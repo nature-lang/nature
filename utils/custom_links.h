@@ -79,14 +79,71 @@ extern list_t *ct_rtype_vec;
 extern table_t *ct_rtype_table; // 避免 rtype_vec 重复写入
 
 // 主要是需要处理 gc_bits 数据
-uint8_t *fndefs_serialize();
+static inline uint8_t *fndefs_serialize() {
+    // 按 count 进行一次序列化，然后将 gc_bits 按顺序追加
+    uint8_t *data = mallocz(ct_fndef_size);
 
-uint8_t *symdefs_serialize();
+    uint8_t *p = data;
+    // 首先将 fndef 移动到 data 中
+    uint64_t size = ct_fndef_count * sizeof(fndef_t);
+    memmove(p, ct_fndef_list, size);
+
+    // 将 gc_bits 移动到数据尾部
+    p = p + size;// byte 类型，所以按字节移动
+    for (int i = 0; i < ct_fndef_count; ++i) {
+        fndef_t *f = &ct_fndef_list[i];
+        uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size, POINTER_SIZE);
+        memmove(p, f->gc_bits, gc_bits_size);
+        p += gc_bits_size;
+    }
+
+    return data;
+}
+
+// 由于不包含 gc_bits，所以可以直接使用 ct_symdef_list 生成 symdef_data
+static inline uint8_t *symdefs_serialize() {
+    return (uint8_t *) ct_symdef_list;
+}
 
 /**
  * 将 reflect_types 进行序列化,序列化后的 byte 总数就是 ct_rtype_size
  * @return
  */
-uint8_t *rtypes_serialize();
+static uint8_t *rtypes_serialize() {
+    // 按 count 进行一次序列化，然后将 gc_bits 按顺序追加
+    // 计算 ct_reflect_type
+    uint8_t *data = mallocz(ct_rtype_size);
+    uint8_t *p = data;
+
+    // rtypes 整体一次性移动到 data 中，随后再慢慢移动 gc_bits
+    uint64_t size = ct_rtype_vec->length * sizeof(rtype_t);
+    memmove(p, ct_rtype_vec->take, size);
+
+    // 移动 gc_bits
+    p = p + size;// byte 类型，所以按字节移动
+    for (int i = 0; i < ct_rtype_vec->length; ++i) {
+        rtype_t *r = ct_list_value(ct_rtype_vec, i);// take 的类型是字节，所以这里按字节移动
+        uint64_t gc_bits_size = calc_gc_bits_size(r->size, POINTER_SIZE);
+        if (gc_bits_size) {
+            memmove(p, r->gc_bits, gc_bits_size);
+        }
+        p += gc_bits_size;
+    }
+
+    // 移动 element_hashes
+    for (int i = 0; i < ct_rtype_vec->length; ++i) {
+        rtype_t *r = ct_list_value(ct_rtype_vec, i);
+
+        // array 占用了 length 字段，但是程element_hashes 是没有值的。
+        if (r->length > 0 && r->element_hashes) {
+            memmove(p, r->element_hashes, r->length * sizeof(uint64_t));
+        }
+
+        p += r->length * sizeof(uint64_t);
+    }
+
+    return data;
+}
+
 
 #endif //NATURE_CUSTOM_LINKS_H

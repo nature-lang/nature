@@ -59,9 +59,9 @@ lir_operand_t *lir_reg_operand(uint8_t index, type_kind kind) {
     return operand_new(LIR_OPERAND_REG, reg);
 }
 
-linked_t *lir_memory_mov(module_t *m, type_t t, lir_operand_t *dst, lir_operand_t *src) {
+linked_t *lir_memory_mov(module_t *m, uint16_t size, lir_operand_t *dst, lir_operand_t *src) {
     linked_t *result = linked_new();
-    uint16_t remind = type_sizeof(t);
+    uint16_t remind = size;
     uint16_t offset = 0;
     while (remind > 0) {
         uint16_t count = 0;

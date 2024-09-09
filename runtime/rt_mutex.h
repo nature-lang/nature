@@ -17,10 +17,16 @@
 #define ACTIVE_SPIN 4
 #define ACTIVE_SPIN_COUNT 30
 
+#ifdef __LINUX
+#define ATOMIC
+#else
+#define ATOMIC _Atomic
+#endif
+
 typedef struct {
-    int64_t state;
-    int64_t sema;
-    int64_t waiter_count;
+    ATOMIC int64_t state;
+    ATOMIC int64_t sema;
+    ATOMIC int64_t waiter_count;
     rt_linkco_list_t waiters; // 不需要预先初始化，值为 0 即可
 } rt_mutex_t;
 
@@ -42,6 +48,6 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff);
 
 void rt_do_spin();
 
-int64_t atomic_add_int64(int64_t *state, int64_t delta);
+int64_t atomic_add_int64(ATOMIC int64_t *state, int64_t delta);
 
 #endif//NATURE_RT_MUTEX_H

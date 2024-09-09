@@ -2,7 +2,7 @@
 #define NATURE_RUNTIME_RUNTIME_H
 
 #include <pthread.h>
-#include <uv.h>
+#include <include/uv.h>
 
 #include "aco/aco.h"
 #include "fixalloc.h"
@@ -24,7 +24,7 @@
 
 #define ALLOC_PAGE_SIZE 8192// 单位 byte
 
-#define PAGE_MASK (ALLOC_PAGE_SIZE - 1)// 0b1111111111111
+#define ALLOC_PAGE_MASK (ALLOC_PAGE_SIZE - 1)// 0b1111111111111
 
 #define MSTACK_SIZE (8 * 1024 * 1024)// 8M 由于目前还没有栈扩容机制，所以初始化栈可以大一点
 
@@ -242,7 +242,7 @@ typedef enum {
     P_STATUS_EXIT = 7,
 } p_status_t;
 
-typedef struct processor_t processor_t;
+typedef struct n_processor_t n_processor_t;
 typedef struct coroutine_t coroutine_t;
 
 
@@ -283,7 +283,7 @@ struct coroutine_t {
 
     pthread_mutex_t *yield_lock; // yield 完成后进行 unlock, 并清空该 lock
 
-    processor_t *p;// 当前 coroutine 绑定的 p
+    n_processor_t *p;// 当前 coroutine 绑定的 p
 
     n_future_t *future;
 
@@ -308,7 +308,7 @@ struct coroutine_t {
  * 位于 share_processor_t 中的协程，如果运行时间过长会被抢占式调度
  * 共享处理器的数量通畅等于线程的数量, 所以可以将线程维度的无锁内存分配器放置再这里
  */
-struct processor_t {
+struct n_processor_t {
     int index;
     mcache_t mcache;              // 线程维度无锁内存分配器
     aco_t main_aco;               // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
@@ -344,7 +344,7 @@ struct processor_t {
     rt_linked_fixalloc_t gc_worklist;// gc 扫描的 ptr 节点列表
     uint64_t gc_work_finished;       // 当前处理的 GC 轮次，每完成一轮 + 1
 
-    struct processor_t *next;// processor 链表支持
+    struct n_processor_t *next;// processor 链表支持
 };
 
 int runtime_main(int argc, char *argv[]);
@@ -362,11 +362,11 @@ void coroutine_dump_error(coroutine_t *co, n_errort *error);
  * 第一版总是返回 processor_main
  * @return
  */
-processor_t *processor_get();
+n_processor_t *processor_get();
 
 coroutine_t *coroutine_get();
 
-void processor_set_status(processor_t *p, p_status_t status);
+void processor_set_status(n_processor_t *p, p_status_t status);
 
 #ifdef __x86_64__
 #define BP_VALUE()      \
@@ -380,7 +380,7 @@ void processor_set_status(processor_t *p, p_status_t status);
 
 #define PRE_RTCALL_HOOK(target)                                                                                \
     do {                                                                                                       \
-        processor_t *p = processor_get();                                                                      \
+        n_processor_t *p = processor_get();                                                                      \
         if (!p) {                                                                                              \
             break;                                                                                             \
         }                                                                                                      \

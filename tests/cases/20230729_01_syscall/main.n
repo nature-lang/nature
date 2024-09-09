@@ -18,7 +18,7 @@ print('buf: ', buf as string, '!!!', '\n')
 
 
 // clock_gettime
-var t = syscall.clock_gettime(syscall.CLOCK_REALTIME)
+var t = syscall.gettime()
 println('sec:', t.sec > 1691651852, 'nsec:', t.nsec > 0)
 
 // env

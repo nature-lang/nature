@@ -24,8 +24,6 @@
   SOFTWARE.
 
 */
-#define _POSIX_C_SOURCE 200809L
-
 #include "toml.h"
 #include <assert.h>
 #include <ctype.h>

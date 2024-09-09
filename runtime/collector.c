@@ -5,7 +5,7 @@
 
 static void insert_gc_worklist(rt_linked_fixalloc_t *gc_worklist, void *ptr) {
     assert(span_of((addr_t) ptr) && "ptr not found in active span");
-    processor_t *p = processor_get();
+    n_processor_t *p = processor_get();
     if (p) {
         DEBUGF("[insert_gc_worklist] p_index_%d=%d, p=%p, ptr=%p", p->share, p->index, gc_worklist, ptr);
     } else {
@@ -43,7 +43,7 @@ void shade_obj_grey(void *obj) {
     bitmap_clear(span->gcmark_bits, obj_index);
     mutex_unlock(&span->gcmark_locker);
 
-    processor_t *p = processor_get();
+    n_processor_t *p = processor_get();
 
     // gc_work_finished < memory->gc_count 就说明 share processor 正在处理 gc_work, 所以可以插入到 gc_worklist 中
     if (p->share && p->gc_work_finished < memory->gc_count) {
@@ -56,7 +56,7 @@ void shade_obj_grey(void *obj) {
 }
 
 void rt_shade_obj_with_barrier(void *new_obj) {
-    processor_t *p = processor_get();
+    n_processor_t *p = processor_get();
     // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 冲突
     if (p && !p->share) {
         mutex_lock(&p->gc_stw_locker);
@@ -283,7 +283,7 @@ void mcentral_sweep(mheap_t *mheap) {
  * save_stack 中保存着 coroutine 栈数组，其中 stack->ptr 指向了原始栈的栈顶
  * 整个 ptr 申请的空间是 sz, 实际占用的空间是 valid_sz，valid_sz 是经过 align 的空间
  */
-static void scan_stack(processor_t *p, coroutine_t *co) {
+static void scan_stack(n_processor_t *p, coroutine_t *co) {
     DEBUGF(
             "[runtime_gc.scan_stack] start, p_index_%d=%d(%lu), p_status=%d, co=%p, co_status=%d, co_stack_size=%zu, save_stack=%p(%zu), scan_offset=%lu, "
             "scan_ret_addr=%p",
@@ -300,7 +300,7 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
     rt_linked_fixalloc_t *worklist = &p->gc_worklist;
     if (!p->share) {
         int assist_p_index = p->index % cpu_count;
-        processor_t *assist_p = share_processor_index[assist_p_index];
+        n_processor_t *assist_p = share_processor_index[assist_p_index];
         assert(assist_p);
         worklist = &assist_p->gc_worklist;
     }
@@ -437,7 +437,7 @@ static void scan_stack(processor_t *p, coroutine_t *co) {
  * @param addr
  * @param global
  */
-static void handle_gc_ptr(processor_t *p, addr_t addr) {
+static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
     DEBUGF("[handle_gc_ptr] start, p=%p, addr=%p", p, (void *) addr);
 
     // p may be null
@@ -523,7 +523,7 @@ static void handle_gc_ptr(processor_t *p, addr_t addr) {
     }
 }
 
-static void handle_gc_worklist(processor_t *p) {
+static void handle_gc_worklist(n_processor_t *p) {
     assert(p->status != P_STATUS_EXIT);
     coroutine_t *co = coroutine_get();
     DEBUGF("[runtime_gc.handle_gc_worklist] start, p_index_%d=%d, count=%lu, gc_co=%p", p->share, p->index,
@@ -563,7 +563,7 @@ static void handle_gc_worklist(processor_t *p) {
  * 由于不经过 pre/post_tplcall_hook 所以需要手动管理一下 gc 状态
  */
 static void gc_work() {
-    processor_t *share_p = processor_get();
+    n_processor_t *share_p = processor_get();
     assert(share_p);
     coroutine_t *gc_co = coroutine_get();
     assert(gc_co);
@@ -656,7 +656,7 @@ static void scan_solo_stack() {
 
         if (span_of((addr_t) solo_co->fn)) {
             int assist_p_index = p->index % cpu_count;
-            processor_t *assist_p = share_processor_index[assist_p_index];
+            n_processor_t *assist_p = share_processor_index[assist_p_index];
             assert(assist_p);
             insert_gc_worklist(&assist_p->gc_worklist, solo_co->fn);
         }
@@ -738,7 +738,7 @@ static void scan_global() {
     RDEBUGF("[runtime_gc.scan_global] start");
 
     // TODO 暂时放在第一个 share processor 中，后续可以考虑放在 global worklist 中
-    processor_t *p = share_processor_list;
+    n_processor_t *p = share_processor_list;
     assert(p);
 
     for (int i = 0; i < rt_symdef_count; ++i) {
@@ -790,6 +790,7 @@ static void gc_mark_done() {
  */
 void runtime_gc() {
     int64_t before = allocated_bytes;
+
     // - gc stage: GC_START
     gc_stage = GC_STAGE_START;
     DEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START", allocated_bytes / 1000);
@@ -868,5 +869,5 @@ void runtime_gc() {
 
     gc_stage = GC_STAGE_OFF;
     DEBUGF("[runtime_gc] gc stage: GC_OFF, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes,
-            (before - allocated_bytes) / 1000);
+           (before - allocated_bytes) / 1000);
 }

@@ -20,7 +20,7 @@ u16 EM_386 = 3 // i386
 
 type elf64_ehdr_t = struct {
     arr<u8,16> ident
-    u16 type
+    u16 t
     u16 machine
     u32 version
     u64 entry

@@ -1,0 +1,18 @@
+type dir_t = void_ptr
+
+type dirent_t = struct {
+    u64 ino
+    i64 off
+    u16 reclen
+    u8 t
+    arr<u8,256> name
+}
+
+#linkid opendir
+fn opendir(void_ptr str):dir_t
+
+#linkid readdir
+fn readdir(dir_t d):raw_ptr<dirent_t>
+
+#linkid closedir
+fn closedir(dir_t d):int

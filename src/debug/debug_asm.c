@@ -39,9 +39,10 @@ static string asm_operand_to_string(asm_operand_t *operand) {
             return dsprintf("[%s|%d]", ((asm_indirect_reg_t *) value)->reg->name, operand->size);
         }
         case ASM_OPERAND_TYPE_SIB_REG: {
-            // [base+index*scale+offset]
+            // [base+index*scale+disp]
             asm_sib_reg_t *sib = (asm_sib_reg_t *) value;
-            return dsprintf("[%s+%s*%d]", sib->base->name, sib->base->name, sib->scale);
+            return dsprintf("[%s+%s*%d+%d]", sib->base->name, sib->index ? sib->index->name : "_", sib->scale,
+                            sib->disp);
         }
         case ASM_OPERAND_TYPE_SYMBOL: {
             return dsprintf("%s", ((asm_symbol_t *) value)->name);

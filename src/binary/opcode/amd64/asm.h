@@ -85,16 +85,17 @@
      _operand;\
 })
 
-#define SIB_REG(_base, _index, _scale) ({ \
-     asm_operand_t *operand = NEW(asm_operand_t); \
-     operand->type = ASM_OPERAND_TYPE_SIB_REG;  \
-     asm_sib_register_t *_sib = NEW(asm_sib_reg_t); \
+#define SIB_REG(_base, _index, _scale, _disp, _size) ({ \
+     asm_operand_t *_operand = NEW(asm_operand_t); \
+     _operand->type = ASM_OPERAND_TYPE_SIB_REG;  \
+     asm_sib_reg_t *_sib = NEW(asm_sib_reg_t); \
      _sib->base = _base;\
      _sib->index = _index;\
      _sib->scale = _scale;\
-     operand->size = _base->size;\
-     operand->value = _sib;    \
-     operand;\
+     _sib->disp = _disp;\
+     _operand->size = _size; \
+     _operand->value = _sib;    \
+     _operand;\
 })
 
 #define RIP_RELATIVE(_disp) ({ \
@@ -131,9 +132,9 @@ typedef enum {
     ASM_OPERAND_TYPE_REG = 1,
     ASM_OPERAND_TYPE_FREG,
     ASM_OPERAND_TYPE_INDIRECT_REG,
+    ASM_OPERAND_TYPE_DISP_REG,
     ASM_OPERAND_TYPE_SIB_REG,
     ASM_OPERAND_TYPE_RIP_RELATIVE,
-    ASM_OPERAND_TYPE_DISP_REG, // 这是啥？有区别？
     ASM_OPERAND_TYPE_SYMBOL,
     ASM_OPERAND_TYPE_UINT8,
     ASM_OPERAND_TYPE_UINT16,
@@ -182,6 +183,7 @@ typedef struct {
     reg_t *base;
     reg_t *index;
     uint8_t scale;
+    int32_t disp;
 } asm_sib_reg_t;
 
 typedef struct {

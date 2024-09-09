@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "runtime/memory.h"
+#include "runtime/processor.h"
 #include "test.h"
 #include "test_runtime.h"
 

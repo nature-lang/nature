@@ -130,7 +130,7 @@ static inline void cross_opcode_init() {
         return;
     }
 
-    assert(false && "not support this arch");
+    assert(false && "not support arch");
 }
 // -------- opcode init end -----------
 
@@ -141,35 +141,34 @@ static inline void cross_opcode_init() {
 #define AMD64_PTR_SIZE 8 // 单位 byte
 #define AMD64_NUMBER_SIZE 8 // 单位 byte
 
-uint64_t amd64_create_plt_entry(elf_context *ctx, uint64_t got_offset, sym_attr_t *attr);
+uint64_t amd64_create_plt_entry(elf_context_t *ctx, uint64_t got_offset, sym_attr_t *attr);
 
 int amd64_gotplt_entry_type(uint64_t relocate_type);
 
+int arm64_gotplt_entry_type(uint64_t relocate_type);
+
 int8_t amd64_is_code_relocate(uint64_t relocate_type);
 
-void amd64_relocate(elf_context *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr, addr_t val);
+int8_t arm64_is_code_relocate(uint64_t relocate_type);
 
-/**
- * 经过两次遍历最终生成 section text、symbol、rela
- * @param ctx
- * @param operations amd64_opcode_t
- */
-void amd64_operation_encodings(elf_context *ctx, slice_t *closures);
+void amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr, addr_t val);
 
-static inline uint64_t cross_create_plt_entry(elf_context *ctx, uint64_t got_offset, sym_attr_t *attr) {
+static inline uint64_t cross_create_plt_entry(elf_context_t *ctx, uint64_t got_offset, sym_attr_t *attr) {
     if (BUILD_ARCH == ARCH_AMD64) {
         return amd64_create_plt_entry(ctx, got_offset, attr);
     }
 
-    assert(false && "not support this arch");
+    assert(false && "not support arch");
 }
 
 
 static inline int8_t cross_is_code_relocate(uint64_t relocate_type) {
     if (BUILD_ARCH == ARCH_AMD64) {
         return amd64_is_code_relocate(relocate_type);
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        return arm64_is_code_relocate(relocate_type);
     }
-    assert(false && "not support this arch");
+    assert(false && "not support arch");
 }
 
 static inline int cross_got_rel_type(bool is_code_rel) {
@@ -180,14 +179,16 @@ static inline int cross_got_rel_type(bool is_code_rel) {
             return R_X86_64_GLOB_DAT;
         }
     }
-    assert(false && "not support this arch");
+    assert(false && "not support arch");
 }
 
 static inline int cross_gotplt_entry_type(uint64_t relocate_type) {
     if (BUILD_ARCH == ARCH_AMD64) {
         return amd64_gotplt_entry_type(relocate_type);
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        return arm64_gotplt_entry_type(relocate_type);
     }
-    assert(false && "not support this arch");
+    assert(false && "not support arch");
 }
 
 static inline uint8_t cross_ptr_size() {
@@ -196,7 +197,7 @@ static inline uint8_t cross_ptr_size() {
     }
 
     return sizeof(void *);
-//    assert(false && "not support this arch");
+//    assert(false && "not support arch");
 }
 
 #ifndef POINTER_SIZE
@@ -208,43 +209,37 @@ static inline uint8_t cross_number_size() {
         return AMD64_NUMBER_SIZE;
     }
     return sizeof(int);
-//    assert(false && "not support this arch");
+//    assert(false && "not support arch");
 }
 
 static inline uint64_t cross_elf_start_addr() {
     if (BUILD_ARCH == ARCH_AMD64) {
         return AMD64_ELF_START_ADDR;
     }
-    assert(false && "not support this arch");
+    assert(false && "not support arch");
 }
 
 static inline uint64_t cross_elf_page_size() {
     if (BUILD_ARCH == ARCH_AMD64) {
         return AMD64_64_ELF_PAGE_SIZE;
     }
-    assert(false && "not support this arch");
+    assert(false && "not support arch");
 }
 
-static inline void cross_relocate(elf_context *l, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr, addr_t val) {
+static inline void cross_relocate(elf_context_t *l, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr, addr_t val) {
     if (BUILD_ARCH == ARCH_AMD64) {
         return amd64_relocate(l, rel, type, ptr, addr, val);
     }
-    assert(false && "not support this arch");
+    assert(false && "not support arch");
 }
 
 static inline uint16_t cross_ehdr_machine() {
     if (BUILD_ARCH == ARCH_AMD64) {
         return EM_X86_64;
     }
-    assert(false && "not support this arch");
+    assert(false && "not support arch");
 }
 
-static inline void cross_opcode_encodings(elf_context *ctx, slice_t *closures) {
-    if (BUILD_ARCH == ARCH_AMD64) {
-        return amd64_operation_encodings(ctx, closures);
-    }
-    assert(false && "not support this arch");
-}
 // -------- linker/elf end -----------
 
 static inline type_kind cross_kind_trans(type_kind kind) {
@@ -261,7 +256,7 @@ static inline type_kind cross_kind_trans(type_kind kind) {
 
         return kind;
     }
-    assert(false && "not support this arch");
+    assert(false && "not support arch");
 }
 
 #endif //NATURE_CROSS_H

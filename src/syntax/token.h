@@ -25,7 +25,8 @@ typedef enum {
     TOKEN_COLON,    // :
     TOKEN_SEMICOLON,// ;
     TOKEN_SLASH,    // /
-    TOKEN_STAR,     // * STAR
+    TOKEN_STAR,     //  a * b, *a
+    TOKEN_IMPORT_STAR, // import as *
     TOKEN_PERSON,   // %
     TOKEN_QUESTION, // ?
     TOKEN_RIGHT_ARROW, // ->
@@ -149,9 +150,9 @@ static string token_str[] = {
         [TOKEN_MINUS] = "-",
         [TOKEN_PLUS] = "+",
         [TOKEN_COLON] = ":",
-        [TOKEN_SEMICOLON] = ";",
         [TOKEN_SLASH] = "/",
         [TOKEN_STAR] = "*",
+        [TOKEN_IMPORT_STAR] = "*",
         [TOKEN_QUESTION] = "?",
         [TOKEN_NOT] = "!",
         [TOKEN_PERSON] = "%",
@@ -252,7 +253,8 @@ typedef struct {
     token_type_t type;// 通配类型，如 var
     char *literal;
     int line;
-    int column;
+    int column; // token 的起始字符
+    int length; // token 占用的总字符长度
 } token_t;
 
 static inline bool token_complex_assign(token_type_t t) {
@@ -268,6 +270,7 @@ static inline token_t *token_new(uint8_t token, char *literal, int line, int col
     t->literal = literal;
     t->line = line;
     t->column = column;
+    t->length = strlen(literal);
 
 #ifdef DEBUG_SCANNER
     debug_scanner(t);

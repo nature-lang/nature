@@ -4,7 +4,7 @@
 
 #include "sysmon.h"
 
-#define CO_TIMEOUT (20 * 1000 * 1000)// 10ms
+#define CO_TIMEOUT (100 * 1000 * 1000) // ms
 
 // 等待 1000ms 的时间，如果无法抢占则 deadlock
 #define PREEMPT_TIMEOUT 1000
@@ -52,6 +52,9 @@ void wait_sysmon() {
             RDEBUGF("[wait_sysmon.share] runtime timeout(%lu ms), wait locker, p_index_%d=%d(%lu)", time / 1000 / 1000,
                     p->share, p->index,
                     (uint64_t) p->thread_id);
+
+            RDEBUGF("warning deadlock: processor %d run timeout(%lu ms)", p->index, time / 1000 / 1000);
+            continue;
 
             // 尝试 10ms 获取抢占 disable_preempt_locker,避免抢占期间抢占状态变更成不可抢占, 如果获取不到就跳过
             // 但是可以从 not -> can
@@ -163,15 +166,15 @@ void wait_sysmon() {
         mutex_lock(&solo_processor_locker);
         RDEBUGF("[wait_sysmon.solo] get solo_processor_locker, solo_p_count=%d", solo_processor_count);
 
-        processor_t *prev = NULL;
-        processor_t *p = solo_processor_list;
+        n_processor_t *prev = NULL;
+        n_processor_t *p = solo_processor_list;
         while (p) {
             if (p->status == P_STATUS_EXIT) {
                 RDEBUGF("[wait_sysmon.solo] p=%p, index=%d, exited, prev=%p,  will remove from solo_processor_list=%p",
                         p, p->index, prev,
                         solo_processor_list);
 
-                processor_t *exited = p;
+                n_processor_t *exited = p;
                 if (prev) {
                     prev->next = p->next;
                     p = p->next;
@@ -377,8 +380,7 @@ void wait_sysmon() {
 
         gc_eval_count--;
 
-        // 每 5ms 进行一次 gc 验证
-        usleep(WAIT_SHORT_TIME * 1000);// 5ms
+        usleep(WAIT_SHORT_TIME * 1000);
     }
 
     RDEBUGF("[wait_sysmon] wait sysmon exit success");

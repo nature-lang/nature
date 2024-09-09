@@ -1,7 +1,7 @@
 #include "linkco.h"
 
 linkco_t *rti_acquire_linkco() {
-    processor_t *p = processor_get();
+    n_processor_t *p = processor_get();
     assert(p);
 
     if (p->linkco_count == 0) {
@@ -38,7 +38,7 @@ void rti_release_linkco(linkco_t *linkco) {
     linkco->co = NULL;
     linkco->data = NULL;
 
-    processor_t *p = processor_get();
+    n_processor_t *p = processor_get();
     assert(p);
 
     if (p->linkco_count == P_LINKCO_CACHE_MAX) {

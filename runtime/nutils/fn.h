@@ -4,26 +4,9 @@
 #include "utils/type.h"
 #include "utils/mutex.h"
 
-#define JIT_CODES_SIZE 80// byte
-
 extern table_t *env_upvalue_table;
 extern mutex_t env_upvalue_locker;
 
-typedef struct {
-    value_casting value;
-    void *ref;
-} upvalue_t;
-
-typedef struct {
-    void **values;
-    uint64_t length;
-} envs_t;
-
-typedef struct {
-    uint8_t closure_jit_codes[JIT_CODES_SIZE];
-    addr_t fn_addr;
-    envs_t *envs;
-} runtime_fn_t;
 
 void *fn_new(addr_t fn_addr, envs_t *envs);
 

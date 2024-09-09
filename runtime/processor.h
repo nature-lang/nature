@@ -2,7 +2,7 @@
 #define NATURE_PROCESSOR_H
 
 #include <stdint.h>
-#include <uv.h>
+#include <include/uv.h>
 
 #include "nutils/errort.h"
 #include "nutils/vec.h"
@@ -10,9 +10,9 @@
 #include "runtime.h"
 
 extern int cpu_count;
-extern processor_t *share_processor_index[1024];
-extern processor_t *share_processor_list;// 共享协程列表的数量一般就等于线程数量
-extern processor_t *solo_processor_list; // 独享协程列表其实就是多线程
+extern n_processor_t *share_processor_index[1024];
+extern n_processor_t *share_processor_list;// 共享协程列表的数量一般就等于线程数量
+extern n_processor_t *solo_processor_list; // 独享协程列表其实就是多线程
 extern mutex_t solo_processor_locker;    // 删除 solo processor 需要先获取该锁
 extern int solo_processor_count;
 extern int coroutine_count;
@@ -31,21 +31,27 @@ extern mutex_t cp_alloc_locker;
 typedef enum {
     CO_FLAG_SOLO = 1,
     CO_FLAG_MAIN = 2,
-} lir_flag_t;
+} co_flag_t;
+
+#ifdef __LINUX
+#define NO_OPTIMIZE __attribute__((optimize(0)))
+#else
+#define NO_OPTIMIZE __attribute__((optnone))
+#endif
 
 extern void async_preempt() __asm__("async_preempt");
 
-__attribute__((optimize(0))) void debug_ret();
+NO_OPTIMIZE void debug_ret();
 
-__attribute__((optimize(0))) void co_preempt_yield();
+NO_OPTIMIZE void co_preempt_yield();
 
-#define PROCESSOR_FOR(list) for (processor_t *p = list; p; p = p->next)
+#define PROCESSOR_FOR(list) for (n_processor_t *p = list; p; p = p->next)
 
-static inline bool processor_safe(processor_t *p) {
+static inline bool processor_safe(n_processor_t *p) {
     return p->need_stw > 0 && p->need_stw == p->safe_point;
 }
 
-static inline void co_set_status(processor_t *p, coroutine_t *co, co_status_t status) {
+static inline void co_set_status(n_processor_t *p, coroutine_t *co, co_status_t status) {
     assert(p);
     assert(co);
 
@@ -56,14 +62,14 @@ static inline void co_set_status(processor_t *p, coroutine_t *co, co_status_t st
 /**
  * yield 统一入口, 避免直接调用 aco_yield
  */
-static inline void _co_yield(processor_t *p, coroutine_t *co) {
+static inline void _co_yield(n_processor_t *p, coroutine_t *co) {
     assert(p);
     assert(co);
 
     aco_yield1(&co->aco);
 }
 
-static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
+static inline void co_yield_runnable(n_processor_t *p, coroutine_t *co) {
     DEBUGF("[runtime.co_yield_runnable] start");
     assert(p);
     assert(co);
@@ -83,7 +89,7 @@ static inline void co_yield_runnable(processor_t *p, coroutine_t *co) {
            co->status);
 }
 
-static inline void co_yield_waiting(processor_t *p, coroutine_t *co) {
+static inline void co_yield_waiting(n_processor_t *p, coroutine_t *co) {
     assert(p);
     assert(co);
 
@@ -130,7 +136,7 @@ void processor_set_exit();
  * @param timeout_ms
  * @return
  */
-int io_run(processor_t *p, uint64_t timeout_ms);
+int io_run(n_processor_t *p, uint64_t timeout_ms);
 
 /**
  * runtime_main 会负责调用该方法，该方法读取 cpu 的核心数，然后初始化对应数量的 share_processor
@@ -138,11 +144,11 @@ int io_run(processor_t *p, uint64_t timeout_ms);
  */
 void sched_init();
 
-processor_t *processor_new(int index);
+n_processor_t *processor_new(int index);
 
 void coroutine_free(coroutine_t *co);
 
-void processor_free(processor_t *p);
+void processor_free(n_processor_t *p);
 
 /**
  * @param fn
@@ -165,7 +171,7 @@ void rt_coroutine_dispatch(coroutine_t *co);
  * 有 processor_run 调用
  * coroutine 的本质是一个指针，指向了需要执行的代码的 IP 地址。 (aco_create_init 会绑定对应的 fn)
  */
-void coroutine_resume(processor_t *p, coroutine_t *co);
+void coroutine_resume(n_processor_t *p, coroutine_t *co);
 
 void co_migrate(aco_t *aco, aco_share_stack_t *new_st);
 
@@ -179,7 +185,7 @@ void *rt_coroutine_error(coroutine_t *co);
 
 int64_t rt_processor_index();
 
-void rt_processor_wake(processor_t *p);
+void rt_processor_wake(n_processor_t *p);
 
 // ------------ libuv 的一些回调 -----------------------
 static void uv_on_timer(uv_timer_t *timer);

@@ -215,7 +215,7 @@ void analyzer_import(module_t *m, ast_import_t *import) {
 
     // import foo.bar => foo is package.name, so import workdir/bar.n
     import->full_path = package_import_fullpath(import->package_conf, import->package_dir, import->ast_package);
-    ANALYZER_ASSERTF(file_exists(import->full_path), "cannot find import file %s", import->full_path);
+    ANALYZER_ASSERTF(file_exists(import->full_path), "cannot import module '%s': not found", package);
     ANALYZER_ASSERTF(ends_with(import->full_path, ".n"), "import file suffix must .n");
 
     if (!import->as || strlen(import->as) == 0) {
@@ -438,6 +438,16 @@ static void analyzer_type(module_t *m, type_t *type) {
             struct_property_t *item = ct_list_value(struct_decl->properties, i);
 
             analyzer_type(m, &item->type);
+
+            // 可选的右值解析
+            if (item->right) {
+                // cannot contains ast_fndef 标识
+                m->analyzer_has_fndef = false;
+                analyzer_expr(m, item->right);
+
+                ANALYZER_ASSERTF(m->analyzer_has_fndef == false,
+                                 "struct field default value cannot be a fn def, use fn def ident instead");
+            }
         }
     }
 }
@@ -1154,6 +1164,12 @@ static bool analyzer_local_ident(module_t *m, ast_expr_t *expr) {
     ast_ident *ident = ast_new_ident(temp->literal);
     expr->value = ident;
 
+
+    // 当前 analyzer 位于 global analyzer, 可能是结构体的右侧值的 anazlyer。
+    if (!m->analyzer_current) {
+        return false;
+    }
+
     // - 在当前函数作用域中查找变量定义(local 是有清理逻辑的，一旦离开作用域就会被清理, 所以这里不用担心使用了下一级的
     // local)
     slice_t *locals = m->analyzer_current->locals;
@@ -1164,6 +1180,8 @@ static bool analyzer_local_ident(module_t *m, ast_expr_t *expr) {
             return true;
         }
     }
+
+
 
     // - 非本地作用域变量则查找父仅查找, 如果是自由变量则使用 env[free_var_index] 进行改写
     symbol_type_t type = SYMBOL_VAR;
@@ -1518,6 +1536,7 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
             return analyzer_co_async_expr(m, expr->value);
         }
         case AST_FNDEF: {
+            assertf(!m->analyzer_has_fndef, "");
             return analyzer_local_fndef(m, expr->value);
         }
         default:
@@ -1798,6 +1817,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
 static void analyzer_main(module_t *m, slice_t *stmt_list) {
     ast_fndef_t *fndef = ast_fndef_new(m, 0, 0);
     fndef->symbol_name = FN_MAIN_NAME;
+    fndef->linkid = FN_MAIN_LINKID_TO;
     fndef->fn_name = fndef->symbol_name;
     fndef->body = slice_new();
     fndef->return_type = type_kind_new(TYPE_VOID);

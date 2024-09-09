@@ -1,0 +1,3 @@
+type pthread_mutex_t = struct{
+    arr<u8,40> __align = []
+}

@@ -49,6 +49,12 @@ acosw:
 
 
 // ----------------------------------------------------------------------------------------
+#ifdef __DARWIN
+#define SYM(x) _##x
+#else
+#define SYM(x) x
+#endif
+
 .globl async_preempt
 #if defined(__APPLE__)
 #else
@@ -75,14 +81,7 @@ async_preempt:
     mov QWORD PTR [rsp + 88], r13
     mov QWORD PTR [rsp + 96], r14
     mov QWORD PTR [rsp + 104], r15
-#if defined(__APPLE__)
-#ifndef hasAVX
-    cmp byte ptr [internal/cpu.X86 + const_offsetX86HasAVX], 0
-    je .Lno_avx
-#endif
-    vzeroupper
-    .Lno_avx
-#endif
+
     movups [rsp + 112], xmm0
     movups [rsp + 128], xmm1
     movups [rsp + 144], xmm2
@@ -99,13 +98,13 @@ async_preempt:
     movups [rsp + 320], xmm13
     movups [rsp + 336], xmm14
     movups [rsp + 352], xmm15
-    call co_preempt_yield
+    call SYM(co_preempt_yield)
 
 
     // debug (多的不能确定，但是这里肯定是 0 了，毕竟ret 地址被覆盖了，可关键是，栈空间还是会被污染呢)
     mov rdi, rbp
     mov rsi, [rbp + 8] // +8 是跳过 prev rbp, 此时栈中存储的值就是 ret addr 的值
-    call debug_ret
+    call SYM(debug_ret)
 
     movups xmm15, [rsp + 352]
     movups xmm14, [rsp + 336]
@@ -214,13 +213,8 @@ aco_save_fpucw_mxcsr:
 aco_funcp_protector_asm:
 #ifdef __x86_64__
             and     rsp,0xfffffffffffffff0
-    #if defined(__APPLE__)
-            call    _aco_funcp_protector
-            call    _abort
-    #else
-            call    aco_funcp_protector
-            call    abort
-    #endif
+            call    SYM(aco_funcp_protector)
+            call    SYM(abort)
             ret
 #else
     #error "platform not support"

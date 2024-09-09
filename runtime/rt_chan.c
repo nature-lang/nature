@@ -101,7 +101,12 @@ static void rt_msg_transmit(coroutine_t *co, void *stack_ptr, void *msg_ptr, boo
     aco_share_stack_t *share_stack = co->aco.share_stack;
     aco_save_stack_t *save_stack = &co->aco.save_stack;
 
+#ifdef __LINUX
     pthread_spin_lock(&share_stack->owner_lock);
+#else
+    pthread_mutex_lock(&share_stack->owner_lock);
+#endif
+
     if (share_stack->owner != &co->aco) {
         // != 表示 share_stack 溢出到了 save_stack 中
         assert(save_stack->valid_sz > 0);
@@ -115,8 +120,11 @@ static void rt_msg_transmit(coroutine_t *co, void *stack_ptr, void *msg_ptr, boo
     } else {
         memmove(msg_ptr, stack_ptr, size);
     }
-
+#ifdef __LINUX
     pthread_spin_unlock(&share_stack->owner_lock);
+#else
+    pthread_mutex_unlock(&share_stack->owner_lock);
+#endif
 }
 
 n_chan_t *rt_chan_new(int64_t rhash, int64_t ele_rhash, int64_t buf_len) {
@@ -131,6 +139,7 @@ n_chan_t *rt_chan_new(int64_t rhash, int64_t ele_rhash, int64_t buf_len) {
     n_chan_t *chan = rti_gc_malloc(rtype->size, rtype);
     chan->msg_size = rtype_stack_size(element_rtype, POINTER_SIZE);
     pthread_mutex_init(&chan->lock, NULL);
+
     // ele_rhash
     chan->buf = rti_vec_new(element_rtype, buf_len, buf_len);
     return chan;
@@ -155,7 +164,7 @@ void rt_chan_send(n_chan_t *chan, void *msg_ptr) {
         rt_msg_transmit(linkco->co, linkco->data, msg_ptr, true, chan->msg_size);
 
         // 一旦设置为 runnable 并 push 到 runnable_list 中，coroutine 将会立即运行。
-        processor_t *p = linkco->co->p;
+        n_processor_t *p = linkco->co->p;
         co_set_status(p, linkco->co, CO_STATUS_RUNNABLE);
         rt_linked_fixalloc_push(&p->runnable_list, linkco->co);
 
@@ -216,7 +225,7 @@ void rt_chan_recv(n_chan_t *chan, void *msg_ptr) {
         }
 
         // 将取出的 send co 放入到 runnable 进行激活
-        processor_t *p = linkco->co->p;
+        n_processor_t *p = linkco->co->p;
         co_set_status(p, linkco->co, CO_STATUS_RUNNABLE);
         rt_linked_fixalloc_push(&p->runnable_list, linkco->co);
 

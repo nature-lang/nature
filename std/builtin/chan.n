@@ -18,7 +18,7 @@ import coroutine as co
 //    arr<u8,40> lock
 //}
 
-// var ch = chan<T>()
+// var ch = chan_new<T>()
 fn chan_new<T>(...[int] args):chan<T> {
     int rhash = @reflect_hash(chan<T>)
     int ele_rhash = @reflect_hash(T)

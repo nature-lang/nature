@@ -159,7 +159,7 @@ void rt_vec_push(n_vec_t *vec, void *ref) {
 
     // TODO debug 验证 gc 问题
     if (span_of((addr_t) vec) == NULL || vec->ele_rhash <= 0) {
-        processor_t *p = processor_get();
+        n_processor_t *p = processor_get();
         coroutine_t *co = coroutine_get();
         assertf(false,
                 "vec_push failed, p_index_%d=%d(%lu), p_status=%d, co=%p vec=%p ele_rtype_hash=%lu must be a valid hash",

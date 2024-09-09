@@ -5,8 +5,8 @@
 
 #ifdef __AMD64
 
-table_t *env_upvalue_table;
-mutex_t env_upvalue_locker;
+table_t *env_upvalue_table = NULL;
+mutex_t env_upvalue_locker = {0};
 
 /**
  * 假设 addr = 0x40007fffb8
@@ -132,7 +132,7 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime, addr
 
 void *fn_new(addr_t fn_addr, envs_t *envs) {
     //    PRE_RTCALL_HOOK(); // env_new 已经设置 pre_rt_call_hook，此处不需要重复设置
-    processor_t *p = processor_get();
+    n_processor_t *p = processor_get();
     assert(p->status == P_STATUS_RTCALL);
 
     DEBUGF("[runtime.fn_new] fn_addr=0x%lx, envs=%p", fn_addr, envs);
@@ -221,6 +221,8 @@ void env_closure(uint64_t stack_addr, uint64_t rtype_hash) {
 }
 
 void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t size) {
+    uint64_t start = uv_hrtime();
+
     PRE_RTCALL_HOOK();
     DEBUGF("[runtime.env_assign_ref] fn_base=%p, index=%lu, src_ref=%p, size=%lu", fn, index, src_ref, size);
     assert(index < fn->envs->length);
@@ -232,11 +234,14 @@ void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t si
            fn, fn->envs,
            index, src_ref, size, fetch_int_value((addr_t) heap_addr, size), heap_addr);
 
+    // heap_addr 是比较小的空间
+    assert(size <= 8);
     memmove(heap_addr, src_ref, size);
 
     DEBUGF("[runtime.env_assign_ref] post fn_base=%p, fn->envs_base=%p, index=%lu, src_ref=%p, size=%lu, env_int_value=0x%lx, heap_addr=%p",
            fn, fn->envs,
            index, src_ref, size, fetch_int_value((addr_t) heap_addr, size), heap_addr);
+
 }
 
 void *env_element_value(runtime_fn_t *fn, uint64_t index) {

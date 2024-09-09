@@ -33,15 +33,6 @@ static bool scanner_is_string(module_t *m, char s) {
     return s == '"' || s == '`' || s == '\'';
 }
 
-static bool scanner_is_stop_char(module_t *m, char c) {
-    if (c == '\n' || c == '+' || c == '-' || c == '*' || c == '/' || c == '&' ||
-        c == '<' || c == '>' || c == '|' || c == '=' || c == '!' || c == ' ' ||
-        c == '~') {
-        return true;
-    }
-    return false;
-}
-
 
 /**
  * 判断 word(number 开头) 是否为 int
@@ -162,7 +153,7 @@ static token_type_t scanner_special_char(module_t *m) {
         case ':':
             return TOKEN_COLON;
         case ';':
-            return TOKEN_SEMICOLON;
+            return TOKEN_STMT_EOF;
         case ',':
             return TOKEN_COMMA;
         case '?':
@@ -182,8 +173,9 @@ static token_type_t scanner_special_char(module_t *m) {
             return scanner_match(m, '=') ? TOKEN_PLUS_EQUAL : TOKEN_PLUS;
         case '/':
             return scanner_match(m, '=') ? TOKEN_SLASH_EQUAL : TOKEN_SLASH;
-        case '*':
+        case '*': {
             return scanner_match(m, '=') ? TOKEN_STAR_EQUAL : TOKEN_STAR;
+        }
         case '.': {
             if (scanner_match(m, '.')) {
                 // 下一个值必须也要是点，否则就报错
@@ -330,58 +322,44 @@ scanner_rest(char *word, int word_length, int8_t rest_start, int8_t rest_length,
  * next not {
  * @return
  */
-static bool scanner_at_stmt_end(module_t *m) {
-    if (scanner_is_space(m->s_cursor.space_prev) ||
-        m->s_cursor.space_prev == '\\' || m->s_cursor.space_prev == STRING_EOF) {
-        return false;
+static bool scanner_need_stmt_end(module_t *m, token_t *prev_token) {
+    // 以这些类型结束行时，自动加入结束符号，如果后面还希望加表达式，比如 return a; 那请不要在 return 和 a 之间添加换行符
+    // var a = new int，类似这种情况，类型也会作为表达式的结尾。需要进行识别
+    switch (prev_token->type) {
+        case TOKEN_IMPORT_STAR: // import x as *
+        case TOKEN_LITERAL_INT: // 1
+        case TOKEN_LITERAL_STRING: // 'hello'
+        case TOKEN_LITERAL_FLOAT: // 3.14
+        case TOKEN_IDENT: // a
+        case TOKEN_BREAK: // break
+        case TOKEN_CONTINUE: // continue
+        case TOKEN_RETURN: // return\n
+        case TOKEN_TRUE:
+        case TOKEN_FALSE:
+        case TOKEN_RIGHT_PAREN: // )\n
+        case TOKEN_RIGHT_SQUARE: // ]\n
+        case TOKEN_RIGHT_CURLY: // }\n
+        case TOKEN_RIGHT_ANGLE: // new <T>\n
+        case TOKEN_BOOL:
+        case TOKEN_FLOAT:
+        case TOKEN_F32:
+        case TOKEN_F64:
+        case TOKEN_INT:
+        case TOKEN_I8:
+        case TOKEN_I16:
+        case TOKEN_I32:
+        case TOKEN_I64:
+        case TOKEN_UINT:
+        case TOKEN_U8:
+        case TOKEN_U16:
+        case TOKEN_U32:
+        case TOKEN_U64:
+        case TOKEN_STRING:
+        case TOKEN_NULL:
+            return true;
+        default:
+            return false;
     }
-
-    if (m->s_cursor.space_next == '}') {
-        return false;
-    }
-
-    if (m->s_cursor.space_next == ']') {
-        return false;
-    }
-
-    if (m->s_cursor.space_next == ')') {
-        return false;
-    }
-
-    // var b = (
-    if (m->s_cursor.space_prev == '(') {
-        return false;
-    }
-
-    // var a = [
-    if (m->s_cursor.space_prev == '[') {
-        return false;
-    }
-
-    // if xxx {
-    if (m->s_cursor.space_prev == '{') {
-        return false;
-    }
-
-    if (m->s_cursor.space_prev == '=') {
-        return false;
-    }
-
-    if (m->s_cursor.space_prev == ',') {
-        return false;
-    }
-
-    // var a = true ||
-    if (m->s_cursor.space_prev == '|') {
-        return false;
-    }
-
-    // var a = true &&
-    if (m->s_cursor.space_prev == '|') {
-        return false;
-    }
-
-    return true;
 }
 
 static long scanner_number_convert(module_t *m, char *word, int base) {
@@ -440,6 +418,85 @@ static char *scanner_number_advance(module_t *m) {
     return scanner_gen_word(m);
 }
 
+token_t *scanner_item(module_t *m, linked_node *prev_node) {
+    // reset by guard
+    m->s_cursor.current = m->s_cursor.guard;
+    m->s_cursor.length = 0;
+
+    if (scanner_is_alpha(m, *m->s_cursor.current)) {
+        char *word = scanner_ident_advance(m);
+
+        token_t *t = token_new(scanner_ident(word, m->s_cursor.length), word,
+                               m->s_cursor.line, m->s_cursor.column);
+        return t;
+    }
+
+    if (scanner_match(m, '@')) {
+        char *word = scanner_ident_advance(m);
+        word++;
+        token_t *t = token_new(TOKEN_MACRO_IDENT, word, m->s_cursor.line, m->s_cursor.column);
+        return t;
+    }
+
+    if (scanner_match(m, '#')) {
+        char *word = scanner_ident_advance(m);
+        word++;
+        token_t *t = token_new(TOKEN_FN_LABEL, word, m->s_cursor.line, m->s_cursor.column);
+        return t;
+    }
+
+
+    // 首个字符是 0 ~ 9 则判定为数字
+    if (scanner_is_number(m, *m->s_cursor.current)) {
+        char *word = NULL;
+        long decimal;
+
+        // 0 开头的数字特殊处理
+        if (*m->s_cursor.guard == '0') {
+            if (m->s_cursor.guard[1] == 'x') {
+                decimal = scanner_number_convert(m, scanner_hex_number_advance(m), 16);
+                word = itoa(decimal);
+            } else if (m->s_cursor.guard[1] == 'o') {
+                decimal = scanner_number_convert(m, scanner_oct_number_advance(m), 8);
+                word = itoa(decimal);
+            } else if (m->s_cursor.guard[1] == 'b') {
+                decimal = scanner_number_convert(m, scanner_bin_number_advance(m), 2);
+                word = itoa(decimal);
+            } else {
+                word = scanner_number_advance(m);// 1, 1.12, 0.233
+            }
+        } else {
+            word = scanner_number_advance(m);// 1, 1.12, 0.233
+        }
+
+        // word 已经生成，通过判断 word 中是否包含 . 判断 int 开头的 word 的类型
+        uint8_t type;
+        if (scanner_is_float(m, word)) {
+            type = TOKEN_LITERAL_FLOAT;
+        } else {
+            type = TOKEN_LITERAL_INT;
+        }
+
+        return token_new(type, word, m->s_cursor.line, m->s_cursor.column);
+    }
+
+    // 字符串扫描
+    if (scanner_is_string(m, *m->s_cursor.current)) {
+        char *str = scanner_string_advance(m, *m->s_cursor.current);
+        return token_new(TOKEN_LITERAL_STRING, str, m->s_cursor.line, m->s_cursor.column);
+    }
+
+    // if current is 特殊字符
+    token_type_t special_type = scanner_special_char(m);
+    SCANNER_ASSERTF(special_type > 0, "special characters are not recognized");
+
+    if (special_type == TOKEN_STAR && prev_node && ((token_t *) prev_node->value)->type == TOKEN_AS) {
+        return token_new(TOKEN_IMPORT_STAR, scanner_gen_word(m), m->s_cursor.line, m->s_cursor.column);
+    }
+
+    return token_new(special_type, scanner_gen_word(m), m->s_cursor.line, m->s_cursor.column);
+}
+
 /**
  * 符号表使用什么结构来存储, 链表结构
  * @param chars
@@ -450,102 +507,30 @@ linked_t *scanner(module_t *m) {
 
     linked_t *list = linked_new();
 
-    while (true) {
+    while (!scanner_at_eof(m)) {
         // 每经过一个 word 就需要检测是否有空白符号或者注释需要跳过
         bool has_newline = scanner_skip_space(m);
-
-        if (has_newline && scanner_at_stmt_end(m)) {
-            // push token_t TOKEN_STMT_EOF
-            linked_push(list, token_new(TOKEN_STMT_EOF, ";", m->s_cursor.line - 1,
-                                        m->s_cursor.column));
-        }
-
-        // reset by guard
-        m->s_cursor.current = m->s_cursor.guard;
-        m->s_cursor.length = 0;
-
-        if (scanner_is_alpha(m, *m->s_cursor.current)) {
-            char *word = scanner_ident_advance(m);
-
-            token_t *t = token_new(scanner_ident(word, m->s_cursor.length), word,
-                                   m->s_cursor.line, m->s_cursor.column);
-            linked_push(list, t);
-            continue;
-        }
-
-        if (scanner_match(m, '@')) {
-            char *word = scanner_ident_advance(m);
-            word++;
-            token_t *t = token_new(TOKEN_MACRO_IDENT, word, m->s_cursor.line, m->s_cursor.column);
-            linked_push(list, t);
-            continue;
-        }
-
-        if (scanner_match(m, '#')) {
-            char *word = scanner_ident_advance(m);
-            word++;
-            token_t *t = token_new(TOKEN_FN_LABEL, word, m->s_cursor.line, m->s_cursor.column);
-            linked_push(list, t);
-            continue;
-        }
-
-
-        // 首个字符是 0 ~ 9 则判定为数字
-        if (scanner_is_number(m, *m->s_cursor.current)) {
-            char *word = NULL;
-            long decimal;
-
-            // 0 开头的数字特殊处理
-            if (*m->s_cursor.guard == '0') {
-                if (m->s_cursor.guard[1] == 'x') {
-                    decimal = scanner_number_convert(m, scanner_hex_number_advance(m), 16);
-                    word = itoa(decimal);
-                } else if (m->s_cursor.guard[1] == 'o') {
-                    decimal = scanner_number_convert(m, scanner_oct_number_advance(m), 8);
-                    word = itoa(decimal);
-                } else if (m->s_cursor.guard[1] == 'b') {
-                    decimal = scanner_number_convert(m, scanner_bin_number_advance(m), 2);
-                    word = itoa(decimal);
-                } else {
-                    word = scanner_number_advance(m);// 1, 1.12, 0.233
-                }
-            } else {
-                word = scanner_number_advance(m);// 1, 1.12, 0.233
-            }
-
-            // word 已经生成，通过判断 word 中是否包含 . 判断 int 开头的 word 的类型
-            uint8_t type;
-            if (scanner_is_float(m, word)) {
-                type = TOKEN_LITERAL_FLOAT;
-            } else {
-                type = TOKEN_LITERAL_INT;
-            }
-
-            linked_push(list, token_new(type, word, m->s_cursor.line, m->s_cursor.column));
-            continue;
-        }
-
-        // 字符串扫描
-        if (scanner_is_string(m, *m->s_cursor.current)) {
-            char *str = scanner_string_advance(m, *m->s_cursor.current);
-            linked_push(list, token_new(TOKEN_LITERAL_STRING, str, m->s_cursor.line,
-                                        m->s_cursor.column));
-            continue;
-        }
-
         if (scanner_at_eof(m)) {
             break;
         }
 
-        // if current is 特殊字符
-        int8_t special_type = scanner_special_char(m);
-        SCANNER_ASSERTF(special_type > 0, "special characters are not recognized");
+        linked_node *prev_node = linked_last(list);
+        if (has_newline && prev_node) {
+            token_t *prev_token = prev_node->value;
+            if (scanner_need_stmt_end(m, prev_token)) {
+                token_t *stmt_end = token_new(TOKEN_STMT_EOF, ";", prev_token->line,
+                                              prev_token->column + prev_token->length + 1);
 
-        linked_push(list, token_new(special_type, scanner_gen_word(m), m->s_cursor.line, m->s_cursor.column));
+                // push token_t TOKEN_STMT_EOF
+                linked_push(list, stmt_end);
+            }
+        }
+
+        token_t *next_token = scanner_item(m, prev_node); // 预扫描一个字符，用于辅助 stmt_end 插入判断
+        linked_push(list, next_token);
     }
 
-    linked_push(list,
-                token_new(TOKEN_EOF, "EOF", m->s_cursor.line, m->s_cursor.line));
+    linked_push(list, token_new(TOKEN_EOF, "EOF", m->s_cursor.line, m->s_cursor.line));
 
     return list;
 }

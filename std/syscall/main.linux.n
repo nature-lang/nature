@@ -610,6 +610,38 @@ type stat_t = struct {
     arr<i64,3> __unused
 }
 
+u32 S_IFMT  = 0o170000  // 位掩码,用于提取文件类型位
+u32 S_IFBLK = 0o060000  // 块设备特殊文件
+u32 S_IFCHR = 0o020000  // 字符设备特殊文件
+u32 S_IFDIR = 0o040000  // 目录文件
+u32 S_IFIFO = 0o010000  // FIFO 或套接字
+u32 S_IFREG = 0o100000  // 普通文件
+u32 S_IFLNK = 0o120000  // 符号链接
+u32 S_IFSOCK = 0o140000 // 套接字
+
+fn stat_is_blk(u32 mode):bool {
+    return (mode & S_IFMT) == S_IFBLK
+}
+fn stat_is_chr(u32 mode):bool {
+    return (mode & S_IFMT) == S_IFCHR
+}
+fn stat_is_dir(u32 mode):bool {
+    return (mode & S_IFMT) == S_IFDIR
+}
+
+fn stat_is_fifo(u32 mode):bool {
+    return (mode & S_IFMT) == S_IFIFO
+}
+
+fn stat_is_reg(u32 mode):bool {
+    return (mode & S_IFMT) == S_IFREG
+}
+fn stat_is_lnk(u32 mode):bool {
+    return (mode & S_IFMT) == S_IFLNK
+}
+fn stat_is_sock(u32 mode):bool {
+    return (mode & S_IFMT) == S_IFSOCK
+}
 fn stat(string filename):stat_t {
     var st = stat_t{
         dev = 56,
@@ -694,7 +726,8 @@ fn chmod(string path, u32 mode) {
     call6(SYS_CHMOD, path.ref(), mode as void_ptr, 0, 0, 0, 0)
 }
 
-fn clock_gettime(int clock_id):timespec_t {
+fn gettime():timespec_t {
+    int clock_id = CLOCK_REALTIME
     var result = timespec_t{}
 
     call6(SYS_CLOCK_GETTIME, clock_id as void_ptr, result as void_ptr, 0, 0, 0, 0)

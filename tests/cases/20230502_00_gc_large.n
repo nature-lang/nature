@@ -9,13 +9,15 @@ fn large_allocator() {
     }
 
     runtime_force_gc()
-    println(list[380])
-    println(list[2000])
+    assert(list[380] == 380)
+    assert(list[2000] == 2000)
 }
 
 large_allocator()
 
-println(runtime_malloc_bytes())
+assert(runtime_malloc_bytes() > 100000 && runtime_malloc_bytes() < 200000)
 co.sleep(1000) // 等待 1s 等待 gc 完成
-println(runtime_malloc_bytes())
-println(l[2])
+assert(runtime_malloc_bytes() > 100 && runtime_malloc_bytes() < 2000)
+assert(l[2] == 3)
+
+println('gc large test success')

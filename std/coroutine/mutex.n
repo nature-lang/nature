@@ -1,11 +1,11 @@
-import coroutine as co
+import coroutine.types
 
 // 存放在了标准库的 mutex_t 中
 type mutex_t = struct {
     i64 state
     i64 sema
     i64 waiter_count
-    co.linkco_list_t waiters
+    var waiters = types.linkco_list_t{}
 }
 
 #linkid rt_mutex_lock

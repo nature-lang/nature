@@ -7,8 +7,8 @@
 #include "utils/assertf.h"
 
 rt_mutex_t m = {0};
-int64_t sum = 0;
-int64_t sum_no_lock = 0;
+ATOMIC int64_t sum = 0;
+ATOMIC int64_t sum_no_lock = 0;
 
 static void sub_sum_fn() {
     rt_mutex_lock(&m);

@@ -6,7 +6,9 @@
 #include <stdbool.h>
 #include <uv.h>
 
-static bool can_semacquire(int64_t *addr) {
+atomic_flag lock_taken = ATOMIC_FLAG_INIT;
+
+static bool can_semacquire(ATOMIC int64_t *addr) {
     while (true) {
         int64_t v = atomic_load(addr);
         if (v == 0) {
@@ -20,6 +22,8 @@ static bool can_semacquire(int64_t *addr) {
 }
 
 void rt_mutex_lock(rt_mutex_t *m) {
+//    TDEBUGF("[rt_mutex_lock] m->waiters.locker.__sig = %d", m->waiters.locker.__sig)
+
     int64_t expected = 0;// starving = 0 and locked=0
     if (atomic_compare_exchange_strong(&m->state, &expected, MUTEX_LOCKED)) {
         return;
@@ -193,7 +197,7 @@ bool rt_can_spin(int64_t iter) {
         return false;
     }
 
-    processor_t *p = processor_get();
+    n_processor_t *p = processor_get();
     if (!rt_linked_fixalloc_empty(&p->runnable_list)) {
         return false;
     }
@@ -240,8 +244,8 @@ void rt_mutex_waiter_acquire(rt_mutex_t *m, bool to_head) {
             linkco_list_push(&m->waiters, co);
         }
 
-        assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
-                m->waiters.count);
+//        assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
+//                m->waiters.count);
 
         // bug: 此时一旦解锁， release 就能读取 waiters 并 push 到 runnable list 中导致数据异常
         // 所以需要将锁延迟到 yield 到 sched 后再进行处理
@@ -280,9 +284,15 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
         return;
     }
 
-    assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
-            m->waiters.count);
+    // waiter_count 存在无锁抢占，所以此处不能安全进行 assert
+//    assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
+//            m->waiters.count);
 
+//    if (atomic_flag_test_and_set(&lock_taken)) {
+//        assertf(false, "race: Lock already taken!");
+//    }
+
+//    TDEBUGF("waiter info ...%d, %d, %p, %p", m->waiter_count, m->waiters.count, m->waiters.head, m->waiters.rear);
     // head pop
     coroutine_t *wait_co = linkco_list_pop(&m->waiters);
     assert(wait_co);
@@ -290,12 +300,12 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
     atomic_add_int64(&m->waiter_count, -1);
 
 
-    assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
-            m->waiters.count);
+//    assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
+//            m->waiters.count);
 
     pthread_mutex_unlock(&m->waiters.locker);
 
-    processor_t *p = wait_co->p;
+    n_processor_t *p = wait_co->p;
 
     // 尝试抢占自己释放的信号, 并将抢占标记传递给 wait_co
     bool ticket = can_semacquire(&m->sema);
@@ -324,7 +334,7 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
  * @param delta
  * @return
  */
-int64_t atomic_add_int64(int64_t *state, int64_t delta) {
+int64_t atomic_add_int64(ATOMIC int64_t *state, int64_t delta) {
     int64_t old = atomic_load(state);
     int64_t n = old + delta;
     while (!atomic_compare_exchange_strong(state, &old, n)) {

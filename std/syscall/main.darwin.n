@@ -1,0 +1,927 @@
+import libc
+import libc_temp
+import dirent_temp
+import syscall_temp
+import strings_temp
+
+// 文件系统相关常量
+u32 MS_ASYNC = 0x1
+u32 MS_INVALIDATE = 0x2
+u32 MS_SYNC = 0x10
+
+// 打开文件的标志
+int O_RDONLY = 0x0000
+int O_WRONLY = 0x0001
+int O_RDWR   = 0x0002
+int O_APPEND = 0x0008
+int O_CREAT  = 0x0200
+int O_EXCL   = 0x0800
+int O_TRUNC  = 0x0400
+
+// 文件seek的位置
+int SEEK_SET = 0
+int SEEK_CUR = 1
+int SEEK_END = 2
+
+// 标准文件描述符
+int STDIN_FILENO = 0
+int STDOUT_FILENO = 1
+int STDERR_FILENO = 2
+
+// Darwin系统调用编号
+int SYS_SYSCALL = 0
+int SYS_EXIT = 1
+int SYS_FORK = 2
+int SYS_READ = 3
+int SYS_WRITE = 4
+int SYS_OPEN = 5
+int SYS_CLOSE = 6
+int SYS_WAIT4 = 7
+int SYS_LINK = 9
+int SYS_UNLINK = 10
+int SYS_CHDIR = 12
+int SYS_FCHDIR = 13
+int SYS_MKNOD = 14
+int SYS_CHMOD = 15
+int SYS_CHOWN = 16
+int SYS_GETFSSTAT = 18
+int SYS_GETPID = 20
+int SYS_SETUID = 23
+int SYS_GETUID = 24
+int SYS_GETEUID = 25
+int SYS_PTRACE = 26
+int SYS_RECVMSG = 27
+int SYS_SENDMSG = 28
+int SYS_RECVFROM = 29
+int SYS_ACCEPT = 30
+int SYS_GETPEERNAME = 31
+int SYS_GETSOCKNAME = 32
+int SYS_ACCESS = 33
+int SYS_CHFLAGS = 34
+int SYS_FCHFLAGS = 35
+int SYS_SYNC = 36
+int SYS_KILL = 37
+int SYS_GETPPID = 39
+int SYS_DUP = 41
+int SYS_PIPE = 42
+int SYS_GETEGID = 43
+int SYS_SIGACTION = 46
+int SYS_GETGID = 47
+int SYS_SIGPROCMASK = 48
+int SYS_GETLOGIN = 49
+int SYS_SETLOGIN = 50
+int SYS_ACCT = 51
+int SYS_SIGPENDING = 52
+int SYS_SIGALTSTACK = 53
+int SYS_IOCTL = 54
+int SYS_REBOOT = 55
+int SYS_REVOKE = 56
+int SYS_SYMLINK = 57
+int SYS_READLINK = 58
+int SYS_EXECVE = 59
+int SYS_UMASK = 60
+int SYS_CHROOT = 61
+int SYS_MSYNC = 65
+int SYS_VFORK = 66
+int SYS_MUNMAP = 73
+int SYS_MPROTECT = 74
+int SYS_MADVISE = 75
+int SYS_MINCORE = 78
+int SYS_GETGROUPS = 79
+int SYS_SETGROUPS = 80
+int SYS_GETPGRP = 81
+int SYS_SETPGID = 82
+int SYS_SETITIMER = 83
+int SYS_SWAPON = 85
+int SYS_GETITIMER = 86
+int SYS_GETDTABLESIZE = 89
+int SYS_DUP2 = 90
+int SYS_FCNTL = 92
+int SYS_SELECT = 93
+int SYS_FSYNC = 95
+int SYS_SETPRIORITY = 96
+int SYS_SOCKET = 97
+int SYS_CONNECT = 98
+int SYS_GETPRIORITY = 100
+int SYS_BIND = 104
+int SYS_SETSOCKOPT = 105
+int SYS_LISTEN = 106
+int SYS_SIGSUSPEND = 111
+int SYS_GETTIMEOFDAY = 116
+int SYS_GETRUSAGE = 117
+int SYS_GETSOCKOPT = 118
+int SYS_READV = 120
+int SYS_WRITEV = 121
+int SYS_SETTIMEOFDAY = 122
+int SYS_FCHOWN = 123
+int SYS_FCHMOD = 124
+int SYS_SETREUID = 126
+int SYS_SETREGID = 127
+int SYS_RENAME = 128
+int SYS_FLOCK = 131
+int SYS_MKFIFO = 132
+int SYS_SENDTO = 133
+int SYS_SHUTDOWN = 134
+int SYS_SOCKETPAIR = 135
+int SYS_MKDIR = 136
+int SYS_RMDIR = 137
+int SYS_UTIMES = 138
+int SYS_FUTIMES = 139
+int SYS_ADJTIME = 140
+int SYS_GETHOSTUUID = 142
+int SYS_SETSID = 147
+int SYS_GETPGID = 151
+int SYS_SETPRIVEXEC = 152
+int SYS_PREAD = 153
+int SYS_PWRITE = 154
+int SYS_NFSSVC = 155
+int SYS_STATFS = 157
+int SYS_FSTATFS = 158
+int SYS_UNMOUNT = 159
+int SYS_GETFH = 161
+int SYS_QUOTACTL = 165
+int SYS_MOUNT = 167
+int SYS_CSOPS = 169
+int SYS_CSOPS_AUDITTOKEN = 170
+int SYS_WAITID = 173
+int SYS_KDEBUG_TYPEFILTER = 177
+int SYS_KDEBUG_TRACE_STRING = 178
+int SYS_KDEBUG_TRACE64 = 179
+int SYS_KDEBUG_TRACE = 180
+int SYS_SETGID = 181
+int SYS_SETEGID = 182
+int SYS_SETEUID = 183
+int SYS_SIGRETURN = 184
+int SYS_THREAD_SELFCOUNTS = 186
+int SYS_FDATASYNC = 187
+int SYS_STAT = 188
+int SYS_FSTAT = 189
+int SYS_LSTAT = 190
+int SYS_PATHCONF = 191
+int SYS_FPATHCONF = 192
+int SYS_GETRLIMIT = 194
+int SYS_SETRLIMIT = 195
+int SYS_GETDIRENTRIES = 196
+int SYS_MMAP = 197
+int SYS_LSEEK = 199
+int SYS_TRUNCATE = 200
+int SYS_FTRUNCATE = 201
+int SYS_SYSCTL = 202
+int SYS_MLOCK = 203
+int SYS_MUNLOCK = 204
+int SYS_UNDELETE = 205
+int SYS_OPEN_DPROTECTED_NP = 216
+int SYS_FSGETPATH_EXT = 217
+int SYS_GETATTRLIST = 220
+int SYS_SETATTRLIST = 221
+int SYS_GETDIRENTRIESATTR = 222
+int SYS_EXCHANGEDATA = 223
+int SYS_SEARCHFS = 225
+int SYS_DELETE = 226
+int SYS_COPYFILE = 227
+int SYS_FGETATTRLIST = 228
+int SYS_FSETATTRLIST = 229
+int SYS_POLL = 230
+int SYS_GETXATTR = 234
+int SYS_FGETXATTR = 235
+int SYS_SETXATTR = 236
+int SYS_FSETXATTR = 237
+int SYS_REMOVEXATTR = 238
+int SYS_FREMOVEXATTR = 239
+int SYS_LISTXATTR = 240
+int SYS_FLISTXATTR = 241
+int SYS_FSCTL = 242
+int SYS_INITGROUPS = 243
+int SYS_POSIX_SPAWN = 244
+int SYS_FFSCTL = 245
+int SYS_NFSCLNT = 247
+int SYS_FHOPEN = 248
+int SYS_MINHERIT = 250
+int SYS_SEMSYS = 251
+int SYS_MSGSYS = 252
+int SYS_SHMSYS = 253
+int SYS_SEMCTL = 254
+int SYS_SEMGET = 255
+int SYS_SEMOP = 256
+int SYS_MSGCTL = 258
+int SYS_MSGGET = 259
+int SYS_MSGSND = 260
+int SYS_MSGRCV = 261
+int SYS_SHMAT = 262
+int SYS_SHMCTL = 263
+int SYS_SHMDT = 264
+int SYS_SHMGET = 265
+int SYS_SHM_OPEN = 266
+int SYS_SHM_UNLINK = 267
+int SYS_SEM_OPEN = 268
+int SYS_SEM_CLOSE = 269
+int SYS_SEM_UNLINK = 270
+int SYS_SEM_WAIT = 271
+int SYS_SEM_TRYWAIT = 272
+int SYS_SEM_POST = 273
+int SYS_SYSCTLBYNAME = 274
+int SYS_OPEN_EXTENDED = 277
+int SYS_UMASK_EXTENDED = 278
+int SYS_STAT_EXTENDED = 279
+int SYS_LSTAT_EXTENDED = 280
+int SYS_FSTAT_EXTENDED = 281
+int SYS_CHMOD_EXTENDED = 282
+int SYS_FCHMOD_EXTENDED = 283
+int SYS_ACCESS_EXTENDED = 284
+int SYS_SETTID = 285
+int SYS_GETTID = 286
+int SYS_SETSGROUPS = 287
+int SYS_GETSGROUPS = 288
+int SYS_SETWGROUPS = 289
+int SYS_GETWGROUPS = 290
+int SYS_MKFIFO_EXTENDED = 291
+int SYS_MKDIR_EXTENDED = 292
+int SYS_IDENTITYSVC = 293
+int SYS_SHARED_REGION_CHECK_NP = 294
+int SYS_VM_PRESSURE_MONITOR = 296
+int SYS_PSYNCH_RW_LONGRDLOCK = 297
+int SYS_PSYNCH_RW_YIELDWRLOCK = 298
+int SYS_PSYNCH_RW_DOWNGRADE = 299
+int SYS_PSYNCH_RW_UPGRADE = 300
+int SYS_PSYNCH_MUTEXWAIT = 301
+int SYS_PSYNCH_MUTEXDROP = 302
+int SYS_PSYNCH_CVBROAD = 303
+int SYS_PSYNCH_CVSIGNAL = 304
+int SYS_PSYNCH_CVWAIT = 305
+int SYS_PSYNCH_RW_RDLOCK = 306
+int SYS_PSYNCH_RW_WRLOCK = 307
+int SYS_PSYNCH_RW_UNLOCK = 308
+int SYS_PSYNCH_RW_UNLOCK2 = 309
+int SYS_GETSID = 310
+int SYS_SETTID_WITH_PID = 311
+int SYS_PSYNCH_CVCLRPREPOST = 312
+int SYS_AIO_FSYNC = 313
+int SYS_AIO_RETURN = 314
+int SYS_AIO_SUSPEND = 315
+int SYS_AIO_CANCEL = 316
+int SYS_AIO_ERROR = 317
+int SYS_AIO_READ = 318
+int SYS_AIO_WRITE = 319
+int SYS_LIO_LISTIO = 320
+int SYS_IOPOLICYSYS = 322
+int SYS_PROCESS_POLICY = 323
+int SYS_MLOCKALL = 324
+int SYS_MUNLOCKALL = 325
+int SYS_ISSETUGID = 327
+int SYS___PTHREAD_KILL = 328
+int SYS___PTHREAD_SIGMASK = 329
+int SYS___SIGWAIT = 330
+int SYS___DISABLE_THREADSIGNAL = 331
+int SYS___PTHREAD_MARKCANCEL = 332
+int SYS___PTHREAD_CANCELED = 333
+int SYS___SEMWAIT_SIGNAL = 334
+int SYS_PROC_INFO = 336
+int SYS_SENDFILE = 337
+int SYS_STAT64 = 338
+int SYS_FSTAT64 = 339
+int SYS_LSTAT64 = 340
+int SYS_STAT64_EXTENDED = 341
+int SYS_LSTAT64_EXTENDED = 342
+int SYS_FSTAT64_EXTENDED = 343
+int SYS_GETDIRENTRIES64 = 344
+int SYS_STATFS64 = 345
+int SYS_FSTATFS64 = 346
+int SYS_GETFSSTAT64 = 347
+int SYS___PTHREAD_CHDIR = 348
+int SYS___PTHREAD_FCHDIR = 349
+int SYS_AUDIT = 350
+int SYS_AUDITON = 351
+int SYS_GETAUID = 353
+int SYS_SETAUID = 354
+int SYS_GETAUDIT_ADDR = 357
+int SYS_SETAUDIT_ADDR = 358
+int SYS_AUDITCTL = 359
+int SYS_BSDTHREAD_CREATE = 360
+int SYS_BSDTHREAD_TERMINATE = 361
+int SYS_KQUEUE = 362
+int SYS_KEVENT = 363
+int SYS_LCHOWN = 364
+int SYS_BSDTHREAD_REGISTER = 366
+int SYS_WORKQ_OPEN = 367
+int SYS_WORKQ_KERNRETURN = 368
+int SYS_KEVENT64 = 369
+int SYS___OLD_SEMWAIT_SIGNAL = 370
+int SYS___OLD_SEMWAIT_SIGNAL_NOCANCEL = 371
+int SYS_THREAD_SELFID = 372
+int SYS_LEDGER = 373
+int SYS_KEVENT_QOS = 374
+int SYS_KEVENT_ID = 375
+
+int SYS___MAC_EXECVE = 380
+int SYS___MAC_SYSCALL = 381
+int SYS___MAC_GET_FILE = 382
+int SYS___MAC_SET_FILE = 383
+int SYS___MAC_GET_LINK = 384
+int SYS___MAC_SET_LINK = 385
+int SYS___MAC_GET_PROC = 386
+int SYS___MAC_SET_PROC = 387
+int SYS___MAC_GET_FD = 388
+int SYS___MAC_SET_FD = 389
+int SYS___MAC_GET_PID = 390
+int SYS_PSELECT = 394
+
+int SYS_PSELECT_NOCANCEL = 395
+int SYS_READ_NOCANCEL = 396
+int SYS_WRITE_NOCANCEL = 397
+int SYS_OPEN_NOCANCEL = 398
+int SYS_CLOSE_NOCANCEL = 399
+int SYS_WAIT4_NOCANCEL = 400
+int SYS_RECVMSG_NOCANCEL = 401
+int SYS_SENDMSG_NOCANCEL = 402
+int SYS_RECVFROM_NOCANCEL = 403
+int SYS_ACCEPT_NOCANCEL = 404
+int SYS_MSYNC_NOCANCEL = 405
+int SYS_FCNTL_NOCANCEL = 406
+int SYS_SELECT_NOCANCEL = 407
+int SYS_FSYNC_NOCANCEL = 408
+int SYS_CONNECT_NOCANCEL = 409
+int SYS_SIGSUSPEND_NOCANCEL = 410
+int SYS_READV_NOCANCEL = 411
+int SYS_WRITEV_NOCANCEL = 412
+int SYS_SENDTO_NOCANCEL = 413
+int SYS_PREAD_NOCANCEL = 414
+int SYS_PWRITE_NOCANCEL = 415
+int SYS_WAITID_NOCANCEL = 416
+int SYS_POLL_NOCANCEL = 417
+int SYS_MSGSND_NOCANCEL = 418
+int SYS_MSGRCV_NOCANCEL = 419
+int SYS_SEM_WAIT_NOCANCEL = 420
+int SYS_AIO_SUSPEND_NOCANCEL = 421
+int SYS___SIGWAIT_NOCANCEL = 422
+int SYS___SEMWAIT_SIGNAL_NOCANCEL = 423
+int SYS___MAC_MOUNT = 424
+int SYS___MAC_GET_MOUNT = 425
+int SYS___MAC_GETFSSTAT = 426
+int SYS_FSGETPATH = 427
+int SYS_AUDIT_SESSION_SELF = 428
+int SYS_AUDIT_SESSION_JOIN = 429
+int SYS_FILEPORT_MAKEPORT = 430
+int SYS_FILEPORT_MAKEFD = 431
+int SYS_AUDIT_SESSION_PORT = 432
+int SYS_PID_SUSPEND = 433
+int SYS_PID_RESUME = 434
+int SYS_PID_HIBERNATE = 435
+int SYS_PID_SHUTDOWN_SOCKETS = 436
+int SYS_SHARED_REGION_MAP_AND_SLIDE_NP = 438
+int SYS_KAS_INFO = 439
+int SYS_MEMORYSTATUS_CONTROL = 440
+int SYS_GUARDED_OPEN_NP = 441
+int SYS_GUARDED_CLOSE_NP = 442
+int SYS_GUARDED_KQUEUE_NP = 443
+int SYS_CHANGE_FDGUARD_NP = 444
+int SYS_USRCTL = 445
+int SYS_PROC_RLIMIT_CONTROL = 446
+int SYS_CONNECTX = 447
+int SYS_DISCONNECTX = 448
+int SYS_PEELOFF = 449
+int SYS_SOCKET_DELEGATE = 450
+int SYS_TELEMETRY = 451
+int SYS_PROC_UUID_POLICY = 452
+int SYS_MEMORYSTATUS_GET_LEVEL = 453
+int SYS_SYSTEM_OVERRIDE = 454
+int SYS_VFS_PURGE = 455
+int SYS_SFI_CTL = 456
+int SYS_SFI_PIDCTL = 457
+int SYS_COALITION = 458
+int SYS_COALITION_INFO = 459
+int SYS_NECP_MATCH_POLICY = 460
+int SYS_GETATTRLISTBULK = 461
+int SYS_CLONEFILEAT = 462
+int SYS_OPENAT = 463
+int SYS_OPENAT_NOCANCEL = 464
+int SYS_RENAMEAT = 465
+int SYS_FACCESSAT = 466
+int SYS_FCHMODAT = 467
+int SYS_FCHOWNAT = 468
+int SYS_FSTATAT = 469
+int SYS_FSTATAT64 = 470
+int SYS_LINKAT = 471
+int SYS_UNLINKAT = 472
+int SYS_READLINKAT = 473
+int SYS_SYMLINKAT = 474
+int SYS_MKDIRAT = 475
+int SYS_GETATTRLISTAT = 476
+int SYS_PROC_TRACE_LOG = 477
+int SYS_BSDTHREAD_CTL = 478
+int SYS_OPENBYID_NP = 479
+int SYS_RECVMSG_X = 480
+int SYS_SENDMSG_X = 481
+int SYS_THREAD_SELFUSAGE = 482
+int SYS_CSRCTL = 483
+int SYS_GUARDED_OPEN_DPROTECTED_NP = 484
+int SYS_GUARDED_WRITE_NP = 485
+int SYS_GUARDED_PWRITE_NP = 486
+int SYS_GUARDED_WRITEV_NP = 487
+int SYS_RENAMEATX_NP = 488
+int SYS_MREMAP_ENCRYPTED = 489
+int SYS_NETAGENT_TRIGGER = 490
+int SYS_STACK_SNAPSHOT_WITH_CONFIG = 491
+int SYS_MICROSTACKSHOT = 492
+int SYS_GRAB_PGO_DATA = 493
+int SYS_PERSONA = 494
+int SYS_MACH_EVENTLINK_SIGNAL = 496
+int SYS_MACH_EVENTLINK_WAIT_UNTIL = 497
+int SYS_MACH_EVENTLINK_SIGNAL_WAIT_UNTIL = 498
+int SYS_WORK_INTERVAL_CTL = 499
+int SYS_GETENTROPY = 500
+int SYS_NECP_OPEN = 501
+int SYS_NECP_CLIENT_ACTION = 502
+int SYS___NEXUS_OPEN = 503
+int SYS___NEXUS_REGISTER = 504
+int SYS___NEXUS_DEREGISTER = 505
+int SYS___NEXUS_CREATE = 506
+int SYS___NEXUS_DESTROY = 507
+int SYS___NEXUS_GET_OPT = 508
+int SYS___NEXUS_SET_OPT = 509
+int SYS___CHANNEL_OPEN = 510
+int SYS___CHANNEL_GET_INFO = 511
+int SYS___CHANNEL_SYNC = 512
+int SYS___CHANNEL_GET_OPT = 513
+int SYS___CHANNEL_SET_OPT = 514
+int SYS_ULOCK_WAIT = 515
+int SYS_ULOCK_WAKE = 516
+int SYS_FCLONEFILEAT = 517
+int SYS_FS_SNAPSHOT = 518
+int SYS_REGISTER_UEXC_HANDLER = 519
+int SYS_TERMINATE_WITH_PAYLOAD = 520
+int SYS_ABORT_WITH_PAYLOAD = 521
+int SYS_NECP_SESSION_OPEN = 522
+int SYS_NECP_SESSION_ACTION = 523
+int SYS_SETATTRLISTAT = 524
+int SYS_NET_QOS_GUIDELINE = 525
+int SYS_FMOUNT = 526
+int SYS_NTP_ADJTIME = 527
+int SYS_NTP_GETTIME = 528
+int SYS_OS_FAULT_WITH_PAYLOAD = 529
+int SYS_KQUEUE_WORKLOOP_CTL = 530
+int SYS___MACH_BRIDGE_REMOTE_TIME = 531
+int SYS_COALITION_LEDGER = 532
+int SYS_LOG_DATA = 533
+int SYS_MEMORYSTATUS_AVAILABLE_MEMORY = 534
+int SYS_SHARED_REGION_MAP_AND_SLIDE_2_NP = 536
+int SYS_PIVOT_ROOT = 537
+int SYS_TASK_INSPECT_FOR_PID = 538
+int SYS_TASK_READ_FOR_PID = 539
+int SYS_PREADV = 540
+int SYS_PWRITEV = 541
+int SYS_PREADV_NOCANCEL = 542
+int SYS_PWRITEV_NOCANCEL = 543
+int SYS_ULOCK_WAIT2 = 544
+int SYS_PROC_INFO_EXTENDED_ID = 545
+int SYS_MAXSYSCALL = 546
+int SYS_INVALID = 63
+
+// sigkill 相关信号
+int SIGABRT = 0x6
+int SIGALRM = 0xe
+int SIGBUS = 0x7
+int SIGCHLD = 0x11
+int SIGCLD = 0x11
+int SIGCONT = 0x12
+int SIGFPE = 0x8
+int SIGHUP = 0x1
+int SIGILL = 0x4
+int SIGINT = 0x2
+int SIGIO = 0x1d
+int SIGIOT = 0x6
+int SIGKILL = 0x9
+int SIGPIPE = 0xd
+int SIGPOLL = 0x1d
+int SIGPROF = 0x1b
+int SIGPWR = 0x1e
+int SIGQUIT = 0x3
+int SIGSEGV = 0xb
+int SIGSTKFLT = 0x10
+int SIGSTOP = 0x13
+int SIGSYS = 0x1f
+int SIGTERM = 0xf
+int SIGTRAP = 0x5
+int SIGTSTP = 0x14
+int SIGTTIN = 0x15
+int SIGTTOU = 0x16
+int SIGUNUSED = 0x1f
+int SIGURG = 0x17
+int SIGUSR1 = 0xa
+int SIGUSR2 = 0xc
+int SIGVTALRM = 0x1a
+int SIGWINCH = 0x1c
+int SIGXCPU = 0x18
+int SIGXFSZ = 0x19
+
+// 网络相关
+int AF_ALG = 0x26
+int AF_APPLETALK = 0x5
+int AF_ASH = 0x12
+int AF_ATMPVC = 0x8
+int AF_ATMSVC = 0x14
+int AF_AX25 = 0x3
+int AF_BLUETOOTH = 0x1f
+int AF_BRIDGE = 0x7
+int AF_CAIF = 0x25
+int AF_CAN = 0x1d
+int AF_DECnet = 0xc
+int AF_ECONET = 0x13
+int AF_FILE = 0x1
+int AF_IEEE802154 = 0x24
+int AF_INET = 0x2
+int AF_INET6 = 0xa
+int AF_IPX = 0x4
+int AF_IRDA = 0x17
+int AF_ISDN = 0x22
+int AF_IUCV = 0x20
+int AF_KEY = 0xf
+int AF_LLC = 0x1a
+int AF_LOCAL = 0x1
+int AF_MAX = 0x27
+int AF_NETBEUI = 0xd
+int AF_NETLINK = 0x10
+int AF_NETROM = 0x6
+int AF_PACKET = 0x11
+int AF_PHONET = 0x23
+int AF_PPPOX = 0x18
+int AF_RDS = 0x15
+int AF_ROSE = 0xb
+int AF_ROUTE = 0x10
+int AF_RXRPC = 0x21
+int AF_SECURITY = 0xe
+int AF_SNA = 0x16
+int AF_TIPC = 0x1e
+int AF_UNIX = 0x1
+int AF_UNSPEC = 0x0
+int AF_WANPIPE = 0x19
+int AF_X25 = 0x9
+int ARPHRD_ADAPT = 0x108
+int ARPHRD_APPLETLK = 0x8
+int ARPHRD_ARCNET = 0x7
+int ARPHRD_ASH = 0x30d
+int ARPHRD_ATM = 0x13
+int ARPHRD_AX25 = 0x3
+int ARPHRD_BIF = 0x307
+int ARPHRD_CHAOS = 0x5
+int ARPHRD_CISCO = 0x201
+int ARPHRD_CSLIP = 0x101
+int ARPHRD_CSLIP6 = 0x103
+int ARPHRD_DDCMP = 0x205
+int ARPHRD_DLCI = 0xf
+int ARPHRD_ECONET = 0x30e
+int ARPHRD_EETHER = 0x2
+int ARPHRD_ETHER = 0x1
+int ARPHRD_EUI64 = 0x1b
+int ARPHRD_FCAL = 0x311
+int ARPHRD_FCFABRIC = 0x313
+int ARPHRD_FCPL = 0x312
+int ARPHRD_FCPP = 0x310
+int ARPHRD_FDDI = 0x306
+int ARPHRD_FRAD = 0x302
+int ARPHRD_HDLC = 0x201
+int ARPHRD_HIPPI = 0x30c
+int ARPHRD_HWX25 = 0x110
+int ARPHRD_IEEE1394 = 0x18
+int ARPHRD_IEEE802 = 0x6
+int ARPHRD_IEEE80211 = 0x321
+int ARPHRD_IEEE80211_PRISM = 0x322
+int ARPHRD_IEEE80211_RADIOTAP = 0x323
+int ARPHRD_IEEE802154 = 0x324
+int ARPHRD_IEEE802154_PHY = 0x325
+int ARPHRD_IEEE802_TR = 0x320
+int ARPHRD_INFINIBAND = 0x20
+int ARPHRD_IPDDP = 0x309
+int ARPHRD_IPGRE = 0x30a
+int ARPHRD_IRDA = 0x30f
+int ARPHRD_LAPB = 0x204
+int ARPHRD_LOCALTLK = 0x305
+int ARPHRD_LOOPBACK = 0x304
+int ARPHRD_METRICOM = 0x17
+int ARPHRD_NETROM = 0x0
+int ARPHRD_NONE = 0xfffe
+int ARPHRD_PIMREG = 0x30b
+int ARPHRD_PPP = 0x200
+int ARPHRD_PRONET = 0x4
+int ARPHRD_RAWHDLC = 0x206
+int ARPHRD_ROSE = 0x10e
+int ARPHRD_RSRVD = 0x104
+int ARPHRD_SIT = 0x308
+int ARPHRD_SKIP = 0x303
+int ARPHRD_SLIP = 0x100
+int ARPHRD_SLIP6 = 0x102
+int ARPHRD_TUNNEL = 0x300
+int ARPHRD_TUNNEL6 = 0x301
+int ARPHRD_VOID = 0xffff
+int ARPHRD_X25 = 0x10f
+
+int SOCK_CLOEXEC = 0x80000
+int SOCK_DCCP = 0x6
+int SOCK_DGRAM = 0x2
+int SOCK_NONBLOCK = 0x800
+int SOCK_PACKET = 0xa
+int SOCK_RAW = 0x3
+int SOCK_RDM = 0x4
+int SOCK_SEQPACKET = 0x5
+int SOCK_STREAM = 0x1
+
+fn call6(int number, void_ptr a1, void_ptr a2, void_ptr a3, void_ptr a4, void_ptr a5, void_ptr a6):int {
+    return syscall_call6(number, a1, a2, a3, a4, a5, a6)
+}
+
+fn open(string filename, int flags, u32 perm):int {
+    return call6(SYS_OPEN, filename.ref(), flags as void_ptr, perm as void_ptr, 0, 0, 0)
+}
+
+
+fn read(int fd, void_ptr buf, int len):int {
+    return call6(SYS_READ, fd as void_ptr, buf, len as void_ptr, 0, 0, 0)
+}
+
+fn readlink(string file, [u8] buf):int {
+    return call6(SYS_READLINK, file.ref(), buf.ref(), buf.len() as void_ptr, 0, 0, 0)
+}
+
+fn write(int fd, void_ptr buf, int len):int {
+    return call6(SYS_WRITE, fd as void_ptr, buf, len as void_ptr, 0, 0, 0)
+}
+
+fn close(int fd) {
+    call6(SYS_CLOSE, fd as void_ptr, 0, 0, 0, 0, 0)
+}
+
+fn unlink(string path) {
+    call6(SYS_UNLINK, path.ref(), 0, 0, 0, 0, 0)
+}
+
+fn seek(int fd, int offset, int whence):int {
+    return call6(SYS_LSEEK, fd as void_ptr, offset as void_ptr, whence as void_ptr, 0, 0, 0)
+}
+
+#linkid fork
+fn libc_fork():int
+
+fn fork():int {
+    return libc_fork()
+    // return call6(SYS_FORK, 0, 0, 0, 0, 0, 0)
+}
+
+// path is full path
+// argv[0] = /proc/:pid/comm
+fn exec(string path, [string] argv, [string] envp) {
+    return syscall_exec(path, argv, envp)
+}
+
+type timespec_t = struct {
+    i64 sec
+    i64 nsec
+}
+
+type stat_t = struct {
+    i32 dev
+    u16 mode
+    u16 nlink
+    u64 ino
+    u32 uid
+    u32 gid
+    i32 rdev
+    timespec_t atim
+    timespec_t mtim
+    timespec_t ctim
+    timespec_t btim
+    i64 size
+    i64 blocks
+    i32 blksize
+    u32 flags
+    u32 gen
+    i32 lspare
+    arr<i64,2> st_qspare
+}
+
+u16 S_IFMT   = 0o170000
+u16 S_IFBLK  = 0o060000
+u16 S_IFCHR  = 0o020000
+u16 S_IFDIR  = 0o040000
+u16 S_IFIFO  = 0o010000
+u16 S_IFLNK  = 0o120000
+u16 S_IFREG  = 0o100000
+u16 S_IFSOCK = 0o140000
+
+fn stat_is_blk(u16 mode):bool {
+    return (mode & S_IFMT) == S_IFBLK
+}
+
+fn stat_is_chr(u16 mode):bool {
+    return (mode & S_IFMT) == S_IFCHR
+}
+
+fn stat_is_dir(u16 mode):bool {
+    return (mode & S_IFMT) == S_IFDIR
+}
+
+fn stat_is_fifo(u16 mode):bool {
+    return (mode & S_IFMT) == S_IFIFO
+}
+
+fn stat_is_lnk(u16 mode):bool {
+    return (mode & S_IFMT) == S_IFLNK
+}
+
+fn stat_is_reg(u16 mode):bool {
+    return (mode & S_IFMT) == S_IFREG
+}
+
+fn stat_is_sock(u16 mode):bool {
+    return (mode & S_IFMT) == S_IFSOCK
+}
+fn stat(string filename):stat_t {
+    var st = stat_t{}
+    call6(SYS_STAT64, filename.ref(), st as void_ptr, 0, 0, 0, 0)
+    return st
+}
+
+fn fstat(int fd):stat_t {
+    var st = stat_t{}
+    call6(SYS_FSTAT64, fd as void_ptr, st as void_ptr, 0, 0, 0, 0)
+    return st
+}
+
+fn mkdir(string path, u32 mode) {
+    call6(SYS_MKDIR, path.ref(), mode as void_ptr, 0, 0, 0, 0)
+}
+
+fn rmdir(string path) {
+    call6(SYS_RMDIR, path.ref(), 0, 0, 0, 0, 0)
+}
+
+fn rename(string oldpath, string newpath) {
+    call6(SYS_RENAME, oldpath.ref(), newpath.ref(), 0, 0, 0, 0)
+}
+
+fn exit(int status) {
+    call6(SYS_EXIT, status as void_ptr, 0, 0, 0, 0, 0)
+}
+
+fn getpid():int {
+    return call6(SYS_GETPID, 0, 0, 0, 0, 0, 0)
+}
+
+fn getppid():int {
+    return call6(SYS_GETPPID, 0, 0, 0, 0, 0, 0)
+}
+
+#linkid getcwd
+fn libc_getcwd(void_ptr path, uint size):void_ptr
+
+#linkid strlen
+fn libc_strlen(void_ptr str):uint
+
+fn getcwd():string {
+    var buf = vec_new<u8>(1024, 0) // 1024 是 path max
+
+    // 这不能是自己调用自己了，冲突的yip
+    void_ptr raw_path = libc_getcwd(buf.ref() as void_ptr, buf.len() as uint)
+    var len = libc_strlen(raw_path) as i64
+
+    buf = buf.slice(0, len - 1) // -1 is remove '\0'
+    return buf as string
+}
+
+fn kill(int pid, int sig) {
+    call6(SYS_KILL, pid as void_ptr, sig as void_ptr, 0, 0, 0, 0)
+}
+
+fn wait(int pid, int option):(int, int) {
+    var status = 0
+    int result = call6(SYS_WAIT4, pid as void_ptr, &status as void_ptr, option as void_ptr, 0, 0, 0)
+    if result == -1 {
+        throw libc_strerror()
+    }
+    return (result, status)
+}
+
+fn chdir(string path) {
+    call6(SYS_CHDIR, path.ref(), 0, 0, 0, 0, 0)
+}
+
+fn chroot(string path) {
+    call6(SYS_CHROOT, path.ref(), 0, 0, 0, 0, 0)
+}
+
+fn chown(string path, u32 uid, u32 gid) {
+    call6(SYS_CHOWN, path.ref(), uid as void_ptr, gid as void_ptr, 0, 0, 0)
+}
+
+fn chmod(string path, u32 mode) {
+    call6(SYS_CHMOD, path.ref(), mode as void_ptr, 0, 0, 0, 0)
+}
+
+type timeval_t = struct {
+    i64 tv_sec
+    i32 tv_usec
+}
+
+type timezone_t = struct {
+    i32 tz_minuteswest
+    i32 tz_dsttime
+}
+
+fn gettime():timespec_t {
+    // Darwin 不直接支持 clock_gettime，我们需要使用 gettimeofday 代替
+    var tv = timeval_t{}
+    var tz = timezone_t{}
+    call6(SYS_GETTIMEOFDAY, tv as void_ptr, tz as void_ptr, 0, 0, 0, 0)
+    var result = timespec_t{
+        sec = tv.tv_sec,
+        nsec = (tv.tv_usec * 1000) as i64
+    }
+    return result
+}
+
+// 网络相关结构体和函数
+type sockaddr_in = struct {
+    u16 sin_family
+    u16 sin_port
+    u32 sin_addr
+    arr<u8,8> sin_zero
+}
+
+type sockaddr_in6 = struct {
+    u8 sin6_len
+    u8 sin6_family
+    u16 sin6_port
+    u32 sin6_flowinfo
+    arr<u32,4> sin6_addr
+    u32 sin6_scope_id
+}
+
+type sockaddr_un = struct {
+    u8 sun_len
+    u8 sun_family
+    arr<u8,104> sun_path
+}
+
+fn socket(int domain, int t, int protocol):int {
+    return call6(SYS_SOCKET, domain as void_ptr, t as void_ptr, protocol as void_ptr, 0, 0, 0)
+}
+
+fn bind<T>(int sockfd, T addr) {
+    var len = @sizeof(T) as void_ptr
+    call6(SYS_BIND, sockfd as void_ptr, addr as void_ptr, len, 0, 0, 0)
+}
+
+fn bind6(int sockfd, sockaddr_in6 addr) {
+    var len = @sizeof(sockaddr_in6) as void_ptr
+    call6(SYS_BIND, sockfd as void_ptr, addr as void_ptr, len, 0, 0, 0)
+}
+
+fn listen(int sockfd, int backlog) {
+    call6(SYS_LISTEN, sockfd as void_ptr, backlog as void_ptr, 0, 0, 0, 0)
+}
+
+fn accept<T>(int sockfd, ptr<T> addr):int {
+    var len = @sizeof(T)
+    raw_ptr<int> len_ptr = &len
+    int fd = call6(SYS_ACCEPT, sockfd as void_ptr, addr as void_ptr, len_ptr as void_ptr, 0, 0, 0)
+    return fd
+}
+
+fn recvfrom(int sockfd, [u8] buf, int flags):int {
+    return call6(SYS_RECVFROM, sockfd as void_ptr, buf.ref(), buf.len() as void_ptr, flags as void_ptr, 0, 0)
+}
+
+fn sendto(int sockfd, [u8] buf, int flags):int {
+    return call6(SYS_SENDTO, sockfd as void_ptr, buf.ref(), buf.len() as void_ptr, flags as void_ptr, 0, 0)
+}
+
+fn get_envs():[string] {
+    return libc_get_envs()
+}
+
+fn get_env(string key):string {
+    void_ptr ref = getenv(key.ref())
+    if ref == 0 {
+        return ''
+    }
+    return libc_string_new(ref)
+}
+
+fn set_env(string key, string value) {
+    var result = setenv(key.ref(), value.ref(), 1)
+    if result != 0 {
+        throw 'setenv error'
+    }
+}
+
+// Darwin 不支持 unshare，这里提供一个错误提示
+fn unshare(int flags) {
+    throw 'unshare is not supported on Darwin'
+}
+
+fn mount(string source, string target, string fs_type, u32 flags, string data) {
+    call6(SYS_MOUNT, source.ref(), target.ref(), fs_type.ref(), flags as void_ptr, data.ref(), 0)
+}
+
+fn umount(string target, u32 flags) {
+    // Darwin 使用 SYS_UNMOUNT 而不是 SYS_UMOUNT2
+    call6(SYS_UNMOUNT, target.ref(), flags as void_ptr, 0, 0, 0, 0)
+}

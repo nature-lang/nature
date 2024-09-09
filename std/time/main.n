@@ -31,7 +31,7 @@ fn time_t.datetime():string {
 
 // 将 time_t 使用当前时间进行初始化
 fn now():time_t {
-    var sys_time = syscall.clock_gettime(syscall.CLOCK_REALTIME)
+    var sys_time = syscall.gettime()
     var t = time_t {
         sec = sys_time.sec,
         nsec = sys_time.nsec,
@@ -39,4 +39,8 @@ fn now():time_t {
     }
 
     return t
+}
+
+fn unix():i64 {
+    return now().timestamp()
 }

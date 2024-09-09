@@ -1,0 +1,9 @@
+type car_t<E> = [E]
+
+int global_v = 12
+
+type bar_t<T> = struct{
+    T a = global_v as T
+    car_t<T> c
+    int size = @sizeof(T)
+}

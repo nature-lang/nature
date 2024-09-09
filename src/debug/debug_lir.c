@@ -105,9 +105,9 @@ char *lir_imm_to_string(lir_imm_t *immediate) {
         }
         len = sprintf(buf, "IMM[%s|BOOL]", bool_str);
     } else if (is_integer(immediate->kind)) {
-        len = sprintf(buf, "IMM[%ld:INT]", immediate->uint_value);
+        len = sprintf(buf, "IMM[%ld:%s]", immediate->uint_value, type_kind_str[immediate->kind]);
     } else if (is_float(immediate->kind)) {
-        len = sprintf(buf, "IMM[%f:FLOAT]", immediate->f64_value);
+        len = sprintf(buf, "IMM[%f:%s]", immediate->f64_value, type_kind_str[immediate->kind]);
     } else if (immediate->kind == TYPE_RAW_STRING) {
         len = sprintf(buf, "IMM[%s:RAW_STRING]", immediate->string_value);
     } else {

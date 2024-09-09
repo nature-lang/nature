@@ -946,7 +946,7 @@ inst_t comisd = {"cmp", "comisd", 0x66, {0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
                          {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
                  }
 };
-inst_t comiss = {"cmp", "comiss", 0x66, {0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
+inst_t comiss = {"cmp", "comiss", 0, {0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
                  {
                          {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                          {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
@@ -1292,11 +1292,12 @@ asm_keys_t operand_low_to_high(inst_operand_type t) {
     }
 
     if (t == OPERAND_TYPE_M) {
-        res.count = 3;
+        res.count = 4;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
         highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
+        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
+        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
         res.list = highs;
         return res;
     }
@@ -1310,21 +1311,23 @@ asm_keys_t operand_low_to_high(inst_operand_type t) {
     }
 
     if (t == OPERAND_TYPE_M32) {
-        res.count = 3;
+        res.count = 4;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
         highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, DWORD);
         highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, DWORD);
         highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, DWORD);
+        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, DWORD);
         res.list = highs;
         return res;
     }
 
     if (t == OPERAND_TYPE_M64) {
-        res.count = 3;
+        res.count = 4;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
         highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
         highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
+        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
+        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
         res.list = highs;
         return res;
     }
@@ -1854,14 +1857,8 @@ static void parser_ext(amd64_inst_format_t *format, opcode_ext ext) {
 }
 
 static void set_disp(amd64_inst_format_t *format, reg_t *reg, uint8_t *disps, uint8_t count) {
-    // 特殊 register 处理, 由于 [rsp] 这样的编码在使用 modr/m 的 rm 部分使用 100 表示 rsp 寄存器基址
-    // 但是由于 mod = 0b00，r/m=0b100 表示引导 sib 字段。所以需要 sib 部分进行重新进行寄存器引导。
-    // reg 部分依旧有效, 0x24 = 00,100,100 , 档 sib 的 index 部分 = 0b100 时不存在变值寄存器，用来特殊引导 [base] 这样的形式。
     //  [rsp] 就可以用于引导这种形式。
     int j = 0;
-    if (reg && reg->index == 4) { // 4 表示 rsp/esp
-        format->disps[j++] = 0x24;
-    }
 
     for (int i = 0; i < count; i++) {
         format->disps[j++] = disps[i];
@@ -2099,28 +2096,47 @@ amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst) {
                 uint8_t temp[4];
                 int32_to_uint8(r->disp, temp);
                 set_disp(format, NULL, temp, 4);
-            } else if (asm_operand->type == ASM_OPERAND_TYPE_SIB_REG) {
-                asm_sib_reg_t *sib_reg = asm_operand->value;
-                if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
-                    if (format->modrm == NULL) {
-                        format->modrm = new_modrm();
-                    }
-
-                    format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER;
-                    format->modrm->rm = MODRM_MOD_SIB_FOLLOWS_RM;
-
-                    format->sib = new_sib(sib_reg->scale, sib_reg->index->index, sib_reg->base->index);
-                    if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
-                        format->rex_prefix->x = sib_reg->index->index > 7;
-                        format->rex_prefix->b = sib_reg->base->index > 7;
-                    }
-
-                    if (sib_reg->base->index == 13) {
-                        format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
-                        uint8_t temp[1] = {0};
-                        set_disp(format, sib_reg->base, temp, 0);
-                    }
+            }
+        } else if (asm_operand->type == ASM_OPERAND_TYPE_SIB_REG) {
+            asm_sib_reg_t *sib_reg = asm_operand->value;
+            if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
+                if (format->modrm == NULL) {
+                    format->modrm = new_modrm();
                 }
+
+                format->modrm->rm = MODRM_MOD_SIB_FOLLOWS_RM;
+                assert(sib_reg->base != NULL);
+
+                uint8_t sib_index = sib_reg->index ? sib_reg->index->index : 4; // 0 表示 rax, 4 表示没有索引
+                uint8_t sib_base = sib_reg->base->index;
+
+                format->sib = new_sib(sib_reg->scale, sib_index, sib_base);
+                if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
+                    format->rex_prefix->x = sib_index > 7;
+                    format->rex_prefix->b = sib_base > 7;
+                }
+
+                if (sib_reg->disp == 0) {
+                    format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER;
+                } else if (sib_reg->disp >= -128 && sib_reg->disp <= 127) {
+                    format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
+                    uint8_t temp[1] = {(uint8_t) sib_reg->disp};
+                    set_disp(format, sib_reg->base, temp, 1);
+                } else {
+                    format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_DWORD_DISP;
+                    uint8_t temp[4];
+                    int32_to_uint8(sib_reg->disp, temp);
+                    set_disp(format, sib_reg->base, temp, 4);
+                }
+
+
+                // r13/rbp Special case treatment
+                if (sib_reg->base->index == 13 || sib_reg->base->index == 5) {
+                    format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
+                    uint8_t temp[1] = {0};
+                    set_disp(format, sib_reg->base, temp, 1);
+                }
+
             }
         } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT64) {
             asm_uint64_t *uint = asm_operand->value;
