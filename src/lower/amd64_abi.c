@@ -391,7 +391,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
             lir_operand_t *dst_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_VOID_PTR));
             linked_push(result, lir_op_lea(dst_ref, dst));
 
-            linked_t *temps = lir_memory_mov(c->module, arg_type, dst_ref, arg_operand);
+            linked_t *temps = lir_memory_mov(c->module, type_sizeof(arg_type), dst_ref, arg_operand);
             linked_concat(result, temps);
         } else {
             linked_push(result, lir_op_move(dst, arg_operand));

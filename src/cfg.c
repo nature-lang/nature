@@ -398,7 +398,7 @@ void cfg(closure_t *c) {
     // 添加入口块
     c->entry = c->blocks->take[0];
 
-    // debug_block_lir(c, "cfg_build");
+     debug_block_lir(c, "cfg_build_before_check");
 
     // return 分析
     return_check(c, NULL, c->entry);

@@ -27,7 +27,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
     set(BUILD_TYPE "debug")
     #    add_compile_definitions(NATURE_DEBUG)
     add_compile_definitions(DEBUG_LIR)
-    #    add_compile_definitions(DEBUG_ASM)
+    add_compile_definitions(DEBUG_ASM)
     add_compile_definitions(DEBUG_PARSER)
     #    add_compile_definitions(DEBUG_INTERVAL)
     #    add_compile_definitions(DEBUG_MACHO)
@@ -50,13 +50,14 @@ include_directories(.)
 add_executable(nature main.c ${SRC} ${CMD} ${UTILS})
 target_link_libraries(nature m) # 链接数学计算库
 
-enable_testing()
-add_subdirectory(tests)
-add_subdirectory(runtime EXCLUDE_FROM_ALL)
-
 # custom golang build package
 set(PACKAGE_BINARY_NAME npkg)
 set(GOBIN /usr/local/go/bin/go)
+set(PACKAGE_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME})
+
+enable_testing()
+add_subdirectory(tests)
+add_subdirectory(runtime EXCLUDE_FROM_ALL)
 
 add_custom_target(${PACKAGE_BINARY_NAME} ALL
         COMMAND GOOS=${CMAKE_SYSTEM_NAME} GOARCH=${CMAKE_SYSTEM_PROCESSOR} ${GOBIN} build -o ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} ${PROJECT_SOURCE_DIR}/package/main.go

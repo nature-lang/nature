@@ -1,9 +1,9 @@
 import path
 import syscall
 import libc_temp
-import dirent_temp
 import syscall_temp
 import strings_temp
+import os.dirent
 
 fn args():[string] {
     return std_args()
@@ -34,27 +34,27 @@ fn dirs_sort([string] dirs) {
 fn listdir(string path):[string] {
     [string] result = []
 
-    var dir = opendir(path.ref())
+    var dir = dirent.opendir(path.ref())
     if dir == 0 {
         throw 'opendir failed: ' + libc_strerror()
     }
 
     for true {
         // raw_ptr 可以接收 null 或者具体的指针值，可以通过 *语法解构原始值
-        raw_ptr<dirent_t> entry = readdir(dir)
+        raw_ptr<dirent.dirent_t> entry = dirent.readdir(dir)
         if entry == null {
             break
         }
 
-        // dirent_t dirent = *entry
         var name = libc_string_new(entry.name as void_ptr)
-        if name == '.' || name == '..' {
+        if name == '.' || name == '..' || name == '' {
             continue
         }
 
         result.push(name)
     }
 
+    closedir(dir)
     dirs_sort(result)
 
     return result
@@ -96,7 +96,8 @@ fn rmdir(string dir, bool recursive) {
     var list = listdir(dir)
     for item in list {
         var fullpath = path.join(dir, item)
-        if path.isdir(fullpath) {
+        var isdir = path.isdir(fullpath)
+        if isdir {
             rmdir(fullpath, true) // 递归删除其中的所有文件
         } else {
             // rm file 可能存在权限不足的错误，暂时不做错误判断，直接跳过即可

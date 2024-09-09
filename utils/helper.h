@@ -555,6 +555,12 @@ static inline void sys_memory_unmap(void *base, uint64_t size) {
 static inline void sys_memory_remove(void *addr, uint64_t size) {
     madvise(addr, size, MADV_DONTNEED);
 }
+#elif __DARWIN
+
+static inline void sys_memory_remove(void *addr, uint64_t size) {
+    // On Darwin, use MADV_FREE which is similar to MADV_DONTNEED
+    madvise(addr, size, MADV_FREE);
+}
 
 #else
 

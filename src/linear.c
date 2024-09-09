@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stddef.h>
 
 #include "src/debug/debug.h"
 #include "src/error.h"
@@ -47,7 +48,7 @@ static lir_operand_t *linear_super_move(module_t *m, type_t t, lir_operand_t *ds
     }
 
     if (is_large_alloc_type(t)) {
-        linked_t *temps = lir_memory_mov(m, t, dst, src);
+        linked_t *temps = lir_memory_mov(m, type_sizeof(t), dst, src);
         linked_concat(m->current_closure->operations, temps);
         return dst;
     }
@@ -350,7 +351,7 @@ static void linear_escape_rewrite(module_t *m, ast_var_decl_t *var_decl, bool fo
     ast_var_decl_t *symbol_var = s->ast_value;
 
     // type 带有 in_heap 标志的简单类型需要进行 escape rewrite 改写才能分配在栈上
-    if (!is_escape_rewrite_type(symbol_var->type)) {
+    if (!is_stack_alloc_type(symbol_var->type)) {
         return;
     }
 
@@ -461,7 +462,7 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
             // var 存在 heap_ident 表明当前 var 被弃用，后续应该使用 heap_ident。只有一些标量类型会发生这种情况。
             if (symbol_var->heap_ident) {
                 assert(target == NULL);
-                assert(is_escape_rewrite_type(symbol_var->type));
+                assert(is_stack_alloc_type(symbol_var->type));
 
                 lir_operand_t *src = lir_var_operand(m, symbol_var->heap_ident);
 
@@ -536,6 +537,20 @@ static void linear_tuple_assign(module_t *m, ast_assign_stmt_t *stmt) {
     linear_expr(m, stmt->right, dst);
 }
 
+static lir_operand_t *linear_inline_env_values(module_t *m) {
+    // 基于 fn_runtime_operand + index 计算出 offset 直接进行 move 操作
+    size_t envs_offset = offsetof(runtime_fn_t, envs);
+    lir_operand_t *env_operand = temp_var_operand(m, type_kind_new(TYPE_VOID_PTR));
+    // lea [fn + x] -> env
+    OP_PUSH(lir_op_move(env_operand, indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR),
+                                                           m->current_closure->fn_runtime_operand, envs_offset)));
+    // mov [env+0] -> values
+    lir_operand_t *values_operand = temp_var_operand(m, type_kind_new(TYPE_VOID_PTR));
+    OP_PUSH(lir_op_move(values_operand, indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), env_operand, 0)));
+
+    return values_operand;
+}
+
 /**
  * foo = 12
  * *envs[1] = 12
@@ -546,12 +561,38 @@ static void linear_env_assign(module_t *m, ast_assign_stmt_t *stmt) {
     ast_env_access_t *ast = stmt->left.value;
     lir_operand_t *index = int_operand(ast->index);
 
-    lir_operand_t *src_ref = lea_operand_pointer(m, linear_expr(m, stmt->right, NULL));
+    // 不需要 ref，直接 move 过去就行
+    lir_operand_t *src = linear_expr(m, stmt->right, NULL);
+//    lir_operand_t *src_ref = lea_operand_pointer(m, src);
     uint64_t size = type_sizeof(stmt->right.type);
+
     assertf(m->current_closure->fn_runtime_operand, "have env access, must have fn_runtime_operand");
 
-    push_rt_call(m, RT_CALL_ENV_ASSIGN_REF, NULL, 4, m->current_closure->fn_runtime_operand, index, src_ref,
-                 int_operand(size));
+    lir_operand_t *values_operand = linear_inline_env_values(m);
+
+    // move [values+x] -> dst_ptr
+    lir_operand_t *dst_ptr = temp_var_operand(m, type_ptrof(stmt->right.type));
+    size_t values_offset = ast->index * POINTER_SIZE;
+    OP_PUSH(lir_op_move(dst_ptr,
+                        indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), values_operand, values_offset)));
+
+
+    if (is_large_alloc_type(stmt->right.type)) {
+        assert(stmt->right.type.in_heap);
+    }
+
+    // 计算在 envs 中 values 的 offset
+    // move dst -> [values + x]
+    rtype_t rtype = ct_reflect_type(stmt->left.type);
+    if (rtype.size <= POINTER_SIZE) {
+        lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, dst_ptr, 0);
+        OP_PUSH(lir_op_move(dst, src));
+    } else {
+        linked_concat(m->current_closure->operations, lir_memory_mov(m, rtype.size, dst_ptr, src));
+    }
+
+//    push_rt_call(m, RT_CALL_ENV_ASSIGN_REF, NULL, 4, m->current_closure->fn_runtime_operand, index, src_ref,
+//                 int_operand(size));
 }
 
 static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
@@ -756,9 +797,13 @@ static void linear_var_tuple_def_stmt(module_t *m, ast_var_tuple_def_stmt_t *var
  * @return
  */
 static void linear_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
+    // 不传递 dst 在 type > 8byte 时会造成一定的空间浪费, 但是也让 move 和 super_move 的边界更加的清晰
+    // 后续 expr 遇到 target 时总是使用普通 move, 只有在特定的地方(右值赋值给左值时，才会使用 super_move)
+    // 左值右值主要提现在，vardef/var_tup_def/assign/call(arg)
     lir_operand_t *dst = linear_var_decl(m, &stmt->var_decl);
+    lir_operand_t *src = linear_expr(m, stmt->right, NULL);
 
-    linear_expr(m, stmt->right, dst);
+    linear_super_move(m, stmt->var_decl.type, dst, src);
 
     // 将 dst 值 copy 出来进行重新分配改写
     linear_escape_rewrite(m, &stmt->var_decl, false);
@@ -1497,6 +1542,7 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
     return target;
 }
 
+
 /**
  * 1. 根据 c->env_name 得到 base_target   call GET_ENV
  * var a = b + 3 // 其中 b 是外部环境变量,需要改写成 GET_ENV
@@ -1509,23 +1555,31 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
 static lir_operand_t *linear_env_access(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     assertf(m->current_closure->fn_runtime_operand, "have env access, must have fn_runtime_operand");
 
+    assert(expr.type.in_heap);
+
     ast_env_access_t *ast = expr.value;
     lir_operand_t *index = int_operand(ast->index);
     uint64_t size = type_sizeof(expr.type);
 
-    lir_operand_t *env_addr_ref = temp_var_operand(m, type_kind_new(TYPE_VOID_PTR));
-    push_rt_call(m, RT_CALL_ENV_ELEMENT_VALUE, env_addr_ref, 2, m->current_closure->fn_runtime_operand, index);
+    lir_operand_t *values_operand = linear_inline_env_values(m);
 
-    // 归还类型，让后续的使用中，可以按照 struct 类型进行使用，尤其是将 env_access 作为参数传递的过程中
-    lir_var_t *temp_var = env_addr_ref->value;
-    temp_var->type = expr.type;
+    // move [values+x] -> dst_ptr (values 中的值已经取了出来，丢到了 dst_ptr 里面)
+    size_t values_offset = ast->index * POINTER_SIZE;
+    lir_operand_t *src_ptr = indirect_addr_operand(m, expr.type, values_operand, values_offset);
 
-    // mov [env+x] -> target
-    if (!is_large_alloc_type(expr.type) && !kind_in_heap(expr.type.kind)) {
-        env_addr_ref = indirect_addr_operand(m, expr.type, env_addr_ref, 0);
+    // 把 values 中存储的值取出来，放在 target 中
+    if (!target) {
+        target = temp_var_operand(m, expr.type);
     }
 
-    return linear_super_move(m, expr.type, target, env_addr_ref);
+    // 传递值而不是指针，像其他的 escape 一样, 传递值而不是指针。所以此处需要进一步取值
+    if (is_scala_type(expr.type)) {
+        src_ptr = indirect_addr_operand(m, expr.type, src_ptr, 0);
+    }
+
+    // 无论是 struct/arr 还是 string/vec/ptr 等都直接进行
+    OP_PUSH(lir_op_move(target, src_ptr));
+    return target;
 }
 
 /**
@@ -2248,7 +2302,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
 
     if (literal->kind == TYPE_STRING) {
         if (!target) {
-            target = temp_var_operand_with_alloc(m, expr.type);
+            target = temp_var_operand(m, expr.type);
         }
 
         // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
@@ -2263,7 +2317,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
         return linear_super_move(m, expr.type, target, src);
     }
 
-    // 创建一个堆分配的 target, expr.type 是 int/bool 等等类型
+    // 面对像 1.tostr() 这样的表达式的时候，需要创建一个堆分配的 target, expr.type 是 int/bool 等等类型
     if (expr.type.in_heap && !target) {
         uint64_t rtype_hash = ct_find_rtype_hash(expr.type);
         lir_operand_t *temp_operand = temp_var_operand(m, type_ptrof(expr.type));
@@ -2327,13 +2381,13 @@ static lir_operand_t *linear_capture_expr(module_t *m, ast_expr_t *expr) {
         // 被 child fn 引用的 var 是更上一级的 var, local fn 也只能通过 env[n] 的方式引用
         assertf(m->current_closure->fn_runtime_operand, "have env access, must have fn_runtime_operand");
         ast_env_access_t *env_access = expr->value;
-        lir_operand_t *env_value = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
-        lir_operand_t *index = int_operand(env_access->index);
 
-        push_rt_call(m, RT_CALL_ENV_ELEMENT_VALUE, env_value,
-                     2, m->current_closure->fn_runtime_operand, index);
+        // env value 是什么东西。值还是指针，就指
+        lir_operand_t *values_operand = linear_inline_env_values(m);
+        size_t values_offset = env_access->index * POINTER_SIZE;
+        lir_operand_t *env_value_ptr = indirect_addr_operand(m, expr->type, values_operand, values_offset);
 
-        return env_value;
+        return env_value_ptr;
     } else if (expr->assert_type == AST_EXPR_IDENT) {
         // 被 child fn 引用的 var 是 local fn 中的 local var
         ast_ident *ident = expr->value;
@@ -2413,14 +2467,15 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 
         // - mov env[0] -> value_arr
         // - mov src_ptr -> value_arr[0]
-        // env 中直接存储了堆上的地址，不需要关注 upvalue 是否 close
+        // env 中直接存储了元素在堆上的地址，不需要关注 upvalue 是否 close
         lir_operand_t *src_ptr = linear_capture_expr(m, item);
 
         // dst addr
-        lir_operand_t *value_addr = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
-        OP_PUSH(lir_op_move(value_addr, indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), env_operand, 0)));
+        lir_operand_t *values_operand = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
+        OP_PUSH(lir_op_move(values_operand, indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), env_operand, 0)));
 
-        lir_operand_t *dst = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), value_addr, i * POINTER_SIZE);
+        // src_ptr 一定是一个指针类型的地址, 比如 PTR/STRING/VEC 等等，所以此处可以直接使用 TYPE_VOID_PTR
+        lir_operand_t *dst = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), values_operand, i * POINTER_SIZE);
         OP_PUSH(lir_op_move(dst, src_ptr));
     }
 

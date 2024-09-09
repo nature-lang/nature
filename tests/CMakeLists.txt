@@ -69,6 +69,8 @@ endforeach ()
 
 # ---------------------------------- 通过环境变量启用 runtime main debug 测试 ------------------------------------------
 if (DEFINED ENV{RUNTIME_DEBUG_CASE})
+    message("RUNTIME_DEBUG_CASE is defined: $ENV{RUNTIME_DEBUG_CASE}")
+
     set(TEST_IDENT $ENV{RUNTIME_DEBUG_CASE})
     message("[test_runtime_debug] find RUNTIME_DEBUG_CASE: ${TEST_IDENT}")
 
@@ -83,22 +85,23 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
     message("[test_runtime_debug] work_dir: ${WORK_DIR}, entry: ${ENTRY}")
 
     set(LIBMAIN_STATIC ${CMAKE_CURRENT_SOURCE_DIR}/tmp/libmain.a)
-    add_custom_target(build_libmain
+    add_custom_command(
+            OUTPUT ${LIBMAIN_STATIC}
             COMMAND env BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp NATURE_ROOT=${PROJECT_SOURCE_DIR} $<TARGET_FILE:nature> build --archive ${ENTRY}
             WORKING_DIRECTORY ${WORK_DIR}
-            COMMENT "Generating ${LIBMAIN_STATIC}")
-    add_dependencies(build_libmain nature)
+            DEPENDS nature
+            COMMENT "Generating ${LIBMAIN_STATIC}"
+    )
 
     message("[test_runtime_debug] LIBMAIN_STATIC: ${LIBMAIN_STATIC}")
 
     # 2. target_link_libraries 生成最终可执行文件, 依赖上一部生成的 libmain.a
-    add_executable(test_runtime_debug test_runtime_debug.c ${RUNTIMES} ${UTILS})
+    add_executable(test_runtime_debug test_runtime_debug.c ${RUNTIMES} ${UTILS} ${LIBMAIN_STATIC})
     if (CMAKE_SYSTEM_NAME MATCHES "linux")
-        set(CMAKE_EXE_LINKER_FLAGS "-static")
+        #        set(CMAKE_EXE_LINKER_FLAGS "-static")
+        set_target_properties(test_runtime_debug PROPERTIES LINK_FLAGS "-static")
     endif ()
-
-    target_link_libraries(test_runtime_debug ${LIBMAIN_STATIC} ${LIBUV_STATIC} ${LIBC_STATIC})
-    add_dependencies(test_runtime_debug build_libmain)
+    target_link_libraries(test_runtime_debug ${LIBMAIN_STATIC} ${LIBUV_STATIC})
     add_test(NAME test_runtime_debug COMMAND test_runtime_debug WORKING_DIRECTORY ${WORK_DIR})
 
     message("[test_runtime_debug] register test_runtime_debug case ${TEST_IDENT} success, work_dir=${WORK_DIR}, entry_file=${ENTRY}")

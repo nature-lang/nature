@@ -12,6 +12,8 @@
 #include "utils/table.h"
 #include "utils/type.h"
 
+extern ast_fndef_t *ast_copy_global;
+
 typedef enum {
     AST_EXPR_LITERAL = 1, // 常数值 => 预计将存储在 data 段中
     AST_EXPR_BINARY,
@@ -117,30 +119,30 @@ typedef enum {
 } ast_expr_op_t;
 
 static string ast_expr_op_str[] = {
-    [AST_OP_ADD] = "+",
-    [AST_OP_SUB] = "-",
-    [AST_OP_MUL] = "*",
-    [AST_OP_DIV] = "/",
-    [AST_OP_REM] = "%",
+        [AST_OP_ADD] = "+",
+        [AST_OP_SUB] = "-",
+        [AST_OP_MUL] = "*",
+        [AST_OP_DIV] = "/",
+        [AST_OP_REM] = "%",
 
-    [AST_OP_AND] = "&",
-    [AST_OP_OR] = "|",
-    [AST_OP_XOR] = "^",
-    [AST_OP_BNOT] = "~",
-    [AST_OP_LSHIFT] = "<<",
-    [AST_OP_RSHIFT] = ">>",
+        [AST_OP_AND] = "&",
+        [AST_OP_OR] = "|",
+        [AST_OP_XOR] = "^",
+        [AST_OP_BNOT] = "~",
+        [AST_OP_LSHIFT] = "<<",
+        [AST_OP_RSHIFT] = ">>",
 
-    [AST_OP_LT] = "<",
-    [AST_OP_LE] = "<=",
-    [AST_OP_GT] = ">", // >
-    [AST_OP_GE] = ">=", // >=
-    [AST_OP_EE] = "==", // ==
-    [AST_OP_NE] = "!=", // !=
-    [AST_OP_OR_OR] = "||",
-    [AST_OP_AND_AND] = "&&",
+        [AST_OP_LT] = "<",
+        [AST_OP_LE] = "<=",
+        [AST_OP_GT] = ">", // >
+        [AST_OP_GE] = ">=", // >=
+        [AST_OP_EE] = "==", // ==
+        [AST_OP_NE] = "!=", // !=
+        [AST_OP_OR_OR] = "||",
+        [AST_OP_AND_AND] = "&&",
 
-    [AST_OP_NOT] = "!", // unary !right
-    [AST_OP_NEG] = "-", // unary -right
+        [AST_OP_NOT] = "!", // unary !right
+        [AST_OP_NEG] = "-", // unary -right
 };
 
 struct ast_stmt_t {
@@ -176,7 +178,6 @@ typedef struct {
     type_t type;
 
     union {
-        // type 是 struct 时可以携带一定的参数, 该参数目前不开放给用户，但是可以方便编译器添加默认值
         list_t *properties; // *struct_property_t
     };
 } ast_new_expr_t;
@@ -612,9 +613,6 @@ struct ast_fndef_t {
     // local_ident_t* 当前函数中是否存在被 child 引用的变量
     slice_t *be_capture_locals;
 
-    // analyzer stage, 当 fn 定义在 struct 中,用于记录 struct type, 其是一个 ptr<struct>
-    type_t *self_struct_ptr;
-
     type_t type; // 类型冗余一份
 
     // 默认为 null, 当前函数为泛型 fn 时才会有值，local fn 同样有值且和 global fn 同值
@@ -626,6 +624,7 @@ struct ast_fndef_t {
 
     // 仅当前 fn 为 global fn 时才有可能存在一个或者多个 child_fndefs
     slice_t *local_children;
+
     // analyzer 时赋值
     bool is_local; // 是否是全局函数
     bool is_tpl; // 是否是 tpl 函数
@@ -652,9 +651,33 @@ struct ast_fndef_t {
 
 ast_ident *ast_new_ident(char *literal);
 
-ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp);
+ast_fndef_t *ast_fndef_copy(ast_fndef_t *temp);
 
-ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp);
+ast_expr_t *ast_expr_copy(ast_expr_t *temp);
+
+static bool ast_is_arithmetic_op(ast_expr_op_t op) {
+    return op == AST_OP_LSHIFT ||
+           op == AST_OP_RSHIFT ||
+           op == AST_OP_AND ||
+           op == AST_OP_OR ||
+           op == AST_OP_XOR ||
+           op == AST_OP_REM ||
+           op == AST_OP_ADD ||
+           op == AST_OP_SUB ||
+           op == AST_OP_MUL ||
+           op == AST_OP_DIV;
+}
+
+static bool ast_is_logic_op(ast_expr_op_t op) {
+    return op == AST_OP_OR_OR ||
+           op == AST_OP_AND_AND ||
+           op == AST_OP_LT ||
+           op == AST_OP_LE ||
+           op == AST_OP_GT ||
+           op == AST_OP_GE ||
+           op == AST_OP_EE ||
+           op == AST_OP_NE;
+}
 
 static inline ast_generics_param_t *ast_generics_param_new(int line, int column, char *ident) {
     ast_generics_param_t *param = NEW(ast_generics_param_t);

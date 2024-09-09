@@ -252,7 +252,7 @@ static inline lir_operand_t *int64_operand(uint64_t val) {
 
 static inline lir_operand_t *int_operand(uint64_t val) {
     lir_imm_t *imm_operand = NEW(lir_imm_t);
-    imm_operand->kind = TYPE_INT;
+    imm_operand->kind = TYPE_INT64;
     imm_operand->uint_value = val;
     lir_operand_t *operand = NEW(lir_operand_t);
     operand->assert_type = LIR_OPERAND_IMM;
@@ -272,7 +272,7 @@ static inline lir_operand_t *bool_operand(bool val) {
 
 static inline lir_operand_t *float_operand(double val) {
     lir_imm_t *imm_operand = NEW(lir_imm_t);
-    imm_operand->kind = TYPE_FLOAT;
+    imm_operand->kind = TYPE_FLOAT64;
     imm_operand->f64_value = val;
     lir_operand_t *operand = NEW(lir_operand_t);
     operand->assert_type = LIR_OPERAND_IMM;
@@ -1139,6 +1139,6 @@ static inline bool lir_can_lea(lir_op_t *op) {
     return false;
 }
 
-linked_t *lir_memory_mov(module_t *m, type_t t, lir_operand_t *dst, lir_operand_t *src);
+linked_t *lir_memory_mov(module_t *m, uint16_t size, lir_operand_t *dst, lir_operand_t *src);
 
 #endif// NATURE_SRC_LIR_H_

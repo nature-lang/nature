@@ -23,14 +23,14 @@ void cmd_entry(int argc, char **argv) {
     }
 
     struct option long_options[] = {
-            {"archive", no_argument, NULL, 0},
-            {"output", required_argument, NULL, 'o'},
-            {NULL, 0, NULL, 0}};
+            {"archive", no_argument,       NULL, 0},
+            {"output",  required_argument, NULL, 'o'},
+            {NULL, 0,                      NULL, 0}};
 
     int option_index = 0;
     int c;
 
-    bool libmain = false;
+    bool is_archive = false;
 
     // -o 参数解析
     // --archive 参数解析     int c;
@@ -61,7 +61,7 @@ void cmd_entry(int argc, char **argv) {
             }
             case 0: {
                 assert(strcmp(long_options[option_index].name, "archive") == 0);
-                libmain = true;
+                is_archive = true;
                 break;
             }
             default:
@@ -69,11 +69,8 @@ void cmd_entry(int argc, char **argv) {
         }
     }
 
-    if (libmain) {
-        build_libmain(build_file);
-    } else {
-        build(build_file);
-    }
+
+    build(build_file, is_archive);
 }
 
 #endif//NATURE_ROOT_H

@@ -714,8 +714,8 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     uint64_t rel_offset = *temp->offset + rip_offset(temp->data_count, temp->operation);
                     int64_t addend = (int64_t) (*temp->offset + temp->data_count) - (int64_t) rel_offset; // 下一条指令的其实位置
 
-                    // addend = 下一条指令的起始位置 - rel_offset
-                    temp->rel = mach_put_relocate(ctx, ctx->text_section, rel_offset, X86_64_RELOC_SIGNED, sym_index);
+                    // addend = 下一条指令的起始位置 - rel_offset, 这是一条 branch 类型的数据
+                    temp->rel = mach_put_relocate(ctx, ctx->text_section, rel_offset, X86_64_RELOC_BRANCH, sym_index);
                     continue;
 
                 }
@@ -765,7 +765,7 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
             // 外部符号添加重定位信息(temp->offset + 当前指令长度减去重定位的位置长度。 PC32 默认就是 4byte)
             uint64_t rel_offset = *temp->offset + rip_offset(temp->data_count, temp->operation);
 
-            temp->rel = mach_put_relocate(ctx, ctx->text_section, rel_offset, X86_64_RELOC_SIGNED, (int) sym_index);
+            temp->rel = mach_put_relocate(ctx, ctx->text_section, rel_offset, X86_64_RELOC_BRANCH, (int) sym_index);
         }
 
     }

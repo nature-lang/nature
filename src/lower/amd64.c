@@ -57,13 +57,13 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
             symbol->name = unique_name;
             if (imm->kind == TYPE_RAW_STRING) {
                 symbol->size = strlen(imm->string_value) + 1;
-                symbol->value = (uint8_t *)imm->string_value;
+                symbol->value = (uint8_t *) imm->string_value;
             } else if (imm->kind == TYPE_FLOAT64) {
                 symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *)&imm->f64_value;
+                symbol->value = (uint8_t *) &imm->f64_value;
             } else if (imm->kind == TYPE_FLOAT32) {
                 symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *)&imm->f32_value;
+                symbol->value = (uint8_t *) &imm->f32_value;
             } else {
                 assertf(false, "not support type %s", type_kind_str[imm->kind]);
             }
@@ -83,6 +83,7 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
                 imm_operand->assert_type = temp_operand->assert_type;
                 imm_operand->value = temp_operand->value;
             } else {
+                // float 直接修改地址，通过 rip 寻址即可, symbol value 已经添加到全局符号表中
                 imm_operand->assert_type = LIR_OPERAND_SYMBOL_VAR;
                 imm_operand->value = symbol_var;
             }

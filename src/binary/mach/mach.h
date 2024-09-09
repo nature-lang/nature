@@ -103,7 +103,7 @@ static inline void macho_section_realloc(mach_section_t *section, int64_t new_si
         size = size * 2;
     }
     uint8_t *data = realloc(section->data, size);
-    memset(data + section->data_capacity, 0, size - section->data_capacity);
+    memset(data + section->data_capacity, 0, size - section->data_capacity); // 多余位置配置为 0
     section->data = data;
     section->data_capacity = size;
 }
@@ -155,6 +155,7 @@ static uint64_t mach_put_str(mach_section_t *str_table, string_view_t *str) {
     char *ptr = mach_section_ptr_add(str_table, len);
 
     memmove(ptr, str->data, len);
+    ptr[str->size] = '\0';
     return offset;
 }
 
@@ -166,8 +167,10 @@ static inline int64_t mach_put_sym(mach_symtab_lc *lc, struct nlist_64 *sym, cha
     struct nlist_64 *new_sym = mach_section_ptr_add(lc->symbols, sizeof(struct nlist_64));
     uint64_t name_offset = 0;// name 在 str_table 中的 offset
     if (name && name[0]) {
-        char *prefixed_name = malloc(strlen(name) + 2);// +2 为了 "_" 和 '\0'
+        char *prefixed_name = mallocz(strlen(name) + 2);// +2 为了 "_" 和 '\0'
         sprintf(prefixed_name, "_%s", name);
+
+
         name_offset = mach_put_str(lc->str_table, string_view_create(prefixed_name, strlen(prefixed_name)));
     }
 
@@ -276,6 +279,9 @@ mach_put_relocate(mach_context_t *ctx, mach_section_t *apply_section, int32_t of
 }
 
 
+/**
+ * 符号总是使用
+ */
 static inline struct relocation_info *
 mach_put_rel_data(mach_context_t *ctx, mach_section_t *apply_section, int32_t rel_offset,
                   char *name, uint64_t symbol_type) {
@@ -334,7 +340,7 @@ static inline void reorder_symtab(mach_context_t *ctx) {
         if (n_sect > 0) {
             mach_section_t *ms = ctx->sections->take[n_sect - 1];
             symbols[i].n_sect = ms->sh_index;
-            log_debug("symbol sect index change %d -> %d", n_sect, ms->sh_index);
+//            log_debug("symbol sect index change %d -> %d", n_sect, ms->sh_index);
 
             // 基于 section addr 从新计算 symbol 在段表中的偏移
             symbols[i].n_value = ms->section.addr + symbols[i].n_value;
@@ -375,7 +381,6 @@ static inline void reorder_symtab(mach_context_t *ctx) {
 
             for (uint32_t j = 0; j < sec->section.nreloc; j++) {
                 uint32_t old_idx = rel[j].r_symbolnum;
-                log_debug("change index %d -> %d", old_idx, old_to_new_index[old_idx]);
                 rel[j].r_symbolnum = old_to_new_index[old_idx];
 //                rel[j].r_address = sec->section.addr + rel[j].r_address;
             }
@@ -508,13 +513,11 @@ static inline bool mach_output_object(mach_context_t *ctx) {
     reorder_symtab(ctx);
 
     // debug println 所有的 symbol 名称，sect, 以及 type
-    struct nlist_64 *symbols = (struct nlist_64 *) ctx->symtab_command->symbols->data;
-    for (int i = 0; i < ctx->symtab_command->sc.nsyms; i++) {
-        struct nlist_64 *sym = &symbols[i];
-        log_debug("index: %d, symbol: %s, sect: %d, type: %d\n", i,
-                  ctx->symtab_command->str_table->data + sym->n_un.n_strx,
-                  sym->n_sect, sym->n_type);
-    }
+//    struct nlist_64 *symbols = (struct nlist_64 *) ctx->symtab_command->symbols->data;
+//    for (int i = 0; i < ctx->symtab_command->sc.nsyms; i++) {
+//        struct nlist_64 *sym = &symbols[i];
+//        log_debug("index: %d, symbol: %s, sect: %d, type: %d\n", i, ctx->symtab_command->str_table->data + sym->n_un.n_strx, sym->n_sect, sym->n_type);
+//    }
 
     fwrite(&ctx->symtab_command->sc, 1, sizeof(struct symtab_command), f);
     file_offset += sizeof(struct symtab_command);
@@ -530,7 +533,6 @@ static inline bool mach_output_object(mach_context_t *ctx) {
             continue;
         }
 
-        log_debug("debug section=%s, offset=%d, size=%d", sec->name, sec->section.offset, sec->section.size);
 
         // file_offset 对齐, 对不起的地方补 0
         while (file_offset < sec->section.offset) {
@@ -541,6 +543,11 @@ static inline bool mach_output_object(mach_context_t *ctx) {
         fwrite(sec->data, 1, sec->section.size, f);
         file_offset += sec->section.size;
 
+    }
+
+    while (file_offset < sec_offset) {
+        fputc(0, f);
+        file_offset++;
     }
 
     assert(file_offset == sec_offset);
@@ -555,11 +562,11 @@ static inline bool mach_output_object(mach_context_t *ctx) {
         assert(file_offset == sec->section.reloff);
 
         // log_debug
-        struct relocation_info *rel = (struct relocation_info *) sec->relocate->data;
-        for (size_t j = 0; j < sec->section.nreloc; j++) {
-            assert(rel[j].r_address < sec->section.size);
-            log_debug("relocate: %d, symbol_index: %d", rel[j].r_address, rel[j].r_symbolnum);
-        }
+//        struct relocation_info *rel = (struct relocation_info *) sec->relocate->data;
+//        for (size_t j = 0; j < sec->section.nreloc; j++) {
+//            assert(rel[j].r_address < sec->section.size);
+//            log_debug("relocate: %d, symbol_index: %d", rel[j].r_address, rel[j].r_symbolnum);
+//        }
 
         fwrite(sec->relocate->data, 1, sec->relocate->data_offset, f);
         file_offset += sec->relocate->data_offset;

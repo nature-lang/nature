@@ -139,6 +139,7 @@ n_chan_t *rt_chan_new(int64_t rhash, int64_t ele_rhash, int64_t buf_len) {
     n_chan_t *chan = rti_gc_malloc(rtype->size, rtype);
     chan->msg_size = rtype_stack_size(element_rtype, POINTER_SIZE);
     pthread_mutex_init(&chan->lock, NULL);
+
     // ele_rhash
     chan->buf = rti_vec_new(element_rtype, buf_len, buf_len);
     return chan;

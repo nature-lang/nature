@@ -16,7 +16,7 @@
 #define assert_int_equal(_actual, _expect) (assertf((_actual) == (_expect), "%d", _actual))
 #define assert_true(_expr) (assertf(_expr, "not true"))
 
-#define PACKAGE_SYNC_COMMAND "npkg sync -v"
+#define PACKAGE_SYNC_COMMAND " sync -v"
 
 static inline void exec_no_output(slice_t *args) {
     exec_process(WORKDIR, BUILD_OUTPUT, args);
@@ -44,7 +44,7 @@ static inline int blackbox_setup() {
 
     strcpy(BUILD_OUTPUT_DIR, getenv("BUILD_OUTPUT_DIR"));
 
-    build(entry);
+    build(entry, false);
 
     return 0;
 }
@@ -52,7 +52,8 @@ static inline int blackbox_setup() {
 static inline void blackbox_package_sync() {
     // 环境变量下查找 package 可执行文件 npkg
     char *workdir = get_workdir();
-    char *output = command_output(workdir, PACKAGE_SYNC_COMMAND);
+    char *npkg_path = getenv("NPKG_PATH");
+    char *output = command_output(workdir, str_connect(npkg_path, PACKAGE_SYNC_COMMAND));
     log_debug("npkg sync:%s", output);
 }
 

@@ -3,8 +3,6 @@
 
 #include "src/module.h"
 
-void build(char *build_entry);
-
-void build_libmain(char *build_entry);
+void build(char *build_entry, bool is_archive);
 
 #endif //NATURE_ROOT_H

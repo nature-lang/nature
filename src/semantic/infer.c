@@ -406,7 +406,7 @@ static void literal_integer_casting(module_t *m, ast_expr_t *expr, type_t target
 
     literal->kind = target_kind;
 
-    expr->type = target_type;
+    expr->type.kind = target_type.kind;
 }
 
 static void literal_float_casting(module_t *m, ast_expr_t *expr, type_t target_type) {
@@ -504,6 +504,7 @@ static char *rewrite_ident_use(module_t *m, char *old) {
 
 static void rewrite_type_alias(module_t *m, ast_type_alias_stmt_t *stmt) {
     assert(m->current_fn);
+
     // 如果不存在 params_hash 表示当前 fndef 不存在基于泛型的重写，所以 alias 也不需要进行重写
     if (!m->current_fn->generics_args_hash) {
         return;
@@ -588,7 +589,7 @@ static bool type_confirmed(type_t t) {
  * @param expr
  * @return
  */
-static type_t infer_binary(module_t *m, ast_binary_expr_t *expr) {
+static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_type) {
     // +/-/*/ ，由做表达式的类型决定, 并且如果左右表达式类型不一致，则抛出异常
     type_t left_type = infer_right_expr(m, &expr->left, type_kind_new(TYPE_UNKNOWN));
     type_t right_type = infer_right_expr(m, &expr->right, left_type);
@@ -621,40 +622,16 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr) {
                       ast_expr_op_str[expr->operator]);
     }
 
-    // 暂时取消类型隐式转换，而是使用左值的类型作为目标类型
-    type_t target_type = left_type;
-
-    switch (expr->operator) {
-        // 算术运算符
-        case AST_OP_LSHIFT:
-        case AST_OP_RSHIFT:
-        case AST_OP_AND:
-        case AST_OP_OR:
-        case AST_OP_XOR:
-        case AST_OP_REM:
-        case AST_OP_ADD:
-        case AST_OP_SUB:
-        case AST_OP_MUL:
-        case AST_OP_DIV: {
-            return target_type;
-        }
-
-            // 逻辑运算符
-        case AST_OP_OR_OR:
-        case AST_OP_AND_AND:
-        case AST_OP_LT:
-        case AST_OP_LE:
-        case AST_OP_GT:
-        case AST_OP_GE:
-        case AST_OP_EE:
-        case AST_OP_NE: {
-            return type_kind_new(TYPE_BOOL);
-        }
-        default: {
-            INFER_ASSERTF(false, "unknown operator");
-            exit(1);
-        }
+    if (ast_is_arithmetic_op(expr->operator)) {
+        return left_type;
     }
+
+    if (ast_is_logic_op(expr->operator)) {
+        return type_kind_new(TYPE_BOOL);
+    }
+
+    INFER_ASSERTF(false, "unknown operator '%s'", ast_expr_op_str[expr->operator]);
+    exit(1);
 }
 
 /**
@@ -1227,10 +1204,12 @@ static type_t infer_struct_new(module_t *m, ast_expr_t *expr) {
         struct_property->type = expect_property->type;
     }
 
+
     // struct 默认参数处理, 默认参数的 infer 已经提前完成了，所以这里不需要二次重复进行 infer_right_expr
     list_t *default_properties = ast->type.struct_->properties;
     for (int i = 0; i < default_properties->length; ++i) {
         struct_property_t *d = ct_list_value(default_properties, i);
+        // 右值复制
         if (!d->right || table_exist(exists, d->key)) {
             continue;
         }
@@ -1451,7 +1430,7 @@ static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t tar
     if (is_singleton_tpl) {
         special_fn = tpl_fn;
     } else {
-        special_fn = ast_fndef_copy(m, tpl_fn);
+        special_fn = ast_fndef_copy(tpl_fn);
     }
     special_fn->impl_type = tpl_fn->impl_type;
 
@@ -2126,7 +2105,7 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
             return infer_new_expr(m, expr->value);
         }
         case AST_EXPR_BINARY: {
-            return infer_binary(m, expr->value);
+            return infer_binary(m, expr->value, target_type);
         }
         case AST_EXPR_UNARY: {
             return infer_unary(m, expr->value);
@@ -2247,7 +2226,13 @@ static type_t reduction_struct(module_t *m, type_t t) {
             p->type = reduction_type(m, p->type);
         }
 
-        assert(p->right == NULL);
+        if (p->right) {
+            type_t right_type = infer_right_expr(m, p->right, p->type);
+            if (p->type.kind == TYPE_UNKNOWN) {
+                INFER_ASSERTF(type_confirmed(right_type), "struct property '%s' type not confirmed", p->key);
+                p->type = right_type;
+            }
+        }
 
         int item_align = type_alignof(p->type);
 
@@ -2258,21 +2243,6 @@ static type_t reduction_struct(module_t *m, type_t t) {
         INFER_ASSERTF(type_confirmed(p->type), "struct property '%s' type not confirmed", p->key);
     }
     t.struct_->align = align;
-
-    // 将已经还原完成的 struct 赋值给 fn 使用
-    for (int i = 0; i < s->properties->length; ++i) {
-        struct_property_t *p = ct_list_value(s->properties, i);
-        if (!p->right) {
-            continue;
-        }
-
-        ast_expr_t *expr = p->right;
-        if (expr->assert_type == AST_FNDEF) {
-            ast_fndef_t *fndef = expr->value;
-            fndef->self_struct_ptr = NEW(type_t);
-            *fndef->self_struct_ptr = type_ptrof(type_new(TYPE_STRUCT, t.struct_));
-        }
-    }
 
     return t;
 }
@@ -2787,7 +2757,7 @@ static slice_t *generics_constraints_product(module_t *m, type_t *impl_type, lis
 
 
 /**
- * 对左右的 fn param 进行初步还原，这样 call gen fn 时才能正确的匹配类型
+ * 对左右的 fn def 中的 param 进行初步还原，这样 call gen fn 时才能正确的匹配类型
  * @param m
  */
 void pre_infer(module_t *m) {
@@ -2847,6 +2817,11 @@ void infer(module_t *m) {
     m->current_fn = NULL;
     m->current_line = 0;
     m->current_column = 0;
+
+    /**
+     * gen fn 作为模版函数, 存在类型 T 等泛型，不能直接进入到 infer_worklist 中进行 infer
+     * 当 call 时，gen fn  指定了具体类型，此时可以基于 tpl fn 生成 special fn，此时 special fn 可以推送到 fn->module->temp_worklist
+     */
     linked_t *infer_worklist = linked_new();
 
     // infer_worklist

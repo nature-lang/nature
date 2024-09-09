@@ -123,6 +123,7 @@ static asm_operand_t *lir_operand_trans(closure_t *c, lir_op_t *op, lir_operand_
         lir_indirect_addr_t *indirect = operand->value;
         lir_operand_t *base = indirect->base;
 
+        // rbp 特殊编码
         if (base->assert_type == LIR_OPERAND_STACK) {
             assert(op->code == LIR_OPCODE_LEA);
             lir_stack_t *stack = base->value;
@@ -136,7 +137,13 @@ static asm_operand_t *lir_operand_trans(closure_t *c, lir_op_t *op, lir_operand_
         reg_t *reg = base->value;
         asm_operand_t *asm_operand;
 
-        // TODO rbps/ebp 等寄存器不能使用 indirect_reg, 例如: 0:  4c 8b 45 00    mov    r8,QWORD PTR [rbp+0x0]
+        // r12/rsp 特殊编码
+        if (reg->index == rsp->index || reg->index == r12->index) {
+            // 对于 RSP 和 R12，总是使用 SIB 编码
+            return SIB_REG(reg, NULL, 0, indirect->offset, type_kind_sizeof(indirect->type.kind));
+        }
+
+        // TODO rbp/ebp 等寄存器不能使用 indirect_reg, 例如: 0:  4c 8b 45 00    mov    r8,QWORD PTR [rbp+0x0]
         if (indirect->offset == 0) {
             asm_operand = INDIRECT_REG(reg, type_kind_sizeof(indirect->type.kind));
         } else {

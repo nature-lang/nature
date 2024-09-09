@@ -5,8 +5,8 @@ var pid = syscall.fork() catch err {
 }
 
 if pid > 0 {
-    sleep(1)
     // 主进程等待 1 秒钟, 等待子进程执行完成
+    sleep(1)
     println('start child process complete, will exit')
 } else {
     // child 执行其他东西, 由于此时共用了 fd, 所以直接输出到标准输出中

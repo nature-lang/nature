@@ -3,7 +3,7 @@ type rt_coroutine_t = struct{
     bool solo
     i32 status
     void_ptr aco
-    void_ptr fn
+    void_ptr f
     void_ptr p
     // void_ptr args
     void_ptr result

@@ -49,6 +49,7 @@ string token_type_to_str[] = {[TOKEN_LEFT_PAREN] = "TOKEN_LEFT_PAREN",
         [TOKEN_SEMICOLON] = "TOKEN_SEMICOLON",
         [TOKEN_SLASH] = "TOKEN_SLASH",
         [TOKEN_STAR] = "TOKEN_STAR",        // * STAR
+        [TOKEN_IMPORT_STAR] = "TOKEN_IMPORT_STAR",        // * STAR
         [TOKEN_QUESTION] = "TOKEN_QUESTION",// ?
         [TOKEN_EOF] = "TOKEN_EOF",
         [TOKEN_STMT_EOF] = "TOKEN_STMT_EOF",
@@ -182,6 +183,10 @@ void debug_stmt(string type, ast_stmt_t stmt) {
  * @param c
  */
 void debug_lir(closure_t *c, char *key) {
+//    if (c->module->type != MODULE_TYPE_MAIN) {
+//        return;
+//    }
+
 #ifdef DEBUG_LIR
     printf("%s lir: %s ---------------------------------------------------------------------\n",
            key,
@@ -222,6 +227,9 @@ void debug_lir(closure_t *c, char *key) {
  * @param c
  */
 void debug_block_lir(closure_t *c, char *stage_after) {
+//    if (!str_equal(c->linkident, "co_async@3725339910")) {
+//        return;
+//    }
 #ifdef DEBUG_LIR
     printf("%s after block_lir: %s------------------------------------------------------------------------\n",
            stage_after, c->fndef->symbol_name);
@@ -393,7 +401,7 @@ void debug_module_asm(module_t *m) {
 
 void debug_asm(closure_t *c) {
 #ifdef DEBUG_ASM
-    printf("asm: %s------------------------------------------------------------------------\n", c->symbol_name);
+    printf("asm: %s------------------------------------------------------------------------\n", c->linkident);
     for (int i = 0; i < c->asm_operations->count; ++i) {
         asm_op_to_string(i, c->asm_operations->take[i]);
     }

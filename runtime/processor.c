@@ -311,6 +311,7 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
 
     // 获取锁才能切换协程并更新状态
     mutex_lock(&p->thread_locker);
+
     p->coroutine = co;
     // - 再 tls 中记录正在运行的协程
     uv_key_set(&tls_coroutine_key, co);
@@ -384,9 +385,9 @@ static void processor_run(void *raw) {
         // - stw
         if (p->need_stw > 0) {
             STW_WAIT:
-            RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw,
-                    p->share,
-                    p->index);
+        RDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index_%d=%d", p->need_stw,
+                p->share,
+                p->index);
             p->safe_point = p->need_stw;
 
             // runtime_gc 线程会解除 safe 状态，所以这里一直等待即可

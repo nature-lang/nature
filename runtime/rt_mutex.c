@@ -6,6 +6,8 @@
 #include <stdbool.h>
 #include <uv.h>
 
+atomic_flag lock_taken = ATOMIC_FLAG_INIT;
+
 static bool can_semacquire(ATOMIC int64_t *addr) {
     while (true) {
         int64_t v = atomic_load(addr);
@@ -20,6 +22,8 @@ static bool can_semacquire(ATOMIC int64_t *addr) {
 }
 
 void rt_mutex_lock(rt_mutex_t *m) {
+//    TDEBUGF("[rt_mutex_lock] m->waiters.locker.__sig = %d", m->waiters.locker.__sig)
+
     int64_t expected = 0;// starving = 0 and locked=0
     if (atomic_compare_exchange_strong(&m->state, &expected, MUTEX_LOCKED)) {
         return;
@@ -240,8 +244,8 @@ void rt_mutex_waiter_acquire(rt_mutex_t *m, bool to_head) {
             linkco_list_push(&m->waiters, co);
         }
 
-        assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
-                m->waiters.count);
+//        assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
+//                m->waiters.count);
 
         // bug: 此时一旦解锁， release 就能读取 waiters 并 push 到 runnable list 中导致数据异常
         // 所以需要将锁延迟到 yield 到 sched 后再进行处理
@@ -280,9 +284,15 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
         return;
     }
 
-    assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
-            m->waiters.count);
+    // waiter_count 存在无锁抢占，所以此处不能安全进行 assert
+//    assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
+//            m->waiters.count);
 
+//    if (atomic_flag_test_and_set(&lock_taken)) {
+//        assertf(false, "race: Lock already taken!");
+//    }
+
+//    TDEBUGF("waiter info ...%d, %d, %p, %p", m->waiter_count, m->waiters.count, m->waiters.head, m->waiters.rear);
     // head pop
     coroutine_t *wait_co = linkco_list_pop(&m->waiters);
     assert(wait_co);
@@ -290,8 +300,8 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
     atomic_add_int64(&m->waiter_count, -1);
 
 
-    assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
-            m->waiters.count);
+//    assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
+//            m->waiters.count);
 
     pthread_mutex_unlock(&m->waiters.locker);
 

@@ -5,7 +5,7 @@
 
 static void test_basic() {
     char *raw = exec_output();
-
+    printf("%s", raw);
     char *str = "child process will run\n"
                 "first exec err: No such file or directory\n"
                 "hello world\n"

@@ -221,6 +221,8 @@ void env_closure(uint64_t stack_addr, uint64_t rtype_hash) {
 }
 
 void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t size) {
+    uint64_t start = uv_hrtime();
+
     PRE_RTCALL_HOOK();
     DEBUGF("[runtime.env_assign_ref] fn_base=%p, index=%lu, src_ref=%p, size=%lu", fn, index, src_ref, size);
     assert(index < fn->envs->length);
@@ -232,11 +234,14 @@ void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t si
            fn, fn->envs,
            index, src_ref, size, fetch_int_value((addr_t) heap_addr, size), heap_addr);
 
+    // heap_addr 是比较小的空间
+    assert(size <= 8);
     memmove(heap_addr, src_ref, size);
 
     DEBUGF("[runtime.env_assign_ref] post fn_base=%p, fn->envs_base=%p, index=%lu, src_ref=%p, size=%lu, env_int_value=0x%lx, heap_addr=%p",
            fn, fn->envs,
            index, src_ref, size, fetch_int_value((addr_t) heap_addr, size), heap_addr);
+
 }
 
 void *env_element_value(runtime_fn_t *fn, uint64_t index) {
@@ -247,7 +252,7 @@ void *env_element_value(runtime_fn_t *fn, uint64_t index) {
     assertf(index < fn->envs->length, "index out of range, fn=%p, envs=%p", fn, fn->envs);
 
     DEBUGF("[runtime.env_element_.value] fn_base=%p, envs=%p, value=%p",
-           fn, fn->envs, fn->envs->values[index]);
+            fn, fn->envs, fn->envs->values[index]);
 
     return fn->envs->values[index];
 }

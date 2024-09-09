@@ -73,6 +73,13 @@ static token_t *parser_peek(module_t *m) {
     return m->p_cursor.current->value;
 }
 
+static token_t *parser_prev(module_t *m) {
+    if (!m->p_cursor.current->prev) {
+        return NULL;
+    }
+    return m->p_cursor.current->prev->value;
+}
+
 static bool parser_is(module_t *m, token_type_t expect) {
     token_t *t = m->p_cursor.current->value;
     return t->type == expect;
@@ -96,7 +103,7 @@ static bool parser_consume(module_t *m, token_type_t expect) {
 static token_t *parser_must(module_t *m, token_type_t expect) {
     token_t *t = m->p_cursor.current->value;
 
-    PARSER_ASSERTF(t->type == expect, "parser error expect '%s' actual '%c'", token_str[expect], t->literal[0]);
+    PARSER_ASSERTF(t->type == expect, "expected '%s' found '%s'", token_str[expect], t->literal);
 
     parser_advance(m);
     return t;
@@ -181,7 +188,11 @@ static bool parser_must_stmt_end(module_t *m) {
         return true;
     }
 
-    PARSER_ASSERTF(false, "except ; or } in stmt end");
+    token_t *prev_token = parser_prev(m);
+
+    // 这里应该选择上一个末尾表达式
+    dump_errorf(m, CT_STAGE_PARSER, prev_token->line, prev_token->column,
+                "excepted ';' or '}' at end of statement");
     return false;
 }
 
@@ -446,7 +457,17 @@ static type_t parser_single_type(module_t *m) {
         while (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
             // default value
             struct_property_t item = {.type = parser_type(m), .key = parser_advance(m)->literal};
-            PARSER_ASSERTF(!parser_is(m, TOKEN_EQUAL), "cannot assign default value")
+
+            if (parser_consume(m, TOKEN_EQUAL)) {
+                ast_expr_t *temp_expr = expr_new_ptr(m);
+                *temp_expr = parser_expr(m);
+                assertf(temp_expr->assert_type != AST_FNDEF,
+                        "struct field default value cannot be a function definition, Use field assignment with function identifier (e.g., 'f = fn_ident') instead.");
+
+                item.right = temp_expr;
+            }
+
+
             ct_list_push(type_struct->properties, &item);
             parser_must_stmt_end(m);
         }
@@ -469,7 +490,8 @@ static type_t parser_single_type(module_t *m) {
                 type_t t = parser_type(m);
                 ct_list_push(typeuse_fn->param_types, &t);
             } while (parser_consume(m, TOKEN_COMMA));
-            parser_consume(m, TOKEN_RIGHT_PAREN);
+
+            parser_must(m, TOKEN_RIGHT_PAREN);
         }
 
         if (parser_consume(m, TOKEN_COLON)) {
@@ -572,7 +594,7 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
             table_set(m->parser_type_params_table, ident->literal, ident->literal);
         } while (parser_consume(m, TOKEN_COMMA));
 
-        parser_consume(m, TOKEN_RIGHT_ANGLE);
+        parser_must(m, TOKEN_RIGHT_ANGLE);
     }
 
     parser_must(m, TOKEN_EQUAL); // =
@@ -1212,7 +1234,7 @@ static bool is_for_tradition_stmt(module_t *m) {
 
         PARSER_ASSERTF(t->type != TOKEN_EOF, "unexpected EOF")
 
-        if (close == 0 && t->type == TOKEN_SEMICOLON) {
+        if (close == 0 && t->type == TOKEN_STMT_EOF) {
             semicolon_count++;
         }
 
@@ -1340,9 +1362,9 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
     if (is_for_tradition_stmt(m)) {
         ast_for_tradition_stmt_t *for_tradition_stmt = NEW(ast_for_iterator_stmt_t);
         for_tradition_stmt->init = parser_stmt(m);
-        parser_must(m, TOKEN_SEMICOLON);
+        parser_must(m, TOKEN_STMT_EOF);
         for_tradition_stmt->cond = parser_expr_with_precedence(m);
-        parser_must(m, TOKEN_SEMICOLON);
+        parser_must(m, TOKEN_STMT_EOF);
         for_tradition_stmt->update = parser_stmt(m);
 
         for_tradition_stmt->body = parser_body(m);
@@ -1541,7 +1563,7 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
     if (parser_consume(m, TOKEN_AS)) {
         // 可选 as
         token = parser_advance(m);
-        PARSER_ASSERTF(token->type == TOKEN_IDENT || token->type == TOKEN_STAR, "import as must ident");
+        PARSER_ASSERTF(token->type == TOKEN_IDENT || token->type == TOKEN_IMPORT_STAR, "import as must ident");
         stmt->as = token->literal;
     }
     result->assert_type = AST_STMT_IMPORT;
@@ -1606,6 +1628,10 @@ static ast_expr_t parser_left_curly_expr(module_t *m) {
             element.value = parser_expr(m);
             ct_list_push(map_new->elements, &element);
         }
+
+        // 跳过可能存在的 STMT_EOF, scanner 添加
+        parser_consume(m, TOKEN_STMT_EOF);
+
         parser_must(m, TOKEN_RIGHT_CURLY);
         result.assert_type = AST_EXPR_MAP_NEW;
         result.value = map_new;
@@ -1920,7 +1946,8 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
                 ct_list_push(fndef->generics_params, temp);
                 table_set(m->parser_type_params_table, ident->literal, ident->literal);
             } while (parser_consume(m, TOKEN_COMMA));
-            parser_consume(m, TOKEN_RIGHT_ANGLE);
+
+            parser_must(m, TOKEN_RIGHT_ANGLE);
         }
 
         m->p_cursor.current = temp_current;
@@ -1992,7 +2019,8 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
             ct_list_push(fndef->generics_params, temp);
             table_set(m->parser_type_params_table, ident->literal, ident->literal);
         } while (parser_consume(m, TOKEN_COMMA));
-        parser_consume(m, TOKEN_RIGHT_ANGLE);
+
+        parser_must(m, TOKEN_RIGHT_ANGLE);
     }
 
     parser_params(m, fndef);
@@ -2005,7 +2033,6 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
         fndef->return_type.line = parser_peek(m)->line;
         fndef->return_type.column = parser_peek(m)->column;
     }
-
 
     if (parser_is_stmt_eof(m)) {
         fndef->is_tpl = true;
@@ -2031,8 +2058,15 @@ static ast_stmt_t *parser_fn_label(module_t *m) {
     do {
         token_t *token = parser_must(m, TOKEN_FN_LABEL);
         if (str_equal(token->literal, MACRO_LINKID)) {
-            token_t *linkto_value = parser_must(m, TOKEN_IDENT);
-            fndef->linkid = linkto_value->literal;
+            if (parser_is(m, TOKEN_IDENT)) {
+                token_t *linkto_value = parser_must(m, TOKEN_IDENT);
+                fndef->linkid = linkto_value->literal;
+            } else {
+                token_t *literal = parser_must(m, TOKEN_LITERAL_STRING);
+                fndef->linkid = literal->literal;
+            }
+
+
         } else if (str_equal(token->literal, MACRO_LOCAL)) {
             fndef->is_private = true;
         } else {
@@ -2175,7 +2209,7 @@ static ast_stmt_t *parser_stmt(module_t *m) {
         return stmt_expr_fake_new(m, expr);
     }
 
-    PARSER_ASSERTF(false, "cannot parser stmt with = '%s'", parser_peek(m)->literal);
+    PARSER_ASSERTF(false, "statement cannot start with '%s'", parser_peek(m)->literal);
     exit(1);
 }
 
@@ -2406,9 +2440,12 @@ static ast_expr_t parser_struct_new(module_t *m, type_t t) {
             *((ast_expr_t *) item.right) = parser_expr(m);
 
             ct_list_push(struct_new->properties, &item);
-        } while (parser_consume(m, TOKEN_COMMA));
+        } while (parser_consume(m, TOKEN_COMMA)); // 多个结构体进行初始化时，使用逗号分隔。
 
-        parser_consume(m, TOKEN_RIGHT_CURLY);
+        // 移除误解添加的 ; 符号
+        parser_consume(m, TOKEN_STMT_EOF);
+
+        parser_must(m, TOKEN_RIGHT_CURLY);
     }
     result.assert_type = AST_EXPR_STRUCT_NEW;
     result.value = struct_new;
@@ -2484,7 +2521,7 @@ static ast_fndef_t *coroutine_fn_closure(module_t *m, ast_expr_t *call_expr) {
     ast_vardef_stmt_t *vardef = NEW(ast_vardef_stmt_t);
     vardef->var_decl.type = type_kind_new(TYPE_UNKNOWN);
     vardef->var_decl.ident = FN_COROUTINE_RETURN_VAR;
-    vardef->right = *ast_expr_copy(m, call_expr);
+    vardef->right = *ast_expr_copy(call_expr);
     vardef_stmt->value = vardef;
 
     // co_return(&result)
@@ -2524,7 +2561,7 @@ static ast_fndef_t *coroutine_fn_void_closure(module_t *m, ast_expr_t *call_expr
     // call(x, x, x)
     ast_stmt_t *call_stmt = stmt_new(m);
     call_stmt->assert_type = AST_CALL;
-    call_stmt->value = ast_expr_copy(m, call_expr)->value;
+    call_stmt->value = ast_expr_copy(call_expr)->value;
     slice_push(stmt_list, call_stmt);
 
     fndef->body = stmt_list;
@@ -2753,6 +2790,7 @@ slice_t *parser(module_t *m, linked_t *token_list) {
         }
 
         slice_push(block_stmt, stmt);
+
         parser_must_stmt_end(m);
     }
 

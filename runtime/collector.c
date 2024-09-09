@@ -790,6 +790,7 @@ static void gc_mark_done() {
  */
 void runtime_gc() {
     int64_t before = allocated_bytes;
+
     // - gc stage: GC_START
     gc_stage = GC_STAGE_START;
     DEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START", allocated_bytes / 1000);
@@ -868,5 +869,5 @@ void runtime_gc() {
 
     gc_stage = GC_STAGE_OFF;
     DEBUGF("[runtime_gc] gc stage: GC_OFF, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes,
-            (before - allocated_bytes) / 1000);
+           (before - allocated_bytes) / 1000);
 }

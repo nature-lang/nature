@@ -32,6 +32,8 @@ extern char *TEMP_DIR;// 链接临时目录
 extern char *BUILD_ENTRY;         // nature build {test/main.n} 花括号包起来的这部分
 extern char SOURCE_PATH[PATH_MAX];// /opt/test/main.n 的绝对路径
 
+#define LD_ENTRY "runtime_main"
+
 #define BUILD_TMP_DIR "/tmp/nature-build.XXXXXX"
 //#define DARWIN_BUILD_TMP_DIR  ""
 #define LIB_START_FILE "crt1.o"
@@ -42,6 +44,7 @@ extern char SOURCE_PATH[PATH_MAX];// /opt/test/main.n 的绝对路径
 
 #define LIBUV_FILE "libuv.a"
 #define LINKER_OUTPUT "a.out"
+#define LIBMACH_C_FILE "libSystem.tbd"
 
 
 static inline char *temp_dir() {
@@ -150,6 +153,12 @@ static inline void env_init() {
         assertf(false,
                 "only support compiles to arch=amd64, please with BUILD_ARCH build, example BUILD_ARCH=mad64 nature build main.n");
     }
+
+    // darwin 不支持跨平台编译, 必须在当前平台编译
+#ifndef __DARWIN
+    assertf(BUILD_OS != OS_DARWIN, "darwin does not support cross-compilation, please compile on the darwin platform");
+#endif
+
 
     char *root = getenv("NATURE_ROOT");
     if (root != NULL) {

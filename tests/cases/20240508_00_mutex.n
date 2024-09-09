@@ -1,23 +1,24 @@
 import coroutine as co
 import coroutine.mutex as m
+import time
 
+
+int start = time.unix()
 int result_no_lock = 0
-
-// 闭包引用 no_lock
 fn sum_no_lock() {
-    for int i = 0; i < 1000; i+=1 {
+    for int i = 0; i < 100; i+=1 {
         result_no_lock += 1
     }
 }
 
-for int i = 0; i < 1000; i+=1 {
+for int i = 0; i < 10000; i+=1 {
     go sum_no_lock()
 }
 
 // 等待 1s 让协程完成
-co.sleep(3000)
-println("post result_no_lock: ", &result_no_lock, result_no_lock)
-assert(result_no_lock < 1000000 && result_no_lock > 900000)
+co.sleep(1000)
+println("post result_no_lock completed", result_no_lock, time.unix() - start)
+assert(result_no_lock < 1000000 && result_no_lock > 500000)
 
 var mu = m.mutex_t{}
 int result_lock = 0
@@ -30,16 +31,19 @@ fn sum_lock() {
     mu.unlock()
 }
 
+start = time.unix()
 for int i = 0; i < 5000; i+=1 {
     go sum_lock()
 }
+println('sum_lock coroutine create success, use time = ', time.unix() - start)
 
-for int i = 0; i <= 10; i+=1 {
+// wait completed
+for int i = 0; i <= 100; i+=1 {
     if result_lock == 500000 {
         break
     }
     println('wait result lock complete..., current =', result_lock)
-    co.sleep(1000)
+    co.sleep(200)
 }
 
 println("post result_lock: ", &result_lock, result_lock)

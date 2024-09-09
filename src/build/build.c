@@ -17,8 +17,6 @@
 #include "src/semantic/analyzer.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
-#include "utils/custom_links.h"
-#include "utils/error.h"
 
 
 // char*, 支持 .o 或者 .a 文件后缀
@@ -29,7 +27,7 @@ static slice_t *linker_libs;
  * @return
  */
 static char *lib_file_path(char *file) {
-    char *_os_arch = str_connect(os_to_string(OS_LINUX), "_");
+    char *_os_arch = str_connect(os_to_string(BUILD_OS), "_");
     _os_arch = str_connect(_os_arch, arch_to_string(BUILD_ARCH));
 
     char *dir = path_join(NATURE_ROOT, "lib");
@@ -122,10 +120,11 @@ static void mach_custom_links() {
     mach_put_data(ctx->data_rtype_section, ct_rtype_data, ct_rtype_size);
     // 创建符号指向自定义数据段 __data.rtype
     mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-            .n_type = N_SECT | N_EXT,
-            .n_sect = ctx->data_rtype_section->sh_index,
-            .n_value = 0, // in section data offset
-    }, SYMBOL_RTYPE_DATA);
+                         .n_type = N_SECT | N_EXT,
+                         .n_sect = ctx->data_rtype_section->sh_index,
+                         .n_value = 0,// in section data offset
+                 },
+                 SYMBOL_RTYPE_DATA);
 
     macho_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, cross_number_size());
 
@@ -135,10 +134,11 @@ static void mach_custom_links() {
     mach_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
 
     mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-            .n_type = N_SECT | N_EXT,
-            .n_sect = ctx->data_fndef_section->sh_index,
-            .n_value = 0, // in section data offset
-    }, SYMBOL_FNDEF_DATA);
+                         .n_type = N_SECT | N_EXT,
+                         .n_sect = ctx->data_fndef_section->sh_index,
+                         .n_value = 0,// in section data offset
+                 },
+                 SYMBOL_FNDEF_DATA);
     macho_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, cross_number_size());
 
     // symdef --------------------------------------------------------------------------
@@ -147,10 +147,11 @@ static void mach_custom_links() {
     mach_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
 
     mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-            .n_type = N_SECT | N_EXT,
-            .n_sect = ctx->data_symdef_section->sh_index,
-            .n_value = 0, // in section data offset
-    }, SYMBOL_SYMDEF_DATA);
+                         .n_type = N_SECT | N_EXT,
+                         .n_sect = ctx->data_symdef_section->sh_index,
+                         .n_value = 0,// in section data offset
+                 },
+                 SYMBOL_SYMDEF_DATA);
     macho_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, cross_number_size());
 
 
@@ -196,8 +197,8 @@ static void elf_assembler_module(module_t *m) {
                 .st_size = symbol->size,
                 .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
                 .st_other = 0,
-                .st_shndx = ctx->data_section->sh_index, // 定义符号的段
-                .st_value = offset, // 定义符号的位置，基于段的偏移
+                .st_shndx = ctx->data_section->sh_index,// 定义符号的段
+                .st_value = offset,                     // 定义符号的位置，基于段的偏移
         };
         elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, symbol->name);
     }
@@ -236,10 +237,11 @@ static void mach_assembler_module(module_t *m) {
 
         // 写入符号表
         mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-                .n_type = N_SECT | N_EXT,
-                .n_sect = ctx->data_section->sh_index,
-                .n_value = offset, // in section data offset
-        }, symbol->name);
+                             .n_type = N_SECT | N_EXT,
+                             .n_sect = ctx->data_section->sh_index,
+                             .n_value = offset,// in section data offset
+                     },
+                     symbol->name);
     }
 
     if (BUILD_ARCH == ARCH_AMD64) {
@@ -274,7 +276,7 @@ static void assembler_module(module_t *m) {
  * modules modules
  * @param modules
  */
-static void build_link_exe(slice_t *modules) {
+static void build_elf_exe(slice_t *modules) {
     // 检测是否生成
     int fd;
     char *output = path_join(TEMP_DIR, LINKER_OUTPUT);
@@ -289,18 +291,12 @@ static void build_link_exe(slice_t *modules) {
 
     // 将相关符号都加入来
     slice_push(linker_libs, custom_link_object_path());
-
-    if (BUILD_OS == OS_LINUX) {
-        slice_push(linker_libs, lib_file_path(LIB_START_FILE));
-    }
+    slice_push(linker_libs, lib_file_path(LIB_START_FILE));
 
     // 固定使用 elf 格式的 libruntime.a 和 libuv.a, 只在 output 时才会转换成 macho 格式的文件
     slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
     slice_push(linker_libs, lib_file_path(LIBUV_FILE));
-
-    if (BUILD_OS == OS_LINUX) {
-        slice_push(linker_libs, lib_file_path(LIBC_FILE));
-    }
+    slice_push(linker_libs, lib_file_path(LIBC_FILE));
 
     for (int i = 0; i < linker_libs->count; ++i) {
         char *path = linker_libs->take[i];
@@ -332,6 +328,114 @@ static void build_link_exe(slice_t *modules) {
     copy(BUILD_OUTPUT, output, 0755);
     log_debug("linker output--> %s\n", output);
     log_debug("build output--> %s\n", BUILD_OUTPUT);
+}
+
+static int command_exists(const char *cmd) {
+    char *path = getenv("PATH");
+    if (path == NULL) {
+        return 0;// PATH 环境变量不存在
+    }
+
+    char *path_copy = strdup(path);
+    char *dir = strtok(path_copy, ":");
+    struct stat st;
+    int exists = 0;
+
+    while (dir != NULL) {
+        char full_path[1024];
+        snprintf(full_path, sizeof(full_path), "%s/%s", dir, cmd);
+
+        if (stat(full_path, &st) == 0) {
+            if (S_ISREG(st.st_mode) && (st.st_mode & S_IXUSR)) {
+                exists = 1;
+                break;
+            }
+        }
+
+        dir = strtok(NULL, ":");
+    }
+
+    free(path_copy);
+    return exists;
+}
+
+/**
+ * -arch x86_64 -dynamic -platform_version macos 11.7.1 14.0 -e _runtime_main -o a.out libruntime.a libuv.a libSystem.tbd @objects.txt
+ */
+static void build_mach_exe(slice_t *modules) {
+    // 检测当前设备是否安装了 ld 命令
+    if (!command_exists("ld")) {
+        assertf(false, "'ld' command not found. Please ensure it is installed and in your PATH.");
+    }
+
+    // 将 modules 中的 obj output_file 添加到文件 objects.txt 中, 用来作为 ld 的参数
+    const char *objects_file = path_join(TEMP_DIR, "objects.txt");
+    FILE *obj_list = fopen(objects_file, "w");
+    if (!obj_list) {
+        assertf(false, "unable to create objects list file: %s", objects_file);
+    }
+    for (int i = 0; i < modules->count; i++) {
+        module_t *m = modules->take[i];
+        if (m->object_file) {
+            fprintf(obj_list, "%s\n", m->object_file);
+        }
+    }
+
+    fprintf(obj_list, "%s\n", custom_link_object_path());
+    fclose(obj_list);
+
+    char *darwin_ld_arch;
+    if (BUILD_ARCH == ARCH_AMD64) {
+        darwin_ld_arch = "x86_64";
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        darwin_ld_arch = "arm64";
+    } else {
+        assert(false);
+    }
+
+    slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
+    slice_push(linker_libs, lib_file_path(LIBUV_FILE));
+    slice_push(linker_libs, lib_file_path(LIBMACH_C_FILE));
+
+    char libs_str[4096] = "";  // 用于存储库文件路径字符串
+    // 拼接 linker_libs 中的库文件路径
+    for (int i = 0; i < linker_libs->count; i++) {
+        char *lib = linker_libs->take[i];
+        strcat(libs_str, lib);
+        strcat(libs_str, " ");
+    }
+
+
+    // 拼接出 ld 参数, libruntime.a/libuv.a/libSystem.tbd 都在 lib_file_path(LIBMACH_C_FILE)
+    char *output = path_join(TEMP_DIR, LINKER_OUTPUT);
+    char cmd[8192];
+
+    snprintf(cmd, sizeof(cmd),
+             "ld -w -arch %s -dynamic -platform_version macos 11.7.1 14.0 "
+             "-e _%s -o %s %s @%s",
+             darwin_ld_arch,
+             LD_ENTRY,
+             output,
+             libs_str,
+             objects_file);
+
+
+
+    // 使用 ld 命令执行 ld 相关参数，并参考 build_elf_exe 进行打印 copy debug 操作
+    log_debug("%s", cmd);
+    int result = system(cmd);
+    if (result != 0) {
+        assertf(false, "Linking failed. ld command error: %d", result);
+    }
+
+    if (!file_exists(output)) {
+        assertf(false, "Linking failed. output file '%s' was not created", output);
+    }
+
+    remove(BUILD_OUTPUT);
+    copy(BUILD_OUTPUT, output, 0755);
+    log_debug("linker output --> %s", output);
+    log_debug("build output --> %s", BUILD_OUTPUT);
 }
 
 static void build_init(char *build_entry) {
@@ -491,7 +595,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     ast_import_t main_import = {
             .package_dir = WORKDIR,
             .package_conf = package_conf,
-            .module_ident = FN_MAIN_NAME,
+            .module_ident = MODULE_MAIN_IDENT,
     };
 
     // main [links] 自动注册
@@ -634,71 +738,11 @@ static void build_compiler(slice_t *modules) {
     }
 }
 
-/**
- * nature build main.n, build_entry = "main.n"
- * nature build client/main.n build_entry = "client/main.n"
- * @param build_entry
- */
-void build(char *build_entry) {
-    assertf(strlen(build_entry) > 2, "build entry=%s exception", build_entry);
-
-    // 配置初始化
-    build_init(build_entry);
-
-    // debug
-    config_print();
-
-    // 解析 package_conf
-    toml_table_t *package_conf = NULL;
-    char *package_file = path_join(WORKDIR, PACKAGE_TOML);
-    if (file_exists(package_file)) {
-        package_conf = package_parser(package_file);
-    }
-
-    slice_t *modules = build_modules(package_conf);
-
-    // 编译(所有的模块都编译完成后再统一进行汇编与链接)
-    build_compiler(modules);
-
-    // 汇编
-    build_assembler(modules);
-
-    if (BUILD_OS == OS_LINUX) {
-        // 链接
-        build_link_exe(modules);
-    } else {
-        // TODO build with external ld
-    }
-
-}
 
 /**
- * 构建成 libmain.a 文件 
+ * 构建成 libmain.a 文件
  */
-void build_libmain(char *build_entry) {
-    assertf(strlen(build_entry) > 2, "build entry=%s exception", build_entry);
-
-    // 配置初始化
-    build_init(build_entry);
-
-    // debug
-    config_print();
-
-    // 解析 package_conf
-    toml_table_t *package_conf = NULL;
-    char *package_file = path_join(WORKDIR, PACKAGE_TOML);
-    if (file_exists(package_file)) {
-        package_conf = package_parser(package_file);
-    }
-
-    slice_t *modules = build_modules(package_conf);
-
-    // 编译(所有的模块都编译完成后再统一进行汇编与链接)
-    build_compiler(modules);
-
-    // 汇编
-    build_assembler(modules);
-
+static void build_archive(slice_t *modules) {
     char *cmd = mallocz(10240 * sizeof(char));
     strcpy(cmd, "ar -rcs ");
     char *output = path_join(TEMP_DIR, "libmain.a");
@@ -707,6 +751,9 @@ void build_libmain(char *build_entry) {
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
         char *obj_file = m->object_file;
+        if (obj_file == NULL) {
+            continue;
+        }
 
         // 将每个模块的object文件添加到命令中
         strcat(cmd, " ");
@@ -723,4 +770,44 @@ void build_libmain(char *build_entry) {
     copy(BUILD_OUTPUT, output, 0755);
     log_debug("build temp output--> %s\n", output);
     log_debug("build output--> %s\n", BUILD_OUTPUT);
+}
+
+/**
+ * nature build main.n, build_entry = "main.n"
+ * nature build client/main.n build_entry = "client/main.n"
+ * @param build_entry
+ */
+void build(char *build_entry, bool is_archive) {
+    assertf(strlen(build_entry) > 2, "build entry=%s exception", build_entry);
+
+//    log_set_level(LOG_INFO);
+
+    // 配置初始化
+    build_init(build_entry);
+
+    // debug
+    config_print();
+
+    // 解析 package_conf
+    toml_table_t *package_conf = NULL;
+    char *package_file = path_join(WORKDIR, PACKAGE_TOML);
+    if (file_exists(package_file)) {
+        package_conf = package_parser(package_file);
+    }
+
+    slice_t *modules = build_modules(package_conf);
+
+    // 编译(所有的模块都编译完成后再统一进行汇编与链接)
+    build_compiler(modules);
+
+    // 汇编
+    build_assembler(modules);
+
+    if (is_archive) {
+        build_archive(modules);
+    } else if (BUILD_OS == OS_LINUX) {
+        build_elf_exe(modules);
+    } else {
+        build_mach_exe(modules);
+    }
 }

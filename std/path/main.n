@@ -105,5 +105,5 @@ fn isdir(string path):bool {
          return false
     }
 
-    return (s.mode & 0170000) == (0040000)
+    return syscall.stat_is_dir(s.mode)
 }

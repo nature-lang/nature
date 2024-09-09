@@ -328,7 +328,6 @@ struct type_map_t {
     type_t value_type;
 };
 
-// 这里应该用 c string 吗？ 衡量的标准是什么？标准是这个数据用在哪里,key
 // 这种数据一旦确定就不会变化了,就将其存储在编译时就行了
 typedef struct {
     type_t type;
@@ -398,6 +397,22 @@ typedef struct {
     int64_t msg_size;
     pthread_mutex_t lock;
 } n_chan_t;
+
+typedef struct {
+    value_casting value;
+    void *ref;
+} upvalue_t;
+
+typedef struct {
+    void **values;
+    uint64_t length;
+} envs_t;
+
+typedef struct {
+    uint8_t closure_jit_codes[80];
+    addr_t fn_addr;
+    envs_t *envs;
+} runtime_fn_t;
 
 // 指针在 64位系统中占用的大小就是 8byte = 64bit
 typedef addr_t n_ptr_t, n_raw_ptr_t;
@@ -624,6 +639,10 @@ static inline bool is_number(type_kind kind) {
     return is_float(kind) || is_integer(kind);
 }
 
+static inline bool is_scala_type(type_t t) {
+    return is_number(t.kind) || t.kind == TYPE_BOOL;
+}
+
 static inline bool can_type_casting(type_kind kind) {
     return is_number(kind) || kind == TYPE_BOOL;
 }
@@ -633,10 +652,6 @@ static inline bool is_large_alloc_type(type_t t) {
 }
 
 static inline bool is_stack_alloc_type(type_t t) {
-    return is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
-}
-
-static inline bool is_escape_rewrite_type(type_t t) {
     return is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
 }
 

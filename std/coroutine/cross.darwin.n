@@ -1,0 +1,4 @@
+type pthread_mutex_t = struct{
+    i64 sig = 0x32AAABA7
+    arr<u8,56> __opaque = [0]
+}

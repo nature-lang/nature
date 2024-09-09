@@ -1,12 +1,12 @@
 import syscall
-import package.zlib_temp
+import package.zlib
 
 var input = 'mock/input.txt'
 var output = 'output.gz'
 
 var fd = syscall.open(input, syscall.O_RDONLY, 0666)
 
-var gzfile = gzopen(output.ref(), 'wb'.ref())
+var gzfile = zlib.gzopen(output.ref(), 'wb'.ref())
 
 var buf = vec_new<u8>(4096, 0)
 for true {
@@ -16,10 +16,10 @@ for true {
     }
 
     // gzwrite
-    int write_len = gzwrite(gzfile, buf.ref(), len)
+    int write_len = zlib.gzwrite(gzfile, buf.ref(), len)
     if write_len != len {
         syscall.close(fd)
-        gzclose(gzfile)
+        zlib.gzclose(gzfile)
 
         throw 'write failed'
     }
@@ -28,6 +28,6 @@ for true {
 }
 
 syscall.close(fd)
-gzclose(gzfile)
+zlib.gzclose(gzfile)
 
 println('gz success full')
