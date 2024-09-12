@@ -1,7 +1,7 @@
 #include "amd64_abi.h"
 
 #include "src/cross.h"
-#include "src/register/amd64.h"
+#include "src/register/arch/amd64.h"
 
 lir_operand_t *select_return_reg(lir_operand_t *operand) {
     type_kind kind = operand_type_kind(operand);

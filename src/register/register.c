@@ -1,8 +1,12 @@
 #include "register.h"
 #include "src/cross.h"
 #include "utils/helper.h"
-#include "amd64.h"
+#include "arch/amd64.h"
 #include <assert.h>
+
+table_t *reg_table; // 根据 index 和 size 定位具体的寄存器
+slice_t *regs;
+reg_t *alloc_regs[UINT8_MAX];
 
 char *reg_table_key(lir_flag_t alloc_type, uint8_t index, uint8_t size) {
     int64_t int_key = (int64_t) index << 8;

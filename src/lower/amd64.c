@@ -2,7 +2,7 @@
 
 #include "amd64_abi.h"
 #include "src/cross.h"
-#include "src/register/amd64.h"
+#include "src/register/arch/amd64.h"
 
 static lir_operand_t *amd64_convert_first_to_temp(closure_t *c, linked_t *list, lir_operand_t *first) {
     lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(first));

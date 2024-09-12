@@ -4,7 +4,7 @@
 #include <string.h>
 #include "utils/helper.h"
 #include "utils/linked.h"
-#include "src/register/register.h"
+#include "src/types.h"
 
 // 指令字符宽度
 #define BYTE 1 // 1 byte = 8 位
@@ -16,20 +16,19 @@
 #define ZWORD 64 // 64 byte
 
 #define MOVSQ(_prefix) ({\
-  asm_inst_t *_inst = NEW(asm_operation_t);\
+  asm_inst_t *_inst = NEW(amd64_asm_inst_t);\
   _inst->name = "movsq"; \
   _inst->prefix = _prefix; \
   _inst->count = 0;\
   _inst;\
 })
 
-// ASM_INST("mov", { to, from });
-#define ASM_INST(_name, ...) ({ \
-  asm_operation_t *_inst = NEW(asm_operation_t); \
-  memset(_inst, 0, sizeof(asm_operation_t)); \
+// ASM_INST("mov",  to, from );
+#define AMD64_ASM(_name, ...) ({ \
+  amd64_asm_inst_t *_inst = NEW(amd64_asm_inst_t); \
   _inst->op_id = op->id; \
   _inst->name = _name;\
-  asm_operand_t *_temp_operands[4] = __VA_ARGS__;\
+  amd64_asm_operand_t *_temp_operands[4] = {__VA_ARGS__};\
   for (int _i = 0; _i < 4; ++_i) {\
     if (_temp_operands[_i] != NULL) {\
       _inst->operands[_i] = _temp_operands[_i];\
@@ -40,7 +39,7 @@
 })
 
 #define REG(_reg) ({ \
-    asm_operand_t *reg_operand = NEW(asm_operand_t); \
+    amd64_asm_operand_t *reg_operand = NEW(amd64_asm_operand_t); \
     if (FLAG(LIR_FLAG_ALLOC_FLOAT) & _reg->flag) {\
         reg_operand->type = ASM_OPERAND_TYPE_FREG; \
     } else { \
@@ -52,7 +51,7 @@
 })
 
 #define SYMBOL(_name, _is_local) ({ \
-     asm_operand_t *_operand = NEW(asm_operand_t); \
+     amd64_asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
      _operand->type = ASM_OPERAND_TYPE_SYMBOL;  \
      asm_symbol_t *_symbol = NEW(asm_symbol_t); \
      _symbol->name = _name;    \
@@ -65,7 +64,7 @@
 #define LABEL(_name) (SYMBOL(_name, false))
 
 #define DISP_REG(_reg, _disp, _size) ({ \
-     asm_operand_t *_operand = NEW(asm_operand_t); \
+     amd64_asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
      _operand->type = ASM_OPERAND_TYPE_DISP_REG;  \
      asm_disp_reg_t *_disp_reg = NEW(asm_disp_reg_t); \
      _disp_reg->reg = (reg_t*)(_reg);    \
@@ -76,7 +75,7 @@
 })
 
 #define INDIRECT_REG(_reg, _size) ({ \
-     asm_operand_t *_operand = NEW(asm_operand_t); \
+     amd64_asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
      _operand->type = ASM_OPERAND_TYPE_INDIRECT_REG;  \
      asm_indirect_reg_t *_indirect = NEW(asm_indirect_reg_t); \
      _indirect->reg = (reg_t*)(_reg);    \
@@ -86,7 +85,7 @@
 })
 
 #define SIB_REG(_base, _index, _scale, _disp, _size) ({ \
-     asm_operand_t *_operand = NEW(asm_operand_t); \
+     amd64_asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
      _operand->type = ASM_OPERAND_TYPE_SIB_REG;  \
      asm_sib_reg_t *_sib = NEW(asm_sib_reg_t); \
      _sib->base = _base;\
@@ -99,7 +98,7 @@
 })
 
 #define RIP_RELATIVE(_disp) ({ \
-     asm_operand_t *operand = NEW(asm_operand_t); \
+     amd64_asm_operand_t *operand = NEW(amd64_asm_operand_t); \
      operand->type = ASM_OPERAND_TYPE_RIP_RELATIVE;  \
      asm_rip_relative_t *rip = NEW(asm_rip_relative_t); \
      rip->disp = _disp;\
@@ -119,7 +118,7 @@
 #define FLOAT64(_value) VALUE_OPERAND(asm_float64_t, ASM_OPERAND_TYPE_FLOAT64, (_value), OWORD)
 
 #define VALUE_OPERAND(_type, _operand_type, _value, _size) ({ \
-    asm_operand_t *_number_operand = malloc(sizeof(asm_operand_t));\
+    amd64_asm_operand_t *_number_operand = malloc(sizeof(amd64_asm_operand_t));\
     _number_operand->type = (_operand_type);\
     _type *_number = malloc(sizeof(_type));\
     _number->value = (_value);\
@@ -209,7 +208,7 @@ typedef struct {
     asm_operand_type type;
     uint8_t size;
     void *value; // asm_operand_register
-} asm_operand_t;
+} amd64_asm_operand_t;
 
 /**
  * 汇编指令结构(即如何编写汇编指令)
@@ -220,11 +219,39 @@ typedef struct {
     string name; // 指令名称 operator symbol
     uint8_t prefix; // 自定义指令前缀，覆盖
     uint8_t count;
-    asm_operand_t *operands[4]; // 最多 4 个参数
-} asm_operation_t;
+    amd64_asm_operand_t *operands[4]; // 最多 4 个参数
+} amd64_asm_inst_t;
 
-asm_operand_t *amd64_asm_symbol_operand(asm_operation_t asm_inst);
+static inline amd64_asm_operand_t *amd64_asm_symbol_operand(amd64_asm_inst_t asm_inst) {
+    for (int i = 0; i < asm_inst.count; ++i) {
+        amd64_asm_operand_t *operand = asm_inst.operands[i];
+        if (operand->type == ASM_OPERAND_TYPE_SYMBOL) {
+            return operand;
+        }
+    }
+    return NULL;
+}
 
-asm_operand_t *asm_match_int_operand(int64_t n);
+static inline amd64_asm_operand_t *asm_match_int_operand(int64_t n) {
+    // 正负数处理
+    if (n >= INT8_MIN && n <= INT8_MAX) {
+        return UINT8(n);
+    }
+
+    if (n >= INT16_MIN && n <= INT16_MAX) {
+        return UINT16(n);
+    }
+
+    if (n >= INT32_MIN && n <= INT32_MAX) {
+        return UINT32(n);
+    }
+
+    if (n >= INT64_MIN && n <= INT64_MAX) {
+        return UINT64(n);
+    }
+
+    return NULL;
+}
+
 
 #endif //NATURE_SRC_ASSEMBLER_X86_64_ASM_H_

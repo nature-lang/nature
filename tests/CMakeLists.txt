@@ -30,6 +30,9 @@ add_executable(test_yaml test_yaml.c ${UTILS})
 add_test(test_yaml test_yaml)
 set_property(TEST test_yaml PROPERTY ENVIRONMENT "YAML_PATH=${CMAKE_CURRENT_SOURCE_DIR}/assets/travis.yaml;")
 
+add_executable(test_arm64_encoding test_arm64_encoding.c ${UTILS} ${SRC})
+add_test(test_arm64_encoding test_arm64_encoding)
+
 # ---------------------------------- cases 测试 ------------------------------------------
 # cases test, 获取 cases 一级目录下的所有文件，排除 mock
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)

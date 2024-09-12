@@ -442,7 +442,7 @@ static void build_init(char *build_entry) {
     env_init();
     config_init();
     symbol_init();
-    cross_reg_init();
+    reg_init();
     cross_opcode_init();
 
     // 全局 init

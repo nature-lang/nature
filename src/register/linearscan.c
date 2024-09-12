@@ -1,6 +1,6 @@
 #include "linearscan.h"
 #include "allocate.h"
-#include "amd64.h"
+#include "arch/amd64.h"
 #include "interval.h"
 #include "src/debug/debug.h"
 

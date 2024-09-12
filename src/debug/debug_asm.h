@@ -3,6 +3,6 @@
 
 #include "src/native/amd64.h"
 
-void asm_op_to_string(int i, asm_operation_t *op);
+void asm_op_to_string(int i, amd64_asm_inst_t *op);
 
 #endif //NATURE_ASM_H

@@ -2,7 +2,7 @@
 #include "utils/helper.h"
 #include <assert.h>
 
-static string asm_operand_to_string(asm_operand_t *operand) {
+static string asm_operand_to_string(amd64_asm_operand_t *operand) {
     void *value = operand->value;
     switch (operand->type) {
         case ASM_OPERAND_TYPE_UINT8: {
@@ -61,7 +61,7 @@ static string asm_operand_to_string(asm_operand_t *operand) {
 }
 
 // mov a -> b
-void asm_op_to_string(int i, asm_operation_t *op) {
+void asm_op_to_string(int i, amd64_asm_inst_t *op) {
     printf("%lu\t", op->op_id);
     if (str_equal(op->name, "label")) {
         printf("%s  ", op->name);

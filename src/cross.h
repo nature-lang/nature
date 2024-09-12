@@ -5,42 +5,6 @@
 #include "src/build/config.h"
 #include "src/lir.h"
 
-// -------- reg start -----------
-extern table_t *reg_table; // 根据 index 和 size 定位具体的寄存器
-extern slice_t *regs;
-extern reg_t *alloc_regs[UINT8_MAX];
-
-void amd64_reg_init();
-
-static inline void cross_reg_init() {
-    // 初始化
-    reg_table = table_new();
-    regs = slice_new();
-    memset(alloc_regs, 0, sizeof(alloc_regs));
-
-    if (BUILD_ARCH == ARCH_AMD64) {
-        amd64_reg_init();
-        return;
-    }
-
-    assertf(false, "not support arch %d", BUILD_ARCH);
-}
-// -------- reg init end -----------
-
-
-// -------- cross_alloc_reg_count start -----------
-#define AMD64_ALLOC_REG_COUNT 14+16;
-
-static inline uint8_t cross_alloc_reg_count() {
-    if (BUILD_ARCH == ARCH_AMD64) {
-        return AMD64_ALLOC_REG_COUNT;
-    }
-
-    assertf(false, "not support arch %d", BUILD_ARCH);
-    exit(1);
-}
-// -------- cross_alloc_reg_count end -----------
-
 
 // -------- alloc kind start -----------
 alloc_kind_e amd64_alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var);

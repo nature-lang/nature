@@ -1,6 +1,4 @@
 #include "amd64.h"
-#include "utils/type.h"
-#include "utils/slice.h"
 #include "src/cross.h"
 #include <stdio.h>
 
