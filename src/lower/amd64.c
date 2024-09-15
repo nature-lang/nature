@@ -1,8 +1,6 @@
 #include "amd64.h"
 
 #include "amd64_abi.h"
-#include "src/cross.h"
-#include "src/register/arch/amd64.h"
 
 static lir_operand_t *amd64_convert_first_to_temp(closure_t *c, linked_t *list, lir_operand_t *first) {
     lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(first));
@@ -22,12 +20,11 @@ static linked_t *amd64_lower_neg(closure_t *c, lir_op_t *op) {
         linked_push(list, op);
         return list;
     }
-    // 副店形操作
 
     linked_push(list, lir_op_move(op->output, op->first));
     // xor float 需要覆盖满整个 xmm 寄存器(128bit), 所以这里直接用 symbol 最多只能有 f64 = 64bit
     // 这里用 xmm1 进行一个中转
-    lir_operand_t *xmm_operand = select_return_reg(op->output);
+    lir_operand_t *xmm_operand = amd64_select_return_reg(op->output);
     linked_push(list, lir_op_move(xmm_operand, symbol_var_operand(FLOAT_NEG_MASK_IDENT, kind)));
 
     linked_push(list, lir_op_new(LIR_OPCODE_XOR, op->output, xmm_operand, op->output));
@@ -89,7 +86,7 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
             }
 
         } else if (is_qword_int(imm->kind)) {
-            // 大数值必须通过 reg 转化
+            // 大数值必须通过 reg 转化,
             type_kind kind = operand_type_kind(imm_operand);
             lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(kind));
 
@@ -199,8 +196,8 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
     lir_opcode_t op_code = op->code;
     lir_operand_t *result_operand = ax_operand;
     if (op->code == LIR_OPCODE_REM) {
-        op_code = LIR_OPCODE_DIV;    // rem 也是基于 div 计算得到的
-        result_operand = dx_operand; // 余数固定寄存器
+        op_code = LIR_OPCODE_DIV;   // rem 也是基于 div 计算得到的
+        result_operand = dx_operand;// 余数固定寄存器
     }
 
     // 64位操作系统中寄存器大小当然只有64位，因此，idiv使用rdx:rax作为被除数

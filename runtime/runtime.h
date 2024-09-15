@@ -396,9 +396,9 @@ void processor_set_status(n_processor_t *p, p_status_t status);
         _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE); \
     } while (0);
 
-void pre_tplcall_hook(char *target);
+void pre_tplcall_hook();
 
-void post_tplcall_hook(char *target);
+void post_tplcall_hook();
 
 void post_rtcall_hook(char *target);
 

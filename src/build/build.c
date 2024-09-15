@@ -13,6 +13,8 @@
 #include "src/debug/debug.h"
 #include "src/linear.h"
 #include "src/native/amd64.h"
+#include "src/lower/amd64.h"
+#include "src/lower/arm64.h"
 #include "src/register/linearscan.h"
 #include "src/semantic/analyzer.h"
 #include "src/semantic/infer.h"
@@ -443,7 +445,9 @@ static void build_init(char *build_entry) {
     config_init();
     symbol_init();
     reg_init();
-    cross_opcode_init();
+    if (BUILD_ARCH == ARCH_AMD64) {
+        amd64_opcode_init();
+    }
 
     // 全局 init
     BUILD_ENTRY = build_entry;
@@ -691,6 +695,27 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     }
 
     return modules;
+}
+
+static void cross_lower(closure_t *c) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        amd64_lower(c);
+        return;
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        arm64_lower(c);
+        return;
+    }
+
+    assert(false && "not support arch");
+}
+
+static inline void cross_native(closure_t *c) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        amd64_native(c);
+        return;
+    }
+
+    assert(false && "not support arch");
 }
 
 static void build_compiler(slice_t *modules) {

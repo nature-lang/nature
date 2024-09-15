@@ -29,9 +29,11 @@ static inline void reg_init() {
     assertf(false, "not support arch %d", BUILD_ARCH);
 }
 
-static inline uint8_t cross_alloc_reg_count() {
+static inline uint8_t alloc_reg_count() {
     if (BUILD_ARCH == ARCH_AMD64) {
         return AMD64_ALLOC_REG_COUNT;
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        return ARM64_ALLOC_REG_COUNT;
     }
 
     assertf(false, "not support arch %d", BUILD_ARCH);
@@ -39,6 +41,8 @@ static inline uint8_t cross_alloc_reg_count() {
 }
 
 char *reg_table_key(lir_flag_t alloc_type, uint8_t index, uint8_t size);
+
+reg_t *reg_select(uint8_t index, type_kind kind);
 
 reg_t *reg_find(lir_flag_t alloc_type, uint8_t index, size_t size);
 

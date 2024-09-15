@@ -35,7 +35,7 @@ static linked_t *inactive_new(closure_t *c) {
     linked_t *inactive = linked_new();
 
     // 遍历所有固定寄存器生成 fixed_interval
-    for (int i = 1; i < cross_alloc_reg_count(); ++i) {
+    for (int i = 1; i < alloc_reg_count(); ++i) {
         reg_t *reg = alloc_regs[i];
         interval_t *interval = table_get(c->interval_table, reg->name);
         assert(interval && "physic reg interval not found");
@@ -67,8 +67,10 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
         operand->value = stack;
     } else {
         reg_t *reg = alloc_regs[i->assigned];
+        assert(reg);
+
         uint8_t index = reg->index;
-        reg = cross_reg_select(index, var->type.kind);
+        reg = reg_select(index, var->type.kind);
 
         assert(reg);
 
@@ -93,7 +95,7 @@ static uint8_t find_free_reg(interval_t *current, int *free_pos) {
         hint_reg_id = current->reg_hint->assigned;
     }
 
-    for (int i = 1; i < cross_alloc_reg_count(); ++i) {
+    for (int i = 1; i < alloc_reg_count(); ++i) {
         if (free_pos[i] > current->last_range->to) {
             // 如果有多个寄存器比较空闲，则优先考虑 hint
             // ~~否则优先考虑 free 时间最小的寄存器,从而可以充分利用寄存器的时间~~
@@ -137,7 +139,7 @@ static uint8_t find_block_reg(interval_t *current, int *use_pos, int *block_pos)
         hint_reg_id = current->reg_hint->assigned;
     }
 
-    for (int i = 1; i < cross_alloc_reg_count(); ++i) {
+    for (int i = 1; i < alloc_reg_count(); ++i) {
         if (use_pos[i] <= current->first_range->from + 1) {
             continue;
         }
@@ -367,7 +369,7 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
     int free_pos[UINT8_MAX];
     memset(free_pos, -1, sizeof(free_pos));
 
-    for (int i = 1; i < cross_alloc_reg_count(); ++i) {
+    for (int i = 1; i < alloc_reg_count(); ++i) {
         reg_t *reg = alloc_regs[i];
         if (!(FLAG(a->current->alloc_type) & reg->flag)) { // already set 0
             continue;
@@ -443,7 +445,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     memset(use_pos, -1, sizeof(use_pos));
     memset(block_pos, -1, sizeof(block_pos)); // 用于记录寄存器从什么时候开始 block
 
-    for (int reg_id = 1; reg_id < cross_alloc_reg_count(); ++reg_id) {
+    for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
         reg_t *reg = alloc_regs[reg_id];
         if (!(FLAG(a->current->alloc_type) & reg->flag)) {
             continue;

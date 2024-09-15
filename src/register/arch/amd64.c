@@ -40,7 +40,7 @@ reg_t *ax;
 reg_t *cx;
 reg_t *dx;
 reg_t *bx;
-reg_t *sp;
+//reg_t *sp;
 reg_t *bp;
 reg_t *si;
 reg_t *di;
@@ -199,7 +199,7 @@ void amd64_reg_init() {
     cx = reg_new("cx", 1, LIR_FLAG_ALLOC_INT, WORD, 0);
     dx = reg_new("dx", 2, LIR_FLAG_ALLOC_INT, WORD, 0);
     bx = reg_new("bx", 3, LIR_FLAG_ALLOC_INT, WORD, 0);
-    sp = reg_new("sp", 4, LIR_FLAG_ALLOC_INT, WORD, 0);
+    reg_new("sp", 4, LIR_FLAG_ALLOC_INT, WORD, 0);
     bp = reg_new("bp", 5, LIR_FLAG_ALLOC_INT, WORD, 0);
     si = reg_new("si", 6, LIR_FLAG_ALLOC_INT, WORD, 0);
     di = reg_new("di", 7, LIR_FLAG_ALLOC_INT, WORD, 0);
@@ -323,14 +323,6 @@ void amd64_reg_init() {
     zmm15 = reg_new("zmm15", 15, LIR_FLAG_ALLOC_FLOAT, ZWORD, 0);
 }
 
-reg_t *amd64_reg_select(uint8_t index, type_kind kind) {
-    uint8_t alloc_type = type_kind_trans_alloc(kind);
-    uint8_t size = type_kind_sizeof(kind);
-
-    return reg_find(alloc_type, index, size);
-}
-
-
 /**
  * TODO 选择 fit reg 还是大 reg?
  * amd64 下统一使用 8byte 寄存器或者 16byte xmm 寄存器
@@ -344,121 +336,25 @@ reg_t *amd64_reg_select(uint8_t index, type_kind kind) {
  * @param size
  * @return
  */
-reg_t *amd64_fn_param_next_reg(uint8_t *used, type_kind kind) {
-    bool floated = is_float(kind);
-    uint8_t used_index = 0;
-    if (floated) {
-        used_index = 1;
-    }
-    uint8_t index = used[used_index]++;
-    uint8_t int_param_indexes[] = {7, 6, 2, 1, 8, 9};
-    // 通用寄存器 (0~5 = 6 个) rdi, rsi, rdx, rcx, r8, r9
-    if (!floated && index <= 5) {
-        uint8_t reg_index = int_param_indexes[index];
-        return (reg_t *) cross_reg_select(reg_index, kind);
-    }
-
-    // 浮点寄存器(0~7 = 8 个) xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
-    if (floated && index <= 7) {
-        return (reg_t *) cross_reg_select(index, kind);
-    }
-
-    return NULL;
-}
-
-
-/**
- * output 没有特殊情况就必须分一个寄存器，主要是 amd64 的指令基本都是需要寄存器参与的
- * @param c
- * @param op
- * @param i
- * @return
- */
-alloc_kind_e amd64_alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
-    if (lir_op_contain_cmp(op)) {
-        if (var->flag & FLAG(LIR_FLAG_OUTPUT)) { // 顶层 var 才不用分配寄存器，否则 var 可能只是 indirect_addr base
-            return ALLOC_KIND_SHOULD;
-        }
-    }
-    if (op->code == LIR_OPCODE_MOVE) {
-        // 如果 left == imm 或者 reg 则返回 should, mov 的 first 一定是 use
-        assertf(var->flag & FLAG(LIR_FLAG_OUTPUT), "move def must in output");
-
-        lir_operand_t *first = op->first;
-        if (first->assert_type == LIR_OPERAND_REG) {
-            return ALLOC_KIND_SHOULD;
-        }
-
-        if (first->assert_type == LIR_OPERAND_IMM) {
-            lir_imm_t *imm = first->value;
-            if (!is_qword_int(imm->kind)) {
-                return ALLOC_KIND_SHOULD;
-            }
-        }
-    }
-    if (op->code == LIR_OPCODE_CLV) {
-        return ALLOC_KIND_SHOULD;
-    }
-
-    if (op->code == LIR_OPCODE_NOP) {
-        return ALLOC_KIND_SHOULD;
-    }
-
-    // phi 也属于 def, 所以必须分配寄存器
-    return ALLOC_KIND_MUST;
-}
-
-/**
- * 如果 op type is var, 且是 indirect addr, 则必须分配一个寄存器，用于地址 indirect addr
- * output 已经必须要有寄存器了, input 就无所谓了
- * @param c
- * @param op
- * @param i
- * @return
- */
-alloc_kind_e amd64_alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var) {
-    // var 是 indirect addr 的 base 部分， native indirect addr 则必须借助寄存器
-//    if (var->flag & FLAG(LIR_FLAG_INDIRECT_ADDR_BASE) && op->code != LIR_OPCODE_LEA) {
-    if (var->flag & FLAG(LIR_FLAG_INDIRECT_ADDR_BASE)) {
-        return ALLOC_KIND_MUST;
-    }
-
-    // lea 指令的 use 一定是 first, 所以不需要重复判断
-    if (op->code == LIR_OPCODE_LEA) {
-        return ALLOC_KIND_NOT;
-    }
-
-    if (op->code == LIR_OPCODE_MOVE) {
-        if (op->output->assert_type == LIR_OPERAND_SYMBOL_VAR ||
-            op->output->assert_type == LIR_OPERAND_STACK ||
-            op->output->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-            return ALLOC_KIND_MUST;
-        }
-    }
-
-    if (lir_op_term(op)) {
-        assertf(op->first->assert_type == LIR_OPERAND_VAR, "arithmetic op first operand must var for assign reg");
-        if (var->flag & FLAG(LIR_FLAG_FIRST)) {
-            return ALLOC_KIND_MUST;
-        }
-    }
-
-    // 比较运算符实用了 op cmp, 所以 cmp 的 first 或者 second 其中一个必须是寄存器
-    // 如果优先分配给 first, 如果 first 不是寄存器，则分配给 second
-    if (lir_op_contain_cmp(op)) { // cmp indirect addr
-        assert((op->first->assert_type == LIR_OPERAND_VAR || op->second->assert_type == LIR_OPERAND_VAR) &&
-               "cmp must have var, var can allocate registers");
-
-        if (var->flag & FLAG(LIR_FLAG_FIRST)) {
-            return ALLOC_KIND_MUST;
-        }
-
-        // second 只能是在 first 非 var 的情况下才能分配寄存器
-        if (var->flag & FLAG(LIR_FLAG_SECOND) && op->first->assert_type != LIR_OPERAND_VAR) {
-            // 优先将寄存器分配给 first, 仅当 first 不是 var 时才分配给 second
-            return ALLOC_KIND_MUST;
-        }
-    }
-    return ALLOC_KIND_SHOULD;
-}
+//reg_t *amd64_fn_param_next_reg(uint8_t *used, type_kind kind) {
+//    bool floated = is_float(kind);
+//    uint8_t used_index = 0;
+//    if (floated) {
+//        used_index = 1;
+//    }
+//    uint8_t index = used[used_index]++;
+//    uint8_t int_param_indexes[] = {7, 6, 2, 1, 8, 9};
+//    // 通用寄存器 (0~5 = 6 个) rdi, rsi, rdx, rcx, r8, r9
+//    if (!floated && index <= 5) {
+//        uint8_t reg_index = int_param_indexes[index];
+//        return (reg_t *) cross_reg_select(reg_index, kind);
+//    }
+//
+//    // 浮点寄存器(0~7 = 8 个) xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
+//    if (floated && index <= 7) {
+//        return (reg_t *) cross_reg_select(index, kind);
+//    }
+//
+//    return NULL;
+//}
 

@@ -4,27 +4,21 @@
 #include "src/lir.h"
 
 typedef enum {
-    AMD64_CLASS_NO,
+    AMD64_CLASS_NO = 0,
     AMD64_CLASS_MEMORY,
     AMD64_CLASS_INTEGER,
     AMD64_CLASS_SSE,
-//    AMD64_MODE_X87 // 不认识，暂时忽略
+    //    AMD64_MODE_X87 // 不认识，暂时忽略
 } amd64_class_t;
 
 int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint64_t offset);
 
-lir_operand_t *select_return_reg(lir_operand_t *operand);
+lir_operand_t *amd64_select_return_reg(lir_operand_t *operand);
 
-/**
- * 返回 lir 指令列表
- * @param c
- * @param args
- * @return
- */
 linked_t *amd64_lower_call(closure_t *c, lir_op_t *op);
 
 linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op);
 
 linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op);
 
-#endif //NATURE_AMD64_ABI_H
+#endif//NATURE_AMD64_ABI_H

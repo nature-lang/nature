@@ -149,9 +149,9 @@ static inline void env_init() {
         assertf(false, "only support compiles to os linux/darwin");
     }
 
-    if (BUILD_ARCH != ARCH_AMD64) {
+    if (BUILD_ARCH != ARCH_AMD64 && BUILD_ARCH != ARCH_ARM64) {
         assertf(false,
-                "only support compiles to arch=amd64, please with BUILD_ARCH build, example BUILD_ARCH=mad64 nature build main.n");
+                "unsupported architecture. set BUILD_ARCH=amd64 or BUILD_ARCH=arm64 env to compile.");
     }
 
     // darwin 不支持跨平台编译, 必须在当前平台编译

@@ -4,6 +4,104 @@
 #include "src/ssa.h"
 #include "utils/stack.h"
 
+
+/**
+ * output 没有特殊情况就必须分一个寄存器，主要是 的指令基本都是需要寄存器参与的
+ * @param c
+ * @param op
+ * @param i
+ * @return
+ */
+static alloc_kind_e alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
+    if (lir_op_contain_cmp(op)) {
+        if (var->flag & FLAG(LIR_FLAG_OUTPUT)) { // 顶层 var 才不用分配寄存器，否则 var 可能只是 indirect_addr base
+            return ALLOC_KIND_SHOULD;
+        }
+    }
+    if (op->code == LIR_OPCODE_MOVE) {
+        // 如果 left == imm 或者 reg 则返回 should, mov 的 first 一定是 use
+        assertf(var->flag & FLAG(LIR_FLAG_OUTPUT), "move def must in output");
+
+        lir_operand_t *first = op->first;
+        if (first->assert_type == LIR_OPERAND_REG) {
+            return ALLOC_KIND_SHOULD;
+        }
+
+        if (first->assert_type == LIR_OPERAND_IMM) {
+            lir_imm_t *imm = first->value;
+            if (!is_qword_int(imm->kind)) {
+                return ALLOC_KIND_SHOULD;
+            }
+        }
+    }
+    if (op->code == LIR_OPCODE_CLV) {
+        return ALLOC_KIND_SHOULD;
+    }
+
+    if (op->code == LIR_OPCODE_NOP) {
+        return ALLOC_KIND_SHOULD;
+    }
+
+    // phi 也属于 def, 所以必须分配寄存器
+    return ALLOC_KIND_MUST;
+}
+
+
+/**
+ * 如果 op type is var, 且是 indirect addr, 则必须分配一个寄存器，用于地址 indirect addr
+ * output 已经必须要有寄存器了, input 就无所谓了
+ * @param c
+ * @param op
+ * @param i
+ * @return
+ */
+static alloc_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var) {
+    // var 是 indirect addr 的 base 部分， native indirect addr 则必须借助寄存器
+//    if (var->flag & FLAG(LIR_FLAG_INDIRECT_ADDR_BASE) && op->code != LIR_OPCODE_LEA) {
+    if (var->flag & FLAG(LIR_FLAG_INDIRECT_ADDR_BASE)) {
+        return ALLOC_KIND_MUST;
+    }
+
+    // lea 指令的 use 一定是 first, 所以不需要重复判断
+    if (op->code == LIR_OPCODE_LEA) {
+        return ALLOC_KIND_NOT;
+    }
+
+    if (op->code == LIR_OPCODE_MOVE) {
+        if (op->output->assert_type == LIR_OPERAND_SYMBOL_VAR ||
+            op->output->assert_type == LIR_OPERAND_STACK ||
+            op->output->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+            return ALLOC_KIND_MUST;
+        }
+    }
+
+    if (lir_op_term(op)) {
+        assertf(op->first->assert_type == LIR_OPERAND_VAR, "arithmetic op first operand must var for assign reg");
+        if (var->flag & FLAG(LIR_FLAG_FIRST)) {
+            return ALLOC_KIND_MUST;
+        }
+    }
+
+    // 比较运算符实用了 op cmp, 所以 cmp 的 first 或者 second 其中一个必须是寄存器
+    // 如果优先分配给 first, 如果 first 不是寄存器，则分配给 second
+    if (lir_op_contain_cmp(op)) { // cmp indirect addr
+        assert((op->first->assert_type == LIR_OPERAND_VAR || op->second->assert_type == LIR_OPERAND_VAR) &&
+               "cmp must have var, var can allocate registers");
+
+        if (var->flag & FLAG(LIR_FLAG_FIRST)) {
+            return ALLOC_KIND_MUST;
+        }
+
+        // second 只能是在 first 非 var 的情况下才能分配寄存器
+        if (var->flag & FLAG(LIR_FLAG_SECOND) && op->first->assert_type != LIR_OPERAND_VAR) {
+            // 优先将寄存器分配给 first, 仅当 first 不是 var 时才分配给 second
+            return ALLOC_KIND_MUST;
+        }
+    }
+    return ALLOC_KIND_SHOULD;
+}
+
+
 static bool block_covered(closure_t *c, int position) {
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *b = c->blocks->take[i];
@@ -329,7 +427,7 @@ void interval_block_order(closure_t *c) {
 
 void interval_build(closure_t *c) {
     // new_interval for all physical registers
-    for (int reg_id = 1; reg_id < cross_alloc_reg_count(); ++reg_id) {
+    for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
         reg_t *reg = alloc_regs[reg_id];
         interval_t *interval = interval_new(c);
         interval->index = reg_id;
@@ -415,7 +513,7 @@ void interval_build(closure_t *c) {
             // fixed all phy reg in call
             if (lir_op_call(op)) {
                 // traverse all register
-                for (int j = 1; j < cross_alloc_reg_count(); ++j) {
+                for (int j = 1; j < alloc_reg_count(); ++j) {
                     reg_t *reg = alloc_regs[j];
                     interval_t *interval = table_get(c->interval_table, reg->name);
 
@@ -464,7 +562,7 @@ void interval_build(closure_t *c) {
                 if (!interval->fixed) {
                     assertf(operand->assert_type == LIR_OPERAND_VAR, "only var can be lives");
                     live_remove(live_table, lives, interval->var);
-                    interval_add_use_pos(c, interval, op->id, cross_alloc_kind_of_def(c, op, operand->value));
+                    interval_add_use_pos(c, interval, op->id, alloc_kind_of_def(c, op, operand->value));
                 }
             }
 
@@ -485,7 +583,7 @@ void interval_build(closure_t *c) {
                         assertf(operand->assert_type == LIR_OPERAND_VAR, "only var can be lives");
                         // phi body 一定是在当前 block 的起始位置,上面已经进行了特殊处理 merge live，所以这里不需要添加 live
                         live_add(live_table, lives, interval->var);
-                        interval_add_use_pos(c, interval, op->id, cross_alloc_kind_of_use(c, op, operand->value));
+                        interval_add_use_pos(c, interval, op->id, alloc_kind_of_use(c, op, operand->value));
                     }
                 }
             }

@@ -44,7 +44,7 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->loop_ends = slice_new();
     c->loop_headers = slice_new();
 
-    c->interval_count = cross_alloc_reg_count() + 1;
+    c->interval_count = alloc_reg_count() + 1;
 
     fndef->closure = c;
     c->fndef = fndef;
@@ -54,7 +54,7 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
 }
 
 lir_operand_t *lir_reg_operand(uint8_t index, type_kind kind) {
-    reg_t *reg = cross_reg_select(index, kind);
+    reg_t *reg = reg_select(index, kind);
     assert(reg);
     return operand_new(LIR_OPERAND_REG, reg);
 }

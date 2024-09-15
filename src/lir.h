@@ -735,7 +735,7 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
 static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *dst_operand) {
     module_t *m = c->module;
     assert(dst_operand->assert_type == LIR_OPERAND_VAR);
-    assert(is_large_alloc_type(t));
+    assert(is_large_stack_type(t));
 
     uint16_t size = type_sizeof(t);
 
@@ -787,14 +787,13 @@ static inline lir_operand_t *temp_var_operand_with_alloc(module_t *m, type_t typ
     assert(type.kind > 0);
 
     string unique_ident = var_unique_ident(m, TEMP_IDENT);
-
     symbol_table_set_var(unique_ident, type);
 
     lir_var_t *lir_var = lir_var_new(m, unique_ident);
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var);
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
-    if (is_large_alloc_type(type)) {
+    if (is_large_stack_type(type)) {
         if (type.in_heap) {
             lir_var->type = type_kind_new(TYPE_VOID_PTR);
 
@@ -813,22 +812,14 @@ static inline lir_operand_t *lower_temp_var_operand(closure_t *c, linked_t *list
     assert(type.kind > 0);
 
     string unique_ident = var_unique_ident(c->module, TEMP_IDENT);
-
     symbol_table_set_var(unique_ident, type);
 
     lir_var_t *lir_var = lir_var_new(c->module, unique_ident);
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var);
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
-    if (is_large_alloc_type(type)) {
-        //        if (type.in_heap) {
-        //            lir_var->type = type_kind_new(TYPE_VOID_PTR);
-        //            uint64_t rtype_hash = ct_find_rtype_hash(type);
-        //            linked_push(list, lir_rtcall(RT_CALL_GC_MALLOC, target, 1, int_operand(rtype_hash)));
-        //            linked_push(list, lir_rtcall(RT_CALL_POST_RTCALL_HOOK, NULL, 1, string_operand(RT_CALL_GC_MALLOC)));
-        //        } else {
+    if (is_large_stack_type(type)) {
         linked_push(list, lir_stack_alloc(c, type, target));
-        //        }
     }
 
     return target;

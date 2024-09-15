@@ -651,7 +651,7 @@ void mark_ptr_black(void *value) {
  * yield 的入口也是这里
  * @param target
  */
-void pre_tplcall_hook(char *target) {
+void pre_tplcall_hook() {
     coroutine_t *co = coroutine_get();
     n_processor_t *p = processor_get();
 
@@ -669,8 +669,7 @@ void pre_tplcall_hook(char *target) {
     co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);
     co->scan_offset = (uint64_t) p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE);
 
-    TRACEF("[pre_tplcall_hook] co=%p, status=%d ,target=%s, scan_offset=%lu, ret_addr=%p", co, co->status, target,
-           co->scan_offset,
+    TRACEF("[pre_tplcall_hook] co=%p, status=%d , scan_offset=%lu, ret_addr=%p", co, co->status, co->scan_offset,
            (void *) co->scan_ret_addr);
 
     // #ifdef DEBUG
@@ -686,10 +685,10 @@ void pre_tplcall_hook(char *target) {
     // #endif
 }
 
-void post_tplcall_hook(char *target) {
+void post_tplcall_hook() {
     n_processor_t *p = processor_get();
-    TRACEF("[runtime.post_tplcall_hook] p=%p, target=%s, p_index_%d=%d will set processor_status, running",
-           processor_get(), target,
+    TRACEF("[runtime.post_tplcall_hook] p=%p, p_index_%d=%d will set processor_status, running",
+           processor_get(),
            p->share, p->index);
     processor_set_status(p, P_STATUS_RUNNING);
 }
