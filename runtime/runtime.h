@@ -372,10 +372,12 @@ void processor_set_status(n_processor_t *p, p_status_t status);
 #define BP_VALUE()      \
     uint64_t rbp_value; \
     __asm__ volatile("mov %%rbp, %0" : "=r"(rbp_value));
-#elif
+#elif defined(__aarch64__)
 #define BP_VALUE()      \
     uint64_t rbp_value; \
-    assert(false && "not support");
+    __asm__ volatile("mov x29, %0" : "=r"(rbp_value));
+#else
+assert(false);
 #endif
 
 #define PRE_RTCALL_HOOK(target)                                                                                \

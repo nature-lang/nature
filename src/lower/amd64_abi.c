@@ -1,6 +1,5 @@
 #include "amd64_abi.h"
 
-#include "src/cross.h"
 #include "src/register/arch/amd64.h"
 
 lir_operand_t *amd64_select_return_reg(lir_operand_t *operand) {

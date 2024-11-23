@@ -46,6 +46,8 @@ extern char SOURCE_PATH[PATH_MAX];// /opt/test/main.n 的绝对路径
 #define LINKER_OUTPUT "a.out"
 #define LIBMACH_C_FILE "libSystem.tbd"
 
+#define LIBGCC_FILE "libgcc.a"
+
 
 static inline char *temp_dir() {
     char *tmp_dir;

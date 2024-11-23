@@ -7,15 +7,17 @@
 extern reg_t *x0, *x1, *x2, *x3, *x4, *x5, *x6, *x7;
 extern reg_t *x8, *x9, *x10, *x11, *x12, *x13, *x14, *x15;
 extern reg_t *x16, *x17, *x18, *x19, *x20, *x21, *x22, *x23;
-extern reg_t *x24, *x25, *x26, *x27, *x28, *x29, *x30;
+extern reg_t *x24, *x25, *x26, *x27, *x28, *x29, *x30; // x29 = fp, x30 = lr
 
 // 32位别名定义
-reg_t *w0, *w1, *w2, *w3, *w4, *w5, *w6, *w7;
-reg_t *w8, *w9, *w10, *w11, *w12, *w13, *w14, *w15;
-reg_t *w16, *w17, *w18, *w19, *w20, *w21, *w22, *w23;
-reg_t *w24, *w25, *w26, *w27, *w28, *w29, *w30;
+extern reg_t *w0, *w1, *w2, *w3, *w4, *w5, *w6, *w7;
+extern reg_t *w8, *w9, *w10, *w11, *w12, *w13, *w14, *w15;
+extern reg_t *w16, *w17, *w18, *w19, *w20, *w21, *w22, *w23;
+extern reg_t *w24, *w25, *w26, *w27, *w28, *w29, *w30;
 
 // 特殊寄存器
+extern reg_t *fp;
+extern reg_t *lr;
 extern reg_t *sp;  // 栈指针
 extern reg_t *pc;  // 程序计数器
 extern reg_t *xzr; // 零寄存器

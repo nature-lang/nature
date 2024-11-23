@@ -1,7 +1,7 @@
 #include "arm64.h"
 #include "utils/type.h"
 #include "utils/slice.h"
-#include "src/cross.h"
+#include "src/register/register.h"
 #include <stdio.h>
 
 // 通用寄存器定义
@@ -17,6 +17,8 @@ reg_t *w16, *w17, *w18, *w19, *w20, *w21, *w22, *w23;
 reg_t *w24, *w25, *w26, *w27, *w28, *w29, *w30;
 
 // 特殊寄存器定义
+reg_t *fp;
+reg_t *lr;
 reg_t *sp;
 reg_t *pc;
 reg_t *xzr;
@@ -74,6 +76,8 @@ void arm64_reg_init() {
     x28 = reg_new("x28", 28, LIR_FLAG_ALLOC_INT, QWORD, 28);
     x29 = reg_new("x29", 29, 0, QWORD, 0);  // FP, 不参与分配
     x30 = reg_new("x30", 30, 0, QWORD, 0);  // LR, 不参与分配
+    fp = x29;
+    lr = x30;
 
 
     // 32位寄存器初始化

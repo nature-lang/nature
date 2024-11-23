@@ -82,19 +82,17 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     coroutine_t *co = p->coroutine;
     assert(co);
 
-#ifdef __LINUX
-#define CTX_RSP  ctx->uc_mcontext.gregs[REG_RSP]
-#else
-#define CTX_RSP ctx->uc_mcontext->__ss.__rsp
-#endif
+#ifdef __AMD64
+
 
 #ifdef __LINUX
-#define CTX_RIP  ctx->uc_mcontext.gregs[REG_RIP]
+#define CTX_RSP ctx->uc_mcontext.gregs[REG_RSP]
+#define CTX_RIP ctx->uc_mcontext.gregs[REG_RIP]
 #else
+#define CTX_RSP ctx->uc_mcontext->__ss.__rsp
 #define CTX_RIP ctx->uc_mcontext->__ss.__rip
 #endif
 
-#ifdef __AMD64
     // int REG_RBP = 10;
     int REG_RSP = 15;
     int REG_RIP = 16;
@@ -129,9 +127,56 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
 
     CTX_RSP = (int64_t) rsp;
     CTX_RIP = (int64_t) async_preempt;
-#elif
-    // TODO arm64
+
+#elif defined(__ARM64)
+#ifdef __LINUX
+#define CTX_SP ctx->uc_mcontext.sp
+#define CTX_PC ctx->uc_mcontext.pc
+#define CTX_LR ctx->uc_mcontext.regs[30]  // x30 是链接寄存器(LR)
+#else
+#define CTX_SP ctx->uc_mcontext->__ss.__sp
+#define CTX_PC ctx->uc_mcontext->__ss.__pc
+#define CTX_LR ctx->uc_mcontext->__ss.__lr
 #endif
+
+    uint64_t *sp = (uint64_t *)CTX_SP;
+    uint64_t pc = CTX_PC;
+    uint64_t lr = CTX_LR;  // 保存返回地址的链接寄存器
+
+    // 查找当前执行的函数
+    fndef_t *fn = find_fn(pc);
+    if (fn) {
+        // 基于当前 sp 计算扫描偏移
+        uint64_t sp_addr = (uint64_t)sp;
+        co->scan_ret_addr = pc;
+        co->scan_offset = (uint64_t)co->p->share_stack.align_retptr - sp_addr;
+    } else {
+        // c 语言段被抢占,采用保守扫描策略
+        co->scan_ret_addr = 0;
+        co->scan_offset = (uint64_t)co->p->share_stack.align_retptr - (uint64_t)sp;
+    }
+
+    // 为被抢占的函数预留栈空间
+    sp -= 128; // 1024 字节的安全区域
+
+    // ARM64 中保存返回地址和链接寄存器
+    sp -= 2;  // 预留两个位置,一个给 pc,一个给 lr
+    sp[0] = pc;
+    sp[1] = lr;
+
+    RDEBUGF("[runtime.thread_handle_sig] pc=%p lr=%p save to %p, co=%p, scan_ret_addr=%p, scan_offset=%lu, fn=%p",
+            (void *)pc, (void *)lr, sp, co,
+            (void *)co->scan_ret_addr, co->scan_offset, fn);
+
+    // 更新上下文
+    CTX_SP = (uint64_t)sp;
+    CTX_PC = (uint64_t)async_preempt;
+    CTX_LR = (uint64_t)async_preempt;  // 确保返回地址也指向抢占处理函数
+
+#else
+#error "platform no support yet"
+#endif
+
 }
 
 static void processor_uv_close(n_processor_t *p) {
@@ -660,10 +705,13 @@ void pre_tplcall_hook() {
     processor_set_status(p, P_STATUS_TPLCALL);
 
     uint64_t rbp_value;
-#ifdef __x86_64__
+#ifdef __AMD64
     __asm__ volatile("mov %%rbp, %0" : "=r"(rbp_value));
-#elif
-    assert(false && "not support");
+#elif __ARM64
+    // 在 ARM64 中，x29 是帧指针(FP)
+    __asm__ volatile("mov %0, x29" : "=r"(rbp_value));
+#else
+    assert(false && "platform not supported");
 #endif
 
     co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);

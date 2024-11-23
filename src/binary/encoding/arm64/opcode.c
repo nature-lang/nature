@@ -385,8 +385,17 @@ static uint32_t asm_cset(arm64_asm_inst_t *inst) {
 
 static uint32_t asm_b(arm64_asm_inst_t *inst) {
     arm64_asm_operand_t *opr1 = inst->operands[0];
-    assert(opr1->type == ARM64_ASM_OPERAND_SYMBOL);
-    int64_t offset = opr1->symbol.offset;
+    int64_t offset;
+
+    if (opr1->type == ARM64_ASM_OPERAND_SYMBOL) {
+        offset = opr1->symbol.offset;
+    } else if (opr1->type == ARM64_ASM_OPERAND_IMMEDIATE) {
+        offset = opr1->immediate;
+    } else {
+        assert(false); // 不支持的操作数类型
+        return 0;
+    }
+
     offset = offset / 4;
 
     return W_B(offset);
@@ -395,8 +404,17 @@ static uint32_t asm_b(arm64_asm_inst_t *inst) {
 
 static uint32_t asm_bl(arm64_asm_inst_t *inst) {
     arm64_asm_operand_t *opr1 = inst->operands[0];
-    assert(opr1->type == ARM64_ASM_OPERAND_SYMBOL);
-    int64_t offset = opr1->symbol.offset;
+    int64_t offset;
+
+    if (opr1->type == ARM64_ASM_OPERAND_SYMBOL) {
+        offset = opr1->symbol.offset;
+    } else if (opr1->type == ARM64_ASM_OPERAND_IMMEDIATE) {
+        offset = opr1->immediate;
+    } else {
+        assert(false); // 不支持的操作数类型
+        return 0;
+    }
+
     offset = offset / 4;
 
     return W_BL(offset);
@@ -412,7 +430,20 @@ static uint32_t asm_br(arm64_asm_inst_t *inst) {
 
 static uint32_t asm_bcc(arm64_asm_inst_t *inst) {
     uint32_t cond = inst->opcode == B ? BAL - BEQ : inst->opcode - BEQ;
-    return W_BCC(cond);
+    int64_t offset = 0;
+
+    arm64_asm_operand_t *opr1 = inst->operands[0];
+    if (opr1->type == ARM64_ASM_OPERAND_IMMEDIATE) {
+        offset = opr1->immediate;
+    } else if (opr1->type == ARM64_ASM_OPERAND_SYMBOL) {
+        offset = opr1->symbol.offset;
+    } else {
+        assert(false); // 不支持的操作数类型
+        return 0;
+    }
+
+    offset = offset / 4; // 将偏移量调整为指令地址的单位
+    return W_BCC(cond, offset);
 }
 
 
@@ -677,25 +708,25 @@ arm64_opr_flags_list arm64_opcode_map[] = {
         }},
         [R_ADRP] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {ADRP, {R64, SYM}}}},
         [R_CSET] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {CSET, {R32 | R64, CND}}}},
-        [R_B] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {B, {SYM}}}},
+        [R_B] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {B, {SYM | IMM}}}},
+        [R_BL] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BL, {SYM | IMM}}}},
         [R_BR] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BR, {R64}}}},
-        [R_BEQ] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BEQ, {SYM}}}},
-        [R_BNE] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BNE, {SYM}}}},
-        [R_BHS] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BHS, {SYM}}}},
-        [R_BLO] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BLO, {SYM}}}},
-        [R_BMI] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BMI, {SYM}}}},
-        [R_BPL] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BPL, {SYM}}}},
-        [R_BVS] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BVS, {SYM}}}},
-        [R_BVC] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BVC, {SYM}}}},
-        [R_BHI] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BHI, {SYM}}}},
-        [R_BLS] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BLS, {SYM}}}},
-        [R_BGE] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BGE, {SYM}}}},
-        [R_BLT] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BLT, {SYM}}}},
-        [R_BGT] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BGT, {SYM}}}},
-        [R_BLE] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BLE, {SYM}}}},
-        [R_BAL] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BAL, {SYM}}}},
-        [R_BNV] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BNV, {SYM}}}},
-        [R_BL] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BL, {SYM}}}},
+        [R_BEQ] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BEQ, {SYM | IMM}}}},
+        [R_BNE] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BNE, {SYM | IMM}}}},
+        [R_BHS] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BHS, {SYM | IMM}}}},
+        [R_BLO] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BLO, {SYM | IMM}}}},
+        [R_BMI] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BMI, {SYM | IMM}}}},
+        [R_BPL] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BPL, {SYM | IMM}}}},
+        [R_BVS] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BVS, {SYM | IMM}}}},
+        [R_BVC] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BVC, {SYM | IMM}}}},
+        [R_BHI] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BHI, {SYM | IMM}}}},
+        [R_BLS] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BLS, {SYM | IMM}}}},
+        [R_BGE] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BGE, {SYM | IMM}}}},
+        [R_BLT] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BLT, {SYM | IMM}}}},
+        [R_BGT] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BGT, {SYM | IMM}}}},
+        [R_BLE] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BLE, {SYM | IMM}}}},
+        [R_BAL] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BAL, {SYM | IMM}}}},
+        [R_BNV] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BNV, {SYM | IMM}}}},
         [R_BLR] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BLR, {R64}}}},
         [R_RET] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {RET}}},
         [R_SVC] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {SVC, {IMM}}}},
@@ -929,7 +960,7 @@ static arm64_opcode_handle_fn arm64_opcode_handle_table[] = {
 uint32_t arm64_asm_inst_encoding(arm64_asm_inst_t *inst) {
     // opcode 确认
     arm64_match_opcode(inst);
-    assert(inst->opcode > NOOP);
+    assert(inst->opcode > 0);
     arm64_opcode_handle_fn fn = arm64_opcode_handle_table[inst->opcode];
     assert(fn);
 

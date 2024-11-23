@@ -1,4 +1,3 @@
-#include "cross.h"
 #include "utils/stack.h"
 #include "lir.h"
 

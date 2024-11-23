@@ -1,10 +1,17 @@
 #include "arm64.h"
 #include "arm64_abi.h"
 
-static lir_operand_t *arm64_convert_first_to_temp(closure_t *c, linked_t *list, lir_operand_t *operand) {
+static lir_operand_t *arm64_convert_mov_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
     lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(operand));
 
     linked_push(list, lir_op_move(temp, operand));
+    return lir_reset_operand(temp, operand->pos);
+}
+
+static lir_operand_t *arm64_convert_lea_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
+    lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(operand));
+
+    linked_push(list, lir_op_lea(temp, operand));
     return lir_reset_operand(temp, operand->pos);
 }
 
@@ -60,18 +67,67 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
     return list;
 }
 
+static linked_t *arm64_lower_symbol_var(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+    if (op->code == LIR_OPCODE_LEA || op->code == LIR_OPCODE_LABEL) {
+        return list;
+    }
+
+    if (op->first && op->first->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        op->first = arm64_convert_lea_var(c, list, op->first);
+    }
+
+
+    if (op->second && op->second->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        op->second = arm64_convert_lea_var(c, list, op->second);
+    }
+
+    if (op->output && op->output->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        op->output = arm64_convert_lea_var(c, list, op->output);
+    }
+
+    // TODO 可能需要嵌套 symbol 处理
+//    slice_t *sym_operands = extract_op_operands(op, FLAG(LIR_OPERAND_SYMBOL_VAR), 0, false);
+//    for (int i = 0; i < sym_operands->count; ++i) {
+//        lir_operand_t *operand = sym_operands->take[0];
+//        // 添加 lea 指令将 symbol 地址添加到 var 中, 这样在寄存器分配阶段 var 必定分配到寄存器。native 阶段则可以使用 adrp + add 指令将 sym 地址添加到寄存器中
+//        lir_op_lea()
+//    }
+    return list;
+}
+
+
+/**
+ * 按照 arm64 规定
+ * first 必须是寄存器, second 必须是寄存器或者立即数
+ */
+static linked_t *arm64_lower_cmp(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+
+    if (op->first->assert_type != LIR_OPERAND_VAR) {
+        op->first = arm64_convert_mov_var(c, list, op->first);
+    }
+
+    if (op->second->assert_type != LIR_OPERAND_VAR && op->second->assert_type != LIR_OPERAND_IMM) {
+        op->second = arm64_convert_mov_var(c, list, op->second);
+    }
+
+    linked_push(list, op);
+
+    return list;
+}
+
 static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
     assert(op->output->assert_type == LIR_OPERAND_VAR); // var 才能分配寄存器
 
     // 所有的三元运算的 output 和 first 必须是 var, 这样才能分配到寄存器
     if (op->first->assert_type != LIR_OPERAND_VAR) {
-        op->first = arm64_convert_first_to_temp(c, list, op->first);
+        op->first = arm64_convert_mov_var(c, list, op->first);
     }
 
-
     if (op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_REM) {
-        op->second = arm64_convert_first_to_temp(c, list, op->second);
+        op->second = arm64_convert_mov_var(c, list, op->second);
     }
 
     linked_push(list, op);
@@ -81,7 +137,7 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
 
 static linked_t *arm64_lower_output(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
-    op->output = arm64_convert_first_to_temp(c, list, op->output);
+    op->output = arm64_convert_mov_var(c, list, op->output);
     linked_push(list, op);
     return list;
 }
@@ -92,6 +148,7 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
         lir_op_t *op = LINKED_VALUE();
 
         linked_concat(operations, arm64_lower_imm(c, op));
+        linked_concat(operations, arm64_lower_symbol_var(c, op));
 
         if (lir_op_call(op) && op->second->value != NULL) {
             linked_concat(operations, arm64_lower_call(c, op));
@@ -108,9 +165,13 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        // 所有都三元运算都是不兼容 amd64 的，所以这里尽可能的进行三元转换为二元的处理
         if (is_ternary(op)) {
             linked_concat(operations, arm64_lower_ternary(c, op));
+            continue;
+        }
+
+        if (lir_op_contain_cmp(op)) {
+            linked_concat(operations, arm64_lower_cmp(c, op));
             continue;
         }
 

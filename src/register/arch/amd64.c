@@ -1,5 +1,5 @@
 #include "amd64.h"
-#include "src/cross.h"
+#include "src/register/register.h"
 #include <stdio.h>
 
 reg_t *rax;

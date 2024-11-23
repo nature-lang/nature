@@ -40,36 +40,49 @@ static void test_dump(uint32_t encoding) {
 })
 
 static void test_basic() {
-    arm64_asm_inst_t *inst = ARM64_ASM(R_SUB, ARM_REG(x8), ARM_REG(x10), ARM_IMM(0x10));
+    arm64_asm_inst_t *inst = ARM64_ASM(R_SUB, ARM64_REG(x8), ARM64_REG(x10), ARM64_IMM(0x10));
     uint32_t binary = arm64_asm_inst_encoding(inst);
     TEST_EQ(binary, 0x48, 0x41, 0x00, 0xD1);
 
     // SUB sp, sp, #32
-    inst = ARM64_ASM(R_SUB, ARM_REG(sp), ARM_REG(sp), ARM_IMM(32));
+    inst = ARM64_ASM(R_SUB, ARM64_REG(sp), ARM64_REG(sp), ARM64_IMM(32));
     binary = arm64_asm_inst_encoding(inst);
     TEST_EQ(binary, 0xFF, 0x83, 0x00, 0xD1);
 
 
     // ADRP x8, :got:foo
     // 注意：ADRP的编码依赖于具体的地址，这里使用占位符
-    inst = ARM64_ASM(R_ADRP, ARM_REG(x8), ARM_SYM("hello", true, 0)); // 使用0作为占位符
+    inst = ARM64_ASM(R_ADRP, ARM64_REG(x8), ARM64_SYM("hello", true, 0, 0)); // 使用0作为占位符
     binary = arm64_asm_inst_encoding(inst);
     TEST_EQ(binary, 0x08, 0x00, 0x00, 0x90);
 
     // LDR x8, [x8, :got_lo12:foo]
-    inst = ARM64_ASM(R_LDR, ARM_REG(x8), ARM_INDIRECT(x8, 0, 0)); // 假设0表示无偏移
+    inst = ARM64_ASM(R_LDR, ARM64_REG(x8), ARM64_INDIRECT(x8, 0, 0)); // 假设0表示无偏移
     binary = arm64_asm_inst_encoding(inst);
     TEST_EQ(binary, 0x08, 0x01, 0x40, 0xF9);
 
     //  bl test 类似于 amd64 中的 call test
-    inst = ARM64_ASM(R_BL, ARM_SYM("test", true, 0));
+    inst = ARM64_ASM(R_BL, ARM64_SYM("test", true, 0, 0));
     binary = arm64_asm_inst_encoding(inst);
     TEST_EQ(binary, 0x00, 0x00, 0x00, 0x94);
 
     // bl offset
-    inst = ARM64_ASM(R_BL, ARM_SYM("test", true, 0x20));
+    inst = ARM64_ASM(R_BL, ARM64_SYM("test", true, 0x20, 0));
     binary = arm64_asm_inst_encoding(inst);
     TEST_EQ(binary, 0x08, 0x00, 0x00, 0x94);
+
+    inst = ARM64_ASM(R_BL, ARM64_IMM(0x10));
+    binary = arm64_asm_inst_encoding(inst);
+    TEST_EQ(binary, 0x04, 0x00, 0x00, 0x94);
+
+    // beq 测试
+    inst = ARM64_ASM(R_BEQ, ARM64_SYM("symbol", true, 0, 0));
+    binary = arm64_asm_inst_encoding(inst);
+    TEST_EQ(binary, 0x00, 0x00, 0x00, 0x54);
+
+    inst = ARM64_ASM(R_BEQ, ARM64_IMM(0x10));
+    binary = arm64_asm_inst_encoding(inst);
+    TEST_EQ(binary, 0x80, 0x00, 0x00, 0x54);
 }
 
 

@@ -15,6 +15,17 @@ if (CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64)
 endif ()
 
 
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL x86_64)
+    set(CMAKE_SYSTEM_PROCESSOR amd64)
+    message("set CMAKE_SYSTEM_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR}")
+endif ()
+
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL aarch64)
+    set(CMAKE_SYSTEM_PROCESSOR arm64)
+    message("set CMAKE_SYSTEM_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR}")
+endif ()
+
+
 # 写入到系统变量中
 if (CMAKE_SYSTEM_NAME MATCHES darwin)
     add_definitions(-D_XOPEN_SOURCE=700)
@@ -35,4 +46,9 @@ endif ()
 if (CMAKE_SYSTEM_PROCESSOR MATCHES amd64)
     message("add compile def __AMD64")
     add_compile_definitions(__AMD64=1)
+endif ()
+
+if (CMAKE_SYSTEM_PROCESSOR MATCHES arm64)
+    message("add compile def __ARM64")
+    add_compile_definitions(__ARM64=1)
 endif ()

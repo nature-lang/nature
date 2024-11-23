@@ -1,5 +1,4 @@
 #include "arm64_abi.h"
-#include "src/cross.h"
 #include "src/register/arch/arm64.h"
 
 static int arm64_hfa_aux(type_t type, int32_t *fsize, int num) {

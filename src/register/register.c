@@ -1,5 +1,4 @@
 #include "register.h"
-#include "src/cross.h"
 #include "utils/helper.h"
 #include "arch/amd64.h"
 #include <assert.h>

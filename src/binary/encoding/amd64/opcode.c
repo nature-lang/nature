@@ -1276,7 +1276,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_REL8) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT8, BYTE);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_UINT8, BYTE);
         res.list = highs;
         return res;
     }
@@ -1284,7 +1284,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_REL16) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT16, WORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_UINT16, WORD);
         res.list = highs;
         return res;
     }
@@ -1292,7 +1292,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_REL32) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT32, DWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_UINT32, DWORD);
         res.list = highs;
         return res;
     }
@@ -1300,11 +1300,11 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_RM8) {
         res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, BYTE);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, BYTE);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, BYTE);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, BYTE);
-        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, BYTE);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_REG, BYTE);
+        highs[1] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_INDIRECT_REG, BYTE);
+        highs[2] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_DISP_REG, BYTE);
+        highs[3] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE, BYTE);
+        highs[4] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_SIB_REG, BYTE);
         res.list = highs;
         return res;
     }
@@ -1312,11 +1312,11 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_RM16) {
         res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, WORD);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, WORD);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, WORD);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, WORD);
-        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, WORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_REG, WORD);
+        highs[1] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_INDIRECT_REG, WORD);
+        highs[2] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_DISP_REG, WORD);
+        highs[3] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE, WORD);
+        highs[4] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_SIB_REG, WORD);
         res.list = highs;
         return res;
     }
@@ -1324,11 +1324,11 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_RM32) {
         res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, DWORD);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, DWORD);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, DWORD);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, DWORD);
-        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, DWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_REG, DWORD);
+        highs[1] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_INDIRECT_REG, DWORD);
+        highs[2] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_DISP_REG, DWORD);
+        highs[3] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE, DWORD);
+        highs[4] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_SIB_REG, DWORD);
         res.list = highs;
         return res;
     }
@@ -1336,11 +1336,11 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_RM64) {
         res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, QWORD);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
-        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_REG, QWORD);
+        highs[1] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
+        highs[2] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_DISP_REG, QWORD);
+        highs[3] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
+        highs[4] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_SIB_REG, QWORD);
         res.list = highs;
         return res;
     }
@@ -1348,10 +1348,10 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_M) {
         res.count = 4;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
+        highs[1] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_SIB_REG, QWORD);
+        highs[2] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_DISP_REG, QWORD);
+        highs[3] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
         res.list = highs;
         return res;
     }
@@ -1359,7 +1359,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_M16) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, WORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_INDIRECT_REG, WORD);
         res.list = highs;
         return res;
     }
@@ -1367,10 +1367,10 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_M32) {
         res.count = 4;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, DWORD);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, DWORD);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, DWORD);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, DWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_INDIRECT_REG, DWORD);
+        highs[1] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_DISP_REG, DWORD);
+        highs[2] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE, DWORD);
+        highs[3] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_SIB_REG, DWORD);
         res.list = highs;
         return res;
     }
@@ -1378,10 +1378,10 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_M64) {
         res.count = 4;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
+        highs[1] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_DISP_REG, QWORD);
+        highs[2] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_SIB_REG, QWORD);
+        highs[3] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
         res.list = highs;
         return res;
     }
@@ -1389,7 +1389,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_IMM8) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT8, BYTE);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_UINT8, BYTE);
         res.list = highs;
         return res;
     }
@@ -1397,7 +1397,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_IMM16) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT16, WORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_UINT16, WORD);
         res.list = highs;
         return res;
     }
@@ -1405,8 +1405,8 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_IMM32) {
         res.count = 2;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT32, DWORD);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT, QWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_UINT32, DWORD);
+        highs[1] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_UINT, QWORD);
         res.list = highs;
         return res;
     }
@@ -1414,7 +1414,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_IMM64) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_UINT64, QWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_UINT64, QWORD);
         res.list = highs;
         return res;
     }
@@ -1422,7 +1422,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_R8) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, BYTE);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_REG, BYTE);
         res.list = highs;
         return res;
     }
@@ -1438,7 +1438,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_R16) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, 2);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_REG, 2);
         res.list = highs;
         return res;
     }
@@ -1446,7 +1446,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_R32) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, 4);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_REG, 4);
         res.list = highs;
         return res;
     }
@@ -1454,7 +1454,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_R64) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, QWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_REG, QWORD);
         res.list = highs;
         return res;
     }
@@ -1462,7 +1462,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_XMM1S64 || t == OPERAND_TYPE_XMM2S64) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_FREG, QWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_FREG, QWORD);
         res.list = highs;
         return res;
     }
@@ -1470,7 +1470,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_XMM1S32 || t == OPERAND_TYPE_XMM2S32) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_FREG, DWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_FREG, DWORD);
         res.list = highs;
         return res;
     }
@@ -1479,7 +1479,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_XMM2M128) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_FREG, OWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_FREG, OWORD);
         res.list = highs;
         return res;
     }
@@ -1487,22 +1487,22 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_XMM1M64 || t == OPERAND_TYPE_XMM2M64) {
         res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_FREG, QWORD);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, QWORD);
-        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, QWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_FREG, QWORD);
+        highs[1] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_INDIRECT_REG, QWORD);
+        highs[2] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
+        highs[3] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_SIB_REG, QWORD);
+        highs[4] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_DISP_REG, QWORD);
         res.list = highs;
         return res;
     }
     if (t == OPERAND_TYPE_XMM2M32 || t == OPERAND_TYPE_XMM1M32) {
         res.count = 5;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_FREG, DWORD);
-        highs[1] = asm_operand_to_key(ASM_OPERAND_TYPE_INDIRECT_REG, DWORD);
-        highs[2] = asm_operand_to_key(ASM_OPERAND_TYPE_RIP_RELATIVE, DWORD);
-        highs[3] = asm_operand_to_key(ASM_OPERAND_TYPE_SIB_REG, DWORD);
-        highs[4] = asm_operand_to_key(ASM_OPERAND_TYPE_DISP_REG, DWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_FREG, DWORD);
+        highs[1] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_INDIRECT_REG, DWORD);
+        highs[2] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE, DWORD);
+        highs[3] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_SIB_REG, DWORD);
+        highs[4] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_DISP_REG, DWORD);
         res.list = highs;
         return res;
     }
@@ -1510,7 +1510,7 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
     if (t == OPERAND_TYPE_YMM1 || t == OPERAND_TYPE_YMM2) {
         res.count = 1;
         uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_FREG, YWORD);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_FREG, YWORD);
         res.list = highs;
         return res;
     }
@@ -1660,15 +1660,15 @@ amd64_opcode_inst_t *opcode_select(amd64_asm_inst_t operation) {
         amd64_asm_operand_t *operand = operation.operands[i];
         reg_t *reg = NULL;
         reg_t *reg2 = NULL;
-        if (operand->type == ASM_OPERAND_TYPE_REG) {
+        if (operand->type == AMD64_ASM_OPERAND_TYPE_REG) {
             reg = operand->value;
-        } else if (operand->type == ASM_OPERAND_TYPE_DISP_REG) {
+        } else if (operand->type == AMD64_ASM_OPERAND_TYPE_DISP_REG) {
             asm_disp_reg_t *disp = operand->value;
             reg = disp->reg;
-        } else if (operand->type == ASM_OPERAND_TYPE_INDIRECT_REG) {
+        } else if (operand->type == AMD64_ASM_OPERAND_TYPE_INDIRECT_REG) {
             asm_indirect_reg_t *indirect = operand->value;
             reg = indirect->reg;
-        } else if (operand->type == ASM_OPERAND_TYPE_SIB_REG) {
+        } else if (operand->type == AMD64_ASM_OPERAND_TYPE_SIB_REG) {
             asm_sib_reg_t *sib = operand->value;
             reg = sib->base;
             reg2 = sib->index;
@@ -2004,7 +2004,7 @@ amd64_binary_format_t *opcode_fill(amd64_opcode_inst_t *inst, amd64_asm_inst_t a
         opcode_operand_t operand = inst->operands[i];
         amd64_asm_operand_t *asm_operand = asm_inst.operands[i];
         // asm 参数填充
-        if (asm_operand->type == ASM_OPERAND_TYPE_REG || asm_operand->type == ASM_OPERAND_TYPE_FREG) {
+        if (asm_operand->type == AMD64_ASM_OPERAND_TYPE_REG || asm_operand->type == AMD64_ASM_OPERAND_TYPE_FREG) {
             reg_t *r = asm_operand->value;
             if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
                 if (format->modrm == NULL) {
@@ -2049,7 +2049,7 @@ amd64_binary_format_t *opcode_fill(amd64_opcode_inst_t *inst, amd64_asm_inst_t a
                 return NULL;
             }
 
-        } else if (asm_operand->type == ASM_OPERAND_TYPE_DISP_REG) {
+        } else if (asm_operand->type == AMD64_ASM_OPERAND_TYPE_DISP_REG) {
             asm_disp_reg_t *r = asm_operand->value;
             if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
                 if (format->modrm == NULL) {
@@ -2093,7 +2093,7 @@ amd64_binary_format_t *opcode_fill(amd64_opcode_inst_t *inst, amd64_asm_inst_t a
                 return NULL;
             }
 
-        } else if (asm_operand->type == ASM_OPERAND_TYPE_INDIRECT_REG) {
+        } else if (asm_operand->type == AMD64_ASM_OPERAND_TYPE_INDIRECT_REG) {
             asm_indirect_reg_t *r = asm_operand->value;
             if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
                 if (format->modrm == NULL) {
@@ -2124,7 +2124,7 @@ amd64_binary_format_t *opcode_fill(amd64_opcode_inst_t *inst, amd64_asm_inst_t a
                 error_exit("unsupported encoding %d", operand.encoding);
                 return NULL;
             }
-        } else if (asm_operand->type == ASM_OPERAND_TYPE_RIP_RELATIVE) { // 还会影响 modrm?
+        } else if (asm_operand->type == AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE) { // 还会影响 modrm?
             asm_rip_relative_t *r = asm_operand->value;
             if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
                 if (format->modrm == NULL) {
@@ -2151,7 +2151,7 @@ amd64_binary_format_t *opcode_fill(amd64_opcode_inst_t *inst, amd64_asm_inst_t a
                 int32_to_uint8(r->disp, temp);
                 set_disp(format, NULL, temp, 4);
             }
-        } else if (asm_operand->type == ASM_OPERAND_TYPE_SIB_REG) {
+        } else if (asm_operand->type == AMD64_ASM_OPERAND_TYPE_SIB_REG) {
             asm_sib_reg_t *sib_reg = asm_operand->value;
             if (operand.encoding == ENCODING_TYPE_MODRM_RM) {
                 if (format->modrm == NULL) {
@@ -2192,31 +2192,31 @@ amd64_binary_format_t *opcode_fill(amd64_opcode_inst_t *inst, amd64_asm_inst_t a
                 }
 
             }
-        } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT64) {
+        } else if (asm_operand->type == AMD64_ASM_OPERAND_TYPE_UINT64) {
             asm_uint64_t *uint = asm_operand->value;
             uint8_t temp[8];
             memcpy(temp, &uint->value, sizeof(uint->value)); // 小端处理
             set_imm(format, temp, 8);
-        } else if (asm_operand->type == ASM_OPERAND_TYPE_FLOAT64) {
+        } else if (asm_operand->type == AMD64_ASM_OPERAND_TYPE_FLOAT64) {
             asm_float64_t *f = asm_operand->value;
             uint8_t temp[8];
             memcpy(temp, &f->value, sizeof(f->value));
             set_imm(format, temp, 8);
-        } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT32 || asm_operand->type == ASM_OPERAND_TYPE_UINT) {
+        } else if (asm_operand->type == AMD64_ASM_OPERAND_TYPE_UINT32 || asm_operand->type == AMD64_ASM_OPERAND_TYPE_UINT) {
             asm_uint32_t *uint = asm_operand->value;
             uint8_t temp[4];
             memcpy(temp, &uint->value, sizeof(uint->value)); // 小端处理
             set_imm(format, temp, 4);
-        } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT16) {
+        } else if (asm_operand->type == AMD64_ASM_OPERAND_TYPE_UINT16) {
             asm_uint16_t *uint = asm_operand->value;
             uint8_t temp[2];
             memcpy(temp, &uint->value, sizeof(uint->value)); // 小端处理
             set_imm(format, temp, 2);
-        } else if (asm_operand->type == ASM_OPERAND_TYPE_UINT8) {
+        } else if (asm_operand->type == AMD64_ASM_OPERAND_TYPE_UINT8) {
             asm_uint8_t *uint = asm_operand->value;
             uint8_t temp[1] = {uint->value};
             set_imm(format, temp, 1);
-        } else if (asm_operand->type == ASM_OPERAND_TYPE_FLOAT32) {
+        } else if (asm_operand->type == AMD64_ASM_OPERAND_TYPE_FLOAT32) {
             asm_float32_t *f = asm_operand->value;
             uint8_t temp[8];
             memcpy(temp, &f->value, sizeof(f->value));

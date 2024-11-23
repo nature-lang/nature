@@ -41,9 +41,9 @@
 #define REG(_reg) ({ \
     amd64_asm_operand_t *reg_operand = NEW(amd64_asm_operand_t); \
     if (FLAG(LIR_FLAG_ALLOC_FLOAT) & _reg->flag) {\
-        reg_operand->type = ASM_OPERAND_TYPE_FREG; \
+        reg_operand->type = AMD64_ASM_OPERAND_TYPE_FREG; \
     } else { \
-        reg_operand->type = ASM_OPERAND_TYPE_REG; \
+        reg_operand->type = AMD64_ASM_OPERAND_TYPE_REG; \
     }                 \
     reg_operand->size = _reg->size;\
     reg_operand->value = _reg;    \
@@ -52,7 +52,7 @@
 
 #define SYMBOL(_name, _is_local) ({ \
      amd64_asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
-     _operand->type = ASM_OPERAND_TYPE_SYMBOL;  \
+     _operand->type = AMD64_ASM_OPERAND_TYPE_SYMBOL;  \
      asm_symbol_t *_symbol = NEW(asm_symbol_t); \
      _symbol->name = _name;    \
      _symbol->is_local = _is_local;    \
@@ -65,7 +65,7 @@
 
 #define DISP_REG(_reg, _disp, _size) ({ \
      amd64_asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
-     _operand->type = ASM_OPERAND_TYPE_DISP_REG;  \
+     _operand->type = AMD64_ASM_OPERAND_TYPE_DISP_REG;  \
      asm_disp_reg_t *_disp_reg = NEW(asm_disp_reg_t); \
      _disp_reg->reg = (reg_t*)(_reg);    \
      _disp_reg->disp = _disp;    \
@@ -76,7 +76,7 @@
 
 #define INDIRECT_REG(_reg, _size) ({ \
      amd64_asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
-     _operand->type = ASM_OPERAND_TYPE_INDIRECT_REG;  \
+     _operand->type = AMD64_ASM_OPERAND_TYPE_INDIRECT_REG;  \
      asm_indirect_reg_t *_indirect = NEW(asm_indirect_reg_t); \
      _indirect->reg = (reg_t*)(_reg);    \
      _operand->size = _size;\
@@ -86,7 +86,7 @@
 
 #define SIB_REG(_base, _index, _scale, _disp, _size) ({ \
      amd64_asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
-     _operand->type = ASM_OPERAND_TYPE_SIB_REG;  \
+     _operand->type = AMD64_ASM_OPERAND_TYPE_SIB_REG;  \
      asm_sib_reg_t *_sib = NEW(asm_sib_reg_t); \
      _sib->base = _base;\
      _sib->index = _index;\
@@ -99,7 +99,7 @@
 
 #define RIP_RELATIVE(_disp) ({ \
      amd64_asm_operand_t *operand = NEW(amd64_asm_operand_t); \
-     operand->type = ASM_OPERAND_TYPE_RIP_RELATIVE;  \
+     operand->type = AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE;  \
      asm_rip_relative_t *rip = NEW(asm_rip_relative_t); \
      rip->disp = _disp;\
      operand->size = QWORD;\
@@ -107,15 +107,15 @@
      operand;\
 })
 
-#define UINT8(_value) VALUE_OPERAND(asm_uint8_t, ASM_OPERAND_TYPE_UINT8, (_value), BYTE)
-#define UINT16(_value) VALUE_OPERAND(asm_uint16_t, ASM_OPERAND_TYPE_UINT16, (_value), WORD)
-#define UINT32(_value) VALUE_OPERAND(asm_uint32_t, ASM_OPERAND_TYPE_UINT32, (_value), DWORD)
-#define UINT64(_value) VALUE_OPERAND(asm_uint64_t, ASM_OPERAND_TYPE_UINT64, (_value), QWORD)
-#define UINT(_value) VALUE_OPERAND(asm_uint32_t, ASM_OPERAND_TYPE_UINT, (_value), QWORD)
-#define INT8(_value) VALUE_OPERAND(asm_int8_t, ASM_OPERAND_TYPE_INT8, (_value), BYTE)
-#define INT32(_value) VALUE_OPERAND(asm_int32_t, ASM_OPERAND_TYPE_INT32, (_value), DWORD)
-#define FLOAT32(_value) VALUE_OPERAND(asm_float32_t, ASM_OPERAND_TYPE_FLOAT32, (_value), OWORD)
-#define FLOAT64(_value) VALUE_OPERAND(asm_float64_t, ASM_OPERAND_TYPE_FLOAT64, (_value), OWORD)
+#define UINT8(_value) VALUE_OPERAND(asm_uint8_t, AMD64_ASM_OPERAND_TYPE_UINT8, (_value), BYTE)
+#define UINT16(_value) VALUE_OPERAND(asm_uint16_t, AMD64_ASM_OPERAND_TYPE_UINT16, (_value), WORD)
+#define UINT32(_value) VALUE_OPERAND(asm_uint32_t, AMD64_ASM_OPERAND_TYPE_UINT32, (_value), DWORD)
+#define UINT64(_value) VALUE_OPERAND(asm_uint64_t, AMD64_ASM_OPERAND_TYPE_UINT64, (_value), QWORD)
+#define UINT(_value) VALUE_OPERAND(asm_uint32_t, AMD64_ASM_OPERAND_TYPE_UINT, (_value), QWORD)
+#define INT8(_value) VALUE_OPERAND(asm_int8_t, AMD64_ASM_OPERAND_TYPE_INT8, (_value), BYTE)
+#define INT32(_value) VALUE_OPERAND(asm_int32_t, AMD64_ASM_OPERAND_TYPE_INT32, (_value), DWORD)
+#define FLOAT32(_value) VALUE_OPERAND(asm_float32_t, AMD64_ASM_OPERAND_TYPE_FLOAT32, (_value), OWORD)
+#define FLOAT64(_value) VALUE_OPERAND(asm_float64_t, AMD64_ASM_OPERAND_TYPE_FLOAT64, (_value), OWORD)
 
 #define VALUE_OPERAND(_type, _operand_type, _value, _size) ({ \
     amd64_asm_operand_t *_number_operand = malloc(sizeof(amd64_asm_operand_t));\
@@ -128,23 +128,23 @@
 })
 
 typedef enum {
-    ASM_OPERAND_TYPE_REG = 1,
-    ASM_OPERAND_TYPE_FREG,
-    ASM_OPERAND_TYPE_INDIRECT_REG,
-    ASM_OPERAND_TYPE_DISP_REG,
-    ASM_OPERAND_TYPE_SIB_REG,
-    ASM_OPERAND_TYPE_RIP_RELATIVE,
-    ASM_OPERAND_TYPE_SYMBOL,
-    ASM_OPERAND_TYPE_UINT8,
-    ASM_OPERAND_TYPE_UINT16,
-    ASM_OPERAND_TYPE_UINT32,
-    ASM_OPERAND_TYPE_UINT64,
-    ASM_OPERAND_TYPE_UINT,
-    ASM_OPERAND_TYPE_INT8,
-    ASM_OPERAND_TYPE_INT32,
-    ASM_OPERAND_TYPE_FLOAT32,
-    ASM_OPERAND_TYPE_FLOAT64,
-} asm_operand_type;
+    AMD64_ASM_OPERAND_TYPE_REG = 1,
+    AMD64_ASM_OPERAND_TYPE_FREG,
+    AMD64_ASM_OPERAND_TYPE_INDIRECT_REG,
+    AMD64_ASM_OPERAND_TYPE_DISP_REG,
+    AMD64_ASM_OPERAND_TYPE_SIB_REG,
+    AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE,
+    AMD64_ASM_OPERAND_TYPE_SYMBOL,
+    AMD64_ASM_OPERAND_TYPE_UINT8,
+    AMD64_ASM_OPERAND_TYPE_UINT16,
+    AMD64_ASM_OPERAND_TYPE_UINT32,
+    AMD64_ASM_OPERAND_TYPE_UINT64,
+    AMD64_ASM_OPERAND_TYPE_UINT,
+    AMD64_ASM_OPERAND_TYPE_INT8,
+    AMD64_ASM_OPERAND_TYPE_INT32,
+    AMD64_ASM_OPERAND_TYPE_FLOAT32,
+    AMD64_ASM_OPERAND_TYPE_FLOAT64,
+} amd64_asm_operand_type;
 
 typedef struct {
     uint8_t value;
@@ -205,7 +205,7 @@ typedef struct {
 
 
 typedef struct {
-    asm_operand_type type;
+    amd64_asm_operand_type type;
     uint8_t size;
     void *value; // asm_operand_register
 } amd64_asm_operand_t;
@@ -225,7 +225,7 @@ typedef struct {
 static inline amd64_asm_operand_t *amd64_asm_symbol_operand(amd64_asm_inst_t asm_inst) {
     for (int i = 0; i < asm_inst.count; ++i) {
         amd64_asm_operand_t *operand = asm_inst.operands[i];
-        if (operand->type == ASM_OPERAND_TYPE_SYMBOL) {
+        if (operand->type == AMD64_ASM_OPERAND_TYPE_SYMBOL) {
             return operand;
         }
     }

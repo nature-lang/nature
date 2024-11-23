@@ -8,11 +8,13 @@
 
 #include "config.h"
 #include "src/binary/arch/amd64.h"
+#include "src/binary/arch/arm64.h"
 #include "src/binary/mach/mach.h"
 #include "src/cfg.h"
 #include "src/debug/debug.h"
 #include "src/linear.h"
 #include "src/native/amd64.h"
+#include "src/native/arm64.h"
 #include "src/lower/amd64.h"
 #include "src/lower/arm64.h"
 #include "src/register/linearscan.h"
@@ -69,7 +71,7 @@ static void elf_custom_links() {
             .st_size = ct_rtype_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_RTYPE_DATA);
-    elf_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, cross_number_size());
+    elf_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, QWORD);
 
     // fndef --------------------------------------------------------------------------
     ct_fndef_size = collect_fndef_list(ctx);
@@ -83,7 +85,7 @@ static void elf_custom_links() {
             .st_size = ct_fndef_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_FNDEF_DATA);
-    elf_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, cross_number_size());
+    elf_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, QWORD);
 
     // symdef --------------------------------------------------------------------------
     ct_symdef_size = collect_symdef_list(ctx);
@@ -97,12 +99,12 @@ static void elf_custom_links() {
             .st_size = ct_symdef_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_SYMDEF_DATA);
-    elf_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, cross_number_size());
+    elf_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, QWORD);
 
     // custom_global symbol
     // ------------------------------------------------------------------------------------------------------
     double float_mask = -0.0;
-    elf_put_global_symbol(ctx, FLOAT_NEG_MASK_IDENT, &float_mask, cross_number_size());
+    elf_put_global_symbol(ctx, FLOAT_NEG_MASK_IDENT, &float_mask, QWORD);
 
     elf_file_format(ctx);
 
@@ -128,7 +130,7 @@ static void mach_custom_links() {
                  },
                  SYMBOL_RTYPE_DATA);
 
-    macho_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, cross_number_size());
+    macho_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, QWORD);
 
     // fndef --------------------------------------------------------------------------
     ct_fndef_size = collect_fndef_list(ctx);
@@ -141,7 +143,7 @@ static void mach_custom_links() {
                          .n_value = 0,// in section data offset
                  },
                  SYMBOL_FNDEF_DATA);
-    macho_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, cross_number_size());
+    macho_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, QWORD);
 
     // symdef --------------------------------------------------------------------------
     ct_symdef_size = collect_symdef_list(ctx);
@@ -154,13 +156,13 @@ static void mach_custom_links() {
                          .n_value = 0,// in section data offset
                  },
                  SYMBOL_SYMDEF_DATA);
-    macho_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, cross_number_size());
+    macho_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, QWORD);
 
 
     // custom_global symbol
     // ------------------------------------------------------------------------------------------------------
     double float_mask = -0.0;
-    macho_put_global_symbol(ctx, FLOAT_NEG_MASK_IDENT, &float_mask, cross_number_size());
+    macho_put_global_symbol(ctx, FLOAT_NEG_MASK_IDENT, &float_mask, QWORD);
 
     mach_output_object(ctx);
     log_debug(" --> assembler: %s\n", custom_link_object_path());
@@ -207,6 +209,8 @@ static void elf_assembler_module(module_t *m) {
 
     if (BUILD_ARCH == ARCH_AMD64) {
         elf_amd64_operation_encodings(ctx, m->closures);
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        elf_arm64_operation_encodings(ctx, m->closures);
     } else {
         assert(false);
     }
@@ -248,6 +252,8 @@ static void mach_assembler_module(module_t *m) {
 
     if (BUILD_ARCH == ARCH_AMD64) {
         mach_amd64_operation_encodings(ctx, m->closures);
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        mach_arm64_operation_encodings(ctx, m->closures);
     } else {
         assert(false);
     }
@@ -299,6 +305,11 @@ static void build_elf_exe(slice_t *modules) {
     slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
     slice_push(linker_libs, lib_file_path(LIBUV_FILE));
     slice_push(linker_libs, lib_file_path(LIBC_FILE));
+
+    // arm64 需要 libc
+    if (BUILD_ARCH == ARCH_ARM64) {
+        slice_push(linker_libs, lib_file_path(LIBGCC_FILE));
+    }
 
     for (int i = 0; i < linker_libs->count; ++i) {
         char *path = linker_libs->take[i];
@@ -394,6 +405,11 @@ static void build_mach_exe(slice_t *modules) {
     } else {
         assert(false);
     }
+
+    // 相关文件必须存在
+    assert(file_exists(lib_file_path(LIB_RUNTIME_FILE)));
+    assert(file_exists(lib_file_path(LIBUV_FILE)));
+    assert(file_exists(lib_file_path(LIBMACH_C_FILE)));
 
     slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
     slice_push(linker_libs, lib_file_path(LIBUV_FILE));
@@ -713,6 +729,9 @@ static inline void cross_native(closure_t *c) {
     if (BUILD_ARCH == ARCH_AMD64) {
         amd64_native(c);
         return;
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        arm64_native(c);
+        return;
     }
 
     assert(false && "not support arch");
@@ -759,6 +778,8 @@ static void build_compiler(slice_t *modules) {
 
             // 基于 arch 生成汇编
             cross_native(c);
+
+            debug_asm(c);
         }
     }
 }

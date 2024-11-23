@@ -5,6 +5,7 @@
 
 typedef enum {
     R_NOOP,
+    R_LABEL,
     R_MOV, R_MOVK,
     R_ADD, R_SUB,
     R_MUL, R_SDIV, R_UDIV,
@@ -25,6 +26,7 @@ typedef enum {
     R_BL, R_BLR,
     R_RET,
     R_SVC,
+    R_NEG,
 
     R_FMOV,
     R_FADD, R_FSUB, R_FMUL, R_FDIV,
@@ -33,6 +35,84 @@ typedef enum {
     R_SCVTF, R_UCVTF,
     R_FCVT, R_FCVTZS, R_FCVTZU,
 } arm64_asm_raw_opcode_t;
+
+static char *arm64_raw_op_names[] = {
+        [R_NOOP] = "noop",
+        [R_LABEL] = "label",
+        [R_MOV] = "mov",
+        [R_MOVK] = "movk",
+        [R_ADD] = "add",
+        [R_SUB] = "sub",
+        [R_MUL] = "mul",
+        [R_SDIV] = "sdiv",
+        [R_UDIV] = "udiv",
+        [R_MADD] = "madd",
+        [R_MSUB] = "msub",
+        [R_AND] = "and",
+        [R_ORR] = "orr",
+        [R_EOR] = "eor",
+        [R_EON] = "eon",
+        [R_CMP] = "cmp",
+        [R_CMN] = "cmn",
+        [R_LSL] = "lsl",
+        [R_LSR] = "lsr",
+        [R_ASR] = "asr",
+        [R_SXTB] = "sxtb",
+        [R_SXTH] = "sxth",
+        [R_SXTW] = "sxtw",
+        [R_UXTB] = "uxtb",
+        [R_UXTH] = "uxth",
+        [R_UXTW] = "uxtw",
+        [R_LDRB] = "ldrb",
+        [R_LDRH] = "ldrh",
+        [R_LDR] = "ldr",
+        [R_LDRSB] = "ldrsb",
+        [R_LDRSH] = "ldrsh",
+        [R_LDRSW] = "ldrsw",
+        [R_STRB] = "strb",
+        [R_STRH] = "strh",
+        [R_STR] = "str",
+        [R_LDP] = "ldp",
+        [R_STP] = "stp",
+        [R_ADRP] = "adrp",
+        [R_CSET] = "cset",
+        [R_B] = "b",
+        [R_BR] = "br",
+        [R_BEQ] = "b.eq",
+        [R_BNE] = "b.ne",
+        [R_BHS] = "b.hs",
+        [R_BLO] = "b.lo",
+        [R_BMI] = "b.mi",
+        [R_BPL] = "b.pl",
+        [R_BVS] = "b.vs",
+        [R_BVC] = "b.vc",
+        [R_BHI] = "b.hi",
+        [R_BLS] = "b.ls",
+        [R_BGE] = "b.ge",
+        [R_BLT] = "b.lt",
+        [R_BGT] = "b.gt",
+        [R_BLE] = "b.le",
+        [R_BAL] = "b.al",
+        [R_BNV] = "b.nv",
+        [R_BL] = "bl",
+        [R_BLR] = "blr",
+        [R_RET] = "ret",
+        [R_SVC] = "svc",
+        [R_NEG] = "neg",
+        [R_FMOV] = "fmov",
+        [R_FADD] = "fadd",
+        [R_FSUB] = "fsub",
+        [R_FMUL] = "fmul",
+        [R_FDIV] = "fdiv",
+        [R_FCMP] = "fcmp",
+        [R_FNEG] = "fneg",
+        [R_FSQRT] = "fsqrt",
+        [R_SCVTF] = "scvtf",
+        [R_UCVTF] = "ucvtf",
+        [R_FCVT] = "fcvt",
+        [R_FCVTZS] = "fcvtzs",
+        [R_FCVTZU] = "fcvtzu"
+};
 
 typedef enum {
     NOOP = 0,
@@ -97,19 +177,26 @@ typedef enum {
     ARM64_COND_GT, ARM64_COND_LE, ARM64_COND_AL, ARM64_COND_NV
 } arm64_asm_cond_type;
 
+typedef enum {
+    ARM64_RELOC_NONE,
+    ARM64_RELOC_LO12,        // :lo12:
+    ARM64_RELOC_HI12,        // :hi12:
+} arm64_reloc_type;
 
 typedef struct {
     arm64_asm_operand_type type;
+    uint8_t size;
     union {
         reg_t reg; // 包括 freg 和 reg
         int64_t immediate;
         struct {
             char *name;
             bool is_local;
-            int64_t offset; // 汇编器识别便宜 offset
+            int64_t offset; // 汇编器识别 offset
+            arm64_reloc_type reloc_type;  // 重定位类型
         } symbol;
         struct {
-            int64_t offset;
+            int64_t offset; // TODO offset 可能是一个需要重定位的符号。
             reg_t *reg;
             int8_t prepost; // 0=none, 1=pre, 2=post
         } indirect; // 间接寻址， [x0] [x0, #14]
@@ -168,73 +255,74 @@ typedef struct {
 } arm64_opr_flags_list; // arm64_asm_opcode_flags_list;
 
 
-#define ARM_REG(_reg) ({ \
-    arm64_asm_operand_t *reg_operand = NEW(arm64_asm_operand_t); \
+#define ARM64_REG(_reg) ({ \
+    arm64_asm_operand_t *_reg_operand = NEW(arm64_asm_operand_t); \
     if (FLAG(LIR_FLAG_ALLOC_FLOAT) & _reg->flag) {\
-        reg_operand->type = ARM64_ASM_OPERAND_FREG; \
+        _reg_operand->type = ARM64_ASM_OPERAND_FREG; \
     } else { \
-        reg_operand->type = ARM64_ASM_OPERAND_REG; \
+        _reg_operand->type = ARM64_ASM_OPERAND_REG; \
     }                 \
-    reg_operand->reg = *_reg;    \
-    reg_operand;\
+    _reg_operand->reg = *_reg;    \
+    _reg_operand;\
 })
 
-#define ARM_SYM(_name, _is_local, _offset) ({ \
-    arm64_asm_operand_t *operand = NEW(arm64_asm_operand_t); \
-    operand->type = ARM64_ASM_OPERAND_SYMBOL; \
-    operand->symbol.name = _name; \
-    operand->symbol.is_local = _is_local; \
-    operand->symbol.offset = _offset;\
-    operand; \
+#define ARM64_SYM(_name, _is_local, _offset, _reloc_type) ({ \
+    arm64_asm_operand_t *_operand = NEW(arm64_asm_operand_t); \
+    _operand->type = ARM64_ASM_OPERAND_SYMBOL; \
+    _operand->symbol.name = _name; \
+    _operand->symbol.is_local = _is_local; \
+    _operand->symbol.offset = _offset;\
+    _operand->symbol.reloc_type = _reloc_type;\
+    _operand; \
 })
 
-#define ARM_IMM(_imm) ({ \
-    arm64_asm_operand_t *imm_operand = NEW(arm64_asm_operand_t); \
-    imm_operand->type = ARM64_ASM_OPERAND_IMMEDIATE; \
-    imm_operand->immediate = _imm; \
-    imm_operand; \
+#define ARM64_IMM(_imm) ({ \
+    arm64_asm_operand_t *_imm_operand = NEW(arm64_asm_operand_t); \
+    _imm_operand->type = ARM64_ASM_OPERAND_IMMEDIATE; \
+    _imm_operand->immediate = _imm; \
+    _imm_operand; \
 })
 
-#define ARM_INDIRECT(_reg, _offset, _prepost) ({ \
-    arm64_asm_operand_t *indirect_operand = NEW(arm64_asm_operand_t); \
-    indirect_operand->type = ARM64_ASM_OPERAND_INDIRECT; \
-    indirect_operand->indirect.reg = _reg; \
-    indirect_operand->indirect.offset = _offset; \
-    indirect_operand->indirect.prepost = _prepost; \
-    indirect_operand; \
+#define ARM64_INDIRECT(_reg, _offset, _prepost) ({ \
+    arm64_asm_operand_t *_indirect_operand = NEW(arm64_asm_operand_t); \
+    _indirect_operand->type = ARM64_ASM_OPERAND_INDIRECT; \
+    _indirect_operand->indirect.reg = _reg; \
+    _indirect_operand->indirect.offset = _offset; \
+    _indirect_operand->indirect.prepost = _prepost; \
+    _indirect_operand; \
 })
 
-#define ARM_REG_OFFSET(_base, _index, _scale, _extend) ({ \
-    arm64_asm_operand_t *reg_offset_operand = NEW(arm64_asm_operand_t); \
-    reg_offset_operand->type = ARM64_ASM_OPERAND_REGISTER_OFFSET; \
-    reg_offset_operand->base = _base; \
-    reg_offset_operand->index = _index; \
-    reg_offset_operand->scale = _scale; \
-    reg_offset_operand->extend = _extend; \
-    reg_offset_operand; \
+#define ARM64_REG_OFFSET(_base, _index, _scale, _extend) ({ \
+    arm64_asm_operand_t *_reg_offset_operand = NEW(arm64_asm_operand_t); \
+    _reg_offset_operand->type = ARM64_ASM_OPERAND_REGISTER_OFFSET; \
+    _reg_offset_operand->base = _base; \
+    _reg_offset_operand->index = _index; \
+    _reg_offset_operand->scale = _scale; \
+    _reg_offset_operand->extend = _extend; \
+    _reg_offset_operand; \
 })
 
-#define ARM_COND(_cond) ({ \
-    arm64_asm_operand_t *cond_operand = NEW(arm64_asm_operand_t); \
-    cond_operand->type = ARM64_ASM_OPERAND_COND; \
-    cond_operand->cond = _cond; \
-    cond_operand; \
+#define ARM64_COND(_cond) ({ \
+    arm64_asm_operand_t *_cond_operand = NEW(arm64_asm_operand_t); \
+    _cond_operand->type = ARM64_ASM_OPERAND_COND; \
+    _cond_operand->cond = _cond; \
+    _cond_operand; \
 })
 
-#define ARM_SHIFT(_option, _amount) ({ \
-    arm64_asm_operand_t *shift_operand = NEW(arm64_asm_operand_t); \
-    shift_operand->type = ARM64_ASM_OPERAND_SHIFT; \
-    shift_operand->extend.option = _option; \
-    shift_operand->extend.imm = _amount; \
-    shift_operand; \
+#define ARM64_SHIFT(_option, _amount) ({ \
+    arm64_asm_operand_t *_shift_operand = NEW(arm64_asm_operand_t); \
+    _shift_operand->type = ARM64_ASM_OPERAND_SHIFT; \
+    _shift_operand->extend.option = _option; \
+    _shift_operand->extend.imm = _amount; \
+    _shift_operand; \
 })
 
-#define ARM_EXTEND(_option, _amount) ({ \
-    arm64_asm_operand_t *extend_operand = NEW(arm64_asm_operand_t); \
-    extend_operand->type = ARM64_ASM_OPERAND_EXTEND; \
-    extend_operand->extend.option = _option; \
-    extend_operand->extend.imm = _amount; \
-    extend_operand; \
+#define ARM64_EXTEND(_option, _amount) ({ \
+    arm64_asm_operand_t *_extend_operand = NEW(arm64_asm_operand_t); \
+    _extend_operand->type = ARM64_ASM_OPERAND_EXTEND; \
+    _extend_operand->extend.option = _option; \
+    _extend_operand->extend.imm = _amount; \
+    _extend_operand; \
 })
 
 // 如何在 native 阶段生成 asm_arm64_inst_t?
@@ -253,7 +341,7 @@ typedef struct {
       _inst;\
 })
 
-#define ARM64_IMM(imm, t, b)  (((imm) >> (b)) & ((1 << (t - b + 1)) - 1))
+#define EXTRACT_IMM(imm, t, b)  (((imm) >> (b)) & ((1 << (t - b + 1)) - 1))
 
 #define W_MOVK(sz, rd, imm, sft)                   (0x72800000U | ((sz) << 31) | ((sft) << 21) | (((imm) & ((1U << 16) - 1)) << 5) | (rd))
 #define W_MOVZ(sz, rd, imm, sft)                   (0x52800000U | ((sz) << 31) | ((sft) << 21) | (((imm) & ((1U << 16) - 1)) << 5) | (rd))
@@ -297,19 +385,21 @@ typedef struct {
 #define W_LDR_R(sz, rt, base, rm, s, s2, option)   (0x38600800U | ((sz) << 30) | ((s) << 23) | ((rm) << 16) | ((option) << 13) | ((s2) << 12) | ((base) << 5) | (rt))
 #define W_STR_R(sz, rt, base, rm, s2, option)      (0x38200800U | ((sz) << 30) | ((rm) << 16) | ((option) << 13) | ((s2) << 12) | ((base) << 5) | (rt))
 
-#define W_ADRP(rd, imm)                            (0x90000000U | (ARM64_IMM(imm, 31, 30) << 29) | (ARM64_IMM(imm, 29, 12) << 5) | (rd))
+#define W_ADRP(rd, imm)                            (0x90000000U | (EXTRACT_IMM(imm, 31, 30) << 29) | (EXTRACT_IMM(imm, 29, 12) << 5) | (rd))
 
 #define W_CSINC(sz, rd, rn, rm, cond)              (0x1a800400U | ((sz) << 31) | ((rm) << 16) | ((cond) << 12) | ((rn) << 5) | (rd))
 
 #define W_B(offset)                                (0x14000000U | ((offset) & ((1U << 26) - 1)))
 #define W_BR(rn)                                   (0xd61f0000U | ((rn) << 5))
-#define W_BCC(cond)                                (0x54000000U | (cond))
+//#define W_BCC(cond)                                (0x54000000U | (cond))
+#define W_BCC(cond, offset)                        (0x54000000U | (((offset) & 0x7FFFF) << 5) | (cond))
 
 #define W_BL(offset)                               (0x94000000U | ((offset) & ((1U << 26) - 1)))
 #define W_BLR(rn)                                  (0xd63f0000U | ((rn) << 5))
 #define W_RET(rn)                                  (0xd65f0000U | ((rn) << 5))
 #define W_SVC(imm)                                 (0xd4000001U | ((imm) << 5))
 
+#define P_NEG(sz, rd, rm)                          W_SUB_S(sz, rd, ZERO, rm, 0)
 #define P_MOV(sz, rd, rs)                          W_ORR_S(sz, rd, ZERO, rs, 0)
 #define P_MOV_SP(sz, rd, rs)                       W_ADD_I(sz, rd, rs, 0)
 #define P_MUL(sz, rd, rn, rm)                      W_MADD(sz, rd, rn, rm, ZERO)
