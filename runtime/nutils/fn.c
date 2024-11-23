@@ -3,10 +3,11 @@
 #include "array.h"
 #include "runtime/runtime.h"
 
-#ifdef __AMD64
-
 table_t *env_upvalue_table = NULL;
 mutex_t env_upvalue_locker = {0};
+
+
+#ifdef __AMD64
 
 /**
  * 假设 addr = 0x40007fffb8
@@ -102,6 +103,91 @@ static uint8_t gen_mov_reg_codes(uint8_t *codes, uint64_t reg_index, uint64_t fn
     return 10;
 }
 
+
+
+#else
+/**
+ * ARM64 加载 64 位立即数需要使用多条指令
+ * 例如加载地址 0x40007fffb8:
+ * movz x16, #0xffb8, lsl #0
+ * movk x16, #0x7fff, lsl #16
+ * movk x16, #0x4000, lsl #32
+ * br x16
+ */
+static uint8_t gen_jmp_addr_codes(uint8_t *codes, uint64_t addr) {
+    // movz x16, #imm16_0
+    uint32_t movz = 0xD2800000 | (16 & 0x1F) | ((addr & 0xFFFF) << 5);
+    memcpy(codes, &movz, 4);
+
+    // movk x16, #imm16_1, lsl #16
+    uint32_t movk1 = 0xF2A00000 | (16 & 0x1F) | (((addr >> 16) & 0xFFFF) << 5);
+    memcpy(codes + 4, &movk1, 4);
+
+    // movk x16, #imm16_2, lsl #32
+    uint32_t movk2 = 0xF2C00000 | (16 & 0x1F) | (((addr >> 32) & 0xFFFF) << 5);
+    memcpy(codes + 8, &movk2, 4);
+
+    // br x16
+    uint32_t br = 0xD61F0200 | (16 & 0x1F);
+    memcpy(codes + 12, &br, 4);
+
+    return 16;
+}
+
+/**
+ * ARM64 版本的栈移动
+ * 例如:
+ * movz x16, #imm16_0
+ * movk x16, #imm16_1, lsl #16
+ * movk x16, #imm16_2, lsl #32
+ * str x16, [fp, #offset]
+ */
+static uint8_t gen_mov_stack_codes(uint8_t *codes, uint64_t stack_offset, uint64_t fn_runtime_ptr) {
+    // movz x16, #imm16_0
+    uint32_t movz = 0xD2800000 | (16 & 0x1F) | ((fn_runtime_ptr & 0xFFFF) << 5);
+    memcpy(codes, &movz, 4);
+
+    // movk x16, #imm16_1, lsl #16
+    uint32_t movk1 = 0xF2A00000 | (16 & 0x1F) | (((fn_runtime_ptr >> 16) & 0xFFFF) << 5);
+    memcpy(codes + 4, &movk1, 4);
+
+    // movk x16, #imm16_2, lsl #32
+    uint32_t movk2 = 0xF2C00000 | (16 & 0x1F) | (((fn_runtime_ptr >> 32) & 0xFFFF) << 5);
+    memcpy(codes + 8, &movk2, 4);
+
+    // str x16, [fp, #offset]
+    uint32_t str = 0xF9000000 | (16 & 0x1F) | (29 << 5) | ((stack_offset & 0x1FF) << 12);
+    memcpy(codes + 12, &str, 4);
+
+    return 16;
+}
+
+/**
+ * ARM64 参数寄存器: x0-x7
+ */
+static uint8_t gen_mov_reg_codes(uint8_t *codes, uint64_t reg_index, uint64_t fn_runtime_ptr) {
+    if (reg_index > 7) {
+        assert(false && "ARM64 only supports x0-x7 as parameter registers");
+        exit(1);
+    }
+
+    // movz xN, #imm16_0
+    uint32_t movz = 0xD2800000 | (reg_index & 0x1F) | ((fn_runtime_ptr & 0xFFFF) << 5);
+    memcpy(codes, &movz, 4);
+
+    // movk xN, #imm16_1, lsl #16
+    uint32_t movk1 = 0xF2A00000 | (reg_index & 0x1F) | (((fn_runtime_ptr >> 16) & 0xFFFF) << 5);
+    memcpy(codes + 4, &movk1, 4);
+
+    // movk xN, #imm16_2, lsl #32
+    uint32_t movk2 = 0xF2C00000 | (reg_index & 0x1F) | (((fn_runtime_ptr >> 32) & 0xFFFF) << 5);
+    memcpy(codes + 8, &movk2, 4);
+
+    return 12;
+}
+
+#endif
+
 static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime_ptr, addr_t fn_addr) {
     uint8_t codes[100] = {0};
     uint64_t size = 0;
@@ -123,12 +209,6 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime_ptr, 
 
     memcpy(fn_runtime_ptr->closure_jit_codes, codes, size);
 }
-
-#else
-static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime, addr_t fn_addr) {
-    assert(false && "gen_closure_jit_codes cannot support arch");
-}
-#endif
 
 void *fn_new(addr_t fn_addr, envs_t *envs) {
     //    PRE_RTCALL_HOOK(); // env_new 已经设置 pre_rt_call_hook，此处不需要重复设置

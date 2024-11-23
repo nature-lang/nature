@@ -1,8 +1,7 @@
 #ifndef NATURE_REGISTER_AMD64_H
 #define NATURE_REGISTER_AMD64_H
 
-#include "register.h"
-#include "src/lir.h"
+#include "src/types.h"
 
 extern reg_t *rax;
 extern reg_t *rcx;
@@ -42,7 +41,6 @@ extern reg_t *ax;
 extern reg_t *cx;
 extern reg_t *dx;
 extern reg_t *bx;
-extern reg_t *sp;
 extern reg_t *bp;
 extern reg_t *si;
 extern reg_t *di;
@@ -165,9 +163,8 @@ extern reg_t *zmm15;
 #define AMD64_ALLOC_INT_REG_COUNT 14;
 #define AMD64_ALLOC_FLOAT_REG_COUNT 16;
 #define AMD64_ALLOC_REG_COUNT 14+16;
-#define STACK_ALIGN_SIZE 16
+#define AMD64_STACK_ALIGN_SIZE 16
 
-
-reg_t *amd64_fn_param_next_reg(uint8_t used[2], type_kind kind);
+void amd64_reg_init();
 
 #endif //NATURE_AMD64_H

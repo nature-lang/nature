@@ -30,6 +30,9 @@ add_executable(test_yaml test_yaml.c ${UTILS})
 add_test(test_yaml test_yaml)
 set_property(TEST test_yaml PROPERTY ENVIRONMENT "YAML_PATH=${CMAKE_CURRENT_SOURCE_DIR}/assets/travis.yaml;")
 
+add_executable(test_arm64_encoding test_arm64_encoding.c ${UTILS} ${SRC})
+add_test(test_arm64_encoding test_arm64_encoding)
+
 # ---------------------------------- cases 测试 ------------------------------------------
 # cases test, 获取 cases 一级目录下的所有文件，排除 mock
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)
@@ -61,7 +64,7 @@ foreach (TEST_CASE ${TEST_CASES})
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME} WORKING_DIRECTORY ${WORK_DIR})
     set_property(TEST ${TEST_NAME}
             PROPERTY
-            ENVIRONMENT "NPKG_PATH=${PACKAGE_BINARY_PATH};BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};PATH=/usr/local/nature/bin:$ENV{PATH};")
+            ENVIRONMENT "BUILD_OS=$ENV{BUILD_OS};BUILD_ARCH=$ENV{BUILD_ARCH};NPKG_PATH=${PACKAGE_BINARY_PATH};BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};PATH=/usr/local/nature/bin:$ENV{PATH};")
 
     message("[test cases] register test ${TEST_NAME} file success, cases work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}")
 endforeach ()

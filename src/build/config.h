@@ -46,6 +46,8 @@ extern char SOURCE_PATH[PATH_MAX];// /opt/test/main.n 的绝对路径
 #define LINKER_OUTPUT "a.out"
 #define LIBMACH_C_FILE "libSystem.tbd"
 
+#define LIBGCC_FILE "libgcc.a"
+
 
 static inline char *temp_dir() {
     char *tmp_dir;
@@ -136,12 +138,12 @@ static inline void config_init() {
 
 static inline void env_init() {
     char *os = getenv("BUILD_OS");
-    if (os != NULL) {
+    if (os != NULL && !str_equal(os, "")) {
         BUILD_OS = os_to_uint8(os);
     }
 
     char *arch = getenv("BUILD_ARCH");
-    if (arch != NULL) {
+    if (arch != NULL && !str_equal(os, "")) {
         BUILD_ARCH = arch_to_uint8(arch);
     }
 
@@ -149,9 +151,9 @@ static inline void env_init() {
         assertf(false, "only support compiles to os linux/darwin");
     }
 
-    if (BUILD_ARCH != ARCH_AMD64) {
+    if (BUILD_ARCH != ARCH_AMD64 && BUILD_ARCH != ARCH_ARM64) {
         assertf(false,
-                "only support compiles to arch=amd64, please with BUILD_ARCH build, example BUILD_ARCH=mad64 nature build main.n");
+                "unsupported architecture. set BUILD_ARCH=amd64 or BUILD_ARCH=arm64 env to compile.");
     }
 
     // darwin 不支持跨平台编译, 必须在当前平台编译

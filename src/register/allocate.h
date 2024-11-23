@@ -3,7 +3,6 @@
 
 #include "utils/slice.h"
 #include "utils/linked.h"
-#include "src/cross.h"
 #include "interval.h"
 
 #define SET_USE_POS(_index, _pos) \

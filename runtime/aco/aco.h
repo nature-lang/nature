@@ -43,6 +43,11 @@
 #define ACO_REG_IDX_SP 5
 #define ACO_REG_IDX_BP 7
 #define ACO_REG_IDX_FPU 8
+#elif defined(__aarch64__)
+#define ACO_REG_IDX_RETADDR 0
+#define ACO_REG_IDX_SP 1
+#define ACO_REG_IDX_BP 2
+#define ACO_REG_IDX_FPU 3
 #else
 #error "platform no support yet"
 #endif

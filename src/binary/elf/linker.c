@@ -4,29 +4,99 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <ar.h>
 
 #include "elf.h"
-#include "src/cross.h"
+#include "src/binary/arch/amd64.h"
+#include "src/binary/arch/arm64.h"
 #include "utils/custom_links.h"
 #include "utils/error.h"
 
-static uint64_t get_be(const uint8_t *b, int n) {
-    uint64_t ret = 0;
-    while (n) ret = (ret << 8) | *b++, --n;
-    return ret;
+static uint64_t elf_create_plt_entry(elf_context_t *ctx, uint64_t got_offset, sym_attr_t *attr) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return amd64_create_plt_entry(ctx, got_offset, attr);
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        return arm64_create_plt_entry(ctx, got_offset, attr);
+    }
+
+    assert(false && "not support arch");
 }
 
-static ssize_t read_ar_header(int fd, uint64_t offset, archive_header_t *arhdr) {
-    char *p, *e;
-    lseek(fd, offset, SEEK_SET);
-    ssize_t len = full_read(fd, arhdr, sizeof(archive_header_t));
-    if (len != sizeof(archive_header_t)) return len ? -1 : 0;
-    p = arhdr->ar_name;
-    for (e = p + sizeof arhdr->ar_name; e > p && e[-1] == ' ';) --e;
-    *e = '\0';
-    arhdr->ar_size[sizeof arhdr->ar_size - 1] = 0;
-    return len;
+static int8_t elf_is_code_relocate(uint64_t relocate_type) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return amd64_is_code_relocate(relocate_type);
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        return arm64_is_code_relocate(relocate_type);
+    }
+    assert(false && "not support arch");
 }
+
+static int elf_got_rel_type(bool is_code_rel) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        if (is_code_rel) {
+            return R_X86_64_JUMP_SLOT;
+        } else {
+            return R_X86_64_GLOB_DAT;
+        }
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        if (is_code_rel) {
+            return R_AARCH64_JUMP_SLOT;
+        } else {
+            return R_AARCH64_GLOB_DAT;
+        }
+    }
+
+    assert(false && "not support arch");
+}
+
+static int elf_gotplt_entry_type(uint64_t relocate_type) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return amd64_gotplt_entry_type(relocate_type);
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        return arm64_gotplt_entry_type(relocate_type);
+    }
+    assert(false && "not support arch");
+}
+
+static inline uint64_t elf_start_addr() {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return AMD64_ELF_START_ADDR;
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        return ARM64_ELF_START_ADDR;
+    }
+    assert(false && "not support arch");
+}
+
+static inline uint64_t elf_page_size() {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return AMD64_64_ELF_PAGE_SIZE;
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        return ARM64_ELF_PAGE_SIZE;
+    }
+}
+
+static inline void elf_relocate(elf_context_t *l, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr, addr_t val) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return elf_amd64_relocate(l, rel, type, ptr, addr, val);
+    }
+
+    if (BUILD_ARCH == ARCH_ARM64) {
+        return elf_arm64_relocate(l, rel, type, ptr, addr, val);
+    }
+
+    assert(false && "not support arch");
+}
+
+static inline uint16_t elf_ehdr_machine() {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return EM_X86_64;
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        return EM_AARCH64;
+    }
+
+    assert(false && "not support arch");
+}
+
 
 static int sort_sections(elf_context_t *ctx) {
     for (int sh_index = 1; sh_index < ctx->sections->count; ++sh_index) {
@@ -148,8 +218,8 @@ static void layout_sections(elf_context_t *ctx) {
     ctx->phdr_list = mallocz(phdr_count * sizeof(Elf64_Phdr));
 
     uint64_t file_offset = sizeof(Elf64_Ehdr) + phdr_count * sizeof(Elf64_Phdr);
-    addr_t s_align = cross_elf_page_size();
-    addr_t addr = cross_elf_start_addr();
+    addr_t s_align = elf_page_size();
+    addr_t addr = elf_start_addr();
     addr_t base = addr;// elf 文件的起始虚拟内存地址
     addr = addr + (file_offset & (s_align - 1));
     int n = 0;
@@ -307,6 +377,12 @@ sym_attr_t *elf_get_sym_attr(elf_context_t *ctx, uint64_t sym_index, bool alloc)
 static sym_attr_t *put_got_entry(elf_context_t *ctx, int relocate_type, uint64_t sym_index) {
     char plt_name[200];
     bool need_plt_entry = relocate_type == R_X86_64_JUMP_SLOT;
+
+    if (BUILD_ARCH == ARCH_ARM64) {
+        need_plt_entry = relocate_type == R_AARCH64_JUMP_SLOT;
+    }
+
+
     sym_attr_t *attr = elf_get_sym_attr(ctx, sym_index, true);
     uint64_t offset = need_plt_entry ? attr->plt_offset : attr->got_offset;
     if (offset) {
@@ -322,7 +398,7 @@ static sym_attr_t *put_got_entry(elf_context_t *ctx, int relocate_type, uint64_t
 
     if (need_plt_entry) {
         // 基于 amd64 的 plt entry
-        attr->plt_offset = cross_create_plt_entry(ctx, got_offset, attr);
+        attr->plt_offset = elf_create_plt_entry(ctx, got_offset, attr);
 
         size_t len = strlen(sym_name);
         if (len > sizeof(plt_name) - 5) {
@@ -482,7 +558,6 @@ void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset) {
     for (int i = 1; i < sym_count; ++i, sym++) {
         // add symbol
         char *sym_name = strtab + sym->st_name;
-        // log_debug("sym_name: %s\n", sym_name);
         if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE) {
             local_section_t *local = &local_sections[sym->st_shndx];// st_shndx 定义符号的段
             if (!local->section) {
@@ -695,8 +770,8 @@ uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t size) {
  * - pre_handle custom links
  * - alloc section name
  * - layout sections
- * - cross_relocate global_symbols
- * - cross_relocate sections
+ * - elf_relocate global_symbols
+ * - elf_relocate sections
  * - fill got
  * - output execute
  */
@@ -764,9 +839,9 @@ void elf_build_got_entries(elf_context_t *ctx, uint64_t got_sym_index) {
             uint64_t sym_index = ELF64_R_SYM(rel->r_info);
             Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
 
-            int gotplt_type = cross_gotplt_entry_type(type);
+            int gotplt_type = elf_gotplt_entry_type(type);
             if (gotplt_type == -1) {
-                error_exit("[elf_build_got_entries] unknown relocation code for got: %d", type);
+                assertf(false, "[elf_build_got_entries] unknown relocation code for got: %d", type);
             }
 
             if (gotplt_type == NO_GOTPLT_ENTRY) {
@@ -792,9 +867,9 @@ void elf_build_got_entries(elf_context_t *ctx, uint64_t got_sym_index) {
             }
 
             // 代码段 PLT 构建
-            int8_t is_code_rel = cross_is_code_relocate(type);
+            int8_t is_code_rel = elf_is_code_relocate(type);
             if (is_code_rel == -1) {
-                error_exit("[elf_build_got_entries] unknown relocation code for got: %d", type);
+                assertf(false, "[elf_build_got_entries] unknown relocation code for got: %d", type);
             }
 
             bool is_code_pass = pass == 0;
@@ -822,7 +897,7 @@ void elf_build_got_entries(elf_context_t *ctx, uint64_t got_sym_index) {
                 got_sym_index = build_got(ctx);
             }
 
-            int rel_type = cross_got_rel_type((bool) is_code_rel);
+            int rel_type = elf_got_rel_type((bool) is_code_rel);
             sym_attr_t *attr = put_got_entry(ctx, rel_type, sym_index);
 
             if (is_code_rel) {
@@ -854,7 +929,18 @@ elf_put_rel_data(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offs
     // 如果遍历没有找到符号则会添加一条  UND 符号信息到符号表中
     //  10: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND string_new
     uint64_t sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, name);
-    return elf_put_relocate(ctx, ctx->symtab_section, apply_section, rel_offset, R_X86_64_64, (int) sym_index, 0);
+
+
+    int reloc_type;
+    if (BUILD_ARCH == ARCH_AMD64) {
+        reloc_type = R_X86_64_64;
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        reloc_type = R_AARCH64_ABS64; // 使用适合 ARM64 的重定位类型
+    } else {
+        assert(false && "Unsupported architecture");
+    }
+
+    return elf_put_relocate(ctx, ctx->symtab_section, apply_section, rel_offset, reloc_type, (int) sym_index, 0);
 }
 
 /**
@@ -977,7 +1063,7 @@ void elf_relocate_section(elf_context_t *ctx, section_t *apply_section, section_
         // s->sh_addr 应该就是目标段的地址，加上 r_offset 就是绝对的地址修正了？
         // 没看出来 ptr 和 adr 的区别
         uint64_t addr = apply_section->sh_addr + rel->r_offset;
-        cross_relocate(ctx, rel, type, ptr, addr, target);
+        elf_relocate(ctx, rel, type, ptr, addr, target);
     }
 }
 
@@ -994,14 +1080,24 @@ void elf_fill_got(elf_context_t *ctx) {
 
         Elf64_Rela *rel;
         for (rel = SEC_START(Elf64_Rela, s); rel < SEC_END(Elf64_Rela, s); rel++) {
-            switch (ELF64_R_TYPE(rel->r_info)) {
-                case R_X86_64_GOT32:
-                case R_X86_64_GOTPCREL:
-                case R_X86_64_GOTPCRELX:
-                case R_X86_64_REX_GOTPCRELX:
-                case R_X86_64_PLT32:
-                    elf_fill_got_entry(ctx, rel);
-                    break;
+            if (BUILD_ARCH == ARCH_AMD64) {
+                switch (ELF64_R_TYPE(rel->r_info)) {
+                    case R_X86_64_GOT32:
+                    case R_X86_64_GOTPCREL:
+                    case R_X86_64_GOTPCRELX:
+                    case R_X86_64_REX_GOTPCRELX:
+                    case R_X86_64_PLT32:
+                        elf_fill_got_entry(ctx, rel);
+                        break;
+                }
+            } else if (BUILD_ARCH == ARCH_ARM64) {
+                switch (ELF64_R_TYPE(rel->r_info)) {
+                    case R_AARCH64_ADR_GOT_PAGE:
+                    case R_AARCH64_LD64_GOT_LO12_NC:
+                    case R_AARCH64_ADR_PREL_PG_HI21:
+                        elf_fill_got_entry(ctx, rel);
+                        break;
+                }
             }
         }
     }
@@ -1222,6 +1318,24 @@ void sort_symbols(elf_context_t *ctx, section_t *s) {
     }
 }
 
+static uint64_t get_be(const uint8_t *b, int n) {
+    uint64_t ret = 0;
+    while (n) ret = (ret << 8) | *b++, --n;
+    return ret;
+}
+
+static ssize_t read_ar_header(int fd, uint64_t offset, archive_header_t *arhdr) {
+    char *p, *e;
+    lseek(fd, offset, SEEK_SET);
+    ssize_t len = full_read(fd, arhdr, sizeof(archive_header_t));
+    if (len != sizeof(archive_header_t)) return len ? -1 : 0;
+    p = arhdr->ar_name;
+    for (e = p + sizeof arhdr->ar_name; e > p && e[-1] == ' ';) --e;
+    *e = '\0';
+    arhdr->ar_size[sizeof arhdr->ar_size - 1] = 0;
+    return len;
+}
+
 void load_archive(elf_context_t *ctx, int fd) {
     assertf(fd != -1, "invalid fd");
 
@@ -1254,20 +1368,22 @@ void load_archive(elf_context_t *ctx, int fd) {
         while (i < symbol_count) {
             section_t *s = ctx->symtab_section;
             uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, sym_name);
-            if (!sym_index) {
-                goto CONTINUE;
-            }
-            Elf64_Sym *sym = &((Elf64_Sym *) s->data)[sym_index];
-            if (sym->st_shndx != SHN_UNDEF) {
+            if (!sym_index) {  // 如果内存符号表中不依赖该 sym, 则进行跳过 (i++, sym_name += strlen(sym_name) + 1)
                 goto CONTINUE;
             }
 
-            // 已经加载到内存中的符号存在对该符号的依赖
-            offset = get_be(ar_index + i * entrysize, entrysize);
+            Elf64_Sym *sym = &((Elf64_Sym *) s->data)[sym_index];
+            if (sym->st_shndx != SHN_UNDEF) { // 依赖当前符号，但是已经定义过了，则不重复加载
+                goto CONTINUE;
+            }
+
+            // 加载符号在所在的 object header 偏移, 进行定向的 object 文件加载
+            // get_be 从符号表中读取大端格式的整数，该整数表示 object 文件的 header 偏移
+            offset = get_be(ar_index + (i * entrysize), entrysize);
             len = read_ar_header(fd, offset, &arhdr);
             int cmp = memcmp(arhdr.ar_fmag, ARFMAG, 2);
             if (len <= 0 || cmp != 0) {
-                error_exit("invalid archive ar_fmag");
+                assertf(false, "invalid archive ar_fmag");
             }
 
             offset += len;
@@ -1417,7 +1533,7 @@ void elf_output(elf_context_t *ctx) {
         ehdr.e_entry = elf_get_sym_addr(ctx, START_LABEL, 0); // 目前位于 crt1.o 中
     }
 
-    ehdr.e_machine = cross_ehdr_machine();
+    ehdr.e_machine = elf_ehdr_machine();
     ehdr.e_version = EV_CURRENT;
     ehdr.e_shoff = ctx->file_offset;
     ehdr.e_ehsize = sizeof(Elf64_Ehdr);

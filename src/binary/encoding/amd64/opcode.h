@@ -154,14 +154,12 @@ typedef struct {
     uint8_t opcode[3];
     opcode_ext extensions[4];
     opcode_operand_t operands[4]; // 形参
-} inst_t; // 机器指令,中间表示, 该中间表示可以快速过渡到 inst_format?
+} amd64_opcode_inst_t; // 机器指令,中间表示, 该中间表示可以快速过渡到 inst_format
 
-/**
- * 机器码指令结构, 难道是这个的描述性不好？
- */
+
 typedef struct {
     uint64_t op_id;
-    uint8_t prefix; // 不知道是干嘛的，明明都有 rex.prefix 和 vex.prefix 了
+    uint8_t prefix;
     vex_prefix_t *vex_prefix;
     rex_prefix_t *rex_prefix;
     uint8_t opcode[3];
@@ -171,23 +169,23 @@ typedef struct {
     uint8_t disp_count;
     uint8_t imms[8];
     uint8_t imm_count;
-} amd64_inst_format_t; // 机器编码类型
+} amd64_binary_format_t; // 机器编码类型
 
 
 /**
  * 存储多个 opcode 的数据结构
  */
 typedef struct {
-    inst_t **list; // 默认初始化 10 大小
+    amd64_opcode_inst_t **list; // 默认初始化 10 大小
     int count;
-} amd64_insts_t;
+} amd64_opcode_insts_t;
 
 // 注册到指令树 map[] + operand_tree
 // 方式1： key 为 inst operand, 比如进入值为 rm16, 那么将会匹配一个 succs 的列表，然后继续递归啊查找，最终找到一个列表
 // 方式2： key 为 asm operand, 也就是 jit-compiler 中的方式, 但是目前的 key 没有更加细腻的类型。比如 t_register 就没有明确的宽度字符串
 // 如果需要完全实现的话，需要有宽度字符串的参与,才能构建 key
 typedef struct {
-    amd64_insts_t insts; // data 数据段，最终的叶子节点才会有该数据
+    amd64_opcode_insts_t insts; // data 数据段，最终的叶子节点才会有该数据
     string key; // 筛选 key 为 inst 指令的 operand 部分比如 -> OPERAND_TYPE_R64, 如果深度为 1, key 为 opcode
     table_t *succs;
 } amd64_opcode_tree_node_t;
@@ -195,7 +193,7 @@ typedef struct {
 typedef struct {
     uint16_t *list;
     int count;
-} asm_keys_t;
+} amd64_asm_keys_t;
 
 extern amd64_opcode_tree_node_t *opcode_tree_root; // key = root
 
@@ -228,13 +226,13 @@ uint16_t asm_operand_to_key(uint8_t type, uint8_t byte);
  *
  * 接受一个 code(int) 响应一个 n code + size 的字符串列表
  */
-asm_keys_t operand_low_to_high(inst_operand_type t);
+amd64_asm_keys_t operand_low_to_high(inst_operand_type t);
 
-void opcode_tree_build(inst_t *inst);
+void opcode_tree_build(amd64_opcode_inst_t *inst);
 
 amd64_opcode_tree_node_t *opcode_find_name(string name);
 
-void opcode_find_succs(amd64_opcode_tree_node_t *node, inst_t *inst, int operands_index);
+void opcode_find_succs(amd64_opcode_tree_node_t *node, amd64_opcode_inst_t *inst, int operands_index);
 
 /**
  * 指令选择
@@ -243,7 +241,7 @@ void opcode_find_succs(amd64_opcode_tree_node_t *node, inst_t *inst, int operand
  * 2. tree 结构进一步选择
  * 3. 得到 opcodes 列表，堆一些特殊 inst 做简单过滤
  */
-inst_t *opcode_select(asm_operation_t operation);
+amd64_opcode_inst_t *opcode_select(amd64_asm_inst_t operation);
 
 /**
  * 指令填充
@@ -252,12 +250,14 @@ inst_t *opcode_select(asm_operation_t operation);
  * @param asm_inst
  * @param inst
  */
-amd64_inst_format_t *opcode_fill(inst_t *inst, asm_operation_t asm_inst);
+amd64_binary_format_t *opcode_fill(amd64_opcode_inst_t *inst, amd64_asm_inst_t asm_inst);
 
-void opcode_format_encoding(amd64_inst_format_t *format, uint8_t *data, uint8_t *count);
+void opcode_format_encoding(amd64_binary_format_t *format, uint8_t *data, uint8_t *count);
 
-void opcode_sort_insts(amd64_insts_t *insts);
+void opcode_sort_insts(amd64_opcode_insts_t *insts);
 
-inst_t *amd64_operation_encoding(asm_operation_t operation, uint8_t *data, uint8_t *count);
+amd64_opcode_inst_t *amd64_asm_inst_encoding(amd64_asm_inst_t inst, uint8_t *data, uint8_t *count);
+
+void amd64_opcode_init();
 
 #endif //NATURE_SRC_ASSEMBLER_X86_64_OPCODE_H_

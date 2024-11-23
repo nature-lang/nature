@@ -188,6 +188,11 @@ void debug_lir(closure_t *c, char *key) {
 //    }
 
 #ifdef DEBUG_LIR
+    // 跳过各种全局的 init 方法
+    if (ends_with(c->fndef->symbol_name, ".init")) {
+        return;
+    }
+
     printf("%s lir: %s ---------------------------------------------------------------------\n",
            key,
            c->fndef->symbol_name);
@@ -227,9 +232,11 @@ void debug_lir(closure_t *c, char *key) {
  * @param c
  */
 void debug_block_lir(closure_t *c, char *stage_after) {
-//    if (!str_equal(c->linkident, "co_async@3725339910")) {
-//        return;
-//    }
+    // 跳过各种全局的 init 方法
+    if (ends_with(c->fndef->symbol_name, ".init")) {
+        return;
+    }
+
 #ifdef DEBUG_LIR
     printf("%s after block_lir: %s------------------------------------------------------------------------\n",
            stage_after, c->fndef->symbol_name);
@@ -389,19 +396,14 @@ void debug_basic_block(basic_block_t *block) {
     printf("\n\n\n");
 }
 
-void debug_module_asm(module_t *m) {
-#ifdef DEBUG_ASM
-    printf("module asm: %s------------------------------------------------------------------------\n", m->ident);
-    for (int i = 0; i < m->asm_operations->count; ++i) {
-        asm_op_to_string(i, m->asm_operations->take[i]);
-    }
-    fflush(stdout);
-#endif
-}
-
 void debug_asm(closure_t *c) {
 #ifdef DEBUG_ASM
-    printf("asm: %s------------------------------------------------------------------------\n", c->linkident);
+    // 跳过各种全局的 init 方法
+    if (ends_with(c->fndef->symbol_name, ".init")) {
+        return;
+    }
+
+    printf("asm: %s------------------------------------------------------------------------\n", c->fndef->symbol_name);
     for (int i = 0; i < c->asm_operations->count; ++i) {
         asm_op_to_string(i, c->asm_operations->take[i]);
     }

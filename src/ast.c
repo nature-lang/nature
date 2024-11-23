@@ -1,6 +1,5 @@
 #include "ast.h"
 
-#include "src/cross.h"
 #include "types.h"
 #include "utils/helper.h"
 

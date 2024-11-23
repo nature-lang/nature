@@ -26,6 +26,8 @@ void aco_runtime_test(void) {
 #ifdef __x86_64__
     assert(sizeof(void *) == 8 && "require 'sizeof(void*) == 8'");
     assert(sizeof(__uint128_t) == 16 && "require 'sizeof(__uint128_t) == 16'");
+#elif defined(__aarch64__)
+    assert(sizeof(void *) == 8 && "require 'sizeof(void*) == 8'");
 #else
 #error "platform no support yet"
 #endif
@@ -43,102 +45,102 @@ void aco_runtime_test(void) {
     ((((uintptr_t) (src) & 0x0f) == 0) && (((uintptr_t) (dst) & 0x0f) == 0) && (((sz) & 0x0f) == 0x08) && (((sz) >> 4) >= 0) && \
      (((sz) >> 4) <= 8))
 
-#define aco_amd64_inline_short_aligned_memcpy(dst, src, sz)                                            \
-    do {                                                                                               \
-        __uint128_t xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7;                                    \
-        switch ((sz) >> 4) {                                                                           \
-            case 0:                                                                                    \
-                break;                                                                                 \
-            case 1:                                                                                    \
-                xmm0 = *((__uint128_t *) (src) + 0);                                                   \
-                *((__uint128_t *) (dst) + 0) = xmm0;                                                   \
-                break;                                                                                 \
-            case 2:                                                                                    \
-                xmm0 = *((__uint128_t *) (src) + 0);                                                   \
-                xmm1 = *((__uint128_t *) (src) + 1);                                                   \
-                *((__uint128_t *) (dst) + 0) = xmm0;                                                   \
-                *((__uint128_t *) (dst) + 1) = xmm1;                                                   \
-                break;                                                                                 \
-            case 3:                                                                                    \
-                xmm0 = *((__uint128_t *) (src) + 0);                                                   \
-                xmm1 = *((__uint128_t *) (src) + 1);                                                   \
-                xmm2 = *((__uint128_t *) (src) + 2);                                                   \
-                *((__uint128_t *) (dst) + 0) = xmm0;                                                   \
-                *((__uint128_t *) (dst) + 1) = xmm1;                                                   \
-                *((__uint128_t *) (dst) + 2) = xmm2;                                                   \
-                break;                                                                                 \
-            case 4:                                                                                    \
-                xmm0 = *((__uint128_t *) (src) + 0);                                                   \
-                xmm1 = *((__uint128_t *) (src) + 1);                                                   \
-                xmm2 = *((__uint128_t *) (src) + 2);                                                   \
-                xmm3 = *((__uint128_t *) (src) + 3);                                                   \
-                *((__uint128_t *) (dst) + 0) = xmm0;                                                   \
-                *((__uint128_t *) (dst) + 1) = xmm1;                                                   \
-                *((__uint128_t *) (dst) + 2) = xmm2;                                                   \
-                *((__uint128_t *) (dst) + 3) = xmm3;                                                   \
-                break;                                                                                 \
-            case 5:                                                                                    \
-                xmm0 = *((__uint128_t *) (src) + 0);                                                   \
-                xmm1 = *((__uint128_t *) (src) + 1);                                                   \
-                xmm2 = *((__uint128_t *) (src) + 2);                                                   \
-                xmm3 = *((__uint128_t *) (src) + 3);                                                   \
-                xmm4 = *((__uint128_t *) (src) + 4);                                                   \
-                *((__uint128_t *) (dst) + 0) = xmm0;                                                   \
-                *((__uint128_t *) (dst) + 1) = xmm1;                                                   \
-                *((__uint128_t *) (dst) + 2) = xmm2;                                                   \
-                *((__uint128_t *) (dst) + 3) = xmm3;                                                   \
-                *((__uint128_t *) (dst) + 4) = xmm4;                                                   \
-                break;                                                                                 \
-            case 6:                                                                                    \
-                xmm0 = *((__uint128_t *) (src) + 0);                                                   \
-                xmm1 = *((__uint128_t *) (src) + 1);                                                   \
-                xmm2 = *((__uint128_t *) (src) + 2);                                                   \
-                xmm3 = *((__uint128_t *) (src) + 3);                                                   \
-                xmm4 = *((__uint128_t *) (src) + 4);                                                   \
-                xmm5 = *((__uint128_t *) (src) + 5);                                                   \
-                *((__uint128_t *) (dst) + 0) = xmm0;                                                   \
-                *((__uint128_t *) (dst) + 1) = xmm1;                                                   \
-                *((__uint128_t *) (dst) + 2) = xmm2;                                                   \
-                *((__uint128_t *) (dst) + 3) = xmm3;                                                   \
-                *((__uint128_t *) (dst) + 4) = xmm4;                                                   \
-                *((__uint128_t *) (dst) + 5) = xmm5;                                                   \
-                break;                                                                                 \
-            case 7:                                                                                    \
-                xmm0 = *((__uint128_t *) (src) + 0);                                                   \
-                xmm1 = *((__uint128_t *) (src) + 1);                                                   \
-                xmm2 = *((__uint128_t *) (src) + 2);                                                   \
-                xmm3 = *((__uint128_t *) (src) + 3);                                                   \
-                xmm4 = *((__uint128_t *) (src) + 4);                                                   \
-                xmm5 = *((__uint128_t *) (src) + 5);                                                   \
-                xmm6 = *((__uint128_t *) (src) + 6);                                                   \
-                *((__uint128_t *) (dst) + 0) = xmm0;                                                   \
-                *((__uint128_t *) (dst) + 1) = xmm1;                                                   \
-                *((__uint128_t *) (dst) + 2) = xmm2;                                                   \
-                *((__uint128_t *) (dst) + 3) = xmm3;                                                   \
-                *((__uint128_t *) (dst) + 4) = xmm4;                                                   \
-                *((__uint128_t *) (dst) + 5) = xmm5;                                                   \
-                *((__uint128_t *) (dst) + 6) = xmm6;                                                   \
-                break;                                                                                 \
-            case 8:                                                                                    \
-                xmm0 = *((__uint128_t *) (src) + 0);                                                   \
-                xmm1 = *((__uint128_t *) (src) + 1);                                                   \
-                xmm2 = *((__uint128_t *) (src) + 2);                                                   \
-                xmm3 = *((__uint128_t *) (src) + 3);                                                   \
-                xmm4 = *((__uint128_t *) (src) + 4);                                                   \
-                xmm5 = *((__uint128_t *) (src) + 5);                                                   \
-                xmm6 = *((__uint128_t *) (src) + 6);                                                   \
-                xmm7 = *((__uint128_t *) (src) + 7);                                                   \
-                *((__uint128_t *) (dst) + 0) = xmm0;                                                   \
-                *((__uint128_t *) (dst) + 1) = xmm1;                                                   \
-                *((__uint128_t *) (dst) + 2) = xmm2;                                                   \
-                *((__uint128_t *) (dst) + 3) = xmm3;                                                   \
-                *((__uint128_t *) (dst) + 4) = xmm4;                                                   \
-                *((__uint128_t *) (dst) + 5) = xmm5;                                                   \
-                *((__uint128_t *) (dst) + 6) = xmm6;                                                   \
-                *((__uint128_t *) (dst) + 7) = xmm7;                                                   \
-                break;                                                                                 \
-        }                                                                                              \
-        *((uint64_t *) ((uintptr_t) (dst) + (sz) -8)) = *((uint64_t *) ((uintptr_t) (src) + (sz) -8)); \
+#define aco_amd64_inline_short_aligned_memcpy(dst, src, sz)                                              \
+    do {                                                                                                 \
+        __uint128_t xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7;                                      \
+        switch ((sz) >> 4) {                                                                             \
+            case 0:                                                                                      \
+                break;                                                                                   \
+            case 1:                                                                                      \
+                xmm0 = *((__uint128_t *) (src) + 0);                                                     \
+                *((__uint128_t *) (dst) + 0) = xmm0;                                                     \
+                break;                                                                                   \
+            case 2:                                                                                      \
+                xmm0 = *((__uint128_t *) (src) + 0);                                                     \
+                xmm1 = *((__uint128_t *) (src) + 1);                                                     \
+                *((__uint128_t *) (dst) + 0) = xmm0;                                                     \
+                *((__uint128_t *) (dst) + 1) = xmm1;                                                     \
+                break;                                                                                   \
+            case 3:                                                                                      \
+                xmm0 = *((__uint128_t *) (src) + 0);                                                     \
+                xmm1 = *((__uint128_t *) (src) + 1);                                                     \
+                xmm2 = *((__uint128_t *) (src) + 2);                                                     \
+                *((__uint128_t *) (dst) + 0) = xmm0;                                                     \
+                *((__uint128_t *) (dst) + 1) = xmm1;                                                     \
+                *((__uint128_t *) (dst) + 2) = xmm2;                                                     \
+                break;                                                                                   \
+            case 4:                                                                                      \
+                xmm0 = *((__uint128_t *) (src) + 0);                                                     \
+                xmm1 = *((__uint128_t *) (src) + 1);                                                     \
+                xmm2 = *((__uint128_t *) (src) + 2);                                                     \
+                xmm3 = *((__uint128_t *) (src) + 3);                                                     \
+                *((__uint128_t *) (dst) + 0) = xmm0;                                                     \
+                *((__uint128_t *) (dst) + 1) = xmm1;                                                     \
+                *((__uint128_t *) (dst) + 2) = xmm2;                                                     \
+                *((__uint128_t *) (dst) + 3) = xmm3;                                                     \
+                break;                                                                                   \
+            case 5:                                                                                      \
+                xmm0 = *((__uint128_t *) (src) + 0);                                                     \
+                xmm1 = *((__uint128_t *) (src) + 1);                                                     \
+                xmm2 = *((__uint128_t *) (src) + 2);                                                     \
+                xmm3 = *((__uint128_t *) (src) + 3);                                                     \
+                xmm4 = *((__uint128_t *) (src) + 4);                                                     \
+                *((__uint128_t *) (dst) + 0) = xmm0;                                                     \
+                *((__uint128_t *) (dst) + 1) = xmm1;                                                     \
+                *((__uint128_t *) (dst) + 2) = xmm2;                                                     \
+                *((__uint128_t *) (dst) + 3) = xmm3;                                                     \
+                *((__uint128_t *) (dst) + 4) = xmm4;                                                     \
+                break;                                                                                   \
+            case 6:                                                                                      \
+                xmm0 = *((__uint128_t *) (src) + 0);                                                     \
+                xmm1 = *((__uint128_t *) (src) + 1);                                                     \
+                xmm2 = *((__uint128_t *) (src) + 2);                                                     \
+                xmm3 = *((__uint128_t *) (src) + 3);                                                     \
+                xmm4 = *((__uint128_t *) (src) + 4);                                                     \
+                xmm5 = *((__uint128_t *) (src) + 5);                                                     \
+                *((__uint128_t *) (dst) + 0) = xmm0;                                                     \
+                *((__uint128_t *) (dst) + 1) = xmm1;                                                     \
+                *((__uint128_t *) (dst) + 2) = xmm2;                                                     \
+                *((__uint128_t *) (dst) + 3) = xmm3;                                                     \
+                *((__uint128_t *) (dst) + 4) = xmm4;                                                     \
+                *((__uint128_t *) (dst) + 5) = xmm5;                                                     \
+                break;                                                                                   \
+            case 7:                                                                                      \
+                xmm0 = *((__uint128_t *) (src) + 0);                                                     \
+                xmm1 = *((__uint128_t *) (src) + 1);                                                     \
+                xmm2 = *((__uint128_t *) (src) + 2);                                                     \
+                xmm3 = *((__uint128_t *) (src) + 3);                                                     \
+                xmm4 = *((__uint128_t *) (src) + 4);                                                     \
+                xmm5 = *((__uint128_t *) (src) + 5);                                                     \
+                xmm6 = *((__uint128_t *) (src) + 6);                                                     \
+                *((__uint128_t *) (dst) + 0) = xmm0;                                                     \
+                *((__uint128_t *) (dst) + 1) = xmm1;                                                     \
+                *((__uint128_t *) (dst) + 2) = xmm2;                                                     \
+                *((__uint128_t *) (dst) + 3) = xmm3;                                                     \
+                *((__uint128_t *) (dst) + 4) = xmm4;                                                     \
+                *((__uint128_t *) (dst) + 5) = xmm5;                                                     \
+                *((__uint128_t *) (dst) + 6) = xmm6;                                                     \
+                break;                                                                                   \
+            case 8:                                                                                      \
+                xmm0 = *((__uint128_t *) (src) + 0);                                                     \
+                xmm1 = *((__uint128_t *) (src) + 1);                                                     \
+                xmm2 = *((__uint128_t *) (src) + 2);                                                     \
+                xmm3 = *((__uint128_t *) (src) + 3);                                                     \
+                xmm4 = *((__uint128_t *) (src) + 4);                                                     \
+                xmm5 = *((__uint128_t *) (src) + 5);                                                     \
+                xmm6 = *((__uint128_t *) (src) + 6);                                                     \
+                xmm7 = *((__uint128_t *) (src) + 7);                                                     \
+                *((__uint128_t *) (dst) + 0) = xmm0;                                                     \
+                *((__uint128_t *) (dst) + 1) = xmm1;                                                     \
+                *((__uint128_t *) (dst) + 2) = xmm2;                                                     \
+                *((__uint128_t *) (dst) + 3) = xmm3;                                                     \
+                *((__uint128_t *) (dst) + 4) = xmm4;                                                     \
+                *((__uint128_t *) (dst) + 5) = xmm5;                                                     \
+                *((__uint128_t *) (dst) + 6) = xmm6;                                                     \
+                *((__uint128_t *) (dst) + 7) = xmm7;                                                     \
+                break;                                                                                   \
+        }                                                                                                \
+        *((uint64_t *) ((uintptr_t) (dst) + (sz) - 8)) = *((uint64_t *) ((uintptr_t) (src) + (sz) - 8)); \
     } while (0)
 
 // Note: dst and src must be valid address already
@@ -260,7 +262,7 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
     pthread_mutex_lock(&share_stack_lock);
     p->real_ptr = mmap((void *) share_stack_base, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     DEBUGF("[aco_share_stack_init] share_stack real_ptr=%p", p->real_ptr);
-//    share_stack_base += (uint64_t) 64 * 1024 * 1024 * 1024;
+    //    share_stack_base += (uint64_t) 64 * 1024 * 1024 * 1024;
     share_stack_base += sz;
     pthread_mutex_unlock(&share_stack_lock);
 
@@ -275,7 +277,7 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
     p->sz = sz - u_pgsz;
 
     p->owner = NULL;
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
     uintptr_t u_p = (uintptr_t) (p->sz - (sizeof(void *) << 1) + (uintptr_t) p->ptr);
     u_p = (u_p >> 4) << 4;
     p->align_highptr = (void *) u_p;
@@ -311,6 +313,11 @@ void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack,
         aco->reg[ACO_REG_IDX_RETADDR] = (void *) fp;
         aco->reg[ACO_REG_IDX_SP] = aco->share_stack->align_retptr;
         aco->reg[ACO_REG_IDX_FPU] = uv_key_get(&aco_gtls_fpucw_mxcsr);
+#elif defined(__aarch64__)
+        aco->reg[ACO_REG_IDX_RETADDR] = (void *) fp;
+        aco->reg[ACO_REG_IDX_SP] = aco->share_stack->align_retptr;
+        aco->reg[ACO_REG_IDX_BP] = aco->share_stack->align_retptr;
+        // ARM64 不需要保存 FPU 状态,因为它使用独立的 NEON/FP 寄存器
 #else
 #error "platform no support yet"
 #endif
@@ -326,7 +333,7 @@ void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack,
 
         assert(aco->save_stack.ptr);
         aco->save_stack.sz = save_stack_sz;
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
         aco->save_stack.valid_sz = 0;
 #else
 #error "platform no support yet"
@@ -357,10 +364,10 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
             aco_t *owner_co = resume_co->share_stack->owner;
             assert(owner_co->share_stack == resume_co->share_stack);
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
             assert(((uintptr_t) (owner_co->share_stack->align_retptr) >= (uintptr_t) (owner_co->reg[ACO_REG_IDX_SP])) &&
                    ((uintptr_t) (owner_co->share_stack->align_highptr) -
-                    (uintptr_t) (owner_co->share_stack->align_limit) <=
+                            (uintptr_t) (owner_co->share_stack->align_limit) <=
                     (uintptr_t) (owner_co->reg[ACO_REG_IDX_SP])));
 
             owner_co->save_stack.valid_sz =
@@ -403,20 +410,20 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
         }
 
         assert(resume_co->share_stack->owner == NULL);
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(__aarch64__)
         assert(resume_co->save_stack.valid_sz <= resume_co->share_stack->align_limit - sizeof(void *));
         // TODO: optimize the performance penalty of memcpy function call
         //   for very short memory span
         if (resume_co->save_stack.valid_sz > 0) {
-            // #ifdef __x86_64__
+#ifdef __x86_64__
             aco_amd64_optimized_memcpy_drop_in(
                     (void *) ((uintptr_t) (resume_co->share_stack->align_retptr) - resume_co->save_stack.valid_sz),
                     resume_co->save_stack.ptr, resume_co->save_stack.valid_sz);
-            // #else
-            //             memcpy((void *)((uintptr_t)(resume_co->share_stack->align_retptr) - resume_co->save_stack.valid_sz),
-            //             resume_co->save_stack.ptr,
-            //                    resume_co->save_stack.valid_sz);
-            // #endif
+#else
+            memcpy((void *) ((uintptr_t) (resume_co->share_stack->align_retptr) - resume_co->save_stack.valid_sz),
+                   resume_co->save_stack.ptr,
+                   resume_co->save_stack.valid_sz);
+#endif
             resume_co->save_stack.ct_restore++;
         }
 
@@ -435,7 +442,6 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
 #else
         pthread_mutex_unlock(&resume_co->share_stack->owner_lock);
 #endif
-
     }
     uv_key_set(&aco_gtls_co, resume_co);
     acosw(resume_co->main_co, resume_co);
@@ -472,7 +478,7 @@ aco_attr_no_asan void aco_share_spill(aco_t *aco) {
 #ifdef __x86_64__
         aco_amd64_optimized_memcpy_drop_in(aco->save_stack.ptr, aco->reg[ACO_REG_IDX_SP], aco->save_stack.valid_sz);
 #else
-        memcpy(owner_co->temp_stack.ptr, owner_co->reg[ACO_REG_IDX_SP], owner_co->temp_stack.valid_sz);
+        memcpy(aco->save_stack.ptr, aco->reg[ACO_REG_IDX_SP], aco->save_stack.valid_sz);
 #endif
     }
 

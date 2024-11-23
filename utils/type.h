@@ -647,7 +647,7 @@ static inline bool can_type_casting(type_kind kind) {
     return is_number(kind) || kind == TYPE_BOOL;
 }
 
-static inline bool is_large_alloc_type(type_t t) {
+static inline bool is_large_stack_type(type_t t) {
     return t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
 }
 
@@ -747,7 +747,7 @@ static inline type_t number_type_lift(type_kind left, type_kind right) {
     return type_kind_new(right);
 }
 
-static bool integer_range_check(type_kind kind, int64_t i) {
+static inline bool integer_range_check(type_kind kind, int64_t i) {
     switch (kind) {
         case TYPE_UINT8:
             return i >= 0 && i <= UINT8_MAX;
@@ -770,7 +770,7 @@ static bool integer_range_check(type_kind kind, int64_t i) {
     }
 }
 
-static bool float_range_check(type_kind kind, double f) {
+static inline bool float_range_check(type_kind kind, double f) {
     switch (kind) {
         case TYPE_FLOAT32:
             return f >= -FLT_MAX && f <= FLT_MAX;
@@ -780,5 +780,21 @@ static bool float_range_check(type_kind kind, double f) {
             return false;
     }
 }
+
+
+static inline type_kind cross_kind_trans(type_kind kind) {
+    if (kind == TYPE_FLOAT) {
+        return TYPE_FLOAT64;
+    }
+    if (kind == TYPE_INT) {
+        return TYPE_INT64;
+    }
+    if (kind == TYPE_UINT) {
+        return TYPE_UINT64;
+    }
+
+    return kind;
+}
+
 
 #endif// NATURE_TYPE_H

@@ -1,33 +1,36 @@
-#ifndef NATURE_AMD64_H
-#define NATURE_AMD64_H
+#ifndef NATURE_BINARY_ARCH_AMD64_H
+#define NATURE_BINARY_ARCH_AMD64_H
 
 #include "src/binary/linker.h"
-#include "src/binary/opcode/amd64/asm.h"
-#include "src/binary/opcode/amd64/opcode.h"
+#include "src/binary/encoding/amd64/asm.h"
+#include "src/binary/encoding/amd64/opcode.h"
 
 #include <stdlib.h>
 
+#define AMD64_ELF_START_ADDR 0x400000
+#define AMD64_64_ELF_PAGE_SIZE 0x200000
+
 typedef struct {
-    inst_t *inst;
+    amd64_opcode_inst_t *inst;
     uint8_t *data;
     uint8_t data_count;
     uint64_t *offset; // 指令的位置
-    asm_operation_t *operation; // 原始指令, 指令改写与二次扫描时使用(只有 amd64 用得上？)
+    amd64_asm_inst_t *operation; // 原始指令, 指令改写与二次扫描时使用
     string rel_symbol; // 使用的符号, 二次扫描时用于判断是否需要重定位，目前都只适用于 label
-    asm_operand_t *rel_operand; // 引用自 asm_operations
+    amd64_asm_operand_t *rel_operand; // 引用自 asm_operations
     uint64_t sym_index; // 指令引用的符号在符号表的索引，如果指令发生了 slot 变更，则响应的符号的 value 同样需要变更
     void *rel; // elf_rela, mach relacate_info
 } amd64_build_temp_t;
 
 
-static inline bool is_imm_operand(asm_operand_t *operand) {
-    return operand->type == ASM_OPERAND_TYPE_UINT ||
-           operand->type == ASM_OPERAND_TYPE_UINT8 ||
-           operand->type == ASM_OPERAND_TYPE_UINT16 ||
-           operand->type == ASM_OPERAND_TYPE_UINT32 ||
-           operand->type == ASM_OPERAND_TYPE_UINT64 ||
-           operand->type == ASM_OPERAND_TYPE_INT8 ||
-           operand->type == ASM_OPERAND_TYPE_INT32;
+static inline bool is_imm_operand(amd64_asm_operand_t *operand) {
+    return operand->type == AMD64_ASM_OPERAND_TYPE_UINT ||
+           operand->type == AMD64_ASM_OPERAND_TYPE_UINT8 ||
+           operand->type == AMD64_ASM_OPERAND_TYPE_UINT16 ||
+           operand->type == AMD64_ASM_OPERAND_TYPE_UINT32 ||
+           operand->type == AMD64_ASM_OPERAND_TYPE_UINT64 ||
+           operand->type == AMD64_ASM_OPERAND_TYPE_INT8 ||
+           operand->type == AMD64_ASM_OPERAND_TYPE_INT32;
 }
 
 /**
@@ -42,12 +45,12 @@ static inline bool is_imm_operand(asm_operand_t *operand) {
  * @param inst_count
  * @return
  */
-static inline uint64_t rip_offset(uint64_t data_count, asm_operation_t *operation) {
+static inline uint64_t rip_offset(uint64_t data_count, amd64_asm_inst_t *operation) {
     // R_X86_64_PC32 默认就是占用 4 byte
     uint64_t offset = data_count - 4;
 
     if (operation->count > 1) {
-        asm_operand_t *operand = operation->operands[1];
+        amd64_asm_operand_t *operand = operation->operands[1];
         if (is_imm_operand(operand)) {
             offset -= operand->size;
         }
@@ -56,7 +59,7 @@ static inline uint64_t rip_offset(uint64_t data_count, asm_operation_t *operatio
     return offset;
 }
 
-static inline uint8_t jmp_rewrite_rel8_reduce_count(asm_operation_t *operation) {
+static inline uint8_t jmp_rewrite_rel8_reduce_count(amd64_asm_inst_t *operation) {
     if (operation->name[0] != 'j') {
         return 0;
     }
@@ -70,7 +73,7 @@ static inline uint8_t jmp_rewrite_rel8_reduce_count(asm_operation_t *operation) 
     return 6 - 2;
 }
 
-static inline uint8_t jmp_operation_count(asm_operation_t *operation, uint8_t size) {
+static inline uint8_t jmp_operation_count(amd64_asm_inst_t *operation, uint8_t size) {
     if (operation->name[0] != 'j') {
         assertf(false, "[linux_elf_amd64_jmp_inst_count] operation: %s not jmp or jcc:", operation->name);
     }
@@ -83,11 +86,11 @@ static inline uint8_t jmp_operation_count(asm_operation_t *operation, uint8_t si
     return 6;
 }
 
-static inline bool is_call_op(char *name) {
+static inline bool amd64_is_call_op(char *name) {
     return str_equal(name, "call");
 }
 
-static inline bool is_jmp_op(char *name) {
+static inline bool amd64_is_jmp_op(char *name) {
     return name[0] == 'j';
 }
 
@@ -97,16 +100,17 @@ static inline bool is_jmp_op(char *name) {
  * @param operand
  * @param rel_diff
  */
-static inline void amd64_rewrite_rel_symbol(asm_operation_t *operation, asm_operand_t *operand, uint64_t rel_diff) {
+static inline void
+amd64_rewrite_rel_symbol(amd64_asm_inst_t *operation, amd64_asm_operand_t *operand, uint64_t rel_diff) {
     // 目标 operand 已经确定了指令长度，不再是一个符号，所以不能在随意修正了
-    if (operand->type != ASM_OPERAND_TYPE_SYMBOL) {
+    if (operand->type != AMD64_ASM_OPERAND_TYPE_SYMBOL) {
         if (rel_diff == 0) {
             return;
         }
 
-        if (operand->type == ASM_OPERAND_TYPE_UINT32) {
+        if (operand->type == AMD64_ASM_OPERAND_TYPE_UINT32) {
             uint8_t data_count = 5;
-            if (!is_call_op(operation->name)) {
+            if (!amd64_is_call_op(operation->name)) {
                 data_count = jmp_operation_count(operation, DWORD);
             }
             asm_uint32_t *v = NEW(asm_uint32_t);
@@ -123,13 +127,13 @@ static inline void amd64_rewrite_rel_symbol(asm_operation_t *operation, asm_oper
 
     // symbol to rel32
     // call 指令不能改写成 rel8(-128 ~ 127)
-    if (rel_diff == 0 || rel_diff > 127 || rel_diff < -128 || is_call_op(operation->name)) {
+    if (rel_diff == 0 || rel_diff > 127 || rel_diff < -128 || amd64_is_call_op(operation->name)) {
         uint8_t data_count = 5;
-        if (!is_call_op(operation->name)) {
+        if (!amd64_is_call_op(operation->name)) {
             data_count = jmp_operation_count(operation, DWORD);
         }
 
-        operand->type = ASM_OPERAND_TYPE_UINT32;
+        operand->type = AMD64_ASM_OPERAND_TYPE_UINT32;
         operand->size = DWORD;
         asm_uint32_t *v = NEW(asm_uint32_t);
         v->value = 0;
@@ -141,32 +145,32 @@ static inline void amd64_rewrite_rel_symbol(asm_operation_t *operation, asm_oper
     }
 
     // jmp 指令
-    operand->type = ASM_OPERAND_TYPE_UINT8;
+    operand->type = AMD64_ASM_OPERAND_TYPE_UINT8;
     operand->size = BYTE;
     asm_uint8_t *v = NEW(asm_uint8_t);
     v->value = (uint8_t) (rel_diff - jmp_operation_count(operation, operand->size)); // 去掉当前指令的差值
     operand->value = v;
 }
 
-static inline void amd64_rewrite_rip_symbol(asm_operand_t *operand) {
-    operand->type = ASM_OPERAND_TYPE_RIP_RELATIVE;
+static inline void amd64_rewrite_rip_symbol(amd64_asm_operand_t *operand) {
+    operand->type = AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE;
     operand->size = operand->size;
     asm_rip_relative_t *r = NEW(asm_rip_relative_t);
     r->disp = 0;
     operand->value = r;
 }
 
-static inline asm_operand_t *extract_symbol_operand(asm_operation_t *operation) {
+static inline amd64_asm_operand_t *extract_symbol_operand(amd64_asm_inst_t *operation) {
     for (int i = 0; i < operation->count; ++i) {
-        asm_operand_t *operand = operation->operands[i];
-        if (operand->type == ASM_OPERAND_TYPE_SYMBOL) {
+        amd64_asm_operand_t *operand = operation->operands[i];
+        if (operand->type == AMD64_ASM_OPERAND_TYPE_SYMBOL) {
             return operand;
         }
     }
     return NULL;
 }
 
-static inline amd64_build_temp_t *build_temp_new(asm_operation_t *operation) {
+static inline amd64_build_temp_t *build_temp_new(amd64_asm_inst_t *operation) {
     amd64_build_temp_t *temp = NEW(amd64_build_temp_t);
     temp->data = mallocz(sizeof(uint8_t) * 30);
     temp->data_count = 0;
@@ -180,7 +184,7 @@ static inline amd64_build_temp_t *build_temp_new(asm_operation_t *operation) {
     return temp;
 }
 
-int amd64_gotplt_entry_type(uint64_t relocate_type) {
+static inline int amd64_gotplt_entry_type(uint64_t relocate_type) {
     switch (relocate_type) {
         case R_X86_64_GLOB_DAT:
         case R_X86_64_JUMP_SLOT:
@@ -223,7 +227,7 @@ int amd64_gotplt_entry_type(uint64_t relocate_type) {
     return -1;
 }
 
-uint64_t amd64_create_plt_entry(elf_context_t *ctx, uint64_t got_offset, sym_attr_t *attr) {
+static inline uint64_t amd64_create_plt_entry(elf_context_t *ctx, uint64_t got_offset, sym_attr_t *attr) {
     section_t *plt = ctx->plt;
 
     int modrm = 0x25;
@@ -251,7 +255,7 @@ uint64_t amd64_create_plt_entry(elf_context_t *ctx, uint64_t got_offset, sym_att
     return plt_offset;
 }
 
-int8_t amd64_is_code_relocate(uint64_t relocate_type) {
+static inline int8_t amd64_is_code_relocate(uint64_t relocate_type) {
     switch (relocate_type) {
         case R_X86_64_32:
         case R_X86_64_32S:
@@ -286,7 +290,8 @@ int8_t amd64_is_code_relocate(uint64_t relocate_type) {
     return -1;
 }
 
-void amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, uint64_t addr, uint64_t val) {
+static inline void
+elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, uint64_t addr, uint64_t val) {
     int sym_index = ELF64_R_SYM(rel->r_info);
     switch (type) {
         case R_X86_64_64:
@@ -386,7 +391,7 @@ void amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr,
                 x = sym->st_value - section->sh_addr - section->data_count;
                 add32le(ptr + 8, x);
             } else {
-                assertf(false, "[amd64_relocate]unexpected R_X86_64_TLSGD pattern");
+                assertf(false, "[elf_amd64_relocate]unexpected R_X86_64_TLSGD pattern");
             }
 
             break;
@@ -406,7 +411,7 @@ void amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr,
                 memcpy(ptr - 3, replace, sizeof(replace));
                 rel[1].r_info = ELF64_R_INFO(0, R_X86_64_NONE);
             } else {
-                assertf(false, "[amd64_relocate] unexpected R_X86_64_TLSLD pattern");
+                assertf(false, "[elf_amd64_relocate] unexpected R_X86_64_TLSLD pattern");
             }
 
             break;
@@ -437,7 +442,7 @@ void amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr,
             /* do nothing */
             break;
         default:
-            assertf(false, "[amd64_relocate] unknown rel code");
+            assertf(false, "[elf_amd64_relocate] unknown rel code");
             break;
     }
 }
@@ -459,7 +464,7 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
     for (int i = 0; i < closures->count; ++i) {
         closure_t *c = closures->take[i];
         for (int j = 0; j < c->asm_operations->count; ++j) {
-            asm_operation_t *operation = c->asm_operations->take[j];
+            amd64_asm_inst_t *operation = c->asm_operations->take[j];
             amd64_build_temp_t *temp = build_temp_new(operation);
             slice_push(build_temps, temp);
             slice_push(c->asm_build_temps, temp);
@@ -479,19 +484,19 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
                         .st_other = 0,
                         .st_value = *temp->offset,
                 };
-                uint64_t sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, s->name);
-                temp->sym_index = sym_index;
+                temp->sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, s->name);
                 continue;
             }
 
-            asm_operand_t *rel_operand = extract_symbol_operand(operation);
+            amd64_asm_operand_t *rel_operand = extract_symbol_operand(operation);
             if (rel_operand != NULL) {
                 // 指令引用了符号，符号可能是数据符号的引用，也可能是标签符号的引用
                 // 1. 数据符号引用(直接改写成 0x0(rip)) , 已经跨 section 了，此时不能使用相对寻址，会造成链接阶段异常
                 // 2. 标签符号引用(在符号表中,表明为内部符号,否则使用 rel32 先占位),都是在 .text section 内，所以可以使用 jmp 相对寻址, 连接器不会破坏同一个段内的位置
                 asm_symbol_t *symbol_operand = rel_operand->value;
+
                 // 判断是否为标签符号引用, 比如 call symbol call(一次遍历时不能确定符号是否必定不存在，所以必须等二次遍历才能确定是否写入 rel)
-                if (is_call_op(operation->name) || is_jmp_op(operation->name)) {
+                if (amd64_is_call_op(operation->name) || amd64_is_jmp_op(operation->name)) {
                     // 标签符号
                     uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, symbol_operand->name);
                     if (sym_index > 0) {
@@ -505,11 +510,6 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
                         amd64_rewrite_rel_symbol(operation, rel_operand, 0);
                         temp->rel_operand = rel_operand; // 等到二次遍历时再确认是否需要改写
                         temp->rel_symbol = symbol_operand->name;
-//                        uint8_t reduce_count = jmp_rewrite_rel8_reduce_count(operation);
-//                        if (reduce_count > 0) {
-//                            temp->may_need_reduce = true;
-//                            temp->reduce_count = reduce_count;
-//                        }
                     }
                 } else {
                     // 其他指令(可能是 mov 等,对数据段符号的引用)引用了符号，由于不用考虑指令重写的问题,所以直接写入 0(%rip),让重定位阶段去找改符号进行重定位即可
@@ -533,7 +533,7 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
                     amd64_rewrite_rip_symbol(rel_operand);
 
                     // 编码
-                    temp->inst = amd64_operation_encoding(*operation, temp->data, &temp->data_count);
+                    temp->inst = amd64_asm_inst_encoding(*operation, temp->data, &temp->data_count);
                     section_offset += temp->data_count;
 
                     // 将符号和 sym_index 关联,rel 记录了符号的使用位置， sym_index 记录的符号的信息(包括 linker 完成后的绝对虚拟地址)
@@ -551,7 +551,7 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
             }
 
             // 编码
-            temp->inst = amd64_operation_encoding(*operation, temp->data, &temp->data_count);
+            temp->inst = amd64_asm_inst_encoding(*operation, temp->data, &temp->data_count);
             section_offset += temp->data_count;
         }
     }
@@ -589,7 +589,7 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
             amd64_rewrite_rel_symbol(temp->operation, temp->rel_operand, rel_diff);
 
             uint8_t old_count = temp->data_count;
-            temp->inst = amd64_operation_encoding(*temp->operation, temp->data, &temp->data_count);
+            temp->inst = amd64_asm_inst_encoding(*temp->operation, temp->data, &temp->data_count);
             assertf(temp->data_count == old_count, "second traverse cannot update encoding data_count");
         } else {
             // st_value = 0 表示这是一个外部的符号， 需要添加重定位
@@ -633,7 +633,7 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
     for (int i = 0; i < closures->count; ++i) {
         closure_t *c = closures->take[i];
         for (int j = 0; j < c->asm_operations->count; ++j) {
-            asm_operation_t *operation = c->asm_operations->take[j];
+            amd64_asm_inst_t *operation = c->asm_operations->take[j];
             amd64_build_temp_t *temp = build_temp_new(operation);
             slice_push(build_temps, temp);
             slice_push(c->asm_build_temps, temp);
@@ -662,14 +662,14 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
                 continue;
             }
 
-            asm_operand_t *rel_operand = extract_symbol_operand(operation);
+            amd64_asm_operand_t *rel_operand = extract_symbol_operand(operation);
             if (rel_operand != NULL) {
                 // 指令引用了符号，符号可能是数据符号的引用，也可能是标签符号的引用
                 // 1. 数据符号引用(直接改写成 0x0(rip)) , 已经跨 section 了，此时不能使用相对寻址，会造成链接阶段异常
                 // 2. 标签符号引用(在符号表中,表明为内部符号,否则使用 rel32 先占位),都是在 .text section 内，所以可以使用 jmp 相对寻址, 连接器不会破坏同一个段内的位置
                 asm_symbol_t *symbol_operand = rel_operand->value;
                 // 判断是否为标签符号引用, 比如 call symbol call(一次遍历时不能确定符号是否必定不存在，所以必须等二次遍历才能确定是否写入 rel)
-                if (is_call_op(operation->name) || is_jmp_op(operation->name)) {
+                if (amd64_is_call_op(operation->name) || amd64_is_jmp_op(operation->name)) {
 
                     // 标签符号
                     uint64_t sym_index = (uint64_t) table_get(symtab_hash, symbol_operand->name);
@@ -706,7 +706,7 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     amd64_rewrite_rip_symbol(rel_operand);
 
                     // 编码
-                    temp->inst = amd64_operation_encoding(*operation, temp->data, &temp->data_count);
+                    temp->inst = amd64_asm_inst_encoding(*operation, temp->data, &temp->data_count);
                     section_offset += temp->data_count;
 
                     // 将符号和 sym_index 关联,rel 记录了符号的使用位置， sym_index 记录的符号的信息(包括 linker 完成后的绝对虚拟地址)
@@ -722,7 +722,7 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
             }
 
             // 编码
-            temp->inst = amd64_operation_encoding(*operation, temp->data, &temp->data_count);
+            temp->inst = amd64_asm_inst_encoding(*operation, temp->data, &temp->data_count);
             section_offset += temp->data_count;
         }
     }
@@ -758,7 +758,7 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
             amd64_rewrite_rel_symbol(temp->operation, temp->rel_operand, rel_diff);
 
             uint8_t old_count = temp->data_count;
-            temp->inst = amd64_operation_encoding(*temp->operation, temp->data, &temp->data_count);
+            temp->inst = amd64_asm_inst_encoding(*temp->operation, temp->data, &temp->data_count);
             assertf(temp->data_count == old_count, "second traverse cannot update encoding data_count");
         } else {
             // st_value = 0 表示这是一个外部的符号， 需要添加重定位
