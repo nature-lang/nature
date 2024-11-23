@@ -138,12 +138,12 @@ static inline void config_init() {
 
 static inline void env_init() {
     char *os = getenv("BUILD_OS");
-    if (os != NULL) {
+    if (os != NULL && !str_equal(os, "")) {
         BUILD_OS = os_to_uint8(os);
     }
 
     char *arch = getenv("BUILD_ARCH");
-    if (arch != NULL) {
+    if (arch != NULL && !str_equal(os, "")) {
         BUILD_ARCH = arch_to_uint8(arch);
     }
 
