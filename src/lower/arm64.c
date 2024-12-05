@@ -175,6 +175,12 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
+        if (op->code == LIR_OPCODE_MOVE && !lir_can_mov(op)) {
+            op->first = arm64_convert_mov_var(c, operations, op->first);
+            linked_push(operations, op);
+            continue;
+        }
+
         linked_push(operations, op);
     }
 

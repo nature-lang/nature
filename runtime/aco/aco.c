@@ -23,11 +23,9 @@
 static uint64_t share_stack_base = MMAP_SHARE_STACK_BASE;
 
 void aco_runtime_test(void) {
-#ifdef __x86_64__
+#if  defined(__x86_64__) || defined(__aarch64__)
     assert(sizeof(void *) == 8 && "require 'sizeof(void*) == 8'");
     assert(sizeof(__uint128_t) == 16 && "require 'sizeof(__uint128_t) == 16'");
-#elif defined(__aarch64__)
-    assert(sizeof(void *) == 8 && "require 'sizeof(void*) == 8'");
 #else
 #error "platform no support yet"
 #endif
@@ -169,12 +167,6 @@ uv_key_t aco_gtls_co;
 
 uv_key_t aco_gtls_last_word_fp;
 
-// static __thread void* aco_gtls_fpucw_mxcsr[2];
-// #elif  __x86_64__
-// static __thread void *aco_gtls_fpucw_mxcsr[1];
-// #else
-// #error "platform no support yet"
-// #endif
 uv_key_t aco_gtls_fpucw_mxcsr;
 pthread_mutex_t share_stack_lock;
 
@@ -281,7 +273,14 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
     uintptr_t u_p = (uintptr_t) (p->sz - (sizeof(void *) << 1) + (uintptr_t) p->ptr);
     u_p = (u_p >> 4) << 4;
     p->align_highptr = (void *) u_p;
-    p->align_retptr = (void *) (u_p - sizeof(void *));
+
+#ifdef __aarch64__
+    // aarch64 hardware-enforces 16 byte stack alignment
+    p->align_retptr  = (void*)(u_p - 16);
+#else
+    p->align_retptr  = (void*)(u_p - sizeof(void*));
+#endif
+
     *((void **) (p->align_retptr)) = (void *) (aco_funcp_protector_asm);
     assert(p->sz > (16 + (sizeof(void *) << 1) + sizeof(void *)));
     p->align_limit = p->sz - 16 - (sizeof(void *) << 1);
@@ -314,10 +313,8 @@ void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack,
         aco->reg[ACO_REG_IDX_SP] = aco->share_stack->align_retptr;
         aco->reg[ACO_REG_IDX_FPU] = uv_key_get(&aco_gtls_fpucw_mxcsr);
 #elif defined(__aarch64__)
-        aco->reg[ACO_REG_IDX_RETADDR] = (void *) fp;
+        aco->reg[ACO_REG_IDX_RETADDR] = (void*)fp;
         aco->reg[ACO_REG_IDX_SP] = aco->share_stack->align_retptr;
-        aco->reg[ACO_REG_IDX_BP] = aco->share_stack->align_retptr;
-        // ARM64 不需要保存 FPU 状态,因为它使用独立的 NEON/FP 寄存器
 #else
 #error "platform no support yet"
 #endif

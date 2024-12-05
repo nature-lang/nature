@@ -605,6 +605,7 @@ void sched_init() {
     share_processor_list = NULL;
     solo_processor_list = NULL;
 
+    cpu_count = 1; // TODO
     for (int i = 0; i < cpu_count; ++i) {
         n_processor_t *p = processor_new(i);
         // 仅 share processor 需要 gc worklist

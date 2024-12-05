@@ -347,7 +347,7 @@ struct n_processor_t {
     struct n_processor_t *next;// processor 链表支持
 };
 
-int runtime_main(int argc, char *argv[]);
+int main(int argc, char *argv[]);
 
 void test_runtime_init();
 
@@ -375,7 +375,7 @@ void processor_set_status(n_processor_t *p, p_status_t status);
 #elif defined(__aarch64__)
 #define BP_VALUE()      \
     uint64_t rbp_value; \
-    __asm__ volatile("mov x29, %0" : "=r"(rbp_value));
+    __asm__ volatile("mov %0, x29" : "=r"(rbp_value));
 #else
 assert(false);
 #endif

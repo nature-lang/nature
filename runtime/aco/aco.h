@@ -44,10 +44,10 @@
 #define ACO_REG_IDX_BP 7
 #define ACO_REG_IDX_FPU 8
 #elif defined(__aarch64__)
-#define ACO_REG_IDX_RETADDR 0
-#define ACO_REG_IDX_SP 1
-#define ACO_REG_IDX_BP 2
-#define ACO_REG_IDX_FPU 3
+#define ACO_REG_IDX_RETADDR 13
+#define ACO_REG_IDX_SP 14
+#define ACO_REG_IDX_BP 12
+#define ACO_REG_IDX_FPU 15
 #else
 #error "platform no support yet"
 #endif
@@ -93,7 +93,14 @@ typedef struct {
 typedef void (*aco_cofuncp_t)(void);
 
 struct aco_s {
+#ifdef __X86_64__
     void *reg[9]; // amd64 试用
+#elif __aarch64__
+    void* reg[16];
+#else
+#error "platform no support yet"
+#endif
+
 
     aco_t *main_co;
     void *arg;

@@ -153,14 +153,13 @@ static string arm64_asm_operand_to_string(arm64_asm_operand_t *operand) {
                     "lsl", "lsr", "asr", "ror"
             };
             if (operand->extend.option < 4) {
-                return dsprintf("%s #%ld",
-                                shift_types[operand->extend.option],
-                                operand->extend.imm);
+                return dsprintf("lsl #%ld",
+                                operand->immediate);
             }
             return "invalid";
         }
         case ARM64_ASM_OPERAND_EXTEND: {
-            static const char *extend_types[] = {
+            static char *extend_types[] = {
                     "uxtb", "uxth", "uxtw", "uxtx",
                     "sxtb", "sxth", "sxtw", "sxtx"
             };

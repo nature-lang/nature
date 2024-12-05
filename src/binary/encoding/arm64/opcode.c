@@ -957,7 +957,7 @@ static arm64_opcode_handle_fn arm64_opcode_handle_table[] = {
         [FCVTZU] = asm_f_2r,
 };
 
-uint32_t arm64_asm_inst_encoding(arm64_asm_inst_t *inst) {
+uint32_t arm64_asm_inst_encoding(arm64_asm_inst_t *inst, uint8_t *data_count) {
     // opcode 确认
     arm64_match_opcode(inst);
     assert(inst->opcode > 0);
@@ -966,5 +966,7 @@ uint32_t arm64_asm_inst_encoding(arm64_asm_inst_t *inst) {
 
     uint32_t result = fn(inst);
     assert(result > 0);
+
+    *data_count = 4; // arm64 固定占用 4 字节
     return result;
 }

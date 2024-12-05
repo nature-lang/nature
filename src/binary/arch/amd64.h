@@ -11,9 +11,9 @@
 #define AMD64_64_ELF_PAGE_SIZE 0x200000
 
 typedef struct {
-    amd64_opcode_inst_t *inst;
-    uint8_t *data;
-    uint8_t data_count;
+    amd64_opcode_inst_t *inst; // 汇编中间指令，没什么用
+    uint8_t *data; // 编码二进制数据
+    uint8_t data_count; // 编码二进制数据长度
     uint64_t *offset; // 指令的位置
     amd64_asm_inst_t *operation; // 原始指令, 指令改写与二次扫描时使用
     string rel_symbol; // 使用的符号, 二次扫描时用于判断是否需要重定位，目前都只适用于 label

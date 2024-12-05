@@ -117,15 +117,35 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
 static slice_t *arm64_native_mov(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
+    // 必须存在一个寄存器操作数
+    // mov REG(first) -> REG(output)
+    // mov REG -> MEM
+    // mov IMM -> REG
+    // mov MEM(stack) -> REG
+
+    assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
+
     arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
     // 检查源操作数类型
     if (op->first->assert_type == LIR_OPERAND_REG) {
         if (arm64_is_integer_operand(op->first)) {
-            slice_push(operations, ARM64_ASM(R_MOV, result, source));
+            if (op->output->assert_type == LIR_OPERAND_REG) {
+                // REG -> REG
+                slice_push(operations, ARM64_ASM(R_MOV, result, source));
+            } else {
+                // REG -> MEM
+                slice_push(operations, ARM64_ASM(R_STR, source, result));
+            }
         } else {
-            slice_push(operations, ARM64_ASM(R_FMOV, result, source));
+            if (op->output->assert_type == LIR_OPERAND_REG) {
+                // FREG -> FREG
+                slice_push(operations, ARM64_ASM(R_FMOV, result, source));
+            } else {
+                // FREG -> MEM
+                slice_push(operations, ARM64_ASM(R_STR, source, result));
+            }
         }
     } else if (op->first->assert_type == LIR_OPERAND_IMM) {
         // 立即数到寄存器的移动
@@ -134,19 +154,21 @@ static slice_t *arm64_native_mov(closure_t *c, lir_op_t *op) {
 
         int64_t value = imm->int_value;
 
-        if (value >= 0 && value <= 0xFFFF) {
-            // 小的正整数可以直接用 MOV
+        if (value >= -1 && value <= 0xFFFF) {
             slice_push(operations, ARM64_ASM(R_MOV, result, ARM64_IMM(value)));
         } else {
-            // 大数或负数需要使用 MOV, MOVK 组合
-            slice_push(operations, ARM64_ASM(R_MOV, result, ARM64_IMM(value & 0xFFFF)));
+            // 大数或负数需要使用 MOVZ, MOVK 组合
+            uint64_t uvalue = (uint64_t) value;
+            slice_push(operations, ARM64_ASM(R_MOV, result, ARM64_IMM(uvalue & 0xFFFF)));
 
-            if (value > 0xFFFF) {
-                slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((value >> 16) & 0xFFFF), ARM64_IMM(16)));
+            if ((uvalue >> 16) & 0xFFFF) {
+                slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((uvalue >> 16) & 0xFFFF), ARM64_SHIFT(16)));
             }
-            if (value > 0xFFFFFFFF) {
-                slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((value >> 32) & 0xFFFF), ARM64_IMM(32)));
-                slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((value >> 48) & 0xFFFF), ARM64_IMM(48)));
+            if ((uvalue >> 32) & 0xFFFF) {
+                slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((uvalue >> 32) & 0xFFFF), ARM64_SHIFT(32)));
+            }
+            if ((uvalue >> 48) & 0xFFFF) {
+                slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((uvalue >> 48) & 0xFFFF), ARM64_SHIFT(48)));
             }
         }
     } else if (op->first->assert_type == LIR_OPERAND_STACK ||
@@ -237,6 +259,7 @@ static slice_t *arm64_native_clv(closure_t *c, lir_op_t *op) {
     if (output->assert_type == LIR_OPERAND_STACK) {
         lir_stack_t *stack = output->value;
         assertf(stack->size <= QWORD, "only can clv size <= %d, actual=%d", QWORD, stack->size);
+        assert(result->type == ARM64_ASM_OPERAND_REG);
 
         // ARM64 使用 MOV 指令加载立即数 0
         slice_push(operations, ARM64_ASM(R_MOV, result, ARM64_IMM(0)));
@@ -249,6 +272,7 @@ static slice_t *arm64_native_clv(closure_t *c, lir_op_t *op) {
         uint16_t size = type_sizeof(temp->type);
 
         assertf(size <= QWORD, "only can clv size <= %d, actual=%d", QWORD, size);
+        assert(result->type == ARM64_ASM_OPERAND_REG);
 
         // ARM64 使用 MOV 指令加载立即数 0
         slice_push(operations, ARM64_ASM(R_MOV, result, ARM64_IMM(0)));
@@ -510,8 +534,9 @@ static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
     // 进行最终的对齐, linux arm64 中栈一般都是是按 16byte 对齐的
     offset = align_up(offset, ARM64_STACK_ALIGN_SIZE);
 
-    // 保存当前的帧指针和链接寄存器
-    slice_push(operations, ARM64_ASM(R_STP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, 16, 0)));
+    // 保存当前的帧指针和链接寄存器, ARM64_INDIRECT(sp, -16, 1) 最后一个参数是 1 表示 pre index, 会先进行 sub sp, sp, #16 减少 sp 的值
+    // 等价于 push sp 两次
+    slice_push(operations, ARM64_ASM(R_STP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, -16, 1)));
     // 更新帧指针
     slice_push(operations, ARM64_ASM(R_MOV, ARM64_REG(fp), ARM64_REG(sp)));
 
@@ -537,12 +562,17 @@ static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
 
 slice_t *arm64_native_fn_end(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
-    // 恢复 fp(x29) 和 lr(x30)
-    slice_push(operations, ARM64_ASM(R_LDP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, 16, 0)));// [sp, #16]
 
-    // 恢复栈指针，相当于 AMD64 的 mov rsp, rbp 和 pop rbp 的组合效果
-    slice_push(operations, ARM64_ASM(R_ADD, ARM64_REG(sp), ARM64_REG(sp), ARM64_IMM(32)));// add sp, sp, #32
+    // 恢复栈帧
+    int64_t offset = c->stack_offset;
+    offset += c->call_stack_max_offset;
+    offset = align_up(offset, ARM64_STACK_ALIGN_SIZE);
+    if (offset != 0) {
+        slice_push(operations, ARM64_ASM(R_ADD, ARM64_REG(sp), ARM64_REG(sp), ARM64_IMM(offset)));
+    }
 
+    // 恢复 fp(x29) 和 lr(x30), ARM64_INDIRECT(sp, 16, 2) 2 表示 post-index 模式
+    slice_push(operations, ARM64_ASM(R_LDP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, 16, 2)));// [sp], #16
     // 返回
     slice_push(operations, ARM64_ASM(R_RET));
     return operations;
@@ -566,8 +596,21 @@ static slice_t *arm64_native_lea(closure_t *c, lir_op_t *op) {
         slice_push(operations, ARM64_ASM(R_ADD, result, result, lo12_symbol_operand));
     } else if (op->first->assert_type == LIR_OPERAND_STACK ||
                op->first->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-        // 对于栈地址或间接地址，直接使用 ADD 指令
-        slice_push(operations, ARM64_ASM(R_ADD, result, first, ARM64_IMM(0)));
+
+        reg_t *base = NULL;
+        int64_t offset = 0;
+        if (op->first->assert_type == LIR_OPERAND_STACK) {
+            lir_stack_t *stack = op->first->value;
+            base = x29;
+            offset = stack->slot;
+        } else {
+            lir_indirect_addr_t *mem = op->first->value;
+            assert(mem->base->assert_type == LIR_OPERAND_REG);
+            base = mem->base->value;
+            offset = mem->offset;
+        }
+
+        slice_push(operations, ARM64_ASM(R_ADD, result, ARM64_REG(base), ARM64_IMM(offset)));
     }
     return operations;
 }

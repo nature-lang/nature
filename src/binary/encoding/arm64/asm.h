@@ -309,11 +309,10 @@ typedef struct {
     _cond_operand; \
 })
 
-#define ARM64_SHIFT(_option, _amount) ({ \
+#define ARM64_SHIFT(_amount) ({ \
     arm64_asm_operand_t *_shift_operand = NEW(arm64_asm_operand_t); \
     _shift_operand->type = ARM64_ASM_OPERAND_SHIFT; \
-    _shift_operand->extend.option = _option; \
-    _shift_operand->extend.imm = _amount; \
+    _shift_operand->immediate = _amount; \
     _shift_operand; \
 })
 

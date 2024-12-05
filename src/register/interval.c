@@ -50,6 +50,8 @@ static alloc_kind_e alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var
 /**
  * 如果 op type is var, 且是 indirect addr, 则必须分配一个寄存器，用于地址 indirect addr
  * output 已经必须要有寄存器了, input 就无所谓了
+ *
+ * use = first or second
  * @param c
  * @param op
  * @param i
@@ -57,7 +59,6 @@ static alloc_kind_e alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var
  */
 static alloc_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var) {
     // var 是 indirect addr 的 base 部分， native indirect addr 则必须借助寄存器
-//    if (var->flag & FLAG(LIR_FLAG_INDIRECT_ADDR_BASE) && op->code != LIR_OPCODE_LEA) {
     if (var->flag & FLAG(LIR_FLAG_INDIRECT_ADDR_BASE)) {
         return ALLOC_KIND_MUST;
     }
@@ -67,7 +68,9 @@ static alloc_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var
         return ALLOC_KIND_NOT;
     }
 
+    // arm64 和 amd64 都适用
     if (op->code == LIR_OPCODE_MOVE) {
+        // 如果 output 不是寄存器，则 input 必须分配寄存器
         if (op->output->assert_type == LIR_OPERAND_SYMBOL_VAR ||
             op->output->assert_type == LIR_OPERAND_STACK ||
             op->output->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
