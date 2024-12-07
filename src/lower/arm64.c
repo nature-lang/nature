@@ -2,33 +2,62 @@
 #include "arm64_abi.h"
 
 static lir_operand_t *arm64_convert_mov_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
+    assert(c);
+    assert(list);
+    assert(operand);
+
     lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(operand));
+    assert(temp);
 
     linked_push(list, lir_op_move(temp, operand));
     return lir_reset_operand(temp, operand->pos);
 }
 
-static lir_operand_t *arm64_convert_lea_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
-    lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(operand));
+static lir_operand_t *arm64_convert_lea_symbol_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
+    assert(c);
+    assert(list);
+    assert(operand);
+    assert(c->module);
+
+    lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(TYPE_INT));
+    assert(temp);
 
     linked_push(list, lir_op_lea(temp, operand));
-    return lir_reset_operand(temp, operand->pos);
+
+    lir_operand_t *result = indirect_addr_operand(c->module, lir_operand_type(operand), temp, 0);
+    assert(result);
+
+    return lir_reset_operand(result, operand->pos);
 }
 
 static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
+    assert(c);
+    assert(op);
+
     linked_t *list = linked_new();
+    assert(list);
+
     slice_t *imm_operands = extract_op_operands(op, FLAG(LIR_OPERAND_IMM), 0, false);
+    assert(imm_operands);
+    assert(imm_operands->take);
 
     for (int i = 0; i < imm_operands->count; ++i) {
         lir_operand_t *imm_operand = imm_operands->take[i];
+        assert(imm_operand);
+
         lir_imm_t *imm = imm_operand->value;
+        assert(imm);
 
         if (imm->kind == TYPE_RAW_STRING || is_float(imm->kind)) {
             char *unique_name = var_unique_ident(c->module, TEMP_VAR_IDENT);
+            assert(unique_name);
+
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
+            assert(symbol);
             symbol->name = unique_name;
 
             if (imm->kind == TYPE_RAW_STRING) {
+                assert(imm->string_value);
                 symbol->size = strlen(imm->string_value) + 1;
                 symbol->value = (uint8_t *) imm->string_value;
             } else if (imm->kind == TYPE_FLOAT64) {
@@ -60,39 +89,50 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
                 imm_operand->assert_type = LIR_OPERAND_SYMBOL_VAR;
                 imm_operand->value = symbol_var;
             }
-
         }
     }
 
     return list;
 }
 
+/**
+ * symbol_var 需要通过 adrp 的形式寻址，所以这里进行 lea 形式改写， lea 在 native 阶段会改写成 adrp 的形式，注意此处只能基于 int 类型寄存器处理
+ * 通过 lea 将符号地址加载到 int 类型寄存器, 假设是 x0 中后，后续的使用需要通过 indirect 来获取 x0 中的值
+ * @param c
+ * @param op
+ * @return
+ */
 static linked_t *arm64_lower_symbol_var(closure_t *c, lir_op_t *op) {
+    assert(c);
+    assert(op);
+
     linked_t *list = linked_new();
+    assert(list);
+
     if (op->code == LIR_OPCODE_LEA || op->code == LIR_OPCODE_LABEL) {
         return list;
     }
 
     if (op->first && op->first->assert_type == LIR_OPERAND_SYMBOL_VAR) {
-        op->first = arm64_convert_lea_var(c, list, op->first);
+        op->first = arm64_convert_lea_symbol_var(c, list, op->first);
     }
 
 
     if (op->second && op->second->assert_type == LIR_OPERAND_SYMBOL_VAR) {
-        op->second = arm64_convert_lea_var(c, list, op->second);
+        op->second = arm64_convert_lea_symbol_var(c, list, op->second);
     }
 
     if (op->output && op->output->assert_type == LIR_OPERAND_SYMBOL_VAR) {
-        op->output = arm64_convert_lea_var(c, list, op->output);
+        op->output = arm64_convert_lea_symbol_var(c, list, op->output);
     }
 
     // TODO 可能需要嵌套 symbol 处理
-//    slice_t *sym_operands = extract_op_operands(op, FLAG(LIR_OPERAND_SYMBOL_VAR), 0, false);
-//    for (int i = 0; i < sym_operands->count; ++i) {
-//        lir_operand_t *operand = sym_operands->take[0];
-//        // 添加 lea 指令将 symbol 地址添加到 var 中, 这样在寄存器分配阶段 var 必定分配到寄存器。native 阶段则可以使用 adrp + add 指令将 sym 地址添加到寄存器中
-//        lir_op_lea()
-//    }
+    //    slice_t *sym_operands = extract_op_operands(op, FLAG(LIR_OPERAND_SYMBOL_VAR), 0, false);
+    //    for (int i = 0; i < sym_operands->count; ++i) {
+    //        lir_operand_t *operand = sym_operands->take[0];
+    //        // 添加 lea 指令将 symbol 地址添加到 var 中, 这样在寄存器分配阶段 var 必定分配到寄存器。native 阶段则可以使用 adrp + add 指令将 sym 地址添加到寄存器中
+    //        lir_op_lea()
+    //    }
     return list;
 }
 
@@ -126,7 +166,8 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
         op->first = arm64_convert_mov_var(c, list, op->first);
     }
 
-    if (op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_REM) {
+    if (op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_REM || op->code ==
+        LIR_OPCODE_XOR) {
         op->second = arm64_convert_mov_var(c, list, op->second);
     }
 
@@ -143,6 +184,9 @@ static linked_t *arm64_lower_output(closure_t *c, lir_op_t *op) {
 }
 
 static void arm64_lower_block(closure_t *c, basic_block_t *block) {
+    assert(c);
+    assert(block);
+
     linked_t *operations = linked_new();
     LINKED_FOR(block->operations) {
         lir_op_t *op = LINKED_VALUE();
@@ -151,7 +195,21 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
         linked_concat(operations, arm64_lower_symbol_var(c, op));
 
         if (lir_op_call(op) && op->second->value != NULL) {
-            linked_concat(operations, arm64_lower_call(c, op));
+            linked_t *call_operations = arm64_lower_call(c, op);
+            for (linked_node *call_node = call_operations->front; call_node != call_operations->rear;
+                 call_node = call_node->succ) {
+                lir_op_t *call_op = call_node->value;
+
+                linked_concat(operations, arm64_lower_symbol_var(c, call_op));
+
+                if (call_op->code == LIR_OPCODE_MOVE && !lir_can_mov(call_op)) {
+                    call_op->first = arm64_convert_mov_var(c, operations, call_op->first);
+                    linked_push(operations, call_op);
+                    continue;
+                }
+
+                linked_push(operations, call_op);
+            }
             continue;
         }
 
@@ -165,7 +223,7 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (is_ternary(op)) {
+        if (is_ternary_op(op) || op->code == LIR_OPCODE_NOT) {
             linked_concat(operations, arm64_lower_ternary(c, op));
             continue;
         }
@@ -185,9 +243,7 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
     }
 
     block->operations = operations;
-
 }
-
 
 void arm64_lower(closure_t *c) {
     // 按基本块遍历所有指令

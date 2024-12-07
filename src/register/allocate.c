@@ -63,6 +63,7 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
         lir_stack_t *stack = NEW(lir_stack_t);
         stack->slot = *i->stack_slot;
         stack->size = type_kind_sizeof(var->type.kind);
+        stack->kind = var->type.kind;
         operand->assert_type = LIR_OPERAND_STACK;
         operand->value = stack;
     } else {
@@ -87,7 +88,7 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
  * @return
  */
 static uint8_t find_free_reg(interval_t *current, int *free_pos) {
-//    uint8_t min_full_reg_id = 0; // 能够用于整个 current lifetime 寄存器器中 free 时间最短的寄存器(hotspot LinearScanWalker::find_free_reg)
+    //    uint8_t min_full_reg_id = 0; // 能够用于整个 current lifetime 寄存器器中 free 时间最短的寄存器(hotspot LinearScanWalker::find_free_reg)
     uint8_t full_reg_id = 0; //  能够用于整个 current lifetime 寄存器器中 free 时间最长的寄存器
     uint8_t max_part_reg_id = 0; // 需要 split current to unhandled
     uint8_t hint_reg_id = 0; // register hint 对应的 interval 分配的 reg
@@ -236,7 +237,7 @@ static void spill_interval(closure_t *c, allocate_t *a, interval_t *i, int befor
         17		MOVE 	STACK[-8|8] -> REG[rax] // 分配了寄存器，但是会被立刻覆盖
         18		MOVE 	REG[rcx] -> REG[rax]
      */
-    // 必须要使用寄存器的部分？
+    // 必须要使用寄存器的部分被后分到 unhandled 中了
     use_pos_t *must_pos = interval_must_reg_pos(child);
     if (must_pos) {
         split_pos = interval_find_optimal_split_pos(c, child, must_pos->value);
@@ -371,7 +372,8 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
 
     for (int i = 1; i < alloc_reg_count(); ++i) {
         reg_t *reg = alloc_regs[i];
-        if (!(FLAG(a->current->alloc_type) & reg->flag)) { // already set 0
+        if (!(FLAG(a->current->alloc_type) & reg->flag)) {
+            // already set 0
             continue;
         }
         set_pos(free_pos, i, INT32_MAX);
@@ -417,7 +419,8 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
         return true;
     }
 
-    // 有空闲的寄存器，但是空闲时间不够,需要 split current
+    // TODO last_range 之前可能存在 stack pos, find optimal split post 应该找到这之前
+    // 有空闲的寄存器，但是空闲时间小于当前 current 的生命周期,需要 split current
     if (free_pos[reg_id] < a->current->last_range->to) {
         int optimal_position = interval_find_optimal_split_pos(c, a->current, free_pos[reg_id]);
 
@@ -611,6 +614,9 @@ void replace_virtual_register(closure_t *c) {
                 lir_operand_t *operand = var_operands->take[j];
                 lir_var_t *var = operand->value;
                 interval_t *parent = table_get(c->interval_table, var->ident);
+                if (parent->parent) {
+                    parent = parent->parent;
+                }
                 assert(parent);
 
                 interval_t *interval = interval_child_at(parent, op->id, var->flag & FLAG(LIR_FLAG_USE));
@@ -636,4 +642,3 @@ void replace_virtual_register(closure_t *c) {
         }
     }
 }
-

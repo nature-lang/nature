@@ -9,27 +9,27 @@
 #include "utils/linked.h"
 
 lir_opcode_t ast_op_convert[] = {
-        [AST_OP_ADD] = LIR_OPCODE_ADD,
-        [AST_OP_SUB] = LIR_OPCODE_SUB,
-        [AST_OP_MUL] = LIR_OPCODE_MUL,
-        [AST_OP_DIV] = LIR_OPCODE_DIV,
-        [AST_OP_REM] = LIR_OPCODE_REM,
+    [AST_OP_ADD] = LIR_OPCODE_ADD,
+    [AST_OP_SUB] = LIR_OPCODE_SUB,
+    [AST_OP_MUL] = LIR_OPCODE_MUL,
+    [AST_OP_DIV] = LIR_OPCODE_DIV,
+    [AST_OP_REM] = LIR_OPCODE_REM,
 
-        [AST_OP_LSHIFT] = LIR_OPCODE_SHL,
-        [AST_OP_RSHIFT] = LIR_OPCODE_SHR,
-        [AST_OP_AND] = LIR_OPCODE_AND,
-        [AST_OP_OR] = LIR_OPCODE_OR,
-        [AST_OP_XOR] = LIR_OPCODE_XOR,
+    [AST_OP_LSHIFT] = LIR_OPCODE_SHL,
+    [AST_OP_RSHIFT] = LIR_OPCODE_SHR,
+    [AST_OP_AND] = LIR_OPCODE_AND,
+    [AST_OP_OR] = LIR_OPCODE_OR,
+    [AST_OP_XOR] = LIR_OPCODE_XOR,
 
-        [AST_OP_LT] = LIR_OPCODE_SLT,
-        [AST_OP_LE] = LIR_OPCODE_SLE,
-        [AST_OP_GT] = LIR_OPCODE_SGT,
-        [AST_OP_GE] = LIR_OPCODE_SGE,
-        [AST_OP_EE] = LIR_OPCODE_SEE,
-        [AST_OP_NE] = LIR_OPCODE_SNE,
+    [AST_OP_LT] = LIR_OPCODE_SLT,
+    [AST_OP_LE] = LIR_OPCODE_SLE,
+    [AST_OP_GT] = LIR_OPCODE_SGT,
+    [AST_OP_GE] = LIR_OPCODE_SGE,
+    [AST_OP_EE] = LIR_OPCODE_SEE,
+    [AST_OP_NE] = LIR_OPCODE_SNE,
 
-        [AST_OP_BNOT] = LIR_OPCODE_NOT,
-        [AST_OP_NEG] = LIR_OPCODE_NEG,
+    [AST_OP_BNOT] = LIR_OPCODE_NOT,
+    [AST_OP_NEG] = LIR_OPCODE_NEG,
 };
 
 /**
@@ -540,12 +540,12 @@ static void linear_tuple_assign(module_t *m, ast_assign_stmt_t *stmt) {
 static lir_operand_t *linear_inline_env_values(module_t *m) {
     // 基于 fn_runtime_operand + index 计算出 offset 直接进行 move 操作
     size_t envs_offset = offsetof(runtime_fn_t, envs);
-    lir_operand_t *env_operand = temp_var_operand(m, type_kind_new(TYPE_VOID_PTR));
+    lir_operand_t *env_operand = temp_var_operand(m, type_kind_new(TYPE_GC_ENV));
     // lea [fn + x] -> env
     OP_PUSH(lir_op_move(env_operand, indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR),
-                                                           m->current_closure->fn_runtime_operand, envs_offset)));
+        m->current_closure->fn_runtime_operand, envs_offset)));
     // mov [env+0] -> values
-    lir_operand_t *values_operand = temp_var_operand(m, type_kind_new(TYPE_VOID_PTR));
+    lir_operand_t *values_operand = temp_var_operand(m, type_kind_new(TYPE_GC_ENV_VALUES));
     OP_PUSH(lir_op_move(values_operand, indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), env_operand, 0)));
 
     return values_operand;
@@ -563,7 +563,7 @@ static void linear_env_assign(module_t *m, ast_assign_stmt_t *stmt) {
 
     // 不需要 ref，直接 move 过去就行
     lir_operand_t *src = linear_expr(m, stmt->right, NULL);
-//    lir_operand_t *src_ref = lea_operand_pointer(m, src);
+    //    lir_operand_t *src_ref = lea_operand_pointer(m, src);
     uint64_t size = type_sizeof(stmt->right.type);
 
     assertf(m->current_closure->fn_runtime_operand, "have env access, must have fn_runtime_operand");
@@ -574,7 +574,7 @@ static void linear_env_assign(module_t *m, ast_assign_stmt_t *stmt) {
     lir_operand_t *dst_ptr = temp_var_operand(m, type_ptrof(stmt->right.type));
     size_t values_offset = ast->index * POINTER_SIZE;
     OP_PUSH(lir_op_move(dst_ptr,
-                        indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), values_operand, values_offset)));
+        indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), values_operand, values_offset)));
 
 
     if (is_large_stack_type(stmt->right.type)) {
@@ -591,8 +591,8 @@ static void linear_env_assign(module_t *m, ast_assign_stmt_t *stmt) {
         linked_concat(m->current_closure->operations, lir_memory_mov(m, rtype.size, dst_ptr, src));
     }
 
-//    push_rt_call(m, RT_CALL_ENV_ASSIGN_REF, NULL, 4, m->current_closure->fn_runtime_operand, index, src_ref,
-//                 int_operand(size));
+    //    push_rt_call(m, RT_CALL_ENV_ASSIGN_REF, NULL, 4, m->current_closure->fn_runtime_operand, index, src_ref,
+    //                 int_operand(size));
 }
 
 static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
@@ -1566,7 +1566,7 @@ static lir_operand_t *linear_env_access(module_t *m, ast_expr_t expr, lir_operan
 
     // move [values+x] -> dst_ptr (values 中的值已经取了出来，丢到了 dst_ptr 里面)
     size_t values_offset = ast->index * POINTER_SIZE;
-    lir_operand_t *src_ptr = indirect_addr_operand(m, expr.type, values_operand, values_offset);
+    lir_operand_t *src_ptr = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), values_operand, values_offset);
 
     // 把 values 中存储的值取出来，放在 target 中
     if (!target) {
@@ -2140,7 +2140,7 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
             lir_operand_t *cond_target = linear_expr(m, *cond_expr, NULL);
             OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(false), cond_target, handle_end->output));
 
-            DEFAULT_HANDLE:
+        DEFAULT_HANDLE:
             // exec 逻辑
             if (match_case->handle_expr) {
                 linear_expr(m, *match_case->handle_expr, target);
@@ -2543,9 +2543,9 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_FNDEF: {
             linear_fn_decl(m,
-                           (ast_expr_t) {
-                                   .line = stmt->line, .assert_type = stmt->assert_type, .value = stmt->value,
-                                   .target_type = NULL
+                           (ast_expr_t){
+                               .line = stmt->line, .assert_type = stmt->assert_type, .value = stmt->value,
+                               .target_type = NULL
                            },
                            NULL);
             return;
@@ -2554,13 +2554,13 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             ast_call_t *call = stmt->value;
             // stmt 中都 call 都是没有返回值的
             linear_call(m,
-                        (ast_expr_t) {
-                                .line = stmt->line,
-                                .column = stmt->column,
-                                .assert_type = AST_CALL,
-                                .type = call->return_type,
-                                .target_type = call->return_type,
-                                .value = call,
+                        (ast_expr_t){
+                            .line = stmt->line,
+                            .column = stmt->column,
+                            .assert_type = AST_CALL,
+                            .type = call->return_type,
+                            .target_type = call->return_type,
+                            .value = call,
                         },
                         NULL);
             return;
@@ -2568,13 +2568,13 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             ast_catch_t *catch = stmt->value;
             linear_catch_expr(m,
-                              (ast_expr_t) {
-                                      .line = stmt->line,
-                                      .column = stmt->column,
-                                      .assert_type = AST_CATCH,
-                                      .type = catch->try_expr.type,
-                                      .target_type = catch->try_expr.type,
-                                      .value = catch,
+                              (ast_expr_t){
+                                  .line = stmt->line,
+                                  .column = stmt->column,
+                                  .assert_type = AST_CATCH,
+                                  .type = catch->try_expr.type,
+                                  .target_type = catch->try_expr.type,
+                                  .value = catch,
                               },
                               NULL);
             return;
@@ -2595,33 +2595,33 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
 }
 
 linear_expr_fn expr_fn_table[] = {
-        [AST_EXPR_LITERAL] = linear_literal,
-        [AST_EXPR_IDENT] = linear_ident,
-        [AST_EXPR_ENV_ACCESS] = linear_env_access,
-        [AST_EXPR_BINARY] = linear_binary,
-        [AST_EXPR_UNARY] = linear_unary,
-        [AST_EXPR_ARRAY_NEW] = linear_array_new,
-        [AST_EXPR_ARRAY_ACCESS] = linear_array_access,
-        [AST_EXPR_VEC_NEW] = linear_vec_new,
-        [AST_EXPR_VEC_ACCESS] = linear_vec_access,
-        [AST_EXPR_MAP_NEW] = linear_map_new,
-        [AST_EXPR_MAP_ACCESS] = linear_map_access,
-        [AST_EXPR_STRUCT_NEW] = linear_struct_new,
-        [AST_EXPR_STRUCT_SELECT] = linear_struct_select,
-        [AST_EXPR_TUPLE_NEW] = linear_tuple_new,
-        [AST_EXPR_TUPLE_ACCESS] = linear_tuple_access,
-        [AST_EXPR_SET_NEW] = linear_set_new,
-        [AST_CALL] = linear_call,
-        [AST_FNDEF] = linear_fn_decl,
-        [AST_EXPR_AS] = linear_as_expr,
-        [AST_EXPR_IS] = linear_is_expr,
-        [AST_MACRO_EXPR_ULA] = linear_ula_expr,
-        [AST_MACRO_EXPR_DEFAULT] = linear_default_expr,
-        [AST_MACRO_EXPR_SIZEOF] = linear_sizeof_expr,
-        [AST_MACRO_EXPR_REFLECT_HASH] = linear_reflect_hash_expr,
-        [AST_EXPR_NEW] = linear_new_expr,
-        [AST_CATCH] = linear_catch_expr,
-        [AST_MATCH] = linear_match_expr,
+    [AST_EXPR_LITERAL] = linear_literal,
+    [AST_EXPR_IDENT] = linear_ident,
+    [AST_EXPR_ENV_ACCESS] = linear_env_access,
+    [AST_EXPR_BINARY] = linear_binary,
+    [AST_EXPR_UNARY] = linear_unary,
+    [AST_EXPR_ARRAY_NEW] = linear_array_new,
+    [AST_EXPR_ARRAY_ACCESS] = linear_array_access,
+    [AST_EXPR_VEC_NEW] = linear_vec_new,
+    [AST_EXPR_VEC_ACCESS] = linear_vec_access,
+    [AST_EXPR_MAP_NEW] = linear_map_new,
+    [AST_EXPR_MAP_ACCESS] = linear_map_access,
+    [AST_EXPR_STRUCT_NEW] = linear_struct_new,
+    [AST_EXPR_STRUCT_SELECT] = linear_struct_select,
+    [AST_EXPR_TUPLE_NEW] = linear_tuple_new,
+    [AST_EXPR_TUPLE_ACCESS] = linear_tuple_access,
+    [AST_EXPR_SET_NEW] = linear_set_new,
+    [AST_CALL] = linear_call,
+    [AST_FNDEF] = linear_fn_decl,
+    [AST_EXPR_AS] = linear_as_expr,
+    [AST_EXPR_IS] = linear_is_expr,
+    [AST_MACRO_EXPR_ULA] = linear_ula_expr,
+    [AST_MACRO_EXPR_DEFAULT] = linear_default_expr,
+    [AST_MACRO_EXPR_SIZEOF] = linear_sizeof_expr,
+    [AST_MACRO_EXPR_REFLECT_HASH] = linear_reflect_hash_expr,
+    [AST_EXPR_NEW] = linear_new_expr,
+    [AST_CATCH] = linear_catch_expr,
+    [AST_MATCH] = linear_match_expr,
 };
 
 static lir_operand_t *linear_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {

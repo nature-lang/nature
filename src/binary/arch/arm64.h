@@ -329,7 +329,7 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
                         temp->rel_symbol = rel_operand->symbol.name;
                     }
                 } else {
-                    // 其他指令的符号引用(如数据访问, 在 native 阶段被改造成了 adrp + add, 直接根据 symbol 进行重定位即可)
+                    // 数据指令访问添加重定位项即可
                     uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, rel_operand->symbol.name);
                     if (sym_index == 0) {
                         // 添加未定义符号

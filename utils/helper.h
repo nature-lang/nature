@@ -30,6 +30,7 @@
 #define v_addr_t uint64_t
 #define addr_t uint64_t
 
+
 #undef free
 #define free(ptr)      \
     ({                 \
@@ -38,14 +39,48 @@
         }              \
     })
 
-#define mallocz(size)              \
-    ({                             \
-        void *_ptr = malloc(size); \
-        if (size) {                \
-            memset(_ptr, 0, size); \
-        }                          \
-        _ptr;                      \
-    })
+// #define malloc(size) reallocator(NULL, size)
+//
+// #define mallocz(size)              \
+//     ({                             \
+//         void *_ptr = malloc(size); \
+//         assertf(_ptr != NULL, "memory full"); \
+//         if (size) {                \
+//             memset(_ptr, 0, size); \
+//         }                          \
+//         _ptr;                      \
+//     })
+//
+// }
+
+
+static inline void *reallocator(void *ptr, uint64_t size) {
+    void *ptr1;
+    if (size == 0) {
+        free(ptr);
+        ptr1 = NULL;
+    } else {
+        ptr1 = realloc(ptr, size);
+        if (!ptr1) {
+            assertf(false, "memory full");
+            exit(1);
+        }
+    }
+    return ptr1;
+}
+
+static inline void *mallocz(uint64_t size) {
+    assert(size > 0);
+
+    void *ptr;
+    ptr = reallocator(NULL, size);
+    assertf(ptr != NULL, "memory full");
+    if (size) {
+        memset(ptr, 0, size);
+    }
+    return ptr;
+}
+
 
 #define GROW_CAPACITY(capacity) ((capacity) < 8 ? 8 : (capacity) * 2)
 
@@ -235,12 +270,12 @@ static char *str_connect3(const char *a, const char *b, const char *c) {
     size_t total_len = len_a + len_b + len_c;
 
     // 分配内存
-    char *result = mallocz(total_len + 1);  // +1 for null terminator
+    char *result = mallocz(total_len + 1); // +1 for null terminator
     // 拼接字符串
     memcpy(result, a, len_a);
     memcpy(result + len_a, b, len_b);
     memcpy(result + len_a + len_b, c, len_c);
-    result[total_len] = '\0';  // 确保字符串以 null 结尾
+    result[total_len] = '\0'; // 确保字符串以 null 结尾
 
     return result;
 }
@@ -345,7 +380,8 @@ static inline char *file_name(char *path) {
         return path; // path 本身就是 file name
     }
 
-    if (*(ptr + 1) == '\0') { // 斜杠结尾是文件
+    if (*(ptr + 1) == '\0') {
+        // 斜杠结尾是文件
         return "";
     }
 
@@ -493,13 +529,13 @@ static inline ssize_t full_read(int fd, void *buf, size_t count) {
 }
 
 static inline char *str_replace(char *str, char *old, char *new) {
-    char *result;  // the return string
-    char *ins;     // the next insert pointer
-    char *tmp;     // varies
-    int len_rep;   // length of old (the string to remove)
-    int len_with;  // length of new (the string to replace old new)
+    char *result; // the return string
+    char *ins; // the next insert pointer
+    char *tmp; // varies
+    int len_rep; // length of old (the string to remove)
+    int len_with; // length of new (the string to replace old new)
     int len_front; // distance between old and end of last old
-    int count;     // number of replacements
+    int count; // number of replacements
 
     // sanity checks and initialization
     if (!str || !old) return NULL;
@@ -535,12 +571,12 @@ static inline char *str_replace(char *str, char *old, char *new) {
 }
 
 static inline void *sys_memory_map(void *hint, uint64_t size) {
-    return mmap(hint, size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+    return mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
 }
 
 static inline void *mallocz_big(size_t size) {
     int64_t page_size = sysconf(_SC_PAGESIZE);
-//    int page_size = getpagesize();
+    //    int page_size = getpagesize();
     size = align_up(size, page_size);
     void *ptr = sys_memory_map(NULL, size);
     return ptr;

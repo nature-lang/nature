@@ -182,6 +182,7 @@
 typedef struct {
     int64_t slot;
     uint64_t size;
+    type_kind kind;
 } lir_stack_t;
 
 /**
@@ -322,10 +323,11 @@ static inline lir_var_t *lir_var_new(module_t *m, char *ident) {
 
 lir_operand_t *lir_reg_operand(uint8_t index, type_kind kind);
 
-static inline lir_operand_t *lir_stack_operand(module_t *m, int64_t slot, uint64_t size) {
+static inline lir_operand_t *lir_stack_operand(module_t *m, int64_t slot, uint64_t size, type_kind kind) {
     lir_stack_t *stack = NEW(lir_stack_t);
     stack->slot = slot;
     stack->size = size;
+    stack->kind = kind;
 
     return operand_new(LIR_OPERAND_STACK, stack);
 }
@@ -389,9 +391,9 @@ static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64
         for (int i = 0; i < args->count; ++i) {
             lir_operand_t *o = args->take[i];
             assert(o->assert_type == LIR_OPERAND_VAR || o->assert_type == LIR_OPERAND_SYMBOL_VAR ||
-                   o->assert_type == LIR_OPERAND_IMM ||
-                   o->assert_type == LIR_OPERAND_STACK || o->assert_type == LIR_OPERAND_REG ||
-                   o->assert_type == LIR_OPERAND_INDIRECT_ADDR);
+                o->assert_type == LIR_OPERAND_IMM ||
+                o->assert_type == LIR_OPERAND_STACK || o->assert_type == LIR_OPERAND_REG ||
+                o->assert_type == LIR_OPERAND_INDIRECT_ADDR);
             slice_concat(result, recursion_extract_operands(o, flag));
         }
         return result;
@@ -563,9 +565,9 @@ lir_op_new(lir_opcode_t code, lir_operand_t *first, lir_operand_t *second, lir_o
     op->second = lir_operand_copy(second);
     op->output = lir_operand_copy(result);
 
-    op->first && (op->first->pos = LIR_FLAG_FIRST);
-    op->second && (op->second->pos = LIR_FLAG_SECOND);
-    op->output && (op->output->pos = LIR_FLAG_OUTPUT);
+    op->first && ((op->first->pos = LIR_FLAG_FIRST));
+    op->second && ((op->second->pos = LIR_FLAG_SECOND));
+    op->output && ((op->output->pos = LIR_FLAG_OUTPUT));
 
     set_operand_flag(op->first);
     set_operand_flag(op->second);
@@ -609,6 +611,14 @@ static inline lir_op_t *lir_op_lea(lir_operand_t *dst, lir_operand_t *src) {
 
 static inline type_t lir_operand_type(lir_operand_t *operand) {
     assert(operand->assert_type != LIR_OPERAND_REG);
+
+    if (operand->assert_type == LIR_OPERAND_STACK) {
+        lir_stack_t *stack = operand->value;
+        if (stack->kind == 0) {
+            return type_kind_new(TYPE_UNKNOWN);
+        }
+        return type_kind_new(stack->kind);
+    }
 
     if (operand->assert_type == LIR_OPERAND_VAR) {
         lir_var_t *var = operand->value;
@@ -762,7 +772,7 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
         bitmap_grow_set(c->stack_gc_bits, bit_index_end - i, test);
     }
 
-    lir_operand_t *src_operand = lir_stack_operand(m, -c->stack_offset, size);
+    lir_operand_t *src_operand = lir_stack_operand(m, -c->stack_offset, size, 0);
     return lir_op_lea(dst_operand, src_operand);
 }
 
@@ -1065,12 +1075,16 @@ static inline slice_t *extract_var_operands(lir_op_t *op, flag_t vr_flag) {
     return extract_op_operands(op, FLAG(LIR_OPERAND_VAR), vr_flag, true);
 }
 
-static inline bool is_ternary(lir_op_t *op) {
+static inline bool is_ternary_op(lir_op_t *op) {
     return op->code == LIR_OPCODE_ADD || op->code == LIR_OPCODE_SUB || op->code == LIR_OPCODE_MUL ||
            op->code == LIR_OPCODE_DIV ||
            op->code == LIR_OPCODE_REM || op->code == LIR_OPCODE_SHR || op->code == LIR_OPCODE_SHL ||
            op->code == LIR_OPCODE_AND ||
            op->code == LIR_OPCODE_OR || op->code == LIR_OPCODE_XOR;
+}
+
+static inline bool lir_is_mem(lir_operand_t *operand) {
+    return operand->assert_type == LIR_OPERAND_STACK || operand->assert_type == LIR_OPERAND_INDIRECT_ADDR;
 }
 
 /**
@@ -1090,7 +1104,7 @@ static inline int64_t var_stack_slot(closure_t *c, lir_var_t *var) {
 static inline lir_operand_t *lir_stack_offset(module_t *m, lir_operand_t *operand, int64_t offset) {
     assert(operand->assert_type == LIR_OPERAND_STACK);
     lir_stack_t *stack = operand->value;
-    return lir_stack_operand(m, stack->slot + offset, stack->size);
+    return lir_stack_operand(m, stack->slot + offset, stack->size, 0);
 }
 
 /**

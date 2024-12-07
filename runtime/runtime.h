@@ -13,6 +13,7 @@
 #include "utils/mutex.h"
 #include "utils/type.h"
 
+int runtime_main(int argc, char *argv[]);
 
 #define P_LINKCO_CACHE_MAX 128
 
@@ -346,8 +347,6 @@ struct n_processor_t {
 
     struct n_processor_t *next;// processor 链表支持
 };
-
-int main(int argc, char *argv[]);
 
 void test_runtime_init();
 

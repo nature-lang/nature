@@ -26,7 +26,6 @@ typedef enum {
     R_BL, R_BLR,
     R_RET,
     R_SVC,
-    R_NEG,
 
     R_FMOV,
     R_FADD, R_FSUB, R_FMUL, R_FDIV,
@@ -34,84 +33,85 @@ typedef enum {
     R_FSQRT,
     R_SCVTF, R_UCVTF,
     R_FCVT, R_FCVTZS, R_FCVTZU,
+    R_MVN,
 } arm64_asm_raw_opcode_t;
 
 static char *arm64_raw_op_names[] = {
-        [R_NOOP] = "noop",
-        [R_LABEL] = "label",
-        [R_MOV] = "mov",
-        [R_MOVK] = "movk",
-        [R_ADD] = "add",
-        [R_SUB] = "sub",
-        [R_MUL] = "mul",
-        [R_SDIV] = "sdiv",
-        [R_UDIV] = "udiv",
-        [R_MADD] = "madd",
-        [R_MSUB] = "msub",
-        [R_AND] = "and",
-        [R_ORR] = "orr",
-        [R_EOR] = "eor",
-        [R_EON] = "eon",
-        [R_CMP] = "cmp",
-        [R_CMN] = "cmn",
-        [R_LSL] = "lsl",
-        [R_LSR] = "lsr",
-        [R_ASR] = "asr",
-        [R_SXTB] = "sxtb",
-        [R_SXTH] = "sxth",
-        [R_SXTW] = "sxtw",
-        [R_UXTB] = "uxtb",
-        [R_UXTH] = "uxth",
-        [R_UXTW] = "uxtw",
-        [R_LDRB] = "ldrb",
-        [R_LDRH] = "ldrh",
-        [R_LDR] = "ldr",
-        [R_LDRSB] = "ldrsb",
-        [R_LDRSH] = "ldrsh",
-        [R_LDRSW] = "ldrsw",
-        [R_STRB] = "strb",
-        [R_STRH] = "strh",
-        [R_STR] = "str",
-        [R_LDP] = "ldp",
-        [R_STP] = "stp",
-        [R_ADRP] = "adrp",
-        [R_CSET] = "cset",
-        [R_B] = "b",
-        [R_BR] = "br",
-        [R_BEQ] = "b.eq",
-        [R_BNE] = "b.ne",
-        [R_BHS] = "b.hs",
-        [R_BLO] = "b.lo",
-        [R_BMI] = "b.mi",
-        [R_BPL] = "b.pl",
-        [R_BVS] = "b.vs",
-        [R_BVC] = "b.vc",
-        [R_BHI] = "b.hi",
-        [R_BLS] = "b.ls",
-        [R_BGE] = "b.ge",
-        [R_BLT] = "b.lt",
-        [R_BGT] = "b.gt",
-        [R_BLE] = "b.le",
-        [R_BAL] = "b.al",
-        [R_BNV] = "b.nv",
-        [R_BL] = "bl",
-        [R_BLR] = "blr",
-        [R_RET] = "ret",
-        [R_SVC] = "svc",
-        [R_NEG] = "neg",
-        [R_FMOV] = "fmov",
-        [R_FADD] = "fadd",
-        [R_FSUB] = "fsub",
-        [R_FMUL] = "fmul",
-        [R_FDIV] = "fdiv",
-        [R_FCMP] = "fcmp",
-        [R_FNEG] = "fneg",
-        [R_FSQRT] = "fsqrt",
-        [R_SCVTF] = "scvtf",
-        [R_UCVTF] = "ucvtf",
-        [R_FCVT] = "fcvt",
-        [R_FCVTZS] = "fcvtzs",
-        [R_FCVTZU] = "fcvtzu"
+    [R_NOOP] = "noop",
+    [R_LABEL] = "label",
+    [R_MOV] = "mov",
+    [R_MOVK] = "movk",
+    [R_ADD] = "add",
+    [R_SUB] = "sub",
+    [R_MUL] = "mul",
+    [R_SDIV] = "sdiv",
+    [R_UDIV] = "udiv",
+    [R_MADD] = "madd",
+    [R_MSUB] = "msub",
+    [R_AND] = "and",
+    [R_ORR] = "orr",
+    [R_EOR] = "eor",
+    [R_EON] = "eon",
+    [R_CMP] = "cmp",
+    [R_CMN] = "cmn",
+    [R_LSL] = "lsl",
+    [R_LSR] = "lsr",
+    [R_ASR] = "asr",
+    [R_SXTB] = "sxtb",
+    [R_SXTH] = "sxth",
+    [R_SXTW] = "sxtw",
+    [R_UXTB] = "uxtb",
+    [R_UXTH] = "uxth",
+    [R_UXTW] = "uxtw",
+    [R_LDRB] = "ldrb",
+    [R_LDRH] = "ldrh",
+    [R_LDR] = "ldr",
+    [R_LDRSB] = "ldrsb",
+    [R_LDRSH] = "ldrsh",
+    [R_LDRSW] = "ldrsw",
+    [R_STRB] = "strb",
+    [R_STRH] = "strh",
+    [R_STR] = "str",
+    [R_LDP] = "ldp",
+    [R_STP] = "stp",
+    [R_ADRP] = "adrp",
+    [R_CSET] = "cset",
+    [R_B] = "b",
+    [R_BR] = "br",
+    [R_BEQ] = "b.eq",
+    [R_BNE] = "b.ne",
+    [R_BHS] = "b.hs",
+    [R_BLO] = "b.lo",
+    [R_BMI] = "b.mi",
+    [R_BPL] = "b.pl",
+    [R_BVS] = "b.vs",
+    [R_BVC] = "b.vc",
+    [R_BHI] = "b.hi",
+    [R_BLS] = "b.ls",
+    [R_BGE] = "b.ge",
+    [R_BLT] = "b.lt",
+    [R_BGT] = "b.gt",
+    [R_BLE] = "b.le",
+    [R_BAL] = "b.al",
+    [R_BNV] = "b.nv",
+    [R_BL] = "bl",
+    [R_BLR] = "blr",
+    [R_RET] = "ret",
+    [R_SVC] = "svc",
+    [R_FMOV] = "fmov",
+    [R_FADD] = "fadd",
+    [R_FSUB] = "fsub",
+    [R_FMUL] = "fmul",
+    [R_FDIV] = "fdiv",
+    [R_FCMP] = "fcmp",
+    [R_FNEG] = "fneg",
+    [R_FSQRT] = "fsqrt",
+    [R_SCVTF] = "scvtf",
+    [R_UCVTF] = "ucvtf",
+    [R_FCVT] = "fcvt",
+    [R_FCVTZS] = "fcvtzs",
+    [R_FCVTZU] = "fcvtzu",
+    [R_MVN] = "mvn",
 };
 
 typedef enum {
@@ -147,6 +147,7 @@ typedef enum {
     FSQRT,
     SCVTF, UCVTF,
     FCVT, FCVTZS, FCVTZU,
+    MVN,
 } arm64_asm_opcode_t;
 
 typedef enum {
@@ -179,22 +180,25 @@ typedef enum {
 
 typedef enum {
     ARM64_RELOC_NONE,
-    ARM64_RELOC_LO12,        // :lo12:
-    ARM64_RELOC_HI12,        // :hi12:
+    ARM64_RELOC_LO12, // :lo12:
+    ARM64_RELOC_HI12, // :hi12:
 } arm64_reloc_type;
 
 typedef struct {
     arm64_asm_operand_type type;
     uint8_t size;
+
     union {
         reg_t reg; // 包括 freg 和 reg
         int64_t immediate;
+
         struct {
             char *name;
             bool is_local;
             int64_t offset; // 汇编器识别 offset
-            arm64_reloc_type reloc_type;  // 重定位类型
+            arm64_reloc_type reloc_type; // 重定位类型
         } symbol;
+
         struct {
             int64_t offset; // TODO offset 可能是一个需要重定位的符号。
             reg_t *reg;
@@ -209,6 +213,7 @@ typedef struct {
         } reg_offset;
 
         arm64_asm_cond_type cond;
+
         struct {
             int64_t option;
             int64_t imm;
@@ -283,9 +288,10 @@ typedef struct {
     _imm_operand; \
 })
 
-#define ARM64_INDIRECT(_reg, _offset, _prepost) ({ \
+#define ARM64_INDIRECT(_reg, _offset, _prepost, _size) ({ \
     arm64_asm_operand_t *_indirect_operand = NEW(arm64_asm_operand_t); \
     _indirect_operand->type = ARM64_ASM_OPERAND_INDIRECT; \
+    _indirect_operand->size = _size; \
     _indirect_operand->indirect.reg = _reg; \
     _indirect_operand->indirect.offset = _offset; \
     _indirect_operand->indirect.prepost = _prepost; \
@@ -380,6 +386,8 @@ typedef struct {
 #define W_STR(b, rt, ofs, base, prepost)           (0x38000000U | ((b) << 30) | ((((ofs) & ((1U << 9) - 1))) << 12) | ((prepost) << 10) | ((base) << 5) | (rt))
 #define W_LDP(sz, rs1, rs2, ofs, base, prepost)    (0x28400000U | ((sz) << 31) | ((prepost) << 23) | (((((ofs) >> 3) & ((1U << 7) - 1))) << 15) | ((rs2) << 10) | ((base) << 5) | (rs1))
 #define W_STP(sz, rs1, rs2, ofs, base, prepost)    (0x28000000U | ((sz) << 31) | ((prepost) << 23) | (((((ofs) >> 3) & ((1U << 7) - 1))) << 15) | ((rs2) << 10) | ((base) << 5) | (rs1))
+
+#define W_ORN_S(sf, rd, rn, rm, imm6)              (0xAA2003E0U | ((sf) << 31) | ((rd) << 0) | ((rn) << 5) | ((rm) << 16) | ((imm6) << 10))
 
 #define W_LDR_R(sz, rt, base, rm, s, s2, option)   (0x38600800U | ((sz) << 30) | ((s) << 23) | ((rm) << 16) | ((option) << 13) | ((s2) << 12) | ((base) << 5) | (rt))
 #define W_STR_R(sz, rt, base, rm, s2, option)      (0x38200800U | ((sz) << 30) | ((rm) << 16) | ((option) << 13) | ((s2) << 12) | ((base) << 5) | (rt))

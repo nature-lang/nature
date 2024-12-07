@@ -11,6 +11,9 @@ include(../cmake/cross.cmake)
 
 set(CMAKE_C_STANDARD 11)
 
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+
 add_compile_definitions(RUNTIME)
 message("add compile def RUNTIME")
 
