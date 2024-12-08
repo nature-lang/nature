@@ -1253,6 +1253,6 @@ void *gc_malloc(uint64_t rhash) {
 
     uint64_t start = uv_hrtime();
     void *result = rti_gc_malloc(rtype->size, rtype);
-    DEBUGF("[gc_malloc] use time %llu", uv_hrtime() - start);
+    DEBUGF("[gc_malloc] use time %lu", uv_hrtime() - start);
     return result;
 }

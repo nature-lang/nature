@@ -8,7 +8,7 @@ println(s.rdev)
 println(s.size)
 println(s.blksize)
 println(s.blocks)
-println(s.mode)
+println(s.mode) // v
 println(s.uid)
 println(s.gid)
 println(s.atim.sec)

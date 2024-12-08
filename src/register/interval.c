@@ -14,11 +14,15 @@
  */
 static alloc_kind_e alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
     if (lir_op_contain_cmp(op)) {
+        if (BUILD_ARCH == ARCH_ARM64 && lir_op_scc(op)) {
+            return ALLOC_KIND_MUST;
+        }
+
         if (var->flag & FLAG(LIR_FLAG_OUTPUT)) {
-            // 顶层 var 才不用分配寄存器，否则 var 可能只是 indirect_addr base
             return ALLOC_KIND_SHOULD;
         }
     }
+
     if (op->code == LIR_OPCODE_MOVE) {
         // 如果 left == imm 或者 reg 则返回 should, mov 的 first 一定是 use
         assertf(var->flag & FLAG(LIR_FLAG_OUTPUT), "move def must in output");
@@ -90,7 +94,7 @@ static alloc_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var
         }
     }
 
-    if (BUILD_ARCH == ARCH_ARM64 && (is_ternary_op(op) || op->code == LIR_OPCODE_NOT)) {
+    if (BUILD_ARCH == ARCH_ARM64 && (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT)) {
         return ALLOC_KIND_MUST;
     }
 

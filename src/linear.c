@@ -1012,7 +1012,7 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
     stack_pop(m->current_closure->break_labels);
 }
 
-static void linear_continue(module_t *m, ast_continue_t *stmt) {
+static void linear_continue(module_t *m) {
     LINEAR_ASSERTF(m->current_closure->continue_labels->count > 0, "continue must use in for stmt")
     lir_operand_t *label = stack_top(m->current_closure->continue_labels);
     OP_PUSH(lir_op_bal(label));
@@ -2536,7 +2536,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             return linear_break(m, stmt->value);
         }
         case AST_STMT_CONTINUE: {
-            return linear_continue(m, stmt->value);
+            return linear_continue(m);
         }
         case AST_STMT_FOR_TRADITION: {
             return linear_for_tradition(m, stmt->value);
@@ -2684,6 +2684,15 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
         c->fn_runtime_operand = fn_runtime_operand;
     }
 
+    // 返回值 operand 也 push 到 params1 里面，方便处理
+    if (fndef->return_type.kind != TYPE_VOID) {
+        lir_operand_t *return_operand = unique_var_operand(m, fndef->return_type, TEMP_RESULT);
+
+        slice_push(params, return_operand->value);
+
+        // 这里直接引用了 op->output->value, 在 ssa rename 时，c->return_operand 可以联动改名
+        c->return_operand = return_operand;
+    }
 
     OP_PUSH(lir_op_output(LIR_OPCODE_FN_BEGIN, operand_new(LIR_OPERAND_PARAMS, params)));
 
@@ -2692,15 +2701,6 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
         ast_var_decl_t *var_decl = ct_list_value(fndef->params, i);
         assert(var_decl->type.status == REDUCTION_STATUS_DONE);
         linear_escape_rewrite(m, var_decl, true);
-    }
-
-    // 返回值 operand 也 push 到 params1 里面，方便处理
-    if (fndef->return_type.kind != TYPE_VOID) {
-        lir_operand_t *return_operand = unique_var_operand(m, fndef->return_type, TEMP_RESULT);
-        lir_op_t *op = lir_op_output(LIR_OPCODE_NOP, return_operand);
-        OP_PUSH(op);
-        // 这里直接引用了 op->output->value, 在 ssa rename 时，c->return_operand 可以联动改名
-        c->return_operand = op->output;
     }
 
     linear_body(m, fndef->body);

@@ -683,11 +683,6 @@ static ast_return_stmt_t *ast_return_copy(ast_return_stmt_t *temp) {
     return stmt;
 }
 
-static ast_continue_t *ast_continue_copy(ast_continue_t *temp) {
-    ast_continue_t *stmt = COPY_NEW(ast_continue_t, temp);
-    return stmt;
-}
-
 static ast_break_t *ast_break_copy(ast_break_t *temp) {
     ast_break_t *stmt = COPY_NEW(ast_break_t, temp);
     stmt->expr = ast_expr_copy(temp->expr);
@@ -768,7 +763,7 @@ static ast_stmt_t *ast_stmt_copy(ast_stmt_t *temp) {
             break;
         }
         case AST_STMT_CONTINUE: {
-            stmt->value = ast_continue_copy(temp->value);
+            stmt->value = NULL;
             break;
         }
         case AST_STMT_BREAK: {

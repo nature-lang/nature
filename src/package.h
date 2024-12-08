@@ -27,7 +27,7 @@ static inline toml_table_t *package_parser(char *file) {
     toml_table_t *conf = toml_parse_file(fp, errbuf, sizeof(errbuf));
     fclose(fp);
 
-    assertf(conf, "cannot parser - ", errbuf);
+    assertf(conf, "cannot parser package.toml, err: %s", errbuf);
 
     return conf;
 }

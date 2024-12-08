@@ -1,7 +1,7 @@
 #include "arm64.h"
 #include "arm64_abi.h"
 
-static lir_operand_t *arm64_convert_mov_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
+static lir_operand_t *arm64_convert_use_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
     assert(c);
     assert(list);
     assert(operand);
@@ -145,14 +145,25 @@ static linked_t *arm64_lower_cmp(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
     if (op->first->assert_type != LIR_OPERAND_VAR) {
-        op->first = arm64_convert_mov_var(c, list, op->first);
+        op->first = arm64_convert_use_var(c, list, op->first);
     }
 
     if (op->second->assert_type != LIR_OPERAND_VAR && op->second->assert_type != LIR_OPERAND_IMM) {
-        op->second = arm64_convert_mov_var(c, list, op->second);
+        op->second = arm64_convert_use_var(c, list, op->second);
     }
 
     linked_push(list, op);
+
+    // 这会导致 def 消失，可为什么 def 是 indirect addr 这也很奇怪
+    if (lir_op_scc(op) && op->output->assert_type != LIR_OPERAND_VAR) {
+        lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(op->output));
+        assert(temp);
+
+        lir_operand_t *dst = op->output;
+        op->output = lir_reset_operand(temp, op->output->pos);
+
+        linked_push(list, lir_op_move(dst, op->output));
+    }
 
     return list;
 }
@@ -163,12 +174,12 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
 
     // 所有的三元运算的 output 和 first 必须是 var, 这样才能分配到寄存器
     if (op->first->assert_type != LIR_OPERAND_VAR) {
-        op->first = arm64_convert_mov_var(c, list, op->first);
+        op->first = arm64_convert_use_var(c, list, op->first);
     }
 
     if (op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_REM || op->code ==
         LIR_OPCODE_XOR) {
-        op->second = arm64_convert_mov_var(c, list, op->second);
+        op->second = arm64_convert_use_var(c, list, op->second);
     }
 
     linked_push(list, op);
@@ -176,9 +187,38 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
     return list;
 }
 
+/**
+ * lea sym -> [t]
+ * -->
+ * lea sym -> t0
+ * mov t0 -> [t] // t0 存储的已经是地址了，直接 mov 过去就行
+ *
+ * @param c
+ * @param op
+ * @return
+ */
+static linked_t *arm64_lower_lea(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+    linked_push(list, op);
+
+    // 这会导致 def 消失，可为什么 def 是 indirect addr 这也很奇怪
+    if (op->output->assert_type != LIR_OPERAND_VAR) {
+        lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(op->output));
+        assert(temp);
+
+        lir_operand_t *dst = op->output;
+        op->output = lir_reset_operand(temp, op->output->pos);
+
+        linked_push(list, lir_op_move(dst, op->output));
+    }
+
+    return list;
+}
+
+
 static linked_t *arm64_lower_output(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
-    op->output = arm64_convert_mov_var(c, list, op->output);
+    op->output = arm64_convert_use_var(c, list, op->output);
     linked_push(list, op);
     return list;
 }
@@ -203,7 +243,7 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
                 linked_concat(operations, arm64_lower_symbol_var(c, call_op));
 
                 if (call_op->code == LIR_OPCODE_MOVE && !lir_can_mov(call_op)) {
-                    call_op->first = arm64_convert_mov_var(c, operations, call_op->first);
+                    call_op->first = arm64_convert_use_var(c, operations, call_op->first);
                     linked_push(operations, call_op);
                     continue;
                 }
@@ -223,7 +263,12 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (is_ternary_op(op) || op->code == LIR_OPCODE_NOT) {
+        if (op->code == LIR_OPCODE_LEA) {
+            linked_concat(operations, arm64_lower_lea(c, op));
+            continue;
+        }
+
+        if (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT) {
             linked_concat(operations, arm64_lower_ternary(c, op));
             continue;
         }
@@ -234,7 +279,7 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
         }
 
         if (op->code == LIR_OPCODE_MOVE && !lir_can_mov(op)) {
-            op->first = arm64_convert_mov_var(c, operations, op->first);
+            op->first = arm64_convert_use_var(c, operations, op->first);
             linked_push(operations, op);
             continue;
         }

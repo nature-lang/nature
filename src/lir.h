@@ -12,9 +12,9 @@
 
 #define VEC_TYPE_IDENT "vec"
 
-#define TEMP_RESULT "result"
-#define TEMP_IDENT "t"
-#define TEMP_VAR_IDENT "v"
+#define TEMP_RESULT "#result"
+#define TEMP_IDENT "#t"
+#define TEMP_VAR_IDENT "#v"
 #define TEMP_LABEL "L"
 #define ITERATOR_CURSOR "cursor"
 
@@ -378,6 +378,7 @@ static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64
         return result;
     }
 
+    // TODO 这不能算 def, 只有算 use 才对
     if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *addr = operand->value;
         if (FLAG(addr->base->assert_type) & flag) {
@@ -772,7 +773,7 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
         bitmap_grow_set(c->stack_gc_bits, bit_index_end - i, test);
     }
 
-    lir_operand_t *src_operand = lir_stack_operand(m, -c->stack_offset, size, 0);
+    lir_operand_t *src_operand = lir_stack_operand(m, -c->stack_offset, size, t.kind);
     return lir_op_lea(dst_operand, src_operand);
 }
 
@@ -1030,6 +1031,25 @@ static inline bool lir_op_term(lir_op_t *op) {
     return (op->code == LIR_OPCODE_ADD || op->code == LIR_OPCODE_SUB);
 }
 
+
+static inline bool lir_op_ternary(lir_op_t *op) {
+    return op->code == LIR_OPCODE_ADD || op->code == LIR_OPCODE_SUB || op->code == LIR_OPCODE_MUL ||
+           op->code == LIR_OPCODE_DIV ||
+           op->code == LIR_OPCODE_REM || op->code == LIR_OPCODE_SHR || op->code == LIR_OPCODE_SHL ||
+           op->code == LIR_OPCODE_AND ||
+           op->code == LIR_OPCODE_OR || op->code == LIR_OPCODE_XOR;
+}
+
+static inline bool lir_op_scc(lir_op_t *op) {
+    return op->code == LIR_OPCODE_SLT ||
+           op->code == LIR_OPCODE_SLE ||
+           op->code == LIR_OPCODE_SGT ||
+           op->code == LIR_OPCODE_SGE ||
+           op->code == LIR_OPCODE_SEE ||
+           op->code == LIR_OPCODE_SNE;
+}
+
+
 static inline bool lir_op_factor(lir_op_t *op) {
     return op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_REM;
 }
@@ -1073,14 +1093,6 @@ static inline slice_t *extract_op_operands(lir_op_t *op, flag_t operand_flag, fl
  */
 static inline slice_t *extract_var_operands(lir_op_t *op, flag_t vr_flag) {
     return extract_op_operands(op, FLAG(LIR_OPERAND_VAR), vr_flag, true);
-}
-
-static inline bool is_ternary_op(lir_op_t *op) {
-    return op->code == LIR_OPCODE_ADD || op->code == LIR_OPCODE_SUB || op->code == LIR_OPCODE_MUL ||
-           op->code == LIR_OPCODE_DIV ||
-           op->code == LIR_OPCODE_REM || op->code == LIR_OPCODE_SHR || op->code == LIR_OPCODE_SHL ||
-           op->code == LIR_OPCODE_AND ||
-           op->code == LIR_OPCODE_OR || op->code == LIR_OPCODE_XOR;
 }
 
 static inline bool lir_is_mem(lir_operand_t *operand) {

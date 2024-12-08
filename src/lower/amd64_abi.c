@@ -260,6 +260,9 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
     slice_t *params = op->output->value;
 
     if (c->return_operand) {
+        // 为了 ssa 将 return var 添加到了 params 中，现在 从 params 中移除, 使用 nop 或者 其他方式保证 def 完整
+        slice_remove(params, params->count - 1);
+
         type_t return_type = lir_operand_type(c->return_operand);
         int64_t count = amd64_type_classify(return_type, &lo, &hi, 0);
 
@@ -283,12 +286,14 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
             // 此时需要栈空间暂存返回值，然后在 fn_end 时将相应的值放到相应的寄存器上
             if (is_large_stack_type(return_type)) {
                 linked_push(result, lir_stack_alloc(c, return_type, c->return_operand));
+            } else {
+                // 保证 use-def 完整，后续 reg alloc 需要定义 interval
+                linked_push(result, lir_op_output(LIR_OPCODE_NOP, c->return_operand));
             }
         }
     }
 
     linked_concat(result, amd64_lower_params(c, params));
-
     op->output->value = slice_new();
     return result;
 }

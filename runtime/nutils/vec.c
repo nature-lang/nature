@@ -100,7 +100,7 @@ void rt_vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
 
     uint64_t element_size = rt_rtype_out_size(l->ele_rhash);
     // 计算 offset
-    uint64_t offset = element_size * index;// (size unit byte) * index
+    uint64_t offset = element_size * index; // (size unit byte) * index
     memmove(value_ref, l->data + offset, element_size);
 }
 
@@ -115,13 +115,13 @@ void rt_vec_assign(n_vec_t *l, uint64_t index, void *ref) {
     PRE_RTCALL_HOOK();
 
     // assert(index <= l->length - 1 && "index out of range [%d] with length %d", index, l->length);
-    assert(index <= l->length - 1 && "index out of range");// TODO runtime 错误提示优化
+    assert(index <= l->length - 1 && "index out of range"); // TODO runtime 错误提示优化
 
     rtype_t *element_rtype = rt_find_rtype(l->ele_rhash);
     uint64_t element_size = rtype_stack_size(element_rtype, POINTER_SIZE);
     DEBUGF("[runtime.rt_vec_assign] element_size=%lu", element_size);
     // 计算 offset
-    uint64_t offset = rtype_stack_size(element_rtype, POINTER_SIZE) * index;// (size unit byte) * index
+    uint64_t offset = rtype_stack_size(element_rtype, POINTER_SIZE) * index; // (size unit byte) * index
     void *p = l->data + offset;
     memmove(p, ref, element_size);
 }
@@ -258,7 +258,9 @@ n_void_ptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index) {
 
     assert(l);
 
-    TRACEF("[rt_vec_element_addr] l=%p, element_rtype_hash=%lu, index=%lu", l, l->ele_rhash, index);
+    DEBUGF("[rt_vec_element_addr] l=%p, element_rtype_hash=%lu, index=%lu, length=%ld", l, l->ele_rhash, index,
+            l->length);
+
     if (index >= l->length) {
         char *msg = dsprintf("index out of vec [%d] with length %d", index, l->length);
         DEBUGF("[runtime.rt_vec_element_addr] has err %s", msg);
@@ -268,7 +270,7 @@ n_void_ptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index) {
 
     uint64_t element_size = rt_rtype_out_size(l->ele_rhash);
     // 计算 offset
-    uint64_t offset = element_size * index;// (size unit byte) * index
+    uint64_t offset = element_size * index; // (size unit byte) * index
 
     DEBUGF("[rt_vec_element_addr] l->data=%p, offset=%lu, result=%p", l->data, offset, (l->data + offset));
     return (n_void_ptr_t) l->data + offset;

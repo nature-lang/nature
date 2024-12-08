@@ -1518,7 +1518,7 @@ static ast_stmt_t *parser_continue_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     parser_must(m, TOKEN_CONTINUE);
 
-    result->value = NEW(ast_continue_t);
+    result->value = NULL;
     result->assert_type = AST_STMT_CONTINUE;
     return result;
 }

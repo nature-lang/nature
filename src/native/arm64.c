@@ -15,6 +15,40 @@ typedef slice_t *(*arm64_native_fn)(closure_t *c, lir_op_t *op);
  */
 static slice_t *arm64_native_op(closure_t *c, lir_op_t *op);
 
+/**
+ * 处理大数值的移动操作
+ * @param operations 操作序列
+ * @param result 目标寄存器操作数
+ * @param value 需要移动的值
+ */
+static void arm64_mov_imm(slice_t *operations, arm64_asm_operand_t *result, int64_t value) {
+    if (value >= -0XFFFF && value <= 0xFFFF) {
+        slice_push(operations, ARM64_ASM(R_MOV, result, ARM64_IMM(value)));
+        return;
+    }
+
+    // 超过 16位的数处理, result 可能是 32位的 w 寄存器，统一转换成 64位的 x 寄存器处理
+    assert(result->type == ARM64_ASM_OPERAND_REG);
+    result = ARM64_REG(reg_select(result->reg.index, TYPE_INT64));
+
+    // 大数或负数需要使用 MOVZ, MOVK 组合
+    uint64_t uvalue = value;
+    // 处理低 0 - 16 位
+    slice_push(operations, ARM64_ASM(R_MOV, result, ARM64_IMM(uvalue & 0xFFFF)));
+
+    if ((uvalue >> 16) & 0xFFFF) {
+        // 16 - 32
+        slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((uvalue >> 16) & 0xFFFF), ARM64_SHIFT(16)));
+    }
+    if ((uvalue >> 32) & 0xFFFF) {
+        // 32 - 48
+        slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((uvalue >> 32) & 0xFFFF), ARM64_SHIFT(32)));
+    }
+    if ((uvalue >> 48) & 0xFFFF) {
+        // 48 - 64
+        slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((uvalue >> 48) & 0xFFFF), ARM64_SHIFT(48)));
+    }
+}
 
 static bool arm64_is_integer_operand(lir_operand_t *operand) {
     if (operand->assert_type == LIR_OPERAND_REG) {
@@ -22,39 +56,72 @@ static bool arm64_is_integer_operand(lir_operand_t *operand) {
         return reg->flag & FLAG(LIR_FLAG_ALLOC_INT);
     }
 
-    return is_integer(operand_type_kind(operand));
+    // bool 也被失败成 int 类型
+    return !is_float(operand_type_kind(operand));
+}
+
+static void arm64_gen_cmp(slice_t *operations, arm64_asm_operand_t *source, arm64_asm_operand_t *dest, bool is_int) {
+    if (is_int) {
+        arm64_asm_raw_opcode_t opcode;
+        if (source->type == ARM64_ASM_OPERAND_IMMEDIATE && source->immediate < 0) {
+            source->immediate = -source->immediate;
+            opcode = R_CMN;
+        } else {
+            opcode = R_CMP;
+        }
+
+        if (source->type == ARM64_ASM_OPERAND_IMMEDIATE && source->immediate > 4095) {
+            // 使用 x16 进行中转，然后再进行比较
+            arm64_asm_operand_t *free_reg;
+            if (source->size <= 4) {
+                free_reg = ARM64_REG(w16);
+            } else {
+                free_reg = ARM64_REG(x16);
+            }
+
+            // mov
+            arm64_mov_imm(operations, free_reg, source->immediate);
+            source = free_reg;
+        }
+
+
+        slice_push(operations, ARM64_ASM(opcode, dest, source));
+    } else {
+        assert(dest->type == ARM64_ASM_OPERAND_FREG);
+        slice_push(operations, ARM64_ASM(R_FCMP, dest, source));
+    }
 }
 
 static arm64_asm_operand_t *convert_operand_to_free_reg(slice_t *operations, arm64_asm_operand_t *source, bool is_int,
                                                         uint8_t size) {
-    arm64_asm_operand_t *asm_reg;
+    arm64_asm_operand_t *free_reg;
     if (is_int) {
         if (size <= 4) {
-            asm_reg = ARM64_REG(w16);
+            free_reg = ARM64_REG(w16);
         } else {
-            asm_reg = ARM64_REG(x16);
+            free_reg = ARM64_REG(x16);
         }
 
         // 基于 x16/w16/d16/s16 临时寄存器做一个 ldr mem -> reg, return reg
         if (size == BYTE) {
-            slice_push(operations, ARM64_ASM(R_LDRB, asm_reg, source));
+            slice_push(operations, ARM64_ASM(R_LDRB, free_reg, source));
         } else if (size == WORD) {
-            slice_push(operations, ARM64_ASM(R_LDRH, asm_reg, source));
+            slice_push(operations, ARM64_ASM(R_LDRH, free_reg, source));
         } else {
-            slice_push(operations, ARM64_ASM(R_LDR, asm_reg, source));
+            slice_push(operations, ARM64_ASM(R_LDR, free_reg, source));
         }
     } else {
         if (size == 4) {
-            asm_reg = ARM64_REG(s16);
+            free_reg = ARM64_REG(s16);
         } else {
-            asm_reg = ARM64_REG(d16);
+            free_reg = ARM64_REG(d16);
         }
 
-        slice_push(operations, ARM64_ASM(R_LDR, asm_reg, source));
+        slice_push(operations, ARM64_ASM(R_LDR, free_reg, source));
     }
 
-    asm_reg->size = size;
-    return asm_reg;
+    free_reg->size = size;
+    return free_reg;
 }
 
 /**
@@ -214,34 +281,9 @@ static slice_t *arm64_native_mov(closure_t *c, lir_op_t *op) {
         // move imm -> reg
         lir_imm_t *imm = op->first->value;
         assert(is_number(imm->kind) || imm->kind == TYPE_BOOL);
-
         int64_t value = imm->int_value;
 
-        if (value >= -0XFFFF && value <= 0xFFFF) {
-            slice_push(operations, ARM64_ASM(R_MOV, result, ARM64_IMM(value)));
-        } else {
-            // 超过 16位的数处理, result 可能是 32位的 w 寄存器，统一转换成 64位的 x 寄存器处理
-            assert(result->type == ARM64_ASM_OPERAND_REG);
-            result = ARM64_REG(reg_select(result->reg.index, TYPE_INT64));
-
-            // 大数或负数需要使用 MOVZ, MOVK 组合
-            uint64_t uvalue = value;
-            // 处理低 0 - 16 位
-            slice_push(operations, ARM64_ASM(R_MOV, result, ARM64_IMM(uvalue & 0xFFFF)));
-
-            if ((uvalue >> 16) & 0xFFFF) {
-                // 16 - 32
-                slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((uvalue >> 16) & 0xFFFF), ARM64_SHIFT(16)));
-            }
-            if ((uvalue >> 32) & 0xFFFF) {
-                // 32 - 48
-                slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((uvalue >> 32) & 0xFFFF), ARM64_SHIFT(32)));
-            }
-            if ((uvalue >> 48) & 0xFFFF) {
-                // 48 - 64
-                slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((uvalue >> 48) & 0xFFFF), ARM64_SHIFT(48)));
-            }
-        }
+        arm64_mov_imm(operations, result, value);
     } else if (op->first->assert_type == LIR_OPERAND_STACK ||
                op->first->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
                op->first->assert_type == LIR_OPERAND_SYMBOL_VAR) {
@@ -610,22 +652,16 @@ static slice_t *arm64_native_call(closure_t *c, lir_op_t *op) {
 static slice_t *arm64_native_scc(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
+    assert(op->output->assert_type == LIR_OPERAND_REG);
+
     // 假设 op->first 和 op->second 是需要比较的操作数
     arm64_asm_operand_t *first = lir_operand_trans_arm64(c, op, op->first, operations);
     arm64_asm_operand_t *second = lir_operand_trans_arm64(c, op, op->second, operations);
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
     // 进行比较
-    if (arm64_is_integer_operand(op->first)) {
-        if (second->type == ARM64_ASM_OPERAND_IMMEDIATE && second->immediate < 0) {
-            second->immediate = -second->immediate;
-            slice_push(operations, ARM64_ASM(R_CMN, first, second));
-        } else {
-            slice_push(operations, ARM64_ASM(R_CMP, first, second));
-        }
-    } else {
-        slice_push(operations, ARM64_ASM(R_FCMP, first, second));
-    }
+    arm64_gen_cmp(operations, second, first, arm64_is_integer_operand(op->first));
+
 
     // 根据 op->code 设置条件码
     arm64_asm_cond_type cond;
@@ -765,27 +801,15 @@ static slice_t *arm64_native_beq(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     // 比较 first 是否等于 second，如果相等就跳转到 result label
-    arm64_asm_operand_t *first_reg = lir_operand_trans_arm64(c, op, op->first, operations);
+    arm64_asm_operand_t *first = lir_operand_trans_arm64(c, op, op->first, operations);
     arm64_asm_operand_t *second = lir_operand_trans_arm64(c, op, op->second, operations);
     assert(second->type == ARM64_ASM_OPERAND_REG || second->type == ARM64_ASM_OPERAND_IMMEDIATE);
+    arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
-    arm64_asm_operand_t *result_label = lir_operand_trans_arm64(c, op, op->output, operations);
-
-    // cmp 指令比较
-    if (arm64_is_integer_operand(op->first)) {
-        if (second->type == ARM64_ASM_OPERAND_IMMEDIATE && second->immediate < 0) {
-            second->immediate = -second->immediate;
-            slice_push(operations, ARM64_ASM(R_CMN, first_reg, second));
-        } else {
-            slice_push(operations, ARM64_ASM(R_CMP, first_reg, second));
-        }
-    } else {
-        slice_push(operations, ARM64_ASM(R_FCMP, first_reg, second));
-    }
-
+    arm64_gen_cmp(operations, second, first, arm64_is_integer_operand(op->first));
 
     // 如果相等则跳转(beq)到标签
-    slice_push(operations, ARM64_ASM(R_BEQ, result_label));
+    slice_push(operations, ARM64_ASM(R_BEQ, result));
 
     return operations;
 }

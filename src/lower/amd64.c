@@ -284,7 +284,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         }
 
         // 所有都三元运算都是不兼容 amd64 的，所以这里尽可能的进行三元转换为二元的处理
-        if (is_ternary_op(op)) {
+        if (lir_op_ternary(op)) {
             linked_concat(operations, amd64_lower_ternary(c, op));
             continue;
         }

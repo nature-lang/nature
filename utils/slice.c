@@ -57,7 +57,6 @@ void slice_concat_free(slice_t *dst, slice_t *src) {
 }
 
 /**
- * 如果 i == s->count 或者为 -1 则删除最后一个元素
  * @param s
  * @param i
  * @return

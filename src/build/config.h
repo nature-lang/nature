@@ -143,7 +143,7 @@ static inline void env_init() {
     }
 
     char *arch = getenv("BUILD_ARCH");
-    if (arch != NULL && !str_equal(os, "")) {
+    if (arch != NULL && !str_equal(arch, "")) {
         BUILD_ARCH = arch_to_uint8(arch);
     }
 

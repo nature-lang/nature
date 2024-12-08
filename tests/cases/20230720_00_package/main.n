@@ -4,6 +4,7 @@ import syscall
 import os
 import local
 import package.src.user
+import assert
 
 user.dump()
 int r =  rand.dump()

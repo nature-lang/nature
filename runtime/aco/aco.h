@@ -75,7 +75,7 @@ typedef struct {
     void *ptr;
     size_t sz;
     void *align_highptr;
-    void *align_retptr; // 最大值
+    void *align_retptr;
     size_t align_validsz;
     size_t align_limit;
     aco_t *owner;

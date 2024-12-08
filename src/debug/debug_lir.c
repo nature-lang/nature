@@ -5,14 +5,14 @@
 
 // STACK[12]
 static char *lir_operand_stack_to_string(lir_stack_t *stack) {
-    char *str = (char *) mallocz(100);
+    char *str = (char *) mallocz(30);
     sprintf(str, "STACK[%ld|%ld|%s]", stack->slot, stack->size, type_kind_str[stack->kind]);
     return str;
 }
 
 // REG[rax]
 static char *lir_operand_reg_to_string(reg_t *reg) {
-    char *str = (char *) mallocz(100);
+    char *str = (char *) mallocz(30);
     sprintf(str, "REG[%s]", reg->name);
     return str;
 }
