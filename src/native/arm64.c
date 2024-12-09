@@ -205,11 +205,27 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
         } else if (v->kind == TYPE_BOOL) {
             result = ARM64_IMM(v->bool_value);
         }
-        if (result) {
-            result->size = type_kind_sizeof(v->kind);
-            return result;
+
+        assertf(result, "unsupported immediate type");
+
+        result->size = type_kind_sizeof(v->kind);
+
+        // 三元运算符的 second 如果是 imm，imm 有数字大小限制不能超过 4095
+        if (operand->pos == LIR_FLAG_SECOND && lir_op_ternary(op) && result->immediate > 4095) {
+            // 使用 x16 进行中转，然后再进行比较
+            arm64_asm_operand_t *free_reg;
+            if (result->size <= 4) {
+                free_reg = ARM64_REG(w16);
+            } else {
+                free_reg = ARM64_REG(x16);
+            }
+
+            arm64_mov_imm(operations, free_reg, result->immediate);
+            result = free_reg;
         }
-        assert(false && "unsupported immediate type");
+
+
+        return result;
     }
 
     if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {
@@ -382,7 +398,15 @@ static slice_t *arm64_native_clv(closure_t *c, lir_op_t *op) {
 
     // 对于寄存器类型，使用 EOR 指令将寄存器清零
     if (output->assert_type == LIR_OPERAND_REG) {
-        slice_push(operations, ARM64_ASM(R_EOR, result, result, result));
+        if (result->type == ARM64_ASM_OPERAND_REG) {
+            slice_push(operations, ARM64_ASM(R_EOR, result, result, result));
+        } else {
+            if (result->size == QWORD) {
+                slice_push(operations, ARM64_ASM(R_FMOV, result, ARM64_REG(xzr)));
+            } else {
+                slice_push(operations, ARM64_ASM(R_FMOV, result, ARM64_REG(wzr)));
+            }
+        }
         return operations;
     }
 
@@ -412,8 +436,15 @@ static slice_t *arm64_native_clr(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
-
-    slice_push(operations, ARM64_ASM(R_EOR, result, result, result));
+    if (result->type == ARM64_ASM_OPERAND_REG) {
+        slice_push(operations, ARM64_ASM(R_EOR, result, result, result));
+    } else {
+        if (result->size == QWORD) {
+            slice_push(operations, ARM64_ASM(R_FMOV, result, ARM64_REG(xzr)));
+        } else {
+            slice_push(operations, ARM64_ASM(R_FMOV, result, ARM64_REG(wzr)));
+        }
+    }
     return operations;
 }
 
@@ -594,7 +625,6 @@ static slice_t *arm64_native_not(closure_t *c, lir_op_t *op) {
 
     return operations;
 }
-
 
 static slice_t *arm64_native_add(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();

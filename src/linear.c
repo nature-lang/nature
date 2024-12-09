@@ -403,8 +403,13 @@ static lir_operand_t *linear_var_decl(module_t *m, ast_var_decl_t *var_decl) {
         if (symbol_var->type.in_heap) {
             uint64_t rtype_hash = ct_find_rtype_hash(var->type);
             // 更新类型避免在 lower 被识别成 struct 进行 amd64 下的特殊值传递
+            type_t temp_type = var->type;
             var->type = type_kind_new(TYPE_VOID_PTR);
+            // gc malloc 的结果是指针，所以不能按照 target 来处理，至少 type 需要抵消掉
             push_rt_call(m, RT_CALL_GC_MALLOC, target, 1, int_operand(rtype_hash));
+            // 恢复 type, 后续的 struct 需要作为 struct 使用
+
+            var->type = temp_type;
         } else {
             // 在没有逃逸分析之前默认直接在栈上分配
             OP_PUSH(lir_stack_alloc(m->current_closure, var_decl->type, target));
@@ -2468,7 +2473,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 
         // - mov env[0] -> value_arr
         // - mov src_ptr -> value_arr[0]
-        // env 中直接存储了元素在堆上的地址，不需要关注 upvalue 是否 close
+        // env 中直接存储了元素在堆上的地址，不需要在关注 upvalue 是否 close
         lir_operand_t *src_ptr = linear_capture_expr(m, item);
 
         // dst addr

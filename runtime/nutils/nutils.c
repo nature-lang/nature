@@ -376,6 +376,7 @@ n_errort co_remove_error() {
     co->error = NULL;
 
     post_rtcall_hook("co_remove_error");
+
     return *error;
 }
 

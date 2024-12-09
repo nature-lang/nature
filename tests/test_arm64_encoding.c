@@ -141,6 +141,14 @@ static void test_basic() {
     // 测试 mvn
     inst = ARM64_ASM(R_MVN, ARM64_REG(x0), ARM64_REG(x1)); // E00321AA
     TEST_EQ(inst, 0xE0, 0x03, 0x21, 0xAA);
+
+    // 测试 fmov d1, xzr
+    inst = ARM64_ASM(R_FMOV, ARM64_REG(d1), ARM64_REG(xzr)); // E103679E
+    TEST_EQ(inst, 0xE1, 0x03, 0x67, 0x9E);
+
+    // 测试 fmov s1, wzr
+    inst = ARM64_ASM(R_FMOV, ARM64_REG(s1), ARM64_REG(wzr)); // 0110251E
+    TEST_EQ(inst, 0xE1, 0x03, 0x27, 0x1E);
 }
 
 

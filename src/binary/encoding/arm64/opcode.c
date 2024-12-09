@@ -589,6 +589,9 @@ static uint32_t asm_f_2r(arm64_asm_inst_t *inst) {
 
     switch (inst->opcode) {
         case FMOV:
+            if (opr2->type == ARM64_ASM_OPERAND_REG) {
+                return FMOV_I(dsz, opr1->reg.index, opr2->reg.index);
+            }
             return FMOV(dsz, opr1->reg.index, opr2->reg.index);
         case FCMP:
             return FCMP(dsz, opr1->reg.index, opr2->reg.index);
@@ -820,8 +823,8 @@ arm64_opr_flags_list arm64_opcode_map[] = {
 
     [R_FMOV] = {
         2, (arm64_opr_flags *[]){
-            &(arm64_opr_flags){FMOV, {F32, F32}},
-            &(arm64_opr_flags){FMOV, {F64, F64}},
+            &(arm64_opr_flags){FMOV, {F32, F32 | R32}},
+            &(arm64_opr_flags){FMOV, {F64, F64 | R64}},
         }
     },
     [R_FADD] = {

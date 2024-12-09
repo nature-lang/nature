@@ -609,7 +609,6 @@ void sched_init() {
     share_processor_list = NULL;
     solo_processor_list = NULL;
 
-    cpu_count = 1; // TODO
     for (int i = 0; i < cpu_count; ++i) {
         n_processor_t *p = processor_new(i);
         // 仅 share processor 需要 gc worklist
@@ -720,29 +719,11 @@ void pre_tplcall_hook() {
            (void *) co->scan_ret_addr);
 
 #elif __ARM64
-    /*
- 高地址
-+------------------------+
-|     上一个栈帧        |
-+------------------------+
-|     局部变量          |
-+------------------------+
-|     保存的寄存器      |
-+------------------------+
-|     LR (x30)          |
-+------------------------+ FP + PTR_SIZE
-|     FP (x29)          |
-+------------------------+ current FP
-|     参数区域          |
-+------------------------+
-低地址
-     */
     addr_t fp_value;
     // 在 ARM64 中，x29 是帧指针(FP)
     __asm__ volatile("mov %0, x29" : "=r"(fp_value));
     co->scan_ret_addr = fetch_addr_value(fp_value + POINTER_SIZE);
     assert(co->scan_ret_addr);
-
     addr_t prev_fp_value = fetch_addr_value(fp_value);
     assert(prev_fp_value);
 

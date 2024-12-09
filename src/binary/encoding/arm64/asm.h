@@ -433,6 +433,7 @@ typedef struct {
 #define F_LDR_R(sz, rt, base, rm, s, s2, option)   (0xbc700800U | ((sz) << 30) | ((s) << 23) | ((rm) << 16) | ((option) << 13) | ((s2) << 12) | ((base) << 5) | (rt))
 #define F_STR_R(sz, rt, base, rm, s2, option)      (0xbc300800U | ((sz) << 30) | ((rm) << 16) | ((option) << 13) | ((s2) << 12) | ((base) << 5) | (rt))
 
+#define FMOV_I(sz, rd, rn)                         (0x1e270000U | ((sz) << 31) | (sz << 22) | ((rn) << 5) | (rd))
 #define FMOV(sz, rd, rn)                           (0x1e204000U | ((sz) << 22) | ((rn) << 5) | (rd))
 #define FADD(sz, rd, rn, rm)                       (0x1e202800U | ((sz) << 22) | ((rm) << 16) | ((rn) << 5) | (rd))
 #define FSUB(sz, rd, rn, rm)                       (0x1e203800U | ((sz) << 22) | ((rm) << 16) | ((rn) << 5) | (rd))

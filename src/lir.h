@@ -12,9 +12,9 @@
 
 #define VEC_TYPE_IDENT "vec"
 
-#define TEMP_RESULT "#result"
-#define TEMP_IDENT "#t"
-#define TEMP_VAR_IDENT "#v"
+#define TEMP_RESULT "@result"
+#define TEMP_IDENT "t"
+#define TEMP_VAR_IDENT "v"
 #define TEMP_LABEL "L"
 #define ITERATOR_CURSOR "cursor"
 

@@ -238,11 +238,6 @@ static ast_macro_ula_expr_t *ast_ula_expr_copy(ast_macro_ula_expr_t *temp) {
     return expr;
 }
 
-static ast_macro_default_expr_t *ast_default_expr_copy(ast_macro_default_expr_t *temp) {
-    ast_macro_default_expr_t *expr = COPY_NEW(ast_macro_default_expr_t, temp);
-    return expr;
-}
-
 static ast_macro_sizeof_expr_t *ast_sizeof_expr_copy(ast_macro_sizeof_expr_t *temp) {
     ast_macro_sizeof_expr_t *sizeof_expr = COPY_NEW(ast_macro_sizeof_expr_t, temp);
     sizeof_expr->target_type = type_copy(temp->target_type);
@@ -549,7 +544,7 @@ ast_expr_t *ast_expr_copy(ast_expr_t *temp) {
             break;
         }
         case AST_MACRO_EXPR_DEFAULT: {
-            expr->value = ast_default_expr_copy(temp->value);
+            expr->value = NULL;
             break;
         }
         case AST_MACRO_EXPR_REFLECT_HASH: {

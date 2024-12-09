@@ -169,8 +169,9 @@ static linked_t *arm64_lower_cmp(closure_t *c, lir_op_t *op) {
 }
 
 static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
+    assert(op->first && op->output);
+
     linked_t *list = linked_new();
-    assert(op->output->assert_type == LIR_OPERAND_VAR); // var 才能分配寄存器
 
     // 所有的三元运算的 output 和 first 必须是 var, 这样才能分配到寄存器
     if (op->first->assert_type != LIR_OPERAND_VAR) {
@@ -178,11 +179,22 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
     }
 
     if (op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_REM || op->code ==
-        LIR_OPCODE_XOR) {
+        LIR_OPCODE_XOR || op->code == LIR_OPCODE_OR || op->code == LIR_OPCODE_AND) {
         op->second = arm64_convert_use_var(c, list, op->second);
     }
 
     linked_push(list, op);
+
+    // 如果 output 不是 var 会导致 arm64 指令异常
+    if (op->output->assert_type != LIR_OPERAND_VAR) {
+        lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(op->output));
+        assert(temp);
+
+        lir_operand_t *dst = op->output;
+        op->output = lir_reset_operand(temp, op->output->pos);
+
+        linked_push(list, lir_op_move(dst, op->output));
+    }
 
     return list;
 }
