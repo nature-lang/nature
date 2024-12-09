@@ -3,12 +3,12 @@
 
 static void test_basic() {
     char *raw = exec_output();
-
-    assert_string_equal(raw, "101-101\n"
-                             "-100005\n"
-                             "244\n"
-                             "truefalsefalsefalsetruetrue\n"
-                             "100-10024\n");
+    char *str = "101-101\n"
+            "-100005\n"
+            "244\n"
+            "truefalsefalsefalsetruetrue\n"
+            "100-10024\n";
+    assert_string_equal(raw, str);
 }
 
 int main(void) {

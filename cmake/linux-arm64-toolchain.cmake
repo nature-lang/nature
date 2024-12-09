@@ -1,5 +1,11 @@
-set(CMAKE_C_COMPILER aarch64-linux-musl-gcc)
-set(CMAKE_CXX_COMPILER aarch64-linux-musl-g++)
+# 按优先级查找可用的编译器
+find_program(CMAKE_C_COMPILER 
+    NAMES 
+        aarch64-linux-musl-gcc 
+        musl-gcc 
+        cc
+    REQUIRED
+)
 set(CMAKE_EXE_LINKER_FLAGS "-static")
 #set(CMAKE_FIND_LIBRARY_SUFFIXES "")
 

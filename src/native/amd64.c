@@ -697,7 +697,7 @@ static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
     // 进行最终的对齐, linux amd64 中栈一般都是是按 16byte 对齐的
     offset = align_up(offset, AMD64_STACK_ALIGN_SIZE);
 
-    slice_push(operations, AMD64_ASM("push", REG(rbp)));
+    slice_push(operations, AMD64_ASM("push", REG(rbp))); // push 会移动 rsp 至臻，所以不需要再次处理
     slice_push(operations, AMD64_ASM("mov", REG(rbp), REG(rsp))); // 保存栈指针
     if (offset != 0) {
         slice_push(operations, AMD64_ASM("sub", REG(rsp), UINT32(offset)));

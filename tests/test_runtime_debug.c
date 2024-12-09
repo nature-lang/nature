@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+#include "runtime/rt_mutex.h"
 #include "runtime/runtime.h"
 #include "test.h"
 

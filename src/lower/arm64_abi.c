@@ -2,6 +2,9 @@
 #include "src/register/arch/arm64.h"
 
 static int arm64_hfa_aux(type_t type, int32_t *fsize, int num) {
+    assert(fsize != NULL);
+    assert(num >= 0);
+
     uint16_t size = type_sizeof(type);
 
     if (is_float(type.kind)) {
@@ -17,11 +20,15 @@ static int arm64_hfa_aux(type_t type, int32_t *fsize, int num) {
 
         // 遍历 struct
         type_struct_t *s = type.struct_;
+        assert(s != NULL);
+        assert(s->properties != NULL);
+
         int num0 = num;
         uint16_t offset = 0;
 
         for (int i = 0; i < s->properties->length; ++i) {
             struct_property_t *p = ct_list_value(s->properties, i);
+            assert(p != NULL);
             uint16_t element_size = type_sizeof(p->type);
             uint16_t element_align = type_alignof(p->type);
             offset = align_up(offset, element_align);
@@ -41,27 +48,9 @@ static int arm64_hfa_aux(type_t type, int32_t *fsize, int num) {
             return -1;
         }
         return num;
-    } else if (type.kind == TYPE_ARR && type.in_heap == false) {
-        int num1;
-
-        type_array_t *type_arr = type.array;
-        // 判断数组的长度是否为 0
-        if (type_arr->length == 0) {
-            return num;
-        }
-
-        num1 = arm64_hfa_aux(type_arr->element_type, fsize, num);
-        if (num1 == -1 || (num1 != num && type_arr->length > 4)) {
-            return -1;
-        }
-
-        num1 = num + type_arr->length * (num1 - num);
-
-        if (num1 > 4) {
-            return -1;
-        }
-        return num1;
     }
+
+    // ARR 总是通过栈传递
     return -1;
 }
 
@@ -90,16 +79,17 @@ static int64_t arm64_pcs_aux(int64_t n, type_t *args_types, int64_t *args_pos) {
         uint16_t size;
         uint16_t align;
 
-        if ((args_types[i].kind == TYPE_ARR) || (args_types[i].kind == TYPE_FN)) {
+        // 数组总是作为指针进行处理
+        if ((args_types[i].kind == TYPE_FN)) {
             size = align = 8;
         } else {
             size = type_sizeof(args_types[i]);
             align = type_alignof(args_types[i]);
         }
 
-
         if (hfa) {
-        } else if (size > 16) {
+        } else if (size > 16 || args_types[i].kind == TYPE_ARR) {
+            // type_arr 总是作为大型结构体进行处理
             // 大于16字节的结构体通过指针传递, 如果有空余的寄存器(nx < 8)，则指针需要占用一个寄存器
             if (nx < 8) {
                 args_pos[i] = (nx++ << 1) | 1;
@@ -112,6 +102,7 @@ static int64_t arm64_pcs_aux(int64_t n, type_t *args_types, int64_t *args_pos) {
 
             continue;
         } else if (args_types[i].kind == TYPE_STRUCT) {
+            // struct 但是 size < 16
             // B.4
             // 结构体
             size = (size + 7) & ~7;
@@ -207,13 +198,23 @@ static int64_t arm64_pcs_aux(int64_t n, type_t *args_types, int64_t *args_pos) {
  * 根据 arm64 abi 将寄存器中的参数传递到 param 中。
  */
 static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
+    assert(c != NULL);
+    assert(param_vars != NULL);
+
     linked_t *result = linked_new();
+
+    if (param_vars->count == 0) {
+        return result;
+    }
 
     int64_t *args_pos = mallocz(param_vars->count * sizeof(int64_t));
     type_t *args_type = mallocz(param_vars->count * sizeof(type_t));
+    assert(args_pos != NULL);
+    assert(args_type != NULL);
 
     for (int i = 0; i < param_vars->count; ++i) {
         lir_var_t *var = param_vars->take[i];
+        assert(var != NULL);
         args_type[i] = var->type;
     }
 
@@ -229,7 +230,12 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
 
         if (arg_pos < 16) {
             // 通过整数寄存器传递
-            if (param_type.kind == TYPE_STRUCT && !(arg_pos & 1)) { // 结构体可能占用两个寄存器
+
+            if (param_type.kind == TYPE_STRUCT && !(arg_pos & 1)) {
+                // 位  param 申请足够的栈空间来接收寄存器中传递的结构体参数
+                linked_push(result, lir_stack_alloc(c, param_type, dst_param));
+
+                // 结构体可能占用两个寄存器
                 // 结构体存储在寄存器中
                 lir_operand_t *lo_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(arg_pos >> 1, TYPE_UINT64));
                 lir_operand_t *dst = indirect_addr_operand(c->module, type_kind_new(TYPE_UINT64), dst_param, 0);
@@ -242,11 +248,18 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
                     linked_push(result, lir_op_move(dst, hi_reg_operand));
                 }
             } else {
-                lir_operand_t *src = operand_new(LIR_OPERAND_REG, reg_select(arg_pos >> 1, param_type.kind));
+                uint8_t reg_index = arg_pos >> 1;
+                lir_operand_t *src = operand_new(LIR_OPERAND_REG, reg_select(reg_index, param_type.kind));
                 linked_push(result, lir_op_move(dst_param, src));
+
+                // fn runtime operand 就是一个 type_fn 类型的指针
+                if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
+                    c->fn_runtime_reg = reg_index;
+                }
             }
         } else if (arg_pos < 32) {
             // 通过浮点寄存器传递
+
             int64_t reg_index = (arg_pos >> 1) - 8;
             if (param_type.kind == TYPE_STRUCT) {
                 int32_t fsize = 0;
@@ -265,13 +278,15 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
                 linked_push(result, lir_op_move(dst_param, src));
             }
         } else {
-            // 参数通过栈传递
+            // 参数通过栈传递 stack pass (过大的结构体通过栈指针+寄存器的方式传递)
+
             int64_t sp_offset = arg_pos - 32 + 16; // 16是为保存的fp和lr预留的空间
-            lir_operand_t *src = lir_stack_operand(c->module, sp_offset, type_sizeof(param_type));
+            lir_operand_t *src = lir_stack_operand(c->module, sp_offset, type_sizeof(param_type), param_type.kind);
 
             if ((arg_pos & 1) || (type_sizeof(param_type) <= 8)) {
                 linked_push(result, lir_op_move(dst_param, src));
             } else {
+                assert(is_large_stack_type(param_type));
                 assert(type_sizeof(param_type) <= 16 && type_sizeof(param_type) > 8);
 
                 lir_operand_t *src_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_VOID_PTR));
@@ -280,6 +295,12 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
 
                 linked_t *temps = lir_memory_mov(c->module, type_sizeof(param_type), dst_param, src_ref);
                 linked_concat(result, temps);
+            }
+
+            // 记录最后一个参数所在的栈起点(fn_runtime_operand)
+            if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
+                assert(sp_offset > 0);
+                c->fn_runtime_stack = sp_offset;
             }
         }
     }
@@ -297,13 +318,21 @@ linked_t *arm64_lower_fn_begin(closure_t *c, lir_op_t *op) {
     slice_t *params = op->output->value;
 
     if (c->return_operand) {
+        // 移除最后一个参数，其指向了 return_operand
+        slice_remove(params, params->count - 1);
+
         type_t return_type = lir_operand_type(c->return_operand);
         int32_t fsize = 0;
         int32_t hfa_count = arm64_hfa(return_type, &fsize);
 
         if (hfa_count > 0 && hfa_count <= 4) {
             // HFA 返回值不需要特殊处理，直接使用 v0-v3 寄存器
-        } else if (type_sizeof(return_type) > 16) {
+            // 增加 nop 指令让参数更加完整
+            linked_push(result, lir_op_output(LIR_OPCODE_NOP, c->return_operand));
+        } else if (return_type.kind == TYPE_ARR || type_sizeof(return_type) > 16) {
+            assert(return_type.kind == TYPE_STRUCT || return_type.kind == TYPE_ARR);
+
+            // 数组由于调用约定没有明确规定，所以我们也按照类似的处理方式
             // 大于 16 字节的结构体，通过内存返回，x8 中存储返回地址
             lir_operand_t *return_operand = c->return_operand;
             assert(return_operand->assert_type == LIR_OPERAND_VAR);
@@ -313,7 +342,11 @@ linked_t *arm64_lower_fn_begin(closure_t *c, lir_op_t *op) {
             linked_push(result, lir_op_move(return_operand, x8_reg));
         } else {
             // 小于等于 16 字节的结构体或基本类型，不需要特殊处理
-            // 将在 fn_end 时处理返回值
+            if (return_type.kind == TYPE_STRUCT) {
+                linked_push(result, lir_stack_alloc(c, return_type, c->return_operand));
+            } else {
+                linked_push(result, lir_op_output(LIR_OPCODE_NOP, c->return_operand));
+            }
         }
     }
 
@@ -323,9 +356,16 @@ linked_t *arm64_lower_fn_begin(closure_t *c, lir_op_t *op) {
 }
 
 linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
+    assert(c != NULL);
+    assert(op != NULL);
+    assert(op->second != NULL);
+
     linked_t *result = linked_new();
     slice_t *args = op->second->value; // exprs
+    assert(args);
+
     int64_t args_count = args->count; // 不需要处理可变参数
+    assert(args_count >= 0);
     lir_operand_t *sp_operand = operand_new(LIR_OPERAND_REG, sp);
 
     lir_operand_t *call_result = op->output;
@@ -334,8 +374,8 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         call_result_type = lir_operand_type(call_result);
     }
 
-    int64_t *args_pos = mallocz(args->count + 1);
-    int64_t *stack_struct_offset = mallocz(args->count + 1);
+    int64_t *args_pos = mallocz((args_count + 1) * sizeof(int64_t));
+    assert(args_pos);
     type_t *args_type = mallocz(sizeof(type_t) * (args_count + 1));
 
     args_type[0] = call_result_type;
@@ -352,9 +392,10 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         // 计算 call result pos
         arm64_pcs_aux(1, args_type, args_pos);
         assert(args_pos[0] == 0 | args_pos[0] == 1 || args_pos[0] == 16); // v0 或者 x0 寄存器
+        if (args_type[0].kind == TYPE_ARR) {
+            assert(args_pos[0] == 1);
+        }
     }
-
-
 
     // +1 表示跳过 call_result
     int64_t stack_offset = arm64_pcs_aux(args_count, args_type + 1, args_pos + 1);
@@ -370,7 +411,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
     // 处理所有的通过指针传递的数据，为其在当前栈帧中分配栈空间 (基于 c->stack_offset 的永久栈空间)
     for (int i = 0; i < args_count; ++i) {
         lir_operand_t *arg_operand = args->take[i];
-        int64_t arg_pos = args_pos[i + 1];
+        int64_t arg_pos = args_pos[i + 1]; // 跳过 fn result
         type_t arg_type = lir_operand_type(arg_operand);
         if (arg_pos & 1) {
             // sub rsp -> size
@@ -403,7 +444,8 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
 
         if ((arg_item_pos & 1) || (size <= 8)) {
             linked_push(result, lir_op_move(dst, arg_operand));
-        } else { // struct or arr 但是数据小于 8
+        } else {
+            // struct or arr 但是数据小于 8
             assert(size <= 16 && size > 8);
             lir_operand_t *dst_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_VOID_PTR));
             linked_push(result, lir_op_lea(dst_ref, dst));
@@ -426,7 +468,8 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
 
         if (arg_pos < 16) {
             // 直接存储在通用寄存器中
-            if (args_type->kind == TYPE_STRUCT && !(arg_pos & 1)) { // 结构体存储在寄存器中
+            if (arg_type.kind == TYPE_STRUCT && !(arg_pos & 1)) {
+                // 结构体存储在寄存器中
                 lir_operand_t *lo_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, TYPE_UINT64));
                 type_t lo_type = type_kind_new(TYPE_UINT64);
                 // 结构体如果超过 8byte 则需要两个连续的寄存器，默认已经分配了连续寄存器， reg+1, 现在先处理小于 8byte 的部分
@@ -450,7 +493,8 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
                 linked_push(result, lir_op_move(lo_reg_operand, arg_operand));
                 slice_push(use_regs, lo_reg_operand->value);
             }
-        } else if (arg_pos < 32) { // struct 通过指针传递时，分配的寄存器总是 < 16 的通用寄存器
+        } else if (arg_pos < 32) {
+            // struct 通过指针传递时，分配的寄存器总是 < 16 的通用寄存器
             reg_index = (arg_pos >> 1) - 8; // 计算正确的浮点寄存器索引
 
             // arg 通过浮点形寄存器传递
@@ -481,7 +525,6 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
                 slice_push(use_regs, dst_operand->value);
             }
         }
-
     }
 
     // 重新生成 op->second, 用于寄存器分配记录
@@ -495,24 +538,35 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
     }
 
     // 如果函数的返回值是一个结构体，并且超过了 16byte, caller 需要为该返回值申请足够的 stack 空间，并将 stack 地址放到 x8 寄存器中
-    if (call_result_type.kind == TYPE_STRUCT && args_pos[0] == 1) {
+    if (args_pos[0] == 1) {
+        assert(call_result_type.kind == TYPE_STRUCT || call_result_type.kind == TYPE_ARR);
+
         assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
         assert(is_large_stack_type(lir_operand_type(call_result)));
 
         lir_operand_t *result_reg_operand = operand_new(LIR_OPERAND_REG, x8);
 
-        // linear call 的时候没有为 result 申请空间，此处进行空间申请
+        // linear call 的时候没有为 result 申请空间，此处进行空间申请, 为 call 申请了空间，并将空间地址放在 x8 寄存器, callee 会使用该寄存器
         linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
         linked_push(result, lir_op_move(result_reg_operand, call_result));
     }
 
 
     // 返回值处理: 参数已经处理完毕，开始调用 call 指令。其中 call_result
-    if ((call_result_type.kind == TYPE_STRUCT && args_pos[0] == 1)) {
-        // 相关数据已经写入到了 call_result 中，此时不需要显式的处理 call_result,
+    if (args_pos[0] == 1) {
+        // callee 已经将数据写入到了 call_result(x8寄存器对应的栈空间中)，此时不需要显式的处理 call_result,
+        assert(call_result_type.kind == TYPE_STRUCT || call_result_type.kind == TYPE_ARR);
+
         linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, NULL));
         return result;
     }
+
+    // 由于结构体小于等于 16byte, 所以可以通过寄存器传递，此时栈中没有返回值的空间，所以需要进行空间申请
+    if (is_large_stack_type(call_result_type)) {
+        assert(call_result->assert_type == LIR_OPERAND_VAR);
+        linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
+    }
+
 
     // struct 通过指针传递时不需要考虑 hfa 优化。下面才需要考虑 hfa 优化。
     uint8_t call_result_size = type_sizeof(call_result_type);
@@ -522,11 +576,9 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         // 从新计算 output_res
         if (args_pos[0] < 16) {
             // 通过通用寄存器传递, x0, x1
-            lir_operand_t *lo_src_reg = operand_new(LIR_OPERAND_REG, x0);
-            slice_push(output_regs, lo_src_reg);
+            slice_push(output_regs, x0);
             if (call_result_size > QWORD) {
-                lir_operand_t *hi_src_reg = operand_new(LIR_OPERAND_REG, x1);
-                slice_push(output_regs, hi_src_reg);
+                slice_push(output_regs, x1);
             }
         } else {
             assert(args_pos[0] < 32);
@@ -590,14 +642,12 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
                 linked_push(result, lir_op_move(dst_operand, src_operand));
             }
         }
-
-
     } else {
         lir_operand_t *src;
         // int or float
         if (args_pos[0] < 16) {
             // int
-            src = operand_new(LIR_OPERAND_REG, x0);
+            src = operand_new(LIR_OPERAND_REG, reg_select(x0->index, call_result_type.kind));
         } else {
             assert(args_pos[0] < 32);
             src = operand_new(LIR_OPERAND_REG, reg_select(v0->index, call_result_type.kind));
@@ -612,6 +662,9 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
 }
 
 linked_t *arm64_lower_fn_end(closure_t *c, lir_op_t *op) {
+    assert(c != NULL);
+    assert(op != NULL);
+
     linked_t *result = linked_new();
     lir_operand_t *return_operand = op->first;
     if (!return_operand) {

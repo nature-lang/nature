@@ -11,15 +11,14 @@
 #define ARM64_ELF_PAGE_SIZE 0x200000
 
 typedef struct {
-    uint32_t inst;// 编码后的指令
-    uint8_t *data;// 原始数据
-    uint8_t data_count;
-    uint64_t *offset;                // 指令的位置
-    arm64_asm_inst_t *operation;     // 原始指令,指令改写与二次扫描时使用
-    string rel_symbol;               // 使用的符号,二次扫描时用于判断是否需要重定位，目前都只适用于 label
-    arm64_asm_operand_t *rel_operand;// 引用自 asm_operations
-    uint64_t sym_index;              // 指令引用的符号在符号表的索引，如果指令发生了 slot 变更，则相应的符号的 value 同样需要变更
-    void *rel;                       // elf_rela, mach relacate_info
+    uint32_t data; // 汇编指令
+    uint8_t data_count; // 汇编指令长度, 单位 byte(arm64 默认长度 4byte)
+    uint64_t *offset; // 指令的位置
+    arm64_asm_inst_t *operation; // 原始指令,指令改写与二次扫描时使用
+    string rel_symbol; // 使用的符号,二次扫描时用于判断是否需要重定位，目前都只适用于 label
+    arm64_asm_operand_t *rel_operand; // 引用自 asm_operations
+    uint64_t sym_index; // 指令引用的符号在符号表的索引，如果指令发生了 slot 变更，则相应的符号的 value 同样需要变更
+    void *rel; // elf_rela, mach relacate_info
 } arm64_build_temp_t;
 
 static inline uint64_t arm64_create_plt_entry(elf_context_t *ctx, uint64_t got_offset, sym_attr_t *attr) {
@@ -45,9 +44,9 @@ static inline uint64_t arm64_create_plt_entry(elf_context_t *ctx, uint64_t got_o
         write32le(p + 16, 0xd61f0220);
 
         // PLT0 padding to maintain 16-byte alignment
-        write32le(p + 20, 0xd503201f);  // nop
-        write32le(p + 24, 0xd503201f);  // nop
-        write32le(p + 28, 0xd503201f);  // nop
+        write32le(p + 20, 0xd503201f); // nop
+        write32le(p + 24, 0xd503201f); // nop
+        write32le(p + 28, 0xd503201f); // nop
     }
 
     // Create PLT entry (16 bytes)
@@ -71,7 +70,7 @@ static inline uint64_t arm64_create_plt_entry(elf_context_t *ctx, uint64_t got_o
 
 static inline int arm64_gotplt_entry_type(uint64_t relocate_type) {
     switch (relocate_type) {
-         case R_AARCH64_NONE:
+        case R_AARCH64_NONE:
         case R_AARCH64_P32_ABS32:
         case R_AARCH64_P32_COPY:
         case R_AARCH64_P32_GLOB_DAT:
@@ -168,9 +167,8 @@ static inline arm64_asm_operand_t *arm64_extract_symbol_operand(arm64_asm_inst_t
 
 static inline arm64_build_temp_t *arm64_build_temp_new(arm64_asm_inst_t *operation) {
     arm64_build_temp_t *temp = NEW(arm64_build_temp_t);
-    temp->data = mallocz(sizeof(uint8_t) * 30);
+    temp->data = 0;
     temp->data_count = 0;
-    temp->inst = 0;
     temp->offset = NEW(uint64_t);
     temp->operation = operation;
     temp->rel_operand = NULL;
@@ -186,165 +184,96 @@ elf_arm64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
 
     switch (type) {
         case R_AARCH64_ABS64:
-            // 64位绝对地址
-            add64le(ptr, val + rel->r_addend);
+            add64le(ptr, val);
             break;
-
         case R_AARCH64_ABS32:
-            // 32位绝对地址
-            add32le(ptr, val + rel->r_addend);
+            add32le(ptr, val);
             break;
-
         case R_AARCH64_PREL32:
-            // 32位相对地址
-            add32le(ptr, val - addr + rel->r_addend);
+            add32le(ptr, val - addr);
             break;
-
-        case R_AARCH64_CALL26:
-        case R_AARCH64_JUMP26:
-            // 26位跳转指令重定位
-        {
-            int64_t diff = val - addr + rel->r_addend;
-            // 检查范围是否在±128MB内
-            if (diff < -0x8000000 || diff > 0x7ffffff) {
-                assertf(false, "arm64 branch out of range");
+        case R_AARCH64_MOVW_UABS_G0_NC:
+            write32le(ptr, ((read32le(ptr) & 0xffe0001f) | (val & 0xffff) << 5));
+            break;
+        case R_AARCH64_MOVW_UABS_G1_NC:
+            write32le(ptr, ((read32le(ptr) & 0xffe0001f) | (val >> 16 & 0xffff) << 5));
+            break;
+        case R_AARCH64_MOVW_UABS_G2_NC:
+            write32le(ptr, ((read32le(ptr) & 0xffe0001f) | (val >> 32 & 0xffff) << 5));
+            break;
+        case R_AARCH64_MOVW_UABS_G3:
+            write32le(ptr, ((read32le(ptr) & 0xffe0001f) | (val >> 48 & 0xffff) << 5));
+            break;
+        case R_AARCH64_ADR_PREL_PG_HI21: {
+            uint64_t off = (val >> 12) - (addr >> 12);
+            if ((off + ((uint64_t)1 << 20)) >> 21) {
+                assertf(0, "R_AARCH64_ADR_PREL_PG_HI21 relocation failed");
             }
-            // 取26位并设置到指令中
-            uint32_t inst = read32le(ptr);
-            inst = (inst & ~0x3ffffff) | ((diff >> 2) & 0x3ffffff);
-            write32le(ptr, inst);
-
-            break;
-        }
-        case R_AARCH64_ADR_PREL_PG_HI21:
-            // ADRP指令的高21位重定位
-        {
-            uint64_t page_diff = ((val + rel->r_addend) & ~0xfff) - (addr & ~0xfff);
-            uint32_t inst = read32le(ptr);
-            inst = (inst & ~((0x1fffff) << 5)) | ((page_diff >> 12) & 0x1fffff) << 5;
-            write32le(ptr, inst);
-
+            write32le(ptr, ((read32le(ptr) & 0x9f00001f) | (off & 0x1ffffc) << 3 | (off & 3) << 29));
             break;
         }
         case R_AARCH64_ADD_ABS_LO12_NC:
-            // ADD指令的低12位重定位
-        {
-            uint32_t inst = read32le(ptr);
-            inst = (inst & ~(0xfff << 10)) | ((val + rel->r_addend) & 0xfff) << 10;
-            write32le(ptr, inst);
-
-            break;
-        }
         case R_AARCH64_LDST8_ABS_LO12_NC:
+            write32le(ptr, ((read32le(ptr) & 0xffc003ff) | (val & 0xfff) << 10));
+            break;
         case R_AARCH64_LDST16_ABS_LO12_NC:
+            write32le(ptr, ((read32le(ptr) & 0xffc003ff) | (val & 0xffe) << 9));
+            break;
         case R_AARCH64_LDST32_ABS_LO12_NC:
+            write32le(ptr, ((read32le(ptr) & 0xffc003ff) | (val & 0xffc) << 8));
+            break;
         case R_AARCH64_LDST64_ABS_LO12_NC:
+            write32le(ptr, ((read32le(ptr) & 0xffc003ff) | (val & 0xff8) << 7));
+            break;
         case R_AARCH64_LDST128_ABS_LO12_NC:
-            // 加载/存储指令的低12位重定位
-        {
-            uint32_t shift = 0;
-            switch (type) {
-                case R_AARCH64_LDST16_ABS_LO12_NC:
-                    shift = 1;
-                    break;
-                case R_AARCH64_LDST32_ABS_LO12_NC:
-                    shift = 2;
-                    break;
-                case R_AARCH64_LDST64_ABS_LO12_NC:
-                    shift = 3;
-                    break;
-                case R_AARCH64_LDST128_ABS_LO12_NC:
-                    shift = 4;
-                    break;
+            write32le(ptr, ((read32le(ptr) & 0xffc003ff) | (val & 0xff0) << 6));
+            break;
+        case R_AARCH64_JUMP26:
+        case R_AARCH64_CALL26:
+            if (((val - addr) + ((uint64_t)1 << 27)) & ~(uint64_t)0xffffffc) {
+                assertf(0, "R_AARCH64_(JUMP|CALL)26 relocation failed");
             }
-            uint32_t inst = read32le(ptr);
-            inst = (inst & ~(0xfff << 10)) | (((val + rel->r_addend) >> shift) & 0xfff) << 10;
-            write32le(ptr, inst);
-
-
+            write32le(ptr, (0x14000000 | (uint32_t)(type == R_AARCH64_CALL26) << 31 | ((val - addr) >> 2 & 0x3ffffff)));
             break;
-        }
-
-        case R_AARCH64_MOVW_UABS_G0_NC:
-            // MOVZ/MOVK指令的0-15位重定位
-        {
-            uint32_t inst = read32le(ptr);
-            inst = (inst & ~(0xffff << 5)) | ((val + rel->r_addend) & 0xffff) << 5;
-            write32le(ptr, inst);
-        }
-            break;
-
-        case R_AARCH64_MOVW_UABS_G1_NC:
-            // MOVZ/MOVK指令的16-31位重定位
-        {
-            uint32_t inst = read32le(ptr);
-            inst = (inst & ~(0xffff << 5)) | (((val + rel->r_addend) >> 16) & 0xffff) << 5;
-            write32le(ptr, inst);
-
-            break;
-        }
-        case R_AARCH64_MOVW_UABS_G2_NC:// MOVZ/MOVK指令的32-47位重定位
-        {
-            uint32_t inst = read32le(ptr);
-            inst = (inst & ~(0xffff << 5)) | (((val + rel->r_addend) >> 32) & 0xffff) << 5;
-            write32le(ptr, inst);
-
-            break;
-        }
-        case R_AARCH64_MOVW_UABS_G3:
-            // MOVZ/MOVK指令的48-63位重定位
-        {
-            uint32_t inst = read32le(ptr);
-            inst = (inst & ~(0xffff << 5)) | (((val + rel->r_addend) >> 48) & 0xffff) << 5;
-            write32le(ptr, inst);
-
-            break;
-        }
-        case R_AARCH64_ADR_GOT_PAGE:
-            // GOT表项的页面相对寻址
-        {
-            uint64_t got_offset = elf_get_sym_attr(ctx, sym_index, 0)->got_offset;
-            uint64_t page_diff = (ctx->got->sh_addr + got_offset - (addr & ~0xfff));
-            uint32_t inst = read32le(ptr);
-            inst = (inst & ~((0x1fffff) << 5)) | ((page_diff >> 12) & 0x1fffff) << 5;
-            write32le(ptr, inst);
-
+        case R_AARCH64_ADR_GOT_PAGE: {
+            uint64_t off = (((ctx->got->sh_addr + elf_get_sym_attr(ctx, sym_index, 0)->got_offset) >> 12) - (addr >> 12));
+            if ((off + ((uint64_t)1 << 20)) >> 21) {
+                assertf(0, "R_AARCH64_ADR_GOT_PAGE relocation failed");
+            }
+            write32le(ptr, ((read32le(ptr) & 0x9f00001f) | (off & 0x1ffffc) << 3 | (off & 3) << 29));
             break;
         }
         case R_AARCH64_LD64_GOT_LO12_NC:
-            // GOT表项的低12位加载
-        {
-            uint64_t got_offset = elf_get_sym_attr(ctx, sym_index, 0)->got_offset;
-            uint32_t inst = read32le(ptr);
-            inst = (inst & ~(0xfff << 10)) | ((got_offset & 0xfff) >> 3) << 10;
-            write32le(ptr, inst);
-
+            write32le(ptr, ((read32le(ptr) & 0xfff803ff) | ((ctx->got->sh_addr + elf_get_sym_attr(ctx, sym_index, 0)->got_offset) & 0xff8) << 7));
             break;
-        }
+        case R_AARCH64_COPY:
+            break;
         case R_AARCH64_GLOB_DAT:
         case R_AARCH64_JUMP_SLOT:
-            // GOT/PLT表项重定位
-            write64le(ptr, val + rel->r_addend);
+            write64le(ptr, val - rel->r_addend);
             break;
-
-        case R_AARCH64_COPY:
-            // 不需要处理，在程序加载时处理
+        case R_AARCH64_RELATIVE:
+            // Handle relative relocation if needed
             break;
-
         default:
-            assertf(false, "unknown arm64 relocation type: %d", type);
+            assertf(0, "Unhandled relocation type %x at %lx", type, addr);
+            break;
     }
 }
 
 
 static inline void
 arm64_rewrite_rel_symbol(arm64_asm_inst_t *operation, arm64_asm_operand_t *operand, uint64_t rel_diff) {
+    int addend = 0;
+
+
     // 如果不是符号操作数,直接返回
     if (operand->type != ARM64_ASM_OPERAND_SYMBOL) {
         return;
     }
 
-    operand->immediate = rel_diff;
+    operand->immediate = rel_diff - addend; // arm64 具有固定长度 addend 4byte
+    operand->type = ARM64_ASM_OPERAND_IMMEDIATE;
 }
 
 static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *closures) {
@@ -353,7 +282,7 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
     }
 
     slice_t *build_temps = slice_new();
-    uint64_t section_offset = 0;// text section slot
+    uint64_t section_offset = 0; // text section slot
 
     // 第一遍扫描
     for (int i = 0; i < closures->count; ++i) {
@@ -372,11 +301,11 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
 
                 // 添加到符号表
                 Elf64_Sym sym = {
-                        .st_shndx = ctx->text_section->sh_index,
-                        .st_size = 0,
-                        .st_info = ELF64_ST_INFO(!operand->symbol.is_local, STT_FUNC),
-                        .st_other = 0,
-                        .st_value = *temp->offset,
+                    .st_shndx = ctx->text_section->sh_index,
+                    .st_size = 0,
+                    .st_info = ELF64_ST_INFO(!operand->symbol.is_local, STT_FUNC),
+                    .st_other = 0,
+                    .st_value = *temp->offset,
                 };
                 temp->sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, operand->symbol.name);
                 continue;
@@ -400,16 +329,16 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
                         temp->rel_symbol = rel_operand->symbol.name;
                     }
                 } else {
-                    // 其他指令的符号引用(如数据访问, 在 native 阶段被改造成了 adrp + add, 直接根据 symbol 进行重定位即可)
+                    // 数据指令访问添加重定位项即可
                     uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, rel_operand->symbol.name);
                     if (sym_index == 0) {
                         // 添加未定义符号
                         Elf64_Sym sym = {
-                                .st_shndx = 0,
-                                .st_size = 0,
-                                .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
-                                .st_other = 0,
-                                .st_value = 0,
+                            .st_shndx = 0,
+                            .st_size = 0,
+                            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
+                            .st_other = 0,
+                            .st_value = 0,
                         };
                         sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, rel_operand->symbol.name);
                     }
@@ -417,9 +346,8 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
 
                     // 生成重定位信息
                     temp->sym_index = sym_index;
-                    temp->inst = 0;
-                    memset(temp->data, 0, 4);// ARM64指令固定4字节
-                    temp->data_count = 4;
+
+                    temp->data = arm64_asm_inst_encoding(operation, &temp->data_count);
                     section_offset += temp->data_count;
 
 
@@ -436,9 +364,7 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
             }
 
             // 编码指令
-            temp->inst = 0;// ARM64指令编码
-            memset(temp->data, 0, 4);
-            temp->data_count = 4;
+            temp->data = arm64_asm_inst_encoding(operation, &temp->data_count);
             section_offset += temp->data_count;
         }
     }
@@ -454,11 +380,11 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
         if (sym_index == 0) {
             // 添加未定义符号
             Elf64_Sym sym = {
-                    .st_shndx = 0,
-                    .st_size = 0,
-                    .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
-                    .st_other = 0,
-                    .st_value = 0,
+                .st_shndx = 0,
+                .st_size = 0,
+                .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
+                .st_other = 0,
+                .st_value = 0,
             };
             sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, temp->rel_symbol);
         }
@@ -469,11 +395,7 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
             uint64_t rel_diff = sym->st_value - *temp->offset;
             arm64_rewrite_rel_symbol(temp->operation, temp->rel_operand, rel_diff);
 
-            uint8_t old_count = temp->data_count;
-            temp->inst = 0;// ARM64指令编码
-            memset(temp->data, 0, 4);
-            temp->data_count = 4;
-            assertf(temp->data_count == old_count, "second traverse cannot update encoding data_count");
+            temp->data = arm64_asm_inst_encoding(temp->operation, &temp->data_count);
         } else {
             int reloc_type;
 
@@ -503,7 +425,17 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
         c->text_count = 0;
         for (int j = 0; j < c->asm_build_temps->count; ++j) {
             arm64_build_temp_t *temp = c->asm_build_temps->take[j];
-            elf_put_data(ctx->text_section, temp->data, temp->data_count);
+            if (temp->data_count == 0) {
+                continue;
+            }
+
+            uint8_t bytes[4];
+            bytes[0] = temp->data & 0xFF;          // 最低字节
+            bytes[1] = (temp->data >> 8) & 0xFF;   // 次低字节
+            bytes[2] = (temp->data >> 16) & 0xFF;  // 次高字节
+            bytes[3] = (temp->data >> 24) & 0xFF;  // 最高字节
+
+            elf_put_data(ctx->text_section, bytes, temp->data_count);
             c->text_count += temp->data_count;
         }
     }
@@ -515,7 +447,7 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
     }
 
     slice_t *build_temps = slice_new();
-    uint64_t section_offset = 0;// text section slot
+    uint64_t section_offset = 0; // text section slot
     table_t *symtab_hash = table_new();
 
     // 第一遍扫描
@@ -536,17 +468,17 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
                 if (!operand->symbol.is_local) {
                     n_type |= N_EXT;
                 }
-                temp->sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-                        .n_sect = ctx->text_section->sh_index,
-                        .n_value = *temp->offset,
-                        .n_type = n_type,
-                }, operand->symbol.name);
+                temp->sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                                                   .n_sect = ctx->text_section->sh_index,
+                                                   .n_value = *temp->offset,
+                                                   .n_type = n_type,
+                                               }, operand->symbol.name);
 
                 table_set(symtab_hash, operand->symbol.name, (void *) temp->sym_index);
                 continue;
             }
 
-            // 处理符号引用
+            // 处理符号引用(label 或者 symbol 符号)
             arm64_asm_operand_t *rel_operand = arm64_extract_symbol_operand(operation);
             if (rel_operand != NULL) {
                 // 判断是否为分支/调用指令
@@ -567,18 +499,16 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     uint64_t sym_index = (uint64_t) table_get(symtab_hash, rel_operand->symbol.name);
                     if (sym_index == 0) {
                         // 添加未定义符号
-                        sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-                                .n_sect = NO_SECT,
-                                .n_value = 0,
-                                .n_type = N_UNDF | N_EXT,
-                        }, rel_operand->symbol.name);
+                        sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                                                     .n_sect = NO_SECT,
+                                                     .n_value = 0,
+                                                     .n_type = N_UNDF | N_EXT,
+                                                 }, rel_operand->symbol.name);
                     }
 
                     // 生成重定位信息
                     temp->sym_index = sym_index;
-                    temp->inst = 0;
-                    memset(temp->data, 0, 4);// ARM64指令固定4字节
-                    temp->data_count = 4;
+                    temp->data = arm64_asm_inst_encoding(operation, &temp->data_count);
                     section_offset += temp->data_count;
 
                     // 添加重定位项
@@ -593,9 +523,7 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
             }
 
             // 编码指令
-            temp->inst = 0;
-            memset(temp->data, 0, 4);
-            temp->data_count = 4;
+            temp->data = arm64_asm_inst_encoding(operation, &temp->data_count);
             section_offset += temp->data_count;
         }
     }
@@ -610,11 +538,11 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
         uint64_t sym_index = (uint64_t) table_get(symtab_hash, temp->rel_symbol);
         if (sym_index == 0) {
             // 添加未定义符号
-            sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-                    .n_sect = NO_SECT,
-                    .n_value = 0,
-                    .n_type = N_UNDF | N_EXT,
-            }, temp->rel_symbol);
+            sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                                         .n_sect = NO_SECT,
+                                         .n_value = 0,
+                                         .n_type = N_UNDF | N_EXT,
+                                     }, temp->rel_symbol);
         }
 
         struct nlist_64 *sym = &((struct nlist_64 *) ctx->symtab_command->symbols->data)[sym_index];
@@ -623,11 +551,7 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
             uint64_t rel_diff = sym->n_value - *temp->offset;
             arm64_rewrite_rel_symbol(temp->operation, temp->rel_operand, rel_diff);
 
-            uint8_t old_count = temp->data_count;
-            temp->inst = 0;
-            memset(temp->data, 0, 4);
-            temp->data_count = 4;
-            assertf(temp->data_count == old_count, "second traverse cannot update encoding data_count");
+            temp->data = arm64_asm_inst_encoding(temp->operation, &temp->data_count);
         } else {
             // 确认是外部符号，进行重定位处理
             temp->rel = mach_put_relocate(ctx, ctx->text_section, *temp->offset,
@@ -641,7 +565,17 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
         c->text_count = 0;
         for (int j = 0; j < c->asm_build_temps->count; ++j) {
             arm64_build_temp_t *temp = c->asm_build_temps->take[j];
-            mach_put_data(ctx->text_section, temp->data, temp->data_count);
+            if (temp->data_count == 0) {
+                continue;
+            }
+
+            uint8_t bytes[4];
+            bytes[0] = temp->data & 0xFF;          // 最低字节
+            bytes[1] = (temp->data >> 8) & 0xFF;   // 次低字节
+            bytes[2] = (temp->data >> 16) & 0xFF;  // 次高字节
+            bytes[3] = (temp->data >> 24) & 0xFF;  // 最高字节
+
+            mach_put_data(ctx->text_section, bytes, temp->data_count);
             c->text_count += temp->data_count;
         }
     }

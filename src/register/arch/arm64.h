@@ -42,7 +42,7 @@ extern reg_t *s16, *s17, *s18, *s19, *s20, *s21, *s22, *s23;
 extern reg_t *s24, *s25, *s26, *s27, *s28, *s29, *s30, *s31;
 
 
-#define ARM64_ALLOC_REG_COUNT 28 + 32;
+#define ARM64_ALLOC_REG_COUNT 27 + 31;
 #define ARM64_STACK_ALIGN_SIZE 16
 
 void arm64_reg_init();

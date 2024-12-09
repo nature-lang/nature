@@ -2,6 +2,12 @@
 
 #include "array.h"
 #include "runtime/runtime.h"
+#include <sys/mman.h>
+#include <unistd.h>
+
+#ifdef __DARWIN
+#include <libkern/OSCacheControl.h>  // 这是需要的头文件
+#endif
 
 table_t *env_upvalue_table = NULL;
 mutex_t env_upvalue_locker = {0};
@@ -59,48 +65,43 @@ static uint8_t gen_mov_stack_codes(uint8_t *codes, uint64_t stack_offset, uint64
 }
 
 static uint8_t gen_mov_reg_codes(uint8_t *codes, uint64_t reg_index, uint64_t fn_runtime_ptr) {
-    // RDI = 7、RSI = 6、RDX = 2、RCX = 1、R8 = 8、R9 = 9
-    uint8_t *imm = (uint8_t *) (&fn_runtime_ptr);
-    switch (reg_index) {
-        case 7: {// rdi
-            codes[0] = 0x48;
-            codes[1] = 0xBF;
-            break;
-        }
-        case 6: {// rsi
-            codes[0] = 0x48;
-            codes[1] = 0xBE;
-            break;
-        }
-        case 2: {// rdx
-            codes[0] = 0x48;
-            codes[1] = 0xBA;
-            break;
-        }
-        case 1: {// rcx
-            codes[0] = 0x48;
-            codes[1] = 0xB9;
-            break;
-        }
-        case 8: {// r8
-            codes[0] = 0x49;
-            codes[1] = 0xB8;
-            break;
-        }
-        case 9: {// r9
-            codes[0] = 0x49;
-            codes[1] = 0xB9;
-            break;
-        }
-        default:
-            assert(false && "cannot use reg_index=%s in fn param" && reg_index);
-            exit(1);
+    // x0-x7 对应参数寄存器
+    uint32_t reg = reg_index;
+
+    // 在ARM64中，我们需要使用多条指令来加载64位值
+    // mov     x0, #0x1234
+    // movk    x0, #0x5678, lsl #16
+    // movk    x0, #0x9abc, lsl #32
+    // movk    x0, #0xdef0, lsl #48
+
+    uint32_t *instructions = (uint32_t *)codes;
+
+    // 检查寄存器范围 (x0-x7)
+    if (reg > 7) {
+        assert(false && "ARM64: register index must be between 0-7");
+        exit(1);
     }
 
-    // 将地址按 little-endian 方式存储
-    memcpy(&codes[2], &fn_runtime_ptr, sizeof(uint64_t));
+    // 分解64位值为4个16位片段
+    uint16_t val0 = fn_runtime_ptr & 0xFFFF;
+    uint16_t val1 = (fn_runtime_ptr >> 16) & 0xFFFF;
+    uint16_t val2 = (fn_runtime_ptr >> 32) & 0xFFFF;
+    uint16_t val3 = (fn_runtime_ptr >> 48) & 0xFFFF;
 
-    return 10;
+    // mov     xN, #val0
+    instructions[0] = 0xD2800000 | (reg << 0) | ((uint32_t)val0 << 5);
+
+    // movk    xN, #val1, lsl #16
+    instructions[1] = 0xF2A00000 | (reg << 0) | ((uint32_t)val1 << 5);
+
+    // movk    xN, #val2, lsl #32
+    instructions[2] = 0xF2C00000 | (reg << 0) | ((uint32_t)val2 << 5);
+
+    // movk    xN, #val3, lsl #48
+    instructions[3] = 0xF2E00000 | (reg << 0) | ((uint32_t)val3 << 5);
+
+    // 返回生成的指令总字节数 (4条指令 * 4字节)
+    return 16;
 }
 
 
@@ -115,49 +116,53 @@ static uint8_t gen_mov_reg_codes(uint8_t *codes, uint64_t reg_index, uint64_t fn
  * br x16
  */
 static uint8_t gen_jmp_addr_codes(uint8_t *codes, uint64_t addr) {
-    // movz x16, #imm16_0
-    uint32_t movz = 0xD2800000 | (16 & 0x1F) | ((addr & 0xFFFF) << 5);
-    memcpy(codes, &movz, 4);
+    // LDR X16, #8 (0x58000050)
+    uint32_t ldr = 0x58000050;
+    memcpy(codes, &ldr, 4);
 
-    // movk x16, #imm16_1, lsl #16
-    uint32_t movk1 = 0xF2A00000 | (16 & 0x1F) | (((addr >> 16) & 0xFFFF) << 5);
-    memcpy(codes + 4, &movk1, 4);
+    // BR X16 (0xD61F0200)
+    uint32_t br = 0xD61F0200;
+    memcpy(codes + 4, &br, 4);
 
-    // movk x16, #imm16_2, lsl #32
-    uint32_t movk2 = 0xF2C00000 | (16 & 0x1F) | (((addr >> 32) & 0xFFFF) << 5);
-    memcpy(codes + 8, &movk2, 4);
-
-    // br x16
-    uint32_t br = 0xD61F0200 | (16 & 0x1F);
-    memcpy(codes + 12, &br, 4);
+    // 64位目标地址
+    memcpy(codes + 8, &addr, 8);
 
     return 16;
 }
 
 /**
- * ARM64 版本的栈移动
- * 例如:
- * movz x16, #imm16_0
- * movk x16, #imm16_1, lsl #16
- * movk x16, #imm16_2, lsl #32
- * str x16, [fp, #offset]
+ * ARM64 版本的栈存储实现
+ * fn_addr = 0x40007fffb8
+ * stack_offset = 0x10
+ *
+ * 汇编指令为:
+ * LDR X16, #8          // 加载地址到 X16 寄存器
+ * STR X16, [FP, #16]   // 将 X16 中的值存储到 FP+16 的位置
+ * .quad fn_addr        // 64位地址值
+ *
+ * 机器码为:
+ * 58000050            // LDR X16, #8
+ * F90008F0            // STR X16, [FP, #16]  (16 = stack_offset)
+ * [8字节地址值]        // 目标地址
+ *
+ * @param codes 输出的机器码缓冲区
+ * @param stack_offset 栈偏移量
+ * @param fn_runtime_ptr 要存储的函数指针
+ * @return 返回生成的机器码长度(16字节)
  */
 static uint8_t gen_mov_stack_codes(uint8_t *codes, uint64_t stack_offset, uint64_t fn_runtime_ptr) {
-    // movz x16, #imm16_0
-    uint32_t movz = 0xD2800000 | (16 & 0x1F) | ((fn_runtime_ptr & 0xFFFF) << 5);
-    memcpy(codes, &movz, 4);
+    // LDR X16, #8 (0x58000050)
+    uint32_t ldr = 0x58000050;
+    memcpy(codes, &ldr, 4);
 
-    // movk x16, #imm16_1, lsl #16
-    uint32_t movk1 = 0xF2A00000 | (16 & 0x1F) | (((fn_runtime_ptr >> 16) & 0xFFFF) << 5);
-    memcpy(codes + 4, &movk1, 4);
+    // STR X16, [FP, #offset]
+    // 注意：这里假设 stack_offset 是小于 4096 的正数
+    // 基础指令是 0xF90000F0，需要将偏移量编码进去
+    uint32_t str = 0xF90000F0 | ((stack_offset & 0x7F8) << 7);
+    memcpy(codes + 4, &str, 4);
 
-    // movk x16, #imm16_2, lsl #32
-    uint32_t movk2 = 0xF2C00000 | (16 & 0x1F) | (((fn_runtime_ptr >> 32) & 0xFFFF) << 5);
-    memcpy(codes + 8, &movk2, 4);
-
-    // str x16, [fp, #offset]
-    uint32_t str = 0xF9000000 | (16 & 0x1F) | (29 << 5) | ((stack_offset & 0x1FF) << 12);
-    memcpy(codes + 12, &str, 4);
+    // 64位目标地址
+    memcpy(codes + 8, &fn_runtime_ptr, 8);
 
     return 16;
 }
@@ -168,7 +173,6 @@ static uint8_t gen_mov_stack_codes(uint8_t *codes, uint64_t stack_offset, uint64
 static uint8_t gen_mov_reg_codes(uint8_t *codes, uint64_t reg_index, uint64_t fn_runtime_ptr) {
     if (reg_index > 7) {
         assert(false && "ARM64 only supports x0-x7 as parameter registers");
-        exit(1);
     }
 
     // movz xN, #imm16_0
@@ -192,12 +196,13 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime_ptr, 
     uint8_t codes[100] = {0};
     uint64_t size = 0;
 
+    DEBUGF("fn_runtime_reg=%lu, fn_runtime_stack=%lu", fndef->fn_runtime_reg, fndef->fn_runtime_stack);
     uint8_t temp_codes[50];
     uint8_t count;
-    if (fndef->fn_runtime_reg > 0) {
-        count = gen_mov_reg_codes(temp_codes, fndef->fn_runtime_reg, (uint64_t) fn_runtime_ptr);
+    if (fndef->fn_runtime_stack > 0) {
+        count = gen_mov_stack_codes(temp_codes, fndef->fn_runtime_stack, (uint64_t) fn_runtime_ptr);
     } else {
-        count = gen_mov_stack_codes(temp_codes, fndef->fn_runtime_reg, (uint64_t) fn_runtime_ptr);
+        count = gen_mov_reg_codes(temp_codes, fndef->fn_runtime_reg, (uint64_t) fn_runtime_ptr);
     }
     for (int i = 0; i < count; ++i) {
         codes[size++] = temp_codes[i];
@@ -208,6 +213,14 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime_ptr, 
     }
 
     memcpy(fn_runtime_ptr->closure_jit_codes, codes, size);
+#ifdef  __ARM64
+#ifdef __DARWIN
+    sys_icache_invalidate(fn_runtime_ptr->closure_jit_codes, fn_runtime_ptr->closure_jit_codes + size);
+#elif defined(__LINUX)
+    __builtin___clear_cache(fn_runtime_ptr->closure_jit_codes, fn_runtime_ptr->closure_jit_codes + size);
+#endif
+    // arm64 清理缓存
+#endif
 }
 
 void *fn_new(addr_t fn_addr, envs_t *envs) {
@@ -218,12 +231,18 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
     DEBUGF("[runtime.fn_new] fn_addr=0x%lx, envs=%p", fn_addr, envs);
     assert(envs);
     rtype_t *fn_rtype = gc_rtype_array(TYPE_GC_FN, sizeof(runtime_fn_t) / POINTER_SIZE);
+
     // 手动设置 gc 区域, runtime_fn_t 一共是 12 个 pointer 区域，最后一个区域保存的是 envs 需要扫描
     // 其他区域都不需要扫面
     bitmap_set(fn_rtype->gc_bits, 11);
-    fn_rtype->last_ptr = sizeof(runtime_fn_t);// 也就是最后一个内存位置包含了指针
+    fn_rtype->last_ptr = sizeof(runtime_fn_t); // 也就是最后一个内存位置包含了指针
 
     runtime_fn_t *fn_runtime = rti_gc_malloc(sizeof(runtime_fn_t), fn_rtype);
+
+    // 设置可执行权限
+    uintptr_t page_start = (uintptr_t) fn_runtime & ~(sysconf(_SC_PAGESIZE) - 1);
+    mprotect((void *) page_start, sysconf(_SC_PAGESIZE),PROT_READ | PROT_WRITE | PROT_EXEC);
+
     fn_runtime->fn_addr = fn_addr;
 
     // fn_runtime->envs = envs;
@@ -235,18 +254,19 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
 
     gen_closure_jit_codes(fndef, fn_runtime, fn_addr);
 
-    DEBUGF("[runtime.fn_new] fn find success, fn_runtime=%p, fn_name=%s, stack=%lu, reg=%lu, jit_code=%p, envs=%p, fn_addr=%p",
-           fn_runtime, fndef->name, fndef->fn_runtime_stack, fndef->fn_runtime_reg, fn_runtime->closure_jit_codes,
-           fn_runtime->envs,
-           (void *) fn_addr);
+    DEBUGF(
+        "[runtime.fn_new] fn find success, fn_runtime=%p, fn_name=%s, stack=%lu, reg=%lu, jit_code=%p, envs=%p, fn_addr=%p",
+        fn_runtime, fndef->name, fndef->fn_runtime_stack, fndef->fn_runtime_reg, fn_runtime->closure_jit_codes,
+        fn_runtime->envs,
+        (void *) fn_addr);
 
     /**
      * closure_jit_codes 就是 fn_runtime 对首个值，所以 return fn_runtime 和 fn_runtime->closure_jit_codes 没有区别
      * 都是堆内存区域对首个地址, 所以将返回值当成数据参数或者时 call label 都是可以的.
      *
      */
-//    assert((void *) fn_runtime == (void *) fn_runtime->closure_jit_codes &&
-//           "fn_new base must equal fn_runtime first property");
+    //    assert((void *) fn_runtime == (void *) fn_runtime->closure_jit_codes &&
+    //           "fn_new base must equal fn_runtime first property");
     return fn_runtime->closure_jit_codes;
 }
 
@@ -310,18 +330,19 @@ void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t si
 
     void *heap_addr = fn->envs->values[index];
 
-    DEBUGF("[runtime.env_assign_ref] pre fn_base=%p, fn->envs_base=%p, index=%lu, src_ref=%p, size=%lu, env_int_value=0x%lx, heap_addr=%p",
-           fn, fn->envs,
-           index, src_ref, size, fetch_int_value((addr_t) heap_addr, size), heap_addr);
+    DEBUGF(
+        "[runtime.env_assign_ref] pre fn_base=%p, fn->envs_base=%p, index=%lu, src_ref=%p, size=%lu, env_int_value=0x%lx, heap_addr=%p",
+        fn, fn->envs,
+        index, src_ref, size, fetch_int_value((addr_t) heap_addr, size), heap_addr);
 
     // heap_addr 是比较小的空间
     assert(size <= 8);
     memmove(heap_addr, src_ref, size);
 
-    DEBUGF("[runtime.env_assign_ref] post fn_base=%p, fn->envs_base=%p, index=%lu, src_ref=%p, size=%lu, env_int_value=0x%lx, heap_addr=%p",
-           fn, fn->envs,
-           index, src_ref, size, fetch_int_value((addr_t) heap_addr, size), heap_addr);
-
+    DEBUGF(
+        "[runtime.env_assign_ref] post fn_base=%p, fn->envs_base=%p, index=%lu, src_ref=%p, size=%lu, env_int_value=0x%lx, heap_addr=%p",
+        fn, fn->envs,
+        index, src_ref, size, fetch_int_value((addr_t) heap_addr, size), heap_addr);
 }
 
 void *env_element_value(runtime_fn_t *fn, uint64_t index) {
@@ -332,7 +353,7 @@ void *env_element_value(runtime_fn_t *fn, uint64_t index) {
     assertf(index < fn->envs->length, "index out of range, fn=%p, envs=%p", fn, fn->envs);
 
     DEBUGF("[runtime.env_element_.value] fn_base=%p, envs=%p, value=%p",
-            fn, fn->envs, fn->envs->values[index]);
+           fn, fn->envs, fn->envs->values[index]);
 
     return fn->envs->values[index];
 }

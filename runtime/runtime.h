@@ -13,6 +13,7 @@
 #include "utils/mutex.h"
 #include "utils/type.h"
 
+int runtime_main(int argc, char *argv[]);
 
 #define P_LINKCO_CACHE_MAX 128
 
@@ -36,7 +37,11 @@
 
 #define MMAP_SHARE_STACK_BASE 0xa000000000
 #define ARENA_HINT_BASE 0xc000000000 // 0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
+#ifdef __AMD64
 #define ARENA_HINT_MAX 0x800000000000// 128T
+#else
+#define ARENA_HINT_MAX 0x1000000000000 // 256T
+#endif
 #define ARENA_HINT_SIZE 1099511627776// 1 << 40
 #define ARENA_HINT_COUNT 128         // 0.75T ~ 128T
 
@@ -54,6 +59,9 @@
 #define PAGE_SUMMARY_LEVEL 5                                                    // 5 层 radix tree
 #define PAGE_SUMMARY_MERGE_COUNT 8                                              // 每个上级 summary 索引的数量
 #define PAGE_SUMMARY_COUNT_L4 (128 * 1024 * 1024 / 4)                           // 一个 chunk 表示 4M 空间, 所以 l5 一共有 33554432 个 chunk(128T空间)
+
+
+
 #define PAGE_SUMMARY_COUNT_L3 (PAGE_SUMMARY_COUNT_L4 / PAGE_SUMMARY_MERGE_COUNT)// 4194304, 每个 summary 管理 64M 空间
 #define PAGE_SUMMARY_COUNT_L2 (PAGE_SUMMARY_COUNT_L3 / PAGE_SUMMARY_MERGE_COUNT)// 524288, 每个 summary 管理 512M 空间
 #define PAGE_SUMMARY_COUNT_L1 (PAGE_SUMMARY_COUNT_L2 / PAGE_SUMMARY_MERGE_COUNT)// 65536, 每个 summary 管理 4G 空间
@@ -76,31 +84,31 @@ typedef void (*void_fn_t)(void);
  * 参考 linux, 栈从上往下增长，所以在数学意义上 base > end
  */
 typedef struct {
-    addr_t stack_base;  // 虚拟起始地址(按照内存申请的节奏来，这里依旧是低地址位置)
-    uint64_t stack_size;// 栈空间
+    addr_t stack_base; // 虚拟起始地址(按照内存申请的节奏来，这里依旧是低地址位置)
+    uint64_t stack_size; // 栈空间
     ucontext_t ctx;
 } mmode_t;
 
 typedef struct mspan_t {
-    struct mspan_t *next;// mspan 是双向链表
+    struct mspan_t *next; // mspan 是双向链表
     // struct mspan_t *prev;
 
-    uint32_t sweepgen;// 目前暂时是单线程模式，所以不需要并发垃圾回收
-    addr_t base;      // mspan 在 arena 中的起始位置
+    uint32_t sweepgen; // 目前暂时是单线程模式，所以不需要并发垃圾回收
+    addr_t base; // mspan 在 arena 中的起始位置
     addr_t end;
-    uint8_t spanclass;// spanclass index (基于 sizeclass 通过 table 可以确定 page 的数量和 span 的数量)
+    uint8_t spanclass; // spanclass index (基于 sizeclass 通过 table 可以确定 page 的数量和 span 的数量)
 
-    uint64_t pages_count;// page 的数量，通常可以通过 sizeclass 确定，但是如果 spanclass = 0 时，表示大型内存，其 pages
+    uint64_t pages_count; // page 的数量，通常可以通过 sizeclass 确定，但是如果 spanclass = 0 时，表示大型内存，其 pages
     // 是不固定的
-    uint64_t obj_count;// mspan 中 obj 的数量，也可以通过 sizeclass 直接确定,如果是分配大内存时，其固定为 1，
+    uint64_t obj_count; // mspan 中 obj 的数量，也可以通过 sizeclass 直接确定,如果是分配大内存时，其固定为 1，
     // 也就是一个 obj 占用一个 span
-    uint64_t obj_size;// obj_count * obj_size 不一定等于 pages_count * page_size, 虽然可以通过 sizeclass
+    uint64_t obj_size; // obj_count * obj_size 不一定等于 pages_count * page_size, 虽然可以通过 sizeclass
     // 获取，但是不兼容大对象
-    uint64_t alloc_count;// 已经用掉的 obj count
+    uint64_t alloc_count; // 已经用掉的 obj count
 
     // bitmap 结构, alloc_bits 标记 obj 是否被使用， 1 表示使用，0表示空闲
     gc_bits *alloc_bits;
-    gc_bits *gcmark_bits;// gc 阶段标记，1 表示被使用(三色标记中的黑色),0表示空闲(三色标记中的白色)
+    gc_bits *gcmark_bits; // gc 阶段标记，1 表示被使用(三色标记中的黑色),0表示空闲(三色标记中的白色)
 
     mutex_t alloc_locker;
     mutex_t gcmark_locker;
@@ -111,21 +119,21 @@ typedef struct mspan_t {
  * 物理机有几个线程就注册几个 mcache
  */
 typedef struct {
-    mspan_t *alloc[SPANCLASS_COUNT];// 136 种 mspan,每种类型的 span 只会持有一个
-    uint32_t flush_gen;             // sweepgen 缓存，避免重复进行 mache flush
+    mspan_t *alloc[SPANCLASS_COUNT]; // 136 种 mspan,每种类型的 span 只会持有一个
+    uint32_t flush_gen; // sweepgen 缓存，避免重复进行 mache flush
 } mcache_t;
 
 typedef struct {
     uint8_t spanclass;
     mutex_t locker;
 
-    mspan_t *partial_list;// 还有空闲 span obj 的链表
+    mspan_t *partial_list; // 还有空闲 span obj 的链表
     mspan_t *full_list;
 } mcentral_t;
 
 typedef struct {
     uint64_t blocks[8];
-} page_chunk_t;// page_chunk 现在占用 64 * 8 = 512bit
+} page_chunk_t; // page_chunk 现在占用 64 * 8 = 512bit
 
 // TODO start/end/max 的正确编码值应该是 uint21_t,后续需要正确实现,能表示的最大值是 2^21=2097152
 // 0 标识无空闲， 1 标识有空闲
@@ -133,8 +141,8 @@ typedef struct {
     uint16_t start;
     uint16_t end;
     uint16_t max;
-    uint8_t full;// start=end=max=2^21 最大值， full 设置为 1, 表示所有空间都是空间的
-} page_summary_t;// page alloc chunk 的摘要数据，组成 [start,max,end]
+    uint8_t full; // start=end=max=2^21 最大值， full 设置为 1, 表示所有空间都是空间的
+} page_summary_t; // page alloc chunk 的摘要数据，组成 [start,max,end]
 
 /**
  * chunk 1bit 对应一个 page 是否被使用
@@ -179,7 +187,7 @@ typedef struct {
     // 每个 arena 包含 64M 内存，被划分成 8192个 page, 每个 page 8K
     // 可以通过 page_index 快速定位到 span, 每一个 pages 都会在这里有一个数据
     // 可以是一个 span 存在于多个 page_index 中, 一个 span 的最小内存是 8k, 所以一个 page 最多只能存储一个 span.
-    mspan_t *spans[ARENA_PAGES_COUNT];// page = 8k, 所以 pages 的数量是固定的
+    mspan_t *spans[ARENA_PAGES_COUNT]; // page = 8k, 所以 pages 的数量是固定的
 
     addr_t base;
 } arena_t;
@@ -188,7 +196,7 @@ typedef struct {
  * 从 0.75T 开始 hint,知道 126.75T
  */
 typedef struct arena_hint_t {
-    addr_t addr;// mmap hint addr
+    addr_t addr; // mmap hint addr
     bool last;
     struct arena_hint_t *next;
 } arena_hint_t;
@@ -200,35 +208,36 @@ typedef struct {
     // 全局只有这一个 page alloc，所以所有通过 arena 划分出来的 page 都将被该 page alloc 结构管理
     page_alloc_t page_alloc;
     // arenas 在空间上是不连续的，尤其是前面部分都是 null, 为了能够快速遍历，需要一个可遍历的空间
-    slice_t *arena_indexes;// arena index 列表
+    slice_t *arena_indexes; // arena index 列表
     arena_t *arenas[ARENA_COUNT];
     mcentral_t centrals[SPANCLASS_COUNT];
     uint32_t sweepgen;
-    slice_t *spans;// 所有分配的 span 都会在这里被引用
+    slice_t *spans; // 所有分配的 span 都会在这里被引用
     arena_hint_t *arena_hints;
+
     // cursor ~ end 可能会跨越多个连续的 arena
     struct {
-        addr_t cursor;// 指向未被使用的地址, 从 0 开始计算
-        addr_t end;   // 指向本次申请的终点
+        addr_t cursor; // 指向未被使用的地址, 从 0 开始计算
+        addr_t end; // 指向本次申请的终点
     } current_arena;
 
     fixalloc_t spanalloc;
 } mheap_t;
 
 typedef struct {
-    mheap_t *mheap;// 全局 heap, 访问时需要加锁
+    mheap_t *mheap; // 全局 heap, 访问时需要加锁
     mutex_t locker;
     uint32_t sweepgen;
-    uint64_t gc_count;// gc 循环次数
+    uint64_t gc_count; // gc 循环次数
 } memory_t;
 
 typedef enum {
-    CO_STATUS_RUNNABLE = 1,// 允许被调度
+    CO_STATUS_RUNNABLE = 1, // 允许被调度
     CO_STATUS_RUNNING = 2, // 正在运行
     CO_STATUS_TPLCALL = 3, // 陷入系统调用
-    CO_STATUS_RTCALL = 4,  // 陷入系统调用
+    CO_STATUS_RTCALL = 4, // 陷入系统调用
     CO_STATUS_WAITING = 5, // 等待 IO 事件就绪
-    CO_STATUS_DEAD = 6,    // 死亡状态
+    CO_STATUS_DEAD = 6, // 死亡状态
 } co_status_t;
 
 typedef enum {
@@ -268,40 +277,75 @@ static inline rtype_t *rti_linkco_rtype() {
 typedef struct n_future_t {
     int64_t size;
     void *result;
-    n_errort *error;// 类似 result 一样可选的 error
+    n_errort *error; // 类似 result 一样可选的 error
     void *await_co;
 } n_future_t;
 
 struct coroutine_t {
     int64_t id;
-    bool main;// 是否是 main 函数
-    bool solo;// 当前协程需要独享线程
+    bool main; // 是否是 main 函数
+    bool solo; // 当前协程需要独享线程
     bool ticket;
     co_status_t status;
     aco_t aco;
-    void *fn;      // fn 指向
+    void *fn; // fn 指向
 
     pthread_mutex_t *yield_lock; // yield 完成后进行 unlock, 并清空该 lock
 
-    n_processor_t *p;// 当前 coroutine 绑定的 p
+    n_processor_t *p; // 当前 coroutine 绑定的 p
 
     n_future_t *future;
 
-    struct coroutine_t *await_co;// 可能为 null, 如果不为 null 说明该 co 在等待当前 co exit
+    struct coroutine_t *await_co; // 可能为 null, 如果不为 null 说明该 co 在等待当前 co exit
     mutex_t dead_locker;
 
     // 当前 coroutine stack 颜色是否为黑色, 黑色说明当前 goroutine stack 已经扫描完毕
     // gc stage 是 mark 时, 当 gc_black 值小于 memory->gc_count 时，说明当前 coroutine stack 不是黑色的
     uint64_t gc_black;
 
-    bool gc_work;// 当前 coroutine 是否是 gc coroutine
+    bool gc_work; // 当前 coroutine 是否是 gc coroutine
 
+    /**
+    * arm64
+     高地址
+    +------------------------+
+    |     上一个栈帧        |
+    +------------------------+
+    |     局部变量          |
+    +------------------------+
+    |     保存的寄存器      |
+    +------------------------+
+    |     LR (x30)          |
+    +------------------------+
+    |     FP (x29)          |
+    +------------------------+ current FP
+    |     参数区域          |
+    +------------------------+
+    低地址
+
+    amd64
+    高地址
+    +------------------------+
+    |     上一个栈帧        |
+    +------------------------+
+    |     返回地址          |
+    +------------------------+
+    |     保存的 RBP        |
+    +------------------------+
+    |     局部变量          |
+    +------------------------+
+    |     保存的寄存器      |
+    +------------------------+
+    |     参数区域          |
+    +------------------------+
+    低地址
+    */
     uint64_t scan_offset;
     uint64_t scan_ret_addr;
 
     n_errort *error;
 
-    struct coroutine_t *next;// coroutine list
+    struct coroutine_t *next; // coroutine list
 };
 
 /**
@@ -310,18 +354,18 @@ struct coroutine_t {
  */
 struct n_processor_t {
     int index;
-    mcache_t mcache;              // 线程维度无锁内存分配器
-    aco_t main_aco;               // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
-    aco_share_stack_t share_stack;// processor 中的所有的 stack 都使用该共享栈
+    mcache_t mcache; // 线程维度无锁内存分配器
+    aco_t main_aco; // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
+    aco_share_stack_t share_stack; // processor 中的所有的 stack 都使用该共享栈
 
     struct sigaction sig;
     uv_timer_t timer; // 辅助协程调度的定时器
-    uv_loop_t uv_loop;// uv loop 事件循环
+    uv_loop_t uv_loop; // uv loop 事件循环
 
     // - 仅仅 solo processor 需要该锁， share 进行协作时需要上锁，避免在此期间进行任何内存操作
-    mutex_t gc_stw_locker;// solo processor 辅助判断
-    uint64_t need_stw;    // 外部声明, 内部判断 是否需要 stw
-    uint64_t safe_point;  // 内部声明, 外部判断是否已经 stw
+    mutex_t gc_stw_locker; // solo processor 辅助判断
+    uint64_t need_stw; // 外部声明, 内部判断 是否需要 stw
+    uint64_t safe_point; // 内部声明, 外部判断是否已经 stw
 
     // 当前 p 需要被其他线程读取的一些属性都通过该锁进行保护
     // - 如更新 p 对应的 co 的状态等
@@ -329,25 +373,23 @@ struct n_processor_t {
     p_status_t status;
 
     uv_thread_t thread_id; // 当前 processor 绑定的 pthread 线程
-    coroutine_t *coroutine;// 当前正在调度的 coroutine
-    uint64_t co_started_at;// 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
+    coroutine_t *coroutine; // 当前正在调度的 coroutine
+    uint64_t co_started_at; // 协程调度开始时间, 单位纳秒，一般从系统启动时间开始计算，而不是 unix 时间戳
 
     // 存储 linkco_t 的指针，注意 gc 的时候需要遍历进行 mark 避免被错误清理
     linkco_t *linkco_cache[P_LINKCO_CACHE_MAX];
     uint8_t linkco_count;
 
-    rt_linked_fixalloc_t co_list;// 当前 processor 下的 coroutine 列表
+    rt_linked_fixalloc_t co_list; // 当前 processor 下的 coroutine 列表
     rt_linked_fixalloc_t runnable_list;
 
-    bool share;// 默认都是共享处理器
+    bool share; // 默认都是共享处理器
 
-    rt_linked_fixalloc_t gc_worklist;// gc 扫描的 ptr 节点列表
-    uint64_t gc_work_finished;       // 当前处理的 GC 轮次，每完成一轮 + 1
+    rt_linked_fixalloc_t gc_worklist; // gc 扫描的 ptr 节点列表
+    uint64_t gc_work_finished; // 当前处理的 GC 轮次，每完成一轮 + 1
 
-    struct n_processor_t *next;// processor 链表支持
+    struct n_processor_t *next; // processor 链表支持
 };
-
-int runtime_main(int argc, char *argv[]);
 
 void test_runtime_init();
 
@@ -368,35 +410,52 @@ coroutine_t *coroutine_get();
 
 void processor_set_status(n_processor_t *p, p_status_t status);
 
-#ifdef __x86_64__
-#define BP_VALUE()      \
-    uint64_t rbp_value; \
-    __asm__ volatile("mov %%rbp, %0" : "=r"(rbp_value));
-#elif defined(__aarch64__)
-#define BP_VALUE()      \
-    uint64_t rbp_value; \
-    __asm__ volatile("mov x29, %0" : "=r"(rbp_value));
-#else
-assert(false);
-#endif
-
+#ifdef __AMD64
 #define PRE_RTCALL_HOOK(target)                                                                                \
     do {                                                                                                       \
         n_processor_t *p = processor_get();                                                                      \
         if (!p) {                                                                                              \
             break;                                                                                             \
         }                                                                                                      \
-        if (p->status == P_STATUS_RTCALL) {                                                                    \
+        if (p->status == P_STATUS_RTCALL || p->status == P_STATUS_TPLCALL) {                                                                    \
             break;                                                                                             \
         }                                                                                                      \
         processor_set_status(p, P_STATUS_RTCALL);                                                              \
         DEBUGF("[pre_rtcall_hook] target %s, status set rtcall success, non-preemption", __FUNCTION__);        \
-        BP_VALUE();                                                                                            \
+        uint64_t rbp_value; \
+        __asm__ volatile("mov %0, x29" : "=r"(rbp_value));                                                                                       \
         coroutine_t *_co = coroutine_get();                                                                    \
         assert(_co);                                                                                           \
         _co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);                                       \
         _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE); \
     } while (0);
+#elif __ARM64
+#define PRE_RTCALL_HOOK(target)                                                                                \
+    do {                                                                                                       \
+        n_processor_t *p = processor_get();                                                                      \
+        if (!p) {                                                                                              \
+            break;                                                                                             \
+        }                                                                                                      \
+         if (p->status == P_STATUS_RTCALL || p->status == P_STATUS_TPLCALL) {                                                                    \
+            break;                                                                                             \
+        }                                                                                                      \
+        processor_set_status(p, P_STATUS_RTCALL);                                                              \
+        DEBUGF("[pre_rtcall_hook] target %s, status set rtcall success, non-preemption", __FUNCTION__);        \
+        coroutine_t *_co = coroutine_get();                                                                    \
+        assert(_co);   \
+        addr_t fp_value; \
+        __asm__ volatile("mov %0, x29" : "=r"(fp_value)); \
+        _co->scan_ret_addr = fetch_addr_value(fp_value + POINTER_SIZE); \
+        assert(_co->scan_ret_addr); \
+        addr_t prev_fp_value = fetch_addr_value(fp_value); \
+        assert(prev_fp_value); \
+        fndef_t *fn = find_fn(_co->scan_ret_addr); \
+        assert(fn); \
+        _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (prev_fp_value - fn->stack_size); \
+    } while (0);
+#else
+    assert(false);
+#endif
 
 void pre_tplcall_hook();
 

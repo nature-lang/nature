@@ -260,7 +260,9 @@ typedef struct uv_metrics_s uv_metrics_t;
 
 typedef enum {
   UV_LOOP_BLOCK_SIGNAL = 0,
-  UV_METRICS_IDLE_TIME
+  UV_METRICS_IDLE_TIME,
+  UV_LOOP_USE_IO_URING_SQPOLL
+#define UV_LOOP_USE_IO_URING_SQPOLL UV_LOOP_USE_IO_URING_SQPOLL
 } uv_loop_option;
 
 typedef enum {
@@ -604,7 +606,18 @@ UV_EXTERN int uv_tcp_simultaneous_accepts(uv_tcp_t* handle, int enable);
 
 enum uv_tcp_flags {
   /* Used with uv_tcp_bind, when an IPv6 address is used. */
-  UV_TCP_IPV6ONLY = 1
+  UV_TCP_IPV6ONLY = 1,
+
+  /* Enable SO_REUSEPORT socket option when binding the handle.
+   * This allows completely duplicate bindings by multiple processes
+   * or threads if they all set SO_REUSEPORT before binding the port.
+   * Incoming connections are distributed across the participating
+   * listener sockets.
+   *
+   * This flag is available only on Linux 3.9+, DragonFlyBSD 3.6+,
+   * FreeBSD 12.0+, Solaris 11.4, and AIX 7.2.5+ for now.
+   */
+  UV_TCP_REUSEPORT = 2,
 };
 
 UV_EXTERN int uv_tcp_bind(uv_tcp_t* handle,
@@ -645,10 +658,13 @@ enum uv_udp_flags {
   UV_UDP_PARTIAL = 2,
   /*
    * Indicates if SO_REUSEADDR will be set when binding the handle.
-   * This sets the SO_REUSEPORT socket flag on the BSDs and OS X. On other
-   * Unix platforms, it sets the SO_REUSEADDR flag.  What that means is that
-   * multiple threads or processes can bind to the same address without error
-   * (provided they all set the flag) but only the last one to bind will receive
+   * This sets the SO_REUSEPORT socket flag on the BSDs (except for
+   * DragonFlyBSD), OS X, and other platforms where SO_REUSEPORTs don't
+   * have the capability of load balancing, as the opposite of what
+   * UV_UDP_REUSEPORT would do. On other Unix platforms, it sets the
+   * SO_REUSEADDR flag. What that means is that multiple threads or
+   * processes can bind to the same address without error (provided
+   * they all set the flag) but only the last one to bind will receive
    * any traffic, in effect "stealing" the port from the previous listener.
    */
   UV_UDP_REUSEADDR = 4,
@@ -671,6 +687,18 @@ enum uv_udp_flags {
    * This flag is no-op on platforms other than Linux.
    */
   UV_UDP_LINUX_RECVERR = 32,
+  /*
+   * Indicates if SO_REUSEPORT will be set when binding the handle.
+   * This sets the SO_REUSEPORT socket option on supported platforms.
+   * Unlike UV_UDP_REUSEADDR, this flag will make multiple threads or
+   * processes that are binding to the same address and port "share"
+   * the port, which means incoming datagrams are distributed across
+   * the receiving sockets among threads or processes.
+   *
+   * This flag is available only on Linux 3.9+, DragonFlyBSD 3.6+,
+   * FreeBSD 12.0+, Solaris 11.4, and AIX 7.2.5+ for now.
+   */
+  UV_UDP_REUSEPORT = 64,
   /*
    * Indicates that recvmmsg should be used, if available.
    */
@@ -1106,7 +1134,14 @@ enum uv_process_flags {
    * option is only meaningful on Windows systems. On Unix it is silently
    * ignored.
    */
-  UV_PROCESS_WINDOWS_HIDE_GUI = (1 << 6)
+  UV_PROCESS_WINDOWS_HIDE_GUI = (1 << 6),
+  /*
+   * On Windows, if the path to the program to execute, specified in
+   * uv_process_options_t's file field, has a directory component,
+   * search for the exact file name before trying variants with
+   * extensions like '.exe' or '.cmd'.
+   */
+  UV_PROCESS_WINDOWS_FILE_PATH_EXACT_NAME = (1 << 7)
 };
 
 /*
@@ -1283,6 +1318,17 @@ UV_EXTERN uv_pid_t uv_os_getppid(void);
 
 UV_EXTERN int uv_os_getpriority(uv_pid_t pid, int* priority);
 UV_EXTERN int uv_os_setpriority(uv_pid_t pid, int priority);
+
+enum {
+  UV_THREAD_PRIORITY_HIGHEST = 2,
+  UV_THREAD_PRIORITY_ABOVE_NORMAL = 1,
+  UV_THREAD_PRIORITY_NORMAL = 0,
+  UV_THREAD_PRIORITY_BELOW_NORMAL = -1,
+  UV_THREAD_PRIORITY_LOWEST = -2,
+};
+
+UV_EXTERN int uv_thread_getpriority(uv_thread_t tid, int* priority);
+UV_EXTERN int uv_thread_setpriority(uv_thread_t tid, int priority);
 
 UV_EXTERN unsigned int uv_available_parallelism(void);
 UV_EXTERN int uv_cpu_info(uv_cpu_info_t** cpu_infos, int* count);
@@ -1884,6 +1930,18 @@ struct uv_loop_s {
 
 UV_EXTERN void* uv_loop_get_data(const uv_loop_t*);
 UV_EXTERN void uv_loop_set_data(uv_loop_t*, void* data);
+
+/* Unicode utilities needed for dealing with Windows. */
+UV_EXTERN size_t uv_utf16_length_as_wtf8(const uint16_t* utf16,
+                                         ssize_t utf16_len);
+UV_EXTERN int uv_utf16_to_wtf8(const uint16_t* utf16,
+                               ssize_t utf16_len,
+                               char** wtf8_ptr,
+                               size_t* wtf8_len_ptr);
+UV_EXTERN ssize_t uv_wtf8_length_as_utf16(const char* wtf8);
+UV_EXTERN void uv_wtf8_to_utf16(const char* wtf8,
+                                uint16_t* utf16,
+                                size_t utf16_len);
 
 /* Don't export the private CPP symbols. */
 #undef UV_HANDLE_TYPE_PRIVATE

@@ -138,7 +138,7 @@ static string arm64_asm_operand_to_string(arm64_asm_operand_t *operand) {
             }
         }
         case ARM64_ASM_OPERAND_COND: {
-            static const char *cond_names[] = {
+            static char *cond_names[] = {
                     "eq", "ne", "hs", "lo", "mi", "pl", "vs", "vc",
                     "hi", "ls", "ge", "lt", "gt", "le", "al", "nv"
             };
@@ -149,18 +149,10 @@ static string arm64_asm_operand_to_string(arm64_asm_operand_t *operand) {
             return "invalid";
         }
         case ARM64_ASM_OPERAND_SHIFT: {
-            static const char *shift_types[] = {
-                    "lsl", "lsr", "asr", "ror"
-            };
-            if (operand->extend.option < 4) {
-                return dsprintf("%s #%ld",
-                                shift_types[operand->extend.option],
-                                operand->extend.imm);
-            }
-            return "invalid";
+            return dsprintf("lsl #%ld", operand->immediate);
         }
         case ARM64_ASM_OPERAND_EXTEND: {
-            static const char *extend_types[] = {
+            static char *extend_types[] = {
                     "uxtb", "uxth", "uxtw", "uxtx",
                     "sxtb", "sxth", "sxtw", "sxtx"
             };

@@ -5,14 +5,14 @@
 
 // STACK[12]
 static char *lir_operand_stack_to_string(lir_stack_t *stack) {
-    char *str = (char *) mallocz(100);
-    sprintf(str, "STACK[%ld|%ld]", stack->slot, stack->size);
+    char *str = (char *) mallocz(30);
+    sprintf(str, "STACK[%ld|%ld|%s]", stack->slot, stack->size, type_kind_str[stack->kind]);
     return str;
 }
 
 // REG[rax]
 static char *lir_operand_reg_to_string(reg_t *reg) {
-    char *str = (char *) mallocz(100);
+    char *str = (char *) mallocz(30);
     sprintf(str, "REG[%s]", reg->name);
     return str;
 }
@@ -32,7 +32,8 @@ string lir_operand_to_string(lir_operand_t *operand) {
         case LIR_OPERAND_SYMBOL_LABEL: {
             return lir_label_to_string((lir_symbol_label_t *) operand->value);
         }
-        case LIR_OPERAND_SYMBOL_VAR: { // 外部符号引用
+        case LIR_OPERAND_SYMBOL_VAR: {
+            // 外部符号引用
             return lir_operand_symbol_to_string((lir_symbol_var_t *) operand->value);
         }
         case LIR_OPERAND_STACK: {

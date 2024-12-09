@@ -6,7 +6,7 @@
 #else
 .type  acosw, @function
 #endif
-#ifdef __x86_64__
+#ifndef __aarch64__
 .intel_syntax noprefix
 #endif
 acosw:
@@ -47,30 +47,42 @@ acosw:
     jmp     rax
 
 #elif defined(__aarch64__)
-    // acosw 函数的 ARM64 实现
-    // x0 - from_co (第一个参数)
-    // x1 - to_co (第二个参数)
-    // 保存调用者保存的寄存器
-    stp x19, x20, [x0, #0]
-    stp x21, x22, [x0, #16]
-    stp x23, x24, [x0, #32]
-    stp x25, x26, [x0, #48]
-    stp x27, x28, [x0, #64]
-    stp x29, x30, [x0, #80]    // x29 是 fp, x30 是 lr
-    mov x2, sp
-    str x2, [x0, #96]          // 保存 sp
+ /*
+     0x00         -->            0xff
+     x16 x17 x19  ...  x29 lr sp fpcr
+     0   8   10   ...  60  68 70 78
+ */
+     // r0 - from_co | r1 - to_co
+     mov     x2,  lr
+     stp    x16, x17, [x0, 0x00]
+     stp    x19, x20, [x0, 0x10]
+     stp    x21, x22, [x0, 0x20]
+     stp    x23, x24, [x0, 0x30]
+     stp    x25, x26, [x0, 0x40]
+     stp    x27, x28, [x0, 0x50]
+     stp    x29, lr,  [x0, 0x60]
+     mov     x5,  sp
+     str     x5,  [x0, 0x70]
+ #ifndef ACO_CONFIG_SHARE_FPU_MXCSR_ENV
+     mrs     x5,  fpcr
+     str     x5,  [x1, 0x78]
+ #endif
 
-    // 加载目标协程的寄存器
-    ldp x19, x20, [x1, #0]
-    ldp x21, x22, [x1, #16]
-    ldp x23, x24, [x1, #32]
-    ldp x25, x26, [x1, #48]
-    ldp x27, x28, [x1, #64]
-    ldp x29, x30, [x1, #80]    // 恢复 fp 和 lr
-    ldr x2, [x1, #96]
-    mov sp, x2                  // 恢复 sp
-    ret                        // 使用加载的 lr 返回#else
+     ldp     x16, x17, [x1, 0x00]
+     ldp     x19, x20, [x1, 0x10]
+     ldp     x21, x22, [x1, 0x20]
+     ldp     x23, x24, [x1, 0x30]
+     ldp     x25, x26, [x1, 0x40]
+     ldp     x27, x28, [x1, 0x50]
+     ldp     x29, x30, [x1, 0x60]
+     ldr     x3,  [x1, 0x70]
+     mov     sp,  x3
+ #ifndef ACO_CONFIG_SHARE_FPU_MXCSR_ENV
+     ldr     x3,  [x1, 0x78]
+     msr     fpcr,x3
+ #endif
 
+     br      x30
 #else
     #error "platform not support"
 #endif
@@ -272,7 +284,7 @@ async_preempt:
 .type  aco_save_reg, @function
 #endif
 
-#ifdef __x86_64__
+#ifndef __aarch64__
 .intel_syntax noprefix
 #endif
 
@@ -316,7 +328,7 @@ aco_save_reg:
 #else
 .type  aco_save_fpucw_mxcsr, @function
 #endif
-#ifdef __x86_64__
+#ifndef __aarch64__
 .intel_syntax noprefix
 #endif
 
@@ -325,13 +337,9 @@ aco_save_fpucw_mxcsr:
     fnstcw  WORD PTR  [rdi]
     stmxcsr DWORD PTR [rdi+0x4]
     ret
-#elif defined(__aarch64__)
-    // ARM64 没有直接对应的 FPU 控制字和 MXCSR
-    // 我们可以保存 FPCR 和 FPSR
+#elif __aarch64__
     mrs x1, fpcr
-    str w1, [x0, #0]   // 使用 w1 因为 FPCR 是32位
-    mrs x1, fpsr
-    str w1, [x0, #4]   // 同时保存 FPSR
+    str x1, [x0]
     ret
 #else
     #error "platform not support"
@@ -351,7 +359,7 @@ aco_save_fpucw_mxcsr:
 .type  aco_funcp_protector_asm, @function
 #endif
 
-#ifdef __x86_64__
+#ifndef __aarch64__
 .intel_syntax noprefix
 #endif
 
@@ -362,11 +370,12 @@ aco_funcp_protector_asm:
     call    SYM(abort)
     ret
 #elif defined(__aarch64__)
-    AND x0, x0, #0xFFFFFFFFFFFFFFF0
-
-    bl SYM(aco_funcp_protector)
-    bl SYM(abort)
-    ret 
+    mov     x9, sp
+    and     x9, x9, #0xfffffffffffffff0
+    mov     sp, x9
+    bl      aco_funcp_protector
+    bl      abort
+    ret
 #else
     #error "platform not support"
 #endif

@@ -1,11 +1,4 @@
-#add_executable(test_hello test_hello.c ${SRC} ${CMD} ${UTILS})
-#add_test(test_hello test_hello)
-#
-#add_executable(test_bitmap test_bitmap.c ${UTILS})
-#add_test(test_bitmap test_bitmap)
-#
-#add_executable(test_slice test_slice.c ${UTILS})
-#add_test(test_slice test_slice)
+include(CTest)
 
 # runtime test
 ENABLE_LANGUAGE(ASM)
@@ -17,7 +10,6 @@ message("LIBUV_STATIC: ${LIBUV_STATIC}")
 set(LIBUC_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libc.a")
 message("LIBUC_STATIC: ${LIBUC_STATIC}")
 
-
 add_executable(test_page_alloc test_page_alloc.c ${RUNTIMES} ${UTILS})
 target_link_libraries(test_page_alloc ${LIBUV_STATIC})
 add_test(test_page_alloc test_page_alloc)
@@ -25,6 +17,10 @@ add_test(test_page_alloc test_page_alloc)
 add_executable(test_rt_mutex test_rt_mutex.c ${RUNTIMES} ${UTILS})
 target_link_libraries(test_rt_mutex ${LIBUV_STATIC})
 add_test(test_rt_mutex test_rt_mutex)
+
+add_executable(test_runtime_fn test_runtime_fn.c ${RUNTIMES} ${UTILS})
+target_link_libraries(test_runtime_fn ${LIBUV_STATIC})
+add_test(test_runtime_fn test_runtime_fn)
 
 add_executable(test_yaml test_yaml.c ${UTILS})
 add_test(test_yaml test_yaml)
@@ -96,14 +92,22 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
             COMMENT "Generating ${LIBMAIN_STATIC}"
     )
 
+    add_custom_target(generate_libmain ALL
+            DEPENDS ${LIBMAIN_STATIC}
+            COMMENT "Trigger libmain.a generation"
+    )
+
     message("[test_runtime_debug] LIBMAIN_STATIC: ${LIBMAIN_STATIC}")
 
     # 2. target_link_libraries 生成最终可执行文件, 依赖上一部生成的 libmain.a
-    add_executable(test_runtime_debug test_runtime_debug.c ${RUNTIMES} ${UTILS} ${LIBMAIN_STATIC})
-    if (CMAKE_SYSTEM_NAME MATCHES "linux")
+    add_executable(test_runtime_debug test_runtime_debug.c ${RUNTIMES} ${UTILS})
+#    if (CMAKE_SYSTEM_NAME MATCHES "linux")
         #        set(CMAKE_EXE_LINKER_FLAGS "-static")
-        set_target_properties(test_runtime_debug PROPERTIES LINK_FLAGS "-static")
-    endif ()
+#        set_target_properties(test_runtime_debug PROPERTIES LINK_FLAGS "-static")
+#    endif ()
+
+    add_dependencies(test_runtime_debug generate_libmain)  # 添加这行
+
     target_link_libraries(test_runtime_debug ${LIBMAIN_STATIC} ${LIBUV_STATIC})
     add_test(NAME test_runtime_debug COMMAND test_runtime_debug WORKING_DIRECTORY ${WORK_DIR})
 

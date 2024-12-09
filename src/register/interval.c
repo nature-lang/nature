@@ -14,10 +14,15 @@
  */
 static alloc_kind_e alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
     if (lir_op_contain_cmp(op)) {
-        if (var->flag & FLAG(LIR_FLAG_OUTPUT)) { // 顶层 var 才不用分配寄存器，否则 var 可能只是 indirect_addr base
+        if (BUILD_ARCH == ARCH_ARM64 && lir_op_scc(op)) {
+            return ALLOC_KIND_MUST;
+        }
+
+        if (var->flag & FLAG(LIR_FLAG_OUTPUT)) {
             return ALLOC_KIND_SHOULD;
         }
     }
+
     if (op->code == LIR_OPCODE_MOVE) {
         // 如果 left == imm 或者 reg 则返回 should, mov 的 first 一定是 use
         assertf(var->flag & FLAG(LIR_FLAG_OUTPUT), "move def must in output");
@@ -29,6 +34,10 @@ static alloc_kind_e alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var
 
         if (first->assert_type == LIR_OPERAND_IMM) {
             lir_imm_t *imm = first->value;
+            if (BUILD_ARCH == ARCH_ARM64) {
+                return ALLOC_KIND_MUST;
+            }
+
             if (!is_qword_int(imm->kind)) {
                 return ALLOC_KIND_SHOULD;
             }
@@ -50,6 +59,8 @@ static alloc_kind_e alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var
 /**
  * 如果 op type is var, 且是 indirect addr, 则必须分配一个寄存器，用于地址 indirect addr
  * output 已经必须要有寄存器了, input 就无所谓了
+ *
+ * use = first or second
  * @param c
  * @param op
  * @param i
@@ -57,7 +68,6 @@ static alloc_kind_e alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var
  */
 static alloc_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var) {
     // var 是 indirect addr 的 base 部分， native indirect addr 则必须借助寄存器
-//    if (var->flag & FLAG(LIR_FLAG_INDIRECT_ADDR_BASE) && op->code != LIR_OPCODE_LEA) {
     if (var->flag & FLAG(LIR_FLAG_INDIRECT_ADDR_BASE)) {
         return ALLOC_KIND_MUST;
     }
@@ -67,7 +77,9 @@ static alloc_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var
         return ALLOC_KIND_NOT;
     }
 
+    // arm64 和 amd64 都适用
     if (op->code == LIR_OPCODE_MOVE) {
+        // 如果 output 不是寄存器，则 input 必须分配寄存器
         if (op->output->assert_type == LIR_OPERAND_SYMBOL_VAR ||
             op->output->assert_type == LIR_OPERAND_STACK ||
             op->output->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
@@ -82,21 +94,32 @@ static alloc_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var
         }
     }
 
-    // 比较运算符实用了 op cmp, 所以 cmp 的 first 或者 second 其中一个必须是寄存器
+    if (BUILD_ARCH == ARCH_ARM64 && (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT)) {
+        return ALLOC_KIND_MUST;
+    }
+
     // 如果优先分配给 first, 如果 first 不是寄存器，则分配给 second
-    if (lir_op_contain_cmp(op)) { // cmp indirect addr
+    if (lir_op_contain_cmp(op)) {
+        // cmp indirect addr
         assert((op->first->assert_type == LIR_OPERAND_VAR || op->second->assert_type == LIR_OPERAND_VAR) &&
-               "cmp must have var, var can allocate registers");
+            "cmp must have var, var can allocate registers");
 
         if (var->flag & FLAG(LIR_FLAG_FIRST)) {
             return ALLOC_KIND_MUST;
         }
 
+        // if (BUILD_ARCH == ARCH_ARM64) {
+        //     // arm64 除了 ldr 和 str 指令外，其他所有指令都不允许操作 mem
+        //     if (var->flag & FLAG(LIR_FLAG_SECOND) && op->first->assert_type == LIR_OPERAND_VAR) {
+        //         return ALLOC_KIND_MUST;
+        //     }
+        // } else {
         // second 只能是在 first 非 var 的情况下才能分配寄存器
         if (var->flag & FLAG(LIR_FLAG_SECOND) && op->first->assert_type != LIR_OPERAND_VAR) {
             // 优先将寄存器分配给 first, 仅当 first 不是 var 时才分配给 second
             return ALLOC_KIND_MUST;
         }
+        // }
     }
     return ALLOC_KIND_SHOULD;
 }
@@ -147,7 +170,7 @@ static void loop_header_detect(closure_t *c, basic_block_t *current, basic_block
         assert(parent->succs->count == 1 && parent->succs->take[0] == current && "critical edge must broken");
 
         slice_push(current->loop_ends, parent);
-        slice_push(c->loop_ends, parent);// 一个 header 可能对应多个 end
+        slice_push(c->loop_ends, parent); // 一个 header 可能对应多个 end
         return;
     }
 
@@ -222,7 +245,6 @@ static void loop_mark(closure_t *c) {
                 linked_push(work_list, pred);
                 pred->loop.index_map[loop_index] = true;
             }
-
         } while (!linked_empty(work_list));
     }
 }
@@ -376,7 +398,7 @@ static interval_t *operand_interval(closure_t *c, lir_operand_t *operand) {
 // 大值在栈顶被优先处理 block_to_stack
 static void block_to_depth_stack(ct_stack_t *work_list, basic_block_t *block) {
     // next->next->next
-    stack_node *p = work_list->top;// top 指向栈中的下一个可用元素，总是为 NULL
+    stack_node *p = work_list->top; // top 指向栈中的下一个可用元素，总是为 NULL
     while (p->next != NULL && ((basic_block_t *) p->next->value)->loop.depth > block->loop.depth) {
         p = p->next;
     }
@@ -481,7 +503,7 @@ void interval_build(closure_t *c) {
 
 
         int block_from = OP(linked_first(block->operations))->id;
-        int block_to = OP(block->last_op)->id + 2;// +2 是为了让 interval lifetime 具有连续性，从而在 add range 时能够进行 merge
+        int block_to = OP(block->last_op)->id + 2; // +2 是为了让 interval lifetime 具有连续性，从而在 add range 时能够进行 merge
 
         // lives(out) in add full range 遍历所有的 lives(union all succ, so it similar live_out),直接添加跨越整个块到间隔
         // 后续遇到 def 时会缩减长度， add_range 会对 range 进行合并,上面的 +2 是合并的基础
@@ -555,7 +577,7 @@ void interval_build(closure_t *c) {
                         interval->first_range->from = op->id;
                     } else {
                         // 同样是仅定义未使用，或者重复定义(reg 情况)
-                        interval_add_range(c, interval, op->id, op->id + 1);// 进
+                        interval_add_range(c, interval, op->id, op->id + 1); // 进
                     }
                 }
 
@@ -631,7 +653,7 @@ interval_t *interval_new(closure_t *c) {
     i->spilled = false;
     i->fixed = false;
     i->parent = NULL;
-    i->index = c->interval_count++;// 基于 closure_t 做自增 id 即可
+    i->index = c->interval_count++; // 基于 closure_t 做自增 id 即可
     return i;
 }
 
@@ -649,7 +671,7 @@ bool interval_expired(interval_t *i, int position, bool is_input) {
         position -= 1;
     }
 
-    int last_to = i->last_range->to;// interval < last_to
+    int last_to = i->last_range->to; // interval < last_to
     // 由于 interval < last_to, 所以 position == last_to 时，interval 已经开始 expired 了
     return position >= last_to;
 }
@@ -704,7 +726,7 @@ int interval_next_intersect(closure_t *c, interval_t *current, interval_t *selec
     assertf(select->ranges->count > 0, "select interval=%d not ranges, cannot calc intersection", select->index);
     assertf(select->last_range->to > current->first_range->from, "select interval=%d is expired", select->index);
 
-    int position = current->first_range->from;// first_from 指向 range 的开头
+    int position = current->first_range->from; // first_from 指向 range 的开头
 
     int64_t end = max(current->last_range->to, select->last_range->to);
 
@@ -739,7 +761,7 @@ int interval_next_intersect(closure_t *c, interval_t *current, interval_t *selec
     result = select_first_cover;
     // 如果 select_first_cover 在 label 的位置，则其占用的空间范围应该前移
 
-    END:
+END:
 
     // 此时应该返回 select 大于 current->first_range->from 的首个 cover select 的节点
     // 因为即使没有交集，该寄存器的最大空闲时间也是到这个节点
@@ -764,9 +786,9 @@ int interval_next_intersect(closure_t *c, interval_t *current, interval_t *selec
 
 
             if (b->succs->count == 1) {
-                return OP(b->last_op)->id - 1;// 插入在 branch 之前即可
+                return OP(b->last_op)->id - 1; // 插入在 branch 之前即可
             } else {
-                assert(b->succs->count == 2);// 存在两个 branch 语句，所以需要 - 3
+                assert(b->succs->count == 2); // 存在两个 branch 语句，所以需要 - 3
                 return OP(b->last_op)->id - 3;
             }
         }
@@ -856,8 +878,6 @@ void interval_add_range(closure_t *c, interval_t *i, int from, int to) {
             // 重新计算 last range
             i->last_range = linked_last(i->ranges)->value;
         }
-
-
     } else {
         // 新的 range 和 旧的 range 无交集
         // 不重叠,则 range 插入到 ranges 的最前面
@@ -985,7 +1005,7 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
             linked_push(right_ranges, new_range);
 
             // from < position < to
-            range->to = position;// 截短丢到左边
+            range->to = position; // 截短丢到左边
             linked_push(left_ranges, range);
         }
     }
@@ -1011,7 +1031,7 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
 
     if (need_mov) {
         // mov id = position - 1
-        // 此时 child 还没有确定是分配寄存器还是溢出
+        // 此时 child 还没有确定是分配寄存器还是溢出, 后续 replace 的时候如果识别到是相同的寄存器，进行移除操作即可
         closure_insert_mov(c, position, i, child);
     }
 
@@ -1028,7 +1048,8 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
 
     i->assigned = 0;
     i->spilled = true;
-    if (*i->stack_slot != 0) {// 已经分配了 slot 了
+    if (*i->stack_slot != 0) {
+        // 已经分配了 slot 了
         return;
     }
 
@@ -1047,7 +1068,7 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
     bool is_ptr = type_is_pointer_heap(i->var->type);
     bitmap_grow_set(c->stack_gc_bits, bit_index, is_ptr);
 
-    *i->stack_slot = -c->stack_offset;// 取负数，一般栈都是高往低向下增长
+    *i->stack_slot = -c->stack_offset; // 取负数，一般栈都是高往低向下增长
 }
 
 /**
@@ -1091,10 +1112,10 @@ void resolve_data_flow(closure_t *c) {
             basic_block_t *to = from->succs->take[i];
 
             resolver_t r = {
-                    .from_list = slice_new(),
-                    .to_list = slice_new(),
-                    .insert_block = NULL,
-                    .insert_id = 0,
+                .from_list = slice_new(),
+                .to_list = slice_new(),
+                .insert_block = NULL,
+                .insert_id = 0,
             };
 
             // to 入口活跃则可能存在对同一个变量在进入到当前块之前就已经存在了，所以可能会进行 spill/reload
@@ -1142,7 +1163,7 @@ void resolve_data_flow(closure_t *c) {
                 assert(form_parent_interval);
                 interval_t *from_interval = interval_child_at(form_parent_interval, OP(from->last_op)->id, false);
 
-                lir_var_t *def = to_op->output->value;// result must assign reg
+                lir_var_t *def = to_op->output->value; // result must assign reg
                 interval_t *to_parent_interval = table_get(c->interval_table, def->ident);
                 assert(to_parent_interval);
                 interval_t *to_interval = interval_child_at(to_parent_interval, to_op->id, false);
@@ -1283,16 +1304,16 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
         r->insert_block = from;
 
         lir_op_t *last_op = from->last_op->value;
-        if (lir_op_branch(last_op)) {// 只有一个 succ, 说明只有一个 branch op, 直接插入到 branch op 之前即可
+        if (lir_op_branch(last_op)) {
+            // 只有一个 succ, 说明只有一个 branch op, 直接插入到 branch op 之前即可
             // insert before last op
             r->insert_id = last_op->id - 1;
         } else {
-            r->insert_id = last_op->id + 1;// ? 好像没有这种情况
+            r->insert_id = last_op->id + 1; // ? 好像没有这种情况
         }
-
     } else {
         r->insert_block = to;
-        r->insert_id = OP(to->first_op)->id - 1;// 插入到 label 之后，首个之类之前
+        r->insert_id = OP(to->first_op)->id - 1; // 插入到 label 之后，首个之类之前
     }
 }
 

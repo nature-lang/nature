@@ -123,6 +123,18 @@ void linked_concat(linked_t *dst, linked_t *src) {
     }
 }
 
+
+void linked_concat_free(linked_t *dst, linked_t *src) {
+    linked_node *current = src->front;
+    while (current->value != NULL) {
+        void *v = current->value;
+        linked_push(dst, v);
+        current = current->succ;
+    }
+
+    linked_free(src);
+}
+
 linked_node *linked_last(linked_t *l) {
     if (linked_empty(l)) {
         return NULL;

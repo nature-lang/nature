@@ -10,7 +10,7 @@
 extern int entry();
 
 /**
- * crt1.o _start -> runtime_main  -> entry
+ * crt1.o _start -> main  -> entry
  */
 int runtime_main(int argc, char *argv[]) {
     // - init log

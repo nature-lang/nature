@@ -34,16 +34,16 @@ char **command_argv;
                 return;                                                                                                                 \
             case TYPE_UINT:                                                                                                             \
             case TYPE_UINT64:                                                                                                           \
-                *(uint64_t *) output_ref = (uint64_t) _input_value;                                                                     \
+                *(uint64_t *) output_ref = (uint64_t)(int64_t) _input_value;                                                                     \
                 return;                                                                                                                 \
             case TYPE_UINT32:                                                                                                           \
-                *(uint32_t *) output_ref = (uint32_t) _input_value;                                                                     \
+                *(uint32_t *) output_ref = (uint32_t)(int32_t) _input_value;                                                                     \
                 return;                                                                                                                 \
             case TYPE_UINT16:                                                                                                           \
-                *(uint16_t *) output_ref = (uint16_t) _input_value;                                                                     \
+                *(uint16_t *) output_ref = (uint16_t)(int16_t) _input_value;                                                                     \
                 return;                                                                                                                 \
             case TYPE_UINT8:                                                                                                            \
-                *(uint8_t *) output_ref = (uint8_t) _input_value;                                                                       \
+                *(uint8_t *) output_ref = (uint8_t)(int8_t) _input_value;                                                                       \
                 return;                                                                                                                 \
             default:                                                                                                                    \
                 assert(false && "cannot scanner_number_convert type");                                                                  \
@@ -55,17 +55,25 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
     PRE_RTCALL_HOOK();
     rtype_t *input_rtype = rt_find_rtype(input_rtype_hash);
     rtype_t *output_rtype = rt_find_rtype(output_rtype_hash);
-    DEBUGF("[convert_number] input_kind=%s, input_ref=%p, output_kind=%s, output_ref=%p",
-           type_kind_str[input_rtype->kind], input_ref,
-           type_kind_str[output_rtype->kind], output_ref);
+    assertf(input_rtype, "cannot find input_rtype by hash %lu", input_rtype_hash);
+    assertf(output_rtype, "cannot find output_rtype by hash %lu", output_rtype_hash);
+
+    DEBUGF("[number_casting] input_kind=%s, input_ref=%p,input_int64(%ld), output_kind=%s, output_ref=%p",
+            type_kind_str[input_rtype->kind], input_ref, fetch_int_value((addr_t)input_ref, input_rtype->size),
+            type_kind_str[output_rtype->kind], output_ref);
 
     value_casting v = {0};
     memmove(&v, input_ref, input_rtype->size);
 
     switch (input_rtype->kind) {
         case TYPE_FLOAT:
-        case TYPE_FLOAT64: _NUMBER_CASTING(output_rtype->kind, v.f64_value, v.i64_value);
-        case TYPE_FLOAT32: _NUMBER_CASTING(output_rtype->kind, v.f32_value, v.i64_value);
+        case TYPE_FLOAT64: {
+            _NUMBER_CASTING(output_rtype->kind, v.f64_value, v.i64_value);
+        }
+        case TYPE_FLOAT32: {
+            _NUMBER_CASTING(output_rtype->kind, v.f32_value, v.i64_value);
+        }
+        // 其他类型保持不变
         case TYPE_INT:
         case TYPE_INT64: _NUMBER_CASTING(output_rtype->kind, v.i64_value, v.i64_value);
         case TYPE_INT32: _NUMBER_CASTING(output_rtype->kind, v.i32_value, v.i64_value);
@@ -113,9 +121,9 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
     uint64_t size = rt_rtype_out_size(target_rtype_hash);
     memmove(value_ref, &mu->value, size);
     DEBUGF(
-            "[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, "
-            "values_ref: %p",
-            mu, type_kind_str[mu->rtype->kind], size, mu->value.i64_value, value_ref);
+        "[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, "
+        "values_ref: %p",
+        mu, type_kind_str[mu->rtype->kind], size, mu->value.i64_value, value_ref);
 }
 
 bool union_is(n_union_t *mu, int64_t target_rtype_hash) {
@@ -345,10 +353,10 @@ void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_
     n_errort *error = n_error_new(msg, true);
 
     n_trace_t trace = {
-            .path = string_new(path, strlen(path)),
-            .ident = string_new(fn_name, strlen(fn_name)),
-            .line = line,
-            .column = column,
+        .path = string_new(path, strlen(path)),
+        .ident = string_new(fn_name, strlen(fn_name)),
+        .line = line,
+        .column = column,
     };
     rt_vec_push(error->traces, &trace);
 
@@ -368,6 +376,7 @@ n_errort co_remove_error() {
     co->error = NULL;
 
     post_rtcall_hook("co_remove_error");
+
     return *error;
 }
 
@@ -385,10 +394,10 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
     assert(column >= 0 && column < 1000000);
     // 存在异常时顺便添加调用栈信息
     n_trace_t trace = {
-            .path = string_new(path, strlen(path)),
-            .ident = string_new(fn_name, strlen(fn_name)),
-            .line = line,
-            .column = column,
+        .path = string_new(path, strlen(path)),
+        .ident = string_new(fn_name, strlen(fn_name)),
+        .line = line,
+        .column = column,
     };
 
     rt_vec_push(co->error->traces, &trace);
@@ -449,7 +458,7 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
     }
 
     if (rtype->kind == TYPE_STRING) {
-        n_string_t *n_str = (void *) fetch_addr_value((addr_t) data_ref);// 读取栈中存储的值
+        n_string_t *n_str = (void *) fetch_addr_value((addr_t) data_ref); // 读取栈中存储的值
         assert(n_str && n_str->length > 0 && "fetch addr by data ref failed");
 
         // return strdup(string_ref(n_str));
@@ -548,8 +557,10 @@ rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
     }
 
     rtype->kind = kind;
-    rtype->last_ptr = 0;// 最后一个包含指针的字节数, 使用该字段判断是否包含指针
-    rtype->gc_bits = malloc_gc_bits(count * POINTER_SIZE);
+    rtype->last_ptr = 0; // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
+    if (count > 0) {
+        rtype->gc_bits = malloc_gc_bits(count * POINTER_SIZE);
+    }
 
     /* 初始化可变参数列表 */
     va_start(valist, count);
@@ -596,7 +607,7 @@ rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
     rtype = NEW(rtype_t);
     rtype->size = length * POINTER_SIZE;
     rtype->kind = kind;
-    rtype->last_ptr = 0;// 最后一个包含指针的字节数, 使用该字段判断是否包含指针
+    rtype->last_ptr = 0; // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
     rtype->gc_bits = malloc_gc_bits(length * POINTER_SIZE);
     rtype->hash = hash;
     rtype->in_heap = true;
@@ -631,13 +642,13 @@ rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
 
     free(str);
     rtype_t rtype = {
-            .size = element_size * length,
-            .hash = hash,
-            .kind = TYPE_ARR,
-            .length = length,
+        .size = element_size * length,
+        .hash = hash,
+        .kind = TYPE_ARR,
+        .length = length,
     };
     rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bool need_gc = element_rtype->last_ptr > 0;// element 包含指针数据
+    bool need_gc = element_rtype->last_ptr > 0; // element 包含指针数据
     if (need_gc) {
         rtype.last_ptr = element_size * length;
 
@@ -652,7 +663,7 @@ rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
 }
 
 void raw_ptr_valid(void *raw_ptr) {
-    PRE_RTCALL_HOOK();// 修改状态避免抢占
+    PRE_RTCALL_HOOK(); // 修改状态避免抢占
 
     DEBUGF("[raw_ptr_valid] raw_ptr=%p", raw_ptr);
     // raw_ptr 必须处于合理的范围

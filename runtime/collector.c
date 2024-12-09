@@ -106,7 +106,7 @@ static void flush_mcache() {
                 continue;
             }
 
-            p->mcache.alloc[j] = NULL;// uncache
+            p->mcache.alloc[j] = NULL; // uncache
             mcentral_t *mcentral = &memory->mheap->centrals[span->spanclass];
             uncache_span(mcentral, span);
         }
@@ -119,7 +119,7 @@ static void flush_mcache() {
             if (!span) {
                 continue;
             }
-            p->mcache.alloc[j] = NULL;// uncache
+            p->mcache.alloc[j] = NULL; // uncache
             mcentral_t *mcentral = &memory->mheap->centrals[span->spanclass];
             uncache_span(mcentral, span);
         }
@@ -285,11 +285,11 @@ void mcentral_sweep(mheap_t *mheap) {
  */
 static void scan_stack(n_processor_t *p, coroutine_t *co) {
     DEBUGF(
-            "[runtime_gc.scan_stack] start, p_index_%d=%d(%lu), p_status=%d, co=%p, co_status=%d, co_stack_size=%zu, save_stack=%p(%zu), scan_offset=%lu, "
-            "scan_ret_addr=%p",
-            p->share, p->index, (uint64_t) p->thread_id, p->status, co, co->status, co->aco.save_stack.valid_sz,
-            co->aco.save_stack.ptr,
-            co->aco.save_stack.sz, co->scan_offset, (void *) co->scan_ret_addr);
+        "[runtime_gc.scan_stack] start, p_index_%d=%d(%lu), p_status=%d, co=%p, co_status=%d, co_stack_size=%zu, save_stack=%p(%zu), scan_offset=%lu, "
+        "scan_ret_addr=%p",
+        p->share, p->index, (uint64_t) p->thread_id, p->status, co, co->status, co->aco.save_stack.valid_sz,
+        co->aco.save_stack.ptr,
+        co->aco.save_stack.sz, co->scan_offset, (void *) co->scan_ret_addr);
 
     // save_stack 也是通过 gc 申请，即使是 gc_work 也需要标记一下
     assert(span_of((addr_t) co->aco.save_stack.ptr) && "coroutine save stack not found span");
@@ -319,7 +319,9 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     if (p->share) {
         aco_save_stack_t stack = co->aco.save_stack;
         assert(stack.valid_sz > 0);
-        // 通过 + sz 指向栈底，然后 - scan_offset 回到栈顶
+        // shae stack to save stack 通过 sp 指针将数据从栈顶(小值 copy 到大值)栈低
+        // 通过 + sz 指向栈底，然后 - scan_offset 回到栈顶, stack.ptr ~ valid_sz 是可扫描的区域，但是最靠近栈顶的部分函数被 syscall 占用无法识别
+        // 所以需要减掉这部分区域，从 nature fn 区域开始扫描, pre_tplcall_hook 会将最后一个 nature fn 的偏移写入到 scan offset 中
         scan_sp = ((addr_t) stack.ptr + stack.valid_sz) - co->scan_offset;
         size = stack.valid_sz;
     } else {
@@ -329,13 +331,13 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     }
     assert(scan_sp % POINTER_SIZE == 0);
 
-    DEBUGF("[runtime_gc.scan_stack] co=%p will scan stack, scan_sp=%p, size=%lu, first ret_addr=%p", co,
+    DEBUGF("[runtime_gc.scan_stack] co=%p will scan stack, scan_sp=%p, valid_size=%lu, first ret_addr=%p", co,
            (void *) scan_sp, size,
            (void *) co->scan_ret_addr);
 
 #ifdef NATURE_DEBUG
     DEBUGF("[runtime_gc.scan_stack] traverse stack, start");
-    addr_t temp_cursor = (addr_t) scan_sp;// 栈向下(小)增长
+    addr_t temp_cursor = (addr_t) scan_sp; // 栈向下(小)增长
     size_t temp_i = 0;
     size_t max_i = size / POINTER_SIZE;
     while (temp_i < max_i) {
@@ -376,9 +378,10 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
             cursor += POINTER_SIZE;
         }
 
-        DEBUGF("[runtime_gc.scan_stack] conservative scan completed, p_index_%d=%d, p_status=%d, co=%p, scan_ptr_count=%d",
-               p->share,
-               p->index, p->status, co, scan_ptr_count);
+        DEBUGF(
+            "[runtime_gc.scan_stack] conservative scan completed, p_index_%d=%d, p_status=%d, co=%p, scan_ptr_count=%d",
+            p->share,
+            p->index, p->status, co, scan_ptr_count);
         return;
     }
 
@@ -397,7 +400,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
         scan_fn_count++;
 
-        DEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p", fn->name, (void *) ret_addr);
+        DEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p, fn->stack_size=%ld", fn->name,
+               (void *) ret_addr, fn->stack_size);
 
         addr_t frame_cursor = cursor;
         int64_t ptr_count = fn->stack_size / POINTER_SIZE;
@@ -502,9 +506,10 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
             // 同理，即使某个 ptr 需要 gc, 但是也可能存在 gc 时，还没有赋值的清空
             addr_t value = fetch_addr_value(temp_addr);
 
-            TRACEF("[handle_gc_ptr] addr is ptr,base=%p cursor=%p cursor_value=%p, obj_size=%ld, bit_index=%lu, in_heap=%d",
-                   (void *) addr,
-                   (void *) temp_addr, (void *) value, span->obj_size, bit_index, in_heap(value));
+            TRACEF(
+                "[handle_gc_ptr] addr is ptr,base=%p cursor=%p cursor_value=%p, obj_size=%ld, bit_index=%lu, in_heap=%d",
+                (void *) addr,
+                (void *) temp_addr, (void *) value, span->obj_size, bit_index, in_heap(value));
 
             if (span_of(value)) {
                 // assert(span_of(heap_addr) && "heap_addr not belong active span");
@@ -578,10 +583,11 @@ static void gc_work() {
         rt_linked_node_t *node = current;
         current = current->succ;
 
-        DEBUGF("[runtime_gc.gc_work] will scan_stack p_index_%d=%d, co=%p, status=%d, gc_work=%d, is_main=%d, gc_black=%lu/gc_count=%lu, aco=%p",
-               share_p->share, share_p->index,
-               wait_co, wait_co->status, wait_co->gc_work, wait_co->main, wait_co->gc_black, memory->gc_count,
-               &wait_co->aco);
+        DEBUGF(
+            "[runtime_gc.gc_work] will scan_stack p_index_%d=%d, co=%p, status=%d, gc_work=%d, is_main=%d, gc_black=%lu/gc_count=%lu, aco=%p",
+            share_p->share, share_p->index,
+            wait_co, wait_co->status, wait_co->gc_work, wait_co->main, wait_co->gc_black, memory->gc_count,
+            &wait_co->aco);
 
         if (wait_co->status == CO_STATUS_DEAD) {
             DEBUGF("[runtime_gc.gc_work] co=%p, main=%d, gc_work=%d, status=dead, will remove",
@@ -632,7 +638,7 @@ static void gc_work() {
 
     // - handle share processor work list
     handle_gc_worklist(share_p);
-    share_p->gc_work_finished = memory->gc_count;// 打上 completed 标识
+    share_p->gc_work_finished = memory->gc_count; // 打上 completed 标识
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle solo processor gc work list completed, will exit",
            share_p->share, share_p->index);
 }
