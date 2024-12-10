@@ -571,7 +571,16 @@ static inline char *str_replace(char *str, char *old, char *new) {
 }
 
 static inline void *sys_memory_map(void *hint, uint64_t size) {
-    return mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+    void *ptr;
+#if defined(__DARWIN) && defined(__ARM64)
+    ptr = mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT, 0, 0);
+#else
+    ptr = mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+#endif
+
+
+    assertf(ptr, "mmap failed: %s", strerror(errno));
+    return ptr;
 }
 
 static inline void *mallocz_big(size_t size) {

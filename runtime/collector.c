@@ -143,8 +143,13 @@ static void free_mspan_meta(mspan_t *span) {
 static bool sweep_span(mcentral_t *central, mspan_t *span) {
     // 但是此时 span 其实并没有真的被释放,只有 alloc_count = 0 时才会触发真正的释放操作, 这里记录更新一下分配的内存值
     assert(span);
-    assert(span->obj_count > 0 && span->obj_count <= 1024);
     assert(span->base > 0);
+#if defined(__DARWIN) && defined(__ARM64)
+    assert(span->obj_count > 0 && span->obj_count <= 2048); // darwin/arm64 一页是 16k
+#else
+    assert(span->obj_count > 0 && span->obj_count <= 1024); // 一页大小是 8k
+#endif
+
 
     RDEBUGF("[sweep_span] start, span=%p, spc=%d, base=%p, obj_size=%ld, alloc_count=%ld, obj_count=%ld", span,
             span->spanclass,
@@ -163,8 +168,11 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             allocated_bytes -= span->obj_size;
 
             DEBUGF("[sweep_span] will sweep, obj_addr=%p", (void *) (span->base + i * span->obj_size));
-            // TODO 直接 set 0 让 gc 问题快速暴露出来
-            memset((void *) (span->base + i * span->obj_size), 0, span->obj_size);
+
+            // TODO 直接 set 0 让 gc 问题快速暴露出来, jit class 不允许设置内存，所以跳过
+            if ((span->spanclass >> 1) != JIT_SIZECLASS) {
+                memset((void *) (span->base + i * span->obj_size), 0, span->obj_size);
+            }
         } else {
             DEBUGF("[sweep_span] will sweep, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
                    (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),

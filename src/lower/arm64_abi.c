@@ -80,7 +80,7 @@ static int64_t arm64_pcs_aux(int64_t n, type_t *args_types, int64_t *args_pos) {
         uint16_t align;
 
         // 数组总是作为指针进行处理
-        if ((args_types[i].kind == TYPE_FN)) {
+        if (args_types[i].kind == TYPE_FN) {
             size = align = 8;
         } else {
             size = type_sizeof(args_types[i]);

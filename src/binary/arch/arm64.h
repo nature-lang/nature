@@ -206,7 +206,7 @@ elf_arm64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
             break;
         case R_AARCH64_ADR_PREL_PG_HI21: {
             uint64_t off = (val >> 12) - (addr >> 12);
-            if ((off + ((uint64_t)1 << 20)) >> 21) {
+            if ((off + ((uint64_t) 1 << 20)) >> 21) {
                 assertf(0, "R_AARCH64_ADR_PREL_PG_HI21 relocation failed");
             }
             write32le(ptr, ((read32le(ptr) & 0x9f00001f) | (off & 0x1ffffc) << 3 | (off & 3) << 29));
@@ -230,21 +230,25 @@ elf_arm64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
             break;
         case R_AARCH64_JUMP26:
         case R_AARCH64_CALL26:
-            if (((val - addr) + ((uint64_t)1 << 27)) & ~(uint64_t)0xffffffc) {
+            if (((val - addr) + ((uint64_t) 1 << 27)) & ~(uint64_t) 0xffffffc) {
                 assertf(0, "R_AARCH64_(JUMP|CALL)26 relocation failed");
             }
-            write32le(ptr, (0x14000000 | (uint32_t)(type == R_AARCH64_CALL26) << 31 | ((val - addr) >> 2 & 0x3ffffff)));
+            write32le(
+                ptr, (0x14000000 | (uint32_t) (type == R_AARCH64_CALL26) << 31 | ((val - addr) >> 2 & 0x3ffffff)));
             break;
         case R_AARCH64_ADR_GOT_PAGE: {
-            uint64_t off = (((ctx->got->sh_addr + elf_get_sym_attr(ctx, sym_index, 0)->got_offset) >> 12) - (addr >> 12));
-            if ((off + ((uint64_t)1 << 20)) >> 21) {
+            uint64_t off = (((ctx->got->sh_addr + elf_get_sym_attr(ctx, sym_index, 0)->got_offset) >> 12) - (
+                                addr >> 12));
+            if ((off + ((uint64_t) 1 << 20)) >> 21) {
                 assertf(0, "R_AARCH64_ADR_GOT_PAGE relocation failed");
             }
             write32le(ptr, ((read32le(ptr) & 0x9f00001f) | (off & 0x1ffffc) << 3 | (off & 3) << 29));
             break;
         }
         case R_AARCH64_LD64_GOT_LO12_NC:
-            write32le(ptr, ((read32le(ptr) & 0xfff803ff) | ((ctx->got->sh_addr + elf_get_sym_attr(ctx, sym_index, 0)->got_offset) & 0xff8) << 7));
+            write32le(
+                ptr, ((read32le(ptr) & 0xfff803ff) | (
+                          (ctx->got->sh_addr + elf_get_sym_attr(ctx, sym_index, 0)->got_offset) & 0xff8) << 7));
             break;
         case R_AARCH64_COPY:
             break;
@@ -430,10 +434,10 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
             }
 
             uint8_t bytes[4];
-            bytes[0] = temp->data & 0xFF;          // 最低字节
-            bytes[1] = (temp->data >> 8) & 0xFF;   // 次低字节
-            bytes[2] = (temp->data >> 16) & 0xFF;  // 次高字节
-            bytes[3] = (temp->data >> 24) & 0xFF;  // 最高字节
+            bytes[0] = temp->data & 0xFF; // 最低字节
+            bytes[1] = (temp->data >> 8) & 0xFF; // 次低字节
+            bytes[2] = (temp->data >> 16) & 0xFF; // 次高字节
+            bytes[3] = (temp->data >> 24) & 0xFF; // 最高字节
 
             elf_put_data(ctx->text_section, bytes, temp->data_count);
             c->text_count += temp->data_count;
@@ -570,10 +574,10 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
             }
 
             uint8_t bytes[4];
-            bytes[0] = temp->data & 0xFF;          // 最低字节
-            bytes[1] = (temp->data >> 8) & 0xFF;   // 次低字节
-            bytes[2] = (temp->data >> 16) & 0xFF;  // 次高字节
-            bytes[3] = (temp->data >> 24) & 0xFF;  // 最高字节
+            bytes[0] = temp->data & 0xFF; // 最低字节
+            bytes[1] = (temp->data >> 8) & 0xFF; // 次低字节
+            bytes[2] = (temp->data >> 16) & 0xFF; // 次高字节
+            bytes[3] = (temp->data >> 24) & 0xFF; // 最高字节
 
             mach_put_data(ctx->text_section, bytes, temp->data_count);
             c->text_count += temp->data_count;

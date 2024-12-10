@@ -15,8 +15,13 @@ typedef struct {
 static inline string_view_t *string_view_create(char *str, size_t len) {
     string_view_t *sv = NEW(string_view_t);
 
-    sv->data = mallocz(len);
-    strncpy(sv->data, str, len);
+    if (len > 0) {
+        sv->data = mallocz(len);
+        strncpy(sv->data, str, len);
+    } else {
+        sv->data = mallocz(1);
+        memset(sv->data, 0, 1);
+    }
     sv->size = len;
     return sv;
 }

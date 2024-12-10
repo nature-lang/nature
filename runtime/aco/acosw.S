@@ -2,15 +2,15 @@
 
 .text
 .globl acosw
-#if defined(__APPLE__)
+#if defined(__DARWIN)
 #else
 .type  acosw, @function
 #endif
-#ifndef __aarch64__
+#ifndef __ARM64
 .intel_syntax noprefix
 #endif
 acosw:
-#ifdef __x86_64__
+#ifdef __AMD64
 /*
     0x00                  -->                  0xff
     r12 r13 r14 r15 rip rsp rbx rbp fpucw16 mxcsr32
@@ -46,7 +46,7 @@ acosw:
     mov     rsp,rcx
     jmp     rax
 
-#elif defined(__aarch64__)
+#elif defined(__ARM64)
  /*
      0x00         -->            0xff
      x16 x17 x19  ...  x29 lr sp fpcr
@@ -96,12 +96,12 @@ acosw:
 #endif
 
 .globl async_preempt
-#if defined(__APPLE__)
+#if defined(__DARWIN)
 #else
 .type  async_preempt, @function
 #endif
 async_preempt:
-#ifdef __x86_64__
+#ifdef __AMD64
     push rbp
     mov rbp, rsp
     pushfq
@@ -186,7 +186,7 @@ async_preempt:
     add rsp, 1032
     jmp [rsp - 1032]
 
-#elif defined(__aarch64__)
+#elif defined(__ARM64)
     // 保存所有通用寄存器
     stp x29, x30, [sp, #-16]!
     mov x29, sp
@@ -279,18 +279,18 @@ async_preempt:
 
 
 .globl aco_save_reg
-#if defined(__APPLE__)
+#if defined(__DARWIN)
 #else
 .type  aco_save_reg, @function
 #endif
 
-#ifndef __aarch64__
+#ifndef __ARM64
 .intel_syntax noprefix
 #endif
 
 aco_save_reg:
 
-#ifdef __x86_64__
+#ifdef __AMD64
     mov     rdx,QWORD PTR [rsp]      // retaddr
     lea     rcx,[rsp+0x8]            // rsp
     mov     QWORD PTR [rdi+0x0], r12
@@ -307,7 +307,7 @@ aco_save_reg:
 #endif
     ret
 
-#elif defined(__aarch64__)
+#elif defined(__ARM64)
     // x0 包含目标地址
     stp x19, x20, [x0, #0]
     stp x21, x22, [x0, #16]
@@ -324,20 +324,20 @@ aco_save_reg:
 #endif
 
 .globl aco_save_fpucw_mxcsr
-#if defined(__APPLE__)
+#if defined(__DARWIN)
 #else
 .type  aco_save_fpucw_mxcsr, @function
 #endif
-#ifndef __aarch64__
+#ifndef __ARM64
 .intel_syntax noprefix
 #endif
 
 aco_save_fpucw_mxcsr:
-#ifdef __x86_64__
+#ifdef __AMD64
     fnstcw  WORD PTR  [rdi]
     stmxcsr DWORD PTR [rdi+0x4]
     ret
-#elif __aarch64__
+#elif __ARM64
     mrs x1, fpcr
     str x1, [x0]
     ret
@@ -345,7 +345,7 @@ aco_save_fpucw_mxcsr:
     #error "platform not support"
 #endif
 
-#if defined(__APPLE__)
+#if defined(__DARWIN)
 .globl _abort
 .globl _aco_funcp_protector
 #else
@@ -354,27 +354,33 @@ aco_save_fpucw_mxcsr:
 #endif
 
 .globl aco_funcp_protector_asm
-#if defined(__APPLE__)
+#if defined(__DARWIN)
 #else
 .type  aco_funcp_protector_asm, @function
 #endif
 
-#ifndef __aarch64__
+#ifndef __ARM64
 .intel_syntax noprefix
 #endif
 
 aco_funcp_protector_asm:
-#ifdef __x86_64__
+#if defined(__AMD64)
     and     rsp,0xfffffffffffffff0
     call    SYM(aco_funcp_protector)
     call    SYM(abort)
     ret
-#elif defined(__aarch64__)
+#elif defined(__ARM64)
     mov     x9, sp
     and     x9, x9, #0xfffffffffffffff0
     mov     sp, x9
+    #if defined(__DARWIN)
+    bl      _aco_funcp_protector
+    bl      _abort
+    #else
     bl      aco_funcp_protector
     bl      abort
+    #endif
+
     ret
 #else
     #error "platform not support"
