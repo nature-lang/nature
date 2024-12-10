@@ -106,7 +106,7 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
 #        set_target_properties(test_runtime_debug PROPERTIES LINK_FLAGS "-static")
 #    endif ()
 
-    add_dependencies(test_runtime_debug generate_libmain)  # 添加这行
+#    add_dependencies(test_runtime_debug generate_libmain)  # 添加这行
 
     target_link_libraries(test_runtime_debug ${LIBMAIN_STATIC} ${LIBUV_STATIC})
     add_test(NAME test_runtime_debug COMMAND test_runtime_debug WORKING_DIRECTORY ${WORK_DIR})

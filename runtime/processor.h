@@ -41,7 +41,7 @@ typedef enum {
 
 extern void async_preempt() __asm__("async_preempt");
 
-NO_OPTIMIZE void debug_ret();
+NO_OPTIMIZE void debug_ret(uint64_t rbp, uint64_t ret_addr);
 
 NO_OPTIMIZE void co_preempt_yield();
 

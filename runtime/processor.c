@@ -89,7 +89,7 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
 #ifdef __LINUX
 #define CTX_RSP ctx->uc_mcontext.gregs[REG_RSP]
 #define CTX_RIP ctx->uc_mcontext.gregs[REG_RIP]
-#else
+#else  // darwin
 #define CTX_RSP ctx->uc_mcontext->__ss.__rsp
 #define CTX_RIP ctx->uc_mcontext->__ss.__rip
 #endif
@@ -130,6 +130,7 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     CTX_RIP = (int64_t) async_preempt;
 
 #elif defined(__ARM64)
+
 #ifdef __LINUX
 #define CTX_SP ctx->uc_mcontext.sp
 #define CTX_PC ctx->uc_mcontext.pc

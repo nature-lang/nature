@@ -4,6 +4,7 @@
 #include "runtime/runtime.h"
 #include <sys/mman.h>
 #include <unistd.h>
+#include <errno.h>
 
 #ifdef __DARWIN
 #include <libkern/OSCacheControl.h>  // 这是需要的头文件
@@ -215,7 +216,7 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime_ptr, 
     memcpy(fn_runtime_ptr->closure_jit_codes, codes, size);
 #ifdef  __ARM64
 #ifdef __DARWIN
-    sys_icache_invalidate(fn_runtime_ptr->closure_jit_codes, fn_runtime_ptr->closure_jit_codes + size);
+    sys_icache_invalidate(fn_runtime_ptr->closure_jit_codes, size);
 #elif defined(__LINUX)
     __builtin___clear_cache(fn_runtime_ptr->closure_jit_codes, fn_runtime_ptr->closure_jit_codes + size);
 #endif
@@ -239,9 +240,10 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
 
     runtime_fn_t *fn_runtime = rti_gc_malloc(sizeof(runtime_fn_t), fn_rtype);
 
-    // 设置可执行权限
-    uintptr_t page_start = (uintptr_t) fn_runtime & ~(sysconf(_SC_PAGESIZE) - 1);
-    mprotect((void *) page_start, sysconf(_SC_PAGESIZE),PROT_READ | PROT_WRITE | PROT_EXEC);
+    // 启用 pthread_jit_write_protect_np 才能写入数据
+#if defined(__DARWIN) && defined(__ARM64)
+    pthread_jit_write_protect_np(false);
+#endif
 
     fn_runtime->fn_addr = fn_addr;
 
@@ -267,6 +269,12 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
      */
     //    assert((void *) fn_runtime == (void *) fn_runtime->closure_jit_codes &&
     //           "fn_new base must equal fn_runtime first property");
+
+#if defined(__DARWIN) && defined(__ARM64)
+    pthread_jit_write_protect_np(true); // 开启内存区域可执行能力，开启后内存区域不可写入, 不可清空
+#endif
+
+
     return fn_runtime->closure_jit_codes;
 }
 

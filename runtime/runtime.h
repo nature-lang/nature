@@ -12,6 +12,7 @@
 #include "utils/linked.h"
 #include "utils/mutex.h"
 #include "utils/type.h"
+#include "sizeclass.h"
 
 int runtime_main(int argc, char *argv[]);
 
@@ -23,9 +24,16 @@ int runtime_main(int argc, char *argv[]);
 
 #define ARENA_COUNT 4194304// 64 位 linux 按照每 64MB 内存进行拆分，一共可以拆分这个多个 arena
 
+#if defined(__DARWIN) && defined(__ARM64)
+#define ALLOC_PAGE_SIZE 16384 // apple silicon 系统内存页按照 16byte 对齐
+
+#define ALLOC_PAGE_MASK (ALLOC_PAGE_SIZE - 1)// 0b1111111111111
+#else
 #define ALLOC_PAGE_SIZE 8192// 单位 byte
 
 #define ALLOC_PAGE_MASK (ALLOC_PAGE_SIZE - 1)// 0b1111111111111
+#endif
+
 
 #define MSTACK_SIZE (8 * 1024 * 1024)// 8M 由于目前还没有栈扩容机制，所以初始化栈可以大一点
 
@@ -48,11 +56,6 @@ int runtime_main(int argc, char *argv[]);
 #define ARENA_BASE_OFFSET ARENA_HINT_BASE
 
 #define CHUNK_BITS_COUNT 512// 单位 bit, 一个 chunk 的大小是 512bit
-
-/**
- * 最后一位表示 sizeclass 是否包含指针 是 0 表示 scan 类型， 1 表示 noscan 类型
- */
-#define SPANCLASS_COUNT 136
 
 #define STD_MALLOC_LIMIT (32 * 1024)// 32Kb
 

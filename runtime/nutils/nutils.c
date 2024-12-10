@@ -59,8 +59,8 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
     assertf(output_rtype, "cannot find output_rtype by hash %lu", output_rtype_hash);
 
     DEBUGF("[number_casting] input_kind=%s, input_ref=%p,input_int64(%ld), output_kind=%s, output_ref=%p",
-            type_kind_str[input_rtype->kind], input_ref, fetch_int_value((addr_t)input_ref, input_rtype->size),
-            type_kind_str[output_rtype->kind], output_ref);
+           type_kind_str[input_rtype->kind], input_ref, fetch_int_value((addr_t)input_ref, input_rtype->size),
+           type_kind_str[output_rtype->kind], output_ref);
 
     value_casting v = {0};
     memmove(&v, input_ref, input_rtype->size);
@@ -665,10 +665,19 @@ rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
 void raw_ptr_valid(void *raw_ptr) {
     PRE_RTCALL_HOOK(); // 修改状态避免抢占
 
+
     DEBUGF("[raw_ptr_valid] raw_ptr=%p", raw_ptr);
     // raw_ptr 必须处于合理的范围
     addr_t i = (addr_t) raw_ptr;
-    if (i < MMAP_SHARE_STACK_BASE || i > ARENA_HINT_MAX) {
+
+    // apple silicon 系统的内存翻译比较奇怪，尤其是在 readdir 函数中的表现比较奇怪，因此暂时不做范围验证，只验证不为 0 即可
+#if defined(__DARWIN) && defined(__ARM64)
+    bool failed = i <= 0;
+#else
+    bool failed = i < MMAP_SHARE_STACK_BASE || i > ARENA_HINT_MAX;
+#endif
+
+    if (failed) {
         rt_coroutine_set_error("invalid memory address or nil pointer dereference");
     }
 }

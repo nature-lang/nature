@@ -105,7 +105,7 @@ typedef enum {
     TYPE_GC_ENV,
     TYPE_GC_ENV_VALUE,
     TYPE_GC_ENV_VALUES,
-    TYPE_GC_UPVALUE
+    TYPE_GC_UPVALUE,
 } type_kind;
 
 static string type_kind_str[] = {

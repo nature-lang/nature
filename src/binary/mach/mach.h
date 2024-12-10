@@ -258,7 +258,6 @@ mach_put_relocate(mach_context_t *ctx, mach_section_t *apply_section, int32_t of
                 break;
             case ARM64_RELOC_BRANCH26:
             case ARM64_RELOC_PAGE21:
-            case ARM64_RELOC_PAGEOFF12:
             case ARM64_RELOC_GOT_LOAD_PAGE21:
             case ARM64_RELOC_GOT_LOAD_PAGEOFF12:
             case ARM64_RELOC_POINTER_TO_GOT:
