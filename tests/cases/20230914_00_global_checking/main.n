@@ -1,18 +1,20 @@
 import 'mod.n'
 
-println(mod.a, mod.b)
+fn main() {
+    println(mod.a, mod.b)
 
-mod.call()
+    mod.call()
 
-println(mod.d)
+    println(mod.d)
 
-for v in mod.e {
-    println(v)
+    for v in mod.e {
+        println(v)
+    }
+    println(mod.e1)
+
+    println(true == true)
+    println(true == false)
+    println(true != true)
+    println(true != false)
+    println(true != mod.t)
 }
-println(mod.e1)
-
-println(true == true)
-println(true == false)
-println(true != true)
-println(true != false)
-println(true != mod.t)

@@ -42,6 +42,8 @@ static void test_dump(uint32_t encoding) {
 })
 
 static void test_basic() {
+    lir_op_t *op = NEW(lir_op_t);
+
     arm64_asm_inst_t *inst = ARM64_ASM(R_SUB, ARM64_REG(x8), ARM64_REG(x10), ARM64_IMM(0x10));
     TEST_EQ(inst, 0x48, 0x41, 0x00, 0xD1);
 

@@ -16,6 +16,9 @@
 #define POINTER_SIZE sizeof(void *)
 #endif
 
+#define ERRORT_TYPE_ALIAS "error_t"
+#define ERRABLE_TYPE_ALIAS "errable"
+
 // 指令字符宽度
 #define BYTE 1  // 1 byte = 8 位
 #define WORD 2  // 2 byte = 16 位
@@ -356,11 +359,12 @@ struct type_struct_t {
  * type_fn_t 在堆内存中仅仅是一个指针数据，指向堆内存, 这里的数据就是编译器前端的一个类型描述
  */
 struct type_fn_t {
-    char *name; // 可选的函数名称，并不是所有的函数类型都能改得到函数名称
+    char *fn_name; // 可选的函数名称，并不是所有的函数类型都能改得到函数名称
     type_t return_type;
     list_t *param_types; // type_t
-    bool rest;
-    bool tpl;
+    bool is_rest;
+    bool is_errable;
+    bool is_tpl;
 };
 
 // 类型描述信息 end
@@ -480,7 +484,8 @@ typedef struct {
     n_string_t *msg;
     n_vec_t *traces; // element is n_trace_t
     uint8_t has;
-} n_errort;
+    uint8_t panic;
+} n_error_t;
 
 // 所有的类型都会有一个唯一标识，从而避免类型的重复，不重复的类型会被加入到其中
 // list 的唯一标识， 比如 [int] a, [int] b , [float] c   等等，其实只有一种类型
@@ -548,6 +553,8 @@ type_kind to_gc_kind(type_kind kind);
 
 char *type_format(type_t t);
 
+char *type_origin_format(type_t t);
+
 /**
  * size 对应的 gc_bits 占用的字节数量
  * @param size
@@ -597,6 +604,7 @@ static inline bool is_list_u8(type_t t) {
     return true;
 }
 
+
 static inline type_t type_kind_new(type_kind kind) {
     type_t result = {
         .status = REDUCTION_STATUS_DONE,
@@ -625,6 +633,41 @@ static inline type_t type_new(type_kind kind, void *value) {
         .impl_args = NULL,
     };
     return result;
+}
+
+
+static inline type_t type_errort_new() {
+    type_t errort = type_new(TYPE_ALIAS, NULL);
+    errort.alias = NEW(type_alias_t);
+    errort.alias->ident = ERRORT_TYPE_ALIAS;
+    errort.origin_ident = ERRORT_TYPE_ALIAS;
+    errort.origin_type_kind = TYPE_ALIAS;
+    errort.status = REDUCTION_STATUS_UNDO;
+
+    return errort;
+}
+
+static inline type_t type_errable_new(type_t t) {
+    type_alias_t *errable = type_alias_new(ERRABLE_TYPE_ALIAS, NULL);
+    errable->args = ct_list_new(sizeof(type_t));
+    ct_list_push(errable->args, &t);
+
+    return type_new(TYPE_ALIAS, errable);
+}
+
+static inline bool is_errable_t(type_t t) {
+    if (t.kind != TYPE_ALIAS) {
+        return false;
+    }
+
+    return t.alias->ident = ERRABLE_TYPE_ALIAS;
+}
+
+static type_t extern_errable_t(type_t t) {
+    assert(is_errable_t(t));
+    type_t *arg_t = ct_list_value(t.alias->args, 0);
+
+    return *arg_t;
 }
 
 static inline bool is_float(type_kind kind) {

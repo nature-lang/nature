@@ -1,5 +1,7 @@
-int foo = -33 + 5
-print('foo=', foo, '\n')
+fn main() {
+    int foo = -33 + 5
+    print('foo=', foo, '\n')
 
-int bar = foo + 12
-print('bar=', bar)
+    int bar = foo + 12
+    print('bar=', bar)
+}

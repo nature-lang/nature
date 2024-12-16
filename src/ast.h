@@ -29,7 +29,7 @@ typedef enum {
     AST_MACRO_EXPR_REFLECT_HASH,
     AST_MACRO_EXPR_TYPE_EQ,
     AST_MACRO_EXPR_DEFAULT,
-    AST_MACRO_CO_ASYNC,
+    AST_MACRO_ASYNC,
 
     AST_EXPR_NEW, // new person
 
@@ -119,30 +119,30 @@ typedef enum {
 } ast_expr_op_t;
 
 static string ast_expr_op_str[] = {
-        [AST_OP_ADD] = "+",
-        [AST_OP_SUB] = "-",
-        [AST_OP_MUL] = "*",
-        [AST_OP_DIV] = "/",
-        [AST_OP_REM] = "%",
+    [AST_OP_ADD] = "+",
+    [AST_OP_SUB] = "-",
+    [AST_OP_MUL] = "*",
+    [AST_OP_DIV] = "/",
+    [AST_OP_REM] = "%",
 
-        [AST_OP_AND] = "&",
-        [AST_OP_OR] = "|",
-        [AST_OP_XOR] = "^",
-        [AST_OP_BNOT] = "~",
-        [AST_OP_LSHIFT] = "<<",
-        [AST_OP_RSHIFT] = ">>",
+    [AST_OP_AND] = "&",
+    [AST_OP_OR] = "|",
+    [AST_OP_XOR] = "^",
+    [AST_OP_BNOT] = "~",
+    [AST_OP_LSHIFT] = "<<",
+    [AST_OP_RSHIFT] = ">>",
 
-        [AST_OP_LT] = "<",
-        [AST_OP_LE] = "<=",
-        [AST_OP_GT] = ">", // >
-        [AST_OP_GE] = ">=", // >=
-        [AST_OP_EE] = "==", // ==
-        [AST_OP_NE] = "!=", // !=
-        [AST_OP_OR_OR] = "||",
-        [AST_OP_AND_AND] = "&&",
+    [AST_OP_LT] = "<",
+    [AST_OP_LE] = "<=",
+    [AST_OP_GT] = ">", // >
+    [AST_OP_GE] = ">=", // >=
+    [AST_OP_EE] = "==", // ==
+    [AST_OP_NE] = "!=", // !=
+    [AST_OP_OR_OR] = "||",
+    [AST_OP_AND_AND] = "&&",
 
-        [AST_OP_NOT] = "!", // unary !right
-        [AST_OP_NEG] = "-", // unary -right
+    [AST_OP_NOT] = "!", // unary !right
+    [AST_OP_NEG] = "-", // unary -right
 };
 
 struct ast_stmt_t {
@@ -234,7 +234,7 @@ typedef struct {
 
     ast_expr_t *flag_expr;
     type_t return_type;
-} ast_macro_co_async_t;
+} ast_macro_async_t;
 
 // 一元表达式
 typedef struct {
@@ -456,7 +456,7 @@ typedef struct {
     char *package_dir; // 这也是 import module 的 workdir
     bool use_links;
 
-    char *module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident
+    char *package_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident
 } ast_import_t;
 
 /**
@@ -575,7 +575,7 @@ typedef struct {
 typedef struct {
     string ident; // my_int (自定义的类型名称)
     list_t *params; // *ast_generics_param|null
-    type_t type; // int (类型)
+    type_t type_expr; // int (类型)
 } ast_type_alias_stmt_t;
 
 // 这里包含 body, 所以属于 def
@@ -629,13 +629,14 @@ struct ast_fndef_t {
     bool is_local; // 是否是全局函数
     bool is_tpl; // 是否是 tpl 函数
 
-    // tpl 专属, 自定义 调用当前函数实际上会被 linkto
-    // 如果是 builtin 中的 tpl, 并且没有 linkto 参数，则什么也不用做
+    bool is_errable;
+
+    // tpl fn 可以自定义 #linkid 宏, 用来自定义链接符号名称
     char *linkid;
 
     bool is_generics; // 是否是泛型
 
-    bool is_co_async; // coroutine closure fn, default is false
+    bool is_async; // coroutine closure fn, default is false
     bool is_private;
 
     // catch err { break 12 }
@@ -643,6 +644,7 @@ struct ast_fndef_t {
 
     // dump error
     char *fn_name;
+    char *fn_name_with_pkg;
     char *rel_path;
     int column;
     int line;
@@ -780,7 +782,7 @@ static inline bool can_assign(ast_type_t t) {
 
 static inline ast_fndef_t *ast_fndef_new(module_t *m, int line, int column) {
     ast_fndef_t *fndef = NEW(ast_fndef_t);
-    fndef->is_co_async = false;
+    fndef->is_async = false;
     fndef->is_private = false;
     fndef->module = m;
     fndef->rel_path = m->rel_path;

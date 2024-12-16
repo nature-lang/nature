@@ -1,7 +1,9 @@
-fn hello() {
+fn hello():void! {
     println('hello nature')
     throw 'world error'
 }
 
-hello()
-println('can not get here')
+fn main():void! {
+    hello()
+    println('can not get here')
+}

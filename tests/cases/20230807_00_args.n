@@ -1,7 +1,9 @@
 import os
 
-var args = os.args()
+fn main() {
+    var args = os.args()
 
-for arg in args {
-    println(arg)
+    for arg in args {
+        println(arg)
+    }
 }

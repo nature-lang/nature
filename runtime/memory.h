@@ -168,6 +168,8 @@ void rtypes_deserialize();
 
 void fndefs_deserialize();
 
+void callers_deserialize();
+
 void symdefs_deserialize();
 
 rtype_t *rt_find_rtype(uint32_t rtype_hash);

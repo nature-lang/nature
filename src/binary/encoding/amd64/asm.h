@@ -27,6 +27,8 @@
 #define AMD64_ASM(_name, ...) ({ \
   amd64_asm_inst_t *_inst = NEW(amd64_asm_inst_t); \
   _inst->op_id = op->id; \
+  _inst->line = op->line; \
+  _inst->column = op->column; \
   _inst->name = _name;\
   amd64_asm_operand_t *_temp_operands[4] = {__VA_ARGS__};\
   for (int _i = 0; _i < 4; ++_i) {\
@@ -220,6 +222,8 @@ typedef struct {
     uint8_t prefix; // 自定义指令前缀，覆盖
     uint8_t count;
     amd64_asm_operand_t *operands[4]; // 最多 4 个参数
+    int line;
+    int column;
 } amd64_asm_inst_t;
 
 static inline amd64_asm_operand_t *amd64_asm_symbol_operand(amd64_asm_inst_t asm_inst) {

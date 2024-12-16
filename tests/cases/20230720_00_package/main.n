@@ -6,11 +6,13 @@ import local
 import package.src.user
 import assert
 
-user.dump()
-int r =  rand.dump()
-print('rand.dump() -> ', r, '\n')
-seed.dump()
-syscall.dump()
-os.dump()
-print('local.get_count() -> ', local.get_count(), '\n')
-local.dump()
+fn main() {
+    user.dump()
+    int r =  rand.dump()
+    print('rand.dump() -> ', r, '\n')
+    seed.dump()
+    syscall.dump()
+    os.dump()
+    print('local.get_count() -> ', local.get_count(), '\n')
+    local.dump()
+}

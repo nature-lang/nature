@@ -12,7 +12,7 @@ static void test_basic() {
                         "foo = 12\n"
                         "foo = 233\n"
                         "hello nature\n"
-                        "coroutine 'main' uncaught error: '??hello error' at cases/20230422_02_catch.n:35:19\n");
+                        "coroutine 'main' uncaught error: '??hello error' at cases/20230422_02_catch.n:37:23\n");
 }
 
 int main(void) {

@@ -1,4 +1,4 @@
-import runtime_temp
+import runtime
 
 type future_t<T> = struct{
     i64 size
@@ -7,7 +7,7 @@ type future_t<T> = struct{
     void_ptr co
 }
 
-fn co_async<T>(fn() function, int flag):ptr<future_t<T>> {
+fn async<T>(fn():void! function, int flag):ptr<future_t<T>> {
     var fu = new future_t<T>
     fu.size = @sizeof(T)
     if fu.size > 0 {
@@ -17,17 +17,17 @@ fn co_async<T>(fn() function, int flag):ptr<future_t<T>> {
 
     // Establish mutually binding relationships, so even if the coroutine exits,
     // the related result/error will also be bound to the future to prevent being garbage collected.
-    fu.co = rt_coroutine_async(function as void_ptr, flag, fu as void_ptr)
+    fu.co = runtime.coroutine_async(function as void_ptr, flag, fu as void_ptr)
 
     return fu
 }
 
 fn co_return<T>(raw_ptr<T> result) {
-    rt_coroutine_return(result as void_ptr)
+    runtime.coroutine_return(result as void_ptr)
 }
 
-fn future_t<T>.await():T {
-    rt_coroutine_await(self.co)
+fn future_t<T>.await():T! {
+    runtime.coroutine_await(self.co)
 
     if self.error != null {
         throw self.error.msg
@@ -36,8 +36,8 @@ fn future_t<T>.await():T {
     return *self.result
 }
 
-fn future_t<T:void>.await() {
-    rt_coroutine_await(self.co)
+fn future_t<T:void>.await():void! {
+    runtime.coroutine_await(self.co)
 
     if self.error != null {
         throw self.error.msg

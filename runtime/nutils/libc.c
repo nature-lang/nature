@@ -13,7 +13,7 @@ typedef struct {
 
 n_string_t *libc_string_new(n_void_ptr_t raw_string) {
     if (!raw_string) {
-        rt_coroutine_set_error("raw string is empty");
+        rt_coroutine_set_error("raw string is empty", false);
         return NULL;
     }
 

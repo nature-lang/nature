@@ -1,53 +1,59 @@
 import 'mod.n' as m
 
-// case 1
 type person_t = struct{
     string sex = 'male'
     int age = 1
     var limbs = true
 }
 
-var p = person_t{}
 
-assert(p.sex == 'male' && p.age == 1 && p.limbs == true)
 
-println(p.sex, p.age, p.limbs)
-
-// case 2
-int a = 12
-
-var test = fn():string {
-    return 'test'
-}
-
-type foo_t = struct{
-    u8 a = a as u8
-    u16 b = (12 + 25 * 3) as u16
-    arr<u8,3> c
-    string d = test()
-}
-var f = foo_t{
-    c = [1, 2, 3]
-}
-assert(f.a == 12 && f.b == 87 && f.c[0] == 1 && f.c[1] == 2 && f.c[2] == 3 && f.d == 'test')
-
-println(f.a, f.b, f.c[0], f.c[1], f.c[2], f.d)
-
-// case 3
-var b = m.bar_t<f32>{
-    c = [3.14, 3.15, 3.16]
-}
-
-println(b.a == 12.0, b.a, b.c[0], b.c[1], b.c[2], b.size)
-assert(b.a == 12.0 && b.c[0] == 3.14 && b.c[1] == 3.15 && b.c[2] == 3.16 && b.size == 4)
-  
-// case 4
 type nest_t = struct{
     f32 f = 2.33
     person_t p = person_t{} // 默认初始化
 }
 
-var n = nest_t{}
-println(n.f, n.p.age, n.p.limbs, n.p.sex)
-assert(n.f == 2.33 && n.p.age == 1 &&
-n.p.limbs == true && n.p.sex == 'male')
+fn main() {
+    // case 1
+    var p = person_t{}
+
+    assert(p.sex == 'male' && p.age == 1 && p.limbs == true)
+
+    println(p.sex, p.age, p.limbs)
+
+    // case 2
+    int a = 12
+
+
+    var test = fn():string {
+        return 'test'
+    }
+    type foo_t = struct{
+        u8 a = a as u8
+        u16 b = (12 + 25 * 3) as u16
+        arr<u8,3> c
+        string d = test()
+    }
+
+
+    var f = foo_t{
+        c = [1, 2, 3]
+    }
+    assert(f.a == 12 && f.b == 87 && f.c[0] == 1 && f.c[1] == 2 && f.c[2] == 3 && f.d == 'test')
+
+    println(f.a, f.b, f.c[0], f.c[1], f.c[2], f.d)
+
+    // case 3
+    var b = m.bar_t<f32>{
+        c = [3.14, 3.15, 3.16]
+    }
+
+    println(b.a == 12.0, b.a, b.c[0], b.c[1], b.c[2], b.size)
+    assert(b.a == 12.0 && b.c[0] == 3.14 && b.c[1] == 3.15 && b.c[2] == 3.16 && b.size == 4)
+
+    // case 4
+    var n = nest_t{}
+    println(n.f, n.p.age, n.p.limbs, n.p.sex)
+    assert(n.f == 2.33 && n.p.age == 1 &&
+    n.p.limbs == true && n.p.sex == 'male')
+}

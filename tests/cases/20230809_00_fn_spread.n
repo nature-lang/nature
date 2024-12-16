@@ -7,6 +7,8 @@ fn sum(int a, ...[int] list):int {
     return t
 }
 
-println(sum(1, 2, 3, 4))
+fn main() {
+    println(sum(1, 2, 3, 4))
 
-println(sum(3, ...[1, 2, 3, 4]))
+    println(sum(3, ...[1, 2, 3, 4]))
+}

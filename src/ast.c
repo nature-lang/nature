@@ -44,8 +44,8 @@ static type_union_t *type_union_copy(type_union_t *temp) {
 
 static type_fn_t *type_fn_copy(type_fn_t *temp) {
     type_fn_t *fn = COPY_NEW(type_fn_t, temp);
-    if (temp->name) {
-        fn->name = strdup(temp->name);
+    if (temp->fn_name) {
+        fn->fn_name = strdup(temp->fn_name);
     }
 
     fn->param_types = ct_list_type_copy(temp->param_types);
@@ -209,7 +209,7 @@ static ast_ident *ast_ident_copy(ast_ident *temp) {
 
 static ast_literal_t *ast_literal_copy(ast_literal_t *temp) {
     ast_literal_t *literal = COPY_NEW(ast_literal_t, temp);
-    literal->value = strdup(temp->value);// 根据实际情况复制，这里假设 value 是字符串
+    literal->value = strdup(temp->value); // 根据实际情况复制，这里假设 value 是字符串
     return literal;
 }
 
@@ -410,8 +410,8 @@ static ast_tuple_destr_t *ast_tuple_destr_copy(ast_tuple_destr_t *temp) {
     return tuple_destr;
 }
 
-static ast_macro_co_async_t *ast_co_async_copy(ast_macro_co_async_t *temp) {
-    ast_macro_co_async_t *expr = COPY_NEW(ast_macro_co_async_t, temp);
+static ast_macro_async_t *ast_async_copy(ast_macro_async_t *temp) {
+    ast_macro_async_t *expr = COPY_NEW(ast_macro_async_t, temp);
     expr->closure_fn = ast_fndef_copy(temp->closure_fn);
     expr->closure_fn_void = ast_fndef_copy(temp->closure_fn_void);
     expr->origin_call = ast_call_copy(temp->origin_call);
@@ -504,8 +504,8 @@ ast_expr_t *ast_expr_copy(ast_expr_t *temp) {
             expr->value = ast_call_copy(temp->value);
             break;
         }
-        case AST_MACRO_CO_ASYNC: {
-            expr->value = ast_co_async_copy(temp->value);
+        case AST_MACRO_ASYNC: {
+            expr->value = ast_async_copy(temp->value);
             break;
         }
         case AST_FNDEF: {
@@ -615,13 +615,13 @@ static ast_catch_t *ast_catch_copy(ast_catch_t *temp) {
     ast_catch_t *catch = COPY_NEW(ast_catch_t, temp);
     catch->try_expr = *ast_expr_copy(&temp->try_expr);
     catch->catch_err = *ast_var_decl_copy(&temp->catch_err);
-    catch->catch_body = ast_body_copy(temp->catch_body);// 需要实现这个函数
+    catch->catch_body = ast_body_copy(temp->catch_body); // 需要实现这个函数
     return catch;
 }
 
 static ast_var_tuple_def_stmt_t *ast_var_tuple_def_copy(ast_var_tuple_def_stmt_t *temp) {
     ast_var_tuple_def_stmt_t *stmt = COPY_NEW(ast_var_tuple_def_stmt_t, temp);
-    stmt->tuple_destr = ast_tuple_destr_copy(temp->tuple_destr);// 需要实现这个函数
+    stmt->tuple_destr = ast_tuple_destr_copy(temp->tuple_destr); // 需要实现这个函数
     stmt->right = *ast_expr_copy(&temp->right);
     return stmt;
 }
@@ -636,15 +636,15 @@ static ast_assign_stmt_t *ast_assign_copy(ast_assign_stmt_t *temp) {
 static ast_if_stmt_t *ast_if_copy(ast_if_stmt_t *temp) {
     ast_if_stmt_t *stmt = COPY_NEW(ast_if_stmt_t, temp);
     stmt->condition = *ast_expr_copy(&temp->condition);
-    stmt->consequent = ast_body_copy(temp->consequent);// 需要实现这个函数
-    stmt->alternate = ast_body_copy(temp->alternate);  // 需要实现这个函数
+    stmt->consequent = ast_body_copy(temp->consequent); // 需要实现这个函数
+    stmt->alternate = ast_body_copy(temp->alternate); // 需要实现这个函数
     return stmt;
 }
 
 static ast_for_cond_stmt_t *ast_for_cond_copy(ast_for_cond_stmt_t *temp) {
     ast_for_cond_stmt_t *stmt = COPY_NEW(ast_for_cond_stmt_t, temp);
     stmt->condition = *ast_expr_copy(&temp->condition);
-    stmt->body = ast_body_copy(temp->body);// 需要实现这个函数
+    stmt->body = ast_body_copy(temp->body); // 需要实现这个函数
     return stmt;
 }
 
@@ -653,7 +653,7 @@ static ast_for_iterator_stmt_t *ast_for_iterator_copy(ast_for_iterator_stmt_t *t
     stmt->iterate = *ast_expr_copy(&temp->iterate);
     stmt->first = *ast_var_decl_copy(&temp->first);
     stmt->second = temp->second ? ast_var_decl_copy(temp->second) : NULL;
-    stmt->body = ast_body_copy(temp->body);// 需要实现这个函数
+    stmt->body = ast_body_copy(temp->body); // 需要实现这个函数
     return stmt;
 }
 
@@ -662,7 +662,7 @@ static ast_for_tradition_stmt_t *ast_tradition_copy(ast_for_tradition_stmt_t *te
     stmt->init = ast_stmt_copy(temp->init);
     stmt->cond = *ast_expr_copy(&temp->cond);
     stmt->update = ast_stmt_copy(temp->update);
-    stmt->body = ast_body_copy(temp->body);// 需要实现这个函数
+    stmt->body = ast_body_copy(temp->body); // 需要实现这个函数
     return stmt;
 }
 
@@ -802,6 +802,7 @@ ast_fndef_t *ast_fndef_copy(ast_fndef_t *temp) {
     fndef->type = type_copy(temp->type);
     fndef->capture_exprs = temp->capture_exprs;
     fndef->fn_name = temp->fn_name;
+    fndef->fn_name_with_pkg = temp->fn_name_with_pkg;
     fndef->rel_path = temp->rel_path;
     fndef->column = temp->column;
     fndef->line = temp->line;

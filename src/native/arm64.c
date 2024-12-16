@@ -21,7 +21,7 @@ static slice_t *arm64_native_op(closure_t *c, lir_op_t *op);
  * @param result 目标寄存器操作数
  * @param value 需要移动的值
  */
-static void arm64_mov_imm(slice_t *operations, arm64_asm_operand_t *result, int64_t value) {
+static void arm64_mov_imm(lir_op_t *op, slice_t *operations, arm64_asm_operand_t *result, int64_t value) {
     if (value >= -0XFFFF && value <= 0xFFFF) {
         slice_push(operations, ARM64_ASM(R_MOV, result, ARM64_IMM(value)));
         return;
@@ -60,7 +60,8 @@ static bool arm64_is_integer_operand(lir_operand_t *operand) {
     return !is_float(operand_type_kind(operand));
 }
 
-static void arm64_gen_cmp(slice_t *operations, arm64_asm_operand_t *source, arm64_asm_operand_t *dest, bool is_int) {
+static void arm64_gen_cmp(lir_op_t *op, slice_t *operations, arm64_asm_operand_t *source, arm64_asm_operand_t *dest,
+                          bool is_int) {
     if (is_int) {
         arm64_asm_raw_opcode_t opcode;
         if (source->type == ARM64_ASM_OPERAND_IMMEDIATE && source->immediate < 0) {
@@ -80,7 +81,7 @@ static void arm64_gen_cmp(slice_t *operations, arm64_asm_operand_t *source, arm6
             }
 
             // mov
-            arm64_mov_imm(operations, free_reg, source->immediate);
+            arm64_mov_imm(op, operations, free_reg, source->immediate);
             source = free_reg;
         }
 
@@ -92,7 +93,8 @@ static void arm64_gen_cmp(slice_t *operations, arm64_asm_operand_t *source, arm6
     }
 }
 
-static arm64_asm_operand_t *convert_operand_to_free_reg(slice_t *operations, arm64_asm_operand_t *source, bool is_int,
+static arm64_asm_operand_t *convert_operand_to_free_reg(lir_op_t *op, slice_t *operations, arm64_asm_operand_t *source,
+                                                        bool is_int,
                                                         uint8_t size) {
     arm64_asm_operand_t *free_reg;
     if (is_int) {
@@ -179,7 +181,7 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
 
     // 只有 MOVE(str/ldr) 指令可以操作内存地址
     if (operand->pos == LIR_FLAG_SECOND && lir_is_mem(operand) && op->code != LIR_OPCODE_MOVE) {
-        return convert_operand_to_free_reg(operations, result, arm64_is_integer_operand(operand), mem_size);
+        return convert_operand_to_free_reg(op, operations, result, arm64_is_integer_operand(operand), mem_size);
     }
 
     if (result) {
@@ -220,7 +222,7 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
                 free_reg = ARM64_REG(x16);
             }
 
-            arm64_mov_imm(operations, free_reg, result->immediate);
+            arm64_mov_imm(op, operations, free_reg, result->immediate);
             result = free_reg;
         }
 
@@ -299,7 +301,7 @@ static slice_t *arm64_native_mov(closure_t *c, lir_op_t *op) {
         assert(is_number(imm->kind) || imm->kind == TYPE_BOOL);
         int64_t value = imm->int_value;
 
-        arm64_mov_imm(operations, result, value);
+        arm64_mov_imm(op, operations, result, value);
     } else if (op->first->assert_type == LIR_OPERAND_STACK ||
                op->first->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
                op->first->assert_type == LIR_OPERAND_SYMBOL_VAR) {
@@ -666,6 +668,7 @@ static slice_t *arm64_native_call(closure_t *c, lir_op_t *op) {
 
     // 获取函数地址操作数
     arm64_asm_operand_t *func_address = lir_operand_trans_arm64(c, op, op->first, operations);
+    assert(func_address->type == ARM64_ASM_OPERAND_REG || func_address->type == ARM64_ASM_OPERAND_SYMBOL);
 
     // 使用 BL 指令进行函数调用, 需要根据 fn 的类型选择合适的调用指令
     if (func_address->type == ARM64_ASM_OPERAND_REG) {
@@ -690,7 +693,7 @@ static slice_t *arm64_native_scc(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
     // 进行比较
-    arm64_gen_cmp(operations, second, first, arm64_is_integer_operand(op->first));
+    arm64_gen_cmp(op, operations, second, first, arm64_is_integer_operand(op->first));
 
 
     // 根据 op->code 设置条件码
@@ -836,7 +839,7 @@ static slice_t *arm64_native_beq(closure_t *c, lir_op_t *op) {
     assert(second->type == ARM64_ASM_OPERAND_REG || second->type == ARM64_ASM_OPERAND_IMMEDIATE);
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
-    arm64_gen_cmp(operations, second, first, arm64_is_integer_operand(op->first));
+    arm64_gen_cmp(op, operations, second, first, arm64_is_integer_operand(op->first));
 
     // 如果相等则跳转(beq)到标签
     slice_push(operations, ARM64_ASM(R_BEQ, result));

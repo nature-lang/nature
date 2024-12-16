@@ -94,7 +94,7 @@ static alloc_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var
         }
     }
 
-    if (BUILD_ARCH == ARCH_ARM64 && (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT)) {
+    if (BUILD_ARCH == ARCH_ARM64 && (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT) || lir_op_call(op)) {
         return ALLOC_KIND_MUST;
     }
 

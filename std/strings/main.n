@@ -2,7 +2,7 @@ import syscall
 import fmt
 
 // 基于 c 字符串创建一个 nature 字符串 
-fn from(void_ptr p):string {
+fn from(void_ptr p):string! {
     return libc_string_new(p)
 }
 
@@ -182,7 +182,7 @@ fn join([string] list, string separator):string {
     return result as string
 }
 
-fn ascii(string c):u8 {
+fn ascii(string c):u8! {
     if c.len() != 1 {
         throw 'c length must equal to 1'
     }

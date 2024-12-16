@@ -1,36 +1,39 @@
-fn hello() {
+fn hello():void! {
     println('hello nature')
     throw 'hello error'
 }
 
-hello() catch err {
-    println('catch err:', err.msg)
-    break
-    break
-    println('hello world 1')
-}
-
-fn world(bool e):int {
-    if e {
-        throw 'world error'
+fn main():void! {
+    hello() catch err {
+        println('catch err:', err.msg)
+        break
+        break
+        println('hello world 1')
     }
-    return 233
-}
 
-int foo = world(true) catch err {
-    println('catch err:', err.msg)
-    break 12
-}
-println('foo =', foo)
+    // closure fn
+    fn world(bool e):int! {
+        if e {
+            throw 'world error'
+        }
+        return 233
+    }
 
-foo = world(false) catch err {
-    println('catch err:', err.msg)
-    break 12
-}
-println('foo =', foo)
+    int foo = world(true) catch err {
+        println('catch err:', err.msg)
+        break 12
+    }
+    println('foo =', foo)
+
+    foo = world(false) catch err {
+        println('catch err:', err.msg)
+        break 12
+    }
+    println('foo =', foo)
 
 
-// return
-hello() catch err1 {
-    throw '??' + err1.msg
+    // return
+    hello() catch err1 {
+        throw '??' + err1.msg
+    }
 }

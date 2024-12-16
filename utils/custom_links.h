@@ -3,6 +3,7 @@
 
 #include "ct_list.h"
 #include "type.h"
+#include "src/types.h"
 
 /**
  * 这里存储了 nature 所有全局变量
@@ -24,9 +25,17 @@ typedef struct {
     uint64_t line;
     uint64_t column;
     char name[80]; // 函数名称
-    char rel_path[256];  // 文件路径 TODO 可以像 elf 文件一样做 str 段优化。
+    char rel_path[256]; // 文件路径 TODO 可以像 elf 文件一样做 str 段优化。
     uint8_t *gc_bits; // 基于 stack_offset 计算出的 gc_bits TODO 做成数据段优化
 } fndef_t;
+
+typedef struct {
+    uint64_t offset; // 从 fn label 开始计算的 offset (跳过当前 call)
+    uint64_t line; // line
+    uint64_t column; // column
+    void *data; // fn_base 对应的 fn_name, 只占用 8byte 的地址数据, collect 收集完成时会被替换成 fndef list 中对应的 index
+    char target_name[24]; // 调试使用
+} caller_t;
 
 
 // gc 基于此进行全部符号的遍历
@@ -38,6 +47,9 @@ typedef struct {
 
 #define SYMBOL_FNDEF_COUNT  "rt_fndef_count"
 #define SYMBOL_FNDEF_DATA  "rt_fndef_data"
+
+#define SYMBOL_CALLER_COUNT "rt_caller_count"
+#define SYMBOL_CALLER_DATA "rt_caller_data"
 
 #define SYMBOL_RTYPE_COUNT "rt_rtype_count"
 #define SYMBOL_RTYPE_DATA "rt_rtype_data"
@@ -52,6 +64,12 @@ extern symdef_t *rt_symdef_ptr;
 extern uint64_t rt_fndef_count;
 extern fndef_t rt_fndef_data;
 extern fndef_t *rt_fndef_ptr;
+
+extern uint64_t rt_caller_count;
+extern caller_t rt_caller_data;
+extern caller_t *rt_caller_ptr;
+extern table_t *rt_caller_table;
+
 
 extern uint64_t rt_rtype_count;
 extern rtype_t rt_rtype_data;
@@ -70,12 +88,15 @@ extern uint8_t *ct_fndef_data;
 extern uint64_t ct_fndef_count;
 extern fndef_t *ct_fndef_list;
 
+// - caller
+extern uint8_t *ct_caller_data;
+extern list_t *ct_caller_list;
 
 // - rtype
 extern uint64_t ct_rtype_count; // 从 list 中提取而来
 extern uint8_t *ct_rtype_data;
 extern uint64_t ct_rtype_size; // rtype + gc_bits + element_kinds 的总数据量大小, sh_size 预申请需要该值，已经在 reflect_type 时计算完毕
-extern list_t *ct_rtype_vec;
+extern list_t *ct_rtype_list;
 extern table_t *ct_rtype_table; // 避免 rtype_vec 重复写入
 
 // 主要是需要处理 gc_bits 数据
@@ -89,7 +110,7 @@ static inline uint8_t *fndefs_serialize() {
     memmove(p, ct_fndef_list, size);
 
     // 将 gc_bits 移动到数据尾部
-    p = p + size;// byte 类型，所以按字节移动
+    p = p + size; // byte 类型，所以按字节移动
     for (int i = 0; i < ct_fndef_count; ++i) {
         fndef_t *f = &ct_fndef_list[i];
         uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size, POINTER_SIZE);
@@ -100,9 +121,30 @@ static inline uint8_t *fndefs_serialize() {
     return data;
 }
 
+
 // 由于不包含 gc_bits，所以可以直接使用 ct_symdef_list 生成 symdef_data
 static inline uint8_t *symdefs_serialize() {
     return (uint8_t *) ct_symdef_list;
+}
+
+
+// 定长数据，直接进行序列化
+static inline uint8_t *callers_serialize() {
+    // 更新 rt_fndef_index
+    for (int i = 0; i < ct_caller_list->length; i++) {
+        caller_t *caller = ct_list_value(ct_caller_list, i);
+        assert(caller->data);
+        caller->data = (void *) ((closure_t *) caller->data)->rt_fndef_index;
+    }
+
+    uint64_t size = sizeof(caller_t) * ct_caller_list->length;
+    if (size == 0) {
+        return NULL;
+    }
+    uint8_t *data = mallocz(size);
+    memmove(data, ct_caller_list->take, size);
+
+    return data;
 }
 
 /**
@@ -116,13 +158,13 @@ static uint8_t *rtypes_serialize() {
     uint8_t *p = data;
 
     // rtypes 整体一次性移动到 data 中，随后再慢慢移动 gc_bits
-    uint64_t size = ct_rtype_vec->length * sizeof(rtype_t);
-    memmove(p, ct_rtype_vec->take, size);
+    uint64_t size = ct_rtype_list->length * sizeof(rtype_t);
+    memmove(p, ct_rtype_list->take, size);
 
     // 移动 gc_bits
-    p = p + size;// byte 类型，所以按字节移动
-    for (int i = 0; i < ct_rtype_vec->length; ++i) {
-        rtype_t *r = ct_list_value(ct_rtype_vec, i);// take 的类型是字节，所以这里按字节移动
+    p = p + size; // byte 类型，所以按字节移动
+    for (int i = 0; i < ct_rtype_list->length; ++i) {
+        rtype_t *r = ct_list_value(ct_rtype_list, i); // take 的类型是字节，所以这里按字节移动
         uint64_t gc_bits_size = calc_gc_bits_size(r->size, POINTER_SIZE);
         if (gc_bits_size) {
             memmove(p, r->gc_bits, gc_bits_size);
@@ -131,8 +173,8 @@ static uint8_t *rtypes_serialize() {
     }
 
     // 移动 element_hashes
-    for (int i = 0; i < ct_rtype_vec->length; ++i) {
-        rtype_t *r = ct_list_value(ct_rtype_vec, i);
+    for (int i = 0; i < ct_rtype_list->length; ++i) {
+        rtype_t *r = ct_list_value(ct_rtype_list, i);
 
         // array 占用了 length 字段，但是程element_hashes 是没有值的。
         if (r->length > 0 && r->element_hashes) {

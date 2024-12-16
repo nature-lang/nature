@@ -32,10 +32,10 @@
 /* Whether to generate a GOT/PLT entry and when. NO_GOTPLT_ENTRY is first so
    that unknown relocation don't create a GOT or PLT entry */
 enum gotplt_entry {
-    NO_GOTPLT_ENTRY,    /* never generate (eg. GLOB_DAT & JMP_SLOT relocs) */
-    BUILD_GOT_ONLY,    /* only build GOT (eg. TPOFF relocs) */
-    AUTO_GOTPLT_ENTRY,    /* generate if sym is UNDEF */
-    ALWAYS_GOTPLT_ENTRY    /* always generate (eg. PLTOFF relocs) */
+    NO_GOTPLT_ENTRY, /* never generate (eg. GLOB_DAT & JMP_SLOT relocs) */
+    BUILD_GOT_ONLY, /* only build GOT (eg. TPOFF relocs) */
+    AUTO_GOTPLT_ENTRY, /* generate if sym is UNDEF */
+    ALWAYS_GOTPLT_ENTRY /* always generate (eg. PLTOFF relocs) */
 };
 
 /* relocation type for 32 bit data relocation */
@@ -58,13 +58,13 @@ enum gotplt_entry {
 #define ARFMAG "`\n"
 
 typedef struct {
-    char ar_name[16];           /* name of this member */
-    char ar_date[12];           /* file mtime */
-    char ar_uid[6];             /* owner uid; printed as decimal */
-    char ar_gid[6];             /* owner gid; printed as decimal */
-    char ar_mode[8];            /* file mode, printed as octal   */
-    char ar_size[10];           /* file size, printed as decimal */
-    char ar_fmag[2];            /* should contain ARFMAG */
+    char ar_name[16]; /* name of this member */
+    char ar_date[12]; /* file mtime */
+    char ar_uid[6]; /* owner uid; printed as decimal */
+    char ar_gid[6]; /* owner gid; printed as decimal */
+    char ar_mode[8]; /* file mode, printed as octal   */
+    char ar_size[10]; /* file size, printed as decimal */
+    char ar_fmag[2]; /* should contain ARFMAG */
 } archive_header_t;
 
 
@@ -179,10 +179,12 @@ static inline uint64_t collect_fndef_list(void *ctx) {
             continue;
         }
 
+        c->rt_fndef_index = count;
+
         fndef_t *f = &ct_fndef_list[count++];
         f->fn_runtime_reg = c->fn_runtime_reg;
         f->fn_runtime_stack = c->fn_runtime_stack;
-        f->stack_size = c->stack_offset;// native 的时候已经进行了 16byte 对齐了
+        f->stack_size = c->stack_offset; // native 的时候已经进行了 16byte 对齐了
         f->gc_bits = c->stack_gc_bits->bits;
 
         size_with_bits += sizeof(fndef_t);
@@ -193,9 +195,9 @@ static inline uint64_t collect_fndef_list(void *ctx) {
         f->line = c->fndef->line;
         f->column = c->fndef->column;
 
-        f->base = 0;// 等待符号重定位
+        f->base = 0; // 等待符号重定位
         assert(c->text_count > 0);
-        f->size = c->text_count;// 至少要等所有等 module 都 assembly 完成才能计算出 text_count
+        f->size = c->text_count; // 至少要等所有等 module 都 assembly 完成才能计算出 text_count
 
         // 按从 base ~ top 的入栈顺序写入
         for (int i = 0; i < c->stack_vars->count; ++i) {
@@ -205,18 +207,18 @@ static inline uint64_t collect_fndef_list(void *ctx) {
             stack_slot = var_stack_slot(c, var) * -1;
 
             log_debug(
-                    "[stack_vars.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
-                    c->linkident, var->ident, type_format(var->type), type_sizeof(var->type),
-                    type_is_pointer_heap(var->type),
-                    (stack_slot / POINTER_SIZE) - 1, stack_slot);
+                "[stack_vars.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
+                c->linkident, var->ident, type_format(var->type), type_sizeof(var->type),
+                type_is_pointer_heap(var->type),
+                (stack_slot / POINTER_SIZE) - 1, stack_slot);
         }
 
         log_debug(
-                "[collect_fndef_list] item success, fn name=%s, base=0x%lx, size=%lu, stack_size=%lu,"
-                "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
-                f->name, f->base, f->size, f->stack_size, f->fn_runtime_stack, f->fn_runtime_reg,
-                f->stack_size / POINTER_SIZE,
-                bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
+            "[collect_fndef_list] item success, fn name=%s, base=0x%lx, size=%lu, stack_size=%lu,"
+            "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
+            f->name, f->base, f->size, f->stack_size, f->fn_runtime_stack, f->fn_runtime_reg,
+            f->stack_size / POINTER_SIZE,
+            bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
 
         if (BUILD_OS == OS_LINUX) {
             elf_context_t *elf_ctx = ctx;
@@ -247,8 +249,8 @@ static inline uint64_t collect_symdef_list(void *ctx) {
         ast_var_decl_t *var_decl = s->ast_value;
         symdef_t *symdef = &ct_symdef_list[count++];
         symdef->need_gc = type_is_pointer_heap(var_decl->type);
-        symdef->size = type_sizeof(var_decl->type);// 符号的大小
-        symdef->base = 0;                          // 这里引用了全局符号表段地址
+        symdef->size = type_sizeof(var_decl->type); // 符号的大小
+        symdef->base = 0; // 这里引用了全局符号表段地址
         strcpy(symdef->name, var_decl->ident);
 
         if (BUILD_OS == OS_LINUX) {

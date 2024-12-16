@@ -1,0 +1,19 @@
+fn main() {
+    println('hello world')
+    var a = 12
+
+    [float] list = []
+    var d = list[20] catch err {
+        println('catch panic: ', err.msg)
+    }
+
+
+    test()
+    println('nice wold')
+}
+
+fn test() {
+    var b = 24
+    panic('in here')
+    var c = 56
+}

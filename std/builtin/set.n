@@ -1,14 +1,16 @@
+import runtime
+
 fn set<T>.add(T key):bool {
    raw_ptr<T> ref = &key
-   return rt_set_add(self as void_ptr, ref as void_ptr)
+   return runtime.set_add(self as void_ptr, ref as void_ptr)
 }
 
 fn set<T>.contains(T key):bool {
    raw_ptr<T> ref = &key
-   return rt_set_contains(self as void_ptr, ref as void_ptr)
+   return runtime.set_contains(self as void_ptr, ref as void_ptr)
 }
 
 fn set<T>.del(T key) {
     raw_ptr<T> ref = &key
-    rt_set_delete(self as void_ptr, ref as void_ptr)
+    runtime.set_delete(self as void_ptr, ref as void_ptr)
 }

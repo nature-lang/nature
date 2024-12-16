@@ -10,8 +10,12 @@ fn sort([int] list) {
 }
 
 var list = [2, 8, 4, 2, 3]
-sort(list)
 
-for v in list {
-    println(v)
+fn main() {
+    sort(list)
+
+    for v in list {
+        println(v)
+    }
 }
+

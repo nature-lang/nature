@@ -619,27 +619,9 @@ static slice_t *amd64_native_sub(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
-    // first is fn label or addr
     amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
 
-    // 2. 参数处理  lir_ope code->second; lower 之后参数都按实际处理过了
-//    assert(((slice_t *) op->second->value)->count == 0);
-    // lower 阶段已经处理过了
-
-//    // TODO 调用变长参数函数之前，需要将 rax 置为 0, 如何判断调用目标是否为变长参数函数？
-//    if (false)
-//        slice_push(operations, ASM_INST("mov", { REG(rax), UINT32(0) }));
-//    }
-
-    // 3. 调用 call 指令(处理地址), 响应的结果在 rax 中
     slice_push(operations, AMD64_ASM("call", first));
-
-    // 4. 响应处理(取出响应值传递给 result), result 已经固定分配了 rax/xmm0 寄存器,所以 move result to rax 不是必要的
-//    if (op->output != NULL) {
-//        assert(op->output->assert_type == LIR_OPERAND_REG);
-//        reg_t *reg = op->output->value;
-//        assert(reg->index == 0); // rax or xmm0 index == 0
-//    }
 
     return operations;
 }

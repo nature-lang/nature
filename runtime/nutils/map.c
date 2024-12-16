@@ -109,7 +109,7 @@ n_void_ptr_t rt_map_access(n_map_t *m, void *key_ref) {
                hash_value_deleted(hash_value));
 
         char *msg = dsprintf("key '%s' not found in map", key_str);
-        rt_coroutine_set_error(msg);
+        rt_coroutine_set_error(msg, true);
         return 0;
     }
 
@@ -125,7 +125,7 @@ n_void_ptr_t rt_map_access(n_map_t *m, void *key_ref) {
            data_index,
            value_size);
 
-    void *src = m->value_data + value_size * data_index;// 单位字节
+    void *src = m->value_data + value_size * data_index; // 单位字节
     return (n_void_ptr_t) src;
 }
 
@@ -180,7 +180,7 @@ void rt_map_delete(n_map_t *m, void *key_ref) {
     PRE_RTCALL_HOOK();
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
     uint64_t *hash_value = &m->hash_table[hash_index];
-    *hash_value &= 1ULL << HASH_DELETED;// 配置删除标志即可
+    *hash_value &= 1ULL << HASH_DELETED; // 配置删除标志即可
     m->length--;
 }
 

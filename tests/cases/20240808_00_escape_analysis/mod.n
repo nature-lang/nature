@@ -1,6 +1,4 @@
 type bar_t = arr<int,5>
-
-
 fn bar_t.len():int {
     return 5
 }

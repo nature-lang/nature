@@ -10,7 +10,7 @@ fn args():[string] {
 }
 
 // read current exe path by read link /proc/self/exe
-fn exe():string {
+fn exe():string! {
     var buf = vec_new<u8>(4096, 0)
     var len = syscall.readlink('/proc/self/exe', buf)
 
@@ -31,7 +31,7 @@ fn dirs_sort([string] dirs) {
 
 // unsafe ptr
 // The order of return is uncertain
-fn listdir(string path):[string] {
+fn listdir(string path):[string]! {
     [string] result = []
 
     var dir = dirent.opendir(path.ref())
@@ -62,7 +62,7 @@ fn listdir(string path):[string] {
 
 // use strings.split(dir, '/')
 // join and syscall.mkdir(dir, mode)
-fn mkdirs(string dir, u32 mode) {
+fn mkdirs(string dir, u32 mode):void! {
     if dir == '' {
         throw 'dir is empty'
     }
@@ -80,7 +80,7 @@ fn mkdirs(string dir, u32 mode) {
 }
 
 // use remove file
-fn remove(string full_path) {
+fn remove(string full_path):void! {
     if !path.exists(full_path) {
         return
     }
@@ -88,7 +88,7 @@ fn remove(string full_path) {
     syscall.unlink(full_path)
 }
 
-fn rmdir(string dir, bool recursive) {
+fn rmdir(string dir, bool recursive):void! {
     if !recursive {
         return syscall.rmdir(dir)
     }

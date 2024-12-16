@@ -35,7 +35,7 @@ type elf64_ehdr_t = struct {
     u16 shstrndx
 }
 
-fn arch(string path):string {
+fn arch(string path):string! {
     if path == '' {
         throw 'path is empty'
     }

@@ -1,4 +1,4 @@
-fn rem(int dividend, int divisor):int {
+fn rem(int dividend, int divisor):int! {
 	if divisor == 0 {
 		throw 'divisor cannot zero'
 	}
@@ -8,25 +8,27 @@ fn rem(int dividend, int divisor):int {
 
 int result = 0
 
-// normal
-result = rem(10, 3)
-println(result)
+fn main():void! {
+    // normal
+    result = rem(10, 3)
+    println(result)
 
-// normal
-result = rem(10, 4) catch err {
-    // default break
-    println(err.msg)
+    // normal
+    result = rem(10, 4) catch err {
+        // default break
+        println(err.msg)
+    }
+    println(result)
+
+    // error handle
+    result = rem(10, 0) catch err {
+        println(err.msg)
+        break 1
+    }
+    println(result)
+
+
+    // error not handle
+    result = rem(10, 0)
+    println('hello world')
 }
-println(result)
-
-// error handle
-result = rem(10, 0) catch err {
-    println(err.msg)
-    break 1
-}
-println(result)
-
-
-// error not handle
-result = rem(10, 0)
-println('hello world')

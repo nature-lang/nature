@@ -3,7 +3,9 @@ import path
 import libc_temp
 import strings
 
-os.mkdirs('./foo1/bar2/car3/dog4', 0755)
-os.rmdir('./foo1/bar2', true)
+fn main():void! {
+    os.mkdirs('./foo1/bar2/car3/dog4', 0755)
+    os.rmdir('./foo1/bar2', true)
 
-println(path.isdir('foo1'), path.isdir('main.n'))
+    println(path.isdir('foo1'), path.isdir('main.n'))
+}

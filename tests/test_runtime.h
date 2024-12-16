@@ -10,12 +10,22 @@ uint64_t rt_symdef_count;
 symdef_t rt_symdef_data;
 
 uint64_t rt_fndef_count;
-fndef_t rt_fndef_data;// 仅需要修复一下 gc_bits 数据即可
+fndef_t rt_fndef_data; // 仅需要修复一下 gc_bits 数据即可
+
+uint64_t rt_caller_count;
+caller_t rt_caller_data; // 仅需要修复一下 gc_bits 数据即可
 
 uint64_t rt_rtype_count;
 rtype_t rt_rtype_data;
 
-void entry() {
+// Declare entry function with custom assembly name _main.main
+#ifdef __DARWIN
+__attribute__((used)) void test_main(void) asm("_main.main");
+#else
+__attribute__((used)) void test_main(void) __asm__("main.main");
+#endif
+
+void test_main() {
     printf("hello world in _main\n");
 }
 

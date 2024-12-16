@@ -1,17 +1,19 @@
-var m = {'a': 1, 'b': 2, 'c': 3}
+fn main() {
+    var m = {'a': 1, 'b': 2, 'c': 3}
 
-println('a =', m['a'])
+    println('a =', m['a'])
 
-m['b'] = m['c']
-m['c'] =  33
+    m['b'] = m['c']
+    m['c'] =  33
 
-println(m['b'], m['c'])
+    println(m['b'], m['c'])
 
-println(m.len())
+    println(m.len())
 
-m.del('b')
+    m.del('b')
 
-println(m.len())
+    println(m.len())
 
-var b = m['b']
-println(b)
+    var b = m['b']
+    println(b)
+}

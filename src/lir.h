@@ -41,7 +41,7 @@
 #define CATCH_ERROR_IDENT "CATCH_ERROR"
 #define CATCH_END_IDENT "CATCH_END"
 
-#define ERRORT_TYPE_ALIAS "error_t"
+
 #define ERRORT_MSG_IDENT "msg"
 #define ERRORT_IS_IDENT "is"
 
@@ -101,8 +101,8 @@
 
 #define RT_CALL_BOOL_CASTING "bool_casting"
 #define RT_CALL_NUMBER_CASTING "number_casting"
-#define RT_CALL_void_ptr_CASTING "void_ptr_casting"
-#define RT_CALL_CASTING_TO_void_ptr "casting_to_void_ptr"
+#define RT_CALL_VOID_PTR_CASTING "void_ptr_casting"
+#define RT_CALL_CASTING_TO_VOID_PTR "casting_to_void_ptr"
 
 /**
  * 将 single 类型转换为 union 类型
@@ -157,23 +157,32 @@
 
 #define RT_CALL_COROUTINE_ASYNC "rt_coroutine_async"
 #define RT_CALL_COROUTINE_RETURN "rt_coroutine_return"
-#define FN_COROUTINE_RETURN_VAR "result"
-
-#define BUILTIN_CALL_CO_ASYNC "co_async"
-#define BUILTIN_CALL_CO_RETURN "co_return"
-
 
 #define RT_CALL_CO_THROW_ERROR "co_throw_error"
 #define RT_CALL_CO_REMOVE_ERROR "co_remove_error"
 #define RT_CALL_CO_HAS_ERROR "co_has_error"
+#define RT_CALL_CO_HAS_PANIC "co_has_panic"
 
 #define RT_CALL_PROCESSOR_SET_EXIT "processor_set_exit"
+
+#define FN_COROUTINE_RETURN_VAR "result"
+
+#define BUILTIN_CALL_ASYNC "async"
+#define BUILTIN_CALL_CO_RETURN "co_return"
+
+
 
 #define DEFAULT_IDENT "_"
 
 #define OP(_node) ((lir_op_t *) _node->value)
 
-#define OP_PUSH(_op) linked_push(m->current_closure->operations, _op)
+#define OP_PUSH(_op) \
+    do { \
+        lir_op_t * _value = _op;\
+        _value->line = m->current_line; \
+        _value->column = m->current_column; \
+         linked_push(m->current_closure->operations, _value); \
+    } while (0)
 
 /**
  * mov DWORD 0x1,[rbp-8] 假设 rbp = 100, 则表示将 0x1 存储在 92 ~ 96 之间
@@ -237,8 +246,35 @@ static inline bool is_rtcall(string target) {
     }
 
     return str_equal(target, RT_CALL_SET_ADD) || str_equal(target, RT_CALL_SET_DELETE) ||
-           str_equal(target, RT_CALL_SET_CONTAINS) ||
-           str_equal(target, RT_CALL_SET_NEW);
+           str_equal(target, RT_CALL_SET_CONTAINS) || str_equal(target, RT_CALL_SET_NEW) ||
+           str_equal(target, RT_CALL_VEC_NEW) || str_equal(target, RT_CALL_VEC_ELEMENT_ADDR) ||
+           str_equal(target, RT_CALL_VEC_SLICE) || str_equal(target, RT_CALL_VEC_REF) ||
+           str_equal(target, RT_CALL_VEC_LENGTH) || str_equal(target, RT_CALL_VEC_CAPACITY) ||
+           str_equal(target, RT_CALL_VEC_PUSH) || str_equal(target, RT_CALL_VEC_ITERATOR) ||
+           str_equal(target, RT_CALL_VEC_CONCAT) || str_equal(target, RT_CALL_WRITE_BARRIER) ||
+           str_equal(target, RT_CALL_ARRAY_ELEMENT_ADDR) || str_equal(target, RT_CALL_RAW_PTR_VALID) ||
+           str_equal(target, RT_CALL_MAP_NEW) || str_equal(target, RT_CALL_MAP_ACCESS) ||
+           str_equal(target, RT_CALL_MAP_ASSIGN) || str_equal(target, RT_CALL_MAP_LENGTH) ||
+           str_equal(target, RT_CALL_MAP_DELETE) || str_equal(target, RT_CALL_TUPLE_NEW) ||
+           str_equal(target, RT_CALL_BOOL_CASTING) || str_equal(target, RT_CALL_NUMBER_CASTING) ||
+           str_equal(target, RT_CALL_VOID_PTR_CASTING) || str_equal(target, RT_CALL_CASTING_TO_VOID_PTR) ||
+           str_equal(target, RT_CALL_UNION_CASTING) || str_equal(target, RT_CALL_UNION_IS) ||
+           str_equal(target, RT_CALL_UNION_ASSERT) || str_equal(target, RT_CALL_RAW_PTR_ASSERT) ||
+           str_equal(target, RT_CALL_ITERATOR_NEXT_KEY) || str_equal(target, RT_CALL_ITERATOR_NEXT_VALUE) ||
+           str_equal(target, RT_CALL_ITERATOR_TAKE_VALUE) || str_equal(target, RT_CALL_FN_NEW) ||
+           str_equal(target, RT_CALL_ENV_NEW) || str_equal(target, RT_CALL_ENV_CLOSURE) ||
+           str_equal(target, RT_CALL_ENV_ASSIGN_REF) || str_equal(target, RT_CALL_ENV_ELEMENT_VALUE) ||
+           str_equal(target, RT_CALL_STRING_NEW) || str_equal(target, RT_CALL_STRING_CONCAT) ||
+           str_equal(target, RT_CALL_STRING_EE) || str_equal(target, RT_CALL_STRING_NE) ||
+           str_equal(target, RT_CALL_STRING_LT) || str_equal(target, RT_CALL_STRING_LE) ||
+           str_equal(target, RT_CALL_STRING_GT) || str_equal(target, RT_CALL_STRING_GE) ||
+           str_equal(target, RT_CALL_STRING_LENGTH) || str_equal(target, RT_CALL_STRING_REF) ||
+           str_equal(target, RT_CALL_PRE_TPLCALL_HOOK) || str_equal(target, RT_CALL_POST_TPLCALL_HOOK) ||
+           str_equal(target, RT_CALL_POST_RTCALL_HOOK) || str_equal(target, RT_CALL_GC_MALLOC) ||
+           str_equal(target, RT_CALL_RUNTIME_EVAL_GC) || str_equal(target, RT_CALL_COROUTINE_ASYNC) ||
+           str_equal(target, RT_CALL_COROUTINE_RETURN) || str_equal(target, RT_CALL_CO_THROW_ERROR) ||
+           str_equal(target, RT_CALL_CO_REMOVE_ERROR) || str_equal(target, RT_CALL_CO_HAS_ERROR) ||
+           str_equal(target, RT_CALL_CO_HAS_PANIC) || str_equal(target, RT_CALL_PROCESSOR_SET_EXIT);
 }
 
 static inline lir_operand_t *int64_operand(uint64_t val) {
@@ -574,6 +610,14 @@ lir_op_new(lir_opcode_t code, lir_operand_t *first, lir_operand_t *second, lir_o
     set_operand_flag(op->second);
     set_operand_flag(op->output);
 
+    return op;
+}
+
+static inline lir_op_t *lir_op_with_pos(lir_opcode_t code, lir_operand_t *first, lir_operand_t *second,
+                                        lir_operand_t *result, int line, int column) {
+    lir_op_t *op = lir_op_new(code, first, second, result);
+    op->line = line;
+    op->column = column;
     return op;
 }
 

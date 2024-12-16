@@ -91,7 +91,7 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
     amd64_class_t hi = AMD64_CLASS_NO;
     uint8_t *onstack = mallocz(param_vars->count + 1);
 
-    int64_t stack_param_slot = 16; // by rbp, rest addr 和 push rsp 占用了 16 个字节
+    int64_t stack_param_slot = 16; // by rbp, is_rest addr 和 push rsp 占用了 16 个字节
 
     uint8_t sse_reg_count = 0;
     uint8_t int_reg_count = 0;
@@ -548,8 +548,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     // 参数通过栈传递, 返回值处理
     if (count == 0) {
         lir_operand_t *output_reg = operand_new(LIR_OPERAND_REG, reg_select(rax->index, TYPE_UINT64));
-        linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, output_reg));
-
+        linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, output_reg, op->line, op->column));
         linked_push(result, lir_op_move(call_result, output_reg));
         return result;
     }
@@ -589,7 +588,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
             slice_push(output_regs, hi_src_reg->value);
         }
 
-        linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, new_output));
+        linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, new_output, op->line, op->column));
 
         // 从 reg 中将返回值 mov 到 call_result 上
         lir_operand_t *dst = indirect_addr_operand(c->module, type_kind_new(lo_kind), call_result, 0);
@@ -603,7 +602,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
         reg_t *lo_reg = lo_src_reg->value;
         lo_src_reg = operand_new(LIR_OPERAND_REG, reg_select(lo_reg->index, call_result_type.kind));
 
-        linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, lo_src_reg));
+        linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, lo_src_reg, op->line, op->column));
 
         linked_push(result, lir_op_move(call_result, lo_src_reg));
     }
