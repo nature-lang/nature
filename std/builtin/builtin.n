@@ -1,0 +1,2 @@
+#linkid rt_panic
+fn panic(string msg)

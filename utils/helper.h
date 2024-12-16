@@ -30,28 +30,14 @@
 #define v_addr_t uint64_t
 #define addr_t uint64_t
 
-
 #undef free
-#define free(ptr)      \
-    ({                 \
-        if (ptr) {     \
-            free(ptr); \
-        }              \
-    })
 
-// #define malloc(size) reallocator(NULL, size)
-//
-// #define mallocz(size)              \
-//     ({                             \
-//         void *_ptr = malloc(size); \
-//         assertf(_ptr != NULL, "memory full"); \
-//         if (size) {                \
-//             memset(_ptr, 0, size); \
-//         }                          \
-//         _ptr;                      \
-//     })
-//
-// }
+#define free(_ptr) \
+    do {                 \
+        if (_ptr) {     \
+            free(_ptr); \
+        }              \
+    } while(0)
 
 
 static inline void *reallocator(void *ptr, uint64_t size) {
@@ -645,6 +631,23 @@ static inline char *fullpath(char *rel) {
 static inline bool str_char(char *str, char c) {
     char *result = strchr(str, c);
     return result != NULL;
+}
+
+static inline void str_rcpy(char *dest, const char *src, size_t n) {
+    if (!src || !dest || n == 0) return;
+
+    size_t src_len = strlen(src);
+    const char *start = src;
+
+    // 如果源字符串长度大于目标长度，从右侧截取
+    if (src_len > n - 1) {
+        // 预留 1 字节给 null 终止符
+        start = src + (src_len - (n - 1));
+    }
+
+    size_t copy_len = (src_len <= n - 1) ? src_len : (n - 1);
+    memmove(dest, start, copy_len);
+    dest[copy_len] = '\0';
 }
 
 #endif // NATURE_SRC_LIB_HELPER_H_

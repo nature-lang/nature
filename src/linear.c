@@ -300,6 +300,34 @@ static lir_operand_t *global_fn_symbol(module_t *m, ast_expr_t expr) {
     return lir_label_operand(symbol_ident, s->is_local);
 }
 
+static void linear_has_panic(module_t *m) {
+    char *error_target_label = m->current_closure->error_label;
+    assertf(m->current_line < 1000000, "line '%d' exception", m->current_line);
+    assertf(m->current_column < 1000000, "column '%d' exception", m->current_line);
+
+    // panic 必须被立刻 catch, 判断当前表达式是否被 catch, 如果被 catch, 则走正常的 error 流程, 也就是有错误跳转到 catch label
+    bool be_catch = false;
+    if (m->current_closure->catch_error_label) {
+        error_target_label = m->current_closure->catch_error_label;
+        be_catch = true;
+    }
+
+    lir_operand_t *path_operand = string_operand(m->rel_path);
+    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg);
+    lir_operand_t *line_operand = int_operand(m->current_line);
+    lir_operand_t *column_operand = int_operand(m->current_column);
+
+    // 不可抢占，也不 yield，所以不需要添加任何勾子。
+    // 如果没有被 catch, hash_error 直接 panic 并退出程序执行, 从而提醒 coder 及时处理错误
+    lir_operand_t *has_error = temp_var_operand_with_alloc(m, type_kind_new(TYPE_BOOL));
+    push_rt_call_no_hook(m, RT_CALL_CO_HAS_PANIC, has_error, 5, bool_operand(be_catch), path_operand, fn_name_operand,
+                         line_operand,
+                         column_operand);
+
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), has_error, lir_label_operand(error_target_label, true)));
+}
+
+
 static void linear_has_error(module_t *m) {
     char *error_target_label = m->current_closure->error_label;
     assertf(m->current_line < 1000000, "line '%d' exception", m->current_line);
@@ -313,7 +341,7 @@ static void linear_has_error(module_t *m) {
     lir_operand_t *has_error = temp_var_operand_with_alloc(m, type_kind_new(TYPE_BOOL));
 
     lir_operand_t *path_operand = string_operand(m->rel_path);
-    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->symbol_name);
+    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg);
     lir_operand_t *line_operand = int_operand(m->current_line);
     lir_operand_t *column_operand = int_operand(m->current_column);
 
@@ -515,7 +543,7 @@ static void linear_vec_assign(module_t *m, ast_assign_stmt_t *stmt) {
         target = indirect_addr_operand(m, t, target, 0);
     }
 
-    linear_has_error(m);
+    linear_has_panic(m);
 
     linear_super_move(m, t, target, src);
 }
@@ -625,7 +653,7 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
     } else if (is_struct_raw_ptr(type_struct)) {
         type_struct = type_struct.ptr->value_type;
         push_rt_call(m, RT_CALL_RAW_PTR_VALID, NULL, 1, struct_target);
-        linear_has_error(m);
+        linear_has_panic(m);
     }
 
     assert(type_struct.kind == TYPE_STRUCT);
@@ -1112,10 +1140,10 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
 
     // call 所有的参数都丢到 params 变量中
     for (int i = 0; i < type_fn->param_types->length; ++i) {
-        if (type_fn->rest && i >= type_fn->param_types->length - 1) {
-            // rest 超载情况处理
+        if (type_fn->is_rest && i >= type_fn->param_types->length - 1) {
+            // is_rest 超载情况处理
             type_t *rest_list_type = ct_list_value(type_fn->param_types, i);
-            assertf(rest_list_type->kind == TYPE_VEC, "rest param must list type");
+            assertf(rest_list_type->kind == TYPE_VEC, "is_rest param must list type");
 
             // actual 的参数个数与 formal 的参数一致，并且 actual last type(must list) == formal last type 一致。
             if (call->args->length == type_fn->param_types->length && (call->args->length - 1) == i) {
@@ -1162,19 +1190,19 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     }
 
     // rtcall 自带 pre_hook, 所以这里不需要重复处理了
-    if (!is_rtcall(type_fn->name) && type_fn->tpl) {
-        push_rt_call_no_hook(m, RT_CALL_PRE_TPLCALL_HOOK, NULL, 1, string_operand(type_fn->name));
+    if (!is_rtcall(type_fn->fn_name) && type_fn->is_tpl) {
+        push_rt_call_no_hook(m, RT_CALL_PRE_TPLCALL_HOOK, NULL, 1, string_operand(type_fn->fn_name));
     }
 
     // call base_target,params -> target
     OP_PUSH(lir_op_new(LIR_OPCODE_CALL, base_target, operand_new(LIR_OPERAND_ARGS, params), temp));
 
-    if (type_fn->tpl) {
-        push_rt_call_no_hook(m, RT_CALL_POST_TPLCALL_HOOK, NULL, 1, string_operand(type_fn->name));
+    if (type_fn->is_tpl) {
+        push_rt_call_no_hook(m, RT_CALL_POST_TPLCALL_HOOK, NULL, 1, string_operand(type_fn->fn_name));
     }
 
-    // builtin call 不会抛出异常只是直接 panic， 所以不需要判断 has_error
-    if (!is_builtin_call(type_fn->name)) {
+    // 目标函数可能会产生错误才需要进行错误判断，并跳转到对应的 error label 或者 continue label
+    if (type_fn->is_errable) {
         linear_has_error(m);
     }
 
@@ -1376,7 +1404,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
         // checking
         if (unary_expr->operand.type.kind == TYPE_RAW_PTR) {
             push_rt_call(m, RT_CALL_RAW_PTR_VALID, NULL, 1, first);
-            linear_has_error(m);
+            linear_has_panic(m);
         }
 
         if (!target) {
@@ -1416,7 +1444,7 @@ static lir_operand_t *linear_vec_access(module_t *m, ast_expr_t expr, lir_operan
     }
 
     // 可能会存在数组越界的错误需要拦截处理
-    linear_has_error(m);
+    linear_has_panic(m);
 
     if (!target) {
         target = temp_var_operand_with_alloc(m, expr.type);
@@ -1497,7 +1525,7 @@ static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_oper
     }
 
     // 可能会存在数组越界的错误处理
-    linear_has_error(m);
+    linear_has_panic(m);
 
     // 如果此时 list 发生了 grow, 则该地址会变成一个无效的脏地址，比如 grow(list).foo = list[1]
     // 所以对于 struct 的 access,这里的 target 不应该为 null
@@ -1613,7 +1641,7 @@ static lir_operand_t *linear_map_access(module_t *m, ast_expr_t expr, lir_operan
         value_target = indirect_addr_operand(m, expr.type, value_target, 0);
     }
 
-    linear_has_error(m);
+    linear_has_panic(m);
 
     if (!target) {
         target = temp_var_operand_with_alloc(m, expr.type);
@@ -1696,8 +1724,7 @@ static lir_operand_t *linear_struct_select(module_t *m, ast_expr_t expr, lir_ope
         type_struct = type_struct.ptr->value_type;
 
         push_rt_call(m, RT_CALL_RAW_PTR_VALID, NULL, 1, struct_target);
-
-        linear_has_error(m);
+        linear_has_panic(m);
     }
 
     assert(type_struct.kind == TYPE_STRUCT);
@@ -2013,7 +2040,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         lir_operand_t *output_ref = lea_operand_pointer(m, target);
         uint64_t target_rtype_hash = ct_find_rtype_hash(as_expr->target_type);
         push_rt_call(m, RT_CALL_UNION_ASSERT, NULL, 3, input, int_operand(target_rtype_hash), output_ref);
-        linear_has_error(m);
+        linear_has_panic(m);
         return target;
     }
 
@@ -2028,7 +2055,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         // raw_ptr<T> as ptr<T>
         assert(as_expr->target_type.kind == TYPE_PTR);
         push_rt_call(m, RT_CALL_RAW_PTR_ASSERT, target, 1, input);
-        linear_has_error(m);
+        linear_has_panic(m);
         return target;
     }
 
@@ -2048,7 +2075,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     if (as_expr->target_type.kind == TYPE_VOID_PTR) {
         // 如果类型长度匹配直接进行 mov 即可
         if (type_sizeof(as_expr->src.type) < POINTER_SIZE) {
-            push_rt_call(m, RT_CALL_void_ptr_CASTING, target, 1, input);
+            push_rt_call(m, RT_CALL_VOID_PTR_CASTING, target, 1, input);
         } else {
             OP_PUSH(lir_op_move(target, input));
         }
@@ -2061,7 +2088,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         assertf(as_expr->src.type.kind != TYPE_FLOAT32, "void_ptr cannot casting to float");
 
         if (type_sizeof(as_expr->target_type) < POINTER_SIZE) {
-            push_rt_call(m, RT_CALL_CASTING_TO_void_ptr, target, 1, input);
+            push_rt_call(m, RT_CALL_CASTING_TO_VOID_PTR, target, 1, input);
         } else {
             OP_PUSH(lir_op_move(target, input));
         }
@@ -2495,7 +2522,8 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     assert(stmt->error.type.kind == TYPE_STRING);
     lir_operand_t *msg_operand = linear_expr(m, stmt->error, NULL);
     lir_operand_t *path_operand = string_operand(m->rel_path);
-    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->symbol_name);
+    assert(m->current_closure->fndef->fn_name_with_pkg);
+    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg);
     lir_operand_t *line_operand = int_operand(m->current_line);
     lir_operand_t *column_operand = int_operand(m->current_column);
 

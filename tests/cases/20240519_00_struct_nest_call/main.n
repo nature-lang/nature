@@ -1,32 +1,34 @@
 import 'other.n'
 
-var package = other.package_t{
-    t = true,
-    p = other.person_t{
-        name = 'hualaka',
-        age = 23,
-        sex = true,
-        hello = fn() {
-            println("hello world")
+fn main() {
+    var package = other.package_t{
+        t = true,
+        p = other.person_t{
+            name = 'hualaka',
+            age = 23,
+            sex = true,
+            hello = fn() {
+                println("hello world")
+            }
         }
     }
+
+    // p is struct, 并且这里发生了 copy
+    var p = package.p
+
+    (&p).hello()
+    (&p).age = 32
+    println((&p).age)
+
+    // (&p).set_age(25) // err: raw_ptr<person_t(struct)> cannot use impl call, must ptr<...>
+    // package.p.set_age(25) // err: person_t(struct) cannot use impl call, must ptr<...>
+
+    // usafe load address
+    @unsafe_load(package.p).set_age(25)
+
+    println((&p).age)
+    println(p.age)
+    println(package.p.age)
+
+    // p.set_age(25) // person_t(struct) cannot use impl call, must ptr<...>
 }
-
-// p is struct, 并且这里发生了 copy
-var p = package.p
-
-(&p).hello()
-(&p).age = 32
-println((&p).age)
-
-// (&p).set_age(25) // err: raw_ptr<person_t(struct)> cannot use impl call, must ptr<...>
-// package.p.set_age(25) // err: person_t(struct) cannot use impl call, must ptr<...>
-
-// usafe load address
-@unsafe_load(package.p).set_age(25)
-
-println((&p).age)
-println(p.age)
-println(package.p.age)
-
-// p.set_age(25) // person_t(struct) cannot use impl call, must ptr<...>

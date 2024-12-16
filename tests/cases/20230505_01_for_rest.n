@@ -6,4 +6,6 @@ fn sum(...[int] list):int {
 	return result
 }
 
-println(sum(1, 2, 3, 4, 5))
+fn main() {
+    println(sum(1, 2, 3, 4, 5))
+}

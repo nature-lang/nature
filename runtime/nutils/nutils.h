@@ -37,9 +37,11 @@ void zero_fn();
 
 void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column);
 
-n_errort co_remove_error();
+n_error_t co_remove_error();
 
 uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
+
+uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_int_t column);
 
 n_void_ptr_t void_ptr_casting(value_casting v);
 
@@ -60,5 +62,7 @@ rtype_t *gc_rtype_array(type_kind kind, uint32_t count);
 rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length);
 
 void raw_ptr_valid(void *raw_ptr);
+
+void rt_panic(n_string_t *msg);
 
 #endif // NATURE_BASIC_H

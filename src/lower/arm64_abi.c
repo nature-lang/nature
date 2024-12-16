@@ -557,7 +557,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         // callee 已经将数据写入到了 call_result(x8寄存器对应的栈空间中)，此时不需要显式的处理 call_result,
         assert(call_result_type.kind == TYPE_STRUCT || call_result_type.kind == TYPE_ARR);
 
-        linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, NULL));
+        linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, NULL, op->line, op->column));
         return result;
     }
 
@@ -601,7 +601,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         }
 
         lir_operand_t *new_output = operand_new(LIR_OPERAND_REGS, output_regs);
-        linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, new_output));
+        linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, new_output, op->line, op->column));
 
         // 将返回值 mov 到 call_result 中
 
@@ -653,7 +653,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
             src = operand_new(LIR_OPERAND_REG, reg_select(v0->index, call_result_type.kind));
         }
 
-        linked_push(result, lir_op_new(LIR_OPCODE_CALL, op->first, op->second, src));
+        linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, src, op->line, op->column));
 
         linked_push(result, lir_op_move(call_result, src));
     }

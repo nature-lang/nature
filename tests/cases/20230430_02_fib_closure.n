@@ -1,13 +1,15 @@
-int count = 0
+fn main() {
+    int count = 0
 
-fn fib(int n):int {
-    count += 1
-    if (n <= 1) {
-        return n
+    fn fib(int n):int {
+        count += 1
+        if (n <= 1) {
+            return n
+        }
+
+        return fib(n - 1) + fib(n - 2)
     }
 
-    return fib(n - 1) + fib(n - 2)
+    var result = fib(10)
+    print('result=', result, ',recursion_count=', count, '\n')
 }
-
-var result = fib(10)
-print('result=', result, ',recursion_count=', count, '\n')

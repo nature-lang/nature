@@ -31,7 +31,13 @@ fn time_t.datetime():string {
 
 // 将 time_t 使用当前时间进行初始化
 fn now():time_t {
-    var sys_time = syscall.gettime()
+    var sys_time = syscall.gettime() catch err {
+        // 如果获取时间戳失败，则返回一个空的时间
+        int sec = 0
+        return time_t {
+            tm = localtime(&sec)
+        }
+    }
     var t = time_t {
         sec = sys_time.sec,
         nsec = sys_time.nsec,

@@ -16,6 +16,33 @@
 
 int runtime_main(int argc, char *argv[]);
 
+#ifdef __AMD64
+#define CO_SCAN_REQUIRE(_co) \
+   { \
+        uint64_t rbp_value; \
+        __asm__ volatile("mov %%rbp, %0" : "=r"(rbp_value)); \
+        _co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE); \
+        _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE); \
+        TRACEF("[pre_tplcall_hook] co=%p, status=%d, bp_value=%p, scan_offset=%lu, ret_addr=%p", _co, _co->status, (void*)rbp_value, _co->scan_offset, (void *) _co->scan_ret_addr); \
+    };
+#elif __ARM64
+#define CO_SCAN_REQUIRE(_co) \
+    { \
+        addr_t _fp_value;     \
+        __asm__ volatile("mov %0, x29" : "=r"(_fp_value)); \
+        _co->scan_ret_addr = fetch_addr_value(_fp_value + POINTER_SIZE); \
+        assert(_co->scan_ret_addr); \
+        addr_t _prev_fp_value = fetch_addr_value(_fp_value); \
+        assert(_prev_fp_value); \
+        fndef_t *_fn = find_fn(_co->scan_ret_addr); \
+        assert(_fn); \
+        _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (_prev_fp_value - _fn->stack_size); \
+        TRACEF("[pre_tplcall_hook] co=%p, status=%d, fp_value=%p, prev_fn_value=%p, fn=%s, stack_size=%ld, scan_offset=%p, ret_addr=%p", _co, _co->status, (void*)_fp_value, (void*)_prev_fp_value, _fn->name, _fn->stack_size, (void*)_co->scan_offset, (void *) _co->scan_ret_addr); \
+    };
+#else
+// not define
+#endif
+
 #define P_LINKCO_CACHE_MAX 128
 
 #define GC_WORKLIST_LIMIT 1024// 每处理 1024 个 ptr 就 yield
@@ -280,7 +307,7 @@ static inline rtype_t *rti_linkco_rtype() {
 typedef struct n_future_t {
     int64_t size;
     void *result;
-    n_errort *error; // 类似 result 一样可选的 error
+    n_error_t *error; // 类似 result 一样可选的 error
     void *await_co;
 } n_future_t;
 
@@ -346,7 +373,7 @@ struct coroutine_t {
     uint64_t scan_offset;
     uint64_t scan_ret_addr;
 
-    n_errort *error;
+    n_error_t *error;
 
     struct coroutine_t *next; // coroutine list
 };
@@ -398,9 +425,9 @@ void test_runtime_init();
 
 int test_runtime_main(void *main_fn);
 
-void rt_coroutine_set_error(char *msg);
+void rt_coroutine_set_error(char *msg, bool panic);
 
-void coroutine_dump_error(coroutine_t *co, n_errort *error);
+void coroutine_dump_error(coroutine_t *co, n_error_t *error);
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了
@@ -413,7 +440,6 @@ coroutine_t *coroutine_get();
 
 void processor_set_status(n_processor_t *p, p_status_t status);
 
-#ifdef __AMD64
 #define PRE_RTCALL_HOOK(target)                                                                                \
     do {                                                                                                       \
         n_processor_t *p = processor_get();                                                                      \
@@ -425,40 +451,10 @@ void processor_set_status(n_processor_t *p, p_status_t status);
         }                                                                                                      \
         processor_set_status(p, P_STATUS_RTCALL);                                                              \
         DEBUGF("[pre_rtcall_hook] target %s, status set rtcall success, non-preemption", __FUNCTION__);        \
-        uint64_t rbp_value; \
-        __asm__ volatile("mov %0, x29" : "=r"(rbp_value));                                                                                       \
         coroutine_t *_co = coroutine_get();                                                                    \
         assert(_co);                                                                                           \
-        _co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);                                       \
-        _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE); \
+        CO_SCAN_REQUIRE(_co) \
     } while (0);
-#elif __ARM64
-#define PRE_RTCALL_HOOK(target)                                                                                \
-    do {                                                                                                       \
-        n_processor_t *p = processor_get();                                                                      \
-        if (!p) {                                                                                              \
-            break;                                                                                             \
-        }                                                                                                      \
-         if (p->status == P_STATUS_RTCALL || p->status == P_STATUS_TPLCALL) {                                                                    \
-            break;                                                                                             \
-        }                                                                                                      \
-        processor_set_status(p, P_STATUS_RTCALL);                                                              \
-        DEBUGF("[pre_rtcall_hook] target %s, status set rtcall success, non-preemption", __FUNCTION__);        \
-        coroutine_t *_co = coroutine_get();                                                                    \
-        assert(_co);   \
-        addr_t fp_value; \
-        __asm__ volatile("mov %0, x29" : "=r"(fp_value)); \
-        _co->scan_ret_addr = fetch_addr_value(fp_value + POINTER_SIZE); \
-        assert(_co->scan_ret_addr); \
-        addr_t prev_fp_value = fetch_addr_value(fp_value); \
-        assert(prev_fp_value); \
-        fndef_t *fn = find_fn(_co->scan_ret_addr); \
-        assert(fn); \
-        _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (prev_fp_value - fn->stack_size); \
-    } while (0);
-#else
-    assert(false);
-#endif
 
 void pre_tplcall_hook();
 

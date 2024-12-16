@@ -5,6 +5,6 @@ fn assert(bool cond) {
         return
     }
 
-    throw('assert false')
+    panic('assert false')
     exit(1)
 }

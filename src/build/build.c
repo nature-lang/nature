@@ -57,6 +57,7 @@ static void elf_custom_links() {
     elf_context_t *ctx = elf_context_new(custom_link_object_path(), OUTPUT_OBJ);
 
     ctx->data_rtype_section = elf_section_new(ctx, ".data.rtype", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    ctx->data_caller_section = elf_section_new(ctx, ".data.caller", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     ctx->data_fndef_section = elf_section_new(ctx, ".data.fndef", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     ctx->data_symdef_section = elf_section_new(ctx, ".data.symdef", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
 
@@ -64,11 +65,11 @@ static void elf_custom_links() {
     ct_rtype_data = rtypes_serialize();
     elf_put_data(ctx->data_rtype_section, ct_rtype_data, ct_rtype_size);
     Elf64_Sym sym = {
-            .st_shndx = ctx->data_rtype_section->sh_index,
-            .st_value = 0,
-            .st_other = 0,
-            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-            .st_size = ct_rtype_size,
+        .st_shndx = ctx->data_rtype_section->sh_index,
+        .st_value = 0,
+        .st_other = 0,
+        .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+        .st_size = ct_rtype_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_RTYPE_DATA);
     elf_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, QWORD);
@@ -77,26 +78,40 @@ static void elf_custom_links() {
     ct_fndef_size = collect_fndef_list(ctx);
     ct_fndef_data = fndefs_serialize();
     elf_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
-    sym = (Elf64_Sym) {
-            .st_shndx = ctx->data_fndef_section->sh_index,
-            .st_value = 0,
-            .st_other = 0,
-            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-            .st_size = ct_fndef_size,
+    sym = (Elf64_Sym){
+        .st_shndx = ctx->data_fndef_section->sh_index,
+        .st_value = 0,
+        .st_other = 0,
+        .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+        .st_size = ct_fndef_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_FNDEF_DATA);
     elf_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, QWORD);
+
+    // caller - --------------------------------------------------------------------------
+    ct_caller_data = callers_serialize();
+    elf_put_data(ctx->data_caller_section, ct_caller_data, ct_caller_list->length * sizeof(caller_t));
+    sym = (Elf64_Sym){
+        .st_shndx = ctx->data_caller_section->sh_index,
+        .st_value = 0,
+        .st_other = 0,
+        .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+        .st_size = ct_rtype_size,
+    };
+    // 注册段名称与 runtime 中的符号进行绑定
+    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_CALLER_DATA);
+    elf_put_global_symbol(ctx, SYMBOL_CALLER_COUNT, &ct_caller_list->length, QWORD);
 
     // symdef --------------------------------------------------------------------------
     ct_symdef_size = collect_symdef_list(ctx);
     ct_symdef_data = symdefs_serialize();
     elf_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
-    sym = (Elf64_Sym) {
-            .st_shndx = ctx->data_symdef_section->sh_index,
-            .st_value = 0,
-            .st_other = 0,
-            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-            .st_size = ct_symdef_size,
+    sym = (Elf64_Sym){
+        .st_shndx = ctx->data_symdef_section->sh_index,
+        .st_value = 0,
+        .st_other = 0,
+        .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+        .st_size = ct_symdef_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_SYMDEF_DATA);
     elf_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, QWORD);
@@ -118,15 +133,17 @@ static void mach_custom_links() {
     ctx->data_rtype_section = mach_section_new(ctx, "__data_rtype", "__DATA", S_REGULAR);
     ctx->data_fndef_section = mach_section_new(ctx, "__data_fndef", "__DATA", S_REGULAR);
     ctx->data_symdef_section = mach_section_new(ctx, "__data_symdef", "__DATA", S_REGULAR);
+    ctx->data_caller_section = mach_section_new(ctx, "__data_caller", "__DATA", S_REGULAR);
+
 
     // rtype --------------------------------------------------------------------------
     ct_rtype_data = rtypes_serialize();
     mach_put_data(ctx->data_rtype_section, ct_rtype_data, ct_rtype_size);
     // 创建符号指向自定义数据段 __data.rtype
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-                         .n_type = N_SECT | N_EXT,
-                         .n_sect = ctx->data_rtype_section->sh_index,
-                         .n_value = 0,// in section data offset
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                     .n_type = N_SECT | N_EXT,
+                     .n_sect = ctx->data_rtype_section->sh_index,
+                     .n_value = 0, // in section data offset
                  },
                  SYMBOL_RTYPE_DATA);
 
@@ -137,23 +154,37 @@ static void mach_custom_links() {
     ct_fndef_data = fndefs_serialize();
     mach_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
 
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-                         .n_type = N_SECT | N_EXT,
-                         .n_sect = ctx->data_fndef_section->sh_index,
-                         .n_value = 0,// in section data offset
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                     .n_type = N_SECT | N_EXT,
+                     .n_sect = ctx->data_fndef_section->sh_index,
+                     .n_value = 0, // in section data offset
                  },
                  SYMBOL_FNDEF_DATA);
     macho_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, QWORD);
+
+
+    // caller --------------------------------------------------------------------------
+    ct_caller_data = callers_serialize();
+    mach_put_data(ctx->data_caller_section, ct_caller_data, ct_caller_list->length * sizeof(caller_t));
+    // 注册段名称与 runtime 中的符号进行绑定
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                     .n_type = N_SECT | N_EXT,
+                     .n_sect = ctx->data_caller_section->sh_index,
+                     .n_value = 0, // in section data offset
+                 },
+                 SYMBOL_CALLER_DATA);
+    macho_put_global_symbol(ctx, SYMBOL_CALLER_COUNT, &ct_caller_list->length, QWORD);
+
 
     // symdef --------------------------------------------------------------------------
     ct_symdef_size = collect_symdef_list(ctx);
     ct_symdef_data = symdefs_serialize();
     mach_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
 
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-                         .n_type = N_SECT | N_EXT,
-                         .n_sect = ctx->data_symdef_section->sh_index,
-                         .n_value = 0,// in section data offset
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                     .n_type = N_SECT | N_EXT,
+                     .n_sect = ctx->data_symdef_section->sh_index,
+                     .n_value = 0, // in section data offset
                  },
                  SYMBOL_SYMDEF_DATA);
     macho_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, QWORD);
@@ -198,11 +229,11 @@ static void elf_assembler_module(module_t *m) {
 
         // 写入符号表
         Elf64_Sym sym = {
-                .st_size = symbol->size,
-                .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-                .st_other = 0,
-                .st_shndx = ctx->data_section->sh_index,// 定义符号的段
-                .st_value = offset,                     // 定义符号的位置，基于段的偏移
+            .st_size = symbol->size,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_other = 0,
+            .st_shndx = ctx->data_section->sh_index, // 定义符号的段
+            .st_value = offset, // 定义符号的位置，基于段的偏移
         };
         elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, symbol->name);
     }
@@ -242,10 +273,10 @@ static void mach_assembler_module(module_t *m) {
         uint64_t offset = mach_put_data(ctx->data_section, symbol->value, symbol->size);
 
         // 写入符号表
-        mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-                             .n_type = N_SECT | N_EXT,
-                             .n_sect = ctx->data_section->sh_index,
-                             .n_value = offset,// in section data offset
+        mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                         .n_type = N_SECT | N_EXT,
+                         .n_sect = ctx->data_section->sh_index,
+                         .n_value = offset, // in section data offset
                      },
                      symbol->name);
     }
@@ -294,7 +325,7 @@ static void build_elf_exe(slice_t *modules) {
         module_t *m = modules->take[i];
 
         fd = check_open(m->object_file, O_RDONLY | O_BINARY);
-        load_object_file(ctx, fd, 0);// 加载并解析目标文件
+        load_object_file(ctx, fd, 0); // 加载并解析目标文件
     }
 
     // 将相关符号都加入来
@@ -346,7 +377,7 @@ static void build_elf_exe(slice_t *modules) {
 static int command_exists(const char *cmd) {
     char *path = getenv("PATH");
     if (path == NULL) {
-        return 0;// PATH 环境变量不存在
+        return 0; // PATH 环境变量不存在
     }
 
     char *path_copy = strdup(path);
@@ -415,7 +446,7 @@ static void build_mach_exe(slice_t *modules) {
     slice_push(linker_libs, lib_file_path(LIBUV_FILE));
     slice_push(linker_libs, lib_file_path(LIBMACH_C_FILE));
 
-    char libs_str[4096] = "";  // 用于存储库文件路径字符串
+    char libs_str[4096] = ""; // 用于存储库文件路径字符串
     // 拼接 linker_libs 中的库文件路径
     for (int i = 0; i < linker_libs->count; i++) {
         char *lib = linker_libs->take[i];
@@ -436,7 +467,6 @@ static void build_mach_exe(slice_t *modules) {
              output,
              libs_str,
              objects_file);
-
 
 
     // 使用 ld 命令执行 ld 相关参数，并参考 build_elf_exe 进行打印 copy debug 操作
@@ -480,10 +510,13 @@ static void build_init(char *build_entry) {
 
     // type ct_rtype_table
     ct_rtype_table = table_new();
-    ct_rtype_vec = ct_list_new(sizeof(rtype_t));
+    ct_rtype_list = ct_list_new(sizeof(rtype_t));
     ct_rtype_data = NULL;
     ct_rtype_count = 0;
     ct_rtype_size = 0;
+
+    ct_caller_list = ct_list_new(sizeof(caller_t));
+    ct_caller_data = 0;
 
     linker_libs = slice_new();
 }
@@ -529,7 +562,7 @@ static void build_assembler(slice_t *modules) {
             closure_t *c = m->closures->take[j];
             // 基于 symbol_name 读取引用次数, 如果没有被引用过则不做编译
             symbol_t *s = symbol_table_get_noref(c->fndef->symbol_name);
-            if (s->ref_count == 0 && !str_equal(c->fndef->symbol_name, FN_MAIN_NAME)) {
+            if (s->ref_count == 0 && !str_equal(c->fndef->symbol_name, FN_MAIN_LINKID)) {
                 continue;
             }
 
@@ -548,7 +581,7 @@ static void build_assembler(slice_t *modules) {
 }
 
 static void build_tpls(slice_t *templates) {
-    slice_t *modules = slice_new();// module_t*
+    slice_t *modules = slice_new(); // module_t*
     // 开始编译 templates, impl 实现注册到 build.c 中即可
     for (int i = 0; i < templates->count; ++i) {
         char *full_path = templates->take[i];
@@ -574,7 +607,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     slice_t *tpls = slice_new();
     slice_t *builtin_modules = slice_new();
 
-    // builtin tpl list, default import
+    // builtin is_tpl list, default import
     char *template_dir = path_join(NATURE_ROOT, "std/temps");
     char *full_path = path_join(template_dir, "builtin_temp.n");
     assertf(file_exists(full_path), "builtin_temp.n not found in %s/std/temps", NATURE_ROOT);
@@ -613,9 +646,9 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
     // main build
     ast_import_t main_import = {
-            .package_dir = WORKDIR,
-            .package_conf = package_conf,
-            .module_ident = MODULE_MAIN_IDENT,
+        .package_dir = WORKDIR,
+        .package_conf = package_conf,
+        .package_ident = PACKAGE_MAIN_IDENT,
     };
 
     // main [links] 自动注册
@@ -630,10 +663,10 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     table_t *links_handled = table_new();
     table_set(links_handled, main_import.package_dir, (void *) 1);
 
-    module_t *main = module_build(&main_import, SOURCE_PATH, MODULE_TYPE_MAIN);
-    slice_push(modules, main);
+    module_t *main_package = module_build(&main_import, SOURCE_PATH, MODULE_TYPE_MAIN);
+    slice_push(modules, main_package);
 
-    linked_push(work_list, main);
+    linked_push(work_list, main_package);
 
     table_t *import_tpl_table = table_new();
 
@@ -678,7 +711,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         }
     }
 
-    // - tpl 没有依赖关系，可以进行预先构建
+    // - is_tpl 没有依赖关系，可以进行预先构建
     build_tpls(tpls);
 
     // modules contains
@@ -692,22 +725,27 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     }
 
     // register all module init to main module body
-    assert(main->ast_fndefs->count > 0);
-    ast_fndef_t *root_fndef = main->ast_fndefs->take[0];
+    assert(main_package->ast_fndefs->count > 0);
+
+    ast_fndef_t *main_fndef = NULL;
+    SLICE_FOR(main_package->ast_fndefs) {
+        ast_fndef_t *f = SLICE_VALUE(main_package->ast_fndefs);
+        if (str_equal(f->fn_name, FN_MAIN_NAME)) {
+            main_fndef = f;
+        }
+    }
+    assert(main_fndef);
 
     slice_t *new_body = slice_new();
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
-        if (m->type == MODULE_TYPE_MAIN || m->type == MODULE_TYPE_TPL) {
-            continue;
-        }
         if (m->call_init_stmt) {
             slice_push(new_body, m->call_init_stmt);
         }
     }
     if (new_body) {
-        slice_concat(new_body, root_fndef->body);
-        root_fndef->body = new_body;
+        slice_concat(new_body, main_fndef->body);
+        main_fndef->body = new_body;
     }
 
     return modules;
@@ -826,7 +864,7 @@ static void build_archive(slice_t *modules) {
 void build(char *build_entry, bool is_archive) {
     assertf(strlen(build_entry) > 2, "build entry=%s exception", build_entry);
 
-//    log_set_level(LOG_INFO);
+    //    log_set_level(LOG_INFO);
 
     // 配置初始化
     build_init(build_entry);

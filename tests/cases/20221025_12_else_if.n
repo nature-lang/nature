@@ -1,9 +1,11 @@
-int foo = 23
+fn main() {
+    int foo = 23
 
-if (foo > 100) {
-    print('foo > 100')
-} else if (foo > 20) {
-    print('foo > 20')
-} else {
-    print('else handle')
+    if (foo > 100) {
+        print('foo > 100')
+    } else if (foo > 20) {
+        print('foo > 20')
+    } else {
+        print('else handle')
+    }
 }

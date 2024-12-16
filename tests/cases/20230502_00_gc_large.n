@@ -1,23 +1,25 @@
 import coroutine as co
 
-[int] l = [1, 2, 3, 4]
+fn main() {
+    [int] l = [1, 2, 3, 4]
 
-fn large_allocator() {
-    [i64] list = []
-    for int i = 0; i < 5000; i+=1 {
-        list.push(i)
+    fn large_allocator() {
+        [i64] list = []
+        for int i = 0; i < 5000; i+=1 {
+            list.push(i)
+        }
+
+        runtime_force_gc()
+        assert(list[380] == 380)
+        assert(list[2000] == 2000)
     }
 
-    runtime_force_gc()
-    assert(list[380] == 380)
-    assert(list[2000] == 2000)
+    large_allocator()
+
+    assert(runtime_malloc_bytes() > 100000 && runtime_malloc_bytes() < 200000)
+    co.sleep(1000) // 等待 1s 等待 gc 完成
+    assert(runtime_malloc_bytes() > 100 && runtime_malloc_bytes() < 2000)
+    assert(l[2] == 3)
+
+    println('gc large test success')
 }
-
-large_allocator()
-
-assert(runtime_malloc_bytes() > 100000 && runtime_malloc_bytes() < 200000)
-co.sleep(1000) // 等待 1s 等待 gc 完成
-assert(runtime_malloc_bytes() > 100 && runtime_malloc_bytes() < 2000)
-assert(l[2] == 3)
-
-println('gc large test success')

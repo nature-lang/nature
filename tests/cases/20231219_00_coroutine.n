@@ -41,132 +41,134 @@ fn foo(){
     print('share sub_co done\n')
 }
 
-var bar = fn(){
-    var i = 2
-    for i > 0 {
-        co.sleep(100)
-        i -= 1
+fn main() {
+    var bar = fn(){
+        var i = 2
+        for i > 0 {
+            co.sleep(100)
+            i -= 1
+        }
+
+        println('solo sub_co done', i)
     }
 
-    println('solo sub_co done', i)
-}
+    // - 共享协程
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
 
-// - 共享协程
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
 
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
 
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
 
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
 
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
 
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
+    @async(bar(), co.SOLO)
+    @async(bar(), co.SOLO)
+    @async(bar(), co.SOLO)
+    @async(bar(), co.SOLO)
+    @async(bar(), co.SOLO)
+    @async(bar(), co.SOLO)
+    @async(bar(), co.SOLO)
+    @async(bar(), co.SOLO)
+    @async(bar(), co.SOLO)
+    @async(bar(), co.SOLO)
+    @async(bar(), co.SOLO)
+    @async(bar(), co.SOLO)
+    @async(bar(), co.SOLO)
+    @async(bar(), co.SOLO)
 
-@co_async(bar(), co.SOLO)
-@co_async(bar(), co.SOLO)
-@co_async(bar(), co.SOLO)
-@co_async(bar(), co.SOLO)
-@co_async(bar(), co.SOLO)
-@co_async(bar(), co.SOLO)
-@co_async(bar(), co.SOLO)
-@co_async(bar(), co.SOLO)
-@co_async(bar(), co.SOLO)
-@co_async(bar(), co.SOLO)
-@co_async(bar(), co.SOLO)
-@co_async(bar(), co.SOLO)
-@co_async(bar(), co.SOLO)
-@co_async(bar(), co.SOLO)
-
-for int i=0; i < 100; i+=1 {
-   @co_async(foo(), 0)
-}
-
-for int i=0; i < 100; i+=1 {
-   @co_async(bar(), co.SOLO)
-}
-
-for int i=0; i < 300; i+=1 {
-   go bar()
-}
-
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-@co_async(foo(), 0)
-
-// main for sleep
-for int i=0; i<25; i+=1 {
-    co.sleep(10)
-    if i > 20 {
-        println('main_co sleep done', i)
+    for int i=0; i < 100; i+=1 {
+       @async(foo(), 0)
     }
-}
 
-println('main_co done')
+    for int i=0; i < 100; i+=1 {
+       @async(bar(), co.SOLO)
+    }
+
+    for int i=0; i < 300; i+=1 {
+       go bar()
+    }
+
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+    @async(foo(), 0)
+
+    // main for sleep
+    for int i=0; i<25; i+=1 {
+        co.sleep(10)
+        if i > 20 {
+            println('main_co sleep done', i)
+        }
+    }
+
+    println('main_co done')
+}

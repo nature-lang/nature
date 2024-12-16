@@ -9,9 +9,10 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    char *str = "err msg: index out of vec [24] with length 12\n"
+    char *str = "panic msg: index out of vec [24] with length 12\n"
+                "err msg: car error\n"
                 "err trace len: 2\n"
-                "err trace first: 20230828_00_trace_error/foo/bar.n 20230828_00_trace_error.foo.bar.car 18 19\n"
+                "err trace first: 20230828_00_trace_error/foo/bar.n 20230828_00_trace_error.foo.bar.car 21 19\n"
                 "\n"
                 "---------------------------------------------------------\n"
                 "\n"
@@ -21,8 +22,8 @@ static void test_basic() {
                 "\t\tat 20230828_00_trace_error/foo/bar.n:12:24\n"
                 "1:\t20230828_00_trace_error.foo.bar.test\n"
                 "\t\tat 20230828_00_trace_error/foo/bar.n:4:12\n"
-                "2:\tmain\n"
-                "\t\tat 20230828_00_trace_error/main.n:14:14\n";
+                "2:\tmain.main\n"
+                "\t\tat 20230828_00_trace_error/main.n:15:16\n";
     assert_string_equal(raw, str);
 }
 

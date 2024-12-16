@@ -1085,6 +1085,8 @@ void memory_init() {
 
     fndefs_deserialize();
     DEBUGF("[memory_init] fndefs_deserialize success");
+    callers_deserialize();
+    DEBUGF("[memory_init] callers_deserialize success");
     symdefs_deserialize();
     DEBUGF("[memory_init] symdefs_deserialize success");
     rtypes_deserialize();

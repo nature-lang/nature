@@ -30,4 +30,6 @@ fn boom():int {
     return 2333
 }
 
-boom()
+fn main() {
+    boom()
+}

@@ -356,6 +356,7 @@ static bool scanner_need_stmt_end(module_t *m, token_t *prev_token) {
         case TOKEN_U64:
         case TOKEN_STRING:
         case TOKEN_NULL:
+        case TOKEN_NOT: // fn test():void!;  tpl fn 声明可以已 ! 结尾
             return true;
         default:
             return false;

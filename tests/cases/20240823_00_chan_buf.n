@@ -1,41 +1,43 @@
 import coroutine as co
 import time
 
-// case 1
-var ch_buf = chan_new<int>(5)
+fn main() {
+    // case 1
+    var ch_buf = chan_new<int>(5)
 
-ch_buf.send(1)
-ch_buf.send(3)
-ch_buf.send(5)
-ch_buf.send(7)
-ch_buf.send(9)
+    ch_buf.send(1)
+    ch_buf.send(3)
+    ch_buf.send(5)
+    ch_buf.send(7)
+    ch_buf.send(9)
 
-println('ch_buf send success, no blocking')
+    println('ch_buf send success, no blocking')
 
-println(ch_buf.recv())
-println(ch_buf.recv())
-println(ch_buf.recv())
-println(ch_buf.recv())
-println(ch_buf.recv())
+    println(ch_buf.recv())
+    println(ch_buf.recv())
+    println(ch_buf.recv())
+    println(ch_buf.recv())
+    println(ch_buf.recv())
 
-println('ch_buf recv success, no blocking')
+    println('ch_buf recv success, no blocking')
 
 
-// case 2 limiter
-fn handle(chan<u8> ch) {
-    co.sleep(100)
-    println('handle task successful will callback, index =', ch.recv()) // 归还 ch, 让新的任务可以创建
+    // case 2 limiter
+    fn handle(chan<u8> ch) {
+        co.sleep(100)
+        println('handle task successful will callback, index =', ch.recv()) // 归还 ch, 让新的任务可以创建
+    }
+
+    var ch_limit = chan_new<u8>(10)
+    var start = time.now().timestamp()
+    for u8 i = 0; i < 100; i+=1 {
+        ch_limit.send(i)
+        println('dispatch task index =', i)
+        go handle(ch_limit)
+    }
+
+    co.sleep(110)
+    var use_time = time.now().timestamp() - start
+    println('task completed, use time(second) =', use_time)
+    assert(use_time <= 2)
 }
-
-var ch_limit = chan_new<u8>(10)
-var start = time.now().timestamp()
-for u8 i = 0; i < 100; i+=1 {
-    ch_limit.send(i)
-    println('dispatch task index =', i)
-    go handle(ch_limit)
-}
-
-co.sleep(110)
-var use_time = time.now().timestamp() - start
-println('task completed, use time(second) =', use_time)
-assert(use_time <= 2)

@@ -2,12 +2,12 @@
 
 #include "stdlib.h"
 
-uint64_t remove_total_bytes = 0;    // 当前回收到物理内存中的总空间
+uint64_t remove_total_bytes = 0; // 当前回收到物理内存中的总空间
 uint64_t allocated_total_bytes = 0; // 当前分配的总空间
-int64_t allocated_bytes = 0;       // 当前分配的内存空间
-uint64_t next_gc_bytes = 0;         // 下一次 gc 的内存量
-bool gc_barrier;                    // gc 屏障开启标识
-uint8_t gc_stage;                   // gc 阶段
+int64_t allocated_bytes = 0; // 当前分配的内存空间
+uint64_t next_gc_bytes = 0; // 下一次 gc 的内存量
+bool gc_barrier; // gc 屏障开启标识
+uint8_t gc_stage; // gc 阶段
 mutex_t gc_stage_locker;
 
 memory_t *memory;
@@ -30,6 +30,29 @@ uint64_t rt_rtype_out_size(uint32_t rtype_hash) {
     return rtype_stack_size(rtype, POINTER_SIZE);
 }
 
+void callers_deserialize() {
+    rt_caller_table = table_new();
+
+    rt_caller_ptr = &rt_caller_data;
+    DEBUGF("[runtime.callers_deserialize] count=%lu", rt_caller_count);
+
+    // 生成 table 数据，可以通过 ret_addr 快速定位到 caller, caller 可以快速定位到 fn
+    for (int i = 0; i < rt_caller_count; ++i) {
+        caller_t *caller = &rt_caller_ptr[i];
+        assert(((uint64_t) caller->data) >= 0);
+        fndef_t *f = &rt_fndef_ptr[(uint64_t) caller->data];
+        caller->offset += f->base; // ret addr
+        caller->data = f;
+
+        table_set(rt_caller_table, itoa(caller->offset), caller);
+        DEBUGF("[runtime.callers_deserialize] call '%s' ret_addr=%p, in fn=%s(%p), file=%s",
+               caller->target_name,
+               (void*)caller->offset, f->name,
+               (void*)f->base,
+               f->rel_path);
+    }
+}
+
 void fndefs_deserialize() {
     rt_fndef_ptr = &rt_fndef_data;
 
@@ -42,10 +65,10 @@ void fndefs_deserialize() {
         f->gc_bits = gc_bits_offset;
 
         DEBUGF(
-                "[fndefs_deserialize] name=%s, base=0x%lx, size=%lu, stack_size=%lu,"
-                "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
-                f->name, f->base, f->size, f->stack_size, f->fn_runtime_stack, f->fn_runtime_reg, gc_bits_size,
-                bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
+            "[fndefs_deserialize] name=%s, base=0x%lx, size=%lu, stack_size=%lu,"
+            "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
+            f->name, f->base, f->size, f->stack_size, f->fn_runtime_stack, f->fn_runtime_reg, gc_bits_size,
+            bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
 
         gc_bits_offset += gc_bits_size;
     }

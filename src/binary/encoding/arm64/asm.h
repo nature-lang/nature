@@ -223,6 +223,8 @@ typedef struct {
 
 typedef struct {
     uint64_t op_id;
+    int line;
+    int column;
     arm64_asm_raw_opcode_t raw_opcode;
     arm64_asm_opcode_t opcode;
     uint8_t count;
@@ -333,6 +335,9 @@ typedef struct {
 // 如何在 native 阶段生成 asm_arm64_inst_t?
 #define ARM64_ASM(_raw_opcode, ...) ({ \
     arm64_asm_inst_t* _inst = NEW(arm64_asm_inst_t); \
+    _inst->op_id = op->id; \
+    _inst->line = op->line; \
+    _inst->column = op->column; \
     _inst->raw_opcode = _raw_opcode;       \
                                     \
     arm64_asm_operand_t *_temp_operands[4] = { __VA_ARGS__ }; \

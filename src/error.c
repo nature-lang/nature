@@ -9,7 +9,6 @@ void push_errorf(module_t *m, ct_stage stage, int line, int column, char *format
     vsprintf(error->msg, format, args);
     va_end(args);
 
-
     error->stage = stage;
     error->column = column;
     error->line = line;

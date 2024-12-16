@@ -168,8 +168,9 @@ rtype_t rtype_array(type_array_t *t) {
         .hash = hash,
         .kind = TYPE_ARR,
         .length = t->length,
-        .gc_bits = malloc_gc_bits(rtype.size)
     };
+
+    rtype.gc_bits = malloc_gc_bits(rtype.size);
 
     uint16_t offset = 0;
     rtype.last_ptr = rtype_array_gc_bits(rtype.gc_bits, &offset, t);
@@ -690,15 +691,15 @@ bool type_is_pointer_heap(type_t t) {
 }
 
 rtype_t *rtype_push(rtype_t rtype) {
-    uint64_t index = ct_rtype_vec->length;
-    ct_list_push(ct_rtype_vec, &rtype);
+    uint64_t index = ct_rtype_list->length;
+    ct_list_push(ct_rtype_list, &rtype);
 
     ct_rtype_size += sizeof(rtype_t);
     ct_rtype_size += calc_gc_bits_size(rtype.size, POINTER_SIZE);
     ct_rtype_size += (rtype.length * sizeof(uint64_t));
     ct_rtype_count += 1;
 
-    return ct_list_value(ct_rtype_vec, index);
+    return ct_list_value(ct_rtype_list, index);
 }
 
 /**
@@ -829,7 +830,11 @@ char *_type_format(type_t t) {
 
     if (t.kind == TYPE_FN) {
         if (t.fn) {
-            return dsprintf("fn(...):%s", type_format(t.fn->return_type));
+            if (t.fn->is_errable) {
+                return dsprintf("fn(...):%s!", type_format(t.fn->return_type));
+            } else {
+                return dsprintf("fn(...):%s", type_format(t.fn->return_type));
+            }
         } else {
             return "fn";
         }
@@ -866,4 +871,17 @@ char *type_format(type_t t) {
 
 
     return dsprintf("%s(%s)", ident, _type_format(t));
+}
+
+char *type_origin_format(type_t t) {
+    char *ident = t.origin_ident;
+    if (ident == NULL) {
+        return _type_format(t);
+    }
+
+    if (t.kind == TYPE_PARAM) {
+        return t.param->ident;
+    }
+
+    return ident;
 }

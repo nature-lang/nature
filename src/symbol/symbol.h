@@ -7,9 +7,9 @@
 #include "utils/table.h"
 #include <stdlib.h>
 
+#define PACKAGE_MAIN_IDENT "main"
 #define FN_MAIN_NAME "main"
-#define FN_MAIN_LINKID_TO "entry"
-#define MODULE_MAIN_IDENT "main"
+#define FN_MAIN_LINKID "main.main"
 
 #define FN_INIT_NAME "init"
 #define ANONYMOUS_FN_NAME "lambda"
@@ -28,7 +28,7 @@
 
 #define MACRO_SIZEOF "sizeof"
 #define MACRO_REFLECT_HASH "reflect_hash"
-#define MACRO_CO_ASYNC "co_async"
+#define MACRO_ASYNC "async"
 #define MACRO_ULA "unsafe_load"
 #define MACRO_DEFAULT "default"
 
@@ -67,10 +67,10 @@ typedef enum {
 
 typedef struct {
     string ident; // 符号唯一标识
-    bool is_local;// 对应 elf 符号中的 global/local, 表示能否被外部链接链接到
+    bool is_local; // 对应 elf 符号中的 global/local, 表示能否被外部链接链接到
     symbol_type_t type;
-    void *ast_value;  // ast_typedef_stmt/ast_var_decl/ast_fndef_t/closure_t
-    int64_t ref_count;// 引用计数
+    void *ast_value; // ast_typedef_stmt/ast_var_decl/ast_fndef_t/closure_t
+    int64_t ref_count; // 引用计数
 } symbol_t;
 
 static inline bool is_builtin_call(char *ident) {

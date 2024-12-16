@@ -1,27 +1,29 @@
 import syscall
 
-string s = 'hello world!'
-var raw_str = s.ref()
-int result = syscall.call6(syscall.SYS_WRITE, syscall.STDOUT_FILENO as void_ptr, raw_str, s.len() as void_ptr, 0, 0, 0)
+fn main():void! {
+    string s = 'hello world!'
+    var raw_str = s.ref()
+    int result = syscall.call6(syscall.SYS_WRITE, syscall.STDOUT_FILENO as void_ptr, raw_str, s.len() as void_ptr, 0, 0, 0)
 
-// read
-var fd = syscall.open('./asserts/stat.txt', syscall.O_RDONLY, 0666)
+    // read
+    var fd = syscall.open('./asserts/stat.txt', syscall.O_RDONLY, 0666)
 
-var buf = vec_new<u8>(100, 0) // 预先申请好了空间, 便于 syscall 中将相应的值回写
-print('buf len: ', buf.len(), ', buf cap: ', buf.cap(), '\n')
+    var buf = vec_new<u8>(100, 0) // 预先申请好了空间, 便于 syscall 中将相应的值回写
+    print('buf len: ', buf.len(), ', buf cap: ', buf.cap(), '\n')
 
-result = syscall.call6(syscall.SYS_READ, fd as void_ptr, buf.ref(), buf.len() as void_ptr, 0, 0, 0)
+    result = syscall.call6(syscall.SYS_READ, fd as void_ptr, buf.ref(), buf.len() as void_ptr, 0, 0, 0)
 
-print('read result: ', result, '\n')
-buf = buf.slice(0, result)
-print('buf: ', buf as string, '!!!', '\n')
+    print('read result: ', result, '\n')
+    buf = buf.slice(0, result)
+    print('buf: ', buf as string, '!!!', '\n')
 
 
-// clock_gettime
-var t = syscall.gettime()
-println('sec:', t.sec > 1691651852, 'nsec:', t.nsec > 0)
+    // clock_gettime
+    var t = syscall.gettime()
+    println('sec:', t.sec > 1691651852, 'nsec:', t.nsec > 0)
 
-// env
-syscall.set_env('NICE', 'hello man')
-var env = syscall.get_env('NICE')
-println('env:', env)
+    // env
+    syscall.set_env('NICE', 'hello man')
+    var env = syscall.get_env('NICE')
+    println('env:', env)
+}

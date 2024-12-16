@@ -4,6 +4,7 @@ fn values():(float, f32, f64) {
     return (a, b, 3.3)
 }
 
-var (a, b, c) = values()
-
-print(a, b, c, '\n')
+fn main() {
+    var (a, b, c) = values()
+    print(a, b, c, '\n')
+}

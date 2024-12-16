@@ -1,74 +1,76 @@
 import strings
 
-var s = 'hello world world'
-var index = strings.find(s, 'wo')
-println('index of wo is ', index)
+fn main() {
+    var s = 'hello world world'
+    var index = strings.find(s, 'wo')
+    println('index of wo is ', index)
 
-index = strings.find(s, 'wow')
-println('index of wow is ', index)
+    index = strings.find(s, 'wow')
+    println('index of wow is ', index)
 
-index = strings.find_after(s, 'wo', 7)
-println('index after 7 of wo is ', index)
+    index = strings.find_after(s, 'wo', 7)
+    println('index after 7 of wo is ', index)
 
 
-// test split
-var list = strings.split(s, ' ')
-println('split len:', list.len())
+    // test split
+    var list = strings.split(s, ' ')
+    println('split len:', list.len())
 
-for v in list {
-    println(v)
+    for v in list {
+        println(v)
+    }
+
+    list = strings.split('he\noll', '')
+    println('split he\\noll len:', list.len())
+    for v in list {
+        print(v)
+    }
+    println('!!!')
+
+    // test join
+    var list2 = ['nice', 'to', 'meet', 'you']
+    var s2 = strings.join(list2, '-')
+    println('join result:', s2, '!!!')
+
+
+    // ends with
+    var s3 = 'hell_test.exe'
+    var suffix = '.exe'
+    var r3 = strings.ends_with(s3, suffix)
+    println(s3, 'ends with .exe?:', r3)
+    println(s3, 'ends with .elf?:', strings.ends_with(s3, '.elf'))
+
+
+    // starts with
+    var s4 = 'nice to meet you'
+    println(s4, 'starts with nice?:', strings.starts_with(s4, 'nice'))
+    println(s4, 'starts with where?:', strings.starts_with(s4, 'where'))
+    println(s4, 'starts with empty?:', strings.starts_with(s4, ''))
+
+    // trim
+    var s5 = '\n\t hello world\n\n\t \t\n'
+    var s6 = strings.ltrim(s5, ['\n', '\t', ' '])
+    s6 = strings.rtrim(s6, ['\n', '\t', ' '])
+
+    println('ltrim + rtrim result:', s6, '!!!')
+
+    println('trim result:', strings.trim(s5, ['\n', '\t', ' ']), '!!!')
+
+    var s7 = 'nice to meet you'
+
+    var s8 = strings.replace(s7, 'e', 'g')
+    println(s8)
+
+    println(strings.replace('hello world hello nice to meet you hello', 'hello', 'hualaka'))
+    println(strings.replace('hello world hello nice to meet you hello', 'hello', ''))
+
+    // reverse
+    var s9 = 'helloworld'
+    println(s9, 'reverse: ', strings.reverse(s9))
+
+    // rfind
+    var s10 = 'helloxworldxworld'
+    println('rfind wo:', strings.rfind(s10, 'wo', s10.len())) // 12 v
+    println('rfind wo:', strings.rfind(s10, 'wo', 12)) // 6 v
+    println('rfind wo:', strings.rfind(s10, 'r', s10.len())) // 6 v
 }
-
-list = strings.split('he\noll', '')
-println('split he\\noll len:', list.len())
-for v in list {
-    print(v)
-}
-println('!!!')
-
-// test join
-var list2 = ['nice', 'to', 'meet', 'you']
-var s2 = strings.join(list2, '-')
-println('join result:', s2, '!!!')
-
-
-// ends with
-var s3 = 'hell_test.exe'
-var suffix = '.exe'
-var r3 = strings.ends_with(s3, suffix)
-println(s3, 'ends with .exe?:', r3)
-println(s3, 'ends with .elf?:', strings.ends_with(s3, '.elf'))
-
-
-// starts with
-var s4 = 'nice to meet you'
-println(s4, 'starts with nice?:', strings.starts_with(s4, 'nice'))
-println(s4, 'starts with where?:', strings.starts_with(s4, 'where'))
-println(s4, 'starts with empty?:', strings.starts_with(s4, ''))
-
-// trim
-var s5 = '\n\t hello world\n\n\t \t\n'
-var s6 = strings.ltrim(s5, ['\n', '\t', ' '])
-s6 = strings.rtrim(s6, ['\n', '\t', ' '])
-
-println('ltrim + rtrim result:', s6, '!!!')
-
-println('trim result:', strings.trim(s5, ['\n', '\t', ' ']), '!!!')
-
-var s7 = 'nice to meet you'
-
-var s8 = strings.replace(s7, 'e', 'g')
-println(s8)
-
-println(strings.replace('hello world hello nice to meet you hello', 'hello', 'hualaka'))
-println(strings.replace('hello world hello nice to meet you hello', 'hello', ''))
-
-// reverse
-var s9 = 'helloworld'
-println(s9, 'reverse: ', strings.reverse(s9))
-
-// rfind
-var s10 = 'helloxworldxworld'
-println('rfind wo:', strings.rfind(s10, 'wo', s10.len())) // 12 v
-println('rfind wo:', strings.rfind(s10, 'wo', 12)) // 6 v
-println('rfind wo:', strings.rfind(s10, 'r', s10.len())) // 6 v

@@ -638,14 +638,14 @@ coroutine_t *coroutine_get() {
     return uv_key_get(&tls_coroutine_key);
 }
 
-void rt_coroutine_set_error(char *msg) {
+void rt_coroutine_set_error(char *msg, bool panic) {
     DEBUGF("[runtime.rt_coroutine_set_error] msg=%s", msg);
     coroutine_t *co = coroutine_get();
-    n_errort *error = n_error_new(string_new(msg, strlen(msg)), 1);
+    n_error_t *error = n_error_new(string_new(msg, strlen(msg)), panic);
     co->error = error;
 }
 
-void coroutine_dump_error(coroutine_t *co, n_errort *error) {
+void coroutine_dump_error(coroutine_t *co, n_error_t *error) {
     DEBUGF("[runtime.coroutine_dump_error] co=%p, errort base=%p", co, error);
 
     n_string_t *msg = error->msg;
@@ -705,58 +705,10 @@ void pre_tplcall_hook() {
     n_processor_t *p = processor_get();
 
     // 这里需要抢占到锁再进行更新，否则和 wait_sysmon 存在冲突。
-    // 如果 wait_sysmon 已经获取了锁，则会阻塞在此处等待 wait_symon 进行抢占, 避免再次进入 tpl
+    // 如果 wait_sysmon 已经获取了锁，则会阻塞在此处等待 wait_symon 进行抢占, 避免再次进入 is_tpl
     processor_set_status(p, P_STATUS_TPLCALL);
 
-#ifdef __AMD64
-    uint64_t rbp_value;
-    __asm__ volatile("mov %%rbp, %0" : "=r"(rbp_value));
-    co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);
-    // 去到上一个 fn 的栈顶
-    co->scan_offset = (uint64_t) p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE); //
-    TRACEF("[pre_tplcall_hook] co=%p, status=%d, bp_value=%p, scan_offset=%lu, ret_addr=%p", co, co->status,
-           (void*)rbp_value,
-           co->scan_offset,
-           (void *) co->scan_ret_addr);
-
-#elif __ARM64
-    addr_t fp_value;
-    // 在 ARM64 中，x29 是帧指针(FP)
-    __asm__ volatile("mov %0, x29" : "=r"(fp_value));
-    co->scan_ret_addr = fetch_addr_value(fp_value + POINTER_SIZE);
-    assert(co->scan_ret_addr);
-    addr_t prev_fp_value = fetch_addr_value(fp_value);
-    assert(prev_fp_value);
-
-    fndef_t *fn = find_fn(co->scan_ret_addr);
-    assert(fn);
-
-    co->scan_offset = (uint64_t) p->share_stack.align_retptr - (prev_fp_value - fn->stack_size);
-
-    TRACEF(
-        "[pre_tplcall_hook] co=%p, status=%d, fp_value=%p, prev_fn_value=%p, fn=%s, stack_size=%ld, scan_offset=%p, ret_addr=%p",
-        co, co->status,
-        (void*)fp_value,
-        (void*)prev_fp_value,
-        fn->name,
-        fn->stack_size,
-        (void*)co->scan_offset,
-        (void *) co->scan_ret_addr);
-#else
-    assert(false && "platform not supported");
-#endif
-
-    // #ifdef DEBUG
-    //     addr_t ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);
-    //     fndef_t *fn = find_fn(ret_addr);
-    //     if (fn) {
-    //         TRACEF("[runtime.pre_tpl_hook] ret_addr=%p, fn=%s -> %s, path=%s:%lu", (void *)ret_addr, fn->name, target, fn->rel_path,
-    //         fn->line);
-    //     }
-    //     // 基于 share stack 计算 offset
-    //     TRACEF("[runtime.pre_tpl_hook] aco->align_retptr=%p, rbp=%p, bp_offset=%lu", aco->share_stack->align_retptr, (void *)rbp_value,
-    //            aco->bp_offset);
-    // #endif
+    CO_SCAN_REQUIRE(co)
 }
 
 void post_tplcall_hook() {

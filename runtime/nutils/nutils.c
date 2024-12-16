@@ -94,7 +94,7 @@ n_ptr_t *raw_ptr_assert(n_raw_ptr_t *raw_ptr) {
     PRE_RTCALL_HOOK();
     if (raw_ptr == 0) {
         DEBUGF("[raw_ptr_assert] raw pointer");
-        rt_coroutine_set_error("raw_ptr is null, cannot assert");
+        rt_coroutine_set_error("raw_ptr is null, cannot assert", true);
         return 0;
     }
 
@@ -114,7 +114,7 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        rt_coroutine_set_error("type assert error");
+        rt_coroutine_set_error("type assert error", true);
         return;
     }
 
@@ -340,7 +340,7 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
 }
 
 void zero_fn() {
-    rt_coroutine_set_error("zero_fn");
+    rt_coroutine_set_error("empty fn", true);
 }
 
 // 基于字符串到快速设置不太需要考虑内存泄漏的问题， raw_string 都是 .data 段中的字符串
@@ -350,7 +350,7 @@ void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_
     coroutine_t *co = coroutine_get();
     DEBUGF("[runtime.co_throw_error] co=%p, msg=%s, path=%s, line=%ld, column=%ld", co, msg->data, path, line, column);
 
-    n_errort *error = n_error_new(msg, true);
+    n_error_t *error = n_error_new(msg, false);
 
     n_trace_t trace = {
         .path = string_new(path, strlen(path)),
@@ -365,12 +365,12 @@ void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_
     post_rtcall_hook("co_throw_error");
 }
 
-n_errort co_remove_error() {
+n_error_t co_remove_error() {
     PRE_RTCALL_HOOK();
     coroutine_t *co = coroutine_get();
     assert(co->error);
 
-    n_errort *error = co->error;
+    n_error_t *error = co->error;
     DEBUGF("[runtime.co_remove_error] remove error: %p, has? %d", error, error ? error->has : 0);
 
     co->error = NULL;
@@ -378,6 +378,47 @@ n_errort co_remove_error() {
     post_rtcall_hook("co_remove_error");
 
     return *error;
+}
+
+uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_int_t column) {
+    coroutine_t *co = coroutine_get();
+    if (!co->error || co->error->has == false) {
+        return 0;
+    }
+
+    PRE_RTCALL_HOOK();
+
+    assert(line >= 0 && line < 1000000);
+    assert(column >= 0 && column < 1000000);
+
+    // build in panic 可以被 catch 捕获，但只能是立刻捕获，否则会全局异常退出。
+    if (be_catch) {
+        // 存在异常时顺便添加调用栈信息, 这样 catch 错误时可以更加准确的添加相关信息
+        n_trace_t trace = {
+            .path = string_new(path, strlen((char *) path)),
+            .ident = string_new(fn_name, strlen((char *) fn_name)),
+            .line = line,
+            .column = column,
+        };
+
+        rt_vec_push(co->error->traces, &trace);
+
+        post_rtcall_hook("co_has_panic");
+        return 1;
+    }
+
+    char *dump_msg;
+    if (co->main) {
+        dump_msg = dsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", (char *) co->error->msg->data,
+                            path, line, column);
+    } else {
+        dump_msg = dsprintf("coroutine %ld panic: '%s' at %s:%d:%d\n", co->id, (char *) co->error->msg->data,
+                            path, line, column);
+    }
+
+    VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
+    // panic msg
+    exit(EXIT_FAILURE);
 }
 
 uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
@@ -392,7 +433,8 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
            fn_name, line, column)
     assert(line >= 0 && line < 1000000);
     assert(column >= 0 && column < 1000000);
-    // 存在异常时顺便添加调用栈信息
+
+    // 存在异常时顺便添加调用栈信息, 这样 catch 错误时可以更加准确的添加相关信息
     n_trace_t trace = {
         .path = string_new(path, strlen(path)),
         .ident = string_new(fn_name, strlen(fn_name)),
@@ -678,6 +720,30 @@ void raw_ptr_valid(void *raw_ptr) {
 #endif
 
     if (failed) {
-        rt_coroutine_set_error("invalid memory address or nil pointer dereference");
+        rt_coroutine_set_error("invalid memory address or nil pointer dereference", true);
     }
+}
+
+void rt_panic(n_string_t *msg) {
+    coroutine_t *co = coroutine_get();
+    n_processor_t *p = processor_get();
+
+
+    // 更新 ret addr 到 co 中
+    CO_SCAN_REQUIRE(co);
+    assert(co->scan_ret_addr);
+    caller_t *caller = table_get(rt_caller_table, itoa(co->scan_ret_addr));
+
+    // pre_rtcall_hook 中已经记录了 ret addr
+    char *dump_msg;
+    if (co->main) {
+        dump_msg = dsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", rt_string_ref(msg),
+                            ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
+    } else {
+        dump_msg = dsprintf("coroutine '%ld' panic: '%s' at %s:%d:%d\n", co->id, rt_string_ref(msg),
+                            ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
+    }
+    VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
+    // panic msg
+    exit(EXIT_FAILURE);
 }

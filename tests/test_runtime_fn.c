@@ -11,23 +11,22 @@
 #include "test_runtime.h"
 
 int main() {
-    DIR *dir;
-    struct dirent *entry;
+    char dest[25]; // 目标缓冲区大小为 25 字节
 
-    // 打开当前目录 "."
-    dir = opendir(".");
+    // 测试用例 1：源字符串长度小于 n
+    const char *src1 = "Hello, World!";
+    str_rcpy(dest, src1, 24);
+    printf("Test 1: %s\n", dest); // 预期输出: "Hello, World!"
 
-    if (dir == NULL) {
-        printf("无法打开目录\n");
-        return 1;
-    }
+    // 测试用例 2：源字符串长度等于 n
+    const char *src2 = "This is a test string.";
+    str_rcpy(dest, src2, 24);
+    printf("Test 2: %s\n", dest); // 预期输出: "This is a test string."
 
-    // 读取目录中的所有项目
-    while ((entry = readdir(dir)) != NULL) {
-        printf("文件名: %s\n", entry->d_name);
-    }
+    // 测试用例 3：源字符串长度大于 n
+    const char *src3 = "abcdefghijklmnopqrstuvwxyz";
+    str_rcpy(dest, src3, 24);
+    printf("Test 3: %s\n", dest); // 预期输出: "cdefghijklmnopqrstuvwxyz"
 
-    // 关闭目录
-    closedir(dir);
     return 0;
 }

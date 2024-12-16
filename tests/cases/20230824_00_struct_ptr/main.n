@@ -1,52 +1,54 @@
 import 'mod.n' as *
 
-var p = person_t {
-    name = 'hualaka',
-    from = 'china',
-    gender = 1
+fn main() {
+    var p = person_t {
+        name = 'hualaka',
+        from = 'china',
+        gender = 1
+    }
+
+    println(p.gender, p.from, p.get_name())
+    @unsafe_load(p).set_age(24)
+    println(p.age)
+
+    // --- ptr test
+    ptr<person_t> p2 = new person_t
+    p2.name = "wanglufei"
+    p2.from = "japan"
+    p2.gender = 2
+    p2.set_age(19)
+
+    println(p2.get_name(), p2.from, p2.gender, p2.age)
+
+    // --- &person_t test
+    raw_ptr<person_t> p3 = &p
+    p3.age = 24
+    println(p3.name, p3.from, p3.gender, p3.age, p.age)
+
+    // --- ptr param
+    fn test_param(raw_ptr<person_t> p3, person_t p) {
+        println('in test fn, p.name is', p.name)
+        println('in test fn, p3.name is', p3.name)
+    }
+
+    test_param(p3, p)
+
+    // --- refer rewrite
+    fn test_refer(raw_ptr<person_t> p3, person_t p) {
+        p3.name = 'rewrite by p3'
+        p.name = 'rewrite by p' // nop
+    }
+
+    test_refer(p3, p)
+    println(p.name, p3.name)
+
+    // --- test return
+    fn test_return():ptr<person_t> {
+        var p = new person_t // gc_malloc, can return
+        p.age = 55
+        return p
+    }
+
+    var p4 = test_return()
+    println(p4.age, p4.name, '!')
 }
-
-println(p.gender, p.from, p.get_name())
-@unsafe_load(p).set_age(24)
-println(p.age)
-
-// --- ptr test
-ptr<person_t> p2 = new person_t
-p2.name = "wanglufei"
-p2.from = "japan"
-p2.gender = 2
-p2.set_age(19)
-
-println(p2.get_name(), p2.from, p2.gender, p2.age)
-
-// --- &person_t test
-raw_ptr<person_t> p3 = &p
-p3.age = 24
-println(p3.name, p3.from, p3.gender, p3.age, p.age)
-
-// --- ptr param
-fn test_param(raw_ptr<person_t> p3, person_t p) {
-    println('in test fn, p.name is', p.name)
-    println('in test fn, p3.name is', p3.name)
-}
-
-test_param(p3, p)
-
-// --- refer rewrite
-fn test_refer(raw_ptr<person_t> p3, person_t p) {
-    p3.name = 'rewrite by p3'
-    p.name = 'rewrite by p' // nop
-}
-
-test_refer(p3, p)
-println(p.name, p3.name)
-
-// --- test return
-fn test_return():ptr<person_t> {
-    var p = new person_t // gc_malloc, can return
-    p.age = 55
-    return p
-}
-
-var p4 = test_return()
-println(p4.age, p4.name, '!')

@@ -1,7 +1,9 @@
 import 'src/config.n'
 
-print('config.max=', config.get_max(), '\n')
-config.set_count(125)
-print('config.count=', config.count, '\n')
+fn main() {
+    print('config.max=', config.get_max(), '\n')
+    config.set_count(125)
+    print('config.count=', config.count, '\n')
 
-config.test_math()
+    config.test_math()
+}

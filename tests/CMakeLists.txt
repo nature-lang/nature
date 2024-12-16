@@ -4,7 +4,11 @@ include(CTest)
 ENABLE_LANGUAGE(ASM)
 FILE(GLOB_RECURSE RUNTIMES ../runtime/*c ../runtime/aco/acosw.S)
 
-set(LIBUV_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libuv.a")
+if (CMAKE_SYSTEM_NAME STREQUAL "linux" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
+    set(LIBUV_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libuv_gcc.a")
+else ()
+    set(LIBUV_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libuv.a")
+endif ()
 message("LIBUV_STATIC: ${LIBUV_STATIC}")
 
 set(LIBUC_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libc.a")
@@ -101,12 +105,15 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
 
     # 2. target_link_libraries 生成最终可执行文件, 依赖上一部生成的 libmain.a
     add_executable(test_runtime_debug test_runtime_debug.c ${RUNTIMES} ${UTILS})
+
 #    if (CMAKE_SYSTEM_NAME MATCHES "linux")
-        #        set(CMAKE_EXE_LINKER_FLAGS "-static")
+#        set(CMAKE_EXE_LINKER_FLAGS "-static")
 #        set_target_properties(test_runtime_debug PROPERTIES LINK_FLAGS "-static")
 #    endif ()
 
-#    add_dependencies(test_runtime_debug generate_libmain)  # 添加这行
+
+
+    add_dependencies(test_runtime_debug generate_libmain)  # 添加这行
 
     target_link_libraries(test_runtime_debug ${LIBMAIN_STATIC} ${LIBUV_STATIC})
     add_test(NAME test_runtime_debug COMMAND test_runtime_debug WORKING_DIRECTORY ${WORK_DIR})

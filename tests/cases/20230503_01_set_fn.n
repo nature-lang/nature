@@ -1,10 +1,12 @@
-{int} s = {}
-s.add(1)
-s.add(2)
+fn main() {
+    {int} s = {}
+    s.add(1)
+    s.add(2)
 
-println(s.contains(2))
-println(s.contains(3))
+    println(s.contains(2))
+    println(s.contains(3))
 
 
-var foo = {1, 2, 3}.contains(2)
-println(foo)
+    var foo = {1, 2, 3}.contains(2)
+    println(foo)
+}

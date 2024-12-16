@@ -270,7 +270,6 @@ static inline void
 arm64_rewrite_rel_symbol(arm64_asm_inst_t *operation, arm64_asm_operand_t *operand, uint64_t rel_diff) {
     int addend = 0;
 
-
     // 如果不是符号操作数,直接返回
     if (operand->type != ARM64_ASM_OPERAND_SYMBOL) {
         return;
@@ -291,6 +290,9 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
     // 第一遍扫描
     for (int i = 0; i < closures->count; ++i) {
         closure_t *c = closures->take[i];
+
+        uint64_t fn_offset = 0;
+
         for (int j = 0; j < c->asm_operations->count; ++j) {
             arm64_asm_inst_t *operation = c->asm_operations->take[j];
             arm64_build_temp_t *temp = arm64_build_temp_new(operation);
@@ -317,7 +319,11 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
 
             // 处理符号引用
             arm64_asm_operand_t *rel_operand = arm64_extract_symbol_operand(operation);
+            char *call_target = NULL;
             if (rel_operand != NULL) {
+                assert(rel_operand->type == ARM64_ASM_OPERAND_SYMBOL);
+                call_target = rel_operand->symbol.name;
+
                 // 判断是否为分支/调用指令
                 if (arm64_is_call_op(operation) || arm64_is_branch_op(operation)) {
                     uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, rel_operand->symbol.name);
@@ -353,6 +359,7 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
 
                     temp->data = arm64_asm_inst_encoding(operation, &temp->data_count);
                     section_offset += temp->data_count;
+                    fn_offset += temp->data_count;
 
 
                     // 添加重定位项
@@ -370,6 +377,28 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
             // 编码指令
             temp->data = arm64_asm_inst_encoding(operation, &temp->data_count);
             section_offset += temp->data_count;
+            fn_offset += temp->data_count;
+
+            if (operation->raw_opcode == R_BL || operation->raw_opcode == R_BLR) {
+                do {
+                    // 跳过 linear 阶段大量生成的 rt_call
+                    if (call_target && is_rtcall(call_target)) {
+                        break;
+                    }
+
+                    caller_t caller = {
+                        .data = c,
+                        .offset = fn_offset,
+                        .line = operation->line,
+                        .column = operation->column,
+                    };
+                    if (call_target) {
+                        str_rcpy(caller.target_name, call_target, 24);
+                    }
+
+                    ct_list_push(ct_caller_list, &caller);
+                } while (0);
+            }
         }
     }
 
@@ -457,6 +486,9 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
     // 第一遍扫描
     for (int i = 0; i < closures->count; ++i) {
         closure_t *c = closures->take[i];
+
+        uint64_t fn_offset = 0;
+
         for (int j = 0; j < c->asm_operations->count; ++j) {
             arm64_asm_inst_t *operation = c->asm_operations->take[j];
             arm64_build_temp_t *temp = arm64_build_temp_new(operation);
@@ -484,7 +516,11 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
 
             // 处理符号引用(label 或者 symbol 符号)
             arm64_asm_operand_t *rel_operand = arm64_extract_symbol_operand(operation);
+            char *call_target = NULL;
             if (rel_operand != NULL) {
+                assert(rel_operand->type == ARM64_ASM_OPERAND_SYMBOL);
+                call_target = rel_operand->symbol.name;
+
                 // 判断是否为分支/调用指令
                 if (arm64_is_call_op(operation) || arm64_is_branch_op(operation)) {
                     uint64_t sym_index = (uint64_t) table_get(symtab_hash, rel_operand->symbol.name);
@@ -514,6 +550,7 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     temp->sym_index = sym_index;
                     temp->data = arm64_asm_inst_encoding(operation, &temp->data_count);
                     section_offset += temp->data_count;
+                    fn_offset += temp->data_count;
 
                     // 添加重定位项
                     uint64_t reloc_type = ARM64_RELOC_PAGE21;
@@ -529,6 +566,28 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
             // 编码指令
             temp->data = arm64_asm_inst_encoding(operation, &temp->data_count);
             section_offset += temp->data_count;
+            fn_offset += temp->data_count;
+
+            if (operation->raw_opcode == R_BL || operation->raw_opcode == R_BLR) {
+                do {
+                    // 跳过 linear 阶段大量生成的 rt_call
+                    if (call_target && is_rtcall(call_target)) {
+                        break;
+                    }
+
+                    caller_t caller = {
+                        .data = c,
+                        .offset = fn_offset,
+                        .line = operation->line,
+                        .column = operation->column,
+                    };
+                    if (call_target) {
+                        strncpy(caller.target_name, call_target, 23);
+                    }
+
+                    ct_list_push(ct_caller_list, &caller);
+                } while (0);
+            }
         }
     }
 

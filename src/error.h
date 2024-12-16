@@ -30,11 +30,11 @@
 }
 
 #define PARSER_ASSERTF(condition, fmt, ...) { \
-        ((condition) ?: dump_errorf(m, CT_STAGE_PARSER, parser_peek(m)->line, parser_peek(m)->column, fmt, ##__VA_ARGS__)); \
+        ((condition) ?"": dump_errorf(m, CT_STAGE_PARSER, parser_peek(m)->line, parser_peek(m)->column, fmt, ##__VA_ARGS__)); \
     }
 
 #define SCANNER_ASSERTF(condition, fmt, ...) { \
-        ((condition) ?: dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column, fmt, ##__VA_ARGS__)); \
+        ((condition) ?"": dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column, fmt, ##__VA_ARGS__)); \
     }
 
 

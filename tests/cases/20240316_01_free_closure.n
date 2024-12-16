@@ -1,44 +1,46 @@
-// 1. 引用 env.get_free_a, 但是 get_free_a 由于引用了外部环境，所以进行了闭包处理
-var free_a = 1111
-fn get_free_a():int {
-    return free_a
-}
-
-fn first() {
-    println(free_a, get_free_a())
-}
-
-first()
-
-// 2. 引用 env.get_free_b, 此时 get_free_b 就是普通的 fn 没有引用外部的环境
-fn gen_free_b():int{
-    return 2222
-}
-
-var free_c = 3333
-
-fn second() {
-    println(free_a, gen_free_b(), free_c)
-}
-second()
-
-// 3. 多级嵌套环境引用
-fn third() {
-    var free_d_0 = 44440
-    fn third2() {
-        var free_d_1 = 44441
-        fn third3() {
-            var free_d_2 = 44442
-            fn third4() {
-                println('in third 4', free_d_0, free_d_1, free_d_2)
-            }
-            third4()
-            println('in third 3', free_d_0)
-        }
-
-        third3()
+fn main() {
+    // 1. 引用 env.get_free_a, 但是 get_free_a 由于引用了外部环境，所以进行了闭包处理
+    var free_a = 1111
+    fn get_free_a():int {
+        return free_a
     }
 
-    third2()
+    fn first() {
+        println(free_a, get_free_a())
+    }
+
+    first()
+
+    // 2. 引用 env.get_free_b, 此时 get_free_b 就是普通的 fn 没有引用外部的环境
+    fn gen_free_b():int{
+        return 2222
+    }
+
+    var free_c = 3333
+
+    fn second() {
+        println(free_a, gen_free_b(), free_c)
+    }
+    second()
+
+    // 3. 多级嵌套环境引用
+    fn third() {
+        var free_d_0 = 44440
+        fn third2() {
+            var free_d_1 = 44441
+            fn third3() {
+                var free_d_2 = 44442
+                fn third4() {
+                    println('in third 4', free_d_0, free_d_1, free_d_2)
+                }
+                third4()
+                println('in third 3', free_d_0)
+            }
+
+            third3()
+        }
+
+        third2()
+    }
+    third()
 }
-third()
