@@ -1,4 +1,5 @@
 import coroutine as co
+import runtime
 
 fn main() {
     // case 1
@@ -40,7 +41,7 @@ fn main() {
     f64 sum = 0
 
     fn consumer1() {
-        println('[ch_queue] consumer1 start, p_index =', co.processor_index())
+        println('[ch_queue] consumer1 start, p_index =', runtime.processor_index())
 
         for int i = 0; i < 100; i+=1 {
           var msg = ch_queue.recv()
@@ -51,7 +52,7 @@ fn main() {
     }
 
     fn consumer2() {
-        println('[ch_queue] consumer2 start, p_index =', co.processor_index())
+        println('[ch_queue] consumer2 start, p_index =', runtime.processor_index())
 
         for int i = 0; i < 100; i+=1 {
           var msg = ch_queue.recv()
@@ -66,7 +67,7 @@ fn main() {
 
     co.sleep(100) // 等待 consumer 就绪
 
-    println('[ch_queue] will send, p_index=', co.processor_index())
+    println('[ch_queue] will send, p_index=', runtime.processor_index())
     // 生成 10 个 send
     for int i = 0; i < 50; i+=1 {
         ch_queue.send(i as f64)

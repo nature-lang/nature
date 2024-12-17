@@ -1,0 +1,17 @@
+#linkid rt_coroutine_new
+fn coroutine_new(void_ptr function, int flag, void_ptr future):void_ptr
+
+#linkid rt_coroutine_async
+fn coroutine_async(void_ptr function, int flag, void_ptr future):void_ptr
+
+#linkid rt_coroutine_dispatch
+fn coroutine_dispatch(void_ptr co)
+
+#linkid rt_coroutine_return
+fn coroutine_return(void_ptr result)
+
+#linkid rt_coroutine_await
+fn coroutine_await(void_ptr co)
+
+#linkid rt_coroutine_error
+fn coroutine_error(void_ptr co):raw_ptr<error_t>

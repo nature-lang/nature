@@ -3,6 +3,7 @@ import fmt.util
 import fmt
 import time
 import coroutine as co
+import runtime
 
 fn logf(string format, ...[any] args) {
     var msg = fmt.sprintf(format, ...args)
@@ -11,7 +12,7 @@ fn logf(string format, ...[any] args) {
 }
 
 fn main() {
-    runtime_force_gc()
+    runtime.gc()
 
     int len = 2
     int arg_index = 0

@@ -1,8 +1,8 @@
-import libc_temp
+import libc
 import syscall
 
 fn main() {
     for true {
-        usleep(10000)
+        libc.usleep(10000)
     }
 }

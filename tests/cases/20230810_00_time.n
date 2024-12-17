@@ -1,11 +1,12 @@
 import time
+import libc
 
 fn main() {
     var timestamp = 1691656611
-    ptr<libc_tm_t> ti = localtime(&timestamp)
+    ptr<libc.tm_t> ti = libc.localtime(&timestamp)
 
     // 修改成 strings.new() -- 基于重载解析多种类型的 new
-    string tz = libc_string_new(ti.tm_zone)
+    string tz = libc.string_new(ti.tm_zone)
 
     var hour = ti.tm_hour
     if tz == 'CST' {
@@ -24,7 +25,7 @@ fn main() {
         println('unknown timezone:', tz)
     }
 
-    var tp = libc_tm_t {
+    var tp = libc.tm_t {
         tm_year = 122,
         tm_mon = 7,
         tm_mday = 9,
@@ -35,7 +36,7 @@ fn main() {
 
     // UTC 1660066252
     // CST 1660037452
-    timestamp = mktime(&tp)
+    timestamp = libc.mktime(&tp)
     if tz == 'CST' {
         println(timestamp == 1660037452)
     } else if tz == 'UTC' {
@@ -46,7 +47,7 @@ fn main() {
 
     // format 测试(需要一个 100 空间的 buf)
     var buf = vec_new<u8>(100, 0)
-    var len = strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S'.ref(), &tp)
+    var len = libc.strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S'.ref(), &tp)
     buf = buf.slice(0, len)
     println('datetime:', buf as string, '!!!')
 

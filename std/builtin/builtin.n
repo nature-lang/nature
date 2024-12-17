@@ -1,2 +1,18 @@
+// type ptr<t> = *t
+
+// type uint_ptr = uint
+
+// type any = ...|...
+
+// type all_t = void_ptr // any_t 用于类型约束，c_ptr -> uint 是最终的编译类型
+
+// type fn_t = void_ptr // 同上
+
+#linkid print
+fn print(...[any] args)
+
+#linkid println
+fn println(...[any] args)
+
 #linkid rt_panic
 fn panic(string msg)

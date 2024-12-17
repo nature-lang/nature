@@ -4,7 +4,6 @@ import syscall
 import os
 import local
 import package.src.user
-import assert
 
 fn main() {
     user.dump()

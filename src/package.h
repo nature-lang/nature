@@ -13,11 +13,17 @@
 
 bool is_std_package(char *package);
 
-bool is_std_temp_package(char *package);
-
 char *package_import_temp_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *ast_import_package);
 
 char *package_import_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *ast_import_package);
+
+static inline char *ast_import_package_tostr(slice_t *ast_import_package) {
+    char *result = ast_import_package->take[0];
+    for (int i = 1; i < ast_import_package->count; ++i) {
+        result = str_connect_by(result, ast_import_package->take[i], ".");
+    }
+    return result;
+}
 
 static inline toml_table_t *package_parser(char *file) {
     FILE *fp = fopen(file, "r");

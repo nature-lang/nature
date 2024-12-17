@@ -1,5 +1,5 @@
 import coroutine as co
-import libc_temp
+import runtime
 
 fn car() {
     var a = vec_new<int>(10, 0)
@@ -35,7 +35,7 @@ fn foo(){
     string d = 'hello world'
     d = 'done done'
     car()
-    runtime_force_gc()
+    runtime.gc()
 
     co.sleep(100)
     print('share sub_co done\n')

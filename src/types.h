@@ -60,7 +60,6 @@ typedef enum {
 typedef enum {
     MODULE_TYPE_MAIN = 1, // 入口文件
     MODULE_TYPE_COMMON = 2, // 标准 module
-    MODULE_TYPE_TPL = 3, // .tpl.n 文件
     MODULE_TYPE_BUILTIN = 4,
 } module_type_t;
 

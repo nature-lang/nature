@@ -12,7 +12,6 @@ static void infer_call_args(module_t *m, ast_call_t *call, type_fn_t *target_typ
 
 static void infer_fndef(module_t *m, ast_fndef_t *fn);
 
-
 static type_t *select_fn_param(type_fn_t *type_fn, uint8_t index, bool is_spread) {
     assert(type_fn);
     if (type_fn->is_rest && index >= type_fn->param_types->length - 1) {

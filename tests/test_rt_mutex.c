@@ -52,7 +52,7 @@ void test_lock_sum() {
             remain_count += p->runnable_list.count;
         }
 
-        coroutine_sleep(1000);
+        rt_coroutine_sleep(1000);
         TESTDUMP("[test_lock_sum] wait coroutine calc complete...")
     } while (remain_count > 0);
 
@@ -72,7 +72,7 @@ void test_no_lock_sum() {
         rt_coroutine_dispatch(sub_co);
     }
 
-    coroutine_sleep(2000);
+    rt_coroutine_sleep(2000);
     TESTDUMP("[test_no_lock_sum] no_lock_sum=%ld", sum_no_lock);
     assert(sum_no_lock < 1000000);
 }
@@ -96,12 +96,12 @@ void test_basic() {
 
 
     TESTDUMP("[test_slow] will yield sleep")
-    coroutine_sleep(2000);
+    rt_coroutine_sleep(2000);
 
     TESTDUMP("[test_slow] sleep come back")
     rt_mutex_unlock(&m);
     TESTDUMP("[test_slow] unlock success, and sleep while")
-    coroutine_sleep(200);
+    rt_coroutine_sleep(200);
 }
 
 int main(void) {

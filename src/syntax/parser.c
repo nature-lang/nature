@@ -2315,6 +2315,25 @@ static ast_stmt_t *parser_stmt(module_t *m) {
     exit(1);
 }
 
+static ast_stmt_t *parser_module_stmt(module_t *m) {
+    // module parser 只包含着几种简单语句
+    if (parser_is(m, TOKEN_VAR)) {
+        return parser_var_begin_stmt(m);
+    } else if (is_type_begin_stmt(m)) {
+        return parser_type_begin_stmt(m);
+    } else if (parser_is(m, TOKEN_FN_LABEL)) {
+        return parser_fn_label(m);
+    } else if (parser_is(m, TOKEN_FN)) {
+        return parser_fndef_stmt(m, ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column));
+    } else if (parser_is(m, TOKEN_IMPORT)) {
+        return parser_import_stmt(m);
+    } else if (parser_is(m, TOKEN_TYPE)) {
+        return parser_type_alias_stmt(m);
+    }
+
+    PARSER_ASSERTF(false, "non-declaration statement outside fn body")
+}
+
 /**
  * template 文件只能包含 type 和 fn 两种表达式
  * @param m
@@ -2841,8 +2860,6 @@ static ast_expr_t parser_macro_call(module_t *m) {
  * @return
  */
 static ast_expr_t parser_expr(module_t *m) {
-    PARSER_ASSERTF(m->type != MODULE_TYPE_TPL, "template file cannot contains expr");
-
     // struct new
     if (parser_is_struct_new_expr(m)) {
         return parser_struct_new_expr(m);
@@ -2884,14 +2901,8 @@ slice_t *parser(module_t *m, linked_t *token_list) {
             debug_parser_stmt(stmt_type);
         }
 #endif
-        ast_stmt_t *stmt;
-        if (m->type == MODULE_TYPE_TPL) {
-            stmt = parser_tpl_stmt(m);
-        } else {
-            stmt = parser_stmt(m);
-        }
 
-        slice_push(block_stmt, stmt);
+        slice_push(block_stmt, parser_module_stmt(m));
 
         parser_must_stmt_end(m);
     }

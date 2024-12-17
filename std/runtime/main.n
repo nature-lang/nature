@@ -40,23 +40,14 @@ fn string_length(void_ptr s):int
 #linkid rt_string_ref
 fn string_ref(void_ptr s):void_ptr
 
-#linkid rt_coroutine_new
-fn coroutine_new(void_ptr function, int flag, void_ptr future):void_ptr
+#linkid rt_processor_index
+fn processor_index():int
 
-#linkid rt_coroutine_async
-fn coroutine_async(void_ptr function, int flag, void_ptr future):void_ptr
+#linkid runtime_force_gc
+fn gc()
 
-#linkid rt_coroutine_dispatch
-fn coroutine_dispatch(void_ptr co)
+#linkid runtime_malloc_bytes
+fn malloc_bytes():i64
 
-#linkid rt_coroutine_yield
-fn coroutine_yield()
-
-#linkid rt_coroutine_return
-fn coroutine_return(void_ptr result)
-
-#linkid rt_coroutine_await
-fn coroutine_await(void_ptr co)
-
-#linkid rt_coroutine_error
-fn coroutine_error(void_ptr co):raw_ptr<error_t>
+#linkid gc_malloc
+fn gc_malloc(int rhash):void_ptr

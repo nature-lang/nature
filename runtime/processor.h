@@ -175,7 +175,7 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co);
 
 void co_migrate(aco_t *aco, aco_share_stack_t *new_st);
 
-void coroutine_sleep(int64_t ms);
+void rt_coroutine_sleep(int64_t ms);
 
 void rt_coroutine_await(coroutine_t *co);
 

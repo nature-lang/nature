@@ -2,9 +2,8 @@ import os
 import fmt
 import path
 import elf
-import libc_temp
-import dirent_temp
 import strings
+import libc.dirent
 
 fn main():void! {
     var a1 = path.join('/test/hello/world/', './nice.tar.gz')
@@ -14,11 +13,11 @@ fn main():void! {
     var a3 = path.join('/test/hello/world', 'nice.tar.gz')
     println(a3)
 
-    var s = libc_string_replace('/test/hello/world/sub/sub2', '/test/hello/world/', '')
+    var s =strings.replace('/test/hello/world/sub/sub2', '/test/hello/world/', '')
     println(s)
 
     // test list dir (build in fn?) parser handle?
-    var size = 12 + @sizeof(dirent_t) - 24
+    var size = 12 + @sizeof(dirent.dirent_t) - 24
     println('dirent_t size', size)
     var list = os.listdir('mock')
     println("os.listdir of mock len", list.len())

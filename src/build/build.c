@@ -580,38 +580,12 @@ static void build_assembler(slice_t *modules) {
     assembler_custom_links();
 }
 
-static void build_tpls(slice_t *templates) {
-    slice_t *modules = slice_new(); // module_t*
-    // 开始编译 templates, impl 实现注册到 build.c 中即可
-    for (int i = 0; i < templates->count; ++i) {
-        char *full_path = templates->take[i];
-
-        // 编译并注册 temp 文件 (template 不需要 import 所以可以直接走 analyzer/generic/infer 逻辑)
-        module_t *tpl_module = module_build(NULL, full_path, MODULE_TYPE_TPL);
-        slice_push(modules, tpl_module);
-    }
-
-    for (int i = 0; i < modules->count; ++i) {
-        module_t *m = modules->take[i];
-        analyzer(m, m->stmt_list);
-
-        pre_infer(m);
-    }
-}
-
 static slice_t *build_modules(toml_table_t *package_conf) {
     assertf(strlen(SOURCE_PATH) > 0, "SOURCE_PATH empty");
 
     table_t *module_table = table_new();
     slice_t *modules = slice_new();
-    slice_t *tpls = slice_new();
     slice_t *builtin_modules = slice_new();
-
-    // builtin is_tpl list, default import
-    char *template_dir = path_join(NATURE_ROOT, "std/temps");
-    char *full_path = path_join(template_dir, "builtin_temp.n");
-    assertf(file_exists(full_path), "builtin_temp.n not found in %s/std/temps", NATURE_ROOT);
-    slice_push(tpls, full_path);
 
     // builtin modules
     char *builtin_dir = path_join(NATURE_ROOT, "std/builtin");
@@ -629,7 +603,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
                 continue;
             }
 
-            full_path = path_join(builtin_dir, filename);
+            char* full_path = path_join(builtin_dir, filename);
             slice_push(builtin_modules, full_path);
         }
     }
@@ -692,16 +666,6 @@ static slice_t *build_modules(toml_table_t *package_conf) {
                 table_set(links_handled, import->package_dir, import);
             }
 
-            if (import->module_type == MODULE_TYPE_TPL) {
-                assertf(import->full_path, "import temp path empty");
-
-                if (!table_exist(import_tpl_table, import->full_path)) {
-                    table_set(import_tpl_table, import->full_path, import);
-                    slice_push(tpls, import->full_path);
-                }
-                continue;
-            }
-
             // new module dep all imports handled
             module_t *new_module = module_build(import, import->full_path, import->module_type);
 
@@ -711,13 +675,9 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         }
     }
 
-    // - is_tpl 没有依赖关系，可以进行预先构建
-    build_tpls(tpls);
-
     // modules contains
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
-        assert(m->type != MODULE_TYPE_TPL);
 
         // analyzer => ast_fndefs(global)
         // analyzer 需要将 global symbol 注册完成，否则在 pre_infer 时找不到相关的符号

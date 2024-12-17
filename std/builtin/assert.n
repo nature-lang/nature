@@ -1,4 +1,4 @@
-import libc_temp
+import libc
 
 fn assert(bool cond) {
     if cond {
@@ -6,5 +6,5 @@ fn assert(bool cond) {
     }
 
     panic('assert false')
-    exit(1)
+    libc.exit(1)
 }

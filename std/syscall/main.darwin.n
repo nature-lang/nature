@@ -1,8 +1,4 @@
 import libc
-import libc_temp
-import dirent_temp
-import syscall_temp
-import strings_temp
 
 // 文件系统相关常量
 u32 MS_ASYNC = 0x1
@@ -624,9 +620,17 @@ int SOCK_RDM = 0x4
 int SOCK_SEQPACKET = 0x5
 int SOCK_STREAM = 0x1
 
-fn call6(int number, void_ptr a1, void_ptr a2, void_ptr a3, void_ptr a4, void_ptr a5, void_ptr a6):int! {
-    return syscall_call6(number, a1, a2, a3, a4, a5, a6)
-}
+#linkid syscall_call6
+fn call6(int number, void_ptr a1, void_ptr a2, void_ptr a3, void_ptr a4, void_ptr a5, void_ptr a6):int!
+
+#linkid syscall_getcwd
+fn syscall_getcwd():string
+
+#linkid getenv
+fn getenv(void_ptr key):void_ptr
+
+#linkid setenv
+fn setenv(void_ptr key, void_ptr value, i32 overwrite):i32
 
 fn open(string filename, int flags, u32 perm):int! {
     return call6(SYS_OPEN, filename.ref(), flags as void_ptr, perm as void_ptr, 0, 0, 0)
@@ -656,19 +660,15 @@ fn seek(int fd, int offset, int whence):int! {
     return call6(SYS_LSEEK, fd as void_ptr, offset as void_ptr, whence as void_ptr, 0, 0, 0)
 }
 
-#linkid fork
-fn libc_fork():int
-
 fn fork():int! {
-    return libc_fork()
+    return libc.fork()
     // return call6(SYS_FORK, 0, 0, 0, 0, 0, 0)
 }
 
 // path is full path
 // argv[0] = /proc/:pid/comm
-fn exec(string path, [string] argv, [string] envp):void! {
-    return syscall_exec(path, argv, envp)
-}
+#linkid syscall_exec
+fn exec(string path, [string] argv, [string] envp):void!
 
 type timespec_t = struct {
     i64 sec
@@ -768,18 +768,11 @@ fn getppid():int! {
     return call6(SYS_GETPPID, 0, 0, 0, 0, 0, 0)
 }
 
-#linkid getcwd
-fn libc_getcwd(void_ptr path, uint size):void_ptr
-
-#linkid strlen
-fn libc_strlen(void_ptr str):uint
-
 fn getcwd():string! {
     var buf = vec_new<u8>(1024, 0) // 1024 是 path max
 
-    // 这不能是自己调用自己了，冲突的yip
-    void_ptr raw_path = libc_getcwd(buf.ref() as void_ptr, buf.len() as uint)
-    var len = libc_strlen(raw_path) as i64
+    void_ptr raw_path = libc.getcwd(buf.ref() as void_ptr, buf.len() as uint)
+    var len = libc.strlen(raw_path) as i64
 
     buf = buf.slice(0, len - 1) // -1 is remove '\0'
     return buf as string
@@ -793,7 +786,7 @@ fn wait(int pid, int option):(int, int)! {
     var status = 0
     int result = call6(SYS_WAIT4, pid as void_ptr, &status as void_ptr, option as void_ptr, 0, 0, 0)
     if result == -1 {
-        throw libc_strerror()
+        throw libc.strerror()
     }
     return (result, status)
 }
@@ -893,7 +886,7 @@ fn sendto(int sockfd, [u8] buf, int flags):int! {
 }
 
 fn get_envs():[string] {
-    return libc_get_envs()
+    return libc.get_envs()
 }
 
 fn get_env(string key):string {
@@ -901,7 +894,7 @@ fn get_env(string key):string {
     if ref == 0 {
         return ''
     }
-    return libc_string_new(ref)
+    return libc.string_new(ref)
 }
 
 fn set_env(string key, string value):void! {

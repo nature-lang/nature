@@ -56,22 +56,6 @@ static void analyzer_import_std(module_t *m, char *package, ast_import_t *import
     import->package_conf = package_parser(package_conf_path);
 }
 
-static char *std_temp_full_path(module_t *m, char *package, ast_import_t *import) {
-    // /usr/local/nature/std
-    ANALYZER_ASSERTF(NATURE_ROOT, "NATURE_ROOT not found");
-
-    char *temp_dir = path_join(NATURE_ROOT, "std");
-    temp_dir = path_join(temp_dir, "temps");
-
-    char *full_path = path_join(temp_dir, package);
-
-    // 结尾添加 .n 找到具体的文件
-    full_path = str_connect(full_path, ".n");
-    assertf(file_exists(full_path), "cannot find temp file %s", full_path);
-
-    return full_path;
-}
-
 /**
  * 基于 m->package_tol 完善 import
  * @param m
@@ -103,41 +87,6 @@ static void analyzer_import_dep(module_t *m, char *package, ast_import_t *import
 static void analyzer_body(module_t *m, slice_t *body) {
     for (int i = 0; i < body->count; ++i) {
         analyzer_stmt(m, body->take[i]);
-    }
-}
-
-// temp
-void analyzer_import_temp(module_t *m, ast_import_t *import) {
-    ANALYZER_ASSERTF(import->ast_package->count > 0, "import exception");
-    char *package = import->ast_package->take[0];
-    import->module_type = MODULE_TYPE_TPL;
-    import->use_links = false;
-    import->as = "";
-
-    if (is_std_temp_package(package)) {
-        assertf(import->ast_package->count == 1, "import os temp module exception");
-        import->full_path = std_temp_full_path(m, package, import);
-    } else {
-        ANALYZER_ASSERTF(import->ast_package->count == 2, "import temp module '%s' notfound", package);
-        ANALYZER_ASSERTF(m->package_conf, "cannot 'import %s', not found package.toml", package);
-
-        // package module(这里包含三种情况, 一种就是当前 package 自身 >  一种是 std package > 一种是外部 package)
-        if (is_current_package(m->package_conf, package)) {
-            //
-            // 基于 package_toml 定位到 root dir, 然后进行 file 的拼接操作
-            import->package_dir = m->package_dir;
-            import->package_conf = m->package_conf;
-        } else if (is_dep_package(m->package_conf, package)) {
-            analyzer_import_dep(m, package, import);
-        } else {
-            ANALYZER_ASSERTF(false, "import package %s not found", package);
-        }
-
-        // 基于 import->package_conf 和 dir 定位到具体的 temp 文件
-        import->full_path = package_import_temp_fullpath(import->package_conf, import->package_dir,
-                                                         import->ast_package);
-
-        assertf(file_exists(import->full_path), "templates path '%s' notfound", import->full_path);
     }
 }
 
@@ -186,12 +135,6 @@ void analyzer_import(module_t *m, ast_import_t *import) {
     char *package = import->ast_package->take[0];
     char *module = import->ast_package->take[import->ast_package->count - 1];
 
-    // - import temp 判断结尾是否是 _temp, 如果是 _temp 表示这是一个 temp 文件
-    if (ends_with(module, "_temp")) {
-        analyzer_import_temp(m, import);
-        return;
-    }
-
     // - import module
     if (!m->package_conf && is_std_package(package)) {
         analyzer_import_std(m, package, import);
@@ -215,7 +158,8 @@ void analyzer_import(module_t *m, ast_import_t *import) {
 
     // import foo.bar => foo is package.name, so import workdir/bar.n
     import->full_path = package_import_fullpath(import->package_conf, import->package_dir, import->ast_package);
-    ANALYZER_ASSERTF(file_exists(import->full_path), "cannot import module '%s': not found", package);
+    ANALYZER_ASSERTF(file_exists(import->full_path), "cannot import package '%s': not found",
+                     ast_import_package_tostr(import->ast_package));
     ANALYZER_ASSERTF(ends_with(import->full_path, ".n"), "import file suffix must .n");
 
     if (!import->as || strlen(import->as) == 0) {
@@ -265,25 +209,13 @@ static char *analyzer_resolve_type_alias(module_t *m, analyzer_fndef_t *current,
         }
 
         // - import xxx as * 产生的全局符号
-        // - import is_tpl 中的符号
         for (int i = 0; i < m->imports->count; ++i) {
             ast_import_t *import = m->imports->take[i];
 
-            if (import->module_type == MODULE_TYPE_TPL) {
-                assert(import_tpl_symbol_table);
-                assert(import->full_path);
-                table_t *tpl_symbol_table = table_get(import_tpl_symbol_table, import->full_path);
-                assert(tpl_symbol_table);
-                if (table_exist(tpl_symbol_table, ident)) {
-                    // is_tpl global Symbol does not require symbol rewriting
-                    return ident;
-                }
-            } else if (import->module_type == MODULE_TYPE_COMMON) {
-                if (str_equal(import->as, "*")) {
-                    char *temp = ident_with_prefix(import->package_ident, ident);
-                    if (table_exist(can_import_symbol_table, temp)) {
-                        return temp;
-                    }
+            if (str_equal(import->as, "*")) {
+                char *temp = ident_with_prefix(import->package_ident, ident);
+                if (table_exist(can_import_symbol_table, temp)) {
+                    return temp;
                 }
             }
         }
@@ -814,7 +746,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
 
     if (fndef->is_tpl) {
         assert(fndef->body == NULL);
-        ANALYZER_ASSERTF(fndef->impl_type.kind == 0, "is_tpl fn cannot have impl type");
+        ANALYZER_ASSERTF(fndef->impl_type.kind == 0, "tpl fn cannot have impl type");
     }
 
     analyzer_type(m, &fndef->return_type);
@@ -1211,26 +1143,14 @@ static bool analyzer_local_ident(module_t *m, ast_expr_t *expr) {
 
 static bool analyzer_module_ident(module_t *m, ast_ident *ident) {
     // - import xxx as * 产生的全局符号
-    // - import temp 中的符号
     for (int i = 0; i < m->imports->count; ++i) {
         ast_import_t *import = m->imports->take[i];
 
-        // TODO is_tpl 即将取消 TPL 机制, 增加 linkid 自定义链接名称
-        if (import->module_type == MODULE_TYPE_TPL) {
-            assert(import_tpl_symbol_table);
-            assert(import->full_path);
-            table_t *tpl_symbol_table = table_get(import_tpl_symbol_table, import->full_path);
-            if (table_exist(tpl_symbol_table, ident->literal)) {
-                // temp global Symbol does not require symbol rewriting
+        if (str_equal(import->as, "*")) {
+            char *temp = ident_with_prefix(import->package_ident, ident->literal);
+            if (table_exist(can_import_symbol_table, temp)) {
+                ident->literal = temp;
                 return true;
-            }
-        } else if (import->module_type == MODULE_TYPE_COMMON) {
-            if (str_equal(import->as, "*")) {
-                char *temp = ident_with_prefix(import->package_ident, ident->literal);
-                if (table_exist(can_import_symbol_table, temp)) {
-                    ident->literal = temp;
-                    return true;
-                }
             }
         }
     }
@@ -1617,64 +1537,6 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
     }
 }
 
-static void analyzer_tpl(module_t *m, slice_t *stmt_list) {
-    // var_decl blocks
-    slice_t *fn_list = slice_new();
-
-    // 跳过 import 语句开始计算, 不直接使用 analyzer stmt, 因为 module 中不需要这么多表达式
-    for (int i = 0; i < stmt_list->count; ++i) {
-        ast_stmt_t *stmt = stmt_list->take[i];
-        SET_LINE_COLUMN(stmt);
-
-        if (stmt->assert_type == AST_STMT_TYPE_ALIAS) {
-            ast_type_alias_stmt_t *type_alias = stmt->value;
-            type_alias->ident = ident_with_prefix(m->ident, type_alias->ident);
-            symbol_t *s = symbol_table_set(type_alias->ident, SYMBOL_TYPE_ALIAS, type_alias, false);
-            slice_push(m->global_symbols, s);
-
-            // 虽然当前 alias 是全局的，但是右值也可能会引用一些当前模块下的全局符号, 需要 with 携带上 current module
-            // ident
-            analyzer_type(m, &type_alias->type_expr);
-            continue;
-        }
-
-        if (stmt->assert_type == AST_FNDEF) {
-            ast_fndef_t *fndef = stmt->value;
-            fndef->is_tpl = true;
-            // 由于存在函数的重载，所以同一个 module 下会存在多个同名的 global fn symbol_name
-            fndef->symbol_name = ident_with_prefix(m->ident, fndef->symbol_name); // 全局函数改名
-            symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
-
-            slice_push(m->global_symbols, s);
-            slice_push(fn_list, fndef);
-            continue;
-        }
-
-        ANALYZER_ASSERTF(false, "module stmt must be var_decl/var_def/fn_decl/type_alias")
-    }
-
-    // 所有的符号都已经注册完毕，此时进行简单的处理即可
-    for (int i = 0; i < fn_list->count; ++i) {
-        ast_fndef_t *fndef = fn_list->take[i];
-
-        // m->ast_fndefs 包含了当前 module 中的所有函数，嵌套定义的函数都进行了平铺
-        slice_push(m->ast_fndefs, fndef);
-
-        analyzer_type(m, &fndef->return_type);
-
-        // 函数形参处理
-        for (int j = 0; j < fndef->params->length; ++j) {
-            analyzer_current_init(m, fndef);
-            m->analyzer_global = fndef;
-            fndef->is_local = false;
-
-            ast_var_decl_t *param = ct_list_value(fndef->params, j);
-
-            analyzer_type(m, &param->type);
-        }
-    }
-}
-
 /**
  * - 模块中的函数都是全局函数，将会在全局函数维度支持泛型函数与函数重载，由于在 analyzer 阶段还在收集所有的符号
  *   所以无法确定全局的 unique ident，因此将会用一个链表结构，将所有的在当前作用域下的同名的函数都 append 进去
@@ -1844,11 +1706,7 @@ void analyzer(module_t *m, slice_t *stmt_list) {
     m->current_line = 0;
     m->current_column = 0;
 
-    if (m->type == MODULE_TYPE_TPL) {
-        analyzer_tpl(m, stmt_list);
-    } else {
-        analyzer_module(m, stmt_list);
-    }
+    analyzer_module(m, stmt_list);
 
     if (m->type == MODULE_TYPE_MAIN) {
         analyzer_main(m);

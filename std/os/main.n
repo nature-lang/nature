@@ -1,12 +1,10 @@
 import path
 import syscall
-import libc_temp
-import syscall_temp
-import strings_temp
-import os.dirent
+import libc
+import libc.dirent
 
 fn args():[string] {
-    return std_args()
+    return libc.std_args()
 }
 
 // read current exe path by read link /proc/self/exe
@@ -36,7 +34,7 @@ fn listdir(string path):[string]! {
 
     var dir = dirent.opendir(path.ref())
     if dir == 0 {
-        throw 'opendir failed: ' + libc_strerror()
+        throw 'opendir failed: ' + libc.strerror()
     }
 
     for true {
@@ -46,7 +44,7 @@ fn listdir(string path):[string]! {
             break
         }
 
-        var name = libc_string_new(entry.name as void_ptr)
+        var name = libc.string_new(entry.name as void_ptr)
         if name == '.' || name == '..' || name == '' {
             continue
         }
@@ -54,7 +52,7 @@ fn listdir(string path):[string]! {
         result.push(name)
     }
 
-    closedir(dir)
+    dirent.closedir(dir)
     dirs_sort(result)
 
     return result
