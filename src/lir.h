@@ -15,31 +15,31 @@
 #define TEMP_RESULT "@result"
 #define TEMP_IDENT "t"
 #define TEMP_VAR_IDENT "v"
-#define TEMP_LABEL "L"
+#define TEMP_LABEL ".L"
 #define ITERATOR_CURSOR "cursor"
 
 #define LABEL_END_SUFFIX ".end"
 #define LABEL_ERROR_SUFFIX ".error"
 
-#define MATCH_IDENT "@MATCH" // 需要用到字符串匹配，所以给定特殊字符避免后续干扰
-#define MATCH_END_IDENT "MATCH_END"
-#define MATCH_CASE_START "CASE_START"
-#define MATCH_CASE_HANDLE_END "CASE_HANDLE_END"
+#define MATCH_IDENT ".@MATCH" // 需要用到字符串匹配，所以给定特殊字符避免后续干扰
+#define MATCH_END_IDENT ".MATCH_END"
+#define MATCH_CASE_START ".CASE_START"
+#define MATCH_CASE_HANDLE_END ".CASE_HANDLE_END"
 
-#define FOR_CONTINUE_IDENT "FOR_CONTINUE"
-#define FOR_UPDATE_IDENT "FOR_UPDATE"
-#define FOR_END_IDENT "FOR_END"
-#define FOR_COND_IDENT "FOR_COND"
-#define FOR_TRADITION_IDENT "FOR_TRADITION"
-#define FOR_ITERATOR_IDENT "FOR_ITERATOR"
-#define END_IF_IDENT "IF_END"
-#define IF_ALTERNATE_IDENT "IF_ALTERNATE"
-#define IF_CONTINUE_IDENT "IF_CONTINUE"
-#define LOGICAL_OR_IDENT "LOGICAL_OR_END"
-#define LOGICAL_AND_IDENT "LOGICAL_AND_END"
+#define FOR_CONTINUE_IDENT ".FOR_CONTINUE"
+#define FOR_UPDATE_IDENT ".FOR_UPDATE"
+#define FOR_END_IDENT ".FOR_END"
+#define FOR_COND_IDENT ".FOR_COND"
+#define FOR_TRADITION_IDENT ".FOR_TRADITION"
+#define FOR_ITERATOR_IDENT ".FOR_ITERATOR"
+#define END_IF_IDENT ".IF_END"
+#define IF_ALTERNATE_IDENT ".IF_ALTERNATE"
+#define IF_CONTINUE_IDENT ".IF_CONTINUE"
+#define LOGICAL_OR_IDENT ".LOGICAL_OR_END"
+#define LOGICAL_AND_IDENT ".LOGICAL_AND_END"
 
-#define CATCH_ERROR_IDENT "CATCH_ERROR"
-#define CATCH_END_IDENT "CATCH_END"
+#define CATCH_ERROR_IDENT ".CATCH_ERROR"
+#define CATCH_END_IDENT ".CATCH_END"
 
 
 #define ERRORT_MSG_IDENT "msg"
@@ -169,7 +169,6 @@
 
 #define BUILTIN_CALL_ASYNC "async"
 #define BUILTIN_CALL_CO_RETURN "co_return"
-
 
 
 #define DEFAULT_IDENT "_"
@@ -639,6 +638,11 @@ static inline lir_op_t *lir_op_label(char *ident, bool is_local) {
 
 static inline lir_op_t *lir_op_label_with_prefix(module_t *m, char *ident) {
     char *unique_ident = label_ident_with_prefix(m, ident);
+    return lir_op_label(unique_ident, true);
+}
+
+static inline lir_op_t *lir_op_local_label(module_t *m, char *ident) {
+    char *unique_ident = label_ident_with_unique(m, ident);
     return lir_op_label(unique_ident, true);
 }
 

@@ -3,8 +3,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
-
-#include "utils/mutex.h"
+#include <pthread.h>
 
 #define GCBITS_CHUNK_BYTES 65536
 #define GCBITS_CHUNK_HEADER_BYTES 16
@@ -18,7 +17,7 @@ typedef struct {
 } gc_bits_header_t;
 
 typedef struct gc_bits_arena_t {
-    uintptr_t free_index; // 指向 bits 下一个可用
+   uintptr_t free_index; // 指向 bits 下一个可用
     struct gc_bits_arena_t* next; // arenas 链表构成
     gc_bits bits[GCBITS_CHUNK_PAYLOAD_BYTES];
 } gc_bits_arena_t;

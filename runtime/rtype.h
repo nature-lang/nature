@@ -118,15 +118,19 @@ static inline void builtin_rtype_init() {
 
     // 初始化错误追踪 rtype
     errort_trace_rtype = GC_RTYPE(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
+    sc_map_put_64v(&rt_rtype_map, errort_trace_rtype.hash, &errort_trace_rtype);
 
     // 初始化错误 rtype
     errort_rtype = GC_RTYPE(TYPE_STRUCT, 3, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+    sc_map_put_64v(&rt_rtype_map, errort_rtype.hash, &errort_rtype);
 
     // 初始化环境变量 rtype
     envs_rtype = GC_RTYPE(TYPE_GC_ENV, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+    sc_map_put_64v(&rt_rtype_map, envs_rtype.hash, &envs_rtype);
 
     // 初始化环境变量值 rtype
     env_value_rtype = GC_RTYPE(TYPE_GC_ENV_VALUE, 1, TYPE_GC_SCAN);
+    sc_map_put_64v(&rt_rtype_map, env_value_rtype.hash, &env_value_rtype);
 
     // 初始化标准参数 rtype
     std_arg_rtype = GC_RTYPE(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);

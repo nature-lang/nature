@@ -68,10 +68,10 @@ static void broken_critical_edges(closure_t *c) {
     SLICE_FOR(c->blocks) {
         basic_block_t *b = SLICE_VALUE(c->blocks);
         for (int i = 0; i < b->preds->count; ++i) {
-            basic_block_t *p = b->preds->take[i];// 从 p->b 这条边
+            basic_block_t *p = b->preds->take[i]; // 从 p->b 这条边
             if (b->preds->count > 1 && p->succs->count > 1) {
                 // p -> b 为 critical edge， 需要再其中间插入一个 empty block(only contain label + bal asm_operations)
-                lir_op_t *label_op = lir_op_label_with_prefix(c->module, TEMP_LABEL);
+                lir_op_t *label_op = lir_op_local_label(c->module, TEMP_LABEL);
                 lir_operand_t *label = label_op->output;
                 lir_op_t *bal_op = lir_op_bal(lir_label_operand(b->name, true));
 
@@ -208,7 +208,7 @@ static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
         lir_op_t *op = LINKED_VALUE();
         // 如果当前分支包含 return, 那么当前分支到后续所有子分支都会包含
         if (op->code == LIR_OPCODE_RETURN) {
-            return;// 找到了 return 指令返回
+            return; // 找到了 return 指令返回
         }
     }
 
@@ -229,7 +229,7 @@ static void cfg_build(closure_t *c) {
     table_t *basic_block_table = table_new();
 
     // 1.根据 label(if/else/while 等都会产生 label) 分块,仅考虑顺序块关联关系
-    basic_block_t *current_block = NULL;// 第一次 traverse 时还没有任何 block
+    basic_block_t *current_block = NULL; // 第一次 traverse 时还没有任何 block
     lir_op_t *label_op = linked_first(c->operations)->value;
     assert(label_op->code == LIR_OPCODE_LABEL && "first op must be label");
 
@@ -300,12 +300,12 @@ static void cfg_build(closure_t *c) {
             // 如果下一条指令不是 LABEL，则使用主动添加  label 指令
             lir_op_t *next_op = succ->value;
             if (next_op->code != LIR_OPCODE_LABEL) {
-                lir_op_t *temp_label = lir_op_label_with_prefix(c->module, TEMP_LABEL);
+                lir_op_t *temp_label = lir_op_local_label(c->module, TEMP_LABEL);
                 linked_insert_after(c->operations, LINKED_NODE(), temp_label);
             }
         }
 
-        BLOCK_OP_PUSH:
+    BLOCK_OP_PUSH:
         // 值 copy
         linked_push(current_block->operations, op);
     }
@@ -398,7 +398,7 @@ void cfg(closure_t *c) {
     // 添加入口块
     c->entry = c->blocks->take[0];
 
-     debug_block_lir(c, "cfg_build_before_check");
+    debug_block_lir(c, "cfg_build_before_check");
 
     // return 分析
     return_check(c, NULL, c->entry);

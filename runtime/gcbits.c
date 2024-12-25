@@ -1,8 +1,8 @@
 #include "gcbits.h"
 
 #include <stdatomic.h>
-#include "rt_mutex.h"
 #include "uv.h"
+#include "utils/helper.h"
 
 gc_bits_arenas_t gc_bits_arenas;
 

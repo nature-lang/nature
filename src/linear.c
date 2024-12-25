@@ -906,8 +906,8 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     OP_PUSH(lir_op_move(cursor_operand, int_operand(-1))); // cursor 初始值 = --
 
     // make label
-    lir_op_t *for_start_label = lir_op_label_with_prefix(m, FOR_ITERATOR_IDENT);
-    lir_op_t *for_end_label = lir_op_label_with_prefix(m, FOR_END_IDENT);
+    lir_op_t *for_start_label = lir_op_local_label(m, FOR_ITERATOR_IDENT);
+    lir_op_t *for_end_label = lir_op_local_label(m, FOR_END_IDENT);
 
     stack_push(m->current_closure->continue_labels, for_start_label->output);
     stack_push(m->current_closure->break_labels, for_end_label->output);
@@ -941,7 +941,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, int_operand(-1), cursor_operand, lir_copy_label_operand(for_end_label->output)));
 
     // 添加 continue label
-    OP_PUSH(lir_op_label_with_prefix(m, FOR_CONTINUE_IDENT));
+    OP_PUSH(lir_op_local_label(m, FOR_CONTINUE_IDENT));
 
     // gen value
     if (ast->second) {
@@ -970,8 +970,8 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
  * @param ast
  */
 static void linear_for_cond(module_t *m, ast_for_cond_stmt_t *ast) {
-    lir_op_t *for_start = lir_op_label_with_prefix(m, FOR_COND_IDENT);
-    lir_operand_t *for_end_operand = lir_label_operand(label_ident_with_prefix(m, FOR_END_IDENT), true);
+    lir_op_t *for_start = lir_op_local_label(m, FOR_COND_IDENT);
+    lir_operand_t *for_end_operand = lir_label_operand(label_ident_with_unique(m, FOR_END_IDENT), true);
     stack_push(m->current_closure->continue_labels, for_start->output);
     stack_push(m->current_closure->break_labels, for_end_operand);
 
@@ -981,7 +981,7 @@ static void linear_for_cond(module_t *m, ast_for_cond_stmt_t *ast) {
     lir_op_t *cmp_goto = lir_op_new(LIR_OPCODE_BEQ, bool_operand(false), condition_target, for_end_operand);
 
     OP_PUSH(cmp_goto);
-    OP_PUSH(lir_op_label_with_prefix(m, FOR_CONTINUE_IDENT));
+    OP_PUSH(lir_op_local_label(m, FOR_CONTINUE_IDENT));
     linear_body(m, ast->body);
 
     // bal => goto
@@ -997,9 +997,9 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
     // init
     linear_stmt(m, ast->init);
 
-    lir_op_t *for_start = lir_op_label_with_prefix(m, FOR_TRADITION_IDENT);
-    lir_op_t *for_update = lir_op_label_with_prefix(m, FOR_UPDATE_IDENT);
-    lir_operand_t *for_end_operand = lir_label_operand(label_ident_with_prefix(m, FOR_END_IDENT), true);
+    lir_op_t *for_start = lir_op_local_label(m, FOR_TRADITION_IDENT);
+    lir_op_t *for_update = lir_op_local_label(m, FOR_UPDATE_IDENT);
+    lir_operand_t *for_end_operand = lir_label_operand(label_ident_with_unique(m, FOR_END_IDENT), true);
     stack_push(m->current_closure->continue_labels, for_update->output);
     stack_push(m->current_closure->break_labels, for_end_operand);
 
@@ -1012,7 +1012,7 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
     OP_PUSH(beq);
 
     // continue
-    OP_PUSH(lir_op_label_with_prefix(m, FOR_CONTINUE_IDENT));
+    OP_PUSH(lir_op_local_label(m, FOR_CONTINUE_IDENT));
 
     // block
     linear_body(m, ast->body);
@@ -1072,8 +1072,8 @@ static void linear_if(module_t *m, ast_if_stmt_t *if_stmt) {
 
     // 判断结果是否为 false, false 对应 else
     lir_operand_t *false_target = bool_operand(false);
-    lir_operand_t *end_label_operand = lir_label_operand(label_ident_with_prefix(m, END_IF_IDENT), true);
-    lir_operand_t *alternate_label_operand = lir_label_operand(label_ident_with_prefix(m, IF_ALTERNATE_IDENT), true);
+    lir_operand_t *end_label_operand = lir_label_operand(label_ident_with_unique(m, END_IF_IDENT), true);
+    lir_operand_t *alternate_label_operand = lir_label_operand(label_ident_with_unique(m, IF_ALTERNATE_IDENT), true);
 
     lir_op_t *cmp_goto;
     if (if_stmt->alternate->count == 0) {
@@ -1084,7 +1084,7 @@ static void linear_if(module_t *m, ast_if_stmt_t *if_stmt) {
                               lir_copy_label_operand(alternate_label_operand));
     }
     OP_PUSH(cmp_goto);
-    OP_PUSH(lir_op_label_with_prefix(m, IF_CONTINUE_IDENT));
+    OP_PUSH(lir_op_local_label(m, IF_CONTINUE_IDENT));
 
     // 编译 consequent block
     linear_body(m, if_stmt->consequent);
@@ -1201,7 +1201,7 @@ static lir_operand_t *linear_logical_or(module_t *m, ast_expr_t expr, lir_operan
     assert(expr.type.kind == TYPE_BOOL);
     // 编译 left, 如果 left 为 true,则直接返回 true
     ast_binary_expr_t *logical_expr = expr.value;
-    lir_operand_t *logic_end_operand = lir_label_operand(label_ident_with_prefix(m, LOGICAL_OR_IDENT), true);
+    lir_operand_t *logic_end_operand = lir_label_operand(label_ident_with_unique(m, LOGICAL_OR_IDENT), true);
 
     // xxx left -> result
     lir_operand_t *left_src = linear_expr(m, logical_expr->left, NULL);
@@ -1225,7 +1225,7 @@ static lir_operand_t *linear_logical_and(module_t *m, ast_expr_t expr, lir_opera
     // 编译 left, 如果 left 为 true,则直接返回 true
     ast_binary_expr_t *logical_expr = expr.value;
 
-    lir_operand_t *logic_end_operand = lir_label_operand(label_ident_with_prefix(m, LOGICAL_AND_IDENT), true);
+    lir_operand_t *logic_end_operand = lir_label_operand(label_ident_with_unique(m, LOGICAL_AND_IDENT), true);
 
     // xxx left -> result
     lir_operand_t *left_target = linear_expr(m, logical_expr->left, NULL);
@@ -2087,7 +2087,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
 static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_match_t *match_expr = expr.value;
 
-    char *match_start_ident = label_ident_with_prefix(m, MATCH_IDENT);
+    char *match_start_ident = label_ident_with_unique(m, MATCH_IDENT);
     char *match_end_ident = str_connect(match_start_ident, LABEL_END_SUFFIX);
     OP_PUSH(lir_op_label(match_start_ident, true));
 
@@ -2117,7 +2117,7 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
         ast_match_case_t *match_case = SLICE_VALUE(match_expr->cases);
         for (int i = 0; i < match_case->cond_list->length; ++i) {
             ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, i);
-            lir_op_t *handle_end = lir_op_label_with_prefix(m, MATCH_CASE_HANDLE_END);
+            lir_op_t *handle_end = lir_op_local_label(m, MATCH_CASE_HANDLE_END);
             if (match_case->is_default) {
                 goto DEFAULT_HANDLE;
             }
@@ -2195,13 +2195,13 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     }
 
     // 编译 expr, 有异常应该直接就跳转到 catch 了。
-    char *catch_error_label = label_ident_with_prefix(m, CATCH_ERROR_IDENT);
+    char *catch_error_label = label_ident_with_unique(m, CATCH_ERROR_IDENT);
     m->current_closure->catch_error_label = catch_error_label;
     linear_expr(m, catch_expr->try_expr, target);
     m->current_closure->catch_error_label = NULL; // 表达式已经编译完成，可以清理标记位了
 
     // 跳过错误处理部分
-    lir_op_t *catch_end_label = lir_op_label_with_prefix(m, CATCH_END_IDENT);
+    lir_op_t *catch_end_label = lir_op_local_label(m, CATCH_END_IDENT);
     OP_PUSH(lir_op_bal(catch_end_label->output));
 
     OP_PUSH(lir_op_label(catch_error_label, true));
@@ -2250,7 +2250,7 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
 //
 //    if (try->expr.type.kind == TYPE_VOID) {
 //        // 包含 catch 则右侧表达式遇到错误时应该跳转到 catch_error_label
-//        char *catch_end_label = label_ident_with_prefix(m, CATCH_END_IDENT);
+//        char *catch_end_label = label_ident_with_unique(m, CATCH_END_IDENT);
 //        m->current_closure->catch_error_label = catch_end_label;
 //
 //        linear_expr(m, try->expr, NULL);
@@ -2276,13 +2276,13 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
 //    }
 //
 //    // 包含 catch 则右侧表达式遇到错误时应该跳转到 catch_error_label
-//    char *catch_error_label = label_ident_with_prefix(m, CATCH_ERROR_IDENT);
+//    char *catch_error_label = label_ident_with_unique(m, CATCH_ERROR_IDENT);
 //    m->current_closure->catch_error_label = catch_error_label;
 //    linear_expr(m, try->expr, result_operand);
 //    m->current_closure->catch_error_label = NULL;// 表达式已经编译完成，可以清理标记位了
 //
 //    // bal to catch_end
-//    lir_op_t *catch_end_label = lir_op_label_with_prefix(m, CATCH_END_IDENT);
+//    lir_op_t *catch_end_label = lir_op_local_label(m, CATCH_END_IDENT);
 //    OP_PUSH(lir_op_bal(catch_end_label->output));
 //
 //    // catch_error_label: ------------------------------------------------------------------------------------------------------

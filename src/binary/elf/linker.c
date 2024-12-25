@@ -1273,13 +1273,18 @@ void sort_symbols(elf_context_t *ctx, section_t *s) {
 
     Elf64_Sym *new_sym = new_symtab;
 
-    // first pass
+    // first pass - local symbols
     Elf64_Sym *sym = (Elf64_Sym *) s->data;
     for (int i = 0; i < sym_count; ++i) {
         if (ELF64_ST_BIND(sym->st_info) == STB_LOCAL) {
-            // nwe_symtab 相当于起始点, 第一次就是索引为 0
-            symtab_index_map[i] = new_sym - new_symtab;
-            *new_sym++ = *sym;
+            // 检查是否为 . 开头的本地标签
+            char *name = (char *) s->link->data + sym->st_name;
+            if (name[0] != '.' || sym->st_info == ELF64_ST_INFO(STB_LOCAL, STT_FILE)) {
+                symtab_index_map[i] = new_sym - new_symtab;
+                *new_sym++ = *sym;
+            } else {
+                symtab_index_map[i] = 0; // 标记为已移除
+            }
         }
         sym++;
     }
@@ -1288,21 +1293,25 @@ void sort_symbols(elf_context_t *ctx, section_t *s) {
         s->sh_info = new_sym - new_symtab;
     }
 
-    // second pass
+    // second pass - global symbols
     sym = (Elf64_Sym *) s->data;
     for (int i = 0; i < sym_count; ++i) {
         if (ELF64_ST_BIND(sym->st_info) != STB_LOCAL) {
-            // nwe_symtab 相当于起始点, 第一次就是索引为 0
             symtab_index_map[i] = new_sym - new_symtab;
             *new_sym++ = *sym;
         }
         sym++;
     }
 
-    // 将新符号复制到就符号中
-    memcpy(s->data, new_symtab, sym_count * sizeof(Elf64_Sym));
+    // 更新符号表大小
+    uint64_t new_sym_count = new_sym - new_symtab;
+    s->data_count = new_sym_count * sizeof(Elf64_Sym);
+    s->sh_size = s->data_count;
 
-    // 调整符号索引
+    // 将新符号复制到原符号表中
+    memcpy(s->data, new_symtab, s->data_count);
+
+    // 调整重定位表中的符号索引
     for (int sh_index = 1; sh_index < ctx->sections->count; ++sh_index) {
         section_t *rel_section = SEC_TACK(sh_index);
         if (rel_section->sh_type != SHT_RELA || rel_section->link != s) {
@@ -1316,6 +1325,9 @@ void sort_symbols(elf_context_t *ctx, section_t *s) {
             rel->r_info = ELF64_R_INFO(sym_index, type);
         }
     }
+
+    free(new_symtab);
+    free(symtab_index_map);
 }
 
 static uint64_t get_be(const uint8_t *b, int n) {
