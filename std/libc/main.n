@@ -104,24 +104,15 @@ fn clock():int
 #linkid uv_hrtime
 fn uv_hrtime():u64
 
-// --- 自定义在 runtime/libc 模块中的函数
-// void_ptr = char*
-#linkid libc_string_new
-fn string_new(void_ptr s):string
-
-#linkid libc_string_replace
-fn string_replace(string str, string old, string new_str):string
-
-// 读取 errno 中的错误信息
-#linkid libc_strerror
-fn strerror():string
-
 // 读取当前全局的 errno 编码
-#linkid libc_errno
+#linkid rt_errno
 fn errno():int
 
-#linkid libc_get_envs
+#linkid rt_get_envs
 fn get_envs():[string]
+
+#linkid rt_strerror
+fn strerror():string
 
 #linkid exit
 fn exit(i32 status)

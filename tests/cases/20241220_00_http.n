@@ -1,0 +1,11 @@
+import http
+
+fn main():void! {
+    var app = http.server()
+
+    app.get('/', fn(http.request_t req, ptr<http.response_t> res) {
+        res.send('hello nature')
+    })
+
+    app.listen(8888)
+}

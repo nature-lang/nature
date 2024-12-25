@@ -656,7 +656,7 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
     slice_t *build_temps = slice_new();
     uint64_t section_offset = 0; // text section slot
 
-    table_t *symtab_hash = table_new(); // 存储符号在符号表中 index, 同时用来定位是否已经存在
+    table_t *symtab_hash = table_new(false); // 存储符号在符号表中 index, 同时用来定位是否已经存在
 
     // 一次遍历
     for (int i = 0; i < closures->count; ++i) {

@@ -16,3 +16,6 @@ fn println(...[any] args)
 
 #linkid rt_panic
 fn panic(string msg)
+
+#linkid rt_assert
+fn assert(bool cond)

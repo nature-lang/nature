@@ -67,6 +67,9 @@ static inline void *mallocz(uint64_t size) {
     return ptr;
 }
 
+#define CONTAINER_OF(ptr, type, member) \
+((type *) ((char *) (ptr) - offsetof(type, member)))
+
 
 #define GROW_CAPACITY(capacity) ((capacity) < 8 ? 8 : (capacity) * 2)
 
@@ -112,11 +115,11 @@ static inline void *mallocz(uint64_t size) {
 #define RDEBUGF(...)
 #define MDEBUGF(...)
 #define DEBUGF(...)
-#define TRACEF(format, ...)
+#define TRACEF(...)
 
 #define TDEBUGF(format, ...)                                                                        \
     fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
-    fflush(stdout);
+    // fflush(stdout);
 
 #define TESTDUMP(format, ...)                                                                                                 \
     fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
@@ -144,10 +147,9 @@ static inline uint32_t hash_data(uint8_t *data, uint64_t size) {
 
 static inline uint32_t hash_string(char *str) {
     assert(str);
-    assert(strlen(str) > 0);
-    // if (str == NULL) {
-    //     return 0;
-    // }
+    if (strlen(str) == 0) {
+        return 0;
+    }
     return hash_data((uint8_t *) str, strlen(str));
 }
 

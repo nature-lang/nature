@@ -156,10 +156,16 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             (void *) span->base, span->obj_size, span->alloc_count, span->obj_count);
 
     int alloc_count = 0;
+    int free_index = -1;
     for (int i = 0; i < span->obj_count; ++i) {
         if (bitmap_test(span->gcmark_bits, i)) {
             alloc_count++;
             continue;
+        } else {
+            // 空闲
+            if (free_index == -1) {
+                free_index = i;
+            }
         }
 
         // 如果 gcmark_bits(没有被标记) = 0, alloc_bits(分配过) = 1, 则表明内存被释放，可以进行释放的, TODO 这一段都属于 debug 逻辑
@@ -186,6 +192,7 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
     span->alloc_bits = span->gcmark_bits;
     span->gcmark_bits = gcbits_new(span->obj_count);
     span->alloc_count = alloc_count;
+    span->free_index = free_index == -1 ? 0 : free_index;
 
     RDEBUGF("[sweep_span] reset gcmark_bits success, span=%p, spc=%d", span, span->spanclass)
 
@@ -612,8 +619,14 @@ static void gc_work() {
 
         // add gc mark
         if (span_of((addr_t) wait_co->fn)) {
-            DEBUGF("[runtime_gc.scan_stack] co=%p fn=%p in heap and span, need gc mark", wait_co, wait_co->fn);
+            DEBUGF("[runtime_gc.gc_work] co=%p fn=%p in heap and span, need gc mark", wait_co, wait_co->fn);
             insert_gc_worklist(&share_p->gc_worklist, wait_co->fn);
+        }
+
+        // add gc mark
+        if (span_of((addr_t) wait_co->arg)) {
+            DEBUGF("[runtime_gc.gc_work] co=%p arg=%p in heap and span, need gc mark", wait_co, wait_co->arg);
+            insert_gc_worklist(&share_p->gc_worklist, wait_co->arg);
         }
 
         // 只有第一次 resume 时才会初始化 co, 申请堆栈，并且绑定对应的 p
@@ -702,7 +715,7 @@ static void scan_solo_stack() {
 static void inject_gc_work_coroutine() {
     // 遍历 share processor 插入 gc coroutine
     PROCESSOR_FOR(share_processor_list) {
-        coroutine_t *gc_co = rt_coroutine_new((void *) gc_work, 0, 0);
+        coroutine_t *gc_co = rt_coroutine_new((void *) gc_work, 0, 0,NULL);
 
         gc_co->gc_work = true;
         rt_linked_fixalloc_push(&p->co_list, gc_co);
@@ -882,6 +895,6 @@ void runtime_gc() {
     // -------------- STW end ----------------------------
 
     gc_stage = GC_STAGE_OFF;
-    DEBUGF("[runtime_gc] gc stage: GC_OFF, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes,
-           (before - allocated_bytes) / 1000);
+    TDEBUGF("[runtime_gc] gc stage: GC_OFF, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes / 1024,
+            (before - allocated_bytes) / 1024);
 }

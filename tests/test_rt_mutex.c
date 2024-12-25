@@ -7,17 +7,17 @@
 #include "utils/assertf.h"
 
 rt_mutex_t m = {0};
-ATOMIC int64_t sum = 0;
+ATOMIC int64_t test_count = 0;
 ATOMIC int64_t sum_no_lock = 0;
 
 static void sub_sum_fn() {
     rt_mutex_lock(&m);
     for (int i = 0; i < 100; i++) {
 //        sum = sum + 1;
-        int64_t old = sum;
+        int64_t old = test_count;
         // 直接进行 race 检测， 存在 race 可以直接报出来。
-        if (!atomic_compare_exchange_strong(&sum, &old, old + 1)) {
-            assertf(false, "existential race, sum=%ld, old=%ld", sum, old);
+        if (!atomic_compare_exchange_strong(&test_count, &old, old + 1)) {
+            assertf(false, "existential race, sum=%ld, old=%ld", test_count, old);
         }
 
         // co_yield_runnable(co->p, co);
@@ -38,7 +38,7 @@ void test_lock_sum() {
     memset(&m, 0, sizeof(rt_mutex_t));
 
     for (int i = 0; i < 10000; ++i) {
-        coroutine_t *sub_co = rt_coroutine_new((void *) sub_sum_fn, 0, 0);
+        coroutine_t *sub_co = rt_coroutine_new((void *) sub_sum_fn, 0, NULL,NULL);
         rt_coroutine_dispatch(sub_co);
     }
 
@@ -60,15 +60,15 @@ void test_lock_sum() {
     TESTDUMP("[test_lock_sum] processor remain_count=%lu", remain_count)
 
 
-    TESTDUMP("[test_lock_sum] sum=%ld", sum);
-    assert(sum == 1000000);
+    TESTDUMP("[test_lock_sum] sum=%ld", test_count);
+    assert(test_count == 1000000);
 }
 
 void test_no_lock_sum() {
     TESTDUMP("[test_no_lock_sum] start");
 
     for (int i = 0; i < 10000; ++i) {
-        coroutine_t *sub_co = rt_coroutine_new((void *) sub_sum_no_lock_fn, 0, 0);
+        coroutine_t *sub_co = rt_coroutine_new((void *) sub_sum_no_lock_fn, 0, 0,NULL);
         rt_coroutine_dispatch(sub_co);
     }
 
@@ -91,7 +91,7 @@ void test_basic() {
 
 
     // 创建 sub_co 同样尝试获取锁获取锁获取锁获取锁
-    coroutine_t *sub_co = rt_coroutine_new((void *) sub_fn, 0, 0);
+    coroutine_t *sub_co = rt_coroutine_new((void *) sub_fn, 0, 0,NULL);
     rt_coroutine_dispatch(sub_co);
 
 

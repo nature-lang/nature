@@ -1,12 +1,13 @@
 import time
 import libc
+import runtime
 
 fn main() {
     var timestamp = 1691656611
     ptr<libc.tm_t> ti = libc.localtime(&timestamp)
 
     // 修改成 strings.new() -- 基于重载解析多种类型的 new
-    string tz = libc.string_new(ti.tm_zone)
+    string tz = runtime.string_new(ti.tm_zone)
 
     var hour = ti.tm_hour
     if tz == 'CST' {

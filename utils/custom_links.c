@@ -8,8 +8,6 @@ caller_t *rt_caller_ptr = NULL;
 
 table_t *rt_caller_table = NULL;
 
-table_t *rt_rtype_table = NULL;
-
 // - symdef
 uint64_t ct_symdef_size = 0; // 数量
 uint8_t *ct_symdef_data = 0; // 序列化后的 data 大小

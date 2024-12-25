@@ -1,4 +1,5 @@
 #include "linkco.h"
+#include "runtime/rtype.h"
 
 linkco_t *rti_acquire_linkco() {
     n_processor_t *p = processor_get();
@@ -19,8 +20,7 @@ linkco_t *rti_acquire_linkco() {
 
         // 全局借取失败，需要自己 new 一个
         if (p->linkco_count == 0) {
-            rtype_t *rtype = rti_linkco_rtype();
-            linkco_t *linkco = rti_gc_malloc(rtype->size, rtype);
+            linkco_t *linkco = rti_gc_malloc(linkco_rtype.size, &linkco_rtype);
             p->linkco_cache[p->linkco_count++] = linkco;
         }
     }

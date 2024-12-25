@@ -813,7 +813,7 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
         bit_index_count = 1;
     }
     for (int i = 0; i < bit_index_count; ++i) {
-        bool test = bitmap_test(rtype.gc_bits, i);
+        bool test = bitmap_test(rtype.malloc_gc_bits, i);
         bitmap_grow_set(c->stack_gc_bits, bit_index_end - i, test);
     }
 

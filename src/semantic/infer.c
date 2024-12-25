@@ -6,6 +6,8 @@
 #include "src/debug/debug.h"
 #include "src/error.h"
 
+static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, list_t *properties);
+
 static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type);
 
 static void infer_call_args(module_t *m, ast_call_t *call, type_fn_t *target_type_fn);
@@ -329,7 +331,7 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
     }
 
     // 进行参数解析，可以顺便使用 type_compare 了！
-    table_t *generics_args_table = table_new();
+    table_t *generics_args_table = table_new(false);
 
     if (call->generics_args == NULL) {
         // 避免脏数据污染 is_tpl 导致后续的 copy 异常
@@ -718,19 +720,8 @@ static type_t infer_new_expr(module_t *m, ast_new_expr_t *new_expr) {
 
     // 目前只有结构体可以使用 new
     INFER_ASSERTF(new_expr->type.kind == TYPE_STRUCT, "only struct type can use new");
-
-    new_expr->properties = ct_list_new(sizeof(struct_property_t));
-
-    table_t *exists = table_new();
-    list_t *default_properties = new_expr->type.struct_->properties;
-    for (int i = 0; i < default_properties->length; ++i) {
-        struct_property_t *d = ct_list_value(default_properties, i);
-        if (!d->right || table_exist(exists, d->key)) {
-            continue;
-        }
-
-        ct_list_push(new_expr->properties, d);
-    }
+    type_struct_t *type_struct = new_expr->type.struct_;
+    new_expr->properties = infer_struct_properties(m, type_struct, new_expr->properties);
 
     return reduction_type(m, type_ptrof(new_expr->type));
 }
@@ -1170,6 +1161,55 @@ static type_t infer_set_new(module_t *m, ast_set_new_t *set_new, type_t target_t
     return reduction_type(m, result);
 }
 
+static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, list_t *properties) {
+    table_t *exists = table_new(false);
+    for (int i = 0; i < properties->length; ++i) {
+        struct_property_t *struct_property = ct_list_value(properties, i);
+        struct_property_t *expect_property = type_struct_property(type_struct, struct_property->key);
+
+        INFER_ASSERTF(expect_property, "not found property '%s'", struct_property->key);
+
+        table_set(exists, struct_property->key, struct_property);
+
+        // struct_decl 已经是被还原过的类型了
+        infer_right_expr(m, struct_property->right, expect_property->type);
+
+        // type 冗余,方便计算 size (不能用来计算 offset)
+        struct_property->type = expect_property->type;
+    }
+
+
+    // struct 默认参数处理, 默认参数的 infer 已经提前完成了，所以这里不需要二次重复进行 infer_right_expr
+    list_t *default_properties = type_struct->properties;
+    for (int i = 0; i < default_properties->length; ++i) {
+        struct_property_t *d = ct_list_value(default_properties, i);
+        // 右值复制
+        if (!d->right || table_exist(exists, d->key)) {
+            continue;
+        }
+        table_set(exists, d->key, d);
+
+        ct_list_push(properties, d);
+    }
+
+    // check has default values.
+    for (int i = 0; i < type_struct->properties->length; ++i) {
+        struct_property_t *property = ct_list_value(type_struct->properties, i);
+        if (table_exist(exists, property->key)) {
+            continue;
+        }
+
+        // check can default value
+        if (must_assign_value(property->type.kind)) {
+            INFER_ASSERTF(false, "property '%s' type '%s' must assign value", property->key,
+                          type_origin_format(property->type));
+        }
+    }
+
+
+    return properties;
+}
+
 /**
  * person{
  *  age = 1
@@ -1198,37 +1238,11 @@ static type_t infer_struct_new(module_t *m, ast_expr_t *expr) {
 
     INFER_ASSERTF(ast->type.kind == TYPE_STRUCT, "'%s' not struct, cannot struct new", type_format(ast->type));
 
-    type_struct_t *type_struct = ast->type.struct_;
-
     // exists 记录已经存在的参数用来辅助 struct 默认参数
-    table_t *exists = table_new();
-    for (int i = 0; i < ast->properties->length; ++i) {
-        struct_property_t *struct_property = ct_list_value(ast->properties, i);
-        struct_property_t *expect_property = type_struct_property(type_struct, struct_property->key);
+    list_t *properties = ast->properties;
+    type_struct_t *type_struct = ast->type.struct_;
+    ast->properties = infer_struct_properties(m, type_struct, properties);
 
-        INFER_ASSERTF(expect_property, "not found property '%s'", struct_property->key);
-
-        table_set(exists, struct_property->key, struct_property);
-
-        // struct_decl 已经是被还原过的类型了
-        infer_right_expr(m, struct_property->right, expect_property->type);
-
-        // type 冗余,方便计算 size (不能用来计算 offset)
-        struct_property->type = expect_property->type;
-    }
-
-
-    // struct 默认参数处理, 默认参数的 infer 已经提前完成了，所以这里不需要二次重复进行 infer_right_expr
-    list_t *default_properties = ast->type.struct_->properties;
-    for (int i = 0; i < default_properties->length; ++i) {
-        struct_property_t *d = ct_list_value(default_properties, i);
-        // 右值复制
-        if (!d->right || table_exist(exists, d->key)) {
-            continue;
-        }
-
-        ct_list_push(ast->properties, d);
-    }
 
     return ast->type;
 }
@@ -1430,7 +1444,7 @@ static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t tar
     }
 
     if (tpl_fn->generics_hash_table == NULL) {
-        tpl_fn->generics_hash_table = table_new();
+        tpl_fn->generics_hash_table = table_new(false);
     }
 
     ast_fndef_t *special_fn = table_get(tpl_fn->generics_hash_table, args_hash);
@@ -2446,7 +2460,7 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
 
         // 此时只是使用 module 作为一个 context 使用，实际上 type_alias_stmt->params 和 当前 module 并不是同一个文件中的
         if (m->infer_type_args_stack) {
-            table_t *args_table = table_new();
+            table_t *args_table = table_new(false);
             impl_args = ct_list_new(sizeof(type_t));
 
             for (int i = 0; i < t.alias->args->length; ++i) {
@@ -2717,7 +2731,7 @@ static void infer_fndef(module_t *m, ast_fndef_t *fn) {
 void cartesian_product(list_t *generics_params, int depth, type_t **temp_product, slice_t *result) {
     if (depth == generics_params->length) {
         // 从新申请空间， copy 到 result 中
-        table_t *arg_table = table_new();
+        table_t *arg_table = table_new(false);
         for (int i = 0; i < generics_params->length; ++i) {
             ast_generics_param_t *param = ct_list_value(generics_params, i);
             // 直接引用到了 constraints 中

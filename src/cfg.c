@@ -6,7 +6,7 @@
 #include "src/error.h"
 
 static void cfg_pruning(closure_t *c) {
-    table_t *exists = table_new();
+    table_t *exists = table_new(false);
     linked_t *q = linked_new();
 
     basic_block_t *entry = c->blocks->take[0];
@@ -125,7 +125,7 @@ static void broken_critical_edges(closure_t *c) {
 
 static void break_check(closure_t *c, table_t *handled, basic_block_t *b, char *match_end_ident) {
     if (handled == NULL) {
-        handled = table_new();
+        handled = table_new(false);
     }
 
     // 重复到达节点
@@ -195,7 +195,7 @@ static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
     }
 
     if (handled == NULL) {
-        handled = table_new();
+        handled = table_new(false);
     }
     if (table_exist(handled, b->name)) {
         // 循环节点
@@ -226,7 +226,7 @@ static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
 
 static void cfg_build(closure_t *c) {
     // 用于快速定位 block succ/pred
-    table_t *basic_block_table = table_new();
+    table_t *basic_block_table = table_new(false);
 
     // 1.根据 label(if/else/while 等都会产生 label) 分块,仅考虑顺序块关联关系
     basic_block_t *current_block = NULL;// 第一次 traverse 时还没有任何 block

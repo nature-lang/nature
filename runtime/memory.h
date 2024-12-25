@@ -10,14 +10,15 @@
 #include "sizeclass.h"
 #include "utils/custom_links.h"
 #include "utils/helper.h"
+#include "rtype.h"
 
 extern memory_t *memory;
-extern uint64_t remove_total_bytes;    // 当前回收到物理内存中的总空间
+extern uint64_t remove_total_bytes; // 当前回收到物理内存中的总空间
 extern uint64_t allocated_total_bytes; // 当前分配的总空间
-extern int64_t allocated_bytes;       // 当前分配的内存空间
-extern uint64_t next_gc_bytes;         // 下一次 gc 的内存量
-extern bool gc_barrier;                // gc 屏障开启标识
-extern uint8_t gc_stage;               // gc 阶段
+extern int64_t allocated_bytes; // 当前分配的内存空间
+extern uint64_t next_gc_bytes; // 下一次 gc 的内存量
+extern bool gc_barrier; // gc 屏障开启标识
+extern uint8_t gc_stage; // gc 阶段
 extern mutex_t gc_stage_locker;
 
 typedef enum {
@@ -54,9 +55,9 @@ typedef enum {
         *item->next = NULL;          \
     } while (0)
 
-// radix tree 每一层级的 item 可以管理的 page 的数量
+// radix tree 每一层级的 item 可以管理的 page 的数量, 用于判断当前 page 是否满载
 static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
-        CHUNK_BITS_COUNT * 64, CHUNK_BITS_COUNT * 32, CHUNK_BITS_COUNT * 16, CHUNK_BITS_COUNT * 8, CHUNK_BITS_COUNT,
+    L0_MAX_PAGES, L1_MAX_PAGES, L2_MAX_PAGES, L3_MAX_PAGES, L4_MAX_PAGES,
 };
 
 static inline bool gc_barrier_get() {
@@ -172,9 +173,21 @@ void callers_deserialize();
 
 void symdefs_deserialize();
 
-rtype_t *rt_find_rtype(uint32_t rtype_hash);
+static inline rtype_t *rt_find_rtype(int64_t rhash) {
+    rtype_t *result = sc_map_get_64v(&rt_rtype_map, rhash);
 
-uint64_t rt_rtype_out_size(uint32_t rtype_hash);
+    return result;
+}
+
+static inline uint64_t rt_rtype_out_size(int64_t rhash) {
+    assert(rhash > 0 && "rhash empty");
+
+    rtype_t *rtype = rt_find_rtype(rhash);
+
+    assert(rtype && "cannot find rtype by hash");
+
+    return rtype_stack_size(rtype, POINTER_SIZE);
+}
 
 fndef_t *find_fn(addr_t addr);
 
@@ -190,6 +203,7 @@ void runtime_force_gc();
 
 void *gc_malloc(uint64_t rhash);
 
+void *gc_malloc_size(uint64_t size);
 
 uint64_t runtime_malloc_bytes();
 

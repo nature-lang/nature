@@ -1,4 +1,4 @@
-import fmt.util as *
+import fmt.utils as *
 import path
 
 fn sprintf(string fmt, ...[any] args):string {

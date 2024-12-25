@@ -11,18 +11,18 @@
 
 extern int cpu_count;
 extern n_processor_t *share_processor_index[1024];
-extern n_processor_t *share_processor_list;// 共享协程列表的数量一般就等于线程数量
+extern n_processor_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
 extern n_processor_t *solo_processor_list; // 独享协程列表其实就是多线程
-extern mutex_t solo_processor_locker;    // 删除 solo processor 需要先获取该锁
+extern mutex_t solo_processor_locker; // 删除 solo processor 需要先获取该锁
 extern int solo_processor_count;
 extern int coroutine_count;
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
 
 // processor gc_finished 后新产生的 shade ptr 会存入到该全局工作队列中，在 gc_mark_done 阶段进行单线程处理
-extern rt_linked_fixalloc_t global_gc_worklist;// 全局 gc worklist
+extern rt_linked_fixalloc_t global_gc_worklist; // 全局 gc worklist
 
-extern bool processor_need_exit;// 全局 STW 标识
+extern bool processor_need_exit; // 全局 STW 标识
 
 extern fixalloc_t coroutine_alloc;
 extern fixalloc_t processor_alloc;
@@ -67,6 +67,12 @@ static inline void _co_yield(n_processor_t *p, coroutine_t *co) {
     assert(co);
 
     aco_yield1(&co->aco);
+}
+
+static inline void co_will_runnable(n_processor_t *p, coroutine_t *co) {
+    assert(co->p->status != P_STATUS_EXIT);
+    co_set_status(p, co, CO_STATUS_RUNNABLE);
+    rt_linked_fixalloc_push(&p->runnable_list, co);
 }
 
 static inline void co_yield_runnable(n_processor_t *p, coroutine_t *co) {
@@ -154,9 +160,10 @@ void processor_free(n_processor_t *p);
  * @param fn
  * @param args 元素的类型是 n_union_t 联合类型
  * @param flag
+ * @param arg
  * @return
  */
-coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu);
+coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu, void *arg);
 
 coroutine_t *rt_coroutine_async(void *fn, int64_t flag, n_future_t *fu);
 
@@ -166,6 +173,8 @@ void rt_coroutine_return(void *result_ptr);
  * 为 coroutine 选择合适的 processor 绑定，如果是独享 coroutine 则创建一个 solo processor
  */
 void rt_coroutine_dispatch(coroutine_t *co);
+
+void rt_coroutine_to_processor(n_processor_t *p, coroutine_t *co);
 
 /**
  * 有 processor_run 调用
@@ -180,6 +189,8 @@ void rt_coroutine_sleep(int64_t ms);
 void rt_coroutine_await(coroutine_t *co);
 
 void rt_coroutine_yield();
+
+void *rt_coroutine_arg();
 
 void *rt_coroutine_error(coroutine_t *co);
 

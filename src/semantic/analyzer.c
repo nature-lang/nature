@@ -202,9 +202,10 @@ static char *analyzer_resolve_type_alias(module_t *m, analyzer_fndef_t *current,
     if (current == NULL) {
         // - 当前 module 的全局 type
         // analyzer 在初始化 module 时已经将这些符号全都注册到了全局符号表中 (module_ident + ident)
+        // can_import_symbol_table 记录了所有的 package + ident 组成的符号，所以也包括 current module
+        // 所以可以用来判断是否 import 了当前 package 中的 symbol
         char *global_ident = ident_with_prefix(m->ident, ident);
-        symbol_t *s = table_get(symbol_table, global_ident);
-        if (s) {
+        if (table_exist(can_import_symbol_table, global_ident)) {
             return global_ident;
         }
 
@@ -221,7 +222,7 @@ static char *analyzer_resolve_type_alias(module_t *m, analyzer_fndef_t *current,
         }
 
         // builtin 中的全局类型
-        s = table_get(symbol_table, ident);
+        symbol_t *s = table_get(symbol_table, ident);
         if (s != NULL) {
             // 不需要改写使用的名称了
             return ident;
@@ -712,7 +713,7 @@ static analyzer_fndef_t *analyzer_current_init(module_t *m, ast_fndef_t *fndef) 
     analyzer_fndef_t *new = NEW(analyzer_fndef_t);
     new->locals = slice_new();
     new->frees = slice_new();
-    new->free_table = table_new();
+    new->free_table = table_new(false);
 
     new->scope_depth = 0;
 
@@ -1323,6 +1324,11 @@ static void analyzer_list_new(module_t *m, ast_vec_new_t *expr) {
 
 static void analyzer_new_expr(module_t *m, ast_new_expr_t *expr) {
     analyzer_type(m, &expr->type);
+
+    for (int i = 0; i < expr->properties->length; ++i) {
+        struct_property_t *property = ct_list_value(expr->properties, i);
+        analyzer_expr(m, property->right);
+    }
 }
 
 static void analyzer_for_cond(module_t *m, ast_for_cond_stmt_t *stmt) {
@@ -1587,6 +1593,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         if (stmt->assert_type == AST_STMT_TYPE_ALIAS) {
             ast_type_alias_stmt_t *type_alias = stmt->value;
             assert(type_alias->type_expr.kind > 0);
+
             type_alias->ident = ident_with_prefix(m->ident, type_alias->ident);
             symbol_t *s = symbol_table_set(type_alias->ident, SYMBOL_TYPE_ALIAS, type_alias, false);
             ANALYZER_ASSERTF(s, "type alias '%s' redeclared", type_alias->ident);

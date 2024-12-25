@@ -1,7 +1,7 @@
 #include "runtime/processor.h"
 
 coroutine_t *rt_coroutine_async(void *fn, int64_t flag, n_future_t *fu) {
-    coroutine_t *co = rt_coroutine_new(fn, flag, fu);
+    coroutine_t *co = rt_coroutine_new(fn, flag, fu,NULL);
     rt_coroutine_dispatch(co);
     DEBUGF("[rt_coroutine_async] co=%p, fn=%p, flag=%ld, fu=%p, size=%ld", co, fn, flag, fu, fu->size);
 
@@ -11,6 +11,12 @@ coroutine_t *rt_coroutine_async(void *fn, int64_t flag, n_future_t *fu) {
 void rt_coroutine_yield() {
     n_processor_t *p = processor_get();
     co_yield_runnable(p, p->coroutine);
+}
+
+
+void *rt_coroutine_arg() {
+    coroutine_t *co = coroutine_get();
+    return co->arg;
 }
 
 static void uv_timer_close_cb(uv_handle_t *handle) {
@@ -70,9 +76,10 @@ void rt_coroutine_sleep(int64_t ms) {
     // 退出等待 io 事件就绪
     co_yield_waiting(p, co);
 
-    DEBUGF("[runtime.rt_coroutine_sleep] coroutine sleep resume, co=%p, co_status=%d, uv_loop=%p, p_index_%d=%d, timer=%p",
-           co, co->status,
-           &p->uv_loop, p->share, p->index, &timer);
+    DEBUGF(
+        "[runtime.rt_coroutine_sleep] coroutine sleep resume, co=%p, co_status=%d, uv_loop=%p, p_index_%d=%d, timer=%p",
+        co, co->status,
+        &p->uv_loop, p->share, p->index, &timer);
 }
 
 

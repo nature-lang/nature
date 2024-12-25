@@ -5,3 +5,6 @@ fn sleep(int ms)
 
 #linkid rt_coroutine_yield
 fn yield()
+
+#linkid rt_coroutine_arg
+fn arg():void_ptr

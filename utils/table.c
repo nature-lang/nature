@@ -2,6 +2,11 @@
 #include "helper.h"
 #include "stdlib.h"
 
+
+static inline void table_adjust(table_t *t, int capacity);
+
+static inline table_entry *table_find_entry(table_entry *entries, int capacity, bool use_hash_key, void *key);
+
 //static uint32_t table_hash_string(const string key) {
 //    uint32_t hash = 2166136261u;
 //    while (key != NULL && *key != '\0') {
@@ -24,14 +29,14 @@ void table_free(table_t *t) {
     table_init(t);
 }
 
-void *table_get(table_t *t, string key) {
+void *table_get(table_t *t, void *key) {
     assertf(t, "table is null, called: %s");
 
     if (t->count == 0) {
         return NULL;
     }
 
-    table_entry *entry = table_find_entry(t->entries, t->capacity, key);
+    table_entry *entry = table_find_entry(t->entries, t->capacity, t->use_hash_key, key);
     if (entry->key == NULL) {
         return NULL;
     }
@@ -39,14 +44,18 @@ void *table_get(table_t *t, string key) {
     return entry->value;
 }
 
-bool table_set(table_t *t, char *key, void *value) {
-    key = strdup(key); // 由于需要内部使用，所以不依赖外部的 key
+
+bool table_set(table_t *t, void *key, void *value) {
+    if (t->use_hash_key == false) {
+        key = (char *) strdup((char *) key); // 由于需要内部使用，所以不依赖外部的 key
+    }
+
     if (t->count + 1 > t->capacity * TABLE_MAX_LOAD) {
         int capacity = GROW_CAPACITY(t->capacity);
         table_adjust(t, capacity);
     }
 
-    table_entry *entry = table_find_entry(t->entries, t->capacity, key);
+    table_entry *entry = table_find_entry(t->entries, t->capacity, t->use_hash_key, key);
 
     bool is_new_key = entry->key == NULL;
     if (is_new_key && entry->value == NULL) {
@@ -59,7 +68,8 @@ bool table_set(table_t *t, char *key, void *value) {
     return is_new_key;
 }
 
-void table_adjust(table_t *t, int capacity) {
+
+static inline void table_adjust(table_t *t, int capacity) {
     // 创建一个新的 entries 并初始化
     table_entry *entries = mallocz(sizeof(table_entry) * capacity);
 
@@ -71,7 +81,7 @@ void table_adjust(table_t *t, int capacity) {
         }
 
         // 重新分配到 new entries，但是依旧要考虑 hash_string 冲突
-        table_entry *entry = table_find_entry(entries, capacity, old_entry->key);
+        table_entry *entry = table_find_entry(entries, capacity, t->use_hash_key, old_entry->key);
         entry->key = old_entry->key;
         entry->value = old_entry->value;
         t->count++;
@@ -92,9 +102,15 @@ void table_adjust(table_t *t, int capacity) {
  * @param key
  * @return
  */
-table_entry *table_find_entry(table_entry *entries, int capacity, string key) {
+static inline table_entry *table_find_entry(table_entry *entries, int capacity, bool use_hash_key, void *key) {
     // 计算 hash 值(TODO 可以优化为预计算 hash_string 值)
-    uint32_t hash = hash_string(key);
+    uint64_t hash;
+    if (use_hash_key) {
+        hash = (uint64_t) key;
+    } else {
+        hash = hash_string(key);
+    }
+
     uint32_t index = hash % capacity;
 
     table_entry *tombstone = NULL;
@@ -111,8 +127,16 @@ table_entry *table_find_entry(table_entry *entries, int capacity, string key) {
             if (tombstone == NULL) {
                 tombstone = entry;
             }
-        } else if (str_equal(entry->key, key)) {
-            return entry;
+        } else {
+            if (use_hash_key) {
+                if (entry->key == key) {
+                    return entry;
+                }
+            } else {
+                if (str_equal((char *) entry->key, (char *) key)) {
+                    return entry;
+                }
+            }
         }
 
         // 使用开放寻址法解决 hash 冲突解决,如果当前 entry 已经被使用，则使用相邻的下一个 entry
@@ -123,19 +147,21 @@ table_entry *table_find_entry(table_entry *entries, int capacity, string key) {
     }
 }
 
-table_t *table_new() {
+
+table_t *table_new(bool use_key_hash) {
     table_t *t = mallocz(sizeof(table_t));
     table_init(t);
+    t->use_hash_key = use_key_hash;
     return t;
 }
 
-bool table_exist(table_t *t, char *key) {
+bool table_exist(table_t *t, void *key) {
     assert(t);
     if (t->count == 0) {
         return false;
     }
 
-    table_entry *entry = table_find_entry(t->entries, t->capacity, key);
+    table_entry *entry = table_find_entry(t->entries, t->capacity, t->use_hash_key, key);
     if (entry->key == NULL) {
         return false;
     }
@@ -148,12 +174,12 @@ bool table_exist(table_t *t, char *key) {
  * @param t
  * @param key
  */
-void table_delete(table_t *t, char *key) {
+void table_delete(table_t *t, void *key) {
     if (t->count == 0) {
         return;
     }
 
-    table_entry *entry = table_find_entry(t->entries, t->capacity, key);
+    table_entry *entry = table_find_entry(t->entries, t->capacity, t->use_hash_key, key);
     if (entry->key == NULL) {
         return;
     }
@@ -161,7 +187,3 @@ void table_delete(table_t *t, char *key) {
     entry->key = NULL;
     entry->value = (void *) true;
 }
-
-
-
-

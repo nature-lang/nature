@@ -14,7 +14,7 @@ bool is_std_package(char *package) {
         return table_exist(std_package_table, package);
     }
 
-    std_package_table = table_new();
+    std_package_table = table_new(false);
 
     // 遍历 NATURE_ROOT 下的 std 目录下的所有文件夹
     char *std_dir = path_join(NATURE_ROOT, "std");

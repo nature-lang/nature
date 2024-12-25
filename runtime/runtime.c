@@ -5,6 +5,7 @@
 #include "runtime/nutils/fn.h"
 #include "runtime/nutils/nutils.h"
 #include "sysmon.h"
+#include "nutils/libuv.h"
 
 #ifdef __DARWIN
 extern void user_main(void) __asm("_main.main");
@@ -30,14 +31,14 @@ int runtime_main(int argc, char *argv[]) {
     RDEBUGF("[runtime_main] memory init success");
 
     // - env clsoure
-    env_upvalue_table = table_new();
+    env_upvalue_table = table_new(false);
     mutex_init(&env_upvalue_locker, false);
 
     sched_init();
     RDEBUGF("[runtime_main] processor init success");
 
     // - 提取 main 进行 coroutine 创建调度，需要等待 processor init 加载完成
-    coroutine_t *main_co = rt_coroutine_new((void *) user_main, FLAG(CO_FLAG_MAIN), 0);
+    coroutine_t *main_co = rt_coroutine_new((void *) user_main, FLAG(CO_FLAG_MAIN), NULL,NULL);
     rt_coroutine_dispatch(main_co);
     RDEBUGF("[runtime_main] main_co dispatch success")
 
@@ -54,7 +55,7 @@ void test_runtime_init() {
     memory_init();
 
     // - env clsoure
-    env_upvalue_table = table_new();
+    env_upvalue_table = table_new(false);
     mutex_init(&env_upvalue_locker, false);
 }
 
@@ -68,7 +69,7 @@ int test_runtime_main(void *main_fn) {
     processor_need_exit = false;
 
     // - 提取 main 进行 coroutine 创建调度，需要等待 processor init 加载完成
-    coroutine_t *main_co = rt_coroutine_new(main_fn, FLAG(CO_FLAG_MAIN), 0);
+    coroutine_t *main_co = rt_coroutine_new(main_fn, FLAG(CO_FLAG_MAIN), NULL,NULL);
     rt_coroutine_dispatch(main_co);
 
     while (true) {

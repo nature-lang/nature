@@ -34,6 +34,9 @@ fn map_delete(void_ptr m, void_ptr key)
 #linkid rt_map_length
 fn map_length(void_ptr m):int
 
+#linkid rt_map_contains
+fn map_contains(void_ptr s, void_ptr key):bool
+
 #linkid rt_string_length
 fn string_length(void_ptr s):int
 
@@ -51,3 +54,9 @@ fn malloc_bytes():i64
 
 #linkid gc_malloc
 fn gc_malloc(int rhash):void_ptr
+
+#linkid gc_malloc_size
+fn gc_malloc_size(int size):void_ptr
+
+#linkid rt_string_new
+fn string_new(void_ptr s):string

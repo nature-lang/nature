@@ -16,7 +16,7 @@ extern slice_t *regs;
 extern reg_t *alloc_regs[UINT8_MAX];
 
 static inline void reg_init() {
-    reg_table = table_new();
+    reg_table = table_new(false);
     regs = slice_new();
     memset(alloc_regs, 0, sizeof(alloc_regs));
 

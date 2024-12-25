@@ -456,7 +456,7 @@ typedef struct {
     char *package_dir; // 这也是 import module 的 workdir
     bool use_links;
 
-    char *package_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident
+    char *package_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident, 如果是 main 则默认添加 main.n
 } ast_import_t;
 
 /**

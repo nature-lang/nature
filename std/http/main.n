@@ -1,0 +1,235 @@
+import http.uv
+import strings
+import coroutine as co
+import fmt
+import fmt.utils
+import runtime
+
+type callback_fn = fn(request_t, ptr<response_t>)
+
+#runtime_use n_server_t
+type server_t = struct{
+    {string:callback_fn} routers
+    fn():void! handler_fn
+    string addr
+    int port
+}
+
+fn server_t.get(string path, callback_fn callback) {
+    self.routers[path] = callback
+}
+
+fn server_t.listen(int port):void! {
+    self.port = port
+    uv.http_listen(self as void_ptr)
+}
+
+fn server():ptr<server_t> {
+    var s = new server_t(addr='0.0.0.0', handler_fn=conn_handler)
+    return s
+}
+
+fn conn_handler():void! {
+    var arg = co.arg()
+    if arg == 0 {
+        throw 'conn_handler arg is null'
+    }
+    var ctx = arg as raw_ptr<uv.conn_ctx_t>
+
+    var res = response_new()
+    string req_str = runtime.string_new(ctx.read_buf_base)
+    var req = request_parse(req_str)
+
+    var handler = ctx.server.routers[req.path] catch err {
+        res.status = 404
+        res.message = 'Not Found'
+        res.send(fmt.sprintf('404 not found'))
+
+        uv.conn_resp(ctx, res.to_str())
+        return
+    }
+    handler(req, res)
+    uv.conn_resp(ctx, res.to_str())
+}
+
+
+type request_t = struct{
+    string method
+    {string:string} headers
+    int length
+    string host
+    string url // / or /test or /test?key=value
+    string origin // 获取URL的来源，包括 protocol 和 host。 http://example.com
+    string href // 获取完整的 URL，包括 protocol 和 host。 http://example.com/test?key=value&k2=v2
+    string path // 获取 URL 的路径部分。 /test or /test/
+    string querystring // key=value&k2=v2
+    string body // http 请求原始 body
+}
+
+fn request_parse(string data):request_t {
+    var req = request_t{}
+    var parts = strings.split(data, "\r\n\r\n")
+    if parts.len() > 1 {
+        req.body = parts[1]
+    }
+
+    // parse headers section
+    var header_lines = strings.split(parts[0], "\r\n")
+    if header_lines.len() == 0 {
+        return req
+    }
+
+    // Parse first line (METHOD URL VERSION)
+    var first_line = strings.split(header_lines[0], " ")
+    if first_line.len() >= 2 {
+        req.method = first_line[0]
+        req.url = first_line[1]
+
+        // split path and querystring
+        var query_pos = strings.find(req.url, '?')
+        if query_pos == -1 {
+            // no querystring
+            req.path = req.url
+        } else {
+            req.path = strings.slice(req.url, 0, query_pos)
+            req.querystring = strings.slice(req.url, query_pos+1, req.url.len())
+        }
+    }
+
+    // parse remaining headers
+    for var i = 1; i < header_lines.len(); i += 1 {
+        var line = header_lines[i]
+        var colon_pos = strings.find(line, ':')
+        if colon_pos == -1 {
+            continue
+        }
+
+        var key = strings.slice(line, 0, colon_pos)
+        var value = strings.slice(line, colon_pos+1, line.len())
+        req.headers[key] = value
+
+        if key == 'Host' {
+            req.host = value
+            req.origin = "http://" + value
+            req.href = req.origin + req.url
+        }
+    }
+
+    if req.headers.contains('Content-Length') {
+        req.length = strings.to_int(req.headers['Content-Length']) catch e {
+            break 0
+        }
+    }
+
+    return req
+}
+
+/*
+100 "continue"
+101 "switching protocols"
+102 "processing"
+200 "ok"
+201 "created"
+202 "accepted"
+203 "non-authoritative information"
+204 "no content"
+205 "reset content"
+206 "partial content"
+207 "multi-status"
+208 "already reported"
+226 "im used"
+300 "multiple choices"
+301 "moved permanently"
+302 "found"
+303 "see other"
+304 "not modified"
+305 "use proxy"
+307 "temporary redirect"
+308 "permanent redirect"
+400 "bad request"
+401 "unauthorized"
+402 "payment required"
+403 "forbidden"
+404 "not found"
+405 "method not allowed"
+406 "not acceptable"
+407 "proxy authentication required"
+408 "request timeout"
+409 "conflict"
+410 "gone"
+411 "length required"
+412 "precondition failed"
+413 "payload too large"
+414 "uri too long"
+415 "unsupported media type"
+416 "range not satisfiable"
+417 "expectation failed"
+418 "I'm a teapot"
+422 "unprocessable entity"
+423 "locked"
+424 "failed dependency"
+426 "upgrade required"
+428 "precondition required"
+429 "too many requests"
+431 "request header fields too large"
+500 "internal server error"
+501 "not implemented"
+502 "bad gateway"
+503 "service unavailable"
+504 "gateway timeout"
+505 "http version not supported"
+506 "variant also negotiates"
+507 "insufficient storage"
+508 "loop detected"
+510 "not extended"
+511 "network authentication required"
+*/
+type response_t = struct{
+    string version // http 版本号
+    {string:string} headers
+    int status // http 状态码
+    string message // 默认情况下 http 状态码对应的消息
+    int length // content length
+    string body // 响应体
+    string content_type // content type
+    string charset
+}
+
+fn response_new():ptr<response_t> {
+    return new response_t(
+        version = 'HTTP/1.1',
+        headers = {'Connection': 'close'},
+        status = 200,
+        message = 'OK',
+        length = 0,
+        content_type = 'text/plain',
+        charset = 'utf8',
+    )
+}
+
+fn response_t.send(string msg) {
+    self.body = msg
+    self.length = msg.len()
+}
+
+fn response_t.to_str():string {
+    var headers_str = ''
+    for k, v in self.headers {
+        var tmp = k + ': ' + v + '\r\n'
+        headers_str += tmp
+    }
+
+    // var str = self.version + ' ' + utils.itos(self.status) + ' ' + self.message + '\r\n' +
+    //   headers_str +
+    //    'Content-Length: ' + utils.itos(self.length) + '\r\n' +
+    //   'Content-Type: ' + self.content_type + '; charset=' + self.charset + '\r\n'  +
+    //    '\r\n' + self.body
+
+    var str = fmt.sprintf('%s %d %s\r\n', self.version, self.status, self.message) +
+        headers_str +
+        fmt.sprintf('Content-Length: %d\r\n', self.length) +
+        fmt.sprintf('Content-Type: %s; charset=%s\r\n', self.content_type, self.charset) +
+        '\r\n' + self.body
+
+    return str
+}

@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 #include <unistd.h>
 #include <errno.h>
+#include "runtime/rtype.h"
 
 #ifdef __DARWIN
 #include <libkern/OSCacheControl.h>  // 这是需要的头文件
@@ -231,14 +232,8 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
 
     DEBUGF("[runtime.fn_new] fn_addr=0x%lx, envs=%p", fn_addr, envs);
     assert(envs);
-    rtype_t *fn_rtype = gc_rtype_array(TYPE_GC_FN, sizeof(runtime_fn_t) / POINTER_SIZE);
 
-    // 手动设置 gc 区域, runtime_fn_t 一共是 12 个 pointer 区域，最后一个区域保存的是 envs 需要扫描
-    // 其他区域都不需要扫面
-    bitmap_set(fn_rtype->gc_bits, 11);
-    fn_rtype->last_ptr = sizeof(runtime_fn_t); // 也就是最后一个内存位置包含了指针
-
-    runtime_fn_t *fn_runtime = rti_gc_malloc(sizeof(runtime_fn_t), fn_rtype);
+    runtime_fn_t *fn_runtime = rti_gc_malloc(sizeof(runtime_fn_t), &fn_rtype);
 
     // 启用 pthread_jit_write_protect_np 才能写入数据
 #if defined(__DARWIN) && defined(__ARM64)
@@ -283,9 +278,8 @@ envs_t *env_new(uint64_t length) {
     DEBUGF("[runtime.env_new] length=%lu, %p", length, env_upvalue_table);
     assert(env_upvalue_table);
 
-    rtype_t *envs_rtype = gc_rtype(TYPE_GC_ENV, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
-    envs_t *envs = rti_gc_malloc(sizeof(envs_t), envs_rtype);
-    envs->values = (void *) rti_array_new(gc_rtype(TYPE_GC_ENV_VALUE, 1, TYPE_GC_SCAN), length);
+    envs_t *envs = rti_gc_malloc(sizeof(envs_t), &envs_rtype);
+    envs->values = (void *) rti_array_new(&env_value_rtype, length);
     envs->length = length;
 
     DEBUGF("[runtime.env_new] success,env_base=%p, values_base=%p, length=%lu", envs, envs->values, envs->length);

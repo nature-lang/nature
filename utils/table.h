@@ -7,7 +7,8 @@
 #define TABLE_MAX_LOAD 0.75
 
 typedef struct {
-    char *key;
+    void *key;
+
     void *value;
 } table_entry;
 
@@ -15,24 +16,21 @@ typedef struct {
     int count;
     int capacity;
     table_entry *entries;
+    bool use_hash_key;
 } table_t;
 
-table_t *table_new();
+table_t *table_new(bool use_key_hash);
 
 void table_init(table_t *t);
 
 void table_free(table_t *t);
 
-bool table_exist(table_t *t, string key);
+bool table_exist(table_t *t, void *key);
 
-void *table_get(table_t *t, string key);
+void *table_get(table_t *t, void *key);
 
-bool table_set(table_t *t, string key, void *value);
+bool table_set(table_t *t, void *key, void *value);
 
-void table_delete(table_t *t, string key);
-
-table_entry *table_find_entry(table_entry *entries, int capacity, string key);
-
-void table_adjust(table_t *t, int capacity);
+void table_delete(table_t *t, void *key);
 
 #endif //NATURE_SRC_LIB_TABLE_H_

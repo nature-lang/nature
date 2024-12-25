@@ -509,7 +509,7 @@ static void build_init(char *build_entry) {
     assertf(!dir_exists(SOURCE_PATH), "build output='%s' cannot be a directory", BUILD_OUTPUT);
 
     // type ct_rtype_table
-    ct_rtype_table = table_new();
+    ct_rtype_table = table_new(false);
     ct_rtype_list = ct_list_new(sizeof(rtype_t));
     ct_rtype_data = NULL;
     ct_rtype_count = 0;
@@ -583,7 +583,7 @@ static void build_assembler(slice_t *modules) {
 static slice_t *build_modules(toml_table_t *package_conf) {
     assertf(strlen(SOURCE_PATH) > 0, "SOURCE_PATH empty");
 
-    table_t *module_table = table_new();
+    table_t *module_table = table_new(false);
     slice_t *modules = slice_new();
     slice_t *builtin_modules = slice_new();
 
@@ -634,7 +634,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         }
     }
 
-    table_t *links_handled = table_new();
+    table_t *links_handled = table_new(false);
     table_set(links_handled, main_import.package_dir, (void *) 1);
 
     module_t *main_package = module_build(&main_import, SOURCE_PATH, MODULE_TYPE_MAIN);
@@ -642,7 +642,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
     linked_push(work_list, main_package);
 
-    table_t *import_tpl_table = table_new();
+    table_t *import_tpl_table = table_new(false);
 
     while (work_list->count > 0) {
         // module_build time has perfected import

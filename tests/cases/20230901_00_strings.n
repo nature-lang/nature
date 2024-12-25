@@ -1,6 +1,6 @@
 import strings
 
-fn main() {
+fn main():void! {
     var s = 'hello world world'
     var index = strings.find(s, 'wo')
     println('index of wo is ', index)
@@ -73,4 +73,20 @@ fn main() {
     println('rfind wo:', strings.rfind(s10, 'wo', s10.len())) // 12 v
     println('rfind wo:', strings.rfind(s10, 'wo', 12)) // 6 v
     println('rfind wo:', strings.rfind(s10, 'r', s10.len())) // 6 v
+
+    // to int
+     // test to_int
+    assert(strings.to_int("123") == 123)
+    assert(strings.to_int("-123") == -123)
+    assert(strings.to_int("  456") == 456)
+
+    strings.to_int("12a3") catch e {
+        assert(e.msg == "invalid character in number")
+    }
+    strings.to_int("-") catch e {
+        assert(e.msg == "invalid number format")
+    }
+    strings.to_int("999999999999999999999") catch e {
+        assert(e.msg == "number too large")
+    }
 }

@@ -4,6 +4,7 @@
 #include "ct_list.h"
 #include "type.h"
 #include "src/types.h"
+#include "utils/sc_map.h"
 
 /**
  * 这里存储了 nature 所有全局变量
@@ -73,8 +74,6 @@ extern table_t *rt_caller_table;
 
 extern uint64_t rt_rtype_count;
 extern rtype_t rt_rtype_data;
-extern table_t *rt_rtype_table;
-
 
 // - symdef
 extern uint64_t ct_symdef_size; // 数量
@@ -167,7 +166,7 @@ static uint8_t *rtypes_serialize() {
         rtype_t *r = ct_list_value(ct_rtype_list, i); // take 的类型是字节，所以这里按字节移动
         uint64_t gc_bits_size = calc_gc_bits_size(r->size, POINTER_SIZE);
         if (gc_bits_size) {
-            memmove(p, r->gc_bits, gc_bits_size);
+            memmove(p, r->malloc_gc_bits, gc_bits_size);
         }
         p += gc_bits_size;
     }

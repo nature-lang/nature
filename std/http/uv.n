@@ -1,0 +1,19 @@
+import http
+
+type conn_ctx_t = struct{
+    ptr<http.server_t> server
+    void_ptr read_buf_base
+    // ... other field not use
+}
+
+#linkid rt_uv_http_listen
+fn http_listen(void_ptr server):void!
+
+#linkid rt_uv_read
+fn read(void_ptr client):string!
+
+#linkid rt_uv_write
+fn write(void_ptr client, string data):void!
+
+#linkid rt_uv_conn_resp
+fn conn_resp(raw_ptr<conn_ctx_t> ctx, string data)

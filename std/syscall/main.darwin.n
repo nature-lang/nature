@@ -1,4 +1,5 @@
 import libc
+import runtime
 
 // 文件系统相关常量
 u32 MS_ASYNC = 0x1
@@ -894,7 +895,7 @@ fn get_env(string key):string {
     if ref == 0 {
         return ''
     }
-    return libc.string_new(ref)
+    return runtime.string_new(ref)
 }
 
 fn set_env(string key, string value):void! {

@@ -2,6 +2,7 @@ import path
 import syscall
 import libc
 import libc.dirent
+import runtime
 
 fn args():[string] {
     return libc.std_args()
@@ -44,7 +45,7 @@ fn listdir(string path):[string]! {
             break
         }
 
-        var name = libc.string_new(entry.name as void_ptr)
+        var name = runtime.string_new(entry.name as void_ptr)
         if name == '.' || name == '..' || name == '' {
             continue
         }

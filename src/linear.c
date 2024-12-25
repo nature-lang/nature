@@ -158,19 +158,6 @@ static lir_operand_t *linear_default_set(module_t *m, type_t t, lir_operand_t *t
 }
 
 /**
- * throw 一个错误的 fn
- * @param m
- * @param t
- * @return
- */
-static lir_operand_t *linear_default_fn(module_t *m, type_t t, lir_operand_t *target) {
-    lir_operand_t *default_fn_operand = lir_label_operand(RT_CALL_DEFAULT_FN, false);
-
-    OP_PUSH(lir_op_lea(target, default_fn_operand));
-    return target;
-}
-
-/**
  * @param m
  * @param t
  * @return
@@ -262,10 +249,6 @@ static lir_operand_t *linear_default_operand(module_t *m, type_t t, lir_operand_
 
     if (t.kind == TYPE_SET) {
         return linear_default_set(m, t, target);
-    }
-
-    if (t.kind == TYPE_FN) {
-        return linear_default_fn(m, t, target);
     }
 
     if (t.kind == TYPE_STRUCT) {
@@ -1795,7 +1778,7 @@ static lir_operand_t *linear_struct_new(module_t *m, ast_expr_t expr, lir_operan
 
 
     // 快速赋值,由于 struct 的相关属性都存储在 type 中，所以偏移量等值都需要在前端完成计算
-    table_t *exists = table_new();
+    table_t *exists = table_new(false);
     for (int i = 0; i < ast->properties->length; ++i) {
         struct_property_t *p = ct_list_value(ast->properties, i);
 
@@ -1879,7 +1862,7 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
 
     // 默认值处理
     type_struct_t *type_struct = new_expr->type.struct_;
-    table_t *exists = table_new();
+    table_t *exists = table_new(false);
     for (int i = 0; i < new_expr->properties->length; ++i) {
         struct_property_t *p = ct_list_value(new_expr->properties, i);
 
@@ -2222,10 +2205,10 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
 
     OP_PUSH(lir_op_label(catch_error_label, true));
 
-    // 零值处理 target
-    if (has_ret) {
-        linear_default_operand(m, expr.type, target);
-    }
+    // catch 中总是会对 target 进行赋值，或者直接退出当前函数，所以不需要进行 default operand 处理
+    // if (has_ret) {
+    // linear_default_operand(m, expr.type, target);
+    // }
 
     // 为 err 赋值
     lir_operand_t *err_operand = linear_var_decl(m, &catch_expr->catch_err);

@@ -1,7 +1,7 @@
 fn ascii(string c):u8 {
-//    if c.len() != 1 {
-//        throw 'c length must equal to 1'
-//    }
+    if c.len() == 0 {
+        return 0
+    }
     var list = c as [u8]
     return list[0]
 }

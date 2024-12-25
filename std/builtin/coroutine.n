@@ -9,7 +9,7 @@ type future_t<T> = struct{
 }
 
 fn async<T>(fn():void! function, int flag):ptr<future_t<T>> {
-    var fu = new future_t<T>
+    var fu = new future_t<T>()
     fu.size = @sizeof(T)
     if fu.size > 0 {
         var hash = @reflect_hash(T)

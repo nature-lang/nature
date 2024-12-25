@@ -1,5 +1,5 @@
 import os
-import fmt.util
+import fmt.utils
 import time
 import runtime
 

@@ -7,7 +7,8 @@ static void test_basic() {
                         "3 33\n"
                         "3\n"
                         "2\n"
-                        "coroutine 'main' panic: 'key 'b' not found in map' at cases/20221025_09_map.n:17:15\n");
+                        "110\n"
+                        "coroutine 'main' panic: 'key 'b' not found in map' at cases/20221025_09_map.n:24:15\n");
 }
 
 int main(void) {

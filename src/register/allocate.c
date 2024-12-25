@@ -8,7 +8,7 @@
  */
 static linked_t *unhandled_new(closure_t *c) {
     linked_t *unhandled = linked_new();
-    table_t *exists = table_new();
+    table_t *exists = table_new(false);
     // 遍历所有变量,根据 interval from 进行排序
     for (int i = 0; i < c->var_defs->count; ++i) {
         lir_var_t *var = c->var_defs->take[i];

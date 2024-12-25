@@ -37,9 +37,9 @@ static symbol_t *_symbol_table_set(string ident, symbol_type_t type, void *ast_v
 }
 
 void symbol_init() {
-    can_import_symbol_table = table_new();
+    can_import_symbol_table = table_new(false);
 
-    symbol_table = table_new();
+    symbol_table = table_new(false);
     symbol_fn_list = slice_new();
     symbol_var_list = slice_new();
     symbol_typedef_list = slice_new();

@@ -8,3 +8,8 @@ fn map<T,U>.del(T key) {
     raw_ptr<T> ref = &key
     runtime.map_delete(self as void_ptr, ref as void_ptr)
 }
+
+fn map<T,U>.contains(T key):bool {
+    raw_ptr<T> ref = &key
+    return runtime.map_contains(self as void_ptr, ref as void_ptr)
+}

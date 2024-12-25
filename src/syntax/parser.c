@@ -86,6 +86,14 @@ static bool parser_is(module_t *m, token_type_t expect) {
     return t->type == expect;
 }
 
+static bool parser_ident_is(module_t *m, char *expect) {
+    token_t *t = m->p_cursor.current->value;
+    if (t->type != TOKEN_IDENT) {
+        return false;
+    }
+    return str_equal(t->literal, expect);
+}
+
 static bool parser_is_literal(module_t *m) {
     return parser_is(m, TOKEN_LITERAL_FLOAT) ||
            parser_is(m, TOKEN_LITERAL_INT) ||
@@ -576,7 +584,7 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
         type_alias_stmt->params = ct_list_new(sizeof(ast_generics_param_t));
 
         // 放在 module 全局表中用于辅助 parser
-        m->parser_type_params_table = table_new();
+        m->parser_type_params_table = table_new(false);
 
         do {
             token_t *ident = parser_advance(m);
@@ -1212,7 +1220,7 @@ static list_t *parser_arg(module_t *m, ast_call_t *call) {
         return args;
     }
 
-    do {
+    while (!parser_is(m, TOKEN_RIGHT_PAREN)) {
         if (parser_consume(m, TOKEN_ELLIPSIS)) {
             call->spread = true;
         }
@@ -1223,7 +1231,14 @@ static list_t *parser_arg(module_t *m, ast_call_t *call) {
         if (call->spread) {
             PARSER_ASSERTF(parser_is(m, TOKEN_RIGHT_PAREN), "can only use '...' as the final argument in the list");
         }
-    } while (parser_consume(m, TOKEN_COMMA));
+
+        // 结尾存在 ',' 或者 ) 可以避免换行符识别异常, 所以 parser 需要支持最后一个 TOKEN_COMMA 可选的情况
+        if (parser_is(m, TOKEN_RIGHT_PAREN)) {
+            break;
+        } else {
+            parser_must(m, TOKEN_COMMA);
+        }
+    }
 
     parser_must(m, TOKEN_RIGHT_PAREN);
 
@@ -1797,9 +1812,29 @@ static ast_expr_t parser_fndef_expr(module_t *m) {
 
 static ast_expr_t parser_new_expr(module_t *m) {
     ast_expr_t result = expr_new(m);
-    parser_must(m, TOKEN_NEW);
+    parser_must(m, TOKEN_IDENT);
     ast_new_expr_t *new_expr = NEW(ast_new_expr_t);
     new_expr->type = parser_type(m);
+    new_expr->properties = ct_list_new(sizeof(struct_property_t));
+
+    parser_must(m, TOKEN_LEFT_PAREN);
+    while (!parser_is(m, TOKEN_RIGHT_PAREN)) {
+        struct_property_t item = {0};
+        item.key = parser_must(m, TOKEN_IDENT)->literal;
+        parser_must(m, TOKEN_EQUAL);
+        item.right = expr_new_ptr(m);
+        *((ast_expr_t *) item.right) = parser_expr(m);
+
+        ct_list_push(new_expr->properties, &item);
+
+        if (parser_is(m, TOKEN_RIGHT_PAREN)) {
+            break;
+        } else {
+            parser_must(m, TOKEN_COMMA);
+        }
+    }
+    parser_must(m, TOKEN_RIGHT_PAREN);
+
     result.assert_type = AST_EXPR_NEW;
     result.value = new_expr;
     return result;
@@ -2022,7 +2057,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
 
         // 记录泛型参数，用于 parser type 时可以正确解析
         if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
-            m->parser_type_params_table = table_new();
+            m->parser_type_params_table = table_new(false);
             fndef->generics_params = ct_list_new(sizeof(ast_generics_param_t));
             do {
                 token_t *ident = parser_advance(m);
@@ -2098,7 +2133,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
     fndef->fn_name_with_pkg = ident_with_prefix(m->ident, token_ident->literal);
 
     if (!is_impl_type && parser_consume(m, TOKEN_LEFT_ANGLE)) {
-        m->parser_type_params_table = table_new();
+        m->parser_type_params_table = table_new(false);
         fndef->generics_params = ct_list_new(sizeof(ast_generics_param_t));
         do {
             token_t *ident = parser_advance(m);
@@ -2155,30 +2190,39 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
  * @param m
  * @return
  */
-static ast_stmt_t *parser_fn_label(module_t *m) {
+static ast_stmt_t *parser_label(module_t *m) {
     PARSER_ASSERTF(m->type != MODULE_TYPE_MAIN, "cannot define fn label in main module")
     ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
 
     do {
-        token_t *token = parser_must(m, TOKEN_FN_LABEL);
+        token_t *token = parser_must(m, TOKEN_LABEL);
         if (str_equal(token->literal, MACRO_LINKID)) {
             if (parser_is(m, TOKEN_IDENT)) {
-                token_t *linkto_value = parser_must(m, TOKEN_IDENT);
-                fndef->linkid = linkto_value->literal;
+                token_t *linkid_value = parser_must(m, TOKEN_IDENT);
+                fndef->linkid = linkid_value->literal;
             } else {
                 token_t *literal = parser_must(m, TOKEN_LITERAL_STRING);
                 fndef->linkid = literal->literal;
             }
         } else if (str_equal(token->literal, MACRO_LOCAL)) {
             fndef->is_private = true;
+        } else if (str_equal(token->literal, MACRO_RUNTIME_USE)) {
+            parser_must(m, TOKEN_IDENT);
         } else {
+            // 不认识的 label 不做处理, 直接跳过
             PARSER_ASSERTF(false, "unknown fn label '%s'", token->literal);
         }
-    } while (parser_is(m, TOKEN_FN_LABEL));
+    } while (parser_is(m, TOKEN_LABEL));
 
     parser_must(m, TOKEN_STMT_EOF);
 
-    return parser_fndef_stmt(m, fndef);
+    if (parser_is(m, TOKEN_TYPE)) {
+        return parser_type_alias_stmt(m);
+    } else if (parser_is(m, TOKEN_FN)) {
+        return parser_fndef_stmt(m, fndef);
+    } else {
+        PARSER_ASSERTF(false, "the label can only be applied to type alias or fn.");
+    }
 }
 
 static ast_stmt_t *parser_let_stmt(module_t *m) {
@@ -2280,8 +2324,8 @@ static ast_stmt_t *parser_stmt(module_t *m) {
         return parser_throw_stmt(m);
     } else if (parser_is(m, TOKEN_LET)) {
         return parser_let_stmt(m);
-    } else if (parser_is(m, TOKEN_FN_LABEL)) {
-        return parser_fn_label(m);
+    } else if (parser_is(m, TOKEN_LABEL)) {
+        return parser_label(m);
     } else if (parser_is(m, TOKEN_IDENT)) {
         return parser_expr_begin_stmt(m);
     } else if (parser_is(m, TOKEN_FN)) {
@@ -2321,8 +2365,8 @@ static ast_stmt_t *parser_module_stmt(module_t *m) {
         return parser_var_begin_stmt(m);
     } else if (is_type_begin_stmt(m)) {
         return parser_type_begin_stmt(m);
-    } else if (parser_is(m, TOKEN_FN_LABEL)) {
-        return parser_fn_label(m);
+    } else if (parser_is(m, TOKEN_LABEL)) {
+        return parser_label(m);
     } else if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_stmt(m, ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column));
     } else if (parser_is(m, TOKEN_IMPORT)) {
@@ -2855,6 +2899,28 @@ static ast_expr_t parser_macro_call(module_t *m) {
     PARSER_ASSERTF(false, "macro '%s' not defined", token->literal);
 }
 
+static bool parser_is_new(module_t *m) {
+    if (!parser_ident_is(m, token_str[TOKEN_NEW])) {
+        return false;
+    }
+
+    return parser_next_is(m, 1, TOKEN_IDENT) ||
+           parser_next_is(m, 1, TOKEN_INT) ||
+           parser_next_is(m, 1, TOKEN_I8) ||
+           parser_next_is(m, 1, TOKEN_I16) ||
+           parser_next_is(m, 1, TOKEN_I32) ||
+           parser_next_is(m, 1, TOKEN_I64) ||
+           parser_next_is(m, 1, TOKEN_UINT) ||
+           parser_next_is(m, 1, TOKEN_U8) ||
+           parser_next_is(m, 1, TOKEN_U16) ||
+           parser_next_is(m, 1, TOKEN_U32) ||
+           parser_next_is(m, 1, TOKEN_U64) ||
+           parser_next_is(m, 1, TOKEN_FLOAT) ||
+           parser_next_is(m, 1, TOKEN_F32) ||
+           parser_next_is(m, 1, TOKEN_F64) ||
+           parser_next_is(m, 1, TOKEN_BOOL);
+}
+
 /**
  * 表达式优先级处理方式
  * @return
@@ -2880,8 +2946,7 @@ static ast_expr_t parser_expr(module_t *m) {
         return parser_fndef_expr(m);
     }
 
-    // new
-    if (parser_is(m, TOKEN_NEW)) {
+    if (parser_is_new(m)) {
         return parser_new_expr(m);
     }
 

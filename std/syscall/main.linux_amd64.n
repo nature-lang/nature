@@ -1,4 +1,5 @@
 import libc
+import runtime
 
 u32 MS_ACTIVE = 0x40000000
 u32 MS_ASYNC = 0x1
@@ -812,7 +813,7 @@ fn get_env(string key):string {
         return ''
     }
 
-    return libc.string_new(ref)
+    return runtime.string_new(ref)
 }
 
 fn set_env(string key, string value):void! {

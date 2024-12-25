@@ -3,6 +3,7 @@
 
 #include "fixalloc.h"
 #include "utils/mutex.h"
+#include <uv.h>
 
 #define RT_LINKED_FOR(_list) for (rt_linked_node_t *_node = _list.front; _node != _list.rear; _node = _node->succ)
 #define RT_LINKED_VALUE() (_node->value)
@@ -87,7 +88,7 @@ static inline void *rt_linked_fixalloc_pop_no_lock(rt_linked_fixalloc_t *l) {
     }
 
     assertf(l->head, "l=%p front is null", l);
-    rt_linked_node_t *node = l->head;// 推出头部节点
+    rt_linked_node_t *node = l->head; // 推出头部节点
     void *value = node->value;
 
     if (!node->succ) {

@@ -28,6 +28,9 @@
 #define YWORD 32// 32 byte = ymm
 #define ZWORD 64// 64 byte
 
+#define TYPE_GC_SCAN 1
+#define TYPE_GC_NOSCAN 0
+
 typedef union {
     int64_t int_value;
     int64_t i64_value;
@@ -102,8 +105,7 @@ typedef enum {
 
     // runtime 中使用的一种需要 gc 的 pointer base type 结构
     TYPE_GC,
-    TYPE_GC_SCAN,
-    TYPE_GC_NOSCAN,
+
     TYPE_GC_FN,
     TYPE_GC_ENV,
     TYPE_GC_ENV_VALUE,
@@ -161,18 +163,19 @@ static string type_kind_str[] = {
 // reflect type
 // 所有的 type 都可以转化成该结构
 typedef struct {
-    uint64_t index; // 全局 index,在 linker 时 ct_reflect_type 的顺序会被打乱，需要靠 index 进行复原
     uint64_t size; // 无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
     uint8_t in_heap; // 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是
+
     // pointer 数据
     int64_t hash; // 做类型推断时能够快速判断出类型是否相等
     uint64_t last_ptr; // 类型对应的堆数据中最后一个包含指针的字节数
     type_kind kind; // 类型的种类
-    uint8_t *gc_bits; // 类型 bit 数据(按 uint8 对齐)
-
+    uint8_t *malloc_gc_bits;
+    // 类型 bit 数据(按 uint8 对齐), 在内存中分配空间, 如果为 NULL, 则直接使用 gc_bits, 如果为 NULL, 则直接使用 gc_bits, 如果为 NULL, 则直接使用 gc_bits, 如果为 NULL, 则直接使用 gc_bits
+    uint64_t gc_bits; // 从右到左，每个 bit 代表一个指针的位置，如果为 1，表示该位置是一个指针，需要 gc
     uint8_t align; // struct/list 最终对齐的字节数
     uint16_t length; // struct/tuple/array 类型的长度
-    uint64_t *element_hashes; // struct/tuple 每个类型的种类
+    uint64_t *element_hashes;
 } rtype_t;
 
 // 类型描述信息 start
@@ -668,6 +671,10 @@ static type_t extern_errable_t(type_t t) {
     type_t *arg_t = ct_list_value(t.alias->args, 0);
 
     return *arg_t;
+}
+
+static inline bool must_assign_value(type_kind kind) {
+    return kind == TYPE_FN || kind == TYPE_PTR;
 }
 
 static inline bool is_float(type_kind kind) {

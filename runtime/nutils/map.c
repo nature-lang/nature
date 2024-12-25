@@ -97,7 +97,7 @@ n_void_ptr_t rt_map_access(n_map_t *m, void *key_ref) {
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
 
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
-    char *key_str = rtype_value_str(key_rtype, key_ref);
+    char *key_str = rtype_value_to_str(key_rtype, key_ref);
     DEBUGF("[runtime.rt_map_access] key_rtype_kind: %d, key_str: %s, hash_index=%lu,", key_rtype->kind, key_str,
            hash_index);
 
@@ -109,7 +109,7 @@ n_void_ptr_t rt_map_access(n_map_t *m, void *key_ref) {
                hash_value_deleted(hash_value));
 
         char *msg = dsprintf("key '%s' not found in map", key_str);
-        rt_coroutine_set_error(msg, true);
+        rt_default_co_error(msg, true);
         return 0;
     }
 
@@ -139,7 +139,7 @@ n_void_ptr_t rt_map_assign(n_map_t *m, void *key_ref) {
     uint64_t hash_value = m->hash_table[hash_index];
 
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
-    char *key_str = rtype_value_str(key_rtype, key_ref);
+    char *key_str = rtype_value_to_str(key_rtype, key_ref);
 
     DEBUGF("[runtime.rt_map_assign] key_rtype_kind: %d, key_str: %s, hash_index=%lu,",
            key_rtype->kind,
@@ -187,4 +187,33 @@ void rt_map_delete(n_map_t *m, void *key_ref) {
 uint64_t rt_map_length(n_map_t *l) {
     PRE_RTCALL_HOOK();
     return l->length;
+}
+
+/**
+ * 判断 key 是否存在于 set 中
+ * @param m
+ * @param key_ref
+ * @return
+ */
+bool rt_map_contains(n_map_t *m, void *key_ref) {
+    PRE_RTCALL_HOOK();
+    assert(m);
+    assert(key_ref);
+    assert(m->key_rtype_hash > 0);
+
+    DEBUGF("[runtime.rt_map_contains] key_ref=%p, key_rtype_hash=%lu, len=%lu", key_ref, m->key_rtype_hash, m->length);
+
+    uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
+    uint64_t hash_value = m->hash_table[hash_index];
+
+    DEBUGF("[runtime.rt_map_contains] hash_index=%lu, hash_value=%lu", hash_index, hash_value);
+
+    if (hash_value_empty(hash_value)) {
+        return false;
+    }
+    if (hash_value_deleted(hash_value)) {
+        return false;
+    }
+
+    return true;
 }

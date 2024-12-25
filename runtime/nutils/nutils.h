@@ -3,11 +3,13 @@
 
 #include "runtime/runtime.h"
 #include "utils/type.h"
+#include "utils/sc_map.h"
 
 #define INT_SIZE sizeof(int64_t)
 
 extern int command_argc;
 extern char **command_argv;
+
 
 #define ASSERT_ADDR(_addr) assertf((addr_t) _addr > 0xa000 && (addr_t) _addr <= ARENA_HINT_MAX, "addr '%p' cannot valid", _addr)
 
@@ -33,8 +35,6 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
 
 void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, void *value_ref);
 
-void zero_fn();
-
 void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column);
 
 n_error_t co_remove_error();
@@ -49,20 +49,20 @@ value_casting casting_to_void_ptr(void *ptr);
 
 n_vec_t *std_args();
 
-char *rtype_value_str(rtype_t *rtype, void *data_ref);
+char *rtype_value_to_str(rtype_t *rtype, void *data_ref);
 
 void rt_write_barrier(void *slot, void *new_obj);
 
 void write_barrier(void *slot, void *new_obj);
 
-//rtype_t *gc_rtype(type_kind kind, uint32_t count, ...);
-
-rtype_t *gc_rtype_array(type_kind kind, uint32_t count);
-
-rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length);
-
 void raw_ptr_valid(void *raw_ptr);
 
 void rt_panic(n_string_t *msg);
+
+void rt_assert(n_bool_t cond);
+
+n_string_t *rt_string_new(n_void_ptr_t raw_string);
+
+n_string_t *rt_strerror();
 
 #endif // NATURE_BASIC_H

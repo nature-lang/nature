@@ -20,7 +20,7 @@ static void linear_posthandle(closure_t *c) {
 static void linear_prehandle(closure_t *c) {
     // collect var defs
     int next_id = 0;
-    table_t *var_table = table_new();
+    table_t *var_table = table_new(false);
     c->var_defs = slice_new();
 
     for (int i = 0; i < c->blocks->count; ++i) {
