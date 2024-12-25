@@ -1406,7 +1406,7 @@ elf_context_t *elf_context_new(char *output, uint8_t type) {
     ctx->sections = slice_new();
     slice_push(ctx->sections, NULL);
 
-    ctx->symtab_hash = table_new(false);
+    ctx->symtab_hash = table_new();
     /* create standard sections */
     ctx->text_section = elf_section_new(ctx, ".text", SHT_PROGBITS, SHF_ALLOC | SHF_EXECINSTR);
     ctx->data_section = elf_section_new(ctx, ".data", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);

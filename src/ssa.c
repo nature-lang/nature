@@ -231,11 +231,11 @@ void ssa_live(closure_t *c) {
 void ssa_add_phi(closure_t *c) {
     // 跳过没有插入过 phi 的节点的 var，这些节点不需要重新 name
     slice_t *added_phi_globals = slice_new();
-    table_t *added_phi_global_table = table_new(false);
+    table_t *added_phi_global_table = table_new();
 
     for (int i = 0; i < c->ssa_globals->count; ++i) {
         lir_var_t *var = c->ssa_globals->take[i];
-        table_t *inserted = table_new(false); // key is block name
+        table_t *inserted = table_new(); // key is block name
 
         linked_t *work_list = table_get(c->ssa_var_blocks, var->ident);
         assertf(work_list, "var '%s' has use, but lack def", var->ident);
@@ -281,7 +281,7 @@ void ssa_add_phi(closure_t *c) {
  */
 slice_t *ssa_calc_live_out(closure_t *c, basic_block_t *block) {
     slice_t *live_out = slice_new();
-    table_t *exist_var = table_new(false); // basic var ident
+    table_t *exist_var = table_new(); // basic var ident
 
     for (int i = 0; i < block->succs->count; ++i) {
         basic_block_t *succ = block->succs->take[i];
@@ -305,7 +305,7 @@ slice_t *ssa_calc_live_out(closure_t *c, basic_block_t *block) {
  */
 slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block) {
     slice_t *live_in = slice_new();
-    table_t *exist_var = table_new(false); // basic var ident
+    table_t *exist_var = table_new(); // basic var ident
 
     SLICE_FOR(block->use) {
         lir_var_t *var = SLICE_VALUE(block->use);
@@ -345,7 +345,7 @@ bool ssa_live_changed(slice_t *old, slice_t *new) {
     if (old->count != new->count) {
         return true;
     }
-    table_t *var_count = table_new(false);
+    table_t *var_count = table_new();
     for (int i = 0; i < old->count; ++i) {
         string ident = ((lir_var_t *) old->take[i])->ident;
         table_set(var_count, ident, old->take[i]);
@@ -379,14 +379,14 @@ bool ssa_live_changed(slice_t *old, slice_t *new) {
  */
 void ssa_use_def(closure_t *c) {
     // 可能出现 B0 处未定义，但是直接使用,也需要计入到符号表中
-    table_t *exist_global_vars = table_new(false);
+    table_t *exist_global_vars = table_new();
 
     for (int id = 0; id < c->blocks->count; ++id) {
         slice_t *use = slice_new();
         slice_t *def = slice_new();
 
-        table_t *exist_use = table_new(false);
-        table_t *exist_def = table_new(false);
+        table_t *exist_use = table_new();
+        table_t *exist_def = table_new();
 
         basic_block_t *block = c->blocks->take[id];
 
@@ -505,8 +505,8 @@ slice_t *ssa_calc_dom_blocks(closure_t *c, basic_block_t *block) {
 
 // 前序遍历各个基本块
 void ssa_rename(closure_t *c) {
-    table_t *var_number_table = table_new(false); // def 使用，用于记录当前应该命名为多少
-    table_t *stack_table = table_new(false);      // use 使用，判断使用的变量的名称
+    table_t *var_number_table = table_new(); // def 使用，用于记录当前应该命名为多少
+    table_t *stack_table = table_new();      // use 使用，判断使用的变量的名称
 
     // 遍历所有变量,进行初始化
     SLICE_FOR(c->var_defs) {

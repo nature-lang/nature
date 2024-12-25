@@ -584,7 +584,7 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
         type_alias_stmt->params = ct_list_new(sizeof(ast_generics_param_t));
 
         // 放在 module 全局表中用于辅助 parser
-        m->parser_type_params_table = table_new(false);
+        m->parser_type_params_table = table_new();
 
         do {
             token_t *ident = parser_advance(m);
@@ -2057,7 +2057,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
 
         // 记录泛型参数，用于 parser type 时可以正确解析
         if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
-            m->parser_type_params_table = table_new(false);
+            m->parser_type_params_table = table_new();
             fndef->generics_params = ct_list_new(sizeof(ast_generics_param_t));
             do {
                 token_t *ident = parser_advance(m);
@@ -2133,7 +2133,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
     fndef->fn_name_with_pkg = ident_with_prefix(m->ident, token_ident->literal);
 
     if (!is_impl_type && parser_consume(m, TOKEN_LEFT_ANGLE)) {
-        m->parser_type_params_table = table_new(false);
+        m->parser_type_params_table = table_new();
         fndef->generics_params = ct_list_new(sizeof(ast_generics_param_t));
         do {
             token_t *ident = parser_advance(m);

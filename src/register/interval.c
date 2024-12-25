@@ -474,7 +474,7 @@ void interval_build(closure_t *c) {
         basic_block_t *block = c->blocks->take[i];
         // 计算当前 block 的 lives
         slice_t *lives = slice_new();
-        table_t *live_table = table_new(false);
+        table_t *live_table = table_new();
 
         // 1. calc lives in = union of successor.liveIn for each successor of b
         for (int j = 0; j < block->succs->count; ++j) {

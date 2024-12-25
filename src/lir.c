@@ -25,13 +25,13 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->break_labels = stack_new();
 
     c->ssa_globals = slice_new();
-    c->ssa_globals_table = table_new(false);
-    c->ssa_var_blocks = table_new(false);
-    c->ssa_var_block_exists = table_new(false);
+    c->ssa_globals_table = table_new();
+    c->ssa_var_blocks = table_new();
+    c->ssa_var_block_exists = table_new();
 
-    c->match_has_ret = table_new(false);
+    c->match_has_ret = table_new();
 
-    c->interval_table = table_new(false);
+    c->interval_table = table_new();
 
     // 在需要使用的时候再初始化
 //    c->closure_vars = slice_new();

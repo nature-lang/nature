@@ -27,7 +27,7 @@ fn main():void! {
     println('listen success')
 
     // 接受链接
-    var client_addr_ptr = new syscall.sockaddr_in // 初始化一个空的地址，等待 callee 赋值
+    var client_addr_ptr = new syscall.sockaddr_in() // 初始化一个空的地址，等待 callee 赋值
 
     var client_fd = syscall.accept(sockfd, client_addr_ptr) catch err {
        throw 'accept error: ' +  err.msg

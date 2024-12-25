@@ -31,7 +31,7 @@ int runtime_main(int argc, char *argv[]) {
     RDEBUGF("[runtime_main] memory init success");
 
     // - env clsoure
-    env_upvalue_table = table_new(false);
+    env_upvalue_table = table_new();
     mutex_init(&env_upvalue_locker, false);
 
     sched_init();
@@ -55,7 +55,7 @@ void test_runtime_init() {
     memory_init();
 
     // - env clsoure
-    env_upvalue_table = table_new(false);
+    env_upvalue_table = table_new();
     mutex_init(&env_upvalue_locker, false);
 }
 

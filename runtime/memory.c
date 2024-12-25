@@ -14,7 +14,7 @@ mutex_t gc_stage_locker;
 memory_t *memory;
 
 void callers_deserialize() {
-    rt_caller_table = table_new(false);
+    rt_caller_table = table_new();
 
     rt_caller_ptr = &rt_caller_data;
     DEBUGF("[runtime.callers_deserialize] count=%lu", rt_caller_count);

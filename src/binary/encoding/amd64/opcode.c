@@ -1018,7 +1018,7 @@ static amd64_opcode_tree_node_t *opcode_node_new() {
             .count = 0,
             .list = malloc(sizeof(amd64_opcode_inst_t) * 10),
     };
-    node->succs = table_new(false);
+    node->succs = table_new();
     return node;
 }
 

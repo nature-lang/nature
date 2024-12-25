@@ -713,7 +713,7 @@ static analyzer_fndef_t *analyzer_current_init(module_t *m, ast_fndef_t *fndef) 
     analyzer_fndef_t *new = NEW(analyzer_fndef_t);
     new->locals = slice_new();
     new->frees = slice_new();
-    new->free_table = table_new(false);
+    new->free_table = table_new();
 
     new->scope_depth = 0;
 

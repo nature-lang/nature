@@ -481,7 +481,7 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
 
     slice_t *build_temps = slice_new();
     uint64_t section_offset = 0; // text section slot
-    table_t *symtab_hash = table_new(false);
+    table_t *symtab_hash = table_new();
 
     // 第一遍扫描
     for (int i = 0; i < closures->count; ++i) {

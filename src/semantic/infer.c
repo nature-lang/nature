@@ -331,7 +331,7 @@ static table_t *infer_generics_args(module_t *m, ast_fndef_t *tpl_fn, ast_call_t
     }
 
     // 进行参数解析，可以顺便使用 type_compare 了！
-    table_t *generics_args_table = table_new(false);
+    table_t *generics_args_table = table_new();
 
     if (call->generics_args == NULL) {
         // 避免脏数据污染 is_tpl 导致后续的 copy 异常
@@ -1162,7 +1162,7 @@ static type_t infer_set_new(module_t *m, ast_set_new_t *set_new, type_t target_t
 }
 
 static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, list_t *properties) {
-    table_t *exists = table_new(false);
+    table_t *exists = table_new();
     for (int i = 0; i < properties->length; ++i) {
         struct_property_t *struct_property = ct_list_value(properties, i);
         struct_property_t *expect_property = type_struct_property(type_struct, struct_property->key);
@@ -1444,7 +1444,7 @@ static ast_fndef_t *generic_special_fn(module_t *m, ast_call_t *call, type_t tar
     }
 
     if (tpl_fn->generics_hash_table == NULL) {
-        tpl_fn->generics_hash_table = table_new(false);
+        tpl_fn->generics_hash_table = table_new();
     }
 
     ast_fndef_t *special_fn = table_get(tpl_fn->generics_hash_table, args_hash);
@@ -2460,7 +2460,7 @@ static type_t reduction_type_alias(module_t *m, type_t t) {
 
         // 此时只是使用 module 作为一个 context 使用，实际上 type_alias_stmt->params 和 当前 module 并不是同一个文件中的
         if (m->infer_type_args_stack) {
-            table_t *args_table = table_new(false);
+            table_t *args_table = table_new();
             impl_args = ct_list_new(sizeof(type_t));
 
             for (int i = 0; i < t.alias->args->length; ++i) {
@@ -2731,7 +2731,7 @@ static void infer_fndef(module_t *m, ast_fndef_t *fn) {
 void cartesian_product(list_t *generics_params, int depth, type_t **temp_product, slice_t *result) {
     if (depth == generics_params->length) {
         // 从新申请空间， copy 到 result 中
-        table_t *arg_table = table_new(false);
+        table_t *arg_table = table_new();
         for (int i = 0; i < generics_params->length; ++i) {
             ast_generics_param_t *param = ct_list_value(generics_params, i);
             // 直接引用到了 constraints 中

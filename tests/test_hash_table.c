@@ -53,7 +53,7 @@ static void test_uthash_performance() {
 
 static void test_table_performance() {
     uint64_t start_time, end_time;
-    table_t *table = table_new(false);
+    table_t *table = table_new();
 
     // Test table.h insertion
     start_time = uv_hrtime();
