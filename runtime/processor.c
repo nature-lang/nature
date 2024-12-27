@@ -4,7 +4,7 @@
 #include <ucontext.h>
 
 #include "runtime.h"
-#include "runtime/nutils/libuv.h"
+#include "runtime/nutils/http.h"
 
 int cpu_count;
 bool processor_need_exit;

@@ -20,6 +20,10 @@ fn vec<T>.push(T v) {
     return runtime.vec_push(self as void_ptr, ref as void_ptr)
 }
 
+fn vec<T>.append(vec<T> l2) {
+    return runtime.vec_append(self as void_ptr, l2 as void_ptr)
+}
+
 fn vec<T>.slice(int start, int end):vec<T> {
     return runtime.vec_slice(self as void_ptr, start, end) as vec<T>
 }

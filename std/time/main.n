@@ -5,7 +5,7 @@ import libc
 type time_t = struct {
     i64 sec
     i64 nsec
-    ptr<libc.tm_t> tm
+    raw_ptr<libc.tm_t> tm
 }
 
 fn time_t.timestamp():i64 {
@@ -32,12 +32,9 @@ fn time_t.datetime():string {
 // 将 time_t 使用当前时间进行初始化
 fn now():time_t {
     var sys_time = syscall.gettime() catch err {
-        // 如果获取时间戳失败，则返回一个空的时间
-        int sec = 0
-        return time_t {
-            tm = libc.localtime(&sec)
-        }
+        return time_t {}
     }
+
     var t = time_t {
         sec = sys_time.sec,
         nsec = sys_time.nsec,

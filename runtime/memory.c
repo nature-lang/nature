@@ -14,7 +14,7 @@ mutex_t gc_stage_locker;
 memory_t *memory;
 
 void callers_deserialize() {
-    rt_caller_table = table_new();
+    sc_map_init_64v(&rt_caller_map, rt_caller_count * 2, 0);
 
     rt_caller_ptr = &rt_caller_data;
     DEBUGF("[runtime.callers_deserialize] count=%lu", rt_caller_count);
@@ -27,7 +27,7 @@ void callers_deserialize() {
         caller->offset += f->base; // ret addr
         caller->data = f;
 
-        table_set(rt_caller_table, itoa(caller->offset), caller);
+        sc_map_put_64v(&rt_caller_map, caller->offset, caller);
         DEBUGF("[runtime.callers_deserialize] call '%s' ret_addr=%p, in fn=%s(%p), file=%s",
                caller->target_name,
                (void*)caller->offset, f->name,
@@ -37,6 +37,8 @@ void callers_deserialize() {
 }
 
 void fndefs_deserialize() {
+    sc_map_init_64v(&rt_fndef_cache, 0, 0);
+
     rt_fndef_ptr = &rt_fndef_data;
 
     DEBUGF("[fndefs_deserialize] rt_fndef_ptr addr: %p", rt_fndef_ptr);

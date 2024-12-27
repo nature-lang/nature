@@ -5,13 +5,6 @@
 #include "utils/assertf.h"
 #include "utils/exec.h"
 
-static void test_basic() {
-    char *raw = exec_output();
-    char *find = strstr(raw, "main_co done");
-
-    assert_true(find);
-}
-
 int main(void) {
-    TEST_BASIC
+    TEST_EXEC_IMM
 }

@@ -564,19 +564,8 @@ void write_barrier(void *slot, void *new_obj) {
 void raw_ptr_valid(void *raw_ptr) {
     PRE_RTCALL_HOOK(); // 修改状态避免抢占
 
-
     DEBUGF("[raw_ptr_valid] raw_ptr=%p", raw_ptr);
-    // raw_ptr 必须处于合理的范围
-    addr_t i = (addr_t) raw_ptr;
-
-    // apple silicon 系统的内存翻译比较奇怪，尤其是在 readdir 函数中的表现比较奇怪，因此暂时不做范围验证，只验证不为 0 即可
-#if defined(__DARWIN) && defined(__ARM64)
-    bool failed = i <= 0;
-#else
-    bool failed = i < MMAP_SHARE_STACK_BASE || i > ARENA_HINT_MAX;
-#endif
-
-    if (failed) {
+    if (raw_ptr <= 0) {
         rt_default_co_error("invalid memory address or nil pointer dereference", true);
     }
 }
@@ -604,7 +593,7 @@ void rt_panic(n_string_t *msg) {
     // 更新 ret addr 到 co 中
     CO_SCAN_REQUIRE(co);
     assert(co->scan_ret_addr);
-    caller_t *caller = table_get(rt_caller_table, itoa(co->scan_ret_addr));
+    caller_t *caller = sc_map_get_64v(&rt_caller_map, co->scan_ret_addr);
     panic_dump(co, caller, rt_string_ref(msg));
 }
 
@@ -620,7 +609,7 @@ void rt_assert(n_bool_t cond) {
     // 更新 ret addr 到 co 中
     CO_SCAN_REQUIRE(co);
     assert(co->scan_ret_addr);
-    caller_t *caller = table_get(rt_caller_table, itoa(co->scan_ret_addr));
+    caller_t *caller = sc_map_get_64v(&rt_caller_map, co->scan_ret_addr);
     panic_dump(co, caller, "assertion failed");
 }
 

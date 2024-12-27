@@ -2,16 +2,16 @@ import coroutine as co
 import time
 import 'mod.n'
 
-fn main() {
-    fn boom() {
-        var start = time.now().ms_timestamp()
-        for int i = 0; i < 5; i+=1 {
-            co.sleep(500)
-        }
-
-        mod.count += 1
+fn boom() {
+    var start = time.now().ms_timestamp()
+    for int i = 0; i < 5; i+=1 {
+        co.sleep(500)
     }
 
+    mod.count += 1
+}
+
+fn main() {
     var start = time.now().ms_timestamp()
     for int i = 0; i < 200000; i+=1 {
         go boom()

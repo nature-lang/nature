@@ -20,8 +20,6 @@ n_string_t *string_new(void *raw_string, int64_t length) {
 
     n_array_t *data = rti_array_new(&string_element_rtype, capacity);
 
-    TRACEF("[string_new] rtype gc_bits=%s", bitmap_to_str(string_rtype.gc_bits, 2));
-
     n_string_t *str = rti_gc_malloc(string_rtype.size, &string_rtype);
     str->data = data;
     str->length = length;
@@ -30,7 +28,18 @@ n_string_t *string_new(void *raw_string, int64_t length) {
     str->rhash = string_rtype.hash;
     memmove(str->data, raw_string, length);
 
-    DEBUGF("[string_new] success, string=%p, data=%p, raw_str=%s", str, str->data, (char*)raw_string);
+    DEBUGF("[string_new] success, string=%p, data=%p, len=%ld, raw_str=%s", str, str->data, str->length,
+           (char*)raw_string);
+    return str;
+}
+
+n_string_t *rt_string_ref_new(void *raw_string, int64_t length) {
+    n_string_t *str = rti_gc_malloc(string_rtype.size, &string_ref_rtype);
+    str->data = raw_string;
+    str->length = length;
+    str->capacity = length;
+    str->ele_rhash = string_element_rtype.hash;
+    str->rhash = string_rtype.hash;
     return str;
 }
 

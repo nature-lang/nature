@@ -3,10 +3,12 @@
 symdef_t *rt_symdef_ptr = NULL;
 
 fndef_t *rt_fndef_ptr = NULL;
+struct sc_map_64v rt_fndef_cache;
+
 
 caller_t *rt_caller_ptr = NULL;
 
-table_t *rt_caller_table = NULL;
+struct sc_map_64v rt_caller_map;
 
 // - symdef
 uint64_t ct_symdef_size = 0; // 数量

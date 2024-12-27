@@ -40,6 +40,8 @@ uint64_t rt_vec_capacity(n_vec_t *l);
 
 void *rt_vec_ref(n_vec_t *l);
 
+void rt_vec_append(n_vec_t *dst, n_vec_t *src);
+
 /**
  * 将 reference 处的值通过 memmove 移动 element_size 个字节到 array offest 中
  * @param vec

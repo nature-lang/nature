@@ -123,19 +123,32 @@ static void broken_critical_edges(closure_t *c) {
     }
 }
 
+static inline bool is_match_end_block(char *match_end_ident, basic_block_t *b) {
+    if (match_end_ident == NULL) {
+        return false;
+    }
+
+    return str_equal(b->name, match_end_ident);
+}
+
 static void break_check(closure_t *c, table_t *handled, basic_block_t *b, char *match_end_ident) {
     if (handled == NULL) {
         handled = table_new();
     }
 
-    // 重复到达节点
-    if (table_exist(handled, b->name)) {
-        return;
+    // 如果当前 block 是新的 match/catch block, 也就是嵌套 match, 则需要更新 match_end_ident
+    if ((strstr(b->name, MATCH_IDENT) || strstr(b->name, CATCH_IDENT)) && !
+        strstr(b->name, LABEL_END_SUFFIX)) {
+        // 判断 match 是否需要 ret
+        bool has_ret = table_get(c->match_has_ret, b->name);
+        // 更新 match_end_ident
+        if (has_ret) {
+            match_end_ident = str_connect(b->name, LABEL_END_SUFFIX);
+        }
     }
 
-    table_set(handled, b->name, b);
-
-    // match_end 存在表示开启了 break check 模式。
+    // 从当前 block 开去吃判断是否存在 break or return
+    // 当前 block match_end 存在表示开启了 break check 模式。
     if (match_end_ident) {
         LINKED_FOR(b->operations) {
             lir_op_t *op = LINKED_VALUE();
@@ -146,39 +159,37 @@ static void break_check(closure_t *c, table_t *handled, basic_block_t *b, char *
                 assert(label_operand);
                 lir_symbol_label_t *label = label_operand->value;
                 if (str_equal(label->ident, match_end_ident)) {
-                    return;
+                    // 直接注销当前路径的 match_end_ident 中断 break check 然后继续向下查找即可。当前路线可能存在多个 match/catch
+                    match_end_ident = NULL;
                 }
             }
-        }
-    }
 
-    if (match_end_ident) {
-        if (str_equal(match_end_ident, b->name)) {
-            lir_op_t *op = OP(linked_first(b->operations));
-
-            // 到达匹配的 end label 没有找到任何的 break, 则确实 break
-            dump_errorf(c->module, CT_STAGE_CFG, op->line, op->column, "match missing break");
-        }
-    }
-
-
-    // 当前 block 没有找到 return, 递归寻找 succ
-    for (int i = 0; i < b->succs->count; ++i) {
-        char *new_match_end_ident = NULL;
-        // 需要排除 match_1.end 情况
-        if (strstr(b->name, MATCH_IDENT) && !strstr(b->name, LABEL_END_SUFFIX)) {
-            // 判断是否存在 ret
-            bool has_ret = table_get(c->match_has_ret, b->name);
-            if (has_ret) {
-                new_match_end_ident = str_connect(b->name, LABEL_END_SUFFIX);
+            // return 等效于 break 直接返回, 那其他 block 怎么才能处理
+            if (op->code == LIR_OPCODE_RETURN) {
+                match_end_ident = NULL;
             }
         }
+    }
 
-        if (new_match_end_ident) {
-            break_check(c, handled, b->succs->take[i], new_match_end_ident);
-        } else {
-            break_check(c, handled, b->succs->take[i], match_end_ident);
+    // 通过一条线路到达 end 节点且没有发现 break or return，则编译错误
+    if (match_end_ident && str_equal(match_end_ident, b->name)) {
+        lir_op_t *op = OP(linked_first(b->operations));
+
+        // 到达匹配的 end label 没有找到任何的 break, 则确实 break
+        dump_errorf(c->module, CT_STAGE_CFG, op->line, op->column, "match missing break or return");
+    }
+
+    // 当前 block 没有找到 return, 递归寻找 succ, 查找期间需要判断是否开启了新的 break 结构
+    for (int i = 0; i < b->succs->count; ++i) {
+        basic_block_t *succ = b->succs->take[i];
+
+        // 递归 check (检查是否重复)
+        if (table_exist(handled, succ->name) && !is_match_end_block(match_end_ident, succ)) {
+            continue;
         }
+
+        table_set(handled, succ->name, succ);
+        break_check(c, handled, succ, match_end_ident);
     }
 }
 

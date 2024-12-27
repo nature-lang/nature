@@ -1,19 +1,12 @@
-#include <unistd.h>
-#include <sys/syscall.h>
-#include <fcntl.h>
 #include <stdio.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <sys/un.h>
-#include <sys/stat.h>
-#include <dirent.h>
-#include <uv.h>
 #include <string.h>
 #include <stdlib.h>
-#include <pthread.h>
+#include <uv.h>
 
 #include "test_runtime.h"
 
-int main() {
 
+// 在原有的handle_on_url函数后添加测试入口
+int main(void) {
+    return 0;
 }

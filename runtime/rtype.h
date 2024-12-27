@@ -16,6 +16,8 @@ extern rtype_t string_element_rtype;
 // 添加 hash table  (GC_RTYPE(TYPE_STRING, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);)
 extern rtype_t string_rtype;
 
+extern rtype_t string_ref_rtype;
+
 // GC_RTYPE(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
 extern rtype_t errort_trace_rtype;
 
@@ -108,6 +110,10 @@ static inline void builtin_rtype_init() {
     // 初始化字符串 rtype
     string_rtype = GC_RTYPE(TYPE_STRING, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
                             TYPE_GC_NOSCAN);
+    sc_map_put_64v(&rt_rtype_map, string_rtype.hash, &string_rtype);
+
+    string_ref_rtype = GC_RTYPE(TYPE_STRING, 5, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
+                                TYPE_GC_NOSCAN);
     sc_map_put_64v(&rt_rtype_map, string_rtype.hash, &string_rtype);
 
     // 测试 gc_bits

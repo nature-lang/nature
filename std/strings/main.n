@@ -9,12 +9,9 @@ fn from(void_ptr p):string! {
 }
 
 fn find_char(string s, u8 char, int after):int {
-    for k,v in s {
-        if k < after {
-            continue
-        }
-
-        if v == char {
+    int len = s.len()
+    for int k = after; k < len; k += 1 {
+        if s[k] == char {
             return k
         }
     }

@@ -82,11 +82,18 @@ fndef_t *find_fn(addr_t addr) {
         return NULL;
     }
 
+    // 尝试通过 ret addr 快速定位
+    fndef_t *fn = sc_map_get_64v(&rt_fndef_cache, addr);
+    if (fn) {
+        return fn;
+    }
+
     for (int i = 0; i < rt_fndef_count; ++i) {
-        fndef_t *fn = &rt_fndef_ptr[i];
+        fn = &rt_fndef_ptr[i];
         assert(fn);
 
         if (fn->base <= addr && addr < (fn->base + fn->size)) {
+            sc_map_put_64v(&rt_fndef_cache, addr, fn);
             return fn;
         }
     }
@@ -896,5 +903,5 @@ void runtime_gc() {
 
     gc_stage = GC_STAGE_OFF;
     DEBUGF("[runtime_gc] gc stage: GC_OFF, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes / 1024,
-            (before - allocated_bytes) / 1024);
+           (before - allocated_bytes) / 1024);
 }

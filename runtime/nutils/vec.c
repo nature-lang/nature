@@ -3,10 +3,12 @@
 #include "array.h"
 #include "runtime/runtime.h"
 
-void rt_vec_grow(n_vec_t *vec) {
+static void rt_vec_grow(n_vec_t *vec, int custom_capacity) {
     PRE_RTCALL_HOOK();
 
-    if (vec->capacity > 0) {
+    if (custom_capacity) {
+        vec->capacity = custom_capacity;
+    } else if (vec->capacity > 0) {
         vec->capacity = vec->capacity * 2;
     } else {
         vec->capacity = VEC_DEFAULT_CAPACITY;
@@ -172,7 +174,7 @@ void rt_vec_push(n_vec_t *vec, void *ref) {
     if (vec->length == vec->capacity) {
         DEBUGF("[vec_push] current len=%lu equals cap, trigger grow, next capacity=%lu", vec->length,
                vec->capacity * 2);
-        rt_vec_grow(vec);
+        rt_vec_grow(vec, 0);
     }
 
     uint64_t index = vec->length++;
@@ -180,7 +182,7 @@ void rt_vec_push(n_vec_t *vec, void *ref) {
 }
 
 /**
- * 在原有 array data 上进行切割
+ * 共享 array_data
  * @param rtype_hash
  * @param l
  * @param start 起始 index [start, end)
@@ -219,6 +221,18 @@ n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
     sliced_vec->data = l->data + start * element_size;
 
     return sliced_vec;
+}
+
+
+void rt_vec_append(n_vec_t *dst, n_vec_t *src) {
+    PRE_RTCALL_HOOK();
+    // assert(dst->ele_rhash == src->ele_rhash && "The types of the two vecs are different");
+    if (dst->length + src->length > dst->capacity) {
+        rt_vec_grow(dst, dst->length + src->length + 1);
+    }
+    int64_t element_size = rt_rtype_out_size(src->ele_rhash);
+    memmove(dst->data + dst->length * element_size, src->data, src->length * element_size);
+    dst->length += src->length;
 }
 
 /**
@@ -278,7 +292,7 @@ n_void_ptr_t rt_vec_iterator(n_vec_t *l) {
     if (l->length == l->capacity) {
         DEBUGF("[rt_vec_iterator] current_length=%lu == capacity, trigger grow, next capacity=%lu", l->length,
                l->capacity * 2);
-        rt_vec_grow(l);
+        rt_vec_grow(l, 0);
     }
     uint64_t index = l->length++;
 

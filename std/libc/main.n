@@ -21,7 +21,7 @@ type tm_t = struct {
 
 // 标准库函数, 返回值是静态值，不用处理 gc 但是线程不安全
 #linkid localtime
-fn localtime(raw_ptr<i64> timestamp):ptr<tm_t>
+fn localtime(raw_ptr<i64> timestamp):raw_ptr<tm_t>
 
 // 将 time_info_t 转换为时间戳
 #linkid mktime

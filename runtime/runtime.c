@@ -5,7 +5,7 @@
 #include "runtime/nutils/fn.h"
 #include "runtime/nutils/nutils.h"
 #include "sysmon.h"
-#include "nutils/libuv.h"
+#include "nutils/http.h"
 
 #ifdef __DARWIN
 extern void user_main(void) __asm("_main.main");

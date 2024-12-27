@@ -30,14 +30,13 @@
 #define v_addr_t uint64_t
 #define addr_t uint64_t
 
-#undef free
-
-#define free(_ptr) \
-    do {                 \
-        if (_ptr) {     \
-            free(_ptr); \
-        }              \
-    } while(0)
+// #undef free
+// #define free(_ptr) \
+//     do {                 \
+//         if (_ptr) {     \
+//             free(_ptr); \
+//         }              \
+//     } while(0)
 
 
 static inline void *reallocator(void *ptr, uint64_t size) {
@@ -119,7 +118,7 @@ static inline void *mallocz(uint64_t size) {
 
 #define TDEBUGF(format, ...)                                                                        \
     fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
-    // fflush(stdout);
+    fflush(stdout);
 
 #define TESTDUMP(format, ...)                                                                                                 \
     fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \

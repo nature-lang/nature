@@ -521,7 +521,7 @@ uint16_t type_alignof(type_t t) {
         return t.struct_->align;
     }
     if (t.kind == TYPE_ARR) {
-        return type_sizeof(t.array->element_type);
+        return type_alignof(t.array->element_type);
     }
 
     return type_sizeof(t);

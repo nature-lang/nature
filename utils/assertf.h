@@ -37,10 +37,13 @@ static inline void x_assertf_c21162d2(int expr, const char *fmt, ...) {
     }
 }
 
+#ifdef NDEBUG
+    #define assertf(e, fmt, ...) ((void)0)
+#else
 #define assertf(e, fmt, ...)                                                        \
     x_assertf_c21162d2(!!(e), "Assert %s(%s)%s failed: " fmt " %s[%s:%d (%s)]%s\n", \
         COL(RED), #e, COL(RST),                                                     \
         ##__VA_ARGS__,                                                              \
         COL(GRAY), x_bname_dfc95d52(__FILE__), __LINE__, __func__, COL(RST))
-
+#endif
 #endif

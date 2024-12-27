@@ -4,6 +4,9 @@ fn vec_new(int ref_hash, int ele_ref_hash, int len, int cap):void_ptr
 #linkid rt_vec_push
 fn vec_push(void_ptr list, void_ptr val)
 
+#linkid rt_vec_append
+fn vec_append(void_ptr list1, void_ptr list2)
+
 #linkid rt_vec_slice
 fn vec_slice(void_ptr list, int start, int end):void_ptr
 
@@ -60,3 +63,6 @@ fn gc_malloc_size(int size):void_ptr
 
 #linkid rt_string_new
 fn string_new(void_ptr s):string
+
+#linkid rt_string_ref_new
+fn string_ref_new(void_ptr s, int len):string
