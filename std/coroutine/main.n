@@ -1,35 +1,10 @@
-import coroutine_temp
-
 var SOLO = 1 << 1
 
-type coroutine_t = struct{
-    i32 status
-}
+#linkid rt_coroutine_sleep
+fn sleep(int ms)
 
-fn create(fn() f, int flags):coroutine_t {
-    var rt_co = coroutine_create(f, flags)
+#linkid rt_coroutine_yield
+fn yield()
 
-    return coroutine_t{
-        status = rt_co.status
-    }
-}
-
-fn run(fn() f, int flags):coroutine_t {
-    var rt_co = coroutine_async(f, flags)
-
-    return coroutine_t{
-        status = rt_co.status
-    }
-}
-
-fn sleep(int ms) {
-    coroutine_sleep(ms)
-}
-
-fn yield() {
-    rt_coroutine_yield()
-}
-
-
-#linkid rt_processor_index
-fn processor_index():int
+#linkid rt_coroutine_arg
+fn arg():void_ptr

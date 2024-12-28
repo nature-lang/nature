@@ -16,7 +16,7 @@ rtype_t rtype_base(type_kind kind) {
     };
 
     if (rtype.size > 0) {
-        rtype.gc_bits = malloc_gc_bits(rtype.size);
+        rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
     }
 
     return rtype;
@@ -35,8 +35,8 @@ static rtype_t rtype_raw_ptr(type_ptr_t *t) {
         .kind = TYPE_RAW_PTR,
     };
     // 计算 gc_bits
-    rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bitmap_set(rtype.gc_bits, 0);
+    rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
+    bitmap_set(rtype.malloc_gc_bits, 0);
 
     return rtype;
 }
@@ -52,8 +52,8 @@ static rtype_t rtype_void_ptr(type_kind kind) {
         .kind = TYPE_VOID_PTR,
     };
     // 计算 gc_bits
-    rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bitmap_set(rtype.gc_bits, 0);
+    rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
+    bitmap_set(rtype.malloc_gc_bits, 0);
 
     return rtype;
 }
@@ -77,8 +77,8 @@ static rtype_t rtype_pointer(type_ptr_t *t) {
         .kind = TYPE_PTR,
     };
     // 计算 gc_bits
-    rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bitmap_set(rtype.gc_bits, 0);
+    rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
+    bitmap_set(rtype.malloc_gc_bits, 0);
 
     return rtype;
 }
@@ -97,8 +97,8 @@ static rtype_t rtype_string() {
         .kind = TYPE_STRING,
     };
 
-    rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bitmap_set(rtype.gc_bits, 0);
+    rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
+    bitmap_set(rtype.malloc_gc_bits, 0);
 
     return rtype;
 }
@@ -121,8 +121,8 @@ static rtype_t rtype_vec(type_vec_t *t) {
         .kind = TYPE_VEC,
     };
     // 计算 gc_bits
-    rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bitmap_set(rtype.gc_bits, 0);
+    rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
+    bitmap_set(rtype.malloc_gc_bits, 0);
 
     return rtype;
 }
@@ -141,12 +141,12 @@ static rtype_t rtype_chan(type_chan_t *t) {
     };
 
     // 计算 gc_bits
-    rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bitmap_set(rtype.gc_bits, 0);
-    bitmap_set(rtype.gc_bits, 1);
-    bitmap_set(rtype.gc_bits, 2);
-    bitmap_set(rtype.gc_bits, 3);
-    bitmap_set(rtype.gc_bits, 4);
+    rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
+    bitmap_set(rtype.malloc_gc_bits, 0);
+    bitmap_set(rtype.malloc_gc_bits, 1);
+    bitmap_set(rtype.malloc_gc_bits, 2);
+    bitmap_set(rtype.malloc_gc_bits, 3);
+    bitmap_set(rtype.malloc_gc_bits, 4);
 
     return rtype;
 }
@@ -170,10 +170,10 @@ rtype_t rtype_array(type_array_t *t) {
         .length = t->length,
     };
 
-    rtype.gc_bits = malloc_gc_bits(rtype.size);
+    rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
 
     uint16_t offset = 0;
-    rtype.last_ptr = rtype_array_gc_bits(rtype.gc_bits, &offset, t);
+    rtype.last_ptr = rtype_array_gc_bits(rtype.malloc_gc_bits, &offset, t);
 
     return rtype;
 }
@@ -197,10 +197,10 @@ static rtype_t rtype_map(type_map_t *t) {
         .kind = TYPE_MAP,
     };
     // 计算 gc_bits
-    rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bitmap_set(rtype.gc_bits, 0); // hash_table
-    bitmap_set(rtype.gc_bits, 1); // key_data
-    bitmap_set(rtype.gc_bits, 2); // value_data
+    rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
+    bitmap_set(rtype.malloc_gc_bits, 0); // hash_table
+    bitmap_set(rtype.malloc_gc_bits, 1); // key_data
+    bitmap_set(rtype.malloc_gc_bits, 2); // value_data
 
     return rtype;
 }
@@ -222,9 +222,9 @@ static rtype_t rtype_set(type_set_t *t) {
         .kind = TYPE_SET,
     };
     // 计算 gc_bits
-    rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bitmap_set(rtype.gc_bits, 0); // hash_table
-    bitmap_set(rtype.gc_bits, 1); // key_data
+    rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
+    bitmap_set(rtype.malloc_gc_bits, 0); // hash_table
+    bitmap_set(rtype.malloc_gc_bits, 1); // key_data
 
     return rtype;
 }
@@ -243,10 +243,10 @@ static rtype_t rtype_union(type_union_t *t) {
         .hash = hash,
         .kind = TYPE_UNION,
         .last_ptr = POINTER_SIZE,
-        .gc_bits = malloc_gc_bits(POINTER_SIZE * 2)
+        .malloc_gc_bits = malloc_gc_bits(POINTER_SIZE * 2)
     };
 
-    bitmap_set(rtype.gc_bits, 0);
+    bitmap_set(rtype.malloc_gc_bits, 0);
 
     return rtype;
 }
@@ -271,10 +271,10 @@ static rtype_t rtype_fn(type_fn_t *t) {
         .hash = hash_string(str),
         .kind = TYPE_FN,
         .last_ptr = 0,
-        .gc_bits = malloc_gc_bits(POINTER_SIZE)
+        .malloc_gc_bits = malloc_gc_bits(POINTER_SIZE)
     };
     rtype.last_ptr = 8;
-    bitmap_set(rtype.gc_bits, 0);
+    bitmap_set(rtype.malloc_gc_bits, 0);
 
     return rtype;
 }
@@ -358,7 +358,7 @@ static rtype_t rtype_struct(type_struct_t *t) {
             .size = 0,
             .hash = hash_string(str),
             .kind = TYPE_STRUCT,
-            .gc_bits = NULL,
+            .malloc_gc_bits = NULL,
             .length = t->properties->length,
             .element_hashes = NULL,
             .last_ptr = 0,
@@ -376,7 +376,9 @@ static rtype_t rtype_struct(type_struct_t *t) {
     uint16_t last_ptr_offset = rtype_struct_gc_bits(gc_bits, &offset, t);
 
     uint64_t *element_hash_list = mallocz(sizeof(uint64_t) * t->properties->length);
+
     // 记录需要 gc 的 key 的
+    int hash_index = 0;
     for (int i = 0; i < t->properties->length; ++i) {
         struct_property_t *p = ct_list_value(t->properties, i);
         rtype_t element_rtype = ct_reflect_type(p->type);
@@ -389,7 +391,7 @@ static rtype_t rtype_struct(type_struct_t *t) {
         .size = size,
         .hash = hash_string(str),
         .kind = TYPE_STRUCT,
-        .gc_bits = gc_bits,
+        .malloc_gc_bits = gc_bits,
         .length = t->properties->length,
         .element_hashes = element_hash_list,
         .last_ptr = last_ptr_offset,
@@ -431,13 +433,15 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
     }
     uint64_t size = align_up(offset, t->align);
 
-    rtype_t rtype = {.size = size, .hash = hash_string(str), .kind = TYPE_TUPLE, .gc_bits = malloc_gc_bits(size)};
+    rtype_t rtype = {
+        .size = size, .hash = hash_string(str), .kind = TYPE_TUPLE, .malloc_gc_bits = malloc_gc_bits(size)
+    };
 
     if (need_gc_count > 0) {
         // 默认 size 8byte 对齐了
         for (int i = 0; i < need_gc_count; ++i) {
             uint16_t gc_offset = need_gc_offsets[i];
-            bitmap_set(rtype.gc_bits, gc_offset / POINTER_SIZE);
+            bitmap_set(rtype.malloc_gc_bits, gc_offset / POINTER_SIZE);
         }
 
         rtype.last_ptr = need_gc_offsets[need_gc_count - 1] + POINTER_SIZE;
@@ -517,7 +521,7 @@ uint16_t type_alignof(type_t t) {
         return t.struct_->align;
     }
     if (t.kind == TYPE_ARR) {
-        return type_sizeof(t.array->element_type);
+        return type_alignof(t.array->element_type);
     }
 
     return type_sizeof(t);

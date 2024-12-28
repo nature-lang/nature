@@ -395,9 +395,14 @@ void debug_basic_block(basic_block_t *block) {
     for (int i = 0; i < block->succs->count; ++i) {
         printf("%s\t", ((basic_block_t *) block->succs->take[i])->name);
     }
-    printf("\n\t\tlive_in:");
+    printf("\n\t\tlive:");
     for (int i = 0; i < block->live->count; ++i) {
         lir_var_t *var = block->live->take[i];
+        printf("%s\t", var->ident);
+    }
+    printf("\n\t\tlive_in:");
+    for (int i = 0; i < block->live_in->count; ++i) {
+        lir_var_t *var = block->live_in->take[i];
         printf("%s\t", var->ident);
     }
     printf("\n\n\n");

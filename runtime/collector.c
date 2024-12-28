@@ -75,18 +75,29 @@ void rt_shade_obj_with_barrier(void *new_obj) {
 /**
  * addr 是 .text 中的地址
  * @param addr
+ * @param p
  * @return
  */
-fndef_t *find_fn(addr_t addr) {
+fndef_t *find_fn(addr_t addr, n_processor_t *p) {
     if (addr <= 0) {
         return NULL;
     }
+    assert(p);
+
+    // 尝试通过 ret addr 快速定位
+    fndef_t *fn = sc_map_get_64v(&p->caller_cache, addr);
+    if (fn) {
+        return fn;
+    }
 
     for (int i = 0; i < rt_fndef_count; ++i) {
-        fndef_t *fn = &rt_fndef_ptr[i];
+        fn = &rt_fndef_ptr[i];
         assert(fn);
 
         if (fn->base <= addr && addr < (fn->base + fn->size)) {
+            // put 增加 lock
+            sc_map_put_64v(&p->caller_cache, addr, fn);
+
             return fn;
         }
     }
@@ -156,10 +167,16 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             (void *) span->base, span->obj_size, span->alloc_count, span->obj_count);
 
     int alloc_count = 0;
+    int free_index = -1;
     for (int i = 0; i < span->obj_count; ++i) {
         if (bitmap_test(span->gcmark_bits, i)) {
             alloc_count++;
             continue;
+        } else {
+            // 空闲
+            if (free_index == -1) {
+                free_index = i;
+            }
         }
 
         // 如果 gcmark_bits(没有被标记) = 0, alloc_bits(分配过) = 1, 则表明内存被释放，可以进行释放的, TODO 这一段都属于 debug 逻辑
@@ -186,6 +203,7 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
     span->alloc_bits = span->gcmark_bits;
     span->gcmark_bits = gcbits_new(span->obj_count);
     span->alloc_count = alloc_count;
+    span->free_index = free_index == -1 ? 0 : free_index;
 
     RDEBUGF("[sweep_span] reset gcmark_bits success, span=%p, spc=%d", span, span->spanclass)
 
@@ -350,7 +368,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     size_t max_i = size / POINTER_SIZE;
     while (temp_i < max_i) {
         addr_t v = fetch_addr_value((addr_t) temp_cursor);
-        fndef_t *fn = find_fn(v);
+        fndef_t *fn = find_fn(v, p);
         TRACEF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i,
                temp_cursor, v,
                fn ? fn->name : "", fn ? fn->stack_size : 0);
@@ -394,12 +412,12 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     }
 
     addr_t ret_addr = co->scan_ret_addr;
-    assertf(find_fn(ret_addr), "scan ret_addr=%p failed", ret_addr);
+    assertf(find_fn(ret_addr,p), "scan ret_addr=%p failed", ret_addr);
 
     int scan_fn_count = 0;
     // coroutine_wrapper 也使用了该协程栈，如果遇到的 return_addr 无法找到对应的 fn 直接退出当前循环即可
     while (cursor < max) {
-        fndef_t *fn = find_fn(ret_addr);
+        fndef_t *fn = find_fn(ret_addr, p);
         // assertf(fn, "fn not found by ret_addr, return_addr=0x%lx", ret_addr);
         if (!fn) {
             DEBUGF("fn not found by ret_addr, return_addr=%p, break", (void *) ret_addr);
@@ -612,8 +630,14 @@ static void gc_work() {
 
         // add gc mark
         if (span_of((addr_t) wait_co->fn)) {
-            DEBUGF("[runtime_gc.scan_stack] co=%p fn=%p in heap and span, need gc mark", wait_co, wait_co->fn);
+            DEBUGF("[runtime_gc.gc_work] co=%p fn=%p in heap and span, need gc mark", wait_co, wait_co->fn);
             insert_gc_worklist(&share_p->gc_worklist, wait_co->fn);
+        }
+
+        // add gc mark
+        if (span_of((addr_t) wait_co->arg)) {
+            DEBUGF("[runtime_gc.gc_work] co=%p arg=%p in heap and span, need gc mark", wait_co, wait_co->arg);
+            insert_gc_worklist(&share_p->gc_worklist, wait_co->arg);
         }
 
         // 只有第一次 resume 时才会初始化 co, 申请堆栈，并且绑定对应的 p
@@ -702,7 +726,7 @@ static void scan_solo_stack() {
 static void inject_gc_work_coroutine() {
     // 遍历 share processor 插入 gc coroutine
     PROCESSOR_FOR(share_processor_list) {
-        coroutine_t *gc_co = rt_coroutine_new((void *) gc_work, 0, 0);
+        coroutine_t *gc_co = rt_coroutine_new((void *) gc_work, 0, 0,NULL);
 
         gc_co->gc_work = true;
         rt_linked_fixalloc_push(&p->co_list, gc_co);
@@ -882,6 +906,6 @@ void runtime_gc() {
     // -------------- STW end ----------------------------
 
     gc_stage = GC_STAGE_OFF;
-    DEBUGF("[runtime_gc] gc stage: GC_OFF, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes,
-           (before - allocated_bytes) / 1000);
+    DEBUGF("[runtime_gc] gc stage: GC_OFF, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes / 1024,
+           (before - allocated_bytes) / 1024);
 }

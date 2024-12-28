@@ -1,6 +1,7 @@
 #include "memory.h"
 
-#include "stdlib.h"
+#include <stdlib.h>
+
 
 uint64_t remove_total_bytes = 0; // 当前回收到物理内存中的总空间
 uint64_t allocated_total_bytes = 0; // 当前分配的总空间
@@ -12,26 +13,8 @@ mutex_t gc_stage_locker;
 
 memory_t *memory;
 
-rtype_t *rt_find_rtype(uint32_t rtype_hash) {
-    char *str = itoa(rtype_hash);
-    rtype_t *result = table_get(rt_rtype_table, str);
-    free(str);
-
-    return result;
-}
-
-uint64_t rt_rtype_out_size(uint32_t rtype_hash) {
-    assert(rtype_hash > 0 && "rtype_hash empty");
-
-    rtype_t *rtype = rt_find_rtype(rtype_hash);
-
-    assert(rtype && "cannot find rtype by hash");
-
-    return rtype_stack_size(rtype, POINTER_SIZE);
-}
-
 void callers_deserialize() {
-    rt_caller_table = table_new();
+    sc_map_init_64v(&rt_caller_map, rt_caller_count * 2, 0);
 
     rt_caller_ptr = &rt_caller_data;
     DEBUGF("[runtime.callers_deserialize] count=%lu", rt_caller_count);
@@ -44,7 +27,7 @@ void callers_deserialize() {
         caller->offset += f->base; // ret addr
         caller->data = f;
 
-        table_set(rt_caller_table, itoa(caller->offset), caller);
+        sc_map_put_64v(&rt_caller_map, caller->offset, caller);
         DEBUGF("[runtime.callers_deserialize] call '%s' ret_addr=%p, in fn=%s(%p), file=%s",
                caller->target_name,
                (void*)caller->offset, f->name,
@@ -81,8 +64,7 @@ void fndefs_deserialize() {
  */
 void rtypes_deserialize() {
     RDEBUGF("[rtypes_deserialize] start");
-
-    rt_rtype_table = table_new();
+    sc_map_init_64v(&rt_rtype_map, rt_rtype_count * 2, 0);
 
     rtype_t *rt_rtype_ptr = &rt_rtype_data;
 
@@ -94,12 +76,12 @@ void rtypes_deserialize() {
         rtype_t *r = &rt_rtype_ptr[i];
         uint64_t gc_bits_size = calc_gc_bits_size(r->size, POINTER_SIZE);
 
-        r->gc_bits = gc_bits_offset;
+        r->malloc_gc_bits = gc_bits_offset;
         gc_bits_offset += gc_bits_size;
         count++;
     }
 
-    // elements
+    // element_hashs
     for (int i = 0; i < rt_rtype_count; ++i) {
         rtype_t *r = &rt_rtype_ptr[i];
 
@@ -110,12 +92,11 @@ void rtypes_deserialize() {
         }
 
         // rtype 已经组装完毕，现在加入到 rtype table 中
-        char *str = itoa(r->hash);
-        bool is_new_key = table_set(rt_rtype_table, str, r);
-        RDEBUGF("[rtypes_deserialize] hash=%s to table success, kind=%s, is_new_key=%d", str, type_kind_str[r->kind],
-                is_new_key);
-        free(str);
+        sc_map_put_64v(&rt_rtype_map, r->hash, r);
+        RDEBUGF("[rtypes_deserialize] hash=%ld to table success, kind=%s", r->hash, type_kind_str[r->kind]);
     }
+
+    builtin_rtype_init();
 
     RDEBUGF("[rtypes_deserialize] count=%lu", count);
 }

@@ -12,7 +12,7 @@ fn main() {
     println(p.age)
 
     // --- ptr test
-    ptr<person_t> p2 = new person_t
+    ptr<person_t> p2 = new person_t()
     p2.name = "wanglufei"
     p2.from = "japan"
     p2.gender = 2
@@ -44,7 +44,7 @@ fn main() {
 
     // --- test return
     fn test_return():ptr<person_t> {
-        var p = new person_t // gc_malloc, can return
+        var p = new person_t() // gc_malloc, can return
         p.age = 55
         return p
     }

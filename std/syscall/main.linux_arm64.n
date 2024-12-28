@@ -1,8 +1,5 @@
+import runtime
 import libc
-import libc_temp
-import dirent_temp
-import syscall_temp
-import strings_temp
 
 u32 MS_ACTIVE = 0x40000000
 u32 MS_ASYNC = 0x1
@@ -574,9 +571,17 @@ int AT_STATX_DONT_SYNC = 0x4000
 int AT_RECURSIVE = 0x8000
 int AT_EACCESS = 0x200
 
-fn call6(int number, void_ptr a1, void_ptr a2, void_ptr a3, void_ptr a4, void_ptr a5, void_ptr a6):int! {
-    return syscall_call6(number, a1, a2, a3, a4, a5, a6)
-}
+#linkid syscall_call6
+fn call6(int number, void_ptr a1, void_ptr a2, void_ptr a3, void_ptr a4, void_ptr a5, void_ptr a6):int!
+
+#linkid syscall_getcwd
+fn syscall_getcwd():string
+
+#linkid getenv
+fn getenv(void_ptr key):void_ptr
+
+#linkid setenv
+fn setenv(void_ptr key, void_ptr value, i32 overwrite):i32
 
 fn open(string filename, int flags, u32 perm):int! {
     return call6(SYS_OPENAT, AT_FDCWD as void_ptr, filename.ref(), flags as void_ptr, perm as void_ptr, 0, 0)
@@ -612,9 +617,8 @@ fn fork():int! {
 
 // path is full path
 // argv[0] = /proc/:pid/comm
-fn exec(string path, [string] argv, [string] envp):void! {
-    return syscall_exec(path, argv, envp)
-}
+#linkid syscall_exec
+fn exec(string path, [string] argv, [string] envp):void!
 
 type timespec_t = struct {
     i64 sec
@@ -725,9 +729,9 @@ fn kill(int pid, int sig):void! {
 
 fn wait(int pid, int option):(int, int)! {
     var status = 0
-    int result = waitpid(pid, &status, option)
+    int result = libc.waitpid(pid, &status, option)
     if result == -1 {
-        throw libc_strerror()
+        throw libc.strerror()
     }
 
     return (result, status)
@@ -820,7 +824,7 @@ fn sendto(int sockfd, [u8] buf, int flags):int! {
 }
 
 fn get_envs():[string] {
-    return libc_get_envs()
+    return libc.get_envs()
 }
 
 fn get_env(string key):string {
@@ -829,7 +833,7 @@ fn get_env(string key):string {
         return ''
     }
 
-    return libc_string_new(ref)
+    return runtime.string_new(ref)
 }
 
 fn set_env(string key, string value):void! {

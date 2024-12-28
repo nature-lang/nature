@@ -68,10 +68,10 @@ static void broken_critical_edges(closure_t *c) {
     SLICE_FOR(c->blocks) {
         basic_block_t *b = SLICE_VALUE(c->blocks);
         for (int i = 0; i < b->preds->count; ++i) {
-            basic_block_t *p = b->preds->take[i];// 从 p->b 这条边
+            basic_block_t *p = b->preds->take[i]; // 从 p->b 这条边
             if (b->preds->count > 1 && p->succs->count > 1) {
                 // p -> b 为 critical edge， 需要再其中间插入一个 empty block(only contain label + bal asm_operations)
-                lir_op_t *label_op = lir_op_label_with_prefix(c->module, TEMP_LABEL);
+                lir_op_t *label_op = lir_op_local_label(c->module, TEMP_LABEL);
                 lir_operand_t *label = label_op->output;
                 lir_op_t *bal_op = lir_op_bal(lir_label_operand(b->name, true));
 
@@ -123,19 +123,32 @@ static void broken_critical_edges(closure_t *c) {
     }
 }
 
+static inline bool is_match_end_block(char *match_end_ident, basic_block_t *b) {
+    if (match_end_ident == NULL) {
+        return false;
+    }
+
+    return str_equal(b->name, match_end_ident);
+}
+
 static void break_check(closure_t *c, table_t *handled, basic_block_t *b, char *match_end_ident) {
     if (handled == NULL) {
         handled = table_new();
     }
 
-    // 重复到达节点
-    if (table_exist(handled, b->name)) {
-        return;
+    // 如果当前 block 是新的 match/catch block, 也就是嵌套 match, 则需要更新 match_end_ident
+    if ((strstr(b->name, MATCH_IDENT) || strstr(b->name, CATCH_IDENT)) && !
+        strstr(b->name, LABEL_END_SUFFIX)) {
+        // 判断 match 是否需要 ret
+        bool has_ret = table_get(c->match_has_ret, b->name);
+        // 更新 match_end_ident
+        if (has_ret) {
+            match_end_ident = str_connect(b->name, LABEL_END_SUFFIX);
+        }
     }
 
-    table_set(handled, b->name, b);
-
-    // match_end 存在表示开启了 break check 模式。
+    // 从当前 block 开去吃判断是否存在 break or return
+    // 当前 block match_end 存在表示开启了 break check 模式。
     if (match_end_ident) {
         LINKED_FOR(b->operations) {
             lir_op_t *op = LINKED_VALUE();
@@ -146,39 +159,37 @@ static void break_check(closure_t *c, table_t *handled, basic_block_t *b, char *
                 assert(label_operand);
                 lir_symbol_label_t *label = label_operand->value;
                 if (str_equal(label->ident, match_end_ident)) {
-                    return;
+                    // 直接注销当前路径的 match_end_ident 中断 break check 然后继续向下查找即可。当前路线可能存在多个 match/catch
+                    match_end_ident = NULL;
                 }
             }
-        }
-    }
 
-    if (match_end_ident) {
-        if (str_equal(match_end_ident, b->name)) {
-            lir_op_t *op = OP(linked_first(b->operations));
-
-            // 到达匹配的 end label 没有找到任何的 break, 则确实 break
-            dump_errorf(c->module, CT_STAGE_CFG, op->line, op->column, "match missing break");
-        }
-    }
-
-
-    // 当前 block 没有找到 return, 递归寻找 succ
-    for (int i = 0; i < b->succs->count; ++i) {
-        char *new_match_end_ident = NULL;
-        // 需要排除 match_1.end 情况
-        if (strstr(b->name, MATCH_IDENT) && !strstr(b->name, LABEL_END_SUFFIX)) {
-            // 判断是否存在 ret
-            bool has_ret = table_get(c->match_has_ret, b->name);
-            if (has_ret) {
-                new_match_end_ident = str_connect(b->name, LABEL_END_SUFFIX);
+            // return 等效于 break 直接返回, 那其他 block 怎么才能处理
+            if (op->code == LIR_OPCODE_RETURN) {
+                match_end_ident = NULL;
             }
         }
+    }
 
-        if (new_match_end_ident) {
-            break_check(c, handled, b->succs->take[i], new_match_end_ident);
-        } else {
-            break_check(c, handled, b->succs->take[i], match_end_ident);
+    // 通过一条线路到达 end 节点且没有发现 break or return，则编译错误
+    if (match_end_ident && str_equal(match_end_ident, b->name)) {
+        lir_op_t *op = OP(linked_first(b->operations));
+
+        // 到达匹配的 end label 没有找到任何的 break, 则确实 break
+        dump_errorf(c->module, CT_STAGE_CFG, op->line, op->column, "match missing break or return");
+    }
+
+    // 当前 block 没有找到 return, 递归寻找 succ, 查找期间需要判断是否开启了新的 break 结构
+    for (int i = 0; i < b->succs->count; ++i) {
+        basic_block_t *succ = b->succs->take[i];
+
+        // 递归 check (检查是否重复)
+        if (table_exist(handled, succ->name) && !is_match_end_block(match_end_ident, succ)) {
+            continue;
         }
+
+        table_set(handled, succ->name, succ);
+        break_check(c, handled, succ, match_end_ident);
     }
 }
 
@@ -208,7 +219,7 @@ static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
         lir_op_t *op = LINKED_VALUE();
         // 如果当前分支包含 return, 那么当前分支到后续所有子分支都会包含
         if (op->code == LIR_OPCODE_RETURN) {
-            return;// 找到了 return 指令返回
+            return; // 找到了 return 指令返回
         }
     }
 
@@ -229,7 +240,7 @@ static void cfg_build(closure_t *c) {
     table_t *basic_block_table = table_new();
 
     // 1.根据 label(if/else/while 等都会产生 label) 分块,仅考虑顺序块关联关系
-    basic_block_t *current_block = NULL;// 第一次 traverse 时还没有任何 block
+    basic_block_t *current_block = NULL; // 第一次 traverse 时还没有任何 block
     lir_op_t *label_op = linked_first(c->operations)->value;
     assert(label_op->code == LIR_OPCODE_LABEL && "first op must be label");
 
@@ -300,12 +311,12 @@ static void cfg_build(closure_t *c) {
             // 如果下一条指令不是 LABEL，则使用主动添加  label 指令
             lir_op_t *next_op = succ->value;
             if (next_op->code != LIR_OPCODE_LABEL) {
-                lir_op_t *temp_label = lir_op_label_with_prefix(c->module, TEMP_LABEL);
+                lir_op_t *temp_label = lir_op_local_label(c->module, TEMP_LABEL);
                 linked_insert_after(c->operations, LINKED_NODE(), temp_label);
             }
         }
 
-        BLOCK_OP_PUSH:
+    BLOCK_OP_PUSH:
         // 值 copy
         linked_push(current_block->operations, op);
     }
@@ -398,7 +409,7 @@ void cfg(closure_t *c) {
     // 添加入口块
     c->entry = c->blocks->take[0];
 
-     debug_block_lir(c, "cfg_build_before_check");
+    debug_block_lir(c, "cfg_build_before_check");
 
     // return 分析
     return_check(c, NULL, c->entry);

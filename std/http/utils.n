@@ -1,0 +1,44 @@
+fn status_to_str(int status):string {
+    return match status {
+        200 -> '200'
+        201 -> '201'
+        204 -> '204'
+        301 -> '301'
+        302 -> '302'
+        304 -> '304'
+        400 -> '400'
+        401 -> '401'
+        403 -> '403'
+        404 -> '404'
+        419 -> '419'
+        500 -> '500'
+        501 -> '501'
+        502 -> '502'
+        503 -> '503'
+        _ -> {
+            var buf = vec_new<u8>(3, 3)
+            buf[0] = (status / 100 + 48) as u8
+            buf[1] = (status / 10 % 10 + 48) as u8
+            buf[2] = (status % 10 + 48) as u8
+            return buf as string
+        }
+    }
+}
+
+// unsigned
+fn utos(uint value):string {
+    var buf = vec_new<u8>(20, 20) // uint 最大数字是 20 位
+    var idx = 19;
+
+    if value == 0 {
+        return "0"
+    }
+
+    for value > 0 {
+       buf[idx] = ((value % 10) + 48) as u8
+       value /= 10
+       idx -= 1
+    }
+
+    return buf.slice(idx + 1, 20) as string
+}

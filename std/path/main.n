@@ -1,5 +1,5 @@
 import strings
-import fmt.util as *
+import fmt.utils as *
 import syscall
 
 fn exists(string path):bool {

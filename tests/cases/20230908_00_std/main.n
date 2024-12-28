@@ -1,6 +1,5 @@
 import os
 import path
-import libc_temp
 import strings
 
 fn main():void! {

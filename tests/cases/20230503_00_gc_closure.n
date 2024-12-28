@@ -1,4 +1,5 @@
 import coroutine as co
+import runtime
 
 fn main() {
     fn make_atm():fn(int):int {
@@ -19,14 +20,14 @@ fn main() {
             i += 1
         }
 
-        println(runtime_malloc_bytes())
+        println(runtime.malloc_bytes())
         println(atms[10](10))
         println(atms[599](100))
         println(atms[999](200))
 
-        runtime_force_gc()
+        runtime.gc()
         co.sleep(500) // wait gc finish
-        println(runtime_malloc_bytes())
+        println(runtime.malloc_bytes())
         println(atms[10](10))
         println(atms[599](100))
         println(atms[999](200))
@@ -34,7 +35,7 @@ fn main() {
 
     makes()
 
-    runtime_force_gc()
+    runtime.gc()
     co.sleep(500)
-    println(runtime_malloc_bytes())
+    println(runtime.malloc_bytes())
 }

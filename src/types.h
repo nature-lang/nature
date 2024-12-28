@@ -60,7 +60,6 @@ typedef enum {
 typedef enum {
     MODULE_TYPE_MAIN = 1, // 入口文件
     MODULE_TYPE_COMMON = 2, // 标准 module
-    MODULE_TYPE_TPL = 3, // .tpl.n 文件
     MODULE_TYPE_BUILTIN = 4,
 } module_type_t;
 
@@ -287,7 +286,7 @@ typedef struct basic_block_t {
     slice_t *live_out;
     slice_t *live_in; // ssa 阶段计算的精确 live in
     // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
-    slice_t *live; // reg alloc 阶段计算
+    slice_t *live; // reg alloc 阶段计算, 用于 resolve_data_flow 生成，未计算循环产生的 live in
     // employer
     slice_t *domers; // 当前块被哪些基本块管辖
     struct basic_block_t *imm_domer; // 当前块的直接(最近)支配者

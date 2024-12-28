@@ -1,4 +1,5 @@
 import coroutine as co
+import runtime
 
 fn main() {
     i16 a = 16
@@ -10,8 +11,8 @@ fn main() {
     }
     u32 d = 321
 
-    println(runtime_malloc_bytes())
+    println(runtime.malloc_bytes())
     co.sleep(1000)
     println(list[9999])
-    println(runtime_malloc_bytes())
+    println(runtime.malloc_bytes())
 }

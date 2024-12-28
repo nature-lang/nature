@@ -6,9 +6,7 @@ fndef_t *rt_fndef_ptr = NULL;
 
 caller_t *rt_caller_ptr = NULL;
 
-table_t *rt_caller_table = NULL;
-
-table_t *rt_rtype_table = NULL;
+struct sc_map_64v rt_caller_map;
 
 // - symdef
 uint64_t ct_symdef_size = 0; // 数量

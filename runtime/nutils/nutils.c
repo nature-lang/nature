@@ -4,6 +4,7 @@
 #include "runtime/processor.h"
 #include "string.h"
 #include "vec.h"
+#include "runtime/rtype.h"
 
 int command_argc;
 char **command_argv;
@@ -94,7 +95,7 @@ n_ptr_t *raw_ptr_assert(n_raw_ptr_t *raw_ptr) {
     PRE_RTCALL_HOOK();
     if (raw_ptr == 0) {
         DEBUGF("[raw_ptr_assert] raw pointer");
-        rt_coroutine_set_error("raw_ptr is null, cannot assert", true);
+        rt_default_co_error("raw_ptr is null, cannot assert", true);
         return 0;
     }
 
@@ -114,7 +115,7 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        rt_coroutine_set_error("type assert error", true);
+        rt_default_co_error("type assert error", true);
         return;
     }
 
@@ -152,10 +153,10 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
         gc_kind = TYPE_GC_SCAN;
     }
 
-    rtype_t *union_rtype = gc_rtype(TYPE_UNION, 2, gc_kind, TYPE_GC_NOSCAN);
+    rtype_t union_rtype = GC_RTYPE(TYPE_UNION, 2, gc_kind, TYPE_GC_NOSCAN);
 
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
-    n_union_t *mu = rti_gc_malloc(sizeof(n_union_t), union_rtype);
+    n_union_t *mu = rti_gc_malloc(sizeof(n_union_t), &union_rtype);
 
     DEBUGF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
            mu, value_ref,
@@ -339,10 +340,6 @@ void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, vo
     exit(0);
 }
 
-void zero_fn() {
-    rt_coroutine_set_error("empty fn", true);
-}
-
 // 基于字符串到快速设置不太需要考虑内存泄漏的问题， raw_string 都是 .data 段中的字符串
 void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column) {
     PRE_RTCALL_HOOK();
@@ -461,8 +458,7 @@ value_casting casting_to_void_ptr(void *ptr) {
 
 n_vec_t *std_args() {
     // 初始化一个 string 类型的数组
-    rtype_t *element_rtype = gc_rtype(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
-    n_vec_t *list = rti_vec_new(element_rtype, command_argc, command_argc);
+    n_vec_t *list = rti_vec_new(&std_arg_rtype, command_argc, command_argc);
 
     // 初始化 string
     for (int i = 0; i < command_argc; ++i) {
@@ -484,7 +480,7 @@ n_vec_t *std_args() {
  * @param ref
  * @return
  */
-char *rtype_value_str(rtype_t *rtype, void *data_ref) {
+char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
     assert(rtype && "rtype is null");
     assert(data_ref && "data_ref is null");
     uint64_t data_size = rtype_stack_size(rtype, POINTER_SIZE);
@@ -501,7 +497,8 @@ char *rtype_value_str(rtype_t *rtype, void *data_ref) {
 
     if (rtype->kind == TYPE_STRING) {
         n_string_t *n_str = (void *) fetch_addr_value((addr_t) data_ref); // 读取栈中存储的值
-        assert(n_str && n_str->length > 0 && "fetch addr by data ref failed");
+
+        assert(n_str && n_str->length >= 0 && "fetch addr by data ref failed");
 
         // return strdup(string_ref(n_str));
         // 进行 data copy, 避免被 free
@@ -564,164 +561,28 @@ void write_barrier(void *slot, void *new_obj) {
     rt_write_barrier(slot, new_obj);
 }
 
-/**
- * 生成用于 gc 的 rtype
- * @param count
- * @param ...
- * @return
- */
-rtype_t *gc_rtype(type_kind kind, uint32_t count, ...) {
-    // count = 1 = 8byte = 1 gc_bit 初始化 gc bits
-    char *str = itoa(kind);
-
-    va_list valist;
-    /* 初始化可变参数列表 */
-    va_start(valist, count);
-    for (int i = 0; i < count; i++) {
-        type_kind arg_kind = va_arg(valist, type_kind);
-        str = str_connect_free(str, itoa(arg_kind));
-    }
-    va_end(valist);
-
-    uint64_t hash = hash_string(str);
-    free(str);
-    str = itoa(hash);
-    rtype_t *rtype = table_get(rt_rtype_table, str);
-    free(str);
-    if (rtype) {
-        return rtype;
-    }
-
-    rtype = NEW(rtype_t);
-    rtype->size = count * POINTER_SIZE;
-    if (rtype->size == 0) {
-        rtype->size = type_kind_sizeof(kind);
-    }
-
-    rtype->kind = kind;
-    rtype->last_ptr = 0; // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
-    if (count > 0) {
-        rtype->gc_bits = malloc_gc_bits(count * POINTER_SIZE);
-    }
-
-    /* 初始化可变参数列表 */
-    va_start(valist, count);
-    for (int i = 0; i < count; i++) {
-        type_kind arg_kind = va_arg(valist, type_kind);
-        if (arg_kind == TYPE_GC_SCAN) {
-            bitmap_set(rtype->gc_bits, i);
-            rtype->last_ptr = (i + 1) * POINTER_SIZE;
-        } else if (arg_kind == TYPE_GC_NOSCAN) {
-            // bitmap_clear(rtype.gc_bits, i);
-        } else {
-            assertf(false, "gc rtype kind exception, only support TYPE_GC_SCAN/TYPE_GC_NOSCAN");
-        }
-    }
-    va_end(valist);
-
-    rtype->hash = hash;
-    rtype->in_heap = kind_in_heap(kind);
-    str = itoa(rtype->hash);
-    table_set(rt_rtype_table, str, rtype);
-    free(str);
-
-    return rtype;
-}
-
-/**
- * 默认就是不 gc 数组
- * @param count
- * @return
- */
-rtype_t *gc_rtype_array(type_kind kind, uint32_t length) {
-    // 更简单的计算一下 hash 即可 array, len + scan 计算即可
-    char *str = dsprintf("%d_%lu_%lu", kind, length, TYPE_PTR);
-    int64_t hash = hash_string(str);
-    free(str);
-    str = itoa(hash);
-    rtype_t *rtype = table_get(rt_rtype_table, str);
-    free(str);
-    if (rtype) {
-        return rtype;
-    }
-
-    // count = 1 = 8byte = 1 gc_bit 初始化 gc bits
-    rtype = NEW(rtype_t);
-    rtype->size = length * POINTER_SIZE;
-    rtype->kind = kind;
-    rtype->last_ptr = 0; // 最后一个包含指针的字节数, 使用该字段判断是否包含指针
-    rtype->gc_bits = malloc_gc_bits(length * POINTER_SIZE);
-    rtype->hash = hash;
-    rtype->in_heap = true;
-    str = itoa(rtype->hash);
-
-    table_set(rt_rtype_table, str, rtype);
-    free(str);
-
-    return rtype;
-}
-
-/**
- * runtime 中使用的基于 element_rtype 生成的 rtype
- * @param element_rtype
- * @param length
- * @return
- */
-rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
-    assert(element_rtype);
-
-    uint64_t element_size = rtype_stack_size(element_rtype, POINTER_SIZE);
-
-    TRACEF("[rti_rtype_array] element_rtype=%p, element_size=%lu, length=%lu", element_rtype, element_size, length);
-
-    char *str = dsprintf("%d_%lu_%lu", TYPE_ARR, length, element_rtype->hash);
-
-    uint32_t hash = hash_string(str);
-
-    TRACEF("[rti_rtype_array] str=%s, hash=%d", str, hash);
-
-    assert(hash > 0);
-
-    free(str);
-    rtype_t rtype = {
-        .size = element_size * length,
-        .hash = hash,
-        .kind = TYPE_ARR,
-        .length = length,
-    };
-    rtype.gc_bits = malloc_gc_bits(rtype.size);
-    bool need_gc = element_rtype->last_ptr > 0; // element 包含指针数据
-    if (need_gc) {
-        rtype.last_ptr = element_size * length;
-
-        // need_gc 暗示了 8byte 对齐了
-        for (int i = 0; i < rtype.size / POINTER_SIZE; ++i) {
-            bitmap_set(rtype.gc_bits, i);
-        }
-    }
-
-    TRACEF("[rti_rtype_array] success");
-    return rtype;
-}
-
 void raw_ptr_valid(void *raw_ptr) {
     PRE_RTCALL_HOOK(); // 修改状态避免抢占
 
-
     DEBUGF("[raw_ptr_valid] raw_ptr=%p", raw_ptr);
-    // raw_ptr 必须处于合理的范围
-    addr_t i = (addr_t) raw_ptr;
-
-    // apple silicon 系统的内存翻译比较奇怪，尤其是在 readdir 函数中的表现比较奇怪，因此暂时不做范围验证，只验证不为 0 即可
-#if defined(__DARWIN) && defined(__ARM64)
-    bool failed = i <= 0;
-#else
-    bool failed = i < MMAP_SHARE_STACK_BASE || i > ARENA_HINT_MAX;
-#endif
-
-    if (failed) {
-        rt_coroutine_set_error("invalid memory address or nil pointer dereference", true);
+    if (raw_ptr <= 0) {
+        rt_default_co_error("invalid memory address or nil pointer dereference", true);
     }
+}
+
+static inline void panic_dump(coroutine_t *co, caller_t *caller, char *msg) {
+    // pre_rtcall_hook 中已经记录了 ret addr
+    char *dump_msg;
+    if (co->main) {
+        dump_msg = dsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", msg,
+                            ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
+    } else {
+        dump_msg = dsprintf("coroutine '%ld' panic: '%s' at %s:%d:%d\n", co->id, msg,
+                            ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
+    }
+    VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
+    // panic msg
+    exit(EXIT_FAILURE);
 }
 
 void rt_panic(n_string_t *msg) {
@@ -732,18 +593,65 @@ void rt_panic(n_string_t *msg) {
     // 更新 ret addr 到 co 中
     CO_SCAN_REQUIRE(co);
     assert(co->scan_ret_addr);
-    caller_t *caller = table_get(rt_caller_table, itoa(co->scan_ret_addr));
+    caller_t *caller = sc_map_get_64v(&rt_caller_map, co->scan_ret_addr);
+    panic_dump(co, caller, rt_string_ref(msg));
+}
 
-    // pre_rtcall_hook 中已经记录了 ret addr
-    char *dump_msg;
-    if (co->main) {
-        dump_msg = dsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", rt_string_ref(msg),
-                            ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
-    } else {
-        dump_msg = dsprintf("coroutine '%ld' panic: '%s' at %s:%d:%d\n", co->id, rt_string_ref(msg),
-                            ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
+void rt_assert(n_bool_t cond) {
+    coroutine_t *co = coroutine_get();
+    n_processor_t *p = processor_get();
+
+    if (cond) {
+        return;
     }
-    VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
-    // panic msg
-    exit(EXIT_FAILURE);
+
+    // panic
+    // 更新 ret addr 到 co 中
+    CO_SCAN_REQUIRE(co);
+    assert(co->scan_ret_addr);
+    caller_t *caller = sc_map_get_64v(&rt_caller_map, co->scan_ret_addr);
+    panic_dump(co, caller, "assertion failed");
+}
+
+typedef struct {
+    int64_t a;
+    uint8_t b[5];
+} st;
+
+n_string_t *rt_string_new(n_void_ptr_t raw_string) {
+    if (!raw_string) {
+        rt_default_co_error("raw string is empty", false);
+        return NULL;
+    }
+
+    char *str = (char *) raw_string;
+
+    return string_new(str, strlen(str));
+}
+
+n_string_t *rt_strerror() {
+    char *msg = strerror(errno);
+    n_string_t *s = string_new(msg, strlen(msg));
+    return s;
+}
+
+extern char **environ;
+
+n_vec_t *rt_get_envs() {
+    n_vec_t *list = rti_vec_new(&os_env_rtype, 0, 0);
+
+    char **env = environ;
+
+    while (*env) {
+        n_string_t *s = string_new(*env, strlen(*env));
+        rt_vec_push(list, &s);
+        env++;
+    }
+
+    DEBUGF("[libc_get_envs] list=%p, list->length=%lu", list, list->length);
+    return list;
+}
+
+n_int_t rt_errno() {
+    return errno;
 }

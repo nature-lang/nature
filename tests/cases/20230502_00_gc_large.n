@@ -1,4 +1,5 @@
 import coroutine as co
+import runtime
 
 fn main() {
     [int] l = [1, 2, 3, 4]
@@ -9,16 +10,16 @@ fn main() {
             list.push(i)
         }
 
-        runtime_force_gc()
+        runtime.gc()
         assert(list[380] == 380)
         assert(list[2000] == 2000)
     }
 
     large_allocator()
 
-    assert(runtime_malloc_bytes() > 100000 && runtime_malloc_bytes() < 200000)
+    assert(runtime.malloc_bytes() > 100000 && runtime.malloc_bytes() < 200000)
     co.sleep(1000) // 等待 1s 等待 gc 完成
-    assert(runtime_malloc_bytes() > 100 && runtime_malloc_bytes() < 2000)
+    assert(runtime.malloc_bytes() > 100 && runtime.malloc_bytes() < 2000)
     assert(l[2] == 3)
 
     println('gc large test success')

@@ -1,6 +1,6 @@
 import syscall
 import os
-import libc_temp
+import libc
 
 fn main():void! {
     // 创建一个 socket
@@ -11,7 +11,7 @@ fn main():void! {
     var addr = syscall.sockaddr_in {
         sin_family = syscall.AF_INET as u16,
         sin_addr = 0x00000000,
-        sin_port = htons(8080),
+        sin_port = libc.htons(8080),
         sin_zero = [] as arr<u8,8>
     }
 
@@ -27,7 +27,7 @@ fn main():void! {
     println('listen success')
 
     // 接受链接
-    var client_addr_ptr = new syscall.sockaddr_in // 初始化一个空的地址，等待 callee 赋值
+    var client_addr_ptr = new syscall.sockaddr_in() // 初始化一个空的地址，等待 callee 赋值
 
     var client_fd = syscall.accept(sockfd, client_addr_ptr) catch err {
        throw 'accept error: ' +  err.msg

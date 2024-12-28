@@ -1,4 +1,5 @@
 import coroutine as co
+import runtime
 
 type atm_t = struct {
     string name
@@ -25,7 +26,7 @@ fn make_atm():fn(f32):atm_t {
 
 fn main() {
     // 进行 gc 检测 atm 捕获的情况
-    runtime_force_gc()
+    runtime.gc()
     co.sleep(500) // wait gc finish
 
     var atm1_draw = make_atm()
@@ -33,7 +34,7 @@ fn main() {
     println(atm1_draw(100).amount)
 
     // 进行 gc 检测 atm 捕获的情况
-    runtime_force_gc()
+    runtime.gc()
     co.sleep(500) // wait gc finish
 
     var atm2_draw = make_atm()
@@ -65,7 +66,7 @@ fn main() {
     }
 
     // 进行 gc 检测 atm 捕获的情况
-    runtime_force_gc()
+    runtime.gc()
     co.sleep(500) // wait gc finish
 
     for item in list {
@@ -73,7 +74,7 @@ fn main() {
     }
 
     // 进行 gc 检测 atm 捕获的情况
-    runtime_force_gc()
+    runtime.gc()
     co.sleep(500) // wait gc finish
 
     // --- array
@@ -98,7 +99,7 @@ fn main() {
     var list3 = vec_new<atm_t>(200, 0)
 
     // 进行 gc 检测 atm 捕获的情况
-    runtime_force_gc()
+    runtime.gc()
     co.sleep(500) // wait gc finish
 
     for int i=0; i < 8; i+=1 {

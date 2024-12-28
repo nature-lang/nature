@@ -251,7 +251,7 @@ static uint32_t asm_ldrstr(arm64_asm_inst_t *inst) {
         assert(opr2->indirect.reg->size == QWORD);
 
         int64_t offset = opr2->indirect.offset;
-        assert(offset < (1 << (6 + 3)) && offset >= -(1 << (6 + 3)));
+        assert(offset < 4095 && offset >= -4095);
         uint32_t base = opr2->indirect.reg->index;
         uint32_t prepost = pre_post_map[opr2->indirect.prepost];
         switch (inst->opcode) {

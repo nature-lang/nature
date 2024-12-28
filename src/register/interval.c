@@ -94,7 +94,8 @@ static alloc_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var
         }
     }
 
-    if (BUILD_ARCH == ARCH_ARM64 && (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT) || lir_op_call(op)) {
+    if (BUILD_ARCH == ARCH_ARM64 && (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT || op->code == LIR_OPCODE_NEG) ||
+        lir_op_call(op)) {
         return ALLOC_KIND_MUST;
     }
 
@@ -431,6 +432,7 @@ void interval_block_order(closure_t *c) {
         assertf(block && block->first_op, "block or block->first_op is null");
 
         slice_push(order_blocks, block);
+        block->id = order_blocks->count - 1;
 
         // 需要计算每一个块的正向前驱的数量
         for (int i = 0; i < block->forward_succs->count; ++i) {
@@ -482,6 +484,11 @@ void interval_build(closure_t *c) {
             for (int k = 0; k < succ->live->count; ++k) {
                 lir_var_t *var = succ->live->take[k];
                 // 同时添加到 table 和 lives 中
+                live_add(live_table, lives, var);
+            }
+
+            for (int k = 0; k < succ->live_in->count; ++k) {
+                lir_var_t *var = succ->live_in->take[k];
                 live_add(live_table, lives, var);
             }
         }
@@ -631,6 +638,7 @@ void interval_build(closure_t *c) {
             for (int j = 0; j < block->loop_ends->count; ++j) {
                 basic_block_t *end = block->loop_ends->take[j];
                 for (int k = 0; k < lives->count; ++k) {
+                    // 在循环头中定义的变量添加跨越整个循环的生命周期
                     lir_var_t *var = lives->take[k];
                     interval_t *interval = table_get(c->interval_table, var->ident);
                     interval_add_range(c, interval, block_from, OP(end->last_op)->id + 2);
@@ -639,6 +647,9 @@ void interval_build(closure_t *c) {
         }
         block->live = lives;
     }
+
+    // TODO live in 没有计算完整，可能会导致循环中的 live in 异常，导致后续的 resolve_data_flow 异常，虽然 interval_find_optimal_split_pos
+    // 已经尽量让分割点在循环的外部
 }
 
 interval_t *interval_new(closure_t *c) {
@@ -799,34 +810,33 @@ END:
 
 /**
  * - 不能在边界进行切分，会导致 resolve_data_flow 检测边界异常插入重复的 mov
- * - 尽量不要在 for 循环内部的 block 中进行切分
+ * - 不要在 for 循环内部的 block 中进行切分, 循环中的 live_in 计算是完整的
  * @param c
- * @param current
+ * @param interval
  * @param before
  * @return
  */
 int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int before) {
     // 如果 before 是对应的 op_id 是 label，则直接选择 before, before - 1 是一个无法使用的中间地带
-    // TODO 整体逻辑已经移动到了 interval_next_intersect
     for (int i = c->blocks->count - 1; i >= 0; --i) {
         basic_block_t *b = c->blocks->take[i];
         lir_op_t *label_op = linked_first(b->operations)->value;
+        // assert(label_op->id != before);
 
-        assert(label_op->id != before);
         // 计算交集的时候刻意避免了 before = label 的位置
         // 在 before 之前找到一个合适的位置进行溢出。这里直接向前推断到
-        //        if (label_op->id == before) {
-        //            assert(i > 0);
-        //            b = c->blocks->take[i - 1];
-        //
-        //
-        //            if (b->succs->count == 1) {
-        //                return OP(b->last_op)->id - 1; // 插入在 branch 之前即可
-        //            } else {
-        //                assert(b->succs->count == 2); // 存在两个 branch 语句，所以需要 - 3
-        //                return OP(b->last_op)->id - 3;
-        //            }
-        //        }
+        if (label_op->id == before) {
+            assert(i > 0);
+            b = c->blocks->take[i - 1];
+
+
+            if (b->succs->count == 1) {
+                return OP(b->last_op)->id - 1; // 插入在 branch 之前即可
+            } else {
+                assert(b->succs->count == 2); // 存在两个 branch 语句，所以需要 - 3
+                return OP(b->last_op)->id - 3;
+            }
+        }
     }
 
     int id = before - 1;

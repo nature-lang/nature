@@ -442,7 +442,7 @@ token_t *scanner_item(module_t *m, linked_node *prev_node) {
     if (scanner_match(m, '#')) {
         char *word = scanner_ident_advance(m);
         word++;
-        token_t *t = token_new(TOKEN_FN_LABEL, word, m->s_cursor.line, m->s_cursor.column);
+        token_t *t = token_new(TOKEN_LABEL, word, m->s_cursor.line, m->s_cursor.column);
         return t;
     }
 
@@ -690,8 +690,8 @@ static token_type_t scanner_ident(char *word, int length) {
             switch (word[1]) {
                 case 'u':// null
                     return scanner_rest(word, length, 2, 2, "ll", TOKEN_NULL);
-                case 'e':// new
-                    return scanner_rest(word, length, 2, 1, "w", TOKEN_NEW);
+                // case 'e':// new, new 识别成 ident 在 parser 采用固定语法结构时才会被识别成 new
+                    // return scanner_rest(word, length, 2, 1, "w", TOKEN_NEW);
             }
             break;
         case 'p':

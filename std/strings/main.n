@@ -1,18 +1,17 @@
 import syscall
 import fmt
+import libc
+import runtime
 
 // 基于 c 字符串创建一个 nature 字符串 
 fn from(void_ptr p):string! {
-    return libc_string_new(p)
+    return runtime.string_new(p)
 }
 
 fn find_char(string s, u8 char, int after):int {
-    for k,v in s {
-        if k < after {
-            continue
-        }
-
-        if v == char {
+    int len = s.len()
+    for int k = after; k < len; k += 1 {
+        if s[k] == char {
             return k
         }
     }
@@ -31,7 +30,7 @@ fn find_after(string s, string sub, int after):int {
     }
 
     void_ptr base = s.ref()
-    void_ptr temp =  strstr((base as uint + after as uint) as void_ptr, sub.ref())
+    void_ptr temp = libc.strstr((base as uint + after as uint) as void_ptr, sub.ref())
     if temp == 0 {
         return -1
     }
@@ -182,9 +181,9 @@ fn join([string] list, string separator):string {
     return result as string
 }
 
-fn ascii(string c):u8! {
-    if c.len() != 1 {
-        throw 'c length must equal to 1'
+fn ascii(string c):u8 {
+    if c.len() == 0 {
+        return 0
     }
     var list = c as [u8]
     return list[0]
@@ -252,6 +251,54 @@ fn replace(string s, string sub_old, string sub_new):string {
 
         // 更新 i
         i = found + sub_old.len()
+    }
+
+    return result
+}
+
+fn to_int(string s):int! {
+    if s.len() == 0 {
+        throw "cannot convert empty string to int"
+    }
+
+    var result = 0
+    var start = 0
+    var negative = false
+
+    // Handle negative sign
+    if s[0] == ascii('-') {
+        negative = true
+        start = 1
+        if s.len() == 1 {
+            throw "invalid number format"
+        }
+    }
+
+    // skip leading whitespace
+    for int i = start; i < s.len(); i += 1 {
+        if s[i] != ascii(' ') {
+            start = i
+            break
+        }
+    }
+
+    // convert digits
+    for int i = start; i < s.len(); i += 1 {
+        var c = s[i]
+        if c < ascii('0') || c > ascii('9') {
+            throw "invalid character in number"
+        }
+
+        // Check for overflow
+        if result > 0x7FFFFFFF / 10 {
+            throw "number too large"
+        }
+
+        result = result * 10 + (c - ascii('0')) as int
+    }
+
+    if negative {
+        result = -result
     }
 
     return result

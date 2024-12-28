@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <include/uv.h>
 
+#include "utils/custom_links.h"
 #include "aco/aco.h"
 #include "fixalloc.h"
 #include "gcbits.h"
@@ -13,6 +14,7 @@
 #include "utils/mutex.h"
 #include "utils/type.h"
 #include "sizeclass.h"
+#include "nutils/nutils.h"
 
 int runtime_main(int argc, char *argv[]);
 
@@ -27,18 +29,19 @@ int runtime_main(int argc, char *argv[]);
     };
 #elif __ARM64
 #define CO_SCAN_REQUIRE(_co) \
-    { \
+    do { \
         addr_t _fp_value;     \
         __asm__ volatile("mov %0, x29" : "=r"(_fp_value)); \
-        _co->scan_ret_addr = fetch_addr_value(_fp_value + POINTER_SIZE); \
+        uint64_t _value = fetch_addr_value(_fp_value + POINTER_SIZE); \
+        fndef_t *_fn = find_fn(_value, _co->p); \
+        if (!_fn) break; \
+        _co->scan_ret_addr = _value; \
         assert(_co->scan_ret_addr); \
         addr_t _prev_fp_value = fetch_addr_value(_fp_value); \
         assert(_prev_fp_value); \
-        fndef_t *_fn = find_fn(_co->scan_ret_addr); \
-        assert(_fn); \
         _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (_prev_fp_value - _fn->stack_size); \
         TRACEF("[pre_tplcall_hook] co=%p, status=%d, fp_value=%p, prev_fn_value=%p, fn=%s, stack_size=%ld, scan_offset=%p, ret_addr=%p", _co, _co->status, (void*)_fp_value, (void*)_prev_fp_value, _fn->name, _fn->stack_size, (void*)_co->scan_offset, (void *) _co->scan_ret_addr); \
-    };
+    } while(0);
 #else
 // not define
 #endif
@@ -88,14 +91,20 @@ int runtime_main(int argc, char *argv[]);
 
 #define PAGE_SUMMARY_LEVEL 5                                                    // 5 层 radix tree
 #define PAGE_SUMMARY_MERGE_COUNT 8                                              // 每个上级 summary 索引的数量
-#define PAGE_SUMMARY_COUNT_L4 (128 * 1024 * 1024 / 4)                           // 一个 chunk 表示 4M 空间, 所以 l5 一共有 33554432 个 chunk(128T空间)
 
+#define PAGE_SUMMARY_COUNT_L4 (128 * 1024 * 1024 / 4)                           // l5 一共管理 33554432 个 chunk(4M) (128T空间)
+#define PAGE_SUMMARY_COUNT_L3 (PAGE_SUMMARY_COUNT_L4 / PAGE_SUMMARY_MERGE_COUNT) // 4194304, 每个 summary item 管理 32M 空间
+#define PAGE_SUMMARY_COUNT_L2 (PAGE_SUMMARY_COUNT_L3 / PAGE_SUMMARY_MERGE_COUNT) // 524288, 每个 summary item 管理 256M 空间
+#define PAGE_SUMMARY_COUNT_L1 (PAGE_SUMMARY_COUNT_L2 / PAGE_SUMMARY_MERGE_COUNT) // 65536, 每个 summary item 管理 2G 空间
+#define PAGE_SUMMARY_COUNT_L0 (PAGE_SUMMARY_COUNT_L1 / PAGE_SUMMARY_MERGE_COUNT) // 8192, 每个 summary item 管理 16G 空间
 
+// radix tree 每一层级中 summary item，管理的 page 数量
+#define L4_MAX_PAGES 512 // 512 个 page, 也就是 4KB
+#define L3_MAX_PAGES (L4_MAX_PAGES * 8)      // 4096 个 page, 32M
+#define L2_MAX_PAGES (L3_MAX_PAGES * 8)      // 32768 个 page, 256M
+#define L1_MAX_PAGES (L2_MAX_PAGES * 8)      // 262144 个 page, 2048M
+#define L0_MAX_PAGES (L1_MAX_PAGES * 8)      // 2097152 个 page, 16GB,  16GB * L0_count 8192 = 128T
 
-#define PAGE_SUMMARY_COUNT_L3 (PAGE_SUMMARY_COUNT_L4 / PAGE_SUMMARY_MERGE_COUNT)// 4194304, 每个 summary 管理 64M 空间
-#define PAGE_SUMMARY_COUNT_L2 (PAGE_SUMMARY_COUNT_L3 / PAGE_SUMMARY_MERGE_COUNT)// 524288, 每个 summary 管理 512M 空间
-#define PAGE_SUMMARY_COUNT_L1 (PAGE_SUMMARY_COUNT_L2 / PAGE_SUMMARY_MERGE_COUNT)// 65536, 每个 summary 管理 4G 空间
-#define PAGE_SUMMARY_COUNT_L0 (PAGE_SUMMARY_COUNT_L1 / PAGE_SUMMARY_MERGE_COUNT)// 8192, 每个 summary 管理 32G 空间
 #define PAGE_SUMMARY_MAX_VALUE 2LL ^ 21                                         // 2097152, max=start=end 的最大值
 
 #define DEFAULT_NEXT_GC_BYTES (100 * 1024)// 100KB
@@ -105,8 +114,6 @@ int runtime_main(int argc, char *argv[]);
 #define WAIT_SHORT_TIME 10// ms
 #define WAIT_MID_TIME 50  // ms
 #define WAIT_LONG_TIME 100// ms
-
-rtype_t *gc_rtype(type_kind kind, uint32_t count, ...);
 
 typedef void (*void_fn_t)(void);
 
@@ -135,6 +142,7 @@ typedef struct mspan_t {
     uint64_t obj_size; // obj_count * obj_size 不一定等于 pages_count * page_size, 虽然可以通过 sizeclass
     // 获取，但是不兼容大对象
     uint64_t alloc_count; // 已经用掉的 obj count
+    uint64_t free_index; // 下一个空闲 bit 的位置
 
     // bitmap 结构, alloc_bits 标记 obj 是否被使用， 1 表示使用，0表示空闲
     gc_bits *alloc_bits;
@@ -168,9 +176,9 @@ typedef struct {
 // TODO start/end/max 的正确编码值应该是 uint21_t,后续需要正确实现,能表示的最大值是 2^21=2097152
 // 0 标识无空闲， 1 标识有空闲
 typedef struct {
-    uint16_t start;
-    uint16_t end;
-    uint16_t max;
+    uint32_t start;
+    uint32_t end;
+    uint32_t max;
     uint8_t full; // start=end=max=2^21 最大值， full 设置为 1, 表示所有空间都是空间的
 } page_summary_t; // page alloc chunk 的摘要数据，组成 [start,max,end]
 
@@ -217,7 +225,7 @@ typedef struct {
     // 每个 arena 包含 64M 内存，被划分成 8192个 page, 每个 page 8K
     // 可以通过 page_index 快速定位到 span, 每一个 pages 都会在这里有一个数据
     // 可以是一个 span 存在于多个 page_index 中, 一个 span 的最小内存是 8k, 所以一个 page 最多只能存储一个 span.
-    mspan_t *spans[ARENA_PAGES_COUNT]; // page = 8k, 所以 pages 的数量是固定的
+    mspan_t *spans[ARENA_PAGES_COUNT]; // page = 8192, 所以 pages 的数量是固定的
 
     addr_t base;
 } arena_t;
@@ -239,7 +247,9 @@ typedef struct {
     page_alloc_t page_alloc;
     // arenas 在空间上是不连续的，尤其是前面部分都是 null, 为了能够快速遍历，需要一个可遍历的空间
     slice_t *arena_indexes; // arena index 列表
+    // 非连续空间
     arena_t *arenas[ARENA_COUNT];
+
     mcentral_t centrals[SPANCLASS_COUNT];
     uint32_t sweepgen;
     slice_t *spans; // 所有分配的 span 都会在这里被引用
@@ -293,16 +303,6 @@ struct linkco_t {
     void *data;
 };
 
-/**
- * 必须和 linkco_t 结构联动
- * @return
- */
-static inline rtype_t *rti_linkco_rtype() {
-    rtype_t *rtype = gc_rtype(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
-    assert(rtype->size == sizeof(struct linkco_t));
-    return rtype;
-}
-
 // 必须和 nature code 保持一致
 typedef struct n_future_t {
     int64_t size;
@@ -319,6 +319,9 @@ struct coroutine_t {
     co_status_t status;
     aco_t aco;
     void *fn; // fn 指向
+
+    void *data; // 临时额外数据存储, gc 不会读取该数据进行标记，标记数据不能存储在这里
+    void *arg; // coroutine 额外请求参数处理, gc 会读取该数据进行标记。
 
     pthread_mutex_t *yield_lock; // yield 完成后进行 unlock, 并清空该 lock
 
@@ -418,6 +421,8 @@ struct n_processor_t {
     rt_linked_fixalloc_t gc_worklist; // gc 扫描的 ptr 节点列表
     uint64_t gc_work_finished; // 当前处理的 GC 轮次，每完成一轮 + 1
 
+    struct sc_map_64v caller_cache; // 函数缓存定义
+
     struct n_processor_t *next; // processor 链表支持
 };
 
@@ -425,7 +430,9 @@ void test_runtime_init();
 
 int test_runtime_main(void *main_fn);
 
-void rt_coroutine_set_error(char *msg, bool panic);
+void rt_default_co_error(char *msg, bool panic);
+
+void rt_co_error(coroutine_t *co, char *msg, bool panic);
 
 void coroutine_dump_error(coroutine_t *co, n_error_t *error);
 
@@ -443,17 +450,13 @@ void processor_set_status(n_processor_t *p, p_status_t status);
 #define PRE_RTCALL_HOOK(target)                                                                                \
     do {                                                                                                       \
         n_processor_t *p = processor_get();                                                                      \
-        if (!p) {                                                                                              \
-            break;                                                                                             \
-        }                                                                                                      \
-        if (p->status == P_STATUS_RTCALL || p->status == P_STATUS_TPLCALL) {                                                                    \
-            break;                                                                                             \
-        }                                                                                                      \
+        if (!p) break;                                                                                             \
+        if (p->status == P_STATUS_RTCALL || p->status == P_STATUS_TPLCALL) break;                                                                                             \
         processor_set_status(p, P_STATUS_RTCALL);                                                              \
         DEBUGF("[pre_rtcall_hook] target %s, status set rtcall success, non-preemption", __FUNCTION__);        \
-        coroutine_t *_co = coroutine_get();                                                                    \
-        assert(_co);                                                                                           \
-        CO_SCAN_REQUIRE(_co) \
+        coroutine_t *_co = coroutine_get();                                                                  \
+        if (!_co) break; \
+        CO_SCAN_REQUIRE(_co); \
     } while (0);
 
 void pre_tplcall_hook();

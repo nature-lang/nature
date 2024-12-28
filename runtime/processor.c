@@ -1,8 +1,10 @@
 #include "processor.h"
 
+#include <uv.h>
 #include <ucontext.h>
 
 #include "runtime.h"
+#include "runtime/nutils/http.h"
 
 int cpu_count;
 bool processor_need_exit;
@@ -102,7 +104,7 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     uint64_t rip = CTX_RIP;
 
     // rip 已经存到了 rsp 里面,只要能定位到 bp_offset 就行了。
-    fndef_t *fn = find_fn(rip);
+    fndef_t *fn = find_fn(rip, p);
     if (fn) {
         // 基于当前 rsp scan
         uint64_t sp_addr = (uint64_t) rsp;
@@ -146,7 +148,7 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     uint64_t lr = CTX_LR; // 保存返回地址的链接寄存器
 
     // 查找当前执行的函数
-    fndef_t *fn = find_fn(pc);
+    fndef_t *fn = find_fn(pc, p);
     if (fn) {
         // 基于当前 sp 计算扫描偏移
         uint64_t sp_addr = (uint64_t) sp;
@@ -430,7 +432,7 @@ static void processor_run(void *raw) {
 
     // 对 p 进行调度处理(p 上面可能还没有 coroutine)
     while (true) {
-        TRACEF("[runtime.processor_run] handle, p_index_%d=%d", p->share, p->index);
+        // TRACEF("[runtime.processor_run] handle, p_index_%d=%d", p->share, p->index);
         // - stw
         if (p->need_stw > 0) {
         STW_WAIT:
@@ -460,13 +462,9 @@ static void processor_run(void *raw) {
 
         // - 处理 coroutine (找到 io 可用的 goroutine)
         uint64_t time_start = uv_hrtime();
-        while (true) {
+        while (p->runnable_list.count > 0) {
             coroutine_t *co = rt_linked_fixalloc_pop(&p->runnable_list);
-            if (!co) {
-                // runnable list 已经处理完成
-                TRACEF("[runtime.processor_run] runnable is empty, p_index_%d=%d", p->share, p->index);
-                break;
-            }
+            assert(co);
 
             RDEBUGF("[runtime.processor_run] will handle coroutine, p_index_%d=%d, co=%p, status=%d", p->share,
                     p->index, co, co->status);
@@ -502,7 +500,7 @@ static void processor_run(void *raw) {
         }
 
         // - 处理 io 就绪事件(也就是 run 指定时间的 libuv)
-        io_run(p, WAIT_SHORT_TIME);
+        io_run(p, WAIT_BRIEF_TIME * 5);
     }
 
 EXIT:
@@ -511,6 +509,18 @@ EXIT:
     processor_set_status(p, P_STATUS_EXIT);
 
     RDEBUGF("[runtime.processor_run] exited, p_index_%d=%d", p->share, p->index);
+}
+
+
+void rt_coroutine_to_processor(n_processor_t *p, coroutine_t *co) {
+    if (gc_stage == GC_STAGE_MARK) {
+        co->gc_black = memory->gc_count;
+    }
+
+    // goroutine 默认状态是 runnable
+    assert(co->status == CO_STATUS_RUNNABLE);
+    rt_linked_fixalloc_push(&p->co_list, co);
+    rt_linked_fixalloc_push(&p->runnable_list, co);
 }
 
 void rt_coroutine_dispatch(coroutine_t *co) {
@@ -547,6 +557,7 @@ void rt_coroutine_dispatch(coroutine_t *co) {
     // - 遍历 shared_processor_list 找到 co_list->count 最小的 processor 进行调度
     n_processor_t *select_p = NULL;
 
+    // TODO 直接采用 next 方案, 按顺序匹配
     if (co->main) {
         select_p = share_processor_index[0];
     } else {
@@ -591,6 +602,10 @@ void sched_init() {
     gc_stage = GC_STAGE_OFF;
     solo_processor_count = 0;
     coroutine_count = 0;
+
+    // - libuv 线程锁
+    uv_loop_init(&uv_global_loop);
+    mutex_init(&uv_thread_locker, false);
 
     // - 初始化 global linkco
     mutex_init(&global_linkco_locker, false);
@@ -638,9 +653,15 @@ coroutine_t *coroutine_get() {
     return uv_key_get(&tls_coroutine_key);
 }
 
-void rt_coroutine_set_error(char *msg, bool panic) {
-    DEBUGF("[runtime.rt_coroutine_set_error] msg=%s", msg);
+void rt_default_co_error(char *msg, bool panic) {
+    DEBUGF("[runtime.rt_default_co_error] msg=%s", msg);
     coroutine_t *co = coroutine_get();
+    n_error_t *error = n_error_new(string_new(msg, strlen(msg)), panic);
+    co->error = error;
+}
+
+void rt_co_error(coroutine_t *co, char *msg, bool panic) {
+    DEBUGF("[runtime.rt_co_error] msg=%s", msg);
     n_error_t *error = n_error_new(string_new(msg, strlen(msg)), panic);
     co->error = error;
 }
@@ -732,10 +753,11 @@ void post_rtcall_hook(char *target) {
  * 且 co 没有赋值给 co_list, 则 new co 不能正确的被 mark, 会被错误清理, result 同理
  * @param fn
  * @param flag
+ * @param arg
  * @param result_size
  * @return
  */
-coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu) {
+coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu, void *arg) {
     mutex_lock(&cp_alloc_locker);
     coroutine_t *co = fixalloc_alloc(&coroutine_alloc);
     co->id = coroutine_count++;
@@ -744,12 +766,20 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu) {
     if (in_heap((addr_t) fn)) {
         rt_shade_obj_with_barrier(fn);
     }
+
+    if (in_heap((addr_t) arg)) {
+        rt_shade_obj_with_barrier(arg);
+    }
+
+    // 通过 shade 避免 fu 在本轮中被 gc
     rt_shade_obj_with_barrier(fu);
 
     co->future = fu;
     co->fn = fn;
     co->solo = FLAG(CO_FLAG_SOLO) & flag;
     co->main = FLAG(CO_FLAG_MAIN) & flag;
+    co->arg = arg;
+    co->data = NULL;
     co->gc_black = 0;
     co->yield_lock = NULL;
     co->ticket = false;
@@ -776,6 +806,7 @@ n_processor_t *processor_new(int index) {
     p->need_stw = 0;
     p->safe_point = 0;
 
+    sc_map_init_64v(&p->caller_cache, 100, 0);
     mutex_init(&p->thread_locker, false);
     p->status = P_STATUS_INIT;
     p->sig.sa_flags = 0;

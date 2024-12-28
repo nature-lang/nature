@@ -3,10 +3,12 @@
 #include "array.h"
 #include "runtime/runtime.h"
 
-void rt_vec_grow(n_vec_t *vec) {
+static void rt_vec_grow(n_vec_t *vec, int custom_capacity) {
     PRE_RTCALL_HOOK();
 
-    if (vec->capacity > 0) {
+    if (custom_capacity) {
+        vec->capacity = custom_capacity;
+    } else if (vec->capacity > 0) {
         vec->capacity = vec->capacity * 2;
     } else {
         vec->capacity = VEC_DEFAULT_CAPACITY;
@@ -60,17 +62,13 @@ n_vec_t *rt_vec_new(int64_t rhash, int64_t ele_rhash, int64_t length, int64_t ca
     assert(capacity >= length && "capacity must be greater than length");
     TRACEF("[rt_vec_new] length=%lu, capacity=%lu", length, capacity);
 
-    // find rtype and element_rtype
-    rtype_t *vec_rtype = rt_find_rtype(rhash);
-    assert(vec_rtype && "cannot find rtype with hash");
-
     rtype_t *element_rtype = rt_find_rtype(ele_rhash);
     assert(element_rtype && "cannot find element_rtype with hash");
 
     // - 进行内存申请,申请回来一段内存是 memory_vec_t 大小的内存, memory_vec_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 vec_data + 1 时会按照 sizeof(memory_vec_t) 大小的内存区域移动
     // 的技巧而已，所以这里要和数组结构做一个区分
-    n_vec_t *vec = rti_gc_malloc(vec_rtype->size, vec_rtype);
+    n_vec_t *vec = rti_gc_malloc(vec_rtype.size, &vec_rtype);
     vec->capacity = capacity;
     vec->length = length;
     vec->ele_rhash = ele_rhash;
@@ -94,7 +92,7 @@ void rt_vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
     if (index >= l->length) {
         char *msg = dsprintf("index out of range [%d] with length %d", index, l->length);
         DEBUGF("[runtime.rt_vec_access] has err %s", msg);
-        rt_coroutine_set_error(msg, true);
+        rt_default_co_error(msg, true);
 
         return;
     }
@@ -176,7 +174,7 @@ void rt_vec_push(n_vec_t *vec, void *ref) {
     if (vec->length == vec->capacity) {
         DEBUGF("[vec_push] current len=%lu equals cap, trigger grow, next capacity=%lu", vec->length,
                vec->capacity * 2);
-        rt_vec_grow(vec);
+        rt_vec_grow(vec, 0);
     }
 
     uint64_t index = vec->length++;
@@ -184,7 +182,7 @@ void rt_vec_push(n_vec_t *vec, void *ref) {
 }
 
 /**
- * 在原有 array data 上进行切割
+ * 共享 array_data
  * @param rtype_hash
  * @param l
  * @param start 起始 index [start, end)
@@ -198,14 +196,14 @@ n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
     if (start >= l->length || end > l->length || start < 0 || end < 0) {
         char *msg = dsprintf("slice [%d:%d] out of vec with length %d", start, end, l->length);
         DEBUGF("[runtime.vec_slice] has err %s", msg);
-        rt_coroutine_set_error(msg, true);
+        rt_default_co_error(msg, true);
         return 0;
     }
 
     if (start > end) {
         char *msg = dsprintf("invalid index values, must be low %d <= high %d", start, end);
         DEBUGF("[runtime.vec_slice] has err %s", msg);
-        rt_coroutine_set_error(msg, true);
+        rt_default_co_error(msg, true);
         return 0;
     }
 
@@ -213,9 +211,7 @@ n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
            l->ele_rhash, start, end);
     int64_t length = end - start;
 
-    rtype_t *vec_rtype = rt_find_rtype(l->rhash);
-    assert(vec_rtype && "cannot find rtype with hash");
-    n_vec_t *sliced_vec = rti_gc_malloc(vec_rtype->size, vec_rtype);
+    n_vec_t *sliced_vec = rti_gc_malloc(vec_rtype.size, &vec_rtype);
     sliced_vec->capacity = length;
     sliced_vec->length = length;
     sliced_vec->ele_rhash = l->ele_rhash;
@@ -225,6 +221,18 @@ n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
     sliced_vec->data = l->data + start * element_size;
 
     return sliced_vec;
+}
+
+
+void rt_vec_append(n_vec_t *dst, n_vec_t *src) {
+    PRE_RTCALL_HOOK();
+    // assert(dst->ele_rhash == src->ele_rhash && "The types of the two vecs are different");
+    if (dst->length + src->length > dst->capacity) {
+        rt_vec_grow(dst, dst->length + src->length + 1);
+    }
+    int64_t element_size = rt_rtype_out_size(src->ele_rhash);
+    memmove(dst->data + dst->length * element_size, src->data, src->length * element_size);
+    dst->length += src->length;
 }
 
 /**
@@ -266,7 +274,7 @@ n_void_ptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index) {
     if (index >= l->length) {
         char *msg = dsprintf("index out of vec [%d] with length %d", index, l->length);
         DEBUGF("[runtime.rt_vec_element_addr] has err %s", msg);
-        rt_coroutine_set_error(msg, true);
+        rt_default_co_error(msg, true);
         return 0;
     }
 
@@ -284,7 +292,7 @@ n_void_ptr_t rt_vec_iterator(n_vec_t *l) {
     if (l->length == l->capacity) {
         DEBUGF("[rt_vec_iterator] current_length=%lu == capacity, trigger grow, next capacity=%lu", l->length,
                l->capacity * 2);
-        rt_vec_grow(l);
+        rt_vec_grow(l, 0);
     }
     uint64_t index = l->length++;
 
@@ -296,8 +304,6 @@ n_void_ptr_t rt_vec_iterator(n_vec_t *l) {
 }
 
 n_vec_t *rti_vec_new(rtype_t *ele_rtype, int64_t length, int64_t capacity) {
-    rtype_t *vec_rtype = gc_rtype(TYPE_VEC, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
-                                  TYPE_GC_NOSCAN);
     if (capacity == 0) {
         if (length > 0) {
             capacity = length;
@@ -306,16 +312,16 @@ n_vec_t *rti_vec_new(rtype_t *ele_rtype, int64_t length, int64_t capacity) {
         }
     }
 
-    assert(vec_rtype->size == sizeof(n_vec_t));
+    assert(vec_rtype.size == sizeof(n_vec_t));
     assert(capacity >= length && "capacity must be greater than length");
     assert(ele_rtype && "ele_rtype is empty");
 
     // 申请 vec 空间
-    n_vec_t *vec = rti_gc_malloc(vec_rtype->size, vec_rtype);
+    n_vec_t *vec = rti_gc_malloc(vec_rtype.size, &vec_rtype);
     vec->capacity = capacity;
     vec->length = length;
     vec->ele_rhash = ele_rtype->hash;
-    vec->rhash = vec_rtype->hash;
+    vec->rhash = vec_rtype.hash;
 
     void *data = rti_array_new(ele_rtype, capacity);
     write_barrier(&vec->data, &data);

@@ -14,6 +14,10 @@ message("LIBUV_STATIC: ${LIBUV_STATIC}")
 set(LIBUC_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libc.a")
 message("LIBUC_STATIC: ${LIBUC_STATIC}")
 
+add_executable(test_hash_table test_hash_table.c ${UTILS})
+target_link_libraries(test_hash_table ${LIBUV_STATIC})
+add_test(test_hash_table test_hash_table)
+
 add_executable(test_page_alloc test_page_alloc.c ${RUNTIMES} ${UTILS})
 target_link_libraries(test_page_alloc ${LIBUV_STATIC})
 add_test(test_page_alloc test_page_alloc)
@@ -106,12 +110,11 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
     # 2. target_link_libraries 生成最终可执行文件, 依赖上一部生成的 libmain.a
     add_executable(test_runtime_debug test_runtime_debug.c ${RUNTIMES} ${UTILS})
 
-#    if (CMAKE_SYSTEM_NAME MATCHES "linux")
-#        set(CMAKE_EXE_LINKER_FLAGS "-static")
-#        set_target_properties(test_runtime_debug PROPERTIES LINK_FLAGS "-static")
-#    endif ()
-
-
+    #    if (CMAKE_SYSTEM_NAME MATCHES "linux")
+    #        set(CMAKE_EXE_LINKER_FLAGS "-static")
+    #        set_target_properties(test_runtime_debug PROPERTIES LINK_FLAGS "-static")
+    #    endif ()
+    target_compile_definitions(test_runtime_debug PRIVATE NDEBUG)
 
     add_dependencies(test_runtime_debug generate_libmain)  # 添加这行
 

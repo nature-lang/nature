@@ -64,7 +64,7 @@ typedef enum {
     TOKEN_IDENT,
     TOKEN_POUND,// #
     TOKEN_MACRO_IDENT, // @sizeof/@sla
-    TOKEN_FN_LABEL, // #linkid
+    TOKEN_LABEL, // #linkid
     TOKEN_LITERAL_STRING,
     TOKEN_LITERAL_FLOAT,
     TOKEN_LITERAL_INT,
@@ -187,6 +187,7 @@ static string token_str[] = {
         [TOKEN_LITERAL_FLOAT] = "float_literal",
         [TOKEN_LITERAL_INT] = "int_literal",
 
+        [TOKEN_NEW] = "new",
         [TOKEN_CONTINUE] = "continue",
         [TOKEN_BREAK] = "break",
 
@@ -242,7 +243,7 @@ static string token_str[] = {
         [TOKEN_AS] = "as",
         [TOKEN_IS] = "is",
         [TOKEN_GO] = "go",
-        [TOKEN_FN_LABEL] = "fn_label",
+        [TOKEN_LABEL] = "fn_label",
         [TOKEN_MACRO_IDENT] = "macro_ident",
 
         [TOKEN_STMT_EOF] = ";",

@@ -1,5 +1,7 @@
 #include "string.h"
 
+#include <runtime/rtype.h>
+
 #include "array.h"
 #include "vec.h"
 
@@ -14,28 +16,30 @@ n_string_t *string_new(void *raw_string, int64_t length) {
     TRACEF("[string_new] raw_string=%s, length=%lu", (char *) raw_string, length);
 
     // byte 数组，先手动创建一个简单类型
-    rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
-
     int64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
 
-    n_array_t *data = rti_array_new(element_rtype, capacity);
-    // 创建 memory_string_t 类型，并转换成 rtype 进行 堆内存申请
+    n_array_t *data = rti_array_new(&string_element_rtype, capacity);
 
-    rtype_t *string_rtype = gc_rtype(TYPE_STRING, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
-                                     TYPE_GC_NOSCAN);
-
-    assert(element_rtype->hash > 0);
-
-    TRACEF("[string_new] rtype gc_bits=%s", bitmap_to_str(string_rtype->gc_bits, 2));
-    n_string_t *str = rti_gc_malloc(string_rtype->size, string_rtype);
+    n_string_t *str = rti_gc_malloc(string_rtype.size, &string_rtype);
     str->data = data;
     str->length = length;
     str->capacity = capacity;
-    str->ele_rhash = element_rtype->hash;
-    str->rhash = string_rtype->hash;
+    str->ele_rhash = string_element_rtype.hash;
+    str->rhash = string_rtype.hash;
     memmove(str->data, raw_string, length);
 
-    DEBUGF("[string_new] success, string=%p, data=%p, raw_str=%s", str, str->data, (char*)raw_string);
+    DEBUGF("[string_new] success, string=%p, data=%p, len=%ld, raw_str=%s", str, str->data, str->length,
+           (char*)raw_string);
+    return str;
+}
+
+n_string_t *rt_string_ref_new(void *raw_string, int64_t length) {
+    n_string_t *str = rti_gc_malloc(string_rtype.size, &string_ref_rtype);
+    str->data = raw_string;
+    str->length = length;
+    str->capacity = length;
+    str->ele_rhash = string_element_rtype.hash;
+    str->rhash = string_rtype.hash;
     return str;
 }
 
@@ -67,22 +71,19 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
 
     int64_t length = a->length + b->length;
     int64_t capacity = length + 1;
-    rtype_t *element_rtype = gc_rtype(TYPE_UINT8, 0);
-    rtype_t *string_rtype = gc_rtype(TYPE_STRING, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
-                                     TYPE_GC_NOSCAN);
-    n_array_t *data = rti_array_new(element_rtype, capacity);
+    n_array_t *data = rti_array_new(&string_element_rtype, capacity);
 
     // 将 str copy 到 data 中
     memmove(data, a->data, a->length);
     memmove(data + a->length, b->data, b->length);
 
-    n_string_t *str = rti_gc_malloc(string_rtype->size, string_rtype);
+    n_string_t *str = rti_gc_malloc(string_rtype.size, &string_rtype);
     str->length = length;
     str->data = data;
     str->length = length;
     str->capacity = capacity;
-    str->ele_rhash = element_rtype->hash;
-    str->rhash = string_rtype->hash;
+    str->ele_rhash = string_element_rtype.hash;
+    str->rhash = string_rtype.hash;
     DEBUGF("[runtime.string_concat] success, string=%p, data=%p", str, str->data);
     return str;
 }
@@ -94,6 +95,8 @@ n_int_t rt_string_length(n_string_t *a) {
 
 n_bool_t string_ee(n_string_t *a, n_string_t *b) {
     PRE_RTCALL_HOOK();
+    assert(a);
+    assert(b);
     DEBUGF("[runtime.string_ee] a=%s, b=%s, a_len=%ld, b_len=%ld", a->data, b->data, a->length, b->length);
     return a->length == b->length && memcmp(a->data, b->data, a->length) == 0;
 }

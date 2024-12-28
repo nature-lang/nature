@@ -1,0 +1,22 @@
+import http
+import coroutine as co
+
+fn auto_close(ptr<http.server_t> app) {
+    co.sleep(3000)
+    app.close()
+}
+
+fn main():void! {
+    var app = http.server()
+
+    app.get('/', fn(http.request_t req, ptr<http.response_t> res) {
+        res.send('hello nature')
+    })
+
+    app.get('/close', fn(http.request_t req, ptr<http.response_t> res) {
+        app.close()
+    })
+
+    app.listen(8888)
+    println('server is closed')
+}

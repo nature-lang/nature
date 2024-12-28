@@ -38,39 +38,6 @@ bool is_std_package(char *package) {
 
     return table_exist(std_package_table, package);
 }
-
-bool is_std_temp_package(char *package) {
-    // 扫描 nature root 下的所有 文件，并注册到全局变量 std_packages 中
-    if (std_temp_package_table) {
-        return table_exist(std_temp_package_table, package);
-    }
-
-    std_temp_package_table = table_new();
-
-    // 遍历 NATURE_ROOT 下的 std 目录下的所有文件夹
-    char *std_dir = path_join(NATURE_ROOT, "std");
-    char *temp_dir = path_join(std_dir, "temps");
-
-    DIR *dir = opendir(temp_dir);
-    assertf(dir, "cannot found temp dir %s", temp_dir);
-
-    struct dirent *entry;
-    while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_type == DT_REG) {
-            char *filename = strdup(entry->d_name);
-
-            filename = rtrim(filename, ".n");
-
-            table_set(std_temp_package_table, filename, (void *) 1);
-        }
-    }
-
-    closedir(dir);
-
-
-    return table_exist(std_temp_package_table, package);
-}
-
 char *package_import_temp_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *ast_import_package) {
     assert(package_dir);
     assert(ast_import_package);

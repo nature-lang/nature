@@ -1,11 +1,11 @@
 import syscall
 import strings
-import libc_temp
+import libc
 
 type time_t = struct {
     i64 sec
     i64 nsec
-    ptr<libc_tm_t> tm
+    raw_ptr<libc.tm_t> tm
 }
 
 fn time_t.timestamp():i64 {
@@ -23,7 +23,7 @@ fn time_t.ns_timestamp():i64 {
 fn time_t.datetime():string {
     var buf = vec_new<u8>(100, 0)// 必须预留足够大的空间,才能正常引用
 
-   var len = strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S'.ref(), self.tm)
+   var len = libc.strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S'.ref(), self.tm)
    buf = buf.slice(0, len)
 
    return buf as string
@@ -32,16 +32,13 @@ fn time_t.datetime():string {
 // 将 time_t 使用当前时间进行初始化
 fn now():time_t {
     var sys_time = syscall.gettime() catch err {
-        // 如果获取时间戳失败，则返回一个空的时间
-        int sec = 0
-        return time_t {
-            tm = localtime(&sec)
-        }
+        return time_t {}
     }
+
     var t = time_t {
         sec = sys_time.sec,
         nsec = sys_time.nsec,
-        tm = localtime(&sys_time.sec)
+        tm = libc.localtime(&sys_time.sec)
     }
 
     return t

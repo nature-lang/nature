@@ -1,17 +1,13 @@
 #include <stdio.h>
+#include <runtime/builtin.h>
 
 #include "string.h"
 #include "tests/test.h"
 #include "utils/assertf.h"
 #include "utils/exec.h"
 
-static void test_basic() {
-    char *raw = exec_output();
-    char *find = strstr(raw, "main_co done");
-
-    assert_true(find);
-}
+extern char **environ;
 
 int main(void) {
-    TEST_BASIC
+    TEST_EXEC_IMM
 }

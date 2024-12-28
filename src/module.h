@@ -21,6 +21,11 @@ static inline char *ident_with_prefix(char *module_ident, char *ident) {
     return temp;
 }
 
+static inline char *label_ident_with_unique(module_t *m, char *ident) {
+    char *result = malloc(strlen(ident) + sizeof(int) + 2);
+    sprintf(result, "%s_%d", ident, var_unique_count++);
+    return result;
+}
 
 static inline char *label_ident_with_prefix(module_t *m, char *ident) {
     char *result = malloc(strlen(ident) + sizeof(int) + 2);
