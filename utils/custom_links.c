@@ -3,8 +3,6 @@
 symdef_t *rt_symdef_ptr = NULL;
 
 fndef_t *rt_fndef_ptr = NULL;
-struct sc_map_64v rt_fndef_cache;
-
 
 caller_t *rt_caller_ptr = NULL;
 

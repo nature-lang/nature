@@ -189,7 +189,7 @@ static inline uint64_t rt_rtype_out_size(int64_t rhash) {
     return rtype_stack_size(rtype, POINTER_SIZE);
 }
 
-fndef_t *find_fn(addr_t addr);
+fndef_t *find_fn(addr_t addr, n_processor_t *p);
 
 /**
  * 强制 gc

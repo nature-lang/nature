@@ -13,6 +13,8 @@ static inline void on_async_close_cb(uv_handle_t *handle) {
     conn_ctx_t *ctx = CONTAINER_OF(handle, conn_ctx_t, async_handle);
     DEBUGF("[on_async_close_cb] ctx: %p", ctx);
 
+    ctx->read_buf_len = 0;
+    ctx->read_buf_cap = 0;
     free(ctx->read_buf);
     free(ctx->write_buf.base);
     free(ctx);
@@ -53,7 +55,6 @@ static inline void on_write_end_cb(uv_write_t *write_req, int status) {
 void alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
     conn_ctx_t *ctx = CONTAINER_OF(handle, conn_ctx_t, client_handle);
     DEBUGF("[uv_alloc_buffer] suggested_size: %ld", suggested_size);
-    assert(ctx->read_buf_len == ctx->read_buf_cap);
     ctx->read_buf_cap += HTTP_PARSER_BUF_SIZE;
 
     if (!ctx->read_buf) {
@@ -226,6 +227,7 @@ static void on_new_conn_cb(uv_stream_t *server, int status) {
     uv_tcp_init(server->loop, &ctx->client_handle);
     int result = uv_accept(server, (uv_stream_t *) &ctx->client_handle);
     if (result) {
+        DEBUGF("[accept_new_conn] uv_accept failed: %s", uv_strerror(result));
         uv_close((uv_handle_t *) &ctx->client_handle, on_close_cb);
         return;
     }

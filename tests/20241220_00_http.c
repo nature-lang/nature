@@ -34,8 +34,8 @@ int main(void) {
         // 关闭 http 服务器
         http_get("/close");
 
-        int status;
+        int status = 0;
         waitpid(pid, &status, 0); // 等待子进程结束
-        log_debug("http server %d exit with status %d", pid, status);
+        log_debug("http server %d exit with status %ld", pid, status);
     }
 }

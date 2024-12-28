@@ -246,7 +246,7 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
     write_barrier(&fn_runtime->envs, &envs);
 
     // 基于 jit 返回一个可以直接被外部 call 的 fn_addr
-    fndef_t *fndef = find_fn(fn_addr);
+    fndef_t *fndef = find_fn(fn_addr, p);
     assert(fndef && "cannot find fn by addr");
 
     gen_closure_jit_codes(fndef, fn_runtime, fn_addr);

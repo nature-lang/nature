@@ -15,7 +15,12 @@ static void test_basic() {
                 "/test/hello/world/nice.tar.gz\n"
                 "/test/hello/world/nice.tar.gz\n"
                 "sub/sub2\n"
+#ifdef __LINUX
                 "dirent_t size 268\n"
+#else
+                "dirent_t size 1036\n"
+#endif
+
                 "os.listdir of mock len 4\n"
                 "item:  dir1\n"
                 "item:  file\n"

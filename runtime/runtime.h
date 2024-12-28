@@ -33,7 +33,7 @@ int runtime_main(int argc, char *argv[]);
         addr_t _fp_value;     \
         __asm__ volatile("mov %0, x29" : "=r"(_fp_value)); \
         uint64_t _value = fetch_addr_value(_fp_value + POINTER_SIZE); \
-        fndef_t *_fn = find_fn(_value); \
+        fndef_t *_fn = find_fn(_value, _co->p); \
         if (!_fn) break; \
         _co->scan_ret_addr = _value; \
         assert(_co->scan_ret_addr); \
@@ -420,6 +420,8 @@ struct n_processor_t {
 
     rt_linked_fixalloc_t gc_worklist; // gc 扫描的 ptr 节点列表
     uint64_t gc_work_finished; // 当前处理的 GC 轮次，每完成一轮 + 1
+
+    struct sc_map_64v caller_cache; // 函数缓存定义
 
     struct n_processor_t *next; // processor 链表支持
 };

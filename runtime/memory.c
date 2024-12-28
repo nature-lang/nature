@@ -37,8 +37,6 @@ void callers_deserialize() {
 }
 
 void fndefs_deserialize() {
-    sc_map_init_64v(&rt_fndef_cache, 0, 0);
-
     rt_fndef_ptr = &rt_fndef_data;
 
     DEBUGF("[fndefs_deserialize] rt_fndef_ptr addr: %p", rt_fndef_ptr);

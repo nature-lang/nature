@@ -75,15 +75,17 @@ void rt_shade_obj_with_barrier(void *new_obj) {
 /**
  * addr 是 .text 中的地址
  * @param addr
+ * @param p
  * @return
  */
-fndef_t *find_fn(addr_t addr) {
+fndef_t *find_fn(addr_t addr, n_processor_t *p) {
     if (addr <= 0) {
         return NULL;
     }
+    assert(p);
 
     // 尝试通过 ret addr 快速定位
-    fndef_t *fn = sc_map_get_64v(&rt_fndef_cache, addr);
+    fndef_t *fn = sc_map_get_64v(&p->caller_cache, addr);
     if (fn) {
         return fn;
     }
@@ -93,7 +95,9 @@ fndef_t *find_fn(addr_t addr) {
         assert(fn);
 
         if (fn->base <= addr && addr < (fn->base + fn->size)) {
-            sc_map_put_64v(&rt_fndef_cache, addr, fn);
+            // put 增加 lock
+            sc_map_put_64v(&p->caller_cache, addr, fn);
+
             return fn;
         }
     }
@@ -364,7 +368,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     size_t max_i = size / POINTER_SIZE;
     while (temp_i < max_i) {
         addr_t v = fetch_addr_value((addr_t) temp_cursor);
-        fndef_t *fn = find_fn(v);
+        fndef_t *fn = find_fn(v, p);
         TRACEF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i,
                temp_cursor, v,
                fn ? fn->name : "", fn ? fn->stack_size : 0);
@@ -408,12 +412,12 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     }
 
     addr_t ret_addr = co->scan_ret_addr;
-    assertf(find_fn(ret_addr), "scan ret_addr=%p failed", ret_addr);
+    assertf(find_fn(ret_addr,p), "scan ret_addr=%p failed", ret_addr);
 
     int scan_fn_count = 0;
     // coroutine_wrapper 也使用了该协程栈，如果遇到的 return_addr 无法找到对应的 fn 直接退出当前循环即可
     while (cursor < max) {
-        fndef_t *fn = find_fn(ret_addr);
+        fndef_t *fn = find_fn(ret_addr, p);
         // assertf(fn, "fn not found by ret_addr, return_addr=0x%lx", ret_addr);
         if (!fn) {
             DEBUGF("fn not found by ret_addr, return_addr=%p, break", (void *) ret_addr);

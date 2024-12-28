@@ -104,7 +104,7 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     uint64_t rip = CTX_RIP;
 
     // rip 已经存到了 rsp 里面,只要能定位到 bp_offset 就行了。
-    fndef_t *fn = find_fn(rip);
+    fndef_t *fn = find_fn(rip, p);
     if (fn) {
         // 基于当前 rsp scan
         uint64_t sp_addr = (uint64_t) rsp;
@@ -148,7 +148,7 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     uint64_t lr = CTX_LR; // 保存返回地址的链接寄存器
 
     // 查找当前执行的函数
-    fndef_t *fn = find_fn(pc);
+    fndef_t *fn = find_fn(pc, p);
     if (fn) {
         // 基于当前 sp 计算扫描偏移
         uint64_t sp_addr = (uint64_t) sp;
@@ -806,6 +806,7 @@ n_processor_t *processor_new(int index) {
     p->need_stw = 0;
     p->safe_point = 0;
 
+    sc_map_init_64v(&p->caller_cache, 100, 0);
     mutex_init(&p->thread_locker, false);
     p->status = P_STATUS_INIT;
     p->sig.sa_flags = 0;

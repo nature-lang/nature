@@ -65,7 +65,6 @@ extern symdef_t *rt_symdef_ptr;
 extern uint64_t rt_fndef_count;
 extern fndef_t rt_fndef_data;
 extern fndef_t *rt_fndef_ptr;
-extern struct sc_map_64v rt_fndef_cache;
 
 extern uint64_t rt_caller_count;
 extern caller_t rt_caller_data;
