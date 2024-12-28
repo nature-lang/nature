@@ -1,11 +1,6 @@
 import http
 import coroutine as co
 
-fn auto_close(ptr<http.server_t> app) {
-    co.sleep(3000)
-    app.close()
-}
-
 fn main():void! {
     var app = http.server()
 

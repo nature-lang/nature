@@ -603,9 +603,20 @@ static bool type_confirmed(type_t t) {
  * @return
  */
 static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_type) {
+    type_t right_type;
     // +/-/*/ ，由做表达式的类型决定, 并且如果左右表达式类型不一致，则抛出异常
     type_t left_type = infer_right_expr(m, &expr->left, type_kind_new(TYPE_UNKNOWN));
-    type_t right_type = infer_right_expr(m, &expr->right, left_type);
+    if (left_type.kind != TYPE_UNION) {
+        // 基于 left type 进行隐式类型转换
+        right_type = infer_right_expr(m, &expr->right, left_type);
+    } else {
+        right_type = infer_right_expr(m, &expr->right, type_kind_new(TYPE_UNKNOWN));
+    }
+
+    if (!type_compare(left_type, right_type, NULL)) {
+        INFER_ASSERTF(false, "type inconsistency, expect=%s, actual=%s", type_origin_format(left_type),
+                      type_origin_format(right_type));
+    }
 
     // 目前 binary 的两侧符号只支持 int 和 float
     if (is_number(left_type.kind)) {
@@ -663,7 +674,7 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     type_t target_type = reduction_type(m, as_expr->target_type);
     as_expr->target_type = target_type;
 
-    INFER_ASSERTF(target_type.kind != TYPE_NULL, "cannot casting to 'null'");
+    // INFER_ASSERTF(target_type.kind != TYPE_NULL, "cannot casting to 'null'");
 
     // 此处进行了类型的约束
     type_t src_type = infer_expr(m, &as_expr->src, target_type);
@@ -801,58 +812,86 @@ static type_t infer_async(module_t *m, ast_expr_t *expr) {
     return call_expr->return_type;
 }
 
-static type_t infer_match(module_t *m, ast_match_t *match_expr, type_t target_type) {
+/**
+ * @param m
+ * @param match
+ * @param target_type
+ * @return
+ */
+static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
     // target 约束了 exec 的返回类型
     // subject 约束 case 的类型
 
     // 不存在 subject_type 时，case 的类型必须是 bool，否则和 subject_type 一致，其中 is xxx 特殊处理
     type_t subject_type = type_kind_new(TYPE_BOOL);
-    if (match_expr->subject) {
-        subject_type = infer_right_expr(m, match_expr->subject, type_kind_new(TYPE_UNKNOWN));
-        INFER_ASSERTF(type_confirmed(subject_type), "map key type not confirm");
+    if (match->subject) {
+        subject_type = infer_right_expr(m, match->subject, type_kind_new(TYPE_UNKNOWN));
+        INFER_ASSERTF(type_confirmed(subject_type), "match subject type not confirm");
     }
-
-    type_t result;
-
 
     stack_push(m->current_fn->break_target_types, &target_type);
 
+    table_t *union_table = table_new(); // key is hash
+
+    bool has_default = false;
+
     // 类型一致
-    SLICE_FOR(match_expr->cases) {
-        ast_match_case_t *match_case = SLICE_VALUE(match_expr->cases);
+    SLICE_FOR(match->cases) {
+        ast_match_case_t *match_case = SLICE_VALUE(match->cases);
         if (match_case->is_default) {
+            has_default = true;
             goto DEFAULT_HANDLE;
         }
 
         for (int i = 0; i < match_case->cond_list->length; ++i) {
             ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, i);
 
+            // union 只能使用 is 匹配类型, 而不能进行值匹配
+            if (subject_type.kind == TYPE_UNION) {
+                INFER_ASSERTF(cond_expr->assert_type == AST_EXPR_MATCH_IS,
+                              "match 'union type' only support 'is' assert");
+            }
+
             if (cond_expr->assert_type == AST_EXPR_MATCH_IS) {
                 INFER_ASSERTF(subject_type.kind == TYPE_UNION, "only type any can use is assert");
-
-                // 不寻常任何引导
                 infer_right_expr(m, cond_expr, type_kind_new(TYPE_UNKNOWN));
+                assert(cond_expr->type.kind == TYPE_BOOL);
+
+                ast_match_is_expr_t *match_is_expr = cond_expr->value;
+                rtype_t rtype = ct_reflect_type(match_is_expr->target_type);
+
+                table_set(union_table, itoa(rtype.hash), cond_expr);
             } else {
                 infer_right_expr(m, cond_expr, subject_type);
             }
         }
 
     DEFAULT_HANDLE:
-        if (match_case->handle_expr) {
-            type_t handle_expr_type = infer_right_expr(m, match_case->handle_expr, target_type);
-            // 类型赋值，或者一致性校验
-            if (target_type.kind == TYPE_UNKNOWN) {
-                type_t *t = stack_top(m->current_fn->break_target_types);
-                *t = handle_expr_type;
+        infer_body(m, match_case->handle_body);
+    }
+
+    // default check
+    if (!has_default) {
+        do {
+            if (subject_type.kind == TYPE_UNION && !subject_type.union_->any) {
+                for (int i = 0; i < subject_type.union_->elements->length; i++) {
+                    type_t *element_type = ct_list_value(subject_type.union_->elements, i);
+                    rtype_t rtype = ct_reflect_type(*element_type);
+                    if (!table_exist(union_table, itoa(rtype.hash))) {
+                        ANALYZER_ASSERTF(has_default,
+                                         "match expression lacks a default case '_' and union element type lacks, for example 'is %s'",
+                                         type_origin_format(*element_type))
+                    }
+                }
+
+                break; // union completed
             }
-        } else {
-            assert(match_case->handle_body);
-            infer_body(m, match_case->handle_body);
-        }
+
+            ANALYZER_ASSERTF(has_default, "match expression lacks a default case '_'")
+        } while (0);
     }
 
     stack_pop(m->current_fn->break_target_types);
-
     return target_type;
 }
 
