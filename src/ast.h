@@ -387,8 +387,6 @@ typedef struct {
 
     bool is_default; //  使用了 ident 并且 ident 是 _, 在 analyzer 阶段会被解析为 default。default 必须在最后一栏
 
-    // either
-    ast_expr_t *handle_expr;
     slice_t *handle_body;
 } ast_match_case_t;
 

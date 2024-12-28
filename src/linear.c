@@ -2111,13 +2111,13 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
 
     char *match_start_ident = label_ident_with_unique(m, MATCH_IDENT);
     char *match_end_ident = str_connect(match_start_ident, LABEL_END_SUFFIX);
+
     OP_PUSH(lir_op_label(match_start_ident, true));
 
 
     bool has_ret = expr.target_type.kind != TYPE_VOID;
 
     table_set(m->current_closure->match_has_ret, match_start_ident, (void *) has_ret);
-
     if (has_ret && !target) {
         target = temp_var_operand_with_alloc(m, expr.type);
     }
@@ -2136,13 +2136,20 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
     }
 
     SLICE_FOR(match_expr->cases) {
+        // .@MATCH_79.case_handle_end
+        char *handle_start_ident = label_ident_with_unique(m, str_connect(match_start_ident,MATCH_CASE_HANDLE));
+        lir_op_t *handle_start = lir_op_label(handle_start_ident, true);
+        lir_op_t *handle_end = lir_op_label(str_connect(handle_start_ident, LABEL_END_SUFFIX), true);
+
         ast_match_case_t *match_case = SLICE_VALUE(match_expr->cases);
+
+        // 最后一条分支不需要进行 check, 直接进入 handle body
+        if (match_case->is_default || _i == match_expr->cases->count - 1) {
+            goto LINEAR_HANDLE_BODY;
+        }
+
         for (int i = 0; i < match_case->cond_list->length; ++i) {
             ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, i);
-            lir_op_t *handle_end = lir_op_local_label(m, MATCH_CASE_HANDLE_END);
-            if (match_case->is_default) {
-                goto DEFAULT_HANDLE;
-            }
 
             if (match_expr->subject) {
                 assert(subject_operand->assert_type == LIR_OPERAND_VAR);
@@ -2174,28 +2181,18 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
                 }
             }
 
-
             lir_operand_t *cond_target = linear_expr(m, *cond_expr, NULL);
-            OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(false), cond_target, handle_end->output));
-
-        DEFAULT_HANDLE:
-            // exec 逻辑
-            if (match_case->handle_expr) {
-                linear_expr(m, *match_case->handle_expr, target);
-                // break 标识用来做 cfg check
-                OP_PUSH(lir_op_new(LIR_OPCODE_BREAK, NULL, NULL, match_end->output));
-            } else {
-                linear_body(m, match_case->handle_body);
-            }
-
-            // 只要运行了 exec， 就直接结束 case 而不是继续执行。
-            OP_PUSH(lir_op_bal(match_end->output));
-
-            // default 逻辑, 不需要添加 handle end, 其必定会进入 handle_expr, 然后退出 match
-            if (!match_case->is_default) {
-                OP_PUSH(handle_end); // case_end
-            }
+            OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), cond_target, handle_start->output));
         }
+
+        OP_PUSH(lir_op_bal(handle_end->output));
+    LINEAR_HANDLE_BODY:
+        OP_PUSH(handle_start);
+        linear_body(m, match_case->handle_body);
+        // 只要运行了 exec， 就直接结束 case 而不是继续执行。
+        OP_PUSH(lir_op_bal(match_end->output));
+        // default 逻辑, 不需要添加 handle end, 其必定会进入 handle_expr, 然后退出 match
+        OP_PUSH(handle_end); // case_end
     }
 
     match_end->line = m->current_line + 1;

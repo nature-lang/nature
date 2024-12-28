@@ -516,8 +516,63 @@ static void analyzer_end_scope(module_t *m) {
     }
 }
 
+static ast_stmt_t *auto_as_stmt(int line, char *subject_ident, type_t target_type) {
+    // var x = x as T
+    ast_vardef_stmt_t *vardef = NEW(ast_vardef_stmt_t);
+    vardef->var_decl.ident = strdup(subject_ident);
+    vardef->var_decl.type = type_copy(target_type);
+
+    ast_expr_t expr = {
+        .line = line,
+        .column = 0,
+        .assert_type = AST_EXPR_AS,
+    };
+
+    ast_as_expr_t *as_expr = NEW(ast_as_expr_t);
+    as_expr->src = *ast_ident_expr(expr.line, expr.column, strdup(vardef->var_decl.ident));
+    as_expr->target_type = type_copy(target_type);
+    expr.value = as_expr;
+    vardef->right = expr;
+
+    ast_stmt_t *stmt = NEW(ast_stmt_t);
+    stmt->line = line;
+    stmt->column = 0;
+    stmt->assert_type = AST_STMT_VARDEF;
+    stmt->value = vardef;
+    return stmt;
+}
+
+static ast_expr_t *extract_is_expr(module_t *m, ast_expr_t *expr) {
+    if (expr->assert_type == AST_EXPR_IS && ((ast_is_expr_t *) expr->value)->src.assert_type == AST_EXPR_IDENT) {
+        return expr;
+    }
+
+    if (expr->assert_type == AST_EXPR_BINARY && ((ast_binary_expr_t *) expr->value)->operator == AST_OP_AND_AND) {
+        ast_binary_expr_t *binary_expr = expr->value;
+        ast_expr_t *left = extract_is_expr(m, &binary_expr->left);
+        ast_expr_t *right = extract_is_expr(m, &binary_expr->right);
+        if (left && right) {
+            ANALYZER_ASSERTF(false, "condition expr cannot contains multiple is expr");
+        }
+        return left ? left : right;
+    }
+
+    return NULL;
+}
+
 static void analyzer_if(module_t *m, ast_if_stmt_t *if_stmt) {
+    ast_expr_t *is_expr = extract_is_expr(m, &if_stmt->condition);
+    if (is_expr) {
+        ast_is_expr_t *is_cond = is_expr->value;
+        assert(is_cond->src.assert_type == AST_EXPR_IDENT);
+        char *ident = ((ast_ident *) is_cond->src.value)->literal;
+        type_t target_type = is_cond->target_type;
+        ast_stmt_t *as_stmt = auto_as_stmt(is_expr->line, ident, target_type);
+        slice_insert(if_stmt->consequent, 0, as_stmt);
+    }
+
     analyzer_expr(m, &if_stmt->condition);
+
 
     analyzer_begin_scope(m);
     analyzer_body(m, if_stmt->consequent);
@@ -538,20 +593,25 @@ static void analyzer_throw(module_t *m, ast_throw_stmt_t *throw) {
 }
 
 static void analyzer_match(module_t *m, ast_match_t *match) {
+    char *subject_ident = NULL;
     if (match->subject) {
+        if (match->subject->assert_type == AST_EXPR_IDENT) {
+            subject_ident = strdup(((ast_ident *) match->subject->value)->literal);
+        }
+
         analyzer_expr(m, match->subject);
     }
-
-    bool has_default = false;
 
     analyzer_begin_scope(m);
     SLICE_FOR(match->cases) {
         ast_match_case_t *match_case = SLICE_VALUE(match->cases);
 
+        bool is_cond = false;
         for (int i = 0; i < match_case->cond_list->length; ++i) {
-            ast_expr_t *expr = ct_list_value(match_case->cond_list, i);
-            if (expr->assert_type == AST_EXPR_IDENT) {
-                ast_ident *ident = expr->value;
+            ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, i);
+
+            if (cond_expr->assert_type == AST_EXPR_IDENT) {
+                ast_ident *ident = cond_expr->value;
                 if (str_equal(ident->literal, DEFAULT_IDENT)) {
                     // 'else' entry must be the last one in a 'when' expression.
                     // match 特殊形式处理
@@ -562,23 +622,33 @@ static void analyzer_match(module_t *m, ast_match_t *match) {
 
 
                     match_case->is_default = true;
-                    has_default = true;
                     continue;
                 }
+            } else if (cond_expr->assert_type == AST_EXPR_MATCH_IS) {
+                is_cond = true;
             }
 
-            analyzer_expr(m, expr);
+            analyzer_expr(m, cond_expr);
         }
 
-        if (match_case->handle_expr) {
-            analyzer_expr(m, match_case->handle_expr);
-        } else {
-            analyzer_body(m, match_case->handle_body);
+        if (match_case->cond_list->length > 1) {
+            is_cond = false; // cond is logic, not is expr
         }
+
+        if (is_cond && subject_ident) {
+            // 添加断言 as 表达式到 handle body 中
+            ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, 0);
+            assert(cond_expr->assert_type == AST_EXPR_MATCH_IS);
+            ast_match_is_expr_t *is_cond_expr = cond_expr->value;
+            slice_insert(match_case->handle_body, 0,
+                         auto_as_stmt(cond_expr->line, subject_ident, is_cond_expr->target_type));
+        }
+
+        analyzer_begin_scope(m);
+        analyzer_body(m, match_case->handle_body);
+        analyzer_end_scope(m);
     }
     analyzer_end_scope(m);
-
-    ANALYZER_ASSERTF(has_default, "match expression lacks a default case '_'")
 }
 
 /**

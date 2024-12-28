@@ -2774,25 +2774,30 @@ static ast_expr_t parser_match_expr(module_t *m) {
         m->parser_match_cond = false;
 
         // expr or stmt
-        ast_expr_t *exec_expr = NULL;
-        slice_t *exec_body = NULL;
+        slice_t *handle_body = NULL;
         if (parser_is(m, TOKEN_LEFT_CURLY)) {
             // expr -> {
             //  stmt
             //  stmt
             // }
-            exec_body = parser_body(m);
+            handle_body = parser_body(m);
         } else {
-            // expr -> expr
-            exec_expr = expr_new_ptr(m);
-            *exec_expr = parser_expr(m);
+            slice_t *stmt_list = slice_new();
+            ast_stmt_t *stmt = stmt_new(m);
+            ast_break_t *b = NEW(ast_break_t);
+            b->expr = expr_new_ptr(m);
+            // expr -> {break expr}
+            *b->expr = parser_expr(m);
+            stmt->value = b;
+            stmt->assert_type = AST_STMT_BREAK;
+            slice_push(stmt_list, stmt);
+            handle_body = stmt_list;
         }
 
         parser_must_stmt_end(m);
 
         match_case->cond_list = cond_list;
-        match_case->handle_body = exec_body;
-        match_case->handle_expr = exec_expr;
+        match_case->handle_body = handle_body;
 
         slice_push(cases, match_case);
     }

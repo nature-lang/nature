@@ -102,6 +102,7 @@ typedef enum {
     TYPE_ALIAS, // 声明一个新的类型时注册的 type 的类型是这个
     TYPE_PARAM, // type formal param type foo<f1, f2> = f1|f2, 其中 f1 就是一个 param
     TYPE_UNION,
+    TYPE_ENUM,
 
     // runtime 中使用的一种需要 gc 的 pointer base type 结构
     TYPE_GC,

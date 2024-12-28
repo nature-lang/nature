@@ -97,7 +97,6 @@ fn main() {
     var d = match c {
         is int -> 0.0
         is float -> c as float
-        12 -> 0.0
         _ -> 0.0
     }
     println(d)

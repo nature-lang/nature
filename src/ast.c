@@ -598,11 +598,7 @@ static ast_match_t *ast_match_copy(ast_match_t *temp) {
 
         ast_match_case_t *new_match_case = NEW(ast_match_case_t);
         new_match_case->cond_list = ast_list_expr_copy(match_case->cond_list);
-        if (new_match_case->handle_expr) {
-            new_match_case->handle_expr = ast_expr_copy(match_case->handle_expr);
-        } else {
-            new_match_case->handle_body = ast_body_copy(match_case->handle_body);
-        }
+        new_match_case->handle_body = ast_body_copy(match_case->handle_body);
         slice_push(cases, new_match_case);
     }
 

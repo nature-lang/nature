@@ -65,9 +65,9 @@ void fndefs_deserialize() {
 void rtypes_deserialize() {
     RDEBUGF("[rtypes_deserialize] start");
     sc_map_init_64v(&rt_rtype_map, rt_rtype_count * 2, 0);
+    builtin_rtype_init();
 
     rtype_t *rt_rtype_ptr = &rt_rtype_data;
-
     uint8_t *gc_bits_offset = (uint8_t *) (rt_rtype_ptr + rt_rtype_count);
 
     // gc bits
@@ -84,6 +84,19 @@ void rtypes_deserialize() {
     // element_hashs
     for (int i = 0; i < rt_rtype_count; ++i) {
         rtype_t *r = &rt_rtype_ptr[i];
+        //  常用 rtype 注册覆盖
+        if (r->kind == TYPE_UINT8) {
+            string_element_rtype = *r;
+        } else if (r->kind == TYPE_STRING) {
+            string_rtype = *r;
+            string_ref_rtype = *r;
+            std_arg_rtype = *r;
+            os_env_rtype = *r;
+        } else if (r->kind == TYPE_VEC) {
+            vec_rtype = *r;
+        } else if (r->kind == TYPE_GC_FN) {
+            fn_rtype = *r;
+        }
 
         if (r->length > 0) {
             uint64_t size = r->length * sizeof(uint64_t);
@@ -96,7 +109,6 @@ void rtypes_deserialize() {
         RDEBUGF("[rtypes_deserialize] hash=%ld to table success, kind=%s", r->hash, type_kind_str[r->kind]);
     }
 
-    builtin_rtype_init();
 
     RDEBUGF("[rtypes_deserialize] count=%lu", count);
 }
