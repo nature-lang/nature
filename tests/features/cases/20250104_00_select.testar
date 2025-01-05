@@ -1,0 +1,95 @@
+=== test_basic
+--- main.n
+fn main():void! {
+    var ch1 = chan_new<int>(1)
+    var ch2 = chan_new<string>()
+
+    for int i = 0; i < 2; i+=1 {
+        select{
+            ch2.on_recv() -> msg {
+                println('ch2 on_recv msg:', msg)
+            }
+            ch1.on_recv() -> msg {
+                println('ch1 on_recv msg:', msg)
+            }
+            ch1.on_send(23312) -> {
+                println('ch1 on_send success')
+            }
+        }
+    }
+}
+--- output.txt
+ch1 on_send success
+ch1 on_recv msg: 23312
+
+=== test_default
+--- main.n
+fn main():void! {
+    var ch1 = chan_new<int>()
+    var ch2 = chan_new<string>()
+
+    select{
+        ch2.on_recv() -> msg {
+            println('ch2 on_recv msg:', msg)
+        }
+        ch1.on_send(23312) -> {
+            println('ch1 on_send success')
+        }
+        _ -> {
+            println('default')
+        }
+    }
+}
+--- output.txt
+default
+
+=== test_block
+--- main.n
+import coroutine as co
+
+fn sleep_send(chan<string> ch2):void! {
+    co.sleep(1000)
+    ch2.send('hello ch2')
+}
+
+fn main():void! {
+    var ch1 = chan_new<int>()
+    var ch2 = chan_new<string>()
+
+    go sleep_send(ch2)
+
+    select{
+        ch2.on_recv() -> msg {
+            println('ch2 on_recv msg:', msg)
+        }
+        ch1.on_send(23312) -> {
+            println('ch1 on_send success')
+        }
+    }
+}
+--- output.txt
+ch2 on_recv msg: hello ch2
+
+=== test_send_failed
+--- main.n
+fn main():void! {
+    var ch1 = chan_new<int>()
+    var ch2 = chan_new<string>()
+
+    ch1.close()
+
+    select{
+        ch2.on_recv() -> msg {
+            println('ch2 on_recv msg:', msg)
+        }
+        ch1.on_send(23312) -> {
+            if !ch1.is_successful() {
+                println('ch1 on_send failed, ch1 is closed')
+            } else {
+                println('ch1 on_send success')
+            }
+        }
+    }
+}
+--- output.txt
+ch1 on_send failed, ch1 is closed

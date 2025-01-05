@@ -13,7 +13,7 @@ fn main():void! {
     var a3 = path.join('/test/hello/world', 'nice.tar.gz')
     println(a3)
 
-    var s =strings.replace('/test/hello/world/sub/sub2', '/test/hello/world/', '')
+    var s = '/test/hello/world/sub/sub2'.replace('/test/hello/world/', '')
     println(s)
 
     // test list dir (build in fn?) parser handle?

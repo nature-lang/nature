@@ -10,8 +10,8 @@ linkco_t *rti_acquire_linkco() {
 
         while (p->linkco_count < (P_LINKCO_CACHE_MAX / 2) && global_linkco_cache != NULL) {
             linkco_t *linkco = global_linkco_cache;
-            global_linkco_cache = linkco->succ;
-            linkco->succ = NULL;
+            global_linkco_cache = linkco->next;
+            linkco->next = NULL;
             p->linkco_cache[p->linkco_count++] = linkco;
         }
 
@@ -27,14 +27,14 @@ linkco_t *rti_acquire_linkco() {
 
     linkco_t *linkco = p->linkco_cache[--p->linkco_count];
     assert(linkco->prev == NULL);
-    assert(linkco->succ == NULL);
+    assert(linkco->next == NULL);
 
     return linkco;
 }
 
 void rti_release_linkco(linkco_t *linkco) {
     assert(linkco->prev == NULL);
-    assert(linkco->succ == NULL);
+    assert(linkco->next == NULL);
     linkco->co = NULL;
     linkco->data = NULL;
 
@@ -51,14 +51,14 @@ void rti_release_linkco(linkco_t *linkco) {
             if (first == NULL) {
                 first = temp;
             } else {
-                last->succ = temp;
+                last->next = temp;
             }
 
             last = temp;
         }
 
         mutex_lock(&global_linkco_locker);
-        last->succ = global_linkco_cache;
+        last->next = global_linkco_cache;
         global_linkco_cache = first;
         mutex_unlock(&global_linkco_locker);
     }

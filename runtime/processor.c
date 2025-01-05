@@ -4,6 +4,7 @@
 #include <ucontext.h>
 
 #include "runtime.h"
+#include "nutils/rt_signal.h"
 #include "runtime/nutils/http.h"
 
 int cpu_count;
@@ -379,9 +380,10 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
     // running -> dispatch
     assert(co->status != CO_STATUS_RUNNING);
 
-    if (co->yield_lock) {
-        pthread_mutex_unlock(co->yield_lock);
-        co->yield_lock = NULL;
+    if (co->wait_unlock_fn) {
+        co->wait_unlock_fn(co, co->wait_lock);
+        co->wait_unlock_fn = NULL;
+        co->wait_lock = NULL;
     }
 
     p->co_started_at = 0;
@@ -620,6 +622,9 @@ void sched_init() {
 
     DEBUGF("[runtime.sched_init] cpu_count=%d", cpu_count);
 
+    // 全局信号监控
+    signal_init();
+
     // - 为每一个 processor 创建对应的 thread 进行处理对应的 p
     // 初始化 share_processor_index 数组为 0
     share_processor_list = NULL;
@@ -653,7 +658,7 @@ coroutine_t *coroutine_get() {
     return uv_key_get(&tls_coroutine_key);
 }
 
-void rt_default_co_error(char *msg, bool panic) {
+void rt_throw(char *msg, bool panic) {
     DEBUGF("[runtime.rt_default_co_error] msg=%s", msg);
     coroutine_t *co = coroutine_get();
     n_error_t *error = n_error_new(string_new(msg, strlen(msg)), panic);
@@ -781,7 +786,8 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu, void *arg)
     co->arg = arg;
     co->data = NULL;
     co->gc_black = 0;
-    co->yield_lock = NULL;
+    co->wait_unlock_fn = NULL;
+    co->wait_lock = NULL;
     co->ticket = false;
     co->status = CO_STATUS_RUNNABLE;
     co->p = NULL;

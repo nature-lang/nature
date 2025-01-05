@@ -4,6 +4,8 @@ import libc
 import libc.dirent
 import runtime
 
+type signal = u8
+
 fn args():[string] {
     return libc.std_args()
 }
@@ -59,7 +61,7 @@ fn listdir(string path):[string]! {
     return result
 }
 
-// use strings.split(dir, '/')
+// use dir.split(dir, '/')
 // join and syscall.mkdir(dir, mode)
 fn mkdirs(string dir, u32 mode):void! {
     if dir == '' {

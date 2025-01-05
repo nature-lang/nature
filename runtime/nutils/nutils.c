@@ -5,6 +5,7 @@
 #include "string.h"
 #include "vec.h"
 #include "runtime/rtype.h"
+#include "runtime/rt_chan.h"
 
 int command_argc;
 char **command_argv;
@@ -95,7 +96,7 @@ n_ptr_t *raw_ptr_assert(n_raw_ptr_t *raw_ptr) {
     PRE_RTCALL_HOOK();
     if (raw_ptr == 0) {
         DEBUGF("[raw_ptr_assert] raw pointer");
-        rt_default_co_error("raw_ptr is null, cannot assert", true);
+        rt_throw("raw_ptr is null, cannot assert", true);
         return 0;
     }
 
@@ -115,7 +116,7 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        rt_default_co_error("type assert error", true);
+        rt_throw("type assert error", true);
         return;
     }
 
@@ -253,11 +254,12 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
     exit(0);
 }
 
-int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor, void *value_ref) {
+int64_t iterator_next_value(void *iterator, uint64_t rhash, int64_t cursor, void *value_ref) {
     PRE_RTCALL_HOOK();
-    DEBUGF("[runtime.iterator_next_value] iterator base=%p,rtype_hash=%lu, cursor=%lu", iterator, rtype_hash, cursor);
+    DEBUGF("[runtime.iterator_next_value] iterator base=%p,rtype_hash=%lu, cursor=%lu, kind=%s", iterator, rhash,
+           cursor);
 
-    rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
+    rtype_t *iterator_rtype = rt_find_rtype(rhash);
 
     cursor += 1;
     if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
@@ -291,20 +293,35 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
         return cursor;
     }
 
+    if (iterator_rtype->kind == TYPE_CHAN) {
+        n_chan_t *ch = iterator;
+        // auto recv msg assign to value_ref
+        rt_chan_recv(ch, value_ref, false);
+
+        return 1;
+    }
+
     assert(false && "cannot support iterator type");
     exit(0);
 }
 
-void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, void *value_ref) {
+/**
+ * 存在 key 的情况下 second 直接使用 take_value, 不会对 cursor 进行递增
+ * 已知 cursor 的情况
+ * @param rhash
+ * @param cursor
+ * @param value_ref
+ */
+void iterator_take_value(void *iterator, uint64_t rhash, int64_t cursor, void *value_ref) {
     PRE_RTCALL_HOOK();
     DEBUGF("[runtime.iterator_take_value] iterator base=%p,rtype_hash=%lu, cursor=%lu, value_ref=%p", iterator,
-           rtype_hash, cursor,
+           rhash, cursor,
            value_ref);
 
     assert(cursor != -1 && "cannot iterator value");
-    assert(rtype_hash > 0 && "rtype hash is empty");
+    assert(rhash > 0 && "rtype hash is empty");
 
-    rtype_t *iterator_rtype = rt_find_rtype(rtype_hash);
+    rtype_t *iterator_rtype = rt_find_rtype(rhash);
     if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
         n_vec_t *list = iterator;
         DEBUGF("[runtime.iterator_take_value] kind is list, base=%p, len=%lu, cap=%lu, data_base=%p, element_hash=%lu",
@@ -488,7 +505,8 @@ char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
     TRACEF("[rtype_value_str] rtype_kind=%s, data_ref=%p, data_size=%lu", type_kind_str[rtype->kind], data_ref,
            data_size);
 
-    if (is_number(rtype->kind)) {
+    if (is_number(rtype->kind) || rtype->kind == TYPE_BOOL || rtype->kind == TYPE_PTR || rtype->kind == TYPE_RAW_PTR ||
+        rtype->kind == TYPE_VOID_PTR || rtype->kind == TYPE_CHAN || rtype->kind == TYPE_COROUTINE_T) {
         assert(data_size <= 8 && "not support number size > 8");
         int64_t temp = 0;
         memmove(&temp, data_ref, data_size);
@@ -507,6 +525,14 @@ char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
         str[n_str->length] = '\0';
         return str;
     }
+
+    if (rtype->kind == TYPE_STRUCT || rtype->kind == TYPE_ARR) {
+        char *data = mallocz(data_size + 1);
+        memmove(data, data_ref, data_size);
+        data[data_size] = '\0';
+        return data;
+    }
+
 
     assert(false && "not support type kind");
 
@@ -566,7 +592,7 @@ void raw_ptr_valid(void *raw_ptr) {
 
     DEBUGF("[raw_ptr_valid] raw_ptr=%p", raw_ptr);
     if (raw_ptr <= 0) {
-        rt_default_co_error("invalid memory address or nil pointer dereference", true);
+        rt_throw("invalid memory address or nil pointer dereference", true);
     }
 }
 
@@ -620,7 +646,7 @@ typedef struct {
 
 n_string_t *rt_string_new(n_void_ptr_t raw_string) {
     if (!raw_string) {
-        rt_default_co_error("raw string is empty", false);
+        rt_throw("raw string is empty", false);
         return NULL;
     }
 

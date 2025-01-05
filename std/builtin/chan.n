@@ -16,6 +16,7 @@ import coroutine as co
 //    int msg_size
 
 //    arr<u8,40> lock
+//    bool closed
 //}
 
 // var ch = chan_new<T>()
@@ -31,22 +32,52 @@ fn chan_new<T>(...[int] args):chan<T> {
     return rt_chan_new(rhash, ele_rhash, buf_len) as chan<T>
 }
 
-fn chan<T>.send(T msg) {
-    rt_chan_send(self as void_ptr, &msg as void_ptr)
+fn chan<T>.send(T msg):void! {
+    rt_chan_send(self as void_ptr, &msg as void_ptr, false)
 }
 
-fn chan<T>.recv():T {
+fn chan<T>.try_send(T msg):bool! {
+    return rt_chan_send(self as void_ptr, &msg as void_ptr, true)
+}
+
+fn chan<T>.on_send(T msg):void {
+    // no body
+}
+
+fn chan<T>.recv():T! {
     T msg = @default()
-    rt_chan_recv(self as void_ptr, &msg as void_ptr)
+    rt_chan_recv(self as void_ptr, &msg as void_ptr, false)
 
     return msg
 }
+
+// The specific logic is already handled at compiler time, and this function is mainly used for compiler front-end validation
+fn chan<T>.on_recv():T {
+    T msg = @default()
+    return msg
+}
+
+fn chan<T>.try_recv(T msg):bool! {
+    return rt_chan_recv(self as void_ptr, &msg as void_ptr, true)
+}
+
+#linkid rt_chan_close
+fn chan<T>.close():void!
+
+#linkid rt_chan_is_closed
+fn chan<T>.is_closed():bool
+
+#linkid rt_chan_is_successful
+fn chan<T>.is_successful():bool
 
 #linkid rt_chan_new
 fn rt_chan_new(i64 rhash, i64 ele_hash, i64 buf_len):void_ptr
 
 #linkid rt_chan_send
-fn rt_chan_send(void_ptr ch, void_ptr msg)
+fn rt_chan_send(void_ptr ch, void_ptr msg, bool _try):bool!
 
 #linkid rt_chan_recv
-fn rt_chan_recv(void_ptr ch, void_ptr msg)
+fn rt_chan_recv(void_ptr ch, void_ptr msg, bool _try):bool!
+
+#linkid rt_chan_close
+fn rt_chan_close(void_ptr ch):void!

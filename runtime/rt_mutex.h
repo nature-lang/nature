@@ -17,12 +17,6 @@
 #define ACTIVE_SPIN 4
 #define ACTIVE_SPIN_COUNT 30
 
-#ifdef __LINUX
-#define ATOMIC
-#else
-#define ATOMIC _Atomic
-#endif
-
 typedef struct {
     ATOMIC int64_t state;
     ATOMIC int64_t sema;

@@ -1,0 +1,88 @@
+import strings
+
+fn main():void! {
+    var s = 'hello world world'
+    var index = s.find('wo')
+    println('index of wo is ', index)
+
+    index = s.find('wow')
+    println('index of wow is ', index)
+
+    index = s.find_after('wo', 7)
+    println('index after 7 of wo is ', index)
+
+    // test split
+    var list = s.split(' ')
+    println('split len:', list.len())
+
+    for v in list {
+        println(v)
+    }
+
+    list = 'he\noll'.split('')
+    println('split he\\noll len:', list.len())
+    for v in list {
+        print(v)
+    }
+    println('!!!')
+
+    // test join
+    var list2 = ['nice', 'to', 'meet', 'you']
+    var s2 = strings.join(list2, '-')
+    println('join result:', s2, '!!!')
+
+    // ends with
+    var s3 = 'hell_test.exe'
+    var suffix = '.exe'
+    var r3 = s3.ends_with(suffix)
+    println(s3, 'ends with .exe?:', r3)
+    println(s3, 'ends with .elf?:', s3.ends_with('.elf'))
+
+    // starts with
+    var s4 = 'nice to meet you'
+    println(s4, 'starts with nice?:', s4.starts_with('nice'))
+    println(s4, 'starts with where?:', s4.starts_with('where'))
+    println(s4, 'starts with empty?:', s4.starts_with(''))
+
+    // trim
+    var s5 = '\n\t hello world\n\n\t \t\n'
+    var s6 = s5.ltrim(['\n', '\t', ' '])
+    s6 = s6.rtrim(['\n', '\t', ' '])
+
+    println('ltrim + rtrim result:', s6, '!!!')
+
+    println('trim result:', s5.trim(['\n', '\t', ' ']), '!!!')
+
+    var s7 = 'nice to meet you'
+
+    var s8 = s7.replace('e', 'g')
+    println(s8)
+
+    println('hello world hello nice to meet you hello'.replace('hello', 'hualaka'))
+    println('hello world hello nice to meet you hello'.replace('hello', ''))
+
+    // reverse
+    var s9 = 'helloworld'
+    println(s9, 'reverse: ', s9.reverse())
+
+    // rfind
+    var s10 = 'helloxworldxworld'
+    println('rfind wo:', s10.rfind('wo', s10.len()))
+    println('rfind wo:', s10.rfind('wo', 12))
+    println('rfind wo:', s10.rfind('r', s10.len()))
+
+    // to int
+    assert("123".to_int() == 123)
+    assert("-123".to_int() == -123)
+    assert("  456".to_int() == 456)
+
+    var s11 = "12a3".to_int() catch e {
+        assert(e.msg == "invalid character in number")
+    }
+    var s12 = "-".to_int() catch e {
+        assert(e.msg == "invalid number format")
+    }
+    var s13 = "999999999999999999999".to_int() catch e {
+        assert(e.msg == "number too large")
+    }
+}

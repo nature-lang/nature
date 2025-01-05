@@ -74,6 +74,7 @@ typedef enum {
     AST_STMT_FOR_COND,
     AST_STMT_FOR_TRADITION,
     AST_STMT_TYPE_ALIAS,
+    AST_STMT_SELECT,
     AST_CALL,
     AST_CATCH,
     AST_MATCH,
@@ -119,30 +120,30 @@ typedef enum {
 } ast_expr_op_t;
 
 static string ast_expr_op_str[] = {
-    [AST_OP_ADD] = "+",
-    [AST_OP_SUB] = "-",
-    [AST_OP_MUL] = "*",
-    [AST_OP_DIV] = "/",
-    [AST_OP_REM] = "%",
+        [AST_OP_ADD] = "+",
+        [AST_OP_SUB] = "-",
+        [AST_OP_MUL] = "*",
+        [AST_OP_DIV] = "/",
+        [AST_OP_REM] = "%",
 
-    [AST_OP_AND] = "&",
-    [AST_OP_OR] = "|",
-    [AST_OP_XOR] = "^",
-    [AST_OP_BNOT] = "~",
-    [AST_OP_LSHIFT] = "<<",
-    [AST_OP_RSHIFT] = ">>",
+        [AST_OP_AND] = "&",
+        [AST_OP_OR] = "|",
+        [AST_OP_XOR] = "^",
+        [AST_OP_BNOT] = "~",
+        [AST_OP_LSHIFT] = "<<",
+        [AST_OP_RSHIFT] = ">>",
 
-    [AST_OP_LT] = "<",
-    [AST_OP_LE] = "<=",
-    [AST_OP_GT] = ">", // >
-    [AST_OP_GE] = ">=", // >=
-    [AST_OP_EE] = "==", // ==
-    [AST_OP_NE] = "!=", // !=
-    [AST_OP_OR_OR] = "||",
-    [AST_OP_AND_AND] = "&&",
+        [AST_OP_LT] = "<",
+        [AST_OP_LE] = "<=",
+        [AST_OP_GT] = ">", // >
+        [AST_OP_GE] = ">=", // >=
+        [AST_OP_EE] = "==", // ==
+        [AST_OP_NE] = "!=", // !=
+        [AST_OP_OR_OR] = "||",
+        [AST_OP_AND_AND] = "&&",
 
-    [AST_OP_NOT] = "!", // unary !right
-    [AST_OP_NEG] = "-", // unary -right
+        [AST_OP_NOT] = "!", // unary !right
+        [AST_OP_NEG] = "-", // unary -right
 };
 
 struct ast_stmt_t {
@@ -488,7 +489,34 @@ typedef struct {
 typedef struct {
     ast_expr_t left; // left is struct or package
     string key;
-} ast_select_t;
+} ast_expr_select_t;
+
+/**
+select {
+    ch.on_recv() -> msg {
+        continue
+    }
+    ch.on_send(msg) -> {
+        break
+    }
+    _ -> {
+    }
+}
+*/
+typedef struct {
+    ast_call_t *on_call; // 可选
+    ast_var_decl_t *recv_var; // 可选
+    bool is_recv;
+    bool is_default; // default 没有 on_call 和 recv_var
+    slice_t *handle_body;
+} ast_select_case_t;
+
+typedef struct {
+    slice_t *cases; // ast_select_case_t
+    bool has_default;
+    int16_t send_count;
+    int16_t recv_count;
+} ast_select_stmt_t;
 
 typedef struct {
     ast_expr_t instance; // type is ptr<struct> or struct

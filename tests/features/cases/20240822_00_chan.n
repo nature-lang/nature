@@ -1,11 +1,11 @@
 import coroutine as co
 import runtime
 
-fn main() {
+fn main():void! {
     // case 1
     var ch = chan_new<int>()
 
-    go (fn(){
+    go (fn():void!{
         co.sleep(1000)
         int v = ch.recv()
         // assert(v == -233)
@@ -26,7 +26,7 @@ fn main() {
 
     // case 2
     var ch_str = chan_new<string>()
-    go (fn(chan<string> ch){
+    go (fn(chan<string> ch):void!{
         co.sleep(1000)
         ch_str.send('hello channel')
     })(ch_str)
@@ -40,7 +40,7 @@ fn main() {
     var ch_queue = chan_new<f64>()
     f64 sum = 0
 
-    fn consumer1() {
+    fn consumer1():void! {
         println('[ch_queue] consumer1 start, p_index =', runtime.processor_index())
 
         for int i = 0; i < 100; i+=1 {
@@ -51,7 +51,7 @@ fn main() {
         }
     }
 
-    fn consumer2() {
+    fn consumer2():void! {
         println('[ch_queue] consumer2 start, p_index =', runtime.processor_index())
 
         for int i = 0; i < 100; i+=1 {

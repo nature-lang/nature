@@ -1,6 +1,5 @@
 #include "exec.h"
 
-#include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -62,7 +61,7 @@ int exec_imm(char *work_dir, char *file, slice_t *list) {
 
 
 // 结尾必须是 NULL,开头必须是重复命令
-char *exec(char *work_dir, char *file, slice_t *list) {
+char *exec(char *work_dir, char *file, slice_t *list, int32_t *pid) {
     int fd[2];// write to fd[1], read by fd[0]
     VOID pipe(fd);
 
@@ -88,10 +87,12 @@ char *exec(char *work_dir, char *file, slice_t *list) {
 
         // exec 一旦执行成功，当前子进程就会自己推出，执行失败这会返回错误
         int result = execvp(file, argv);
-        //        perror("failed message");
         exit(result);
     }
 
+    if (pid) {
+        *pid = fid;
+    }
     close(fd[1]);
 
     char *buf = mallocz(81920);
@@ -100,12 +101,6 @@ char *exec(char *work_dir, char *file, slice_t *list) {
 
     int exec_status;
     wait(&exec_status);
-
-    // 测试时需要测试异常退出的清空, 此时 status != 0
-    //    if (exec_status != 0) {
-    //        sprintf(buf, "exec file='%s' failed", file);
-    //        return buf;
-    //    }
 
     return buf;
 }

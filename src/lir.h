@@ -23,9 +23,8 @@
 
 #define CATCH_IDENT ".@CATCH"
 #define MATCH_IDENT ".@MATCH" // 需要用到字符串匹配，所以给定特殊字符避免后续干扰
-#define MATCH_END_IDENT ".MATCH_END"
-#define MATCH_CASE_HANDLE ".CASE_HANDLE"
-#define MATCH_CASE_END ".CASE_END"
+#define CASE_HANDLE ".CASE_HANDLE"
+#define SELECT_IDENT ".@SELECT" // 需要用到字符串匹配，所以给定特殊字符避免后续干扰
 
 #define FOR_CONTINUE_IDENT ".FOR_CONTINUE"
 #define FOR_UPDATE_IDENT ".FOR_UPDATE"
@@ -39,7 +38,6 @@
 #define IF_CONTINUE_IDENT ".CONTINUE"
 #define LOGICAL_OR_IDENT ".LOGICAL_OR_END"
 #define LOGICAL_AND_IDENT ".LOGICAL_AND_END"
-
 
 
 #define ERRORT_MSG_IDENT "msg"
@@ -163,6 +161,10 @@
 #define RT_CALL_CO_HAS_ERROR "co_has_error"
 #define RT_CALL_CO_HAS_PANIC "co_has_panic"
 
+#define RT_CALL_SELECT_BLOCK "rt_select_block"
+
+#define RT_CALL_CHAN_SELECT "rt_chan_select"
+
 #define RT_CALL_PROCESSOR_SET_EXIT "processor_set_exit"
 
 #define FN_COROUTINE_RETURN_VAR "result"
@@ -279,6 +281,16 @@ static inline bool is_rtcall(string target) {
 static inline lir_operand_t *int64_operand(uint64_t val) {
     lir_imm_t *imm_operand = NEW(lir_imm_t);
     imm_operand->kind = TYPE_INT64;
+    imm_operand->uint_value = val;
+    lir_operand_t *operand = NEW(lir_operand_t);
+    operand->assert_type = LIR_OPERAND_IMM;
+    operand->value = imm_operand;
+    return operand;
+}
+
+static inline lir_operand_t *int16_operand(uint64_t val) {
+    lir_imm_t *imm_operand = NEW(lir_imm_t);
+    imm_operand->kind = TYPE_INT16;
     imm_operand->uint_value = val;
     lir_operand_t *operand = NEW(lir_operand_t);
     operand->assert_type = LIR_OPERAND_IMM;
@@ -427,9 +439,9 @@ static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64
         for (int i = 0; i < args->count; ++i) {
             lir_operand_t *o = args->take[i];
             assert(o->assert_type == LIR_OPERAND_VAR || o->assert_type == LIR_OPERAND_SYMBOL_VAR ||
-                o->assert_type == LIR_OPERAND_IMM ||
-                o->assert_type == LIR_OPERAND_STACK || o->assert_type == LIR_OPERAND_REG ||
-                o->assert_type == LIR_OPERAND_INDIRECT_ADDR);
+                   o->assert_type == LIR_OPERAND_IMM ||
+                   o->assert_type == LIR_OPERAND_STACK || o->assert_type == LIR_OPERAND_REG ||
+                   o->assert_type == LIR_OPERAND_INDIRECT_ADDR);
             slice_concat(result, recursion_extract_operands(o, flag));
         }
         return result;

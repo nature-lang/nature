@@ -15,18 +15,18 @@ fn base(string path):string {
         return '.'
     }
 
-    path = strings.rtrim(path, ['/'])
+    path = path.rtrim(['/'])
 
     if path == '' {
         return '/'
     }
 
-    var i = strings.rfind(path, "/", path.len())
+    var i = path.rfind("/", path.len())
     if i == -1 {
         return path
     }
 
-    return strings.slice(path, i + 1, path.len())
+    return path.slice(i + 1, path.len())
 }
 
 // ref golang path.dir
@@ -38,10 +38,10 @@ fn dir(string path):string {
   var last = path[path.len() - 1]
 
   if last == ascii('/') {
-     return strings.slice(path, 0, path.len()-1)
+     return path.slice(0, path.len()-1)
   }
 
-  var i = strings.rfind(path, '/', path.len())
+  var i = path.rfind('/', path.len())
   if i == -1 {
     return '.'
   }
@@ -50,7 +50,7 @@ fn dir(string path):string {
     return '/'
   }
 
-  return strings.slice(path, 0, i)
+  return path.slice(0, i)
 }
 
 fn join(string dst, ...[string] list):string {

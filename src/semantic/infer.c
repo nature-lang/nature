@@ -774,12 +774,12 @@ static type_t infer_async(module_t *m, ast_expr_t *expr) {
         infer_fn_decl(m, co_expr->closure_fn);
         infer_fn_decl(m, co_expr->closure_fn_void);
 
-        first_arg = (ast_expr_t){
-            .line = expr->line,
-            .column = expr->column,
-            .assert_type = AST_FNDEF,
-            .type = co_expr->closure_fn->type,
-            .target_type = co_expr->closure_fn->type,
+        first_arg = (ast_expr_t) {
+                .line = expr->line,
+                .column = expr->column,
+                .assert_type = AST_FNDEF,
+                .type = co_expr->closure_fn->type,
+                .target_type = co_expr->closure_fn->type,
         };
 
         if (co_expr->return_type.kind == TYPE_VOID) {
@@ -866,7 +866,7 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
             }
         }
 
-    DEFAULT_HANDLE:
+        DEFAULT_HANDLE:
         infer_body(m, match_case->handle_body);
     }
 
@@ -1393,8 +1393,8 @@ static type_t infer_access(module_t *m, ast_expr_t *expr) {
  * @param select
  * @return
  */
-static type_t infer_select(module_t *m, ast_expr_t *expr) {
-    ast_select_t *select = expr->value;
+static type_t infer_unknown_select(module_t *m, ast_expr_t *expr) {
+    ast_expr_select_t *select = expr->value;
 
     infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
 
@@ -1586,7 +1586,7 @@ static bool marking_heap_alloc(ast_expr_t *expr) {
 
 // fn person_t<>.test() -> fn person_tx_test()
 static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
-    ast_select_t *select = call->left.value;
+    ast_expr_select_t *select = call->left.value;
 
     // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
     type_t select_left_type = infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
@@ -1698,10 +1698,19 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type) {
 
             // infer call args
             type_t left_type = infer_left_expr(m, &call->left);
+            type_fn_t *type_fn = left_type.fn;
             assert(left_type.kind == TYPE_FN);
-            infer_call_args(m, call, left_type.fn);
-            call->return_type = left_type.fn->return_type;
-            return left_type.fn->return_type;
+            infer_call_args(m, call, type_fn);
+            call->return_type = type_fn->return_type;
+
+            if (type_fn->is_errable) {
+                INFER_ASSERTF(m->current_fn->is_errable || m->be_caught,
+                              "calling an errable! fn `%s` requires the current `fn %s` errable! as well or be caught.",
+                              type_fn->fn_name ? type_fn->fn_name : "lambda",
+                              m->current_fn->fn_name);
+            }
+
+            return type_fn->return_type;
         } while (0);
     }
 
@@ -1803,6 +1812,27 @@ static void infer_assign(module_t *m, ast_assign_stmt_t *stmt) {
     infer_right_expr(m, &stmt->right, left_type);
 }
 
+
+static void infer_select(module_t *m, ast_select_stmt_t *stmt) {
+    SLICE_FOR(stmt->cases) {
+        ast_select_case_t *select_case = SLICE_VALUE(stmt->cases);
+
+        if (select_case->on_call) {
+            // call 改写 xxx.xxx.xxx.on_recv() -> chan_on_recv(xxx.xxx.xxx)
+            infer_call(m, select_case->on_call, type_kind_new(TYPE_UNKNOWN));
+        }
+
+        if (select_case->recv_var) {
+            // must recv
+            select_case->recv_var->type = select_case->on_call->return_type;
+            infer_var_decl(m, select_case->recv_var);
+            rewrite_var_decl(m, select_case->recv_var);
+        }
+
+        infer_body(m, select_case->handle_body);
+    }
+}
+
 static void infer_if(module_t *m, ast_if_stmt_t *stmt) {
     infer_right_expr(m, &stmt->condition, type_kind_new(TYPE_BOOL));
 
@@ -1826,8 +1856,10 @@ static void infer_for_cond_stmt(module_t *m, ast_for_cond_stmt_t *stmt) {
 static void infer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     // 经过 infer_right_expr 的类型一定是已经被还原过的
     type_t iterate_type = infer_right_expr(m, &stmt->iterate, type_kind_new(TYPE_UNKNOWN));
-    INFER_ASSERTF(iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_VEC || iterate_type.kind == TYPE_STRING,
-                  "for in iterate type must be map/list/string, actual=%s", type_format(iterate_type));
+    INFER_ASSERTF(
+            iterate_type.kind == TYPE_MAP || iterate_type.kind == TYPE_VEC || iterate_type.kind == TYPE_STRING ||
+            iterate_type.kind == TYPE_CHAN,
+            "for in iterate type must be map/list/string/chan, actual=%s", type_format(iterate_type));
 
     rewrite_var_decl(m, &stmt->first);
 
@@ -1839,10 +1871,17 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     ast_var_decl_t *first = &stmt->first;
     ast_var_decl_t *second = stmt->second;
 
+    if (iterate_type.kind == TYPE_CHAN) {
+        INFER_ASSERTF(second == NULL, "for chan only have one receive parameter");
+    }
+
     // 为 key_decl 添加 type
     if (iterate_type.kind == TYPE_MAP) {
         type_map_t *type_map = iterate_type.map;
         first->type = type_map->key_type;
+    } else if (iterate_type.kind == TYPE_CHAN) {
+        type_chan_t *chan_decl = iterate_type.chan;
+        first->type = chan_decl->element_type;
     } else if (iterate_type.kind == TYPE_STRING) {
         if (!second) {
             first->type = type_kind_new(TYPE_UINT8);
@@ -1932,7 +1971,7 @@ static type_t infer_literal(module_t *m, ast_literal_t *literal) {
 
 static type_t infer_env_access(module_t *m, ast_env_access_t *expr) {
     ast_ident ident = {
-        .literal = expr->unique_ident,
+            .literal = expr->unique_ident,
     };
     return infer_ident(m, &ident);
 }
@@ -2062,6 +2101,9 @@ static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
             infer_catch(m, stmt->value);
             break;
         }
+        case AST_STMT_SELECT: {
+            return infer_select(m, stmt->value);
+        }
         case AST_STMT_IF: {
             return infer_if(m, stmt->value);
         }
@@ -2119,7 +2161,7 @@ static type_t infer_left_expr(module_t *m, ast_expr_t *expr) {
             break;
         }
         case AST_EXPR_SELECT: {
-            type = infer_select(m, expr);
+            type = infer_unknown_select(m, expr);
             break;
         }
         case AST_EXPR_ENV_ACCESS: {
@@ -2215,7 +2257,7 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
             return infer_access(m, expr);
         }
         case AST_EXPR_SELECT: {
-            return infer_select(m, expr);
+            return infer_unknown_select(m, expr);
         }
         case AST_CALL: {
             return infer_call(m, expr->value, target_type);
@@ -2367,9 +2409,8 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         t.map->key_type = reduction_type(m, t.map->key_type);
         t.map->value_type = reduction_type(m, t.map->value_type);
 
-        INFER_ASSERTF(is_number(t.map->key_type.kind) || t.map->key_type.kind == TYPE_STRING ||
-                      t.map->key_type.kind == TYPE_ALL_T || t.map->key_type.kind == TYPE_PARAM,
-                      "map key only support number/string");
+        INFER_ASSERTF(is_map_set_key_type(t.map->key_type.kind),
+                      "type '%s' not support as map key", type_format(t.map->key_type));
 
         t.impl_ident = type_kind_str[TYPE_MAP];
         t.impl_args = ct_list_new(sizeof(type_t));
@@ -2381,9 +2422,8 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
 
     if (t.kind == TYPE_SET) {
         t.set->element_type = reduction_type(m, t.set->element_type);
-        INFER_ASSERTF(is_number(t.set->element_type.kind) || t.set->element_type.kind == TYPE_STRING ||
-                      t.set->element_type.kind == TYPE_ALL_T || t.set->element_type.kind == TYPE_PARAM,
-                      "set element only support number/string");
+        INFER_ASSERTF(is_map_set_key_type(t.set->element_type.kind),
+                      "type '%s' not support as set element", type_format(t.set->element_type));
 
         t.impl_ident = type_kind_str[TYPE_SET];
         t.impl_args = ct_list_new(sizeof(type_t));
@@ -2620,7 +2660,7 @@ static type_t reduction_type(module_t *m, type_t t) {
     }
 
     INFER_ASSERTF(false, "cannot parser type %s", type_format(t));
-STATUS_DONE:
+    STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
     if (in_heap == true) {

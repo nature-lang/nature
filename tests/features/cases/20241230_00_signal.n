@@ -1,0 +1,12 @@
+import coroutine as co
+import os.signal
+import syscall
+
+fn main():void! {
+    var ch = chan_new<signal.sig_t>(1)
+    signal.notify(ch, syscall.SIGTERM, syscall.SIGUSR1, syscall.SIGUSR2, syscall.SIGINT)
+
+    for sig in ch {
+        println('received signal: ', sig)
+    }
+}

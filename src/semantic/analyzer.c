@@ -10,6 +10,8 @@
 #include "src/error.h"
 #include "utils/helper.h"
 
+static void analyzer_var_decl(module_t *m, ast_var_decl_t *var_decl, bool redeclare_check);
+
 static void analyzer_expr(module_t *m, ast_expr_t *expr);
 
 static void analyzer_stmt(module_t *m, ast_stmt_t *stmt);
@@ -19,6 +21,8 @@ static void analyzer_var_tuple_destr(module_t *m, ast_tuple_destr_t *tuple_destr
 static bool analyzer_special_type_rewrite(module_t *m, type_t *type);
 
 static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef);
+
+static void analyzer_call(module_t *m, ast_call_t *call);
 
 char *analyzer_force_unique_ident(module_t *m) {
     if (m->ident) {
@@ -523,9 +527,9 @@ static ast_stmt_t *auto_as_stmt(int line, char *subject_ident, type_t target_typ
     vardef->var_decl.type = type_copy(target_type);
 
     ast_expr_t expr = {
-        .line = line,
-        .column = 0,
-        .assert_type = AST_EXPR_AS,
+            .line = line,
+            .column = 0,
+            .assert_type = AST_EXPR_AS,
     };
 
     ast_as_expr_t *as_expr = NEW(ast_as_expr_t);
@@ -649,6 +653,25 @@ static void analyzer_match(module_t *m, ast_match_t *match) {
         analyzer_end_scope(m);
     }
     analyzer_end_scope(m);
+}
+
+static void analyzer_select(module_t *m, ast_select_stmt_t *select) {
+    SLICE_FOR(select->cases) {
+        ast_select_case_t *select_case = SLICE_VALUE(select->cases);
+        if (select_case->on_call) {
+            analyzer_call(m, select_case->on_call);
+        }
+        analyzer_begin_scope(m);
+        if (select_case->recv_var) {
+            analyzer_var_decl(m, select_case->recv_var, true);
+        }
+        analyzer_body(m, select_case->handle_body);
+        analyzer_end_scope(m);
+        if (select_case->is_default) {
+            ANALYZER_ASSERTF(_i == select->cases->count - 1,
+                             "default case '_' must be the last one in a 'select' expression");
+        }
+    }
 }
 
 /**
@@ -817,7 +840,6 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
 
     if (fndef->is_tpl) {
         assert(fndef->body == NULL);
-        ANALYZER_ASSERTF(fndef->impl_type.kind == 0, "tpl fn cannot have impl type");
     }
 
     analyzer_type(m, &fndef->return_type);
@@ -840,8 +862,8 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         // param 中需要新增一个 impl_type_alias 的参数, 参数的名称为 self, 类型则是 impl_type
         type_t param_type = type_copy(fndef->impl_type);
         ast_var_decl_t param = {
-            .ident = FN_SELF_NAME,
-            .type = param_type, // TODO ptrof
+                .ident = FN_SELF_NAME,
+                .type = param_type, // TODO ptrof
         };
         ct_list_push(params, &param);
 
@@ -866,6 +888,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         param->ident = param_local->unique_ident;
     }
 
+    // tpl fn 没有 fn body
     if (fndef->body) {
         analyzer_body(m, fndef->body);
     }
@@ -1035,8 +1058,8 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
 
         // 封装成 ast_expr 更利于 compiler
         ast_expr_t expr = {
-            .line = fndef->line,
-            .column = fndef->column,
+                .line = fndef->line,
+                .column = fndef->column,
         };
 
         // local 表示引用的 fn 是在 fndef->parent 的 local 变量，而不是自己的 local
@@ -1276,8 +1299,8 @@ static void analyzer_access(module_t *m, ast_access_t *access) {
  * 如果是 package.test 则进行符号改写, 改写成 namespace + module_name
  * struct.key , instance? 则不做任何对处理。
  */
-static void analyzer_select(module_t *m, ast_expr_t *expr) {
-    ast_select_t *select = expr->value;
+static void analyzer_unknown_select(module_t *m, ast_expr_t *expr) {
+    ast_expr_select_t *select = expr->value;
 
     // import select 特殊处理, 直接进行符号改写
     if (select->left.assert_type == AST_EXPR_IDENT) {
@@ -1518,7 +1541,7 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         case AST_EXPR_SELECT: {
             // analyzer 仅进行了变量重命名
             // 此时作用域不明确，无法进行任何的表达式改写。
-            return analyzer_select(m, expr);
+            return analyzer_unknown_select(m, expr);
         }
         case AST_EXPR_IDENT: {
             // ident unique 改写并注册到符号表中
@@ -1583,6 +1606,9 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             return analyzer_catch(m, stmt->value);
         }
+        case AST_STMT_SELECT: {
+            return analyzer_select(m, stmt->value);
+        }
         case AST_STMT_THROW: {
             return analyzer_throw(m, stmt->value);
         }
@@ -1645,11 +1671,11 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             // 将 vardef 转换成 assign stmt，然后导入到 fn init 中进行初始化
             ast_stmt_t *assign_stmt = NEW(ast_stmt_t);
             ast_assign_stmt_t *assign = NEW(ast_assign_stmt_t);
-            assign->left = (ast_expr_t){
-                .line = stmt->line,
-                .column = stmt->column,
-                .assert_type = AST_EXPR_IDENT,
-                .value = ast_new_ident(var_decl->ident),
+            assign->left = (ast_expr_t) {
+                    .line = stmt->line,
+                    .column = stmt->column,
+                    .assert_type = AST_EXPR_IDENT,
+                    .value = ast_new_ident(var_decl->ident),
             };
             assign->right = vardef->right;
             assign_stmt->line = stmt->line;
@@ -1696,7 +1722,11 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
                 symbol_name = str_connect_by(fndef->impl_type.impl_ident, symbol_name, "_");
             }
 
-            fndef->symbol_name = ident_with_prefix(m->ident, symbol_name); // 全局函数改名
+            if (is_impl_builtin_type(fndef->impl_type.kind)) {
+                fndef->symbol_name = symbol_name; // built in type impe 不需要添加 module ident
+            } else {
+                fndef->symbol_name = ident_with_prefix(m->ident, symbol_name); // 全局函数改名
+            }
             slice_push(fn_list, fndef);
 
             // 泛型允许重载，所以此处会有同名 symbol 被覆盖写入, 在 pre_infer 对泛型进行展开后再次覆盖注册到 symbol
@@ -1730,11 +1760,11 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         // 添加调用指令(后续 root module 会将这条指令添加到 main body 中)
         ast_stmt_t *call_stmt = NEW(ast_stmt_t);
         ast_call_t *call = NEW(ast_call_t);
-        call->left = (ast_expr_t){
-            .assert_type = AST_EXPR_IDENT,
-            .value = ast_new_ident(s->ident), // module.init
-            .line = 1,
-            .column = 0,
+        call->left = (ast_expr_t) {
+                .assert_type = AST_EXPR_IDENT,
+                .value = ast_new_ident(s->ident), // module.init
+                .line = 1,
+                .column = 0,
         };
         call->args = ct_list_new(sizeof(ast_expr_t));
         call_stmt->assert_type = AST_CALL;

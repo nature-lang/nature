@@ -76,7 +76,7 @@ static inline uint8_t *uint64_to_uint8_array(uint64_t value) {
 }
 
 /**
- * runtime 中使用的基于 element_rtype 生成的 rtype
+ * TODO struct/arr 计算异常, 应该采用递归的方式正确计算
  * @param element_rtype
  * @param length
  * @return
@@ -87,10 +87,10 @@ static inline rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
     uint64_t element_size = rtype_stack_size(element_rtype, POINTER_SIZE);
 
     rtype_t rtype = {
-        .size = element_size * length,
-        .hash = 0, // runtime 生成的没有 hash 值，不需要进行 hash 定位
-        .kind = TYPE_ARR,
-        .length = length,
+            .size = element_size * length,
+            .hash = 0, // runtime 生成的没有 hash 值，不需要进行 hash 定位
+            .kind = TYPE_ARR,
+            .length = length,
     };
 
     rtype.last_ptr = element_rtype->last_ptr > 0; // element 包含指针数据
@@ -101,7 +101,8 @@ static inline rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
 
 static inline void builtin_rtype_init() {
     // 初始化协程结构体 rtype
-    linkco_rtype = GC_RTYPE(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+    linkco_rtype = GC_RTYPE(TYPE_STRUCT, 7, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_SCAN,
+                            TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
 
     // 初始化字符串元素 rtype
     string_element_rtype = GC_RTYPE(TYPE_UINT8, 0);
@@ -117,10 +118,10 @@ static inline void builtin_rtype_init() {
     sc_map_put_64v(&rt_rtype_map, string_rtype.hash, &string_rtype);
 
     // 测试 gc_bits
-    assert(bitmap_test((uint8_t*)&string_rtype.gc_bits, 0) == 1);
-    assert(bitmap_test((uint8_t*)&string_rtype.gc_bits, 1) == 0);
-    assert(bitmap_test((uint8_t*)&string_rtype.gc_bits, 2) == 0);
-    assert(bitmap_test((uint8_t*)&string_rtype.gc_bits, 3) == 0);
+    assert(bitmap_test((uint8_t *) &string_rtype.gc_bits, 0) == 1);
+    assert(bitmap_test((uint8_t *) &string_rtype.gc_bits, 1) == 0);
+    assert(bitmap_test((uint8_t *) &string_rtype.gc_bits, 2) == 0);
+    assert(bitmap_test((uint8_t *) &string_rtype.gc_bits, 3) == 0);
 
     // 初始化错误追踪 rtype
     errort_trace_rtype = GC_RTYPE(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);

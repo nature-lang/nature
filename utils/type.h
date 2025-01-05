@@ -115,50 +115,50 @@ typedef enum {
 } type_kind;
 
 static string type_kind_str[] = {
-    [TYPE_GC] = "gc",
-    [TYPE_GC_FN] = "runtime_fn",
-    [TYPE_GC_ENV] = "env",
-    [TYPE_GC_ENV_VALUE] = "env_value",
-    [TYPE_GC_ENV_VALUES] = "env_values",
-    [TYPE_GC_UPVALUE] = "upvalue",
+        [TYPE_GC] = "gc",
+        [TYPE_GC_FN] = "runtime_fn",
+        [TYPE_GC_ENV] = "env",
+        [TYPE_GC_ENV_VALUE] = "env_value",
+        [TYPE_GC_ENV_VALUES] = "env_values",
+        [TYPE_GC_UPVALUE] = "upvalue",
 
-    [TYPE_ARR] = "arr",
+        [TYPE_ARR] = "arr",
 
-    [TYPE_UNION] = "union",
+        [TYPE_UNION] = "union",
 
-    [TYPE_STRING] = "string",
-    [TYPE_RAW_STRING] = "raw_string",
-    [TYPE_BOOL] = "bool",
-    [TYPE_FLOAT] = "float",
-    [TYPE_FLOAT32] = "f32",
-    [TYPE_FLOAT64] = "f64",
-    [TYPE_INT] = "int",
-    [TYPE_UINT] = "uint",
-    [TYPE_INT8] = "i8",
-    [TYPE_INT16] = "i16",
-    [TYPE_INT32] = "i32",
-    [TYPE_INT64] = "i64",
-    [TYPE_UINT8] = "u8",
-    [TYPE_UINT16] = "u16",
-    [TYPE_UINT32] = "u32",
-    [TYPE_UINT64] = "u64",
-    [TYPE_VOID] = "void",
-    [TYPE_UNKNOWN] = "unknown",
-    [TYPE_STRUCT] = "struct", // ast_struct_decl
-    [TYPE_ALIAS] = "alias",
-    [TYPE_COROUTINE_T] = "coroutine_t",
-    [TYPE_CHAN] = "chan",
-    [TYPE_VEC] = "vec",
-    [TYPE_MAP] = "map",
-    [TYPE_SET] = "set",
-    [TYPE_TUPLE] = "tup",
-    [TYPE_FN] = "fn",
-    [TYPE_FN_T] = "fn_t",
-    [TYPE_ALL_T] = "all_t",
-    [TYPE_PTR] = "ptr", // ptr<type>
-    [TYPE_RAW_PTR] = "raw_ptr", // raw_ptr<type>
-    [TYPE_VOID_PTR] = "void_ptr", // void_ptr
-    [TYPE_NULL] = "null",
+        [TYPE_STRING] = "string",
+        [TYPE_RAW_STRING] = "raw_string",
+        [TYPE_BOOL] = "bool",
+        [TYPE_FLOAT] = "float",
+        [TYPE_FLOAT32] = "f32",
+        [TYPE_FLOAT64] = "f64",
+        [TYPE_INT] = "int",
+        [TYPE_UINT] = "uint",
+        [TYPE_INT8] = "i8",
+        [TYPE_INT16] = "i16",
+        [TYPE_INT32] = "i32",
+        [TYPE_INT64] = "i64",
+        [TYPE_UINT8] = "u8",
+        [TYPE_UINT16] = "u16",
+        [TYPE_UINT32] = "u32",
+        [TYPE_UINT64] = "u64",
+        [TYPE_VOID] = "void",
+        [TYPE_UNKNOWN] = "unknown",
+        [TYPE_STRUCT] = "struct", // ast_struct_decl
+        [TYPE_ALIAS] = "alias",
+        [TYPE_COROUTINE_T] = "coroutine_t",
+        [TYPE_CHAN] = "chan",
+        [TYPE_VEC] = "vec",
+        [TYPE_MAP] = "map",
+        [TYPE_SET] = "set",
+        [TYPE_TUPLE] = "tup",
+        [TYPE_FN] = "fn",
+        [TYPE_FN_T] = "fn_t",
+        [TYPE_ALL_T] = "all_t",
+        [TYPE_PTR] = "ptr", // ptr<type>
+        [TYPE_RAW_PTR] = "raw_ptr", // raw_ptr<type>
+        [TYPE_VOID_PTR] = "void_ptr", // void_ptr
+        [TYPE_NULL] = "null",
 };
 
 // reflect type
@@ -406,6 +406,8 @@ typedef struct {
 
     int64_t msg_size;
     pthread_mutex_t lock;
+    bool closed;
+    bool successful; // 默认是 true, 一旦变成 false 就永远是 false, 和 successful 对应
 } n_chan_t;
 
 typedef struct {
@@ -611,13 +613,13 @@ static inline bool is_list_u8(type_t t) {
 
 static inline type_t type_kind_new(type_kind kind) {
     type_t result = {
-        .status = REDUCTION_STATUS_DONE,
-        .kind = kind,
-        .value = 0,
-        .origin_ident = NULL,
-        .origin_type_kind = 0,
-        .impl_ident = type_kind_str[kind],
-        .impl_args = NULL,
+            .status = REDUCTION_STATUS_DONE,
+            .kind = kind,
+            .value = 0,
+            .origin_ident = NULL,
+            .origin_type_kind = 0,
+            .impl_ident = type_kind_str[kind],
+            .impl_args = NULL,
     };
 
     result.in_heap = kind_in_heap(kind);
@@ -627,18 +629,24 @@ static inline type_t type_kind_new(type_kind kind) {
 
 static inline type_t type_new(type_kind kind, void *value) {
     type_t result = {
-        .kind = kind,
-        .value = value,
-        .in_heap = kind_in_heap(kind),
-        .status = REDUCTION_STATUS_DONE,
-        .origin_ident = NULL,
-        .origin_type_kind = 0,
-        .impl_ident = NULL,
-        .impl_args = NULL,
+            .kind = kind,
+            .value = value,
+            .in_heap = kind_in_heap(kind),
+            .status = REDUCTION_STATUS_DONE,
+            .origin_ident = NULL,
+            .origin_type_kind = 0,
+            .impl_ident = NULL,
+            .impl_args = NULL,
     };
     return result;
 }
 
+static inline type_t type_array_new(type_kind element_type_kind, uint64_t length) {
+    type_array_t *t = NEW(type_array_t);
+    t->length = length;
+    t->element_type = type_kind_new(element_type_kind);
+    return type_new(TYPE_ARR, t);
+}
 
 static inline type_t type_errort_new() {
     type_t errort = type_new(TYPE_ALIAS, NULL);
@@ -713,10 +721,10 @@ static inline bool is_stack_alloc_type(type_t t) {
     return is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
 }
 
-static inline bool can_use_impl(type_kind kind) {
-    return kind == TYPE_PTR || kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_CHAN ||
-           kind == TYPE_TUPLE ||
-           kind == TYPE_STRING || kind == TYPE_UNION || kind == TYPE_FN || kind == TYPE_COROUTINE_T;
+static inline bool is_impl_builtin_type(type_kind kind) {
+    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_STRING ||
+           kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_CHAN ||
+           kind == TYPE_STRING || kind == TYPE_COROUTINE_T;
 }
 
 static inline bool is_stack_impl(type_kind kind) {
@@ -770,6 +778,11 @@ static inline bool is_struct_ptr(type_t t) {
 
 static inline bool is_struct_raw_ptr(type_t t) {
     return t.kind == TYPE_RAW_PTR && t.ptr->value_type.kind == TYPE_STRUCT;
+}
+
+static inline bool is_map_set_key_type(type_kind kind) {
+    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_STRING || kind == TYPE_PTR || kind == TYPE_RAW_PTR ||
+           kind == TYPE_VOID_PTR || kind == TYPE_CHAN || kind == TYPE_STRUCT || kind == TYPE_ARR;
 }
 
 static inline bool is_reduction_type(type_t t) {

@@ -1,7 +1,7 @@
 import coroutine as co
 import time
 
-fn main() {
+fn main():void! {
     // case 1
     var ch_buf = chan_new<int>(5)
 
@@ -23,7 +23,7 @@ fn main() {
 
 
     // case 2 limiter
-    fn handle(chan<u8> ch) {
+    fn handle(chan<u8> ch):void! {
         co.sleep(100)
         println('handle task successful will callback, index =', ch.recv()) // 归还 ch, 让新的任务可以创建
     }

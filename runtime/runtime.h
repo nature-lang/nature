@@ -16,6 +16,13 @@
 #include "sizeclass.h"
 #include "nutils/nutils.h"
 
+
+#ifdef __LINUX
+#define ATOMIC
+#else
+#define ATOMIC _Atomic
+#endif
+
 int runtime_main(int argc, char *argv[]);
 
 #ifdef __AMD64
@@ -294,13 +301,21 @@ typedef enum {
 typedef struct n_processor_t n_processor_t;
 typedef struct coroutine_t coroutine_t;
 
+// lock_of is n_chan_t or rt_mutex_t
+typedef bool (*unlock_fn)(coroutine_t *co, void *lock_of);
+
 
 // 通过 gc malloc 申请
 struct linkco_t {
     coroutine_t *co;
-    struct linkco_t *prev;
-    struct linkco_t *succ;
+    linkco_t *prev;
+    linkco_t *next;
+    linkco_t *waitlink; // linkco list, use in unlockf and select list
+
     void *data;
+    n_chan_t *chan; // chan
+    bool is_select; // 是否在 select 中被使用，需要配合 coroutine.select_done 实现 cas
+    bool success; // chan recv/send 是否成功
 };
 
 // 必须和 nature code 保持一致
@@ -322,8 +337,6 @@ struct coroutine_t {
 
     void *data; // 临时额外数据存储, gc 不会读取该数据进行标记，标记数据不能存储在这里
     void *arg; // coroutine 额外请求参数处理, gc 会读取该数据进行标记。
-
-    pthread_mutex_t *yield_lock; // yield 完成后进行 unlock, 并清空该 lock
 
     n_processor_t *p; // 当前 coroutine 绑定的 p
 
@@ -378,6 +391,11 @@ struct coroutine_t {
 
     n_error_t *error;
 
+    ATOMIC int32_t select_done;
+    linkco_t *waiting; // 当前 co 等待的 linkco, 如果存在多个 linkco 时，通过 linkco.waitlink 链接
+    unlock_fn wait_unlock_fn;
+    void *wait_lock;
+
     struct coroutine_t *next; // coroutine list
 };
 
@@ -430,7 +448,7 @@ void test_runtime_init();
 
 int test_runtime_main(void *main_fn);
 
-void rt_default_co_error(char *msg, bool panic);
+void rt_throw(char *msg, bool panic);
 
 void rt_co_error(coroutine_t *co, char *msg, bool panic);
 
@@ -447,7 +465,7 @@ coroutine_t *coroutine_get();
 
 void processor_set_status(n_processor_t *p, p_status_t status);
 
-#define PRE_RTCALL_HOOK(target)                                                                                \
+#define PRE_RTCALL_HOOK()                                                                                \
     do {                                                                                                       \
         n_processor_t *p = processor_get();                                                                      \
         if (!p) break;                                                                                             \
