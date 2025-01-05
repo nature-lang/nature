@@ -134,7 +134,7 @@ static rtype_t rtype_chan(type_chan_t *t) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = sizeof(n_chan_t), // 104
+        .size = sizeof(n_chan_t),
         .hash = hash,
         .last_ptr = POINTER_SIZE * 5,
         .kind = TYPE_CHAN,

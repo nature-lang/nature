@@ -180,8 +180,8 @@ static ast_expr_t *expr_new_ptr(module_t *m) {
 
 static ast_expr_t expr_new(module_t *m) {
     ast_expr_t result = {
-        .line = parser_peek(m)->line,
-        .column = parser_peek(m)->column,
+            .line = parser_peek(m)->line,
+            .column = parser_peek(m)->column,
     };
     return result;
 }
@@ -252,8 +252,8 @@ static type_t parser_type(module_t *m) {
     // T?, T? 后面不在允许直接携带 |
     if (parser_consume(m, TOKEN_QUESTION)) {
         type_t union_type = {
-            .status = REDUCTION_STATUS_UNDO,
-            .kind = TYPE_UNION,
+                .status = REDUCTION_STATUS_UNDO,
+                .kind = TYPE_UNION,
         };
         union_type.union_ = NEW(type_union_t);
         union_type.union_->elements = ct_list_new(sizeof(type_t));
@@ -277,19 +277,19 @@ static type_t parser_type(module_t *m) {
  */
 static type_t parser_single_type(module_t *m) {
     type_t result = {
-        .status = REDUCTION_STATUS_UNDO,
-        .line = parser_peek(m)->line,
-        .column = parser_peek(m)->column,
-        .origin_ident = NULL,
-        .impl_ident = NULL,
-        .impl_args = NULL,
+            .status = REDUCTION_STATUS_UNDO,
+            .line = parser_peek(m)->line,
+            .column = parser_peek(m)->column,
+            .origin_ident = NULL,
+            .impl_ident = NULL,
+            .impl_args = NULL,
     };
 
     // any 特殊处理
     if (parser_consume(m, TOKEN_ANY)) {
         type_t union_type = {
-            .status = REDUCTION_STATUS_DONE,
-            .kind = TYPE_UNION,
+                .status = REDUCTION_STATUS_DONE,
+                .kind = TYPE_UNION,
         };
         union_type.union_ = NEW(type_union_t);
         union_type.union_->elements = ct_list_new(sizeof(type_t));
@@ -637,12 +637,12 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
         }
 
         type_t t = {
-            .status = REDUCTION_STATUS_UNDO,
-            .line = parser_peek(m)->line,
-            .column = parser_peek(m)->column,
-            .origin_ident = NULL,
-            .impl_ident = NULL,
-            .impl_args = NULL,
+                .status = REDUCTION_STATUS_UNDO,
+                .line = parser_peek(m)->line,
+                .column = parser_peek(m)->column,
+                .origin_ident = NULL,
+                .impl_ident = NULL,
+                .impl_args = NULL,
         };
         t.kind = TYPE_STRUCT;
         t.struct_ = type_struct;
@@ -659,8 +659,8 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
 
     if (parser_consume(m, TOKEN_QUESTION)) {
         type_t union_type = {
-            .status = REDUCTION_STATUS_UNDO,
-            .kind = TYPE_UNION,
+                .status = REDUCTION_STATUS_UNDO,
+                .kind = TYPE_UNION,
         };
         union_type.union_ = NEW(type_union_t);
         union_type.union_->elements = ct_list_new(sizeof(type_t));
@@ -680,9 +680,9 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
     if (parser_consume(m, TOKEN_OR)) {
         // union
         type_t union_type = {
-            .status = REDUCTION_STATUS_UNDO,
-            .kind = TYPE_UNION,
-            .union_ = NEW(type_union_t)
+                .status = REDUCTION_STATUS_UNDO,
+                .kind = TYPE_UNION,
+                .union_ = NEW(type_union_t)
         };
         union_type.union_->elements = ct_list_new(sizeof(type_t));
         ct_list_push(union_type.union_->elements, &t);
@@ -712,13 +712,13 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
  */
 static type_t ast_expr_to_type_alias(module_t *m, ast_expr_t left, list_t *generics_args) {
     type_t t = {
-        .status = REDUCTION_STATUS_UNDO,
-        .line = parser_peek(m)->line,
-        .column = parser_peek(m)->column,
-        .origin_ident = NULL,
-        .origin_type_kind = 0,
-        .impl_ident = NULL,
-        .kind = TYPE_ALIAS,
+            .status = REDUCTION_STATUS_UNDO,
+            .line = parser_peek(m)->line,
+            .column = parser_peek(m)->column,
+            .origin_ident = NULL,
+            .origin_type_kind = 0,
+            .impl_ident = NULL,
+            .kind = TYPE_ALIAS,
     };
 
     // 重新整理一下左值，整理成 type_alias_t
@@ -728,7 +728,7 @@ static type_t ast_expr_to_type_alias(module_t *m, ast_expr_t left, list_t *gener
         t.origin_ident = ident->literal;
         t.origin_type_kind = TYPE_ALIAS;
     } else if (left.assert_type == AST_EXPR_SELECT) {
-        ast_select_t *select = left.value;
+        ast_expr_select_t *select = left.value;
         assert(select->left.assert_type == AST_EXPR_IDENT);
         ast_ident *select_left = select->left.value;
         t.alias = type_alias_new(select->key, select_left->literal);
@@ -814,7 +814,7 @@ static bool parser_left_angle_is_type_args(module_t *m, ast_expr_t left) {
     }
     if (left.assert_type == AST_EXPR_SELECT) {
         // select must ident . ident
-        ast_select_t *select = left.value;
+        ast_expr_select_t *select = left.value;
         if (select->left.assert_type != AST_EXPR_IDENT) {
             return false;
         }
@@ -876,7 +876,7 @@ static bool parser_left_angle_is_type_args(module_t *m, ast_expr_t left) {
     }
 
 
-RET:
+    RET:
     m->intercept_errors = NULL;
     m->p_cursor.current = temp;
 #ifdef DEBUG_PARSER
@@ -1194,13 +1194,13 @@ static ast_expr_t parser_access(module_t *m, ast_expr_t left) {
  * @param left
  * @return
  */
-static ast_expr_t parser_select(module_t *m, ast_expr_t left) {
+static ast_expr_t parser_unknown_select(module_t *m, ast_expr_t left) {
     ast_expr_t result = expr_new(m);
 
     parser_must(m, TOKEN_DOT);
 
     token_t *property_token = parser_must(m, TOKEN_IDENT);
-    ast_select_t *select = NEW(ast_select_t);
+    ast_expr_select_t *select = NEW(ast_expr_select_t);
 
     select->left = left;
     select->key = property_token->literal; // struct 的 property 不能是运行时计算的结果，必须是具体的值
@@ -1616,6 +1616,91 @@ static ast_stmt_t *parser_break_stmt(module_t *m) {
 
     result->value = b;
     result->assert_type = AST_STMT_BREAK;
+    return result;
+}
+
+/*select {
+    ch.on_recv() -> msg { // recv 的 msg 同样是可选的。
+        continue
+    }
+    ch.on_send(msg) -> {
+        break
+    }
+    _ -> {
+    }
+}*/
+static ast_stmt_t *parser_select_stmt(module_t *m) {
+    ast_stmt_t *result = stmt_new(m);
+    parser_must(m, TOKEN_SELECT);
+    parser_must(m, TOKEN_LEFT_CURLY);
+
+    ast_select_stmt_t *select = NEW(ast_select_stmt_t);
+    select->cases = slice_new();
+
+    bool has_default = false;
+    while (!parser_is(m, TOKEN_RIGHT_CURLY)) {
+        ast_select_case_t *select_case = NEW(ast_select_case_t);
+
+        // default
+        if (parser_is(m, TOKEN_IDENT) && str_equal(parser_peek(m)->literal, "_")) {
+            parser_advance(m);
+            parser_must(m, TOKEN_RIGHT_ARROW);
+            select_case->recv_var = NULL;
+            select_case->handle_body = NULL;
+            select_case->is_default = true;
+            select_case->handle_body = parser_body(m);
+            slice_push(select->cases, select_case);
+            parser_must_stmt_end(m);
+
+            has_default = true;
+
+            continue;
+        }
+
+        ast_expr_t expr = parser_expr_with_precedence(m);
+        PARSER_ASSERTF(expr.assert_type == AST_CALL, "select case must be chan select call");
+        ast_call_t *call = expr.value;
+        PARSER_ASSERTF(call->left.assert_type == AST_EXPR_SELECT, "select case must be chan select call");
+        ast_expr_select_t *call_select = call->left.value;
+        if (str_equal(call_select->key, "on_recv")) {
+            select->recv_count++;
+            select_case->is_recv = true;
+        } else if (str_equal(call_select->key, "on_send")) {
+            select->send_count++;
+            select_case->is_recv = false;
+        } else {
+            PARSER_ASSERTF(false, "only on_recv or on_send can be used in select case");
+        }
+
+
+        select_case->on_call = call;
+
+        parser_must(m, TOKEN_RIGHT_ARROW); // ->
+
+        // -> msg {}
+        // -> {}
+        if (parser_is(m, TOKEN_IDENT)) {
+            select_case->recv_var = NEW(ast_var_decl_t);
+            // 需要根据 iterator 的类型对 key 和 value type 进行类型判断
+            select_case->recv_var->type = type_kind_new(TYPE_UNKNOWN);
+            select_case->recv_var->ident = parser_must(m, TOKEN_IDENT)->literal;
+        }
+
+        select_case->handle_body = parser_body(m);
+
+        slice_push(select->cases, select_case);
+        parser_must_stmt_end(m);
+    }
+    parser_must(m, TOKEN_RIGHT_CURLY);
+
+    select->has_default = has_default;
+
+    if (select->has_default && select->cases->count == 1) {
+        PARSER_ASSERTF(false, "select must contains on_call case");
+    }
+
+    result->assert_type = AST_STMT_SELECT;
+    result->value = select;
     return result;
 }
 
@@ -2350,6 +2435,8 @@ static ast_stmt_t *parser_stmt(module_t *m) {
     } else if (parser_is(m, TOKEN_MATCH)) {
         ast_expr_t expr = parser_match_expr(m);
         return stmt_expr_fake_new(m, expr);
+    } else if (parser_is(m, TOKEN_SELECT)) {
+        return parser_select_stmt(m);
     } else if (parser_is(m, TOKEN_MACRO_IDENT)) {
         ast_expr_t expr = parser_expr_with_precedence(m);
         return stmt_expr_fake_new(m, expr);
@@ -2395,48 +2482,48 @@ static ast_stmt_t *parser_tpl_stmt(module_t *m) {
 }
 
 static parser_rule rules[] = {
-    [TOKEN_LEFT_PAREN] = {parser_left_paren_expr, parser_call_expr, PRECEDENCE_CALL},
-    [TOKEN_LEFT_SQUARE] = {parser_list_new, parser_access, PRECEDENCE_CALL},
-    [TOKEN_LEFT_CURLY] = {parser_left_curly_expr, NULL, PRECEDENCE_NULL},
-    [TOKEN_LESS_THAN] = {NULL, parser_binary, PRECEDENCE_COMPARE},
-    [TOKEN_LEFT_ANGLE] = {NULL, parser_type_args_expr, PRECEDENCE_CALL},
-    [TOKEN_MACRO_IDENT] = {parser_macro_call, NULL, PRECEDENCE_NULL},
-    [TOKEN_DOT] = {NULL, parser_select, PRECEDENCE_CALL},
-    [TOKEN_MINUS] = {parser_unary, parser_binary, PRECEDENCE_TERM},
-    [TOKEN_PLUS] = {NULL, parser_binary, PRECEDENCE_TERM},
-    [TOKEN_NOT] = {parser_unary, NULL, PRECEDENCE_UNARY},
-    [TOKEN_TILDE] = {parser_unary, NULL, PRECEDENCE_UNARY},
-    [TOKEN_AND] = {parser_unary, parser_binary, PRECEDENCE_AND},
-    [TOKEN_OR] = {NULL, parser_binary, PRECEDENCE_OR},
-    [TOKEN_XOR] = {NULL, parser_binary, PRECEDENCE_XOR},
-    [TOKEN_LEFT_SHIFT] = {NULL, parser_binary, PRECEDENCE_SHIFT},
-    [TOKEN_PERSON] = {NULL, parser_binary, PRECEDENCE_FACTOR},
-    [TOKEN_STAR] = {parser_unary, parser_binary, PRECEDENCE_FACTOR},
-    [TOKEN_SLASH] = {NULL, parser_binary, PRECEDENCE_FACTOR},
-    [TOKEN_OR_OR] = {NULL, parser_binary, PRECEDENCE_OR_OR},
-    [TOKEN_AND_AND] = {NULL, parser_binary, PRECEDENCE_AND_AND},
-    [TOKEN_NOT_EQUAL] = {NULL, parser_binary, PRECEDENCE_CMP_EQUAL},
-    [TOKEN_EQUAL_EQUAL] = {NULL, parser_binary, PRECEDENCE_CMP_EQUAL},
+        [TOKEN_LEFT_PAREN] = {parser_left_paren_expr, parser_call_expr, PRECEDENCE_CALL},
+        [TOKEN_LEFT_SQUARE] = {parser_list_new, parser_access, PRECEDENCE_CALL},
+        [TOKEN_LEFT_CURLY] = {parser_left_curly_expr, NULL, PRECEDENCE_NULL},
+        [TOKEN_LESS_THAN] = {NULL, parser_binary, PRECEDENCE_COMPARE},
+        [TOKEN_LEFT_ANGLE] = {NULL, parser_type_args_expr, PRECEDENCE_CALL},
+        [TOKEN_MACRO_IDENT] = {parser_macro_call, NULL, PRECEDENCE_NULL},
+        [TOKEN_DOT] = {NULL, parser_unknown_select, PRECEDENCE_CALL},
+        [TOKEN_MINUS] = {parser_unary, parser_binary, PRECEDENCE_TERM},
+        [TOKEN_PLUS] = {NULL, parser_binary, PRECEDENCE_TERM},
+        [TOKEN_NOT] = {parser_unary, NULL, PRECEDENCE_UNARY},
+        [TOKEN_TILDE] = {parser_unary, NULL, PRECEDENCE_UNARY},
+        [TOKEN_AND] = {parser_unary, parser_binary, PRECEDENCE_AND},
+        [TOKEN_OR] = {NULL, parser_binary, PRECEDENCE_OR},
+        [TOKEN_XOR] = {NULL, parser_binary, PRECEDENCE_XOR},
+        [TOKEN_LEFT_SHIFT] = {NULL, parser_binary, PRECEDENCE_SHIFT},
+        [TOKEN_PERSON] = {NULL, parser_binary, PRECEDENCE_FACTOR},
+        [TOKEN_STAR] = {parser_unary, parser_binary, PRECEDENCE_FACTOR},
+        [TOKEN_SLASH] = {NULL, parser_binary, PRECEDENCE_FACTOR},
+        [TOKEN_OR_OR] = {NULL, parser_binary, PRECEDENCE_OR_OR},
+        [TOKEN_AND_AND] = {NULL, parser_binary, PRECEDENCE_AND_AND},
+        [TOKEN_NOT_EQUAL] = {NULL, parser_binary, PRECEDENCE_CMP_EQUAL},
+        [TOKEN_EQUAL_EQUAL] = {NULL, parser_binary, PRECEDENCE_CMP_EQUAL},
 
-    [TOKEN_RIGHT_SHIFT] = {NULL, parser_binary, PRECEDENCE_SHIFT},
-    [TOKEN_RIGHT_ANGLE] = {NULL, parser_binary, PRECEDENCE_COMPARE},
+        [TOKEN_RIGHT_SHIFT] = {NULL, parser_binary, PRECEDENCE_SHIFT},
+        [TOKEN_RIGHT_ANGLE] = {NULL, parser_binary, PRECEDENCE_COMPARE},
 
-    [TOKEN_GREATER_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
-    [TOKEN_LESS_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
-    [TOKEN_LITERAL_STRING] = {parser_literal, NULL, PRECEDENCE_NULL},
-    [TOKEN_LITERAL_INT] = {parser_literal, NULL, PRECEDENCE_NULL},
-    [TOKEN_LITERAL_FLOAT] = {parser_literal, NULL, PRECEDENCE_NULL},
-    [TOKEN_TRUE] = {parser_literal, NULL, PRECEDENCE_NULL},
-    [TOKEN_FALSE] = {parser_literal, NULL, PRECEDENCE_NULL},
-    [TOKEN_NULL] = {parser_literal, NULL, PRECEDENCE_NULL},
+        [TOKEN_GREATER_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
+        [TOKEN_LESS_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
+        [TOKEN_LITERAL_STRING] = {parser_literal, NULL, PRECEDENCE_NULL},
+        [TOKEN_LITERAL_INT] = {parser_literal, NULL, PRECEDENCE_NULL},
+        [TOKEN_LITERAL_FLOAT] = {parser_literal, NULL, PRECEDENCE_NULL},
+        [TOKEN_TRUE] = {parser_literal, NULL, PRECEDENCE_NULL},
+        [TOKEN_FALSE] = {parser_literal, NULL, PRECEDENCE_NULL},
+        [TOKEN_NULL] = {parser_literal, NULL, PRECEDENCE_NULL},
 
-    [TOKEN_AS] = {NULL, parser_as_expr, PRECEDENCE_TYPE_CAST},
-    [TOKEN_IS] = {parser_match_is_expr, parser_is_expr, PRECEDENCE_TYPE_CAST},
-    [TOKEN_CATCH] = {NULL, parser_catch_expr, PRECEDENCE_CATCH},
+        [TOKEN_AS] = {NULL, parser_as_expr, PRECEDENCE_TYPE_CAST},
+        [TOKEN_IS] = {parser_match_is_expr, parser_is_expr, PRECEDENCE_TYPE_CAST},
+        [TOKEN_CATCH] = {NULL, parser_catch_expr, PRECEDENCE_CATCH},
 
-    // 以 ident 开头的前缀表达式
-    [TOKEN_IDENT] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
-    [TOKEN_EOF] = {NULL, NULL, PRECEDENCE_NULL},
+        // 以 ident 开头的前缀表达式
+        [TOKEN_IDENT] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
+        [TOKEN_EOF] = {NULL, NULL, PRECEDENCE_NULL},
 };
 
 /**

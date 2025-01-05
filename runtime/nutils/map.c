@@ -109,7 +109,7 @@ n_void_ptr_t rt_map_access(n_map_t *m, void *key_ref) {
                hash_value_deleted(hash_value));
 
         char *msg = dsprintf("key '%s' not found in map", key_str);
-        rt_default_co_error(msg, true);
+        rt_throw(msg, true);
         return 0;
     }
 

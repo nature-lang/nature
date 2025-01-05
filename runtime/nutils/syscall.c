@@ -56,11 +56,11 @@ void syscall_exec(n_string_t *path, n_vec_t *argv, n_vec_t *envp) {
     // 一旦调用成功,当前进程会被占用
     int result = execve(p_str, c_args, c_envs);
     if (result == -1) {
-        rt_default_co_error(strerror(errno), false);
+        rt_throw(strerror(errno), false);
         return;
     }
 
-    rt_default_co_error("execve failed", false);
+    rt_throw("execve failed", false);
 }
 
 // 使用 waitpid, 返回值为 exit status
@@ -68,7 +68,7 @@ n_u32_t syscall_wait(n_int_t pid) {
     int status;
     int result = waitpid((pid_t) pid, &status, 0);
     if (result == -1) {
-        rt_default_co_error(strerror(errno), false);
+        rt_throw(strerror(errno), false);
         return 0;
     }
 
@@ -79,7 +79,7 @@ n_int_t syscall_call6(n_int_t number, n_uint_t a1, n_uint_t a2, n_uint_t a3, n_u
     int64_t result = syscall(number, a1, a2, a3, a4, a5, a6);
 
     if (result == -1) {
-        rt_default_co_error(strerror(errno), false);
+        rt_throw(strerror(errno), false);
         return 0;
     }
     return (n_int_t) result;

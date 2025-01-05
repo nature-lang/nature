@@ -22,9 +22,9 @@ static bool can_semacquire(ATOMIC int64_t *addr) {
 }
 
 void rt_mutex_lock(rt_mutex_t *m) {
-//    TDEBUGF("[rt_mutex_lock] m->waiters.locker.__sig = %d", m->waiters.locker.__sig)
+    //    TDEBUGF("[rt_mutex_lock] m->waiters.locker.__sig = %d", m->waiters.locker.__sig)
 
-    int64_t expected = 0;// starving = 0 and locked=0
+    int64_t expected = 0; // starving = 0 and locked=0
     if (atomic_compare_exchange_strong(&m->state, &expected, MUTEX_LOCKED)) {
         return;
     }
@@ -37,11 +37,9 @@ void rt_mutex_lock(rt_mutex_t *m) {
     while (true) {
         // can_spin 的条件非常苛刻
         if ((old & (MUTEX_LOCKED | MUTEX_STARVING)) == MUTEX_LOCKED && rt_can_spin(iter)) {
-
             if (!awoke && (old & MUTEX_WOKEN) == 0 &&
                 (old >> MUTEX_WAITER_SHIFT) != 0 && // 如果 waiter list 中存在被阻塞的 coroutine
                 atomic_compare_exchange_strong(&m->state, &old, old | MUTEX_WOKEN)) {
-
                 awoke = true;
             }
 
@@ -119,7 +117,7 @@ void rt_mutex_lock(rt_mutex_t *m) {
             int64_t delta = MUTEX_LOCKED - (1 << MUTEX_WAITER_SHIFT);
             // 如果从当前 coroutine 开始未进入到饥饿模式，则当前 coroutine 后面等待的 coroutine 是更晚进入的，更加不会是饥饿的
             if (!starving || (old >> MUTEX_WAITER_SHIFT == 1)) {
-                delta -= MUTEX_STARVING;// 退出饥饿模式
+                delta -= MUTEX_STARVING; // 退出饥饿模式
             }
 
             // 饥饿模式下有序排队，不存在竞争
@@ -211,6 +209,12 @@ void rt_do_spin() {
     }
 }
 
+static bool mutex_yield_commit(coroutine_t *co, void *chan_lock) {
+    pthread_mutex_unlock(chan_lock);
+    return true;
+}
+
+
 void rt_mutex_waiter_acquire(rt_mutex_t *m, bool to_head) {
     DEBUGF("[rt_mutex_waiter_acquire] m=%p, state=%lu, waiter_count=%lu, to_heap=%d", m, m->state, m->waiter_count,
            to_head);
@@ -244,16 +248,12 @@ void rt_mutex_waiter_acquire(rt_mutex_t *m, bool to_head) {
             linkco_list_push(&m->waiters, co);
         }
 
-//        assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
-//                m->waiters.count);
+        //        assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
+        //                m->waiters.count);
 
         // bug: 此时一旦解锁， release 就能读取 waiters 并 push 到 runnable list 中导致数据异常
         // 所以需要将锁延迟到 yield 到 sched 后再进行处理
-        co->yield_lock = &m->waiters.locker;
-        // pthread_mutex_unlock(&m->waiters.locker);
-
-        // 让出当前协程的执行
-        co_yield_waiting(co->p, co);
+        co_yield_waiting(co, mutex_yield_commit, &m->waiters.locker);
 
         // co 返回，尝试获取信号量
         if (co->ticket || can_semacquire(&m->sema)) {
@@ -285,14 +285,14 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
     }
 
     // waiter_count 存在无锁抢占，所以此处不能安全进行 assert
-//    assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
-//            m->waiters.count);
+    //    assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
+    //            m->waiters.count);
 
-//    if (atomic_flag_test_and_set(&lock_taken)) {
-//        assertf(false, "race: Lock already taken!");
-//    }
+    //    if (atomic_flag_test_and_set(&lock_taken)) {
+    //        assertf(false, "race: Lock already taken!");
+    //    }
 
-//    TDEBUGF("waiter info ...%d, %d, %p, %p", m->waiter_count, m->waiters.count, m->waiters.head, m->waiters.rear);
+    //    TDEBUGF("waiter info ...%d, %d, %p, %p", m->waiter_count, m->waiters.count, m->waiters.head, m->waiters.rear);
     // head pop
     coroutine_t *wait_co = linkco_list_pop(&m->waiters);
     assert(wait_co);
@@ -300,8 +300,8 @@ void rt_mutex_waiter_release(rt_mutex_t *m, bool handoff) {
     atomic_add_int64(&m->waiter_count, -1);
 
 
-//    assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
-//            m->waiters.count);
+    //    assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
+    //            m->waiters.count);
 
     pthread_mutex_unlock(&m->waiters.locker);
 

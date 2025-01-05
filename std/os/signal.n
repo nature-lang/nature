@@ -1,0 +1,11 @@
+import coroutine as co
+import coroutine.mutex
+import syscall
+
+type sig_t = int
+
+#linkid signal_notify
+fn notify(chan<sig_t> sig_ch, ...[int] signals)
+
+#linkid signal_stop
+fn stop(chan<sig_t> sig_ch)

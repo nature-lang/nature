@@ -7,6 +7,6 @@
 #include "tests/test.h"
 
 int main(void) {
-    blackbox_setup();
+    feature_test_build();
     // TEST_EXEC_IMM
 }

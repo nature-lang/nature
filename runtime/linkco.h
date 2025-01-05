@@ -24,7 +24,7 @@ static inline void linkco_list_push(rt_linkco_list_t *list, void *value) {
     assert(list);
 
     linkco_t *new_linkco = rti_acquire_linkco();
-    assert(new_linkco->succ == NULL);
+    assert(new_linkco->next == NULL);
     assert(new_linkco->prev == NULL);
 
     new_linkco->co = value;
@@ -38,8 +38,8 @@ static inline void linkco_list_push(rt_linkco_list_t *list, void *value) {
     } else {
         assert(list->rear);
 
-//        list->rear->succ = new_linkco;
-        rt_write_barrier(&list->rear->succ, &new_linkco);
+//        list->rear->next = new_linkco;
+        rt_write_barrier(&list->rear->next, &new_linkco);
 
 //        new_linkco->prev = list->rear;
         rt_write_barrier(&new_linkco->prev, &list->rear);
@@ -65,8 +65,8 @@ static inline void *linkco_list_pop(rt_linkco_list_t *list) {
 
     linkco_t *null_co = NULL;
 
-//    list->head = list->head->succ;
-    rt_write_barrier(&list->head, &list->head->succ);
+//    list->head = list->head->next;
+    rt_write_barrier(&list->head, &list->head->next);
 
 
     if (list->head == NULL) {
@@ -82,7 +82,7 @@ static inline void *linkco_list_pop(rt_linkco_list_t *list) {
 
     void *value = pop_linkco->co;
 
-    pop_linkco->succ = NULL;
+    pop_linkco->next = NULL;
     rti_release_linkco(pop_linkco);
 
     return value;
@@ -108,7 +108,7 @@ static inline void linkco_list_push_head(rt_linkco_list_t *list, void *value) {
         list->rear = new_linkco;
     } else {
         assert(list->head);
-        new_linkco->succ = list->head;
+        new_linkco->next = list->head;
         list->head->prev = new_linkco;
         list->head = new_linkco;
     }
@@ -145,17 +145,17 @@ static inline void linkco_list_remove(rt_linkco_list_t *list, linkco_t *linkco) 
     // 调整链表关系
     if (linkco->prev == NULL) {
         assert(list->head == linkco);
-        list->head = linkco->succ;
+        list->head = linkco->next;
     } else {
-        linkco->prev->succ = linkco->succ;
+        linkco->prev->next = linkco->next;
     }
 
     // 调整链表关系
-    if (linkco->succ == NULL) {
+    if (linkco->next == NULL) {
         assert(list->rear == linkco);
         list->rear = linkco->prev;
     } else {
-        linkco->succ->prev = linkco->prev;
+        linkco->next->prev = linkco->prev;
     }
 
     list->count--;

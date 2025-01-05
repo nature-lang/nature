@@ -38,41 +38,43 @@ add_executable(test_arm64_encoding test_arm64_encoding.c ${UTILS} ${SRC})
 add_test(test_arm64_encoding test_arm64_encoding)
 
 # ---------------------------------- cases 测试 ------------------------------------------
-# cases test, 获取 cases 一级目录下的所有文件，排除 mock
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)
 message("[test cases]make temp dir ${CMAKE_CURRENT_SOURCE_DIR}/tmp success")
 
-# 读取 ${CMAKE_CURRENT_SOURCE_DIR}/cases 一级目录中的所有文件或者文件夹
-file(GLOB TEST_CASES ${CMAKE_CURRENT_SOURCE_DIR}/cases/*)
-foreach (TEST_CASE ${TEST_CASES})
-    message("[test cases] find test case ${TEST_CASE}")
+# 读取 features 目录下的所有 .c 文件
+file(GLOB TEST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/features/*.c)
+foreach (TEST_SOURCE ${TEST_SOURCES})
+    # 获取不带扩展名的文件名作为测试标识
+    get_filename_component(TEST_NAME ${TEST_SOURCE} NAME_WE)
+    message("[test cases] find test source ${TEST_SOURCE}")
 
-    # 生成 test_ident, 如果是目录则取最后一级目录，如果是文件，则取最后一次文件，去掉 .n 后缀
-    # 文件示例 /tmp/tmp.wKB2qsXqAh/tests/cases/20230913_00_env_struct.n
-    # 目录示例 /tmp/tmp.wKB2qsXqAh/tests/cases/20240321_01_coroutine_power
-    get_filename_component(TEST_NAME ${TEST_CASE} NAME_WE)
+    # 生成测试可执行文件
+    add_executable(${TEST_NAME} ${TEST_SOURCE} ${SRC} ${CMD} ${UTILS})
 
-    # 直接生成测试用例可执行文件，由测试用例进行编译和输出测试
-    add_executable(${TEST_NAME} ${CMAKE_CURRENT_SOURCE_DIR}/${TEST_NAME}.c ${SRC} ${CMD} ${UTILS})
-
-    # 判断 TEST_CASE 是文件夹还是目录，从而生成合适的 WORK_DIR 和 ENTRY_FILE
-    if (IS_DIRECTORY ${TEST_CASE})
-        set(WORK_DIR ${TEST_CASE})
+    # 查找对应的测试用例文件或目录
+    set(CASE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}")
+    
+    # 判断是文件夹还是文件来设置工作目录和入口文件
+    # testar 和 n 文件可能同时存在，但是 testar 的优先级更高
+    if (IS_DIRECTORY ${CASE_PATH})
+        set(WORK_DIR ${CASE_PATH})
         set(ENTRY_FILE main.n)
+    elseif (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}.testar")
+        set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features/cases)
+        set(ENTRY_FILE "${TEST_NAME}.testar")
     else ()
-        set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cases)
-        set(ENTRY_FILE ${TEST_NAME}.n)
+        set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features/cases)
+        set(ENTRY_FILE "${TEST_NAME}.n")
     endif ()
 
-    # 生成测试用例
+    # 添加测试
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME} WORKING_DIRECTORY ${WORK_DIR})
     set_property(TEST ${TEST_NAME}
             PROPERTY
             ENVIRONMENT "BUILD_OS=$ENV{BUILD_OS};BUILD_ARCH=$ENV{BUILD_ARCH};NPKG_PATH=${PACKAGE_BINARY_PATH};BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};PATH=/usr/local/nature/bin:$ENV{PATH};")
 
-    message("[test cases] register test ${TEST_NAME} file success, cases work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}")
-endforeach ()
-
+    message("[test cases] register test ${TEST_NAME} success, work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}")
+endforeach()
 
 # ---------------------------------- 通过环境变量启用 runtime main debug 测试 ------------------------------------------
 if (DEFINED ENV{RUNTIME_DEBUG_CASE})
@@ -81,11 +83,11 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
     set(TEST_IDENT $ENV{RUNTIME_DEBUG_CASE})
     message("[test_runtime_debug] find RUNTIME_DEBUG_CASE: ${TEST_IDENT}")
 
-    if (IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/cases/${TEST_IDENT})
-        set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cases/${TEST_IDENT})
+    if (IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_IDENT})
+        set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_IDENT})
         set(ENTRY main.n)
     else ()
-        set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cases)
+        set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features/cases)
         set(ENTRY "${TEST_IDENT}.n")
     endif ()
 

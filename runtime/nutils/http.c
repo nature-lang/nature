@@ -248,7 +248,7 @@ static inline void on_server_close_cb(uv_handle_t *handle) {
     n_server_t *ctx = handle->data;
     free(ctx->uv_server_handler);
 
-    co_will_runnable(ctx->listen_co->p, ctx->listen_co);
+    co_ready(ctx->listen_co);
 }
 
 void rt_uv_http_close(n_server_t *server_ctx) {
@@ -285,6 +285,6 @@ void rt_uv_http_listen(n_server_t *server_ctx) {
     }
 
     DEBUGF("[rt_uv_http_listen] listen success, port=%ld, p_index=%d", server_ctx->port, p->index);
-    co_yield_waiting(p, co);
+    co_yield_waiting(co, NULL, NULL);
     DEBUGF("[rt_uv_http_listen] listen resume, port=%ld, and return, p_index=%d", server_ctx->port, p->index);
 }

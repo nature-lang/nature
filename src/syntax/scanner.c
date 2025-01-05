@@ -107,7 +107,7 @@ static char scanner_guard_advance(module_t *m) {
         m->s_cursor.column = 0;
     }
 
-    return m->s_cursor.guard[-1];// [] 访问的为值
+    return m->s_cursor.guard[-1]; // [] 访问的为值
 }
 
 static bool scanner_match(module_t *m, char expected) {
@@ -192,8 +192,10 @@ static token_type_t scanner_special_char(module_t *m) {
         case '=':
             return scanner_match(m, '=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL;
         case '<':
-            if (scanner_match(m, '<')) {    // <<
-                if (scanner_match(m, '=')) {// <<=
+            if (scanner_match(m, '<')) {
+                // <<
+                if (scanner_match(m, '=')) {
+                    // <<=
                     return TOKEN_LEFT_SHIFT_EQUAL;
                 }
                 // <<
@@ -215,7 +217,7 @@ static token_type_t scanner_special_char(module_t *m) {
                 return TOKEN_RIGHT_SHIFT_EQUAL;
             }
 
-            return TOKEN_RIGHT_ANGLE;// >
+            return TOKEN_RIGHT_ANGLE; // >
         }
         case '&':
             return scanner_match(m, '&') ? TOKEN_AND_AND : TOKEN_AND;
@@ -243,7 +245,7 @@ static void scanner_cursor_init(module_t *m) {
 
 static char *scanner_string_advance(module_t *m, char close_char) {
     // 在遇到下一个闭合字符之前， 如果中间遇到了空格则忽略
-    m->s_cursor.guard++;// 跳过 open_char
+    m->s_cursor.guard++; // 跳过 open_char
     char escape_char = '\\';
 
     // 由于包含字符串处理, 所以这里不使用 scanner_gen_word 直接生成
@@ -375,8 +377,8 @@ static long scanner_number_convert(module_t *m, char *word, int base) {
 }
 
 static char *scanner_hex_number_advance(module_t *m) {
-    m->s_cursor.guard++;// 0
-    m->s_cursor.guard++;// x
+    m->s_cursor.guard++; // 0
+    m->s_cursor.guard++; // x
     m->s_cursor.current = m->s_cursor.guard;
 
     // guard = current, 向前推进 guard,并累加 length
@@ -388,8 +390,8 @@ static char *scanner_hex_number_advance(module_t *m) {
 }
 
 static char *scanner_oct_number_advance(module_t *m) {
-    m->s_cursor.guard++;// 0
-    m->s_cursor.guard++;// o
+    m->s_cursor.guard++; // 0
+    m->s_cursor.guard++; // o
     m->s_cursor.current = m->s_cursor.guard;
 
     while (scanner_is_oct_number(m, *m->s_cursor.guard) && !scanner_at_eof(m)) {
@@ -400,8 +402,8 @@ static char *scanner_oct_number_advance(module_t *m) {
 }
 
 static char *scanner_bin_number_advance(module_t *m) {
-    m->s_cursor.guard++;// 0
-    m->s_cursor.guard++;// b
+    m->s_cursor.guard++; // 0
+    m->s_cursor.guard++; // b
     m->s_cursor.current = m->s_cursor.guard;
 
     while (scanner_is_bin_number(m, *m->s_cursor.guard) && !scanner_at_eof(m)) {
@@ -464,10 +466,10 @@ token_t *scanner_item(module_t *m, linked_node *prev_node) {
                 decimal = scanner_number_convert(m, scanner_bin_number_advance(m), 2);
                 word = itoa(decimal);
             } else {
-                word = scanner_number_advance(m);// 1, 1.12, 0.233
+                word = scanner_number_advance(m); // 1, 1.12, 0.233
             }
         } else {
-            word = scanner_number_advance(m);// 1, 1.12, 0.233
+            word = scanner_number_advance(m); // 1, 1.12, 0.233
         }
 
         // word 已经生成，通过判断 word 中是否包含 . 判断 int 开头的 word 的类型
@@ -580,8 +582,8 @@ static bool scanner_skip_space(module_t *m) {
                         }
                         scanner_guard_advance(m);
                     }
-                    scanner_guard_advance(m);// *
-                    scanner_guard_advance(m);// /
+                    scanner_guard_advance(m); // *
+                    scanner_guard_advance(m); // /
                     break;
                 } else {
                     m->s_cursor.space_next = *m->s_cursor.guard;
@@ -627,8 +629,8 @@ static token_type_t scanner_ident(char *word, int length) {
                     switch (word[2]) {
                         case 'n':
                             return scanner_rest(word, length, 3, 5, "tinue", TOKEN_CONTINUE);
-                            //                        case 'r':
-                            //                            return scanner_rest(word, length, 3, 1, "o", TOKEN_CORO);
+                        //                        case 'r':
+                        //                            return scanner_rest(word, length, 3, 1, "o", TOKEN_CORO);
                     }
                     return scanner_rest(word, length, 2, 6, "ntinue", TOKEN_CONTINUE);
                 case 'a':
@@ -688,20 +690,25 @@ static token_type_t scanner_ident(char *word, int length) {
         }
         case 'n':
             switch (word[1]) {
-                case 'u':// null
+                case 'u': // null
                     return scanner_rest(word, length, 2, 2, "ll", TOKEN_NULL);
                 // case 'e':// new, new 识别成 ident 在 parser 采用固定语法结构时才会被识别成 new
-                    // return scanner_rest(word, length, 2, 1, "w", TOKEN_NEW);
+                // return scanner_rest(word, length, 2, 1, "w", TOKEN_NEW);
             }
             break;
         case 'p':
             return scanner_rest(word, length, 1, 2, "tr", TOKEN_PTR);
-        case 's': {// self,string,struct,sizeof,sett
+        case 's': {
+            // self,string,struct,sizeof,sett
             switch (word[1]) {
-                case 'e':
-                    return scanner_rest(word, length, 2, 1, "t", TOKEN_SET);
-                    //                case 'i':
-                    //                    return scanner_rest(word, length, 2, 4, "zeof", TOKEN_SIZEOF);
+                case 'e': {
+                    switch (word[2]) {
+                        case 't':
+                            return scanner_rest(word, length, 3, 0, "", TOKEN_SET);
+                        case 'l': // select
+                            return scanner_rest(word, length, 3, 3, "ect", TOKEN_SELECT);
+                    }
+                }
             }
 
             if (length == 6 && word[1] == 't' && word[2] == 'r') {
@@ -714,13 +721,14 @@ static token_type_t scanner_ident(char *word, int length) {
             }
             break;
         }
-        case 't': {// tup/throw/type/true
+        case 't': {
+            // tup/throw/type/true
             switch (word[1]) {
                 case 'h':
                     return scanner_rest(word, length, 2, 3, "row", TOKEN_THROW);
-                case 'y':// type
+                case 'y': // type
                     return scanner_rest(word, length, 2, 2, "pe", TOKEN_TYPE);
-                case 'u':// tup
+                case 'u': // tup
                     return scanner_rest(word, length, 2, 1, "p", TOKEN_TUP);
                 case 'r': {
                     switch (word[2]) {
@@ -738,9 +746,9 @@ static token_type_t scanner_ident(char *word, int length) {
             switch (word[1]) {
                 case 'a':
                     return scanner_rest(word, length, 2, 1, "r", TOKEN_VAR);
-                case 'e':// vec
+                case 'e': // vec
                     return scanner_rest(word, length, 2, 1, "c", TOKEN_VEC);
-                case 'o':// void
+                case 'o': // void
                     return scanner_rest(word, length, 2, 2, "id", TOKEN_VOID);
             }
         }
@@ -759,7 +767,8 @@ static token_type_t scanner_ident(char *word, int length) {
             }
             break;
         }
-        case 'm': {// map
+        case 'm': {
+            // map
             switch (word[1]) {
                 case 'a': {
                     switch (word[2]) {

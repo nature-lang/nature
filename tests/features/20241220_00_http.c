@@ -21,7 +21,7 @@ char *http_get(const char *path) {
 }
 
 int main(void) {
-    blackbox_setup();
+    feature_test_build();
     pid_t pid = fork();
     if (pid == 0) {
         // 子进程运行 http 服务器

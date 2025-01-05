@@ -69,10 +69,10 @@ static inline void _co_yield(n_processor_t *p, coroutine_t *co) {
     aco_yield1(&co->aco);
 }
 
-static inline void co_will_runnable(n_processor_t *p, coroutine_t *co) {
+static inline void co_ready(coroutine_t *co) {
     assert(co->p->status != P_STATUS_EXIT);
-    co_set_status(p, co, CO_STATUS_RUNNABLE);
-    rt_linked_fixalloc_push(&p->runnable_list, co);
+    co_set_status(co->p, co, CO_STATUS_RUNNABLE);
+    rt_linked_fixalloc_push(&co->p->runnable_list, co);
 }
 
 static inline void co_yield_runnable(n_processor_t *p, coroutine_t *co) {
@@ -95,18 +95,21 @@ static inline void co_yield_runnable(n_processor_t *p, coroutine_t *co) {
            co->status);
 }
 
-static inline void co_yield_waiting(n_processor_t *p, coroutine_t *co) {
-    assert(p);
+static inline void co_yield_waiting(coroutine_t *co, unlock_fn unlock_fn, void *lock_of) {
+    assert(co->p);
     assert(co);
+
+    co->wait_unlock_fn = unlock_fn;
+    co->wait_lock = lock_of;
 
     // 这里作为一个整体，不再允许抢占
     // syscall -> waiting
-    co_set_status(p, co, CO_STATUS_WAITING);
+    co_set_status(co->p, co, CO_STATUS_WAITING);
 
-    _co_yield(p, co);
+    _co_yield(co->p, co);
 
     // waiting -> syscall
-    co_set_status(p, co, CO_STATUS_TPLCALL);
+    co_set_status(co->p, co, CO_STATUS_TPLCALL);
     DEBUGF("[runtime.co_yield_waiting] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co,
            co->status);
 }
@@ -189,6 +192,8 @@ void rt_coroutine_sleep(int64_t ms);
 void rt_coroutine_await(coroutine_t *co);
 
 void rt_coroutine_yield();
+
+void rt_select_block();
 
 void *rt_coroutine_arg();
 

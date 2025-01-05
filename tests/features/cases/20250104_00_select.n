@@ -1,0 +1,5 @@
+fn main():void! {
+    println('will select {}')
+    select{}
+    println('hello world')
+}

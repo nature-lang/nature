@@ -4,7 +4,6 @@ fn string.len():int {
     return runtime.string_length(self as void_ptr)
 }
 
-
 fn string.ref():void_ptr {
     return runtime.string_ref(self as void_ptr)
 }

@@ -15,6 +15,8 @@ static ast_catch_t *ast_catch_copy(ast_catch_t *temp);
 
 static ast_match_t *ast_match_copy(ast_match_t *temp);
 
+static ast_select_stmt_t *ast_select_copy(ast_select_stmt_t *temp);
+
 ast_ident *ast_new_ident(char *literal) {
     ast_ident *ident = NEW(ast_ident);
     ident->literal = strdup(literal);
@@ -397,8 +399,8 @@ static ast_access_t *ast_access_copy(ast_access_t *temp) {
     return access;
 }
 
-static ast_select_t *ast_select_copy(ast_select_t *temp) {
-    ast_select_t *select = COPY_NEW(ast_select_t, temp);
+static ast_expr_select_t *ast_select_expr_copy(ast_expr_select_t *temp) {
+    ast_expr_select_t *select = COPY_NEW(ast_expr_select_t, temp);
     select->left = *ast_expr_copy(&temp->left);
     select->key = strdup(temp->key);
     return select;
@@ -556,7 +558,7 @@ ast_expr_t *ast_expr_copy(ast_expr_t *temp) {
             break;
         }
         case AST_EXPR_SELECT: {
-            expr->value = ast_select_copy(temp->value);
+            expr->value = ast_select_expr_copy(temp->value);
             break;
         }
         default:
@@ -584,6 +586,26 @@ static ast_vardef_stmt_t *ast_vardef_copy(ast_vardef_stmt_t *temp) {
     vardef->var_decl = *ast_var_decl_copy(&temp->var_decl);
     vardef->right = *ast_expr_copy(&temp->right);
     return vardef;
+}
+
+static ast_select_stmt_t *ast_select_copy(ast_select_stmt_t *temp) {
+    ast_select_stmt_t *select = COPY_NEW(ast_select_stmt_t, temp);
+    slice_t *cases = slice_new();
+    SLICE_FOR(temp->cases) {
+        ast_select_case_t *match_case = SLICE_VALUE(temp->cases);
+
+        ast_select_case_t *new_select_case = NEW(ast_select_case_t);
+        new_select_case->on_call = ast_call_copy(match_case->on_call);
+        if (match_case->recv_var) {
+            new_select_case->recv_var = ast_var_decl_copy(match_case->recv_var);
+        }
+        new_select_case->handle_body = ast_body_copy(match_case->handle_body);
+        slice_push(cases, new_select_case);
+    }
+
+    select->cases = cases;
+
+    return select;
 }
 
 static ast_match_t *ast_match_copy(ast_match_t *temp) {
@@ -763,6 +785,10 @@ static ast_stmt_t *ast_stmt_copy(ast_stmt_t *temp) {
         }
         case AST_CATCH: {
             stmt->value = ast_catch_copy(temp->value);
+            break;
+        }
+        case AST_STMT_SELECT: {
+            stmt->value = ast_select_copy(temp->value);
             break;
         }
         default:
