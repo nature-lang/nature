@@ -48,7 +48,7 @@ fn main() {
 
 
     // fn 情况 var 测试
-    (fn test(mod.car_t local_var) {
+    (fn(mod.car_t local_var) {
         local_var.tostr()
         var b = local_var + 11
         println(local_var + 12, b)
@@ -58,7 +58,7 @@ fn main() {
     var c1 = 12
     var c2 = [1, 2, 3] as arr<int,3>
 
-    fn test2() {
+    var test2 = fn() {
         println(c1, c2[0], c2[2])
     }
 

@@ -455,7 +455,7 @@ typedef struct {
     char *package_dir; // 这也是 import module 的 workdir
     bool use_links;
 
-    char *package_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident, 如果是 main 则默认添加 main.n
+    char *module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident, 如果是 main 则默认添加 main.n
 } ast_import_t;
 
 /**
@@ -610,7 +610,7 @@ struct ast_fndef_t {
     char *symbol_name;
     // 闭包处理中的的 var name, 可能为 null
     // 其通过 jit 封装了一份完整的执行环境，并将环境通过 last param 传递给 symbol name 对应的函数 body 部分
-    char *closure_name;
+    char *jit_closure_name;
     type_t return_type;
     list_t *params; // ast_var_decl_t*
     bool rest_param;
@@ -814,7 +814,7 @@ static inline ast_fndef_t *ast_fndef_new(module_t *m, int line, int column) {
     fndef->rel_path = m->rel_path;
     fndef->symbol_name = NULL;
     fndef->linkid = NULL;
-    fndef->closure_name = NULL;
+    fndef->jit_closure_name = NULL;
     fndef->line = line;
     fndef->column = column;
     fndef->local_children = slice_new();

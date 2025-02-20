@@ -12,7 +12,7 @@ fn main():void! {
         println('[ch] sub co recv success, value =', v)
     })()
 
-    fn disturb() {
+    var disturb = fn() {
         for true {
             co.sleep(100)
         }
@@ -40,7 +40,7 @@ fn main():void! {
     var ch_queue = chan_new<f64>()
     f64 sum = 0
 
-    fn consumer1():void! {
+   var consumer1 = fn():void! {
         println('[ch_queue] consumer1 start, p_index =', runtime.processor_index())
 
         for int i = 0; i < 100; i+=1 {
@@ -51,7 +51,7 @@ fn main():void! {
         }
     }
 
-    fn consumer2():void! {
+    var consumer2 = fn():void! {
         println('[ch_queue] consumer2 start, p_index =', runtime.processor_index())
 
         for int i = 0; i < 100; i+=1 {

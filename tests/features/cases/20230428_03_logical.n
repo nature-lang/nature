@@ -1,16 +1,16 @@
+fn test_false():bool {
+    println('entry test_false')
+    return false
+}
+
+fn test_true():bool {
+    println('entry test_true')
+    return true
+}
+
 fn main() {
     int a = 50
     int b = 100
-
-    fn test_false():bool {
-        println('entry test_false')
-        return false
-    }
-
-    fn test_true():bool {
-        println('entry test_true')
-        return true
-    }
 
     if a > 1 || test_false() {
         println('or_1 is true')

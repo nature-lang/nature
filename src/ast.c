@@ -462,6 +462,7 @@ ast_expr_t *ast_expr_copy(ast_expr_t *temp) {
             expr->value = ast_arr_new_copy(temp->value);
             break;
         }
+        case AST_EXPR_ARRAY_ACCESS:
         case AST_EXPR_VEC_ACCESS: {
             expr->value = ast_list_access_copy(temp->value);
             break;
@@ -791,6 +792,10 @@ static ast_stmt_t *ast_stmt_copy(ast_stmt_t *temp) {
             stmt->value = ast_select_copy(temp->value);
             break;
         }
+        case AST_MATCH: {
+            stmt->value = ast_match_copy(temp->value);
+            break;
+        }
         default:
             assertf(false, "[ast_stmt_copy] unknown stmt");
     }
@@ -818,7 +823,7 @@ ast_fndef_t *ast_fndef_copy(ast_fndef_t *temp) {
     ast_fndef_t *fndef = COPY_NEW(ast_fndef_t, temp);
     fndef->symbol_name = temp->symbol_name;
     fndef->linkid = temp->linkid;
-    fndef->closure_name = temp->closure_name;
+    fndef->jit_closure_name = temp->jit_closure_name;
     fndef->return_type = type_copy(temp->return_type);
     fndef->params = ast_fn_formals_copy(temp->params);
     fndef->type = type_copy(temp->type);

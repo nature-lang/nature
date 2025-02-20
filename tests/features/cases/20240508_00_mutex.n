@@ -6,7 +6,7 @@ import time
 fn main() {
     int start = time.unix()
     int result_no_lock = 0
-    fn sum_no_lock() {
+    var sum_no_lock = fn() {
         for int i = 0; i < 100; i+=1 {
             result_no_lock += 1
         }
@@ -24,7 +24,7 @@ fn main() {
     var mu = m.mutex_t{}
     int result_lock = 0
 
-    fn sum_lock() {
+    var sum_lock = fn() {
         mu.lock()
         for int i = 0; i < 100; i+=1 {
             result_lock += 1

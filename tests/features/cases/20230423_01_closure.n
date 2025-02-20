@@ -1,9 +1,9 @@
 fn main() {
-    fn clock():int {
+    var clock = fn():int {
         return 1682261163
     }
 
-    fn morning(fn():int callback) {
+    var morning = fn(fn():int callback) {
         var t = callback()
         print('timestamp=', t, '\n')
     }
@@ -15,7 +15,7 @@ fn main() {
         return 1682262975
     })
 
-    var callback = fn(): int {
+    var callback = fn():int {
         return 1682263024
     }
 

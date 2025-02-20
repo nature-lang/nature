@@ -15,7 +15,7 @@ fn main() {
     bool f = !(3.1415926 as bool)
     print(e, f, '\n') // truefalse
 
-    fn sum(int a, int b):int {
+    var sum = fn(int a, int b):int {
         return a + b
     }
 

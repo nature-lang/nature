@@ -12,7 +12,7 @@ fn main():void! {
     }
 
     // closure fn
-    fn world(bool e):int! {
+    var world = fn(bool e):int! {
         if e {
             throw 'world error'
         }

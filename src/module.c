@@ -21,8 +21,8 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
     if (import) {
         m->package_dir = import->package_dir;
         m->package_conf = import->package_conf;
-        m->ident = import->package_ident;
-        m->label_prefix = import->package_ident;
+        m->ident = import->module_ident;
+        m->label_prefix = import->module_ident;
     }
 
     m->errors = slice_new();

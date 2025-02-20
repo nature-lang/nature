@@ -1,9 +1,9 @@
 fn boom():int {
-    fn test() {
+    var test = fn() {
         println('in test')
     }
 
-    fn test2() {
+    var test2 = fn() {
         println('in test2')
     }
 

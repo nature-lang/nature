@@ -622,7 +622,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     ast_import_t main_import = {
         .package_dir = WORKDIR,
         .package_conf = package_conf,
-        .package_ident = PACKAGE_MAIN_IDENT,
+        .module_ident = PACKAGE_MAIN_IDENT,
     };
 
     // main [links] 自动注册

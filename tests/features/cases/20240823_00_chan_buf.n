@@ -23,7 +23,7 @@ fn main():void! {
 
 
     // case 2 limiter
-    fn handle(chan<u8> ch):void! {
+    var handle = fn(chan<u8> ch):void! {
         co.sleep(100)
         println('handle task successful will callback, index =', ch.recv()) // 归还 ch, 让新的任务可以创建
     }

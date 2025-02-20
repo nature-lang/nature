@@ -26,7 +26,7 @@ fn main() {
     println(p3.name, p3.from, p3.gender, p3.age, p.age)
 
     // --- ptr param
-    fn test_param(raw_ptr<person_t> p3, person_t p) {
+    var test_param = fn(raw_ptr<person_t> p3, person_t p) {
         println('in test fn, p.name is', p.name)
         println('in test fn, p3.name is', p3.name)
     }
@@ -34,7 +34,7 @@ fn main() {
     test_param(p3, p)
 
     // --- refer rewrite
-    fn test_refer(raw_ptr<person_t> p3, person_t p) {
+    var test_refer = fn(raw_ptr<person_t> p3, person_t p) {
         p3.name = 'rewrite by p3'
         p.name = 'rewrite by p' // nop
     }
@@ -43,7 +43,7 @@ fn main() {
     println(p.name, p3.name)
 
     // --- test return
-    fn test_return():ptr<person_t> {
+    var test_return = fn():ptr<person_t> {
         var p = new person_t() // gc_malloc, can return
         p.age = 55
         return p
