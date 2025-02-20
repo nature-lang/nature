@@ -19,7 +19,7 @@ fn main() {
     print(l2[0], l2[1], l2[2], l2[3], '\n')
     println(helper.haha)
 
-    fn gc_in1() {
+    var gc_in1 = fn() {
         u8 a = 12
         u16 b = 24
         {int:bool} maps = {1: true, 2: false, 3: false, 4: true}
@@ -32,7 +32,7 @@ fn main() {
 
     i32 b = 25
 
-    fn gc_in2():[string] {
+    var gc_in2 = fn():[string] {
         u8 a = 12 // 栈干扰
         u16 b = 24
         [string] list = ['hello', 'world', 'nature', 'haha']

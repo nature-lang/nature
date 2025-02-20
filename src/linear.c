@@ -460,7 +460,7 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
     assertf(s, "ident %s not declare");
 
     // checking closure name
-    char *closure_name = m->current_closure->fndef->closure_name;
+    char *closure_name = m->current_closure->fndef->jit_closure_name;
     if (closure_name && str_equal(s->ident, closure_name)) {
         // symbol 中的该符号已经改写成 closure var 了，该 closure var 通过 last param 丢了进来
         // 所以直接使用 fn 该 fn 就行了，该 fn 一定被赋值了，就放心好了
@@ -2608,7 +2608,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
     // symbol label 不能使用 mov 在变量间自由的传递，所以这里将 symbol label 的 addr 加载出来返回
     lir_operand_t *fn_symbol_operand = symbol_label_operand(m, fndef->symbol_name);
 
-    if (!fndef->closure_name) {
+    if (!fndef->jit_closure_name) {
         if (expr.target_type.kind == 0) {
             return NULL; // 没有表达式需要接收值
         }
@@ -2617,7 +2617,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
         return target;
     }
 
-    assert(!str_equal(fndef->closure_name, ""));
+    assert(!str_equal(fndef->jit_closure_name, ""));
 
     // 函数引用了外部的环境变量，所以需要编译成一个闭包，closure_name 本质就是一个 temp var, 指向了 fn_new 的结果
     // 即使在 for 循环中，temp var 此时依旧唯一指向 fn_new 的结果。所以 closure_new 存储的数据类型就是一个指针，指向了 heap 中
@@ -2634,7 +2634,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
     // fn_new(env)
     lir_operand_t *label_addr_operand = temp_var_operand_with_alloc(m, fndef->type);
     OP_PUSH(lir_op_lea(label_addr_operand, fn_symbol_operand));
-    lir_operand_t *result = lir_var_operand(m, fndef->closure_name);
+    lir_operand_t *result = lir_var_operand(m, fndef->jit_closure_name);
     push_rt_call(m, RT_CALL_FN_NEW, result, 2, label_addr_operand, env_operand);
 
     // env_assign
@@ -2856,9 +2856,9 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     // 和 linear_fndef 不同，linear_closure 是函数内部的空间中,添加的也是当前 fn 的形式参数
     // 当前 fn 的形式参数在 body 中都是可以随意调用的
     // if 包含 envs 则使用 custom_var_operand 注册一个临时变量，并加入到 LIR_OPCODE_FN_BEGIN 中
-    if (fndef->closure_name) {
+    if (fndef->jit_closure_name) {
         // 直接使用 fn->closure_name 作为 runtime name?
-        lir_operand_t *fn_runtime_operand = lir_var_operand(m, fndef->closure_name);
+        lir_operand_t *fn_runtime_operand = lir_var_operand(m, fndef->jit_closure_name);
         slice_push(params, fn_runtime_operand->value);
         c->fn_runtime_operand = fn_runtime_operand;
     }

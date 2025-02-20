@@ -34,7 +34,7 @@ fn main() {
     }
 
     // case 5
-    fn case5_int(bool arg1):int {
+    var case5_int = fn(bool arg1):int {
         return 16
     }
     match 3 {

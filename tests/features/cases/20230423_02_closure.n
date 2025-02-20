@@ -1,5 +1,5 @@
 fn main() {
-    fn make_atm():fn(int):int {
+    var make_atm = fn():fn(int):int {
         var cash = 1000
         return fn(int amount):int {
             cash -= amount

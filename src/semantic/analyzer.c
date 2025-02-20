@@ -61,7 +61,7 @@ static void analyzer_import_std(module_t *m, char *package, ast_import_t *import
 }
 
 /**
- * 基于 m->package_tol 完善 import
+ * 基于 m->package_toml 完善 import
  * @param m
  * @param import
  * @return
@@ -130,7 +130,7 @@ void analyzer_import(module_t *m, ast_import_t *import) {
 
         import->package_conf = m->package_conf;
         import->package_dir = m->package_dir;
-        import->package_ident = module_unique_ident(import);
+        import->module_ident = module_unique_ident(import);
         import->module_type = MODULE_TYPE_COMMON;
         return;
     }
@@ -172,7 +172,7 @@ void analyzer_import(module_t *m, ast_import_t *import) {
 
     import->module_type = MODULE_TYPE_COMMON;
     // package 模式下的 ident 应该基于 package module?
-    import->package_ident = module_unique_ident(import);
+    import->module_ident = module_unique_ident(import);
 }
 
 static type_t analyzer_type_fn(ast_fndef_t *fndef) {
@@ -218,7 +218,7 @@ static char *analyzer_resolve_type_alias(module_t *m, analyzer_fndef_t *current,
             ast_import_t *import = m->imports->take[i];
 
             if (str_equal(import->as, "*")) {
-                char *temp = ident_with_prefix(import->package_ident, ident);
+                char *temp = ident_with_prefix(import->module_ident, ident);
                 if (table_exist(can_import_symbol_table, temp)) {
                     return temp;
                 }
@@ -272,7 +272,7 @@ static void analyzer_type(module_t *m, type_t *type) {
             ast_import_t *import = table_get(m->import_table, type_alias->import_as);
             ANALYZER_ASSERTF(import, "type left ident = %s not found in import", type_alias->import_as);
 
-            char *unique_ident = ident_with_prefix(import->package_ident, type_alias->ident);
+            char *unique_ident = ident_with_prefix(import->module_ident, type_alias->ident);
             // 更新 ident 指向
             type_alias->ident = unique_ident;
 
@@ -575,6 +575,7 @@ static void analyzer_if(module_t *m, ast_if_stmt_t *if_stmt) {
         slice_insert(if_stmt->consequent, 0, as_stmt);
     }
 
+    // ident 唯一标识生成
     analyzer_expr(m, &if_stmt->condition);
 
 
@@ -993,10 +994,10 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
 
     // 闭包函数不能有 macro ident
     if (fndef->linkid) {
-        ANALYZER_ASSERTF(false, "closure fn cannot have @linkid");
+        ANALYZER_ASSERTF(false, "closure fn cannot have #linkid label");
     }
 
-    ANALYZER_ASSERTF(!fndef->is_tpl, "closure fn cannot be is_tpl");
+    ANALYZER_ASSERTF(!fndef->is_tpl, "closure fn cannot be template");
 
     // 更新 m->analyzer_current
     analyzer_current_init(m, fndef);
@@ -1084,20 +1085,20 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
     // - 退出当前 current
     m->analyzer_current = m->analyzer_current->parent;
 
-    // 如果当前函数是定层函数，退出后 m->analyzer_current is null
+    // 如果当前函数是顶层层函数，退出后 m->analyzer_current is null
     // 不过顶层函数也不存在 closure 引用的情况，直接注册到符号表中退出就行了
     if (free_var_count > 0) {
         assert(m->analyzer_current);
 
-        fndef->closure_name = fndef->symbol_name;
+        fndef->jit_closure_name = fndef->symbol_name;
         fndef->symbol_name = var_ident_with_index(m, str_connect(fndef->symbol_name, "_closure")); // 二进制中的 label name
 
         // 符号表内容修改为 var_decl
         ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
         var_decl->type = analyzer_type_fn(fndef);
-        var_decl->ident = fndef->closure_name;
+        var_decl->ident = fndef->jit_closure_name;
 
-        symbol_table_set(fndef->closure_name, SYMBOL_VAR, var_decl, true);
+        symbol_table_set(fndef->jit_closure_name, SYMBOL_VAR, var_decl, true);
         symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, true);
 
         // 原始名称不变, 可以被 analyzer_resolve 寻找到
@@ -1235,13 +1236,13 @@ static bool analyzer_local_ident(module_t *m, ast_expr_t *expr) {
     return false;
 }
 
-static bool analyzer_module_ident(module_t *m, ast_ident *ident) {
+static bool analyzer_as_star_or_builtin_ident(module_t *m, ast_ident *ident) {
     // - import xxx as * 产生的全局符号
     for (int i = 0; i < m->imports->count; ++i) {
         ast_import_t *import = m->imports->take[i];
 
         if (str_equal(import->as, "*")) {
-            char *temp = ident_with_prefix(import->package_ident, ident->literal);
+            char *temp = ident_with_prefix(import->module_ident, ident->literal);
             if (table_exist(can_import_symbol_table, temp)) {
                 ident->literal = temp;
                 return true;
@@ -1283,7 +1284,7 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
         return true;
     }
 
-    if (analyzer_module_ident(m, ident)) {
+    if (analyzer_as_star_or_builtin_ident(m, ident)) {
         return true;
     }
 
@@ -1299,7 +1300,7 @@ static void analyzer_access(module_t *m, ast_access_t *access) {
  * 如果是 package.test 则进行符号改写, 改写成 namespace + module_name
  * struct.key , instance? 则不做任何对处理。
  */
-static void analyzer_unknown_select(module_t *m, ast_expr_t *expr) {
+static void analyzer_select_expr(module_t *m, ast_expr_t *expr) {
     ast_expr_select_t *select = expr->value;
 
     // import select 特殊处理, 直接进行符号改写
@@ -1324,7 +1325,7 @@ static void analyzer_unknown_select(module_t *m, ast_expr_t *expr) {
         if (import) {
             // 这里直接将 module.select 改成了全局唯一名称，彻底消灭了select ！
             // (不需要检测 import package 是否存在，这在 linker 中会做的)
-            char *unique_ident = ident_with_prefix(import->package_ident, select->key);
+            char *unique_ident = ident_with_prefix(import->module_ident, select->key);
 
             // 检测 import ident 是否存在
             if (!table_exist(can_import_symbol_table, unique_ident)) {
@@ -1336,7 +1337,7 @@ static void analyzer_unknown_select(module_t *m, ast_expr_t *expr) {
             return;
         }
 
-        if (analyzer_module_ident(m, ident)) {
+        if (analyzer_as_star_or_builtin_ident(m, ident)) {
             return;
         }
 
@@ -1408,7 +1409,7 @@ static void analyzer_tuple_destr(module_t *m, ast_tuple_destr_t *tuple) {
     }
 }
 
-static void analyzer_list_new(module_t *m, ast_vec_new_t *expr) {
+static void analyzer_vec_new(module_t *m, ast_vec_new_t *expr) {
     for (int i = 0; i < expr->elements->length; ++i) {
         ast_expr_t *value = ct_list_value(expr->elements, i);
         analyzer_expr(m, value);
@@ -1533,7 +1534,7 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
             return analyzer_tuple_destr(m, expr->value);
         }
         case AST_EXPR_VEC_NEW: {
-            return analyzer_list_new(m, expr->value);
+            return analyzer_vec_new(m, expr->value);
         }
         case AST_EXPR_ACCESS: {
             return analyzer_access(m, expr->value);
@@ -1541,7 +1542,7 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         case AST_EXPR_SELECT: {
             // analyzer 仅进行了变量重命名
             // 此时作用域不明确，无法进行任何的表达式改写。
-            return analyzer_unknown_select(m, expr);
+            return analyzer_select_expr(m, expr);
         }
         case AST_EXPR_IDENT: {
             // ident unique 改写并注册到符号表中
@@ -1723,7 +1724,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             }
 
             if (is_impl_builtin_type(fndef->impl_type.kind)) {
-                fndef->symbol_name = symbol_name; // built in type impe 不需要添加 module ident
+                fndef->symbol_name = symbol_name; // built in type impl 不需要添加 module ident
             } else {
                 fndef->symbol_name = ident_with_prefix(m->ident, symbol_name); // 全局函数改名
             }

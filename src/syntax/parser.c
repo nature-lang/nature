@@ -1854,6 +1854,7 @@ static ast_expr_t parser_fndef_expr(module_t *m) {
     parser_must(m, TOKEN_FN);
 
     if (parser_is(m, TOKEN_IDENT)) {
+        PARSER_ASSERTF(false, "closure fn cannot have a name");
         token_t *name_token = parser_advance(m);
         fndef->symbol_name = name_token->literal;
         fndef->fn_name = fndef->symbol_name;
@@ -1864,6 +1865,7 @@ static ast_expr_t parser_fndef_expr(module_t *m) {
 
     if (parser_consume(m, TOKEN_COLON)) {
         fndef->return_type = parser_type(m);
+
     } else {
         fndef->return_type = type_kind_new(TYPE_VOID);
         fndef->return_type.line = parser_peek(m)->line;
@@ -2413,8 +2415,6 @@ static ast_stmt_t *parser_stmt(module_t *m) {
         return parser_label(m);
     } else if (parser_is(m, TOKEN_IDENT)) {
         return parser_expr_begin_stmt(m);
-    } else if (parser_is(m, TOKEN_FN)) {
-        return parser_fndef_stmt(m, ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column));
     } else if (parser_is(m, TOKEN_IF)) {
         return parser_if_stmt(m);
     } else if (parser_is(m, TOKEN_FOR)) {
@@ -2446,7 +2446,7 @@ static ast_stmt_t *parser_stmt(module_t *m) {
     exit(1);
 }
 
-static ast_stmt_t *parser_module_stmt(module_t *m) {
+static ast_stmt_t *parser_global_stmt(module_t *m) {
     // module parser 只包含着几种简单语句
     if (parser_is(m, TOKEN_VAR)) {
         return parser_var_begin_stmt(m);
@@ -3059,7 +3059,7 @@ slice_t *parser(module_t *m, linked_t *token_list) {
         }
 #endif
 
-        slice_push(block_stmt, parser_module_stmt(m));
+        slice_push(block_stmt, parser_global_stmt(m));
 
         parser_must_stmt_end(m);
     }

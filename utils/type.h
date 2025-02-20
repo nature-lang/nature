@@ -763,7 +763,7 @@ static inline bool is_zero_type(type_t t) {
 static inline bool is_origin_type(type_t t) {
     return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_VOID_PTR || t.kind == TYPE_VOID ||
            t.kind == TYPE_NULL || t.kind == TYPE_BOOL ||
-           t.kind == TYPE_STRING || t.kind == TYPE_VOID || t.kind == TYPE_FN_T || t.kind == TYPE_ALL_T;
+           t.kind == TYPE_STRING || t.kind == TYPE_FN_T || t.kind == TYPE_ALL_T;
 }
 
 static inline bool is_clv_default_type(type_t t) {
