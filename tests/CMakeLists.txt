@@ -55,13 +55,14 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
     set(CASE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}")
     
     # 判断是文件夹还是文件来设置工作目录和入口文件
-    # testar 和 n 文件可能同时存在，但是 testar 的优先级更高
+    # testar 和 n 文件可以同时存在，在 main 中选择自己需要的测试方式
     if (IS_DIRECTORY ${CASE_PATH})
         set(WORK_DIR ${CASE_PATH})
         set(ENTRY_FILE main.n)
     elseif (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}.testar")
         set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features/cases)
-        set(ENTRY_FILE "${TEST_NAME}.testar")
+        set(TESTAR_FILE "${TEST_NAME}.testar")
+        set(ENTRY_FILE "${TEST_NAME}.n")
     else ()
         set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features/cases)
         set(ENTRY_FILE "${TEST_NAME}.n")
@@ -71,7 +72,7 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME} WORKING_DIRECTORY ${WORK_DIR})
     set_property(TEST ${TEST_NAME}
             PROPERTY
-            ENVIRONMENT "BUILD_OS=$ENV{BUILD_OS};BUILD_ARCH=$ENV{BUILD_ARCH};NPKG_PATH=${PACKAGE_BINARY_PATH};BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};PATH=/usr/local/nature/bin:$ENV{PATH};")
+            ENVIRONMENT "BUILD_OS=$ENV{BUILD_OS};BUILD_ARCH=$ENV{BUILD_ARCH};NPKG_PATH=${PACKAGE_BINARY_PATH};BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};TESTAR_FILE=${TESTAR_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};PATH=/usr/local/nature/bin:$ENV{PATH};")
 
     message("[test cases] register test ${TEST_NAME} success, work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}")
 endforeach()

@@ -638,6 +638,14 @@ static ast_catch_t *ast_catch_copy(ast_catch_t *temp) {
     return catch;
 }
 
+static ast_try_catch_stmt_t *ast_try_catch_stmt_copy(ast_try_catch_stmt_t *temp) {
+    ast_try_catch_stmt_t *try_stmt = COPY_NEW(ast_try_catch_stmt_t , temp);
+    try_stmt->try_body = ast_body_copy(temp->try_body);
+    try_stmt->catch_err = *ast_var_decl_copy(&temp->catch_err);
+    try_stmt->catch_body = ast_body_copy(temp->catch_body); // 需要实现这个函数
+    return try_stmt;
+}
+
 static ast_var_tuple_def_stmt_t *ast_var_tuple_def_copy(ast_var_tuple_def_stmt_t *temp) {
     ast_var_tuple_def_stmt_t *stmt = COPY_NEW(ast_var_tuple_def_stmt_t, temp);
     stmt->tuple_destr = ast_tuple_destr_copy(temp->tuple_destr); // 需要实现这个函数
@@ -796,6 +804,10 @@ static ast_stmt_t *ast_stmt_copy(ast_stmt_t *temp) {
             stmt->value = ast_match_copy(temp->value);
             break;
         }
+        case AST_STMT_TRY_CATCH: {
+            stmt->value = ast_try_catch_stmt_copy(temp->value);
+            break;
+        };
         default:
             assertf(false, "[ast_stmt_copy] unknown stmt");
     }

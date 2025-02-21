@@ -1,0 +1,96 @@
+=== test_basic
+--- main.n
+fn hello():void! {
+    println('hello nature')
+    throw 'error in hello fn'
+    println('hello world')
+}
+
+fn main() {
+    try {
+        var a = 1
+        var b = a + 1
+        hello()
+        var c = a + b
+    } catch e {
+        println('catch err:', e.msg)
+    }
+}
+--- output.txt
+hello nature
+catch err: error in hello fn
+
+=== test_catch_panic
+--- main.n
+fn main() {
+    try {
+        [int] list = []
+        var b = list[12]
+    } catch e {
+        println("catch panic: ", e.msg)
+    }
+}
+
+--- output.txt
+catch panic:  index out of vec [12] with length 0
+
+=== test_panic
+--- main.n
+// panic 必须直接被 catch 或者 try catch 捕获, panic 不能向上传递
+fn panic_err() {
+    [int] list = []
+    var b = list[12]
+}
+
+fn main() {
+    try {
+        var a = 3.14
+        panic_err()
+        var b = 2.33
+    } catch e {
+        println("catch panic: ", e.msg)
+    }
+}
+
+--- output.txt
+coroutine 'main' panic: 'index out of vec [12] with length 0' at nature-test/main.n:4:19
+
+=== test_nested
+--- main.n
+fn throw1():void! {
+    throw 'err in throw1'
+}
+
+fn throw2():void! {
+    throw 'err in throw2'
+}
+
+fn throw3():void! {
+    throw 'err in throw2'
+}
+
+fn main():void! {
+    try {
+        var a = 12
+        try {
+            throw1()
+        } catch e {
+            println('nested catch err:', e.msg)
+
+            throw2()
+        }
+    } catch e {
+        println('catch err', e.msg)
+        throw3()
+    }
+}
+
+--- output.txt
+nested catch err: err in throw1
+catch err err in throw2
+coroutine 'main' uncaught error: 'err in throw2' at nature-test/main.n:10:23
+stack backtrace:
+0:	main.throw3
+		at nature-test/main.n:10:23
+1:	main.main
+		at nature-test/main.n:25:18
