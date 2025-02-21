@@ -12,3 +12,4 @@ set(CMAKE_EXE_LINKER_FLAGS "-static")
 set(CMAKE_SYSTEM_NAME linux)
 set(CMAKE_SYSTEM_PROCESSOR arm64)
 
+set(RUST_TARGET aarch64-unknown-linux-musl)

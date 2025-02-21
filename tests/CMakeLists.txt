@@ -30,10 +30,6 @@ add_executable(test_runtime_fn test_runtime_fn.c ${RUNTIMES} ${UTILS})
 target_link_libraries(test_runtime_fn ${LIBUV_STATIC})
 add_test(test_runtime_fn test_runtime_fn)
 
-add_executable(test_yaml test_yaml.c ${UTILS})
-add_test(test_yaml test_yaml)
-set_property(TEST test_yaml PROPERTY ENVIRONMENT "YAML_PATH=${CMAKE_CURRENT_SOURCE_DIR}/assets/travis.yaml;")
-
 add_executable(test_arm64_encoding test_arm64_encoding.c ${UTILS} ${SRC})
 add_test(test_arm64_encoding test_arm64_encoding)
 

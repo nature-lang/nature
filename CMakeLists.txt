@@ -51,14 +51,10 @@ include_directories(.)
 add_executable(nature main.c ${SRC} ${CMD} ${UTILS})
 target_link_libraries(nature m) # 链接数学计算库
 
-# custom golang build package
+# custom golang build package npkg
 set(PACKAGE_BINARY_NAME npkg)
 set(GOBIN /usr/local/go/bin/go)
 set(PACKAGE_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME})
-
-enable_testing()
-add_subdirectory(tests)
-add_subdirectory(runtime EXCLUDE_FROM_ALL)
 
 add_custom_target(${PACKAGE_BINARY_NAME} ALL
         COMMAND GOOS=${CMAKE_SYSTEM_NAME} GOARCH=${CMAKE_SYSTEM_PROCESSOR} ${GOBIN} build -o ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} ${PROJECT_SOURCE_DIR}/package/main.go
@@ -66,9 +62,37 @@ add_custom_target(${PACKAGE_BINARY_NAME} ALL
         COMMENT "package manager npkg"
 )
 
+# custom rust build package nls
+#CARGO_TARGET_DIR=/custom/path cargo build --release
+set(LSP_BINARY_NAME nls)
+if(DEFINED RUST_TARGET)
+    add_custom_target(${LSP_BINARY_NAME} ALL
+            COMMAND CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR} cargo build --release --target ${RUST_TARGET}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/nls
+            COMMENT "nature language server nls"
+    )
+
+    set(LSP_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${RUST_TARGET}/release/${LSP_BINARY_NAME})
+else()
+    add_custom_target(${LSP_BINARY_NAME} ALL
+            COMMAND CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR} cargo build --release
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/nls
+            COMMENT "nature language server nls"
+    )
+
+    set(LSP_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/release/${LSP_BINARY_NAME})
+endif()
+
+
+enable_testing()
+add_subdirectory(tests)
+add_subdirectory(runtime EXCLUDE_FROM_ALL)
+
+
 #--------------------------------- install ---------------------------------
 install(TARGETS nature DESTINATION nature/bin)
 install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} DESTINATION nature/bin)
+install(PROGRAMS ${LSP_BINARY_PATH} DESTINATION nature/bin)
 install(DIRECTORY lib/ DESTINATION nature/lib)
 install(DIRECTORY std/ DESTINATION nature/std)
 install(FILES LICENSE DESTINATION nature/)
