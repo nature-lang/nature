@@ -490,7 +490,8 @@ static bool rewrite_local_fndef(module_t *m, ast_fndef_t *fndef) {
     // 如果 local fndef 引用了外部环境，是一个 closure, closure name 同样寻要基于 params hash 进行改写, 并将新的 symbol
     // 写入到全局符号表中
     if (fndef->jit_closure_name) {
-        fndef->jit_closure_name = str_connect_by(fndef->jit_closure_name, fndef->generics_args_hash, GEN_REWRITE_SEPARATOR);
+        fndef->jit_closure_name = str_connect_by(fndef->jit_closure_name, fndef->generics_args_hash,
+                                                 GEN_REWRITE_SEPARATOR);
 
         ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
         var_decl->ident = fndef->jit_closure_name;
@@ -895,10 +896,27 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
     return target_type;
 }
 
+static void infer_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
+    m->be_caught += 1;
+    infer_body(m, try_stmt->try_body);
+    m->be_caught -= 1;
+
+    type_t errort = type_errort_new();
+    errort = reduction_type(m, errort);
+    try_stmt->catch_err.type = errort;
+
+    rewrite_var_decl(m, &try_stmt->catch_err);
+
+    type_t t = type_kind_new(TYPE_VOID);
+    stack_push(m->current_fn->break_target_types, &t);
+    infer_body(m, try_stmt->catch_body);
+    stack_pop(m->current_fn->break_target_types);
+}
+
 static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
-    m->be_caught = true;
+    m->be_caught += 1;
     type_t t = infer_right_expr(m, &catch_expr->try_expr, type_kind_new(TYPE_UNKNOWN));
-    m->be_caught = false;
+    m->be_caught -= 1;
 
     type_t errort = type_errort_new();
     errort = reduction_type(m, errort);
@@ -1701,7 +1719,7 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type) {
             call->return_type = type_fn->return_type;
 
             if (type_fn->is_errable) {
-                INFER_ASSERTF(m->current_fn->is_errable || m->be_caught,
+                INFER_ASSERTF(m->current_fn->is_errable || m->be_caught > 0,
                               "calling an errable! fn `%s` requires the current `fn %s` errable! as well or be caught.",
                               type_fn->fn_name ? type_fn->fn_name : "lambda",
                               m->current_fn->fn_name);
@@ -1722,7 +1740,7 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type) {
 
     // catch 语句中可以包含多条 call 语句, 都统一处理了
     if (type_fn->is_errable) {
-        INFER_ASSERTF(m->current_fn->is_errable || m->be_caught,
+        INFER_ASSERTF(m->current_fn->is_errable || m->be_caught > 0,
                       "calling an errable! fn `%s` requires the current `fn %s` errable! as well or be caught.",
                       type_fn->fn_name ? type_fn->fn_name : "lambda",
                       m->current_fn->fn_name);
@@ -1802,7 +1820,7 @@ static void infer_select(module_t *m, ast_select_stmt_t *stmt) {
 
         if (select_case->recv_var) {
             // must recv
-            select_case->recv_var->type = reduction_type(m,  select_case->on_call->return_type);
+            select_case->recv_var->type = reduction_type(m, select_case->on_call->return_type);
             type_t type = select_case->recv_var->type;
             if (type.kind == TYPE_UNKNOWN || type.kind == TYPE_VOID || type.kind == TYPE_NULL) {
                 INFER_ASSERTF(false, "variable declaration cannot use type '%s'", type_format(type));
@@ -2082,6 +2100,9 @@ static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             infer_catch(m, stmt->value);
             break;
+        }
+        case AST_STMT_TRY_CATCH: {
+            return infer_try_catch_stmt(m, stmt->value);
         }
         case AST_STMT_SELECT: {
             return infer_select(m, stmt->value);

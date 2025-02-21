@@ -49,7 +49,6 @@ typedef enum {
     AST_EXPR_TUPLE_NEW, // (1, 1.1, true)
     AST_EXPR_TUPLE_DESTR, // (var_a, var_b, (var_c, var_d))
     AST_EXPR_STRUCT_NEW, // person {a = 1; b = 2}
-    AST_EXPR_TRY,
     AST_EXPR_BOOM,
 
     // 抽象复合类型
@@ -68,7 +67,6 @@ typedef enum {
     AST_STMT_RETURN,
     AST_STMT_IF,
     AST_STMT_THROW,
-    AST_STMT_TRY_CATCH,
     AST_STMT_LET,
     AST_STMT_FOR_ITERATOR,
     AST_STMT_FOR_COND,
@@ -76,6 +74,7 @@ typedef enum {
     AST_STMT_TYPE_ALIAS,
     AST_STMT_SELECT,
     AST_CALL,
+    AST_STMT_TRY_CATCH,
     AST_CATCH,
     AST_MATCH,
     AST_FNDEF, // fn def (其包含 body)
@@ -367,6 +366,21 @@ typedef struct {
 } ast_catch_t;
 
 /**
+ * try {
+ *  stmt
+ *  stmt
+ * } catch e {
+ *    stmt
+ *    stmt
+ * }
+ */
+typedef struct {
+    slice_t *try_body;
+    ast_var_decl_t catch_err;
+    slice_t *catch_body;
+} ast_try_catch_stmt_t;
+
+/**
  * match nice {
 	test() -> 12
 	int|string -> {
@@ -396,23 +410,6 @@ typedef struct {
     slice_t *cases; // ast_match_case*
 } ast_match_t;
 
-/**
- * try {
- *  stmt1()
- *  stmt2()
- *  ...
- * } catch err {
- *  stmt1()
- * }
- *
- *
- *
- */
-typedef struct {
-    slice_t *try_body;
-    ast_var_decl_t catch_err;
-    slice_t *catch_handle;
-} try_catch_stmt_t;
 
 /**
  * for (int i = 0; i < 100; i++) {}

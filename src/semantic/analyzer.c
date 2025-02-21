@@ -906,6 +906,17 @@ static void analyzer_catch(module_t *m, ast_catch_t *catch_expr) {
     analyzer_end_scope(m);
 }
 
+static void analyzer_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
+    analyzer_begin_scope(m);
+    analyzer_body(m, try_stmt->try_body);
+    analyzer_end_scope(m);
+
+    analyzer_begin_scope(m);
+    analyzer_var_decl(m, &try_stmt->catch_err, true);
+    analyzer_body(m, try_stmt->catch_body);
+    analyzer_end_scope(m);
+}
+
 static void analyzer_as_expr(module_t *m, ast_as_expr_t *as_expr) {
     analyzer_type(m, &as_expr->target_type);
     analyzer_expr(m, &as_expr->src);
@@ -1606,6 +1617,9 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_CATCH: {
             return analyzer_catch(m, stmt->value);
+        }
+        case AST_STMT_TRY_CATCH: {
+            return analyzer_try_catch_stmt(m, stmt->value);
         }
         case AST_STMT_SELECT: {
             return analyzer_select(m, stmt->value);

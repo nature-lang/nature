@@ -181,11 +181,11 @@ static inline slice_t *testar_decompress(char *content) {
 }
 
 static inline void feature_testar_test(char *custom_target) {
-    char *entry = getenv("ENTRY_FILE");
-    assert_true(entry && "entry file is null");
+    char *testar_file = getenv("TESTAR_FILE");
+    assert_true(testar_file && "testar file is null");
 
     // TEST_EXEC_IMM
-    char *content = file_read(entry);
+    char *content = file_read(testar_file);
     slice_t *cases = testar_decompress(content);
 
     // 选定测试目录 /tmp/nature_test
@@ -242,7 +242,8 @@ static inline void feature_testar_test(char *custom_target) {
             char *output = exec_output();
             assert_string_equal(output, (char *) output_file->content);
         } else {
-            exec_imm_param();
+            char *output = exec_output();
+            printf("%s", output);
         }
 
 

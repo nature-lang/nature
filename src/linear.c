@@ -307,8 +307,8 @@ static void linear_has_panic(module_t *m) {
 
     // panic 必须被立刻 catch, 判断当前表达式是否被 catch, 如果被 catch, 则走正常的 error 流程, 也就是有错误跳转到 catch label
     bool be_catch = false;
-    if (m->current_closure->catch_error_label) {
-        error_target_label = m->current_closure->catch_error_label;
+    if (!stack_empty(m->current_closure->catch_error_labels)) {
+        error_target_label = stack_top(m->current_closure->catch_error_labels);
         be_catch = true;
     }
 
@@ -334,8 +334,8 @@ static void linear_has_error(module_t *m) {
     assertf(m->current_column < 1000000, "column '%d' exception", m->current_line);
 
     // 存在 catch error
-    if (m->current_closure->catch_error_label) {
-        error_target_label = m->current_closure->catch_error_label;
+    if (!stack_empty(m->current_closure->catch_error_labels)) {
+        error_target_label = stack_top(m->current_closure->catch_error_labels);
     }
 
     lir_operand_t *has_error = temp_var_operand_with_alloc(m, type_kind_new(TYPE_BOOL));
@@ -1057,9 +1057,11 @@ static void linear_break(module_t *m, ast_break_t *stmt) {
     lir_operand_t *label = stack_top(m->current_closure->break_labels);
 
     if (stmt->expr != NULL) {
-        assert(m->current_closure->break_labels->count);
-        lir_operand_t *target = stack_top(m->current_closure->break_targets);
-        linear_expr(m, *stmt->expr, target);
+        // stmt->expr type maybe void, like println()
+        if (m->current_closure->break_labels->count > 0) {
+            lir_operand_t *target = stack_top(m->current_closure->break_targets);
+            linear_expr(m, *stmt->expr, target);
+        }
 
         OP_PUSH(lir_op_new(LIR_OPCODE_BREAK, NULL, NULL, label));
     }
@@ -2350,14 +2352,14 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-
-    m->current_closure->catch_error_label = catch_start_label;
+    stack_push(m->current_closure->catch_error_labels, catch_start_label);
     linear_expr(m, catch_expr->try_expr, target);
-    m->current_closure->catch_error_label = NULL; // 表达式已经编译完成，可以清理标记位了
+    stack_pop(m->current_closure->catch_error_labels);
 
     // 跳过错误处理部分
     lir_op_t *catch_end_label = lir_op_label(catch_end_ident, true);
     OP_PUSH(lir_op_bal(catch_end_label->output));
+
     OP_PUSH(lir_op_label(catch_start_label, true));
 
     // catch 中总是会对 target 进行赋值，或者直接退出当前函数，所以不需要进行 default operand 处理
@@ -2385,6 +2387,41 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     OP_PUSH(catch_end_label);
 
     return target;
+}
+
+static void linear_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
+    // 编译 expr, 有异常应该直接就跳转到 catch 了。
+    char *catch_start_label = label_ident_with_unique(m, CATCH_IDENT);
+    char *catch_end_ident = str_connect(catch_start_label, LABEL_END_SUFFIX);
+
+    bool has_ret = false;
+
+
+    stack_push(m->current_closure->catch_error_labels, catch_start_label);
+    linear_body(m, try_stmt->try_body);
+    stack_pop(m->current_closure->catch_error_labels);
+
+    // 跳过错误处理部分
+    lir_op_t *catch_end_label = lir_op_label(catch_end_ident, true);
+    OP_PUSH(lir_op_bal(catch_end_label->output));
+    OP_PUSH(lir_op_label(catch_start_label, true));
+
+
+    table_set(m->current_closure->match_has_ret, catch_start_label, (void *) has_ret);
+
+    // 为 err 赋值
+    lir_operand_t *err_operand = linear_var_decl(m, &try_stmt->catch_err);
+    push_rt_call_no_hook(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
+
+    stack_push(m->current_closure->break_labels, catch_end_label->output);
+//    stack_push(m->current_closure->break_targets, target);
+
+    linear_body(m, try_stmt->catch_body);
+
+    stack_pop(m->current_closure->break_labels);
+//    stack_pop(m->current_closure->break_targets);
+
+    OP_PUSH(catch_end_label);
 }
 
 /**
@@ -2757,6 +2794,9 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
                               },
                               NULL);
             return;
+        }
+        case AST_STMT_TRY_CATCH: {
+            return linear_try_catch_stmt(m, stmt->value);
         }
         case AST_STMT_RETURN: {
             return linear_return(m, stmt->value);

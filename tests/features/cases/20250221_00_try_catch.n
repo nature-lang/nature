@@ -1,0 +1,27 @@
+fn throw1():void! {
+    throw 'err in throw1'
+}
+
+fn throw2():void! {
+    throw 'err in throw2'
+}
+
+fn throw3():void! {
+    throw 'err in throw2'
+}
+
+fn main():void! {
+    try {
+        var a = 12
+        try {
+            throw1()
+        } catch e {
+            println('nested catch err:', e.msg)
+
+            throw2()
+        }
+    } catch e {
+        println('catch err', e.msg)
+        throw3()
+    }
+}
