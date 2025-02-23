@@ -53,6 +53,8 @@ static uint8_t gen_jmp_addr_codes(uint8_t *codes, uint64_t addr) {
  * @return
  */
 static uint8_t gen_mov_stack_codes(uint8_t *codes, uint64_t stack_offset, uint64_t fn_runtime_ptr) {
+    DEBUGF("[gen_mov_stack_codes] stack_offset %ld, runtime_ptr %p", stack_offset, (void*)fn_runtime_ptr)
+
     // 将 imm64 移动到寄存器 rax 中
     codes[0] = 0x48;
     codes[1] = 0xB8;
@@ -67,43 +69,48 @@ static uint8_t gen_mov_stack_codes(uint8_t *codes, uint64_t stack_offset, uint64
 }
 
 static uint8_t gen_mov_reg_codes(uint8_t *codes, uint64_t reg_index, uint64_t fn_runtime_ptr) {
-    // x0-x7 对应参数寄存器
-    uint32_t reg = reg_index;
-
-    // 在ARM64中，我们需要使用多条指令来加载64位值
-    // mov     x0, #0x1234
-    // movk    x0, #0x5678, lsl #16
-    // movk    x0, #0x9abc, lsl #32
-    // movk    x0, #0xdef0, lsl #48
-
-    uint32_t *instructions = (uint32_t *)codes;
-
-    // 检查寄存器范围 (x0-x7)
-    if (reg > 7) {
-        assert(false && "ARM64: register index must be between 0-7");
-        exit(1);
+    // RDI = 7、RSI = 6、RDX = 2、RCX = 1、R8 = 8、R9 = 9
+    uint8_t *imm = (uint8_t *) (&fn_runtime_ptr);
+    switch (reg_index) {
+        case 7: {// rdi
+            codes[0] = 0x48;
+            codes[1] = 0xBF;
+            break;
+        }
+        case 6: {// rsi
+            codes[0] = 0x48;
+            codes[1] = 0xBE;
+            break;
+        }
+        case 2: {// rdx
+            codes[0] = 0x48;
+            codes[1] = 0xBA;
+            break;
+        }
+        case 1: {// rcx
+            codes[0] = 0x48;
+            codes[1] = 0xB9;
+            break;
+        }
+        case 8: {// r8
+            codes[0] = 0x49;
+            codes[1] = 0xB8;
+            break;
+        }
+        case 9: {// r9
+            codes[0] = 0x49;
+            codes[1] = 0xB9;
+            break;
+        }
+        default:
+            assert(false && "cannot use reg_index=%s in fn param" && reg_index);
+            exit(1);
     }
 
-    // 分解64位值为4个16位片段
-    uint16_t val0 = fn_runtime_ptr & 0xFFFF;
-    uint16_t val1 = (fn_runtime_ptr >> 16) & 0xFFFF;
-    uint16_t val2 = (fn_runtime_ptr >> 32) & 0xFFFF;
-    uint16_t val3 = (fn_runtime_ptr >> 48) & 0xFFFF;
+    // 将地址按 little-endian 方式存储
+    memcpy(&codes[2], &fn_runtime_ptr, sizeof(uint64_t));
 
-    // mov     xN, #val0
-    instructions[0] = 0xD2800000 | (reg << 0) | ((uint32_t)val0 << 5);
-
-    // movk    xN, #val1, lsl #16
-    instructions[1] = 0xF2A00000 | (reg << 0) | ((uint32_t)val1 << 5);
-
-    // movk    xN, #val2, lsl #32
-    instructions[2] = 0xF2C00000 | (reg << 0) | ((uint32_t)val2 << 5);
-
-    // movk    xN, #val3, lsl #48
-    instructions[3] = 0xF2E00000 | (reg << 0) | ((uint32_t)val3 << 5);
-
-    // 返回生成的指令总字节数 (4条指令 * 4字节)
-    return 16;
+    return 10;
 }
 
 

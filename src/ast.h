@@ -784,6 +784,10 @@ static inline ast_expr_t ast_type_as(ast_expr_t expr, type_t target_type) {
     return *result;
 }
 
+static inline bool is_bool_operand_operator(ast_expr_op_t op) {
+    return op == AST_OP_AND_AND || op == AST_OP_OR_OR;
+}
+
 /**
  * 部分运算符只支持 int 类型数值运算，此时数值类型提升也拯救不了该运算
  * @return

@@ -449,6 +449,9 @@ void interval_block_order(closure_t *c) {
     c->blocks = order_blocks;
 }
 
+/**
+ * 此处的 live 是 live in 的简化形态，只是临时使用，后续的 resolve_data_flow 虽然使用了，但是可能会有问题
+ */
 void interval_build(closure_t *c) {
     // new_interval for all physical registers
     for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
@@ -481,14 +484,9 @@ void interval_build(closure_t *c) {
         // 1. calc lives in = union of successor.liveIn for each successor of b
         for (int j = 0; j < block->succs->count; ++j) {
             basic_block_t *succ = block->succs->take[j];
-            for (int k = 0; k < succ->live->count; ++k) {
-                lir_var_t *var = succ->live->take[k];
+            for (int k = 0; k < succ->temp_live_in->count; ++k) {
+                lir_var_t *var = succ->temp_live_in->take[k];
                 // 同时添加到 table 和 lives 中
-                live_add(live_table, lives, var);
-            }
-
-            for (int k = 0; k < succ->live_in->count; ++k) {
-                lir_var_t *var = succ->live_in->take[k];
                 live_add(live_table, lives, var);
             }
         }
@@ -518,6 +516,7 @@ void interval_build(closure_t *c) {
             lir_var_t *var = lives->take[k];
             interval_t *interval = table_get(c->interval_table, var->ident);
             interval_add_range(c, interval, block_from, block_to);
+            debug_interval_var(interval, "lives_add_all_block_range");
         }
 
         // 倒序遍历所有块指令添加 use and pos
@@ -642,14 +641,12 @@ void interval_build(closure_t *c) {
                     lir_var_t *var = lives->take[k];
                     interval_t *interval = table_get(c->interval_table, var->ident);
                     interval_add_range(c, interval, block_from, OP(end->last_op)->id + 2);
+                    debug_interval_var(interval, "loop header add");
                 }
             }
         }
-        block->live = lives;
+        block->temp_live_in = lives;
     }
-
-    // TODO live in 没有计算完整，可能会导致循环中的 live in 异常，导致后续的 resolve_data_flow 异常，虽然 interval_find_optimal_split_pos
-    // 已经尽量让分割点在循环的外部
 }
 
 interval_t *interval_new(closure_t *c) {
@@ -1131,8 +1128,8 @@ void resolve_data_flow(closure_t *c) {
             // to 入口活跃则可能存在对同一个变量在进入到当前块之前就已经存在了，所以可能会进行 spill/reload
             // for each interval it live at begin of successor do ? 怎么拿这样的 interval? 最简单办法是通过 live
             // live not contain phi def interval
-            for (int j = 0; j < to->live->count; ++j) {
-                lir_var_t *var = to->live->take[j];
+            for (int j = 0; j < to->temp_live_in->count; ++j) {
+                lir_var_t *var = to->temp_live_in->take[j];
                 interval_t *parent_interval = table_get(c->interval_table, var->ident);
                 assert(parent_interval);
 

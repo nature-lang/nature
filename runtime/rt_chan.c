@@ -467,6 +467,7 @@ static bool selpark_commit(coroutine_t *co, void *arg) {
  */
 int rt_chan_select(scase *cases, int16_t sends_count, int16_t recvs_count, bool _try) {
     PRE_RTCALL_HOOK();
+    DEBUGF("[rt_chan_select] cases = %p, sends_count = %d, recvs_count = %d", cases, sends_count, recvs_count);
 
     int16_t cases_count = sends_count + recvs_count;
     int16_t *order = mallocz(sizeof(int16_t) * cases_count * 2);
@@ -540,6 +541,7 @@ int rt_chan_select(scase *cases, int16_t sends_count, int16_t recvs_count, bool 
         casi = i;
         cas = &cases[casi];
         c = cas->chan;
+        assert(c);
 
         if (casi >= sends_count) {
             // recv

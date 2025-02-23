@@ -86,11 +86,11 @@ void reg_alloc(closure_t *c) {
 
     interval_build(c);
 
-    debug_interval(c);
+    debug_closure_interval(c);
 
     allocate_walk(c);
 
-    debug_interval(c);
+    debug_closure_interval(c);
 
     resolve_data_flow(c);
 

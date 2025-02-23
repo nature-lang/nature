@@ -38,7 +38,9 @@ void debug_lir(closure_t *c, char *key);
 
 void debug_block_lir(closure_t *c, char *stage_after);
 
-void debug_interval(closure_t *c);
+void debug_interval_var(interval_t *interval, char* stage);
+
+void debug_closure_interval(closure_t *c);
 
 void debug_asm(closure_t *c);
 

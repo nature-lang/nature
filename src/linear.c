@@ -1140,6 +1140,7 @@ static void linear_select(module_t *m, ast_select_stmt_t *select_stmt) {
     } scase;*/
     // 创建栈空间存储 scase 数据, send 放在前面，recv 放在后面
     type_t type_arr = type_array_new(TYPE_VOID_PTR, cases_count * 2);
+    // 实际上 c 语言不能接收一个数组作为参数，所以传递参数时需要转换为指针
     lir_operand_t *scase_target = temp_var_operand_with_alloc(m, type_arr);
     int64_t send_offset = 0;
     int64_t recv_offset = select_stmt->send_count * POINTER_SIZE * 2;
@@ -1172,9 +1173,9 @@ static void linear_select(module_t *m, ast_select_stmt_t *select_stmt) {
         if (select_case->is_recv) {
             casi = recv_offset / (POINTER_SIZE * 2);
 
-            lir_operand_t *dst_chan = indirect_addr_operand(m, chan_expr->type, scase_target, recv_offset);
+            lir_operand_t *dst_chan = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), scase_target, recv_offset);
             recv_offset += POINTER_SIZE;
-            lir_operand_t *dst_msg_ptr = indirect_addr_operand(m, call->return_type, scase_target, recv_offset);
+            lir_operand_t *dst_msg_ptr = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), scase_target, recv_offset);
             recv_offset += POINTER_SIZE;
 
             OP_PUSH(lir_op_move(dst_chan, chan_target));
@@ -1188,16 +1189,18 @@ static void linear_select(module_t *m, ast_select_stmt_t *select_stmt) {
             casi = send_offset / (POINTER_SIZE * 2);
 
             // send
-            lir_operand_t *dst_chan = indirect_addr_operand(m, chan_expr->type, scase_target, send_offset);
+            lir_operand_t *dst_chan = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), scase_target, send_offset);
             send_offset += POINTER_SIZE;
             OP_PUSH(lir_op_move(dst_chan, chan_target));
-
-            lir_operand_t *dst_msg_ptr = indirect_addr_operand(m, call->return_type, scase_target, send_offset);
-            send_offset += POINTER_SIZE;
 
             // 从 args 第二个参数提取 msg target
             ast_expr_t *msg_expr = ct_list_value(args, 1);
             lir_operand_t *msg_target = linear_expr(m, *msg_expr, NULL);
+
+            // 获取 msg 的 type, 以前剧场 chan_expr 定义的 element type
+            lir_operand_t *dst_msg_ptr = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), scase_target, send_offset);
+            send_offset += POINTER_SIZE;
+
             OP_PUSH(lir_op_move(dst_msg_ptr, lea_operand_pointer(m, msg_target)));
         }
 
@@ -1207,6 +1210,8 @@ static void linear_select(module_t *m, ast_select_stmt_t *select_stmt) {
     // int rt_chan_select(scase *cases, int16_t sends_count, int16_t recvs_count, bool _try)
     // select has default, _try = true
     lir_operand_t *chan_select_case_index = temp_var_operand(m, type_kind_new(TYPE_INT));
+    lir_var_t *scase_var = scase_target->value;
+    scase_var->type = type_kind_new(TYPE_VOID_PTR);
     push_rt_call(m, RT_CALL_CHAN_SELECT, chan_select_case_index, 4, scase_target,
                  int16_operand(select_stmt->send_count),
                  int16_operand(select_stmt->recv_count), bool_operand(select_stmt->has_default));

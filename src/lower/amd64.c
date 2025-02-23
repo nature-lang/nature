@@ -86,14 +86,16 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
             }
 
         } else if (is_qword_int(imm->kind)) {
-            // 大数值必须通过 reg 转化,
-            type_kind kind = operand_type_kind(imm_operand);
-            lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(kind));
+            if (op->code != LIR_OPCODE_MOVE || op->output->assert_type != LIR_OPERAND_VAR) {
+                // 大数值必须通过 reg 转化,
+                type_kind kind = operand_type_kind(imm_operand);
+                lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(kind));
 
-            linked_push(list, lir_op_move(temp, imm_operand));
-            temp = lir_reset_operand(temp, imm_operand->pos);
-            imm_operand->assert_type = temp->assert_type;
-            imm_operand->value = temp->value;
+                linked_push(list, lir_op_move(temp, imm_operand));
+                temp = lir_reset_operand(temp, imm_operand->pos);
+                imm_operand->assert_type = temp->assert_type;
+                imm_operand->value = temp->value;
+            }
         }
     }
 
