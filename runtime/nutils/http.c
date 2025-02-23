@@ -6,8 +6,8 @@
 #define DEFAULT_BACKLOG 128
 
 
-mutex_t uv_thread_locker;
-uv_loop_t uv_global_loop;
+mutex_t uv_thread_locker = {0};
+uv_loop_t uv_global_loop = {0};
 
 static inline void on_async_close_cb(uv_handle_t *handle) {
     conn_ctx_t *ctx = CONTAINER_OF(handle, conn_ctx_t, async_handle);

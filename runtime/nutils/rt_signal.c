@@ -3,17 +3,17 @@
 #include "vec.h"
 
 // sig to ch list
-ATOMIC int64_t signal_recv;
+ATOMIC int64_t signal_recv = 0;
 
-int64_t signal_mask;
+int64_t signal_mask = 0;
 
-pthread_mutex_t signal_locker;
+pthread_mutex_t signal_locker = PTHREAD_MUTEX_INITIALIZER;
 
-struct sc_map_64 signal_handlers;
+struct sc_map_64 signal_handlers = {0};
 
 int64_t sig_ref[NSIG] = {0};
 
-coroutine_t *signal_loop_co;
+coroutine_t *signal_loop_co = NULL;
 
 void signal_notify(n_chan_t *ch, n_vec_t *signals) {
     pthread_mutex_lock(&signal_locker);
