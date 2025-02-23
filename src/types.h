@@ -286,7 +286,7 @@ typedef struct basic_block_t {
     slice_t *live_out;
     slice_t *live_in; // ssa 阶段计算的精确 live in
     // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
-    slice_t *live; // reg alloc 阶段计算, 用于 resolve_data_flow 生成，未计算循环产生的 live in
+    slice_t *temp_live_in; // reg alloc interval build 阶段产生临时 live in，未计算循环产生的 live in 所以是不完整的
     // employer
     slice_t *domers; // 当前块被哪些基本块管辖
     struct basic_block_t *imm_domer; // 当前块的直接(最近)支配者

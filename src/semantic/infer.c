@@ -604,6 +604,8 @@ static bool type_confirmed(type_t t) {
  * @return
  */
 static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_type) {
+
+
     type_t right_type;
     // +/-/*/ ，由做表达式的类型决定, 并且如果左右表达式类型不一致，则抛出异常
     type_t left_type = infer_right_expr(m, &expr->left, type_kind_new(TYPE_UNKNOWN));
@@ -638,6 +640,12 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_t
                       type_format(left_type),
                       ast_expr_op_str[expr->operator],
                       type_format(right_type));
+    }
+
+    if (is_bool_operand_operator(expr->operator)) {
+        INFER_ASSERTF(left_type.kind == TYPE_BOOL && right_type.kind == TYPE_BOOL,
+                      "binary operator '%s' only bool operand",
+                      ast_expr_op_str[expr->operator]);
     }
 
     // 位运算只能支持整形

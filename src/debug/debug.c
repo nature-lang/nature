@@ -256,7 +256,47 @@ void debug_block_lir(closure_t *c, char *stage_after) {
 #endif
 }
 
-void debug_interval(closure_t *c) {
+void debug_interval_var(interval_t *interval, char *stage) {
+    assert(interval);
+    int parent_index = 0;
+    char *parent_ident = "";
+    int64_t stack_slot = 0;
+    char *ranges = "";
+    char *use_pos = "";
+    char *type_str = "int";
+    if (interval->alloc_type == LIR_FLAG_ALLOC_FLOAT) {
+        type_str = "float";
+    }
+
+    if (interval->parent) {
+        parent_index = interval->parent->index;
+        parent_ident = interval->parent->var->ident;
+    }
+
+    if (interval->stack_slot) {
+        stack_slot = *interval->stack_slot;
+    }
+
+    LINKED_FOR(interval->ranges) {
+        interval_range_t *r = LINKED_VALUE();
+        char *temp_range = dsprintf("[%d,%d)\t", r->from, r->to);
+        ranges = str_connect(ranges, temp_range);
+    }
+    LINKED_FOR(interval->use_pos_list) {
+        use_pos_t *u = LINKED_VALUE();
+        char *temp_use = dsprintf("%d-%d\t", u->value, u->kind);
+        use_pos = str_connect(use_pos, temp_use);
+    }
+
+    log_debug("%s var: index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
+              stage,
+              interval->index,
+              interval->var ? interval->var->ident : "-", parent_index, parent_ident, interval->assigned, type_str,
+              stack_slot, ranges,
+              use_pos);
+}
+
+void debug_closure_interval(closure_t *c) {
 #ifdef DEBUG_INTERVAL
     log_debug("closure=%s interval ------------------------------------------------------------------------",
               c->fndef->fn_name);
@@ -296,48 +336,15 @@ void debug_interval(closure_t *c) {
 
         log_debug("reg: index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
                   interval->index, reg->name,
-                  parent_index, parent_ident, !interval->spilled ? interval->assigned:-1, type_str, stack_slot, ranges,
+                  parent_index, parent_ident, !interval->spilled ? interval->assigned : -1, type_str, stack_slot,
+                  ranges,
                   use_pos);
     }
 
     for (int i = 0; i < c->var_defs->count; ++i) {
         lir_var_t *var = c->var_defs->take[i];
         interval_t *interval = table_get(c->interval_table, var->ident);
-        assert(interval);
-        int parent_index = 0;
-        char *parent_ident = "";
-        int64_t stack_slot = 0;
-        char *ranges = "";
-        char *use_pos = "";
-        char *type_str = "int";
-        if (interval->alloc_type == LIR_FLAG_ALLOC_FLOAT) {
-            type_str = "float";
-        }
-
-        if (interval->parent) {
-            parent_index = interval->parent->index;
-            parent_ident = interval->parent->var->ident;
-        }
-
-        if (interval->stack_slot) {
-            stack_slot = *interval->stack_slot;
-        }
-
-        LINKED_FOR(interval->ranges) {
-            interval_range_t *r = LINKED_VALUE();
-            char *temp_range = dsprintf("[%d,%d)\t", r->from, r->to);
-            ranges = str_connect(ranges, temp_range);
-        }
-        LINKED_FOR(interval->use_pos_list) {
-            use_pos_t *u = LINKED_VALUE();
-            char *temp_use = dsprintf("%d-%d\t", u->value, u->kind);
-            use_pos = str_connect(use_pos, temp_use);
-        }
-
-        log_debug("var: index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
-                  interval->index,
-                  interval->var->ident, parent_index, parent_ident, interval->assigned, type_str, stack_slot, ranges,
-                  use_pos);
+        debug_interval_var(interval, "");
     }
     printf("\n\n");
 #endif
@@ -400,8 +407,8 @@ void debug_basic_block(basic_block_t *block) {
         printf("%s\t", ((basic_block_t *) block->succs->take[i])->name);
     }
     printf("\n\t\tlive:");
-    for (int i = 0; i < block->live->count; ++i) {
-        lir_var_t *var = block->live->take[i];
+    for (int i = 0; i < block->temp_live_in->count; ++i) {
+        lir_var_t *var = block->temp_live_in->take[i];
         printf("%s\t", var->ident);
     }
     printf("\n\t\tlive_in:");

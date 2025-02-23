@@ -41,13 +41,13 @@ fn main() {
         5 -> assert(false)
         1&3 -> assert(false)
         1 | 2 -> assert(false)
-        15 | case5_int(2 && 1) | (1|2) -> println('matched')
+        15 | case5_int(2 > 0 && 1 < 0) | (1|2) -> println('matched')
         _ -> assert(false)
     }
 
     // case 6
     match {
-        12 && 0 -> assert(false)
+        12 > 0 && 0 > 0 -> assert(false)
         (1&3) == 2 || false -> assert(false)
         (13|(1|2)) == 15 -> println('matched')
         (1|2) > 3 -> assert(false)

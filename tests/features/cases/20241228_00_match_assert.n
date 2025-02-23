@@ -27,7 +27,7 @@ fn main() {
 
     union_t1 foo3 = true
     if false {
-    } else if true && (1 || 2) && foo3 is bool && bool_test() {
+    } else if true && (1 > 0 || 2 > 0) && foo3 is bool && bool_test() {
         assert(foo3 == true)
     } else {
         assert(false)

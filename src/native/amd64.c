@@ -163,6 +163,7 @@ static amd64_asm_operand_t *lir_operand_trans_amd64(closure_t *c, lir_op_t *op, 
             asm_operand = DISP_REG(reg, indirect->offset, type_kind_sizeof(indirect->type.kind));
         }
 
+        assert(asm_operand->size > 0);
         return asm_operand;
     }
 

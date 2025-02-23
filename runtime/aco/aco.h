@@ -93,9 +93,9 @@ typedef struct {
 typedef void (*aco_cofuncp_t)(void);
 
 struct aco_s {
-#ifdef __X86_64__
+#ifdef __AMD64
     void *reg[9]; // amd64 试用
-#elif __aarch64__
+#elif __ARM64
     void* reg[16];
 #else
 #error "platform no support yet"

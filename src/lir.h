@@ -905,6 +905,7 @@ static inline lir_operand_t *lower_temp_var_operand(closure_t *c, linked_t *list
  */
 static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir_operand_t *base, int64_t offset) {
     assert(type.kind > 0);
+    assert(type.kind != TYPE_VOID);
 
     if (base->assert_type == LIR_OPERAND_INDIRECT_ADDR || base->assert_type == LIR_OPERAND_STACK) {
         type_t base_type = lir_operand_type(base);
@@ -1009,7 +1010,7 @@ static inline basic_block_t *lir_new_block(char *name, uint16_t label_index) {
     basic_block->use = slice_new();
     basic_block->def = slice_new();
     basic_block->loop_ends = slice_new();
-    basic_block->live = slice_new();
+    basic_block->temp_live_in = slice_new();
     basic_block->live_in = slice_new();
     basic_block->live_out = slice_new();
     basic_block->domers = slice_new();

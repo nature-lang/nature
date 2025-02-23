@@ -561,6 +561,7 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
             // 编码
             temp->inst = amd64_asm_inst_encoding(*operation, temp->data, &temp->data_count);
             section_offset += temp->data_count;
+            fn_offset += temp->data_count;
 
             // 记录 caller 信息
             if (amd64_is_call_op(operation->name)) {
