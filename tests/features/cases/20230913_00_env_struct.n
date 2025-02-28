@@ -15,7 +15,7 @@ fn make_atm():fn(f32):atm_t {
         address = 'shenzhen',
         amount = 1000,
         count = 0,
-        bank = 'china bank'
+        bank = 'china bank',
     }
 
     return fn(f32 amount):atm_t {
@@ -45,17 +45,17 @@ fn main() {
     var list = vec_new<atm_t>(0, 0)
 
     list.push(atm_t{
-        amount = 100
+        amount = 100,
     })
 
     list.push(atm_t{
-        amount = 200
+        amount = 200,
     })
     list.push(atm_t{
-        amount = 300
+        amount = 300,
     })
     list.push(atm_t{
-        amount = 400
+        amount = 400,
     })
 
     var list2 = vec_new<atm_t>(100, 0)
@@ -81,19 +81,19 @@ fn main() {
     arr<atm_t,8> array = []
 
     array[0] = atm_t{
-        amount = 100
+        amount = 100,
     }
 
     array[3] = atm_t{
-        amount = 400
+        amount = 400,
     }
 
     array[5] = atm_t{
-        amount = 600
+        amount = 600,
     }
 
     array[7] = atm_t{
-        amount = 800
+        amount = 800,
     }
 
     var list3 = vec_new<atm_t>(200, 0)

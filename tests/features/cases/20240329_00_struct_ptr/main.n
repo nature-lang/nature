@@ -4,7 +4,7 @@ fn main() {
     var p = other.person_t{
         name = 'hualaka',
         age = 23,
-        sex = true
+        sex = true,
     }
 
     [other.person_t] list = [p]

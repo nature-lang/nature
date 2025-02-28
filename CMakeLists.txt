@@ -18,23 +18,48 @@ message("build time: ${BUILD_TIME}")
 # 设置 release 模式下的优化等级
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
     set(BUILD_TYPE "release")
-    set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+    set(CMAKE_C_FLAGS_RELEASE "-O2")
     set(BUILD_TYPE "release")
 endif ()
 
 # 设置 debug 模式下编译输出
 if (CMAKE_BUILD_TYPE MATCHES Debug)
     set(BUILD_TYPE "debug")
-    #    add_compile_definitions(NATURE_DEBUG)
-#    add_compile_definitions(DEBUG_LIR)
-    #    add_compile_definitions(DEBUG_ASM)
-    #    add_compile_definitions(DEBUG_PARSER)
-    #        add_compile_definitions(DEBUG_INTERVAL)
-    #    add_compile_definitions(DEBUG_MACHO)
-#    add_compile_definitions(ASSERT_ERROR)
-    #    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2")
+    
+    # 定义调试选项，默认都为 OFF
+    option(DEBUG_NATURE "Enable nature debug output" OFF)
+    option(DEBUG_LIR "Enable LIR debug output" OFF)
+    option(DEBUG_ASM "Enable ASM debug output" OFF)
+    option(DEBUG_PARSER "Enable parser debug output" OFF)
+    option(DEBUG_INTERVAL "Enable interval debug output" OFF)
+    option(DEBUG_MACHO "Enable MACHO debug output" OFF)
+    option(ASSERT_ERROR "Enable assert error" OFF)
+    
+    # 根据选项添加对应的编译定义
+    if(DEBUG_NATURE)
+        add_compile_definitions(NATURE_DEBUG)
+    endif()
+    if(DEBUG_LIR)
+        add_compile_definitions(DEBUG_LIR)
+    endif()
+    if(DEBUG_ASM)
+        add_compile_definitions(DEBUG_ASM)
+    endif()
+    if(DEBUG_PARSER)
+        add_compile_definitions(DEBUG_PARSER)
+    endif()
+    if(DEBUG_INTERVAL)
+        add_compile_definitions(DEBUG_INTERVAL)
+    endif()
+    if(DEBUG_MACHO)
+        add_compile_definitions(DEBUG_MACHO)
+    endif()
+    if(ASSERT_ERROR)
+        add_compile_definitions(ASSERT_ERROR)
+    endif()
+    
     message("cmake type is debug")
-endif ()
+endif()
 
 configure_file("${PROJECT_SOURCE_DIR}/config/config.h.in" "${PROJECT_SOURCE_DIR}/config/config.h")
 
@@ -95,7 +120,8 @@ install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} DESTINATION 
 install(PROGRAMS ${LSP_BINARY_PATH} DESTINATION nature/bin)
 install(DIRECTORY lib/ DESTINATION nature/lib)
 install(DIRECTORY std/ DESTINATION nature/std)
-install(FILES LICENSE DESTINATION nature/)
+install(FILES LICENSE-MIT DESTINATION nature/)
+install(FILES LICENSE-APACHE DESTINATION nature/)
 install(FILES VERSION DESTINATION nature/)
 
 

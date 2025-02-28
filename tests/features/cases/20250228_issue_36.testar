@@ -1,0 +1,188 @@
+=== test_argh1
+--- main.n
+type rectangle_t = struct {
+    int width = 0
+    int length = 0
+    string name = ""
+}
+
+fn argh(rectangle_t r):rectangle_t {
+    r.width = 3
+    r.length = 4
+    // println("Made it this far!")
+
+    var r2 = rectangle_t{
+        width = r.width * 2,
+        length = r.length * 2,
+    }
+    println("Made it to here!")
+    return r2
+}
+
+fn main() {
+    var r1 = rectangle_t{
+        width = 1,
+        length = 2,
+        name = "r1",
+    }
+
+    var r2 = argh(r1)
+    assert(r2.width == 6 && r2.length == 8 && r1.width == 1 && r1.length == 2)
+}
+
+
+=== test_argh2
+--- main.n
+type rectangle_t = struct {
+    int width = 0
+    int length = 0
+    string name = ""
+}
+
+fn main() {
+    var argh = fn(rectangle_t r):rectangle_t {
+        r.width = 3
+        r.length = 4
+        // println("Made it this far!")
+
+        var r2 = rectangle_t{
+            width = r.width * 2,
+            length = r.length * 2,
+        }
+        println("Made it to here!")
+        return r2
+    }
+
+    var r1 = rectangle_t{
+        width = 1,
+        length = 2,
+        name = "r1",
+    }
+
+    var r2 = argh(r1)
+    assert(r2.width == 6 && r2.length == 8 && r1.width == 1 && r1.length == 2)
+}
+
+=== test_argh3
+--- main.n
+type rectangle_t = struct {
+    int width = 0
+    int length = 0
+    string name = ""
+}
+
+fn argh(rectangle_t r):rectangle_t {
+    r.width = 3
+    r.length = 4
+    println("Made it this far!")
+
+    var r2 = rectangle_t{
+        width = r.width * 2,
+        length = r.length * 2,
+    }
+    println("Made it to here!")
+    return r2
+}
+
+fn main() {
+    var r1 = rectangle_t{
+        width = 1,
+        length = 2,
+        name = "r1",
+    }
+
+    var r2 = argh(r1)
+    assert(r2.width == 6 && r2.length == 8 && r1.width == 1 && r1.length == 2)
+}
+
+
+=== test_argh4
+--- main.n
+type rectangle_t = struct {
+    int width = 0
+    int length = 0
+    string name = ""
+}
+
+fn main() {
+    var argh = fn(rectangle_t r):rectangle_t {
+        r.width = 3
+        r.length = 4
+        println("Made it this far!")
+
+        var r2 = rectangle_t{
+            width = r.width * 2,
+            length = r.length * 2}
+        println("Made it to here!")
+        return r2
+    }
+
+    var r1 = rectangle_t{
+        width = 1,
+        length = 2,
+        name = "r1"}
+
+    var r2 = argh(r1)
+    assert(r2.width == 6 && r2.length == 8 && r1.width == 1 && r1.length == 2)
+}
+
+=== test_argh5
+--- main.n
+type rectangle_t = struct {
+    int width = 0
+    int length = 0
+    string name = ""
+}
+
+fn argh(rectangle_t r):rectangle_t {
+    r.width = 3
+    r.length = 4
+
+    var r2 = rectangle_t{
+        width = r.width * 2,
+        length = r.length * 2,
+    }
+    return r2
+}
+
+fn main() {
+    var r1 = rectangle_t{
+        width = 1,
+        length = 2,
+        name = "r1",
+    }
+
+    var r2 = argh(r1)
+    assert(r2.width == 6 && r2.length == 8 && r1.width == 1 && r1.length == 2)
+}
+
+
+=== test_argh6
+--- main.n
+type rectangle_t = struct {
+    int width = 0
+    int length = 0
+    string name = ""
+}
+
+fn main() {
+    var argh = fn(rectangle_t r):rectangle_t {
+        r.width = 3
+        r.length = 4
+
+        var r2 = rectangle_t{
+            width = r.width * 2,
+            length = r.length * 2,
+        }
+        return r2
+    }
+
+    var r1 = rectangle_t{
+        width = 1,
+        length = 2,
+        name = "r1",
+    }
+
+    var r2 = argh(r1)
+    assert(r2.width == 6 && r2.length == 8 && r1.width == 1 && r1.length == 2)
+}

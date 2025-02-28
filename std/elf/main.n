@@ -60,7 +60,7 @@ fn arch(string path):string! {
         EM_ARM: 'armv7',
         EM_RISCV: 'riscv64',
         EM_X86_64: 'amd64',
-        EM_386: 'i386'
+        EM_386: 'i386',
     }
 
     var arch = arch_of[elf_header.machine]

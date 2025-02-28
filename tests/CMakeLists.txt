@@ -59,6 +59,7 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
         set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features/cases)
         set(TESTAR_FILE "${TEST_NAME}.testar")
         set(ENTRY_FILE "${TEST_NAME}.n")
+        target_compile_definitions(${TEST_NAME} PRIVATE TEST_MODE)
     else ()
         set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features/cases)
         set(ENTRY_FILE "${TEST_NAME}.n")
@@ -70,7 +71,7 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
             PROPERTY
             ENVIRONMENT "BUILD_OS=$ENV{BUILD_OS};BUILD_ARCH=$ENV{BUILD_ARCH};NPKG_PATH=${PACKAGE_BINARY_PATH};BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};TESTAR_FILE=${TESTAR_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};PATH=/usr/local/nature/bin:$ENV{PATH};")
 
-    message("[test cases] register test ${TEST_NAME} success, work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}")
+    message("[test cases] register test ${TEST_NAME} success, work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}, testar_file=${TESTAR_FILE}")
 endforeach()
 
 # ---------------------------------- 通过环境变量启用 runtime main debug 测试 ------------------------------------------

@@ -61,7 +61,7 @@ int exec_imm(char *work_dir, char *file, slice_t *list) {
 
 
 // 结尾必须是 NULL,开头必须是重复命令
-char *exec(char *work_dir, char *file, slice_t *list, int32_t *pid) {
+char *exec(char *work_dir, char *file, slice_t *list, int32_t *pid, int32_t *status) {
     int fd[2];// write to fd[1], read by fd[0]
     VOID pipe(fd);
 
@@ -100,7 +100,11 @@ char *exec(char *work_dir, char *file, slice_t *list, int32_t *pid) {
     full_read(fd[0], buf, 81920);
 
     int exec_status;
-    wait(&exec_status);
+    if (status == NULL) {
+        status = &exec_status;
+    }
+
+    wait(status);
 
     return buf;
 }

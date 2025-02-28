@@ -27,17 +27,18 @@ void map_grow(n_map_t *m) {
     uint64_t key_size = rtype_stack_size(key_rtype, POINTER_SIZE);
     uint64_t value_size = rtype_stack_size(value_rtype, POINTER_SIZE);
 
-    n_map_t old_map;
+    n_map_t old_map = {0};
     memmove(&old_map, m, sizeof(n_map_t));
 
 
+    m->length = 0;
     m->capacity *= 2;
     m->key_data = rti_array_new(key_rtype, m->capacity);
     m->value_data = rti_array_new(value_rtype, m->capacity);
     m->hash_table = rti_gc_malloc(sizeof(int64_t) * m->capacity, NULL);
 
     // 对所有的 key 进行 rehash, i 就是 data_index
-    for (int data_index = 0; data_index < m->length; ++data_index) {
+    for (int data_index = 0; data_index < old_map.length; ++data_index) {
         void *key_ref = old_map.key_data + data_index * key_size;
         void *value_ref = old_map.value_data + data_index * value_size;
 
@@ -52,33 +53,34 @@ void map_grow(n_map_t *m) {
         }
 
         // rehash
-        rt_map_assign(m, key_ref);
-    }
+        void* new_value_ref = (void*)rt_map_assign(m, key_ref); // 这里会导致 m length 变长
+        memmove(new_value_ref, value_ref, value_size);
+   }
 }
 
 
-n_map_t *rt_map_new(uint64_t rtype_hash, uint64_t key_index, uint64_t value_index) {
+n_map_t *rt_map_new(uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhash) {
     PRE_RTCALL_HOOK();
     rtype_t *map_rtype = rt_find_rtype(rtype_hash);
-    rtype_t *key_rtype = rt_find_rtype(key_index);
-    rtype_t *value_rtype = rt_find_rtype(value_index);
+    rtype_t *key_rtype = rt_find_rtype(key_rhash);
+    rtype_t *value_rtype = rt_find_rtype(value_rhash);
     uint64_t capacity = MAP_DEFAULT_CAPACITY;
-    DEBUGF("[runtime.rt_map_new] map_rindex=%ld(%s-%ld), key_rindex=%ld(%s-%ld), value_rindex=%ld(%s-%ld)",
+    DEBUGF("[runtime.rt_map_new] map_rhash=%ld(%s-%ld), key_rhash=%ld(%s-%ld), value_rindex=%ld(%s-%ld)",
            rtype_hash,
            type_kind_str[map_rtype->kind],
            map_rtype->size,
-           key_index,
+           key_rhash,
            type_kind_str[key_rtype->kind],
            key_rtype->size,
-           value_index,
+           value_rhash,
            type_kind_str[value_rtype->kind],
            value_rtype->size);
 
     n_map_t *map_data = rti_gc_malloc(map_rtype->size, map_rtype);
     map_data->capacity = capacity;
     map_data->length = 0;
-    map_data->key_rtype_hash = key_index;
-    map_data->value_rtype_hash = value_index;
+    map_data->key_rtype_hash = key_rhash;
+    map_data->value_rtype_hash = value_rhash;
     map_data->hash_table = rti_gc_malloc(sizeof(uint64_t) * capacity, NULL);
     map_data->key_data = rti_array_new(key_rtype, capacity);
     map_data->value_data = rti_array_new(value_rtype, capacity);
@@ -139,12 +141,15 @@ n_void_ptr_t rt_map_assign(n_map_t *m, void *key_ref) {
     uint64_t hash_value = m->hash_table[hash_index];
 
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
+
     char *key_str = rtype_value_to_str(key_rtype, key_ref);
 
-    DEBUGF("[runtime.rt_map_assign] key_rtype_kind: %d, key_str: %s, hash_index=%lu,",
+    DEBUGF("[runtime.rt_map_assign] key_rtype_kind=%d, key_str=%s, hash_index=%lu, map_len=%d",
            key_rtype->kind,
            key_str,
-           hash_index);
+           hash_index,
+           m->length);
+
     free((void *) key_str);
 
     uint64_t data_index = 0;
@@ -162,9 +167,9 @@ n_void_ptr_t rt_map_assign(n_map_t *m, void *key_ref) {
 
     uint64_t key_size = rt_rtype_out_size(m->key_rtype_hash);
     uint64_t value_size = rt_rtype_out_size(m->value_rtype_hash);
-    DEBUGF("[runtime.rt_map_assign] assign success data_index=%lu, hash_value=%lu",
+    DEBUGF("[runtime.rt_map_assign] assign success data_index=%lu, hash_value=%lu, key_size=%ld",
            data_index,
-           m->hash_table[hash_index]);
+           m->hash_table[hash_index], key_size);
 
     // push to key list and value list
     memmove(m->key_data + key_size * data_index, key_ref, key_size);

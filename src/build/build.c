@@ -548,7 +548,7 @@ static void build_assembler(slice_t *modules) {
             ast_var_decl_t *var_decl = &vardef->var_decl;
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
             symbol->name = var_decl->ident;
-            symbol->size = type_kind_sizeof(var_decl->type.kind);
+            symbol->size = type_sizeof(var_decl->type);
             symbol->value = NULL;
             slice_push(m->asm_global_symbols, symbol);
         }
@@ -824,7 +824,11 @@ static void build_archive(slice_t *modules) {
 void build(char *build_entry, bool is_archive) {
     assertf(strlen(build_entry) > 2, "build entry=%s exception", build_entry);
 
-    //    log_set_level(LOG_INFO);
+#ifdef TEST_MODE
+    printf("In test mode!\n");
+#endif
+
+    log_set_level(LOG_INFO);
 
     // 配置初始化
     build_init(build_entry);

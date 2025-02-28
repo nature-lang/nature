@@ -5,7 +5,7 @@
 
 #define MAP_DEFAULT_CAPACITY 16 // Java HashMap default 16
 
-n_map_t *rt_map_new(uint64_t rtype_hash, uint64_t key_index, uint64_t value_index);
+n_map_t *rt_map_new(uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhash);
 
 uint64_t rt_map_length(n_map_t *l);
 

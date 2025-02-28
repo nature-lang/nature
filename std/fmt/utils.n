@@ -30,7 +30,7 @@ fn itos_with<T>(T i, string fill, u8 width):string {
         i = -i // 转换为正数
     }
 
-    var result = [] as [u8]
+    var result = vec_new<u8>()
 
     if i == 0 {
         if width == 0 {

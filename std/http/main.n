@@ -184,7 +184,7 @@ fn request_new(raw_ptr<uv.conn_ctx_t> ctx):request_t {
         method = ctx.method,
         host = runtime.string_ref_new(ctx.host_at, ctx.host_len),
         url = runtime.string_ref_new(ctx.url_at, ctx.url_len),
-        path = runtime.string_ref_new(ctx.path_at, ctx.path_len)
+        path = runtime.string_ref_new(ctx.path_at, ctx.path_len),
     }
 
     if ctx.body_len > 0 {

@@ -17,10 +17,10 @@ fn register(string username, string password):void! {
         throw 'The user ' + username +' has already registered'
     }
 
-	u = user {
+	u = user{
 		id = id,
 		username = username,
-		password = password
+		password = password,
 	}
 
 	list.push(u)

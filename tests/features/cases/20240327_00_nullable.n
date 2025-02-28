@@ -19,9 +19,6 @@ fn main() {
         println('raw_nat is not null')
     }
 
-    // 禁止 raw_ptr 转换为 ptr<i32>
-    // nat_p = raw_nat as ptr<i32>
-
     i32 load_nat = *raw_nat
     println(load_nat)
 }

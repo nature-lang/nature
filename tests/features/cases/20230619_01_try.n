@@ -26,7 +26,7 @@ fn main():void! {
                 throw 'divisor cannot zero'
             }
             return a / b
-        }
+        },
     }
 
     // 正常访问

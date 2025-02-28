@@ -439,6 +439,28 @@ static void literal_float_casting(module_t *m, ast_expr_t *expr, type_t target_t
 }
 
 /**
+ * integer literal 可以转换为 float 类型，不做检查
+ * float literal 可以转换为 integer 类型，不做检查
+ * float literal 可以转换为 float 类型，不做检查
+ *
+ * integer literal 之间的转换需要进行 fit 检查
+ */
+static bool literal_as_check(module_t *m, ast_literal_t *literal, type_t target_type) {
+    assert(is_number(target_type.kind));
+
+    type_kind literal_kind = cross_kind_trans(literal->kind);
+    type_kind target_kind = cross_kind_trans(target_type.kind);
+
+    if (is_integer(literal->kind) && is_integer(target_type.kind)) {
+        int64_t i = atoll(literal->value);
+        return integer_range_check(target_kind, i);
+    }
+
+
+    return true;
+}
+
+/**
  * 直接根据 arg 进行 hash
  * @param args
  * @return
@@ -604,20 +626,27 @@ static bool type_confirmed(type_t t) {
  * @return
  */
 static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_type) {
+    assert(target_type.kind != TYPE_UNION);
 
+    type_t left_target_type = type_kind_new(TYPE_UNKNOWN);
+    if (ast_is_arithmetic_op(expr->operator)) {
+        left_target_type = target_type;
+    }
 
     type_t right_type;
     // +/-/*/ ，由做表达式的类型决定, 并且如果左右表达式类型不一致，则抛出异常
-    type_t left_type = infer_right_expr(m, &expr->left, type_kind_new(TYPE_UNKNOWN));
-    if (left_type.kind != TYPE_UNION) {
-        // 基于 left type 进行隐式类型转换
-        right_type = infer_right_expr(m, &expr->right, left_type);
-    } else {
-        right_type = infer_right_expr(m, &expr->right, type_kind_new(TYPE_UNKNOWN));
-    }
+    type_t left_type = infer_right_expr(m, &expr->left, left_target_type);
+    INFER_ASSERTF(left_type.kind != TYPE_UNKNOWN, "unknown binary expr left type");
 
+    type_t right_target_type = type_kind_new(TYPE_UNKNOWN);
+    if (left_type.kind != TYPE_UNION) {
+        right_target_type = left_type;
+    }
+    right_type = infer_right_expr(m, &expr->right, right_target_type);
+
+    // left type 和 right type 必须相同
     if (!type_compare(left_type, right_type, NULL)) {
-        INFER_ASSERTF(false, "type inconsistency, expect=%s, actual=%s", type_origin_format(left_type),
+        INFER_ASSERTF(false, "binary type inconsistency, left is '%s', right is '%s'", type_origin_format(left_type),
                       type_origin_format(right_type));
     }
 
@@ -668,8 +697,11 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_t
 }
 
 /**
- * 类型转换 type casting
- * i8 foo = 12 as i8
+ *
+ * 支持 integer/floater 类型之间相互进行转换
+ * 支持 string 与 `[u8]` 类型之间相互转换
+ * 支持 void_ptr 与任意类型(除了 floater)之间相互转换
+ * 后续联合类型断言也使用 as 语法
  *
  * 类型断言 type assert
  * i8|i16|i32 bar = 24
@@ -683,55 +715,54 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     type_t target_type = reduction_type(m, as_expr->target_type);
     as_expr->target_type = target_type;
 
-    // INFER_ASSERTF(target_type.kind != TYPE_NULL, "cannot casting to 'null'");
-
-    // 此处进行了类型的约束
-    type_t src_type = infer_expr(m, &as_expr->src, target_type);
+    type_t src_type = infer_expr(m, &as_expr->src, type_kind_new(TYPE_UNKNOWN));
+    INFER_ASSERTF(src_type.kind != TYPE_UNKNOWN, "unknown as source type");
     as_expr->src.type = src_type;
 
-    // type_compare 允许 ptr 赋值给 raw_ptr 所以返回了 true, 但是不允许 as, 所以需要进行 as 拦截
-    if (as_expr->src.type.kind == TYPE_RAW_PTR) {
-        INFER_ASSERTF(target_type.kind == TYPE_VOID_PTR, "%s can only as void_ptr", type_format(as_expr->src.type));
-
+    // void_ptr 可以 as 为任意类型
+    if (as_expr->src.type.kind == TYPE_VOID_PTR && !is_float(target_type.kind)) {
         return target_type;
     }
 
-    // 如果此时 src type 和 dst type 一致，则直接跳过，不做任何报错
-    if (type_compare(src_type, target_type, NULL)) {
+    // 任意类型都可以 as void_ptr
+    if (!is_float(as_expr->src.type.kind) && target_type.kind == TYPE_VOID_PTR) {
         return target_type;
     }
 
+    // union/any 可以 as 为任意类型
     if (as_expr->src.type.kind == TYPE_UNION) {
         INFER_ASSERTF(target_type.kind != TYPE_UNION, "union to union type is not supported");
 
         // target_type 必须包含再 union 中
         INFER_ASSERTF(union_type_contains(as_expr->src.type.union_, target_type),
-                      "type = %s not contains in union type",
+                      "type '%s' not contains in union type",
                       type_format(target_type));
         return target_type;
     }
 
-    // 特殊类型转换 string -> list u8
+    // 特殊类型转换 string -> [u8]
     if (as_expr->src.type.kind == TYPE_STRING && is_list_u8(target_type)) {
         return target_type;
     }
 
-    // list u8 -> string
     if (is_list_u8(as_expr->src.type) && target_type.kind == TYPE_STRING) {
         return target_type;
     }
 
-    // 除了 float 以外所有类型都可以转换成 void_ptr TODO 可以转换成更加具体的 raw_ptr 而不是 void_ptr
-    if (!is_float(as_expr->src.type.kind) && target_type.kind == TYPE_VOID_PTR) {
+    // number 之间可以相互进行类型转换, 但是需要进行 literal check
+    if (is_number(as_expr->src.type.kind) && is_number(target_type.kind)) {
+        // literal check, 避免不合适的类型转换
+        if (as_expr->src.assert_type == AST_EXPR_LITERAL) {
+            ast_literal_t *literal = as_expr->src.value;
+            INFER_ASSERTF(literal_as_check(m, as_expr->src.value, target_type), "literal %s out of '%d' range",
+                          literal->value, type_origin_format(target_type));
+        }
+
         return target_type;
     }
 
-    if (as_expr->src.type.kind == TYPE_VOID_PTR && !is_float(target_type.kind)) {
-        return target_type;
-    }
 
-    INFER_ASSERTF(can_type_casting(target_type.kind), "cannot casting to '%s'", type_format(target_type));
-
+    INFER_ASSERTF(false, "cannot casting to '%s'", type_format(target_type));
     return target_type;
 }
 
@@ -988,16 +1019,21 @@ static type_t infer_type_eq_expr(module_t *m, ast_expr_t *expr) {
  * @param expr
  * @return
  */
-static type_t infer_unary(module_t *m, ast_unary_expr_t *expr) {
+static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_type) {
     if (expr->operator == AST_OP_NOT) {
         // bool 支持各种类型的 implicit type convert
         return infer_right_expr(m, &expr->operand, type_kind_new(TYPE_BOOL));
     }
 
-    type_t type = infer_right_expr(m, &expr->operand, type_kind_new(TYPE_UNKNOWN));
+    type_t operand_target_type = type_kind_new(TYPE_UNKNOWN);
+    if (expr->operator == AST_OP_NEG) {
+        operand_target_type = target_type;
+    }
+
+    type_t type = infer_right_expr(m, &expr->operand, operand_target_type);
 
     if ((expr->operator == AST_OP_NEG) && !is_number(type.kind)) {
-        INFER_ASSERTF(false, "neg operand must applies to int or float type");
+        INFER_ASSERTF(false, "neg(-) must use in number，actual '%s'", type_format(type));
     }
 
     // &var
@@ -1116,7 +1152,7 @@ static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type) {
 
     result.vec = type_vec;
     if (vec_new->elements->length == 0) {
-        INFER_ASSERTF(type_confirmed(type_vec->element_type), "list element type not confirm");
+        INFER_ASSERTF(type_confirmed(type_vec->element_type), "vec element type not confirm");
         return reduction_type(m, result);
     }
 
@@ -1135,11 +1171,16 @@ static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type) {
 }
 
 static type_t infer_empty_curly_new(module_t *m, ast_expr_t *expr, type_t target_type) {
+    if (target_type.kind == TYPE_UNKNOWN) {
+        return target_type;
+    }
+
     // 必须要 target 引导，才能确定具体的类型
     INFER_ASSERTF(target_type.kind > 0, "map key/value type cannot confirm");
 
     INFER_ASSERTF(target_type.kind == TYPE_MAP || target_type.kind == TYPE_SET, "{} cannot ref type %s",
                   type_format(target_type));
+
     if (target_type.kind == TYPE_MAP) {
         expr->assert_type = AST_EXPR_MAP_NEW;
     } else if (target_type.kind == TYPE_SET) {
@@ -1973,8 +2014,42 @@ static void infer_break(module_t *m, ast_break_t *stmt) {
     }
 }
 
-static type_t infer_literal(module_t *m, ast_literal_t *literal) {
-    return reduction_type(m, type_kind_new(literal->kind));
+static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
+    ast_literal_t *literal = expr->value;
+    type_t literal_type = reduction_type(m, type_kind_new(literal->kind));
+    literal->kind = literal_type.kind;
+
+    type_kind target_kind = target_type.kind;
+    if (target_kind == TYPE_VOID_PTR) {
+        target_kind = TYPE_UINT;
+    }
+    target_kind = cross_kind_trans(target_kind);
+
+    if (is_float(literal_type.kind) && is_float(target_kind)) {
+        literal->kind = target_kind;
+        return target_type;
+    }
+
+    // int literal 自动转换为 float 类型, 并更新 literal value
+  // int 转换为 float 类型
+    if (is_integer(literal_type.kind) && is_float(target_kind)) {
+        literal->kind = target_kind;
+        return target_type;
+    }
+
+    // float 转换为 int 会导致数据丢失，所以不进行自动转换, 请手动使用 as 转换
+
+    if (is_integer(literal_type.kind) && is_integer(target_kind)) {
+        int64_t i = atoll(literal->value);
+        if (integer_range_check(target_kind, i)) { // range 匹配直接返回，否则应该直接报错
+            literal->kind = target_kind;
+            return target_type;
+        }
+
+        INFER_ASSERTF(false, "literal '%s' out of range for type '%s'", literal->value, type_format(target_type));
+    }
+
+    return literal_type;
 }
 
 static type_t infer_env_access(module_t *m, ast_env_access_t *expr) {
@@ -2240,7 +2315,7 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
             return infer_binary(m, expr->value, target_type);
         }
         case AST_EXPR_UNARY: {
-            return infer_unary(m, expr->value);
+            return infer_unary(m, expr->value, target_type);
         }
         case AST_EXPR_IDENT: {
             return infer_ident(m, expr->value);
@@ -2280,7 +2355,7 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
             return infer_fn_decl(m, expr->value);
         }
         case AST_EXPR_LITERAL: {
-            return infer_literal(m, expr->value);
+            return infer_literal(m, expr, target_type);
         }
         case AST_EXPR_ENV_ACCESS: {
             return infer_env_access(m, expr->value);
@@ -2306,35 +2381,23 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
 
     // 避免重复 reduction
     if (expr->type.kind == 0) {
-        type_t type = infer_expr(m, expr, target_type);
+        type_t type = infer_expr(m, expr, target_type.kind != TYPE_UNION ? target_type : type_kind_new(TYPE_UNKNOWN));
 
         target_type = reduction_type(m, target_type);
         expr->type = reduction_type(m, type);
         expr->target_type = target_type;
     }
 
-
     // TYPE_UNKNOWN 表示需要进行类型推断，此时什么都不做，交给调用者进行判断
     if (target_type.kind == TYPE_UNKNOWN) {
         return expr->type;
     }
 
-    // - 对一些特殊类型进行预处理再进入 type_compare
-    // 如果 target_type 是 number, 并且 expr->assert_type 是字面量值，则进行编译时的字面量值判断与类型转换
-    // 避免出现如 i8 foo = 1 as i8 这样的重复的在编译时就可以识别出来的转换
-    if ((is_integer(target_type.kind) || target_type.kind == TYPE_VOID_PTR) && expr->assert_type == AST_EXPR_LITERAL) {
-        literal_integer_casting(m, expr, target_type);
-    }
-
-    if (is_float(target_type.kind) && expr->assert_type == AST_EXPR_LITERAL) {
-        literal_float_casting(m, expr, target_type);
-    }
-
-    // single type to union type (必须保留)
+    // auto as，为了后续的 linear, 需要将 signal type 转换为 union type
     if (target_type.kind == TYPE_UNION && can_assign_to_union(expr->type)) {
         INFER_ASSERTF(union_type_contains(target_type.union_, expr->type), "union type not contains '%s'",
                       type_format(expr->type));
-
+        // linear 检测到 signal_type as union_type 会调用 RT_CALL_UNION_CASTING 进行转换
         *expr = ast_type_as(*expr, target_type);
     }
 

@@ -194,7 +194,7 @@ static string token_str[] = {
 
     [TOKEN_CHAN] = "chan",
     [TOKEN_ARR] = "arr",
-    //    [TOKEN_VEC] = "vec",
+    [TOKEN_VEC] = "vec",
     [TOKEN_MAP] = "map",
     [TOKEN_SET] = "set",
     [TOKEN_TUP] = "tup",

@@ -37,6 +37,10 @@ Future development priorities include:
 - Project validation and bug fixes
 - Implementation of planned features listed above
 
+nature is a project developed out of interest. golang is the programming language I use in my daily work, so nature is designed to be a continuation and optimization of the golang programming language, as described in the Features section.
+
+golang has an excellent and high-performance cross-platform compiler and runtime implementation, and in future releases nature will be compiled into the readable golang language, further increasing the usability of the nature programming language.
+
 Official website: [https://nature-lang.org](https://nature-lang.org/)
 
 ## Installation

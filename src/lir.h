@@ -914,6 +914,15 @@ static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir
         base = temp;
     }
 
+
+    // 如果 base 是 global symbol var, 则加载 symbol addr 作为 indirect base
+//    if (base->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+//        lir_symbol_var_t *symbol_var = base->value;
+//        lir_operand_t *temp = temp_var_operand(m, type_kind_new(TYPE_VOID_PTR));
+//        OP_PUSH(lir_op_lea(temp, base));
+//        base = temp;
+//    }
+
     assertf(base->assert_type == LIR_OPERAND_VAR || base->assert_type == LIR_OPERAND_REG,
             "indirect addr only support var operand");
     lir_indirect_addr_t *addr = NEW(lir_indirect_addr_t);

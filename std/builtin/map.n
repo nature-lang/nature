@@ -1,5 +1,12 @@
 import runtime
 
+fn map_new<T,U>():map<T,U> {
+    int hash = @reflect_hash(map<T,U>)
+    int key_hash = @reflect_hash(T)
+    int value_hash = @reflect_hash(U)
+    return runtime.map_new(hash, key_hash, value_hash) as map<T,U>
+}
+
 fn map<T,U>.len():int {
     return runtime.map_length(self as void_ptr)
 }

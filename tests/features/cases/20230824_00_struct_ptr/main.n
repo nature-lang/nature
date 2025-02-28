@@ -1,10 +1,10 @@
 import 'mod.n' as *
 
 fn main() {
-    var p = person_t {
+    var p = person_t{
         name = 'hualaka',
         from = 'china',
-        gender = 1
+        gender = 1,
     }
 
     println(p.gender, p.from, p.get_name())

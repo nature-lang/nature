@@ -3,7 +3,7 @@ import 'mod.n' as *
 fn main() {
     var foo = square{
         length = 10,
-        width = 5
+        width = 5,
     }
 
     var area = foo.area()

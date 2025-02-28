@@ -2,7 +2,6 @@
 #define NATURE_TESTS_H
 
 #include <assert.h>
-#include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -11,13 +10,14 @@
 
 #include "src/build/build.h"
 #include "utils/exec.h"
-
+#include "src/error.h"
 
 #ifdef __LINUX
 #define ATOMIC
 #else
 #define ATOMIC _Atomic
 #endif
+
 
 #define assert_string_equal(_actual, _expect) (assertf(str_equal(_actual, _expect), "%s", _actual))
 #define assert_int_equal(_actual, _expect) (assertf((_actual) == (_expect), "%d", _actual))
@@ -33,16 +33,21 @@ static inline int exec_imm_param() {
     return exec_imm(WORKDIR, BUILD_OUTPUT, slice_new());
 }
 
+static inline char *exec_output_status(int *status) {
+    assert(status);
+    return exec(WORKDIR, BUILD_OUTPUT, slice_new(), NULL, status);
+}
+
 static inline char *exec_output() {
-    return exec(WORKDIR, BUILD_OUTPUT, slice_new(), NULL);
+    return exec(WORKDIR, BUILD_OUTPUT, slice_new(), NULL, NULL);
 }
 
 static inline char *exec_output_with_pid(int32_t *pid) {
-    return exec(WORKDIR, BUILD_OUTPUT, slice_new(), pid);
+    return exec(WORKDIR, BUILD_OUTPUT, slice_new(), pid, NULL);
 }
 
 static inline char *exec_with_args(slice_t *args) {
-    return exec(WORKDIR, BUILD_OUTPUT, args, NULL);
+    return exec(WORKDIR, BUILD_OUTPUT, args, NULL, NULL);
 }
 
 static inline int feature_test_build() {
@@ -55,7 +60,12 @@ static inline int feature_test_build() {
 
     strcpy(BUILD_OUTPUT_DIR, getenv("BUILD_OUTPUT_DIR"));
 
-    build(entry, false);
+    COMPILER_TRY {
+        build(entry, false);
+    } else {
+        assertf(false, "%s", (char *) test_error_msg);
+        exit(1);
+    }
 
     return 0;
 }
@@ -210,13 +220,20 @@ static inline void feature_testar_test(char *custom_target) {
 
         printf("test case start=== %s\n", test_case->name);
 
+        assertf(test_case->files->count > 0, "test case '%s' must have main.n", test_case->name);
+
         testar_case_file_t *output_file = NULL;
+        bool has_entry_main = false;
 
         for (int j = 0; j < test_case->files->count; j++) {
             testar_case_file_t *file = test_case->files->take[j];
 
             if (str_equal(file->name, "output.txt")) {
                 output_file = file;
+            }
+
+            if (str_equal(file->name, "main.n")) {
+                has_entry_main = true;
             }
 
             // 构建完整的文件路径
@@ -234,17 +251,37 @@ static inline void feature_testar_test(char *custom_target) {
             fclose(fp);
         }
 
-        char *entry = "main.n";
-        build(entry, false);
+        assertf(has_entry_main, "test case '%s' must have main.n", test_case->name);
 
-        // 执行并测试
-        if (output_file) {
-            char *output = exec_output();
-            assert_string_equal(output, (char *) output_file->content);
+        // 固定格式生命
+        char *entry = "main.n";
+
+        COMPILER_TRY {
+            build(entry, false);
+
+            // 执行并测试
+            if (output_file) {
+                char *output = exec_output();
+                assertf(str_equal(output, (char *) output_file->content), "n %s failed\nexpect: %sactual: %s",
+                        test_case->name, output_file->content, output);
+            } else {
+                int32_t status = 0;
+                char *output = exec_output_status(&status);
+                if (status != 0) {
+                    assertf(false, "%s failed: %s", test_case->name, output);
+                } else {
+                    printf("%s", output);
+                }
+            }
         } else {
-            char *output = exec_output();
-            printf("%s", output);
-        }
+            // 编译错误处理
+            if (output_file) {
+                assertf(str_equal(test_error_msg, (char *) output_file->content), "in %s\nexpect: %sactual: %s",
+                        test_case->name, output_file->content, test_error_msg);
+            } else {
+                assertf(false, "%s failed: %s", test_case->name, test_error_msg);
+            }
+        };
 
 
         // 进行编译

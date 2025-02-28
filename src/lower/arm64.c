@@ -13,21 +13,25 @@ static lir_operand_t *arm64_convert_use_var(closure_t *c, linked_t *list, lir_op
     return lir_reset_operand(temp, operand->pos);
 }
 
-static lir_operand_t *arm64_convert_lea_symbol_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
+/**
+ * 将 symbol 转换为 lea ptr + indirect 形式
+ */
+static lir_operand_t *arm64_convert_lea_symbol_var(closure_t *c, linked_t *list, lir_operand_t *symbol_var_operand) {
     assert(c);
     assert(list);
-    assert(operand);
+    assert(symbol_var_operand);
     assert(c->module);
 
-    lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(TYPE_INT));
-    assert(temp);
+    lir_operand_t *symbol_ptr = temp_var_operand_with_alloc(c->module, type_kind_new(TYPE_VOID_PTR));
+    assert(symbol_ptr);
 
-    linked_push(list, lir_op_lea(temp, operand));
+    linked_push(list, lir_op_lea(symbol_ptr, symbol_var_operand));
 
-    lir_operand_t *result = indirect_addr_operand(c->module, lir_operand_type(operand), temp, 0);
+    // result 集成原始的 type
+    lir_operand_t *result = indirect_addr_operand(c->module, lir_operand_type(symbol_var_operand), symbol_ptr, 0);
     assert(result);
 
-    return lir_reset_operand(result, operand->pos);
+    return lir_reset_operand(result, symbol_var_operand->pos);
 }
 
 static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {

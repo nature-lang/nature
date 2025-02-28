@@ -11,7 +11,7 @@ fn main() {
     }
 
     // 简单情况: v
-    var bar = [1, 3, 5, 7, 9] as mod.bar_t
+    mod.bar_t bar = [1, 3, 5, 7, 9]
     var b = bar[0]
     println(b, bar[1], bar[4], bar.len())
 
@@ -20,22 +20,22 @@ fn main() {
         mid2 = tmp_t{
             t1 = 2,
             t2 = 3,
-            bar = []
-        }
+            bar = [],
+        },
     }
 
     println(foo.mid2.bar.len())
 
     // 字面量简单情况: v
-    println(([1, 3, 5, 7, 9] as mod.bar_t).len())
+    println([1, 3, 5, 7, 9].len())
 
     // 字面量复杂情况: v
     var len = (foo_t{
         mid2 = tmp_t{
             t1 = 2,
             t2 = 3,
-            bar = []
-        }
+            bar = [],
+        },
     }).mid2.bar.len()
     println(len)
 
@@ -56,7 +56,7 @@ fn main() {
 
     // 闭包情况测试: v
     var c1 = 12
-    var c2 = [1, 2, 3] as arr<int,3>
+    arr<int,3> c2 = [1, 2, 3]
 
     var test2 = fn() {
         println(c1, c2[0], c2[2])

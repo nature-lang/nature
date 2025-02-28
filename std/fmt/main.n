@@ -3,7 +3,7 @@ import path
 
 fn sprintf(string fmt, ...[any] args):string {
     var end = fmt.len()
-    var result = [] as [u8]
+    var result = vec_new<u8>()
 
     var sources = fmt as [u8]
 
@@ -102,7 +102,7 @@ fn sprintf(string fmt, ...[any] args):string {
         if c == ascii('s') {
             string s = ''
             if arg is string {
-                s = arg as string
+                s = arg // auto as
             } else {
                 s = '%!s'
             }
@@ -129,40 +129,39 @@ fn sprintf(string fmt, ...[any] args):string {
         if c == ascii('v') {
             string s = ''
             if arg is int {
-                 s = itos(arg as int)
+                 s = itos(arg)
             }  else if arg is i8 {
-                 s = itos(arg as i8)
+                 s = itos(arg)
             }  else if arg is i16 {
-                 s = itos(arg as i16)
+                 s = itos(arg)
             } else if arg is i32 {
-                 s = itos(arg as i32)
+                 s = itos(arg)
             } else if arg is i64 {
-                 s = itos(arg as i64)
+                 s = itos(arg)
             } else if arg is uint {
-                 s = itos(arg as uint)
+                 s = itos(arg)
             } else if arg is u8 {
-                 s = itos(arg as u8)
+                 s = itos(arg)
             }  else if arg is u16 {
-                 s = itos(arg as u16)
+                 s = itos(arg)
             } else if arg is u32 {
-                 s = itos(arg as u32)
+                 s = itos(arg)
             } else if arg is u64 {
-                 s = itos(arg as u64)
+                 s = itos(arg)
             } else if arg is float {
-                 s = ftos(arg as float)
+                 s = ftos(arg)
             } else if arg is f64 {
-                 s = ftos(arg as f64)
+                 s = ftos(arg)
             } else if arg is f32 {
-                 s = ftos(arg as f32)
+                 s = ftos(arg)
             } else if arg is bool {
-                let arg as bool
                 if arg {
                     s = 'true'
                 } else {
                     s = 'false'
                 }
             } else if arg is string {
-                s = arg as string // union 断言
+                s = arg // auto as
             } else {
                 s = '%!v'
             }

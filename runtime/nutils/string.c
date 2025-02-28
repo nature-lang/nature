@@ -13,7 +13,7 @@
  */
 n_string_t *string_new(void *raw_string, int64_t length) {
     PRE_RTCALL_HOOK();
-    TRACEF("[string_new] raw_string=%s, length=%lu", (char *) raw_string, length);
+    TRACEF("[string_new] raw_string=%s, length=%lu, ptr=%p", (char *) raw_string, length, raw_string);
 
     // byte 数组，先手动创建一个简单类型
     int64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
@@ -35,7 +35,7 @@ n_string_t *string_new(void *raw_string, int64_t length) {
 
 n_string_t *rt_string_ref_new(void *raw_string, int64_t length) {
     n_string_t *str = rti_gc_malloc(string_rtype.size, &string_ref_rtype);
-    str->data = raw_string;
+    str->data = raw_string; // 直接指向 raw_string, 而没有创建新的字符串
     str->length = length;
     str->capacity = length;
     str->ele_rhash = string_element_rtype.hash;

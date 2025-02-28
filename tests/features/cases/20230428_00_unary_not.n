@@ -5,14 +5,14 @@ fn main() {
     print(a, b, b1, '\n') // falsefalsetrue
 
     var str = 'hello world'
-    bool c = !(str as bool)
+    bool c = !(str.len() > 0)
 
     string str2 = ''
-    bool d = !(str2 as bool)
+    bool d = !(str2.len() == 0)
     print(c, d, '\n') // falsefalse
 
-    bool e = (1 + 1) as bool
-    bool f = !(3.1415926 as bool)
+    bool e = (1 + 1) != 0
+    bool f = !(3.1415926 != 0.0)
     print(e, f, '\n') // truefalse
 
     var sum = fn(int a, int b):int {

@@ -9,8 +9,8 @@ fn main() {
             sex = true,
             hello = fn() {
                 println("hello world")
-            }
-        }
+            },
+        },
     }
 
     // p is struct, 并且这里发生了 copy

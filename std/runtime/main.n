@@ -22,6 +22,9 @@ fn vec_length(void_ptr list):int
 #linkid rt_vec_capacity
 fn vec_capacity(void_ptr list):int
 
+#linkid rt_set_new
+fn set_new(int rhash, int key_hash):void_ptr
+
 #linkid rt_set_add
 fn set_add(void_ptr s, void_ptr key):bool
 
@@ -30,6 +33,9 @@ fn set_contains(void_ptr s, void_ptr key):bool
 
 #linkid rt_set_delete
 fn set_delete(void_ptr s, void_ptr key)
+
+#linkid rt_map_new
+fn map_new(int rhash, int key_hash, int value_hash):void_ptr
 
 #linkid rt_map_delete
 fn map_delete(void_ptr m, void_ptr key)

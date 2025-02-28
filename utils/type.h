@@ -610,36 +610,9 @@ static inline bool is_list_u8(type_t t) {
     return true;
 }
 
+type_t type_kind_new(type_kind kind);
 
-static inline type_t type_kind_new(type_kind kind) {
-    type_t result = {
-            .status = REDUCTION_STATUS_DONE,
-            .kind = kind,
-            .value = 0,
-            .origin_ident = NULL,
-            .origin_type_kind = 0,
-            .impl_ident = type_kind_str[kind],
-            .impl_args = NULL,
-    };
-
-    result.in_heap = kind_in_heap(kind);
-
-    return result;
-}
-
-static inline type_t type_new(type_kind kind, void *value) {
-    type_t result = {
-            .kind = kind,
-            .value = value,
-            .in_heap = kind_in_heap(kind),
-            .status = REDUCTION_STATUS_DONE,
-            .origin_ident = NULL,
-            .origin_type_kind = 0,
-            .impl_ident = NULL,
-            .impl_args = NULL,
-    };
-    return result;
-}
+type_t type_new(type_kind kind, void *value);
 
 static inline type_t type_array_new(type_kind element_type_kind, uint64_t length) {
     type_array_t *t = NEW(type_array_t);

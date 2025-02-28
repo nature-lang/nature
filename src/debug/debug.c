@@ -191,9 +191,9 @@ void debug_lir(closure_t *c, char *key) {
 
 #ifdef DEBUG_LIR
     // 跳过各种全局的 init 方法
-    if (ends_with(c->fndef->symbol_name, ".init")) {
-        return;
-    }
+//    if (ends_with(c->fndef->symbol_name, ".init")) {
+//        return;
+//    }
 
     printf("%s lir: %s ---------------------------------------------------------------------\n",
            key,
@@ -239,9 +239,9 @@ void debug_lir(closure_t *c, char *key) {
  */
 void debug_block_lir(closure_t *c, char *stage_after) {
     // 跳过各种全局的 init 方法
-    if (ends_with(c->fndef->symbol_name, ".init")) {
-        return;
-    }
+//    if (ends_with(c->fndef->symbol_name, ".init")) {
+//        return;
+//    }
 
 #ifdef DEBUG_LIR
     printf("%s after block_lir: %s------------------------------------------------------------------------\n",
@@ -422,9 +422,9 @@ void debug_basic_block(basic_block_t *block) {
 void debug_asm(closure_t *c) {
 #ifdef DEBUG_ASM
     // 跳过各种全局的 init 方法
-    if (ends_with(c->fndef->symbol_name, ".init")) {
-        return;
-    }
+//    if (ends_with(c->fndef->symbol_name, ".init")) {
+//        return;
+//    }
 
     printf("asm: %s------------------------------------------------------------------------\n", c->fndef->symbol_name);
     for (int i = 0; i < c->asm_operations->count; ++i) {

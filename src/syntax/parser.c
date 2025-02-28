@@ -625,8 +625,8 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
             if (parser_consume(m, TOKEN_EQUAL)) {
                 ast_expr_t *temp_expr = expr_new_ptr(m);
                 *temp_expr = parser_expr(m);
-                assertf(temp_expr->assert_type != AST_FNDEF,
-                        "struct field default value cannot be a function definition, Use field assignment with function identifier (e.g., 'f = fn_ident') instead.");
+                PARSER_ASSERTF(temp_expr->assert_type != AST_FNDEF,
+                               "struct field default value cannot be a function definition, Use field assignment with function identifier (e.g., 'f = fn_ident') instead.");
 
                 item.right = temp_expr;
             }
@@ -1068,14 +1068,23 @@ static ast_expr_t parser_left_paren_expr(module_t *m) {
 
     // tuple new
     parser_must(m, TOKEN_COMMA);
+
     // 下一个是逗号才能判断为 tuple
     ast_tuple_new_t *tuple = NEW(ast_tuple_new_t);
     tuple->elements = ct_list_new(sizeof(ast_expr_t));
     ct_list_push(tuple->elements, &expr);
+
+
     do {
         expr = parser_expr(m);
         ct_list_push(tuple->elements, &expr);
-    } while (parser_consume(m, TOKEN_COMMA));
+
+        if (parser_is(m, TOKEN_RIGHT_PAREN)) {
+            break;
+        } else {
+            parser_must(m, TOKEN_COMMA);
+        }
+    } while (!parser_is(m, TOKEN_RIGHT_PAREN));
 
     parser_must(m, TOKEN_RIGHT_PAREN);
 
@@ -1705,7 +1714,7 @@ static ast_stmt_t *parser_select_stmt(module_t *m) {
 }
 
 static ast_stmt_t *parser_try_catch_stmt(module_t *m) {
-    ast_stmt_t * result = stmt_new(m);
+    ast_stmt_t *result = stmt_new(m);
     parser_must(m, TOKEN_TRY);
 
     ast_try_catch_stmt_t *try_stmt = NEW(ast_try_catch_stmt_t);
@@ -1792,12 +1801,17 @@ static ast_expr_t parser_list_new(module_t *m) {
     list_new->elements = ct_list_new(sizeof(ast_expr_t));
     parser_must(m, TOKEN_LEFT_SQUARE);
 
-    if (!parser_is(m, TOKEN_RIGHT_SQUARE)) {
-        do {
-            ast_expr_t expr = parser_expr(m);
-            ct_list_push(list_new->elements, &expr);
-        } while (parser_consume(m, TOKEN_COMMA));
+    while (!parser_is(m, TOKEN_RIGHT_SQUARE)) {
+        ast_expr_t expr = parser_expr(m);
+        ct_list_push(list_new->elements, &expr);
+
+        if (parser_is(m, TOKEN_RIGHT_SQUARE)) {
+            break;
+        } else {
+            parser_must(m, TOKEN_COMMA);
+        }
     }
+
     parser_must(m, TOKEN_RIGHT_SQUARE);
 
     result.assert_type = AST_EXPR_VEC_NEW;
@@ -1826,17 +1840,27 @@ static ast_expr_t parser_left_curly_expr(module_t *m) {
     }
 
     ast_expr_t key_expr = parser_expr(m);
-    if (parser_consume(m, TOKEN_COLON)) {
+    if (parser_consume(m, TOKEN_COLON)) { // k:v
         // map
         ast_map_new_t *map_new = NEW(ast_map_new_t);
         map_new->elements = ct_list_new(sizeof(ast_map_element_t));
         ast_map_element_t element = {.key = key_expr, .value = parser_expr(m)};
         ct_list_push(map_new->elements, &element);
-        while (parser_consume(m, TOKEN_COMMA)) {
+
+        // 必须消耗掉一个逗号或者右大括号才能继续
+        parser_consume(m, TOKEN_COMMA);
+
+        while (!parser_is(m, TOKEN_RIGHT_CURLY)) {
             element.key = parser_expr(m);
             parser_must(m, TOKEN_COLON);
             element.value = parser_expr(m);
             ct_list_push(map_new->elements, &element);
+
+            if (parser_is(m, TOKEN_RIGHT_CURLY)) {
+                break;
+            } else {
+                parser_must(m, TOKEN_COMMA);
+            }
         }
 
         // 跳过可能存在的 STMT_EOF, scanner 添加
@@ -2457,9 +2481,9 @@ static ast_stmt_t *parser_stmt(module_t *m) {
         return stmt_expr_fake_new(m, expr);
     } else if (parser_is(m, TOKEN_SELECT)) {
         return parser_select_stmt(m);
-    }else if (parser_is(m, TOKEN_TRY)) {
+    } else if (parser_is(m, TOKEN_TRY)) {
         return parser_try_catch_stmt(m);
-    }  else if (parser_is(m, TOKEN_MACRO_IDENT)) {
+    } else if (parser_is(m, TOKEN_MACRO_IDENT)) {
         ast_expr_t expr = parser_expr_with_precedence(m);
         return stmt_expr_fake_new(m, expr);
     }
@@ -2580,8 +2604,7 @@ static ast_expr_t parser_precedence_expr(module_t *m, parser_precedence preceden
     // 读取表达式前缀
     parser_prefix_fn prefix_fn = find_rule(parser_peek(m)->type)->prefix;
 
-    PARSER_ASSERTF(prefix_fn, "cannot parser ident '%s' type '%s'", parser_peek(m)->literal,
-                   token_str[parser_peek(m)->type]);
+    PARSER_ASSERTF(prefix_fn, "cannot parser ident '%s'", parser_peek(m)->literal);
 
     ast_expr_t expr = prefix_fn(m);
 
@@ -2704,23 +2727,23 @@ static ast_expr_t parser_struct_new(module_t *m, type_t t) {
     struct_new->properties = ct_list_new(sizeof(struct_property_t));
 
     parser_must(m, TOKEN_LEFT_CURLY);
-    if (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
-        do {
-            // ident 类型
-            struct_property_t item = {0};
-            item.key = parser_must(m, TOKEN_IDENT)->literal;
-            parser_must(m, TOKEN_EQUAL);
-            item.right = expr_new_ptr(m);
-            *((ast_expr_t *) item.right) = parser_expr(m);
+    while (!parser_is(m, TOKEN_RIGHT_CURLY)) {
+        // ident 类型
+        struct_property_t item = {0};
+        item.key = parser_must(m, TOKEN_IDENT)->literal;
+        parser_must(m, TOKEN_EQUAL);
+        item.right = expr_new_ptr(m);
+        *((ast_expr_t *) item.right) = parser_expr(m);
+        ct_list_push(struct_new->properties, &item);
 
-            ct_list_push(struct_new->properties, &item);
-        } while (parser_consume(m, TOKEN_COMMA)); // 多个结构体进行初始化时，使用逗号分隔。
-
-        // 移除误解添加的 ; 符号
-        parser_consume(m, TOKEN_STMT_EOF);
-
-        parser_must(m, TOKEN_RIGHT_CURLY);
+        if (parser_is(m, TOKEN_RIGHT_CURLY)) {
+            break;
+        } else {
+            parser_must(m, TOKEN_COMMA);
+        }
     }
+
+    parser_must(m, TOKEN_RIGHT_CURLY);
     result.assert_type = AST_EXPR_STRUCT_NEW;
     result.value = struct_new;
     return result;

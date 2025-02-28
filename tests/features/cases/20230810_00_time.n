@@ -32,7 +32,7 @@ fn main() {
         tm_mday = 9,
         tm_hour = 17,
         tm_min = 30,
-        tm_sec = 52
+        tm_sec = 52,
     }
 
     // UTC 1660066252

@@ -47,8 +47,8 @@ fn main() {
     // list nest array
     [arr<i64,3>] a3 = []
 
-    a3.push([1, 2, 3] as arr<i64,3>)
-    a3.push([11, 12, 13] as arr<i64,3>)
+    a3.push([1, 2, 3])
+    a3.push([11, 12, 13])
 
     // access
     println(a3[0][0], a3[0][1], a3[0][2], a3[1][0], a3[1][1], a3[1][2])

@@ -48,6 +48,19 @@ static lir_operand_t *linear_super_move(module_t *m, type_t t, lir_operand_t *ds
     }
 
     if (is_large_stack_type(t)) {
+        // 如果 dst 或者 src 是 global symbol, 则需要通过 lea 指令加载到 var 中
+        if (dst->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+            lir_operand_t *dst_ref = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
+            OP_PUSH(lir_op_lea(dst_ref, dst));
+            dst = dst_ref;
+        }
+
+        if (src->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+            lir_operand_t *src_ref = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
+            OP_PUSH(lir_op_lea(src_ref, src));
+            src = src_ref;
+        }
+
         linked_t *temps = lir_memory_mov(m, type_sizeof(t), dst, src);
         linked_concat(m->current_closure->operations, temps);
         return dst;
@@ -514,6 +527,15 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
             symbol->ident = ident->literal;
             symbol->kind = symbol_var->type.kind;
             lir_operand_t *src = operand_new(LIR_OPERAND_SYMBOL_VAR, symbol);
+
+            if (is_large_stack_type(symbol_var->type)) {
+                // 如果是 struct/arr 则直接返回 symbol 的地址, 并且继承原始类型, 而不是作为 void ptr
+                lir_operand_t *src_ref = temp_var_operand(m, symbol_var->type);
+                OP_PUSH(lir_op_lea(src_ref, src));
+
+                return linear_super_move(m, expr.type, target, src_ref);
+            }
+
             return linear_super_move(m, expr.type, target, src);
         }
     }
@@ -660,7 +682,7 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
 
     int64_t offset = type_struct_offset(type_struct.struct_, struct_access->key);
 
-    // indirect_addr -> [rax + 0x8], rax 存储的内容必须是一个内存地址, indirect addr 对于不同的指令来说含义不通
+    // indirect_addr -> [rax + 0x8], rax 存储的内容必须是一个内存地址, indirect addr 对于不同的指令来说含义不同
     // 1. mov 12 -> [rax+0x8] 表示将 12 移动到 rax 移动到 rax+0x8 对应的内存地址中, 移动的大小根据声明的尺寸
     // 2. lea [rax+0x8] -> rax 表示将 rax+0x8 计算到的内存地址存储在 rax 中
     // 3. push [rax+0x8] 等同于 mov 表示移动数据
@@ -1175,7 +1197,8 @@ static void linear_select(module_t *m, ast_select_stmt_t *select_stmt) {
 
             lir_operand_t *dst_chan = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), scase_target, recv_offset);
             recv_offset += POINTER_SIZE;
-            lir_operand_t *dst_msg_ptr = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), scase_target, recv_offset);
+            lir_operand_t *dst_msg_ptr = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), scase_target,
+                                                               recv_offset);
             recv_offset += POINTER_SIZE;
 
             OP_PUSH(lir_op_move(dst_chan, chan_target));
@@ -1198,7 +1221,8 @@ static void linear_select(module_t *m, ast_select_stmt_t *select_stmt) {
             lir_operand_t *msg_target = linear_expr(m, *msg_expr, NULL);
 
             // 获取 msg 的 type, 以前剧场 chan_expr 定义的 element type
-            lir_operand_t *dst_msg_ptr = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), scase_target, send_offset);
+            lir_operand_t *dst_msg_ptr = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), scase_target,
+                                                               send_offset);
             send_offset += POINTER_SIZE;
 
             OP_PUSH(lir_op_move(dst_msg_ptr, lea_operand_pointer(m, msg_target)));
@@ -1654,7 +1678,14 @@ static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_oper
     lir_operand_t *index_target = linear_expr(m, ast->index, NULL);
 
     lir_operand_t *array_target_ref = temp_var_operand(m, type_ptrof(ast->left.type));
-    OP_PUSH(lir_op_move(array_target_ref, array_target));
+    if (array_target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        // 加载 array symbol 的地址到 array_target_ref 中
+        // 这里明确 symbol 是 array 所以才能这么做
+        OP_PUSH(lir_op_lea(array_target_ref, array_target));
+    } else {
+        OP_PUSH(lir_op_move(array_target_ref, array_target));
+    }
+
 
     uint64_t rtype_hash = ct_find_rtype_hash(ast->left.type);
 
@@ -1899,9 +1930,10 @@ static lir_operand_t *linear_tuple_access(module_t *m, ast_expr_t expr, lir_oper
     uint64_t item_size = type_sizeof(ast->element_type);
     uint64_t offset = type_tuple_offset(t.tuple, ast->index);
 
-    lir_operand_t *src = indirect_addr_operand(m, t, tuple_target, offset);
-    // 如果是结构体的话，src 中存储的应该是指向的 addr
-    if (is_large_stack_type(t)) {
+    lir_operand_t *src = indirect_addr_operand(m, ast->element_type, tuple_target, offset);
+
+    // 如果是 struct/arr 的话，src 中存储的应该是指向的 addr, 从而方便 super move
+    if (is_large_stack_type(ast->element_type)) {
         src = lea_operand_pointer(m, src);
     }
 

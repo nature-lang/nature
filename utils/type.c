@@ -9,10 +9,10 @@
 rtype_t rtype_base(type_kind kind) {
     uint32_t hash = hash_string(itoa(kind));
     rtype_t rtype = {
-        .size = type_kind_sizeof(kind), // 单位 byte
-        .hash = hash,
-        .last_ptr = 0,
-        .kind = kind,
+            .size = type_kind_sizeof(kind), // 单位 byte
+            .hash = hash,
+            .last_ptr = 0,
+            .kind = kind,
     };
 
     if (rtype.size > 0) {
@@ -29,10 +29,10 @@ static rtype_t rtype_raw_ptr(type_ptr_t *t) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = sizeof(n_ptr_t),
-        .hash = hash,
-        .last_ptr = POINTER_SIZE,
-        .kind = TYPE_RAW_PTR,
+            .size = sizeof(n_ptr_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE,
+            .kind = TYPE_RAW_PTR,
     };
     // 计算 gc_bits
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
@@ -46,10 +46,10 @@ static rtype_t rtype_void_ptr(type_kind kind) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = sizeof(n_ptr_t),
-        .hash = hash,
-        .last_ptr = POINTER_SIZE,
-        .kind = TYPE_VOID_PTR,
+            .size = sizeof(n_ptr_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE,
+            .kind = TYPE_VOID_PTR,
     };
     // 计算 gc_bits
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
@@ -71,10 +71,10 @@ static rtype_t rtype_pointer(type_ptr_t *t) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = sizeof(n_ptr_t),
-        .hash = hash,
-        .last_ptr = POINTER_SIZE,
-        .kind = TYPE_PTR,
+            .size = sizeof(n_ptr_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE,
+            .kind = TYPE_PTR,
     };
     // 计算 gc_bits
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
@@ -91,10 +91,10 @@ static rtype_t rtype_pointer(type_ptr_t *t) {
 static rtype_t rtype_string() {
     uint32_t hash = hash_string(itoa(TYPE_STRING));
     rtype_t rtype = {
-        .size = sizeof(n_string_t),
-        .hash = hash,
-        .last_ptr = POINTER_SIZE,
-        .kind = TYPE_STRING,
+            .size = sizeof(n_string_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE,
+            .kind = TYPE_STRING,
     };
 
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
@@ -115,10 +115,10 @@ static rtype_t rtype_vec(type_vec_t *t) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = sizeof(n_vec_t),
-        .hash = hash,
-        .last_ptr = POINTER_SIZE,
-        .kind = TYPE_VEC,
+            .size = sizeof(n_vec_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE,
+            .kind = TYPE_VEC,
     };
     // 计算 gc_bits
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
@@ -134,10 +134,10 @@ static rtype_t rtype_chan(type_chan_t *t) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = sizeof(n_chan_t),
-        .hash = hash,
-        .last_ptr = POINTER_SIZE * 5,
-        .kind = TYPE_CHAN,
+            .size = sizeof(n_chan_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE * 5,
+            .kind = TYPE_CHAN,
     };
 
     // 计算 gc_bits
@@ -164,10 +164,10 @@ rtype_t rtype_array(type_array_t *t) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = element_size * t->length,
-        .hash = hash,
-        .kind = TYPE_ARR,
-        .length = t->length,
+            .size = element_size * t->length,
+            .hash = hash,
+            .kind = TYPE_ARR,
+            .length = t->length,
     };
 
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
@@ -191,10 +191,10 @@ static rtype_t rtype_map(type_map_t *t) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = sizeof(n_map_t),
-        .hash = hash,
-        .last_ptr = POINTER_SIZE * 3, // hash_table + key_data + value_data
-        .kind = TYPE_MAP,
+            .size = sizeof(n_map_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE * 3, // hash_table + key_data + value_data
+            .kind = TYPE_MAP,
     };
     // 计算 gc_bits
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
@@ -216,10 +216,10 @@ static rtype_t rtype_set(type_set_t *t) {
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
-        .size = sizeof(n_set_t),
-        .hash = hash,
-        .last_ptr = POINTER_SIZE * 2, // hash_table + key_data
-        .kind = TYPE_SET,
+            .size = sizeof(n_set_t),
+            .hash = hash,
+            .last_ptr = POINTER_SIZE * 2, // hash_table + key_data
+            .kind = TYPE_SET,
     };
     // 计算 gc_bits
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
@@ -239,11 +239,11 @@ static rtype_t rtype_union(type_union_t *t) {
     uint32_t hash = hash_string(itoa(TYPE_UNION));
 
     rtype_t rtype = {
-        .size = POINTER_SIZE * 2, // element_rtype + value(并不知道 value 的类型)
-        .hash = hash,
-        .kind = TYPE_UNION,
-        .last_ptr = POINTER_SIZE,
-        .malloc_gc_bits = malloc_gc_bits(POINTER_SIZE * 2)
+            .size = POINTER_SIZE * 2, // element_rtype + value(并不知道 value 的类型)
+            .hash = hash,
+            .kind = TYPE_UNION,
+            .last_ptr = POINTER_SIZE,
+            .malloc_gc_bits = malloc_gc_bits(POINTER_SIZE * 2)
     };
 
     bitmap_set(rtype.malloc_gc_bits, 0);
@@ -267,11 +267,11 @@ static rtype_t rtype_fn(type_fn_t *t) {
         str = str_connect(str, itoa(formal_type.hash));
     }
     rtype_t rtype = {
-        .size = POINTER_SIZE,
-        .hash = hash_string(str),
-        .kind = TYPE_FN,
-        .last_ptr = 0,
-        .malloc_gc_bits = malloc_gc_bits(POINTER_SIZE)
+            .size = POINTER_SIZE,
+            .hash = hash_string(str),
+            .kind = TYPE_FN,
+            .last_ptr = 0,
+            .malloc_gc_bits = malloc_gc_bits(POINTER_SIZE)
     };
     rtype.last_ptr = 8;
     bitmap_set(rtype.malloc_gc_bits, 0);
@@ -355,13 +355,13 @@ static rtype_t rtype_struct(type_struct_t *t) {
 
     if (t->properties->length == 0) {
         rtype_t rtype = {
-            .size = 0,
-            .hash = hash_string(str),
-            .kind = TYPE_STRUCT,
-            .malloc_gc_bits = NULL,
-            .length = t->properties->length,
-            .element_hashes = NULL,
-            .last_ptr = 0,
+                .size = 0,
+                .hash = hash_string(str),
+                .kind = TYPE_STRUCT,
+                .malloc_gc_bits = NULL,
+                .length = t->properties->length,
+                .element_hashes = NULL,
+                .last_ptr = 0,
         };
 
         return rtype;
@@ -388,13 +388,13 @@ static rtype_t rtype_struct(type_struct_t *t) {
     }
 
     rtype_t rtype = {
-        .size = size,
-        .hash = hash_string(str),
-        .kind = TYPE_STRUCT,
-        .malloc_gc_bits = gc_bits,
-        .length = t->properties->length,
-        .element_hashes = element_hash_list,
-        .last_ptr = last_ptr_offset,
+            .size = size,
+            .hash = hash_string(str),
+            .kind = TYPE_STRUCT,
+            .malloc_gc_bits = gc_bits,
+            .length = t->properties->length,
+            .element_hashes = element_hash_list,
+            .last_ptr = last_ptr_offset,
     };
 
     return rtype;
@@ -434,7 +434,7 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
     uint64_t size = align_up(offset, t->align);
 
     rtype_t rtype = {
-        .size = size, .hash = hash_string(str), .kind = TYPE_TUPLE, .malloc_gc_bits = malloc_gc_bits(size)
+            .size = size, .hash = hash_string(str), .kind = TYPE_TUPLE, .malloc_gc_bits = malloc_gc_bits(size)
     };
 
     if (need_gc_count > 0) {
@@ -888,4 +888,36 @@ char *type_origin_format(type_t t) {
     }
 
     return ident;
+}
+
+type_t type_kind_new(type_kind kind) {
+    kind = cross_kind_trans(kind);
+    type_t result = {
+            .status = REDUCTION_STATUS_DONE,
+            .kind = kind,
+            .value = 0,
+            .origin_ident = NULL,
+            .origin_type_kind = 0,
+            .impl_ident = type_kind_str[kind],
+            .impl_args = NULL,
+    };
+
+    result.in_heap = kind_in_heap(kind);
+
+    return result;
+}
+
+type_t type_new(type_kind kind, void *value) {
+    kind = cross_kind_trans(kind);
+    type_t result = {
+            .kind = kind,
+            .value = value,
+            .in_heap = kind_in_heap(kind),
+            .status = REDUCTION_STATUS_DONE,
+            .origin_ident = NULL,
+            .origin_type_kind = 0,
+            .impl_ident = NULL,
+            .impl_args = NULL,
+    };
+    return result;
 }
