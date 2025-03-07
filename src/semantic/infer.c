@@ -633,7 +633,6 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_t
         left_target_type = target_type;
     }
 
-    type_t right_type;
     // +/-/*/ ，由做表达式的类型决定, 并且如果左右表达式类型不一致，则抛出异常
     type_t left_type = infer_right_expr(m, &expr->left, left_target_type);
     INFER_ASSERTF(left_type.kind != TYPE_UNKNOWN, "unknown binary expr left type");
@@ -642,7 +641,7 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_t
     if (left_type.kind != TYPE_UNION) {
         right_target_type = left_type;
     }
-    right_type = infer_right_expr(m, &expr->right, right_target_type);
+    type_t right_type = infer_right_expr(m, &expr->right, right_target_type);
 
     // left type 和 right type 必须相同
     if (!type_compare(left_type, right_type, NULL)) {
@@ -754,7 +753,7 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
         // literal check, 避免不合适的类型转换
         if (as_expr->src.assert_type == AST_EXPR_LITERAL) {
             ast_literal_t *literal = as_expr->src.value;
-            INFER_ASSERTF(literal_as_check(m, as_expr->src.value, target_type), "literal %s out of '%d' range",
+            INFER_ASSERTF(literal_as_check(m, as_expr->src.value, target_type), "literal %s out of '%s' range",
                           literal->value, type_origin_format(target_type));
         }
 
@@ -1537,13 +1536,15 @@ static ast_fndef_t *generics_special_fn(module_t *m, ast_call_t *call, type_t ta
     char *args_hash = generics_args_hash(temp_fn->generics_params, args_table);
     char *symbol_name = str_connect_by(temp_fn->symbol_name, args_hash, GEN_REWRITE_SEPARATOR);
 
-    // 在没有基于类型约束产生重载的情况下，temp_fn 就是 tpl_fn, 否则应该基于 arg_hash 查找具体类型的 tpl_fn
+    // 在没有基于类型约束产生重载的情况下，temp_fn 就是 tpl_fn
+    // 在存在重载的情况下, 应该基于 arg_hash 查找具体类型的 tpl_fn
+    // is_singleton_tpl 应该废弃，无论什么情况都进行 tpl_fn 的 clone, 避免泛型约束展开时的冲突问题
     ast_fndef_t *tpl_fn = temp_fn;
-    bool is_singleton_tpl = false;
+//    bool is_singleton_tpl = false;
     symbol_t *symbol = symbol_table_get(symbol_name);
     if (symbol) {
         tpl_fn = symbol->ast_value;
-        is_singleton_tpl = true;
+//        is_singleton_tpl = true;
     }
 
     if (tpl_fn->generics_hash_table == NULL) {
@@ -1557,11 +1558,8 @@ static ast_fndef_t *generics_special_fn(module_t *m, ast_call_t *call, type_t ta
 
     // local_children 关系也已经重新构建, analyzer_global 用于辅助 local_children 重建
     m->analyzer_global = NULL;
-    if (is_singleton_tpl) {
-        special_fn = tpl_fn;
-    } else {
-        special_fn = ast_fndef_copy(tpl_fn);
-    }
+
+    special_fn = ast_fndef_copy(tpl_fn);
     special_fn->impl_type = tpl_fn->impl_type;
 
     // 分配泛型参数，此时泛型函数中的 type_param 还没有进行特化处理

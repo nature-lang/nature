@@ -30,6 +30,8 @@
 #define v_addr_t uint64_t
 #define addr_t uint64_t
 
+static char tlsprintf_buf[1024];
+
 // #undef free
 // #define free(_ptr) \
 //     do {                 \
@@ -204,6 +206,15 @@ static inline char *dsprintf(char *format, ...) {
     va_end(args);
 
     return realloc(buf, count + 1);
+}
+
+static inline char *tlsprintf(char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    int count = vsnprintf(tlsprintf_buf, sizeof(tlsprintf_buf), format, args);
+    va_end(args);
+
+    return tlsprintf_buf;
 }
 
 static inline int64_t max(int64_t a, int64_t b) {

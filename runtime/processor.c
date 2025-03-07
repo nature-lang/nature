@@ -682,11 +682,11 @@ void coroutine_dump_error(coroutine_t *co, n_error_t *error) {
     rt_vec_access(error->traces, 0, &first_trace);
     char *dump_msg;
     if (co->main) {
-        dump_msg = dsprintf("coroutine 'main' uncaught error: '%s' at %s:%d:%d\n", (char *) error->msg->data,
+        dump_msg = tlsprintf("coroutine 'main' uncaught error: '%s' at %s:%d:%d\n", (char *) error->msg->data,
                             (char *) first_trace.path->data, first_trace.line,
                             first_trace.column);
     } else {
-        dump_msg = dsprintf("coroutine %ld uncaught error: '%s' at %s:%d:%d\n", co->id, (char *) error->msg->data,
+        dump_msg = tlsprintf("coroutine %ld uncaught error: '%s' at %s:%d:%d\n", co->id, (char *) error->msg->data,
                             (char *) first_trace.path->data, first_trace.line,
                             first_trace.column);
     }
@@ -699,7 +699,7 @@ void coroutine_dump_error(coroutine_t *co, n_error_t *error) {
         for (int i = 0; i < error->traces->length; ++i) {
             n_trace_t trace = {};
             rt_vec_access(error->traces, i, &trace);
-            temp = dsprintf("%d:\t%s\n\t\tat %s:%d:%d\n", i, (char *) trace.ident->data, (char *) trace.path->data,
+            temp = tlsprintf("%d:\t%s\n\t\tat %s:%d:%d\n", i, (char *) trace.ident->data, (char *) trace.path->data,
                             trace.line, trace.column);
             VOID write(STDOUT_FILENO, temp, strlen(temp));
         }

@@ -650,7 +650,7 @@ fn stat_is_sock(u32 mode):bool {
 fn stat(string filename):stat_t! {
     var st = stat_t{
         dev = 56,
-        ino = 24
+        ino = 24,
     }
 
     // as void_ptr 等同于 c 中的 *stat_t

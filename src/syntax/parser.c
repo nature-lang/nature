@@ -1795,15 +1795,15 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
  * [a, 1, call(), foo[1]]
  * @return
  */
-static ast_expr_t parser_list_new(module_t *m) {
+static ast_expr_t parser_vec_new(module_t *m) {
     ast_expr_t result = expr_new(m);
-    ast_vec_new_t *list_new = NEW(ast_vec_new_t);
-    list_new->elements = ct_list_new(sizeof(ast_expr_t));
+    ast_vec_new_t *vec_new = NEW(ast_vec_new_t);
+    vec_new->elements = ct_list_new(sizeof(ast_expr_t));
     parser_must(m, TOKEN_LEFT_SQUARE);
 
     while (!parser_is(m, TOKEN_RIGHT_SQUARE)) {
         ast_expr_t expr = parser_expr(m);
-        ct_list_push(list_new->elements, &expr);
+        ct_list_push(vec_new->elements, &expr);
 
         if (parser_is(m, TOKEN_RIGHT_SQUARE)) {
             break;
@@ -1815,7 +1815,7 @@ static ast_expr_t parser_list_new(module_t *m) {
     parser_must(m, TOKEN_RIGHT_SQUARE);
 
     result.assert_type = AST_EXPR_VEC_NEW;
-    result.value = list_new;
+    result.value = vec_new;
 
     return result;
 }
@@ -1848,7 +1848,9 @@ static ast_expr_t parser_left_curly_expr(module_t *m) {
         ct_list_push(map_new->elements, &element);
 
         // 必须消耗掉一个逗号或者右大括号才能继续
-        parser_consume(m, TOKEN_COMMA);
+        if (!parser_is(m, TOKEN_RIGHT_CURLY)) {
+            parser_must(m, TOKEN_COMMA);
+        }
 
         while (!parser_is(m, TOKEN_RIGHT_CURLY)) {
             element.key = parser_expr(m);
@@ -1876,10 +1878,22 @@ static ast_expr_t parser_left_curly_expr(module_t *m) {
     ast_set_new_t *expr = NEW(ast_set_new_t);
     expr->elements = ct_list_new(sizeof(ast_expr_t));
     ct_list_push(expr->elements, &key_expr);
-    while (parser_consume(m, TOKEN_COMMA)) {
+
+    if (!parser_is(m, TOKEN_RIGHT_CURLY)) {
+        parser_must(m, TOKEN_COMMA);
+    }
+
+    while (!parser_is(m, TOKEN_RIGHT_CURLY)) {
         key_expr = parser_expr(m);
         ct_list_push(expr->elements, &key_expr);
+
+        if (parser_is(m, TOKEN_RIGHT_CURLY)) {
+            break;
+        } else {
+            parser_must(m, TOKEN_COMMA);
+        }
     }
+
     parser_must(m, TOKEN_RIGHT_CURLY);
     result.assert_type = AST_EXPR_SET_NEW;
     result.value = expr;
@@ -2529,7 +2543,7 @@ static ast_stmt_t *parser_tpl_stmt(module_t *m) {
 
 static parser_rule rules[] = {
         [TOKEN_LEFT_PAREN] = {parser_left_paren_expr, parser_call_expr, PRECEDENCE_CALL},
-        [TOKEN_LEFT_SQUARE] = {parser_list_new, parser_access, PRECEDENCE_CALL},
+        [TOKEN_LEFT_SQUARE] = {parser_vec_new, parser_access, PRECEDENCE_CALL},
         [TOKEN_LEFT_CURLY] = {parser_left_curly_expr, NULL, PRECEDENCE_NULL},
         [TOKEN_LESS_THAN] = {NULL, parser_binary, PRECEDENCE_COMPARE},
         [TOKEN_LEFT_ANGLE] = {NULL, parser_type_args_expr, PRECEDENCE_CALL},

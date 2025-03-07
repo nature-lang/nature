@@ -1,0 +1,7 @@
+name = "fs"
+version = "0.1.0"
+authors = ["weiwenhao <wwhacker@qq.com>"]
+license = "MIT"
+type = "lib"
+
+[dependencies]

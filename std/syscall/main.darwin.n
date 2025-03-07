@@ -629,7 +629,7 @@ fn getenv(void_ptr key):void_ptr
 #linkid setenv
 fn setenv(void_ptr key, void_ptr value, i32 overwrite):i32
 
-fn open(string filename, int flags, u32 perm):int! {
+fn open(string filename, int flags, int perm):int! {
     return call6(SYS_OPEN, filename.ref(), flags as void_ptr, perm as void_ptr, 0, 0, 0)
 }
 

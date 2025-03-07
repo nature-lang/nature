@@ -39,7 +39,7 @@ static inline void on_close_cb(uv_handle_t *handle) {
 static inline void on_write_end_cb(uv_write_t *write_req, int status) {
     if (status < 0) {
         // 对端可能已经关闭了连接,导致写入失败等情况
-        char *msg = dsprintf("uv_write failed: %s", uv_strerror(status));
+        char *msg = tlsprintf("uv_write failed: %s", uv_strerror(status));
         DEBUGF("[on_write_end_cb] %s", msg);
     }
 
@@ -280,7 +280,7 @@ void rt_uv_http_listen(n_server_t *server_ctx) {
     int result = uv_listen((uv_stream_t *) uv_server, DEFAULT_BACKLOG, on_new_conn_cb);
     if (result) {
         // 端口占用等错误
-        rt_co_error(co, dsprintf("uv listen failed: %s", uv_strerror(result)), false);
+        rt_co_error(co, tlsprintf("uv listen failed: %s", uv_strerror(result)), false);
         return;
     }
 

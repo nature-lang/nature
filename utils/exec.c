@@ -86,8 +86,8 @@ char *exec(char *work_dir, char *file, slice_t *list, int32_t *pid, int32_t *sta
         }
 
         // exec 一旦执行成功，当前子进程就会自己推出，执行失败这会返回错误
-        int result = execvp(file, argv);
-        exit(result);
+        execvp(file, argv);
+        exit(EXIT_FAILURE);
     }
 
     if (pid) {
@@ -95,16 +95,15 @@ char *exec(char *work_dir, char *file, slice_t *list, int32_t *pid, int32_t *sta
     }
     close(fd[1]);
 
-    char *buf = mallocz(81920);
+    char *buf = mallocz(8192 * 2);
+    full_read(fd[0], buf, 8192 * 2);
 
-    full_read(fd[0], buf, 81920);
-
-    int exec_status;
+    int exec_status = 0;
     if (status == NULL) {
         status = &exec_status;
     }
-
-    wait(status);
+    waitpid(fid, status, 0);  // 等待子进程执行完成
+    // wait(status);
 
     return buf;
 }

@@ -423,10 +423,10 @@ uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_i
 
     char *dump_msg;
     if (co->main) {
-        dump_msg = dsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", (char *) co->error->msg->data,
+        dump_msg = tlsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", (char *) co->error->msg->data,
                             path, line, column);
     } else {
-        dump_msg = dsprintf("coroutine %ld panic: '%s' at %s:%d:%d\n", co->id, (char *) co->error->msg->data,
+        dump_msg = tlsprintf("coroutine %ld panic: '%s' at %s:%d:%d\n", co->id, (char *) co->error->msg->data,
                             path, line, column);
     }
 
@@ -600,10 +600,10 @@ static inline void panic_dump(coroutine_t *co, caller_t *caller, char *msg) {
     // pre_rtcall_hook 中已经记录了 ret addr
     char *dump_msg;
     if (co->main) {
-        dump_msg = dsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", msg,
+        dump_msg = tlsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", msg,
                             ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
     } else {
-        dump_msg = dsprintf("coroutine '%ld' panic: '%s' at %s:%d:%d\n", co->id, msg,
+        dump_msg = tlsprintf("coroutine '%ld' panic: '%s' at %s:%d:%d\n", co->id, msg,
                             ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
     }
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));

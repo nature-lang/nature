@@ -54,6 +54,7 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
     # testar 和 n 文件可以同时存在，在 main 中选择自己需要的测试方式
     if (IS_DIRECTORY ${CASE_PATH})
         set(WORK_DIR ${CASE_PATH})
+        set(TESTAR_FILE "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}.testar")
         set(ENTRY_FILE main.n)
     elseif (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}.testar")
         set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features/cases)

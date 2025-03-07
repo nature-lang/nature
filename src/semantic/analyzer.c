@@ -1311,7 +1311,7 @@ static void analyzer_access(module_t *m, ast_access_t *access) {
  * 如果是 package.test 则进行符号改写, 改写成 namespace + module_name
  * struct.key , instance? 则不做任何对处理。
  */
-static void analyzer_select_expr(module_t *m, ast_expr_t *expr) {
+static void rewrite_select_expr(module_t *m, ast_expr_t *expr) {
     ast_expr_select_t *select = expr->value;
 
     // import select 特殊处理, 直接进行符号改写
@@ -1553,7 +1553,7 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         case AST_EXPR_SELECT: {
             // analyzer 仅进行了变量重命名
             // 此时作用域不明确，无法进行任何的表达式改写。
-            return analyzer_select_expr(m, expr);
+            return rewrite_select_expr(m, expr);
         }
         case AST_EXPR_IDENT: {
             // ident unique 改写并注册到符号表中

@@ -10,7 +10,7 @@ n_void_ptr_t array_element_addr(n_array_t *data, uint64_t rtype_hash, uint64_t i
     rtype_t *array_rtype = rt_find_rtype(rtype_hash);
 
     if (index >= array_rtype->length) {
-        char *msg = dsprintf("index out of array [%d] with length %d", index, array_rtype->length);
+        char *msg = tlsprintf("index out of array [%d] with length %d", index, array_rtype->length);
         DEBUGF("[runtime.array_element_addr] has err %s", msg);
         rt_throw(msg, true);
         return 0;

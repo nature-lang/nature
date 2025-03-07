@@ -1,0 +1,33 @@
+import syscall
+
+// match runtime.fs_context_t 
+type file_t = struct{
+    i32 fd
+    void_ptr data
+    i64 data_len
+    i64 data_cap
+    // ... other fields
+}
+
+#linkid rt_uv_fs_open
+fn open(string path, int flags, int mode):ptr<file_t>!
+
+// 读取整个文件
+#linkid rt_uv_fs_read
+fn file_t.read():string!
+
+#linkid rt_uv_fs_read_at
+fn file_t.read_at(int offset, int len):string!
+
+#linkid rt_uv_fs_write
+fn file_t.write(string content):void!
+
+#linkid rt_uv_fs_write_at
+fn file_t.write_at(string content, int offset, int len):void!
+
+#linkid rt_uv_fs_close
+fn file_t.close():void
+
+fn file_t.seek(int offset, int whence):int! {
+    return syscall.seek(self.fd as int, offset, whence)
+}
