@@ -1,0 +1,9 @@
+import process
+
+fn main():void! {
+    var p = process.command('ls', '-la')
+    p.workdir = '/usr/loca/bin'
+
+    var fu = p.run()
+    var (output, status) = fu.await()
+}

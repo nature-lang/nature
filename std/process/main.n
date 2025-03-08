@@ -1,0 +1,4 @@
+type processor_t = struct{}
+
+fn command() {
+}

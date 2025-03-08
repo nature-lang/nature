@@ -6,6 +6,7 @@ type file_t = struct{
     void_ptr data
     i64 data_len
     i64 data_cap
+    bool closed
     // ... other fields
 }
 

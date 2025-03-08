@@ -25,6 +25,7 @@ void cmd_entry(int argc, char **argv) {
     struct option long_options[] = {
             {"archive", no_argument,       NULL, 0},
             {"output",  required_argument, NULL, 'o'},
+            {"target",  required_argument, NULL, 1},
             {NULL, 0,                      NULL, 0}};
 
     int option_index = 0;
@@ -66,6 +67,27 @@ void cmd_entry(int argc, char **argv) {
                 } else {
                     // 如果没有路径分隔符，直接作为输出文件名
                     strcpy(BUILD_OUTPUT_NAME, o_arg);
+                }
+                break;
+            }
+            case 1: {
+                char *target = optarg;
+                if (strcmp(target, "linux_amd64") == 0) {
+                    BUILD_OS = OS_LINUX;
+                    BUILD_ARCH = ARCH_AMD64;
+                } else if (strcmp(target, "linux_arm64") == 0) {
+                    BUILD_OS = OS_LINUX;
+                    BUILD_ARCH = ARCH_ARM64;
+                } else if (strcmp(target, "darwin_amd64") == 0) {
+                    BUILD_OS = OS_DARWIN;
+                    BUILD_ARCH = ARCH_AMD64;
+                } else if (strcmp(target, "darwin_arm64") == 0) {
+                    BUILD_OS = OS_DARWIN;
+                    BUILD_ARCH = ARCH_ARM64;
+                } else {
+                    printf("Invalid target: %s\n", target);
+                    printf("Available targets: linux_amd64, linux_arm64, darwin_amd64, darwin_arm64\n");
+                    exit(EXIT_FAILURE);
                 }
                 break;
             }

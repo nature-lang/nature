@@ -1,7 +1,6 @@
-name = "syscall"
+name = "process"
 version = "0.1.0"
 authors = ["weiwenhao <wwhacker@qq.com>"]
-description = "syscall package"
 license = "MIT"
 type = "lib"
 

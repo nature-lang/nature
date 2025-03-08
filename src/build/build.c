@@ -491,6 +491,7 @@ static void build_init(char *build_entry) {
     config_init();
     symbol_init();
     reg_init();
+
     if (BUILD_ARCH == ARCH_AMD64) {
         amd64_opcode_init();
     }

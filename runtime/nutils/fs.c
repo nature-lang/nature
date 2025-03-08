@@ -106,8 +106,8 @@ static void on_read_cb(uv_fs_t *req) {
 }
 
 fs_context_t *rt_uv_fs_open(n_string_t *path, int64_t flags, int64_t mode) {
-    // 创建 context
-    fs_context_t *ctx = NEW(fs_context_t);
+    // 创建 context, 不需要主动销毁，后续由用户端接手该变量，并由 GC 进行销毁
+    fs_context_t *ctx = rti_gc_malloc(sizeof(fs_context_t), NULL);
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
@@ -137,6 +137,11 @@ n_string_t *rt_uv_fs_read(fs_context_t *ctx) {
     coroutine_t *co = coroutine_get();
     n_processor_t *p = processor_get();
     DEBUGF("[fs_read] read file: %d", ctx->fd);
+
+    if (ctx->closed) {
+        rt_co_error(co, "fd already closed", false);
+        return NULL;
+    }
 
     // 配置初始缓冲区
     ctx->data_cap = BUFFER_SIZE;
@@ -175,6 +180,10 @@ n_string_t *rt_uv_fs_read_at(fs_context_t *ctx, int offset, int len) {
     coroutine_t *co = coroutine_get();
     n_processor_t *p = processor_get();
     DEBUGF("[fs_read_at] read file: %d, offset: %d, len: %d", ctx->fd, offset, len);
+    if (ctx->closed) {
+        rt_co_error(co, "fd already closed", false);
+        return NULL;
+    }
 
     ctx->req.data = co;
 
@@ -226,6 +235,11 @@ void rt_uv_fs_write_at(fs_context_t *ctx, n_string_t *data, int offset, int len)
     coroutine_t *co = coroutine_get();
     n_processor_t *p = processor_get();
 
+    if (ctx->closed) {
+        rt_co_error(co, "fd already closed", false);
+        return;
+    }
+
     // 如果 len 为 -1，则使用整个数据长度
     int write_len = (len == -1) ? data->length : len;
     // 确保不超过实际数据长度
@@ -257,6 +271,11 @@ void rt_uv_fs_write(fs_context_t *ctx, n_string_t *data) {
     n_processor_t *p = processor_get();
     DEBUGF("[fs_write] write file: %d, data_len: %ld", ctx->fd, data->length);
 
+    if (ctx->closed) {
+        rt_co_error(co, "fd already closed", false);
+        return;
+    }
+
     // 配置写入缓冲区, 进行一次写入
     uv_buf_t buf = uv_buf_init(rt_string_ref(data), data->length);
 
@@ -280,6 +299,11 @@ void rt_uv_fs_close(fs_context_t *ctx) {
     n_processor_t *p = processor_get();
     DEBUGF("[fs_close] close file: %d", ctx->fd);
 
+    // 重复关闭直接返回
+    if (ctx->closed) {
+        return;
+    }
+
     // 同步方式关闭文件
     int result = uv_fs_close(&p->uv_loop, &ctx->req, ctx->fd, NULL);
     if (result < 0) {
@@ -293,5 +317,10 @@ void rt_uv_fs_close(fs_context_t *ctx) {
     if (ctx->data) {
         free(ctx->data);
     }
-    free(ctx);
+
+    ctx->closed = true;
+
+    // ctx 的内存应该由 GC 释放，而不是此处主动释放。
+    // 否则 用户端 再次读取 ctx 从而出现奇怪的行为！
+//    free(ctx);
 }

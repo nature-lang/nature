@@ -73,9 +73,11 @@ fn main():void! {
     f.close()
     f.write('hello\nworld')
 }
+--- test.txt
+hello world
 
 --- output.txt
-coroutine 'main' uncaught error: 'bad file descriptor' at nature-test/main.n:7:23
+coroutine 'main' uncaught error: 'fd already closed' at nature-test/main.n:7:23
 
 === test_read_at
 --- main.n
