@@ -2734,7 +2734,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 
 static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     // msg to errort
-    symbol_t *symbol = symbol_table_get(ERRORT_TYPE_ALIAS);
+    symbol_t *symbol = symbol_table_get(ERRORT_TYPE_DEF);
 
     assert(stmt->error.type.kind == TYPE_STRING);
     lir_operand_t *msg_operand = linear_expr(m, stmt->error, NULL);

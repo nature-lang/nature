@@ -16,8 +16,7 @@
 #define POINTER_SIZE sizeof(void *)
 #endif
 
-#define ERRORT_TYPE_ALIAS "error_t"
-#define ERRABLE_TYPE_ALIAS "errable"
+#define ERRORT_TYPE_DEF "error_t"
 
 // 指令字符宽度
 #define BYTE 1  // 1 byte = 8 位
@@ -99,10 +98,12 @@ typedef enum {
     TYPE_VOID, // 表示函数无返回值
     TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
-    TYPE_ALIAS, // 声明一个新的类型时注册的 type 的类型是这个
-    TYPE_PARAM, // type formal param type foo<f1, f2> = f1|f2, 其中 f1 就是一个 param
     TYPE_UNION,
     TYPE_ENUM,
+
+//    TYPE_ALIAS, // 声明一个新的类型时注册的 type 的类型是这个
+//    TYPE_PARAM, // type formal param type foo<f1, f2> = f1|f2, 其中 f1 就是一个 param
+    TYPE_IDENT,
 
     // runtime 中使用的一种需要 gc 的 pointer base type 结构
     TYPE_GC,
@@ -113,6 +114,14 @@ typedef enum {
     TYPE_GC_ENV_VALUES,
     TYPE_GC_UPVALUE,
 } type_kind;
+
+typedef enum {
+    TYPE_IDENT_DEF = 1,
+    TYPE_IDENT_ALIAS,
+    TYPE_IDENT_PARAM,
+    TYPE_IDENT_BUILTIN, // int/float/vec/string...
+    TYPE_IDENT_USE, // use 就是还不能确定是 type alias 还是 type def
+} type_ident_kind;
 
 static string type_kind_str[] = {
         [TYPE_GC] = "gc",
@@ -145,7 +154,7 @@ static string type_kind_str[] = {
         [TYPE_VOID] = "void",
         [TYPE_UNKNOWN] = "unknown",
         [TYPE_STRUCT] = "struct", // ast_struct_decl
-        [TYPE_ALIAS] = "alias",
+        [TYPE_IDENT] = "ident",
         [TYPE_COROUTINE_T] = "coroutine_t",
         [TYPE_CHAN] = "chan",
         [TYPE_VEC] = "vec",
@@ -232,6 +241,11 @@ typedef struct type_fn_t type_fn_t;
 
 // 类型的描述信息，无论是否还原，类型都会在这里呈现
 typedef struct type_t {
+    char *import_as; // 可能为 null, foo.car 时， foo 就是 module_ident
+    char *ident; // 当 type.kind == ALIAS/PARAM 时，此处缓存一下 alias/formal ident, 用于 dump error
+    list_t *def_args; // type_t
+    type_ident_kind ident_kind; // TYPE_ALIAS/TYPE_PARAM/TYPE_DEF
+
     union {
         void *value;
         type_vec_t *vec;
@@ -242,16 +256,14 @@ typedef struct type_t {
         type_tuple_t *tuple;
         type_struct_t *struct_;
         type_fn_t *fn;
-        type_alias_t *alias; // 这个其实是自定义类型的 ident
-        type_param_t *param; // 类型的一种特殊形式，更准确的说法也可以是
+//        type_alias_t *alias; // 这个其实是自定义类型的 ident
+//        type_param_t *param; // 类型的一种特殊形式，更准确的说法也可以是
         type_ptr_t *ptr;
         type_union_t *union_;
     };
-
     type_kind kind;
+
     reduction_status_t status;
-    char *origin_ident; // 当 type.kind == ALIAS/PARAM 时，此处缓存一下 alias/formal ident, 用于 dump error
-    type_kind origin_type_kind;
 
     // type_alias + args 进行 reduction 还原之前，将其参数缓存下来
     char *impl_ident;
@@ -614,6 +626,33 @@ type_t type_kind_new(type_kind kind);
 
 type_t type_new(type_kind kind, void *value);
 
+static inline bool ident_is_param(type_t *t) {
+    if (t->kind != TYPE_IDENT) {
+        return false;
+    }
+
+    return t->ident_kind == TYPE_IDENT_PARAM;
+}
+
+static inline bool ident_is_def_or_alias(type_t* t) {
+    if (t->kind != TYPE_IDENT) {
+        return false;
+    }
+
+    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_ALIAS || t->ident_kind == TYPE_IDENT_USE;
+}
+
+static inline type_t type_ident_new(char *ident, type_ident_kind kind) {
+    type_t t = type_kind_new(TYPE_IDENT);
+    t.status = REDUCTION_STATUS_UNDO;
+    t.ident = ident;
+    t.ident_kind = kind;
+    t.impl_ident = ident;
+    t.def_args = NULL;
+    t.impl_args = NULL;
+    return t;
+}
+
 static inline type_t type_array_new(type_kind element_type_kind, uint64_t length) {
     type_array_t *t = NEW(type_array_t);
     t->length = length;
@@ -622,37 +661,7 @@ static inline type_t type_array_new(type_kind element_type_kind, uint64_t length
 }
 
 static inline type_t type_errort_new() {
-    type_t errort = type_new(TYPE_ALIAS, NULL);
-    errort.alias = NEW(type_alias_t);
-    errort.alias->ident = ERRORT_TYPE_ALIAS;
-    errort.origin_ident = ERRORT_TYPE_ALIAS;
-    errort.origin_type_kind = TYPE_ALIAS;
-    errort.status = REDUCTION_STATUS_UNDO;
-
-    return errort;
-}
-
-static inline type_t type_errable_new(type_t t) {
-    type_alias_t *errable = type_alias_new(ERRABLE_TYPE_ALIAS, NULL);
-    errable->args = ct_list_new(sizeof(type_t));
-    ct_list_push(errable->args, &t);
-
-    return type_new(TYPE_ALIAS, errable);
-}
-
-static inline bool is_errable_t(type_t t) {
-    if (t.kind != TYPE_ALIAS) {
-        return false;
-    }
-
-    return t.alias->ident = ERRABLE_TYPE_ALIAS;
-}
-
-static type_t extern_errable_t(type_t t) {
-    assert(is_errable_t(t));
-    type_t *arg_t = ct_list_value(t.alias->args, 0);
-
-    return *arg_t;
+    return type_ident_new(ERRORT_TYPE_DEF, TYPE_IDENT_DEF);
 }
 
 static inline bool must_assign_value(type_kind kind) {

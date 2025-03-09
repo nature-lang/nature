@@ -599,7 +599,8 @@ typedef struct {
     string ident; // my_int (自定义的类型名称)
     list_t *params; // *ast_generics_param|null
     type_t type_expr; // int (类型)
-} ast_type_alias_stmt_t;
+    bool is_alias; // 是否仅作为别名
+} ast_type_def_stmt_t;
 
 // 这里包含 body, 所以属于 def
 struct ast_fndef_t {

@@ -539,8 +539,8 @@ type_t type_ptrof(type_t t) {
     result.kind = TYPE_PTR;
     result.ptr = NEW(type_ptr_t);
     result.ptr->value_type = t;
-    result.origin_ident = NULL;
-    result.origin_type_kind = 0;
+    result.ident = NULL;
+    result.ident_kind = 0;
     result.line = t.line;
     result.column = t.column;
     result.in_heap = false;
@@ -556,8 +556,8 @@ type_t type_raw_ptrof(type_t t) {
     result.kind = TYPE_RAW_PTR;
     result.ptr = NEW(type_ptr_t);
     result.ptr->value_type = t;
-    result.origin_ident = NULL;
-    result.origin_type_kind = 0;
+    result.ident = NULL;
+    result.ident_kind = 0;
     result.line = t.line;
     result.column = t.column;
     result.in_heap = false;
@@ -864,27 +864,26 @@ char *_type_format(type_t t) {
  * @return
  */
 char *type_format(type_t t) {
-    char *ident = t.origin_ident;
+    char *ident = t.ident;
     if (ident == NULL) {
         return _type_format(t);
     }
 
-    if (t.kind == TYPE_PARAM) {
-        return t.param->ident;
+    if (ident_is_param(&t)) {
+        return ident;
     }
-
 
     return dsprintf("%s(%s)", ident, _type_format(t));
 }
 
 char *type_origin_format(type_t t) {
-    char *ident = t.origin_ident;
+    char *ident = t.ident;
     if (ident == NULL) {
         return _type_format(t);
     }
 
-    if (t.kind == TYPE_PARAM) {
-        return t.param->ident;
+    if (ident_is_param(&t)) {
+        return ident;
     }
 
     return ident;
@@ -896,8 +895,8 @@ type_t type_kind_new(type_kind kind) {
             .status = REDUCTION_STATUS_DONE,
             .kind = kind,
             .value = 0,
-            .origin_ident = NULL,
-            .origin_type_kind = 0,
+            .ident = NULL,
+            .ident_kind = 0,
             .impl_ident = type_kind_str[kind],
             .impl_args = NULL,
     };
@@ -914,8 +913,8 @@ type_t type_new(type_kind kind, void *value) {
             .value = value,
             .in_heap = kind_in_heap(kind),
             .status = REDUCTION_STATUS_DONE,
-            .origin_ident = NULL,
-            .origin_type_kind = 0,
+            .ident = NULL,
+            .ident_kind = 0,
             .impl_ident = NULL,
             .impl_args = NULL,
     };

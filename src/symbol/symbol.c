@@ -67,7 +67,7 @@ symbol_t *symbol_table_set(string ident, symbol_type_t type, void *ast_value, bo
         slice_push(symbol_var_list, s);
     }
 
-    if (type == SYMBOL_TYPE_ALIAS) {
+    if (type == SYMBOL_TYPE) {
         slice_push(symbol_typedef_list, s);
     }
 

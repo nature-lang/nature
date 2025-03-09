@@ -65,7 +65,7 @@ fn main() {
     i16 b8  = 12
     var a8 = mod.person_t<string>{
         name = "hello",
-        age = b8 as i8,
+        age = b8 as mod.custom_t<i8>,
     }
     println(a8.name, a8.age)
 }

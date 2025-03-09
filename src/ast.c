@@ -131,9 +131,10 @@ static type_array_t *type_array_copy(type_array_t *temp) {
 
 type_t type_copy(type_t temp) {
     type_t type = temp;
-    if (temp.origin_ident) {
-        type.origin_ident = strdup(temp.origin_ident);
-        type.origin_type_kind = temp.origin_type_kind;
+    if (temp.ident) {
+        type.ident = strdup(temp.ident);
+        type.ident_kind = temp.ident_kind;
+        type.def_args = ct_list_type_copy(temp.def_args);
     }
     if (temp.impl_ident) {
         type.impl_ident = strdup(temp.impl_ident);
@@ -143,10 +144,6 @@ type_t type_copy(type_t temp) {
     }
 
     switch (temp.kind) {
-        case TYPE_ALIAS: {
-            type.alias = type_alias_copy(temp.alias);
-            break;
-        }
         case TYPE_VEC: {
             type.vec = type_vec_copy(temp.vec);
             break;

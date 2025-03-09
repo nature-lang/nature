@@ -46,7 +46,7 @@ static bool parser_is_impl_type(type_kind kind) {
            kind == TYPE_MAP ||
            kind == TYPE_SET ||
            kind == TYPE_TUPLE ||
-           kind == TYPE_ALIAS;
+           kind == TYPE_IDENT;
 }
 
 static token_t *parser_advance(module_t *m) {
@@ -280,7 +280,9 @@ static type_t parser_single_type(module_t *m) {
             .status = REDUCTION_STATUS_UNDO,
             .line = parser_peek(m)->line,
             .column = parser_peek(m)->column,
-            .origin_ident = NULL,
+            .ident = NULL,
+            .ident_kind = 0,
+            .def_args = NULL,
             .impl_ident = NULL,
             .impl_args = NULL,
     };
@@ -304,10 +306,13 @@ static type_t parser_single_type(module_t *m) {
         result.kind = token_to_kind[type_token->type];
         result.value = NULL;
         result.impl_ident = type_kind_str[result.kind];
+
         if (type_token->type == TOKEN_INT || type_token->type == TOKEN_UINT || type_token->type == TOKEN_FLOAT) {
-            result.origin_ident = type_token->literal;
-            result.origin_type_kind = result.kind;
+            // 后续 int 会转换为 int64, 所以这里额外记录一下原始类，让 format 更加准确
+            result.ident = type_token->literal;
+            result.ident_kind = TYPE_IDENT_BUILTIN;
         }
+
         result.status = REDUCTION_STATUS_DONE;
 
         return result;
@@ -521,39 +526,35 @@ static type_t parser_single_type(module_t *m) {
         // --------------------------------------------param----------------------------------------------------------
         // type param1 快速处理, foo_t<param1, param1> {
         if (m->parser_type_params_table && table_exist(m->parser_type_params_table, first->literal)) {
-            result.kind = TYPE_PARAM;
-            result.param = type_param_new(first->literal);
-            result.origin_ident = result.param->ident;
-            result.origin_type_kind = TYPE_PARAM;
+            result.kind = TYPE_IDENT;
+            result.ident = first->literal;
+            result.ident_kind = TYPE_IDENT_PARAM;
             return result;
         }
 
-        // --------------------------------------------alias----------------------------------------------------------
+        // --------------------------------------------def or alias----------------------------------------------------------
         // foo.bar 形式的类型
         token_t *second = NULL;
         if (parser_consume(m, TOKEN_DOT)) {
             second = parser_advance(m);
         }
 
-        result.kind = TYPE_ALIAS;
+        result.kind = TYPE_IDENT;
+        result.ident_kind = TYPE_IDENT_USE; // 无法确定是 alias 还是 def
         if (second) {
-            result.alias = type_alias_new(second->literal, first->literal);
+            result.import_as = first->literal;
+            result.ident = second->literal;
         } else {
-            result.alias = type_alias_new(first->literal, NULL);
-        }
-
-        result.origin_ident = result.alias->ident;
-        if (result.alias->import_as) {
-            result.origin_ident = str_connect_by(result.alias->import_as, result.alias->ident, ".");
+            result.ident = first->literal;
         }
 
         // alias<arg1, arg2> arg1 和 arg2 是实际类型, 而不是泛型
         if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
             // parser actual params
-            result.alias->args = ct_list_new(sizeof(type_t));
+            result.def_args = ct_list_new(sizeof(type_t));
             do {
                 type_t item = parser_single_type(m);
-                ct_list_push(result.alias->args, &item);
+                ct_list_push(result.def_args, &item);
             } while (parser_consume(m, TOKEN_COMMA));
 
             parser_must(m, TOKEN_RIGHT_ANGLE);
@@ -573,7 +574,7 @@ static type_t parser_single_type(module_t *m) {
  */
 static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
-    ast_type_alias_stmt_t *type_alias_stmt = NEW(ast_type_alias_stmt_t);
+    ast_type_def_stmt_t *type_alias_stmt = NEW(ast_type_def_stmt_t);
     parser_must(m, TOKEN_TYPE); // code
     type_alias_stmt->ident = parser_must(m, TOKEN_IDENT)->literal; // ident
 
@@ -640,7 +641,7 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
                 .status = REDUCTION_STATUS_UNDO,
                 .line = parser_peek(m)->line,
                 .column = parser_peek(m)->column,
-                .origin_ident = NULL,
+                .ident = NULL,
                 .impl_ident = NULL,
                 .impl_args = NULL,
         };
@@ -710,35 +711,32 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
  * @param generics_args nullable
  * @return
  */
-static type_t ast_expr_to_type_alias(module_t *m, ast_expr_t left, list_t *generics_args) {
+static type_t ast_expr_to_type_def_ident(module_t *m, ast_expr_t left, list_t *generics_args) {
     type_t t = {
             .status = REDUCTION_STATUS_UNDO,
             .line = parser_peek(m)->line,
             .column = parser_peek(m)->column,
-            .origin_ident = NULL,
-            .origin_type_kind = 0,
+            .ident = NULL,
+            .ident_kind = TYPE_IDENT_DEF,
             .impl_ident = NULL,
-            .kind = TYPE_ALIAS,
+            .kind = TYPE_IDENT,
     };
 
     // 重新整理一下左值，整理成 type_alias_t
     if (left.assert_type == AST_EXPR_IDENT) {
         ast_ident *ident = left.value;
-        t.alias = type_alias_new(ident->literal, NULL);
-        t.origin_ident = ident->literal;
-        t.origin_type_kind = TYPE_ALIAS;
+        t.ident = ident->literal;
     } else if (left.assert_type == AST_EXPR_SELECT) {
         ast_expr_select_t *select = left.value;
         assert(select->left.assert_type == AST_EXPR_IDENT);
         ast_ident *select_left = select->left.value;
-        t.alias = type_alias_new(select->key, select_left->literal);
-        t.origin_ident = select->key;
-        t.origin_type_kind = TYPE_ALIAS;
+        t.import_as = select_left->literal;
+        t.ident = select->key;
     } else {
         assertf(false, "struct new left type exception");
     }
-    t.alias->args = generics_args;
 
+    t.def_args = generics_args;
     return t;
 }
 
@@ -925,7 +923,7 @@ static ast_expr_t parser_type_args_expr(module_t *m, ast_expr_t left) {
     }
 
     assert(parser_is(m, TOKEN_LEFT_CURLY));
-    type_t t = ast_expr_to_type_alias(m, left, generics_args);
+    type_t t = ast_expr_to_type_def_ident(m, left, generics_args);
     return parser_struct_new(m, t);
 }
 
@@ -2231,17 +2229,18 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
         // 解析完整类型是为了让 self 类型可以验证 fn ...(foo<T, U> a, T b)...
         type_t impl_type = {0};
         if (first_token->type == TOKEN_IDENT) {
-            impl_type.kind = TYPE_ALIAS;
+            impl_type.kind = TYPE_IDENT; // 在没有解析出具体类型之前只能是 ident
             impl_type.impl_ident = parser_must(m, TOKEN_IDENT)->literal;
-            impl_type.alias = type_alias_new(first_token->literal, NULL);
+            impl_type.ident = first_token->literal;
+            impl_type.ident_kind = TYPE_IDENT_DEF;
 
             if (fndef->generics_params) {
                 // parser sign type
                 parser_must(m, TOKEN_LEFT_ANGLE);
-                impl_type.alias->args = ct_list_new(sizeof(type_t));
+                impl_type.def_args = ct_list_new(sizeof(type_t));
                 do {
                     type_t param_type = parser_single_type(m);
-                    assert(param_type.kind == TYPE_PARAM);
+                    assert(param_type.ident_kind == TYPE_IDENT_PARAM);
 
                     // 排除参数约束
                     if (parser_consume(m, TOKEN_COLON)) {
@@ -2250,7 +2249,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
                         } while (parser_consume(m, TOKEN_OR));
                     }
 
-                    ct_list_push(impl_type.alias->args, &param_type);
+                    ct_list_push(impl_type.def_args, &param_type);
                 } while (parser_consume(m, TOKEN_COMMA));
 
                 parser_must(m, TOKEN_RIGHT_ANGLE);
@@ -2503,7 +2502,6 @@ static ast_stmt_t *parser_stmt(module_t *m) {
     }
 
     PARSER_ASSERTF(false, "statement cannot start with '%s'", parser_peek(m)->literal);
-    exit(1);
 }
 
 static ast_stmt_t *parser_global_stmt(module_t *m) {
