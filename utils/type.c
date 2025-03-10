@@ -539,30 +539,28 @@ type_t type_ptrof(type_t t) {
     result.kind = TYPE_PTR;
     result.ptr = NEW(type_ptr_t);
     result.ptr->value_type = t;
-    result.ident = NULL;
-    result.ident_kind = 0;
+//    result.ident = t.ident;
+//    result.ident_kind = t.ident_kind;
+//    result.args = t.args;
     result.line = t.line;
     result.column = t.column;
     result.in_heap = false;
-    result.impl_ident = t.impl_ident;
-    result.impl_args = t.impl_args;
     return result;
 }
 
 type_t type_raw_ptrof(type_t t) {
-    type_t result;
+    type_t result = {0};
     result.status = t.status;
 
     result.kind = TYPE_RAW_PTR;
     result.ptr = NEW(type_ptr_t);
     result.ptr->value_type = t;
-    result.ident = NULL;
-    result.ident_kind = 0;
+//    result.ident = t.ident;
+//    result.ident_kind = t.ident_kind;
+//    result.args = t.args;
     result.line = t.line;
     result.column = t.column;
     result.in_heap = false;
-    result.impl_ident = t.impl_ident;
-    result.impl_args = t.impl_args;
     return result;
 }
 
@@ -864,7 +862,16 @@ char *_type_format(type_t t) {
  * @return
  */
 char *type_format(type_t t) {
-    char *ident = t.ident;
+    char *ident = NULL;
+    if (t.ident_kind != TYPE_IDENT_BUILTIN) {
+        ident = t.ident;
+    }
+
+    // 特殊 t.ident 处理
+    if (t.ident && (str_equal(t.ident, "int") || str_equal(t.ident, "uint") || str_equal(t.ident, "float"))) {
+        ident = t.ident;
+    }
+
     if (ident == NULL) {
         return _type_format(t);
     }
@@ -897,9 +904,13 @@ type_t type_kind_new(type_kind kind) {
             .value = 0,
             .ident = NULL,
             .ident_kind = 0,
-            .impl_ident = type_kind_str[kind],
-            .impl_args = NULL,
     };
+
+    // 不能直接填充 ident, 比如 vec ident 必须要有 args, 但是此时无法计算 args
+    if (is_impl_builtin_type(kind)) {
+        result.ident = type_kind_str[kind];
+        result.ident_kind = TYPE_IDENT_BUILTIN;
+    }
 
     result.in_heap = kind_in_heap(kind);
 
@@ -915,8 +926,11 @@ type_t type_new(type_kind kind, void *value) {
             .status = REDUCTION_STATUS_DONE,
             .ident = NULL,
             .ident_kind = 0,
-            .impl_ident = NULL,
-            .impl_args = NULL,
     };
+
+    if (is_impl_builtin_type(kind)) {
+        result.ident = type_kind_str[kind];
+        result.ident_kind = TYPE_IDENT_BUILTIN;
+    }
     return result;
 }

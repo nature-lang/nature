@@ -355,7 +355,7 @@ static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_
 
     // 进行参数解析，可以顺便使用 type_compare 了！
     table_t *generics_args_table = table_new();
-
+    // call-generics_args 为 null 说明 caller 没有传递泛型 args, 此时需要根据调用参数进行自动泛型推导
     if (call->generics_args == NULL) {
         // 避免脏数据污染 is_tpl 导致后续的 copy 异常
         ct_stack_t *stash_stack = m->infer_type_args_stack;
@@ -748,10 +748,10 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     if (target_type.ident_kind == TYPE_IDENT_DEF) {
         as_expr->src.type.ident = target_type.ident;
         as_expr->src.type.ident_kind = target_type.ident_kind;
-        as_expr->src.type.def_args = target_type.def_args;
+        as_expr->src.type.args = target_type.args;
 
         // compare check
-        if (type_compare( as_expr->src.type, target_type, NULL)) {
+        if (type_compare(as_expr->src.type, target_type, NULL)) {
             return target_type;
         }
     }
@@ -1117,9 +1117,7 @@ static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type) {
         if (target_type.kind != TYPE_UNKNOWN) {
             result.ident = target_type.ident; // literal new ident 直接继承
             result.ident_kind = target_type.ident_kind;
-            result.def_args = target_type.def_args;
-            result.impl_ident = target_type.impl_ident;
-            result.impl_args = target_type.impl_args;
+            result.args = target_type.args;
         }
 
         type_array_t *type_array = NEW(type_array_t);
@@ -1145,9 +1143,7 @@ static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type) {
     if (target_type.kind != TYPE_UNKNOWN) {
         result.ident = target_type.ident; // literal new ident 直接继承
         result.ident_kind = target_type.ident_kind;
-        result.def_args = target_type.def_args;
-        result.impl_ident = target_type.impl_ident;
-        result.impl_args = target_type.impl_args;
+        result.args = target_type.args;
     }
 
     type_vec_t *type_vec = NEW(type_vec_t);
@@ -1213,9 +1209,7 @@ static type_t infer_map_new(module_t *m, ast_map_new_t *map_new, type_t target_t
     if (target_type.kind != TYPE_UNKNOWN) {
         result.ident = target_type.ident; // literal new ident 直接继承
         result.ident_kind = target_type.ident_kind;
-        result.def_args = target_type.def_args;
-        result.impl_ident = target_type.impl_ident;
-        result.impl_args = target_type.impl_args;
+        result.args = target_type.args;
     }
 
 
@@ -1262,9 +1256,7 @@ static type_t infer_set_new(module_t *m, ast_set_new_t *set_new, type_t target_t
     if (target_type.kind != TYPE_UNKNOWN) {
         result.ident = target_type.ident; // literal new ident 直接继承
         result.ident_kind = target_type.ident_kind;
-        result.def_args = target_type.def_args;
-        result.impl_ident = target_type.impl_ident;
-        result.impl_args = target_type.impl_args;
+        result.args = target_type.args;
     }
 
     type_set_t *type_set = NEW(type_set_t);
@@ -1697,10 +1689,11 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
     //                  type_format(select_left_type), select->key);
 
 
-    // call 继承 select_left_type 的 args
-    char *impl_ident = select_left_type.impl_ident;
+    // call 继承 select_left_type 的 args, TODO 是否应该使用 destr_type 对应的 ident
+    char *impl_ident = destr_type.ident;
+    assert(impl_ident);
     char *impl_symbol_name = str_connect_by(impl_ident, select->key, "_");
-    list_t *impl_args = select_left_type.impl_args;
+    list_t *impl_args = destr_type.args;
     symbol_t *s;
     if (impl_args) {
         char *arg_hash = generics_impl_args_hash(m, impl_args);
@@ -1714,7 +1707,7 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
             s = symbol_table_get(impl_symbol_name);
         }
 
-        INFER_ASSERTF(s, "type %s no property '%s'", type_format(select_left_type), select->key);
+        INFER_ASSERTF(s, "type '%s' not impl '%s' fn", type_format(destr_type), select->key);
     }
 
     call->left = *ast_ident_expr(call->left.line, call->left.column, impl_symbol_name);
@@ -1736,7 +1729,7 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
     }
     call->args = args;
 
-    call->generics_args = select_left_type.impl_args;
+    call->generics_args = destr_type.args;
     return true;
 }
 
@@ -2165,9 +2158,7 @@ static type_t infer_tuple_new(module_t *m, ast_tuple_new_t *tuple_new, type_t ta
     if (target_type.kind != TYPE_UNKNOWN) {
         result.ident = target_type.ident; // literal new ident 直接继承
         result.ident_kind = target_type.ident_kind;
-        result.def_args = target_type.def_args;
-        result.impl_ident = target_type.impl_ident;
-        result.impl_args = target_type.impl_args;
+        result.args = target_type.args;
     }
 
     type_tuple_t *tuple_type = NEW(type_tuple_t);
@@ -2481,14 +2472,21 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_PTR || t.kind == TYPE_RAW_PTR) {
         type_ptr_t *type_pointer = t.ptr;
         type_pointer->value_type = reduction_type(m, type_pointer->value_type);
-        t.impl_ident = type_pointer->value_type.impl_ident;
-        t.impl_args = type_pointer->value_type.impl_args;
+        if (type_pointer->value_type.ident_kind > 0) {
+//            t.ident_kind = type_pointer->value_type.ident_kind;
+//            t.ident = type_pointer->value_type.ident;
+//            t.args = type_pointer->value_type.args;
+        }
+
         return t;
     }
 
     if (t.kind == TYPE_ARR) {
         type_array_t *type_array = t.array;
         type_array->element_type = reduction_type(m, type_array->element_type);
+
+        // not impl
+
         return t;
     }
 
@@ -2496,9 +2494,11 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         type_chan_t *type_chan = t.chan;
         type_chan->element_type = reduction_type(m, type_chan->element_type);
 
-        t.impl_ident = type_kind_str[TYPE_CHAN];
-        t.impl_args = ct_list_new(sizeof(type_t));
-        ct_list_push(t.impl_args, &type_chan->element_type);
+
+        t.ident_kind = TYPE_IDENT_BUILTIN;
+        t.ident = type_kind_str[TYPE_CHAN];
+        t.args = ct_list_new(sizeof(type_t));
+        ct_list_push(t.args, &type_chan->element_type);
 
         return t;
     }
@@ -2507,9 +2507,11 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         type_vec_t *type_vec = t.vec;
         type_vec->element_type = reduction_type(m, type_vec->element_type);
 
-        t.impl_ident = type_kind_str[TYPE_VEC];
-        t.impl_args = ct_list_new(sizeof(type_t));
-        ct_list_push(t.impl_args, &type_vec->element_type);
+        // vec.len 都是 impl fn 实现，但是如果是 type my_vec = [int] 这样的实现，impl_ident 应该使用默认的 ident。
+        t.ident_kind = TYPE_IDENT_BUILTIN;
+        t.ident = type_kind_str[TYPE_VEC];
+        t.args = ct_list_new(sizeof(type_t));
+        ct_list_push(t.args, &type_vec->element_type);
 
         return t;
     }
@@ -2521,10 +2523,12 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         INFER_ASSERTF(is_map_set_key_type(t.map->key_type.kind),
                       "type '%s' not support as map key", type_format(t.map->key_type));
 
-        t.impl_ident = type_kind_str[TYPE_MAP];
-        t.impl_args = ct_list_new(sizeof(type_t));
-        ct_list_push(t.impl_args, &t.map->key_type);
-        ct_list_push(t.impl_args, &t.map->value_type);
+        t.ident_kind = TYPE_IDENT_BUILTIN;
+        t.ident = type_kind_str[TYPE_MAP];
+        t.args = ct_list_new(sizeof(type_t));
+        ct_list_push(t.args, &t.map->key_type);
+        ct_list_push(t.args, &t.map->value_type);
+
 
         return t;
     }
@@ -2534,9 +2538,10 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         INFER_ASSERTF(is_map_set_key_type(t.set->element_type.kind),
                       "type '%s' not support as set element", type_format(t.set->element_type));
 
-        t.impl_ident = type_kind_str[TYPE_SET];
-        t.impl_args = ct_list_new(sizeof(type_t));
-        ct_list_push(t.impl_args, &t.set->element_type);
+        t.ident_kind = TYPE_IDENT_BUILTIN;
+        t.ident = type_kind_str[TYPE_SET];
+        t.args = ct_list_new(sizeof(type_t));
+        ct_list_push(t.args, &t.set->element_type);
 
         return t;
     }
@@ -2605,13 +2610,13 @@ static type_t reduction_type_def_or_alias(module_t *m, type_t t) {
     // 判断是否包含 args, 如果包含 args 则需要每一次 reduction 都进行处理
     // 此时的 type alias 相当于重新定义了一个新的类型，并进行了 type_copy, 所以不会存在 reduction 冲突问题, 可以直接返回
     if (stmt->params) {
-        INFER_ASSERTF(t.def_args, "type alias '%s' need param", t.ident);
-        INFER_ASSERTF(t.def_args->length == stmt->params->length, "type alias '%s' param not match",
+        INFER_ASSERTF(t.args, "type alias '%s' need param", t.ident);
+        INFER_ASSERTF(t.args->length == stmt->params->length, "type alias '%s' param not match",
                       t.ident);
 
         // 对 arg 进行 reduction 并校验类型归属
-        for (int i = 0; i < t.def_args->length; ++i) {
-            type_t *arg = ct_list_value(t.def_args, i);
+        for (int i = 0; i < t.args->length; ++i) {
+            type_t *arg = ct_list_value(t.args, i);
             *arg = reduction_type(m, *arg);
 
             ast_generics_param_t *param = ct_list_value(stmt->params, i);
@@ -2633,8 +2638,8 @@ static type_t reduction_type_def_or_alias(module_t *m, type_t t) {
         if (m->infer_type_args_stack) {
             table_t *args_table = table_new();
 
-            for (int i = 0; i < t.def_args->length; ++i) {
-                type_t *arg = ct_list_value(t.def_args, i);
+            for (int i = 0; i < t.args->length; ++i) {
+                type_t *arg = ct_list_value(t.args, i);
                 *arg = reduction_type(m, *arg);
 
                 ast_generics_param_t *param = ct_list_value(stmt->params, i);
@@ -2657,8 +2662,6 @@ static type_t reduction_type_def_or_alias(module_t *m, type_t t) {
             stack_pop(m->infer_type_args_stack);
         }
 
-        t.impl_args = t.def_args;
-        t.impl_ident = t.ident;
         t.kind = right_type_expr.kind;
         t.value = right_type_expr.value;
         t.in_heap = right_type_expr.in_heap;
@@ -2670,8 +2673,6 @@ static type_t reduction_type_def_or_alias(module_t *m, type_t t) {
 
     // 检查右值是否 reduce 完成
     if (stmt->type_expr.status == REDUCTION_STATUS_DONE) {
-        t.impl_args = t.def_args;
-        t.impl_ident = t.ident;
         t.kind = stmt->type_expr.kind;
         t.value = stmt->type_expr.value;
         t.in_heap = stmt->type_expr.in_heap;
@@ -2691,8 +2692,6 @@ static type_t reduction_type_def_or_alias(module_t *m, type_t t) {
 
     // reduction_type 已经返回，现在这里可以直接修改为 done, 或者在外部的 reduction_type 中配置为 done
 
-    t.impl_args = t.def_args;
-    t.impl_ident = t.ident;
     t.kind = stmt->type_expr.kind;
     t.value = stmt->type_expr.value;
     t.in_heap = stmt->type_expr.in_heap;
@@ -2720,7 +2719,7 @@ static type_t reduction_type(module_t *m, type_t t) {
 
     char *ident = t.ident;
     type_ident_kind ident_kind = t.ident_kind;
-    list_t *def_args = t.def_args;
+    list_t *args = t.args;
     bool in_heap = t.in_heap;
 
     if (t.kind == TYPE_UNKNOWN) {
@@ -2748,7 +2747,7 @@ static type_t reduction_type(module_t *m, type_t t) {
 
         ident = t.ident;
         ident_kind = t.ident_kind;
-        def_args = t.def_args;
+        args = t.args;
 
         goto STATUS_DONE;
     }
@@ -2761,12 +2760,14 @@ static type_t reduction_type(module_t *m, type_t t) {
     // 只有 typedef ident 才有中间状态的说法
     if (is_origin_type(t)) {
         t.status = REDUCTION_STATUS_DONE;
-        t.impl_ident = type_kind_str[t.kind];
+        t.ident = type_kind_str[t.kind];
+        t.ident_kind = TYPE_IDENT_BUILTIN;
+        t.args = NULL;
         goto STATUS_DONE;
     }
 
     // infer complex type
-    if (is_reduction_type(t)) {
+    if (is_complex_type(t)) {
         t = reduction_complex_type(m, t);
         goto STATUS_DONE;
     }
@@ -2779,9 +2780,16 @@ static type_t reduction_type(module_t *m, type_t t) {
         t.in_heap = true;
     }
 
-    t.ident = ident;
-    t.ident_kind = ident_kind;
-    t.def_args = def_args;
+    // ident 继承, 而不是基于 builtin 生成
+    if (ident_kind > 0) {
+        t.ident_kind = ident_kind;
+        t.ident = ident;
+    }
+
+    if (args) {
+        t.args = args;
+    }
+
     t.kind = cross_kind_trans(t.kind);
 
     // 计算 reflect type
@@ -2837,9 +2845,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
         if (target_type.kind != TYPE_UNKNOWN) {
             fndef->type.ident = target_type.ident; // literal new ident 直接继承
             fndef->type.ident_kind = target_type.ident_kind;
-            fndef->type.def_args = target_type.def_args;
-            fndef->type.impl_ident = target_type.impl_ident;
-            fndef->type.impl_args = target_type.impl_args;
+            fndef->type.args = target_type.args;
         }
         return fndef->type;
     }
@@ -2876,9 +2882,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     if (target_type.kind != TYPE_UNKNOWN) {
         result.ident = target_type.ident; // literal new ident 直接继承
         result.ident_kind = target_type.ident_kind;
-        result.def_args = target_type.def_args;
-        result.impl_ident = target_type.impl_ident;
-        result.impl_args = target_type.impl_args;
+        result.args = target_type.args;
     }
 
     // 冗余一份，方便计算使用

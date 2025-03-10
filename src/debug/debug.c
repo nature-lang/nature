@@ -99,6 +99,7 @@ string token_type_to_str[] = {
         [TOKEN_VOID] = "TOKEN_VOID",
         [TOKEN_ANY] = "TOKEN_ANY",
         [TOKEN_STRUCT] = "TOKEN_STRUCT",
+        [TOKEN_INTERFACE] = "TOKEN_INTERFACE",
         [TOKEN_FOR] = "TOKEN_FOR",
         [TOKEN_IN] = "TOKEN_IN",
         // [TOKEN_WHILE]="TOKEN_WHILE",

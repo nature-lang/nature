@@ -104,6 +104,7 @@ typedef enum {
     TOKEN_VOID,
     TOKEN_ANY,
     TOKEN_STRUCT,
+    TOKEN_INTERFACE,
     TOKEN_THROW,
     TOKEN_TRY,
     TOKEN_CATCH,

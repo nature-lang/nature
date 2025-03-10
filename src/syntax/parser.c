@@ -26,21 +26,9 @@ static ast_expr_t parser_go_expr(module_t *m);
 static ast_expr_t parser_match_expr(module_t *m);
 
 static bool parser_is_impl_type(type_kind kind) {
-    return kind == TYPE_STRING ||
+    return is_number(kind) ||
+           kind == TYPE_STRING ||
            kind == TYPE_BOOL ||
-           kind == TYPE_INT ||
-           kind == TYPE_UINT ||
-           kind == TYPE_INT8 ||
-           kind == TYPE_INT16 ||
-           kind == TYPE_INT32 ||
-           kind == TYPE_INT64 ||
-           kind == TYPE_UINT8 ||
-           kind == TYPE_UINT16 ||
-           kind == TYPE_UINT32 ||
-           kind == TYPE_UINT64 ||
-           kind == TYPE_FLOAT ||
-           kind == TYPE_FLOAT32 ||
-           kind == TYPE_FLOAT64 ||
            kind == TYPE_CHAN ||
            kind == TYPE_VEC ||
            kind == TYPE_MAP ||
@@ -231,6 +219,34 @@ static slice_t *parser_body(module_t *m) {
     return stmt_list;
 }
 
+static inline type_fn_t *parser_type_fn(module_t *m) {
+    type_fn_t *type_fn = NEW(type_fn_t);
+    type_fn->param_types = ct_list_new(sizeof(type_t));
+
+    parser_must(m, TOKEN_LEFT_PAREN);
+    if (!parser_consume(m, TOKEN_RIGHT_PAREN)) {
+        // 包含参数类型
+        do {
+            type_t t = parser_type(m);
+            ct_list_push(type_fn->param_types, &t);
+        } while (parser_consume(m, TOKEN_COMMA));
+
+        parser_must(m, TOKEN_RIGHT_PAREN);
+    }
+
+    if (parser_consume(m, TOKEN_COLON)) {
+        type_fn->return_type = parser_type(m);
+    } else {
+        type_fn->return_type = type_kind_new(TYPE_VOID);
+    }
+
+    if (parser_consume(m, TOKEN_NOT)) {
+        type_fn->is_errable = true;
+    }
+
+    return type_fn;
+}
+
 /**
  * example
  *
@@ -282,9 +298,7 @@ static type_t parser_single_type(module_t *m) {
             .column = parser_peek(m)->column,
             .ident = NULL,
             .ident_kind = 0,
-            .def_args = NULL,
-            .impl_ident = NULL,
-            .impl_args = NULL,
+            .args = NULL,
     };
 
     // any 特殊处理
@@ -305,13 +319,13 @@ static type_t parser_single_type(module_t *m) {
         token_t *type_token = parser_advance(m);
         result.kind = token_to_kind[type_token->type];
         result.value = NULL;
-        result.impl_ident = type_kind_str[result.kind];
 
-        if (type_token->type == TOKEN_INT || type_token->type == TOKEN_UINT || type_token->type == TOKEN_FLOAT) {
-            // 后续 int 会转换为 int64, 所以这里额外记录一下原始类，让 format 更加准确
+        if (is_impl_builtin_type(result.kind)) {
             result.ident = type_token->literal;
             result.ident_kind = TYPE_IDENT_BUILTIN;
+            result.args = NULL;
         }
+
 
         result.status = REDUCTION_STATUS_DONE;
 
@@ -490,30 +504,7 @@ static type_t parser_single_type(module_t *m) {
 
     // fn(int, int):int!
     if (parser_consume(m, TOKEN_FN)) {
-        type_fn_t *type_fn = NEW(type_fn_t);
-        type_fn->param_types = ct_list_new(sizeof(type_t));
-
-        parser_must(m, TOKEN_LEFT_PAREN);
-        if (!parser_consume(m, TOKEN_RIGHT_PAREN)) {
-            // 包含参数类型
-            do {
-                type_t t = parser_type(m);
-                ct_list_push(type_fn->param_types, &t);
-            } while (parser_consume(m, TOKEN_COMMA));
-
-            parser_must(m, TOKEN_RIGHT_PAREN);
-        }
-
-        if (parser_consume(m, TOKEN_COLON)) {
-            type_fn->return_type = parser_type(m);
-        } else {
-            type_fn->return_type = type_kind_new(TYPE_VOID);
-        }
-
-        if (parser_consume(m, TOKEN_NOT)) {
-            type_fn->is_errable = true;
-        }
-
+        type_fn_t *type_fn = parser_type_fn(m);
         result.kind = TYPE_FN;
         result.fn = type_fn;
         return result;
@@ -551,10 +542,10 @@ static type_t parser_single_type(module_t *m) {
         // alias<arg1, arg2> arg1 和 arg2 是实际类型, 而不是泛型
         if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
             // parser actual params
-            result.def_args = ct_list_new(sizeof(type_t));
+            result.args = ct_list_new(sizeof(type_t));
             do {
                 type_t item = parser_single_type(m);
-                ct_list_push(result.def_args, &item);
+                ct_list_push(result.args, &item);
             } while (parser_consume(m, TOKEN_COMMA));
 
             parser_must(m, TOKEN_RIGHT_ANGLE);
@@ -572,19 +563,19 @@ static type_t parser_single_type(module_t *m) {
  * type foo = gen i8|u8|i16
  * @return
  */
-static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
+static ast_stmt_t *parser_type_def_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     ast_type_def_stmt_t *type_alias_stmt = NEW(ast_type_def_stmt_t);
     parser_must(m, TOKEN_TYPE); // code
     type_alias_stmt->ident = parser_must(m, TOKEN_IDENT)->literal; // ident
 
-    // <arg1, arg2>
+    // <param1, param2>
     if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
         PARSER_ASSERTF(!parser_is(m, TOKEN_RIGHT_ANGLE), "type alias params cannot empty");
 
         type_alias_stmt->params = ct_list_new(sizeof(ast_generics_param_t));
 
-        // 放在 module 全局表中用于辅助 parser
+        // 将泛型参数放在 module 全局表中用于辅助 parser
         m->parser_type_params_table = table_new();
 
         do {
@@ -606,6 +597,17 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
         } while (parser_consume(m, TOKEN_COMMA));
 
         parser_must(m, TOKEN_RIGHT_ANGLE);
+    }
+
+    // impl interface, support generics args
+    if (parser_consume(m, TOKEN_COLON)) {
+        type_alias_stmt->impls = slice_new();
+
+        do {
+            // TODO
+            // 直接用 type ident 吧，这样才能实现正宗的 union?
+//            parser_i
+        } while (parser_consume(m, TOKEN_COMMA));
     }
 
     parser_must(m, TOKEN_EQUAL); // =
@@ -642,8 +644,8 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
                 .line = parser_peek(m)->line,
                 .column = parser_peek(m)->column,
                 .ident = NULL,
-                .impl_ident = NULL,
-                .impl_args = NULL,
+                .args = NULL,
+                .ident_kind = 0,
         };
         t.kind = TYPE_STRUCT;
         t.struct_ = type_struct;
@@ -651,6 +653,41 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
         type_alias_stmt->type_expr = t;
 
         // 后续不能直接接 ?|
+        m->parser_type_params_table = NULL; // 右值解析完成后需要及时清空
+
+        return result;
+    }
+
+    if (parser_consume(m, TOKEN_INTERFACE)) {
+        type_union_t *type_union = NEW(type_union_t);
+        type_union->elements = ct_list_new(sizeof(type_fn_t));
+        type_union->interface = true;
+        type_union->any = true;
+
+        parser_must(m, TOKEN_LEFT_CURLY);
+        while (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
+            parser_must(m, TOKEN_FN);
+            type_fn_t *type_fn = parser_type_fn(m);
+
+            char *fn_name = parser_must(m, TOKEN_IDENT)->literal;
+            type_fn->fn_name = fn_name;
+
+            ct_list_push(type_union->elements, &type_fn);
+            parser_must_stmt_end(m);
+        }
+
+        type_t t = {
+                .status = REDUCTION_STATUS_UNDO,
+                .line = parser_peek(m)->line,
+                .column = parser_peek(m)->column,
+                .ident = NULL,
+                .ident_kind = 0,
+                .args = NULL,
+                .kind = TYPE_UNION,
+                .union_ = type_union,
+        };
+
+        type_alias_stmt->type_expr = t;
         m->parser_type_params_table = NULL; // 右值解析完成后需要及时清空
 
         return result;
@@ -675,6 +712,7 @@ static ast_stmt_t *parser_type_alias_stmt(module_t *m) {
 
         // ! 或者 ? 后面不能再接任何类型
         m->parser_type_params_table = NULL; // 右值解析完成后需要及时清空
+
         return result;
     }
 
@@ -718,8 +756,8 @@ static type_t ast_expr_to_type_def_ident(module_t *m, ast_expr_t left, list_t *g
             .column = parser_peek(m)->column,
             .ident = NULL,
             .ident_kind = TYPE_IDENT_DEF,
-            .impl_ident = NULL,
             .kind = TYPE_IDENT,
+            .args = NULL,
     };
 
     // 重新整理一下左值，整理成 type_alias_t
@@ -736,7 +774,7 @@ static type_t ast_expr_to_type_def_ident(module_t *m, ast_expr_t left, list_t *g
         assertf(false, "struct new left type exception");
     }
 
-    t.def_args = generics_args;
+    t.args = generics_args;
     return t;
 }
 
@@ -2224,20 +2262,19 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
             parser_must(m, TOKEN_RIGHT_ANGLE);
         }
 
-        m->p_cursor.current = temp_current;
+        m->p_cursor.current = temp_current; // 已经发生了回溯，所以 first_token 等都不占用 token
 
         // 解析完整类型是为了让 self 类型可以验证 fn ...(foo<T, U> a, T b)...
         type_t impl_type = {0};
         if (first_token->type == TOKEN_IDENT) {
-            impl_type.kind = TYPE_IDENT; // 在没有解析出具体类型之前只能是 ident
-            impl_type.impl_ident = parser_must(m, TOKEN_IDENT)->literal;
-            impl_type.ident = first_token->literal;
+            impl_type.kind = TYPE_IDENT;
+            impl_type.ident = parser_must(m, TOKEN_IDENT)->literal;
             impl_type.ident_kind = TYPE_IDENT_DEF;
 
             if (fndef->generics_params) {
                 // parser sign type
                 parser_must(m, TOKEN_LEFT_ANGLE);
-                impl_type.def_args = ct_list_new(sizeof(type_t));
+                impl_type.args = ct_list_new(sizeof(type_t));
                 do {
                     type_t param_type = parser_single_type(m);
                     assert(param_type.ident_kind == TYPE_IDENT_PARAM);
@@ -2249,15 +2286,18 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
                         } while (parser_consume(m, TOKEN_OR));
                     }
 
-                    ct_list_push(impl_type.def_args, &param_type);
+                    ct_list_push(impl_type.args, &param_type);
                 } while (parser_consume(m, TOKEN_COMMA));
 
                 parser_must(m, TOKEN_RIGHT_ANGLE);
             }
         } else {
+            // first_token 是 type
             // table 就绪的情况下可以正确的解析 param
             impl_type = parser_single_type(m);
-            impl_type.impl_ident = first_token->literal;
+            impl_type.ident = first_token->literal;
+            impl_type.ident_kind = TYPE_IDENT_BUILTIN;
+            impl_type.args = NULL;
         }
         impl_type.line = first_token->line;
         impl_type.column = first_token->column;
@@ -2361,7 +2401,7 @@ static ast_stmt_t *parser_label(module_t *m) {
     parser_must(m, TOKEN_STMT_EOF);
 
     if (parser_is(m, TOKEN_TYPE)) {
-        return parser_type_alias_stmt(m);
+        return parser_type_def_stmt(m);
     } else if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_stmt(m, fndef);
     } else {
@@ -2481,7 +2521,7 @@ static ast_stmt_t *parser_stmt(module_t *m) {
     } else if (parser_is(m, TOKEN_IMPORT)) {
         return parser_import_stmt(m);
     } else if (parser_is(m, TOKEN_TYPE)) {
-        return parser_type_alias_stmt(m);
+        return parser_type_def_stmt(m);
     } else if (parser_is(m, TOKEN_CONTINUE)) {
         return parser_continue_stmt(m);
     } else if (parser_is(m, TOKEN_BREAK)) {
@@ -2517,7 +2557,7 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
     } else if (parser_is(m, TOKEN_IMPORT)) {
         return parser_import_stmt(m);
     } else if (parser_is(m, TOKEN_TYPE)) {
-        return parser_type_alias_stmt(m);
+        return parser_type_def_stmt(m);
     }
 
     PARSER_ASSERTF(false, "non-declaration statement outside fn body")
@@ -2532,7 +2572,7 @@ static ast_stmt_t *parser_tpl_stmt(module_t *m) {
     if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_stmt(m, ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column));
     } else if (parser_is(m, TOKEN_TYPE)) {
-        return parser_type_alias_stmt(m);
+        return parser_type_def_stmt(m);
     }
 
     PARSER_ASSERTF(false, "cannot parser stmt with = '%s' in template file", parser_peek(m)->literal);

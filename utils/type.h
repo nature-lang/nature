@@ -120,6 +120,7 @@ typedef enum {
     TYPE_IDENT_ALIAS,
     TYPE_IDENT_PARAM,
     TYPE_IDENT_BUILTIN, // int/float/vec/string...
+    TYPE_IDENT_IMPL, // impl interface, def args 可以?
     TYPE_IDENT_USE, // use 就是还不能确定是 type alias 还是 type def
 } type_ident_kind;
 
@@ -210,7 +211,8 @@ typedef struct {
 
 typedef struct {
     bool any;
-    list_t *elements; // type_t*
+    bool interface; // interface union 的 elements 只能是 fn type 声明，并且包含必须包含 fn name，来约束 extend 的名称
+    list_t *elements; // type_t* or type_fn_t*
 } type_union_t;
 
 typedef struct type_string_t type_string_t; // 类型不完全声明
@@ -243,7 +245,7 @@ typedef struct type_fn_t type_fn_t;
 typedef struct type_t {
     char *import_as; // 可能为 null, foo.car 时， foo 就是 module_ident
     char *ident; // 当 type.kind == ALIAS/PARAM 时，此处缓存一下 alias/formal ident, 用于 dump error
-    list_t *def_args; // type_t
+    list_t *args; // type def 和 type impl 都存在 args，此时呈共用关系
     type_ident_kind ident_kind; // TYPE_ALIAS/TYPE_PARAM/TYPE_DEF
 
     union {
@@ -266,8 +268,6 @@ typedef struct type_t {
     reduction_status_t status;
 
     // type_alias + args 进行 reduction 还原之前，将其参数缓存下来
-    char *impl_ident;
-    list_t *impl_args; // type_t
     int line;
     int column;
     bool in_heap; // 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
@@ -647,9 +647,7 @@ static inline type_t type_ident_new(char *ident, type_ident_kind kind) {
     t.status = REDUCTION_STATUS_UNDO;
     t.ident = ident;
     t.ident_kind = kind;
-    t.impl_ident = ident;
-    t.def_args = NULL;
-    t.impl_args = NULL;
+    t.args = NULL;
     return t;
 }
 
@@ -767,7 +765,7 @@ static inline bool is_map_set_key_type(type_kind kind) {
            kind == TYPE_VOID_PTR || kind == TYPE_CHAN || kind == TYPE_STRUCT || kind == TYPE_ARR;
 }
 
-static inline bool is_reduction_type(type_t t) {
+static inline bool is_complex_type(type_t t) {
     return t.kind == TYPE_STRUCT || t.kind == TYPE_MAP || t.kind == TYPE_VEC || t.kind == TYPE_CHAN ||
            t.kind == TYPE_ARR ||
            t.kind == TYPE_TUPLE ||

@@ -302,8 +302,8 @@ static void analyzer_type(module_t *m, type_t *type) {
         if (ast_stmt->is_alias) {
             type->ident_kind = TYPE_IDENT_ALIAS;
             // alias 不能包含泛型参数
-            if (type->def_args) {
-                ANALYZER_ASSERTF(type->def_args->length == 0, "alias '%s' cannot contains generics type args",
+            if (type->args) {
+                ANALYZER_ASSERTF(type->args->length == 0, "alias '%s' cannot contains generics type args",
                                  type->ident);
             }
         } else {
@@ -311,10 +311,10 @@ static void analyzer_type(module_t *m, type_t *type) {
         }
 
         // foo<arg1,>
-        if (type->def_args) {
+        if (type->args) {
             // actual param 处理
-            for (int i = 0; i < type->def_args->length; ++i) {
-                type_t *temp = ct_list_value(type->def_args, i);
+            for (int i = 0; i < type->args->length; ++i) {
+                type_t *temp = ct_list_value(type->args, i);
                 analyzer_type(m, temp);
             }
         }
@@ -422,7 +422,7 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
         type->ident = NULL;
         type->ident_kind = 0;
 
-        ANALYZER_ASSERTF(type->def_args == NULL, "void_ptr cannot contains arg");
+        ANALYZER_ASSERTF(type->args == NULL, "void_ptr cannot contains arg");
 
         return true;
     }
@@ -432,9 +432,9 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
         type->ident = NULL;
         type->ident_kind = 0;
 
-        ANALYZER_ASSERTF(type->def_args && type->def_args->length == 1, "raw_ptr<...> must contains arg type");
+        ANALYZER_ASSERTF(type->args && type->args->length == 1, "raw_ptr<...> must contains arg type");
 
-        type_t *arg_type = ct_list_value(type->def_args, 0);
+        type_t *arg_type = ct_list_value(type->args, 0);
         analyzer_type(m, arg_type);
 
         type_raw_ptr_t *raw_ptr = NEW(type_raw_ptr_t);
@@ -449,9 +449,9 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
         type->ident = NULL;
         type->ident_kind = 0;
 
-        ANALYZER_ASSERTF(type->def_args && type->def_args->length == 1, "ptr<...> must contains arg type");
+        ANALYZER_ASSERTF(type->args && type->args->length == 1, "ptr<...> must contains arg type");
 
-        type_t *arg_type = ct_list_value(type->def_args, 0);
+        type_t *arg_type = ct_list_value(type->args, 0);
         analyzer_type(m, arg_type);
 
         type_ptr_t *ptr = NEW(type_ptr_t);
@@ -467,7 +467,7 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
         type->ident = NULL;
         type->ident_kind = 0;
 
-        ANALYZER_ASSERTF(type->def_args == NULL, "all_t cannot contains arg");
+        ANALYZER_ASSERTF(type->args == NULL, "all_t cannot contains arg");
         return true;
     }
 
@@ -477,7 +477,7 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
         type->ident = NULL;
         type->ident_kind = 0;
 
-        ANALYZER_ASSERTF(type->def_args == NULL, "fn_t cannot contains arg");
+        ANALYZER_ASSERTF(type->args == NULL, "fn_t cannot contains arg");
         return true;
     }
 
@@ -872,11 +872,10 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
     // 类型定位，在 analyzer 阶段, alias 类型会被添加上 module 生成新 ident
     // fn vec<T>.vec_len() -> fn vec_len(vec<T> self)
     if (fndef->impl_type.kind > 0) {
-        // 更新 alias
+        // 如果是 builtin type 直接使用全局名称
         if (ident_is_def_or_alias(&fndef->impl_type)) {
-            char *unique_alias_ident = analyzer_resolve_type_alias(m, NULL, fndef->impl_type.impl_ident);
-            ANALYZER_ASSERTF(unique_alias_ident != NULL, "type alias '%s' undeclared \n", fndef->impl_type.impl_ident);
-            fndef->impl_type.impl_ident = unique_alias_ident;
+            char *unique_alias_ident = analyzer_resolve_type_alias(m, NULL, fndef->impl_type.ident);
+            ANALYZER_ASSERTF(unique_alias_ident != NULL, "type alias '%s' undeclared \n", fndef->impl_type.ident);
             fndef->impl_type.ident = unique_alias_ident;
         }
 
@@ -1755,8 +1754,8 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
 
             // fn string<T>.len() -> fn <T>.string_len to symbol_table
             if (fndef->impl_type.kind > 0) {
-                assert(fndef->impl_type.impl_ident);
-                symbol_name = str_connect_by(fndef->impl_type.impl_ident, symbol_name, "_");
+                assert(fndef->impl_type.ident);
+                symbol_name = str_connect_by(fndef->impl_type.ident, symbol_name, "_");
             }
 
             if (is_impl_builtin_type(fndef->impl_type.kind)) {

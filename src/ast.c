@@ -134,13 +134,9 @@ type_t type_copy(type_t temp) {
     if (temp.ident) {
         type.ident = strdup(temp.ident);
         type.ident_kind = temp.ident_kind;
-        type.def_args = ct_list_type_copy(temp.def_args);
-    }
-    if (temp.impl_ident) {
-        type.impl_ident = strdup(temp.impl_ident);
-    }
-    if (temp.impl_args) {
-        type.impl_args = ct_list_type_copy(temp.impl_args);
+        if (temp.args) {
+            type.args = ct_list_type_copy(temp.args);
+        }
     }
 
     switch (temp.kind) {

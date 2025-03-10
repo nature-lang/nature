@@ -600,6 +600,7 @@ typedef struct {
     list_t *params; // *ast_generics_param|null
     type_t type_expr; // int (类型)
     bool is_alias; // 是否仅作为别名
+    slice_t *impls; // type def 可以实现多个接口, 但是 interface def 不支持 impl
 } ast_type_def_stmt_t;
 
 // 这里包含 body, 所以属于 def
