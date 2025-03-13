@@ -28,7 +28,7 @@ string ast_type_to_str[] = {
         [AST_STMT_FOR_ITERATOR] = "AST_STMT_FOR_ITERATOR",
         [AST_FNDEF] = "AST_FUNCTION_DECL",
         [AST_CALL] = "AST_CALL",
-        [AST_STMT_TYPE_ALIAS] = "AST_STMT_TYPE_DECL",
+        [AST_STMT_TYPEDEF] = "AST_STMT_TYPE_DECL",
         [AST_STMT_ENV_CLOSURE] = "AST_ENV_CLOSURE",
 };
 

@@ -229,6 +229,7 @@ struct module_t {
     slice_t *global_symbols; // symbol_t, 这里只存储全局符号
     slice_t *global_vardef; // 用于在 infer 阶段进行类型推导
 
+    slice_t *global_typedef; // 记录所有的 type def
     slice_t *ast_fndefs;
     linked_t *temp_worklist; // ast_fndef
 

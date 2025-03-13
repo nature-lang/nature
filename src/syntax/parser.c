@@ -531,7 +531,7 @@ static type_t parser_single_type(module_t *m) {
         }
 
         result.kind = TYPE_IDENT;
-        result.ident_kind = TYPE_IDENT_USE; // 无法确定是 alias 还是 def
+        result.ident_kind = TYPE_IDENT_USE; // 无法确定是 alias 还是 def 还是 interface
         if (second) {
             result.import_as = first->literal;
             result.ident = second->literal;
@@ -565,15 +565,17 @@ static type_t parser_single_type(module_t *m) {
  */
 static ast_stmt_t *parser_type_def_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
-    ast_type_def_stmt_t *type_alias_stmt = NEW(ast_type_def_stmt_t);
+    ast_typedef_stmt_t *typedef_stmt = NEW(ast_typedef_stmt_t);
+    sc_map_init_sv(&typedef_stmt->method_table, 0, 0);
+
     parser_must(m, TOKEN_TYPE); // code
-    type_alias_stmt->ident = parser_must(m, TOKEN_IDENT)->literal; // ident
+    typedef_stmt->ident = parser_must(m, TOKEN_IDENT)->literal; // ident
 
     // <param1, param2>
     if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
         PARSER_ASSERTF(!parser_is(m, TOKEN_RIGHT_ANGLE), "type alias params cannot empty");
 
-        type_alias_stmt->params = ct_list_new(sizeof(ast_generics_param_t));
+        typedef_stmt->params = ct_list_new(sizeof(ast_generics_param_t));
 
         // 将泛型参数放在 module 全局表中用于辅助 parser
         m->parser_type_params_table = table_new();
@@ -592,7 +594,7 @@ static ast_stmt_t *parser_type_def_stmt(module_t *m) {
                 temp->constraints.any = false;
             }
 
-            ct_list_push(type_alias_stmt->params, temp);
+            ct_list_push(typedef_stmt->params, temp);
             table_set(m->parser_type_params_table, ident->literal, ident->literal);
         } while (parser_consume(m, TOKEN_COMMA));
 
@@ -600,19 +602,23 @@ static ast_stmt_t *parser_type_def_stmt(module_t *m) {
     }
 
     // impl interface, support generics args
+    // type data_t: container<T> {
+    // type data_t: container<int> {
+    bool has_impl = false;
     if (parser_consume(m, TOKEN_COLON)) {
-        type_alias_stmt->impls = slice_new();
-
+        typedef_stmt->impl_interfaces = ct_list_new(sizeof(type_t));
         do {
-            // TODO
-            // 直接用 type ident 吧，这样才能实现正宗的 union?
-//            parser_i
+            type_t interface_type = parser_type(m);
+            interface_type.ident_kind = TYPE_IDENT_INTERFACE;
+            ct_list_push(typedef_stmt->impl_interfaces, &interface_type);
         } while (parser_consume(m, TOKEN_COMMA));
+
+        has_impl = true;
     }
 
     parser_must(m, TOKEN_EQUAL); // =
-    result->assert_type = AST_STMT_TYPE_ALIAS;
-    result->value = type_alias_stmt;
+    result->assert_type = AST_STMT_TYPEDEF;
+    result->value = typedef_stmt;
 
     // struct / union 都在这里生命，并且暂时不再支持匿名 strut, 也就是 parser type 不需要处理 struct
 
@@ -650,7 +656,7 @@ static ast_stmt_t *parser_type_def_stmt(module_t *m) {
         t.kind = TYPE_STRUCT;
         t.struct_ = type_struct;
 
-        type_alias_stmt->type_expr = t;
+        typedef_stmt->type_expr = t;
 
         // 后续不能直接接 ?|
         m->parser_type_params_table = NULL; // 右值解析完成后需要及时清空
@@ -659,20 +665,35 @@ static ast_stmt_t *parser_type_def_stmt(module_t *m) {
     }
 
     if (parser_consume(m, TOKEN_INTERFACE)) {
+        if (has_impl) {
+            PARSER_ASSERTF(false, "interface cannot has impl");
+        }
+
         type_union_t *type_union = NEW(type_union_t);
-        type_union->elements = ct_list_new(sizeof(type_fn_t));
+        type_union->elements = ct_list_new(sizeof(type_t));
         type_union->interface = true;
-        type_union->any = true;
+        type_union->any = false;
 
         parser_must(m, TOKEN_LEFT_CURLY);
         while (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
             parser_must(m, TOKEN_FN);
-            type_fn_t *type_fn = parser_type_fn(m);
-
+            // ident
             char *fn_name = parser_must(m, TOKEN_IDENT)->literal;
+            type_fn_t *type_fn = parser_type_fn(m);
             type_fn->fn_name = fn_name;
 
-            ct_list_push(type_union->elements, &type_fn);
+            type_t union_item = {
+                    .status = REDUCTION_STATUS_UNDO,
+                    .line = parser_peek(m)->line,
+                    .column = parser_peek(m)->column,
+                    .ident = NULL,
+                    .ident_kind = 0,
+                    .args = NULL,
+                    .kind = TYPE_FN,
+                    .fn = type_fn,
+            };
+
+            ct_list_push(type_union->elements, &union_item);
             parser_must_stmt_end(m);
         }
 
@@ -687,7 +708,8 @@ static ast_stmt_t *parser_type_def_stmt(module_t *m) {
                 .union_ = type_union,
         };
 
-        type_alias_stmt->type_expr = t;
+        typedef_stmt->type_expr = t;
+        typedef_stmt->is_interface = true;
         m->parser_type_params_table = NULL; // 右值解析完成后需要及时清空
 
         return result;
@@ -708,7 +730,7 @@ static ast_stmt_t *parser_type_def_stmt(module_t *m) {
         ct_list_push(union_type.union_->elements, &null_type);
 
         PARSER_ASSERTF(!parser_is(m, TOKEN_OR), "union type declaration cannot use '?'");
-        type_alias_stmt->type_expr = union_type;
+        typedef_stmt->type_expr = union_type;
 
         // ! 或者 ? 后面不能再接任何类型
         m->parser_type_params_table = NULL; // 右值解析完成后需要及时清空
@@ -732,13 +754,13 @@ static ast_stmt_t *parser_type_def_stmt(module_t *m) {
             ct_list_push(union_type.union_->elements, &t);
         } while (parser_consume(m, TOKEN_OR));
 
-        type_alias_stmt->type_expr = union_type;
+        typedef_stmt->type_expr = union_type;
         m->parser_type_params_table = NULL; // 右值解析完成后需要及时清空
         return result;
     }
 
     // 一般类型
-    type_alias_stmt->type_expr = t;
+    typedef_stmt->type_expr = t;
     m->parser_type_params_table = NULL; // 右值解析完成后需要及时清空
     return result;
 }
@@ -1409,6 +1431,49 @@ static bool is_for_tradition_stmt(module_t *m) {
 }
 
 /**
+ * call generics 和 type generics 有一样的前缀，所以需要进行前瞻检测
+ * person_t<t>()
+ * vec<t>()
+ * vec<t> a = xxx
+ */
+static bool is_call_generics(module_t *m) {
+    linked_node *temp = m->p_cursor.current;
+    linked_node *current = temp;
+
+#ifdef DEBUG_PARSER
+    printf("\t@@\t");
+    fflush(stdout);
+#endif
+
+    // 屏蔽错误
+    m->intercept_errors = slice_new();
+
+    type_t t = parser_type(m);
+    bool result = false;
+
+    // 无法判定为类型，直接返回 true
+    if (m->intercept_errors->count > 0) {
+        result = true;
+        goto RET;
+    }
+
+    // 判断下一个典型符号
+    if (parser_is(m, TOKEN_LEFT_PAREN)) {
+        result = true;
+        goto RET;
+    }
+
+    RET:
+    m->intercept_errors = NULL;
+    m->p_cursor.current = temp;
+#ifdef DEBUG_PARSER
+    printf("\t@@\t");
+    fflush(stdout);
+#endif
+    return result;
+}
+
+/**
  * 只有变量声明是以类型开头
  * var a = xxx
  * int a = xxx
@@ -1476,13 +1541,15 @@ static bool is_type_begin_stmt(module_t *m) {
 
     // person<[i8]> foo
     if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_LEFT_ANGLE)) {
-        return true;
+        // 检测 type 然后检测下一个符号
+        return !is_call_generics(m);
     }
 
-    // person.foo<[i8]>
+    // person.foo<[i8]> or person.foo<[i8]>()
     if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) &&
         parser_next_is(m, 3, TOKEN_LEFT_ANGLE)) {
-        return true;
+        // 检测 type 然后检测下一个符号，并进行回溯
+        return !is_call_generics(m);
     }
 
     // (var_a, var_b) = (1, 2)

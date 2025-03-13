@@ -107,6 +107,8 @@
  */
 #define RT_CALL_UNION_CASTING "union_casting"
 
+#define RT_CALL_INTERFACE_CASTING "interface_casting"
+
 /**
  * 判断 union 中的 single 类型是什么
  */
@@ -806,7 +808,7 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
 static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *dst_operand) {
     module_t *m = c->module;
     assert(dst_operand->assert_type == LIR_OPERAND_VAR);
-    assert(is_large_stack_type(t));
+    assert(is_stack_ref_big_type(t));
 
     uint16_t size = type_sizeof(t);
 
@@ -864,7 +866,7 @@ static inline lir_operand_t *temp_var_operand_with_alloc(module_t *m, type_t typ
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var);
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
-    if (is_large_stack_type(type)) {
+    if (is_stack_ref_big_type(type)) {
         if (type.in_heap) {
             lir_var->type = type_kind_new(TYPE_VOID_PTR);
 
@@ -889,7 +891,7 @@ static inline lir_operand_t *lower_temp_var_operand(closure_t *c, linked_t *list
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var);
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
-    if (is_large_stack_type(type)) {
+    if (is_stack_ref_big_type(type)) {
         linked_push(list, lir_stack_alloc(c, type, target));
     }
 

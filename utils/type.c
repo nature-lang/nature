@@ -850,8 +850,14 @@ char *_type_format(type_t t) {
         return dsprintf("raw_ptr<%s>", type_format(t.ptr->value_type));
     }
 
-    if (t.kind == TYPE_UNION && t.union_->any) {
-        return "any";
+    if (t.kind == TYPE_UNION) {
+        if (t.union_->interface) {
+            return "interface";
+        }
+
+        if (t.union_->any) {
+            return "any";
+        }
     }
 
     return type_kind_str[t.kind];

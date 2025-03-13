@@ -120,7 +120,7 @@ typedef enum {
     TYPE_IDENT_ALIAS,
     TYPE_IDENT_PARAM,
     TYPE_IDENT_BUILTIN, // int/float/vec/string...
-    TYPE_IDENT_IMPL, // impl interface, def args 可以?
+    TYPE_IDENT_INTERFACE, // type.impls 部分专用
     TYPE_IDENT_USE, // use 就是还不能确定是 type alias 还是 type def
 } type_ident_kind;
 
@@ -206,13 +206,9 @@ typedef struct type_alias_t type_alias_t;
 typedef struct type_param_t type_param_t;
 
 typedef struct {
-    list_t *elements; // type_t
-} type_gen_t;
-
-typedef struct {
     bool any;
     bool interface; // interface union 的 elements 只能是 fn type 声明，并且包含必须包含 fn name，来约束 extend 的名称
-    list_t *elements; // type_t* or type_fn_t*
+    list_t *elements; // type_t
 } type_union_t;
 
 typedef struct type_string_t type_string_t; // 类型不完全声明
@@ -484,11 +480,13 @@ typedef struct {
 } n_fn_t; // 就占用一个指针大小
 
 /**
- * 不能随便调换顺序，这是 gc 的顺序
+ * 不能随便调换顺序，这是 gc rtype 的顺序
  */
 typedef struct {
     value_casting value;
     rtype_t *rtype;
+    int64_t method_count;
+    int64_t *methods; // methods
 } n_union_t;
 
 typedef struct {
@@ -634,7 +632,7 @@ static inline bool ident_is_param(type_t *t) {
     return t->ident_kind == TYPE_IDENT_PARAM;
 }
 
-static inline bool ident_is_def_or_alias(type_t* t) {
+static inline bool ident_is_def_or_alias(type_t *t) {
     if (t->kind != TYPE_IDENT) {
         return false;
     }
@@ -663,7 +661,7 @@ static inline type_t type_errort_new() {
 }
 
 static inline bool must_assign_value(type_kind kind) {
-    return kind == TYPE_FN || kind == TYPE_PTR;
+    return kind == TYPE_FN || kind == TYPE_PTR || kind == TYPE_UNION;
 }
 
 static inline bool is_float(type_kind kind) {
@@ -693,8 +691,12 @@ static inline bool can_type_casting(type_kind kind) {
     return is_number(kind) || kind == TYPE_BOOL;
 }
 
-static inline bool is_large_stack_type(type_t t) {
+static inline bool is_stack_ref_big_type(type_t t) {
     return t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
+}
+
+static inline bool is_stack_ref_big_type_kind(type_kind kind) {
+    return kind == TYPE_STRUCT || kind == TYPE_ARR;
 }
 
 static inline bool is_stack_alloc_type(type_t t) {
@@ -711,19 +713,19 @@ static inline bool is_stack_impl(type_kind kind) {
     return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_STRUCT || kind == TYPE_ARR;
 }
 
-static inline bool is_gc_alloc(type_t t) {
-    return t.kind == TYPE_PTR ||
-           t.kind == TYPE_RAW_PTR ||
-           t.kind == TYPE_VOID_PTR ||
-           t.kind == TYPE_MAP ||
-           t.kind == TYPE_STRING ||
-           t.kind == TYPE_SET ||
-           t.kind == TYPE_VEC ||
-           t.kind == TYPE_TUPLE ||
-           t.kind == TYPE_COROUTINE_T ||
-           t.kind == TYPE_CHAN ||
-           t.kind == TYPE_UNION ||
-           t.kind == TYPE_FN;
+static inline bool is_gc_alloc(type_kind kind) {
+    return kind == TYPE_PTR ||
+           kind == TYPE_RAW_PTR ||
+           kind == TYPE_VOID_PTR ||
+           kind == TYPE_MAP ||
+           kind == TYPE_STRING ||
+           kind == TYPE_SET ||
+           kind == TYPE_VEC ||
+           kind == TYPE_TUPLE ||
+           kind == TYPE_COROUTINE_T ||
+           kind == TYPE_CHAN ||
+           kind == TYPE_UNION ||
+           kind == TYPE_FN;
 }
 
 /**

@@ -25,6 +25,8 @@ bool union_is(n_union_t *mu, int64_t target_rtype_hash);
  */
 n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref);
 
+n_union_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods);
+
 void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_rtype_hash, void *output_ref);
 
 n_bool_t bool_casting(uint64_t input_rtype_hash, int64_t int_value, double float_value);

@@ -6,6 +6,9 @@
 #include "src/debug/debug.h"
 #include "src/error.h"
 
+static void
+check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast_typedef_stmt_t *typedef_stmt);
+
 static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, list_t *properties);
 
 static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type);
@@ -13,6 +16,8 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type);
 static void infer_call_args(module_t *m, ast_call_t *call, type_fn_t *target_type_fn);
 
 static void infer_fndef(module_t *m, ast_fndef_t *fn);
+
+static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef);
 
 static type_t *select_fn_param(type_fn_t *type_fn, uint8_t index, bool is_spread) {
     assert(type_fn);
@@ -523,7 +528,7 @@ static char *rewrite_ident_use(module_t *m, char *old) {
     return str_connect_by(old, m->current_fn->generics_args_hash, GEN_REWRITE_SEPARATOR);
 }
 
-static void rewrite_type_alias(module_t *m, ast_type_def_stmt_t *stmt) {
+static void rewrite_type_alias(module_t *m, ast_typedef_stmt_t *stmt) {
     assert(m->current_fn);
 
     // 如果不存在 params_hash 表示当前 fndef 不存在基于泛型的重写，所以 alias 也不需要进行重写
@@ -1326,7 +1331,7 @@ static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, 
 
         // check can default value
         if (must_assign_value(property->type.kind)) {
-            INFER_ASSERTF(false, "property '%s' type '%s' must assign value", property->key,
+            INFER_ASSERTF(false, "struct property '%s' must be assigned default value", property->key,
                           type_origin_format(property->type));
         }
     }
@@ -1689,7 +1694,7 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
     //                  type_format(select_left_type), select->key);
 
 
-    // call 继承 select_left_type 的 args, TODO 是否应该使用 destr_type 对应的 ident
+    // call 继承 select_left_type 的 args
     char *impl_ident = destr_type.ident;
     assert(impl_ident);
     char *impl_symbol_name = str_connect_by(impl_ident, select->key, "_");
@@ -1741,6 +1746,48 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
  * @return
  */
 static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type) {
+    // --------------------------------------------interface call handle----------------------------------------------------------
+    if (call->left.assert_type == AST_EXPR_SELECT) {
+        do {
+            ast_expr_select_t *select = call->left.value;
+            type_t select_left_type = infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
+            if (select_left_type.ident_kind != TYPE_IDENT_INTERFACE) {
+                break;
+            }
+
+            type_union_t *union_type = select_left_type.union_;
+            assert(union_type->interface);
+
+            // check have select key, and check params and return type
+            type_t *temp = NULL;
+            for (int i = 0; i < union_type->elements->length; ++i) {
+                type_t *element = ct_list_value(union_type->elements, i);
+                assert(element->kind == TYPE_FN);
+                if (str_equal(element->fn->fn_name, select->key)) {
+                    temp = element;
+                    break;
+                }
+            }
+
+            INFER_ASSERTF(temp, "interface '%s' not declare '%s' fn", select_left_type.ident, select->key);
+
+            type_fn_t *type_fn = temp->fn;
+
+            // infer call args
+            infer_call_args(m, call, type_fn);
+            call->return_type = type_fn->return_type;
+
+            if (type_fn->is_errable) {
+                INFER_ASSERTF(m->current_fn->is_errable || m->be_caught > 0,
+                              "calling an errable! fn `%s` requires the current `fn %s` errable! as well or be caught.",
+                              type_fn->fn_name ? type_fn->fn_name : "lambda",
+                              m->current_fn->fn_name);
+            }
+
+            return type_fn->return_type;
+        } while (0);
+    }
+
     // --------------------------------------------impl type handle----------------------------------------------------------
     // fn person_t<>.test() -> fn person_tx_test()
     bool is_rewrite = false;
@@ -1851,6 +1898,20 @@ static void infer_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
         return;
     }
 }
+
+//static void infer_global_typedef(module_t *m, ast_typedef_stmt_t *stmt) {
+//    if (!stmt->is_interface) {
+//        return;
+//    }
+//    assert(stmt->impls->length > 0);
+//
+//    // 不行，没有具体调用类型，无法进行任何的操作，还是只能在 reduction 中进行操作
+//    // type foo_t<T>: container_t<T> {}
+//    for (int i = 0; i < stmt->impls->length; ++i) {
+//        type_t *interface_type = ct_list_value(stmt->impls, i);
+//        assert(interface_type->ident_kind == TYPE_IDENT_IMPL);
+//    }
+//}
 
 static void infer_global_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     stmt->var_decl.type = reduction_type(m, stmt->var_decl.type);
@@ -2002,7 +2063,7 @@ static void infer_for_tradition(module_t *m, ast_for_tradition_stmt_t *stmt) {
  * @param m
  * @param stmt
  */
-static void infer_type_alias_stmt(module_t *m, ast_type_def_stmt_t *stmt) {
+static void infer_type_alias_stmt(module_t *m, ast_typedef_stmt_t *stmt) {
     rewrite_type_alias(m, stmt);
 }
 
@@ -2237,7 +2298,7 @@ static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_STMT_BREAK: {
             return infer_break(m, stmt->value);
         }
-        case AST_STMT_TYPE_ALIAS: {
+        case AST_STMT_TYPEDEF: {
             return infer_type_alias_stmt(m, stmt->value);
         }
         default: {
@@ -2419,8 +2480,31 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
         return expr->type;
     }
 
-    // auto as，为了后续的 linear, 需要将 signal type 转换为 union type
-    if (target_type.kind == TYPE_UNION && can_assign_to_union(expr->type)) {
+    // handle interface
+    if (target_type.kind == TYPE_UNION && target_type.ident_kind == TYPE_IDENT_INTERFACE) {
+        assert(expr->type.status == REDUCTION_STATUS_DONE);
+        assert(target_type.status == REDUCTION_STATUS_DONE);
+
+        // auto destr ptr
+        type_t actual_type = expr->type;
+        if (expr->type.kind == TYPE_PTR || expr->type.kind == TYPE_RAW_PTR) {
+            actual_type = expr->type.ptr->value_type;
+        }
+
+        INFER_ASSERTF(actual_type.ident_kind > 0 && actual_type.ident_kind == TYPE_IDENT_DEF,
+                      "type '%s' not impl interface '%s'",
+                      type_format(actual_type), target_type.ident);
+
+        symbol_t *s = symbol_table_get(actual_type.ident);
+        assert(s && s->type == SYMBOL_TYPE);
+        ast_typedef_stmt_t *typedef_stmt = s->ast_value;
+
+        check_typedef_impl(m, &target_type, actual_type.ident, typedef_stmt);
+
+        // auto as to interface, expr as interface_union, will handle in linear
+        *expr = ast_type_as(*expr, target_type);
+    } else if (target_type.kind == TYPE_UNION && can_assign_to_union(expr->type)) {
+        // auto as，为了后续的 linear, 需要将 signal type 转换为 union type
         INFER_ASSERTF(union_type_contains(target_type.union_, expr->type), "union type not contains '%s'",
                       type_format(expr->type));
         // linear 检测到 signal_type as union_type 会调用 RT_CALL_UNION_CASTING 进行转换
@@ -2591,6 +2675,45 @@ static type_t type_param_special(module_t *m, type_t t, table_t *arg_table) {
     return reduction_type(m, *arg_type);
 }
 
+static void
+check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast_typedef_stmt_t *typedef_stmt) {
+    *impl_interface = reduction_type(m, *impl_interface);
+
+    assert(impl_interface->ident_kind == TYPE_IDENT_INTERFACE);
+    assert(impl_interface->status == REDUCTION_STATUS_DONE);
+    assert(impl_interface->kind == TYPE_UNION);
+    type_union_t *interface_union = impl_interface->union_;
+    assert(interface_union->interface);
+
+    // check impl
+    for (int j = 0; j < interface_union->elements->length; ++j) {
+        type_t *expect_type = ct_list_value(interface_union->elements, j);
+        assert(expect_type->status == REDUCTION_STATUS_DONE);
+        assert(expect_type->kind == TYPE_FN);
+        type_fn_t *interface_fn_type = expect_type->fn;
+        assert(interface_fn_type->fn_name);
+
+        // find fn from symbol table
+        char *fn_ident = str_connect_by(typedef_ident, interface_fn_type->fn_name, "_");
+
+        // find ast_fn by teypdef_stmt.sc_map
+        ast_fndef_t *ast_fndef = sc_map_get_sv(&typedef_stmt->method_table, fn_ident);
+
+        INFER_ASSERTF(ast_fndef, "type '%s' not impl fn '%s' for interface '%s'",
+                      typedef_ident,
+                      interface_fn_type->fn_name,
+                      impl_interface->ident
+        );
+
+        type_t actual_type = infer_impl_fn_decl(m, ast_fndef);
+
+        // actual_type 由于进行了 rewrite, 所以 param 包含了 self, 而 expect type 没有进行这样的处理。
+        // compare
+        INFER_ASSERTF(type_compare(*expect_type, actual_type, NULL),
+                      "the fn '%s' of type '%s' mismatch interface '%s'", ast_fndef->fn_name, typedef_ident,
+                      impl_interface->ident);
+    }
+}
 
 /**
  * custom_type a = ...
@@ -2599,19 +2722,19 @@ static type_t type_param_special(module_t *m, type_t t, table_t *arg_table) {
  * @param t
  * @return
  */
-static type_t reduction_type_def_or_alias(module_t *m, type_t t) {
+static type_t reduction_typedef_or_alias(module_t *m, type_t t) {
     symbol_t *symbol = symbol_table_get(t.ident);
-    INFER_ASSERTF(symbol, "type def '%s' not found", t.ident);
+    INFER_ASSERTF(symbol, "typedef '%s' not found", t.ident);
     INFER_ASSERTF(symbol->type == SYMBOL_TYPE, "'%s' is not a type", symbol->ident);
 
     // 此时的 symbol 可能是其他 module 中声明的符号
-    ast_type_def_stmt_t *stmt = symbol->ast_value;
+    ast_typedef_stmt_t *typedef_stmt = symbol->ast_value;
 
     // 判断是否包含 args, 如果包含 args 则需要每一次 reduction 都进行处理
     // 此时的 type alias 相当于重新定义了一个新的类型，并进行了 type_copy, 所以不会存在 reduction 冲突问题, 可以直接返回
-    if (stmt->params) {
-        INFER_ASSERTF(t.args, "type alias '%s' need param", t.ident);
-        INFER_ASSERTF(t.args->length == stmt->params->length, "type alias '%s' param not match",
+    if (typedef_stmt->params) {
+        INFER_ASSERTF(t.args, "typedef '%s' need param", t.ident);
+        INFER_ASSERTF(t.args->length == typedef_stmt->params->length, "typedef '%s' params mismatch",
                       t.ident);
 
         // 对 arg 进行 reduction 并校验类型归属
@@ -2619,7 +2742,7 @@ static type_t reduction_type_def_or_alias(module_t *m, type_t t) {
             type_t *arg = ct_list_value(t.args, i);
             *arg = reduction_type(m, *arg);
 
-            ast_generics_param_t *param = ct_list_value(stmt->params, i);
+            ast_generics_param_t *param = ct_list_value(typedef_stmt->params, i);
 
             // 对 constraints 进行类型还原
             if (!param->constraints.any) {
@@ -2642,16 +2765,24 @@ static type_t reduction_type_def_or_alias(module_t *m, type_t t) {
                 type_t *arg = ct_list_value(t.args, i);
                 *arg = reduction_type(m, *arg);
 
-                ast_generics_param_t *param = ct_list_value(stmt->params, i);
+                ast_generics_param_t *param = ct_list_value(typedef_stmt->params, i);
                 table_set(args_table, param->ident, arg);
             }
 
-            // arg_table 也保存一份在 type 中
+            // 添加 arg_table 进行后续的 right type handle
             stack_push(m->infer_type_args_stack, args_table);
         }
 
-        // 对右值 copy 后再进行 reduction, 假如右侧值是一个 struct, 则其中的 struct fn 也需要 copy
-        type_t right_type_expr = type_copy(stmt->type_expr);
+        // 进行 impl 校验， 如果存在泛型，还需要进行泛型展开
+        if (typedef_stmt->impl_interfaces) {
+            for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
+                type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
+                check_typedef_impl(m, impl_interface, t.ident, typedef_stmt);
+            }
+        }
+
+        // 对右值进行 copy, 因为泛型会对 type_expr 进行多次展开, 所以需要进行 copy
+        type_t right_type_expr = type_copy(typedef_stmt->type_expr);
 
         // reduction 部分的 struct 的 right expr 如果是 struct，也只会进行到 infer_fn_decl 而不会处理 fn body 部分
         // 所以 fn body 部分还是包含 type_param, 如果此时将 type_param_table 置空，会导致后续 infer_fndef 时解析 param 异常
@@ -2667,41 +2798,52 @@ static type_t reduction_type_def_or_alias(module_t *m, type_t t) {
         t.in_heap = right_type_expr.in_heap;
         t.status = right_type_expr.status;
         return t;
+    } else {
+        INFER_ASSERTF(t.args == NULL, "typedef '%s' args mismatch",
+                      t.ident);
     }
 
-    // 需要 ident 嵌套特殊处理
 
     // 检查右值是否 reduce 完成
-    if (stmt->type_expr.status == REDUCTION_STATUS_DONE) {
-        t.kind = stmt->type_expr.kind;
-        t.value = stmt->type_expr.value;
-        t.in_heap = stmt->type_expr.in_heap;
-        t.status = stmt->type_expr.status;
+    if (typedef_stmt->type_expr.status == REDUCTION_STATUS_DONE) {
+        t.kind = typedef_stmt->type_expr.kind;
+        t.value = typedef_stmt->type_expr.value;
+        t.in_heap = typedef_stmt->type_expr.in_heap;
+        t.status = typedef_stmt->type_expr.status;
         return t;
     }
 
     // 当前 ident 对应的 type 正在 reduction, 出现这种情况可能的原因是嵌套使用了 ident
     // 此时直接将 ident 丢回去就可以了
-    if (stmt->type_expr.status == REDUCTION_STATUS_DOING) {
+    if (typedef_stmt->type_expr.status == REDUCTION_STATUS_DOING) {
         return t;
     }
 
     // 打上正在进行的标记,避免进入死循环
-    stmt->type_expr.status = REDUCTION_STATUS_DOING;
-    stmt->type_expr = reduction_type(m, stmt->type_expr);
+    typedef_stmt->type_expr.status = REDUCTION_STATUS_DOING;
+
+    // check impl
+    if (typedef_stmt->impl_interfaces) {
+        for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
+            type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
+            check_typedef_impl(m, impl_interface, t.ident, typedef_stmt);
+        }
+    }
+
+    typedef_stmt->type_expr = reduction_type(m, typedef_stmt->type_expr);
 
     // reduction_type 已经返回，现在这里可以直接修改为 done, 或者在外部的 reduction_type 中配置为 done
 
-    t.kind = stmt->type_expr.kind;
-    t.value = stmt->type_expr.value;
-    t.in_heap = stmt->type_expr.in_heap;
-    t.status = stmt->type_expr.status;
+    t.kind = typedef_stmt->type_expr.kind;
+    t.value = typedef_stmt->type_expr.value;
+    t.in_heap = typedef_stmt->type_expr.in_heap;
+    t.status = typedef_stmt->type_expr.status;
     return t;
 }
 
 static type_t reduction_union_type(module_t *m, type_t t) {
     type_union_t *type_union = t.union_;
-    if (type_union->any) {
+    if (type_union->elements->length == 0) {
         return t;
     }
 
@@ -2731,8 +2873,15 @@ static type_t reduction_type(module_t *m, type_t t) {
         goto STATUS_DONE;
     }
 
+
     if (ident_is_def_or_alias(&t)) {
-        t = reduction_type_def_or_alias(m, t);
+        t = reduction_typedef_or_alias(m, t);
+        goto STATUS_DONE;
+    }
+
+    if (t.kind == TYPE_IDENT && (t.ident_kind == TYPE_IDENT_INTERFACE || t.ident_kind == TYPE_IDENT_INTERFACE)) {
+        // use interface
+        t = reduction_typedef_or_alias(m, t);
         goto STATUS_DONE;
     }
 
@@ -2807,7 +2956,7 @@ static void infer_generics_param_constraints(module_t *m, type_t *impl_type, lis
 
     INFER_ASSERTF(symbol, "type alias '%s' not found", impl_ident);
     INFER_ASSERTF(symbol->type == SYMBOL_TYPE, "'%s' is not a type alias", symbol->ident);
-    ast_type_def_stmt_t *ast_stmt = symbol->ast_value;
+    ast_typedef_stmt_t *ast_stmt = symbol->ast_value;
     list_t *params = ast_stmt->params;
 
     INFER_ASSERTF(params->length == generics_params->length, "type alias '%s' param not match", impl_ident);
@@ -2831,6 +2980,36 @@ static void infer_generics_param_constraints(module_t *m, type_t *impl_type, lis
         INFER_ASSERTF(compare, "type alias '%s' param constraint not match", impl_ident);
     }
 }
+
+/**
+ * 为了能够和 impl 中声明的 fn 进行 compare, 需要将 fn 将 self 参数暂时去除, 并且不改变 fndef 中的 ident/return_type/type 等
+ */
+static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef) {
+    assert(fndef->impl_type.kind > 0);
+
+    // 对 fndef 进行类型还原
+    type_fn_t *f = NEW(type_fn_t);
+    f->fn_name = fndef->fn_name;
+    f->is_tpl = fndef->is_tpl;
+    f->is_errable = fndef->is_errable;
+    f->param_types = ct_list_new(sizeof(type_t));
+    f->return_type = reduction_type(m, fndef->return_type);
+
+    // 跳过 self
+    for (int i = 1; i < fndef->params->length; ++i) {
+        ast_var_decl_t *param = ct_list_value(fndef->params, i);
+
+        param->type = reduction_type(m, param->type);
+        ct_list_push(f->param_types, &param->type);
+    }
+
+    f->is_rest = fndef->rest_param;
+    type_t result = type_new(TYPE_FN, f);
+    result.status = REDUCTION_STATUS_DONE;
+
+    return result;
+}
+
 
 /**
  * 对参数和返回值进行了类型推导，其中 self 对应的 struct 还没有 reduction 还没有处理完成

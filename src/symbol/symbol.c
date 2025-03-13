@@ -95,3 +95,12 @@ symbol_t *symbol_table_get(char *ident) {
 
     return s;
 }
+
+symbol_t *symbol_typedef_add_method(char *typedef_ident, char *method_ident, ast_fndef_t *fndef) {
+    symbol_t *symbol = symbol_table_get(typedef_ident);
+    assert(symbol);
+    assert(symbol->type == SYMBOL_TYPE);
+    ast_typedef_stmt_t *typedef_stmt = symbol->ast_value;
+
+    sc_map_put_sv(&typedef_stmt->method_table, method_ident, fndef);
+}

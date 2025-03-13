@@ -1,0 +1,40 @@
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type rectangle: measurable<i64> = struct{
+	i64 width
+	i64 height
+}
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+
+type circle: measurable<i64> = struct{
+	i64 radius
+}
+fn circle.area():i64 {
+    return (3.14 * self.radius as f64 * self.radius as f64) as i64
+}
+fn circle.perimeter():i64 {
+    return (2 as f64 * 3.14 * self.radius as f64) as i64
+}
+
+type foo_t<T> = struct{
+    int a
+    measurable<T> m
+    fn() function
+}
+
+fn main():void! {
+    var f = foo_t<i64>{
+       function = fn(){},
+       m = rectangle{width=3, height=4},
+    }
+
+    println(f.m.area(), f.m.perimeter())
+}

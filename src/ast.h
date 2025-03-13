@@ -11,6 +11,7 @@
 #include "utils/stack.h"
 #include "utils/table.h"
 #include "utils/type.h"
+#include "utils/sc_map.h"
 
 extern ast_fndef_t *ast_copy_global;
 
@@ -71,7 +72,7 @@ typedef enum {
     AST_STMT_FOR_ITERATOR,
     AST_STMT_FOR_COND,
     AST_STMT_FOR_TRADITION,
-    AST_STMT_TYPE_ALIAS,
+    AST_STMT_TYPEDEF,
     AST_STMT_SELECT,
     AST_CALL,
     AST_STMT_TRY_CATCH,
@@ -600,8 +601,10 @@ typedef struct {
     list_t *params; // *ast_generics_param|null
     type_t type_expr; // int (类型)
     bool is_alias; // 是否仅作为别名
-    slice_t *impls; // type def 可以实现多个接口, 但是 interface def 不支持 impl
-} ast_type_def_stmt_t;
+    bool is_interface; // 快速识别
+    list_t *impl_interfaces; // type def 可以实现多个接口, 但是 interface def 不支持 impl
+    struct sc_map_sv method_table; // key = ident, value = ast_fndef_t
+} ast_typedef_stmt_t;
 
 // 这里包含 body, 所以属于 def
 struct ast_fndef_t {

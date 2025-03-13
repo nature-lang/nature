@@ -83,6 +83,8 @@ static inline bool is_builtin_call(char *ident) {
 
 symbol_t *symbol_table_set(char *ident, symbol_type_t type, void *ast_value, bool is_local);
 
+symbol_t *symbol_typedef_add_method(char *typedef_ident, char *method_ident, ast_fndef_t *fndef);
+
 symbol_t *symbol_table_get(char *ident);
 
 symbol_t *symbol_table_get_noref(char *ident);

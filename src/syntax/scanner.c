@@ -630,8 +630,8 @@ static token_type_t scanner_ident(char *word, int length) {
                     switch (word[2]) {
                         case 'n':
                             return scanner_rest(word, length, 3, 5, "tinue", TOKEN_CONTINUE);
-                        //                        case 'r':
-                        //                            return scanner_rest(word, length, 3, 1, "o", TOKEN_CORO);
+                            //                        case 'r':
+                            //                            return scanner_rest(word, length, 3, 1, "o", TOKEN_CORO);
                     }
                     return scanner_rest(word, length, 2, 6, "ntinue", TOKEN_CONTINUE);
                 case 'a':
@@ -666,6 +666,8 @@ static token_type_t scanner_ident(char *word, int length) {
                 return TOKEN_IN;
             } else if (length == 2 && word[1] == 's') {
                 return TOKEN_IS;
+            } else if (length == 3 && word[1] == 'n' && word[2] == 't') {
+                return TOKEN_INT;
             }
 
             switch (word[1]) {
@@ -674,7 +676,7 @@ static token_type_t scanner_ident(char *word, int length) {
                 case 'f':
                     return scanner_rest(word, length, 2, 0, "", TOKEN_IF);
                 case 'n':
-                    return scanner_rest(word, length, 2, 1, "t", TOKEN_INT);
+                    return scanner_rest(word, length, 2, 7, "terface", TOKEN_INTERFACE);
                 case '8':
                     return scanner_rest(word, length, 2, 0, "", TOKEN_I8);
                 case '1':
@@ -693,8 +695,8 @@ static token_type_t scanner_ident(char *word, int length) {
             switch (word[1]) {
                 case 'u': // null
                     return scanner_rest(word, length, 2, 2, "ll", TOKEN_NULL);
-                // case 'e':// new, new 识别成 ident 在 parser 采用固定语法结构时才会被识别成 new
-                // return scanner_rest(word, length, 2, 1, "w", TOKEN_NEW);
+                    // case 'e':// new, new 识别成 ident 在 parser 采用固定语法结构时才会被识别成 new
+                    // return scanner_rest(word, length, 2, 1, "w", TOKEN_NEW);
             }
             break;
         case 'p':

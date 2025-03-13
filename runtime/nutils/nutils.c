@@ -4,6 +4,7 @@
 #include "runtime/processor.h"
 #include "string.h"
 #include "vec.h"
+#include "array.h"
 #include "runtime/rtype.h"
 #include "runtime/rt_chan.h"
 
@@ -61,7 +62,7 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
     assertf(output_rtype, "cannot find output_rtype by hash %lu", output_rtype_hash);
 
     DEBUGF("[number_casting] input_kind=%s, input_ref=%p,input_int64(%ld), output_kind=%s, output_ref=%p",
-           type_kind_str[input_rtype->kind], input_ref, fetch_int_value((addr_t)input_ref, input_rtype->size),
+           type_kind_str[input_rtype->kind], input_ref, fetch_int_value((addr_t) input_ref, input_rtype->size),
            type_kind_str[output_rtype->kind], output_ref);
 
     value_casting v = {0};
@@ -75,7 +76,7 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
         case TYPE_FLOAT32: {
             _NUMBER_CASTING(output_rtype->kind, v.f32_value, v.i64_value);
         }
-        // 其他类型保持不变
+            // 其他类型保持不变
         case TYPE_INT:
         case TYPE_INT64: _NUMBER_CASTING(output_rtype->kind, v.i64_value, v.i64_value);
         case TYPE_INT32: _NUMBER_CASTING(output_rtype->kind, v.i32_value, v.i64_value);
@@ -123,14 +124,83 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
     uint64_t size = rt_rtype_out_size(target_rtype_hash);
     memmove(value_ref, &mu->value, size);
     DEBUGF(
-        "[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, "
-        "values_ref: %p",
-        mu, type_kind_str[mu->rtype->kind], size, mu->value.i64_value, value_ref);
+            "[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, "
+            "values_ref: %p",
+            mu, type_kind_str[mu->rtype->kind], size, mu->value.i64_value, value_ref);
 }
 
 bool union_is(n_union_t *mu, int64_t target_rtype_hash) {
     PRE_RTCALL_HOOK();
     return mu->rtype->hash == target_rtype_hash;
+}
+
+/**
+ * union 参考 env 中的 upvalue 处理超过 8byte 的数据
+ * @param input_rtype_hash
+ * @param value
+ * @return
+ */
+n_union_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods) {
+    PRE_RTCALL_HOOK();
+    // - 根据 input_rtype_hash 找到对应的
+    rtype_t *rtype = rt_find_rtype(input_rtype_hash);
+    assert(rtype && "cannot find rtype by hash");
+
+    ASSERT_ADDR(value_ref);
+
+    TRACEF("[union_casting] input_kind=%s, in_heap=%d", type_kind_str[rtype->kind], rtype->in_heap);
+
+    type_kind gc_kind = to_gc_kind(rtype->kind);
+    if (is_gc_alloc(rtype->kind)) {
+        gc_kind = TYPE_GC_SCAN;
+    }
+
+    rtype_t union_rtype;
+    if (method_count > 0) {
+        union_rtype = GC_RTYPE(TYPE_UNION, 4, gc_kind, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_SCAN);
+    } else {
+        union_rtype = GC_RTYPE(TYPE_UNION, 4, gc_kind, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
+    }
+
+    // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
+    n_union_t *mu = rti_gc_malloc(sizeof(n_union_t), &union_rtype);
+
+    if (method_count > 0) {
+        mu->method_count = method_count;
+        mu->methods = (int64_t *) rti_array_new(&uint64_rtype, method_count);
+        // 进行数据 copy
+        memmove(mu->methods, methods, method_count * POINTER_SIZE);
+    }
+
+    DEBUGF("[interface_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
+           mu, value_ref,
+           &mu->value, rtype_stack_size(rtype, POINTER_SIZE), (void *) fetch_addr_value((addr_t) value_ref));
+
+    mu->rtype = rtype;
+    uint64_t out_size = rtype_stack_size(rtype, POINTER_SIZE);
+    if (is_stack_ref_big_type_kind(rtype->kind)) {
+        // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
+        void *new_value = rti_gc_malloc(rtype->size, rtype);
+        memmove(new_value, value_ref, out_size);
+        mu->value.ptr_value = new_value;
+    } else {
+        memmove(&mu->value, value_ref, out_size);
+
+        // 特殊类型参数处理，为了兼容 fn method 中的 self 自动化参数, self 如果是 int/struct 等类型，会自动转换为 ptr<int>
+        // 如果是 vec/string 等类型，self 的类型依旧是 vec/string 等，而不是 ptr<vec>/ptr<string> 这有点多余, 因为 vec/string
+        // 本来就是在堆中分配的, 传递的是一个指针, 虽然后续可以能会进行统一处理，但是目前还是需要进行特殊处理，value 中直接存放可以作为
+        // fn method 传递的参数
+        if (is_stack_impl(rtype->kind)) {
+            mu->value.ptr_value = &mu->value.ptr_value; // ptr<T>
+        }
+    }
+
+    DEBUGF("[interface_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld, union_ptr_value: %p",
+           mu,
+           mu->rtype,
+           mu->value.i64_value, mu->value.ptr_value);
+
+    return mu;
 }
 
 /**
@@ -150,11 +220,11 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
     TRACEF("[union_casting] input_kind=%s, in_heap=%d", type_kind_str[rtype->kind], rtype->in_heap);
 
     type_kind gc_kind = to_gc_kind(rtype->kind);
-    if (rtype->size > 8) {
+    if (is_gc_alloc(rtype->kind)) {
         gc_kind = TYPE_GC_SCAN;
     }
 
-    rtype_t union_rtype = GC_RTYPE(TYPE_UNION, 2, gc_kind, TYPE_GC_NOSCAN);
+    rtype_t union_rtype = GC_RTYPE(TYPE_UNION, 4, gc_kind, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
 
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
     n_union_t *mu = rti_gc_malloc(sizeof(n_union_t), &union_rtype);
@@ -166,12 +236,13 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
 
 
     uint64_t out_size = rtype_stack_size(rtype, POINTER_SIZE);
-    if (out_size <= 8) {
-        memmove(&mu->value, value_ref, out_size);
-    } else {
+    if (is_stack_ref_big_type_kind(rtype->kind)) {
+        // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
         void *new_value = rti_gc_malloc(rtype->size, rtype);
         memmove(new_value, value_ref, out_size);
         mu->value.ptr_value = new_value;
+    } else {
+        memmove(&mu->value, value_ref, out_size);
     }
 
 
@@ -367,10 +438,10 @@ void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_
     n_error_t *error = n_error_new(msg, false);
 
     n_trace_t trace = {
-        .path = string_new(path, strlen(path)),
-        .ident = string_new(fn_name, strlen(fn_name)),
-        .line = line,
-        .column = column,
+            .path = string_new(path, strlen(path)),
+            .ident = string_new(fn_name, strlen(fn_name)),
+            .line = line,
+            .column = column,
     };
     rt_vec_push(error->traces, &trace);
 
@@ -409,10 +480,10 @@ uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_i
     if (be_catch) {
         // 存在异常时顺便添加调用栈信息, 这样 catch 错误时可以更加准确的添加相关信息
         n_trace_t trace = {
-            .path = string_new(path, strlen((char *) path)),
-            .ident = string_new(fn_name, strlen((char *) fn_name)),
-            .line = line,
-            .column = column,
+                .path = string_new(path, strlen((char *) path)),
+                .ident = string_new(fn_name, strlen((char *) fn_name)),
+                .line = line,
+                .column = column,
         };
 
         rt_vec_push(co->error->traces, &trace);
@@ -424,10 +495,10 @@ uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_i
     char *dump_msg;
     if (co->main) {
         dump_msg = tlsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", (char *) co->error->msg->data,
-                            path, line, column);
+                             path, line, column);
     } else {
         dump_msg = tlsprintf("coroutine %ld panic: '%s' at %s:%d:%d\n", co->id, (char *) co->error->msg->data,
-                            path, line, column);
+                             path, line, column);
     }
 
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
@@ -450,10 +521,10 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
 
     // 存在异常时顺便添加调用栈信息, 这样 catch 错误时可以更加准确的添加相关信息
     n_trace_t trace = {
-        .path = string_new(path, strlen(path)),
-        .ident = string_new(fn_name, strlen(fn_name)),
-        .line = line,
-        .column = column,
+            .path = string_new(path, strlen(path)),
+            .ident = string_new(fn_name, strlen(fn_name)),
+            .line = line,
+            .column = column,
     };
 
     rt_vec_push(co->error->traces, &trace);
@@ -601,10 +672,10 @@ static inline void panic_dump(coroutine_t *co, caller_t *caller, char *msg) {
     char *dump_msg;
     if (co->main) {
         dump_msg = tlsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", msg,
-                            ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
+                             ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
     } else {
         dump_msg = tlsprintf("coroutine '%ld' panic: '%s' at %s:%d:%d\n", co->id, msg,
-                            ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
+                             ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
     }
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
     // panic msg

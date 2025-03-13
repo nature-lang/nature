@@ -13,6 +13,9 @@ extern rtype_t linkco_rtype; // rtype 预生成
 // 添加 hash table gc_rtype(TYPE_UINT8, 0);
 extern rtype_t string_element_rtype;
 
+// 添加 hash table gc_rtype(TYPE_UINT64, 0);
+extern rtype_t uint64_rtype;
+
 // 添加 hash table  (GC_RTYPE(TYPE_STRING, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);)
 extern rtype_t string_rtype;
 
@@ -107,6 +110,10 @@ static inline void builtin_rtype_init() {
     // 初始化字符串元素 rtype
     string_element_rtype = GC_RTYPE(TYPE_UINT8, 0);
     sc_map_put_64v(&rt_rtype_map, string_element_rtype.hash, &string_element_rtype);
+
+    // 初始化 uint64 rtype
+    uint64_rtype = GC_RTYPE(TYPE_UINT64, 0);
+    sc_map_put_64v(&rt_rtype_map, uint64_rtype.hash, &uint64_rtype);
 
     // 初始化字符串 rtype
     string_rtype = GC_RTYPE(TYPE_STRING, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,

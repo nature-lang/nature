@@ -118,8 +118,8 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
             continue;
         }
 
-        if (stmt->assert_type == AST_STMT_TYPE_ALIAS) {
-            ast_type_def_stmt_t *type_alias = stmt->value;
+        if (stmt->assert_type == AST_STMT_TYPEDEF) {
+            ast_typedef_stmt_t *type_alias = stmt->value;
             char *global_ident = ident_with_prefix(m->ident, type_alias->ident);
             table_set(can_import_symbol_table, global_ident, type_alias);
             continue;

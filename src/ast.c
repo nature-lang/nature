@@ -112,12 +112,6 @@ static type_alias_t *type_alias_copy(type_alias_t *temp) {
     return alias;
 }
 
-static type_gen_t *type_gen_copy(type_gen_t *temp) {
-    type_gen_t *gen = COPY_NEW(type_gen_t, temp);
-    gen->elements = ct_list_type_copy(temp->elements);
-    return gen;
-}
-
 static type_ptr_t *type_pointer_copy(type_ptr_t *temp) {
     type_ptr_t *pointer = COPY_NEW(type_ptr_t, temp);
     pointer->value_type = type_copy(temp->value_type);

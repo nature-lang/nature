@@ -1,0 +1,496 @@
+=== test_not_impl
+--- main.n
+type measurable<T> = interface{
+	fn area():T
+	fn perimeter():T
+}
+
+type rectangle: measurable<f64> = struct{
+	f64 width
+	f64 height
+}
+
+// 实现 interface 中的函数
+fn rectangle.area():f64 {
+	return self.width * self.height
+}
+
+// 通过使用才能触发检测
+fn print_shape(measurable<f64> s) {
+    println(s.area(), s.perimeter())
+}
+
+fn main():void! {
+
+}
+
+--- output.txt
+nature-test/main.n:12:2: type 'main.rectangle' not impl fn 'perimeter' for interface 'main.measurable'
+
+=== test_mismatch_interface
+--- main.n
+type measurable<T> = interface{
+	fn area():T
+	fn perimeter():T
+}
+
+type rectangle: measurable<f64> = struct{
+	f64 width
+	f64 height
+}
+
+// 实现 interface 中的函数
+fn rectangle.area():f64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():int {
+	return 2 * (self.width + self.height)
+}
+
+fn main():void! {
+}
+
+--- output.txt
+nature-test/main.n:12:2: the fn 'perimeter' of type 'main.rectangle' mismatch interface 'main.measurable'
+
+=== test_mismatch_interface2
+--- main.n
+type measurable<T> = interface{
+	fn area():T
+	fn perimeter():T
+}
+
+type rectangle: measurable<f64> = struct{
+	f64 width
+	f64 height
+}
+
+fn rectangle.area():f64 {
+	return self.width * self.height
+}
+
+fn rectangle.perimeter():f64 {
+	return 2 * (self.width + self.height)
+}
+fn print_shape(measurable<i64> s) {
+}
+
+fn main():void! {
+    var r = rectangle{width = 3.0, height = 4.0}
+    print_shape(r)
+}
+
+--- output.txt
+nature-test/main.n:23:17: the fn 'area' of type 'main.rectangle' mismatch interface 'main.measurable'
+
+=== test_basic
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type rectangle: measurable<i64> = struct{
+	i64 width
+	i64 height
+}
+
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+
+fn print_shape(measurable<i64> s) {
+    println(s.area(), s.perimeter())
+}
+
+fn main():void! {
+    var r = rectangle{width=3, height=4}
+    print_shape(r)
+
+    var r1 = new rectangle(width=15, height=18)
+    print_shape(r1)
+}
+
+--- output.txt
+12 14
+270 66
+
+=== test_multi_impl
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type rectangle: measurable<i64> = struct{
+	i64 width
+	i64 height
+}
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+
+type circle: measurable<i64> = struct{
+	i64 radius
+}
+fn circle.area():i64 {
+    return (3.14 * self.radius as f64 * self.radius as f64) as i64
+}
+fn circle.perimeter():i64 {
+    return (2 as f64 * 3.14 * self.radius as f64) as i64
+}
+
+fn print_shape(measurable<i64> s) {
+    println(s.area(), s.perimeter())
+}
+
+fn main():void! {
+    var r = rectangle{width=3, height=4}
+    print_shape(r)
+
+    var r1 = new rectangle(width=15, height=18)
+    print_shape(r1)
+
+    var c = circle{radius=5}
+    print_shape(c)
+
+    var c1 = new circle(radius=10)
+    print_shape(c1)
+}
+
+--- output.txt
+12 14
+270 66
+78 31
+314 62
+
+=== test_change_data
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+	fn update(T)
+}
+
+type rectangle: measurable<i64> = struct{
+	i64 width
+	i64 height
+}
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+fn rectangle.update(i64 i) {
+    self.width = i
+    self.height = i
+}
+
+type circle: measurable<i64> = struct{
+	i64 radius
+}
+fn circle.area():i64 {
+    return (3.14 * self.radius as f64 * self.radius as f64) as i64
+}
+fn circle.perimeter():i64 {
+    return (2 as f64 * 3.14 * self.radius as f64) as i64
+}
+fn circle.update(i64 i) {
+    self.radius = i
+}
+
+fn update_and_print(measurable<i64> s, i64 i) {
+    s.update(i)
+    println(s.area(), s.perimeter())
+}
+
+fn main():void! {
+    var r = rectangle{width=3, height=4}
+    update_and_print(r, 5)
+    var r1 = new rectangle(width=15, height=18)
+    update_and_print(r1, 50)
+    println('update after:', r.width, r.height, r1.width, r1.height)
+
+
+    var c = circle{radius=5}
+    update_and_print(c, 100)
+
+    var c1 = new circle(radius=10)
+    update_and_print(c1, 1)
+    println('update after:', c.radius, c1.radius)
+}
+
+--- output.txt
+25 20
+2500 200
+update after: 3 4 50 50
+31400 628
+3 6
+update after: 5 1
+
+=== test_generics_impl
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type rectangle: measurable<i64> = struct{
+	i64 width
+	i64 height
+}
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+
+type circle: measurable<i64> = struct{
+	i64 radius
+}
+fn circle.area():i64 {
+    return (3.14 * self.radius as f64 * self.radius as f64) as i64
+}
+fn circle.perimeter():i64 {
+    return (2 as f64 * 3.14 * self.radius as f64) as i64
+}
+
+fn print_shape<T>(measurable<T> s) {
+    println(s.area(), s.perimeter())
+}
+
+fn main():void! {
+    var r = rectangle{width=3, height=4}
+    print_shape<f64>(r)
+
+    // var c = circle<f64>{radius=5}
+    // print_shape(c)
+}
+
+--- output.txt
+nature-test/main.n:33:22: the fn 'perimeter' of type 'main.rectangle' mismatch interface 'main.measurable'
+
+=== test_typedef_arg_mismatch
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type rectangle: measurable<i64> = struct{
+	i64 width
+	i64 height
+}
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+
+type circle: measurable<i64> = struct{
+	i64 radius
+}
+fn circle.area():i64 {
+    return (3.14 * self.radius as f64 * self.radius as f64) as i64
+}
+fn circle.perimeter():i64 {
+    return (2 as f64 * 3.14 * self.radius as f64) as i64
+}
+
+fn print_shape<T>(measurable<T> s) {
+    println(s.area(), s.perimeter())
+}
+
+fn main():void! {
+    var r = rectangle{width=3, height=4}
+    print_shape<i64>(r)
+
+    var c = circle<f64>{radius=5}
+    print_shape(c)
+}
+
+--- output.txt
+nature-test/main.n:35:24: typedef 'main.circle' args mismatch
+
+=== test_generics_interface
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type rectangle: measurable<i64> = struct{
+	i64 width
+	i64 height
+}
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+
+type circle: measurable<i64> = struct{
+	i64 radius
+}
+fn circle.area():i64 {
+    return (3.14 * self.radius as f64 * self.radius as f64) as i64
+}
+fn circle.perimeter():i64 {
+    return (2 as f64 * 3.14 * self.radius as f64) as i64
+}
+
+fn print_shape<T>(measurable<T> s) {
+    println(s.area(), s.perimeter())
+}
+
+fn main():void! {
+    var r = rectangle{width=3, height=4}
+    print_shape<i64>(r)
+
+    var c = circle{radius=5}
+    print_shape<i64>(c)
+}
+
+--- output.txt
+12 14
+78 31
+
+=== test_interface_in_var
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type rectangle: measurable<i64> = struct{
+	i64 width
+	i64 height
+}
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+
+type circle: measurable<i64> = struct{
+	i64 radius
+}
+fn circle.area():i64 {
+    return (3.14 * self.radius as f64 * self.radius as f64) as i64
+}
+fn circle.perimeter():i64 {
+    return (2 as f64 * 3.14 * self.radius as f64) as i64
+}
+
+fn main():void! {
+    measurable<i64> s = rectangle{width=3, height=4}
+    println(s.area(), s.perimeter())
+
+    s = new circle(radius=5)
+    println(s.area(), s.perimeter())
+}
+
+--- output.txt
+12 14
+78 31
+
+
+=== test_struct_interface_default_value
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type rectangle: measurable<i64> = struct{
+	i64 width
+	i64 height
+}
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+
+type circle: measurable<i64> = struct{
+	i64 radius
+}
+fn circle.area():i64 {
+    return (3.14 * self.radius as f64 * self.radius as f64) as i64
+}
+fn circle.perimeter():i64 {
+    return (2 as f64 * 3.14 * self.radius as f64) as i64
+}
+
+type foo_t<T> = struct{
+    int a
+    measurable<T> m
+    fn() function
+}
+
+fn main():void! {
+    var f = foo_t<i64>{
+       function=fn(){},
+    }
+}
+
+--- output.txt
+nature-test/main.n:35:18: struct property 'm' must be assigned default value
+
+=== test_struct_interface
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type rectangle: measurable<i64> = struct{
+	i64 width
+	i64 height
+}
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+
+type circle: measurable<i64> = struct{
+	i64 radius
+}
+fn circle.area():i64 {
+    return (3.14 * self.radius as f64 * self.radius as f64) as i64
+}
+fn circle.perimeter():i64 {
+    return (2 as f64 * 3.14 * self.radius as f64) as i64
+}
+
+type foo_t<T> = struct{
+    int a
+    measurable<T> m
+    fn() function
+}
+
+fn main():void! {
+    var f = foo_t<i64>{
+       function = fn(){},
+       m = rectangle{width=3, height=4},
+    }
+
+    println(f.m.area(), f.m.perimeter())
+}
+
+--- output.txt
+12 14
