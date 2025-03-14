@@ -150,16 +150,12 @@ n_union_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int64_t
 
     TRACEF("[union_casting] input_kind=%s, in_heap=%d", type_kind_str[rtype->kind], rtype->in_heap);
 
-    type_kind gc_kind = to_gc_kind(rtype->kind);
-    if (is_gc_alloc(rtype->kind)) {
-        gc_kind = TYPE_GC_SCAN;
-    }
 
     rtype_t union_rtype;
     if (method_count > 0) {
-        union_rtype = GC_RTYPE(TYPE_UNION, 4, gc_kind, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_SCAN);
+        union_rtype = GC_RTYPE(TYPE_UNION, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_SCAN);
     } else {
-        union_rtype = GC_RTYPE(TYPE_UNION, 4, gc_kind, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
+        union_rtype = GC_RTYPE(TYPE_UNION, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     }
 
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
@@ -178,27 +174,23 @@ n_union_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int64_t
 
     mu->rtype = rtype;
     uint64_t out_size = rtype_stack_size(rtype, POINTER_SIZE);
-    if (is_stack_ref_big_type_kind(rtype->kind)) {
+    if (is_stack_impl(rtype->kind)) {
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
         void *new_value = rti_gc_malloc(rtype->size, rtype);
         memmove(new_value, value_ref, out_size);
         mu->value.ptr_value = new_value;
     } else {
-        memmove(&mu->value, value_ref, out_size);
-
         // 特殊类型参数处理，为了兼容 fn method 中的 self 自动化参数, self 如果是 int/struct 等类型，会自动转换为 ptr<int>
         // 如果是 vec/string 等类型，self 的类型依旧是 vec/string 等，而不是 ptr<vec>/ptr<string> 这有点多余, 因为 vec/string
         // 本来就是在堆中分配的, 传递的是一个指针, 虽然后续可以能会进行统一处理，但是目前还是需要进行特殊处理，value 中直接存放可以作为
         // fn method 传递的参数
-        if (is_stack_impl(rtype->kind)) {
-            mu->value.ptr_value = &mu->value.ptr_value; // ptr<T>
-        }
+        memmove(&mu->value, value_ref, out_size);
     }
 
     DEBUGF("[interface_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld, union_ptr_value: %p",
-           mu,
-           mu->rtype,
-           mu->value.i64_value, mu->value.ptr_value);
+            mu,
+            mu->rtype,
+            mu->value.i64_value, mu->value.ptr_value);
 
     return mu;
 }

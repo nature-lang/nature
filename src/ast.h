@@ -178,9 +178,8 @@ typedef struct {
 typedef struct {
     type_t type;
 
-    union {
-        list_t *properties; // *struct_property_t
-    };
+    list_t *properties; // *struct_property_t
+    ast_expr_t *default_expr; // scalar expr
 } ast_new_expr_t;
 
 /**
@@ -602,7 +601,7 @@ typedef struct {
     type_t type_expr; // int (类型)
     bool is_alias; // 是否仅作为别名
     bool is_interface; // 快速识别
-    list_t *impl_interfaces; // type def 可以实现多个接口, 但是 interface def 不支持 impl
+    list_t *impl_interfaces; // typedef 可以实现多个接口, 对于 interface 来说则是自身扩展
     struct sc_map_sv method_table; // key = ident, value = ast_fndef_t
 } ast_typedef_stmt_t;
 

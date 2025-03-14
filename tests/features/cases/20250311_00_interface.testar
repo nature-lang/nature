@@ -494,3 +494,437 @@ fn main():void! {
 
 --- output.txt
 12 14
+
+=== test_combination_impl_failed
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type updatable = interface{
+    fn update(i64)
+}
+
+type rectangle: measurable<i64>,updatable = struct{
+	i64 width
+	i64 height
+}
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+fn main():void! {
+}
+
+--- output.txt
+nature-test/main.n:14:2: type 'main.rectangle' not impl fn 'update' for interface 'main.updatable'
+
+=== test_combination_impl_failed2
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type updatable = interface{
+    fn update(i64)
+}
+
+type rectangle: measurable<i64>,updatable = struct{
+	i64 width
+	i64 height
+}
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+fn rectangle.update(i64 i) {
+   self.width = i
+   self.height = i
+}
+
+fn update_and_print(updatable s, i64 i) {
+    s.update(i)
+    println(s.area(), s.perimeter())
+}
+
+fn main():void! {
+    var r = rectangle{width=3, height=4}
+    update_and_print(r, 5)
+}
+
+--- output.txt
+nature-test/main.n:27:13: interface 'main.updatable' not declare 'area' fn
+
+=== test_combination_impl
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type updatable = interface{
+    fn update(i64)
+}
+
+type rectangle: measurable<i64>,updatable = struct{
+	i64 width
+	i64 height
+}
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+fn rectangle.update(i64 i) {
+   self.width = i
+   self.height = i
+}
+
+fn print_shape(measurable<i64> s) {
+    println(s.area(), s.perimeter())
+}
+
+fn update_basic(updatable u, i64 i) {
+    u.update(i)
+}
+
+fn main():void! {
+    var r = new rectangle(width=3, height=4)
+    update_basic(r, 5)
+    print_shape(r)
+}
+
+--- output.txt
+25 20
+
+=== test_struct_property_exists_failed
+--- main.n
+type test_t = struct{
+    int a
+    float a
+}
+
+fn main() {
+}
+
+--- output.txt
+nature-test/main.n:3:13: struct property key 'a' exists
+
+=== test_interface_method_exists_failed
+--- main.n
+type measurable<T> = interface{
+	fn area():T
+	fn area():T
+}
+
+fn main() {
+}
+
+--- output.txt
+nature-test/main.n:3:14: interface method 'area' exists
+
+
+=== test_combination_duplicate
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type updatable = interface{
+    fn update(i64)
+    fn area():i64
+}
+
+type combination: measurable<f64>,updatable = interface{
+    fn to_str():string
+}
+
+fn use_com(combination c) {
+}
+
+fn main():void! {
+
+}
+
+--- output.txt
+nature-test/main.n:15:2: duplicate method 'area'
+
+=== test_duck_type_deny
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type updatable = interface{
+    fn update(i64)
+    fn area():i64
+}
+
+type combination: measurable<i64>,updatable = interface{
+    fn to_str():string
+}
+
+type rectangle = struct{
+	i64 width
+	i64 height
+}
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+fn rectangle.update(i64 i) {
+   self.width = i
+   self.height = i
+}
+fn rectangle.to_str():string {
+    return 'hello world'
+}
+
+fn use_com(combination c) {
+}
+
+fn main():void! {
+    var r = new rectangle(width=3, height=4)
+    use_com(r)
+}
+
+--- output.txt
+nature-test/main.n:38:13: type 'main.rectangle' not impl 'main.combination' interface
+
+=== test_combination
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type updatable = interface{
+    fn update(i64)
+    fn area():i64
+}
+
+type combination: measurable<i64>,updatable = interface{
+    fn to_str():string
+}
+
+type rectangle:combination, updatable = struct{
+	i64 width
+	i64 height
+}
+fn rectangle.area():i64 {
+	return self.width * self.height
+}
+fn rectangle.perimeter():i64 {
+	return 2 * (self.width + self.height)
+}
+fn rectangle.update(i64 i) {
+   self.width = i
+   self.height = i
+}
+fn rectangle.to_str():string {
+    return 'hello world'
+}
+
+fn use_com(combination c):int {
+    return c.area()
+}
+
+fn main():void! {
+    var r = new rectangle(width=3, height=4)
+    println(use_com(r))
+}
+
+--- output.txt
+12
+
+=== test_new_scalar
+--- main.n
+type my_float = float
+
+fn main():void! {
+    var r = new i64(8)
+    println(*r)
+
+    var r2 = new arr<i16,4>([1, 2, 3, 4])
+    println((*r2)[0])
+    println(r2[0], r2[1], r2[2], r2[3])
+
+    var m = new my_float(3.14)
+    println(*m)
+}
+
+--- output.txt
+8
+1
+1 2 3 4
+3.140000
+
+=== test_scalar_interface
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type updatable = interface{
+    fn update(i64)
+    fn area():i64
+}
+
+type combination: measurable<i64>,updatable = interface{
+    fn to_str():string
+}
+
+type square:combination, updatable = i64
+
+fn square.area():i64 {
+    i64 length = *self as i64
+	return length * length
+}
+fn square.perimeter():i64 {
+	return (*self * 4) as i64
+}
+fn square.update(i64 i) {
+   *self = i as square
+}
+fn square.to_str():string {
+    return 'hello world'
+}
+
+fn use_com(combination c):int {
+    return c.area()
+}
+
+fn change_use(combination c):int {
+    c.update(10)
+    return c.perimeter()
+}
+
+fn main():void! {
+    var sp = new square(8)
+    println(use_com(sp), change_use(sp), *sp)
+
+    square s = 12
+    println(use_com(s), change_use(s), s)
+}
+
+--- output.txt
+64 40 10
+144 40 12
+
+=== test_interface_is
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type updatable = interface{
+    fn update(i64)
+    fn area():i64
+}
+
+type combination: measurable<i64>,updatable = interface{
+    fn to_str():string
+}
+
+type square:combination, updatable = i64
+
+fn square.area():i64 {
+    i64 length = *self as i64
+	return length * length
+}
+fn square.perimeter():i64 {
+	return (*self * 4) as i64
+}
+fn square.update(i64 i) {
+   *self = i as square
+}
+fn square.to_str():string {
+    return 'hello world'
+}
+
+fn use_com(combination c):int {
+    if c is square {
+        return 1
+    }
+    if c is ptr<square> {
+        return 2
+    }
+    return 0
+}
+
+fn main():void! {
+    var sp = new square(8)
+    println(use_com(sp))
+
+    square s = 12
+    println(use_com(s))
+}
+
+--- output.txt
+2
+1
+
+=== test_interface_match
+--- main.n
+type measurable<T> = interface{
+	fn perimeter():T
+	fn area():T
+}
+
+type updatable = interface{
+    fn update(i64)
+    fn area():i64
+}
+
+type combination: measurable<i64>,updatable = interface{
+    fn to_str():string
+}
+
+type square:combination, updatable = i64
+
+fn square.area():i64 {
+    i64 length = *self as i64
+	return length * length
+}
+fn square.perimeter():i64 {
+	return (*self * 4) as i64
+}
+fn square.update(i64 i) {
+   *self = i as square
+}
+fn square.to_str():string {
+    return 'hello world'
+}
+
+fn use_com(combination c):int {
+    return match c {
+        is square -> 10
+        is ptr<square> -> 20
+        _ -> 0
+    }
+}
+
+fn main():void! {
+    var sp = new square(8)
+    println(use_com(sp))
+
+    square s = 12
+    println(use_com(s))
+}
+
+--- output.txt
+20
+10

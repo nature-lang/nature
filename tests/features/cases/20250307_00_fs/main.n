@@ -3,10 +3,17 @@ import syscall
 
 fn main():void! {
     var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
+    var buf = vec_new<u8>(50)
 
-    // 从偏移量 12 开始读取到文件结尾
-    var content3 = f.read_at(12, -1)
-    println('read_at(12, -1): ', content3)
+    println(buf.len(), buf.cap())
+    var len = f.read(buf)
+    println('first read test.txt data:', len, buf as string)
 
-    f.close()
+    len = f.read(buf)
+    println('second read test.txt data:', len, buf as string)
+
+    len = f.read(buf)
+    if len == 0 {
+        println('read completed')
+    }
 }

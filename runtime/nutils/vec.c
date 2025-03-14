@@ -59,6 +59,13 @@ n_vec_t *rt_vec_new(int64_t rhash, int64_t ele_rhash, int64_t length, int64_t ca
         length = 0;
     }
 
+    // panic cap >= len
+    if (capacity < length) {
+        char *msg = tlsprintf("cap out of range");
+        rt_throw(msg, true);
+    }
+
+
     assert(capacity >= length && "capacity must be greater than length");
     TRACEF("[rt_vec_new] length=%lu, capacity=%lu", length, capacity);
 

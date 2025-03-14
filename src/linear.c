@@ -32,6 +32,8 @@ lir_opcode_t ast_op_convert[] = {
         [AST_OP_NEG] = LIR_OPCODE_NEG,
 };
 
+static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *target);
+
 /**
  * - 识别 dst(target) 是否为 null
  * - 如果是栈类型的数据，比如 struct/arr 则进行整片内存区域的 copy
@@ -709,6 +711,28 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
     }
 }
 
+static void linear_ia_ptr_assign(module_t *m, ast_assign_stmt_t *stmt) {
+    assert(stmt->left.assert_type == AST_EXPR_UNARY);
+    ast_unary_expr_t *unary_expr = stmt->left.value;
+    assert(unary_expr->operator == AST_OP_IA);
+
+    // 右值可能是一个 struct_new, 但是这又有什么影响呢，你必须创造新的空间？
+    lir_operand_t *src = linear_expr(m, stmt->right, NULL);
+
+    lir_operand_t *ptr_operand = linear_expr(m, unary_expr->operand, NULL);
+
+    // *ptr = [a, b, c]
+    // *ptr = 12
+    lir_operand_t *dst;
+    if (is_stack_ref_big_type(stmt->left.type)) {
+        dst = ptr_operand; // super_move 会自动进行全尺寸移动
+    } else {
+        dst = indirect_addr_operand(m, stmt->left.type, ptr_operand, 0);
+    }
+
+    linear_super_move(m, stmt->left.type, dst, src);
+}
+
 /**
  * ident = operand
  * @param c
@@ -913,6 +937,10 @@ static void linear_assign(module_t *m, ast_assign_stmt_t *stmt) {
     // a = 1
     if (left.assert_type == AST_EXPR_IDENT) {
         return linear_ident_assign(m, stmt);
+    }
+
+    if (left.assert_type == AST_EXPR_UNARY) {
+        return linear_ia_ptr_assign(m, stmt);
     }
 
     // 比如 set[0] = 1; 不允许这么赋值，set  .add 来添加 key
@@ -1746,6 +1774,9 @@ static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_oper
 
 
     uint64_t rtype_hash = ct_find_rtype_hash(ast->left.type);
+    if (ast->left.type.kind == TYPE_PTR || ast->left.type.kind == TYPE_RAW_PTR) {
+        rtype_hash = ct_find_rtype_hash(ast->left.type.ptr->value_type);
+    }
 
     lir_operand_t *item_target = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
     push_rt_call(m, RT_CALL_ARRAY_ELEMENT_ADDR, item_target, 3, array_target_ref, int_operand(rtype_hash),
@@ -2106,32 +2137,45 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
     uint64_t rtype_hash = ct_find_rtype_hash(new_expr->type);
     push_rt_call(m, RT_CALL_GC_MALLOC, target, 1, int_operand(rtype_hash));
 
-    // 目前只有 struct 可以 new
-    assert(new_expr->type.kind == TYPE_STRUCT);
+    if (new_expr->type.kind == TYPE_STRUCT) {
+        // 默认值处理
+        type_struct_t *type_struct = new_expr->type.struct_;
+        table_t *exists = table_new();
+        for (int i = 0; i < new_expr->properties->length; ++i) {
+            struct_property_t *p = ct_list_value(new_expr->properties, i);
 
-    // 默认值处理
-    type_struct_t *type_struct = new_expr->type.struct_;
-    table_t *exists = table_new();
-    for (int i = 0; i < new_expr->properties->length; ++i) {
-        struct_property_t *p = ct_list_value(new_expr->properties, i);
+            table_set(exists, p->key, p);
+            // struct 的 key.key 是不允许使用表达式的, 计算偏移，进行 move
+            uint64_t offset = type_struct_offset(type_struct, p->key);
 
-        table_set(exists, p->key, p);
-        // struct 的 key.key 是不允许使用表达式的, 计算偏移，进行 move
-        uint64_t offset = type_struct_offset(type_struct, p->key);
+            assertf(p->right, "struct new property_expr value empty");
+            ast_expr_t *property_expr = p->right;
 
-        assertf(p->right, "struct new property_expr value empty");
-        ast_expr_t *property_expr = p->right;
+            lir_operand_t *dst = indirect_addr_operand(m, p->type, target, offset);
+            if (is_stack_ref_big_type(p->type)) {
+                // foo.bar = person {}
+                dst = lea_operand_pointer(m, dst);
+            }
 
-        lir_operand_t *dst = indirect_addr_operand(m, p->type, target, offset);
-        if (is_stack_ref_big_type(p->type)) {
-            // foo.bar = person {}
-            dst = lea_operand_pointer(m, dst);
+            linear_expr(m, *property_expr, dst);
         }
+        linear_struct_fill_default(m, new_expr->type, target, exists);
+    } else {
+        if (new_expr->default_expr) {
+            lir_operand_t *src = linear_expr(m, *new_expr->default_expr, NULL);
+            lir_operand_t *dst;
+            if (is_stack_ref_big_type(new_expr->type)) {
+                // handle arr
+                dst = target;
+            } else {
+                // indirect ptr operand
+                dst = indirect_addr_operand(m, new_expr->type, target, 0);
+            }
 
-        linear_expr(m, *property_expr, dst);
+            linear_super_move(m, new_expr->type, dst, src);
+        }
     }
 
-    linear_struct_fill_default(m, new_expr->type, target, exists);
 
     return target;
 }

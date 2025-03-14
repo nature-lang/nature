@@ -1,0 +1,11 @@
+type reader = interface{
+    fn read([u8] buf):int!
+}
+
+type writer = interface{
+    fn write([u8] buf):int!
+}
+
+type seeker = interface{
+    fn seek(int offset, int whence):int!
+}

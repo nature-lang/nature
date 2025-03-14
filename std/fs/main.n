@@ -1,7 +1,8 @@
 import syscall
+import io
 
 // match runtime.fs_context_t 
-type file_t = struct{
+type file_t:io.reader, io.writer, io.seeker = struct{
     i32 fd
     void_ptr data
     i64 data_len
@@ -13,22 +14,25 @@ type file_t = struct{
 #linkid rt_uv_fs_open
 fn open(string path, int flags, int mode):ptr<file_t>!
 
-// 读取整个文件
-#linkid rt_uv_fs_read
-fn file_t.read():string!
+#linkid rt_uv_fs_content
+fn file_t.content():string!
 
-#linkid rt_uv_fs_read_at
-fn file_t.read_at(int offset, int len):string!
+#linkid rt_uv_fs_read
+fn file_t.read([u8] buf):int!
 
 #linkid rt_uv_fs_write
-fn file_t.write(string content):void!
-
-#linkid rt_uv_fs_write_at
-fn file_t.write_at(string content, int offset, int len):void!
-
-#linkid rt_uv_fs_close
-fn file_t.close():void
+fn file_t.write([u8] buf):int!
 
 fn file_t.seek(int offset, int whence):int! {
     return syscall.seek(self.fd as int, offset, whence)
 }
+
+#linkid rt_uv_fs_read_at
+fn file_t.read_at([u8] buf, int offset):int!
+
+#linkid rt_uv_fs_write_at
+fn file_t.write_at([u8] buf, int offset):int!
+
+#linkid rt_uv_fs_close
+fn file_t.close():void
+

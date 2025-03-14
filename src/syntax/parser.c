@@ -229,6 +229,9 @@ static inline type_fn_t *parser_type_fn(module_t *m) {
         do {
             type_t t = parser_type(m);
             ct_list_push(type_fn->param_types, &t);
+
+            // 可选的函数名称
+            parser_consume(m, TOKEN_IDENT);
         } while (parser_consume(m, TOKEN_COMMA));
 
         parser_must(m, TOKEN_RIGHT_PAREN);
@@ -563,7 +566,7 @@ static type_t parser_single_type(module_t *m) {
  * type foo = gen i8|u8|i16
  * @return
  */
-static ast_stmt_t *parser_type_def_stmt(module_t *m) {
+static ast_stmt_t *parser_typedef_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     ast_typedef_stmt_t *typedef_stmt = NEW(ast_typedef_stmt_t);
     sc_map_init_sv(&typedef_stmt->method_table, 0, 0);
@@ -604,7 +607,6 @@ static ast_stmt_t *parser_type_def_stmt(module_t *m) {
     // impl interface, support generics args
     // type data_t: container<T> {
     // type data_t: container<int> {
-    bool has_impl = false;
     if (parser_consume(m, TOKEN_COLON)) {
         typedef_stmt->impl_interfaces = ct_list_new(sizeof(type_t));
         do {
@@ -612,8 +614,6 @@ static ast_stmt_t *parser_type_def_stmt(module_t *m) {
             interface_type.ident_kind = TYPE_IDENT_INTERFACE;
             ct_list_push(typedef_stmt->impl_interfaces, &interface_type);
         } while (parser_consume(m, TOKEN_COMMA));
-
-        has_impl = true;
     }
 
     parser_must(m, TOKEN_EQUAL); // =
@@ -626,16 +626,26 @@ static ast_stmt_t *parser_type_def_stmt(module_t *m) {
     if (parser_consume(m, TOKEN_STRUCT)) {
         type_struct_t *type_struct = NEW(type_struct_t);
         type_struct->properties = ct_list_new(sizeof(struct_property_t));
+
+        struct sc_map_s64 exists = {0};
+        sc_map_init_s64(&exists, 0, 0); // value is type_fn_t
+
         parser_must(m, TOKEN_LEFT_CURLY);
         while (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
             // default value
             struct_property_t item = {.type = parser_type(m), .key = parser_advance(m)->literal};
 
+            if (sc_map_get_s64(&exists, item.key)) {
+                PARSER_ASSERTF(false, "struct property key '%s' exists", item.key);
+            }
+
+            sc_map_put_s64(&exists, item.key, 1);
+
             if (parser_consume(m, TOKEN_EQUAL)) {
                 ast_expr_t *temp_expr = expr_new_ptr(m);
                 *temp_expr = parser_expr(m);
                 PARSER_ASSERTF(temp_expr->assert_type != AST_FNDEF,
-                               "struct field default value cannot be a function definition, Use field assignment with function identifier (e.g., 'f = fn_ident') instead.");
+                               "struct property default value cannot be a function definition, use field assignment with fn identifier (e.g., 'f = fn_ident') instead.");
 
                 item.right = temp_expr;
             }
@@ -665,22 +675,29 @@ static ast_stmt_t *parser_type_def_stmt(module_t *m) {
     }
 
     if (parser_consume(m, TOKEN_INTERFACE)) {
-        if (has_impl) {
-            PARSER_ASSERTF(false, "interface cannot has impl");
-        }
-
         type_union_t *type_union = NEW(type_union_t);
         type_union->elements = ct_list_new(sizeof(type_t));
         type_union->interface = true;
-        type_union->any = false;
+        type_union->any = true;
 
         parser_must(m, TOKEN_LEFT_CURLY);
+
+        struct sc_map_s64 exists = {0};
+        sc_map_init_s64(&exists, 0, 0); // value is type_fn_t
+
+
         while (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
             parser_must(m, TOKEN_FN);
             // ident
             char *fn_name = parser_must(m, TOKEN_IDENT)->literal;
             type_fn_t *type_fn = parser_type_fn(m);
             type_fn->fn_name = fn_name;
+
+            if (sc_map_get_s64(&exists, fn_name)) {
+                PARSER_ASSERTF(false, "interface method '%s' exists", fn_name);
+            }
+
+            sc_map_put_s64(&exists, fn_name, 1);
 
             type_t union_item = {
                     .status = REDUCTION_STATUS_UNDO,
@@ -771,7 +788,7 @@ static ast_stmt_t *parser_type_def_stmt(module_t *m) {
  * @param generics_args nullable
  * @return
  */
-static type_t ast_expr_to_type_def_ident(module_t *m, ast_expr_t left, list_t *generics_args) {
+static type_t ast_expr_to_typedef_ident(module_t *m, ast_expr_t left, list_t *generics_args) {
     type_t t = {
             .status = REDUCTION_STATUS_UNDO,
             .line = parser_peek(m)->line,
@@ -782,7 +799,7 @@ static type_t ast_expr_to_type_def_ident(module_t *m, ast_expr_t left, list_t *g
             .args = NULL,
     };
 
-    // 重新整理一下左值，整理成 type_alias_t
+    // 重新整理一下左值，整理成 typedef_t
     if (left.assert_type == AST_EXPR_IDENT) {
         ast_ident *ident = left.value;
         t.ident = ident->literal;
@@ -983,7 +1000,7 @@ static ast_expr_t parser_type_args_expr(module_t *m, ast_expr_t left) {
     }
 
     assert(parser_is(m, TOKEN_LEFT_CURLY));
-    type_t t = ast_expr_to_type_def_ident(m, left, generics_args);
+    type_t t = ast_expr_to_typedef_ident(m, left, generics_args);
     return parser_struct_new(m, t);
 }
 
@@ -2063,24 +2080,35 @@ static ast_expr_t parser_new_expr(module_t *m) {
     parser_must(m, TOKEN_IDENT);
     ast_new_expr_t *new_expr = NEW(ast_new_expr_t);
     new_expr->type = parser_type(m);
-    new_expr->properties = ct_list_new(sizeof(struct_property_t));
 
     parser_must(m, TOKEN_LEFT_PAREN);
-    while (!parser_is(m, TOKEN_RIGHT_PAREN)) {
-        struct_property_t item = {0};
-        item.key = parser_must(m, TOKEN_IDENT)->literal;
-        parser_must(m, TOKEN_EQUAL);
-        item.right = expr_new_ptr(m);
-        *((ast_expr_t *) item.right) = parser_expr(m);
+    if (!parser_is(m, TOKEN_RIGHT_PAREN)) {
+        // has default value
+        if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_EQUAL)) {
+            new_expr->properties = ct_list_new(sizeof(struct_property_t));
 
-        ct_list_push(new_expr->properties, &item);
+            // struct default value
+            while (!parser_is(m, TOKEN_RIGHT_PAREN)) {
+                struct_property_t item = {0};
+                item.key = parser_must(m, TOKEN_IDENT)->literal;
+                parser_must(m, TOKEN_EQUAL);
+                item.right = expr_new_ptr(m);
+                *((ast_expr_t *) item.right) = parser_expr(m);
 
-        if (parser_is(m, TOKEN_RIGHT_PAREN)) {
-            break;
+                ct_list_push(new_expr->properties, &item);
+
+                if (parser_is(m, TOKEN_RIGHT_PAREN)) {
+                    break;
+                } else {
+                    parser_must(m, TOKEN_COMMA);
+                }
+            }
         } else {
-            parser_must(m, TOKEN_COMMA);
+            new_expr->default_expr = expr_new_ptr(m);
+            *new_expr->default_expr = parser_expr(m);
         }
     }
+
     parser_must(m, TOKEN_RIGHT_PAREN);
 
     result.assert_type = AST_EXPR_NEW;
@@ -2468,7 +2496,7 @@ static ast_stmt_t *parser_label(module_t *m) {
     parser_must(m, TOKEN_STMT_EOF);
 
     if (parser_is(m, TOKEN_TYPE)) {
-        return parser_type_def_stmt(m);
+        return parser_typedef_stmt(m);
     } else if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_stmt(m, fndef);
     } else {
@@ -2577,7 +2605,8 @@ static ast_stmt_t *parser_stmt(module_t *m) {
         return parser_let_stmt(m);
     } else if (parser_is(m, TOKEN_LABEL)) {
         return parser_label(m);
-    } else if (parser_is(m, TOKEN_IDENT)) {
+    } else if (parser_is(m, TOKEN_IDENT) || parser_is(m, TOKEN_STAR)) {
+        // *ident = 12
         return parser_expr_begin_stmt(m);
     } else if (parser_is(m, TOKEN_IF)) {
         return parser_if_stmt(m);
@@ -2588,7 +2617,7 @@ static ast_stmt_t *parser_stmt(module_t *m) {
     } else if (parser_is(m, TOKEN_IMPORT)) {
         return parser_import_stmt(m);
     } else if (parser_is(m, TOKEN_TYPE)) {
-        return parser_type_def_stmt(m);
+        return parser_typedef_stmt(m);
     } else if (parser_is(m, TOKEN_CONTINUE)) {
         return parser_continue_stmt(m);
     } else if (parser_is(m, TOKEN_BREAK)) {
@@ -2624,7 +2653,7 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
     } else if (parser_is(m, TOKEN_IMPORT)) {
         return parser_import_stmt(m);
     } else if (parser_is(m, TOKEN_TYPE)) {
-        return parser_type_def_stmt(m);
+        return parser_typedef_stmt(m);
     }
 
     PARSER_ASSERTF(false, "non-declaration statement outside fn body")
@@ -2639,7 +2668,7 @@ static ast_stmt_t *parser_tpl_stmt(module_t *m) {
     if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_stmt(m, ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column));
     } else if (parser_is(m, TOKEN_TYPE)) {
-        return parser_type_def_stmt(m);
+        return parser_typedef_stmt(m);
     }
 
     PARSER_ASSERTF(false, "cannot parser stmt with = '%s' in template file", parser_peek(m)->literal);
@@ -3174,6 +3203,7 @@ static bool parser_is_new(module_t *m) {
            parser_next_is(m, 1, TOKEN_FLOAT) ||
            parser_next_is(m, 1, TOKEN_F32) ||
            parser_next_is(m, 1, TOKEN_F64) ||
+           parser_next_is(m, 1, TOKEN_ARR) ||
            parser_next_is(m, 1, TOKEN_BOOL);
 }
 

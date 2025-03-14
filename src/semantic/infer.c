@@ -768,10 +768,23 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
 static type_t infer_new_expr(module_t *m, ast_new_expr_t *new_expr) {
     new_expr->type = reduction_type(m, new_expr->type);
 
-    // 目前只有结构体可以使用 new
-    INFER_ASSERTF(new_expr->type.kind == TYPE_STRUCT, "only struct type can use new");
-    type_struct_t *type_struct = new_expr->type.struct_;
-    new_expr->properties = infer_struct_properties(m, type_struct, new_expr->properties);
+    if (new_expr->type.kind == TYPE_STRUCT) {
+        type_struct_t *type_struct = new_expr->type.struct_;
+        if (new_expr->properties) {
+            new_expr->properties = infer_struct_properties(m, type_struct, new_expr->properties);
+        } else {
+            // set default properties
+            new_expr->properties = infer_struct_properties(m, type_struct, ct_list_new(sizeof(struct_property_t)));
+        }
+    } else {
+        // only scalar type can use new
+        INFER_ASSERTF(is_scala_type(new_expr->type) || new_expr->type.kind == TYPE_ARR,
+                      "only scala type(number/bool/struct/arr) can use new");
+        if (new_expr->default_expr) {
+            infer_right_expr(m, new_expr->default_expr, new_expr->type);
+        }
+    }
+
 
     return reduction_type(m, type_ptrof(new_expr->type));
 }
@@ -1385,6 +1398,12 @@ static type_t infer_struct_new(module_t *m, ast_expr_t *expr) {
 static type_t infer_access_expr(module_t *m, ast_expr_t *expr) {
     ast_access_t *access = expr->value;
     type_t left_type = infer_right_expr(m, &access->left, type_kind_new(TYPE_UNKNOWN));
+
+    if (left_type.kind == TYPE_PTR || left_type.kind == TYPE_RAW_PTR) {
+        if (left_type.ptr->value_type.kind == TYPE_ARR) {
+            left_type = left_type.ptr->value_type;
+        }
+    }
 
     // ast_access to ast_map_access
     if (left_type.kind == TYPE_MAP) {
@@ -2345,8 +2364,18 @@ static type_t infer_left_expr(module_t *m, ast_expr_t *expr) {
             type = infer_call(m, expr->value, type_kind_new(TYPE_UNKNOWN));
             break;
         }
+        case AST_EXPR_UNARY: {
+            // only support star
+            ast_unary_expr_t *unary_expr = expr->value;
+            if (unary_expr->operator == AST_OP_IA) {
+                type = infer_unary(m, unary_expr, type_kind_new(TYPE_UNKNOWN));
+            } else {
+                INFER_ASSERTF(false, "unary operand cannot used in left");
+            }
+            break;
+        }
         default: {
-            INFER_ASSERTF(false, "operand assert=%d cannot used in left", expr->assert_type);
+            INFER_ASSERTF(false, "operand cannot used in left");
             exit(0);
         }
     }
@@ -2498,6 +2527,20 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
         symbol_t *s = symbol_table_get(actual_type.ident);
         assert(s && s->type == SYMBOL_TYPE);
         ast_typedef_stmt_t *typedef_stmt = s->ast_value;
+
+        // check actual_type impl 是否包含 target_type.ident
+        bool found = false;
+        if (typedef_stmt->impl_interfaces) {
+            for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
+                type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
+                assert(impl_interface->ident_kind == TYPE_IDENT_INTERFACE);
+                if (str_equal(impl_interface->ident, target_type.ident)) {
+                    found = true;
+                }
+            }
+        }
+        // 禁止鸭子类型
+        INFER_ASSERTF(found, "type '%s' not impl '%s' interface", actual_type.ident, target_type.ident);
 
         check_typedef_impl(m, &target_type, actual_type.ident, typedef_stmt);
 
@@ -2677,8 +2720,6 @@ static type_t type_param_special(module_t *m, type_t t, table_t *arg_table) {
 
 static void
 check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast_typedef_stmt_t *typedef_stmt) {
-    *impl_interface = reduction_type(m, *impl_interface);
-
     assert(impl_interface->ident_kind == TYPE_IDENT_INTERFACE);
     assert(impl_interface->status == REDUCTION_STATUS_DONE);
     assert(impl_interface->kind == TYPE_UNION);
@@ -2712,6 +2753,42 @@ check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast
         INFER_ASSERTF(type_compare(*expect_type, actual_type, NULL),
                       "the fn '%s' of type '%s' mismatch interface '%s'", ast_fndef->fn_name, typedef_ident,
                       impl_interface->ident);
+    }
+}
+
+static void combination_interface(module_t *m, ast_typedef_stmt_t *typedef_stmt) {
+    assert(typedef_stmt->type_expr.status == REDUCTION_STATUS_DONE);
+    assert(typedef_stmt->type_expr.kind == TYPE_UNION);
+    type_union_t *origin_union = typedef_stmt->type_expr.union_;
+    struct sc_map_sv exists = {0};
+    sc_map_init_sv(&exists, 0, 0); // value is type_fn_t
+
+    for (int i = 0; i < origin_union->elements->length; ++i) {
+        type_t *temp = ct_list_value(origin_union->elements, i);
+        assert(temp->kind == TYPE_FN);
+        sc_map_put_sv(&exists, temp->fn->fn_name, temp);
+    }
+
+    // combination
+    for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
+        type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
+        *impl_interface = reduction_type(m, *impl_interface);
+        assert(impl_interface->kind == TYPE_UNION);
+        for (int j = 0; j < impl_interface->union_->elements->length; ++j) {
+            type_t *temp = ct_list_value(impl_interface->union_->elements, j);
+            // check exists
+            type_t *exist_type = sc_map_get_sv(&exists, temp->fn->fn_name);
+            if (exist_type) {
+                // compare
+                INFER_ASSERTF(type_compare(*exist_type, *temp, NULL), "duplicate method '%s'",
+                              temp->fn->fn_name);
+
+                continue;
+            }
+
+            sc_map_put_sv(&exists, temp->fn->fn_name, temp);
+            ct_list_push(origin_union->elements, temp);
+        }
     }
 }
 
@@ -2775,9 +2852,16 @@ static type_t reduction_typedef_or_alias(module_t *m, type_t t) {
 
         // 进行 impl 校验， 如果存在泛型，还需要进行泛型展开
         if (typedef_stmt->impl_interfaces) {
-            for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
-                type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
-                check_typedef_impl(m, impl_interface, t.ident, typedef_stmt);
+            if (typedef_stmt->is_interface) {
+                assert(typedef_stmt->type_expr.status == REDUCTION_STATUS_DONE);
+                assert(typedef_stmt->type_expr.kind == TYPE_UNION);
+                combination_interface(m, typedef_stmt);
+            } else {
+                for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
+                    type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
+                    *impl_interface = reduction_type(m, *impl_interface);
+                    check_typedef_impl(m, impl_interface, t.ident, typedef_stmt);
+                }
             }
         }
 
@@ -2822,15 +2906,24 @@ static type_t reduction_typedef_or_alias(module_t *m, type_t t) {
     // 打上正在进行的标记,避免进入死循环
     typedef_stmt->type_expr.status = REDUCTION_STATUS_DOING;
 
+    typedef_stmt->type_expr = reduction_type(m, typedef_stmt->type_expr);
+
     // check impl
     if (typedef_stmt->impl_interfaces) {
-        for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
-            type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
-            check_typedef_impl(m, impl_interface, t.ident, typedef_stmt);
+        if (typedef_stmt->is_interface) {
+            assert(typedef_stmt->type_expr.status == REDUCTION_STATUS_DONE);
+            assert(typedef_stmt->type_expr.kind == TYPE_UNION);
+            combination_interface(m, typedef_stmt);
+        } else {
+            for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
+                type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
+                *impl_interface = reduction_type(m, *impl_interface);
+                check_typedef_impl(m, impl_interface, t.ident, typedef_stmt);
+            }
         }
     }
 
-    typedef_stmt->type_expr = reduction_type(m, typedef_stmt->type_expr);
+    // combination impl interfaces
 
     // reduction_type 已经返回，现在这里可以直接修改为 done, 或者在外部的 reduction_type 中配置为 done
 

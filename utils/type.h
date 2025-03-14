@@ -687,10 +687,6 @@ static inline bool is_scala_type(type_t t) {
     return is_number(t.kind) || t.kind == TYPE_BOOL;
 }
 
-static inline bool can_type_casting(type_kind kind) {
-    return is_number(kind) || kind == TYPE_BOOL;
-}
-
 static inline bool is_stack_ref_big_type(type_t t) {
     return t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
 }

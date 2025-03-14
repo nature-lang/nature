@@ -9,7 +9,7 @@
 
 typedef struct {
     int32_t fd;
-    char* data;
+    char *data;
     int64_t data_len;
     int64_t data_cap;
     bool closed;
@@ -20,14 +20,16 @@ typedef struct {
 
 fs_context_t *rt_uv_fs_open(n_string_t *path, int64_t flags, int64_t mode);
 
-n_string_t *rt_uv_fs_read(fs_context_t *ctx);
+n_int_t rt_uv_fs_read(fs_context_t *ctx, n_vec_t *buf);
 
-void rt_uv_fs_write(fs_context_t *ctx, n_string_t *data);
+n_string_t *rt_uv_fs_content(fs_context_t *ctx);
+
+n_int_t rt_uv_fs_write(fs_context_t *ctx, n_vec_t *buf);
 
 void rt_uv_fs_close(fs_context_t *ctx);
 
-n_string_t *rt_uv_fs_read_at(fs_context_t *ctx, int offset, int len);
+n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset);
 
-void rt_uv_fs_write_at(fs_context_t *ctx, n_string_t *data, int offset, int len);
+n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset);
 
 #endif //NATURE_FS_H

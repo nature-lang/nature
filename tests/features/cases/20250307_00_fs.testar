@@ -5,24 +5,74 @@ import syscall
 
 fn main():void! {
     var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
-    var content = f.read()
-    print('read test.txt data:\n', content)
+    var buf = vec_new<u8>(50)
+
+    println(buf.len(), buf.cap())
+    var len = f.read(buf)
+    println('first read test.txt data:', len, buf as string)
+
+    len = f.read(buf)
+    println('second read test.txt data:', len, buf as string)
+
+    len = f.read(buf)
+    if len == 0 {
+        println('read completed')
+    }
 }
 
 --- test.txt
-hello world in test.txt
-hello nature in test.txt
-hello golang in test.txt
-hello rust in test.txt
-hello kotlin in test.txt
+hello world in test.txt hello world in test.txt hello world in test.txt
+
 
 --- output.txt
-read test.txt data:
-hello world in test.txt
-hello nature in test.txt
-hello golang in test.txt
-hello rust in test.txt
-hello kotlin in test.txt
+50 50
+first read test.txt data: 50 hello world in test.txt hello world in test.txt he
+second read test.txt data: 22 llo world in test.txt
+t hello world in test.txt he
+read completed
+
+
+=== test_read_content
+--- main.n
+import fs
+import syscall
+
+fn main():void! {
+    var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
+    var str = f.content()
+    println(str, "read completed")
+}
+
+--- output.txt
+hello world in test.txt hello world in test.txt hello world in test.txt
+ read completed
+
+=== test_write
+--- main.n
+import fs
+import syscall
+
+fn main():void! {
+    var f = fs.open('./test.txt',  syscall.O_RDWR|syscall.O_TRUNC, 0644)
+    var n = f.write('hello world\n' as [u8])
+    println('first write len:', n)
+    n = f.write('hello nature\n' as [u8])
+    println('second write len:', n)
+
+    var s = f.content()
+    println('current file content:\n', s, 'content end')
+}
+
+--- test.txt
+will be trunc
+
+--- output.txt
+first write len: 12
+second write len: 13
+current file content:
+ hello world
+hello nature
+ content end
 
 === test_write_failed
 --- main.n
@@ -31,10 +81,11 @@ import syscall
 
 fn main():void! {
     var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
-    f.write('write data hahaha') catch err {
+    f.write('write data hahaha' as [u8]) catch err {
         throw 'write to test.txt failed:' + err.msg
     }
 }
+
 
 --- test.txt
 hello world in test.txt
@@ -42,26 +93,6 @@ hello nature in test.txt
 
 --- output.txt
 coroutine 'main' uncaught error: 'write to test.txt failed:bad file descriptor' at nature-test/main.n:7:45
-
-=== test_write_success
---- main.n
-import fs
-import syscall
-
-fn main():void! {
-    var f = fs.open('./test.txt',  syscall.O_RDWR|syscall.O_TRUNC, 0644)
-    f.write('hello\nworld')
-
-    // check
-    assert(f.read() == 'hello\nworld')
-
-    f.close()
-    println('file closed')
-}
-
---- test.txt
-hello world in test.txt
-
 
 === test_close
 --- main.n
@@ -71,7 +102,7 @@ import syscall
 fn main():void! {
     var f = fs.open('./test.txt',  syscall.O_RDWR|syscall.O_TRUNC, 0644)
     f.close()
-    f.write('hello\nworld')
+    f.write('hello\nworld' as [u8])
 }
 --- test.txt
 hello world
@@ -85,30 +116,23 @@ import fs
 import syscall
 
 fn main():void! {
-    var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
-    
-    // 从偏移量 6 开始读取 5 个字节
-    var content1 = f.read_at(6, 5)
-    println('read_at(6, 5):', content1)
-    
-    // 从偏移量 0 开始读取 11 个字节
-    var content2 = f.read_at(0, 11)
-    println('read_at(0, 11):', content2)
-    
-    // 从偏移量 12 开始读取到文件结尾
-    var content3 = f.read_at(12, -1)
-    print('read_at(12, -1): ', content3)
-    
-    f.close()
+    var f = fs.open('./test.txt',  syscall.O_RDWR, 0644)
+    var buf = vec_new<u8>(100)
+    var n = f.read_at(buf, 8)
+    println(buf.len(), buf.cap(), n, buf.slice(0, n) as string, 'read_at end')
+
+    n = f.read_at(buf, 12)
+    println(buf.len(), buf.cap(), n, buf.slice(0, n) as string, 'read_at end')
 }
 
 --- test.txt
-hello world in test.txt
+01234567890123456789
 
 --- output.txt
-read_at(6, 5): world
-read_at(0, 11): hello world
-read_at(12, -1): in test.txt
+100 100 13 890123456789
+ read_at end
+100 100 9 23456789
+ read_at end
 
 === test_write_at
 --- main.n
@@ -116,29 +140,19 @@ import fs
 import syscall
 
 fn main():void! {
-    // 创建文件并写入初始内容
-    var f = fs.open('./test.txt', syscall.O_RDWR|syscall.O_CREAT|syscall.O_TRUNC, 0644)
-    f.write('hello world in test.txt')
-    
-    // 在偏移量 6 处写入新内容
-    f.write_at('nature', 6, 6)
-    
-    // 读取整个文件内容进行验证
-    f.seek(0, syscall.SEEK_SET)
-    var content = f.read()
-    println('After write_at:', content)
-    
-    // 在偏移量 13 处写入新内容，指定长度为 2（只写入 'in' 而不是 'in test'）
-    f.write_at('in test', 13, 2)
-    
-    // 再次读取整个文件内容进行验证
-    f.seek(0, syscall.SEEK_SET)
-    content = f.read()
-    println('After second write_at:', content)
-    
-    f.close()
+    var f = fs.open('./test.txt',  syscall.O_RDWR, 0644)
+    var n = f.write_at('nature' as [u8], 9)
+    println(n)
+    n = f.write_at('hello' as [u8], 0)
+    println(n)
+
+    print(f.content())
 }
 
+--- test.txt
+01234567890123456789
+
 --- output.txt
-After write_at: hello naturein test.txt
-After second write_at: hello natureiintest.txt
+6
+5
+hello5678nature56789

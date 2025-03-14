@@ -218,6 +218,22 @@ static ast_as_expr_t *ast_as_expr_copy(ast_as_expr_t *temp) {
 static ast_new_expr_t *ast_new_expr_copy(ast_new_expr_t *temp) {
     ast_new_expr_t *new_expr = COPY_NEW(ast_new_expr_t, temp);
     new_expr->type = type_copy(temp->type);
+    if (temp->default_expr) {
+        new_expr->default_expr = ast_expr_copy(temp->default_expr);
+    } else if (temp->properties) {
+        list_t *properties = ct_list_new(sizeof(struct_property_t)); // *struct_property_t
+        for (int i = 0; i < temp->properties->length; ++i) {
+            struct_property_t *temp_property = ct_list_value(temp->properties, i);
+            struct_property_t *property = NEW(struct_property_t);
+            property->type = type_copy(temp_property->type);
+            property->key = strdup(temp_property->key);
+            property->right = ast_expr_copy(temp_property->right);
+            ct_list_push(properties, property);
+        }
+
+        new_expr->properties = properties;
+    }
+
     return new_expr;
 }
 
@@ -626,7 +642,7 @@ static ast_catch_t *ast_catch_copy(ast_catch_t *temp) {
 }
 
 static ast_try_catch_stmt_t *ast_try_catch_stmt_copy(ast_try_catch_stmt_t *temp) {
-    ast_try_catch_stmt_t *try_stmt = COPY_NEW(ast_try_catch_stmt_t , temp);
+    ast_try_catch_stmt_t *try_stmt = COPY_NEW(ast_try_catch_stmt_t, temp);
     try_stmt->try_body = ast_body_copy(temp->try_body);
     try_stmt->catch_err = *ast_var_decl_copy(&temp->catch_err);
     try_stmt->catch_body = ast_body_copy(temp->catch_body); // 需要实现这个函数

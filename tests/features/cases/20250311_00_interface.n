@@ -3,38 +3,43 @@ type measurable<T> = interface{
 	fn area():T
 }
 
-type rectangle: measurable<i64> = struct{
-	i64 width
-	i64 height
-}
-fn rectangle.area():i64 {
-	return self.width * self.height
-}
-fn rectangle.perimeter():i64 {
-	return 2 * (self.width + self.height)
+type updatable = interface{
+    fn update(i64)
+    fn area():i64
 }
 
-type circle: measurable<i64> = struct{
-	i64 radius
-}
-fn circle.area():i64 {
-    return (3.14 * self.radius as f64 * self.radius as f64) as i64
-}
-fn circle.perimeter():i64 {
-    return (2 as f64 * 3.14 * self.radius as f64) as i64
+type combination: measurable<i64>,updatable = interface{
+    fn to_str():string
 }
 
-type foo_t<T> = struct{
-    int a
-    measurable<T> m
-    fn() function
+type square:combination, updatable = i64
+
+fn square.area():i64 {
+    i64 length = *self as i64
+	return length * length
+}
+fn square.perimeter():i64 {
+	return (*self * 4) as i64
+}
+fn square.update(i64 i) {
+   *self = i as square
+}
+fn square.to_str():string {
+    return 'hello world'
+}
+
+fn use_com(combination c):int {
+    return match c {
+        is square -> 10
+        is ptr<square> -> 20
+        _ -> 0
+    }
 }
 
 fn main():void! {
-    var f = foo_t<i64>{
-       function = fn(){},
-       m = rectangle{width=3, height=4},
-    }
+    var sp = new square(8)
+    println(use_com(sp))
 
-    println(f.m.area(), f.m.perimeter())
+    square s = 12
+    println(use_com(s))
 }

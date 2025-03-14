@@ -659,6 +659,8 @@ static void analyzer_match(module_t *m, ast_match_t *match) {
                     continue;
                 }
             } else if (cond_expr->assert_type == AST_EXPR_MATCH_IS) {
+                ast_match_is_expr_t *is_expr = cond_expr->value;
+                analyzer_type(m, &is_expr->target_type);
                 is_cond = true;
             }
 
@@ -882,7 +884,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         // 如果是 builtin type 直接使用全局名称
         if (ident_is_def_or_alias(&fndef->impl_type)) {
             char *unique_alias_ident = analyzer_resolve_type_alias(m, NULL, fndef->impl_type.ident);
-            ANALYZER_ASSERTF(unique_alias_ident != NULL, "type alias '%s' undeclared \n", fndef->impl_type.ident);
+            ANALYZER_ASSERTF(unique_alias_ident != NULL, "type '%s' undeclared \n", fndef->impl_type.ident);
             fndef->impl_type.ident = unique_alias_ident;
         }
 
@@ -1463,9 +1465,13 @@ static void analyzer_vec_new(module_t *m, ast_vec_new_t *expr) {
 static void analyzer_new_expr(module_t *m, ast_new_expr_t *expr) {
     analyzer_type(m, &expr->type);
 
-    for (int i = 0; i < expr->properties->length; ++i) {
-        struct_property_t *property = ct_list_value(expr->properties, i);
-        analyzer_expr(m, property->right);
+    if (expr->properties) {
+        for (int i = 0; i < expr->properties->length; ++i) {
+            struct_property_t *property = ct_list_value(expr->properties, i);
+            analyzer_expr(m, property->right);
+        }
+    } else if (expr->default_expr) {
+        analyzer_expr(m, expr->default_expr);
     }
 }
 
@@ -1514,7 +1520,7 @@ static void analyzer_return(module_t *m, ast_return_stmt_t *stmt) {
 }
 
 // type foo = int
-static void analyzer_type_def_stmt(module_t *m, ast_typedef_stmt_t *stmt) {
+static void analyzer_typedef_stmt(module_t *m, ast_typedef_stmt_t *stmt) {
     // local type alias 不允许携带 param
     if (stmt->params && stmt->params->length > 0) {
         ANALYZER_ASSERTF(false, "local type alias cannot with params");
@@ -1684,7 +1690,7 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
             return analyzer_break(m, stmt->value);
         }
         case AST_STMT_TYPEDEF: {
-            return analyzer_type_def_stmt(m, stmt->value);
+            return analyzer_typedef_stmt(m, stmt->value);
         }
         default: {
             return;
@@ -1761,7 +1767,6 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
                 }
             }
 
-            // has impl
             if (ast_typedef->impl_interfaces && ast_typedef->impl_interfaces->length > 0) {
                 for (int j = 0; j < ast_typedef->impl_interfaces->length; ++j) {
                     type_t *impl = ct_list_value(ast_typedef->impl_interfaces, j);
