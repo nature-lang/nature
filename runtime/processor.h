@@ -197,8 +197,6 @@ void rt_select_block();
 
 void *rt_coroutine_arg();
 
-void *rt_coroutine_error(coroutine_t *co);
-
 int64_t rt_processor_index();
 
 void rt_processor_wake(n_processor_t *p);

@@ -360,6 +360,7 @@ static bool scanner_need_stmt_end(module_t *m, token_t *prev_token) {
         case TOKEN_VOID:
         case TOKEN_NULL:
         case TOKEN_NOT: // fn test():void!;  tpl fn 声明可以已 ! 结尾
+        case TOKEN_QUESTION: // type nullable = T?; typedef 或者 fn 中都可能存在 ? 结尾的语句
             return true;
         default:
             return false;

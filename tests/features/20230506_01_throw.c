@@ -9,10 +9,10 @@ static void test_basic() {
         "2\n"
         "divisor cannot zero\n"
         "1\n"
-        "coroutine 'main' uncaught error: 'divisor cannot zero' at cases/20230506_01_throw.n:3:27\n"
+        "coroutine 'main' uncaught error: 'divisor cannot zero' at cases/20230506_01_throw.n:3:34\n"
         "stack backtrace:\n"
         "0:\tmain.rem\n"
-        "\t\tat cases/20230506_01_throw.n:3:27\n"
+        "\t\tat cases/20230506_01_throw.n:3:34\n"
         "1:\tmain.main\n"
         "\t\tat cases/20230506_01_throw.n:32:22\n";
 

@@ -243,7 +243,7 @@ fn string.replace(string sub_old, string sub_new):string {
 
 fn string.to_int():int! {
     if self.len() == 0 {
-        throw "cannot convert empty string to int"
+        throw errorf('cannot convert empty string to int')
     }
 
     var result = 0
@@ -254,7 +254,7 @@ fn string.to_int():int! {
         negative = true
         start = 1
         if self.len() == 1 {
-            throw "invalid number format"
+            throw errorf("invalid number format")
         }
     }
 
@@ -268,11 +268,11 @@ fn string.to_int():int! {
     for int i = start; i < self.len(); i += 1 {
         var c = self[i]
         if c < '0'.ascii() || c > '9'.ascii() {
-            throw "invalid character in number"
+            throw errorf("invalid character in number")
         }
 
         if result > 0x7FFFFFFF / 10 {
-            throw "number too large"
+            throw errorf("number too large")
         }
 
         result = result * 10 + (c - '0'.ascii()) as int

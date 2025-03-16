@@ -1,45 +1,22 @@
-type measurable<T> = interface{
-	fn perimeter():T
-	fn area():T
+type testable = interface{
+    fn nice():bool
 }
 
-type updatable = interface{
-    fn update(i64)
-    fn area():i64
+type test_t:testable = [int]
+
+fn test_t.nice():bool {
+    return self[2] == 3
 }
 
-type combination: measurable<i64>,updatable = interface{
-    fn to_str():string
-}
-
-type square:combination, updatable = i64
-
-fn square.area():i64 {
-    i64 length = *self as i64
-	return length * length
-}
-fn square.perimeter():i64 {
-	return (*self * 4) as i64
-}
-fn square.update(i64 i) {
-   *self = i as square
-}
-fn square.to_str():string {
-    return 'hello world'
-}
-
-fn use_com(combination c):int {
-    return match c {
-        is square -> 10
-        is ptr<square> -> 20
-        _ -> 0
+fn use(testable? test) {
+    if (test is testable) { // test = test as testable
+        println('testable value is', test.nice())
+    } else {
+        println('test not testable')
     }
 }
 
 fn main():void! {
-    var sp = new square(8)
-    println(use_com(sp))
-
-    square s = 12
-    println(use_com(s))
+    test_t t = [1, 2, 3]
+    use(t)
 }

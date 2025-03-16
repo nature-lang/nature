@@ -4,7 +4,7 @@ import runtime
 type future_t<T> = struct{
     i64 size
     raw_ptr<T> result
-    raw_ptr<error_t> error
+    throwable? error
     void_ptr co
 }
 
@@ -30,8 +30,9 @@ fn co_return<T>(raw_ptr<T> result) {
 fn future_t<T>.await():T! {
     utils.coroutine_await(self.co)
 
-    if self.error != null {
-        throw self.error.msg
+    if self.error is throwable {
+        var error = self.error as throwable
+        throw errorf(error.msg())
     }
 
     return *self.result
@@ -40,8 +41,11 @@ fn future_t<T>.await():T! {
 fn future_t<T:void>.await():void! {
     utils.coroutine_await(self.co)
 
-    if self.error != null {
-        throw self.error.msg
+    if self.error is throwable {
+        var error = self.error as throwable
+        throw errorf(error.msg())
+    } else {
+        println('self.error is null')
     }
 
     return

@@ -15,7 +15,11 @@ extern char **command_argv;
 
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref);
 
+void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref);
+
 bool union_is(n_union_t *mu, int64_t target_rtype_hash);
+
+bool interface_is(n_interface_t *mu, int64_t target_rtype_hash);
 
 /**
  * input rtype index 是 value 具体的类型
@@ -25,7 +29,7 @@ bool union_is(n_union_t *mu, int64_t target_rtype_hash);
  */
 n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref);
 
-n_union_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods);
+n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods);
 
 void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_rtype_hash, void *output_ref);
 
@@ -37,9 +41,9 @@ int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor,
 
 void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, void *value_ref);
 
-void co_throw_error(n_string_t *msg, char *path, char *fn_name, n_int_t line, n_int_t column);
+void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t line, n_int_t column);
 
-n_error_t co_remove_error();
+n_interface_t *co_remove_error();
 
 uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
 

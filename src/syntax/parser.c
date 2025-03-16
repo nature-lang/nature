@@ -281,6 +281,8 @@ static type_t parser_type(module_t *m) {
         type_t null_type = type_kind_new(TYPE_NULL);
         ct_list_push(union_type.union_->elements, &null_type);
 
+        union_type.union_->nullable = true;
+
         return union_type;
     }
 
@@ -636,7 +638,7 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
             struct_property_t item = {.type = parser_type(m), .key = parser_advance(m)->literal};
 
             if (sc_map_get_s64(&exists, item.key)) {
-                PARSER_ASSERTF(false, "struct property key '%s' exists", item.key);
+                PARSER_ASSERTF(false, "struct field name '%s' exists", item.key);
             }
 
             sc_map_put_s64(&exists, item.key, 1);
@@ -645,7 +647,7 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
                 ast_expr_t *temp_expr = expr_new_ptr(m);
                 *temp_expr = parser_expr(m);
                 PARSER_ASSERTF(temp_expr->assert_type != AST_FNDEF,
-                               "struct property default value cannot be a function definition, use field assignment with fn identifier (e.g., 'f = fn_ident') instead.");
+                               "struct field default value cannot be a function definition, use field assignment with fn identifier (e.g., 'f = fn_ident') instead.");
 
                 item.right = temp_expr;
             }
@@ -675,11 +677,8 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
     }
 
     if (parser_consume(m, TOKEN_INTERFACE)) {
-        type_union_t *type_union = NEW(type_union_t);
-        type_union->elements = ct_list_new(sizeof(type_t));
-        type_union->interface = true;
-        type_union->any = true;
-
+        type_interface_t *type_interface = NEW(type_interface_t);
+        type_interface->elements = ct_list_new(sizeof(type_t));
         parser_must(m, TOKEN_LEFT_CURLY);
 
         struct sc_map_s64 exists = {0};
@@ -710,7 +709,7 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
                     .fn = type_fn,
             };
 
-            ct_list_push(type_union->elements, &union_item);
+            ct_list_push(type_interface->elements, &union_item);
             parser_must_stmt_end(m);
         }
 
@@ -721,8 +720,8 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
                 .ident = NULL,
                 .ident_kind = 0,
                 .args = NULL,
-                .kind = TYPE_UNION,
-                .union_ = type_union,
+                .kind = TYPE_INTERFACE,
+                .interface = type_interface,
         };
 
         typedef_stmt->type_expr = t;
@@ -745,6 +744,8 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
 
         type_t null_type = type_kind_new(TYPE_NULL);
         ct_list_push(union_type.union_->elements, &null_type);
+
+        union_type.union_->nullable = true;
 
         PARSER_ASSERTF(!parser_is(m, TOKEN_OR), "union type declaration cannot use '?'");
         typedef_stmt->type_expr = union_type;
@@ -2657,22 +2658,6 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
     }
 
     PARSER_ASSERTF(false, "non-declaration statement outside fn body")
-}
-
-/**
- * template 文件只能包含 type 和 fn 两种表达式
- * @param m
- * @return
- */
-static ast_stmt_t *parser_tpl_stmt(module_t *m) {
-    if (parser_is(m, TOKEN_FN)) {
-        return parser_fndef_stmt(m, ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column));
-    } else if (parser_is(m, TOKEN_TYPE)) {
-        return parser_typedef_stmt(m);
-    }
-
-    PARSER_ASSERTF(false, "cannot parser stmt with = '%s' in template file", parser_peek(m)->literal);
-    exit(EXIT_FAILURE);
 }
 
 static parser_rule rules[] = {

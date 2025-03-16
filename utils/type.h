@@ -16,7 +16,7 @@
 #define POINTER_SIZE sizeof(void *)
 #endif
 
-#define ERRORT_TYPE_DEF "error_t"
+#define THROWABLE_IDENT "throwable"
 
 // 指令字符宽度
 #define BYTE 1  // 1 byte = 8 位
@@ -99,6 +99,7 @@ typedef enum {
     TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
     TYPE_UNION,
+    TYPE_INTERFACE,
     TYPE_ENUM,
 
 //    TYPE_ALIAS, // 声明一个新的类型时注册的 type 的类型是这个
@@ -174,6 +175,7 @@ static string type_kind_str[] = {
 // reflect type
 // 所有的 type 都可以转化成该结构
 typedef struct {
+    char ident[56]; // 类型unique ident 缓存，用于定义一些常用的 rtype, 比如 throwable rtype
     uint64_t size; // 无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
     uint8_t in_heap; // 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是
 
@@ -207,9 +209,14 @@ typedef struct type_param_t type_param_t;
 
 typedef struct {
     bool any;
-    bool interface; // interface union 的 elements 只能是 fn type 声明，并且包含必须包含 fn name，来约束 extend 的名称
+    bool nullable; // 通过 ? 声明的类型
     list_t *elements; // type_t
 } type_union_t;
+
+
+typedef struct {
+    list_t *elements; // type_t
+} type_interface_t;
 
 typedef struct type_string_t type_string_t; // 类型不完全声明
 
@@ -258,6 +265,7 @@ typedef struct type_t {
 //        type_param_t *param; // 类型的一种特殊形式，更准确的说法也可以是
         type_ptr_t *ptr;
         type_union_t *union_;
+        type_interface_t *interface;
     };
     type_kind kind;
 
@@ -485,9 +493,14 @@ typedef struct {
 typedef struct {
     value_casting value;
     rtype_t *rtype;
-    int64_t method_count;
-    int64_t *methods; // methods
 } n_union_t;
+
+typedef struct {
+    value_casting value;
+    int64_t *methods; // methods
+    rtype_t *rtype;
+    int64_t method_count;
+} n_interface_t;
 
 typedef struct {
     n_string_t *path;
@@ -498,10 +511,8 @@ typedef struct {
 
 typedef struct {
     n_string_t *msg;
-    n_vec_t *traces; // element is n_trace_t
-    uint8_t has;
     uint8_t panic;
-} n_error_t;
+} n_errort;
 
 // 所有的类型都会有一个唯一标识，从而避免类型的重复，不重复的类型会被加入到其中
 // list 的唯一标识， 比如 [int] a, [int] b , [float] c   等等，其实只有一种类型
@@ -603,7 +614,7 @@ static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
     return kind == TYPE_UNION || kind == TYPE_STRING || kind == TYPE_VEC ||
            kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_TUPLE || kind == TYPE_GC_ENV ||
-           kind == TYPE_FN || kind == TYPE_COROUTINE_T || kind == TYPE_CHAN;
+           kind == TYPE_FN || kind == TYPE_COROUTINE_T || kind == TYPE_CHAN || kind == TYPE_INTERFACE;
 }
 
 static inline bool is_list_u8(type_t t) {
@@ -656,12 +667,20 @@ static inline type_t type_array_new(type_kind element_type_kind, uint64_t length
     return type_new(TYPE_ARR, t);
 }
 
-static inline type_t type_errort_new() {
-    return type_ident_new(ERRORT_TYPE_DEF, TYPE_IDENT_DEF);
+static inline type_t interface_throwable() {
+    return type_ident_new(THROWABLE_IDENT, TYPE_IDENT_INTERFACE);
 }
 
-static inline bool must_assign_value(type_kind kind) {
-    return kind == TYPE_FN || kind == TYPE_PTR || kind == TYPE_UNION;
+static inline bool must_assign_value(type_t t) {
+    if (t.kind == TYPE_FN || t.kind == TYPE_PTR || t.kind == TYPE_INTERFACE) {
+        return true;
+    }
+
+    if (t.kind == TYPE_UNION && !t.union_->nullable) {
+        return true;
+    }
+
+    return false;
 }
 
 static inline bool is_float(type_kind kind) {

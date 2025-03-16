@@ -31,7 +31,7 @@ fn main() {
 
     var b = a1[0]
     var b1 = a1[5] catch err {
-        println(err.msg)
+        println(err.msg())
     }
     println(b, b1, a1[0])
 
@@ -54,7 +54,7 @@ fn main() {
     println(a3[0][0], a3[0][1], a3[0][2], a3[1][0], a3[1][1], a3[1][2])
 
     var r1 = a3[0][5] catch err {
-        println(err.msg)
+        println(err.msg())
     }
 
     // array in struct

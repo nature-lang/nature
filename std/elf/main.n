@@ -37,7 +37,7 @@ type elf64_ehdr_t = struct {
 
 fn arch(string path):string! {
     if path == '' {
-        throw 'path is empty'
+        throw errorf('path is empty')
     }
 
     int fd = syscall.open(path, syscall.O_RDONLY, 0)
@@ -51,7 +51,7 @@ fn arch(string path):string! {
        elf_header.ident[EI_MAG2] != ELFMAG2 ||
        elf_header.ident[EI_MAG3] != ELFMAG3 {
 
-       throw 'not a valid elf file'
+       throw errorf('not a valid elf file')
     }
 
     // 读取常用的 arch 并解析成字符串返回

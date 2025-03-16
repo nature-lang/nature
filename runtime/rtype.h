@@ -19,12 +19,14 @@ extern rtype_t uint64_rtype;
 // 添加 hash table  (GC_RTYPE(TYPE_STRING, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);)
 extern rtype_t string_rtype;
 
+// 默认会被 rtypes_deserialize 覆盖为 compile 中的值
 extern rtype_t string_ref_rtype;
 
 // GC_RTYPE(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
 extern rtype_t errort_trace_rtype;
 
-// GC_RTYPE(TYPE_STRUCT, 3, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+extern rtype_t throwable_rtype;
+
 extern rtype_t errort_rtype;
 
 // GC_RTYPE(TYPE_GC_ENV, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
@@ -64,7 +66,7 @@ extern rtype_t fn_rtype;
     } \
     _size = _count * POINTER_SIZE; \
     if (_size == 0) _size = type_kind_sizeof(_kind); \
-    uint64_t _hash = _size << 32 | _gc_bits; \
+    uint64_t _hash = ((uint64_t)_kind << 56) | (_size << 32) | _gc_bits; \
     (rtype_t) { \
         .size = _size, \
         .kind = _kind, \
@@ -134,8 +136,11 @@ static inline void builtin_rtype_init() {
     errort_trace_rtype = GC_RTYPE(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     sc_map_put_64v(&rt_rtype_map, errort_trace_rtype.hash, &errort_trace_rtype);
 
+    throwable_rtype = GC_RTYPE(TYPE_INTERFACE, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_SCAN);
+    sc_map_put_64v(&rt_rtype_map, throwable_rtype.hash, &throwable_rtype);
+
     // 初始化错误 rtype
-    errort_rtype = GC_RTYPE(TYPE_STRUCT, 3, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+    errort_rtype = GC_RTYPE(TYPE_STRUCT, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
     sc_map_put_64v(&rt_rtype_map, errort_rtype.hash, &errort_rtype);
 
     // 初始化环境变量 rtype

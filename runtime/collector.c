@@ -311,11 +311,11 @@ void mcentral_sweep(mheap_t *mheap) {
  */
 static void scan_stack(n_processor_t *p, coroutine_t *co) {
     DEBUGF(
-        "[runtime_gc.scan_stack] start, p_index_%d=%d(%lu), p_status=%d, co=%p, co_status=%d, co_stack_size=%zu, save_stack=%p(%zu), scan_offset=%lu, "
-        "scan_ret_addr=%p",
-        p->share, p->index, (uint64_t) p->thread_id, p->status, co, co->status, co->aco.save_stack.valid_sz,
-        co->aco.save_stack.ptr,
-        co->aco.save_stack.sz, co->scan_offset, (void *) co->scan_ret_addr);
+            "[runtime_gc.scan_stack] start, p_index_%d=%d(%lu), p_status=%d, co=%p, co_status=%d, co_stack_size=%zu, save_stack=%p(%zu), scan_offset=%lu, "
+            "scan_ret_addr=%p",
+            p->share, p->index, (uint64_t) p->thread_id, p->status, co, co->status, co->aco.save_stack.valid_sz,
+            co->aco.save_stack.ptr,
+            co->aco.save_stack.sz, co->scan_offset, (void *) co->scan_ret_addr);
 
     // save_stack 也是通过 gc 申请，即使是 gc_work 也需要标记一下
     assert(span_of((addr_t) co->aco.save_stack.ptr) && "coroutine save stack not found span");
@@ -332,6 +332,15 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     }
 
     insert_gc_worklist(worklist, co->aco.save_stack.ptr);
+    if (co->error) {
+        insert_gc_worklist(worklist, co->error);
+    }
+
+    if (co->traces) {
+        insert_gc_worklist(worklist, co->traces);
+    }
+
+
     if (co->gc_work) {
         DEBUGF("[runtime_gc.scan_stack] co=%p is gc_work=true, return", co);
         return;
@@ -405,14 +414,14 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         }
 
         DEBUGF(
-            "[runtime_gc.scan_stack] conservative scan completed, p_index_%d=%d, p_status=%d, co=%p, scan_ptr_count=%d",
-            p->share,
-            p->index, p->status, co, scan_ptr_count);
+                "[runtime_gc.scan_stack] conservative scan completed, p_index_%d=%d, p_status=%d, co=%p, scan_ptr_count=%d",
+                p->share,
+                p->index, p->status, co, scan_ptr_count);
         return;
     }
 
     addr_t ret_addr = co->scan_ret_addr;
-    assertf(find_fn(ret_addr,p), "scan ret_addr=%p failed", ret_addr);
+    assertf(find_fn(ret_addr, p), "scan ret_addr=%p failed", ret_addr);
 
     int scan_fn_count = 0;
     // coroutine_wrapper 也使用了该协程栈，如果遇到的 return_addr 无法找到对应的 fn 直接退出当前循环即可
@@ -533,9 +542,9 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
             addr_t value = fetch_addr_value(temp_addr);
 
             TRACEF(
-                "[handle_gc_ptr] addr is ptr,base=%p cursor=%p cursor_value=%p, obj_size=%ld, bit_index=%lu, in_heap=%d",
-                (void *) addr,
-                (void *) temp_addr, (void *) value, span->obj_size, bit_index, in_heap(value));
+                    "[handle_gc_ptr] addr is ptr,base=%p cursor=%p cursor_value=%p, obj_size=%ld, bit_index=%lu, in_heap=%d",
+                    (void *) addr,
+                    (void *) temp_addr, (void *) value, span->obj_size, bit_index, in_heap(value));
 
             if (span_of(value)) {
                 // assert(span_of(heap_addr) && "heap_addr not belong active span");
@@ -610,10 +619,10 @@ static void gc_work() {
         current = current->succ;
 
         DEBUGF(
-            "[runtime_gc.gc_work] will scan_stack p_index_%d=%d, co=%p, status=%d, gc_work=%d, is_main=%d, gc_black=%lu/gc_count=%lu, aco=%p",
-            share_p->share, share_p->index,
-            wait_co, wait_co->status, wait_co->gc_work, wait_co->main, wait_co->gc_black, memory->gc_count,
-            &wait_co->aco);
+                "[runtime_gc.gc_work] will scan_stack p_index_%d=%d, co=%p, status=%d, gc_work=%d, is_main=%d, gc_black=%lu/gc_count=%lu, aco=%p",
+                share_p->share, share_p->index,
+                wait_co, wait_co->status, wait_co->gc_work, wait_co->main, wait_co->gc_black, memory->gc_count,
+                &wait_co->aco);
 
         if (wait_co->status == CO_STATUS_DEAD) {
             DEBUGF("[runtime_gc.gc_work] co=%p, main=%d, gc_work=%d, status=dead, will remove",
@@ -726,7 +735,7 @@ static void scan_solo_stack() {
 static void inject_gc_work_coroutine() {
     // 遍历 share processor 插入 gc coroutine
     PROCESSOR_FOR(share_processor_list) {
-        coroutine_t *gc_co = rt_coroutine_new((void *) gc_work, 0, 0,NULL);
+        coroutine_t *gc_co = rt_coroutine_new((void *) gc_work, 0, 0, NULL);
 
         gc_co->gc_work = true;
         rt_linked_fixalloc_push(&p->co_list, gc_co);

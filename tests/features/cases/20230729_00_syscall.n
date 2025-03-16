@@ -2,7 +2,7 @@ import syscall
 
 fn main():void! {
     var pid = syscall.fork() catch err {
-        return print('fork err: ', err.msg, '\n')
+        return print('fork err: ', err.msg(), '\n')
     }
 
     if pid > 0 {
@@ -17,14 +17,14 @@ fn main():void! {
 
     // 测试主动 kill
     pid = syscall.fork() catch err {
-        return print('fork err: ', err.msg, '\n')
+        return print('fork err: ', err.msg(), '\n')
     }
 
     if pid > 0 {
         // 主进程, wait 阻塞, 并读取返回值
         var has_err = false
         syscall.kill(pid, syscall.SIGKILL) catch err {
-            print('kill err: ', err.msg, '\n')
+            print('kill err: ', err.msg(), '\n')
             has_err = true
         }
 

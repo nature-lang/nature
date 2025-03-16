@@ -82,7 +82,7 @@ import syscall
 fn main():void! {
     var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
     f.write('write data hahaha' as [u8]) catch err {
-        throw 'write to test.txt failed:' + err.msg
+        throw errorf('write to test.txt failed:' + err.msg())
     }
 }
 
@@ -92,7 +92,7 @@ hello world in test.txt
 hello nature in test.txt
 
 --- output.txt
-coroutine 'main' uncaught error: 'write to test.txt failed:bad file descriptor' at nature-test/main.n:7:45
+coroutine 'main' uncaught error: 'write to test.txt failed:bad file descriptor' at nature-test/main.n:7:52
 
 === test_close
 --- main.n

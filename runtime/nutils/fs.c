@@ -6,7 +6,7 @@ static void on_write_cb(uv_fs_t *req) {
 
     if (req->result < 0) {
         // 文件写入异常，设置错误并返回
-        rt_co_error(co, (char *) uv_strerror(req->result), false);
+        rt_co_throw(co, (char *) uv_strerror(req->result), false);
         co_ready(co);
         uv_fs_req_cleanup(&ctx->req);
         return;
@@ -25,7 +25,7 @@ static inline void on_open_cb(uv_fs_t *req) {
     if (req->result < 0) {
         DEBUGF("[on_open_cb] open file failed: %s, co: %p", uv_strerror(req->result), req->data);
 
-        rt_co_error(req->data, (char *) uv_strerror(req->result), false);
+        rt_co_throw(req->data, (char *) uv_strerror(req->result), false);
 
         co_ready(req->data);
         uv_fs_req_cleanup(&ctx->req);
@@ -45,7 +45,7 @@ static void on_read_at_cb(uv_fs_t *req) {
 
     if (req->result < 0) {
         // 文件读取异常，设置错误并返回
-        rt_co_error(co, (char *) uv_strerror(req->result), false);
+        rt_co_throw(co, (char *) uv_strerror(req->result), false);
         co_ready(co);
         uv_fs_req_cleanup(&ctx->req);
         return;
@@ -65,7 +65,7 @@ static void on_read_cb(uv_fs_t *req) {
 
     if (req->result < 0) {
         // 文件读取异常， 设置错误并返回，不需要关闭 fd, fd 由外部控制
-        rt_co_error(co, (char *) uv_strerror(req->result), false);
+        rt_co_throw(co, (char *) uv_strerror(req->result), false);
         co_ready(co);
         uv_fs_req_cleanup(&ctx->req);
         return;
@@ -87,7 +87,7 @@ fs_context_t *rt_uv_fs_open(n_string_t *path, int64_t flags, int64_t mode) {
 
     int result = uv_fs_open(&p->uv_loop, &ctx->req, rt_string_ref(path), (int) flags, (int) mode, on_open_cb);
     if (result) {
-        rt_co_error(co, (char *) uv_strerror(result), false);
+        rt_co_throw(co, (char *) uv_strerror(result), false);
         return NULL;
     }
 
@@ -97,8 +97,8 @@ fs_context_t *rt_uv_fs_open(n_string_t *path, int64_t flags, int64_t mode) {
     // yield wait file open
     co_yield_waiting(co, NULL, NULL);
 
-    if (co->error && co->error->has) {
-        DEBUGF("[fs_open] open file failed: %s", rt_string_ref(co->error->msg));
+    if (co->has_error) {
+        DEBUGF("[fs_open] open file failed: %s", rti_error_msg(co->error));
         return NULL;
     } else {
         DEBUGF("[fs_open] open file success: %s", rt_string_ref(path));
@@ -113,7 +113,7 @@ n_string_t *rt_uv_fs_content(fs_context_t *ctx) {
     DEBUGF("[rt_uv_fs_content] read file: %d", ctx->fd);
 
     if (ctx->closed) {
-        rt_co_error(co, "fd already closed", false);
+        rt_co_throw(co, "fd already closed", false);
         return 0;
     }
 
@@ -124,7 +124,7 @@ n_string_t *rt_uv_fs_content(fs_context_t *ctx) {
     ctx->data_len = 0;
     ctx->data = malloc(file_size + 1);
     if (!ctx->data) {
-        rt_co_error(co, "out of memory", false);
+        rt_co_throw(co, "out of memory", false);
         return 0;
     }
 
@@ -137,8 +137,8 @@ n_string_t *rt_uv_fs_content(fs_context_t *ctx) {
 
     co_yield_waiting(co, NULL, NULL);
 
-    if (co->error && co->error->has) {
-        DEBUGF("[fs_read] read file failed: %s", rt_string_ref(co->error->msg));
+    if (co->has_error) {
+        DEBUGF("[fs_read] read file failed: %s", rti_error_msg(co->error));
         return 0;
     } else {
         DEBUGF("[fs_read] read file success");
@@ -165,7 +165,7 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     DEBUGF("[rt_uv_fs_read] read file: %d", ctx->fd);
 
     if (ctx->closed) {
-        rt_co_error(co, "fd already closed", false);
+        rt_co_throw(co, "fd already closed", false);
         return 0;
     }
 
@@ -181,8 +181,8 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
 
     co_yield_waiting(co, NULL, NULL);
 
-    if (co->error && co->error->has) {
-        DEBUGF("[rt_uv_fs_read] read file failed: %s", rt_string_ref(co->error->msg));
+    if (co->has_error) {
+        DEBUGF("[rt_uv_fs_read] read file failed: %s", rti_error_msg(co->error));
         return 0;
     } else {
         DEBUGF("[rt_uv_fs_read] read file success");
@@ -196,11 +196,11 @@ n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     n_processor_t *p = processor_get();
 
     if (ctx->closed) {
-        rt_co_error(co, "fd already closed", false);
-        return;
+        rt_co_throw(co, "fd already closed", false);
+        return 0;
     }
 
-    DEBUGF("[fs_write_at] write file: %d, offset: %d, data_len: %d", ctx->fd, offset, write_len);
+    DEBUGF("[fs_write_at] write file: %d, offset: %d, data_len: %d", ctx->fd, offset, buf->length);
 
     // 配置写入缓冲区
     uv_buf_t uv_buf = uv_buf_init((char *) buf->data, buf->length);
@@ -214,8 +214,8 @@ n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     // 挂起协程等待写入完成
     co_yield_waiting(co, NULL, NULL);
 
-    if (co->error && co->error->has) {
-        DEBUGF("[fs_write_at] write file failed: %s", rt_string_ref(co->error->msg));
+    if (co->has_error) {
+        DEBUGF("[fs_write_at] write file failed: %s", rti_error_msg(co->error));
     } else {
         DEBUGF("[fs_write_at] write file success");
     }

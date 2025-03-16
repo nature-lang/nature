@@ -8,7 +8,7 @@
 
 // type fn_t = void_ptr // 同上
 
-type nullable<T> = T|null
+type nullable<T> = T?
 
 #linkid print
 fn print(...[any] args)

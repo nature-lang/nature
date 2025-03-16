@@ -229,6 +229,25 @@ static rtype_t rtype_set(type_set_t *t) {
     return rtype;
 }
 
+static rtype_t rtype_interface(type_t t) {
+    char *str = itoa(TYPE_INTERFACE);
+    str = str_connect(str, t.ident); // 通过 interface 的名称进行绝对区分
+    uint32_t hash = hash_string(str);
+
+    rtype_t rtype = {
+            .size = POINTER_SIZE * 4, // element_rtype + value(并不知道 value 的类型)
+            .hash = hash,
+            .kind = TYPE_INTERFACE,
+            .last_ptr = POINTER_SIZE * 2,
+            .malloc_gc_bits = malloc_gc_bits(POINTER_SIZE * 2)
+    };
+
+    bitmap_set(rtype.malloc_gc_bits, 0);
+    bitmap_set(rtype.malloc_gc_bits, 1);
+
+    return rtype;
+}
+
 /**
  * 从类型声明上无法看出 any 是否需要 gc,那就默认第二个值总是需要 gc 扫描
  * hash = type_kind
@@ -612,6 +631,9 @@ rtype_t reflect_type(type_t t) {
         case TYPE_UNION:
             rtype = rtype_union(t.union_);
             break;
+        case TYPE_INTERFACE:
+            rtype = rtype_interface(t);
+            break;
         default:
             if (is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_NULL || t.kind == TYPE_VOID ||
                 t.kind == TYPE_BOOL) {
@@ -619,6 +641,13 @@ rtype_t reflect_type(type_t t) {
             }
     }
     rtype.in_heap = t.in_heap;
+    if (t.ident) {
+        int len = strlen(t.ident);
+        if (len > 56) {
+            len = 56;
+        }
+        strncpy(rtype.ident, t.ident, strlen(t.ident));
+    }
     return rtype;
 }
 
@@ -851,13 +880,13 @@ char *_type_format(type_t t) {
     }
 
     if (t.kind == TYPE_UNION) {
-        if (t.union_->interface) {
-            return "interface";
-        }
-
         if (t.union_->any) {
             return "any";
         }
+    }
+
+    if (t.kind == TYPE_INTERFACE) {
+        return "interface";
     }
 
     return type_kind_str[t.kind];

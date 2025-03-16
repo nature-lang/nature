@@ -26,7 +26,7 @@ fn main() {
 
     b = null
     var c = b.name catch err {
-        println(err.msg)
+        println(err.msg())
     }
 
     // 没有完整的 try catch, 所以无法 catch

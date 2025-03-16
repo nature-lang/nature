@@ -109,15 +109,16 @@
 
 #define RT_CALL_INTERFACE_CASTING "interface_casting"
 
-/**
- * 判断 union 中的 single 类型是什么
- */
+#define RT_CALL_INTERFACE_IS "interface_is"
+
 #define RT_CALL_UNION_IS "union_is"
 
 /**
  * 将 union 断言为 single 类型
  */
 #define RT_CALL_UNION_ASSERT "union_assert"
+
+#define RT_CALL_INTERFACE_ASSERT "interface_assert"
 
 #define RT_CALL_RAW_PTR_ASSERT "raw_ptr_assert"
 

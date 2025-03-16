@@ -329,12 +329,25 @@ static void analyzer_type(module_t *m, type_t *type) {
         return;
     }
 
+    if (type->kind == TYPE_INTERFACE) {
+        type_interface_t *u = type->interface;
+        if (u->elements->length > 0) {
+            for (int i = 0; i < u->elements->length; ++i) {
+                type_t *temp = ct_list_value(u->elements, i);
+                analyzer_type(m, temp);
+            }
+            return;
+        }
+    }
+
     if (type->kind == TYPE_UNION) {
         type_union_t *u = type->union_;
         if (u->elements->length > 0) {
             for (int i = 0; i < u->elements->length; ++i) {
                 type_t *temp = ct_list_value(u->elements, i);
                 analyzer_type(m, temp);
+
+                // 除了 nullable 外，其他 union 类型不能包含 interface
             }
             return;
         }
@@ -1776,7 +1789,6 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
                     analyzer_type(m, impl);
                 }
             }
-
 
             analyzer_type(m, &ast_typedef->type_expr);
 

@@ -20,6 +20,8 @@ rtype_t string_ref_rtype = {0};
 rtype_t errort_trace_rtype = {0};
 
 // GC_RTYPE(TYPE_STRUCT, 3, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+rtype_t throwable_rtype = {0};
+
 rtype_t errort_rtype = {0};
 
 // GC_RTYPE(TYPE_GC_ENV, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);

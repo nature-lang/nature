@@ -98,6 +98,8 @@ void rtypes_deserialize() {
             vec_rtype = *r;
         } else if (r->kind == TYPE_GC_FN) {
             fn_rtype = *r;
+        } else if (str_equal(r->ident, THROWABLE_IDENT)) {
+            throwable_rtype = *r;
         }
 
         if (r->length > 0) {

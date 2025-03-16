@@ -37,6 +37,12 @@ static list_t *ct_list_type_copy(list_t *temp_list) {
     return list;
 }
 
+static type_interface_t *type_interface_copy(type_interface_t *temp) {
+    type_interface_t *interface = COPY_NEW(type_interface_t, temp);
+    interface->elements = ct_list_type_copy(temp->elements);
+    return interface;
+}
+
 static type_union_t *type_union_copy(type_union_t *temp) {
     type_union_t *union_ = COPY_NEW(type_union_t, temp);
     union_->elements = ct_list_type_copy(temp->elements);
@@ -168,6 +174,10 @@ type_t type_copy(type_t temp) {
         }
         case TYPE_UNION: {
             type.union_ = type_union_copy(temp.union_);
+            break;
+        }
+        case TYPE_INTERFACE: {
+            type.interface = type_interface_copy(temp.interface);
             break;
         }
         case TYPE_RAW_PTR:

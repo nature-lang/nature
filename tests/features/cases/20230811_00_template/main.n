@@ -22,7 +22,7 @@ fn main():void! {
             syscall.close(fd)
             zlib.gzclose(gzfile)
 
-            throw 'write failed'
+            throw errorf('write failed')
         }
 
         println('gz write success, len:', write_len)

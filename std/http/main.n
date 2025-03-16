@@ -209,7 +209,7 @@ fn request_new(raw_ptr<uv.conn_ctx_t> ctx):request_t {
 fn conn_handler():void! {
     var arg = co.arg()
     if arg == 0 {
-        throw 'conn_handler arg is null'
+        throw errorf('conn_handler arg is null')
     }
     var ctx = arg as raw_ptr<uv.conn_ctx_t>
 

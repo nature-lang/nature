@@ -709,7 +709,7 @@ fn wait(int pid, int option):(int, int)! {
     var status = 0
     int result = libc.waitpid(pid, &status, option)
     if result == -1 {
-        throw libc.strerror()
+        throw errorf(libc.strerror())
     }
 
     return (result, status)
@@ -819,7 +819,7 @@ fn get_env(string key):string {
 fn set_env(string key, string value):void! {
     var result = setenv(key.ref(), value.ref(), 1)
     if result != 0 {
-        throw 'setenv error'
+        throw errorf('setenv error')
     }
 }
 

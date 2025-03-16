@@ -8,7 +8,7 @@
 #include "src/syntax/parser.h"
 #include "src/syntax/scanner.h"
 
-int var_unique_count = 0;
+int64_t global_var_unique_count = 0;
 
 /**
  * @param source_path

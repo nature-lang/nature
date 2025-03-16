@@ -1,11 +1,11 @@
 import fmt.utils as *
 import path
 
-fn sprintf(string fmt, ...[any] args):string {
-    var end = fmt.len()
+fn sprintf(string format, ...[any] args):string {
+    var end = format.len()
     var result = vec_new<u8>()
 
-    var sources = fmt as [u8]
+    var sources = format as [u8]
 
     int i = 0
     int arg_index = 0
@@ -177,7 +177,7 @@ fn sprintf(string fmt, ...[any] args):string {
     return result as string
 }
 
-fn printf(string fmt, ...[any] args) {
-    var str = sprintf(fmt, ...args)
+fn printf(string format, ...[any] args) {
+    var str = sprintf(format, ...args)
     print(str)
 }

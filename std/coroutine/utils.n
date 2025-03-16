@@ -12,6 +12,3 @@ fn coroutine_return(void_ptr result)
 
 #linkid rt_coroutine_await
 fn coroutine_await(void_ptr co)
-
-#linkid rt_coroutine_error
-fn coroutine_error(void_ptr co):raw_ptr<error_t>

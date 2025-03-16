@@ -1,6 +1,6 @@
 fn rem(int dividend, int divisor):int! {
 	if divisor == 0 {
-		throw 'divisor cannot zero'
+		throw errorf('divisor cannot zero')
 	}
 
 	return dividend % divisor
@@ -16,13 +16,13 @@ fn main():void! {
     // normal
     result = rem(10, 4) catch err {
         // default break
-        println(err.msg)
+        println(err.msg())
     }
     println(result)
 
     // error handle
     result = rem(10, 0) catch err {
-        println(err.msg)
+        println(err.msg())
         break 1
     }
     println(result)

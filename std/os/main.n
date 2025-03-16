@@ -37,7 +37,7 @@ fn listdir(string path):[string]! {
 
     var dir = dirent.opendir(path.ref())
     if dir == 0 {
-        throw 'opendir failed: ' + libc.strerror()
+        throw errorf('opendir failed: ' + libc.strerror())
     }
 
     for true {
@@ -65,7 +65,7 @@ fn listdir(string path):[string]! {
 // join and syscall.mkdir(dir, mode)
 fn mkdirs(string dir, u32 mode):void! {
     if dir == '' {
-        throw 'dir is empty'
+        throw errorf('dir is empty')
     }
 
     if path.exists(dir) {

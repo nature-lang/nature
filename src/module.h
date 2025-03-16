@@ -7,7 +7,7 @@
 #include "utils/helper.h"
 #include "utils/linked.h"
 
-extern int var_unique_count;
+extern int64_t global_var_unique_count;
 
 // module_path + path + ident
 static inline char *ident_with_prefix(char *module_ident, char *ident) {
@@ -22,30 +22,35 @@ static inline char *ident_with_prefix(char *module_ident, char *ident) {
 }
 
 static inline char *label_ident_with_unique(module_t *m, char *ident) {
-    char *result = malloc(strlen(ident) + sizeof(int) + 2);
-    sprintf(result, "%s_%d", ident, var_unique_count++);
+    int64_t size = strlen(ident) + 10 + 2;
+    char *result = mallocz(size); // 预留 10 位数字
+    snprintf(result, size, "%s_%ld", ident, global_var_unique_count++);
     return result;
 }
 
 static inline char *label_ident_with_prefix(module_t *m, char *ident) {
-    char *result = malloc(strlen(ident) + sizeof(int) + 2);
-    sprintf(result, "%s_%d", ident, m->var_unique_count++);
+    int64_t size = strlen(ident) + 10 + 2;
+    char *result = mallocz(size);
+    snprintf(result, size, "%s_%d", ident, m->var_unique_count++);
     assert(m->label_prefix);
     return ident_with_prefix(m->label_prefix, result);
 }
 
 static inline char *var_ident_with_index(module_t *m, char *ident) {
-    char *result = malloc(strlen(ident) + sizeof(int) + 2);
-    sprintf(result, "%s_%d", ident, var_unique_count++);
+    int64_t size = strlen(ident) + 10 + 2;
+    char *result = mallocz(size);
+    snprintf(result, size, "%s_%ld", ident, global_var_unique_count++);
     return result;
 }
 
 static inline char *var_unique_ident(module_t *m, char *ident) {
-    char *result = malloc(strlen(ident) + sizeof(int) + 2);
+    int64_t size = strlen(ident) + 10 + 2;
+    char *result = mallocz(size);
+
     if (m->ident) {
-        sprintf(result, "%s_%d", ident, m->var_unique_count++);
+        snprintf(result, size, "%s_%d", ident, m->var_unique_count++);
     } else {
-        sprintf(result, "%s_%d", ident, var_unique_count++);
+        snprintf(result, size, "%s_%ld", ident, global_var_unique_count++);
     }
     return ident_with_prefix(m->ident, result);
 }

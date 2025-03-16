@@ -77,6 +77,18 @@ static lir_operand_t *linear_default_string(module_t *m, type_t t, lir_operand_t
     return target;
 }
 
+static lir_operand_t *linear_default_nullable(module_t *m, type_t t, lir_operand_t *target) {
+    type_t null_type = type_kind_new(TYPE_NULL);
+    uint64_t rtype_hash = ct_find_rtype_hash(null_type);
+    lir_operand_t *null_operand = temp_var_operand(m, null_type);
+    null_operand = linear_default_operand(m, null_type, null_operand);
+
+    // lea null operand var
+    lir_operand_t *value_ref = lea_operand_pointer(m, null_operand);
+    push_rt_call(m, RT_CALL_UNION_CASTING, target, 2, int_operand(rtype_hash), value_ref);
+    return target;
+}
+
 static lir_operand_t *
 linear_default_vec(module_t *m, type_t t, lir_operand_t *len, lir_operand_t *cap, lir_operand_t *target) {
     if (!target) {
@@ -262,6 +274,10 @@ static lir_operand_t *linear_default_operand(module_t *m, type_t t, lir_operand_
         return target;
     }
 
+    if (t.kind == TYPE_UNION && t.union_->nullable) {
+        return linear_default_nullable(m, t, target);
+    }
+
     if (t.kind == TYPE_STRING) {
         return linear_default_string(m, t, target);
     }
@@ -289,7 +305,6 @@ static lir_operand_t *linear_default_operand(module_t *m, type_t t, lir_operand_
     if (t.kind == TYPE_TUPLE) {
         return linear_default_tuple(m, t, target);
     }
-
 
     LINEAR_ASSERTF(false, "type '%s' must assign default value", type_format(t))
     return NULL;
@@ -1332,14 +1347,13 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
                 break;
             }
 
-            type_union_t *union_type = select_left_type.union_;
-            assert(union_type->interface);
+            type_interface_t *interface_type = select_left_type.interface;
 
             // find index
             int index = -1;
             type_t *interface_fn_type = NULL;
-            for (int i = 0; i < union_type->elements->length; ++i) {
-                type_t *element = ct_list_value(union_type->elements, i);
+            for (int i = 0; i < interface_type->elements->length; ++i) {
+                type_t *element = ct_list_value(interface_type->elements, i);
                 assert(element->kind == TYPE_FN);
                 if (str_equal(element->fn->fn_name, select->key)) {
                     index = i;
@@ -1350,7 +1364,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
             assert(index != -1); // infer 已经校验过了
 
             // linear select left get union target
-            lir_operand_t *union_target = linear_expr(m, select->left, NULL);
+            lir_operand_t *interface_target = linear_expr(m, select->left, NULL);
 
             /**
              * typedef struct {
@@ -1360,18 +1374,18 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
              *   int64_t *methods; // methods
              * } n_union_t;
              */
-            lir_operand_t *method_target = temp_var_operand(m, type_kind_new(TYPE_VOID_PTR));
-            lir_operand_t *src = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), union_target, POINTER_SIZE * 3);
-            OP_PUSH(lir_op_move(method_target, src));
+            lir_operand_t *methods_target = temp_var_operand(m, type_kind_new(TYPE_VOID_PTR));
+            lir_operand_t *src = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), interface_target, POINTER_SIZE);
+            OP_PUSH(lir_op_move(methods_target, src));
 
             base_target = temp_var_operand(m, *interface_fn_type);
-            src = indirect_addr_operand(m, *interface_fn_type, method_target, POINTER_SIZE * index);
+            src = indirect_addr_operand(m, *interface_fn_type, methods_target, POINTER_SIZE * index);
             OP_PUSH(lir_op_move(base_target, src));
             type_fn = interface_fn_type->fn;
 
             // get self, 不需要进行额外的数据分配， union_casting 中已经进行了数据处理, 直接按照 void_ptr 进行数据处理即可
             lir_operand_t *self_target = temp_var_operand(m, type_kind_new(TYPE_VOID_PTR));
-            src = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), union_target, 0);
+            src = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), interface_target, 0);
             OP_PUSH(lir_op_move(self_target, src));
             slice_push(params, self_target);
         } while (0);
@@ -2237,7 +2251,8 @@ static lir_operand_t *linear_reflect_hash_expr(module_t *m, ast_expr_t expr, lir
 
 static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_is_expr_t *is_expr = expr.value;
-    assert(is_expr->src.type.kind == TYPE_UNION || is_expr->src.type.kind == TYPE_RAW_PTR);
+    assert(is_expr->src.type.kind == TYPE_UNION || is_expr->src.type.kind == TYPE_RAW_PTR ||
+           is_expr->src.type.kind == TYPE_INTERFACE);
 
     if (!target) {
         target = temp_var_operand_with_alloc(m, expr.type);
@@ -2255,8 +2270,13 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
         return target;
     }
 
+
     uint64_t target_rtype_hash = ct_find_rtype_hash(is_expr->target_type);
-    push_rt_call(m, RT_CALL_UNION_IS, target, 2, operand, int_operand(target_rtype_hash));
+    if (is_expr->src.type.kind == TYPE_INTERFACE) {
+        push_rt_call(m, RT_CALL_INTERFACE_IS, target, 2, operand, int_operand(target_rtype_hash));
+    } else {
+        push_rt_call(m, RT_CALL_UNION_IS, target, 2, operand, int_operand(target_rtype_hash));
+    }
 
     return target;
 }
@@ -2319,56 +2339,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
         type_union_t *union_type = as_expr->target_type.union_;
 
-        if (union_type->interface) {
-            type_t src_type = as_expr->src.type;
-            if (src_type.ident_kind != TYPE_IDENT_DEF && (src_type.kind == TYPE_PTR || src_type.kind == TYPE_RAW_PTR)) {
-                src_type = src_type.ptr->value_type;
-            }
-
-            assert(src_type.ident_kind == TYPE_IDENT_DEF);
-
-            // find ident
-            symbol_t *s = symbol_table_get(src_type.ident);
-            assert(s && s->type == SYMBOL_TYPE);
-            ast_typedef_stmt_t *typedef_stmt = s->ast_value;
-            assert(!typedef_stmt->is_interface);
-
-            if (typedef_stmt->method_table.size > 0) {
-                // alloc stack
-                type_t methods_type_arr = type_array_new(TYPE_VOID_PTR, typedef_stmt->method_table.size);
-                lir_operand_t *methods_target = temp_var_operand_with_alloc(m, methods_type_arr);
-
-                // fn label to stack by interface fn sequence
-                for (int i = 0; i < union_type->elements->length; ++i) {
-                    type_t *temp = ct_list_value(union_type->elements, i);
-                    assert(temp->kind == TYPE_FN);
-                    type_fn_t *interface_fn_type = temp->fn;
-                    assert(interface_fn_type->fn_name);
-
-                    // 按照 union type 中的定义顺序写入
-                    char *fn_ident = str_connect_by(src_type.ident, interface_fn_type->fn_name, "_");
-
-                    ast_fndef_t *ast_fndef = sc_map_get_sv(&typedef_stmt->method_table, fn_ident);
-                    assert(ast_fndef);
-                    symbol_table_get(fn_ident);
-
-                    // lea fn_label to stack
-                    lir_operand_t *fn_label = lir_label_operand(fn_ident, false);
-                    lir_operand_t *item_target = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), methods_target,
-                                                                       i * POINTER_SIZE);
-                    OP_PUSH(lir_op_lea(item_target, fn_label));
-                }
-
-                push_rt_call(m, RT_CALL_INTERFACE_CASTING, target, 4, int_operand(src_rtype_hash), union_value,
-                             int_operand(typedef_stmt->method_table.size),
-                             methods_target);
-
-                return target;
-            }
-        }
-
-        push_rt_call(m, RT_CALL_UNION_CASTING, target, 4, int_operand(src_rtype_hash), union_value, int_operand(0),
-                     int_operand(0));
+        push_rt_call(m, RT_CALL_UNION_CASTING, target, 2, int_operand(src_rtype_hash), union_value);
         return target;
     }
 
@@ -2380,6 +2351,85 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         uint64_t target_rtype_hash = ct_find_rtype_hash(as_expr->target_type);
         push_rt_call(m, RT_CALL_UNION_ASSERT, NULL, 3, src_operand, int_operand(target_rtype_hash), output_ref);
         linear_has_panic(m);
+        return target;
+    }
+
+    // interface as
+    if (as_expr->src.type.kind == TYPE_INTERFACE) {
+        assert(as_expr->target_type.kind != TYPE_INTERFACE);
+        OP_PUSH(lir_op_nop_def(target));
+
+        lir_operand_t *output_ref = target;
+        if (!is_stack_ref_big_type(as_expr->target_type)) {
+            output_ref = lea_operand_pointer(m, target);
+        }
+
+        uint64_t target_rtype_hash = ct_find_rtype_hash(as_expr->target_type);
+        push_rt_call(m, RT_CALL_INTERFACE_ASSERT, NULL, 3, src_operand, int_operand(target_rtype_hash), output_ref);
+        linear_has_panic(m);
+        return target;
+    }
+
+    if (as_expr->target_type.kind == TYPE_INTERFACE) {
+        lir_operand_t *interface_value;
+        if (is_stack_ref_big_type(as_expr->src.type)) {
+            interface_value = temp_var_operand(m, type_kind_new(TYPE_VOID_PTR));
+            OP_PUSH(lir_op_move(interface_value, src_operand));
+        } else {
+            interface_value = lea_operand_pointer(m, src_operand);
+        }
+
+        type_interface_t *interface_type = as_expr->target_type.interface;
+
+        type_t src_type = as_expr->src.type;
+        if (src_type.ident_kind != TYPE_IDENT_DEF && (src_type.kind == TYPE_PTR || src_type.kind == TYPE_RAW_PTR)) {
+            src_type = src_type.ptr->value_type;
+        }
+
+        assert(src_type.ident_kind == TYPE_IDENT_DEF);
+
+        // find ident
+        symbol_t *s = symbol_table_get(src_type.ident);
+        assert(s && s->type == SYMBOL_TYPE);
+        ast_typedef_stmt_t *typedef_stmt = s->ast_value;
+        assert(!typedef_stmt->is_interface);
+
+        if (typedef_stmt->method_table.size > 0) {
+            // alloc stack
+            type_t methods_type_arr = type_array_new(TYPE_VOID_PTR, typedef_stmt->method_table.size);
+            lir_operand_t *methods_target = temp_var_operand_with_alloc(m, methods_type_arr);
+
+            // fn label to stack by interface fn sequence
+            for (int i = 0; i < interface_type->elements->length; ++i) {
+                type_t *temp = ct_list_value(interface_type->elements, i);
+                assert(temp->kind == TYPE_FN);
+                type_fn_t *interface_fn_type = temp->fn;
+                assert(interface_fn_type->fn_name);
+
+                // 按照 union type 中的定义顺序写入
+                char *fn_ident = str_connect_by(src_type.ident, interface_fn_type->fn_name, "_");
+
+                ast_fndef_t *ast_fndef = sc_map_get_sv(&typedef_stmt->method_table, fn_ident);
+                assert(ast_fndef);
+                symbol_table_get(fn_ident);
+
+                // lea fn_label to stack
+                lir_operand_t *fn_label = lir_label_operand(fn_ident, false);
+                lir_operand_t *item_target = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), methods_target,
+                                                                   i * POINTER_SIZE);
+                OP_PUSH(lir_op_lea(item_target, fn_label));
+            }
+
+            push_rt_call(m, RT_CALL_INTERFACE_CASTING, target, 4, int_operand(src_rtype_hash), interface_value,
+                         int_operand(typedef_stmt->method_table.size),
+                         methods_target);
+
+        } else {
+            push_rt_call(m, RT_CALL_INTERFACE_CASTING, target, 4, int_operand(src_rtype_hash), interface_value,
+                         int_operand(typedef_stmt->method_table.size),
+                         int_operand(0));
+        }
+
         return target;
     }
 
@@ -2487,7 +2537,8 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
             if (match_expr->subject) {
                 assert(subject_operand->assert_type == LIR_OPERAND_VAR);
                 lir_var_t *subject_var = subject_operand->value;
-                ast_expr_t *subject_new_expr = ast_ident_expr(cond_expr->line, cond_expr->column, subject_var->ident);
+                ast_expr_t *subject_new_expr = ast_ident_expr(cond_expr->line, cond_expr->column,
+                                                              subject_var->ident);
                 subject_new_expr->type = match_expr->subject->type;
 
                 // 不太好改写, 毕竟一个是 a, 一个是 b, 但是也不算难改写。提取 ident 即可
@@ -2569,8 +2620,9 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
 
     table_set(m->current_closure->match_has_ret, catch_start_label, (void *) has_ret);
 
-    // 为 err 赋值
+    // 从 catch expr 中获取 err 然后为 err 赋值
     lir_operand_t *err_operand = linear_var_decl(m, &catch_expr->catch_err);
+
     push_rt_call_no_hook(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
 
     stack_push(m->current_closure->break_labels, catch_end_label->output);
@@ -2882,10 +2934,12 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 
         // dst addr
         lir_operand_t *values_operand = temp_var_operand_with_alloc(m, type_kind_new(TYPE_VOID_PTR));
-        OP_PUSH(lir_op_move(values_operand, indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), env_operand, 0)));
+        OP_PUSH(lir_op_move(values_operand,
+                            indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), env_operand, 0)));
 
         // src_ptr 一定是一个指针类型的地址, 比如 PTR/STRING/VEC 等等，所以此处可以直接使用 TYPE_VOID_PTR
-        lir_operand_t *dst = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), values_operand, i * POINTER_SIZE);
+        lir_operand_t *dst = indirect_addr_operand(m, type_kind_new(TYPE_VOID_PTR), values_operand,
+                                                   i * POINTER_SIZE);
         OP_PUSH(lir_op_move(dst, src_ptr));
     }
 
@@ -2894,10 +2948,9 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 
 static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     // msg to errort
-    symbol_t *symbol = symbol_table_get(ERRORT_TYPE_DEF);
+    assert(str_equal(stmt->error.type.ident, THROWABLE_IDENT));
+    lir_operand_t *error_operand = linear_expr(m, stmt->error, NULL);
 
-    assert(stmt->error.type.kind == TYPE_STRING);
-    lir_operand_t *msg_operand = linear_expr(m, stmt->error, NULL);
     lir_operand_t *path_operand = string_operand(m->rel_path);
     assert(m->current_closure->fndef->fn_name_with_pkg);
     lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg);
@@ -2905,7 +2958,7 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     lir_operand_t *column_operand = int_operand(m->current_column);
 
     // attach errort to processor
-    push_rt_call_no_hook(m, RT_CALL_CO_THROW_ERROR, NULL, 5, msg_operand, path_operand, fn_name_operand,
+    push_rt_call_no_hook(m, RT_CALL_CO_THROW_ERROR, NULL, 5, error_operand, path_operand, fn_name_operand,
                          line_operand,
                          column_operand);
 
