@@ -4,24 +4,6 @@ fn vec_new(int ref_hash, int ele_ref_hash, int len, int cap):void_ptr
 #linkid rt_vec_push
 fn vec_push(void_ptr list, void_ptr val)
 
-#linkid rt_vec_append
-fn vec_append(void_ptr list1, void_ptr list2)
-
-#linkid rt_vec_slice
-fn vec_slice(void_ptr list, int start, int end):void_ptr
-
-#linkid rt_vec_concat
-fn vec_concat(void_ptr list1, void_ptr list2):void_ptr
-
-#linkid rt_vec_ref
-fn vec_ref(void_ptr list):void_ptr
-
-#linkid rt_vec_length
-fn vec_length(void_ptr list):int
-
-#linkid rt_vec_capacity
-fn vec_capacity(void_ptr list):int
-
 #linkid rt_set_new
 fn set_new(int rhash, int key_hash):void_ptr
 

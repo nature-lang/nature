@@ -2394,9 +2394,9 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         ast_typedef_stmt_t *typedef_stmt = s->ast_value;
         assert(!typedef_stmt->is_interface);
 
-        if (typedef_stmt->method_table.size > 0) {
+        if (interface_type->elements->length > 0) {
             // alloc stack
-            type_t methods_type_arr = type_array_new(TYPE_VOID_PTR, typedef_stmt->method_table.size);
+            type_t methods_type_arr = type_array_new(TYPE_VOID_PTR, interface_type->elements->length);
             lir_operand_t *methods_target = temp_var_operand_with_alloc(m, methods_type_arr);
 
             // fn label to stack by interface fn sequence
@@ -2411,7 +2411,12 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
                 ast_fndef_t *ast_fndef = sc_map_get_sv(&typedef_stmt->method_table, fn_ident);
                 assert(ast_fndef);
-                symbol_table_get(fn_ident);
+                symbol_t *fn_symbol = symbol_table_get(fn_ident);
+                assert(fn_symbol);
+
+                if (ast_fndef->linkid) {
+                    fn_ident = ast_fndef->linkid;
+                }
 
                 // lea fn_label to stack
                 lir_operand_t *fn_label = lir_label_operand(fn_ident, false);
@@ -2421,12 +2426,12 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             }
 
             push_rt_call(m, RT_CALL_INTERFACE_CASTING, target, 4, int_operand(src_rtype_hash), interface_value,
-                         int_operand(typedef_stmt->method_table.size),
+                         int_operand(interface_type->elements->length),
                          methods_target);
 
         } else {
             push_rt_call(m, RT_CALL_INTERFACE_CASTING, target, 4, int_operand(src_rtype_hash), interface_value,
-                         int_operand(typedef_stmt->method_table.size),
+                         int_operand(0),
                          int_operand(0));
         }
 

@@ -70,4 +70,6 @@ n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end);
  */
 n_vec_t *rt_vec_concat(n_vec_t *a, n_vec_t *b);
 
+uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t *src);
+
 #endif //NATURE_VEC_H

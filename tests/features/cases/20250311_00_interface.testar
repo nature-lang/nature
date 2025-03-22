@@ -447,7 +447,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:35:18: type 'main.measurable(interface)' must assign default value
+nature-test/main.n:35:18: struct filed 'm' must be assigned default value
 
 === test_struct_interface
 --- main.n
@@ -615,7 +615,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:3:13: struct property key 'a' exists
+nature-test/main.n:3:13: struct field name 'a' exists
 
 === test_interface_method_exists_failed
 --- main.n

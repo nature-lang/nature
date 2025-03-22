@@ -29,26 +29,23 @@ fn vec<T>.push(T v) {
     return runtime.vec_push(self as void_ptr, ref as void_ptr)
 }
 
-fn vec<T>.append(vec<T> l2) {
-    return runtime.vec_append(self as void_ptr, l2 as void_ptr)
-}
+#linkid rt_vec_append
+fn vec<T>.append(vec<T> l2)
 
-fn vec<T>.slice(int start, int end):vec<T> {
-    return runtime.vec_slice(self as void_ptr, start, end) as vec<T>
-}
+#linkid rt_vec_slice
+fn vec<T>.slice(int start, int end):vec<T>
 
-fn vec<T>.concat(vec<T> l2):vec<T> {
-    return runtime.vec_concat(self as void_ptr, l2 as void_ptr) as vec<T>
-}
+#linkid rt_vec_concat
+fn vec<T>.concat(vec<T> l2):vec<T>
 
-fn vec<T>.len():int {
-    return runtime.vec_length(self as void_ptr)
-}
+#linkid rt_vec_copy
+fn vec<T>.copy(vec<T> src):int
 
-fn vec<T>.cap():int {
-    return runtime.vec_capacity(self as void_ptr)
-}
+#linkid rt_vec_length
+fn vec<T>.len():int
 
-fn vec<T>.ref():void_ptr {
-    return runtime.vec_ref(self as void_ptr)
-}
+#linkid rt_vec_capacity
+fn vec<T>.cap():int
+
+#linkid rt_vec_ref
+fn vec<T>.ref():void_ptr

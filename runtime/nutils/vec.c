@@ -336,3 +336,25 @@ n_vec_t *rti_vec_new(rtype_t *ele_rtype, int64_t length, int64_t capacity) {
     DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->ele_rhash);
     return vec;
 }
+
+/**
+ * 类似Go的copy内置函数，返回实际复制的元素数量
+ * @param dst 目标vec（必须预先分配空间）
+ * @param src 源vec
+ * @return 实际复制的元素数量（取dst剩余空间和src长度的最小值）
+ */
+uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t *src) {
+    PRE_RTCALL_HOOK();
+
+    assert(dst->ele_rhash == src->ele_rhash && "element type mismatch");
+
+    uint64_t element_size = rt_rtype_out_size(src->ele_rhash);
+    uint64_t copy_len = src->length < dst->length ? src->length : dst->length;
+
+    if (copy_len > 0) {
+        memmove(dst->data, src->data, copy_len * element_size);
+    }
+
+    DEBUGF("[rt_vec_copy] copied %lu elements from %p to %p", copy_len, src, dst);
+    return copy_len;
+}

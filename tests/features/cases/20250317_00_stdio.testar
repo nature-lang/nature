@@ -1,0 +1,20 @@
+=== test_basic
+--- main.n
+import io
+
+fn main():void! {
+    var stdout = io.stdout()
+    stdout.write('1. hello world form stdout\n' as [u8])
+    stdout.write('2. hello nature form stdout\n' as [u8])
+    stdout.write('3. hello stdout form stdout\n' as [u8])
+
+    var stderr = io.stderr()
+    stderr.write('1. hello world from stderr\n' as [u8])
+    stderr.write('2. hello nature from stderr\n' as [u8])
+    stderr.write('3. hello stderr from stderr\n' as [u8])
+}
+
+--- output.txt
+1. hello world form stdout
+2. hello nature form stdout
+3. hello stdout form stdout

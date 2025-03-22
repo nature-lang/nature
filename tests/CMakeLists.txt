@@ -115,7 +115,7 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
     #        set(CMAKE_EXE_LINKER_FLAGS "-static")
     #        set_target_properties(test_runtime_debug PROPERTIES LINK_FLAGS "-static")
     #    endif ()
-    target_compile_definitions(test_runtime_debug PRIVATE NDEBUG)
+    # target_compile_definitions(test_runtime_debug PRIVATE NDEBUG)
 
     add_dependencies(test_runtime_debug generate_libmain)  # 添加这行
 

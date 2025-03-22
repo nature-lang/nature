@@ -268,7 +268,7 @@ static void analyzer_type(module_t *m, type_t *type) {
         // foo.bar
         if (type->import_as) {
             ast_import_t *import = table_get(m->import_table, type->import_as);
-            ANALYZER_ASSERTF(import, "type left ident = %s not found in import", type->import_as);
+            ANALYZER_ASSERTF(import, "module '%s' not found", type->import_as);
 
             char *unique_ident = ident_with_prefix(import->module_ident, type->ident);
 

@@ -1,4 +1,5 @@
 var SOLO = 1 << 1
+var SAME = 1 << 2
 
 #linkid rt_coroutine_sleep
 fn sleep(int ms)

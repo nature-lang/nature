@@ -34,12 +34,16 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
     option(DEBUG_INTERVAL "Enable interval debug output" OFF)
     option(DEBUG_MACHO "Enable MACHO debug output" OFF)
     option(ASSERT_ERROR "Enable assert error" OFF)
-    
+
+    # 添加这行来查看 DEBUG_LIR 的值
+    message("DEBUG_LIR value: ${DEBUG_LIR}") 
+
     # 根据选项添加对应的编译定义
     if(DEBUG_NATURE)
         add_compile_definitions(NATURE_DEBUG)
     endif()
     if(DEBUG_LIR)
+        message("DEBUG_LIR is enabled")
         add_compile_definitions(DEBUG_LIR)
     endif()
     if(DEBUG_ASM)

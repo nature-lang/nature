@@ -1,3 +1,6 @@
+import fs
+import syscall
+
 type reader = interface{
     fn read([u8] buf):int!
 }
@@ -8,4 +11,89 @@ type writer = interface{
 
 type seeker = interface{
     fn seek(int offset, int whence):int!
+}
+
+fn stdout():ptr<fs.file_t>! {
+    return fs.from(syscall.STDOUT, '/dev/stdout')
+}
+
+fn stdin():ptr<fs.file_t>! {
+    return fs.from(syscall.STDIN, '/dev/stdin')
+}
+
+fn stderr():ptr<fs.file_t>! {
+    return fs.from(syscall.STDERR, '/dev/stderr')
+}
+
+fn discard():ptr<fs.file_t>! {
+    return fs.open('/dev/null', syscall.O_RDWR, 0)
+}
+
+type buffer: reader, writer = struct{
+    [u8] buf
+    int offset
+}
+
+fn buffer.write([u8] buf):int! {
+    self.buf.append(buf)
+    return buf.len()
+}
+
+// The read buf will be discarded (by offset), only when offset >= buf reset discard
+fn buffer.read([u8] buf):int! {
+    if self.empty() {
+        self.reset()
+
+        if buf.len() == 0 {
+            return 0
+        }
+
+        throw errorf('EOF')
+    }
+
+    int n = buf.copy(self.buf.slice(self.offset, self.buf.len()))
+    self.offset += n
+
+    return n
+}
+
+fn buffer.empty():bool {
+    return self.buf.len() <= self.offset
+}
+
+fn buffer.len():int {
+    return self.buf.len() - self.offset
+}
+
+fn buffer.cap():int {
+    return self.buf.cap()
+}
+
+fn buffer.truncate(int n) {
+    if n == 0 {
+        self.reset()
+        return
+    }
+
+    if n < 0 || n > self.len() {
+        panic('truncate out of range')
+    }
+
+    self.buf = self.buf.slice(0, self.offset + n)
+}
+
+fn buffer.reset() {
+    self.offset = 0
+    self.buf = self.buf.slice(0, 0)
+}
+
+fn buffer.read_all():[u8] {
+    if self.empty() {
+        return []
+    }
+
+    var result = self.buf.slice(self.offset, self.buf.len())
+    self.reset()
+
+    return result
 }

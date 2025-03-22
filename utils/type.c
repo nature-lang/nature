@@ -231,7 +231,11 @@ static rtype_t rtype_set(type_set_t *t) {
 
 static rtype_t rtype_interface(type_t t) {
     char *str = itoa(TYPE_INTERFACE);
-    str = str_connect(str, t.ident); // 通过 interface 的名称进行绝对区分
+
+    // typedef 的 right expr 没有 ident, 当然对应的 rtype 也用不上，所以不需要做额外的处理
+    if (t.ident) {
+        str = str_connect(str, t.ident); // 通过 interface 的名称进行绝对区分
+    }
     uint32_t hash = hash_string(str);
 
     rtype_t rtype = {
@@ -643,10 +647,15 @@ rtype_t reflect_type(type_t t) {
     rtype.in_heap = t.in_heap;
     if (t.ident) {
         int len = strlen(t.ident);
-        if (len > 56) {
-            len = 56;
+        // 假设 rtype.ident 的大小是 RTYPE_IDENT_SIZE (或者其他定义的常量)
+        // 需要预留一个字节给终止符 '\0'
+        if (len > sizeof(rtype.ident) - 1) {
+            len = sizeof(rtype.ident) - 1;
         }
-        strncpy(rtype.ident, t.ident, strlen(t.ident));
+
+        strncpy(rtype.ident, t.ident, len);
+        // 确保字符串正确终止
+        rtype.ident[len] = '\0';
     }
     return rtype;
 }

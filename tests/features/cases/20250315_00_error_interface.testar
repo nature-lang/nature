@@ -1,7 +1,7 @@
 === test_error_interface_failed
 --- main.n
 fn bar():void! {
-    throw errorf('error in bar')
+    throw 'error in bar'
 }
 
 fn foo():void! {

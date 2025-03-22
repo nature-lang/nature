@@ -156,3 +156,26 @@ fn main():void! {
 6
 5
 hello5678nature56789
+
+
+=== test_read_len
+--- main.n
+import fs
+import syscall
+
+fn main():void! {
+    var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
+    var buf = vec_new<u8>(10, 100)
+
+    println(buf.len(), buf.cap())
+    var len = f.read(buf)
+    println('first read test.txt data:', len, buf as string)
+}
+
+--- test.txt
+hello world in test.txt hello world in test.txt hello world in test.txt
+
+
+--- output.txt
+10 100
+first read test.txt data: 10 hello worl

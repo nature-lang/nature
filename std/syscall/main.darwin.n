@@ -21,9 +21,9 @@ int SEEK_CUR = 1
 int SEEK_END = 2
 
 // 标准文件描述符
-int STDIN_FILENO = 0
-int STDOUT_FILENO = 1
-int STDERR_FILENO = 2
+int STDIN = 0
+int STDOUT = 1
+int STDERR = 2
 
 // Darwin系统调用编号
 int SYS_SYSCALL = 0

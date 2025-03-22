@@ -73,9 +73,9 @@ int SEEK_SET = 0  // 移动到文件开头
 int SEEK_CUR = 1 // 保持不变
 int SEEK_END = 2 // 移动到文件末尾
 
-int STDIN_FILENO = 0
-int STDOUT_FILENO = 1
-int STDERR_FILENO = 2
+int STDIN = 0
+int STDOUT = 1
+int STDERR = 2
 
 int CLOCK_REALTIME = 0
 int CLOCK_MONOTONIC = 1

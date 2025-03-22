@@ -11,7 +11,7 @@ check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast
 
 static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, list_t *properties);
 
-static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type);
+static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool check_errable);
 
 static void infer_call_args(module_t *m, ast_call_t *call, type_fn_t *target_type_fn);
 
@@ -878,13 +878,14 @@ static type_t infer_async(module_t *m, ast_expr_t *expr) {
 
     infer_right_expr(m, co_expr->flag_expr, type_kind_new(TYPE_INT));
 
-    // check origin call
-    type_t fn_type = infer_right_expr(m, &co_expr->origin_call->left, type_kind_new(TYPE_UNKNOWN));
+    // check infer call
+    infer_call(m, co_expr->origin_call, type_kind_new(TYPE_UNKNOWN), false);
+
+    // check origin
+    type_t fn_type = co_expr->origin_call->left.type;
+
     assert(fn_type.kind == TYPE_FN);
     co_expr->return_type = fn_type.fn->return_type;
-
-    // 检查请求参数是否一致
-    infer_call_args(m, co_expr->origin_call, fn_type.fn);
 
     // -------------------------------------------- 消除 ast_async_t, 直接改造成 call async----------------------------------------------------------
     ast_expr_t first_arg = {0};
@@ -1884,7 +1885,7 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
  * @param call
  * @return
  */
-static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type) {
+static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool check_errable) {
     // --------------------------------------------interface call handle----------------------------------------------------------
     if (call->left.assert_type == AST_EXPR_SELECT) {
         do {
@@ -1992,7 +1993,7 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type) {
     call->return_type = type_fn->return_type;
 
     // catch 语句中可以包含多条 call 语句, 都统一处理了
-    if (type_fn->is_errable) {
+    if (type_fn->is_errable && check_errable) {
         INFER_ASSERTF(m->current_fn->is_errable || m->be_caught > 0,
                       "calling an errable! fn `%s` requires the current `fn %s` errable! as well or be caught.",
                       type_fn->fn_name ? type_fn->fn_name : "lambda",
@@ -2068,7 +2069,7 @@ static void infer_select(module_t *m, ast_select_stmt_t *stmt) {
 
         if (select_case->on_call) {
             // call 改写 xxx.xxx.xxx.on_recv() -> chan_on_recv(xxx.xxx.xxx)
-            infer_call(m, select_case->on_call, type_kind_new(TYPE_UNKNOWN));
+            infer_call(m, select_case->on_call, type_kind_new(TYPE_UNKNOWN), true);
         }
 
         if (select_case->recv_var) {
@@ -2388,7 +2389,7 @@ static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
             break;
         }
         case AST_CALL: {
-            infer_call(m, stmt->value, type_kind_new(TYPE_VOID));
+            infer_call(m, stmt->value, type_kind_new(TYPE_VOID), true);
             break;
         }
         case AST_CATCH: {
@@ -2466,7 +2467,7 @@ static type_t infer_left_expr(module_t *m, ast_expr_t *expr) {
             break;
         }
         case AST_CALL: {
-            type = infer_call(m, expr->value, type_kind_new(TYPE_UNKNOWN));
+            type = infer_call(m, expr->value, type_kind_new(TYPE_UNKNOWN), true);
             break;
         }
         case AST_EXPR_UNARY: {
@@ -2573,7 +2574,7 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
             return infer_select_expr(m, expr);
         }
         case AST_CALL: {
-            return infer_call(m, expr->value, target_type);
+            return infer_call(m, expr->value, target_type, true);
         }
         case AST_MACRO_ASYNC: {
             return infer_async(m, expr);

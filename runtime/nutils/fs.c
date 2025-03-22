@@ -3,6 +3,7 @@
 static void on_write_cb(uv_fs_t *req) {
     fs_context_t *ctx = CONTAINER_OF(req, fs_context_t, req);
     coroutine_t *co = req->data;
+    assert(co);
 
     if (req->result < 0) {
         // 文件写入异常，设置错误并返回
@@ -39,26 +40,6 @@ static inline void on_open_cb(uv_fs_t *req) {
     uv_fs_req_cleanup(&ctx->req);
 }
 
-static void on_read_at_cb(uv_fs_t *req) {
-    fs_context_t *ctx = CONTAINER_OF(req, fs_context_t, req);
-    coroutine_t *co = req->data;
-
-    if (req->result < 0) {
-        // 文件读取异常，设置错误并返回
-        rt_co_throw(co, (char *) uv_strerror(req->result), false);
-        co_ready(co);
-        uv_fs_req_cleanup(&ctx->req);
-        return;
-    }
-
-    // result >= 0, 表示读取的数据长度
-    ctx->data_len = req->result;
-
-    DEBUGF("[on_read_at_cb] read file success, data_len: %ld", ctx->data_len);
-    co_ready(co);
-    uv_fs_req_cleanup(&ctx->req);
-}
-
 static void on_read_cb(uv_fs_t *req) {
     fs_context_t *ctx = CONTAINER_OF(req, fs_context_t, req);
     coroutine_t *co = req->data;
@@ -77,6 +58,24 @@ static void on_read_cb(uv_fs_t *req) {
     DEBUGF("[on_read_cb] read file success, data_len: %ld", ctx->data_len);
     co_ready(co);
     uv_fs_req_cleanup(&ctx->req);
+}
+
+/**
+ * 主要用于 stdio/stdin/stderr 的创建, name 示例 "/dev/stdin"
+ */
+fs_context_t *rt_uv_fs_from(n_int_t fd, n_string_t *name) {
+    fs_context_t *ctx = rti_gc_malloc(sizeof(fs_context_t), NULL);
+    if (fd < 0) {
+        coroutine_t *co = coroutine_get();
+        rt_co_throw(co, "invalid fd", false);
+        return NULL;
+    }
+
+    ctx->fd = fd;
+    DEBUGF("[fs_from] create file context from fd: %d, name: %s", fd,
+           rt_string_ref(name));
+
+    return ctx;
 }
 
 fs_context_t *rt_uv_fs_open(n_string_t *path, int64_t flags, int64_t mode) {
@@ -169,11 +168,11 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
         return 0;
     }
 
-    // 配置初始缓冲区
-    ctx->data_cap = buf->capacity;
-    ctx->data_len = 0; // 记录实际读取的数量
+    // 配置初始缓冲区，能够读取的最大程度受限于 buf.length
+    ctx->data_cap = buf->length;
+    ctx->data_len = 0;// 记录实际读取的数量
     ctx->data = (char *) buf->data;
-    ctx->buf = uv_buf_init(ctx->data, buf->capacity);
+    ctx->buf = uv_buf_init(ctx->data, buf->length);
 
     // 基于 fd offset 进行读取
     ctx->req.data = co;
@@ -224,6 +223,9 @@ n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
 }
 
 n_int_t rt_uv_fs_write(fs_context_t *ctx, n_vec_t *buf) {
+    assert(buf);
+
+    DEBUGF("[rt_uv_fs_write] buf len: %ld", buf->length);
     return rt_uv_fs_write_at(ctx, buf, -1);
 }
 
@@ -254,5 +256,5 @@ void rt_uv_fs_close(fs_context_t *ctx) {
 
     // ctx 的内存应该由 GC 释放，而不是此处主动释放。
     // 否则 用户端 再次读取 ctx 从而出现奇怪的行为！
-//    free(ctx);
+    //    free(ctx);
 }

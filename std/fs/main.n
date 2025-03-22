@@ -11,6 +11,9 @@ type file_t:io.reader, io.writer, io.seeker = struct{
     // ... other fields
 }
 
+#linkid rt_uv_fs_from
+fn from(int fd, string name):ptr<file_t>!
+
 #linkid rt_uv_fs_open
 fn open(string path, int flags, int mode):ptr<file_t>!
 

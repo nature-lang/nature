@@ -196,7 +196,7 @@ static void processor_uv_close(n_processor_t *p) {
     int result = uv_loop_close(&p->uv_loop);
 
     if (result != 0) {
-        RDEBUGF("[runtime.processor_uv_close] uv loop close failed, code=%d, msg=%s, p_index_%d=%d", result,
+        DEBUGF("[runtime.processor_uv_close] uv loop close failed, code=%d, msg=%s, p_index_%d=%d", result,
                 uv_strerror(result), p->share,
                 p->index);
         assert(false && "uv loop close failed");
@@ -560,9 +560,10 @@ void rt_coroutine_dispatch(coroutine_t *co) {
     // - 遍历 shared_processor_list 找到 co_list->count 最小的 processor 进行调度
     n_processor_t *select_p = NULL;
 
-    // TODO 直接采用 next 方案, 按顺序匹配
     if (co->main) {
         select_p = share_processor_index[0];
+    } else if (co->flag & FLAG(CO_FLAG_SAME)) {
+        select_p = processor_get();
     } else {
         PROCESSOR_FOR(share_processor_list) {
             if (!select_p || p->co_list.count < select_p->co_list.count) {
@@ -795,6 +796,7 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu, void *arg)
     co->fn = fn;
     co->solo = FLAG(CO_FLAG_SOLO) & flag;
     co->main = FLAG(CO_FLAG_MAIN) & flag;
+    co->flag = flag;
     co->arg = arg;
     co->data = NULL;
     co->gc_black = 0;

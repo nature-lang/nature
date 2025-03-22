@@ -30,7 +30,8 @@ extern mutex_t cp_alloc_locker;
 
 typedef enum {
     CO_FLAG_SOLO = 1,
-    CO_FLAG_MAIN = 2,
+    CO_FLAG_SAME = 2,
+    CO_FLAG_MAIN = 3,
 } co_flag_t;
 
 #ifdef __LINUX
@@ -98,6 +99,7 @@ static inline void co_yield_runnable(n_processor_t *p, coroutine_t *co) {
 static inline void co_yield_waiting(coroutine_t *co, unlock_fn unlock_fn, void *lock_of) {
     assert(co->p);
     assert(co);
+    assertf(co->status != CO_STATUS_WAITING, "co already waiting io");
 
     co->wait_unlock_fn = unlock_fn;
     co->wait_lock = lock_of;

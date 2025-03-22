@@ -3,7 +3,7 @@ import syscall
 fn main():void! {
     string s = 'hello world!'
     var raw_str = s.ref()
-    int result = syscall.call6(syscall.SYS_WRITE, syscall.STDOUT_FILENO as void_ptr, raw_str, s.len() as void_ptr, 0, 0, 0)
+    int result = syscall.call6(syscall.SYS_WRITE, syscall.STDOUT as void_ptr, raw_str, s.len() as void_ptr, 0, 0, 0)
 
     // read
     var fd = syscall.open('./asserts/stat.txt', syscall.O_RDONLY, 0666)

@@ -52,7 +52,7 @@ static inline void on_write_end_cb(uv_write_t *write_req, int status) {
  * @param suggested_size
  * @param buf
  */
-void alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
+static inline void http_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
     conn_ctx_t *ctx = CONTAINER_OF(handle, conn_ctx_t, client_handle);
     DEBUGF("[uv_alloc_buffer] suggested_size: %ld", suggested_size);
     ctx->read_buf_cap += HTTP_PARSER_BUF_SIZE;
@@ -233,7 +233,7 @@ static void on_new_conn_cb(uv_stream_t *server, int status) {
     }
 
     ctx->client_handle.data = listen_co;
-    result = uv_read_start((uv_stream_t *) &ctx->client_handle, alloc_buffer_cb, on_read_cb);
+    result = uv_read_start((uv_stream_t *) &ctx->client_handle, http_alloc_buffer_cb, on_read_cb);
     if (result) {
         DEBUGF("[rt_uv_read] uv_read_start failed: %s", uv_strerror(result));
         uv_close((uv_handle_t *) &ctx->client_handle, on_close_cb);

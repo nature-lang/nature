@@ -1,0 +1,7 @@
+import io
+import process
+
+fn main():void! {
+    var state = process.run('sleep', ['3'])
+    println('process exited', state.exit_code, state.term_sig, state.stdout, state.stderr)
+}

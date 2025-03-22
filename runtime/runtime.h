@@ -331,6 +331,7 @@ struct coroutine_t {
     bool main; // 是否是 main 函数
     bool solo; // 当前协程需要独享线程
     bool ticket;
+    int64_t flag;
     co_status_t status;
     aco_t aco;
     void *fn; // fn 指向
