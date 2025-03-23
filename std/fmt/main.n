@@ -1,5 +1,4 @@
 import fmt.utils as *
-import path
 
 fn sprintf(string format, ...[any] args):string {
     var end = format.len()

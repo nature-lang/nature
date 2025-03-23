@@ -12,6 +12,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <fcntl.h>
 
 #include "assertf.h"
 #include "errno.h"
@@ -31,6 +32,9 @@
 #define addr_t uint64_t
 
 static char tlsprintf_buf[1024];
+
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#define min(a, b) ((a) < (b) ? (a) : (b))
 
 // #undef free
 // #define free(_ptr) \
@@ -215,13 +219,6 @@ static inline char *tlsprintf(char *format, ...) {
     va_end(args);
 
     return tlsprintf_buf;
-}
-
-static inline int64_t max(int64_t a, int64_t b) {
-    if (a > b) {
-        return a;
-    }
-    return b;
 }
 
 static inline char *itoa(int64_t n) {

@@ -1,12 +1,11 @@
 #ifndef __ASSERTF_H
 #define __ASSERTF_H
 
-#include <unistd.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fcntl.h>
+// 移除了 unistd.h 和 fcntl.h，因为不再需要 isatty
 
 #define COL_NONE    ""
 #define COL_RST     "\x1b[0m"
@@ -14,7 +13,8 @@
 #define COL_GRAY    "\x1b[02m"
 #define COL_CYAN    "\x1b[36m"
 
-#define COL(col)            (isatty(fileno(stderr)) ? (COL_##col) : COL_NONE)
+// 移除 isatty 检查，直接使用颜色代码
+#define COL(col)            (COL_##col)
 
 /**
  * basename(3) have inconsistent implementation across UNIX-like systems.
