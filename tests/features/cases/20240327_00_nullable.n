@@ -9,7 +9,7 @@ fn main() {
 
     i32 temp = 233
 
-    raw_ptr<i32> raw_nat = &temp
+    rawptr<i32> raw_nat = &temp
 
     println(raw_nat == null, raw_nat != null)
 

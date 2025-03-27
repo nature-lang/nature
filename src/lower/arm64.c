@@ -22,7 +22,7 @@ static lir_operand_t *arm64_convert_lea_symbol_var(closure_t *c, linked_t *list,
     assert(symbol_var_operand);
     assert(c->module);
 
-    lir_operand_t *symbol_ptr = temp_var_operand_with_alloc(c->module, type_kind_new(TYPE_VOID_PTR));
+    lir_operand_t *symbol_ptr = temp_var_operand_with_alloc(c->module, type_kind_new(TYPE_ANYPTR));
     assert(symbol_ptr);
 
     linked_push(list, lir_op_lea(symbol_ptr, symbol_var_operand));

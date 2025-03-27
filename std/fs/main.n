@@ -1,10 +1,34 @@
 import syscall
 import io
 
+type timespec_t = struct {
+    u64 sec 
+    u64 nsec
+}
+
+type stat_t = struct {
+    u64 dev      // device ID
+    u64 mode     // file mode
+    u64 nlink    // number of hard links
+    u64 uid      // user ID
+    u64 gid      // group ID
+    u64 rdev     // device type
+    u64 ino      // inode number
+    u64 size     // file size in bytes
+    u64 blksize  // block size
+    u64 blocks   // number of allocated blocks
+    u64 flags    // user defined flags
+    u64 gen      // file generation number
+    timespec_t atime    // last access time
+    timespec_t mtime    // last modification time
+    timespec_t ctime    // last status change time
+    timespec_t birthtime // creation time
+}
+
 // match runtime.fs_context_t 
 type file_t:io.reader, io.writer, io.seeker = struct{
     i32 fd
-    void_ptr data
+    anyptr data
     i64 data_len
     i64 data_cap
     bool closed
@@ -39,3 +63,5 @@ fn file_t.write_at([u8] buf, int offset):int!
 #linkid rt_uv_fs_close
 fn file_t.close():void
 
+#linkid rt_uv_fs_stat
+fn file_t.stat():stat_t!

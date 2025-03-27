@@ -20,7 +20,7 @@ fn main() {
     (&p).age = 32
     println((&p).age)
 
-    // (&p).set_age(25) // err: raw_ptr<person_t(struct)> cannot use impl call, must ptr<...>
+    // (&p).set_age(25) // err: rawptr<person_t(struct)> cannot use impl call, must ptr<...>
     // package.p.set_age(25) // err: person_t(struct) cannot use impl call, must ptr<...>
 
     // usafe load address

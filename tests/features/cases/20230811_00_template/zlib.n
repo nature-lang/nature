@@ -1,8 +1,8 @@
 #linkid gzopen
-fn gzopen(void_ptr fname, void_ptr mode):void_ptr
+fn gzopen(anyptr fname, anyptr mode):anyptr
 
 #linkid gzwrite
-fn gzwrite(void_ptr outfile, void_ptr buf, int len):int
+fn gzwrite(anyptr outfile, anyptr buf, int len):int
 
 #linkid gzclose
-fn gzclose(void_ptr outfile):int
+fn gzclose(anyptr outfile):int

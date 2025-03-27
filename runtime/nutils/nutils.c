@@ -95,15 +95,15 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
     }
 }
 
-n_ptr_t *raw_ptr_assert(n_raw_ptr_t *raw_ptr) {
+n_ptr_t *rawptr_assert(n_rawptr_t *rawptr) {
     PRE_RTCALL_HOOK();
-    if (raw_ptr == 0) {
-        DEBUGF("[raw_ptr_assert] raw pointer");
-        rt_throw("raw_ptr is null, cannot assert", true);
+    if (rawptr == 0) {
+        DEBUGF("[rawptr_assert] raw pointer");
+        rt_throw("rawptr is null, cannot assert", true);
         return 0;
     }
 
-    return raw_ptr;
+    return rawptr;
 }
 
 void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref) {
@@ -454,8 +454,9 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
     assert(error->method_count == 1);
     coroutine_t *co = coroutine_get();
 
-    DEBUGF("[runtime.co_throw_error] co=%p, error_base=%s, path=%s, line=%ld, column=%ld", co, error, path, line,
-           column);
+    DEBUGF("[runtime.co_throw_error] co=%p, error=%p, path=%s, line=%ld, column=%ld, msg=%s", co, (void*)error, path,
+            line,
+            column, (char *) rt_string_ref(rti_error_msg(error)));
 
     assert(co->traces == NULL);
     n_vec_t *traces = rti_vec_new(&errort_trace_rtype, 0, 0);
@@ -564,12 +565,12 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
     return 1;
 }
 
-n_void_ptr_t void_ptr_casting(value_casting v) {
+n_anyptr_t anyptr_casting(value_casting v) {
     PRE_RTCALL_HOOK();
     return v.u64_value;
 }
 
-value_casting casting_to_void_ptr(void *ptr) {
+value_casting casting_to_anyptr(void *ptr) {
     value_casting v = {0};
     v.ptr_value = ptr;
     return v;
@@ -607,8 +608,8 @@ char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
     TRACEF("[rtype_value_str] rtype_kind=%s, data_ref=%p, data_size=%lu", type_kind_str[rtype->kind], data_ref,
            data_size);
 
-    if (is_number(rtype->kind) || rtype->kind == TYPE_BOOL || rtype->kind == TYPE_PTR || rtype->kind == TYPE_RAW_PTR ||
-        rtype->kind == TYPE_VOID_PTR || rtype->kind == TYPE_CHAN || rtype->kind == TYPE_COROUTINE_T) {
+    if (is_number(rtype->kind) || rtype->kind == TYPE_BOOL || rtype->kind == TYPE_PTR || rtype->kind == TYPE_RAWPTR ||
+        rtype->kind == TYPE_ANYPTR || rtype->kind == TYPE_CHAN || rtype->kind == TYPE_COROUTINE_T) {
         assert(data_size <= 8 && "not support number size > 8");
         int64_t temp = 0;
         memmove(&temp, data_ref, data_size);
@@ -689,11 +690,11 @@ void write_barrier(void *slot, void *new_obj) {
     rt_write_barrier(slot, new_obj);
 }
 
-void raw_ptr_valid(void *raw_ptr) {
+void rawptr_valid(void *rawptr) {
     PRE_RTCALL_HOOK(); // 修改状态避免抢占
 
-    DEBUGF("[raw_ptr_valid] raw_ptr=%p", raw_ptr);
-    if (raw_ptr <= 0) {
+    DEBUGF("[rawptr_valid] rawptr=%p", rawptr);
+    if (rawptr <= 0) {
         rt_throw("invalid memory address or nil pointer dereference", true);
     }
 }
@@ -746,7 +747,7 @@ typedef struct {
     uint8_t b[5];
 } st;
 
-n_string_t *rt_string_new(n_void_ptr_t raw_string) {
+n_string_t *rt_string_new(n_anyptr_t raw_string) {
     if (!raw_string) {
         rt_throw("raw string is empty", false);
         return NULL;

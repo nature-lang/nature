@@ -3,6 +3,7 @@ import syscall
 
 fn main():void! {
     var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
+
     var buf = vec_new<u8>(50)
 
     println(buf.len(), buf.cap())

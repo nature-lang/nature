@@ -108,7 +108,7 @@ static amd64_asm_operand_t *lir_operand_trans_amd64(closure_t *c, lir_op_t *op, 
         lir_imm_t *v = operand->value;
         assert(v->kind != TYPE_RAW_STRING && v->kind != TYPE_FLOAT);
         if (v->kind == TYPE_INT || v->kind == TYPE_UINT || v->kind == TYPE_INT64 || v->kind == TYPE_UINT64 ||
-            v->kind == TYPE_VOID_PTR) {
+            v->kind == TYPE_ANYPTR) {
             // mov r64,imm64 转换成 mov rm64,imm32
             if (v->int_value > INT32_MAX || v->int_value < INT32_MIN) {
                 return UINT64(v->uint_value);

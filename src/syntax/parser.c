@@ -589,13 +589,26 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
             token_t *ident = parser_advance(m);
             ast_generics_param_t *temp = ast_generics_param_new(ident->line, ident->column, ident->literal);
 
-            // 可选的泛型约束 <T:t1|t2, U:t1|t2>
+            // 可选的泛型约束 <T:t1|t2, U:t1&t2>
             if (parser_consume(m, TOKEN_COLON)) {
-                do {
-                    type_t t = parser_single_type(m);
-                    ct_list_push(temp->constraints.elements, &t);
-                } while (parser_consume(m, TOKEN_OR));
+                type_t t = parser_single_type(m);
+                ct_list_push(temp->constraints.elements, &t);
 
+                if (parser_is(m, TOKEN_OR)) {
+                    temp->constraints.or = true;
+                    while (parser_consume(m, TOKEN_OR)) {
+                        t = parser_single_type(m);
+                        ct_list_push(temp->constraints.elements, &t);
+                    }
+                } else if (parser_is(m, TOKEN_AND)) {
+                    temp->constraints.and = true;
+                    while (parser_consume(m, TOKEN_AND)) {
+                        t = parser_single_type(m);
+                        ct_list_push(temp->constraints.elements, &t);
+                    }
+                }
+
+                // 只要包含类型约束， any 就是 false
                 temp->constraints.any = false;
             }
 
@@ -2108,8 +2121,20 @@ static ast_expr_t parser_new_expr(module_t *m) {
                 }
             }
         } else {
+
             new_expr->default_expr = expr_new_ptr(m);
             *new_expr->default_expr = parser_expr(m);
+
+            // copy to properties
+            if (new_expr->default_expr->assert_type == AST_EXPR_IDENT) {
+                new_expr->properties = ct_list_new(sizeof(struct_property_t));
+                ast_ident *ident = new_expr->default_expr->value;
+                struct_property_t item = {
+                        .key = strdup(ident->literal),
+                        .right = ast_ident_expr(parser_peek(m)->line, parser_peek(m)->column, strdup(ident->literal))
+                };
+                ct_list_push(new_expr->properties, &item);
+            }
         }
     }
 
@@ -2345,12 +2370,26 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
                 // 默认是 union any
                 ast_generics_param_t *temp = ast_generics_param_new(ident->line, ident->column, ident->literal);
 
-                // 可选的泛型约束 <T:t1|t2, U:t1|t2>
+                // 可选的泛型约束 <T:t1|t2, U:t1&t2>
                 if (parser_consume(m, TOKEN_COLON)) {
-                    do {
-                        type_t t = parser_single_type(m);
-                        ct_list_push(temp->constraints.elements, &t);
-                    } while (parser_consume(m, TOKEN_OR));
+                    type_t t = parser_single_type(m);
+                    ct_list_push(temp->constraints.elements, &t);
+
+                    if (parser_is(m, TOKEN_OR)) {
+                        temp->constraints.or = true;
+                        while (parser_consume(m, TOKEN_OR)) {
+                            t = parser_single_type(m);
+                            ct_list_push(temp->constraints.elements, &t);
+                        }
+                    } else if (parser_is(m, TOKEN_AND)) {
+                        temp->constraints.and = true;
+                        while (parser_consume(m, TOKEN_AND)) {
+                            t = parser_single_type(m);
+                            ct_list_push(temp->constraints.elements, &t);
+                        }
+                    }
+
+                    // 只要包含类型约束， any 就是 false
                     temp->constraints.any = false;
                 }
 
@@ -2422,14 +2461,29 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
             token_t *ident = parser_advance(m);
             ast_generics_param_t *temp = ast_generics_param_new(ident->line, ident->column, ident->literal);
 
-            // 可选的泛型约束 <T:t1|t2, U:t1|t2>
+            // 可选的泛型约束 <T:t1|t2, U:t1&t2>
             if (parser_consume(m, TOKEN_COLON)) {
-                do {
-                    type_t t = parser_single_type(m);
-                    ct_list_push(temp->constraints.elements, &t);
-                } while (parser_consume(m, TOKEN_OR));
+                type_t t = parser_single_type(m);
+                ct_list_push(temp->constraints.elements, &t);
+
+                if (parser_is(m, TOKEN_OR)) {
+                    temp->constraints.or = true;
+                    while (parser_consume(m, TOKEN_OR)) {
+                        t = parser_single_type(m);
+                        ct_list_push(temp->constraints.elements, &t);
+                    }
+                } else if (parser_is(m, TOKEN_AND)) {
+                    temp->constraints.and = true;
+                    while (parser_consume(m, TOKEN_AND)) {
+                        t = parser_single_type(m);
+                        ct_list_push(temp->constraints.elements, &t);
+                    }
+                }
+
+                // 只要包含类型约束， any 就是 false
                 temp->constraints.any = false;
             }
+
 
             ct_list_push(fndef->generics_params, temp);
             table_set(m->parser_type_params_table, ident->literal, ident->literal);

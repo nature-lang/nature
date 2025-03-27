@@ -18,7 +18,7 @@ n_vec_t *rti_vec_new(rtype_t *ele_rtype, int64_t length, int64_t capacity);
 
 n_vec_t *rt_vec_new(int64_t rhash, int64_t ele_rhash, int64_t length, int64_t capacity);
 
-n_void_ptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index);
+n_anyptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index);
 
 /**
  * 返回 index 对应的 array 处的内存位置
@@ -49,7 +49,7 @@ void rt_vec_append(n_vec_t *dst, n_vec_t *src);
  */
 void rt_vec_push(n_vec_t *vec, void *ref);
 
-n_void_ptr_t rt_vec_iterator(n_vec_t *l);
+n_anyptr_t rt_vec_iterator(n_vec_t *l);
 
 /**
  * slice 不会修改原数组

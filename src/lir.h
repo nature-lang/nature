@@ -81,7 +81,7 @@
 #define RT_CALL_WRITE_BARRIER "write_barrier"
 
 #define RT_CALL_ARRAY_ELEMENT_ADDR "array_element_addr"
-#define RT_CALL_RAW_PTR_VALID "raw_ptr_valid"
+#define RT_CALL_RAWPTR_VALID "rawptr_valid"
 
 #define RT_CALL_MAP_NEW "rt_map_new"
 #define RT_CALL_MAP_ACCESS "rt_map_access"
@@ -99,8 +99,8 @@
 
 #define RT_CALL_BOOL_CASTING "bool_casting"
 #define RT_CALL_NUMBER_CASTING "number_casting"
-#define RT_CALL_VOID_PTR_CASTING "void_ptr_casting"
-#define RT_CALL_CASTING_TO_VOID_PTR "casting_to_void_ptr"
+#define RT_CALL_ANYPTR_CASTING "anyptr_casting"
+#define RT_CALL_CASTING_TO_ANYPTR "casting_to_anyptr"
 
 /**
  * 将 single 类型转换为 union 类型
@@ -120,7 +120,7 @@
 
 #define RT_CALL_INTERFACE_ASSERT "interface_assert"
 
-#define RT_CALL_RAW_PTR_ASSERT "raw_ptr_assert"
+#define RT_CALL_RAWPTR_ASSERT "rawptr_assert"
 
 #define RT_CALL_ITERATOR_NEXT_KEY "iterator_next_key"
 
@@ -256,14 +256,14 @@ static inline bool is_rtcall(string target) {
            str_equal(target, RT_CALL_VEC_LENGTH) || str_equal(target, RT_CALL_VEC_CAPACITY) ||
            str_equal(target, RT_CALL_VEC_PUSH) || str_equal(target, RT_CALL_VEC_ITERATOR) ||
            str_equal(target, RT_CALL_VEC_CONCAT) || str_equal(target, RT_CALL_WRITE_BARRIER) ||
-           str_equal(target, RT_CALL_ARRAY_ELEMENT_ADDR) || str_equal(target, RT_CALL_RAW_PTR_VALID) ||
+           str_equal(target, RT_CALL_ARRAY_ELEMENT_ADDR) || str_equal(target, RT_CALL_RAWPTR_VALID) ||
            str_equal(target, RT_CALL_MAP_NEW) || str_equal(target, RT_CALL_MAP_ACCESS) ||
            str_equal(target, RT_CALL_MAP_ASSIGN) || str_equal(target, RT_CALL_MAP_LENGTH) ||
            str_equal(target, RT_CALL_MAP_DELETE) || str_equal(target, RT_CALL_TUPLE_NEW) ||
            str_equal(target, RT_CALL_BOOL_CASTING) || str_equal(target, RT_CALL_NUMBER_CASTING) ||
-           str_equal(target, RT_CALL_VOID_PTR_CASTING) || str_equal(target, RT_CALL_CASTING_TO_VOID_PTR) ||
+           str_equal(target, RT_CALL_ANYPTR_CASTING) || str_equal(target, RT_CALL_CASTING_TO_ANYPTR) ||
            str_equal(target, RT_CALL_UNION_CASTING) || str_equal(target, RT_CALL_UNION_IS) ||
-           str_equal(target, RT_CALL_UNION_ASSERT) || str_equal(target, RT_CALL_RAW_PTR_ASSERT) ||
+           str_equal(target, RT_CALL_UNION_ASSERT) || str_equal(target, RT_CALL_RAWPTR_ASSERT) ||
            str_equal(target, RT_CALL_ITERATOR_NEXT_KEY) || str_equal(target, RT_CALL_ITERATOR_NEXT_VALUE) ||
            str_equal(target, RT_CALL_ITERATOR_TAKE_VALUE) || str_equal(target, RT_CALL_FN_NEW) ||
            str_equal(target, RT_CALL_ENV_NEW) || str_equal(target, RT_CALL_ENV_CLOSURE) ||
@@ -869,7 +869,7 @@ static inline lir_operand_t *temp_var_operand_with_alloc(module_t *m, type_t typ
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
     if (is_stack_ref_big_type(type)) {
         if (type.in_heap) {
-            lir_var->type = type_kind_new(TYPE_VOID_PTR);
+            lir_var->type = type_kind_new(TYPE_ANYPTR);
 
             uint64_t rtype_hash = ct_find_rtype_hash(type);
             OP_PUSH(lir_rtcall(RT_CALL_GC_MALLOC, target, 1, int_operand(rtype_hash)));
@@ -921,7 +921,7 @@ static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir
     // 如果 base 是 global symbol var, 则加载 symbol addr 作为 indirect base
 //    if (base->assert_type == LIR_OPERAND_SYMBOL_VAR) {
 //        lir_symbol_var_t *symbol_var = base->value;
-//        lir_operand_t *temp = temp_var_operand(m, type_kind_new(TYPE_VOID_PTR));
+//        lir_operand_t *temp = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
 //        OP_PUSH(lir_op_lea(temp, base));
 //        base = temp;
 //    }

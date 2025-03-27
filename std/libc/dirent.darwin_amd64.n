@@ -1,4 +1,4 @@
-type dir_t = void_ptr
+type dir_t = anyptr
 
 type dirent_t = struct {
     u64 ino
@@ -10,10 +10,10 @@ type dirent_t = struct {
 }
 
 #linkid 'opendir$INODE64'
-fn opendir(void_ptr str):dir_t
+fn opendir(anyptr str):dir_t
 
 #linkid 'readdir$INODE64'
-fn readdir(dir_t d):raw_ptr<dirent_t>
+fn readdir(dir_t d):rawptr<dirent_t>
 
 #linkid closedir
 fn closedir(dir_t d):int

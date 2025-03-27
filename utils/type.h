@@ -89,8 +89,8 @@ typedef enum {
     TYPE_PTR, // ptr<T> 不允许为 null 的安全指针
     // 允许为 null 的指针， unsafe_ptr<type>, 可以通过 is 断言，可以通过 as 转换为 ptr<>。
     // 其在内存上，等于一个指针的占用大小
-    TYPE_RAW_PTR, // raw_ptr<T> // 允许为 null 的不安全指针，也可能是错乱的悬空指针，暂时无法保证其正确性
-    TYPE_VOID_PTR, // void_ptr 没有具体类型，相当于 uintptr
+    TYPE_RAWPTR, // rawptr<T> // 允许为 null 的不安全指针，也可能是错乱的悬空指针，暂时无法保证其正确性
+    TYPE_ANYPTR, // anyptr 没有具体类型，相当于 uintptr
 
     // 编译时特殊临时类型,或者是没有理解是啥意思的类型(主要是编译器前端在使用这些类型)
     TYPE_FN_T, // 通配所有的 fn 类型
@@ -167,8 +167,8 @@ static string type_kind_str[] = {
         [TYPE_FN_T] = "fn_t",
         [TYPE_ALL_T] = "all_t",
         [TYPE_PTR] = "ptr", // ptr<type>
-        [TYPE_RAW_PTR] = "raw_ptr", // raw_ptr<type>
-        [TYPE_VOID_PTR] = "void_ptr", // void_ptr
+        [TYPE_RAWPTR] = "rawptr", // rawptr<type>
+        [TYPE_ANYPTR] = "anyptr", // anyptr
         [TYPE_NULL] = "null",
 };
 
@@ -226,7 +226,7 @@ typedef struct type_coroutine_t type_coroutine_t;
 
 typedef struct type_chan_t type_chan_t;
 
-typedef struct type_ptr_t type_ptr_t, type_raw_ptr_t;
+typedef struct type_ptr_t type_ptr_t, type_rawptr_t;
 
 typedef struct type_array_t type_array_t;
 
@@ -443,13 +443,13 @@ typedef struct {
 } runtime_fn_t;
 
 // 指针在 64位系统中占用的大小就是 8byte = 64bit
-typedef addr_t n_ptr_t, n_raw_ptr_t;
+typedef addr_t n_ptr_t, n_rawptr_t;
 
 typedef uint8_t n_bool_t;
 
 typedef uint8_t n_array_t; // 数组在内存中的变现形式就是 byte 列表
 
-typedef addr_t n_void_ptr_t;
+typedef addr_t n_anyptr_t;
 
 typedef int64_t n_int_t;
 typedef int64_t n_int64_t;
@@ -570,7 +570,7 @@ bool type_is_pointer_heap(type_t t);
 
 type_t type_ptrof(type_t t);
 
-type_t type_raw_ptrof(type_t t);
+type_t type_rawptrof(type_t t);
 
 type_param_t *type_param_new(char *literal);
 
@@ -730,8 +730,8 @@ static inline bool is_stack_impl(type_kind kind) {
 
 static inline bool is_gc_alloc(type_kind kind) {
     return kind == TYPE_PTR ||
-           kind == TYPE_RAW_PTR ||
-           kind == TYPE_VOID_PTR ||
+           kind == TYPE_RAWPTR ||
+           kind == TYPE_ANYPTR ||
            kind == TYPE_MAP ||
            kind == TYPE_STRING ||
            kind == TYPE_SET ||
@@ -758,13 +758,13 @@ static inline bool is_zero_type(type_t t) {
  * @return
  */
 static inline bool is_origin_type(type_t t) {
-    return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_VOID_PTR || t.kind == TYPE_VOID ||
+    return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_ANYPTR || t.kind == TYPE_VOID ||
            t.kind == TYPE_NULL || t.kind == TYPE_BOOL ||
            t.kind == TYPE_STRING || t.kind == TYPE_FN_T || t.kind == TYPE_ALL_T;
 }
 
 static inline bool is_clv_default_type(type_t t) {
-    return is_number(t.kind) || t.kind == TYPE_VOID_PTR || t.kind == TYPE_RAW_PTR || t.kind == TYPE_NULL ||
+    return is_number(t.kind) || t.kind == TYPE_ANYPTR || t.kind == TYPE_RAWPTR || t.kind == TYPE_NULL ||
            t.kind == TYPE_BOOL ||
            t.kind == TYPE_VOID;
 }
@@ -773,20 +773,20 @@ static inline bool is_struct_ptr(type_t t) {
     return t.kind == TYPE_PTR && t.ptr->value_type.kind == TYPE_STRUCT;
 }
 
-static inline bool is_struct_raw_ptr(type_t t) {
-    return t.kind == TYPE_RAW_PTR && t.ptr->value_type.kind == TYPE_STRUCT;
+static inline bool is_struct_rawptr(type_t t) {
+    return t.kind == TYPE_RAWPTR && t.ptr->value_type.kind == TYPE_STRUCT;
 }
 
 static inline bool is_map_set_key_type(type_kind kind) {
-    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_STRING || kind == TYPE_PTR || kind == TYPE_RAW_PTR ||
-           kind == TYPE_VOID_PTR || kind == TYPE_CHAN || kind == TYPE_STRUCT || kind == TYPE_ARR;
+    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_STRING || kind == TYPE_PTR || kind == TYPE_RAWPTR ||
+           kind == TYPE_ANYPTR || kind == TYPE_CHAN || kind == TYPE_STRUCT || kind == TYPE_ARR;
 }
 
 static inline bool is_complex_type(type_t t) {
     return t.kind == TYPE_STRUCT || t.kind == TYPE_MAP || t.kind == TYPE_VEC || t.kind == TYPE_CHAN ||
            t.kind == TYPE_ARR ||
            t.kind == TYPE_TUPLE ||
-           t.kind == TYPE_SET || t.kind == TYPE_FN || t.kind == TYPE_PTR || t.kind == TYPE_RAW_PTR;
+           t.kind == TYPE_SET || t.kind == TYPE_FN || t.kind == TYPE_PTR || t.kind == TYPE_RAWPTR;
 }
 
 static inline bool is_qword_int(type_kind kind) {

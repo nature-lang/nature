@@ -43,7 +43,7 @@ fn arch(string path):string! {
     int fd = syscall.open(path, syscall.O_RDONLY, 0)
 
     var elf_header = elf64_ehdr_t{}
-    syscall.read(fd, elf_header as void_ptr, @sizeof(elf64_ehdr_t))
+    syscall.read(fd, elf_header as anyptr, @sizeof(elf64_ehdr_t))
     syscall.close(fd)
 
     if elf_header.ident[EI_MAG0] != ELFMAG0 ||

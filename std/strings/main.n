@@ -4,7 +4,7 @@ import libc
 import runtime
 
 // 基于 c 字符串创建一个 nature 字符串 
-fn from(void_ptr p):string! {
+fn from(anyptr p):string! {
     return runtime.string_new(p)
 }
 
@@ -30,8 +30,8 @@ fn string.find_after(string sub, int after):int {
         return self.find_char(sub[0], after)
     }
 
-    void_ptr base = self.ref()
-    void_ptr temp = libc.strstr((base as uint + after as uint) as void_ptr, sub.ref())
+    anyptr base = self.ref()
+    anyptr temp = libc.strstr((base as uint + after as uint) as anyptr, sub.ref())
     if temp == 0 {
         return -1
     }
@@ -110,7 +110,10 @@ fn string.find(string sub):int {
 
 fn string.slice(int start, int end):string {
     var list = self as [u8]
-    list = list.slice(start, end)
+    list = list.slice(start, end) catch e {
+        panic(e.msg())
+    }
+
     return list as string
 }
 
@@ -276,6 +279,71 @@ fn string.to_int():int! {
         }
 
         result = result * 10 + (c - '0'.ascii()) as int
+    }
+
+    if negative {
+        result = -result
+    }
+
+    return result
+}
+
+fn string.to_float():float! {
+    if self.len() == 0 {
+        throw errorf('cannot convert empty string to float')
+    }
+
+    var result = 0.0
+    var start = 0
+    var negative = false
+
+    if self[0] == '-'.ascii() {
+        negative = true
+        start = 1
+        if self.len() == 1 {
+            throw errorf("invalid number format")
+        }
+    }
+
+    // 跳过前导空格
+    for int i = start; i < self.len(); i += 1 {
+        if self[i] != ' '.ascii() {
+            start = i
+            break
+        }
+    }
+
+    var decimal_point = -1
+    for int i = start; i < self.len(); i += 1 {
+        var c = self[i]
+        if c == '.'.ascii() {
+            if decimal_point != -1 {
+                throw errorf("invalid float format: multiple decimal points")
+            }
+            decimal_point = i
+            continue
+        }
+        
+        if c < '0'.ascii() || c > '9'.ascii() {
+            throw errorf("invalid character in float")
+        }
+
+        if decimal_point == -1 {
+            // 处理整数部分
+            result = result * 10.0 + (c - '0'.ascii()) as float
+        } else {
+            // 处理小数部分
+            var decimal_place = i - decimal_point
+            var decimal_value = (c - '0'.ascii()) as float
+            var multiplier = 0.1
+            
+            // 计算正确的小数位乘数
+            for int j = 1; j < decimal_place; j += 1 {
+                multiplier = multiplier * 0.1
+            }
+            
+            result = result + decimal_value * multiplier
+        }
     }
 
     if negative {

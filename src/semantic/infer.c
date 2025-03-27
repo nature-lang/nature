@@ -19,6 +19,145 @@ static void infer_fndef(module_t *m, ast_fndef_t *fn);
 
 static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef);
 
+static bool union_type_contains(type_union_t *union_type, type_t sub);
+
+bool generics_constraints_compare(ast_generics_constraints *left, ast_generics_constraints *right) {
+    if (left->any) {
+        return true;
+    }
+
+    if (right->any && !left->any) {
+        return false;
+    }
+
+    if (right->and && !left->and) {
+        return false;
+    }
+
+    if (right->or && !left->or) {
+        return false;
+    }
+
+    // 创建一个标记数组，用于标记left中的类型是否已经匹配
+    // 遍历right中的类型，确保每个类型都存在于left中
+    for (int i = 0; i < right->elements->length; ++i) {
+        type_t *right_type = ct_list_value(right->elements, i);
+
+        // 检查right_type是否存在于left中
+        bool type_found = false;
+        for (int j = 0; j < left->elements->length; ++j) {
+            type_t *left_type = ct_list_value(left->elements, j);
+            if (type_compare(*left_type, *right_type, NULL)) {
+                type_found = true;
+                break;
+            }
+        }
+        // 如果right_type不存在于left中，则释放内存并返回false
+        if (!type_found) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void generics_constraints_check(module_t *m, ast_generics_constraints *constraints, type_t *src) {
+    // 对 constraints 进行类型还原
+    for (int j = 0; j < constraints->elements->length; ++j) {
+        type_t *constraint = ct_list_value(constraints->elements, j);
+        *constraint = reduction_type(m, *constraint);
+
+        if (constraints->elements->length == 1) {
+            if (constraint->kind == TYPE_INTERFACE) {
+                constraints->and = true;
+            } else if (constraint->kind != TYPE_UNION) { // or 表示单个类型约束？那 union 呢？怎么 check, 怎么约束？
+                constraints->or = true;
+            }
+        }
+
+        if (constraints->and) {
+            // must interface
+            INFER_ASSERTF(constraint->kind == TYPE_INTERFACE, "only type 'interface' can be combination with '&'");
+        } else if (constraints->or) {
+            // cannot interface and union
+            INFER_ASSERTF(constraint->kind != TYPE_UNION, "cannot use type 'union' combination")
+            INFER_ASSERTF(constraint->kind != TYPE_INTERFACE, "cannot use type 'interface' combination")
+        }
+    }
+
+    if (constraints->any) {
+        return;
+    }
+
+    // check src
+    if (constraints->or) {
+        for (int i = 0; i < constraints->elements->length; ++i) {
+            type_t *t = ct_list_value(constraints->elements, i);
+            if (type_compare(*t, *src, NULL)) {
+                return; // 验证成功
+            }
+        }
+
+        // type alias '%s' param constraint not match
+        INFER_ASSERTF(false, "type '%s' does not match any of the constraints", type_format(*src));
+        return;
+    }
+
+    // check interface
+    if (constraints->and) {
+        for (int i = 0; i < constraints->elements->length; ++i) {
+            type_t *interface_type = ct_list_value(constraints->elements, i);
+            assert(interface_type->ident_kind == TYPE_IDENT_INTERFACE);
+            assert(interface_type->kind == TYPE_INTERFACE);
+
+            type_t temp_target_type = *src;
+            if (src->kind == TYPE_PTR || src->kind == TYPE_RAWPTR) {
+                temp_target_type = src->ptr->value_type;
+            }
+
+            assert(temp_target_type.ident);
+
+            symbol_t *s = symbol_table_get(temp_target_type.ident);
+            if (!s) { // maybe builtin type
+                if (interface_type->interface->elements->length > 0) {
+                    INFER_ASSERTF(false, "type '%s' not impl '%s' interface", temp_target_type.ident,
+                                  interface_type->ident);
+                }
+
+                // empty interface
+                continue;
+            }
+
+            assert(s && s->type == SYMBOL_TYPE);
+            ast_typedef_stmt_t *typedef_stmt = s->ast_value;
+            bool found = false;
+            if (typedef_stmt->impl_interfaces) {
+                for (int j = 0; j < typedef_stmt->impl_interfaces->length; ++j) {
+                    type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, j);
+                    assert(impl_interface->ident_kind == TYPE_IDENT_INTERFACE);
+                    if (str_equal(impl_interface->ident, interface_type->ident)) {
+                        found = true;
+                    }
+                }
+            }
+            // 禁止鸭子类型
+            INFER_ASSERTF(found, "type '%s' not impl '%s' interface", temp_target_type.ident, interface_type->ident);
+            check_typedef_impl(m, interface_type, temp_target_type.ident, typedef_stmt);
+        }
+
+        return;
+    }
+
+    // union check
+    assert(constraints->elements->length == 1);
+    type_t *union_constraint = ct_list_value(constraints->elements, 0);
+    assert(union_constraint->kind == TYPE_UNION);
+
+    // type alias '%s' param constraint not match
+    INFER_ASSERTF(union_type_contains(union_constraint->union_, *src),
+                  "type '%s' does not match any of the constraints", type_format(*src));
+}
+
 static type_t *select_fn_param(type_fn_t *type_fn, uint8_t index, bool is_spread) {
     assert(type_fn);
     if (type_fn->is_rest && index >= type_fn->param_types->length - 1) {
@@ -146,9 +285,9 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         return true;
     }
 
-    // raw_ptr<t> 可以赋值为 null 以及 ptr<t> 两种类型的值
+    // rawptr<t> 可以赋值为 null 以及 ptr<t> 两种类型的值
     // 但是不能通过 as 转换为 ptr<T> 和 null
-    if (dst.kind == TYPE_RAW_PTR) {
+    if (dst.kind == TYPE_RAWPTR) {
         if (src.kind == TYPE_NULL) {
             return true;
         }
@@ -175,6 +314,8 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
             table_set(generics_param_table, param_ident, target_type);
             dst = *target_type;
         }
+
+        return true;
     }
 
     if (dst.kind != src.kind) {
@@ -333,7 +474,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         return true;
     }
 
-    if (dst.kind == TYPE_PTR || dst.kind == TYPE_RAW_PTR) {
+    if (dst.kind == TYPE_PTR || dst.kind == TYPE_RAWPTR) {
         type_t left_pointer = dst.ptr->value_type;
         type_t right_pointer = src.ptr->value_type;
         return type_compare(left_pointer, right_pointer, generics_param_table);
@@ -399,6 +540,8 @@ static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_
         // 判断泛型参数是否全部推断完成
         for (int i = 0; i < temp_fn->generics_params->length; i++) {
             ast_generics_param_t *param = ct_list_value(temp_fn->generics_params, i);
+            type_t *arg_type = table_get(generics_args_table, param->ident);
+            generics_constraints_check(m, &param->constraints, arg_type);
             INFER_ASSERTF(table_exist(generics_args_table, param->ident), "cannot infer generics param '%s'",
                           param->ident);
         }
@@ -702,7 +845,7 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_t
  *
  * 支持 integer/floater 类型之间相互进行转换
  * 支持 string 与 `[u8]` 类型之间相互转换
- * 支持 void_ptr 与任意类型(除了 floater)之间相互转换
+ * 支持 anyptr 与任意类型(除了 floater)之间相互转换
  * 后续联合类型断言也使用 as 语法
  *
  * 类型断言 type assert
@@ -721,13 +864,13 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     INFER_ASSERTF(src_type.kind != TYPE_UNKNOWN, "unknown as source type");
     as_expr->src.type = src_type;
 
-    // void_ptr 可以 as 为任意类型
-    if (as_expr->src.type.kind == TYPE_VOID_PTR && !is_float(target_type.kind)) {
+    // anyptr 可以 as 为任意类型
+    if (as_expr->src.type.kind == TYPE_ANYPTR && !is_float(target_type.kind)) {
         return target_type;
     }
 
-    // 任意类型都可以 as void_ptr
-    if (!is_float(as_expr->src.type.kind) && target_type.kind == TYPE_VOID_PTR) {
+    // 任意类型都可以 as anyptr
+    if (!is_float(as_expr->src.type.kind) && target_type.kind == TYPE_ANYPTR) {
         return target_type;
     }
 
@@ -747,7 +890,7 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     if (as_expr->src.type.kind == TYPE_INTERFACE) {
         type_t interface_type = as_expr->src.type;
         type_t temp_target_type = target_type;
-        if (target_type.kind == TYPE_PTR || target_type.kind == TYPE_RAW_PTR) {
+        if (target_type.kind == TYPE_PTR || target_type.kind == TYPE_RAWPTR) {
             temp_target_type = target_type.ptr->value_type;
         }
 
@@ -1131,7 +1274,7 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_typ
         INFER_ASSERTF(type.kind != TYPE_UNION, "cannot load address of an union type");
 
 
-        return type_raw_ptrof(type);
+        return type_rawptrof(type);
     }
 
     // @unsafe_la(var)
@@ -1147,7 +1290,7 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_typ
 
     // *var
     if (expr->operator == AST_OP_IA) {
-        INFER_ASSERTF(type.kind == TYPE_PTR || type.kind == TYPE_RAW_PTR,
+        INFER_ASSERTF(type.kind == TYPE_PTR || type.kind == TYPE_RAWPTR,
                       "cannot dereference non-pointer type '%s'", type_format(type));
 
         return type.ptr->value_type;
@@ -1474,7 +1617,7 @@ static type_t infer_access_expr(module_t *m, ast_expr_t *expr) {
     ast_access_t *access = expr->value;
     type_t left_type = infer_right_expr(m, &access->left, type_kind_new(TYPE_UNKNOWN));
 
-    if (left_type.kind == TYPE_PTR || left_type.kind == TYPE_RAW_PTR) {
+    if (left_type.kind == TYPE_PTR || left_type.kind == TYPE_RAWPTR) {
         if (left_type.ptr->value_type.kind == TYPE_ARR) {
             left_type = left_type.ptr->value_type;
         }
@@ -1586,7 +1729,7 @@ static type_t infer_select_expr(module_t *m, ast_expr_t *expr) {
     // infer 自动解引用
     // 不能直接改写 select->instance!
     type_t left_type = select->left.type;
-    if (left_type.kind == TYPE_PTR | left_type.kind == TYPE_RAW_PTR) {
+    if (left_type.kind == TYPE_PTR | left_type.kind == TYPE_RAWPTR) {
         type_t value_type = select->left.type.ptr->value_type;
         if (value_type.kind == TYPE_STRUCT) {
             left_type = value_type;
@@ -1594,7 +1737,7 @@ static type_t infer_select_expr(module_t *m, ast_expr_t *expr) {
     }
 
     // TODO 在本次版本中，尝试不进行限制 raw ptr 的 . 语法，从而达到和 c 语言一样的效果
-    //    INFER_ASSERTF(left_type.kind != TYPE_RAW_PTR,
+    //    INFER_ASSERTF(left_type.kind != TYPE_RAWPTR,
     //                  "%s cannot use select '.' operator", type_format(left_type));
 
     // ast_access to ast_struct_access
@@ -1608,7 +1751,7 @@ static type_t infer_select_expr(module_t *m, ast_expr_t *expr) {
 
         // 改写
         ast_struct_select_t *struct_select = NEW(ast_struct_select_t);
-        struct_select->instance = select->left; // 可能是 ptr<struct>/ raw_ptr<struct> / struct
+        struct_select->instance = select->left; // 可能是 ptr<struct>/ rawptr<struct> / struct
         struct_select->key = select->key;
         struct_select->property = p;
         expr->assert_type = AST_EXPR_STRUCT_SELECT;
@@ -1773,7 +1916,7 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
     type_t select_left_type = infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
 
     type_t destr_type = select_left_type;
-    if (select_left_type.kind == TYPE_PTR || select_left_type.kind == TYPE_RAW_PTR) {
+    if (select_left_type.kind == TYPE_PTR || select_left_type.kind == TYPE_RAWPTR) {
         destr_type = select_left_type.ptr->value_type;
     }
 
@@ -1847,7 +1990,7 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
             }
 
             INFER_ASSERTF(s, "type '%s' not impl '%s' fn", type_format(destr_type), select->key);
-            if (select_left_type.kind == TYPE_PTR || select_left_type.kind == TYPE_RAW_PTR) {
+            if (select_left_type.kind == TYPE_PTR || select_left_type.kind == TYPE_RAWPTR) {
                 self_arg->type.ptr->value_type = temp_type;
             } else {
                 self_arg->type = temp_type;
@@ -2005,6 +2148,10 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
 
 void infer_expr_fake(module_t *m, ast_expr_fake_stmt_t *stmt) {
     infer_right_expr(m, &stmt->expr, type_kind_new(TYPE_UNKNOWN));
+    if (stmt->expr.assert_type == AST_MATCH && stmt->expr.type.kind == TYPE_UNKNOWN) {
+        stmt->expr.type = type_kind_new(TYPE_VOID);
+        stmt->expr.target_type = type_kind_new(TYPE_VOID);
+    }
 }
 
 /**
@@ -2225,7 +2372,7 @@ static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
     literal->kind = literal_type.kind;
 
     type_kind target_kind = target_type.kind;
-    if (target_kind == TYPE_VOID_PTR) {
+    if (target_kind == TYPE_ANYPTR) {
         target_kind = TYPE_UINT;
     }
     target_kind = cross_kind_trans(target_kind);
@@ -2611,7 +2758,7 @@ static ast_expr_t as_to_interface(module_t *m, ast_expr_t *expr, type_t interfac
 
     // auto destr ptr
     type_t src_type = expr->type;
-    if (expr->type.kind == TYPE_PTR || expr->type.kind == TYPE_RAW_PTR) {
+    if (expr->type.kind == TYPE_PTR || expr->type.kind == TYPE_RAWPTR) {
         src_type = expr->type.ptr->value_type;
     }
 
@@ -2706,8 +2853,8 @@ static type_t reduction_struct(module_t *m, type_t t) {
     INFER_ASSERTF(t.kind == TYPE_STRUCT, "type kind=%s unexpect", type_format(t));
 
     type_struct_t *s = t.struct_;
-    int align = 0;
 
+    int max_align = 0;
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *p = ct_list_value(s->properties, i);
 
@@ -2724,20 +2871,18 @@ static type_t reduction_struct(module_t *m, type_t t) {
         }
 
         int item_align = type_alignof(p->type);
-
-        if (item_align > align) {
-            align = item_align;
+        if (item_align > max_align) {
+            max_align = item_align;
         }
 
         INFER_ASSERTF(type_confirmed(p->type), "struct property '%s' type not confirmed", p->key);
     }
-    t.struct_->align = align;
-
+    t.struct_->align = max_align;
     return t;
 }
 
 static type_t reduction_complex_type(module_t *m, type_t t) {
-    if (t.kind == TYPE_PTR || t.kind == TYPE_RAW_PTR) {
+    if (t.kind == TYPE_PTR || t.kind == TYPE_RAWPTR) {
         type_ptr_t *type_pointer = t.ptr;
         type_pointer->value_type = reduction_type(m, type_pointer->value_type);
         return t;
@@ -2955,17 +3100,7 @@ static type_t reduction_typedef_or_alias(module_t *m, type_t t) {
 
             ast_generics_param_t *param = ct_list_value(typedef_stmt->params, i);
 
-            // 对 constraints 进行类型还原
-            if (!param->constraints.any) {
-                for (int j = 0; j < param->constraints.elements->length; ++j) {
-                    type_t *constraint = ct_list_value(param->constraints.elements, j);
-                    *constraint = reduction_type(m, *constraint);
-                }
-            }
-
-
-            INFER_ASSERTF(union_type_contains(&param->constraints, *arg), "type alias '%s' param constraint not match",
-                          t.ident);
+            generics_constraints_check(m, &param->constraints, arg);
         }
 
         // 此时只是使用 module 作为一个 context 使用，实际上 type_alias_stmt->params 和 当前 module 并不是同一个文件中的
@@ -3218,16 +3353,32 @@ static void infer_generics_param_constraints(module_t *m, type_t *impl_type, lis
     // generics_params 定义的约束应该包含在 impl_type 定义的 params 中
     for (int i = 0; i < params->length; ++i) {
         ast_generics_param_t *type_generics_param = ct_list_value(params, i);
-        if (!type_generics_param->constraints.any) {
-            for (int j = 0; j < type_generics_param->constraints.elements->length; ++j) {
-                type_t *constraint = ct_list_value(type_generics_param->constraints.elements, j);
-                *constraint = reduction_type(m, *constraint);
+
+        for (int j = 0; j < type_generics_param->constraints.elements->length; ++j) {
+            type_t *constraint = ct_list_value(type_generics_param->constraints.elements, j);
+            *constraint = reduction_type(m, *constraint);
+
+            if (type_generics_param->constraints.elements->length == 1) {
+                if (constraint->kind == TYPE_INTERFACE) {
+                    type_generics_param->constraints.and = true;
+                } else if (constraint->kind != TYPE_UNION) { // or 表示单个类型约束？那 union 呢？怎么 check, 怎么约束？
+                    type_generics_param->constraints.or = true;
+                }
+            }
+
+            if (type_generics_param->constraints.and) {
+                // must interface
+                INFER_ASSERTF(constraint->kind == TYPE_INTERFACE, "only type 'interface' can be combination with '&'");
+            } else if (type_generics_param->constraints.or) {
+                INFER_ASSERTF(constraint->kind != TYPE_UNION, "cannot use type 'union' combination")
+                INFER_ASSERTF(constraint->kind != TYPE_INTERFACE, "cannot use type 'interface' combination")
             }
         }
 
         ast_generics_param_t *impl_generics_param = ct_list_value(generics_params, i);
 
-        bool compare = type_union_compare(&type_generics_param->constraints, &impl_generics_param->constraints);
+        bool compare = generics_constraints_compare(&type_generics_param->constraints,
+                                                    &impl_generics_param->constraints);
         INFER_ASSERTF(compare, "type alias '%s' param constraint not match", impl_ident);
     }
 }
@@ -3372,6 +3523,9 @@ static void infer_fndef(module_t *m, ast_fndef_t *fn) {
     }
 }
 
+/**
+ * union type 才能进行 product
+ */
 void cartesian_product(list_t *generics_params, int depth, type_t **temp_product, slice_t *result) {
     if (depth == generics_params->length) {
         // 从新申请空间， copy 到 result 中
@@ -3400,20 +3554,46 @@ void cartesian_product(list_t *generics_params, int depth, type_t **temp_product
  * @return
  */
 static slice_t *generics_constraints_product(module_t *m, type_t *impl_type, list_t *generics_params) {
+    slice_t *hash_list = slice_new();
+
     // 要么全部是 any， 要么不能全部是 any, 避免复杂的匹配情况
     int any_count = 0;
     for (int i = 0; i < generics_params->length; ++i) {
         ast_generics_param_t *param = ct_list_value(generics_params, i);
-        if (param->constraints.any) {
-            any_count++;
-        } else {
-            for (int j = 0; j < param->constraints.elements->length; ++j) {
-                type_t *temp = ct_list_value(param->constraints.elements, j);
-                *temp = reduction_type(m, *temp);
+        for (int j = 0; j < param->constraints.elements->length; ++j) {
+            type_t *temp = ct_list_value(param->constraints.elements, j);
+            *temp = reduction_type(m, *temp);
+
+            if (param->constraints.elements->length == 1) {
+                if (temp->kind == TYPE_INTERFACE) {
+                    param->constraints.and = true;
+                } else if (temp->kind != TYPE_UNION) { // or 表示单个类型约束？那 union 呢？怎么 check, 怎么约束？
+                    param->constraints.or = true;
+                }
             }
+
+
+            if (param->constraints.and) {
+                // must interface
+                INFER_ASSERTF(temp->ident_kind == TYPE_IDENT_INTERFACE,
+                              "only type 'interface' can be combination with '&'");
+            } else if (param->constraints.or) {
+                // cannot interface and union
+                INFER_ASSERTF(temp->kind != TYPE_UNION, "cannot use type 'union' combination")
+                INFER_ASSERTF(temp->kind != TYPE_INTERFACE, "cannot use type 'interface' combination")
+            }
+        }
+
+        if (param->constraints.any) {
+            return hash_list; // 存在 any 则无法进行具体数量的组合约束
+        }
+
+        if (param->constraints.and) {
+            return hash_list; // and 表示这是 interface, 同样无法进行类型约束
         }
     }
 
+    // 要么全都是 any 要么全都不是 any
     INFER_ASSERTF(any_count == 0 || any_count == generics_params->length,
                   "all generics params must have constraints or all none");
 
@@ -3421,12 +3601,6 @@ static slice_t *generics_constraints_product(module_t *m, type_t *impl_type, lis
         infer_generics_param_constraints(m, impl_type, generics_params);
     }
 
-    slice_t *hash_list = slice_new();
-
-    // 全部 any, 没有类型约束，不需要计算排列组合
-    if (any_count == generics_params->length) {
-        return hash_list;
-    }
 
     slice_t *product_list = slice_new();
     // 对 param 的 param->constraints 进行笛卡尔积计算, 也就是全量的排列组合, 比如 fn person_t<T:int|float, U:string> 的类型排列组合有  int+string 和 float+string 种可能

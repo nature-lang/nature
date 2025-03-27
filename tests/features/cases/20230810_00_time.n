@@ -4,7 +4,7 @@ import runtime
 
 fn main() {
     var timestamp = 1691656611
-    raw_ptr<libc.tm_t> ti = libc.localtime(&timestamp)
+    rawptr<libc.tm_t> ti = libc.localtime(&timestamp)
 
     // 修改成 strings.new() -- 基于重载解析多种类型的 new
     string tz = runtime.string_new(ti.tm_zone)

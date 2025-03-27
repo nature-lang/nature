@@ -8,4 +8,4 @@ fn sleep(int ms)
 fn yield()
 
 #linkid rt_coroutine_arg
-fn arg():void_ptr
+fn arg():anyptr

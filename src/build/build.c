@@ -681,7 +681,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         module_t *m = modules->take[i];
 
         // analyzer => ast_fndefs(global)
-        // analyzer 需要将 global symbol 注册完成，否则在 pre_infer 时找不到相关的符号
+        // analyzer 前需要将 global symbol 注册完成，否则在 pre_infer 时找不到相关的符号
         analyzer(m, m->stmt_list);
     }
 

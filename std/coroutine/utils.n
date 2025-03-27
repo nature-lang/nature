@@ -1,14 +1,14 @@
 #linkid rt_coroutine_new
-fn coroutine_new(void_ptr function, int flag, void_ptr future):void_ptr
+fn coroutine_new(anyptr function, int flag, anyptr future):anyptr
 
 #linkid rt_coroutine_async
-fn coroutine_async(void_ptr function, int flag, void_ptr future):void_ptr
+fn coroutine_async(anyptr function, int flag, anyptr future):anyptr
 
 #linkid rt_coroutine_dispatch
-fn coroutine_dispatch(void_ptr co)
+fn coroutine_dispatch(anyptr co)
 
 #linkid rt_coroutine_return
-fn coroutine_return(void_ptr result)
+fn coroutine_return(anyptr result)
 
 #linkid rt_coroutine_await
-fn coroutine_await(void_ptr co)
+fn coroutine_await(anyptr co)

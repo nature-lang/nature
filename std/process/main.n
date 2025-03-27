@@ -10,10 +10,10 @@ type state_t = struct{
 
 type process_t = struct{
     int pid
-    void_ptr args
-    void_ptr envs
-    void_ptr p
-    void_ptr co
+    anyptr args
+    anyptr envs
+    anyptr p
+    anyptr co
     bool exited
     i32 exit_code
     i32 term_sig

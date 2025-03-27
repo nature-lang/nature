@@ -19,8 +19,8 @@ fn main() {
     p.test_self()
 
 
-    // raw_ptr struct test
-    raw_ptr<other.person_t> b = &p
+    // rawptr struct test
+    rawptr<other.person_t> b = &p
     b.age = 32
     println(b.name, b.age, b.sex)
 

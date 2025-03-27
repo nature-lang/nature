@@ -69,7 +69,7 @@ fn buffer.cap():int {
     return self.buf.cap()
 }
 
-fn buffer.truncate(int n) {
+fn buffer.truncate(int n):void! {
     if n == 0 {
         self.reset()
         return
@@ -82,12 +82,12 @@ fn buffer.truncate(int n) {
     self.buf = self.buf.slice(0, self.offset + n)
 }
 
-fn buffer.reset() {
+fn buffer.reset():void! {
     self.offset = 0
     self.buf = self.buf.slice(0, 0)
 }
 
-fn buffer.read_all():[u8] {
+fn buffer.read_all():[u8]! {
     if self.empty() {
         return []
     }
@@ -97,3 +97,189 @@ fn buffer.read_all():[u8] {
 
     return result
 }
+
+
+type buf_reader<T: reader>: reader = struct{
+    T rd
+    [u8] buf = vec_new<u8>(4096)
+    int r
+    int w
+    bool eof
+}
+
+fn buf_reader<T>.size():int {
+    return self.buf.len()
+}
+
+fn buf_reader<T>.reset(T rd) {
+    self.rd = rd
+    if self.buf.len() == 0 {
+        self.buf = vec_new<u8>(4096)
+    }
+    self.r = 0
+    self.w = 0
+    self.eof = false
+}
+
+#local
+fn buf_reader<T>.fill():void! {
+    if self.r > 0 {
+        // Copy unread data to the buffer start position
+        self.buf.copy(self.buf.slice(self.r, self.w))
+        self.w -= self.r
+        self.r = 0
+    }
+
+    if self.w >= self.buf.len() {
+        panic('tried to fill full buffer')
+    }
+
+    // Read new data: try a limited number of times
+    int max_empty_reads = 100
+    for int i = max_empty_reads; i > 0; i -= 1 {
+        // maybe eof
+        int n = self.rd.read(self.buf.slice(self.w, self.buf.len())) catch e {
+            if e.msg() == 'EOF' {
+                self.eof = true
+            }
+
+            throw e
+        }
+        if n < 0 {
+            throw errorf('negative read count')
+        }
+        self.w += n
+        if n > 0 {
+            return
+        }
+        // if n == 0, will try again
+    }
+    
+    throw errorf('no progress')
+}
+
+fn buf_reader<T>.read([u8] buf):int! {
+    if buf.len() == 0 {
+        if self.buffered() > 0 {
+            return 0
+        }
+
+        self.eof = true
+        throw errorf('EOF')
+    }
+
+    // buffer is empty, need to read from underlying reader
+    if self.r == self.w {
+        // if request buffer size larger than internal buffer
+        // read directly to avoid copy
+        if buf.len() >= self.buf.len() {
+            return self.rd.read(buf)
+        }
+
+        // fill internal buffer
+        self.r = 0
+        self.w = 0
+        int n = self.rd.read(self.buf)
+        if n < 0 {
+            panic('negative read count')
+        }
+
+        if n == 0 {
+            self.eof = true
+            throw errorf('EOF')
+        }
+        self.w += n
+    }
+
+    // copy data from internal buffer
+    int n = buf.copy(self.buf.slice(self.r, self.w))
+    self.r += n
+    return n 
+}
+
+fn buf_reader<T>.buffered():int {
+    return self.w - self.r
+}
+
+fn buf_reader<T>.read_until(u8 delim):[u8] {
+    [u8] result = vec_new<u8>()
+    var has_error = false
+
+    for true {
+        int i = -1
+        for int j = self.r; j < self.w; j += 1 {
+            if self.buf[j] == delim {
+                i = j - self.r
+                break
+            }
+        }
+
+        // found delim
+        if i >= 0 {
+            result = self.buf.slice(self.r, self.r + i + 1)
+            self.r += i + 1 // move read pointer
+            return result
+        }
+
+        if has_error {
+            result = self.buf.slice(self.r, self.w)
+            self.r = self.w
+            return result
+        }
+
+        // buf is already full of data, without self.r for read consumption
+        if self.buffered() >= self.buf.len() {
+            result = self.buf
+            self.r = self.w
+            // throw errorf('buffer full')
+            return result
+        }
+
+        // fill may read to the end of the file to generate an eof error
+        // fill will make 100 attempts until the data is filled successfully, otherwise it will throw no progress
+        self.fill() catch e {
+            has_error = true
+        }
+    }
+
+    return result
+}
+
+fn buf_reader<T>.read_exact([u8] buf):void! {
+    int total = 0
+    for total < buf.len() {
+        int n = self.read(buf.slice(total, buf.len()))
+        total += n
+    }
+}
+
+fn buf_reader<T>.read_byte():u8! {
+    if self.r == self.w {
+        self.fill()
+    }
+
+    u8 b = self.buf[self.r]
+    self.r += 1
+    return b
+}
+
+fn buf_reader<T>.read_line():string! {
+    if self.eof {
+        throw errorf('EOF')
+    }
+
+    var bytes = self.read_until('\n'.ascii())
+
+    // 处理 \r\n
+    if bytes.len() > 0 && bytes[bytes.len() - 1] == '\n'.ascii() {
+        bytes = bytes.slice(0, bytes.len() - 1)
+        if bytes.len() > 0 && bytes[bytes.len() - 1] == '\r'.ascii() {
+            bytes = bytes.slice(0, bytes.len() - 1)
+        }
+    }
+
+    return bytes as string
+}
+
+// fn buf_reader<T>.copy([u8] buf, anyptr raw) {
+// }

@@ -1,0 +1,14 @@
+import io
+import strings
+import fmt
+
+fn main():void! {
+    var rd = new io.buffer()
+    rd.write("\n\n\nHello\n\n" as [u8])
+    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+
+    for int i = 0; i < 6; i += 1 {
+        var line = br.read_line()
+        println("Read line: '" + line + "'")
+    }
+}

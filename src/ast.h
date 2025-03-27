@@ -583,10 +583,16 @@ typedef struct {
     char *unique_ident;
 } ast_env_access_t;
 
+typedef struct {
+    list_t *elements;
+    bool any;
+    bool and;
+    bool or;
+} ast_generics_constraints;
 
 typedef struct {
-    char *ident;
-    type_union_t constraints;
+    char *ident; // generic param
+    ast_generics_constraints constraints;
 } ast_generics_param_t;
 
 /**
@@ -711,8 +717,11 @@ static bool ast_is_logic_op(ast_expr_op_t op) {
 static inline ast_generics_param_t *ast_generics_param_new(int line, int column, char *ident) {
     ast_generics_param_t *param = NEW(ast_generics_param_t);
     param->ident = ident;
-    param->constraints.any = true;
+
     param->constraints.elements = ct_list_new(sizeof(type_t));
+    param->constraints.any = true;
+    param->constraints.and = false;
+    param->constraints.or = false;
     return param;
 }
 

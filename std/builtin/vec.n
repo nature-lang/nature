@@ -2,7 +2,7 @@ import runtime
 
 // 暂时无法通过 struct 推导
 // type vec<T> = struct{
-//    void_ptr data
+//    anyptr data
 //    int len
 //    int cap
 //    int reflect_hash
@@ -25,15 +25,18 @@ fn vec_new<T>(...[int] args):vec<T> {
 }
 
 fn vec<T>.push(T v) {
-    raw_ptr<T> ref = &v
-    return runtime.vec_push(self as void_ptr, ref as void_ptr)
+    rawptr<T> ref = &v
+    return runtime.vec_push(self as anyptr, ref as anyptr)
 }
 
 #linkid rt_vec_append
 fn vec<T>.append(vec<T> l2)
 
-#linkid rt_vec_slice
-fn vec<T>.slice(int start, int end):vec<T>
+fn vec<T>.slice(int start, int end):vec<T> {
+    return runtime.vec_slice(self as anyptr, start, end) as vec<T> catch e {
+        panic(e.msg())
+    }
+}
 
 #linkid rt_vec_concat
 fn vec<T>.concat(vec<T> l2):vec<T>
@@ -48,4 +51,4 @@ fn vec<T>.len():int
 fn vec<T>.cap():int
 
 #linkid rt_vec_ref
-fn vec<T>.ref():void_ptr
+fn vec<T>.ref():anyptr

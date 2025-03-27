@@ -350,7 +350,7 @@ static inline void feature_testar_test(char *custom_target) {
             if (output_file) {
                 char *output = exec_output();
                 char *expected = unescape_string((char *) output_file->content);
-                assertf(str_equal(output, expected), "n %s failed\nexpect: %sactual: %s",
+                assertf(str_equal(output, expected), "n %s failed\nexpect: %s\nactual: %s",
                         test_case->name, output_file->content, output);
             } else {
                 int32_t status = 0;
@@ -365,7 +365,7 @@ static inline void feature_testar_test(char *custom_target) {
         else {
             // 编译错误处理
             if (output_file) {
-                assertf(str_equal(test_error_msg, (char *) output_file->content), "in %s\nexpect: %sactual: %s",
+                assertf(str_equal(test_error_msg, (char *) output_file->content), "in %s\nexpect: %s\nactual: %s",
                         test_case->name, output_file->content, test_error_msg);
             } else {
                 assertf(false, "%s failed: %s", test_case->name, test_error_msg);

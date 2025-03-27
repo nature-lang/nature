@@ -1,0 +1,220 @@
+import syscall
+import os
+import time
+import fs
+import mem
+import fmt
+import libc
+
+type config_t = struct{
+    i32 dim
+    i32 hidden_dim
+    i32 n_layers
+    i32 n_heads
+    i32 n_kv_heads
+    i32 vocab_size
+    i32 seq_len
+}
+
+type quantized_tensor = struct{
+    ptr<i8> q // quantized values
+    ptr<f32> s  // scaling
+}
+
+type transformer_weights = struct{
+    // token embedding table
+    ptr<quantized_tensor> q_tokens
+    ptr<f32> token_embedding_table
+
+    // weights for rmsnorms
+    ptr<f32> rms_att_weight
+    ptr<f32> rms_ffn_weight
+
+    // weights for matmuls. note dim == n_heads * head_size
+    ptr<quantized_tensor> wq           // (layer, dim, n_heads * head_size)
+    ptr<quantized_tensor> wk           // (layer, dim, n_kv_heads * head_size)
+    ptr<quantized_tensor> wv           // (layer, dim, n_kv_heads * head_size)
+    ptr<quantized_tensor> wo           // (layer, n_heads * head_size, dim)
+    
+    // weights for ffn
+    ptr<quantized_tensor> w1           // (layer, hidden_dim, dim)
+    ptr<quantized_tensor> w2           // (layer, dim, hidden_dim)
+    ptr<quantized_tensor> w3           // (layer, hidden_dim, dim)
+    
+    // final rmsnorm
+    ptr<f32> rms_final_weight          // (dim,)
+    
+    // (optional) classifier weights for the logits, on the last layer
+    ptr<quantized_tensor> wcls 
+}
+
+
+type run_state = struct{
+    // current wave of activations
+    ptr<f32> x        // activation at current time stamp (dim,)
+    ptr<f32> xb       // same, but inside a residual branch (dim,)
+    ptr<f32> xb2      // an additional buffer just for convenience (dim,)
+    ptr<f32> hb       // buffer for hidden dimension in the ffn (hidden_dim,)
+    ptr<f32> hb2      // buffer for hidden dimension in the ffn (hidden_dim,)
+    quantized_tensor xq  // quantized x (dim,)
+    quantized_tensor hq  // quantized hb (hidden_dim,)
+    ptr<f32> q        // query (dim,)
+    ptr<f32> k        // key (dim,)
+    ptr<f32> v        // value (dim,)
+    ptr<f32> att      // buffer for scores/attention values (n_heads, seq_len)
+    ptr<f32> logits   // output logits
+    // kv cache
+    ptr<f32> key_cache    // (layer, seq_len, dim)
+    ptr<f32> value_cache  // (layer, seq_len, dim)
+}
+
+type transformer = struct{
+    config_t config
+    transformer_weights weights
+    run_state state
+    int fd
+    ptr<f32> data
+    int file_size
+}
+
+i32 GS = 0
+
+fn transformer.memory_map_weights(anyptr weights_ptr, u8 shared_classifier) {
+    // todo
+}
+
+// read_checkpoint
+fn transformer_new(string path):ptr<transformer>! {
+    var f = fs.open(path, syscall.O_RDONLY, 0)
+
+    var int_buf = vec_new<u8>(4)
+
+    var n = f.read(int_buf)
+    assert(n == 4)
+    u32 magic_number = mem.read_u32_le(int_buf)
+
+    if magic_number != 0x616b3432 {
+        panic('bad magic number')
+    }
+
+    assert(f.read(int_buf) == 4)
+    i32 version = mem.read_i32_le(int_buf)
+
+    if version != 2 {
+        panic(fmt.sprintf('Bad version %d, need version 2', version))
+    }
+
+    i32 header_size = 256 // the header size for version 2 in bytes
+
+    // read the configs
+    var config = config_t{}
+    var config_buf = vec_new<u8>(@sizeof(config_t))
+    assert(f.read(config_buf) == @sizeof(config_t))
+    mem.copy(config_buf, &config)
+
+    // read in flags
+    var u8_buf = vec_new<u8>(1)
+    assert(f.read(u8_buf) == 1)
+
+    // a byte to indicate if the classifier is shared
+    var shared_classifier = mem.read_u8_le(u8_buf)
+
+    assert(f.read(int_buf) == 4)
+    GS = mem.read_i32_le(int_buf)
+
+    // figure out the file size
+    var st = f.stat()
+    var file_size = st.size
+
+    i32 fd = f.fd
+    anyptr data = libc.mmap(0, file_size as int, libc.PROT_READ, libc.MAP_PRIVATE, fd as int, 0)
+
+    anyptr weights_ptr = (data as i32 + header_size) as anyptr
+
+    var t = new transform(config, fd, data = data as ptr<f32>, file_size)
+
+    t.memory_map_weights(weights_ptr, shared_classifier)
+
+    return t
+}
+
+fn transformer_new(string checkpoint_path):ptr<transformer>! {
+
+    // var tf = new transformer()
+    throw errorf("td")
+}
+
+fn error_usage():void! {
+    var str = 'Usage:   run <checkpoint> [options]\n'
+    str += 'Example: run model.bin -n 256 -i "Once upon a time"\n'
+    str += 'Options:\n'
+    str += '  -t <float>  temperature in [0,inf], default 1.0\n'
+    str += '  -p <float>  p value in top-p (nucleus) sampling in [0,1] default 0.9\n'
+    str += '  -s <int>    random seed, default time(NULL)\n'
+    str += '  -n <int>    number of steps to run for, default 256. 0 = max_seq_len\n'
+    str += '  -i <string> input prompt\n'
+    str += '  -z <string> optional path to custom tokenizer\n'
+    str += '  -m <string> mode: generate|chat, default: generate\n'
+    str += '  -y <string> (optional) system prompt in chat mode\n'
+
+    print(str)
+    syscall.exit(1)
+}
+
+fn main():void! {
+    // default parameters
+    string checkpoint_path = '' // Core weight file
+    string tokenizer_path = 'tokenizer.bin'
+    f32 temperature = 1.0
+    f32 topp = 0.0
+    int steps = 256
+    string prompt = ''
+    u64 rng_seed = 0 // seed rng with time by default
+    string mode = 'generate' // generate or chat
+    string system_prompt = ''
+
+    // read args
+    var args = os.args()
+    var args_len = args.len()
+    if args_len >= 2 {
+        checkpoint_path= args[1]
+    } else {
+        error_usage()
+    }
+
+    for int i = 2; i < args_len; i+=2 {
+        if i + 1 >= args_len { error_usage() } // must have arg after flag
+        if args[i][0] != '-'.ascii() { error_usage() } // must start with dash
+        if args[i].len() != 2 { error_usage() }  // must be -x (one dash, one letter)
+
+        match args[i][1] {
+            't'.ascii() -> { temperature = args[i+1].to_float() as f32 }
+            'p'.ascii() -> { topp = args[i+1].to_float() as f32 }
+            's'.ascii() -> { rng_seed = args[i+1].to_int() as u64 }
+            'n'.ascii() -> { steps = args[i+1].to_int() }
+            'i'.ascii() -> { prompt = args[i+1] }
+            'z'.ascii() -> { tokenizer_path = args[i+1] }
+            'm'.ascii() -> { mode = args[i+1] }
+            'y'.ascii() -> { system_prompt = args[i+1] }
+            _ -> {
+                error_usage()
+            }
+        }
+    }
+
+    // parameter validation
+    if rng_seed <= 0 {
+        rng_seed = time.unix() as u64
+    }
+    if temperature < 0.0 {
+        temperature = 0.0
+    }
+    if topp < 0.0 || topp > 1.0 {
+        topp = 0.0
+    }
+    if steps < 0 {
+        steps = 0
+    }
+
+    // build the Transformer via the model .bin file
+}

@@ -13,7 +13,7 @@ static void test_basic() {
 #if defined(__DARWIN) && defined(__ARM64)
             "bar_t any dump 233.332993 0xc000004180\n";
 #else
-                "bar_t any dump 233.332993 0xc000002180\n";
+            "bar_t any dump 233.332993 0xc000002180\n";
 #endif
 
 

@@ -22,17 +22,17 @@ rtype_t rtype_base(type_kind kind) {
     return rtype;
 }
 
-static rtype_t rtype_raw_ptr(type_ptr_t *t) {
+static rtype_t rtype_rawptr(type_ptr_t *t) {
     rtype_t value_rtype = reflect_type(t->value_type);
 
-    char *str = dsprintf("%d_%lu", TYPE_RAW_PTR, value_rtype.hash);
+    char *str = dsprintf("%d_%lu", TYPE_RAWPTR, value_rtype.hash);
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
             .size = sizeof(n_ptr_t),
             .hash = hash,
             .last_ptr = POINTER_SIZE,
-            .kind = TYPE_RAW_PTR,
+            .kind = TYPE_RAWPTR,
     };
     // 计算 gc_bits
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
@@ -41,15 +41,15 @@ static rtype_t rtype_raw_ptr(type_ptr_t *t) {
     return rtype;
 }
 
-static rtype_t rtype_void_ptr(type_kind kind) {
-    char *str = dsprintf("%d", TYPE_VOID_PTR);
+static rtype_t rtype_anyptr(type_kind kind) {
+    char *str = dsprintf("%d", TYPE_ANYPTR);
     uint32_t hash = hash_string(str);
     free(str);
     rtype_t rtype = {
             .size = sizeof(n_ptr_t),
             .hash = hash,
             .last_ptr = POINTER_SIZE,
-            .kind = TYPE_VOID_PTR,
+            .kind = TYPE_ANYPTR,
     };
     // 计算 gc_bits
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
@@ -376,12 +376,13 @@ static uint16_t rtype_struct_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_st
 static rtype_t rtype_struct(type_struct_t *t) {
     char *str = itoa(TYPE_STRUCT);
 
-    if (t->properties->length == 0) {
+    uint16_t size = type_struct_sizeof(t);
+    if (size == 0) {
         rtype_t rtype = {
-                .size = 0,
+                .size = 1, // 空 struct 默认占用 1 一个字节, 让 gc malloc 可以编译通过
                 .hash = hash_string(str),
                 .kind = TYPE_STRUCT,
-                .malloc_gc_bits = NULL,
+                .malloc_gc_bits = malloc_gc_bits(1),
                 .length = t->properties->length,
                 .element_hashes = NULL,
                 .last_ptr = 0,
@@ -389,8 +390,6 @@ static rtype_t rtype_struct(type_struct_t *t) {
 
         return rtype;
     }
-
-    uint16_t size = type_struct_sizeof(t);
 
     uint16_t offset = 0; // 基于 offset 计算 gc bits
     uint8_t *gc_bits = malloc_gc_bits(size);
@@ -540,7 +539,7 @@ uint16_t type_sizeof(type_t t) {
 
 uint16_t type_alignof(type_t t) {
     if (t.kind == TYPE_STRUCT) {
-        assert(t.struct_->align > 0);
+//        assert(t.struct_->align > 0);
         return t.struct_->align;
     }
     if (t.kind == TYPE_ARR) {
@@ -571,11 +570,11 @@ type_t type_ptrof(type_t t) {
     return result;
 }
 
-type_t type_raw_ptrof(type_t t) {
+type_t type_rawptrof(type_t t) {
     type_t result = {0};
     result.status = t.status;
 
-    result.kind = TYPE_RAW_PTR;
+    result.kind = TYPE_RAWPTR;
     result.ptr = NEW(type_ptr_t);
     result.ptr->value_type = t;
 //    result.ident = t.ident;
@@ -602,11 +601,11 @@ rtype_t reflect_type(type_t t) {
         case TYPE_PTR:
             rtype = rtype_pointer(t.ptr);
             break;
-        case TYPE_RAW_PTR:
-            rtype = rtype_raw_ptr(t.ptr);
+        case TYPE_RAWPTR:
+            rtype = rtype_rawptr(t.ptr);
             break;
-        case TYPE_VOID_PTR:
-            rtype = rtype_void_ptr(t.kind);
+        case TYPE_ANYPTR:
+            rtype = rtype_anyptr(t.kind);
             break;
         case TYPE_VEC:
             rtype = rtype_vec(t.vec);
@@ -723,7 +722,7 @@ bool type_is_pointer_heap(type_t t) {
         return true;
     }
 
-    if (t.kind == TYPE_RAW_PTR || t.kind == TYPE_PTR || t.kind == TYPE_VOID_PTR) {
+    if (t.kind == TYPE_RAWPTR || t.kind == TYPE_PTR || t.kind == TYPE_ANYPTR) {
         return true;
     }
 
@@ -884,8 +883,8 @@ char *_type_format(type_t t) {
         return dsprintf("ptr<%s>", type_format(t.ptr->value_type));
     }
 
-    if (t.kind == TYPE_RAW_PTR) {
-        return dsprintf("raw_ptr<%s>", type_format(t.ptr->value_type));
+    if (t.kind == TYPE_RAWPTR) {
+        return dsprintf("rawptr<%s>", type_format(t.ptr->value_type));
     }
 
     if (t.kind == TYPE_UNION) {

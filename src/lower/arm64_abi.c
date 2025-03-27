@@ -293,7 +293,7 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
                 assert(is_stack_ref_big_type(param_type));
                 assert(type_sizeof(param_type) <= 16 && type_sizeof(param_type) > 8);
 
-                lir_operand_t *src_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_VOID_PTR));
+                lir_operand_t *src_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_ANYPTR));
                 linked_push(result, lir_op_lea(src_ref, src));
 
                 // 直接移动栈指针，而不是进行完全的 copy
@@ -450,7 +450,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         } else {
             // struct or arr 但是数据小于 8
             assert(size <= 16 && size > 8);
-            lir_operand_t *dst_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_VOID_PTR));
+            lir_operand_t *dst_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_ANYPTR));
             linked_push(result, lir_op_lea(dst_ref, dst));
 
             linked_t *temps = lir_memory_mov(c->module, type_sizeof(arg_type), dst_ref, arg_operand);

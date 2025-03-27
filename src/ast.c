@@ -180,7 +180,7 @@ type_t type_copy(type_t temp) {
             type.interface = type_interface_copy(temp.interface);
             break;
         }
-        case TYPE_RAW_PTR:
+        case TYPE_RAWPTR:
         case TYPE_PTR: {
             type.ptr = type_pointer_copy(temp.ptr);
             break;
@@ -230,7 +230,9 @@ static ast_new_expr_t *ast_new_expr_copy(ast_new_expr_t *temp) {
     new_expr->type = type_copy(temp->type);
     if (temp->default_expr) {
         new_expr->default_expr = ast_expr_copy(temp->default_expr);
-    } else if (temp->properties) {
+    }
+
+    if (temp->properties) {
         list_t *properties = ct_list_new(sizeof(struct_property_t)); // *struct_property_t
         for (int i = 0; i < temp->properties->length; ++i) {
             struct_property_t *temp_property = ct_list_value(temp->properties, i);

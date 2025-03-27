@@ -32,6 +32,8 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset);
 
 n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset);
 
+uv_stat_t rt_uv_fs_stat(fs_context_t *ctx);
+
 fs_context_t *rt_uv_fs_from(n_int_t fd, n_string_t *name);
 
 #endif //NATURE_FS_H

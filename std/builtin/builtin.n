@@ -4,9 +4,9 @@
 
 // type any = ...|...
 
-// type all_t = void_ptr // any_t 用于类型约束，c_ptr -> uint 是最终的编译类型
+// type all_t = anyptr // any_t 用于类型约束，c_ptr -> uint 是最终的编译类型
 
-// type fn_t = void_ptr // 同上
+// type fn_t = anyptr // 同上
 
 type nullable<T> = T?
 

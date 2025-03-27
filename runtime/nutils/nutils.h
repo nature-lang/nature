@@ -49,9 +49,9 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
 
 uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_int_t column);
 
-n_void_ptr_t void_ptr_casting(value_casting v);
+n_anyptr_t anyptr_casting(value_casting v);
 
-value_casting casting_to_void_ptr(void *ptr);
+value_casting casting_to_anyptr(void *ptr);
 
 n_vec_t *std_args();
 
@@ -61,13 +61,13 @@ void rt_write_barrier(void *slot, void *new_obj);
 
 void write_barrier(void *slot, void *new_obj);
 
-void raw_ptr_valid(void *raw_ptr);
+void rawptr_valid(void *rawptr);
 
 void rt_panic(n_string_t *msg);
 
 void rt_assert(n_bool_t cond);
 
-n_string_t *rt_string_new(n_void_ptr_t raw_string);
+n_string_t *rt_string_new(n_anyptr_t raw_string);
 
 n_string_t *rt_strerror();
 

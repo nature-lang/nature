@@ -73,7 +73,7 @@ fs_context_t *rt_uv_fs_from(n_int_t fd, n_string_t *name) {
 
     ctx->fd = fd;
     DEBUGF("[fs_from] create file context from fd: %d, name: %s", fd,
-           rt_string_ref(name));
+           (char*)rt_string_ref(name));
 
     return ctx;
 }
@@ -97,10 +97,10 @@ fs_context_t *rt_uv_fs_open(n_string_t *path, int64_t flags, int64_t mode) {
     co_yield_waiting(co, NULL, NULL);
 
     if (co->has_error) {
-        DEBUGF("[fs_open] open file failed: %s", rti_error_msg(co->error));
+        DEBUGF("[fs_open] open file failed: %s", (char*)rt_string_ref(rti_error_msg(co->error)));
         return NULL;
     } else {
-        DEBUGF("[fs_open] open file success: %s", rt_string_ref(path));
+        DEBUGF("[fs_open] open file success: %s", (char*)rt_string_ref(path));
     }
 
     return ctx;
@@ -137,7 +137,7 @@ n_string_t *rt_uv_fs_content(fs_context_t *ctx) {
     co_yield_waiting(co, NULL, NULL);
 
     if (co->has_error) {
-        DEBUGF("[fs_read] read file failed: %s", rti_error_msg(co->error));
+        DEBUGF("[fs_read] read file failed: %s", (char*)rt_string_ref(rti_error_msg(co->error)));
         return 0;
     } else {
         DEBUGF("[fs_read] read file success");
@@ -181,7 +181,7 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     co_yield_waiting(co, NULL, NULL);
 
     if (co->has_error) {
-        DEBUGF("[rt_uv_fs_read] read file failed: %s", rti_error_msg(co->error));
+        DEBUGF("[rt_uv_fs_read] read file failed: %s",  (char*)rt_string_ref(rti_error_msg(co->error)));
         return 0;
     } else {
         DEBUGF("[rt_uv_fs_read] read file success");
@@ -199,7 +199,7 @@ n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
         return 0;
     }
 
-    DEBUGF("[fs_write_at] write file: %d, offset: %d, data_len: %d", ctx->fd, offset, buf->length);
+    DEBUGF("[fs_write_at] write file: %d, offset: %d, data_len: %ld", ctx->fd, offset, buf->length);
 
     // 配置写入缓冲区
     uv_buf_t uv_buf = uv_buf_init((char *) buf->data, buf->length);
@@ -214,7 +214,7 @@ n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     co_yield_waiting(co, NULL, NULL);
 
     if (co->has_error) {
-        DEBUGF("[fs_write_at] write file failed: %s", rti_error_msg(co->error));
+        DEBUGF("[fs_write_at] write file failed: %s",  (char*)rt_string_ref(rti_error_msg(co->error)));
     } else {
         DEBUGF("[fs_write_at] write file success");
     }
@@ -257,4 +257,64 @@ void rt_uv_fs_close(fs_context_t *ctx) {
     // ctx 的内存应该由 GC 释放，而不是此处主动释放。
     // 否则 用户端 再次读取 ctx 从而出现奇怪的行为！
     //    free(ctx);
+}
+
+
+static void on_stat_cb(uv_fs_t *req) {
+    fs_context_t *ctx = CONTAINER_OF(req, fs_context_t, req);
+    coroutine_t *co = req->data;
+    assert(co);
+
+    if (req->result < 0) {
+        // File stat operation failed, set error and return
+        rt_co_throw(co, (char *) uv_strerror(req->result), false);
+        co_ready(co);
+        uv_fs_req_cleanup(&ctx->req);
+        return;
+    }
+
+    // Stat operation successful
+    DEBUGF("[on_stat_cb] stat file success, fd: %d", ctx->fd);
+    
+    co_ready(co);
+    // Note: req cleanup is handled in the main function after coroutine resumes
+}
+
+uv_stat_t rt_uv_fs_stat(fs_context_t *ctx) {
+    coroutine_t *co = coroutine_get();
+    n_processor_t *p = processor_get();
+    uv_stat_t stat_result = {0};
+    
+    if (ctx->closed) {
+        rt_co_throw(co, "fd already closed", false);
+        return stat_result;
+    }
+    
+    DEBUGF("[rt_uv_fs_stat] stat file: %d", ctx->fd);
+    
+    // Set up coroutine resume point
+    ctx->req.data = co;
+    
+    // Initiate async stat request
+    int result = uv_fs_fstat(&p->uv_loop, &ctx->req, ctx->fd, on_stat_cb);
+    if (result < 0) {
+        rt_co_throw(co, (char *) uv_strerror(result), false);
+        return stat_result;
+    }
+    
+    // Suspend coroutine waiting for stat operation to complete
+    co_yield_waiting(co, NULL, NULL);
+    
+    if (co->has_error) {
+        DEBUGF("[rt_uv_fs_stat] stat file failed: %s", (char*)rt_string_ref(rti_error_msg(co->error)));
+    } else {
+        DEBUGF("[rt_uv_fs_stat] stat file success");
+        // Copy stat result from request
+        stat_result = ctx->req.statbuf;
+    }
+    
+    // Clean up request
+    uv_fs_req_cleanup(&ctx->req);
+    
+    return stat_result;
 }
