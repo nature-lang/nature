@@ -27,7 +27,7 @@ type stat_t = struct {
 
 // match runtime.fs_context_t 
 type file_t:io.reader, io.writer, io.seeker = struct{
-    i32 fd
+    int fd
     anyptr data
     i64 data_len
     i64 data_cap

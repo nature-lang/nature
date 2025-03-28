@@ -1213,8 +1213,14 @@ static type_t infer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     return type_kind_new(TYPE_BOOL);
 }
 
-static type_t infer_sizeof_expr(module_t *m, ast_macro_sizeof_expr_t *sizeof_expr) {
+static type_t infer_sizeof_expr(module_t *m, ast_macro_sizeof_expr_t *sizeof_expr, type_t target_type) {
     sizeof_expr->target_type = reduction_type(m, sizeof_expr->target_type);
+
+    // literal 自动检测
+    if (is_integer(target_type.kind)) {
+        return target_type;
+    }
+
     return type_kind_new(TYPE_INT);
 }
 
@@ -2663,7 +2669,7 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
             return infer_is_expr(m, expr->value);
         }
         case AST_MACRO_EXPR_SIZEOF: {
-            return infer_sizeof_expr(m, expr->value);
+            return infer_sizeof_expr(m, expr->value, target_type);
         }
         case AST_MACRO_EXPR_REFLECT_HASH: {
             return infer_reflect_hash_expr(m, expr->value);

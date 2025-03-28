@@ -17,70 +17,115 @@ type config_t = struct{
 }
 
 type quantized_tensor = struct{
-    ptr<i8> q // quantized values
-    ptr<f32> s  // scaling
+    rawptr<i8> q // quantized values
+    rawptr<f32> s  // scaling
 }
 
 type transformer_weights = struct{
     // token embedding table
-    ptr<quantized_tensor> q_tokens
-    ptr<f32> token_embedding_table
+    rawptr<quantized_tensor> q_tokens
+    [f32] token_embedding_table
 
     // weights for rmsnorms
-    ptr<f32> rms_att_weight
-    ptr<f32> rms_ffn_weight
+    rawptr<f32> rms_att_weight
+    rawptr<f32> rms_ffn_weight
 
     // weights for matmuls. note dim == n_heads * head_size
-    ptr<quantized_tensor> wq           // (layer, dim, n_heads * head_size)
-    ptr<quantized_tensor> wk           // (layer, dim, n_kv_heads * head_size)
-    ptr<quantized_tensor> wv           // (layer, dim, n_kv_heads * head_size)
-    ptr<quantized_tensor> wo           // (layer, n_heads * head_size, dim)
+    rawptr<quantized_tensor> wq           // (layer, dim, n_heads * head_size)
+    rawptr<quantized_tensor> wk           // (layer, dim, n_kv_heads * head_size)
+    rawptr<quantized_tensor> wv           // (layer, dim, n_kv_heads * head_size)
+    rawptr<quantized_tensor> wo           // (layer, n_heads * head_size, dim)
     
     // weights for ffn
-    ptr<quantized_tensor> w1           // (layer, hidden_dim, dim)
-    ptr<quantized_tensor> w2           // (layer, dim, hidden_dim)
-    ptr<quantized_tensor> w3           // (layer, hidden_dim, dim)
+    rawptr<quantized_tensor> w1           // (layer, hidden_dim, dim)
+    rawptr<quantized_tensor> w2           // (layer, dim, hidden_dim)
+    rawptr<quantized_tensor> w3           // (layer, hidden_dim, dim)
     
     // final rmsnorm
-    ptr<f32> rms_final_weight          // (dim,)
+    rawptr<f32> rms_final_weight          // (dim,)
     
     // (optional) classifier weights for the logits, on the last layer
-    ptr<quantized_tensor> wcls 
+    rawptr<quantized_tensor> wcls
 }
 
 
-type run_state = struct{
+type run_state_t = struct{
     // current wave of activations
-    ptr<f32> x        // activation at current time stamp (dim,)
-    ptr<f32> xb       // same, but inside a residual branch (dim,)
-    ptr<f32> xb2      // an additional buffer just for convenience (dim,)
-    ptr<f32> hb       // buffer for hidden dimension in the ffn (hidden_dim,)
-    ptr<f32> hb2      // buffer for hidden dimension in the ffn (hidden_dim,)
+    rawptr<f32> x        // activation at current time stamp (dim,)
+    rawptr<f32> xb       // same, but inside a residual branch (dim,)
+    rawptr<f32> xb2      // an additional buffer just for convenience (dim,)
+    rawptr<f32> hb       // buffer for hidden dimension in the ffn (hidden_dim,)
+    rawptr<f32> hb2      // buffer for hidden dimension in the ffn (hidden_dim,)
     quantized_tensor xq  // quantized x (dim,)
     quantized_tensor hq  // quantized hb (hidden_dim,)
-    ptr<f32> q        // query (dim,)
-    ptr<f32> k        // key (dim,)
-    ptr<f32> v        // value (dim,)
-    ptr<f32> att      // buffer for scores/attention values (n_heads, seq_len)
-    ptr<f32> logits   // output logits
+    rawptr<f32> q        // query (dim,)
+    rawptr<f32> k        // key (dim,)
+    rawptr<f32> v        // value (dim,)
+    rawptr<f32> att      // buffer for scores/attention values (n_heads, seq_len)
+    rawptr<f32> logits   // output logits
     // kv cache
-    ptr<f32> key_cache    // (layer, seq_len, dim)
-    ptr<f32> value_cache  // (layer, seq_len, dim)
+    rawptr<f32> key_cache    // (layer, seq_len, dim)
+    rawptr<f32> value_cache  // (layer, seq_len, dim)
 }
 
 type transformer = struct{
     config_t config
     transformer_weights weights
-    run_state state
+    run_state_t state
     int fd
     ptr<f32> data
-    int file_size
+    uint file_size
 }
 
 i32 GS = 0
 
-fn transformer.memory_map_weights(anyptr weights_ptr, u8 shared_classifier) {
-    // todo
+fn transformer.init_quantized_tensors(rawptr<anyptr> pp, i32 n, i32 size_each):rawptr<quantized_tensor>! {
+    throw errorf('todo')
+}
+
+fn transformer.malloc_run_state():void! {
+}
+
+fn transformer.dequantize(i32 n):void! {
+}
+
+fn transformer.memory_map_weights(anyptr weights_ptr, u8 shared_classifier):void! {
+    config_t cfg = self.config
+    i32 head_size = cfg.dim / cfg.n_heads
+
+    anyptr fptr = weights_ptr
+
+    self.weights.rms_att_weight = fptr as ptr<f32>
+
+    fptr += (cfg.n_layers * cfg.dim * @sizeof(f32)) as anyptr
+    self.weights.rms_ffn_weight = fptr as ptr<f32>
+
+    fptr += (cfg.n_layers * cfg.dim * @sizeof(f32)) as anyptr
+    self.weights.rms_final_weight = fptr as ptr<f32>
+
+    fptr += (cfg.dim * @sizeof(f32)) as anyptr
+
+    // now read all the quantized weights
+    weights_ptr = fptr
+    self.weights.q_tokens = self.init_quantized_tensors(&weights_ptr, 1, cfg.vocab_size * cfg.dim)
+    self.weights.token_embedding_table = vec_new<f32>((cfg.vocab_size * cfg.dim * @sizeof(f32)) as int)
+    self.dequantize(cfg.vocab_size * cfg.dim)
+
+    self.weights.wq = self.init_quantized_tensors(&weights_ptr, cfg.n_layers, cfg.dim * (cfg.n_heads * head_size))
+    self.weights.wk = self.init_quantized_tensors(&weights_ptr, cfg.n_layers, cfg.dim * (cfg.n_kv_heads * head_size))
+    self.weights.wv = self.init_quantized_tensors(&weights_ptr, cfg.n_layers, cfg.dim * (cfg.n_kv_heads * head_size))
+    self.weights.wo = self.init_quantized_tensors(&weights_ptr, cfg.n_layers, cfg.dim * (cfg.n_heads * head_size))
+
+
+    self.weights.w1 = self.init_quantized_tensors(&weights_ptr, cfg.n_layers, cfg.dim * cfg.hidden_dim)
+    self.weights.w2 = self.init_quantized_tensors(&weights_ptr, cfg.n_layers, cfg.dim * cfg.hidden_dim)
+    self.weights.w3 = self.init_quantized_tensors(&weights_ptr, cfg.n_layers, cfg.dim * cfg.hidden_dim)
+
+    if shared_classifier > 0 {
+        self.weights.wcls = self.weights.q_tokens
+    } else {
+        self.weights.wcls = self.init_quantized_tensors(&weights_ptr, 1, cfg.dim * cfg.vocab_size)
+    }
 }
 
 // read_checkpoint
@@ -124,24 +169,20 @@ fn transformer_new(string path):ptr<transformer>! {
 
     // figure out the file size
     var st = f.stat()
-    var file_size = st.size
+    u64 file_size = st.size
 
-    i32 fd = f.fd
-    anyptr data = libc.mmap(0, file_size as int, libc.PROT_READ, libc.MAP_PRIVATE, fd as int, 0)
+    anyptr data = libc.mmap(0, file_size as int, libc.PROT_READ, libc.MAP_PRIVATE, f.fd, 0)
 
     anyptr weights_ptr = (data as i32 + header_size) as anyptr
 
-    var t = new transform(config, fd, data = data as ptr<f32>, file_size)
+    var t = new transformer(config, fd = f.fd, data = data as ptr<f32>, file_size)
 
     t.memory_map_weights(weights_ptr, shared_classifier)
 
+    // allocate the RunState buffers
+    t.malloc_run_state()
+
     return t
-}
-
-fn transformer_new(string checkpoint_path):ptr<transformer>! {
-
-    // var tf = new transformer()
-    throw errorf("td")
 }
 
 fn error_usage():void! {
@@ -217,4 +258,5 @@ fn main():void! {
     }
 
     // build the Transformer via the model .bin file
+    var tf = transformer_new(checkpoint_path)
 }

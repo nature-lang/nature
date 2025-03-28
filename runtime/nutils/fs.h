@@ -8,10 +8,10 @@
 #define BUFFER_SIZE 4096
 
 typedef struct {
-    int32_t fd;
+    n_int_t fd;
     char *data;
-    int64_t data_len;
-    int64_t data_cap;
+    n_int64_t data_len;
+    n_int64_t data_cap;
     bool closed;
 
     uv_fs_t req; // 对同一个文件的所有的操作都共用该 req, 不同文件操作之间通过 fd 进行关联
