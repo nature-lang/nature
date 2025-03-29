@@ -639,7 +639,7 @@ rtype_t reflect_type(type_t t) {
             break;
         default:
             if (is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_NULL || t.kind == TYPE_VOID ||
-                t.kind == TYPE_BOOL) {
+                t.kind == TYPE_BOOL || t.kind == TYPE_INTEGER_T) {
                 rtype = rtype_base(t.kind);
             }
     }

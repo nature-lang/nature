@@ -681,7 +681,7 @@ fn rename(string oldpath, string newpath):void! {
 }
 
 fn exit(int status):void! {
-    call6(SYS_EXIT, status as anyptr, 0, 0, 0, 0, 0)
+    call6(SYS_EXIT_GROUP, status as anyptr, 0, 0, 0, 0, 0)
 }
 
 fn getpid():int! {

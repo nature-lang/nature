@@ -1,0 +1,7 @@
+import unsafe
+
+fn main():void! {
+    anyptr a = 12
+    int b = 12
+    a += b as anyptr
+}

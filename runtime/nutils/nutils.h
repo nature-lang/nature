@@ -69,6 +69,8 @@ void rt_assert(n_bool_t cond);
 
 n_string_t *rt_string_new(n_anyptr_t raw_string);
 
+n_vec_t *unsafe_vec_new(int64_t rhash, int64_t ele_rhash, int64_t len, void *data_ptr);
+
 n_string_t *rt_strerror();
 
 #endif // NATURE_BASIC_H

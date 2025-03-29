@@ -30,13 +30,13 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
     m->imports = slice_new();
     m->import_table = table_new();
     m->global_symbols = slice_new();
-    m->global_vardef = slice_new(); // ast_vardef_stmt_t
+    m->global_vardef = slice_new();// ast_vardef_stmt_t
     m->call_init_stmt = NULL;
     m->source_path = source_path;
     m->infer_type_args_stack = stack_new();
     m->ast_fndefs = slice_new();
     m->closures = slice_new();
-    m->asm_global_symbols = slice_new(); // 文件全局符号以及 operations 编译过程中产生的局部符号
+    m->asm_global_symbols = slice_new();// 文件全局符号以及 operations 编译过程中产生的局部符号
     m->asm_operations = slice_new();
     m->asm_temp_var_decl_count = 0;
     if (m->package_dir) {
@@ -106,14 +106,16 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
             ast_vardef_stmt_t *vardef = stmt->value;
             ast_var_decl_t *var_decl = &vardef->var_decl;
             var_decl->ident = ident_with_prefix(m->ident, var_decl->ident);
-            symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, false);
+            symbol_t *s = symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, false);
+            ANALYZER_ASSERTF(s, "ident '%s' redeclared", var_decl->ident);
             continue;
         }
 
         if (stmt->assert_type == AST_STMT_TYPEDEF) {
             ast_typedef_stmt_t *typedef_stmt = stmt->value;
             typedef_stmt->ident = ident_with_prefix(m->ident, typedef_stmt->ident);
-            symbol_table_set(typedef_stmt->ident, SYMBOL_TYPE, typedef_stmt, false);
+            symbol_t *s = symbol_table_set(typedef_stmt->ident, SYMBOL_TYPE, typedef_stmt, false);
+            ANALYZER_ASSERTF(s, "ident '%s' redeclared", typedef_stmt->ident);
             continue;
         }
 
@@ -121,8 +123,9 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
             ast_fndef_t *fndef = stmt->value;
 
             if (fndef->impl_type.kind == 0) {
-                fndef->symbol_name = ident_with_prefix(m->ident, fndef->symbol_name); // 全局函数改名
-                symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
+                fndef->symbol_name = ident_with_prefix(m->ident, fndef->symbol_name);// 全局函数改名
+                symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
+                ANALYZER_ASSERTF(s, "ident '%s' redeclared", fndef->symbol_name);
             } else {
                 // Delay to analyzer module and then process it...
             }

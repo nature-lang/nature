@@ -1,12 +1,10 @@
-// type ptr<t> = *t
+// type fn_t = anyptr
 
-// type uint_ptr = uint
+// type all_t = anyptr
 
-// type any = ...|...
+// type integer_t = int
 
-// type all_t = anyptr // any_t 用于类型约束，c_ptr -> uint 是最终的编译类型
-
-// type fn_t = anyptr // 同上
+// type floater_t = float
 
 type nullable<T> = T?
 

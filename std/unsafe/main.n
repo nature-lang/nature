@@ -1,0 +1,13 @@
+fn vec_new<T>(rawptr<T> p, int len):vec<T>! {
+    if len < 0 {
+        throw errorf("invalid vec index '%d' (must be non-negative)", len)
+    }
+
+    int hash = @reflect_hash(vec<T>)
+    int ele_hash = @reflect_hash(T)
+
+    return unsafe_vec_new(hash, ele_hash, len, p as anyptr) as vec<T>
+}
+
+#local #linkid unsafe_vec_new
+fn unsafe_vec_new(int hash, int ele_hash, int len, anyptr p):anyptr

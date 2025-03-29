@@ -1,8 +1,5 @@
-import io
-import strings
-import fmt
+import unsafe
 
 fn main():void! {
-    anyptr a = 12
-    rawptr<anyptr> q = &a
+
 }

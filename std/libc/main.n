@@ -155,8 +155,47 @@ fn strrstr(anyptr haystack, anyptr needle):anyptr
 #linkid memmove
 fn memmove(anyptr dst, anyptr src, int len)
 
+#linkid memcpy
+fn memcpy(anyptr dst, anyptr src, int len)
+
+#linkid memset
+fn memset(anyptr dst, int c, int len)
+
 #linkid mmap
 fn mmap(anyptr addr, int len, int prot, int flags, int fd, int off):anyptr
 
 #linkid munmap
 fn munmap(anyptr addr, int len)
+
+#linkid fabs
+fn fabs(f64 x):f64
+
+#linkid fabsf
+fn fabsf(f32 x):f32
+
+#linkid round
+fn round(f64 x):f64
+
+#linkid roundf
+fn roundf(f32 x):f32
+
+#linkid cosf
+fn cosf(f32 x):f32
+
+#linkid sinf
+fn sinf(f32 x):f32
+
+#linkid sqrtf
+fn sqrtf(f32 x):f32
+
+#linkid isprint
+fn isprint(u8 c):bool
+
+#linkid isspace
+fn isspace(u8 c):bool
+
+#linkid powf
+fn powf(f32 x, f32 y):f32
+
+#linkid expf
+fn expf(f32 x):f32

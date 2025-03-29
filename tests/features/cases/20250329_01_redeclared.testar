@@ -1,0 +1,66 @@
+=== test_redeclared1
+--- main.n
+int a = 12
+type a = struct{}
+
+fn main():void! {
+}
+
+--- output.txt
+nature-test/main.n:2:4: ident 'main.a' redeclared
+
+=== test_redeclared2
+--- main.n
+int a = 12
+f32 a = 12.2
+
+fn main():void! {
+}
+
+--- output.txt
+nature-test/main.n:2:3: ident 'main.a' redeclared
+
+=== test_redeclared3
+--- main.n
+type a = struct{}
+
+fn foo():int {
+}
+
+fn foo(i32 i) {
+}
+
+fn main():void! {
+}
+
+--- output.txt
+nature-test/main.n:6:2: ident 'main.foo' redeclared
+
+=== test_redeclared4
+--- main.n
+type t = struct{}
+
+fn t.foo():int {
+}
+
+fn t.foo(i32 i) {
+}
+
+fn main():void! {
+}
+
+--- output.txt
+nature-test/main.n:6:2: ident 'main.t_foo' redeclared
+
+=== test_redeclared5
+--- main.n
+type t<T> = struct{}
+
+fn t<T>.foo() {
+}
+
+fn t<T:void>.foo() {
+}
+
+fn main():void! {
+}

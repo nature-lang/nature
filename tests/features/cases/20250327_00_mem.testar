@@ -178,3 +178,40 @@ b: 2
 c: true
 d: 67305985
 e: 578437695752307201
+
+
+=== test_read_float_le
+--- main.n
+import mem
+
+fn main():void! {
+    // IEEE 754 表示:
+    // 1.0f (f32) = 0x3f800000
+    // 1.0 (f64) = 0x3ff0000000000000
+    
+    // test f32 be
+    [u8] f32_buf = [0x00, 0x00, 0x80, 0x3f]  // 1.0f be representation
+    f32 f32_val = mem.read_f32_le(f32_buf)
+    assert(f32_val == 1.0)
+    
+    [u8] f64_buf = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x3f] 
+    f64 f64_val = mem.read_f64_le(f64_buf)
+    println(f64_val)
+    assert(f64_val == 1.0)
+    
+    // PI (f32) ≈ 0x40490fdb
+    // PI (f64) ≈ 0x400921fb54442d18
+    [u8] pi_f32_buf = [0xdb, 0x0f, 0x49, 0x40]  
+    f32 pi_f32 = mem.read_f32_le(pi_f32_buf)
+    assert(pi_f32 > 3.14 && pi_f32 < 3.15)
+    
+    [u8] pi_f64_buf = [0x18, 0x2d, 0x44, 0x54, 0xfb, 0x21, 0x09, 0x40] 
+    f64 pi_f64 = mem.read_f64_le(pi_f64_buf)
+    assert(pi_f64 > 3.14 && pi_f64 < 3.15)
+    
+    println('test read float le success')
+}
+
+--- output.txt
+1.000000
+test read float le success

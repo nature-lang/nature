@@ -52,11 +52,11 @@ void ssa_add_phi(closure_t *c);
 
 void ssa_rename(closure_t *c);
 
-void ssa_rename_block(closure_t *c, basic_block_t *block, table_t *var_number_table, table_t *stack_table);
+void ssa_rename_block(closure_t *c, basic_block_t *block, struct sc_map_s64 *var_number_table, struct sc_map_sv *stack_table);
 
-uint8_t ssa_new_var_number(lir_var_t *var, table_t *var_number_table, table_t *stack_table);
+uint64_t ssa_new_var_number(lir_var_t *var, struct sc_map_s64 *var_number_table, struct sc_map_sv *stack_table);
 
-void ssa_rename_var(lir_var_t *var, uint8_t number);
+void ssa_rename_var(lir_var_t *var, uint64_t number);
 
 slice_t *ssa_calc_dom_blocks(closure_t *c, basic_block_t *block);
 

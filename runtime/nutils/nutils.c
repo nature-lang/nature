@@ -454,9 +454,9 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
     assert(error->method_count == 1);
     coroutine_t *co = coroutine_get();
 
-    DEBUGF("[runtime.co_throw_error] co=%p, error=%p, path=%s, line=%ld, column=%ld, msg=%s", co, (void*)error, path,
-            line,
-            column, (char *) rt_string_ref(rti_error_msg(error)));
+    DEBUGF("[runtime.co_throw_error] co=%p, error=%p, path=%s, line=%ld, column=%ld, msg=%s", co, (void *) error, path,
+           line,
+           column, (char *) rt_string_ref(rti_error_msg(error)));
 
     assert(co->traces == NULL);
     n_vec_t *traces = rti_vec_new(&errort_trace_rtype, 0, 0);
@@ -783,4 +783,27 @@ n_vec_t *rt_get_envs() {
 
 n_int_t rt_errno() {
     return errno;
+}
+
+n_vec_t *unsafe_vec_new(int64_t rhash, int64_t ele_rhash, int64_t len, void *data_ptr) {
+    DEBUGF("[unsafe_vec_new] hash=%lu, ele_hash=%lu, len=%lu, rhash, ele_rhash, length, capacity")
+    assert(len > 0);
+
+    int64_t cap = len;
+
+    rtype_t *ele_rtype = rt_find_rtype(ele_rhash);
+    assert(ele_rtype && "cannot find element_rtype_hash with hash");
+
+    // - 进行内存申请,申请回来一段内存是 memory_vec_t 大小的内存, memory_vec_* 就是限定这一片内存区域的结构体表示
+    // 虽然数组也这么表示，但是数组本质上只是利用了 vec_data + 1 时会按照 sizeof(memory_vec_t) 大小的内存区域移动
+    // 的技巧而已，所以这里要和数组结构做一个区分
+    n_vec_t *vec = rti_gc_malloc(vec_rtype.size, &vec_rtype);
+    vec->capacity = cap;
+    vec->length = len;
+    vec->ele_rhash = ele_rhash;
+    vec->rhash = rhash;
+    vec->data = data_ptr;
+
+    DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->ele_rhash);
+    return vec;
 }
