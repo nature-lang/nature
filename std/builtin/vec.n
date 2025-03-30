@@ -52,3 +52,46 @@ fn vec<T>.cap():int
 
 #linkid rt_vec_ref
 fn vec<T>.ref():anyptr
+
+fn vec<T>.sort() {
+    self.sort_at(fn(int a, int b):bool {
+        return self[a] < self[b]
+    })
+}
+
+fn vec<T>.sort_at(fn(int, int):bool less) {
+    self.quick_sort(0, self.len() - 1, less)
+}
+
+fn vec<T>.sort_by(fn(T, T):bool cmp) {
+    self.sort_at(fn(int a, int b):bool {
+        return cmp(self[a], self[b])
+    })
+}
+
+fn vec<T>.quick_sort(int low, int high, fn(int, int):bool less) {
+    if low < high {
+        int pivot_index = self.partition(low, high, less)
+        self.quick_sort(low, pivot_index - 1, less)
+        self.quick_sort(pivot_index + 1, high, less)
+    }
+}
+
+fn vec<T>.partition(int low, int high, fn(int, int):bool less):int {
+    int i = low - 1
+    
+    for int j = low; j < high; j += 1 {
+        if less(j, high) {
+            i += 1
+            T temp = self[i]
+            self[i] = self[j]
+            self[j] = temp
+        }
+    }
+    
+    T temp = self[i + 1]
+    self[i + 1] = self[high]
+    self[high] = temp
+    
+    return i + 1
+}

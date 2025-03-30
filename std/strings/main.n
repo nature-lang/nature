@@ -1,5 +1,4 @@
 import syscall
-import fmt
 import libc
 import runtime
 
@@ -122,7 +121,8 @@ fn string.split(string separator):[string] {
 
     if separator == '' {
         for v in self {
-            result.push(fmt.sprintf('%c', v))
+            var temp = [v]
+            result.push(temp as string)
         }
 
         return result

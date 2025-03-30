@@ -1,0 +1,167 @@
+=== test_int_sort
+--- main.n
+import fmt
+
+fn main() {
+    var nums = [5, 2, 9, 1, 7]
+    
+    println("Before sort: ", nums_to_string(nums))
+    nums.sort()
+    println("After sort: ", nums_to_string(nums))
+    
+    // Verify sort results
+    assert(nums[0] == 1)
+    assert(nums[1] == 2)
+    assert(nums[2] == 5)
+    assert(nums[3] == 7)
+    assert(nums[4] == 9)
+    
+    println("Integer sort test passed!")
+}
+
+fn nums_to_string(vec<int> nums):string {
+    string result = "["
+    for int i = 0; i < nums.len(); i += 1 {
+        if i > 0 {
+            result += ", "
+        }
+        result += fmt.sprintf('%d', nums[i])
+    }
+    result += "]"
+    return result
+}
+
+=== test_float_sort
+--- main.n
+import fmt
+
+fn main() {
+    var floats = [3.14, 1.618, 2.718, 0.577, 1.414]
+
+    println("Before sort: ", floats_to_string(floats))
+    floats.sort()
+    println("After sort: ", floats_to_string(floats))
+
+    // Verify sort results
+    assert(floats[0] < 0.6)
+    assert(floats[1] > 1.4 && floats[1] < 1.5)
+    assert(floats[2] > 1.6 && floats[2] < 1.7)
+    assert(floats[3] > 2.7 && floats[3] < 2.8)
+    assert(floats[4] > 3.1 && floats[4] < 3.2)
+
+    println("Float sort test passed!")
+}
+
+fn floats_to_string(vec<f64> floats):string {
+    string result = "["
+    for int i = 0; i < floats.len(); i += 1 {
+        if i > 0 {
+            result += ", "
+        }
+        result += fmt.sprintf("%.2f", floats[i])
+    }
+    result += "]"
+    return result
+}
+
+
+=== test_struct_sort
+--- main.n
+import fmt
+
+type person_t = struct {
+    string name
+    int age
+    f64 height
+}
+
+fn main() {
+    [person_t] persons = [
+        person_t{ name = "Alice", age = 25, height = 165.5 },
+        person_t{ name = "Bob", age = 30, height = 180.0 },
+        person_t{ name = "Charlie", age = 20, height = 175.5 },
+        person_t{ name = "David", age = 25, height = 170.0 },
+        person_t{ name = "Eve", age = 28, height = 168.0 },
+    ]
+    
+    println("Before sort: ", persons_to_string(persons))
+    
+    // Sort by age
+    persons.sort_by(fn(person_t a, person_t b):bool {
+        return a.age < b.age
+    })
+    println("After sort by age: ", persons_to_string(persons))
+    
+    // Verify age sort results
+    assert(persons[0].age == 20)  // Charlie
+    assert(persons[1].age == 25)  // Alice or David
+    assert(persons[2].age == 25)  // Alice or David
+    assert(persons[3].age == 28)  // Eve
+    assert(persons[4].age == 30)  // Bob
+    
+    println("Struct sort test passed!")
+}
+
+fn persons_to_string(vec<person_t> persons):string {
+    string result = "[\n"
+    for int i = 0; i < persons.len(); i += 1 {
+        if i > 0 {
+            result += ",\n"
+        }
+        result += fmt.sprintf("  {name: %s, age: %d, height: %.1f}", 
+            persons[i].name, persons[i].age, persons[i].height)
+    }
+    result += "\n]"
+    return result
+}
+
+
+=== test_struct_sort_at
+--- main.n
+import fmt
+
+type person_t = struct {
+    string name
+    int age
+    f64 height
+}
+
+fn main() {
+    [person_t] persons = [
+        person_t{ name = "Alice", age = 25, height = 165.5 },
+        person_t{ name = "Bob", age = 30, height = 180.0 },
+        person_t{ name = "Charlie", age = 20, height = 175.5 },
+        person_t{ name = "David", age = 25, height = 170.0 },
+        person_t{ name = "Eve", age = 28, height = 168.0 },
+    ]
+
+    println("Before sort: ", persons_to_string(persons))
+
+    // Sort by age
+    persons.sort_at(fn(int a, int b):bool {
+        return persons[a].age < persons[b].age
+    })
+    println("After sort by age: ", persons_to_string(persons))
+
+    // Verify age sort results
+    assert(persons[0].age == 20)  // Charlie
+    assert(persons[1].age == 25)  // Alice or David
+    assert(persons[2].age == 25)  // Alice or David
+    assert(persons[3].age == 28)  // Eve
+    assert(persons[4].age == 30)  // Bob
+
+    println("Struct sort test passed!")
+}
+
+fn persons_to_string(vec<person_t> persons):string {
+    string result = "[\n"
+    for int i = 0; i < persons.len(); i += 1 {
+        if i > 0 {
+            result += ",\n"
+        }
+        result += fmt.sprintf("  {name: %s, age: %d, height: %.1f}",
+            persons[i].name, persons[i].age, persons[i].height)
+    }
+    result += "\n]"
+    return result
+}

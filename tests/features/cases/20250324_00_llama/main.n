@@ -227,15 +227,71 @@ fn transformer.memory_map_weights(anyptr weights_ptr, u8 shared_classifier):void
 
 
 fn transformer.rmsnorm([f32] o, [f32] x, anyptr weight, int size) {
-    // TODO
+    f32 ss = 0.0
+    for int j = 0; j < size; j += 1 {
+        ss += x[j] * x[j]
+    }
+
+    ss /= size as f32
+    ss += 1e-5
+    ss = 1.0 / libc.sqrtf(ss)
+
+    for int j = 0; j < size; j += 1 {
+        f32 w = *((weight + j as anyptr * 4) as rawptr<f32>)
+        o[j] = w * (ss * x[j])
+    }
 }
 
-fn transformer.matmul([f32] xout, rawptr<quantized_tensor> x, rawptr<quantized_tensor> w, int n, int d) {
-    // TODO
+fn transformer.matmul([f32] xout, rawptr<quantized_tensor> x, rawptr<quantized_tensor> w, int n, int d):void! {
+    // W (d,n) @ x (n,) -> xout (d,)
+
+    var done = chan_new<bool>()
+
+    for int i = 0; i < d; i+=1 {
+        go fn():void! {
+            f32 val = 0.0
+            i32 ival = 0
+            int _in = i * n
+
+            // Group by GS for matrix multiplication
+            for int j = 0; j <= n - GS; j += GS {
+                for int k = 0; k < GS; k+=1 {
+                    ival += (x.q[j + k] as i32) * (w.q[_in + j + k] as i32)
+                }
+                val += (ival as f32) * w.s[(_in + j) / GS] * x.s[j / GS]
+                ival = 0
+            }
+
+            xout[i] = val
+
+            done.send(true)
+        }()
+    }
+
+    for int i = 0; i < d; i+=1 {
+        done.recv()
+    }
 }
 
 fn transformer.softmax([f32] x, int size) {
-    // TODO
+    f32 max_val = x[0]
+    for int i = 1; i < size; i += 1 {
+        if x[i] > max_val {
+            max_val = x[i]
+        }
+    }
+
+    // exp and sum
+    f32 sum = 0.0
+    for int i = 0; i < size; i += 1 {
+        x[i] = libc.expf(x[i] - max_val)
+        sum += x[i]
+    }
+
+    // normalize
+    for int i = 0; i < size; i += 1 {
+        x[i] /= sum
+    }
 }
 
 fn transformer.forward(int token, int pos):[f32]! {
@@ -451,11 +507,152 @@ fn transformer_new(string path):ptr<transformer>! {
 }
 
 fn tokenizer_t.decode(int prev_token, int token):string! {
-    throw errorf('TODO')
+    string piece = self.vocab[token]
+    // following BOS (1) token, sentencepiece decoder strips any leading whitespace (see PR #89)
+    if prev_token == 1 && piece[0] == ' ' {
+        piece += 1
+    }
+
+    u8 byte_val = 0
+    if fmt.sscanf(piece, '<0x%02x>', &byte_val) == 1 {
+        return [byte_val] as string
+    }
+
+    return piece
 }
 
 fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
-    throw errorf('TODO')
+    // 如果词汇表未排序，则进行排序
+    if self.sorted_vocab.len() == 0 {
+        self.sorted_vocab = vec_new<token_index_t>(self.vocab_size)
+        for int i = 0; i < self.vocab_size; i+=1 {
+            self.sorted_vocab[i].str = self.vocab[i]
+            self.sorted_vocab[i].id = i
+        }
+        
+        // 对词汇表进行排序
+        self.sorted_vocab.sort_by(fn(token_index_t a, token_index_t b):int {
+            return a.str.compare(b.str)
+        })
+    }
+    
+    // 创建临时缓冲区，用于存储合并候选项
+    string str_buffer = ""
+    
+    // 开始时令牌数为0
+    int n_tokens = 0
+    
+    // 添加可选的BOS(=1)令牌
+    if bos != 0 {
+        tokens[n_tokens] = 1
+        n_tokens += 1
+    }
+    
+    // 添加虚拟前缀令牌，但仅当文本非空时
+    if text.len() > 0 {
+        // 查找空格令牌
+        int dummy_prefix = -1
+        for int i = 0; i < self.vocab_size; i+=1 {
+            if self.sorted_vocab[i].str == " " {
+                dummy_prefix = self.sorted_vocab[i].id
+                break
+            }
+        }
+        
+        if dummy_prefix != -1 {
+            tokens[n_tokens] = dummy_prefix
+            n_tokens += 1
+        }
+    }
+    
+    // 处理输入字符串的原始(UTF-8)字节序列
+    int i = 0
+    while i < text.len() {
+        // 如果当前字节是ASCII或前导字节，则重置缓冲区
+        if (text[i] & 0xC0) != 0x80 {
+            str_buffer = ""
+        }
+        
+        // 将当前字节附加到缓冲区
+        str_buffer += [text[i]] as string
+        
+        // 如果下一个字符是连续字节，则继续附加
+        if i + 1 < text.len() && (text[i+1] & 0xC0) == 0x80 && str_buffer.len() < 4 {
+            i += 1
+            continue
+        }
+        
+        // 在词汇表中查找此代码点
+        int id = -1
+        for int j = 0; j < self.vocab_size; j+=1 {
+            if self.sorted_vocab[j].str == str_buffer {
+                id = self.sorted_vocab[j].id
+                break
+            }
+        }
+        
+        if id != -1 {
+            // 在词汇表中找到此代码点，将其添加为令牌
+            tokens[n_tokens] = id
+            n_tokens += 1
+        } else {
+            // 字节回退编码：将每个字节编码为令牌
+            for int j = 0; j < str_buffer.len(); j+=1 {
+                tokens[n_tokens] = (str_buffer[j] as int) + 3
+                n_tokens += 1
+            }
+        }
+        
+        str_buffer = ""
+        i += 1
+    }
+    
+    // 根据vocab_scores中的分数，每次迭代合并最佳连续对
+    while true {
+        f32 best_score = -1e10
+        int best_id = -1
+        int best_idx = -1
+        
+        for int i = 0; i < n_tokens - 1; i+=1 {
+            // 检查是否可以合并对(tokens[i], tokens[i+1])
+            string merge_str = self.vocab[tokens[i]] + self.vocab[tokens[i+1]]
+            
+            int id = -1
+            for int j = 0; j < self.vocab_size; j+=1 {
+                if self.sorted_vocab[j].str == merge_str {
+                    id = self.sorted_vocab[j].id
+                    break
+                }
+            }
+            
+            if id != -1 && self.vocab_scores[id] > best_score {
+                // 此合并对存在于词汇表中！记录其分数和位置
+                best_score = self.vocab_scores[id]
+                best_id = id
+                best_idx = i
+            }
+        }
+        
+        if best_idx == -1 {
+            break // 找不到更多要合并的对，所以完成了
+        }
+        
+        // 将连续对(best_idx, best_idx+1)合并为新令牌best_id
+        tokens[best_idx] = best_id
+        // 删除位置best_idx+1处的令牌，将整个序列向后移动1
+        for int i = best_idx + 1; i < n_tokens - 1; i+=1 {
+            tokens[i] = tokens[i+1]
+        }
+        n_tokens -= 1 // 令牌长度减少
+    }
+    
+    // 添加可选的EOS(=2)令牌
+    if eos != 0 {
+        tokens[n_tokens] = 2
+        n_tokens += 1
+    }
+    
+    return n_tokens
 }
 
 fn tokenizer_new(string tokenizer_path, int vocab_size):ptr<tokenizer_t>! {

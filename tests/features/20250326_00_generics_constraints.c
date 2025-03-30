@@ -2,5 +2,5 @@
 
 int main(void) {
     // TEST_EXEC_IMM
-    feature_testar_test(NULL);
+    feature_testar_test("test_constraints_interface_succ1");
 }

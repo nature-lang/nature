@@ -1,3 +1,5 @@
+=== test_basic
+--- main.n
 import coroutine as co
 import runtime
 
@@ -76,4 +78,92 @@ fn main():void! {
     co.sleep(1000)
     println('[ch_queue] send end, sum is', sum)
     assert(sum > -500 && sum < 500)
+}
+
+=== test_chan_done
+--- main.n
+import coroutine as co
+import time
+
+fn main():void! {
+    i64 start = time.unix()
+    int count = 100
+    var done = chan_new<bool>()
+    var mockfn = fn(int id):void! {
+        co.sleep(1000)
+        // println(id, 'coroutine end')
+
+        done.send(true)
+    }
+    for int i = 0; i < count; i+=1 {
+        go mockfn(i)
+    }
+
+    for int i = 0; i < count; i+=1 {
+        done.recv()
+    }
+
+    assert(time.unix() - start == 1)
+    println('done, use time: ', time.unix() - start)
+}
+
+=== test_chan_done2
+--- main.n
+import coroutine as co
+import time
+
+fn main():void! {
+    i64 start = time.unix()
+    int count = 100
+    var done = chan_new<bool>()
+    var ids = set_new<int>()
+
+    for int i = 0; i < count; i+=1 {
+        go fn(int id):void! {
+            co.sleep(1000)
+            bool succ = ids.add(id)
+            assert(succ)
+            // println(id, 'coroutine end', succ)
+
+            done.send(true)
+        }(i)
+    }
+
+    for int i = 0; i < count; i+=1 {
+        done.recv()
+    }
+
+    assert(time.unix() - start == 1)
+    println('done, use time: ', time.unix() - start)
+}
+
+=== test_chan_done3
+--- main.n
+import coroutine as co
+import time
+
+fn main():void! {
+    i64 start = time.unix()
+    int count = 100
+    var done = chan_new<bool>()
+    var ids = set_new<int>()
+    ids.add(100)
+
+    for int i = 0; i < count; i+=1 {
+        go fn():void! {
+            co.sleep(1000)
+            bool succ = ids.add(i)
+            assert(succ == false)
+            // println(i, 'coroutine end', succ)
+
+            done.send(true)
+        }()
+    }
+
+    for int i = 0; i < count; i+=1 {
+        done.recv()
+    }
+
+    assert(time.unix() - start == 1)
+    println('done, use time: ', time.unix() - start)
 }

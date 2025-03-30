@@ -1,7 +1,18 @@
-import unsafe
+type test_interface = interface{
+    fn to_string():string
+}
 
-fn main():void! {
-    anyptr a = 12
-    int b = 12
-    a += b as anyptr
+type foo_t:test_interface = struct{}
+
+fn foo_t.to_string():string {
+    return 'foo_t'
+}
+
+fn test<T:test_interface>(T param) {
+    println(param.to_string())
+}
+
+fn main() {
+    var f = foo_t{}
+    test(f)
 }

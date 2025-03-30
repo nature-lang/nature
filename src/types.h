@@ -327,6 +327,7 @@ typedef struct interval_t {
     interval_range_t *first_range;
     interval_range_t *last_range;
     linked_t *ranges;
+    slice_t *range_list;
     linked_t *use_pos_list; // 存储 use_position 列表
     struct interval_t *parent;
     linked_t *children; // 动态数组

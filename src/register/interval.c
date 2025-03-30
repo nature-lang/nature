@@ -701,21 +701,44 @@ bool interval_covered(interval_t *i, int position, bool is_input) {
         return i->first_range->from <= adjust_position && adjust_position < i->first_range->to;
     }
 
-    linked_node *current = linked_first(i->ranges);
-    while (current->value != NULL) {
-        interval_range_t *range = current->value;
-
-        // 直接内联 range_covered 的逻辑，避免函数调用
-        if (range->from <= adjust_position && adjust_position < range->to) {
-            return true;
+    // 计算 position 与区间范围的相对位置
+    int range_span = i->last_range->to - i->first_range->from;
+    int pos_offset = adjust_position - i->first_range->from;
+    
+    // 如果 position 更靠近区间结尾，则从尾部开始查找
+    if (pos_offset > range_span / 2) {
+        linked_node *current = linked_last(i->ranges);
+        while (current->value != NULL) {
+            interval_range_t *range = current->value;
+            
+            if (range->from <= adjust_position && adjust_position < range->to) {
+                return true;
+            }
+            
+            // 如果当前 range 的 to 已经小于 position，可以提前结束搜索
+            if (range->to <= adjust_position) {
+                return false;
+            }
+            
+            current = current->prev;
         }
-
-        // 如果当前range的from已经大于position，可以提前结束搜索
-        if (range->from > adjust_position) {
-            return false;
+    } else {
+        // 从头部开始查找
+        linked_node *current = linked_first(i->ranges);
+        while (current->value != NULL) {
+            interval_range_t *range = current->value;
+            
+            if (range->from <= adjust_position && adjust_position < range->to) {
+                return true;
+            }
+            
+            // 如果当前 range 的 from 已经大于 position，可以提前结束搜索
+            if (range->from > adjust_position) {
+                return false;
+            }
+            
+            current = current->succ;
         }
-
-        current = current->succ;
     }
     return false;
 }
@@ -751,7 +774,7 @@ int interval_next_intersect(closure_t *c, interval_t *current, interval_t *selec
     assert(select->last_range->to > current->first_range->from);
 
     int current_first_from = current->first_range->from;// first_from 指向 range 的开头
-    int current_last_to = current->last_range->to;// first_from 指向 range 的开头
+    int current_last_to = current->last_range->to;      // first_from 指向 range 的开头
 
     int result = -1;
     int select_first_cover = -1;
@@ -790,7 +813,7 @@ int interval_next_intersect(closure_t *c, interval_t *current, interval_t *selec
                 goto END;
             }
 
-            linked_node* next_select_node = select_node->succ;
+            linked_node *next_select_node = select_node->succ;
             if (next_select_node->value) {
                 interval_range_t *next_select_range = next_select_node->value;
                 assert(next_select_range->from > current_last_to);
@@ -811,7 +834,7 @@ int interval_next_intersect(closure_t *c, interval_t *current, interval_t *selec
 
     // 没有交集，返回 select_first_cover
     result = select_first_cover;
-    END:
+END:
 
     // 此时应该返回 select 大于 current->first_range->from 的首个 cover select 的节点
     // 因为即使没有交集，该寄存器的最大空闲时间也是到这个节点
@@ -850,7 +873,7 @@ int old_interval_next_intersect(closure_t *c, interval_t *current, interval_t *s
     assertf(select->ranges->count > 0, "select interval=%d not ranges, cannot calc intersection", select->index);
     assertf(select->last_range->to > current->first_range->from, "select interval=%d is expired", select->index);
 
-    int position = current->first_range->from; // first_from 指向 range 的开头
+    int position = current->first_range->from;// first_from 指向 range 的开头
 
     int64_t end = max(current->last_range->to, select->last_range->to);
 
@@ -885,7 +908,7 @@ int old_interval_next_intersect(closure_t *c, interval_t *current, interval_t *s
     result = select_first_cover;
     // 如果 select_first_cover 在 label 的位置，则其占用的空间范围应该前移
 
-    END:
+END:
 
     // 此时应该返回 select 大于 current->first_range->from 的首个 cover select 的节点
     // 因为即使没有交集，该寄存器的最大空闲时间也是到这个节点
@@ -910,9 +933,9 @@ int old_interval_next_intersect(closure_t *c, interval_t *current, interval_t *s
 
 
             if (b->succs->count == 1) {
-                return OP(b->last_op)->id - 1; // 插入在 branch 之前即可
+                return OP(b->last_op)->id - 1;// 插入在 branch 之前即可
             } else {
-                assert(b->succs->count == 2); // 存在两个 branch 语句，所以需要 - 3
+                assert(b->succs->count == 2);// 存在两个 branch 语句，所以需要 - 3
                 return OP(b->last_op)->id - 3;
             }
         }

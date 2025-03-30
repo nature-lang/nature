@@ -762,6 +762,11 @@ static void analyzer_call(module_t *m, ast_call_t *call) {
 }
 
 static void analyzer_async_expr(module_t *m, ast_macro_async_t *async) {
+    analyzer_begin_scope(m);
+
+    // handle stmt copy
+    analyzer_body(m, async->args_copy_stmts);
+
     analyzer_local_fndef(m, async->closure_fn);
     analyzer_local_fndef(m, async->closure_fn_void);
 
@@ -773,6 +778,8 @@ static void analyzer_async_expr(module_t *m, ast_macro_async_t *async) {
     if (async->flag_expr) {
         analyzer_expr(m, async->flag_expr);
     }
+
+    analyzer_end_scope(m);
 }
 
 /**

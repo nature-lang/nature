@@ -20,7 +20,7 @@ static void test_basic() {
                 "0:\tmain.div\n"
                 "\t\tat cases/20240318_00_coroutine_error.n:6:40\n"
                 "1:\tmain.main\n"
-                "\t\tat cases/20240318_00_coroutine_error.n:34:16\n";
+                "\t\tat cases/20240318_00_coroutine_error.n:34:11\n";
     assert_string_equal(raw, str);
 }
 

@@ -1,4 +1,5 @@
 import fmt.utils as *
+import strings
 
 fn sprintf(string format, ...[any] args):string {
     var end = format.len()
@@ -39,6 +40,19 @@ fn sprintf(string format, ...[any] args):string {
             i += 1
         }
 
+        // 解析精度（对于浮点数）
+        var precision = 6 as u8  // 默认精度为6
+        if i < end && sources[i] == ascii('.') {
+            i += 1
+            precision = 0
+            
+            // 解析精度数字
+            for i < end && sources[i] >= ascii('0') && sources[i] <= ascii('9') {
+                precision = precision * 10 + (sources[i] - ascii('0'))
+                i += 1
+            }
+        }
+
         c = sources[i]
         i+=1
 
@@ -55,7 +69,7 @@ fn sprintf(string format, ...[any] args):string {
         }
 
         // c 不再 format 字符中，提示异常
-        if !{ascii('v'), ascii('c'), ascii('d'), ascii('s')}.contains(c) {
+        if !{ascii('v'), ascii('c'), ascii('d'), ascii('s'), ascii('f')}.contains(c) {
             result.push(ascii('%'))
             result.push(ascii('?'))
             result.push(c)
@@ -124,6 +138,26 @@ fn sprintf(string format, ...[any] args):string {
             continue
         }
 
+        // 添加对 %f 格式的支持
+        if c == ascii('f') {
+            string s = ''
+            if arg is float {
+                s = ftos_with(arg as float, fill, width, precision)
+            } else if arg is f32 {
+                s = ftos_with(arg as f32, fill, width, precision)
+            } else if arg is f64 {
+                s = ftos_with(arg as f64, fill, width, precision)
+            } else {
+                s = '%!f'
+            }
+
+            for c in s {
+                result.push(c)
+            }
+
+            continue
+        }
+
         // 各种类型的值进行 string 处理
         if c == ascii('v') {
             string s = ''
@@ -179,4 +213,412 @@ fn sprintf(string format, ...[any] args):string {
 fn printf(string format, ...[any] args) {
     var str = sprintf(format, ...args)
     print(str)
+}
+
+fn sscanf(string str, string format, ...[any] args):int {
+    var str_len = str.len()
+    var format_len = format.len()
+    
+    var str_sources = str as [u8]
+    var format_sources = format as [u8]
+    
+    int str_i = 0
+    int format_i = 0
+    int arg_index = 0
+    int matched = 0
+    
+    for format_i < format_len && str_i < str_len {
+        u8 fc = format_sources[format_i]
+        format_i += 1
+        
+        // 如果不是格式说明符，则直接匹配字符
+        if fc != ascii('%') {
+            // 跳过空白字符
+            if fc == ascii(' ') {
+                for str_i < str_len && str_sources[str_i] == ascii(' ') {
+                    str_i += 1
+                }
+                continue
+            }
+            
+            // 匹配普通字符
+            if str_i < str_len && str_sources[str_i] == fc {
+                str_i += 1
+                continue
+            } else {
+                // 字符不匹配，解析失败
+                break
+            }
+        }
+        
+        // 处理 %% 的情况
+        if format_i < format_len && format_sources[format_i] == ascii('%') {
+            if str_i < str_len && str_sources[str_i] == ascii('%') {
+                str_i += 1
+                format_i += 1
+                continue
+            } else {
+                break
+            }
+        }
+        
+        // 确保还有参数可用
+        if arg_index >= args.len() {
+            break
+        }
+        
+        // 解析宽度
+        int width = 0
+        for format_i < format_len && format_sources[format_i] >= ascii('0') && format_sources[format_i] <= ascii('9') {
+            width = width * 10 + (format_sources[format_i] - ascii('0')) as int
+            format_i += 1
+        }
+        
+        // 获取格式说明符
+        if format_i >= format_len {
+            break
+        }
+        
+        u8 specifier = format_sources[format_i]
+        format_i += 1
+        
+        // 跳过输入字符串中的空白字符
+        for str_i < str_len && str_sources[str_i] == ascii(' ') {
+            str_i += 1
+        }
+        
+        if str_i >= str_len {
+            break
+        }
+        
+        any arg = args[arg_index]
+        arg_index += 1
+        
+        // 根据格式说明符解析数据
+        if specifier == ascii('d') {
+            // 解析整数
+            bool negative = false
+            int value = 0
+            int start_pos = str_i
+            int char_count = 0
+            
+            // 处理负号
+            if str_sources[str_i] == ascii('-') {
+                negative = true
+                str_i += 1
+                char_count += 1
+            } else if str_sources[str_i] == ascii('+') {
+                str_i += 1
+                char_count += 1
+            }
+            
+            bool has_digit = false
+            
+            // 解析数字，考虑宽度限制
+            for str_i < str_len && (width <= 0 || char_count < width) && 
+                str_sources[str_i] >= '0'.ascii() && str_sources[str_i] <= '9'.ascii() {
+                value = value * 10 + (str_sources[str_i] - '0'.ascii()) as int
+                str_i += 1
+                char_count += 1
+                has_digit = true
+            }
+            
+            if !has_digit {
+                break
+            }
+            
+            if negative {
+                value = -value
+            }
+            
+            // 根据参数类型设置值
+            if arg is rawptr<int> {
+                *arg = value
+                matched += 1
+            } else if arg is rawptr<i8> {
+                *arg = value as i8
+                matched += 1
+            } else if arg is rawptr<i16> {
+                *arg = value as i16
+                matched += 1
+            } else if arg is rawptr<i32> {
+                *arg = value as i32
+                matched += 1
+            } else if arg is rawptr<i64> {
+                *arg = value as i64
+                matched += 1
+            } else if arg is rawptr<uint> {
+                if !negative {
+                    *arg = value as uint
+                    matched += 1
+                }
+            } else if arg is rawptr<u8> {
+                if !negative {
+                    *arg = value as u8
+                    matched += 1
+                }
+            } else if arg is rawptr<u16> {
+                if !negative {
+                    *arg = value as u16
+                    matched += 1
+                }
+            } else if arg is rawptr<u32> {
+                if !negative {
+                    *arg = value as u32
+                    matched += 1
+                }
+            } else if arg is rawptr<u64> {
+                if !negative {
+                    *arg = value as u64
+                    matched += 1
+                }
+            }
+        } else if specifier == ascii('x') || specifier == ascii('X') {
+            // 解析十六进制数
+            uint value = 0
+            bool has_digit = false
+            int char_count = 0
+            
+            // 处理必须的 0x 或 0X 前缀
+            // if str_i + 1 < str_len && str_sources[str_i] == ascii('0') && 
+            //   (str_sources[str_i + 1] == ascii('x') || str_sources[str_i + 1] == ascii('X')) {
+            //    str_i += 2
+            //    char_count += 2
+            // } 
+            
+            // 解析十六进制数字，考虑宽度限制
+            for str_i < str_len && (width <= 0 || char_count < width) {
+                u8 c = str_sources[str_i]
+                int digit = 0
+                
+                if c >= ascii('0') && c <= ascii('9') {
+                    digit = (c - ascii('0')) as int
+                } else if c >= ascii('a') && c <= ascii('f') {
+                    digit = (c - ascii('a') + 10) as int
+                } else if c >= ascii('A') && c <= ascii('F') {
+                    digit = (c - ascii('A') + 10) as int
+                } else {
+                    break
+                }
+                
+                value = value * 16 + digit as uint
+                str_i += 1
+                char_count += 1
+                has_digit = true
+            }
+            
+            if !has_digit {
+                break
+            }
+            
+            // 根据参数类型设置值
+            if arg is rawptr<int> {
+                *arg = value as int
+                matched += 1
+            } else if arg is rawptr<i8> {
+                *arg = value as i8
+                matched += 1
+            } else if arg is rawptr<i16> {
+                *arg = value as i16
+                matched += 1
+            } else if arg is rawptr<i32> {
+                *arg = value as i32
+                matched += 1
+            } else if arg is rawptr<i64> {
+                *arg = value as i64
+                matched += 1
+            } else if arg is rawptr<uint> {
+                *arg = value
+                matched += 1
+            } else if arg is rawptr<u8> {
+                *arg = value as u8
+                matched += 1
+            } else if arg is rawptr<u16> {
+                *arg = value as u16
+                matched += 1
+            } else if arg is rawptr<u32> {
+                *arg = value as u32
+                matched += 1
+            } else if arg is rawptr<u64> {
+                *arg = value as u64
+                matched += 1
+            }
+        } else if specifier == ascii('o') {
+            // 解析八进制数
+            uint value = 0
+            bool has_digit = false
+            int char_count = 0
+            
+            // 处理必须的 0o 或 0O 前缀
+            // if str_i + 1 < str_len && str_sources[str_i] == ascii('0') &&
+            //    (str_sources[str_i + 1] == ascii('o') || str_sources[str_i + 1] == ascii('O')) {
+            //     str_i += 2
+            //     char_count += 2
+            // } 
+            
+            // 解析八进制数字，考虑宽度限制
+            for str_i < str_len && (width <= 0 || char_count < width) && 
+                str_sources[str_i] >= ascii('0') && str_sources[str_i] <= ascii('7') {
+                value = value * 8 + (str_sources[str_i] - ascii('0')) as uint
+                str_i += 1
+                char_count += 1
+                has_digit = true
+            }
+            
+            if !has_digit {
+                break
+            }
+            
+            // 根据参数类型设置值
+            if arg is rawptr<int> {
+                *arg = value as int
+                matched += 1
+            } else if arg is rawptr<i8> {
+                *arg = value as i8
+                matched += 1
+            } else if arg is rawptr<i16> {
+                *arg = value as i16
+                matched += 1
+            } else if arg is rawptr<i32> {
+                *arg = value as i32
+                matched += 1
+            } else if arg is rawptr<i64> {
+                *arg = value as i64
+                matched += 1
+            } else if arg is rawptr<uint> {
+                *arg = value
+                matched += 1
+            } else if arg is rawptr<u8> {
+                *arg = value as u8
+                matched += 1
+            } else if arg is rawptr<u16> {
+                *arg = value as u16
+                matched += 1
+            } else if arg is rawptr<u32> {
+                *arg = value as u32
+                matched += 1
+            } else if arg is rawptr<u64> {
+                *arg = value as u64
+                matched += 1
+            }
+        } else if specifier == ascii('s') {
+            // 解析字符串
+            int start = str_i
+            int char_count = 0
+            
+            // 读取非空白字符，考虑宽度限制
+            if width > 0 {
+                // 有宽度限制
+                for str_i < str_len && char_count < width && str_sources[str_i] != ascii(' ') {
+                    str_i += 1
+                    char_count += 1
+                }
+            } else {
+                // 无宽度限制，读取所有非空白字符
+                for str_i < str_len && str_sources[str_i] != ascii(' ') {
+                    str_i += 1
+                }
+            }
+            
+            if start < str_i {
+                string value = str.slice(start, str_i)
+                
+                if arg is rawptr<string> {
+                    *arg = value
+                    matched += 1
+                }
+            }
+        } else if specifier == ascii('c') {
+            // 解析单个字符或指定数量的字符
+            if width <= 0 {
+                width = 1  // 默认读取一个字符
+            }
+            
+            if str_i + width <= str_len {
+                if width == 1 {
+                    // 单个字符
+                    u8 value = str_sources[str_i]
+                    str_i += 1
+                    
+                    if arg is rawptr<u8> {
+                        *arg = value
+                        matched += 1
+                    }
+                } else {
+                    // 多个字符作为字符串
+                    string value = str.slice(str_i, str_i + width)
+                    str_i += width
+                    
+                    if arg is rawptr<string> {
+                        *arg = value
+                        matched += 1
+                    }
+                }
+            }
+        } else if specifier == ascii('f') {
+            // 解析浮点数
+            bool negative = false
+            float value = 0.0
+            int char_count = 0
+            
+            // 处理负号
+            if str_sources[str_i] == ascii('-') {
+                negative = true
+                str_i += 1
+                char_count += 1
+            } else if str_sources[str_i] == ascii('+') {
+                str_i += 1
+                char_count += 1
+            }
+            
+            bool has_digit = false
+            
+            // 解析整数部分，考虑宽度限制
+            for str_i < str_len && (width <= 0 || char_count < width) && 
+                str_sources[str_i] >= ascii('0') && str_sources[str_i] <= ascii('9') {
+                value = value * 10 + (str_sources[str_i] - ascii('0')) as float
+                str_i += 1
+                char_count += 1
+                has_digit = true
+            }
+            
+            // 解析小数部分，考虑宽度限制
+            if str_i < str_len && (width <= 0 || char_count < width) && str_sources[str_i] == ascii('.') {
+                str_i += 1
+                char_count += 1
+                float decimal = 0.1
+                
+                for str_i < str_len && (width <= 0 || char_count < width) && 
+                    str_sources[str_i] >= ascii('0') && str_sources[str_i] <= ascii('9') {
+                    value += (str_sources[str_i] - ascii('0')) as float * decimal
+                    decimal *= 0.1
+                    str_i += 1
+                    char_count += 1
+                    has_digit = true
+                }
+            }
+            
+            if !has_digit {
+                break
+            }
+            
+            if negative {
+                value = -value
+            }
+            
+            // 根据参数类型设置值
+            if arg is rawptr<float> {
+                *arg = value
+                matched += 1
+            } else if arg is rawptr<f32> {
+                *arg = value as f32
+                matched += 1
+            } else if arg is rawptr<f64> {
+                *arg = value as f64
+                matched += 1
+            }
+        }
+    }
+    
+    return matched
 }

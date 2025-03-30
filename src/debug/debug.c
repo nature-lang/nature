@@ -34,13 +34,13 @@ string ast_type_to_str[] = {
 
 string token_type_to_str[] = {
         [TOKEN_LEFT_PAREN] = "TOKEN_LEFT_PAREN",
-        [TOKEN_RIGHT_PAREN] = "TOKEN_RIGHT_PAREN", // ()
+        [TOKEN_RIGHT_PAREN] = "TOKEN_RIGHT_PAREN",// ()
         [TOKEN_LEFT_SQUARE] = "TOKEN_LEFT_SQUARE",
-        [TOKEN_RIGHT_SQUARE] = "TOKEN_RIGHT_SQUARE", // []
+        [TOKEN_RIGHT_SQUARE] = "TOKEN_RIGHT_SQUARE",// []
         [TOKEN_LEFT_CURLY] = "TOKEN_LEFT_CURLY",
-        [TOKEN_RIGHT_CURLY] = "TOKEN_RIGHT_CURLY", // {}
+        [TOKEN_RIGHT_CURLY] = "TOKEN_RIGHT_CURLY",// {}
         [TOKEN_LEFT_ANGLE] = "TOKEN_LEFT_ANGLE",
-        [TOKEN_RIGHT_ANGLE] = "TOKEN_RIGHT_ANGLE", // <>
+        [TOKEN_RIGHT_ANGLE] = "TOKEN_RIGHT_ANGLE",// <>
 
         [TOKEN_COMMA] = "TOKEN_COMMA",
         [TOKEN_DOT] = "TOKEN_DOT",
@@ -49,9 +49,9 @@ string token_type_to_str[] = {
         [TOKEN_COLON] = "TOKEN_COLON",
         [TOKEN_SEMICOLON] = "TOKEN_SEMICOLON",
         [TOKEN_SLASH] = "TOKEN_SLASH",
-        [TOKEN_STAR] = "TOKEN_STAR", // * STAR
-        [TOKEN_IMPORT_STAR] = "TOKEN_IMPORT_STAR", // * STAR
-        [TOKEN_QUESTION] = "TOKEN_QUESTION", // ?
+        [TOKEN_STAR] = "TOKEN_STAR",              // * STAR
+        [TOKEN_IMPORT_STAR] = "TOKEN_IMPORT_STAR",// * STAR
+        [TOKEN_QUESTION] = "TOKEN_QUESTION",      // ?
         [TOKEN_EOF] = "TOKEN_EOF",
         [TOKEN_STMT_EOF] = "TOKEN_STMT_EOF",
         [TOKEN_RIGHT_ARROW] = "TOKEN_RIGHT_ARROW",
@@ -66,24 +66,24 @@ string token_type_to_str[] = {
         [TOKEN_AND_AND] = "TOKEN_AND_AND",
         [TOKEN_OR_OR] = "TOKEN_OR_OR",
 
-        [TOKEN_PLUS_EQUAL] = "TOKEN_PLUS_EQUAL", // +=
-        [TOKEN_MINUS_EQUAL] = "TOKEN_MINUS_EQUAL", // -=
-        [TOKEN_STAR_EQUAL] = "TOKEN_STAR_EQUAL", // *=
-        [TOKEN_SLASH_EQUAL] = "TOKEN_SLASH_EQUAL", // /=
-        [TOKEN_PERSON_EQUAL] = "TOKEN_PERSON_EQUAL", // %=
-        [TOKEN_AND_EQUAL] = "TOKEN_AND_EQUAL", // &=
-        [TOKEN_OR_EQUAL] = "TOKEN_OR_EQUAL", // |=
-        [TOKEN_XOR_EQUAL] = "TOKEN_XOR_EQUAL", // ^=
-        [TOKEN_LEFT_SHIFT_EQUAL] = "TOKEN_LEFT_SHIFT_EQUAL", // >>=
-        [TOKEN_RIGHT_SHIFT_EQUAL] = "TOKEN_RIGHT_SHIFT_EQUAL", // <<=
+        [TOKEN_PLUS_EQUAL] = "TOKEN_PLUS_EQUAL",              // +=
+        [TOKEN_MINUS_EQUAL] = "TOKEN_MINUS_EQUAL",            // -=
+        [TOKEN_STAR_EQUAL] = "TOKEN_STAR_EQUAL",              // *=
+        [TOKEN_SLASH_EQUAL] = "TOKEN_SLASH_EQUAL",            // /=
+        [TOKEN_PERSON_EQUAL] = "TOKEN_PERSON_EQUAL",          // %=
+        [TOKEN_AND_EQUAL] = "TOKEN_AND_EQUAL",                // &=
+        [TOKEN_OR_EQUAL] = "TOKEN_OR_EQUAL",                  // |=
+        [TOKEN_XOR_EQUAL] = "TOKEN_XOR_EQUAL",                // ^=
+        [TOKEN_LEFT_SHIFT_EQUAL] = "TOKEN_LEFT_SHIFT_EQUAL",  // >>=
+        [TOKEN_RIGHT_SHIFT_EQUAL] = "TOKEN_RIGHT_SHIFT_EQUAL",// <<=
 
         // 位运算
-        [TOKEN_TILDE] = "TOKEN_TILDE", // ~
-        [TOKEN_AND] = "TOKEN_AND", // &
-        [TOKEN_OR] = "TOKEN_OR", // |
-        [TOKEN_XOR] = "TOKEN_XOR", // ^
-        [TOKEN_LEFT_SHIFT] = "TOKEN_LEFT_SHIFT", // <<
-        [TOKEN_RIGHT_SHIFT] = "TOKEN_RIGHT_SHIFT", // >>
+        [TOKEN_TILDE] = "TOKEN_TILDE",            // ~
+        [TOKEN_AND] = "TOKEN_AND",                // &
+        [TOKEN_OR] = "TOKEN_OR",                  // |
+        [TOKEN_XOR] = "TOKEN_XOR",                // ^
+        [TOKEN_LEFT_SHIFT] = "TOKEN_LEFT_SHIFT",  // <<
+        [TOKEN_RIGHT_SHIFT] = "TOKEN_RIGHT_SHIFT",// >>
 
         // LITERALS.
         [TOKEN_IDENT] = "TOKEN_IDENT",
@@ -116,8 +116,7 @@ string token_type_to_str[] = {
         [TOKEN_FN] = "TOKEN_FN",
         [TOKEN_IMPORT] = "TOKEN_IMPORT",
         [TOKEN_AS] = "TOKEN_AS",
-        [TOKEN_RETURN] = "TOKEN_RETURN"
-};
+        [TOKEN_RETURN] = "TOKEN_RETURN"};
 
 string lir_opcode_to_string[] = {
         [LIR_OPCODE_ADD] = "ADD  ",
@@ -192,9 +191,9 @@ void debug_lir(closure_t *c, char *key) {
 
 #ifdef DEBUG_LIR
     // 跳过各种全局的 init 方法
-//    if (ends_with(c->fndef->symbol_name, ".init")) {
-//        return;
-//    }
+    //    if (ends_with(c->fndef->symbol_name, ".init")) {
+    //        return;
+    //    }
 
     printf("%s lir: %s ---------------------------------------------------------------------\n",
            key,
@@ -202,7 +201,7 @@ void debug_lir(closure_t *c, char *key) {
     linked_node *current = c->operations->front;
     while (current->value != NULL) {
         lir_op_t *op = current->value;
-//        printf("%d", op->id);
+        //        printf("%d", op->id);
         if (op->code == LIR_OPCODE_LABEL) {
             printf("%s\t", lir_opcode_to_string[op->code]);
         } else {
@@ -243,6 +242,17 @@ void debug_block_lir(closure_t *c, char *stage_after) {
 //    if (ends_with(c->fndef->symbol_name, ".init")) {
 //        return;
 //    }
+
+//    if (str_equal(c->linkident, "??")) {
+//        printf("%s after block_lir: %s------------------------------------------------------------------------\n",
+//               stage_after, c->fndef->symbol_name);
+//        for (int i = 0; i < c->blocks->count; ++i) {
+//            basic_block_t *basic_block = c->blocks->take[i];
+//            debug_basic_block(basic_block);
+//        }
+//        printf("\n\n");
+//    }
+
 
 #ifdef DEBUG_LIR
     printf("%s after block_lir: %s------------------------------------------------------------------------\n",
@@ -423,9 +433,9 @@ void debug_basic_block(basic_block_t *block) {
 void debug_asm(closure_t *c) {
 #ifdef DEBUG_ASM
     // 跳过各种全局的 init 方法
-//    if (ends_with(c->fndef->symbol_name, ".init")) {
-//        return;
-//    }
+    //    if (ends_with(c->fndef->symbol_name, ".init")) {
+    //        return;
+    //    }
 
     printf("asm: %s------------------------------------------------------------------------\n", c->fndef->symbol_name);
     for (int i = 0; i < c->asm_operations->count; ++i) {

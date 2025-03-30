@@ -43,14 +43,17 @@ static bool scanner_is_string(module_t *m, char s) {
 static bool scanner_is_float(module_t *m, char *word) {
     // 是否包含 .,包含则为 float
     int dot_count = 0;
+    bool has_e = false;
 
     // 遍历 dot 数量
-    while (*word != '\0') {
-        if (*word == '.') {
+    char *p = word;
+    while (*p != '\0') {
+        if (*p == '.') {
             dot_count++;
+        } else if (*p == 'e' || *p == 'E') {
+            has_e = true;
         }
-
-        word++;
+        p++;
     }
 
     // 结尾不能是 .
@@ -58,6 +61,11 @@ static bool scanner_is_float(module_t *m, char *word) {
         dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
                     "floating-point numbers cannot end with '.'");
         return false;
+    }
+
+     // 如果有科学计数法标记，则认为是浮点数
+     if (has_e) {
+        return true;
     }
 
     if (dot_count == 0) {
@@ -417,8 +425,37 @@ static char *scanner_bin_number_advance(module_t *m) {
 }
 
 static char *scanner_number_advance(module_t *m) {
-    while ((scanner_is_number(m, *m->s_cursor.guard) || *m->s_cursor.guard == '.') && !scanner_at_eof(m)) {
+    while (scanner_is_number(m, *m->s_cursor.guard) && !scanner_at_eof(m)) {
         scanner_guard_advance(m);
+    }
+    
+    // 处理小数点部分
+    if (*m->s_cursor.guard == '.' && scanner_is_number(m, m->s_cursor.guard[1])) {
+        scanner_guard_advance(m); // 跳过小数点
+        
+        // 处理小数点后的数字
+        while (scanner_is_number(m, *m->s_cursor.guard) && !scanner_at_eof(m)) {
+            scanner_guard_advance(m);
+        }
+    }
+    
+    // 处理科学计数法部分
+    if ((*m->s_cursor.guard == 'e' || *m->s_cursor.guard == 'E') && 
+        (scanner_is_number(m, m->s_cursor.guard[1]) || 
+         ((m->s_cursor.guard[1] == '+' || m->s_cursor.guard[1] == '-') && 
+          scanner_is_number(m, m->s_cursor.guard[2])))) {
+        
+        scanner_guard_advance(m); // 跳过 'e' 或 'E'
+        
+        // 处理可能的正负号
+        if (*m->s_cursor.guard == '+' || *m->s_cursor.guard == '-') {
+            scanner_guard_advance(m);
+        }
+        
+        // 处理指数部分的数字
+        while (scanner_is_number(m, *m->s_cursor.guard) && !scanner_at_eof(m)) {
+            scanner_guard_advance(m);
+        }
     }
 
     return scanner_gen_word(m);

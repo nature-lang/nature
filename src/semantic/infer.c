@@ -9,6 +9,8 @@
 static void
 check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast_typedef_stmt_t *typedef_stmt);
 
+static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_type);
+
 static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, list_t *properties);
 
 static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool check_errable);
@@ -20,6 +22,8 @@ static void infer_fndef(module_t *m, ast_fndef_t *fn);
 static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef);
 
 static bool union_type_contains(type_union_t *union_type, type_t sub);
+
+static void infer_break(module_t *m, ast_break_t *stmt);
 
 bool generics_constraints_compare(ast_generics_constraints *left, ast_generics_constraints *right) {
     if (left->any) {
@@ -1018,12 +1022,27 @@ static type_t infer_new_expr(module_t *m, ast_new_expr_t *new_expr) {
 
 
 /**
+ * change to block expr
  * @param m
  * @param pVoid
  * @return
  */
-static type_t infer_async(module_t *m, ast_expr_t *expr) {
+static type_t infer_async(module_t *m, ast_expr_t *expr, type_t target_type) {
     ast_macro_async_t *co_expr = expr->value;
+
+    type_fn_t *type_fn = infer_call_left(m, co_expr->origin_call, type_kind_new(TYPE_UNKNOWN));
+
+    for (int i = 0; i < co_expr->args_copy_stmts->count; ++i) {
+        ast_stmt_t *stmt = co_expr->args_copy_stmts->take[i];
+        assert(stmt->assert_type == AST_STMT_VARDEF);
+        ast_vardef_stmt_t *vardef = stmt->value;
+        bool is_spread = co_expr->origin_call->spread && (i == co_expr->origin_call->args->length - 1);
+        type_t *arg_type = select_fn_param(type_fn, i, is_spread);
+        vardef->var_decl.type = *arg_type;
+    }
+
+    infer_body(m, co_expr->args_copy_stmts);
+
     if (co_expr->flag_expr == NULL) {
         co_expr->flag_expr = ast_int_expr(expr->line, expr->column, 0);
     }
@@ -1076,18 +1095,43 @@ static type_t infer_async(module_t *m, ast_expr_t *expr) {
     call_expr->left = *ast_ident_expr(expr->line, expr->column, BUILTIN_CALL_ASYNC);
 
     call_expr->args = ct_list_new(sizeof(ast_expr_t));
-    ct_list_push(call_expr->args, &first_arg);
+    ct_list_push(call_expr->args, &first_arg);// ast_fndef
     ct_list_push(call_expr->args, co_expr->flag_expr);
 
     // 泛型参数
     call_expr->generics_args = ct_list_new(sizeof(type_t));
     ct_list_push(call_expr->generics_args, &co_expr->return_type);
 
-    // expr 表达式类型改写
-    expr->assert_type = AST_CALL;
-    expr->value = call_expr;
+    ast_expr_t *new_call_expr = NEW(ast_expr_t);
+    new_call_expr->line = expr->line;
+    new_call_expr->column = expr->column;
+    new_call_expr->assert_type = AST_CALL;
+    new_call_expr->value = call_expr;
 
-    type_t result_type = infer_right_expr(m, expr, type_kind_new(TYPE_UNKNOWN));
+    type_t result_type = infer_right_expr(m, new_call_expr, type_kind_new(TYPE_UNKNOWN));
+
+    // change to block
+    ast_block_expr_t *block_expr = NEW(ast_block_expr_t);
+
+    block_expr->body = co_expr->args_copy_stmts;
+
+    // add break expr
+    ast_stmt_t *break_stmt = NEW(ast_stmt_t);
+    break_stmt->line = new_call_expr->line;
+    break_stmt->column = new_call_expr->column;
+    ast_break_t *_break = NEW(ast_break_t);
+    _break->expr = new_call_expr;
+    break_stmt->assert_type = AST_STMT_BREAK;
+    break_stmt->value = _break;
+
+    stack_push(m->current_fn->break_target_types, &target_type);
+    infer_break(m, _break);
+    stack_pop(m->current_fn->break_target_types);
+
+    slice_push(block_expr->body, break_stmt);
+
+    expr->assert_type = AST_EXPR_BLOCK;
+    expr->value = block_expr;
 
     return call_expr->return_type;
 }
@@ -2035,14 +2079,7 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
     return true;
 }
 
-/**
- * self.foo()
- * 由于重载的存在，对参数的 compare 变成了基于 type 的 search 的过程
- * 如果找不到目标函数则说明 key 不存在或者没有找到匹配的函数类型
- * @param call
- * @return
- */
-static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool check_errable) {
+static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_type) {
     // --------------------------------------------interface call handle----------------------------------------------------------
     if (call->left.assert_type == AST_EXPR_SELECT) {
         do {
@@ -2067,29 +2104,16 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
 
             INFER_ASSERTF(temp, "interface '%s' not declare '%s' fn", select_left_type.ident, select->key);
 
-            type_fn_t *type_fn = temp->fn;
-
-            // infer call args
-            infer_call_args(m, call, type_fn);
-            call->return_type = type_fn->return_type;
-
-            if (type_fn->is_errable) {
-                INFER_ASSERTF(m->current_fn->is_errable || m->be_caught > 0,
-                              "calling an errable! fn `%s` requires the current `fn %s` errable! as well or be caught.",
-                              type_fn->fn_name ? type_fn->fn_name : "lambda",
-                              m->current_fn->fn_name);
-            }
-
-            return type_fn->return_type;
+            return temp->fn;
         } while (0);
     }
 
     // --------------------------------------------impl type handle----------------------------------------------------------
     // fn person_t<>.test() -> fn person_tx_test()
-    bool is_rewrite = false;
     if (call->left.assert_type == AST_EXPR_SELECT) {
-        is_rewrite = infer_select_call_rewrite(m, call);
+        bool is_rewrite = infer_select_call_rewrite(m, call);
     }
+
 
     // analyzer 阶段已经对 ident 进行了 resolve/module ident with
     // --------------------------------------------generics handle----------------------------------------------------------
@@ -2124,27 +2148,26 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
 
             // infer call args
             type_t left_type = infer_left_expr(m, &call->left);
-            type_fn_t *type_fn = left_type.fn;
             assert(left_type.kind == TYPE_FN);
-            infer_call_args(m, call, type_fn);
-            call->return_type = type_fn->return_type;
-
-            if (type_fn->is_errable) {
-                INFER_ASSERTF(m->current_fn->is_errable || m->be_caught > 0,
-                              "calling an errable! fn `%s` requires the current `fn %s` errable! as well or be caught.",
-                              type_fn->fn_name ? type_fn->fn_name : "lambda",
-                              m->current_fn->fn_name);
-            }
-
-            return type_fn->return_type;
+            return left_type.fn;
         } while (0);
     }
 
-    // 左值是一个表达式，进行表达式的类型 infer
     type_t left_type = infer_right_expr(m, &call->left, type_kind_new(TYPE_UNKNOWN));
     INFER_ASSERTF(left_type.kind == TYPE_FN, "cannot call non-fn");
 
-    type_fn_t *type_fn = left_type.fn;
+    return left_type.fn;
+}
+
+/**
+ * self.foo()
+ * 由于重载的存在，对参数的 compare 变成了基于 type 的 search 的过程
+ * 如果找不到目标函数则说明 key 不存在或者没有找到匹配的函数类型
+ * @param call
+ * @return
+ */
+static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool check_errable) {
+    type_fn_t *type_fn = infer_call_left(m, call, target_type);
     infer_call_args(m, call, type_fn);
 
     call->return_type = type_fn->return_type;
@@ -2738,7 +2761,7 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
             return infer_call(m, expr->value, target_type, true);
         }
         case AST_MACRO_ASYNC: {
-            return infer_async(m, expr);
+            return infer_async(m, expr, target_type);
         }
         case AST_EXPR_ENV_ACCESS: {
             return infer_env_access(m, expr->value);
@@ -3732,7 +3755,8 @@ void infer(module_t *m) {
             ast_fndef_t *child = fn->local_children->take[j];
             child->module->temp_worklist = infer_worklist;
             infer_fndef(child->module, child);
-            slice_push(child->module->ast_fndefs, child);
+
+            slice_push(m->ast_fndefs, child);
         }
 
         if (fn->generics_args_table) {
