@@ -53,20 +53,8 @@ fn vec<T>.cap():int
 #linkid rt_vec_ref
 fn vec<T>.ref():anyptr
 
-fn vec<T>.sort() {
-    self.sort_at(fn(int a, int b):bool {
-        return self[a] < self[b]
-    })
-}
-
-fn vec<T>.sort_at(fn(int, int):bool less) {
+fn vec<T>.sort(fn(int, int):bool less) {
     self.quick_sort(0, self.len() - 1, less)
-}
-
-fn vec<T>.sort_by(fn(T, T):bool cmp) {
-    self.sort_at(fn(int a, int b):bool {
-        return cmp(self[a], self[b])
-    })
 }
 
 fn vec<T>.quick_sort(int low, int high, fn(int, int):bool less) {
@@ -94,4 +82,24 @@ fn vec<T>.partition(int low, int high, fn(int, int):bool less):int {
     self[high] = temp
     
     return i + 1
+}
+
+fn vec<T>.search(fn(int):bool predicate):int! {
+    int low = 0
+    int high = self.len()
+    
+    for low < high {
+        int mid = low + (high - low) / 2
+        if !predicate(mid) {
+            low = mid + 1
+        } else {
+            high = mid
+        }
+    }
+    
+    if low == self.len() {
+        throw errorf('not found')
+    }
+    
+    return low
 }

@@ -509,8 +509,8 @@ fn transformer_new(string path):ptr<transformer>! {
 fn tokenizer_t.decode(int prev_token, int token):string! {
     string piece = self.vocab[token]
     // following BOS (1) token, sentencepiece decoder strips any leading whitespace (see PR #89)
-    if prev_token == 1 && piece[0] == ' ' {
-        piece += 1
+    if prev_token == 1 && piece[0] == ' '.ascii() {
+        piece = piece.slice(1, piece.len())
     }
 
     u8 byte_val = 0
@@ -521,8 +521,17 @@ fn tokenizer_t.decode(int prev_token, int token):string! {
     return piece
 }
 
+fn str_lookup(string str, [token_index_t] sorted_vocab, int vocab_size):int {
+    int idx = sorted_vocab.search(fn(int i):bool {
+        return sorted_vocab[i].str >= str
+    }) catch e {
+        return -1
+    }
+
+    return sorted_vocab[idx].id
+}
+
 fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
-    // 如果词汇表未排序，则进行排序
     if self.sorted_vocab.len() == 0 {
         self.sorted_vocab = vec_new<token_index_t>(self.vocab_size)
         for int i = 0; i < self.vocab_size; i+=1 {
@@ -530,103 +539,94 @@ fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
             self.sorted_vocab[i].id = i
         }
         
-        // 对词汇表进行排序
-        self.sorted_vocab.sort_by(fn(token_index_t a, token_index_t b):int {
-            return a.str.compare(b.str)
+        self.sorted_vocab.sort(fn(int a, int b):bool {
+            return self.sorted_vocab[a].str < self.sorted_vocab[b].str
         })
     }
     
-    // 创建临时缓冲区，用于存储合并候选项
-    string str_buffer = ""
+    // create a temporary buffer that will store merge candidates of always two consecutive tokens
+    // *2 for concat, +1 for null terminator +2 for UTF8 (in case max_token_length is 1)
+    var str_buffer = vec_new<u8>(self.max_token_length as int * 2 + 1 + 2)
+    int str_len = 0
     
-    // 开始时令牌数为0
+    // start at 0 tokens
     int n_tokens = 0
-    
-    // 添加可选的BOS(=1)令牌
+
+    // add optional BOS (=1) token, if desired
     if bos != 0 {
         tokens[n_tokens] = 1
         n_tokens += 1
     }
-    
-    // 添加虚拟前缀令牌，但仅当文本非空时
+
+    // add_dummy_prefix is true by default
+    // so prepend a dummy prefix token to the input string, but only if text != ""
+    // TODO: pretty sure this isn't correct in the general case but I don't have the
+    // energy to read more of the sentencepiece code to figure out what it's doing
     if text.len() > 0 {
-        // 查找空格令牌
-        int dummy_prefix = -1
-        for int i = 0; i < self.vocab_size; i+=1 {
-            if self.sorted_vocab[i].str == " " {
-                dummy_prefix = self.sorted_vocab[i].id
-                break
-            }
-        }
-        
-        if dummy_prefix != -1 {
-            tokens[n_tokens] = dummy_prefix
-            n_tokens += 1
-        }
+        int dummy_prefix = str_lookup(' ', self.sorted_vocab, self.vocab_size)
+
+        tokens[n_tokens] = dummy_prefix
+        n_tokens += 1
     }
     
-    // 处理输入字符串的原始(UTF-8)字节序列
-    int i = 0
-    while i < text.len() {
-        // 如果当前字节是ASCII或前导字节，则重置缓冲区
-        if (text[i] & 0xC0) != 0x80 {
-            str_buffer = ""
+    // Okay UTF-8 time. This will get messy. Here is the reference from Wikipedia:
+    // Code point ↔ UTF-8 conversion
+    // First code point	Last code point	Byte 1	Byte 2	Byte 3	Byte 4
+    // U+0000	U+007F	    0xxxxxxx
+    // U+0080	U+07FF	    110xxxxx	10xxxxxx
+    // U+0800	U+FFFF	    1110xxxx	10xxxxxx	10xxxxxx
+    // U+10000	U+10FFFF    11110xxx	10xxxxxx	10xxxxxx	10xxxxxx
+    for i, c in text {
+        // reset buffer if the current byte is ASCII or a leading byte
+        // 0xC0 is 11000000, so (*c & 0xC0) keeps the first 2 bits and zeros the rest
+        // 0x80 is 10000000
+        // in UTF-8, all continuation bytes start with "10" in first two bits
+        // so in English this is: "if this byte is not a continuation byte"
+        if (c & 0xC0) != 0x80 {
+            str_len = 0
         }
         
         // 将当前字节附加到缓冲区
-        str_buffer += [text[i]] as string
-        
-        // 如果下一个字符是连续字节，则继续附加
-        if i + 1 < text.len() && (text[i+1] & 0xC0) == 0x80 && str_buffer.len() < 4 {
-            i += 1
+        str_buffer[str_len] = c
+        str_len += 1
+        str_buffer[str_len] = '\0'.ascii()
+
+        if (text[i+1] & 0xC0) == 0x80 && str_len < 4 {
             continue
         }
-        
-        // 在词汇表中查找此代码点
-        int id = -1
-        for int j = 0; j < self.vocab_size; j+=1 {
-            if self.sorted_vocab[j].str == str_buffer {
-                id = self.sorted_vocab[j].id
-                break
-            }
-        }
-        
+
+        int id = str_lookup(str_buffer as string, self.sorted_vocab, self.vocab_size)
+
         if id != -1 {
-            // 在词汇表中找到此代码点，将其添加为令牌
+            // we found this codepoint in vocab, add it as a token
             tokens[n_tokens] = id
             n_tokens += 1
         } else {
-            // 字节回退编码：将每个字节编码为令牌
-            for int j = 0; j < str_buffer.len(); j+=1 {
+             // byte_fallback encoding: just encode each byte as a token
+            // +3 is here because the first 3 vocab elements are <unk>, <s>, </s>
+            // so the individual bytes only start at index 3
+            for int j = 0; j < str_len; j+=1 {
                 tokens[n_tokens] = (str_buffer[j] as int) + 3
                 n_tokens += 1
             }
         }
-        
-        str_buffer = ""
-        i += 1
+
+        str_len = 0 // protect against a sequence of stray UTF8 continuation bytes
     }
-    
-    // 根据vocab_scores中的分数，每次迭代合并最佳连续对
-    while true {
+
+    // merge the best consecutive pair each iteration, according the scores in vocab_scores
+    for true {
         f32 best_score = -1e10
         int best_id = -1
         int best_idx = -1
         
-        for int i = 0; i < n_tokens - 1; i+=1 {
-            // 检查是否可以合并对(tokens[i], tokens[i+1])
+        for int i = 0; i < (n_tokens - 1); i+=1 {
+            // check if we can merge the pair (tokens[i], tokens[i+1])
             string merge_str = self.vocab[tokens[i]] + self.vocab[tokens[i+1]]
-            
-            int id = -1
-            for int j = 0; j < self.vocab_size; j+=1 {
-                if self.sorted_vocab[j].str == merge_str {
-                    id = self.sorted_vocab[j].id
-                    break
-                }
-            }
-            
+            int id = str_lookup(merge_str, self.sorted_vocab, self.vocab_size)
+
             if id != -1 && self.vocab_scores[id] > best_score {
-                // 此合并对存在于词汇表中！记录其分数和位置
+                // this merge pair exists in vocab! record its score and position
                 best_score = self.vocab_scores[id]
                 best_id = id
                 best_idx = i
@@ -634,19 +634,20 @@ fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
         }
         
         if best_idx == -1 {
-            break // 找不到更多要合并的对，所以完成了
+            break // we couldn't find any more pairs to merge, so we're done
         }
         
-        // 将连续对(best_idx, best_idx+1)合并为新令牌best_id
+        // merge the consecutive pair (best_idx, best_idx+1) into new token best_id
         tokens[best_idx] = best_id
-        // 删除位置best_idx+1处的令牌，将整个序列向后移动1
+
+        // delete token at position best_idx+1, shift the entire sequence back 1
         for int i = best_idx + 1; i < n_tokens - 1; i+=1 {
             tokens[i] = tokens[i+1]
         }
-        n_tokens -= 1 // 令牌长度减少
+        n_tokens -= 1 // token length decreased
     }
     
-    // 添加可选的EOS(=2)令牌
+    // add optional EOS (=2) token, if desired
     if eos != 0 {
         tokens[n_tokens] = 2
         n_tokens += 1

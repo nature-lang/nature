@@ -1,36 +1,3 @@
-=== test_int_sort
---- main.n
-import fmt
-
-fn main() {
-    var nums = [5, 2, 9, 1, 7]
-    
-    println("Before sort: ", nums_to_string(nums))
-    nums.sort()
-    println("After sort: ", nums_to_string(nums))
-    
-    // Verify sort results
-    assert(nums[0] == 1)
-    assert(nums[1] == 2)
-    assert(nums[2] == 5)
-    assert(nums[3] == 7)
-    assert(nums[4] == 9)
-    
-    println("Integer sort test passed!")
-}
-
-fn nums_to_string(vec<int> nums):string {
-    string result = "["
-    for int i = 0; i < nums.len(); i += 1 {
-        if i > 0 {
-            result += ", "
-        }
-        result += fmt.sprintf('%d', nums[i])
-    }
-    result += "]"
-    return result
-}
-
 === test_float_sort
 --- main.n
 import fmt
@@ -39,7 +6,9 @@ fn main() {
     var floats = [3.14, 1.618, 2.718, 0.577, 1.414]
 
     println("Before sort: ", floats_to_string(floats))
-    floats.sort()
+    floats.sort(fn(int a, int b):bool {
+        return floats[a] < floats[b]
+    })
     println("After sort: ", floats_to_string(floats))
 
     // Verify sort results
@@ -87,8 +56,8 @@ fn main() {
     println("Before sort: ", persons_to_string(persons))
     
     // Sort by age
-    persons.sort_by(fn(person_t a, person_t b):bool {
-        return a.age < b.age
+    persons.sort(fn(int a, int b):bool {
+        return persons[a].age < persons[b].age
     })
     println("After sort by age: ", persons_to_string(persons))
     
@@ -116,7 +85,7 @@ fn persons_to_string(vec<person_t> persons):string {
 }
 
 
-=== test_struct_sort_at
+=== test_struct_sort
 --- main.n
 import fmt
 
@@ -138,7 +107,7 @@ fn main() {
     println("Before sort: ", persons_to_string(persons))
 
     // Sort by age
-    persons.sort_at(fn(int a, int b):bool {
+    persons.sort(fn(int a, int b):bool {
         return persons[a].age < persons[b].age
     })
     println("After sort by age: ", persons_to_string(persons))
@@ -164,4 +133,69 @@ fn persons_to_string(vec<person_t> persons):string {
     }
     result += "\n]"
     return result
+}
+
+
+
+=== test_binary_search_mutil
+--- main.n
+import fmt
+
+fn main():void! {
+    [int] nums = [1, 1, 1, 1, 1, 3, 5, 7, 7, 9, 11, 13, 15]
+    
+    int target = 7
+    int index = nums.search(fn(int i):bool {
+        return nums[i] >= target
+    })
+    
+    fmt.printf("Searching for %d, found at index: %d, val is: %d\n", target, index, nums[index])
+    assert(index == 7)
+    assert(nums[index] == target)
+}
+
+
+
+=== test_binary_search
+--- main.n
+import fmt
+
+type person_t = struct {
+    string name
+    int age
+    f64 height
+}
+
+fn main():void! {
+    [int] nums = [1, 1, 1, 1, 1, 3, 5, 7, 7, 9, 11, 13, 15]
+    
+    int target = 7
+    int index = nums.search(fn(int i):bool {
+        return nums[i] >= target
+    })
+    
+    fmt.printf("Searching for %d using search, found at index: %d\n", target, index)
+    assert(index == 7)
+    assert(nums[index] == target)
+    
+    // 测试结构体数组
+    [person_t] persons = [
+        person_t{ name = "Alice", age = 20, height = 165.5 },
+        person_t{ name = "Bob", age = 25, height = 180.0 },
+        person_t{ name = "Charlie", age = 28, height = 175.5 },
+        person_t{ name = "David", age = 30, height = 170.0 },
+        person_t{ name = "Eve", age = 35, height = 168.0 },
+    ]
+    
+    int target_age = 28
+    index = persons.search(fn(int i):bool {
+        return persons[i].age >= target_age
+    })
+    
+    fmt.printf("Searching for age %d using search, found at index: %d\n", target_age, index)
+    assert(index == 2)
+    assert(persons[index].age == target_age)
+    assert(persons[index].name == "Charlie")
+    
+    println("Binary search test passed!")
 }
