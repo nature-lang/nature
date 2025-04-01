@@ -240,7 +240,7 @@ fn response_t.send(string msg) {
 
 fn response_t.to_str():string {
     var cap = (100 + self.body.len()) * 2
-    var buf = vec_new<u8>(0, cap)
+    var buf = vec_cap<u8>(cap)
 
     u8 space_ascii = 32
 

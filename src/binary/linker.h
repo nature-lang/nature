@@ -206,14 +206,14 @@ static inline uint64_t collect_fndef_list(void *ctx) {
             assert(stack_slot < 0);
             stack_slot = var_stack_slot(c, var) * -1;
 
-            log_debug(
+            log_trace(
                 "[stack_vars.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
                 c->linkident, var->ident, type_format(var->type), type_sizeof(var->type),
                 type_is_pointer_heap(var->type),
                 (stack_slot / POINTER_SIZE) - 1, stack_slot);
         }
 
-        log_debug(
+        log_trace(
             "[collect_fndef_list] item success, fn name=%s, base=0x%lx, size=%lu, stack_size=%lu,"
             "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
             f->name, f->base, f->size, f->stack_size, f->fn_runtime_stack, f->fn_runtime_reg,

@@ -36,7 +36,7 @@ fn main():void! {
     println('accept success')
 
     // 这里标识只接收 0 个字节即可
-    var recv_buf = vec_new<u8>()
+    var recv_buf = vec_new<u8>(0, 0)
     syscall.recvfrom(client_fd, recv_buf, 0)
 
     var resp_str = 'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 12\r\n\r\nHello, World!'

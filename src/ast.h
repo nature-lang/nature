@@ -563,8 +563,6 @@ typedef struct {
 
 typedef struct {
     list_t *elements;// ast_expr, nullable
-    ast_expr_t *len; // ast_expr, nullable
-    ast_expr_t *cap; // ast_expr, nullable
 } ast_vec_new_t;
 
 typedef struct {

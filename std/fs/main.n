@@ -42,7 +42,16 @@ fn from(int fd, string name):ptr<file_t>!
 fn open(string path, int flags, int mode):ptr<file_t>!
 
 #linkid rt_uv_fs_content
-fn file_t.content():string!
+fn file_t.content():string! {
+    var s = self.stat()
+    var file_size = s.size
+    var buf = vec_new<u8>(0, file_size as int)
+    int n = self.read(buf)
+    if n != file_size as int {
+        throw errorf('incomplete reading')
+    }
+    return buf as string
+}
 
 #linkid rt_uv_fs_read
 fn file_t.read([u8] buf):int!

@@ -41,8 +41,8 @@ fn main() {
     println((b as [i8]).len())
 
     // 空数组快速确定类型
-    i8_i16_list c = vec_new<i8>()
-    var d = vec_new<i16>()
+    i8_i16_list c = vec_new<i8>(0, 0)
+    var d = vec_new<i16>(0, 0)
     print((c as [i8]).len(), d.len(), '\n')
     c = d
 

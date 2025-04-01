@@ -90,23 +90,15 @@ static lir_operand_t *linear_default_nullable(module_t *m, type_t t, lir_operand
 }
 
 static lir_operand_t *
-linear_default_vec(module_t *m, type_t t, lir_operand_t *len, lir_operand_t *cap, lir_operand_t *target) {
+linear_default_vec(module_t *m, type_t t, lir_operand_t *target) {
     if (!target) {
         target = temp_var_operand_with_alloc(m, t);
     }
 
     lir_operand_t *rtype_hash = int_operand(ct_find_rtype_hash(t));
     lir_operand_t *element_index = int_operand(ct_find_rtype_hash(t.vec->element_type));
-    lir_operand_t *len_operand = int_operand(-1);
-    lir_operand_t *cap_operand = int_operand(-1);
-    if (len) {
-        len_operand = len;
-    }
-    if (cap) {
-        cap_operand = cap;
-    }
-
-    push_rt_call(m, RT_CALL_VEC_NEW, target, 4, rtype_hash, element_index, len_operand, cap_operand);
+    lir_operand_t *cap_operand = int_operand(VEC_DEFAULT_CAPACITY);// default cap_operand
+    push_rt_call(m, RT_CALL_VEC_CAP, target, 3, rtype_hash, element_index, cap_operand);
     return target;
 }
 
@@ -209,7 +201,7 @@ static lir_operand_t *linear_struct_fill_default(module_t *m, type_t t, lir_oper
     assert(target->assert_type == LIR_OPERAND_VAR);
     assert(t.kind == TYPE_STRUCT);
 
-     for (int i = 0; i < t.struct_->properties->length; ++i) {
+    for (int i = 0; i < t.struct_->properties->length; ++i) {
         struct_property_t *p = ct_list_value(t.struct_->properties, i);
 
         if (exists && table_exist(exists, p->key)) {
@@ -283,7 +275,7 @@ static lir_operand_t *linear_default_operand(module_t *m, type_t t, lir_operand_
     }
 
     if (t.kind == TYPE_VEC) {
-        return linear_default_vec(m, t, NULL, NULL, target);
+        return linear_default_vec(m, t, target);
     }
 
     if (t.kind == TYPE_ARR) {
@@ -986,9 +978,14 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     lir_operand_t *cursor_operand = unique_var_operand(m, type_kind_new(TYPE_INT), ITERATOR_CURSOR);
     OP_PUSH(lir_op_move(cursor_operand, int_operand(-1)));// cursor 初始值 = --
 
+    char *for_start_ident = label_ident_with_unique(m, FOR_ITERATOR_IDENT);
+    char *for_update_ident = str_connect(for_start_ident, LABEL_UPDATE_SUFFIX);
+    char *for_continue_ident = str_connect(for_start_ident, LABEL_CONTINUE_SUFFIX);
+    char *for_end_ident = str_connect(for_start_ident, LABEL_END_SUFFIX);
+
     // make label
-    lir_op_t *for_start_label = lir_op_local_label(m, FOR_ITERATOR_IDENT);
-    lir_op_t *for_end_label = lir_op_local_label(m, FOR_END_IDENT);
+    lir_op_t *for_start_label = lir_op_label(for_start_ident, true);
+    lir_op_t *for_end_label = lir_op_label(for_end_ident, true);
 
     stack_push(m->current_closure->continue_labels, for_start_label->output);
     stack_push(m->current_closure->break_labels, for_end_label->output);
@@ -1023,7 +1020,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, int_operand(-1), cursor_operand, lir_copy_label_operand(for_end_label->output)));
 
     // 添加 continue label
-    OP_PUSH(lir_op_local_label(m, FOR_CONTINUE_IDENT));
+    OP_PUSH(lir_op_label(for_continue_ident, true));
 
     // gen value
     if (ast->second) {
@@ -1079,9 +1076,16 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
     // init
     linear_stmt(m, ast->init);
 
-    lir_op_t *for_start = lir_op_local_label(m, FOR_TRADITION_IDENT);
-    lir_op_t *for_update = lir_op_local_label(m, FOR_UPDATE_IDENT);
-    lir_operand_t *for_end_operand = lir_label_operand(label_ident_with_unique(m, FOR_END_IDENT), true);
+    char *for_start_ident = label_ident_with_unique(m, FOR_TRADITION_IDENT);
+    char *for_update_ident = str_connect(for_start_ident, LABEL_UPDATE_SUFFIX);
+    char *for_continue_ident = str_connect(for_start_ident, LABEL_CONTINUE_SUFFIX);
+    char *for_end_ident = str_connect(for_start_ident, LABEL_END_SUFFIX);
+
+    lir_op_t *for_start = lir_op_label(for_start_ident, true);
+
+    lir_op_t *for_update = lir_op_label(for_update_ident, true);
+
+    lir_operand_t *for_end_operand = lir_label_operand(for_end_ident, true);
     stack_push(m->current_closure->continue_labels, for_update->output);
     stack_push(m->current_closure->break_labels, for_end_operand);
 
@@ -1094,7 +1098,7 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
     OP_PUSH(beq);
 
     // continue
-    OP_PUSH(lir_op_local_label(m, FOR_CONTINUE_IDENT));
+    OP_PUSH(lir_op_label(for_continue_ident, true));
 
     // block
     linear_body(m, ast->body);
@@ -1424,7 +1428,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
             }
 
             // actual 剩余的所有参数进行 linear_expr 之后 都需要用一个数组收集起来，并写入到 target_operand 中
-            lir_operand_t *rest_target = linear_default_vec(m, *rest_list_type, NULL, NULL, NULL);
+            lir_operand_t *rest_target = linear_default_vec(m, *rest_list_type, NULL);
 
             for (int j = i; j < call->args->length; ++j) {
                 ast_expr_t *arg = ct_list_value(call->args, j);
@@ -1738,16 +1742,7 @@ static lir_operand_t *linear_vec_new(module_t *m, ast_expr_t expr, lir_operand_t
     ast_vec_new_t *ast = expr.value;
     type_t t = expr.type;
 
-    lir_operand_t *len_operand = NULL;
-    if (ast->len) {
-        len_operand = linear_expr(m, *ast->len, NULL);
-    }
-    lir_operand_t *cap_operand = NULL;
-    if (ast->cap) {
-        cap_operand = linear_expr(m, *ast->cap, NULL);
-    }
-
-    target = linear_default_vec(m, t, len_operand, cap_operand, target);
+    target = linear_default_vec(m, t, target);
 
     if (ast->elements) {
         for (int i = 0; i < ast->elements->length; ++i) {
@@ -2064,7 +2059,7 @@ static lir_operand_t *linear_struct_new(module_t *m, ast_expr_t expr, lir_operan
     ast_struct_new_t *ast = expr.value;
     type_t t = expr.type;
 
-      if (!target) {
+    if (!target) {
         target = temp_var_operand_with_alloc(m, t);
     }
 
@@ -2407,7 +2402,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
                 assert(interface_fn_type->fn_name);
 
                 // 按照 union type 中的定义顺序写入
-                char *fn_ident = str_connect_by(src_type.ident, interface_fn_type->fn_name, "_");
+                char *fn_ident = str_connect_by(src_type.ident, interface_fn_type->fn_name, IMPL_CONNECT_IDENT);
 
                 ast_fndef_t *ast_fndef = sc_map_get_sv(&typedef_stmt->method_table, fn_ident);
                 assert(ast_fndef);

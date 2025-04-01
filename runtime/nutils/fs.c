@@ -106,54 +106,6 @@ fs_context_t *rt_uv_fs_open(n_string_t *path, int64_t flags, int64_t mode) {
     return ctx;
 }
 
-n_string_t *rt_uv_fs_content(fs_context_t *ctx) {
-    coroutine_t *co = coroutine_get();
-    n_processor_t *p = processor_get();
-    DEBUGF("[rt_uv_fs_content] read file: %d", ctx->fd);
-
-    if (ctx->closed) {
-        rt_co_throw(co, "fd already closed", false);
-        return 0;
-    }
-
-    // 通过 seek end 判断文件的大小
-    off_t file_size = lseek(ctx->fd, 0, SEEK_END);
-
-    ctx->data_cap = file_size;
-    ctx->data_len = 0;
-    ctx->data = malloc(file_size + 1);
-    if (!ctx->data) {
-        rt_co_throw(co, "out of memory", false);
-        return 0;
-    }
-
-    ctx->buf = uv_buf_init(ctx->data, file_size);
-
-
-    // 基于 fd offset 进行读取, 从 0 开始读取
-    ctx->req.data = co;
-    uv_fs_read(&p->uv_loop, &ctx->req, ctx->fd, &ctx->buf, 1, 0, on_read_cb);
-
-    co_yield_waiting(co, NULL, NULL);
-
-    if (co->has_error) {
-        DEBUGF("[fs_read] read file failed: %s", (char*)rt_string_ref(rti_error_msg(co->error)));
-        return 0;
-    } else {
-        DEBUGF("[fs_read] read file success");
-    }
-
-    n_string_t *result = string_new(ctx->data, ctx->data_len);
-
-    // 读取完成, 清理 data
-    free(ctx->data);
-    ctx->data = NULL;
-    ctx->data_len = 0;
-    ctx->data_cap = 0;
-
-    return result;
-}
-
 n_int_t rt_uv_fs_read(fs_context_t *ctx, n_vec_t *buf) {
     return rt_uv_fs_read_at(ctx, buf, -1);
 }
@@ -248,10 +200,6 @@ void rt_uv_fs_close(fs_context_t *ctx) {
 
     // 清理请求和释放内存
     uv_fs_req_cleanup(&ctx->req);
-    if (ctx->data) {
-        free(ctx->data);
-    }
-
     ctx->closed = true;
 
     // ctx 的内存应该由 GC 释放，而不是此处主动释放。

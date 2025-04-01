@@ -50,7 +50,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:6:2: ident 'main.t_foo' redeclared
+nature-test/main.n:6:2: ident 'main.t.foo' redeclared
 
 === test_redeclared5
 --- main.n

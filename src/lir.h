@@ -12,12 +12,18 @@
 
 #define VEC_TYPE_IDENT "vec"
 
+#define GEN_REWRITE_SEPARATOR "@"
+
+#define IMPL_CONNECT_IDENT "."
+
 #define TEMP_RESULT "@result"
 #define TEMP_IDENT "t"
 #define TEMP_VAR_IDENT "v"
 #define TEMP_LABEL ".L"
 #define ITERATOR_CURSOR "cursor"
 
+#define LABEL_UPDATE_SUFFIX ".update"
+#define LABEL_CONTINUE_SUFFIX ".continue"
 #define LABEL_END_SUFFIX ".end"
 #define LABEL_ERROR_SUFFIX ".error"
 
@@ -69,7 +75,7 @@
 
 // RT = runtime
 // CT = compile time
-#define RT_CALL_VEC_NEW "rt_vec_new"
+#define RT_CALL_VEC_CAP "rt_vec_cap"
 #define RT_CALL_VEC_ELEMENT_ADDR "rt_vec_element_addr"
 #define RT_CALL_VEC_SLICE "rt_vec_slice"
 #define RT_CALL_VEC_REF "rt_vec_ref"
@@ -252,7 +258,7 @@ static inline bool is_rtcall(string target) {
 
     return str_equal(target, RT_CALL_SET_ADD) || str_equal(target, RT_CALL_SET_DELETE) ||
            str_equal(target, RT_CALL_SET_CONTAINS) || str_equal(target, RT_CALL_SET_NEW) ||
-           str_equal(target, RT_CALL_VEC_NEW) || str_equal(target, RT_CALL_VEC_ELEMENT_ADDR) ||
+           str_equal(target, RT_CALL_VEC_CAP) || str_equal(target, RT_CALL_VEC_ELEMENT_ADDR) ||
            str_equal(target, RT_CALL_VEC_SLICE) || str_equal(target, RT_CALL_VEC_REF) ||
            str_equal(target, RT_CALL_VEC_LENGTH) || str_equal(target, RT_CALL_VEC_CAPACITY) ||
            str_equal(target, RT_CALL_VEC_PUSH) || str_equal(target, RT_CALL_VEC_ITERATOR) ||

@@ -8,7 +8,7 @@ fn main():void! {
 
     var br = new io.buf_reader<io.buffer>(rd)
 
-    var buf = vec_new<u8>(5)
+    var buf = vec_new<u8>(0, 5)
     var n = br.read(buf)
     println(n, buf as string)
 }
@@ -24,7 +24,7 @@ fn main():void! {
     var rd = io.buffer{}
     var br = new io.buf_reader<io.buffer>(rd)
 
-    var buf = vec_new<u8>(5)
+    var buf = vec_new<u8>(0, 5)
     try {
         br.read(buf)
         panic('should throw EOF')
@@ -69,7 +69,7 @@ import strings
 fn main():void! {
     // use buffer to simulate file
     var rd = new io.buffer()
-    var data = vec_new<u8>(4096 + 100)
+    var data = vec_new<u8>(0, 4096 + 100)
     for int i = 0; i < data.len(); i += 1 {
        data[i] = 'a'.ascii()
     }
@@ -117,7 +117,7 @@ fn main():void! {
 
     var br = new io.buf_reader<ptr<io.buffer>>(rd)
 
-    var buf = vec_new<u8>(5)
+    var buf = vec_new<u8>(0, 5)
     br.read_exact(buf)
     println("read data: " + (buf as string))
     assert(buf as string == "hello")
@@ -150,7 +150,7 @@ fn main():void! {
     var rd = new io.buffer()
     var br = new io.buf_reader<ptr<io.buffer>>(rd)
 
-    var buf = vec_new<u8>(5)
+    var buf = vec_new<u8>(0, 5)
     try {
         br.read_exact(buf)
         panic('an error should have occurred')
@@ -175,7 +175,7 @@ fn main():void! {
 
     var br = new io.buf_reader<ptr<io.buffer>>(rd)
 
-    var buf = vec_new<u8>(5)
+    var buf = vec_new<u8>(0, 5)
     try {
         br.read_exact(buf)
         panic('an error should have occurred')
@@ -199,11 +199,11 @@ fn main():void! {
 
     var br = new io.buf_reader<ptr<io.buffer>>(rd)
 
-    var empty_buf = vec_new<u8>(0)
+    var empty_buf = vec_cap<u8>(0)
     br.read_exact(empty_buf)
     println("success read 0 length")
 
-    var buf = vec_new<u8>(5)
+    var buf = vec_new<u8>(0, 5)
     br.read_exact(buf)
     println("subsequent data: " + (buf as string))
     assert(buf as string == "hello")

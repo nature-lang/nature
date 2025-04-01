@@ -68,7 +68,7 @@ bool interval_expired(interval_t *i, int position, bool is_input);
  * @param adjust_position
  * @return
  */
-bool interval_covered(interval_t *i, int adjust_position, bool is_input);
+bool interval_covered(interval_t *i, int position, bool is_input);
 
 /**
  * 寻找 current 和 select 的第一个相交点
@@ -94,8 +94,6 @@ int interval_next_use_position(interval_t *i, int after_position);
 
 void interval_spill_slot(closure_t *c, interval_t *i);
 
-interval_t *interval_child_at(interval_t *i, int op_id, bool is_use);
-
 use_pos_t *interval_must_reg_pos(interval_t *i);
 
 use_pos_t *interval_must_stack_pos(interval_t *i);
@@ -109,5 +107,11 @@ void resolve_mappings(closure_t *c, resolver_t *r);
 use_pos_t *first_use_pos(interval_t *i, alloc_kind_e kind);
 
 void var_replace(lir_operand_t *operand, interval_t *i);
+
+/**
+ * 虚拟寄存器替换成 stack slot 和 physical register
+ * @param c
+ */
+void replace_virtual_register(closure_t *c);
 
 #endif

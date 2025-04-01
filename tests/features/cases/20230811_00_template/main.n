@@ -9,7 +9,7 @@ fn main():void! {
 
     var gzfile = zlib.gzopen(output.ref(), 'wb'.ref())
 
-    var buf = vec_new<u8>(4096, 0)
+    var buf = vec_new<u8>(0, 4096)
     for true {
         var len = syscall.read(fd, buf.ref(), buf.len())
         if len == 0 {

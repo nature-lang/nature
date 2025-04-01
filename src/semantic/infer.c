@@ -1996,7 +1996,7 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
 
     // call 继承 select_left_type 的 args
     char *impl_ident = destr_type.ident;
-    char *impl_symbol_name = str_connect_by(impl_ident, select->key, "_");
+    char *impl_symbol_name = str_connect_by(impl_ident, select->key, IMPL_CONNECT_IDENT);
     list_t *impl_args = destr_type.args;
     symbol_t *s;
     ast_expr_t *self_arg = &select->left;
@@ -2027,7 +2027,7 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
             if (temp_type.ident && temp_type.ident_kind == TYPE_IDENT_BUILTIN) {
                 impl_ident = temp_type.ident;
                 impl_args = temp_type.args;
-                impl_symbol_name = str_connect_by(impl_ident, select->key, "_");
+                impl_symbol_name = str_connect_by(impl_ident, select->key, IMPL_CONNECT_IDENT);
                 if (impl_args) {
                     char *arg_hash = generics_impl_args_hash(m, impl_args);
 
@@ -3051,7 +3051,7 @@ check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast
         assert(interface_fn_type->fn_name);
 
         // find fn from symbol table
-        char *fn_ident = str_connect_by(typedef_ident, interface_fn_type->fn_name, "_");
+        char *fn_ident = str_connect_by(typedef_ident, interface_fn_type->fn_name, IMPL_CONNECT_IDENT);
 
         // find ast_fn by teypdef_stmt.sc_map
         ast_fndef_t *ast_fndef = sc_map_get_sv(&typedef_stmt->method_table, fn_ident);

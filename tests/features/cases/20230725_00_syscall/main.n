@@ -20,7 +20,7 @@ fn main():void! {
     }
 
     // read buf is [u8]
-    var buf = vec_new<u8>(20, 0)
+    var buf = vec_new<u8>(0, 20)
     var len = syscall.read(fd, buf.ref(), buf.len()) catch err {
         return print(err.msg())
     }

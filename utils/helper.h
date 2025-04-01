@@ -90,7 +90,7 @@ static inline void *mallocz(uint64_t size) {
     })
 
 // 抢占式调度与 coroutine dispatch 使用该 debug 函数
-#ifdef NATURE_DEBUG
+#ifdef DEBUG_LOG
 
 #define RDEBUGF(format, ...)                                                                                                 \
     fprintf(stderr, "[%lu] RDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \

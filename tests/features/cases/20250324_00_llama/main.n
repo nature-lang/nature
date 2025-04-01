@@ -6,6 +6,17 @@ import mem
 import fmt
 import libc
 import unsafe
+import io
+
+type config_t = struct{
+    i32 dim
+    i32 hidden_dim
+    i32 n_layers
+    i32 n_heads
+    i32 n_kv_heads
+    i32 vocab_size
+    i32 seq_len
+}
 
 type prob_index_t = struct{
     f32 prob
@@ -34,48 +45,32 @@ type tokenizer_t = struct{
     arr<u8,512> byte_pieces
 }
 
-type config_t = struct{
-    i32 dim
-    i32 hidden_dim
-    i32 n_layers
-    i32 n_heads
-    i32 n_kv_heads
-    i32 vocab_size
-    i32 seq_len
-}
-
-type quantized_tensor = struct{
-    vec<i8> q // quantized values
-    vec<f32> s  // scaling
-}
 
 type transformer_weights = struct{
     // token embedding table
-    quantized_tensor q_tokens
-    [f32] token_embedding_table
+    rawptr<f32> token_embedding_table    // (vocab_size, dim)
 
     // weights for rmsnorms
-    rawptr<f32> rms_att_weight
-    rawptr<f32> rms_ffn_weight
+    rawptr<f32> rms_att_weight           // (layer, dim)
+    rawptr<f32> rms_ffn_weight           // (layer, dim)
 
     // weights for matmuls. note dim == n_heads * head_size
-    vec<quantized_tensor> wq           // (layer, dim, n_heads * head_size)
-    vec<quantized_tensor> wk           // (layer, dim, n_kv_heads * head_size)
-    vec<quantized_tensor> wv           // (layer, dim, n_kv_heads * head_size)
-    vec<quantized_tensor> wo           // (layer, n_heads * head_size, dim)
-    
-    // weights for ffn
-    vec<quantized_tensor> w1           // (layer, hidden_dim, dim)
-    vec<quantized_tensor> w2           // (layer, dim, hidden_dim)
-    vec<quantized_tensor> w3           // (layer, hidden_dim, dim)
-    
-    // final rmsnorm
-    rawptr<f32> rms_final_weight          // (dim,)
-    
-    // (optional) classifier weights for the logits, on the last layer
-    vec<quantized_tensor> wcls
-}
+    rawptr<f32> wq                       // (layer, dim, n_heads * head_size)
+    rawptr<f32> wk                       // (layer, dim, n_kv_heads * head_size)
+    rawptr<f32> wv                       // (layer, dim, n_kv_heads * head_size)
+    rawptr<f32> wo                       // (layer, n_heads * head_size, dim)
 
+    // weights for ffn
+    rawptr<f32> w1                       // (layer, hidden_dim, dim)
+    rawptr<f32> w2                       // (layer, dim, hidden_dim)
+    rawptr<f32> w3                       // (layer, hidden_dim, dim)
+
+    // final rmsnorm
+    rawptr<f32> rms_final_weight         // (dim,)
+
+    // (optional) classifier weights for the logits, on the last layer
+    rawptr<f32> wcls
+}
 
 type run_state_t = struct{
     // current wave of activations
@@ -84,8 +79,6 @@ type run_state_t = struct{
     vec<f32> xb2      // an additional buffer just for convenience (dim,)
     vec<f32> hb       // buffer for hidden dimension in the ffn (hidden_dim,)
     vec<f32> hb2      // buffer for hidden dimension in the ffn (hidden_dim,)
-    quantized_tensor xq  // quantized x (dim,)
-    quantized_tensor hq  // quantized hb (hidden_dim,)
     vec<f32> q        // query (dim,)
     vec<f32> k        // key (dim,)
     vec<f32> v        // value (dim,)
@@ -105,126 +98,79 @@ type transformer = struct{
     uint file_size
 }
 
-int GS = 0
-
-fn transformer.dequantize(rawptr<quantized_tensor> qx, [f32] x, int n):void! {
-    for int i = 0; i < n; i+=1 {
-        x[i] = qx.q[i] as f32 * qx.s[i / GS]
-    }
-}
-
-fn transformer.quantize(rawptr<quantized_tensor> qx, [f32] x, int n):void! {
-    int num_groups = n / GS as int
-    f32 Q_MAX = 127.0
-    for int group = 0; group < num_groups; group+=1 {
-        // find the max absolute value in the current group
-        f32 wmax = 0.0
-        for int i = 0; i < GS; i+=1 {
-            f32 val = libc.fabsf(x[group * GS + i])
-            if val > wmax {
-                wmax = val
-            }
-        }
-
-        // calculate and write the scaling factor
-        f32 scale = wmax / Q_MAX
-        qx.s[group] = scale
-
-        // calculate and write the quantized values
-        for int i = 0; i < GS; i+=1 {
-            f32 quant_value = x[group * GS + i] / scale // scale
-            i8 quantized = libc.roundf(quant_value) as i8 // round and clamp
-            qx.q[group * GS + i] = quantized
-        }
-    }    
-}
-
-fn transformer.init_quantized_tensors(rawptr<anyptr> pp, i32 n, i32 size_each):vec<quantized_tensor>! {
-    anyptr p = *pp
-
-    var res = vec_new<quantized_tensor>(n as int)
-
-    for i32 i = 0; i < n; i+=1 {
-        // map quantized int8 values
-        res[i].q = unsafe.vec_new(p as rawptr<i8>, size_each as int)
-        p = p + size_each as anyptr
-
-        // map scale factors
-        res[i].s = unsafe.vec_new(p as rawptr<f32>, size_each as int / GS)
-        p = p + size_each as anyptr / GS as anyptr * 4
-    }
-
-    *pp = p
-    return res
-}
-
 fn transformer.malloc_run_state(rawptr<run_state_t> s, rawptr<config_t> cfg):void! {
     i32 kv_dim = (cfg.dim * cfg.n_kv_heads) / cfg.n_heads
-    
-    // allocate memory for various buffers
-    s.x = vec_new<f32>(cfg.dim as int)
-    s.xb = vec_new<f32>(cfg.dim as int)
-    s.xb2 = vec_new<f32>(cfg.dim as int)
-    s.hb = vec_new<f32>(cfg.hidden_dim as int)
-    s.hb2 = vec_new<f32>(cfg.hidden_dim as int)
-    
-    // allocate memory for quantized tensors
-    s.xq.q = vec_new<i8>(cfg.dim as int)
-    s.xq.s = vec_new<f32>(cfg.dim as int / GS)
 
-    s.hq.q = vec_new<i8>(cfg.hidden_dim as int)
-    s.hq.s = vec_new<f32>(cfg.hidden_dim as int / GS)
-    
+    // allocate memory for various buffers
+    s.x = vec_new<f32>(0, cfg.dim as int)
+    s.xb = vec_new<f32>(0, cfg.dim as int)
+    s.xb2 = vec_new<f32>(0, cfg.dim as int)
+    s.hb = vec_new<f32>(0, cfg.hidden_dim as int)
+    s.hb2 = vec_new<f32>(0, cfg.hidden_dim as int)
+
     // allocate memory for queries, keys, and values
-    s.q = vec_new<f32>(cfg.dim as int)
-    s.k = vec_new<f32>(kv_dim as int)
-    s.v = vec_new<f32>(kv_dim as int)
-    
-    s.att = vec_new<f32>((cfg.n_heads * cfg.seq_len) as int)
-    s.logits = vec_new<f32>(cfg.vocab_size as int)
-    
-    s.key_cache = vec_new<f32>((cfg.n_layers * cfg.seq_len * kv_dim) as int)
-    s.value_cache = vec_new<f32>((cfg.n_layers * cfg.seq_len * kv_dim) as int)
+    s.q = vec_new<f32>(0, cfg.dim as int)
+    s.k = vec_new<f32>(0, kv_dim as int)
+    s.v = vec_new<f32>(0, kv_dim as int)
+
+    s.att = vec_new<f32>(0, (cfg.n_heads * cfg.seq_len) as int)
+    s.logits = vec_new<f32>(0, cfg.vocab_size as int)
+
+    s.key_cache = vec_new<f32>(0, (cfg.n_layers * cfg.seq_len * kv_dim) as int)
+    s.value_cache = vec_new<f32>(0, (cfg.n_layers * cfg.seq_len * kv_dim) as int)
 }
 
-fn transformer.memory_map_weights(anyptr weights_ptr, u8 shared_classifier):void! {
+fn transformer.memory_map_weights(anyptr weights_ptr, u8 shared_weights):void! {
     config_t cfg = self.config
     i32 head_size = cfg.dim / cfg.n_heads
 
-    anyptr fptr = weights_ptr
+    // 使用 unsigned long long 来避免大模型的整数溢出问题
+    i32 n_layers = cfg.n_layers
 
-    self.weights.rms_att_weight = fptr as ptr<f32>
+    self.weights.token_embedding_table = weights_ptr as rawptr<f32>
+    weights_ptr += (cfg.vocab_size * cfg.dim * @sizeof(f32)) as anyptr
 
-    fptr += (cfg.n_layers * cfg.dim * @sizeof(f32)) as anyptr
-    self.weights.rms_ffn_weight = fptr as ptr<f32>
+    self.weights.rms_att_weight = weights_ptr as rawptr<f32>
+    weights_ptr += (n_layers * cfg.dim * @sizeof(f32)) as anyptr
 
-    fptr += (cfg.n_layers * cfg.dim * @sizeof(f32)) as anyptr
-    self.weights.rms_final_weight = fptr as ptr<f32>
+    self.weights.wq = weights_ptr as rawptr<f32>
+    weights_ptr += (n_layers * cfg.dim * (cfg.n_heads * head_size) * @sizeof(f32)) as anyptr
 
-    fptr += (cfg.dim * @sizeof(f32)) as anyptr
+    self.weights.wk = weights_ptr as rawptr<f32>
+    weights_ptr += (n_layers * cfg.dim * (cfg.n_kv_heads * head_size) * @sizeof(f32)) as anyptr
 
-    // now read all the quantized weights
-    weights_ptr = fptr
-    self.weights.q_tokens = self.init_quantized_tensors(&weights_ptr, 1, cfg.vocab_size * cfg.dim)[0]
-    self.weights.token_embedding_table = vec_new<f32>((cfg.vocab_size * cfg.dim * @sizeof(f32)) as int)
-    self.dequantize(&self.weights.q_tokens, self.weights.token_embedding_table , (cfg.vocab_size * cfg.dim) as int)
+    self.weights.wv = weights_ptr as rawptr<f32>
+    weights_ptr += (n_layers * cfg.dim * (cfg.n_kv_heads * head_size) * @sizeof(f32)) as anyptr
 
-    self.weights.wq = self.init_quantized_tensors(&weights_ptr, cfg.n_layers, cfg.dim * (cfg.n_heads * head_size))
-    self.weights.wk = self.init_quantized_tensors(&weights_ptr, cfg.n_layers, cfg.dim * (cfg.n_kv_heads * head_size))
-    self.weights.wv = self.init_quantized_tensors(&weights_ptr, cfg.n_layers, cfg.dim * (cfg.n_kv_heads * head_size))
-    self.weights.wo = self.init_quantized_tensors(&weights_ptr, cfg.n_layers, cfg.dim * (cfg.n_heads * head_size))
+    self.weights.wo = weights_ptr as rawptr<f32>
+    weights_ptr += (n_layers * (cfg.n_heads * head_size) * cfg.dim * @sizeof(f32)) as anyptr
 
-    self.weights.w1 = self.init_quantized_tensors(&weights_ptr, cfg.n_layers, cfg.dim * cfg.hidden_dim)
-    self.weights.w2 = self.init_quantized_tensors(&weights_ptr, cfg.n_layers, cfg.dim * cfg.hidden_dim)
-    self.weights.w3 = self.init_quantized_tensors(&weights_ptr, cfg.n_layers, cfg.dim * cfg.hidden_dim)
+    self.weights.rms_ffn_weight = weights_ptr as rawptr<f32>
+    weights_ptr += (n_layers * cfg.dim * @sizeof(f32)) as anyptr
 
-    if shared_classifier > 0 {
-        self.weights.wcls = [self.weights.q_tokens]
+    self.weights.w1 = weights_ptr as rawptr<f32>
+    weights_ptr += (n_layers * cfg.dim * cfg.hidden_dim * @sizeof(f32)) as anyptr
+
+    self.weights.w2 = weights_ptr as rawptr<f32>
+    weights_ptr += (n_layers * cfg.hidden_dim * cfg.dim * @sizeof(f32)) as anyptr
+
+    self.weights.w3 = weights_ptr as rawptr<f32>
+    weights_ptr += (n_layers * cfg.dim * cfg.hidden_dim * @sizeof(f32)) as anyptr
+
+    self.weights.rms_final_weight = weights_ptr as rawptr<f32>
+    weights_ptr += (cfg.dim * @sizeof(f32)) as anyptr
+
+    // 跳过 RoPE 频率表（在非量化版本中不需要）
+    weights_ptr += (cfg.seq_len * head_size / 2 * @sizeof(f32)) as anyptr // 跳过 freq_cis_real
+    weights_ptr += (cfg.seq_len * head_size / 2 * @sizeof(f32)) as anyptr // 跳过 freq_cis_imag
+
+    // 如果共享分类器权重，则使用 token_embedding_table
+    if shared_weights > 0 {
+        self.weights.wcls = self.weights.token_embedding_table
     } else {
-        self.weights.wcls = self.init_quantized_tensors(&weights_ptr, 1, cfg.dim * cfg.vocab_size)
+        self.weights.wcls = weights_ptr as rawptr<f32>
     }
 }
-
 
 fn transformer.rmsnorm([f32] o, [f32] x, anyptr weight, int size) {
     f32 ss = 0.0
@@ -237,35 +183,26 @@ fn transformer.rmsnorm([f32] o, [f32] x, anyptr weight, int size) {
     ss = 1.0 / libc.sqrtf(ss)
 
     for int j = 0; j < size; j += 1 {
-        f32 w = *((weight + j as anyptr * 4) as rawptr<f32>)
+        f32 w = *((weight + j as anyptr * @sizeof(f32)) as rawptr<f32>)
         o[j] = w * (ss * x[j])
     }
 }
 
-fn transformer.matmul([f32] xout, rawptr<quantized_tensor> x, rawptr<quantized_tensor> w, int n, int d):void! {
+fn transformer.matmul([f32] xout, [f32] x, anyptr w, int n, int d):void! {
     // W (d,n) @ x (n,) -> xout (d,)
-
     var done = chan_new<bool>()
 
     for int i = 0; i < d; i+=1 {
-        go fn():void! {
+        go fn(int idx):void! {
             f32 val = 0.0
-            i32 ival = 0
-            int _in = i * n
-
-            // Group by GS for matrix multiplication
-            for int j = 0; j <= n - GS; j += GS {
-                for int k = 0; k < GS; k+=1 {
-                    ival += (x.q[j + k] as i32) * (w.q[_in + j + k] as i32)
-                }
-                val += (ival as f32) * w.s[(_in + j) / GS] * x.s[j / GS]
-                ival = 0
+            for int j = 0; j < n; j+=1 {
+                f32 w_val = *((w + ((idx * n + j) * 4) as anyptr) as rawptr<f32>)
+                val += w_val * x[j]
             }
 
-            xout[i] = val
-
+            xout[idx] = val
             done.send(true)
-        }()
+        }(i)
     }
 
     for int i = 0; i < d; i+=1 {
@@ -273,7 +210,7 @@ fn transformer.matmul([f32] xout, rawptr<quantized_tensor> x, rawptr<quantized_t
     }
 }
 
-fn transformer.softmax([f32] x, int size) {
+fn softmax([f32] x, int size) {
     f32 max_val = x[0]
     for int i = 1; i < size; i += 1 {
         if x[i] > max_val {
@@ -305,22 +242,33 @@ fn transformer.forward(int token, int pos):[f32]! {
     int hidden_dim = p.hidden_dim as int
     int head_size = dim / p.n_heads as int
 
-    s.x = vec_new<f32>(dim)
-    int copy_len = s.x.copy(self.weights.token_embedding_table.slice(token*dim, (token+1)*dim))
-    assert(copy_len == dim)
-
+    // 复制 token embedding 到 x(首先为 x ref 分配足够的空间)
+    s.x = vec_new<f32>(0, dim)
+    anyptr content_row = w.token_embedding_table as anyptr + token as anyptr * dim as anyptr * @sizeof(f32)
+    libc.memcpy(s.x.ref(), content_row, dim * @sizeof(f32)) // 直接进行不安全k的数据 copy
     [f32] x = s.x
 
+    println('[forward] forward all the layers', p.n_layers, p.seq_len, pos, kv_dim)
     // forward all the layers
     for int l = 0; l < p.n_layers as int; l+=1 {
+        println('[forward] 1 forward all the layers index', l, p.seq_len, pos, kv_dim)
+
         // attention rmsnorm
-        self.rmsnorm(s.xb, x, w.rms_att_weight as anyptr + l as anyptr * dim as anyptr * 4, dim)
+        self.rmsnorm(s.xb, x, w.rms_att_weight as anyptr + (l * dim * @sizeof(f32)) as anyptr, dim)
+
+        // key 和 value 指向 kv cache
+        int loff = l * p.seq_len as int * kv_dim // kv cache layer offset for convenience
+        int start = loff + pos * kv_dim
+        s.k = s.key_cache.slice(start, start + kv_dim)
+        s.v = s.value_cache.slice(start, start + kv_dim)
 
         // qkv matmuls for this position
-        self.quantize(&s.xq, s.xb, dim)
-        self.matmul(s.q, &s.xq, &w.wq[l], dim, dim)
-        self.matmul(s.k, &s.xq, &w.wk[l], dim, kv_dim)
-        self.matmul(s.v, &s.xq, &w.wv[l], dim, kv_dim)
+        self.matmul(s.q, s.xb, w.wq as anyptr + (l * dim * dim * @sizeof(f32)) as anyptr, dim, dim)
+        self.matmul(s.k, s.xb, w.wk as anyptr + (l * dim * kv_dim * @sizeof(f32)) as anyptr, dim, kv_dim)
+        self.matmul(s.v, s.xb, w.wv as anyptr + (l * dim * kv_dim * @sizeof(f32)) as anyptr, dim, kv_dim)
+
+        println('[forward] 2 forward all the layers index', l, p.seq_len, pos, kv_dim, dim)
+
 
         // RoPE relative positional encoding: complex-valued rotate q and k in each head
         for int i = 0; i < dim; i+=2 {
@@ -345,65 +293,64 @@ fn transformer.forward(int token, int pos):[f32]! {
             }
         }
 
-        // save key,value at this time step (pos) to our kv cache
-        int loff = l * p.seq_len as int * kv_dim // kv cache layer offset for convenience
+        println('[forward] 3 forward all the layers index', l, p.seq_len, pos, kv_dim, dim)
 
-        int key_start = loff + pos * kv_dim
-
-        [f32] key_cache_row = s.key_cache.slice(key_start, key_start + kv_dim)
-        [f32] value_cache_row = s.value_cache.slice(key_start, key_start + kv_dim)
-
-        int k_copy_len = key_cache_row.copy(s.k)
-        assert(k_copy_len == kv_dim)
-        int v_copy_len = value_cache_row.copy(s.v)
-        assert(v_copy_len == kv_dim)
-
-
-        // TODO coroutine
+        var done = chan_new<bool>()
         for int h = 0; h < p.n_heads as int; h+=1 {
-            // get the query vector for this head
-            [f32] q = s.q.slice(h * head_size, s.q.len())
-            [f32] att = s.att.slice(h * p.seq_len as int, s.att.len())
+            go fn(int h_idx):void! {
+                // get the query vector for this head
+                [f32] q = s.q.slice(h_idx * head_size, (h_idx + 1) * head_size)
+                [f32] att = s.att.slice(h_idx * p.seq_len as int, (h_idx + 1) * p.seq_len as int)
 
-            // iterate over all timesteps, including the current one
-            for int t = 0; t <= pos; t+=1 {
-                // get the key vector for this head and at this timestep
-                [f32] k = s.key_cache.slice(loff + t * kv_dim + (h / kv_mul) * head_size, s.key_cache.len())
+                // iterate over all timesteps, including the current one
+                for int t = 0; t <= pos; t += 1 {
+                    // get the key vector for this head and at this timestep
+                    int k_start = loff + t * kv_dim + (h_idx / kv_mul) * head_size
+                    [f32] k = s.key_cache.slice(k_start, k_start + head_size)
 
-                // calculate the attention score as the dot product of q and k
-                f32 score = 0.0
-                for int i = 0; i < head_size; i+=1 {
-                    score += q[i] * k[i]
+                    // calculate the attention score as the dot product of q and k
+                    f32 score = 0.0
+                    for int i = 0; i < head_size; i += 1 {
+                        score += q[i] * k[i]
+                    }
+                    score /= libc.sqrtf(head_size as f32)
+                    // save the score to the attention buffer
+                    att[t] = score
                 }
-                score /= libc.sqrtf(head_size as f32)
-                // save the score to the attention buffer
-                att[t] = score
-            }
 
-            // softmax the scores to get attention weights, from 0..pos inclusively
-            self.softmax(att, pos + 1)
+                // softmax the scores to get attention weights, from 0..pos inclusively
+                softmax(att, pos + 1)
 
-            // weighted sum of the values, store back into xb
-            [f32] xb = s.xb.slice(h * head_size, s.xb.len())
-            // clean data
-            libc.memset(xb.ref(), 0, head_size * @sizeof(f32))
+                // weighted sum of the values, store back into xb
+                [f32] xb = s.xb.slice(h_idx * head_size, (h_idx + 1) * head_size)
+                libc.memset(xb.ref(), 0, head_size * @sizeof(f32))
 
-            for int t = 0; t <= pos; t+=1 {
-                // get the value vector for this head and at this timestep
-                [f32] v = s.value_cache.slice(loff + t * kv_dim + (h / kv_mul) * head_size, s.value_cache.len())
-                // get the attention weight for this timestep
-                f32 a = att[t]
+                for int t = 0; t <= pos; t+=1 {
+                    // get the value vector for this head and at this timestep
+                    int v_start = loff + t * kv_dim + (h / kv_mul) * head_size
+                    [f32] v = s.value_cache.slice(v_start, v_start + head_size)
+                    // get the attention weight for this timestep
+                    f32 a = att[t]
 
-                // accumulate the weighted value into xb
-                for int i = 0; i < head_size; i+=1 {
-                    xb[i] += a * v[i]
+                    // accumulate the weighted value into xb
+                    for int i = 0; i < head_size; i+=1 {
+                        xb[i] += a * v[i]
+                    }
                 }
-            }
+
+                done.send(true)
+            }(h)
         }
 
+        for int h = 0; h < p.n_heads as int; h+=1 {
+            done.recv()
+        }
+
+        println('[forward] 4 forward all the layers index', l, p.seq_len, pos, kv_dim)
+
+
         // final matmul to get the output of the attention
-        self.quantize(&s.xq, s.xb, dim)
-        self.matmul(s.xb2, &s.xq, &w.wo[l], dim, dim)
+        self.matmul(s.xb2, s.xb, w.wo as anyptr + (l * dim * dim * @sizeof(f32)) as anyptr, dim, dim)
 
         // residual connection back into x
         for int i = 0; i < dim; i+=1 {
@@ -411,13 +358,15 @@ fn transformer.forward(int token, int pos):[f32]! {
         }
 
         // ffn rmsnorm
-        self.rmsnorm(s.xb, x, w.rms_ffn_weight as anyptr + l as anyptr * dim as anyptr * @sizeof(f32), dim)
+        self.rmsnorm(s.xb, x, w.rms_ffn_weight as anyptr + (l * dim * @sizeof(f32)) as anyptr, dim)
 
         // Now for FFN in PyTorch we have: self.w2(F.silu(self.w1(x)) * self.w3(x))
         // first calculate self.w1(x) and self.w3(x)
-        self.quantize(&s.xq, s.xb, dim)
-        self.matmul(s.hb, &s.xq, &w.w1[l], dim, hidden_dim)
-        self.matmul(s.hb2, &s.xq, &w.w3[l], dim, hidden_dim)
+        self.matmul(s.hb, s.xb, w.w1 as anyptr + (l * dim * hidden_dim * @sizeof(f32)) as anyptr, dim, hidden_dim)
+        self.matmul(s.hb2, s.xb, w.w3 as anyptr + (l * dim * hidden_dim * @sizeof(f32)) as anyptr, dim, hidden_dim)
+
+        println('[forward] 5 forward all the layers index', l, p.seq_len, pos, kv_dim)
+
 
         // SwiGLU non-linearity
         for int i = 0; i < hidden_dim; i+=1 {
@@ -430,8 +379,9 @@ fn transformer.forward(int token, int pos):[f32]! {
         }
 
         // final matmul to get the output of the ffn
-        self.quantize(&s.hq, s.hb, hidden_dim)
-        self.matmul(s.xb, &s.hq, &w.w2[l], hidden_dim, dim)
+        self.matmul(s.xb, s.hb, w.w2 as anyptr + (l * hidden_dim * dim * @sizeof(f32)) as anyptr, hidden_dim, dim)
+
+        println('[forward] 6 forward all the layers index', l, p.seq_len, pos, kv_dim)
 
         // residual connection
         for int i = 0; i < dim; i+=1 {
@@ -443,9 +393,8 @@ fn transformer.forward(int token, int pos):[f32]! {
     self.rmsnorm(x, x, w.rms_final_weight as anyptr, dim)
 
     // classifier into logits
-    self.quantize(&s.xq, x, dim)
-    self.matmul(s.logits, &s.xq, &w.wcls[0], dim, p.vocab_size as int)
-    
+    self.matmul(s.logits, x, w.wcls as anyptr, dim, p.vocab_size as int)
+
     return s.logits
 }
 
@@ -453,55 +402,41 @@ fn transformer.forward(int token, int pos):[f32]! {
 fn transformer_new(string path):ptr<transformer>! {
     var f = fs.open(path, syscall.O_RDONLY, 0)
 
-    var int_buf = vec_new<u8>(4)
-
-    var n = f.read(int_buf)
-    assert(n == 4)
-    u32 magic_number = mem.read_u32_le(int_buf)
-
-    if magic_number != 0x616b3432 {
-        panic('bad magic number')
-    }
-
-    assert(f.read(int_buf) == 4)
-    i32 version = mem.read_i32_le(int_buf)
-
-    if version != 2 {
-        panic(fmt.sprintf('Bad version %d, need version 2', version))
-    }
-
-    i32 header_size = 256 // the header size for version 2 in bytes
-
-    // read the configs
+    // 读取配置
     var config = config_t{}
-    var config_buf = vec_new<u8>(@sizeof(config_t))
+    var config_buf = vec_new<u8>(0, @sizeof(config_t))
     assert(f.read(config_buf) == @sizeof(config_t))
     mem.copy(config_buf, &config)
 
-    // read in flags
-    var u8_buf = vec_new<u8>(1)
-    assert(f.read(u8_buf) == 1)
+    // 检查是否共享分类器权重
+    u8 shared_weights = 0
+    if config.vocab_size > 0 {
+        shared_weights = 1
+    } else {
+        // abs vocab_size
+        config.vocab_size = -config.vocab_size
+    }
 
-    // a byte to indicate if the classifier is shared
-    var shared_classifier = mem.read_u8_le(u8_buf)
-
-    assert(f.read(int_buf) == 4)
-    GS = mem.read_i32_le(int_buf) as int
-
-    // figure out the file size
+    // 获取文件大小
     var st = f.stat()
     u64 file_size = st.size
 
+    // 内存映射整个文件
     anyptr data = libc.mmap(0, file_size as int, libc.PROT_READ, libc.MAP_PRIVATE, f.fd, 0)
+    assert(data > 0)
 
-    anyptr weights_ptr = (data as i32 + header_size) as anyptr
+    // 权重指针从配置结构之后开始
+    anyptr weights_ptr = data as anyptr + @sizeof(config_t)
 
     var t = new transformer(config, fd = f.fd, data = data as ptr<f32>, file_size)
 
-    t.memory_map_weights(weights_ptr, shared_classifier)
+    t.memory_map_weights(weights_ptr, shared_weights)
 
-    // allocate the RunState buffers
+    // 分配 RunState 缓冲区
     t.malloc_run_state(&t.state, &t.config)
+    println('[transformer_new] malloc run state', t.state.x.len(), t.state.xb.len(), t.state.xb2.len(), t.state.hb.len(),
+        t.state.hb2.len(), t.state.q.len(), t.state.k.len(), t.state.v.len(), t.state.att.len(), t.state.logits.len(),
+         t.state.key_cache.len(), t.state.value_cache.len())
 
     return t
 }
@@ -514,7 +449,7 @@ fn tokenizer_t.decode(int prev_token, int token):string! {
     }
 
     u8 byte_val = 0
-    if fmt.sscanf(piece, '<0x%02x>', &byte_val) == 1 {
+    if fmt.sscanf(piece, "<0x%02x>", &byte_val) == 1 {
         return [byte_val] as string
     }
 
@@ -532,23 +467,29 @@ fn str_lookup(string str, [token_index_t] sorted_vocab, int vocab_size):int {
 }
 
 fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
+    println('[encode] start', text, bos, eos, tokens.len(), self.vocab_size)
     if self.sorted_vocab.len() == 0 {
-        self.sorted_vocab = vec_new<token_index_t>(self.vocab_size)
+        self.sorted_vocab = vec_cap<token_index_t>(self.vocab_size)
         for int i = 0; i < self.vocab_size; i+=1 {
-            self.sorted_vocab[i].str = self.vocab[i]
-            self.sorted_vocab[i].id = i
+            self.sorted_vocab.push(token_index_t{
+                str = self.vocab[i],
+                id = i,
+            })
         }
-        
+        assert(self.sorted_vocab.len() == self.vocab_size)
+        println(self.sorted_vocab[0].str)
+        println(self.sorted_vocab[31999].str)
+
         self.sorted_vocab.sort(fn(int a, int b):bool {
             return self.sorted_vocab[a].str < self.sorted_vocab[b].str
         })
     }
-    
+
     // create a temporary buffer that will store merge candidates of always two consecutive tokens
     // *2 for concat, +1 for null terminator +2 for UTF8 (in case max_token_length is 1)
-    var str_buffer = vec_new<u8>(self.max_token_length as int * 2 + 1 + 2)
+    var str_buffer = vec_new<u8>(0, self.max_token_length as int * 2 + 1 + 2)
     int str_len = 0
-    
+
     // start at 0 tokens
     int n_tokens = 0
 
@@ -563,12 +504,12 @@ fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
     // TODO: pretty sure this isn't correct in the general case but I don't have the
     // energy to read more of the sentencepiece code to figure out what it's doing
     if text.len() > 0 {
-        int dummy_prefix = str_lookup(' ', self.sorted_vocab, self.vocab_size)
+        int dummy_prefix = str_lookup(" ", self.sorted_vocab, self.vocab_size)
 
         tokens[n_tokens] = dummy_prefix
         n_tokens += 1
     }
-    
+
     // Okay UTF-8 time. This will get messy. Here is the reference from Wikipedia:
     // Code point ↔ UTF-8 conversion
     // First code point	Last code point	Byte 1	Byte 2	Byte 3	Byte 4
@@ -585,7 +526,7 @@ fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
         if (c & 0xC0) != 0x80 {
             str_len = 0
         }
-        
+
         // 将当前字节附加到缓冲区
         str_buffer[str_len] = c
         str_len += 1
@@ -619,7 +560,7 @@ fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
         f32 best_score = -1e10
         int best_id = -1
         int best_idx = -1
-        
+
         for int i = 0; i < (n_tokens - 1); i+=1 {
             // check if we can merge the pair (tokens[i], tokens[i+1])
             string merge_str = self.vocab[tokens[i]] + self.vocab[tokens[i+1]]
@@ -632,11 +573,11 @@ fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
                 best_idx = i
             }
         }
-        
+
         if best_idx == -1 {
             break // we couldn't find any more pairs to merge, so we're done
         }
-        
+
         // merge the consecutive pair (best_idx, best_idx+1) into new token best_id
         tokens[best_idx] = best_id
 
@@ -646,22 +587,22 @@ fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
         }
         n_tokens -= 1 // token length decreased
     }
-    
+
     // add optional EOS (=2) token, if desired
     if eos != 0 {
         tokens[n_tokens] = 2
         n_tokens += 1
     }
-    
+
     return n_tokens
 }
 
 fn tokenizer_new(string tokenizer_path, int vocab_size):ptr<tokenizer_t>! {
     var t = new tokenizer_t(
         vocab_size = vocab_size,
-        vocab = vec_new<string>(vocab_size),
-        vocab_scores = vec_new<f32>(vocab_size),
-        sorted_vocab = vec_new<token_index_t>(0),
+        vocab = vec_cap<string>(0),
+        vocab_scores = vec_cap<f32>(0),
+        sorted_vocab = vec_cap<token_index_t>(0),
     )
 
     for int i = 0; i < 256; i+=1 {
@@ -670,35 +611,140 @@ fn tokenizer_new(string tokenizer_path, int vocab_size):ptr<tokenizer_t>! {
     }
 
     var f = fs.open(tokenizer_path, syscall.O_RDONLY, 0)
-    var int_buf = vec_new<u8>(4)
-    assert(f.read(int_buf) == 4)
+    var file_reader = new io.buf_reader<ptr<fs.file_t>>(rd = f)
 
-    t.max_token_length = mem.read_u32_le(int_buf)
 
-    var f32_buf = vec_new<u8>(4)
+    var i32_buf = vec_new<u8>(0, 4)
+    file_reader.read_exact(i32_buf)
+    t.max_token_length = mem.read_u32_le(i32_buf)
 
+    var f32_buf = vec_new<u8>(0, 4)
     for int i = 0; i < vocab_size; i+=1 {
-        assert(f.read(f32_buf) == 4)
-        t.vocab_scores[i] = mem.read_f32_le(f32_buf)
+        file_reader.read_exact(f32_buf)
+        t.vocab_scores.push(mem.read_f32_le(f32_buf))
 
-        assert(f.read(int_buf) == 4)
-        int len = mem.read_i64_le(int_buf)
+        file_reader.read_exact(i32_buf)
+        int len = mem.read_i32_le(i32_buf) as int
 
-        var str_buf = vec_new<u8>(len)
-        if f.read(str_buf) != len {
-            panic("read str failed")
-        }
+        var str_buf = vec_new<u8>(0, len)
+        file_reader.read_exact(str_buf)
 
-        t.vocab[i] = str_buf as string
+        t.vocab.push(str_buf as string)
     }
 
     f.close()
-
     return t
 }
 
+fn random_u32(rawptr<u64> state):u32 {
+    // xorshift rng: https://en.wikipedia.org/wiki/Xorshift#xorshift.2A
+    *state ^= *state >> 12
+    *state ^= *state << 25
+    *state ^= *state >> 27
+    return ((*state * 0x2545F4914F6CDD1D) >> 32) as u32
+}
+
+fn random_f32(rawptr<u64> state):f32 {
+    // random float32 in [0,1)
+    return (random_u32(state) >> 8) as f32 / 16777216.0
+}
+
+fn sampler_t.sample_argmax([f32] probabilities, int n):int {
+    // return the index that has the highest probability
+    int max_i = 0
+    f32 max_p = probabilities[0]
+    for int i = 1; i < n; i += 1 {
+        if probabilities[i] > max_p {
+            max_i = i
+            max_p = probabilities[i]
+        }
+    }
+    return max_i
+}
+
+fn sampler_t.sample_mult([f32] probabilities, int n, f32 coin):int {
+    // sample index from probabilities (they must sum to 1!)
+    f32 cdf = 0.0
+    for int i = 0; i < n; i += 1 {
+        cdf += probabilities[i]
+        if coin < cdf {
+            return i
+        }
+    }
+    return n - 1 // in case of rounding errors
+}
+
+fn sampler_t.sample_topp([f32] probabilities, int n, f32 topp, vec<prob_index_t> probindex, f32 coin):int {
+    // top-p 采样(或称"nucleus sampling")从概率总和超过 topp 的最小 token 集合中采样
+    // 这样我们就不会采样到概率非常低的 token，从而减少生成"离谱"内容的可能性
+    
+    // 首先，将概率值和对应索引填充到 probindex 中
+    // 只考虑概率大于 cutoff 的 token
+    int n0 = 0
+    f32 cutoff = (1.0 - topp) / (n - 1) as f32
+    
+    for int i = 0; i < n; i += 1 {
+        if probabilities[i] >= cutoff {
+            probindex[n0].index = i
+            probindex[n0].prob = probabilities[i]
+            n0 += 1
+        }
+    }
+    
+    // 按概率降序排序
+    probindex.slice(0, n0).sort(fn(int a, int b):bool {
+        return probindex[a].prob > probindex[b].prob
+    })
+    
+    // 截断列表，使累积概率超过 topp
+    f32 cumulative_prob = 0.0
+    int last_idx = n0 - 1  // 以防舍入误差，默认考虑所有元素
+    
+    for int i = 0; i < n0; i += 1 {
+        cumulative_prob += probindex[i].prob
+        if cumulative_prob > topp {
+            last_idx = i
+            break  // 通过包含 last_idx，我们已经超过了 topp
+        }
+    }
+    
+    // 从截断列表中采样
+    f32 r = coin * cumulative_prob
+    f32 cdf = 0.0
+    
+    for int i = 0; i <= last_idx; i += 1 {
+        cdf += probindex[i].prob
+        if r < cdf {
+            return probindex[i].index
+        }
+    }
+    
+    // 以防舍入误差
+    return probindex[last_idx].index
+}
+
 fn sampler_t.sample([f32] logits):int! {
-    throw errorf('TODO')
+    int vocab_size = self.vocab_size
+
+    // 如果温度为0，直接返回最高概率的token
+    if self.temperature == 0.0 {
+        return self.sample_argmax(logits, vocab_size)
+    }
+
+    // 应用温度缩放
+    for int i = 0; i < vocab_size; i += 1 {
+        logits[i] /= self.temperature
+    }
+
+    // apply softmax to the logic
+    softmax(logits, vocab_size)
+
+    f32 coin = random_f32(&self.rng_state)
+    if self.topp <= 0 || self.topp >= 1 {
+        return self.sample_mult(logits, vocab_size, coin)
+    } else {
+        return self.sample_topp(logits, vocab_size, self.topp, self.probindex, coin)
+    }
 }
 
 fn sampler_new(int vocab_size, f32 temperature, f32 topp, u64 rng_seed):ptr<sampler_t>! {
@@ -707,7 +753,7 @@ fn sampler_new(int vocab_size, f32 temperature, f32 topp, u64 rng_seed):ptr<samp
         temperature,
         topp,
         rng_state = rng_seed,
-        probindex = vec_new<prob_index_t>(vocab_size),
+        probindex = vec_new<prob_index_t>(prob_index_t{}, vocab_size),
     )
 }
 
@@ -737,7 +783,7 @@ fn print_safe(string piece) {
         return
     }
 
-    if piece[1] == '\0'[0] {
+    if piece.len() > 1 && piece[1] == '\0'[0] {
         u8 byte_val = piece[0]
         if !(libc.isprint(byte_val) || libc.isspace(byte_val)) {
             return
@@ -748,12 +794,15 @@ fn print_safe(string piece) {
 }
 
 fn generate(ptr<transformer> tf, ptr<tokenizer_t> t, ptr<sampler_t> s, string prompt, int steps):void! {
-    var prompt_tokens = vec_new<int>((prompt.len() + 3) as int) // +3 for '\0', ?BOS, ?EOS
+    println('[generate] start', prompt, steps)
+    var prompt_tokens = vec_new<int>(0, (prompt.len() + 3) as int) // +3 for '\0', ?BOS, ?EOS
 
     int num_prompt_tokens = t.encode(prompt, 1, 0, prompt_tokens)
     if num_prompt_tokens < 1 {
         panic("Something went wrong, expect at least 1 prompt word token")
     }
+
+    println('[generate] tokenizer encode successful', num_prompt_tokens)
 
     // start the main loop
     i64 start = 0  // used to time our code, only initialized after first iteration
@@ -763,6 +812,7 @@ fn generate(ptr<transformer> tf, ptr<tokenizer_t> t, ptr<sampler_t> s, string pr
     for pos < steps {
         // forward the transformer to get logits for the next token
         var logits = tf.forward(token, pos)
+        println('[generate] forward', token, pos)
 
         // advance the state state machine
         if pos < num_prompt_tokens - 1 {
@@ -781,6 +831,7 @@ fn generate(ptr<transformer> tf, ptr<tokenizer_t> t, ptr<sampler_t> s, string pr
 
         // print the token as string, decode it with the Tokenizer object
         var piece = t.decode(token, next)
+        println('[generate] tokenizer decode success', piece)
 
         print_safe(piece) // same as printf("%s", piece), but skips "unsafe" bytes
 
@@ -803,10 +854,10 @@ fn generate(ptr<transformer> tf, ptr<tokenizer_t> t, ptr<sampler_t> s, string pr
 
 fn main():void! {
     // default parameters
-    string checkpoint_path = '' // Core weight file
+    string checkpoint_path = 'mode.bin' // Core weight file
     string tokenizer_path = 'tokenizer.bin'
     f32 temperature = 1.0
-    f32 topp = 0.0
+    f32 topp = 0.9 // 默认使用top-p采样
     int steps = 256
     string prompt = ''
     u64 rng_seed = 0 // seed rng with time by default
@@ -819,7 +870,9 @@ fn main():void! {
     if args_len >= 2 {
         checkpoint_path= args[1]
     } else {
-        error_usage()
+        if checkpoint_path.len() == 0 {
+            error_usage()
+        }
     }
 
     for int i = 2; i < args_len; i+=2 {
@@ -858,6 +911,9 @@ fn main():void! {
 
     // build the Transformer via the model .bin file
     var tf = transformer_new(checkpoint_path)
+    println('transformer_new success:', tf.config.dim, tf.config.hidden_dim, tf.config.n_layers,
+        tf.config.n_heads, tf.config.n_kv_heads, tf.config.vocab_size, tf.config.seq_len,
+        tf.fd, tf.file_size)
 
     if steps == 0 || steps > tf.config.seq_len as int {
         steps = tf.config.seq_len as int
@@ -865,6 +921,7 @@ fn main():void! {
 
     // build the Tokenizer via the tokenizer .bin file
     var t = tokenizer_new(tokenizer_path, tf.config.vocab_size as int)
+    println('tokenizer_new success:', t.vocab_size, t.max_token_length, t.vocab.len(), t.vocab_scores.len())
 
     // build the Sampler
     var s = sampler_new(tf.config.vocab_size as int, temperature, topp, rng_seed)

@@ -9,19 +9,16 @@ import runtime
 //    int ele_reflect_hash
 // }
 
-fn vec_new<T>(...[int] args):vec<T> {
+fn vec_new<T>(T value, int len):vec<T> {
     int hash = @reflect_hash(vec<T>)
     int ele_hash = @reflect_hash(T)
-    int len = -1
-    int cap = -1
-    if args.len() == 1 {
-        len = args[0]
-    } else if args.len() == 2 {
-        len = args[0]
-        cap = args[1]
-    }
+    return runtime.vec_new(hash, ele_hash, len, &value as anyptr) as vec<T>
+}
 
-    return runtime.vec_new(hash, ele_hash, len, cap) as vec<T>
+fn vec_cap<T>(int cap):vec<T> {
+    int hash = @reflect_hash(vec<T>)
+    int ele_hash = @reflect_hash(T)
+    return runtime.vec_cap(hash, ele_hash, cap) as vec<T>
 }
 
 fn vec<T>.push(T v) {

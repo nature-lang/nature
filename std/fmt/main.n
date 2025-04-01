@@ -3,7 +3,7 @@ import strings
 
 fn sprintf(string format, ...[any] args):string {
     var end = format.len()
-    var result = vec_new<u8>()
+    var result = vec_new<u8>(0, 0)
 
     var sources = format as [u8]
 

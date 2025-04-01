@@ -370,7 +370,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
            (void *) scan_sp, size,
            (void *) co->scan_ret_addr);
 
-#ifdef NATURE_DEBUG
+#ifdef DEBUG_LOG
     DEBUGF("[runtime_gc.scan_stack] traverse stack, start");
     addr_t temp_cursor = (addr_t) scan_sp; // 栈向下(小)增长
     size_t temp_i = 0;

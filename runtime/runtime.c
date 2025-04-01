@@ -18,7 +18,7 @@ extern void user_main(void) __asm("main.main");
  */
 int runtime_main(int argc, char *argv[]) {
     // - init log
-#ifndef NATURE_DEBUG
+#ifndef DEBUG_LOG
     log_set_level(LOG_FATAL);
 #endif
     // - read arg

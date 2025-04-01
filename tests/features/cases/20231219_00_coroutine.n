@@ -2,11 +2,11 @@ import coroutine as co
 import runtime
 
 fn car() {
-    var a = vec_new<int>(10, 0)
-    a = vec_new<int>(403, 0)
-    a = vec_new<int>(1201, 0)
-    a = vec_new<int>(512, 0)
-    a = vec_new<int>(700, 0)
+    var a = vec_new<int>(0, 10)
+    a = vec_new<int>(0, 403)
+    a = vec_new<int>(0, 1201)
+    a = vec_new<int>(0, 512)
+    a = vec_new<int>(0, 700)
 
     var c = {1:2, 2:3, 3:4}
 

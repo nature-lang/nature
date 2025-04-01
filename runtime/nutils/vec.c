@@ -39,35 +39,68 @@ static void rt_vec_grow(n_vec_t *vec, int custom_capacity) {
  * @param length vec 大小，允许为 0，当 capacity = -1 时，使用 default_capacity
  * @return
  */
-n_vec_t *rt_vec_new(int64_t rhash, int64_t ele_rhash, int64_t length, int64_t capacity) {
+n_vec_t *rt_vec_new(int64_t rhash, int64_t ele_rhash, int64_t length, void *value_ref) {
     PRE_RTCALL_HOOK();
 
-    DEBUGF("[rt_vec_new] r_hash=%lu,e_hash=%lu,len=%lu,cap=%lu", rhash, ele_rhash, length, capacity);
+    DEBUGF("[rt_vec_new] r_hash=%lu,e_hash=%lu,len=%lu,cap=%lu", rhash, ele_rhash, length);
 
     assertf(rhash > 0, "rhash must be a valid hash");
     assertf(ele_rhash > 0, "ele_rhash must be a valid hash");
 
-    // capacity 需要大于等于 length
-    if (capacity < length) {
-        capacity = length;
+    if (length < 0) {
+        char *msg = tlsprintf("len must be greater than 0");
+        rt_throw(msg, true);
     }
-
-    if (capacity == -1) {
+    int64_t capacity = length;
+    if (capacity == 0) {
         capacity = VEC_DEFAULT_CAPACITY;
     }
-    if (length == -1) {
-        length = 0;
+
+    rtype_t *element_rtype = rt_find_rtype(ele_rhash);
+    assert(element_rtype && "cannot find element_rtype with hash");
+
+    // - 进行内存申请,申请回来一段内存是 memory_vec_t 大小的内存, memory_vec_* 就是限定这一片内存区域的结构体表示
+    // 虽然数组也这么表示，但是数组本质上只是利用了 vec_data + 1 时会按照 sizeof(memory_vec_t) 大小的内存区域移动
+    // 的技巧而已，所以这里要和数组结构做一个区分
+    n_vec_t *vec = rti_gc_malloc(vec_rtype.size, &vec_rtype);
+    vec->capacity = capacity;
+    vec->length = length;
+    vec->ele_rhash = ele_rhash;
+    vec->rhash = rhash;
+    if (capacity > 0) {
+        vec->data = rti_array_new(element_rtype, capacity);
+
+        uint64_t element_size = rtype_stack_size(element_rtype, POINTER_SIZE);
+        uint64_t zero = 0;
+        if (memcmp(value_ref, &zero, element_size) != 0) {
+            DEBUGF("[rt_vec_new] will set default value_ref=%p, element_size=%lu", value_ref, element_size);
+
+            for (int64_t i = 0; i < length; i++) {
+                void *dst = vec->data + (i * element_size);
+                memmove(dst, value_ref, element_size);
+            }
+        }
     }
 
-    // panic cap >= len
-    if (capacity < length) {
-        char *msg = tlsprintf("cap out of range");
+    DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->ele_rhash);
+    return vec;
+}
+
+n_vec_t *rt_vec_cap(int64_t rhash, int64_t ele_rhash, int64_t capacity) {
+    PRE_RTCALL_HOOK();
+
+    if (capacity < 0) {
+        char *msg = tlsprintf("cap must be greater than 0");
         rt_throw(msg, true);
     }
 
 
-    assert(capacity >= length && "capacity must be greater than length");
-    TRACEF("[rt_vec_new] length=%lu, capacity=%lu", length, capacity);
+    DEBUGF("[rt_vec_new] r_hash=%lu,e_hash=%lu,len=%lu,cap=%lu", rhash, ele_rhash, capacity);
+
+    assertf(rhash > 0, "rhash must be a valid hash");
+    assertf(ele_rhash > 0, "ele_rhash must be a valid hash");
+
+    int64_t length = 0;
 
     rtype_t *element_rtype = rt_find_rtype(ele_rhash);
     assert(element_rtype && "cannot find element_rtype with hash");
@@ -106,7 +139,7 @@ void rt_vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
 
     uint64_t element_size = rt_rtype_out_size(l->ele_rhash);
     // 计算 offset
-    uint64_t offset = element_size * index; // (size unit byte) * index
+    uint64_t offset = element_size * index;// (size unit byte) * index
     memmove(value_ref, l->data + offset, element_size);
 }
 
@@ -121,13 +154,13 @@ void rt_vec_assign(n_vec_t *l, uint64_t index, void *ref) {
     PRE_RTCALL_HOOK();
 
     // assert(index <= l->length - 1 && "index out of range [%d] with length %d", index, l->length);
-    assert(index <= l->length - 1 && "index out of range"); // TODO runtime 错误提示优化
+    assert(index <= l->length - 1 && "index out of range");// TODO runtime 错误提示优化
 
     rtype_t *element_rtype = rt_find_rtype(l->ele_rhash);
     uint64_t element_size = rtype_stack_size(element_rtype, POINTER_SIZE);
     DEBUGF("[runtime.rt_vec_assign] element_size=%lu", element_size);
     // 计算 offset
-    uint64_t offset = rtype_stack_size(element_rtype, POINTER_SIZE) * index; // (size unit byte) * index
+    uint64_t offset = rtype_stack_size(element_rtype, POINTER_SIZE) * index;// (size unit byte) * index
     void *p = l->data + offset;
     memmove(p, ref, element_size);
 }
@@ -256,7 +289,8 @@ n_vec_t *rt_vec_concat(n_vec_t *a, n_vec_t *b) {
     assert(a->ele_rhash == b->ele_rhash && "The types of the two vecs are different");
     int64_t element_size = rt_rtype_out_size(a->ele_rhash);
     int64_t length = a->length + b->length;
-    n_vec_t *merged = rt_vec_new(a->rhash, a->ele_rhash, length, length);
+    n_vec_t *merged = rt_vec_cap(a->rhash, a->ele_rhash, length);
+    merged->length = length;
     DEBUGF("[vec_concat] a->len=%lu, b->len=%lu", a->length, b->length);
 
     // 合并 a
@@ -287,7 +321,7 @@ n_anyptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index) {
 
     uint64_t element_size = rt_rtype_out_size(l->ele_rhash);
     // 计算 offset
-    uint64_t offset = element_size * index; // (size unit byte) * index
+    uint64_t offset = element_size * index;// (size unit byte) * index
 
     DEBUGF("[rt_vec_element_addr] l->data=%p, offset=%lu, result=%p", l->data, offset, (l->data + offset));
     return (n_anyptr_t) l->data + offset;

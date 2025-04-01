@@ -7,6 +7,17 @@
 
 #include "src/debug/debug.h"
 
+static inline lir_var_t *live_var_copy(lir_var_t *var) {
+    lir_var_t *new_var = NEW(lir_var_t);
+    new_var->ident = strdup(var->ident);
+    new_var->old = strdup(var->old);
+
+    new_var->flag = var->flag;
+    new_var->flag = var->flag;
+
+    return new_var;
+}
+
 /**
  *  如果 self 被除了 await 和 self 外的其他所有 block 支配，那这个节点就是 await 的最近支配者
  * @param be_doms
@@ -292,7 +303,7 @@ slice_t *ssa_calc_live_out(closure_t *c, basic_block_t *block) {
             if (table_exist(exist_var, var->ident)) {
                 continue;
             }
-            slice_push(live_out, var);
+            slice_push(live_out, live_var_copy(var));
             table_set(exist_var, var->ident, var);
         }
     }
@@ -313,7 +324,7 @@ slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        slice_push(live_in, var);
+        slice_push(live_in, live_var_copy(var));
         table_set(exist_var, var->ident, var);
     }
 
@@ -328,7 +339,7 @@ slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        slice_push(live_in, var);
+        slice_push(live_in, live_var_copy(var));
         table_set(exist_var, var->ident, var);
     }
 
@@ -525,6 +536,18 @@ void ssa_rename(closure_t *c) {
 }
 
 void ssa_rename_block(closure_t *c, basic_block_t *block, struct sc_map_s64 *var_number_table, struct sc_map_sv *stack_table) {
+    // rename live in(use)
+    for (int i = 0; i < block->live_in->count; ++i) {
+        lir_var_t *var = block->live_in->take[i];
+        var_number_stack *stack = sc_map_get_sv(stack_table, var->old);
+        assert(stack);
+        if (stack->count > 0) {
+            uint8_t number = stack->numbers[stack->count - 1];
+            ssa_rename_var(var, number);
+        }
+    }
+
+
     // skip label code
     linked_node *current = block->operations->front->succ;
 

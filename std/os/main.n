@@ -12,7 +12,7 @@ fn args():[string] {
 
 // read current exe path by read link /proc/self/exe
 fn exe():string! {
-    var buf = vec_new<u8>(4096, 0)
+    var buf = vec_new<u8>(0, 4096)
     var len = syscall.readlink('/proc/self/exe', buf)
 
     buf = buf.slice(0, len)

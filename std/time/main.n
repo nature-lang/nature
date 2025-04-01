@@ -21,7 +21,7 @@ fn time_t.ns_timestamp():i64 {
 }
 
 fn time_t.datetime():string {
-    var buf = vec_new<u8>(100, 0)// 必须预留足够大的空间,才能正常引用
+    var buf = vec_new<u8>(0, 100)// 必须预留足够大的空间,才能正常引用
 
    var len = libc.strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S'.ref(), self.tm)
    buf = buf.slice(0, len)

@@ -829,7 +829,11 @@ void build(char *build_entry, bool is_archive) {
     printf("In test mode!\n");
 #endif
 
+#ifdef DEBUG_LOG
+    log_set_level(LOG_DEBUG);
+#else
     log_set_level(LOG_INFO);
+#endif
 
     // 配置初始化
     build_init(build_entry);

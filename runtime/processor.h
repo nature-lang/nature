@@ -112,7 +112,7 @@ static inline void co_yield_waiting(coroutine_t *co, unlock_fn unlock_fn, void *
 
     // waiting -> syscall
     co_set_status(co->p, co, CO_STATUS_TPLCALL);
-    DEBUGF("[runtime.co_yield_waiting] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co,
+    DEBUGF("[runtime.co_yield_waiting] p_index_%d=%d, co=%p, co_status=%d, yield resume", co->p->share, co->p->index, co,
            co->status);
 }
 

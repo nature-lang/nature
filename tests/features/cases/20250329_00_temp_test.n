@@ -1,8 +1,25 @@
 import fmt
 
-fn main():void! {
-    var a = 'hello world'
-    for i, c in a {
-        println(i, c)
+fn breakfn() {
+}
+
+fn sprintf() {
+    var sources = '%d'
+    int idx = 0
+
+    for idx < 2 { // i 的值被污染
+        idx += 1
+
+        breakfn()
+
+        if sources[idx] == 0 {
+            idx = idx + 1
+        }
+
+        u8 c = sources[idx]
     }
+}
+
+fn main():void! {
+    fmt.printf('%d', 12)
 }

@@ -305,11 +305,14 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
             if (operation->raw_opcode == R_LABEL) {
                 arm64_asm_operand_t *operand = operation->operands[0];
 
+
                 // 添加到符号表
                 Elf64_Sym sym = {
                     .st_shndx = ctx->text_section->sh_index,
                     .st_size = 0,
-                    .st_info = ELF64_ST_INFO(!operand->symbol.is_local, STT_FUNC),
+//                    .st_info = ELF64_ST_INFO(!operand->symbol.is_local, STT_FUNC),
+                        // TODO 暂时都做成全局
+                    .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
                     .st_other = 0,
                     .st_value = *temp->offset,
                 };

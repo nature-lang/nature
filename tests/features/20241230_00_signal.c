@@ -42,7 +42,6 @@ int main(int argc, char *argv[]) {
     pthread_t tid;
     int ret = pthread_create(&tid, NULL, thread_kill, NULL);
     assert(ret == 0);
-
     char *raw = exec_output_with_pid(&pid);
     assert_string_equal(raw, dsprintf("received signal:  %d\n"
                                       "received signal:  %d\n"

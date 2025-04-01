@@ -30,7 +30,7 @@ fn itos_with<T>(T i, string fill, u8 width):string {
         i = -i // 转换为正数
     }
 
-    var result = vec_new<u8>()
+    var result = vec_new<u8>(0, 0)
 
     if i == 0 {
         if width == 0 {
@@ -129,7 +129,7 @@ fn ftos_with<T>(T f, string fill, u8 width, u8 precision):string {
     }
     
     var padding = width as int - s.len()
-    var result = vec_new<u8>()
+    var result = vec_new<u8>(0, 0)
     
     // 处理负数情况
     if is_neg {

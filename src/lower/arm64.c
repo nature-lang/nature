@@ -284,7 +284,7 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT) {
+        if (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT || op->code == LIR_OPCODE_NEG) {
             linked_concat(operations, arm64_lower_ternary(c, op));
             continue;
         }

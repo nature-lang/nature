@@ -101,7 +101,7 @@ fn buffer.read_all():[u8]! {
 
 type buf_reader<T: reader>: reader = struct{
     T rd
-    [u8] buf = vec_new<u8>(4096)
+    [u8] buf = vec_new<u8>(0, 4096)
     int r
     int w
     bool eof
@@ -114,7 +114,7 @@ fn buf_reader<T>.size():int {
 fn buf_reader<T>.reset(T rd) {
     self.rd = rd
     if self.buf.len() == 0 {
-        self.buf = vec_new<u8>(4096)
+        self.buf = vec_new<u8>(0, 4096)
     }
     self.r = 0
     self.w = 0
@@ -202,7 +202,7 @@ fn buf_reader<T>.buffered():int {
 }
 
 fn buf_reader<T>.read_until(u8 delim):[u8] {
-    [u8] result = vec_new<u8>()
+    [u8] result = vec_new<u8>(0, 0)
     var has_error = false
 
     for true {

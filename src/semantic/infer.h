@@ -7,7 +7,6 @@
 #include "src/ast.h"
 #include "src/types.h"
 
-#define GEN_REWRITE_SEPARATOR "@"
 
 void pre_infer(module_t *m);
 

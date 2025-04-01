@@ -5,7 +5,7 @@ import syscall
 
 fn main():void! {
     var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
-    var buf = vec_new<u8>(50)
+    var buf = vec_new<u8>(0, 50)
 
     println(buf.len(), buf.cap())
     var len = f.read(buf)
@@ -117,7 +117,7 @@ import syscall
 
 fn main():void! {
     var f = fs.open('./test.txt',  syscall.O_RDWR, 0644)
-    var buf = vec_new<u8>(100)
+    var buf = vec_new<u8>(0, 100)
     var n = f.read_at(buf, 8)
     println(buf.len(), buf.cap(), n, buf.slice(0, n) as string, 'read_at end')
 
@@ -165,7 +165,7 @@ import syscall
 
 fn main():void! {
     var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
-    var buf = vec_new<u8>(10, 100)
+    var buf = vec_new<u8>(0, 10)
 
     println(buf.len(), buf.cap())
     var len = f.read(buf)
@@ -177,5 +177,5 @@ hello world in test.txt hello world in test.txt hello world in test.txt
 
 
 --- output.txt
-10 100
+10 10
 first read test.txt data: 10 hello worl

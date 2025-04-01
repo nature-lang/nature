@@ -191,9 +191,9 @@ void debug_lir(closure_t *c, char *key) {
 
 #ifdef DEBUG_LIR
     // 跳过各种全局的 init 方法
-    //    if (ends_with(c->fndef->symbol_name, ".init")) {
-    //        return;
-    //    }
+    if (!strstr(c->fndef->symbol_name, DEBUG_LIR)) {
+        return;
+    }
 
     printf("%s lir: %s ---------------------------------------------------------------------\n",
            key,
@@ -238,23 +238,11 @@ void debug_lir(closure_t *c, char *key) {
  * @param c
  */
 void debug_block_lir(closure_t *c, char *stage_after) {
-    // 跳过各种全局的 init 方法
-//    if (ends_with(c->fndef->symbol_name, ".init")) {
-//        return;
-//    }
-
-//    if (str_equal(c->linkident, "??")) {
-//        printf("%s after block_lir: %s------------------------------------------------------------------------\n",
-//               stage_after, c->fndef->symbol_name);
-//        for (int i = 0; i < c->blocks->count; ++i) {
-//            basic_block_t *basic_block = c->blocks->take[i];
-//            debug_basic_block(basic_block);
-//        }
-//        printf("\n\n");
-//    }
-
-
 #ifdef DEBUG_LIR
+    if (strstr(c->linkident, DEBUG_LIR) == NULL) {
+        return;
+    }
+
     printf("%s after block_lir: %s------------------------------------------------------------------------\n",
            stage_after, c->fndef->symbol_name);
     for (int i = 0; i < c->blocks->count; ++i) {
@@ -299,18 +287,26 @@ void debug_interval_var(interval_t *interval, char *stage) {
         use_pos = str_connect(use_pos, temp_use);
     }
 
-    log_debug("%s var: index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
+    log_debug("%s var: index(%d-%s), parent(%d-%s), assigned=(%d(%s)-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
               stage,
               interval->index,
-              interval->var ? interval->var->ident : "-", parent_index, parent_ident, interval->assigned, type_str,
+              interval->var ? interval->var->ident : "-", parent_index, parent_ident,
+              interval->assigned,
+              alloc_regs[interval->assigned] ? alloc_regs[interval->assigned]->name : "_",
+              type_str,
               stack_slot, ranges,
               use_pos);
 }
 
-void debug_closure_interval(closure_t *c) {
+void debug_closure_interval(closure_t *c, char *stage) {
 #ifdef DEBUG_INTERVAL
-    log_debug("closure=%s interval ------------------------------------------------------------------------",
-              c->fndef->fn_name);
+    if (!str_equal(c->linkident, DEBUG_INTERVAL)) {
+        return;
+    }
+
+    log_debug("stage=%s closure=%s interval ------------------------------------------------------------------------",
+              stage,
+              c->linkident);
     for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
         reg_t *reg = alloc_regs[reg_id];
         interval_t *interval = table_get(c->interval_table, reg->name);
@@ -355,9 +351,11 @@ void debug_closure_interval(closure_t *c) {
     for (int i = 0; i < c->var_defs->count; ++i) {
         lir_var_t *var = c->var_defs->take[i];
         interval_t *interval = table_get(c->interval_table, var->ident);
-        debug_interval_var(interval, "");
+        debug_interval_var(interval, stage);
     }
+
     printf("\n\n");
+    fflush(stdout);
 #endif
 }
 
@@ -386,7 +384,11 @@ void debug_basic_block(basic_block_t *block) {
     while (current->value != NULL) {
         lir_op_t *op = current->value;
         printf("%d", op->id);
-        printf("\t\t%s\t", lir_opcode_to_string[op->code]);
+        if (op->is_resolve) {
+            printf("\t\t%s!\t", lir_opcode_to_string[op->code]);
+        } else {
+            printf("\t\t%s\t", lir_opcode_to_string[op->code]);
+        }
 
         // first
         if (op->first) {

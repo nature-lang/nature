@@ -40,7 +40,7 @@ fn string.find_after(string sub, int after):int {
 }
 
 fn string.reverse():string {
-    var result = vec_new<u8>(self.len(), 0)
+    var result = vec_new<u8>(0, self.len())
 
     for i,c in self {
         result[self.len() - 1 - i] = c

@@ -42,7 +42,7 @@ stack backtrace:
 === test_panic
 --- main.n
 fn bar():void! {
-    var list = vec_new<i8>(10)
+    var list = vec_new<i8>(0, 10)
     var foo = list[11]
 }
 
@@ -62,7 +62,7 @@ coroutine 'main' panic: 'index out of vec [11] with length 10' at nature-test/ma
 === test_catch_panic
 --- main.n
 fn bar():void! {
-    var list = vec_new<i8>(10)
+    var list = vec_new<i8>(0, 10)
     var s = list[11] catch err {
         println('catch err:', err.msg())
     }

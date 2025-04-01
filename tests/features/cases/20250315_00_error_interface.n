@@ -1,5 +1,5 @@
 fn bar():void! {
-    var list = vec_new<i8>(10)
+    var list = vec_new<i8>(0, 10)
     var foo = list[11]
 }
 

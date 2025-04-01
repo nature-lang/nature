@@ -47,7 +47,7 @@ fn main() {
     }
 
     // format 测试(需要一个 100 空间的 buf)
-    var buf = vec_new<u8>(100, 0)
+    var buf = vec_new<u8>(0, 100)
     var len = libc.strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S'.ref(), &tp)
     buf = buf.slice(0, len)
     println('datetime:', buf as string, '!!!')

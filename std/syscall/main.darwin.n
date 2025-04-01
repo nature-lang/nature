@@ -766,7 +766,7 @@ fn getppid():int! {
 }
 
 fn getcwd():string! {
-    var buf = vec_new<u8>(1024, 0) // 1024 是 path max
+    var buf = vec_new<u8>(0, 1024) // 1024 是 path max
 
     anyptr raw_path = libc.getcwd(buf.ref() as anyptr, buf.len() as uint)
     var len = libc.strlen(raw_path) as i64

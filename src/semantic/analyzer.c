@@ -1825,7 +1825,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
                     fndef->impl_type.ident = unique_typedef_ident;
                 }
 
-                fndef->symbol_name = str_connect_by(fndef->impl_type.ident, symbol_name, "_");
+                fndef->symbol_name = str_connect_by(fndef->impl_type.ident, symbol_name, IMPL_CONNECT_IDENT);
 
                 // register to global symbol table
                 symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);

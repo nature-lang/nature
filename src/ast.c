@@ -344,14 +344,6 @@ static ast_vec_new_t *ast_list_new_copy(ast_vec_new_t *temp) {
         vec_new->elements = ast_list_expr_copy(temp->elements);
     }
 
-    if (temp->len) {
-        vec_new->len = ast_expr_copy(temp->len);
-    }
-
-    if (temp->cap) {
-        vec_new->cap = ast_expr_copy(temp->cap);
-    }
-
     return vec_new;
 }
 
