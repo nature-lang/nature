@@ -60,23 +60,12 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position);
  */
 int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int before);
 
-bool range_covered(interval_range_t *r, int position, bool is_input);
-
-
 bool interval_expired(interval_t *i, int position, bool is_input);
 
 /**
  * interval 的 range 是否包含了 position
  * @param i
- * @param position
- * @return
- */
-bool interval_covered(interval_t *i, int position, bool is_input);
-
-/**
- * interval 的 range 是否包含了 position
- * @param i
- * @param position
+ * @param adjust_position
  * @return
  */
 bool interval_covered(interval_t *i, int position, bool is_input);
@@ -90,6 +79,7 @@ bool interval_covered(interval_t *i, int position, bool is_input);
  * @return
  */
 int interval_next_intersect(closure_t *c, interval_t *current, interval_t *select);
+int old_interval_next_intersect(closure_t *c, interval_t *current, interval_t *select);
 
 bool interval_is_intersect(interval_t *current, interval_t *select);
 
@@ -104,8 +94,6 @@ int interval_next_use_position(interval_t *i, int after_position);
 
 void interval_spill_slot(closure_t *c, interval_t *i);
 
-interval_t *interval_child_at(interval_t *i, int op_id, bool is_use);
-
 use_pos_t *interval_must_reg_pos(interval_t *i);
 
 use_pos_t *interval_must_stack_pos(interval_t *i);
@@ -119,5 +107,11 @@ void resolve_mappings(closure_t *c, resolver_t *r);
 use_pos_t *first_use_pos(interval_t *i, alloc_kind_e kind);
 
 void var_replace(lir_operand_t *operand, interval_t *i);
+
+/**
+ * 虚拟寄存器替换成 stack slot 和 physical register
+ * @param c
+ */
+void replace_virtual_register(closure_t *c);
 
 #endif

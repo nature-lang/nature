@@ -2,44 +2,265 @@ import runtime
 
 // 暂时无法通过 struct 推导
 // type vec<T> = struct{
-//    void_ptr data
+//    anyptr data
 //    int len
 //    int cap
 //    int reflect_hash
 //    int ele_reflect_hash
 // }
 
-fn vec_new<T>(int len, int cap):vec<T> {
+fn vec_new<T>(T value, int len):vec<T> {
     int hash = @reflect_hash(vec<T>)
-    int ele_hash = @reflect_hash(T)
-    return runtime.vec_new(hash, ele_hash, len, cap) as vec<T>
+    int element_hash = @reflect_hash(T)
+    return runtime.vec_new(hash, element_hash, len, &value as anyptr) as vec<T>
+}
+
+fn vec_cap<T>(int cap):vec<T> {
+    int hash = @reflect_hash(vec<T>)
+    int element_hash = @reflect_hash(T)
+    return runtime.vec_cap(hash, element_hash, cap) as vec<T>
 }
 
 fn vec<T>.push(T v) {
-    raw_ptr<T> ref = &v
-    return runtime.vec_push(self as void_ptr, ref as void_ptr)
+    rawptr<T> ref = &v
+    int element_hash = @reflect_hash(T)
+    return runtime.vec_push(self as anyptr, element_hash, ref as anyptr)
 }
 
 fn vec<T>.append(vec<T> l2) {
-    return runtime.vec_append(self as void_ptr, l2 as void_ptr)
+    int element_hash = @reflect_hash(T)
+    return runtime.vec_append(self as anyptr, l2 as anyptr, element_hash)
 }
 
 fn vec<T>.slice(int start, int end):vec<T> {
-    return runtime.vec_slice(self as void_ptr, start, end) as vec<T>
+    return runtime.vec_slice(self as anyptr, start, end) as vec<T> catch e {
+        panic(e.msg())
+    }
 }
 
 fn vec<T>.concat(vec<T> l2):vec<T> {
-    return runtime.vec_concat(self as void_ptr, l2 as void_ptr) as vec<T>
+    int element_hash = @reflect_hash(T)
+    return runtime.vec_concat(self as anyptr, l2 as anyptr, element_hash) as vec<T>
 }
 
-fn vec<T>.len():int {
-    return runtime.vec_length(self as void_ptr)
+#linkid rt_vec_copy
+fn vec<T>.copy(vec<T> src):int
+
+#linkid rt_vec_length
+fn vec<T>.len():int
+
+#linkid rt_vec_capacity
+fn vec<T>.cap():int
+
+#linkid rt_vec_ref
+fn vec<T>.ref():anyptr
+
+fn vec<T>.sort(fn(int, int):bool less) {
+    // 如果向量长度小于等于1，无需排序
+    if self.len() <= 1 {
+        return
+    }
+    
+    // 调用主排序函数
+    self.pdqsort(0, self.len(), 64, less)
 }
 
-fn vec<T>.cap():int {
-    return runtime.vec_capacity(self as void_ptr)
+#local
+fn vec<T>.insertion_sort(int a, int b, fn(int, int):bool less) {
+    for int i = a + 1; i < b; i+=1 {
+        for int j = i; j > a && less(j, j-1); j-=1 {
+            self.swap(j, j-1)
+        }
+    }
 }
 
-fn vec<T>.ref():void_ptr {
-    return runtime.vec_ref(self as void_ptr)
+#local
+fn vec<T>.swap(int i, int j) {
+    if i == j {
+        return
+    }
+    
+    T temp = self[i]
+    self[i] = self[j]
+    self[j] = temp
+}
+
+#local
+fn vec<T>.heap_sort(int a, int b, fn(int, int):bool less) {
+    int first = a
+    int lo = 0
+    int hi = b - a
+    
+    // 构建最大堆
+    for int i = (hi - 1) / 2; i >= 0; i-=1 {
+        self.sift_down(i, hi, first, less)
+    }
+    
+    // 依次取出最大元素
+    for int i = hi - 1; i >= 0; i-=1 {
+        self.swap(first, first + i)
+        self.sift_down(lo, i, first, less)
+    }
+}
+
+#local
+fn vec<T>.sift_down(int root, int hi, int first, fn(int, int):bool less) {
+    for true {
+        int child = 2 * root + 1
+        if child >= hi {
+            break
+        }
+        
+        if child + 1 < hi && less(first + child, first + child + 1) {
+            child+=1
+        }
+        
+        if !less(first + root, first + child) {
+            return
+        }
+        
+        self.swap(first + root, first + child)
+        root = child
+    }
+}
+
+#local
+fn vec<T>.pdqsort(int a, int b, int limit, fn(int, int):bool less) {
+    int max_insertion = 12
+    
+    bool was_balanced = true    // 上次分区是否平衡
+    bool was_partitioned = true // 切片是否已经分区
+    
+    for true {
+        int length = b - a
+        
+        // 小数组使用插入排序
+        if length <= max_insertion {
+            self.insertion_sort(a, b, less)
+            return
+        }
+        
+        // 如果太多不平衡的选择，回退到堆排序
+        if limit == 0 {
+            self.heap_sort(a, b, less)
+            return
+        }
+        
+        // 如果上次分区不平衡，打破模式
+        if !was_balanced {
+            self.break_patterns(a, b)
+            limit-=1
+        }
+        
+        // 选择枢轴
+        int pivot = a + length / 2
+        
+        // 分区
+        bool already_partitioned = false
+        int mid = self.partition(a, b, pivot, less, &already_partitioned)
+        was_partitioned = already_partitioned
+        
+        // 计算左右子数组长度
+        int left_len = mid - a
+        int right_len = b - mid - 1
+        int balance_threshold = length / 8
+        
+        // 递归排序较短的一侧，迭代排序较长的一侧
+        if left_len < right_len {
+            was_balanced = left_len >= balance_threshold
+            self.pdqsort(a, mid, limit, less)
+            a = mid + 1
+        } else {
+            was_balanced = right_len >= balance_threshold
+            self.pdqsort(mid + 1, b, limit, less)
+            b = mid
+        }
+        
+        // 如果剩余部分已经排序，直接返回
+        if a >= b {
+            return
+        }
+    }
+}
+
+// 分区函数
+fn vec<T>.partition(int a, int b, int pivot, fn(int, int):bool less, rawptr<bool> already_partitioned):int {
+    self.swap(a, pivot)
+    int i = a + 1
+    int j = b - 1
+    
+    // 跳过已经正确排序的元素
+    for i <= j && less(i, a) {
+        i+=1
+    }
+    
+    for i <= j && !less(j, a) {
+        j-=1
+    }
+    
+    // 检查是否已经分区
+    if i > j {
+        self.swap(a, j)
+        *already_partitioned = true
+        return j
+    }
+    
+    self.swap(i, j)
+    i+=1
+    j-=1
+    
+    // 主分区循环
+    for true {
+        for i <= j && less(i, a) {
+            i+=1
+        }
+        
+        for i <= j && !less(j, a) {
+            j-=1
+        }
+        
+        if i > j {
+            break
+        }
+        
+        self.swap(i, j)
+        i+=1
+        j-=1
+    }
+    
+    self.swap(a, j)
+    *already_partitioned = false
+    return j
+}
+
+#local
+fn vec<T>.break_patterns(int a, int b) {
+    int length = b - a
+    
+    if length >= 8 {
+        // 将数组分成4部分，并交换中间两部分
+        int quarter = length / 4
+        self.swap(a + quarter, a + quarter * 3)
+        self.swap(a + quarter * 2, a + quarter * 3 - 1)
+    }
+}
+
+fn vec<T>.search(fn(int):bool predicate):int! {
+    int low = 0
+    int high = self.len()
+    
+    for low < high {
+        int mid = low + (high - low) / 2
+        if !predicate(mid) {
+            low = mid + 1
+        } else {
+            high = mid
+        }
+    }
+    
+    if low == self.len() {
+        throw errorf('not found')
+    }
+    
+    return low
 }

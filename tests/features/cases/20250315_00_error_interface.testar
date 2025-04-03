@@ -1,0 +1,82 @@
+=== test_error_interface_failed
+--- main.n
+fn bar():void! {
+    throw 'error in bar'
+}
+
+fn foo():void! {
+    bar()
+}
+
+fn main():void! {
+    foo()
+}
+
+--- output.txt
+nature-test/main.n:2:22: type 'string' cannot casting to interface 'throwable'
+
+=== test_throw
+--- main.n
+fn bar():void! {
+    throw errorf('error in bar')
+}
+
+fn foo():void! {
+    bar()
+}
+
+fn main():void! {
+    foo()
+}
+
+--- output.txt
+coroutine 'main' uncaught error: 'error in bar' at nature-test/main.n:2:29
+stack backtrace:
+0:	main.bar
+		at nature-test/main.n:2:29
+1:	main.foo
+		at nature-test/main.n:6:11
+2:	main.main
+		at nature-test/main.n:10:11
+
+=== test_panic
+--- main.n
+fn bar():void! {
+    var list = vec_new<i8>(0, 10)
+    var foo = list[11]
+}
+
+fn foo():void! {
+    bar()
+}
+
+fn main():void! {
+    foo() catch err {
+        println('catch err:', err.msg())
+    }
+}
+
+--- output.txt
+coroutine 'main' panic: 'index out of vec [11] with length 10' at nature-test/main.n:3:21
+
+=== test_catch_panic
+--- main.n
+fn bar():void! {
+    var list = vec_new<i8>(0, 10)
+    var s = list[11] catch err {
+        println('catch err:', err.msg())
+    }
+}
+
+fn foo():void! {
+    bar()
+}
+
+fn main():void! {
+    foo() catch err {
+        println('catch err:', err.msg())
+    }
+}
+
+--- output.txt
+catch err: index out of vec [11] with length 10

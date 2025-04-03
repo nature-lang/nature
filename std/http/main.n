@@ -77,8 +77,8 @@ type server_t = struct{
     string addr
     int port
     arr<{string:callback_fn},8> routers // TODO tire tree
-    void_ptr uv_server_handler
-    void_ptr listen_co
+    anyptr uv_server_handler
+    anyptr listen_co
 }
 
 fn server_t.get(string path, callback_fn callback) {
@@ -140,16 +140,17 @@ fn server_t.find_callback(u8 method, string path):callback_fn {
         return all_routes[path]
     }
 
-    return callback_notfound
+    // callback_notfound 作为 ident 具有自己的类型(fn), 此处需要转换为 callback_fn, 或者定义 callback_fn 直接使用 alias 声明 而不是 type
+    return callback_notfound as callback_fn
 }
 
 fn server_t.listen(int port):void! {
     self.port = port
-    uv.http_listen(self as void_ptr)
+    uv.http_listen(self as anyptr)
 }
 
 fn server_t.close() {
-    uv.http_close(self as void_ptr)
+    uv.http_close(self as anyptr)
 }
 
 fn server():ptr<server_t> {
@@ -179,12 +180,12 @@ type response_t = struct{
     string charset
 }
 
-fn request_new(raw_ptr<uv.conn_ctx_t> ctx):request_t {
+fn request_new(rawptr<uv.conn_ctx_t> ctx):request_t {
     var req = request_t{
         method = ctx.method,
         host = runtime.string_ref_new(ctx.host_at, ctx.host_len),
         url = runtime.string_ref_new(ctx.url_at, ctx.url_len),
-        path = runtime.string_ref_new(ctx.path_at, ctx.path_len)
+        path = runtime.string_ref_new(ctx.path_at, ctx.path_len),
     }
 
     if ctx.body_len > 0 {
@@ -208,9 +209,9 @@ fn request_new(raw_ptr<uv.conn_ctx_t> ctx):request_t {
 fn conn_handler():void! {
     var arg = co.arg()
     if arg == 0 {
-        throw 'conn_handler arg is null'
+        throw errorf('conn_handler arg is null')
     }
-    var ctx = arg as raw_ptr<uv.conn_ctx_t>
+    var ctx = arg as rawptr<uv.conn_ctx_t>
 
     var req = request_new(ctx)
     var res = response_new()
@@ -239,7 +240,7 @@ fn response_t.send(string msg) {
 
 fn response_t.to_str():string {
     var cap = (100 + self.body.len()) * 2
-    var buf = vec_new<u8>(0, cap)
+    var buf = vec_cap<u8>(cap)
 
     u8 space_ascii = 32
 

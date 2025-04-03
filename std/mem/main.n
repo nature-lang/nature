@@ -1,0 +1,195 @@
+import libc
+
+fn copy<T>([u8] buf, rawptr<T> dst):void! {
+    int size = @sizeof(T)
+    if size == 0 {
+        throw errorf('type size failed')   
+    }
+    if buf.len() < size {
+        throw errorf('buffer too small')
+    }
+
+    libc.memmove(dst as anyptr, buf.ref(), size)
+}
+
+fn read_u8_le([u8] buf):u8! {
+    if buf.len() < 1 {
+        throw errorf('buffer too small')
+    }
+
+    return buf[0]
+}
+
+fn read_u16_le([u8] buf):u16! {
+    if buf.len() < 2 {
+        throw errorf('buffer too small')
+    }
+    return (buf[1] as u16) << 8 | (buf[0] as u16)
+}
+
+fn read_u32_le([u8] buf):u32! {
+    if buf.len() < 4 {
+        throw errorf('buffer too small')
+    }
+    return (buf[3] as u32) << 24 | (buf[2] as u32) << 16 | (buf[1] as u32) << 8 | (buf[0] as u32)
+}
+
+fn read_u64_le([u8] buf):u64! {
+    if buf.len() < 8 {
+        throw errorf('buffer too small')
+    }
+    return (buf[7] as u64) << 56 | (buf[6] as u64) << 48 | (buf[5] as u64) << 40 | (buf[4] as u64) << 32 |
+           (buf[3] as u64) << 24 | (buf[2] as u64) << 16 | (buf[1] as u64) << 8  | (buf[0] as u64)
+}
+
+fn read_i8_le([u8] buf):i8! {
+    if buf.len() < 1 {
+        throw errorf('buffer too small')
+    }
+    return buf[0] as i8
+}
+
+fn read_i16_le([u8] buf):i16! {
+    if buf.len() < 2 {
+        throw errorf('buffer too small')
+    }
+    return ((buf[1] as i16) << 8 | (buf[0] as i16)) as i16
+}
+
+fn read_i32_le([u8] buf):i32! {
+    if buf.len() < 4 {
+        throw errorf('buffer too small')
+    }
+    return ((buf[3] as i32) << 24 | (buf[2] as i32) << 16 | (buf[1] as i32) << 8 | (buf[0] as i32)) as i32
+}
+
+fn read_i64_le([u8] buf):i64! {
+    if buf.len() < 8 {
+        throw errorf('buffer too small')
+    }
+    return ((buf[7] as i64) << 56 | (buf[6] as i64) << 48 | (buf[5] as i64) << 40 | (buf[4] as i64) << 32 |
+            (buf[3] as i64) << 24 | (buf[2] as i64) << 16 | (buf[1] as i64) << 8  | (buf[0] as i64)) as i64
+}
+
+
+
+fn read_u8_be([u8] buf):u8! {
+    if buf.len() < 1 {
+        throw errorf('buffer too small')
+    }
+    return buf[0]
+}
+
+fn read_u16_be([u8] buf):u16! {
+    if buf.len() < 2 {
+        throw errorf('buffer too small')
+    }
+    return (buf[0] as u16) << 8 | (buf[1] as u16)
+}
+
+fn read_u32_be([u8] buf):u32! {
+    if buf.len() < 4 {
+        throw errorf('buffer too small')
+    }
+    return (buf[0] as u32) << 24 | (buf[1] as u32) << 16 | (buf[2] as u32) << 8 | (buf[3] as u32)
+}
+
+fn read_u64_be([u8] buf):u64! {
+    if buf.len() < 8 {
+        throw errorf('buffer too small')
+    }
+    return (buf[0] as u64) << 56 | (buf[1] as u64) << 48 | (buf[2] as u64) << 40 | (buf[3] as u64) << 32 |
+           (buf[4] as u64) << 24 | (buf[5] as u64) << 16 | (buf[6] as u64) << 8  | (buf[7] as u64)
+}
+
+fn read_i8_be([u8] buf):i8! {
+    if buf.len() < 1 {
+        throw errorf('buffer too small')
+    }
+    return buf[0] as i8
+}
+
+fn read_i16_be([u8] buf):i16! {
+    if buf.len() < 2 {
+        throw errorf('buffer too small')
+    }
+    return ((buf[0] as i16) << 8 | (buf[1] as i16)) as i16
+}
+
+fn read_i32_be([u8] buf):i32! {
+    if buf.len() < 4 {
+        throw errorf('buffer too small')
+    }
+    return ((buf[0] as i32) << 24 | (buf[1] as i32) << 16 | (buf[2] as i32) << 8 | (buf[3] as i32)) as i32
+}
+
+fn read_i64_be([u8] buf):i64! {
+    if buf.len() < 8 {
+        throw errorf('buffer too small')
+    }
+    return ((buf[0] as i64) << 56 | (buf[1] as i64) << 48 | (buf[2] as i64) << 40 | (buf[3] as i64) << 32 |
+            (buf[4] as i64) << 24 | (buf[5] as i64) << 16 | (buf[6] as i64) << 8  | (buf[7] as i64)) as i64
+}
+
+
+fn read_f32_le([u8] buf):f32! {
+    if buf.len() < 4 {
+        throw errorf('buffer too small')
+    }
+    
+    // 先读取为 u32
+    u32 bits = (buf[3] as u32) << 24 | (buf[2] as u32) << 16 | (buf[1] as u32) << 8 | (buf[0] as u32)
+    
+    // 使用 memmove 将 bits 的二进制表示复制到 result 变量
+    f32 result = 0.0
+    libc.memmove(&result as anyptr, &bits as anyptr, 4)
+    
+    return result
+}
+
+fn read_f64_le([u8] buf):f64! {
+    if buf.len() < 8 {
+        throw errorf('buffer too small')
+    }
+    
+    // 先读取为 u64
+    u64 bits = (buf[7] as u64) << 56 | (buf[6] as u64) << 48 | (buf[5] as u64) << 40 | (buf[4] as u64) << 32 |
+               (buf[3] as u64) << 24 | (buf[2] as u64) << 16 | (buf[1] as u64) << 8  | (buf[0] as u64)
+    
+    // 使用 memmove 将 bits 的二进制表示复制到 result 变量
+    f64 result = 0.0
+    libc.memmove(&result as anyptr, &bits as anyptr, 8)
+    
+    return result
+}
+
+fn read_f32_be([u8] buf):f32! {
+    if buf.len() < 4 {
+        throw errorf('buffer too small')
+    }
+    
+    // 先读取为 u32
+    u32 bits = (buf[0] as u32) << 24 | (buf[1] as u32) << 16 | (buf[2] as u32) << 8 | (buf[3] as u32)
+    
+    // 使用 memmove 将 bits 的二进制表示复制到 result 变量
+    f32 result = 0.0
+    libc.memmove(&result as anyptr, &bits as anyptr, 4)
+    
+    return result
+}
+
+fn read_f64_be([u8] buf):f64! {
+    if buf.len() < 8 {
+        throw errorf('buffer too small')
+    }
+    
+    // 先读取为 u64
+    u64 bits = (buf[0] as u64) << 56 | (buf[1] as u64) << 48 | (buf[2] as u64) << 40 | (buf[3] as u64) << 32 |
+               (buf[4] as u64) << 24 | (buf[5] as u64) << 16 | (buf[6] as u64) << 8  | (buf[7] as u64)
+    
+    // 使用 memmove 将 bits 的二进制表示复制到 result 变量
+    f64 result = 0.0
+    libc.memmove(&result as anyptr, &bits as anyptr, 8)
+    
+    return result
+}

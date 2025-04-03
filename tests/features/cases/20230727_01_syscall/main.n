@@ -11,7 +11,7 @@ fn main():void! {
 
     syscall.seek(fd, 0, syscall.SEEK_SET)
 
-    var buf = vec_new<u8>(20, 0)
+    var buf = vec_new<u8>(0, 20)
     var len = syscall.read(fd, buf.ref(), buf.len())
     buf = buf.slice(0, len)
     print('read len: ', len, ', data: ', buf as string, '\n')

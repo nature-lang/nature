@@ -1,0 +1,5 @@
+import unsafe
+
+fn main():void! {
+
+}

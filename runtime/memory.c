@@ -30,8 +30,8 @@ void callers_deserialize() {
         sc_map_put_64v(&rt_caller_map, caller->offset, caller);
         DEBUGF("[runtime.callers_deserialize] call '%s' ret_addr=%p, in fn=%s(%p), file=%s",
                caller->target_name,
-               (void*)caller->offset, f->name,
-               (void*)f->base,
+               (void *) caller->offset, f->name,
+               (void *) f->base,
                f->rel_path);
     }
 }
@@ -48,10 +48,12 @@ void fndefs_deserialize() {
         f->gc_bits = gc_bits_offset;
 
         DEBUGF(
-            "[fndefs_deserialize] name=%s, base=0x%lx, size=%lu, stack_size=%lu,"
-            "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
-            f->name, f->base, f->size, f->stack_size, f->fn_runtime_stack, f->fn_runtime_reg, gc_bits_size,
-            bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
+                "[fndefs_deserialize] name=%s, base=%p, size=%lu, stack_size=%lu,"
+                "fn_runtime_stack=%p, fn_runtime_reg=%p, gc_bits(%lu)=%s",
+                f->name, (void *) f->base, f->size, f->stack_size, (void *) f->fn_runtime_stack,
+                (void *) f->fn_runtime_reg,
+                gc_bits_size,
+                bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
 
         gc_bits_offset += gc_bits_size;
     }
@@ -96,6 +98,8 @@ void rtypes_deserialize() {
             vec_rtype = *r;
         } else if (r->kind == TYPE_GC_FN) {
             fn_rtype = *r;
+        } else if (str_equal(r->ident, THROWABLE_IDENT)) {
+            throwable_rtype = *r;
         }
 
         if (r->length > 0) {

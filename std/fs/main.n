@@ -1,0 +1,76 @@
+import syscall
+import io
+
+type timespec_t = struct {
+    u64 sec 
+    u64 nsec
+}
+
+type stat_t = struct {
+    u64 dev      // device ID
+    u64 mode     // file mode
+    u64 nlink    // number of hard links
+    u64 uid      // user ID
+    u64 gid      // group ID
+    u64 rdev     // device type
+    u64 ino      // inode number
+    u64 size     // file size in bytes
+    u64 blksize  // block size
+    u64 blocks   // number of allocated blocks
+    u64 flags    // user defined flags
+    u64 gen      // file generation number
+    timespec_t atime    // last access time
+    timespec_t mtime    // last modification time
+    timespec_t ctime    // last status change time
+    timespec_t birthtime // creation time
+}
+
+// match runtime.fs_context_t 
+type file_t:io.reader, io.writer, io.seeker = struct{
+    int fd
+    anyptr data
+    i64 data_len
+    i64 data_cap
+    bool closed
+    // ... other fields
+}
+
+#linkid rt_uv_fs_from
+fn from(int fd, string name):ptr<file_t>!
+
+#linkid rt_uv_fs_open
+fn open(string path, int flags, int mode):ptr<file_t>!
+
+#linkid rt_uv_fs_content
+fn file_t.content():string! {
+    var s = self.stat()
+    var file_size = s.size
+    var buf = vec_new<u8>(0, file_size as int)
+    int n = self.read(buf)
+    if n != file_size as int {
+        throw errorf('incomplete reading')
+    }
+    return buf as string
+}
+
+#linkid rt_uv_fs_read
+fn file_t.read([u8] buf):int!
+
+#linkid rt_uv_fs_write
+fn file_t.write([u8] buf):int!
+
+fn file_t.seek(int offset, int whence):int! {
+    return syscall.seek(self.fd as int, offset, whence)
+}
+
+#linkid rt_uv_fs_read_at
+fn file_t.read_at([u8] buf, int offset):int!
+
+#linkid rt_uv_fs_write_at
+fn file_t.write_at([u8] buf, int offset):int!
+
+#linkid rt_uv_fs_close
+fn file_t.close():void
+
+#linkid rt_uv_fs_stat
+fn file_t.stat():stat_t!

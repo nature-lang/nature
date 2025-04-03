@@ -1,0 +1,68 @@
+=== test_basic
+--- main.n
+import process
+import io
+
+fn main():void! {
+    var cmd = process.command('echo', ['hello world'])
+    var p = cmd.spawn()
+    p.wait()
+    println('process exited')
+}
+
+--- output.txt
+hello world
+process exited
+
+=== test_run
+--- main.n
+import process
+import io
+
+fn main():void! {
+    var state = process.run('echo', ['hello world'])
+    println('process exited', state.exit_code, state.term_sig, state.stdout, state.stderr)
+}
+
+--- output.txt
+process exited 0 0 hello world
+\s
+
+=== test_buf
+--- main.n
+import io
+
+fn main():void! {
+    var buf = io.buffer{}
+    var n = buf.write('hello world' as [u8])
+    println('write 1:', n, buf.empty(), buf.len(), buf.cap())
+
+    n = buf.write('This is an arbitrary text written to the buffer' as [u8])
+    println('write 2:', n, buf.empty(), buf.len(), buf.cap())
+
+    var read_buf = vec_new<u8>(0, 5)
+    n = buf.read(read_buf)
+    println('read 1:', n, read_buf as string, buf.empty(), buf.len(), buf.cap())
+
+
+    var remain_buf = buf.read_all()
+    println('read 2:', remain_buf as string, buf.empty(), buf.len(), buf.cap())
+}
+--- output.txt
+write 1: 11 false 11 12
+write 2: 47 false 58 59
+read 1: 5 hello false 53 59
+read 2:  worldThis is an arbitrary text written to the buffer true 0 0
+
+
+=== test_sleep
+--- main.n
+import io
+import process
+
+fn main():void! {
+    var state = process.run('sleep', ['3'])
+    println('process exited', state.exit_code, state.term_sig, state.stdout, state.stderr)
+}
+--- output.txt
+process exited 0 0\s\s

@@ -21,9 +21,9 @@ fn main() {
         println('进来了!')
     }
 
-    var a = vec_new<u8>(102400, 0)
+    var a = vec_new<u8>(0, 102400)
 
-    a = vec_new<u8>(1, 0)
+    a = vec_new<u8>(0, 1)
 
     if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.contains(c) || arg_index == len || 1 < 0 {
         println('进来了!')

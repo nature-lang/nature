@@ -233,7 +233,7 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
 
             if (param_type.kind == TYPE_STRUCT && !(arg_pos & 1)) {
                 // 位  param 申请足够的栈空间来接收寄存器中传递的结构体参数
-                linked_push(result, lir_stack_alloc(c, param_type, dst_param));
+                linked_push(result, lir_stack_alloc(c, param_type, dst_param)); // dst_param def
 
                 // 结构体可能占用两个寄存器
                 // 结构体存储在寄存器中
@@ -250,7 +250,7 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
             } else {
                 uint8_t reg_index = arg_pos >> 1;
                 lir_operand_t *src = operand_new(LIR_OPERAND_REG, reg_select(reg_index, param_type.kind));
-                linked_push(result, lir_op_move(dst_param, src));
+                linked_push(result, lir_op_move(dst_param, src)); // dst_param def
 
                 // fn runtime operand 就是一个 type_fn 类型的指针
                 if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
@@ -262,6 +262,9 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
 
             int64_t reg_index = (arg_pos >> 1) - 8;
             if (param_type.kind == TYPE_STRUCT) {
+                // 为 dst_param 分配栈空间
+                linked_push(result, lir_stack_alloc(c, param_type, dst_param));
+
                 int32_t fsize = 0;
                 int32_t n = arm64_hfa(param_type, &fsize);
                 assert(n <= 4);
@@ -269,13 +272,14 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
 
                 for (int j = 0; j < n; ++j) {
                     lir_operand_t *src = operand_new(LIR_OPERAND_REG, reg_select(reg_index + j, ftype_kind));
-                    lir_operand_t *dst = indirect_addr_operand(c->module, type_kind_new(ftype_kind), dst_param,
+                    lir_operand_t *dst = indirect_addr_operand(c->module, type_kind_new(ftype_kind),
+                                                               dst_param, // not def
                                                                j * fsize);
                     linked_push(result, lir_op_move(dst, src));
                 }
             } else {
                 lir_operand_t *src = operand_new(LIR_OPERAND_REG, reg_select(reg_index, param_type.kind));
-                linked_push(result, lir_op_move(dst_param, src));
+                linked_push(result, lir_op_move(dst_param, src)); // def
             }
         } else {
             // 参数通过栈传递 stack pass (过大的结构体通过栈指针+寄存器的方式传递)
@@ -284,17 +288,16 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
             lir_operand_t *src = lir_stack_operand(c->module, sp_offset, type_sizeof(param_type), param_type.kind);
 
             if ((arg_pos & 1) || (type_sizeof(param_type) <= 8)) {
-                linked_push(result, lir_op_move(dst_param, src));
+                linked_push(result, lir_op_move(dst_param, src)); // dst_param def
             } else {
-                assert(is_large_stack_type(param_type));
+                assert(is_stack_ref_big_type(param_type));
                 assert(type_sizeof(param_type) <= 16 && type_sizeof(param_type) > 8);
 
-                lir_operand_t *src_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_VOID_PTR));
+                lir_operand_t *src_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_ANYPTR));
                 linked_push(result, lir_op_lea(src_ref, src));
 
-
-                linked_t *temps = lir_memory_mov(c->module, type_sizeof(param_type), dst_param, src_ref);
-                linked_concat(result, temps);
+                // 直接移动栈指针，而不是进行完全的 copy
+                linked_push(result, lir_op_move(dst_param, src_ref));
             }
 
             // 记录最后一个参数所在的栈起点(fn_runtime_operand)
@@ -447,7 +450,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         } else {
             // struct or arr 但是数据小于 8
             assert(size <= 16 && size > 8);
-            lir_operand_t *dst_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_VOID_PTR));
+            lir_operand_t *dst_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_ANYPTR));
             linked_push(result, lir_op_lea(dst_ref, dst));
 
             linked_t *temps = lir_memory_mov(c->module, type_sizeof(arg_type), dst_ref, arg_operand);
@@ -542,7 +545,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         assert(call_result_type.kind == TYPE_STRUCT || call_result_type.kind == TYPE_ARR);
 
         assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
-        assert(is_large_stack_type(lir_operand_type(call_result)));
+        assert(is_stack_ref_big_type(lir_operand_type(call_result)));
 
         lir_operand_t *result_reg_operand = operand_new(LIR_OPERAND_REG, x8);
 
@@ -562,7 +565,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
     }
 
     // 由于结构体小于等于 16byte, 所以可以通过寄存器传递，此时栈中没有返回值的空间，所以需要进行空间申请
-    if (is_large_stack_type(call_result_type)) {
+    if (is_stack_ref_big_type(call_result_type)) {
         assert(call_result->assert_type == LIR_OPERAND_VAR);
         linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
     }

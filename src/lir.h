@@ -12,19 +12,26 @@
 
 #define VEC_TYPE_IDENT "vec"
 
+#define GEN_REWRITE_SEPARATOR "@"
+
+#define IMPL_CONNECT_IDENT "."
+
 #define TEMP_RESULT "@result"
 #define TEMP_IDENT "t"
 #define TEMP_VAR_IDENT "v"
 #define TEMP_LABEL ".L"
 #define ITERATOR_CURSOR "cursor"
 
+#define LABEL_UPDATE_SUFFIX ".update"
+#define LABEL_CONTINUE_SUFFIX ".continue"
 #define LABEL_END_SUFFIX ".end"
 #define LABEL_ERROR_SUFFIX ".error"
 
+#define BLOCK_IDENT ".@BLOCK"
 #define CATCH_IDENT ".@CATCH"
-#define MATCH_IDENT ".@MATCH" // 需要用到字符串匹配，所以给定特殊字符避免后续干扰
+#define MATCH_IDENT ".@MATCH"// 需要用到字符串匹配，所以给定特殊字符避免后续干扰
 #define CASE_HANDLE ".CASE_HANDLE"
-#define SELECT_IDENT ".@SELECT" // 需要用到字符串匹配，所以给定特殊字符避免后续干扰
+#define SELECT_IDENT ".@SELECT"// 需要用到字符串匹配，所以给定特殊字符避免后续干扰
 
 #define FOR_CONTINUE_IDENT ".FOR_CONTINUE"
 #define FOR_UPDATE_IDENT ".FOR_UPDATE"
@@ -68,7 +75,7 @@
 
 // RT = runtime
 // CT = compile time
-#define RT_CALL_VEC_NEW "rt_vec_new"
+#define RT_CALL_VEC_CAP "rt_vec_cap"
 #define RT_CALL_VEC_ELEMENT_ADDR "rt_vec_element_addr"
 #define RT_CALL_VEC_SLICE "rt_vec_slice"
 #define RT_CALL_VEC_REF "rt_vec_ref"
@@ -81,7 +88,7 @@
 #define RT_CALL_WRITE_BARRIER "write_barrier"
 
 #define RT_CALL_ARRAY_ELEMENT_ADDR "array_element_addr"
-#define RT_CALL_RAW_PTR_VALID "raw_ptr_valid"
+#define RT_CALL_RAWPTR_VALID "rawptr_valid"
 
 #define RT_CALL_MAP_NEW "rt_map_new"
 #define RT_CALL_MAP_ACCESS "rt_map_access"
@@ -99,17 +106,18 @@
 
 #define RT_CALL_BOOL_CASTING "bool_casting"
 #define RT_CALL_NUMBER_CASTING "number_casting"
-#define RT_CALL_VOID_PTR_CASTING "void_ptr_casting"
-#define RT_CALL_CASTING_TO_VOID_PTR "casting_to_void_ptr"
+#define RT_CALL_ANYPTR_CASTING "anyptr_casting"
+#define RT_CALL_CASTING_TO_ANYPTR "casting_to_anyptr"
 
 /**
  * 将 single 类型转换为 union 类型
  */
 #define RT_CALL_UNION_CASTING "union_casting"
 
-/**
- * 判断 union 中的 single 类型是什么
- */
+#define RT_CALL_INTERFACE_CASTING "interface_casting"
+
+#define RT_CALL_INTERFACE_IS "interface_is"
+
 #define RT_CALL_UNION_IS "union_is"
 
 /**
@@ -117,7 +125,9 @@
  */
 #define RT_CALL_UNION_ASSERT "union_assert"
 
-#define RT_CALL_RAW_PTR_ASSERT "raw_ptr_assert"
+#define RT_CALL_INTERFACE_ASSERT "interface_assert"
+
+#define RT_CALL_RAWPTR_ASSERT "rawptr_assert"
 
 #define RT_CALL_ITERATOR_NEXT_KEY "iterator_next_key"
 
@@ -129,8 +139,8 @@
 
 #define RT_CALL_ENV_NEW "env_new"
 #define RT_CALL_ENV_CLOSURE "env_closure"
-#define RT_CALL_ENV_ASSIGN_REF "env_assign_ref"// 实际代码位置对 env 的访问
-#define RT_CALL_ENV_ELEMENT_VALUE "env_element_value" // heap addr
+#define RT_CALL_ENV_ASSIGN_REF "env_assign_ref"      // 实际代码位置对 env 的访问
+#define RT_CALL_ENV_ELEMENT_VALUE "env_element_value"// heap addr
 
 #define RT_CALL_STRING_NEW "string_new"
 
@@ -177,12 +187,12 @@
 
 #define OP(_node) ((lir_op_t *) _node->value)
 
-#define OP_PUSH(_op) \
-    do { \
-        lir_op_t * _value = _op;\
-        _value->line = m->current_line; \
-        _value->column = m->current_column; \
-         linked_push(m->current_closure->operations, _value); \
+#define OP_PUSH(_op)                                         \
+    do {                                                     \
+        lir_op_t *_value = _op;                              \
+        _value->line = m->current_line;                      \
+        _value->column = m->current_column;                  \
+        linked_push(m->current_closure->operations, _value); \
     } while (0)
 
 /**
@@ -201,9 +211,9 @@ typedef struct {
  * t1[0] = 24 => mov 24 -> indirect_addr(t1, 0)
  */
 typedef struct {
-    lir_operand_t *base; // compiler 完成后为 var,  reg alloc 后为 reg
-    int64_t offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
-    type_t type; // lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
+    lir_operand_t *base;// compiler 完成后为 var,  reg alloc 后为 reg
+    int64_t offset;     // 偏移量是可以计算出来的, 默认为 0, 单位字节
+    type_t type;        // lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
 } lir_indirect_addr_t;
 
 typedef struct {
@@ -214,22 +224,22 @@ typedef struct {
 
 typedef struct {
     char *ident;
-    bool is_local; // 是否为局部符号, 否则就是 global, 可以被链接器链接
+    bool is_local;// 是否为局部符号, 否则就是 global, 可以被链接器链接
 } lir_symbol_label_t;
 
 typedef struct {
     string ident;
     type_kind kind;
-} lir_symbol_var_t; // 外部符号引用, 外部符号引用
+} lir_symbol_var_t;// 外部符号引用, 外部符号引用
 
 typedef struct {
     union {
-        uint64_t uint_value; // 8bit, 负数使用补码存储
-        int64_t int_value; // 8bit, 负数使用补码存储
-        double f64_value; // 8bit
-        float f32_value; // 4bit
-        bool bool_value; // 1bit
-        string string_value; // 8bit
+        uint64_t uint_value;// 8bit, 负数使用补码存储
+        int64_t int_value;  // 8bit, 负数使用补码存储
+        double f64_value;   // 8bit
+        float f32_value;    // 4bit
+        bool bool_value;    // 1bit
+        string string_value;// 8bit
     };
 
     type_kind kind;
@@ -238,7 +248,7 @@ typedef struct {
 struct lir_operand_t {
     lir_operand_type_t assert_type;
     void *value;
-    lir_flag_t pos; // 在 opcode 中的位置信息
+    lir_flag_t pos;// 在 opcode 中的位置信息
 };
 
 static inline bool is_rtcall(string target) {
@@ -248,19 +258,19 @@ static inline bool is_rtcall(string target) {
 
     return str_equal(target, RT_CALL_SET_ADD) || str_equal(target, RT_CALL_SET_DELETE) ||
            str_equal(target, RT_CALL_SET_CONTAINS) || str_equal(target, RT_CALL_SET_NEW) ||
-           str_equal(target, RT_CALL_VEC_NEW) || str_equal(target, RT_CALL_VEC_ELEMENT_ADDR) ||
+           str_equal(target, RT_CALL_VEC_CAP) || str_equal(target, RT_CALL_VEC_ELEMENT_ADDR) ||
            str_equal(target, RT_CALL_VEC_SLICE) || str_equal(target, RT_CALL_VEC_REF) ||
            str_equal(target, RT_CALL_VEC_LENGTH) || str_equal(target, RT_CALL_VEC_CAPACITY) ||
            str_equal(target, RT_CALL_VEC_PUSH) || str_equal(target, RT_CALL_VEC_ITERATOR) ||
            str_equal(target, RT_CALL_VEC_CONCAT) || str_equal(target, RT_CALL_WRITE_BARRIER) ||
-           str_equal(target, RT_CALL_ARRAY_ELEMENT_ADDR) || str_equal(target, RT_CALL_RAW_PTR_VALID) ||
+           str_equal(target, RT_CALL_ARRAY_ELEMENT_ADDR) || str_equal(target, RT_CALL_RAWPTR_VALID) ||
            str_equal(target, RT_CALL_MAP_NEW) || str_equal(target, RT_CALL_MAP_ACCESS) ||
            str_equal(target, RT_CALL_MAP_ASSIGN) || str_equal(target, RT_CALL_MAP_LENGTH) ||
            str_equal(target, RT_CALL_MAP_DELETE) || str_equal(target, RT_CALL_TUPLE_NEW) ||
            str_equal(target, RT_CALL_BOOL_CASTING) || str_equal(target, RT_CALL_NUMBER_CASTING) ||
-           str_equal(target, RT_CALL_VOID_PTR_CASTING) || str_equal(target, RT_CALL_CASTING_TO_VOID_PTR) ||
+           str_equal(target, RT_CALL_ANYPTR_CASTING) || str_equal(target, RT_CALL_CASTING_TO_ANYPTR) ||
            str_equal(target, RT_CALL_UNION_CASTING) || str_equal(target, RT_CALL_UNION_IS) ||
-           str_equal(target, RT_CALL_UNION_ASSERT) || str_equal(target, RT_CALL_RAW_PTR_ASSERT) ||
+           str_equal(target, RT_CALL_UNION_ASSERT) || str_equal(target, RT_CALL_RAWPTR_ASSERT) ||
            str_equal(target, RT_CALL_ITERATOR_NEXT_KEY) || str_equal(target, RT_CALL_ITERATOR_NEXT_VALUE) ||
            str_equal(target, RT_CALL_ITERATOR_TAKE_VALUE) || str_equal(target, RT_CALL_FN_NEW) ||
            str_equal(target, RT_CALL_ENV_NEW) || str_equal(target, RT_CALL_ENV_CLOSURE) ||
@@ -496,7 +506,7 @@ static inline lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_var->ident = var->ident;
         new_var->old = var->old;
         new_var->type = var->type;
-        new_var->flag = 0; // 即使是同一个 var 在不同的位置承担的 flag 也是不同的
+        new_var->flag = 0;// 即使是同一个 var 在不同的位置承担的 flag 也是不同的
         new_operand->value = new_var;
         return new_operand;
     }
@@ -555,7 +565,7 @@ static inline void set_operand_flag(lir_operand_t *operand) {
     if (operand->assert_type == LIR_OPERAND_VAR) {
         // 仅 output 且 indirect_addr = false 才配置 def
         lir_var_t *var = operand->value;
-        var->flag |= FLAG(operand->pos); // 冗余 operand 的位置信息
+        var->flag |= FLAG(operand->pos);// 冗余 operand 的位置信息
         if (operand->pos == LIR_FLAG_OUTPUT) {
             var->flag |= FLAG(LIR_FLAG_DEF);
         } else {
@@ -600,8 +610,8 @@ static inline void set_operand_flag(lir_operand_t *operand) {
     slice_t *operands = recursion_extract_operands(operand, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
     for (int i = 0; i < operands->count; ++i) {
         lir_operand_t *o = operands->take[i];
-        o->pos = operand->pos; // 继承父级的 pos
-        set_operand_flag(o); // 符合嵌入的全部定义成 USE
+        o->pos = operand->pos;// 继承父级的 pos
+        set_operand_flag(o);  // 符合嵌入的全部定义成 USE
     }
 }
 
@@ -609,7 +619,7 @@ static inline lir_op_t *
 lir_op_new(lir_opcode_t code, lir_operand_t *first, lir_operand_t *second, lir_operand_t *result) {
     lir_op_t *op = NEW(lir_op_t);
     op->code = code;
-    op->first = lir_operand_copy(first); // 这里的 copy 并不深度，而是 copy 了指针！
+    op->first = lir_operand_copy(first);// 这里的 copy 并不深度，而是 copy 了指针！
     op->second = lir_operand_copy(second);
     op->output = lir_operand_copy(result);
 
@@ -740,7 +750,7 @@ static inline lir_op_t *push_rt_call_no_hook(module_t *m, char *name, lir_operan
     slice_t *operand_args = slice_new();
 
     va_list args;
-    va_start(args, arg_count); // 初始化参数
+    va_start(args, arg_count);// 初始化参数
     for (int i = 0; i < arg_count; ++i) {
         lir_operand_t *param = va_arg(args, lir_operand_t *);
         slice_push(operand_args, param);
@@ -755,7 +765,7 @@ static inline lir_op_t *push_rt_call(module_t *m, char *name, lir_operand_t *res
     slice_t *operand_args = slice_new();
 
     va_list args;
-    va_start(args, arg_count); // 初始化参数
+    va_start(args, arg_count);// 初始化参数
     for (int i = 0; i < arg_count; ++i) {
         lir_operand_t *param = va_arg(args, lir_operand_t *);
         slice_push(operand_args, param);
@@ -772,7 +782,7 @@ static inline lir_op_t *lir_rtcall(char *name, lir_operand_t *result, int arg_co
     slice_t *params_operand = slice_new();
 
     va_list args;
-    va_start(args, arg_count); // 初始化参数
+    va_start(args, arg_count);// 初始化参数
     for (int i = 0; i < arg_count; ++i) {
         lir_operand_t *param = va_arg(args, lir_operand_t *);
         slice_push(params_operand, param);
@@ -786,7 +796,7 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
     slice_t *params_operand = slice_new();
 
     va_list args;
-    va_start(args, arg_count); // 初始化参数
+    va_start(args, arg_count);// 初始化参数
     for (int i = 0; i < arg_count; ++i) {
         lir_operand_t *param = va_arg(args, lir_operand_t *);
         slice_push(params_operand, param);
@@ -806,18 +816,13 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
 static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *dst_operand) {
     module_t *m = c->module;
     assert(dst_operand->assert_type == LIR_OPERAND_VAR);
-    assert(is_large_stack_type(t));
+    assert(is_stack_ref_big_type(t));
 
     uint16_t size = type_sizeof(t);
 
-    // struct size 可能为 0， 但是为了保证 ssa 完整性，所以依旧需要进行 lir mov 指令插入(可以使用 NOP 指令代替)
-    if (size == 0) {
-        return lir_op_nop_def(dst_operand);
-    }
-
     // 为了方便和寄存器进行交换，这里总是按照指针地址对齐
     c->stack_offset += size;
-    c->stack_offset = align_up(c->stack_offset, POINTER_SIZE); // 按照 8byte 对齐
+    c->stack_offset = align_up(c->stack_offset, POINTER_SIZE);// 按照 8byte 对齐
 
     rtype_t rtype = reflect_type(t);
     assert(rtype.size == size);
@@ -864,9 +869,9 @@ static inline lir_operand_t *temp_var_operand_with_alloc(module_t *m, type_t typ
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var);
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
-    if (is_large_stack_type(type)) {
+    if (is_stack_ref_big_type(type)) {
         if (type.in_heap) {
-            lir_var->type = type_kind_new(TYPE_VOID_PTR);
+            lir_var->type = type_kind_new(TYPE_ANYPTR);
 
             uint64_t rtype_hash = ct_find_rtype_hash(type);
             OP_PUSH(lir_rtcall(RT_CALL_GC_MALLOC, target, 1, int_operand(rtype_hash)));
@@ -889,7 +894,7 @@ static inline lir_operand_t *lower_temp_var_operand(closure_t *c, linked_t *list
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var);
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
-    if (is_large_stack_type(type)) {
+    if (is_stack_ref_big_type(type)) {
         linked_push(list, lir_stack_alloc(c, type, target));
     }
 
@@ -913,6 +918,15 @@ static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir
         OP_PUSH(lir_op_move(temp, base));
         base = temp;
     }
+
+
+    // 如果 base 是 global symbol var, 则加载 symbol addr 作为 indirect base
+    //    if (base->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+    //        lir_symbol_var_t *symbol_var = base->value;
+    //        lir_operand_t *temp = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    //        OP_PUSH(lir_op_lea(temp, base));
+    //        base = temp;
+    //    }
 
     assertf(base->assert_type == LIR_OPERAND_VAR || base->assert_type == LIR_OPERAND_REG,
             "indirect addr only support var operand");
@@ -983,7 +997,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
     assert(operand->assert_type != LIR_OPERAND_SYMBOL_LABEL);
 
     assertf(operand->assert_type == LIR_OPERAND_VAR || operand->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
-            operand->assert_type == LIR_OPERAND_SYMBOL_LABEL || operand->assert_type == LIR_OPERAND_SYMBOL_VAR,
+                    operand->assert_type == LIR_OPERAND_SYMBOL_LABEL || operand->assert_type == LIR_OPERAND_SYMBOL_VAR,
             "only support lea var/symbol/addr, actual=%d", operand->assert_type);
 
     type_t t = lir_operand_type(operand);

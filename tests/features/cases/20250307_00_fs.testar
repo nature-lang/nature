@@ -1,0 +1,181 @@
+=== test_read
+--- main.n
+import fs
+import syscall
+
+fn main():void! {
+    var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
+    var buf = vec_new<u8>(0, 50)
+
+    println(buf.len(), buf.cap())
+    var len = f.read(buf)
+    println('first read test.txt data:', len, buf as string)
+
+    len = f.read(buf)
+    println('second read test.txt data:', len, buf as string)
+
+    len = f.read(buf)
+    if len == 0 {
+        println('read completed')
+    }
+}
+
+--- test.txt
+hello world in test.txt hello world in test.txt hello world in test.txt
+
+
+--- output.txt
+50 50
+first read test.txt data: 50 hello world in test.txt hello world in test.txt he
+second read test.txt data: 22 llo world in test.txt
+t hello world in test.txt he
+read completed
+
+
+=== test_read_content
+--- main.n
+import fs
+import syscall
+
+fn main():void! {
+    var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
+    var str = f.content()
+    println(str, "read completed")
+}
+
+--- output.txt
+hello world in test.txt hello world in test.txt hello world in test.txt
+ read completed
+
+=== test_write
+--- main.n
+import fs
+import syscall
+
+fn main():void! {
+    var f = fs.open('./test.txt',  syscall.O_RDWR|syscall.O_TRUNC, 0644)
+    var n = f.write('hello world\n' as [u8])
+    println('first write len:', n)
+    n = f.write('hello nature\n' as [u8])
+    println('second write len:', n)
+
+    var s = f.content()
+    println('current file content:\n', s, 'content end')
+}
+
+--- test.txt
+will be trunc
+
+--- output.txt
+first write len: 12
+second write len: 13
+current file content:
+ hello world
+hello nature
+ content end
+
+=== test_write_failed
+--- main.n
+import fs
+import syscall
+
+fn main():void! {
+    var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
+    f.write('write data hahaha' as [u8]) catch err {
+        throw errorf('write to test.txt failed:' + err.msg())
+    }
+}
+
+
+--- test.txt
+hello world in test.txt
+hello nature in test.txt
+
+--- output.txt
+coroutine 'main' uncaught error: 'write to test.txt failed:bad file descriptor' at nature-test/main.n:7:52
+
+=== test_close
+--- main.n
+import fs
+import syscall
+
+fn main():void! {
+    var f = fs.open('./test.txt',  syscall.O_RDWR|syscall.O_TRUNC, 0644)
+    f.close()
+    f.write('hello\nworld' as [u8])
+}
+--- test.txt
+hello world
+
+--- output.txt
+coroutine 'main' uncaught error: 'fd already closed' at nature-test/main.n:7:23
+
+=== test_read_at
+--- main.n
+import fs
+import syscall
+
+fn main():void! {
+    var f = fs.open('./test.txt',  syscall.O_RDWR, 0644)
+    var buf = vec_new<u8>(0, 100)
+    var n = f.read_at(buf, 8)
+    println(buf.len(), buf.cap(), n, buf.slice(0, n) as string, 'read_at end')
+
+    n = f.read_at(buf, 12)
+    println(buf.len(), buf.cap(), n, buf.slice(0, n) as string, 'read_at end')
+}
+
+--- test.txt
+01234567890123456789
+
+--- output.txt
+100 100 13 890123456789
+ read_at end
+100 100 9 23456789
+ read_at end
+
+=== test_write_at
+--- main.n
+import fs
+import syscall
+
+fn main():void! {
+    var f = fs.open('./test.txt',  syscall.O_RDWR, 0644)
+    var n = f.write_at('nature' as [u8], 9)
+    println(n)
+    n = f.write_at('hello' as [u8], 0)
+    println(n)
+
+    print(f.content())
+}
+
+--- test.txt
+01234567890123456789
+
+--- output.txt
+6
+5
+hello5678nature56789
+
+
+=== test_read_len
+--- main.n
+import fs
+import syscall
+
+fn main():void! {
+    var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
+    var buf = vec_new<u8>(0, 10)
+
+    println(buf.len(), buf.cap())
+    var len = f.read(buf)
+    println('first read test.txt data:', len, buf as string)
+}
+
+--- test.txt
+hello world in test.txt hello world in test.txt hello world in test.txt
+
+
+--- output.txt
+10 10
+first read test.txt data: 10 hello worl

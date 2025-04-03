@@ -4,7 +4,7 @@ fn main() {
     var p = other.person_t{
         name = 'hualaka',
         age = 23,
-        sex = true
+        sex = true,
     }
 
     [other.person_t] list = [p]
@@ -19,16 +19,17 @@ fn main() {
     p.test_self()
 
 
-    // raw_ptr struct test
-    raw_ptr<other.person_t> b = &p
+    // rawptr struct test
+    rawptr<other.person_t> b = &p
     b.age = 32
     println(b.name, b.age, b.sex)
 
-    b = null
-    var c = b.name catch err {
-        println(err.msg)
-    }
+    // TODO raw ptr check disabled... wait inline
+    // b = null
+    // var c = b.name catch err {
+    //    println(err.msg())
+    //}
 
     // 没有完整的 try catch, 所以无法 catch
-    b.name = 'hello'
+    // b.name = 'hello'
 }

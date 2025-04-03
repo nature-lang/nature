@@ -173,13 +173,13 @@ void callers_deserialize();
 
 void symdefs_deserialize();
 
-static inline rtype_t *rt_find_rtype(int64_t rhash) {
-    rtype_t *result = sc_map_get_64v(&rt_rtype_map, rhash);
+static inline rtype_t *rt_find_rtype(int64_t hash) {
+    rtype_t *result = sc_map_get_64v(&rt_rtype_map, hash);
 
     return result;
 }
 
-static inline uint64_t rt_rtype_out_size(int64_t rhash) {
+static inline uint64_t rt_rtype_stack_size(int64_t rhash) {
     assert(rhash > 0 && "rhash empty");
 
     rtype_t *rtype = rt_find_rtype(rhash);

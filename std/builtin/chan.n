@@ -1,8 +1,8 @@
 import coroutine as co
 
 // type waitq_t = struct{
-//     raw_ptr<co.linkco_t> head
-//    raw_ptr<co.linkco_t> rear
+//     rawptr<co.linkco_t> head
+//    rawptr<co.linkco_t> rear
 //}
 
 // type chan<T> = struct{
@@ -33,11 +33,11 @@ fn chan_new<T>(...[int] args):chan<T> {
 }
 
 fn chan<T>.send(T msg):void! {
-    rt_chan_send(self as void_ptr, &msg as void_ptr, false)
+    rt_chan_send(self as anyptr, &msg as anyptr, false)
 }
 
 fn chan<T>.try_send(T msg):bool! {
-    return rt_chan_send(self as void_ptr, &msg as void_ptr, true)
+    return rt_chan_send(self as anyptr, &msg as anyptr, true)
 }
 
 fn chan<T>.on_send(T msg):void {
@@ -46,7 +46,7 @@ fn chan<T>.on_send(T msg):void {
 
 fn chan<T>.recv():T! {
     T msg = @default()
-    rt_chan_recv(self as void_ptr, &msg as void_ptr, false)
+    rt_chan_recv(self as anyptr, &msg as anyptr, false)
 
     return msg
 }
@@ -58,7 +58,7 @@ fn chan<T>.on_recv():T {
 }
 
 fn chan<T>.try_recv(T msg):bool! {
-    return rt_chan_recv(self as void_ptr, &msg as void_ptr, true)
+    return rt_chan_recv(self as anyptr, &msg as anyptr, true)
 }
 
 #linkid rt_chan_close
@@ -71,13 +71,13 @@ fn chan<T>.is_closed():bool
 fn chan<T>.is_successful():bool
 
 #linkid rt_chan_new
-fn rt_chan_new(i64 rhash, i64 ele_hash, i64 buf_len):void_ptr
+fn rt_chan_new(i64 rhash, i64 ele_hash, i64 buf_len):anyptr
 
 #linkid rt_chan_send
-fn rt_chan_send(void_ptr ch, void_ptr msg, bool _try):bool!
+fn rt_chan_send(anyptr ch, anyptr msg, bool _try):bool!
 
 #linkid rt_chan_recv
-fn rt_chan_recv(void_ptr ch, void_ptr msg, bool _try):bool!
+fn rt_chan_recv(anyptr ch, anyptr msg, bool _try):bool!
 
 #linkid rt_chan_close
-fn rt_chan_close(void_ptr ch):void!
+fn rt_chan_close(anyptr ch):void!

@@ -6,7 +6,7 @@ fn main():void! {
     user.register('xiaoyou', 'nanana456')
 
 	user.register('xiaoyou', 'nanana789') catch err {
-		println(err.msg)
+		println(err.msg())
 	}
 
     var foo = user.find('xiaoyou')

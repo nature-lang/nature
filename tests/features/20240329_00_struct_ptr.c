@@ -12,9 +12,9 @@ static void test_basic() {
                 "hualaka\n"
                 "hualaka 23 true hualaka 30 true\n"
                 "in test_self hualaka 30 true\n"
-                "hualaka 32 true\n"
-                "invalid memory address or nil pointer dereference\n"
-                "coroutine 'main' panic: 'invalid memory address or nil pointer dereference' at 20240329_00_struct_ptr/main.n:33:5\n";
+                "hualaka 32 true\n";
+    //                "invalid memory address or nil pointer dereference\n"
+    //                "coroutine 'main' panic: 'invalid memory address or nil pointer dereference' at 20240329_00_struct_ptr/main.n:33:5\n";
 
     assert_string_equal(raw, str);
 }

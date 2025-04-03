@@ -37,13 +37,13 @@ type elf64_ehdr_t = struct {
 
 fn arch(string path):string! {
     if path == '' {
-        throw 'path is empty'
+        throw errorf('path is empty')
     }
 
     int fd = syscall.open(path, syscall.O_RDONLY, 0)
 
     var elf_header = elf64_ehdr_t{}
-    syscall.read(fd, elf_header as void_ptr, @sizeof(elf64_ehdr_t))
+    syscall.read(fd, elf_header as anyptr, @sizeof(elf64_ehdr_t))
     syscall.close(fd)
 
     if elf_header.ident[EI_MAG0] != ELFMAG0 ||
@@ -51,7 +51,7 @@ fn arch(string path):string! {
        elf_header.ident[EI_MAG2] != ELFMAG2 ||
        elf_header.ident[EI_MAG3] != ELFMAG3 {
 
-       throw 'not a valid elf file'
+       throw errorf('not a valid elf file')
     }
 
     // 读取常用的 arch 并解析成字符串返回
@@ -60,7 +60,7 @@ fn arch(string path):string! {
         EM_ARM: 'armv7',
         EM_RISCV: 'riscv64',
         EM_X86_64: 'amd64',
-        EM_386: 'i386'
+        EM_386: 'i386',
     }
 
     var arch = arch_of[elf_header.machine]

@@ -229,6 +229,7 @@ struct module_t {
     slice_t *global_symbols; // symbol_t, 这里只存储全局符号
     slice_t *global_vardef; // 用于在 infer 阶段进行类型推导
 
+    slice_t *global_typedef; // 记录所有的 type def
     slice_t *ast_fndefs;
     linked_t *temp_worklist; // ast_fndef
 
@@ -326,6 +327,7 @@ typedef struct interval_t {
     interval_range_t *first_range;
     interval_range_t *last_range;
     linked_t *ranges;
+    slice_t *range_list;
     linked_t *use_pos_list; // 存储 use_position 列表
     struct interval_t *parent;
     linked_t *children; // 动态数组
@@ -438,6 +440,7 @@ typedef struct lir_op_t {
     lir_operand_t *second; // 参数2
     lir_operand_t *output; // 参数3
     int id; // 编号, 也就是寄存器分配期间的 position, 一般都是顺序编码的
+    bool is_resolve;
 
     int line;
     int column;

@@ -2,6 +2,7 @@
 #define NATURE_SRC_LIB_HELPER_H_
 
 #include <assert.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -19,16 +20,21 @@
 
 
 #ifndef O_BINARY
-# define O_BINARY 0
+#define O_BINARY 0
 #endif
 
 #define string char *
 #define STRING_EOF '\0'
 
-#define VOID (void)!
+#define VOID (void) !
 
 #define v_addr_t uint64_t
 #define addr_t uint64_t
+
+static char tlsprintf_buf[1024];
+
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#define min(a, b) ((a) < (b) ? (a) : (b))
 
 // #undef free
 // #define free(_ptr) \
@@ -67,7 +73,7 @@ static inline void *mallocz(uint64_t size) {
 }
 
 #define CONTAINER_OF(ptr, type, member) \
-((type *) ((char *) (ptr) - offsetof(type, member)))
+    ((type *) ((char *) (ptr) - offsetof(type, member)))
 
 
 #define GROW_CAPACITY(capacity) ((capacity) < 8 ? 8 : (capacity) * 2)
@@ -84,30 +90,30 @@ static inline void *mallocz(uint64_t size) {
     })
 
 // 抢占式调度与 coroutine dispatch 使用该 debug 函数
-#ifdef NATURE_DEBUG
+#ifdef RUNTIME_DEBUG_LOG
 
-#define RDEBUGF(format, ...)                                                                                                 \
-    fprintf(stderr, "[%lu] RDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+#define RDEBUGF(format, ...)                                                                                                  \
+    fprintf(stderr, "[%lu] RDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
     fflush(stderr);
 
-#define MDEBUGF(format, ...)                                                                                                       \
-    fprintf(stdout, "[%lu] MEMORY DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+#define MDEBUGF(format, ...)                                                                                                        \
+    fprintf(stdout, "[%lu] MEMORY DEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
     fflush(stdout);
 
-#define DEBUGF(format, ...)                                                                                                  \
-    fprintf(stdout, "[%lu] DDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+#define DEBUGF(format, ...)                                                                                                   \
+    fprintf(stdout, "[%lu] DDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
     fflush(stdout);
 
-#define TRACEF(format, ...)                                                                                                  \
-    fprintf(stdout, "[%lu] TTRACE-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+#define TRACEF(format, ...)                                                                                                   \
+    fprintf(stdout, "[%lu] TTRACE-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
     fflush(stdout);
 
-#define TDEBUGF(format, ...)                                                                                                 \
-    fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+#define TDEBUGF(format, ...)                                                                                                  \
+    fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
     fflush(stdout);
 
 #define TESTDUMP(format, ...)                                                                                                 \
-    fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+    fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
     fflush(stdout);
 
 #else
@@ -116,12 +122,12 @@ static inline void *mallocz(uint64_t size) {
 #define DEBUGF(...)
 #define TRACEF(...)
 
-#define TDEBUGF(format, ...)                                                                        \
-    fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
-    fflush(stdout);
+#define TDEBUGF(format, ...)                                                                                                  \
+//    fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
+//    fflush(stdout);
 
 #define TESTDUMP(format, ...)                                                                                                 \
-    fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t)uv_thread_self(), ##__VA_ARGS__); \
+    fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
     fflush(stdout);
 
 #endif
@@ -206,11 +212,13 @@ static inline char *dsprintf(char *format, ...) {
     return realloc(buf, count + 1);
 }
 
-static inline int64_t max(int64_t a, int64_t b) {
-    if (a > b) {
-        return a;
-    }
-    return b;
+static inline char *tlsprintf(char *format, ...) {
+    va_list args;
+    va_start(args, format);
+    int count = vsnprintf(tlsprintf_buf, sizeof(tlsprintf_buf), format, args);
+    va_end(args);
+
+    return tlsprintf_buf;
 }
 
 static inline char *itoa(int64_t n) {
@@ -257,12 +265,12 @@ static char *str_connect3(const char *a, const char *b, const char *c) {
     size_t total_len = len_a + len_b + len_c;
 
     // 分配内存
-    char *result = mallocz(total_len + 1); // +1 for null terminator
+    char *result = mallocz(total_len + 1);// +1 for null terminator
     // 拼接字符串
     memcpy(result, a, len_a);
     memcpy(result + len_a, b, len_b);
     memcpy(result + len_a + len_b, c, len_c);
-    result[total_len] = '\0'; // 确保字符串以 null 结尾
+    result[total_len] = '\0';// 确保字符串以 null 结尾
 
     return result;
 }
@@ -352,7 +360,7 @@ static inline char *path_dir(char *path) {
     assert(strlen(path) > 0);
     char *result = strdup(path);
 
-    char *ptr = strrchr(result, '/'); // 查找最后一个斜杠
+    char *ptr = strrchr(result, '/');// 查找最后一个斜杠
     if (ptr == NULL) {
         return result;
     }
@@ -364,7 +372,7 @@ static inline char *path_dir(char *path) {
 static inline char *file_name(char *path) {
     char *ptr = strrchr(path, '/');
     if (ptr == NULL) {
-        return path; // path 本身就是 file name
+        return path;// path 本身就是 file name
     }
 
     if (*(ptr + 1) == '\0') {
@@ -397,7 +405,7 @@ static inline bool file_exists(char *path) {
 }
 
 static inline char *rtrim(char *str, char *sub) {
-    size_t len = strlen(str); // +1 表示 \0 部分
+    size_t len = strlen(str);// +1 表示 \0 部分
     len = len - strlen(sub) + 1;
 
     char *res = mallocz(len);
@@ -517,17 +525,17 @@ static inline ssize_t full_read(int fd, void *buf, size_t count) {
 
 static inline char *str_replace(char *str, char *old, char *new) {
     char *result; // the return string
-    char *ins; // the next insert pointer
-    char *tmp; // varies
-    int len_rep; // length of old (the string to remove)
+    char *ins;    // the next insert pointer
+    char *tmp;    // varies
+    int len_rep;  // length of old (the string to remove)
     int len_with; // length of new (the string to replace old new)
-    int len_front; // distance between old and end of last old
-    int count; // number of replacements
+    int len_front;// distance between old and end of last old
+    int count;    // number of replacements
 
     // sanity checks and initialization
     if (!str || !old) return NULL;
     len_rep = strlen(old);
-    if (len_rep == 0) return NULL; // empty old causes infinite loop during count
+    if (len_rep == 0) return NULL;// empty old causes infinite loop during count
     if (!new) new = "";
     len_with = strlen(new);
 
@@ -551,7 +559,7 @@ static inline char *str_replace(char *str, char *old, char *new) {
         len_front = ins - str;
         tmp = strncpy(tmp, str, len_front) + len_front;
         tmp = strcpy(tmp, new) + len_with;
-        str += len_front + len_rep; // move to next "end of old"
+        str += len_front + len_rep;// move to next "end of old"
     }
     strcpy(tmp, str);
     return result;
@@ -611,7 +619,7 @@ static inline int64_t *take_numbers(char *str, uint64_t count) {
         // 使用 atoi 函数将字符串转换为整数，并存入数组中
         numbers[i] = atoll(token);
         i++;
-        token = strtok(NULL, "\n"); // 继续提取下一个数字
+        token = strtok(NULL, "\n");// 继续提取下一个数字
     }
     return numbers;
 }
@@ -651,4 +659,4 @@ static inline void str_rcpy(char *dest, const char *src, size_t n) {
     dest[copy_len] = '\0';
 }
 
-#endif // NATURE_SRC_LIB_HELPER_H_
+#endif// NATURE_SRC_LIB_HELPER_H_

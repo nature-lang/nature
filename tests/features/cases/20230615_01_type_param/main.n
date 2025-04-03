@@ -5,13 +5,14 @@ fn main() {
     println(foo)
 
     foo = [1 as i8, 2, 3]
-    let foo as [i8]
-    print(foo[0], foo[1], foo[2], '\n')
+    if foo is [i8] {
+        print(foo[0], foo[1], foo[2], '\n')
+    }
 
     // struct box
     var b = mod.box<i8, i16> {
         width = 5,
-        length = 10
+        length = 10,
     }
 
     println('i8 area=', b.area())
@@ -19,7 +20,7 @@ fn main() {
 
     var car = mod.box<f32, f32> {
         width = 3.1,
-        length = 6.1
+        length = 6.1,
     }
     println('float area=', car.area())
     println('float area=', car.width * car.length)

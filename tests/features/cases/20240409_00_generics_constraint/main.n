@@ -3,26 +3,26 @@ import 'mod.n'
 fn main() {
     var f = mod.bar_t<int, f32>{
         a = 233,
-        b = 333.444
+        b = 333.444,
     }
     int a = @unsafe_load(f).dump()
 
     var f2 = mod.foo_t<f32, bool>{
         a = 233.333,
-        b = true
+        b = true,
     }
     var a2 = @unsafe_load(f2).dump()
 
 
     var f3 = mod.foo_t<bool, string>{
         a = true,
-        b = 'hello'
+        b = 'hello',
     }
     f3.dump('world')
 
     var f4 = mod.bar_t<f32, [i32]>{
         a = 233.333,
-        b = [1, 2, 3]
+        b = [1, 2, 3],
     }
     f4.dump()
 }

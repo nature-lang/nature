@@ -1,0 +1,108 @@
+=== test_basic
+--- main.n
+fn main() {
+    // basic test
+    int a1 = 12
+    i64 a2 = 12
+    i32 a3 = 24
+    i8 a4 = 120
+
+    f32 b1 = 12.012
+    f64 b2 = 12.012
+    float b3 = 12.012
+
+    // binary 推导测试
+    int c = 1000
+    u8 c1 = 12 + c as u8
+    u16 c2 = (24 + (2 * c as u16)) - 1
+
+    // unary 推导测试
+    i8 d = -(12 + 8)
+
+    // arg 推导测试
+    test_arg_infer(1, 2, -3, 104, 3.14, -3.1415926, [1, 2, 3, 4])
+}
+
+fn test_arg_infer(i8 a, u8 b, i32 c, u32 d, f32 e, f64 f, [u8] g) {
+    assert(a == 1 && b == 2 && c == -3 && d == 104 && e == 3.14 && g[0] == 1 && g[1] == 2 && g[2] == 3 && g[3] == 4)
+}
+
+=== test_literal_casting
+--- main.n
+fn main() {
+    bool e = 3.14 > 0 // 0 会自动转换为 float 类型
+    assert(e)
+}
+
+=== test_f32_eq
+--- main.n
+fn main() {
+    f32 e = 3.14
+    bool b = e == 3.14
+    assert(b == true)
+}
+
+=== test_compiler_infer_failed
+--- main.n
+fn main() {
+   int c = 1000
+   u16 c2 = (24 + (2 * c)) - 1
+}
+--- output.txt
+nature-test/main.n:3:24: type inconsistency, expect=u16, actual=int(i64)
+
+=== test_compiler_range_failed
+--- main.n
+fn main() {
+   int c = 1000
+   i8 c2 = (245 + (2 * c as i8)) - 1
+}
+--- output.txt
+nature-test/main.n:3:15: literal '245' out of range for type 'i8'
+
+=== test_empty_vec_casting
+--- main.n
+fn main() {
+    var list = [] as [u8]
+}
+--- output.txt
+nature-test/main.n:2:16: vec element type not confirm
+
+=== test_vec_casting
+--- main.n
+fn main() {
+    var list = [12, 14] as [u8]
+}
+--- output.txt
+nature-test/main.n:2:22: cannot casting to 'vec<u8>'
+
+
+=== test_empty_data_new
+--- main.n
+fn main() {
+    var list = vec_new<u8>(0, 0)
+    list.push(12)
+    assert(list[0] == 12)
+
+    var m = map_new<u16,u32>()
+    m[12] = 24
+    assert(m[12] == 24)
+
+    var s = set_new<string>()
+    s.add("hello")
+    assert(s.contains("hello"))
+
+    [f32] f_list = []
+    f_list.push(3.14)
+    assert(f_list[0] == 3.14)
+
+    {f64} f_set = {}
+    f_set.add(3.14)
+    assert(f_set.contains(3.14))
+
+    [{u8}] set_list = []
+    set_list.push({1, 2, 3})
+    assert(set_list[0].contains(2))
+    assert(set_list[0].contains(3))
+    assert(!set_list[0].contains(4))
+}

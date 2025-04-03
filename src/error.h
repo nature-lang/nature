@@ -2,11 +2,23 @@
 #define NATURE_ERROR_H
 
 #include "types.h"
+#include <setjmp.h>
 
 #define ERROR_STR_SIZE 1024
 
+extern jmp_buf test_compiler_jmp_buf;
+extern int test_has_compiler_error;
+extern char test_error_msg[2048];
+
+#define COMPILER_TRY if (!setjmp(test_compiler_jmp_buf))
+
+#define COMPILER_THROW(_fmt, ...) do { \
+    snprintf(test_error_msg, sizeof(test_error_msg) - 1, _fmt, ##__VA_ARGS__);\
+    longjmp(test_compiler_jmp_buf, 1);\
+} while(0)
+
 #define SET_LINE_COLUMN(src) { \
-    assert(src->line > 0);      \
+    assert(src->line > 0);\
     m->current_line = src->line;\
     m->current_column = src->column;\
 }

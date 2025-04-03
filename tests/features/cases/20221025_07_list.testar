@@ -1,0 +1,102 @@
+=== test_basic
+--- main.n
+fn main() {
+    vec<u8> l = [1, 2]
+    l.push(13)
+    println(l[0], l[1], l[2])
+
+    [u8] l2 = [3, 4]
+    l2.push(12)
+    println(l2[0], l2[1], l2[2])
+
+    var l3 = vec_new<u8>(0, 0)
+    l3.push(12)
+    println(l3.len())
+    println(l3.cap())
+
+    var l4 = vec_new<u16>(0, 1024)
+    l4.push(12)
+    println(l4.len())
+    println(l4.cap())
+
+    var l5 = vec_cap<u16>(2048)
+    u16 b5 = 11
+    l5.push(b5 + 1)
+    println(l5.len())
+    println(l5.cap())
+
+    [int] l6 = [1, 2]
+    l6[1] = 22
+    var b6 = l6[1] + 3
+    println(l6[0], l6[1], b6)
+
+    // --- slice and concat
+    var l7 = ['a', 'b', 'c', 'd', 'e']
+    var l8 = l7.slice(1, 4)
+    for v in l8 {
+        print(v)
+    }
+    println()
+
+    l7 = l7.concat(['f', 'g', 'h'])
+    for v in l7 {
+        print(v)
+    }
+}
+
+--- output.txt
+1 2 13
+3 4 12
+1
+8
+1025
+2048
+1
+2048
+1 22 25
+bcd
+abcdefgh\0
+
+=== test_slice
+--- main.n
+import unsafe
+
+fn main():void! {
+    var a = [1, 2, 3, 4]
+    var b = a.slice(2, a.len())
+    b[0] *= 10
+    println(a[0], a[1], a[2], a[3])
+    println(b[0], b[1])
+}
+
+--- output.txt
+1 2 30 4
+30 4
+
+=== test_copy_failed
+--- main.n
+import unsafe
+
+fn main():void! {
+    var a = [1, 2, 3, 4]
+    var b = vec_new<int>(0, 0)
+    b.copy(a)
+    println(b.len(), b[0])
+}
+
+--- output.txt
+coroutine 'main' panic: 'index out of vec [0] with length 0' at nature-test/main.n:7:24
+
+=== test_copy
+--- main.n
+import unsafe
+
+fn main():void! {
+    var a = [1, 2, 3, 4]
+    var b = vec_new<int>(0, 10)
+    b.copy(a)
+    println(b.len(), b[0], b[1], b[2], b[3], b[4], b[5])
+}
+
+--- output.txt
+10 1 2 3 4 0 0

@@ -37,6 +37,12 @@ static list_t *ct_list_type_copy(list_t *temp_list) {
     return list;
 }
 
+static type_interface_t *type_interface_copy(type_interface_t *temp) {
+    type_interface_t *interface = COPY_NEW(type_interface_t, temp);
+    interface->elements = ct_list_type_copy(temp->elements);
+    return interface;
+}
+
 static type_union_t *type_union_copy(type_union_t *temp) {
     type_union_t *union_ = COPY_NEW(type_union_t, temp);
     union_->elements = ct_list_type_copy(temp->elements);
@@ -112,12 +118,6 @@ static type_alias_t *type_alias_copy(type_alias_t *temp) {
     return alias;
 }
 
-static type_gen_t *type_gen_copy(type_gen_t *temp) {
-    type_gen_t *gen = COPY_NEW(type_gen_t, temp);
-    gen->elements = ct_list_type_copy(temp->elements);
-    return gen;
-}
-
 static type_ptr_t *type_pointer_copy(type_ptr_t *temp) {
     type_ptr_t *pointer = COPY_NEW(type_ptr_t, temp);
     pointer->value_type = type_copy(temp->value_type);
@@ -131,22 +131,15 @@ static type_array_t *type_array_copy(type_array_t *temp) {
 
 type_t type_copy(type_t temp) {
     type_t type = temp;
-    if (temp.origin_ident) {
-        type.origin_ident = strdup(temp.origin_ident);
-        type.origin_type_kind = temp.origin_type_kind;
-    }
-    if (temp.impl_ident) {
-        type.impl_ident = strdup(temp.impl_ident);
-    }
-    if (temp.impl_args) {
-        type.impl_args = ct_list_type_copy(temp.impl_args);
+    if (temp.ident) {
+        type.ident = strdup(temp.ident);
+        type.ident_kind = temp.ident_kind;
+        if (temp.args) {
+            type.args = ct_list_type_copy(temp.args);
+        }
     }
 
     switch (temp.kind) {
-        case TYPE_ALIAS: {
-            type.alias = type_alias_copy(temp.alias);
-            break;
-        }
         case TYPE_VEC: {
             type.vec = type_vec_copy(temp.vec);
             break;
@@ -183,7 +176,11 @@ type_t type_copy(type_t temp) {
             type.union_ = type_union_copy(temp.union_);
             break;
         }
-        case TYPE_RAW_PTR:
+        case TYPE_INTERFACE: {
+            type.interface = type_interface_copy(temp.interface);
+            break;
+        }
+        case TYPE_RAWPTR:
         case TYPE_PTR: {
             type.ptr = type_pointer_copy(temp.ptr);
             break;
@@ -211,7 +208,7 @@ static ast_ident *ast_ident_copy(ast_ident *temp) {
 
 static ast_literal_t *ast_literal_copy(ast_literal_t *temp) {
     ast_literal_t *literal = COPY_NEW(ast_literal_t, temp);
-    literal->value = strdup(temp->value); // 根据实际情况复制，这里假设 value 是字符串
+    literal->value = strdup(temp->value);// 根据实际情况复制，这里假设 value 是字符串
     return literal;
 }
 
@@ -231,6 +228,24 @@ static ast_as_expr_t *ast_as_expr_copy(ast_as_expr_t *temp) {
 static ast_new_expr_t *ast_new_expr_copy(ast_new_expr_t *temp) {
     ast_new_expr_t *new_expr = COPY_NEW(ast_new_expr_t, temp);
     new_expr->type = type_copy(temp->type);
+    if (temp->default_expr) {
+        new_expr->default_expr = ast_expr_copy(temp->default_expr);
+    }
+
+    if (temp->properties) {
+        list_t *properties = ct_list_new(sizeof(struct_property_t));// *struct_property_t
+        for (int i = 0; i < temp->properties->length; ++i) {
+            struct_property_t *temp_property = ct_list_value(temp->properties, i);
+            struct_property_t *property = NEW(struct_property_t);
+            property->type = type_copy(temp_property->type);
+            property->key = strdup(temp_property->key);
+            property->right = ast_expr_copy(temp_property->right);
+            ct_list_push(properties, property);
+        }
+
+        new_expr->properties = properties;
+    }
+
     return new_expr;
 }
 
@@ -329,14 +344,6 @@ static ast_vec_new_t *ast_list_new_copy(ast_vec_new_t *temp) {
         vec_new->elements = ast_list_expr_copy(temp->elements);
     }
 
-    if (temp->len) {
-        vec_new->len = ast_expr_copy(temp->len);
-    }
-
-    if (temp->cap) {
-        vec_new->cap = ast_expr_copy(temp->cap);
-    }
-
     return vec_new;
 }
 
@@ -414,6 +421,7 @@ static ast_tuple_destr_t *ast_tuple_destr_copy(ast_tuple_destr_t *temp) {
 
 static ast_macro_async_t *ast_async_copy(ast_macro_async_t *temp) {
     ast_macro_async_t *expr = COPY_NEW(ast_macro_async_t, temp);
+    expr->args_copy_stmts = ast_body_copy(expr->args_copy_stmts);
     expr->closure_fn = ast_fndef_copy(temp->closure_fn);
     expr->closure_fn_void = ast_fndef_copy(temp->closure_fn_void);
     expr->origin_call = ast_call_copy(temp->origin_call);
@@ -634,21 +642,21 @@ static ast_catch_t *ast_catch_copy(ast_catch_t *temp) {
     ast_catch_t *catch = COPY_NEW(ast_catch_t, temp);
     catch->try_expr = *ast_expr_copy(&temp->try_expr);
     catch->catch_err = *ast_var_decl_copy(&temp->catch_err);
-    catch->catch_body = ast_body_copy(temp->catch_body); // 需要实现这个函数
+    catch->catch_body = ast_body_copy(temp->catch_body);// 需要实现这个函数
     return catch;
 }
 
 static ast_try_catch_stmt_t *ast_try_catch_stmt_copy(ast_try_catch_stmt_t *temp) {
-    ast_try_catch_stmt_t *try_stmt = COPY_NEW(ast_try_catch_stmt_t , temp);
+    ast_try_catch_stmt_t *try_stmt = COPY_NEW(ast_try_catch_stmt_t, temp);
     try_stmt->try_body = ast_body_copy(temp->try_body);
     try_stmt->catch_err = *ast_var_decl_copy(&temp->catch_err);
-    try_stmt->catch_body = ast_body_copy(temp->catch_body); // 需要实现这个函数
+    try_stmt->catch_body = ast_body_copy(temp->catch_body);// 需要实现这个函数
     return try_stmt;
 }
 
 static ast_var_tuple_def_stmt_t *ast_var_tuple_def_copy(ast_var_tuple_def_stmt_t *temp) {
     ast_var_tuple_def_stmt_t *stmt = COPY_NEW(ast_var_tuple_def_stmt_t, temp);
-    stmt->tuple_destr = ast_tuple_destr_copy(temp->tuple_destr); // 需要实现这个函数
+    stmt->tuple_destr = ast_tuple_destr_copy(temp->tuple_destr);// 需要实现这个函数
     stmt->right = *ast_expr_copy(&temp->right);
     return stmt;
 }
@@ -663,15 +671,15 @@ static ast_assign_stmt_t *ast_assign_copy(ast_assign_stmt_t *temp) {
 static ast_if_stmt_t *ast_if_copy(ast_if_stmt_t *temp) {
     ast_if_stmt_t *stmt = COPY_NEW(ast_if_stmt_t, temp);
     stmt->condition = *ast_expr_copy(&temp->condition);
-    stmt->consequent = ast_body_copy(temp->consequent); // 需要实现这个函数
-    stmt->alternate = ast_body_copy(temp->alternate); // 需要实现这个函数
+    stmt->consequent = ast_body_copy(temp->consequent);// 需要实现这个函数
+    stmt->alternate = ast_body_copy(temp->alternate);  // 需要实现这个函数
     return stmt;
 }
 
 static ast_for_cond_stmt_t *ast_for_cond_copy(ast_for_cond_stmt_t *temp) {
     ast_for_cond_stmt_t *stmt = COPY_NEW(ast_for_cond_stmt_t, temp);
     stmt->condition = *ast_expr_copy(&temp->condition);
-    stmt->body = ast_body_copy(temp->body); // 需要实现这个函数
+    stmt->body = ast_body_copy(temp->body);// 需要实现这个函数
     return stmt;
 }
 
@@ -680,7 +688,7 @@ static ast_for_iterator_stmt_t *ast_for_iterator_copy(ast_for_iterator_stmt_t *t
     stmt->iterate = *ast_expr_copy(&temp->iterate);
     stmt->first = *ast_var_decl_copy(&temp->first);
     stmt->second = temp->second ? ast_var_decl_copy(temp->second) : NULL;
-    stmt->body = ast_body_copy(temp->body); // 需要实现这个函数
+    stmt->body = ast_body_copy(temp->body);// 需要实现这个函数
     return stmt;
 }
 
@@ -689,7 +697,7 @@ static ast_for_tradition_stmt_t *ast_tradition_copy(ast_for_tradition_stmt_t *te
     stmt->init = ast_stmt_copy(temp->init);
     stmt->cond = *ast_expr_copy(&temp->cond);
     stmt->update = ast_stmt_copy(temp->update);
-    stmt->body = ast_body_copy(temp->body); // 需要实现这个函数
+    stmt->body = ast_body_copy(temp->body);// 需要实现这个函数
     return stmt;
 }
 
@@ -845,9 +853,7 @@ ast_fndef_t *ast_fndef_copy(ast_fndef_t *temp) {
     fndef->rel_path = temp->rel_path;
     fndef->column = temp->column;
     fndef->line = temp->line;
-    if (temp->body) {
-        fndef->body = ast_body_copy(temp->body);
-    }
+
     fndef->is_generics = false;
     fndef->global_parent = NULL;
 
@@ -859,6 +865,10 @@ ast_fndef_t *ast_fndef_copy(ast_fndef_t *temp) {
     } else {
         ast_copy_global = fndef;
         fndef->local_children = slice_new();
+    }
+
+    if (temp->body) {
+        fndef->body = ast_body_copy(temp->body);
     }
 
     return fndef;

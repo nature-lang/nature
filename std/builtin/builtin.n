@@ -1,12 +1,12 @@
-// type ptr<t> = *t
+// type fn_t = anyptr
 
-// type uint_ptr = uint
+// type all_t = anyptr
 
-// type any = ...|...
+// type integer_t = int
 
-// type all_t = void_ptr // any_t 用于类型约束，c_ptr -> uint 是最终的编译类型
+// type floater_t = float
 
-// type fn_t = void_ptr // 同上
+type nullable<T> = T?
 
 #linkid print
 fn print(...[any] args)

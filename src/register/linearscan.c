@@ -3,12 +3,12 @@
 #include "interval.h"
 #include "src/debug/debug.h"
 
+
 /**
  * 处理 env closure
  * @param c
  */
 static void linear_posthandle(closure_t *c) {
-
 }
 
 /**
@@ -86,11 +86,11 @@ void reg_alloc(closure_t *c) {
 
     interval_build(c);
 
-    debug_closure_interval(c);
+    debug_closure_interval(c, "interval_build");
 
     allocate_walk(c);
 
-    debug_closure_interval(c);
+    debug_closure_interval(c, "allocate_walk");
 
     resolve_data_flow(c);
 

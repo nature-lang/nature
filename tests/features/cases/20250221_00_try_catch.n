@@ -1,13 +1,13 @@
 fn throw1():void! {
-    throw 'err in throw1'
+    throw errorf('err in throw1')
 }
 
 fn throw2():void! {
-    throw 'err in throw2'
+    throw errorf('err in throw2')
 }
 
 fn throw3():void! {
-    throw 'err in throw2'
+    throw errorf('err in throw2')
 }
 
 fn main():void! {
@@ -16,12 +16,12 @@ fn main():void! {
         try {
             throw1()
         } catch e {
-            println('nested catch err:', e.msg)
+            println('nested catch err:', e.msg())
 
             throw2()
         }
     } catch e {
-        println('catch err', e.msg)
+        println('catch err', e.msg())
         throw3()
     }
 }

@@ -30,7 +30,7 @@ fn itos_with<T>(T i, string fill, u8 width):string {
         i = -i // 转换为正数
     }
 
-    var result = [] as [u8]
+    var result = vec_new<u8>(0, 0)
 
     if i == 0 {
         if width == 0 {
@@ -87,6 +87,10 @@ fn itos_with<T>(T i, string fill, u8 width):string {
 }
 
 fn ftos<T>(T f):string {
+    return ftos_with(f, '0', 0 as u8, 6 as u8)
+}
+
+fn ftos_with<T>(T f, string fill, u8 width, u8 precision):string {
     var is_neg = false
     if f < 0 {
         is_neg = true
@@ -98,16 +102,14 @@ fn ftos<T>(T f):string {
     var int_str = itos(int_part)  // 将整数部分转换为字符串
 
     // 取小数部分
-    var frac_part =  f - int_part as T
-
+    var frac_part = f - int_part as T
     var frac_str = ''
 
-    if frac_part > 0 {
+    if frac_part > 0 && precision > 0 {
         frac_str = '.'
-        var precision = 6  // 设置小数部分的精度
-
+        
         // 将 frac_part 转换成整数(precision 位数)
-        for int i = 0; i < precision; i+=1 {
+        for int i = 0; i < precision as int; i+=1 {
             var digit = (frac_part * 10) as int
             frac_str += itos(digit)
 
@@ -115,9 +117,53 @@ fn ftos<T>(T f):string {
         }
     }
 
+    var s = ''
     if is_neg {
-        return '-' + int_str + frac_str
+        s = '-' + int_str + frac_str
+    } else {
+        s = int_str + frac_str
     }
     
-    return int_str + frac_str
+    if s.len() >= width as int {
+        return s
+    }
+    
+    var padding = width as int - s.len()
+    var result = vec_new<u8>(0, 0)
+    
+    // 处理负数情况
+    if is_neg {
+        if fill == ' ' {
+            // 对于空格填充的负数，先添加符号再填充
+            result.push(ascii('-'))
+            s = s.slice(1, s.len())  // 移除负号
+            
+            // 添加填充字符
+            for int i = 0; i < padding; i += 1 {
+                result.push(ascii(fill))
+            }
+        } else {
+            // 对于0填充的负数，先添加符号，再填充0
+            result.push(ascii('-'))
+            s = s.slice(1, s.len())  // 移除负号
+            
+            // 添加填充字符
+            for int i = 0; i < padding; i += 1 {
+                result.push(ascii(fill))
+            }
+        }
+    } else {
+        // 对于正数，先填充再添加数字
+        // 添加填充字符
+        for int i = 0; i < padding; i += 1 {
+            result.push(ascii(fill))
+        }
+    }
+    
+    // 添加数字字符串
+    for c in s {
+        result.push(c)
+    }
+    
+    return result as string
 }

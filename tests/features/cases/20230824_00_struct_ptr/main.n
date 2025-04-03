@@ -1,10 +1,10 @@
 import 'mod.n' as *
 
 fn main() {
-    var p = person_t {
+    var p = person_t{
         name = 'hualaka',
         from = 'china',
-        gender = 1
+        gender = 1,
     }
 
     println(p.gender, p.from, p.get_name())
@@ -21,12 +21,12 @@ fn main() {
     println(p2.get_name(), p2.from, p2.gender, p2.age)
 
     // --- &person_t test
-    raw_ptr<person_t> p3 = &p
+    rawptr<person_t> p3 = &p
     p3.age = 24
     println(p3.name, p3.from, p3.gender, p3.age, p.age)
 
     // --- ptr param
-    var test_param = fn(raw_ptr<person_t> p3, person_t p) {
+    var test_param = fn(rawptr<person_t> p3, person_t p) {
         println('in test fn, p.name is', p.name)
         println('in test fn, p3.name is', p3.name)
     }
@@ -34,7 +34,7 @@ fn main() {
     test_param(p3, p)
 
     // --- refer rewrite
-    var test_refer = fn(raw_ptr<person_t> p3, person_t p) {
+    var test_refer = fn(rawptr<person_t> p3, person_t p) {
         p3.name = 'rewrite by p3'
         p.name = 'rewrite by p' // nop
     }

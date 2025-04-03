@@ -1,8 +1,8 @@
 #ifndef NATURE_LINKCO_H
 #define NATURE_LINKCO_H
 
-#include "runtime.h"
 #include "nutils/nutils.h"
+#include "runtime.h"
 
 extern linkco_t *global_linkco_cache;
 extern mutex_t global_linkco_locker;
@@ -13,9 +13,9 @@ linkco_t *rti_acquire_linkco();
 void rti_release_linkco(linkco_t *linkco);
 
 typedef struct {
-    linkco_t *head;// default null
-    linkco_t *rear;// default null
-    int64_t count; // default 0
+    linkco_t *head;        // default null
+    linkco_t *rear;        // default null
+    int64_t count;         // default 0
     pthread_mutex_t locker;// default 0
 } rt_linkco_list_t;
 
@@ -31,21 +31,21 @@ static inline void linkco_list_push(rt_linkco_list_t *list, void *value) {
     if (list->head == NULL) {
         assert(list->rear == NULL);
 
-//        list->head = new_linkco;
-//        list->rear = new_linkco;
-        rt_write_barrier(&list->head, &new_linkco);
-        rt_write_barrier(&list->rear, &new_linkco);
+        //        list->head = new_linkco;
+        //        list->rear = new_linkco;
+        rti_write_barrier_ptr(&list->head, new_linkco, false);
+        rti_write_barrier_ptr(&list->rear, new_linkco, false);
     } else {
         assert(list->rear);
 
-//        list->rear->next = new_linkco;
-        rt_write_barrier(&list->rear->next, &new_linkco);
+        //        list->rear->next = new_linkco;
+        rti_write_barrier_ptr(&list->rear->next, new_linkco, false);
 
-//        new_linkco->prev = list->rear;
-        rt_write_barrier(&new_linkco->prev, &list->rear);
+        //        new_linkco->prev = list->rear;
+        rti_write_barrier_ptr(&new_linkco->prev, list->rear, false);
 
-//        list->rear = new_linkco;
-        rt_write_barrier(&list->rear, &new_linkco);
+        //        list->rear = new_linkco;
+        rti_write_barrier_ptr(&list->rear, new_linkco, false);
     }
 
     list->count++;
@@ -63,19 +63,17 @@ static inline void *linkco_list_pop(rt_linkco_list_t *list) {
 
     linkco_t *pop_linkco = list->head;
 
-    linkco_t *null_co = NULL;
-
-//    list->head = list->head->next;
-    rt_write_barrier(&list->head, &list->head->next);
+    //    list->head = list->head->next;
+    rti_write_barrier_ptr(&list->head, list->head->next, false);
 
 
     if (list->head == NULL) {
         assertf(list->count == 1, "list head is null, but list count = %d", list->count);
-//        list->rear = NULL;
-        rt_write_barrier(&list->rear, &null_co);
+        //        list->rear = NULL;
+        rti_write_barrier_ptr(&list->rear, NULL, false);
     } else {
-//        list->head->prev = NULL;
-        rt_write_barrier(&list->head->prev, &null_co);
+        //        list->head->prev = NULL;
+        rti_write_barrier_ptr(&list->head->prev, NULL, false);
     }
 
     list->count--;

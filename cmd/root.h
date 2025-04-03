@@ -25,6 +25,7 @@ void cmd_entry(int argc, char **argv) {
     struct option long_options[] = {
             {"archive", no_argument,       NULL, 0},
             {"output",  required_argument, NULL, 'o'},
+            {"target",  required_argument, NULL, 1},
             {NULL, 0,                      NULL, 0}};
 
     int option_index = 0;
@@ -37,26 +38,57 @@ void cmd_entry(int argc, char **argv) {
     while ((c = getopt_long(argc, argv, "o:", long_options, &option_index)) != -1) {
         switch (c) {
             case 'o': {
-                char *o_arg = optarg;// o_arg 指向字符串 "./haha/test"
-
-                // 解析出一个相对路径
-                char *output_dir = path_dir(o_arg);
-                if (strlen(output_dir) > 0) {
-                    char temp_path[PATH_MAX] = "";
-                    if (realpath(output_dir, temp_path) == NULL) {
-                        assertf(false, "output dir='%s' not created", output_dir);
+                char *o_arg = optarg;
+                
+                // 如果包含路径分隔符，则解析目录和文件名
+                if (strchr(o_arg, '/') != NULL) {
+                    // 解析出目录路径
+                    char *output_dir = path_dir(o_arg);
+                    if (strlen(output_dir) > 0) {
+                        char temp_path[PATH_MAX] = "";
+                        if (realpath(output_dir, temp_path) == NULL) {
+                            // assertf(false, "output dir='%s' not exists", output_dir);
+                            printf("output dir '%s' not exists\n", output_dir);
+                            exit(EXIT_FAILURE);
+                        }
+                        strcpy(BUILD_OUTPUT_DIR, temp_path);
+                        if (!dir_exists(BUILD_OUTPUT_DIR)) {
+                            printf("build output dir '%s' not exists\n", BUILD_OUTPUT_DIR);
+                            exit(EXIT_FAILURE);
+                        }
+                        // assertf(dir_exists(BUILD_OUTPUT_DIR), "build output dir='%s' not exists", BUILD_OUTPUT_DIR);
                     }
-
-                    strcpy(BUILD_OUTPUT_DIR, temp_path);
-                    assertf(dir_exists(BUILD_OUTPUT_DIR), "build output dir='%s' cannot be a file", BUILD_OUTPUT_DIR);
+                    
+                    // 解析出文件名称
+                    char *output_name = file_name(o_arg);
+                    if (strlen(output_name) > 0) {
+                        strcpy(BUILD_OUTPUT_NAME, output_name);
+                    }
+                } else {
+                    // 如果没有路径分隔符，直接作为输出文件名
+                    strcpy(BUILD_OUTPUT_NAME, o_arg);
                 }
-
-                // 解析出文件名称
-                char *output_name = file_name(o_arg);
-                if (strlen(output_name) > 0) {
-                    strcpy(BUILD_OUTPUT_NAME, output_name);
+                break;
+            }
+            case 1: {
+                char *target = optarg;
+                if (strcmp(target, "linux_amd64") == 0) {
+                    BUILD_OS = OS_LINUX;
+                    BUILD_ARCH = ARCH_AMD64;
+                } else if (strcmp(target, "linux_arm64") == 0) {
+                    BUILD_OS = OS_LINUX;
+                    BUILD_ARCH = ARCH_ARM64;
+                } else if (strcmp(target, "darwin_amd64") == 0) {
+                    BUILD_OS = OS_DARWIN;
+                    BUILD_ARCH = ARCH_AMD64;
+                } else if (strcmp(target, "darwin_arm64") == 0) {
+                    BUILD_OS = OS_DARWIN;
+                    BUILD_ARCH = ARCH_ARM64;
+                } else {
+                    printf("Invalid target: %s\n", target);
+                    printf("Available targets: linux_amd64, linux_arm64, darwin_amd64, darwin_arm64\n");
+                    exit(EXIT_FAILURE);
                 }
-
                 break;
             }
             case 0: {

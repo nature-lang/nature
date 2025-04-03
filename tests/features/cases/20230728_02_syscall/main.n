@@ -5,7 +5,7 @@ fn main():void! {
     string path2 = './asserts/test_rename'
 
     syscall.mkdir(path, 0755) catch err {
-        print('mkdir err: ', err.msg, '\n')
+        print('mkdir err: ', err.msg(), '\n')
     }
 
     // 读取目录进行检查
@@ -29,7 +29,7 @@ fn main():void! {
     syscall.rmdir(path2)
     println('rmdir success')
     var _ = syscall.stat(path2) catch err {
-        print('stat err: ', err.msg, '\n')
+        print('stat err: ', err.msg(), '\n')
     }
 
     var pid = syscall.getpid()

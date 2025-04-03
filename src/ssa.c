@@ -7,6 +7,17 @@
 
 #include "src/debug/debug.h"
 
+static inline lir_var_t *live_var_copy(lir_var_t *var) {
+    lir_var_t *new_var = NEW(lir_var_t);
+    new_var->ident = strdup(var->ident);
+    new_var->old = strdup(var->old);
+
+    new_var->flag = var->flag;
+    new_var->flag = var->flag;
+
+    return new_var;
+}
+
 /**
  *  如果 self 被除了 await 和 self 外的其他所有 block 支配，那这个节点就是 await 的最近支配者
  * @param be_doms
@@ -98,7 +109,7 @@ void ssa_domers(closure_t *c) {
 
     // 初始化其他 domers 为所有节点的集合 {B0,B1,B2,B3..}
     for (int i = 1; i < c->blocks->count; ++i) {
-        slice_t *other = slice_new(); // basic_block_t
+        slice_t *other = slice_new();// basic_block_t
 
         // Dom[i] = N
         for (int k = 0; k < c->blocks->count; ++k) {
@@ -235,7 +246,7 @@ void ssa_add_phi(closure_t *c) {
 
     for (int i = 0; i < c->ssa_globals->count; ++i) {
         lir_var_t *var = c->ssa_globals->take[i];
-        table_t *inserted = table_new(); // key is block name
+        table_t *inserted = table_new();// key is block name
 
         linked_t *work_list = table_get(c->ssa_var_blocks, var->ident);
         assertf(work_list, "var '%s' has use, but lack def", var->ident);
@@ -281,7 +292,7 @@ void ssa_add_phi(closure_t *c) {
  */
 slice_t *ssa_calc_live_out(closure_t *c, basic_block_t *block) {
     slice_t *live_out = slice_new();
-    table_t *exist_var = table_new(); // basic var ident
+    table_t *exist_var = table_new();// basic var ident
 
     for (int i = 0; i < block->succs->count; ++i) {
         basic_block_t *succ = block->succs->take[i];
@@ -292,7 +303,7 @@ slice_t *ssa_calc_live_out(closure_t *c, basic_block_t *block) {
             if (table_exist(exist_var, var->ident)) {
                 continue;
             }
-            slice_push(live_out, var);
+            slice_push(live_out, live_var_copy(var));
             table_set(exist_var, var->ident, var);
         }
     }
@@ -305,7 +316,7 @@ slice_t *ssa_calc_live_out(closure_t *c, basic_block_t *block) {
  */
 slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block) {
     slice_t *live_in = slice_new();
-    table_t *exist_var = table_new(); // basic var ident
+    table_t *exist_var = table_new();// basic var ident
 
     SLICE_FOR(block->use) {
         lir_var_t *var = SLICE_VALUE(block->use);
@@ -313,7 +324,7 @@ slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        slice_push(live_in, var);
+        slice_push(live_in, live_var_copy(var));
         table_set(exist_var, var->ident, var);
     }
 
@@ -328,7 +339,7 @@ slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        slice_push(live_in, var);
+        slice_push(live_in, live_var_copy(var));
         table_set(exist_var, var->ident, var);
     }
 
@@ -505,27 +516,38 @@ slice_t *ssa_calc_dom_blocks(closure_t *c, basic_block_t *block) {
 
 // 前序遍历各个基本块
 void ssa_rename(closure_t *c) {
-    table_t *var_number_table = table_new(); // def 使用，用于记录当前应该命名为多少
-    table_t *stack_table = table_new();      // use 使用，判断使用的变量的名称
+    struct sc_map_s64 var_number_table;// def 使用，用于记录当前应该命名为多少
+    struct sc_map_sv stack_table;      // use 使用，判断使用的变量的名称
+    sc_map_init_s64(&var_number_table, 0, 0);
+    sc_map_init_sv(&stack_table, 0, 0);
 
     // 遍历所有变量,进行初始化
     SLICE_FOR(c->var_defs) {
         lir_var_t *var = SLICE_VALUE(c->var_defs);
-        uint8_t *number = NEW(uint8_t);
-        *number = 0;
-
         var_number_stack *stack = NEW(var_number_stack);
         stack->count = 0;
 
-        table_set(var_number_table, var->old, number);
-        table_set(stack_table, var->old, stack);
+        sc_map_put_s64(&var_number_table, var->old, 0);
+        sc_map_put_sv(&stack_table, var->old, stack);
     }
 
     // 从根开始更名(rename 就相当于创建了一个新的变量)
-    ssa_rename_block(c, c->entry, var_number_table, stack_table);
+    ssa_rename_block(c, c->entry, &var_number_table, &stack_table);
 }
 
-void ssa_rename_block(closure_t *c, basic_block_t *block, table_t *var_number_table, table_t *stack_table) {
+void ssa_rename_block(closure_t *c, basic_block_t *block, struct sc_map_s64 *var_number_table, struct sc_map_sv *stack_table) {
+    // rename live in(use)
+    for (int i = 0; i < block->live_in->count; ++i) {
+        lir_var_t *var = block->live_in->take[i];
+        var_number_stack *stack = sc_map_get_sv(stack_table, var->old);
+        assert(stack);
+        if (stack->count > 0) {
+            uint8_t number = stack->numbers[stack->count - 1];
+            ssa_rename_var(var, number);
+        }
+    }
+
+
     // skip label code
     linked_node *current = block->operations->front->succ;
 
@@ -534,7 +556,7 @@ void ssa_rename_block(closure_t *c, basic_block_t *block, table_t *var_number_ta
         lir_op_t *op = current->value;
         // phi body 由当前块的前驱进行编号
         if (op->code == LIR_OPCODE_PHI) {
-            uint8_t number = ssa_new_var_number((lir_var_t *) op->output->value, var_number_table, stack_table);
+            uint64_t number = ssa_new_var_number((lir_var_t *) op->output->value, var_number_table, stack_table);
             ssa_rename_var((lir_var_t *) op->output->value, number);
 
             current = current->succ;
@@ -546,7 +568,7 @@ void ssa_rename_block(closure_t *c, basic_block_t *block, table_t *var_number_ta
         for (int i = 0; i < vars->count; ++i) {
             lir_var_t *var = vars->take[i];
 
-            var_number_stack *stack = table_get(stack_table, var->old);
+            var_number_stack *stack = sc_map_get_sv(stack_table, var->old);
             assert(stack);
             uint8_t number = stack->numbers[stack->count - 1];
             ssa_rename_var(var, number);
@@ -556,7 +578,7 @@ void ssa_rename_block(closure_t *c, basic_block_t *block, table_t *var_number_ta
         for (int i = 0; i < vars->count; ++i) {
             lir_var_t *var = vars->take[i];
 
-            uint8_t number = ssa_new_var_number(var, var_number_table, stack_table); // 新增定义
+            uint8_t number = ssa_new_var_number(var, var_number_table, stack_table);// 新增定义
             ssa_rename_var(var, number);
         }
 
@@ -576,13 +598,13 @@ void ssa_rename_block(closure_t *c, basic_block_t *block, table_t *var_number_ta
         basic_block_t *succ_block = block->succs->take[i];
         // 为 每个 phi 函数的 phi param 命名
         // lir_op_t *succ_op = succ_block->asm_operations->front->succ;
-        linked_node *op_node = linked_first(succ_block->operations)->succ; // front is label
+        linked_node *op_node = linked_first(succ_block->operations)->succ;// front is label
         while (op_node->value != NULL && OP(op_node)->code == LIR_OPCODE_PHI) {
             lir_op_t *op = OP(op_node);
             slice_t *phi_body = op->first->value;
             // block 位于 succ 的 phi_body 的具体位置
             lir_var_t *var = ssa_phi_body_of(phi_body, succ_block->preds, block);
-            var_number_stack *stack = table_get(stack_table, var->ident);
+            var_number_stack *stack = sc_map_get_sv(stack_table, var->ident);
             assert(stack);
             assert(stack->count > 0);
 
@@ -614,7 +636,7 @@ void ssa_rename_block(closure_t *c, basic_block_t *block, table_t *var_number_ta
             }
 
             // pop stack
-            var_number_stack *stack = table_get(stack_table, var->old);
+            var_number_stack *stack = sc_map_get_sv(stack_table, var->old);
             assertf(stack, "var %s not found in stack table", var->old);
             stack->count--;
         }
@@ -630,26 +652,29 @@ void ssa_rename_block(closure_t *c, basic_block_t *block, table_t *var_number_ta
  * @param stack_table
  * @return
  */
-uint8_t ssa_new_var_number(lir_var_t *var, table_t *var_number_table, table_t *stack_table) {
-    uint8_t *value = table_get(var_number_table, var->old);
-    var_number_stack *stack = table_get(stack_table, var->old);
+uint64_t ssa_new_var_number(lir_var_t *var, struct sc_map_s64 *var_number_table, struct sc_map_sv *stack_table) {
+    uint64_t value = sc_map_get_s64(var_number_table, var->old);
+    assert(sc_map_found(var_number_table));
+    var_number_stack *stack = sc_map_get_sv(stack_table, var->old);
     assert(stack);
 
-    uint8_t result = *value;
-    *value += 1;
+    uint64_t result = value;
+    value += 1;
 
-    table_set(var_number_table, var->old, value);
+    sc_map_put_s64(var_number_table, var->old, value + 1);
     stack->numbers[stack->count++] = result;
 
     return result;
 }
 
-void ssa_rename_var(lir_var_t *var, uint8_t number) {
+void ssa_rename_var(lir_var_t *var, uint64_t number) {
+    assert(number < UINT8_MAX);
     // 1: '\0'
     // 2: '_12'
-    char *buf = (char *) malloc(strlen(var->ident) + sizeof(uint8_t) + 3);
-    sprintf(buf, "%s.s%d", var->ident, number);
-    var->ident = buf; // 已经分配在了堆中，需要手动释放了
+    int64_t size = strlen(var->ident) + 10 + 3;
+    char *buf = mallocz(size);
+    snprintf(buf, size, "%s.s%ld", var->ident, number);
+    var->ident = buf;// 已经分配在了堆中，需要手动释放了
 }
 
 /**

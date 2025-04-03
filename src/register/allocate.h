@@ -41,6 +41,4 @@ bool allocate_block_reg(closure_t *c, allocate_t *a);
  */
 void sort_to_unhandled(linked_t *unhandled, interval_t *to);
 
-void replace_virtual_register(closure_t *c);
-
 #endif //NATURE_SRC_REGISTER_ALLOCATE_H_

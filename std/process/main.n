@@ -1,0 +1,104 @@
+import io
+import coroutine as co
+
+type state_t = struct{
+    string stdout
+    string stderr
+    i32 exit_code
+    i32 term_sig
+}
+
+type process_t = struct{
+    int pid
+    anyptr args
+    anyptr envs
+    anyptr p
+    anyptr co
+    bool exited
+    i32 exit_code
+    i32 term_sig
+    command_t cmd
+    // stdout_pipe
+    // stderr_pipe
+    // req
+}
+
+type command_t = struct{
+    string name
+    [string] args
+
+    string cwd
+    [string] env
+
+    io.reader stdin
+    io.writer stdout
+    io.writer stderr
+}
+
+
+fn run(string name, [string] args):ptr<state_t>! {
+    var stdout_buffer = new io.buffer()
+    var stderr_buffer = new io.buffer()
+
+    var cmd = new command_t(name, args, stdin=io.discard(), stdout=stdout_buffer, stderr=stderr_buffer)
+    var p = cmd.spawn()
+    p.wait()
+
+    var stdout = stdout_buffer.read_all() as string
+    var stderr = stderr_buffer.read_all() as string
+
+    return new state_t(stdout, stderr, exit_code = p.exit_code, term_sig = p.term_sig)
+}
+
+fn command(string name, [string] args):ptr<command_t>! {
+    var cmd = new command_t(name, args, stdin=io.discard(), stdout=io.stdout(), stderr=io.stderr())
+
+    return cmd
+}
+
+#local
+fn command_t.spawn():ptr<process_t>! {
+    var p = self.uv_spawn(self)
+
+    // Scheduling in the current thread will not cause competition
+    @async(p.handle_stdout(), co.SAME)
+    @async(p.handle_stderr(), co.SAME)
+
+    return p
+}
+
+
+#linkid rt_uv_process_spawn
+fn command_t.uv_spawn(ptr<command_t> cmd):ptr<process_t>!
+
+#local
+fn process_t.handle_stdout():void! {
+    for true {
+        string buf = self.read_stdout() catch e {
+            return
+        }
+
+        self.cmd.stdout.write(buf as [u8])
+    }
+}
+
+#local
+fn process_t.handle_stderr():void! {
+    for true {
+        string buf = self.read_stderr() catch e {
+            return
+        }
+
+        self.cmd.stderr.write(buf as [u8])
+    }
+}
+
+#linkid rt_uv_process_wait
+fn process_t.wait():void!
+
+#linkid rt_uv_process_read_stdout
+fn process_t.read_stdout():string!
+
+#linkid rt_uv_process_read_stderr
+fn process_t.read_stderr():string!
+

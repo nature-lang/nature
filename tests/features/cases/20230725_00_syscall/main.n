@@ -2,7 +2,7 @@ import syscall
 
 fn main():void! {
     var fd = syscall.open('asserts/notfound.txt', syscall.O_RDONLY, 0666) catch err {
-        print('open asserts/notfound.txt failed: ', err.msg, '\n')
+        print('open asserts/notfound.txt failed: ', err.msg(), '\n')
         break -1
     }
 
@@ -11,7 +11,7 @@ fn main():void! {
     }
 
     fd = syscall.open('asserts/open.txt', syscall.O_RDONLY | syscall.O_CREAT, 0666) catch err {
-        return print('open asserts/open.txt failed: ', err.msg, '\n')
+        return print('open asserts/open.txt failed: ', err.msg(), '\n')
         // fd default is zero
     }
 
@@ -20,9 +20,9 @@ fn main():void! {
     }
 
     // read buf is [u8]
-    var buf = vec_new<u8>(20, 0)
+    var buf = vec_new<u8>(0, 20)
     var len = syscall.read(fd, buf.ref(), buf.len()) catch err {
-        return print(err.msg)
+        return print(err.msg())
     }
 
     print('actual read len: ', len, '\n')

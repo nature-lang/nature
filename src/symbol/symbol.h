@@ -33,10 +33,6 @@
 #define MACRO_ULA "unsafe_load"
 #define MACRO_DEFAULT "default"
 
-
-// 临时表，用来临时记录, key = ident, value is any
-extern table_t *can_import_symbol_table;
-
 /**
  * 编译时产生的所有符号都进行唯一处理后写入到该 table 中
  * 1. 模块名 + fn名称
@@ -59,7 +55,7 @@ extern slice_t *symbol_typedef_list;
 
 typedef enum {
     SYMBOL_VAR = 1,
-    SYMBOL_TYPE_ALIAS,
+    SYMBOL_TYPE,
     SYMBOL_FN,
 } symbol_type_t;
 
@@ -82,6 +78,8 @@ static inline bool is_builtin_call(char *ident) {
 }
 
 symbol_t *symbol_table_set(char *ident, symbol_type_t type, void *ast_value, bool is_local);
+
+symbol_t *symbol_typedef_add_method(char *typedef_ident, char *method_ident, ast_fndef_t *fndef);
 
 symbol_t *symbol_table_get(char *ident);
 

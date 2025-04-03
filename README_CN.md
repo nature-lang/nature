@@ -19,7 +19,7 @@ nature 编程语言
 待实现的特性
 
 - 渐进式 GC，能够进行手动内存管理
-- 测试模块以及专用测试 DSL 语言，目标是可以高效稳定的利用 AI 编码
+- 测试模块以及专用测试 DSL，高效稳定利用 AI 编码
 - GC 与协程非抢占式调度系统完善
 - 跨平台编译支持 wasm、risc64 平台
 - 编译为可读的 golang 编程语言
@@ -36,6 +36,10 @@ nature 编程语言
 - 标准库完善
 - 项目验证及 bug 修复
 - 上述待实现特性
+
+nature 是兴趣使然而开发的项目，golang 是我在日常工作中使用的编程语言，所以 nature 在设计理念上是对 golang 编程语言的延续与优化，就如特性一栏所述一般。
+
+golang 拥有非常优秀且高性能的跨平台编译器和 runtime 实现，在后续的版本中 nature 将支持编译为可读的 golang 语言，从而进一步增加 nature 编程语言的可用性。
 
 官网 [https://nature-lang.org](https://nature-lang.org/)
 
@@ -55,20 +59,20 @@ fn main() {
 
 编译并执行
 
-```
+```sh
 > nature build main.n && ./main
 hello nature
 ```
 
 ---
 
-编辑器支持 https://github.com/nature-lang/nls
+编辑器 lsp 安装 https://github.com/nature-lang/nls
 
 编码示例 https://github.com/nature-lang/nature/tree/master/tests/features/cases
 
 ## 文档
 
-[https://nature-lang.org/docs/getting-started/hello-world](https://nature-lang.org/docs/getting-started/hello-world)
+ [https://nature-lang.org/docs/getting-started/hello-world](https://nature-lang.org/docs/getting-started/hello-world)
 
 ## 贡献指南
 

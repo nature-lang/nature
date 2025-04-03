@@ -3,7 +3,7 @@ import coroutine as co
 fn div(i32 dividend, i32 divisor):i32! {
     co.sleep(500)
     if (divisor == 0) {
-        throw 'divisor cannot be 0'
+        throw errorf('divisor cannot be 0')
     }
 
     return dividend / divisor
@@ -14,17 +14,17 @@ fn main() {
     var fut = @async(fn():void! {
         println('in closure fn')
         co.sleep(1000)
-        throw 'in closure err'
+        throw errorf('in closure err')
     }(), co.SOLO)
 
     fut.await() catch err {
-        println('fut.await catch err: ' + err.msg)
+        println('fut.await catch err: ' + err.msg())
     }
 
     // 2.
     var fut2 = go div(10, 0)
     var result = fut2.await() catch err {
-        println('dive catch err: ' + err.msg)
+        println('dive catch err: ' + err.msg())
         break 10
     }
     println('div result', result)

@@ -147,7 +147,7 @@ static void break_check(closure_t *c, table_t *handled, basic_block_t *b, char *
         }
     }
 
-    // 从当前 block 开去吃判断是否存在 break or return
+    // 从当前 block 判断是否存在 break or return
     // 当前 block match_end 存在表示开启了 break check 模式。
     if (match_end_ident) {
         LINKED_FOR(b->operations) {

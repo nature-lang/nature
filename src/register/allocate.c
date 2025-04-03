@@ -97,7 +97,7 @@ static uint8_t find_free_reg(interval_t *current, int *free_pos) {
     }
 
     for (int i = 1; i < alloc_reg_count(); ++i) {
-        if (free_pos[i] > current->last_range->to) {
+        if (free_pos[i] >= current->last_range->to) { // TODO 测试
             // 如果有多个寄存器比较空闲，则优先考虑 hint
             // ~~否则优先考虑 free 时间最小的寄存器,从而可以充分利用寄存器的时间~~
             // 由于 nature 中 rt_call 较多，临时变量较多，所以寄存器利用率不高(根本用不完)
@@ -396,6 +396,7 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
         }
 
         int pos = interval_next_intersect(c, a->current, select);
+//        int old_pos = old_interval_next_intersect(c, a->current, select);
         assert(pos);
         // potions 表示两个 interval 重合，重合点之前都是可以自由分配的区域
         set_pos(free_pos, select->assigned, pos);
@@ -491,6 +492,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         assert(a->current->index != select->index);
 
         pos = interval_next_intersect(c, a->current, select);
+//        int old_pos = old_interval_next_intersect(c, a->current, select);
         assert(pos);
 
         if (select->fixed) {
@@ -524,7 +526,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         //  active/inactive interval 的下一个 pos 都早于 current first use pos, 所以最好直接 spill 整个 current
         // assign spill slot to current
         spill_interval(c, a, a->current, 0);
-    } else if (block_pos[reg_id] > a->current->last_range->to) {
+    } else if (block_pos[reg_id] >= a->current->last_range->to) { // TODO 测试
         // block_pos 是由于 fixed 强制使用而产生的 pos, 此时寄存器必须要溢出
         // 一般都会进入到这一条件中
         // reg_id 对应的寄存器的空闲时间 大于 current.first_use 但是小于 current->last_range->to
@@ -594,51 +596,4 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     }
 
     return false;
-}
-
-/**
- * 虚拟寄存器替换成 stack slot 和 physical register
- * @param c
- */
-void replace_virtual_register(closure_t *c) {
-    for (int i = 0; i < c->blocks->count; ++i) {
-        basic_block_t *block = c->blocks->take[i];
-        linked_node *current = block->first_op;
-        while (current->value != NULL) {
-            lir_op_t *op = current->value;
-            slice_t *var_operands = extract_op_operands(op, FLAG(LIR_OPERAND_VAR),
-                                                        FLAG(LIR_FLAG_DEF) | FLAG(LIR_FLAG_USE),
-                                                        false);
-
-            for (int j = 0; j < var_operands->count; ++j) {
-                lir_operand_t *operand = var_operands->take[j];
-                lir_var_t *var = operand->value;
-                interval_t *parent = table_get(c->interval_table, var->ident);
-                if (parent->parent) {
-                    parent = parent->parent;
-                }
-                assert(parent);
-
-                interval_t *interval = interval_child_at(parent, op->id, var->flag & FLAG(LIR_FLAG_USE));
-
-                var_replace(operand, interval);
-            }
-
-            if (op->code == LIR_OPCODE_MOVE) {
-                if (lir_operand_equal(op->first, op->output)) {
-                    linked_remove(block->operations, current);
-                }
-            }
-
-            current = current->succ;
-        }
-
-        // remove phi op
-        current = linked_first(block->operations)->succ;
-        while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
-            linked_remove(block->operations, current);
-
-            current = current->succ;
-        }
-    }
 }

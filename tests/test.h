@@ -2,7 +2,6 @@
 #define NATURE_TESTS_H
 
 #include <assert.h>
-#include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -10,14 +9,15 @@
 #include <string.h>
 
 #include "src/build/build.h"
+#include "src/error.h"
 #include "utils/exec.h"
-
 
 #ifdef __LINUX
 #define ATOMIC
 #else
 #define ATOMIC _Atomic
 #endif
+
 
 #define assert_string_equal(_actual, _expect) (assertf(str_equal(_actual, _expect), "%s", _actual))
 #define assert_int_equal(_actual, _expect) (assertf((_actual) == (_expect), "%d", _actual))
@@ -33,16 +33,21 @@ static inline int exec_imm_param() {
     return exec_imm(WORKDIR, BUILD_OUTPUT, slice_new());
 }
 
+static inline char *exec_output_status(int *status) {
+    assert(status);
+    return exec(WORKDIR, BUILD_OUTPUT, slice_new(), NULL, status);
+}
+
 static inline char *exec_output() {
-    return exec(WORKDIR, BUILD_OUTPUT, slice_new(), NULL);
+    return exec(WORKDIR, BUILD_OUTPUT, slice_new(), NULL, NULL);
 }
 
 static inline char *exec_output_with_pid(int32_t *pid) {
-    return exec(WORKDIR, BUILD_OUTPUT, slice_new(), pid);
+    return exec(WORKDIR, BUILD_OUTPUT, slice_new(), pid, NULL);
 }
 
 static inline char *exec_with_args(slice_t *args) {
-    return exec(WORKDIR, BUILD_OUTPUT, args, NULL);
+    return exec(WORKDIR, BUILD_OUTPUT, args, NULL, NULL);
 }
 
 static inline int feature_test_build() {
@@ -55,20 +60,26 @@ static inline int feature_test_build() {
 
     strcpy(BUILD_OUTPUT_DIR, getenv("BUILD_OUTPUT_DIR"));
 
-    build(entry, false);
+    COMPILER_TRY {
+        build(entry, false);
+    }
+    else {
+        assertf(false, "%s", (char *) test_error_msg);
+        exit(1);
+    }
 
     return 0;
 }
 
 typedef struct {
-    char *name; // 文件名称
-    uint8_t *content; // 文件内容
+    char *name;      // 文件名称
+    uint8_t *content;// 文件内容
     uint64_t length; // 文件长度
 } testar_case_file_t;
 
 typedef struct {
-    char *name; // 测试用例名称
-    slice_t *files; // testar_case_file_t
+    char *name;    // 测试用例名称
+    slice_t *files;// testar_case_file_t
 } testar_case_t;
 
 /**
@@ -89,7 +100,18 @@ static inline testar_case_file_t *parse_file(char *content, size_t *offset) {
         free(file);
         return NULL;
     }
-    start += 4; // 跳过 "--- "
+    start += 4;// 跳过 "--- "
+
+    // 检查是否是文件引用格式 "file: path/to/file"
+    bool is_file_ref = false;
+    if (strncmp(start, "file:", 5) == 0) {
+        is_file_ref = true;
+        start += 5;// 跳过 "file:"
+        // 跳过可能的空格
+        while (*start == ' ') {
+            start++;
+        }
+    }
 
     // 读取文件名
     char *name_end = strchr(start, '\n');
@@ -101,6 +123,41 @@ static inline testar_case_file_t *parse_file(char *content, size_t *offset) {
     file->name = malloc(name_len + 1);
     strncpy(file->name, start, name_len);
     file->name[name_len] = '\0';
+
+    // 如果是文件引用，则读取引用的文件内容
+    if (is_file_ref) {
+        char *file_path = file->name;
+        // 获取文件名（路径的最后一部分）
+        char *basename = strrchr(file_path, '/');
+        if (basename) {
+            basename++;// 跳过 '/'
+        } else {
+            basename = file_path;// 没有路径分隔符，整个就是文件名
+        }
+
+        // 更新文件名为基本名称
+        char *new_name = strdup(basename);
+        free(file->name);
+        file->name = new_name;
+
+        // 读取引用文件的内容
+        char *file_content = file_read(file_path);
+        if (!file_content) {
+            assertf(false, "Cannot read referenced file: %s", file_path);
+            free(file->name);
+            free(file);
+            return NULL;
+        }
+
+        size_t content_len = strlen(file_content);
+        file->content = (uint8_t *) file_content;
+        file->length = content_len;
+
+        // 更新偏移量到下一行
+        *offset += (name_end - (content + *offset)) + 1;
+
+        return file;
+    }
 
     // 移动到文件内容开始处
     start = name_end + 1;
@@ -157,7 +214,7 @@ static inline slice_t *testar_decompress(char *content) {
         test_case->files = slice_new();
 
         // 读取测试用例名称
-        char *name_start = content + offset + 4; // 跳过 "=== "
+        char *name_start = content + offset + 4;// 跳过 "=== "
         char *name_end = strchr(name_start, '\n');
         size_t name_len = name_end - name_start;
         test_case->name = malloc(name_len + 1);
@@ -178,6 +235,46 @@ static inline slice_t *testar_decompress(char *content) {
     }
 
     return cases;
+}
+
+static inline char *unescape_string(const char *input) {
+    char *output = malloc(strlen(input) + 1);
+    char *p = output;
+
+    while (*input) {
+        if (*input == '\\') {
+            input++;
+            switch (*input) {
+                case 'n':
+                    *p++ = '\n';
+                    break;
+                case 't':
+                    *p++ = '\t';
+                    break;
+                case 'r':
+                    *p++ = '\r';
+                    break;
+                case '0':
+                    *p++ = '\0';
+                    break;
+                case 's':
+                    *p++ = ' ';
+                    break;// 自定义空格转义
+                case '\\':
+                    *p++ = '\\';
+                    break;
+                default:// 保持原样
+                    *p++ = '\\';
+                    *p++ = *input;
+                    break;
+            }
+            input++;
+        } else {
+            *p++ = *input++;
+        }
+    }
+    *p = '\0';
+    return output;
 }
 
 static inline void feature_testar_test(char *custom_target) {
@@ -210,13 +307,20 @@ static inline void feature_testar_test(char *custom_target) {
 
         printf("test case start=== %s\n", test_case->name);
 
+        assertf(test_case->files->count > 0, "test case '%s' must have main.n", test_case->name);
+
         testar_case_file_t *output_file = NULL;
+        bool has_entry_main = false;
 
         for (int j = 0; j < test_case->files->count; j++) {
             testar_case_file_t *file = test_case->files->take[j];
 
             if (str_equal(file->name, "output.txt")) {
                 output_file = file;
+            }
+
+            if (str_equal(file->name, "main.n")) {
+                has_entry_main = true;
             }
 
             // 构建完整的文件路径
@@ -234,17 +338,39 @@ static inline void feature_testar_test(char *custom_target) {
             fclose(fp);
         }
 
-        char *entry = "main.n";
-        build(entry, false);
+        assertf(has_entry_main, "test case '%s' must have main.n", test_case->name);
 
-        // 执行并测试
-        if (output_file) {
-            char *output = exec_output();
-            assert_string_equal(output, (char *) output_file->content);
-        } else {
-            char *output = exec_output();
-            printf("%s", output);
+        // 固定格式生命
+        char *entry = "main.n";
+
+        COMPILER_TRY {
+            build(entry, false);
+
+            // 执行并测试
+            if (output_file) {
+                char *output = exec_output();
+                char *expected = unescape_string((char *) output_file->content);
+                assertf(str_equal(output, expected), "n %s failed\nexpect: %s\nactual: %s",
+                        test_case->name, output_file->content, output);
+            } else {
+                int32_t status = 0;
+                char *output = exec_output_status(&status);
+                if (status != 0) {
+                    assertf(false, "%s failed: %s", test_case->name, output);
+                } else {
+                    printf("%s", output);
+                }
+            }
         }
+        else {
+            // 编译错误处理
+            if (output_file) {
+                assertf(str_equal(test_error_msg, (char *) output_file->content), "in %s\nexpect: %s\nactual: %s",
+                        test_case->name, output_file->content, test_error_msg);
+            } else {
+                assertf(false, "%s failed: %s", test_case->name, test_error_msg);
+            }
+        };
 
 
         // 进行编译
@@ -260,17 +386,17 @@ static inline void feature_test_package_sync() {
     log_debug("npkg sync:%s", output);
 }
 
-#define TEST_EXEC_IMM   \
+#define TEST_EXEC_IMM     \
     feature_test_build(); \
     exec_imm_param();
 
-#define TEST_BASIC    \
+#define TEST_BASIC        \
     feature_test_build(); \
     test_basic();
 
-#define TEST_WITH_PACKAGE    \
+#define TEST_WITH_PACKAGE        \
     feature_test_package_sync(); \
     feature_test_build();        \
     test_basic();
 
-#endif // NATURE_TEST_H
+#endif// NATURE_TEST_H

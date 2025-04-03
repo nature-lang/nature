@@ -1,0 +1,425 @@
+=== test_integer_literals
+--- main.n
+import fmt
+
+fn main() {
+    var i8_val = 0 as i8
+    var i16_val = 0 as i16
+    var i32_val = 0 as i32
+    var i64_val = 0 as i64
+    var uint_val = 0 as uint
+    var u8_val = 0 as u8
+    var u16_val = 0 as u16
+    var u32_val = 0 as u32
+    var u64_val = 0 as u64
+
+    fmt.sscanf("100", "%d", &i8_val)
+    assert(i8_val == 100)
+
+    fmt.sscanf("1000", "%d", &i16_val)
+    assert(i16_val == 1000)
+
+    fmt.sscanf("100000", "%d", &i32_val)
+    assert(i32_val == 100000)
+
+    fmt.sscanf("1000000000", "%d", &i64_val)
+    assert(i64_val == 1000000000)
+
+    fmt.sscanf("200", "%d", &uint_val)
+    assert(uint_val == 200)
+
+    fmt.sscanf("200", "%d", &u8_val)
+    assert(u8_val == 200)
+
+    fmt.sscanf("1000", "%d", &u16_val)
+    assert(u16_val == 1000)
+
+    fmt.sscanf("100000", "%d", &u32_val)
+    assert(u32_val == 100000)
+
+    fmt.sscanf("1000000000", "%d", &u64_val)
+    assert(u64_val == 1000000000)
+
+    var input = "123 -456 +789"
+    var a = 0
+    var b = 0
+    var c = 0
+
+    var matched = fmt.sscanf(input, "%d %d %d", &a, &b, &c)
+    assert(matched == 3)
+    assert(a == 123)
+    assert(b == -456)
+    assert(c == 789)
+}
+
+=== test_sscanf_string
+--- main.n
+import fmt
+
+fn main() {
+    var input = "hello world"
+    var str1 = ""
+    var str2 = ""
+
+    var matched = fmt.sscanf(input, "%s %s", &str1, &str2)
+
+    assert(matched == 2)
+    assert(str1 == "hello")
+    assert(str2 == "world")
+
+    var special_str = ""
+    fmt.sscanf("test-string", "%s", &special_str)
+    println(special_str)
+    assert(special_str == "test-string")
+}
+
+=== test_sscanf_char
+--- main.n
+import fmt
+
+fn main() {
+    var input = "a b c"
+    var c1 = 0 as u8
+    var c2 = 0 as u8
+    var c3 = 0 as u8
+
+    var matched = fmt.sscanf(input, "%c %c %c", &c1, &c2, &c3)
+
+    assert(matched == 3)
+    assert(c1 == 'a'.ascii())
+    assert(c2 == 'b'.ascii())
+    assert(c3 == 'c'.ascii())
+}
+
+=== test_sscanf_float
+--- main.n
+import fmt
+
+fn main() {
+    var input = "3.14 -2.718 +0.5"
+    var f1 = 0.0
+    var f2 = 0.0
+    var f3 = 0.0
+
+    var matched = fmt.sscanf(input, "%f %f %f", &f1, &f2, &f3)
+
+    assert(matched == 3)
+    assert(f1 == 3.14)
+    assert(f2 == -2.718)
+    assert(f3 == 0.5)
+
+    // 测试不同浮点类型
+    var f32_val = 0.0 as f32
+    var f64_val = 0.0 as f64
+
+    fmt.sscanf("3.14159", "%f", &f32_val)
+    assert(f32_val == 3.14159 as f32)
+
+    fmt.sscanf("3.14159265359", "%f", &f64_val)
+    assert(f64_val == 3.14159265359)
+}
+
+=== test_sscanf_mixed
+--- main.n
+import fmt
+
+fn main() {
+    var input = "test 123 x 3.14"
+    var str = ""
+    var num = 0
+    var ch = 0 as u8
+    var flt = 0.0
+
+    var matched = fmt.sscanf(input, "%s %d %c %f", &str, &num, &ch, &flt)
+
+    assert(matched == 4)
+    assert(str == "test")
+    assert(num == 123)
+    assert(ch == 'x'.ascii())
+    assert(flt == 3.14)
+}
+
+=== test_sscanf_partial_match
+--- main.n
+import fmt
+
+fn main() {
+    var input = "123 abc"
+    var num = 0
+
+    var matched = fmt.sscanf(input, "%d %d", &num)
+
+    assert(matched == 1)
+    assert(num == 123)
+}
+
+=== test_sscanf_format_literals
+--- main.n
+import fmt
+
+fn main() {
+    var input = "value: 42"
+    var num = 0
+
+    var matched = fmt.sscanf(input, "value: %d", &num)
+
+    assert(matched == 1)
+    assert(num == 42)
+}
+
+
+=== test_sscanf_percent_sign
+--- main.n
+import fmt
+
+fn main() {
+    var input = "50% complete"
+    var num = 0
+
+    var matched = fmt.sscanf(input, "%d%% complete", &num)
+
+    assert(matched == 1)
+    assert(num == 50)
+}
+
+
+=== test_sscanf_hex_format
+--- main.n
+import fmt
+
+fn main() {
+    var input = "FF ABC 123"
+    var hex1 = 0
+    var hex2 = 0
+    var hex3 = 0
+
+    var matched = fmt.sscanf(input, "%x %x %x", &hex1, &hex2, &hex3)
+
+    assert(matched == 3)
+    assert(hex1 == 255)
+    assert(hex2 == 2748)
+    assert(hex3 == 291)
+
+    // 测试不同整数类型
+    var u8_val = 0 as u8
+    var u16_val = 0 as u16
+    var u32_val = 0 as u32
+    var u64_val = 0 as u64
+
+    fmt.sscanf("A5", "%x", &u8_val)
+    assert(u8_val == 165)
+
+    fmt.sscanf("ABCD", "%x", &u16_val)
+    assert(u16_val == 43981)
+
+    fmt.sscanf("12345678", "%x", &u32_val)
+    assert(u32_val == 305419896)
+
+    fmt.sscanf("FFFFFFFF", "%x", &u64_val)
+    assert(u64_val == 4294967295)
+
+    // 测试大写十六进制格式
+    var hex_upper = 0
+    fmt.sscanf("ABCDEF", "%X", &hex_upper)
+    assert(hex_upper == 11259375)
+}
+
+=== test_sscanf_octal_format
+--- main.n
+import fmt
+
+fn main() {
+    var input = "123 456 777"
+    var oct1 = 0
+    var oct2 = 0
+    var oct3 = 0
+
+    var matched = fmt.sscanf(input, "%o %o %o", &oct1, &oct2, &oct3)
+
+    assert(matched == 3)
+    assert(oct1 == 83)    // 八进制 0o123 = 十进制 83
+    assert(oct2 == 302)   // 八进制 0o456 = 十进制 302
+    assert(oct3 == 511)   // 八进制 0o777 = 十进制 511
+
+    // 测试不同整数类型
+    var u8_val = 0 as u8
+    var u16_val = 0 as u16
+    var u32_val = 0 as u32
+    var u64_val = 0 as u64
+
+    fmt.sscanf("177", "%o", &u8_val)
+    assert(u8_val == 127)
+
+    fmt.sscanf("177777", "%o", &u16_val)
+    assert(u16_val == 65535)
+
+    fmt.sscanf("37777777777", "%o", &u32_val)
+    assert(u32_val == 4294967295)
+
+    // 测试大写前缀
+    var oct_upper = 0
+    fmt.sscanf("123", "%o", &oct_upper)
+    assert(oct_upper == 83)
+}
+
+
+=== test_sscanf_width_string
+--- main.n
+import fmt
+
+fn main() {
+    var input = "abcdefghijklmnopqrstuvwxyz"
+    var str1 = ""
+    var str2 = ""
+    var str3 = ""
+
+    // The issue might be that we're not handling consecutive width-limited strings correctly
+    // Let's add spaces between format specifiers to make it clearer
+    var matched = fmt.sscanf(input, "%5s %10s %5s", &str1, &str2, &str3)
+
+    println(str1, str2, str3)
+
+    assert(matched == 3)
+    assert(str1 == "abcde")
+    assert(str2 == "fghijklmno")  // This was likely "fghijklmno" which is incorrect
+    assert(str3 == "pqrst")  // This was likely "pqrst" which is incorrect
+}
+
+
+=== test_sscanf_width_integer
+--- main.n
+import fmt
+
+fn main() {
+    var input = "1234567890"
+    var num1 = 0
+    var num2 = 0
+
+    var matched = fmt.sscanf(input, "%3d %4d", &num1, &num2)
+
+    assert(matched == 2)
+    println(num1, num2)
+    assert(num1 == 123)
+    assert(num2 == 4567)
+
+    var input2 = "+12345"
+    var num3 = 0
+    var matched2 = fmt.sscanf(input2, "%4d", &num3)
+    assert(matched2 == 1)
+    assert(num3 == 123)
+
+    var input3 = "-12345"
+    var num4 = 0
+    var matched3 = fmt.sscanf(input3, "%4d", &num4)
+    assert(matched3 == 1)
+    assert(num4 == -123)
+}
+
+
+=== test_sscanf_hex_without_prefix
+--- main.n
+import fmt
+
+fn main() {
+    // 测试不带前缀的十六进制数解析
+    var input = "ABC DEF 123"
+    var hex1 = 0
+    var hex2 = 0
+    var hex3 = 0
+
+    var matched = fmt.sscanf(input, "%x %x %x", &hex1, &hex2, &hex3)
+
+    assert(matched == 3)
+    assert(hex1 == 0xABC)
+    assert(hex2 == 0xDEF)
+    assert(hex3 == 0x123)
+
+    // 测试带宽度限制的十六进制数解析
+    var input2 = "ABCDEF"
+    var hex4 = 0
+    var hex5 = 0
+
+    matched = fmt.sscanf(input2, "%3x%3x", &hex4, &hex5)
+
+    assert(matched == 2)
+    assert(hex4 == 0xABC)
+    assert(hex5 == 0xDEF)
+
+    // 测试混合大小写的十六进制数
+    var input3 = "aB1 cD2"
+    var hex6 = 0
+    var hex7 = 0
+
+    matched = fmt.sscanf(input3, "%x %x", &hex6, &hex7)
+
+    assert(matched == 2)
+    assert(hex6 == 0xAB1)
+    assert(hex7 == 0xCD2)
+
+    // 测试带前缀的十六进制数(无法解析)
+    var input4 = "0xABC 0X123"
+    var hex8 = 0
+    var hex9 = 0
+
+    matched = fmt.sscanf(input4, "%x %x", &hex8, &hex9)
+    assert(matched == 1)
+    assert(hex8 == 0)
+    assert(hex9 == 0)
+}
+
+=== test_sscanf_width_hex
+--- main.n
+import fmt
+
+fn main() {
+    var input = "ABCDEF123456"
+    var hex1 = 0
+    var hex2 = 0
+
+    var matched = fmt.sscanf(input, "%5x %6x", &hex1, &hex2)
+
+    assert(matched == 2)
+    println(hex1, hex2)
+    assert(hex1 == 0xABCDE)  // 读取前5个字符
+    assert(hex2 == 0xF12345)  // 读取接下来的6个字符
+}
+
+
+=== test_sscanf_width_octal
+--- main.n
+import fmt
+
+fn main() {
+    var input = "123 4567"
+    var oct1 = 0
+    var oct2 = 0
+
+    var matched = fmt.sscanf(input, "%3o %4o", &oct1, &oct2)
+
+    assert(matched == 2)
+    println(oct1, oct2)
+    assert(oct1 == 0o123)  // 读取前3个字符
+    assert(oct2 == 0o4567)  // 读取接下来的4个字符
+}
+
+=== test_sscanf_hex_special
+--- main.n
+import fmt
+
+fn main() {
+    var input = "<0x41>"
+    u8 c = 0
+    var matched = fmt.sscanf(input, "<0x%02x>", &c)
+    assert(matched == 1 && c == 65)
+
+    input = "<0x41>"
+    c = 0
+    matched = fmt.sscanf(input, "<0x%2x>", &c)
+    assert(matched == 1 && c == 65)
+
+    input = "<0xA>"
+    c = 0
+    matched = fmt.sscanf(input, "<0x%2x>", &c)
+    println(matched, c)
+    assert(matched == 1 && c == 10)
+}

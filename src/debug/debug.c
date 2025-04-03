@@ -28,19 +28,19 @@ string ast_type_to_str[] = {
         [AST_STMT_FOR_ITERATOR] = "AST_STMT_FOR_ITERATOR",
         [AST_FNDEF] = "AST_FUNCTION_DECL",
         [AST_CALL] = "AST_CALL",
-        [AST_STMT_TYPE_ALIAS] = "AST_STMT_TYPE_DECL",
+        [AST_STMT_TYPEDEF] = "AST_STMT_TYPE_DECL",
         [AST_STMT_ENV_CLOSURE] = "AST_ENV_CLOSURE",
 };
 
 string token_type_to_str[] = {
         [TOKEN_LEFT_PAREN] = "TOKEN_LEFT_PAREN",
-        [TOKEN_RIGHT_PAREN] = "TOKEN_RIGHT_PAREN", // ()
+        [TOKEN_RIGHT_PAREN] = "TOKEN_RIGHT_PAREN",// ()
         [TOKEN_LEFT_SQUARE] = "TOKEN_LEFT_SQUARE",
-        [TOKEN_RIGHT_SQUARE] = "TOKEN_RIGHT_SQUARE", // []
+        [TOKEN_RIGHT_SQUARE] = "TOKEN_RIGHT_SQUARE",// []
         [TOKEN_LEFT_CURLY] = "TOKEN_LEFT_CURLY",
-        [TOKEN_RIGHT_CURLY] = "TOKEN_RIGHT_CURLY", // {}
+        [TOKEN_RIGHT_CURLY] = "TOKEN_RIGHT_CURLY",// {}
         [TOKEN_LEFT_ANGLE] = "TOKEN_LEFT_ANGLE",
-        [TOKEN_RIGHT_ANGLE] = "TOKEN_RIGHT_ANGLE", // <>
+        [TOKEN_RIGHT_ANGLE] = "TOKEN_RIGHT_ANGLE",// <>
 
         [TOKEN_COMMA] = "TOKEN_COMMA",
         [TOKEN_DOT] = "TOKEN_DOT",
@@ -49,9 +49,9 @@ string token_type_to_str[] = {
         [TOKEN_COLON] = "TOKEN_COLON",
         [TOKEN_SEMICOLON] = "TOKEN_SEMICOLON",
         [TOKEN_SLASH] = "TOKEN_SLASH",
-        [TOKEN_STAR] = "TOKEN_STAR", // * STAR
-        [TOKEN_IMPORT_STAR] = "TOKEN_IMPORT_STAR", // * STAR
-        [TOKEN_QUESTION] = "TOKEN_QUESTION", // ?
+        [TOKEN_STAR] = "TOKEN_STAR",              // * STAR
+        [TOKEN_IMPORT_STAR] = "TOKEN_IMPORT_STAR",// * STAR
+        [TOKEN_QUESTION] = "TOKEN_QUESTION",      // ?
         [TOKEN_EOF] = "TOKEN_EOF",
         [TOKEN_STMT_EOF] = "TOKEN_STMT_EOF",
         [TOKEN_RIGHT_ARROW] = "TOKEN_RIGHT_ARROW",
@@ -66,24 +66,24 @@ string token_type_to_str[] = {
         [TOKEN_AND_AND] = "TOKEN_AND_AND",
         [TOKEN_OR_OR] = "TOKEN_OR_OR",
 
-        [TOKEN_PLUS_EQUAL] = "TOKEN_PLUS_EQUAL", // +=
-        [TOKEN_MINUS_EQUAL] = "TOKEN_MINUS_EQUAL", // -=
-        [TOKEN_STAR_EQUAL] = "TOKEN_STAR_EQUAL", // *=
-        [TOKEN_SLASH_EQUAL] = "TOKEN_SLASH_EQUAL", // /=
-        [TOKEN_PERSON_EQUAL] = "TOKEN_PERSON_EQUAL", // %=
-        [TOKEN_AND_EQUAL] = "TOKEN_AND_EQUAL", // &=
-        [TOKEN_OR_EQUAL] = "TOKEN_OR_EQUAL", // |=
-        [TOKEN_XOR_EQUAL] = "TOKEN_XOR_EQUAL", // ^=
-        [TOKEN_LEFT_SHIFT_EQUAL] = "TOKEN_LEFT_SHIFT_EQUAL", // >>=
-        [TOKEN_RIGHT_SHIFT_EQUAL] = "TOKEN_RIGHT_SHIFT_EQUAL", // <<=
+        [TOKEN_PLUS_EQUAL] = "TOKEN_PLUS_EQUAL",              // +=
+        [TOKEN_MINUS_EQUAL] = "TOKEN_MINUS_EQUAL",            // -=
+        [TOKEN_STAR_EQUAL] = "TOKEN_STAR_EQUAL",              // *=
+        [TOKEN_SLASH_EQUAL] = "TOKEN_SLASH_EQUAL",            // /=
+        [TOKEN_PERSON_EQUAL] = "TOKEN_PERSON_EQUAL",          // %=
+        [TOKEN_AND_EQUAL] = "TOKEN_AND_EQUAL",                // &=
+        [TOKEN_OR_EQUAL] = "TOKEN_OR_EQUAL",                  // |=
+        [TOKEN_XOR_EQUAL] = "TOKEN_XOR_EQUAL",                // ^=
+        [TOKEN_LEFT_SHIFT_EQUAL] = "TOKEN_LEFT_SHIFT_EQUAL",  // >>=
+        [TOKEN_RIGHT_SHIFT_EQUAL] = "TOKEN_RIGHT_SHIFT_EQUAL",// <<=
 
         // 位运算
-        [TOKEN_TILDE] = "TOKEN_TILDE", // ~
-        [TOKEN_AND] = "TOKEN_AND", // &
-        [TOKEN_OR] = "TOKEN_OR", // |
-        [TOKEN_XOR] = "TOKEN_XOR", // ^
-        [TOKEN_LEFT_SHIFT] = "TOKEN_LEFT_SHIFT", // <<
-        [TOKEN_RIGHT_SHIFT] = "TOKEN_RIGHT_SHIFT", // >>
+        [TOKEN_TILDE] = "TOKEN_TILDE",            // ~
+        [TOKEN_AND] = "TOKEN_AND",                // &
+        [TOKEN_OR] = "TOKEN_OR",                  // |
+        [TOKEN_XOR] = "TOKEN_XOR",                // ^
+        [TOKEN_LEFT_SHIFT] = "TOKEN_LEFT_SHIFT",  // <<
+        [TOKEN_RIGHT_SHIFT] = "TOKEN_RIGHT_SHIFT",// >>
 
         // LITERALS.
         [TOKEN_IDENT] = "TOKEN_IDENT",
@@ -99,6 +99,7 @@ string token_type_to_str[] = {
         [TOKEN_VOID] = "TOKEN_VOID",
         [TOKEN_ANY] = "TOKEN_ANY",
         [TOKEN_STRUCT] = "TOKEN_STRUCT",
+        [TOKEN_INTERFACE] = "TOKEN_INTERFACE",
         [TOKEN_FOR] = "TOKEN_FOR",
         [TOKEN_IN] = "TOKEN_IN",
         // [TOKEN_WHILE]="TOKEN_WHILE",
@@ -115,8 +116,7 @@ string token_type_to_str[] = {
         [TOKEN_FN] = "TOKEN_FN",
         [TOKEN_IMPORT] = "TOKEN_IMPORT",
         [TOKEN_AS] = "TOKEN_AS",
-        [TOKEN_RETURN] = "TOKEN_RETURN"
-};
+        [TOKEN_RETURN] = "TOKEN_RETURN"};
 
 string lir_opcode_to_string[] = {
         [LIR_OPCODE_ADD] = "ADD  ",
@@ -191,7 +191,7 @@ void debug_lir(closure_t *c, char *key) {
 
 #ifdef DEBUG_LIR
     // 跳过各种全局的 init 方法
-    if (ends_with(c->fndef->symbol_name, ".init")) {
+    if (!strstr(c->fndef->symbol_name, DEBUG_LIR)) {
         return;
     }
 
@@ -201,7 +201,7 @@ void debug_lir(closure_t *c, char *key) {
     linked_node *current = c->operations->front;
     while (current->value != NULL) {
         lir_op_t *op = current->value;
-//        printf("%d", op->id);
+        //        printf("%d", op->id);
         if (op->code == LIR_OPCODE_LABEL) {
             printf("%s\t", lir_opcode_to_string[op->code]);
         } else {
@@ -238,12 +238,11 @@ void debug_lir(closure_t *c, char *key) {
  * @param c
  */
 void debug_block_lir(closure_t *c, char *stage_after) {
-    // 跳过各种全局的 init 方法
-    if (ends_with(c->fndef->symbol_name, ".init")) {
+#ifdef DEBUG_LIR
+    if (strstr(c->linkident, DEBUG_LIR) == NULL) {
         return;
     }
 
-#ifdef DEBUG_LIR
     printf("%s after block_lir: %s------------------------------------------------------------------------\n",
            stage_after, c->fndef->symbol_name);
     for (int i = 0; i < c->blocks->count; ++i) {
@@ -288,18 +287,26 @@ void debug_interval_var(interval_t *interval, char *stage) {
         use_pos = str_connect(use_pos, temp_use);
     }
 
-    log_debug("%s var: index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
+    log_debug("%s var: index(%d-%s), parent(%d-%s), assigned=(%d(%s)-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
               stage,
               interval->index,
-              interval->var ? interval->var->ident : "-", parent_index, parent_ident, interval->assigned, type_str,
+              interval->var ? interval->var->ident : "-", parent_index, parent_ident,
+              interval->assigned,
+              alloc_regs[interval->assigned] ? alloc_regs[interval->assigned]->name : "_",
+              type_str,
               stack_slot, ranges,
               use_pos);
 }
 
-void debug_closure_interval(closure_t *c) {
+void debug_closure_interval(closure_t *c, char *stage) {
 #ifdef DEBUG_INTERVAL
-    log_debug("closure=%s interval ------------------------------------------------------------------------",
-              c->fndef->fn_name);
+    if (!str_equal(c->linkident, DEBUG_INTERVAL)) {
+        return;
+    }
+
+    log_debug("stage=%s closure=%s interval ------------------------------------------------------------------------",
+              stage,
+              c->linkident);
     for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
         reg_t *reg = alloc_regs[reg_id];
         interval_t *interval = table_get(c->interval_table, reg->name);
@@ -344,9 +351,11 @@ void debug_closure_interval(closure_t *c) {
     for (int i = 0; i < c->var_defs->count; ++i) {
         lir_var_t *var = c->var_defs->take[i];
         interval_t *interval = table_get(c->interval_table, var->ident);
-        debug_interval_var(interval, "");
+        debug_interval_var(interval, stage);
     }
+
     printf("\n\n");
+    fflush(stdout);
 #endif
 }
 
@@ -375,7 +384,11 @@ void debug_basic_block(basic_block_t *block) {
     while (current->value != NULL) {
         lir_op_t *op = current->value;
         printf("%d", op->id);
-        printf("\t\t%s\t", lir_opcode_to_string[op->code]);
+        if (op->is_resolve) {
+            printf("\t\t%s!\t", lir_opcode_to_string[op->code]);
+        } else {
+            printf("\t\t%s\t", lir_opcode_to_string[op->code]);
+        }
 
         // first
         if (op->first) {
@@ -422,9 +435,9 @@ void debug_basic_block(basic_block_t *block) {
 void debug_asm(closure_t *c) {
 #ifdef DEBUG_ASM
     // 跳过各种全局的 init 方法
-    if (ends_with(c->fndef->symbol_name, ".init")) {
-        return;
-    }
+    //    if (ends_with(c->fndef->symbol_name, ".init")) {
+    //        return;
+    //    }
 
     printf("asm: %s------------------------------------------------------------------------\n", c->fndef->symbol_name);
     for (int i = 0; i < c->asm_operations->count; ++i) {

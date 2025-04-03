@@ -1,6 +1,6 @@
 fn hello():void! {
     println('hello nature')
-    throw 'world error'
+    throw errorf('world error')
 }
 
 fn main():void! {

@@ -1,0 +1,22 @@
+type testable = interface{
+    fn nice():bool
+}
+
+type test_t:testable = [int]
+
+fn test_t.nice():bool {
+    return self[2] == 3
+}
+
+fn use(testable? test) {
+    if (test is testable) { // test = test as testable
+        println('testable value is', test.nice())
+    } else {
+        println('test not testable')
+    }
+}
+
+fn main():void! {
+    test_t t = [1, 2, 3]
+    use(t)
+}

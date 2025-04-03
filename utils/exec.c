@@ -61,7 +61,7 @@ int exec_imm(char *work_dir, char *file, slice_t *list) {
 
 
 // 结尾必须是 NULL,开头必须是重复命令
-char *exec(char *work_dir, char *file, slice_t *list, int32_t *pid) {
+char *exec(char *work_dir, char *file, slice_t *list, int32_t *pid, int32_t *status) {
     int fd[2];// write to fd[1], read by fd[0]
     VOID pipe(fd);
 
@@ -86,8 +86,8 @@ char *exec(char *work_dir, char *file, slice_t *list, int32_t *pid) {
         }
 
         // exec 一旦执行成功，当前子进程就会自己推出，执行失败这会返回错误
-        int result = execvp(file, argv);
-        exit(result);
+        execvp(file, argv);
+        exit(EXIT_FAILURE);
     }
 
     if (pid) {
@@ -95,12 +95,15 @@ char *exec(char *work_dir, char *file, slice_t *list, int32_t *pid) {
     }
     close(fd[1]);
 
-    char *buf = mallocz(81920);
+    char *buf = mallocz(8192 * 2);
+    full_read(fd[0], buf, 8192 * 2);
 
-    full_read(fd[0], buf, 81920);
-
-    int exec_status;
-    wait(&exec_status);
+    int exec_status = 0;
+    if (status == NULL) {
+        status = &exec_status;
+    }
+    waitpid(fid, status, 0);  // 等待子进程执行完成
+    // wait(status);
 
     return buf;
 }

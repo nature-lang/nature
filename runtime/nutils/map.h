@@ -5,15 +5,15 @@
 
 #define MAP_DEFAULT_CAPACITY 16 // Java HashMap default 16
 
-n_map_t *rt_map_new(uint64_t rtype_hash, uint64_t key_index, uint64_t value_index);
+n_map_t *rt_map_new(uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhash);
 
 uint64_t rt_map_length(n_map_t *l);
 
 void map_grow(n_map_t *m);
 
-n_void_ptr_t rt_map_assign(n_map_t *m, void *key_ref);
+n_anyptr_t rt_map_assign(n_map_t *m, void *key_ref);
 
-n_void_ptr_t rt_map_access(n_map_t *m, void *key_ref);
+n_anyptr_t rt_map_access(n_map_t *m, void *key_ref);
 
 void rt_map_delete(n_map_t *m, void *key_ref);
 

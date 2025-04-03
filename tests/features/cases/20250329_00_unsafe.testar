@@ -1,0 +1,16 @@
+=== test_unsafe_vec_new
+--- main.n
+import unsafe
+
+fn main():void! {
+    arr<u8,5> r = [1, 2, 3, 4, 5]
+
+    // to ptr
+    //  as rawptr<u8>
+    var p = r as anyptr
+    vec<u8> list = unsafe.vec_new(p as rawptr<u8>, 5)
+    println(list[0], list[1], list[2], list[3], list[4])
+}
+
+--- output.txt
+1 2 3 4 5

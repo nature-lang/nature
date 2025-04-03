@@ -322,7 +322,7 @@ struct linkco_t {
 typedef struct n_future_t {
     int64_t size;
     void *result;
-    n_error_t *error; // 类似 result 一样可选的 error
+    n_union_t *error; // 类似 result 一样可选的 error
     void *await_co;
 } n_future_t;
 
@@ -331,6 +331,7 @@ struct coroutine_t {
     bool main; // 是否是 main 函数
     bool solo; // 当前协程需要独享线程
     bool ticket;
+    int64_t flag;
     co_status_t status;
     aco_t aco;
     void *fn; // fn 指向
@@ -389,7 +390,9 @@ struct coroutine_t {
     uint64_t scan_offset;
     uint64_t scan_ret_addr;
 
-    n_error_t *error;
+    bool has_error;
+    n_interface_t *error; // throwable
+    n_vec_t *traces; // element is n_trace_t
 
     ATOMIC int32_t select_done;
     linkco_t *waiting; // 当前 co 等待的 linkco, 如果存在多个 linkco 时，通过 linkco.waitlink 链接
@@ -450,9 +453,9 @@ int test_runtime_main(void *main_fn);
 
 void rt_throw(char *msg, bool panic);
 
-void rt_co_error(coroutine_t *co, char *msg, bool panic);
+void rt_co_throw(coroutine_t *co, char *msg, bool panic);
 
-void coroutine_dump_error(coroutine_t *co, n_error_t *error);
+void coroutine_dump_error(coroutine_t *co);
 
 /**
  * 正常需要根据线程 id 返回，第一版返回 id 就行了

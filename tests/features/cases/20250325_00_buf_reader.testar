@@ -1,0 +1,316 @@
+=== test_read
+--- main.n
+import io
+
+fn main():void! {
+    var rd = io.buffer{}
+    rd.write('hello world' as [u8])
+
+    var br = new io.buf_reader<io.buffer>(rd)
+
+    var buf = vec_new<u8>(0, 5)
+    var n = br.read(buf)
+    println(n, buf as string)
+}
+
+--- output.txt
+5 hello
+
+=== test_read_empty
+--- main.n
+import io
+
+fn main():void! {
+    var rd = io.buffer{}
+    var br = new io.buf_reader<io.buffer>(rd)
+
+    var buf = vec_new<u8>(0, 5)
+    try {
+        br.read(buf)
+        panic('should throw EOF')
+    } catch err {
+        assert(err.msg() == 'EOF')
+        println(err.msg())
+    }
+}
+
+--- output.txt
+EOF
+
+=== test_read_until
+--- main.n
+import io
+import strings
+
+fn main():void! {
+    var rd = new io.buffer()
+    rd.write('hello\nworld\n' as [u8])
+
+    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+
+    var line = br.read_until('\n'.ascii())
+    assert(line as string == 'hello\n')
+    println(line as string)
+
+    line = br.read_until('\n'.ascii())
+    assert(line as string == 'world\n')
+    println(line as string)
+}
+
+--- output.txt
+hello\n
+world\n
+
+=== test_read_until_buffer_full
+--- main.n
+import io
+import strings
+
+fn main():void! {
+    // use buffer to simulate file
+    var rd = new io.buffer()
+    var data = vec_new<u8>(0, 4096 + 100)
+    for int i = 0; i < data.len(); i += 1 {
+       data[i] = 'a'.ascii()
+    }
+    rd.write(data)
+
+    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+    // until triggers fill until the entire buf is full without any successful data reading
+    var line = br.read_until('\n'.ascii())
+    println('read until buffer full', line.len())
+}
+
+--- output.txt
+read until buffer full 4096
+
+=== test_read_until_eof
+--- main.n
+import io
+import strings
+
+fn main():void! {
+    var rd = new io.buffer()
+    rd.write("hello world" as [u8]) // no delim
+    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+
+    var line = br.read_until('\n'.ascii())
+    assert(line as string == "hello world")
+    // check end is delim
+    println("read data: " + (line as string), (line as string).ends_with('\n'))
+
+    line = br.read_until('\n'.ascii())
+    assert(line.len() == 0)
+}
+
+--- output.txt
+read data: hello world false
+
+=== test_read_exact
+--- main.n
+import io
+import strings
+
+fn main():void! {
+    var rd = new io.buffer()
+    rd.write("hello world" as [u8])
+
+    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+
+    var buf = vec_new<u8>(0, 5)
+    br.read_exact(buf)
+    println("read data: " + (buf as string))
+    assert(buf as string == "hello")
+
+    br.read_exact(buf)
+    println("second read data: " + (buf as string))
+    assert(buf as string == " worl")
+
+    try {
+        br.read_exact(buf)
+        panic('an error should have occurred')
+    } catch e {
+        println("expected error: " + e.msg())
+        assert(e.msg() == "EOF")
+    }
+}
+
+--- output.txt
+read data: hello
+second read data:  worl
+expected error: EOF
+
+=== test_read_exact_empty
+--- main.n
+import io
+import strings
+
+fn main():void! {
+    // empty buffer
+    var rd = new io.buffer()
+    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+
+    var buf = vec_new<u8>(0, 5)
+    try {
+        br.read_exact(buf)
+        panic('an error should have occurred')
+    } catch e {
+        println("expected error: " + e.msg())
+        assert(e.msg() == "EOF")
+    }
+}
+
+--- output.txt
+expected error: EOF
+
+
+=== test_partial_read
+--- main.n
+import io
+import strings
+
+fn main():void! {
+    var rd = new io.buffer()
+    rd.write("abc" as [u8])
+
+    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+
+    var buf = vec_new<u8>(0, 5)
+    try {
+        br.read_exact(buf)
+        panic('an error should have occurred')
+    } catch e {
+        println("expected error: " + e.msg())
+        assert(e.msg() == "EOF")
+    }
+}
+
+--- output.txt
+expected error: EOF
+
+=== test_read_zero_length
+--- main.n
+import io
+import strings
+
+fn main():void! {
+    var rd = new io.buffer()
+    rd.write("hello" as [u8])
+
+    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+
+    var empty_buf = vec_cap<u8>(0)
+    br.read_exact(empty_buf)
+    println("success read 0 length")
+
+    var buf = vec_new<u8>(0, 5)
+    br.read_exact(buf)
+    println("subsequent data: " + (buf as string))
+    assert(buf as string == "hello")
+}
+
+--- output.txt
+success read 0 length
+subsequent data: hello
+
+=== test_read_byte
+--- main.n
+import io
+import strings
+import fmt
+
+fn main():void! {
+    var rd = new io.buffer()
+    rd.write("Hello" as [u8])
+    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+
+    u8 b = br.read_byte()
+    assert(b == 'H'.ascii())
+
+    b = br.read_byte()
+    assert(b == 'e'.ascii())
+
+    for int i = 0; i < 3; i += 1 {
+        b = br.read_byte()
+        fmt.printf('%c\n', b)
+    }
+
+    try {
+        b = br.read_byte()
+    } catch e {
+        println("expected err: " + e.msg())
+        assert(e.msg() == "EOF")
+    }
+}
+
+--- output.txt
+l
+l
+o
+expected err: EOF
+
+=== test_read_line
+--- main.n
+import io
+import strings
+import fmt
+
+fn main():void! {
+    var rd = new io.buffer()
+    rd.write("Hello\nWorld\r\nTest\rEnd" as [u8])
+    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+
+    // Test \n line ending
+    var line = br.read_line()
+    println("Line 1: '" + line + "'")
+    assert(line == "Hello")
+
+    // Test \r\n line ending
+    line = br.read_line()
+    println("Line 2: '" + line + "'")
+    assert(line == "World")
+
+    // Test \r line ending
+    line = br.read_line()
+    println("Line 3: '" + line + "'")
+    assert(line == "Test\rEnd")
+
+    // Test EOF
+    try {
+        line = br.read_line()
+        println("can't get here")
+    } catch e {
+        println("catch e: " + e.msg())
+    }
+}
+
+--- output.txt
+Line 1: 'Hello'
+Line 2: 'World'
+Line 3: 'Test\rEnd'
+catch e: EOF
+
+=== test_read_empty_line
+--- main.n
+import io
+import strings
+import fmt
+
+fn main():void! {
+    var rd = new io.buffer()
+    rd.write("\n\n\nHello\n\n" as [u8])
+    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+
+    for int i = 0; i < 6; i += 1 {
+        var line = br.read_line()
+        println("Read line: '" + line + "'")
+    }
+}
+
+--- output.txt
+Read line: ''
+Read line: ''
+Read line: ''
+Read line: 'Hello'
+Read line: ''
+Read line: ''

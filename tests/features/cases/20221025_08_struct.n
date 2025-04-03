@@ -9,7 +9,7 @@ type people = struct {
 fn main() {
     var foo = people {
         a = 22,
-        b = true
+        b = true,
     }
 
     foo.c = 11

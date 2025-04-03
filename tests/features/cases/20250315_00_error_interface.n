@@ -1,0 +1,14 @@
+fn bar():void! {
+    var list = vec_new<i8>(0, 10)
+    var foo = list[11]
+}
+
+fn foo():void! {
+    bar()
+}
+
+fn main():void! {
+    foo() catch err {
+        println('catch err:', err.msg())
+    }
+}

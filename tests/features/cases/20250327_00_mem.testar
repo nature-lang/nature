@@ -1,0 +1,217 @@
+=== test_read_le
+--- main.n
+import mem
+
+fn main():void! {
+    [u8] buf = [1, 2, 3, 4, 5, 6, 7, 8]
+
+    // test u8/i8
+    assert(mem.read_u8_le(buf) == 1)
+    assert(mem.read_i8_le(buf) == 1)
+
+    // test u16/i16
+    assert(mem.read_u16_le(buf) == 513) // 0x0201
+    assert(mem.read_i16_le(buf) == 513)
+
+    // test u32/i32
+    assert(mem.read_u32_le(buf) == 67305985) // 0x04030201
+    assert(mem.read_i32_le(buf) == 67305985)
+
+    // test u64/i64
+    assert(mem.read_u64_le(buf) == 578437695752307201) // 0x0807060504030201
+    assert(mem.read_i64_le(buf) == 578437695752307201)
+
+    println('test read le success')
+}
+
+--- output.txt
+test read le success
+
+=== test_read_be
+--- main.n
+import mem
+
+fn main():void! {
+    [u8] buf = [1, 2, 3, 4, 5, 6, 7, 8]
+
+    // test u8/i8
+    assert(mem.read_u8_be(buf) == 1)
+    assert(mem.read_i8_be(buf) == 1)
+
+    // test u16/i16
+    assert(mem.read_u16_be(buf) == 258) // 0x0102
+    assert(mem.read_i16_be(buf) == 258)
+
+    // test u32/i32
+    assert(mem.read_u32_be(buf) == 16909060) // 0x01020304
+    assert(mem.read_i32_be(buf) == 16909060)
+
+    // test u64/i64
+    assert(mem.read_u64_be(buf) == 72623859790382856) // 0x0102030405060708
+    assert(mem.read_i64_be(buf) == 72623859790382856)
+
+    println('test read be success')
+}
+
+--- output.txt
+test read be success
+
+=== test_buffer_too_small
+--- main.n
+import mem
+
+fn main():void! {
+    [u8] buf = [1, 2, 3]
+
+    // test u32 with small buffer
+    try {
+        mem.read_u32_le(buf)
+        panic('should throw buffer too small')
+    } catch err {
+        assert(err.msg() == 'buffer too small')
+        println('test u32 buffer too small: ' + err.msg())
+    }
+
+    // test u64 with small buffer
+    try {
+        mem.read_u64_le(buf)
+        panic('should throw buffer too small')
+    } catch err {
+        assert(err.msg() == 'buffer too small')
+        println('test u64 buffer too small: ' + err.msg())
+    }
+}
+
+--- output.txt
+test u32 buffer too small: buffer too small
+test u64 buffer too small: buffer too small
+
+=== test_empty_buffer
+--- main.n
+import mem
+
+fn main():void! {
+    [u8] buf = []
+
+    try {
+        mem.read_u8_le(buf)
+        panic('should throw buffer too small')
+    } catch err {
+        assert(err.msg() == 'buffer too small')
+        println('test empty buffer: ' + err.msg())
+    }
+}
+
+--- output.txt
+test empty buffer: buffer too small
+
+=== test_copy_scalar
+--- main.n
+import mem
+
+fn main():void! {
+    [u8] buf = [1, 2, 3, 4]
+    u32 v = 0
+
+    mem.copy(buf, &v)
+    assert(v == 67305985) // 0x04030201
+    println('test copy success:',  v)
+
+    // test buffer too small
+    [u8] small_buf = [1, 2]
+    try {
+        mem.copy(small_buf, &v)
+        panic('should throw buffer too small')
+    } catch err {
+        assert(err.msg() == 'buffer too small')
+        println('test copy buffer too small: ' + err.msg())
+    }
+}
+
+--- output.txt
+test copy success: 67305985
+test copy buffer too small: buffer too small
+
+
+=== test_copy_struct
+--- main.n
+import mem
+
+type foo_t = struct{
+    i8 a
+    i8 b
+    bool c
+    i32 d
+    i64 e
+}
+
+fn main():void! {
+    [u8] buf = [
+       1,    // a
+       2,    // b
+       1,    // c (true)
+       0,    // padding (4byte)
+       1, 2, 3, 4,    // d (le)
+       1, 2, 3, 4, 5, 6, 7, 8,  // e (le)
+    ]
+    var v = foo_t{}
+
+    mem.copy(buf, &v)
+    assert(v.a == 1)
+    assert(v.b == 2)
+    assert(v.c == true)
+    assert(v.d == 67305985)  // 0x04030201
+    assert(v.e == 578437695752307201)  // 0x0807060504030201
+
+    println('test struct copy success')
+    println('a:', v.a)
+    println('b:', v.b)
+    println('c:', v.c)
+    println('d:', v.d)
+    println('e:', v.e)
+}
+
+--- output.txt
+test struct copy success
+a: 1
+b: 2
+c: true
+d: 67305985
+e: 578437695752307201
+
+
+=== test_read_float_le
+--- main.n
+import mem
+
+fn main():void! {
+    // IEEE 754 表示:
+    // 1.0f (f32) = 0x3f800000
+    // 1.0 (f64) = 0x3ff0000000000000
+    
+    // test f32 be
+    [u8] f32_buf = [0x00, 0x00, 0x80, 0x3f]  // 1.0f be representation
+    f32 f32_val = mem.read_f32_le(f32_buf)
+    assert(f32_val == 1.0)
+    
+    [u8] f64_buf = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x3f] 
+    f64 f64_val = mem.read_f64_le(f64_buf)
+    println(f64_val)
+    assert(f64_val == 1.0)
+    
+    // PI (f32) ≈ 0x40490fdb
+    // PI (f64) ≈ 0x400921fb54442d18
+    [u8] pi_f32_buf = [0xdb, 0x0f, 0x49, 0x40]  
+    f32 pi_f32 = mem.read_f32_le(pi_f32_buf)
+    assert(pi_f32 > 3.14 && pi_f32 < 3.15)
+    
+    [u8] pi_f64_buf = [0x18, 0x2d, 0x44, 0x54, 0xfb, 0x21, 0x09, 0x40] 
+    f64 pi_f64 = mem.read_f64_le(pi_f64_buf)
+    assert(pi_f64 > 3.14 && pi_f64 < 3.15)
+    
+    println('test read float le success')
+}
+
+--- output.txt
+1.000000
+test read float le success

@@ -41,17 +41,17 @@ fn main() {
     println((b as [i8]).len())
 
     // 空数组快速确定类型
-    i8_i16_list c = [] as [i8]
-    var d = [] as [i16]
+    i8_i16_list c = vec_new<i8>(0, 0)
+    var d = vec_new<i16>(0, 0)
     print((c as [i8]).len(), d.len(), '\n')
     c = d
 
     print(c is [i8], c is [i16], '\n')
 
 
-    // raw_ptr
-    raw_ptr<int> a1 = null
+    // rawptr
+    rawptr<int> a1 = null
     int b1 = 12
     a1 = &b1
-    println(a1 as void_ptr == &b1 as void_ptr)
+    println(a1 as anyptr == &b1 as anyptr)
 }

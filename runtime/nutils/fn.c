@@ -250,7 +250,7 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
     fn_runtime->fn_addr = fn_addr;
 
     // fn_runtime->envs = envs;
-    write_barrier(&fn_runtime->envs, &envs);
+    rti_write_barrier_ptr(&fn_runtime->envs, envs, false);
 
     // 基于 jit 返回一个可以直接被外部 call 的 fn_addr
     fndef_t *fndef = find_fn(fn_addr, p);

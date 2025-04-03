@@ -1,0 +1,169 @@
+=== test_int
+--- main.n
+type my_int = int
+
+fn main():void! {
+    int foo = 1
+    my_int bar = 12
+    bar = foo
+}
+
+--- output.txt
+nature-test/main.n:6:13: type inconsistency, expect=main.my_int(i64), actual=int(i64)
+
+=== test_struct_def
+--- main.n
+type person_t = struct{}
+
+type woman_t = person_t
+
+fn main():void! {
+    var p = person_t{}
+    woman_t w = p
+}
+
+--- output.txt
+nature-test/main.n:7:17: type inconsistency, expect=main.woman_t(struct), actual=main.person_t(struct)
+
+=== test_struct_def2
+--- main.n
+type person_t = struct{
+    u32 age
+}
+
+type woman_t = person_t
+
+fn main():void! {
+    var w = woman_t{
+        age = 28,
+    }
+    assert(w.age == 28)
+    person_t p = w
+}
+
+--- output.txt
+nature-test/main.n:12:18: type inconsistency, expect=main.person_t(struct), actual=main.woman_t(struct)
+
+=== test_literal_failed
+--- main.n
+type int_literal = int
+type i8_literal = i8
+type u8_literal = u8
+type vec_int_literal = [int]
+type vec_string_literal = vec<string>
+type set_int_literal = set<int>
+type tuple_literal = (int, bool, arr<u8,5>)
+type map_literal = map<string, [u16]>
+type fn_literal = fn(int,string):void!
+
+fn main():void! {
+    int_literal i = -1
+    i8_literal i1 = 12
+    u8_literal i2 = 200
+    vec_int_literal vec_int = [1,2,3]
+    vec_string_literal vec_string = ['a','b','c', 'd', 'e', '5', 'g']
+    set_int_literal set_int = {1, 2, 3, 4, i}
+}
+
+--- output.txt
+nature-test/main.n:17:44: type inconsistency, expect=int(i64), actual=main.int_literal(i64)
+
+=== test_literal_failed2
+--- main.n
+type int_literal = int
+type i8_literal = i8
+type u8_literal = u8
+type vec_int_literal = [int]
+type vec_string_literal = vec<string>
+type set_int_literal = set<int>
+type tuple_literal = (int, bool, arr<u8,5>)
+type map_literal = map<string, [u16]>
+type fn_literal = fn(int,string):void!
+
+fn main():void! {
+    string s = 'hello world'
+    int seed = 24
+    [u32] seed_vec = [1, 10, 100, 1000, 10000, 2, 20, 200, 2000, 20000, 3, 30, 300, 3000, 30000, 4, 40, 400, 4000, 40000, 5, 50, 500, 5000, 50000]
+
+    int_literal i = -1
+    i8_literal i1 = 12
+    u8_literal i2 = 200
+    vec_int_literal vec_int = [1,2,3]
+    vec_string_literal vec_string = ['a','b','c', 'd', s, '5', 'g']
+    set_int_literal set_int = {1, 2, 3, 4, seed, 5}
+    tuple_literal t = (1, true, [1,2,3,4,5])
+    map_literal m = {'a':seed_vec, 'b': [4,5,6,7]}
+}
+
+--- output.txt
+nature-test/main.n:23:31: type inconsistency, expect=vec<u16>, actual=vec<u32>
+
+=== test_literal_failed3
+--- main.n
+type int_literal = int
+type i8_literal = i8
+type u8_literal = u8
+type u16_literal = u16
+type vec_int_literal = [int]
+type vec_string_literal = vec<string>
+type set_int_literal = set<int>
+type tuple_literal = (int, bool, arr<u8,5>)
+type map_literal = map<string, [u16]>
+type fn_literal = fn(int,string):void!
+
+fn main():void! {
+    string s = 'hello world'
+    int seed = 24
+    [u16_literal] seed_vec = [1, 10, 100, 1000, 10000, 2, 20, 200, 2000, 20000, 3, 30, 300, 3000, 30000, 4, 40, 400, 4000, 40000, 5, 50, 500, 5000, 50000]
+
+    int_literal i = -1
+    i8_literal i1 = 12
+    u8_literal i2 = 200
+    vec_int_literal vec_int = [1,2,3]
+    vec_string_literal vec_string = ['a','b','c', 'd', s, '5', 'g']
+    set_int_literal set_int = {1, 2, 3, 4, seed, 5}
+    tuple_literal t = (1, true, [1,2,3,4,5])
+    map_literal m = {'a':seed_vec, 'b': [4,5,6,7]}
+}
+
+--- output.txt
+nature-test/main.n:24:31: type inconsistency, expect=vec<u16>, actual=vec<main.u16_literal(u16)>
+
+=== test_literal
+--- main.n
+type int_literal = int
+type i8_literal = i8
+type u8_literal = u8
+type u16_literal = u16
+type vec_int_literal = [int]
+type vec_string_literal = vec<string>
+type set_int_literal = set<int>
+type tuple_literal = (int, bool, arr<u8,5>)
+type map_literal = map<string, [u16]>
+type fn_literal = fn(int,string):int!
+
+fn main():void! {
+    string s = 'hello world'
+    int seed = 24
+    [u16] seed_vec = [1, 10, 100, 1000, 10000, 2, 20, 200, 2000, 20000, 3, 30, 300, 3000, 30000, 4, 40, 400, 4000, 40000, 5, 50, 500, 5000, 50000]
+
+    int_literal i = -1
+    i8_literal i1 = 12
+    u8_literal i2 = 200
+    vec_int_literal vec_int = [1,2,3]
+    vec_string_literal vec_string = ['a','b','c', 'd', s, '5', 'g']
+    set_int_literal set_int = {1, 2, 3, 4, seed, 5}
+    tuple_literal t = (1, true, [1,2,3,4,5])
+    map_literal m = {'a':seed_vec, 'b': [4,5,6,7]}
+
+    fn_literal f = fn(int x, string y):int! {
+        return x + y.len()
+    }
+
+    assert(i == -1)
+    assert(i1 == 12)
+    assert(i2 == 200)
+    assert(vec_int[0] == 1 && vec_int[1] == 2 && vec_int[2] == 3)
+    assert(vec_string[0] == 'a' && vec_string[1] == 'b' && vec_string[2] == 'c' && vec_string[3] == 'd' && vec_string[4] == s && vec_string[5] == '5' && vec_string[6] == 'g')
+    assert(f(12, 'hello') == 17)
+}

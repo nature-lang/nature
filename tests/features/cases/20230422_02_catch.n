@@ -1,11 +1,11 @@
 fn hello():void! {
     println('hello nature')
-    throw 'hello error'
+    throw errorf('hello error')
 }
 
 fn main():void! {
     hello() catch err {
-        println('catch err:', err.msg)
+        println('catch err:', err.msg())
         break
         break
         println('hello world 1')
@@ -14,19 +14,19 @@ fn main():void! {
     // closure fn
     var world = fn(bool e):int! {
         if e {
-            throw 'world error'
+            throw errorf('world error')
         }
         return 233
     }
 
     int foo = world(true) catch err {
-        println('catch err:', err.msg)
+        println('catch err:', err.msg())
         break 12
     }
     println('foo =', foo)
 
     foo = world(false) catch err {
-        println('catch err:', err.msg)
+        println('catch err:', err.msg())
         break 12
     }
     println('foo =', foo)
@@ -34,6 +34,6 @@ fn main():void! {
 
     // return
     hello() catch err1 {
-        throw '??' + err1.msg
+        throw errorf('??' + err1.msg())
     }
 }

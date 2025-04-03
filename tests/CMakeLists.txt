@@ -11,8 +11,12 @@ else ()
 endif ()
 message("LIBUV_STATIC: ${LIBUV_STATIC}")
 
-set(LIBUC_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libc.a")
-message("LIBUC_STATIC: ${LIBUC_STATIC}")
+if (CMAKE_SYSTEM_NAME STREQUAL "darwin")
+    set(LIBC_STATIC "")
+else ()
+    set(LIBC_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libc.a")
+endif ()
+message("LIBC_STATIC: ${LIBC_STATIC}")
 
 add_executable(test_hash_table test_hash_table.c ${UTILS})
 target_link_libraries(test_hash_table ${LIBUV_STATIC})
@@ -54,11 +58,13 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
     # testar 和 n 文件可以同时存在，在 main 中选择自己需要的测试方式
     if (IS_DIRECTORY ${CASE_PATH})
         set(WORK_DIR ${CASE_PATH})
+        set(TESTAR_FILE "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}.testar")
         set(ENTRY_FILE main.n)
     elseif (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}.testar")
         set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features/cases)
         set(TESTAR_FILE "${TEST_NAME}.testar")
         set(ENTRY_FILE "${TEST_NAME}.n")
+        target_compile_definitions(${TEST_NAME} PRIVATE TEST_MODE)
     else ()
         set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features/cases)
         set(ENTRY_FILE "${TEST_NAME}.n")
@@ -70,7 +76,7 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
             PROPERTY
             ENVIRONMENT "BUILD_OS=$ENV{BUILD_OS};BUILD_ARCH=$ENV{BUILD_ARCH};NPKG_PATH=${PACKAGE_BINARY_PATH};BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};TESTAR_FILE=${TESTAR_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};PATH=/usr/local/nature/bin:$ENV{PATH};")
 
-    message("[test cases] register test ${TEST_NAME} success, work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}")
+    message("[test cases] register test ${TEST_NAME} success, work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}, testar_file=${TESTAR_FILE}")
 endforeach()
 
 # ---------------------------------- 通过环境变量启用 runtime main debug 测试 ------------------------------------------
@@ -113,11 +119,11 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
     #        set(CMAKE_EXE_LINKER_FLAGS "-static")
     #        set_target_properties(test_runtime_debug PROPERTIES LINK_FLAGS "-static")
     #    endif ()
-    target_compile_definitions(test_runtime_debug PRIVATE NDEBUG)
+    # target_compile_definitions(test_runtime_debug PRIVATE NDEBUG)
 
     add_dependencies(test_runtime_debug generate_libmain)  # 添加这行
 
-    target_link_libraries(test_runtime_debug ${LIBMAIN_STATIC} ${LIBUV_STATIC})
+    target_link_libraries(test_runtime_debug ${LIBMAIN_STATIC} ${LIBUV_STATIC} ${LIBC_STATIC})
     add_test(NAME test_runtime_debug COMMAND test_runtime_debug WORKING_DIRECTORY ${WORK_DIR})
 
     message("[test_runtime_debug] register test_runtime_debug case ${TEST_IDENT} success, work_dir=${WORK_DIR}, entry_file=${ENTRY}")

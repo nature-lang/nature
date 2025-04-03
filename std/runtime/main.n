@@ -1,50 +1,44 @@
 #linkid rt_vec_new
-fn vec_new(int ref_hash, int ele_ref_hash, int len, int cap):void_ptr
+fn vec_new(int hash, int element_hash, int len, anyptr value_ref):anyptr
+
+#linkid rt_vec_cap
+fn vec_cap(int hash, int element_hash, int cap):anyptr
 
 #linkid rt_vec_push
-fn vec_push(void_ptr list, void_ptr val)
-
-#linkid rt_vec_append
-fn vec_append(void_ptr list1, void_ptr list2)
+fn vec_push(anyptr list, int element_hash, anyptr val)
 
 #linkid rt_vec_slice
-fn vec_slice(void_ptr list, int start, int end):void_ptr
+fn vec_slice(anyptr list, int start, int end):anyptr
+
+#linkid rt_vec_append
+fn vec_append(anyptr list1, anyptr list2, int element_hash)
 
 #linkid rt_vec_concat
-fn vec_concat(void_ptr list1, void_ptr list2):void_ptr
+fn vec_concat(anyptr list1, anyptr list2, int element_hash):anyptr
 
-#linkid rt_vec_ref
-fn vec_ref(void_ptr list):void_ptr
-
-#linkid rt_vec_length
-fn vec_length(void_ptr list):int
-
-#linkid rt_vec_capacity
-fn vec_capacity(void_ptr list):int
+#linkid rt_set_new
+fn set_new(int rhash, int key_hash):anyptr
 
 #linkid rt_set_add
-fn set_add(void_ptr s, void_ptr key):bool
+fn set_add(anyptr s, anyptr key):bool
 
 #linkid rt_set_contains
-fn set_contains(void_ptr s, void_ptr key):bool
+fn set_contains(anyptr s, anyptr key):bool
 
 #linkid rt_set_delete
-fn set_delete(void_ptr s, void_ptr key)
+fn set_delete(anyptr s, anyptr key)
+
+#linkid rt_map_new
+fn map_new(int rhash, int key_hash, int value_hash):anyptr
 
 #linkid rt_map_delete
-fn map_delete(void_ptr m, void_ptr key)
-
-#linkid rt_map_length
-fn map_length(void_ptr m):int
+fn map_delete(anyptr m, anyptr key)
 
 #linkid rt_map_contains
-fn map_contains(void_ptr s, void_ptr key):bool
-
-#linkid rt_string_length
-fn string_length(void_ptr s):int
+fn map_contains(anyptr s, anyptr key):bool
 
 #linkid rt_string_ref
-fn string_ref(void_ptr s):void_ptr
+fn string_ref(anyptr s):anyptr
 
 #linkid rt_processor_index
 fn processor_index():int
@@ -56,13 +50,13 @@ fn gc()
 fn malloc_bytes():i64
 
 #linkid gc_malloc
-fn gc_malloc(int rhash):void_ptr
+fn gc_malloc(int rhash):anyptr
 
 #linkid gc_malloc_size
-fn gc_malloc_size(int size):void_ptr
+fn gc_malloc_size(int size):anyptr
 
 #linkid rt_string_new
-fn string_new(void_ptr s):string
+fn string_new(anyptr s):string
 
 #linkid rt_string_ref_new
-fn string_ref_new(void_ptr s, int len):string
+fn string_ref_new(anyptr s, int len):string

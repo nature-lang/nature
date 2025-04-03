@@ -1,16 +1,22 @@
 import runtime
 
+fn set_new<T>():set<T> {
+    int hash = @reflect_hash(set<T>)
+    int key_hash = @reflect_hash(T)
+    return runtime.set_new(hash, key_hash) as set<T>
+}
+
 fn set<T>.add(T key):bool {
-   raw_ptr<T> ref = &key
-   return runtime.set_add(self as void_ptr, ref as void_ptr)
+   rawptr<T> ref = &key
+   return runtime.set_add(self as anyptr, ref as anyptr)
 }
 
 fn set<T>.contains(T key):bool {
-   raw_ptr<T> ref = &key
-   return runtime.set_contains(self as void_ptr, ref as void_ptr)
+   rawptr<T> ref = &key
+   return runtime.set_contains(self as anyptr, ref as anyptr)
 }
 
 fn set<T>.del(T key) {
-    raw_ptr<T> ref = &key
-    runtime.set_delete(self as void_ptr, ref as void_ptr)
+    rawptr<T> ref = &key
+    runtime.set_delete(self as anyptr, ref as anyptr)
 }

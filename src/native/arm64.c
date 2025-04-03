@@ -195,7 +195,7 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
         // 根据不同类型返回立即数
         if (v->kind == TYPE_INT || v->kind == TYPE_UINT ||
             v->kind == TYPE_INT64 || v->kind == TYPE_UINT64 ||
-            v->kind == TYPE_VOID_PTR) {
+            v->kind == TYPE_ANYPTR) {
             result = ARM64_IMM(v->uint_value);
         } else if (v->kind == TYPE_INT8 || v->kind == TYPE_UINT8 ||
                    v->kind == TYPE_INT16 || v->kind == TYPE_UINT16 ||
@@ -212,7 +212,7 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
 
         result->size = type_kind_sizeof(v->kind);
 
-        // 三元运算符的 second 如果是 imm，imm 有数字大小限制不能超过 4095
+        // 三元运算符的 second 如果是 imm，imm 有数字大小限制不能超过 4095, 如果超过 4095 则需要使用 x16 寄存器进行中转
         if (operand->pos == LIR_FLAG_SECOND && lir_op_ternary(op) && result->immediate > 4095) {
             // 使用 x16 进行中转，然后再进行比较
             arm64_asm_operand_t *free_reg;

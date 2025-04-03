@@ -1,0 +1,337 @@
+=== test_float_sort
+--- main.n
+import fmt
+
+fn main() {
+    var floats = [3.14, 1.618, 2.718, 0.577, 1.414]
+
+    println("Before sort: ", floats_to_string(floats))
+    floats.sort(fn(int a, int b):bool {
+        return floats[a] < floats[b]
+    })
+    println("After sort: ", floats_to_string(floats))
+
+    // Verify sort results
+    assert(floats[0] < 0.6)
+    assert(floats[1] > 1.4 && floats[1] < 1.5)
+    assert(floats[2] > 1.6 && floats[2] < 1.7)
+    assert(floats[3] > 2.7 && floats[3] < 2.8)
+    assert(floats[4] > 3.1 && floats[4] < 3.2)
+
+    println("Float sort test passed!")
+}
+
+fn floats_to_string(vec<f64> floats):string {
+    string result = "["
+    for int i = 0; i < floats.len(); i += 1 {
+        if i > 0 {
+            result += ", "
+        }
+        result += fmt.sprintf("%.2f", floats[i])
+    }
+    result += "]"
+    return result
+}
+
+
+=== test_struct_sort
+--- main.n
+import fmt
+
+type person_t = struct {
+    string name
+    int age
+    f64 height
+}
+
+fn main() {
+    [person_t] persons = [
+        person_t{ name = "Alice", age = 25, height = 165.5 },
+        person_t{ name = "Bob", age = 30, height = 180.0 },
+        person_t{ name = "Charlie", age = 20, height = 175.5 },
+        person_t{ name = "David", age = 25, height = 170.0 },
+        person_t{ name = "Eve", age = 28, height = 168.0 },
+    ]
+    
+    println("Before sort: ", persons_to_string(persons))
+    
+    // Sort by age
+    persons.sort(fn(int a, int b):bool {
+        return persons[a].age < persons[b].age
+    })
+    println("After sort by age: ", persons_to_string(persons))
+    
+    // Verify age sort results
+    assert(persons[0].age == 20)  // Charlie
+    assert(persons[1].age == 25)  // Alice or David
+    assert(persons[2].age == 25)  // Alice or David
+    assert(persons[3].age == 28)  // Eve
+    assert(persons[4].age == 30)  // Bob
+    
+    println("Struct sort test passed!")
+}
+
+fn persons_to_string(vec<person_t> persons):string {
+    string result = "[\n"
+    for int i = 0; i < persons.len(); i += 1 {
+        if i > 0 {
+            result += ",\n"
+        }
+        result += fmt.sprintf("  {name: %s, age: %d, height: %.1f}", 
+            persons[i].name, persons[i].age, persons[i].height)
+    }
+    result += "\n]"
+    return result
+}
+
+
+=== test_struct_sort
+--- main.n
+import fmt
+
+type person_t = struct {
+    string name
+    int age
+    f64 height
+}
+
+fn main() {
+    [person_t] persons = [
+        person_t{ name = "Alice", age = 25, height = 165.5 },
+        person_t{ name = "Bob", age = 30, height = 180.0 },
+        person_t{ name = "Charlie", age = 20, height = 175.5 },
+        person_t{ name = "David", age = 25, height = 170.0 },
+        person_t{ name = "Eve", age = 28, height = 168.0 },
+    ]
+
+    println("Before sort: ", persons_to_string(persons))
+
+    // Sort by age
+    persons.sort(fn(int a, int b):bool {
+        return persons[a].age < persons[b].age
+    })
+    println("After sort by age: ", persons_to_string(persons))
+
+    // Verify age sort results
+    assert(persons[0].age == 20)  // Charlie
+    assert(persons[1].age == 25)  // Alice or David
+    assert(persons[2].age == 25)  // Alice or David
+    assert(persons[3].age == 28)  // Eve
+    assert(persons[4].age == 30)  // Bob
+
+    println("Struct sort test passed!")
+}
+
+fn persons_to_string(vec<person_t> persons):string {
+    string result = "[\n"
+    for int i = 0; i < persons.len(); i += 1 {
+        if i > 0 {
+            result += ",\n"
+        }
+        result += fmt.sprintf("  {name: %s, age: %d, height: %.1f}",
+            persons[i].name, persons[i].age, persons[i].height)
+    }
+    result += "\n]"
+    return result
+}
+
+
+
+=== test_binary_search_mutil
+--- main.n
+import fmt
+
+fn main():void! {
+    [int] nums = [1, 1, 1, 1, 1, 3, 5, 7, 7, 9, 11, 13, 15]
+    
+    int target = 7
+    int index = nums.search(fn(int i):bool {
+        return nums[i] >= target
+    })
+    
+    fmt.printf("Searching for %d, found at index: %d, val is: %d\n", target, index, nums[index])
+    assert(index == 7)
+    assert(nums[index] == target)
+}
+
+
+
+=== test_binary_search
+--- main.n
+import fmt
+
+type person_t = struct {
+    string name
+    int age
+    f64 height
+}
+
+fn main():void! {
+    [int] nums = [1, 1, 1, 1, 1, 3, 5, 7, 7, 9, 11, 13, 15]
+    
+    int target = 7
+    int index = nums.search(fn(int i):bool {
+        return nums[i] >= target
+    })
+    
+    fmt.printf("Searching for %d using search, found at index: %d\n", target, index)
+    assert(index == 7)
+    assert(nums[index] == target)
+    
+    // 测试结构体数组
+    [person_t] persons = [
+        person_t{ name = "Alice", age = 20, height = 165.5 },
+        person_t{ name = "Bob", age = 25, height = 180.0 },
+        person_t{ name = "Charlie", age = 28, height = 175.5 },
+        person_t{ name = "David", age = 30, height = 170.0 },
+        person_t{ name = "Eve", age = 35, height = 168.0 },
+    ]
+    
+    int target_age = 28
+    index = persons.search(fn(int i):bool {
+        return persons[i].age >= target_age
+    })
+    
+    fmt.printf("Searching for age %d using search, found at index: %d\n", target_age, index)
+    assert(index == 2)
+    assert(persons[index].age == target_age)
+    assert(persons[index].name == "Charlie")
+    
+    println("Binary search test passed!")
+}
+
+=== test_sort_time
+--- main.n
+import time
+
+fn random_u32(rawptr<u64> state):u32 {
+    // xorshift rng: https://en.wikipedia.org/wiki/Xorshift#xorshift.2A
+    *state ^= *state >> 12
+    *state ^= *state << 25
+    *state ^= *state >> 27
+    return ((*state * 0x2545F4914F6CDD1D) >> 32) as u32
+}
+
+fn main():void! {
+    u64 seed = time.unix() as u64
+    int len = 1000000
+    var list = vec_cap<u32>(len)
+
+    for int i = 0; i < len; i+=1 {
+        list.push(random_u32(&seed))
+    }
+
+    i64 start = time.now().ms_timestamp()
+    list.sort(fn(int a, int b):bool {
+        return list[a] > list[b]
+    })
+
+    i64 use_time = time.now().ms_timestamp() - start
+
+    // for i in list {
+    //    println(i)
+    //}
+    assert(use_time < 5000)
+    println('use time(ms)', use_time)
+}
+
+
+
+
+
+=== test_slice_sort_time
+--- main.n
+import time
+
+fn random_u32(rawptr<u64> state):u32 {
+    // xorshift rng: https://en.wikipedia.org/wiki/Xorshift#xorshift.2A
+    *state ^= *state >> 12
+    *state ^= *state << 25
+    *state ^= *state >> 27
+    return ((*state * 0x2545F4914F6CDD1D) >> 32) as u32
+}
+
+fn main():void! {
+    u64 seed = time.unix() as u64
+    int len = 1000000
+    int slice_end = (len as float * 0.75) as int
+    var list = vec_cap<u32>(len)
+
+    for int i = 0; i < len; i+=1 {
+        list.push(random_u32(&seed))
+    }
+
+    i64 start = time.now().ms_timestamp()
+    list.slice(0, slice_end).sort(fn(int a, int b):bool {
+        return list[a] > list[b]
+    })
+
+    i64 use_time = time.now().ms_timestamp() - start
+
+    assert(use_time < 5000)
+    println('use time(ms)', use_time)
+}
+
+=== test_sort_float
+--- main.n
+import time
+
+fn random_u32(rawptr<u64> state):u32 {
+    // xorshift rng: https://en.wikipedia.org/wiki/Xorshift#xorshift.2A
+    *state ^= *state >> 12
+    *state ^= *state << 25
+    *state ^= *state >> 27
+    return ((*state * 0x2545F4914F6CDD1D) >> 32) as u32
+}
+
+fn random_f32(rawptr<u64> state):f32 {
+    // random float32 in [0,1)
+    return (random_u32(state) >> 8) as f32 / 16777216.0
+}
+
+fn main():void! {
+    u64 seed = time.unix() as u64
+    int len = 1000000
+    var list = vec_cap<f32>(len)
+
+    for int i = 0; i < len; i+=1 {
+        list.push(random_f32(&seed))
+    }
+
+    i64 start = time.now().ms_timestamp()
+    list.sort(fn(int a, int b):bool {
+        return list[a] > list[b]
+    })
+
+    i64 use_time = time.now().ms_timestamp() - start
+
+    // for i in list {
+    //    println(i)
+    // }
+
+    assert(use_time < 5000)
+    println('use time(ms)', use_time)
+}
+
+=== test_empty_slice_sort_time
+--- main.n
+import time
+import fmt
+
+type prob_index_t = struct{
+    f32 prob
+    int index
+}
+
+fn main():void! {
+    int n = 32000
+
+    var probindex = vec_new<prob_index_t>(prob_index_t{}, n)
+    i64 start = time.now().ms_timestamp()
+    probindex.sort(fn(int a, int b):bool {
+        return probindex[a].prob > probindex[b].prob
+    })
+    i64 use_time = time.now().ms_timestamp() - start
+    assert(use_time < 1000)
+    println('use time(ms)', use_time)
+}

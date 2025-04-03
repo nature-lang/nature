@@ -3,15 +3,15 @@ import syscall
 fn main():void! {
     string s = 'hello world!'
     var raw_str = s.ref()
-    int result = syscall.call6(syscall.SYS_WRITE, syscall.STDOUT_FILENO as void_ptr, raw_str, s.len() as void_ptr, 0, 0, 0)
+    int result = syscall.call6(syscall.SYS_WRITE, syscall.STDOUT as anyptr, raw_str, s.len() as anyptr, 0, 0, 0)
 
     // read
     var fd = syscall.open('./asserts/stat.txt', syscall.O_RDONLY, 0666)
 
-    var buf = vec_new<u8>(100, 0) // 预先申请好了空间, 便于 syscall 中将相应的值回写
+    var buf = vec_new<u8>(0, 100) // 预先申请好了空间, 便于 syscall 中将相应的值回写
     print('buf len: ', buf.len(), ', buf cap: ', buf.cap(), '\n')
 
-    result = syscall.call6(syscall.SYS_READ, fd as void_ptr, buf.ref(), buf.len() as void_ptr, 0, 0, 0)
+    result = syscall.call6(syscall.SYS_READ, fd as anyptr, buf.ref(), buf.len() as anyptr, 0, 0, 0)
 
     print('read result: ', result, '\n')
     buf = buf.slice(0, result)

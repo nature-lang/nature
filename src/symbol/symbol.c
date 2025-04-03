@@ -1,9 +1,6 @@
 #include "symbol.h"
 #include "utils/helper.h"
 
-// 临时表，用来临时记录, key = ident, value is any
-table_t *can_import_symbol_table;
-
 /**
  * 编译时产生的所有符号都进行唯一处理后写入到该 table 中
  * 1. 模块名 + fn名称
@@ -37,8 +34,6 @@ static symbol_t *_symbol_table_set(string ident, symbol_type_t type, void *ast_v
 }
 
 void symbol_init() {
-    can_import_symbol_table = table_new();
-
     symbol_table = table_new();
     symbol_fn_list = slice_new();
     symbol_var_list = slice_new();
@@ -67,7 +62,7 @@ symbol_t *symbol_table_set(string ident, symbol_type_t type, void *ast_value, bo
         slice_push(symbol_var_list, s);
     }
 
-    if (type == SYMBOL_TYPE_ALIAS) {
+    if (type == SYMBOL_TYPE) {
         slice_push(symbol_typedef_list, s);
     }
 
@@ -94,4 +89,13 @@ symbol_t *symbol_table_get(char *ident) {
     table_set(symbol_table, ident, s);
 
     return s;
+}
+
+symbol_t *symbol_typedef_add_method(char *typedef_ident, char *method_ident, ast_fndef_t *fndef) {
+    symbol_t *symbol = symbol_table_get(typedef_ident);
+    assert(symbol);
+    assert(symbol->type == SYMBOL_TYPE);
+    ast_typedef_stmt_t *typedef_stmt = symbol->ast_value;
+
+    sc_map_put_sv(&typedef_stmt->method_table, method_ident, fndef);
 }

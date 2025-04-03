@@ -3,9 +3,9 @@ import runtime
 
 type future_t<T> = struct{
     i64 size
-    raw_ptr<T> result
-    raw_ptr<error_t> error
-    void_ptr co
+    rawptr<T> result
+    throwable? error
+    anyptr co
 }
 
 fn async<T>(fn():void! function, int flag):ptr<future_t<T>> {
@@ -13,25 +13,26 @@ fn async<T>(fn():void! function, int flag):ptr<future_t<T>> {
     fu.size = @sizeof(T)
     if fu.size > 0 {
         var hash = @reflect_hash(T)
-        fu.result = runtime.gc_malloc(hash) as raw_ptr<T>
+        fu.result = runtime.gc_malloc(hash) as rawptr<T>
     }
 
     // Establish mutually binding relationships, so even if the coroutine exits,
     // the related result/error will also be bound to the future to prevent being garbage collected.
-    fu.co = utils.coroutine_async(function as void_ptr, flag, fu as void_ptr)
+    fu.co = utils.coroutine_async(function as anyptr, flag, fu as anyptr)
 
     return fu
 }
 
-fn co_return<T>(raw_ptr<T> result) {
-    utils.coroutine_return(result as void_ptr)
+fn co_return<T>(rawptr<T> result) {
+    utils.coroutine_return(result as anyptr)
 }
 
 fn future_t<T>.await():T! {
     utils.coroutine_await(self.co)
 
-    if self.error != null {
-        throw self.error.msg
+    if self.error is throwable {
+        var error = self.error as throwable
+        throw errorf(error.msg())
     }
 
     return *self.result
@@ -40,8 +41,11 @@ fn future_t<T>.await():T! {
 fn future_t<T:void>.await():void! {
     utils.coroutine_await(self.co)
 
-    if self.error != null {
-        throw self.error.msg
+    if self.error is throwable {
+        var error = self.error as throwable
+        throw errorf(error.msg())
+    } else {
+        println('self.error is null')
     }
 
     return

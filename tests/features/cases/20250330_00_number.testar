@@ -1,0 +1,121 @@
+=== test_integer_literals
+--- main.n
+fn main():void! {
+    // 十进制整数
+    i32 dec_pos = 42
+    i32 dec_neg = -42
+
+    // 十六进制整数
+    i32 hex_pos = 0x2A      // 42 in decimal
+    i32 hex_neg = -0x2A     // -42 in decimal
+
+    // 二进制整数
+    i32 bin_pos = 0b101010  // 42 in decimal
+    i32 bin_neg = -0b101010 // -42 in decimal
+
+    // 八进制整数
+    i32 oct_pos = 0o52      // 42 in decimal
+    i32 oct_neg = -0o52     // -42 in decimal
+
+    // 验证所有表示法都等价
+    assert(dec_pos == hex_pos)
+    assert(dec_pos == bin_pos)
+    assert(dec_pos == oct_pos)
+
+    assert(dec_neg == hex_neg)
+    assert(dec_neg == bin_neg)
+    assert(dec_neg == oct_neg)
+
+    // 大数值测试
+    i64 large_dec = 1234567890
+    i64 large_hex = 0x499602D2
+    i64 large_bin = 0b1001001100101100000001011010010
+    i64 large_oct = 0o11145401322
+
+    assert(large_dec == large_hex)
+    assert(large_dec == large_bin)
+    assert(large_dec == large_oct)
+
+    println('Integer literal tests passed!')
+}
+
+--- output.txt
+Integer literal tests passed!
+
+
+=== test_float_literals
+--- main.n
+fn main():void! {
+    // 基本浮点数表示
+    f64 f1 = 3.14159
+    f64 f2 = -3.14159
+
+    // 科学计数法表示
+    f64 sci1 = 3.14159e2    // 314.159
+    f64 sci2 = 3.14159E2    // 同上，大写E
+    f64 sci3 = -3.14159e2   // -314.159
+    f64 sci4 = 3.14159e-2   // 0.0314159
+    f64 sci5 = -3.14159e-2  // -0.0314159
+    println(sci1)
+
+    // 验证科学计数法
+    assert(sci1 == 314.159)
+    assert(sci2 == 314.159)
+    assert(sci3 == -314.159)
+    assert(sci4 == 0.0314159)
+    assert(sci5 == -0.0314159)
+
+
+    // 特殊值测试
+    f64 zero = 0.0
+    f64 neg_zero = -0.0
+    f64 inf = 1.0 / 0.0
+    f64 neg_inf = -1.0 / 0.0
+    f64 nan = 0.0 / 0.0
+
+    assert(zero == 0.0)
+    assert(neg_zero == -0.0)
+    assert(inf > 1.0e308)
+    assert(neg_inf < -1.0e308)
+
+    println('Float literal tests passed!')
+}
+
+--- output.txt
+314.159000
+Float literal tests passed!
+
+
+=== test_scientific_notation
+--- main.n
+fn main():void! {
+    // 基本科学计数法测试
+    f64 a = 12e-5    // 0.00012
+    f64 b = 12E-5    // 同上，大写E
+    f64 c = 12e5     // 1200000
+    f64 d = 12E5     // 同上，大写E
+
+    assert(a == 0.00012)
+    assert(b == 0.00012)
+    assert(c == 1200000.0)
+    assert(d == 1200000.0)
+
+    // 带小数点的科学计数法
+    f64 e = 1.2e-4   // 0.00012
+    f64 f = 1.2E-4   // 同上，大写E
+    f64 g = 1.2e4    // 12000
+    f64 h = 1.2E4    // 同上，大写E
+
+    assert(e == 0.00012)
+    assert(f == 0.00012)
+    assert(g == 12000.0)
+    assert(h == 12000.0)
+
+    f64 i = 1e-5
+    assert(i == 0.000010)
+
+    println('Scientific notation tests passed!')
+}
+
+--- output.txt
+Scientific notation tests passed!

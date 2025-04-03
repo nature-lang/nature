@@ -12,7 +12,7 @@ fn args():[string] {
 
 // read current exe path by read link /proc/self/exe
 fn exe():string! {
-    var buf = vec_new<u8>(4096, 0)
+    var buf = vec_new<u8>(0, 4096)
     var len = syscall.readlink('/proc/self/exe', buf)
 
     buf = buf.slice(0, len)
@@ -37,17 +37,17 @@ fn listdir(string path):[string]! {
 
     var dir = dirent.opendir(path.ref())
     if dir == 0 {
-        throw 'opendir failed: ' + libc.strerror()
+        throw errorf('opendir failed: ' + libc.strerror())
     }
 
     for true {
-        // raw_ptr 可以接收 null 或者具体的指针值，可以通过 *语法解构原始值
-        raw_ptr<dirent.dirent_t> entry = dirent.readdir(dir)
+        // rawptr 可以接收 null 或者具体的指针值，可以通过 *语法解构原始值
+        rawptr<dirent.dirent_t> entry = dirent.readdir(dir)
         if entry == null {
             break
         }
 
-        var name = runtime.string_new(entry.name as void_ptr)
+        var name = runtime.string_new(entry.name as anyptr)
         if name == '.' || name == '..' || name == '' {
             continue
         }
@@ -65,7 +65,7 @@ fn listdir(string path):[string]! {
 // join and syscall.mkdir(dir, mode)
 fn mkdirs(string dir, u32 mode):void! {
     if dir == '' {
-        throw 'dir is empty'
+        throw errorf('dir is empty')
     }
 
     if path.exists(dir) {

@@ -65,11 +65,11 @@ static void elf_custom_links() {
     ct_rtype_data = rtypes_serialize();
     elf_put_data(ctx->data_rtype_section, ct_rtype_data, ct_rtype_size);
     Elf64_Sym sym = {
-        .st_shndx = ctx->data_rtype_section->sh_index,
-        .st_value = 0,
-        .st_other = 0,
-        .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-        .st_size = ct_rtype_size,
+            .st_shndx = ctx->data_rtype_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_rtype_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_RTYPE_DATA);
     elf_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, QWORD);
@@ -78,12 +78,12 @@ static void elf_custom_links() {
     ct_fndef_size = collect_fndef_list(ctx);
     ct_fndef_data = fndefs_serialize();
     elf_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
-    sym = (Elf64_Sym){
-        .st_shndx = ctx->data_fndef_section->sh_index,
-        .st_value = 0,
-        .st_other = 0,
-        .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-        .st_size = ct_fndef_size,
+    sym = (Elf64_Sym) {
+            .st_shndx = ctx->data_fndef_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_fndef_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_FNDEF_DATA);
     elf_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, QWORD);
@@ -91,12 +91,12 @@ static void elf_custom_links() {
     // caller - --------------------------------------------------------------------------
     ct_caller_data = callers_serialize();
     elf_put_data(ctx->data_caller_section, ct_caller_data, ct_caller_list->length * sizeof(caller_t));
-    sym = (Elf64_Sym){
-        .st_shndx = ctx->data_caller_section->sh_index,
-        .st_value = 0,
-        .st_other = 0,
-        .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-        .st_size = ct_rtype_size,
+    sym = (Elf64_Sym) {
+            .st_shndx = ctx->data_caller_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_rtype_size,
     };
     // 注册段名称与 runtime 中的符号进行绑定
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_CALLER_DATA);
@@ -106,12 +106,12 @@ static void elf_custom_links() {
     ct_symdef_size = collect_symdef_list(ctx);
     ct_symdef_data = symdefs_serialize();
     elf_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
-    sym = (Elf64_Sym){
-        .st_shndx = ctx->data_symdef_section->sh_index,
-        .st_value = 0,
-        .st_other = 0,
-        .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-        .st_size = ct_symdef_size,
+    sym = (Elf64_Sym) {
+            .st_shndx = ctx->data_symdef_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_symdef_size,
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_SYMDEF_DATA);
     elf_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, QWORD);
@@ -140,10 +140,10 @@ static void mach_custom_links() {
     ct_rtype_data = rtypes_serialize();
     mach_put_data(ctx->data_rtype_section, ct_rtype_data, ct_rtype_size);
     // 创建符号指向自定义数据段 __data.rtype
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                     .n_type = N_SECT | N_EXT,
-                     .n_sect = ctx->data_rtype_section->sh_index,
-                     .n_value = 0, // in section data offset
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
+                         .n_type = N_SECT | N_EXT,
+                         .n_sect = ctx->data_rtype_section->sh_index,
+                         .n_value = 0, // in section data offset
                  },
                  SYMBOL_RTYPE_DATA);
 
@@ -154,10 +154,10 @@ static void mach_custom_links() {
     ct_fndef_data = fndefs_serialize();
     mach_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
 
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                     .n_type = N_SECT | N_EXT,
-                     .n_sect = ctx->data_fndef_section->sh_index,
-                     .n_value = 0, // in section data offset
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
+                         .n_type = N_SECT | N_EXT,
+                         .n_sect = ctx->data_fndef_section->sh_index,
+                         .n_value = 0, // in section data offset
                  },
                  SYMBOL_FNDEF_DATA);
     macho_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, QWORD);
@@ -167,10 +167,10 @@ static void mach_custom_links() {
     ct_caller_data = callers_serialize();
     mach_put_data(ctx->data_caller_section, ct_caller_data, ct_caller_list->length * sizeof(caller_t));
     // 注册段名称与 runtime 中的符号进行绑定
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                     .n_type = N_SECT | N_EXT,
-                     .n_sect = ctx->data_caller_section->sh_index,
-                     .n_value = 0, // in section data offset
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
+                         .n_type = N_SECT | N_EXT,
+                         .n_sect = ctx->data_caller_section->sh_index,
+                         .n_value = 0, // in section data offset
                  },
                  SYMBOL_CALLER_DATA);
     macho_put_global_symbol(ctx, SYMBOL_CALLER_COUNT, &ct_caller_list->length, QWORD);
@@ -181,10 +181,10 @@ static void mach_custom_links() {
     ct_symdef_data = symdefs_serialize();
     mach_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
 
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                     .n_type = N_SECT | N_EXT,
-                     .n_sect = ctx->data_symdef_section->sh_index,
-                     .n_value = 0, // in section data offset
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
+                         .n_type = N_SECT | N_EXT,
+                         .n_sect = ctx->data_symdef_section->sh_index,
+                         .n_value = 0, // in section data offset
                  },
                  SYMBOL_SYMDEF_DATA);
     macho_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, QWORD);
@@ -229,11 +229,11 @@ static void elf_assembler_module(module_t *m) {
 
         // 写入符号表
         Elf64_Sym sym = {
-            .st_size = symbol->size,
-            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
-            .st_other = 0,
-            .st_shndx = ctx->data_section->sh_index, // 定义符号的段
-            .st_value = offset, // 定义符号的位置，基于段的偏移
+                .st_size = symbol->size,
+                .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+                .st_other = 0,
+                .st_shndx = ctx->data_section->sh_index, // 定义符号的段
+                .st_value = offset, // 定义符号的位置，基于段的偏移
         };
         elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, symbol->name);
     }
@@ -273,10 +273,10 @@ static void mach_assembler_module(module_t *m) {
         uint64_t offset = mach_put_data(ctx->data_section, symbol->value, symbol->size);
 
         // 写入符号表
-        mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                         .n_type = N_SECT | N_EXT,
-                         .n_sect = ctx->data_section->sh_index,
-                         .n_value = offset, // in section data offset
+        mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
+                             .n_type = N_SECT | N_EXT,
+                             .n_sect = ctx->data_section->sh_index,
+                             .n_value = offset, // in section data offset
                      },
                      symbol->name);
     }
@@ -491,6 +491,7 @@ static void build_init(char *build_entry) {
     config_init();
     symbol_init();
     reg_init();
+
     if (BUILD_ARCH == ARCH_AMD64) {
         amd64_opcode_init();
     }
@@ -548,7 +549,7 @@ static void build_assembler(slice_t *modules) {
             ast_var_decl_t *var_decl = &vardef->var_decl;
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
             symbol->name = var_decl->ident;
-            symbol->size = type_kind_sizeof(var_decl->type.kind);
+            symbol->size = type_sizeof(var_decl->type);
             symbol->value = NULL;
             slice_push(m->asm_global_symbols, symbol);
         }
@@ -603,7 +604,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
                 continue;
             }
 
-            char* full_path = path_join(builtin_dir, filename);
+            char *full_path = path_join(builtin_dir, filename);
             slice_push(builtin_modules, full_path);
         }
     }
@@ -620,9 +621,9 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
     // main build
     ast_import_t main_import = {
-        .package_dir = WORKDIR,
-        .package_conf = package_conf,
-        .module_ident = PACKAGE_MAIN_IDENT,
+            .package_dir = WORKDIR,
+            .package_conf = package_conf,
+            .module_ident = PACKAGE_MAIN_IDENT,
     };
 
     // main [links] 自动注册
@@ -680,7 +681,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         module_t *m = modules->take[i];
 
         // analyzer => ast_fndefs(global)
-        // analyzer 需要将 global symbol 注册完成，否则在 pre_infer 时找不到相关的符号
+        // analyzer 前需要将 global symbol 注册完成，否则在 pre_infer 时找不到相关的符号
         analyzer(m, m->stmt_list);
     }
 
@@ -824,7 +825,15 @@ static void build_archive(slice_t *modules) {
 void build(char *build_entry, bool is_archive) {
     assertf(strlen(build_entry) > 2, "build entry=%s exception", build_entry);
 
-    //    log_set_level(LOG_INFO);
+#ifdef TEST_MODE
+    printf("In test mode!\n");
+#endif
+
+#ifdef DEBUG_LOG
+    log_set_level(LOG_DEBUG);
+#else
+    log_set_level(LOG_INFO);
+#endif
 
     // 配置初始化
     build_init(build_entry);

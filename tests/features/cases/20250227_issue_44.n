@@ -1,0 +1,127 @@
+// The naturelang code is a modified version of the original Odin code from
+// https://github.com/odin-lang/Odin/blob/m_aster/core/unicode/utf8/utf8.odin
+// 0000_0000 0000_0000 0000_0000 0000_0000
+
+var RUNE_ERROR = 0xefbfbd as u32
+var RUNE_SELF = 0x80
+var RUNE_BOM = 0xfeff
+var RUNE_EOF = ~0
+var MAX_RUNE = 0x0010ffff as u32
+var UTF_MAX = 4
+
+var SURROGATE_MIN = 0xd800 as u32
+var SURROGATE_MAX = 0xdfff as u32
+
+var SURROGATE_HIGH_MAX = 0xdbff as u32
+var SURROGATE_LOW_MIN = 0xdc00 as u32
+
+var T1 = 0b00000000
+var TX = 0b10000000
+var T2 = 0b11000000
+var T3 = 0b11100000
+var T4 = 0b11110000
+var T5 = 0b11111000
+
+var MASKX = 0b00111111
+var MASK2 = 0b00011111
+var MASK3 = 0b00001111
+var MASK4 = 0b00000111
+
+var RUNE_MAX1 = (1 << 7 - 1) as u32
+var RUNE_MAX2 = (1 << 11 - 1) as u32
+var RUNE_MAX3 = (1 << 16 - 1) as u32
+
+// The default lowest and highest continuation byte.
+var LOCB = 0b10000000
+var HICB = 0b10111111
+
+type AcceptRange = struct {
+  u8 lo
+  u8 hi
+}
+
+arr<AcceptRange, 5> accept_ranges = [
+    AcceptRange{ lo = 0x80, hi = 0xbf },
+    AcceptRange{ lo = 0xa0, hi = 0xbf },
+    AcceptRange{ lo = 0x80, hi = 0x9f },
+    AcceptRange{ lo = 0x90, hi = 0xbf },
+    AcceptRange{ lo = 0x80, hi = 0x8f }]
+
+u8 xx = 0xF1 // invalid: size 1
+u8 _as= 0xF0 // ASCII: size 1
+u8 s1 = 0x02 // accept 0, size 2
+u8 s2 = 0x13 // accept 1, size 3
+u8 s3 = 0x03 // accept 0, size 3
+u8 s4 = 0x23 // accept 2, size 3
+u8 s5 = 0x34 // accept 3, size 4
+u8 s6 = 0x04 // accept 0, size 4
+u8 s7 = 0x44 // accept 4, size 4
+
+arr<u8, 256> accept_sizes = [
+  //     1    2    3    4    5   6    7    8    9    A    B    C    D    E    F
+    _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, // 0x00-0x0F
+    _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, // 0x10-0x1F
+    _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, // 0x20-0x2F
+    _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, // 0x30-0x3F
+    _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, // 0x40-0x4F
+    _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, // 0x50-0x5F
+    _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, // 0x60-0x6F
+    _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, // 0x70-0x7F
+    //   1   2   3   4   5   6   7   8   9   A   B   C   D   E   F
+    xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, // 0x80-0x8F
+    xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, // 0x90-0x9F
+    xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, // 0xA0-0xAF
+    xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, // 0xB0-0xBF
+    xx, xx, s1, s1, s1, s1, s1, s1, s1, s1, s1, s1, s1, s1, s1, s1, // 0xC0-0xCF
+    s1, s1, s1, s1, s1, s1, s1, s1, s1, s1, s1, s1, s1, s1, s1, s1, // 0xD0-0xDF
+    s2, s3, s3, s3, s3, s3, s3, s3, s3, s3, s3, s3, s3, s4, s3, s3, // 0xE0-0xEF
+    s5, s6, s6, s6, s7, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx] // 0xF0-0xFF
+
+//unicode -> utf8 (int -> go rune)
+fn encode_rune(int c): (arr<u8, 4>, int) {
+  int r = c
+  arr<u8, 4> buf = [0, 0, 0, 0]
+  var i = r as u32
+  var mask = 0x3f as u8
+
+  if (i <= RUNE_MAX1) {
+    buf[0] = r as u8
+    return (buf, 1)
+  }
+
+  if (i <= RUNE_MAX2) {
+    buf[0] = (0xc0 as u8) | (r >> 6) as u8
+    buf[1] = (0x80 as u8) | (mask & r as u8)
+    return (buf, 2)
+  }
+
+  // Invalid or Surrogate range
+  if (i > MAX_RUNE || (i >= SURROGATE_MIN && i <= SURROGATE_MAX)) {
+    r = 0xfffd
+  }
+
+  if (i <= RUNE_MAX3) {
+    buf[0] = (0xe0 as u8) | (r >> 12) as u8
+    buf[1] = (0x80 as u8) | (r >> 6) as u8
+    buf[2] = (0x80 as u8) | r as u8
+    return (buf, 3)
+  }
+
+  buf[0] = 0xf0 | (r >> 18) as u8
+  buf[1] = (0x80 as u8) | (r >> 12) as u8 & mask
+  buf[2] = (0x80 as u8) | (r >> 6) as u8 & mask
+  buf[3] = (0x80 as u8) | (r as u8) & mask
+  return (buf, 4)
+}
+
+fn main() {
+    var res = encode_rune(23456)
+    var a = res[0]
+    // 229 238 160 0
+    println(a[0], a[1], a[2], a[3])
+    assert(a[0] == 229 && a[1] == 238 && a[2] == 160 && a[3] == 0 && res[1] == 3)
+
+    res[0] = [5, 6, 7, 8]
+    res[1] *= 2
+    assert(res[0][0] == 5 && res[0][1] == 6 && res[0][2] == 7 && res[0][3] == 8 && res[1] == 6)
+}

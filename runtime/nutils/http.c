@@ -39,7 +39,7 @@ static inline void on_close_cb(uv_handle_t *handle) {
 static inline void on_write_end_cb(uv_write_t *write_req, int status) {
     if (status < 0) {
         // 对端可能已经关闭了连接,导致写入失败等情况
-        char *msg = dsprintf("uv_write failed: %s", uv_strerror(status));
+        char *msg = tlsprintf("uv_write failed: %s", uv_strerror(status));
         DEBUGF("[on_write_end_cb] %s", msg);
     }
 
@@ -52,7 +52,7 @@ static inline void on_write_end_cb(uv_write_t *write_req, int status) {
  * @param suggested_size
  * @param buf
  */
-void alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
+static inline void http_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
     conn_ctx_t *ctx = CONTAINER_OF(handle, conn_ctx_t, client_handle);
     DEBUGF("[uv_alloc_buffer] suggested_size: %ld", suggested_size);
     ctx->read_buf_cap += HTTP_PARSER_BUF_SIZE;
@@ -233,7 +233,7 @@ static void on_new_conn_cb(uv_stream_t *server, int status) {
     }
 
     ctx->client_handle.data = listen_co;
-    result = uv_read_start((uv_stream_t *) &ctx->client_handle, alloc_buffer_cb, on_read_cb);
+    result = uv_read_start((uv_stream_t *) &ctx->client_handle, http_alloc_buffer_cb, on_read_cb);
     if (result) {
         DEBUGF("[rt_uv_read] uv_read_start failed: %s", uv_strerror(result));
         uv_close((uv_handle_t *) &ctx->client_handle, on_close_cb);
@@ -280,7 +280,7 @@ void rt_uv_http_listen(n_server_t *server_ctx) {
     int result = uv_listen((uv_stream_t *) uv_server, DEFAULT_BACKLOG, on_new_conn_cb);
     if (result) {
         // 端口占用等错误
-        rt_co_error(co, dsprintf("uv listen failed: %s", uv_strerror(result)), false);
+        rt_co_throw(co, tlsprintf("uv listen failed: %s", uv_strerror(result)), false);
         return;
     }
 

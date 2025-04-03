@@ -1,15 +1,22 @@
-type trace_t = struct {
-    string path
-    string ident
-    int line
-    int column
+import fmt
+
+type throwable = interface{
+	fn msg():string
 }
 
-type error_t = struct {
-    string msg
-    [trace_t] traces
-    bool has
-    bool panic
+type errort:throwable = struct{
+	string message
+	bool is_panic
 }
 
-type errable<T> = error_t|T
+fn errort.msg():string {
+	return self.message
+}
+
+fn errorf(string format, ...[any] args):ptr<errort> {
+	var msg = fmt.sprintf(format, ...args)
+	return new errort(message = msg)
+}
+
+
+type errable<T> = errort|T
