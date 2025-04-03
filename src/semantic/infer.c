@@ -1833,6 +1833,11 @@ static void infer_call_args(module_t *m, ast_call_t *call, type_fn_t *target_typ
         INFER_ASSERTF(false, "not enough args");
     }
 
+    if (call->spread && target_type_fn->is_rest) {
+        INFER_ASSERTF(target_type_fn->param_types->length == call->args->length,
+                      "spread operator '...' requires a function with rest parameters")
+    }
+
     for (int i = 0; i < call->args->length; ++i) {
         bool is_spread = call->spread && (i == call->args->length - 1);
 

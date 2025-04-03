@@ -279,6 +279,7 @@ typedef struct {
 typedef struct {
     type_kind kind;
     char *value;
+    int64_t len; // string 时 len
 } ast_literal_t;// 标量值
 
 // (xx, xx, xx)

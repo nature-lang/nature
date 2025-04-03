@@ -683,8 +683,8 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
         type_struct = struct_access->instance.type.ptr->value_type;
     } else if (is_struct_rawptr(type_struct)) {
         type_struct = type_struct.ptr->value_type;
-        push_rt_call(m, RT_CALL_RAWPTR_VALID, NULL, 1, struct_target);
-        linear_has_panic(m);
+        //        push_rt_call(m, RT_CALL_RAWPTR_VALID, NULL, 1, struct_target);
+        //        linear_has_panic(m);
     }
 
     assert(type_struct.kind == TYPE_STRUCT);
@@ -702,11 +702,12 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
     // 如果 stmt->right 是一个 arr/struct 这样的在内存中分配的区域，那么 linear 的返回值
     lir_operand_t *dst_slot = indirect_addr_operand(m, stmt->left.type, struct_target, offset);
 
+    // TODO stmt->right.type.in_heap? handle
     if (is_gc_alloc(stmt->left.type.kind)) {
         lir_operand_t *obj = linear_expr(m, stmt->right, NULL);
 
         dst_slot = lea_operand_pointer(m, dst_slot);
-        obj = lea_operand_pointer(m, obj);
+        //        obj = lea_operand_pointer(m, obj);
 
         push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst_slot, obj);
     } else {
@@ -1025,9 +1026,15 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     // gen value
     if (ast->second) {
         lir_operand_t *second_target = linear_var_decl(m, ast->second);
-        assert(!is_stack_ref_big_type(ast->second->type));
-        OP_PUSH(lir_op_nop_def(second_target));// var_decl 没有进行初始化，所以需要进行一下 def 初始化
-        lir_operand_t *value_ref = lea_operand_pointer(m, second_target);
+
+        // var_decl 没有进行初始化，而是直接通过指针传递数据， 所以需要进行一下 nop def 初始化
+        // 让 ssa def 完整
+        OP_PUSH(lir_op_nop_def(second_target));
+
+        lir_operand_t *value_ref = second_target;
+        if (!is_stack_ref_big_type(ast->second->type)) {
+            value_ref = lea_operand_pointer(m, second_target);
+        }
 
         push_rt_call(m, RT_CALL_ITERATOR_TAKE_VALUE, NULL, 4, iterator_target, int_operand(rtype_hash), cursor_operand,
                      value_ref);
@@ -1429,6 +1436,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
 
             // actual 剩余的所有参数进行 linear_expr 之后 都需要用一个数组收集起来，并写入到 target_operand 中
             lir_operand_t *rest_target = linear_default_vec(m, *rest_list_type, NULL);
+            lir_operand_t *element_hash = int_operand(ct_find_rtype_hash(rest_list_type->vec->element_type));
 
             for (int j = i; j < call->args->length; ++j) {
                 ast_expr_t *arg = ct_list_value(call->args, j);
@@ -1436,7 +1444,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
 
                 // 将栈上的地址传递给 list 即可,不需要管栈中存储的值
                 lir_operand_t *rest_arg_ref = lea_operand_pointer(m, rest_arg);
-                push_rt_call(m, RT_CALL_VEC_PUSH, NULL, 2, rest_target, rest_arg_ref);
+                push_rt_call(m, RT_CALL_VEC_PUSH, NULL, 3, rest_target, element_hash, rest_arg_ref);
             }
 
             slice_push(params, rest_target);
@@ -1671,11 +1679,11 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     // 所以 target 真的有足够的空间么？target 默认就是 ptr， 无论是不是超过 8byte!
     // first 是个 ptr
     if (unary_expr->operator== AST_OP_IA) {
-        // checking
-        if (unary_expr->operand.type.kind == TYPE_RAWPTR) {
-            push_rt_call(m, RT_CALL_RAWPTR_VALID, NULL, 1, first);
-            linear_has_panic(m);
-        }
+        // checking TODO 性能问题，暂时不启用
+        //        if (unary_expr->operand.type.kind == TYPE_RAWPTR) {
+        //            push_rt_call(m, RT_CALL_RAWPTR_VALID, NULL, 1, first);
+        //            linear_has_panic(m);
+        //        }
 
         if (!target) {
             target = temp_var_operand_with_alloc(m, expr.type);
@@ -1716,9 +1724,10 @@ static lir_operand_t *linear_vec_access(module_t *m, ast_expr_t expr, lir_operan
     // 可能会存在数组越界的错误需要拦截处理
     linear_has_panic(m);
 
-    if (!target) {
-        target = temp_var_operand_with_alloc(m, expr.type);
-    }
+    // bug: probindex[0].index = 1, 所以 target 应该由外部控制，如果没有 target 就返回引用的指针
+    //    if (!target) {
+    //        target = temp_var_operand_with_alloc(m, expr.type);
+    //    }
 
     // 如果此时 list 发生了 grow, 则该地址会变成一个无效的脏地址，比如 grow(list).foo = list[1]
     // 所以对于 struct 的 access,这里的 target 不应该为 null
@@ -1749,7 +1758,8 @@ static lir_operand_t *linear_vec_new(module_t *m, ast_expr_t expr, lir_operand_t
             ast_expr_t *item_expr = ct_list_value(ast->elements, i);
 
             lir_operand_t *item_target = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
-            push_rt_call(m, RT_CALL_VEC_ITERATOR, item_target, 1, target);
+            lir_operand_t *element_hash = int_operand(ct_find_rtype_hash(t.vec->element_type));
+            push_rt_call(m, RT_CALL_VEC_ITERATOR, item_target, 2, target, element_hash);
             if (!is_stack_ref_big_type(item_expr->type)) {
                 item_target = indirect_addr_operand(m, t.vec->element_type, item_target, 0);
             }
@@ -1994,8 +2004,8 @@ static lir_operand_t *linear_struct_select(module_t *m, ast_expr_t expr, lir_ope
     } else if (is_struct_rawptr(type_struct)) {
         type_struct = type_struct.ptr->value_type;
         // TODO inline 校验, 校验失败调用 panic
-        push_rt_call(m, RT_CALL_RAWPTR_VALID, NULL, 1, struct_target);
-        linear_has_panic(m);
+        //        push_rt_call(m, RT_CALL_RAWPTR_VALID, NULL, 1, struct_target);
+        //        linear_has_panic(m);
     }
 
     assert(type_struct.kind == TYPE_STRUCT);
@@ -2040,7 +2050,6 @@ static lir_operand_t *linear_tuple_access(module_t *m, ast_expr_t expr, lir_oper
 
 /**
  * struct_new 初始化时还无法判断当前 struct 是否会出现逃逸行为，所以无法判断应该在栈上还是堆上分配
- *
  *
  * foo.bar = 1
  *
@@ -2794,7 +2803,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
 
         // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
         lir_operand_t *imm_c_string_operand = string_operand(literal->value);
-        lir_operand_t *imm_len_operand = int_operand(strlen(literal->value));
+        lir_operand_t *imm_len_operand = int_operand(literal->len);
         push_rt_call(m, RT_CALL_STRING_NEW, target, 2, imm_c_string_operand, imm_len_operand);
         return target;
     }

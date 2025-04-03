@@ -199,3 +199,139 @@ fn main():void! {
     
     println("Binary search test passed!")
 }
+
+=== test_sort_time
+--- main.n
+import time
+
+fn random_u32(rawptr<u64> state):u32 {
+    // xorshift rng: https://en.wikipedia.org/wiki/Xorshift#xorshift.2A
+    *state ^= *state >> 12
+    *state ^= *state << 25
+    *state ^= *state >> 27
+    return ((*state * 0x2545F4914F6CDD1D) >> 32) as u32
+}
+
+fn main():void! {
+    u64 seed = time.unix() as u64
+    int len = 1000000
+    var list = vec_cap<u32>(len)
+
+    for int i = 0; i < len; i+=1 {
+        list.push(random_u32(&seed))
+    }
+
+    i64 start = time.now().ms_timestamp()
+    list.sort(fn(int a, int b):bool {
+        return list[a] > list[b]
+    })
+
+    i64 use_time = time.now().ms_timestamp() - start
+
+    // for i in list {
+    //    println(i)
+    //}
+    assert(use_time < 5000)
+    println('use time(ms)', use_time)
+}
+
+
+
+
+
+=== test_slice_sort_time
+--- main.n
+import time
+
+fn random_u32(rawptr<u64> state):u32 {
+    // xorshift rng: https://en.wikipedia.org/wiki/Xorshift#xorshift.2A
+    *state ^= *state >> 12
+    *state ^= *state << 25
+    *state ^= *state >> 27
+    return ((*state * 0x2545F4914F6CDD1D) >> 32) as u32
+}
+
+fn main():void! {
+    u64 seed = time.unix() as u64
+    int len = 1000000
+    int slice_end = (len as float * 0.75) as int
+    var list = vec_cap<u32>(len)
+
+    for int i = 0; i < len; i+=1 {
+        list.push(random_u32(&seed))
+    }
+
+    i64 start = time.now().ms_timestamp()
+    list.slice(0, slice_end).sort(fn(int a, int b):bool {
+        return list[a] > list[b]
+    })
+
+    i64 use_time = time.now().ms_timestamp() - start
+
+    assert(use_time < 5000)
+    println('use time(ms)', use_time)
+}
+
+=== test_sort_float
+--- main.n
+import time
+
+fn random_u32(rawptr<u64> state):u32 {
+    // xorshift rng: https://en.wikipedia.org/wiki/Xorshift#xorshift.2A
+    *state ^= *state >> 12
+    *state ^= *state << 25
+    *state ^= *state >> 27
+    return ((*state * 0x2545F4914F6CDD1D) >> 32) as u32
+}
+
+fn random_f32(rawptr<u64> state):f32 {
+    // random float32 in [0,1)
+    return (random_u32(state) >> 8) as f32 / 16777216.0
+}
+
+fn main():void! {
+    u64 seed = time.unix() as u64
+    int len = 1000000
+    var list = vec_cap<f32>(len)
+
+    for int i = 0; i < len; i+=1 {
+        list.push(random_f32(&seed))
+    }
+
+    i64 start = time.now().ms_timestamp()
+    list.sort(fn(int a, int b):bool {
+        return list[a] > list[b]
+    })
+
+    i64 use_time = time.now().ms_timestamp() - start
+
+    // for i in list {
+    //    println(i)
+    // }
+
+    assert(use_time < 5000)
+    println('use time(ms)', use_time)
+}
+
+=== test_empty_slice_sort_time
+--- main.n
+import time
+import fmt
+
+type prob_index_t = struct{
+    f32 prob
+    int index
+}
+
+fn main():void! {
+    int n = 32000
+
+    var probindex = vec_new<prob_index_t>(prob_index_t{}, n)
+    i64 start = time.now().ms_timestamp()
+    probindex.sort(fn(int a, int b):bool {
+        return probindex[a].prob > probindex[b].prob
+    })
+    i64 use_time = time.now().ms_timestamp() - start
+    assert(use_time < 1000)
+    println('use time(ms)', use_time)
+}

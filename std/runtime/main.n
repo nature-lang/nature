@@ -1,14 +1,20 @@
 #linkid rt_vec_new
-fn vec_new(int hash, int ele_hash, int len, anyptr value_ref):anyptr
+fn vec_new(int hash, int element_hash, int len, anyptr value_ref):anyptr
 
 #linkid rt_vec_cap
-fn vec_cap(int hash, int ele_hash, int cap):anyptr
+fn vec_cap(int hash, int element_hash, int cap):anyptr
 
 #linkid rt_vec_push
-fn vec_push(anyptr list, anyptr val)
+fn vec_push(anyptr list, int element_hash, anyptr val)
 
 #linkid rt_vec_slice
 fn vec_slice(anyptr list, int start, int end):anyptr
+
+#linkid rt_vec_append
+fn vec_append(anyptr list1, anyptr list2, int element_hash)
+
+#linkid rt_vec_concat
+fn vec_concat(anyptr list1, anyptr list2, int element_hash):anyptr
 
 #linkid rt_set_new
 fn set_new(int rhash, int key_hash):anyptr

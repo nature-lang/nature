@@ -1,3 +1,30 @@
+=== test_end_string
+--- main.n
+import fmt
+
+fn main():void! {
+    var a = 'test\0test'
+    println(a.len())
+
+    println('\0'[0])
+}
+
+--- output.txt
+9
+0
+
+=== test_spread_args
+--- main.n
+fn main():void! {
+    [any] list = [true, 1, 'hello']
+    println('hello', ...list)
+}
+
+--- output.txt
+nature-test/main.n:3:11: spread operator '...' requires a function with rest parameters
+
+=== test_vec_struct_access
+--- main.n
 import time
 import fmt
 

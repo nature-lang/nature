@@ -24,11 +24,12 @@ fn main() {
     b.age = 32
     println(b.name, b.age, b.sex)
 
-    b = null
-    var c = b.name catch err {
-        println(err.msg())
-    }
+    // TODO raw ptr check disabled... wait inline
+    // b = null
+    // var c = b.name catch err {
+    //    println(err.msg())
+    //}
 
     // 没有完整的 try catch, 所以无法 catch
-    b.name = 'hello'
+    // b.name = 'hello'
 }

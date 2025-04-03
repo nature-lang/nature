@@ -11,14 +11,14 @@
 #define ARM64_ELF_PAGE_SIZE 0x200000
 
 typedef struct {
-    uint32_t data; // 汇编指令
-    uint8_t data_count; // 汇编指令长度, 单位 byte(arm64 默认长度 4byte)
-    uint64_t *offset; // 指令的位置
-    arm64_asm_inst_t *operation; // 原始指令,指令改写与二次扫描时使用
-    string rel_symbol; // 使用的符号,二次扫描时用于判断是否需要重定位，目前都只适用于 label
-    arm64_asm_operand_t *rel_operand; // 引用自 asm_operations
-    uint64_t sym_index; // 指令引用的符号在符号表的索引，如果指令发生了 slot 变更，则相应的符号的 value 同样需要变更
-    void *rel; // elf_rela, mach relacate_info
+    uint32_t data;                   // 汇编指令
+    uint8_t data_count;              // 汇编指令长度, 单位 byte(arm64 默认长度 4byte)
+    uint64_t *offset;                // 指令的位置
+    arm64_asm_inst_t *operation;     // 原始指令,指令改写与二次扫描时使用
+    string rel_symbol;               // 使用的符号,二次扫描时用于判断是否需要重定位，目前都只适用于 label
+    arm64_asm_operand_t *rel_operand;// 引用自 asm_operations
+    uint64_t sym_index;              // 指令引用的符号在符号表的索引，如果指令发生了 slot 变更，则相应的符号的 value 同样需要变更
+    void *rel;                       // elf_rela, mach relacate_info
 } arm64_build_temp_t;
 
 static inline uint64_t arm64_create_plt_entry(elf_context_t *ctx, uint64_t got_offset, sym_attr_t *attr) {
@@ -44,9 +44,9 @@ static inline uint64_t arm64_create_plt_entry(elf_context_t *ctx, uint64_t got_o
         write32le(p + 16, 0xd61f0220);
 
         // PLT0 padding to maintain 16-byte alignment
-        write32le(p + 20, 0xd503201f); // nop
-        write32le(p + 24, 0xd503201f); // nop
-        write32le(p + 28, 0xd503201f); // nop
+        write32le(p + 20, 0xd503201f);// nop
+        write32le(p + 24, 0xd503201f);// nop
+        write32le(p + 28, 0xd503201f);// nop
     }
 
     // Create PLT entry (16 bytes)
@@ -234,11 +234,10 @@ elf_arm64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
                 assertf(0, "R_AARCH64_(JUMP|CALL)26 relocation failed");
             }
             write32le(
-                ptr, (0x14000000 | (uint32_t) (type == R_AARCH64_CALL26) << 31 | ((val - addr) >> 2 & 0x3ffffff)));
+                    ptr, (0x14000000 | (uint32_t) (type == R_AARCH64_CALL26) << 31 | ((val - addr) >> 2 & 0x3ffffff)));
             break;
         case R_AARCH64_ADR_GOT_PAGE: {
-            uint64_t off = (((ctx->got->sh_addr + elf_get_sym_attr(ctx, sym_index, 0)->got_offset) >> 12) - (
-                                addr >> 12));
+            uint64_t off = (((ctx->got->sh_addr + elf_get_sym_attr(ctx, sym_index, 0)->got_offset) >> 12) - (addr >> 12));
             if ((off + ((uint64_t) 1 << 20)) >> 21) {
                 assertf(0, "R_AARCH64_ADR_GOT_PAGE relocation failed");
             }
@@ -247,8 +246,7 @@ elf_arm64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
         }
         case R_AARCH64_LD64_GOT_LO12_NC:
             write32le(
-                ptr, ((read32le(ptr) & 0xfff803ff) | (
-                          (ctx->got->sh_addr + elf_get_sym_attr(ctx, sym_index, 0)->got_offset) & 0xff8) << 7));
+                    ptr, ((read32le(ptr) & 0xfff803ff) | ((ctx->got->sh_addr + elf_get_sym_attr(ctx, sym_index, 0)->got_offset) & 0xff8) << 7));
             break;
         case R_AARCH64_COPY:
             break;
@@ -275,7 +273,7 @@ arm64_rewrite_rel_symbol(arm64_asm_inst_t *operation, arm64_asm_operand_t *opera
         return;
     }
 
-    operand->immediate = rel_diff - addend; // arm64 具有固定长度 addend 4byte
+    operand->immediate = rel_diff - addend;// arm64 具有固定长度 addend 4byte
     operand->type = ARM64_ASM_OPERAND_IMMEDIATE;
 }
 
@@ -285,7 +283,7 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
     }
 
     slice_t *build_temps = slice_new();
-    uint64_t section_offset = 0; // text section slot
+    uint64_t section_offset = 0;// text section slot
 
     // 第一遍扫描
     for (int i = 0; i < closures->count; ++i) {
@@ -308,13 +306,12 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
 
                 // 添加到符号表
                 Elf64_Sym sym = {
-                    .st_shndx = ctx->text_section->sh_index,
-                    .st_size = 0,
-//                    .st_info = ELF64_ST_INFO(!operand->symbol.is_local, STT_FUNC),
-                        // TODO 暂时都做成全局
-                    .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
-                    .st_other = 0,
-                    .st_value = *temp->offset,
+                        .st_shndx = ctx->text_section->sh_index,
+                        .st_size = 0,
+                        .st_info = ELF64_ST_INFO(!operand->symbol.is_local, STT_FUNC),
+                        //                    .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
+                        .st_other = 0,
+                        .st_value = *temp->offset,
                 };
                 temp->sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, operand->symbol.name);
                 continue;
@@ -347,11 +344,11 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
                     if (sym_index == 0) {
                         // 添加未定义符号
                         Elf64_Sym sym = {
-                            .st_shndx = 0,
-                            .st_size = 0,
-                            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
-                            .st_other = 0,
-                            .st_value = 0,
+                                .st_shndx = 0,
+                                .st_size = 0,
+                                .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
+                                .st_other = 0,
+                                .st_value = 0,
                         };
                         sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, rel_operand->symbol.name);
                     }
@@ -390,10 +387,10 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
                     }
 
                     caller_t caller = {
-                        .data = c,
-                        .offset = fn_offset,
-                        .line = operation->line,
-                        .column = operation->column,
+                            .data = c,
+                            .offset = fn_offset,
+                            .line = operation->line,
+                            .column = operation->column,
                     };
                     if (call_target) {
                         str_rcpy(caller.target_name, call_target, 24);
@@ -416,11 +413,11 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
         if (sym_index == 0) {
             // 添加未定义符号
             Elf64_Sym sym = {
-                .st_shndx = 0,
-                .st_size = 0,
-                .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
-                .st_other = 0,
-                .st_value = 0,
+                    .st_shndx = 0,
+                    .st_size = 0,
+                    .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
+                    .st_other = 0,
+                    .st_value = 0,
             };
             sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, temp->rel_symbol);
         }
@@ -466,10 +463,10 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
             }
 
             uint8_t bytes[4];
-            bytes[0] = temp->data & 0xFF; // 最低字节
+            bytes[0] = temp->data & 0xFF;        // 最低字节
             bytes[1] = (temp->data >> 8) & 0xFF; // 次低字节
-            bytes[2] = (temp->data >> 16) & 0xFF; // 次高字节
-            bytes[3] = (temp->data >> 24) & 0xFF; // 最高字节
+            bytes[2] = (temp->data >> 16) & 0xFF;// 次高字节
+            bytes[3] = (temp->data >> 24) & 0xFF;// 最高字节
 
             elf_put_data(ctx->text_section, bytes, temp->data_count);
             c->text_count += temp->data_count;
@@ -483,7 +480,7 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
     }
 
     slice_t *build_temps = slice_new();
-    uint64_t section_offset = 0; // text section slot
+    uint64_t section_offset = 0;// text section slot
     table_t *symtab_hash = table_new();
 
     // 第一遍扫描
@@ -508,10 +505,11 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     n_type |= N_EXT;
                 }
                 temp->sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                                                   .n_sect = ctx->text_section->sh_index,
-                                                   .n_value = *temp->offset,
-                                                   .n_type = n_type,
-                                               }, operand->symbol.name);
+                                                                            .n_sect = ctx->text_section->sh_index,
+                                                                            .n_value = *temp->offset,
+                                                                            .n_type = n_type,
+                                                                    },
+                                               operand->symbol.name);
 
                 table_set(symtab_hash, operand->symbol.name, (void *) temp->sym_index);
                 continue;
@@ -543,10 +541,11 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     if (sym_index == 0) {
                         // 添加未定义符号
                         sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                                                     .n_sect = NO_SECT,
-                                                     .n_value = 0,
-                                                     .n_type = N_UNDF | N_EXT,
-                                                 }, rel_operand->symbol.name);
+                                                                              .n_sect = NO_SECT,
+                                                                              .n_value = 0,
+                                                                              .n_type = N_UNDF | N_EXT,
+                                                                      },
+                                                 rel_operand->symbol.name);
                     }
 
                     // 生成重定位信息
@@ -579,10 +578,10 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     }
 
                     caller_t caller = {
-                        .data = c,
-                        .offset = fn_offset,
-                        .line = operation->line,
-                        .column = operation->column,
+                            .data = c,
+                            .offset = fn_offset,
+                            .line = operation->line,
+                            .column = operation->column,
                     };
                     if (call_target) {
                         strncpy(caller.target_name, call_target, 23);
@@ -605,10 +604,11 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
         if (sym_index == 0) {
             // 添加未定义符号
             sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                                         .n_sect = NO_SECT,
-                                         .n_value = 0,
-                                         .n_type = N_UNDF | N_EXT,
-                                     }, temp->rel_symbol);
+                                                                  .n_sect = NO_SECT,
+                                                                  .n_value = 0,
+                                                                  .n_type = N_UNDF | N_EXT,
+                                                          },
+                                     temp->rel_symbol);
         }
 
         struct nlist_64 *sym = &((struct nlist_64 *) ctx->symtab_command->symbols->data)[sym_index];
@@ -636,10 +636,10 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
             }
 
             uint8_t bytes[4];
-            bytes[0] = temp->data & 0xFF; // 最低字节
+            bytes[0] = temp->data & 0xFF;        // 最低字节
             bytes[1] = (temp->data >> 8) & 0xFF; // 次低字节
-            bytes[2] = (temp->data >> 16) & 0xFF; // 次高字节
-            bytes[3] = (temp->data >> 24) & 0xFF; // 最高字节
+            bytes[2] = (temp->data >> 16) & 0xFF;// 次高字节
+            bytes[3] = (temp->data >> 24) & 0xFF;// 最高字节
 
             mach_put_data(ctx->text_section, bytes, temp->data_count);
             c->text_count += temp->data_count;

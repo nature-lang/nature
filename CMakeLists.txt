@@ -28,6 +28,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
     
     # 定义调试选项，默认都为 OFF
     option(DEBUG_LOG "Enable log debug output" OFF)
+    option(RUNTIME_DEBUG_LOG "Enable log debug output" OFF)
     option(DEBUG_LIR "Enable LIR debug output" OFF)
     option(DEBUG_ASM "Enable ASM debug output" OFF)
     option(DEBUG_PARSER "Enable parser debug output" OFF)
@@ -39,6 +40,9 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
     message("DEBUG_LIR value: ${DEBUG_LIR}") 
 
     # 根据选项添加对应的编译定义
+    if(RUNTIME_DEBUG_LOG)
+        add_compile_definitions(RUNTIME_DEBUG_LOG)
+    endif()
     if(DEBUG_LOG)
         add_compile_definitions(DEBUG_LOG)
     endif()

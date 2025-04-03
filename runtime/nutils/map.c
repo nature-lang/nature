@@ -119,7 +119,7 @@ n_anyptr_t rt_map_access(n_map_t *m, void *key_ref) {
     uint64_t data_index = get_data_index(m, hash_index);
 
     // 找到值所在中数组位置起始点并返回
-    uint64_t value_size = rt_rtype_out_size(m->value_rtype_hash);
+    uint64_t value_size = rt_rtype_stack_size(m->value_rtype_hash);
 
     DEBUGF("[runtime.rt_map_access] value_base=%p, find hash_value=%lu,data_index=%lu,value_size=%lu success",
            m->value_data,
@@ -165,8 +165,8 @@ n_anyptr_t rt_map_assign(n_map_t *m, void *key_ref) {
 
     set_data_index(m, hash_index, data_index);
 
-    uint64_t key_size = rt_rtype_out_size(m->key_rtype_hash);
-    uint64_t value_size = rt_rtype_out_size(m->value_rtype_hash);
+    uint64_t key_size = rt_rtype_stack_size(m->key_rtype_hash);
+    uint64_t value_size = rt_rtype_stack_size(m->value_rtype_hash);
     DEBUGF("[runtime.rt_map_assign] assign success data_index=%lu, hash_value=%lu, key_size=%ld",
            data_index,
            m->hash_table[hash_index], key_size);

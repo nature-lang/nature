@@ -14,11 +14,11 @@
  * @param capacity
  * @return
  */
-n_vec_t *rti_vec_new(rtype_t *ele_rtype, int64_t length, int64_t capacity);
+n_vec_t *rti_vec_new(rtype_t *element_rtype, int64_t length, int64_t capacity);
 
-n_vec_t *rt_vec_new(int64_t rhash, int64_t ele_rhash, int64_t length, void *value_ref);
+n_vec_t *rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *value_ref);
 
-n_vec_t *rt_vec_cap(int64_t rhash, int64_t ele_rhash, int64_t capacity);
+n_vec_t *rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity);
 
 n_anyptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index);
 
@@ -42,16 +42,16 @@ uint64_t rt_vec_capacity(n_vec_t *l);
 
 void *rt_vec_ref(n_vec_t *l);
 
-void rt_vec_append(n_vec_t *dst, n_vec_t *src);
+void rt_vec_append(n_vec_t *dst, n_vec_t *src, int64_t element_hash);
 
 /**
  * 将 reference 处的值通过 memmove 移动 element_size 个字节到 array offest 中
  * @param vec
  * @param value
  */
-void rt_vec_push(n_vec_t *vec, void *ref);
+void rt_vec_push(n_vec_t *vec, int64_t element_hash, void *ref);
 
-n_anyptr_t rt_vec_iterator(n_vec_t *l);
+n_anyptr_t rt_vec_iterator(n_vec_t *l, int64_t element_hash);
 
 /**
  * slice 不会修改原数组
@@ -70,7 +70,7 @@ n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end);
  * @param b
  * @return
  */
-n_vec_t *rt_vec_concat(n_vec_t *a, n_vec_t *b);
+n_vec_t *rt_vec_concat(n_vec_t *a, n_vec_t *b, int64_t element_hash);
 
 uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t *src);
 

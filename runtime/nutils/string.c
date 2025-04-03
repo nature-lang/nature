@@ -16,7 +16,7 @@ n_string_t *string_new(void *raw_string, int64_t length) {
     TRACEF("[string_new] raw_string=%s, length=%lu, ptr=%p", (char *) raw_string, length, raw_string);
 
     // byte 数组，先手动创建一个简单类型
-    int64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
+    int64_t capacity = length + 1;// +1 预留 '\0' 空间 给 string_ref 时使用
 
     n_array_t *data = rti_array_new(&string_element_rtype, capacity);
 
@@ -24,22 +24,22 @@ n_string_t *string_new(void *raw_string, int64_t length) {
     str->data = data;
     str->length = length;
     str->capacity = capacity;
-    str->ele_rhash = string_element_rtype.hash;
-    str->rhash = string_rtype.hash;
+    str->element_size = rtype_stack_size(&string_element_rtype, POINTER_SIZE);
+    str->hash = string_rtype.hash;
     memmove(str->data, raw_string, length);
 
     DEBUGF("[string_new] success, string=%p, data=%p, len=%ld, raw_str=%s", str, str->data, str->length,
-           (char*)raw_string);
+           (char *) raw_string);
     return str;
 }
 
 n_string_t *rt_string_ref_new(void *raw_string, int64_t length) {
     n_string_t *str = rti_gc_malloc(string_rtype.size, &string_ref_rtype);
-    str->data = raw_string; // 直接指向 raw_string, 而没有创建新的字符串
+    str->data = raw_string;// 直接指向 raw_string, 而没有创建新的字符串
     str->length = length;
     str->capacity = length;
-    str->ele_rhash = string_element_rtype.hash;
-    str->rhash = string_rtype.hash;
+    str->element_size = rtype_stack_size(&string_element_rtype, POINTER_SIZE);
+    str->hash = string_rtype.hash;
     return str;
 }
 
@@ -59,7 +59,7 @@ void *rt_string_ref(n_string_t *n_str) {
 
     // 结尾添加 '\0' 字符
     int a = '\0';
-    rt_vec_push(n_str, &a);
+    rt_vec_push(n_str, string_element_rtype.hash, &a);
     n_str->length -= 1;
 
     return n_str->data;
@@ -82,8 +82,8 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     str->data = data;
     str->length = length;
     str->capacity = capacity;
-    str->ele_rhash = string_element_rtype.hash;
-    str->rhash = string_rtype.hash;
+    str->element_size = rtype_stack_size(&string_element_rtype, POINTER_SIZE);
+    str->hash = string_rtype.hash;
     DEBUGF("[runtime.string_concat] success, string=%p, data=%p", str, str->data);
     return str;
 }

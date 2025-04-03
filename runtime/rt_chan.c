@@ -60,14 +60,14 @@ static void waitq_push(waitq_t *waitq, linkco_t *linkco) {
     if (waitq->head == NULL) {
         assert(waitq->rear == NULL);
 
-        rt_write_barrier(&waitq->head, &linkco);
-        rt_write_barrier(&waitq->rear, &linkco);
+        rti_write_barrier_ptr(&waitq->head, linkco, false);
+        rti_write_barrier_ptr(&waitq->rear, linkco, false);
     } else {
         assert(waitq->rear);
 
-        rt_write_barrier(&waitq->rear->next, &linkco);
-        rt_write_barrier(&linkco->prev, &waitq->rear);
-        rt_write_barrier(&waitq->rear, &linkco);
+        rti_write_barrier_ptr(&waitq->rear->next, linkco, false);
+        rti_write_barrier_ptr(&linkco->prev, waitq->rear, false);
+        rti_write_barrier_ptr(&waitq->rear, linkco, false);
     }
 }
 
@@ -117,14 +117,12 @@ static linkco_t *waitq_pop(waitq_t *waitq) {
         assertf(waitq->head->co, "waitq head %p value empty", waitq->head);
 
         linkco_t *pop_linkco = waitq->head;
-        linkco_t *null_co = NULL;
-
-        rt_write_barrier(&waitq->head, &waitq->head->next);
+        rti_write_barrier_ptr(&waitq->head, waitq->head->next, false);
 
         if (waitq->head == NULL) {
-            rt_write_barrier(&waitq->rear, &null_co);
+            rti_write_barrier_ptr(&waitq->rear, NULL, false);
         } else {
-            rt_write_barrier(&waitq->head->prev, &null_co);
+            rti_write_barrier_ptr(&waitq->head->prev, NULL, false);
         }
 
         pop_linkco->prev = NULL;

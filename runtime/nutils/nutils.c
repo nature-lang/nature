@@ -1,13 +1,13 @@
 #include "nutils.h"
 
-#include "runtime/memory.h"
-#include "runtime/processor.h"
-#include "string.h"
-#include "vec.h"
 #include "array.h"
 #include "errort.h"
-#include "runtime/rtype.h"
+#include "runtime/memory.h"
+#include "runtime/processor.h"
 #include "runtime/rt_chan.h"
+#include "runtime/rtype.h"
+#include "string.h"
+#include "vec.h"
 
 int command_argc;
 char **command_argv;
@@ -39,16 +39,16 @@ char **command_argv;
                 return;                                                                                                                 \
             case TYPE_UINT:                                                                                                             \
             case TYPE_UINT64:                                                                                                           \
-                *(uint64_t *) output_ref = (uint64_t)(int64_t) _input_value;                                                                     \
+                *(uint64_t *) output_ref = (uint64_t) (int64_t) _input_value;                                                           \
                 return;                                                                                                                 \
             case TYPE_UINT32:                                                                                                           \
-                *(uint32_t *) output_ref = (uint32_t)(int32_t) _input_value;                                                                     \
+                *(uint32_t *) output_ref = (uint32_t) (int32_t) _input_value;                                                           \
                 return;                                                                                                                 \
             case TYPE_UINT16:                                                                                                           \
-                *(uint16_t *) output_ref = (uint16_t)(int16_t) _input_value;                                                                     \
+                *(uint16_t *) output_ref = (uint16_t) (int16_t) _input_value;                                                           \
                 return;                                                                                                                 \
             case TYPE_UINT8:                                                                                                            \
-                *(uint8_t *) output_ref = (uint8_t)(int8_t) _input_value;                                                                       \
+                *(uint8_t *) output_ref = (uint8_t) (int8_t) _input_value;                                                              \
                 return;                                                                                                                 \
             default:                                                                                                                    \
                 assert(false && "cannot scanner_number_convert type");                                                                  \
@@ -80,15 +80,23 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
         }
             // 其他类型保持不变
         case TYPE_INT:
-        case TYPE_INT64: _NUMBER_CASTING(output_rtype->kind, v.i64_value, v.i64_value);
-        case TYPE_INT32: _NUMBER_CASTING(output_rtype->kind, v.i32_value, v.i64_value);
-        case TYPE_INT16: _NUMBER_CASTING(output_rtype->kind, v.i16_value, v.i64_value);
-        case TYPE_INT8: _NUMBER_CASTING(output_rtype->kind, v.i8_value, v.i64_value);
+        case TYPE_INT64:
+            _NUMBER_CASTING(output_rtype->kind, v.i64_value, v.i64_value);
+        case TYPE_INT32:
+            _NUMBER_CASTING(output_rtype->kind, v.i32_value, v.i64_value);
+        case TYPE_INT16:
+            _NUMBER_CASTING(output_rtype->kind, v.i16_value, v.i64_value);
+        case TYPE_INT8:
+            _NUMBER_CASTING(output_rtype->kind, v.i8_value, v.i64_value);
         case TYPE_UINT:
-        case TYPE_UINT64: _NUMBER_CASTING(output_rtype->kind, v.u64_value, v.i64_value);
-        case TYPE_UINT32: _NUMBER_CASTING(output_rtype->kind, v.u32_value, v.i64_value);
-        case TYPE_UINT16: _NUMBER_CASTING(output_rtype->kind, v.u16_value, v.i64_value);
-        case TYPE_UINT8: _NUMBER_CASTING(output_rtype->kind, v.u8_value, v.i64_value);
+        case TYPE_UINT64:
+            _NUMBER_CASTING(output_rtype->kind, v.u64_value, v.i64_value);
+        case TYPE_UINT32:
+            _NUMBER_CASTING(output_rtype->kind, v.u32_value, v.i64_value);
+        case TYPE_UINT16:
+            _NUMBER_CASTING(output_rtype->kind, v.u16_value, v.i64_value);
+        case TYPE_UINT8:
+            _NUMBER_CASTING(output_rtype->kind, v.u8_value, v.i64_value);
         default:
             assert(false && "type cannot ident");
             exit(1);
@@ -149,7 +157,7 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
         return;
     }
 
-    uint64_t size = rt_rtype_out_size(target_rtype_hash);
+    uint64_t size = rt_rtype_stack_size(target_rtype_hash);
     memmove(value_ref, &mu->value, size);
     DEBUGF(
             "[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, "
@@ -326,7 +334,7 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
 
     if (iterator_rtype->kind == TYPE_MAP) {
         n_map_t *map = iterator;
-        uint64_t key_size = rt_rtype_out_size(map->key_rtype_hash);
+        uint64_t key_size = rt_rtype_stack_size(map->key_rtype_hash);
         DEBUGF("[runtime.iterator_next_key] kind is map, len=%lu, key_base=%p, key_index=%lu, key_size=%lu",
                map->length, map->key_data,
                map->key_rtype_hash, key_size);
@@ -344,33 +352,33 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
     exit(0);
 }
 
-int64_t iterator_next_value(void *iterator, uint64_t rhash, int64_t cursor, void *value_ref) {
+int64_t iterator_next_value(void *iterator, int64_t hash, int64_t cursor, void *value_ref) {
     PRE_RTCALL_HOOK();
-    DEBUGF("[runtime.iterator_next_value] iterator base=%p,rtype_hash=%lu, cursor=%lu, kind=%s", iterator, rhash,
+    DEBUGF("[runtime.iterator_next_value] iterator base=%p,rtype_hash=%lu, cursor=%lu, kind=%s", iterator, hash,
            cursor);
 
-    rtype_t *iterator_rtype = rt_find_rtype(rhash);
+    rtype_t *iterator_rtype = rt_find_rtype(hash);
 
     cursor += 1;
     if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
         n_vec_t *list = iterator;
-        assert(list->ele_rhash && "list element rtype hash is empty");
-        uint64_t value_size = rt_rtype_out_size(list->ele_rhash);
+        assert(list->element_size && "list element size is zero");
+        uint64_t element_size = list->element_size;
         DEBUGF("[runtime.iterator_next_value] kind is list, len=%lu, cap=%lu, data_base=%p, value_size=%ld, cursor=%ld",
                list->length,
-               list->capacity, list->data, value_size, cursor);
+               list->capacity, list->data, element_size, cursor);
 
         if (cursor >= list->length) {
             return -1;
         }
 
-        memmove(value_ref, list->data + value_size * cursor, value_size);
+        memmove(value_ref, list->data + element_size * cursor, element_size);
         return cursor;
     }
 
     if (iterator_rtype->kind == TYPE_MAP) {
         n_map_t *map = iterator;
-        uint64_t value_size = rt_rtype_out_size(map->value_rtype_hash);
+        uint64_t value_size = rt_rtype_stack_size(map->value_rtype_hash);
         DEBUGF("[runtime.iterator_next_value] kind is map, len=%lu, key_base=%p, key_index=%lu, key_size=%lu",
                map->length, map->key_data,
                map->key_rtype_hash, value_size);
@@ -398,31 +406,31 @@ int64_t iterator_next_value(void *iterator, uint64_t rhash, int64_t cursor, void
 /**
  * 存在 key 的情况下 second 直接使用 take_value, 不会对 cursor 进行递增
  * 已知 cursor 的情况
- * @param rhash
+ * @param hash
  * @param cursor
  * @param value_ref
  */
-void iterator_take_value(void *iterator, uint64_t rhash, int64_t cursor, void *value_ref) {
+void iterator_take_value(void *iterator, int64_t hash, int64_t cursor, void *value_ref) {
     PRE_RTCALL_HOOK();
     DEBUGF("[runtime.iterator_take_value] iterator base=%p,rtype_hash=%lu, cursor=%lu, value_ref=%p", iterator,
-           rhash, cursor,
+           hash, cursor,
            value_ref);
 
     assert(cursor != -1 && "cannot iterator value");
-    assert(rhash > 0 && "rtype hash is empty");
+    assert(hash > 0 && "rtype hash is empty");
 
-    rtype_t *iterator_rtype = rt_find_rtype(rhash);
+    rtype_t *iterator_rtype = rt_find_rtype(hash);
     if (iterator_rtype->kind == TYPE_VEC || iterator_rtype->kind == TYPE_STRING) {
         n_vec_t *list = iterator;
-        DEBUGF("[runtime.iterator_take_value] kind is list, base=%p, len=%lu, cap=%lu, data_base=%p, element_hash=%lu",
+        DEBUGF("[runtime.iterator_take_value] kind is list, base=%p, len=%lu, cap=%lu, data_base=%p, element_size=%lu",
                iterator,
-               list->length, list->capacity, list->data, list->ele_rhash);
+               list->length, list->capacity, list->data, list->element_size);
 
-        assert(list->ele_rhash > 0 && "list element rtype hash is empty");
+        assert(list->element_size > 0 && "list element size is zero");
 
         assert(cursor < list->length && "cursor >= list->length");
 
-        uint64_t element_size = rt_rtype_out_size(list->ele_rhash);
+        uint64_t element_size = list->element_size;
 
         memmove(value_ref, list->data + element_size * cursor, element_size);
         DEBUGF("[runtime.iterator_take_value] iterator=%p, value_ref=%p, element_size=%lu", iterator, value_ref,
@@ -432,7 +440,7 @@ void iterator_take_value(void *iterator, uint64_t rhash, int64_t cursor, void *v
 
     if (iterator_rtype->kind == TYPE_MAP) {
         n_map_t *map = iterator;
-        uint64_t value_size = rt_rtype_out_size(map->value_rtype_hash);
+        uint64_t value_size = rt_rtype_stack_size(map->value_rtype_hash);
         DEBUGF("[runtime.iterator_take_value] kind is map, len=%lu, value_base=%p, value_index=%lu, value_size=%lu",
                map->length,
                map->value_data, map->value_rtype_hash, value_size);
@@ -460,7 +468,7 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
 
     assert(co->traces == NULL);
     n_vec_t *traces = rti_vec_new(&errort_trace_rtype, 0, 0);
-    rt_write_barrier(&co->traces, &traces);
+    rti_write_barrier_ptr(&co->traces, traces, false);
 
     n_trace_t trace = {
             .path = string_new(path, strlen(path)),
@@ -468,9 +476,9 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
             .line = line,
             .column = column,
     };
-    rt_vec_push(co->traces, &trace);
+    rt_vec_push(co->traces, errort_trace_rtype.hash, &trace);
 
-    rt_write_barrier(&co->error, &error);
+    rti_write_barrier_ptr(&co->error, error, false);
     co->has_error = true;
 
     post_rtcall_hook("co_throw_error");
@@ -484,10 +492,9 @@ n_interface_t *co_remove_error() {
     co->has_error = false;
 
     n_interface_t *error = co->error;
-    void *nullable = NULL;
 
-    rt_write_barrier(&co->error, &nullable);
-    rt_write_barrier(&co->traces, &nullable);
+    rti_write_barrier_ptr(&co->error, NULL, false);
+    rti_write_barrier_ptr(&co->traces, NULL, false);
 
     post_rtcall_hook("co_remove_error");
     return error;
@@ -515,7 +522,7 @@ uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_i
                 .column = column,
         };
 
-        rt_vec_push(co->traces, &trace);
+        rt_vec_push(co->traces, errort_trace_rtype.hash, &trace);
         post_rtcall_hook("co_has_panic");
         return 1;
     }
@@ -559,7 +566,7 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
             .column = column,
     };
 
-    rt_vec_push(co->traces, &trace);
+    rt_vec_push(co->traces, errort_trace_rtype.hash, &trace);
 
     post_rtcall_hook("co_has_error");
     return 1;
@@ -587,9 +594,9 @@ n_vec_t *std_args() {
         rt_vec_assign(list, i, &str);
     }
 
-    DEBUGF("[std_args] list=%p, list->data=%p, list->length=%lu, element_rtype_hash=%lu", list, list->data,
+    DEBUGF("[std_args] list=%p, list->data=%p, list->length=%lu, element_size=%lu", list, list->data,
            list->length,
-           list->ele_rhash);
+           list->element_size);
     return list;
 }
 
@@ -617,7 +624,7 @@ char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
     }
 
     if (rtype->kind == TYPE_STRING) {
-        n_string_t *n_str = (void *) fetch_addr_value((addr_t) data_ref); // 读取栈中存储的值
+        n_string_t *n_str = (void *) fetch_addr_value((addr_t) data_ref);// 读取栈中存储的值
 
         assert(n_str && n_str->length >= 0 && "fetch addr by data ref failed");
 
@@ -642,8 +649,9 @@ char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
     return NULL;
 }
 
-void rt_write_barrier(void *slot, void *new_obj) {
-    DEBUGF("[runtime.write_barrier] slot=%p, new_obj=%p", slot, new_obj);
+// mark_black_new_obj 如果 new_obj 不是从 allocator(gc_malloc) 获取的新对象，则有必要主动 mark black 避免其被 sweep
+void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj) {
+    DEBUGF("[runtime_gc.rt_write_barrier_ptr] slot=%p, new_obj=%p", slot, new_obj);
 
     n_processor_t *p = processor_get();
 
@@ -654,8 +662,9 @@ void rt_write_barrier(void *slot, void *new_obj) {
     }
 
     if (!gc_barrier_get()) {
-        RDEBUGF("[runtime.write_barrier] gc_barrier is false, no need write barrier");
-        memmove(slot, new_obj, POINTER_SIZE);
+        DEBUGF("[runtime_gc.rt_write_barrier_ptr] slot: %p, new_obj: %p, gc_barrier is false, no need write barrier", slot, new_obj);
+
+        *(void **) slot = new_obj;
 
         if (!p->share) {
             mutex_unlock(&p->gc_stw_locker);
@@ -664,34 +673,85 @@ void rt_write_barrier(void *slot, void *new_obj) {
         return;
     }
 
-
-    RDEBUGF("[runtime.write_barrier] gc_barrier is true");
-
-    // yuasa 写屏障 shade slot
+    // yuasa 删除写屏障 shade slot
     shade_obj_grey(slot);
 
-    // Dijkstra 写屏障
+    // stack 扫描完成后退化成黑色写屏障, 否则是是灰色写屏障
     coroutine_t *co = coroutine_get();
-    if (co->gc_black < memory->gc_count) {
+    bool is_grey = co->gc_black < memory->gc_count;
+    TDEBUGF("[runtime_gc.rt_write_barrier_ptr] slot: %p, new_obj: %p, gc_barrier is true, gc_black %d", slot, new_obj, is_grey);
+
+    // 直接 mark 为黑色，当前 new_obj 的 field 不会被处理，并且该 obj 本轮 gc 不会被清理
+    // 例如 global linkco cache 中的获取的新的 obj, 不是从 allocator 中申请，所以需要主动进行 mark
+    if (mark_black_new_obj && new_obj) {
+        mark_ptr_black(new_obj);
+    }
+
+    // Dijkstra 写屏障
+    // new_obj 可能为 null
+    if (is_grey && new_obj) {
         // shade new_obj
         shade_obj_grey(new_obj);
     }
 
-    memmove(slot, new_obj, POINTER_SIZE);
+    *(void **) slot = new_obj;
 
     if (!p->share) {
         mutex_unlock(&p->gc_stw_locker);
     }
 }
 
+//static void rt_write_barrier(void *slot, void *new_obj) {
+//    DEBUGF("[runtime.write_barrier] slot=%p, new_obj=%p", slot, new_obj);
+//
+//    n_processor_t *p = processor_get();
+//
+//    // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 和 barrier 冲突
+//    // TODO 必须放在 gc_barrier_get 之前进行独享线程的 stw locker lock? 因为 stw locker 代替了 solo p 真正的 STW?
+//    if (!p->share) {
+//        mutex_lock(&p->gc_stw_locker);
+//    }
+//
+//    if (!gc_barrier_get()) {
+//        RDEBUGF("[runtime.write_barrier] gc_barrier is false, no need write barrier");
+//
+//        memmove(slot, new_obj, POINTER_SIZE);
+//
+//        if (!p->share) {
+//            mutex_unlock(&p->gc_stw_locker);
+//        }
+//
+//        return;
+//    }
+//
+//
+//    RDEBUGF("[runtime.write_barrier] gc_barrier is true");
+//
+//    // yuasa 写屏障 shade slot
+//    shade_obj_grey(slot);
+//
+//    // Dijkstra 写屏障
+//    coroutine_t *co = coroutine_get();
+//    if (co->gc_black < memory->gc_count) {
+//        // shade new_obj
+//        shade_obj_grey(new_obj);
+//    }
+//
+//    memmove(slot, new_obj, POINTER_SIZE);
+//
+//    if (!p->share) {
+//        mutex_unlock(&p->gc_stw_locker);
+//    }
+//}
+
 void write_barrier(void *slot, void *new_obj) {
     PRE_RTCALL_HOOK();
 
-    rt_write_barrier(slot, new_obj);
+    rti_write_barrier_ptr(slot, new_obj, false);
 }
 
 void rawptr_valid(void *rawptr) {
-    PRE_RTCALL_HOOK(); // 修改状态避免抢占
+    PRE_RTCALL_HOOK();// 修改状态避免抢占
 
     DEBUGF("[rawptr_valid] rawptr=%p", rawptr);
     if (rawptr <= 0) {
@@ -773,7 +833,8 @@ n_vec_t *rt_get_envs() {
 
     while (*env) {
         n_string_t *s = string_new(*env, strlen(*env));
-        rt_vec_push(list, &s);
+
+        rt_vec_push(list, string_rtype.hash, &s);
         env++;
     }
 
@@ -785,14 +846,14 @@ n_int_t rt_errno() {
     return errno;
 }
 
-n_vec_t *unsafe_vec_new(int64_t rhash, int64_t ele_rhash, int64_t len, void *data_ptr) {
-    DEBUGF("[unsafe_vec_new] hash=%lu, ele_hash=%lu, len=%lu, rhash, ele_rhash, length, capacity")
+n_vec_t *unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr) {
+    DEBUGF("[unsafe_vec_new] hash=%lu, element_hash=%lu, len=%lu, rhash, ele_rhash, length, capacity")
     assert(len > 0);
 
     int64_t cap = len;
 
-    rtype_t *ele_rtype = rt_find_rtype(ele_rhash);
-    assert(ele_rtype && "cannot find element_rtype_hash with hash");
+    rtype_t *element_rtype = rt_find_rtype(element_hash);
+    assert(element_rtype && "cannot find element_rtype_hash with hash");
 
     // - 进行内存申请,申请回来一段内存是 memory_vec_t 大小的内存, memory_vec_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 vec_data + 1 时会按照 sizeof(memory_vec_t) 大小的内存区域移动
@@ -800,10 +861,10 @@ n_vec_t *unsafe_vec_new(int64_t rhash, int64_t ele_rhash, int64_t len, void *dat
     n_vec_t *vec = rti_gc_malloc(vec_rtype.size, &vec_rtype);
     vec->capacity = cap;
     vec->length = len;
-    vec->ele_rhash = ele_rhash;
-    vec->rhash = rhash;
+    vec->element_size = rtype_stack_size(element_rtype, POINTER_SIZE);
+    vec->hash = hash;
     vec->data = data_ptr;
 
-    DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->ele_rhash);
+    DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->element_hash);
     return vec;
 }

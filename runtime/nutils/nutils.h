@@ -37,9 +37,9 @@ n_bool_t bool_casting(uint64_t input_rtype_hash, int64_t int_value, double float
 
 int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, void *key_ref);
 
-int64_t iterator_next_value(void *iterator, uint64_t rtype_hash, int64_t cursor, void *value_ref);
+int64_t iterator_next_value(void *iterator, int64_t hash, int64_t cursor, void *value_ref);
 
-void iterator_take_value(void *iterator, uint64_t rtype_hash, int64_t cursor, void *value_ref);
+void iterator_take_value(void *iterator, int64_t hash, int64_t cursor, void *value_ref);
 
 void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t line, n_int_t column);
 
@@ -57,7 +57,7 @@ n_vec_t *std_args();
 
 char *rtype_value_to_str(rtype_t *rtype, void *data_ref);
 
-void rt_write_barrier(void *slot, void *new_obj);
+void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj);
 
 void write_barrier(void *slot, void *new_obj);
 
@@ -69,7 +69,7 @@ void rt_assert(n_bool_t cond);
 
 n_string_t *rt_string_new(n_anyptr_t raw_string);
 
-n_vec_t *unsafe_vec_new(int64_t rhash, int64_t ele_rhash, int64_t len, void *data_ptr);
+n_vec_t *unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr);
 
 n_string_t *rt_strerror();
 

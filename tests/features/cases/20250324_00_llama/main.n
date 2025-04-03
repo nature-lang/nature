@@ -8,6 +8,12 @@ import libc
 import unsafe
 import io
 
+fn logf(string format, ...[any] args) {
+    var msg = fmt.sprintf(format, ...args)
+    var t = time.now()
+    fmt.printf('%v - %v\n', t.ms_timestamp(), msg)
+}
+
 type config_t = struct{
     i32 dim
     i32 hidden_dim
@@ -189,25 +195,20 @@ fn transformer.rmsnorm([f32] o, [f32] x, anyptr weight, int size) {
 }
 
 fn transformer.matmul([f32] xout, [f32] x, anyptr w, int n, int d):void! {
+    // log('[transformer.matmul] start', xout.len(), x.len(), w, n, d)
     // W (d,n) @ x (n,) -> xout (d,)
-    var done = chan_new<bool>()
-
+    // TODO #pragma optimize
     for int i = 0; i < d; i+=1 {
-        go fn(int idx):void! {
-            f32 val = 0.0
-            for int j = 0; j < n; j+=1 {
-                f32 w_val = *((w + ((idx * n + j) * 4) as anyptr) as rawptr<f32>)
-                val += w_val * x[j]
-            }
+        f32 val = 0.0
+        for int j = 0; j < n; j+=1 {
+            f32 w_val = *((w + ((i * n + j) * 4) as anyptr) as rawptr<f32>)
+            val += w_val * x[j]
+        }
 
-            xout[idx] = val
-            done.send(true)
-        }(i)
+        xout[i] = val
     }
 
-    for int i = 0; i < d; i+=1 {
-        done.recv()
-    }
+    // log('[transformer.matmul] end')
 }
 
 fn softmax([f32] x, int size) {
@@ -242,16 +243,17 @@ fn transformer.forward(int token, int pos):[f32]! {
     int hidden_dim = p.hidden_dim as int
     int head_size = dim / p.n_heads as int
 
+    // log('[forward] start forward all the layers', p.n_layers, p.seq_len, pos, kv_dim)
+
     // 复制 token embedding 到 x(首先为 x ref 分配足够的空间)
     s.x = vec_new<f32>(0, dim)
     anyptr content_row = w.token_embedding_table as anyptr + token as anyptr * dim as anyptr * @sizeof(f32)
     libc.memcpy(s.x.ref(), content_row, dim * @sizeof(f32)) // 直接进行不安全k的数据 copy
     [f32] x = s.x
 
-    println('[forward] forward all the layers', p.n_layers, p.seq_len, pos, kv_dim)
     // forward all the layers
     for int l = 0; l < p.n_layers as int; l+=1 {
-        println('[forward] 1 forward all the layers index', l, p.seq_len, pos, kv_dim)
+        // logf('[forward]  handle layer %d/%d', l, p.n_layers)
 
         // attention rmsnorm
         self.rmsnorm(s.xb, x, w.rms_att_weight as anyptr + (l * dim * @sizeof(f32)) as anyptr, dim)
@@ -266,9 +268,6 @@ fn transformer.forward(int token, int pos):[f32]! {
         self.matmul(s.q, s.xb, w.wq as anyptr + (l * dim * dim * @sizeof(f32)) as anyptr, dim, dim)
         self.matmul(s.k, s.xb, w.wk as anyptr + (l * dim * kv_dim * @sizeof(f32)) as anyptr, dim, kv_dim)
         self.matmul(s.v, s.xb, w.wv as anyptr + (l * dim * kv_dim * @sizeof(f32)) as anyptr, dim, kv_dim)
-
-        println('[forward] 2 forward all the layers index', l, p.seq_len, pos, kv_dim, dim)
-
 
         // RoPE relative positional encoding: complex-valued rotate q and k in each head
         for int i = 0; i < dim; i+=2 {
@@ -292,11 +291,8 @@ fn transformer.forward(int token, int pos):[f32]! {
                 list[i+1] = v0 * fci + v1 * fcr
             }
         }
-
-        println('[forward] 3 forward all the layers index', l, p.seq_len, pos, kv_dim, dim)
-
         var done = chan_new<bool>()
-        for int h = 0; h < p.n_heads as int; h+=1 {
+        for int h1 = 0; h1 < p.n_heads as int; h1+=1 {
             go fn(int h_idx):void! {
                 // get the query vector for this head
                 [f32] q = s.q.slice(h_idx * head_size, (h_idx + 1) * head_size)
@@ -327,7 +323,7 @@ fn transformer.forward(int token, int pos):[f32]! {
 
                 for int t = 0; t <= pos; t+=1 {
                     // get the value vector for this head and at this timestep
-                    int v_start = loff + t * kv_dim + (h / kv_mul) * head_size
+                    int v_start = loff + t * kv_dim + (h_idx / kv_mul) * head_size
                     [f32] v = s.value_cache.slice(v_start, v_start + head_size)
                     // get the attention weight for this timestep
                     f32 a = att[t]
@@ -339,14 +335,12 @@ fn transformer.forward(int token, int pos):[f32]! {
                 }
 
                 done.send(true)
-            }(h)
+            }(h1)
         }
 
         for int h = 0; h < p.n_heads as int; h+=1 {
             done.recv()
         }
-
-        println('[forward] 4 forward all the layers index', l, p.seq_len, pos, kv_dim)
 
 
         // final matmul to get the output of the attention
@@ -365,9 +359,6 @@ fn transformer.forward(int token, int pos):[f32]! {
         self.matmul(s.hb, s.xb, w.w1 as anyptr + (l * dim * hidden_dim * @sizeof(f32)) as anyptr, dim, hidden_dim)
         self.matmul(s.hb2, s.xb, w.w3 as anyptr + (l * dim * hidden_dim * @sizeof(f32)) as anyptr, dim, hidden_dim)
 
-        println('[forward] 5 forward all the layers index', l, p.seq_len, pos, kv_dim)
-
-
         // SwiGLU non-linearity
         for int i = 0; i < hidden_dim; i+=1 {
             f32 val = s.hb[i]
@@ -381,19 +372,23 @@ fn transformer.forward(int token, int pos):[f32]! {
         // final matmul to get the output of the ffn
         self.matmul(s.xb, s.hb, w.w2 as anyptr + (l * hidden_dim * dim * @sizeof(f32)) as anyptr, hidden_dim, dim)
 
-        println('[forward] 6 forward all the layers index', l, p.seq_len, pos, kv_dim)
-
         // residual connection
         for int i = 0; i < dim; i+=1 {
             x[i] += s.xb[i]
         }
     }
 
+    // logf('[forward] layer handle end')
+
     // final rmsnorm
     self.rmsnorm(x, x, w.rms_final_weight as anyptr, dim)
 
+    // logf('[forward] final rmsnorm end')
+
     // classifier into logits
     self.matmul(s.logits, x, w.wcls as anyptr, dim, p.vocab_size as int)
+
+    // log('[forward] end forward, matmul end', s.logits.len())
 
     return s.logits
 }
@@ -434,9 +429,9 @@ fn transformer_new(string path):ptr<transformer>! {
 
     // 分配 RunState 缓冲区
     t.malloc_run_state(&t.state, &t.config)
-    println('[transformer_new] malloc run state', t.state.x.len(), t.state.xb.len(), t.state.xb2.len(), t.state.hb.len(),
-        t.state.hb2.len(), t.state.q.len(), t.state.k.len(), t.state.v.len(), t.state.att.len(), t.state.logits.len(),
-         t.state.key_cache.len(), t.state.value_cache.len())
+    // log('[transformer_new] malloc run state', t.state.x.len(), t.state.xb.len(), t.state.xb2.len(), t.state.hb.len(),
+    //    t.state.hb2.len(), t.state.q.len(), t.state.k.len(), t.state.v.len(), t.state.att.len(), t.state.logits.len(),
+    //     t.state.key_cache.len(), t.state.value_cache.len())
 
     return t
 }
@@ -467,7 +462,6 @@ fn str_lookup(string str, [token_index_t] sorted_vocab, int vocab_size):int {
 }
 
 fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
-    println('[encode] start', text, bos, eos, tokens.len(), self.vocab_size)
     if self.sorted_vocab.len() == 0 {
         self.sorted_vocab = vec_cap<token_index_t>(self.vocab_size)
         for int i = 0; i < self.vocab_size; i+=1 {
@@ -477,8 +471,6 @@ fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
             })
         }
         assert(self.sorted_vocab.len() == self.vocab_size)
-        println(self.sorted_vocab[0].str)
-        println(self.sorted_vocab[31999].str)
 
         self.sorted_vocab.sort(fn(int a, int b):bool {
             return self.sorted_vocab[a].str < self.sorted_vocab[b].str
@@ -663,18 +655,25 @@ fn sampler_t.sample_argmax([f32] probabilities, int n):int {
 }
 
 fn sampler_t.sample_mult([f32] probabilities, int n, f32 coin):int {
+    // logf('[sampler_t.sample_mult] start, probabilities len %d, n %d, coin %f', probabilities.len(), n, coin)
     // sample index from probabilities (they must sum to 1!)
     f32 cdf = 0.0
     for int i = 0; i < n; i += 1 {
         cdf += probabilities[i]
         if coin < cdf {
+            logf('[sampler_t.sample_mult] end 1, probabilities len %d, n %d, coin %f', probabilities.len(), n, coin)
             return i
         }
     }
+
+    // logf('[sampler_t.sample_mult] end 2, probabilities len %d, n %d, coin %f', probabilities.len(), n, coin)
     return n - 1 // in case of rounding errors
 }
 
 fn sampler_t.sample_topp([f32] probabilities, int n, f32 topp, vec<prob_index_t> probindex, f32 coin):int {
+    // logf('[sampler_t.sample_topp] start, probabilities len %d, n %d, topp %f, prob_index len %d, coin %f',
+            // probabilities.len(), n, topp, probindex.len(), coin)
+
     // top-p 采样(或称"nucleus sampling")从概率总和超过 topp 的最小 token 集合中采样
     // 这样我们就不会采样到概率非常低的 token，从而减少生成"离谱"内容的可能性
     
@@ -690,16 +689,16 @@ fn sampler_t.sample_topp([f32] probabilities, int n, f32 topp, vec<prob_index_t>
             n0 += 1
         }
     }
-    
+
     // 按概率降序排序
     probindex.slice(0, n0).sort(fn(int a, int b):bool {
         return probindex[a].prob > probindex[b].prob
     })
-    
+
     // 截断列表，使累积概率超过 topp
     f32 cumulative_prob = 0.0
     int last_idx = n0 - 1  // 以防舍入误差，默认考虑所有元素
-    
+
     for int i = 0; i < n0; i += 1 {
         cumulative_prob += probindex[i].prob
         if cumulative_prob > topp {
@@ -707,24 +706,24 @@ fn sampler_t.sample_topp([f32] probabilities, int n, f32 topp, vec<prob_index_t>
             break  // 通过包含 last_idx，我们已经超过了 topp
         }
     }
-    
+
     // 从截断列表中采样
     f32 r = coin * cumulative_prob
     f32 cdf = 0.0
-    
+
     for int i = 0; i <= last_idx; i += 1 {
         cdf += probindex[i].prob
         if r < cdf {
             return probindex[i].index
         }
     }
-    
-    // 以防舍入误差
+
     return probindex[last_idx].index
 }
 
 fn sampler_t.sample([f32] logits):int! {
     int vocab_size = self.vocab_size
+    // logf('[sampler_t.sample] start, vocab_size %d, logits count %d, temperature %f', vocab_size, logits.len(), self.temperature)
 
     // 如果温度为0，直接返回最高概率的token
     if self.temperature == 0.0 {
@@ -779,7 +778,7 @@ fn print_safe(string piece) {
         return
     }
 
-    if piece[0] == '\0'[0] {
+    if piece[0] == 0 {
         return
     }
 
@@ -794,7 +793,7 @@ fn print_safe(string piece) {
 }
 
 fn generate(ptr<transformer> tf, ptr<tokenizer_t> t, ptr<sampler_t> s, string prompt, int steps):void! {
-    println('[generate] start', prompt, steps)
+    // log('[generate] start', prompt, steps)
     var prompt_tokens = vec_new<int>(0, (prompt.len() + 3) as int) // +3 for '\0', ?BOS, ?EOS
 
     int num_prompt_tokens = t.encode(prompt, 1, 0, prompt_tokens)
@@ -802,7 +801,7 @@ fn generate(ptr<transformer> tf, ptr<tokenizer_t> t, ptr<sampler_t> s, string pr
         panic("Something went wrong, expect at least 1 prompt word token")
     }
 
-    println('[generate] tokenizer encode successful', num_prompt_tokens)
+    // log('[generate] tokenizer encode successful', num_prompt_tokens, steps)
 
     // start the main loop
     i64 start = 0  // used to time our code, only initialized after first iteration
@@ -811,8 +810,9 @@ fn generate(ptr<transformer> tf, ptr<tokenizer_t> t, ptr<sampler_t> s, string pr
     int pos = 0    // position in the sequence
     for pos < steps {
         // forward the transformer to get logits for the next token
+        // logf('[generate] forward start %v, %v/%v', token, pos, steps)
         var logits = tf.forward(token, pos)
-        println('[generate] forward', token, pos)
+        // logf('[generate] forward end %v, %v/%v', token, pos, steps)
 
         // advance the state state machine
         if pos < num_prompt_tokens - 1 {
@@ -821,6 +821,7 @@ fn generate(ptr<transformer> tf, ptr<tokenizer_t> t, ptr<sampler_t> s, string pr
         } else {
             // otherwise sample the next token from the logits
             next = s.sample(logits)
+            // logf('[generate] sample end %v, %v/%v', token, pos, steps)
         }
         pos += 1
 
@@ -831,7 +832,7 @@ fn generate(ptr<transformer> tf, ptr<tokenizer_t> t, ptr<sampler_t> s, string pr
 
         // print the token as string, decode it with the Tokenizer object
         var piece = t.decode(token, next)
-        println('[generate] tokenizer decode success', piece)
+        // log('[generate] tokenizer decode success', piece)
 
         print_safe(piece) // same as printf("%s", piece), but skips "unsafe" bytes
 
@@ -854,13 +855,14 @@ fn generate(ptr<transformer> tf, ptr<tokenizer_t> t, ptr<sampler_t> s, string pr
 
 fn main():void! {
     // default parameters
-    string checkpoint_path = 'mode.bin' // Core weight file
+    string checkpoint_path = 'mode.bin' // TODO Core weight file
     string tokenizer_path = 'tokenizer.bin'
     f32 temperature = 1.0
     f32 topp = 0.9 // 默认使用top-p采样
-    int steps = 256
+    // int steps = 256
+    int steps = 30
     string prompt = ''
-    u64 rng_seed = 0 // seed rng with time by default
+    u64 rng_seed = 1743659096 // TODO seed rng with time by default
     string mode = 'generate' // generate or chat
     string system_prompt = ''
 
@@ -911,9 +913,9 @@ fn main():void! {
 
     // build the Transformer via the model .bin file
     var tf = transformer_new(checkpoint_path)
-    println('transformer_new success:', tf.config.dim, tf.config.hidden_dim, tf.config.n_layers,
-        tf.config.n_heads, tf.config.n_kv_heads, tf.config.vocab_size, tf.config.seq_len,
-        tf.fd, tf.file_size)
+    // log('transformer_new success:', tf.config.dim, tf.config.hidden_dim, tf.config.n_layers,
+        //tf.config.n_heads, tf.config.n_kv_heads, tf.config.vocab_size, tf.config.seq_len,
+        //tf.fd, tf.file_size)
 
     if steps == 0 || steps > tf.config.seq_len as int {
         steps = tf.config.seq_len as int
@@ -921,7 +923,7 @@ fn main():void! {
 
     // build the Tokenizer via the tokenizer .bin file
     var t = tokenizer_new(tokenizer_path, tf.config.vocab_size as int)
-    println('tokenizer_new success:', t.vocab_size, t.max_token_length, t.vocab.len(), t.vocab_scores.len())
+    // log('tokenizer_new success:', t.vocab_size, t.max_token_length, t.vocab.len(), t.vocab_scores.len())
 
     // build the Sampler
     var s = sampler_new(tf.config.vocab_size as int, temperature, topp, rng_seed)

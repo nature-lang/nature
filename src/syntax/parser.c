@@ -1189,6 +1189,7 @@ static ast_expr_t parser_literal(module_t *m) {
     ast_literal_t *literal_expr = NEW(ast_literal_t);
     literal_expr->kind = token_to_kind[literal_token->type];
     literal_expr->value = literal_token->literal;// 具体数值
+    literal_expr->len = literal_token->length;
 
     result.assert_type = AST_EXPR_LITERAL;
     result.value = literal_expr;

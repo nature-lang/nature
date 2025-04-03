@@ -11,8 +11,12 @@ else ()
 endif ()
 message("LIBUV_STATIC: ${LIBUV_STATIC}")
 
-set(LIBUC_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libc.a")
-message("LIBUC_STATIC: ${LIBUC_STATIC}")
+if (CMAKE_SYSTEM_NAME STREQUAL "darwin")
+    set(LIBC_STATIC "")
+else ()
+    set(LIBC_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libc.a")
+endif ()
+message("LIBC_STATIC: ${LIBC_STATIC}")
 
 add_executable(test_hash_table test_hash_table.c ${UTILS})
 target_link_libraries(test_hash_table ${LIBUV_STATIC})
@@ -119,7 +123,7 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
 
     add_dependencies(test_runtime_debug generate_libmain)  # 添加这行
 
-    target_link_libraries(test_runtime_debug ${LIBMAIN_STATIC} ${LIBUV_STATIC})
+    target_link_libraries(test_runtime_debug ${LIBMAIN_STATIC} ${LIBUV_STATIC} ${LIBC_STATIC})
     add_test(NAME test_runtime_debug COMMAND test_runtime_debug WORKING_DIRECTORY ${WORK_DIR})
 
     message("[test_runtime_debug] register test_runtime_debug case ${TEST_IDENT} success, work_dir=${WORK_DIR}, entry_file=${ENTRY}")

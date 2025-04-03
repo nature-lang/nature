@@ -408,8 +408,8 @@ typedef struct {
     uint8_t *data;
     int64_t length;  // 实际占用的位置的大小
     int64_t capacity;// 预先申请的容量大小
-    int64_t ele_rhash;
-    int64_t rhash;
+    int64_t element_size;
+    int64_t hash;
 } n_vec_t, n_string_t;
 
 // 通过 gc malloc 申请
