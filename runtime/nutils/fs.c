@@ -7,7 +7,7 @@ static void on_write_cb(uv_fs_t *req) {
 
     if (req->result < 0) {
         // 文件写入异常，设置错误并返回
-        rt_co_throw(co, (char *) uv_strerror(req->result), false);
+        rti_co_throw(co, (char *) uv_strerror(req->result), false);
         co_ready(co);
         uv_fs_req_cleanup(&ctx->req);
         return;
@@ -26,7 +26,7 @@ static inline void on_open_cb(uv_fs_t *req) {
     if (req->result < 0) {
         DEBUGF("[on_open_cb] open file failed: %s, co: %p", uv_strerror(req->result), req->data);
 
-        rt_co_throw(req->data, (char *) uv_strerror(req->result), false);
+        rti_co_throw(req->data, (char *) uv_strerror(req->result), false);
 
         co_ready(req->data);
         uv_fs_req_cleanup(&ctx->req);
@@ -46,7 +46,7 @@ static void on_read_cb(uv_fs_t *req) {
 
     if (req->result < 0) {
         // 文件读取异常， 设置错误并返回，不需要关闭 fd, fd 由外部控制
-        rt_co_throw(co, (char *) uv_strerror(req->result), false);
+        rti_co_throw(co, (char *) uv_strerror(req->result), false);
         co_ready(co);
         uv_fs_req_cleanup(&ctx->req);
         return;
@@ -67,7 +67,7 @@ fs_context_t *rt_uv_fs_from(n_int_t fd, n_string_t *name) {
     fs_context_t *ctx = rti_gc_malloc(sizeof(fs_context_t), NULL);
     if (fd < 0) {
         coroutine_t *co = coroutine_get();
-        rt_co_throw(co, "invalid fd", false);
+        rti_co_throw(co, "invalid fd", false);
         return NULL;
     }
 
@@ -86,7 +86,7 @@ fs_context_t *rt_uv_fs_open(n_string_t *path, int64_t flags, int64_t mode) {
 
     int result = uv_fs_open(&p->uv_loop, &ctx->req, rt_string_ref(path), (int) flags, (int) mode, on_open_cb);
     if (result) {
-        rt_co_throw(co, (char *) uv_strerror(result), false);
+        rti_co_throw(co, (char *) uv_strerror(result), false);
         return NULL;
     }
 
@@ -116,7 +116,7 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     DEBUGF("[rt_uv_fs_read] read file: %d", ctx->fd);
 
     if (ctx->closed) {
-        rt_co_throw(co, "fd already closed", false);
+        rti_co_throw(co, "fd already closed", false);
         return 0;
     }
 
@@ -147,7 +147,7 @@ n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     n_processor_t *p = processor_get();
 
     if (ctx->closed) {
-        rt_co_throw(co, "fd already closed", false);
+        rti_co_throw(co, "fd already closed", false);
         return 0;
     }
 
@@ -215,7 +215,7 @@ static void on_stat_cb(uv_fs_t *req) {
 
     if (req->result < 0) {
         // File stat operation failed, set error and return
-        rt_co_throw(co, (char *) uv_strerror(req->result), false);
+        rti_co_throw(co, (char *) uv_strerror(req->result), false);
         co_ready(co);
         uv_fs_req_cleanup(&ctx->req);
         return;
@@ -234,7 +234,7 @@ uv_stat_t rt_uv_fs_stat(fs_context_t *ctx) {
     uv_stat_t stat_result = {0};
     
     if (ctx->closed) {
-        rt_co_throw(co, "fd already closed", false);
+        rti_co_throw(co, "fd already closed", false);
         return stat_result;
     }
     
@@ -246,7 +246,7 @@ uv_stat_t rt_uv_fs_stat(fs_context_t *ctx) {
     // Initiate async stat request
     int result = uv_fs_fstat(&p->uv_loop, &ctx->req, ctx->fd, on_stat_cb);
     if (result < 0) {
-        rt_co_throw(co, (char *) uv_strerror(result), false);
+        rti_co_throw(co, (char *) uv_strerror(result), false);
         return stat_result;
     }
     

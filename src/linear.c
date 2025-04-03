@@ -32,6 +32,60 @@ lir_opcode_t ast_op_convert[] = {
         [AST_OP_NEG] = LIR_OPCODE_NEG,
 };
 
+static lir_operand_t *linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_operand_t *index_target, type_t vec_element_type) {
+    assert(vec_element_type.kind > 0);
+
+    if (vec_target->assert_type == LIR_OPERAND_SYMBOL_VAR) {// global vec copy to temp
+        lir_operand_t *temp_vec_target = temp_var_operand(m, type_new(TYPE_VEC, &vec_element_type));
+        OP_PUSH(lir_op_move(temp_vec_target, vec_target));
+        vec_target = temp_vec_target;
+    }
+
+    // get vec length
+    lir_operand_t *length_target = temp_var_operand(m, type_kind_new(TYPE_INT));
+    lir_operand_t *length_src = indirect_addr_operand(m, type_kind_new(TYPE_INT), vec_target, offsetof(n_vec_t, length));
+    OP_PUSH(lir_op_move(length_target, length_src));
+
+    // cmp index < length to
+    lir_operand_t *cmp_result = temp_var_operand_with_alloc(m, type_kind_new(TYPE_BOOL));
+    OP_PUSH(lir_op_new(LIR_OPCODE_SLT, index_target, length_target, cmp_result));
+
+    char *cmd_label_ident = label_ident_with_unique(m, "vec_index_cmd");
+    char *end_label_ident = str_connect(cmd_label_ident, LABEL_END_SUFFIX);
+    lir_operand_t *cmp_end_label = lir_label_operand(end_label_ident, true);
+
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), cmp_result, cmp_end_label));
+
+    char *error_label_ident = m->current_closure->error_label;
+    bool be_catch = false;
+    if (!stack_empty(m->current_closure->catch_error_labels)) {
+        error_label_ident = stack_top(m->current_closure->catch_error_labels);
+        be_catch = true;
+    }
+
+    push_rt_call_no_hook(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target, bool_operand(be_catch));
+    // bal catch or end label
+    OP_PUSH(lir_op_bal(lir_label_operand(error_label_ident, true)));
+    OP_PUSH(lir_op_label(end_label_ident, true));
+
+    rtype_t vec_element_rtype = ct_reflect_type(vec_element_type);
+    int64_t element_size = rtype_stack_size(&vec_element_rtype, POINTER_SIZE);
+
+    // 计算偏移量: index * element_size
+    lir_operand_t *offset = temp_var_operand(m, type_kind_new(TYPE_INT));
+    OP_PUSH(lir_op_new(LIR_OPCODE_MUL, index_target, int_operand(element_size), offset));
+
+    // 获取 data value(is_ptr)
+    lir_operand_t *data_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    lir_operand_t *data_src = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), vec_target, offsetof(n_vec_t, data));
+    OP_PUSH(lir_op_move(data_ptr, data_src));
+
+    // 计算最终地址 data + offset 并返回
+    lir_operand_t *result = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_new(LIR_OPCODE_ADD, data_ptr, offset, result));
+    return result;
+}
+
 static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *target);
 
 /**
@@ -539,12 +593,15 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
 
             if (is_stack_ref_big_type(symbol_var->type)) {
                 // 如果是 struct/arr 则直接返回 symbol 的地址, 并且继承原始类型, 而不是作为 void ptr
+                // src_ref 此时是一个 var, 其中存储了一个地址，指向了 global data 中的一块内存区域
+                // 总而言之返回的 src_ref 不再是 symbol_var 类型，而是 var 类型
                 lir_operand_t *src_ref = temp_var_operand(m, symbol_var->type);
                 OP_PUSH(lir_op_lea(src_ref, src));
 
                 return linear_super_move(m, expr.type, target, src_ref);
             }
 
+            // src 中直接存储了目标的值，如 int 类型就是 int 的值， vec 类型就是 vec 的指针
             return linear_super_move(m, expr.type, target, src);
         }
     }
@@ -567,14 +624,10 @@ static void linear_vec_assign(module_t *m, ast_assign_stmt_t *stmt) {
     lir_operand_t *src = linear_expr(m, stmt->right, NULL);
 
     // target 中保存的是一个指针数据，指向的类型是 right.type
-    lir_operand_t *target = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
-
-    push_rt_call(m, RT_CALL_VEC_ELEMENT_ADDR, target, 2, vec_target, index_target);
+    lir_operand_t *target = linear_inline_vec_element_addr(m, vec_target, index_target, vec_access->element_type);
     if (!is_stack_ref_big_type(t)) {
         target = indirect_addr_operand(m, t, target, 0);
     }
-
-    linear_has_panic(m);
 
     linear_super_move(m, t, target, src);
 }
@@ -1468,6 +1521,8 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     }
 
     // rtcall 自带 pre_hook, 所以这里不需要重复处理了
+    // tpl 可以指向 rt_call, rt_call 内部已经进行过状态转换，此时不需要重复添加 tpl hook 了
+    // 当然重复添加也没什么影响, 已经进行重复处理了
     if (!is_rtcall(type_fn->fn_name) && type_fn->is_tpl) {
         push_rt_call_no_hook(m, RT_CALL_PRE_TPLCALL_HOOK, NULL, 1, string_operand(type_fn->fn_name));
     }
@@ -1715,19 +1770,13 @@ static lir_operand_t *linear_vec_access(module_t *m, ast_expr_t expr, lir_operan
     lir_operand_t *vec_target = linear_expr(m, ast->left, NULL);
     lir_operand_t *index_target = linear_expr(m, ast->index, NULL);
 
-    lir_operand_t *src = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
-    push_rt_call(m, RT_CALL_VEC_ELEMENT_ADDR, src, 2, vec_target, index_target);
+    lir_operand_t *src = linear_inline_vec_element_addr(m, vec_target, index_target, ast->element_type);
+
     if (!is_stack_ref_big_type(expr.type)) {
         src = indirect_addr_operand(m, expr.type, src, 0);
     }
 
-    // 可能会存在数组越界的错误需要拦截处理
-    linear_has_panic(m);
-
     // bug: probindex[0].index = 1, 所以 target 应该由外部控制，如果没有 target 就返回引用的指针
-    //    if (!target) {
-    //        target = temp_var_operand_with_alloc(m, expr.type);
-    //    }
 
     // 如果此时 list 发生了 grow, 则该地址会变成一个无效的脏地址，比如 grow(list).foo = list[1]
     // 所以对于 struct 的 access,这里的 target 不应该为 null
@@ -1784,9 +1833,11 @@ static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_oper
 
     lir_operand_t *array_target_ref = temp_var_operand(m, type_ptrof(ast->left.type));
     if (array_target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        assert(false);
+        // linear_ident 处理了 global symbol var, 不会再有 global symbol var 返回了
         // 加载 array symbol 的地址到 array_target_ref 中
         // 这里明确 symbol 是 array 所以才能这么做
-        OP_PUSH(lir_op_lea(array_target_ref, array_target));
+        //        OP_PUSH(lir_op_lea(array_target_ref, array_target));
     } else {
         OP_PUSH(lir_op_move(array_target_ref, array_target));
     }
@@ -1916,7 +1967,7 @@ static lir_operand_t *linear_map_access(module_t *m, ast_expr_t expr, lir_operan
     // linear key to temp var
     lir_operand_t *key_ref = lea_operand_pointer(m, linear_expr(m, ast->key, NULL));
 
-    lir_operand_t *value_target = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
+    lir_operand_t *value_target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
     push_rt_call(m, RT_CALL_MAP_ACCESS, value_target, 2, map_target, key_ref);
     if (!is_stack_ref_big_type(expr.type)) {
         value_target = indirect_addr_operand(m, expr.type, value_target, 0);

@@ -280,7 +280,7 @@ void rt_uv_http_listen(n_server_t *server_ctx) {
     int result = uv_listen((uv_stream_t *) uv_server, DEFAULT_BACKLOG, on_new_conn_cb);
     if (result) {
         // 端口占用等错误
-        rt_co_throw(co, tlsprintf("uv listen failed: %s", uv_strerror(result)), false);
+        rti_co_throw(co, tlsprintf("uv listen failed: %s", uv_strerror(result)), false);
         return;
     }
 

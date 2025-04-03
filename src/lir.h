@@ -166,7 +166,9 @@
 #define RT_CALL_COROUTINE_ASYNC "rt_coroutine_async"
 #define RT_CALL_COROUTINE_RETURN "rt_coroutine_return"
 
+#define RT_CALL_THROW_INDEX_OUT_ERROR "throw_index_out_error"
 #define RT_CALL_CO_THROW_ERROR "co_throw_error"
+
 #define RT_CALL_CO_REMOVE_ERROR "co_remove_error"
 #define RT_CALL_CO_HAS_ERROR "co_has_error"
 #define RT_CALL_CO_HAS_PANIC "co_has_panic"
@@ -920,12 +922,14 @@ static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir
     }
 
 
+    // comment: indirect symbol var 在 lower symbol var 需要嵌套处理，比较麻烦， 所以需要通过手段消除 symbol_var 嵌套带来的问题
+    // 尽量在外部就尽量通过一些手段消除 symbol_var 带来的影响, 只保留简单的 scalar 类型的 symbol_var
     // 如果 base 是 global symbol var, 则加载 symbol addr 作为 indirect base
     //    if (base->assert_type == LIR_OPERAND_SYMBOL_VAR) {
     //        lir_symbol_var_t *symbol_var = base->value;
     //        lir_operand_t *temp = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-    //        OP_PUSH(lir_op_lea(temp, base));
-    //        base = temp;
+    //        // 没有原始类型判断不出来！还是外部进行处理的吧
+    //
     //    }
 
     assertf(base->assert_type == LIR_OPERAND_VAR || base->assert_type == LIR_OPERAND_REG,

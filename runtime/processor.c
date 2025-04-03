@@ -660,8 +660,8 @@ coroutine_t *coroutine_get() {
     return uv_key_get(&tls_coroutine_key);
 }
 
-void rt_throw(char *msg, bool panic) {
-    DEBUGF("[runtime.rt_throw] msg=%s", msg);
+void rti_throw(char *msg, bool panic) {
+    DEBUGF("[runtime.rti_throw] msg=%s", msg);
     coroutine_t *co = coroutine_get();
     n_interface_t *error = n_error_new(string_new(msg, strlen(msg)), panic);
 
@@ -673,7 +673,7 @@ void rt_throw(char *msg, bool panic) {
     rti_write_barrier_ptr(&co->error, error, false);
 }
 
-void rt_co_throw(coroutine_t *co, char *msg, bool panic) {
+void rti_co_throw(coroutine_t *co, char *msg, bool panic) {
     n_interface_t *error = n_error_new(string_new(msg, strlen(msg)), panic);
     co->has_error = true;
     if (co->traces == NULL) {

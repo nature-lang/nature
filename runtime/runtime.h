@@ -451,9 +451,9 @@ void test_runtime_init();
 
 int test_runtime_main(void *main_fn);
 
-void rt_throw(char *msg, bool panic);
+void rti_throw(char *msg, bool panic);
 
-void rt_co_throw(coroutine_t *co, char *msg, bool panic);
+void rti_co_throw(coroutine_t *co, char *msg, bool panic);
 
 void coroutine_dump_error(coroutine_t *co);
 

@@ -194,18 +194,24 @@ fn transformer.rmsnorm([f32] o, [f32] x, anyptr weight, int size) {
     }
 }
 
-fn transformer.matmul([f32] xout, [f32] x, anyptr w, int n, int d):void! {
+fn transformer.matmul(anyptr xout_ref, anyptr x_ref, anyptr w, int n, int d):void! {
     // log('[transformer.matmul] start', xout.len(), x.len(), w, n, d)
     // W (d,n) @ x (n,) -> xout (d,)
+    // anyptr x_ref = x.ref()
+    // anyptr xout_ref = xout.ref()
+
     // TODO #pragma optimize
     for int i = 0; i < d; i+=1 {
         f32 val = 0.0
         for int j = 0; j < n; j+=1 {
             f32 w_val = *((w + ((i * n + j) * 4) as anyptr) as rawptr<f32>)
-            val += w_val * x[j]
+            f32 x_val = *((x_ref + (j * 4) as anyptr) as rawptr<f32>)
+            val += w_val * x_val
         }
 
-        xout[i] = val
+
+        // xout[i] = val
+        *((xout_ref + (i * 4) as anyptr) as rawptr<f32>) = val
     }
 
     // log('[transformer.matmul] end')
@@ -265,9 +271,9 @@ fn transformer.forward(int token, int pos):[f32]! {
         s.v = s.value_cache.slice(start, start + kv_dim)
 
         // qkv matmuls for this position
-        self.matmul(s.q, s.xb, w.wq as anyptr + (l * dim * dim * @sizeof(f32)) as anyptr, dim, dim)
-        self.matmul(s.k, s.xb, w.wk as anyptr + (l * dim * kv_dim * @sizeof(f32)) as anyptr, dim, kv_dim)
-        self.matmul(s.v, s.xb, w.wv as anyptr + (l * dim * kv_dim * @sizeof(f32)) as anyptr, dim, kv_dim)
+        self.matmul(s.q.ref(), s.xb.ref(), w.wq as anyptr + (l * dim * dim * @sizeof(f32)) as anyptr, dim, dim)
+        self.matmul(s.k.ref(), s.xb.ref(), w.wk as anyptr + (l * dim * kv_dim * @sizeof(f32)) as anyptr, dim, kv_dim)
+        self.matmul(s.v.ref(), s.xb.ref(), w.wv as anyptr + (l * dim * kv_dim * @sizeof(f32)) as anyptr, dim, kv_dim)
 
         // RoPE relative positional encoding: complex-valued rotate q and k in each head
         for int i = 0; i < dim; i+=2 {
@@ -291,60 +297,52 @@ fn transformer.forward(int token, int pos):[f32]! {
                 list[i+1] = v0 * fci + v1 * fcr
             }
         }
-        var done = chan_new<bool>()
-        for int h1 = 0; h1 < p.n_heads as int; h1+=1 {
-            go fn(int h_idx):void! {
-                // get the query vector for this head
-                [f32] q = s.q.slice(h_idx * head_size, (h_idx + 1) * head_size)
-                [f32] att = s.att.slice(h_idx * p.seq_len as int, (h_idx + 1) * p.seq_len as int)
 
-                // iterate over all timesteps, including the current one
-                for int t = 0; t <= pos; t += 1 {
-                    // get the key vector for this head and at this timestep
-                    int k_start = loff + t * kv_dim + (h_idx / kv_mul) * head_size
-                    [f32] k = s.key_cache.slice(k_start, k_start + head_size)
+        for int h_idx = 0; h_idx < p.n_heads as int; h_idx+=1 {
+            // get the query vector for this head
+            [f32] q = s.q.slice(h_idx * head_size, (h_idx + 1) * head_size)
+            [f32] att = s.att.slice(h_idx * p.seq_len as int, (h_idx + 1) * p.seq_len as int)
 
-                    // calculate the attention score as the dot product of q and k
-                    f32 score = 0.0
-                    for int i = 0; i < head_size; i += 1 {
-                        score += q[i] * k[i]
-                    }
-                    score /= libc.sqrtf(head_size as f32)
-                    // save the score to the attention buffer
-                    att[t] = score
+            // iterate over all timesteps, including the current one
+            for int t = 0; t <= pos; t += 1 {
+                // get the key vector for this head and at this timestep
+                int k_start = loff + t * kv_dim + (h_idx / kv_mul) * head_size
+                [f32] k = s.key_cache.slice(k_start, k_start + head_size)
+
+                // calculate the attention score as the dot product of q and k
+                f32 score = 0.0
+                for int i = 0; i < head_size; i += 1 {
+                    score += q[i] * k[i]
                 }
+                score /= libc.sqrtf(head_size as f32)
+                // save the score to the attention buffer
+                att[t] = score
+            }
 
-                // softmax the scores to get attention weights, from 0..pos inclusively
-                softmax(att, pos + 1)
+            // softmax the scores to get attention weights, from 0..pos inclusively
+            softmax(att, pos + 1)
 
-                // weighted sum of the values, store back into xb
-                [f32] xb = s.xb.slice(h_idx * head_size, (h_idx + 1) * head_size)
-                libc.memset(xb.ref(), 0, head_size * @sizeof(f32))
+            // weighted sum of the values, store back into xb
+            [f32] xb = s.xb.slice(h_idx * head_size, (h_idx + 1) * head_size)
+            libc.memset(xb.ref(), 0, head_size * @sizeof(f32))
 
-                for int t = 0; t <= pos; t+=1 {
-                    // get the value vector for this head and at this timestep
-                    int v_start = loff + t * kv_dim + (h_idx / kv_mul) * head_size
-                    [f32] v = s.value_cache.slice(v_start, v_start + head_size)
-                    // get the attention weight for this timestep
-                    f32 a = att[t]
+            for int t = 0; t <= pos; t+=1 {
+                // get the value vector for this head and at this timestep
+                int v_start = loff + t * kv_dim + (h_idx / kv_mul) * head_size
+                [f32] v = s.value_cache.slice(v_start, v_start + head_size)
+                // get the attention weight for this timestep
+                f32 a = att[t]
 
-                    // accumulate the weighted value into xb
-                    for int i = 0; i < head_size; i+=1 {
-                        xb[i] += a * v[i]
-                    }
+                // accumulate the weighted value into xb
+                for int i = 0; i < head_size; i+=1 {
+                    xb[i] += a * v[i]
                 }
-
-                done.send(true)
-            }(h1)
-        }
-
-        for int h = 0; h < p.n_heads as int; h+=1 {
-            done.recv()
+            }
         }
 
 
         // final matmul to get the output of the attention
-        self.matmul(s.xb2, s.xb, w.wo as anyptr + (l * dim * dim * @sizeof(f32)) as anyptr, dim, dim)
+        self.matmul(s.xb2.ref(), s.xb.ref(), w.wo as anyptr + (l * dim * dim * @sizeof(f32)) as anyptr, dim, dim)
 
         // residual connection back into x
         for int i = 0; i < dim; i+=1 {
@@ -356,8 +354,8 @@ fn transformer.forward(int token, int pos):[f32]! {
 
         // Now for FFN in PyTorch we have: self.w2(F.silu(self.w1(x)) * self.w3(x))
         // first calculate self.w1(x) and self.w3(x)
-        self.matmul(s.hb, s.xb, w.w1 as anyptr + (l * dim * hidden_dim * @sizeof(f32)) as anyptr, dim, hidden_dim)
-        self.matmul(s.hb2, s.xb, w.w3 as anyptr + (l * dim * hidden_dim * @sizeof(f32)) as anyptr, dim, hidden_dim)
+        self.matmul(s.hb.ref(), s.xb.ref(), w.w1 as anyptr + (l * dim * hidden_dim * @sizeof(f32)) as anyptr, dim, hidden_dim)
+        self.matmul(s.hb2.ref(), s.xb.ref(), w.w3 as anyptr + (l * dim * hidden_dim * @sizeof(f32)) as anyptr, dim, hidden_dim)
 
         // SwiGLU non-linearity
         for int i = 0; i < hidden_dim; i+=1 {
@@ -370,7 +368,7 @@ fn transformer.forward(int token, int pos):[f32]! {
         }
 
         // final matmul to get the output of the ffn
-        self.matmul(s.xb, s.hb, w.w2 as anyptr + (l * hidden_dim * dim * @sizeof(f32)) as anyptr, hidden_dim, dim)
+        self.matmul(s.xb.ref(), s.hb.ref(), w.w2 as anyptr + (l * hidden_dim * dim * @sizeof(f32)) as anyptr, hidden_dim, dim)
 
         // residual connection
         for int i = 0; i < dim; i+=1 {
@@ -386,7 +384,7 @@ fn transformer.forward(int token, int pos):[f32]! {
     // logf('[forward] final rmsnorm end')
 
     // classifier into logits
-    self.matmul(s.logits, x, w.wcls as anyptr, dim, p.vocab_size as int)
+    self.matmul(s.logits.ref(), x.ref(), w.wcls as anyptr, dim, p.vocab_size as int)
 
     // log('[forward] end forward, matmul end', s.logits.len())
 
@@ -859,8 +857,7 @@ fn main():void! {
     string tokenizer_path = 'tokenizer.bin'
     f32 temperature = 1.0
     f32 topp = 0.9 // 默认使用top-p采样
-    // int steps = 256
-    int steps = 30
+    int steps = 256
     string prompt = ''
     u64 rng_seed = 1743659096 // TODO seed rng with time by default
     string mode = 'generate' // generate or chat

@@ -93,3 +93,103 @@ fn main():void! {
     println(t1[0].index, t1[0].prob)
     assert(t1[0].index == 6 && t1[0].prob == -333.444)
 }
+
+=== test_vec_inline
+--- main.n
+import time
+import fmt
+
+fn main():void! {
+    var list = [1, 2, 3, 4]
+    var a = list[0]
+    var b = list[1]
+    var c = list[2]
+    var d = list[3]
+    println(a, b, c, d)
+
+    list[0] = a * 2
+    list[1] = b * 2
+    list[2] = c * 2
+    list[3] =  d * 2
+    println(list[0], list[1], list[2], list[3])
+}
+
+--- output.txt
+1 2 3 4
+2 4 6 8
+
+
+=== test_vec_access_error
+--- main.n
+fn main():void! {
+    var list = [1, 2, 3, 4]
+    var d = list[8]
+}
+
+--- output.txt
+coroutine 'main' panic: 'index out of vec [8] with length 4' at nature-test/main.n:3:18
+
+=== test_vec_assign_error
+--- main.n
+fn main():void! {
+    var list = [1, 2, 3, 4]
+    list[8] = 12
+}
+
+--- output.txt
+coroutine 'main' panic: 'index out of vec [8] with length 4' at nature-test/main.n:3:16
+
+=== test_catch_vec_assign
+--- main.n
+fn main():void! {
+    var list = [1, 2, 3, 4]
+    try {
+        list[8] = 12
+    } catch e {
+        println('catch vec error:', e.msg())
+    }
+}
+
+--- output.txt
+catch vec error: index out of vec [8] with length 4
+
+=== test_catch_vec_access
+--- main.n
+fn main():void! {
+    var list = [1, 2, 3, 4]
+    var a = list[8] catch e {
+        println('catch vec error:', e.msg())
+        break 12
+    }
+    println(a)
+}
+
+--- output.txt
+catch vec error: index out of vec [8] with length 4
+12
+
+=== test_global_vec
+--- main.n
+var list = [1, 2, 3, 4]
+
+fn main():void! {
+    println(list[3])
+    list[2] = list[3] * 2
+    println(list[2])
+}
+
+--- output.txt
+4
+8
+
+=== test_global_arr
+--- main.n
+arr<u8, 4> list = [1, 2, 3, 4]
+
+fn main():void! {
+    list[2] = list[3] * 2
+    println(list[2])
+}
+
+--- output.txt
+8

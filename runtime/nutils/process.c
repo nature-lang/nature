@@ -63,9 +63,9 @@ static inline void on_read_stderr_cb(uv_stream_t *stream, ssize_t nread, const u
 
     if (nread < 0) {
         if (nread == UV_EOF) {
-            rt_co_throw(co, "read eof", false);
+            rti_co_throw(co, "read eof", false);
         } else {
-            rt_co_throw(co, "read pipe failed", false);
+            rti_co_throw(co, "read pipe failed", false);
         }
         pipe_ctx->closed = true;
 
@@ -101,9 +101,9 @@ static inline void on_read_stdout_cb(uv_stream_t *stream, ssize_t nread, const u
 
     if (nread < 0) {
         if (nread == UV_EOF) {
-            rt_co_throw(co, "read eof", false);
+            rti_co_throw(co, "read eof", false);
         } else {
-            rt_co_throw(co, "read pipe failed", false);
+            rti_co_throw(co, "read pipe failed", false);
         }
         pipe_ctx->closed = true;
 
@@ -193,7 +193,7 @@ process_context_t *rt_uv_process_spawn(command_t *cmd) {
 
     int result = uv_spawn(&p->uv_loop, &ctx->req, &options);
     if (result) {
-        rt_co_throw(co, (char *) uv_strerror(result), false);
+        rti_co_throw(co, (char *) uv_strerror(result), false);
         return NULL;
     }
 
@@ -214,7 +214,7 @@ void rt_uv_process_wait(process_context_t *ctx) {
 
     // 禁止跨 processor 调用, 可以启动协程调用，但是必须在当前 processor 中
     if (ctx->p != p) {
-        rt_co_throw(co, "cannot call process_t.wait across threads", false);
+        rti_co_throw(co, "cannot call process_t.wait across threads", false);
         return;
     }
 
@@ -236,12 +236,12 @@ n_string_t *rt_uv_process_read_stdout(process_context_t *ctx) {
     assert(p == ctx->p);
 
     if (ctx->stdout_pipe.closed) {
-        rt_co_throw(co, "stdout pipe closed", NULL);
+        rti_co_throw(co, "stdout pipe closed", NULL);
         return NULL;
     }
 
     if (ctx->p != p) {
-        rt_co_throw(co, "cannot call process_t.read_stdout across threads", false);
+        rti_co_throw(co, "cannot call process_t.read_stdout across threads", false);
         return NULL;
     }
 
@@ -267,12 +267,12 @@ n_string_t *rt_uv_process_read_stderr(process_context_t *ctx) {
     assert(p == ctx->p);
 
     if (ctx->stderr_pipe.closed) {
-        rt_co_throw(co, "stderr pipe closed", NULL);
+        rti_co_throw(co, "stderr pipe closed", NULL);
         return NULL;
     }
 
     if (ctx->p != p) {
-        rt_co_throw(co, "cannot call process_t.read_stderr across threads", false);
+        rti_co_throw(co, "cannot call process_t.read_stderr across threads", false);
         return NULL;
     }
 

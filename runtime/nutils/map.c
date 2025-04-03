@@ -111,7 +111,7 @@ n_anyptr_t rt_map_access(n_map_t *m, void *key_ref) {
                hash_value_deleted(hash_value));
 
         char *msg = tlsprintf("key '%s' not found in map", key_str);
-        rt_throw(msg, true);
+        rti_throw(msg, true);
         return 0;
     }
 

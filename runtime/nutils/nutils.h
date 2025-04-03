@@ -2,8 +2,8 @@
 #define NATURE_NUTILS_BASIC_H
 
 #include "runtime/runtime.h"
-#include "utils/type.h"
 #include "utils/sc_map.h"
+#include "utils/type.h"
 
 #define INT_SIZE sizeof(int64_t)
 
@@ -43,6 +43,8 @@ void iterator_take_value(void *iterator, int64_t hash, int64_t cursor, void *val
 
 void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t line, n_int_t column);
 
+void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch);
+
 n_interface_t *co_remove_error();
 
 uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
@@ -73,4 +75,4 @@ n_vec_t *unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *d
 
 n_string_t *rt_strerror();
 
-#endif // NATURE_BASIC_H
+#endif// NATURE_BASIC_H

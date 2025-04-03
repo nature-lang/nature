@@ -103,11 +103,26 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
     }
 }
 
+static inline void panic_dump(coroutine_t *co, caller_t *caller, char *msg) {
+    // pre_rtcall_hook 中已经记录了 ret addr
+    char *dump_msg;
+    if (co->main) {
+        dump_msg = tlsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", msg,
+                             ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
+    } else {
+        dump_msg = tlsprintf("coroutine '%ld' panic: '%s' at %s:%d:%d\n", co->id, msg,
+                             ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
+    }
+    VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
+    // panic msg
+    exit(EXIT_FAILURE);
+}
+
 n_ptr_t *rawptr_assert(n_rawptr_t *rawptr) {
     PRE_RTCALL_HOOK();
     if (rawptr == 0) {
         DEBUGF("[rawptr_assert] raw pointer");
-        rt_throw("rawptr is null, cannot assert", true);
+        rti_throw("rawptr is null, cannot assert", true);
         return 0;
     }
 
@@ -121,7 +136,7 @@ void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        rt_throw("type assert error", true);
+        rti_throw("type assert error", true);
         return;
     }
 
@@ -153,7 +168,7 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        rt_throw("type assert error", true);
+        rti_throw("type assert error", true);
         return;
     }
 
@@ -484,6 +499,49 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
     post_rtcall_hook("co_throw_error");
 }
 
+void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
+    PRE_RTCALL_HOOK();
+
+    coroutine_t *co = coroutine_get();
+
+    assert(co->scan_ret_addr);
+    caller_t *caller = sc_map_get_64v(&rt_caller_map, co->scan_ret_addr);
+    assert(caller);
+
+    char *msg = tlsprintf("index out of vec [%d] with length %d", index, len);
+
+    if (be_catch) {
+        n_interface_t *error = n_error_new(string_new(msg, strlen(msg)), true);
+        assert(error->method_count == 1);
+
+        DEBUGF("[runtime.co_throw_error_msg] co=%p, error=%p, path=%s, line=%ld, column=%ld, msg=%s", co, (void *) error, path,
+               line,
+               column, (char *) msg);
+
+        assert(co->traces == NULL);
+
+        fndef_t *caller_fn = caller->data;
+
+        n_vec_t *traces = rti_vec_new(&errort_trace_rtype, 0, 0);
+        rti_write_barrier_ptr(&co->traces, traces, false);
+        n_trace_t trace = {
+                .path = string_new(caller_fn->rel_path, strlen(caller_fn->rel_path)),
+                .ident = string_new(caller_fn->name, strlen(caller_fn->name)),
+                .line = caller->line,
+                .column = caller->column,
+        };
+        rt_vec_push(co->traces, errort_trace_rtype.hash, &trace);
+        rti_write_barrier_ptr(&co->error, error, false);
+        co->has_error = true;
+    } else {
+        char *copy_msg = strdup(msg);
+        panic_dump(co, caller, copy_msg);
+        free(copy_msg);
+    }
+
+    post_rtcall_hook("co_throw_error");
+}
+
 n_interface_t *co_remove_error() {
     PRE_RTCALL_HOOK();
     coroutine_t *co = coroutine_get();
@@ -755,24 +813,10 @@ void rawptr_valid(void *rawptr) {
 
     DEBUGF("[rawptr_valid] rawptr=%p", rawptr);
     if (rawptr <= 0) {
-        rt_throw("invalid memory address or nil pointer dereference", true);
+        rti_throw("invalid memory address or nil pointer dereference", true);
     }
 }
 
-static inline void panic_dump(coroutine_t *co, caller_t *caller, char *msg) {
-    // pre_rtcall_hook 中已经记录了 ret addr
-    char *dump_msg;
-    if (co->main) {
-        dump_msg = tlsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", msg,
-                             ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
-    } else {
-        dump_msg = tlsprintf("coroutine '%ld' panic: '%s' at %s:%d:%d\n", co->id, msg,
-                             ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
-    }
-    VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
-    // panic msg
-    exit(EXIT_FAILURE);
-}
 
 void rt_panic(n_string_t *msg) {
     coroutine_t *co = coroutine_get();
@@ -809,7 +853,7 @@ typedef struct {
 
 n_string_t *rt_string_new(n_anyptr_t raw_string) {
     if (!raw_string) {
-        rt_throw("raw string is empty", false);
+        rti_throw("raw string is empty", false);
         return NULL;
     }
 

@@ -46,7 +46,7 @@ n_vec_t *rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *va
 
     if (length < 0) {
         char *msg = tlsprintf("len must be greater than 0");
-        rt_throw(msg, true);
+        rti_throw(msg, true);
     }
     int64_t capacity = length;
     if (capacity == 0) {
@@ -88,7 +88,7 @@ n_vec_t *rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity) {
 
     if (capacity < 0) {
         char *msg = tlsprintf("cap must be greater than 0");
-        rt_throw(msg, true);
+        rti_throw(msg, true);
     }
 
 
@@ -129,7 +129,7 @@ void rt_vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
     if (index >= l->length) {
         char *msg = tlsprintf("index out of range [%d] with length %d", index, l->length);
         DEBUGF("[runtime.rt_vec_access] has err %s", msg);
-        rt_throw(msg, true);
+        rti_throw(msg, true);
 
         return;
     }
@@ -234,14 +234,14 @@ n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
     if (start > l->length || end > l->length || start < 0 || end < 0) {
         char *msg = tlsprintf("slice [%d:%d] out of vec with length %d", start, end, l->length);
         DEBUGF("[runtime.vec_slice] has err %s", msg);
-        rt_throw(msg, true);
+        rti_throw(msg, true);
         return 0;
     }
 
     if (start > end) {
         char *msg = tlsprintf("invalid index values, must be low %d <= high %d", start, end);
         DEBUGF("[runtime.vec_slice] has err %s", msg);
-        rt_throw(msg, true);
+        rti_throw(msg, true);
         return 0;
     }
 
@@ -315,7 +315,7 @@ n_anyptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index) {
     if (index >= l->length) {
         char *msg = tlsprintf("index out of vec [%d] with length %d", index, l->length);
         DEBUGF("[runtime.rt_vec_element_addr] has err %s", msg);
-        rt_throw(msg, true);
+        rti_throw(msg, true);
         return 0;
     }
 
