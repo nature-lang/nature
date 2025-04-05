@@ -1,3 +1,9 @@
 fn main():void! {
-     var r2 = new [i16;4]([1, 2, 3, 4])
+    var r = 12
+    match r {
+        1 -> {
+            println('hello')
+        }
+        _ -> panic('hello')
+    }
 }

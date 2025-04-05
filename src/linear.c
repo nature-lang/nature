@@ -2664,7 +2664,7 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
     OP_PUSH(lir_op_label(match_start_ident, true));
 
 
-    bool has_ret = expr.target_type.kind != TYPE_VOID;
+    bool has_ret = expr.type.kind != TYPE_VOID;
 
     table_set(m->current_closure->match_has_ret, match_start_ident, (void *) has_ret);
     if (has_ret && !target) {
@@ -2785,7 +2785,7 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     char *catch_start_label = label_ident_with_unique(m, CATCH_IDENT);
     char *catch_end_ident = str_connect(catch_start_label, LABEL_END_SUFFIX);
 
-    bool has_ret = expr.target_type.kind != TYPE_VOID;
+    bool has_ret = expr.type.kind != TYPE_VOID;
 
     if (has_ret && !target) {
         target = temp_var_operand_with_alloc(m, expr.type);

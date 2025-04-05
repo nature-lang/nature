@@ -253,17 +253,17 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
             linked_t *call_operations = arm64_lower_call(c, op);
             for (linked_node *call_node = call_operations->front; call_node != call_operations->rear;
                  call_node = call_node->succ) {
-                lir_op_t *call_op = call_node->value;
+                lir_op_t *temp_op = call_node->value;
 
-                linked_concat(operations, arm64_lower_symbol_var(c, call_op));
+                linked_concat(operations, arm64_lower_symbol_var(c, temp_op));
 
-                if (lir_op_like_move(call_op) && !lir_can_mov(call_op)) {
-                    call_op->first = arm64_convert_use_var(c, operations, call_op->first);
-                    linked_push(operations, call_op);
+                if (temp_op->code == LIR_OPCODE_MOVE && !lir_can_mov(temp_op)) {
+                    temp_op->first = arm64_convert_use_var(c, operations, temp_op->first);
+                    linked_push(operations, temp_op);
                     continue;
                 }
 
-                linked_push(operations, call_op);
+                linked_push(operations, temp_op);
             }
             continue;
         }
@@ -283,7 +283,7 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT || op->code == LIR_OPCODE_NEG) {
+        if (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT || op->code == LIR_OPCODE_NEG || lir_op_convert(op)) {
             linked_concat(operations, arm64_lower_ternary(c, op));
             continue;
         }
@@ -293,7 +293,7 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (lir_op_like_move(op) && !lir_can_mov(op)) {
+        if (op->code == LIR_OPCODE_MOVE && !lir_can_mov(op)) {
             op->first = arm64_convert_use_var(c, operations, op->first);
             linked_push(operations, op);
             continue;
