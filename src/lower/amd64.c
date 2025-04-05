@@ -181,7 +181,36 @@ static linked_t *amd64_lower_shift(closure_t *c, lir_op_t *op) {
     return list;
 }
 
+static linked_t *amd64_lower_mul(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+
+    lir_operand_t *ax_operand = lir_reg_operand(rax->index, operand_type_kind(op->output));
+    lir_operand_t *dx_operand = lir_reg_operand(rdx->index, operand_type_kind(op->output));
+
+    // second cannot imm?
+    if (op->second->assert_type != LIR_OPERAND_VAR) {
+        op->second = amd64_convert_first_to_temp(c, list, op->second);
+    }
+
+    // mov first -> rax
+    linked_push(list, lir_op_move(ax_operand, op->first));
+
+    lir_opcode_t op_code = op->code;
+    lir_operand_t *result_operand = lir_regs_operand(2, ax_operand->value, dx_operand->value);
+
+
+    // imul rax, v2 -> rax+rdx
+    linked_push(list, lir_op_new(op_code, ax_operand, op->second, result_operand));
+    linked_push(list, lir_op_move(op->output, ax_operand)); // 暂时不处理 rdx, 只支持 64
+
+    return list;
+}
+
 static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
+    if (op->code == LIR_OPCODE_MUL) {
+        return amd64_lower_mul(c, op);
+    }
+
     linked_t *list = linked_new();
 
     lir_operand_t *ax_operand = lir_reg_operand(rax->index, operand_type_kind(op->output));
@@ -211,7 +240,9 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
         linked_push(list, lir_op_new(LIR_OPCODE_CLR, NULL, NULL, dx_operand));
     }
 
-    // [div|mul|rem] rax, v2 -> rax
+    // mul 使用 rax:rdx 两个寄存器，需要调整 result_operand
+
+    // [div|mul|rem] rax, v2 -> rax+rdx
     linked_push(list, lir_op_new(op_code, ax_operand, op->second, result_operand));
     linked_push(list, lir_op_move(op->output, result_operand));
 
@@ -243,6 +274,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
+        // float 不需要特别处理, 其不会特殊占用寄存器
         if (lir_op_factor(op) && is_integer(operand_type_kind(op->output))) {
             // inter 类型的 mul 和 div 需要转换成 amd64 单操作数兼容操作
             linked_concat(operations, amd64_lower_factor(c, op));

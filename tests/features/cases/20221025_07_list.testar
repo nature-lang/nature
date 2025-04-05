@@ -162,10 +162,10 @@ fn main():void! {
 
 === test_arr_in_range
 --- main.n
-arr<i16,8> arr1 = [1, 2, 3, 4]
+[i16;8] arr1 = [1, 2, 3, 4]
 
 fn main():void! {
-    arr<i8,4> arr2 = [1, 2, 3, 4]
+    [i8;4] arr2 = [1, 2, 3, 4]
     arr1[2] = arr2[3] as i16 * 2
     println(arr1[2], arr2[3])
 }
@@ -175,10 +175,10 @@ fn main():void! {
 
 === test_arr_out_range
 --- main.n
-arr<i16,8> arr1 = [1, 2, 3, 4]
+[i16;8] arr1 = [1, 2, 3, 4]
 
 fn main():void! {
-    arr<i8,4> arr2 = [1, 2, 3, 4]
+    [i8;4] arr2 = [1, 2, 3, 4]
     arr1[-2] = arr2[-3] as i16 * 2
 }
 

@@ -5,7 +5,7 @@ type dirent_t = struct {
     i64 off
     u16 reclen
     u8 t
-    arr<u8,256> name
+    [u8;256] name
 }
 
 #linkid opendir

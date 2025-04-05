@@ -842,13 +842,13 @@ type_kind to_gc_kind(type_kind kind) {
 char *_type_format(type_t t) {
     if (t.kind == TYPE_VEC) {
         // []
-        return dsprintf("vec<%s>", type_format(t.vec->element_type));
+        return dsprintf("[%s]", type_format(t.vec->element_type));
     }
     if (t.kind == TYPE_CHAN) {
         return dsprintf("chan<%s>", type_format(t.chan->element_type));
     }
     if (t.kind == TYPE_ARR) {
-        return dsprintf("arr<%s,%d>", type_format(t.array->element_type), t.array->length);
+        return dsprintf("[%s;%d]", type_format(t.array->element_type), t.array->length);
     }
     if (t.kind == TYPE_MAP) {
         return dsprintf("map<%s,%s>", type_format(t.map->key_type), _type_format(t.map->value_type));

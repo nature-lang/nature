@@ -31,7 +31,7 @@ fn main() {
     type foo_t = struct{
         u8 a = a as u8
         u16 b = (12 + 25 * 3) as u16
-        arr<u8,3> c
+        [u8;3] c
         string d = test()
     }
 

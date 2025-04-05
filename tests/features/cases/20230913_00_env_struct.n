@@ -78,7 +78,7 @@ fn main() {
     co.sleep(500) // wait gc finish
 
     // --- array
-    arr<atm_t,8> array = []
+    [atm_t;8] array = []
 
     array[0] = atm_t{
         amount = 100,

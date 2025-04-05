@@ -55,7 +55,7 @@ static void analyzer_import_std(module_t *m, char *package, ast_import_t *import
     char *package_conf_path = path_join(package_dir, PACKAGE_TOML);
     ANALYZER_ASSERTF(file_exists(package_conf_path), "package.toml=%s not found", package_conf_path);
 
-    import->use_links = true;// std 默认可以加载其中的 links
+    import->use_links = true; // std 默认可以加载其中的 links
     import->package_dir = package_dir;
     import->package_conf = package_parser(package_conf_path);
 }
@@ -112,7 +112,7 @@ void analyzer_import(module_t *m, ast_import_t *import) {
         ANALYZER_ASSERTF(import->file[0] != '/', "cannot use absolute path=%s", import->file);
 
         // 去掉 .n 部分, 作为默认的 module as (可能不包含 /)
-        char *temp_as = strrchr(import->file, '/');// foo/bar.n -> /bar.n
+        char *temp_as = strrchr(import->file, '/'); // foo/bar.n -> /bar.n
         if (temp_as != NULL) {
             temp_as++;
         } else {
@@ -203,7 +203,7 @@ static type_t analyzer_type_fn(ast_fndef_t *fndef) {
  * @return
  */
 static char *analyzer_resolve_typedef(module_t *m, analyzer_fndef_t *current, string ident) {
-    if (current == NULL) {// 进行全局作用域符号查找
+    if (current == NULL) { // 进行全局作用域符号查找
         // - 当前 module 的全局 type
         // analyzer 在初始化 module 时已经将这些符号全都注册到了全局符号表中 (module_ident + ident)
         // can_import_symbol_table 记录了所有的 package + ident 组成的符号，所以也包括 current module
@@ -496,7 +496,7 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
     }
 
     if (str_equal(type->ident, type_kind_str[TYPE_INTEGER_T])) {
-        type->kind = TYPE_INT;// 底层类型
+        type->kind = TYPE_INT; // 底层类型
         type->value = NULL;
 
         type->ident = "integer_t";
@@ -696,7 +696,7 @@ static void analyzer_match(module_t *m, ast_match_t *match) {
         }
 
         if (match_case->cond_list->length > 1) {
-            is_cond = false;// cond is logic, not is expr
+            is_cond = false; // cond is logic, not is expr
         }
 
         if (is_cond && subject_ident) {
@@ -922,7 +922,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         type_t param_type = type_copy(fndef->impl_type);
         ast_var_decl_t param = {
                 .ident = FN_SELF_NAME,
-                .type = param_type,// 后续 infer 确定了具体类型之后再判断是否需要 ptrof
+                .type = param_type, // 后续 infer 确定了具体类型之后再判断是否需要 ptrof
         };
         ct_list_push(params, &param);
 
@@ -1165,7 +1165,7 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
         assert(m->analyzer_current);
 
         fndef->jit_closure_name = fndef->symbol_name;
-        fndef->symbol_name = var_ident_with_index(m, str_connect(fndef->symbol_name, "_closure"));// 二进制中的 label name
+        fndef->symbol_name = var_ident_with_index(m, str_connect(fndef->symbol_name, "_closure")); // 二进制中的 label name
 
         // 符号表内容修改为 var_decl
         ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
@@ -1354,7 +1354,7 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
     char *current_global_ident = ident_with_prefix(m->ident, ident->literal);
     symbol_t *s = symbol_table_get(current_global_ident);
     if (s != NULL) {
-        ident->literal = current_global_ident;// 找到了则修改为全局名称
+        ident->literal = current_global_ident; // 找到了则修改为全局名称
         return true;
     }
 
@@ -1390,7 +1390,7 @@ static void rewrite_select_expr(module_t *m, ast_expr_t *expr) {
         char *current_module_ident = ident_with_prefix(m->ident, ident->literal);
         symbol_t *s = table_get(symbol_table, current_module_ident);
         if (s != NULL) {
-            ident->literal = current_module_ident;// 找到了则修改为全局名称
+            ident->literal = current_module_ident; // 找到了则修改为全局名称
             return;
         }
 
@@ -1483,6 +1483,11 @@ static void analyzer_tuple_destr(module_t *m, ast_tuple_destr_t *tuple) {
     }
 }
 
+static void analyzer_vec_repeat_new(module_t *m, ast_vec_repeat_new_t *expr) {
+    analyzer_expr(m, &expr->default_element);
+    analyzer_expr(m, &expr->length_expr);
+}
+
 static void analyzer_vec_new(module_t *m, ast_vec_new_t *expr) {
     for (int i = 0; i < expr->elements->length; ++i) {
         ast_expr_t *value = ct_list_value(expr->elements, i);
@@ -1525,7 +1530,7 @@ static void analyzer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     // iterate 是对变量的使用，所以其在 scope
     analyzer_expr(m, &stmt->iterate);
 
-    analyzer_begin_scope(m);// iterator 中创建的 key 和 value 的所在作用域都应该在当前 for scope 里面
+    analyzer_begin_scope(m); // iterator 中创建的 key 和 value 的所在作用域都应该在当前 for scope 里面
 
     analyzer_var_decl(m, &stmt->first, true);
     if (stmt->second) {
@@ -1619,6 +1624,10 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         }
         case AST_EXPR_VEC_NEW: {
             return analyzer_vec_new(m, expr->value);
+        }
+        case AST_EXPR_ARRAY_REPEAT_NEW:
+        case AST_EXPR_VEC_REPEAT_NEW: {
+            return analyzer_vec_repeat_new(m, expr->value);
         }
         case AST_EXPR_ACCESS: {
             return analyzer_access(m, expr->value);
@@ -1735,7 +1744,7 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
  */
 static void analyzer_module(module_t *m, slice_t *stmt_list) {
     // var_decl blocks
-    slice_t *var_assign_list = slice_new();// 存放 stmt
+    slice_t *var_assign_list = slice_new(); // 存放 stmt
     slice_t *fn_list = slice_new();
     slice_t *typedef_list = slice_new();
 
@@ -1876,7 +1885,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         ast_call_t *call = NEW(ast_call_t);
         call->left = (ast_expr_t){
                 .assert_type = AST_EXPR_IDENT,
-                .value = ast_new_ident(s->ident),// module.init
+                .value = ast_new_ident(s->ident), // module.init
                 .line = 1,
                 .column = 0,
         };

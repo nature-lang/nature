@@ -1,9 +1,11 @@
 #ifndef NATURE_BINARY_ARCH_AMD64_H
 #define NATURE_BINARY_ARCH_AMD64_H
 
-#include "src/binary/linker.h"
 #include "src/binary/encoding/amd64/asm.h"
 #include "src/binary/encoding/amd64/opcode.h"
+#include "src/binary/linker.h"
+#include "src/cfg.h"
+#include "src/lir.h"
 
 #include <stdlib.h>
 
@@ -310,19 +312,18 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
             /* fallthrough: val already holds the PLT slot address */
 
         plt32pc32: {
-                // 相对地址计算，
-                // addr 保存了符号的使用位置（加载到虚拟内存中的位置）
-                // val 保存了符号的定义的位置（加载到虚拟内存中的位置）
-                // ptr 真正的段数据,存储在编译时内存中，相对地址修正的填充点
-                int64_t diff;
-                diff = (int64_t) (val - addr);
-                if (diff < -2147483648LL || diff > 2147483647LL) {
-                    assert(false && "relocation failed");
-                }
-                // 小端写入
-                add32le(ptr, diff);
+            // 相对地址计算，
+            // addr 保存了符号的使用位置（加载到虚拟内存中的位置）
+            // val 保存了符号的定义的位置（加载到虚拟内存中的位置）
+            // ptr 真正的段数据,存储在编译时内存中，相对地址修正的填充点
+            int64_t diff;
+            diff = (int64_t) (val - addr);
+            if (diff < -2147483648LL || diff > 2147483647LL) {
+                assert(false && "relocation failed");
             }
-            break;
+            // 小端写入
+            add32le(ptr, diff);
+        } break;
 
         case R_X86_64_COPY:
             break;
@@ -344,7 +345,7 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
         case R_X86_64_GOTPCRELX:
         case R_X86_64_REX_GOTPCRELX:
             add32le(ptr, ctx->got->sh_addr - addr +
-                         elf_get_sym_attr(ctx, sym_index, 0)->got_offset - 4);
+                                 elf_get_sym_attr(ctx, sym_index, 0)->got_offset - 4);
             break;
         case R_X86_64_GOTPC32:
             add32le(ptr, ctx->got->sh_addr - addr + rel->r_addend);
@@ -368,17 +369,15 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
             break;
         case R_X86_64_TLSGD: {
             static const unsigned char expect[] = {
-                /* .byte 0x66; lea 0(%rip),%rdi */
-                0x66, 0x48, 0x8d, 0x3d, 0x00, 0x00, 0x00, 0x00,
-                /* .word 0x6666; rex64; call __tls_get_addr@PLT */
-                0x66, 0x66, 0x48, 0xe8, 0x00, 0x00, 0x00, 0x00
-            };
+                    /* .byte 0x66; lea 0(%rip),%rdi */
+                    0x66, 0x48, 0x8d, 0x3d, 0x00, 0x00, 0x00, 0x00,
+                    /* .word 0x6666; rex64; call __tls_get_addr@PLT */
+                    0x66, 0x66, 0x48, 0xe8, 0x00, 0x00, 0x00, 0x00};
             static const unsigned char replace[] = {
-                /* mov %fs:0,%rax */
-                0x64, 0x48, 0x8b, 0x04, 0x25, 0x00, 0x00, 0x00, 0x00,
-                /* lea -4(%rax),%rax */
-                0x48, 0x8d, 0x80, 0x00, 0x00, 0x00, 0x00
-            };
+                    /* mov %fs:0,%rax */
+                    0x64, 0x48, 0x8b, 0x04, 0x25, 0x00, 0x00, 0x00, 0x00,
+                    /* lea -4(%rax),%rax */
+                    0x48, 0x8d, 0x80, 0x00, 0x00, 0x00, 0x00};
 
             if (memcmp(ptr - 4, expect, sizeof(expect)) == 0) {
                 Elf64_Sym *sym;
@@ -399,16 +398,14 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
         }
         case R_X86_64_TLSLD: {
             static const unsigned char expect[] = {
-                /* lea 0(%rip),%rdi */
-                0x48, 0x8d, 0x3d, 0x00, 0x00, 0x00, 0x00,
-                /* call __tls_get_addr@PLT */
-                0xe8, 0x00, 0x00, 0x00, 0x00
-            };
+                    /* lea 0(%rip),%rdi */
+                    0x48, 0x8d, 0x3d, 0x00, 0x00, 0x00, 0x00,
+                    /* call __tls_get_addr@PLT */
+                    0xe8, 0x00, 0x00, 0x00, 0x00};
             static const unsigned char replace[] = {
-                /* data16 data16 data16 mov %fs:0,%rax */
-                0x66, 0x66, 0x66, 0x64, 0x48, 0x8b, 0x04, 0x25,
-                0x00, 0x00, 0x00, 0x00
-            };
+                    /* data16 data16 data16 mov %fs:0,%rax */
+                    0x66, 0x66, 0x66, 0x64, 0x48, 0x8b, 0x04, 0x25,
+                    0x00, 0x00, 0x00, 0x00};
 
             if (memcmp(ptr - 3, expect, sizeof(expect)) == 0) {
                 memcpy(ptr - 3, replace, sizeof(replace));
@@ -484,11 +481,11 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
                 // 之前的指令由于找不到相应的符号，所以暂时使用了 rel32 来填充
                 // 一旦发现定义点,就需要反推  取消反推重写逻辑,实现太复杂
                 Elf64_Sym sym = {
-                    .st_shndx = ctx->text_section->sh_index,
-                    .st_size = 0,
-                    .st_info = ELF64_ST_INFO(!s->is_local, STT_FUNC),
-                    .st_other = 0,
-                    .st_value = *temp->offset,
+                        .st_shndx = ctx->text_section->sh_index,
+                        .st_size = 0,
+                        .st_info = ELF64_ST_INFO(!s->is_local, STT_FUNC),
+                        .st_other = 0,
+                        .st_value = *temp->offset,
                 };
                 temp->sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, s->name);
                 continue;
@@ -528,11 +525,11 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
                     uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, symbol_operand->name);
                     if (sym_index == 0) {
                         Elf64_Sym sym = {
-                            .st_shndx = 0,
-                            .st_size = 0,
-                            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
-                            .st_other = 0,
-                            .st_value = 0,
+                                .st_shndx = 0,
+                                .st_size = 0,
+                                .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
+                                .st_other = 0,
+                                .st_value = 0,
                         };
                         sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, symbol_operand->name);
                     }
@@ -541,7 +538,7 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
                     amd64_rewrite_rip_symbol(rel_operand);
 
                     // 编码
-                    temp->inst = amd64_asm_inst_encoding(*operation, temp->data, &temp->data_count);
+                    temp->inst = amd64_asm_inst_encoding(*operation, temp->data, &temp->data_count, c);
                     section_offset += temp->data_count;
                     fn_offset += temp->data_count;
 
@@ -559,7 +556,7 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
             }
 
             // 编码
-            temp->inst = amd64_asm_inst_encoding(*operation, temp->data, &temp->data_count);
+            temp->inst = amd64_asm_inst_encoding(*operation, temp->data, &temp->data_count, c);
             section_offset += temp->data_count;
             fn_offset += temp->data_count;
 
@@ -572,10 +569,10 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
                     }
 
                     caller_t caller = {
-                        .data = c,
-                        .offset = fn_offset,
-                        .line = operation->line,
-                        .column = operation->column,
+                            .data = c,
+                            .offset = fn_offset,
+                            .line = operation->line,
+                            .column = operation->column,
                     };
                     if (call_target) {
                         str_rcpy(caller.target_name, call_target, 24);
@@ -599,11 +596,11 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
         uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, temp->rel_symbol);
         if (sym_index == 0) {
             Elf64_Sym sym = {
-                .st_shndx = 0,
-                .st_size = 0,
-                .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
-                .st_other = 0,
-                .st_value = 0,
+                    .st_shndx = 0,
+                    .st_size = 0,
+                    .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC),
+                    .st_other = 0,
+                    .st_value = 0,
             };
             // 如果遍历没有找到符号则会添加一条  UND 符号信息到符号表中
             //  10: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND string_new
@@ -620,7 +617,7 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
             amd64_rewrite_rel_symbol(temp->operation, temp->rel_operand, rel_diff);
 
             uint8_t old_count = temp->data_count;
-            temp->inst = amd64_asm_inst_encoding(*temp->operation, temp->data, &temp->data_count);
+            temp->inst = amd64_asm_inst_encoding(*temp->operation, temp->data, &temp->data_count, NULL);
             assertf(temp->data_count == old_count, "second traverse cannot update encoding data_count");
         } else {
             // st_value = 0 表示这是一个外部的符号， 需要添加重定位
@@ -682,11 +679,7 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
                 if (!s->is_local) {
                     n_type |= N_EXT;
                 }
-                uint64_t sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                                                      .n_sect = ctx->text_section->sh_index,
-                                                      .n_value = *temp->offset,
-                                                      .n_type = n_type
-                                                  }, s->name);
+                uint64_t sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){.n_sect = ctx->text_section->sh_index, .n_value = *temp->offset, .n_type = n_type}, s->name);
                 temp->sym_index = sym_index;
 
                 assert(s->name);
@@ -729,18 +722,14 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     uint64_t sym_index = (uint64_t) table_get(symtab_hash, symbol_operand->name);
                     if (sym_index == 0) {
                         // 可重定位符号注册
-                        sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                                                     .n_sect = NO_SECT,
-                                                     .n_value = 0,
-                                                     .n_type = N_UNDF | N_EXT
-                                                 }, symbol_operand->name);
+                        sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){.n_sect = NO_SECT, .n_value = 0, .n_type = N_UNDF | N_EXT}, symbol_operand->name);
                     }
 
                     // rewrite symbol
                     amd64_rewrite_rip_symbol(rel_operand);
 
                     // 编码
-                    temp->inst = amd64_asm_inst_encoding(*operation, temp->data, &temp->data_count);
+                    temp->inst = amd64_asm_inst_encoding(*operation, temp->data, &temp->data_count, c);
                     section_offset += temp->data_count;
                     fn_offset += temp->data_count;
 
@@ -756,7 +745,7 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
             }
 
             // 编码
-            temp->inst = amd64_asm_inst_encoding(*operation, temp->data, &temp->data_count);
+            temp->inst = amd64_asm_inst_encoding(*operation, temp->data, &temp->data_count, c);
             section_offset += temp->data_count;
             fn_offset += temp->data_count;
 
@@ -769,10 +758,10 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     }
 
                     caller_t caller = {
-                        .data = c,
-                        .offset = fn_offset,
-                        .line = operation->line,
-                        .column = operation->column,
+                            .data = c,
+                            .offset = fn_offset,
+                            .line = operation->line,
+                            .column = operation->column,
                     };
                     if (call_target) {
                         str_rcpy(caller.target_name, call_target, 24);
@@ -797,11 +786,7 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
         if (sym_index == 0) {
             // 如果遍历没有找到符号则会添加一条  UND 符号信息到符号表中
             //  10: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND string_new
-            sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                                         .n_sect = NO_SECT,
-                                         .n_value = 0,
-                                         .n_type = N_UNDF | N_EXT
-                                     }, temp->rel_symbol);
+            sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){.n_sect = NO_SECT, .n_value = 0, .n_type = N_UNDF | N_EXT}, temp->rel_symbol);
         }
 
         // sym->st_value 表示符号定义的位置，基于符号所在的 section(.section)
@@ -815,7 +800,7 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
             amd64_rewrite_rel_symbol(temp->operation, temp->rel_operand, rel_diff);
 
             uint8_t old_count = temp->data_count;
-            temp->inst = amd64_asm_inst_encoding(*temp->operation, temp->data, &temp->data_count);
+            temp->inst = amd64_asm_inst_encoding(*temp->operation, temp->data, &temp->data_count, NULL);
             assertf(temp->data_count == old_count, "second traverse cannot update encoding data_count");
         } else {
             // st_value = 0 表示这是一个外部的符号， 需要添加重定位

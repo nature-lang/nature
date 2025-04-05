@@ -756,7 +756,7 @@ fn main():void! {
     var r = new i64(8)
     println(*r)
 
-    var r2 = new arr<i16,4>([1, 2, 3, 4])
+    var r2 = new [i16;4]([1, 2, 3, 4])
     println((*r2)[0])
     println(r2[0], r2[1], r2[2], r2[3])
 

@@ -57,7 +57,7 @@ fn waitpid(int pid, rawptr<int> status, int options):int
 
 // --- signal 相关 <sys/signalfd.h> 和 <signal.h>
 type sigset_t = struct {
-    arr<u64,16> __val
+    [u64;16] __val
 }
 
 type signalfd_siginfo_t = struct {
@@ -82,7 +82,7 @@ type signalfd_siginfo_t = struct {
     i32 ssi_syscall
     u64 ssi_call_addr
     u32 ssi_arch
-    arr<u8,48> __pad
+    [u8;48] __pad
 }
 
 #linkid sigemptyset

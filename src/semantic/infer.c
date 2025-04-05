@@ -1394,6 +1394,69 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
 }
 
 /**
+ * arr or vec repeat new
+ */
+static type_t infer_vec_repeat_new(module_t *m, ast_expr_t *expr, type_t target_type) {
+    ast_vec_repeat_new_t *repeat_new = expr->value;
+
+    if (target_type.kind == TYPE_ARR) {
+        expr->assert_type = AST_EXPR_ARRAY_REPEAT_NEW;
+
+        // 严格限定类型为 array
+        type_t result = type_kind_new(TYPE_ARR);
+        result.status = REDUCTION_STATUS_UNDO;
+
+        result.ident = target_type.ident; // literal new ident 直接继承
+        result.ident_kind = target_type.ident_kind;
+        result.args = target_type.args;
+
+
+        type_array_t *type_array = NEW(type_array_t);
+
+        type_array->element_type = target_type.array->element_type;
+
+        // check default type
+        infer_right_expr(m, &repeat_new->default_element, type_array->element_type);
+
+        // check len type
+        infer_right_expr(m, &repeat_new->length_expr, type_kind_new(TYPE_INT));
+        INFER_ASSERTF(repeat_new->length_expr.assert_type == AST_EXPR_LITERAL, "array length of the declaration must be a constant");
+        ast_literal_t *literal = repeat_new->length_expr.value;
+        int length = atoi(literal->value);
+
+        INFER_ASSERTF(length > 0, "array length must be greater than 0");
+
+        type_array->length = length;
+        result.array = type_array;
+        return reduction_type(m, result);
+    }
+
+    type_vec_t *type_vec = NEW(type_vec_t);
+    type_vec->element_type = type_kind_new(TYPE_UNKNOWN);
+    if (target_type.kind == TYPE_VEC) {
+        type_vec->element_type = target_type.vec->element_type;
+    }
+
+    // vec new change to vec_new call
+    type_vec->element_type = infer_right_expr(m, &repeat_new->default_element, type_vec->element_type);
+
+    ast_call_t *call_expr = NEW(ast_call_t);
+    call_expr->left = *ast_ident_expr(expr->line, expr->column, BUILTIN_CALL_VEC_NEW);
+    call_expr->args = ct_list_new(sizeof(ast_expr_t));
+    ct_list_push(call_expr->args, &repeat_new->default_element);
+    ct_list_push(call_expr->args, &repeat_new->length_expr);
+
+    call_expr->generics_args = ct_list_new(sizeof(type_t));
+    ct_list_push(call_expr->generics_args, &type_vec->element_type);
+
+    expr->assert_type = AST_CALL;
+    expr->value = call_expr;
+
+    type_t result_type = infer_right_expr(m, expr, type_kind_new(TYPE_UNKNOWN));
+    return result_type;
+}
+
+/**
  * 这里如果有问题直接就退出了
  * [a, b(), c[1], d.foo]
  * @param list_new
@@ -1409,11 +1472,9 @@ static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type) {
         type_t result = type_kind_new(TYPE_ARR);
         result.status = REDUCTION_STATUS_UNDO;
 
-        if (target_type.kind != TYPE_UNKNOWN) {
-            result.ident = target_type.ident; // literal new ident 直接继承
-            result.ident_kind = target_type.ident_kind;
-            result.args = target_type.args;
-        }
+        result.ident = target_type.ident; // literal new ident 直接继承
+        result.ident_kind = target_type.ident_kind;
+        result.args = target_type.args;
 
         type_array_t *type_array = NEW(type_array_t);
 
@@ -1907,7 +1968,9 @@ static ast_fndef_t *generics_special_fn(module_t *m, ast_call_t *call, type_t ta
     // 基于 args_table 进行类型特化，包含 special_fn 和 child
     stack_push(m->infer_type_args_stack, special_fn->generics_args_table);
     infer_fn_decl(m, special_fn, type_kind_new(TYPE_UNKNOWN));
-    linked_push(m->temp_worklist, special_fn);
+    if (m->temp_worklist) {
+        linked_push(m->temp_worklist, special_fn);
+    }
 
     for (int k = 0; k < special_fn->local_children->count; ++k) {
         ast_fndef_t *child = special_fn->local_children->take[k];
@@ -2734,6 +2797,10 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
         }
         case AST_EXPR_VEC_NEW: { // literal casting
             return infer_vec_new(m, expr, target_type);
+        }
+        case AST_EXPR_ARRAY_REPEAT_NEW:
+        case AST_EXPR_VEC_REPEAT_NEW: {
+            return infer_vec_repeat_new(m, expr, target_type);
         }
         case AST_EXPR_EMPTY_CURLY_NEW: { // literal casting
             return infer_empty_curly_new(m, expr, target_type);
@@ -3664,6 +3731,10 @@ static slice_t *generics_constraints_product(module_t *m, type_t *impl_type, lis
  * @param m
  */
 void pre_infer(module_t *m) {
+    // pref infer global vardef 中可能就会存在 generics gen, 所以需要有 temp_worklist 承受这些函数
+    // 并在稍后的 infer 中进行处理
+    m->temp_worklist = linked_new();
+
     // - Global variables also contain type information, which needs to be restored and derived
     for (int j = 0; j < m->global_vardef->count; ++j) {
         ast_vardef_stmt_t *vardef = m->global_vardef->take[j];
@@ -3725,7 +3796,7 @@ void infer(module_t *m) {
      * gen fn 作为模版函数, 存在类型 T 等泛型，不能直接进入到 infer_worklist 中进行 infer
      * 当 call 时，gen fn  指定了具体类型，此时可以基于 is_tpl fn 生成 special fn，此时 special fn 可以推送到 fn->module->temp_worklist
      */
-    linked_t *infer_worklist = linked_new();
+    linked_t *infer_worklist = m->temp_worklist;
 
     // infer_worklist
     // - 遍历所有 fndef 进行处理, 包含 global 和 local fn

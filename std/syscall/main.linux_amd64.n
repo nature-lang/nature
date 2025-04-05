@@ -612,7 +612,7 @@ type stat_t = struct {
     timespec_t atim
     timespec_t mtim
     timespec_t ctim
-    arr<i64,3> __unused
+    [i64;3] __unused
 }
 
 u32 S_IFMT  = 0o170000  // 位掩码,用于提取文件类型位
@@ -745,7 +745,7 @@ type sockaddr_in = struct {
     u16 sin_family
     u16 sin_port
     u32 sin_addr
-    arr<u8,8> sin_zero
+    [u8;8] sin_zero
 }
 
 type sockaddr_in6 = struct {
@@ -754,7 +754,7 @@ type sockaddr_in6 = struct {
     u16 sin6_port
     u32 sin6_flowinfo
     // ipv6 address(128-bit)
-    arr<u32,4> sin6_addr
+    [u32;4] sin6_addr
     u32 sin6_scope_id
 }
 
@@ -762,7 +762,7 @@ type sockaddr_un = struct {
     u8 sun_len
     u8 sun_family
     //  char sun_path[108];
-    arr<u8,108> sun_path
+    [u8;108] sun_path
 }
 
 fn socket(int domain, int t, int protocol):int! {

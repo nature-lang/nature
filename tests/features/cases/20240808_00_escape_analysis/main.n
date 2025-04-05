@@ -56,7 +56,7 @@ fn main() {
 
     // 闭包情况测试: v
     var c1 = 12
-    arr<int,3> c2 = [1, 2, 3]
+    [int;3] c2 = [1, 2, 3]
 
     var test2 = fn() {
         println(c1, c2[0], c2[2])

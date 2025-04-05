@@ -208,7 +208,7 @@ static ast_ident *ast_ident_copy(ast_ident *temp) {
 
 static ast_literal_t *ast_literal_copy(ast_literal_t *temp) {
     ast_literal_t *literal = COPY_NEW(ast_literal_t, temp);
-    literal->value = strdup(temp->value);// 根据实际情况复制，这里假设 value 是字符串
+    literal->value = strdup(temp->value); // 根据实际情况复制，这里假设 value 是字符串
     return literal;
 }
 
@@ -233,7 +233,7 @@ static ast_new_expr_t *ast_new_expr_copy(ast_new_expr_t *temp) {
     }
 
     if (temp->properties) {
-        list_t *properties = ct_list_new(sizeof(struct_property_t));// *struct_property_t
+        list_t *properties = ct_list_new(sizeof(struct_property_t)); // *struct_property_t
         for (int i = 0; i < temp->properties->length; ++i) {
             struct_property_t *temp_property = ct_list_value(temp->properties, i);
             struct_property_t *property = NEW(struct_property_t);
@@ -338,11 +338,19 @@ static ast_array_new_t *ast_arr_new_copy(ast_array_new_t *temp) {
     return arr_new;
 }
 
-static ast_vec_new_t *ast_list_new_copy(ast_vec_new_t *temp) {
+static ast_vec_new_t *ast_vec_new_copy(ast_vec_new_t *temp) {
     ast_vec_new_t *vec_new = COPY_NEW(ast_vec_new_t, temp);
     if (temp->elements) {
         vec_new->elements = ast_list_expr_copy(temp->elements);
     }
+
+    return vec_new;
+}
+
+static ast_vec_repeat_new_t *ast_vec_repeat_new_copy(ast_vec_repeat_new_t *temp) {
+    ast_vec_repeat_new_t *vec_new = COPY_NEW(ast_vec_repeat_new_t, temp);
+    vec_new->default_element = *ast_expr_copy(&temp->default_element);
+    vec_new->length_expr = *ast_expr_copy(&temp->length_expr);
 
     return vec_new;
 }
@@ -463,11 +471,16 @@ ast_expr_t *ast_expr_copy(ast_expr_t *temp) {
             break;
         }
         case AST_EXPR_VEC_NEW: {
-            expr->value = ast_list_new_copy(temp->value);
+            expr->value = ast_vec_new_copy(temp->value);
             break;
         }
         case AST_EXPR_ARRAY_NEW: {
             expr->value = ast_arr_new_copy(temp->value);
+            break;
+        }
+        case AST_EXPR_ARRAY_REPEAT_NEW:
+        case AST_EXPR_VEC_REPEAT_NEW: {
+            expr->value = ast_vec_repeat_new_copy(temp->value);
             break;
         }
         case AST_EXPR_ARRAY_ACCESS:
@@ -642,7 +655,7 @@ static ast_catch_t *ast_catch_copy(ast_catch_t *temp) {
     ast_catch_t *catch = COPY_NEW(ast_catch_t, temp);
     catch->try_expr = *ast_expr_copy(&temp->try_expr);
     catch->catch_err = *ast_var_decl_copy(&temp->catch_err);
-    catch->catch_body = ast_body_copy(temp->catch_body);// 需要实现这个函数
+    catch->catch_body = ast_body_copy(temp->catch_body); // 需要实现这个函数
     return catch;
 }
 
@@ -650,13 +663,13 @@ static ast_try_catch_stmt_t *ast_try_catch_stmt_copy(ast_try_catch_stmt_t *temp)
     ast_try_catch_stmt_t *try_stmt = COPY_NEW(ast_try_catch_stmt_t, temp);
     try_stmt->try_body = ast_body_copy(temp->try_body);
     try_stmt->catch_err = *ast_var_decl_copy(&temp->catch_err);
-    try_stmt->catch_body = ast_body_copy(temp->catch_body);// 需要实现这个函数
+    try_stmt->catch_body = ast_body_copy(temp->catch_body); // 需要实现这个函数
     return try_stmt;
 }
 
 static ast_var_tuple_def_stmt_t *ast_var_tuple_def_copy(ast_var_tuple_def_stmt_t *temp) {
     ast_var_tuple_def_stmt_t *stmt = COPY_NEW(ast_var_tuple_def_stmt_t, temp);
-    stmt->tuple_destr = ast_tuple_destr_copy(temp->tuple_destr);// 需要实现这个函数
+    stmt->tuple_destr = ast_tuple_destr_copy(temp->tuple_destr); // 需要实现这个函数
     stmt->right = *ast_expr_copy(&temp->right);
     return stmt;
 }
@@ -671,15 +684,15 @@ static ast_assign_stmt_t *ast_assign_copy(ast_assign_stmt_t *temp) {
 static ast_if_stmt_t *ast_if_copy(ast_if_stmt_t *temp) {
     ast_if_stmt_t *stmt = COPY_NEW(ast_if_stmt_t, temp);
     stmt->condition = *ast_expr_copy(&temp->condition);
-    stmt->consequent = ast_body_copy(temp->consequent);// 需要实现这个函数
-    stmt->alternate = ast_body_copy(temp->alternate);  // 需要实现这个函数
+    stmt->consequent = ast_body_copy(temp->consequent); // 需要实现这个函数
+    stmt->alternate = ast_body_copy(temp->alternate); // 需要实现这个函数
     return stmt;
 }
 
 static ast_for_cond_stmt_t *ast_for_cond_copy(ast_for_cond_stmt_t *temp) {
     ast_for_cond_stmt_t *stmt = COPY_NEW(ast_for_cond_stmt_t, temp);
     stmt->condition = *ast_expr_copy(&temp->condition);
-    stmt->body = ast_body_copy(temp->body);// 需要实现这个函数
+    stmt->body = ast_body_copy(temp->body); // 需要实现这个函数
     return stmt;
 }
 
@@ -688,7 +701,7 @@ static ast_for_iterator_stmt_t *ast_for_iterator_copy(ast_for_iterator_stmt_t *t
     stmt->iterate = *ast_expr_copy(&temp->iterate);
     stmt->first = *ast_var_decl_copy(&temp->first);
     stmt->second = temp->second ? ast_var_decl_copy(temp->second) : NULL;
-    stmt->body = ast_body_copy(temp->body);// 需要实现这个函数
+    stmt->body = ast_body_copy(temp->body); // 需要实现这个函数
     return stmt;
 }
 
@@ -697,7 +710,7 @@ static ast_for_tradition_stmt_t *ast_tradition_copy(ast_for_tradition_stmt_t *te
     stmt->init = ast_stmt_copy(temp->init);
     stmt->cond = *ast_expr_copy(&temp->cond);
     stmt->update = ast_stmt_copy(temp->update);
-    stmt->body = ast_body_copy(temp->body);// 需要实现这个函数
+    stmt->body = ast_body_copy(temp->body); // 需要实现这个函数
     return stmt;
 }
 

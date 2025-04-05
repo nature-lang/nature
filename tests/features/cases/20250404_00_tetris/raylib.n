@@ -547,7 +547,7 @@ type material_map_t = struct{
 type material_t = struct{
     shader_t shader          // Material shader
     rawptr<material_map_t> maps  // Material maps array (MAX_MATERIAL_MAPS)
-    arr<f32,4> params       // Material generic parameters (if required)
+    [f32;4] params       // Material generic parameters (if required)
 }
 
 type transform_t = struct{
@@ -557,7 +557,7 @@ type transform_t = struct{
 }
 
 type bone_info_t = struct{
-    arr<i8,32> name         // Bone name
+    [i8;32] name         // Bone name
     i32 parent              // Bone parent
 }
 
@@ -581,7 +581,7 @@ type model_animation_t = struct{
     i32 frame_count        // Number of animation frames
     rawptr<bone_info_t> bones    // Bones information (skeleton)
     rawptr<rawptr<transform_t>> frame_poses  // Poses array by frame
-    arr<i8,32> name       // Animation name
+    [i8;32] name       // Animation name
 }
 
 type ray_t = struct{
@@ -642,19 +642,19 @@ type vr_device_info_t = struct{
     f32 eye_to_screen_distance     // Distance between eye and display in meters
     f32 lens_separation_distance   // Lens separation distance in meters
     f32 interpupillary_distance    // IPD (distance between pupils) in meters
-    arr<f32,4> lens_distortion_values  // Lens distortion constant parameters
-    arr<f32,4> chroma_ab_correction    // Chromatic aberration correction parameters
+    [f32;4] lens_distortion_values  // Lens distortion constant parameters
+    [f32;4] chroma_ab_correction    // Chromatic aberration correction parameters
 }
 
 type vr_stereo_config_t = struct{
-    arr<matrix_t,2> projection      // VR projection matrices (per eye)
-    arr<matrix_t,2> view_offset     // VR view offset matrices (per eye)
-    arr<f32,2> left_lens_center     // VR left lens center
-    arr<f32,2> right_lens_center    // VR right lens center
-    arr<f32,2> left_screen_center   // VR left screen center
-    arr<f32,2> right_screen_center  // VR right screen center
-    arr<f32,2> scale                // VR distortion scale
-    arr<f32,2> scale_in             // VR distortion scale in
+    [matrix_t;2] projection      // VR projection matrices (per eye)
+    [matrix_t;2] view_offset     // VR view offset matrices (per eye)
+    [f32;2] left_lens_center     // VR left lens center
+    [f32;2] right_lens_center    // VR right lens center
+    [f32;2] left_screen_center   // VR left screen center
+    [f32;2] right_screen_center  // VR right screen center
+    [f32;2] scale                // VR distortion scale
+    [f32;2] scale_in             // VR distortion scale in
 }
 
 type file_path_list_t = struct{
@@ -666,7 +666,7 @@ type file_path_list_t = struct{
 type automation_event_t = struct{
     u32 frame             // Event frame
     u32 _type             // Event type (AutomationEventType)
-    arr<i32,4> params    // Event parameters (if required)
+    [i32;4] params    // Event parameters (if required)
 }
 
 type automation_event_list_t = struct{

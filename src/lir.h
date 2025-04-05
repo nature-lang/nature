@@ -184,6 +184,7 @@
 #define BUILTIN_CALL_ASYNC "async"
 #define BUILTIN_CALL_CO_RETURN "co_return"
 
+#define BUILTIN_CALL_VEC_NEW "vec_new"
 
 #define DEFAULT_IDENT "_"
 
@@ -383,6 +384,26 @@ static inline lir_var_t *lir_var_new(module_t *m, char *ident) {
 }
 
 lir_operand_t *lir_reg_operand(uint8_t index, type_kind kind);
+
+/**
+ * 创建包含多个寄存器的操作数（可变参数版本）
+ * @param count 寄存器数量
+ * @param ... 可变参数，每个参数都是 reg_t* 类型
+ * @return 包含多个寄存器的操作数
+ */
+static inline lir_operand_t *lir_regs_operand(int count, ...) {
+    slice_t *regs_slice = slice_new();
+
+    va_list args;
+    va_start(args, count);
+    for (int i = 0; i < count; ++i) {
+        reg_t *reg = va_arg(args, reg_t *);
+        slice_push(regs_slice, reg);
+    }
+    va_end(args);
+
+    return operand_new(LIR_OPERAND_REGS, regs_slice);
+}
 
 static inline lir_operand_t *lir_stack_operand(module_t *m, int64_t slot, uint64_t size, type_kind kind) {
     lir_stack_t *stack = NEW(lir_stack_t);

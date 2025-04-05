@@ -10,7 +10,7 @@ type foo_t = struct{
 
 foo_t foo = foo_t{}
 
-arr<u8,5> a = [
+[u8;5] a = [
     1,
     2,
     3,
@@ -82,7 +82,7 @@ fn test_struct_param(foo_t f) {
      assert(foo.a == 1 && foo.e == "5555")
 }
 
-fn test_arr_param(arr<u8,5> array) {
+fn test_arr_param([u8;5] array) {
     assert(array[0] == 1)
     assert(array[1] == 2)
     assert(array[2] == 3)

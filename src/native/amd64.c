@@ -375,9 +375,9 @@ static slice_t *amd64_native_div(closure_t *c, lir_op_t *op) {
  */
 static slice_t *amd64_native_mul(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
-    assertf(op->output->assert_type == LIR_OPERAND_REG, "mul op output must reg");
+    assertf(op->output->assert_type == LIR_OPERAND_REGS || op->output->assert_type == LIR_OPERAND_REG, "mul op output must reg");
 
-    if (amd64_is_integer_operand(op->output)) {
+    if (op->output->assert_type == LIR_OPERAND_REGS) {
         assertf(op->first->assert_type == LIR_OPERAND_REG, "mul op first must reg");
         assertf(op->second->assert_type != LIR_OPERAND_IMM, "mul op second cannot imm");
 
@@ -385,7 +385,6 @@ static slice_t *amd64_native_mul(closure_t *c, lir_op_t *op) {
         reg_t *output_reg = op->output->value;
 
         assertf(first_reg->index == rax->index, "mul op first reg must rax");
-        assertf(output_reg->index == rax->index, "mul op output reg must rax");
 
         amd64_asm_operand_t *second = lir_operand_trans_amd64(c, op, op->second);
         slice_push(operations, AMD64_ASM("imul", second));
@@ -627,6 +626,54 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
     return operations;
 }
 
+static slice_t *amd64_native_trunc(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->output->assert_type == LIR_OPERAND_REG);
+
+    amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
+    amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
+    int64_t size = op->output->size;
+    assert(size > 0);
+
+    // 使用 and 指令进行截断
+    if (output->size == BYTE) {
+        slice_push(operations, AMD64_ASM("and", output, UINT32(0xff)));
+    } else if (output->size == WORD) {
+        slice_push(operations, AMD64_ASM("and", output, UINT32(0xffff)));
+    } else if (output->size == DWORD) {
+        slice_push(operations, AMD64_ASM("and", output, UINT32(0xffffffff)));
+    }
+
+    return operations;
+}
+
+static slice_t *amd64_native_sext(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->output->assert_type == LIR_OPERAND_REG);
+
+    amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
+    amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
+
+    slice_push(operations, AMD64_ASM("movsx", output, first));
+    return operations;
+}
+
+static slice_t *amd64_native_zext(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->output->assert_type == LIR_OPERAND_REG);
+
+    amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
+    amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
+
+    slice_push(operations, AMD64_ASM("movzx", output, first));
+
+    return operations;
+}
+
+
 // result = foo > bar
 // lir GT foo,bar => result // foo GT bar // foo > bar // foo - bar > 0
 //  foo(dst) - bar(src)
@@ -778,6 +825,11 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_BEQ] = amd64_native_beq,
         [LIR_OPCODE_BAL] = amd64_native_bal,
 
+        // 类型扩展
+        [LIR_OPCODE_ZEXT] = amd64_native_zext,
+        [LIR_OPCODE_SEXT] = amd64_native_sext,
+        [LIR_OPCODE_TRUNC] = amd64_native_trunc,
+
         // 一元运算符
         [LIR_OPCODE_NEG] = amd64_native_neg,
 
@@ -808,11 +860,7 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_LEA] = amd64_native_lea,
         [LIR_OPCODE_FN_BEGIN] = amd64_native_fn_begin,
         [LIR_OPCODE_FN_END] = amd64_native_fn_end,
-
-        // 伪指令，直接忽略即可
-        //        [LIR_OPCODE_ENV_CLOSURE] = amd64_native_skip,
 };
-
 
 slice_t *amd64_native_op(closure_t *c, lir_op_t *op) {
     amd64_native_fn fn = amd64_native_table[op->code];

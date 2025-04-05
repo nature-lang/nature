@@ -48,7 +48,7 @@ type tokenizer_t = struct{
     [token_index_t] sorted_vocab
     int vocab_size
     u32 max_token_length
-    arr<u8,512> byte_pieces
+    [u8;512] byte_pieces
 }
 
 

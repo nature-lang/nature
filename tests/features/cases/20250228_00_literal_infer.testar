@@ -74,7 +74,7 @@ fn main() {
     var list = [12, 14] as [u8]
 }
 --- output.txt
-nature-test/main.n:2:22: cannot casting to 'vec<u8>'
+nature-test/main.n:2:22: cannot casting to '[u8]'
 
 
 === test_empty_data_new

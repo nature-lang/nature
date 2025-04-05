@@ -15,7 +15,7 @@ import coroutine as co
 
 //    int msg_size
 
-//    arr<u8,40> lock
+//    [u8;40] lock
 //    bool closed
 //}
 

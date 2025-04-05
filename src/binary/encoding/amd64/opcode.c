@@ -1,1012 +1,325 @@
 #include "opcode.h"
+#include "src/debug/debug_asm.h"
+#include "src/register/arch/amd64.h"
 #include "string.h"
 #include "utils/error.h"
 #include "utils/helper.h"
-#include "src/register/arch/amd64.h"
 #include <assert.h>
 
 amd64_opcode_tree_node_t *opcode_tree_root;
 
-amd64_opcode_inst_t movsq = {"movsq", "movsq", 0, {0xA5}, {OPCODE_EXT_REX_W},
-                             {}
-};
+amd64_opcode_inst_t movsq = {"movsq", "movsq", 0, {0xA5}, {OPCODE_EXT_REX_W}, {}};
 
-amd64_opcode_inst_t call_rm64 = {"call", "call", 0, {0xFF}, {OPCODE_EXT_SLASH2,},
-                                 {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}
-};
+amd64_opcode_inst_t call_rm64 = {"call", "call", 0, {0xFF}, {
+                                                                    OPCODE_EXT_SLASH2,
+                                                            },
+                                 {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
 
-amd64_opcode_inst_t call_rel32 = {"call", "call", 0, {0xE8}, {OPCODE_EXT_IMM_DWORD},
-                                  {
-                                          OPERAND_TYPE_REL32, ENCODING_TYPE_IMM
-                                  }
-};
+amd64_opcode_inst_t call_rel32 = {"call", "call", 0, {0xE8}, {OPCODE_EXT_IMM_DWORD}, {OPERAND_TYPE_REL32, ENCODING_TYPE_IMM}};
 
-amd64_opcode_inst_t jmp_rel8 = {"jmp", "jmp", 0, {0xEB}, {OPCODE_EXT_IMM_BYTE}, {
-        OPERAND_TYPE_REL8, ENCODING_TYPE_IMM
-}
-};
+amd64_opcode_inst_t jmp_rel8 = {"jmp", "jmp", 0, {0xEB}, {OPCODE_EXT_IMM_BYTE}, {OPERAND_TYPE_REL8, ENCODING_TYPE_IMM}};
 
-amd64_opcode_inst_t jmp_rel32 = {"jmp", "jmp", 0, {0xE9}, {OPCODE_EXT_IMM_DWORD}, {
-        OPERAND_TYPE_REL32, ENCODING_TYPE_IMM
-}
-};
+amd64_opcode_inst_t jmp_rel32 = {"jmp", "jmp", 0, {0xE9}, {OPCODE_EXT_IMM_DWORD}, {OPERAND_TYPE_REL32, ENCODING_TYPE_IMM}};
 
-amd64_opcode_inst_t je_rel8 = {"je", "je", 0, {0x74}, {OPCODE_EXT_IMM_BYTE}, {
-        OPERAND_TYPE_REL8, ENCODING_TYPE_IMM
-}
-};
+amd64_opcode_inst_t je_rel8 = {"je", "je", 0, {0x74}, {OPCODE_EXT_IMM_BYTE}, {OPERAND_TYPE_REL8, ENCODING_TYPE_IMM}};
 
-amd64_opcode_inst_t je_rel32 = {"je", "je", 0, {0x0F, 0x84}, {OPCODE_EXT_IMM_DWORD},
-                                {OPERAND_TYPE_REL32, ENCODING_TYPE_IMM}
-};
+amd64_opcode_inst_t je_rel32 = {"je", "je", 0, {0x0F, 0x84}, {OPCODE_EXT_IMM_DWORD}, {OPERAND_TYPE_REL32, ENCODING_TYPE_IMM}};
 
-amd64_opcode_inst_t idiv_rm8 = {"idiv", "idiv", 0, {0xF6}, {OPCODE_EXT_SLASH7},
-                                {
-                                        {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                }
-};
-amd64_opcode_inst_t idiv_rex_rm8 = {"idiv", "idiv", 0, {0xF6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH7},
-                                    {
-                                            {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                    }
-};
-amd64_opcode_inst_t idiv_rm16 = {"idiv", "idiv", 0x66, {0xF7}, {OPCODE_EXT_SLASH7},
-                                 {
-                                         {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                 }
-};
-amd64_opcode_inst_t idiv_rm32 = {"idiv", "idiv", 0, {0xF7}, {OPCODE_EXT_SLASH7},
-                                 {
-                                         {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                 }
-};
-amd64_opcode_inst_t idiv_rm64 = {"idiv", "idiv", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7},
-                                 {
-                                         {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                 }
-};
+amd64_opcode_inst_t idiv_rm8 = {"idiv", "idiv", 0, {0xF6}, {OPCODE_EXT_SLASH7}, {
+                                                                                        {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                                                                }};
+amd64_opcode_inst_t idiv_rex_rm8 = {"idiv", "idiv", 0, {0xF6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH7}, {
+                                                                                                            {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                                                                                    }};
+amd64_opcode_inst_t idiv_rm16 = {"idiv", "idiv", 0x66, {0xF7}, {OPCODE_EXT_SLASH7}, {
+                                                                                            {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                                                                                    }};
+amd64_opcode_inst_t idiv_rm32 = {"idiv", "idiv", 0, {0xF7}, {OPCODE_EXT_SLASH7}, {
+                                                                                         {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                                                                                 }};
+amd64_opcode_inst_t idiv_rm64 = {"idiv", "idiv", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7}, {
+                                                                                                           {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                                                                                                   }};
 
 
-amd64_opcode_inst_t imul_rm8 = {"imul", "imul", 0, {0xF6}, {OPCODE_EXT_SLASH5},
-                                {
-                                        {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                }
-};
-amd64_opcode_inst_t imul_rm16 = {"imul", "imul", 0x66, {0xF7}, {OPCODE_EXT_SLASH5},
-                                 {
-                                         {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                 }
-};
-amd64_opcode_inst_t imul_rm32 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_SLASH5},
-                                 {
-                                         {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                 }
-};
-amd64_opcode_inst_t imul_rm64 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5},
-                                 {
-                                         {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                 }
-};
+amd64_opcode_inst_t imul_rm8 = {"imul", "imul", 0, {0xF6}, {OPCODE_EXT_SLASH5}, {
+                                                                                        {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                                                                }};
+amd64_opcode_inst_t imul_rm16 = {"imul", "imul", 0x66, {0xF7}, {OPCODE_EXT_SLASH5}, {
+                                                                                            {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                                                                                    }};
+amd64_opcode_inst_t imul_rm32 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_SLASH5}, {
+                                                                                         {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                                                                                 }};
+amd64_opcode_inst_t imul_rm64 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5}, {
+                                                                                                           {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                                                                                                   }};
 
 // add------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t add_rm8_imm8 = {"add", "add", 0, {0x80}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
-                                    {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
-};
-amd64_opcode_inst_t add_rex_rm8_imm8 = {"add", "add", 0, {0x80},
-                                        {OPCODE_EXT_REX, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
-                                        {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                         {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
-};
-amd64_opcode_inst_t add_rm16_imm16 = {"add", "add", 0x66, {0x81}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_WORD},
-                                      {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                       {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}}
-};
-amd64_opcode_inst_t add_rm32_imm32 = {"add", "add", 0, {0x81}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
-                                      {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                       {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}
-};
-amd64_opcode_inst_t add_rm64_imm32 = {"add", "add", 0, {0x81},
-                                      {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
-                                      {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                       {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}
-};
-amd64_opcode_inst_t add_rm8_r8 = {"add", "add", 0, {0x00}, {OPCODE_EXT_SLASHR},
-                                  {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                   {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t add_rex_rm8_r8 = {"add", "add", 0, {0x00}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                                      {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                       {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t add_rm16_r16 = {"add", "add", 0x66, {0x01}, {OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                     {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t add_rm32_r32 = {"add", "add", 0, {0x01}, {OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                     {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t add_rm64_r64 = {"add", "add", 0, {0x01}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                     {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t add_r8_rm8 = {"add", "add", 0, {0x02}, {OPCODE_EXT_SLASHR},
-                                  {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                   {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}
-};
-amd64_opcode_inst_t add_rex_r8_rm8 = {"add", "add", 0, {0x02}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                                      {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                       {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}
-};
-amd64_opcode_inst_t add_r16_rm16 = {"add", "add", 0x66, {0x03}, {OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
-                                     {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}
-};
-amd64_opcode_inst_t add_r32_rm32 = {"add", "add", 0, {0x03}, {OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
-                                     {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}
-};
-amd64_opcode_inst_t add_r64_rm64 = {"add", "add", 0, {0x03}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
-                                     {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}
-};
+amd64_opcode_inst_t add_rm8_imm8 = {"add", "add", 0, {0x80}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t add_rex_rm8_imm8 = {"add", "add", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t add_rm16_imm16 = {"add", "add", 0x66, {0x81}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_WORD}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t add_rm32_imm32 = {"add", "add", 0, {0x81}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t add_rm64_imm32 = {"add", "add", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t add_rm8_r8 = {"add", "add", 0, {0x00}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t add_rex_rm8_r8 = {"add", "add", 0, {0x00}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t add_rm16_r16 = {"add", "add", 0x66, {0x01}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t add_rm32_r32 = {"add", "add", 0, {0x01}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t add_rm64_r64 = {"add", "add", 0, {0x01}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t add_r8_rm8 = {"add", "add", 0, {0x02}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t add_rex_r8_rm8 = {"add", "add", 0, {0x02}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t add_r16_rm16 = {"add", "add", 0x66, {0x03}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t add_r32_rm32 = {"add", "add", 0, {0x03}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t add_r64_rm64 = {"add", "add", 0, {0x03}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
 
 // sub ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t sub_rm8_imm8 = {"sub", "sub", 0, {0x80}, {OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
-                                    {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
-};
-amd64_opcode_inst_t sub_rex_rm8_imm8 = {"sub", "sub", 0, {0x80},
-                                        {OPCODE_EXT_REX, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
-                                        {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                         {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
-};
-amd64_opcode_inst_t sub_rm16_imm16 = {"sub", "sub", 0x66, {0x81}, {OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_WORD},
-                                      {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                       {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}}
-};
-amd64_opcode_inst_t sub_rm32_imm32 = {"sub", "sub", 0, {0x81}, {OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD},
-                                      {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                       {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}
-};
-amd64_opcode_inst_t sub_rm64_imm32 = {"sub", "sub", 0, {0x81},
-                                      {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD},
-                                      {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                       {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}
-};
-amd64_opcode_inst_t sub_rm8_r8 = {"sub", "sub", 0, {0x28}, {OPCODE_EXT_SLASHR},
-                                  {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                   {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t sub_rex_rm8_r8 = {"sub", "sub", 0, {0x28}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                                      {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                       {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t sub_rm16_r16 = {"sub", "sub", 0x66, {0x29}, {OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                     {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t sub_rm32_r32 = {"sub", "sub", 0, {0x29}, {OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                     {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t sub_rm64_r64 = {"sub", "sub", 0, {0x29}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                     {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t sub_r8_rm8 = {"sub", "sub", 0, {0x2A}, {OPCODE_EXT_SLASHR},
-                                  {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                   {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}
-};
-amd64_opcode_inst_t sub_rex_r8_rm8 = {"sub", "sub", 0, {0x2A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                                      {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                       {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}
-};
-amd64_opcode_inst_t sub_r16_rm16 = {"sub", "sub", 0x66, {0x2B}, {OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
-                                     {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}
-};
-amd64_opcode_inst_t sub_r32_rm32 = {"sub", "sub", 0, {0x2B}, {OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
-                                     {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}
-};
-amd64_opcode_inst_t sub_r64_rm64 = {"sub", "sub", 0, {0x2B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
-                                     {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}
-};
+amd64_opcode_inst_t sub_rm8_imm8 = {"sub", "sub", 0, {0x80}, {OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t sub_rex_rm8_imm8 = {"sub", "sub", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t sub_rm16_imm16 = {"sub", "sub", 0x66, {0x81}, {OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_WORD}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t sub_rm32_imm32 = {"sub", "sub", 0, {0x81}, {OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t sub_rm64_imm32 = {"sub", "sub", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t sub_rm8_r8 = {"sub", "sub", 0, {0x28}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t sub_rex_rm8_r8 = {"sub", "sub", 0, {0x28}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t sub_rm16_r16 = {"sub", "sub", 0x66, {0x29}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t sub_rm32_r32 = {"sub", "sub", 0, {0x29}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t sub_rm64_r64 = {"sub", "sub", 0, {0x29}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t sub_r8_rm8 = {"sub", "sub", 0, {0x2A}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t sub_rex_r8_rm8 = {"sub", "sub", 0, {0x2A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t sub_r16_rm16 = {"sub", "sub", 0x66, {0x2B}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t sub_r32_rm32 = {"sub", "sub", 0, {0x2B}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t sub_r64_rm64 = {"sub", "sub", 0, {0x2B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
 
 
 // mov reg -> rm ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t mov_rm8_r8 = {"mov", "mov", 0, {0x88}, {OPCODE_EXT_SLASHR},
-                                  {
-                                          {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                          {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                  }
-};
-amd64_opcode_inst_t mov_rex_rm8_r8 = {"mov", "mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                                      {
-                                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                      }
-};
-amd64_opcode_inst_t mov_rm16_r16 = {"mov", "mov", 0x66, {0x89}, {OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                            {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}
-                                    }
-};
-amd64_opcode_inst_t mov_rm32_r32 = {"mov", "mov", 0, {0x89}, {OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                            {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}
-                                    }
-};
-amd64_opcode_inst_t mov_rm64_r64 = {"mov", "mov", 0, {0x89}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                            {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
-                                    }
-};
+amd64_opcode_inst_t mov_rm8_r8 = {"mov", "mov", 0, {0x88}, {OPCODE_EXT_SLASHR}, {
+                                                                                        {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                                                                        {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                                                                                }};
+amd64_opcode_inst_t mov_rex_rm8_r8 = {"mov", "mov", 0, {0x88}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR}, {
+                                                                                                            {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                                                                                            {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
+                                                                                                    }};
+amd64_opcode_inst_t mov_rm16_r16 = {"mov", "mov", 0x66, {0x89}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t mov_rm32_r32 = {"mov", "mov", 0, {0x89}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t mov_rm64_r64 = {"mov", "mov", 0, {0x89}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}}};
 
 // mov rm -> reg ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t mov_r8_rm8 = {"mov", "mov", 0, {0x8A}, {OPCODE_EXT_SLASHR},
-                                  {
-                                          {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                          {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-                                  }
-};
-amd64_opcode_inst_t mov_rex_r8_rm8 = {"mov", "mov", 0, {0x8A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                                      {
-                                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-                                      }
-};
-amd64_opcode_inst_t mov_r16_rm16 = {"mov", "mov", 0x66, {0x8B}, {OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
-                                            {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
-                                    }
-};
-amd64_opcode_inst_t mov_r32_rm32 = {"mov", "mov", 0, {0x8B}, {OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
-                                            {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
-                                    }
-};
-amd64_opcode_inst_t mov_r64_rm64 = {"mov", "mov", 0, {0x8B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
-                                            {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
-                                    }
-};
+amd64_opcode_inst_t mov_r8_rm8 = {"mov", "mov", 0, {0x8A}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t mov_rex_r8_rm8 = {"mov", "mov", 0, {0x8A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t mov_r16_rm16 = {"mov", "mov", 0x66, {0x8B}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t mov_r32_rm32 = {"mov", "mov", 0, {0x8B}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t mov_r64_rm64 = {"mov", "mov", 0, {0x8B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
 
 // mov imm -> reg ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t mov_r8_imm8 = {"mov", "mov", 0, {0xB0}, {OPCODE_EXT_IMM_BYTE},
-                                   {
-                                           {OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS},
-                                           {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                                   }
-};
-amd64_opcode_inst_t mov_rex_r8_imm8 = {"mov", "mov", 0, {0xB0}, {OPCODE_EXT_REX, OPCODE_EXT_IMM_BYTE},
-                                       {
-                                               {OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS},
-                                               {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                                       }
-};
-amd64_opcode_inst_t mov_r16_imm16 = {"mov", "mov", 0x66, {0xB8}, {OPCODE_EXT_IMM_WORD},
-                                     {
-                                             {OPERAND_TYPE_R16, ENCODING_TYPE_OPCODE_PLUS},
-                                             {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}
-                                     }
-};
-amd64_opcode_inst_t mov_r32_imm32 = {"mov", "mov", 0, {0xB8}, {OPCODE_EXT_IMM_DWORD},
-                                     {
-                                             {OPERAND_TYPE_R32, ENCODING_TYPE_OPCODE_PLUS},
-                                             {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
-                                     }
-};
+amd64_opcode_inst_t mov_r8_imm8 = {"mov", "mov", 0, {0xB0}, {OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t mov_rex_r8_imm8 = {"mov", "mov", 0, {0xB0}, {OPCODE_EXT_REX, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t mov_r16_imm16 = {"mov", "mov", 0x66, {0xB8}, {OPCODE_EXT_IMM_WORD}, {{OPERAND_TYPE_R16, ENCODING_TYPE_OPCODE_PLUS}, {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t mov_r32_imm32 = {"mov", "mov", 0, {0xB8}, {OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_R32, ENCODING_TYPE_OPCODE_PLUS}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
 
-amd64_opcode_inst_t mov_r64_imm64 = {"mov", "mov", 0, {0xB8}, {OPCODE_EXT_REX_W, OPCODE_EXT_IMM_QWORD},
-                                     {
-                                             {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS},
-                                             {OPERAND_TYPE_IMM64, ENCODING_TYPE_IMM}
-                                     }
-};
+amd64_opcode_inst_t mov_r64_imm64 = {"mov", "mov", 0, {0xB8}, {OPCODE_EXT_REX_W, OPCODE_EXT_IMM_QWORD}, {{OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}, {OPERAND_TYPE_IMM64, ENCODING_TYPE_IMM}}};
 
 
 // mov imm -> rm ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t mov_rm8_imm8 = {"mov", "mov", 0, {0xC6}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
-                                    {
-                                            {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                            {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                                    }
-};
-amd64_opcode_inst_t mov_rex_rm8_imm8 = {"mov", "mov", 0, {0xC6},
-                                        {OPCODE_EXT_REX, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE},
-                                        {
-                                                {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                                {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                                        }
-};
+amd64_opcode_inst_t mov_rm8_imm8 = {"mov", "mov", 0, {0xC6}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t mov_rex_rm8_imm8 = {"mov", "mov", 0, {0xC6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
 
-amd64_opcode_inst_t mov_rm16_imm16 = {"mov", "mov", 0x66, {0xC7}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_WORD},
-                                      {
-                                              {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                              {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}
-                                      }
-};
-amd64_opcode_inst_t mov_rm32_imm32 = {"mov", "mov", 0, {0xC7}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
-                                      {
-                                              {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                              {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
-                                      }
-};
-amd64_opcode_inst_t mov_rm64_imm32 = {"mov", "mov", 0, {0xC7},
-                                      {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD},
-                                      {
-                                              {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                              {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
-                                      }
-};
+amd64_opcode_inst_t mov_rm16_imm16 = {"mov", "mov", 0x66, {0xC7}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_WORD}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t mov_rm32_imm32 = {"mov", "mov", 0, {0xC7}, {OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t mov_rm64_imm32 = {"mov", "mov", 0, {0xC7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0, OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
 
-amd64_opcode_inst_t lea_r64_m = {"lea", "lea", 0, {0x8D}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                 {
-                                         {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
-                                         {OPERAND_TYPE_M, ENCODING_TYPE_MODRM_RM},
-                                 }
-};
+amd64_opcode_inst_t lea_r64_m = {"lea", "lea", 0, {0x8D}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {
+                                                                                                         {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                                                                                                         {OPERAND_TYPE_M, ENCODING_TYPE_MODRM_RM},
+                                                                                                 }};
 
 amd64_opcode_inst_t syscall_inst = {"syscall_inst", "syscall_inst", 0, {0x0F, 0x05}, {}, {}};
 
 // TODO 什么时候使用 near 什么时候使用 far?
 amd64_opcode_inst_t ret = {"ret", "ret", 0, {0xC3}, {}, {}};
 
-amd64_opcode_inst_t push_r64 = {"push", "push", 0, {0x50}, {},
-                                {
-                                        {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}
-                                }
-};
+amd64_opcode_inst_t push_r64 = {"push", "push", 0, {0x50}, {}, {{OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}}};
 
-amd64_opcode_inst_t push_rm64 = {"push", "push", 0, {0xFF}, {OPCODE_EXT_SLASH6},
-                                 {
-                                         {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
-                                 }
-};
+amd64_opcode_inst_t push_rm64 = {"push", "push", 0, {0xFF}, {OPCODE_EXT_SLASH6}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
 
-amd64_opcode_inst_t pop_r64 = {"pop", "pop", 0, {0x58}, {},
-                               {
-                                       {OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}
-                               }
-};
+amd64_opcode_inst_t pop_r64 = {"pop", "pop", 0, {0x58}, {}, {{OPERAND_TYPE_R64, ENCODING_TYPE_OPCODE_PLUS}}};
 
-amd64_opcode_inst_t pop_rm64 = {"pop", "pop", 0, {0x8F}, {OPCODE_EXT_SLASH0},
-                                {
-                                        {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
-                                }
-};
+amd64_opcode_inst_t pop_rm64 = {"pop", "pop", 0, {0x8F}, {OPCODE_EXT_SLASH0}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
 
 
 // cmp ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t cmp_rm8_imm8 = {"cmp", "cmp", 0, {0x80}, {OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_BYTE},
-                                    {
-                                            {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                            {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                                    }
-};
-amd64_opcode_inst_t cmp_rex_rm8_imm8 = {"cmp", "cmp", 0, {0x80},
-                                        {OPCODE_EXT_REX, OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_BYTE},
-                                        {
-                                                {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                                {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                                        }
-};
-amd64_opcode_inst_t cmp_rm16_imm16 = {"cmp", "cmp", 0x66, {0x81}, {OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_WORD},
-                                      {
-                                              {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                              {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}
-                                      }
-};
-amd64_opcode_inst_t cmp_rm32_imm32 = {"cmp", "cmp", 0, {0x81}, {OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_DWORD},
-                                      {
-                                              {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                              {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
-                                      }
-};
-amd64_opcode_inst_t cmp_rm64_imm32 = {"cmp", "cmp", 0, {0x81},
-                                      {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_DWORD},
-                                      {
-                                              {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                              {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
-                                      }
-};
-amd64_opcode_inst_t cmp_rm8_r8 = {"cmp", "cmp", 0, {0x38}, {OPCODE_EXT_SLASHR},
-                                  {
-                                          {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                          {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                  }
-};
-amd64_opcode_inst_t cmp_rex_rm8_r8 = {"cmp", "cmp", 0, {0x38}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                                      {
-                                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                      }
-};
-amd64_opcode_inst_t cmp_rm16_r16 = {"cmp", "cmp", 0x66, {0x39}, {OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                            {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}
-                                    }
-};
-amd64_opcode_inst_t cmp_rm32_r32 = {"cmp", "cmp", 0, {0x39}, {OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                            {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}
-                                    }
-};
-amd64_opcode_inst_t cmp_rm64_r64 = {"cmp", "cmp", 0, {0x39}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                            {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
-                                    }
-};
+amd64_opcode_inst_t cmp_rm8_imm8 = {"cmp", "cmp", 0, {0x80}, {OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t cmp_rex_rm8_imm8 = {"cmp", "cmp", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t cmp_rm16_imm16 = {"cmp", "cmp", 0x66, {0x81}, {OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_WORD}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t cmp_rm32_imm32 = {"cmp", "cmp", 0, {0x81}, {OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t cmp_rm64_imm32 = {"cmp", "cmp", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7, OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t cmp_rm8_r8 = {"cmp", "cmp", 0, {0x38}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t cmp_rex_rm8_r8 = {"cmp", "cmp", 0, {0x38}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t cmp_rm16_r16 = {"cmp", "cmp", 0x66, {0x39}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t cmp_rm32_r32 = {"cmp", "cmp", 0, {0x39}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t cmp_rm64_r64 = {"cmp", "cmp", 0, {0x39}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}}};
 
-amd64_opcode_inst_t cmp_r8_rm8 = {"cmp", "cmp", 0, {0x3A}, {OPCODE_EXT_SLASHR},
-                                  {
-                                          {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                          {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-                                  }
-};
-amd64_opcode_inst_t cmp_rex_r8_rm8 = {"cmp", "cmp", 0, {0x3A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                                      {
-                                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-                                      }
-};
-amd64_opcode_inst_t cmp_r16_rm16 = {"cmp", "cmp", 0x66, {0x3B}, {OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
-                                            {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
-                                    }
-};
-amd64_opcode_inst_t cmp_r32_rm32 = {"cmp", "cmp", 0, {0x3B}, {OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
-                                            {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
-                                    }
-};
-amd64_opcode_inst_t cmp_r64_rm64 = {"cmp", "cmp", 0, {0x3B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
-                                            {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
-                                    }
-};
+amd64_opcode_inst_t cmp_r8_rm8 = {"cmp", "cmp", 0, {0x3A}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t cmp_rex_r8_rm8 = {"cmp", "cmp", 0, {0x3A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t cmp_r16_rm16 = {"cmp", "cmp", 0x66, {0x3B}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t cmp_r32_rm32 = {"cmp", "cmp", 0, {0x3B}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t cmp_r64_rm64 = {"cmp", "cmp", 0, {0x3B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
 
 
 // setcc ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t seta_rm8 = {"seta", "seta", 0, {0x0F, 0x97}, {}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setae_rm8 = {"setae", "setae", 0, {0x0F, 0x93}, {}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setb_rm8 = {"setb", "setb", 0, {0x0F, 0x92}, {}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setbe_rm8 = {"setbe", "setbe", 0, {0x0F, 0x96}, {}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setg_rm8 = {"setg", "setg", 0, {0x0F, 0x9F}, {}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setge_rm8 = {"setge", "setge", 0, {0x0F, 0x9D}, {}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setl_rm8 = {"setl", "setl", 0, {0x0F, 0x9C}, {}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setle_rm8 = {"setle", "setle", 0, {0x0F, 0x9E}, {}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t sete_rm8 = {"sete", "sete", 0, {0x0F, 0x94}, {}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setne_rm8 = {"setne", "setne", 0, {0x0F, 0x95}, {}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
+amd64_opcode_inst_t seta_rm8 = {"seta", "seta", 0, {0x0F, 0x97}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setae_rm8 = {"setae", "setae", 0, {0x0F, 0x93}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setb_rm8 = {"setb", "setb", 0, {0x0F, 0x92}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setbe_rm8 = {"setbe", "setbe", 0, {0x0F, 0x96}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setg_rm8 = {"setg", "setg", 0, {0x0F, 0x9F}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setge_rm8 = {"setge", "setge", 0, {0x0F, 0x9D}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setl_rm8 = {"setl", "setl", 0, {0x0F, 0x9C}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setle_rm8 = {"setle", "setle", 0, {0x0F, 0x9E}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t sete_rm8 = {"sete", "sete", 0, {0x0F, 0x94}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setne_rm8 = {"setne", "setne", 0, {0x0F, 0x95}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
 // set rex ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t seta_rex_rm8 = {"seta", "seta", 0, {0x0F, 0x97}, {OPCODE_EXT_REX}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setae_rex_rm8 = {"setae", "setae", 0, {0x0F, 0x93}, {OPCODE_EXT_REX}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setb_rex_rm8 = {"setb", "setb", 0, {0x0F, 0x92}, {OPCODE_EXT_REX}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setbe_rex_rm8 = {"setbe", "setbe", 0, {0x0F, 0x96}, {OPCODE_EXT_REX}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setg_rex_rm8 = {"setg", "setg", 0, {0x0F, 0x9F}, {OPCODE_EXT_REX}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setge_rex_rm8 = {"setge", "setge", 0, {0x0F, 0x9D}, {OPCODE_EXT_REX}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setl_rex_rm8 = {"setl", "setl", 0, {0x0F, 0x9C}, {OPCODE_EXT_REX}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setle_rex_rm8 = {"setle", "setle", 0, {0x0F, 0x9E}, {OPCODE_EXT_REX}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t sete_rex_rm8 = {"sete", "sete", 0, {0x0F, 0x94}, {OPCODE_EXT_REX}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t setne_rex_rm8 = {"setne", "setne", 0, {0x0F, 0x95}, {OPCODE_EXT_REX}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
+amd64_opcode_inst_t seta_rex_rm8 = {"seta", "seta", 0, {0x0F, 0x97}, {OPCODE_EXT_REX}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setae_rex_rm8 = {"setae", "setae", 0, {0x0F, 0x93}, {OPCODE_EXT_REX}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setb_rex_rm8 = {"setb", "setb", 0, {0x0F, 0x92}, {OPCODE_EXT_REX}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setbe_rex_rm8 = {"setbe", "setbe", 0, {0x0F, 0x96}, {OPCODE_EXT_REX}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setg_rex_rm8 = {"setg", "setg", 0, {0x0F, 0x9F}, {OPCODE_EXT_REX}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setge_rex_rm8 = {"setge", "setge", 0, {0x0F, 0x9D}, {OPCODE_EXT_REX}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setl_rex_rm8 = {"setl", "setl", 0, {0x0F, 0x9C}, {OPCODE_EXT_REX}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setle_rex_rm8 = {"setle", "setle", 0, {0x0F, 0x9E}, {OPCODE_EXT_REX}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t sete_rex_rm8 = {"sete", "sete", 0, {0x0F, 0x94}, {OPCODE_EXT_REX}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t setne_rex_rm8 = {"setne", "setne", 0, {0x0F, 0x95}, {OPCODE_EXT_REX}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
 
 
 // neg ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t neg_rm8 = {"neg", "neg", 0, {0xF6}, {OPCODE_EXT_SLASH3}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t neg_rex_rm8 = {"neg", "neg", 0, {0xF6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH3}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t neg_rm16 = {"neg", "neg", 0x66, {0xF7}, {OPCODE_EXT_SLASH3}, {
-        OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t neg_rm32 = {"neg", "neg", 0, {0xF7}, {OPCODE_EXT_SLASH3}, {
-        OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t neg_rm64 = {"neg", "neg", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH3}, {
-        OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
-};
+amd64_opcode_inst_t neg_rm8 = {"neg", "neg", 0, {0xF6}, {OPCODE_EXT_SLASH3}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t neg_rex_rm8 = {"neg", "neg", 0, {0xF6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH3}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t neg_rm16 = {"neg", "neg", 0x66, {0xF7}, {OPCODE_EXT_SLASH3}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t neg_rm32 = {"neg", "neg", 0, {0xF7}, {OPCODE_EXT_SLASH3}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t neg_rm64 = {"neg", "neg", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH3}, {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}};
 
 // not ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t not_rm8 = {"not", "not", 0, {0xF6}, {OPCODE_EXT_SLASH2}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t not_rex_rm8 = {"not", "not", 0, {0xF6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH2}, {
-        OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t not_rm16 = {"not", "not", 0x66, {0xF7}, {OPCODE_EXT_SLASH2}, {
-        OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t not_rm32 = {"not", "not", 0, {0xF7}, {OPCODE_EXT_SLASH2}, {
-        OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
-};
-amd64_opcode_inst_t not_rm64 = {"not", "not", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH2},
-                                {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}
-};
+amd64_opcode_inst_t not_rm8 = {"not", "not", 0, {0xF6}, {OPCODE_EXT_SLASH2}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t not_rex_rm8 = {"not", "not", 0, {0xF6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH2}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t not_rm16 = {"not", "not", 0x66, {0xF7}, {OPCODE_EXT_SLASH2}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t not_rm32 = {"not", "not", 0, {0xF7}, {OPCODE_EXT_SLASH2}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t not_rm64 = {"not", "not", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH2}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
 
 // xor ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t xor_rm8_imm8 = {"xor", "xor", 0, {0x80}, {OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_BYTE},
-                                    {
-                                            {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                            {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                                    }};
-amd64_opcode_inst_t xor_rex_rm8_imm8 = {"xor", "xor", 0, {0x80},
-                                        {OPCODE_EXT_REX, OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_BYTE},
-                                        {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                         {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}
-};
-amd64_opcode_inst_t xor_rm16_imm16 = {"xor", "xor", 0x66, {0x81}, {OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_WORD},
-                                      {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                       {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}}
-};
-amd64_opcode_inst_t xor_rm32_imm32 = {"xor", "xor", 0, {0x81}, {OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_DWORD},
-                                      {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                       {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}
-};
-amd64_opcode_inst_t xor_rm64_imm32 = {"xor", "xor", 0, {0x81},
-                                      {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_DWORD},
-                                      {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                       {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}
-};
-amd64_opcode_inst_t xor_rm8_r8 = {"xor", "xor", 0, {0x30}, {OPCODE_EXT_SLASHR},
-                                  {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                   {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t xor_rex_rm8_r8 = {"xor", "xor", 0, {0x30}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                                      {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                       {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t xor_rm16_r16 = {"xor", "xor", 0x66, {0x31}, {OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                     {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t xor_rm32_r32 = {"xor", "xor", 0, {0x31}, {OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                     {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t xor_rm64_r64 = {"xor", "xor", 0, {0x31}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                     {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}}
-};
-amd64_opcode_inst_t xor_r8_rm8 = {"xor", "xor", 0, {0x32}, {OPCODE_EXT_SLASHR},
-                                  {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                   {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}
-};
-amd64_opcode_inst_t xor_rex_r8_rm8 = {"xor", "xor", 0, {0x32}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                                      {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                       {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}
-};
-amd64_opcode_inst_t xor_r16_rm16 = {"xor", "xor", 0x66, {0x33}, {OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
-                                     {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}
-};
-amd64_opcode_inst_t xor_r32_rm32 = {"xor", "xor", 0, {0x33}, {OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
-                                     {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}
-};
-amd64_opcode_inst_t xor_r64_rm64 = {"xor", "xor", 0, {0x33}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                    {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
-                                     {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}
-};
+amd64_opcode_inst_t xor_rm8_imm8 = {"xor", "xor", 0, {0x80}, {OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t xor_rex_rm8_imm8 = {"xor", "xor", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t xor_rm16_imm16 = {"xor", "xor", 0x66, {0x81}, {OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_WORD}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t xor_rm32_imm32 = {"xor", "xor", 0, {0x81}, {OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t xor_rm64_imm32 = {"xor", "xor", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t xor_rm8_r8 = {"xor", "xor", 0, {0x30}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t xor_rex_rm8_r8 = {"xor", "xor", 0, {0x30}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t xor_rm16_r16 = {"xor", "xor", 0x66, {0x31}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t xor_rm32_r32 = {"xor", "xor", 0, {0x31}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t xor_rm64_r64 = {"xor", "xor", 0, {0x31}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t xor_r8_rm8 = {"xor", "xor", 0, {0x32}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t xor_rex_r8_rm8 = {"xor", "xor", 0, {0x32}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t xor_r16_rm16 = {"xor", "xor", 0x66, {0x33}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t xor_r32_rm32 = {"xor", "xor", 0, {0x33}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t xor_r64_rm64 = {"xor", "xor", 0, {0x33}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
 
 // or ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t or_rm8_imm8 = {"or", "or", 0, {0x80}, {OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_BYTE},
-                                   {
-                                           {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                           {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                                   }
-};
-amd64_opcode_inst_t or_rex_rm8_imm8 = {"or", "or", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_BYTE},
-                                       {
-                                               {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                               {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                                       }
-};
-amd64_opcode_inst_t or_rm16_imm16 = {"or", "or", 0x66, {0x81}, {OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_WORD},
-                                     {
-                                             {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                             {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}
-                                     }
-};
-amd64_opcode_inst_t or_rm32_imm32 = {"or", "or", 0, {0x81}, {OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_DWORD},
-                                     {
-                                             {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                             {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
-                                     }
-};
-amd64_opcode_inst_t or_rm64_imm32 = {"or", "or", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_DWORD},
-                                     {
-                                             {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                             {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
-                                     }
-};
-amd64_opcode_inst_t or_rm8_r8 = {"or", "or", 0, {0x08}, {OPCODE_EXT_SLASHR},
-                                 {
-                                         {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                         {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                 }
-};
-amd64_opcode_inst_t or_rex_rm8_r8 = {"or", "or", 0, {0x08}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                                     {
-                                             {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                             {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                     }
-};
-amd64_opcode_inst_t or_rm16_r16 = {"or", "or", 0x66, {0x09}, {OPCODE_EXT_SLASHR},
-                                   {
-                                           {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                           {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}
-                                   }
-};
-amd64_opcode_inst_t or_rm32_r32 = {"or", "or", 0, {0x09}, {OPCODE_EXT_SLASHR},
-                                   {
-                                           {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                           {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}
-                                   }
-};
-amd64_opcode_inst_t or_rm64_r64 = {"or", "or", 0, {0x09}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                   {
-                                           {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                           {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
-                                   }
-};
-amd64_opcode_inst_t or_r8_rm8 = {"or", "or", 0, {0x0A}, {OPCODE_EXT_SLASHR},
-                                 {
-                                         {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                         {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-                                 }
-};
-amd64_opcode_inst_t or_rex_r8_rm8 = {"or", "or", 0, {0x0A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                                     {
-                                             {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                             {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-                                     }
-};
-amd64_opcode_inst_t or_r16_rm16 = {"or", "or", 0x66, {0x0B}, {OPCODE_EXT_SLASHR},
-                                   {
-                                           {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
-                                           {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
-                                   }
-};
-amd64_opcode_inst_t or_r32_rm32 = {"or", "or", 0, {0x0B}, {OPCODE_EXT_SLASHR},
-                                   {
-                                           {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
-                                           {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
-                                   }
-};
-amd64_opcode_inst_t or_r64_rm64 = {"or", "or", 0, {0x0B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                   {
-                                           {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
-                                           {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
-                                   }
-};
+amd64_opcode_inst_t or_rm8_imm8 = {"or", "or", 0, {0x80}, {OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t or_rex_rm8_imm8 = {"or", "or", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t or_rm16_imm16 = {"or", "or", 0x66, {0x81}, {OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_WORD}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t or_rm32_imm32 = {"or", "or", 0, {0x81}, {OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t or_rm64_imm32 = {"or", "or", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH1, OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t or_rm8_r8 = {"or", "or", 0, {0x08}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t or_rex_rm8_r8 = {"or", "or", 0, {0x08}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t or_rm16_r16 = {"or", "or", 0x66, {0x09}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t or_rm32_r32 = {"or", "or", 0, {0x09}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t or_rm64_r64 = {"or", "or", 0, {0x09}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t or_r8_rm8 = {"or", "or", 0, {0x0A}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t or_rex_r8_rm8 = {"or", "or", 0, {0x0A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t or_r16_rm16 = {"or", "or", 0x66, {0x0B}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t or_r32_rm32 = {"or", "or", 0, {0x0B}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t or_r64_rm64 = {"or", "or", 0, {0x0B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
 
 // and ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t and_rm8_imm8 = {"and", "and", 0, {0x80}, {OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_BYTE},
-                                    {
-                                            {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                            {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                                    }
-};
-amd64_opcode_inst_t and_rex_rm8_imm8 = {"and", "and", 0, {0x80},
-                                        {OPCODE_EXT_REX, OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_BYTE},
-                                        {
-                                                {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                                {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}
-                                        }
-};
-amd64_opcode_inst_t and_rm16_imm16 = {"and", "and", 0x66, {0x81}, {OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_WORD},
-                                      {
-                                              {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                              {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}
-                                      }
-};
-amd64_opcode_inst_t and_rm32_imm32 = {"and", "and", 0, {0x81}, {OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_DWORD},
-                                      {
-                                              {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                              {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
-                                      }
-};
-amd64_opcode_inst_t and_rm64_imm32 = {"and", "and", 0, {0x81},
-                                      {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_DWORD},
-                                      {
-                                              {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                              {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}
-                                      }
-};
-amd64_opcode_inst_t and_rm8_r8 = {"and", "and", 0, {0x20}, {OPCODE_EXT_SLASHR},
-                                  {
-                                          {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                          {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                  }
-};
-amd64_opcode_inst_t and_rex_rm8_r8 = {"and", "and", 0, {0x20}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                                      {
-                                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                      }
-};
-amd64_opcode_inst_t and_rm16_r16 = {"and", "and", 0x66, {0x21}, {OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                            {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}
-                                    }
-};
-amd64_opcode_inst_t and_rm32_r32 = {"and", "and", 0, {0x21}, {OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                            {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}
-                                    }
-};
-amd64_opcode_inst_t and_rm64_r64 = {"and", "and", 0, {0x21}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                            {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}
-                                    }
-};
-amd64_opcode_inst_t and_r8_rm8 = {"and", "and", 0, {0x22}, {OPCODE_EXT_SLASHR},
-                                  {
-                                          {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                          {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-                                  }
-};
-amd64_opcode_inst_t and_rex_r8_rm8 = {"and", "and", 0, {0x22}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
-                                      {
-                                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
-                                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}
-                                      }
-};
-amd64_opcode_inst_t and_r16_rm16 = {"and", "and", 0x66, {0x23}, {OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
-                                            {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}
-                                    }
-};
-amd64_opcode_inst_t and_r32_rm32 = {"and", "and", 0, {0x23}, {OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
-                                            {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}
-                                    }
-};
-amd64_opcode_inst_t and_r64_rm64 = {"and", "and", 0, {0x23}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
-                                    {
-                                            {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
-                                            {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}
-                                    }
-};
+amd64_opcode_inst_t and_rm8_imm8 = {"and", "and", 0, {0x80}, {OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t and_rex_rm8_imm8 = {"and", "and", 0, {0x80}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t and_rm16_imm16 = {"and", "and", 0x66, {0x81}, {OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_WORD}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM16, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t and_rm32_imm32 = {"and", "and", 0, {0x81}, {OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t and_rm64_imm32 = {"and", "and", 0, {0x81}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH4, OPCODE_EXT_IMM_DWORD}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_IMM32, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t and_rm8_r8 = {"and", "and", 0, {0x20}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t and_rex_rm8_r8 = {"and", "and", 0, {0x20}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t and_rm16_r16 = {"and", "and", 0x66, {0x21}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t and_rm32_r32 = {"and", "and", 0, {0x21}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t and_rm64_r64 = {"and", "and", 0, {0x21}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t and_r8_rm8 = {"and", "and", 0, {0x22}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t and_rex_r8_rm8 = {"and", "and", 0, {0x22}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t and_r16_rm16 = {"and", "and", 0x66, {0x23}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t and_r32_rm32 = {"and", "and", 0, {0x23}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t and_r64_rm64 = {"and", "and", 0, {0x23}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
 
 // shift ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t sal_rm8_cl = {"sal", "sal", 0, {0xD2}, {OPCODE_EXT_SLASH4},
-                                  {
-                                          {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                          {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                  }
-};
-amd64_opcode_inst_t sal_rex_rm8_cl = {"sal", "sal", 0, {0xD2}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH4},
-                                      {
-                                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                      }
-};
-amd64_opcode_inst_t sal_rm16_cl = {"sal", "sal", 0x66, {0xD3}, {OPCODE_EXT_SLASH4},
-                                   {
-                                           {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                           {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                   }
-};
-amd64_opcode_inst_t sal_rm32_cl = {"sal", "sal", 0, {0xD3}, {OPCODE_EXT_SLASH4},
-                                   {
-                                           {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                           {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                   }
-};
-amd64_opcode_inst_t sal_rm64_cl = {"sal", "sal", 0, {0xD3}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH4},
-                                   {
-                                           {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                           {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                   }
-};
+amd64_opcode_inst_t sal_rm8_cl = {"sal", "sal", 0, {0xD2}, {OPCODE_EXT_SLASH4}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t sal_rex_rm8_cl = {"sal", "sal", 0, {0xD2}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH4}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t sal_rm16_cl = {"sal", "sal", 0x66, {0xD3}, {OPCODE_EXT_SLASH4}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t sal_rm32_cl = {"sal", "sal", 0, {0xD3}, {OPCODE_EXT_SLASH4}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t sal_rm64_cl = {"sal", "sal", 0, {0xD3}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH4}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
 
-amd64_opcode_inst_t sar_rm8_cl = {"sar", "sar", 0, {0xD2}, {OPCODE_EXT_SLASH7},
-                                  {
-                                          {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                          {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                  }
-};
-amd64_opcode_inst_t sar_rex_rm8_cl = {"sar", "sar", 0, {0xD2}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH7},
-                                      {
-                                              {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                              {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                      }
-};
-amd64_opcode_inst_t sar_rm16_cl = {"sar", "sar", 0x66, {0xD3}, {OPCODE_EXT_SLASH7},
-                                   {
-                                           {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
-                                           {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                   }
-};
-amd64_opcode_inst_t sar_rm32_cl = {"sar", "sar", 0, {0xD3}, {OPCODE_EXT_SLASH7},
-                                   {
-                                           {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
-                                           {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                   }
-};
-amd64_opcode_inst_t sar_rm64_cl = {"sar", "sar", 0, {0xD3}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7},
-                                   {
-                                           {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                           {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}
-                                   }
-};
+amd64_opcode_inst_t sar_rm8_cl = {"sar", "sar", 0, {0xD2}, {OPCODE_EXT_SLASH7}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t sar_rex_rm8_cl = {"sar", "sar", 0, {0xD2}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH7}, {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t sar_rm16_cl = {"sar", "sar", 0x66, {0xD3}, {OPCODE_EXT_SLASH7}, {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t sar_rm32_cl = {"sar", "sar", 0, {0xD3}, {OPCODE_EXT_SLASH7}, {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t sar_rm64_cl = {"sar", "sar", 0, {0xD3}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7}, {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
 
 // float ------------------------------------------------------------------------------------------------------
 // float xor ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t xorpd_xmm1_xmm2m128 = {"xor", "xorpd", 0, {0x66, 0x0F, 0x57}, {OPCODE_EXT_SLASHR},
-                                           {
-                                                   {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
-                                                   {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
-                                           }
-};
-amd64_opcode_inst_t xorps_xmm1_xmm2m128 = {"xor", "xorps", 0, {0x0F, 0x57}, {OPCODE_EXT_SLASHR},
-                                           {
-                                                   {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
-                                                   {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
-                                           }
-};
+amd64_opcode_inst_t xorpd_xmm1_xmm2m128 = {"xor", "xorpd", 0, {0x66, 0x0F, 0x57}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t xorps_xmm1_xmm2m128 = {"xor", "xorps", 0, {0x0F, 0x57}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}}};
 
 
 // float mov ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0xF2, {0x0F, 0x10}, {OPCODE_EXT_SLASHR},
-                                       {
-                                               {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
-                                               {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_RM}
-                                       }
-};
-amd64_opcode_inst_t movsd_xmm1_m64 = {"mov", "movsd", 0xF2, {0x0F, 0x10}, {OPCODE_EXT_SLASHR},
-                                      {
-                                              {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
-                                              {OPERAND_TYPE_M64, ENCODING_TYPE_MODRM_RM}
-                                      }
-};
-amd64_opcode_inst_t movsd_xmm1m64_xmm2 = {"mov", "movsd", 0x0F2, {0x0F, 0x11}, {OPCODE_EXT_SLASHR},
-                                          {
-                                                  {OPERAND_TYPE_XMM1M64, ENCODING_TYPE_MODRM_RM},
-                                                  {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_REG}
-                                          }
-};
-amd64_opcode_inst_t movss_xmm1_xmm2 = {"mov", "movss", 0xF3, {0x0F, 0x10}, {OPCODE_EXT_SLASHR},
-                                       {
-                                               {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
-                                               {OPERAND_TYPE_XMM2S32, ENCODING_TYPE_MODRM_RM}
-                                       }
-};
-amd64_opcode_inst_t movss_xmm1_m32 = {"mov", "movss", 0xF3, {0x0F, 0x10}, {OPCODE_EXT_SLASHR},
-                                      {
-                                              {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
-                                              {OPERAND_TYPE_M32, ENCODING_TYPE_MODRM_RM}}
-};
-amd64_opcode_inst_t movss_xmm2m32_xmm1 = {"mov", "movss", 0xF3, {0x0F, 0x11}, {OPCODE_EXT_SLASHR},
-                                          {
-                                                  {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM},
-                                                  {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}}
-};
+amd64_opcode_inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0xF2, {0x0F, 0x10}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t movsd_xmm1_m64 = {"mov", "movsd", 0xF2, {0x0F, 0x10}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_M64, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t movsd_xmm1m64_xmm2 = {"mov", "movsd", 0x0F2, {0x0F, 0x11}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1M64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t movss_xmm1_xmm2 = {"mov", "movss", 0xF3, {0x0F, 0x10}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2S32, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t movss_xmm1_m32 = {"mov", "movss", 0xF3, {0x0F, 0x10}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_M32, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t movss_xmm2m32_xmm1 = {"mov", "movss", 0xF3, {0x0F, 0x11}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}}};
 
 // float 算数运算 ------------------------------------------------------------------------------------------------------
-amd64_opcode_inst_t addsd_xmm1_xmm2m64 = {"add", "addsd", 0xF2, {0x0F, 0x58}, {OPCODE_EXT_SLASHR},
-                                          {
-                                                  {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
-                                                  {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
-                                          }
-};
-amd64_opcode_inst_t addss_xmm1_xmm2m32 = {"add", "addss", 0xF3, {0x0F, 0x58}, {OPCODE_EXT_SLASHR},
-                                          {
-                                                  {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
-                                                  {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
-                                          }
-};
-amd64_opcode_inst_t subsd_xmm1_xmm2m64 = {"sub", "subsd", 0xF2, {0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
-                                          {
-                                                  {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
-                                                  {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
-                                          }
-};
-amd64_opcode_inst_t subss_xmm1_xmm2m32 = {"sub", "subss", 0xF3, {0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
-                                          {
-                                                  {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
-                                                  {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
-                                          }
-};
-amd64_opcode_inst_t mulsd_xmm1_xmm2m64 = {"mul", "mulsd", 0xF2, {0x0F, 0x59}, {OPCODE_EXT_SLASHR},
-                                          {
-                                                  {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
-                                                  {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
-                                          }
-};
-amd64_opcode_inst_t mulss_xmm1_xmm2m32 = {"mul", "mulss", 0xF3, {0x0F, 0x59}, {OPCODE_EXT_SLASHR},
-                                          {
-                                                  {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
-                                                  {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
-                                          }
-};
-amd64_opcode_inst_t divsd_xmm1_xmm2m64 = {"div", "divsd", 0xF2, {0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
-                                          {
-                                                  {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
-                                                  {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
-                                          }
-};
-amd64_opcode_inst_t divss_xmm1_xmm2m32 = {"div", "divss", 0xF2, {0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
-                                          {
-                                                  {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
-                                                  {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
-                                          }
-};
-amd64_opcode_inst_t comisd = {"cmp", "comisd", 0x66, {0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
-                              {
-                                      {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
-                                      {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}
-                              }
-};
-amd64_opcode_inst_t comiss = {"cmp", "comiss", 0, {0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
-                              {
-                                      {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
-                                      {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}
-                              }
-};
+amd64_opcode_inst_t addsd_xmm1_xmm2m64 = {"add", "addsd", 0xF2, {0x0F, 0x58}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t addss_xmm1_xmm2m32 = {"add", "addss", 0xF3, {0x0F, 0x58}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t subsd_xmm1_xmm2m64 = {"sub", "subsd", 0xF2, {0x0F, 0x5C}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t subss_xmm1_xmm2m32 = {"sub", "subss", 0xF3, {0x0F, 0x5C}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t mulsd_xmm1_xmm2m64 = {"mul", "mulsd", 0xF2, {0x0F, 0x59}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t mulss_xmm1_xmm2m32 = {"mul", "mulss", 0xF3, {0x0F, 0x59}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t divsd_xmm1_xmm2m64 = {"div", "divsd", 0xF2, {0x0F, 0x5E}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t divss_xmm1_xmm2m32 = {"div", "divss", 0xF2, {0x0F, 0x5E}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t comisd = {"cmp", "comisd", 0x66, {0x0F, 0x2F}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t comiss = {"cmp", "comiss", 0, {0x0F, 0x2F}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}}};
 
+
+// movsx ------------------------------------------------------------------------------------------------------
+amd64_opcode_inst_t movsx_r16_rm8 = {"movsx", "movsx", 0x66, {0x0F, 0xBE}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t movsx_r32_rm8 = {"movsx", "movsx", 0, {0x0F, 0xBE}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t movsx_r64_rm8 = {"movsx", "movsx", 0, {0x0F, 0xBE}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t movsx_r32_rm16 = {"movsx", "movsx", 0, {0x0F, 0xBF}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t movsx_r64_rm16 = {"movsx", "movsx", 0, {0x0F, 0xBF}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t movsx_r64_rm32 = {"movsx", "movsxd", 0, {0x63}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
+
+// movzx ------------------------------------------------------------------------------------------------------
+amd64_opcode_inst_t movzx_r16_rm8 = {"movzx", "movzx", 0x66, {0x0F, 0xB6}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t movzx_r32_rm8 = {"movzx", "movzx", 0, {0x0F, 0xB6}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t movzx_r64_rm8 = {"movzx", "movzx", 0, {0x0F, 0xB6}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t movzx_r32_rm16 = {"movzx", "movzx", 0, {0x0F, 0xB7}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t movzx_r64_rm16 = {"movzx", "movzx", 0, {0x0F, 0xB7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}};
+
+// mov rm -> reg
+amd64_opcode_inst_t movzx_r64_rm32 = {"movzx", "mov", 0, {0x63}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
 
 
 // opcode end ------------------------------------------------------------------------------------------------------
@@ -1014,7 +327,7 @@ amd64_opcode_inst_t comiss = {"cmp", "comiss", 0, {0x0F, 0x2F}, {OPCODE_EXT_SLAS
 static amd64_opcode_tree_node_t *opcode_node_new() {
     amd64_opcode_tree_node_t *node = NEW(amd64_opcode_tree_node_t);
     node->key = "";
-    node->insts = (amd64_opcode_insts_t) {
+    node->insts = (amd64_opcode_insts_t){
             .count = 0,
             .list = malloc(sizeof(amd64_opcode_inst_t) * 10),
     };
@@ -1256,6 +569,22 @@ void amd64_opcode_init() {
     opcode_tree_build(&comiss);
     opcode_tree_build(&comisd);
 
+
+    // 扩展
+    // movsx/movzx instructions
+    opcode_tree_build(&movsx_r16_rm8);
+    opcode_tree_build(&movsx_r32_rm8);
+    opcode_tree_build(&movsx_r64_rm8);
+    opcode_tree_build(&movsx_r32_rm16);
+    opcode_tree_build(&movsx_r64_rm16);
+    opcode_tree_build(&movsx_r64_rm32);
+
+    opcode_tree_build(&movzx_r16_rm8);
+    opcode_tree_build(&movzx_r32_rm8);
+    opcode_tree_build(&movzx_r64_rm8);
+    opcode_tree_build(&movzx_r32_rm16);
+    opcode_tree_build(&movzx_r64_rm16);
+    opcode_tree_build(&movzx_r64_rm32);
 }
 
 /**
@@ -1426,13 +755,13 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
         res.list = highs;
         return res;
     }
-//    if (t == OPERAND_TYPE_AL) {
-//        res.count = 1;
-//        uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
-//        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, BYTE);
-//        res.list = highs;
-//        return res;
-//    }
+    //    if (t == OPERAND_TYPE_AL) {
+    //        res.count = 1;
+    //        uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
+    //        highs[0] = asm_operand_to_key(ASM_OPERAND_TYPE_REG, BYTE);
+    //        res.list = highs;
+    //        return res;
+    //    }
 
 
     if (t == OPERAND_TYPE_R16) {
@@ -1705,8 +1034,7 @@ amd64_opcode_inst_t *opcode_select(amd64_asm_inst_t operation) {
 
     amd64_opcode_insts_t insts = {
             .count = 0,
-            .list= malloc(sizeof(amd64_opcode_inst_t) * 10)
-    };
+            .list = malloc(sizeof(amd64_opcode_inst_t) * 10)};
 
     /**
      * 上面只进行了 size 和 type 等匹配，现在需要进行一些特殊规则的过滤
@@ -1933,7 +1261,7 @@ static void set_imm(amd64_binary_format_t *format, uint8_t *imms, uint8_t count)
  * @param dst
  */
 static void int32_to_uint8(int32_t src, uint8_t dst[4]) {
-//  memcpy(dst, &src, sizeof(src));
+    //  memcpy(dst, &src, sizeof(src));
     dst[0] = src;
     dst[1] = src >> 8;
     dst[2] = src >> 16;
@@ -2076,18 +1404,18 @@ amd64_binary_format_t *opcode_fill(amd64_opcode_inst_t *inst, amd64_asm_inst_t a
                 }
             } else if (operand.encoding == ENCODING_TYPE_MODRM_REG) {
                 assertf(false, "disp_reg is rm, cannot modrm to reg");
-//                if (format->modrm == NULL) {
-//                    format->modrm = new_modrm();
-//                    format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
-//                }
-//
-//                format->modrm->reg = r->reg->index;
-//                uint8_t temp[] = {r->disp};
-//                set_disp(format, r->reg->name, temp, 1);
-//
-//                if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
-//                    format->rex_prefix->r = r->reg->index > 7;
-//                }
+                //                if (format->modrm == NULL) {
+                //                    format->modrm = new_modrm();
+                //                    format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER_BYTE_DISP;
+                //                }
+                //
+                //                format->modrm->reg = r->reg->index;
+                //                uint8_t temp[] = {r->disp};
+                //                set_disp(format, r->reg->name, temp, 1);
+                //
+                //                if (ext_exists[OPCODE_EXT_REX_W] || ext_exists[OPCODE_EXT_REX]) {
+                //                    format->rex_prefix->r = r->reg->index > 7;
+                //                }
             } else {
                 error_exit("unsupported encoding %d", operand.encoding);
                 return NULL;
@@ -2190,7 +1518,6 @@ amd64_binary_format_t *opcode_fill(amd64_opcode_inst_t *inst, amd64_asm_inst_t a
                     uint8_t temp[1] = {0};
                     set_disp(format, sib_reg->base, temp, 1);
                 }
-
             }
         } else if (asm_operand->type == AMD64_ASM_OPERAND_TYPE_UINT64) {
             asm_uint64_t *uint = asm_operand->value;
@@ -2366,16 +1693,21 @@ void opcode_format_encoding(amd64_binary_format_t *format, uint8_t *data, uint8_
     }
 }
 
-amd64_opcode_inst_t *amd64_asm_inst_encoding(amd64_asm_inst_t inst, uint8_t *data, uint8_t *count) {
+amd64_opcode_inst_t *amd64_asm_inst_encoding(amd64_asm_inst_t inst, uint8_t *data, uint8_t *count, closure_t *c) {
     assert(opcode_tree_root);
     *count = 0;
 
     amd64_opcode_inst_t *opcode = opcode_select(inst);
     amd64_binary_format_t *format = opcode_fill(opcode, inst);
     opcode_format_encoding(format, data, count);
-//    data = realloc(data, *count); // 这里如果修改 data 的地址会导致外面的引用位置改变
+    //    data = realloc(data, *count); // 这里如果修改 data 的地址会导致外面的引用位置改变
+
+#ifdef DEBUG_ASM
+    if (c && str_equal(c->linkident, DEBUG_ASM)) {
+        asm_op_to_string(0, &inst);
+        code_to_string(data, *count);
+    }
+#endif
 
     return opcode;
 }
-
-

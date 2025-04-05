@@ -256,7 +256,7 @@ void opcode_format_encoding(amd64_binary_format_t *format, uint8_t *data, uint8_
 
 void opcode_sort_insts(amd64_opcode_insts_t *insts);
 
-amd64_opcode_inst_t *amd64_asm_inst_encoding(amd64_asm_inst_t inst, uint8_t *data, uint8_t *count);
+amd64_opcode_inst_t *amd64_asm_inst_encoding(amd64_asm_inst_t inst, uint8_t *data, uint8_t *count, closure_t *c);
 
 void amd64_opcode_init();
 

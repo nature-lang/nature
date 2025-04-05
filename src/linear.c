@@ -32,6 +32,30 @@ lir_opcode_t ast_op_convert[] = {
         [AST_OP_NEG] = LIR_OPCODE_NEG,
 };
 
+static lir_operand_t *linear_inline_arr_element_addr_not_check(module_t *m, lir_operand_t *arr_target, lir_operand_t *index_target, type_t arr_type) {
+    assert(arr_type.kind == TYPE_ARR);
+    assert(arr_target->assert_type != LIR_OPERAND_SYMBOL_VAR);
+
+    type_kind index_kind = operand_type_kind(index_target);
+    if (type_kind_sizeof(index_kind) < POINTER_SIZE) {
+        lir_operand_t *temp_index_target = temp_var_operand(m, type_kind_new(TYPE_INT));
+        OP_PUSH(lir_op_zext(temp_index_target, index_target));
+        index_target = temp_index_target;
+    }
+
+    rtype_t arr_element_rtype = ct_reflect_type(arr_type.array->element_type);
+    int64_t element_size = rtype_stack_size(&arr_element_rtype, POINTER_SIZE);
+
+    // 计算偏移量: index * element_size
+    lir_operand_t *offset_target = temp_var_operand(m, type_kind_new(TYPE_INT));
+    OP_PUSH(lir_op_new(LIR_OPCODE_MUL, index_target, int_operand(element_size), offset_target));
+
+    // 计算最终地址 data + offset 并返回
+    lir_operand_t *result = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_new(LIR_OPCODE_ADD, arr_target, offset_target, result));
+    return result;
+}
+
 static lir_operand_t *linear_inline_arr_element_addr(module_t *m, lir_operand_t *arr_target, lir_operand_t *index_target, type_t arr_type) {
     assert(arr_type.kind == TYPE_ARR);
     assert(arr_target->assert_type != LIR_OPERAND_SYMBOL_VAR);
@@ -1943,7 +1967,7 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
 
     int64_t offset = 0;
     for (int i = 0; i < type_array.array->length; ++i) {
-        lir_operand_t *item_target = linear_inline_arr_element_addr(m, target_ref, int_operand(i), type_array);
+        lir_operand_t *item_target = linear_inline_arr_element_addr_not_check(m, target_ref, int_operand(i), type_array);
 
         if (!is_stack_ref_big_type(type_array.array->element_type)) {
             item_target = indirect_addr_operand(m, type_array.array->element_type, item_target, 0);
@@ -1961,6 +1985,35 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
     return target;
 }
 
+static lir_operand_t *linear_array_repeat_new(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    ast_array_repeat_new_t *ast = expr.value;
+    type_t type_array = expr.type;
+
+    if (!target) {
+        target = temp_var_operand_with_alloc(m, type_array);
+    }
+
+    assert(target && target->assert_type == LIR_OPERAND_VAR);
+
+    uint64_t rtype_hash = ct_find_rtype_hash(type_array);
+
+    lir_operand_t *target_ref = temp_var_operand(m, type_ptrof(type_array));
+    OP_PUSH(lir_op_move(target_ref, target));
+
+    lir_operand_t *default_element_target = linear_expr(m, ast->default_element, NULL);
+
+    int64_t offset = 0;
+    for (int i = 0; i < type_array.array->length; ++i) {
+        lir_operand_t *item_target = linear_inline_arr_element_addr_not_check(m, target_ref, int_operand(i), type_array);
+        if (!is_stack_ref_big_type(type_array.array->element_type)) {
+            item_target = indirect_addr_operand(m, type_array.array->element_type, item_target, 0);
+        }
+
+        linear_super_move(m, type_array.array->element_type, item_target, default_element_target);
+    }
+
+    return target;
+}
 
 /**
  * 1. 根据 c->env_name 得到 base_target   call GET_ENV
@@ -3209,6 +3262,7 @@ linear_expr_fn expr_fn_table[] = {
         [AST_EXPR_BINARY] = linear_binary,
         [AST_EXPR_UNARY] = linear_unary,
         [AST_EXPR_ARRAY_NEW] = linear_array_new,
+        [AST_EXPR_ARRAY_REPEAT_NEW] = linear_array_repeat_new,
         [AST_EXPR_ARRAY_ACCESS] = linear_array_access,
         [AST_EXPR_VEC_NEW] = linear_vec_new,
         [AST_EXPR_VEC_ACCESS] = linear_vec_access,

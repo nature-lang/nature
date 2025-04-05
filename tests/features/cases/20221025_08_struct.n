@@ -2,7 +2,7 @@ type people = struct {
     int a
     bool b
     int c
-    arr<int,5> list
+    [int;5] list
     [f32] flist
 }
 

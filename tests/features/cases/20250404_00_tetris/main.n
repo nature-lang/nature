@@ -30,9 +30,9 @@ var game_over = false
 var pause = false
 
 // matrices w: 12 * h: 20
-arr<arr<i32,20>,12> grid = []
-arr<arr<i32,4>,4> piece = []
-arr<arr<i32,4>,4> incoming_piece = []
+[[i32;20];12] grid = []
+[[i32;4];4] piece = []
+[[i32;4];4] incoming_piece = []
 
 i32 piece_position_x = 0
 i32 piece_position_y = 0

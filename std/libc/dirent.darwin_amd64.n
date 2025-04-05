@@ -6,7 +6,7 @@ type dirent_t = struct {
     u16 reclen
     u16 namlen
     u8 t
-    arr<u8,1024> name
+    [u8;1024] name
 }
 
 #linkid 'opendir$INODE64'

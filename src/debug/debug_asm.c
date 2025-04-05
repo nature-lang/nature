@@ -140,8 +140,7 @@ static string arm64_asm_operand_to_string(arm64_asm_operand_t *operand) {
         case ARM64_ASM_OPERAND_COND: {
             static char *cond_names[] = {
                     "eq", "ne", "hs", "lo", "mi", "pl", "vs", "vc",
-                    "hi", "ls", "ge", "lt", "gt", "le", "al", "nv"
-            };
+                    "hi", "ls", "ge", "lt", "gt", "le", "al", "nv"};
 
             if (operand->cond >= 0 && operand->cond < 16) {
                 return cond_names[operand->cond];
@@ -154,8 +153,7 @@ static string arm64_asm_operand_to_string(arm64_asm_operand_t *operand) {
         case ARM64_ASM_OPERAND_EXTEND: {
             static char *extend_types[] = {
                     "uxtb", "uxth", "uxtw", "uxtx",
-                    "sxtb", "sxth", "sxtw", "sxtx"
-            };
+                    "sxtb", "sxth", "sxtw", "sxtx"};
             if (operand->extend.option < 8) {
                 if (operand->extend.imm == 0) {
                     return extend_types[operand->extend.option];
@@ -187,19 +185,19 @@ void amd64_asm_op_to_string(int i, amd64_asm_inst_t *op) {
     } else if (op->count == 2) {
         printf("%s -> %s",
                amd64_asm_operand_to_string(op->operands[1]),
-               amd64_asm_operand_to_string(op->operands[0])
-        );
+               amd64_asm_operand_to_string(op->operands[0]));
     } else if (op->count == 0) {
     } else {
         printf("not_support");
     }
 
     printf("\n");
+    fflush(stdout);
 }
 
 void arm64_asm_op_to_string(int i, arm64_asm_inst_t *op) {
     printf("%lu\t", op->op_id);
-    
+
     // 处理标签的特殊情况
     if (str_equal(arm64_raw_op_names[op->raw_opcode], "label")) {
         printf("%s  ", arm64_raw_op_names[op->raw_opcode]);
@@ -218,29 +216,30 @@ void arm64_asm_op_to_string(int i, arm64_asm_inst_t *op) {
         case 2:
             // 大多数双操作数指令格式为: dest, source
             printf("%s, %s",
-                arm64_asm_operand_to_string(op->operands[0]),
-                arm64_asm_operand_to_string(op->operands[1]));
+                   arm64_asm_operand_to_string(op->operands[0]),
+                   arm64_asm_operand_to_string(op->operands[1]));
             break;
         case 3:
             // 三操作数指令格式为: dest, source1, source2
             printf("%s, %s, %s",
-                arm64_asm_operand_to_string(op->operands[0]),
-                arm64_asm_operand_to_string(op->operands[1]),
-                arm64_asm_operand_to_string(op->operands[2]));
+                   arm64_asm_operand_to_string(op->operands[0]),
+                   arm64_asm_operand_to_string(op->operands[1]),
+                   arm64_asm_operand_to_string(op->operands[2]));
             break;
         case 4:
             // 特殊情况，如 LDP/STP 指令
             printf("%s, %s, %s, %s",
-                arm64_asm_operand_to_string(op->operands[0]),
-                arm64_asm_operand_to_string(op->operands[1]),
-                arm64_asm_operand_to_string(op->operands[2]),
-                arm64_asm_operand_to_string(op->operands[3]));
+                   arm64_asm_operand_to_string(op->operands[0]),
+                   arm64_asm_operand_to_string(op->operands[1]),
+                   arm64_asm_operand_to_string(op->operands[2]),
+                   arm64_asm_operand_to_string(op->operands[3]));
             break;
         default:
             printf("not_support");
     }
 
     printf("\n");
+    fflush(stdout);
 }
 
 void asm_op_to_string(int i, void *op) {
@@ -252,4 +251,3 @@ void asm_op_to_string(int i, void *op) {
 
     assert(false);
 }
-
