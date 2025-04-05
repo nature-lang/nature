@@ -182,8 +182,7 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
         op->first = arm64_convert_use_var(c, list, op->first);
     }
 
-    if (op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_REM || op->code ==
-        LIR_OPCODE_XOR || op->code == LIR_OPCODE_OR || op->code == LIR_OPCODE_AND) {
+    if (op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_REM || op->code == LIR_OPCODE_XOR || op->code == LIR_OPCODE_OR || op->code == LIR_OPCODE_AND) {
         op->second = arm64_convert_use_var(c, list, op->second);
     }
 
@@ -258,7 +257,7 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
 
                 linked_concat(operations, arm64_lower_symbol_var(c, call_op));
 
-                if (call_op->code == LIR_OPCODE_MOVE && !lir_can_mov(call_op)) {
+                if (lir_op_like_move(call_op) && !lir_can_mov(call_op)) {
                     call_op->first = arm64_convert_use_var(c, operations, call_op->first);
                     linked_push(operations, call_op);
                     continue;
@@ -294,7 +293,7 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (op->code == LIR_OPCODE_MOVE && !lir_can_mov(op)) {
+        if (lir_op_like_move(op) && !lir_can_mov(op)) {
             op->first = arm64_convert_use_var(c, operations, op->first);
             linked_push(operations, op);
             continue;

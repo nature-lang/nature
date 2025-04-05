@@ -29,9 +29,9 @@
 
 #define BLOCK_IDENT ".@BLOCK"
 #define CATCH_IDENT ".@CATCH"
-#define MATCH_IDENT ".@MATCH"// 需要用到字符串匹配，所以给定特殊字符避免后续干扰
+#define MATCH_IDENT ".@MATCH" // 需要用到字符串匹配，所以给定特殊字符避免后续干扰
 #define CASE_HANDLE ".CASE_HANDLE"
-#define SELECT_IDENT ".@SELECT"// 需要用到字符串匹配，所以给定特殊字符避免后续干扰
+#define SELECT_IDENT ".@SELECT" // 需要用到字符串匹配，所以给定特殊字符避免后续干扰
 
 #define FOR_CONTINUE_IDENT ".FOR_CONTINUE"
 #define FOR_UPDATE_IDENT ".FOR_UPDATE"
@@ -50,12 +50,12 @@
 #define ERRORT_MSG_IDENT "msg"
 #define ERRORT_IS_IDENT "is"
 
-#define FLOAT_NEG_MASK_IDENT "float_neg_mask"// -0
+#define FLOAT_NEG_MASK_IDENT "float_neg_mask" // -0
 
-#define BUILTIN_REF_KEY "ref"// list.ref()
+#define BUILTIN_REF_KEY "ref" // list.ref()
 // #define BUILTIN_LEN_KEY "len" // list.len()
 // #define BUILTIN_CAP_KEY "cap" // list.cap()
-#define BUILTIN_DEL_KEY "del"// list.del()
+#define BUILTIN_DEL_KEY "del" // list.del()
 
 #define VEC_PUSH_KEY "push"
 #define VEC_POP_KEY "pop"
@@ -97,9 +97,9 @@
 #define RT_CALL_MAP_DELETE "rt_map_delete"
 
 #define RT_CALL_SET_NEW "rt_set_new"
-#define RT_CALL_SET_ADD "rt_set_add"          // 往集合中添加元素
-#define RT_CALL_SET_CONTAINS "rt_set_contains"// s.contain()
-#define RT_CALL_SET_DELETE "rt_set_delete"    // 将元素从 set 中移除
+#define RT_CALL_SET_ADD "rt_set_add" // 往集合中添加元素
+#define RT_CALL_SET_CONTAINS "rt_set_contains" // s.contain()
+#define RT_CALL_SET_DELETE "rt_set_delete" // 将元素从 set 中移除
 
 // 参考 python, tuple 不允许单独赋值，必须初始化时进行赋值
 #define RT_CALL_TUPLE_NEW "tuple_new"
@@ -139,8 +139,8 @@
 
 #define RT_CALL_ENV_NEW "env_new"
 #define RT_CALL_ENV_CLOSURE "env_closure"
-#define RT_CALL_ENV_ASSIGN_REF "env_assign_ref"      // 实际代码位置对 env 的访问
-#define RT_CALL_ENV_ELEMENT_VALUE "env_element_value"// heap addr
+#define RT_CALL_ENV_ASSIGN_REF "env_assign_ref" // 实际代码位置对 env 的访问
+#define RT_CALL_ENV_ELEMENT_VALUE "env_element_value" // heap addr
 
 #define RT_CALL_STRING_NEW "string_new"
 
@@ -152,7 +152,7 @@
 #define RT_CALL_STRING_GT "string_gt"
 #define RT_CALL_STRING_GE "string_ge"
 #define RT_CALL_STRING_LENGTH "rt_string_length"
-#define RT_CALL_STRING_REF "rt_string_ref"// 默认引用传递
+#define RT_CALL_STRING_REF "rt_string_ref" // 默认引用传递
 
 #define RT_CALL_PRE_TPLCALL_HOOK "pre_tplcall_hook"
 #define RT_CALL_POST_TPLCALL_HOOK "post_tplcall_hook"
@@ -213,35 +213,29 @@ typedef struct {
  * t1[0] = 24 => mov 24 -> indirect_addr(t1, 0)
  */
 typedef struct {
-    lir_operand_t *base;// compiler 完成后为 var,  reg alloc 后为 reg
-    int64_t offset;     // 偏移量是可以计算出来的, 默认为 0, 单位字节
-    type_t type;        // lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
+    lir_operand_t *base; // compiler 完成后为 var,  reg alloc 后为 reg
+    int64_t offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
+    type_t type; // lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
 } lir_indirect_addr_t;
 
 typedef struct {
-    lir_operand_t *base;
-    lir_operand_t *offset;
-    type_t type;
-} lir_indexed_addr_t;
-
-typedef struct {
     char *ident;
-    bool is_local;// 是否为局部符号, 否则就是 global, 可以被链接器链接
+    bool is_local; // 是否为局部符号, 否则就是 global, 可以被链接器链接
 } lir_symbol_label_t;
 
 typedef struct {
     string ident;
     type_kind kind;
-} lir_symbol_var_t;// 外部符号引用, 外部符号引用
+} lir_symbol_var_t; // 外部符号引用, 外部符号引用
 
 typedef struct {
     union {
-        uint64_t uint_value;// 8bit, 负数使用补码存储
-        int64_t int_value;  // 8bit, 负数使用补码存储
-        double f64_value;   // 8bit
-        float f32_value;    // 4bit
-        bool bool_value;    // 1bit
-        string string_value;// 8bit
+        uint64_t uint_value; // 8bit, 负数使用补码存储
+        int64_t int_value; // 8bit, 负数使用补码存储
+        double f64_value; // 8bit
+        float f32_value; // 4bit
+        bool bool_value; // 1bit
+        string string_value; // 8bit
     };
 
     type_kind kind;
@@ -250,8 +244,16 @@ typedef struct {
 struct lir_operand_t {
     lir_operand_type_t assert_type;
     void *value;
-    lir_flag_t pos;// 在 opcode 中的位置信息
+    lir_flag_t pos; // 在 opcode 中的位置信息
+    int64_t size; // 实际位宽存储，避免寄存器分配后位宽丢失
 };
+
+
+static inline type_t lir_operand_type(lir_operand_t *operand);
+
+static inline type_kind operand_type_kind(lir_operand_t *operand) {
+    return lir_operand_type(operand).kind;
+}
 
 static inline bool is_rtcall(string target) {
     if (!target || strlen(target) == 0) {
@@ -508,7 +510,7 @@ static inline lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_var->ident = var->ident;
         new_var->old = var->old;
         new_var->type = var->type;
-        new_var->flag = 0;// 即使是同一个 var 在不同的位置承担的 flag 也是不同的
+        new_var->flag = 0; // 即使是同一个 var 在不同的位置承担的 flag 也是不同的
         new_operand->value = new_var;
         return new_operand;
     }
@@ -567,7 +569,7 @@ static inline void set_operand_flag(lir_operand_t *operand) {
     if (operand->assert_type == LIR_OPERAND_VAR) {
         // 仅 output 且 indirect_addr = false 才配置 def
         lir_var_t *var = operand->value;
-        var->flag |= FLAG(operand->pos);// 冗余 operand 的位置信息
+        var->flag |= FLAG(operand->pos); // 冗余 operand 的位置信息
         if (operand->pos == LIR_FLAG_OUTPUT) {
             var->flag |= FLAG(LIR_FLAG_DEF);
         } else {
@@ -612,8 +614,8 @@ static inline void set_operand_flag(lir_operand_t *operand) {
     slice_t *operands = recursion_extract_operands(operand, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG));
     for (int i = 0; i < operands->count; ++i) {
         lir_operand_t *o = operands->take[i];
-        o->pos = operand->pos;// 继承父级的 pos
-        set_operand_flag(o);  // 符合嵌入的全部定义成 USE
+        o->pos = operand->pos; // 继承父级的 pos
+        set_operand_flag(o); // 符合嵌入的全部定义成 USE
     }
 }
 
@@ -621,7 +623,7 @@ static inline lir_op_t *
 lir_op_new(lir_opcode_t code, lir_operand_t *first, lir_operand_t *second, lir_operand_t *result) {
     lir_op_t *op = NEW(lir_op_t);
     op->code = code;
-    op->first = lir_operand_copy(first);// 这里的 copy 并不深度，而是 copy 了指针！
+    op->first = lir_operand_copy(first); // 这里的 copy 并不深度，而是 copy 了指针！
     op->second = lir_operand_copy(second);
     op->output = lir_operand_copy(result);
 
@@ -674,6 +676,18 @@ static inline lir_op_t *lir_op_bal(lir_operand_t *label) {
     return lir_op_new(LIR_OPCODE_BAL, NULL, NULL, lir_copy_label_operand(label));
 }
 
+static inline lir_op_t *lir_op_zext(lir_operand_t *dst, lir_operand_t *src) {
+    return lir_op_new(LIR_OPCODE_ZEXT, src, NULL, dst);
+}
+
+static inline lir_op_t *lir_op_sext(lir_operand_t *dst, lir_operand_t *src) {
+    return lir_op_new(LIR_OPCODE_SEXT, src, NULL, dst);
+}
+
+static inline lir_op_t *lir_op_trunc(lir_operand_t *dst, lir_operand_t *src) {
+    return lir_op_new(LIR_OPCODE_TRUNC, src, NULL, dst);
+}
+
 static inline lir_op_t *lir_op_move(lir_operand_t *dst, lir_operand_t *src) {
     return lir_op_new(LIR_OPCODE_MOVE, src, NULL, dst);
 }
@@ -716,10 +730,6 @@ static inline type_t lir_operand_type(lir_operand_t *operand) {
     return type_kind_new(TYPE_UNKNOWN);
 }
 
-static inline type_kind operand_type_kind(lir_operand_t *operand) {
-    return lir_operand_type(operand).kind;
-}
-
 /**
  * operand 此时并没有 pos 需要替换成新的 operand,替换的过程中需要重新设定
  * @param operand
@@ -752,7 +762,7 @@ static inline lir_op_t *push_rt_call_no_hook(module_t *m, char *name, lir_operan
     slice_t *operand_args = slice_new();
 
     va_list args;
-    va_start(args, arg_count);// 初始化参数
+    va_start(args, arg_count); // 初始化参数
     for (int i = 0; i < arg_count; ++i) {
         lir_operand_t *param = va_arg(args, lir_operand_t *);
         slice_push(operand_args, param);
@@ -767,7 +777,7 @@ static inline lir_op_t *push_rt_call(module_t *m, char *name, lir_operand_t *res
     slice_t *operand_args = slice_new();
 
     va_list args;
-    va_start(args, arg_count);// 初始化参数
+    va_start(args, arg_count); // 初始化参数
     for (int i = 0; i < arg_count; ++i) {
         lir_operand_t *param = va_arg(args, lir_operand_t *);
         slice_push(operand_args, param);
@@ -784,7 +794,7 @@ static inline lir_op_t *lir_rtcall(char *name, lir_operand_t *result, int arg_co
     slice_t *params_operand = slice_new();
 
     va_list args;
-    va_start(args, arg_count);// 初始化参数
+    va_start(args, arg_count); // 初始化参数
     for (int i = 0; i < arg_count; ++i) {
         lir_operand_t *param = va_arg(args, lir_operand_t *);
         slice_push(params_operand, param);
@@ -798,7 +808,7 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
     slice_t *params_operand = slice_new();
 
     va_list args;
-    va_start(args, arg_count);// 初始化参数
+    va_start(args, arg_count); // 初始化参数
     for (int i = 0; i < arg_count; ++i) {
         lir_operand_t *param = va_arg(args, lir_operand_t *);
         slice_push(params_operand, param);
@@ -824,7 +834,7 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
 
     // 为了方便和寄存器进行交换，这里总是按照指针地址对齐
     c->stack_offset += size;
-    c->stack_offset = align_up(c->stack_offset, POINTER_SIZE);// 按照 8byte 对齐
+    c->stack_offset = align_up(c->stack_offset, POINTER_SIZE); // 按照 8byte 对齐
 
     rtype_t rtype = reflect_type(t);
     assert(rtype.size == size);
@@ -935,26 +945,6 @@ static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir
     assertf(base->assert_type == LIR_OPERAND_VAR || base->assert_type == LIR_OPERAND_REG,
             "indirect addr only support var operand");
     lir_indirect_addr_t *addr = NEW(lir_indirect_addr_t);
-    addr->base = base;
-    addr->offset = offset;
-    addr->type = type;
-
-    return operand_new(LIR_OPERAND_INDIRECT_ADDR, addr);
-}
-
-/**
- * @param m
- * @param operand
- * @param offset
- * @param type
- * @return
- */
-static inline lir_operand_t *
-indexed_addr_operand(module_t *m, type_t type, lir_operand_t *base, lir_operand_t *offset) {
-    assert(base->assert_type == LIR_OPERAND_VAR || base->assert_type == LIR_OPERAND_REG);
-    assert(offset->assert_type == LIR_OPERAND_VAR || base->assert_type == LIR_OPERAND_REG);
-    assert(type.kind > 0);
-    lir_indexed_addr_t *addr = NEW(lir_indexed_addr_t);
     addr->base = base;
     addr->offset = offset;
     addr->type = type;
@@ -1100,16 +1090,23 @@ static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
     return false;
 }
 
+static inline bool lir_op_like_move(lir_op_t *op) {
+    return op->code == LIR_OPCODE_MOVE || op->code == LIR_OPCODE_SEXT || op->code == LIR_OPCODE_ZEXT || op->code == LIR_OPCODE_TRUNC;
+}
+
 static inline bool lir_op_contain_cmp(lir_op_t *op) {
     return (op->code == LIR_OPCODE_BEQ || op->code == LIR_OPCODE_SGT || op->code == LIR_OPCODE_SGE ||
             op->code == LIR_OPCODE_SEE ||
-            op->code == LIR_OPCODE_SNE || op->code == LIR_OPCODE_SLT || op->code == LIR_OPCODE_SLE);
+            op->code == LIR_OPCODE_SNE || op->code == LIR_OPCODE_SLT || op->code == LIR_OPCODE_SLE || op->code == LIR_OPCODE_USLT);
 }
 
 static inline bool lir_op_term(lir_op_t *op) {
     return (op->code == LIR_OPCODE_ADD || op->code == LIR_OPCODE_SUB);
 }
 
+static inline bool lir_op_convert(lir_op_t *op) {
+    return op->code == LIR_OPCODE_ZEXT || op->code == LIR_OPCODE_SEXT || op->code == LIR_OPCODE_TRUNC;
+}
 
 static inline bool lir_op_ternary(lir_op_t *op) {
     return op->code == LIR_OPCODE_ADD || op->code == LIR_OPCODE_SUB || op->code == LIR_OPCODE_MUL ||
@@ -1125,7 +1122,8 @@ static inline bool lir_op_scc(lir_op_t *op) {
            op->code == LIR_OPCODE_SGT ||
            op->code == LIR_OPCODE_SGE ||
            op->code == LIR_OPCODE_SEE ||
-           op->code == LIR_OPCODE_SNE;
+           op->code == LIR_OPCODE_SNE ||
+           op->code == LIR_OPCODE_USLT;
 }
 
 
@@ -1237,4 +1235,4 @@ static inline bool lir_can_lea(lir_op_t *op) {
 
 linked_t *lir_memory_mov(module_t *m, uint16_t size, lir_operand_t *dst, lir_operand_t *src);
 
-#endif// NATURE_SRC_LIR_H_
+#endif // NATURE_SRC_LIR_H_

@@ -123,8 +123,8 @@ static inline void *mallocz(uint64_t size) {
 #define TRACEF(...)
 
 #define TDEBUGF(format, ...)                                                                                                  \
-//    fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
-//    fflush(stdout);
+    fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
+    fflush(stdout);
 
 #define TESTDUMP(format, ...)                                                                                                 \
     fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
@@ -265,12 +265,12 @@ static char *str_connect3(const char *a, const char *b, const char *c) {
     size_t total_len = len_a + len_b + len_c;
 
     // 分配内存
-    char *result = mallocz(total_len + 1);// +1 for null terminator
+    char *result = mallocz(total_len + 1); // +1 for null terminator
     // 拼接字符串
     memcpy(result, a, len_a);
     memcpy(result + len_a, b, len_b);
     memcpy(result + len_a + len_b, c, len_c);
-    result[total_len] = '\0';// 确保字符串以 null 结尾
+    result[total_len] = '\0'; // 确保字符串以 null 结尾
 
     return result;
 }
@@ -360,7 +360,7 @@ static inline char *path_dir(char *path) {
     assert(strlen(path) > 0);
     char *result = strdup(path);
 
-    char *ptr = strrchr(result, '/');// 查找最后一个斜杠
+    char *ptr = strrchr(result, '/'); // 查找最后一个斜杠
     if (ptr == NULL) {
         return result;
     }
@@ -372,7 +372,7 @@ static inline char *path_dir(char *path) {
 static inline char *file_name(char *path) {
     char *ptr = strrchr(path, '/');
     if (ptr == NULL) {
-        return path;// path 本身就是 file name
+        return path; // path 本身就是 file name
     }
 
     if (*(ptr + 1) == '\0') {
@@ -405,7 +405,7 @@ static inline bool file_exists(char *path) {
 }
 
 static inline char *rtrim(char *str, char *sub) {
-    size_t len = strlen(str);// +1 表示 \0 部分
+    size_t len = strlen(str); // +1 表示 \0 部分
     len = len - strlen(sub) + 1;
 
     char *res = mallocz(len);
@@ -525,17 +525,17 @@ static inline ssize_t full_read(int fd, void *buf, size_t count) {
 
 static inline char *str_replace(char *str, char *old, char *new) {
     char *result; // the return string
-    char *ins;    // the next insert pointer
-    char *tmp;    // varies
-    int len_rep;  // length of old (the string to remove)
+    char *ins; // the next insert pointer
+    char *tmp; // varies
+    int len_rep; // length of old (the string to remove)
     int len_with; // length of new (the string to replace old new)
-    int len_front;// distance between old and end of last old
-    int count;    // number of replacements
+    int len_front; // distance between old and end of last old
+    int count; // number of replacements
 
     // sanity checks and initialization
     if (!str || !old) return NULL;
     len_rep = strlen(old);
-    if (len_rep == 0) return NULL;// empty old causes infinite loop during count
+    if (len_rep == 0) return NULL; // empty old causes infinite loop during count
     if (!new) new = "";
     len_with = strlen(new);
 
@@ -559,7 +559,7 @@ static inline char *str_replace(char *str, char *old, char *new) {
         len_front = ins - str;
         tmp = strncpy(tmp, str, len_front) + len_front;
         tmp = strcpy(tmp, new) + len_with;
-        str += len_front + len_rep;// move to next "end of old"
+        str += len_front + len_rep; // move to next "end of old"
     }
     strcpy(tmp, str);
     return result;
@@ -619,7 +619,7 @@ static inline int64_t *take_numbers(char *str, uint64_t count) {
         // 使用 atoi 函数将字符串转换为整数，并存入数组中
         numbers[i] = atoll(token);
         i++;
-        token = strtok(NULL, "\n");// 继续提取下一个数字
+        token = strtok(NULL, "\n"); // 继续提取下一个数字
     }
     return numbers;
 }
@@ -659,4 +659,4 @@ static inline void str_rcpy(char *dest, const char *src, size_t n) {
     dest[copy_len] = '\0';
 }
 
-#endif// NATURE_SRC_LIB_HELPER_H_
+#endif // NATURE_SRC_LIB_HELPER_H_

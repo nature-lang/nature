@@ -68,7 +68,7 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' panic: 'index out of vec [2] with length 2' at nature-test/main.n:13:22
+coroutine 'main' panic: 'index out of range [2] with length 2' at nature-test/main.n:13:22
 
 === test_live_in_phi_not_rename
 --- main.n

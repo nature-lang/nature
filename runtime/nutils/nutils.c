@@ -508,7 +508,7 @@ void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
     caller_t *caller = sc_map_get_64v(&rt_caller_map, co->scan_ret_addr);
     assert(caller);
 
-    char *msg = tlsprintf("index out of vec [%d] with length %d", index, len);
+    char *msg = tlsprintf("index out of range [%d] with length %d", index, len);
 
     if (be_catch) {
         n_interface_t *error = n_error_new(string_new(msg, strlen(msg)), true);
@@ -737,7 +737,7 @@ void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj) {
     // stack 扫描完成后退化成黑色写屏障, 否则是是灰色写屏障
     coroutine_t *co = coroutine_get();
     bool is_grey = co->gc_black < memory->gc_count;
-    TDEBUGF("[runtime_gc.rt_write_barrier_ptr] slot: %p, new_obj: %p, gc_barrier is true, gc_black %d", slot, new_obj, is_grey);
+    DEBUGF("[runtime_gc.rt_write_barrier_ptr] slot: %p, new_obj: %p, gc_barrier is true, gc_black %d", slot, new_obj, is_grey);
 
     // 直接 mark 为黑色，当前 new_obj 的 field 不会被处理，并且该 obj 本轮 gc 不会被清理
     // 例如 global linkco cache 中的获取的新的 obj, 不是从 allocator 中申请，所以需要主动进行 mark

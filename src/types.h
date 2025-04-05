@@ -263,6 +263,7 @@ typedef struct {
     int8_t index; // 默认值为 -1， 标识不在循环中 block maybe in multi loops，index is unique number in
     // innermost(最深的) loop
     uint8_t depth; // block 的嵌套级别,数字越高嵌套的越深
+    bool vector; // 是否可以进行向量优化
 } loop_t;
 
 typedef struct basic_block_t {
@@ -378,6 +379,20 @@ typedef enum {
     LIR_OPCODE_REM, // remainder
     LIR_OPCODE_NEG, // -取负数
 
+    // int 类型转换
+    LIR_OPCODE_ZEXT, // int 无符号扩展
+    LIR_OPCODE_SEXT, // int 有符号扩展
+    LIR_OPCODE_TRUNC, // int 大位宽截断
+
+
+    // 向量运算相关指令
+    LIR_OPCODE_VLOAD,
+    LIR_OPCODE_VSTORE,
+    LIR_OPCODE_VADD,
+    LIR_OPCODE_VSUB,
+    LIR_OPCODE_VMUL,
+    LIR_OPCODE_VDIV,
+
     // 位运算
     LIR_OPCODE_SHR, // >>
     LIR_OPCODE_SHL, // <<
@@ -388,6 +403,7 @@ typedef enum {
 
     LIR_OPCODE_CLR, // clean reg
     LIR_OPCODE_CLV, // clean up var, result is var，等同于首次变量注册的功能
+    LIR_OPCODE_USLT, // unsigned set less than <
     LIR_OPCODE_SLT, // set less than <
     LIR_OPCODE_SLE, // set less eq <=
     LIR_OPCODE_SGT, // >
@@ -618,4 +634,4 @@ bool type_union_compare(type_union_t *left, type_union_t *right);
 
 bool type_compare(type_t dst, type_t src, table_t *generics_param_table);
 
-#endif// NATURE_TYPES_H
+#endif // NATURE_TYPES_H

@@ -66,6 +66,7 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
         stack->kind = var->type.kind;
         operand->assert_type = LIR_OPERAND_STACK;
         operand->value = stack;
+        operand->size = stack->size;
     } else {
         reg_t *reg = alloc_regs[i->assigned];
         assert(reg);
@@ -77,6 +78,7 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
 
         operand->assert_type = LIR_OPERAND_REG;
         operand->value = reg;
+        operand->size = type_kind_sizeof(var->type.kind); // 实际 size
     }
 }
 
@@ -396,7 +398,7 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
         }
 
         int pos = interval_next_intersect(c, a->current, select);
-//        int old_pos = old_interval_next_intersect(c, a->current, select);
+        //        int old_pos = old_interval_next_intersect(c, a->current, select);
         assert(pos);
         // potions 表示两个 interval 重合，重合点之前都是可以自由分配的区域
         set_pos(free_pos, select->assigned, pos);
@@ -492,7 +494,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         assert(a->current->index != select->index);
 
         pos = interval_next_intersect(c, a->current, select);
-//        int old_pos = old_interval_next_intersect(c, a->current, select);
+        //        int old_pos = old_interval_next_intersect(c, a->current, select);
         assert(pos);
 
         if (select->fixed) {

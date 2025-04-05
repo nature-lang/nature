@@ -32,10 +32,69 @@ lir_opcode_t ast_op_convert[] = {
         [AST_OP_NEG] = LIR_OPCODE_NEG,
 };
 
+static lir_operand_t *linear_inline_arr_element_addr(module_t *m, lir_operand_t *arr_target, lir_operand_t *index_target, type_t arr_type) {
+    assert(arr_type.kind == TYPE_ARR);
+    assert(arr_target->assert_type != LIR_OPERAND_SYMBOL_VAR);
+
+    type_kind index_kind = operand_type_kind(index_target);
+    if (type_kind_sizeof(index_kind) < POINTER_SIZE) {
+        lir_operand_t *temp_index_target = temp_var_operand(m, type_kind_new(TYPE_INT));
+        OP_PUSH(lir_op_zext(temp_index_target, index_target));
+        index_target = temp_index_target;
+    }
+
+    // get vec length
+    lir_operand_t *length_target = int_operand(arr_type.array->length);
+
+    // cmp index < length to
+    lir_operand_t *cmp_result = temp_var_operand_with_alloc(m, type_kind_new(TYPE_BOOL));
+    OP_PUSH(lir_op_new(LIR_OPCODE_USLT, index_target, length_target, cmp_result));
+
+    char *cmd_label_ident = label_ident_with_unique(m, "arr_index_cmp");
+    char *end_label_ident = str_connect(cmd_label_ident, LABEL_END_SUFFIX);
+    lir_operand_t *cmp_end_label = lir_label_operand(end_label_ident, true);
+
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), cmp_result, cmp_end_label));
+
+    // TODO 共用 index out error handle label, 也就是有错误直接 goto 到这个地方，而不需要生成成百上千个
+    char *error_label_ident = m->current_closure->error_label;
+    bool be_catch = false;
+    if (!stack_empty(m->current_closure->catch_error_labels)) {
+        error_label_ident = stack_top(m->current_closure->catch_error_labels);
+        be_catch = true;
+    }
+
+    push_rt_call_no_hook(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target, bool_operand(be_catch));
+    // bal catch or end label
+    OP_PUSH(lir_op_bal(lir_label_operand(error_label_ident, true)));
+    OP_PUSH(lir_op_label(end_label_ident, true));
+
+    rtype_t arr_element_rtype = ct_reflect_type(arr_type.array->element_type);
+    int64_t element_size = rtype_stack_size(&arr_element_rtype, POINTER_SIZE);
+
+    // 计算偏移量: index * element_size
+    lir_operand_t *offset_target = temp_var_operand(m, type_kind_new(TYPE_INT));
+    OP_PUSH(lir_op_new(LIR_OPCODE_MUL, index_target, int_operand(element_size), offset_target));
+
+    // 计算最终地址 data + offset 并返回
+    lir_operand_t *result = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_new(LIR_OPCODE_ADD, arr_target, offset_target, result));
+    return result;
+}
+
 static lir_operand_t *linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_operand_t *index_target, type_t vec_element_type) {
     assert(vec_element_type.kind > 0);
 
-    if (vec_target->assert_type == LIR_OPERAND_SYMBOL_VAR) {// global vec copy to temp
+    type_kind index_kind = operand_type_kind(index_target);
+
+    if (type_kind_sizeof(index_kind) < POINTER_SIZE) {
+        lir_operand_t *temp_index_target = temp_var_operand(m, type_kind_new(TYPE_INT));
+        OP_PUSH(lir_op_zext(temp_index_target, index_target));
+
+        index_target = temp_index_target;
+    }
+
+    if (vec_target->assert_type == LIR_OPERAND_SYMBOL_VAR) { // global vec copy to temp
         lir_operand_t *temp_vec_target = temp_var_operand(m, type_new(TYPE_VEC, &vec_element_type));
         OP_PUSH(lir_op_move(temp_vec_target, vec_target));
         vec_target = temp_vec_target;
@@ -48,9 +107,10 @@ static lir_operand_t *linear_inline_vec_element_addr(module_t *m, lir_operand_t 
 
     // cmp index < length to
     lir_operand_t *cmp_result = temp_var_operand_with_alloc(m, type_kind_new(TYPE_BOOL));
-    OP_PUSH(lir_op_new(LIR_OPCODE_SLT, index_target, length_target, cmp_result));
 
-    char *cmd_label_ident = label_ident_with_unique(m, "vec_index_cmd");
+    OP_PUSH(lir_op_new(LIR_OPCODE_USLT, index_target, length_target, cmp_result));
+
+    char *cmd_label_ident = label_ident_with_unique(m, "vec_index_cmp");
     char *end_label_ident = str_connect(cmd_label_ident, LABEL_END_SUFFIX);
     lir_operand_t *cmp_end_label = lir_label_operand(end_label_ident, true);
 
@@ -151,18 +211,17 @@ linear_default_vec(module_t *m, type_t t, lir_operand_t *target) {
 
     lir_operand_t *rtype_hash = int_operand(ct_find_rtype_hash(t));
     lir_operand_t *element_index = int_operand(ct_find_rtype_hash(t.vec->element_type));
-    lir_operand_t *cap_operand = int_operand(VEC_DEFAULT_CAPACITY);// default cap_operand
+    lir_operand_t *cap_operand = int_operand(VEC_DEFAULT_CAPACITY); // default cap_operand
     push_rt_call(m, RT_CALL_VEC_CAP, target, 3, rtype_hash, element_index, cap_operand);
     return target;
 }
 
 // target 中保存了栈地址，开始向上清理
-static void linear_default_empty_stack(module_t *m, lir_operand_t *target, uint64_t size) {
+static void linear_default_empty_stack(module_t *m, lir_operand_t *target, uint16_t offset, uint64_t size) {
     uint16_t remind = size;
-    uint16_t offset = 0;
     while (remind > 0) {
         uint16_t count = 0;
-        uint16_t item_size = 0;// unit byte
+        uint16_t item_size = 0; // unit byte
         type_kind kind;
         if (remind >= QWORD) {
             kind = TYPE_UINT64;
@@ -193,22 +252,22 @@ static void linear_default_empty_stack(module_t *m, lir_operand_t *target, uint6
     }
 }
 
-static lir_operand_t *linear_default_arr(module_t *m, type_t t, lir_operand_t *target) {
+static lir_operand_t *linear_default_arr(module_t *m, type_t arrary_type, lir_operand_t *target) {
     if (!target) {
-        target = temp_var_operand_with_alloc(m, t);
+        target = temp_var_operand_with_alloc(m, arrary_type);
     }
-    uint64_t element_size = type_sizeof(t.array->element_type);
+    uint64_t element_size = type_sizeof(arrary_type.array->element_type);
 
-    if (kind_in_heap(t.array->element_type.kind)) {
-        for (int i = 0; i < t.array->length; i++) {
+    if (kind_in_heap(arrary_type.array->element_type.kind)) {
+        for (int i = 0; i < arrary_type.array->length; i++) {
             // 基于 target 生成
-            lir_operand_t *item_target = indirect_addr_operand(m, t.array->element_type, target,
+            lir_operand_t *item_target = indirect_addr_operand(m, arrary_type.array->element_type, target,
                                                                i * element_size);
 
-            linear_default_operand(m, t.array->element_type, item_target);
+            linear_default_operand(m, arrary_type.array->element_type, item_target);
         }
     } else {
-        linear_default_empty_stack(m, target, type_sizeof(t));
+        linear_default_empty_stack(m, target, 0, type_sizeof(arrary_type));
     }
     return target;
 }
@@ -786,7 +845,7 @@ static void linear_ia_ptr_assign(module_t *m, ast_assign_stmt_t *stmt) {
     // *ptr = 12
     lir_operand_t *dst;
     if (is_stack_ref_big_type(stmt->left.type)) {
-        dst = ptr_operand;// super_move 会自动进行全尺寸移动
+        dst = ptr_operand; // super_move 会自动进行全尺寸移动
     } else {
         dst = indirect_addr_operand(m, stmt->left.type, ptr_operand, 0);
     }
@@ -805,7 +864,7 @@ static void linear_ident_assign(module_t *m, ast_assign_stmt_t *stmt) {
     // 右值可能是一个 struct_new, 但是这又有什么影响呢，你必须创造新的空间？
     lir_operand_t *src = linear_expr(m, stmt->right, NULL);
 
-    lir_operand_t *dst = linear_ident(m, stmt->left, NULL);// ident
+    lir_operand_t *dst = linear_ident(m, stmt->left, NULL); // ident
 
     linear_super_move(m, stmt->left.type, dst, src);
 }
@@ -1030,7 +1089,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
 
     // cursor 初始值
     lir_operand_t *cursor_operand = unique_var_operand(m, type_kind_new(TYPE_INT), ITERATOR_CURSOR);
-    OP_PUSH(lir_op_move(cursor_operand, int_operand(-1)));// cursor 初始值 = --
+    OP_PUSH(lir_op_move(cursor_operand, int_operand(-1))); // cursor 初始值 = --
 
     char *for_start_ident = label_ident_with_unique(m, FOR_ITERATOR_IDENT);
     char *for_update_ident = str_connect(for_start_ident, LABEL_UPDATE_SUFFIX);
@@ -1055,7 +1114,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
         first_ref = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
         OP_PUSH(lir_op_move(first_ref, first_target));
     } else {
-        OP_PUSH(lir_op_nop_def(first_target));// var_decl 没有进行初始化，所以需要进行一下 def 初始化
+        OP_PUSH(lir_op_nop_def(first_target)); // var_decl 没有进行初始化，所以需要进行一下 def 初始化
         first_ref = lea_operand_pointer(m, first_target);
     }
 
@@ -1096,7 +1155,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     linear_body(m, ast->body);
 
     // goto for start
-    OP_PUSH(lir_op_bal(for_start_label->output));// 重新进行迭代的计算
+    OP_PUSH(lir_op_bal(for_start_label->output)); // 重新进行迭代的计算
     OP_PUSH(for_end_label);
 
     stack_pop(m->current_closure->continue_labels);
@@ -1425,7 +1484,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
                     break;
                 }
             }
-            assert(index != -1);// infer 已经校验过了
+            assert(index != -1); // infer 已经校验过了
 
             // linear select left get union target
             lir_operand_t *interface_target = linear_expr(m, select->left, NULL);
@@ -1831,33 +1890,28 @@ static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_oper
     lir_operand_t *array_target = linear_expr(m, ast->left, NULL);
     lir_operand_t *index_target = linear_expr(m, ast->index, NULL);
 
-    lir_operand_t *array_target_ref = temp_var_operand(m, type_ptrof(ast->left.type));
     if (array_target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
         assert(false);
         // linear_ident 处理了 global symbol var, 不会再有 global symbol var 返回了
         // 加载 array symbol 的地址到 array_target_ref 中
         // 这里明确 symbol 是 array 所以才能这么做
         //        OP_PUSH(lir_op_lea(array_target_ref, array_target));
-    } else {
-        OP_PUSH(lir_op_move(array_target_ref, array_target));
     }
 
-
-    uint64_t rtype_hash = ct_find_rtype_hash(ast->left.type);
+    // 自动解构
+    type_t arr_type = ast->left.type;
     if (ast->left.type.kind == TYPE_PTR || ast->left.type.kind == TYPE_RAWPTR) {
-        rtype_hash = ct_find_rtype_hash(ast->left.type.ptr->value_type);
+        arr_type = ast->left.type.ptr->value_type;
     }
 
-    lir_operand_t *item_target = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
-    push_rt_call(m, RT_CALL_ARRAY_ELEMENT_ADDR, item_target, 3, array_target_ref, int_operand(rtype_hash),
-                 index_target);
+    lir_operand_t *item_target = linear_inline_arr_element_addr(m, array_target, index_target, arr_type);
+
+    //    push_rt_call(m, RT_CALL_ARRAY_ELEMENT_ADDR, item_target, 3, array_target, int_operand(rtype_hash),
+    //                 index_target);
 
     if (!is_stack_ref_big_type(expr.type)) {
         item_target = indirect_addr_operand(m, expr.type, item_target, 0);
     }
-
-    // 可能会存在数组越界的错误处理
-    linear_has_panic(m);
 
     // 如果此时 list 发生了 grow, 则该地址会变成一个无效的脏地址，比如 grow(list).foo = list[1]
     // 所以对于 struct 的 access,这里的 target 不应该为 null
@@ -1887,11 +1941,10 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
     lir_operand_t *target_ref = temp_var_operand(m, type_ptrof(type_array));
     OP_PUSH(lir_op_move(target_ref, target));
 
-    // TODO 数组不能这么初始化, 应该直接整体初始化为 0， 然后再分别赋值
+    int64_t offset = 0;
     for (int i = 0; i < type_array.array->length; ++i) {
-        lir_operand_t *item_target = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
-        push_rt_call(m, RT_CALL_ARRAY_ELEMENT_ADDR, item_target, 3, target_ref, int_operand(rtype_hash),
-                     int_operand(i));
+        lir_operand_t *item_target = linear_inline_arr_element_addr(m, target_ref, int_operand(i), type_array);
+
         if (!is_stack_ref_big_type(type_array.array->element_type)) {
             item_target = indirect_addr_operand(m, type_array.array->element_type, item_target, 0);
         }
@@ -1900,7 +1953,7 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
             ast_expr_t *item_expr = ct_list_value(ast->elements, i);
             linear_expr(m, *item_expr, item_target);
         } else {
-            // gen zero value, to item_target
+            // gen zero value, to item_target, 如果剩余类型时 vec 等类型，则会产生 vec_new 进行 default 填充
             linear_default_operand(m, type_array.array->element_type, item_target);
         }
     }
@@ -2198,7 +2251,7 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
 static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     // 调用 runtime_malloc 进行内存申请，并将申请的结果返回，其中返回的类型是一个 pointer 结构
     if (!target) {
-        target = temp_var_operand(m, expr.type);// 必定是一个指针类型
+        target = temp_var_operand(m, expr.type); // 必定是一个指针类型
     }
 
     ast_new_expr_t *new_expr = expr.value;
@@ -2363,7 +2416,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             OP_PUSH(lir_op_move(target, src_operand));
         } else {
             lir_operand_t *output_rtype = int_operand(ct_find_rtype_hash(as_expr->target_type));
-            OP_PUSH(lir_op_nop_def(target));// 如何清理多余的 nop 指令？
+            OP_PUSH(lir_op_nop_def(target)); // 如何清理多余的 nop 指令？
             lir_operand_t *output_ref = lea_operand_pointer(m, target);
             lir_operand_t *input_ref = lea_operand_pointer(m, src_operand);
 
@@ -2383,7 +2436,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
     // single type to union type
     if (as_expr->target_type.kind == TYPE_UNION) {
-        assert(as_expr->src.type.kind != TYPE_UNION);// in infer casting
+        assert(as_expr->src.type.kind != TYPE_UNION); // in infer casting
         lir_operand_t *union_value;
         if (is_stack_ref_big_type(as_expr->src.type)) {
             union_value = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
@@ -2615,7 +2668,7 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
                 } else {
                     // eq expr
                     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
-                    binary_expr->operator= AST_OP_EE;// ==
+                    binary_expr->operator= AST_OP_EE; // ==
                     binary_expr->left = *cond_expr;
                     binary_expr->right = *subject_new_expr;
 
@@ -2636,7 +2689,7 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
         // 只要运行了 exec， 就直接结束 case 而不是继续执行。
         OP_PUSH(lir_op_bal(match_end->output));
         // default 逻辑, 不需要添加 handle end, 其必定会进入 handle_expr, 然后退出 match
-        OP_PUSH(handle_end);// case_end
+        OP_PUSH(handle_end); // case_end
     }
 
     match_end->line = m->current_line + 1;
@@ -2698,7 +2751,7 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     // catch 中总是会对 target 进行赋值，或者直接退出当前函数，所以不需要进行 default operand 处理
     if (has_ret && has_default_operand(m, expr.type)) {
         linear_default_operand(m, expr.type, target);
-        has_ret = false;// 设置了默认值之后可以不进行 break check
+        has_ret = false; // 设置了默认值之后可以不进行 break check
     } else {
         OP_PUSH(lir_op_nop_def(target));
     }
@@ -2981,7 +3034,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 
     if (!fndef->jit_closure_name) {
         if (expr.target_type.kind == 0) {
-            return NULL;// 没有表达式需要接收值
+            return NULL; // 没有表达式需要接收值
         }
 
         OP_PUSH(lir_op_lea(target, fn_symbol_operand));
@@ -3265,8 +3318,8 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true)));
 
     OP_PUSH(lir_op_label(c->error_label, true));
-    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));  // 方便 return check
-    OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true)));// bal end
+    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL)); // 方便 return check
+    OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true))); // bal end
 
     OP_PUSH(lir_op_label(c->end_label, true));
 

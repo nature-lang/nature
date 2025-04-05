@@ -127,7 +127,7 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' panic: 'index out of vec [8] with length 4' at nature-test/main.n:3:18
+coroutine 'main' panic: 'index out of range [8] with length 4' at nature-test/main.n:3:18
 
 === test_vec_assign_error
 --- main.n
@@ -137,7 +137,7 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' panic: 'index out of vec [8] with length 4' at nature-test/main.n:3:16
+coroutine 'main' panic: 'index out of range [8] with length 4' at nature-test/main.n:3:16
 
 === test_catch_vec_assign
 --- main.n
@@ -151,7 +151,7 @@ fn main():void! {
 }
 
 --- output.txt
-catch vec error: index out of vec [8] with length 4
+catch vec error: index out of range [8] with length 4
 
 === test_catch_vec_access
 --- main.n
@@ -165,7 +165,7 @@ fn main():void! {
 }
 
 --- output.txt
-catch vec error: index out of vec [8] with length 4
+catch vec error: index out of range [8] with length 4
 12
 
 === test_global_vec
@@ -192,4 +192,53 @@ fn main():void! {
 }
 
 --- output.txt
+8
+
+=== test_arr
+--- main.n
+fn main():void! {
+    arr<u8, 4> list = [1, 2, 3, 4]
+    list[2] = list[3] * 2
+    println(list[2])
+}
+
+--- output.txt
+8
+
+=== test_arr_index
+--- main.n
+arr<i8,4> arr1 = [1, 2, 3, 4]
+
+fn main():void! {
+    i32 idx = 2
+    arr1[idx] = arr1[idx] *2
+    println(arr1[idx])
+
+    arr<i8,4> arr2 = [1, 2, 3, 4]
+    u8 uid = 3
+    arr1[uid] = arr1[uid] *2
+    println(arr1[uid])
+}
+
+--- output.txt
+6
+8
+
+=== test_vec_index
+--- main.n
+var arr1 = [1, 2, 3, 4]
+
+fn main():void! {
+    i32 idx = 2
+    arr1[idx] = arr1[idx] *2
+    println(arr1[idx])
+
+    vec<i8> arr2 = [1, 2, 3, 4]
+    u8 uid = 3
+    arr1[uid] = arr1[uid] *2
+    println(arr1[uid])
+}
+
+--- output.txt
+6
 8

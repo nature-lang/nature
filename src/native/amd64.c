@@ -1,10 +1,11 @@
 #include "amd64.h"
-#include "src/register/arch/amd64.h"
 #include "src/debug/debug.h"
+#include "src/register/arch/amd64.h"
 #include <assert.h>
 
 static char *asm_setcc_integer_trans[] = {
         [LIR_OPCODE_SLT] = "setl",
+        [LIR_OPCODE_USLT] = "setb",
         [LIR_OPCODE_SLE] = "setle",
         [LIR_OPCODE_SGT] = "setg",
         [LIR_OPCODE_SGE] = "setge",
@@ -201,7 +202,7 @@ static amd64_asm_operand_t *lir_operand_trans_amd64(closure_t *c, lir_op_t *op, 
  */
 static slice_t *amd64_native_mov(closure_t *c, lir_op_t *op) {
     assert(op->output->assert_type != LIR_OPERAND_VAR && op->first->assert_type != LIR_OPERAND_VAR);
-//    assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
+    //    assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
     slice_t *operations = slice_new();
     amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
     amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
@@ -262,8 +263,7 @@ static slice_t *amd64_native_clv(closure_t *c, lir_op_t *op) {
     lir_operand_t *output = op->output;
     assert(output->assert_type == LIR_OPERAND_REG ||
            output->assert_type == LIR_OPERAND_STACK ||
-           output->assert_type == LIR_OPERAND_INDIRECT_ADDR
-    );
+           output->assert_type == LIR_OPERAND_INDIRECT_ADDR);
     assert(output);
 
     slice_t *operations = slice_new();
@@ -289,7 +289,7 @@ static slice_t *amd64_native_clv(closure_t *c, lir_op_t *op) {
     }
 
     if (output->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-        lir_indexed_addr_t *temp = output->value;
+        lir_indirect_addr_t *temp = output->value;
         uint16_t size = type_sizeof(temp->type);
 
         assertf(size <= QWORD, "only can clv size <= %d, actual=%d", QWORD, size);
@@ -686,7 +686,7 @@ static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
         slice_push(operations, AMD64_ASM("sub", REG(rsp), UINT32(offset)));
     }
 
-//    c->stack_offset = offset;
+    //    c->stack_offset = offset;
     // gc_bits 补 0
     if (c->call_stack_max_offset) {
         uint16_t bits_start = c->stack_offset / POINTER_SIZE;
@@ -802,13 +802,15 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_SEE] = amd64_native_scc,
         [LIR_OPCODE_SNE] = amd64_native_scc,
 
+        [LIR_OPCODE_USLT] = amd64_native_scc,
+
         [LIR_OPCODE_MOVE] = amd64_native_mov,
         [LIR_OPCODE_LEA] = amd64_native_lea,
         [LIR_OPCODE_FN_BEGIN] = amd64_native_fn_begin,
         [LIR_OPCODE_FN_END] = amd64_native_fn_end,
 
         // 伪指令，直接忽略即可
-//        [LIR_OPCODE_ENV_CLOSURE] = amd64_native_skip,
+        //        [LIR_OPCODE_ENV_CLOSURE] = amd64_native_skip,
 };
 
 

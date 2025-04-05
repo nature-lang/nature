@@ -9,7 +9,7 @@
 // 等待 1000ms 的时间，如果无法抢占则 deadlock
 #define PREEMPT_TIMEOUT 1000
 
-void wait_sysmon() {
+static void wait_sysmon() {
     // 每 50 * 10ms 进行 eval 一次
     int gc_eval_count = WAIT_MID_TIME;
 
@@ -111,14 +111,14 @@ void wait_sysmon() {
                 // 进入到允许抢占状态
                 if (p->status == P_STATUS_RUNNING) {
                     DEBUGF(
-                        "[wait_sysmon.share.thread_locker] p_index=%d(%lu), p_status=%d co=%p in running, use count=%d",
-                        p->index,
-                        (uint64_t) p->thread_id, p->status, p->coroutine, count);
-                    if (count > 200) {
-                        DEBUGF(
-                            "[wait_sysmon.share.thread_locker] p_index=%d(%lu), p_status=%d co=%p syscall timout use count=%d",
+                            "[wait_sysmon.share.thread_locker] p_index=%d(%lu), p_status=%d co=%p in running, use count=%d",
                             p->index,
                             (uint64_t) p->thread_id, p->status, p->coroutine, count);
+                    if (count > 200) {
+                        DEBUGF(
+                                "[wait_sysmon.share.thread_locker] p_index=%d(%lu), p_status=%d co=%p syscall timout use count=%d",
+                                p->index,
+                                (uint64_t) p->thread_id, p->status, p->coroutine, count);
                     }
                     break;
                 }
@@ -126,9 +126,9 @@ void wait_sysmon() {
                 // 进入到 STW 安全状态
                 if (p->status == P_STATUS_DISPATCH) {
                     RDEBUGF(
-                        "[wait_sysmon.share.thread_locker] p_index=%d(%lu), p_status=%d co=%p change dispatch, will unlock",
-                        p->index,
-                        (uint64_t) p->thread_id, p->status, p->coroutine);
+                            "[wait_sysmon.share.thread_locker] p_index=%d(%lu), p_status=%d co=%p change dispatch, will unlock",
+                            p->index,
+                            (uint64_t) p->thread_id, p->status, p->coroutine);
                     goto SHARE_UNLOCK_NEXT;
                 }
 
@@ -145,9 +145,9 @@ void wait_sysmon() {
 
             // 开始抢占
             DEBUGF(
-                "[wait_sysmon.share.thread_locker] p_index=%d(%lu), p_status=%d co=%p run timeout(%lu ms), will send SIGURG",
-                p->index,
-                (uint64_t) p->thread_id, p->status, p->coroutine, time / 1000 / 1000);
+                    "[wait_sysmon.share.thread_locker] p_index=%d(%lu), p_status=%d co=%p run timeout(%lu ms), will send SIGURG",
+                    p->index,
+                    (uint64_t) p->thread_id, p->status, p->coroutine, time / 1000 / 1000);
 
             // 发送信号强制中断线程
             if (pthread_kill(p->thread_id, SIGURG) != 0) {
@@ -271,9 +271,9 @@ void wait_sysmon() {
 
             if (p->status != P_STATUS_RUNNING && p->status != P_STATUS_TPLCALL && p->status != P_STATUS_RTCALL) {
                 DEBUGF(
-                    "[wait_sysmon.solo.thread_locker] p->status=%d, not running/tplcall/rtcall, p_index=%d, goto unlock",
-                    p->status,
-                    p->index);
+                        "[wait_sysmon.solo.thread_locker] p->status=%d, not running/tplcall/rtcall, p_index=%d, goto unlock",
+                        p->status,
+                        p->index);
 
                 goto SOLO_UNLOCK_NEXT;
             }
@@ -292,8 +292,8 @@ void wait_sysmon() {
             }
 
             DEBUGF(
-                "[wait_sysmon.solo.thread_locker] p_index=%d run timeout(%lu ms) need assist to safe_point, will exclude rtcall status",
-                p->index, time / 1000 / 1000);
+                    "[wait_sysmon.solo.thread_locker] p_index=%d run timeout(%lu ms) need assist to safe_point, will exclude rtcall status",
+                    p->index, time / 1000 / 1000);
 
             // 禁止 rtcall 状态
             while (true) {
@@ -305,9 +305,9 @@ void wait_sysmon() {
                 // 进入到 STW 安全状态
                 if (p->status == P_STATUS_DISPATCH) {
                     DEBUGF(
-                        "[wait_sysmon.solo.thread_locker] p_index=%d(%lu), p_status=%d co=%p change dispatch, will unlock",
-                        p->index,
-                        (uint64_t) p->thread_id, p->status, p->coroutine);
+                            "[wait_sysmon.solo.thread_locker] p_index=%d(%lu), p_status=%d co=%p change dispatch, will unlock",
+                            p->index,
+                            (uint64_t) p->thread_id, p->status, p->coroutine);
                     goto SOLO_UNLOCK_NEXT;
                 }
 
@@ -315,9 +315,9 @@ void wait_sysmon() {
             }
 
             DEBUGF(
-                "[wait_sysmon.solo.thread_locker] p_index=%d(%lu), p_status=%d co=%p not eq rtcall, will get gc_stw_locker",
-                p->index,
-                (uint64_t) p->thread_id, p->status, p->coroutine);
+                    "[wait_sysmon.solo.thread_locker] p_index=%d(%lu), p_status=%d co=%p not eq rtcall, will get gc_stw_locker",
+                    p->index,
+                    (uint64_t) p->thread_id, p->status, p->coroutine);
 
             // gc_stw_locker 禁止 tplcall -> running
             mutex_lock(&p->gc_stw_locker);
@@ -339,8 +339,8 @@ void wait_sysmon() {
                     p->safe_point = need_stw;
                 }
                 DEBUGF(
-                    "[wait_sysmon.solo.thread_locker] p_index=%d(%lu), p_status=%d co=%p in tplcall, assist to safe point, goto unlock",
-                    p->index, (uint64_t) p->thread_id, p->status, p->coroutine);
+                        "[wait_sysmon.solo.thread_locker] p_index=%d(%lu), p_status=%d co=%p in tplcall, assist to safe point, goto unlock",
+                        p->index, (uint64_t) p->thread_id, p->status, p->coroutine);
                 goto SOLO_UNLOCK_NEXT;
             }
 
@@ -354,9 +354,9 @@ void wait_sysmon() {
             assert(p->status == P_STATUS_RUNNING);
 
             DEBUGF(
-                "[wait_sysmon.solo.thread_locker] p_index=%d(%lu),p_status=%d co=%p running timeout will send SIGURG",
-                p->index,
-                (uint64_t) p->thread_id, p->status, p->coroutine);
+                    "[wait_sysmon.solo.thread_locker] p_index=%d(%lu),p_status=%d co=%p running timeout will send SIGURG",
+                    p->index,
+                    (uint64_t) p->thread_id, p->status, p->coroutine);
 
             if (pthread_kill(p->thread_id, SIGURG) != 0) {
                 assert(false && "error sending SIGURG to thread");
@@ -374,13 +374,7 @@ void wait_sysmon() {
         }
 
         mutex_unlock(&solo_processor_locker);
-        TRACEF("[wait_sysmon.solo] solo_processor_locker unlock");
-
-        // processor exit 主要和 main coroutine 相关，当 main coroutine 退出后，则整个 wait sysmon 进行退出
-        if (processor_get_exit()) {
-            RDEBUGF("[wait_sysmon] processor need exit, will exit");
-            break;
-        }
+        DEBUGF("[wait_sysmon.solo] solo_processor_locker unlock");
 
         // - GC 判断 (每 100ms 进行一次)
         if (gc_eval_count <= 0) {
@@ -394,4 +388,13 @@ void wait_sysmon() {
     }
 
     RDEBUGF("[wait_sysmon] wait sysmon exit success");
+}
+
+void wait_sysmond() {
+    uv_thread_t thread_id; // 当前 processor 绑定的 pthread 线程
+
+    if (uv_thread_create(&thread_id, wait_sysmon, NULL) != 0) {
+        assert(false && "pthread_create failed %s");
+    }
+    DEBUGF("[wait_sysmond] sysmon thread %ld create success", thread_id)
 }

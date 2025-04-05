@@ -1,0 +1,264 @@
+import tetris.raylib as ray
+import time
+import fmt
+
+fn logf(string format, ...[any] args) {
+    var msg = fmt.sprintf(format, ...args)
+    var t = time.now()
+    fmt.printf('%v - %v\n', t.ms_timestamp(), msg)
+}
+
+
+i32 SQUARE_SIZE = 20
+i32 GRID_HORIZONTAL_SIZE = 12
+i32 GRID_VERTICAL_SIZE = 20
+i32 LATERAL_SPEED = 10
+i32 TURNING_SPEED = 12
+i32 FAST_FALL_AWAIT_COUNTER = 30
+i32 FADING_TIME = 33
+
+i32 GRIDSQUARE_EMPTY = 0
+i32 GRIDSQUARE_MOVING = 1
+i32 GRIDSQUARE_FULL = 2
+i32 GRIDSQUARE_BLOCK = 3
+i32 GRIDSQUARE_FADING = 4
+
+i32 screen_width = 800
+i32 screen_height = 450
+
+var game_over = false
+var pause = false
+
+// matrices w: 12 * h: 20
+arr<arr<i32,20>,12> grid = []
+arr<arr<i32,4>,4> piece = []
+arr<arr<i32,4>,4> incoming_piece = []
+
+i32 piece_position_x = 0
+i32 piece_position_y = 0
+
+var fading_color = ray.color_t{}
+
+var begin_play = true
+var piece_active = false
+var detection = false
+var line_to_delete = false
+
+i32 level = 1
+i32 lines = 0
+
+i32 gravity_movement_counter = 0
+i32 lateral_movement_counter = 0
+i32 turn_movement_counter = 0
+i32 fast_fall_movement_counter = 0
+
+i32 fade_line_counter = 0
+
+// based on level
+i32 gravity_speed = 30
+
+fn init_game() {
+    level = 1
+    lines = 0
+
+    fading_color = ray.GRAY
+
+    piece_position_x = 0
+    piece_position_y = 0
+
+    pause = false
+
+    begin_play = true
+    piece_active = false
+    detection = false
+    line_to_delete = false
+
+    // counters
+    gravity_movement_counter = 0
+    lateral_movement_counter = 0
+    turn_movement_counter = 0
+    fast_fall_movement_counter = 0
+
+    fade_line_counter = 0
+    gravity_speed = 30
+
+    for i32 i = 0; i < GRID_HORIZONTAL_SIZE; i+=1 {
+        for i32 j = 0; j < GRID_VERTICAL_SIZE; j+=1 {
+            if (j == GRID_VERTICAL_SIZE - 1) || (i == 0) || (i == GRID_HORIZONTAL_SIZE - 1) {
+                grid[i][j] = GRIDSQUARE_BLOCK
+            } else {
+                grid[i][j] = GRIDSQUARE_EMPTY
+            }
+        }
+    }
+
+    for i32 i = 0; i < 4; i+=1 {
+        for i32 j = 0; j < 4; j+=1 {
+            incoming_piece[i][j] = GRIDSQUARE_EMPTY
+        }
+    }
+}
+
+fn update_game() {
+    if game_over {
+        if ray.is_key_pressed(ray.KEY_ENTER) {
+            init_game()
+            game_over = false
+        }
+        return
+    }
+
+    if ray.is_key_pressed(ray.KEY_P) {
+        pause = !pause
+    }
+
+    if pause {
+        return
+    }
+
+    if !line_to_delete {
+        if !piece_active {
+            // 获取新的方块
+            piece_active = create_piece()
+
+            // 在开始快速下落前留一点时间
+            fast_fall_movement_counter = 0
+        } else {    // 方块下落中
+            // 更新计数器
+            fast_fall_movement_counter += 1
+            gravity_movement_counter += 1
+            lateral_movement_counter += 1
+            turn_movement_counter += 1
+
+            // 确保在按下按键的这一帧移动
+            if ray.is_key_pressed(ray.KEY_LEFT) || ray.is_key_pressed(ray.KEY_RIGHT) {
+                lateral_movement_counter = LATERAL_SPEED
+            }
+            if ray.is_key_pressed(ray.KEY_UP) {
+                turn_movement_counter = TURNING_SPEED
+            }
+
+            // 下落
+            if ray.is_key_down(ray.KEY_DOWN) && (fast_fall_movement_counter >= FAST_FALL_AWAIT_COUNTER) {
+                // 确保方块在这一帧下落
+                gravity_movement_counter += gravity_speed
+            }
+
+            if gravity_movement_counter >= gravity_speed {
+                // 基本下落移动
+                check_detection(&detection)
+
+                // 检查方块是否与其他方块或边界碰撞
+                resolve_falling_movement(&detection, &piece_active)
+
+                // 检查是否完成一行，如果是，擦除该行并将上面的行下拉
+                check_completion(&line_to_delete)
+
+                gravity_movement_counter = 0
+            }
+
+            // 根据玩家意愿横向移动
+            if lateral_movement_counter >= LATERAL_SPEED {
+                // 更新横向移动，如果成功，重置横向计数器
+                if !resolve_lateral_movement() {
+                    lateral_movement_counter = 0
+                }
+            }
+
+            // 根据玩家意愿旋转方块
+            if turn_movement_counter >= TURNING_SPEED {
+                // 更新旋转移动并重置旋转计数器
+                if resolve_turn_movement() {
+                    turn_movement_counter = 0
+                }
+            }
+        }
+
+        // 游戏结束逻辑
+        for i32 j = 0; j < 2; j += 1 {
+            for i32 i = 1; i < GRID_HORIZONTAL_SIZE - 1; i += 1 {
+                if grid[i][j] == GRIDSQUARE_FULL {
+                    game_over = true
+                }
+            }
+        }
+    } else {
+        // 删除行时的动画
+        fade_line_counter += 1
+
+        if fade_line_counter % 8 < 4 {
+            fading_color = ray.MAROON
+        } else {
+            fading_color = ray.GRAY
+        }
+
+        if fade_line_counter >= FADING_TIME {
+            i32 deleted_lines = 0
+            deleted_lines = delete_complete_lines()
+            fade_line_counter = 0
+            line_to_delete = false
+
+            lines += deleted_lines
+        }
+    }
+    
+}
+
+fn draw_game() {
+    // TODO
+}
+
+fn update_draw_frame() {
+    update_game()
+    draw_game()
+}
+
+fn create_piece():bool {
+    // TODO
+    return false
+}
+
+fn get_randompiece():void {
+    // TODO
+}
+
+fn resolve_falling_movement(rawptr<bool> detection, rawptr<bool> piece_active) {
+    // TODO
+}
+
+fn resolve_lateral_movement():bool {
+    // TODO
+    return false
+}
+
+fn resolve_turn_movement():bool {
+    // TODO
+    return false
+}
+
+fn check_detection(rawptr<bool> detection) {
+    // TODO
+}
+
+fn check_completion(rawptr<bool> line_to_delete) {
+    // TODO
+}
+
+fn delete_complete_lines():i32 {
+    // TODO
+    return 0
+}
+
+
+fn main() {
+    logf('game start')
+    ray.init_window(800, 450, 'raylib [core] example - basic window'.ref())
+    for !ray.window_should_close() {
+        ray.begin_drawing()
+        ray.clear_background(ray.RAYWHITE)
+        ray.draw_text('Congrats! You created your first window!'.ref(), 190, 200, 20, ray.LIGHTGRAY)
+        ray.end_drawing()
+    }
+
+    ray.close_window()
+}

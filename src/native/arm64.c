@@ -248,6 +248,72 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
     return NULL;
 }
 
+static slice_t *arm64_native_trunc(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
+
+    arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
+    arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
+
+    int64_t size = op->output->size;
+    assert(size > 0);
+
+    // 先将源操作数移动到目标寄存器
+    slice_push(operations, ARM64_ASM(R_MOV, result, source));
+
+    // 根据目标寄存器的大小应用适当的掩码进行截断
+    if (size == BYTE) {
+        // 截断为 8 位 (1 字节)
+        slice_push(operations, ARM64_ASM(R_AND, result, result, ARM64_IMM(0xFF)));
+    } else if (size == WORD) {
+        // 截断为 16 位 (2 字节)
+        slice_push(operations, ARM64_ASM(R_AND, result, result, ARM64_IMM(0xFFFF)));
+    } else if (size == DWORD) {
+        // 截断为 32 位 (4 字节)
+        // 对于 W 寄存器，高 32 位自动清零，不需要额外的 AND 操作
+        if (result->type == ARM64_ASM_OPERAND_REG && result->reg.size == QWORD) {
+            // 如果是 X 寄存器，需要显式截断高 32 位
+            slice_push(operations, ARM64_ASM(R_AND, result, result, ARM64_IMM(0xFFFFFFFF)));
+        }
+    }
+
+    return operations;
+}
+
+static slice_t *arm64_native_sext(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
+
+    arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
+    arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
+
+    if (source->size == DWORD && result->size == QWORD) {
+        slice_push(operations, ARM64_ASM(R_SXTW, result, source));
+    } else {
+        slice_push(operations, ARM64_ASM(R_MOV, result, source));
+    }
+
+    return operations;
+}
+
+static slice_t *arm64_native_zext(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
+
+    arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
+    arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
+
+    if (source->size == DWORD && result->size == QWORD) {
+        slice_push(operations, ARM64_ASM(R_UXTW, result, source));
+    } else {
+        slice_push(operations, ARM64_ASM(R_MOV, result, source));
+    }
+
+    return operations;
+}
 
 /**
  * op->result must reg
@@ -391,8 +457,8 @@ static slice_t *arm64_native_bal(closure_t *c, lir_op_t *op) {
 static slice_t *arm64_native_clv(closure_t *c, lir_op_t *op) {
     lir_operand_t *output = op->output;
     assert(output->assert_type == LIR_OPERAND_REG ||
-        output->assert_type == LIR_OPERAND_STACK ||
-        output->assert_type == LIR_OPERAND_INDIRECT_ADDR);
+           output->assert_type == LIR_OPERAND_STACK ||
+           output->assert_type == LIR_OPERAND_INDIRECT_ADDR);
     assert(output);
 
     slice_t *operations = slice_new();
@@ -708,6 +774,9 @@ static slice_t *arm64_native_scc(closure_t *c, lir_op_t *op) {
         case LIR_OPCODE_SLT:
             cond = ARM64_COND_LT;
             break;
+        case LIR_OPCODE_USLT:
+            cond = ARM64_COND_LO;
+            break;
         case LIR_OPCODE_SLE:
             cond = ARM64_COND_LE;
             break;
@@ -849,51 +918,55 @@ static slice_t *arm64_native_beq(closure_t *c, lir_op_t *op) {
 
 
 arm64_native_fn arm64_native_table[] = {
-    [LIR_OPCODE_CLR] = arm64_native_clr,
-    [LIR_OPCODE_CLV] = arm64_native_clv,
-    [LIR_OPCODE_NOP] = arm64_native_nop,
-    [LIR_OPCODE_CALL] = arm64_native_call,
-    [LIR_OPCODE_RT_CALL] = arm64_native_call,
-    [LIR_OPCODE_LABEL] = arm64_native_label,
-    [LIR_OPCODE_PUSH] = arm64_native_push,
-    [LIR_OPCODE_RETURN] = arm64_native_nop,
-    [LIR_OPCODE_BREAK] = arm64_native_nop,
-    [LIR_OPCODE_BEQ] = arm64_native_beq,
-    [LIR_OPCODE_BAL] = arm64_native_bal,
+        [LIR_OPCODE_CLR] = arm64_native_clr,
+        [LIR_OPCODE_CLV] = arm64_native_clv,
+        [LIR_OPCODE_NOP] = arm64_native_nop,
+        [LIR_OPCODE_CALL] = arm64_native_call,
+        [LIR_OPCODE_RT_CALL] = arm64_native_call,
+        [LIR_OPCODE_LABEL] = arm64_native_label,
+        [LIR_OPCODE_PUSH] = arm64_native_push,
+        [LIR_OPCODE_RETURN] = arm64_native_nop,
+        [LIR_OPCODE_BREAK] = arm64_native_nop,
+        [LIR_OPCODE_BEQ] = arm64_native_beq,
+        [LIR_OPCODE_BAL] = arm64_native_bal,
 
-    // 一元运算符
-    [LIR_OPCODE_NEG] = arm64_native_neg,
+        // 一元运算符
+        [LIR_OPCODE_NEG] = arm64_native_neg,
 
-    // 位运算
-    [LIR_OPCODE_XOR] = arm64_native_xor,
-    [LIR_OPCODE_NOT] = arm64_native_not,
-    [LIR_OPCODE_OR] = arm64_native_or,
-    [LIR_OPCODE_AND] = arm64_native_and,
-    [LIR_OPCODE_SHR] = arm64_native_shift,
-    [LIR_OPCODE_SHL] = arm64_native_shift,
+        // 位运算
+        [LIR_OPCODE_XOR] = arm64_native_xor,
+        [LIR_OPCODE_NOT] = arm64_native_not,
+        [LIR_OPCODE_OR] = arm64_native_or,
+        [LIR_OPCODE_AND] = arm64_native_and,
+        [LIR_OPCODE_SHR] = arm64_native_shift,
+        [LIR_OPCODE_SHL] = arm64_native_shift,
 
-    // 算数运算
-    [LIR_OPCODE_ADD] = arm64_native_add,
-    [LIR_OPCODE_SUB] = arm64_native_sub,
-    [LIR_OPCODE_DIV] = arm64_native_div,
-    [LIR_OPCODE_MUL] = arm64_native_mul,
-    [LIR_OPCODE_REM] = arm64_native_rem,
+        // 算数运算
+        [LIR_OPCODE_ADD] = arm64_native_add,
+        [LIR_OPCODE_SUB] = arm64_native_sub,
+        [LIR_OPCODE_DIV] = arm64_native_div,
+        [LIR_OPCODE_MUL] = arm64_native_mul,
+        [LIR_OPCODE_REM] = arm64_native_rem,
 
-    // 逻辑相关运算符
-    [LIR_OPCODE_SGT] = arm64_native_scc,
-    [LIR_OPCODE_SGE] = arm64_native_scc,
-    [LIR_OPCODE_SLT] = arm64_native_scc,
-    [LIR_OPCODE_SLE] = arm64_native_scc,
-    [LIR_OPCODE_SEE] = arm64_native_scc,
-    [LIR_OPCODE_SNE] = arm64_native_scc,
+        // 逻辑相关运算符
+        [LIR_OPCODE_SGT] = arm64_native_scc,
+        [LIR_OPCODE_SGE] = arm64_native_scc,
+        [LIR_OPCODE_SLT] = arm64_native_scc,
+        [LIR_OPCODE_USLT] = arm64_native_scc,
+        [LIR_OPCODE_SLE] = arm64_native_scc,
+        [LIR_OPCODE_SEE] = arm64_native_scc,
+        [LIR_OPCODE_SNE] = arm64_native_scc,
 
-    [LIR_OPCODE_MOVE] = arm64_native_mov,
-    [LIR_OPCODE_LEA] = arm64_native_lea,
-    [LIR_OPCODE_FN_BEGIN] = arm64_native_fn_begin,
-    [LIR_OPCODE_FN_END] = arm64_native_fn_end,
+        [LIR_OPCODE_MOVE] = arm64_native_mov,
+        [LIR_OPCODE_LEA] = arm64_native_lea,
+        [LIR_OPCODE_ZEXT] = arm64_native_zext,
+        [LIR_OPCODE_SEXT] = arm64_native_sext,
+        [LIR_OPCODE_TRUNC] = arm64_native_trunc,
+        [LIR_OPCODE_FN_BEGIN] = arm64_native_fn_begin,
+        [LIR_OPCODE_FN_END] = arm64_native_fn_end,
 
-    // 伪指令，直接忽略即可
-    //        [LIR_OPCODE_ENV_CLOSURE] = arm64_native_skip,
+        // 伪指令，直接忽略即可
+        //        [LIR_OPCODE_ENV_CLOSURE] = arm64_native_skip,
 };
 
 

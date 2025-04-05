@@ -198,8 +198,8 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
     lir_opcode_t op_code = op->code;
     lir_operand_t *result_operand = ax_operand;
     if (op->code == LIR_OPCODE_REM) {
-        op_code = LIR_OPCODE_DIV;   // rem 也是基于 div 计算得到的
-        result_operand = dx_operand;// 余数固定寄存器
+        op_code = LIR_OPCODE_DIV; // rem 也是基于 div 计算得到的
+        result_operand = dx_operand; // 余数固定寄存器
     }
 
     // 64位操作系统中寄存器大小当然只有64位，因此，idiv使用rdx:rax作为被除数
@@ -279,7 +279,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (op->code == LIR_OPCODE_MOVE && !lir_can_mov(op)) {
+        if (lir_op_like_move(op) && !lir_can_mov(op)) {
             op->first = amd64_convert_first_to_temp(c, operations, op->first);
             linked_push(operations, op);
             continue;

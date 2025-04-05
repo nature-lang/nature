@@ -26,6 +26,8 @@ void cmd_entry(int argc, char **argv) {
             {"archive", no_argument,       NULL, 0},
             {"output",  required_argument, NULL, 'o'},
             {"target",  required_argument, NULL, 1},
+            {"ld",      required_argument, NULL, 2},
+            {"ldflags", required_argument, NULL, 3},
             {NULL, 0,                      NULL, 0}};
 
     int option_index = 0;
@@ -94,6 +96,16 @@ void cmd_entry(int argc, char **argv) {
             case 0: {
                 assert(strcmp(long_options[option_index].name, "archive") == 0);
                 is_archive = true;
+                break;
+            }
+            case 2: {
+                // 处理 --ld 参数
+                strcpy(USE_LD, optarg);
+                break;
+            }
+            case 3: {
+                // 处理 --ldflags 参数
+                strcpy(LDFLAGS, optarg);
                 break;
             }
             default:

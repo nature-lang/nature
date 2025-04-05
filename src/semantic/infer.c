@@ -74,7 +74,7 @@ static void generics_constraints_check(module_t *m, ast_generics_constraints *co
         if (constraints->elements->length == 1) {
             if (constraint->kind == TYPE_INTERFACE) {
                 constraints->and = true;
-            } else if (constraint->kind != TYPE_UNION) {// or 表示单个类型约束？那 union 呢？怎么 check, 怎么约束？
+            } else if (constraint->kind != TYPE_UNION) { // or 表示单个类型约束？那 union 呢？怎么 check, 怎么约束？
                 constraints->or = true;
             }
         }
@@ -98,7 +98,7 @@ static void generics_constraints_check(module_t *m, ast_generics_constraints *co
         for (int i = 0; i < constraints->elements->length; ++i) {
             type_t *t = ct_list_value(constraints->elements, i);
             if (type_compare(*t, *src, NULL)) {
-                return;// 验证成功
+                return; // 验证成功
             }
         }
 
@@ -122,7 +122,7 @@ static void generics_constraints_check(module_t *m, ast_generics_constraints *co
             assert(temp_target_type.ident);
 
             symbol_t *s = symbol_table_get(temp_target_type.ident);
-            if (!s) {// maybe builtin type
+            if (!s) { // maybe builtin type
                 if (interface_type->interface->elements->length > 0) {
                     INFER_ASSERTF(false, "type '%s' not impl '%s' interface", temp_target_type.ident,
                                   interface_type->ident);
@@ -1063,7 +1063,7 @@ static type_t infer_async(module_t *m, ast_expr_t *expr, type_t target_type) {
 
     // 如果原有的 go xxx() 没有参数和返回值，则直接使用原有版本的 origin call 传递给 async, 不需要包裹
     if (co_expr->return_type.kind == TYPE_VOID && co_expr->origin_call->args->length == 0) {
-        first_arg = co_expr->origin_call->left;// 直接使用 left call fn ident, 而不是使用闭包
+        first_arg = co_expr->origin_call->left; // 直接使用 left call fn ident, 而不是使用闭包
         first_arg.type.fn->is_errable = true;
 
         // 清空两个 fn body, 避免 infer void 异常
@@ -1095,7 +1095,7 @@ static type_t infer_async(module_t *m, ast_expr_t *expr, type_t target_type) {
     call_expr->left = *ast_ident_expr(expr->line, expr->column, BUILTIN_CALL_ASYNC);
 
     call_expr->args = ct_list_new(sizeof(ast_expr_t));
-    ct_list_push(call_expr->args, &first_arg);// ast_fndef
+    ct_list_push(call_expr->args, &first_arg); // ast_fndef
     ct_list_push(call_expr->args, co_expr->flag_expr);
 
     // 泛型参数
@@ -1155,7 +1155,7 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
 
     stack_push(m->current_fn->break_target_types, &target_type);
 
-    table_t *union_table = table_new();// key is hash
+    table_t *union_table = table_new(); // key is hash
 
     bool has_default = false;
 
@@ -1210,7 +1210,7 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
                     }
                 }
 
-                break;// union completed
+                break; // union completed
             }
 
             ANALYZER_ASSERTF(has_default, "match expression lacks a default case '_'")
@@ -1379,7 +1379,7 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
     if (symbol->type == SYMBOL_VAR) {
         ast_var_decl_t *symbol_var = symbol->ast_value;
 
-        symbol_var->type = reduction_type(m, symbol_var->type);// 对全局符号表中的类型进行类型还原
+        symbol_var->type = reduction_type(m, symbol_var->type); // 对全局符号表中的类型进行类型还原
         return symbol_var->type;
     }
 
@@ -1403,14 +1403,14 @@ static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type) {
     ast_vec_new_t *vec_new = expr->value;
 
     if (target_type.kind == TYPE_ARR) {
-        expr->assert_type = AST_EXPR_ARRAY_NEW;// 直接进行表达式类型的改写(vec_new 和 array_new 同构,所以可以这么做)
+        expr->assert_type = AST_EXPR_ARRAY_NEW; // 直接进行表达式类型的改写(vec_new 和 array_new 同构,所以可以这么做)
 
         // 严格限定类型为 array
         type_t result = type_kind_new(TYPE_ARR);
         result.status = REDUCTION_STATUS_UNDO;
 
         if (target_type.kind != TYPE_UNKNOWN) {
-            result.ident = target_type.ident;// literal new ident 直接继承
+            result.ident = target_type.ident; // literal new ident 直接继承
             result.ident_kind = target_type.ident_kind;
             result.args = target_type.args;
         }
@@ -1436,7 +1436,7 @@ static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type) {
     type_t result = type_kind_new(TYPE_VEC);
     result.status = REDUCTION_STATUS_UNDO;
     if (target_type.kind != TYPE_UNKNOWN) {
-        result.ident = target_type.ident;// literal new ident 直接继承
+        result.ident = target_type.ident; // literal new ident 直接继承
         result.ident_kind = target_type.ident_kind;
         result.args = target_type.args;
     }
@@ -1502,7 +1502,7 @@ static type_t infer_map_new(module_t *m, ast_map_new_t *map_new, type_t target_t
     result.status = REDUCTION_STATUS_UNDO;
 
     if (target_type.kind != TYPE_UNKNOWN) {
-        result.ident = target_type.ident;// literal new ident 直接继承
+        result.ident = target_type.ident; // literal new ident 直接继承
         result.ident_kind = target_type.ident_kind;
         result.args = target_type.args;
     }
@@ -1549,7 +1549,7 @@ static type_t infer_set_new(module_t *m, ast_set_new_t *set_new, type_t target_t
     type_t result = type_kind_new(TYPE_SET);
     result.status = REDUCTION_STATUS_UNDO;
     if (target_type.kind != TYPE_UNKNOWN) {
-        result.ident = target_type.ident;// literal new ident 直接继承
+        result.ident = target_type.ident; // literal new ident 直接继承
         result.ident_kind = target_type.ident_kind;
         result.args = target_type.args;
     }
@@ -1727,7 +1727,8 @@ static type_t infer_access_expr(module_t *m, ast_expr_t *expr) {
     }
 
     if (left_type.kind == TYPE_ARR) {
-        type_t key_type = infer_right_expr(m, &access->key, type_kind_new(TYPE_INT));
+        type_t key_type = infer_right_expr(m, &access->key, type_integer_t_new());
+
 
         ast_array_access_t *array_access = NEW(ast_array_access_t);
 
@@ -1748,7 +1749,7 @@ static type_t infer_access_expr(module_t *m, ast_expr_t *expr) {
 
         type_tuple_t *type_tuple = left_type.tuple;
 
-        ast_literal_t *index_literal = access->key.value;// 读取 index 的值
+        ast_literal_t *index_literal = access->key.value; // 读取 index 的值
         INFER_ASSERTF(is_integer(index_literal->kind), "tuple index field must int immediate value");
         uint64_t index = atoi(index_literal->value);
 
@@ -1810,7 +1811,7 @@ static type_t infer_select_expr(module_t *m, ast_expr_t *expr) {
 
         // 改写
         ast_struct_select_t *struct_select = NEW(ast_struct_select_t);
-        struct_select->instance = select->left;// 可能是 ptr<struct>/ rawptr<struct> / struct
+        struct_select->instance = select->left; // 可能是 ptr<struct>/ rawptr<struct> / struct
         struct_select->key = select->key;
         struct_select->property = p;
         expr->assert_type = AST_EXPR_STRUCT_SELECT;
@@ -2069,8 +2070,8 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
 
     // self arg 可能在栈上分配，在 call fn 中会导致栈变量读取异常，所以需要确保 self arg 在堆上分配
     marking_heap_alloc(self_arg);
-    if (is_stack_impl(self_arg->type.kind)) {// 基于原始类型计算是否需要 load ptr
-        self_arg = ast_load_addr(self_arg);  // safe_load_addr
+    if (is_stack_impl(self_arg->type.kind)) { // 基于原始类型计算是否需要 load ptr
+        self_arg = ast_load_addr(self_arg); // safe_load_addr
     }
 
     ct_list_push(args, self_arg);
@@ -2435,7 +2436,7 @@ static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
 
     if (is_integer(literal_type.kind) && is_integer(target_kind)) {
         int64_t i = atoll(literal->value);
-        if (integer_range_check(target_kind, i)) {// range 匹配直接返回，否则应该直接报错
+        if (integer_range_check(target_kind, i)) { // range 匹配直接返回，否则应该直接报错
             literal->kind = target_kind;
             return target_type;
         }
@@ -2500,7 +2501,7 @@ static void infer_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, type_t 
 
         ast_expr_t *expr = ct_list_value(destr->elements, i);
 
-        expr->type = *actual_type;// value is var_decl 不需要进行推导了
+        expr->type = *actual_type; // value is var_decl 不需要进行推导了
         if (expr->assert_type == AST_VAR_DECL) {
             // 直接推到出具体类型并回写到 operand 的 var_decl 中
             ast_var_decl_t *var_decl = expr->value;
@@ -2531,7 +2532,7 @@ static type_t infer_tuple_new(module_t *m, ast_tuple_new_t *tuple_new, type_t ta
     type_t result = type_kind_new(TYPE_TUPLE);
 
     if (target_type.kind != TYPE_UNKNOWN) {
-        result.ident = target_type.ident;// literal new ident 直接继承
+        result.ident = target_type.ident; // literal new ident 直接继承
         result.ident_kind = target_type.ident_kind;
         result.args = target_type.args;
     }
@@ -2731,22 +2732,22 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
         case AST_EXPR_IDENT: {
             return infer_ident(m, expr->value);
         }
-        case AST_EXPR_VEC_NEW: {// literal casting
+        case AST_EXPR_VEC_NEW: { // literal casting
             return infer_vec_new(m, expr, target_type);
         }
-        case AST_EXPR_EMPTY_CURLY_NEW: {// literal casting
+        case AST_EXPR_EMPTY_CURLY_NEW: { // literal casting
             return infer_empty_curly_new(m, expr, target_type);
         }
-        case AST_EXPR_MAP_NEW: {// literal casting
+        case AST_EXPR_MAP_NEW: { // literal casting
             return infer_map_new(m, expr->value, target_type);
         }
-        case AST_EXPR_SET_NEW: {// literal casting
+        case AST_EXPR_SET_NEW: { // literal casting
             return infer_set_new(m, expr->value, target_type);
         }
-        case AST_FNDEF: {// literal casting
+        case AST_FNDEF: { // literal casting
             return infer_fn_decl(m, expr->value, target_type);
         }
-        case AST_EXPR_LITERAL: {// literal casting
+        case AST_EXPR_LITERAL: { // literal casting
             return infer_literal(m, expr, target_type);
         }
         case AST_EXPR_TUPLE_NEW: {
@@ -3081,7 +3082,7 @@ static void combination_interface(module_t *m, ast_typedef_stmt_t *typedef_stmt)
     assert(typedef_stmt->type_expr.kind == TYPE_INTERFACE);
     type_interface_t *origin_interface = typedef_stmt->type_expr.interface;
     struct sc_map_sv exists = {0};
-    sc_map_init_sv(&exists, 0, 0);// value is type_fn_t
+    sc_map_init_sv(&exists, 0, 0); // value is type_fn_t
 
     for (int i = 0; i < origin_interface->elements->length; ++i) {
         type_t *temp = ct_list_value(origin_interface->elements, i);
@@ -3402,7 +3403,7 @@ static void infer_generics_param_constraints(module_t *m, type_t *impl_type, lis
             if (type_generics_param->constraints.elements->length == 1) {
                 if (constraint->kind == TYPE_INTERFACE) {
                     type_generics_param->constraints.and = true;
-                } else if (constraint->kind != TYPE_UNION) {// or 表示单个类型约束？那 union 呢？怎么 check, 怎么约束？
+                } else if (constraint->kind != TYPE_UNION) { // or 表示单个类型约束？那 union 呢？怎么 check, 怎么约束？
                     type_generics_param->constraints.or = true;
                 }
             }
@@ -3465,7 +3466,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
         // 在 pre_infer 虽然已经对所有的 fn 进行了类型推导，但是后续 infer_right_expr 再次调用时，原则上希望可以继承 type def ident
         // 也就是 literal fn decl 自动类型转换
         if (target_type.kind != TYPE_UNKNOWN) {
-            fndef->type.ident = target_type.ident;// literal new ident 直接继承
+            fndef->type.ident = target_type.ident; // literal new ident 直接继承
             fndef->type.ident_kind = target_type.ident_kind;
             fndef->type.args = target_type.args;
         }
@@ -3502,7 +3503,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     result.status = REDUCTION_STATUS_DONE;
 
     if (target_type.kind != TYPE_UNKNOWN) {
-        result.ident = target_type.ident;// literal new ident 直接继承
+        result.ident = target_type.ident; // literal new ident 直接继承
         result.ident_kind = target_type.ident_kind;
         result.args = target_type.args;
     }
@@ -3608,7 +3609,7 @@ static slice_t *generics_constraints_product(module_t *m, type_t *impl_type, lis
             if (param->constraints.elements->length == 1) {
                 if (temp->kind == TYPE_INTERFACE) {
                     param->constraints.and = true;
-                } else if (temp->kind != TYPE_UNION) {// or 表示单个类型约束？那 union 呢？怎么 check, 怎么约束？
+                } else if (temp->kind != TYPE_UNION) { // or 表示单个类型约束？那 union 呢？怎么 check, 怎么约束？
                     param->constraints.or = true;
                 }
             }
@@ -3626,11 +3627,11 @@ static slice_t *generics_constraints_product(module_t *m, type_t *impl_type, lis
         }
 
         if (param->constraints.any) {
-            return hash_list;// 存在 any 则无法进行具体数量的组合约束
+            return hash_list; // 存在 any 则无法进行具体数量的组合约束
         }
 
         if (param->constraints.and) {
-            return hash_list;// and 表示这是 interface, 同样无法进行类型约束
+            return hash_list; // and 表示这是 interface, 同样无法进行类型约束
         }
     }
 
@@ -3638,7 +3639,7 @@ static slice_t *generics_constraints_product(module_t *m, type_t *impl_type, lis
     INFER_ASSERTF(any_count == 0 || any_count == generics_params->length,
                   "all generics params must have constraints or all none");
 
-    if (ident_is_def_or_alias(impl_type)) {// type ident 才会存在 args
+    if (ident_is_def_or_alias(impl_type)) { // type ident 才会存在 args
         infer_generics_param_constraints(m, impl_type, generics_params);
     }
 
@@ -3752,7 +3753,7 @@ void infer(module_t *m) {
             stack_push(fn->module->infer_type_args_stack, fn->generics_args_table);
         }
 
-        fn->module->temp_worklist = infer_worklist;// temp_worklist 和 infer_worklist 都是指针指向同一片数据，这也是 worklist 存在的意义
+        fn->module->temp_worklist = infer_worklist; // temp_worklist 和 infer_worklist 都是指针指向同一片数据，这也是 worklist 存在的意义
         infer_fndef(fn->module, fn);
         slice_push(m->ast_fndefs, fn);
 

@@ -13,9 +13,11 @@ extern int cpu_count;
 extern n_processor_t *share_processor_index[1024];
 extern n_processor_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
 extern n_processor_t *solo_processor_list; // 独享协程列表其实就是多线程
+extern coroutine_t *main_coroutine;
+
 extern mutex_t solo_processor_locker; // 删除 solo processor 需要先获取该锁
 extern int solo_processor_count;
-extern int coroutine_count;
+extern int64_t coroutine_count;
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
 
@@ -155,6 +157,8 @@ int io_run(n_processor_t *p, uint64_t timeout_ms);
  */
 void sched_init();
 
+void sched_run();
+
 n_processor_t *processor_new(int index);
 
 void coroutine_free(coroutine_t *co);
@@ -178,8 +182,6 @@ void rt_coroutine_return(void *result_ptr);
  * 为 coroutine 选择合适的 processor 绑定，如果是独享 coroutine 则创建一个 solo processor
  */
 void rt_coroutine_dispatch(coroutine_t *co);
-
-void rt_coroutine_to_processor(n_processor_t *p, coroutine_t *co);
 
 /**
  * 有 processor_run 调用

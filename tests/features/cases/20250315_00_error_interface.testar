@@ -57,7 +57,7 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' panic: 'index out of vec [11] with length 10' at nature-test/main.n:3:21
+coroutine 'main' panic: 'index out of range [11] with length 10' at nature-test/main.n:3:21
 
 === test_catch_panic
 --- main.n
@@ -79,4 +79,4 @@ fn main():void! {
 }
 
 --- output.txt
-catch err: index out of vec [11] with length 10
+catch err: index out of range [11] with length 10

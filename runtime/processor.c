@@ -12,12 +12,14 @@ int cpu_count;
 bool processor_need_exit;
 
 n_processor_t *share_processor_index[1024] = {0};
-n_processor_t *share_processor_list;// 共享协程列表的数量一般就等于线程数量
+n_processor_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
 n_processor_t *solo_processor_list; // 独享协程列表其实就是多线程
-mutex_t solo_processor_locker;      // 删除 solo processor 需要先获取该锁
-int coroutine_count;                // coroutine 累计数量
+mutex_t solo_processor_locker; // 删除 solo processor 需要先获取该锁
+int64_t coroutine_count; // coroutine 累计数量
+coroutine_t *main_coroutine = NULL;
 
-int solo_processor_count;// 累计数量
+
+int solo_processor_count; // 累计数量
 rt_linked_fixalloc_t global_gc_worklist;
 
 uv_key_t tls_processor_key = 0;
@@ -93,7 +95,7 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
 #ifdef __LINUX
 #define CTX_RSP ctx->uc_mcontext.gregs[REG_RSP]
 #define CTX_RIP ctx->uc_mcontext.gregs[REG_RIP]
-#else// darwin
+#else // darwin
 #define CTX_RSP ctx->uc_mcontext->__ss.__rsp
 #define CTX_RIP ctx->uc_mcontext->__ss.__rip
 #endif
@@ -120,10 +122,10 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
 
     // 由于被抢占的函数可以会在没有 sub 保留 rsp 的情况下使用 rsp-0x10 这样的空间地址
     // 所以需要为 rsp 预留足够的栈空间给被抢占的函数, 避免后续的操作污染被抢占的函数
-    rsp -= 128;// 一个指针是 8byte, 所以这里是 128 * 8 = 1024 个字节
+    rsp -= 128; // 一个指针是 8byte, 所以这里是 128 * 8 = 1024 个字节
 
     // push rip
-    rsp--;// 栈中预留返回地址
+    rsp--; // 栈中预留返回地址
     *rsp = rip;
 
     RDEBUGF("[runtime.thread_handle_sig] rip=%p save to %p, co=%p, scan_ret_addr=%p, scan_offset=%lu, fn=%p",
@@ -138,7 +140,7 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
 #ifdef __LINUX
 #define CTX_SP ctx->uc_mcontext.sp
 #define CTX_PC ctx->uc_mcontext.pc
-#define CTX_LR ctx->uc_mcontext.regs[30]// x30 是链接寄存器(LR)
+#define CTX_LR ctx->uc_mcontext.regs[30] // x30 是链接寄存器(LR)
 #else
 #define CTX_SP ctx->uc_mcontext->__ss.__sp
 #define CTX_PC ctx->uc_mcontext->__ss.__pc
@@ -147,7 +149,7 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
 
     uint64_t *sp = (uint64_t *) CTX_SP;
     uint64_t pc = CTX_PC;
-    uint64_t lr = CTX_LR;// 保存返回地址的链接寄存器
+    uint64_t lr = CTX_LR; // 保存返回地址的链接寄存器
 
     // 查找当前执行的函数
     fndef_t *fn = find_fn(pc, p);
@@ -163,10 +165,10 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     }
 
     // 为被抢占的函数预留栈空间
-    sp -= 128;// 1024 字节的安全区域
+    sp -= 128; // 1024 字节的安全区域
 
     // ARM64 中保存返回地址和链接寄存器
-    sp -= 2;// 预留两个位置,一个给 pc,一个给 lr
+    sp -= 2; // 预留两个位置,一个给 pc,一个给 lr
     sp[0] = pc;
     sp[1] = lr;
 
@@ -177,7 +179,7 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     // 更新上下文
     CTX_SP = (uint64_t) sp;
     CTX_PC = (uint64_t) async_preempt;
-    CTX_LR = (uint64_t) async_preempt;// 确保返回地址也指向抢占处理函数
+    CTX_LR = (uint64_t) async_preempt; // 确保返回地址也指向抢占处理函数
 
 #else
 #error "platform no support yet"
@@ -189,9 +191,9 @@ static void processor_uv_close(n_processor_t *p) {
     RDEBUGF("[runtime.processor_uv_close] will close loop=%p, loop_req_count=%u, p_index_%d=%d", &p->uv_loop,
             p->uv_loop.active_reqs.count,
             p->share, p->index);
-    uv_close((uv_handle_t *) &p->timer, NULL);// io_run 等待 close 完成！
+    uv_close((uv_handle_t *) &p->timer, NULL); // io_run 等待 close 完成！
 
-    uv_run(&p->uv_loop, UV_RUN_DEFAULT);// 等待上面注册的 uv_close 完成
+    uv_run(&p->uv_loop, UV_RUN_DEFAULT); // 等待上面注册的 uv_close 完成
 
     int result = uv_loop_close(&p->uv_loop);
 
@@ -231,17 +233,9 @@ NO_OPTIMIZE static void coroutine_wrapper() {
             co->main, co->gc_work, co->error);
     processor_set_status(p, P_STATUS_RTCALL);
 
-    if (co->main) {
-        // 通知所有协程退出
-        processor_set_exit();
-        DEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d co=%p, main coroutine exit, set processor_need_exit=true",
-               p->share, p->index,
-               co);
-    }
-
     // coroutine 即将退出，避免被 gc 清理，所以将 error 保存在 co->future 中?
     if (co->error && co->future) {
-        co->future->error = union_casting(throwable_rtype.hash, &co->error);// 将 co error 赋值给 co->future 避免被 gc
+        co->future->error = union_casting(throwable_rtype.hash, &co->error); // 将 co error 赋值给 co->future 避免被 gc
     }
 
     // co->await_co 可能是随时写入的，所以需要 dead_locker 保证同步
@@ -338,7 +332,7 @@ int io_run(n_processor_t *p, uint64_t timeout_ms) {
     p->timer.data = p;
 
     // 设置计时器超时回调，这将在超时后停止事件循环
-    uv_timer_start(&p->timer, uv_stop_callback, timeout_ms, 0);// 只触发一次
+    uv_timer_start(&p->timer, uv_stop_callback, timeout_ms, 0); // 只触发一次
 
 
     // DEBUGF("[runtime.io_run] uv_run start, p_index=%d, loop=%p", p->index, p->uv_loop);
@@ -367,7 +361,7 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
     p->coroutine = co;
     // - 再 tls 中记录正在运行的协程
     uv_key_set(&tls_coroutine_key, co);
-    co->p = p;// 运行前进行绑定，让 coroutine 在运行中可以准确的找到 processor
+    co->p = p; // 运行前进行绑定，让 coroutine 在运行中可以准确的找到 processor
     p->status = P_STATUS_RUNNABLE;
     mutex_unlock(&p->thread_locker);
 
@@ -449,7 +443,7 @@ static void processor_run(void *raw) {
                 TRACEF("[runtime.processor_run] p_index_%d=%d, need_stw=%lu, safe_point=%lu stw loop....", p->share,
                        p->index, p->need_stw,
                        p->safe_point);
-                usleep(WAIT_BRIEF_TIME * 1000);// 1ms
+                usleep(WAIT_BRIEF_TIME * 1000); // 1ms
             }
 
             RDEBUGF("[runtime.processor_run] p_index_%d=%d, stw completed, need_stw=%lu, safe_point=%lu", p->share,
@@ -458,8 +452,8 @@ static void processor_run(void *raw) {
         }
 
         // - exit
-        if (processor_get_exit()) {
-            RDEBUGF("[runtime.processor_run] p_index_%d=%d, need stop, goto exit", p->share, p->index);
+        if (main_coroutine->status == CO_STATUS_DEAD) {
+            RDEBUGF("[runtime.processor_run] main coroutine dead, goto exit", p->share, p->index);
             goto EXIT;
         }
 
@@ -512,18 +506,6 @@ EXIT:
     processor_set_status(p, P_STATUS_EXIT);
 
     RDEBUGF("[runtime.processor_run] exited, p_index_%d=%d", p->share, p->index);
-}
-
-
-void rt_coroutine_to_processor(n_processor_t *p, coroutine_t *co) {
-    if (gc_stage == GC_STAGE_MARK) {
-        co->gc_black = memory->gc_count;
-    }
-
-    // goroutine 默认状态是 runnable
-    assert(co->status == CO_STATUS_RUNNABLE);
-    rt_linked_fixalloc_push(&p->co_list, co);
-    rt_linked_fixalloc_push(&p->runnable_list, co);
 }
 
 void rt_coroutine_dispatch(coroutine_t *co) {
@@ -641,14 +623,23 @@ void sched_init() {
         share_processor_index[p->index] = p;
 
         RT_LIST_PUSH_HEAD(share_processor_list, p);
+    }
+}
 
+void sched_run() {
+    // index 0 是 main processor, 直接使用当前主线程运行
+    for (int i = 1; i < cpu_count; ++i) {
+        n_processor_t *p = share_processor_index[i];
         // 创建一个新的线程用来处理
         if (uv_thread_create(&p->thread_id, processor_run, p) != 0) {
             assert(false && "pthread_create failed %s");
         }
 
-        DEBUGF("[runtime.sched_init] processor create, index=%d, thread_id=%ld", i, (uint64_t) p->thread_id);
+        DEBUGF("[runtime.sched_run] processor run, index=%d, thread_id=%ld", i, (uint64_t) p->thread_id);
     }
+
+    processor_run(share_processor_index[0]);
+    DEBUGF("[runtime.sched_run] main processor exited");
 }
 
 n_processor_t *processor_get() {
@@ -806,7 +797,7 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu, void *arg)
     co->status = CO_STATUS_RUNNABLE;
     co->p = NULL;
     co->next = NULL;
-    co->aco.inited = 0;// 标记为为初始化
+    co->aco.inited = 0; // 标记为为初始化
     co->scan_ret_addr = 0;
     co->scan_offset = 0;
 
@@ -833,7 +824,7 @@ n_processor_t *processor_new(int index) {
     p->thread_id = 0;
     p->coroutine = NULL;
     p->co_started_at = 0;
-    p->mcache.flush_gen = 0;// 线程维度缓存，避免内存分配锁
+    p->mcache.flush_gen = 0; // 线程维度缓存，避免内存分配锁
     rt_linked_fixalloc_init(&p->co_list);
     rt_linked_fixalloc_init(&p->runnable_list);
     p->index = index;
@@ -893,7 +884,7 @@ void processor_free(n_processor_t *p) {
             continue;
         }
 
-        p->mcache.alloc[j] = NULL;// uncache
+        p->mcache.alloc[j] = NULL; // uncache
         mcentral_t *mcentral = &memory->mheap->centrals[span->spanclass];
         uncache_span(mcentral, span);
         DEBUGF("[wait_sysmon.processor_free] uncache span=%p, span_base=%p, spc=%d, alloc_count=%lu", span,
@@ -1030,7 +1021,7 @@ void co_migrate(aco_t *aco, aco_share_stack_t *new_st) {
     addr_t bp_ptr = (addr_t) aco->reg[ACO_REG_IDX_BP];
 
     while (true) {
-        addr_t prev_bp_value = fetch_addr_value((addr_t) bp_ptr);// 可能压根没有报错 bp 的值，所以必须有一个中断条件
+        addr_t prev_bp_value = fetch_addr_value((addr_t) bp_ptr); // 可能压根没有报错 bp 的值，所以必须有一个中断条件
 
         // 边界情况处理
         if (prev_bp_value <= bp_ptr) {

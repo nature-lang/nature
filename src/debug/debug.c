@@ -125,6 +125,7 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_DIV] = "DIV  ",
         [LIR_OPCODE_REM] = "REM  ",
         [LIR_OPCODE_SLT] = "SLT   ",
+        [LIR_OPCODE_USLT] = "USLT   ",
         [LIR_OPCODE_SLE] = "SLE  ",
         [LIR_OPCODE_SGT] = "SGT   ",
         [LIR_OPCODE_SGE] = "SGE  ",
@@ -142,6 +143,9 @@ string lir_opcode_to_string[] = {
 
         [LIR_OPCODE_PHI] = "PHI  ",
         [LIR_OPCODE_MOVE] = "MOVE ",
+        [LIR_OPCODE_ZEXT] = "ZEXT ",
+        [LIR_OPCODE_SEXT] = "SEXT ",
+        [LIR_OPCODE_TRUNC] = "TRUNC",
         [LIR_OPCODE_BEQ] = "BEQ",
         [LIR_OPCODE_BAL] = "BAL ",
         [LIR_OPCODE_PUSH] = "PUSH  ",
@@ -434,10 +438,9 @@ void debug_basic_block(basic_block_t *block) {
 
 void debug_asm(closure_t *c) {
 #ifdef DEBUG_ASM
-    // 跳过各种全局的 init 方法
-    //    if (ends_with(c->fndef->symbol_name, ".init")) {
-    //        return;
-    //    }
+    if (strstr(c->linkident, DEBUG_ASM) == NULL) {
+        return;
+    }
 
     printf("asm: %s------------------------------------------------------------------------\n", c->fndef->symbol_name);
     for (int i = 0; i < c->asm_operations->count; ++i) {
