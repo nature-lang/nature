@@ -1,9 +1,6 @@
+import fs
+import syscall
+
 fn main():void! {
-    var r = 12
-    match r {
-        1 -> {
-            println('hello')
-        }
-        _ -> panic('hello')
-    }
+    println('hello world')
 }

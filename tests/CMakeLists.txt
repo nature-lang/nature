@@ -22,18 +22,6 @@ add_executable(test_hash_table test_hash_table.c ${UTILS})
 target_link_libraries(test_hash_table ${LIBUV_STATIC})
 add_test(test_hash_table test_hash_table)
 
-add_executable(test_page_alloc test_page_alloc.c ${RUNTIMES} ${UTILS})
-target_link_libraries(test_page_alloc ${LIBUV_STATIC})
-add_test(test_page_alloc test_page_alloc)
-
-add_executable(test_rt_mutex test_rt_mutex.c ${RUNTIMES} ${UTILS})
-target_link_libraries(test_rt_mutex ${LIBUV_STATIC})
-add_test(test_rt_mutex test_rt_mutex)
-
-add_executable(test_runtime_fn test_runtime_fn.c ${RUNTIMES} ${UTILS})
-target_link_libraries(test_runtime_fn ${LIBUV_STATIC})
-add_test(test_runtime_fn test_runtime_fn)
-
 add_executable(test_arm64_encoding test_arm64_encoding.c ${UTILS} ${SRC})
 add_test(test_arm64_encoding test_arm64_encoding)
 

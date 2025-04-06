@@ -171,7 +171,7 @@ static inline void env_init() {
     }
 
     char *build_output_dir = getenv("BUILD_OUTPUT_DIR");
-    if (build_output_dir != NULL) {
+    if (build_output_dir != NULL && strlen(BUILD_OUTPUT_DIR) == 0) {
         strcpy(BUILD_OUTPUT_DIR, build_output_dir);
     }
 }

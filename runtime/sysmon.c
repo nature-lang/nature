@@ -29,8 +29,8 @@ static void wait_sysmon() {
 
             coroutine_t *co = p->coroutine;
             assert(co); // p co 切换期间不会清空 co 了
-            if (co->gc_work) {
-                RDEBUGF("[wait_sysmon.share] p_index=%d(%lu), co=%p is gc_work, will skip", p->index,
+            if ( co->flag & FLAG(CO_FLAG_RTFN)) {
+                RDEBUGF("[wait_sysmon.share] p_index=%d(%lu), co=%p is runtime fn, will skip", p->index,
                         (uint64_t) p->thread_id, p->coroutine);
                 continue;
             }
@@ -82,8 +82,8 @@ static void wait_sysmon() {
             co = p->coroutine;
             assert(co);
             // 协程发生了切换，原来的超时已经失效
-            if (co->gc_work) {
-                RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d, co=%p is gc_work, goto unlock", p->index, co);
+            if (co->flag & FLAG(CO_FLAG_RTFN)) {
+                RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d, co=%p is runtime fn, goto unlock", p->index, co);
                 goto SHARE_UNLOCK_NEXT;
             }
 

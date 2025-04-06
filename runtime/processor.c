@@ -213,8 +213,8 @@ NO_OPTIMIZE static void coroutine_wrapper() {
     n_processor_t *p = processor_get();
     assert(p);
 
-    DEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d, p_status=%d co=%p, fn=%p main=%d, gc_work=%d", p->share,
-           p->index, p->status, co, co->fn, co->main, co->gc_work);
+    DEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d, p_status=%d co=%p, fn=%p main=%d, rt_co=%d", p->share,
+           p->index, p->status, co, co->fn, co->main,  co->flag & FLAG(CO_FLAG_RTFN));
 
     co_set_status(p, co, CO_STATUS_RUNNING);
     processor_set_status(p, P_STATUS_RUNNING);
@@ -228,9 +228,9 @@ NO_OPTIMIZE static void coroutine_wrapper() {
     ((void_fn_t) co->fn)();
 
     DEBUGF(
-            "[runtime.coroutine_wrapper] user fn completed, p_index_%d=%d co=%p, main=%d, gc_work=%d,err=%p, will set status to rtcall",
+            "[runtime.coroutine_wrapper] user fn completed, p_index_%d=%d co=%p, main=%d, rt_fn=%d,err=%p, will set status to rtcall",
             p->share, p->index, co,
-            co->main, co->gc_work, co->error);
+            co->main,  co->flag & FLAG(CO_FLAG_RTFN), co->error);
     processor_set_status(p, P_STATUS_RTCALL);
 
     // coroutine 即将退出，避免被 gc 清理，所以将 error 保存在 co->future 中?
@@ -369,8 +369,8 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
 
     // rtcall/tplcall 都可以无锁进入到 dispatch 状态，dispatch 状态是一个可以安全 stw 的状态
     TRACEF(
-            "[coroutine_resume] resume back, p_index_%d=%d(%d), co=%p, status=%d, gc_work=%d, scan_ret_addr=%p, scan_offset=%lu",
-            p->share, p->index, p->status, co, co->status, co->gc_work, (void *) co->scan_ret_addr, co->scan_offset);
+            "[coroutine_resume] resume back, p_index_%d=%d(%d), co=%p, status=%d, rt_fn=%d, scan_ret_addr=%p, scan_offset=%lu",
+            p->share, p->index, p->status, co, co->status, co->flag & FLAG(CO_FLAG_RTFN), (void *) co->scan_ret_addr, co->scan_offset);
 
     // running -> dispatch
     assert(co->status != CO_STATUS_RUNNING);
@@ -385,8 +385,8 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
     processor_set_status(p, P_STATUS_DISPATCH);
 
     uint64_t time = (uv_hrtime() - p->co_started_at) / 1000 / 1000;
-    RDEBUGF("[coroutine_resume] resume back, co=%p, aco=%p, run_time=%lu ms, gc_work=%d", co, &co->aco, time,
-            co->gc_work);
+    RDEBUGF("[coroutine_resume] resume back, co=%p, aco=%p, run_time=%lu ms, rt_co=%d", co, &co->aco, time,
+            co->flag & FLAG(CO_FLAG_RTFN));
 }
 
 // handle by thread
@@ -801,7 +801,6 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu, void *arg)
     co->scan_ret_addr = 0;
     co->scan_offset = 0;
 
-    DEBUGF("[rt_coroutine_new] co=%p, fn=%p new success, gc_barrier=%d", co, co->fn, gc_barrier_get());
     return co;
 }
 

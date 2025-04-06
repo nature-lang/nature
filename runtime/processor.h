@@ -1,12 +1,12 @@
 #ifndef NATURE_PROCESSOR_H
 #define NATURE_PROCESSOR_H
 
-#include <stdint.h>
 #include <include/uv.h>
+#include <stdint.h>
 
+#include "linkco.h"
 #include "nutils/errort.h"
 #include "nutils/vec.h"
-#include "linkco.h"
 #include "runtime.h"
 
 extern int cpu_count;
@@ -34,6 +34,7 @@ typedef enum {
     CO_FLAG_SOLO = 1,
     CO_FLAG_SAME = 2,
     CO_FLAG_MAIN = 3,
+    CO_FLAG_RTFN = 4, // runtime_fn 不需要扫描 stack
 } co_flag_t;
 
 #ifdef __LINUX
@@ -208,4 +209,4 @@ void rt_processor_wake(n_processor_t *p);
 // ------------ libuv 的一些回调 -----------------------
 static void uv_on_timer(uv_timer_t *timer);
 
-#endif// NATURE_PROCESSOR_H
+#endif // NATURE_PROCESSOR_H

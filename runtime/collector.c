@@ -118,7 +118,7 @@ static void flush_mcache() {
                 continue;
             }
 
-            p->mcache.alloc[j] = NULL;// uncache
+            p->mcache.alloc[j] = NULL; // uncache
             mcentral_t *mcentral = &memory->mheap->centrals[span->spanclass];
             uncache_span(mcentral, span);
         }
@@ -131,7 +131,7 @@ static void flush_mcache() {
             if (!span) {
                 continue;
             }
-            p->mcache.alloc[j] = NULL;// uncache
+            p->mcache.alloc[j] = NULL; // uncache
             mcentral_t *mcentral = &memory->mheap->centrals[span->spanclass];
             uncache_span(mcentral, span);
         }
@@ -157,9 +157,9 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
     assert(span);
     assert(span->base > 0);
 #if defined(__DARWIN) && defined(__ARM64)
-    assert(span->obj_count > 0 && span->obj_count <= 2048);// darwin/arm64 一页是 16k
+    assert(span->obj_count > 0 && span->obj_count <= 2048); // darwin/arm64 一页是 16k
 #else
-    assert(span->obj_count > 0 && span->obj_count <= 1024);// 一页大小是 8k
+    assert(span->obj_count > 0 && span->obj_count <= 1024); // 一页大小是 8k
 #endif
 
 
@@ -193,8 +193,8 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             }
         } else {
             DEBUGF("[sweep_span] will sweep, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
-                    (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
-                    bitmap_test(span->gcmark_bits, i));
+                   (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
+                   bitmap_test(span->gcmark_bits, i));
         }
     }
 
@@ -342,9 +342,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         insert_gc_worklist(worklist, co->traces);
     }
 
-
-    if (co->gc_work) {
-        DEBUGF("[runtime_gc.scan_stack] co=%p is gc_work=true, return", co);
+    if (co->flag & FLAG(CO_FLAG_RTFN)) {
+        DEBUGF("[runtime_gc.scan_stack] co=%p rutnime fn, return", co);
         return;
     }
 
@@ -374,7 +373,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
 #ifdef DEBUG_LOG
     DEBUGF("[runtime_gc.scan_stack] traverse stack, start");
-    addr_t temp_cursor = (addr_t) scan_sp;// 栈向下(小)增长
+    addr_t temp_cursor = (addr_t) scan_sp; // 栈向下(小)增长
     size_t temp_i = 0;
     size_t max_i = size / POINTER_SIZE;
     while (temp_i < max_i) {
@@ -681,7 +680,7 @@ static void gc_work() {
 
     // - handle share processor work list
     handle_gc_worklist(share_p);
-    share_p->gc_work_finished = memory->gc_count;// 打上 completed 标识
+    share_p->gc_work_finished = memory->gc_count; // 打上 completed 标识
     DEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle solo processor gc work list completed, will exit",
            share_p->share, share_p->index);
 }
@@ -737,9 +736,8 @@ static void scan_solo_stack() {
 static void inject_gc_work_coroutine() {
     // 遍历 share processor 插入 gc coroutine
     PROCESSOR_FOR(share_processor_list) {
-        coroutine_t *gc_co = rt_coroutine_new((void *) gc_work, 0, 0, NULL);
+        coroutine_t *gc_co = rt_coroutine_new((void *) gc_work, FLAG(CO_FLAG_RTFN), 0, NULL);
 
-        gc_co->gc_work = true;
         rt_linked_fixalloc_push(&p->co_list, gc_co);
         rt_linked_fixalloc_push(&p->runnable_list, gc_co);
     }
@@ -865,7 +863,7 @@ void runtime_gc() {
 
     // - gc stage: GC_START
     gc_stage = GC_STAGE_START;
-    DEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START", allocated_bytes / 1000);
+    DEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START, pid %d", allocated_bytes / 1000, getpid());
 
     memory->gc_count += 1;
 

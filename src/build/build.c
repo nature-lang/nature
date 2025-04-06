@@ -428,13 +428,11 @@ static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
     fclose(obj_list);
 
     // 添加必要的库文件
-    slice_push(linker_libs, custom_link_object_path());
+    slice_push(linker_libs, lib_file_path(LIB_START_FILE));
+
     slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
     slice_push(linker_libs, lib_file_path(LIBUV_FILE));
-
-    // 内置 ld 命令自动查找 libc file, 不再内置 musl libc
-    // slice_push(linker_libs, lib_file_path(LIB_START_FILE));
-    // slice_push(linker_libs, lib_file_path(LIBC_FILE));
+    slice_push(linker_libs, lib_file_path(LIBC_FILE));
 
     // arm64 需要 libgcc
     if (BUILD_ARCH == ARCH_ARM64) {
@@ -455,13 +453,12 @@ static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
 
     // 对于 ELF 格式，链接命令格式不同于 Mach-O
     snprintf(cmd, sizeof(cmd),
-             "%s -o %s %s @%s %s -e %s",
+             "%s -o %s %s @%s %s",
              use_ld,
              output,
              ldflags,
              objects_file,
-             libs_str,
-             LD_ENTRY);
+             libs_str);
 
     // 使用 ld 命令执行链接
     log_debug("%s", cmd);
@@ -491,7 +488,7 @@ static char *find_syslibroot() {
     if (BUILD_OS != OS_DARWIN) {
         return NULL;
     }
-    
+
     // 尝试使用 xcrun 命令获取 SDK 路径
     FILE *fp = popen("xcrun --show-sdk-path 2>/dev/null", "r");
     if (fp) {
@@ -499,11 +496,11 @@ static char *find_syslibroot() {
         if (fgets(path, PATH_MAX, fp) != NULL) {
             // 移除末尾的换行符
             size_t len = strlen(path);
-            if (len > 0 && path[len-1] == '\n') {
-                path[len-1] = '\0';
+            if (len > 0 && path[len - 1] == '\n') {
+                path[len - 1] = '\0';
             }
             pclose(fp);
-            
+
             // 检查路径是否存在
             if (strlen(path) > 0 && dir_exists(path)) {
                 return strdup(path);
@@ -511,20 +508,19 @@ static char *find_syslibroot() {
         }
         pclose(fp);
     }
-    
+
     // 尝试常见的默认位置
     char *default_paths[] = {
-        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
-        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
-        NULL
-    };
-    
+            "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+            "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
+            NULL};
+
     for (int i = 0; default_paths[i] != NULL; i++) {
         if (dir_exists(default_paths[i])) {
             return strdup(default_paths[i]);
         }
     }
-    
+
     // 如果找不到，返回 NULL
     return NULL;
 }
@@ -598,11 +594,10 @@ static void custom_ld_mach_exe(slice_t *modules, char *use_ld, char *ldflags) {
 
     snprintf(cmd, sizeof(cmd),
              "%s -w -arch %s -dynamic -platform_version macos 11.7.1 14.0 %s"
-             "-e _%s -o %s %s %s @%s",
+             "-o %s %s %s @%s",
              use_ld,
              darwin_ld_arch,
              syslibroot_option,
-             LD_ENTRY,
              output,
              ldflags,
              libs_str,

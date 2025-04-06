@@ -1,0 +1,140 @@
+import os
+import fmt
+import path
+import syscall
+import parker.log as * 
+import parker.util
+import compress.tgz
+import fs
+
+var version = '0.1.0'
+
+fn main():void! {
+    if util.arg_version() {
+        fmt.printf('parker version: %v\n', version)
+        return
+    }
+
+    if util.arg_verbose() {
+        tgz.verbose = true
+        set_verbose()
+    }
+
+    var args = os.args()
+
+    // - 读取当前程序所在目录，找到 runner 程序
+    if args.len() < 2 {
+        throw errorf('args failed')
+    }
+
+    // 可能是一个绝对路径也可以是一个相对 path
+    var exec_path = os.exe()
+    logf('exec_path: %v', exec_path)
+
+    var target_name = args[1]
+
+    // - 读取当前工作目录, 确定需要打包的目录
+    var workdir = syscall.getcwd()
+    logf('workdir: %v, target: %v', workdir, target_name)
+    var target_path = path.join(workdir, target_name)
+
+    // - 检查文件是否存在
+    if !path.exists(target_path) {
+        throw errorf('file=%v notfound', target_path)
+    }
+
+    logf('target_path: %v found', target_path)
+
+    workdir = path.dir(target_path)
+    target_name = path.base(target_path)
+
+    logf('new split workdir: %v, target: %v', workdir, target_name)
+
+    // .target_name 将 target_name 写入到文件 .target_name 中随压缩包一起压缩
+    var target_name_f = fs.open('.target_name', syscall.O_RDWR | syscall.O_CREAT, 0755)
+    target_name_f.write(target_name as [u8])
+    target_name_f.close()
+
+    // - 压缩到工作目录即可, 名字就叫 {target_name}.tar.gz
+    var tgz_name = fmt.sprintf('%v.tar.gz', target_name)
+
+    // new target_name + 'd' fd, node -> noded
+    var output_name = fmt.sprintf('%v-c', target_name)
+
+    // - 遍历当前工作目录中的所有文件，进行压缩
+    var sources = os.listdir(workdir)
+    [string] temp = []
+    for s in sources {
+        if {tgz_name, output_name}.contains(s) {
+            logf('tgz encode source %v will continue', s)
+            continue
+        }
+
+        temp.push(s)
+    }
+    sources = temp
+
+    tgz.encode(workdir, tgz_name, sources)
+
+    logf('encode to tgz_name %v in %v', tgz_name, workdir)
+
+    // 如果存在环境变量 RUNNER_PATH, 则有优先读取环境变量
+    var runner_path =  syscall.get_env('RUNNER_PATH')
+    if runner_path == '' {
+        var parker_dir = path.dir(exec_path)
+        runner_path = path.join(parker_dir, 'runner')
+    }
+
+    if !path.exists(runner_path) {
+        throw errorf('runner file=%v notfound', runner_path)
+    }
+
+    logf('runner_path=%v found', runner_path)
+
+    // open and create
+    var output_fd = fs.open(output_name, syscall.O_CREAT|syscall.O_RDWR|syscall.O_TRUNC, 0755)
+
+    // - append runner
+    var runner_fd = fs.open(runner_path, syscall.O_RDONLY, 0666)
+    var runner_content = runner_fd.content()
+    runner_fd.close()
+
+    logf('read runner_fd len: %v', runner_content.len())
+    var len = output_fd.write(runner_content as [u8])
+    logf('write runner to output success, write len=%v', len)
+
+    // - append tgz
+    var tgz_fd = fs.open(tgz_name, syscall.O_RDONLY, 0666)
+    var tgz_content = tgz_fd.content()
+    tgz_fd.close()
+
+    logf('read tgz_fd len: %v', tgz_content.len())
+    len = output_fd.write(tgz_content as [u8])
+    logf('write tgz to output success, write len=%v', len)
+
+    os.remove(tgz_name)
+    os.remove('.target_name')
+
+    var tgz_size = tgz_content.len()
+    logf('stat tgz %v get size=%d', tgz_name, tgz_size)
+    var tgz_size_str = fmt.sprintf('%016d', tgz_size)
+    output_fd.write(tgz_size_str as [u8])
+    logf('tag_size to output success, size_str=%v', tgz_size_str)
+
+    logf('runner %s make successful', path.join(workdir, output_name))
+
+    // - 信息输出
+    fmt.printf('%s\n', output_name)
+    for i, item in sources {
+        if item == '.target_name' {
+            continue
+        }
+
+        if i < sources.len() - 1 {
+            fmt.printf('├── %s\n', item)
+        } else {
+            fmt.printf('└── %s\n', item)
+        }
+    }
+    fmt.printf('🍻 parker successful\n')
+}

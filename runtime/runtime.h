@@ -23,7 +23,16 @@
 #define ATOMIC _Atomic
 #endif
 
-int runtime_main(int argc, char *argv[]);
+/**
+ * crt1.o _start -> main  -> entry
+ */
+#ifndef HAS_TEST_MAIN
+#ifdef __DARWIN
+int runtime_main(int argc, char *argv[]) __asm("_main");
+#else
+int runtime_main(int argc, char *argv[]) __asm("main");
+#endif
+#endif
 
 #ifdef __AMD64
 #define CO_SCAN_REQUIRE(_co) \
@@ -350,8 +359,6 @@ struct coroutine_t {
     // gc stage 是 mark 时, 当 gc_black 值小于 memory->gc_count 时，说明当前 coroutine stack 不是黑色的
     uint64_t gc_black;
 
-    bool gc_work; // 当前 coroutine 是否是 gc coroutine
-
     /**
     * arm64
      高地址
@@ -446,10 +453,6 @@ struct n_processor_t {
 
     struct n_processor_t *next; // processor 链表支持
 };
-
-void test_runtime_init();
-
-int test_runtime_main(void *main_fn);
 
 void rti_throw(char *msg, bool panic);
 

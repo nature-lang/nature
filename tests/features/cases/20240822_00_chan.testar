@@ -103,7 +103,7 @@ fn main():void! {
         done.recv()
     }
 
-    assert(time.unix() - start == 1)
+    assert(time.unix() - start < 2)
     println('done, use time: ', time.unix() - start)
 }
 

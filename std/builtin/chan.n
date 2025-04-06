@@ -57,8 +57,10 @@ fn chan<T>.on_recv():T {
     return msg
 }
 
-fn chan<T>.try_recv(T msg):bool! {
-    return rt_chan_recv(self as anyptr, &msg as anyptr, true)
+fn chan<T>.try_recv():(T, bool)! {
+    T msg = @default()
+    bool is_recv = rt_chan_recv(self as anyptr, &msg as anyptr, true)
+    return (msg, is_recv)
 }
 
 #linkid rt_chan_close

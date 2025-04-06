@@ -4,3 +4,6 @@
 [submodule "nls"]
 	path = nls
 	url = git@github.com:nature-lang/nls.git
+[submodule "tests/features/cases/20250405_02_compress"]
+	path = tests/features/cases/20250405_02_compress
+	url = git@github.com:weiwenhao/compress.git
