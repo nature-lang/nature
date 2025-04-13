@@ -553,10 +553,11 @@ static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_
         // 判断泛型参数是否全部推断完成
         for (int i = 0; i < temp_fn->generics_params->length; i++) {
             ast_generics_param_t *param = ct_list_value(temp_fn->generics_params, i);
-            type_t *arg_type = table_get(generics_args_table, param->ident);
-            generics_constraints_check(m, &param->constraints, arg_type);
             INFER_ASSERTF(table_exist(generics_args_table, param->ident), "cannot infer generics param '%s'",
                           param->ident);
+
+            type_t *arg_type = table_get(generics_args_table, param->ident);
+            generics_constraints_check(m, &param->constraints, arg_type);
         }
         m->infer_type_args_stack = stash_stack;
     } else {
@@ -788,7 +789,7 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_t
     assert(target_type.kind != TYPE_UNION);
 
     type_t left_target_type = type_kind_new(TYPE_UNKNOWN);
-    if (ast_is_arithmetic_op(expr->operator)) {
+    if (ast_is_arithmetic_op(expr->op)) {
         left_target_type = target_type;
     }
 
@@ -813,9 +814,9 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_t
         // 右值也必须是 number
         INFER_ASSERTF(is_number(right_type.kind),
                       "binary operator '%s' only support number operand, actual '%s %s %s'",
-                      ast_expr_op_str[expr->operator],
+                      ast_expr_op_str[expr->op],
                       type_format(left_type),
-                      ast_expr_op_str[expr->operator],
+                      ast_expr_op_str[expr->op],
                       type_format(right_type));
     }
 
@@ -823,34 +824,34 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_t
         // 右值必须是 string
         INFER_ASSERTF(right_type.kind == TYPE_STRING,
                       "binary operator '%s' only support string operand, actual '%s %s %s'",
-                      ast_expr_op_str[expr->operator],
+                      ast_expr_op_str[expr->op],
                       type_format(left_type),
-                      ast_expr_op_str[expr->operator],
+                      ast_expr_op_str[expr->op],
                       type_format(right_type));
     }
 
-    if (is_bool_operand_operator(expr->operator)) {
+    if (is_bool_operand_operator(expr->op)) {
         INFER_ASSERTF(left_type.kind == TYPE_BOOL && right_type.kind == TYPE_BOOL,
                       "binary operator '%s' only bool operand",
-                      ast_expr_op_str[expr->operator]);
+                      ast_expr_op_str[expr->op]);
     }
 
     // 位运算只能支持整形
-    if (is_integer_operator(expr->operator)) {
+    if (is_integer_operator(expr->op)) {
         INFER_ASSERTF(is_integer(left_type.kind) && is_integer(right_type.kind),
                       "binary operator '%s' only integer operand",
-                      ast_expr_op_str[expr->operator]);
+                      ast_expr_op_str[expr->op]);
     }
 
-    if (ast_is_arithmetic_op(expr->operator)) {
+    if (ast_is_arithmetic_op(expr->op)) {
         return left_type;
     }
 
-    if (ast_is_logic_op(expr->operator)) {
+    if (ast_is_logic_op(expr->op)) {
         return type_kind_new(TYPE_BOOL);
     }
 
-    INFER_ASSERTF(false, "unknown operator '%s'", ast_expr_op_str[expr->operator]);
+    INFER_ASSERTF(false, "unknown operator '%s'", ast_expr_op_str[expr->op]);
     exit(1);
 }
 
@@ -901,7 +902,6 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
 
     // interface 可以 as 为任意类型(前提是实现了 interface)
     if (as_expr->src.type.kind == TYPE_INTERFACE) {
-        type_t interface_type = as_expr->src.type;
         type_t temp_target_type = target_type;
         if (target_type.kind == TYPE_PTR || target_type.kind == TYPE_RAWPTR) {
             temp_target_type = target_type.ptr->value_type;
@@ -909,7 +909,7 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
 
         INFER_ASSERTF(temp_target_type.ident && temp_target_type.ident_kind == TYPE_IDENT_DEF,
                       "type '%s' not impl interface '%s'",
-                      type_format(temp_target_type), type_format(interface_type));
+                      type_format(temp_target_type), type_format(src_type));
 
         // 检测 target type 是否实现了 src interface type，并且编译时需要进行特殊处理
         symbol_t *s = symbol_table_get(temp_target_type.ident);
@@ -920,14 +920,14 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
             for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
                 type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
                 assert(impl_interface->ident_kind == TYPE_IDENT_INTERFACE);
-                if (str_equal(impl_interface->ident, interface_type.ident)) {
+                if (str_equal(impl_interface->ident, src_type.ident)) {
                     found = true;
                 }
             }
         }
         // 禁止鸭子类型
-        INFER_ASSERTF(found, "type '%s' not impl '%s' interface", src_type.ident, interface_type.ident);
-        check_typedef_impl(m, &interface_type, temp_target_type.ident, typedef_stmt);
+        INFER_ASSERTF(found, "type '%s' not impl '%s' interface", src_type.ident, src_type.ident);
+        check_typedef_impl(m, &src_type, temp_target_type.ident, typedef_stmt);
 
         return target_type;
     }
@@ -1309,53 +1309,53 @@ static type_t infer_type_eq_expr(module_t *m, ast_expr_t *expr) {
  * @return
  */
 static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_type) {
-    if (expr->operator== AST_OP_NOT) {
+    if (expr->op == AST_OP_NOT) {
         // bool 支持各种类型的 implicit type convert
         return infer_right_expr(m, &expr->operand, type_kind_new(TYPE_BOOL));
     }
 
     type_t operand_target_type = type_kind_new(TYPE_UNKNOWN);
-    if (expr->operator== AST_OP_NEG) {
+    if (expr->op == AST_OP_NEG) {
         operand_target_type = target_type;
     }
 
-    type_t type = infer_right_expr(m, &expr->operand, operand_target_type);
+    type_t operand_type = infer_right_expr(m, &expr->operand, operand_target_type);
 
-    if ((expr->operator== AST_OP_NEG) && !is_number(type.kind)) {
-        INFER_ASSERTF(false, "neg(-) must use in number，actual '%s'", type_format(type));
+    if ((expr->op == AST_OP_NEG) && !is_number(operand_type.kind)) {
+        INFER_ASSERTF(false, "neg(-) must use in number，actual '%s'", type_format(operand_type));
     }
 
     // &var
-    if (expr->operator== AST_OP_LA) {
+    if (expr->op == AST_OP_LA) {
         INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
                       "cannot load address of an literal or call");
 
-        INFER_ASSERTF(type.kind != TYPE_UNION, "cannot load address of an union type");
+        INFER_ASSERTF(operand_type.kind != TYPE_UNION, "cannot load address of an union type");
 
 
-        return type_rawptrof(type);
+        return type_rawptrof(operand_type);
     }
 
     // @unsafe_la(var)
-    if (expr->operator== AST_OP_UNSAFE_LA) {
+    if (expr->op == AST_OP_UNSAFE_LA) {
         INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
                       "cannot safe load address of an literal or call");
 
-        INFER_ASSERTF(type.kind != TYPE_UNION, "cannot safe load address of an union type");
+        INFER_ASSERTF(operand_type.kind != TYPE_UNION, "cannot safe load address of an union type");
 
 
-        return type_ptrof(type);
+        return type_ptrof(operand_type);
     }
 
     // *var
-    if (expr->operator== AST_OP_IA) {
-        INFER_ASSERTF(type.kind == TYPE_PTR || type.kind == TYPE_RAWPTR,
-                      "cannot dereference non-pointer type '%s'", type_format(type));
+    if (expr->op == AST_OP_IA) {
+        INFER_ASSERTF(operand_type.kind == TYPE_PTR || operand_type.kind == TYPE_RAWPTR,
+                      "cannot dereference non-pointer type '%s'", type_format(operand_type));
 
-        return type.ptr->value_type;
+        return operand_type.ptr->value_type;
     }
 
-    return type;
+    return operand_type;
 }
 
 /**
@@ -1968,9 +1968,8 @@ static ast_fndef_t *generics_special_fn(module_t *m, ast_call_t *call, type_t ta
     // 基于 args_table 进行类型特化，包含 special_fn 和 child
     stack_push(m->infer_type_args_stack, special_fn->generics_args_table);
     infer_fn_decl(m, special_fn, type_kind_new(TYPE_UNKNOWN));
-    if (m->temp_worklist) {
-        linked_push(m->temp_worklist, special_fn);
-    }
+    assert(m->temp_worklist);
+    linked_push(m->temp_worklist, special_fn);
 
     for (int k = 0; k < special_fn->local_children->count; ++k) {
         ast_fndef_t *child = special_fn->local_children->take[k];
@@ -2037,7 +2036,7 @@ static bool marking_heap_alloc(ast_expr_t *expr) {
 }
 
 // fn person_t<>.test() -> fn person_tx_test()
-static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
+static bool impl_call_rewrite(module_t *m, ast_call_t *call) {
     ast_expr_select_t *select = call->left.value;
 
     // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
@@ -2067,6 +2066,7 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
     char *impl_ident = destr_type.ident;
     char *impl_symbol_name = str_connect_by(impl_ident, select->key, IMPL_CONNECT_IDENT);
     list_t *impl_args = destr_type.args;
+
     symbol_t *s;
     ast_expr_t *self_arg = &select->left;
     if (impl_args) {
@@ -2086,16 +2086,16 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
         s = symbol_table_get(impl_symbol_name);
         if (!s) {
             // ident to default kind(need args)
-            type_t temp_type = type_copy(destr_type);
-            temp_type.ident = NULL;
-            temp_type.ident_kind = 0;
-            temp_type.args = NULL;
-            temp_type.status = REDUCTION_STATUS_UNDO;
-            temp_type = reduction_type(m, temp_type);
+            type_t builtin_type = type_copy(destr_type);
+            builtin_type.ident = NULL;
+            builtin_type.ident_kind = 0;
+            builtin_type.args = NULL;
+            builtin_type.status = REDUCTION_STATUS_UNDO;
+            builtin_type = reduction_type(m, builtin_type);
             // new impl
-            if (temp_type.ident && temp_type.ident_kind == TYPE_IDENT_BUILTIN) {
-                impl_ident = temp_type.ident;
-                impl_args = temp_type.args;
+            if (builtin_type.ident && builtin_type.ident_kind == TYPE_IDENT_BUILTIN) {
+                impl_ident = builtin_type.ident;
+                impl_args = builtin_type.args;
                 impl_symbol_name = str_connect_by(impl_ident, select->key, IMPL_CONNECT_IDENT);
                 if (impl_args) {
                     char *arg_hash = generics_impl_args_hash(m, impl_args);
@@ -2119,9 +2119,9 @@ static bool infer_select_call_rewrite(module_t *m, ast_call_t *call) {
 
             INFER_ASSERTF(s, "type '%s' not impl '%s' fn", type_format(destr_type), select->key);
             if (select_left_type.kind == TYPE_PTR || select_left_type.kind == TYPE_RAWPTR) {
-                self_arg->type.ptr->value_type = temp_type;
+                self_arg->type.ptr->value_type = builtin_type;
             } else {
-                self_arg->type = temp_type;
+                self_arg->type = builtin_type;
             }
         }
     }
@@ -2180,7 +2180,7 @@ static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_t
     // --------------------------------------------impl type handle----------------------------------------------------------
     // fn person_t<>.test() -> fn person_tx_test()
     if (call->left.assert_type == AST_EXPR_SELECT) {
-        bool is_rewrite = infer_select_call_rewrite(m, call);
+        bool is_rewrite = impl_call_rewrite(m, call);
     }
 
 
@@ -2215,10 +2215,9 @@ static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_t
             // call ident 重写, 从而能够正确的从符号表中检索到 special_fn
             ident->literal = special_fn->symbol_name;
 
-            // infer call args
-            type_t left_type = infer_left_expr(m, &call->left);
-            assert(left_type.kind == TYPE_FN);
-            return left_type.fn;
+//            type_t left_type = infer_left_expr(m, &call->left);
+//            assert(left_type.kind == TYPE_FN);
+//            return left_type.fn;
         } while (0);
     }
 
@@ -2726,7 +2725,7 @@ static type_t infer_left_expr(module_t *m, ast_expr_t *expr) {
         case AST_EXPR_UNARY: {
             // only support star
             ast_unary_expr_t *unary_expr = expr->value;
-            if (unary_expr->operator== AST_OP_IA) {
+            if (unary_expr->op == AST_OP_IA) {
                 type = infer_unary(m, unary_expr, type_kind_new(TYPE_UNKNOWN));
             } else {
                 INFER_ASSERTF(false, "unary operand cannot used in left");
@@ -3203,6 +3202,7 @@ static type_t reduction_typedef_or_alias(module_t *m, type_t t) {
                       t.ident);
 
         // 对 arg 进行 reduction 并校验类型归属
+        table_t *args_table = table_new();
         for (int i = 0; i < t.args->length; ++i) {
             type_t *arg = ct_list_value(t.args, i);
             *arg = reduction_type(m, *arg);
@@ -3210,21 +3210,11 @@ static type_t reduction_typedef_or_alias(module_t *m, type_t t) {
             ast_generics_param_t *param = ct_list_value(typedef_stmt->params, i);
 
             generics_constraints_check(m, &param->constraints, arg);
+            table_set(args_table, param->ident, arg);
         }
 
         // 此时只是使用 module 作为一个 context 使用，实际上 type_alias_stmt->params 和 当前 module 并不是同一个文件中的
         if (m->infer_type_args_stack) {
-            table_t *args_table = table_new();
-
-            for (int i = 0; i < t.args->length; ++i) {
-                type_t *arg = ct_list_value(t.args, i);
-                *arg = reduction_type(m, *arg);
-
-                ast_generics_param_t *param = ct_list_value(typedef_stmt->params, i);
-                table_set(args_table, param->ident, arg);
-            }
-
-            // 添加 arg_table 进行后续的 right type handle
             stack_push(m->infer_type_args_stack, args_table);
         }
 
@@ -3488,7 +3478,7 @@ static void infer_generics_param_constraints(module_t *m, type_t *impl_type, lis
 
         bool compare = generics_constraints_compare(&type_generics_param->constraints,
                                                     &impl_generics_param->constraints);
-        INFER_ASSERTF(compare, "type alias '%s' param constraint not match", impl_ident);
+        INFER_ASSERTF(compare, "type '%s' param constraint mismatch", impl_ident);
     }
 }
 
@@ -3666,7 +3656,6 @@ static slice_t *generics_constraints_product(module_t *m, type_t *impl_type, lis
     slice_t *hash_list = slice_new();
 
     // 要么全部是 any， 要么不能全部是 any, 避免复杂的匹配情况
-    int any_count = 0;
     for (int i = 0; i < generics_params->length; ++i) {
         ast_generics_param_t *param = ct_list_value(generics_params, i);
         for (int j = 0; j < param->constraints.elements->length; ++j) {
@@ -3703,21 +3692,21 @@ static slice_t *generics_constraints_product(module_t *m, type_t *impl_type, lis
     }
 
     // 要么全都是 any 要么全都不是 any
-    INFER_ASSERTF(any_count == 0 || any_count == generics_params->length,
-                  "all generics params must have constraints or all none");
+//    INFER_ASSERTF(any_count == 0 || any_count == generics_params->length,
+//                  "all generics params must have constraints or all none");
 
     if (ident_is_def_or_alias(impl_type)) { // type ident 才会存在 args
         infer_generics_param_constraints(m, impl_type, generics_params);
     }
 
 
-    slice_t *product_list = slice_new();
+    slice_t *combinations = slice_new();
     // 对 param 的 param->constraints 进行笛卡尔积计算, 也就是全量的排列组合, 比如 fn person_t<T:int|float, U:string> 的类型排列组合有  int+string 和 float+string 种可能
     void *current_product = mallocz(sizeof(void *) * generics_params->length);
-    cartesian_product(generics_params, 0, current_product, product_list);
+    cartesian_product(generics_params, 0, current_product, combinations);
 
-    SLICE_FOR(product_list) {
-        table_t *arg_table = SLICE_VALUE(product_list);
+    SLICE_FOR(combinations) {
+        table_t *arg_table = SLICE_VALUE(combinations);
         char *arg_hash = generics_args_hash(generics_params, arg_table);
         slice_push(hash_list, arg_hash);
     }

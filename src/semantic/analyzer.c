@@ -296,7 +296,7 @@ static void analyzer_type(module_t *m, type_t *type) {
         ast_typedef_stmt_t *ast_stmt = s->ast_value;
         assert(ast_stmt);
 
-        if (type->ident_kind == TYPE_IDENT_USE) {
+        if (type->ident_kind == TYPE_IDENT_UNKNOWN) {
             if (ast_stmt->is_alias) {
                 type->ident_kind = TYPE_IDENT_ALIAS;
                 // alias 不能包含泛型参数
@@ -426,7 +426,7 @@ static void analyzer_type(module_t *m, type_t *type) {
  * ptr/anyptr/rawptr/all_t/fn_t 不作为关键字，如果用户没有自定义覆盖, 则转换为需要的类型
  */
 static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
-    assert(type->ident_kind == TYPE_IDENT_USE);
+    assert(type->ident_kind == TYPE_IDENT_UNKNOWN);
     assert(type->import_as == NULL);
 
     // void ptr
@@ -608,7 +608,7 @@ static ast_expr_t *extract_is_expr(module_t *m, ast_expr_t *expr) {
         return expr;
     }
 
-    if (expr->assert_type == AST_EXPR_BINARY && ((ast_binary_expr_t *) expr->value)->operator== AST_OP_AND_AND) {
+    if (expr->assert_type == AST_EXPR_BINARY && ((ast_binary_expr_t *) expr->value)->op == AST_OP_AND_AND) {
         ast_binary_expr_t *binary_expr = expr->value;
         ast_expr_t *left = extract_is_expr(m, &binary_expr->left);
         ast_expr_t *right = extract_is_expr(m, &binary_expr->right);
@@ -1557,11 +1557,11 @@ static void analyzer_return(module_t *m, ast_return_stmt_t *stmt) {
 static void analyzer_typedef_stmt(module_t *m, ast_typedef_stmt_t *stmt) {
     // local type alias 不允许携带 param
     if (stmt->params && stmt->params->length > 0) {
-        ANALYZER_ASSERTF(false, "local type alias cannot with params");
+        ANALYZER_ASSERTF(false, "local typedef cannot with params");
     }
 
     if (stmt->impl_interfaces && stmt->impl_interfaces->length > 0) {
-        ANALYZER_ASSERTF(false, "local type alias cannot with impls");
+        ANALYZER_ASSERTF(false, "local typedef cannot with impls");
     }
 
     analyzer_redeclare_check(m, stmt->ident);
@@ -1830,7 +1830,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
                 if (!is_impl_builtin_type(fndef->impl_type.kind)) {
                     // resolve global ident
                     char *unique_typedef_ident = analyzer_resolve_typedef(m, NULL, fndef->impl_type.ident);
-                    ANALYZER_ASSERTF(unique_typedef_ident, "type '%s' undeclared \n", fndef->impl_type.ident);
+                    ANALYZER_ASSERTF(unique_typedef_ident, "type '%s' undeclared", fndef->impl_type.ident);
                     fndef->impl_type.ident = unique_typedef_ident;
                 }
 

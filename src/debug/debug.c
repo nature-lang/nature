@@ -160,6 +160,7 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_LABEL] = "LABEL ",
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",
         [LIR_OPCODE_FN_END] = "FN_END",
+        [LIR_OPCODE_SAFEPOINT] = "SAFEPOINT",
 };
 
 void debug_parser(int line, char *token) {
@@ -189,13 +190,9 @@ void debug_stmt(string type, ast_stmt_t stmt) {
  * @param c
  */
 void debug_lir(closure_t *c, char *key) {
-    //    if (c->module->type != MODULE_TYPE_MAIN) {
-    //        return;
-    //    }
-
 #ifdef DEBUG_LIR
     // 跳过各种全局的 init 方法
-    if (!strstr(c->fndef->symbol_name, DEBUG_LIR)) {
+    if (!starts_with(c->fndef->symbol_name, DEBUG_LIR)) {
         return;
     }
 
@@ -243,7 +240,7 @@ void debug_lir(closure_t *c, char *key) {
  */
 void debug_block_lir(closure_t *c, char *stage_after) {
 #ifdef DEBUG_LIR
-    if (strstr(c->linkident, DEBUG_LIR) == NULL) {
+    if (!starts_with(c->linkident, DEBUG_LIR)) {
         return;
     }
 

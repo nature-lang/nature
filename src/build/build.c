@@ -590,7 +590,7 @@ static void custom_ld_mach_exe(slice_t *modules, char *use_ld, char *ldflags) {
 
     // 拼接出 ld 参数, libruntime.a/libuv.a/libSystem.tbd 都在 lib_file_path(LIBMACH_C_FILE)
     char *output = path_join(TEMP_DIR, LINKER_OUTPUT);
-    char cmd[8192];
+    char cmd[16384];
 
     snprintf(cmd, sizeof(cmd),
              "%s -w -arch %s -dynamic -platform_version macos 11.7.1 14.0 %s"

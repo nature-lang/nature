@@ -21,7 +21,7 @@ static inline char *ident_with_prefix(char *module_ident, char *ident) {
     return temp;
 }
 
-static inline char *label_ident_with_unique(module_t *m, char *ident) {
+static inline char *label_ident_with_unique(char *ident) {
     int64_t size = strlen(ident) + 10 + 2;
     char *result = mallocz(size); // 预留 10 位数字
     snprintf(result, size, "%s_%ld", ident, global_var_unique_count++);

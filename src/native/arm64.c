@@ -965,8 +965,7 @@ arm64_native_fn arm64_native_table[] = {
         [LIR_OPCODE_FN_BEGIN] = arm64_native_fn_begin,
         [LIR_OPCODE_FN_END] = arm64_native_fn_end,
 
-        // 伪指令，直接忽略即可
-        //        [LIR_OPCODE_ENV_CLOSURE] = arm64_native_skip,
+        [LIR_OPCODE_SAFEPOINT] = arm64_native_skip,
 };
 
 

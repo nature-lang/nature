@@ -25,18 +25,6 @@ static ast_expr_t parser_go_expr(module_t *m);
 
 static ast_expr_t parser_match_expr(module_t *m);
 
-static bool parser_is_impl_type(type_kind kind) {
-    return is_number(kind) ||
-           kind == TYPE_STRING ||
-           kind == TYPE_BOOL ||
-           kind == TYPE_CHAN ||
-           kind == TYPE_VEC ||
-           kind == TYPE_MAP ||
-           kind == TYPE_SET ||
-           kind == TYPE_TUPLE ||
-           kind == TYPE_IDENT;
-}
-
 static token_t *parser_advance(module_t *m) {
     assert(m->p_cursor.current->succ != NULL && "next token_t is null");
     token_t *t = m->p_cursor.current->value;
@@ -552,7 +540,7 @@ static type_t parser_single_type(module_t *m) {
         }
 
         result.kind = TYPE_IDENT;
-        result.ident_kind = TYPE_IDENT_USE; // 无法确定是 alias 还是 def 还是 interface
+        result.ident_kind = TYPE_IDENT_UNKNOWN; // 无法确定是 alias 还是 def 还是 interface
         if (second) {
             result.import_as = first->literal;
             result.ident = second->literal;
@@ -726,7 +714,7 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
 
             sc_map_put_s64(&exists, fn_name, 1);
 
-            type_t union_item = {
+            type_t interface_item = {
                     .status = REDUCTION_STATUS_UNDO,
                     .line = parser_peek(m)->line,
                     .column = parser_peek(m)->column,
@@ -737,7 +725,7 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
                     .fn = type_fn,
             };
 
-            ct_list_push(type_interface->elements, &union_item);
+            ct_list_push(type_interface->elements, &interface_item);
             parser_must_stmt_end(m);
         }
 
@@ -894,7 +882,7 @@ static ast_expr_t parser_binary(module_t *m, ast_expr_t left) {
 
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
 
-    binary_expr->operator= token_to_ast_op[operator_token->type];
+    binary_expr->op = token_to_ast_op[operator_token->type];
     binary_expr->left = left;
     binary_expr->right = right;
 
@@ -1044,7 +1032,7 @@ static ast_expr_t parser_unary(module_t *m) {
     ast_unary_expr_t *unary_expr = malloc(sizeof(ast_unary_expr_t));
     if (operator_token->type == TOKEN_NOT) {
         // !true
-        unary_expr->operator= AST_OP_NOT;
+        unary_expr->op = AST_OP_NOT;
     } else if (operator_token->type == TOKEN_MINUS) {
         // -2
         // 推断下一个 token 是不是一个数字 literal, 如果是直接合并成 ast_literal 即可
@@ -1068,16 +1056,16 @@ static ast_expr_t parser_unary(module_t *m) {
             return result;
         }
 
-        unary_expr->operator= AST_OP_NEG;
+        unary_expr->op = AST_OP_NEG;
     } else if (operator_token->type == TOKEN_TILDE) {
         // ~0b2
-        unary_expr->operator= AST_OP_BNOT;
+        unary_expr->op = AST_OP_BNOT;
     } else if (operator_token->type == TOKEN_AND) {
         // &a
-        unary_expr->operator= AST_OP_LA;
+        unary_expr->op = AST_OP_LA;
     } else if (operator_token->type == TOKEN_STAR) {
         // *a
-        unary_expr->operator= AST_OP_IA;
+        unary_expr->op = AST_OP_IA;
     } else {
         PARSER_ASSERTF(false, "unknown unary operator '%d'", token_str[operator_token->type]);
     }
@@ -1172,7 +1160,6 @@ static ast_expr_t parser_left_paren_expr(module_t *m) {
     // tuple new
     parser_must(m, TOKEN_COMMA);
 
-    // 下一个是逗号才能判断为 tuple
     ast_tuple_new_t *tuple = NEW(ast_tuple_new_t);
     tuple->elements = ct_list_new(sizeof(ast_expr_t));
     ct_list_push(tuple->elements, &expr);
@@ -1696,7 +1683,7 @@ static ast_stmt_t *parser_assign(module_t *m, ast_expr_t left) {
     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
     // 可以跳过 struct new/ golang 等表达式, 如果需要使用相关表达式，需要使用括号包裹
     binary_expr->right = parser_expr_with_precedence(m);
-    binary_expr->operator= token_to_ast_op[t->type];
+    binary_expr->op = token_to_ast_op[t->type];
     binary_expr->left = left;
 
     assign_stmt->right = expr_new(m);
@@ -2474,7 +2461,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
 
 
         // 类型检测
-        PARSER_ASSERTF(parser_is_impl_type(impl_type.kind), "type '%s' cannot impl fn", type_kind_str[impl_type.kind]);
+        PARSER_ASSERTF(is_impl_builtin_type(impl_type.kind) || impl_type.kind == TYPE_IDENT, "type '%s' cannot impl fn", type_kind_str[impl_type.kind]);
 
         fndef->impl_type = impl_type;
 
@@ -2560,7 +2547,6 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
  * @return
  */
 static ast_stmt_t *parser_label(module_t *m) {
-    PARSER_ASSERTF(m->type != MODULE_TYPE_MAIN, "cannot define fn label in main module")
     ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
 
     do {
@@ -3050,7 +3036,7 @@ static ast_fndef_t *coroutine_fn_closure(module_t *m, ast_expr_t *call_expr) {
     ast_expr_t *arg = expr_new_ptr(m);
     ast_unary_expr_t *unary = NEW(ast_unary_expr_t);
     unary->operand = *ast_ident_expr(fndef->line, fndef->column, FN_COROUTINE_RETURN_VAR);
-    unary->operator= AST_OP_LA;
+    unary->op = AST_OP_LA;
     arg->assert_type = AST_EXPR_UNARY;
     arg->value = unary;
 

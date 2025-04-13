@@ -121,7 +121,6 @@ static linked_t *arm64_lower_symbol_var(closure_t *c, lir_op_t *op) {
         op->first = arm64_convert_lea_symbol_var(c, list, op->first);
     }
 
-
     if (op->second && op->second->assert_type == LIR_OPERAND_SYMBOL_VAR) {
         op->second = arm64_convert_lea_symbol_var(c, list, op->second);
     }
@@ -202,6 +201,41 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
     return list;
 }
 
+static linked_t *arm64_lower_safepoint(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+    // 创建临时寄存器存储标志地址
+    lir_operand_t *flag_ptr = temp_var_operand(c->module, type_kind_new(TYPE_ANYPTR));
+
+    // 创建符号引用
+    lir_symbol_var_t *flag_symbol = NEW(lir_symbol_var_t);
+    flag_symbol->kind = TYPE_BOOL;
+    flag_symbol->ident = "gc_stw_safepoint";
+
+    // lea 加载符号地址
+    linked_push(list, lir_op_lea(flag_ptr, operand_new(LIR_OPERAND_SYMBOL_VAR, flag_symbol)));
+
+    // 通过 indirect 读取实际值
+    lir_operand_t *flag_value_src = indirect_addr_operand(c->module, type_kind_new(TYPE_BOOL), flag_ptr, 0);
+
+    // 将值 move 出来，这样才能有寄存器分配出来用于 beq
+    lir_operand_t *flag_value = temp_var_operand(c->module, type_kind_new(TYPE_BOOL));
+    linked_push(list, lir_op_move(flag_value, flag_value_src));
+
+    // 生成比较和跳转指令
+    char *safepoint_continue_ident = label_ident_with_unique("safepoint_continue");
+    lir_operand_t *stw_handler_symbol = lir_label_operand("async_preempt", false);
+    linked_push(list, lir_op_new(LIR_OPCODE_BEQ, flag_value, bool_operand(false), lir_label_operand(safepoint_continue_ident, true)));
+
+    // B
+    linked_push(list, lir_op_bal(stw_handler_symbol));
+
+    // 增加 label continue
+    linked_push(list, lir_op_label(safepoint_continue_ident, true));
+
+
+    return list;
+}
+
 /**
  * lea sym -> [t]
  * -->
@@ -275,6 +309,11 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
 
         if (op->code == LIR_OPCODE_FN_END) {
             linked_concat(operations, arm64_lower_fn_end(c, op));
+            continue;
+        }
+
+        if (op->code == LIR_OPCODE_SAFEPOINT) {
+            linked_concat(operations, arm64_lower_safepoint(c, op));
             continue;
         }
 

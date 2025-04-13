@@ -715,18 +715,18 @@ void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj) {
 
     // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 和 barrier 冲突
     // TODO 必须放在 gc_barrier_get 之前进行独享线程的 stw locker lock? 因为 stw locker 代替了 solo p 真正的 STW?
-    if (!p->share) {
-        mutex_lock(&p->gc_stw_locker);
-    }
+//    if (!p->share) {
+//        mutex_lock(&p->gc_solo_stw_locker);
+//    }
 
     if (!gc_barrier_get()) {
         DEBUGF("[runtime_gc.rt_write_barrier_ptr] slot: %p, new_obj: %p, gc_barrier is false, no need write barrier", slot, new_obj);
 
         *(void **) slot = new_obj;
 
-        if (!p->share) {
-            mutex_unlock(&p->gc_stw_locker);
-        }
+//        if (!p->share) {
+//            mutex_unlock(&p->gc_solo_stw_locker);
+//        }
 
         return;
     }
@@ -754,9 +754,9 @@ void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj) {
 
     *(void **) slot = new_obj;
 
-    if (!p->share) {
-        mutex_unlock(&p->gc_stw_locker);
-    }
+//    if (!p->share) {
+//        mutex_unlock(&p->gc_solo_stw_locker);
+//    }
 }
 
 //static void rt_write_barrier(void *slot, void *new_obj) {

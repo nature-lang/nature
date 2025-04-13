@@ -424,7 +424,7 @@ struct n_processor_t {
     uv_loop_t uv_loop; // uv loop 事件循环
 
     // - 仅仅 solo processor 需要该锁， share 进行协作时需要上锁，避免在此期间进行任何内存操作
-    mutex_t gc_stw_locker; // solo processor 辅助判断
+//    mutex_t gc_solo_stw_locker; // solo processor 辅助判断
     uint64_t need_stw; // 外部声明, 内部判断 是否需要 stw
     uint64_t safe_point; // 内部声明, 外部判断是否已经 stw
 

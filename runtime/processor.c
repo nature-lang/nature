@@ -9,7 +9,6 @@
 #include "runtime/nutils/http.h"
 
 int cpu_count;
-bool processor_need_exit;
 
 n_processor_t *share_processor_index[1024] = {0};
 n_processor_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
@@ -151,7 +150,7 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     uint64_t pc = CTX_PC;
     uint64_t lr = CTX_LR; // 保存返回地址的链接寄存器
 
-    // 查找当前执行的函数
+    // 查找当前执行的函数(协作式调度，必然能够被找到才行)
     fndef_t *fn = find_fn(pc, p);
     if (fn) {
         // 基于当前 sp 计算扫描偏移
@@ -214,7 +213,7 @@ NO_OPTIMIZE static void coroutine_wrapper() {
     assert(p);
 
     DEBUGF("[runtime.coroutine_wrapper] p_index_%d=%d, p_status=%d co=%p, fn=%p main=%d, rt_co=%d", p->share,
-           p->index, p->status, co, co->fn, co->main,  co->flag & FLAG(CO_FLAG_RTFN));
+           p->index, p->status, co, co->fn, co->main, co->flag & FLAG(CO_FLAG_RTFN));
 
     co_set_status(p, co, CO_STATUS_RUNNING);
     processor_set_status(p, P_STATUS_RUNNING);
@@ -225,12 +224,13 @@ NO_OPTIMIZE static void coroutine_wrapper() {
 
     assert((addr_t) co->fn > 0);
 
+    // 调用到用户函数
     ((void_fn_t) co->fn)();
 
     DEBUGF(
             "[runtime.coroutine_wrapper] user fn completed, p_index_%d=%d co=%p, main=%d, rt_fn=%d,err=%p, will set status to rtcall",
             p->share, p->index, co,
-            co->main,  co->flag & FLAG(CO_FLAG_RTFN), co->error);
+            co->main, co->flag & FLAG(CO_FLAG_RTFN), co->error);
     processor_set_status(p, P_STATUS_RTCALL);
 
     // coroutine 即将退出，避免被 gc 清理，所以将 error 保存在 co->future 中?
@@ -277,7 +277,7 @@ static void coroutine_aco_init(n_processor_t *p, coroutine_t *co) {
     aco_create_init(&co->aco, &p->main_aco, &p->share_stack, 0, coroutine_wrapper, co);
 }
 
-void processor_all_stop_the_world() {
+void processor_all_need_stop() {
     uint64_t stw_time = uv_hrtime();
     PROCESSOR_FOR(share_processor_list) {
         p->need_stw = stw_time;
@@ -290,11 +290,11 @@ void processor_all_stop_the_world() {
     mutex_unlock(&solo_processor_locker);
 }
 
-void processor_all_start_the_world() {
+void processor_all_start() {
     PROCESSOR_FOR(share_processor_list) {
         p->need_stw = 0;
         p->safe_point = 0;
-        RDEBUGF("[runtime_gc.processor_all_start_the_world] p_index_%d=%d, thread_id=%lu set safe_point=false",
+        RDEBUGF("[runtime_gc.processor_all_start] p_index_%d=%d, thread_id=%lu set safe_point=false",
                 p->share, p->index,
                 (uint64_t) p->thread_id);
     }
@@ -303,15 +303,15 @@ void processor_all_start_the_world() {
     PROCESSOR_FOR(solo_processor_list) {
         p->need_stw = 0;
         p->safe_point = 0;
-        mutex_unlock(&p->gc_stw_locker);
+//        mutex_unlock(&p->gc_solo_stw_locker);
 
         TRACEF(
-                "[runtime_gc.processor_all_start_the_world] p_index_%d=%d, thread_id=%lu set safe_point=false and unlock gc_stw_locker",
+                "[runtime_gc.processor_all_start] p_index_%d=%d, thread_id=%lu set safe_point=false and unlock gc_stw_locker",
                 p->share, p->index, (uint64_t) p->thread_id);
     }
     mutex_unlock(&solo_processor_locker);
 
-    DEBUGF("[runtime_gc.processor_all_start_the_world] all processor stw completed");
+    DEBUGF("[runtime_gc.processor_all_start] all processor stw completed");
 }
 
 void uv_stop_callback(uv_timer_t *timer) {
@@ -581,8 +581,8 @@ void sched_init() {
     uv_free_cpu_info(info, cpu_count);
 
     // - 初始化全局标识
-    processor_need_exit = false;
     gc_barrier = false;
+    gc_stw_safepoint = false;
     mutex_init(&gc_stage_locker, false);
     mutex_init(&solo_processor_locker, false);
     gc_stage = GC_STAGE_OFF;
@@ -614,6 +614,7 @@ void sched_init() {
     share_processor_list = NULL;
     solo_processor_list = NULL;
 
+    cpu_count = 2;
     for (int i = 0; i < cpu_count; ++i) {
         n_processor_t *p = processor_new(i);
         // 仅 share processor 需要 gc worklist
@@ -812,7 +813,7 @@ n_processor_t *processor_new(int index) {
     mutex_unlock(&cp_alloc_locker);
 
     // uv_loop_init(&p->uv_loop);
-    mutex_init(&p->gc_stw_locker, false);
+//    mutex_init(&p->gc_solo_stw_locker, false);
     p->need_stw = 0;
     p->safe_point = 0;
 
@@ -832,18 +833,6 @@ n_processor_t *processor_new(int index) {
     p->linkco_count = 0;
 
     return p;
-}
-
-/**
- * 当 main processor 退出时，会收到该值
- * @return
- */
-bool processor_get_exit() {
-    return processor_need_exit;
-}
-
-void processor_set_exit() {
-    processor_need_exit = true;
 }
 
 void coroutine_free(coroutine_t *co) {
@@ -948,19 +937,26 @@ bool processor_all_safe() {
     return true;
 }
 
-void processor_all_wait_safe() {
+bool processor_all_wait_safe(int max_count) {
+    int count = 0;
     RDEBUGF("[processor_all_wait_safe] start");
     while (!processor_all_safe()) {
-        usleep(WAIT_BRIEF_TIME * 1000);
+        if (count >= max_count) {
+            return false; // T
+        }
+
+        count += 1;
+        usleep(WAIT_BRIEF_TIME * 1000); // 每 1ms 检测一次
     }
 
     RDEBUGF("[processor_all_wait_safe] end");
+    return true;
 }
 
 void processor_stw_unlock() {
     mutex_lock(&solo_processor_locker);
     PROCESSOR_FOR(solo_processor_list) {
-        mutex_unlock(&p->gc_stw_locker);
+//        mutex_unlock(&p->gc_solo_stw_locker);
         RDEBUGF("[runtime.processor_all_safe_or_lock] solo processor p_index_%d=%d gc_stw_locker unlock", p->share,
                 p->index);
     }
@@ -1084,15 +1080,15 @@ void processor_set_status(n_processor_t *p, p_status_t status) {
 
     // 特殊处理 2， solo 切换成 running 时需要获取 gc_stw_locker, 如果 gc_stw_locker 阻塞说明当前正在 stw
     // 必须获取到 stw locker 才能切换到 running 状态(runnable -> running/ tpl_call -> running)
-    if (!p->share && status == P_STATUS_RUNNING) {
-        mutex_lock(&p->gc_stw_locker);
-    }
+//    if (!p->share && status == P_STATUS_RUNNING) {
+//        mutex_lock(&p->gc_solo_stw_locker);
+//    }
 
     p->status = status;
 
-    if (!p->share && status == P_STATUS_RUNNING) {
-        mutex_unlock(&p->gc_stw_locker);
-    }
+//    if (!p->share && status == P_STATUS_RUNNING) {
+//        mutex_unlock(&p->gc_solo_stw_locker);
+//    }
 
     mutex_unlock(&p->thread_locker);
 

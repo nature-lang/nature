@@ -95,12 +95,14 @@ acosw:
 #define SYM(x) x
 #endif
 
-.globl async_preempt
-#if defined(__DARWIN)
+#ifdef __DARWIN
+.globl _async_preempt
+_async_preempt:
 #else
+.globl async_preempt
 .type  async_preempt, @function
-#endif
 async_preempt:
+#endif
 #ifdef __AMD64
     push rbp
     mov rbp, rsp
@@ -138,7 +140,7 @@ async_preempt:
     movups [rsp + 320], xmm13
     movups [rsp + 336], xmm14
     movups [rsp + 352], xmm15
-    call SYM(co_preempt_yield)
+    call SYM(co_preempt_yield) // save and yield
 
 
     // debug (多的不能确定，但是这里肯定是 0 了，毕竟ret 地址被覆盖了，可关键是，栈空间还是会被污染呢)

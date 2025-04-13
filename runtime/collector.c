@@ -57,20 +57,20 @@ void shade_obj_grey(void *obj) {
 }
 
 void rt_shade_obj_with_barrier(void *new_obj) {
-    n_processor_t *p = processor_get();
+    //    n_processor_t *p = processor_get();
     // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 冲突
-    if (p && !p->share) {
-        mutex_lock(&p->gc_stw_locker);
-    }
+    //    if (p && !p->share) {
+    //        mutex_lock(&p->gc_solo_stw_locker);
+    //    }
 
     if (gc_barrier_get()) {
         DEBUGF("[runtime_gc.rt_shade_obj_with_barrier] new_obj=%p, will shade_obj_grey", new_obj);
         shade_obj_grey(new_obj);
     }
 
-    if (p && !p->share) {
-        mutex_unlock(&p->gc_stw_locker);
-    }
+    //    if (p && !p->share) {
+    //        mutex_unlock(&p->gc_solo_stw_locker);
+    //    }
 }
 
 /**
@@ -306,17 +306,21 @@ void mcentral_sweep(mheap_t *mheap) {
     RDEBUGF("[mcentral_sweep] start");
 }
 
+
 /**
  * save_stack 中保存着 coroutine 栈数组，其中 stack->ptr 指向了原始栈的栈顶
  * 整个 ptr 申请的空间是 sz, 实际占用的空间是 valid_sz，valid_sz 是经过 align 的空间
  */
 static void scan_stack(n_processor_t *p, coroutine_t *co) {
-    DEBUGF(
+    addr_t bp_value = (addr_t) co->aco.reg[ACO_REG_IDX_BP];
+    addr_t sp_value = (addr_t) co->aco.reg[ACO_REG_IDX_SP];
+
+    TDEBUGF(
             "[runtime_gc.scan_stack] start, p_index_%d=%d(%lu), p_status=%d, co=%p, co_status=%d, co_stack_size=%zu, save_stack=%p(%zu), scan_offset=%lu, "
-            "scan_ret_addr=%p",
+            "scan_ret_addr=%p, bp_value=%p, sp_value=%p, share_stack.base=%p",
             p->share, p->index, (uint64_t) p->thread_id, p->status, co, co->status, co->aco.save_stack.valid_sz,
             co->aco.save_stack.ptr,
-            co->aco.save_stack.sz, co->scan_offset, (void *) co->scan_ret_addr);
+            co->aco.save_stack.sz, co->scan_offset, (void *) co->scan_ret_addr, bp_value, sp_value, co->aco.share_stack->align_retptr);
 
     // save_stack 也是通过 gc 申请，即使是 gc_work 也需要标记一下
     assert(span_of((addr_t) co->aco.save_stack.ptr) && "coroutine save stack not found span");
@@ -347,105 +351,110 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         return;
     }
 
-    assert(co->scan_offset);
+    // 由于 nature 支持调用 c 语言，所以 frame_bp 可能是 c 代码，此时不需要进行 scan_stack
+    // 直到遇到 nature code, 才需要进行 stack
+    // 基于 frame_bp + ret_addr 想栈底，目前采用协作式调度后，只有 safepoint 或者 再 c 代码中进行 yield, 这里的 c 代码一定是再 runtime 中进行 yield，采用了
+    // -fno-omit-frame-pointer 方式，所以存在完整的栈帧
+    addr_t stack_top_ptr = 0;
+    if (p->share) {
+        stack_top_ptr = (addr_t) co->aco.save_stack.ptr;
+    } else {
+        // solo 不会溢出到 save stack, 总是在 share stack 进行处理
+        stack_top_ptr = sp_value; // min value
+    }
+    assert(stack_top_ptr > 0);
 
     // sp 指向了内存地址，可以从中取值
-    addr_t scan_sp;
-    uint64_t size;
+    aco_save_stack_t save_stack = co->aco.save_stack;
+    uint64_t size = 0;
     if (p->share) {
-        aco_save_stack_t stack = co->aco.save_stack;
-        assert(stack.valid_sz > 0);
-        // shae stack to save stack 通过 sp 指针将数据从栈顶(小值 copy 到大值)栈低
-        // 通过 + sz 指向栈底，然后 - scan_offset 回到栈顶, stack.ptr ~ valid_sz 是可扫描的区域，但是最靠近栈顶的部分函数被 syscall 占用无法识别
-        // 所以需要减掉这部分区域，从 nature fn 区域开始扫描, pre_tplcall_hook 会将最后一个 nature fn 的偏移写入到 scan offset 中
-        scan_sp = ((addr_t) stack.ptr + stack.valid_sz) - co->scan_offset;
-        size = stack.valid_sz;
+        size = save_stack.valid_sz;
     } else {
-        // retptr 指向了栈底(最大值)
-        scan_sp = (addr_t) p->share_stack.align_retptr - co->scan_offset;
-        size = co->scan_offset;
+        size = (uint64_t) p->share_stack.align_retptr - (uint64_t) sp_value;
     }
-    assert(scan_sp % POINTER_SIZE == 0);
+    assert(size > 0);
 
     DEBUGF("[runtime_gc.scan_stack] co=%p will scan stack, scan_sp=%p, valid_size=%lu, first ret_addr=%p", co,
            (void *) scan_sp, size,
            (void *) co->scan_ret_addr);
 
+
 #ifdef DEBUG_LOG
-    DEBUGF("[runtime_gc.scan_stack] traverse stack, start");
-    addr_t temp_cursor = (addr_t) scan_sp; // 栈向下(小)增长
+    TDEBUGF("[runtime_gc.scan_stack] traverse stack, start");
+    addr_t temp_cursor = stack_top_ptr; // 栈向下(小)增长
     size_t temp_i = 0;
     size_t max_i = size / POINTER_SIZE;
     while (temp_i < max_i) {
         addr_t v = fetch_addr_value((addr_t) temp_cursor);
         fndef_t *fn = find_fn(v, p);
-        TRACEF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i,
-               temp_cursor, v,
-               fn ? fn->name : "", fn ? fn->stack_size : 0);
+        TDEBUGF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i,
+                temp_cursor, v,
+                fn ? fn->name : "", fn ? fn->stack_size : 0);
         temp_cursor += POINTER_SIZE;
         temp_i += 1;
     }
-    DEBUGF("[runtime_gc.scan_stack] traverse stack, end");
+    TDEBUGF("[runtime_gc.scan_stack] traverse stack, end");
 #endif
 
-    addr_t cursor = scan_sp;
-    addr_t max = scan_sp + size;
 
-    // 抢占调度，由于可能在 c 语言中产生抢占，所以无法准确的定位到 nature fn
-    // c 语言代码中可能没有按照标准调用实现，所以 bp 寄存器中无法关联栈帧信息
-    // 因为进行保守的栈扫描策略, 从 sp 指针开始全量扫描。
-    if (co->scan_ret_addr == 0) {
-        DEBUGF("[runtime_gc.scan_stack] conservative scan start, p_index_%d=%d, p_status=%d, co=%p", p->share, p->index,
-               p->status, co);
-        int scan_ptr_count = 0;
-        while (cursor < max) {
-            // 即使在 head 也可能是一个已经被回收的地址，所以需要 in_heap + span_of 双重判断
-            addr_t value = fetch_addr_value(cursor);
-            if (span_of(value)) {
-                insert_gc_worklist(worklist, (void *) value);
+    // share_stack value, bp register 中存储的是当前栈帧的栈底值，指向了 share_stack_value
+    // frame_bp 中存储的是一个 share stack 栈地址，需要将其转换为 save stack 的 offset，然后去其值可以获取 prev_rbp 的值
+    addr_t share_stack_frame_bp = (addr_t) bp_value;
+    bool found = false;
+    addr_t ret_addr = (addr_t) co->aco.reg[ACO_REG_IDX_RETADDR];
 
-                scan_ptr_count++;
-            } else {
-                DEBUGF("[runtime_gc.scan_stack] conservative scan skip, cursor=%p, value=%p, in_heap=%d, span_of=%p",
-                       (void *) cursor,
-                       (void *) value, in_heap(value), span_of(value));
-            }
+    while (share_stack_frame_bp < (addr_t) co->aco.share_stack->align_retptr) {
+        // 将 share_stack frame bp 转换为 save_stack offset
+        addr_t bp_offset = share_stack_frame_bp - sp_value;
 
-            cursor += POINTER_SIZE;
-        }
-
-        DEBUGF(
-                "[runtime_gc.scan_stack] conservative scan completed, p_index_%d=%d, p_status=%d, co=%p, scan_ptr_count=%d",
-                p->share,
-                p->index, p->status, co, scan_ptr_count);
-        return;
-    }
-
-    addr_t ret_addr = co->scan_ret_addr;
-    assertf(find_fn(ret_addr, p), "scan ret_addr=%p failed", ret_addr);
-
-    int scan_fn_count = 0;
-    // coroutine_wrapper 也使用了该协程栈，如果遇到的 return_addr 无法找到对应的 fn 直接退出当前循环即可
-    while (cursor < max) {
+        // check prev value is nature fn
         fndef_t *fn = find_fn(ret_addr, p);
-        // assertf(fn, "fn not found by ret_addr, return_addr=0x%lx", ret_addr);
-        if (!fn) {
-            DEBUGF("fn not found by ret_addr, return_addr=%p, break", (void *) ret_addr);
+        TDEBUGF("[runtime_gc.scan_stack] find frame_bp=%p, bp_offset=%ld, ret_addr=%p, fn=%s", (void *) share_stack_frame_bp, bp_offset, (void *) ret_addr, fn ? fn->name : "-");
+
+        if (fn) {
+            found = true;
             break;
         }
 
-        scan_fn_count++;
 
-        DEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p, fn->stack_size=%ld", fn->name,
-               (void *) ret_addr, fn->stack_size);
+        // bp value 和 ret_addr 不是那么同步
+        share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset);
 
-        addr_t frame_cursor = cursor;
+        // save_stack.ptr 指向栈顶
+        ret_addr = fetch_addr_value(stack_top_ptr + bp_offset + POINTER_SIZE);
+    }
+
+    assert(found);
+    assertf(find_fn(ret_addr, p), "scan ret_addr=%p failed", ret_addr);
+
+
+    // linux/darwin arm64 采用了不同的栈帧布局,所以总是基于 bp 的值从帧底 -> 帧顶遍历，然后查找 prev frame_bp
+    // 上面已经找到了 prev bp 和 ret addr 的值, 可以对 ret addr 进行遍历
+    while (true) {
+        fndef_t *fn = find_fn(ret_addr, p);
+        if (!fn) {
+            TDEBUGF("[runtime_gc.scan_stack] fn not found by ret_addr, return_addr=%p, break", (void *) ret_addr);
+            break;
+        }
+
+        TDEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p, fn->stack_size=%ld, bp=%p", fn->name,
+                (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
+
+        // share_stack_frame_bp 是 fn 对应的帧的值,已经从帧中取了出来, 原来保存再 BP 寄存器中，现在保存再帧中
+        addr_t bp_offset = share_stack_frame_bp - sp_value;
+
+        // 将 share 转换为 prev 偏移量
+        addr_t frame_cursor = stack_top_ptr + bp_offset; // 指向了栈底
+
+        frame_cursor -= POINTER_SIZE; // -8 之后才能向上取值
+
+        // 基于 fn 的 size 计算 ptr_count
         int64_t ptr_count = fn->stack_size / POINTER_SIZE;
-        for (int64_t i = ptr_count - 1; i >= 0; --i) {
+        for (int i = 0; i < ptr_count; ++i) {
             bool is_ptr = bitmap_test(fn->gc_bits, i);
-            DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, is_ptr=%d, may_value=%p", fn->name, i,
-                   ptr_count - 1, is_ptr,
-                   (void *) fetch_int_value(frame_cursor, 8));
+            TDEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, is_ptr=%d, may_value=%p", fn->name, i,
+                    ptr_count - 1, is_ptr,
+                    (void *) fetch_int_value(frame_cursor, 8));
 
             // 即使当前 slot 的类型是 ptr 但是可能存在还没有存储值, 所以需要重复判断
             if (is_ptr) {
@@ -459,14 +468,12 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
                 }
             }
 
-            frame_cursor += POINTER_SIZE;
+            frame_cursor -= POINTER_SIZE;
         }
 
-        // 找到下一个 return_addr
-        ret_addr = (addr_t) fetch_addr_value(frame_cursor + POINTER_SIZE);
-
-        // 跳过 prev_rbp + return addr 进行下一次循环
-        cursor = frame_cursor + POINTER_SIZE + POINTER_SIZE;
+        // 重新提取 ret_addr 和 share_stack_frame_bp
+        share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset);
+        ret_addr = fetch_addr_value(stack_top_ptr + bp_offset + POINTER_SIZE);
     }
 
     DEBUGF("[runtime_gc.scan_stack] completed, p_index=%d, co=%p, scan_fn_count=%d", p->index, co, scan_fn_count);
@@ -856,20 +863,28 @@ static void gc_mark_done() {
 }
 
 /**
+ * 再单独的线程中执行
  * @stack system
  */
 void runtime_gc() {
     int64_t before = allocated_bytes;
+    int64_t _next_gc_bytes = allocated_bytes * NEXT_GC_FACTOR;
 
     // - gc stage: GC_START
     gc_stage = GC_STAGE_START;
-    DEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START, pid %d", allocated_bytes / 1000, getpid());
+    TDEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START, pid %d", allocated_bytes / 1000, getpid());
 
     memory->gc_count += 1;
 
     // 等待所有的 processor 进入安全点
-    processor_all_stop_the_world();
-    processor_all_wait_safe();
+    processor_all_need_stop();
+    if (!processor_all_wait_safe(GC_STW_WAIT_COUNT)) {
+        DEBUGF("[runtime_gc] wait processor safe timeout, will return")
+        processor_all_start(); // 清空安全点
+        // 重置 next gc bytes
+        gc_stage = GC_STAGE_OFF;
+        return;
+    }
 
     DEBUGF("[runtime_gc] all processor safe");
 
@@ -892,7 +907,7 @@ void runtime_gc() {
     scan_pool();
 
     DEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
-    processor_all_start_the_world();
+    processor_all_start();
 
     // - gc stage: GC_MARK
     gc_stage = GC_STAGE_MARK;
@@ -903,8 +918,13 @@ void runtime_gc() {
 
     // STW 之后再更改 GC 阶段
     DEBUGF("[runtime_gc] wait all processor gc work completed, will stop the world and get solo stw locker");
-    processor_all_stop_the_world();
-    processor_all_wait_safe();
+    processor_all_need_stop();
+    if (!processor_all_wait_safe(GC_STW_SWEEP_COUNT)) {
+        DEBUGF("[runtime_gc] wait processor safe sweep timeout, will return")
+        processor_all_start();
+        gc_stage = GC_STAGE_OFF;
+        return;
+    }
     DEBUGF("[runtime_gc] all processor safe");
     // -------------- STW start ----------------------------
 
@@ -935,10 +955,12 @@ void runtime_gc() {
     DEBUGF("[runtime_gc] gcbits_arenas_epoch completed, will stop gc barrier");
 
     gc_barrier_stop();
-    processor_all_start_the_world();
-    // -------------- STW end ----------------------------
+    processor_all_start();
 
+    // -------------- STW end ----------------------------
+    // 更新 next gc byts
+    next_gc_bytes = _next_gc_bytes;
     gc_stage = GC_STAGE_OFF;
-    DEBUGF("[runtime_gc] gc stage: GC_OFF, gc_barrier_stop, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes / 1024,
+    TDEBUGF("[runtime_gc] gc stage: GC_OFF, gc_barrier_stop, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes / 1024,
             (before - allocated_bytes) / 1024);
 }

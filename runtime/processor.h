@@ -9,6 +9,9 @@
 #include "nutils/vec.h"
 #include "runtime.h"
 
+#define GC_STW_WAIT_COUNT 10
+#define GC_STW_SWEEP_COUNT (GC_STW_WAIT_COUNT * 2)
+
 extern int cpu_count;
 extern n_processor_t *share_processor_index[1024];
 extern n_processor_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
@@ -23,8 +26,6 @@ extern uv_key_t tls_coroutine_key;
 
 // processor gc_finished 后新产生的 shade ptr 会存入到该全局工作队列中，在 gc_mark_done 阶段进行单线程处理
 extern rt_linked_fixalloc_t global_gc_worklist; // 全局 gc worklist
-
-extern bool processor_need_exit; // 全局 STW 标识
 
 extern fixalloc_t coroutine_alloc;
 extern fixalloc_t processor_alloc;
@@ -43,7 +44,11 @@ typedef enum {
 #define NO_OPTIMIZE __attribute__((optnone))
 #endif
 
+#ifdef __DARWIN
+extern void async_preempt() __asm__("_async_preempt");
+#else
 extern void async_preempt() __asm__("async_preempt");
+#endif
 
 NO_OPTIMIZE void debug_ret(uint64_t rbp, uint64_t ret_addr);
 
@@ -122,24 +127,17 @@ static inline void co_yield_waiting(coroutine_t *co, unlock_fn unlock_fn, void *
 // locker
 void *global_gc_worklist_pop();
 
-void processor_all_stop_the_world();
+void processor_all_need_stop();
 
-void processor_all_start_the_world();
+void processor_all_start();
 
 bool processor_all_safe();
 
-void processor_all_wait_safe();
+bool processor_all_wait_safe(int max_count);
 
 void processor_stw_unlock();
 
 void wait_all_gc_work_finished();
-
-/**
- *  processor 停止调度
- */
-bool processor_get_exit();
-
-void processor_set_exit();
 
 /**
  * 阻塞特定时间的网络 io 时间, 如果有 io 事件就绪则立即返回

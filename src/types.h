@@ -431,9 +431,9 @@ typedef enum {
     LIR_OPCODE_FN_BEGIN, // output 为 formals 操作数
     LIR_OPCODE_FN_END, // 无操作数
 
-    LIR_OPCODE_NOP, // 空的，不做任何操作的指令，但是将用于 ssa 的完整 use-def
+    LIR_OPCODE_SAFEPOINT,
 
-    LIR_OPCODE_ALLOC, // struct/arr 不确定是在栈上还是在堆上分配时使用该指令
+    LIR_OPCODE_NOP, // 空的，不做任何操作的指令，但是将用于 ssa 的完整 use-def
 } lir_opcode_t;
 
 typedef struct lir_operand_t lir_operand_t;

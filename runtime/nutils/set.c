@@ -34,6 +34,8 @@ static bool _rt_set_add(n_set_t *m, void *key_ref) {
     uint64_t key_size = rt_rtype_stack_size(m->key_rtype_hash);
     void *dst = m->key_data + key_size * key_index;
 
+    // TODO write barrier
+
     // DEBUGF("[runtime.set_add] key_size=%lu, dst=%p, src=%p", key_size, dst, key_ref);
     memmove(dst, key_ref, key_size);
     return added;

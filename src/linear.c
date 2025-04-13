@@ -74,7 +74,7 @@ static lir_operand_t *linear_inline_arr_element_addr(module_t *m, lir_operand_t 
     lir_operand_t *cmp_result = temp_var_operand_with_alloc(m, type_kind_new(TYPE_BOOL));
     OP_PUSH(lir_op_new(LIR_OPCODE_USLT, index_target, length_target, cmp_result));
 
-    char *cmd_label_ident = label_ident_with_unique(m, "arr_index_cmp");
+    char *cmd_label_ident = label_ident_with_unique("arr_index_cmp");
     char *end_label_ident = str_connect(cmd_label_ident, LABEL_END_SUFFIX);
     lir_operand_t *cmp_end_label = lir_label_operand(end_label_ident, true);
 
@@ -134,7 +134,7 @@ static lir_operand_t *linear_inline_vec_element_addr(module_t *m, lir_operand_t 
 
     OP_PUSH(lir_op_new(LIR_OPCODE_USLT, index_target, length_target, cmp_result));
 
-    char *cmd_label_ident = label_ident_with_unique(m, "vec_index_cmp");
+    char *cmd_label_ident = label_ident_with_unique("vec_index_cmp");
     char *end_label_ident = str_connect(cmd_label_ident, LABEL_END_SUFFIX);
     lir_operand_t *cmp_end_label = lir_label_operand(end_label_ident, true);
 
@@ -708,17 +708,30 @@ static void linear_vec_assign(module_t *m, ast_assign_stmt_t *stmt) {
 
     // target 中保存的是一个指针数据，指向的类型是 right.type
     lir_operand_t *target = linear_inline_vec_element_addr(m, vec_target, index_target, vec_access->element_type);
-    if (!is_stack_ref_big_type(t)) {
-        target = indirect_addr_operand(m, t, target, 0);
-    }
 
-    linear_super_move(m, t, target, src);
+    if (is_gc_alloc(stmt->left.type.kind)) {
+        // target 已经是指针了，不需要再次计算 slot
+        push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, target, src);
+    } else {
+        if (!is_stack_ref_big_type(t)) {
+            target = indirect_addr_operand(m, t, target, 0);
+        }
+
+        linear_super_move(m, t, target, src);
+    }
 }
 
 static void linear_array_assign(module_t *m, ast_assign_stmt_t *stmt) {
+    // ptr 返回的是一个 indirect, 所以需要进行 lea 处理
     lir_operand_t *target = linear_array_access(m, stmt->left, NULL);
+    if (is_gc_alloc(stmt->left.type.kind)) {
+        lir_operand_t *new_obj = linear_expr(m, stmt->right, NULL);
+        lir_operand_t *dst_slot = lea_operand_pointer(m, target);
 
-    linear_expr(m, stmt->right, target);
+        push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst_slot, new_obj);
+    } else {
+        linear_expr(m, stmt->right, target);
+    }
 }
 
 static void linear_tuple_assign(module_t *m, ast_assign_stmt_t *stmt) {
@@ -728,13 +741,20 @@ static void linear_tuple_assign(module_t *m, ast_assign_stmt_t *stmt) {
 
     uint64_t element_size = type_sizeof(tuple_access->element_type);
     uint64_t offset = type_tuple_offset(tuple_type.tuple, tuple_access->index);
-
     lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, tuple_target, offset);
-    if (is_stack_ref_big_type(stmt->left.type)) {
-        dst = lea_operand_pointer(m, dst);
-    }
 
-    linear_expr(m, stmt->right, dst);
+    // TODO write barrier
+    if (is_gc_alloc(stmt->left.type.kind)) {
+        lir_operand_t *obj = linear_expr(m, stmt->right, NULL);
+        lir_operand_t *dst_slot = lea_operand_pointer(m, dst);
+        push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst_slot, obj);
+    } else {
+        if (is_stack_ref_big_type(stmt->left.type)) {
+            dst = lea_operand_pointer(m, dst);
+        }
+
+        linear_expr(m, stmt->right, dst);
+    }
 }
 
 static lir_operand_t *linear_inline_env_values(module_t *m) {
@@ -800,13 +820,23 @@ static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
     lir_operand_t *map_target = linear_expr(m, map_access->left, NULL);
 
     lir_operand_t *key_ref = lea_operand_pointer(m, linear_expr(m, map_access->key, NULL));
+
+    // dst 是一个 slot 提供写入地址
     lir_operand_t *dst = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
     push_rt_call(m, RT_CALL_MAP_ASSIGN, dst, 2, map_target, key_ref);
-    if (!is_stack_ref_big_type(stmt->right.type)) {
-        dst = indirect_addr_operand(m, stmt->right.type, dst, 0);
-    }
 
-    linear_expr(m, stmt->right, dst);
+
+    // TODO write barrier
+    if (is_gc_alloc(stmt->left.type.kind)) {
+        // 不包含 struct/array
+        lir_operand_t *obj = linear_expr(m, stmt->right, NULL);
+        push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst, obj);
+    } else {
+        if (!is_stack_ref_big_type(stmt->right.type)) {
+            dst = indirect_addr_operand(m, stmt->right.type, dst, 0);
+        }
+        linear_expr(m, stmt->right, dst);
+    }
 }
 
 static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
@@ -858,7 +888,7 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
 static void linear_ia_ptr_assign(module_t *m, ast_assign_stmt_t *stmt) {
     assert(stmt->left.assert_type == AST_EXPR_UNARY);
     ast_unary_expr_t *unary_expr = stmt->left.value;
-    assert(unary_expr->operator== AST_OP_IA);
+    assert(unary_expr->op == AST_OP_IA);
 
     // 右值可能是一个 struct_new, 但是这又有什么影响呢，你必须创造新的空间？
     lir_operand_t *src = linear_expr(m, stmt->right, NULL);
@@ -1115,7 +1145,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     lir_operand_t *cursor_operand = unique_var_operand(m, type_kind_new(TYPE_INT), ITERATOR_CURSOR);
     OP_PUSH(lir_op_move(cursor_operand, int_operand(-1))); // cursor 初始值 = --
 
-    char *for_start_ident = label_ident_with_unique(m, FOR_ITERATOR_IDENT);
+    char *for_start_ident = label_ident_with_unique(FOR_ITERATOR_IDENT);
     char *for_update_ident = str_connect(for_start_ident, LABEL_UPDATE_SUFFIX);
     char *for_continue_ident = str_connect(for_start_ident, LABEL_CONTINUE_SUFFIX);
     char *for_end_ident = str_connect(for_start_ident, LABEL_END_SUFFIX);
@@ -1193,7 +1223,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
  */
 static void linear_for_cond(module_t *m, ast_for_cond_stmt_t *ast) {
     lir_op_t *for_start = lir_op_local_label(m, FOR_COND_IDENT);
-    lir_operand_t *for_end_operand = lir_label_operand(label_ident_with_unique(m, FOR_END_IDENT), true);
+    lir_operand_t *for_end_operand = lir_label_operand(label_ident_with_unique(FOR_END_IDENT), true);
     stack_push(m->current_closure->continue_labels, for_start->output);
     stack_push(m->current_closure->break_labels, for_end_operand);
 
@@ -1219,7 +1249,7 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
     // init
     linear_stmt(m, ast->init);
 
-    char *for_start_ident = label_ident_with_unique(m, FOR_TRADITION_IDENT);
+    char *for_start_ident = label_ident_with_unique(FOR_TRADITION_IDENT);
     char *for_update_ident = str_connect(for_start_ident, LABEL_UPDATE_SUFFIX);
     char *for_continue_ident = str_connect(for_start_ident, LABEL_CONTINUE_SUFFIX);
     char *for_end_ident = str_connect(for_start_ident, LABEL_END_SUFFIX);
@@ -1300,7 +1330,7 @@ static void linear_return(module_t *m, ast_return_stmt_t *ast) {
 static void linear_if(module_t *m, ast_if_stmt_t *if_stmt) {
     // 编译 condition
     lir_operand_t *condition_target = linear_expr(m, if_stmt->condition, NULL);
-    char *if_label_ident = label_ident_with_unique(m, IF_IDENT);
+    char *if_label_ident = label_ident_with_unique(IF_IDENT);
 
     // 判断结果是否为 false, false 对应 else
     lir_operand_t *false_target = bool_operand(false);
@@ -1333,7 +1363,7 @@ static void linear_if(module_t *m, ast_if_stmt_t *if_stmt) {
 }
 
 static void linear_select(module_t *m, ast_select_stmt_t *select_stmt) {
-    char *select_start_ident = label_ident_with_unique(m, SELECT_IDENT);
+    char *select_start_ident = label_ident_with_unique(SELECT_IDENT);
     char *select_end_ident = str_connect(select_start_ident, LABEL_END_SUFFIX);
     OP_PUSH(lir_op_label(select_start_ident, true));
 
@@ -1447,7 +1477,7 @@ select_case_2.end:
 select_end:*/
     for (int i = 0; i < cases_count; ++i) {
         ast_select_case_t *select_case = select_stmt->cases->take[cases_map[i]];
-        char *handle_start_ident = label_ident_with_unique(m, str_connect(select_start_ident, CASE_HANDLE));
+        char *handle_start_ident = label_ident_with_unique(str_connect(select_start_ident, CASE_HANDLE));
         lir_op_t *handle_start = lir_op_label(handle_start_ident, true);
         lir_op_t *handle_end = lir_op_label(str_connect(handle_start_ident, LABEL_END_SUFFIX), true);
 
@@ -1610,6 +1640,9 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
         push_rt_call_no_hook(m, RT_CALL_PRE_TPLCALL_HOOK, NULL, 1, string_operand(type_fn->fn_name));
     }
 
+    // safe point
+    OP_PUSH(lir_op_safepoint());
+
     // call base_target,params -> target
     OP_PUSH(lir_op_new(LIR_OPCODE_CALL, base_target, operand_new(LIR_OPERAND_ARGS, params), temp));
 
@@ -1633,7 +1666,7 @@ static lir_operand_t *linear_logical_or(module_t *m, ast_expr_t expr, lir_operan
     assert(expr.type.kind == TYPE_BOOL);
     // 编译 left, 如果 left 为 true,则直接返回 true
     ast_binary_expr_t *logical_expr = expr.value;
-    lir_operand_t *logic_end_operand = lir_label_operand(label_ident_with_unique(m, LOGICAL_OR_IDENT), true);
+    lir_operand_t *logic_end_operand = lir_label_operand(label_ident_with_unique(LOGICAL_OR_IDENT), true);
 
     // xxx left -> result
     lir_operand_t *left_src = linear_expr(m, logical_expr->left, NULL);
@@ -1657,7 +1690,7 @@ static lir_operand_t *linear_logical_and(module_t *m, ast_expr_t expr, lir_opera
     // 编译 left, 如果 left 为 true,则直接返回 true
     ast_binary_expr_t *logical_expr = expr.value;
 
-    lir_operand_t *logic_end_operand = lir_label_operand(label_ident_with_unique(m, LOGICAL_AND_IDENT), true);
+    lir_operand_t *logic_end_operand = lir_label_operand(label_ident_with_unique(LOGICAL_AND_IDENT), true);
 
     // xxx left -> result
     lir_operand_t *left_target = linear_expr(m, logical_expr->left, NULL);
@@ -1683,16 +1716,16 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
     }
 
     // 特殊 binary 处理
-    if (binary_expr->operator== AST_OP_OR_OR) {
+    if (binary_expr->op == AST_OP_OR_OR) {
         return linear_logical_or(m, expr, target);
     }
-    if (binary_expr->operator== AST_OP_AND_AND) {
+    if (binary_expr->op == AST_OP_AND_AND) {
         return linear_logical_and(m, expr, target);
     }
 
     lir_operand_t *left_target = linear_expr(m, binary_expr->left, NULL);
     lir_operand_t *right_target = linear_expr(m, binary_expr->right, NULL);
-    lir_opcode_t operator= ast_op_convert[binary_expr->operator];
+    lir_opcode_t operator= ast_op_convert[binary_expr->op];
 
     if (binary_expr->left.type.kind == TYPE_STRING && binary_expr->right.type.kind == TYPE_STRING) {
         switch (operator) {
@@ -1725,7 +1758,7 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
                 break;
             }
             default: {
-                assertf(false, "not support string operator %d", ast_expr_op_str[binary_expr->operator]);
+                assertf(false, "not support string operator %d", ast_expr_op_str[binary_expr->op]);
             }
         }
 
@@ -1752,7 +1785,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
 
     // 判断 first 的类型，如果是 imm 数，则直接对 int_value 取反，否则使用 lir minus  指令编译
     // !imm 为异常, parse 阶段已经识别了, [] 有可能
-    if (unary_expr->operator== AST_OP_NEG && first->assert_type == LIR_OPERAND_IMM) {
+    if (unary_expr->op == AST_OP_NEG && first->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *imm = first->value;
         assertf(is_number(imm->kind), "only number can neg operate");
         if (imm->kind == TYPE_INT) {
@@ -1764,7 +1797,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
         return linear_super_move(m, expr.type, target, first);
     }
 
-    if (unary_expr->operator== AST_OP_NOT) {
+    if (unary_expr->op == AST_OP_NOT) {
         assert(unary_expr->operand.type.kind == TYPE_BOOL);
         if (first->assert_type == LIR_OPERAND_IMM) {
             lir_imm_t *imm = first->value;
@@ -1787,7 +1820,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     }
 
     // &var, 指针引用可能会造成内存逃逸，所以需要特殊处理 TODO 当前版本不存在隐式的逃逸处理，需要显式的调用 sla 才会触发逃逸处理。
-    if (unary_expr->operator== AST_OP_LA || unary_expr->operator== AST_OP_UNSAFE_LA) {
+    if (unary_expr->op == AST_OP_LA || unary_expr->op == AST_OP_UNSAFE_LA) {
         // 如果是 stack_type, 则直接移动到 target 即可，src 中存放的已经是一个栈指针了，没有必要再 lea 了
         if (is_stack_ref_big_type(unary_expr->operand.type)) {
             // 必须 move target，这同时也是一个类型转换的过程
@@ -1816,7 +1849,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     // person_t a = *b
     // 所以 target 真的有足够的空间么？target 默认就是 ptr， 无论是不是超过 8byte!
     // first 是个 ptr
-    if (unary_expr->operator== AST_OP_IA) {
+    if (unary_expr->op == AST_OP_IA) {
         // checking TODO 性能问题，暂时不启用
         //        if (unary_expr->operand.type.kind == TYPE_RAWPTR) {
         //            push_rt_call(m, RT_CALL_RAWPTR_VALID, NULL, 1, first);
@@ -1836,7 +1869,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
         return linear_super_move(m, expr.type, target, src);
     }
 
-    lir_opcode_t type = ast_op_convert[unary_expr->operator];
+    lir_opcode_t type = ast_op_convert[unary_expr->op];
     lir_op_t *unary = lir_op_new(type, first, NULL, target);
     OP_PUSH(unary);
 
@@ -2658,7 +2691,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
 static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_match_t *match_expr = expr.value;
 
-    char *match_start_ident = label_ident_with_unique(m, MATCH_IDENT);
+    char *match_start_ident = label_ident_with_unique(MATCH_IDENT);
     char *match_end_ident = str_connect(match_start_ident, LABEL_END_SUFFIX);
 
     OP_PUSH(lir_op_label(match_start_ident, true));
@@ -2686,7 +2719,7 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
 
     SLICE_FOR(match_expr->cases) {
         // .@MATCH_79.case_handle_end
-        char *handle_start_ident = label_ident_with_unique(m, str_connect(match_start_ident, CASE_HANDLE));
+        char *handle_start_ident = label_ident_with_unique(str_connect(match_start_ident, CASE_HANDLE));
         lir_op_t *handle_start = lir_op_label(handle_start_ident, true);
         lir_op_t *handle_end = lir_op_label(str_connect(handle_start_ident, LABEL_END_SUFFIX), true);
 
@@ -2721,7 +2754,7 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
                 } else {
                     // eq expr
                     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
-                    binary_expr->operator= AST_OP_EE; // ==
+                    binary_expr->op = AST_OP_EE; // ==
                     binary_expr->left = *cond_expr;
                     binary_expr->right = *subject_new_expr;
 
@@ -2757,7 +2790,7 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
 static lir_operand_t *linear_block_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_block_expr_t *block_expr = expr.value;
 
-    char *block_start_label = label_ident_with_unique(m, BLOCK_IDENT);
+    char *block_start_label = label_ident_with_unique(BLOCK_IDENT);
     char *block_end_ident = str_connect(block_start_label, LABEL_END_SUFFIX);
     lir_op_t *block_end_label = lir_op_label(block_end_ident, true);
 
@@ -2782,7 +2815,7 @@ static lir_operand_t *linear_block_expr(module_t *m, ast_expr_t expr, lir_operan
 static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_catch_t *catch_expr = expr.value;
     // 编译 expr, 有异常应该直接就跳转到 catch 了。
-    char *catch_start_label = label_ident_with_unique(m, CATCH_IDENT);
+    char *catch_start_label = label_ident_with_unique(CATCH_IDENT);
     char *catch_end_ident = str_connect(catch_start_label, LABEL_END_SUFFIX);
 
     bool has_ret = expr.type.kind != TYPE_VOID;
@@ -2831,7 +2864,7 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
 
 static void linear_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
     // 编译 expr, 有异常应该直接就跳转到 catch 了。
-    char *catch_start_label = label_ident_with_unique(m, CATCH_IDENT);
+    char *catch_start_label = label_ident_with_unique(CATCH_IDENT);
     char *catch_end_ident = str_connect(catch_start_label, LABEL_END_SUFFIX);
 
     bool has_ret = false;
@@ -3377,6 +3410,7 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
 
     OP_PUSH(lir_op_label(c->end_label, true));
 
+    OP_PUSH(lir_op_safepoint());
     // lower 的时候需要进行特殊的处理(return_operand 为了让 ssa use-def 链条完整)
     OP_PUSH(lir_op_new(LIR_OPCODE_FN_END, c->return_operand, NULL, NULL));
 

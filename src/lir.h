@@ -679,6 +679,10 @@ static inline lir_op_t *lir_op_nop_use(lir_operand_t *use) {
     return lir_op_new(LIR_OPCODE_NOP, use, NULL, NULL);
 }
 
+static inline lir_op_t *lir_op_safepoint() {
+    return lir_op_new(LIR_OPCODE_SAFEPOINT, NULL, NULL, NULL);
+}
+
 static inline lir_op_t *lir_op_label(char *ident, bool is_local) {
     return lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, lir_label_operand(ident, is_local));
 }
@@ -689,7 +693,7 @@ static inline lir_op_t *lir_op_label_with_prefix(module_t *m, char *ident) {
 }
 
 static inline lir_op_t *lir_op_local_label(module_t *m, char *ident) {
-    char *unique_ident = label_ident_with_unique(m, ident);
+    char *unique_ident = label_ident_with_unique(ident);
     return lir_op_label(unique_ident, true);
 }
 

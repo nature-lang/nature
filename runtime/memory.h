@@ -18,6 +18,7 @@ extern uint64_t allocated_total_bytes; // 当前分配的总空间
 extern int64_t allocated_bytes; // 当前分配的内存空间
 extern uint64_t next_gc_bytes; // 下一次 gc 的内存量
 extern bool gc_barrier; // gc 屏障开启标识
+extern bool gc_stw_safepoint; // gc 全局 safepoint 标识，通常配合 stw 使用
 extern uint8_t gc_stage; // gc 阶段
 extern mutex_t gc_stage_locker;
 

@@ -4,7 +4,7 @@
 
 #include "sysmon.h"
 
-#define CO_TIMEOUT (100 * 1000 * 1000) // ms
+#define CO_TIMEOUT (10 * 1000 * 1000) // ms
 
 // 等待 1000ms 的时间，如果无法抢占则 deadlock
 #define PREEMPT_TIMEOUT 1000
@@ -54,7 +54,7 @@ static void wait_sysmon() {
                     (uint64_t) p->thread_id);
 
             RDEBUGF("warning deadlock: processor %d run timeout(%lu ms)", p->index, time / 1000 / 1000);
-            continue;
+            continue; // TODO 暂时取消辅助 GC，以协作式 GC 为主
 
             // 尝试 10ms 获取抢占 disable_preempt_locker,避免抢占期间抢占状态变更成不可抢占, 如果获取不到就跳过
             // 但是可以从 not -> can
@@ -240,6 +240,8 @@ static void wait_sysmon() {
 
             RDEBUGF("[wait_sysmon.solo] run timeout, will get thread_locker, p_index_%d=%d(%lu)", p->share, p->index,
                     (uint64_t) p->thread_id);
+            continue; // TODO 暂时取消辅助 GC，以协作式 GC 为主
+
 
             int trylock = mutex_times_trylock(&p->thread_locker, 10);
             if (trylock == -1) {
@@ -320,7 +322,7 @@ static void wait_sysmon() {
                     (uint64_t) p->thread_id, p->status, p->coroutine);
 
             // gc_stw_locker 禁止 tplcall -> running
-            mutex_lock(&p->gc_stw_locker);
+//            mutex_lock(&p->gc_solo_stw_locker);
             DEBUGF("[wait_sysmon.solo.thread_locker] success get gc_stw_locker, p_index_%d=%d(%lu), p_status=%d",
                    p->share, p->index, (uint64_t) p->thread_id, p->status);
 
@@ -334,7 +336,7 @@ static void wait_sysmon() {
             // 倒也不用担心开启了新一轮的 gc
             uint64_t need_stw = p->need_stw;
             if (p->status == P_STATUS_TPLCALL) {
-                // 辅助进入 gc 状态
+                // gc_solo_stw_locker 获取成功， 辅助进入 gc 状态
                 if (p->safe_point < need_stw) {
                     p->safe_point = need_stw;
                 }
@@ -379,12 +381,12 @@ static void wait_sysmon() {
         // - GC 判断 (每 100ms 进行一次)
         if (gc_eval_count <= 0) {
             runtime_eval_gc();
-            gc_eval_count = WAIT_MID_TIME;
+            gc_eval_count = WAIT_SHORT_TIME; // 10 * 10ms = 100ms
         }
 
         gc_eval_count--;
 
-        usleep(WAIT_SHORT_TIME * 1000);
+        usleep(WAIT_SHORT_TIME * 1000); // 10ms
     }
 
     RDEBUGF("[wait_sysmon] wait sysmon exit success");

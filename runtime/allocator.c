@@ -1166,11 +1166,10 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
     }
     assert(p);
 
-    // 不对，如果运行到一半需要锁怎么办, 每个 solo p 都应该有一个 stw locker 才行。
-    if (!p->share) {
-        MDEBUGF("[rti_gc_malloc] solo need gc_stw_locker p_index_%d=%d, co=%p", p->share, p->index, coroutine_get());
-        mutex_lock(&p->gc_stw_locker);
-    }
+//    if (!p->share) {
+//        MDEBUGF("[rti_gc_malloc] solo need gc_stw_locker p_index_%d=%d, co=%p", p->share, p->index, coroutine_get());
+//        mutex_lock(&p->gc_solo_stw_locker);
+//    }
 
     MDEBUGF("[rti_gc_malloc] start p_index_%d=%d", p->share, p->index);
 
@@ -1199,9 +1198,9 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
         mark_ptr_black(ptr);
     }
 
-    if (!p->share) {
-        mutex_unlock(&p->gc_stw_locker);
-    }
+//    if (!p->share) {
+//        mutex_unlock(&p->gc_solo_stw_locker);
+//    }
 
     MDEBUGF("[rti_gc_malloc] end p_index_%d=%d, co=%p, result=%p", p->share, p->index, coroutine_get(), ptr);
 
@@ -1288,11 +1287,12 @@ void runtime_eval_gc() {
     }
 
     if (allocated_bytes < next_gc_bytes) {
+        DEBUGF("[runtime_eval_gc] not need gc, because allocated_bytes = %ld <= next_gc_bytes = %ld", allocated_bytes,
+               next_gc_bytes);
         goto EXIT;
     } else {
-        DEBUGF("[runtime_eval_gc] will gc, because allocated_bytes=%ld > next_gc_bytes=%ld", allocated_bytes,
+        DEBUGF("[runtime_eval_gc] will gc, because allocated_bytes = %ld > next_gc_bytes = %ld", allocated_bytes,
                next_gc_bytes);
-        next_gc_bytes = allocated_bytes * NEXT_GC_FACTOR;
     }
 
     gc_stage = GC_STAGE_START;

@@ -1,0 +1,293 @@
+=== test_cpu_coroutine
+--- main.n
+import coroutine as co
+
+fn test_cpu_calc() {
+    int count = 0
+    for true {
+        count += 1
+    }
+}
+
+fn main() {
+    go test_cpu_calc()
+
+    for int i = 0; i < 10; i+=1 {
+        println('hello world')
+        co.sleep(500)
+    }
+}
+
+--- output.txt
+hello world
+hello world
+hello world
+hello world
+hello world
+hello world
+hello world
+hello world
+hello world
+hello world
+
+
+=== test_cpu_calc2
+--- main.n
+import coroutine as co
+import runtime
+
+fn test_cpu_calc() {
+    int count = 0
+    for true {
+        count += 1
+    }
+}
+
+fn main() {
+    go test_cpu_calc()
+
+    // allocate big memoory
+    var data = vec_new<i64>(0, 1024000)
+    var start = runtime.malloc_bytes()
+    println('allocate bytes:', start)
+    assert(start > 8000000)
+
+    for int i = 0; i < 10; i+=1 {
+        println('hello world')
+        co.sleep(100)
+    }
+    var end = runtime.malloc_bytes() // gc timeout, cannot gc
+    println('allocate bytes:', end)
+    assert(end > 8000000)
+}
+
+=== test_coroutine_gc
+--- main.n
+import coroutine as co
+import runtime
+
+fn test_cpu_calc() {
+    int count = 0
+    for true {
+        count += 1
+        co.yield()
+    }
+}
+
+fn main() {
+    go test_cpu_calc()
+
+    // allocate big memoory
+    var data = vec_new<i64>(0, 1024000)
+    var start = runtime.malloc_bytes()
+    println('allocate bytes:', start)
+    assert(start > 8000000)
+
+    for int i = 0; i < 10; i+=1 {
+        println('hello world')
+        co.sleep(100)
+    }
+    var end = runtime.malloc_bytes() // gc timeout, cannot gc
+    println('allocate bytes:', end)
+    assert(end < 10000)
+}
+
+=== test_scan_stack
+--- main.n
+import runtime
+import coroutine as co
+
+fn test_break() {
+}
+
+fn car() {
+    test_break()
+    var b = vec_new<int>(0, 1024)
+    var c = 111
+    var d = vec_new<int>(0, 1024)
+    var e = 222
+    var f = vec_new<float>(0, 1024)
+    var before = runtime.malloc_bytes()
+    println(before)
+    assert(before > 50000)
+    co.sleep(1000) // 等待 GC 完成，由于存在引用, 所以无法清理
+    var after = runtime.malloc_bytes()
+    println(after)
+    assert(after > 30000)
+}
+
+fn bar() {
+    test_break()
+    var b = vec_new<int>(0, 1024)
+    var c = 111
+    var d = vec_new<int>(0, 1024)
+    var e = 222
+    var f = vec_new<float>(0, 1024)
+    car()
+    var g = b[0] + c + d[0] + e + f[0] as int
+}
+
+fn foo() {
+    test_break()
+    var a1 = 1
+    var a2 = 1
+    var a3 = 1
+    var a4 = 1
+    var a5 = 1
+    var a6 = 1
+    var a7 = 1
+    var a8 = 1
+    var a9 = 1
+    var a10 = 1
+    var a11 = 1
+    var a12 = 1
+    var b = vec_new<int>(0, 1024)
+    var c = 111
+    var d = vec_new<int>(0, 1024)
+    bar()
+    var e = 222
+    var f = vec_new<float>(0, 1024)
+    var g = a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + b[0] + c + d[0] + e + f[0] as int
+}
+
+fn main() {
+    runtime.gc()
+    foo()
+}
+
+=== test_gc_stack_in_runtime
+--- main.n
+import runtime
+import coroutine as co
+
+#linkid test_gc_sleep_yield
+fn test_gc_sleep_yield()
+
+fn test_break() {
+}
+
+fn car() {
+    test_break()
+    var b = vec_new<int>(0, 1024)
+    var c = 111
+    var d = vec_new<int>(0, 1024)
+    var e = 222
+    var f = vec_new<float>(0, 1024)
+    var before = runtime.malloc_bytes()
+    println(before)
+    assert(before > 50000)
+
+    test_gc_sleep_yield() // 等待 GC 完成，由于存在引用, 所以无法清理
+
+    var after = runtime.malloc_bytes()
+    println(after)
+    assert(after > 30000)
+}
+
+fn bar() {
+    test_break()
+    var b = vec_new<int>(0, 1024)
+    var c = 111
+    var d = vec_new<int>(0, 1024)
+    var e = 222
+    var f = vec_new<float>(0, 1024)
+    car()
+    var g = b[0] + c + d[0] + e + f[0] as int
+}
+
+fn foo() {
+    test_break()
+    var a1 = 1
+    var a2 = 1
+    var a3 = 1
+    var a4 = 1
+    var a5 = 1
+    var a6 = 1
+    var a7 = 1
+    var a8 = 1
+    var a9 = 1
+    var a10 = 1
+    var a11 = 1
+    var a12 = 1
+    var b = vec_new<int>(0, 1024)
+    var c = 111
+    var d = vec_new<int>(0, 1024)
+    bar()
+    var e = 222
+    var f = vec_new<float>(0, 1024)
+    var g = a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + b[0] + c + d[0] + e + f[0] as int
+}
+
+fn main() {
+    runtime.gc()
+    foo()
+}
+
+=== test_solo_coroutine_scan
+--- main.n
+import runtime
+import coroutine as co
+
+#linkid test_gc_sleep_yield
+fn test_gc_sleep_yield()
+
+fn test_break() {
+}
+
+fn car() {
+    test_break()
+    var b = vec_new<int>(0, 1024)
+    var c = 111
+    var d = vec_new<int>(0, 1024)
+    var e = 222
+    var f = vec_new<float>(0, 1024)
+    var before = runtime.malloc_bytes()
+    println(before)
+    assert(before > 50000)
+
+    test_gc_sleep_yield() // 等待 GC 完成，由于存在引用, 所以无法清理
+
+    var after = runtime.malloc_bytes()
+    println(after)
+    assert(after > 30000)
+}
+
+fn bar() {
+    test_break()
+    var b = vec_new<int>(0, 1024)
+    var c = 111
+    var d = vec_new<int>(0, 1024)
+    var e = 222
+    var f = vec_new<float>(0, 1024)
+    car()
+    var g = b[0] + c + d[0] + e + f[0] as int
+}
+
+fn foo() {
+    test_break()
+    var a1 = 1
+    var a2 = 1
+    var a3 = 1
+    var a4 = 1
+    var a5 = 1
+    var a6 = 1
+    var a7 = 1
+    var a8 = 1
+    var a9 = 1
+    var a10 = 1
+    var a11 = 1
+    var a12 = 1
+    var b = vec_new<int>(0, 1024)
+    var c = 111
+    var d = vec_new<int>(0, 1024)
+    bar()
+    var e = 222
+    var f = vec_new<float>(0, 1024)
+    var g = a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + b[0] + c + d[0] + e + f[0] as int
+}
+
+fn main() {
+    @async(foo(), co.SOLO)
+    runtime.gc()
+    co.sleep(1500) // 等待 GC 进行
+}

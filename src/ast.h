@@ -241,7 +241,7 @@ typedef struct {
 
 // 一元表达式
 typedef struct {
-    ast_expr_op_t operator; // 取反，取绝对值, 解引用等,取指针，按位取反
+    ast_expr_op_t op; // 取反，取绝对值, 解引用等,取指针，按位取反
     ast_expr_t operand; // 操作对象
 } ast_unary_expr_t;
 
@@ -251,7 +251,7 @@ typedef struct {
 
 // 二元表达式
 typedef struct {
-    ast_expr_op_t operator; // +/-/*// 等 二元表达式
+    ast_expr_op_t op; // +/-/*// 等 二元表达式
     ast_expr_t right;
     ast_expr_t left;
 } ast_binary_expr_t;
@@ -618,7 +618,7 @@ typedef struct {
     type_t type_expr; // int (类型)
     bool is_alias; // 是否仅作为别名
     bool is_interface; // 快速识别
-    list_t *impl_interfaces; // typedef 可以实现多个接口, 对于 interface 来说则是自身扩展
+    list_t *impl_interfaces; // type_t, typedef 可以实现多个接口, 对于 interface 来说则是自身扩展
     struct sc_map_sv method_table; // key = ident, value = ast_fndef_t
 } ast_typedef_stmt_t;
 
@@ -778,7 +778,7 @@ static inline ast_expr_t *ast_load_addr(ast_expr_t *target) {
 
     ast_unary_expr_t *expr = NEW(ast_unary_expr_t);
     expr->operand = *target;
-    expr->operator= AST_OP_LA;
+    expr->op = AST_OP_LA;
 
     result->line = target->line;
     result->column = target->column;
