@@ -102,6 +102,8 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
 /**
  * symbol_var 需要通过 adrp 的形式寻址，所以这里进行 lea 形式改写， lea 在 native 阶段会改写成 adrp 的形式，注意此处只能基于 int 类型寄存器处理
  * 通过 lea 将符号地址加载到 int 类型寄存器, 假设是 x0 中后，后续的使用需要通过 indirect 来获取 x0 中的值
+ *
+ * 所有的 symbol_var 都会被改造成 lea 指令的形式
  * @param c
  * @param op
  * @return
@@ -203,34 +205,14 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
 
 static linked_t *arm64_lower_safepoint(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
+
+
     // 创建临时寄存器存储标志地址
-    lir_operand_t *flag_ptr = temp_var_operand(c->module, type_kind_new(TYPE_ANYPTR));
-
-    // 创建符号引用
-    lir_symbol_var_t *flag_symbol = NEW(lir_symbol_var_t);
-    flag_symbol->kind = TYPE_BOOL;
-    flag_symbol->ident = "gc_stw_safepoint";
-
-    // lea 加载符号地址
-    linked_push(list, lir_op_lea(flag_ptr, operand_new(LIR_OPERAND_SYMBOL_VAR, flag_symbol)));
-
-    // 通过 indirect 读取实际值
-    lir_operand_t *flag_value_src = indirect_addr_operand(c->module, type_kind_new(TYPE_BOOL), flag_ptr, 0);
-
-    // 将值 move 出来，这样才能有寄存器分配出来用于 beq
-    lir_operand_t *flag_value = temp_var_operand(c->module, type_kind_new(TYPE_BOOL));
-    linked_push(list, lir_op_move(flag_value, flag_value_src));
-
-    // 生成比较和跳转指令
-    char *safepoint_continue_ident = label_ident_with_unique("safepoint_continue");
-    lir_operand_t *stw_handler_symbol = lir_label_operand("async_preempt", false);
-    linked_push(list, lir_op_new(LIR_OPCODE_BEQ, flag_value, bool_operand(false), lir_label_operand(safepoint_continue_ident, true)));
-
-    // B
-    linked_push(list, lir_op_bal(stw_handler_symbol));
+    lir_operand_t *result_reg = lir_reg_operand(x0->index, TYPE_ANYPTR);
+    op->output = result_reg;
 
     // 增加 label continue
-    linked_push(list, lir_op_label(safepoint_continue_ident, true));
+    linked_push(list, op);
 
 
     return list;

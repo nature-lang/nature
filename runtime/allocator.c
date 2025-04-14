@@ -1162,7 +1162,7 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
     uint64_t start = uv_hrtime();
     n_processor_t *p = processor_get();
     if (!p) {
-        p = share_processor_index[0];
+        p = processor_index[0];
     }
     assert(p);
 

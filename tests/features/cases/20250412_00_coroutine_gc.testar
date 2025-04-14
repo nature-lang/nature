@@ -223,7 +223,8 @@ fn main() {
     foo()
 }
 
-=== test_solo_coroutine_scan
+
+=== test_tls
 --- main.n
 import runtime
 import coroutine as co
@@ -231,10 +232,46 @@ import coroutine as co
 #linkid test_gc_sleep_yield
 fn test_gc_sleep_yield()
 
+#linkid init_safepoint
+fn init_safepoint(int v)
+
+#linkid get_safepoint
+fn get_safepoint():int
+
+fn test_tls_set() {
+    init_safepoint(22)
+}
+
+fn test_tls_print() {
+    test_tls_set()
+    co.sleep(1000) // 等待 main 赋值完成
+    println('sub tls value: ', get_safepoint())
+    assert(get_safepoint() == 22)
+}
+
+
+fn main() {
+    init_safepoint(11)
+    go test_tls_print()
+    co.sleep(1500) // 等待 set 完成
+    println('main tls value: ', get_safepoint())
+    assert(get_safepoint() == 11)
+}
+
+=== test_safepoint
+--- main.n
+import runtime
+import coroutine as co
+
 fn test_break() {
 }
 
+fn test_increase(int i):int {
+    return i + 1
+}
+
 fn car() {
+    println('entry car-----------')
     test_break()
     var b = vec_new<int>(0, 1024)
     var c = 111
@@ -245,11 +282,10 @@ fn car() {
     println(before)
     assert(before > 50000)
 
-    test_gc_sleep_yield() // 等待 GC 完成，由于存在引用, 所以无法清理
-
-    var after = runtime.malloc_bytes()
-    println(after)
-    assert(after > 30000)
+    int i = 0
+    for true {
+        i = test_increase(i)
+    }
 }
 
 fn bar() {
@@ -287,7 +323,10 @@ fn foo() {
 }
 
 fn main() {
-    @async(foo(), co.SOLO)
+    @async(foo(), 0)
     runtime.gc()
-    co.sleep(1500) // 等待 GC 进行
+    co.sleep(1000) // 等待 GC 完成
+    var after = runtime.malloc_bytes()
+    println(after)
+    assert(after > 30000)
 }

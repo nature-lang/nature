@@ -29,3 +29,11 @@ void __attribute__((noinline)) test_gc_sleep_yield() {
     int e[12] = {0};
     free(d);
 }
+
+void init_safepoint(int64_t v) {
+    tls_safepoint = v;
+}
+
+int64_t get_safepoint() {
+    return tls_safepoint;
+}

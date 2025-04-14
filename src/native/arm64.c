@@ -23,7 +23,7 @@ static slice_t *arm64_native_op(closure_t *c, lir_op_t *op);
  */
 static void arm64_mov_imm(lir_op_t *op, slice_t *operations, arm64_asm_operand_t *result, int64_t value) {
     if (value >= -0XFFFF && value <= 0xFFFF) {
-        slice_push(operations, ARM64_ASM(R_MOV, result, ARM64_IMM(value)));
+        slice_push(operations, ARM64_INST(R_MOV, result, ARM64_IMM(value)));
         return;
     }
 
@@ -34,19 +34,19 @@ static void arm64_mov_imm(lir_op_t *op, slice_t *operations, arm64_asm_operand_t
     // 大数或负数需要使用 MOVZ, MOVK 组合
     uint64_t uvalue = value;
     // 处理低 0 - 16 位
-    slice_push(operations, ARM64_ASM(R_MOV, result, ARM64_IMM(uvalue & 0xFFFF)));
+    slice_push(operations, ARM64_INST(R_MOV, result, ARM64_IMM(uvalue & 0xFFFF)));
 
     if ((uvalue >> 16) & 0xFFFF) {
         // 16 - 32
-        slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((uvalue >> 16) & 0xFFFF), ARM64_SHIFT(16)));
+        slice_push(operations, ARM64_INST(R_MOVK, result, ARM64_IMM((uvalue >> 16) & 0xFFFF), ARM64_SHIFT(16)));
     }
     if ((uvalue >> 32) & 0xFFFF) {
         // 32 - 48
-        slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((uvalue >> 32) & 0xFFFF), ARM64_SHIFT(32)));
+        slice_push(operations, ARM64_INST(R_MOVK, result, ARM64_IMM((uvalue >> 32) & 0xFFFF), ARM64_SHIFT(32)));
     }
     if ((uvalue >> 48) & 0xFFFF) {
         // 48 - 64
-        slice_push(operations, ARM64_ASM(R_MOVK, result, ARM64_IMM((uvalue >> 48) & 0xFFFF), ARM64_SHIFT(48)));
+        slice_push(operations, ARM64_INST(R_MOVK, result, ARM64_IMM((uvalue >> 48) & 0xFFFF), ARM64_SHIFT(48)));
     }
 }
 
@@ -86,10 +86,10 @@ static void arm64_gen_cmp(lir_op_t *op, slice_t *operations, arm64_asm_operand_t
         }
 
 
-        slice_push(operations, ARM64_ASM(opcode, dest, source));
+        slice_push(operations, ARM64_INST(opcode, dest, source));
     } else {
         assert(dest->type == ARM64_ASM_OPERAND_FREG);
-        slice_push(operations, ARM64_ASM(R_FCMP, dest, source));
+        slice_push(operations, ARM64_INST(R_FCMP, dest, source));
     }
 }
 
@@ -106,11 +106,11 @@ static arm64_asm_operand_t *convert_operand_to_free_reg(lir_op_t *op, slice_t *o
 
         // 基于 x16/w16/d16/s16 临时寄存器做一个 ldr mem -> reg, return reg
         if (size == BYTE) {
-            slice_push(operations, ARM64_ASM(R_LDRB, free_reg, source));
+            slice_push(operations, ARM64_INST(R_LDRB, free_reg, source));
         } else if (size == WORD) {
-            slice_push(operations, ARM64_ASM(R_LDRH, free_reg, source));
+            slice_push(operations, ARM64_INST(R_LDRH, free_reg, source));
         } else {
-            slice_push(operations, ARM64_ASM(R_LDR, free_reg, source));
+            slice_push(operations, ARM64_INST(R_LDR, free_reg, source));
         }
     } else {
         if (size == 4) {
@@ -119,7 +119,7 @@ static arm64_asm_operand_t *convert_operand_to_free_reg(lir_op_t *op, slice_t *o
             free_reg = ARM64_REG(d16);
         }
 
-        slice_push(operations, ARM64_ASM(R_LDR, free_reg, source));
+        slice_push(operations, ARM64_INST(R_LDR, free_reg, source));
     }
 
     free_reg->size = size;
@@ -172,7 +172,7 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
     // indirect 有符号偏移范围 [-256, 255], 如果超出范围，需要借助临时寄存器 x16 进行转换(此处转换不需要考虑 float 类型)
     if (result && result->type == ARM64_ASM_OPERAND_INDIRECT && result->indirect.offset < -256) {
         int64_t offset = result->indirect.offset * -1;
-        slice_push(operations, ARM64_ASM(R_SUB, ARM64_REG(x16), ARM64_REG(result->indirect.reg), ARM64_IMM(offset)));
+        slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(x16), ARM64_REG(result->indirect.reg), ARM64_IMM(offset)));
 
         // 基于 x16 重新生成 indirect
         result->indirect.reg = x16;
@@ -260,21 +260,21 @@ static slice_t *arm64_native_trunc(closure_t *c, lir_op_t *op) {
     assert(size > 0);
 
     // 先将源操作数移动到目标寄存器
-    slice_push(operations, ARM64_ASM(R_MOV, result, source));
+    slice_push(operations, ARM64_INST(R_MOV, result, source));
 
     // 根据目标寄存器的大小应用适当的掩码进行截断
     if (size == BYTE) {
         // 截断为 8 位 (1 字节)
-        slice_push(operations, ARM64_ASM(R_AND, result, result, ARM64_IMM(0xFF)));
+        slice_push(operations, ARM64_INST(R_AND, result, result, ARM64_IMM(0xFF)));
     } else if (size == WORD) {
         // 截断为 16 位 (2 字节)
-        slice_push(operations, ARM64_ASM(R_AND, result, result, ARM64_IMM(0xFFFF)));
+        slice_push(operations, ARM64_INST(R_AND, result, result, ARM64_IMM(0xFFFF)));
     } else if (size == DWORD) {
         // 截断为 32 位 (4 字节)
         // 对于 W 寄存器，高 32 位自动清零，不需要额外的 AND 操作
         if (result->type == ARM64_ASM_OPERAND_REG && result->reg.size == QWORD) {
             // 如果是 X 寄存器，需要显式截断高 32 位
-            slice_push(operations, ARM64_ASM(R_AND, result, result, ARM64_IMM(0xFFFFFFFF)));
+            slice_push(operations, ARM64_INST(R_AND, result, result, ARM64_IMM(0xFFFFFFFF)));
         }
     }
 
@@ -290,9 +290,9 @@ static slice_t *arm64_native_sext(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
     if (source->size == DWORD && result->size == QWORD) {
-        slice_push(operations, ARM64_ASM(R_SXTW, result, source));
+        slice_push(operations, ARM64_INST(R_SXTW, result, source));
     } else {
-        slice_push(operations, ARM64_ASM(R_MOV, result, source));
+        slice_push(operations, ARM64_INST(R_MOV, result, source));
     }
 
     return operations;
@@ -307,9 +307,9 @@ static slice_t *arm64_native_zext(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
     if (source->size == DWORD && result->size == QWORD) {
-        slice_push(operations, ARM64_ASM(R_UXTW, result, source));
+        slice_push(operations, ARM64_INST(R_UXTW, result, source));
     } else {
-        slice_push(operations, ARM64_ASM(R_MOV, result, source));
+        slice_push(operations, ARM64_INST(R_MOV, result, source));
     }
 
     return operations;
@@ -341,24 +341,24 @@ static slice_t *arm64_native_mov(closure_t *c, lir_op_t *op) {
         if (arm64_is_integer_operand(op->first)) {
             if (op->output->assert_type == LIR_OPERAND_REG) {
                 // REG -> REG
-                slice_push(operations, ARM64_ASM(R_MOV, result, source));
+                slice_push(operations, ARM64_INST(R_MOV, result, source));
             } else {
                 // REG -> MEM
                 if (result->size == BYTE) {
-                    slice_push(operations, ARM64_ASM(R_STRB, source, result));
+                    slice_push(operations, ARM64_INST(R_STRB, source, result));
                 } else if (result->size == WORD) {
-                    slice_push(operations, ARM64_ASM(R_STRH, source, result));
+                    slice_push(operations, ARM64_INST(R_STRH, source, result));
                 } else {
-                    slice_push(operations, ARM64_ASM(R_STR, source, result));
+                    slice_push(operations, ARM64_INST(R_STR, source, result));
                 }
             }
         } else {
             if (op->output->assert_type == LIR_OPERAND_REG) {
                 // FREG -> FREG
-                slice_push(operations, ARM64_ASM(R_FMOV, result, source));
+                slice_push(operations, ARM64_INST(R_FMOV, result, source));
             } else {
                 // FREG -> MEM
-                slice_push(operations, ARM64_ASM(R_STR, source, result));
+                slice_push(operations, ARM64_INST(R_STR, source, result));
             }
         }
     } else if (op->first->assert_type == LIR_OPERAND_IMM) {
@@ -376,18 +376,18 @@ static slice_t *arm64_native_mov(closure_t *c, lir_op_t *op) {
         if (source->size == BYTE) {
             // 检查是否为有符号类型
             if (is_signed(operand_type_kind(op->first))) {
-                slice_push(operations, ARM64_ASM(R_LDRSB, result, source)); // 有符号加载
+                slice_push(operations, ARM64_INST(R_LDRSB, result, source)); // 有符号加载
             } else {
-                slice_push(operations, ARM64_ASM(R_LDRB, result, source)); // 无符号加载
+                slice_push(operations, ARM64_INST(R_LDRB, result, source)); // 无符号加载
             }
         } else if (source->size == WORD) {
             if (is_signed(operand_type_kind(op->first))) {
-                slice_push(operations, ARM64_ASM(R_LDRSH, result, source)); // 有符号加载
+                slice_push(operations, ARM64_INST(R_LDRSH, result, source)); // 有符号加载
             } else {
-                slice_push(operations, ARM64_ASM(R_LDRH, result, source)); // 无符号加载
+                slice_push(operations, ARM64_INST(R_LDRH, result, source)); // 无符号加载
             }
         } else {
-            slice_push(operations, ARM64_ASM(R_LDR, result, source));
+            slice_push(operations, ARM64_INST(R_LDR, result, source));
         }
     } else {
         assert(false && "Unsupported operand type for MOV");
@@ -428,11 +428,11 @@ static slice_t *arm64_native_push(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *value = lir_operand_trans_arm64(c, op, op->first, operations);
 
     // 先减少 SP
-    slice_push(operations, ARM64_ASM(R_SUB, ARM64_REG(sp), ARM64_REG(sp), ARM64_IMM(value->size)));
+    slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), ARM64_IMM(value->size)));
 
     // 将值存储到栈上
     assert(value->size >= 4);
-    slice_push(operations, ARM64_ASM(R_STR, value, ARM64_INDIRECT(sp, 0, 0, value->size)));
+    slice_push(operations, ARM64_INST(R_STR, value, ARM64_INDIRECT(sp, 0, 0, value->size)));
     return operations;
 }
 
@@ -443,7 +443,7 @@ static slice_t *arm64_native_bal(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *target = lir_operand_trans_arm64(c, op, op->output, operations);
 
     // 使用 B 指令进行无条件跳转
-    slice_push(operations, ARM64_ASM(R_B, target));
+    slice_push(operations, ARM64_INST(R_B, target));
 
     return operations;
 }
@@ -467,12 +467,12 @@ static slice_t *arm64_native_clv(closure_t *c, lir_op_t *op) {
     // 对于寄存器类型，使用 EOR 指令将寄存器清零
     if (output->assert_type == LIR_OPERAND_REG) {
         if (result->type == ARM64_ASM_OPERAND_REG) {
-            slice_push(operations, ARM64_ASM(R_EOR, result, result, result));
+            slice_push(operations, ARM64_INST(R_EOR, result, result, result));
         } else {
             if (result->size == QWORD) {
-                slice_push(operations, ARM64_ASM(R_FMOV, result, ARM64_REG(xzr)));
+                slice_push(operations, ARM64_INST(R_FMOV, result, ARM64_REG(xzr)));
             } else {
-                slice_push(operations, ARM64_ASM(R_FMOV, result, ARM64_REG(wzr)));
+                slice_push(operations, ARM64_INST(R_FMOV, result, ARM64_REG(wzr)));
             }
         }
         return operations;
@@ -483,13 +483,13 @@ static slice_t *arm64_native_clv(closure_t *c, lir_op_t *op) {
         assertf(size <= QWORD, "only can clv size <= %d, actual=%d", QWORD, size);
 
         if (size == BYTE) {
-            slice_push(operations, ARM64_ASM(R_STRB, ARM64_REG(wzr), result));
+            slice_push(operations, ARM64_INST(R_STRB, ARM64_REG(wzr), result));
         } else if (size == WORD) {
-            slice_push(operations, ARM64_ASM(R_STRH, ARM64_REG(wzr), result));
+            slice_push(operations, ARM64_INST(R_STRH, ARM64_REG(wzr), result));
         } else if (size == DWORD) {
-            slice_push(operations, ARM64_ASM(R_STR, ARM64_REG(wzr), result));
+            slice_push(operations, ARM64_INST(R_STR, ARM64_REG(wzr), result));
         } else {
-            slice_push(operations, ARM64_ASM(R_STR, ARM64_REG(xzr), result));
+            slice_push(operations, ARM64_INST(R_STR, ARM64_REG(xzr), result));
         }
 
         return operations;
@@ -505,12 +505,12 @@ static slice_t *arm64_native_clr(closure_t *c, lir_op_t *op) {
 
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
     if (result->type == ARM64_ASM_OPERAND_REG) {
-        slice_push(operations, ARM64_ASM(R_EOR, result, result, result));
+        slice_push(operations, ARM64_INST(R_EOR, result, result, result));
     } else {
         if (result->size == QWORD) {
-            slice_push(operations, ARM64_ASM(R_FMOV, result, ARM64_REG(xzr)));
+            slice_push(operations, ARM64_INST(R_FMOV, result, ARM64_REG(xzr)));
         } else {
-            slice_push(operations, ARM64_ASM(R_FMOV, result, ARM64_REG(wzr)));
+            slice_push(operations, ARM64_INST(R_FMOV, result, ARM64_REG(wzr)));
         }
     }
     return operations;
@@ -528,10 +528,10 @@ static slice_t *arm64_native_div(closure_t *c, lir_op_t *op) {
     // 判断是否为整数除法
     if (arm64_is_integer_operand(op->first)) {
         // 使用 SDIV 指令进行有符号整数除法
-        slice_push(operations, ARM64_ASM(R_SDIV, result, dividend, divisor));
+        slice_push(operations, ARM64_INST(R_SDIV, result, dividend, divisor));
     } else {
         // 使用 FDIV 指令进行浮点数除法
-        slice_push(operations, ARM64_ASM(R_FDIV, result, dividend, divisor));
+        slice_push(operations, ARM64_INST(R_FDIV, result, dividend, divisor));
     }
 
     return operations;
@@ -549,10 +549,10 @@ static slice_t *arm64_native_mul(closure_t *c, lir_op_t *op) {
     // 判断是否为整数乘法
     if (arm64_is_integer_operand(op->output)) {
         // 使用 MUL 指令进行整数乘法
-        slice_push(operations, ARM64_ASM(R_MUL, result, first, second));
+        slice_push(operations, ARM64_INST(R_MUL, result, first, second));
     } else {
         // 使用 FMUL 指令进行浮点数乘法
-        slice_push(operations, ARM64_ASM(R_FMUL, result, first, second));
+        slice_push(operations, ARM64_INST(R_FMUL, result, first, second));
     }
 
     return operations;
@@ -578,10 +578,10 @@ static slice_t *arm64_native_rem(closure_t *c, lir_op_t *op) {
     temp_reg->size = dividend->size;
 
     // 1. 先做除法得到商: temp_reg = dividend / divisor
-    slice_push(operations, ARM64_ASM(R_SDIV, temp_reg, dividend, divisor));
+    slice_push(operations, ARM64_INST(R_SDIV, temp_reg, dividend, divisor));
 
     // 2. 用 MSUB 计算余数: result = dividend - (temp_reg * divisor)
-    slice_push(operations, ARM64_ASM(R_MSUB, result, temp_reg, divisor, dividend));
+    slice_push(operations, ARM64_INST(R_MSUB, result, temp_reg, divisor, dividend));
 
     return operations;
 }
@@ -601,10 +601,10 @@ static slice_t *arm64_native_neg(closure_t *c, lir_op_t *op) {
         }
 
         // 使用 SUB 指令实现整数取负：result = 0 - source
-        slice_push(operations, ARM64_ASM(R_SUB, result, zero_reg, source));
+        slice_push(operations, ARM64_INST(R_SUB, result, zero_reg, source));
     } else {
         // 使用 FNEG 指令进行浮点数取负
-        slice_push(operations, ARM64_ASM(R_FNEG, result, source));
+        slice_push(operations, ARM64_INST(R_FNEG, result, source));
     }
 
     return operations;
@@ -623,7 +623,7 @@ static slice_t *arm64_native_xor(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
     // 使用 EOR 指令实现异或操作
-    slice_push(operations, ARM64_ASM(R_EOR, result, first, second));
+    slice_push(operations, ARM64_INST(R_EOR, result, first, second));
 
     return operations;
 }
@@ -641,7 +641,7 @@ static slice_t *arm64_native_or(closure_t *c, lir_op_t *op) {
     assert(result->type == ARM64_ASM_OPERAND_REG);
 
     // 使用 ORR 指令实现或操作
-    slice_push(operations, ARM64_ASM(R_ORR, result, first, second));
+    slice_push(operations, ARM64_INST(R_ORR, result, first, second));
 
     return operations;
 }
@@ -655,7 +655,7 @@ static slice_t *arm64_native_and(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
     // 使用 AND 指令实现与操作
-    slice_push(operations, ARM64_ASM(R_AND, result, first, second));
+    slice_push(operations, ARM64_INST(R_AND, result, first, second));
 
     return operations;
 }
@@ -670,10 +670,10 @@ static slice_t *arm64_native_shift(closure_t *c, lir_op_t *op) {
     // 根据 op->code 选择合适的移位指令
     switch (op->code) {
         case LIR_OPCODE_SHL:
-            slice_push(operations, ARM64_ASM(R_LSL, result, source, shift_amount));
+            slice_push(operations, ARM64_INST(R_LSL, result, source, shift_amount));
             break;
         case LIR_OPCODE_SHR:
-            slice_push(operations, ARM64_ASM(R_LSR, result, source, shift_amount));
+            slice_push(operations, ARM64_INST(R_LSR, result, source, shift_amount));
             break;
         default:
             assert(false && "Unsupported shift operation");
@@ -689,7 +689,7 @@ static slice_t *arm64_native_not(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
     // 使用 EOR 指令实现 NOT 操作
-    slice_push(operations, ARM64_ASM(R_MVN, result, source));
+    slice_push(operations, ARM64_INST(R_MVN, result, source));
 
     return operations;
 }
@@ -703,9 +703,9 @@ static slice_t *arm64_native_add(closure_t *c, lir_op_t *op) {
 
     // 使用 ADD 指令进行加法
     if (arm64_is_integer_operand(op->output)) {
-        slice_push(operations, ARM64_ASM(R_ADD, result, left, right));
+        slice_push(operations, ARM64_INST(R_ADD, result, left, right));
     } else {
-        slice_push(operations, ARM64_ASM(R_FADD, result, left, right));
+        slice_push(operations, ARM64_INST(R_FADD, result, left, right));
     }
 
     return operations;
@@ -720,9 +720,9 @@ static slice_t *arm64_native_sub(closure_t *c, lir_op_t *op) {
 
     // 使用 SUB 指令进行减法
     if (arm64_is_integer_operand(op->output)) {
-        slice_push(operations, ARM64_ASM(R_SUB, result, left, right));
+        slice_push(operations, ARM64_INST(R_SUB, result, left, right));
     } else {
-        slice_push(operations, ARM64_ASM(R_FSUB, result, left, right));
+        slice_push(operations, ARM64_INST(R_FSUB, result, left, right));
     }
 
     return operations;
@@ -738,9 +738,9 @@ static slice_t *arm64_native_call(closure_t *c, lir_op_t *op) {
 
     // 使用 BL 指令进行函数调用, 需要根据 fn 的类型选择合适的调用指令
     if (func_address->type == ARM64_ASM_OPERAND_REG) {
-        slice_push(operations, ARM64_ASM(R_BLR, func_address));
+        slice_push(operations, ARM64_INST(R_BLR, func_address));
     } else {
-        slice_push(operations, ARM64_ASM(R_BL, func_address));
+        slice_push(operations, ARM64_INST(R_BL, func_address));
     }
 
 
@@ -791,7 +791,7 @@ static slice_t *arm64_native_scc(closure_t *c, lir_op_t *op) {
     }
 
     // 设置条件码
-    slice_push(operations, ARM64_ASM(R_CSET, result, ARM64_COND(cond)));
+    slice_push(operations, ARM64_INST(R_CSET, result, ARM64_COND(cond)));
 
     return operations;
 }
@@ -802,7 +802,7 @@ static slice_t *arm64_native_label(closure_t *c, lir_op_t *op) {
     lir_symbol_label_t *label_operand = op->output->value;
 
     // 虚拟指令，接下来的汇编器实现会解析该指令
-    slice_push(operations, ARM64_ASM(R_LABEL, ARM64_SYM(label_operand->ident, label_operand->is_local, 0, 0)));
+    slice_push(operations, ARM64_INST(R_LABEL, ARM64_SYM(label_operand->ident, label_operand->is_local, 0, 0)));
 
     return operations;
 }
@@ -818,13 +818,13 @@ static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
 
     // 保存当前的帧指针和链接寄存器, ARM64_INDIRECT(sp, -16, 1) 最后一个参数是 1 表示 pre index, 会先进行 sub sp, sp, #16 减少 sp 的值
     // 等价于 push sp 两次
-    slice_push(operations, ARM64_ASM(R_STP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, -16, 1, OWORD)));
+    slice_push(operations, ARM64_INST(R_STP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, -16, 1, OWORD)));
     // 更新帧指针
-    slice_push(operations, ARM64_ASM(R_MOV, ARM64_REG(fp), ARM64_REG(sp)));
+    slice_push(operations, ARM64_INST(R_MOV, ARM64_REG(fp), ARM64_REG(sp)));
 
     // 如果需要，调整栈指针以分配栈空间
     if (offset != 0) {
-        slice_push(operations, ARM64_ASM(R_SUB, ARM64_REG(sp), ARM64_REG(sp), ARM64_IMM(offset)));
+        slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), ARM64_IMM(offset)));
     }
 
 
@@ -847,14 +847,14 @@ slice_t *arm64_native_fn_end(closure_t *c, lir_op_t *op) {
 
     // 恢复栈帧
     if (c->stack_offset != 0) {
-        slice_push(operations, ARM64_ASM(R_ADD, ARM64_REG(sp), ARM64_REG(sp), ARM64_IMM(c->stack_offset)));
+        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(sp), ARM64_REG(sp), ARM64_IMM(c->stack_offset)));
     }
 
     // 恢复 fp(x29) 和 lr(x30), ARM64_INDIRECT(sp, 16, 2) 2 表示 post-index 模式
-    slice_push(operations, ARM64_ASM(R_LDP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, 16, 2, OWORD)));
+    slice_push(operations, ARM64_INST(R_LDP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, 16, 2, OWORD)));
     // [sp], #16
     // 返回
-    slice_push(operations, ARM64_ASM(R_RET));
+    slice_push(operations, ARM64_INST(R_RET));
     return operations;
 }
 
@@ -869,11 +869,49 @@ static slice_t *arm64_native_lea(closure_t *c, lir_op_t *op) {
         // 对于符号地址，使用 ADRP 指令加载页地址
         // ADRP x0, symbol        ; 加载符号的页地址
         // ADD x0, x0, :lo12:symbol  ; 加载低12位偏移
-        slice_push(operations, ARM64_ASM(R_ADRP, result, first));
+        slice_push(operations, ARM64_INST(R_ADRP, result, first));
 
         arm64_asm_operand_t *lo12_symbol_operand = ARM64_SYM(first->symbol.name, first->symbol.is_local,
-                                                             first->symbol.offset, ARM64_RELOC_LO12);
-        slice_push(operations, ARM64_ASM(R_ADD, result, result, lo12_symbol_operand));
+                                                             first->symbol.offset, ASM_ARM64_RELOC_LO12);
+        slice_push(operations, ARM64_INST(R_ADD, result, result, lo12_symbol_operand));
+    } else if (op->first->assert_type == LIR_OPERAND_SYMBOL_TLS) {
+        if (BUILD_OS == OS_DARWIN) {
+            // 处理 TLS 变量
+            lir_symbol_var_t *tls_var = op->first->value;
+
+            // 1. 使用 ADRP 加载 TLS 变量的页地址
+            arm64_asm_operand_t *tlv_page = ARM64_SYM(tls_var->ident, false, 0, ASM_ARM64_RELOC_TLVP_LOAD_PAGE21);
+            slice_push(operations, ARM64_INST(R_ADRP, result, tlv_page));
+
+            // 2. 加载 TLV getter 函数的地址
+            assert(op->output->assert_type == LIR_OPERAND_REG);
+            reg_t *result_reg = op->output->value;
+            assert(result_reg->index == x0->index);
+            slice_push(operations, ARM64_INST(R_LDR, result, ARM64_INDIRECT_SYM(result_reg, tls_var->ident, ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12)));
+
+            // 3.?
+            slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(x16), ARM64_INDIRECT(result_reg, 0, 0, QWORD)));
+
+            // 3. 调用 TLV get 函数获取实际的 TLS 变量地址
+            slice_push(operations, ARM64_INST(R_BLR, ARM64_REG(x16)));
+        } else {
+            // 处理 TLS 变量
+            lir_symbol_var_t *tls_var = op->first->value;
+
+            // 1. 使用 MRS 指令读取 TPIDR_EL0 寄存器（TLS 基址）到结果寄存器
+            slice_push(operations, ARM64_INST(R_MRS, result, ARM64_IMM(TPIDR_EL0)));
+
+            // 2.1 添加高12位偏移量
+            arm64_asm_operand_t *tls_hi12_operand = ARM64_SYM(tls_var->ident, false, 0, ASM_ARM64_RELOC_TLSLE_ADD_TPREL_HI12);
+            slice_push(operations, ARM64_INST(R_ADD, result, result, tls_hi12_operand));
+
+            // 2.2 添加低12位偏移量
+            arm64_asm_operand_t *tls_lo12_operand = ARM64_SYM(tls_var->ident, false, 0, ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12_NC);
+            slice_push(operations, ARM64_INST(R_ADD, result, result, tls_lo12_operand));
+        }
+
+        // tls 地址已经添加到了 result 中
+        // slice_push(operations, ARM64_ASM(R_ADD, result, result, tls_lo12_operand));
     } else if (op->first->assert_type == LIR_OPERAND_STACK ||
                op->first->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         reg_t *base = NULL;
@@ -889,7 +927,7 @@ static slice_t *arm64_native_lea(closure_t *c, lir_op_t *op) {
             offset = mem->offset;
         }
 
-        slice_push(operations, ARM64_ASM(R_ADD, result, ARM64_REG(base), ARM64_IMM(offset)));
+        slice_push(operations, ARM64_INST(R_ADD, result, ARM64_REG(base), ARM64_IMM(offset)));
     }
     return operations;
 }
@@ -911,7 +949,65 @@ static slice_t *arm64_native_beq(closure_t *c, lir_op_t *op) {
     arm64_gen_cmp(op, operations, second, first, arm64_is_integer_operand(op->first));
 
     // 如果相等则跳转(beq)到标签
-    slice_push(operations, ARM64_ASM(R_BEQ, result));
+    slice_push(operations, ARM64_INST(R_BEQ, result));
+
+    return operations;
+}
+
+static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->output && op->output->assert_type == LIR_OPERAND_REG);
+    reg_t *x0_reg = op->output->value;
+    assert(x0_reg->index == x0->index);
+
+    arm64_asm_operand_t *x0_operand = ARM64_REG(x0_reg);
+    x0_operand->size = x0_reg->size;
+
+
+    // 加载 tls_yield_safepoint 的指针
+    if (BUILD_OS == OS_DARWIN) {
+        // 处理 TLS 变量
+        // 1. 使用 ADRP 加载 TLS 变量的页地址
+        arm64_asm_operand_t *tlv_page = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_ARM64_RELOC_TLVP_LOAD_PAGE21);
+        slice_push(operations, ARM64_INST(R_ADRP, x0_operand, tlv_page));
+
+        // 2. 加载 TLV getter 函数的地址
+        assert(op->output->assert_type == LIR_OPERAND_REG);
+        reg_t *result_reg = op->output->value;
+        assert(result_reg->index == x0->index);
+        slice_push(operations, ARM64_INST(R_LDR, x0_operand, ARM64_INDIRECT_SYM(result_reg, TLS_YIELD_SAFEPOINT_IDENT, ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12)));
+
+        // 3.?
+        slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(x16), ARM64_INDIRECT(result_reg, 0, 0, QWORD)));
+
+        // 3. 调用 TLV get 函数获取实际的 TLS 变量地址
+        slice_push(operations, ARM64_INST(R_BLR, ARM64_REG(x16)));
+    } else {
+        // 1. 使用 MRS 指令读取 TPIDR_EL0 寄存器（TLS 基址）到结果寄存器
+        slice_push(operations, ARM64_INST(R_MRS, x0_operand, ARM64_IMM(TPIDR_EL0)));
+
+        // 2.1 添加高12位偏移量
+        arm64_asm_operand_t *tls_hi12_operand = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_ARM64_RELOC_TLSLE_ADD_TPREL_HI12);
+        slice_push(operations, ARM64_INST(R_ADD, x0_operand, x0_operand, tls_hi12_operand));
+
+        // 2.2 添加低12位偏移量
+        arm64_asm_operand_t *tls_lo12_operand = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12_NC);
+        slice_push(operations, ARM64_INST(R_ADD, x0_operand, x0_operand, tls_lo12_operand));
+    }
+
+    // ldr x0, [x0]
+    //    arm64_asm_operand_t *w0_operand = ARM64_REG(w0);
+    //    w0_operand->size = w0_reg->size;
+    slice_push(operations, ARM64_INST(R_LDR, x0_operand, ARM64_INDIRECT(x0_reg, 0, 0, POINTER_SIZE)));
+
+    // cmp x0,#0x0
+    slice_push(operations, ARM64_INST(R_CMP, x0_operand, ARM64_IMM(0)));
+
+    // b.eq 跳过 bl 指令
+    slice_push(operations, ARM64_INST(R_BEQ, ARM64_IMM(8)));
+
+    slice_push(operations, ARM64_INST(R_BL, ARM64_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, 0)));
 
     return operations;
 }
@@ -965,7 +1061,7 @@ arm64_native_fn arm64_native_table[] = {
         [LIR_OPCODE_FN_BEGIN] = arm64_native_fn_begin,
         [LIR_OPCODE_FN_END] = arm64_native_fn_end,
 
-        [LIR_OPCODE_SAFEPOINT] = arm64_native_skip,
+        [LIR_OPCODE_SAFEPOINT] = arm64_native_safepoint,
 };
 
 

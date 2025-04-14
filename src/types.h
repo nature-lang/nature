@@ -359,6 +359,7 @@ typedef enum {
     LIR_OPERAND_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？又或者是 symbol?
     LIR_OPERAND_REG,
     LIR_OPERAND_SYMBOL_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？
+    LIR_OPERAND_SYMBOL_TLS, // TLS 类型 VAR
     LIR_OPERAND_STACK,
     LIR_OPERAND_PHI_BODY,
     LIR_OPERAND_PARAMS,
@@ -589,6 +590,15 @@ typedef struct {
     section_t *bss_section;
     section_t *data_section;
     section_t *text_section;
+
+    // TLS 段的起始地址
+    addr_t tls_start;
+    // TLS 段的大小
+    size_t tls_size;
+
+    // tls section
+    section_t *tdata_section;
+    section_t *tbss_section;
 
     bool leading_underscore;
 

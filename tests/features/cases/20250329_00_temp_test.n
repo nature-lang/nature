@@ -1,13 +1,18 @@
 import runtime
 import coroutine as co
+import libc
 
-#linkid test_gc_sleep_yield
-fn test_gc_sleep_yield()
+int global_i = 0
 
 fn test_break() {
 }
 
+fn test_increase(int i):int {
+    return i + 1
+}
+
 fn car() {
+    println('entry car-----------')
     test_break()
     var b = vec_new<int>(0, 1024)
     var c = 111
@@ -18,11 +23,9 @@ fn car() {
     println(before)
     assert(before > 50000)
 
-    test_gc_sleep_yield() // 等待 GC 完成，由于存在引用, 所以无法清理
-
-    var after = runtime.malloc_bytes()
-    println(after)
-    assert(after > 30000)
+    for true {
+        global_i = test_increase(global_i)
+    }
 }
 
 fn bar() {
@@ -60,7 +63,15 @@ fn foo() {
 }
 
 fn main() {
-    @async(foo(), co.SOLO)
+    @async(foo(), 0)
     runtime.gc()
-    co.sleep(2000) // 等待 GC 进行
+
+    for int i = 0; i < 10; i += 1 {
+        co.sleep(100)
+        println(i, " = ", global_i)
+    }
+
+    var after = runtime.malloc_bytes()
+    println(after)
+    assert(after > 30000)
 }

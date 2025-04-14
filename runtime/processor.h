@@ -9,12 +9,13 @@
 #include "nutils/vec.h"
 #include "runtime.h"
 
-#define GC_STW_WAIT_COUNT 10
+#define GC_STW_WAIT_COUNT 25
 #define GC_STW_SWEEP_COUNT (GC_STW_WAIT_COUNT * 2)
 
 extern int cpu_count;
-extern n_processor_t *share_processor_index[1024];
-extern n_processor_t *share_processor_list; // 共享协程列表的数量一般就等于线程数量
+extern n_processor_t *processor_index[1024];
+extern n_processor_t *processor_list; // 共享协程列表的数量一般就等于线程数量
+
 extern n_processor_t *solo_processor_list; // 独享协程列表其实就是多线程
 extern coroutine_t *main_coroutine;
 
@@ -23,6 +24,8 @@ extern int solo_processor_count;
 extern int64_t coroutine_count;
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
+
+extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint; // gc 全局 safepoint 标识，通常配合 stw 使用
 
 // processor gc_finished 后新产生的 shade ptr 会存入到该全局工作队列中，在 gc_mark_done 阶段进行单线程处理
 extern rt_linked_fixalloc_t global_gc_worklist; // 全局 gc worklist
@@ -45,9 +48,9 @@ typedef enum {
 #endif
 
 #ifdef __DARWIN
-extern void async_preempt() __asm__("_async_preempt");
+extern void assist_preempt_yield() __asm__("_assist_preempt_yield");
 #else
-extern void async_preempt() __asm__("async_preempt");
+extern void assist_preempt_yield() __asm__("assist_preempt_yield");
 #endif
 
 NO_OPTIMIZE void debug_ret(uint64_t rbp, uint64_t ret_addr);
@@ -56,8 +59,8 @@ NO_OPTIMIZE void co_preempt_yield();
 
 #define PROCESSOR_FOR(list) for (n_processor_t *p = list; p; p = p->next)
 
-static inline bool processor_safe(n_processor_t *p) {
-    return p->need_stw > 0 && p->need_stw == p->safe_point;
+static inline bool processor_need_stw(n_processor_t *p) {
+    return p->need_stw > 0 && p->need_stw == p->in_stw;
 }
 
 static inline void co_set_status(n_processor_t *p, coroutine_t *co, co_status_t status) {
@@ -76,6 +79,10 @@ static inline void _co_yield(n_processor_t *p, coroutine_t *co) {
     assert(co);
 
     aco_yield1(&co->aco);
+
+    // yield 返回，继续 running
+    p->status = P_STATUS_RUNNING;
+    p->co_started_at = uv_hrtime();
 }
 
 static inline void co_ready(coroutine_t *co) {
