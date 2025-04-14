@@ -25,6 +25,9 @@ add_test(test_hash_table test_hash_table)
 add_executable(test_arm64_encoding test_arm64_encoding.c ${UTILS} ${SRC})
 add_test(test_arm64_encoding test_arm64_encoding)
 
+add_executable(test_amd64_encoding test_amd64_encoding.c ${UTILS} ${SRC})
+add_test(test_amd64_encoding test_amd64_encoding)
+
 # ---------------------------------- cases 测试 ------------------------------------------
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)
 message("[test cases]make temp dir ${CMAKE_CURRENT_SOURCE_DIR}/tmp success")

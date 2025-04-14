@@ -17,12 +17,6 @@ static char *lir_operand_reg_to_string(reg_t *reg) {
     return str;
 }
 
-static char *lir_operand_symbol_tls_to_string(lir_symbol_var_t *ptr) {
-    string buf = mallocz(DEBUG_STR_COUNT);
-    int len = sprintf(buf, "SYMBOL_TLS[%s]", ptr->ident);
-    return realloc(buf, len + 1);
-}
-
 static char *lir_operand_symbol_to_string(lir_symbol_var_t *ptr) {
     string buf = mallocz(DEBUG_STR_COUNT);
     int len = sprintf(buf, "SYMBOL[%s]", ptr->ident);
@@ -41,10 +35,6 @@ string lir_operand_to_string(lir_operand_t *operand) {
         case LIR_OPERAND_SYMBOL_VAR: {
             // 外部符号引用
             return lir_operand_symbol_to_string((lir_symbol_var_t *) operand->value);
-        }
-        case LIR_OPERAND_SYMBOL_TLS: {
-            // 外部符号引用
-            return lir_operand_symbol_tls_to_string((lir_symbol_var_t *) operand->value);
         }
         case LIR_OPERAND_STACK: {
             return lir_operand_stack_to_string((lir_stack_t *) operand->value);

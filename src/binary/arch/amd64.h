@@ -534,7 +534,7 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
                         sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, symbol_operand->name);
                     }
 
-                    // rewrite symbol
+                    // rewrite symbol TODO 可能有其他的重定位方式
                     amd64_rewrite_rip_symbol(rel_operand);
 
                     // 编码

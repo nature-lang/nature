@@ -874,44 +874,6 @@ static slice_t *arm64_native_lea(closure_t *c, lir_op_t *op) {
         arm64_asm_operand_t *lo12_symbol_operand = ARM64_SYM(first->symbol.name, first->symbol.is_local,
                                                              first->symbol.offset, ASM_ARM64_RELOC_LO12);
         slice_push(operations, ARM64_INST(R_ADD, result, result, lo12_symbol_operand));
-    } else if (op->first->assert_type == LIR_OPERAND_SYMBOL_TLS) {
-        if (BUILD_OS == OS_DARWIN) {
-            // 处理 TLS 变量
-            lir_symbol_var_t *tls_var = op->first->value;
-
-            // 1. 使用 ADRP 加载 TLS 变量的页地址
-            arm64_asm_operand_t *tlv_page = ARM64_SYM(tls_var->ident, false, 0, ASM_ARM64_RELOC_TLVP_LOAD_PAGE21);
-            slice_push(operations, ARM64_INST(R_ADRP, result, tlv_page));
-
-            // 2. 加载 TLV getter 函数的地址
-            assert(op->output->assert_type == LIR_OPERAND_REG);
-            reg_t *result_reg = op->output->value;
-            assert(result_reg->index == x0->index);
-            slice_push(operations, ARM64_INST(R_LDR, result, ARM64_INDIRECT_SYM(result_reg, tls_var->ident, ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12)));
-
-            // 3.?
-            slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(x16), ARM64_INDIRECT(result_reg, 0, 0, QWORD)));
-
-            // 3. 调用 TLV get 函数获取实际的 TLS 变量地址
-            slice_push(operations, ARM64_INST(R_BLR, ARM64_REG(x16)));
-        } else {
-            // 处理 TLS 变量
-            lir_symbol_var_t *tls_var = op->first->value;
-
-            // 1. 使用 MRS 指令读取 TPIDR_EL0 寄存器（TLS 基址）到结果寄存器
-            slice_push(operations, ARM64_INST(R_MRS, result, ARM64_IMM(TPIDR_EL0)));
-
-            // 2.1 添加高12位偏移量
-            arm64_asm_operand_t *tls_hi12_operand = ARM64_SYM(tls_var->ident, false, 0, ASM_ARM64_RELOC_TLSLE_ADD_TPREL_HI12);
-            slice_push(operations, ARM64_INST(R_ADD, result, result, tls_hi12_operand));
-
-            // 2.2 添加低12位偏移量
-            arm64_asm_operand_t *tls_lo12_operand = ARM64_SYM(tls_var->ident, false, 0, ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12_NC);
-            slice_push(operations, ARM64_INST(R_ADD, result, result, tls_lo12_operand));
-        }
-
-        // tls 地址已经添加到了 result 中
-        // slice_push(operations, ARM64_ASM(R_ADD, result, result, tls_lo12_operand));
     } else if (op->first->assert_type == LIR_OPERAND_STACK ||
                op->first->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         reg_t *base = NULL;

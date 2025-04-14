@@ -110,6 +110,9 @@ amd64_opcode_inst_t mov_r16_rm16 = {"mov", "mov", 0x66, {0x8B}, {OPCODE_EXT_SLAS
 amd64_opcode_inst_t mov_r32_rm32 = {"mov", "mov", 0, {0x8B}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
 amd64_opcode_inst_t mov_r64_rm64 = {"mov", "mov", 0, {0x8B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
 
+// mov seg -> reg
+amd64_opcode_inst_t mov_r64_seg = {"mov", "mov", 0, {0x8B}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_SEG64, ENCODING_TYPE_MODRM_RM}}};
+
 // mov imm -> reg ------------------------------------------------------------------------------------------------------
 amd64_opcode_inst_t mov_r8_imm8 = {"mov", "mov", 0, {0xB0}, {OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
 amd64_opcode_inst_t mov_rex_r8_imm8 = {"mov", "mov", 0, {0xB0}, {OPCODE_EXT_REX, OPCODE_EXT_IMM_BYTE}, {{OPERAND_TYPE_R8, ENCODING_TYPE_OPCODE_PLUS}, {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
@@ -423,6 +426,8 @@ void amd64_opcode_init() {
     opcode_tree_build(&mov_r64_rm64);
     opcode_tree_build(&mov_r32_rm32);
 
+    opcode_tree_build(&mov_r64_seg);
+
     // mov imm ->reg
     opcode_tree_build(&mov_rex_r8_imm8);
     opcode_tree_build(&mov_r8_imm8);
@@ -670,6 +675,14 @@ amd64_asm_keys_t operand_low_to_high(inst_operand_type t) {
         highs[2] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_DISP_REG, QWORD);
         highs[3] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE, QWORD);
         highs[4] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_SIB_REG, QWORD);
+        res.list = highs;
+        return res;
+    }
+
+    if (t == OPERAND_TYPE_SEG64) {
+        res.count = 1;
+        uint16_t *highs = malloc(sizeof(uint16_t) * res.count);
+        highs[0] = asm_operand_to_key(AMD64_ASM_OPERAND_TYPE_SEG_OFFSET, QWORD);
         res.list = highs;
         return res;
     }
@@ -1479,6 +1492,42 @@ amd64_binary_format_t *opcode_fill(amd64_opcode_inst_t *inst, amd64_asm_inst_t a
                 int32_to_uint8(r->disp, temp);
                 set_disp(format, NULL, temp, 4);
             }
+        } else if (asm_operand->type == AMD64_ASM_OPERAND_TYPE_SEG_OFFSET) {
+            // only encoding rm64
+            asm_seg_offset_t *seg_offset = asm_operand->value;
+
+            // // 在适当的位置添加段寄存器前缀的定义
+            //#define SEGMENT_PREFIX_CS 0x2E
+            //#define SEGMENT_PREFIX_SS 0x36
+            //#define SEGMENT_PREFIX_DS 0x3E
+            //#define SEGMENT_PREFIX_ES 0x26
+            //#define SEGMENT_PREFIX_FS 0x64
+            //#define SEGMENT_PREFIX_GS 0x65
+
+            // 添加段寄存器前缀
+            if (str_equal(seg_offset->name, "fs")) {
+                format->prefix = 0x64; // fs 段前缀
+            } else if (str_equal(seg_offset->name, "gs")) {
+                format->prefix = 0x65; // gs 段前缀
+            }
+
+            // 设置 ModR/M 和偏移量
+            if (format->modrm == NULL) {
+                format->modrm = new_modrm();
+            }
+
+            // 使用绝对寻址模式而不是RIP相对寻址
+            format->modrm->mod = MODRM_MOD_INDIRECT_REGISTER;
+            format->modrm->rm = MODRM_MOD_SIB_FOLLOWS_RM; // 4，表示使用SIB字节
+
+            // 创建SIB字节，使用特殊的绝对寻址形式
+            format->sib = new_sib(0, 4, 5); // scale=0, index=4 (no index), base=5 (disp32)
+
+            // 设置 TLS 偏移量
+            uint8_t temp[4];
+            int32_to_uint8(seg_offset->offset, temp);
+            set_disp(format, NULL, temp, 4);
+
         } else if (asm_operand->type == AMD64_ASM_OPERAND_TYPE_SIB_REG) {
             asm_sib_reg_t *sib_reg = asm_operand->value;
             if (operand.encoding == ENCODING_TYPE_MODRM_RM) {

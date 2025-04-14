@@ -108,7 +108,6 @@ static alloc_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var
     if (op->code == LIR_OPCODE_MOVE) {
         // 如果 output 不是寄存器，则 input 必须分配寄存器
         if (op->output->assert_type == LIR_OPERAND_SYMBOL_VAR ||
-            op->output->assert_type == LIR_OPERAND_SYMBOL_TLS ||
             op->output->assert_type == LIR_OPERAND_STACK ||
             op->output->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
             return ALLOC_KIND_MUST;
