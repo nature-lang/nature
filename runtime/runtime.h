@@ -34,32 +34,52 @@ int runtime_main(int argc, char *argv[]) __asm("main");
 #endif
 #endif
 
+//#ifdef __AMD64
+//#define CO_SCAN_REQUIRE(_co)                                                                                                                                                           \
+//    {                                                                                                                                                                                  \
+//        uint64_t rbp_value;                                                                                                                                                            \
+//        __asm__ volatile("mov %%rbp, %0" : "=r"(rbp_value));                                                                                                                           \
+//        _co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);                                                                                                               \
+//        _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE);                                                                         \
+//        TRACEF("[pre_tplcall_hook] co=%p, status=%d, bp_value=%p, scan_offset=%lu, ret_addr=%p", _co, _co->status, (void *) rbp_value, _co->scan_offset, (void *) _co->scan_ret_addr); \
+//    };
+//#elif __ARM64
+//#define CO_SCAN_REQUIRE(_co)                                                                                                                                                                                                                                                                 \
+//    do {                                                                                                                                                                                                                                                                                     \
+//        addr_t _fp_value;                                                                                                                                                                                                                                                                    \
+//        __asm__ volatile("mov %0, x29" : "=r"(_fp_value));                                                                                                                                                                                                                                   \
+//        uint64_t _value = fetch_addr_value(_fp_value + POINTER_SIZE);                                                                                                                                                                                                                        \
+//        fndef_t *_fn = find_fn(_value, _co->p);                                                                                                                                                                                                                                              \
+//        if (!_fn) break;                                                                                                                                                                                                                                                                     \
+//        _co->scan_ret_addr = _value;                                                                                                                                                                                                                                                         \
+//        assert(_co->scan_ret_addr);                                                                                                                                                                                                                                                          \
+//        addr_t _prev_fp_value = fetch_addr_value(_fp_value);                                                                                                                                                                                                                                 \
+//        assert(_prev_fp_value);                                                                                                                                                                                                                                                              \
+//        _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (_prev_fp_value - _fn->stack_size);                                                                                                                                                                                      \
+//        TRACEF("[pre_tplcall_hook] co=%p, status=%d, fp_value=%p, prev_fn_value=%p, fn=%s, stack_size=%ld, scan_offset=%p, ret_addr=%p", _co, _co->status, (void *) _fp_value, (void *) _prev_fp_value, _fn->name, _fn->stack_size, (void *) _co->scan_offset, (void *) _co->scan_ret_addr); \
+//    } while (0);
+//#else
+//// not define
+//#endif
+
+
 #ifdef __AMD64
-#define CO_SCAN_REQUIRE(_co)                                                                                                                                                           \
-    {                                                                                                                                                                                  \
-        uint64_t rbp_value;                                                                                                                                                            \
-        __asm__ volatile("mov %%rbp, %0" : "=r"(rbp_value));                                                                                                                           \
-        _co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);                                                                                                               \
-        _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE);                                                                         \
-        TRACEF("[pre_tplcall_hook] co=%p, status=%d, bp_value=%p, scan_offset=%lu, ret_addr=%p", _co, _co->status, (void *) rbp_value, _co->scan_offset, (void *) _co->scan_ret_addr); \
-    };
+#define CALLER_RET_ADDR(_co)                                  \
+    ({                                                        \
+        uint64_t _rbp_value;                                  \
+        __asm__ volatile("mov %%rbp, %0" : "=r"(_rbp_value)); \
+        fetch_addr_value(rbp_value + POINTER_SIZE);           \
+    });
 #elif __ARM64
-#define CO_SCAN_REQUIRE(_co)                                                                                                                                                                                                                                                                 \
-    do {                                                                                                                                                                                                                                                                                     \
-        addr_t _fp_value;                                                                                                                                                                                                                                                                    \
-        __asm__ volatile("mov %0, x29" : "=r"(_fp_value));                                                                                                                                                                                                                                   \
-        uint64_t _value = fetch_addr_value(_fp_value + POINTER_SIZE);                                                                                                                                                                                                                        \
-        fndef_t *_fn = find_fn(_value, _co->p);                                                                                                                                                                                                                                              \
-        if (!_fn) break;                                                                                                                                                                                                                                                                     \
-        _co->scan_ret_addr = _value;                                                                                                                                                                                                                                                         \
-        assert(_co->scan_ret_addr);                                                                                                                                                                                                                                                          \
-        addr_t _prev_fp_value = fetch_addr_value(_fp_value);                                                                                                                                                                                                                                 \
-        assert(_prev_fp_value);                                                                                                                                                                                                                                                              \
-        _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (_prev_fp_value - _fn->stack_size);                                                                                                                                                                                      \
-        TRACEF("[pre_tplcall_hook] co=%p, status=%d, fp_value=%p, prev_fn_value=%p, fn=%s, stack_size=%ld, scan_offset=%p, ret_addr=%p", _co, _co->status, (void *) _fp_value, (void *) _prev_fp_value, _fn->name, _fn->stack_size, (void *) _co->scan_offset, (void *) _co->scan_ret_addr); \
-    } while (0);
+#define CALLER_RET_ADDR(_co)                                          \
+    ({                                                                \
+        addr_t _fp_value;                                             \
+        __asm__ volatile("mov %0, x29" : "=r"(_fp_value));            \
+        uint64_t _value = fetch_addr_value(_fp_value + POINTER_SIZE); \
+        _value;                                                       \
+    });
 #else
-// not define
+#error "platform not supported"
 #endif
 
 #define P_LINKCO_CACHE_MAX 128
@@ -300,13 +320,13 @@ typedef enum {
     P_STATUS_INIT = 0,
     P_STATUS_DISPATCH = 1,
 
-    P_STATUS_TPLCALL = 2,
-    P_STATUS_RTCALL = 3,
+    //    P_STATUS_TPLCALL = 2,
+    //    P_STATUS_RTCALL = 3,
 
-    P_STATUS_RUNNABLE = 4,
-    P_STATUS_RUNNING = 5,
-    P_STATUS_PREEMPT = 6,
-    P_STATUS_EXIT = 7,
+    P_STATUS_RUNNABLE = 3,
+    P_STATUS_RUNNING = 4,
+    P_STATUS_PREEMPT = 5,
+    P_STATUS_EXIT = 6,
 } p_status_t;
 
 typedef struct n_processor_t n_processor_t;
@@ -396,8 +416,8 @@ struct coroutine_t {
     +------------------------+
     低地址
     */
-    uint64_t scan_offset;
-    uint64_t scan_ret_addr;
+    //    uint64_t scan_offset;
+    //    uint64_t scan_ret_addr;
 
     bool has_error;
     n_interface_t *error; // throwable
@@ -426,8 +446,6 @@ struct n_processor_t {
     uv_timer_t timer; // 辅助协程调度的定时器
     uv_loop_t uv_loop; // uv loop 事件循环
 
-    // - 仅仅 solo processor 需要该锁， share 进行协作时需要上锁，避免在此期间进行任何内存操作
-    //    mutex_t gc_solo_stw_locker; // solo processor 辅助判断
     uint64_t need_stw; // 外部声明, 内部判断 是否需要 stw
     uint64_t in_stw; // 内部声明, 外部判断是否已经 stw
 
@@ -446,8 +464,6 @@ struct n_processor_t {
 
     rt_linked_fixalloc_t co_list; // 当前 processor 下的 coroutine 列表
     rt_linked_fixalloc_t runnable_list;
-
-    bool share; // 默认都是共享处理器
 
     rt_linked_fixalloc_t gc_worklist; // gc 扫描的 ptr 节点列表
     uint64_t gc_work_finished; // 当前处理的 GC 轮次，每完成一轮 + 1
@@ -474,23 +490,23 @@ coroutine_t *coroutine_get();
 
 void processor_set_status(n_processor_t *p, p_status_t status);
 
-#define PRE_RTCALL_HOOK()                                                                               \
-    do {                                                                                                \
-        n_processor_t *p = processor_get();                                                             \
-        if (!p) break;                                                                                  \
-        if (p->status == P_STATUS_RTCALL || p->status == P_STATUS_TPLCALL) break;                       \
-        processor_set_status(p, P_STATUS_RTCALL);                                                       \
-        DEBUGF("[pre_rtcall_hook] target %s, status set rtcall success, non-preemption", __FUNCTION__); \
-        coroutine_t *_co = coroutine_get();                                                             \
-        if (!_co) break;                                                                                \
-        CO_SCAN_REQUIRE(_co);                                                                           \
-    } while (0);
+//#define PRE_RTCALL_HOOK()                                                                               \
+//    do {                                                                                                \
+//        n_processor_t *p = processor_get();                                                             \
+//        if (!p) break;                                                                                  \
+//        if (p->status == P_STATUS_RTCALL || p->status == P_STATUS_TPLCALL) break;                       \
+//        processor_set_status(p, P_STATUS_RTCALL);                                                       \
+//        DEBUGF("[pre_rtcall_hook] target %s, status set rtcall success, non-preemption", __FUNCTION__); \
+//        coroutine_t *_co = coroutine_get();                                                             \
+//        if (!_co) break;                                                                                \
+//        CO_SCAN_REQUIRE(_co);                                                                           \
+//    } while (0);
 
-void pre_tplcall_hook();
+//void pre_tplcall_hook();
 
-void post_tplcall_hook();
+//void post_tplcall_hook();
 
-void post_rtcall_hook(char *target);
+//void post_rtcall_hook(char *target);
 
 void *rti_gc_malloc(uint64_t size, rtype_t *rtype);
 

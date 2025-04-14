@@ -88,7 +88,7 @@ static lir_operand_t *linear_inline_arr_element_addr(module_t *m, lir_operand_t 
         be_catch = true;
     }
 
-    push_rt_call_no_hook(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target, bool_operand(be_catch));
+    push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target, bool_operand(be_catch));
     // bal catch or end label
     OP_PUSH(lir_op_bal(lir_label_operand(error_label_ident, true)));
     OP_PUSH(lir_op_label(end_label_ident, true));
@@ -147,7 +147,7 @@ static lir_operand_t *linear_inline_vec_element_addr(module_t *m, lir_operand_t 
         be_catch = true;
     }
 
-    push_rt_call_no_hook(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target, bool_operand(be_catch));
+    push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target, bool_operand(be_catch));
     // bal catch or end label
     OP_PUSH(lir_op_bal(lir_label_operand(error_label_ident, true)));
     OP_PUSH(lir_op_label(end_label_ident, true));
@@ -479,9 +479,9 @@ static void linear_has_panic(module_t *m) {
     // 不可抢占，也不 yield，所以不需要添加任何勾子。
     // 如果没有被 catch, hash_error 直接 panic 并退出程序执行, 从而提醒 coder 及时处理错误
     lir_operand_t *has_error = temp_var_operand_with_alloc(m, type_kind_new(TYPE_BOOL));
-    push_rt_call_no_hook(m, RT_CALL_CO_HAS_PANIC, has_error, 5, bool_operand(be_catch), path_operand, fn_name_operand,
-                         line_operand,
-                         column_operand);
+    push_rt_call(m, RT_CALL_CO_HAS_PANIC, has_error, 5, bool_operand(be_catch), path_operand, fn_name_operand,
+                 line_operand,
+                 column_operand);
 
     OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), has_error, lir_label_operand(error_target_label, true)));
 }
@@ -505,8 +505,8 @@ static void linear_has_error(module_t *m) {
     lir_operand_t *column_operand = int_operand(m->current_column);
 
     // 不可抢占，也不 yield，所以不需要添加任何勾子。
-    push_rt_call_no_hook(m, RT_CALL_CO_HAS_ERROR, has_error, 4, path_operand, fn_name_operand, line_operand,
-                         column_operand);
+    push_rt_call(m, RT_CALL_CO_HAS_ERROR, has_error, 4, path_operand, fn_name_operand, line_operand,
+                 column_operand);
     OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), has_error, lir_label_operand(error_target_label, true)));
 }
 
@@ -1633,22 +1633,11 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
         temp = temp_var_operand(m, call->return_type);
     }
 
-    // rtcall 自带 pre_hook, 所以这里不需要重复处理了
-    // tpl 可以指向 rt_call, rt_call 内部已经进行过状态转换，此时不需要重复添加 tpl hook 了
-    // 当然重复添加也没什么影响, 已经进行重复处理了
-    if (!is_rtcall(type_fn->fn_name) && type_fn->is_tpl) {
-        push_rt_call_no_hook(m, RT_CALL_PRE_TPLCALL_HOOK, NULL, 1, string_operand(type_fn->fn_name));
-    }
-
     // safe point
     OP_PUSH(lir_op_safepoint());
 
     // call base_target,params -> target
     OP_PUSH(lir_op_new(LIR_OPCODE_CALL, base_target, operand_new(LIR_OPERAND_ARGS, params), temp));
-
-    if (type_fn->is_tpl) {
-        push_rt_call_no_hook(m, RT_CALL_POST_TPLCALL_HOOK, NULL, 1, string_operand(type_fn->fn_name));
-    }
 
     // 目标函数可能会产生错误才需要进行错误判断，并跳转到对应的 error label 或者 continue label
     if (type_fn->is_errable) {
@@ -2847,7 +2836,7 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     // 从 catch expr 中获取 err 然后为 err 赋值
     lir_operand_t *err_operand = linear_var_decl(m, &catch_expr->catch_err);
 
-    push_rt_call_no_hook(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
+    push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
 
     stack_push(m->current_closure->break_labels, catch_end_label->output);
     stack_push(m->current_closure->break_targets, target);
@@ -2884,7 +2873,7 @@ static void linear_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
 
     // 为 err 赋值
     lir_operand_t *err_operand = linear_var_decl(m, &try_stmt->catch_err);
-    push_rt_call_no_hook(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
+    push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
 
     stack_push(m->current_closure->break_labels, catch_end_label->output);
     //    stack_push(m->current_closure->break_targets, target);
@@ -3139,7 +3128,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
     lir_operand_t *env_operand = temp_var_operand_with_alloc(m, type_kind_new(TYPE_GC_ENV));
 
     // 不通过 post hook 推出 rt_call 状态，避免进行抢占, 使 env_new+env_assign+fn_new 成为一个整体，避免被抢占
-    push_rt_call_no_hook(m, RT_CALL_ENV_NEW, env_operand, 1, length);
+    push_rt_call(m, RT_CALL_ENV_NEW, env_operand, 1, length);
 
     // fn_new(env)
     lir_operand_t *label_addr_operand = temp_var_operand_with_alloc(m, fndef->type);
@@ -3182,9 +3171,9 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     lir_operand_t *column_operand = int_operand(m->current_column);
 
     // attach errort to processor
-    push_rt_call_no_hook(m, RT_CALL_CO_THROW_ERROR, NULL, 5, error_operand, path_operand, fn_name_operand,
-                         line_operand,
-                         column_operand);
+    push_rt_call(m, RT_CALL_CO_THROW_ERROR, NULL, 5, error_operand, path_operand, fn_name_operand,
+                 line_operand,
+                 column_operand);
 
     // 插入 return 标识(用来做 return check 的，check 完会清除的)
     OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));

@@ -675,14 +675,8 @@ type automation_event_list_t = struct{
     anyptr events
 }
 
-
 #linkid WindowShouldClose
-fn _window_should_close():bool
-
-fn window_should_close():bool {
-    co.yield()
-    return _window_should_close()
-}
+fn window_should_close():bool
 
 #linkid BeginDrawing
 fn begin_drawing()

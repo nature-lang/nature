@@ -812,7 +812,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
     mspan_t *mspan = mcache->alloc[spanclass];
 
     if (mspan) {
-        MDEBUGF("[mcache_alloc] p_index_%d=%d, span=%p, alloc_count=%lu, obj_count=%lu", p->share, p->index, mspan,
+        MDEBUGF("[mcache_alloc] p_index=%d, span=%p, alloc_count=%lu, obj_count=%lu", p->index, mspan,
                 mspan->alloc_count,
                 mspan->obj_count);
     } else {
@@ -823,7 +823,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
     // 判断当前 mspan 是否已经满载了，如果满载需要从 mcentral 中填充 mspan
     if (mspan == NULL || mspan->alloc_count == mspan->obj_count) {
         mspan = mcache_refill(mcache, spanclass);
-        MDEBUGF("[runtime.mcache_alloc] p_index_%d=%d, refill mspan=%p", p->share, p->index, mspan);
+        MDEBUGF("[runtime.mcache_alloc] p_index=%d, refill mspan=%p", p->index, mspan);
     }
 
     *span = mspan;
@@ -848,7 +848,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
         used_count += 1;
 
         mutex_unlock(&mspan->alloc_locker);
-        MDEBUGF("[runtime.mcache_alloc] p_index_%d=%d, find can use addr=%p", p->share, p->index, (void *) addr);
+        MDEBUGF("[runtime.mcache_alloc] p_index=%d, find can use addr=%p", p->index, (void *) addr);
         return addr;
     }
 
@@ -1171,7 +1171,7 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
 //        mutex_lock(&p->gc_solo_stw_locker);
 //    }
 
-    MDEBUGF("[rti_gc_malloc] start p_index_%d=%d", p->share, p->index);
+    MDEBUGF("[rti_gc_malloc] start p_index=%d", p->index);
 
     if (rtype) {
         MDEBUGF("[rti_gc_malloc] size=%ld, type_kind=%s", size, type_kind_str[rtype->kind]);
@@ -1192,17 +1192,13 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
 
     // 如果当前写屏障开启，则新分配的对象都是黑色(不在工作队列且被 span 标记), 避免在本轮被 GC 清理
     if (gc_barrier_get()) {
-        DEBUGF("[rti_gc_malloc] p_index_%d=%d(%lu), p_status=%d, gc barrier enabled, will mark ptr as black, ptr=%p",
-               p->share, p->index,
+        DEBUGF("[rti_gc_malloc] p_index=%d(%lu), p_status=%d, gc barrier enabled, will mark ptr as black, ptr=%p",
+               p->index,
                (uint64_t) p->thread_id, p->status, ptr);
         mark_ptr_black(ptr);
     }
 
-//    if (!p->share) {
-//        mutex_unlock(&p->gc_solo_stw_locker);
-//    }
-
-    MDEBUGF("[rti_gc_malloc] end p_index_%d=%d, co=%p, result=%p", p->share, p->index, coroutine_get(), ptr);
+    MDEBUGF("[rti_gc_malloc] end p_index=%d, co=%p, result=%p",p->index, coroutine_get(), ptr);
 
     // jit span 不用清 0， 权限不足也无法进行清零
     if (rtype && rtype->kind != TYPE_GC_FN) {
@@ -1326,7 +1322,6 @@ EXIT:
 
 void *gc_malloc(uint64_t rhash) {
     // uint64_t start = uv_hrtime();
-    PRE_RTCALL_HOOK();
 
     rtype_t *rtype = sc_map_get_64v(&rt_rtype_map, rhash);
     assertf(rtype, "notfound rtype by hash=%ld", rhash);
@@ -1342,7 +1337,7 @@ void *gc_malloc(uint64_t rhash) {
 void *gc_malloc_size(uint64_t size) {
     // uint64_t start = uv_hrtime();
 
-    PRE_RTCALL_HOOK();
+
 
     // uint64_t stage2 = uv_hrtime();
     // TDEBUGF("[gc_malloc_size] malloc size is %lu, use time %lu ", size, stage2 - start);

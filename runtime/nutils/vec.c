@@ -4,7 +4,7 @@
 #include "runtime/runtime.h"
 
 static void rt_vec_grow(n_vec_t *vec, rtype_t *element_rtype, int custom_capacity) {
-    PRE_RTCALL_HOOK();
+
 
     if (custom_capacity) {
         vec->capacity = custom_capacity;
@@ -37,7 +37,7 @@ static void rt_vec_grow(n_vec_t *vec, rtype_t *element_rtype, int custom_capacit
  * @return
  */
 n_vec_t *rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *value_ref) {
-    PRE_RTCALL_HOOK();
+
 
     DEBUGF("[rt_vec_new] hash=%lu, element_hash=%lu, len=%lu, cap=%lu", hash, element_hash, length);
 
@@ -84,7 +84,7 @@ n_vec_t *rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *va
 }
 
 n_vec_t *rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity) {
-    PRE_RTCALL_HOOK();
+
 
     if (capacity < 0) {
         char *msg = tlsprintf("cap must be greater than 0");
@@ -124,7 +124,7 @@ n_vec_t *rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity) {
  * @param value_ref
  */
 void rt_vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
-    PRE_RTCALL_HOOK();
+
 
     if (index >= l->length) {
         char *msg = tlsprintf("index out of range [%d] with length %d", index, l->length);
@@ -147,7 +147,7 @@ void rt_vec_access(n_vec_t *l, uint64_t index, void *value_ref) {
  * @return
  */
 void rt_vec_assign(n_vec_t *l, uint64_t index, void *ref) {
-    PRE_RTCALL_HOOK();
+
 
     // assert(index <= l->length - 1 && "index out of range [%d] with length %d", index, l->length);
     assert(index <= l->length - 1 && "index out of range");// TODO runtime 错误提示优化
@@ -160,20 +160,20 @@ void rt_vec_assign(n_vec_t *l, uint64_t index, void *ref) {
 }
 
 uint64_t rt_vec_length(n_vec_t *l) {
-    PRE_RTCALL_HOOK();
+
     assert(l);
 
     return l->length;
 }
 
 uint64_t rt_vec_capacity(n_vec_t *l) {
-    PRE_RTCALL_HOOK();
+
 
     return l->capacity;
 }
 
 void *rt_vec_ref(n_vec_t *l) {
-    PRE_RTCALL_HOOK();
+
 
     return l->data;
 }
@@ -184,7 +184,7 @@ void *rt_vec_ref(n_vec_t *l) {
  * @param ref
  */
 void rt_vec_push(n_vec_t *vec, int64_t element_hash, void *ref) {
-    PRE_RTCALL_HOOK();
+
     assert(element_hash);
 
     assert(ref > 0 && "ref must be a valid address");
@@ -200,8 +200,7 @@ void rt_vec_push(n_vec_t *vec, int64_t element_hash, void *ref) {
         n_processor_t *p = processor_get();
         coroutine_t *co = coroutine_get();
         assertf(false,
-                "vec_push failed, p_index_%d=%d(%lu), p_status=%d, co=%p vec=%p element_size=%lu must be a valid hash",
-                p->share,
+                "vec_push failed, p_index=%d(%lu), p_status=%d, co=%p vec=%p element_size=%lu must be a valid hash",
                 p->index, (uint64_t) p->thread_id, p->status, co, vec, vec->element_size);
     }
 
@@ -228,7 +227,7 @@ void rt_vec_push(n_vec_t *vec, int64_t element_hash, void *ref) {
  * @return
  */
 n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
-    PRE_RTCALL_HOOK();
+
 
     // start end 检测
     if (start > l->length || end > l->length || start < 0 || end < 0) {
@@ -262,7 +261,7 @@ n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
 
 
 void rt_vec_append(n_vec_t *dst, n_vec_t *src, int64_t element_hash) {
-    PRE_RTCALL_HOOK();
+
 
     rtype_t *element_rtype = rt_find_rtype(element_hash);
     assert(element_rtype);
@@ -284,7 +283,7 @@ void rt_vec_append(n_vec_t *dst, n_vec_t *src, int64_t element_hash) {
  * @return
  */
 n_vec_t *rt_vec_concat(n_vec_t *a, n_vec_t *b, int64_t element_hash) {
-    PRE_RTCALL_HOOK();
+
     assert(element_hash);
     DEBUGF("[vec_concat] rtype_hash=%lu, a=%p, b=%p", a->hash, a, b);
 
@@ -305,7 +304,7 @@ n_vec_t *rt_vec_concat(n_vec_t *a, n_vec_t *b, int64_t element_hash) {
 }
 
 n_anyptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index) {
-    PRE_RTCALL_HOOK();
+
 
     assert(l);
 
@@ -327,7 +326,7 @@ n_anyptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index) {
 }
 
 n_anyptr_t rt_vec_iterator(n_vec_t *l, int64_t element_hash) {
-    PRE_RTCALL_HOOK();
+
 
     assert(element_hash);
     rtype_t *element_rtype = rt_find_rtype(element_hash);
@@ -381,7 +380,7 @@ n_vec_t *rti_vec_new(rtype_t *element_rtype, int64_t length, int64_t capacity) {
  * @return 实际复制的元素数量（取dst剩余空间和src长度的最小值）
  */
 uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t *src) {
-    PRE_RTCALL_HOOK();
+
 
     uint64_t copy_len = src->length < dst->length ? src->length : dst->length;
 

@@ -154,11 +154,6 @@
 #define RT_CALL_STRING_LENGTH "rt_string_length"
 #define RT_CALL_STRING_REF "rt_string_ref" // 默认引用传递
 
-#define RT_CALL_PRE_TPLCALL_HOOK "pre_tplcall_hook"
-#define RT_CALL_POST_TPLCALL_HOOK "post_tplcall_hook"
-
-#define RT_CALL_POST_RTCALL_HOOK "post_rtcall_hook"
-
 #define RT_CALL_GC_MALLOC "gc_malloc"
 
 #define RT_CALL_RUNTIME_EVAL_GC "runtime_eval_gc"
@@ -284,9 +279,7 @@ static inline bool is_rtcall(string target) {
            str_equal(target, RT_CALL_STRING_EE) || str_equal(target, RT_CALL_STRING_NE) ||
            str_equal(target, RT_CALL_STRING_LT) || str_equal(target, RT_CALL_STRING_LE) ||
            str_equal(target, RT_CALL_STRING_GT) || str_equal(target, RT_CALL_STRING_GE) ||
-           str_equal(target, RT_CALL_STRING_LENGTH) || str_equal(target, RT_CALL_STRING_REF) ||
-           str_equal(target, RT_CALL_PRE_TPLCALL_HOOK) || str_equal(target, RT_CALL_POST_TPLCALL_HOOK) ||
-           str_equal(target, RT_CALL_POST_RTCALL_HOOK) || str_equal(target, RT_CALL_GC_MALLOC) ||
+           str_equal(target, RT_CALL_GC_MALLOC) ||
            str_equal(target, RT_CALL_RUNTIME_EVAL_GC) || str_equal(target, RT_CALL_COROUTINE_ASYNC) ||
            str_equal(target, RT_CALL_COROUTINE_RETURN) || str_equal(target, RT_CALL_CO_THROW_ERROR) ||
            str_equal(target, RT_CALL_CO_REMOVE_ERROR) || str_equal(target, RT_CALL_CO_HAS_ERROR) ||
@@ -783,21 +776,6 @@ static inline void lir_set_quick_op(basic_block_t *block) {
     block->last_op = linked_last(block->operations);
 }
 
-static inline lir_op_t *push_rt_call_no_hook(module_t *m, char *name, lir_operand_t *result, int arg_count, ...) {
-    slice_t *operand_args = slice_new();
-
-    va_list args;
-    va_start(args, arg_count); // 初始化参数
-    for (int i = 0; i < arg_count; ++i) {
-        lir_operand_t *param = va_arg(args, lir_operand_t *);
-        slice_push(operand_args, param);
-    }
-    va_end(args);
-    lir_operand_t *call_params_operand = operand_new(LIR_OPERAND_ARGS, operand_args);
-
-    OP_PUSH(lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(name, false), call_params_operand, result));
-}
-
 static inline lir_op_t *push_rt_call(module_t *m, char *name, lir_operand_t *result, int arg_count, ...) {
     slice_t *operand_args = slice_new();
 
@@ -811,8 +789,6 @@ static inline lir_op_t *push_rt_call(module_t *m, char *name, lir_operand_t *res
     lir_operand_t *call_params_operand = operand_new(LIR_OPERAND_ARGS, operand_args);
 
     OP_PUSH(lir_op_new(LIR_OPCODE_RT_CALL, lir_label_operand(name, false), call_params_operand, result));
-
-    push_rt_call_no_hook(m, RT_CALL_POST_RTCALL_HOOK, NULL, 1, string_operand(name));
 }
 
 static inline lir_op_t *lir_rtcall(char *name, lir_operand_t *result, int arg_count, ...) {
@@ -912,7 +888,6 @@ static inline lir_operand_t *temp_var_operand_with_alloc(module_t *m, type_t typ
 
             uint64_t rtype_hash = ct_find_rtype_hash(type);
             OP_PUSH(lir_rtcall(RT_CALL_GC_MALLOC, target, 1, int_operand(rtype_hash)));
-            OP_PUSH(lir_rtcall(RT_CALL_POST_RTCALL_HOOK, NULL, 1, string_operand(RT_CALL_GC_MALLOC)));
         } else {
             OP_PUSH(lir_stack_alloc(m->current_closure, type, target));
         }

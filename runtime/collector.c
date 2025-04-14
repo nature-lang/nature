@@ -7,7 +7,7 @@ static void insert_gc_worklist(rt_linked_fixalloc_t *gc_worklist, void *ptr) {
     assert(span_of((addr_t) ptr) && "ptr not found in active span");
     n_processor_t *p = processor_get();
     if (p) {
-        DEBUGF("[insert_gc_worklist] p_index_%d=%d, p=%p, ptr=%p", p->share, p->index, gc_worklist, ptr);
+        DEBUGF("[insert_gc_worklist] p_index=%d, p=%p, ptr=%p", p->index, gc_worklist, ptr);
     } else {
         DEBUGF("[insert_gc_worklist] global worklist, p=%p, ptr=%p", gc_worklist, ptr);
     }
@@ -47,11 +47,9 @@ void shade_obj_grey(void *obj) {
     n_processor_t *p = processor_get();
 
     // gc_work_finished < memory->gc_count 就说明 share processor 正在处理 gc_work, 所以可以插入到 gc_worklist 中
-    if (p->share && p->gc_work_finished < memory->gc_count) {
-        // 不需要加锁，solo processor 此时不再往当前 worklist 中写入 obj
+    if (p->gc_work_finished < memory->gc_count) {
         insert_gc_worklist(&p->gc_worklist, obj);
     } else {
-        // solo to global worklist
         insert_gc_worklist(&global_gc_worklist, obj);
     }
 }
@@ -124,19 +122,19 @@ static void flush_mcache() {
         }
     }
 
-    mutex_lock(&solo_processor_locker);
-    PROCESSOR_FOR(solo_processor_list) {
-        for (int j = 0; j < SPANCLASS_COUNT; ++j) {
-            mspan_t *span = p->mcache.alloc[j];
-            if (!span) {
-                continue;
-            }
-            p->mcache.alloc[j] = NULL; // uncache
-            mcentral_t *mcentral = &memory->mheap->centrals[span->spanclass];
-            uncache_span(mcentral, span);
-        }
-    }
-    mutex_unlock(&solo_processor_locker);
+    //    mutex_lock(&solo_processor_locker);
+    //    PROCESSOR_FOR(solo_processor_list) {
+    //        for (int j = 0; j < SPANCLASS_COUNT; ++j) {
+    //            mspan_t *span = p->mcache.alloc[j];
+    //            if (!span) {
+    //                continue;
+    //            }
+    //            p->mcache.alloc[j] = NULL; // uncache
+    //            mcentral_t *mcentral = &memory->mheap->centrals[span->spanclass];
+    //            uncache_span(mcentral, span);
+    //        }
+    //    }
+    //    mutex_unlock(&solo_processor_locker);
 
     DEBUGF("gc flush mcache successful");
 }
@@ -316,11 +314,11 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     addr_t sp_value = (addr_t) co->aco.reg[ACO_REG_IDX_SP];
 
     TDEBUGF(
-            "[runtime_gc.scan_stack] start, p_index_%d=%d(%lu), p_status=%d, co=%p, co_status=%d, co_stack_size=%zu, save_stack=%p(%zu), scan_offset=%lu, "
-            "scan_ret_addr=%p, bp_value=%p, sp_value=%p, share_stack.base=%p",
-            p->share, p->index, (uint64_t) p->thread_id, p->status, co, co->status, co->aco.save_stack.valid_sz,
+            "[runtime_gc.scan_stack] start, p_index=%d(%lu), p_status=%d, co=%p, co_status=%d, co_stack_size=%zu, save_stack=%p(%zu), "
+            "bp_value=%p, sp_value=%p, share_stack.base=%p",
+            p->index, (uint64_t) p->thread_id, p->status, co, co->status, co->aco.save_stack.valid_sz,
             co->aco.save_stack.ptr,
-            co->aco.save_stack.sz, co->scan_offset, (void *) co->scan_ret_addr, bp_value, sp_value, co->aco.share_stack->align_retptr);
+            co->aco.save_stack.sz, bp_value, sp_value, co->aco.share_stack->align_retptr);
 
     // save_stack 也是通过 gc 申请，即使是 gc_work 也需要标记一下
     assert(span_of((addr_t) co->aco.save_stack.ptr) && "coroutine save stack not found span");
@@ -329,13 +327,6 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
     // solo processor 的 gc_worklist 无法使用，需要使用 share processor 进行辅助
     rt_linked_fixalloc_t *worklist = &p->gc_worklist;
-    if (!p->share) {
-        int assist_p_index = p->index % cpu_count;
-        n_processor_t *assist_p = processor_index[assist_p_index];
-        assert(assist_p);
-        worklist = &assist_p->gc_worklist;
-    }
-
     insert_gc_worklist(worklist, co->aco.save_stack.ptr);
 
     if (co->error) {
@@ -355,28 +346,28 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     // 直到遇到 nature code, 才需要进行 stack
     // 基于 frame_bp + ret_addr 想栈底，目前采用协作式调度后，只有 safepoint 或者 再 c 代码中进行 yield, 这里的 c 代码一定是再 runtime 中进行 yield，采用了
     // -fno-omit-frame-pointer 方式，所以存在完整的栈帧
-    addr_t stack_top_ptr = 0;
-    if (p->share) {
-        stack_top_ptr = (addr_t) co->aco.save_stack.ptr;
-    } else {
-        // solo 不会溢出到 save stack, 总是在 share stack 进行处理
-        stack_top_ptr = sp_value; // min value
-    }
+    //    addr_t stack_top_ptr = 0;
+    //    if (p->share) {
+    addr_t stack_top_ptr = (addr_t) co->aco.save_stack.ptr;
+    //    }
+    //    else {
+    //        // solo 不会溢出到 save stack, 总是在 share stack 进行处理
+    //        stack_top_ptr = sp_value; // min value
+    //    }
     assert(stack_top_ptr > 0);
 
     // sp 指向了内存地址，可以从中取值
     aco_save_stack_t save_stack = co->aco.save_stack;
     uint64_t size = 0;
-    if (p->share) {
-        size = save_stack.valid_sz;
-    } else {
-        size = (uint64_t) p->share_stack.align_retptr - (uint64_t) sp_value;
-    }
+    //    if (p->share) {
+    size = save_stack.valid_sz;
+    //    } else {
+    //        size = (uint64_t) p->share_stack.align_retptr - (uint64_t) sp_value;
+    //    }
     assert(size > 0);
 
-    DEBUGF("[runtime_gc.scan_stack] co=%p will scan stack, scan_sp=%p, valid_size=%lu, first ret_addr=%p", co,
-           (void *) scan_sp, size,
-           (void *) co->scan_ret_addr);
+    DEBUGF("[runtime_gc.scan_stack] co=%p will scan stack, scan_sp=%p, valid_size=%lu", co,
+           (void *) scan_sp, size);
 
 
 #ifdef DEBUG_LOG
@@ -388,8 +379,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         addr_t v = fetch_addr_value((addr_t) temp_cursor);
         fndef_t *fn = find_fn(v, p);
         DEBUGF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i,
-                temp_cursor, v,
-                fn ? fn->name : "", fn ? fn->stack_size : 0);
+               temp_cursor, v,
+               fn ? fn->name : "", fn ? fn->stack_size : 0);
         temp_cursor += POINTER_SIZE;
         temp_i += 1;
     }
@@ -487,11 +478,6 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
     DEBUGF("[handle_gc_ptr] start, p=%p, addr=%p", p, (void *) addr);
 
-    // p may be null
-    if (p) {
-        assert(p->share);
-    }
-
     // get mspan by ptr
     mspan_t *span = span_of(addr);
     assertf(span, "span not found by addr=%p", (void *) addr);
@@ -574,8 +560,8 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
 static void handle_gc_worklist(n_processor_t *p) {
     assert(p->status != P_STATUS_EXIT);
     coroutine_t *co = coroutine_get();
-    TDEBUGF("[runtime_gc.handle_gc_worklist] start, p_index_%d=%d, count=%lu, gc_co=%p", p->share, p->index,
-           p->gc_worklist.count, co);
+    TDEBUGF("[runtime_gc.handle_gc_worklist] start, p_index=%d, count=%lu, gc_co=%p", p->index,
+            p->gc_worklist.count, co);
 
     if (p->gc_worklist.count == 0) {
         p->gc_work_finished = memory->gc_count;
@@ -586,7 +572,7 @@ static void handle_gc_worklist(n_processor_t *p) {
     int limit_count = 0;
     while (true) {
         if (limit_count >= GC_WORKLIST_LIMIT) {
-            DEBUGF("[runtime_gc.handle_gc_worklist] p_index_%d=%d, handle_count=%d, will yield", p->share, p->index,
+            DEBUGF("[runtime_gc.handle_gc_worklist] p_index=%d, handle_count=%d, will yield", p->index,
                    limit_count);
             limit_count = 0;
             co_yield_runnable(p, p->coroutine);
@@ -604,7 +590,7 @@ static void handle_gc_worklist(n_processor_t *p) {
         limit_count++;
     }
 
-    TDEBUGF("[runtime_gc.handle_gc_worklist] completed, p_index_%d=%d", p->share, p->index);
+    TDEBUGF("[runtime_gc.handle_gc_worklist] completed, p_index=%d", p->index);
 }
 
 /**
@@ -616,8 +602,7 @@ static void gc_work() {
     coroutine_t *gc_co = coroutine_get();
     assert(gc_co);
 
-    TDEBUGF("[runtime_gc.gc_work] start p_index_%d=%d, gc_co=%p, gc_co->id=%ld, co_count=%lu",
-           share_p->share, share_p->index, gc_co, gc_co->id, share_p->co_list.count);
+    TDEBUGF("[runtime_gc.gc_work] start p_index=%d, gc_co=%p, gc_co->id=%ld, co_count=%lu", share_p->index, gc_co, gc_co->id, share_p->co_list.count);
 
     // - share goroutine root and change color black
     rt_linked_node_t *current = share_p->co_list.head;
@@ -627,8 +612,8 @@ static void gc_work() {
         current = current->succ;
 
         DEBUGF(
-                "[runtime_gc.gc_work] will scan_stack p_index_%d=%d, co=%p, status=%d, gc_work=%d, is_main=%d, gc_black=%lu/gc_count=%lu, aco=%p",
-                share_p->share, share_p->index,
+                "[runtime_gc.gc_work] will scan_stack p_index=%d, co=%p, status=%d, gc_work=%d, is_main=%d, gc_black=%lu/gc_count=%lu, aco=%p",
+                share_p->index,
                 wait_co, wait_co->status, wait_co->gc_work, wait_co->main, wait_co->gc_black, memory->gc_count,
                 &wait_co->aco);
 
@@ -681,61 +666,61 @@ static void gc_work() {
         wait_co->gc_black = memory->gc_count;
     }
 
-    TDEBUGF("[runtime_gc.gc_work] p_index_%d=%d, share processor scan stack completed, will yield", share_p->share,
-           share_p->index);
+    TDEBUGF("[runtime_gc.gc_work] p_index=%d, share processor scan stack completed, will yield", share_p->index);
+
     co_yield_runnable(share_p, gc_co);
 
     // - handle share processor work list
     handle_gc_worklist(share_p);
     share_p->gc_work_finished = memory->gc_count; // 打上 completed 标识
-    TDEBUGF("[runtime_gc.gc_work] p_index_%d=%d, handle solo processor gc work list completed, will exit",
-           share_p->share, share_p->index);
+    TDEBUGF("[runtime_gc.gc_work] p_index=%d, handle assist processor gc work list completed, will exit",
+            share_p->index);
 }
 
 /**
  * 需要在 stw 期间调用，扫描所有的 solo_stack
  */
-static void scan_solo_stack() {
-    DEBUGF("[runtime_gc.scan_solo_stack] start");
-    mutex_lock(&solo_processor_locker);
-
-    PROCESSOR_FOR(solo_processor_list) {
-        if (p->status == P_STATUS_EXIT) {
-            continue;
-        }
-
-        coroutine_t *solo_co = rt_linked_fixalloc_first(&p->co_list)->value;
-        if (solo_co->status == CO_STATUS_DEAD) {
-            continue;
-        }
-
-        if (span_of((addr_t) solo_co->fn)) {
-            int assist_p_index = p->index % cpu_count;
-            n_processor_t *assist_p = processor_index[assist_p_index];
-            assert(assist_p);
-            insert_gc_worklist(&assist_p->gc_worklist, solo_co->fn);
-        }
-
-        if (!solo_co->aco.inited) {
-            DEBUGF("[runtime_gc.scan_solo_stack] co=%p, fn=%p not init, will skip", solo_co, solo_co->fn);
-            continue;
-        }
-
-        // 已经扫描过 stack 了
-        if (solo_co->gc_black == memory->gc_count) {
-            DEBUGF("[runtime_gc.scan_solo_stack] co=%p, gc_black=%lu, gc_count=%lu, will skip", solo_co,
-                   solo_co->gc_black, memory->gc_count);
-            continue;
-        }
-
-        // p 必须处于 stw 状态
-        assert(processor_need_stw(p));
-
-        scan_stack(p, solo_co);
-    }
-    mutex_unlock(&solo_processor_locker);
-    DEBUGF("[runtime_gc.scan_solo_stack] completed");
-}
+//static void scan_solo_stack() {
+//    DEBUGF("[runtime_gc.scan_solo_stack] start");
+//    mutex_lock(&solo_processor_locker);
+//
+//    PROCESSOR_FOR(solo_processor_list) {
+//        if (p->status == P_STATUS_EXIT) {
+//            continue;
+//        }
+//
+//        coroutine_t *solo_co = rt_linked_fixalloc_first(&p->co_list)->value;
+//        if (solo_co->status == CO_STATUS_DEAD) {
+//            continue;
+//        }
+//
+//        if (span_of((addr_t) solo_co->fn)) {
+//            int assist_p_index = p->index % cpu_count;
+//            n_processor_t *assist_p = processor_index[assist_p_index];
+//            assert(assist_p);
+//            insert_gc_worklist(&assist_p->gc_worklist, solo_co->fn);
+//        }
+//
+//        if (!solo_co->aco.inited) {
+//            DEBUGF("[runtime_gc.scan_solo_stack] co=%p, fn=%p not init, will skip", solo_co, solo_co->fn);
+//            continue;
+//        }
+//
+//        // 已经扫描过 stack 了
+//        if (solo_co->gc_black == memory->gc_count) {
+//            DEBUGF("[runtime_gc.scan_solo_stack] co=%p, gc_black=%lu, gc_count=%lu, will skip", solo_co,
+//                   solo_co->gc_black, memory->gc_count);
+//            continue;
+//        }
+//
+//        // p 必须处于 stw 状态
+//        assert(processor_need_stw(p));
+//
+//        scan_stack(p, solo_co);
+//    }
+//    mutex_unlock(&solo_processor_locker);
+//    DEBUGF("[runtime_gc.scan_solo_stack] completed");
+//}
 
 /**
  * gc work 会主动 yield，所以整个 coroutine 不允许被抢占。抢占时需要根据 co->gc_work 进行判断
@@ -767,19 +752,6 @@ static void flush_pool() {
  * 添加到 gc_worklist 中可以被标记从而避免被清理
  */
 static void scan_pool() {
-    //    n_processor_t *assist_p = share_processor_list;
-    //    assert(assist_p);
-    //
-    //    // scan global cache?
-    //    mutex_lock(&global_linkco_locker);
-    //    linkco_t *current = global_linkco_cache;
-    //    while (current) {
-    //        DEBUGF("[runtime_gc.scan_pool] global linkco %p to gc_worklist", current);
-    //        rt_linked_fixalloc_push(&assist_p->gc_worklist, current);
-    //        current = current->next;
-    //    }
-    //    mutex_unlock(&global_linkco_locker);
-
     PROCESSOR_FOR(processor_list) {
         DEBUGF("[runtime_gc.scan_pool] share start p: %d, count %d", p->index, p->linkco_count);
         for (int i = 0; i < p->linkco_count; ++i) {
@@ -790,22 +762,6 @@ static void scan_pool() {
             rt_linked_fixalloc_push(&p->gc_worklist, linkco);
         }
     }
-
-    mutex_lock(&solo_processor_locker);
-    PROCESSOR_FOR(solo_processor_list) {
-        DEBUGF("[runtime_gc.scan_pool] solo start p: %d, count %d", p->index, p->linkco_count);
-        for (int i = 0; i < p->linkco_count; ++i) {
-            linkco_t *linkco = p->linkco_cache[i];
-            assert(span_of((addr_t) linkco));
-            DEBUGF("[runtime_gc.scan_pool] solo p: %d, linkco %p, index %d", p->index, linkco, i);
-
-            int assist_p_index = p->index % cpu_count;
-            n_processor_t *assist_p = processor_index[assist_p_index];
-            assert(assist_p);
-            rt_linked_fixalloc_push(&assist_p->gc_worklist, linkco);
-        }
-    }
-    mutex_unlock(&solo_processor_locker);
 }
 
 /**
@@ -898,7 +854,7 @@ void runtime_gc() {
     inject_gc_work_coroutine();
 
     // 扫描 solo processor stack (stw)
-    scan_solo_stack();
+    //    scan_solo_stack();
 
     // 扫描全局变量与 runtime 中使用的 heap 内存，存放到 share_processor_list[0] 中, 为了避免与 share_processor 冲突，所以暂时放在 stw
     // 中完成

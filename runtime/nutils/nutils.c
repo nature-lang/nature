@@ -57,7 +57,7 @@ char **command_argv;
     }
 
 void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_rtype_hash, void *output_ref) {
-    PRE_RTCALL_HOOK();
+
     rtype_t *input_rtype = rt_find_rtype(input_rtype_hash);
     rtype_t *output_rtype = rt_find_rtype(output_rtype_hash);
     assertf(input_rtype, "cannot find input_rtype by hash %lu", input_rtype_hash);
@@ -119,7 +119,7 @@ static inline void panic_dump(coroutine_t *co, caller_t *caller, char *msg) {
 }
 
 n_ptr_t *rawptr_assert(n_rawptr_t *rawptr) {
-    PRE_RTCALL_HOOK();
+
     if (rawptr == 0) {
         DEBUGF("[rawptr_assert] raw pointer");
         rti_throw("rawptr is null, cannot assert", true);
@@ -130,7 +130,7 @@ n_ptr_t *rawptr_assert(n_rawptr_t *rawptr) {
 }
 
 void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref) {
-    PRE_RTCALL_HOOK();
+
     if (mu->rtype->hash != target_rtype_hash) {
         DEBUGF("[interface_assert] type assert error, mu->rtype->kind: %s, target_rtype_hash: %ld",
                type_kind_str[mu->rtype->kind],
@@ -162,7 +162,7 @@ void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
  * @param value_ref
  */
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
-    PRE_RTCALL_HOOK();
+
     if (mu->rtype->hash != target_rtype_hash) {
         DEBUGF("[union_assert] type assert error, mu->rtype->kind: %s, target_rtype_hash: %ld",
                type_kind_str[mu->rtype->kind],
@@ -181,12 +181,12 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
 }
 
 bool union_is(n_union_t *mu, int64_t target_rtype_hash) {
-    PRE_RTCALL_HOOK();
+
     return mu->rtype->hash == target_rtype_hash;
 }
 
 bool interface_is(n_interface_t *mu, int64_t target_rtype_hash) {
-    PRE_RTCALL_HOOK();
+
     return mu->rtype->hash == target_rtype_hash;
 }
 
@@ -197,7 +197,7 @@ bool interface_is(n_interface_t *mu, int64_t target_rtype_hash) {
  * @return
  */
 n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods) {
-    PRE_RTCALL_HOOK();
+
     // - 根据 input_rtype_hash 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
     assert(rtype && "cannot find rtype by hash");
@@ -253,7 +253,7 @@ n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int
  * @return
  */
 n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
-    PRE_RTCALL_HOOK();
+
     // - 根据 input_rtype_hash 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
     assert(rtype && "cannot find rtype by hash");
@@ -301,7 +301,7 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
  * @return
  */
 n_bool_t bool_casting(uint64_t input_rtype_hash, int64_t int_value, double float_value) {
-    PRE_RTCALL_HOOK();
+
     DEBUGF("[runtime.bool_casting] input_rtype_hash=%lu, int_value=%lu, f64_value=%f", input_rtype_hash, int_value,
            float_value);
     rtype_t *input_rtype = rt_find_rtype(input_rtype_hash);
@@ -319,7 +319,7 @@ n_bool_t bool_casting(uint64_t input_rtype_hash, int64_t int_value, double float
  * @return
  */
 int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, void *key_ref) {
-    PRE_RTCALL_HOOK();
+
     DEBUGF("[runtime.iterator_next_key] iterator base=%p,rtype_hash=%lu, cursor=%ld", iterator, rtype_hash, cursor);
 
     // cursor 范围测试
@@ -368,7 +368,7 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
 }
 
 int64_t iterator_next_value(void *iterator, int64_t hash, int64_t cursor, void *value_ref) {
-    PRE_RTCALL_HOOK();
+
     DEBUGF("[runtime.iterator_next_value] iterator base=%p,rtype_hash=%lu, cursor=%lu, kind=%s", iterator, hash,
            cursor);
 
@@ -426,7 +426,7 @@ int64_t iterator_next_value(void *iterator, int64_t hash, int64_t cursor, void *
  * @param value_ref
  */
 void iterator_take_value(void *iterator, int64_t hash, int64_t cursor, void *value_ref) {
-    PRE_RTCALL_HOOK();
+
     DEBUGF("[runtime.iterator_take_value] iterator base=%p,rtype_hash=%lu, cursor=%lu, value_ref=%p", iterator,
            hash, cursor,
            value_ref);
@@ -472,8 +472,6 @@ void iterator_take_value(void *iterator, int64_t hash, int64_t cursor, void *val
 
 // 基于字符串到快速设置不太需要考虑内存泄漏的问题， raw_string 都是 .data 段中的字符串
 void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t line, n_int_t column) {
-    PRE_RTCALL_HOOK();
-
     assert(error->method_count == 1);
     coroutine_t *co = coroutine_get();
 
@@ -495,17 +493,14 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
 
     rti_write_barrier_ptr(&co->error, error, false);
     co->has_error = true;
-
-    post_rtcall_hook("co_throw_error");
 }
 
 void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
-    PRE_RTCALL_HOOK();
-
     coroutine_t *co = coroutine_get();
+    addr_t ret_addr = CALLER_RET_ADDR(co);
+    assert(ret_addr);
 
-    assert(co->scan_ret_addr);
-    caller_t *caller = sc_map_get_64v(&rt_caller_map, co->scan_ret_addr);
+    caller_t *caller = sc_map_get_64v(&rt_caller_map, ret_addr);
     assert(caller);
 
     char *msg = tlsprintf("index out of range [%d] with length %d", index, len);
@@ -538,12 +533,10 @@ void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
         panic_dump(co, caller, copy_msg);
         free(copy_msg);
     }
-
-    post_rtcall_hook("co_throw_error");
 }
 
 n_interface_t *co_remove_error() {
-    PRE_RTCALL_HOOK();
+
     coroutine_t *co = coroutine_get();
 
     assert(co->error);
@@ -553,8 +546,6 @@ n_interface_t *co_remove_error() {
 
     rti_write_barrier_ptr(&co->error, NULL, false);
     rti_write_barrier_ptr(&co->traces, NULL, false);
-
-    post_rtcall_hook("co_remove_error");
     return error;
 }
 
@@ -564,7 +555,6 @@ uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_i
         return 0;
     }
 
-    PRE_RTCALL_HOOK();
 
     assert(line >= 0 && line < 1000000);
     assert(column >= 0 && column < 1000000);
@@ -581,7 +571,6 @@ uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_i
         };
 
         rt_vec_push(co->traces, errort_trace_rtype.hash, &trace);
-        post_rtcall_hook("co_has_panic");
         return 1;
     }
 
@@ -608,7 +597,6 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
         return 0;
     }
 
-    PRE_RTCALL_HOOK();
 
     DEBUGF("[runtime.co_has_error] error has, fn_name: %s, line: %ld, column: %ld",
            fn_name, line, column)
@@ -626,12 +614,11 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
 
     rt_vec_push(co->traces, errort_trace_rtype.hash, &trace);
 
-    post_rtcall_hook("co_has_error");
     return 1;
 }
 
 n_anyptr_t anyptr_casting(value_casting v) {
-    PRE_RTCALL_HOOK();
+
     return v.u64_value;
 }
 
@@ -682,7 +669,7 @@ char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
     }
 
     if (rtype->kind == TYPE_STRING) {
-        n_string_t *n_str = (void *) fetch_addr_value((addr_t) data_ref);// 读取栈中存储的值
+        n_string_t *n_str = (void *) fetch_addr_value((addr_t) data_ref); // 读取栈中存储的值
 
         assert(n_str && n_str->length >= 0 && "fetch addr by data ref failed");
 
@@ -710,24 +697,10 @@ char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
 // mark_black_new_obj 如果 new_obj 不是从 allocator(gc_malloc) 获取的新对象，则有必要主动 mark black 避免其被 sweep
 void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj) {
     DEBUGF("[runtime_gc.rt_write_barrier_ptr] slot=%p, new_obj=%p", slot, new_obj);
-
-    n_processor_t *p = processor_get();
-
-    // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 和 barrier 冲突
-    // TODO 必须放在 gc_barrier_get 之前进行独享线程的 stw locker lock? 因为 stw locker 代替了 solo p 真正的 STW?
-//    if (!p->share) {
-//        mutex_lock(&p->gc_solo_stw_locker);
-//    }
-
     if (!gc_barrier_get()) {
         DEBUGF("[runtime_gc.rt_write_barrier_ptr] slot: %p, new_obj: %p, gc_barrier is false, no need write barrier", slot, new_obj);
 
         *(void **) slot = new_obj;
-
-//        if (!p->share) {
-//            mutex_unlock(&p->gc_solo_stw_locker);
-//        }
-
         return;
     }
 
@@ -753,64 +726,14 @@ void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj) {
     }
 
     *(void **) slot = new_obj;
-
-//    if (!p->share) {
-//        mutex_unlock(&p->gc_solo_stw_locker);
-//    }
 }
 
-//static void rt_write_barrier(void *slot, void *new_obj) {
-//    DEBUGF("[runtime.write_barrier] slot=%p, new_obj=%p", slot, new_obj);
-//
-//    n_processor_t *p = processor_get();
-//
-//    // 独享线程进行 write barrier 之前需要尝试获取线程锁, 避免与 gc_work 和 barrier 冲突
-//    // TODO 必须放在 gc_barrier_get 之前进行独享线程的 stw locker lock? 因为 stw locker 代替了 solo p 真正的 STW?
-//    if (!p->share) {
-//        mutex_lock(&p->gc_stw_locker);
-//    }
-//
-//    if (!gc_barrier_get()) {
-//        RDEBUGF("[runtime.write_barrier] gc_barrier is false, no need write barrier");
-//
-//        memmove(slot, new_obj, POINTER_SIZE);
-//
-//        if (!p->share) {
-//            mutex_unlock(&p->gc_stw_locker);
-//        }
-//
-//        return;
-//    }
-//
-//
-//    RDEBUGF("[runtime.write_barrier] gc_barrier is true");
-//
-//    // yuasa 写屏障 shade slot
-//    shade_obj_grey(slot);
-//
-//    // Dijkstra 写屏障
-//    coroutine_t *co = coroutine_get();
-//    if (co->gc_black < memory->gc_count) {
-//        // shade new_obj
-//        shade_obj_grey(new_obj);
-//    }
-//
-//    memmove(slot, new_obj, POINTER_SIZE);
-//
-//    if (!p->share) {
-//        mutex_unlock(&p->gc_stw_locker);
-//    }
-//}
-
 void write_barrier(void *slot, void *new_obj) {
-    PRE_RTCALL_HOOK();
-
     rti_write_barrier_ptr(slot, new_obj, false);
 }
 
 void rawptr_valid(void *rawptr) {
-    PRE_RTCALL_HOOK();// 修改状态避免抢占
-
+    // 修改状态避免抢占
     DEBUGF("[rawptr_valid] rawptr=%p", rawptr);
     if (rawptr <= 0) {
         rti_throw("invalid memory address or nil pointer dereference", true);
@@ -822,27 +745,26 @@ void rt_panic(n_string_t *msg) {
     coroutine_t *co = coroutine_get();
     n_processor_t *p = processor_get();
 
+    addr_t ret_addr = CALLER_RET_ADDR(co);
+    assert(ret_addr);
 
-    // 更新 ret addr 到 co 中
-    CO_SCAN_REQUIRE(co);
-    assert(co->scan_ret_addr);
-    caller_t *caller = sc_map_get_64v(&rt_caller_map, co->scan_ret_addr);
+    caller_t *caller = sc_map_get_64v(&rt_caller_map, ret_addr);
     panic_dump(co, caller, rt_string_ref(msg));
 }
 
 void rt_assert(n_bool_t cond) {
     coroutine_t *co = coroutine_get();
-    n_processor_t *p = processor_get();
-
     if (cond) {
         return;
     }
 
     // panic
     // 更新 ret addr 到 co 中
-    CO_SCAN_REQUIRE(co);
-    assert(co->scan_ret_addr);
-    caller_t *caller = sc_map_get_64v(&rt_caller_map, co->scan_ret_addr);
+    addr_t ret_addr = CALLER_RET_ADDR(co);
+    assert(ret_addr);
+
+    caller_t *caller = sc_map_get_64v(&rt_caller_map, ret_addr);
+    assert(caller);
     panic_dump(co, caller, "assertion failed");
 }
 

@@ -3216,6 +3216,7 @@ static ast_expr_t parser_macro_async_expr(module_t *m) {
     async_expr->closure_fn = coroutine_fn_closure(m, &call_expr);
     async_expr->closure_fn_void = coroutine_fn_void_closure(m, &call_expr);
 
+    // 可选的 flag
     if (parser_consume(m, TOKEN_COMMA)) {
         async_expr->flag_expr = NEW(ast_expr_t);
         *async_expr->flag_expr = parser_expr(m);

@@ -464,7 +464,7 @@ static bool selpark_commit(coroutine_t *co, void *arg) {
  * @return
  */
 int rt_chan_select(scase *cases, int16_t sends_count, int16_t recvs_count, bool _try) {
-    PRE_RTCALL_HOOK();
+
     DEBUGF("[rt_chan_select] cases = %p, sends_count = %d, recvs_count = %d", cases, sends_count, recvs_count);
 
     int16_t cases_count = sends_count + recvs_count;

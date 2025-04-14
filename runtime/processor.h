@@ -16,11 +16,10 @@ extern int cpu_count;
 extern n_processor_t *processor_index[1024];
 extern n_processor_t *processor_list; // 共享协程列表的数量一般就等于线程数量
 
-extern n_processor_t *solo_processor_list; // 独享协程列表其实就是多线程
+//extern n_processor_t *solo_processor_list; // 独享协程列表其实就是多线程
 extern coroutine_t *main_coroutine;
 
-extern mutex_t solo_processor_locker; // 删除 solo processor 需要先获取该锁
-extern int solo_processor_count;
+//extern mutex_t solo_processor_locker; // 删除 solo processor 需要先获取该锁
 extern int64_t coroutine_count;
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
@@ -35,7 +34,7 @@ extern fixalloc_t processor_alloc;
 extern mutex_t cp_alloc_locker;
 
 typedef enum {
-    CO_FLAG_SOLO = 1,
+    //    CO_FLAG_SOLO = 1, // 暂时取消
     CO_FLAG_SAME = 2,
     CO_FLAG_MAIN = 3,
     CO_FLAG_RTFN = 4, // runtime_fn 不需要扫描 stack
@@ -100,14 +99,14 @@ static inline void co_yield_runnable(n_processor_t *p, coroutine_t *co) {
     co_set_status(p, co, CO_STATUS_RUNNABLE);
     rt_linked_fixalloc_push(&p->runnable_list, co);
 
-    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, will yield", p->share, p->index, co,
+    DEBUGF("[runtime.co_yield_runnable] p_index=%d, co=%p, co_status=%d, will yield", p->index, co,
            co->status);
 
     _co_yield(p, co);
 
     // runnable -> syscall
     co_set_status(p, co, CO_STATUS_TPLCALL);
-    DEBUGF("[runtime.co_yield_runnable] p_index_%d=%d, co=%p, co_status=%d, yield resume", p->share, p->index, co,
+    DEBUGF("[runtime.co_yield_runnable] p_index=%d, co=%p, co_status=%d, yield resume", p->index, co,
            co->status);
 }
 
@@ -127,7 +126,7 @@ static inline void co_yield_waiting(coroutine_t *co, unlock_fn unlock_fn, void *
 
     // waiting -> syscall
     co_set_status(co->p, co, CO_STATUS_TPLCALL);
-    DEBUGF("[runtime.co_yield_waiting] p_index_%d=%d, co=%p, co_status=%d, yield resume", co->p->share, co->p->index, co,
+    DEBUGF("[runtime.co_yield_waiting] p_index=%d, co=%p, co_status=%d, yield resume", co->p->index, co,
            co->status);
 }
 
@@ -141,8 +140,6 @@ void processor_all_start();
 bool processor_all_safe();
 
 bool processor_all_wait_safe(int max_count);
-
-void processor_stw_unlock();
 
 void wait_all_gc_work_finished();
 

@@ -38,7 +38,7 @@ fn main():void! {
 
 
     // 3. macro and solo
-    var fut7 = @async(sum(12, 13), co.SOLO)
+    var fut7 = @async(sum(12, 13), co.SAME)
     var result7 = fut7.await()
     println('async result is', result7)
 
