@@ -230,9 +230,9 @@ static inline int amd64_gotplt_entry_type(uint64_t relocate_type) {
         case R_X86_64_TLSGD:
         case R_X86_64_TLSLD:
         case R_X86_64_DTPOFF32:
-//        case R_X86_64_TPOFF32:
+            //        case R_X86_64_TPOFF32:
         case R_X86_64_DTPOFF64:
-//        case R_X86_64_TPOFF64:
+            //        case R_X86_64_TPOFF64:
         case R_X86_64_REX_GOTPCRELX:
         case R_X86_64_PLT32:
         case R_X86_64_PLTOFF64:
@@ -290,12 +290,12 @@ static inline int8_t amd64_is_code_relocate(uint64_t relocate_type) {
         case R_X86_64_TLSGD:
         case R_X86_64_TLSLD:
         case R_X86_64_DTPOFF32:
-//        case R_X86_64_TPOFF32:
+            //        case R_X86_64_TPOFF32:
         case R_X86_64_DTPOFF64:
         case R_X86_64_TPOFF64:
             return 0;
 
-//        case R_X86_64_TPOFF32:
+            //        case R_X86_64_TPOFF32:
         case R_X86_64_PC32:
         case R_X86_64_PC64:
         case R_X86_64_PLT32:
@@ -325,8 +325,7 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
         case R_X86_64_PLT32:
             /* fallthrough: val already holds the PLT slot address */
 
-        plt32pc32:
-        {
+        plt32pc32: {
             // 相对地址计算，
             // addr 保存了符号的使用位置（加载到虚拟内存中的位置）
             // val 保存了符号的定义的位置（加载到虚拟内存中的位置）
@@ -338,8 +337,7 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
             }
             // 小端写入
             add32le(ptr, diff);
-        }
-            break;
+        } break;
 
         case R_X86_64_COPY:
             break;
@@ -361,7 +359,7 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
         case R_X86_64_GOTPCRELX:
         case R_X86_64_REX_GOTPCRELX:
             add32le(ptr, ctx->got->sh_addr - addr +
-                         elf_get_sym_attr(ctx, sym_index, 0)->got_offset - 4);
+                                 elf_get_sym_attr(ctx, sym_index, 0)->got_offset - 4);
             break;
         case R_X86_64_GOTPC32:
             add32le(ptr, ctx->got->sh_addr - addr + rel->r_addend);
@@ -434,24 +432,25 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
         }
         case R_X86_64_DTPOFF32:
         case R_X86_64_TPOFF32: {
+            // v 是在 TLS section 的偏移量，第一个变量的偏移量是 0, 类型是 int64
+            // v 是在 TLS section 的偏移量，第一个变量的偏移量是 8,
             Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
             section_t *s = SEC_TACK(sym->st_shndx);
 
-            int32_t x = -val;
-            log_debug("[elf_amd64_relocate] R_X86_64_TPOFF32, val=%ld, s->sh_addr=%ld, s->data_count=%ld, x=%lx", val,
-                      s->sh_addr, s->data_count, (uint32_t)x);
+            int32_t x = (int32_t)sym->st_value - ((int32_t)s->sh_addr + (int32_t)s->data_count);
+
+            log_debug("[elf_amd64_relocate] R_X86_64_TPOFF32, st_value=%ld, s->sh_addr=%ld, s->data_count=%ld, x=%lx",
+                      sym->st_value, s->sh_addr, s->data_count, (uint32_t) x);
 
             add32le(ptr, x);
             break;
         }
         case R_X86_64_DTPOFF64:
         case R_X86_64_TPOFF64: {
-            Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
-            section_t *s = SEC_TACK(sym->st_shndx);
-            int32_t x;
-
-            x = val - s->sh_addr - s->data_count;
-            add64le(ptr, x);
+            // Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+            // section_t *s = SEC_TACK(sym->st_shndx);
+            // add64le(ptr, x);
+            assert(false);
             break;
         }
         case R_X86_64_NONE:
@@ -759,11 +758,7 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     uint64_t sym_index = (uint64_t) table_get(symtab_hash, symbol_operand->name);
                     if (sym_index == 0) {
                         // 可重定位符号注册
-                        sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-                                .n_sect = NO_SECT,
-                                .n_value = 0,
-                                .n_type = N_UNDF | N_EXT
-                        }, symbol_operand->name);
+                        sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64) {.n_sect = NO_SECT, .n_value = 0, .n_type = N_UNDF | N_EXT}, symbol_operand->name);
                     }
 
                     // rewrite symbol

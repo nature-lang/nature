@@ -615,9 +615,6 @@ void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset) {
     for (int i = 1; i < sym_count; ++i, sym++) {
         // add symbol
         char *sym_name = strtab + sym->st_name;
-        //        if (strstr(sym_name, "tls_yield_safepoint")) {
-        //            log_debug("load tls symbo");
-        //        }
 
         if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE) {
             local_section_t *local = &local_sections[sym->st_shndx]; // st_shndx 定义符号的段
@@ -1069,17 +1066,8 @@ void elf_relocate_symbols(elf_context_t *ctx, section_t *sym_section) {
             /* add section base */
             section_t *s = SEC_TACK(sh_index);
 
-            if (strstr(name, "tls_yield_safepoint")) {
-                log_debug("load tls symbo");
-            }
-
             // 对于 TLS 变量，需要计算其相对于 TLS 段起始的偏移
-            if (s->sh_flags & SHF_TLS) {
-                // TLS 变量的值是相对于 TP (Thread Pointer) 的偏移(load_object 时已经重新设置了 st_value 的基础值)
-                sym->st_value = sym->st_value;
-            } else {
-                sym->st_value += s->sh_addr;
-            }
+            sym->st_value += s->sh_addr;
         }
         FOUND:;
     }

@@ -9,9 +9,6 @@ int64_t allocated_bytes = 0; // 当前分配的内存空间
 uint64_t next_gc_bytes = 0; // 下一次 gc 的内存量
 bool gc_barrier; // gc 屏障开启标识
 
-_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint3 = true; // gc 全局 safepoint 标识，通常配合 stw 使用
-_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint4 = false; // gc 全局 safepoint 标识，通常配合 stw 使用
-
 uint8_t gc_stage; // gc 阶段
 mutex_t gc_stage_locker;
 

@@ -24,7 +24,6 @@ rt_linked_fixalloc_t global_gc_worklist;
 uv_key_t tls_processor_key = 0;
 uv_key_t tls_coroutine_key = 0;
 
-_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint2 = false;
 _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint = false;
 
 fixalloc_t coroutine_alloc;
