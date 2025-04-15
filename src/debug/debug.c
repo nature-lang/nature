@@ -301,7 +301,7 @@ void debug_interval_var(interval_t *interval, char *stage) {
 
 void debug_closure_interval(closure_t *c, char *stage) {
 #ifdef DEBUG_INTERVAL
-    if (!str_equal(c->linkident, DEBUG_INTERVAL)) {
+    if (!strstr(c->linkident, DEBUG_INTERVAL)) {
         return;
     }
 

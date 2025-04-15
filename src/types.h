@@ -591,11 +591,6 @@ typedef struct {
     section_t *data_section;
     section_t *text_section;
 
-    // TLS 段的起始地址
-    addr_t tls_start;
-    // TLS 段的大小
-    size_t tls_size;
-
     // tls section
     section_t *tdata_section;
     section_t *tbss_section;

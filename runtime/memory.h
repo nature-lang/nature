@@ -22,6 +22,10 @@ extern bool gc_barrier; // gc 屏障开启标识
 extern uint8_t gc_stage; // gc 阶段
 extern mutex_t gc_stage_locker;
 
+// TODO
+extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint3; // gc 全局 safepoint 标识，通常配合 stw 使用
+extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint4; // gc 全局 safepoint 标识，通常配合 stw 使用
+
 typedef enum {
     GC_STAGE_OFF, // 0 表示 gc 关闭, 这也是一个初始状态
     GC_STAGE_START,

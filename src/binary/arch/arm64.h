@@ -579,6 +579,17 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
                         temp->rel_symbol = rel_operand->symbol.name;
                     }
                 } else {
+
+                    // 添加重定位项
+                    uint64_t reloc_type = ARM64_RELOC_PAGE21;
+                    if (rel_operand->symbol.reloc_type == ASM_ARM64_RELOC_LO12) {
+                        reloc_type = ARM64_RELOC_PAGEOFF12;
+                    } else if (rel_operand->symbol.reloc_type == ASM_ARM64_RELOC_TLVP_LOAD_PAGE21) {
+                        reloc_type = ARM64_RELOC_TLVP_LOAD_PAGE21;
+                    } else if (rel_operand->symbol.reloc_type == ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12) {
+                        reloc_type = ARM64_RELOC_TLVP_LOAD_PAGEOFF12;
+                    }
+
                     // 其他指令的符号引用(如数据访问)
                     uint64_t sym_index = (uint64_t) table_get(symtab_hash, rel_operand->symbol.name);
                     if (sym_index == 0) {
@@ -597,15 +608,6 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     section_offset += temp->data_count;
                     fn_offset += temp->data_count;
 
-                    // 添加重定位项
-                    uint64_t reloc_type = ARM64_RELOC_PAGE21;
-                    if (rel_operand->symbol.reloc_type == ASM_ARM64_RELOC_LO12) {
-                        reloc_type = ARM64_RELOC_PAGEOFF12;
-                    } else if (rel_operand->symbol.reloc_type == ASM_ARM64_RELOC_TLVP_LOAD_PAGE21) {
-                        reloc_type = ARM64_RELOC_TLVP_LOAD_PAGE21;
-                    } else if (rel_operand->symbol.reloc_type == ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12) {
-                        reloc_type = ARM64_RELOC_TLVP_LOAD_PAGEOFF12;
-                    }
 
                     temp->rel = mach_put_relocate(ctx, ctx->text_section, *temp->offset,
                                                   reloc_type, (int) sym_index);

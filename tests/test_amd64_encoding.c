@@ -59,13 +59,13 @@ static void test_basic() {
     lir_op_t *op = NEW(lir_op_t);
 
     // mov rax, QWORD PTR fs:tls_safepoint@tpoff
-    amd64_asm_inst_t *inst = AMD64_INST("mov", AMD64_REG(rax), SEG_OFFSET("fs", 0, "tls_safepoint"));
+    amd64_asm_inst_t *inst = AMD64_INST("mov", AMD64_REG(rax), AMD64_SEG_OFFSET("fs", 0, "tls_safepoint"));
     TEST_EQ(*inst, 0x64, 0x48, 0x8B, 0x04, 0x25, 0x00, 0x00, 0x00, 0x00);
 
-    inst = AMD64_INST("mov", AMD64_REG(rax), SEG_OFFSET("gs", 0, "tls_safepoint"));
+    inst = AMD64_INST("mov", AMD64_REG(rax), AMD64_SEG_OFFSET("gs", 0, "tls_safepoint"));
     TEST_EQ(*inst, 0x65, 0x48, 0x8B, 0x04, 0x25, 0x00, 0x00, 0x00, 0x00);
 
-    inst = AMD64_INST("mov", AMD64_REG(rax), SEG_OFFSET("gs", 0x25, "tls_safepoint"));
+    inst = AMD64_INST("mov", AMD64_REG(rax), AMD64_SEG_OFFSET("gs", 0x25, "tls_safepoint"));
     TEST_EQ(*inst, 0x65, 0x48, 0x8B, 0x04, 0x25, 0x25, 0x00, 0x00, 0x00);
 }
 

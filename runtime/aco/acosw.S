@@ -107,7 +107,8 @@ assist_preempt_yield:
     push rbp
     mov rbp, rsp
     pushfq
-    sub rsp, 368
+    sub rsp, 376 // 376 + ret_addr + rbp + pushfd = 400, 16 对齐
+
     nop
     mov QWORD PTR [rsp], rax
     mov QWORD PTR [rsp + 8], rcx
@@ -179,17 +180,14 @@ assist_preempt_yield:
     mov rdx, [rsp + 16]
     mov rcx, [rsp + 8]
     mov rax, [rsp]
-    add rsp, 368
+
+    add rsp, 376
+
     popfq // 从栈顶弹出一个值到 RFLAGS 寄存器中，与之前的 pushfq 对应
 
-    pop rbp // 从栈顶弹出一个值到rbp寄存器中, 与之前的 push rbp dvyk 
+    pop rbp // 从栈顶弹出一个值到rbp寄存器中, 与之前的 push rbp dvyk
 
-    // thread_handle_sig 部分预留了一些栈空间，现在需要还原成与被抢占的函数一致
-    // 但是此时栈空间还没有被污染，依旧可以从原空间中找到需要返回的 rip
-    // add rsp, 1032
-    // jmp [rsp - 1032]
-    // ret 会跳转到 rbp 向前一个地址部分
-
+    ret
 
 #elif defined(__ARM64)
     // 保存所有通用寄存器

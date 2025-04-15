@@ -24,6 +24,7 @@ rt_linked_fixalloc_t global_gc_worklist;
 uv_key_t tls_processor_key = 0;
 uv_key_t tls_coroutine_key = 0;
 
+_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint2 = false;
 _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint = false;
 
 fixalloc_t coroutine_alloc;
@@ -112,12 +113,12 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     if (fn) {
         // 基于当前 rsp scan
         uint64_t sp_addr = (uint64_t) rsp;
-        co->scan_ret_addr = rip;
-        co->scan_offset = (uint64_t) co->p->share_stack.align_retptr - sp_addr;
+//        co->scan_ret_addr = rip;
+//        co->scan_offset = (uint64_t) co->p->share_stack.align_retptr - sp_addr;
     } else {
         // c 语言段被抢占，采取保守的扫描策略(使用 ret_addr = 0 来识别)
-        co->scan_ret_addr = 0;
-        co->scan_offset = (uint64_t) co->p->share_stack.align_retptr - (uint64_t) rsp;
+//        co->scan_ret_addr = 0;
+//        co->scan_offset = (uint64_t) co->p->share_stack.align_retptr - (uint64_t) rsp;
     }
 
     // 由于被抢占的函数可以会在没有 sub 保留 rsp 的情况下使用 rsp-0x10 这样的空间地址
@@ -196,7 +197,8 @@ static void processor_uv_close(n_processor_t *p) {
     int result = uv_loop_close(&p->uv_loop);
 
     if (result != 0) {
-        DEBUGF("[runtime.processor_uv_close] uv loop close failed, code=%d, msg=%s, p_index=%d", result, uv_strerror(result), p->index);
+        DEBUGF("[runtime.processor_uv_close] uv loop close failed, code=%d, msg=%s, p_index=%d", result,
+               uv_strerror(result), p->index);
         assert(false && "uv loop close failed");
     }
 
@@ -209,7 +211,8 @@ NO_OPTIMIZE static void coroutine_wrapper() {
     n_processor_t *p = processor_get();
     assert(p);
 
-    DEBUGF("[runtime.coroutine_wrapper] p_index=%d, p_status=%d co=%p, fn=%p main=%d, rt_co=%d", p->index, p->status, co, co->fn, co->main, co->flag & FLAG(CO_FLAG_RTFN));
+    DEBUGF("[runtime.coroutine_wrapper] p_index=%d, p_status=%d co=%p, fn=%p main=%d, rt_co=%d", p->index, p->status,
+           co, co->fn, co->main, co->flag & FLAG(CO_FLAG_RTFN));
 
     co_set_status(p, co, CO_STATUS_RUNNING);
     processor_set_status(p, P_STATUS_RUNNING);
@@ -438,13 +441,14 @@ static void processor_run(void *raw) {
         // TRACEF("[runtime.processor_run] handle, p_index_%d=%d", p->share, p->index);
         // - stw
         if (p->need_stw > 0) {
-        STW_WAIT:
-            TDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index=%d", p->need_stw, p->index);
+            STW_WAIT:
+        TDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index=%d", p->need_stw, p->index);
             p->in_stw = p->need_stw;
 
             // runtime_gc 线程会解除 safe 状态，所以这里一直等待即可
             while (processor_need_stw(p)) {
-                TRACEF("[runtime.processor_run] p_index=%d, need_stw=%lu, safe_point=%lu stw loop....", p->index, p->need_stw, p->in_stw);
+                TRACEF("[runtime.processor_run] p_index=%d, need_stw=%lu, safe_point=%lu stw loop....", p->index,
+                       p->need_stw, p->in_stw);
                 usleep(WAIT_BRIEF_TIME * 1000); // 1ms
             }
 
@@ -465,7 +469,8 @@ static void processor_run(void *raw) {
             coroutine_t *co = rt_linked_fixalloc_pop(&p->runnable_list);
             assert(co);
 
-            RDEBUGF("[runtime.processor_run] will handle coroutine, p_index=%d, co=%p, status=%d", p->index, co, co->status);
+            RDEBUGF("[runtime.processor_run] will handle coroutine, p_index=%d, co=%p, status=%d", p->index, co,
+                    co->status);
 
             coroutine_resume(p, co);
             run_count++;
@@ -500,7 +505,7 @@ static void processor_run(void *raw) {
         io_run(p, WAIT_BRIEF_TIME * 5);
     }
 
-EXIT:
+    EXIT:
     processor_uv_close(p);
     p->thread_id = 0;
     processor_set_status(p, P_STATUS_EXIT);

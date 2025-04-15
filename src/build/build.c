@@ -375,6 +375,11 @@ static void linker_elf_exe(slice_t *modules) {
 }
 
 static int command_exists(const char *cmd) {
+    // 首先检查绝对路径
+    if (file_exists((char*)cmd)) {
+        return 1;
+    }
+
     char *path = getenv("PATH");
     if (path == NULL) {
         return 0; // PATH 环境变量不存在
@@ -593,7 +598,7 @@ static void custom_ld_mach_exe(slice_t *modules, char *use_ld, char *ldflags) {
     char cmd[16384];
 
     snprintf(cmd, sizeof(cmd),
-             "%s -w -arch %s -dynamic -platform_version macos 11.7.1 14.0 %s"
+             "%s -arch %s -dynamic -platform_version macos 11.7.1 14.0 %s"
              "-o %s %s %s @%s",
              use_ld,
              darwin_ld_arch,

@@ -245,6 +245,7 @@ mach_put_relocate(mach_context_t *ctx, mach_section_t *apply_section, int32_t of
             case X86_64_RELOC_BRANCH:
             case X86_64_RELOC_GOT_LOAD:
             case X86_64_RELOC_GOT:
+            case X86_64_RELOC_TLV:
                 rel->r_pcrel = 1;
                 break;
             case X86_64_RELOC_UNSIGNED:
@@ -287,7 +288,7 @@ mach_put_rel_data(mach_context_t *ctx, mach_section_t *apply_section, int32_t re
                   char *name, uint64_t symbol_type) {
 
     uint64_t sym_index = mach_put_sym(ctx->symtab_command,
-                                      &(struct nlist_64){
+                                      &(struct nlist_64) {
                                               .n_sect = NO_SECT, // 重定位符号无法知道符号定义的 section
                                               .n_type = symbol_type,
                                               .n_value = 0},

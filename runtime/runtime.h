@@ -68,7 +68,7 @@ int runtime_main(int argc, char *argv[]) __asm("main");
     ({                                                        \
         uint64_t _rbp_value;                                  \
         __asm__ volatile("mov %%rbp, %0" : "=r"(_rbp_value)); \
-        fetch_addr_value(rbp_value + POINTER_SIZE);           \
+        fetch_addr_value(_rbp_value + POINTER_SIZE);           \
     });
 #elif __ARM64
 #define CALLER_RET_ADDR(_co)                                          \

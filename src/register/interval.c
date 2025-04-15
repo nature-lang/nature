@@ -361,12 +361,15 @@ static bool resolve_blocked(int8_t *block_regs, interval_t *from, interval_t *to
  * @param src_i
  * @param dst_i
  */
-static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, interval_t *dst_i, bool imm_replace, bool is_resolve) {
+static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, interval_t *dst_i, bool imm_replace,
+                             bool is_resolve) {
     LINKED_FOR(block->operations) {
         lir_op_t *op = LINKED_VALUE();
         if (op->id <= id) {
             continue;
         }
+
+        // op->id > id 才会进来
 
         // last->id < id < op->id
         lir_operand_t *dst = operand_new(LIR_OPERAND_VAR, dst_i->var);
@@ -865,7 +868,7 @@ int interval_next_intersect(closure_t *c, interval_t *current, interval_t *selec
 
     // 没有交集，返回 select_first_cover
     result = select_first_cover;
-END:
+    END:
 
     // 此时应该返回 select 大于 current->first_range->from 的首个 cover select 的节点
     // 因为即使没有交集，该寄存器的最大空闲时间也是到这个节点
@@ -939,7 +942,7 @@ int old_interval_next_intersect(closure_t *c, interval_t *current, interval_t *s
     result = select_first_cover;
     // 如果 select_first_cover 在 label 的位置，则其占用的空间范围应该前移
 
-END:
+    END:
 
     // 此时应该返回 select 大于 current->first_range->from 的首个 cover select 的节点
     // 因为即使没有交集，该寄存器的最大空闲时间也是到这个节点
@@ -978,6 +981,8 @@ END:
 /**
  * - 不能在边界进行切分，会导致 resolve_data_flow 检测边界异常插入重复的 mov
  * - 不要在 for 循环内部的 block 中进行切分, 循环中的 live_in 计算是完整的
+ *
+ * 必须小于 before, before 是被占用的点，不能使用
  * @param c
  * @param interval
  * @param before
@@ -1005,6 +1010,7 @@ int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int befor
             }
         }
     }
+
 
     int id = before - 1;
     return id;
@@ -1130,7 +1136,7 @@ int interval_next_use_position(interval_t *i, int after_position) {
  */
 interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     assert(position < i->last_range->to);
-    assert(position >= i->first_range->from);
+    assert(position > i->first_range->from);
 
     interval_t *child = interval_new_child(c, i);
 

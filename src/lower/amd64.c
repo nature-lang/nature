@@ -249,6 +249,23 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
     return list;
 }
 
+static linked_t *amd64_lower_safepoint(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+
+    // 预留 rax 寄存器存储 call 的结果
+//    lir_operand_t *result_reg = lir_reg_operand(rax->index, TYPE_ANYPTR);
+
+    // 预留 rdi 用于参数(rdi 在 use 会导致 reg 的 use-def 异常), 只保留
+//    lir_operand_t *first_reg = lir_reg_operand(rdi->index, TYPE_ANYPTR);
+    lir_operand_t *result_operand = lir_regs_operand(2, rax, rdi);
+
+
+    // 增加 label continue
+    linked_push(list, lir_op_new(op->code, NULL, NULL, result_operand));
+
+    return list;
+}
+
 static void amd64_lower_block(closure_t *c, basic_block_t *block) {
     linked_t *operations = linked_new();
     LINKED_FOR(block->operations) {
@@ -289,6 +306,11 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         if (lir_op_contain_cmp(op) && op->first->assert_type != LIR_OPERAND_VAR) {
             op->first = amd64_convert_first_to_temp(c, operations, op->first);
             linked_push(operations, op);
+            continue;
+        }
+
+        if (op->code == LIR_OPCODE_SAFEPOINT) {
+            linked_concat(operations, amd64_lower_safepoint(c, op));
             continue;
         }
 

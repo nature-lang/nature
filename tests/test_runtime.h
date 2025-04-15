@@ -21,15 +21,15 @@ uint64_t rt_rtype_count;
 rtype_t rt_rtype_data;
 
 // Declare entry function with custom assembly name _main.main
-#ifdef __DARWIN
-__attribute__((used)) void test_main(void) asm("_main.main");
-#else
-__attribute__((used)) void test_main(void) __asm__("main.main");
-#endif
-
-void test_main() {
-    printf("hello world in _main\n");
-}
+//#ifdef __DARWIN
+//__attribute__((used)) void test_main(void) asm("_main.main");
+//#else
+//__attribute__((used)) void test_main(void) __asm__("main.main");
+//#endif
+//
+//void test_main() {
+//    printf("hello world in _main\n");
+//}
 
 
 //static void test_runtime_init() {

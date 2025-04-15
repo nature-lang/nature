@@ -52,6 +52,18 @@
     reg_operand;                                                 \
 })
 
+#define AMD64_TLS_SYMBOL(_name) ({                     \
+    amd64_asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
+    _operand->type = AMD64_ASM_OPERAND_TYPE_SYMBOL;           \
+    asm_symbol_t *_symbol = NEW(asm_symbol_t);                \
+    _symbol->name = _name;                                    \
+    _symbol->is_tls = true;                            \
+    _symbol->is_local = false;                            \
+    _operand->size = QWORD;                                       \
+    _operand->value = _symbol;                                \
+    _operand;                                                 \
+})
+
 #define AMD64_SYMBOL(_name, _is_local) ({                     \
     amd64_asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
     _operand->type = AMD64_ASM_OPERAND_TYPE_SYMBOL;           \
@@ -86,7 +98,7 @@
     _operand;                                                 \
 })
 
-#define SEG_OFFSET(_name, _offset, _symbol) ({                         \
+#define AMD64_SEG_OFFSET(_name, _offset, _symbol) ({                         \
     amd64_asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
     _operand->type = AMD64_ASM_OPERAND_TYPE_SEG_OFFSET;       \
     asm_seg_offset_t *_seg_offset = NEW(asm_seg_offset_t);    \
@@ -121,15 +133,15 @@
     operand;                                                 \
 })
 
-#define UINT8(_value) VALUE_OPERAND(asm_uint8_t, AMD64_ASM_OPERAND_TYPE_UINT8, (_value), BYTE)
-#define UINT16(_value) VALUE_OPERAND(asm_uint16_t, AMD64_ASM_OPERAND_TYPE_UINT16, (_value), WORD)
-#define UINT32(_value) VALUE_OPERAND(asm_uint32_t, AMD64_ASM_OPERAND_TYPE_UINT32, (_value), DWORD)
-#define UINT64(_value) VALUE_OPERAND(asm_uint64_t, AMD64_ASM_OPERAND_TYPE_UINT64, (_value), QWORD)
-#define UINT(_value) VALUE_OPERAND(asm_uint32_t, AMD64_ASM_OPERAND_TYPE_UINT, (_value), QWORD)
-#define INT8(_value) VALUE_OPERAND(asm_int8_t, AMD64_ASM_OPERAND_TYPE_INT8, (_value), BYTE)
-#define INT32(_value) VALUE_OPERAND(asm_int32_t, AMD64_ASM_OPERAND_TYPE_INT32, (_value), DWORD)
-#define FLOAT32(_value) VALUE_OPERAND(asm_float32_t, AMD64_ASM_OPERAND_TYPE_FLOAT32, (_value), OWORD)
-#define FLOAT64(_value) VALUE_OPERAND(asm_float64_t, AMD64_ASM_OPERAND_TYPE_FLOAT64, (_value), OWORD)
+#define AMD64_UINT8(_value) VALUE_OPERAND(asm_uint8_t, AMD64_ASM_OPERAND_TYPE_UINT8, (_value), BYTE)
+#define AMD64_UINT16(_value) VALUE_OPERAND(asm_uint16_t, AMD64_ASM_OPERAND_TYPE_UINT16, (_value), WORD)
+#define AMD64_UINT32(_value) VALUE_OPERAND(asm_uint32_t, AMD64_ASM_OPERAND_TYPE_UINT32, (_value), DWORD)
+#define AMD64_UINT64(_value) VALUE_OPERAND(asm_uint64_t, AMD64_ASM_OPERAND_TYPE_UINT64, (_value), QWORD)
+#define AMD64_UINT(_value) VALUE_OPERAND(asm_uint32_t, AMD64_ASM_OPERAND_TYPE_UINT, (_value), QWORD)
+#define AMD64_INT8(_value) VALUE_OPERAND(asm_int8_t, AMD64_ASM_OPERAND_TYPE_INT8, (_value), BYTE)
+#define AMD64_INT32(_value) VALUE_OPERAND(asm_int32_t, AMD64_ASM_OPERAND_TYPE_INT32, (_value), DWORD)
+#define AMD64_FLOAT32(_value) VALUE_OPERAND(asm_float32_t, AMD64_ASM_OPERAND_TYPE_FLOAT32, (_value), OWORD)
+#define AMD64_FLOAT64(_value) VALUE_OPERAND(asm_float64_t, AMD64_ASM_OPERAND_TYPE_FLOAT64, (_value), OWORD)
 
 #define VALUE_OPERAND(_type, _operand_type, _value, _size) ({                   \
     amd64_asm_operand_t *_number_operand = malloc(sizeof(amd64_asm_operand_t)); \
@@ -203,7 +215,6 @@ typedef struct {
 typedef struct {
     char *name; // 段寄存器 (fs, gs 等)
     int32_t offset; // TLS 偏移量
-    char *symbol; // symbol offset
 } asm_seg_offset_t;
 
 typedef struct {
@@ -222,6 +233,7 @@ typedef struct {
 typedef struct {
     string name; // 符号名称
     bool is_local; // 是内部符号，还是全局符号(global_fn,global_var 或者当前文件不存在的 var)
+    bool is_tls;
 } asm_symbol_t;
 
 
@@ -258,19 +270,19 @@ static inline amd64_asm_operand_t *amd64_asm_symbol_operand(amd64_asm_inst_t asm
 static inline amd64_asm_operand_t *asm_match_int_operand(int64_t n) {
     // 正负数处理
     if (n >= INT8_MIN && n <= INT8_MAX) {
-        return UINT8(n);
+        return AMD64_UINT8(n);
     }
 
     if (n >= INT16_MIN && n <= INT16_MAX) {
-        return UINT16(n);
+        return AMD64_UINT16(n);
     }
 
     if (n >= INT32_MIN && n <= INT32_MAX) {
-        return UINT32(n);
+        return AMD64_UINT32(n);
     }
 
     if (n >= INT64_MIN && n <= INT64_MAX) {
-        return UINT64(n);
+        return AMD64_UINT64(n);
     }
 
     return NULL;

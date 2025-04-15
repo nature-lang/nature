@@ -568,6 +568,34 @@ static inline lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         return new_operand;
     }
 
+    if (new_operand->assert_type == LIR_OPERAND_REGS) {
+        slice_t *new_value = slice_new();
+
+        slice_t *operands = operand->value;
+        for (int i = 0; i < operands->count; ++i) {
+            reg_t *reg = operands->take[i];
+            reg_t *new_reg = lir_operand_copy(operand_new(LIR_OPERAND_REG, reg))->value;
+            slice_push(new_value, new_reg);
+        }
+
+        new_operand->value = new_value;
+        return new_operand;
+    }
+
+    if (new_operand->assert_type == LIR_OPERAND_VARS) {
+        slice_t *new_value = slice_new();
+
+        slice_t *operands = operand->value;
+        for (int i = 0; i < operands->count; ++i) {
+            lir_var_t *var = operands->take[i];
+            reg_t *new_var = lir_operand_copy(operand_new(LIR_OPERAND_VAR, var))->value;
+            slice_push(new_value, new_var);
+        }
+
+        new_operand->value = new_value;
+        return new_operand;
+    }
+
     return new_operand;
 }
 
@@ -991,7 +1019,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
     assert(operand->assert_type != LIR_OPERAND_SYMBOL_LABEL);
 
     assertf(operand->assert_type == LIR_OPERAND_VAR || operand->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
-                    operand->assert_type == LIR_OPERAND_SYMBOL_LABEL || operand->assert_type == LIR_OPERAND_SYMBOL_VAR,
+            operand->assert_type == LIR_OPERAND_SYMBOL_LABEL || operand->assert_type == LIR_OPERAND_SYMBOL_VAR,
             "only support lea var/symbol/addr, actual=%d", operand->assert_type);
 
     type_t t = lir_operand_type(operand);
@@ -1091,13 +1119,15 @@ static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
 }
 
 static inline bool lir_op_like_move(lir_op_t *op) {
-    return op->code == LIR_OPCODE_MOVE || op->code == LIR_OPCODE_SEXT || op->code == LIR_OPCODE_ZEXT || op->code == LIR_OPCODE_TRUNC;
+    return op->code == LIR_OPCODE_MOVE || op->code == LIR_OPCODE_SEXT || op->code == LIR_OPCODE_ZEXT ||
+           op->code == LIR_OPCODE_TRUNC;
 }
 
 static inline bool lir_op_contain_cmp(lir_op_t *op) {
     return (op->code == LIR_OPCODE_BEQ || op->code == LIR_OPCODE_SGT || op->code == LIR_OPCODE_SGE ||
             op->code == LIR_OPCODE_SEE ||
-            op->code == LIR_OPCODE_SNE || op->code == LIR_OPCODE_SLT || op->code == LIR_OPCODE_SLE || op->code == LIR_OPCODE_USLT);
+            op->code == LIR_OPCODE_SNE || op->code == LIR_OPCODE_SLT || op->code == LIR_OPCODE_SLE ||
+            op->code == LIR_OPCODE_USLT);
 }
 
 static inline bool lir_op_term(lir_op_t *op) {
