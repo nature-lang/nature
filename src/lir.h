@@ -50,7 +50,8 @@
 #define ERRORT_MSG_IDENT "msg"
 #define ERRORT_IS_IDENT "is"
 
-#define FLOAT_NEG_MASK_IDENT "float_neg_mask" // -0
+#define F64_NEG_MASK_IDENT "f64_neg_mask" // -0
+#define F32_NEG_MASK_IDENT "f32_neg_mask" // -0
 
 #define BUILTIN_REF_KEY "ref" // list.ref()
 // #define BUILTIN_LEN_KEY "len" // list.len()
@@ -330,6 +331,16 @@ static inline lir_operand_t *float_operand(double val) {
     lir_imm_t *imm_operand = NEW(lir_imm_t);
     imm_operand->kind = TYPE_FLOAT64;
     imm_operand->f64_value = val;
+    lir_operand_t *operand = NEW(lir_operand_t);
+    operand->assert_type = LIR_OPERAND_IMM;
+    operand->value = imm_operand;
+    return operand;
+}
+
+static inline lir_operand_t *float32_operand(float val) {
+    lir_imm_t *imm_operand = NEW(lir_imm_t);
+    imm_operand->kind = TYPE_FLOAT32;
+    imm_operand->f32_value = val;
     lir_operand_t *operand = NEW(lir_operand_t);
     operand->assert_type = LIR_OPERAND_IMM;
     operand->value = imm_operand;
@@ -1142,6 +1153,7 @@ static inline bool lir_op_ternary(lir_op_t *op) {
     return op->code == LIR_OPCODE_ADD || op->code == LIR_OPCODE_SUB || op->code == LIR_OPCODE_MUL ||
            op->code == LIR_OPCODE_DIV ||
            op->code == LIR_OPCODE_REM || op->code == LIR_OPCODE_SHR || op->code == LIR_OPCODE_SHL ||
+           op->code == LIR_OPCODE_SAR ||
            op->code == LIR_OPCODE_AND ||
            op->code == LIR_OPCODE_OR || op->code == LIR_OPCODE_XOR;
 }

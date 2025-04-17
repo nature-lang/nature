@@ -58,7 +58,7 @@ static bool amd64_is_integer_operand(lir_operand_t *operand) {
         return reg->flag & FLAG(LIR_FLAG_ALLOC_INT);
     }
 
-    return is_integer(operand_type_kind(operand));
+    return is_integer_or_anyptr(operand_type_kind(operand));
 }
 
 static bool asm_operand_equal(amd64_asm_operand_t *a, amd64_asm_operand_t *b) {
@@ -514,6 +514,8 @@ static slice_t *amd64_native_shift(closure_t *c, lir_op_t *op) {
 
     char *opcode;
     if (op->code == LIR_OPCODE_SHR) {
+        opcode = "shr";
+    } else if (op->code == LIR_OPCODE_SAR) {
         opcode = "sar";
     } else {
         opcode = "sal";
@@ -816,12 +818,12 @@ static slice_t *amd64_native_beq(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_safepoint(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
-    assert(op->output->assert_type == LIR_OPERAND_REGS);
-
     amd64_asm_operand_t *rax_operand = AMD64_REG(rax);
     amd64_asm_operand_t *rdi_operand = AMD64_REG(rdi);
 
     if (BUILD_OS == OS_DARWIN) {
+        assert(op->output->assert_type == LIR_OPERAND_REGS);
+
         amd64_asm_operand_t *tlv_page = AMD64_TLS_SYMBOL(TLS_YIELD_SAFEPOINT_IDENT);
 
         // movq _tls_yield_safepoint@TLVP(%rip), %rdi
@@ -833,6 +835,8 @@ static slice_t *amd64_native_safepoint(closure_t *c, lir_op_t *op) {
 
         slice_push(operations, AMD64_INST("mov", rax_operand, INDIRECT_REG(rax, QWORD)));
     } else {
+        assert(op->output->assert_type == LIR_OPERAND_REG);
+
         // mov fs
         amd64_asm_operand_t *safepoint_symbol = AMD64_TLS_SYMBOL(TLS_YIELD_SAFEPOINT_IDENT);
 
@@ -938,6 +942,7 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_OR] = amd64_native_or,
         [LIR_OPCODE_AND] = amd64_native_and,
         [LIR_OPCODE_SHR] = amd64_native_shift,
+        [LIR_OPCODE_SAR] = amd64_native_shift,
         [LIR_OPCODE_SHL] = amd64_native_shift,
 
         // 算数运算

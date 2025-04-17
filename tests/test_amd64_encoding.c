@@ -59,14 +59,35 @@ static void test_basic() {
     lir_op_t *op = NEW(lir_op_t);
 
     // mov rax, QWORD PTR fs:tls_safepoint@tpoff
-    amd64_asm_inst_t *inst = AMD64_INST("mov", AMD64_REG(rax), AMD64_SEG_OFFSET("fs", 0, "tls_safepoint"));
+    amd64_asm_inst_t *inst = AMD64_INST("mov", AMD64_REG(rax), AMD64_SEG_OFFSET("fs", 0));
     TEST_EQ(*inst, 0x64, 0x48, 0x8B, 0x04, 0x25, 0x00, 0x00, 0x00, 0x00);
 
-    inst = AMD64_INST("mov", AMD64_REG(rax), AMD64_SEG_OFFSET("gs", 0, "tls_safepoint"));
+    inst = AMD64_INST("mov", AMD64_REG(rax), AMD64_SEG_OFFSET("gs", 0));
     TEST_EQ(*inst, 0x65, 0x48, 0x8B, 0x04, 0x25, 0x00, 0x00, 0x00, 0x00);
 
-    inst = AMD64_INST("mov", AMD64_REG(rax), AMD64_SEG_OFFSET("gs", 0x25, "tls_safepoint"));
+    inst = AMD64_INST("mov", AMD64_REG(rax), AMD64_SEG_OFFSET("gs", 0x25));
     TEST_EQ(*inst, 0x65, 0x48, 0x8B, 0x04, 0x25, 0x25, 0x00, 0x00, 0x00);
+
+    inst = AMD64_INST("mov", INDIRECT_REG(r13, DWORD), AMD64_UINT32(0));
+    TEST_EQ(*inst, 0x41, 0xC7, 0x45, 0x00, 0x00, 0x00, 0x00, 0x00);
+
+    inst = AMD64_INST("mov", AMD64_REG(rcx), DISP_REG(rax, 128, QWORD));
+    TEST_EQ(*inst, 0x48, 0x8B, 0x88, 0x80, 0x00, 0x00, 0x00);
+
+    inst = AMD64_INST("mov", AMD64_REG(r11), DISP_REG(r10, 128, QWORD));
+    TEST_EQ(*inst, 0x4D, 0x8B, 0x9A, 0x80, 0x00, 0x00, 0x00);
+
+    inst = AMD64_INST("div", AMD64_REG(xmm1s32), AMD64_REG(xmm2s32)); // div ss
+    TEST_EQ(*inst, 0xF3, 0x0F, 0x5E, 0xCA);
+
+    inst = AMD64_INST("sar", AMD64_REG(rdi), AMD64_REG(cl));
+    TEST_EQ(*inst, 0x48, 0xd3, 0xFF);
+
+    inst = AMD64_INST("shr", AMD64_REG(rdi), AMD64_REG(cl));
+    TEST_EQ(*inst, 0x48, 0xd3, 0xEF);
+
+    inst = AMD64_INST("sal", AMD64_REG(rdi), AMD64_REG(cl));
+    TEST_EQ(*inst, 0x48, 0xd3, 0xE7);
 }
 
 

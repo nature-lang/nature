@@ -78,7 +78,7 @@ static void elf_custom_links() {
     ct_fndef_size = collect_fndef_list(ctx);
     ct_fndef_data = fndefs_serialize();
     elf_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
-    sym = (Elf64_Sym){
+    sym = (Elf64_Sym) {
             .st_shndx = ctx->data_fndef_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -91,7 +91,7 @@ static void elf_custom_links() {
     // caller - --------------------------------------------------------------------------
     ct_caller_data = callers_serialize();
     elf_put_data(ctx->data_caller_section, ct_caller_data, ct_caller_list->length * sizeof(caller_t));
-    sym = (Elf64_Sym){
+    sym = (Elf64_Sym) {
             .st_shndx = ctx->data_caller_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -106,7 +106,7 @@ static void elf_custom_links() {
     ct_symdef_size = collect_symdef_list(ctx);
     ct_symdef_data = symdefs_serialize();
     elf_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
-    sym = (Elf64_Sym){
+    sym = (Elf64_Sym) {
             .st_shndx = ctx->data_symdef_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -118,8 +118,11 @@ static void elf_custom_links() {
 
     // custom_global symbol
     // ------------------------------------------------------------------------------------------------------
-    double float_mask = -0.0;
-    elf_put_global_symbol(ctx, FLOAT_NEG_MASK_IDENT, &float_mask, QWORD);
+    double f64_mask = -0.0;
+    elf_put_global_symbol(ctx, F64_NEG_MASK_IDENT, &f64_mask, QWORD);
+    float f32_mast = (float) (-0.0);
+    elf_put_global_symbol(ctx, F32_NEG_MASK_IDENT, &f32_mast, DWORD);
+
 
     elf_file_format(ctx);
 
@@ -140,11 +143,11 @@ static void mach_custom_links() {
     ct_rtype_data = rtypes_serialize();
     mach_put_data(ctx->data_rtype_section, ct_rtype_data, ct_rtype_size);
     // 创建符号指向自定义数据段 __data.rtype
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                                              .n_type = N_SECT | N_EXT,
-                                              .n_sect = ctx->data_rtype_section->sh_index,
-                                              .n_value = 0, // in section data offset
-                                      },
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
+                         .n_type = N_SECT | N_EXT,
+                         .n_sect = ctx->data_rtype_section->sh_index,
+                         .n_value = 0, // in section data offset
+                 },
                  SYMBOL_RTYPE_DATA);
 
     macho_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, QWORD);
@@ -154,11 +157,11 @@ static void mach_custom_links() {
     ct_fndef_data = fndefs_serialize();
     mach_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
 
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                                              .n_type = N_SECT | N_EXT,
-                                              .n_sect = ctx->data_fndef_section->sh_index,
-                                              .n_value = 0, // in section data offset
-                                      },
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
+                         .n_type = N_SECT | N_EXT,
+                         .n_sect = ctx->data_fndef_section->sh_index,
+                         .n_value = 0, // in section data offset
+                 },
                  SYMBOL_FNDEF_DATA);
     macho_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, QWORD);
 
@@ -167,11 +170,11 @@ static void mach_custom_links() {
     ct_caller_data = callers_serialize();
     mach_put_data(ctx->data_caller_section, ct_caller_data, ct_caller_list->length * sizeof(caller_t));
     // 注册段名称与 runtime 中的符号进行绑定
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                                              .n_type = N_SECT | N_EXT,
-                                              .n_sect = ctx->data_caller_section->sh_index,
-                                              .n_value = 0, // in section data offset
-                                      },
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
+                         .n_type = N_SECT | N_EXT,
+                         .n_sect = ctx->data_caller_section->sh_index,
+                         .n_value = 0, // in section data offset
+                 },
                  SYMBOL_CALLER_DATA);
     macho_put_global_symbol(ctx, SYMBOL_CALLER_COUNT, &ct_caller_list->length, QWORD);
 
@@ -181,19 +184,21 @@ static void mach_custom_links() {
     ct_symdef_data = symdefs_serialize();
     mach_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
 
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                                              .n_type = N_SECT | N_EXT,
-                                              .n_sect = ctx->data_symdef_section->sh_index,
-                                              .n_value = 0, // in section data offset
-                                      },
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
+                         .n_type = N_SECT | N_EXT,
+                         .n_sect = ctx->data_symdef_section->sh_index,
+                         .n_value = 0, // in section data offset
+                 },
                  SYMBOL_SYMDEF_DATA);
     macho_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, QWORD);
 
 
     // custom_global symbol
     // ------------------------------------------------------------------------------------------------------
-    double float_mask = -0.0;
-    macho_put_global_symbol(ctx, FLOAT_NEG_MASK_IDENT, &float_mask, QWORD);
+    double f64_mask = -0.0;
+    macho_put_global_symbol(ctx, F64_NEG_MASK_IDENT, &f64_mask, QWORD);
+    float f32_mast = (float) (-0.0);
+    macho_put_global_symbol(ctx, F32_NEG_MASK_IDENT, &f32_mast, DWORD);
 
     mach_output_object(ctx);
     log_debug(" --> assembler: %s\n", custom_link_object_path());
@@ -273,11 +278,11 @@ static void mach_assembler_module(module_t *m) {
         uint64_t offset = mach_put_data(ctx->data_section, symbol->value, symbol->size);
 
         // 写入符号表
-        mach_put_sym(ctx->symtab_command, &(struct nlist_64){
-                                                  .n_type = N_SECT | N_EXT,
-                                                  .n_sect = ctx->data_section->sh_index,
-                                                  .n_value = offset, // in section data offset
-                                          },
+        mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
+                             .n_type = N_SECT | N_EXT,
+                             .n_sect = ctx->data_section->sh_index,
+                             .n_value = offset, // in section data offset
+                     },
                      symbol->name);
     }
 
@@ -376,7 +381,7 @@ static void linker_elf_exe(slice_t *modules) {
 
 static int command_exists(const char *cmd) {
     // 首先检查绝对路径
-    if (file_exists((char*)cmd)) {
+    if (file_exists((char *) cmd)) {
         return 1;
     }
 

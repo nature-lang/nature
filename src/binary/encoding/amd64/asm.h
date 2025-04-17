@@ -98,13 +98,12 @@
     _operand;                                                 \
 })
 
-#define AMD64_SEG_OFFSET(_name, _offset, _symbol) ({                         \
+#define AMD64_SEG_OFFSET(_name, _offset) ({                         \
     amd64_asm_operand_t *_operand = NEW(amd64_asm_operand_t); \
     _operand->type = AMD64_ASM_OPERAND_TYPE_SEG_OFFSET;       \
     asm_seg_offset_t *_seg_offset = NEW(asm_seg_offset_t);    \
     _seg_offset->name = _name;                                \
     _seg_offset->offset = _offset;                            \
-    _seg_offset->symbol = _symbol;                            \
     _operand->value = _seg_offset;                            \
     _operand->size = QWORD;                            \
     _operand;                                                 \

@@ -139,6 +139,7 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_OR] = "OR  ",
         [LIR_OPCODE_AND] = "AND  ",
         [LIR_OPCODE_SHR] = "SHR  ",
+        [LIR_OPCODE_SAR] = "SAR  ",
         [LIR_OPCODE_SHL] = "SHL  ",
 
         [LIR_OPCODE_PHI] = "PHI  ",

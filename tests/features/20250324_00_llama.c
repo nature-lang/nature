@@ -9,7 +9,6 @@ int main(void) {
     slice_push(args, "1743659096");
     slice_push(args, "-i");
     slice_push(args, "hello");
-    //    exec_imm(WORKDIR, BUILD_OUTPUT, args);
 
     char *actual = exec_with_args(args);
     char *expect = "hello, God had made everything better. \n"

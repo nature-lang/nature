@@ -394,6 +394,8 @@ static rtype_t rtype_struct(type_struct_t *t) {
     // 假设没有 struct， 可以根据所有 property 计算 gc bits
     uint16_t last_ptr_offset = rtype_struct_gc_bits(gc_bits, &offset, t);
 
+//    log_debug("[rtype_struct] size=%d, gc_bits=%s", size, bitmap_to_str(gc_bits, calc_gc_bits_size(size, POINTER_SIZE)));
+
     uint64_t *element_hash_list = mallocz(sizeof(uint64_t) * t->properties->length);
 
     // 记录需要 gc 的 key 的

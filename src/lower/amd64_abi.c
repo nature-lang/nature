@@ -641,8 +641,10 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
         return 0;
     }
 
+    // 在 nature 实现中，栈总是通过栈传递并进行完整的值传递
+    // 而 c 语言中，arr 本身是在 abi 中未定义的数据类型，所以 arr 需要作为 ptr 进行传递
     if (t.kind == TYPE_ARR) {
-        return 0; // 总是通过栈传递
+        return 0;
     }
 
     if (is_float(t.kind)) {

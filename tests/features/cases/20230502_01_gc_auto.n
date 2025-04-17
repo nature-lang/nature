@@ -11,6 +11,7 @@ fn main() {
     }
     u32 d = 321
 
+    // vec 扩容会导致多余的数据应该被 gc
     println(runtime.malloc_bytes())
     co.sleep(1000)
     println(list[9999])

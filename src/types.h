@@ -395,7 +395,8 @@ typedef enum {
     LIR_OPCODE_VDIV,
 
     // 位运算
-    LIR_OPCODE_SHR, // >>
+    LIR_OPCODE_SAR, // >> 有符号右移
+    LIR_OPCODE_SHR, // >> 无符号右移
     LIR_OPCODE_SHL, // <<
     LIR_OPCODE_AND, // &
     LIR_OPCODE_OR, // |

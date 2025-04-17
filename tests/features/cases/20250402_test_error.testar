@@ -242,3 +242,129 @@ fn main():void! {
 --- output.txt
 6
 8
+
+=== test_struct_field_neg
+--- main.n
+type test_t = struct{
+    float f
+    int i
+}
+
+fn main():void! {
+    var t = test_t{
+        f = 3.14,
+        i = 3,
+    }
+
+    t.f = -t.f
+    t.i = - t.i
+    println(t.f, t.i)
+    assert(t.f == -3.140000 && t.i == -3)
+}
+
+
+=== test_anyptr_binary
+--- main.n
+fn main():void! {
+    anyptr a = 12
+    anyptr b = 14
+    anyptr c = a * b
+    println(c)
+    assert(c == 0xa8)
+}
+
+
+=== test_struct_offset_eq_128
+--- main.n
+import runtime
+import coroutine as co
+
+type test_t = struct{
+    vec<int> a
+    vec<int> b
+}
+
+type trans_t = struct{
+    [int;15] t1
+    int t2
+    int t3
+    test_t t4
+    ptr<int> t5
+}
+
+fn malloc_test(rawptr<test_t> t) {
+    t.a = [0;288]
+    t.b = [0;288]
+}
+
+fn trans_new():ptr<trans_t> {
+    var v = new trans_t(t2 = 2, t3= 3, t5 = new int(10))
+    malloc_test(&v.t4)
+    return v
+}
+
+fn main():void! {
+    var v = trans_new()
+    println(v, &v.t4, &v.t4.a)
+
+    runtime.gc()
+    co.sleep(1000)
+
+    println(v.t4.a.len(), v.t4.b.len())
+    assert(v.t4.a.len() == 288 && v.t4.b.len() == 288)
+}
+
+
+=== test_div_f32
+--- main.n
+fn main():void! {
+    f32 ss = 1.595615
+    f32 size = 5.0
+
+    ss /= size
+    assert(ss == 0.319123)
+
+    f64 ss2 = 1.595615
+    f64 size2 = 5.0
+    ss2 = ss2 / size2
+    assert(ss2 == 0.319123)
+}
+
+
+=== test_f32_neg
+--- main.n
+fn main():void! {
+    f64 val = 0.096594
+    val = -val
+    println(val)
+    assert(val == -0.096594)
+
+    f32 val2 = 0.096594
+    val2 = -val2
+    println(val2)
+    assert(val2 == -0.096594)
+}
+
+
+=== test_uint_shift_right
+--- main.n
+fn random_u32(rawptr<u64> state):u32 {
+    // xorshift rng: https://en.wikipedia.org/wiki/Xorshift#xorshift.2A
+    *state ^= *state >> 12
+    *state ^= *state << 25
+    *state ^= *state >> 27
+    return ((*state * 0x2545F4914F6CDD1D) >> 32) as u32
+}
+
+fn random_f32(rawptr<u64> state):f32 {
+    // random float32 in [0,1)
+    return (random_u32(state) >> 8) as f32 / 16777216.0
+}
+
+
+fn main():void! {
+    u64 seed1 = 58494830515472664
+    u32 a = random_u32(&seed1)
+    println(a)
+    assert(a == 2094371595)
+}

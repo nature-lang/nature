@@ -18,14 +18,19 @@ type cgroup_t = struct {
     u8 version
     string path
     string procs_path
-   
-
 }
 
 fn cgroup_t.register(int pid):void! {
     var pid_str = fmt.sprintf('%d\n', pid)
-    var f = fs.open(self.procs_path, syscall.O_WRONLY|syscall.O_APPEND, 0)
+
+    logf("[cgroup_t.register] pid %d, procs_path %s", pid, self.procs_path)
+
+    // fs open cannot open fd in mount ns
+    // var f = fs.open(self.procs_path, syscall.O_WRONLY, 0)
+    var fd = syscall.open(self.procs_path, syscall.O_WRONLY, 0)
+    var f = fs.from(fd, self.procs_path)
     f.write(pid_str as [u8])
+
     f.close()
 }
 

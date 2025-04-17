@@ -371,20 +371,20 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
 
 #ifdef DEBUG_LOG
-    DEBUGF("[runtime_gc.scan_stack] traverse stack, start");
+    TDEBUGF("[runtime_gc.scan_stack] traverse stack, start");
     addr_t temp_cursor = stack_top_ptr; // 栈向下(小)增长
     size_t temp_i = 0;
     size_t max_i = size / POINTER_SIZE;
     while (temp_i < max_i) {
         addr_t v = fetch_addr_value((addr_t) temp_cursor);
         fndef_t *fn = find_fn(v, p);
-        DEBUGF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i,
-               temp_cursor, v,
-               fn ? fn->name : "", fn ? fn->stack_size : 0);
+        TDEBUGF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i,
+                temp_cursor, v,
+                fn ? fn->name : "", fn ? fn->stack_size : 0);
         temp_cursor += POINTER_SIZE;
         temp_i += 1;
     }
-    DEBUGF("[runtime_gc.scan_stack] traverse stack, end");
+    TDEBUGF("[runtime_gc.scan_stack] traverse stack, end");
 #endif
 
 
@@ -400,7 +400,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
         // check prev value is nature fn
         fndef_t *fn = find_fn(ret_addr, p);
-        TDEBUGF("[runtime_gc.scan_stack] find frame_bp=%p, bp_offset=%ld, ret_addr=%p, fn=%s", (void *) share_stack_frame_bp, bp_offset, (void *) ret_addr, fn ? fn->name : "-");
+        TDEBUGF("[runtime_gc.scan_stack] find frame_bp=%p, bp_offset=%ld, ret_addr=%p, fn=%s",
+                (void *) share_stack_frame_bp, bp_offset, (void *) ret_addr, fn ? fn->name : "-");
 
         if (fn) {
             found = true;
@@ -476,7 +477,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
  * @param global
  */
 static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
-    DEBUGF("[handle_gc_ptr] start, p=%p, addr=%p", p, (void *) addr);
+    RDEBUGF("[runtime_gc.handle_gc_ptr] start, p=%p, addr=%p", p, (void *) addr);
 
     // get mspan by ptr
     mspan_t *span = span_of(addr);
@@ -491,7 +492,7 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
     addr_t old = addr;
     addr = span->base + (obj_index * span->obj_size);
 
-    RDEBUGF("[handle_gc_ptr] addr=%p(%p), has_ptr=%d, span_base=%p, spc=%d, obj_index=%lu, obj_size=%lu byte",
+    RDEBUGF("[runtime_gc.handle_gc_ptr] addr=%p(%p), has_ptr=%d, span_base=%p, spc=%d, obj_index=%lu, obj_size=%lu byte",
             (void *) addr, (void *) old,
             spanclass_has_ptr(span->spanclass), (void *) span->base, span->spanclass, obj_index, span->obj_size);
 
@@ -501,16 +502,17 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
     // 其他线程可能已经标记了该 obj
     if (bitmap_test(span->gcmark_bits, obj_index)) {
         // already marks black
-        DEBUGF("[handle_gc_ptr] addr=%p, span_base=%p, obj_index=%lu marked, will continue", (void *) addr,
-               (void *) span->base, obj_index);
+        TDEBUGF("[runtime_gc.handle_gc_ptr] addr=%p, span_base=%p, obj_index=%lu marked, will continue", (void *) addr,
+                (void *) span->base, obj_index);
         mutex_unlock(&span->gcmark_locker);
         return;
     }
 
     bitmap_set(span->gcmark_bits, obj_index);
-    DEBUGF("[handle_gc_ptr] addr=%p, span=%p, span_base=%p, obj_index=%lu marked, test=%d", (void *) addr, span,
-           (void *) span->base,
-           obj_index, bitmap_test(span->gcmark_bits, obj_index));
+    RDEBUGF("[runtime_gc.handle_gc_ptr] addr=%p, span=%p, span_base=%p, obj_index=%lu marked, test=%d", (void *) addr,
+            span,
+            (void *) span->base,
+            obj_index, bitmap_test(span->gcmark_bits, obj_index));
 
     mutex_unlock(&span->gcmark_locker);
 
@@ -535,7 +537,7 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
             // 同理，即使某个 ptr 需要 gc, 但是也可能存在 gc 时，还没有赋值的清空
             addr_t value = fetch_addr_value(temp_addr);
 
-            TRACEF(
+            RDEBUGF(
                     "[handle_gc_ptr] addr is ptr,base=%p cursor=%p cursor_value=%p, obj_size=%ld, bit_index=%lu, in_heap=%d",
                     (void *) addr,
                     (void *) temp_addr, (void *) value, span->obj_size, bit_index, in_heap(value));
@@ -549,10 +551,15 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
                     insert_gc_worklist(&global_gc_worklist, (void *) value);
                 }
             } else {
-                DEBUGF("[handle_gc_ptr] skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p", (void *) temp_addr,
-                       (void *) value, in_heap(value),
-                       span_of(value));
+                RDEBUGF("[handle_gc_ptr] skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p", (void *) temp_addr,
+                        (void *) value, in_heap(value),
+                        span_of(value));
             }
+        } else {
+            RDEBUGF(
+                    "[handle_gc_ptr] addr not ptr,base=%p cursor=%p cursor_value(int)=%p, obj_size=%ld, bit_index=%lu",
+                    (void *) addr,
+                    (void *) temp_addr, fetch_int_value(temp_addr, POINTER_SIZE), span->obj_size, bit_index);
         }
     }
 }
@@ -602,7 +609,8 @@ static void gc_work() {
     coroutine_t *gc_co = coroutine_get();
     assert(gc_co);
 
-    TDEBUGF("[runtime_gc.gc_work] start p_index=%d, gc_co=%p, gc_co->id=%ld, co_count=%lu", share_p->index, gc_co, gc_co->id, share_p->co_list.count);
+    TDEBUGF("[runtime_gc.gc_work] start p_index=%d, gc_co=%p, gc_co->id=%ld, co_count=%lu", share_p->index, gc_co,
+            gc_co->id, share_p->co_list.count);
 
     // - share goroutine root and change color black
     rt_linked_node_t *current = share_p->co_list.head;
@@ -917,6 +925,7 @@ void runtime_gc() {
     // 更新 next gc byts
     next_gc_bytes = _next_gc_bytes;
     gc_stage = GC_STAGE_OFF;
-    TDEBUGF("[runtime_gc] gc stage: GC_OFF, gc_barrier_stop, current_allocated=%ldKB, cleanup=%ldKB", allocated_bytes / 1024,
+    TDEBUGF("[runtime_gc] gc stage: GC_OFF, gc_barrier_stop, current_allocated=%ldKB, cleanup=%ldKB",
+            allocated_bytes / 1024,
             (before - allocated_bytes) / 1024);
 }

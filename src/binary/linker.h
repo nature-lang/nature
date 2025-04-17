@@ -213,12 +213,12 @@ static inline uint64_t collect_fndef_list(void *ctx) {
                 (stack_slot / POINTER_SIZE) - 1, stack_slot);
         }
 
-        log_debug(
-            "[collect_fndef_list] item success, fn name=%s, base=0x%lx, size=%lu, stack_size=%lu,"
-            "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
-            f->name, f->base, f->size, f->stack_size, f->fn_runtime_stack, f->fn_runtime_reg,
-            f->stack_size / POINTER_SIZE,
-            bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
+//        log_debug(
+//            "[collect_fndef_list] item success, fn name=%s, base=0x%lx, size=%lu, stack_size=%lu,"
+//            "fn_runtime_stack=0x%lx, fn_runtime_reg=0x%lx, gc_bits(%lu)=%s",
+//            f->name, f->base, f->size, f->stack_size, f->fn_runtime_stack, f->fn_runtime_reg,
+//            f->stack_size / POINTER_SIZE,
+//            bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
 
         if (BUILD_OS == OS_LINUX) {
             elf_context_t *elf_ctx = ctx;

@@ -439,8 +439,8 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
 
             int32_t x = (int32_t)sym->st_value - ((int32_t)s->sh_addr + (int32_t)s->data_count);
 
-            log_debug("[elf_amd64_relocate] R_X86_64_TPOFF32, st_value=%ld, s->sh_addr=%ld, s->data_count=%ld, x=%lx",
-                      sym->st_value, s->sh_addr, s->data_count, (uint32_t) x);
+//            log_debug("[elf_amd64_relocate] R_X86_64_TPOFF32, st_value=%ld, s->sh_addr=%ld, s->data_count=%ld, x=%lx",
+//                      sym->st_value, s->sh_addr, s->data_count, (uint32_t) x);
 
             add32le(ptr, x);
             break;

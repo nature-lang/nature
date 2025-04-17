@@ -730,7 +730,7 @@ static mspan_t *cache_span(mcentral_t *mcentral) {
     assert(mcentral->partial_list && "out of memory: mcentral grow failed");
 
     RT_LIST_POP_HEAD(mcentral->partial_list, &span);
-HAVE_SPAN:
+    HAVE_SPAN:
     MDEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *) span->base,
             span->spanclass,
             span->obj_count, span->alloc_count);
@@ -1198,7 +1198,7 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
         mark_ptr_black(ptr);
     }
 
-    MDEBUGF("[rti_gc_malloc] end p_index=%d, co=%p, result=%p",p->index, coroutine_get(), ptr);
+    MDEBUGF("[rti_gc_malloc] end p_index=%d, co=%p, result=%p", p->index, coroutine_get(), ptr);
 
     // jit span 不用清 0， 权限不足也无法进行清零
     if (rtype && rtype->kind != TYPE_GC_FN) {
@@ -1295,7 +1295,7 @@ void runtime_eval_gc() {
     uv_thread_t runtime_gc_thread;
     uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
 
-EXIT:
+    EXIT:
     mutex_unlock(&gc_stage_locker);
 }
 
@@ -1315,7 +1315,7 @@ void runtime_force_gc() {
     uv_thread_t runtime_gc_thread;
     uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
 
-EXIT:
+    EXIT:
     mutex_unlock(&gc_stage_locker);
     DEBUGF("[runtime_force_gc] end");
 }
@@ -1327,7 +1327,9 @@ void *gc_malloc(uint64_t rhash) {
     assertf(rtype, "notfound rtype by hash=%ld", rhash);
 
     // uint64_t stage2 = uv_hrtime();
-    // TDEBUGF("[gc_malloc] rhash=%lu, malloc size is %lu, use time %lu ", rhash, rtype->size, stage2 - start);
+    TDEBUGF("[gc_malloc] rhash=%lu, malloc size is %lu, rtype bits: %s", rhash, rtype->size,
+            bitmap_to_str(rtype->malloc_gc_bits,
+                          calc_gc_bits_size(rtype->size, POINTER_SIZE)));
 
     void *result = rti_gc_malloc(rtype->size, rtype);
     DEBUGF("[gc_malloc] size %lu, value %p", rtype->size, result);

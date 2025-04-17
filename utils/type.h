@@ -712,11 +712,17 @@ static inline bool is_float(type_kind kind) {
     return kind == TYPE_FLOAT || kind == TYPE_FLOAT32 || kind == TYPE_FLOAT64;
 }
 
+
 static inline bool is_integer(type_kind kind) {
     return kind == TYPE_INT || kind == TYPE_INT8 || kind == TYPE_INT16 || kind == TYPE_INT32 || kind == TYPE_INT64 ||
            kind == TYPE_UINT ||
            kind == TYPE_UINT8 || kind == TYPE_UINT16 || kind == TYPE_UINT32 || kind == TYPE_UINT64;
 }
+
+static inline bool is_integer_or_anyptr(type_kind kind) {
+    return is_integer(kind) || kind == TYPE_ANYPTR;
+}
+
 
 static inline bool is_signed(type_kind kind) {
     return kind == TYPE_INT ||
@@ -766,15 +772,6 @@ static inline bool is_gc_alloc(type_kind kind) {
            kind == TYPE_CHAN ||
            kind == TYPE_UNION ||
            kind == TYPE_FN;
-}
-
-/**
- * 可以直接使用 0 进行填充的值，通常就是简单类型
- * @param t
- * @return
- */
-static inline bool is_zero_type(type_t t) {
-    return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_NULL || t.kind == TYPE_BOOL || t.kind == TYPE_UNION;
 }
 
 /**

@@ -1129,13 +1129,6 @@ void elf_relocate_section(elf_context_t *ctx, section_t *apply_section, section_
         // 没看出来 ptr 和 adr 的区别
         uint64_t addr = apply_section->sh_addr + rel->r_offset;
 
-        if (type == 23) {
-            log_debug(
-                    "[elf_relocate_section] will relocate symbol, apply_section->sh_addr=%ld, rel->r_offset=%p, sym name=%s, sym_index(from rtype)"
-                    "=%ld, sym->st_value=%ld, r_type=%ld, target=%ld",
-                    apply_section->sh_addr, (void *) rel->r_offset, name, sym_index, sym->st_value, type, target);
-        }
-
 
         elf_relocate(ctx, rel, type, ptr, addr, target);
     }

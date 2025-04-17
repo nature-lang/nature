@@ -85,14 +85,13 @@ n_vec_t *rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *va
 
 n_vec_t *rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity) {
 
-
     if (capacity < 0) {
         char *msg = tlsprintf("cap must be greater than 0");
         rti_throw(msg, true);
     }
 
 
-    DEBUGF("[rt_vec_new] hash=%lu,element_hash=%lu,len=%lu,cap=%lu", hash, element_hash, capacity);
+    DEBUGF("[rt_vec_cap] hash=%lu, element_hash=%lu, len=%lu, cap=%lu", hash, element_hash, capacity);
 
     assertf(hash > 0, "rhash must be a valid hash");
     assertf(element_hash > 0, "element_hash must be a valid hash");
@@ -114,7 +113,7 @@ n_vec_t *rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity) {
         vec->data = rti_array_new(element_rtype, capacity);
     }
 
-    DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->element_hash);
+    DEBUGF("[rt_vec_cap] success, vec=%p, data=%p, element_size=%lu", vec, vec->data, vec->element_size);
     return vec;
 }
 

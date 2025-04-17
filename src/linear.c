@@ -16,7 +16,7 @@ lir_opcode_t ast_op_convert[] = {
         [AST_OP_REM] = LIR_OPCODE_REM,
 
         [AST_OP_LSHIFT] = LIR_OPCODE_SHL,
-        [AST_OP_RSHIFT] = LIR_OPCODE_SHR,
+        [AST_OP_RSHIFT] = LIR_OPCODE_SAR, // 默认进行有符号，linear 进行调整
         [AST_OP_AND] = LIR_OPCODE_AND,
         [AST_OP_OR] = LIR_OPCODE_OR,
         [AST_OP_XOR] = LIR_OPCODE_XOR,
@@ -32,7 +32,9 @@ lir_opcode_t ast_op_convert[] = {
         [AST_OP_NEG] = LIR_OPCODE_NEG,
 };
 
-static lir_operand_t *linear_inline_arr_element_addr_not_check(module_t *m, lir_operand_t *arr_target, lir_operand_t *index_target, type_t arr_type) {
+static lir_operand_t *
+linear_inline_arr_element_addr_not_check(module_t *m, lir_operand_t *arr_target, lir_operand_t *index_target,
+                                         type_t arr_type) {
     assert(arr_type.kind == TYPE_ARR);
     assert(arr_target->assert_type != LIR_OPERAND_SYMBOL_VAR);
 
@@ -56,7 +58,8 @@ static lir_operand_t *linear_inline_arr_element_addr_not_check(module_t *m, lir_
     return result;
 }
 
-static lir_operand_t *linear_inline_arr_element_addr(module_t *m, lir_operand_t *arr_target, lir_operand_t *index_target, type_t arr_type) {
+static lir_operand_t *
+linear_inline_arr_element_addr(module_t *m, lir_operand_t *arr_target, lir_operand_t *index_target, type_t arr_type) {
     assert(arr_type.kind == TYPE_ARR);
     assert(arr_target->assert_type != LIR_OPERAND_SYMBOL_VAR);
 
@@ -106,7 +109,9 @@ static lir_operand_t *linear_inline_arr_element_addr(module_t *m, lir_operand_t 
     return result;
 }
 
-static lir_operand_t *linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_operand_t *index_target, type_t vec_element_type) {
+static lir_operand_t *
+linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_operand_t *index_target,
+                               type_t vec_element_type) {
     assert(vec_element_type.kind > 0);
 
     type_kind index_kind = operand_type_kind(index_target);
@@ -126,7 +131,8 @@ static lir_operand_t *linear_inline_vec_element_addr(module_t *m, lir_operand_t 
 
     // get vec length
     lir_operand_t *length_target = temp_var_operand(m, type_kind_new(TYPE_INT));
-    lir_operand_t *length_src = indirect_addr_operand(m, type_kind_new(TYPE_INT), vec_target, offsetof(n_vec_t, length));
+    lir_operand_t *length_src = indirect_addr_operand(m, type_kind_new(TYPE_INT), vec_target,
+                                                      offsetof(n_vec_t, length));
     OP_PUSH(lir_op_move(length_target, length_src));
 
     // cmp index < length to
@@ -1714,7 +1720,11 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
 
     lir_operand_t *left_target = linear_expr(m, binary_expr->left, NULL);
     lir_operand_t *right_target = linear_expr(m, binary_expr->right, NULL);
-    lir_opcode_t operator= ast_op_convert[binary_expr->op];
+    lir_opcode_t operator = ast_op_convert[binary_expr->op];
+    if (operator == LIR_OPCODE_SAR && !is_signed(expr.target_type.kind)) {
+        operator = LIR_OPCODE_SHR;
+    }
+
 
     if (binary_expr->left.type.kind == TYPE_STRING && binary_expr->right.type.kind == TYPE_STRING) {
         switch (operator) {
@@ -1989,7 +1999,8 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
 
     int64_t offset = 0;
     for (int i = 0; i < type_array.array->length; ++i) {
-        lir_operand_t *item_target = linear_inline_arr_element_addr_not_check(m, target_ref, int_operand(i), type_array);
+        lir_operand_t *item_target = linear_inline_arr_element_addr_not_check(m, target_ref, int_operand(i),
+                                                                              type_array);
 
         if (!is_stack_ref_big_type(type_array.array->element_type)) {
             item_target = indirect_addr_operand(m, type_array.array->element_type, item_target, 0);
@@ -2026,7 +2037,8 @@ static lir_operand_t *linear_array_repeat_new(module_t *m, ast_expr_t expr, lir_
 
     int64_t offset = 0;
     for (int i = 0; i < type_array.array->length; ++i) {
-        lir_operand_t *item_target = linear_inline_arr_element_addr_not_check(m, target_ref, int_operand(i), type_array);
+        lir_operand_t *item_target = linear_inline_arr_element_addr_not_check(m, target_ref, int_operand(i),
+                                                                              type_array);
         if (!is_stack_ref_big_type(type_array.array->element_type)) {
             item_target = indirect_addr_operand(m, type_array.array->element_type, item_target, 0);
         }
@@ -2603,6 +2615,9 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
                 // lea fn_label to stack
                 lir_operand_t *fn_label = lir_label_operand(fn_ident, false);
+                // methods 需要通过 c 传递，为了让其符合 c 的 abi, 这里需要将其转换位 anyptr 进行传递
+                lir_var_t *var = methods_target->value;
+                var->type = type_kind_new(TYPE_ANYPTR);
                 lir_operand_t *item_target = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), methods_target,
                                                                    i * POINTER_SIZE);
                 OP_PUSH(lir_op_lea(item_target, fn_label));
@@ -2650,8 +2665,8 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
     // anybody to anyptr
     if (as_expr->target_type.kind == TYPE_ANYPTR) {
-        // 如果类型长度匹配直接进行 mov 即可
-        if (type_sizeof(as_expr->src.type) < POINTER_SIZE) {
+        // 如果类型长度匹配直接进行 mov 即可, arr/struct 则直接 move point 即可
+        if (!is_stack_ref_big_type(as_expr->src.type) && type_sizeof(as_expr->src.type) < POINTER_SIZE) {
             push_rt_call(m, RT_CALL_ANYPTR_CASTING, target, 1, src_operand);
         } else {
             OP_PUSH(lir_op_move(target, src_operand));
@@ -2758,7 +2773,7 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
         }
 
         OP_PUSH(lir_op_bal(handle_end->output));
-    LINEAR_HANDLE_BODY:
+        LINEAR_HANDLE_BODY:
         OP_PUSH(handle_start);
         linear_body(m, match_case->handle_body);
         // 只要运行了 exec， 就直接结束 case 而不是继续执行。
@@ -3222,7 +3237,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_FNDEF: {
             linear_fn_decl(m,
-                           (ast_expr_t){
+                           (ast_expr_t) {
                                    .line = stmt->line,
                                    .assert_type = stmt->assert_type,
                                    .value = stmt->value,
@@ -3234,7 +3249,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             ast_call_t *call = stmt->value;
             // stmt 中都 call 都是没有返回值的
             linear_call(m,
-                        (ast_expr_t){
+                        (ast_expr_t) {
                                 .line = stmt->line,
                                 .column = stmt->column,
                                 .assert_type = AST_CALL,
@@ -3248,7 +3263,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             ast_catch_t *catch = stmt->value;
             linear_catch_expr(m,
-                              (ast_expr_t){
+                              (ast_expr_t) {
                                       .line = stmt->line,
                                       .column = stmt->column,
                                       .assert_type = AST_CATCH,

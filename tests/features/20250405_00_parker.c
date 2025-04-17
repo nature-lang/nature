@@ -8,7 +8,7 @@ static void test_run() {
     remove(noded_path);
 
     setenv("RUNNER_PATH", runner_path, 1);
-    //    setenv("PARKER_VERBOSE", "true", 1);
+//    setenv("PARKER_VERBOSE", "true", 1);
 
     slice_t *args = slice_new();
     slice_push(args, &"node");

@@ -675,6 +675,9 @@ static slice_t *arm64_native_shift(closure_t *c, lir_op_t *op) {
         case LIR_OPCODE_SHR:
             slice_push(operations, ARM64_INST(R_LSR, result, source, shift_amount));
             break;
+        case LIR_OPCODE_SAR:
+            slice_push(operations, ARM64_INST(R_ASR, result, source, shift_amount));
+            break;
         default:
             assert(false && "Unsupported shift operation");
     }
@@ -931,14 +934,16 @@ static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
     if (BUILD_OS == OS_DARWIN) {
         // 处理 TLS 变量
         // 1. 使用 ADRP 加载 TLS 变量的页地址
-        arm64_asm_operand_t *tlv_page = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_ARM64_RELOC_TLVP_LOAD_PAGE21);
+        arm64_asm_operand_t *tlv_page = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
+                                                  ASM_ARM64_RELOC_TLVP_LOAD_PAGE21);
         slice_push(operations, ARM64_INST(R_ADRP, x0_operand, tlv_page));
 
         // 2. 加载 TLV getter 函数的地址
         assert(op->output->assert_type == LIR_OPERAND_REG);
         reg_t *result_reg = op->output->value;
         assert(result_reg->index == x0->index);
-        slice_push(operations, ARM64_INST(R_LDR, x0_operand, ARM64_INDIRECT_SYM(result_reg, TLS_YIELD_SAFEPOINT_IDENT, ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12)));
+        slice_push(operations, ARM64_INST(R_LDR, x0_operand, ARM64_INDIRECT_SYM(result_reg, TLS_YIELD_SAFEPOINT_IDENT,
+                                                                                ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12)));
 
         // 3.?
         slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(x16), ARM64_INDIRECT(result_reg, 0, 0, QWORD)));
@@ -950,11 +955,13 @@ static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
         slice_push(operations, ARM64_INST(R_MRS, x0_operand, ARM64_IMM(TPIDR_EL0)));
 
         // 2.1 添加高12位偏移量
-        arm64_asm_operand_t *tls_hi12_operand = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_ARM64_RELOC_TLSLE_ADD_TPREL_HI12);
+        arm64_asm_operand_t *tls_hi12_operand = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
+                                                          ASM_ARM64_RELOC_TLSLE_ADD_TPREL_HI12);
         slice_push(operations, ARM64_INST(R_ADD, x0_operand, x0_operand, tls_hi12_operand));
 
         // 2.2 添加低12位偏移量
-        arm64_asm_operand_t *tls_lo12_operand = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12_NC);
+        arm64_asm_operand_t *tls_lo12_operand = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
+                                                          ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12_NC);
         slice_push(operations, ARM64_INST(R_ADD, x0_operand, x0_operand, tls_lo12_operand));
     }
 
@@ -996,7 +1003,7 @@ arm64_native_fn arm64_native_table[] = {
         [LIR_OPCODE_NOT] = arm64_native_not,
         [LIR_OPCODE_OR] = arm64_native_or,
         [LIR_OPCODE_AND] = arm64_native_and,
-        [LIR_OPCODE_SHR] = arm64_native_shift,
+        [LIR_OPCODE_SAR] = arm64_native_shift,
         [LIR_OPCODE_SHL] = arm64_native_shift,
 
         // 算数运算
