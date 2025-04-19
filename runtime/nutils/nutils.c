@@ -575,6 +575,9 @@ uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_i
     }
 
     assert(co->error);
+
+    // 在 runtime 调用 nature 代码， rti_error_msg 会让 gc scan_stack 异常，不过马上就要退出了，问题不大
+    // 可以考虑增加 safepoint_lock, 避免进入 safepoint 状态
     n_string_t *msg = rti_error_msg(co->error);
 
     char *dump_msg;
@@ -636,7 +639,7 @@ n_vec_t *std_args() {
     for (int i = 0; i < command_argc; ++i) {
         DEBUGF("[std_args] command_argv[%d]='%s'\n", i, command_argv[i]);
         n_string_t *str = string_new(command_argv[i], strlen(command_argv[i]));
-        rt_vec_assign(list, i, &str);
+        rti_vec_assign(list, i, &str);
     }
 
     DEBUGF("[std_args] list=%p, list->data=%p, list->length=%lu, element_size=%lu", list, list->data,
@@ -831,6 +834,6 @@ n_vec_t *unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *d
     vec->hash = hash;
     vec->data = data_ptr;
 
-    DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_rtype_hash=%lu", vec, vec->data, vec->element_hash);
+    DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_size=%lu", vec, vec->data, vec->element_size);
     return vec;
 }

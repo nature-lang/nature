@@ -43,6 +43,22 @@ amd64_opcode_inst_t idiv_rm32 = {"idiv", "idiv", 0, {0xF7}, {OPCODE_EXT_SLASH7},
 amd64_opcode_inst_t idiv_rm64 = {"idiv", "idiv", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH7}, {
         {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
 }};
+// 无符号除法指令
+amd64_opcode_inst_t div_rm8 = {"div", "div", 0, {0xF6}, {OPCODE_EXT_SLASH6}, {
+    {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+}};
+amd64_opcode_inst_t div_rex_rm8 = {"div", "div", 0, {0xF6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH6}, {
+    {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+}};
+amd64_opcode_inst_t div_rm16 = {"div", "div", 0x66, {0xF7}, {OPCODE_EXT_SLASH6}, {
+    {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+}};
+amd64_opcode_inst_t div_rm32 = {"div", "div", 0, {0xF7}, {OPCODE_EXT_SLASH6}, {
+    {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+}};
+amd64_opcode_inst_t div_rm64 = {"div", "div", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH6}, {
+    {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+}};
 
 
 amd64_opcode_inst_t imul_rm8 = {"imul", "imul", 0, {0xF6}, {OPCODE_EXT_SLASH5}, {
@@ -56,6 +72,23 @@ amd64_opcode_inst_t imul_rm32 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_SLASH5},
 }};
 amd64_opcode_inst_t imul_rm64 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5}, {
         {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+}};
+
+// 无符号乘法指令
+amd64_opcode_inst_t mul_rm8 = {"mul", "mul", 0, {0xF6}, {OPCODE_EXT_SLASH4}, {
+    {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+}};
+amd64_opcode_inst_t mul_rex_rm8 = {"mul", "mul", 0, {0xF6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH4}, {
+    {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+}};
+amd64_opcode_inst_t mul_rm16 = {"mul", "mul", 0x66, {0xF7}, {OPCODE_EXT_SLASH4}, {
+    {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+}};
+amd64_opcode_inst_t mul_rm32 = {"mul", "mul", 0, {0xF7}, {OPCODE_EXT_SLASH4}, {
+    {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+}};
+amd64_opcode_inst_t mul_rm64 = {"mul", "mul", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH4}, {
+    {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
 }};
 
 // add------------------------------------------------------------------------------------------------------
@@ -608,17 +641,17 @@ amd64_opcode_inst_t subsd_xmm1_xmm2m64 = {"sub", "subsd", 0xF2, {0x0F, 0x5C}, {O
 amd64_opcode_inst_t subss_xmm1_xmm2m32 = {"sub", "subss", 0xF3, {0x0F, 0x5C}, {OPCODE_EXT_SLASHR},
                                           {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                            {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}}};
-amd64_opcode_inst_t mulsd_xmm1_xmm2m64 = {"mul", "mulsd", 0xF2, {0x0F, 0x59}, {OPCODE_EXT_SLASHR},
+amd64_opcode_inst_t mulsd_xmm1_xmm2m64 = {"fmul", "mulsd", 0xF2, {0x0F, 0x59}, {OPCODE_EXT_SLASHR},
                                           {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                            {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}}};
-amd64_opcode_inst_t mulss_xmm1_xmm2m32 = {"mul", "mulss", 0xF3, {0x0F, 0x59}, {OPCODE_EXT_SLASHR},
+amd64_opcode_inst_t mulss_xmm1_xmm2m32 = {"fmul", "mulss", 0xF3, {0x0F, 0x59}, {OPCODE_EXT_SLASHR},
                                           {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                            {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}}};
-amd64_opcode_inst_t divsd_xmm1_xmm2m64 = {"div", "divsd", 0xF2, {0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
+amd64_opcode_inst_t divsd_xmm1_xmm2m64 = {"fdiv", "divsd", 0xF2, {0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
                                           {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                            {OPERAND_TYPE_XMM2M64, ENCODING_TYPE_MODRM_RM}}};
 
-amd64_opcode_inst_t divss_xmm1_xmm2m32 = {"div", "divss", 0xF3, {0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
+amd64_opcode_inst_t divss_xmm1_xmm2m32 = {"fdiv", "divss", 0xF3, {0x0F, 0x5E}, {OPCODE_EXT_SLASHR},
                                           {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
                                            {OPERAND_TYPE_XMM2M32, ENCODING_TYPE_MODRM_RM}}};
 amd64_opcode_inst_t comisd = {"cmp", "comisd", 0x66, {0x0F, 0x2F}, {OPCODE_EXT_SLASHR},
@@ -762,11 +795,26 @@ void amd64_opcode_init() {
     opcode_tree_build(&idiv_rm16);
     opcode_tree_build(&idiv_rm32);
     opcode_tree_build(&idiv_rm64);
+
+    // 注册无符号除法指令
+    opcode_tree_build(&div_rex_rm8);
+    opcode_tree_build(&div_rm8);
+    opcode_tree_build(&div_rm16);
+    opcode_tree_build(&div_rm32);
+    opcode_tree_build(&div_rm64);
+
+
     opcode_tree_build(&imul_rm8);
     opcode_tree_build(&imul_rm16);
     opcode_tree_build(&imul_rm32);
     opcode_tree_build(&imul_rm64);
 
+    // 注册无符号乘法指令
+    opcode_tree_build(&mul_rex_rm8);
+    opcode_tree_build(&mul_rm8);
+    opcode_tree_build(&mul_rm16);
+    opcode_tree_build(&mul_rm32);
+    opcode_tree_build(&mul_rm64);
 
     // mov reg -> rm
     opcode_tree_build(&mov_rex_rm8_r8);

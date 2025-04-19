@@ -352,7 +352,11 @@ static slice_t *amd64_native_div(closure_t *c, lir_op_t *op) {
 
         amd64_asm_operand_t *second = lir_operand_trans_amd64(c, op, op->second);
 
-        slice_push(operations, AMD64_INST("idiv", second));
+        if (op->code == LIR_OPCODE_SDIV) {
+            slice_push(operations, AMD64_INST("idiv", second));
+        } else {
+            slice_push(operations, AMD64_INST("div", second));
+        }
         return operations;
     }
 
@@ -363,7 +367,7 @@ static slice_t *amd64_native_div(closure_t *c, lir_op_t *op) {
     assert(!asm_operand_equal(second, result));
     // 浮点数是 amd64 常见的双操作数指令 mulss rm -> reg
     asm_mov(operations, op, result, first);
-    slice_push(operations, AMD64_INST("div", result, second));
+    slice_push(operations, AMD64_INST("fdiv", result, second));
     return operations;
 }
 
@@ -388,7 +392,7 @@ static slice_t *amd64_native_mul(closure_t *c, lir_op_t *op) {
         assertf(first_reg->index == rax->index, "mul op first reg must rax");
 
         amd64_asm_operand_t *second = lir_operand_trans_amd64(c, op, op->second);
-        slice_push(operations, AMD64_INST("imul", second));
+        slice_push(operations, AMD64_INST("mul", second));
         return operations;
     }
 
@@ -399,7 +403,7 @@ static slice_t *amd64_native_mul(closure_t *c, lir_op_t *op) {
     assert(!asm_operand_equal(second, result));
     // 浮点数是 amd64 常见的双操作数指令 mulss rm -> reg
     asm_mov(operations, op, result, first);
-    slice_push(operations, AMD64_INST("mul", result, second));
+    slice_push(operations, AMD64_INST("fmul", result, second));
     return operations;
 }
 
@@ -513,9 +517,9 @@ static slice_t *amd64_native_shift(closure_t *c, lir_op_t *op) {
     assert(asm_operand_equal(first, result));
 
     char *opcode;
-    if (op->code == LIR_OPCODE_SHR) {
+    if (op->code == LIR_OPCODE_USHR) {
         opcode = "shr";
-    } else if (op->code == LIR_OPCODE_SAR) {
+    } else if (op->code == LIR_OPCODE_SSHR) {
         opcode = "sar";
     } else {
         opcode = "sal";
@@ -855,7 +859,6 @@ static slice_t *amd64_native_safepoint(closure_t *c, lir_op_t *op) {
     slice_push(operations, AMD64_INST("call", AMD64_SYMBOL(ASSIST_PREEMPT_YIELD_IDENT, false)));
 
 
-
     // arm64 参考实现
     // // cmp x0,#0x0
     // slice_push(operations, ARM64_INST(R_CMP, x0_operand, ARM64_IMM(0)));
@@ -927,7 +930,7 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_BAL] = amd64_native_bal,
 
         // 类型扩展
-        [LIR_OPCODE_ZEXT] = amd64_native_zext,
+        [LIR_OPCODE_UEXT] = amd64_native_zext,
         [LIR_OPCODE_SEXT] = amd64_native_sext,
         [LIR_OPCODE_TRUNC] = amd64_native_trunc,
 
@@ -941,14 +944,15 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_NOT] = amd64_native_not,
         [LIR_OPCODE_OR] = amd64_native_or,
         [LIR_OPCODE_AND] = amd64_native_and,
-        [LIR_OPCODE_SHR] = amd64_native_shift,
-        [LIR_OPCODE_SAR] = amd64_native_shift,
-        [LIR_OPCODE_SHL] = amd64_native_shift,
+        [LIR_OPCODE_USHR] = amd64_native_shift,
+        [LIR_OPCODE_SSHR] = amd64_native_shift,
+        [LIR_OPCODE_USHL] = amd64_native_shift,
 
         // 算数运算
         [LIR_OPCODE_ADD] = amd64_native_add,
         [LIR_OPCODE_SUB] = amd64_native_sub,
-        [LIR_OPCODE_DIV] = amd64_native_div,
+        [LIR_OPCODE_UDIV] = amd64_native_div,
+        [LIR_OPCODE_SDIV] = amd64_native_div,
         [LIR_OPCODE_MUL] = amd64_native_mul,
         // 逻辑相关运算符
         [LIR_OPCODE_SGT] = amd64_native_scc,

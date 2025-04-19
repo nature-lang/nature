@@ -6,9 +6,9 @@ fn set_new<T>():set<T> {
     return runtime.set_new(hash, key_hash) as set<T>
 }
 
-fn set<T>.add(T key):bool {
+fn set<T>.add(T key) {
    rawptr<T> ref = &key
-   return runtime.set_add(self as anyptr, ref as anyptr)
+   runtime.set_add(self as anyptr, ref as anyptr)
 }
 
 fn set<T>.contains(T key):bool {

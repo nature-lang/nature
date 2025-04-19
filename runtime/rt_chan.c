@@ -27,7 +27,7 @@ static void buf_pop(n_chan_t *ch, void *msg_ptr) {
     assert(!buf_empty(ch));
 
     if (msg_ptr) {
-        rt_vec_access(ch->buf, ch->buf_front, msg_ptr);
+        rti_vec_access(ch->buf, ch->buf_front, msg_ptr);
     }
 
     ch->buf_front = (ch->buf_front + 1) % ch->buf->capacity;

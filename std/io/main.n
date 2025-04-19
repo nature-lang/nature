@@ -1,4 +1,3 @@
-import fs
 import syscall
 
 type reader = interface{
@@ -11,22 +10,6 @@ type writer = interface{
 
 type seeker = interface{
     fn seek(int offset, int whence):int!
-}
-
-fn stdout():ptr<fs.file_t>! {
-    return fs.from(syscall.STDOUT, '/dev/stdout')
-}
-
-fn stdin():ptr<fs.file_t>! {
-    return fs.from(syscall.STDIN, '/dev/stdin')
-}
-
-fn stderr():ptr<fs.file_t>! {
-    return fs.from(syscall.STDERR, '/dev/stderr')
-}
-
-fn discard():ptr<fs.file_t>! {
-    return fs.open('/dev/null', syscall.O_RDWR, 0)
 }
 
 type buffer: reader, writer = struct{
@@ -97,7 +80,6 @@ fn buffer.read_all():[u8]! {
 
     return result
 }
-
 
 type buf_reader<T: reader>: reader = struct{
     T rd

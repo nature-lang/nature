@@ -67,6 +67,7 @@ typedef enum {
     AST_STMT_VARDEF,
     AST_STMT_VAR_TUPLE_DESTR,
     AST_STMT_ASSIGN,
+    AST_STMT_GLOBAL_ASSIGN,
     AST_STMT_RETURN,
     AST_STMT_IF,
     AST_STMT_THROW,
@@ -291,11 +292,6 @@ typedef struct {
     list_t *elements; // ast_expr
 } ast_tuple_destr_t;
 
-typedef struct {
-    ast_expr_t left; // a  或 foo.bar.car 或者 d[0] 或者 (xx, xx, xx)
-    ast_expr_t right;
-} ast_assign_stmt_t;
-
 // 仅仅包含了声明
 // int a;
 typedef struct {
@@ -311,10 +307,16 @@ typedef struct {
     char *heap_ident;
 } ast_var_decl_t;
 
+typedef struct {
+    ast_expr_t left; // a  或 foo.bar.car 或者 d[0] 或者 (xx, xx, xx)
+    ast_expr_t right;
+    ast_var_decl_t *var_decl; // ref global var decl
+} ast_global_assign_stmt_t, ast_assign_stmt_t;
+
 // 包含了声明与赋值，所以统称为定义
 typedef struct {
     ast_var_decl_t var_decl; // 左值
-    ast_expr_t right; // 右值
+    ast_expr_t *right; // 右值
 } ast_vardef_stmt_t;
 
 typedef struct {
@@ -567,7 +569,7 @@ typedef struct {
 typedef struct {
     ast_expr_t default_element; // ast_expr
     ast_expr_t length_expr;
-} ast_array_repeat_new_t,ast_vec_repeat_new_t;
+} ast_array_repeat_new_t, ast_vec_repeat_new_t;
 
 typedef struct {
     list_t *elements; // ast_expr, nullable

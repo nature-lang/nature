@@ -270,7 +270,7 @@ static void processor_sysmon() {
         }
         uint64_t time = (uv_hrtime() - co_start_at);
         if (time < CO_TIMEOUT) {
-            TDEBUGF("[processor_sysmon] p_index=%d, co=%p/%p run not timeout(%lu ms), will skip", p->index,
+            DEBUGF("[processor_sysmon] p_index=%d, co=%p/%p run not timeout(%lu ms), will skip", p->index,
                     p->coroutine, co,
                     time / 1000 / 1000);
             continue;
@@ -279,7 +279,7 @@ static void processor_sysmon() {
         // 设置辅助 yield (如果 processor 进入 safepoint, 则会清空 safepoint)
         *p->tls_yield_safepoint_ptr = true;
 
-        TDEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p run timeout=%d ms(co_start=%ld) set tls yield safepoint=true", p->index,
+        DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p run timeout=%d ms(co_start=%ld) set tls yield safepoint=true", p->index,
                 (uint64_t) p->thread_id, p->coroutine, time / 1000 / 1000, co_start_at / 1000 / 1000);
     }
 

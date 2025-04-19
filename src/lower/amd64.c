@@ -12,7 +12,7 @@ static lir_operand_t *amd64_convert_first_to_temp(closure_t *c, linked_t *list, 
 
 static linked_t *amd64_lower_neg(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
-//    assert(op->output->assert_type == LIR_OPERAND_VAR);
+    //    assert(op->output->assert_type == LIR_OPERAND_VAR);
 
     lir_operand_t *old_output = NULL;
     if (op->output->assert_type != LIR_OPERAND_VAR) {
@@ -250,19 +250,22 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
 
     lir_opcode_t op_code = op->code;
     lir_operand_t *result_operand = ax_operand;
-    if (op->code == LIR_OPCODE_REM) {
-        op_code = LIR_OPCODE_DIV; // rem 也是基于 div 计算得到的
+    if (op->code == LIR_OPCODE_UREM) {
+        op_code = LIR_OPCODE_UDIV; // rem 也是基于 div 计算得到的
         result_operand = dx_operand; // 余数固定寄存器
     }
+    if (op->code == LIR_OPCODE_SREM) {
+        op_code = LIR_OPCODE_SDIV;
+        result_operand = dx_operand; // 余数固定寄存器
+    }
+
+    assert(op_code == LIR_OPCODE_UDIV || op_code == LIR_OPCODE_SDIV);
 
     // 64位操作系统中寄存器大小当然只有64位，因此，idiv使用rdx:rax作为被除数
     // 即rdx中的值作为高64位、rax中的值作为低64位
     // 格式：idiv src，结果存储在rax中
     // 因此，在使用idiv进行计算时，rdx 中不得为随机值，否则会发生浮点异常。
-    if (op_code == LIR_OPCODE_DIV) {
-        // TODO 如果寄存器分配识别异常可以考虑 first = dx_operand, 让 fixed interval 的固定生命周期完善
-        linked_push(list, lir_op_new(LIR_OPCODE_CLR, NULL, NULL, dx_operand));
-    }
+    linked_push(list, lir_op_new(LIR_OPCODE_CLR, NULL, NULL, dx_operand));
 
     // mul 使用 rax:rdx 两个寄存器，需要调整 result_operand
 
@@ -283,10 +286,10 @@ static linked_t *amd64_lower_safepoint(closure_t *c, lir_op_t *op) {
         result_operand = lir_regs_operand(2, rax, rdi);
     }
     // 预留 rax 寄存器存储 call 的结果
-//    lir_operand_t *result_reg = lir_reg_operand(rax->index, TYPE_ANYPTR);
+    //    lir_operand_t *result_reg = lir_reg_operand(rax->index, TYPE_ANYPTR);
 
     // 预留 rdi 用于参数(rdi 在 use 会导致 reg 的 use-def 异常), 只保留
-//    lir_operand_t *first_reg = lir_reg_operand(rdi->index, TYPE_ANYPTR);
+    //    lir_operand_t *first_reg = lir_reg_operand(rdi->index, TYPE_ANYPTR);
 
 
     // 增加 label continue
@@ -327,7 +330,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (op->code == LIR_OPCODE_SHL || op->code == LIR_OPCODE_SHR || op->code == LIR_OPCODE_SAR) {
+        if (op->code == LIR_OPCODE_USHL || op->code == LIR_OPCODE_USHR || op->code == LIR_OPCODE_SSHR) {
             linked_concat(operations, amd64_lower_shift(c, op));
             continue;
         }

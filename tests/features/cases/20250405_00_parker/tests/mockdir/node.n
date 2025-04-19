@@ -1,5 +1,5 @@
 import syscall
-import coroutine as co
+import co
 
 int count = 10
 

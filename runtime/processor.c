@@ -1,7 +1,6 @@
 #include "processor.h"
 
 #include <ucontext.h>
-#include <uv.h>
 
 #include "nutils/errort.h"
 #include "nutils/rt_signal.h"
@@ -26,6 +25,9 @@ uv_key_t tls_coroutine_key = 0;
 
 _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint = false;
 
+uint64_t assist_preempt_yield_ret_addr = 0;
+
+
 fixalloc_t coroutine_alloc;
 fixalloc_t processor_alloc;
 mutex_t cp_alloc_locker;
@@ -45,12 +47,18 @@ NO_OPTIMIZE void debug_ret(uint64_t rbp, uint64_t ret_addr) {
  * 在 user_code 期间的超时抢占
  */
 NO_OPTIMIZE void co_preempt_yield() {
-    n_processor_t *p = processor_get();
-    assert(p);
-    coroutine_t *co = p->coroutine;
+    coroutine_t *co = coroutine_get();
     assert(co);
 
-    TDEBUGF(
+    // 首次 preempt yield, 记录 ret_addr, 用于后续的 scan_stack 识别
+    if (assist_preempt_yield_ret_addr == 0) {
+        assist_preempt_yield_ret_addr = CALLER_RET_ADDR(co);
+    }
+
+    n_processor_t *p = processor_get();
+    assert(p);
+
+    DEBUGF(
             "[runtime.co_preempt_yield] p_index=%d(%d), co=%p, p_status=%d,  will yield, co_start=%ld",
             p->index, p->status, co, co->status, p->co_started_at / 1000 / 1000);
 
@@ -67,7 +75,7 @@ NO_OPTIMIZE void co_preempt_yield() {
 
     // 接下来将直接 return 到用户态，不经过 post_tpl_hook, 所以直接更新为允许抢占
     // yield 切换回了用户态，此时允许抢占，所以不能再使用 RDEBUG, 而是 DEBUG
-    TDEBUGF("[runtime.co_preempt_yield] yield resume end, will set running, p_index=%d, p_status=%d co=%p, p->co=%p, share_stack.base=%p, share_stack.top(sp)=%p, co_start_at=%ld",
+    DEBUGF("[runtime.co_preempt_yield] yield resume end, will set running, p_index=%d, p_status=%d co=%p, p->co=%p, share_stack.base=%p, share_stack.top(sp)=%p, co_start_at=%ld",
             p->index,
             p->status, co, p->coroutine, p->share_stack.align_retptr, co->aco.reg[ACO_REG_IDX_SP],
             p->co_started_at / 1000 / 1000);
@@ -112,12 +120,12 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     if (fn) {
         // 基于当前 rsp scan
         uint64_t sp_addr = (uint64_t) rsp;
-//        co->scan_ret_addr = rip;
-//        co->scan_offset = (uint64_t) co->p->share_stack.align_retptr - sp_addr;
+        //        co->scan_ret_addr = rip;
+        //        co->scan_offset = (uint64_t) co->p->share_stack.align_retptr - sp_addr;
     } else {
         // c 语言段被抢占，采取保守的扫描策略(使用 ret_addr = 0 来识别)
-//        co->scan_ret_addr = 0;
-//        co->scan_offset = (uint64_t) co->p->share_stack.align_retptr - (uint64_t) rsp;
+        //        co->scan_ret_addr = 0;
+        //        co->scan_offset = (uint64_t) co->p->share_stack.align_retptr - (uint64_t) rsp;
     }
 
     // 由于被抢占的函数可以会在没有 sub 保留 rsp 的情况下使用 rsp-0x10 这样的空间地址
@@ -398,7 +406,7 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
 // handle by thread
 static void processor_run(void *raw) {
     n_processor_t *p = raw;
-    TDEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, loop=%p, yield_safepoint_ptr=%p", p->index, p,
+    DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, loop=%p, yield_safepoint_ptr=%p", p->index, p,
             &p->uv_loop, &tls_yield_safepoint);
 
     processor_set_status(p, P_STATUS_DISPATCH);
@@ -440,8 +448,8 @@ static void processor_run(void *raw) {
         // TRACEF("[runtime.processor_run] handle, p_index_%d=%d", p->share, p->index);
         // - stw
         if (p->need_stw > 0) {
-            STW_WAIT:
-        TDEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index=%d", p->need_stw, p->index);
+        STW_WAIT:
+            DEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index=%d", p->need_stw, p->index);
             p->in_stw = p->need_stw;
 
             // runtime_gc 线程会解除 safe 状态，所以这里一直等待即可
@@ -451,7 +459,7 @@ static void processor_run(void *raw) {
                 usleep(WAIT_BRIEF_TIME * 1000); // 1ms
             }
 
-            TDEBUGF("[runtime.processor_run] p_index=%d, stw completed, need_stw=%lu, safe_point=%lu",
+            DEBUGF("[runtime.processor_run] p_index=%d, stw completed, need_stw=%lu, safe_point=%lu",
                     p->index, p->need_stw,
                     p->in_stw);
         }
@@ -504,7 +512,7 @@ static void processor_run(void *raw) {
         io_run(p, WAIT_BRIEF_TIME * 5);
     }
 
-    EXIT:
+EXIT:
     processor_uv_close(p);
     p->thread_id = 0;
     processor_set_status(p, P_STATUS_EXIT);
@@ -662,7 +670,7 @@ void coroutine_dump_error(coroutine_t *co) {
     assert(co->traces->length > 0);
 
     n_trace_t first_trace = {};
-    rt_vec_access(co->traces, 0, &first_trace);
+    rti_vec_access(co->traces, 0, &first_trace);
     char *dump_msg;
     if (co->main) {
         dump_msg = tlsprintf("coroutine 'main' uncaught error: '%s' at %s:%d:%d\n", (char *) rt_string_ref(msg),
@@ -681,7 +689,7 @@ void coroutine_dump_error(coroutine_t *co) {
         VOID write(STDOUT_FILENO, temp, strlen(temp));
         for (int i = 0; i < co->traces->length; ++i) {
             n_trace_t trace = {};
-            rt_vec_access(co->traces, i, &trace);
+            rti_vec_access(co->traces, i, &trace);
             temp = tlsprintf("%d:\t%s\n\t\tat %s:%d:%d\n", i, (char *) trace.ident->data, (char *) trace.path->data,
                              trace.line, trace.column);
             VOID write(STDOUT_FILENO, temp, strlen(temp));
@@ -945,13 +953,13 @@ static bool all_gc_work_finished() {
  * 需要等待独享和共享协程的 gc_work 全部完成 mark,
  */
 void wait_all_gc_work_finished() {
-    TDEBUGF("[runtime_gc.wait_all_gc_work_finished] start");
+    DEBUGF("[runtime_gc.wait_all_gc_work_finished] start");
 
     while (all_gc_work_finished() == false) {
         usleep(WAIT_SHORT_TIME * 1000);
     }
 
-    TDEBUGF("[runtime_gc.wait_all_gc_work_finished] all processor gc work finish");
+    DEBUGF("[runtime_gc.wait_all_gc_work_finished] all processor gc work finish");
 }
 
 void *global_gc_worklist_pop() {

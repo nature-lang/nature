@@ -432,8 +432,6 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
         }
         case R_X86_64_DTPOFF32:
         case R_X86_64_TPOFF32: {
-            // v 是在 TLS section 的偏移量，第一个变量的偏移量是 0, 类型是 int64
-            // v 是在 TLS section 的偏移量，第一个变量的偏移量是 8,
             Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
             section_t *s = SEC_TACK(sym->st_shndx);
 

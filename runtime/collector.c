@@ -183,16 +183,17 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             // 内存回收(未返回到堆)
             allocated_bytes -= span->obj_size;
 
-            DEBUGF("[sweep_span] will sweep, obj_addr=%p", (void *) (span->base + i * span->obj_size));
+            TDEBUGF("[sweep_span] will sweep, span_base=%p obj_addr=%p", span->base, (void *) (span->base + i * span->obj_size));
 
             // TODO 直接 set 0 让 gc 问题快速暴露出来, jit class 不允许设置内存，所以跳过
             if ((span->spanclass >> 1) != JIT_SIZECLASS) {
                 memset((void *) (span->base + i * span->obj_size), 0, span->obj_size);
             }
         } else {
-            DEBUGF("[sweep_span] will sweep, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
-                   (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
-                   bitmap_test(span->gcmark_bits, i));
+            TDEBUGF("[sweep_span] will sweep, span_base=%p, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
+                    span->base,
+                    (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
+                    bitmap_test(span->gcmark_bits, i));
         }
     }
 
@@ -206,8 +207,11 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
 
     RDEBUGF("[sweep_span] reset gcmark_bits success, span=%p, spc=%d", span, span->spanclass)
 
-    // span 所有的 obj 都被释放，归还 span 内存给操作系统
-    if (span->alloc_count == 0) {
+    uint8_t sizeclass = take_sizeclass(span->spanclass);
+
+    // span 所有的 obj 都被释放，归还 span 内存给操作系统,
+    // JIT span 不做 free, jit span 无法进行任何的写入操作
+    if (span->alloc_count == 0 && sizeclass != JIT_SIZECLASS) {
         TRACEF("[sweep_span] span will free to heap, span=%p, base=0x%lx, class=%d", span, span->base, span->spanclass);
         mheap_free_span(memory->mheap, span);
         TRACEF("[sweep_span] span success free to heap, span=%p, base=0x%lx, class=%d", span, span->base,
@@ -313,7 +317,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     addr_t bp_value = (addr_t) co->aco.reg[ACO_REG_IDX_BP];
     addr_t sp_value = (addr_t) co->aco.reg[ACO_REG_IDX_SP];
 
-    TDEBUGF(
+    DEBUGF(
             "[runtime_gc.scan_stack] start, p_index=%d(%lu), p_status=%d, co=%p, co_status=%d, co_stack_size=%zu, save_stack=%p(%zu), "
             "bp_value=%p, sp_value=%p, share_stack.base=%p",
             p->index, (uint64_t) p->thread_id, p->status, co, co->status, co->aco.save_stack.valid_sz,
@@ -346,24 +350,13 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     // 直到遇到 nature code, 才需要进行 stack
     // 基于 frame_bp + ret_addr 想栈底，目前采用协作式调度后，只有 safepoint 或者 再 c 代码中进行 yield, 这里的 c 代码一定是再 runtime 中进行 yield，采用了
     // -fno-omit-frame-pointer 方式，所以存在完整的栈帧
-    //    addr_t stack_top_ptr = 0;
-    //    if (p->share) {
     addr_t stack_top_ptr = (addr_t) co->aco.save_stack.ptr;
-    //    }
-    //    else {
-    //        // solo 不会溢出到 save stack, 总是在 share stack 进行处理
-    //        stack_top_ptr = sp_value; // min value
-    //    }
     assert(stack_top_ptr > 0);
 
     // sp 指向了内存地址，可以从中取值
     aco_save_stack_t save_stack = co->aco.save_stack;
     uint64_t size = 0;
-    //    if (p->share) {
     size = save_stack.valid_sz;
-    //    } else {
-    //        size = (uint64_t) p->share_stack.align_retptr - (uint64_t) sp_value;
-    //    }
     assert(size > 0);
 
     DEBUGF("[runtime_gc.scan_stack] co=%p will scan stack, scan_sp=%p, valid_size=%lu", co,
@@ -371,20 +364,20 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
 
 #ifdef DEBUG_LOG
-    TDEBUGF("[runtime_gc.scan_stack] traverse stack, start");
+    DEBUGF("[runtime_gc.scan_stack] traverse stack, start");
     addr_t temp_cursor = stack_top_ptr; // 栈向下(小)增长
     size_t temp_i = 0;
     size_t max_i = size / POINTER_SIZE;
     while (temp_i < max_i) {
         addr_t v = fetch_addr_value((addr_t) temp_cursor);
         fndef_t *fn = find_fn(v, p);
-        TDEBUGF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i,
-                temp_cursor, v,
-                fn ? fn->name : "", fn ? fn->stack_size : 0);
+        DEBUGF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i,
+               temp_cursor, v,
+               fn ? fn->name : "", fn ? fn->stack_size : 0);
         temp_cursor += POINTER_SIZE;
         temp_i += 1;
     }
-    TDEBUGF("[runtime_gc.scan_stack] traverse stack, end");
+    DEBUGF("[runtime_gc.scan_stack] traverse stack, end");
 #endif
 
 
@@ -393,27 +386,62 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     addr_t share_stack_frame_bp = (addr_t) bp_value;
     bool found = false;
     addr_t ret_addr = (addr_t) co->aco.reg[ACO_REG_IDX_RETADDR];
+    bool found_assist = false;
 
     while (share_stack_frame_bp < (addr_t) co->aco.share_stack->align_retptr) {
         // 将 share_stack frame bp 转换为 save_stack offset
         addr_t bp_offset = share_stack_frame_bp - sp_value;
 
+        if (ret_addr == assist_preempt_yield_ret_addr) {
+            found_assist = true;
+            DEBUGF("[runtime_gc.scan_stack] find assist_preempt_yield_ret_addr %p, conservative treatment will be carried out");
+            break;
+        }
         // check prev value is nature fn
         fndef_t *fn = find_fn(ret_addr, p);
-        TDEBUGF("[runtime_gc.scan_stack] find frame_bp=%p, bp_offset=%ld, ret_addr=%p, fn=%s",
-                (void *) share_stack_frame_bp, bp_offset, (void *) ret_addr, fn ? fn->name : "-");
+        DEBUGF("[runtime_gc.scan_stack] find frame_bp=%p, bp_offset=%ld, ret_addr=%p, fn=%s",
+               (void *) share_stack_frame_bp, bp_offset, (void *) ret_addr, fn ? fn->name : "-");
 
         if (fn) {
             found = true;
             break;
         }
 
-
         // bp value 和 ret_addr 不是那么同步
         share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset);
-
         // save_stack.ptr 指向栈顶
         ret_addr = fetch_addr_value(stack_top_ptr + bp_offset + POINTER_SIZE);
+    }
+
+    if (found_assist) {
+        // 进行保守的栈扫描
+        // share_stack_frame_bp 是 fn 对应的帧的值,已经从帧中取了出来, 原来保存再 BP 寄存器中，现在保存再帧中
+        addr_t bp_offset = share_stack_frame_bp - sp_value;
+        addr_t frame_cursor = stack_top_ptr + bp_offset; // 指向了栈底
+        frame_cursor -= POINTER_SIZE; // -8 才能向上取值
+
+        while (frame_cursor >= stack_top_ptr) {
+            addr_t value = fetch_addr_value(frame_cursor);
+
+            DEBUGF("[runtime_gc.scan_stack] assist_fn stack frame_cursor %p, ptr_value %p, in span %d",
+                   frame_cursor, value, span_of(value) > 0);
+
+            if (span_of(value)) {
+                insert_gc_worklist(worklist, (void *) value);
+            } else {
+                DEBUGF("[runtime_gc.scan_stack] assist_fn skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p",
+                       (void *) frame_cursor, (void *) value,
+                       in_heap(value), span_of(value));
+            }
+
+            frame_cursor -= POINTER_SIZE;
+        }
+
+        // 重新提取 ret_addr 和 share_stack_frame_bp, ret_addr 必须存在于 nature 代码
+        // 只有 nature 代码通过 safepoint 才能调用到 assist_preempt_yield
+        share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset);
+        ret_addr = fetch_addr_value(stack_top_ptr + bp_offset + POINTER_SIZE);
+        found = true;
     }
 
     assert(found);
@@ -425,12 +453,12 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     while (true) {
         fndef_t *fn = find_fn(ret_addr, p);
         if (!fn) {
-            TDEBUGF("[runtime_gc.scan_stack] fn not found by ret_addr, return_addr=%p, break", (void *) ret_addr);
+            DEBUGF("[runtime_gc.scan_stack] fn not found by ret_addr, return_addr=%p, break", (void *) ret_addr);
             break;
         }
 
-        TDEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p, fn->stack_size=%ld, bp=%p", fn->name,
-                (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
+        DEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p, fn->stack_size=%ld, bp=%p", fn->name,
+               (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
 
         // share_stack_frame_bp 是 fn 对应的帧的值,已经从帧中取了出来, 原来保存再 BP 寄存器中，现在保存再帧中
         addr_t bp_offset = share_stack_frame_bp - sp_value;
@@ -444,9 +472,9 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         int64_t ptr_count = fn->stack_size / POINTER_SIZE;
         for (int i = 0; i < ptr_count; ++i) {
             bool is_ptr = bitmap_test(fn->gc_bits, i);
-            TDEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, is_ptr=%d, may_value=%p", fn->name, i,
-                    ptr_count - 1, is_ptr,
-                    (void *) fetch_int_value(frame_cursor, 8));
+            DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, is_ptr=%d, may_value=%p", fn->name, i,
+                   ptr_count - 1, is_ptr,
+                   (void *) fetch_int_value(frame_cursor, 8));
 
             // 即使当前 slot 的类型是 ptr 但是可能存在还没有存储值, 所以需要重复判断
             if (is_ptr) {
@@ -492,9 +520,9 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
     addr_t old = addr;
     addr = span->base + (obj_index * span->obj_size);
 
-    RDEBUGF("[runtime_gc.handle_gc_ptr] addr=%p(%p), has_ptr=%d, span_base=%p, spc=%d, obj_index=%lu, obj_size=%lu byte",
-            (void *) addr, (void *) old,
-            spanclass_has_ptr(span->spanclass), (void *) span->base, span->spanclass, obj_index, span->obj_size);
+    DEBUGF("[runtime_gc.handle_gc_ptr] addr=%p(%p), has_ptr=%d, span_base=%p, spc=%d, obj_index=%lu, obj_size=%lu byte",
+           (void *) addr, (void *) old,
+           spanclass_has_ptr(span->spanclass), (void *) span->base, span->spanclass, obj_index, span->obj_size);
 
     mutex_lock(&span->gcmark_locker);
 
@@ -502,17 +530,17 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
     // 其他线程可能已经标记了该 obj
     if (bitmap_test(span->gcmark_bits, obj_index)) {
         // already marks black
-        TDEBUGF("[runtime_gc.handle_gc_ptr] addr=%p, span_base=%p, obj_index=%lu marked, will continue", (void *) addr,
-                (void *) span->base, obj_index);
+        DEBUGF("[runtime_gc.handle_gc_ptr] addr=%p, span_base=%p, obj_index=%lu marked, will continue", (void *) addr,
+               (void *) span->base, obj_index);
         mutex_unlock(&span->gcmark_locker);
         return;
     }
 
     bitmap_set(span->gcmark_bits, obj_index);
-    RDEBUGF("[runtime_gc.handle_gc_ptr] addr=%p, span=%p, span_base=%p, obj_index=%lu marked, test=%d", (void *) addr,
-            span,
-            (void *) span->base,
-            obj_index, bitmap_test(span->gcmark_bits, obj_index));
+    DEBUGF("[runtime_gc.handle_gc_ptr] addr=%p, span=%p, span_base=%p, obj_index=%lu marked, test=%d, obj_size=%d, spanclass_has_ptr=%d", (void *) addr,
+           span,
+           (void *) span->base,
+           obj_index, bitmap_test(span->gcmark_bits, obj_index), span->obj_size, spanclass_has_ptr(span->spanclass));
 
     mutex_unlock(&span->gcmark_locker);
 
@@ -537,7 +565,7 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
             // 同理，即使某个 ptr 需要 gc, 但是也可能存在 gc 时，还没有赋值的清空
             addr_t value = fetch_addr_value(temp_addr);
 
-            RDEBUGF(
+            DEBUGF(
                     "[handle_gc_ptr] addr is ptr,base=%p cursor=%p cursor_value=%p, obj_size=%ld, bit_index=%lu, in_heap=%d",
                     (void *) addr,
                     (void *) temp_addr, (void *) value, span->obj_size, bit_index, in_heap(value));
@@ -551,12 +579,12 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
                     insert_gc_worklist(&global_gc_worklist, (void *) value);
                 }
             } else {
-                RDEBUGF("[handle_gc_ptr] skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p", (void *) temp_addr,
-                        (void *) value, in_heap(value),
-                        span_of(value));
+                DEBUGF("[handle_gc_ptr] skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p", (void *) temp_addr,
+                       (void *) value, in_heap(value),
+                       span_of(value));
             }
         } else {
-            RDEBUGF(
+            DEBUGF(
                     "[handle_gc_ptr] addr not ptr,base=%p cursor=%p cursor_value(int)=%p, obj_size=%ld, bit_index=%lu",
                     (void *) addr,
                     (void *) temp_addr, fetch_int_value(temp_addr, POINTER_SIZE), span->obj_size, bit_index);
@@ -567,8 +595,8 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
 static void handle_gc_worklist(n_processor_t *p) {
     assert(p->status != P_STATUS_EXIT);
     coroutine_t *co = coroutine_get();
-    TDEBUGF("[runtime_gc.handle_gc_worklist] start, p_index=%d, count=%lu, gc_co=%p", p->index,
-            p->gc_worklist.count, co);
+    DEBUGF("[runtime_gc.handle_gc_worklist] start, p_index=%d, count=%lu, gc_co=%p", p->index,
+           p->gc_worklist.count, co);
 
     if (p->gc_worklist.count == 0) {
         p->gc_work_finished = memory->gc_count;
@@ -597,7 +625,7 @@ static void handle_gc_worklist(n_processor_t *p) {
         limit_count++;
     }
 
-    TDEBUGF("[runtime_gc.handle_gc_worklist] completed, p_index=%d", p->index);
+    DEBUGF("[runtime_gc.handle_gc_worklist] completed, p_index=%d", p->index);
 }
 
 /**
@@ -609,8 +637,8 @@ static void gc_work() {
     coroutine_t *gc_co = coroutine_get();
     assert(gc_co);
 
-    TDEBUGF("[runtime_gc.gc_work] start p_index=%d, gc_co=%p, gc_co->id=%ld, co_count=%lu", share_p->index, gc_co,
-            gc_co->id, share_p->co_list.count);
+    DEBUGF("[runtime_gc.gc_work] start p_index=%d, gc_co=%p, gc_co->id=%ld, co_count=%lu", share_p->index, gc_co,
+           gc_co->id, share_p->co_list.count);
 
     // - share goroutine root and change color black
     rt_linked_node_t *current = share_p->co_list.head;
@@ -674,15 +702,15 @@ static void gc_work() {
         wait_co->gc_black = memory->gc_count;
     }
 
-    TDEBUGF("[runtime_gc.gc_work] p_index=%d, share processor scan stack completed, will yield", share_p->index);
+    DEBUGF("[runtime_gc.gc_work] p_index=%d, share processor scan stack completed, will yield", share_p->index);
 
     co_yield_runnable(share_p, gc_co);
 
     // - handle share processor work list
     handle_gc_worklist(share_p);
     share_p->gc_work_finished = memory->gc_count; // 打上 completed 标识
-    TDEBUGF("[runtime_gc.gc_work] p_index=%d, handle assist processor gc work list completed, will exit",
-            share_p->index);
+    DEBUGF("[runtime_gc.gc_work] p_index=%d, handle processor gc worklist completed, will exit",
+           share_p->index);
 }
 
 /**

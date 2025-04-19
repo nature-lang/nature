@@ -226,6 +226,7 @@ struct module_t {
     table_t *import_table; // 使用处做符号改写使用
 
     // 对外全局符号 -> 三种类型 var/fn/type_decl
+    ast_fndef_t *fn_init;
     slice_t *global_symbols; // symbol_t, 这里只存储全局符号
     slice_t *global_vardef; // 用于在 infer 阶段进行类型推导
 
@@ -375,13 +376,15 @@ typedef enum {
 typedef enum {
     LIR_OPCODE_ADD = 1,
     LIR_OPCODE_SUB,
-    LIR_OPCODE_MUL,
-    LIR_OPCODE_DIV,
-    LIR_OPCODE_REM, // remainder
+    LIR_OPCODE_MUL, // 无符号
+    LIR_OPCODE_UDIV,
+    LIR_OPCODE_SDIV, // 有符号除法
+    LIR_OPCODE_UREM, // remainder
+    LIR_OPCODE_SREM, // 有符号 REM
     LIR_OPCODE_NEG, // -取负数
 
     // int 类型转换
-    LIR_OPCODE_ZEXT, // int 无符号扩展
+    LIR_OPCODE_UEXT, // int 无符号扩展
     LIR_OPCODE_SEXT, // int 有符号扩展
     LIR_OPCODE_TRUNC, // int 大位宽截断
 
@@ -395,9 +398,9 @@ typedef enum {
     LIR_OPCODE_VDIV,
 
     // 位运算
-    LIR_OPCODE_SAR, // >> 有符号右移
-    LIR_OPCODE_SHR, // >> 无符号右移
-    LIR_OPCODE_SHL, // <<
+    LIR_OPCODE_SSHR, // >> 有符号右移
+    LIR_OPCODE_USHR, // >> 无符号右移
+    LIR_OPCODE_USHL, // << 无符号左移
     LIR_OPCODE_AND, // &
     LIR_OPCODE_OR, // |
     LIR_OPCODE_XOR, // ^

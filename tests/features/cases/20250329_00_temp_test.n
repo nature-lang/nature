@@ -1,11 +1,14 @@
-import coroutine as co
-import runtime
+import co
+import fmt
+import process
+import time
 import syscall
 import fs
+import io
+import strings
 
-fn main():void! {
-    var f = fs.open(" /sys/fs/cgroup/parker/93j46diaaircprcqu9xpts0p4xrd9dqf/cgroup.procs",
-            syscall.O_WRONLY|syscall.O_APPEND, 0)
-    f.write("58021\n" as [u8])
-    f.close()
+fn main() {
+    // 直接申请 9217 个内存
+    var items = vec_new<u8>(0, 9217)
+    println(items.len())
 }

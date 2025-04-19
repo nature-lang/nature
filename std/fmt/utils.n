@@ -17,6 +17,48 @@ fn reverse<T>([T] list) {
     }
 }
 
+fn utos<T>(T i):string {
+    return utos_with(i, '0', 0 as u8)
+}
+
+fn utos_with<T>(T i, string fill, u8 width):string {
+    T base = 10
+    var result = vec_new<u8>(0, 0)
+
+    if i == 0 {
+        if width == 0 {
+            return '0'
+        }
+
+        // 填充 width 个数的 fill 字符，并返回
+        for u8 j = 0; j < width; j+=1 {
+            result.push(ascii(fill))
+        }
+
+        return result as string
+    }
+
+    // 按 base 进行转换
+    for i != 0 {
+        T rem = i % base
+        result.push(rem as u8 + ascii('0'))
+
+        i = i / 10
+    }
+
+    // 填充字符
+    u8 result_width = result.len() as u8
+    for width > result_width {
+       result.push(ascii(fill))        
+       result_width += 1
+    }
+
+    // 数组反转
+    reverse(result)
+
+    return result as string
+}
+
 fn itos<T>(T i):string {
     return itos_with(i, '0', 0 as u8)
 }

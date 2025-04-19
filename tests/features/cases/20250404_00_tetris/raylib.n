@@ -1,4 +1,4 @@
-import coroutine as co
+import co
 
 // System/Window config flags
 var FLAG_VSYNC_HINT = 0x00000040

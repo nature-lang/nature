@@ -40,6 +40,8 @@ n_string_t *rt_string_ref_new(void *raw_string, int64_t length) {
     str->capacity = length;
     str->element_size = rtype_stack_size(&string_element_rtype, POINTER_SIZE);
     str->hash = string_rtype.hash;
+
+    DEBUGF("[rt_string_ref_new] create, str: %p", raw_string);
     return str;
 }
 

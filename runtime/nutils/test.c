@@ -7,9 +7,9 @@ static void __attribute__((noinline)) test_sleep_yield() {
     char *str = "sleep wait gc";
     char *str2 = "sleep wait gc";
     char *str3 = "sleep wait gc";
-    TDEBUGF("sleep wait gc completed")
+    DEBUGF("sleep wait gc completed")
     rt_coroutine_sleep(1000);
-    TDEBUGF("sleep completed")
+    DEBUGF("sleep completed")
 }
 
 static void __attribute__((noinline)) test_nest1() {

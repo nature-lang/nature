@@ -18,6 +18,11 @@ n_vec_t *rti_vec_new(rtype_t *element_rtype, int64_t length, int64_t capacity);
 
 n_vec_t *rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *value_ref);
 
+/**
+ * 不进行 vec element 初始化
+ */
+n_vec_t *rt_unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t length);
+
 n_vec_t *rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity);
 
 n_anyptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index);
@@ -28,9 +33,9 @@ n_anyptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index);
  * @param index
  * @return
  */
-void rt_vec_access(n_vec_t *l, uint64_t index, void *value_ref);
+void rti_vec_access(n_vec_t *l, uint64_t index, void *value_ref);
 
-void rt_vec_assign(n_vec_t *l, uint64_t index, void *ref);
+void rti_vec_assign(n_vec_t *l, uint64_t index, void *ref);
 
 /**
  * @param l

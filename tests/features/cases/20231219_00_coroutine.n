@@ -1,4 +1,4 @@
-import coroutine as co
+import co
 import runtime
 
 fn car() {

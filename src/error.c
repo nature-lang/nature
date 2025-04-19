@@ -60,7 +60,7 @@ void dump_errors_exit(module_t *m) {
 #ifdef ASSERT_ERROR
         assertf(false, "%s:%d:%d: %s\n", m->rel_path, error->line, error->column, error->msg);
 #else
-        printf("%s:%d:%d: %s\n", m->rel_path, error->line, error->column, error->msg);
+        fprintf(stderr, "%s:%d:%d: %s\n", m->rel_path, error->line, error->column, error->msg);
 #endif
     }
 

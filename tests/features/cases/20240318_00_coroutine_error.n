@@ -1,4 +1,4 @@
-import coroutine as co
+import co
 
 fn div(i32 dividend, i32 divisor):i32! {
     co.sleep(500)

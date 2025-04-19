@@ -2260,7 +2260,8 @@ static ast_stmt_t *parser_var_begin_stmt(module_t *m) {
     var_assign->var_decl.type = typedecl;
     var_assign->var_decl.ident = ident_token->literal;
     parser_must(m, TOKEN_EQUAL);
-    var_assign->right = parser_expr(m);
+    var_assign->right = expr_new_ptr(m);
+    *var_assign->right = parser_expr(m);
     result->assert_type = AST_STMT_VARDEF;
     result->value = var_assign;
 
@@ -2287,7 +2288,8 @@ static ast_stmt_t *parser_type_begin_stmt(module_t *m) {
 
     // var a = 1
     ast_vardef_stmt_t *stmt = NEW(ast_vardef_stmt_t);
-    stmt->right = parser_expr(m);
+    stmt->right = expr_new_ptr(m);
+    *stmt->right = parser_expr(m);
     stmt->var_decl = *var_decl;
     result->assert_type = AST_STMT_VARDEF;
     result->value = stmt;
@@ -3026,7 +3028,7 @@ static ast_fndef_t *coroutine_fn_closure(module_t *m, ast_expr_t *call_expr) {
     ast_vardef_stmt_t *vardef = NEW(ast_vardef_stmt_t);
     vardef->var_decl.type = type_kind_new(TYPE_UNKNOWN);
     vardef->var_decl.ident = FN_COROUTINE_RETURN_VAR;
-    vardef->right = *ast_expr_copy(call_expr);
+    vardef->right = ast_expr_copy(call_expr);
     vardef_stmt->value = vardef;
 
     // co_return(&result)
@@ -3164,7 +3166,7 @@ static slice_t *async_args_copy(module_t *m, ast_expr_t expr) {
         ast_vardef_stmt_t *vardef = NEW(ast_vardef_stmt_t);
         vardef->var_decl.type = type_kind_new(TYPE_UNKNOWN);
         vardef->var_decl.ident = strdup(unique_name);
-        vardef->right = *ast_expr_copy(arg_expr);
+        vardef->right = ast_expr_copy(arg_expr);
         vardef_stmt->value = vardef;
         slice_push(result, vardef_stmt);
 

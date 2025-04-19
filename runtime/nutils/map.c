@@ -53,14 +53,13 @@ void map_grow(n_map_t *m) {
         }
 
         // rehash
-        void* new_value_ref = (void*)rt_map_assign(m, key_ref); // 这里会导致 m length 变长
+        void *new_value_ref = (void *) rt_map_assign(m, key_ref); // 这里会导致 m length 变长
         memmove(new_value_ref, value_ref, value_size);
-   }
+    }
 }
 
 
 n_map_t *rt_map_new(uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhash) {
-
     rtype_t *map_rtype = rt_find_rtype(rtype_hash);
     rtype_t *key_rtype = rt_find_rtype(key_rhash);
     rtype_t *value_rtype = rt_find_rtype(value_rhash);
@@ -95,7 +94,6 @@ n_map_t *rt_map_new(uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhas
  * @return false 表示没有找到响应的值，也就是值不存在, true 表示相关值已经 copy 到了 value_ref 中
  */
 n_anyptr_t rt_map_access(n_map_t *m, void *key_ref) {
-
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
 
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
@@ -171,8 +169,13 @@ n_anyptr_t rt_map_assign(n_map_t *m, void *key_ref) {
            data_index,
            m->hash_table[hash_index], key_size);
 
-    // push to key list and value list
-    memmove(m->key_data + key_size * data_index, key_ref, key_size);
+    if (key_rtype->size == POINTER_SIZE) {
+        rti_write_barrier_ptr(m->key_data + key_size * data_index, *(void **) key_ref, false);
+    } else {
+        // push to key list and value list
+        memmove(m->key_data + key_size * data_index, key_ref, key_size);
+    }
+
     return (n_anyptr_t) (m->value_data + value_size * data_index);
 }
 
@@ -182,7 +185,6 @@ n_anyptr_t rt_map_assign(n_map_t *m, void *key_ref) {
  * @return
  */
 void rt_map_delete(n_map_t *m, void *key_ref) {
-
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
     uint64_t *hash_value = &m->hash_table[hash_index];
     *hash_value &= 1ULL << HASH_DELETED; // 配置删除标志即可
@@ -201,7 +203,6 @@ uint64_t rt_map_length(n_map_t *l) {
  * @return
  */
 bool rt_map_contains(n_map_t *m, void *key_ref) {
-
     assert(m);
     assert(key_ref);
     assert(m->key_rtype_hash > 0);

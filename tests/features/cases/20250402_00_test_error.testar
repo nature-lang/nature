@@ -1,4 +1,5 @@
 === test_end_string
+
 --- main.n
 import fmt
 
@@ -277,7 +278,7 @@ fn main():void! {
 === test_struct_offset_eq_128
 --- main.n
 import runtime
-import coroutine as co
+import co
 
 type test_t = struct{
     vec<int> a
@@ -367,4 +368,49 @@ fn main():void! {
     u32 a = random_u32(&seed1)
     println(a)
     assert(a == 2094371595)
+}
+
+=== test_octal
+--- main.n
+fn main() {
+    var v = 0o755
+    println(v)
+    assert(v == 0755)
+}
+
+=== test_module_init
+--- main.n
+import syscall
+
+var seed = syscall.SYS_GETPPID
+
+fn main():void! {
+    assert(seed == syscall.SYS_GETPPID)
+    println(seed)
+}
+
+=== test_module_init2
+--- main.n
+import time
+import syscall
+
+var seed = time.now().timestamp()
+
+fn main():void! {
+    assert(seed > 0)
+    println(seed)
+}
+
+=== test_udiv_urem
+--- main.n
+fn main():void! {
+    u32 base = 10
+    u32 i = 3102678087
+    u32 rem = i % base
+    println(rem)
+    assert(rem == 7)
+
+    u32 d = i / base
+    println(d)
+    assert(d == 310267808)
 }

@@ -606,7 +606,9 @@ static ast_var_decl_t *ast_var_decl_copy(ast_var_decl_t *temp) {
 static ast_vardef_stmt_t *ast_vardef_copy(ast_vardef_stmt_t *temp) {
     ast_vardef_stmt_t *vardef = COPY_NEW(ast_vardef_stmt_t, temp);
     vardef->var_decl = *ast_var_decl_copy(&temp->var_decl);
-    vardef->right = *ast_expr_copy(&temp->right);
+    if (temp->right) {
+        vardef->right = ast_expr_copy(temp->right);
+    }
     return vardef;
 }
 
@@ -670,6 +672,13 @@ static ast_try_catch_stmt_t *ast_try_catch_stmt_copy(ast_try_catch_stmt_t *temp)
 static ast_var_tuple_def_stmt_t *ast_var_tuple_def_copy(ast_var_tuple_def_stmt_t *temp) {
     ast_var_tuple_def_stmt_t *stmt = COPY_NEW(ast_var_tuple_def_stmt_t, temp);
     stmt->tuple_destr = ast_tuple_destr_copy(temp->tuple_destr); // 需要实现这个函数
+    stmt->right = *ast_expr_copy(&temp->right);
+    return stmt;
+}
+
+static ast_assign_stmt_t *ast_global_assign_copy(ast_global_assign_stmt_t *temp) {
+    ast_assign_stmt_t *stmt = COPY_NEW(ast_assign_stmt_t, temp);
+    stmt->left = *ast_expr_copy(&temp->left);
     stmt->right = *ast_expr_copy(&temp->right);
     return stmt;
 }
@@ -771,6 +780,10 @@ static ast_stmt_t *ast_stmt_copy(ast_stmt_t *temp) {
         }
         case AST_STMT_ASSIGN: {
             stmt->value = ast_assign_copy(temp->value);
+            break;
+        }
+        case AST_STMT_GLOBAL_ASSIGN: {
+            stmt->value = ast_global_assign_copy(temp->value);
             break;
         }
         case AST_STMT_IF: {

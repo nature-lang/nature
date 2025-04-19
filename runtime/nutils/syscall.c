@@ -27,7 +27,7 @@ void syscall_exec(n_string_t *path, n_vec_t *argv, n_vec_t *envp) {
     char **c_args = mallocz(sizeof(char *) * (argv->length + 1));
     for (int i = 0; i < argv->length; ++i) {
         n_string_t *arg;
-        rt_vec_access(argv, i, &arg);
+        rti_vec_access(argv, i, &arg);
         if (arg == NULL) {
             continue;
         }
@@ -42,7 +42,7 @@ void syscall_exec(n_string_t *path, n_vec_t *argv, n_vec_t *envp) {
     char **c_envs = mallocz(sizeof(char *) * (envp->length + 1));
     for (int i = 0; i < envp->length; ++i) {
         n_string_t *env;
-        rt_vec_access(envp, i, &env);
+        rti_vec_access(envp, i, &env);
         if (env == NULL) {
             continue;
         }

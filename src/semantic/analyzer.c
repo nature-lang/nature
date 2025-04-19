@@ -593,7 +593,8 @@ static ast_stmt_t *auto_as_stmt(int line, char *subject_ident, type_t target_typ
     as_expr->src = *ast_ident_expr(expr.line, expr.column, strdup(vardef->var_decl.ident));
     as_expr->target_type = type_copy(target_type);
     expr.value = as_expr;
-    vardef->right = expr;
+    vardef->right = NEW(ast_expr_t);
+    *vardef->right = expr;
 
     ast_stmt_t *stmt = NEW(ast_stmt_t);
     stmt->line = line;
@@ -833,7 +834,8 @@ static void analyzer_var_decl(module_t *m, ast_var_decl_t *var_decl, bool redecl
 }
 
 static void analyzer_vardef(module_t *m, ast_vardef_stmt_t *vardef) {
-    analyzer_expr(m, &vardef->right);
+    assert(vardef->right);
+    analyzer_expr(m, vardef->right);
     analyzer_redeclare_check(m, vardef->var_decl.ident);
     analyzer_type(m, &vardef->var_decl.type);
 
@@ -1005,38 +1007,6 @@ static void analyzer_type_eq_expr(module_t *m, ast_macro_type_eq_expr_t *expr) {
 static void analyzer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     analyzer_type(m, &is_expr->target_type);
     analyzer_expr(m, &is_expr->src);
-}
-
-/**
- * 允许在同一作用域内重复定义, 直接将该表达式改写成 vardef 即可
- * @param m
- * @param expr
- */
-static void analyzer_let(module_t *m, ast_stmt_t *stmt) {
-    ast_let_t *let_stmt = stmt->value;
-
-    ANALYZER_ASSERTF(let_stmt->expr.assert_type == AST_EXPR_AS, "variables must be used for 'as' in the expression");
-
-    ast_as_expr_t *as_expr = let_stmt->expr.value;
-
-    ANALYZER_ASSERTF(as_expr->src.assert_type == AST_EXPR_IDENT, "variables must be used for 'as' in the expression");
-    ast_ident *ident = as_expr->src.value;
-    char *old = strdup(ident->literal);
-
-    analyzer_expr(m, &let_stmt->expr);
-
-    // 表达式改写
-    ast_vardef_stmt_t *vardef = NEW(ast_vardef_stmt_t);
-    vardef->var_decl.ident = old;
-    vardef->var_decl.type = as_expr->target_type;
-    vardef->right = let_stmt->expr;
-
-    local_ident_t *local = local_ident_new(m, SYMBOL_VAR, &vardef->var_decl, vardef->var_decl.ident);
-    vardef->var_decl.ident = local->unique_ident;
-
-    // 表达式类型改写
-    stmt->assert_type = AST_STMT_VARDEF;
-    stmt->value = vardef;
 }
 
 /**
@@ -1679,15 +1649,13 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_VAR_DECL: {
             return analyzer_var_decl(m, stmt->value, true);
         }
-        case AST_STMT_LET: {
-            return analyzer_let(m, stmt);
-        }
         case AST_STMT_VARDEF: {
             return analyzer_vardef(m, stmt->value);
         }
         case AST_STMT_VAR_TUPLE_DESTR: {
             return analyzer_var_tuple_destr_stmt(m, stmt->value);
         }
+        case AST_STMT_GLOBAL_ASSIGN:
         case AST_STMT_ASSIGN: {
             return analyzer_assign(m, stmt->value);
         }
@@ -1744,7 +1712,7 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
  */
 static void analyzer_module(module_t *m, slice_t *stmt_list) {
     // var_decl blocks
-    slice_t *var_assign_list = slice_new(); // 存放 stmt
+    slice_t *global_assign_list = slice_new(); // 存放 stmt
     slice_t *fn_list = slice_new();
     slice_t *typedef_list = slice_new();
 
@@ -1778,12 +1746,16 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
                     .assert_type = AST_EXPR_IDENT,
                     .value = ast_new_ident(var_decl->ident),
             };
-            assign->right = vardef->right;
+            assign->var_decl = &vardef->var_decl;
+            assign->right = *vardef->right;
             assign_stmt->line = stmt->line;
             assign_stmt->column = stmt->column;
-            assign_stmt->assert_type = AST_STMT_ASSIGN;
+            assign_stmt->assert_type = AST_STMT_GLOBAL_ASSIGN;
             assign_stmt->value = assign;
-            slice_push(var_assign_list, assign_stmt);
+            slice_push(global_assign_list, assign_stmt);
+
+            // 清空 global stmt 的 var right
+            vardef->right = NULL;
             continue;
         }
 
@@ -1865,14 +1837,17 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
     m->global_typedef = typedef_list;
 
     // 添加 module init 函数
-    if (var_assign_list->count > 0) {
+    if (global_assign_list->count > 0) {
         ast_fndef_t *fn_init = ast_fndef_new(m, 0, 0);
-        fn_init->symbol_name = ident_with_prefix(analyzer_force_unique_ident(m), FN_INIT_NAME);
+        // .module.ident . init 加点避免和用户代码冲突
+        fn_init->symbol_name = str_connect(".", ident_with_prefix(m->ident, FN_INIT_NAME));
         fn_init->fn_name = fn_init->symbol_name;
         fn_init->fn_name_with_pkg = ident_with_prefix(m->ident, fn_init->symbol_name);
         fn_init->return_type = type_kind_new(TYPE_VOID);
         fn_init->params = ct_list_new(sizeof(ast_var_decl_t));
-        fn_init->body = var_assign_list;
+        fn_init->body = global_assign_list;
+        fn_init->is_errable = true;
+        m->fn_init = fn_init;
 
         // 讲 module init 函数添加到全局符号中
         symbol_t *s = symbol_table_set(fn_init->symbol_name, SYMBOL_FN, fn_init, false);
@@ -1920,8 +1895,6 @@ static void analyzer_main(module_t *m) {
         }
     }
 
-    // 将 module init 添加到 fn main 的最前端进行初始化
-
     ANALYZER_ASSERTF(main_fn, "fn 'main' is undeclared in the main package");
 
     // func main must have no arguments and no return values
@@ -1930,6 +1903,9 @@ static void analyzer_main(module_t *m) {
 
     ANALYZER_ASSERTF(main_fn->return_type.kind == TYPE_VOID,
                      "fn main must have no arguments and no return values, example: fn main() {...");
+
+    // main fn add define errorable
+    main_fn->is_errable = true;
 }
 
 void analyzer(module_t *m, slice_t *stmt_list) {

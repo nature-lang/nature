@@ -168,8 +168,6 @@ void uncache_span(mcentral_t *mcentral, mspan_t *span);
 
 void mheap_free_span(mheap_t *mheap, mspan_t *span);
 
-addr_t mstack_new(uint64_t size);
-
 void rtypes_deserialize();
 
 void fndefs_deserialize();
@@ -192,6 +190,10 @@ static inline uint64_t rt_rtype_stack_size(int64_t rhash) {
     assert(rtype && "cannot find rtype by hash");
 
     return rtype_stack_size(rtype, POINTER_SIZE);
+}
+
+static inline uint8_t take_sizeclass(uint8_t spanclass) {
+    return spanclass >> 1;
 }
 
 fndef_t *find_fn(addr_t addr, n_processor_t *p);

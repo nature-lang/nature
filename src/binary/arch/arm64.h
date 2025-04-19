@@ -264,19 +264,20 @@ elf_arm64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
 
         // tls 相关的重定位类型
         case R_AARCH64_TLSLE_ADD_TPREL_HI12: {
-            // 获取 TLS 变量相对于线程指针的偏移量的高12位
-            uint32_t bits = (val >> 12) & 0xfff;
-            write32le(ptr, (read32le(ptr) & 0xfff003ff) | (bits << 10));
+            Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+            section_t *s = SEC_TACK(sym->st_shndx);
+            uint64_t tprel = val - s->sh_addr; // 计算 TLS 偏移
+            uint32_t hi12 = (tprel >> 12) & 0xfff;
+            write32le(ptr, (read32le(ptr) & 0xfff003ff) | (hi12 << 10));
             break;
         }
-        case R_AARCH64_TLSLE_ADD_TPREL_LO12: {
-            // 获取 TLS 变量相对于线程指针的偏移量的低12位
-            write32le(ptr, (read32le(ptr) & 0xfff003ff) | ((val & 0xfff) << 10));
-            break;
-        }
+        case R_AARCH64_TLSLE_ADD_TPREL_LO12: 
         case R_AARCH64_TLSLE_ADD_TPREL_LO12_NC: {
-            // 与 LO12 相同，但不检查溢出
-            write32le(ptr, (read32le(ptr) & 0xfff003ff) | ((val & 0xfff) << 10));
+            Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+            section_t *s = SEC_TACK(sym->st_shndx);
+            uint64_t tprel = val - s->sh_addr; // 计算 TLS 偏移
+            uint32_t lo12 = tprel & 0xfff;
+            write32le(ptr, (read32le(ptr) & 0xffc003ff) | (lo12 << 10));
             break;
         }
         case R_AARCH64_COPY:
@@ -408,7 +409,6 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
                     temp->data = arm64_asm_inst_encoding(operation, &temp->data_count);
                     section_offset += temp->data_count;
                     fn_offset += temp->data_count;
-
 
 
                     temp->rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,

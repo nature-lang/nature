@@ -74,3 +74,20 @@ fn file_t.close():void
 
 #linkid rt_uv_fs_stat
 fn file_t.stat():stat_t!
+
+// io
+fn stdout():ptr<file_t>! {
+    return from(syscall.STDOUT, '/dev/stdout')
+}
+
+fn stdin():ptr<file_t>! {
+    return from(syscall.STDIN, '/dev/stdin')
+}
+
+fn stderr():ptr<file_t>! {
+    return from(syscall.STDERR, '/dev/stderr')
+}
+
+fn discard():ptr<file_t>! {
+    return open('/dev/null', syscall.O_RDWR, 0)
+}

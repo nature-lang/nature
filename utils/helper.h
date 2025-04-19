@@ -2,6 +2,7 @@
 #define NATURE_SRC_LIB_HELPER_H_
 
 #include <assert.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdarg.h>
@@ -565,16 +566,68 @@ static inline char *str_replace(char *str, char *old, char *new) {
     return result;
 }
 
+static inline void *sys_memory_reserve(void *hint, uint64_t size) {
+    void *ptr;
+#if defined(__DARWIN) && defined(__ARM64)
+    ptr = mmap(hint, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT, 0, 0);
+#else
+    ptr = mmap(hint, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+#endif
+
+    assertf(ptr, "runtime mmap failed: %s", strerror(errno));
+    return ptr;
+}
+
 static inline void *sys_memory_map(void *hint, uint64_t size) {
     void *ptr;
 #if defined(__DARWIN) && defined(__ARM64)
-    ptr = mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT, 0, 0);
+    ptr = hint;
+    if (mprotect((void *) hint, size, PROT_READ | PROT_WRITE) == -1) {
+        assertf(false, "mprotect failed");
+    }
+//    ptr = mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS | MAP_JIT, 0, 0);
 #else
-    ptr = mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+    ptr = mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, 0, 0);
+    assertf(ptr != MAP_FAILED, "runtime mmap failed: %s", strerror(errno));
+    assertf(ptr, "runtime mmap failed: %s", strerror(errno));
 #endif
 
+    return ptr;
+}
 
-    assertf(ptr, "mmap failed: %s", strerror(errno));
+static inline void sys_memory_used_exec(void *addr, uint64_t size) {
+    // 为 darwin/arm64 设计
+    // 数据清空, 必须在 mprotect exec 之前，exec 之后就不允许写入数据了
+    memset(addr, 0, size);
+
+    // 增加 EXEC
+    if (mprotect(addr, size, PROT_READ | PROT_WRITE | PROT_EXEC) == -1) {
+        assertf(false, "mprotect failed, page_start=%p, size=%lu, err=%s", (void *) addr,
+                size,
+                strerror(errno));
+    }
+    DEBUGF("[sys_memory_used_exec] jit span malloc and mprotect success, mspan=%p, mspan_lock=%p, base=%p, pages_size=%ld",
+           span, &span->alloc_locker,
+           (void *) span->base, pages_count * ALLOC_PAGE_SIZE);
+}
+
+// darwin/arm64 一旦声明为 exec 后就无法去掉
+//static inline void sys_memory_unused_exec(void *addr, uint64_t size) {
+//    // 增加 EXEC
+//    if (mprotect(addr, size, PROT_READ | PROT_WRITE) == -1) {
+//        assertf(false, "mprotect failed, page_start=%p, size=%lu, err=%s", (void *) addr,
+//                size,
+//                strerror(errno));
+//    }
+//    DEBUGF("[sys_memory_unused_exec] jit span malloc and mprotect success, mspan=%p, mspan_lock=%p, base=%p, pages_size=%ld",
+//           span, &span->alloc_locker,
+//           (void *) span->base, pages_count * ALLOC_PAGE_SIZE);
+//}
+
+static inline void *sys_memory_alloc(uint64_t size) {
+    void *ptr;
+    ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+    assertf(ptr, "runtime mmap failed: %s", strerror(errno));
     return ptr;
 }
 
@@ -582,7 +635,7 @@ static inline void *mallocz_big(size_t size) {
     int64_t page_size = sysconf(_SC_PAGESIZE);
     //    int page_size = getpagesize();
     size = align_up(size, page_size);
-    void *ptr = sys_memory_map(NULL, size);
+    void *ptr = sys_memory_alloc(size);
     return ptr;
 }
 
@@ -591,23 +644,36 @@ static inline void sys_memory_unmap(void *base, uint64_t size) {
 }
 
 #ifdef __LINUX
-
-static inline void sys_memory_remove(void *addr, uint64_t size) {
+static inline void sys_memory_unused(void *addr, uint64_t size) {
     madvise(addr, size, MADV_DONTNEED);
 }
 #elif __DARWIN
-
-static inline void sys_memory_remove(void *addr, uint64_t size) {
+static inline void sys_memory_unused(void *addr, uint64_t size) {
     // On Darwin, use MADV_FREE which is similar to MADV_DONTNEED
-    madvise(addr, size, MADV_FREE);
+    if (madvise(addr, size, MADV_FREE_REUSABLE) == -1) {
+        assertf(false, "madvise failed: ", strerror(errno));
+    }
 }
 
 #else
+#error "not support arch"
+#endif
 
-static inline void sys_memory_remove(void *addr, uint64_t size) {
-    assertf(false, "[runtime.sys_memory_remove] cannot support arch");
+
+#ifdef __LINUX
+static inline void sys_memory_used(void *addr, uint64_t size) {
+    void *ptr = mmap(addr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, 0, 0);
+    assertf(ptr, "runtime: out of memory");
 }
-
+#elif __DARWIN
+static inline void sys_memory_used(void *addr, uint64_t size) {
+    // On Darwin, use MADV_FREE which is similar to MADV_DONTNEED
+    if (madvise(addr, size, MADV_FREE_REUSE) == -1) {
+        assertf(false, "madvise failed: ", strerror(errno));
+    }
+}
+#else
+#error "not support arch"
 #endif
 
 static inline int64_t *take_numbers(char *str, uint64_t count) {

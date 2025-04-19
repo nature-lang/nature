@@ -91,7 +91,7 @@ gc_bits_arena_t *gcbits_arena_new() {
 
     if (gc_bits_arenas.free_list == NULL) {
         pthread_mutex_unlock(&gc_bits_arenas.locker);
-        result = sys_memory_map(NULL, GCBITS_CHUNK_BYTES);
+        result = sys_memory_alloc(GCBITS_CHUNK_BYTES);
         assert(result && "gcbits_arena_new: failed to map memory");
 
         memset(result, 0, GCBITS_CHUNK_BYTES);

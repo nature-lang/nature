@@ -78,7 +78,7 @@ static void elf_custom_links() {
     ct_fndef_size = collect_fndef_list(ctx);
     ct_fndef_data = fndefs_serialize();
     elf_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
-    sym = (Elf64_Sym) {
+    sym = (Elf64_Sym){
             .st_shndx = ctx->data_fndef_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -91,7 +91,7 @@ static void elf_custom_links() {
     // caller - --------------------------------------------------------------------------
     ct_caller_data = callers_serialize();
     elf_put_data(ctx->data_caller_section, ct_caller_data, ct_caller_list->length * sizeof(caller_t));
-    sym = (Elf64_Sym) {
+    sym = (Elf64_Sym){
             .st_shndx = ctx->data_caller_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -106,7 +106,7 @@ static void elf_custom_links() {
     ct_symdef_size = collect_symdef_list(ctx);
     ct_symdef_data = symdefs_serialize();
     elf_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
-    sym = (Elf64_Sym) {
+    sym = (Elf64_Sym){
             .st_shndx = ctx->data_symdef_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -143,11 +143,11 @@ static void mach_custom_links() {
     ct_rtype_data = rtypes_serialize();
     mach_put_data(ctx->data_rtype_section, ct_rtype_data, ct_rtype_size);
     // 创建符号指向自定义数据段 __data.rtype
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-                         .n_type = N_SECT | N_EXT,
-                         .n_sect = ctx->data_rtype_section->sh_index,
-                         .n_value = 0, // in section data offset
-                 },
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                                              .n_type = N_SECT | N_EXT,
+                                              .n_sect = ctx->data_rtype_section->sh_index,
+                                              .n_value = 0, // in section data offset
+                                      },
                  SYMBOL_RTYPE_DATA);
 
     macho_put_global_symbol(ctx, SYMBOL_RTYPE_COUNT, &ct_rtype_count, QWORD);
@@ -157,11 +157,11 @@ static void mach_custom_links() {
     ct_fndef_data = fndefs_serialize();
     mach_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
 
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-                         .n_type = N_SECT | N_EXT,
-                         .n_sect = ctx->data_fndef_section->sh_index,
-                         .n_value = 0, // in section data offset
-                 },
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                                              .n_type = N_SECT | N_EXT,
+                                              .n_sect = ctx->data_fndef_section->sh_index,
+                                              .n_value = 0, // in section data offset
+                                      },
                  SYMBOL_FNDEF_DATA);
     macho_put_global_symbol(ctx, SYMBOL_FNDEF_COUNT, &ct_fndef_count, QWORD);
 
@@ -170,11 +170,11 @@ static void mach_custom_links() {
     ct_caller_data = callers_serialize();
     mach_put_data(ctx->data_caller_section, ct_caller_data, ct_caller_list->length * sizeof(caller_t));
     // 注册段名称与 runtime 中的符号进行绑定
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-                         .n_type = N_SECT | N_EXT,
-                         .n_sect = ctx->data_caller_section->sh_index,
-                         .n_value = 0, // in section data offset
-                 },
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                                              .n_type = N_SECT | N_EXT,
+                                              .n_sect = ctx->data_caller_section->sh_index,
+                                              .n_value = 0, // in section data offset
+                                      },
                  SYMBOL_CALLER_DATA);
     macho_put_global_symbol(ctx, SYMBOL_CALLER_COUNT, &ct_caller_list->length, QWORD);
 
@@ -184,11 +184,11 @@ static void mach_custom_links() {
     ct_symdef_data = symdefs_serialize();
     mach_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
 
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-                         .n_type = N_SECT | N_EXT,
-                         .n_sect = ctx->data_symdef_section->sh_index,
-                         .n_value = 0, // in section data offset
-                 },
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                                              .n_type = N_SECT | N_EXT,
+                                              .n_sect = ctx->data_symdef_section->sh_index,
+                                              .n_value = 0, // in section data offset
+                                      },
                  SYMBOL_SYMDEF_DATA);
     macho_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, QWORD);
 
@@ -278,11 +278,11 @@ static void mach_assembler_module(module_t *m) {
         uint64_t offset = mach_put_data(ctx->data_section, symbol->value, symbol->size);
 
         // 写入符号表
-        mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
-                             .n_type = N_SECT | N_EXT,
-                             .n_sect = ctx->data_section->sh_index,
-                             .n_value = offset, // in section data offset
-                     },
+        mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                                                  .n_type = N_SECT | N_EXT,
+                                                  .n_sect = ctx->data_section->sh_index,
+                                                  .n_value = offset, // in section data offset
+                                          },
                      symbol->name);
     }
 
@@ -463,7 +463,7 @@ static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
 
     // 对于 ELF 格式，链接命令格式不同于 Mach-O
     snprintf(cmd, sizeof(cmd),
-             "%s -o %s %s @%s %s",
+             "%s -o %s %s @%s %s 2>/dev/null",
              use_ld,
              output,
              ldflags,
@@ -604,7 +604,7 @@ static void custom_ld_mach_exe(slice_t *modules, char *use_ld, char *ldflags) {
 
     snprintf(cmd, sizeof(cmd),
              "%s -arch %s -dynamic -platform_version macos 11.7.1 14.0 %s"
-             "-o %s %s %s @%s",
+             "-o %s %s %s @%s 2>/dev/null",
              use_ld,
              darwin_ld_arch,
              syslibroot_option,
@@ -690,6 +690,7 @@ static void build_assembler(slice_t *modules) {
         for (int j = 0; j < m->global_vardef->count; ++j) {
             ast_vardef_stmt_t *vardef = m->global_vardef->take[j];
             assert(vardef->var_decl.type.status == REDUCTION_STATUS_DONE);
+            assert(vardef->var_decl.type.kind != TYPE_UNKNOWN);
 
             ast_var_decl_t *var_decl = &vardef->var_decl;
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
@@ -817,11 +818,12 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
             linked_push(work_list, new_module);
             table_set(module_table, import->full_path, new_module);
+            // 按照层级进入到 modules 中(广度优先)
             slice_push(modules, new_module);
         }
     }
 
-    // modules contains
+    // modules contains, 倒叙遍历处理依赖关系
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
 
@@ -843,7 +845,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     assert(main_fndef);
 
     slice_t *new_body = slice_new();
-    for (int i = 0; i < modules->count; ++i) {
+    for (int i = modules->count - 1; i >= 0; --i) {
         module_t *m = modules->take[i];
         if (m->call_init_stmt) {
             slice_push(new_body, m->call_init_stmt);
@@ -882,7 +884,8 @@ static inline void cross_native(closure_t *c) {
 }
 
 static void build_compiler(slice_t *modules) {
-    for (int i = 0; i < modules->count; ++i) {
+    // module 基于广度 import 进入，倒叙遍历解决依赖问题
+    for (int i = modules->count - 1; i >= 0; --i) {
         pre_infer(modules->take[i]);
     }
 

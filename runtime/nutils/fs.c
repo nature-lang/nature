@@ -73,7 +73,7 @@ fs_context_t *rt_uv_fs_from(n_int_t fd, n_string_t *name) {
 
     ctx->fd = fd;
     DEBUGF("[fs_from] create file context from fd: %d, name: %s", fd,
-           (char*)rt_string_ref(name));
+            (char *) rt_string_ref(name));
 
     return ctx;
 }
@@ -97,10 +97,10 @@ fs_context_t *rt_uv_fs_open(n_string_t *path, int64_t flags, int64_t mode) {
     co_yield_waiting(co, NULL, NULL);
 
     if (co->has_error) {
-        DEBUGF("[fs_open] open file failed: %s", (char*)rt_string_ref(rti_error_msg(co->error)));
+        DEBUGF("[fs_open] open file failed: %s", (char *) rt_string_ref(rti_error_msg(co->error)));
         return NULL;
     } else {
-        DEBUGF("[fs_open] open file success: %s", (char*)rt_string_ref(path));
+        DEBUGF("[fs_open] open file success: %s", (char *) rt_string_ref(path));
     }
 
     return ctx;
@@ -122,7 +122,7 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
 
     // 配置初始缓冲区，能够读取的最大程度受限于 buf.length
     ctx->data_cap = buf->length;
-    ctx->data_len = 0;// 记录实际读取的数量
+    ctx->data_len = 0; // 记录实际读取的数量
     ctx->data = (char *) buf->data;
     ctx->buf = uv_buf_init(ctx->data, buf->length);
 
@@ -133,7 +133,7 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     co_yield_waiting(co, NULL, NULL);
 
     if (co->has_error) {
-        DEBUGF("[rt_uv_fs_read] read file failed: %s",  (char*)rt_string_ref(rti_error_msg(co->error)));
+        DEBUGF("[rt_uv_fs_read] read file failed: %s", (char *) rt_string_ref(rti_error_msg(co->error)));
         return 0;
     } else {
         DEBUGF("[rt_uv_fs_read] read file success");
@@ -166,7 +166,7 @@ n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     co_yield_waiting(co, NULL, NULL);
 
     if (co->has_error) {
-        DEBUGF("[fs_write_at] write file failed: %s",  (char*)rt_string_ref(rti_error_msg(co->error)));
+        DEBUGF("[fs_write_at] write file failed: %s", (char *) rt_string_ref(rti_error_msg(co->error)));
     } else {
         DEBUGF("[fs_write_at] write file success");
     }
@@ -223,7 +223,7 @@ static void on_stat_cb(uv_fs_t *req) {
 
     // Stat operation successful
     DEBUGF("[on_stat_cb] stat file success, fd: %d", ctx->fd);
-    
+
     co_ready(co);
     // Note: req cleanup is handled in the main function after coroutine resumes
 }
@@ -232,37 +232,37 @@ uv_stat_t rt_uv_fs_stat(fs_context_t *ctx) {
     coroutine_t *co = coroutine_get();
     n_processor_t *p = processor_get();
     uv_stat_t stat_result = {0};
-    
+
     if (ctx->closed) {
         rti_co_throw(co, "fd already closed", false);
         return stat_result;
     }
-    
+
     DEBUGF("[rt_uv_fs_stat] stat file: %d", ctx->fd);
-    
+
     // Set up coroutine resume point
     ctx->req.data = co;
-    
+
     // Initiate async stat request
     int result = uv_fs_fstat(&p->uv_loop, &ctx->req, ctx->fd, on_stat_cb);
     if (result < 0) {
         rti_co_throw(co, (char *) uv_strerror(result), false);
         return stat_result;
     }
-    
+
     // Suspend coroutine waiting for stat operation to complete
     co_yield_waiting(co, NULL, NULL);
-    
+
     if (co->has_error) {
-        DEBUGF("[rt_uv_fs_stat] stat file failed: %s", (char*)rt_string_ref(rti_error_msg(co->error)));
+        DEBUGF("[rt_uv_fs_stat] stat file failed: %s", (char *) rt_string_ref(rti_error_msg(co->error)));
     } else {
         DEBUGF("[rt_uv_fs_stat] stat file success");
         // Copy stat result from request
         stat_result = ctx->req.statbuf;
     }
-    
+
     // Clean up request
     uv_fs_req_cleanup(&ctx->req);
-    
+
     return stat_result;
 }

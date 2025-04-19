@@ -33,6 +33,8 @@ extern fixalloc_t coroutine_alloc;
 extern fixalloc_t processor_alloc;
 extern mutex_t cp_alloc_locker;
 
+extern uint64_t assist_preempt_yield_ret_addr;
+
 typedef enum {
     //    CO_FLAG_SOLO = 1, // 暂时取消
     CO_FLAG_SAME = 2,

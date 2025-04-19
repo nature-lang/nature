@@ -53,38 +53,10 @@
 #define F64_NEG_MASK_IDENT "f64_neg_mask" // -0
 #define F32_NEG_MASK_IDENT "f32_neg_mask" // -0
 
-#define BUILTIN_REF_KEY "ref" // list.ref()
-// #define BUILTIN_LEN_KEY "len" // list.len()
-// #define BUILTIN_CAP_KEY "cap" // list.cap()
-#define BUILTIN_DEL_KEY "del" // list.del()
-
-#define VEC_PUSH_KEY "push"
-#define VEC_POP_KEY "pop"
-#define VEC_SLICE_KEY "slice"
-#define VEC_CONCAT_KEY "concat"
-#define VEC_LENGTH_KEY "len"
-#define VEC_CAPACITY_KEY "cap"
-
-#define MAP_DELETE_KEY "del"
-// #define MAP_LENGTH_KEY "len"
-
-#define SET_CONTAINS_KEY "contains"
-#define SET_ADD_KEY "add"
-#define SET_DELETE_KEY "del"
-
-#define RT_CALL_DEFAULT_FN "zero_fn"
-
 // RT = runtime
 // CT = compile time
 #define RT_CALL_VEC_CAP "rt_vec_cap"
-#define RT_CALL_VEC_ELEMENT_ADDR "rt_vec_element_addr"
-#define RT_CALL_VEC_SLICE "rt_vec_slice"
-#define RT_CALL_VEC_REF "rt_vec_ref"
-#define RT_CALL_VEC_LENGTH "rt_vec_length"
-#define RT_CALL_VEC_CAPACITY "rt_vec_capacity"
-#define RT_CALL_VEC_PUSH "rt_vec_push"
-#define RT_CALL_VEC_ITERATOR "rt_vec_iterator"
-#define RT_CALL_VEC_CONCAT "rt_vec_concat"
+#define RT_CALL_UNSAFE_VEC_NEW "rt_unsafe_vec_new"
 
 #define RT_CALL_WRITE_BARRIER "write_barrier"
 
@@ -259,11 +231,7 @@ static inline bool is_rtcall(string target) {
 
     return str_equal(target, RT_CALL_SET_ADD) || str_equal(target, RT_CALL_SET_DELETE) ||
            str_equal(target, RT_CALL_SET_CONTAINS) || str_equal(target, RT_CALL_SET_NEW) ||
-           str_equal(target, RT_CALL_VEC_CAP) || str_equal(target, RT_CALL_VEC_ELEMENT_ADDR) ||
-           str_equal(target, RT_CALL_VEC_SLICE) || str_equal(target, RT_CALL_VEC_REF) ||
-           str_equal(target, RT_CALL_VEC_LENGTH) || str_equal(target, RT_CALL_VEC_CAPACITY) ||
-           str_equal(target, RT_CALL_VEC_PUSH) || str_equal(target, RT_CALL_VEC_ITERATOR) ||
-           str_equal(target, RT_CALL_VEC_CONCAT) || str_equal(target, RT_CALL_WRITE_BARRIER) ||
+           str_equal(target, RT_CALL_VEC_CAP) || str_equal(target, RT_CALL_WRITE_BARRIER) ||
            str_equal(target, RT_CALL_ARRAY_ELEMENT_ADDR) || str_equal(target, RT_CALL_RAWPTR_VALID) ||
            str_equal(target, RT_CALL_MAP_NEW) || str_equal(target, RT_CALL_MAP_ACCESS) ||
            str_equal(target, RT_CALL_MAP_ASSIGN) || str_equal(target, RT_CALL_MAP_LENGTH) ||
@@ -734,7 +702,7 @@ static inline lir_op_t *lir_op_bal(lir_operand_t *label) {
 }
 
 static inline lir_op_t *lir_op_zext(lir_operand_t *dst, lir_operand_t *src) {
-    return lir_op_new(LIR_OPCODE_ZEXT, src, NULL, dst);
+    return lir_op_new(LIR_OPCODE_UEXT, src, NULL, dst);
 }
 
 static inline lir_op_t *lir_op_sext(lir_operand_t *dst, lir_operand_t *src) {
@@ -1030,7 +998,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
     assert(operand->assert_type != LIR_OPERAND_SYMBOL_LABEL);
 
     assertf(operand->assert_type == LIR_OPERAND_VAR || operand->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
-            operand->assert_type == LIR_OPERAND_SYMBOL_LABEL || operand->assert_type == LIR_OPERAND_SYMBOL_VAR,
+                    operand->assert_type == LIR_OPERAND_SYMBOL_LABEL || operand->assert_type == LIR_OPERAND_SYMBOL_VAR,
             "only support lea var/symbol/addr, actual=%d", operand->assert_type);
 
     type_t t = lir_operand_type(operand);
@@ -1130,7 +1098,7 @@ static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
 }
 
 static inline bool lir_op_like_move(lir_op_t *op) {
-    return op->code == LIR_OPCODE_MOVE || op->code == LIR_OPCODE_SEXT || op->code == LIR_OPCODE_ZEXT ||
+    return op->code == LIR_OPCODE_MOVE || op->code == LIR_OPCODE_SEXT || op->code == LIR_OPCODE_UEXT ||
            op->code == LIR_OPCODE_TRUNC;
 }
 
@@ -1146,14 +1114,20 @@ static inline bool lir_op_term(lir_op_t *op) {
 }
 
 static inline bool lir_op_convert(lir_op_t *op) {
-    return op->code == LIR_OPCODE_ZEXT || op->code == LIR_OPCODE_SEXT || op->code == LIR_OPCODE_TRUNC;
+    return op->code == LIR_OPCODE_UEXT || op->code == LIR_OPCODE_SEXT || op->code == LIR_OPCODE_TRUNC;
 }
 
 static inline bool lir_op_ternary(lir_op_t *op) {
-    return op->code == LIR_OPCODE_ADD || op->code == LIR_OPCODE_SUB || op->code == LIR_OPCODE_MUL ||
-           op->code == LIR_OPCODE_DIV ||
-           op->code == LIR_OPCODE_REM || op->code == LIR_OPCODE_SHR || op->code == LIR_OPCODE_SHL ||
-           op->code == LIR_OPCODE_SAR ||
+    return op->code == LIR_OPCODE_ADD ||
+           op->code == LIR_OPCODE_SUB ||
+           op->code == LIR_OPCODE_MUL ||
+           op->code == LIR_OPCODE_UDIV ||
+           op->code == LIR_OPCODE_UREM ||
+           op->code == LIR_OPCODE_SDIV ||
+           op->code == LIR_OPCODE_SREM ||
+           op->code == LIR_OPCODE_USHR ||
+           op->code == LIR_OPCODE_USHL ||
+           op->code == LIR_OPCODE_SSHR ||
            op->code == LIR_OPCODE_AND ||
            op->code == LIR_OPCODE_OR || op->code == LIR_OPCODE_XOR;
 }
@@ -1170,7 +1144,11 @@ static inline bool lir_op_scc(lir_op_t *op) {
 
 
 static inline bool lir_op_factor(lir_op_t *op) {
-    return op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_REM;
+    return op->code == LIR_OPCODE_UDIV ||
+           op->code == LIR_OPCODE_MUL ||
+           op->code == LIR_OPCODE_UREM ||
+           op->code == LIR_OPCODE_SDIV ||
+           op->code == LIR_OPCODE_SREM;
 }
 
 static inline slice_t *extract_op_operands(lir_op_t *op, flag_t operand_flag, flag_t vr_flag, bool extract_value) {

@@ -1,4 +1,4 @@
-import coroutine as co
+import co
 import runtime
 
 type atm_t = struct {

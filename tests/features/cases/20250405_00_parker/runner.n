@@ -6,7 +6,7 @@ import parker.util
 import parker.cgroup
 import compress.tgz
 import os.signal
-import coroutine as co
+import co
 import fs
 
 var version = '0.2.0'

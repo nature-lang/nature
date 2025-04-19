@@ -527,8 +527,13 @@ static slice_t *arm64_native_div(closure_t *c, lir_op_t *op) {
 
     // 判断是否为整数除法
     if (arm64_is_integer_operand(op->first)) {
-        // 使用 SDIV 指令进行有符号整数除法
-        slice_push(operations, ARM64_INST(R_SDIV, result, dividend, divisor));
+        if (op->code == LIR_OPCODE_SDIV) {
+            // 使用 SDIV 指令进行有符号整数除法
+            slice_push(operations, ARM64_INST(R_SDIV, result, dividend, divisor));
+        } else {
+            slice_push(operations, ARM64_INST(R_UDIV, result, dividend, divisor));
+        }
+
     } else {
         // 使用 FDIV 指令进行浮点数除法
         slice_push(operations, ARM64_INST(R_FDIV, result, dividend, divisor));
@@ -578,7 +583,11 @@ static slice_t *arm64_native_rem(closure_t *c, lir_op_t *op) {
     temp_reg->size = dividend->size;
 
     // 1. 先做除法得到商: temp_reg = dividend / divisor
-    slice_push(operations, ARM64_INST(R_SDIV, temp_reg, dividend, divisor));
+    if (op->code == LIR_OPCODE_SREM) {
+        slice_push(operations, ARM64_INST(R_SDIV, temp_reg, dividend, divisor));
+    } else {
+        slice_push(operations, ARM64_INST(R_UDIV, temp_reg, dividend, divisor));
+    }
 
     // 2. 用 MSUB 计算余数: result = dividend - (temp_reg * divisor)
     slice_push(operations, ARM64_INST(R_MSUB, result, temp_reg, divisor, dividend));
@@ -669,13 +678,13 @@ static slice_t *arm64_native_shift(closure_t *c, lir_op_t *op) {
 
     // 根据 op->code 选择合适的移位指令
     switch (op->code) {
-        case LIR_OPCODE_SHL:
+        case LIR_OPCODE_USHL:
             slice_push(operations, ARM64_INST(R_LSL, result, source, shift_amount));
             break;
-        case LIR_OPCODE_SHR:
+        case LIR_OPCODE_USHR:
             slice_push(operations, ARM64_INST(R_LSR, result, source, shift_amount));
             break;
-        case LIR_OPCODE_SAR:
+        case LIR_OPCODE_SSHR:
             slice_push(operations, ARM64_INST(R_ASR, result, source, shift_amount));
             break;
         default:
@@ -942,8 +951,7 @@ static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
         assert(op->output->assert_type == LIR_OPERAND_REG);
         reg_t *result_reg = op->output->value;
         assert(result_reg->index == x0->index);
-        slice_push(operations, ARM64_INST(R_LDR, x0_operand, ARM64_INDIRECT_SYM(result_reg, TLS_YIELD_SAFEPOINT_IDENT,
-                                                                                ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12)));
+        slice_push(operations, ARM64_INST(R_LDR, x0_operand, ARM64_INDIRECT_SYM(result_reg, TLS_YIELD_SAFEPOINT_IDENT, ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12)));
 
         // 3.?
         slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(x16), ARM64_INDIRECT(result_reg, 0, 0, QWORD)));
@@ -957,11 +965,13 @@ static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
         // 2.1 添加高12位偏移量
         arm64_asm_operand_t *tls_hi12_operand = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
                                                           ASM_ARM64_RELOC_TLSLE_ADD_TPREL_HI12);
+
         slice_push(operations, ARM64_INST(R_ADD, x0_operand, x0_operand, tls_hi12_operand));
 
         // 2.2 添加低12位偏移量
         arm64_asm_operand_t *tls_lo12_operand = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
                                                           ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12_NC);
+
         slice_push(operations, ARM64_INST(R_ADD, x0_operand, x0_operand, tls_lo12_operand));
     }
 
@@ -1003,15 +1013,18 @@ arm64_native_fn arm64_native_table[] = {
         [LIR_OPCODE_NOT] = arm64_native_not,
         [LIR_OPCODE_OR] = arm64_native_or,
         [LIR_OPCODE_AND] = arm64_native_and,
-        [LIR_OPCODE_SAR] = arm64_native_shift,
-        [LIR_OPCODE_SHL] = arm64_native_shift,
+        [LIR_OPCODE_SSHR] = arm64_native_shift,
+        [LIR_OPCODE_USHL] = arm64_native_shift,
+        [LIR_OPCODE_USHR] = arm64_native_shift,
 
         // 算数运算
         [LIR_OPCODE_ADD] = arm64_native_add,
         [LIR_OPCODE_SUB] = arm64_native_sub,
-        [LIR_OPCODE_DIV] = arm64_native_div,
+        [LIR_OPCODE_UDIV] = arm64_native_div,
+        [LIR_OPCODE_SDIV] = arm64_native_div,
         [LIR_OPCODE_MUL] = arm64_native_mul,
-        [LIR_OPCODE_REM] = arm64_native_rem,
+        [LIR_OPCODE_UREM] = arm64_native_rem,
+        [LIR_OPCODE_SREM] = arm64_native_rem,
 
         // 逻辑相关运算符
         [LIR_OPCODE_SGT] = arm64_native_scc,
@@ -1024,7 +1037,7 @@ arm64_native_fn arm64_native_table[] = {
 
         [LIR_OPCODE_MOVE] = arm64_native_mov,
         [LIR_OPCODE_LEA] = arm64_native_lea,
-        [LIR_OPCODE_ZEXT] = arm64_native_zext,
+        [LIR_OPCODE_UEXT] = arm64_native_zext,
         [LIR_OPCODE_SEXT] = arm64_native_sext,
         [LIR_OPCODE_TRUNC] = arm64_native_trunc,
         [LIR_OPCODE_FN_BEGIN] = arm64_native_fn_begin,

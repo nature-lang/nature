@@ -1,0 +1,134 @@
+import http
+import co
+import fmt
+import process
+import time
+import syscall
+import fs
+import io
+import strings
+import os
+import path
+
+var seed = time.unix() as u64
+
+var nature_path = '/usr/local/nature/bin/nature'
+
+fn json_escape(string s):string {
+    [u8] buf = []
+    for c in s {
+        if c == `"`.ascii() {
+            buf.push('\\'.ascii())
+            buf.push('"'.ascii())
+        } else if c == '\\'.ascii() {
+            buf.push('\\'.ascii())
+            buf.push('\\'.ascii())
+        } else if c == '\n'.ascii() {
+            buf.push('\\'.ascii())
+            buf.push('n'.ascii())
+        } else if c == '\r'.ascii() {
+            buf.push('\\'.ascii())
+            buf.push('r'.ascii())
+        } else if c == '\t'.ascii() {
+            buf.push('\\'.ascii())
+            buf.push('t'.ascii())
+        } else if c == '\b'.ascii() {
+            buf.push('\\'.ascii())
+            buf.push('b'.ascii())
+        } else if c == '\f'.ascii() {
+            buf.push('\\'.ascii())
+            buf.push('f'.ascii())
+        } else {
+            buf.push(c)
+        }
+    }
+    return buf as string
+}
+
+fn random_u32(rawptr<u64> state):u32 {
+    *state ^= *state >> 12
+    *state ^= *state << 25
+    *state ^= *state >> 27
+    return ((*state * 0x2545F4914F6CDD1D) >> 32) as u32
+}
+
+fn create_tempdir():string! {
+    // rand u32
+    var suffix = random_u32(&seed)
+    // println('suffix:', suffix)
+    var tmpdir_path = fmt.sprintf('/tmp/playgrounds-%d', suffix)
+    syscall.mkdir(tmpdir_path, 0755)
+
+    return tmpdir_path
+}
+
+
+fn playgrounds_run(string code):string! {
+    // create temp dir
+    var tmpdir_path = create_tempdir()
+
+    // write code to temp file main.n
+    var source_path = fmt.sprintf('%s/main.n', tmpdir_path)
+    var f = fs.open(source_path, syscall.O_WRONLY | syscall.O_CREAT, 0755)
+    f.write(code as [u8])
+
+    var exec_path = fmt.sprintf('%s/main', tmpdir_path)
+
+    println('build exec_path: ', exec_path)
+
+    // process run 'nature build -o main main.n'
+    var state = process.run(nature_path, ['build', '-o', exec_path, source_path]) catch e {
+        throw errorf('nature build failed: %s', nature_path, source_path, e.msg())
+    }
+
+    if state.exit_code != 0 {
+        return fmt.sprintf(state.stderr)
+    }
+
+    // process run exec file main get output
+    var cmd = process.command(exec_path, []) 
+
+    var output_buf = new io.buffer()
+
+    cmd.stdout = output_buf
+
+    cmd.stderr = output_buf
+
+    cmd.spawn().wait() catch e {
+        throw errorf('exec main failed: %s', e.msg())
+    }
+
+    os.rmdir(tmpdir_path, true)
+    var output = output_buf.read_all() as string
+    return output
+}
+
+fn main():void! {
+    var app = http.server()
+
+    app.post('/playgrounds/run', fn(http.request_t req, ptr<http.response_t> res) {
+        var body = req.body
+
+        res.headers['Content-Type'] = 'application/json'
+
+        var result = playgrounds_run(body) catch e {
+            println('catch error', e.msg())
+            res.status = 500 // 500 Internal Server Error
+            res.send(fmt.sprintf('{"error": %s}', e.msg()))
+            return
+        }
+
+        // result = 'hello world\n';
+        println('read body', body, 'result', result)
+
+        // result 转移为 json string
+        result = json_escape(result)
+
+        res.send(fmt.sprintf('{"data": "%s"}', result))
+        // res.send(result)
+    })
+
+    println('server started')
+    app.listen(8888)
+    println('server is closed')
+}

@@ -38,7 +38,7 @@ void *fixalloc_alloc(fixalloc_t *f) {
 
     if (f->chunk_rem < f->size) {
         // 申请新的 chunk
-        fixalloc_link_t *chunk_ptr = sys_memory_map(NULL, f->chunk_size);
+        fixalloc_link_t *chunk_ptr = sys_memory_alloc(f->chunk_size);
         if (f->chunk_list == NULL) {
             f->chunk_list = chunk_ptr;
         } else {

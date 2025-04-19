@@ -1380,6 +1380,7 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
         ast_var_decl_t *symbol_var = symbol->ast_value;
 
         symbol_var->type = reduction_type(m, symbol_var->type); // 对全局符号表中的类型进行类型还原
+        assert(symbol_var->type.kind != TYPE_UNKNOWN);
         return symbol_var->type;
     }
 
@@ -2215,9 +2216,9 @@ static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_t
             // call ident 重写, 从而能够正确的从符号表中检索到 special_fn
             ident->literal = special_fn->symbol_name;
 
-//            type_t left_type = infer_left_expr(m, &call->left);
-//            assert(left_type.kind == TYPE_FN);
-//            return left_type.fn;
+            //            type_t left_type = infer_left_expr(m, &call->left);
+            //            assert(left_type.kind == TYPE_FN);
+            //            return left_type.fn;
         } while (0);
     }
 
@@ -2278,7 +2279,8 @@ static void infer_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
         INFER_ASSERTF(stmt->var_decl.type.kind != TYPE_VOID, "cannot assign to void");
     }
 
-    type_t right_type = infer_right_expr(m, &stmt->right, stmt->var_decl.type);
+    assert(stmt->right);
+    type_t right_type = infer_right_expr(m, stmt->right, stmt->var_decl.type);
     INFER_ASSERTF(right_type.kind != TYPE_VOID, "cannot assign void to var")
 
     // 需要进行类型推断
@@ -2290,16 +2292,19 @@ static void infer_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     }
 }
 
-static void infer_global_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
-    stmt->var_decl.type = reduction_type(m, stmt->var_decl.type);
-    type_t right_type = infer_right_expr(m, &stmt->right, stmt->var_decl.type);
+static void infer_global_assign(module_t *m, ast_global_assign_stmt_t *stmt) {
+    stmt->var_decl->type = reduction_type(m, stmt->var_decl->type);
+    type_t right_type = infer_right_expr(m, &stmt->right, stmt->var_decl->type);
 
-    if (stmt->var_decl.type.kind == TYPE_UNKNOWN) {
+    // left type
+    // global 自动类型推导
+    if (stmt->var_decl->type.kind == TYPE_UNKNOWN) {
         INFER_ASSERTF(type_confirmed(right_type), "type inference error, right type not confirmed");
 
-        stmt->var_decl.type = right_type;
-        return;
+        stmt->var_decl->type = right_type;
     }
+
+    infer_left_expr(m, &stmt->left);
 }
 
 /**
@@ -2636,6 +2641,9 @@ static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_STMT_ASSIGN: {
             return infer_assign(m, stmt->value);
+        }
+        case AST_STMT_GLOBAL_ASSIGN: {
+            return infer_global_assign(m, stmt->value);
         }
         case AST_FNDEF: {
             break;
@@ -3692,8 +3700,8 @@ static slice_t *generics_constraints_product(module_t *m, type_t *impl_type, lis
     }
 
     // 要么全都是 any 要么全都不是 any
-//    INFER_ASSERTF(any_count == 0 || any_count == generics_params->length,
-//                  "all generics params must have constraints or all none");
+    //    INFER_ASSERTF(any_count == 0 || any_count == generics_params->length,
+    //                  "all generics params must have constraints or all none");
 
     if (ident_is_def_or_alias(impl_type)) { // type ident 才会存在 args
         infer_generics_param_constraints(m, impl_type, generics_params);
@@ -3723,13 +3731,6 @@ void pre_infer(module_t *m) {
     // pref infer global vardef 中可能就会存在 generics gen, 所以需要有 temp_worklist 承受这些函数
     // 并在稍后的 infer 中进行处理
     m->temp_worklist = linked_new();
-
-    // - Global variables also contain type information, which needs to be restored and derived
-    for (int j = 0; j < m->global_vardef->count; ++j) {
-        ast_vardef_stmt_t *vardef = m->global_vardef->take[j];
-
-        infer_global_vardef(m, vardef);
-    }
 
     // - 遍历所有 global fndef 进行处理
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
@@ -3773,6 +3774,10 @@ void pre_infer(module_t *m) {
                 ANALYZER_ASSERTF(s, "generics fn '%s' param constraint redeclared", fndef->fn_name);
             }
         }
+    }
+
+    if (m->fn_init) {
+        infer_fndef(m->fn_init->module, m->fn_init);
     }
 }
 

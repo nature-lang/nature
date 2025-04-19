@@ -1,4 +1,4 @@
-import coroutine as co
+import co
 
 // type waitq_t = struct{
 //     rawptr<co.linkco_t> head

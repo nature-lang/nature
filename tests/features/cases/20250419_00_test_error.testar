@@ -1,0 +1,43 @@
+=== test_fmt_u32
+--- main.n
+import time
+import fmt
+
+u64 seed = 1744996865
+
+fn random_u32(rawptr<u64> state):u32 {
+    *state ^= *state >> 12
+    *state ^= *state << 25
+    *state ^= *state >> 27
+    return ((*state * 0x2545F4914F6CDD1D) >> 32) as u32
+}
+
+fn create_tempdir():string! {
+    // rand u32
+    var suffix = random_u32(&seed)
+    var tmpdir_path = fmt.sprintf('/tmp/playgrounds-%d', suffix)
+
+    return tmpdir_path
+}
+
+fn main():void! {
+    println(seed)
+    var result = create_tempdir()
+    println(result)
+    assert(result == '/tmp/playgrounds-3102678087')
+}
+
+
+=== test_global_arr
+--- main.n
+[u8;5] global_arr = [
+    1,
+    2,
+    3,
+    4,
+    5,
+]
+
+fn main() {
+    assert(global_arr[0] == 1 && global_arr[1] == 2)
+}

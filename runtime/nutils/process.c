@@ -157,7 +157,7 @@ process_context_t *rt_uv_process_spawn(command_t *cmd) {
     ctx->args[0] = rt_string_ref(cmd->name);
     for (int i = 0; i < cmd->args->length; ++i) {
         n_string_t *arg;
-        rt_vec_access(cmd->args, i, &arg);
+        rti_vec_access(cmd->args, i, &arg);
         ctx->args[i + 1] = rt_string_ref(arg);
     }
     ctx->args[arg_count - 1] = NULL;
@@ -168,7 +168,7 @@ process_context_t *rt_uv_process_spawn(command_t *cmd) {
 
         for (int i = 0; i < cmd->env->length; ++i) {
             n_string_t *env;
-            rt_vec_access(cmd->env, i, &env);
+            rti_vec_access(cmd->env, i, &env);
             ctx->envs[i] = rt_string_ref(env);
         }
         ctx->envs[cmd->env->length] = NULL;
@@ -201,6 +201,7 @@ process_context_t *rt_uv_process_spawn(command_t *cmd) {
     ctx->pid = ctx->req.pid;
     assert(ctx->pid);
 
+    DEBUGF("[rt_uv_process_spawn] end, ctx: %p", ctx)
     return ctx;
 }
 
@@ -222,6 +223,8 @@ void rt_uv_process_wait(process_context_t *ctx) {
         DEBUGF("[rt_uv_process_wait] process exited")
         return;
     }
+
+    DEBUGF("[rt_uv_process_wait] process %ld will yield wating", ctx->pid);
 
     // yield wait exited
     ctx->req.data = co;

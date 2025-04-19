@@ -39,7 +39,7 @@ void signal_notify(n_chan_t *ch, n_vec_t *signals) {
         // 原有逻辑：处理指定的信号
         for (int i = 0; i < signals->length; i++) {
             size_t sig;
-            rt_vec_access(signals, i, &sig);
+            rti_vec_access(signals, i, &sig);
             if (sig < 0 || sig > NSIG - 1) {
                 continue;
             }
