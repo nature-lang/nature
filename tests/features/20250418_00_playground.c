@@ -104,17 +104,19 @@ int main(void) {
     char curl_cmd[4096];
     char buf[2048] = {0};
 
-    snprintf(curl_cmd, sizeof(curl_cmd),
-             "curl -s -X POST http://127.0.0.1:8888/playgrounds/run "
-             "-H 'content-type: text/plain' --data-binary '%s'",
-             code1);
-    FILE *fp = popen(curl_cmd, "r");
-    fread(buf, 1, sizeof(buf) - 1, fp);
-    pclose(fp);
-    if (!strstr(buf, "hello world\\nhello error\\n")) {
-        kill(pid, SIGKILL);
-        waitpid(pid, NULL, 0); // 等待子进程退出
-        assertf(false, "buf: %s", buf);
+    for (int i = 0; i < 20; ++i) {
+        snprintf(curl_cmd, sizeof(curl_cmd),
+                 "curl -s -X POST http://127.0.0.1:8888/api/playgrounds/run"
+                 "-H 'content-type: text/plain' --data-binary '%s'",
+                 code1);
+        FILE *fp = popen(curl_cmd, "r");
+        fread(buf, 1, sizeof(buf) - 1, fp);
+        pclose(fp);
+        if (!strstr(buf, "hello world\\nhello error\\n")) {
+            kill(pid, SIGKILL);
+            waitpid(pid, NULL, 0); // 等待子进程退出
+            assertf(false, "buf: %s", buf);
+        }
     }
 
     // kill pid

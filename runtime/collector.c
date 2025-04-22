@@ -183,14 +183,14 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             // 内存回收(未返回到堆)
             allocated_bytes -= span->obj_size;
 
-            TDEBUGF("[sweep_span] will sweep, span_base=%p obj_addr=%p", span->base, (void *) (span->base + i * span->obj_size));
+            DEBUGF("[sweep_span] will sweep, span_base=%p obj_addr=%p", span->base, (void *) (span->base + i * span->obj_size));
 
             // TODO 直接 set 0 让 gc 问题快速暴露出来, jit class 不允许设置内存，所以跳过
             if ((span->spanclass >> 1) != JIT_SIZECLASS) {
                 memset((void *) (span->base + i * span->obj_size), 0, span->obj_size);
             }
         } else {
-            TDEBUGF("[sweep_span] will sweep, span_base=%p, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
+            DEBUGF("[sweep_span] will sweep, span_base=%p, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
                     span->base,
                     (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
                     bitmap_test(span->gcmark_bits, i));
@@ -864,26 +864,26 @@ void runtime_gc() {
 
     // - gc stage: GC_START
     gc_stage = GC_STAGE_START;
-    TDEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START, pid %d", allocated_bytes / 1000, getpid());
+    DEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START, pid %d", allocated_bytes / 1000, getpid());
 
     memory->gc_count += 1;
 
     // 等待所有的 processor 进入安全点
     processor_all_need_stop();
     if (!processor_all_wait_safe(GC_STW_WAIT_COUNT)) {
-        TDEBUGF("[runtime_gc] wait processor safe timeout, will return")
+        DEBUGF("[runtime_gc] wait processor safe timeout, will return")
         processor_all_start(); // 清空安全点
         // 重置 next gc bytes
         gc_stage = GC_STAGE_OFF;
         return;
     }
 
-    TDEBUGF("[runtime_gc] all processor safe");
+    DEBUGF("[runtime_gc] all processor safe");
 
     // 开启写屏障
     gc_barrier_start();
 
-    TDEBUGF("[runtime_gc] barrier start");
+    DEBUGF("[runtime_gc] barrier start");
 
     // 注入 GC 工作协程, gc_worklist 用来检测状态判断 gc work 是否全部完成
     // stw 开启后 work 才会工作
@@ -898,31 +898,31 @@ void runtime_gc() {
 
     scan_pool();
 
-    TDEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
+    DEBUGF("[runtime_gc] gc work coroutine injected, will start the world");
     processor_all_start();
 
     // - gc stage: GC_MARK
     gc_stage = GC_STAGE_MARK;
-    TDEBUGF("[runtime_gc] gc stage: GC_MARK, the world start");
+    DEBUGF("[runtime_gc] gc stage: GC_MARK, the world start");
 
     // 等待所有的 processor 都 mark 完成
     wait_all_gc_work_finished();
 
     // STW 之后再更改 GC 阶段
-    TDEBUGF("[runtime_gc] wait all processor gc work completed, will stop the world and get solo stw locker");
+    DEBUGF("[runtime_gc] wait all processor gc work completed, will stop the world and get solo stw locker");
     processor_all_need_stop();
     if (!processor_all_wait_safe(GC_STW_SWEEP_COUNT)) {
-        TDEBUGF("[runtime_gc] wait processor safe sweep timeout, will return")
+        DEBUGF("[runtime_gc] wait processor safe sweep timeout, will return")
         processor_all_start();
         gc_stage = GC_STAGE_OFF;
         return;
     }
-    TDEBUGF("[runtime_gc] all processor safe");
+    DEBUGF("[runtime_gc] all processor safe");
     // -------------- STW start ----------------------------
 
     // - gc stage: GC_MARK_DONE
     gc_stage = GC_STAGE_MARK_DONE;
-    TDEBUGF("[runtime_gc] gc stage: GC_MARK_DONE");
+    DEBUGF("[runtime_gc] gc stage: GC_MARK_DONE");
 
     // mark 完成期间还会存在新的 mutator barrier 产生的指针推送到 worklist 中
     // 所以必须等 STW 后进行最后的收尾
@@ -930,21 +930,21 @@ void runtime_gc() {
 
     // - gc stage: GC_SWEEP
     gc_stage = GC_STAGE_SWEEP;
-    TDEBUGF("[runtime_gc] gc stage: GC_SWEEP");
+    DEBUGF("[runtime_gc] gc stage: GC_SWEEP");
 
     // gc 清理 需要获取 memory_locker, 避免 wait_sysmon 中 processor_free 产生新的 uncache_span
     // 此时已经 stw 了，所以不需要使用 memory->locker
     flush_mcache();
-    TDEBUGF("[runtime_gc] gc flush mcache completed");
+    DEBUGF("[runtime_gc] gc flush mcache completed");
 
     mcentral_sweep(memory->mheap);
 
     flush_pool();
 
-    TDEBUGF("[runtime_gc] mcentral_sweep completed, unlock success");
+    DEBUGF("[runtime_gc] mcentral_sweep completed, unlock success");
     // 更新 gcbits
     gcbits_arenas_epoch();
-    TDEBUGF("[runtime_gc] gcbits_arenas_epoch completed, will stop gc barrier");
+    DEBUGF("[runtime_gc] gcbits_arenas_epoch completed, will stop gc barrier");
 
     gc_barrier_stop();
     processor_all_start();
@@ -953,7 +953,7 @@ void runtime_gc() {
     // 更新 next gc byts
     next_gc_bytes = _next_gc_bytes;
     gc_stage = GC_STAGE_OFF;
-    TDEBUGF("[runtime_gc] gc stage: GC_OFF, gc_barrier_stop, current_allocated=%ldKB, cleanup=%ldKB",
+    DEBUGF("[runtime_gc] gc stage: GC_OFF, gc_barrier_stop, current_allocated=%ldKB, cleanup=%ldKB",
             allocated_bytes / 1024,
             (before - allocated_bytes) / 1024);
 }

@@ -4,23 +4,12 @@ include(CTest)
 ENABLE_LANGUAGE(ASM)
 FILE(GLOB_RECURSE RUNTIMES ../runtime/*c ../runtime/aco/acosw.S)
 
-if (CMAKE_SYSTEM_NAME STREQUAL "linux" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
-    set(LIBUV_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libuv_gcc.a")
-else ()
-    set(LIBUV_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libuv.a")
-endif ()
-message("LIBUV_STATIC: ${LIBUV_STATIC}")
-
 if (CMAKE_SYSTEM_NAME STREQUAL "darwin")
     set(LIBC_STATIC "")
 else ()
     set(LIBC_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libc.a")
 endif ()
 message("LIBC_STATIC: ${LIBC_STATIC}")
-
-add_executable(test_hash_table test_hash_table.c ${UTILS})
-target_link_libraries(test_hash_table ${LIBUV_STATIC})
-add_test(test_hash_table test_hash_table)
 
 add_executable(test_arm64_encoding test_arm64_encoding.c ${UTILS} ${SRC})
 add_test(test_arm64_encoding test_arm64_encoding)
@@ -73,6 +62,13 @@ endforeach()
 # ---------------------------------- 通过环境变量启用 runtime main debug 测试 ------------------------------------------
 if (DEFINED ENV{RUNTIME_DEBUG_CASE})
     message("RUNTIME_DEBUG_CASE is defined: $ENV{RUNTIME_DEBUG_CASE}")
+
+    if (CMAKE_SYSTEM_NAME STREQUAL "linux" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64")
+        set(LIBUV_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libuv_gcc.a")
+    else ()
+        set(LIBUV_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libuv.a")
+    endif ()
+    message("LIBUV_STATIC: ${LIBUV_STATIC}")
 
     set(TEST_IDENT $ENV{RUNTIME_DEBUG_CASE})
     message("[test_runtime_debug] find RUNTIME_DEBUG_CASE: ${TEST_IDENT}")

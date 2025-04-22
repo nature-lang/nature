@@ -197,12 +197,6 @@ nature-test/main.n:4:2: cannot use type 'interface' combination
 
 
 
-
-
-
-
-
-
 === test_type_param_failed1
 --- main.n
 type test<T:int> = struct{
@@ -306,7 +300,6 @@ fn main() {
 
 --- output.txt
 12
-
 
 
 

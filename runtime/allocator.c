@@ -566,7 +566,7 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
  * @param span
  */
 static void mheap_set_spans(mspan_t *span) {
-    TDEBUGF("[mheap_set_spans] start, span=%p, base=%p, spc=%d, obj_size=%lu, pages_count=%lu", span,
+    DEBUGF("[mheap_set_spans] start, span=%p, base=%p, spc=%d, obj_size=%lu, pages_count=%lu", span,
             (void *) span->base, span->spanclass,
             span->obj_size, span->pages_count);
 
@@ -578,7 +578,7 @@ static void mheap_set_spans(mspan_t *span) {
         uint64_t page_index = (cursor_addr - arena->base) / ALLOC_PAGE_SIZE;
 
         // 判断当前 page_index 是否已经被其他 span 占用，如果占用了
-        TDEBUGF(
+        DEBUGF(
                 "[mheap_set_spans] arena_base=%p page_index=%lu will set span=%p, span_base=%p, cursor_addr=%p, page_count=%lu",
                 (void *) arena->base,
                 page_index, span, (void *) span->base, (void *) cursor_addr,
@@ -592,7 +592,7 @@ static void mheap_set_spans(mspan_t *span) {
 }
 
 static void mheap_clear_spans(mspan_t *span) {
-    TDEBUGF("[mheap_clear_spans] span=%p, base=%p, obj_size: %lu, pages_count: %lu", span, (void *) span->base,
+    DEBUGF("[mheap_clear_spans] span=%p, base=%p, obj_size: %lu, pages_count: %lu", span, (void *) span->base,
             span->obj_size,
             span->pages_count);
 
@@ -603,7 +603,7 @@ static void mheap_clear_spans(mspan_t *span) {
         uint64_t page_index = (cursor_addr - arena->base) / ALLOC_PAGE_SIZE;
 
 
-        TDEBUGF("[mheap_clear_spans] arena_base: %p, page_index=%lu set span=%p, span_base=%p, pages_count=%ld",
+        DEBUGF("[mheap_clear_spans] arena_base: %p, page_index=%lu set span=%p, span_base=%p, pages_count=%ld",
                 (void *) arena->base, page_index, span,
                 (void *) span->base, span->pages_count)
 
@@ -842,7 +842,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
         bool used = bitmap_test(mspan->alloc_bits, i);
         if (used) {
             used_count += 1;
-            // TDEBUGF("[runtime.mcache_alloc] obj_index=%d/%lu, used, continue", i, mspan->obj_count);
+            // DEBUGF("[runtime.mcache_alloc] obj_index=%d/%lu, used, continue", i, mspan->obj_count);
             continue;
         }
 
@@ -1040,7 +1040,7 @@ arena_hint_t *arena_hints_init() {
  * @param span
  */
 void mheap_free_span(mheap_t *mheap, mspan_t *span) {
-    TDEBUGF("[mheap_free_span] start, span->base=%p, pages_count=%lu, chunk_index=%lu", (void *) span->base,
+    DEBUGF("[mheap_free_span] start, span->base=%p, pages_count=%lu, chunk_index=%lu", (void *) span->base,
             span->pages_count,
             chunk_index(span->base));
 
@@ -1060,13 +1060,13 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
     remove_total_bytes += span->pages_count * ALLOC_PAGE_SIZE;
 
     // 将物理内存归还给操作系统
-    TDEBUGF("[mheap_free_span] remove_total_bytes=%lu MB, span.base=%p, span.pages_count=%ld, remove_size=%lu",
+    DEBUGF("[mheap_free_span] remove_total_bytes=%lu MB, span.base=%p, span.pages_count=%ld, remove_size=%lu",
             remove_total_bytes / 1024 / 1024, (void *) span->base, span->pages_count,
             span->pages_count * ALLOC_PAGE_SIZE);
 
     sys_memory_unused((void *) span->base, span->pages_count * ALLOC_PAGE_SIZE);
 
-    TDEBUGF("[mheap_free_span] sys_memory_unused success");
+    DEBUGF("[mheap_free_span] sys_memory_unused success");
 }
 
 void memory_init() {
@@ -1199,7 +1199,7 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
         mark_ptr_black(ptr);
     }
 
-    TDEBUGF("[rti_gc_malloc] end p_index=%d, co=%p, result=%p, size=%d, hash=%d",
+    DEBUGF("[rti_gc_malloc] end p_index=%d, co=%p, result=%p, size=%d, hash=%d",
             p->index, coroutine_get(), ptr, size, rtype ? rtype->hash : 0);
 
     // jit span 不用清 0， 权限不足也无法进行清零
@@ -1327,7 +1327,7 @@ void *gc_malloc_size(uint64_t size) {
 
 
     // uint64_t stage2 = uv_hrtime();
-    // TDEBUGF("[gc_malloc_size] malloc size is %lu, use time %lu ", size, stage2 - start);
+    // DEBUGF("[gc_malloc_size] malloc size is %lu, use time %lu ", size, stage2 - start);
 
     void *result = rti_gc_malloc(size, NULL);
     return result;
