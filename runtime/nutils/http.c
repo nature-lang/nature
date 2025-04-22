@@ -1,7 +1,7 @@
 #include "http.h"
-#include "runtime/runtime.h"
 #include "runtime/processor.h"
 #include "runtime/rt_mutex.h"
+#include "runtime/runtime.h"
 
 #define DEFAULT_BACKLOG 128
 
@@ -22,10 +22,16 @@ static inline void on_async_close_cb(uv_handle_t *handle) {
 
 static inline void on_close_cb(uv_handle_t *handle) {
     conn_ctx_t *ctx = CONTAINER_OF(handle, conn_ctx_t, client_handle);
-    DEBUGF("[on_close_cb] ctx, %p, client_handle: %p", ctx, &ctx->client_handle);
+    DEBUGF("[on_close_cb] ctx, %p, client_handle: %p, async_handle: %p",
+           ctx, &ctx->client_handle, ctx->async_handle);
 
-    // 需要先关闭 async 才能释放内存 TODO 检查 async_handle 是否创建
-    uv_close((uv_handle_t *) &ctx->async_handle, on_async_close_cb);
+
+    // 需要先关闭 async 才能释放内存
+    if (uv_is_active((uv_handle_t *) &ctx->async_handle)) {
+        uv_close((uv_handle_t *) &ctx->async_handle, on_async_close_cb);
+    } else {
+        DEBUGF("[on_close_cb] ctx async_handle not active, not need close")
+    }
 
     // free(ctx->read_buf_base);
     // free(ctx->write_buf.base);

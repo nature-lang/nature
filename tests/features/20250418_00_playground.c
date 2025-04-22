@@ -89,7 +89,6 @@ char *code5 = "fn main() {\n"
 
 int main(void) {
     feature_test_build();
-    //    exec_imm_param();
 
     pid_t pid = fork();
     if (pid == 0) {
@@ -106,8 +105,8 @@ int main(void) {
 
     for (int i = 0; i < 20; ++i) {
         snprintf(curl_cmd, sizeof(curl_cmd),
-                 "curl -s -X POST http://127.0.0.1:8888/api/playgrounds/run"
-                 "-H 'content-type: text/plain' --data-binary '%s'",
+                 "curl -s -X POST http://127.0.0.1:8888/playgrounds/run"
+                 " -H 'content-type: text/plain' --data-binary '%s'",
                  code1);
         FILE *fp = popen(curl_cmd, "r");
         fread(buf, 1, sizeof(buf) - 1, fp);
