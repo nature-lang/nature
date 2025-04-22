@@ -955,7 +955,10 @@ static void build_archive(slice_t *modules) {
     strcat(cmd, " ");
     strcat(cmd, custom_link_object_path());
 
-    system(cmd);
+    int result = system(cmd);
+    if (result != 0) {
+        assertf(false, "Compiling static library failed. ar command error: %d", result);
+    }
 
     strcpy(BUILD_OUTPUT, path_join(BUILD_OUTPUT_DIR, "libmain.a"));
 
