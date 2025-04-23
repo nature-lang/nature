@@ -30,22 +30,31 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
     m->imports = slice_new();
     m->import_table = table_new();
     m->global_symbols = slice_new();
-    m->global_vardef = slice_new();// ast_vardef_stmt_t
+    m->global_vardef = slice_new(); // ast_vardef_stmt_t
     m->call_init_stmt = NULL;
     m->source_path = source_path;
     m->infer_type_args_stack = stack_new();
     m->ast_fndefs = slice_new();
     m->closures = slice_new();
-    m->asm_global_symbols = slice_new();// 文件全局符号以及 operations 编译过程中产生的局部符号
+    m->asm_global_symbols = slice_new(); // 文件全局符号以及 operations 编译过程中产生的局部符号
     m->asm_operations = slice_new();
     m->asm_temp_var_decl_count = 0;
     if (m->package_dir) {
+        // source rel_path 需要保留目录名称，取上一级目录作为 base ns, 需要处理特殊情况 /root/main.n 这种情况的编译
+        // package dir maybe eqs /root
         char *temp_dir = path_dir(m->package_dir);
-        m->rel_path = str_replace(m->source_path, temp_dir, "");
+        if (str_equal(temp_dir, "") || str_equal(temp_dir, "/")) {
+            m->rel_path = m->source_path;
+        } else {
+            m->rel_path = str_replace(m->source_path, temp_dir, "");
+        }
+        assert(m->rel_path);
+
         m->rel_path = ltrim(m->rel_path, "/");
     } else if (strstr(m->source_path, NATURE_ROOT) != NULL) {
         // builtin
         m->rel_path = str_replace(m->source_path, NATURE_ROOT, "");
+        assert(m->rel_path);
         m->rel_path = ltrim(m->rel_path, "/");
     } else {
         m->rel_path = m->source_path;
@@ -123,7 +132,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
             ast_fndef_t *fndef = stmt->value;
 
             if (fndef->impl_type.kind == 0) {
-                fndef->symbol_name = ident_with_prefix(m->ident, fndef->symbol_name);// 全局函数改名
+                fndef->symbol_name = ident_with_prefix(m->ident, fndef->symbol_name); // 全局函数改名
                 symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
                 ANALYZER_ASSERTF(s, "ident '%s' redeclared", fndef->symbol_name);
             } else {

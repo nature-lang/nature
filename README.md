@@ -2,46 +2,57 @@
 
 A general-purpose open-source programming language and compiler designed to provide developers with an **elegant and concise** development experience, enabling them to build secure and reliable cross-platform software **simply and efficiently**.
 
+
 ## Features
 
-### Implemented Features
-
-- Clean, natural, and consistent syntax design
-- Independent compilation system without LLVM dependency, supporting cross-platform compilation for linux/darwin on amd64/arm64
-- Comprehensive type system with support for generics, null safety, and error handling
-- Automatic garbage collection with very brief STW (Stop-The-World) pauses
-- Modular design with npkg package management system
-- Built-in shared-stack coroutines capable of millions of context switches per second
-- Built-in libuv integration with coroutine-based IO event loop
-- Built-in common data structures and standard library implementation with convenient C language interoperability
-- LSP (Language Server Protocol) support for editors
-
-### Planned Features
-
-- Progressive garbage collection with manual memory management capabilities
-- Test module with dedicated testing DSL, aimed at efficient and stable AI-assisted coding
-- Enhanced GC and non-preemptive coroutine scheduling system
-- Cross-platform compilation support for WASM and RISC64 platforms
-- Compilation to readable Go code
+- ✓ Simple, natural, and consistent syntax design
+- ✓ Independent compilation system, no dependency on llvm, supports cross-platform compilation
+- ✓ Well-formed type system with support for generics, null-value safety, and error handling
+- ✓ Automated GC, with very short STW
+- ✓ Modularity and package management system, npkg
+- ✓ Built-in shared-stack concatenation, millions of concatenation switches per second
+- ✓ Built-in libuv cooperates with the concatenation to handle IO event loops
+- ✓ Built-in implementations of common data structures and standard libraries, and easy interaction with C
+- ✓ Editor lsp support
+- ○ Asymptotic GC, capable of manual memory management
+- ○ Tests DSLs, efficient and stable use of AI coding
+- ○ macho cross-platform connector, currently lacks the macho linker darwin can't be cross-platform compilation.
+- ○ Improvement of collaborative scheduling system
+- ○ Cross-platform compilation support for wasm and risc64 platforms
+- ○ Compilation to readable golang programming language
 
 ## Project Status
 
-The project is currently under development. While the current syntax and API are relatively stable, minor syntax changes may occur before version 1.0.
+The nature programming language has reached a usable version, and the syntax APIs are basically stable, there will not be any drastic changes before version 1.0, but there are some minor syntax changes.
 
-The project includes a test suite and standard library to validate syntax functionality, though it hasn't been tested in medium to large-scale projects yet.
+The current version of nature source code supports compilation on the following target platforms
+- linux/amd64
+- linux/arm64
+- darwin/amd64
+- darwin/arm64
 
-Given Nature's current features, it is suitable for game engine and game development, scientific computing and AI, operating systems and IoT, as well as web development.
+nature includes a set of test cases and a standard library to test the usability of the syntax, but it has not been tested on a medium to large scale project, and so there are still many bugs.
 
-Future development priorities include:
-- Standard library enhancement
+Major work in the next versions of The main work is
+- Standard library refinement
+- Gathering user feedback
 - Project validation and bug fixes
-- Implementation of planned features listed above
+- Refinement of language features
+- Compilation into a readable golang programming language to increase the usability of the nature programming language
 
-nature is a project developed out of interest. golang is the programming language I use in my daily work, so nature is designed to be a continuation and optimization of the golang programming language, as described in the Features section.
+Official website: [https://nature-lang.org](https://nature-lang.org)
 
-golang has an excellent and high-performance cross-platform compiler and runtime implementation, and in future releases nature will be compiled into the readable golang language, further increasing the usability of the nature programming language.
+## Design Philosophy
 
-Official website: [https://nature-lang.org](https://nature-lang.org/)
+golang is the programming language I work with. It has a simple syntax, an excellent and high-performance cross-platform compiler and runtime implementations, an advanced concurrent design style, and a high-performance network. It has an excellent, high-performance cross-platform compiler and runtime implementation, an advanced concatenation design style, high-performance network I/O, and good support for standard libraries. However, there are some inconveniences.
+
+- Syntax is too simple, leading to lack of expressiveness.
+- Type system is not perfect, lack of nullable, enumerated parameter, generic (now available), etc.
+- Error handling mechanism is cumbersome.
+- GC and preemptive scheduling design is very good, but it also limits the scope of golang's application in areas such as GUI, OS, game development, and AI. nature is designed to be a continuation and optimization of the golang programming language, and to pursue certain differences, as described in the Features section.
+
+Based on the existing features of the nature programming language, it is suitable for game engines and game development, scientific computing and AI, OS and IoT, and web development.
+
 
 ## Installation
 
