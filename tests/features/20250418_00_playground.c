@@ -22,9 +22,11 @@ char *http_get(const char *path) {
 }
 
 char *code1 = "import fs\n"
+              "import co"
               "\n"
               "fn main() {\n"
               "    println(\"hello world\")\n"
+              "    co.sleep(100)\n"
               "    var stderr = fs.stderr()\n"
               "    stderr.write(\"hello error\\n\" as [u8])\n"
               "}";
