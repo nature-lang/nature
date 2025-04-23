@@ -32,7 +32,7 @@ fn main() {
 }
 
 --- output.txt
-catch panic:  index out of vec [12] with length 0
+catch panic:  index out of range [12] with length 0
 
 === test_panic
 --- main.n
@@ -53,7 +53,7 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' panic: 'index out of vec [12] with length 0' at nature-test/main.n:4:19
+coroutine 'main' panic: 'index out of range [12] with length 0' at nature-test/main.n:4:19
 
 === test_nested
 --- main.n

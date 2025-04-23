@@ -3,7 +3,7 @@
 import unsafe
 
 fn main():void! {
-    arr<u8,5> r = [1, 2, 3, 4, 5]
+    [u8;5] r = [1, 2, 3, 4, 5]
 
     // to ptr
     //  as rawptr<u8>

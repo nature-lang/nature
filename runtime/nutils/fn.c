@@ -233,9 +233,9 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime_ptr, 
 }
 
 void *fn_new(addr_t fn_addr, envs_t *envs) {
-    //    PRE_RTCALL_HOOK(); // env_new 已经设置 pre_rt_call_hook，此处不需要重复设置
+    // // env_new 已经设置 pre_rt_call_hook，此处不需要重复设置
     n_processor_t *p = processor_get();
-    assert(p->status == P_STATUS_RTCALL);
+//    assert(p->status == P_STATUS_RTCALL);
 
     DEBUGF("[runtime.fn_new] fn_addr=0x%lx, envs=%p", fn_addr, envs);
     assert(envs);
@@ -281,7 +281,7 @@ void *fn_new(addr_t fn_addr, envs_t *envs) {
 }
 
 envs_t *env_new(uint64_t length) {
-    PRE_RTCALL_HOOK();
+
     DEBUGF("[runtime.env_new] length=%lu, %p", length, env_upvalue_table);
     assert(env_upvalue_table);
 
@@ -297,7 +297,7 @@ envs_t *env_new(uint64_t length) {
  * stack 需要被回收，但是 stack addr 缺被引用了，此时需要将 stack addr 的值 copy 到 upvalue 中
  */
 void env_closure(uint64_t stack_addr, uint64_t rtype_hash) {
-    PRE_RTCALL_HOOK();
+
 
     mutex_lock(&env_upvalue_locker);
 
@@ -326,13 +326,12 @@ void env_closure(uint64_t stack_addr, uint64_t rtype_hash) {
     table_delete(env_upvalue_table, utoa(stack_addr));
 
     mutex_unlock(&env_upvalue_locker);
-    post_rtcall_hook("env_closure");
 }
 
 void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t size) {
     uint64_t start = uv_hrtime();
 
-    PRE_RTCALL_HOOK();
+
     DEBUGF("[runtime.env_assign_ref] fn_base=%p, index=%lu, src_ref=%p, size=%lu", fn, index, src_ref, size);
     assert(index < fn->envs->length);
     assert(fn);
@@ -355,7 +354,7 @@ void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t si
 }
 
 void *env_element_value(runtime_fn_t *fn, uint64_t index) {
-    PRE_RTCALL_HOOK();
+
     DEBUGF("[runtime.env_element_value] fn_base=%p, envs=%p, envs.length=%lu, index=%lu, fn_addr=%p", fn, fn->envs,
            fn->envs->length, index, (void *) fn->fn_addr);
     assert(fn);

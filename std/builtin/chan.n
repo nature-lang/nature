@@ -1,4 +1,4 @@
-import coroutine as co
+import co
 
 // type waitq_t = struct{
 //     rawptr<co.linkco_t> head
@@ -15,7 +15,7 @@ import coroutine as co
 
 //    int msg_size
 
-//    arr<u8,40> lock
+//    [u8;40] lock
 //    bool closed
 //}
 
@@ -57,8 +57,10 @@ fn chan<T>.on_recv():T {
     return msg
 }
 
-fn chan<T>.try_recv(T msg):bool! {
-    return rt_chan_recv(self as anyptr, &msg as anyptr, true)
+fn chan<T>.try_recv():(T, bool)! {
+    T msg = @default()
+    bool is_recv = rt_chan_recv(self as anyptr, &msg as anyptr, true)
+    return (msg, is_recv)
 }
 
 #linkid rt_chan_close

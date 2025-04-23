@@ -15,7 +15,7 @@ type conn_ctx_t = struct{
     anyptr query_at
     anyptr body_at
     anyptr host_at
-    arr<header_t,100> headers
+    [header_t;100] headers
 
     int read_buf_cap
     int read_buf_len

@@ -141,7 +141,7 @@ fn persons_to_string(vec<person_t> persons):string {
 --- main.n
 import fmt
 
-fn main():void! {
+fn main() {
     [int] nums = [1, 1, 1, 1, 1, 3, 5, 7, 7, 9, 11, 13, 15]
     
     int target = 7
@@ -166,7 +166,7 @@ type person_t = struct {
     f64 height
 }
 
-fn main():void! {
+fn main() {
     [int] nums = [1, 1, 1, 1, 1, 3, 5, 7, 7, 9, 11, 13, 15]
     
     int target = 7
@@ -335,3 +335,39 @@ fn main():void! {
     assert(use_time < 1000)
     println('use time(ms)', use_time)
 }
+
+=== test_notfound_search
+--- main.n
+fn main():void! {
+    var list = [1, 2, 3, 4, 42, 29, 11]
+    int idx = list.search(fn(int a):bool {
+        return a >= 7
+    })
+
+    if idx >= list.len() || list[idx] != 7 {
+        println('not found, idx is', idx)
+    } else {
+        println('found, idx is', idx)
+    }
+}
+
+--- output.txt
+not found, idx is 7
+
+=== test_str_search
+--- main.n
+fn main() {
+    var strlist = ['h', 'he', 'wor', '\n']
+    var idx = strlist.search(fn(int i):bool{
+        return strlist[i] == 'nice'
+    })
+
+    if idx >= strlist.len() || strlist[idx] != 'nice' {
+        println('not found, idx is', idx)
+    } else {
+        println('found, idx is', idx)
+    }
+}
+
+--- output.txt
+not found, idx is 4

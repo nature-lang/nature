@@ -58,6 +58,10 @@ typedef enum {
     OPERAND_TYPE_RM16,
     OPERAND_TYPE_RM32,
     OPERAND_TYPE_RM64,
+
+    // 段寄存器支持
+    OPERAND_TYPE_SEG64,
+
     OPERAND_TYPE_IMM8,
     OPERAND_TYPE_IMM16,
     OPERAND_TYPE_IMM32,
@@ -256,7 +260,7 @@ void opcode_format_encoding(amd64_binary_format_t *format, uint8_t *data, uint8_
 
 void opcode_sort_insts(amd64_opcode_insts_t *insts);
 
-amd64_opcode_inst_t *amd64_asm_inst_encoding(amd64_asm_inst_t inst, uint8_t *data, uint8_t *count);
+amd64_opcode_inst_t *amd64_asm_inst_encoding(amd64_asm_inst_t inst, uint8_t *data, uint8_t *count, closure_t *c);
 
 void amd64_opcode_init();
 

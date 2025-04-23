@@ -5,7 +5,7 @@
 #include "utils/linked.h"
 
 // 如果仅仅使用
-#define ALLOC_USE_MIN 4
+#define ALLOC_USE_MIN 8
 
 /**
  * 根据块的权重（loop.depth） 对所有基本块进行排序插入到 closure_t->order_blocks 中

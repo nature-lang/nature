@@ -128,7 +128,7 @@ typedef enum {
     TOKEN_IMPORT,
     TOKEN_RETURN,
     TOKEN_GO,
-    TOKEN_STMT_EOF,
+    TOKEN_STMT_EOF, // ;
     TOKEN_EOF,// TOKEN_EOF 一定要在最后一个，否则会索引溢出
 } token_type_t;
 

@@ -92,15 +92,15 @@ fn sprintf(string format, ...[any] args):string {
             } else if arg is i64 {
                  s = itos_with(arg as i64, fill, width)
             } else if arg is uint {
-                 s = itos_with(arg as uint, fill, width)
+                 s = utos_with(arg as uint, fill, width)
             } else if arg is u8 {
-                 s = itos_with(arg as u8, fill, width)
+                 s = utos_with(arg as u8, fill, width)
             }  else if arg is u16 {
-                 s = itos_with(arg as u16, fill, width)
+                 s = utos_with(arg as u16, fill, width)
             } else if arg is u32 {
-                 s = itos_with(arg as u32, fill, width)
+                 s = utos_with(arg as u32, fill, width)
             } else if arg is u64 {
-                 s = itos_with(arg as u64, fill, width)
+                 s = utos_with(arg as u64, fill, width)
             }  else {
                  s = '%!d'
             }
@@ -172,15 +172,15 @@ fn sprintf(string format, ...[any] args):string {
             } else if arg is i64 {
                  s = itos(arg)
             } else if arg is uint {
-                 s = itos(arg)
+                 s = utos(arg)
             } else if arg is u8 {
-                 s = itos(arg)
+                 s = utos(arg)
             }  else if arg is u16 {
-                 s = itos(arg)
+                 s = utos(arg)
             } else if arg is u32 {
-                 s = itos(arg)
+                 s = utos(arg)
             } else if arg is u64 {
-                 s = itos(arg)
+                 s = utos(arg)
             } else if arg is float {
                  s = ftos(arg)
             } else if arg is f64 {

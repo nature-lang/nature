@@ -94,7 +94,6 @@ static inline int bitmap_set_count(bitmap_t *b) {
 }
 
 static inline char *bitmap_to_str(uint8_t *bits, uint64_t count) {
-    return ""; // TODO
     char *result = mallocz(count + 1);
     for (int i = 0; i < count; ++i) {
         if (bitmap_test(bits, i)) {

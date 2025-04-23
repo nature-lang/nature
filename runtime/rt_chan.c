@@ -27,7 +27,7 @@ static void buf_pop(n_chan_t *ch, void *msg_ptr) {
     assert(!buf_empty(ch));
 
     if (msg_ptr) {
-        rt_vec_access(ch->buf, ch->buf_front, msg_ptr);
+        rti_vec_access(ch->buf, ch->buf_front, msg_ptr);
     }
 
     ch->buf_front = (ch->buf_front + 1) % ch->buf->capacity;
@@ -231,7 +231,7 @@ bool rt_chan_send(n_chan_t *chan, void *msg_ptr, bool try) {
     pthread_mutex_lock(&chan->lock);
 
     if (chan->closed) {
-        rt_throw("send on closed channel", false);
+        rti_throw("send on closed channel", false);
         pthread_mutex_unlock(&chan->lock);
         return false;
     }
@@ -257,7 +257,7 @@ bool rt_chan_send(n_chan_t *chan, void *msg_ptr, bool try) {
     }
 
     if (chan->closed) {
-        rt_throw("send on closed channel", false);
+        rti_throw("send on closed channel", false);
         pthread_mutex_unlock(&chan->lock);
         return false;
     }
@@ -287,7 +287,7 @@ bool rt_chan_send(n_chan_t *chan, void *msg_ptr, bool try) {
 
     // 已经 send 完成，也可能是 chan closed
     if (!linkco->success) {
-        rt_throw("send on closed channel", false);
+        rti_throw("send on closed channel", false);
         return false;
     }
 
@@ -361,7 +361,7 @@ bool rt_chan_recv(n_chan_t *chan, void *msg_ptr, bool try) {
 
     DEBUGF("[rt_chan_recv] sendq empty, will yield to waiting")
     if (chan->closed) {
-        rt_throw("recv on closed channel", false);
+        rti_throw("recv on closed channel", false);
         pthread_mutex_unlock(&chan->lock);
         return false;
     }
@@ -395,7 +395,7 @@ bool rt_chan_recv(n_chan_t *chan, void *msg_ptr, bool try) {
 
 void rt_chan_close(n_chan_t *chan) {
     if (chan->closed) {
-        rt_throw("chan already closed", false);
+        rti_throw("chan already closed", false);
         return;
     }
 
@@ -464,7 +464,7 @@ static bool selpark_commit(coroutine_t *co, void *arg) {
  * @return
  */
 int rt_chan_select(scase *cases, int16_t sends_count, int16_t recvs_count, bool _try) {
-    PRE_RTCALL_HOOK();
+
     DEBUGF("[rt_chan_select] cases = %p, sends_count = %d, recvs_count = %d", cases, sends_count, recvs_count);
 
     int16_t cases_count = sends_count + recvs_count;

@@ -1,4 +1,4 @@
-import coroutine as co
+import co
 
 fn div(i32 dividend, i32 divisor):i32! {
     co.sleep(500)
@@ -15,7 +15,7 @@ fn main() {
         println('in closure fn')
         co.sleep(1000)
         throw errorf('in closure err')
-    }(), co.SOLO)
+    }(), co.SAME)
 
     fut.await() catch err {
         println('fut.await catch err: ' + err.msg())

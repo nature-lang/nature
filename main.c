@@ -20,8 +20,10 @@ void print_help() {
     printf("Build Flags:\n");
     printf("  -o <name>     Specify output filename (default: main)\n");
     printf("  --archive     Generate static library (output: lib<name>.a)\n");
-    printf("  --target      Specify target platform for cross-compilation\n\n");
-
+    printf("  --target      Specify target platform for cross-compilation\n");
+    printf("  --ld <path>   Specify the path to the linker\n");
+    printf("  --ldflags <flags> Specify linker flags\n\n");
+    
     printf("Cross Compilation:\n");
     printf("  nature build --target <platform> <source_file>\n\n");
 
@@ -35,8 +37,9 @@ void print_help() {
     printf("  nature build main.n                         # Basic build\n");
     printf("  nature build -o test main.n                 # Custom output name\n");
     printf("  nature build --archive main.n               # Generate static library\n");
-    printf("  nature build --target linux_arm64 main.n    # Cross-compile for Linux ARM64\n\n");
-
+    printf("  nature build --target linux_arm64 main.n    # Cross-compile for Linux ARM64\n");
+    printf("  nature build --ld /usr/bin/ld main.n  # Custom linker and flags\n\n");
+    
     printf("Global Flags:\n");
     printf("  --help, -h    Show help information\n");
     printf("  --version, -v     Show version information\n");

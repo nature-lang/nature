@@ -226,6 +226,7 @@ struct module_t {
     table_t *import_table; // 使用处做符号改写使用
 
     // 对外全局符号 -> 三种类型 var/fn/type_decl
+    ast_fndef_t *fn_init;
     slice_t *global_symbols; // symbol_t, 这里只存储全局符号
     slice_t *global_vardef; // 用于在 infer 阶段进行类型推导
 
@@ -263,6 +264,7 @@ typedef struct {
     int8_t index; // 默认值为 -1， 标识不在循环中 block maybe in multi loops，index is unique number in
     // innermost(最深的) loop
     uint8_t depth; // block 的嵌套级别,数字越高嵌套的越深
+    bool vector; // 是否可以进行向量优化
 } loop_t;
 
 typedef struct basic_block_t {
@@ -358,6 +360,7 @@ typedef enum {
     LIR_OPERAND_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？又或者是 symbol?
     LIR_OPERAND_REG,
     LIR_OPERAND_SYMBOL_VAR, // 虚拟寄存器? 那我凭什么给虚拟寄存器分配内存地址？
+    LIR_OPERAND_SYMBOL_TLS, // TLS 类型 VAR
     LIR_OPERAND_STACK,
     LIR_OPERAND_PHI_BODY,
     LIR_OPERAND_PARAMS,
@@ -373,14 +376,31 @@ typedef enum {
 typedef enum {
     LIR_OPCODE_ADD = 1,
     LIR_OPCODE_SUB,
-    LIR_OPCODE_MUL,
-    LIR_OPCODE_DIV,
-    LIR_OPCODE_REM, // remainder
+    LIR_OPCODE_MUL, // 无符号
+    LIR_OPCODE_UDIV,
+    LIR_OPCODE_SDIV, // 有符号除法
+    LIR_OPCODE_UREM, // remainder
+    LIR_OPCODE_SREM, // 有符号 REM
     LIR_OPCODE_NEG, // -取负数
 
+    // int 类型转换
+    LIR_OPCODE_UEXT, // int 无符号扩展
+    LIR_OPCODE_SEXT, // int 有符号扩展
+    LIR_OPCODE_TRUNC, // int 大位宽截断
+
+
+    // 向量运算相关指令
+    LIR_OPCODE_VLOAD,
+    LIR_OPCODE_VSTORE,
+    LIR_OPCODE_VADD,
+    LIR_OPCODE_VSUB,
+    LIR_OPCODE_VMUL,
+    LIR_OPCODE_VDIV,
+
     // 位运算
-    LIR_OPCODE_SHR, // >>
-    LIR_OPCODE_SHL, // <<
+    LIR_OPCODE_SSHR, // >> 有符号右移
+    LIR_OPCODE_USHR, // >> 无符号右移
+    LIR_OPCODE_USHL, // << 无符号左移
     LIR_OPCODE_AND, // &
     LIR_OPCODE_OR, // |
     LIR_OPCODE_XOR, // ^
@@ -388,6 +408,7 @@ typedef enum {
 
     LIR_OPCODE_CLR, // clean reg
     LIR_OPCODE_CLV, // clean up var, result is var，等同于首次变量注册的功能
+    LIR_OPCODE_USLT, // unsigned set less than <
     LIR_OPCODE_SLT, // set less than <
     LIR_OPCODE_SLE, // set less eq <=
     LIR_OPCODE_SGT, // >
@@ -415,9 +436,9 @@ typedef enum {
     LIR_OPCODE_FN_BEGIN, // output 为 formals 操作数
     LIR_OPCODE_FN_END, // 无操作数
 
-    LIR_OPCODE_NOP, // 空的，不做任何操作的指令，但是将用于 ssa 的完整 use-def
+    LIR_OPCODE_SAFEPOINT,
 
-    LIR_OPCODE_ALLOC, // struct/arr 不确定是在栈上还是在堆上分配时使用该指令
+    LIR_OPCODE_NOP, // 空的，不做任何操作的指令，但是将用于 ssa 的完整 use-def
 } lir_opcode_t;
 
 typedef struct lir_operand_t lir_operand_t;
@@ -574,6 +595,10 @@ typedef struct {
     section_t *data_section;
     section_t *text_section;
 
+    // tls section
+    section_t *tdata_section;
+    section_t *tbss_section;
+
     bool leading_underscore;
 
     section_t *rodata_section;
@@ -618,4 +643,4 @@ bool type_union_compare(type_union_t *left, type_union_t *right);
 
 bool type_compare(type_t dst, type_t src, table_t *generics_param_table);
 
-#endif// NATURE_TYPES_H
+#endif // NATURE_TYPES_H

@@ -43,12 +43,12 @@ typedef struct mach_section_t {
     struct section_64 section;
 
     int64_t data_offset;
-    int64_t data_capacity;// 极限容量
-    uint8_t *data;        // 段二进制数据, 可以通过 realloc 扩容
+    int64_t data_capacity; // 极限容量
+    uint8_t *data; // 段二进制数据, 可以通过 realloc 扩容
     uint32_t sh_index;
     char name[1024];
 
-    struct mach_section_t *relocate;// 当前段对应的重定位段
+    struct mach_section_t *relocate; // 当前段对应的重定位段
 } mach_section_t;
 
 
@@ -62,7 +62,7 @@ typedef struct {
     struct symtab_command sc;
     mach_section_t *symbols;
 
-    mach_section_t *str_table;// str_data 数据存储
+    mach_section_t *str_table; // str_data 数据存储
 } mach_symtab_lc;
 
 typedef struct {
@@ -88,10 +88,10 @@ typedef struct {
     mach_symtab_lc *symtab_command;
     struct dysymtab_command dysymtab_command;
 
-    slice_t *sections;// lc_segment_64 包含的所有 section
+    slice_t *sections; // lc_segment_64 包含的所有 section
 
     uint64_t file_offset;
-    char *output;// 完整路径名称
+    char *output; // 完整路径名称
     uint8_t output_type;
 } mach_context_t;
 
@@ -123,7 +123,7 @@ static inline size_t macho_section_data_forward(mach_section_t *ms, uint64_t siz
     if (offset_end > ms->data_capacity) {
         macho_section_realloc(ms, offset_end);
     }
-    ms->data_offset = offset_end;// forward
+    ms->data_offset = offset_end; // forward
 
     if (align > ms->section.align) {
         ms->section.align = align;
@@ -133,7 +133,7 @@ static inline size_t macho_section_data_forward(mach_section_t *ms, uint64_t siz
 }
 
 static inline void *mach_section_ptr_add(mach_section_t *ms, uint64_t size) {
-    size_t offset = macho_section_data_forward(ms, size, 0);// 0 表示 1 字节对齐
+    size_t offset = macho_section_data_forward(ms, size, 0); // 0 表示 1 字节对齐
     return ms->data + offset;
 }
 
@@ -150,7 +150,7 @@ static inline int64_t mach_put_data(mach_section_t *ms, uint8_t *data, int64_t s
 }
 
 static uint64_t mach_put_str(mach_section_t *str_table, string_view_t *str) {
-    size_t len = str->size + 1;// 预留 \0
+    size_t len = str->size + 1; // 预留 \0
     uint64_t offset = str_table->data_offset;
 
     char *ptr = mach_section_ptr_add(str_table, len);
@@ -166,9 +166,9 @@ static uint64_t mach_put_str(mach_section_t *str_table, string_view_t *str) {
 static inline int64_t mach_put_sym(mach_symtab_lc *lc, struct nlist_64 *sym, char *name) {
     // 开辟一点空间处理符号
     struct nlist_64 *new_sym = mach_section_ptr_add(lc->symbols, sizeof(struct nlist_64));
-    uint64_t name_offset = 0;// name 在 str_table 中的 offset
+    uint64_t name_offset = 0; // name 在 str_table 中的 offset
     if (name && name[0]) {
-        char *prefixed_name = mallocz(strlen(name) + 2);// +2 为了 "_" 和 '\0'
+        char *prefixed_name = mallocz(strlen(name) + 2); // +2 为了 "_" 和 '\0'
         sprintf(prefixed_name, "_%s", name);
 
 
@@ -189,8 +189,8 @@ static inline int64_t macho_put_global_symbol(mach_context_t *ctx, char *name, v
 
     struct nlist_64 sym = {
             .n_type = N_SECT | N_EXT,
-            .n_sect = ctx->data_section->sh_index,// 定义符号值的的段的索引
-            .n_value = offset,                    // 定义符号值在段的便宜
+            .n_sect = ctx->data_section->sh_index, // 定义符号值的的段的索引
+            .n_value = offset, // 定义符号值在段的便宜
             .n_desc = 0,
     };
 
@@ -206,9 +206,9 @@ static inline mach_section_t *mach_section_new(mach_context_t *ctx, char *sectna
     strncpy(mc->section.segname, segname, 16);
 
     // 设置默认值
-    mc->section.align = 2;                  // 默认对齐 2*2 = 4byte
-    mc->section.flags = flag;               // 默认标志
-    mc->sh_index = ctx->sections->count + 1;// 从 1 开始计数
+    mc->section.align = 2; // 默认对齐 2*2 = 4byte
+    mc->section.flags = flag; // 默认标志
+    mc->sh_index = ctx->sections->count + 1; // 从 1 开始计数
 
     slice_push(ctx->sections, mc);
 
@@ -233,8 +233,8 @@ mach_put_relocate(mach_context_t *ctx, mach_section_t *apply_section, int32_t of
     rel->r_address = offset;
     rel->r_symbolnum = symbol_index;
     rel->r_pcrel = 0; // 默认不是 PC 相对重定位
-    rel->r_length = 2;// 默认为 4 字节 (2^2 = 4)
-    rel->r_extern = 1;// 默认为外部符号
+    rel->r_length = 2; // 默认为 4 字节 (2^2 = 4)
+    rel->r_extern = 1; // 默认为外部符号
     rel->r_type = type;
 
     // 根据重定位类型调整字段
@@ -245,17 +245,18 @@ mach_put_relocate(mach_context_t *ctx, mach_section_t *apply_section, int32_t of
             case X86_64_RELOC_BRANCH:
             case X86_64_RELOC_GOT_LOAD:
             case X86_64_RELOC_GOT:
+            case X86_64_RELOC_TLV:
                 rel->r_pcrel = 1;
                 break;
             case X86_64_RELOC_UNSIGNED:
-                rel->r_length = 3;// 8字节 (2^3 = 8)
+                rel->r_length = 3; // 8字节 (2^3 = 8)
                 break;
         }
     } else {
         switch (type) {
             // ARM64 重定位类型
             case ARM64_RELOC_UNSIGNED:
-                rel->r_length = 3;// 8字节
+                rel->r_length = 3; // 8字节
                 break;
             case ARM64_RELOC_BRANCH26:
             case ARM64_RELOC_PAGE21:
@@ -263,9 +264,9 @@ mach_put_relocate(mach_context_t *ctx, mach_section_t *apply_section, int32_t of
             case ARM64_RELOC_GOT_LOAD_PAGEOFF12:
             case ARM64_RELOC_POINTER_TO_GOT:
             case ARM64_RELOC_TLVP_LOAD_PAGE21:
-            case ARM64_RELOC_TLVP_LOAD_PAGEOFF12:
                 rel->r_pcrel = 1;
                 break;
+            case ARM64_RELOC_TLVP_LOAD_PAGEOFF12:
             case ARM64_RELOC_ADDEND:
                 // ADDEND 类型通常不需要特殊处理
                 break;
@@ -288,7 +289,7 @@ mach_put_rel_data(mach_context_t *ctx, mach_section_t *apply_section, int32_t re
 
     uint64_t sym_index = mach_put_sym(ctx->symtab_command,
                                       &(struct nlist_64) {
-                                              .n_sect = NO_SECT,// 重定位符号无法知道符号定义的 section
+                                              .n_sect = NO_SECT, // 重定位符号无法知道符号定义的 section
                                               .n_type = symbol_type,
                                               .n_value = 0},
                                       name);
@@ -306,7 +307,7 @@ static inline void reorder_symtab(mach_context_t *ctx) {
     struct nlist_64 *sorted_symbols = mallocz(nsyms * sizeof(struct nlist_64));
     uint32_t *old_to_new_index = mallocz(nsyms * sizeof(uint32_t));
     for (uint32_t i = 0; i < nsyms; i++) {
-        old_to_new_index[i] = i;// 初始化为原始索引
+        old_to_new_index[i] = i; // 初始化为原始索引
     }
 
     uint32_t local_count = 0;
@@ -340,7 +341,7 @@ static inline void reorder_symtab(mach_context_t *ctx) {
         if (n_sect > 0) {
             mach_section_t *ms = ctx->sections->take[n_sect - 1];
             symbols[i].n_sect = ms->sh_index;
-//            log_debug("symbol sect index change %d -> %d", n_sect, ms->sh_index);
+            //            log_debug("symbol sect index change %d -> %d", n_sect, ms->sh_index);
 
             // 基于 section addr 从新计算 symbol 在段表中的偏移
             symbols[i].n_value = ms->section.addr + symbols[i].n_value;
@@ -357,8 +358,6 @@ static inline void reorder_symtab(mach_context_t *ctx) {
             sorted_symbols[external_index] = symbols[i];
             old_to_new_index[i] = external_index++;
         }
-
-
     }
 
     // 将排序后的符号复制回原数组
@@ -382,7 +381,7 @@ static inline void reorder_symtab(mach_context_t *ctx) {
             for (uint32_t j = 0; j < sec->section.nreloc; j++) {
                 uint32_t old_idx = rel[j].r_symbolnum;
                 rel[j].r_symbolnum = old_to_new_index[old_idx];
-//                rel[j].r_address = sec->section.addr + rel[j].r_address;
+                //                rel[j].r_address = sec->section.addr + rel[j].r_address;
             }
         }
     }
@@ -432,16 +431,16 @@ static inline bool mach_output_object(mach_context_t *ctx) {
     }
 
     hdr.filetype = MH_OBJECT;
-    hdr.ncmds = 0;      /* to be modified */
+    hdr.ncmds = 0; /* to be modified */
     hdr.sizeofcmds = 0; /* to be modified */
     hdr.flags = MH_SUBSECTIONS_VIA_SYMBOLS;
-    hdr.ncmds = 3;// segment + symtab + dysymtab
+    hdr.ncmds = 3; // segment + symtab + dysymtab
 
     uint32_t sec_struct_size = 0;
     uint32_t nsects = 0;
     for (int i = 0; i < ctx->sections->count; ++i) {
         mach_section_t *sec = ctx->sections->take[i];
-        if (sec->data_offset == 0) {// 空 section 不写入 segment
+        if (sec->data_offset == 0) { // 空 section 不写入 segment
             continue;
         }
 
@@ -461,7 +460,7 @@ static inline bool mach_output_object(mach_context_t *ctx) {
     uint32_t addr = 0;
     for (int i = 0; i < ctx->sections->count; ++i) {
         mach_section_t *sec = ctx->sections->take[i];
-        if (sec->data_offset == 0) {// 空 section 不写入 segment
+        if (sec->data_offset == 0) { // 空 section 不写入 segment
             continue;
         }
 
@@ -513,11 +512,11 @@ static inline bool mach_output_object(mach_context_t *ctx) {
     reorder_symtab(ctx);
 
     // debug println 所有的 symbol 名称，sect, 以及 type
-//    struct nlist_64 *symbols = (struct nlist_64 *) ctx->symtab_command->symbols->data;
-//    for (int i = 0; i < ctx->symtab_command->sc.nsyms; i++) {
-//        struct nlist_64 *sym = &symbols[i];
-//        log_debug("index: %d, symbol: %s, sect: %d, type: %d\n", i, ctx->symtab_command->str_table->data + sym->n_un.n_strx, sym->n_sect, sym->n_type);
-//    }
+    //    struct nlist_64 *symbols = (struct nlist_64 *) ctx->symtab_command->symbols->data;
+    //    for (int i = 0; i < ctx->symtab_command->sc.nsyms; i++) {
+    //        struct nlist_64 *sym = &symbols[i];
+    //        log_debug("index: %d, symbol: %s, sect: %d, type: %d\n", i, ctx->symtab_command->str_table->data + sym->n_un.n_strx, sym->n_sect, sym->n_type);
+    //    }
 
     fwrite(&ctx->symtab_command->sc, 1, sizeof(struct symtab_command), f);
     file_offset += sizeof(struct symtab_command);
@@ -542,7 +541,6 @@ static inline bool mach_output_object(mach_context_t *ctx) {
 
         fwrite(sec->data, 1, sec->section.size, f);
         file_offset += sec->section.size;
-
     }
 
     while (file_offset < sec_offset) {
@@ -562,11 +560,11 @@ static inline bool mach_output_object(mach_context_t *ctx) {
         assert(file_offset == sec->section.reloff);
 
         // log_debug
-//        struct relocation_info *rel = (struct relocation_info *) sec->relocate->data;
-//        for (size_t j = 0; j < sec->section.nreloc; j++) {
-//            assert(rel[j].r_address < sec->section.size);
-//            log_debug("relocate: %d, symbol_index: %d", rel[j].r_address, rel[j].r_symbolnum);
-//        }
+        //        struct relocation_info *rel = (struct relocation_info *) sec->relocate->data;
+        //        for (size_t j = 0; j < sec->section.nreloc; j++) {
+        //            assert(rel[j].r_address < sec->section.size);
+        //            log_debug("relocate: %d, symbol_index: %d", rel[j].r_address, rel[j].r_symbolnum);
+        //        }
 
         fwrite(sec->relocate->data, 1, sec->relocate->data_offset, f);
         file_offset += sec->relocate->data_offset;
@@ -598,7 +596,7 @@ static inline mach_context_t *mach_context_new(char *output) {
 
     ctx->text_section = mach_section_new(ctx, "__text", "__TEXT",
                                          S_REGULAR | S_ATTR_SOME_INSTRUCTIONS | S_ATTR_PURE_INSTRUCTIONS);
-    ctx->text_section->section.align = 4;// 2^4按照 16 byte 对齐
+    ctx->text_section->section.align = 4; // 2^4按照 16 byte 对齐
 
     ctx->data_section = mach_section_new(ctx, "__data", "__DATA", S_REGULAR);
 
@@ -608,7 +606,7 @@ static inline mach_context_t *mach_context_new(char *output) {
     ctx->segment_command.initprot = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
 
     ctx->symtab_command = NEW(mach_symtab_lc);
-    ctx->symtab_command->symbols = NEW(mach_section_t);// 只使用到了 data 段
+    ctx->symtab_command->symbols = NEW(mach_section_t); // 只使用到了 data 段
     ctx->symtab_command->str_table = NEW(mach_section_t);
     mach_put_str(ctx->symtab_command->str_table, string_view_create("", 0));
 
@@ -622,4 +620,4 @@ static inline mach_context_t *mach_context_new(char *output) {
     return ctx;
 }
 
-#endif//NATURE_MACH_H
+#endif //NATURE_MACH_H

@@ -18,7 +18,6 @@ extern char test_error_msg[2048];
 } while(0)
 
 #define SET_LINE_COLUMN(src) { \
-    assert(src->line > 0);\
     m->current_line = src->line;\
     m->current_column = src->column;\
 }

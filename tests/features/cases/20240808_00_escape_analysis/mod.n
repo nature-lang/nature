@@ -1,4 +1,4 @@
-type bar_t = arr<int,5>
+type bar_t = [int;5]
 
 fn bar_t.len():int {
     return 5

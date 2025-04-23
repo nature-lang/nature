@@ -1,68 +1,14 @@
-import time
+import co
 import fmt
+import process
+import time
+import syscall
+import fs
+import io
+import strings
 
-type prob_index_t = struct{
-    f32 prob
-    int index
-}
-
-type pack_t = struct{
-    prob_index_t p
-}
-
-type warp_t = struct{
-    pack_t p
-}
-
-fn main():void! {
-    var probindex = vec_new<prob_index_t>(prob_index_t{}, 10)
-
-    probindex[0].index = 1
-    probindex[0].prob = 3.1314
-    println(probindex[0].index, probindex[0].prob)
-    assert(probindex[0].index == 1 && probindex[0].prob == 3.1314)
-
-    arr<prob_index_t,2> arrs = [prob_index_t{}, prob_index_t{}]
-    arrs[0].index = 2
-    arrs[0].prob = 1.33
-    println(arrs[0].index, arrs[0].prob)
-    assert(arrs[0].index == 2 && arrs[0].prob == 1.33)
-
-    var (a, b) = (probindex[0].index, arrs[0].index)
-    a *= 2
-    b *= 2
-    println(a, b)
-    assert(a == 2 && b == 4)
-
-    arr<[prob_index_t], 5> arrs2 = [
-        vec_new<prob_index_t>(prob_index_t{}, 10),
-        vec_new<prob_index_t>(prob_index_t{}, 10),
-    ]
-
-    arrs2[1][3].index = 3
-    arrs2[1][3].prob = 520.1314
-    println(arrs2[1][3].index, arrs2[1][3].prob)
-    assert(arrs2[1][3].index == 3 && arrs2[1][3].prob == 520.1314)
-
-    vec<[prob_index_t]> vec3 = [
-            vec_new<prob_index_t>(prob_index_t{}, 10),
-            vec_new<prob_index_t>(prob_index_t{}, 10),
-    ]
-
-    vec3[1][3].index = 4
-    vec3[1][3].prob = 110.120
-    println(vec3[1][3].index, vec3[1][3].prob)
-    assert(vec3[1][3].index == 4 && vec3[1][3].prob == 110.120)
-
-    var vec4 = [warp_t{}]
-    vec4[0].p.p.index = 5
-    vec4[0].p.p.prob = 119.911
-    println(vec4[0].p.p.index, vec4[0].p.p.prob)
-    assert(vec4[0].p.p.index == 5 && vec4[0].p.p.prob == 119.911)
-
-    var t1 = (prob_index_t{}, prob_index_t{})
-    t1[0].index = 6
-    t1[0].prob = -333.444
-    println(t1[0].index, t1[0].prob)
-    assert(t1[0].index == 6 && t1[0].prob == -333.444)
+fn main() {
+    // 直接申请 9217 个内存
+    var items = vec_new<u8>(0, 9217)
+    println(items.len())
 }

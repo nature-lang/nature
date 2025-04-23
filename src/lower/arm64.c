@@ -102,6 +102,8 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
 /**
  * symbol_var 需要通过 adrp 的形式寻址，所以这里进行 lea 形式改写， lea 在 native 阶段会改写成 adrp 的形式，注意此处只能基于 int 类型寄存器处理
  * 通过 lea 将符号地址加载到 int 类型寄存器, 假设是 x0 中后，后续的使用需要通过 indirect 来获取 x0 中的值
+ *
+ * 所有的 symbol_var 都会被改造成 lea 指令的形式
  * @param c
  * @param op
  * @return
@@ -120,7 +122,6 @@ static linked_t *arm64_lower_symbol_var(closure_t *c, lir_op_t *op) {
     if (op->first && op->first->assert_type == LIR_OPERAND_SYMBOL_VAR) {
         op->first = arm64_convert_lea_symbol_var(c, list, op->first);
     }
-
 
     if (op->second && op->second->assert_type == LIR_OPERAND_SYMBOL_VAR) {
         op->second = arm64_convert_lea_symbol_var(c, list, op->second);
@@ -182,8 +183,14 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
         op->first = arm64_convert_use_var(c, list, op->first);
     }
 
-    if (op->code == LIR_OPCODE_MUL || op->code == LIR_OPCODE_DIV || op->code == LIR_OPCODE_REM || op->code ==
-        LIR_OPCODE_XOR || op->code == LIR_OPCODE_OR || op->code == LIR_OPCODE_AND) {
+    if (op->code == LIR_OPCODE_MUL ||
+        op->code == LIR_OPCODE_UDIV ||
+        op->code == LIR_OPCODE_UREM ||
+        op->code == LIR_OPCODE_SDIV ||
+        op->code == LIR_OPCODE_SREM ||
+        op->code == LIR_OPCODE_XOR ||
+        op->code == LIR_OPCODE_OR ||
+        op->code == LIR_OPCODE_AND) {
         op->second = arm64_convert_use_var(c, list, op->second);
     }
 
@@ -199,6 +206,21 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
 
         linked_push(list, lir_op_move(dst, op->output));
     }
+
+    return list;
+}
+
+static linked_t *arm64_lower_safepoint(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+
+
+    // 创建临时寄存器存储标志地址
+    lir_operand_t *result_reg = lir_reg_operand(x0->index, TYPE_ANYPTR);
+    op->output = result_reg;
+
+    // 增加 label continue
+    linked_push(list, op);
+
 
     return list;
 }
@@ -254,17 +276,17 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
             linked_t *call_operations = arm64_lower_call(c, op);
             for (linked_node *call_node = call_operations->front; call_node != call_operations->rear;
                  call_node = call_node->succ) {
-                lir_op_t *call_op = call_node->value;
+                lir_op_t *temp_op = call_node->value;
 
-                linked_concat(operations, arm64_lower_symbol_var(c, call_op));
+                linked_concat(operations, arm64_lower_symbol_var(c, temp_op));
 
-                if (call_op->code == LIR_OPCODE_MOVE && !lir_can_mov(call_op)) {
-                    call_op->first = arm64_convert_use_var(c, operations, call_op->first);
-                    linked_push(operations, call_op);
+                if (temp_op->code == LIR_OPCODE_MOVE && !lir_can_mov(temp_op)) {
+                    temp_op->first = arm64_convert_use_var(c, operations, temp_op->first);
+                    linked_push(operations, temp_op);
                     continue;
                 }
 
-                linked_push(operations, call_op);
+                linked_push(operations, temp_op);
             }
             continue;
         }
@@ -279,12 +301,17 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
+        if (op->code == LIR_OPCODE_SAFEPOINT) {
+            linked_concat(operations, arm64_lower_safepoint(c, op));
+            continue;
+        }
+
         if (op->code == LIR_OPCODE_LEA) {
             linked_concat(operations, arm64_lower_lea(c, op));
             continue;
         }
 
-        if (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT || op->code == LIR_OPCODE_NEG) {
+        if (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT || op->code == LIR_OPCODE_NEG || lir_op_convert(op)) {
             linked_concat(operations, arm64_lower_ternary(c, op));
             continue;
         }

@@ -51,7 +51,7 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
         add_compile_definitions(DEBUG_LIR="${DEBUG_LIR}")
     endif()
     if(DEBUG_ASM)
-        add_compile_definitions(DEBUG_ASM)
+        add_compile_definitions(DEBUG_ASM="${DEBUG_ASM}")
     endif()
     if(DEBUG_PARSER)
         add_compile_definitions(DEBUG_PARSER)
@@ -91,7 +91,7 @@ set(GOBIN /usr/local/go/bin/go)
 set(PACKAGE_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME})
 
 add_custom_target(${PACKAGE_BINARY_NAME} ALL
-        COMMAND GOOS=${CMAKE_SYSTEM_NAME} GOARCH=${CMAKE_SYSTEM_PROCESSOR} ${GOBIN} build -o ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} ${PROJECT_SOURCE_DIR}/package/main.go
+        COMMAND CGO_ENABLED=0 GOOS=${CMAKE_SYSTEM_NAME} GOARCH=${CMAKE_SYSTEM_PROCESSOR} ${GOBIN} build -o ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} ${PROJECT_SOURCE_DIR}/package/main.go
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/package
         COMMENT "package manager npkg"
 )

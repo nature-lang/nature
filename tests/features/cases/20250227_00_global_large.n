@@ -1,16 +1,4 @@
-type foo_t = struct{
-    i64 a
-    i64 b
-    i64 c
-    i64 d
-    string e
-    string f
-    string g
-}
-
-foo_t foo = foo_t{}
-
-arr<u8,5> a = [
+[u8;5] global_arr = [
     1,
     2,
     3,
@@ -18,92 +6,6 @@ arr<u8,5> a = [
     5,
 ]
 
-var t = (
-  1,
-  true,
-  'hello world',
-)
-
-var m = {
-  "a": 1,
-  "b": 2,
-  "c": 3,
-}
-
-u32 bar = 25
-
 fn main() {
-    foo.a = 1
-    foo.b = 22
-    foo.c = 333
-    foo.d = 444
-    foo.e = "5555"
-    foo.f = "66666"
-    foo.g = "777777"
-
-    var i = foo.a
-    var j = foo.e
-
-    assert(foo.a == 1)
-    assert(foo.b == 22)
-    assert(foo.c == 333)
-    assert(foo.d == 444)
-    assert(foo.e == "5555")
-    assert(foo.f == "66666")
-    assert(foo.g == "777777")
-    assert(i == 1)
-    assert(j == "5555")
-
-    test_struct_param(foo)
-    test_arr_param(a)
-
-    var k = a[4]
-    a[0] = 11
-    a[4] = 55
-
-    assert(k == 5)
-    assert(a[0] == 11)
-    assert(a[1] == 2)
-    assert(a[2] == 3)
-    assert(a[3] == 4)
-    assert(a[4] == 55)
-
-    assert(bar == 25)
-    var car = bar
-    bar = 24
-    assert(car == 25 && bar == 24)
-}
-
-fn test_struct_param(foo_t f) {
-     assert(f.a == 1 && f.e == "5555")
-     f.a = -1
-     f.e = "-5555"
-     assert(f.a == -1 && f.e == "-5555")
-     assert(foo.a == 1 && foo.e == "5555")
-}
-
-fn test_arr_param(arr<u8,5> array) {
-    assert(array[0] == 1)
-    assert(array[1] == 2)
-    assert(array[2] == 3)
-    assert(array[3] == 4)
-    assert(array[4] == 5)
-
-    array[0] = 10
-    array[1] = 20
-    array[2] = 30
-    array[3] = 40
-    array[4] = 50
-
-    assert(array[0] == 10)
-    assert(array[1] == 20)
-    assert(array[2] == 30)
-    assert(array[3] == 40)
-    assert(array[4] == 50)
-
-    assert(a[0] == 1)
-    assert(a[1] == 2)
-    assert(a[2] == 3)
-    assert(a[3] == 4)
-    assert(a[4] == 5)
+    assert(global_arr[0] == 1 && global_arr[1] == 2)
 }

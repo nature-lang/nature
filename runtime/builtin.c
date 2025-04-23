@@ -17,7 +17,8 @@ static void print_arg(n_union_t *arg) {
     assert(arg && "[runtime.print_arg] arg is null");
     DEBUGF("[runtime.print_arg] arg=%p, ptr_value=%p", arg, arg->value.ptr_value);
     assert(arg->rtype && "[runtime.print_arg] arg->rtype is null");
-    DEBUGF("[runtime.print_arg] arg->rtype=%p, kind=%s, arg->value=%lu", arg->rtype, type_kind_str[arg->rtype->kind], arg->value.i64_value);
+    DEBUGF("[runtime.print_arg] arg->rtype=%p, kind=%s, arg->value=%lu", arg->rtype, type_kind_str[arg->rtype->kind],
+           arg->value.i64_value);
 
     if (arg->rtype->kind == TYPE_STRING) {
         // n_string_t 在内存视角，应该是由 2 块内存组成，一个是字符个数，一个是指向的数据结构(同样是内存视角)
@@ -51,7 +52,11 @@ static void print_arg(n_union_t *arg) {
 
 
     if (arg->rtype->kind == TYPE_UINT || arg->rtype->kind == TYPE_UINT64) {
+#ifdef __LINUX
         int n = sprintf(sprint_buf, "%lu", arg->value.u64_value);
+#else
+        int n = sprintf(sprint_buf, "%llu", arg->value.u64_value);
+#endif
         VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
@@ -71,7 +76,12 @@ static void print_arg(n_union_t *arg) {
         return;
     }
     if (arg->rtype->kind == TYPE_INT || arg->rtype->kind == TYPE_INT64) {
+#ifdef __LINUX
         int n = sprintf(sprint_buf, "%ld", arg->value.i64_value);
+#else
+        int n = sprintf(sprint_buf, "%lld", arg->value.i64_value);
+#endif
+
         VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
@@ -115,7 +125,8 @@ void print(n_vec_t *args, bool with_space) {
     addr_t base = (addr_t) args->data;// 把 data 中存储的值赋值给 p
     uint64_t element_size = args->element_size;
 
-    DEBUGF("[runtime.print] args vec=%p, len=%lu, data=%p, element_size=%lu", args, args->length, (void *) base, element_size);
+    DEBUGF("[runtime.print] args vec=%p, len=%lu, data=%p, element_size=%lu", args, args->length, (void *) base,
+           element_size);
 
     for (int i = 0; i < args->length; ++i) {
         addr_t p = base + (i * element_size);

@@ -245,7 +245,7 @@ fn vec<T>.break_patterns(int a, int b) {
     }
 }
 
-fn vec<T>.search(fn(int):bool predicate):int! {
+fn vec<T>.search(fn(int):bool predicate):int {
     int low = 0
     int high = self.len()
     
@@ -257,10 +257,10 @@ fn vec<T>.search(fn(int):bool predicate):int! {
             high = mid
         }
     }
-    
-    if low == self.len() {
-        throw errorf('not found')
-    }
-    
+
+    //if low >= self.len() || ??  {
+    //    throw errorf('not found')
+    //}
+
     return low
 }

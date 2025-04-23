@@ -20,24 +20,43 @@ void signal_notify(n_chan_t *ch, n_vec_t *signals) {
 
     // 判断 signal_handlers 是否有对应的 handle
     uint64_t mask = sc_map_get_64(&signal_handlers, (uint64_t) ch);
-    for (int i = 0; i < signals->length; i++) {
-        size_t sig;
-        rt_vec_access(signals, i, &sig);
-        if (sig < 0 || sig > NSIG - 1) {
-            continue;
+
+    // 如果 signals 为空，则监听所有信号
+    if (signals->length == 0) {
+        for (int i = 0; i < sizeof(all_signals) / sizeof(all_signals[0]); i++) {
+            int64_t sig = all_signals[i];
+            if (sig < 0 || sig > NSIG - 1) {
+                continue;
+            }
+
+            mask |= 1 << sig;
+            sig_ref[sig]++;
+
+            // set mask
+            signal_mask |= 1 << sig;
         }
+    } else {
+        // 原有逻辑：处理指定的信号
+        for (int i = 0; i < signals->length; i++) {
+            size_t sig;
+            rti_vec_access(signals, i, &sig);
+            if (sig < 0 || sig > NSIG - 1) {
+                continue;
+            }
 
-        mask |= 1 << sig;
-        sig_ref[sig]++;
+            mask |= 1 << sig;
+            sig_ref[sig]++;
 
-        // set mask
-        signal_mask |= 1 << sig;
+            // set mask
+            signal_mask |= 1 << sig;
+        }
     }
 
     sc_map_put_64(&signal_handlers, (uint64_t) ch, mask);
 
     if (!signal_loop_co) {
-        signal_loop_co = rt_coroutine_new(signal_loop, 0, NULL, NULL);
+        signal_loop_co = rt_coroutine_new(signal_loop, FLAG(CO_FLAG_RTFN), NULL, NULL);
+        DEBUGF("[signal_notify] pid %d builtin coroutine %p signal loop create success", getpid(), signal_loop_co);
         rt_coroutine_dispatch(signal_loop_co);
     }
 

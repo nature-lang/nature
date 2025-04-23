@@ -1,4 +1,4 @@
-import coroutine.cross
+import co.cross
 
 type linkco_t = struct{
     anyptr co // 所有的 coroutine 都可以通过 processor 标记，所以此处使用 anyptr 即可

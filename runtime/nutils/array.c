@@ -2,7 +2,7 @@
 #include "runtime/processor.h"
 
 n_anyptr_t array_element_addr(n_array_t *data, uint64_t rtype_hash, uint64_t index) {
-    PRE_RTCALL_HOOK();
+
     ASSERT_ADDR(data);
 
     DEBUGF("[runtime.array_element_addr] array=%p, rtype_hash=%lu, index=%lu", data, rtype_hash, index);
@@ -13,7 +13,7 @@ n_anyptr_t array_element_addr(n_array_t *data, uint64_t rtype_hash, uint64_t ind
     if (index >= array_rtype->length) {
         char *msg = tlsprintf("index out of array [%d] with length %d", index, array_rtype->length);
         DEBUGF("[runtime.array_element_addr] has err %s", msg);
-        rt_throw(msg, true);
+        rti_throw(msg, true);
         return 0;
     }
 

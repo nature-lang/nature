@@ -13,10 +13,10 @@
 #include "src/cfg.h"
 #include "src/debug/debug.h"
 #include "src/linear.h"
-#include "src/native/amd64.h"
-#include "src/native/arm64.h"
 #include "src/lower/amd64.h"
 #include "src/lower/arm64.h"
+#include "src/native/amd64.h"
+#include "src/native/arm64.h"
 #include "src/register/linearscan.h"
 #include "src/semantic/analyzer.h"
 #include "src/semantic/infer.h"
@@ -118,8 +118,11 @@ static void elf_custom_links() {
 
     // custom_global symbol
     // ------------------------------------------------------------------------------------------------------
-    double float_mask = -0.0;
-    elf_put_global_symbol(ctx, FLOAT_NEG_MASK_IDENT, &float_mask, QWORD);
+    double f64_mask = -0.0;
+    elf_put_global_symbol(ctx, F64_NEG_MASK_IDENT, &f64_mask, QWORD);
+    float f32_mast = (float) (-0.0);
+    elf_put_global_symbol(ctx, F32_NEG_MASK_IDENT, &f32_mast, DWORD);
+
 
     elf_file_format(ctx);
 
@@ -192,8 +195,10 @@ static void mach_custom_links() {
 
     // custom_global symbol
     // ------------------------------------------------------------------------------------------------------
-    double float_mask = -0.0;
-    macho_put_global_symbol(ctx, FLOAT_NEG_MASK_IDENT, &float_mask, QWORD);
+    double f64_mask = -0.0;
+    macho_put_global_symbol(ctx, F64_NEG_MASK_IDENT, &f64_mask, QWORD);
+    float f32_mast = (float) (-0.0);
+    macho_put_global_symbol(ctx, F32_NEG_MASK_IDENT, &f32_mast, DWORD);
 
     mach_output_object(ctx);
     log_debug(" --> assembler: %s\n", custom_link_object_path());
@@ -315,11 +320,11 @@ static void assembler_module(module_t *m) {
  * modules modules
  * @param modules
  */
-static void build_elf_exe(slice_t *modules) {
+static void linker_elf_exe(slice_t *modules) {
     // 检测是否生成
     int fd;
-    char *output = path_join(TEMP_DIR, LINKER_OUTPUT);
-    elf_context_t *ctx = elf_context_new(output, OUTPUT_EXE);
+    char *temp_output = path_join(TEMP_DIR, LINKER_OUTPUT);
+    elf_context_t *ctx = elf_context_new(temp_output, OUTPUT_EXE);
 
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
@@ -364,17 +369,22 @@ static void build_elf_exe(slice_t *modules) {
 
     // - core
     elf_output(ctx);
-    if (!file_exists(output)) {
+    if (!file_exists(temp_output)) {
         assertf(false, "[linker] linker failed");
     }
 
     remove(BUILD_OUTPUT);
-    copy(BUILD_OUTPUT, output, 0755);
-    log_debug("linker output--> %s\n", output);
+    copy(BUILD_OUTPUT, temp_output, 0755);
+    log_debug("linker output--> %s\n", temp_output);
     log_debug("build output--> %s\n", BUILD_OUTPUT);
 }
 
 static int command_exists(const char *cmd) {
+    // 首先检查绝对路径
+    if (file_exists((char *) cmd)) {
+        return 1;
+    }
+
     char *path = getenv("PATH");
     if (path == NULL) {
         return 0; // PATH 环境变量不存在
@@ -386,7 +396,7 @@ static int command_exists(const char *cmd) {
     int exists = 0;
 
     while (dir != NULL) {
-        char full_path[1024];
+        char full_path[8211];
         snprintf(full_path, sizeof(full_path), "%s/%s", dir, cmd);
 
         if (stat(full_path, &st) == 0) {
@@ -403,13 +413,12 @@ static int command_exists(const char *cmd) {
     return exists;
 }
 
-/**
- * -arch x86_64 -dynamic -platform_version macos 11.7.1 14.0 -e _runtime_main -o a.out libruntime.a libuv.a libSystem.tbd @objects.txt
- */
-static void build_mach_exe(slice_t *modules) {
+static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
+    assert(strlen(use_ld) > 0);
+
     // 检测当前设备是否安装了 ld 命令
-    if (!command_exists("ld")) {
-        assertf(false, "'ld' command not found. Please ensure it is installed and in your PATH.");
+    if (!command_exists(use_ld)) {
+        assertf(false, "'%s' command not found. Please ensure it is installed and in your PATH.", use_ld);
     }
 
     // 将 modules 中的 obj output_file 添加到文件 objects.txt 中, 用来作为 ld 的参数
@@ -424,6 +433,133 @@ static void build_mach_exe(slice_t *modules) {
             fprintf(obj_list, "%s\n", m->object_file);
         }
     }
+
+    fprintf(obj_list, "%s\n", custom_link_object_path());
+    fclose(obj_list);
+
+    // 添加必要的库文件
+    slice_push(linker_libs, lib_file_path(LIB_START_FILE));
+
+    slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
+    slice_push(linker_libs, lib_file_path(LIBUV_FILE));
+    slice_push(linker_libs, lib_file_path(LIBC_FILE));
+
+    // arm64 需要 libgcc
+    if (BUILD_ARCH == ARCH_ARM64) {
+        slice_push(linker_libs, lib_file_path(LIBGCC_FILE));
+    }
+
+    char libs_str[4096] = ""; // 用于存储库文件路径字符串
+    // 拼接 linker_libs 中的库文件路径
+    for (int i = 0; i < linker_libs->count; i++) {
+        char *lib = linker_libs->take[i];
+        strcat(libs_str, lib);
+        strcat(libs_str, " ");
+    }
+
+    // 拼接出 ld 参数
+    char *output = path_join(TEMP_DIR, LINKER_OUTPUT);
+    char cmd[8192];
+
+    // 对于 ELF 格式，链接命令格式不同于 Mach-O
+    snprintf(cmd, sizeof(cmd),
+             "%s -o %s %s @%s %s 2>/dev/null",
+             use_ld,
+             output,
+             ldflags,
+             objects_file,
+             libs_str);
+
+    // 使用 ld 命令执行链接
+    log_debug("%s", cmd);
+    int result = system(cmd);
+    if (result != 0) {
+        assertf(false, "Linking failed. ld command error: %d", result);
+    }
+
+    if (!file_exists(output)) {
+        assertf(false, "Linking failed. output file '%s' was not created", output);
+    }
+
+    remove(BUILD_OUTPUT);
+    copy(BUILD_OUTPUT, output, 0755);
+    log_debug("linker output --> %s", output);
+    log_debug("build output --> %s", BUILD_OUTPUT);
+}
+
+
+/**
+ * 查找 macOS 系统的 syslibroot 目录
+ * 首先尝试使用 xcrun 命令获取 SDK 路径
+ * 如果失败，则尝试一些常见的默认位置
+ * @return syslibroot 路径，如果找不到则返回 NULL
+ */
+static char *find_syslibroot() {
+    if (BUILD_OS != OS_DARWIN) {
+        return NULL;
+    }
+
+    // 尝试使用 xcrun 命令获取 SDK 路径
+    FILE *fp = popen("xcrun --show-sdk-path 2>/dev/null", "r");
+    if (fp) {
+        char path[PATH_MAX] = {0};
+        if (fgets(path, PATH_MAX, fp) != NULL) {
+            // 移除末尾的换行符
+            size_t len = strlen(path);
+            if (len > 0 && path[len - 1] == '\n') {
+                path[len - 1] = '\0';
+            }
+            pclose(fp);
+
+            // 检查路径是否存在
+            if (strlen(path) > 0 && dir_exists(path)) {
+                return strdup(path);
+            }
+        }
+        pclose(fp);
+    }
+
+    // 尝试常见的默认位置
+    char *default_paths[] = {
+            "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk",
+            "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk",
+            NULL};
+
+    for (int i = 0; default_paths[i] != NULL; i++) {
+        if (dir_exists(default_paths[i])) {
+            return strdup(default_paths[i]);
+        }
+    }
+
+    // 如果找不到，返回 NULL
+    return NULL;
+}
+
+/**
+ * ld -w -arch arm64 -dynamic -platform_version macos 11.7.1 14.0 -e _runtime_main -o a.out ${ldflags} libruntime.a libuv.a libSystem.tbd  @objects.txt
+ * ld -w -arch x86_64 -dynamic -platform_version macos 11.7.1 14.0 -e _runtime_main -o a.out libruntime.a libuv.a libSystem.tbd @objects.txt
+ */
+static void custom_ld_mach_exe(slice_t *modules, char *use_ld, char *ldflags) {
+    assert(strlen(use_ld) > 0);
+
+    // 检测当前设备是否安装了 ld 命令
+    if (!command_exists(use_ld)) {
+        assertf(false, "'%s' command not found. Please ensure it is installed and in your PATH.", use_ld);
+    }
+
+    // 将 modules 中的 obj output_file 添加到文件 objects.txt 中, 用来作为 ld 的参数
+    const char *objects_file = path_join(TEMP_DIR, "objects.txt");
+    FILE *obj_list = fopen(objects_file, "w");
+    if (!obj_list) {
+        assertf(false, "unable to create objects list file: %s", objects_file);
+    }
+    for (int i = 0; i < modules->count; i++) {
+        module_t *m = modules->take[i];
+        if (m->object_file) {
+            fprintf(obj_list, "%s\n", m->object_file);
+        }
+    }
+
 
     fprintf(obj_list, "%s\n", custom_link_object_path());
     fclose(obj_list);
@@ -446,7 +582,7 @@ static void build_mach_exe(slice_t *modules) {
     slice_push(linker_libs, lib_file_path(LIBUV_FILE));
     slice_push(linker_libs, lib_file_path(LIBMACH_C_FILE));
 
-    char libs_str[4096] = ""; // 用于存储库文件路径字符串
+    char libs_str[4096] = ""; // 用于存储库文件路径字符串, 比如 libruntime.a
     // 拼接 linker_libs 中的库文件路径
     for (int i = 0; i < linker_libs->count; i++) {
         char *lib = linker_libs->take[i];
@@ -454,17 +590,26 @@ static void build_mach_exe(slice_t *modules) {
         strcat(libs_str, " ");
     }
 
+    // 获取 syslibroot 路径
+    char *syslibroot = find_syslibroot();
+    char syslibroot_option[PATH_MAX + 32] = "";
+    if (syslibroot) {
+        snprintf(syslibroot_option, sizeof(syslibroot_option), "-syslibroot %s ", syslibroot);
+    }
+
 
     // 拼接出 ld 参数, libruntime.a/libuv.a/libSystem.tbd 都在 lib_file_path(LIBMACH_C_FILE)
     char *output = path_join(TEMP_DIR, LINKER_OUTPUT);
-    char cmd[8192];
+    char cmd[16384];
 
     snprintf(cmd, sizeof(cmd),
-             "ld -w -arch %s -dynamic -platform_version macos 11.7.1 14.0 "
-             "-e _%s -o %s %s @%s",
+             "%s -arch %s -dynamic -platform_version macos 11.7.1 14.0 %s"
+             "-o %s %s %s @%s 2>/dev/null",
+             use_ld,
              darwin_ld_arch,
-             LD_ENTRY,
+             syslibroot_option,
              output,
+             ldflags,
              libs_str,
              objects_file);
 
@@ -502,6 +647,11 @@ static void build_init(char *build_entry) {
     char temp_path[PATH_MAX] = "";
     if (realpath(build_entry, temp_path) == NULL) {
         assertf(false, "entry file='%s' not found", build_entry);
+    }
+
+    // darwin 默认使用 ld 链接
+    if (BUILD_OS == OS_DARWIN && strlen(USE_LD) == 0) {
+        strcpy(USE_LD, "ld");
     }
 
     // copy
@@ -545,6 +695,7 @@ static void build_assembler(slice_t *modules) {
         for (int j = 0; j < m->global_vardef->count; ++j) {
             ast_vardef_stmt_t *vardef = m->global_vardef->take[j];
             assert(vardef->var_decl.type.status == REDUCTION_STATUS_DONE);
+            assert(vardef->var_decl.type.kind != TYPE_UNKNOWN);
 
             ast_var_decl_t *var_decl = &vardef->var_decl;
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
@@ -672,11 +823,12 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
             linked_push(work_list, new_module);
             table_set(module_table, import->full_path, new_module);
+            // 按照层级进入到 modules 中(广度优先)
             slice_push(modules, new_module);
         }
     }
 
-    // modules contains
+    // modules contains, 倒叙遍历处理依赖关系
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
 
@@ -698,7 +850,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     assert(main_fndef);
 
     slice_t *new_body = slice_new();
-    for (int i = 0; i < modules->count; ++i) {
+    for (int i = modules->count - 1; i >= 0; --i) {
         module_t *m = modules->take[i];
         if (m->call_init_stmt) {
             slice_push(new_body, m->call_init_stmt);
@@ -737,7 +889,8 @@ static inline void cross_native(closure_t *c) {
 }
 
 static void build_compiler(slice_t *modules) {
-    for (int i = 0; i < modules->count; ++i) {
+    // module 基于广度 import 进入，倒叙遍历解决依赖问题
+    for (int i = modules->count - 1; i >= 0; --i) {
         pre_infer(modules->take[i]);
     }
 
@@ -859,11 +1012,21 @@ void build(char *build_entry, bool is_archive) {
     // 汇编
     build_assembler(modules);
 
+    // if custom ld(macos default use linker ld)
+
     if (is_archive) {
-        build_archive(modules);
-    } else if (BUILD_OS == OS_LINUX) {
-        build_elf_exe(modules);
+        return build_archive(modules);
+    }
+
+    if (strlen(USE_LD) > 0) {
+        if (BUILD_OS == OS_LINUX) {
+            custom_ld_elf_exe(modules, USE_LD, LDFLAGS);
+        } else {
+            assert(BUILD_OS == OS_DARWIN);
+            custom_ld_mach_exe(modules, USE_LD, LDFLAGS);
+        }
     } else {
-        build_mach_exe(modules);
+        assertf(BUILD_OS == OS_LINUX, "The cross-platform elf linker can only be used if the target is linux.");
+        linker_elf_exe(modules);
     }
 }

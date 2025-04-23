@@ -1,20 +1,20 @@
 #ifndef NATURE_RUNTIME_RUNTIME_H
 #define NATURE_RUNTIME_RUNTIME_H
 
-#include <pthread.h>
 #include <include/uv.h>
+#include <pthread.h>
 
-#include "utils/custom_links.h"
 #include "aco/aco.h"
 #include "fixalloc.h"
 #include "gcbits.h"
+#include "nutils/nutils.h"
 #include "rt_linked.h"
+#include "sizeclass.h"
 #include "utils/bitmap.h"
+#include "utils/custom_links.h"
 #include "utils/linked.h"
 #include "utils/mutex.h"
 #include "utils/type.h"
-#include "sizeclass.h"
-#include "nutils/nutils.h"
 
 
 #ifdef __LINUX
@@ -23,83 +23,112 @@
 #define ATOMIC _Atomic
 #endif
 
-int runtime_main(int argc, char *argv[]);
+/**
+ * crt1.o _start -> main  -> entry
+ */
+#ifndef HAS_TEST_MAIN
+#ifdef __DARWIN
+int runtime_main(int argc, char *argv[]) __asm("_main");
+#else
+int runtime_main(int argc, char *argv[]) __asm("main");
+#endif
+#endif
+
+//#ifdef __AMD64
+//#define CO_SCAN_REQUIRE(_co)                                                                                                                                                           \
+//    {                                                                                                                                                                                  \
+//        uint64_t rbp_value;                                                                                                                                                            \
+//        __asm__ volatile("mov %%rbp, %0" : "=r"(rbp_value));                                                                                                                           \
+//        _co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE);                                                                                                               \
+//        _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE);                                                                         \
+//        TRACEF("[pre_tplcall_hook] co=%p, status=%d, bp_value=%p, scan_offset=%lu, ret_addr=%p", _co, _co->status, (void *) rbp_value, _co->scan_offset, (void *) _co->scan_ret_addr); \
+//    };
+//#elif __ARM64
+//#define CO_SCAN_REQUIRE(_co)                                                                                                                                                                                                                                                                 \
+//    do {                                                                                                                                                                                                                                                                                     \
+//        addr_t _fp_value;                                                                                                                                                                                                                                                                    \
+//        __asm__ volatile("mov %0, x29" : "=r"(_fp_value));                                                                                                                                                                                                                                   \
+//        uint64_t _value = fetch_addr_value(_fp_value + POINTER_SIZE);                                                                                                                                                                                                                        \
+//        fndef_t *_fn = find_fn(_value, _co->p);                                                                                                                                                                                                                                              \
+//        if (!_fn) break;                                                                                                                                                                                                                                                                     \
+//        _co->scan_ret_addr = _value;                                                                                                                                                                                                                                                         \
+//        assert(_co->scan_ret_addr);                                                                                                                                                                                                                                                          \
+//        addr_t _prev_fp_value = fetch_addr_value(_fp_value);                                                                                                                                                                                                                                 \
+//        assert(_prev_fp_value);                                                                                                                                                                                                                                                              \
+//        _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (_prev_fp_value - _fn->stack_size);                                                                                                                                                                                      \
+//        TRACEF("[pre_tplcall_hook] co=%p, status=%d, fp_value=%p, prev_fn_value=%p, fn=%s, stack_size=%ld, scan_offset=%p, ret_addr=%p", _co, _co->status, (void *) _fp_value, (void *) _prev_fp_value, _fn->name, _fn->stack_size, (void *) _co->scan_offset, (void *) _co->scan_ret_addr); \
+//    } while (0);
+//#else
+//// not define
+//#endif
+
 
 #ifdef __AMD64
-#define CO_SCAN_REQUIRE(_co) \
-   { \
-        uint64_t rbp_value; \
-        __asm__ volatile("mov %%rbp, %0" : "=r"(rbp_value)); \
-        _co->scan_ret_addr = fetch_addr_value(rbp_value + POINTER_SIZE); \
-        _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (rbp_value + POINTER_SIZE + POINTER_SIZE); \
-        TRACEF("[pre_tplcall_hook] co=%p, status=%d, bp_value=%p, scan_offset=%lu, ret_addr=%p", _co, _co->status, (void*)rbp_value, _co->scan_offset, (void *) _co->scan_ret_addr); \
-    };
+#define CALLER_RET_ADDR(_co)                                  \
+    ({                                                        \
+        uint64_t _rbp_value;                                  \
+        __asm__ volatile("mov %%rbp, %0" : "=r"(_rbp_value)); \
+        fetch_addr_value(_rbp_value + POINTER_SIZE);           \
+    });
 #elif __ARM64
-#define CO_SCAN_REQUIRE(_co) \
-    do { \
-        addr_t _fp_value;     \
-        __asm__ volatile("mov %0, x29" : "=r"(_fp_value)); \
+#define CALLER_RET_ADDR(_co)                                          \
+    ({                                                                \
+        addr_t _fp_value;                                             \
+        __asm__ volatile("mov %0, x29" : "=r"(_fp_value));            \
         uint64_t _value = fetch_addr_value(_fp_value + POINTER_SIZE); \
-        fndef_t *_fn = find_fn(_value, _co->p); \
-        if (!_fn) break; \
-        _co->scan_ret_addr = _value; \
-        assert(_co->scan_ret_addr); \
-        addr_t _prev_fp_value = fetch_addr_value(_fp_value); \
-        assert(_prev_fp_value); \
-        _co->scan_offset = (uint64_t) p->share_stack.align_retptr - (_prev_fp_value - _fn->stack_size); \
-        TRACEF("[pre_tplcall_hook] co=%p, status=%d, fp_value=%p, prev_fn_value=%p, fn=%s, stack_size=%ld, scan_offset=%p, ret_addr=%p", _co, _co->status, (void*)_fp_value, (void*)_prev_fp_value, _fn->name, _fn->stack_size, (void*)_co->scan_offset, (void *) _co->scan_ret_addr); \
-    } while(0);
+        _value;                                                       \
+    });
 #else
-// not define
+#error "platform not supported"
 #endif
 
 #define P_LINKCO_CACHE_MAX 128
 
-#define GC_WORKLIST_LIMIT 1024// 每处理 1024 个 ptr 就 yield
+#define GC_WORKLIST_LIMIT 1024 // 每处理 1024 个 ptr 就 yield
 
-#define ARENA_SIZE 67108864// arena 的大小，单位 byte, 64M
+#define ARENA_SIZE 67108864 // arena 的大小，单位 byte, 64M
 
-#define ARENA_COUNT 4194304// 64 位 linux 按照每 64MB 内存进行拆分，一共可以拆分这个多个 arena
+#define ARENA_COUNT 4194304 // 64 位 linux 按照每 64MB 内存进行拆分，一共可以拆分这个多个 arena
 
 #if defined(__DARWIN) && defined(__ARM64)
 #define ALLOC_PAGE_SIZE 16384 // apple silicon 系统内存页按照 16byte 对齐
 
-#define ALLOC_PAGE_MASK (ALLOC_PAGE_SIZE - 1)// 0b1111111111111
+#define ALLOC_PAGE_MASK (ALLOC_PAGE_SIZE - 1) // 0b1111111111111
 #else
-#define ALLOC_PAGE_SIZE 8192// 单位 byte
+#define ALLOC_PAGE_SIZE 8192 // 单位 byte
 
-#define ALLOC_PAGE_MASK (ALLOC_PAGE_SIZE - 1)// 0b1111111111111
+#define ALLOC_PAGE_MASK (ALLOC_PAGE_SIZE - 1) // 0b1111111111111
 #endif
 
 
-#define MSTACK_SIZE (8 * 1024 * 1024)// 8M 由于目前还没有栈扩容机制，所以初始化栈可以大一点
+#define MSTACK_SIZE (8 * 1024 * 1024) // 8M 由于目前还没有栈扩容机制，所以初始化栈可以大一点
 
-#define ARENA_PAGES_COUNT 8192// 64M / 8K = 8192 个 page
+#define ARENA_PAGES_COUNT 8192 // 64M / 8K = 8192 个 page
 
-#define ARENA_BITS_COUNT 2097152// 1byte = 8bit 可以索引 4*8byte = 32byte 空间, 64MB 空间需要 64*1024*1024 / 32
+#define ARENA_BITS_COUNT 2097152 // 1byte = 8bit 可以索引 4*8byte = 32byte 空间, 64MB 空间需要 64*1024*1024 / 32
 
-#define PAGE_ALLOC_CHUNK_SPLIT 8192// 每组 chunks 中的元素的数量
+#define PAGE_ALLOC_CHUNK_SPLIT 8192 // 每组 chunks 中的元素的数量
 
 #define MMAP_SHARE_STACK_BASE 0xa000000000
 #define ARENA_HINT_BASE 0xc000000000 // 0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
 #ifdef __AMD64
-#define ARENA_HINT_MAX 0x800000000000// 128T
+#define ARENA_HINT_MAX 0x800000000000 // 128T
 #else
 #define ARENA_HINT_MAX 0x1000000000000 // 256T
 #endif
-#define ARENA_HINT_SIZE 1099511627776// 1 << 40
-#define ARENA_HINT_COUNT 128         // 0.75T ~ 128T
+#define ARENA_HINT_SIZE 1099511627776 // 1 << 40
+#define ARENA_HINT_COUNT 128 // 0.75T ~ 128T
 
 #define ARENA_BASE_OFFSET ARENA_HINT_BASE
 
-#define CHUNK_BITS_COUNT 512// 单位 bit, 一个 chunk 的大小是 512bit
+#define CHUNK_BITS_COUNT 512 // 单位 bit, 一个 chunk 的大小是 512bit
 
-#define STD_MALLOC_LIMIT (32 * 1024)// 32Kb
+#define STD_MALLOC_LIMIT (32 * 1024) // 32Kb
 
-#define PAGE_SUMMARY_LEVEL 5                                                    // 5 层 radix tree
-#define PAGE_SUMMARY_MERGE_COUNT 8                                              // 每个上级 summary 索引的数量
+#define PAGE_SUMMARY_LEVEL 5 // 5 层 radix tree
+#define PAGE_SUMMARY_MERGE_COUNT 8 // 每个上级 summary 索引的数量
 
-#define PAGE_SUMMARY_COUNT_L4 (128 * 1024 * 1024 / 4)                           // l5 一共管理 33554432 个 chunk(4M) (128T空间)
+#define PAGE_SUMMARY_COUNT_L4 (128 * 1024 * 1024 / 4) // l5 一共管理 33554432 个 chunk(4M) (128T空间)
 #define PAGE_SUMMARY_COUNT_L3 (PAGE_SUMMARY_COUNT_L4 / PAGE_SUMMARY_MERGE_COUNT) // 4194304, 每个 summary item 管理 32M 空间
 #define PAGE_SUMMARY_COUNT_L2 (PAGE_SUMMARY_COUNT_L3 / PAGE_SUMMARY_MERGE_COUNT) // 524288, 每个 summary item 管理 256M 空间
 #define PAGE_SUMMARY_COUNT_L1 (PAGE_SUMMARY_COUNT_L2 / PAGE_SUMMARY_MERGE_COUNT) // 65536, 每个 summary item 管理 2G 空间
@@ -107,20 +136,20 @@ int runtime_main(int argc, char *argv[]);
 
 // radix tree 每一层级中 summary item，管理的 page 数量
 #define L4_MAX_PAGES 512 // 512 个 page, 也就是 4KB
-#define L3_MAX_PAGES (L4_MAX_PAGES * 8)      // 4096 个 page, 32M
-#define L2_MAX_PAGES (L3_MAX_PAGES * 8)      // 32768 个 page, 256M
-#define L1_MAX_PAGES (L2_MAX_PAGES * 8)      // 262144 个 page, 2048M
-#define L0_MAX_PAGES (L1_MAX_PAGES * 8)      // 2097152 个 page, 16GB,  16GB * L0_count 8192 = 128T
+#define L3_MAX_PAGES (L4_MAX_PAGES * 8) // 4096 个 page, 32M
+#define L2_MAX_PAGES (L3_MAX_PAGES * 8) // 32768 个 page, 256M
+#define L1_MAX_PAGES (L2_MAX_PAGES * 8) // 262144 个 page, 2048M
+#define L0_MAX_PAGES (L1_MAX_PAGES * 8) // 2097152 个 page, 16GB,  16GB * L0_count 8192 = 128T
 
-#define PAGE_SUMMARY_MAX_VALUE 2LL ^ 21                                         // 2097152, max=start=end 的最大值
+#define PAGE_SUMMARY_MAX_VALUE 2LL ^ 21 // 2097152, max=start=end 的最大值
 
-#define DEFAULT_NEXT_GC_BYTES (100 * 1024)// 100KB
+#define DEFAULT_NEXT_GC_BYTES (100 * 1024) // 100KB
 #define NEXT_GC_FACTOR 2
 
 #define WAIT_BRIEF_TIME 1 // ms
-#define WAIT_SHORT_TIME 10// ms
-#define WAIT_MID_TIME 50  // ms
-#define WAIT_LONG_TIME 100// ms
+#define WAIT_SHORT_TIME 10 // ms
+#define WAIT_MID_TIME 50 // ms
+#define WAIT_LONG_TIME 100 // ms
 
 typedef void (*void_fn_t)(void);
 
@@ -290,12 +319,14 @@ typedef enum {
 typedef enum {
     P_STATUS_INIT = 0,
     P_STATUS_DISPATCH = 1,
-    P_STATUS_TPLCALL = 2,
-    P_STATUS_RTCALL = 3,
-    P_STATUS_RUNNABLE = 4,
-    P_STATUS_RUNNING = 5,
-    P_STATUS_PREEMPT = 6,
-    P_STATUS_EXIT = 7,
+
+    //    P_STATUS_TPLCALL = 2,
+    //    P_STATUS_RTCALL = 3,
+
+    P_STATUS_RUNNABLE = 3,
+    P_STATUS_RUNNING = 4,
+    P_STATUS_PREEMPT = 5,
+    P_STATUS_EXIT = 6,
 } p_status_t;
 
 typedef struct n_processor_t n_processor_t;
@@ -350,8 +381,6 @@ struct coroutine_t {
     // gc stage 是 mark 时, 当 gc_black 值小于 memory->gc_count 时，说明当前 coroutine stack 不是黑色的
     uint64_t gc_black;
 
-    bool gc_work; // 当前 coroutine 是否是 gc coroutine
-
     /**
     * arm64
      高地址
@@ -387,8 +416,8 @@ struct coroutine_t {
     +------------------------+
     低地址
     */
-    uint64_t scan_offset;
-    uint64_t scan_ret_addr;
+    //    uint64_t scan_offset;
+    //    uint64_t scan_ret_addr;
 
     bool has_error;
     n_interface_t *error; // throwable
@@ -408,6 +437,7 @@ struct coroutine_t {
  */
 struct n_processor_t {
     int index;
+    int64_t *tls_yield_safepoint_ptr;
     mcache_t mcache; // 线程维度无锁内存分配器
     aco_t main_aco; // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
     aco_share_stack_t share_stack; // processor 中的所有的 stack 都使用该共享栈
@@ -416,10 +446,8 @@ struct n_processor_t {
     uv_timer_t timer; // 辅助协程调度的定时器
     uv_loop_t uv_loop; // uv loop 事件循环
 
-    // - 仅仅 solo processor 需要该锁， share 进行协作时需要上锁，避免在此期间进行任何内存操作
-    mutex_t gc_stw_locker; // solo processor 辅助判断
     uint64_t need_stw; // 外部声明, 内部判断 是否需要 stw
-    uint64_t safe_point; // 内部声明, 外部判断是否已经 stw
+    uint64_t in_stw; // 内部声明, 外部判断是否已经 stw
 
     // 当前 p 需要被其他线程读取的一些属性都通过该锁进行保护
     // - 如更新 p 对应的 co 的状态等
@@ -437,8 +465,6 @@ struct n_processor_t {
     rt_linked_fixalloc_t co_list; // 当前 processor 下的 coroutine 列表
     rt_linked_fixalloc_t runnable_list;
 
-    bool share; // 默认都是共享处理器
-
     rt_linked_fixalloc_t gc_worklist; // gc 扫描的 ptr 节点列表
     uint64_t gc_work_finished; // 当前处理的 GC 轮次，每完成一轮 + 1
 
@@ -447,13 +473,9 @@ struct n_processor_t {
     struct n_processor_t *next; // processor 链表支持
 };
 
-void test_runtime_init();
+void rti_throw(char *msg, bool panic);
 
-int test_runtime_main(void *main_fn);
-
-void rt_throw(char *msg, bool panic);
-
-void rt_co_throw(coroutine_t *co, char *msg, bool panic);
+void rti_co_throw(coroutine_t *co, char *msg, bool panic);
 
 void coroutine_dump_error(coroutine_t *co);
 
@@ -468,24 +490,24 @@ coroutine_t *coroutine_get();
 
 void processor_set_status(n_processor_t *p, p_status_t status);
 
-#define PRE_RTCALL_HOOK()                                                                                \
-    do {                                                                                                       \
-        n_processor_t *p = processor_get();                                                                      \
-        if (!p) break;                                                                                             \
-        if (p->status == P_STATUS_RTCALL || p->status == P_STATUS_TPLCALL) break;                                                                                             \
-        processor_set_status(p, P_STATUS_RTCALL);                                                              \
-        DEBUGF("[pre_rtcall_hook] target %s, status set rtcall success, non-preemption", __FUNCTION__);        \
-        coroutine_t *_co = coroutine_get();                                                                  \
-        if (!_co) break; \
-        CO_SCAN_REQUIRE(_co); \
-    } while (0);
+//#define PRE_RTCALL_HOOK()                                                                               \
+//    do {                                                                                                \
+//        n_processor_t *p = processor_get();                                                             \
+//        if (!p) break;                                                                                  \
+//        if (p->status == P_STATUS_RTCALL || p->status == P_STATUS_TPLCALL) break;                       \
+//        processor_set_status(p, P_STATUS_RTCALL);                                                       \
+//        DEBUGF("[pre_rtcall_hook] target %s, status set rtcall success, non-preemption", __FUNCTION__); \
+//        coroutine_t *_co = coroutine_get();                                                             \
+//        if (!_co) break;                                                                                \
+//        CO_SCAN_REQUIRE(_co);                                                                           \
+//    } while (0);
 
-void pre_tplcall_hook();
+//void pre_tplcall_hook();
 
-void post_tplcall_hook();
+//void post_tplcall_hook();
 
-void post_rtcall_hook(char *target);
+//void post_rtcall_hook(char *target);
 
 void *rti_gc_malloc(uint64_t size, rtype_t *rtype);
 
-#endif// NATURE_BASIC_H
+#endif // NATURE_BASIC_H

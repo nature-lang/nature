@@ -235,6 +235,9 @@ update after: 3 4 50 50
 3 6
 update after: 5 1
 
+
+
+
 === test_generics_impl
 --- main.n
 type measurable<T> = interface{
@@ -278,6 +281,9 @@ fn main():void! {
 --- output.txt
 nature-test/main.n:33:22: the fn 'perimeter' of type 'main.rectangle' mismatch interface 'main.measurable'
 
+
+
+
 === test_typedef_arg_mismatch
 --- main.n
 type measurable<T> = interface{
@@ -320,6 +326,9 @@ fn main():void! {
 
 --- output.txt
 nature-test/main.n:35:24: typedef 'main.circle' args mismatch
+
+
+
 
 === test_generics_interface
 --- main.n
@@ -365,6 +374,9 @@ fn main():void! {
 12 14
 78 31
 
+
+
+
 === test_interface_in_var
 --- main.n
 type measurable<T> = interface{
@@ -404,6 +416,7 @@ fn main():void! {
 --- output.txt
 12 14
 78 31
+
 
 
 === test_struct_interface_default_value
@@ -448,6 +461,9 @@ fn main():void! {
 
 --- output.txt
 nature-test/main.n:35:18: struct filed 'm' must be assigned default value
+
+
+
 
 === test_struct_interface
 --- main.n
@@ -495,6 +511,9 @@ fn main():void! {
 --- output.txt
 12 14
 
+
+
+
 === test_combination_impl_failed
 --- main.n
 type measurable<T> = interface{
@@ -521,6 +540,8 @@ fn main():void! {
 
 --- output.txt
 nature-test/main.n:14:2: type 'main.rectangle' not impl fn 'update' for interface 'main.updatable'
+
+
 
 === test_combination_impl_failed2
 --- main.n
@@ -560,6 +581,8 @@ fn main():void! {
 
 --- output.txt
 nature-test/main.n:27:13: interface 'main.updatable' not declare 'area' fn
+
+
 
 === test_combination_impl
 --- main.n
@@ -756,7 +779,7 @@ fn main():void! {
     var r = new i64(8)
     println(*r)
 
-    var r2 = new arr<i16,4>([1, 2, 3, 4])
+    var r2 = new [i16;4]([1, 2, 3, 4])
     println((*r2)[0])
     println(r2[0], r2[1], r2[2], r2[3])
 

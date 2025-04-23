@@ -40,7 +40,7 @@ type AcceptRange = struct {
   u8 hi
 }
 
-arr<AcceptRange, 5> accept_ranges = [
+[AcceptRange;5] accept_ranges = [
     AcceptRange{ lo = 0x80, hi = 0xbf },
     AcceptRange{ lo = 0xa0, hi = 0xbf },
     AcceptRange{ lo = 0x80, hi = 0x9f },
@@ -57,7 +57,7 @@ u8 s5 = 0x34 // accept 3, size 4
 u8 s6 = 0x04 // accept 0, size 4
 u8 s7 = 0x44 // accept 4, size 4
 
-arr<u8, 256> accept_sizes = [
+[u8;256] accept_sizes = [
   //     1    2    3    4    5   6    7    8    9    A    B    C    D    E    F
     _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, // 0x00-0x0F
     _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, _as, // 0x10-0x1F
@@ -78,9 +78,9 @@ arr<u8, 256> accept_sizes = [
     s5, s6, s6, s6, s7, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx, xx] // 0xF0-0xFF
 
 //unicode -> utf8 (int -> go rune)
-fn encode_rune(int c): (arr<u8, 4>, int) {
+fn encode_rune(int c): ([u8;4], int) {
   int r = c
-  arr<u8, 4> buf = [0, 0, 0, 0]
+  [u8;4] buf = [0, 0, 0, 0]
   var i = r as u32
   var mask = 0x3f as u8
 

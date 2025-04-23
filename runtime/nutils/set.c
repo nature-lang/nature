@@ -34,8 +34,16 @@ static bool _rt_set_add(n_set_t *m, void *key_ref) {
     uint64_t key_size = rt_rtype_stack_size(m->key_rtype_hash);
     void *dst = m->key_data + key_size * key_index;
 
+    rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
+
     // DEBUGF("[runtime.set_add] key_size=%lu, dst=%p, src=%p", key_size, dst, key_ref);
-    memmove(dst, key_ref, key_size);
+    // 如果 key_ref 是一个 ptr, 则需要走 write
+    if (key_size == POINTER_SIZE) {
+        rti_write_barrier_ptr(dst, *(void **) key_ref, NULL);
+    } else {
+        memmove(dst, key_ref, key_size);
+    }
+
     return added;
 }
 
@@ -52,10 +60,13 @@ static void rt_set_grow(n_set_t *m) {
     memmove(&old_set, m, sizeof(n_set_t));
 
     m->capacity *= 2;
-    m->key_data = rti_array_new(key_rtype, m->capacity);
-    m->hash_table = rti_gc_malloc(sizeof(int64_t) * m->capacity, NULL);
+    //    m->key_data = rti_array_new(key_rtype, m->capacity);
+    rti_write_barrier_ptr(&m->key_data, rti_array_new(key_rtype, m->capacity), false);
+    //    m->hash_table = rti_gc_malloc(sizeof(int64_t) * m->capacity, NULL);
+    rti_write_barrier_ptr(&m->hash_table, rti_gc_malloc(sizeof(int64_t) * m->capacity, NULL), false);
+
     uint64_t len = m->length;
-    m->length = 0;// 下面需要重新进行 add 操作
+    m->length = 0; // 下面需要重新进行 add 操作
 
     // 对所有的 key 进行 rehash, i 就是 data_index
     for (int data_index = 0; data_index < len; ++data_index) {
@@ -76,7 +87,6 @@ static void rt_set_grow(n_set_t *m) {
 }
 
 n_set_t *rt_set_new(uint64_t rtype_hash, uint64_t key_hash) {
-    PRE_RTCALL_HOOK();
     rtype_t *set_rtype = rt_find_rtype(rtype_hash);
     rtype_t *key_rtype = rt_find_rtype(key_hash);
 
@@ -104,7 +114,6 @@ n_set_t *rt_set_new(uint64_t rtype_hash, uint64_t key_hash) {
  * @return
  */
 bool rt_set_add(n_set_t *m, void *key_ref) {
-    PRE_RTCALL_HOOK();
     DEBUGF("[runtime.rt_set_add] key_ref=%p, key_rtype_hash=%lu, len=%lu, cap=%lu", key_ref, m->key_rtype_hash,
            m->length, m->capacity);
 
@@ -112,8 +121,8 @@ bool rt_set_add(n_set_t *m, void *key_ref) {
     if ((double) m->length + 1 > (double) m->capacity * HASH_MAX_LOAD) {
         rt_set_grow(m);
     }
-
-    return _rt_set_add(m, key_ref);
+    bool result = _rt_set_add(m, key_ref);
+    return result;
 }
 
 /**
@@ -123,7 +132,6 @@ bool rt_set_add(n_set_t *m, void *key_ref) {
  * @return
  */
 bool rt_set_contains(n_set_t *m, void *key_ref) {
-    PRE_RTCALL_HOOK();
     assert(m);
     assert(key_ref);
     assert(m->key_rtype_hash > 0);
@@ -146,9 +154,8 @@ bool rt_set_contains(n_set_t *m, void *key_ref) {
 }
 
 void rt_set_delete(n_set_t *m, void *key_ref) {
-    PRE_RTCALL_HOOK();
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
     uint64_t *hash_value = &m->hash_table[hash_index];
-    *hash_value &= 1ULL << HASH_DELETED;// 配置删除标志即可
+    *hash_value &= 1ULL << HASH_DELETED; // 配置删除标志即可
     m->length--;
 }

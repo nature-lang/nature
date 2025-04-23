@@ -1,6 +1,6 @@
 import http.uv
 import strings
-import coroutine as co
+import co
 import fmt
 import http.utils
 import runtime
@@ -76,7 +76,7 @@ type server_t = struct{
     fn():void! handler_fn
     string addr
     int port
-    arr<{string:callback_fn},8> routers // TODO tire tree
+    [{string:callback_fn};8] routers // TODO tire tree
     anyptr uv_server_handler
     anyptr listen_co
 }

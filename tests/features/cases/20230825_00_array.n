@@ -4,7 +4,7 @@ type sub_t = struct {
 }
 
 type person_t = struct {
-    arr<i32,8> foo
+    [i32;8] foo
     bool bar
     sub_t car
     struct {
@@ -14,7 +14,7 @@ type person_t = struct {
     [f32] egg
 }
 
-fn test_array(arr<int,5> a):arr<int,5> {
+fn test_array([int;5] a):[int;5] {
     a[0] = 1111
     a[2] = 3333
 
@@ -23,7 +23,7 @@ fn test_array(arr<int,5> a):arr<int,5> {
 
 fn main() {
     // basic
-    arr<int,5> a1 = []
+    [int;5] a1 = []
     a1[0] = 11
     a1[1] = 12
 
@@ -36,7 +36,7 @@ fn main() {
     println(b, b1, a1[0])
 
     // array copy
-    arr<int,5> bar = a1
+    [int;5] bar = a1
     bar[0] = 100
     println(bar[0], bar[1], bar[2], a1[0])
 
@@ -45,7 +45,7 @@ fn main() {
     println(a1[0], car[0], car[2])
 
     // list nest array
-    [arr<i64,3>] a3 = []
+    [[i64;3]] a3 = []
 
     a3.push([1, 2, 3])
     a3.push([11, 12, 13])

@@ -45,7 +45,7 @@ default
 
 === test_block
 --- main.n
-import coroutine as co
+import co
 
 fn sleep_send(chan<string> ch2):void! {
     co.sleep(1000)

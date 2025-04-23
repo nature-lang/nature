@@ -1,10 +1,10 @@
 #include "src/binary/linker.h"
 
+#include <ar.h>
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <ar.h>
 
 #include "elf.h"
 #include "src/binary/arch/amd64.h"
@@ -73,6 +73,8 @@ static inline uint64_t elf_page_size() {
     } else if (BUILD_ARCH == ARCH_ARM64) {
         return ARM64_ELF_PAGE_SIZE;
     }
+    assert(false && "not support arch");
+    return 0;
 }
 
 static inline void elf_relocate(elf_context_t *l, Elf64_Rela *rel, int type, uint8_t *ptr, addr_t addr, addr_t val) {
@@ -109,13 +111,13 @@ static int sort_sections(elf_context_t *ctx) {
                 if (s->sh_flags & SHF_WRITE) {
                     base_weight = 0x200;
                 }
-                if (s->sh_flags & SHF_TLS) {
-                    base_weight += 0x200;
-                }
+//                if (s->sh_flags & SHF_TLS) {
+//                    base_weight += 0x200;
+//                }
             } else if (s->sh_name) {
                 base_weight = 0x700;
             } else {
-                base_weight = 0x900;// 符号表 section 最终会在这里被排除掉
+                base_weight = 0x900; // 符号表 section 最终会在这里被排除掉
             }
 
             if (s->sh_type == SHT_SYMTAB || s->sh_type == SHT_DYNSYM) {
@@ -158,8 +160,8 @@ static int sort_sections(elf_context_t *ctx) {
         // 倒序遍历(大-> 小) 选择一个刚好能卡住 k 的位置
         // 对于每一个比 k 大的值，都将其位置后移一位
         for (n = sh_index; n > 1 && weight < (temp = SEC_TACK(n - 1)->actual_sh_weight); --n) {
-            SEC_TACK(n)->actual_sh_weight = temp;                           // 前移一位，留出空位，直到遇到一个 f 小于 k 的部分，就退出循环
-            SEC_TACK(n)->actual_sh_index = SEC_TACK(n - 1)->actual_sh_index;// 位置后移一位， actual_sh_index 中存储了 sh_index
+            SEC_TACK(n)->actual_sh_weight = temp; // 前移一位，留出空位，直到遇到一个 f 小于 k 的部分，就退出循环
+            SEC_TACK(n)->actual_sh_index = SEC_TACK(n - 1)->actual_sh_index; // 位置后移一位， actual_sh_index 中存储了 sh_index
         }
 
         SEC_TACK(n)->actual_sh_weight = weight;
@@ -181,21 +183,21 @@ static int sort_sections(elf_context_t *ctx) {
             s->phdr_flags = flags;
             continue;
         }
-        flags = s->sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_EXECINSTR | SHF_TLS);
+        flags = s->sh_flags & (SHF_ALLOC | SHF_WRITE | SHF_EXECINSTR);
         // 忽略掉前4位，只看后面几位，
         // 只要第 (sh_info link) 和 9 (Section is member of a group.) 位有值
         // 就表名该 section 为 RELRO sections
         // 0xfff0 = 1111 1111 1111 0000
         // 0x240 =  0000 0010 0100 0000
         if ((weight & 0xfff0) == 0x240) {
-            flags |= 1 << 4;// 开启标志位 SHF_MERGE,Might be merged
-        }                   /* RELRO (Relocation Read-Only) sections */
+            flags |= 1 << 4; // 开启标志位 SHF_MERGE,Might be merged
+        } /* RELRO (Relocation Read-Only) sections */
 
         // 添加标识位
         if (flags != prev_flags) {
             // log_debug("new segment: %s", s->name);
             prev_flags = flags;
-            ++phdr_count;// 开启一个新的段, phdr_count 表示程序表的段的数量
+            ++phdr_count; // 开启一个新的段, phdr_count 表示程序表的段的数量
             // 把 00000001 -8-> 10000000  第 8 位是预留位，可以随便定义
             // 此处用来标志开启了新的 segment
             flags |= 1 << 8;
@@ -203,6 +205,11 @@ static int sort_sections(elf_context_t *ctx) {
         // log_debug("section_name: %s, sh_index: %d, actual_sh_index: %d", s->name, s->sh_index, s->actual_sh_index);
 
         s->phdr_flags = flags;
+    }
+
+    // 预留一个 PT_TLS 段
+    if (ctx->tdata_section) {
+        ++phdr_count;
     }
 
     return phdr_count;
@@ -220,17 +227,22 @@ static void layout_sections(elf_context_t *ctx) {
     uint64_t file_offset = sizeof(Elf64_Ehdr) + phdr_count * sizeof(Elf64_Phdr);
     addr_t s_align = elf_page_size();
     addr_t addr = elf_start_addr();
-    addr_t base = addr;// elf 文件的起始虚拟内存地址
+    addr_t base = addr; // elf 文件的起始虚拟内存地址
     addr = addr + (file_offset & (s_align - 1));
     int n = 0;
     Elf64_Phdr *phdr;
+
+    // 记录 TLS 区间
+    uint64_t tls_vaddr = 0, tls_offset = 0, tls_filesz = 0, tls_memsz = 0, tls_align = 0;
+    int tls_found = 0;
+
     for (int sh_index = 1; sh_index < ctx->sections->count; ++sh_index) {
         int order_index = SEC_TACK(sh_index)->actual_sh_index;
         section_t *s = SEC_TACK(order_index);
         uint64_t flags = s->phdr_flags;
         uint64_t align = s->sh_addralign - 1;
-        if (flags == 0) {                                // no alloc in memory
-            file_offset = (file_offset + align) & ~align;// ~align 按位取反
+        if (flags == 0) { // no alloc in memory
+            file_offset = (file_offset + align) & ~align; // ~align 按位取反
             s->sh_offset = file_offset;
             if (s->sh_type != SHT_NOBITS) {
                 file_offset += s->sh_size;
@@ -247,15 +259,28 @@ static void layout_sections(elf_context_t *ctx) {
 
         uint64_t tmp = addr;
         addr = (addr + align) & ~align;
-        file_offset += (int) (addr - tmp);// 对齐差值，多个 section 共用一个 page 从而可以节省内存
+        file_offset += (int) (addr - tmp); // 对齐差值，多个 section 共用一个 page 从而可以节省内存
         s->sh_offset = file_offset;
         s->sh_addr = addr;
+
+        // 记录 TLS 区间（只记录第一个 SHF_TLS 段的起始，最后一个的结束）
+        if (s->sh_flags & SHF_TLS) {
+            if (!tls_found) {
+                tls_vaddr = addr;
+                tls_offset = file_offset;
+                tls_align = s->sh_addralign;
+            }
+            tls_found = 1;
+            tls_filesz += (s->sh_type != SHT_NOBITS) ? s->sh_size : 0;
+            tls_memsz += s->sh_size;
+        }
+
         // 位移优先级高于按位与
         // x = 1 << 8 =  00000000 00000000 00000000 100000000
         // f & x  = 最终判断第 8 位的值是否为 1, 为 1 表示需要创建一个新的 program header
         // pt load 段写入(可装载段)
         if (flags & 1 << 8) {
-            phdr = &ctx->phdr_list[n];// ph fill 看起来像是预留的段空间
+            phdr = &ctx->phdr_list[n]; // ph fill 看起来像是预留的段空间
             /* set new program header */
             phdr->p_type = PT_LOAD;
             phdr->p_align = s_align;
@@ -266,10 +291,11 @@ static void layout_sections(elf_context_t *ctx) {
             if (flags & SHF_EXECINSTR) {
                 phdr->p_flags |= PF_X;
             }
-            if (flags & SHF_TLS) {
-                phdr->p_type = PT_TLS;
-                phdr->p_align = 4;
-            }
+            // if (flags & SHF_TLS) {
+            // phdr->p_type = PT_TLS;
+            // phdr->p_align = align + 1;
+            // }
+
             phdr->p_offset = file_offset;
             phdr->p_vaddr = addr;
             if (n == 0) {
@@ -292,6 +318,19 @@ static void layout_sections(elf_context_t *ctx) {
 
         phdr->p_filesz = file_offset - phdr->p_offset;
         phdr->p_memsz = addr - phdr->p_vaddr;
+    }
+
+    // 额外添加 PT_TLS 段，描述 TLS 区间
+    if (tls_found) {
+        phdr = &ctx->phdr_list[n++];
+        phdr->p_type = PT_TLS;
+        phdr->p_offset = tls_offset;
+        phdr->p_vaddr = tls_vaddr;
+        phdr->p_paddr = tls_vaddr;
+        phdr->p_filesz = tls_filesz;
+        phdr->p_memsz = tls_memsz;
+        phdr->p_flags = PF_R;
+        phdr->p_align = tls_align ? tls_align : 1;
     }
 
     ctx->file_offset = file_offset;
@@ -326,7 +365,7 @@ static int set_section_sizes(elf_context_t *ctx) {
         }
 
         if (s->sh_flags & SHF_ALLOC || s->sh_type == SHT_SYMTAB || s->sh_type == SHT_STRTAB) {
-            s->sh_size = s->data_count;// 直接使用 data_count 覆盖
+            s->sh_size = s->data_count; // 直接使用 data_count 覆盖
         }
     }
     return 0;
@@ -364,7 +403,7 @@ sym_attr_t *elf_get_sym_attr(elf_context_t *ctx, uint64_t sym_index, bool alloc)
         ctx->sym_attrs_count = n;
     }
 
-    return &ctx->sym_attrs[sym_index];// 符号始终在 ctx 中
+    return &ctx->sym_attrs[sym_index]; // 符号始终在 ctx 中
 }
 
 /**
@@ -426,7 +465,7 @@ void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset) {
     assert(fd >= 0);
 
     lseek(fd, file_offset, SEEK_SET);
-    Elf64_Ehdr ehdr;// 清 0
+    Elf64_Ehdr ehdr; // 清 0
     Elf64_Shdr *shdr;
     ssize_t read_size = full_read(fd, &ehdr, sizeof(ehdr));
     assert(read_size == sizeof(ehdr) && "read elf header failed");
@@ -439,7 +478,7 @@ void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset) {
     local_section_t *local_sections = mallocz(sizeof(local_section_t) * ehdr.e_shnum);
 
     // 加载段表字符串表 e_shstrndx = Section header string table index
-    shdr = &shdr_list[ehdr.e_shstrndx];// 必须使用引用，否则无法修改 shdr 的值
+    shdr = &shdr_list[ehdr.e_shstrndx]; // 必须使用引用，否则无法修改 shdr 的值
     char *shstrtab = elf_file_load_data(fd, file_offset + shdr->sh_offset, shdr->sh_size);
 
     // 加载符号表,单个可中定位文件中只允许存在一个符号表
@@ -459,7 +498,7 @@ void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset) {
         sym_count = shdr->sh_size / sizeof(*sym);
         // 加载符号数据
         symtab = elf_file_load_data(fd, file_offset + shdr->sh_offset, shdr->sh_size);
-        local_sections[sh_index].section = ctx->symtab_section;// 通过 index 进行全局关联
+        local_sections[sh_index].section = ctx->symtab_section; // 通过 index 进行全局关联
 
         // 加载符号字符串表
         shdr = &shdr_list[shdr->sh_link];
@@ -486,24 +525,38 @@ void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset) {
 
         shdr = &shdr_list[sh_index];
         char *shdr_name = shstrtab + shdr->sh_name;
+        // 检查是否为 .tbss 段
+        bool is_tbss = str_equal(shdr_name, ".tbss");
 
         section_t *global_section;
-        // n * n 的遍历查找
-        for (int i = 1; i < ctx->sections->count; ++i) {
-            global_section = SEC_TACK(i);
-            if (str_equal(global_section->name, shdr_name)) {
-                // 在全局 sections 中找到了同名 section
-                goto FOUND;
+        if (is_tbss) {
+            global_section = ctx->tdata_section;
+            assert(global_section);
+        } else {
+            // n * n 的遍历查找
+            for (int i = 1; i < ctx->sections->count; ++i) {
+                global_section = SEC_TACK(i);
+                if (str_equal(global_section->name, shdr_name)) {
+                    // 在全局 sections 中找到了同名 section
+                    goto FOUND;
+                }
             }
+
+            // not found in ctx->sections, will create new section
+            global_section = elf_section_new(ctx, shdr_name, shdr->sh_type, shdr->sh_flags & ~SHF_GROUP);
+            global_section->sh_addralign = shdr->sh_addralign;
+            global_section->sh_entsize = shdr->sh_entsize;
+            local_sections[sh_index].is_new = true;
         }
-        // not found in ctx->sections, will create new section
-        global_section = elf_section_new(ctx, shdr_name, shdr->sh_type, shdr->sh_flags & ~SHF_GROUP);
-        global_section->sh_addralign = shdr->sh_addralign;
-        global_section->sh_entsize = shdr->sh_entsize;
-        local_sections[sh_index].is_new = true;
+
+
         FOUND:
-        // 在ctx 中找到了同名 section 但是段类型不相同
-        assertf(shdr->sh_type == global_section->sh_type, "[load_object_file] sh %s code invalid", shdr_name);
+        if (!is_tbss) {
+            // 在ctx 中找到了同名 section 但是段类型不相同
+            assertf(shdr->sh_type == global_section->sh_type, "[load_object_file] sh %s code invalid", shdr_name);
+        }
+        Elf64_Word sh_type = global_section->sh_type;
+
 
         // align
         global_section->data_count += -global_section->data_count & (shdr->sh_addralign - 1);
@@ -516,11 +569,15 @@ void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset) {
 
         // 将 local section 数据写入到全局 section 中
         uint64_t sh_size = shdr->sh_size;
-        if (shdr->sh_type == SHT_NOBITS) {// 预留空间单没数据
-            global_section->data_count += sh_size;
+        if (shdr->sh_type == SHT_NOBITS) { // 预留空间单没数据
+            if (is_tbss) { // 由于需要合并到 tdata 中，所以进行特殊处理
+                elf_section_data_forward(global_section, sh_size, 1);
+            } else {
+                global_section->data_count += sh_size;
+            }
         } else {
             unsigned char *ptr;
-            lseek(fd, file_offset + shdr->sh_offset, SEEK_SET);// 移动 fd 指向的文件的偏移点
+            lseek(fd, file_offset + shdr->sh_offset, SEEK_SET); // 移动 fd 指向的文件的偏移点
             ptr = section_ptr_add(global_section, sh_size);
             full_read(fd, ptr, sh_size);
         };
@@ -537,7 +594,7 @@ void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset) {
 
         shdr = &shdr_list[sh_index];
         if (shdr->sh_link > 0) {
-            section->link = local_sections[shdr->sh_link].section;// 这里的 section 为全局 section
+            section->link = local_sections[shdr->sh_link].section; // 这里的 section 为全局 section
         }
 
         // 重定位段表的 sh_link 保存对应的符号表
@@ -558,8 +615,9 @@ void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset) {
     for (int i = 1; i < sym_count; ++i, sym++) {
         // add symbol
         char *sym_name = strtab + sym->st_name;
+
         if (sym->st_shndx != SHN_UNDEF && sym->st_shndx < SHN_LORESERVE) {
-            local_section_t *local = &local_sections[sym->st_shndx];// st_shndx 定义符号的段
+            local_section_t *local = &local_sections[sym->st_shndx]; // st_shndx 定义符号的段
             if (!local->section) {
                 continue;
             }
@@ -599,8 +657,8 @@ void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset) {
         Elf64_Rela *rel;
         for (rel = (Elf64_Rela *) rel_section->data + (offset / sizeof(Elf64_Rela));
              rel < (Elf64_Rela *) rel_section->data + ((offset + sh_size) / sizeof(Elf64_Rela)); rel++) {
-            uint64_t rel_type = ELF64_R_TYPE(rel->r_info);// 重定位类型
-            uint64_t sym_index = ELF64_R_SYM(rel->r_info);// 重定位符号在符号表中的索引
+            uint64_t rel_type = ELF64_R_TYPE(rel->r_info); // 重定位类型
+            uint64_t sym_index = ELF64_R_SYM(rel->r_info); // 重定位符号在符号表中的索引
 
             assertf(sym_index < sym_count, "[load_object_file] rel sym index exception");
 
@@ -622,7 +680,7 @@ size_t elf_section_data_forward(section_t *section, uint64_t size, uint64_t alig
     if (section->sh_type != SHT_NOBITS && offset_end > section->data_capacity) {
         elf_section_realloc(section, offset_end);
     }
-    section->data_count = offset_end;// forward
+    section->data_count = offset_end; // forward
     if (align > section->sh_addralign) {
         section->sh_addralign = align;
     }
@@ -667,7 +725,7 @@ uint64_t elf_set_sym(elf_context_t *ctx, Elf64_Sym *sym, char *name) {
             // 计算可见性
             uint64_t exist_sym_bind = ELF64_ST_BIND(exist_sym->st_info);
             uint8_t exist_sym_visible = ELF64_ST_VISIBILITY(exist_sym->st_other);
-            /* propagate the most constraining visibility */// 使用约束力最强的可见性等级,越往右约束性越强
+            /* propagate the most constraining visibility */ // 使用约束力最强的可见性等级,越往右约束性越强
             /* STV_DEFAULT(0)<STV_PROTECTED(3)<STV_HIDDEN(2)<STV_INTERNAL(1) */
             uint8_t new_visible;
             if (sym_visible == STV_DEFAULT) {
@@ -734,7 +792,7 @@ uint64_t elf_put_sym(section_t *symtab_section, table_t *symtab_hash, Elf64_Sym 
     new_sym->st_info = sym->st_info;
     new_sym->st_other = sym->st_other;
     new_sym->st_shndx = sym->st_shndx;
-    uint64_t sym_index = new_sym - (Elf64_Sym *) symtab_section->data;// 终点 - 起点 = 数量
+    uint64_t sym_index = new_sym - (Elf64_Sym *) symtab_section->data; // 终点 - 起点 = 数量
 
     if (name && strlen(name) > 0) {
         table_set(symtab_hash, name, (void *) sym_index);
@@ -744,7 +802,7 @@ uint64_t elf_put_sym(section_t *symtab_section, table_t *symtab_hash, Elf64_Sym 
 }
 
 uint64_t elf_put_str(section_t *s, char *str) {
-    size_t len = strlen(str) + 1;// 预留一个 \0
+    size_t len = strlen(str) + 1; // 预留一个 \0
     uint64_t offset = s->data_count;
 
     char *ptr = section_ptr_add(s, len);
@@ -835,7 +893,7 @@ void elf_build_got_entries(elf_context_t *ctx, uint64_t got_sym_index) {
         }
 
         for (rel = (Elf64_Rela *) s->data; rel < (Elf64_Rela *) (s->data + s->data_count); rel++) {
-            uint64_t type = ELF64_R_TYPE(rel->r_info);// 重定位类型
+            uint64_t type = ELF64_R_TYPE(rel->r_info); // 重定位类型
             uint64_t sym_index = ELF64_R_SYM(rel->r_info);
             Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
 
@@ -910,7 +968,7 @@ void elf_build_got_entries(elf_context_t *ctx, uint64_t got_sym_index) {
     }
 
     if (ctx->plt && ctx->plt->relocate) {
-        ctx->plt->relocate->sh_info = ctx->got->sh_index;// 重定位表的 sh_info 存储的应用重定位的段
+        ctx->plt->relocate->sh_info = ctx->got->sh_index; // 重定位表的 sh_info 存储的应用重定位的段
     }
     if (got_sym_index) {
         ((Elf64_Sym *) ctx->symtab_section->data)[got_sym_index].st_size = ctx->got->data_count;
@@ -962,7 +1020,7 @@ elf_put_relocate(elf_context_t *ctx, section_t *sym_section, section_t *apply_se
     section_t *rel_section = apply_section->relocate;
     if (!rel_section) {
         char *temp_name = strdup(apply_section->name);
-        assert(strlen(temp_name) < sizeof(buf) - 24);// 预留出 real. 空间
+        assert(strlen(temp_name) < sizeof(buf) - 24); // 预留出 real. 空间
         snprintf(buf, sizeof(buf), REL_SECTION_FMT, temp_name);
 
         rel_section = elf_section_new(ctx, buf, SHT_RELA, SHF_INFO_LINK);
@@ -981,11 +1039,15 @@ elf_put_relocate(elf_context_t *ctx, section_t *sym_section, section_t *apply_se
 
 void elf_relocate_symbols(elf_context_t *ctx, section_t *sym_section) {
     Elf64_Sym *sym;
+
     for (sym = SEC_START(Elf64_Sym, sym_section) + 1; sym < SEC_END(Elf64_Sym, sym_section); sym++) {
-        int sh_index = sym->st_shndx;
+        int sh_index = sym->st_shndx; // 定义符号的 section, 如 data 或者 tls data
+
+        char *name = (char *) ctx->symtab_section->link->data + sym->st_name;
+
         if (sh_index == SHN_UNDEF) {
             // libc 中 "_DYNAMIC" 唯一未定义的符号就是这个，还是个 STB_WEAK 类型的符号
-            char *name = (char *) ctx->symtab_section->link->data + sym->st_name;
+            //            char *name = (char *) ctx->symtab_section->link->data + sym->st_name;
             /* XXX: _fp_hw seems to be part of the ABI, so we ignore
                it */
             if (!strcmp(name, "_fp_hw")) goto FOUND;
@@ -1002,7 +1064,10 @@ void elf_relocate_symbols(elf_context_t *ctx, section_t *sym_section) {
             // 对于可重定位文件， st_value 保存了基于 section 的偏移
             // 对于可执行文件， st_value 则需要保存实际的线性地址了，也就是 section 的绝对地址 + st_value
             /* add section base */
-            sym->st_value += SEC_TACK(sh_index)->sh_addr;
+            section_t *s = SEC_TACK(sh_index);
+
+            // 对于 TLS 变量，需要计算其相对于 TLS 段起始的偏移
+            sym->st_value += s->sh_addr;
         }
         FOUND:;
     }
@@ -1052,17 +1117,19 @@ void elf_relocate_section(elf_context_t *ctx, section_t *apply_section, section_
 
         // rel 引用的符号在符号表的索引，在没有修正之前就是 UNDEF, 不过 load elf 的时候已经进行了不停的修正，所以这里已经不会是 undef 了
         int sym_index = ELF64_R_SYM(rel->r_info);
-        sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];// 符号
+        sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index]; // 符号
 
         char *name = (char *) ctx->symtab_section->link->data + sym->st_name;
 
-        int type = ELF64_R_TYPE(rel->r_info);// code 就是重定位的类型
-        addr_t target = sym->st_value;       // 符号定义的位置
-        target += rel->r_addend;             // 从当前指令的结尾开始算起，比如 target - 4, 相当于 addr + 4
+        int type = ELF64_R_TYPE(rel->r_info); // code 就是重定位的类型
+        addr_t target = sym->st_value; // 符号定义的位置
+        target += rel->r_addend; // 从当前指令的结尾开始算起，比如 target - 4, 相当于 addr + 4
 
         // s->sh_addr 应该就是目标段的地址，加上 r_offset 就是绝对的地址修正了？
         // 没看出来 ptr 和 adr 的区别
         uint64_t addr = apply_section->sh_addr + rel->r_offset;
+
+
         elf_relocate(ctx, rel, type, ptr, addr, target);
     }
 }
@@ -1140,10 +1207,10 @@ int tidy_section_headers(elf_context_t *ctx) {
             s = SEC_TACK(actual_sh_index);
         }
         if (sh_index == 0 || s->sh_name) {
-            back_map[actual_sh_index] = new_section_count;// count 就是 new sh_index
+            back_map[actual_sh_index] = new_section_count; // count 就是 new sh_index
             new_section_tack[new_section_count++] = s;
         } else {
-            back_map[actual_sh_index] = 0;//
+            back_map[actual_sh_index] = 0; //
             new_section_tack[--tail] = s; // 不需要输出到可执行文件的 section 放在尾部
         }
     }
@@ -1380,7 +1447,7 @@ void load_archive(elf_context_t *ctx, int fd) {
         while (i < symbol_count) {
             section_t *s = ctx->symtab_section;
             uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, sym_name);
-            if (!sym_index) {  // 如果内存符号表中不依赖该 sym, 则进行跳过 (i++, sym_name += strlen(sym_name) + 1)
+            if (!sym_index) { // 如果内存符号表中不依赖该 sym, 则进行跳过 (i++, sym_name += strlen(sym_name) + 1)
                 goto CONTINUE;
             }
 
@@ -1425,6 +1492,11 @@ elf_context_t *elf_context_new(char *output, uint8_t type) {
     // pe 需要特殊处理
     ctx->rodata_section = elf_section_new(ctx, ".data.ro", SHT_PROGBITS, ctx->shf_RELRO);
 
+    // 添加 TLS 段
+    if (type == OUTPUT_EXE) {
+        ctx->tdata_section = elf_section_new(ctx, ".tdata", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE | SHF_TLS);
+        //        ctx->tbss_section = elf_section_new(ctx, ".tbss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE | SHF_TLS);
+    }
 
     /* create ro data section (make ro after relocation done with GNU_RELRO) */
     ctx->bss_section = elf_section_new(ctx, ".bss", SHT_NOBITS, SHF_ALLOC | SHF_WRITE);
@@ -1498,8 +1570,8 @@ uint64_t elf_put_global_symbol(elf_context_t *ctx, char *name, void *value, uint
             .st_size = value_size,
             .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
             .st_other = 0,
-            .st_shndx = ctx->data_section->sh_index,// 定义符号的段
-            .st_value = offset,                     // 定义符号的位置，基于段的偏移
+            .st_shndx = ctx->data_section->sh_index, // 定义符号的段
+            .st_value = offset, // 定义符号的位置，基于段的偏移
     };
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, name);
     return offset;
@@ -1590,7 +1662,7 @@ void elf_output(elf_context_t *ctx) {
         Elf64_Shdr shdr = {0};
         section_t *s = SEC_TACK(sh_index);
         if (s) {
-//            log_debug("[elf_output] shr: %s write file", s->name);
+            //            log_debug("[elf_output] shr: %s write file", s->name);
             shdr.sh_name = s->sh_name;
             shdr.sh_type = s->sh_type;
             shdr.sh_flags = s->sh_flags;

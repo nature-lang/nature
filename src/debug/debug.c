@@ -23,6 +23,7 @@ string ast_type_to_str[] = {
         [AST_VAR_DECL] = "AST_VAR_DECL",
         [AST_STMT_VARDEF] = "AST_STMT_VAR_DECL_ASSIGN",
         [AST_STMT_ASSIGN] = "AST_STMT_ASSIGN",
+        [AST_STMT_GLOBAL_ASSIGN] = "AST_STMT_GLOBAL_ASSIGN",
         [AST_STMT_RETURN] = "AST_STMT_RETURN",
         [AST_STMT_IF] = "AST_STMT_IF",
         [AST_STMT_FOR_ITERATOR] = "AST_STMT_FOR_ITERATOR",
@@ -34,13 +35,13 @@ string ast_type_to_str[] = {
 
 string token_type_to_str[] = {
         [TOKEN_LEFT_PAREN] = "TOKEN_LEFT_PAREN",
-        [TOKEN_RIGHT_PAREN] = "TOKEN_RIGHT_PAREN",// ()
+        [TOKEN_RIGHT_PAREN] = "TOKEN_RIGHT_PAREN", // ()
         [TOKEN_LEFT_SQUARE] = "TOKEN_LEFT_SQUARE",
-        [TOKEN_RIGHT_SQUARE] = "TOKEN_RIGHT_SQUARE",// []
+        [TOKEN_RIGHT_SQUARE] = "TOKEN_RIGHT_SQUARE", // []
         [TOKEN_LEFT_CURLY] = "TOKEN_LEFT_CURLY",
-        [TOKEN_RIGHT_CURLY] = "TOKEN_RIGHT_CURLY",// {}
+        [TOKEN_RIGHT_CURLY] = "TOKEN_RIGHT_CURLY", // {}
         [TOKEN_LEFT_ANGLE] = "TOKEN_LEFT_ANGLE",
-        [TOKEN_RIGHT_ANGLE] = "TOKEN_RIGHT_ANGLE",// <>
+        [TOKEN_RIGHT_ANGLE] = "TOKEN_RIGHT_ANGLE", // <>
 
         [TOKEN_COMMA] = "TOKEN_COMMA",
         [TOKEN_DOT] = "TOKEN_DOT",
@@ -49,9 +50,9 @@ string token_type_to_str[] = {
         [TOKEN_COLON] = "TOKEN_COLON",
         [TOKEN_SEMICOLON] = "TOKEN_SEMICOLON",
         [TOKEN_SLASH] = "TOKEN_SLASH",
-        [TOKEN_STAR] = "TOKEN_STAR",              // * STAR
-        [TOKEN_IMPORT_STAR] = "TOKEN_IMPORT_STAR",// * STAR
-        [TOKEN_QUESTION] = "TOKEN_QUESTION",      // ?
+        [TOKEN_STAR] = "TOKEN_STAR", // * STAR
+        [TOKEN_IMPORT_STAR] = "TOKEN_IMPORT_STAR", // * STAR
+        [TOKEN_QUESTION] = "TOKEN_QUESTION", // ?
         [TOKEN_EOF] = "TOKEN_EOF",
         [TOKEN_STMT_EOF] = "TOKEN_STMT_EOF",
         [TOKEN_RIGHT_ARROW] = "TOKEN_RIGHT_ARROW",
@@ -66,24 +67,24 @@ string token_type_to_str[] = {
         [TOKEN_AND_AND] = "TOKEN_AND_AND",
         [TOKEN_OR_OR] = "TOKEN_OR_OR",
 
-        [TOKEN_PLUS_EQUAL] = "TOKEN_PLUS_EQUAL",              // +=
-        [TOKEN_MINUS_EQUAL] = "TOKEN_MINUS_EQUAL",            // -=
-        [TOKEN_STAR_EQUAL] = "TOKEN_STAR_EQUAL",              // *=
-        [TOKEN_SLASH_EQUAL] = "TOKEN_SLASH_EQUAL",            // /=
-        [TOKEN_PERSON_EQUAL] = "TOKEN_PERSON_EQUAL",          // %=
-        [TOKEN_AND_EQUAL] = "TOKEN_AND_EQUAL",                // &=
-        [TOKEN_OR_EQUAL] = "TOKEN_OR_EQUAL",                  // |=
-        [TOKEN_XOR_EQUAL] = "TOKEN_XOR_EQUAL",                // ^=
-        [TOKEN_LEFT_SHIFT_EQUAL] = "TOKEN_LEFT_SHIFT_EQUAL",  // >>=
-        [TOKEN_RIGHT_SHIFT_EQUAL] = "TOKEN_RIGHT_SHIFT_EQUAL",// <<=
+        [TOKEN_PLUS_EQUAL] = "TOKEN_PLUS_EQUAL", // +=
+        [TOKEN_MINUS_EQUAL] = "TOKEN_MINUS_EQUAL", // -=
+        [TOKEN_STAR_EQUAL] = "TOKEN_STAR_EQUAL", // *=
+        [TOKEN_SLASH_EQUAL] = "TOKEN_SLASH_EQUAL", // /=
+        [TOKEN_PERSON_EQUAL] = "TOKEN_PERSON_EQUAL", // %=
+        [TOKEN_AND_EQUAL] = "TOKEN_AND_EQUAL", // &=
+        [TOKEN_OR_EQUAL] = "TOKEN_OR_EQUAL", // |=
+        [TOKEN_XOR_EQUAL] = "TOKEN_XOR_EQUAL", // ^=
+        [TOKEN_LEFT_SHIFT_EQUAL] = "TOKEN_LEFT_SHIFT_EQUAL", // >>=
+        [TOKEN_RIGHT_SHIFT_EQUAL] = "TOKEN_RIGHT_SHIFT_EQUAL", // <<=
 
         // 位运算
-        [TOKEN_TILDE] = "TOKEN_TILDE",            // ~
-        [TOKEN_AND] = "TOKEN_AND",                // &
-        [TOKEN_OR] = "TOKEN_OR",                  // |
-        [TOKEN_XOR] = "TOKEN_XOR",                // ^
-        [TOKEN_LEFT_SHIFT] = "TOKEN_LEFT_SHIFT",  // <<
-        [TOKEN_RIGHT_SHIFT] = "TOKEN_RIGHT_SHIFT",// >>
+        [TOKEN_TILDE] = "TOKEN_TILDE", // ~
+        [TOKEN_AND] = "TOKEN_AND", // &
+        [TOKEN_OR] = "TOKEN_OR", // |
+        [TOKEN_XOR] = "TOKEN_XOR", // ^
+        [TOKEN_LEFT_SHIFT] = "TOKEN_LEFT_SHIFT", // <<
+        [TOKEN_RIGHT_SHIFT] = "TOKEN_RIGHT_SHIFT", // >>
 
         // LITERALS.
         [TOKEN_IDENT] = "TOKEN_IDENT",
@@ -122,9 +123,12 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_ADD] = "ADD  ",
         [LIR_OPCODE_SUB] = "SUB  ",
         [LIR_OPCODE_MUL] = "MUL  ",
-        [LIR_OPCODE_DIV] = "DIV  ",
-        [LIR_OPCODE_REM] = "REM  ",
+        [LIR_OPCODE_UDIV] = "UDIV  ",
+        [LIR_OPCODE_UREM] = "UREM  ",
+        [LIR_OPCODE_SDIV] = "SDIV  ",
+        [LIR_OPCODE_SREM] = "SREM  ",
         [LIR_OPCODE_SLT] = "SLT   ",
+        [LIR_OPCODE_USLT] = "USLT   ",
         [LIR_OPCODE_SLE] = "SLE  ",
         [LIR_OPCODE_SGT] = "SGT   ",
         [LIR_OPCODE_SGE] = "SGE  ",
@@ -137,11 +141,15 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_XOR] = "XOR  ",
         [LIR_OPCODE_OR] = "OR  ",
         [LIR_OPCODE_AND] = "AND  ",
-        [LIR_OPCODE_SHR] = "SHR  ",
-        [LIR_OPCODE_SHL] = "SHL  ",
+        [LIR_OPCODE_USHR] = "USHR  ",
+        [LIR_OPCODE_SSHR] = "SSHR  ",
+        [LIR_OPCODE_USHL] = "USHL  ",
 
         [LIR_OPCODE_PHI] = "PHI  ",
         [LIR_OPCODE_MOVE] = "MOVE ",
+        [LIR_OPCODE_UEXT] = "UEXT ",
+        [LIR_OPCODE_SEXT] = "SEXT ",
+        [LIR_OPCODE_TRUNC] = "TRUNC",
         [LIR_OPCODE_BEQ] = "BEQ",
         [LIR_OPCODE_BAL] = "BAL ",
         [LIR_OPCODE_PUSH] = "PUSH  ",
@@ -156,6 +164,7 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_LABEL] = "LABEL ",
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",
         [LIR_OPCODE_FN_END] = "FN_END",
+        [LIR_OPCODE_SAFEPOINT] = "SAFEPOINT",
 };
 
 void debug_parser(int line, char *token) {
@@ -185,13 +194,9 @@ void debug_stmt(string type, ast_stmt_t stmt) {
  * @param c
  */
 void debug_lir(closure_t *c, char *key) {
-    //    if (c->module->type != MODULE_TYPE_MAIN) {
-    //        return;
-    //    }
-
 #ifdef DEBUG_LIR
     // 跳过各种全局的 init 方法
-    if (!strstr(c->fndef->symbol_name, DEBUG_LIR)) {
+    if (!starts_with(c->fndef->symbol_name, DEBUG_LIR)) {
         return;
     }
 
@@ -239,7 +244,7 @@ void debug_lir(closure_t *c, char *key) {
  */
 void debug_block_lir(closure_t *c, char *stage_after) {
 #ifdef DEBUG_LIR
-    if (strstr(c->linkident, DEBUG_LIR) == NULL) {
+    if (!starts_with(c->linkident, DEBUG_LIR)) {
         return;
     }
 
@@ -300,7 +305,7 @@ void debug_interval_var(interval_t *interval, char *stage) {
 
 void debug_closure_interval(closure_t *c, char *stage) {
 #ifdef DEBUG_INTERVAL
-    if (!str_equal(c->linkident, DEBUG_INTERVAL)) {
+    if (!strstr(c->linkident, DEBUG_INTERVAL)) {
         return;
     }
 
@@ -434,10 +439,9 @@ void debug_basic_block(basic_block_t *block) {
 
 void debug_asm(closure_t *c) {
 #ifdef DEBUG_ASM
-    // 跳过各种全局的 init 方法
-    //    if (ends_with(c->fndef->symbol_name, ".init")) {
-    //        return;
-    //    }
+    if (!starts_with(c->linkident, DEBUG_ASM)) {
+        return;
+    }
 
     printf("asm: %s------------------------------------------------------------------------\n", c->fndef->symbol_name);
     for (int i = 0; i < c->asm_operations->count; ++i) {

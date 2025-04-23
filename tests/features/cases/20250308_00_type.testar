@@ -52,7 +52,7 @@ type u8_literal = u8
 type vec_int_literal = [int]
 type vec_string_literal = vec<string>
 type set_int_literal = set<int>
-type tuple_literal = (int, bool, arr<u8,5>)
+type tuple_literal = (int, bool, [u8;5])
 type map_literal = map<string, [u16]>
 type fn_literal = fn(int,string):void!
 
@@ -76,7 +76,7 @@ type u8_literal = u8
 type vec_int_literal = [int]
 type vec_string_literal = vec<string>
 type set_int_literal = set<int>
-type tuple_literal = (int, bool, arr<u8,5>)
+type tuple_literal = (int, bool, [u8;5])
 type map_literal = map<string, [u16]>
 type fn_literal = fn(int,string):void!
 
@@ -96,7 +96,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:23:31: type inconsistency, expect=vec<u16>, actual=vec<u32>
+nature-test/main.n:23:31: type inconsistency, expect=[u16], actual=[u32]
 
 === test_literal_failed3
 --- main.n
@@ -107,7 +107,7 @@ type u16_literal = u16
 type vec_int_literal = [int]
 type vec_string_literal = vec<string>
 type set_int_literal = set<int>
-type tuple_literal = (int, bool, arr<u8,5>)
+type tuple_literal = (int, bool, [u8;5])
 type map_literal = map<string, [u16]>
 type fn_literal = fn(int,string):void!
 
@@ -127,7 +127,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:24:31: type inconsistency, expect=vec<u16>, actual=vec<main.u16_literal(u16)>
+nature-test/main.n:24:31: type inconsistency, expect=[u16], actual=[main.u16_literal(u16)]
 
 === test_literal
 --- main.n
@@ -138,7 +138,7 @@ type u16_literal = u16
 type vec_int_literal = [int]
 type vec_string_literal = vec<string>
 type set_int_literal = set<int>
-type tuple_literal = (int, bool, arr<u8,5>)
+type tuple_literal = (int, bool, [u8;5])
 type map_literal = map<string, [u16]>
 type fn_literal = fn(int,string):int!
 

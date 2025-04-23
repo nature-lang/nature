@@ -2,7 +2,7 @@ import os
 import fmt.utils as util
 import fmt
 import time
-import coroutine as co
+import co
 import runtime
 
 fn logf(string format, ...[any] args) {

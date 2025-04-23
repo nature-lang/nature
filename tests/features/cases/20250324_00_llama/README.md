@@ -1,1 +1,0 @@
-Download the llama model by https://github.com/karpathy/llama2.c

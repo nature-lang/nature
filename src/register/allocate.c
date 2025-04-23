@@ -66,6 +66,7 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
         stack->kind = var->type.kind;
         operand->assert_type = LIR_OPERAND_STACK;
         operand->value = stack;
+        operand->size = stack->size;
     } else {
         reg_t *reg = alloc_regs[i->assigned];
         assert(reg);
@@ -77,6 +78,7 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
 
         operand->assert_type = LIR_OPERAND_REG;
         operand->value = reg;
+        operand->size = type_kind_sizeof(var->type.kind); // 实际 size
     }
 }
 
@@ -396,7 +398,7 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
         }
 
         int pos = interval_next_intersect(c, a->current, select);
-//        int old_pos = old_interval_next_intersect(c, a->current, select);
+        //        int old_pos = old_interval_next_intersect(c, a->current, select);
         assert(pos);
         // potions 表示两个 interval 重合，重合点之前都是可以自由分配的区域
         set_pos(free_pos, select->assigned, pos);
@@ -451,7 +453,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
 
     for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
         reg_t *reg = alloc_regs[reg_id];
-        if (!(FLAG(a->current->alloc_type) & reg->flag)) {
+       if (!(FLAG(a->current->alloc_type) & reg->flag)) {
             continue;
         }
         // 这里包含了 use_pos 的设置
@@ -459,7 +461,6 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     }
 
     int first_from = a->current->first_range->from;
-
     // 遍历固定寄存器(active) TODO 固定间隔也进不来呀？
     LINKED_FOR(a->active) {
         interval_t *select = LINKED_VALUE();
@@ -476,7 +477,21 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         } else {
             // 找一个大于 current first use_position 的位置(可以为0，0 表示没找到)
             // 查找 active interval 的下一个使用位置,用来判断其空闲时长
-            int pos = interval_next_use_position(select, first_from);
+            assert(a->current->first_range->from > select->first_range->from);
+
+            int pos = 0;
+            // 如果 select->first_from 和 first from 的差值 < 1, 则后续 split 分配会异常, 无法在 first_from 之前讲 select 进行 split
+            // select interval  42 ~ 48 (must alloc in 42)
+            // current interval 43 ~ 46 (should alloc in 46)
+            // 如果将 select 的寄存器分配给 current, 则 select 需要在 43 之前(可选位置只有 42) 进行 split, 这是无法切割的
+
+            if (a->current->first_range->from - select->first_range->from <= 1) {
+                pos = 0;
+            } else {
+                pos = interval_next_use_position(select, first_from);
+            }
+
+
             SET_USE_POS(select->assigned, pos);
         }
     }
@@ -492,7 +507,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
         assert(a->current->index != select->index);
 
         pos = interval_next_intersect(c, a->current, select);
-//        int old_pos = old_interval_next_intersect(c, a->current, select);
+        //        int old_pos = old_interval_next_intersect(c, a->current, select);
         assert(pos);
 
         if (select->fixed) {
@@ -512,6 +527,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
     // 经过多次 split，如果 first_use 是 must，其一定会小于所有 use_pos 和 block_pos, 从而分配到可用寄存器,然后在瞬间溢出
     use_pos_t *first_use = first_use_pos(a->current, 0);
     assert(first_use);
+
     if (!reg_id || use_pos[reg_id] < first_use->value) {
         // 此处最典型的应用就是 current 被 call fixed interval 阻塞，需要溢出自身
 

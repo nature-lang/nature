@@ -2,6 +2,7 @@
 #define NATURE_SRC_LIB_HELPER_H_
 
 #include <assert.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdarg.h>
@@ -123,8 +124,8 @@ static inline void *mallocz(uint64_t size) {
 #define TRACEF(...)
 
 #define TDEBUGF(format, ...)                                                                                                  \
-//    fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
-//    fflush(stdout);
+    fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
+    fflush(stdout);
 
 #define TESTDUMP(format, ...)                                                                                                 \
     fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
@@ -265,12 +266,12 @@ static char *str_connect3(const char *a, const char *b, const char *c) {
     size_t total_len = len_a + len_b + len_c;
 
     // 分配内存
-    char *result = mallocz(total_len + 1);// +1 for null terminator
+    char *result = mallocz(total_len + 1); // +1 for null terminator
     // 拼接字符串
     memcpy(result, a, len_a);
     memcpy(result + len_a, b, len_b);
     memcpy(result + len_a + len_b, c, len_c);
-    result[total_len] = '\0';// 确保字符串以 null 结尾
+    result[total_len] = '\0'; // 确保字符串以 null 结尾
 
     return result;
 }
@@ -360,7 +361,7 @@ static inline char *path_dir(char *path) {
     assert(strlen(path) > 0);
     char *result = strdup(path);
 
-    char *ptr = strrchr(result, '/');// 查找最后一个斜杠
+    char *ptr = strrchr(result, '/'); // 查找最后一个斜杠
     if (ptr == NULL) {
         return result;
     }
@@ -372,7 +373,7 @@ static inline char *path_dir(char *path) {
 static inline char *file_name(char *path) {
     char *ptr = strrchr(path, '/');
     if (ptr == NULL) {
-        return path;// path 本身就是 file name
+        return path; // path 本身就是 file name
     }
 
     if (*(ptr + 1) == '\0') {
@@ -405,7 +406,7 @@ static inline bool file_exists(char *path) {
 }
 
 static inline char *rtrim(char *str, char *sub) {
-    size_t len = strlen(str);// +1 表示 \0 部分
+    size_t len = strlen(str); // +1 表示 \0 部分
     len = len - strlen(sub) + 1;
 
     char *res = mallocz(len);
@@ -525,17 +526,17 @@ static inline ssize_t full_read(int fd, void *buf, size_t count) {
 
 static inline char *str_replace(char *str, char *old, char *new) {
     char *result; // the return string
-    char *ins;    // the next insert pointer
-    char *tmp;    // varies
-    int len_rep;  // length of old (the string to remove)
+    char *ins; // the next insert pointer
+    char *tmp; // varies
+    int len_rep; // length of old (the string to remove)
     int len_with; // length of new (the string to replace old new)
-    int len_front;// distance between old and end of last old
-    int count;    // number of replacements
+    int len_front; // distance between old and end of last old
+    int count; // number of replacements
 
     // sanity checks and initialization
     if (!str || !old) return NULL;
     len_rep = strlen(old);
-    if (len_rep == 0) return NULL;// empty old causes infinite loop during count
+    if (len_rep == 0) return NULL; // empty old causes infinite loop during count
     if (!new) new = "";
     len_with = strlen(new);
 
@@ -559,22 +560,74 @@ static inline char *str_replace(char *str, char *old, char *new) {
         len_front = ins - str;
         tmp = strncpy(tmp, str, len_front) + len_front;
         tmp = strcpy(tmp, new) + len_with;
-        str += len_front + len_rep;// move to next "end of old"
+        str += len_front + len_rep; // move to next "end of old"
     }
     strcpy(tmp, str);
     return result;
 }
 
+static inline void *sys_memory_reserve(void *hint, uint64_t size) {
+    void *ptr;
+#if defined(__DARWIN) && defined(__ARM64)
+    ptr = mmap(hint, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT, 0, 0);
+#else
+    ptr = mmap(hint, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+#endif
+
+    assertf(ptr, "runtime mmap failed: %s", strerror(errno));
+    return ptr;
+}
+
 static inline void *sys_memory_map(void *hint, uint64_t size) {
     void *ptr;
 #if defined(__DARWIN) && defined(__ARM64)
-    ptr = mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT, 0, 0);
+    ptr = hint;
+    if (mprotect((void *) hint, size, PROT_READ | PROT_WRITE) == -1) {
+        assertf(false, "mprotect failed");
+    }
+//    ptr = mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS | MAP_JIT, 0, 0);
 #else
-    ptr = mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+    ptr = mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, 0, 0);
+    assertf(ptr != MAP_FAILED, "runtime mmap failed: %s", strerror(errno));
+    assertf(ptr, "runtime mmap failed: %s", strerror(errno));
 #endif
 
+    return ptr;
+}
 
-    assertf(ptr, "mmap failed: %s", strerror(errno));
+static inline void sys_memory_used_exec(void *addr, uint64_t size) {
+    // 为 darwin/arm64 设计
+    // 数据清空, 必须在 mprotect exec 之前，exec 之后就不允许写入数据了
+    memset(addr, 0, size);
+
+    // 增加 EXEC
+    if (mprotect(addr, size, PROT_READ | PROT_WRITE | PROT_EXEC) == -1) {
+        assertf(false, "mprotect failed, page_start=%p, size=%lu, err=%s", (void *) addr,
+                size,
+                strerror(errno));
+    }
+    DEBUGF("[sys_memory_used_exec] jit span malloc and mprotect success, mspan=%p, mspan_lock=%p, base=%p, pages_size=%ld",
+           span, &span->alloc_locker,
+           (void *) span->base, pages_count * ALLOC_PAGE_SIZE);
+}
+
+// darwin/arm64 一旦声明为 exec 后就无法去掉
+//static inline void sys_memory_unused_exec(void *addr, uint64_t size) {
+//    // 增加 EXEC
+//    if (mprotect(addr, size, PROT_READ | PROT_WRITE) == -1) {
+//        assertf(false, "mprotect failed, page_start=%p, size=%lu, err=%s", (void *) addr,
+//                size,
+//                strerror(errno));
+//    }
+//    DEBUGF("[sys_memory_unused_exec] jit span malloc and mprotect success, mspan=%p, mspan_lock=%p, base=%p, pages_size=%ld",
+//           span, &span->alloc_locker,
+//           (void *) span->base, pages_count * ALLOC_PAGE_SIZE);
+//}
+
+static inline void *sys_memory_alloc(uint64_t size) {
+    void *ptr;
+    ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+    assertf(ptr, "runtime mmap failed: %s", strerror(errno));
     return ptr;
 }
 
@@ -582,7 +635,7 @@ static inline void *mallocz_big(size_t size) {
     int64_t page_size = sysconf(_SC_PAGESIZE);
     //    int page_size = getpagesize();
     size = align_up(size, page_size);
-    void *ptr = sys_memory_map(NULL, size);
+    void *ptr = sys_memory_alloc(size);
     return ptr;
 }
 
@@ -591,23 +644,36 @@ static inline void sys_memory_unmap(void *base, uint64_t size) {
 }
 
 #ifdef __LINUX
-
-static inline void sys_memory_remove(void *addr, uint64_t size) {
+static inline void sys_memory_unused(void *addr, uint64_t size) {
     madvise(addr, size, MADV_DONTNEED);
 }
 #elif __DARWIN
-
-static inline void sys_memory_remove(void *addr, uint64_t size) {
+static inline void sys_memory_unused(void *addr, uint64_t size) {
     // On Darwin, use MADV_FREE which is similar to MADV_DONTNEED
-    madvise(addr, size, MADV_FREE);
+    if (madvise(addr, size, MADV_FREE_REUSABLE) == -1) {
+        assertf(false, "madvise failed: ", strerror(errno));
+    }
 }
 
 #else
+#error "not support arch"
+#endif
 
-static inline void sys_memory_remove(void *addr, uint64_t size) {
-    assertf(false, "[runtime.sys_memory_remove] cannot support arch");
+
+#ifdef __LINUX
+static inline void sys_memory_used(void *addr, uint64_t size) {
+    void *ptr = mmap(addr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, 0, 0);
+    assertf(ptr, "runtime: out of memory");
 }
-
+#elif __DARWIN
+static inline void sys_memory_used(void *addr, uint64_t size) {
+    // On Darwin, use MADV_FREE which is similar to MADV_DONTNEED
+    if (madvise(addr, size, MADV_FREE_REUSE) == -1) {
+        assertf(false, "madvise failed: ", strerror(errno));
+    }
+}
+#else
+#error "not support arch"
 #endif
 
 static inline int64_t *take_numbers(char *str, uint64_t count) {
@@ -619,7 +685,7 @@ static inline int64_t *take_numbers(char *str, uint64_t count) {
         // 使用 atoi 函数将字符串转换为整数，并存入数组中
         numbers[i] = atoll(token);
         i++;
-        token = strtok(NULL, "\n");// 继续提取下一个数字
+        token = strtok(NULL, "\n"); // 继续提取下一个数字
     }
     return numbers;
 }
@@ -659,4 +725,4 @@ static inline void str_rcpy(char *dest, const char *src, size_t n) {
     dest[copy_len] = '\0';
 }
 
-#endif// NATURE_SRC_LIB_HELPER_H_
+#endif // NATURE_SRC_LIB_HELPER_H_

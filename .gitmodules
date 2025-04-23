@@ -1,6 +1,21 @@
 [submodule "package"]
 	path = package
-	url = git@github.com:nature-lang/package.git
+	url = https://github.com:nature-lang/package.git
 [submodule "nls"]
 	path = nls
-	url = git@github.com:nature-lang/nls.git
+	url = https://github.com:nature-lang/nls.git
+[submodule "tests/features/cases/20250405_02_compress"]
+	path = tests/features/cases/20250405_02_compress
+	url = https://github.com:weiwenhao/compress.git
+[submodule "tests/features/cases/20250324_00_llama"]
+	path = tests/features/cases/20250324_00_llama
+	url = https://github.com/weiwenhao/llama.n.git
+[submodule "tests/features/cases/20250404_00_tetris"]
+	path = tests/features/cases/20250404_00_tetris
+	url = https://github.com/weiwenhao/tetris.git
+[submodule "tests/features/cases/20250418_00_playground"]
+	path = tests/features/cases/20250418_00_playground
+	url = https://github.com/weiwenhao/playground.git
+[submodule "tests/features/cases/20250405_00_parker"]
+	path = tests/features/cases/20250405_00_parker
+	url = https://github.com/weiwenhao/parker.git

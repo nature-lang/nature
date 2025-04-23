@@ -6,11 +6,11 @@
 #include <ucontext.h>
 
 #include "aco/aco.h"
+#include "rtype.h"
 #include "runtime.h"
 #include "sizeclass.h"
 #include "utils/custom_links.h"
 #include "utils/helper.h"
-#include "rtype.h"
 
 extern memory_t *memory;
 extern uint64_t remove_total_bytes; // 当前回收到物理内存中的总空间
@@ -18,6 +18,7 @@ extern uint64_t allocated_total_bytes; // 当前分配的总空间
 extern int64_t allocated_bytes; // 当前分配的内存空间
 extern uint64_t next_gc_bytes; // 下一次 gc 的内存量
 extern bool gc_barrier; // gc 屏障开启标识
+
 extern uint8_t gc_stage; // gc 阶段
 extern mutex_t gc_stage_locker;
 
@@ -57,7 +58,11 @@ typedef enum {
 
 // radix tree 每一层级的 item 可以管理的 page 的数量, 用于判断当前 page 是否满载
 static uint64_t summary_page_count[PAGE_SUMMARY_LEVEL] = {
-    L0_MAX_PAGES, L1_MAX_PAGES, L2_MAX_PAGES, L3_MAX_PAGES, L4_MAX_PAGES,
+        L0_MAX_PAGES,
+        L1_MAX_PAGES,
+        L2_MAX_PAGES,
+        L3_MAX_PAGES,
+        L4_MAX_PAGES,
 };
 
 static inline bool gc_barrier_get() {
@@ -163,8 +168,6 @@ void uncache_span(mcentral_t *mcentral, mspan_t *span);
 
 void mheap_free_span(mheap_t *mheap, mspan_t *span);
 
-addr_t mstack_new(uint64_t size);
-
 void rtypes_deserialize();
 
 void fndefs_deserialize();
@@ -187,6 +190,10 @@ static inline uint64_t rt_rtype_stack_size(int64_t rhash) {
     assert(rtype && "cannot find rtype by hash");
 
     return rtype_stack_size(rtype, POINTER_SIZE);
+}
+
+static inline uint8_t take_sizeclass(uint8_t spanclass) {
+    return spanclass >> 1;
 }
 
 fndef_t *find_fn(addr_t addr, n_processor_t *p);

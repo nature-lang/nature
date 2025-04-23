@@ -9,25 +9,49 @@ static lir_operand_t *amd64_convert_first_to_temp(closure_t *c, linked_t *list, 
     return lir_reset_operand(temp, first->pos);
 }
 
+
 static linked_t *amd64_lower_neg(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
-    // var 才能分配 reg, 正常来说肯定是，如果不是就需要做 convert
-    assert(op->output->assert_type == LIR_OPERAND_VAR);
+    //    assert(op->output->assert_type == LIR_OPERAND_VAR);
+
+    lir_operand_t *old_output = NULL;
+    if (op->output->assert_type != LIR_OPERAND_VAR) {
+        // output 替换
+        lir_operand_t *new_output = temp_var_operand_with_alloc(c->module, lir_operand_type(op->output));
+        old_output = op->output;
+        op->output = lir_reset_operand(new_output, op->output->pos);
+    }
 
     type_kind kind = operand_type_kind(op->output);
     assert(is_number(kind));
-    if (is_integer(kind)) {
+    if (is_integer_or_anyptr(kind)) {
         linked_push(list, op);
+
+        if (old_output) {
+            linked_push(list, lir_op_move(old_output, op->output));
+        }
+
         return list;
     }
 
     linked_push(list, lir_op_move(op->output, op->first));
+
     // xor float 需要覆盖满整个 xmm 寄存器(128bit), 所以这里直接用 symbol 最多只能有 f64 = 64bit
     // 这里用 xmm1 进行一个中转
     lir_operand_t *xmm_operand = amd64_select_return_reg(op->output);
-    linked_push(list, lir_op_move(xmm_operand, symbol_var_operand(FLOAT_NEG_MASK_IDENT, kind)));
+    if (kind == TYPE_FLOAT64) {
+        linked_push(list, lir_op_move(xmm_operand, symbol_var_operand(F64_NEG_MASK_IDENT, kind)));
+    } else {
+        linked_push(list, lir_op_move(xmm_operand, symbol_var_operand(F32_NEG_MASK_IDENT, kind)));
+    }
 
     linked_push(list, lir_op_new(LIR_OPCODE_XOR, op->output, xmm_operand, op->output));
+
+    if (old_output) {
+        linked_push(list, lir_op_move(old_output, op->output));
+    }
+
+
     return list;
 }
 
@@ -181,7 +205,36 @@ static linked_t *amd64_lower_shift(closure_t *c, lir_op_t *op) {
     return list;
 }
 
+static linked_t *amd64_lower_mul(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+
+    lir_operand_t *ax_operand = lir_reg_operand(rax->index, operand_type_kind(op->output));
+    lir_operand_t *dx_operand = lir_reg_operand(rdx->index, operand_type_kind(op->output));
+
+    // second cannot imm?
+    if (op->second->assert_type != LIR_OPERAND_VAR) {
+        op->second = amd64_convert_first_to_temp(c, list, op->second);
+    }
+
+    // mov first -> rax
+    linked_push(list, lir_op_move(ax_operand, op->first));
+
+    lir_opcode_t op_code = op->code;
+    lir_operand_t *result_operand = lir_regs_operand(2, ax_operand->value, dx_operand->value);
+
+
+    // imul rax, v2 -> rax+rdx
+    linked_push(list, lir_op_new(op_code, ax_operand, op->second, result_operand));
+    linked_push(list, lir_op_move(op->output, ax_operand)); // 暂时不处理 rdx, 只支持 64
+
+    return list;
+}
+
 static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
+    if (op->code == LIR_OPCODE_MUL) {
+        return amd64_lower_mul(c, op);
+    }
+
     linked_t *list = linked_new();
 
     lir_operand_t *ax_operand = lir_reg_operand(rax->index, operand_type_kind(op->output));
@@ -197,23 +250,50 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
 
     lir_opcode_t op_code = op->code;
     lir_operand_t *result_operand = ax_operand;
-    if (op->code == LIR_OPCODE_REM) {
-        op_code = LIR_OPCODE_DIV;   // rem 也是基于 div 计算得到的
-        result_operand = dx_operand;// 余数固定寄存器
+    if (op->code == LIR_OPCODE_UREM) {
+        op_code = LIR_OPCODE_UDIV; // rem 也是基于 div 计算得到的
+        result_operand = dx_operand; // 余数固定寄存器
     }
+    if (op->code == LIR_OPCODE_SREM) {
+        op_code = LIR_OPCODE_SDIV;
+        result_operand = dx_operand; // 余数固定寄存器
+    }
+
+    assert(op_code == LIR_OPCODE_UDIV || op_code == LIR_OPCODE_SDIV);
 
     // 64位操作系统中寄存器大小当然只有64位，因此，idiv使用rdx:rax作为被除数
     // 即rdx中的值作为高64位、rax中的值作为低64位
     // 格式：idiv src，结果存储在rax中
     // 因此，在使用idiv进行计算时，rdx 中不得为随机值，否则会发生浮点异常。
-    if (op_code == LIR_OPCODE_DIV) {
-        // TODO 如果寄存器分配识别异常可以考虑 first = dx_operand, 让 fixed interval 的固定生命周期完善
-        linked_push(list, lir_op_new(LIR_OPCODE_CLR, NULL, NULL, dx_operand));
-    }
+    linked_push(list, lir_op_new(LIR_OPCODE_CLR, NULL, NULL, dx_operand));
 
-    // [div|mul|rem] rax, v2 -> rax
+    // mul 使用 rax:rdx 两个寄存器，需要调整 result_operand
+
+    // [div|mul|rem] rax, v2 -> rax+rdx
     linked_push(list, lir_op_new(op_code, ax_operand, op->second, result_operand));
     linked_push(list, lir_op_move(op->output, result_operand));
+
+    return list;
+}
+
+static linked_t *amd64_lower_safepoint(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+
+    lir_operand_t *result_operand;
+    if (BUILD_OS == OS_LINUX) {
+        result_operand = operand_new(LIR_OPERAND_REG, rax);
+    } else {
+        result_operand = lir_regs_operand(2, rax, rdi);
+    }
+    // 预留 rax 寄存器存储 call 的结果
+    //    lir_operand_t *result_reg = lir_reg_operand(rax->index, TYPE_ANYPTR);
+
+    // 预留 rdi 用于参数(rdi 在 use 会导致 reg 的 use-def 异常), 只保留
+    //    lir_operand_t *first_reg = lir_reg_operand(rdi->index, TYPE_ANYPTR);
+
+
+    // 增加 label continue
+    linked_push(list, lir_op_new(op->code, NULL, NULL, result_operand));
 
     return list;
 }
@@ -243,13 +323,14 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (lir_op_factor(op) && is_integer(operand_type_kind(op->output))) {
+        // float 不需要特别处理, 其不会特殊占用寄存器
+        if (lir_op_factor(op) && is_integer_or_anyptr(operand_type_kind(op->output))) {
             // inter 类型的 mul 和 div 需要转换成 amd64 单操作数兼容操作
             linked_concat(operations, amd64_lower_factor(c, op));
             continue;
         }
 
-        if (op->code == LIR_OPCODE_SHL || op->code == LIR_OPCODE_SHR) {
+        if (op->code == LIR_OPCODE_USHL || op->code == LIR_OPCODE_USHR || op->code == LIR_OPCODE_SSHR) {
             linked_concat(operations, amd64_lower_shift(c, op));
             continue;
         }
@@ -257,6 +338,11 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         if (lir_op_contain_cmp(op) && op->first->assert_type != LIR_OPERAND_VAR) {
             op->first = amd64_convert_first_to_temp(c, operations, op->first);
             linked_push(operations, op);
+            continue;
+        }
+
+        if (op->code == LIR_OPCODE_SAFEPOINT) {
+            linked_concat(operations, amd64_lower_safepoint(c, op));
             continue;
         }
 
@@ -279,7 +365,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (op->code == LIR_OPCODE_MOVE && !lir_can_mov(op)) {
+        if (lir_op_like_move(op) && !lir_can_mov(op)) {
             op->first = amd64_convert_first_to_temp(c, operations, op->first);
             linked_push(operations, op);
             continue;

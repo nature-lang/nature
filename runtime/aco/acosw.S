@@ -95,17 +95,20 @@ acosw:
 #define SYM(x) x
 #endif
 
-.globl async_preempt
-#if defined(__DARWIN)
+#ifdef __DARWIN
+.globl _assist_preempt_yield
+_assist_preempt_yield:
 #else
-.type  async_preempt, @function
+.globl assist_preempt_yield
+.type  assist_preempt_yield, @function
+assist_preempt_yield:
 #endif
-async_preempt:
 #ifdef __AMD64
     push rbp
     mov rbp, rsp
     pushfq
-    sub rsp, 368
+    sub rsp, 376 // 376 + ret_addr + rbp + pushfd = 400, 16 对齐
+
     nop
     mov QWORD PTR [rsp], rax
     mov QWORD PTR [rsp + 8], rcx
@@ -138,13 +141,14 @@ async_preempt:
     movups [rsp + 320], xmm13
     movups [rsp + 336], xmm14
     movups [rsp + 352], xmm15
-    call SYM(co_preempt_yield)
+
+    call SYM(co_preempt_yield) // save and yield
 
 
     // debug (多的不能确定，但是这里肯定是 0 了，毕竟ret 地址被覆盖了，可关键是，栈空间还是会被污染呢)
-    mov rdi, rbp
-    mov rsi, [rbp + 8] // +8 是跳过 prev rbp, 此时栈中存储的值就是 ret addr 的值
-    call SYM(debug_ret)
+    // mov rdi, rbp
+    // mov rsi, [rbp + 8] // +8 是跳过 prev rbp, 此时栈中存储的值就是 ret addr 的值
+    // call SYM(debug_ret)
 
     movups xmm15, [rsp + 352]
     movups xmm14, [rsp + 336]
@@ -176,15 +180,14 @@ async_preempt:
     mov rdx, [rsp + 16]
     mov rcx, [rsp + 8]
     mov rax, [rsp]
-    add rsp, 368
-    popfq
 
-    pop rbp
+    add rsp, 376
 
-    // thread_handle_sig 部分预留了一些栈空间，现在需要还原成与被抢占的函数一致
-    // 但是此时栈空间还没有被污染，依旧可以从原空间中找到需要返回的 rip
-    add rsp, 1032
-    jmp [rsp - 1032]
+    popfq // 从栈顶弹出一个值到 RFLAGS 寄存器中，与之前的 pushfq 对应
+
+    pop rbp // 从栈顶弹出一个值到rbp寄存器中, 与之前的 push rbp dvyk
+
+    ret
 
 #elif defined(__ARM64)
     // 保存所有通用寄存器
@@ -268,8 +271,8 @@ async_preempt:
 
     mov sp, x29
     ldp x29, x30, [sp], #16
-    add sp, sp, #1032          // 恢复栈指针
-    ret                        // 返回到被中断的位置
+    // add sp, sp, #1032          // 恢复栈指针
+    ret                        // 返回到被中断的位置, 基于 x30 中的值进行返回
 
 #else
 #error "platform not support"

@@ -1,5 +1,5 @@
-import coroutine as co
-import coroutine.mutex as m
+import co
+import co.mutex as m
 import time
 
 

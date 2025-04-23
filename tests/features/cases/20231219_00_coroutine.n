@@ -1,4 +1,4 @@
-import coroutine as co
+import co
 import runtime
 
 fn car() {
@@ -52,86 +52,28 @@ fn main() {
         println('solo sub_co done', i)
     }
 
-    // - 共享协程
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
 
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-    @async(foo(), 0)
-
-    @async(bar(), co.SOLO)
-    @async(bar(), co.SOLO)
-    @async(bar(), co.SOLO)
-    @async(bar(), co.SOLO)
-    @async(bar(), co.SOLO)
-    @async(bar(), co.SOLO)
-    @async(bar(), co.SOLO)
-    @async(bar(), co.SOLO)
-    @async(bar(), co.SOLO)
-    @async(bar(), co.SOLO)
-    @async(bar(), co.SOLO)
-    @async(bar(), co.SOLO)
-    @async(bar(), co.SOLO)
-    @async(bar(), co.SOLO)
+    @async(bar())
+    @async(bar())
+    @async(bar())
+    @async(bar())
+    @async(bar())
+    @async(bar())
+    @async(bar())
+    @async(bar())
+    @async(bar())
+    @async(bar())
+    @async(bar(), co.SAME)
+    @async(bar(), co.SAME)
+    @async(bar(), co.SAME)
+    @async(bar(), co.SAME)
 
     for int i=0; i < 100; i+=1 {
        @async(foo(), 0)
     }
 
     for int i=0; i < 100; i+=1 {
-       @async(bar(), co.SOLO)
+       @async(bar(), co.SAME)
     }
 
     for int i=0; i < 300; i+=1 {

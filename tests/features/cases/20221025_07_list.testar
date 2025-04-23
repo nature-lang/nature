@@ -59,7 +59,6 @@ abcdefgh\0
 
 === test_slice
 --- main.n
-import unsafe
 
 fn main():void! {
     var a = [1, 2, 3, 4]
@@ -75,8 +74,6 @@ fn main():void! {
 
 === test_copy_failed
 --- main.n
-import unsafe
-
 fn main():void! {
     var a = [1, 2, 3, 4]
     var b = vec_new<int>(0, 0)
@@ -85,12 +82,10 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' panic: 'index out of vec [0] with length 0' at nature-test/main.n:7:24
+coroutine 'main' panic: 'index out of range [0] with length 0' at nature-test/main.n:5:24
 
 === test_copy
 --- main.n
-import unsafe
-
 fn main():void! {
     var a = [1, 2, 3, 4]
     var b = vec_new<int>(0, 10)
@@ -100,3 +95,87 @@ fn main():void! {
 
 --- output.txt
 10 1 2 3 4 0 0
+
+=== test_out_range
+--- main.n
+fn main():void! {
+    var list = [1, 2, 3, 4]
+    var a = list[-1]
+    println(a)
+}
+
+--- output.txt
+coroutine 'main' panic: 'index out of range [-1] with length 4' at nature-test/main.n:3:18
+
+
+
+=== test_out_range2
+--- main.n
+fn main():void! {
+    var list = [1, 2, 3, 4]
+    var a = list[100123111]
+    println(a)
+}
+
+--- output.txt
+coroutine 'main' panic: 'index out of range [100123111] with length 4' at nature-test/main.n:3:26
+
+
+=== test_in_range1
+--- main.n
+fn main():void! {
+    var list = [1, 2, 3, 4]
+    var a = list[0] + list[1] + list[2] + list[3]
+    println(a)
+}
+
+--- output.txt
+10
+
+=== test_in_range2
+--- main.n
+fn main():void! {
+    var list = [1, 2, 3, 4]
+    list[3] = list[0] + list[1] + list[2] + list[3]
+    println(list[3])
+}
+
+--- output.txt
+10
+
+=== test_in_range3
+--- main.n
+var list = [1, 2, 3, 4]
+
+fn main():void! {
+    list[3] = list[0] + list[1] + list[2] + list[3]
+    println(list[3])
+}
+
+--- output.txt
+10
+
+=== test_arr_in_range
+--- main.n
+[i16;8] arr1 = [1, 2, 3, 4]
+
+fn main():void! {
+    [i8;4] arr2 = [1, 2, 3, 4]
+    arr1[2] = arr2[3] as i16 * 2
+    println(arr1[2], arr2[3])
+}
+
+--- output.txt
+8 4
+
+=== test_arr_out_range
+--- main.n
+[i16;8] arr1 = [1, 2, 3, 4]
+
+fn main():void! {
+    [i8;4] arr2 = [1, 2, 3, 4]
+    arr1[-2] = arr2[-3] as i16 * 2
+}
+
+--- output.txt
+coroutine 'main' panic: 'index out of range [-2] with length 8' at nature-test/main.n:5:10

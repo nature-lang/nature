@@ -29,6 +29,9 @@ extern char *WORKDIR; // 执行 shell 命令所在的目录(import 搜索将会�
 extern char *BASE_NS; // 最后一级目录的名称，也可以自定义
 extern char *TEMP_DIR;// 链接临时目录
 
+extern char USE_LD[1024]; // 自定义链接器
+extern char LDFLAGS[1024]; // 自定义链接器参数
+
 extern char *BUILD_ENTRY;         // nature build {test/main.n} 花括号包起来的这部分
 extern char SOURCE_PATH[PATH_MAX];// /opt/test/main.n 的绝对路径
 
@@ -168,7 +171,7 @@ static inline void env_init() {
     }
 
     char *build_output_dir = getenv("BUILD_OUTPUT_DIR");
-    if (build_output_dir != NULL) {
+    if (build_output_dir != NULL && strlen(BUILD_OUTPUT_DIR) == 0) {
         strcpy(BUILD_OUTPUT_DIR, build_output_dir);
     }
 }

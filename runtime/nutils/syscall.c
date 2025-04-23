@@ -27,7 +27,7 @@ void syscall_exec(n_string_t *path, n_vec_t *argv, n_vec_t *envp) {
     char **c_args = mallocz(sizeof(char *) * (argv->length + 1));
     for (int i = 0; i < argv->length; ++i) {
         n_string_t *arg;
-        rt_vec_access(argv, i, &arg);
+        rti_vec_access(argv, i, &arg);
         if (arg == NULL) {
             continue;
         }
@@ -42,7 +42,7 @@ void syscall_exec(n_string_t *path, n_vec_t *argv, n_vec_t *envp) {
     char **c_envs = mallocz(sizeof(char *) * (envp->length + 1));
     for (int i = 0; i < envp->length; ++i) {
         n_string_t *env;
-        rt_vec_access(envp, i, &env);
+        rti_vec_access(envp, i, &env);
         if (env == NULL) {
             continue;
         }
@@ -56,11 +56,11 @@ void syscall_exec(n_string_t *path, n_vec_t *argv, n_vec_t *envp) {
     // 一旦调用成功,当前进程会被占用
     int result = execve(p_str, c_args, c_envs);
     if (result == -1) {
-        rt_throw(strerror(errno), false);
+        rti_throw(strerror(errno), false);
         return;
     }
 
-    rt_throw("execve failed", false);
+    rti_throw("execve failed", false);
 }
 
 // 使用 waitpid, 返回值为 exit status
@@ -68,7 +68,7 @@ n_u32_t syscall_wait(n_int_t pid) {
     int status;
     int result = waitpid((pid_t) pid, &status, 0);
     if (result == -1) {
-        rt_throw(strerror(errno), false);
+        rti_throw(strerror(errno), false);
         return 0;
     }
 
@@ -79,7 +79,7 @@ n_int_t syscall_call6(n_int_t number, n_uint_t a1, n_uint_t a2, n_uint_t a3, n_u
     int64_t result = syscall(number, a1, a2, a3, a4, a5, a6);
 
     if (result == -1) {
-        rt_throw(strerror(errno), false);
+        rti_throw(strerror(errno), false);
         return 0;
     }
     return (n_int_t) result;

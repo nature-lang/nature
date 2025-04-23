@@ -1,10 +1,11 @@
 #include "amd64.h"
-#include "src/register/arch/amd64.h"
 #include "src/debug/debug.h"
+#include "src/register/arch/amd64.h"
 #include <assert.h>
 
 static char *asm_setcc_integer_trans[] = {
         [LIR_OPCODE_SLT] = "setl",
+        [LIR_OPCODE_USLT] = "setb",
         [LIR_OPCODE_SLE] = "setle",
         [LIR_OPCODE_SGT] = "setg",
         [LIR_OPCODE_SGE] = "setge",
@@ -36,16 +37,16 @@ static slice_t *amd64_native_op(closure_t *c, lir_op_t *op);
 
 static amd64_asm_operand_t *amd64_fit_number(uint8_t size, int64_t number) {
     if (size == BYTE) {
-        return UINT8(number);
+        return AMD64_UINT8(number);
     }
     if (size == WORD) {
-        return UINT16(number);
+        return AMD64_UINT16(number);
     }
     if (size == DWORD) {
-        return UINT32(number);
+        return AMD64_UINT32(number);
     }
     if (size == QWORD) {
-        return UINT64(number);
+        return AMD64_UINT64(number);
     }
 
     assert(false);
@@ -57,7 +58,7 @@ static bool amd64_is_integer_operand(lir_operand_t *operand) {
         return reg->flag & FLAG(LIR_FLAG_ALLOC_INT);
     }
 
-    return is_integer(operand_type_kind(operand));
+    return is_integer_or_anyptr(operand_type_kind(operand));
 }
 
 static bool asm_operand_equal(amd64_asm_operand_t *a, amd64_asm_operand_t *b) {
@@ -82,7 +83,7 @@ static void asm_mov(slice_t *operations, lir_op_t *op, amd64_asm_operand_t *dst,
         return;
     }
 
-    amd64_asm_inst_t *operation = AMD64_ASM("mov", dst, src);
+    amd64_asm_inst_t *operation = AMD64_INST("mov", dst, src);
     slice_push(operations, operation);
 }
 
@@ -96,7 +97,7 @@ static void asm_mov(slice_t *operations, lir_op_t *op, amd64_asm_operand_t *dst,
 static amd64_asm_operand_t *lir_operand_trans_amd64(closure_t *c, lir_op_t *op, lir_operand_t *operand) {
     if (operand->assert_type == LIR_OPERAND_REG) {
         reg_t *reg = operand->value;
-        return REG(reg);
+        return AMD64_REG(reg);
     }
 
     if (operand->assert_type == LIR_OPERAND_STACK) {
@@ -111,21 +112,21 @@ static amd64_asm_operand_t *lir_operand_trans_amd64(closure_t *c, lir_op_t *op, 
             v->kind == TYPE_ANYPTR) {
             // mov r64,imm64 转换成 mov rm64,imm32
             if (v->int_value > INT32_MAX || v->int_value < INT32_MIN) {
-                return UINT64(v->uint_value);
+                return AMD64_UINT64(v->uint_value);
             }
-            return UINT32(v->uint_value);
+            return AMD64_UINT32(v->uint_value);
         } else if (v->kind == TYPE_INT8 || v->kind == TYPE_UINT8) {
-            return UINT8(v->uint_value);
+            return AMD64_UINT8(v->uint_value);
         } else if (v->kind == TYPE_INT16 || v->kind == TYPE_UINT16) {
-            return UINT16(v->uint_value);
+            return AMD64_UINT16(v->uint_value);
         } else if (v->kind == TYPE_INT32 || v->kind == TYPE_UINT32) {
-            return UINT32(v->uint_value);
+            return AMD64_UINT32(v->uint_value);
         } else if (v->kind == TYPE_FLOAT32) {
-            return FLOAT32(v->f64_value);
+            return AMD64_FLOAT32(v->f64_value);
         } else if (v->kind == TYPE_FLOAT || v->kind == TYPE_FLOAT64) {
-            return FLOAT64(v->f64_value);
+            return AMD64_FLOAT64(v->f64_value);
         } else if (v->kind == TYPE_BOOL) {
-            return UINT8(v->bool_value);
+            return AMD64_UINT8(v->bool_value);
         }
         assert(false && "code immediate not expected");
     }
@@ -169,7 +170,7 @@ static amd64_asm_operand_t *lir_operand_trans_amd64(closure_t *c, lir_op_t *op, 
 
     if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {
         lir_symbol_var_t *v = operand->value;
-        amd64_asm_operand_t *asm_operand = SYMBOL(v->ident, false);
+        amd64_asm_operand_t *asm_operand = AMD64_SYMBOL(v->ident, false);
         // symbol 也要有 size, 不然无法选择合适的寄存器进行 mov!
         asm_operand->size = type_kind_sizeof(v->kind);
         return asm_operand;
@@ -177,7 +178,7 @@ static amd64_asm_operand_t *lir_operand_trans_amd64(closure_t *c, lir_op_t *op, 
 
     if (operand->assert_type == LIR_OPERAND_SYMBOL_LABEL) {
         lir_symbol_label_t *v = operand->value;
-        return SYMBOL(v->ident, false);
+        return AMD64_SYMBOL(v->ident, false);
     }
 
     assert(false && "operand type not expected");
@@ -201,7 +202,7 @@ static amd64_asm_operand_t *lir_operand_trans_amd64(closure_t *c, lir_op_t *op, 
  */
 static slice_t *amd64_native_mov(closure_t *c, lir_op_t *op) {
     assert(op->output->assert_type != LIR_OPERAND_VAR && op->first->assert_type != LIR_OPERAND_VAR);
-//    assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
+    //    assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
     slice_t *operations = slice_new();
     amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
     amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
@@ -239,7 +240,7 @@ static slice_t *amd64_native_skip(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_push(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
     amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
-    slice_push(operations, AMD64_ASM("push", first));
+    slice_push(operations, AMD64_INST("push", first));
     return operations;
 }
 
@@ -248,7 +249,7 @@ static slice_t *amd64_native_bal(closure_t *c, lir_op_t *op) {
 
     slice_t *operations = slice_new();
     amd64_asm_operand_t *result = lir_operand_trans_amd64(c, op, op->output);
-    slice_push(operations, AMD64_ASM("jmp", result)); // result is symbol label
+    slice_push(operations, AMD64_INST("jmp", result)); // result is symbol label
     return operations;
 }
 
@@ -262,15 +263,14 @@ static slice_t *amd64_native_clv(closure_t *c, lir_op_t *op) {
     lir_operand_t *output = op->output;
     assert(output->assert_type == LIR_OPERAND_REG ||
            output->assert_type == LIR_OPERAND_STACK ||
-           output->assert_type == LIR_OPERAND_INDIRECT_ADDR
-    );
+           output->assert_type == LIR_OPERAND_INDIRECT_ADDR);
     assert(output);
 
     slice_t *operations = slice_new();
     amd64_asm_operand_t *result = lir_operand_trans_amd64(c, op, op->output);
 
     if (output->assert_type == LIR_OPERAND_REG) {
-        slice_push(operations, AMD64_ASM("xor", result, result));
+        slice_push(operations, AMD64_INST("xor", result, result));
         return operations;
     }
 
@@ -284,12 +284,12 @@ static slice_t *amd64_native_clv(closure_t *c, lir_op_t *op) {
         // MOV rm32, imm32
         // MOV rm64, imm32
         uint8_t size = stack->size > DWORD ? DWORD : stack->size;
-        slice_push(operations, AMD64_ASM("mov", result, amd64_fit_number(size, 0)));
+        slice_push(operations, AMD64_INST("mov", result, amd64_fit_number(size, 0)));
         return operations;
     }
 
     if (output->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-        lir_indexed_addr_t *temp = output->value;
+        lir_indirect_addr_t *temp = output->value;
         uint16_t size = type_sizeof(temp->type);
 
         assertf(size <= QWORD, "only can clv size <= %d, actual=%d", QWORD, size);
@@ -300,7 +300,7 @@ static slice_t *amd64_native_clv(closure_t *c, lir_op_t *op) {
         // MOV rm32, imm32
         // MOV rm64, imm32
         size = size > DWORD ? DWORD : size;
-        slice_push(operations, AMD64_ASM("mov", result, amd64_fit_number(size, 0)));
+        slice_push(operations, AMD64_INST("mov", result, amd64_fit_number(size, 0)));
         return operations;
     }
 
@@ -326,7 +326,7 @@ static slice_t *amd64_native_clr(closure_t *c, lir_op_t *op) {
 
     // 参数转换
     amd64_asm_operand_t *result = lir_operand_trans_amd64(c, op, op->output);
-    slice_push(operations, AMD64_ASM("xor", result, result));
+    slice_push(operations, AMD64_INST("xor", result, result));
 
     return operations;
 }
@@ -352,7 +352,11 @@ static slice_t *amd64_native_div(closure_t *c, lir_op_t *op) {
 
         amd64_asm_operand_t *second = lir_operand_trans_amd64(c, op, op->second);
 
-        slice_push(operations, AMD64_ASM("idiv", second));
+        if (op->code == LIR_OPCODE_SDIV) {
+            slice_push(operations, AMD64_INST("idiv", second));
+        } else {
+            slice_push(operations, AMD64_INST("div", second));
+        }
         return operations;
     }
 
@@ -363,7 +367,7 @@ static slice_t *amd64_native_div(closure_t *c, lir_op_t *op) {
     assert(!asm_operand_equal(second, result));
     // 浮点数是 amd64 常见的双操作数指令 mulss rm -> reg
     asm_mov(operations, op, result, first);
-    slice_push(operations, AMD64_ASM("div", result, second));
+    slice_push(operations, AMD64_INST("fdiv", result, second));
     return operations;
 }
 
@@ -375,9 +379,10 @@ static slice_t *amd64_native_div(closure_t *c, lir_op_t *op) {
  */
 static slice_t *amd64_native_mul(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
-    assertf(op->output->assert_type == LIR_OPERAND_REG, "mul op output must reg");
+    assertf(op->output->assert_type == LIR_OPERAND_REGS || op->output->assert_type == LIR_OPERAND_REG,
+            "mul op output must reg");
 
-    if (amd64_is_integer_operand(op->output)) {
+    if (op->output->assert_type == LIR_OPERAND_REGS) {
         assertf(op->first->assert_type == LIR_OPERAND_REG, "mul op first must reg");
         assertf(op->second->assert_type != LIR_OPERAND_IMM, "mul op second cannot imm");
 
@@ -385,10 +390,9 @@ static slice_t *amd64_native_mul(closure_t *c, lir_op_t *op) {
         reg_t *output_reg = op->output->value;
 
         assertf(first_reg->index == rax->index, "mul op first reg must rax");
-        assertf(output_reg->index == rax->index, "mul op output reg must rax");
 
         amd64_asm_operand_t *second = lir_operand_trans_amd64(c, op, op->second);
-        slice_push(operations, AMD64_ASM("imul", second));
+        slice_push(operations, AMD64_INST("mul", second));
         return operations;
     }
 
@@ -399,7 +403,7 @@ static slice_t *amd64_native_mul(closure_t *c, lir_op_t *op) {
     assert(!asm_operand_equal(second, result));
     // 浮点数是 amd64 常见的双操作数指令 mulss rm -> reg
     asm_mov(operations, op, result, first);
-    slice_push(operations, AMD64_ASM("mul", result, second));
+    slice_push(operations, AMD64_INST("fmul", result, second));
     return operations;
 }
 
@@ -420,7 +424,7 @@ static slice_t *amd64_native_neg(closure_t *c, lir_op_t *op) {
 
     // 必须先将 result 中存储目标值，在基于 result 做 neg, 这样才不会破坏 first 中的值
     asm_mov(operations, op, result, first);
-    slice_push(operations, AMD64_ASM("neg", result));
+    slice_push(operations, AMD64_INST("neg", result));
 
     return operations;
 }
@@ -443,7 +447,7 @@ static slice_t *amd64_native_xor(closure_t *c, lir_op_t *op) {
     // 必须先将 result 中存储目标值，在基于 result 做 neg, 这样才不会破坏 first 中的值
     assert(asm_operand_equal(first, result));
 
-    slice_push(operations, AMD64_ASM("xor", result, second));
+    slice_push(operations, AMD64_INST("xor", result, second));
 
     return operations;
 }
@@ -465,7 +469,7 @@ static slice_t *amd64_native_or(closure_t *c, lir_op_t *op) {
     // 必须先将 result 中存储目标值，在基于 result 做 neg, 这样才不会破坏 first 中的值
     assert(asm_operand_equal(first, result));
 
-    slice_push(operations, AMD64_ASM("or", result, second));
+    slice_push(operations, AMD64_INST("or", result, second));
 
     return operations;
 }
@@ -487,7 +491,7 @@ static slice_t *amd64_native_and(closure_t *c, lir_op_t *op) {
     // 必须先将 result 中存储目标值，在基于 result 做 neg, 这样才不会破坏 first 中的值
     assert(asm_operand_equal(first, result));
 
-    slice_push(operations, AMD64_ASM("and", result, second));
+    slice_push(operations, AMD64_INST("and", result, second));
 
     return operations;
 }
@@ -513,13 +517,15 @@ static slice_t *amd64_native_shift(closure_t *c, lir_op_t *op) {
     assert(asm_operand_equal(first, result));
 
     char *opcode;
-    if (op->code == LIR_OPCODE_SHR) {
+    if (op->code == LIR_OPCODE_USHR) {
+        opcode = "shr";
+    } else if (op->code == LIR_OPCODE_SSHR) {
         opcode = "sar";
     } else {
         opcode = "sal";
     }
 
-    slice_push(operations, AMD64_ASM(opcode, result, second));
+    slice_push(operations, AMD64_INST(opcode, result, second));
 
     return operations;
 }
@@ -543,7 +549,7 @@ static slice_t *amd64_native_not(closure_t *c, lir_op_t *op) {
     // 必须先将 result 中存储目标值，在基于 result 做 neg, 这样才不会破坏 first 中的值
     asm_mov(operations, op, result, first);
 
-    slice_push(operations, AMD64_ASM("not", result));
+    slice_push(operations, AMD64_INST("not", result));
 
     return operations;
 }
@@ -566,7 +572,7 @@ static slice_t *amd64_native_add(closure_t *c, lir_op_t *op) {
     // 由于需要 first -> result 进行覆盖，所以 second 和 result 不允许是统一地址或者 reg
     assert(asm_operand_equal(first, result));
 
-    slice_push(operations, AMD64_ASM("add", result, second));
+    slice_push(operations, AMD64_INST("add", result, second));
 
     return operations;
 }
@@ -592,7 +598,7 @@ static slice_t *amd64_native_sub(closure_t *c, lir_op_t *op) {
     assert(asm_operand_equal(first, result));
 
     //  sub imm -> result
-    slice_push(operations, AMD64_ASM("sub", result, second));
+    slice_push(operations, AMD64_INST("sub", result, second));
 
     return operations;
 }
@@ -622,10 +628,58 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
 
     amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
 
-    slice_push(operations, AMD64_ASM("call", first));
+    slice_push(operations, AMD64_INST("call", first));
 
     return operations;
 }
+
+static slice_t *amd64_native_trunc(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->output->assert_type == LIR_OPERAND_REG);
+
+    amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
+    amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
+    int64_t size = op->output->size;
+    assert(size > 0);
+
+    // 使用 and 指令进行截断
+    if (output->size == BYTE) {
+        slice_push(operations, AMD64_INST("and", output, AMD64_UINT32(0xff)));
+    } else if (output->size == WORD) {
+        slice_push(operations, AMD64_INST("and", output, AMD64_UINT32(0xffff)));
+    } else if (output->size == DWORD) {
+        slice_push(operations, AMD64_INST("and", output, AMD64_UINT32(0xffffffff)));
+    }
+
+    return operations;
+}
+
+static slice_t *amd64_native_sext(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->output->assert_type == LIR_OPERAND_REG);
+
+    amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
+    amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
+
+    slice_push(operations, AMD64_INST("movsx", output, first));
+    return operations;
+}
+
+static slice_t *amd64_native_zext(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->output->assert_type == LIR_OPERAND_REG);
+
+    amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
+    amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
+
+    slice_push(operations, AMD64_INST("movzx", output, first));
+
+    return operations;
+}
+
 
 // result = foo > bar
 // lir GT foo,bar => result // foo GT bar // foo > bar // foo - bar > 0
@@ -640,7 +694,7 @@ static slice_t *amd64_native_scc(closure_t *c, lir_op_t *op) {
     assert(result->size == BYTE);
 
     // cmp dst, src 也就是 dst - src 的结果
-    slice_push(operations, AMD64_ASM("cmp", first, second));
+    slice_push(operations, AMD64_INST("cmp", first, second));
 
     char *asm_code;
     if (amd64_is_integer_operand(op->first)) {
@@ -652,7 +706,7 @@ static slice_t *amd64_native_scc(closure_t *c, lir_op_t *op) {
     }
 
     assertf(asm_code, "not found op_code map asm_code");
-    slice_push(operations, AMD64_ASM(asm_code, result));
+    slice_push(operations, AMD64_INST(asm_code, result));
 
     return operations;
 }
@@ -661,7 +715,7 @@ static slice_t *amd64_native_scc(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_label(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
     lir_symbol_label_t *label_operand = op->output->value;
-    slice_push(operations, AMD64_ASM("label", SYMBOL(label_operand->ident, label_operand->is_local)));
+    slice_push(operations, AMD64_INST("label", AMD64_SYMBOL(label_operand->ident, label_operand->is_local)));
     return operations;
 }
 
@@ -680,13 +734,13 @@ static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
     // 进行最终的对齐, linux amd64 中栈一般都是是按 16byte 对齐的
     offset = align_up(offset, AMD64_STACK_ALIGN_SIZE);
 
-    slice_push(operations, AMD64_ASM("push", REG(rbp))); // push 会移动 rsp 至臻，所以不需要再次处理
-    slice_push(operations, AMD64_ASM("mov", REG(rbp), REG(rsp))); // 保存栈指针
+    slice_push(operations, AMD64_INST("push", AMD64_REG(rbp))); // push 会移动 rsp 至臻，所以不需要再次处理
+    slice_push(operations, AMD64_INST("mov", AMD64_REG(rbp), AMD64_REG(rsp))); // 保存栈指针
     if (offset != 0) {
-        slice_push(operations, AMD64_ASM("sub", REG(rsp), UINT32(offset)));
+        slice_push(operations, AMD64_INST("sub", AMD64_REG(rsp), AMD64_UINT32(offset)));
     }
 
-//    c->stack_offset = offset;
+    //    c->stack_offset = offset;
     // gc_bits 补 0
     if (c->call_stack_max_offset) {
         uint16_t bits_start = c->stack_offset / POINTER_SIZE;
@@ -709,9 +763,9 @@ static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
  */
 slice_t *amd64_native_fn_end(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
-    slice_push(operations, AMD64_ASM("mov", REG(rsp), REG(rbp)));
-    slice_push(operations, AMD64_ASM("pop", REG(rbp)));
-    slice_push(operations, AMD64_ASM("ret"));
+    slice_push(operations, AMD64_INST("mov", AMD64_REG(rsp), AMD64_REG(rbp)));
+    slice_push(operations, AMD64_INST("pop", AMD64_REG(rbp)));
+    slice_push(operations, AMD64_INST("ret"));
     return operations;
 }
 
@@ -734,7 +788,7 @@ static slice_t *amd64_native_lea(closure_t *c, lir_op_t *op) {
     // lea 取的是 first 的地址，amd64 下一定是 8byte
     first->size = QWORD;
 
-    slice_push(operations, AMD64_ASM("lea", result, first));
+    slice_push(operations, AMD64_INST("lea", result, first));
     return operations;
 }
 
@@ -758,8 +812,105 @@ static slice_t *amd64_native_beq(closure_t *c, lir_op_t *op) {
     amd64_asm_operand_t *result = lir_operand_trans_amd64(c, op, op->output);
 
     // cmp 指令比较
-    slice_push(operations, AMD64_ASM("cmp", first, second));
-    slice_push(operations, AMD64_ASM("je", result));
+    slice_push(operations, AMD64_INST("cmp", first, second));
+    slice_push(operations, AMD64_INST("je", result));
+
+    return operations;
+}
+
+
+static slice_t *amd64_native_safepoint(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    amd64_asm_operand_t *rax_operand = AMD64_REG(rax);
+    amd64_asm_operand_t *rdi_operand = AMD64_REG(rdi);
+
+    if (BUILD_OS == OS_DARWIN) {
+        assert(op->output->assert_type == LIR_OPERAND_REGS);
+
+        amd64_asm_operand_t *tlv_page = AMD64_TLS_SYMBOL(TLS_YIELD_SAFEPOINT_IDENT);
+
+        // movq _tls_yield_safepoint@TLVP(%rip), %rdi
+        slice_push(operations, AMD64_INST("mov", rdi_operand, tlv_page));
+
+        // call rax
+        amd64_asm_operand_t *call_target = INDIRECT_REG(rdi, QWORD);
+        slice_push(operations, AMD64_INST("call", call_target));
+
+        slice_push(operations, AMD64_INST("mov", rax_operand, INDIRECT_REG(rax, QWORD)));
+    } else {
+        assert(op->output->assert_type == LIR_OPERAND_REG);
+
+        // mov fs
+        amd64_asm_operand_t *safepoint_symbol = AMD64_TLS_SYMBOL(TLS_YIELD_SAFEPOINT_IDENT);
+
+        // movq	%fs:tls_yield_safepoint@tpoff, %rax
+        slice_push(operations, AMD64_INST("mov", rax_operand, safepoint_symbol));
+    }
+
+
+    // cmp
+    slice_push(operations, AMD64_INST("cmp", rax_operand, AMD64_UINT32(0)));
+
+    // je 如何跳过 当前指令 和 call rel32 指令
+    // je 跳过 call rel32 指令
+    slice_push(operations, AMD64_INST("je", AMD64_UINT8(5))); // 5字节(call)
+
+    slice_push(operations, AMD64_INST("call", AMD64_SYMBOL(ASSIST_PREEMPT_YIELD_IDENT, false)));
+
+
+    // arm64 参考实现
+    // // cmp x0,#0x0
+    // slice_push(operations, ARM64_INST(R_CMP, x0_operand, ARM64_IMM(0)));
+
+    // // b.eq 跳过 bl 指令
+    // slice_push(operations, ARM64_INST(R_BEQ, ARM64_IMM(8)));
+
+    // slice_push(operations, ARM64_INST(R_BL, ARM64_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, 0)));
+
+    // // 加载 tls_yield_safepoint 的指针
+    // if (BUILD_OS == OS_DARWIN) {
+    //     // 处理 TLS 变量
+    //     // 1. 使用 ADRP 加载 TLS 变量的页地址
+    //     arm64_asm_operand_t *tlv_page = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_ARM64_RELOC_TLVP_LOAD_PAGE21);
+    //     slice_push(operations, ARM64_INST(R_ADRP, x0_operand, tlv_page));
+
+    //     // 2. 加载 TLV getter 函数的地址
+    //     assert(op->output->assert_type == LIR_OPERAND_REG);
+    //     reg_t *result_reg = op->output->value;
+    //     assert(result_reg->index == x0->index);
+    //     slice_push(operations, ARM64_INST(R_LDR, x0_operand, ARM64_INDIRECT_SYM(result_reg, TLS_YIELD_SAFEPOINT_IDENT, ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12)));
+
+    //     // 3.?
+    //     slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(x16), ARM64_INDIRECT(result_reg, 0, 0, QWORD)));
+
+    //     // 3. 调用 TLV get 函数获取实际的 TLS 变量地址
+    //     slice_push(operations, ARM64_INST(R_BLR, ARM64_REG(x16)));
+    // } else {
+    //     // 1. 使用 MRS 指令读取 TPIDR_EL0 寄存器（TLS 基址）到结果寄存器
+    //     slice_push(operations, ARM64_INST(R_MRS, x0_operand, ARM64_IMM(TPIDR_EL0)));
+
+    //     // 2.1 添加高12位偏移量
+    //     arm64_asm_operand_t *tls_hi12_operand = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_ARM64_RELOC_TLSLE_ADD_TPREL_HI12);
+    //     slice_push(operations, ARM64_INST(R_ADD, x0_operand, x0_operand, tls_hi12_operand));
+
+    //     // 2.2 添加低12位偏移量
+    //     arm64_asm_operand_t *tls_lo12_operand = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12_NC);
+    //     slice_push(operations, ARM64_INST(R_ADD, x0_operand, x0_operand, tls_lo12_operand));
+    // }
+
+    // // ldr x0, [x0]
+    // //    arm64_asm_operand_t *w0_operand = ARM64_REG(w0);
+    // //    w0_operand->size = w0_reg->size;
+    // slice_push(operations, ARM64_INST(R_LDR, x0_operand, ARM64_INDIRECT(x0_reg, 0, 0, POINTER_SIZE)));
+
+    // // cmp x0,#0x0
+    // slice_push(operations, ARM64_INST(R_CMP, x0_operand, ARM64_IMM(0)));
+
+    // // b.eq 跳过 bl 指令
+    // slice_push(operations, ARM64_INST(R_BEQ, ARM64_IMM(8)));
+
+    // slice_push(operations, ARM64_INST(R_BL, ARM64_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, 0)));
 
     return operations;
 }
@@ -778,6 +929,13 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_BEQ] = amd64_native_beq,
         [LIR_OPCODE_BAL] = amd64_native_bal,
 
+        // 类型扩展
+        [LIR_OPCODE_UEXT] = amd64_native_zext,
+        [LIR_OPCODE_SEXT] = amd64_native_sext,
+        [LIR_OPCODE_TRUNC] = amd64_native_trunc,
+
+        [LIR_OPCODE_SAFEPOINT] = amd64_native_safepoint,
+
         // 一元运算符
         [LIR_OPCODE_NEG] = amd64_native_neg,
 
@@ -786,13 +944,15 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_NOT] = amd64_native_not,
         [LIR_OPCODE_OR] = amd64_native_or,
         [LIR_OPCODE_AND] = amd64_native_and,
-        [LIR_OPCODE_SHR] = amd64_native_shift,
-        [LIR_OPCODE_SHL] = amd64_native_shift,
+        [LIR_OPCODE_USHR] = amd64_native_shift,
+        [LIR_OPCODE_SSHR] = amd64_native_shift,
+        [LIR_OPCODE_USHL] = amd64_native_shift,
 
         // 算数运算
         [LIR_OPCODE_ADD] = amd64_native_add,
         [LIR_OPCODE_SUB] = amd64_native_sub,
-        [LIR_OPCODE_DIV] = amd64_native_div,
+        [LIR_OPCODE_UDIV] = amd64_native_div,
+        [LIR_OPCODE_SDIV] = amd64_native_div,
         [LIR_OPCODE_MUL] = amd64_native_mul,
         // 逻辑相关运算符
         [LIR_OPCODE_SGT] = amd64_native_scc,
@@ -802,15 +962,13 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_SEE] = amd64_native_scc,
         [LIR_OPCODE_SNE] = amd64_native_scc,
 
+        [LIR_OPCODE_USLT] = amd64_native_scc,
+
         [LIR_OPCODE_MOVE] = amd64_native_mov,
         [LIR_OPCODE_LEA] = amd64_native_lea,
         [LIR_OPCODE_FN_BEGIN] = amd64_native_fn_begin,
         [LIR_OPCODE_FN_END] = amd64_native_fn_end,
-
-        // 伪指令，直接忽略即可
-//        [LIR_OPCODE_ENV_CLOSURE] = amd64_native_skip,
 };
-
 
 slice_t *amd64_native_op(closure_t *c, lir_op_t *op) {
     amd64_native_fn fn = amd64_native_table[op->code];

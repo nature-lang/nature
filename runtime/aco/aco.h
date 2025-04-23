@@ -58,8 +58,8 @@ typedef struct {
 
 typedef struct {
     void *ptr; // need gc mark
-    size_t sz;
-    size_t valid_sz;
+    size_t sz; // save stack size
+    size_t valid_sz; // 基于 sp 指针计算出来的 valid sz
     // max copy size in bytes
     size_t max_cpsz;
     // copy from share stack to this save stack

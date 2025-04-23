@@ -1,4 +1,4 @@
-import coroutine.types
+import co.types
 
 // 存放在了标准库的 mutex_t 中
 type mutex_t = struct {

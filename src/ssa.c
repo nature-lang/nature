@@ -488,7 +488,7 @@ slice_t *ssa_calc_dom_blocks(closure_t *c, basic_block_t *block) {
     // 遍历当前 block 的 preds 的 dom_list, 然后求交集
     // 如果一个基本块支配着 i 每一个前驱，那么其数量等于 i 前驱的数量
     // block_label_count 记录着当前基本块支配着的节点的数量
-    uint8_t block_label_count[UINT16_MAX] = {0};
+    uint16_t block_label_count[UINT16_MAX] = {0};
     for (int id = 0; id < c->blocks->count; ++id) {
         block_label_count[id] = 0;
     }

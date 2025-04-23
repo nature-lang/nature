@@ -1,0 +1,139 @@
+=== test_array_new
+--- main.n
+fn main():void! {
+    [i8;10] arr1 = [1;10]
+    println(arr1[0], arr1[1], arr1[2])
+}
+
+--- output.txt
+1 1 1
+
+=== test_vec_new
+--- main.n
+fn main():void! {
+    var list = [12;10] // default vec
+
+    println(list[0], list[1], list[2], list.len(), list.cap())
+}
+
+--- output.txt
+12 12 12 10 10
+
+=== test_vec_cast
+--- main.n
+fn main():void! {
+    vec<i32> list = [0;100]
+
+    println(list[0], list[1], list[99], list.len(), list.cap())
+}
+
+--- output.txt
+0 0 0 100 100
+
+
+=== test_array_failed_zero
+--- main.n
+type person_t = struct{
+    ptr<int> p
+}
+
+fn main():void! {
+    [person_t;10] list = [person_t{p = new int(0)};0]
+}
+
+--- output.txt
+nature-test/main.n:6:52: array length must be greater than 0
+
+=== test_vec_init
+--- main.n
+type person_t = struct{
+    ptr<int> p
+}
+
+fn main():void! {
+    [person_t;10] list = [person_t{
+        p = new int(2),
+    };10]
+
+    println(*list[1].p)
+}
+
+--- output.txt
+2
+
+=== test_arr_index_access
+--- main.n
+type person_t = struct{
+    ptr<int> p
+}
+
+fn main():void! {
+    [person_t;10] list = [person_t{
+        p = new int(2),
+    };10]
+
+    i8 a = 1
+    i16 b = 2
+    i32 c = 3
+    i64 d = 4
+    u8 a1 = 5
+    u16 a2 = 6
+    u32 a3 = 7
+    u64 a4 = 8
+
+    println(*list[a].p, *list[b].p, *list[c].p, *list[d].p, *list[a1].p, *list[a2].p, *list[a3].p, *list[a4].p)
+}
+
+--- output.txt
+2 2 2 2 2 2 2 2
+
+=== test_vec_index_access
+--- main.n
+type person_t = struct{
+    ptr<int> p
+}
+
+fn test() {
+
+}
+
+fn main():void! {
+    var list = [person_t{
+        p = new int(2),
+    };10]
+
+    test()
+    i8 a = 1
+    i16 b = 2
+    i32 c = 3
+    i64 d = 4
+    u8 a1 = 5
+    u16 a2 = 6
+    u32 a3 = 7
+    u64 a4 = 8
+
+    println(*list[a].p, *list[b].p, *list[c].p, *list[d].p, *list[a1].p, *list[a2].p, *list[a3].p, *list[a4].p)
+}
+
+--- output.txt
+2 2 2 2 2 2 2 2
+
+=== test_amd64_mul_failed
+--- main.n
+var list = [0;10]
+
+fn test(int a) {
+    println(a)
+}
+
+fn test2() {
+    i16 a = 1
+    test(list[a])
+}
+
+fn main():void! {
+    test2()
+}
+
+--- output.txt
+0
