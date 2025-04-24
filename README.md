@@ -42,42 +42,66 @@ Major work in the next versions of The main work is
 
 Official website: [https://nature-lang.org](https://nature-lang.org)
 
+## Install
 
-## Installation
+Download and extract the natrue installer from [releases](https://github.com/nature-lang/nature/releases) (note the correct permissions). Move the extracted nature folder to `/usr/local/` and add the `/usr/local/nature/bin` directory to the system environment variable.
 
-Download and extract the Nature package from [releases](https://github.com/nature-lang/nature/releases). It's recommended to move the extracted nature folder to `/usr/local/` and add `/usr/local/nature/bin` to your system's PATH.
+> If you need to install into another directory you need to manually set the NATURE_ROOT environment variable to the corresponding directory
 
-Create a main.n file:
+Run the `nature -v` command to check the version, and run the `nature -h` command to check the help
 
-```js
-import fmt
+```sh 
+> nature -v 
+nature v0.5.0 - release build 2025-05-01 
+``` 
 
-fn main() {
-    fmt.printf('hello nature')
-}
-```
+create a main.n file
 
-Compile and run:
+```js 
+import fmt 
+  
+fn main() { 
+ fmt.printf('hello nature') 
+} 
+``` 
 
-```
-> nature build main.n && ./main
-hello nature
-```
+compile and execute
 
----
+```sh 
+> nature build main.n && . /main 
 
-Editor support: https://github.com/nature-lang/nls
+hello nature 
+``` 
 
-Code examples: https://github.com/nature-lang/nature/tree/master/tests/features/cases
+
+--- 
+
 
 ## Documentation
 
-[https://nature-lang.org/docs/getting-started/hello-world](https://nature-lang.org/docs/getting-started/hello-world)
+Quick start [https://nature-lang.org/docs/get-started](https://nature-lang.org/docs/get-started)
 
-## Contribution Guide
+Syntax documentation [https:// nature-lang.org/docs/syntax](https://nature-lang.org/docs/syntax)
 
-https://nature-lang.org/docs/prologue/contribution-guide
+Standard library documentation [https://nature-lang.org/stds](https://nature-lang.org/stds)
+
+Try in browser [https://nature-lang.org/playground](https://nature-lang.org/playground)
+
+LSP https://github.com/nature-lang/nls Reference README.md
+
+## Project examples
+
+1. [parker](https://github.com/weiwenhao/parker) Lightweight packaging tool
+2. [llama.n](https://github.com/weiwenhao/llama.n) Llama2 nature language implementation
+3. [ tetris](https://github.com/weiwenhao/tetris) Tetris implementation based on raylib, macos only
+4. [playground](https://github.com/weiwenhao/playground) playground server api implementation
+
+More syntax examples https://github.com/nature-lang/nature/tree/master/tests/features/cases
+
+## Contribution guidelines
+
+https://nature-lang.org/docs/contribute
 
 ## License
 
-The compiler frontend, backend, runtime, and other project source code are licensed under the Apache License (Version 2.0). Nature source files (.n) included in the current project, such as the standard library, are licensed under the MIT License.
+The source code for the compiler frontend, backend, and runtime of this project is restricted by the Apache License (Version 2.0). Nature source files (.n) such as standard libraries included in the current project use the MIT license.

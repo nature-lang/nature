@@ -1,4 +1,5 @@
-nature 编程语言
+
+#  nature 编程语言
 
 通用开源编程语言与编译器，期望为开发者提供**简洁优雅**的开发体验，能够**简单高效**构建出安全可靠的跨平台软件。
 
@@ -45,38 +46,63 @@ nature 包含一组测试用例及标准库用来测试语法的可用性，但�
 
 ## 安装
 
-从 [releases](https://github.com/nature-lang/nature/releases) 中下载并解压 natrue 安装包。推荐将解压后的 nature 文件夹移动到 `/usr/local/` 下，并将 `/usr/local/nature/bin` 目录加入到系统环境变量。
+从 [releases](https://github.com/nature-lang/nature/releases) 中下载并解压 natrue 安装包(注意权限是否正确)。将解压后的 nature 文件夹移动到 `/usr/local/` 下，并将 `/usr/local/nature/bin` 目录加入到系统环境变量。
+
+> 如果需要安装到其他目录中需要手动设置 NATURE_ROOT 环境变量到对应目录
+
+运行 `nature -v` 命令查看版本，运行 `nature -h` 命令查看帮助
+
+```sh
+> nature -v
+nature v0.5.0 - release build 2025-05-01
+```
 
 创建一个 main.n 文件
 
-```js
-import fmt
-
-fn main() {
-	fmt.printf('hello nature')
-}
+```js  
+import fmt  
+  
+fn main() {  
+    fmt.printf('hello nature')
+}  
 ```
 
 编译并执行
 
-```sh
-> nature build main.n && ./main
+```sh  
+> nature build main.n && ./main  
+
 hello nature
 ```
 
----
 
-编辑器 lsp 安装 https://github.com/nature-lang/nls
+---  
 
-编码示例 https://github.com/nature-lang/nature/tree/master/tests/features/cases
 
 ## 文档
 
- [https://nature-lang.org/docs/getting-started/hello-world](https://nature-lang.org/docs/getting-started/hello-world)
+快速开始 [https://nature-lang.org/docs/get-started](https://nature-lang.org/docs/get-started)
+
+语法文档 [https://nature-lang.org/docs/syntax](https://nature-lang.org/docs/syntax)
+
+标准库文档 [https://nature-lang.org/stds](https://nature-lang.org/stds/co)
+
+在线试用 [https://nature-lang.org/playground](https://nature-lang.org/playground)
+
+LSP  https://github.com/nature-lang/nls 参考 README.md
+
+## 项目示例
+
+1. [parker](https://github.com/weiwenhao/parker) 轻量打包工具
+2. [llama.n](https://github.com/weiwenhao/llama.n) Llama2 nature 语言实现
+3. [tetris](https://github.com/weiwenhao/tetris) 基于 raylib 实现的俄罗斯方块，仅支持 macos
+4. [playground](https://github.com/weiwenhao/playground) playground server api 实现
+
+更多语法示例 https://github.com/nature-lang/nature/tree/master/tests/features/cases
 
 ## 贡献指南
 
-https://nature-lang.org/docs/prologue/contribution-guide
+https://nature-lang.org/docs/contribute
 
 ## License
 
