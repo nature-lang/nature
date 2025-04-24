@@ -1,0 +1,21 @@
+import os
+import syscall
+import time
+import fmt
+
+bool verbose = false
+
+fn set_verbose() {
+    verbose = true
+    logf('verbose enabled')
+}
+
+fn logf(string format, ...[any] args) {
+    if !verbose {
+        return
+    }
+    var msg = fmt.sprintf(format, ...args)
+    var t = time.now()
+    fmt.printf('[%v] %v\n', t.datetime(), msg)
+}
+

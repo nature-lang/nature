@@ -1,0 +1,2482 @@
+import co
+
+// System/Window config flags
+var FLAG_VSYNC_HINT = 0x00000040
+var FLAG_FULLSCREEN_MODE = 0x00000002
+var FLAG_WINDOW_RESIZABLE = 0x00000004
+var FLAG_WINDOW_UNDECORATED = 0x00000008
+var FLAG_WINDOW_HIDDEN = 0x00000080
+var FLAG_WINDOW_MINIMIZED = 0x00000200
+var FLAG_WINDOW_MAXIMIZED = 0x00000400
+var FLAG_WINDOW_UNFOCUSED = 0x00000800
+var FLAG_WINDOW_TOPMOST = 0x00001000
+var FLAG_WINDOW_ALWAYS_RUN = 0x00000100
+var FLAG_WINDOW_TRANSPARENT = 0x00000010
+var FLAG_WINDOW_HIGHDPI = 0x00002000
+var FLAG_WINDOW_MOUSE_PASSTHROUGH = 0x00004000
+var FLAG_BORDERLESS_WINDOWED_MODE = 0x00008000
+var FLAG_MSAA_4X_HINT = 0x00000020
+var FLAG_INTERLACED_HINT = 0x00010000
+
+// Trace log level
+i32 LOG_ALL = 0
+i32 LOG_TRACE = 1
+i32 LOG_DEBUG = 2
+i32 LOG_INFO = 3
+i32 LOG_WARNING = 4
+i32 LOG_ERROR = 5
+i32 LOG_FATAL = 6
+i32 LOG_NONE = 7
+
+// Keyboard keys
+i32 KEY_NULL = 0
+i32 KEY_APOSTROPHE = 39
+i32 KEY_COMMA = 44
+i32 KEY_MINUS = 45
+i32 KEY_PERIOD = 46
+i32 KEY_SLASH = 47
+i32 KEY_ZERO = 48
+i32 KEY_ONE = 49
+i32 KEY_TWO = 50
+i32 KEY_THREE = 51
+i32 KEY_FOUR = 52
+i32 KEY_FIVE = 53
+i32 KEY_SIX = 54
+i32 KEY_SEVEN = 55
+i32 KEY_EIGHT = 56
+i32 KEY_NINE = 57
+i32 KEY_SEMICOLON = 59
+i32 KEY_EQUAL = 61
+i32 KEY_A = 65
+i32 KEY_B = 66
+i32 KEY_C = 67
+i32 KEY_D = 68
+i32 KEY_E = 69
+i32 KEY_F = 70
+i32 KEY_G = 71
+i32 KEY_H = 72
+i32 KEY_I = 73
+i32 KEY_J = 74
+i32 KEY_K = 75
+i32 KEY_L = 76
+i32 KEY_M = 77
+i32 KEY_N = 78
+i32 KEY_O = 79
+i32 KEY_P = 80
+i32 KEY_Q = 81
+i32 KEY_R = 82
+i32 KEY_S = 83
+i32 KEY_T = 84
+i32 KEY_U = 85
+i32 KEY_V = 86
+i32 KEY_W = 87
+i32 KEY_X = 88
+i32 KEY_Y = 89
+i32 KEY_Z = 90
+i32 KEY_LEFT_BRACKET = 91
+i32 KEY_BACKSLASH = 92
+i32 KEY_RIGHT_BRACKET = 93
+i32 KEY_GRAVE = 96
+
+// Function keys
+i32 KEY_SPACE = 32
+i32 KEY_ESCAPE = 256
+i32 KEY_ENTER = 257
+i32 KEY_TAB = 258
+i32 KEY_BACKSPACE = 259
+i32 KEY_INSERT = 260
+i32 KEY_DELETE = 261
+i32 KEY_RIGHT = 262
+i32 KEY_LEFT = 263
+i32 KEY_DOWN = 264
+i32 KEY_UP = 265
+i32 KEY_PAGE_UP = 266
+i32 KEY_PAGE_DOWN = 267
+i32 KEY_HOME = 268
+i32 KEY_END = 269
+i32 KEY_CAPS_LOCK = 280
+i32 KEY_SCROLL_LOCK = 281
+i32 KEY_NUM_LOCK = 282         // Key: Num lock
+i32 KEY_PRINT_SCREEN = 283     // Key: Print screen
+i32 KEY_PAUSE = 284            // Key: Pause
+i32 KEY_F1 = 290              // Key: F1
+i32 KEY_F2 = 291              // Key: F2
+i32 KEY_F3 = 292              // Key: F3
+i32 KEY_F4 = 293              // Key: F4
+i32 KEY_F5 = 294              // Key: F5
+i32 KEY_F6 = 295              // Key: F6
+i32 KEY_F7 = 296              // Key: F7
+i32 KEY_F8 = 297              // Key: F8
+i32 KEY_F9 = 298              // Key: F9
+i32 KEY_F10 = 299             // Key: F10
+i32 KEY_F11 = 300             // Key: F11
+i32 KEY_F12 = 301             // Key: F12
+i32 KEY_LEFT_SHIFT = 340      // Key: Shift left
+i32 KEY_LEFT_CONTROL = 341    // Key: Control left
+i32 KEY_LEFT_ALT = 342        // Key: Alt left
+i32 KEY_LEFT_SUPER = 343      // Key: Super left
+i32 KEY_RIGHT_SHIFT = 344     // Key: Shift right
+i32 KEY_RIGHT_CONTROL = 345   // Key: Control right
+i32 KEY_RIGHT_ALT = 346       // Key: Alt right
+i32 KEY_RIGHT_SUPER = 347     // Key: Super right
+i32 KEY_KB_MENU = 348         // Key: KB menu
+
+// Keypad keys
+i32 KEY_KP_0 = 320           // Key: Keypad 0
+i32 KEY_KP_1 = 321           // Key: Keypad 1
+i32 KEY_KP_2 = 322           // Key: Keypad 2
+i32 KEY_KP_3 = 323           // Key: Keypad 3
+i32 KEY_KP_4 = 324           // Key: Keypad 4
+i32 KEY_KP_5 = 325           // Key: Keypad 5
+i32 KEY_KP_6 = 326           // Key: Keypad 6
+i32 KEY_KP_7 = 327           // Key: Keypad 7
+i32 KEY_KP_8 = 328           // Key: Keypad 8
+i32 KEY_KP_9 = 329           // Key: Keypad 9
+i32 KEY_KP_DECIMAL = 330     // Key: Keypad .
+i32 KEY_KP_DIVIDE = 331      // Key: Keypad /
+i32 KEY_KP_MULTIPLY = 332    // Key: Keypad *
+i32 KEY_KP_SUBTRACT = 333    // Key: Keypad -
+i32 KEY_KP_ADD = 334         // Key: Keypad +
+i32 KEY_KP_ENTER = 335       // Key: Keypad Enter
+i32 KEY_KP_EQUAL = 336       // Key: Keypad =
+
+// Android key buttons
+i32 KEY_BACK = 4             // Key: Android back button
+i32 KEY_MENU = 5             // Key: Android menu button
+i32 KEY_VOLUME_UP = 24       // Key: Android volume up button
+i32 KEY_VOLUME_DOWN = 25     // Key: Android volume down button
+
+// Mouse buttons
+i32 MOUSE_BUTTON_LEFT = 0        // Mouse button left
+i32 MOUSE_BUTTON_RIGHT = 1       // Mouse button right
+i32 MOUSE_BUTTON_MIDDLE = 2      // Mouse button middle (pressed wheel)
+i32 MOUSE_BUTTON_SIDE = 3        // Mouse button side (advanced mouse device)
+i32 MOUSE_BUTTON_EXTRA = 4       // Mouse button extra (advanced mouse device)
+i32 MOUSE_BUTTON_FORWARD = 5     // Mouse button forward (advanced mouse device)
+i32 MOUSE_BUTTON_BACK = 6        // Mouse button back (advanced mouse device)
+
+// Mouse cursor
+i32 MOUSE_CURSOR_DEFAULT = 0      // Default pointer shape
+i32 MOUSE_CURSOR_ARROW = 1        // Arrow shape
+i32 MOUSE_CURSOR_IBEAM = 2        // Text writing cursor shape
+i32 MOUSE_CURSOR_CROSSHAIR = 3    // Cross shape
+i32 MOUSE_CURSOR_POINTING_HAND = 4 // Pointing hand cursor
+i32 MOUSE_CURSOR_RESIZE_EW = 5    // Horizontal resize/move arrow shape
+i32 MOUSE_CURSOR_RESIZE_NS = 6    // Vertical resize/move arrow shape
+i32 MOUSE_CURSOR_RESIZE_NWSE = 7  // Top-left to bottom-right diagonal resize/move arrow shape
+i32 MOUSE_CURSOR_RESIZE_NESW = 8  // The top-right to bottom-left diagonal resize/move arrow shape
+i32 MOUSE_CURSOR_RESIZE_ALL = 9   // The omnidirectional resize/move cursor shape
+i32 MOUSE_CURSOR_NOT_ALLOWED = 10 // The operation-not-allowed shape
+
+// Gamepad buttons
+i32 GAMEPAD_BUTTON_UNKNOWN = 0         // Unknown button, just for error checking
+i32 GAMEPAD_BUTTON_LEFT_FACE_UP = 1    // Gamepad left DPAD up button
+i32 GAMEPAD_BUTTON_LEFT_FACE_RIGHT = 2 // Gamepad left DPAD right button
+i32 GAMEPAD_BUTTON_LEFT_FACE_DOWN = 3  // Gamepad left DPAD down button
+i32 GAMEPAD_BUTTON_LEFT_FACE_LEFT = 4  // Gamepad left DPAD left button
+i32 GAMEPAD_BUTTON_RIGHT_FACE_UP = 5   // Gamepad right button up (i.e. PS3: Triangle, Xbox: Y)
+i32 GAMEPAD_BUTTON_RIGHT_FACE_RIGHT = 6 // Gamepad right button right (i.e. PS3: Circle, Xbox: B)
+i32 GAMEPAD_BUTTON_RIGHT_FACE_DOWN = 7  // Gamepad right button down (i.e. PS3: Cross, Xbox: A)
+i32 GAMEPAD_BUTTON_RIGHT_FACE_LEFT = 8  // Gamepad right button left (i.e. PS3: Square, Xbox: X)
+i32 GAMEPAD_BUTTON_LEFT_TRIGGER_1 = 9   // Gamepad top/back trigger left (first), it could be a trailing button
+i32 GAMEPAD_BUTTON_LEFT_TRIGGER_2 = 10  // Gamepad top/back trigger left (second), it could be a trailing button
+i32 GAMEPAD_BUTTON_RIGHT_TRIGGER_1 = 11 // Gamepad top/back trigger right (first), it could be a trailing button
+i32 GAMEPAD_BUTTON_RIGHT_TRIGGER_2 = 12 // Gamepad top/back trigger right (second), it could be a trailing button
+i32 GAMEPAD_BUTTON_MIDDLE_LEFT = 13     // Gamepad center buttons, left one (i.e. PS3: Select)
+i32 GAMEPAD_BUTTON_MIDDLE = 14          // Gamepad center buttons, middle one (i.e. PS3: PS, Xbox: XBOX)
+i32 GAMEPAD_BUTTON_MIDDLE_RIGHT = 15    // Gamepad center buttons, right one (i.e. PS3: Start)
+i32 GAMEPAD_BUTTON_LEFT_THUMB = 16      // Gamepad joystick pressed button left
+i32 GAMEPAD_BUTTON_RIGHT_THUMB = 17     // Gamepad joystick pressed button right
+
+// Gamepad axis
+i32 GAMEPAD_AXIS_LEFT_X = 0        // Gamepad left stick X axis
+i32 GAMEPAD_AXIS_LEFT_Y = 1        // Gamepad left stick Y axis
+i32 GAMEPAD_AXIS_RIGHT_X = 2       // Gamepad right stick X axis
+i32 GAMEPAD_AXIS_RIGHT_Y = 3       // Gamepad right stick Y axis
+i32 GAMEPAD_AXIS_LEFT_TRIGGER = 4  // Gamepad back trigger left, pressure level: [1..-1]
+i32 GAMEPAD_AXIS_RIGHT_TRIGGER = 5 // Gamepad back trigger right, pressure level: [1..-1]
+
+// Material map index
+i32 MATERIAL_MAP_ALBEDO = 0     // Albedo material (same as: MATERIAL_MAP_DIFFUSE)
+i32 MATERIAL_MAP_METALNESS = 1  // Metalness material (same as: MATERIAL_MAP_SPECULAR)
+i32 MATERIAL_MAP_NORMAL = 2     // Normal material
+i32 MATERIAL_MAP_ROUGHNESS = 3  // Roughness material
+i32 MATERIAL_MAP_OCCLUSION = 4  // Ambient occlusion material
+i32 MATERIAL_MAP_EMISSION = 5   // Emission material
+i32 MATERIAL_MAP_HEIGHT = 6     // Heightmap material
+i32 MATERIAL_MAP_CUBEMAP = 7    // Cubemap material (NOTE: Uses GL_TEXTURE_CUBE_MAP)
+i32 MATERIAL_MAP_IRRADIANCE = 8 // Irradiance material (NOTE: Uses GL_TEXTURE_CUBE_MAP)
+i32 MATERIAL_MAP_PREFILTER = 9  // Prefilter material (NOTE: Uses GL_TEXTURE_CUBE_MAP)
+i32 MATERIAL_MAP_BRDF = 10      // Brdf material
+
+// Shader location index
+i32 SHADER_LOC_VERTEX_POSITION = 0     // Shader location: vertex attribute: position
+i32 SHADER_LOC_VERTEX_TEXCOORD01 = 1   // Shader location: vertex attribute: texcoord01
+i32 SHADER_LOC_VERTEX_TEXCOORD02 = 2   // Shader location: vertex attribute: texcoord02
+i32 SHADER_LOC_VERTEX_NORMAL = 3       // Shader location: vertex attribute: normal
+i32 SHADER_LOC_VERTEX_TANGENT = 4      // Shader location: vertex attribute: tangent
+i32 SHADER_LOC_VERTEX_COLOR = 5        // Shader location: vertex attribute: color
+i32 SHADER_LOC_MATRIX_MVP = 6          // Shader location: matrix uniform: model-view-projection
+i32 SHADER_LOC_MATRIX_VIEW = 7         // Shader location: matrix uniform: view (camera transform)
+i32 SHADER_LOC_MATRIX_PROJECTION = 8   // Shader location: matrix uniform: projection
+i32 SHADER_LOC_MATRIX_MODEL = 9        // Shader location: matrix uniform: model (transform)
+i32 SHADER_LOC_MATRIX_NORMAL = 10      // Shader location: matrix uniform: normal
+i32 SHADER_LOC_VECTOR_VIEW = 11        // Shader location: vector uniform: view
+i32 SHADER_LOC_COLOR_DIFFUSE = 12      // Shader location: vector uniform: diffuse color
+i32 SHADER_LOC_COLOR_SPECULAR = 13     // Shader location: vector uniform: specular color
+i32 SHADER_LOC_COLOR_AMBIENT = 14      // Shader location: vector uniform: ambient color
+i32 SHADER_LOC_MAP_ALBEDO = 15         // Shader location: sampler2d texture: albedo (same as: SHADER_LOC_MAP_DIFFUSE)
+i32 SHADER_LOC_MAP_METALNESS = 16      // Shader location: sampler2d texture: metalness (same as: SHADER_LOC_MAP_SPECULAR)
+i32 SHADER_LOC_MAP_NORMAL = 17         // Shader location: sampler2d texture: normal
+i32 SHADER_LOC_MAP_ROUGHNESS = 18      // Shader location: sampler2d texture: roughness
+i32 SHADER_LOC_MAP_OCCLUSION = 19      // Shader location: sampler2d texture: occlusion
+i32 SHADER_LOC_MAP_EMISSION = 20       // Shader location: sampler2d texture: emission
+i32 SHADER_LOC_MAP_HEIGHT = 21         // Shader location: sampler2d texture: height
+i32 SHADER_LOC_MAP_CUBEMAP = 22        // Shader location: samplerCube texture: cubemap
+i32 SHADER_LOC_MAP_IRRADIANCE = 23     // Shader location: samplerCube texture: irradiance
+i32 SHADER_LOC_MAP_PREFILTER = 24      // Shader location: samplerCube texture: prefilter
+i32 SHADER_LOC_MAP_BRDF = 25           // Shader location: sampler2d texture: brdf
+i32 SHADER_LOC_VERTEX_BONEIDS = 26     // Shader location: vertex attribute: boneIds
+i32 SHADER_LOC_VERTEX_BONEWEIGHTS = 27 // Shader location: vertex attribute: boneWeights
+i32 SHADER_LOC_BONE_MATRICES = 28      // Shader location: array of matrices uniform: boneMatrices
+
+
+// Shader uniform data type
+i32 SHADER_UNIFORM_FLOAT = 0      // Shader uniform type: float
+i32 SHADER_UNIFORM_VEC2 = 1       // Shader uniform type: vec2 (2 float)
+i32 SHADER_UNIFORM_VEC3 = 2       // Shader uniform type: vec3 (3 float)
+i32 SHADER_UNIFORM_VEC4 = 3       // Shader uniform type: vec4 (4 float)
+i32 SHADER_UNIFORM_INT = 4        // Shader uniform type: int
+i32 SHADER_UNIFORM_IVEC2 = 5      // Shader uniform type: ivec2 (2 int)
+i32 SHADER_UNIFORM_IVEC3 = 6      // Shader uniform type: ivec3 (3 int)
+i32 SHADER_UNIFORM_IVEC4 = 7      // Shader uniform type: ivec4 (4 int)
+i32 SHADER_UNIFORM_SAMPLER2D = 8  // Shader uniform type: sampler2d
+
+// Shader attribute data types
+i32 SHADER_ATTRIB_FLOAT = 0       // Shader attribute type: float
+i32 SHADER_ATTRIB_VEC2 = 1        // Shader attribute type: vec2 (2 float)
+i32 SHADER_ATTRIB_VEC3 = 2        // Shader attribute type: vec3 (3 float)
+i32 SHADER_ATTRIB_VEC4 = 3        // Shader attribute type: vec4 (4 float)
+
+// Pixel formats
+i32 PIXELFORMAT_UNCOMPRESSED_GRAYSCALE = 1     // 8 bit per pixel (no alpha)
+i32 PIXELFORMAT_UNCOMPRESSED_GRAY_ALPHA = 2    // 8*2 bpp (2 channels)
+i32 PIXELFORMAT_UNCOMPRESSED_R5G6B5 = 3        // 16 bpp
+i32 PIXELFORMAT_UNCOMPRESSED_R8G8B8 = 4        // 24 bpp
+i32 PIXELFORMAT_UNCOMPRESSED_R5G5B5A1 = 5      // 16 bpp (1 bit alpha)
+i32 PIXELFORMAT_UNCOMPRESSED_R4G4B4A4 = 6      // 16 bpp (4 bit alpha)
+i32 PIXELFORMAT_UNCOMPRESSED_R8G8B8A8 = 7      // 32 bpp
+i32 PIXELFORMAT_UNCOMPRESSED_R32 = 8           // 32 bpp (1 channel - float)
+i32 PIXELFORMAT_UNCOMPRESSED_R32G32B32 = 9     // 32*3 bpp (3 channels - float)
+i32 PIXELFORMAT_UNCOMPRESSED_R32G32B32A32 = 10 // 32*4 bpp (4 channels - float)
+i32 PIXELFORMAT_UNCOMPRESSED_R16 = 11          // 16 bpp (1 channel - half float)
+i32 PIXELFORMAT_UNCOMPRESSED_R16G16B16 = 12    // 16*3 bpp (3 channels - half float)
+i32 PIXELFORMAT_UNCOMPRESSED_R16G16B16A16 = 13 // 16*4 bpp (4 channels - half float)
+i32 PIXELFORMAT_COMPRESSED_DXT1_RGB = 14       // 4 bpp (no alpha)
+i32 PIXELFORMAT_COMPRESSED_DXT1_RGBA = 15      // 4 bpp (1 bit alpha)
+i32 PIXELFORMAT_COMPRESSED_DXT3_RGBA = 16      // 8 bpp
+i32 PIXELFORMAT_COMPRESSED_DXT5_RGBA = 17      // 8 bpp
+i32 PIXELFORMAT_COMPRESSED_ETC1_RGB = 18       // 4 bpp
+i32 PIXELFORMAT_COMPRESSED_ETC2_RGB = 19       // 4 bpp
+i32 PIXELFORMAT_COMPRESSED_ETC2_EAC_RGBA = 20  // 8 bpp
+i32 PIXELFORMAT_COMPRESSED_PVRT_RGB = 21       // 4 bpp
+i32 PIXELFORMAT_COMPRESSED_PVRT_RGBA = 22      // 4 bpp
+i32 PIXELFORMAT_COMPRESSED_ASTC_4x4_RGBA = 23  // 8 bpp
+i32 PIXELFORMAT_COMPRESSED_ASTC_8x8_RGBA = 24  // 2 bpp
+
+
+// Texture parameters: filter mode
+// NOTE 1: Filtering considers mipmaps if available in the texture
+// NOTE 2: Filter is accordingly set for minification and magnification
+i32 TEXTURE_FILTER_POINT = 0               // No filter, just pixel approximation
+i32 TEXTURE_FILTER_BILINEAR = 1           // Linear filtering
+i32 TEXTURE_FILTER_TRILINEAR = 2          // Trilinear filtering (linear with mipmaps)
+i32 TEXTURE_FILTER_ANISOTROPIC_4X = 3     // Anisotropic filtering 4x
+i32 TEXTURE_FILTER_ANISOTROPIC_8X = 4     // Anisotropic filtering 8x
+i32 TEXTURE_FILTER_ANISOTROPIC_16X = 5    // Anisotropic filtering 16x
+
+// Texture parameters: wrap mode
+i32 TEXTURE_WRAP_REPEAT = 0         // Repeats texture in tiled mode
+i32 TEXTURE_WRAP_CLAMP = 1          // Clamps texture to edge pixel in tiled mode
+i32 TEXTURE_WRAP_MIRROR_REPEAT = 2  // Mirrors and repeats the texture in tiled mode
+i32 TEXTURE_WRAP_MIRROR_CLAMP = 3   // Mirrors and clamps to border the texture in tiled mode
+
+// Cubemap layouts
+i32 CUBEMAP_LAYOUT_AUTO_DETECT = 0          // Automatically detect layout type
+i32 CUBEMAP_LAYOUT_LINE_VERTICAL = 1        // Layout is defined by a vertical line with faces
+i32 CUBEMAP_LAYOUT_LINE_HORIZONTAL = 2      // Layout is defined by a horizontal line with faces
+i32 CUBEMAP_LAYOUT_CROSS_THREE_BY_FOUR = 3  // Layout is defined by a 3x4 cross with cubemap faces
+i32 CUBEMAP_LAYOUT_CROSS_FOUR_BY_THREE = 4  // Layout is defined by a 4x3 cross with cubemap faces
+
+// Font type, defines generation method
+i32 FONT_DEFAULT = 0  // Default font generation, anti-aliased
+i32 FONT_BITMAP = 1   // Bitmap font generation, no anti-aliasing
+i32 FONT_SDF = 2      // SDF font generation, requires external shader
+
+// Color blending modes (pre-defined)
+i32 BLEND_ALPHA = 0                // Blend textures considering alpha (default)
+i32 BLEND_ADDITIVE = 1             // Blend textures adding colors
+i32 BLEND_MULTIPLIED = 2           // Blend textures multiplying colors
+i32 BLEND_ADD_COLORS = 3           // Blend textures adding colors (alternative)
+i32 BLEND_SUBTRACT_COLORS = 4      // Blend textures subtracting colors (alternative)
+i32 BLEND_ALPHA_PREMULTIPLY = 5    // Blend premultiplied textures considering alpha
+i32 BLEND_CUSTOM = 6               // Blend textures using custom src/dst factors (use rlSetBlendFactors())
+i32 BLEND_CUSTOM_SEPARATE = 7      // Blend textures using custom rgb/alpha separate src/dst factors (use rlSetBlendFactorsSeparate())
+
+// Gesture
+// NOTE: Provided as bit-wise flags to enable only desired gestures
+i32 GESTURE_NONE = 0         // No gesture
+i32 GESTURE_TAP = 1          // Tap gesture
+i32 GESTURE_DOUBLETAP = 2    // Double tap gesture
+i32 GESTURE_HOLD = 4         // Hold gesture
+i32 GESTURE_DRAG = 8         // Drag gesture
+i32 GESTURE_SWIPE_RIGHT = 16 // Swipe right gesture
+i32 GESTURE_SWIPE_LEFT = 32  // Swipe left gesture
+i32 GESTURE_SWIPE_UP = 64    // Swipe up gesture
+i32 GESTURE_SWIPE_DOWN = 128 // Swipe down gesture
+i32 GESTURE_PINCH_IN = 256   // Pinch in gesture
+i32 GESTURE_PINCH_OUT = 512  // Pinch out gesture
+
+// Camera system modes
+i32 CAMERA_CUSTOM = 0        // Camera custom, controlled by user (UpdateCamera() does nothing)
+i32 CAMERA_FREE = 1          // Camera free mode
+i32 CAMERA_ORBITAL = 2       // Camera orbital, around target, zoom supported
+i32 CAMERA_FIRST_PERSON = 3  // Camera first person
+i32 CAMERA_THIRD_PERSON = 4  // Camera third person
+
+// Camera projection
+i32 CAMERA_PERSPECTIVE = 0   // Perspective projection
+i32 CAMERA_ORTHOGRAPHIC = 1  // Orthographic projection
+
+// N-patch layout
+i32 NPATCH_NINE_PATCH = 0                // Npatch layout: 3x3 tiles
+i32 NPATCH_THREE_PATCH_VERTICAL = 1      // Npatch layout: 1x3 tiles
+i32 NPATCH_THREE_PATCH_HORIZONTAL = 2    // Npatch layout: 3x1 tiles
+
+var LIGHTGRAY = color_t{r = 200, g = 200, b = 200, a = 255}
+var GRAY = color_t{r = 130, g = 130, b = 130, a = 255}
+var DARKGRAY = color_t{r = 80, g = 80, b = 80, a = 255}
+var YELLOW = color_t{r = 253, g = 249, b = 0, a = 255}
+var GOLD = color_t{r = 255, g = 203, b = 0, a = 255}
+var ORANGE = color_t{r = 255, g = 161, b = 0, a = 255}
+var PINK = color_t{r = 255, g = 109, b = 194, a = 255}
+var RED = color_t{r = 230, g = 41, b = 55, a = 255}
+var MAROON = color_t{r = 190, g = 33, b = 55, a = 255}
+var GREEN = color_t{r = 0, g = 228, b = 48, a = 255}
+var LIME = color_t{r = 0, g = 158, b = 47, a = 255}
+var DARKGREEN = color_t{r = 0, g = 117, b = 44, a = 255}
+var SKYBLUE = color_t{r = 102, g = 191, b = 255, a = 255}
+var BLUE = color_t{r = 0, g = 121, b = 241, a = 255}
+var DARKBLUE = color_t{r = 0, g = 82, b = 172, a = 255}
+var PURPLE = color_t{r = 200, g = 122, b = 255, a = 255}
+var VIOLET = color_t{r = 135, g = 60, b = 190, a = 255}
+var DARKPURPLE = color_t{r = 112, g = 31, b = 126, a = 255}
+var BEIGE = color_t{r = 211, g = 176, b = 131, a = 255}
+var BROWN = color_t{r = 127, g = 106, b = 79, a = 255}
+var DARKBROWN = color_t{r = 76, g = 63, b = 47, a = 255}
+var WHITE = color_t{r = 255, g = 255, b = 255, a = 255}
+var BLACK = color_t{r = 0, g = 0, b = 0, a = 255}
+var BLANK = color_t{r = 0, g = 0, b = 0, a = 0}
+var MAGENTA = color_t{r = 255, g = 0, b = 255, a = 255}
+var RAYWHITE = color_t{r = 245, g = 245, b = 245, a = 255}
+
+type vector2_t = struct{
+    f32 x     // Vector x component
+    f32 y     // Vector y component
+}
+
+type vector3_t = struct{
+    f32 x     // Vector x component
+    f32 y     // Vector y component
+    f32 z     // Vector z component
+}
+
+type vector4_t = struct{
+    f32 x     // Vector x component
+    f32 y     // Vector y component
+    f32 z     // Vector z component
+    f32 w     // Vector w component
+}
+
+// Quaternion, 4 components (Vector4 alias)
+type quaternion_t = vector4_t
+
+type matrix_t = struct{
+    f32 m0      // Matrix first row (4 components)
+    f32 m4
+    f32 m8
+    f32 m12
+    f32 m1      // Matrix second row (4 components)
+    f32 m5
+    f32 m9
+    f32 m13
+    f32 m2      // Matrix third row (4 components)
+    f32 m6
+    f32 m10
+    f32 m14
+    f32 m3      // Matrix fourth row (4 components)
+    f32 m7
+    f32 m11
+    f32 m15
+}
+
+type color_t = struct{
+    u8 r
+    u8 g
+    u8 b
+    u8 a
+}
+
+type rectangle_t = struct{
+    f32 x        // Rectangle top-left corner position x
+    f32 y        // Rectangle top-left corner position y
+    f32 width    // Rectangle width
+    f32 height   // Rectangle height
+}
+
+type image_t = struct{
+    anyptr data            // Image raw data
+    i32 width             // Image base width
+    i32 height            // Image base height
+    i32 mipmaps          // Mipmap levels, 1 by default
+    i32 format           // Data format (PixelFormat type)
+}
+
+type texture_t = struct{
+    u32 id               // OpenGL texture id
+    i32 width           // Texture base width
+    i32 height          // Texture base height
+    i32 mipmaps         // Mipmap levels, 1 by default
+    i32 format          // Data format (PixelFormat type)
+}
+
+type texture2d_t = texture_t
+
+type texture_cubemap_t = texture_t
+
+type render_texture_t = struct{
+    u32 id              // OpenGL framebuffer object id
+    texture_t texture   // Color buffer attachment texture
+    texture_t depth     // Depth buffer attachment texture
+}
+
+// RenderTexture2D, same as RenderTexture
+type render_texture2d_t = render_texture_t
+
+type npatch_info_t = struct{
+    rectangle_t source  // Texture source rectangle
+    i32 left           // Left border offset
+    i32 top            // Top border offset
+    i32 right          // Right border offset
+    i32 bottom         // Bottom border offset
+    i32 layout         // Layout of the n-patch: 3x3, 1x3 or 3x1
+}
+
+type glyph_info_t = struct{
+    i32 value          // Character value (Unicode)
+    i32 offset_x       // Character offset X when drawing
+    i32 offset_y       // Character offset Y when drawing
+    i32 advance_x      // Character advance position X
+    image_t image      // Character image data
+}
+
+type font_t = struct{
+    i32 base_size      // Base size (default chars height)
+    i32 glyph_count    // Number of glyph characters
+    i32 glyph_padding  // Padding around the glyph characters
+    texture2d_t texture // Texture atlas containing the glyphs
+    rawptr<rectangle_t> recs        // Rectangles in texture for the glyphs
+    rawptr<glyph_info_t> glyphs      // Glyphs info data
+}
+
+type camera3d_t = struct{
+    vector3_t position  // Camera position
+    vector3_t target   // Camera target it looks-at
+    vector3_t up       // Camera up vector (rotation over its axis)
+    f32 fovy           // Camera field-of-view aperture in Y (degrees) in perspective, used as near plane width in orthographic
+    i32 projection     // Camera projection: CAMERA_PERSPECTIVE or CAMERA_ORTHOGRAPHIC
+}
+
+// Camera type fallback, defaults to Camera3D
+type camera_t = camera3d_t
+
+type camera2d_t = struct{
+    vector2_t offset       // Camera offset (displacement from target)
+    vector2_t target      // Camera target (rotation and zoom origin)
+    f32 rotation         // Camera rotation in degrees
+    f32 zoom            // Camera zoom (scaling), should be 1.0f by default
+}
+
+type mesh_t = struct{
+    i32 vertex_count       // Number of vertices stored in arrays
+    i32 triangle_count     // Number of triangles stored (indexed or not)
+    
+    // Vertex attributes data
+    rawptr<f32> vertices        // Vertex position (XYZ - 3 components per vertex) (shader-location = 0)
+    rawptr<f32> texcoords       // Vertex texture coordinates (UV - 2 components per vertex) (shader-location = 1)
+    rawptr<f32> texcoords2      // Vertex texture second coordinates (UV - 2 components per vertex) (shader-location = 5)
+    rawptr<f32> normals         // Vertex normals (XYZ - 3 components per vertex) (shader-location = 2)
+    rawptr<f32> tangents        // Vertex tangents (XYZW - 4 components per vertex) (shader-location = 4)
+    rawptr<u8> colors           // Vertex colors (RGBA - 4 components per vertex) (shader-location = 3)
+    rawptr<u16> indices         // Vertex indices (in case vertex data comes indexed)
+    
+    // Animation vertex data
+    rawptr<f32> anim_vertices    // Animated vertex positions (after bones transformations)
+    rawptr<f32> anim_normals     // Animated normals (after bones transformations)
+    rawptr<u8> bone_ids          // Vertex bone ids, max 255 bone ids, up to 4 bones influence by vertex (skinning)
+    rawptr<f32> bone_weights     // Vertex bone weight, up to 4 bones influence by vertex (skinning)
+    rawptr<matrix_t> bone_matrices // Bones animated transformation matrices
+    i32 bone_count              // Number of bones
+    
+    // OpenGL identifiers
+    u32 vao_id                  // OpenGL Vertex Array Object id
+    rawptr<u32> vbo_id         // OpenGL Vertex Buffer Objects id (default vertex data)
+}
+
+type shader_t = struct{
+    u32 id                     // Shader program id
+    rawptr<i32> locs          // Shader locations array (RL_MAX_SHADER_LOCATIONS)
+}
+
+type material_map_t = struct{
+    texture2d_t texture       // Material map texture
+    color_t color            // Material map color
+    f32 value               // Material map value
+}
+
+type material_t = struct{
+    shader_t shader          // Material shader
+    rawptr<material_map_t> maps  // Material maps array (MAX_MATERIAL_MAPS)
+    [f32;4] params       // Material generic parameters (if required)
+}
+
+type transform_t = struct{
+    vector3_t translation    // Translation
+    quaternion_t rotation    // Rotation
+    vector3_t scale         // Scale
+}
+
+type bone_info_t = struct{
+    [i8;32] name         // Bone name
+    i32 parent              // Bone parent
+}
+
+type model_t = struct{
+    matrix_t transform      // Local transform matrix
+    
+    i32 mesh_count         // Number of meshes
+    i32 material_count     // Number of materials
+    rawptr<mesh_t> meshes   // Meshes array
+    rawptr<material_t> materials  // Materials array
+    rawptr<i32> mesh_material    // Mesh material number
+    
+    // Animation data
+    i32 bone_count         // Number of bones
+    rawptr<bone_info_t> bones    // Bones information (skeleton)
+    rawptr<transform_t> bind_pose // Bones base transformation (pose)
+}
+
+type model_animation_t = struct{
+    i32 bone_count         // Number of bones
+    i32 frame_count        // Number of animation frames
+    rawptr<bone_info_t> bones    // Bones information (skeleton)
+    rawptr<rawptr<transform_t>> frame_poses  // Poses array by frame
+    [i8;32] name       // Animation name
+}
+
+type ray_t = struct{
+    vector3_t position     // Ray position (origin)
+    vector3_t direction    // Ray direction (normalized)
+}
+
+type ray_collision_t = struct{
+    bool hit              // Did the ray hit something?
+    f32 distance         // Distance to the nearest hit
+    vector3_t point      // Point of the nearest hit
+    vector3_t normal     // Surface normal of hit
+}
+
+type bounding_box_t = struct{
+    vector3_t min            // Minimum vertex box-corner
+    vector3_t max            // Maximum vertex box-corner
+}
+
+type wave_t = struct{
+    u32 frame_count         // Total number of frames (considering channels)
+    u32 sample_rate        // Frequency (samples per second)
+    u32 sample_size        // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
+    u32 channels           // Number of channels (1-mono, 2-stereo, ...)
+    anyptr data            // Buffer data pointer
+}
+
+// Opaque structs declaration
+type raudio_buffer_t = struct{}
+type raudio_processor_t = struct{}
+
+type audio_stream_t = struct{
+    rawptr<raudio_buffer_t> buffer       // Pointer to internal data used by the audio system
+    rawptr<raudio_processor_t> processor // Pointer to internal data processor, useful for audio effects
+    u32 sample_rate        // Frequency (samples per second)
+    u32 sample_size        // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
+    u32 channels           // Number of channels (1-mono, 2-stereo, ...)
+}
+
+type sound_t = struct{
+    audio_stream_t stream  // Audio stream
+    u32 frame_count       // Total number of frames (considering channels)
+}
+
+type music_t = struct{
+    audio_stream_t stream  // Audio stream
+    u32 frame_count       // Total number of frames (considering channels)
+    bool looping          // Music looping enable
+    i32 ctx_type         // Type of music context (audio filetype)
+    anyptr ctx_data      // Audio context data, depends on type
+}
+
+type vr_device_info_t = struct{
+    i32 h_resolution                // Horizontal resolution in pixels
+    i32 v_resolution                // Vertical resolution in pixels
+    f32 h_screen_size              // Horizontal size in meters
+    f32 v_screen_size              // Vertical size in meters
+    f32 eye_to_screen_distance     // Distance between eye and display in meters
+    f32 lens_separation_distance   // Lens separation distance in meters
+    f32 interpupillary_distance    // IPD (distance between pupils) in meters
+    [f32;4] lens_distortion_values  // Lens distortion constant parameters
+    [f32;4] chroma_ab_correction    // Chromatic aberration correction parameters
+}
+
+type vr_stereo_config_t = struct{
+    [matrix_t;2] projection      // VR projection matrices (per eye)
+    [matrix_t;2] view_offset     // VR view offset matrices (per eye)
+    [f32;2] left_lens_center     // VR left lens center
+    [f32;2] right_lens_center    // VR right lens center
+    [f32;2] left_screen_center   // VR left screen center
+    [f32;2] right_screen_center  // VR right screen center
+    [f32;2] scale                // VR distortion scale
+    [f32;2] scale_in             // VR distortion scale in
+}
+
+type file_path_list_t = struct{
+    u32 capacity           // Filepaths max entries
+    u32 count             // Filepaths entries count
+    rawptr<rawptr<i8>> paths  // Filepaths entries
+}
+
+type automation_event_t = struct{
+    u32 frame             // Event frame
+    u32 _type             // Event type (AutomationEventType)
+    [i32;4] params    // Event parameters (if required)
+}
+
+type automation_event_list_t = struct{
+    u32 capacity
+    u32 count
+    anyptr events
+}
+
+#linkid WindowShouldClose
+fn window_should_close():bool
+
+#linkid BeginDrawing
+fn begin_drawing()
+
+#linkid ClearBackground
+fn clear_background(color_t color)
+
+#linkid EndDrawing
+fn end_drawing()
+
+#linkid InitWindow
+fn init_window(i32 width, i32 height, anyptr title)
+
+#linkid CloseWindow
+fn close_window()
+
+
+#linkid IsWindowReady
+fn is_window_ready():bool
+
+#linkid IsWindowFullscreen
+fn is_window_fullscreen():bool
+
+#linkid IsWindowHidden
+fn is_window_hidden():bool
+
+#linkid IsWindowMinimized
+fn is_window_minimized():bool
+
+#linkid IsWindowMaximized
+fn is_window_maximized():bool
+
+#linkid IsWindowFocused
+fn is_window_focused():bool
+
+#linkid IsWindowResized
+fn is_window_resized():bool
+
+#linkid IsWindowState
+fn is_window_state(u32 flag):bool
+
+#linkid SetWindowState
+fn set_window_state(u32 flags)
+
+#linkid ClearWindowState
+fn clear_window_state(u32 flags)
+
+#linkid ToggleFullscreen
+fn toggle_fullscreen()
+
+#linkid ToggleBorderlessWindowed
+fn toggle_borderless_windowed()
+
+#linkid MaximizeWindow
+fn maximize_window()
+
+#linkid MinimizeWindow
+fn minimize_window()
+
+#linkid RestoreWindow
+fn restore_window()
+
+#linkid SetWindowIcon
+fn set_window_icon(image_t image)
+
+#linkid SetWindowTitle
+fn set_window_title(anyptr title)
+
+#linkid SetWindowPosition
+fn set_window_position(i32 x, i32 y)
+
+#linkid SetWindowMonitor
+fn set_window_monitor(i32 monitor)
+
+#linkid SetWindowMinSize
+fn set_window_min_size(i32 width, i32 height)
+
+#linkid SetWindowMaxSize
+fn set_window_max_size(i32 width, i32 height)
+
+#linkid SetWindowSize
+fn set_window_size(i32 width, i32 height)
+
+#linkid SetWindowOpacity
+fn set_window_opacity(f32 opacity)
+
+#linkid SetWindowFocused
+fn set_window_focused()
+
+#linkid GetWindowHandle
+fn get_window_handle():anyptr
+
+#linkid GetScreenWidth
+fn get_screen_width():i32
+
+#linkid GetScreenHeight
+fn get_screen_height():i32
+
+#linkid GetRenderWidth
+fn get_render_width():i32
+
+#linkid GetRenderHeight
+fn get_render_height():i32
+
+#linkid GetMonitorCount
+fn get_monitor_count():i32
+
+#linkid GetCurrentMonitor
+fn get_current_monitor():i32
+
+#linkid GetMonitorPosition
+fn get_monitor_position(i32 monitor):vector2_t
+
+#linkid GetMonitorWidth
+fn get_monitor_width(i32 monitor):i32
+
+#linkid GetMonitorHeight
+fn get_monitor_height(i32 monitor):i32
+
+#linkid GetMonitorPhysicalWidth
+fn get_monitor_physical_width(i32 monitor):i32
+
+#linkid GetMonitorPhysicalHeight
+fn get_monitor_physical_height(i32 monitor):i32
+
+#linkid GetMonitorRefreshRate
+fn get_monitor_refresh_rate(i32 monitor):i32
+
+#linkid GetWindowPosition
+fn get_window_position():vector2_t
+
+#linkid GetWindowScaleDPI
+fn get_window_scale_dpi():vector2_t
+
+#linkid GetMonitorName
+fn get_monitor_name(i32 monitor):anyptr
+
+#linkid SetClipboardText
+fn set_clipboard_text(anyptr text)
+
+#linkid GetClipboardText
+fn get_clipboard_text():anyptr
+
+#linkid GetClipboardImage
+fn get_clipboard_image():image_t
+
+#linkid EnableEventWaiting
+fn enable_event_waiting()
+
+#linkid DisableEventWaiting
+fn disable_event_waiting()
+
+
+// Cursor-related functions
+#linkid ShowCursor
+fn show_cursor()
+
+#linkid HideCursor
+fn hide_cursor()
+
+#linkid IsCursorHidden
+fn is_cursor_hidden():bool
+
+#linkid EnableCursor
+fn enable_cursor()
+
+#linkid DisableCursor
+fn disable_cursor()
+
+#linkid IsCursorOnScreen
+fn is_cursor_on_screen():bool
+
+// Drawing-related functions
+#linkid BeginMode2D
+fn begin_mode_2d(camera2d_t camera)
+
+#linkid EndMode2D
+fn end_mode_2d()
+
+#linkid BeginMode3D
+fn begin_mode_3d(camera3d_t camera)
+
+#linkid EndMode3D
+fn end_mode_3d()
+
+#linkid BeginTextureMode
+fn begin_texture_mode(render_texture2d_t target)
+
+#linkid EndTextureMode
+fn end_texture_mode()
+
+#linkid BeginShaderMode
+fn begin_shader_mode(shader_t shader)
+
+#linkid EndShaderMode
+fn end_shader_mode()
+
+#linkid BeginBlendMode
+fn begin_blend_mode(i32 mode)
+
+#linkid EndBlendMode
+fn end_blend_mode()
+
+#linkid BeginScissorMode
+fn begin_scissor_mode(i32 x, i32 y, i32 width, i32 height)
+
+#linkid EndScissorMode
+fn end_scissor_mode()
+
+#linkid BeginVrStereoMode
+fn begin_vr_stereo_mode(vr_stereo_config_t config)
+
+#linkid EndVrStereoMode
+fn end_vr_stereo_mode()
+
+// VR stereo config functions
+#linkid LoadVrStereoConfig
+fn load_vr_stereo_config(vr_device_info_t device):vr_stereo_config_t
+
+#linkid UnloadVrStereoConfig
+fn unload_vr_stereo_config(vr_stereo_config_t config)
+
+// Shader management functions
+#linkid LoadShader
+fn load_shader(anyptr vs_file_name, anyptr fs_file_name):shader_t
+
+#linkid LoadShaderFromMemory
+fn load_shader_from_memory(anyptr vs_code, anyptr fs_code):shader_t
+
+#linkid IsShaderValid
+fn is_shader_valid(shader_t shader):bool
+
+#linkid GetShaderLocation
+fn get_shader_location(shader_t shader, anyptr uniform_name):i32
+
+#linkid GetShaderLocationAttrib
+fn get_shader_location_attrib(shader_t shader, anyptr attrib_name):i32
+
+#linkid SetShaderValue
+fn set_shader_value(shader_t shader, i32 loc_index, anyptr value, i32 uniform_type)
+
+#linkid SetShaderValueV
+fn set_shader_value_v(shader_t shader, i32 loc_index, anyptr value, i32 uniform_type, i32 count)
+
+#linkid SetShaderValueMatrix
+fn set_shader_value_matrix(shader_t shader, i32 loc_index, matrix_t mat)
+
+#linkid SetShaderValueTexture
+fn set_shader_value_texture(shader_t shader, i32 loc_index, texture2d_t texture)
+
+#linkid UnloadShader
+fn unload_shader(shader_t shader)
+
+// Screen-space-related functions
+#linkid GetScreenToWorldRay
+fn get_screen_to_world_ray(vector2_t position, camera_t camera):ray_t
+
+#linkid GetScreenToWorldRayEx
+fn get_screen_to_world_ray_ex(vector2_t position, camera_t camera, i32 width, i32 height):ray_t
+
+#linkid GetWorldToScreen
+fn get_world_to_screen(vector3_t position, camera_t camera):vector2_t
+
+#linkid GetWorldToScreenEx
+fn get_world_to_screen_ex(vector3_t position, camera_t camera, i32 width, i32 height):vector2_t
+
+#linkid GetWorldToScreen2D
+fn get_world_to_screen_2d(vector2_t position, camera2d_t camera):vector2_t
+
+#linkid GetScreenToWorld2D
+fn get_screen_to_world_2d(vector2_t position, camera2d_t camera):vector2_t
+
+#linkid GetCameraMatrix
+fn get_camera_matrix(camera_t camera):matrix_t
+
+#linkid GetCameraMatrix2D
+fn get_camera_matrix_2d(camera2d_t camera):matrix_t
+
+
+
+// Timing-related functions
+#linkid SetTargetFPS
+fn set_target_fps(i32 fps)
+
+#linkid GetFrameTime
+fn get_frame_time():f32
+
+#linkid GetTime
+fn get_time():f64
+
+#linkid GetFPS
+fn get_fps():i32
+
+// Custom frame control functions
+#linkid SwapScreenBuffer
+fn swap_screen_buffer()
+
+#linkid PollInputEvents
+fn poll_input_events()
+
+#linkid WaitTime
+fn wait_time(f64 seconds)
+
+// Random values generation functions
+#linkid SetRandomSeed
+fn set_random_seed(u32 seed)
+
+#linkid GetRandomValue
+fn get_random_value(i32 min, i32 max):i32
+
+#linkid LoadRandomSequence
+fn load_random_sequence(u32 count, i32 min, i32 max):rawptr<i32>
+
+#linkid UnloadRandomSequence
+fn unload_random_sequence(rawptr<i32> sequence)
+
+// Misc. functions
+#linkid TakeScreenshot
+fn take_screenshot(anyptr file_name)
+
+#linkid SetConfigFlags
+fn set_config_flags(u32 flags)
+
+#linkid OpenURL
+fn open_url(anyptr url)
+
+// Utils module functions
+#linkid TraceLog
+fn trace_log(i32 log_level, anyptr text)
+
+#linkid SetTraceLogLevel
+fn set_trace_log_level(i32 log_level)
+
+#linkid MemAlloc
+fn mem_alloc(u32 size):anyptr
+
+#linkid MemRealloc
+fn mem_realloc(anyptr p, u32 size):anyptr
+
+#linkid MemFree
+fn mem_free(anyptr p)
+
+// Custom callbacks
+#linkid SetTraceLogCallback
+fn set_trace_log_callback(anyptr callback)
+
+#linkid SetLoadFileDataCallback
+fn set_load_file_data_callback(anyptr callback)
+
+#linkid SetSaveFileDataCallback
+fn set_save_file_data_callback(anyptr callback)
+
+#linkid SetLoadFileTextCallback
+fn set_load_file_text_callback(anyptr callback)
+
+#linkid SetSaveFileTextCallback
+fn set_save_file_text_callback(anyptr callback)
+
+// Files management functions
+#linkid LoadFileData
+fn load_file_data(anyptr file_name, rawptr<i32> data_size):rawptr<u8>
+
+#linkid UnloadFileData
+fn unload_file_data(rawptr<u8> data)
+
+#linkid SaveFileData
+fn save_file_data(anyptr file_name, anyptr data, i32 data_size):bool
+
+#linkid ExportDataAsCode
+fn export_data_as_code(rawptr<u8> data, i32 data_size, anyptr file_name):bool
+
+#linkid LoadFileText
+fn load_file_text(anyptr file_name):anyptr
+
+#linkid UnloadFileText
+fn unload_file_text(anyptr text)
+
+#linkid SaveFileText
+fn save_file_text(anyptr file_name, anyptr text):bool
+
+
+
+// File system functions
+#linkid FileExists
+fn file_exists(anyptr file_name):bool
+
+#linkid DirectoryExists
+fn directory_exists(anyptr dir_path):bool
+
+#linkid IsFileExtension
+fn is_file_extension(anyptr file_name, anyptr ext):bool
+
+#linkid GetFileLength
+fn get_file_length(anyptr file_name):i32
+
+#linkid GetFileExtension
+fn get_file_extension(anyptr file_name):anyptr
+
+#linkid GetFileName
+fn get_file_name(anyptr file_path):anyptr
+
+#linkid GetFileNameWithoutExt
+fn get_file_name_without_ext(anyptr file_path):anyptr
+
+#linkid GetDirectoryPath
+fn get_directory_path(anyptr file_path):anyptr
+
+#linkid GetPrevDirectoryPath
+fn get_prev_directory_path(anyptr dir_path):anyptr
+
+#linkid GetWorkingDirectory
+fn get_working_directory():anyptr
+
+#linkid GetApplicationDirectory
+fn get_application_directory():anyptr
+
+#linkid MakeDirectory
+fn make_directory(anyptr dir_path):i32
+
+#linkid ChangeDirectory
+fn change_directory(anyptr dir):bool
+
+#linkid IsPathFile
+fn is_path_file(anyptr path):bool
+
+#linkid IsFileNameValid
+fn is_file_name_valid(anyptr file_name):bool
+
+#linkid LoadDirectoryFiles
+fn load_directory_files(anyptr dir_path):file_path_list_t
+
+#linkid LoadDirectoryFilesEx
+fn load_directory_files_ex(anyptr base_path, anyptr filter, bool scan_subdirs):file_path_list_t
+
+#linkid UnloadDirectoryFiles
+fn unload_directory_files(file_path_list_t files)
+
+#linkid IsFileDropped
+fn is_file_dropped():bool
+
+#linkid LoadDroppedFiles
+fn load_dropped_files():file_path_list_t
+
+#linkid UnloadDroppedFiles
+fn unload_dropped_files(file_path_list_t files)
+
+#linkid GetFileModTime
+fn get_file_mod_time(anyptr file_name):i64
+
+// Compression/Encoding functionality
+#linkid CompressData
+fn compress_data(rawptr<u8> data, i32 data_size, rawptr<i32> comp_data_size):rawptr<u8>
+
+#linkid DecompressData
+fn decompress_data(rawptr<u8> comp_data, i32 comp_data_size, rawptr<i32> data_size):rawptr<u8>
+
+#linkid EncodeDataBase64
+fn encode_data_base64(rawptr<u8> data, i32 data_size, rawptr<i32> output_size):anyptr
+
+#linkid DecodeDataBase64
+fn decode_data_base64(rawptr<u8> data, rawptr<i32> output_size):rawptr<u8>
+
+#linkid ComputeCRC32
+fn compute_crc32(rawptr<u8> data, i32 data_size):u32
+
+#linkid ComputeMD5
+fn compute_md5(rawptr<u8> data, i32 data_size):rawptr<u32>
+
+#linkid ComputeSHA1
+fn compute_sha1(rawptr<u8> data, i32 data_size):rawptr<u32>
+
+// Automation events functionality
+#linkid LoadAutomationEventList
+fn load_automation_event_list(anyptr file_name):automation_event_list_t
+
+#linkid UnloadAutomationEventList
+fn unload_automation_event_list(automation_event_list_t list)
+
+#linkid ExportAutomationEventList
+fn export_automation_event_list(automation_event_list_t list, anyptr file_name):bool
+
+#linkid SetAutomationEventList
+fn set_automation_event_list(rawptr<automation_event_list_t> list)
+
+#linkid SetAutomationEventBaseFrame
+fn set_automation_event_base_frame(i32 frame)
+
+#linkid StartAutomationEventRecording
+fn start_automation_event_recording()
+
+#linkid StopAutomationEventRecording
+fn stop_automation_event_recording()
+
+#linkid PlayAutomationEvent
+fn play_automation_event(automation_event_t event)
+
+// Input-related functions: keyboard
+#linkid IsKeyPressed
+fn is_key_pressed(i32 key):bool
+
+#linkid IsKeyPressedRepeat
+fn is_key_pressed_repeat(i32 key):bool
+
+#linkid IsKeyDown
+fn is_key_down(i32 key):bool
+
+#linkid IsKeyReleased
+fn is_key_released(i32 key):bool
+
+#linkid IsKeyUp
+fn is_key_up(i32 key):bool
+
+#linkid GetKeyPressed
+fn get_key_pressed():i32
+
+#linkid GetCharPressed
+fn get_char_pressed():i32
+
+#linkid SetExitKey
+fn set_exit_key(i32 key)
+
+// Input-related functions: gamepads
+#linkid IsGamepadAvailable
+fn is_gamepad_available(i32 gamepad):bool
+
+#linkid GetGamepadName
+fn get_gamepad_name(i32 gamepad):anyptr
+
+#linkid IsGamepadButtonPressed
+fn is_gamepad_button_pressed(i32 gamepad, i32 button):bool
+
+#linkid IsGamepadButtonDown
+fn is_gamepad_button_down(i32 gamepad, i32 button):bool
+
+#linkid IsGamepadButtonReleased
+fn is_gamepad_button_released(i32 gamepad, i32 button):bool
+
+#linkid IsGamepadButtonUp
+fn is_gamepad_button_up(i32 gamepad, i32 button):bool
+
+#linkid GetGamepadButtonPressed
+fn get_gamepad_button_pressed():i32
+
+#linkid GetGamepadAxisCount
+fn get_gamepad_axis_count(i32 gamepad):i32
+
+#linkid GetGamepadAxisMovement
+fn get_gamepad_axis_movement(i32 gamepad, i32 axis):f32
+
+#linkid SetGamepadMappings
+fn set_gamepad_mappings(anyptr mappings):i32
+
+#linkid SetGamepadVibration
+fn set_gamepad_vibration(i32 gamepad, f32 left_motor, f32 right_motor, f32 duration)
+
+// Input-related functions: mouse
+#linkid IsMouseButtonPressed
+fn is_mouse_button_pressed(i32 button):bool
+
+#linkid IsMouseButtonDown
+fn is_mouse_button_down(i32 button):bool
+
+#linkid IsMouseButtonReleased
+fn is_mouse_button_released(i32 button):bool
+
+#linkid IsMouseButtonUp
+fn is_mouse_button_up(i32 button):bool
+
+#linkid GetMouseX
+fn get_mouse_x():i32
+
+#linkid GetMouseY
+fn get_mouse_y():i32
+
+#linkid GetMousePosition
+fn get_mouse_position():vector2_t
+
+#linkid GetMouseDelta
+fn get_mouse_delta():vector2_t
+
+#linkid SetMousePosition
+fn set_mouse_position(i32 x, i32 y)
+
+#linkid SetMouseOffset
+fn set_mouse_offset(i32 offset_x, i32 offset_y)
+
+#linkid SetMouseScale
+fn set_mouse_scale(f32 scale_x, f32 scale_y)
+
+#linkid GetMouseWheelMove
+fn get_mouse_wheel_move():f32
+
+#linkid GetMouseWheelMoveV
+fn get_mouse_wheel_move_v():vector2_t
+
+#linkid SetMouseCursor
+fn set_mouse_cursor(i32 cursor)
+
+// Input-related functions: touch
+#linkid GetTouchX
+fn get_touch_x():i32
+
+#linkid GetTouchY
+fn get_touch_y():i32
+
+#linkid GetTouchPosition
+fn get_touch_position(i32 index):vector2_t
+
+#linkid GetTouchPointId
+fn get_touch_point_id(i32 index):i32
+
+#linkid GetTouchPointCount
+fn get_touch_point_count():i32
+
+// Gestures and Touch Handling Functions
+#linkid SetGesturesEnabled
+fn set_gestures_enabled(u32 flags)
+
+#linkid IsGestureDetected
+fn is_gesture_detected(u32 gesture):bool
+
+#linkid GetGestureDetected
+fn get_gesture_detected():i32
+
+#linkid GetGestureHoldDuration
+fn get_gesture_hold_duration():f32
+
+#linkid GetGestureDragVector
+fn get_gesture_drag_vector():vector2_t
+
+#linkid GetGestureDragAngle
+fn get_gesture_drag_angle():f32
+
+#linkid GetGesturePinchVector
+fn get_gesture_pinch_vector():vector2_t
+
+#linkid GetGesturePinchAngle
+fn get_gesture_pinch_angle():f32
+
+// Camera System Functions
+#linkid UpdateCamera
+fn update_camera(rawptr<camera_t> camera, i32 mode)
+
+#linkid UpdateCameraPro
+fn update_camera_pro(rawptr<camera_t> camera, vector3_t movement, vector3_t rotation, f32 zoom)
+
+// Basic Shapes Drawing Functions
+#linkid SetShapesTexture
+fn set_shapes_texture(texture2d_t texture, rectangle_t source)
+
+#linkid GetShapesTexture
+fn get_shapes_texture():texture2d_t
+
+#linkid GetShapesTextureRectangle
+fn get_shapes_texture_rectangle():rectangle_t
+
+// Basic shapes drawing functions
+#linkid DrawPixel
+fn draw_pixel(i32 pos_x, i32 pos_y, color_t color)
+
+#linkid DrawPixelV
+fn draw_pixel_v(vector2_t position, color_t color)
+
+#linkid DrawLine
+fn draw_line(i32 start_pos_x, i32 start_pos_y, i32 end_pos_x, i32 end_pos_y, color_t color)
+
+#linkid DrawLineV
+fn draw_line_v(vector2_t start_pos, vector2_t end_pos, color_t color)
+
+#linkid DrawLineEx
+fn draw_line_ex(vector2_t start_pos, vector2_t end_pos, f32 thick, color_t color)
+
+#linkid DrawLineStrip
+fn draw_line_strip(rawptr<vector2_t> points, i32 point_count, color_t color)
+
+#linkid DrawLineBezier
+fn draw_line_bezier(vector2_t start_pos, vector2_t end_pos, f32 thick, color_t color)
+
+#linkid DrawCircle
+fn draw_circle(i32 center_x, i32 center_y, f32 radius, color_t color)
+
+#linkid DrawCircleSector
+fn draw_circle_sector(vector2_t center, f32 radius, f32 start_angle, f32 end_angle, i32 segments, color_t color)
+
+#linkid DrawCircleSectorLines
+fn draw_circle_sector_lines(vector2_t center, f32 radius, f32 start_angle, f32 end_angle, i32 segments, color_t color)
+
+#linkid DrawCircleGradient
+fn draw_circle_gradient(i32 center_x, i32 center_y, f32 radius, color_t inner, color_t outer)
+
+#linkid DrawCircleV
+fn draw_circle_v(vector2_t center, f32 radius, color_t color)
+
+#linkid DrawCircleLines
+fn draw_circle_lines(i32 center_x, i32 center_y, f32 radius, color_t color)
+
+#linkid DrawCircleLinesV
+fn draw_circle_lines_v(vector2_t center, f32 radius, color_t color)
+
+#linkid DrawEllipse
+fn draw_ellipse(i32 center_x, i32 center_y, f32 radius_h, f32 radius_v, color_t color)
+
+#linkid DrawEllipseLines
+fn draw_ellipse_lines(i32 center_x, i32 center_y, f32 radius_h, f32 radius_v, color_t color)
+
+#linkid DrawRing
+fn draw_ring(vector2_t center, f32 inner_radius, f32 outer_radius, f32 start_angle, f32 end_angle, i32 segments, color_t color)
+
+#linkid DrawRingLines
+fn draw_ring_lines(vector2_t center, f32 inner_radius, f32 outer_radius, f32 start_angle, f32 end_angle, i32 segments, color_t color)
+
+#linkid DrawRectangle
+fn draw_rectangle(i32 pos_x, i32 pos_y, i32 width, i32 height, color_t color)
+
+#linkid DrawRectangleV
+fn draw_rectangle_v(vector2_t position, vector2_t size, color_t color)
+
+#linkid DrawRectangleRec
+fn draw_rectangle_rec(rectangle_t rec, color_t color)
+
+#linkid DrawRectanglePro
+fn draw_rectangle_pro(rectangle_t rec, vector2_t origin, f32 rotation, color_t color)
+
+#linkid DrawRectangleGradientV
+fn draw_rectangle_gradient_v(i32 pos_x, i32 pos_y, i32 width, i32 height, color_t top, color_t bottom)
+
+#linkid DrawRectangleGradientH
+fn draw_rectangle_gradient_h(i32 pos_x, i32 pos_y, i32 width, i32 height, color_t left, color_t right)
+
+#linkid DrawRectangleGradientEx
+fn draw_rectangle_gradient_ex(rectangle_t rec, color_t top_left, color_t bottom_left, color_t top_right, color_t bottom_right)
+
+#linkid DrawRectangleLines
+fn draw_rectangle_lines(i32 pos_x, i32 pos_y, i32 width, i32 height, color_t color)
+
+#linkid DrawRectangleLinesEx
+fn draw_rectangle_lines_ex(rectangle_t rec, f32 line_thick, color_t color)
+
+#linkid DrawRectangleRounded
+fn draw_rectangle_rounded(rectangle_t rec, f32 roundness, i32 segments, color_t color)
+
+#linkid DrawRectangleRoundedLines
+fn draw_rectangle_rounded_lines(rectangle_t rec, f32 roundness, i32 segments, color_t color)
+
+#linkid DrawRectangleRoundedLinesEx
+fn draw_rectangle_rounded_lines_ex(rectangle_t rec, f32 roundness, i32 segments, f32 line_thick, color_t color)
+
+#linkid DrawTriangle
+fn draw_triangle(vector2_t v1, vector2_t v2, vector2_t v3, color_t color)
+
+#linkid DrawTriangleLines
+fn draw_triangle_lines(vector2_t v1, vector2_t v2, vector2_t v3, color_t color)
+
+#linkid DrawTriangleFan
+fn draw_triangle_fan(rawptr<vector2_t> points, i32 point_count, color_t color)
+
+#linkid DrawTriangleStrip
+fn draw_triangle_strip(rawptr<vector2_t> points, i32 point_count, color_t color)
+
+#linkid DrawPoly
+fn draw_poly(vector2_t center, i32 sides, f32 radius, f32 rotation, color_t color)
+
+#linkid DrawPolyLines
+fn draw_poly_lines(vector2_t center, i32 sides, f32 radius, f32 rotation, color_t color)
+
+#linkid DrawPolyLinesEx
+fn draw_poly_lines_ex(vector2_t center, i32 sides, f32 radius, f32 rotation, f32 line_thick, color_t color)
+
+// Splines drawing functions
+#linkid DrawSplineLinear
+fn draw_spline_linear(rawptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
+
+#linkid DrawSplineBasis
+fn draw_spline_basis(rawptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
+
+#linkid DrawSplineCatmullRom
+fn draw_spline_catmull_rom(rawptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
+
+#linkid DrawSplineBezierQuadratic
+fn draw_spline_bezier_quadratic(rawptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
+
+#linkid DrawSplineBezierCubic
+fn draw_spline_bezier_cubic(rawptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
+
+#linkid DrawSplineSegmentLinear
+fn draw_spline_segment_linear(vector2_t p1, vector2_t p2, f32 thick, color_t color)
+
+#linkid DrawSplineSegmentBasis
+fn draw_spline_segment_basis(vector2_t p1, vector2_t p2, vector2_t p3, vector2_t p4, f32 thick, color_t color)
+
+#linkid DrawSplineSegmentCatmullRom
+fn draw_spline_segment_catmull_rom(vector2_t p1, vector2_t p2, vector2_t p3, vector2_t p4, f32 thick, color_t color)
+
+#linkid DrawSplineSegmentBezierQuadratic
+fn draw_spline_segment_bezier_quadratic(vector2_t p1, vector2_t c2, vector2_t p3, f32 thick, color_t color)
+
+#linkid DrawSplineSegmentBezierCubic
+fn draw_spline_segment_bezier_cubic(vector2_t p1, vector2_t c2, vector2_t c3, vector2_t p4, f32 thick, color_t color)
+
+// Spline segment point evaluation functions
+#linkid GetSplinePointLinear
+fn get_spline_point_linear(vector2_t start_pos, vector2_t end_pos, f32 t):vector2_t
+
+#linkid GetSplinePointBasis
+fn get_spline_point_basis(vector2_t p1, vector2_t p2, vector2_t p3, vector2_t p4, f32 t):vector2_t
+
+#linkid GetSplinePointCatmullRom
+fn get_spline_point_catmull_rom(vector2_t p1, vector2_t p2, vector2_t p3, vector2_t p4, f32 t):vector2_t
+
+#linkid GetSplinePointBezierQuad
+fn get_spline_point_bezier_quad(vector2_t p1, vector2_t c2, vector2_t p3, f32 t):vector2_t
+
+#linkid GetSplinePointBezierCubic
+fn get_spline_point_bezier_cubic(vector2_t p1, vector2_t c2, vector2_t c3, vector2_t p4, f32 t):vector2_t
+
+// Basic shapes collision detection functions
+#linkid CheckCollisionRecs
+fn check_collision_recs(rectangle_t rec1, rectangle_t rec2):bool
+
+#linkid CheckCollisionCircles
+fn check_collision_circles(vector2_t center1, f32 radius1, vector2_t center2, f32 radius2):bool
+
+#linkid CheckCollisionCircleRec
+fn check_collision_circle_rec(vector2_t center, f32 radius, rectangle_t rec):bool
+
+#linkid CheckCollisionCircleLine
+fn check_collision_circle_line(vector2_t center, f32 radius, vector2_t p1, vector2_t p2):bool
+
+#linkid CheckCollisionPointRec
+fn check_collision_point_rec(vector2_t point, rectangle_t rec):bool
+
+#linkid CheckCollisionPointCircle
+fn check_collision_point_circle(vector2_t point, vector2_t center, f32 radius):bool
+
+#linkid CheckCollisionPointTriangle
+fn check_collision_point_triangle(vector2_t point, vector2_t p1, vector2_t p2, vector2_t p3):bool
+
+#linkid CheckCollisionPointLine
+fn check_collision_point_line(vector2_t point, vector2_t p1, vector2_t p2, i32 threshold):bool
+
+#linkid CheckCollisionPointPoly
+fn check_collision_point_poly(vector2_t point, rawptr<vector2_t> points, i32 point_count):bool
+
+#linkid CheckCollisionLines
+fn check_collision_lines(vector2_t start_pos1, vector2_t end_pos1, vector2_t start_pos2, vector2_t end_pos2, rawptr<vector2_t> collision_point):bool
+
+#linkid GetCollisionRec
+fn get_collision_rec(rectangle_t rec1, rectangle_t rec2):rectangle_t
+
+// Image loading functions
+#linkid LoadImage
+fn load_image(anyptr file_name):image_t
+
+#linkid LoadImageRaw
+fn load_image_raw(anyptr file_name, i32 width, i32 height, i32 format, i32 header_size):image_t
+
+#linkid LoadImageAnim
+fn load_image_anim(anyptr file_name, rawptr<i32> frames):image_t
+
+#linkid LoadImageAnimFromMemory
+fn load_image_anim_from_memory(anyptr file_type, rawptr<u8> file_data, i32 data_size, rawptr<i32> frames):image_t
+
+#linkid LoadImageFromMemory
+fn load_image_from_memory(anyptr file_type, rawptr<u8> file_data, i32 data_size):image_t
+
+#linkid LoadImageFromTexture
+fn load_image_from_texture(texture2d_t texture):image_t
+
+#linkid LoadImageFromScreen
+fn load_image_from_screen():image_t
+
+#linkid IsImageValid
+fn is_image_valid(image_t image):bool
+
+#linkid UnloadImage
+fn unload_image(image_t image)
+
+#linkid ExportImage
+fn export_image(image_t image, anyptr file_name):bool
+
+#linkid ExportImageToMemory
+fn export_image_to_memory(image_t image, anyptr file_type, rawptr<i32> file_size):rawptr<u8>
+
+#linkid ExportImageAsCode
+fn export_image_as_code(image_t image, anyptr file_name):bool
+
+// Image generation functions
+#linkid GenImageColor
+fn gen_image_color(i32 width, i32 height, color_t color):image_t
+
+#linkid GenImageGradientLinear
+fn gen_image_gradient_linear(i32 width, i32 height, i32 direction, color_t start, color_t end):image_t
+
+#linkid GenImageGradientRadial
+fn gen_image_gradient_radial(i32 width, i32 height, f32 density, color_t inner, color_t outer):image_t
+
+#linkid GenImageGradientSquare
+fn gen_image_gradient_square(i32 width, i32 height, f32 density, color_t inner, color_t outer):image_t
+
+#linkid GenImageChecked
+fn gen_image_checked(i32 width, i32 height, i32 checks_x, i32 checks_y, color_t col1, color_t col2):image_t
+
+#linkid GenImageWhiteNoise
+fn gen_image_white_noise(i32 width, i32 height, f32 factor):image_t
+
+#linkid GenImagePerlinNoise
+fn gen_image_perlin_noise(i32 width, i32 height, i32 offset_x, i32 offset_y, f32 scale):image_t
+
+#linkid GenImageCellular
+fn gen_image_cellular(i32 width, i32 height, i32 tile_size):image_t
+
+#linkid GenImageText
+fn gen_image_text(i32 width, i32 height, anyptr text):image_t
+
+// Image manipulation functions
+#linkid ImageCopy
+fn image_copy(image_t image):image_t
+
+#linkid ImageFromImage
+fn image_from_image(image_t image, rectangle_t rec):image_t
+
+#linkid ImageFromChannel
+fn image_from_channel(image_t image, i32 selected_channel):image_t
+
+#linkid ImageText
+fn image_text(anyptr text, i32 font_size, color_t color):image_t
+
+#linkid ImageTextEx
+fn image_text_ex(font_t font, anyptr text, f32 font_size, f32 spacing, color_t tint):image_t
+
+#linkid ImageFormat
+fn image_format(rawptr<image_t> image, i32 new_format)
+
+#linkid ImageToPOT
+fn image_to_pot(rawptr<image_t> image, color_t fill)
+
+#linkid ImageCrop
+fn image_crop(rawptr<image_t> image, rectangle_t crop)
+
+#linkid ImageAlphaCrop
+fn image_alpha_crop(rawptr<image_t> image, f32 threshold)
+
+#linkid ImageAlphaClear
+fn image_alpha_clear(rawptr<image_t> image, color_t color, f32 threshold)
+
+#linkid ImageAlphaMask
+fn image_alpha_mask(rawptr<image_t> image, image_t alpha_mask)
+
+#linkid ImageAlphaPremultiply
+fn image_alpha_premultiply(rawptr<image_t> image)
+
+#linkid ImageBlurGaussian
+fn image_blur_gaussian(rawptr<image_t> image, i32 blur_size)
+
+#linkid ImageKernelConvolution
+fn image_kernel_convolution(rawptr<image_t> image, rawptr<f32> kernel, i32 kernel_size)
+
+#linkid ImageResize
+fn image_resize(rawptr<image_t> image, i32 new_width, i32 new_height)
+
+#linkid ImageResizeNN
+fn image_resize_nn(rawptr<image_t> image, i32 new_width, i32 new_height)
+
+#linkid ImageResizeCanvas
+fn image_resize_canvas(rawptr<image_t> image, i32 new_width, i32 new_height, i32 offset_x, i32 offset_y, color_t fill)
+
+#linkid ImageMipmaps
+fn image_mipmaps(rawptr<image_t> image)
+
+#linkid ImageDither
+fn image_dither(rawptr<image_t> image, i32 r_bpp, i32 g_bpp, i32 b_bpp, i32 a_bpp)
+
+#linkid ImageFlipVertical
+fn image_flip_vertical(rawptr<image_t> image)
+
+#linkid ImageFlipHorizontal
+fn image_flip_horizontal(rawptr<image_t> image)
+
+#linkid ImageRotate
+fn image_rotate(rawptr<image_t> image, i32 degrees)
+
+#linkid ImageRotateCW
+fn image_rotate_cw(rawptr<image_t> image)
+
+#linkid ImageRotateCCW
+fn image_rotate_ccw(rawptr<image_t> image)
+
+#linkid ImageColorTint
+fn image_color_tint(rawptr<image_t> image, color_t color)
+
+#linkid ImageColorInvert
+fn image_color_invert(rawptr<image_t> image)
+
+#linkid ImageColorGrayscale
+fn image_color_grayscale(rawptr<image_t> image)
+
+#linkid ImageColorContrast
+fn image_color_contrast(rawptr<image_t> image, f32 contrast)
+
+#linkid ImageColorBrightness
+fn image_color_brightness(rawptr<image_t> image, i32 brightness)
+
+#linkid ImageColorReplace
+fn image_color_replace(rawptr<image_t> image, color_t color, color_t replace)
+
+#linkid LoadImageColors
+fn load_image_colors(image_t image):rawptr<color_t>
+
+#linkid LoadImagePalette
+fn load_image_palette(image_t image, i32 max_palette_size, rawptr<i32> color_count):rawptr<color_t>
+
+#linkid UnloadImageColors
+fn unload_image_colors(rawptr<color_t> colors)
+
+#linkid UnloadImagePalette
+fn unload_image_palette(rawptr<color_t> colors)
+
+#linkid GetImageAlphaBorder
+fn get_image_alpha_border(image_t image, f32 threshold):rectangle_t
+
+#linkid GetImageColor
+fn get_image_color(image_t image, i32 x, i32 y):color_t
+
+// Image drawing functions
+#linkid ImageClearBackground
+fn image_clear_background(rawptr<image_t> dst, color_t color)
+
+#linkid ImageDrawPixel
+fn image_draw_pixel(rawptr<image_t> dst, i32 pos_x, i32 pos_y, color_t color)
+
+#linkid ImageDrawPixelV
+fn image_draw_pixel_v(rawptr<image_t> dst, vector2_t position, color_t color)
+
+#linkid ImageDrawLine
+fn image_draw_line(rawptr<image_t> dst, i32 start_pos_x, i32 start_pos_y, i32 end_pos_x, i32 end_pos_y, color_t color)
+
+#linkid ImageDrawLineV
+fn image_draw_line_v(rawptr<image_t> dst, vector2_t start, vector2_t end, color_t color)
+
+#linkid ImageDrawLineEx
+fn image_draw_line_ex(rawptr<image_t> dst, vector2_t start, vector2_t end, i32 thick, color_t color)
+
+#linkid ImageDrawCircle
+fn image_draw_circle(rawptr<image_t> dst, i32 center_x, i32 center_y, i32 radius, color_t color)
+
+#linkid ImageDrawCircleV
+fn image_draw_circle_v(rawptr<image_t> dst, vector2_t center, i32 radius, color_t color)
+
+#linkid ImageDrawCircleLines
+fn image_draw_circle_lines(rawptr<image_t> dst, i32 center_x, i32 center_y, i32 radius, color_t color)
+
+#linkid ImageDrawCircleLinesV
+fn image_draw_circle_lines_v(rawptr<image_t> dst, vector2_t center, i32 radius, color_t color)
+
+#linkid ImageDrawRectangle
+fn image_draw_rectangle(rawptr<image_t> dst, i32 pos_x, i32 pos_y, i32 width, i32 height, color_t color)
+
+#linkid ImageDrawRectangleV
+fn image_draw_rectangle_v(rawptr<image_t> dst, vector2_t position, vector2_t size, color_t color)
+
+#linkid ImageDrawRectangleRec
+fn image_draw_rectangle_rec(rawptr<image_t> dst, rectangle_t rec, color_t color)
+
+#linkid ImageDrawRectangleLines
+fn image_draw_rectangle_lines(rawptr<image_t> dst, rectangle_t rec, i32 thick, color_t color)
+
+#linkid ImageDrawTriangle
+fn image_draw_triangle(rawptr<image_t> dst, vector2_t v1, vector2_t v2, vector2_t v3, color_t color)
+
+#linkid ImageDrawTriangleEx
+fn image_draw_triangle_ex(rawptr<image_t> dst, vector2_t v1, vector2_t v2, vector2_t v3, color_t c1, color_t c2, color_t c3)
+
+#linkid ImageDrawTriangleLines
+fn image_draw_triangle_lines(rawptr<image_t> dst, vector2_t v1, vector2_t v2, vector2_t v3, color_t color)
+
+#linkid ImageDrawTriangleFan
+fn image_draw_triangle_fan(rawptr<image_t> dst, rawptr<vector2_t> points, i32 point_count, color_t color)
+
+#linkid ImageDrawTriangleStrip
+fn image_draw_triangle_strip(rawptr<image_t> dst, rawptr<vector2_t> points, i32 point_count, color_t color)
+
+// Image drawing functions
+#linkid ImageDraw
+fn image_draw(rawptr<image_t> dst, image_t src, rectangle_t src_rec, rectangle_t dst_rec, color_t tint)
+
+#linkid ImageDrawText
+fn image_draw_text(rawptr<image_t> dst, anyptr text, i32 pos_x, i32 pos_y, i32 font_size, color_t color)
+
+#linkid ImageDrawTextEx
+fn image_draw_text_ex(rawptr<image_t> dst, font_t font, anyptr text, vector2_t position, f32 font_size, f32 spacing, color_t tint)
+
+// Texture loading functions
+#linkid LoadTexture
+fn load_texture(anyptr file_name):texture2d_t
+
+#linkid LoadTextureFromImage  
+fn load_texture_from_image(image_t image):texture2d_t
+
+#linkid LoadTextureCubemap
+fn load_texture_cubemap(image_t image, i32 layout):texture_cubemap_t
+
+#linkid LoadRenderTexture
+fn load_render_texture(i32 width, i32 height):render_texture2d_t
+
+#linkid IsTextureValid
+fn is_texture_valid(texture2d_t texture):bool
+
+#linkid UnloadTexture
+fn unload_texture(texture2d_t texture)
+
+#linkid IsRenderTextureValid
+fn is_render_texture_valid(render_texture2d_t target):bool
+
+#linkid UnloadRenderTexture
+fn unload_render_texture(render_texture2d_t target)
+
+#linkid UpdateTexture
+fn update_texture(texture2d_t texture, anyptr pixels)
+
+#linkid UpdateTextureRec
+fn update_texture_rec(texture2d_t texture, rectangle_t rec, anyptr pixels)
+
+// Texture configuration functions
+#linkid GenTextureMipmaps
+fn gen_texture_mipmaps(rawptr<texture2d_t> texture)
+
+#linkid SetTextureFilter
+fn set_texture_filter(texture2d_t texture, i32 filter)
+
+#linkid SetTextureWrap
+fn set_texture_wrap(texture2d_t texture, i32 wrap)
+
+// Texture drawing functions
+#linkid DrawTexture
+fn draw_texture(texture2d_t texture, i32 pos_x, i32 pos_y, color_t tint)
+
+#linkid DrawTextureV
+fn draw_texture_v(texture2d_t texture, vector2_t position, color_t tint)
+
+#linkid DrawTextureEx
+fn draw_texture_ex(texture2d_t texture, vector2_t position, f32 rotation, f32 scale, color_t tint)
+
+#linkid DrawTextureRec
+fn draw_texture_rec(texture2d_t texture, rectangle_t source, vector2_t position, color_t tint)
+
+#linkid DrawTexturePro
+fn draw_texture_pro(texture2d_t texture, rectangle_t source, rectangle_t dest, vector2_t origin, f32 rotation, color_t tint)
+
+#linkid DrawTextureNPatch
+fn draw_texture_n_patch(texture2d_t texture, npatch_info_t n_patch_info, rectangle_t dest, vector2_t origin, f32 rotation, color_t tint)
+
+// Color/pixel related functions
+#linkid ColorIsEqual
+fn color_is_equal(color_t col1, color_t col2):bool
+
+#linkid Fade
+fn fade(color_t color, f32 alpha):color_t
+
+#linkid ColorToInt
+fn color_to_int(color_t color):i32
+
+#linkid ColorNormalize
+fn color_normalize(color_t color):vector4_t
+
+#linkid ColorFromNormalized
+fn color_from_normalized(vector4_t normalized):color_t
+
+#linkid ColorToHSV
+fn color_to_hsv(color_t color):vector3_t
+
+#linkid ColorFromHSV
+fn color_from_hsv(f32 hue, f32 saturation, f32 value):color_t
+
+#linkid ColorTint
+fn color_tint(color_t color, color_t tint):color_t
+
+#linkid ColorBrightness
+fn color_brightness(color_t color, f32 factor):color_t
+
+#linkid ColorContrast
+fn color_contrast(color_t color, f32 contrast):color_t
+
+#linkid ColorAlpha
+fn color_alpha(color_t color, f32 alpha):color_t
+
+#linkid ColorAlphaBlend
+fn color_alpha_blend(color_t dst, color_t src, color_t tint):color_t
+
+#linkid ColorLerp
+fn color_lerp(color_t color1, color_t color2, f32 factor):color_t
+
+#linkid GetColor
+fn get_color(u32 hex_value):color_t
+
+#linkid GetPixelColor
+fn get_pixel_color(anyptr src_ptr, i32 format):color_t
+
+#linkid SetPixelColor
+fn set_pixel_color(anyptr dst_ptr, color_t color, i32 format)
+
+#linkid GetPixelDataSize
+fn get_pixel_data_size(i32 width, i32 height, i32 format):i32
+
+
+// Font loading/unloading functions
+#linkid GetFontDefault
+fn get_font_default():font_t
+
+#linkid LoadFont
+fn load_font(anyptr file_name):font_t
+
+#linkid LoadFontEx
+fn load_font_ex(anyptr file_name, i32 font_size, rawptr<i32> codepoints, i32 codepoint_count):font_t
+
+#linkid LoadFontFromImage
+fn load_font_from_image(image_t image, color_t key, i32 first_char):font_t
+
+#linkid LoadFontFromMemory
+fn load_font_from_memory(anyptr file_type, rawptr<u8> file_data, i32 data_size, i32 font_size, rawptr<i32> codepoints, i32 codepoint_count):font_t
+
+#linkid IsFontValid
+fn is_font_valid(font_t font):bool
+
+#linkid LoadFontData
+fn load_font_data(rawptr<u8> file_data, i32 data_size, i32 font_size, rawptr<i32> codepoints, i32 codepoint_count, i32 t):rawptr<glyph_info_t>
+
+#linkid GenImageFontAtlas
+fn gen_image_font_atlas(rawptr<glyph_info_t> glyphs, rawptr<rawptr<rectangle_t>> glyph_recs, i32 glyph_count, i32 font_size, i32 padding, i32 pack_method):image_t
+
+#linkid UnloadFontData
+fn unload_font_data(rawptr<glyph_info_t> glyphs, i32 glyph_count)
+
+#linkid UnloadFont
+fn unload_font(font_t font)
+
+#linkid ExportFontAsCode
+fn export_font_as_code(font_t font, anyptr file_name):bool
+
+// Text drawing functions
+#linkid DrawFPS
+fn draw_fps(i32 pos_x, i32 pos_y)
+
+#linkid DrawText
+fn draw_text(anyptr text, i32 pos_x, i32 pos_y, i32 font_size, color_t color)
+
+#linkid DrawTextEx
+fn draw_text_ex(font_t font, anyptr text, vector2_t position, f32 font_size, f32 spacing, color_t tint)
+
+#linkid DrawTextPro
+fn draw_text_pro(font_t font, anyptr text, vector2_t position, vector2_t origin, f32 rotation, f32 font_size, f32 spacing, color_t tint)
+
+#linkid DrawTextCodepoint
+fn draw_text_codepoint(font_t font, i32 codepoint, vector2_t position, f32 font_size, color_t tint)
+
+#linkid DrawTextCodepoints
+fn draw_text_codepoints(font_t font, rawptr<i32> codepoints, i32 codepoint_count, vector2_t position, f32 font_size, f32 spacing, color_t tint)
+
+// Text font info functions
+#linkid SetTextLineSpacing
+fn set_text_line_spacing(i32 spacing)
+
+#linkid MeasureText
+fn measure_text(anyptr text, i32 font_size):i32
+
+#linkid MeasureTextEx
+fn measure_text_ex(font_t font, anyptr text, f32 font_size, f32 spacing):vector2_t
+
+#linkid GetGlyphIndex
+fn get_glyph_index(font_t font, i32 codepoint):i32
+
+#linkid GetGlyphInfo
+fn get_glyph_info(font_t font, i32 codepoint):glyph_info_t
+
+#linkid GetGlyphAtlasRec
+fn get_glyph_atlas_rec(font_t font, i32 codepoint):rectangle_t
+
+// Text codepoints management functions
+#linkid LoadUTF8
+fn load_utf8(rawptr<i32> codepoints, i32 length):anyptr
+
+#linkid UnloadUTF8
+fn unload_utf8(anyptr text)
+
+#linkid LoadCodepoints
+fn load_codepoints(anyptr text, rawptr<i32> count):rawptr<i32>
+
+#linkid UnloadCodepoints
+fn unload_codepoints(rawptr<i32> codepoints)
+
+#linkid GetCodepointCount
+fn get_codepoint_count(anyptr text):i32
+
+#linkid GetCodepoint
+fn get_codepoint(anyptr text, rawptr<i32> codepoint_size):i32
+
+#linkid GetCodepointNext
+fn get_codepoint_next(anyptr text, rawptr<i32> codepoint_size):i32
+
+#linkid GetCodepointPrevious
+fn get_codepoint_previous(anyptr text, rawptr<i32> codepoint_size):i32
+
+#linkid CodepointToUTF8
+fn codepoint_to_utf8(i32 codepoint, rawptr<i32> utf8_size):anyptr
+
+// Text strings management functions
+#linkid TextCopy
+fn text_copy(anyptr dst, anyptr src):i32
+
+#linkid TextIsEqual
+fn text_is_equal(anyptr text1, anyptr text2):bool
+
+#linkid TextLength
+fn text_length(anyptr text):u32
+
+// 不支持 c 语言的 ...
+// #linkid TextFormat
+// fn text_format(anyptr text, ...):anyptr
+
+// Text strings management functions
+#linkid TextSubtext
+fn text_subtext(anyptr text, i32 position, i32 length):anyptr
+
+#linkid TextReplace
+fn text_replace(anyptr text, anyptr replace, anyptr by):anyptr
+
+#linkid TextInsert
+fn text_insert(anyptr text, anyptr insert, i32 position):anyptr
+
+#linkid TextJoin
+fn text_join(rawptr<anyptr> text_list, i32 count, anyptr delimiter):anyptr
+
+#linkid TextSplit
+fn text_split(anyptr text, i8 delimiter, rawptr<i32> count):rawptr<anyptr>
+
+#linkid TextAppend
+fn text_append(anyptr text, anyptr append, rawptr<i32> position)
+
+#linkid TextFindIndex
+fn text_find_index(anyptr text, anyptr find):i32
+
+#linkid TextToUpper
+fn text_to_upper(anyptr text):anyptr
+
+#linkid TextToLower
+fn text_to_lower(anyptr text):anyptr
+
+#linkid TextToPascal
+fn text_to_pascal(anyptr text):anyptr
+
+#linkid TextToSnake
+fn text_to_snake(anyptr text):anyptr
+
+#linkid TextToCamel
+fn text_to_camel(anyptr text):anyptr
+
+#linkid TextToInteger
+fn text_to_integer(anyptr text):i32
+
+#linkid TextToFloat
+fn text_to_float(anyptr text):f32
+
+// Basic 3d Shapes Drawing Functions
+#linkid DrawLine3D
+fn draw_line_3d(vector3_t start_pos, vector3_t end_pos, color_t color)
+
+#linkid DrawPoint3D
+fn draw_point_3d(vector3_t position, color_t color)
+
+#linkid DrawCircle3D
+fn draw_circle_3d(vector3_t center, f32 radius, vector3_t rotation_axis, f32 rotation_angle, color_t color)
+
+#linkid DrawTriangle3D
+fn draw_triangle_3d(vector3_t v1, vector3_t v2, vector3_t v3, color_t color)
+
+#linkid DrawTriangleStrip3D
+fn draw_triangle_strip_3d(rawptr<vector3_t> points, i32 point_count, color_t color)
+
+#linkid DrawCube
+fn draw_cube(vector3_t position, f32 width, f32 height, f32 length, color_t color)
+
+#linkid DrawCubeV
+fn draw_cube_v(vector3_t position, vector3_t size, color_t color)
+
+#linkid DrawCubeWires
+fn draw_cube_wires(vector3_t position, f32 width, f32 height, f32 length, color_t color)
+
+#linkid DrawCubeWiresV
+fn draw_cube_wires_v(vector3_t position, vector3_t size, color_t color)
+
+#linkid DrawSphere
+fn draw_sphere(vector3_t center_pos, f32 radius, color_t color)
+
+#linkid DrawSphereEx
+fn draw_sphere_ex(vector3_t center_pos, f32 radius, i32 rings, i32 slices, color_t color)
+
+#linkid DrawSphereWires
+fn draw_sphere_wires(vector3_t center_pos, f32 radius, i32 rings, i32 slices, color_t color)
+
+#linkid DrawCylinder
+fn draw_cylinder(vector3_t position, f32 radius_top, f32 radius_bottom, f32 height, i32 slices, color_t color)
+
+#linkid DrawCylinderEx
+fn draw_cylinder_ex(vector3_t start_pos, vector3_t end_pos, f32 start_radius, f32 end_radius, i32 sides, color_t color)
+
+#linkid DrawCylinderWires
+fn draw_cylinder_wires(vector3_t position, f32 radius_top, f32 radius_bottom, f32 height, i32 slices, color_t color)
+
+#linkid DrawCylinderWiresEx
+fn draw_cylinder_wires_ex(vector3_t start_pos, vector3_t end_pos, f32 start_radius, f32 end_radius, i32 sides, color_t color)
+
+#linkid DrawCapsule
+fn draw_capsule(vector3_t start_pos, vector3_t end_pos, f32 radius, i32 slices, i32 rings, color_t color)
+
+#linkid DrawCapsuleWires
+fn draw_capsule_wires(vector3_t start_pos, vector3_t end_pos, f32 radius, i32 slices, i32 rings, color_t color)
+
+#linkid DrawPlane
+fn draw_plane(vector3_t center_pos, vector2_t size, color_t color)
+
+#linkid DrawRay
+fn draw_ray(ray_t ray, color_t color)
+
+#linkid DrawGrid
+fn draw_grid(i32 slices, f32 spacing)
+
+// Model management functions
+#linkid LoadModel
+fn load_model(anyptr file_name):model_t
+
+#linkid LoadModelFromMesh
+fn load_model_from_mesh(mesh_t mesh):model_t
+
+#linkid IsModelValid
+fn is_model_valid(model_t model):bool
+
+#linkid UnloadModel
+fn unload_model(model_t model)
+
+#linkid GetModelBoundingBox
+fn get_model_bounding_box(model_t model):bounding_box_t
+
+// Model drawing functions
+#linkid DrawModel
+fn draw_model(model_t model, vector3_t position, f32 scale, color_t tint)
+
+#linkid DrawModelEx
+fn draw_model_ex(model_t model, vector3_t position, vector3_t rotation_axis, f32 rotation_angle, vector3_t scale, color_t tint)
+
+#linkid DrawModelWires
+fn draw_model_wires(model_t model, vector3_t position, f32 scale, color_t tint)
+
+#linkid DrawModelWiresEx
+fn draw_model_wires_ex(model_t model, vector3_t position, vector3_t rotation_axis, f32 rotation_angle, vector3_t scale, color_t tint)
+
+#linkid DrawModelPoints
+fn draw_model_points(model_t model, vector3_t position, f32 scale, color_t tint)
+
+#linkid DrawModelPointsEx
+fn draw_model_points_ex(model_t model, vector3_t position, vector3_t rotation_axis, f32 rotation_angle, vector3_t scale, color_t tint)
+
+#linkid DrawBoundingBox
+fn draw_bounding_box(bounding_box_t box, color_t color)
+
+#linkid DrawBillboard
+fn draw_billboard(camera_t camera, texture2d_t texture, vector3_t position, f32 scale, color_t tint)
+
+#linkid DrawBillboardRec
+fn draw_billboard_rec(camera_t camera, texture2d_t texture, rectangle_t source, vector3_t position, vector2_t size, color_t tint)
+
+#linkid DrawBillboardPro
+fn draw_billboard_pro(camera_t camera, texture2d_t texture, rectangle_t source, vector3_t position, vector3_t up, vector2_t size, vector2_t origin, f32 rotation, color_t tint)
+
+// Mesh management functions
+#linkid UploadMesh
+fn upload_mesh(rawptr<mesh_t> mesh, bool dynamic)
+
+#linkid UpdateMeshBuffer
+fn update_mesh_buffer(mesh_t mesh, i32 index, anyptr data, i32 data_size, i32 offset)
+
+#linkid UnloadMesh
+fn unload_mesh(mesh_t mesh)
+
+#linkid DrawMesh
+fn draw_mesh(mesh_t mesh, material_t material, matrix_t transform)
+
+#linkid DrawMeshInstanced
+fn draw_mesh_instanced(mesh_t mesh, material_t material, rawptr<matrix_t> transforms, i32 instances)
+
+#linkid GetMeshBoundingBox
+fn get_mesh_bounding_box(mesh_t mesh):bounding_box_t
+
+#linkid GenMeshTangents
+fn gen_mesh_tangents(rawptr<mesh_t> mesh)
+
+#linkid ExportMesh
+fn export_mesh(mesh_t mesh, anyptr file_name):bool
+
+#linkid ExportMeshAsCode
+fn export_mesh_as_code(mesh_t mesh, anyptr file_name):bool
+
+// Mesh generation functions
+#linkid GenMeshPoly
+fn gen_mesh_poly(i32 sides, f32 radius):mesh_t
+
+#linkid GenMeshPlane
+fn gen_mesh_plane(f32 width, f32 length, i32 res_x, i32 res_z):mesh_t
+
+#linkid GenMeshCube
+fn gen_mesh_cube(f32 width, f32 height, f32 length):mesh_t
+
+#linkid GenMeshSphere
+fn gen_mesh_sphere(f32 radius, i32 rings, i32 slices):mesh_t
+
+#linkid GenMeshHemiSphere
+fn gen_mesh_hemi_sphere(f32 radius, i32 rings, i32 slices):mesh_t
+
+#linkid GenMeshCylinder
+fn gen_mesh_cylinder(f32 radius, f32 height, i32 slices):mesh_t
+
+#linkid GenMeshCone
+fn gen_mesh_cone(f32 radius, f32 height, i32 slices):mesh_t
+
+#linkid GenMeshTorus
+fn gen_mesh_torus(f32 radius, f32 size, i32 rad_seg, i32 sides):mesh_t
+
+#linkid GenMeshKnot
+fn gen_mesh_knot(f32 radius, f32 size, i32 rad_seg, i32 sides):mesh_t
+
+#linkid GenMeshHeightmap
+fn gen_mesh_heightmap(image_t heightmap, vector3_t size):mesh_t
+
+#linkid GenMeshCubicmap
+fn gen_mesh_cubicmap(image_t cubicmap, vector3_t cube_size):mesh_t
+
+// Material loading/unloading functions
+#linkid LoadMaterials
+fn load_materials(anyptr file_name, rawptr<i32> material_count):rawptr<material_t>
+
+#linkid LoadMaterialDefault
+fn load_material_default():material_t
+
+#linkid IsMaterialValid
+fn is_material_valid(material_t material):bool
+
+#linkid UnloadMaterial
+fn unload_material(material_t material)
+
+#linkid SetMaterialTexture
+fn set_material_texture(rawptr<material_t> material, i32 map_type, texture2d_t texture)
+
+
+#linkid SetModelMeshMaterial
+fn set_model_mesh_material(rawptr<model_t> model, i32 mesh_id, i32 material_id)
+
+// Model animations loading/unloading functions
+#linkid LoadModelAnimations
+fn load_model_animations(anyptr file_name, rawptr<i32> anim_count):rawptr<model_animation_t>
+
+#linkid UpdateModelAnimation
+fn update_model_animation(model_t model, model_animation_t anim, i32 frame)
+
+#linkid UpdateModelAnimationBones
+fn update_model_animation_bones(model_t model, model_animation_t anim, i32 frame)
+
+#linkid UnloadModelAnimation
+fn unload_model_animation(model_animation_t anim)
+
+#linkid UnloadModelAnimations
+fn unload_model_animations(rawptr<model_animation_t> animations, i32 anim_count)
+
+#linkid IsModelAnimationValid
+fn is_model_animation_valid(model_t model, model_animation_t anim):bool
+
+// Collision detection functions
+#linkid CheckCollisionSpheres
+fn check_collision_spheres(vector3_t center1, f32 radius1, vector3_t center2, f32 radius2):bool
+
+#linkid CheckCollisionBoxes
+fn check_collision_boxes(bounding_box_t box1, bounding_box_t box2):bool
+
+#linkid CheckCollisionBoxSphere
+fn check_collision_box_sphere(bounding_box_t box, vector3_t center, f32 radius):bool
+
+#linkid GetRayCollisionSphere
+fn get_ray_collision_sphere(ray_t ray, vector3_t center, f32 radius):ray_collision_t
+
+#linkid GetRayCollisionBox
+fn get_ray_collision_box(ray_t ray, bounding_box_t box):ray_collision_t
+
+#linkid GetRayCollisionMesh
+fn get_ray_collision_mesh(ray_t ray, mesh_t mesh, matrix_t transform):ray_collision_t
+
+#linkid GetRayCollisionTriangle
+fn get_ray_collision_triangle(ray_t ray, vector3_t p1, vector3_t p2, vector3_t p3):ray_collision_t
+
+#linkid GetRayCollisionQuad
+fn get_ray_collision_quad(ray_t ray, vector3_t p1, vector3_t p2, vector3_t p3, vector3_t p4):ray_collision_t
+
+// Audio device management functions
+#linkid InitAudioDevice
+fn init_audio_device()
+
+#linkid CloseAudioDevice
+fn close_audio_device()
+
+#linkid IsAudioDeviceReady
+fn is_audio_device_ready():bool
+
+#linkid SetMasterVolume
+fn set_master_volume(f32 volume)
+
+#linkid GetMasterVolume
+fn get_master_volume():f32
+
+// Wave/Sound loading/unloading functions
+#linkid LoadWave
+fn load_wave(anyptr file_name):wave_t
+
+#linkid LoadWaveFromMemory
+fn load_wave_from_memory(anyptr file_type, rawptr<u8> file_data, i32 data_size):wave_t
+
+#linkid IsWaveValid
+fn is_wave_valid(wave_t wave):bool
+
+#linkid LoadSound
+fn load_sound(anyptr file_name):sound_t
+
+#linkid LoadSoundFromWave
+fn load_sound_from_wave(wave_t wave):sound_t
+
+#linkid LoadSoundAlias
+fn load_sound_alias(sound_t source):sound_t
+
+#linkid IsSoundValid
+fn is_sound_valid(sound_t sound):bool
+
+#linkid UpdateSound
+fn update_sound(sound_t sound, anyptr data, i32 sample_count)
+
+#linkid UnloadWave
+fn unload_wave(wave_t wave)
+
+#linkid UnloadSound
+fn unload_sound(sound_t sound)
+
+#linkid UnloadSoundAlias
+fn unload_sound_alias(sound_t alias)
+
+#linkid ExportWave
+fn export_wave(wave_t wave, anyptr file_name):bool
+
+#linkid ExportWaveAsCode
+fn export_wave_as_code(wave_t wave, anyptr file_name):bool
+
+// Wave/Sound management functions
+#linkid PlaySound
+fn play_sound(sound_t sound)
+
+#linkid StopSound
+fn stop_sound(sound_t sound)
+
+#linkid PauseSound
+fn pause_sound(sound_t sound)
+
+#linkid ResumeSound
+fn resume_sound(sound_t sound)
+
+#linkid IsSoundPlaying
+fn is_sound_playing(sound_t sound):bool
+
+#linkid SetSoundVolume
+fn set_sound_volume(sound_t sound, f32 volume)
+
+#linkid SetSoundPitch
+fn set_sound_pitch(sound_t sound, f32 pitch)
+
+#linkid SetSoundPan
+fn set_sound_pan(sound_t sound, f32 pan)
+
+#linkid WaveCopy
+fn wave_copy(wave_t wave):wave_t
+
+#linkid WaveCrop
+fn wave_crop(rawptr<wave_t> wave, i32 init_frame, i32 final_frame)
+
+#linkid WaveFormat
+fn wave_format(rawptr<wave_t> wave, i32 sample_rate, i32 sample_size, i32 channels)
+
+#linkid LoadWaveSamples
+fn load_wave_samples(wave_t wave):rawptr<f32>
+
+
+#linkid UnloadWaveSamples
+fn unload_wave_samples(rawptr<f32> samples)
+
+// Music management functions
+#linkid LoadMusicStream
+fn load_music_stream(anyptr file_name):music_t
+
+#linkid LoadMusicStreamFromMemory
+fn load_music_stream_from_memory(anyptr file_type, rawptr<u8> data, i32 data_size):music_t
+
+#linkid IsMusicValid
+fn is_music_valid(music_t music):bool
+
+#linkid UnloadMusicStream
+fn unload_music_stream(music_t music)
+
+#linkid PlayMusicStream
+fn play_music_stream(music_t music)
+
+#linkid IsMusicStreamPlaying
+fn is_music_stream_playing(music_t music):bool
+
+#linkid UpdateMusicStream
+fn update_music_stream(music_t music)
+
+#linkid StopMusicStream
+fn stop_music_stream(music_t music)
+
+#linkid PauseMusicStream
+fn pause_music_stream(music_t music)
+
+#linkid ResumeMusicStream
+fn resume_music_stream(music_t music)
+
+#linkid SeekMusicStream
+fn seek_music_stream(music_t music, f32 position)
+
+#linkid SetMusicVolume
+fn set_music_volume(music_t music, f32 volume)
+
+#linkid SetMusicPitch
+fn set_music_pitch(music_t music, f32 pitch)
+
+#linkid SetMusicPan
+fn set_music_pan(music_t music, f32 pan)
+
+#linkid GetMusicTimeLength
+fn get_music_time_length(music_t music):f32
+
+#linkid GetMusicTimePlayed
+fn get_music_time_played(music_t music):f32
+
+// AudioStream management functions
+#linkid LoadAudioStream
+fn load_audio_stream(u32 sample_rate, u32 sample_size, u32 channels):audio_stream_t
+
+#linkid IsAudioStreamValid
+fn is_audio_stream_valid(audio_stream_t stream):bool
+
+#linkid UnloadAudioStream
+fn unload_audio_stream(audio_stream_t stream)
+
+#linkid UpdateAudioStream
+fn update_audio_stream(audio_stream_t stream, anyptr data, i32 frame_count)
+
+#linkid IsAudioStreamProcessed
+fn is_audio_stream_processed(audio_stream_t stream):bool
+
+#linkid PlayAudioStream
+fn play_audio_stream(audio_stream_t stream)
+
+#linkid PauseAudioStream
+fn pause_audio_stream(audio_stream_t stream)
+
+#linkid ResumeAudioStream
+fn resume_audio_stream(audio_stream_t stream)
+
+#linkid IsAudioStreamPlaying
+fn is_audio_stream_playing(audio_stream_t stream):bool
+
+#linkid StopAudioStream
+fn stop_audio_stream(audio_stream_t stream)
+
+#linkid SetAudioStreamVolume
+fn set_audio_stream_volume(audio_stream_t stream, f32 volume)
+
+#linkid SetAudioStreamPitch
+fn set_audio_stream_pitch(audio_stream_t stream, f32 pitch)
+
+#linkid SetAudioStreamPan
+fn set_audio_stream_pan(audio_stream_t stream, f32 pan)
+
+#linkid SetAudioStreamBufferSizeDefault
+fn set_audio_stream_buffer_size_default(i32 size)
+
+type audio_callback_t = fn(anyptr buffer_data, u32 frames)
+
+#linkid SetAudioStreamCallback
+fn set_audio_stream_callback(audio_stream_t stream, audio_callback_t callback)
+
+#linkid AttachAudioStreamProcessor
+fn attach_audio_stream_processor(audio_stream_t stream, audio_callback_t processor)
+
+#linkid DetachAudioStreamProcessor
+fn detach_audio_stream_processor(audio_stream_t stream, audio_callback_t processor)
+
+#linkid AttachAudioMixedProcessor
+fn attach_audio_mixed_processor(audio_callback_t processor)
+
+#linkid DetachAudioMixedProcessor
+fn detach_audio_mixed_processor(audio_callback_t processor)

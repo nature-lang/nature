@@ -1,0 +1,11 @@
+import compress.tgz
+
+fn main():void! {
+    tgz.verbose = false
+
+    tgz.encode('tests', 'mockdir.tar.gz', ['sub', 'nice.n', 'test.txt'])
+    println('encode success')
+
+    tgz.decode('tests', 'mockdir.tar.gz')
+    println('decode success')
+}

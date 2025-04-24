@@ -1,0 +1,104 @@
+import os
+import fmt
+import path
+import parker.util
+import syscall
+import strings
+import parker.log as *
+import fs
+
+u8 version1 = 1
+u8 version2 = 2
+string v1_default_system = 'freezer'
+string procs_system = 'cgroup.procs'
+string parker_dir = 'parker'
+
+type cgroup_t = struct {
+    string id
+    u8 version
+    string path
+    string procs_path
+}
+
+fn cgroup_t.register(int pid):void! {
+    var pid_str = fmt.sprintf('%d\n', pid)
+
+    logf("[cgroup_t.register] pid %d, procs_path %s", pid, self.procs_path)
+
+    // fs open cannot open fd in mount ns
+    // var f = fs.open(self.procs_path, syscall.O_WRONLY, 0)
+    var fd = syscall.open(self.procs_path, syscall.O_WRONLY, 0)
+    var f = fs.from(fd, self.procs_path)
+    f.write(pid_str as [u8])
+
+    f.close()
+}
+
+fn cgroup_t.clear():void! {
+    logf('s.procs_path is "%s"', self.procs_path)
+
+    var f = fs.open(self.procs_path, syscall.O_RDONLY, 0) catch e {
+        throw errorf('open procs path="%s" failed: %s', self.procs_path, e.msg())
+    }
+
+    var pids_str = f.content()
+    if pids_str.len() == 0 {
+        logf('no pids in cgroup=%s', self.procs_path)
+    } else {
+        logf('read pids from cgroup, %s', pids_str)
+        var pids = pids_str.split('\n')
+
+        for pid_str in pids {
+            // str to int
+            var pid = pid_str.to_int()
+            if pid == 0 {
+                throw errorf('pid str %s to int failed', pid_str)
+            }
+            
+            // kill by pid
+            syscall.kill(pid, syscall.SIGKILL) catch e {
+                logf('kill pid %d failed %s', pid, e.msg())
+            }
+        }
+    }
+
+    // 清理 cgroup 目录
+    os.rmdir(self.path, true)
+}
+
+fn init():cgroup_t! {
+    if !path.exists('/sys/fs/cgroup') {
+        throw errorf('cgroup new err=' + 'path /sys/fs/cgroup not found')
+    }
+    
+    u8 version = 0
+    
+    if path.exists('/sys/fs/cgroup/cgroup.controllers') {
+        version = version2
+    }  else if path.exists(path.join("/sys/fs/cgroup", v1_default_system)) {
+        version = version1
+    } else {
+        throw errorf('cannot detect cgroup version')
+    }
+
+    var id = util.rand_letter(32)
+    
+    var cgroup_path = ''
+    if version == version1 {
+        cgroup_path = path.join('/sys/fs/cgroup', v1_default_system, parker_dir, id)
+    } else {
+        cgroup_path = path.join('/sys/fs/cgroup', parker_dir, id)
+    }
+
+    var procs_path = path.join(cgroup_path, procs_system)
+
+    // mkdir all
+    os.mkdirs(cgroup_path, 0755)
+
+    return cgroup_t {
+        id = id,
+        version = version,
+        path = cgroup_path,
+        procs_path = procs_path,
+    }
+}

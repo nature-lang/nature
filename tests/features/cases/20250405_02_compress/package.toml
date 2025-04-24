@@ -1,0 +1,11 @@
+name = "compress"
+version = "v1.3.2"
+authors = ["weiwenhao 1101140857@qq.com"]
+description = "compress gzip"
+license = "MIT"
+type = "libc" # lib or bin
+
+[links]
+libarchive = { linux_amd64 = 'lib/libarchive_linux_amd64.a', linux_arm64 = 'lib/libarchive_linux_arm64.a', darwin_amd64 = 'lib/libarchive_darwin_amd64.a', darwin_arm64 = 'lib/libarchive_darwin_arm64.a' }
+
+[dependencies]

@@ -14,6 +14,7 @@ fn logf(string format, ...[any] args) {
     fmt.printf('%v - %v\n', t.ms_timestamp(), msg)
 }
 
+
 type config_t = struct{
     i32 dim
     i32 hidden_dim

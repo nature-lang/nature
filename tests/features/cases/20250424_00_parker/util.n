@@ -1,0 +1,141 @@
+import os
+import fmt
+import parker.cgroup
+import path
+import time
+import syscall
+import parker.log as *
+import libc
+import fs
+import strings
+
+string charset = 'abcdefghijklmnopqrstuvwxyz0123456789'
+
+fn arg_version():bool {
+    var args = os.args()
+
+    // 没有参数
+    if args.len() == 1 {
+        return true
+    }
+
+    if args.len() == 2 && (args[1] == '-v' || args[1] == '--version') {
+        return true
+    }
+
+    return false
+}
+
+fn arg_verbose():bool {
+    var flag = syscall.get_env('PARKER_VERBOSE')
+    return flag != ''
+}
+
+// 从 exe_path 中提取完整的数据
+fn extract_tgz(string exe_path):[u8]! {
+    var f = fs.open(exe_path, syscall.O_RDONLY, 0666)
+
+    f.seek(-16, syscall.SEEK_END)
+
+    var size_buf = vec_new<u8>(0, 16)
+    var len = f.read(size_buf)
+    if len != size_buf.len() {
+        f.close()
+        throw errorf('read fd len %d exception', len)
+    }
+
+    var size_str = size_buf as string
+
+    // atoi
+    var size = size_str.to_int()
+    if size == 0 {
+        throw errorf('extract tgz size is zero')
+    }
+
+    logf('read tgz tail 16 size=%d success', size)
+
+    f.seek(-16 - size, syscall.SEEK_END)
+
+    // read result
+    var result = vec_new<u8>(0, size)
+
+    len = f.read(result)
+    if len != size {
+        throw errorf('read fd result len %d != size %d', len, size)
+    }
+
+    // close fd
+    f.close()
+
+    return result
+}
+
+fn rand_letter(int len):string {
+    var result = vec_new<u8>(0, len)
+    libc.srand(time.unix() as u32)
+
+    for i,v in result {
+        int char_index = libc.rand() % charset.len()
+        result[i] = charset[char_index]
+    }
+
+    return result as string
+}
+
+// 在 workdir 创建 mount 空间
+fn mount_ns(string workdir):void! {
+    syscall.unshare(syscall.CLONE_NEWNS)
+
+    // mount / 
+    syscall.mount('none', '/', '', syscall.MS_REC|syscall.MS_PRIVATE, "")
+
+    // mount("tmpfs", workdir, "tmpfs", 0, NULL)
+    syscall.mount('tmpfs', workdir, 'tmpfs', 0, '')
+}
+    
+fn read_target(string workdir):string! {
+    var target_path = path.join(workdir, '.target_name')
+    var fd = syscall.open(target_path, syscall.O_RDONLY, 0)
+    var f = fs.from(fd, target_path)
+    var target_name = f.content()
+    f.close()
+    
+    return path.join(workdir, target_name)
+}
+
+// gmp 模型中，fork 是不安全的操作，所有的子线程都不会被 fork。
+fn run_target(string target_path):int! {
+    // - fork 默认继承父进程的 mount ns
+    // - fork, 父进程直接返回 pid 即可
+    var pid = syscall.fork()
+    if pid > 0 {
+        // parent
+        return pid
+    }
+
+    // sub process
+
+    // pdeathsig
+    // 1 = PR_SET_PDEATHSIG
+    // 9 = SIGKILL
+    var result = libc.prctl(1, 9, 0, 0, 0)
+    if result == -1 {
+       throw errorf('set pdeathsig err=%s', libc.strerror())
+    }
+
+    // 读取当前进程 id
+    pid = syscall.getpid()
+    logf('[child %d] fork success, current is child , syscall.getpid() is %d', pid, pid)
+
+    // run target with all args and env
+    var args = os.args()
+    // args[0] 是 proc/:pid/comm, 这里替换成 target name
+    var target_name = path.base(target_path)
+    args[0] = target_name
+
+    // 通过 exec 进行进程启动直接覆盖当前进程
+    logf('will syscall.exec target_path: %s', target_path)
+    syscall.exec(target_path, args, syscall.get_envs())
+    logf('exec cannot execute it here')
+    return 0 // 正常不会执行到这里了
+}

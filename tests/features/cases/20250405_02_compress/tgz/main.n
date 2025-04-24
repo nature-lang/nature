@@ -1,0 +1,227 @@
+import syscall
+import os
+import fmt
+import path
+import compress.archive
+import runtime
+import strings
+import fs
+
+i32 ARCHIVE_EOF = 1
+i32 ARCHIVE_OK = 0
+
+i32 ARCHIV_RETRY = -10
+i32 ARCHIVE_WARN = -20
+
+i32 ARCHIVE_FAILED = -25
+i32 ARCHIVE_FATAL = -30
+
+i32 ARCHIVE_EXTRACT_PERM = 0x0002
+i32 ARCHIVE_EXTRACT_TIME = 0x0004
+i32 ARCHIVE_EXTRACT_NO_OVERWRITE = 0x0008
+i32 ARCHIVE_EXTRACT_UNLINK = 0x0010
+i32 ARCHIVE_EXTRACT_ACL = 0x0020
+i32 ARCHIVE_EXTRACT_FFLAGS = 0x0040
+
+bool verbose = false
+
+fn logf(string format, ...[any] args) {
+    if !verbose {
+        return
+    }
+    var msg = fmt.sprintf(format, ...args)
+    fmt.printf('%v', msg)
+}
+
+
+/**
+ * @sources 是具体的文件夹或者目录名称，不支持按通配符号，如 * 或者 . 来匹配所有文件
+ * @workdir 表示具体的工作目录, 相关 sources 都是在 workdir 中被找到的
+ */
+fn encode(string workdir, string tgz_path, [string] sources):void! {
+    if workdir.len() == 0 {
+        throw errorf('workdir is empty')
+    }
+
+    if tgz_path.len() == 0 {
+        throw errorf('tgz_path is empty')
+    }
+
+    if sources.len() == 0 {
+        throw errorf('sources is empty')
+    }
+
+    // string old = syscall.getcwd()
+    // syscall.chdir(workdir)
+
+    // 初始化 archive
+    var a = archive.write_new()
+
+    // 添加 gzip 方式压缩
+    archive.write_add_filter_gzip(a)
+
+    // 归档格式为 ustar 格式
+    archive.write_set_format_ustar(a)
+
+    // 写入目标文件
+    archive.write_open_filename(a, tgz_path.ref())
+
+    var buf = vec_new<u8>(0, 16384)
+
+    for source in sources {
+        var disk = archive.read_disk_new()
+
+        var full_path = path.join(workdir, source)
+
+        i32 r = archive.read_disk_open(disk, full_path.ref())
+        if r != 0 {
+            throw errorf('read path %v failed', source)
+        }
+
+        for true {
+            var entry = archive.entry_new()
+
+            r = archive.read_next_header2(disk, entry)
+
+            if r == ARCHIVE_EOF {
+                break
+            }
+
+            if r != ARCHIVE_OK {
+                throw errorf(strings.from(archive.error_string(disk)))
+            }
+
+            archive.read_disk_descend(disk)
+
+            var pathname = strings.from(archive.entry_pathname(entry))
+
+            // custom path name 从 path 中去掉 workdir!
+            var custom = pathname.replace(workdir + '/', '')
+            archive.entry_set_pathname(entry, custom.ref())
+
+            // debug
+            logf('a %v\n', strings.from(archive.entry_pathname(entry)))
+
+            r = archive.write_header(a, entry)
+
+            // ignore error
+            // if r < ARCHIVE_OK {
+            //    throw libc_string_new(archive.error_string(a))
+            //}
+
+            if r == ARCHIVE_FATAL {
+                throw errorf(strings.from(archive.error_string(a)))
+            }
+
+            // success
+            if r > ARCHIVE_FAILED {
+                anyptr raw = archive.entry_sourcepath(entry)
+
+                // 目录也可以被打开，但是不能进行 read
+                var f = fs.open(strings.from(raw), syscall.O_RDONLY, 0666)
+                var len = f.read(buf) catch err {}
+                for len > 0 {
+                     archive.write_data(a, buf.ref(), len)
+                     len = f.read(buf)
+                }
+                f.close()
+            }
+
+            archive.entry_free(entry)
+        }
+
+        // 当前 read 已经处理完成
+        archive.read_close(disk)
+        archive.read_free(disk)
+    }
+    // 全局 write 写入完成
+    archive.write_close(a)
+    archive.write_free(a)
+
+    // 工作目录复原(defer 确实是很好用的一个功能)
+    // syscall.chdir(old)
+}
+
+
+// 在指定目录将 tgz path 进行解压
+fn decode(string workdir, string tgz_path):void! {
+    if tgz_path.len() == 0 {
+        throw errorf('tgz_path is empty')
+    }
+
+    archive.archive_t a = archive.read_new()
+    var r = archive.read_support_format_all(a);
+    if r != ARCHIVE_OK {
+        throw errorf(strings.from(archive.error_string(a)))
+    }
+    r = archive.read_support_filter_all(a);
+    if r != ARCHIVE_OK {
+        throw errorf(strings.from(archive.error_string(a)))
+    }
+
+    archive.archive_t ext = archive.write_disk_new()
+    archive.write_disk_set_options(ext, ARCHIVE_EXTRACT_TIME|ARCHIVE_EXTRACT_PERM|ARCHIVE_EXTRACT_ACL|ARCHIVE_EXTRACT_FFLAGS)
+    archive.write_disk_set_standard_lookup(ext);
+
+    r = archive.read_open_filename(a, tgz_path.ref(), 10240)
+    if r != ARCHIVE_OK {
+        throw errorf(strings.from(archive.error_string(a)))
+    }
+
+    archive.archive_entry_t entry = 0
+
+    for true {
+        r = archive.read_next_header(a, &entry)
+        if r == ARCHIVE_EOF {
+            break
+        }
+
+        if r != ARCHIVE_OK {
+            throw errorf(strings.from(archive.error_string(a)))
+        }
+
+        var old = strings.from(archive.entry_pathname(entry))
+
+        // 链接 workdir
+        var custom = path.join(workdir, old)
+        archive.entry_set_pathname(entry, custom.ref())
+
+        logf('x %v\n', strings.from(archive.entry_pathname(entry)))
+
+        r = archive.write_header(ext, entry)
+        if r == ARCHIVE_OK {
+            copy_data(a, ext)
+        }
+    }
+
+    archive.read_close(a)
+    archive.read_free(a)
+
+    archive.write_close(ext)
+    archive.write_free(ext)
+}
+
+fn copy_data(archive.archive_t ar, archive.archive_t aw):i32 {
+    anyptr buf = 0
+    uint size = 0
+    i64 offset = 0
+    i32 r = 0
+
+    for true {
+        r = archive.read_data_block(ar, &buf, &size, &offset)
+        if r == ARCHIVE_EOF {
+            return ARCHIVE_OK
+        }
+
+        if r != ARCHIVE_OK {
+            return r
+        }
+
+        r = archive.write_data_block(aw, buf, size, offset)
+        if r != ARCHIVE_OK {
+            return r
+        }
+    }
+
+    return 0
+}
