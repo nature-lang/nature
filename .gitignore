@@ -1,5 +1,6 @@
 /build
 /build-*
+/build_*
 bin
 release/
 tmp/

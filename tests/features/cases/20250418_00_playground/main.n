@@ -78,7 +78,7 @@ fn playgrounds_run(string code):string! {
     println('build exec_path: ', exec_path)
 
     // process run 'nature build -o main main.n'
-    var state = process.run(nature_path, ['build','--target', 'linux_amd64','-o', exec_path, source_path]) catch e {
+    var state = process.run(nature_path, ['build', '-o', exec_path, source_path]) catch e {
         throw errorf('nature build failed: %s', nature_path, source_path, e.msg())
     }
 
