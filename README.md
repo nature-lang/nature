@@ -38,9 +38,22 @@ Major work in the next versions of The main work is
 - Gathering user feedback
 - Project validation and bug fixes
 - Refinement of language features
-- Compilation into a readable golang programming language to increase the usability of the nature programming language
 
 Official website: [https://nature-lang.org](https://nature-lang.org)
+
+## Design Philosophy
+
+golang is the programming language I work with. It has a simple syntax, a very good and high-performance cross-platform compiler and runtime implementation, an advanced concurrent design style and high-performance network I/O, and good support for standard libraries. However, there are some inconveniences
+
+- The syntax is too simple, resulting in a lack of expressiveness.
+- The type system is not well developed, lacking nullable, enumerated parameters, generic types (which exist now), etc.
+- Cumbersome error handling mechanism
+- Automatic GC and preemptive scheduling are excellent, but they limit the scope of golang.
+
+nature is designed to be a continuation and optimization of the golang programming language, and to pursue certain differences, as described in the Features section.
+
+Based on the existing features of the nature programming language, it is suitable for game engines and game development, scientific computing and AI, operating systems and the Internet of Things, and web development.
+
 
 ## Install
 
