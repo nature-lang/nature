@@ -1,0 +1,91 @@
+import os
+import path
+import syscall
+import parker.log as *
+import parker.util
+import parker.cgroup
+import compress.tgz
+import os.signal
+import co
+import fs
+
+var version = '0.2.0'
+
+fn main():void! {
+    if util.arg_verbose() {
+        tgz.verbose = true
+        set_verbose()
+    }
+
+    logf('runner start version: %s', version)
+
+    // - read exe path
+    var exe_path = os.exe()
+    var workdir = path.dir(exe_path)
+    logf('workdir=%s', workdir)
+
+    // - extract tgz by exe
+    var tgz_buf = util.extract_tgz(exe_path)
+
+    // - mount namespace
+    util.mount_ns(workdir)
+
+    // - write tgz to mount ns
+    var tgz_path = path.join(workdir, 'parker.tar.gz')
+
+    // fs open cannot open fd in mount ns
+    // var tgz_fd = fs.open(tgz_path, syscall.O_CREAT|syscall.O_RDWR|syscall.O_TRUNC, 0644)
+
+    var fd = syscall.open(tgz_path, syscall.O_CREAT|syscall.O_RDWR|syscall.O_TRUNC, 0644)
+    var tgz_fd = fs.from(fd, tgz_path)
+
+    var len = tgz_fd.write(tgz_buf) catch e {
+        throw errorf('write tgz to %s failed, err=%s', tgz_path, e.msg())
+    }
+    tgz_fd.close()
+    logf('tgz %s closed', tgz_path)
+
+    // - un tgz file
+    tgz.decode(workdir, tgz_path)
+    logf('tgz decode success')
+
+    // - read target
+    var target_path = util.read_target(workdir)
+    logf('read target_path %s success', target_path)
+
+    // - cgroup init
+    var cg = cgroup.init()
+
+    // - run target with cgroup
+    var pid = util.run_target(target_path)
+
+    // - register pid to cgroup
+    cg.register(pid)
+
+    // - listen sig and wait cmd
+    var sig_ch = chan_new<signal.sig_t>(1)
+    signal.notify(sig_ch)
+
+    for true {
+        var (result, status) = syscall.wait(pid, 1)
+        if result != 0 { // pid  is down
+            logf('pid %d is exit status=%d', pid, status)
+            cg.clear()
+            break
+        }
+
+        // recv sig
+        var (sig, is_recv) = sig_ch.try_recv()
+        if is_recv {
+            // 读取信号成功, 进行信号同步
+            // sync the received sig to the pid
+            syscall.kill(pid, sig as int)
+            logf('send sig=%d to pid=%d success', sig, pid)
+        }
+
+        logf('wait pid exit or sig...., result = %d, status = %d', result, status)
+        co.sleep(100)
+    }
+
+    logf('successful and exit')
+}

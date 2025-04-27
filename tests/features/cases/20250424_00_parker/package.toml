@@ -1,0 +1,9 @@
+name = "parker"
+version = "1.0.0"
+authors = ["WEIWENHAO <1101140857@qq.com>"]
+description = "parker all"
+license = "MIT"
+type = "bin" # lib or bin
+
+[dependencies]
+compress = { type = "git", version = "v1.3.2", url = "github.com/weiwenhao/compress", use_links = true }

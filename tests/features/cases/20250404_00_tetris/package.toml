@@ -1,0 +1,13 @@
+name = "tetris"
+version = "1.0.0"
+authors = ["Alice <a@example.com>", "Bob <b@example.com>"]
+description = "Your package description"
+license = "MIT"
+type = "bin"
+
+# 支持 .o 或者 .a link 文件, key 中需要包含 .a 或者 .o 从而能够方便的进行类型识别，从而判断不同的 key
+# 填写相对路劲是，以当前编译的工作目录为基准。
+[links]
+raylib = { darwin_arm64 = 'lib/libraylib_darwin_arm64.a', darwin_amd64 = 'lib/libraylib_darwin_arm64.a' }
+
+[dependencies]

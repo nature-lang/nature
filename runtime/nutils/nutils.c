@@ -229,7 +229,8 @@ n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
         void *new_value = rti_gc_malloc(rtype->size, rtype);
         memmove(new_value, value_ref, out_size);
-        mu->value.ptr_value = new_value; // TODO write barrier
+        //        mu->value.ptr_value = new_value; // TODO write barrier
+        rti_write_barrier_ptr(&mu->value.ptr_value, new_value, false);
     } else {
         // 特殊类型参数处理，为了兼容 fn method 中的 self 自动化参数, self 如果是 int/struct 等类型，会自动转换为 ptr<int>
         // 如果是 vec/string 等类型，self 的类型依旧是 vec/string 等，而不是 ptr<vec>/ptr<string> 这有点多余, 因为 vec/string
@@ -282,7 +283,8 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
         void *new_value = rti_gc_malloc(rtype->size, rtype);
         memmove(new_value, value_ref, out_size);
-        mu->value.ptr_value = new_value;
+        //        mu->value.ptr_value = new_value;
+        rti_write_barrier_ptr(&mu->value.ptr_value, new_value, false);
     } else {
         memmove(&mu->value, value_ref, out_size);
     }
@@ -301,7 +303,6 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
  * @return
  */
 n_bool_t bool_casting(uint64_t input_rtype_hash, int64_t int_value, double float_value) {
-
     DEBUGF("[runtime.bool_casting] input_rtype_hash=%lu, int_value=%lu, f64_value=%f", input_rtype_hash, int_value,
            float_value);
     rtype_t *input_rtype = rt_find_rtype(input_rtype_hash);

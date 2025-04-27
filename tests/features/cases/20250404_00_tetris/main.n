@@ -1,0 +1,718 @@
+import tetris.raylib as ray
+import time
+import fmt
+
+fn logf(string format, ...[any] args) {
+    var msg = fmt.sprintf(format, ...args)
+    var t = time.now()
+    fmt.printf('%v - %v\n', t.ms_timestamp(), msg)
+}
+
+
+i32 SQUARE_SIZE = 20
+i32 GRID_HORIZONTAL_SIZE = 12
+i32 GRID_VERTICAL_SIZE = 20
+i32 LATERAL_SPEED = 10
+i32 TURNING_SPEED = 12
+i32 FAST_FALL_AWAIT_COUNTER = 30
+i32 FADING_TIME = 33
+
+i32 GRIDSQUARE_EMPTY = 0
+i32 GRIDSQUARE_MOVING = 1
+i32 GRIDSQUARE_FULL = 2
+i32 GRIDSQUARE_BLOCK = 3
+i32 GRIDSQUARE_FADING = 4
+
+i32 screen_width = 800
+i32 screen_height = 450
+
+var game_over = false
+var pause = false
+
+// matrices w: 12 * h: 20
+[[i32;20];12] grid = []
+[[i32;4];4] piece = []
+[[i32;4];4] incoming_piece = []
+
+i32 piece_position_x = 0
+i32 piece_position_y = 0
+
+var fading_color = ray.color_t{}
+
+var begin_play = true
+var piece_active = false
+var detection = false
+var line_to_delete = false
+
+i32 level = 1
+i32 lines = 0
+
+i32 gravity_movement_counter = 0
+i32 lateral_movement_counter = 0
+i32 turn_movement_counter = 0
+i32 fast_fall_movement_counter = 0
+
+i32 fade_line_counter = 0
+
+// based on level
+i32 gravity_speed = 30
+
+fn init_game() {
+    level = 1
+    lines = 0
+
+    fading_color = ray.GRAY
+
+    piece_position_x = 0
+    piece_position_y = 0
+
+    pause = false
+
+    begin_play = true
+    piece_active = false
+    detection = false
+    line_to_delete = false
+
+    // counters
+    gravity_movement_counter = 0
+    lateral_movement_counter = 0
+    turn_movement_counter = 0
+    fast_fall_movement_counter = 0
+
+    fade_line_counter = 0
+    gravity_speed = 30
+
+    for i32 i = 0; i < GRID_HORIZONTAL_SIZE; i+=1 {
+        for i32 j = 0; j < GRID_VERTICAL_SIZE; j+=1 {
+            if (j == GRID_VERTICAL_SIZE - 1) || (i == 0) || (i == GRID_HORIZONTAL_SIZE - 1) {
+                grid[i][j] = GRIDSQUARE_BLOCK
+            } else {
+                grid[i][j] = GRIDSQUARE_EMPTY
+            }
+        }
+    }
+
+    for i32 i = 0; i < 4; i+=1 {
+        for i32 j = 0; j < 4; j+=1 {
+            incoming_piece[i][j] = GRIDSQUARE_EMPTY
+        }
+    }
+}
+
+fn update_game() {
+    if game_over {
+        if ray.is_key_pressed(ray.KEY_ENTER) {
+            init_game()
+            game_over = false
+        }
+        return
+    }
+
+    if ray.is_key_pressed(ray.KEY_P) {
+        pause = !pause
+    }
+
+    if pause {
+        return
+    }
+
+    if !line_to_delete {
+        if !piece_active {
+            // Get new piece
+            piece_active = create_piece()
+
+            // Allow some time before fast falling begins
+            fast_fall_movement_counter = 0
+        } else {    // Piece is falling
+            // Update counters
+            fast_fall_movement_counter += 1
+            gravity_movement_counter += 1
+            lateral_movement_counter += 1
+            turn_movement_counter += 1
+
+            // Ensure movement in the frame when key is pressed
+            if ray.is_key_pressed(ray.KEY_LEFT) || ray.is_key_pressed(ray.KEY_RIGHT) {
+                lateral_movement_counter = LATERAL_SPEED
+            }
+            if ray.is_key_pressed(ray.KEY_UP) {
+                turn_movement_counter = TURNING_SPEED
+            }
+
+            // Falling
+            if ray.is_key_down(ray.KEY_DOWN) && (fast_fall_movement_counter >= FAST_FALL_AWAIT_COUNTER) {
+                // Ensure piece falls in this frame
+                gravity_movement_counter += gravity_speed
+            }
+
+            if gravity_movement_counter >= gravity_speed {
+                // Basic falling movement
+                check_detection(&detection)
+
+                // Check if piece collides with other pieces or boundaries
+                resolve_falling_movement(&detection, &piece_active)
+
+                // Check if a line is completed, if so, erase it and pull down the lines above
+                check_completion(&line_to_delete)
+
+                gravity_movement_counter = 0
+            }
+
+            // Move horizontally according to player input
+            if lateral_movement_counter >= LATERAL_SPEED {
+                // Update horizontal movement, if successful, reset horizontal counter
+                if !resolve_lateral_movement() {
+                    lateral_movement_counter = 0
+                }
+            }
+
+            // Rotate piece according to player input
+            if turn_movement_counter >= TURNING_SPEED {
+                // Update rotation movement and reset rotation counter
+                if resolve_turn_movement() {
+                    turn_movement_counter = 0
+                }
+            }
+        }
+
+        // Game over logic
+        for i32 j = 0; j < 2; j += 1 {
+            for i32 i = 1; i < GRID_HORIZONTAL_SIZE - 1; i += 1 {
+                if grid[i][j] == GRIDSQUARE_FULL {
+                    game_over = true
+                }
+            }
+        }
+    } else {
+        // Animation when deleting lines
+        fade_line_counter += 1
+
+        if fade_line_counter % 8 < 4 {
+            fading_color = ray.MAROON
+        } else {
+            fading_color = ray.GRAY
+        }
+
+        if fade_line_counter >= FADING_TIME {
+            i32 deleted_lines = 0
+            deleted_lines = delete_complete_lines()
+            fade_line_counter = 0
+            line_to_delete = false
+
+            lines += deleted_lines
+        }
+    }
+    
+}
+
+fn draw_game() {
+    ray.begin_drawing()
+    
+    ray.clear_background(ray.RAYWHITE)
+    
+    if !game_over {
+        // Draw game area
+        var offset_x = screen_width/2 - (GRID_HORIZONTAL_SIZE*SQUARE_SIZE/2) - 50
+        var offset_y = screen_height/2 - ((GRID_VERTICAL_SIZE - 1)*SQUARE_SIZE/2) + SQUARE_SIZE*2
+        
+        offset_y -= 50     // Note: Hardcoded position!
+        
+        var controller = offset_x
+        
+        for i32 j = 0; j < GRID_VERTICAL_SIZE; j+=1 {
+            for i32 i = 0; i < GRID_HORIZONTAL_SIZE; i+=1 {
+                // Draw each square in the grid
+                if grid[i][j] == GRIDSQUARE_EMPTY {
+                    ray.draw_line(offset_x, offset_y, offset_x + SQUARE_SIZE, offset_y, ray.LIGHTGRAY)
+                    ray.draw_line(offset_x, offset_y, offset_x, offset_y + SQUARE_SIZE, ray.LIGHTGRAY)
+                    ray.draw_line(offset_x + SQUARE_SIZE, offset_y, offset_x + SQUARE_SIZE, offset_y + SQUARE_SIZE, ray.LIGHTGRAY)
+                    ray.draw_line(offset_x, offset_y + SQUARE_SIZE, offset_x + SQUARE_SIZE, offset_y + SQUARE_SIZE, ray.LIGHTGRAY)
+                    offset_x += SQUARE_SIZE
+                } else if grid[i][j] == GRIDSQUARE_FULL {
+                    ray.draw_rectangle(offset_x, offset_y, SQUARE_SIZE, SQUARE_SIZE, ray.GRAY)
+                    offset_x += SQUARE_SIZE
+                } else if grid[i][j] == GRIDSQUARE_MOVING {
+                    ray.draw_rectangle(offset_x, offset_y, SQUARE_SIZE, SQUARE_SIZE, ray.DARKGRAY)
+                    offset_x += SQUARE_SIZE
+                } else if grid[i][j] == GRIDSQUARE_BLOCK {
+                    ray.draw_rectangle(offset_x, offset_y, SQUARE_SIZE, SQUARE_SIZE, ray.LIGHTGRAY)
+                    offset_x += SQUARE_SIZE
+                } else if grid[i][j] == GRIDSQUARE_FADING {
+                    ray.draw_rectangle(offset_x, offset_y, SQUARE_SIZE, SQUARE_SIZE, fading_color)
+                    offset_x += SQUARE_SIZE
+                }
+            }
+            
+            offset_x = controller
+            offset_y += SQUARE_SIZE
+        }
+        
+        // Draw the upcoming piece (hardcoded)
+        offset_x = 500
+        offset_y = 45
+        
+        var controler = offset_x
+        
+        for i32 j = 0; j < 4; j+=1 {
+            for i32 i = 0; i < 4; i+=1 {
+                if incoming_piece[i][j] == GRIDSQUARE_EMPTY {
+                    ray.draw_line(offset_x, offset_y, offset_x + SQUARE_SIZE, offset_y, ray.LIGHTGRAY)
+                    ray.draw_line(offset_x, offset_y, offset_x, offset_y + SQUARE_SIZE, ray.LIGHTGRAY)
+                    ray.draw_line(offset_x + SQUARE_SIZE, offset_y, offset_x + SQUARE_SIZE, offset_y + SQUARE_SIZE, ray.LIGHTGRAY)
+                    ray.draw_line(offset_x, offset_y + SQUARE_SIZE, offset_x + SQUARE_SIZE, offset_y + SQUARE_SIZE, ray.LIGHTGRAY)
+                    offset_x += SQUARE_SIZE
+                } else if incoming_piece[i][j] == GRIDSQUARE_MOVING {
+                    ray.draw_rectangle(offset_x, offset_y, SQUARE_SIZE, SQUARE_SIZE, ray.GRAY)
+                    offset_x += SQUARE_SIZE
+                }
+            }
+            
+            offset_x = controler
+            offset_y += SQUARE_SIZE
+        }
+        
+        ray.draw_text('INCOMING:'.ref(), offset_x, offset_y - 100, 10, ray.GRAY)
+        
+        var lines_text = fmt.sprintf('LINES:      %04d', lines)
+        ray.draw_text(lines_text.ref(), offset_x, offset_y + 20, 10, ray.GRAY)
+        
+        if pause {
+            ray.draw_text('GAME PAUSED'.ref(), screen_width/2 - ray.measure_text('GAME PAUSED'.ref(), 40)/2, screen_height/2 - 40, 40, ray.GRAY)
+        }
+    } else {
+        var text = 'PRESS [ENTER] TO PLAY AGAIN'.ref()
+        ray.draw_text(text, ray.get_screen_width()/2 - ray.measure_text(text, 20)/2, ray.get_screen_height()/2 - 50, 20, ray.GRAY)
+    }
+    
+    ray.end_drawing()
+}
+
+fn update_draw_frame() {
+    update_game()
+    draw_game()
+}
+
+fn create_piece():bool {
+    piece_position_x = (GRID_HORIZONTAL_SIZE - 4)/2
+    piece_position_y = 0
+    
+    // If the game just started and we need to create the first piece, we create an extra one
+    if begin_play {
+        get_randompiece()
+        begin_play = false
+    }
+    
+    // Assign the upcoming piece to the current piece
+    for i32 i = 0; i < 4; i+=1 {
+        for i32 j = 0; j < 4; j+=1 {
+            piece[i][j] = incoming_piece[i][j]
+        }
+    }
+    
+    // Assign a random piece for the upcoming piece
+    get_randompiece()
+    
+    // Assign the piece to the grid
+    for i32 i = piece_position_x; i < piece_position_x + 4; i+=1 {
+        for i32 j = 0; j < 4; j+=1 {
+            if piece[i - piece_position_x][j] == GRIDSQUARE_MOVING {
+                grid[i][j] = GRIDSQUARE_MOVING
+            }
+        }
+    }
+    
+    return true
+}
+
+fn get_randompiece():void {
+    var random = ray.get_random_value(0, 6)
+    
+    // Initialize the upcoming piece as empty
+    for i32 i = 0; i < 4; i+=1 {
+        for i32 j = 0; j < 4; j+=1 {
+            incoming_piece[i][j] = GRIDSQUARE_EMPTY
+        }
+    }
+    
+    // Generate different piece shapes based on random number
+    match random {
+        0 -> {
+            // Piece shape: Cube
+            incoming_piece[1][1] = GRIDSQUARE_MOVING
+            incoming_piece[2][1] = GRIDSQUARE_MOVING
+            incoming_piece[1][2] = GRIDSQUARE_MOVING
+            incoming_piece[2][2] = GRIDSQUARE_MOVING
+        }
+        1 -> {
+            // Piece shape: L
+            incoming_piece[1][0] = GRIDSQUARE_MOVING
+            incoming_piece[1][1] = GRIDSQUARE_MOVING
+            incoming_piece[1][2] = GRIDSQUARE_MOVING
+            incoming_piece[2][2] = GRIDSQUARE_MOVING
+        }
+        2 -> {
+            // Piece shape: Reverse L
+            incoming_piece[1][2] = GRIDSQUARE_MOVING
+            incoming_piece[2][0] = GRIDSQUARE_MOVING
+            incoming_piece[2][1] = GRIDSQUARE_MOVING
+            incoming_piece[2][2] = GRIDSQUARE_MOVING
+        }
+        3 -> {
+            // Piece shape: Line
+            incoming_piece[0][1] = GRIDSQUARE_MOVING
+            incoming_piece[1][1] = GRIDSQUARE_MOVING
+            incoming_piece[2][1] = GRIDSQUARE_MOVING
+            incoming_piece[3][1] = GRIDSQUARE_MOVING
+        }
+        4 -> {
+            // Piece shape: T-shape
+            incoming_piece[1][0] = GRIDSQUARE_MOVING
+            incoming_piece[1][1] = GRIDSQUARE_MOVING
+            incoming_piece[1][2] = GRIDSQUARE_MOVING
+            incoming_piece[2][1] = GRIDSQUARE_MOVING
+        }
+        5 -> {
+            // Piece shape: S-shape
+            incoming_piece[1][1] = GRIDSQUARE_MOVING
+            incoming_piece[2][1] = GRIDSQUARE_MOVING
+            incoming_piece[2][2] = GRIDSQUARE_MOVING
+            incoming_piece[3][2] = GRIDSQUARE_MOVING
+        }
+        6 -> {
+            // Piece shape: Reverse S-shape
+            incoming_piece[1][2] = GRIDSQUARE_MOVING
+            incoming_piece[2][2] = GRIDSQUARE_MOVING
+            incoming_piece[2][1] = GRIDSQUARE_MOVING
+            incoming_piece[3][1] = GRIDSQUARE_MOVING
+        }
+        _ -> panic('invalid random value')
+    }
+}
+
+fn resolve_falling_movement(rawptr<bool> detection, rawptr<bool> piece_active) {
+    // If we have completed the movement of this piece, we stop it
+    if *detection {
+        for i32 j = GRID_VERTICAL_SIZE - 2; j >= 0; j-=1 {
+            for i32 i = 1; i < GRID_HORIZONTAL_SIZE - 1; i+=1 {
+                if grid[i][j] == GRIDSQUARE_MOVING {
+                    grid[i][j] = GRIDSQUARE_FULL
+                    *detection = false
+                    *piece_active = false
+                }
+            }
+        }
+    } else {    // We move the piece downward
+        for i32 j = GRID_VERTICAL_SIZE - 2; j >= 0; j-=1 {
+            for i32 i = 1; i < GRID_HORIZONTAL_SIZE - 1; i+=1 {
+                if grid[i][j] == GRIDSQUARE_MOVING {
+                    grid[i][j+1] = GRIDSQUARE_MOVING
+                    grid[i][j] = GRIDSQUARE_EMPTY
+                }
+            }
+        }
+        
+        piece_position_y += 1
+    }
+}
+
+fn resolve_lateral_movement():bool {
+    var collision = false
+    
+    // Piece movement
+    if ray.is_key_down(ray.KEY_LEFT) {        // Move left
+        // Check if we can move left
+        for i32 j = GRID_VERTICAL_SIZE - 2; j >= 0; j-=1 {
+            for i32 i = 1; i < GRID_HORIZONTAL_SIZE - 1; i+=1 {
+                if grid[i][j] == GRIDSQUARE_MOVING {
+                    // Check if we touch the left wall or there is a fixed piece on the left
+                    if (i-1 == 0) || (grid[i-1][j] == GRIDSQUARE_FULL) {
+                        collision = true
+                    }
+                }
+            }
+        }
+        
+        // If possible, move left
+        if !collision {
+            for i32 j = GRID_VERTICAL_SIZE - 2; j >= 0; j-=1 {
+                for i32 i = 1; i < GRID_HORIZONTAL_SIZE - 1; i+=1 {             // Check matrix from left to right
+                    // Move everything to the left
+                    if grid[i][j] == GRIDSQUARE_MOVING {
+                        grid[i-1][j] = GRIDSQUARE_MOVING
+                        grid[i][j] = GRIDSQUARE_EMPTY
+                    }
+                }
+            }
+            
+            piece_position_x -= 1
+        }
+    } else if ray.is_key_down(ray.KEY_RIGHT) {  // Move right
+        // Check if we can move right
+        for i32 j = GRID_VERTICAL_SIZE - 2; j >= 0; j-=1 {
+            for i32 i = 1; i < GRID_HORIZONTAL_SIZE - 1; i+=1 {
+                if grid[i][j] == GRIDSQUARE_MOVING {
+                    // Check if we touch the right wall or there is a fixed piece on the right
+                    if (i+1 == GRID_HORIZONTAL_SIZE - 1) || (grid[i+1][j] == GRIDSQUARE_FULL) {
+                        collision = true
+                    }
+                }
+            }
+        }
+        
+        // If possible, move right
+        if !collision {
+            for i32 j = GRID_VERTICAL_SIZE - 2; j >= 0; j-=1 {
+                for i32 i = GRID_HORIZONTAL_SIZE - 2; i >= 1; i-=1 {             // Check matrix from right to left
+                    // Move everything to the right
+                    if grid[i][j] == GRIDSQUARE_MOVING {
+                        grid[i+1][j] = GRIDSQUARE_MOVING
+                        grid[i][j] = GRIDSQUARE_EMPTY
+                    }
+                }
+            }
+            
+            piece_position_x += 1
+        }
+    }
+    
+    return collision
+}
+
+fn resolve_turn_movement():bool {
+    // Input for rotating the piece
+    if ray.is_key_down(ray.KEY_UP) {
+        i32 aux = 0
+        var checker = false
+        
+        // Check all rotation possibilities
+        if (grid[piece_position_x + 3][piece_position_y] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x][piece_position_y] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x][piece_position_y] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x + 3][piece_position_y + 3] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x + 3][piece_position_y] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x + 3][piece_position_y] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x][piece_position_y + 3] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x + 3][piece_position_y + 3] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x + 3][piece_position_y + 3] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x][piece_position_y] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x][piece_position_y + 3] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x][piece_position_y + 3] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x + 1][piece_position_y] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x][piece_position_y + 2] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x][piece_position_y + 2] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x + 3][piece_position_y + 1] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x + 1][piece_position_y] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x + 1][piece_position_y] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x + 2][piece_position_y + 3] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x + 3][piece_position_y + 1] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x + 3][piece_position_y + 1] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x][piece_position_y + 2] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x + 2][piece_position_y + 3] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x + 2][piece_position_y + 3] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x + 2][piece_position_y] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x][piece_position_y + 1] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x][piece_position_y + 1] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x + 3][piece_position_y + 2] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x + 2][piece_position_y] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x + 2][piece_position_y] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x + 1][piece_position_y + 3] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x + 3][piece_position_y + 2] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x + 3][piece_position_y + 2] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x][piece_position_y + 1] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x + 1][piece_position_y + 3] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x + 1][piece_position_y + 3] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x + 1][piece_position_y + 1] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x + 1][piece_position_y + 2] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x + 1][piece_position_y + 2] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x + 2][piece_position_y + 1] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x + 1][piece_position_y + 1] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x + 1][piece_position_y + 1] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x + 2][piece_position_y + 2] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x + 2][piece_position_y + 1] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x + 2][piece_position_y + 1] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if (grid[piece_position_x + 1][piece_position_y + 2] == GRIDSQUARE_MOVING) &&
+           (grid[piece_position_x + 2][piece_position_y + 2] != GRIDSQUARE_EMPTY) &&
+           (grid[piece_position_x + 2][piece_position_y + 2] != GRIDSQUARE_MOVING) {
+            checker = true
+        }
+        
+        if !checker {
+            // Rotate the piece
+            aux = piece[0][0]
+            piece[0][0] = piece[3][0]
+            piece[3][0] = piece[3][3]
+            piece[3][3] = piece[0][3]
+            piece[0][3] = aux
+            
+            aux = piece[1][0]
+            piece[1][0] = piece[3][1]
+            piece[3][1] = piece[2][3]
+            piece[2][3] = piece[0][2]
+            piece[0][2] = aux
+            
+            aux = piece[2][0]
+            piece[2][0] = piece[3][2]
+            piece[3][2] = piece[1][3]
+            piece[1][3] = piece[0][1]
+            piece[0][1] = aux
+            
+            aux = piece[1][1]
+            piece[1][1] = piece[2][1]
+            piece[2][1] = piece[2][2]
+            piece[2][2] = piece[1][2]
+            piece[1][2] = aux
+        }
+        
+        // Clear moving pieces from the grid
+        for i32 j = GRID_VERTICAL_SIZE - 2; j >= 0; j-=1 {
+            for i32 i = 1; i < GRID_HORIZONTAL_SIZE - 1; i+=1 {
+                if grid[i][j] == GRIDSQUARE_MOVING {
+                    grid[i][j] = GRIDSQUARE_EMPTY
+                }
+            }
+        }
+        
+        // Put the rotated piece back into the grid
+        for i32 i = piece_position_x; i < piece_position_x + 4; i+=1 {
+            for i32 j = piece_position_y; j < piece_position_y + 4; j+=1 {
+                if piece[i - piece_position_x][j - piece_position_y] == GRIDSQUARE_MOVING {
+                    grid[i][j] = GRIDSQUARE_MOVING
+                }
+            }
+        }
+        
+        return true
+    }
+    
+    return false
+}
+
+fn check_detection(rawptr<bool> detection) {
+    for i32 j = GRID_VERTICAL_SIZE - 2; j >= 0; j-=1 {
+        for i32 i = 1; i < GRID_HORIZONTAL_SIZE - 1; i+=1 {
+            if (grid[i][j] == GRIDSQUARE_MOVING) && ((grid[i][j+1] == GRIDSQUARE_FULL) || (grid[i][j+1] == GRIDSQUARE_BLOCK)) {
+                *detection = true
+            }
+        }
+    }
+}
+
+fn check_completion(rawptr<bool> line_to_delete) {
+    i32 calculator = 0
+    
+    for i32 j = GRID_VERTICAL_SIZE - 2; j >= 0; j-=1 {
+        calculator = 0
+        for i32 i = 1; i < GRID_HORIZONTAL_SIZE - 1; i+=1 {
+            // Calculate each square in this row
+            if grid[i][j] == GRIDSQUARE_FULL {
+                calculator += 1
+            }
+            
+            // Check if we completed the entire row
+            if calculator == GRID_HORIZONTAL_SIZE - 2 {
+                *line_to_delete = true
+                calculator = 0
+                // points++; // Score increase commented out in the original code
+                
+                // Mark completed rows
+                for i32 z = 1; z < GRID_HORIZONTAL_SIZE - 1; z+=1 {
+                    grid[z][j] = GRIDSQUARE_FADING
+                }
+            }
+        }
+    }
+}
+
+fn delete_complete_lines():i32 {
+    i32 deleted_lines = 0
+    
+    // Erase completed rows
+    for i32 j = GRID_VERTICAL_SIZE - 2; j >= 0; j-=1 {
+        for grid[1][j] == GRIDSQUARE_FADING {
+            for i32 i = 1; i < GRID_HORIZONTAL_SIZE - 1; i+=1 {
+                grid[i][j] = GRIDSQUARE_EMPTY
+            }
+            
+            for i32 j2 = j-1; j2 >= 0; j2-=1 {
+                for i32 i2 = 1; i2 < GRID_HORIZONTAL_SIZE - 1; i2+=1 {
+                    if grid[i2][j2] == GRIDSQUARE_FULL {
+                        grid[i2][j2+1] = GRIDSQUARE_FULL
+                        grid[i2][j2] = GRIDSQUARE_EMPTY
+                    } else if grid[i2][j2] == GRIDSQUARE_FADING {
+                        grid[i2][j2+1] = GRIDSQUARE_FADING
+                        grid[i2][j2] = GRIDSQUARE_EMPTY
+                    }
+                }
+            }
+            
+            deleted_lines += 1
+        }
+    }
+    
+    return deleted_lines
+}
+
+
+fn main() {
+    logf('Game start')
+
+    // Initialization
+    ray.init_window(screen_width, screen_height, 'classic game: tetris'.ref())
+    
+    init_game()
+    
+    ray.set_target_fps(60)
+    
+    // Main game loop
+    for !ray.window_should_close() {    // Detect window close button or ESC key
+        // Update and draw
+        update_draw_frame()
+    }
+    
+    // Close window and OpenGL context
+    ray.close_window()
+}
