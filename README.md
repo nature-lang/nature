@@ -6,20 +6,24 @@ A general-purpose open-source programming language and compiler designed to prov
 ## Features
 
 - ✓ Simple, natural, and consistent syntax design
-- ✓ Independent compilation system, no dependency on llvm, supports cross-platform compilation
-- ✓ Well-formed type system with support for generics, null-value safety, and error handling
-- ✓ Automated GC, with very short STW
-- ✓ Modularity and package management system, npkg
-- ✓ Built-in shared-stack concatenation, millions of concatenation switches per second
-- ✓ Built-in libuv cooperates with the concatenation to handle IO event loops
-- ✓ Built-in implementations of common data structures and standard libraries, and easy interaction with C
-- ✓ Editor lsp support
-- ○ Asymptotic GC, capable of manual memory management
-- ○ Tests DSLs, efficient and stable use of AI coding
-- ○ macho cross-platform connector, currently lacks the macho linker darwin can't be cross-platform compilation.
-- ○ Improvement of collaborative scheduling system
-- ○ Cross-platform compilation support for wasm and risc64 platforms
-- ○ Compilation to readable golang programming language
+- ✓ No dependency on llvm and VM, compiles directly to target platform machine code and supports cross-compilation.
+- ✓ Simple deployment, purely static linking based on musl libc, no additional dependencies, good cross-platform characteristics
+- ✓ Comprehensive type system with support for generics, union types, interfaces, null-value safety, etc.
+- ✓ High-performance GC implementation with a very short STW (Stop The World)
+- ✓ High-performance shared-stack concatenation implementation, capable of millions of concatenation switches per second
+- ✓ Built-in libuv to handle IO event loops in collaboration with the concatenators  
+- ✓ High-performance runtime and compiler based on a pure C implementation
+- ✓ Modularity and package management system npkg
+- ✓ Built-in implementations of common data structures and standard libraries.
+- ✓ Use try+catch for error handling, match for pattern matching, channel for concurrent communication, select for concurrent processing.
+- ✓ Follow the system ABI, built-in libc, you can directly call the C language standard library functions to accelerate code development
+- ✓ editor lsp support
+- ✓ Asymptotic GC for manual memory management.  
+- ○ Test DSL, efficient and stable utilization of AI code.  
+- ○ macho cross-platform linker (lack of macho linker currently prevents cross-compilation on darwin platform)
+- ○ Collaborative scheduling system  
+- ○ Cross-platform compilation support for wasm and risc64 platforms.  
+- ○ Compile to readable golang programming language.
 
 ## Project Status
 
