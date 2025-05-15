@@ -1,28 +1,29 @@
 # Nature Programming Language  
   
 A general-purpose open-source programming language and compiler designed to provide developers with an **elegant and concise** development experience, enabling them to build secure and reliable cross-platform software **simply and efficiently**.  
-  
-## Features  
-  
+
+## Features
+
 - ✓ Simple, natural, consistent syntax design, even programming beginners can easily grasp, quickly get started!
-- ✓ No dependency on llvm and VM, compiles directly to target platform machine code and supports cross-compilation.
+- ✓ No dependency on llvm and VM, compiles directly to target platform machine code and supports cross-compilation
 - ✓ Simple deployment, purely static linking based on musl libc, no additional dependencies, good cross-platform characteristics
 - ✓ Comprehensive type system with support for generics, union types, interfaces, null-value safety, etc.
-- ✓ High-performance GC implementation with a very short STW (Stop The World)
+- ✓ Same high-performance GC implementation as go, with very short STW (Stop The World)
+- ✓ High-performance memory allocator implementation like go, similar to google/tcmalloc
 - ✓ High-performance shared-stack Coroutine implementation, capable of millions of Coroutine switches per second
-- ✓ Built-in libuv to handle IO event loops in collaboration with the concatenators  
+- ✓ Built-in libuv to handle IO event loops in collaboration with the concatenators
 - ✓ High-performance runtime and compiler based on a pure C implementation
 - ✓ Modularity and package management system npkg
-- ✓ Built-in implementations of common data structures and standard libraries.
-- ✓ Use try+catch for error handling, match for pattern matching, channel for concurrent communication, select for concurrent processing.
+- ✓ Built-in implementations of common data structures and standard libraries
+- ✓ Use try+catch for error handling, match for pattern matching, channel for concurrent communication, select for concurrent processing
 - ✓ Follow the system ABI, built-in libc, you can directly call the C language standard library functions to accelerate code development
 - ✓ editor lsp support
-- ○ Asymptotic GC for manual memory management.  
-- ○ Test DSL, efficient and stable utilization of AI code.  
+- ○ Asymptotic GC for manual memory management.
+- ○ Testing DSL in hopes of utilizing AI coding efficiently and consistently
 - ○ macho cross-platform linker (lack of macho linker currently prevents cross-compilation on darwin platform)
-- ○ Collaborative scheduling system  
-- ○ Cross-platform compilation support for wasm and risc64 platforms.  
-- ○ Compile to readable golang programming language.
+- ○ Collaborative scheduling system
+- ○ Cross-platform compilation support for wasm and risc64 platforms.
+- ○ Compile to readable go programming language
   
 ## Project Overview
 
@@ -40,16 +41,23 @@ The core work to follow will be to improve the usability of the nature programmi
   
 Official website: [https://nature-lang.org](https://nature-lang.org)  
 
+
 ## Design Philosophy
 
-Golang is the programming language I use at work. Its syntax is simple, and it boasts an excellent, high-performance cross-platform compiler and runtime implementation. It features an advanced coroutine design style, high-performance network I/O, and comprehensive standard library support. However, there are also some inconveniences:
+Go is the programming language I use in my daily work. Its syntax is simple, and it offers very convenient cross-compilation and deployment, a highly efficient and high-performance runtime implementation, and an advanced concurrent design style. However, it also has some inconvenient aspects:
 
-- The overly simple syntax leads to insufficient expressive power
-- The type system is not perfect, lacking features such as nullable types, enum parameters, and generics (which are now available)
-- The error handling mechanism is cumbersome
-- Although the design of automatic GC and preemptive scheduling is excellent, it also limits the application scope of golang
+- The overly simplistic syntax leads to insufficient expressive power.
+- The type system is not sufficiently comprehensive.
+- The error handling mechanism is cumbersome.
+- Although the automatic GC and preemptive scheduling designs are excellent, they also limit the application scope of go.
+- Package management methods.
+- `interface{}`
+- ...
 
-The design philosophy of nature is a continuation and optimization of the golang programming language, while also pursuing certain differences, as described in the features section. Based on the current features of the nature programming language, it is suitable for fields such as game engines and game development, scientific computing and AI, operating systems and IoT, as well as web development.
+nature is designed to be a continuation and improvement of the go programming language, and pursues certain differences. While improving the above problems, nature has runtime, GMP model, allocator, collector, coroutine, channel, std, etc. similar to go. nature also has no dependency on llvm, high compilation speed, and easy cross-compilation and deployment.
+
+Based on the existing features of the nature programming language, it is suitable for game engines and game development, scientific computing and AI, operating systems and the Internet of Things, the command line, and web development.
+
 
 ## Install  
   
