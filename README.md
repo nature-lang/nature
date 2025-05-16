@@ -18,11 +18,11 @@ A general-purpose open-source programming language and compiler designed to prov
 - ✓ Use try+catch for error handling, match for pattern matching, channel for concurrent communication, select for concurrent processing
 - ✓ Follow the system ABI, built-in libc, you can directly call the C language standard library functions to accelerate code development
 - ✓ editor lsp support
-- ○ Asymptotic GC for manual memory management.
+- ○ High-performance memory management to assist in automatic GC
 - ○ Testing DSL in hopes of utilizing AI coding efficiently and consistently
 - ○ macho cross-platform linker (lack of macho linker currently prevents cross-compilation on darwin platform)
 - ○ Collaborative scheduling system
-- ○ Cross-platform compilation support for wasm and risc64 platforms.
+- ○ Cross-platform compilation support for wasm and risc64 platforms
 - ○ Compile to readable go programming language
   
 ## Project Overview
