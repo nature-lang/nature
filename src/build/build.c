@@ -22,6 +22,9 @@
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
 
+// 新增的默认版本定义
+#define DEFAULT_MIN_MACOS_VERSION "11.0"
+#define DEFAULT_MACOS_SDK_VERSION "14.0" // 当动态获取失败时的后备 SDK 版本
 
 // char*, 支持 .o 或者 .a 文件后缀
 static slice_t *linker_libs;
@@ -535,6 +538,45 @@ static char *find_syslibroot() {
     return NULL;
 }
 
+// 新增函数：获取 macOS SDK 版本
+static char* get_macos_sdk_version() {
+    if (BUILD_OS != OS_DARWIN) {
+        return NULL;
+    }
+
+    // 尝试使用 xcrun 命令获取 SDK 版本
+    FILE *fp = popen("xcrun --sdk macosx --show-sdk-version 2>/dev/null", "r");
+    if (!fp) {
+        log_warn("Warning: Failed to run xcrun to get SDK version (popen failed)");
+        return NULL;
+    }
+
+    char version_str[64] = {0};
+    char *result_dup_str = NULL;
+
+    if (fgets(version_str, sizeof(version_str) - 1, fp) != NULL) {
+        size_t len = strlen(version_str);
+        // 移除末尾的换行符
+        if (len > 0 && version_str[len - 1] == '\n') {
+            version_str[len - 1] = '\0';
+            len--; 
+        }
+
+        result_dup_str = strdup(version_str);
+    }
+
+    // 关闭管道。pclose 会等待命令完成。
+    if (pclose(fp) == -1) {
+        log_warn("Warning: pclose failed after trying to get SDK version");
+    }
+
+    if (!result_dup_str) {
+         log_warn("Warning: Could not determine a valid SDK version via xcrun. Raw output from xcrun: '%s'. Using default SDK version.");
+    }
+
+    return result_dup_str; // 可能返回 NULL
+}
+
 /**
  * ld -w -arch arm64 -dynamic -platform_version macos 11.7.1 14.0 -e _runtime_main -o a.out ${ldflags} libruntime.a libuv.a libSystem.tbd  @objects.txt
  * ld -w -arch x86_64 -dynamic -platform_version macos 11.7.1 14.0 -e _runtime_main -o a.out libruntime.a libuv.a libSystem.tbd @objects.txt
@@ -576,11 +618,9 @@ static void custom_ld_mach_exe(slice_t *modules, char *use_ld, char *ldflags) {
     // 相关文件必须存在
     assert(file_exists(lib_file_path(LIB_RUNTIME_FILE)));
     assert(file_exists(lib_file_path(LIBUV_FILE)));
-    assert(file_exists(lib_file_path(LIBMACH_C_FILE)));
 
     slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
     slice_push(linker_libs, lib_file_path(LIBUV_FILE));
-    slice_push(linker_libs, lib_file_path(LIBMACH_C_FILE));
 
     char libs_str[4096] = ""; // 用于存储库文件路径字符串, 比如 libruntime.a
     // 拼接 linker_libs 中的库文件路径
@@ -597,16 +637,35 @@ static void custom_ld_mach_exe(slice_t *modules, char *use_ld, char *ldflags) {
         snprintf(syslibroot_option, sizeof(syslibroot_option), "-syslibroot %s ", syslibroot);
     }
 
+    // 获取 SDK 版本
+    char *sdk_version_dynamic = get_macos_sdk_version();
+    char actual_sdk_version[64];
+    if (sdk_version_dynamic) {
+        strncpy(actual_sdk_version, sdk_version_dynamic, sizeof(actual_sdk_version) - 1);
+        actual_sdk_version[sizeof(actual_sdk_version) - 1] = '\0'; // 确保 null 结尾
+        free(sdk_version_dynamic); // 释放 get_macos_sdk_version 返回的内存
+    } else {
+        // 如果动态获取失败，使用默认值
+        strncpy(actual_sdk_version, DEFAULT_MACOS_SDK_VERSION, sizeof(actual_sdk_version) - 1);
+        actual_sdk_version[sizeof(actual_sdk_version) - 1] = '\0';
+        fprintf(stderr, "Warning: Using default SDK version %s for linking.\n", actual_sdk_version);
+    }
+
+    // 构建 platform_version 参数字符串: "macos <min_version> <sdk_version>"
+    char platform_version_args[128];
+    snprintf(platform_version_args, sizeof(platform_version_args), "macos %s %s",
+             DEFAULT_MIN_MACOS_VERSION, actual_sdk_version);
 
     // 拼接出 ld 参数, libruntime.a/libuv.a/libSystem.tbd 都在 lib_file_path(LIBMACH_C_FILE)
     char *output = path_join(TEMP_DIR, LINKER_OUTPUT);
     char cmd[16384];
 
     snprintf(cmd, sizeof(cmd),
-             "%s -arch %s -dynamic -platform_version macos 11.7.1 14.0 %s"
-             "-o %s %s %s @%s 2>/dev/null",
+             "%s -w -arch %s -dynamic -platform_version %s %s"
+             "-o %s %s %s @%s -lSystem",
              use_ld,
              darwin_ld_arch,
+             platform_version_args,
              syslibroot_option,
              output,
              ldflags,
