@@ -62,8 +62,6 @@ void slice_concat_free(slice_t *dst, slice_t *src) {
  * @return
  */
 void *slice_remove(slice_t *s, int i) {
-    assert(0 < i < s->count);
-
     void *value = s->take[i];
     for (int j = i; j < s->count - 1; ++j) {
         s->take[j] = s->take[j + 1]; // 从 i 开始重拍
