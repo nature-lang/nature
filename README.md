@@ -22,7 +22,7 @@ A general-purpose open-source programming language and compiler designed to prov
 - ○ Testing DSL in hopes of utilizing AI coding efficiently and consistently
 - ○ macho cross-platform linker (lack of macho linker currently prevents cross-compilation on darwin platform)
 - ○ Collaborative scheduling system
-- ○ Cross-platform compilation support for wasm and risc64 platforms
+- ○ Cross-platform compilation support for wasm and riscv64 platforms
 - ○ Compile to readable go programming language
   
 ## Project Overview
