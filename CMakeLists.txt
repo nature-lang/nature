@@ -87,8 +87,18 @@ target_link_libraries(nature m) # 链接数学计算库
 
 # custom golang build package npkg
 set(PACKAGE_BINARY_NAME npkg)
-set(GOBIN /usr/local/go/bin/go)
 set(PACKAGE_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME})
+
+execute_process(
+    COMMAND which go
+    OUTPUT_VARIABLE GOBIN
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+if(NOT GOBIN)
+    message(FATAL_ERROR "Go executable not found")
+endif()
+
+message(STATUS "GOBIN set to: ${GOBIN}")
 
 add_custom_target(${PACKAGE_BINARY_NAME} ALL
         COMMAND CGO_ENABLED=0 GOOS=${CMAKE_SYSTEM_NAME} GOARCH=${CMAKE_SYSTEM_PROCESSOR} ${GOBIN} build -o ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} ${PROJECT_SOURCE_DIR}/package/main.go
