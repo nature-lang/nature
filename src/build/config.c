@@ -13,6 +13,8 @@ build_param_t BUILD_OS = 0;
 build_param_t BUILD_ARCH = ARCH_AMD64;
 #elif __ARM64
 build_param_t BUILD_ARCH = ARCH_ARM64;
+#elif __RISCV64
+build_param_t BUILD_ARCH = ARCH_RISCV64;
 #else
 build_param_t BUILD_ARCH = 0;
 #endif

@@ -1,7 +1,8 @@
-#include "arm64.h"
-#include "arm64_abi.h"
+#include "riscv64.h"
+#include "riscv64_abi.h"
+#include "src/register/arch/riscv64.h"
 
-static lir_operand_t *arm64_convert_use_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
+static lir_operand_t *riscv64_convert_use_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
     assert(c);
     assert(list);
     assert(operand);
@@ -14,9 +15,9 @@ static lir_operand_t *arm64_convert_use_var(closure_t *c, linked_t *list, lir_op
 }
 
 /**
- * 将 symbol 转换为 lea ptr + indirect 形式
+ * 将 symbol 转换为 la 指令形式 (RISC-V 中的加载地址指令)
  */
-static lir_operand_t *arm64_convert_lea_symbol_var(closure_t *c, linked_t *list, lir_operand_t *symbol_var_operand) {
+static lir_operand_t *riscv64_convert_lea_symbol_var(closure_t *c, linked_t *list, lir_operand_t *symbol_var_operand) {
     assert(c);
     assert(list);
     assert(symbol_var_operand);
@@ -34,7 +35,7 @@ static lir_operand_t *arm64_convert_lea_symbol_var(closure_t *c, linked_t *list,
     return lir_reset_operand(result, symbol_var_operand->pos);
 }
 
-static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
+static linked_t *riscv64_lower_imm(closure_t *c, lir_op_t *op) {
     assert(c);
     assert(op);
 
@@ -80,7 +81,7 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
             symbol_var->ident = unique_name;
 
             if (imm->kind == TYPE_RAW_STRING) {
-                // raw_string 本身就是指针类型, 首次加载时需要通过 lea 将 .data 到 raw_string 的起始地址加载到 var_operand
+                // raw_string 本身就是指针类型, 首次加载时需要通过 la 将数据段地址加载到 var_operand
                 lir_operand_t *var_operand = temp_var_operand_with_alloc(c->module, type_kind_new(TYPE_RAW_STRING));
                 lir_op_t *temp_ref = lir_op_lea(var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var));
                 linked_push(list, temp_ref);
@@ -89,7 +90,7 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
                 imm_operand->assert_type = temp_operand->assert_type;
                 imm_operand->value = temp_operand->value;
             } else {
-                // float 直接修改地址，通过 rip 寻址即可, symbol value 已经添加到全局符号表中
+                // 浮点数可以通过全局符号表访问
                 imm_operand->assert_type = LIR_OPERAND_SYMBOL_VAR;
                 imm_operand->value = symbol_var;
             }
@@ -100,15 +101,10 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
 }
 
 /**
- * symbol_var 需要通过 adrp 的形式寻址，所以这里进行 lea 形式改写， lea 在 native 阶段会改写成 adrp 的形式，注意此处只能基于 int 类型寄存器处理
- * 通过 lea 将符号地址加载到 int 类型寄存器, 假设是 x0 中后，后续的使用需要通过 indirect 来获取 x0 中的值
- *
- * 所有的 symbol_var 都会被改造成 lea 指令的形式
- * @param c
- * @param op
- * @return
+ * 在RISC-V中处理符号变量
+ * RISC-V使用la指令加载符号地址，这需要处理为两条指令：auipc+addi
  */
-static linked_t *arm64_lower_symbol_var(closure_t *c, lir_op_t *op) {
+static linked_t *riscv64_lower_symbol_var(closure_t *c, lir_op_t *op) {
     assert(c);
     assert(op);
 
@@ -120,39 +116,39 @@ static linked_t *arm64_lower_symbol_var(closure_t *c, lir_op_t *op) {
     }
 
     if (op->first && op->first->assert_type == LIR_OPERAND_SYMBOL_VAR) {
-        op->first = arm64_convert_lea_symbol_var(c, list, op->first);
+        op->first = riscv64_convert_lea_symbol_var(c, list, op->first);
     }
 
     if (op->second && op->second->assert_type == LIR_OPERAND_SYMBOL_VAR) {
-        op->second = arm64_convert_lea_symbol_var(c, list, op->second);
+        op->second = riscv64_convert_lea_symbol_var(c, list, op->second);
     }
 
     if (op->output && op->output->assert_type == LIR_OPERAND_SYMBOL_VAR) {
-        op->output = arm64_convert_lea_symbol_var(c, list, op->output);
+        op->output = riscv64_convert_lea_symbol_var(c, list, op->output);
     }
 
     return list;
 }
 
-
 /**
- * 按照 arm64 规定
- * first 必须是寄存器, second 必须是寄存器或者立即数
+ * 根据RISC-V规范处理比较指令
+ * RISC-V中的比较通常通过分支指令或者set指令实现
  */
-static linked_t *arm64_lower_cmp(closure_t *c, lir_op_t *op) {
+static linked_t *riscv64_lower_cmp(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
+    // RISC-V中比较操作的两个操作数都需要在寄存器中
     if (op->first->assert_type != LIR_OPERAND_VAR) {
-        op->first = arm64_convert_use_var(c, list, op->first);
+        op->first = riscv64_convert_use_var(c, list, op->first);
     }
 
     if (op->second->assert_type != LIR_OPERAND_VAR && op->second->assert_type != LIR_OPERAND_IMM) {
-        op->second = arm64_convert_use_var(c, list, op->second);
+        op->second = riscv64_convert_use_var(c, list, op->second);
     }
 
     linked_push(list, op);
 
-    // 这会导致 def 消失，可为什么 def 是 indirect addr 这也很奇怪
+    // 处理需要设置条件码的情况
     if (lir_op_scc(op) && op->output->assert_type != LIR_OPERAND_VAR) {
         lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(op->output));
         assert(temp);
@@ -166,16 +162,20 @@ static linked_t *arm64_lower_cmp(closure_t *c, lir_op_t *op) {
     return list;
 }
 
-static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
+/**
+ * 处理三元运算（算术和逻辑操作）
+ */
+static linked_t *riscv64_lower_ternary(closure_t *c, lir_op_t *op) {
     assert(op->first && op->output);
 
     linked_t *list = linked_new();
 
-    // 所有的三元运算的 output 和 first 必须是 var, 这样才能分配到寄存器
+    // 确保操作数在寄存器中
     if (op->first->assert_type != LIR_OPERAND_VAR) {
-        op->first = arm64_convert_use_var(c, list, op->first);
+        op->first = riscv64_convert_use_var(c, list, op->first);
     }
 
+    // RISC-V对这些指令要求两个操作数都在寄存器中
     if (op->code == LIR_OPCODE_MUL ||
         op->code == LIR_OPCODE_UDIV ||
         op->code == LIR_OPCODE_UREM ||
@@ -184,12 +184,12 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
         op->code == LIR_OPCODE_XOR ||
         op->code == LIR_OPCODE_OR ||
         op->code == LIR_OPCODE_AND) {
-        op->second = arm64_convert_use_var(c, list, op->second);
+        op->second = riscv64_convert_use_var(c, list, op->second);
     }
 
     linked_push(list, op);
 
-    // 如果 output 不是 var 会导致 arm64 指令异常
+    // 确保输出操作数是变量（可分配到寄存器）
     if (op->output->assert_type != LIR_OPERAND_VAR) {
         lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(op->output));
         assert(temp);
@@ -199,40 +199,34 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
 
         linked_push(list, lir_op_move(dst, op->output));
     }
-
-    return list;
-}
-
-static linked_t *arm64_lower_safepoint(closure_t *c, lir_op_t *op) {
-    linked_t *list = linked_new();
-
-
-    // 创建临时寄存器存储标志地址
-    lir_operand_t *result_reg = lir_reg_operand(x0->index, TYPE_ANYPTR);
-    op->output = result_reg;
-
-    // 增加 label continue
-    linked_push(list, op);
-
 
     return list;
 }
 
 /**
- * lea sym -> [t]
- * -->
- * lea sym -> t0
- * mov t0 -> [t] // t0 存储的已经是地址了，直接 mov 过去就行
- *
- * @param c
- * @param op
- * @return
+ * 处理安全点指令
  */
-static linked_t *arm64_lower_lea(closure_t *c, lir_op_t *op) {
+static linked_t *riscv64_lower_safepoint(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+
+    // 创建临时寄存器存储标志地址，使用a0寄存器
+    lir_operand_t *result_reg = lir_reg_operand(A0->index, TYPE_ANYPTR);
+    op->output = result_reg;
+
+    linked_push(list, op);
+
+    return list;
+}
+
+/**
+ * 处理加载有效地址指令
+ * RISC-V使用la伪指令（auipc+addi）或者lui+addi实现
+ */
+static linked_t *riscv64_lower_lea(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
     linked_push(list, op);
 
-    // 这会导致 def 消失，可为什么 def 是 indirect addr 这也很奇怪
+    // 确保输出是变量（可分配到寄存器）
     if (op->output->assert_type != LIR_OPERAND_VAR) {
         lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(op->output));
         assert(temp);
@@ -246,15 +240,20 @@ static linked_t *arm64_lower_lea(closure_t *c, lir_op_t *op) {
     return list;
 }
 
-
-static linked_t *arm64_lower_output(closure_t *c, lir_op_t *op) {
+/**
+ * 处理输出操作数
+ */
+static linked_t *riscv64_lower_output(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
-    op->output = arm64_convert_use_var(c, list, op->output);
+    op->output = riscv64_convert_use_var(c, list, op->output);
     linked_push(list, op);
     return list;
 }
 
-static void arm64_lower_block(closure_t *c, basic_block_t *block) {
+/**
+ * 处理基本块中的所有指令
+ */
+static void riscv64_lower_block(closure_t *c, basic_block_t *block) {
     assert(c);
     assert(block);
 
@@ -262,19 +261,19 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
     LINKED_FOR(block->operations) {
         lir_op_t *op = LINKED_VALUE();
 
-        linked_concat(operations, arm64_lower_imm(c, op));
-        linked_concat(operations, arm64_lower_symbol_var(c, op));
+        linked_concat(operations, riscv64_lower_imm(c, op));
+        linked_concat(operations, riscv64_lower_symbol_var(c, op));
 
         if (lir_op_call(op) && op->second->value != NULL) {
-            linked_t *call_operations = arm64_lower_call(c, op);
+            linked_t *call_operations = riscv64_lower_call(c, op);
             for (linked_node *call_node = call_operations->front; call_node != call_operations->rear;
                  call_node = call_node->succ) {
                 lir_op_t *temp_op = call_node->value;
 
-                linked_concat(operations, arm64_lower_symbol_var(c, temp_op));
+                linked_concat(operations, riscv64_lower_symbol_var(c, temp_op));
 
                 if (temp_op->code == LIR_OPCODE_MOVE && !lir_can_mov(temp_op)) {
-                    temp_op->first = arm64_convert_use_var(c, operations, temp_op->first);
+                    temp_op->first = riscv64_convert_use_var(c, operations, temp_op->first);
                     linked_push(operations, temp_op);
                     continue;
                 }
@@ -285,37 +284,37 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
         }
 
         if (op->code == LIR_OPCODE_FN_BEGIN) {
-            linked_concat(operations, arm64_lower_fn_begin(c, op));
+            linked_concat(operations, riscv64_lower_fn_begin(c, op));
             continue;
         }
 
         if (op->code == LIR_OPCODE_FN_END) {
-            linked_concat(operations, arm64_lower_fn_end(c, op));
+            linked_concat(operations, riscv64_lower_fn_end(c, op));
             continue;
         }
 
         if (op->code == LIR_OPCODE_SAFEPOINT) {
-            linked_concat(operations, arm64_lower_safepoint(c, op));
+            linked_concat(operations, riscv64_lower_safepoint(c, op));
             continue;
         }
 
         if (op->code == LIR_OPCODE_LEA) {
-            linked_concat(operations, arm64_lower_lea(c, op));
+            linked_concat(operations, riscv64_lower_lea(c, op));
             continue;
         }
 
         if (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT || op->code == LIR_OPCODE_NEG || lir_op_convert(op)) {
-            linked_concat(operations, arm64_lower_ternary(c, op));
+            linked_concat(operations, riscv64_lower_ternary(c, op));
             continue;
         }
 
         if (lir_op_contain_cmp(op)) {
-            linked_concat(operations, arm64_lower_cmp(c, op));
+            linked_concat(operations, riscv64_lower_cmp(c, op));
             continue;
         }
 
         if (op->code == LIR_OPCODE_MOVE && !lir_can_mov(op)) {
-            op->first = arm64_convert_use_var(c, operations, op->first);
+            op->first = riscv64_convert_use_var(c, operations, op->first);
             linked_push(operations, op);
             continue;
         }
@@ -326,11 +325,14 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
     block->operations = operations;
 }
 
-void arm64_lower(closure_t *c) {
+/**
+ * RISC-V 64位架构的指令降级处理入口函数
+ */
+void riscv64_lower(closure_t *c) {
     // 按基本块遍历所有指令
     SLICE_FOR(c->blocks) {
         basic_block_t *block = SLICE_VALUE(c->blocks);
-        arm64_lower_block(c, block);
+        riscv64_lower_block(c, block);
 
         // 设置 block 的首尾 op
         lir_set_quick_op(block);

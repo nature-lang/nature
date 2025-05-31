@@ -19,21 +19,21 @@ typedef enum {
 extern build_param_t BUILD_OS;
 extern build_param_t BUILD_ARCH;
 
-extern char *NATURE_ROOT;// linux/darwin/freebsd default root
+extern char *NATURE_ROOT; // linux/darwin/freebsd default root
 
-extern char BUILD_OUTPUT_NAME[PATH_MAX];// main
+extern char BUILD_OUTPUT_NAME[PATH_MAX]; // main
 extern char BUILD_OUTPUT_DIR[PATH_MAX]; // default is work_dir test 使用，指定编译路径输出文件
-extern char BUILD_OUTPUT[PATH_MAX];     // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
+extern char BUILD_OUTPUT[PATH_MAX]; // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
 
 extern char *WORKDIR; // 执行 shell 命令所在的目录(import 搜索将会基于该目录进行文件搜索)
 extern char *BASE_NS; // 最后一级目录的名称，也可以自定义
-extern char *TEMP_DIR;// 链接临时目录
+extern char *TEMP_DIR; // 链接临时目录
 
 extern char USE_LD[1024]; // 自定义链接器
 extern char LDFLAGS[1024]; // 自定义链接器参数
 
-extern char *BUILD_ENTRY;         // nature build {test/main.n} 花括号包起来的这部分
-extern char SOURCE_PATH[PATH_MAX];// /opt/test/main.n 的绝对路径
+extern char *BUILD_ENTRY; // nature build {test/main.n} 花括号包起来的这部分
+extern char SOURCE_PATH[PATH_MAX]; // /opt/test/main.n 的绝对路径
 
 #define LD_ENTRY "runtime_main"
 
@@ -67,7 +67,7 @@ static inline char *temp_dir() {
     }
 
     return tmp_dir;
-    ERROR:
+ERROR:
     assertf(false, "[cross_tmp_dir] unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH);
     exit(1);
 }
@@ -101,6 +101,9 @@ static inline char *arch_to_string(uint8_t arch) {
     if (arch == ARCH_ARM64) {
         return "arm64";
     }
+    if (arch == ARCH_RISCV64) {
+        return "riscv64";
+    }
     return NULL;
 }
 
@@ -120,6 +123,9 @@ static inline uint8_t arch_to_uint8(char *arch) {
     }
     if (str_equal(arch, "arm64")) {
         return ARCH_ARM64;
+    }
+    if (str_equal(arch, "riscv64")) {
+        return ARCH_RISCV64;
     }
     return 0;
 }
@@ -154,7 +160,7 @@ static inline void env_init() {
         assertf(false, "only support compiles to os linux/darwin");
     }
 
-    if (BUILD_ARCH != ARCH_AMD64 && BUILD_ARCH != ARCH_ARM64) {
+    if (BUILD_ARCH != ARCH_AMD64 && BUILD_ARCH != ARCH_ARM64 && BUILD_ARCH != ARCH_RISCV64) {
         assertf(false,
                 "unsupported architecture. set BUILD_ARCH=amd64 or BUILD_ARCH=arm64 env to compile.");
     }
@@ -177,4 +183,4 @@ static inline void env_init() {
 }
 
 
-#endif//NATURE_ENV_H
+#endif //NATURE_ENV_H

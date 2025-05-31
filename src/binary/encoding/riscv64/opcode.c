@@ -6,157 +6,157 @@
 
 // raw_opcode to opcode
 riscv64_opr_flags_list riscv64_opcode_map[] = {
-        [R_MV] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_MV, {RISCV64_R64, RISCV64_R64}}}},
-        [R_LI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LI, {RISCV64_R64, RISCV64_IMM}}}},
-        [R_LA] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LA, {RISCV64_R64, RISCV64_SYM}}}},
-        [R_ADD] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ADD, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_ADDW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ADDW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_ADDI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ADDI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
-        [R_ADDIW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ADDIW, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
-        [R_SUB] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SUB, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_SUBW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SUBW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_MUL] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_MUL, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_MULW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_MULW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_DIV] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_DIV, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_DIVW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_DIVW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_DIVU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_DIVU, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_DIVUW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_DIVUW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_REM] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_REM, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_REMW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_REMW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_REMU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_REMU, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_REMUW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_REMUW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_AND] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_AND, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_ANDI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ANDI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
-        [R_OR] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_OR, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_ORI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ORI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
-        [R_XOR] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_XOR, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_XORI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_XORI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
-        [R_NEG] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_NEG, {RISCV64_R64, RISCV64_R64}}}},
-        [R_NOT] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_NOT, {RISCV64_R64, RISCV64_R64}}}},
-        [R_SEXT_B] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SEXT_B, {RISCV64_R64, RISCV64_R64}}}},
-        [R_SEXT_H] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SEXT_H, {RISCV64_R64, RISCV64_R64}}}},
-        [R_SEXT_W] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SEXT_W, {RISCV64_R64, RISCV64_R64}}}},
-        [R_ZEXT_B] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ZEXT_B, {RISCV64_R64, RISCV64_R64}}}},
-        [R_ZEXT_H] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ZEXT_H, {RISCV64_R64, RISCV64_R64}}}},
-        [R_ZEXT_W] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ZEXT_W, {RISCV64_R64, RISCV64_R64}}}},
-        [R_SLL] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLL, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_SLLW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLLW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_SLLI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLLI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
-        [R_SLLIW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLLIW, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
-        [R_SRL] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRL, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_SRLW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRLW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_SRLI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRLI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
-        [R_SRLIW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRLIW, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
-        [R_SRA] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRA, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_SRAW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRAW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_SRAI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRAI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
-        [R_SRAIW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRAIW, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
-        [R_LB] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LB, {RISCV64_R64, RISCV64_IND}}}},
-        [R_LH] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LH, {RISCV64_R64, RISCV64_IND}}}},
-        [R_LW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LW, {RISCV64_R64, RISCV64_IND}}}},
-        [R_LD] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LD, {RISCV64_R64, RISCV64_IND}}}},
-        [R_LBU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LBU, {RISCV64_R64, RISCV64_IND}}}},
-        [R_LHU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LHU, {RISCV64_R64, RISCV64_IND}}}},
-        [R_LWU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LWU, {RISCV64_R64, RISCV64_IND}}}},
-        [R_SB] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SB, {RISCV64_R64, RISCV64_IND}}}},
-        [R_SH] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SH, {RISCV64_R64, RISCV64_IND}}}},
-        [R_SW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SW, {RISCV64_R64, RISCV64_IND}}}},
-        [R_SD] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SD, {RISCV64_R64, RISCV64_IND}}}},
-        [R_SLT] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLT, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_SLTI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLTI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
-        [R_SLTU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLTU, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
-        [R_SLTIU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLTIU, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
-        [R_SEQZ] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SEQZ, {RISCV64_R64, RISCV64_R64}}}},
-        [R_SNEZ] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SNEZ, {RISCV64_R64, RISCV64_R64}}}},
-        [R_SLTZ] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLTZ, {RISCV64_R64, RISCV64_R64}}}},
-        [R_SGTZ] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SGTZ, {RISCV64_R64, RISCV64_R64}}}},
-        [R_J] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_J, {RISCV64_SYM}}}},
-        [R_JR] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_JR, {RISCV64_R64}}}},
-        [R_JALR] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_JALR, {RISCV64_R64}}}},
-        [R_BEQ] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_BEQ, {RISCV64_R64, RISCV64_R64, RISCV64_SYM | RISCV64_IMM}}}},
-        [R_BNE] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_BNE, {RISCV64_R64, RISCV64_R64, RISCV64_SYM | RISCV64_IMM}}}},
-        [R_BLT] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_BLT, {RISCV64_R64, RISCV64_R64, RISCV64_SYM | RISCV64_IMM}}}},
-        [R_BGE] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_BGE, {RISCV64_R64, RISCV64_R64, RISCV64_SYM | RISCV64_IMM}}}},
-        [R_BLTU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_BLTU, {RISCV64_R64, RISCV64_R64, RISCV64_SYM | RISCV64_IMM}}}},
-        [R_BGEU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_BGEU, {RISCV64_R64, RISCV64_R64, RISCV64_SYM | RISCV64_IMM}}}},
-        [R_CALL] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_CALL, {RISCV64_SYM}}}},
-        [R_RET] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_RET}}},
-        [R_ECALL] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ECALL}}},
+        [RV_MV] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_MV, {RISCV64_R64, RISCV64_R64}}}},
+        [RV_LI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LI, {RISCV64_R64, RISCV64_IMM}}}},
+        [RV_LA] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LA, {RISCV64_R64, RISCV64_SYM}}}},
+        [RV_ADD] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ADD, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_ADDW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ADDW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_ADDI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ADDI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
+        [RV_ADDIW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ADDIW, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
+        [RV_SUB] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SUB, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_SUBW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SUBW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_MUL] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_MUL, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_MULW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_MULW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_DIV] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_DIV, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_DIVW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_DIVW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_DIVU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_DIVU, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_DIVUW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_DIVUW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_REM] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_REM, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_REMW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_REMW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_REMU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_REMU, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_REMUW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_REMUW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_AND] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_AND, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_ANDI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ANDI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
+        [RV_OR] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_OR, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_ORI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ORI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
+        [RV_XOR] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_XOR, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_XORI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_XORI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
+        [RV_NEG] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_NEG, {RISCV64_R64, RISCV64_R64}}}},
+        [RV_NOT] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_NOT, {RISCV64_R64, RISCV64_R64}}}},
+        [RV_SEXT_B] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SEXT_B, {RISCV64_R64, RISCV64_R64}}}},
+        [RV_SEXT_H] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SEXT_H, {RISCV64_R64, RISCV64_R64}}}},
+        [RV_SEXT_W] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SEXT_W, {RISCV64_R64, RISCV64_R64}}}},
+        [RV_ZEXT_B] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ZEXT_B, {RISCV64_R64, RISCV64_R64}}}},
+        [RV_ZEXT_H] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ZEXT_H, {RISCV64_R64, RISCV64_R64}}}},
+        [RV_ZEXT_W] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ZEXT_W, {RISCV64_R64, RISCV64_R64}}}},
+        [RV_SLL] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLL, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_SLLW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLLW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_SLLI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLLI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
+        [RV_SLLIW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLLIW, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
+        [RV_SRL] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRL, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_SRLW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRLW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_SRLI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRLI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
+        [RV_SRLIW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRLIW, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
+        [RV_SRA] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRA, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_SRAW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRAW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_SRAI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRAI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
+        [RV_SRAIW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SRAIW, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
+        [RV_LB] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LB, {RISCV64_R64, RISCV64_IND}}}},
+        [RV_LH] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LH, {RISCV64_R64, RISCV64_IND}}}},
+        [RV_LW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LW, {RISCV64_R64, RISCV64_IND}}}},
+        [RV_LD] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LD, {RISCV64_R64, RISCV64_IND}}}},
+        [RV_LBU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LBU, {RISCV64_R64, RISCV64_IND}}}},
+        [RV_LHU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LHU, {RISCV64_R64, RISCV64_IND}}}},
+        [RV_LWU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_LWU, {RISCV64_R64, RISCV64_IND}}}},
+        [RV_SB] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SB, {RISCV64_R64, RISCV64_IND}}}},
+        [RV_SH] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SH, {RISCV64_R64, RISCV64_IND}}}},
+        [RV_SW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SW, {RISCV64_R64, RISCV64_IND}}}},
+        [RV_SD] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SD, {RISCV64_R64, RISCV64_IND}}}},
+        [RV_SLT] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLT, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_SLTI] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLTI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
+        [RV_SLTU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLTU, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
+        [RV_SLTIU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLTIU, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
+        [RV_SEQZ] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SEQZ, {RISCV64_R64, RISCV64_R64}}}},
+        [RV_SNEZ] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SNEZ, {RISCV64_R64, RISCV64_R64}}}},
+        [RV_SLTZ] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SLTZ, {RISCV64_R64, RISCV64_R64}}}},
+        [RV_SGTZ] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_SGTZ, {RISCV64_R64, RISCV64_R64}}}},
+        [RV_J] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_J, {RISCV64_SYM}}}},
+        [RV_JR] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_JR, {RISCV64_R64}}}},
+        [RV_JALR] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_JALR, {RISCV64_R64}}}},
+        [RV_BEQ] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_BEQ, {RISCV64_R64, RISCV64_R64, RISCV64_SYM | RISCV64_IMM}}}},
+        [RV_BNE] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_BNE, {RISCV64_R64, RISCV64_R64, RISCV64_SYM | RISCV64_IMM}}}},
+        [RV_BLT] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_BLT, {RISCV64_R64, RISCV64_R64, RISCV64_SYM | RISCV64_IMM}}}},
+        [RV_BGE] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_BGE, {RISCV64_R64, RISCV64_R64, RISCV64_SYM | RISCV64_IMM}}}},
+        [RV_BLTU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_BLTU, {RISCV64_R64, RISCV64_R64, RISCV64_SYM | RISCV64_IMM}}}},
+        [RV_BGEU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_BGEU, {RISCV64_R64, RISCV64_R64, RISCV64_SYM | RISCV64_IMM}}}},
+        [RV_CALL] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_CALL, {RISCV64_SYM}}}},
+        [RV_RET] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_RET}}},
+        [RV_ECALL] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_ECALL}}},
 
-        [R_FADD_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FADD_D, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FADD_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FADD_S, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FSUB_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSUB_D, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FSUB_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSUB_S, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FMUL_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FMUL_D, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FMUL_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FMUL_S, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FDIV_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FDIV_D, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FDIV_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FDIV_S, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FSQRT_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSQRT_D, {RISCV64_F64, RISCV64_F64}}}},
-        [R_FSQRT_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSQRT_S, {RISCV64_F64, RISCV64_F64}}}},
-        [R_FSGNJ_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSGNJ_D, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FSGNJ_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSGNJ_S, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FSGNJN_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSGNJN_D, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FSGNJN_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSGNJN_S, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FSGNJX_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSGNJX_D, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FSGNJX_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSGNJX_S, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FMV_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FMV_D, {RISCV64_F64, RISCV64_F64}}}},
-        [R_FMV_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FMV_S, {RISCV64_F64, RISCV64_F64}}}},
-        [R_FNEG_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FNEG_D, {RISCV64_F64, RISCV64_F64}}}},
-        [R_FNEG_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FNEG_S, {RISCV64_F64, RISCV64_F64}}}},
-        [R_FMV_X_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FMV_X_D, {RISCV64_R64, RISCV64_F64}}}},
-        [R_FMV_X_W] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FMV_X_W, {RISCV64_R64, RISCV64_F64}}}},
-        [R_FEQ_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FEQ_D, {RISCV64_R64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FEQ_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FEQ_S, {RISCV64_R64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FLT_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FLT_D, {RISCV64_R64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FLT_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FLT_S, {RISCV64_R64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FLE_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FLE_D, {RISCV64_R64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FLE_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FLE_S, {RISCV64_R64, RISCV64_F64, RISCV64_F64}}}},
-        [R_FLD] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FLD, {RISCV64_F64, RISCV64_IND}}}},
-        [R_FLW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FLW, {RISCV64_F64, RISCV64_IND}}}},
-        [R_FSD] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSD, {RISCV64_F64, RISCV64_IND}}}},
-        [R_FSW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSW, {RISCV64_F64, RISCV64_IND}}}},
-        [R_FCVT_D_W] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_D_W, {RISCV64_F64, RISCV64_R64}}}},
-        [R_FCVT_D_WU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_D_WU, {RISCV64_F64, RISCV64_R64}}}},
-        [R_FCVT_D_L] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_D_L, {RISCV64_F64, RISCV64_R64}}}},
-        [R_FCVT_D_LU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_D_LU, {RISCV64_F64, RISCV64_R64}}}},
-        [R_FCVT_W_D] = {2, (riscv64_opr_flags *[]){
+        [RV_FADD_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FADD_D, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FADD_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FADD_S, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FSUB_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSUB_D, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FSUB_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSUB_S, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FMUL_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FMUL_D, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FMUL_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FMUL_S, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FDIV_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FDIV_D, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FDIV_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FDIV_S, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FSQRT_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSQRT_D, {RISCV64_F64, RISCV64_F64}}}},
+        [RV_FSQRT_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSQRT_S, {RISCV64_F64, RISCV64_F64}}}},
+        [RV_FSGNJ_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSGNJ_D, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FSGNJ_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSGNJ_S, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FSGNJN_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSGNJN_D, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FSGNJN_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSGNJN_S, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FSGNJX_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSGNJX_D, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FSGNJX_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSGNJX_S, {RISCV64_F64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FMV_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FMV_D, {RISCV64_F64, RISCV64_F64}}}},
+        [RV_FMV_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FMV_S, {RISCV64_F64, RISCV64_F64}}}},
+        [RV_FNEG_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FNEG_D, {RISCV64_F64, RISCV64_F64}}}},
+        [RV_FNEG_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FNEG_S, {RISCV64_F64, RISCV64_F64}}}},
+        [RV_FMV_X_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FMV_X_D, {RISCV64_R64, RISCV64_F64}}}},
+        [RV_FMV_X_W] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FMV_X_W, {RISCV64_R64, RISCV64_F64}}}},
+        [RV_FEQ_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FEQ_D, {RISCV64_R64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FEQ_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FEQ_S, {RISCV64_R64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FLT_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FLT_D, {RISCV64_R64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FLT_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FLT_S, {RISCV64_R64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FLE_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FLE_D, {RISCV64_R64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FLE_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FLE_S, {RISCV64_R64, RISCV64_F64, RISCV64_F64}}}},
+        [RV_FLD] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FLD, {RISCV64_F64, RISCV64_IND}}}},
+        [RV_FLW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FLW, {RISCV64_F64, RISCV64_IND}}}},
+        [RV_FSD] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSD, {RISCV64_F64, RISCV64_IND}}}},
+        [RV_FSW] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FSW, {RISCV64_F64, RISCV64_IND}}}},
+        [RV_FCVT_D_W] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_D_W, {RISCV64_F64, RISCV64_R64}}}},
+        [RV_FCVT_D_WU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_D_WU, {RISCV64_F64, RISCV64_R64}}}},
+        [RV_FCVT_D_L] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_D_L, {RISCV64_F64, RISCV64_R64}}}},
+        [RV_FCVT_D_LU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_D_LU, {RISCV64_F64, RISCV64_R64}}}},
+        [RV_FCVT_W_D] = {2, (riscv64_opr_flags *[]){
                                    &(riscv64_opr_flags){O_FCVT_W_D, {RISCV64_R64, RISCV64_F64}},
                                    &(riscv64_opr_flags){O_FCVT_W_D, {RISCV64_R64, RISCV64_F64, RISCV64_RND}},
                            }},
-        [R_FCVT_WU_D] = {2, (riscv64_opr_flags *[]){
+        [RV_FCVT_WU_D] = {2, (riscv64_opr_flags *[]){
                                     &(riscv64_opr_flags){O_FCVT_WU_D, {RISCV64_R64, RISCV64_F64}},
                                     &(riscv64_opr_flags){O_FCVT_WU_D, {RISCV64_R64, RISCV64_F64, RISCV64_RND}},
                             }},
-        [R_FCVT_L_D] = {2, (riscv64_opr_flags *[]){
+        [RV_FCVT_L_D] = {2, (riscv64_opr_flags *[]){
                                    &(riscv64_opr_flags){O_FCVT_L_D, {RISCV64_R64, RISCV64_F64}},
                                    &(riscv64_opr_flags){O_FCVT_L_D, {RISCV64_R64, RISCV64_F64, RISCV64_RND}},
                            }},
-        [R_FCVT_LU_D] = {2, (riscv64_opr_flags *[]){
+        [RV_FCVT_LU_D] = {2, (riscv64_opr_flags *[]){
                                     &(riscv64_opr_flags){O_FCVT_LU_D, {RISCV64_R64, RISCV64_F64}},
                                     &(riscv64_opr_flags){O_FCVT_LU_D, {RISCV64_R64, RISCV64_F64, RISCV64_RND}},
                             }},
-        [R_FCVT_S_W] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_S_W, {RISCV64_F64, RISCV64_R64}}}},
-        [R_FCVT_S_WU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_S_WU, {RISCV64_F64, RISCV64_R64}}}},
-        [R_FCVT_S_L] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_S_L, {RISCV64_F64, RISCV64_R64}}}},
-        [R_FCVT_S_LU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_S_LU, {RISCV64_F64, RISCV64_R64}}}},
-        [R_FCVT_W_S] = {2, (riscv64_opr_flags *[]){
+        [RV_FCVT_S_W] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_S_W, {RISCV64_F64, RISCV64_R64}}}},
+        [RV_FCVT_S_WU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_S_WU, {RISCV64_F64, RISCV64_R64}}}},
+        [RV_FCVT_S_L] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_S_L, {RISCV64_F64, RISCV64_R64}}}},
+        [RV_FCVT_S_LU] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_S_LU, {RISCV64_F64, RISCV64_R64}}}},
+        [RV_FCVT_W_S] = {2, (riscv64_opr_flags *[]){
                                    &(riscv64_opr_flags){O_FCVT_W_S, {RISCV64_R64, RISCV64_F64}},
                                    &(riscv64_opr_flags){O_FCVT_W_S, {RISCV64_R64, RISCV64_F64, RISCV64_RND}},
                            }},
-        [R_FCVT_WU_S] = {2, (riscv64_opr_flags *[]){
+        [RV_FCVT_WU_S] = {2, (riscv64_opr_flags *[]){
                                     &(riscv64_opr_flags){O_FCVT_WU_S, {RISCV64_R64, RISCV64_F64}},
                                     &(riscv64_opr_flags){O_FCVT_WU_S, {RISCV64_R64, RISCV64_F64, RISCV64_RND}},
                             }},
-        [R_FCVT_L_S] = {2, (riscv64_opr_flags *[]){
+        [RV_FCVT_L_S] = {2, (riscv64_opr_flags *[]){
                                    &(riscv64_opr_flags){O_FCVT_L_S, {RISCV64_R64, RISCV64_F64}},
                                    &(riscv64_opr_flags){O_FCVT_L_S, {RISCV64_R64, RISCV64_F64, RISCV64_RND}},
                            }},
-        [R_FCVT_LU_S] = {2, (riscv64_opr_flags *[]){
+        [RV_FCVT_LU_S] = {2, (riscv64_opr_flags *[]){
                                     &(riscv64_opr_flags){O_FCVT_LU_S, {RISCV64_R64, RISCV64_F64}},
                                     &(riscv64_opr_flags){O_FCVT_LU_S, {RISCV64_R64, RISCV64_F64, RISCV64_RND}},
                             }},
-        [R_FCVT_D_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_D_S, {RISCV64_F64, RISCV64_F64}}}},
-        [R_FCVT_S_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_S_D, {RISCV64_F64, RISCV64_F64}}}},
+        [RV_FCVT_D_S] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_D_S, {RISCV64_F64, RISCV64_F64}}}},
+        [RV_FCVT_S_D] = {1, (riscv64_opr_flags *[]){&(riscv64_opr_flags){O_FCVT_S_D, {RISCV64_F64, RISCV64_F64}}}},
 };
 
 
@@ -395,7 +395,7 @@ static unsigned char *asm_2ri(riscv64_asm_inst_t *inst) {
             }
         }
 
-        if (inst->opcode == O_ADDI && rd == SP->index && is_im6(imm >> 4) && (imm & 0xf) == 0 && imm != 0) {
+        if (inst->opcode == O_ADDI && rd == R_SP->index && is_im6(imm >> 4) && (imm & 0xf) == 0 && imm != 0) {
             C_ADDI16SP(imm);
             return inst->opcode_data;
         }
@@ -612,7 +612,7 @@ static unsigned char *asm_ld(riscv64_asm_inst_t *inst) {
             W_LW(rd, ofs, rs);
             return inst->opcode_data;
         case O_LD:
-            if (ofs >= 0 && ofs < (1 << 9) && (ofs & 7) == 0 && rs == SP->index) {
+            if (ofs >= 0 && ofs < (1 << 9) && (ofs & 7) == 0 && rs == R_SP->index) {
                 C_LDSP(rd, ofs);
                 return inst->opcode_data;
             }
@@ -662,7 +662,7 @@ static unsigned char *asm_sd(riscv64_asm_inst_t *inst) {
             W_SW(rs2, ofs, rs1);
             return inst->opcode_data;
         case O_SD:
-            if (ofs >= 0 && ofs < (1 << 9) && (ofs & 7) == 0 && rs1 == SP->index) {
+            if (ofs >= 0 && ofs < (1 << 9) && (ofs & 7) == 0 && rs1 == R_SP->index) {
                 C_SDSP(rs2, ofs);
                 return inst->opcode_data;
             }
@@ -887,7 +887,7 @@ static unsigned char *asm_fld(riscv64_asm_inst_t *inst) {
     int64_t ofs = inst->operands[1]->indirect.offset;
     int rs = inst->operands[1]->indirect.reg->index;
     if (inst->opcode == O_FLD) {
-        if (ofs >= 0 && ofs < (1 << 9) && (ofs & 7) == 0 && rs == SP->index) {
+        if (ofs >= 0 && ofs < (1 << 9) && (ofs & 7) == 0 && rs == R_SP->index) {
             C_FLDSP(rd, ofs);
             return inst->opcode_data;
         }
@@ -916,7 +916,7 @@ static unsigned char *asm_fsd(riscv64_asm_inst_t *inst) {
     int rs2 = inst->operands[0]->reg.index;
     int rs1 = inst->operands[1]->indirect.reg->index;
     if (inst->opcode == O_FSD) {
-        if (ofs >= 0 && ofs < (1 << 9) && (ofs & 7) == 0 && rs1 == SP->index) {
+        if (ofs >= 0 && ofs < (1 << 9) && (ofs & 7) == 0 && rs1 == R_SP->index) {
             C_FSDSP(rs2, ofs);
             return inst->opcode_data;
         }

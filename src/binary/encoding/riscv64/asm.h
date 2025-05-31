@@ -58,135 +58,135 @@
 })
 
 typedef enum {
-    R_NOOP,
-    R_MV,
-    R_LI,
-    R_LA,
-    R_ADD,
-    R_ADDW,
-    R_ADDI,
-    R_ADDIW,
-    R_SUB,
-    R_SUBW,
-    R_MUL,
-    R_MULW,
-    R_DIV,
-    R_DIVU,
-    R_DIVW,
-    R_DIVUW,
-    R_REM,
-    R_REMU,
-    R_REMW,
-    R_REMUW,
-    R_AND,
-    R_ANDI,
-    R_OR,
-    R_ORI,
-    R_XOR,
-    R_XORI,
-    R_NEG,
-    R_NOT,
-    R_SEXT_B,
-    R_SEXT_H,
-    R_SEXT_W,
-    R_ZEXT_B,
-    R_ZEXT_H,
-    R_ZEXT_W,
-    R_SLL,
-    R_SLLW,
-    R_SLLI,
-    R_SLLIW,
-    R_SRL,
-    R_SRLW,
-    R_SRLI,
-    R_SRLIW,
-    R_SRA,
-    R_SRAW,
-    R_SRAI,
-    R_SRAIW,
-    R_LB,
-    R_LH,
-    R_LW,
-    R_LD,
-    R_LBU,
-    R_LHU,
-    R_LWU,
-    R_SB,
-    R_SH,
-    R_SW,
-    R_SD,
-    R_SLT,
-    R_SLTU,
-    R_SLTI,
-    R_SLTIU,
-    R_SEQZ,
-    R_SNEZ,
-    R_SLTZ,
-    R_SGTZ,
-    R_J,
-    R_JR,
-    R_JALR,
-    R_BEQ,
-    R_BNE,
-    R_BLT,
-    R_BGE,
-    R_BLTU,
-    R_BGEU,
-    R_CALL,
-    R_RET,
-    R_ECALL,
+    RV_NOOP,
+    RV_MV,
+    RV_LI,
+    RV_LA,
+    RV_ADD,
+    RV_ADDW,
+    RV_ADDI,
+    RV_ADDIW,
+    RV_SUB,
+    RV_SUBW,
+    RV_MUL,
+    RV_MULW,
+    RV_DIV,
+    RV_DIVU,
+    RV_DIVW,
+    RV_DIVUW,
+    RV_REM,
+    RV_REMU,
+    RV_REMW,
+    RV_REMUW,
+    RV_AND,
+    RV_ANDI,
+    RV_OR,
+    RV_ORI,
+    RV_XOR,
+    RV_XORI,
+    RV_NEG,
+    RV_NOT,
+    RV_SEXT_B,
+    RV_SEXT_H,
+    RV_SEXT_W,
+    RV_ZEXT_B,
+    RV_ZEXT_H,
+    RV_ZEXT_W,
+    RV_SLL,
+    RV_SLLW,
+    RV_SLLI,
+    RV_SLLIW,
+    RV_SRL,
+    RV_SRLW,
+    RV_SRLI,
+    RV_SRLIW,
+    RV_SRA,
+    RV_SRAW,
+    RV_SRAI,
+    RV_SRAIW,
+    RV_LB,
+    RV_LH,
+    RV_LW,
+    RV_LD,
+    RV_LBU,
+    RV_LHU,
+    RV_LWU,
+    RV_SB,
+    RV_SH,
+    RV_SW,
+    RV_SD,
+    RV_SLT,
+    RV_SLTU,
+    RV_SLTI,
+    RV_SLTIU,
+    RV_SEQZ,
+    RV_SNEZ,
+    RV_SLTZ,
+    RV_SGTZ,
+    RV_J,
+    RV_JR,
+    RV_JALR,
+    RV_BEQ,
+    RV_BNE,
+    RV_BLT,
+    RV_BGE,
+    RV_BLTU,
+    RV_BGEU,
+    RV_CALL,
+    RV_RET,
+    RV_ECALL,
 
-    R_FADD_D,
-    R_FSUB_D,
-    R_FMUL_D,
-    R_FDIV_D,
-    R_FADD_S,
-    R_FSUB_S,
-    R_FMUL_S,
-    R_FDIV_S,
-    R_FSQRT_D,
-    R_FSQRT_S,
-    R_FSGNJ_D,
-    R_FSGNJN_D,
-    R_FSGNJX_D,
-    R_FSGNJ_S,
-    R_FSGNJN_S,
-    R_FSGNJX_S,
-    R_FMV_D,
-    R_FNEG_D,
-    R_FMV_S,
-    R_FNEG_S,
-    R_FMV_X_D,
-    R_FMV_X_W,
-    R_FEQ_D,
-    R_FLT_D,
-    R_FLE_D,
-    R_FEQ_S,
-    R_FLT_S,
-    R_FLE_S,
-    R_FLD,
-    R_FLW,
-    R_FSD,
-    R_FSW,
+    RV_FADD_D,
+    RV_FSUB_D,
+    RV_FMUL_D,
+    RV_FDIV_D,
+    RV_FADD_S,
+    RV_FSUB_S,
+    RV_FMUL_S,
+    RV_FDIV_S,
+    RV_FSQRT_D,
+    RV_FSQRT_S,
+    RV_FSGNJ_D,
+    RV_FSGNJN_D,
+    RV_FSGNJX_D,
+    RV_FSGNJ_S,
+    RV_FSGNJN_S,
+    RV_FSGNJX_S,
+    RV_FMV_D,
+    RV_FNEG_D,
+    RV_FMV_S,
+    RV_FNEG_S,
+    RV_FMV_X_D,
+    RV_FMV_X_W,
+    RV_FEQ_D,
+    RV_FLT_D,
+    RV_FLE_D,
+    RV_FEQ_S,
+    RV_FLT_S,
+    RV_FLE_S,
+    RV_FLD,
+    RV_FLW,
+    RV_FSD,
+    RV_FSW,
 
-    R_FCVT_D_W,
-    R_FCVT_D_WU,
-    R_FCVT_D_L,
-    R_FCVT_D_LU,
-    R_FCVT_W_D,
-    R_FCVT_WU_D,
-    R_FCVT_L_D,
-    R_FCVT_LU_D,
-    R_FCVT_S_W,
-    R_FCVT_S_WU,
-    R_FCVT_S_L,
-    R_FCVT_S_LU,
-    R_FCVT_W_S,
-    R_FCVT_WU_S,
-    R_FCVT_L_S,
-    R_FCVT_LU_S,
-    R_FCVT_D_S,
-    R_FCVT_S_D,
+    RV_FCVT_D_W,
+    RV_FCVT_D_WU,
+    RV_FCVT_D_L,
+    RV_FCVT_D_LU,
+    RV_FCVT_W_D,
+    RV_FCVT_WU_D,
+    RV_FCVT_L_D,
+    RV_FCVT_LU_D,
+    RV_FCVT_S_W,
+    RV_FCVT_S_WU,
+    RV_FCVT_S_L,
+    RV_FCVT_S_LU,
+    RV_FCVT_W_S,
+    RV_FCVT_WU_S,
+    RV_FCVT_L_S,
+    RV_FCVT_LU_S,
+    RV_FCVT_D_S,
+    RV_FCVT_S_D,
 } riscv64_asm_raw_opcode_t;
 
 typedef enum {
@@ -493,71 +493,6 @@ typedef struct {
     riscv64_opr_flags **list;
 } riscv64_opr_flags_list; // arm64_asm_opcode_flags_list;
 
-#define ZEROREG r_x0
-#define RA r_x1
-#define SP r_x2
-#define GP r_x3
-#define TP r_x4
-#define T0 r_x5
-#define T1 r_x6
-#define T2 r_x7
-#define FP r_x8
-#define S1 r_x9
-#define A0 r_x10
-#define A1 r_x11
-#define A2 r_x12
-#define A3 r_x13
-#define A4 r_x14
-#define A5 r_x15
-#define A6 r_x16
-#define A7 r_x17
-#define S2 r_x18
-#define S3 r_x19
-#define S4 r_x20
-#define S5 r_x21
-#define S6 r_x22
-#define S7 r_x23
-#define S8 r_x24
-#define S9 r_x25
-#define S10 r_x26
-#define S11 r_x27
-#define T3 r_x28
-#define T4 r_x29
-#define T5 r_x30
-#define T6 r_x31
-
-#define FT0 r_f0
-#define FT1 r_f1
-#define FT2 r_f2
-#define FT3 r_f3
-#define FT4 r_f4
-#define FT5 r_f5
-#define FT6 r_f6
-#define FT7 r_f7
-#define FS0 r_f8
-#define FS1 r_f9
-#define FA0 r_f10
-#define FA1 r_f11
-#define FA2 r_f12
-#define FA3 r_f13
-#define FA4 r_f14
-#define FA5 r_f15
-#define FA6 r_f16
-#define FA7 r_f17
-#define FS2 r_f18
-#define FS3 r_f19
-#define FS4 r_f20
-#define FS5 r_f21
-#define FS6 r_f22
-#define FS7 r_f23
-#define FS8 r_f24
-#define FS9 r_f25
-#define FS10 r_f26
-#define FS11 r_f27
-#define FT8 r_f28
-#define FT9 r_f29
-#define FT10 r_f30
-#define FT11 r_f31
 
 static const struct {
     const char *name;
