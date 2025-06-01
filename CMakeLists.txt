@@ -89,15 +89,11 @@ target_link_libraries(nature m) # 链接数学计算库
 set(PACKAGE_BINARY_NAME npkg)
 set(PACKAGE_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME})
 
-execute_process(
-    COMMAND which go
-    OUTPUT_VARIABLE GOBIN
-    OUTPUT_STRIP_TRAILING_WHITESPACE
+find_program(GOBIN go
+        PATHS /usr/local/go/bin /opt/go/bin
+        DOC "Go compiler"
+        REQUIRED
 )
-if(NOT GOBIN)
-    message(FATAL_ERROR "Go executable not found")
-endif()
-
 message(STATUS "GOBIN set to: ${GOBIN}")
 
 add_custom_target(${PACKAGE_BINARY_NAME} ALL
