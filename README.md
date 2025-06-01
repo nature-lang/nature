@@ -61,7 +61,7 @@ Based on the existing features of the nature programming language, it is suitabl
 
 ## Install  
   
-Download and extract the natrue installer from [releases](https://github.com/nature-lang/nature/releases) (note the correct permissions). Move the extracted nature folder to `/usr/local/` and add the `/usr/local/nature/bin` directory to the system environment variable.  
+Download and extract the nature installer from [releases](https://github.com/nature-lang/nature/releases) (note the correct permissions). Move the extracted nature folder to `/usr/local/` and add the `/usr/local/nature/bin` directory to the system environment variable.  
   
 > If you need to install into another directory you need to manually set the NATURE_ROOT environment variable to the corresponding directory  
   
