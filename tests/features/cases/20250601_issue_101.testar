@@ -1,0 +1,128 @@
+=== test_method_generics_constraints
+--- main.n
+type custom_i = interface {
+    fn show_value():string
+}
+
+fn bool.show_value():string {
+    if *self {
+        return 'true'
+    } else {
+        return 'false'
+    }
+}
+
+type custom_t<T> = T|null
+
+fn custom_t<T:custom_i>.show_value():string {
+    return self.show_value()
+}
+
+fn main():void! {
+    bool a = true
+    println(a.show_value())
+
+    custom_t<bool> b = true
+    println(b.show_value())  // triggers bus error
+}
+
+--- output.txt
+nature-test/main.n:15:2: type 'main.custom_t' param constraint mismatch
+
+=== test_deny_duck_interface
+--- main.n
+type custom_i = interface {
+    fn show_value():string
+}
+
+fn bool.show_value():string {
+    if *self {
+        return 'true'
+    } else {
+        return 'false'
+    }
+}
+
+type custom_t<T:custom_i> = T|null
+
+fn custom_t<T:custom_i>.show_value():string {
+    return self.show_value()
+}
+
+fn main():void! {
+    bool a = true
+    println(a.show_value())
+
+    custom_t<bool> b = true
+    println(b.show_value())  // triggers bus error
+}
+
+--- output.txt
+nature-test/main.n:23:12: type 'bool' not impl 'main.custom_i' interface
+
+
+=== test_my_bool_interface
+--- main.n
+type custom_i = interface {
+    fn show_value():string
+}
+
+type my_bool: custom_i = bool
+
+fn my_bool.show_value():string {
+    if *self {
+        return 'true'
+    } else {
+        return 'false'
+    }
+}
+
+type custom_t<T:custom_i> = T|null
+
+fn custom_t<T:custom_i>.show_value():string {
+    return self.show_value()
+}
+
+fn main():void! {
+    my_bool a = true
+    println(a.show_value())
+
+    // custom_t<bool> b = true
+    // println(b.show_value())  // triggers bus error
+}
+--- output.txt
+nature-test/main.n:8:12: type inconsistency, expect=bool, actual=main.my_bool(bool)
+
+=== test_union_type_method_self
+--- main.n
+type custom_i = interface {
+    fn show_value():string
+}
+
+type my_bool:custom_i = bool
+
+fn my_bool.show_value():string {
+    if (*self) as bool {
+        return 'true'
+    } else {
+        return 'false'
+    }
+}
+
+type custom_t<T:custom_i> = T|null
+
+fn custom_t<T:custom_i>.show_values():string {
+    // self = union<T> // union/vec/set/map/tup/fn/chan Not converted to ptr
+    return self.show_value() // type 'main.custom_t(union)' not impl 'show_value' fn
+}
+
+fn main():void! {
+    my_bool a = true
+    println(a.show_value())
+
+    custom_t<my_bool> b = true as my_bool
+    println(b.show_values())  // triggers bus error
+}
+
+--- output.txt
+nature-test/main.n:19:15: type 'main.custom_t(union)' not impl 'show_value' fn

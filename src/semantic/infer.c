@@ -26,7 +26,7 @@ static bool union_type_contains(type_union_t *union_type, type_t sub);
 static void infer_break(module_t *m, ast_break_t *stmt);
 
 bool generics_constraints_compare(ast_generics_constraints *left, ast_generics_constraints *right) {
-    if (left->any) {
+    if (left->any && !right->and) {
         return true;
     }
 
@@ -2492,6 +2492,11 @@ static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
         return target_type;
     }
 
+    if (literal_type.kind == TYPE_BOOL && target_kind == TYPE_BOOL) {
+        literal->kind = target_kind;
+        return target_type;
+    }
+
     // int literal 自动转换为 float 类型, 并更新 literal value
     // int 转换为 float 类型
     if (is_integer(literal_type.kind) && is_float(target_kind)) {
@@ -2500,7 +2505,6 @@ static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
     }
 
     // float 转换为 int 会导致数据丢失，所以不进行自动转换, 请手动使用 as 转换
-
     if (is_integer(literal_type.kind) && is_integer(target_kind)) {
         int64_t i = atoll(literal->value);
         if (integer_range_check(target_kind, i)) { // range 匹配直接返回，否则应该直接报错
@@ -3695,6 +3699,11 @@ static slice_t *generics_constraints_product(module_t *m, type_t *impl_type, lis
         }
 
         if (param->constraints.and) {
+            // 与 impl type 进行一次联合校验
+            if (ident_is_def_or_alias(impl_type)) { // type ident 才会存在 args
+                infer_generics_param_constraints(m, impl_type, generics_params);
+            }
+
             return hash_list; // and 表示这是 interface, 同样无法进行类型约束
         }
     }

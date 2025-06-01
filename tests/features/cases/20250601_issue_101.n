@@ -1,0 +1,30 @@
+type custom_i = interface {
+    fn show_value():string
+}
+
+type my_bool:custom_i = bool
+
+fn my_bool.show_value():string {
+    if (*self) as bool {
+        return 'true'
+    } else {
+        return 'false'
+    }
+}
+
+type custom_t<T:custom_i> = T|null
+
+fn custom_t<T:custom_i>.show_values():string {
+    // self = union<T> // union/vec/set/map/tup/fn/chan Not converted to ptr
+    // Recursive call Until the stack is exhausted
+    println('in show values')
+    return self.show_values()
+}
+
+fn main():void! {
+    my_bool a = true
+    println(a.show_value())
+
+    custom_t<my_bool> b = true as my_bool
+    println(b.show_values())  // triggers bus error
+}
