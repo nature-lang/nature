@@ -19,21 +19,21 @@ typedef enum {
 extern build_param_t BUILD_OS;
 extern build_param_t BUILD_ARCH;
 
-extern char *NATURE_ROOT;// linux/darwin/freebsd default root
+extern char *NATURE_ROOT; // linux/darwin/freebsd default root
 
-extern char BUILD_OUTPUT_NAME[PATH_MAX];// main
+extern char BUILD_OUTPUT_NAME[PATH_MAX]; // main
 extern char BUILD_OUTPUT_DIR[PATH_MAX]; // default is work_dir test 使用，指定编译路径输出文件
-extern char BUILD_OUTPUT[PATH_MAX];     // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
+extern char BUILD_OUTPUT[PATH_MAX]; // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
 
 extern char *WORKDIR; // 执行 shell 命令所在的目录(import 搜索将会基于该目录进行文件搜索)
 extern char *BASE_NS; // 最后一级目录的名称，也可以自定义
-extern char *TEMP_DIR;// 链接临时目录
+extern char *TEMP_DIR; // 链接临时目录
 
 extern char USE_LD[1024]; // 自定义链接器
 extern char LDFLAGS[1024]; // 自定义链接器参数
 
-extern char *BUILD_ENTRY;         // nature build {test/main.n} 花括号包起来的这部分
-extern char SOURCE_PATH[PATH_MAX];// /opt/test/main.n 的绝对路径
+extern char *BUILD_ENTRY; // nature build {test/main.n} 花括号包起来的这部分
+extern char SOURCE_PATH[PATH_MAX]; // /opt/test/main.n 的绝对路径
 
 #define LD_ENTRY "runtime_main"
 
@@ -54,22 +54,25 @@ extern char SOURCE_PATH[PATH_MAX];// /opt/test/main.n 的绝对路径
 
 static inline char *temp_dir() {
     char *tmp_dir;
-    if (BUILD_OS == OS_LINUX || BUILD_OS == OS_DARWIN) {
-        char temp[] = BUILD_TMP_DIR;
-        VOID mkdtemp(temp);
+    // Try to read from TMPDIR environment variable first
+    char *env_tmpdir = getenv("TMPDIR");
+    char temp[1024]; // Increase buffer size to accommodate possible long paths
 
-        size_t size = strlen(BUILD_TMP_DIR) + 1;
-        tmp_dir = malloc(size);
-        memset(tmp_dir, '\0', size);
-        strcpy(tmp_dir, temp);
+    if (env_tmpdir != NULL && strlen(env_tmpdir) > 0) {
+        // Use temporary directory from environment variable
+        snprintf(temp, sizeof(temp), "%snature-build.XXXXXX", env_tmpdir);
     } else {
-        goto ERROR;
+        // Fall back to BUILD_TMP_DIR
+        strcpy(temp, BUILD_TMP_DIR);
     }
 
+    VOID mkdtemp(temp);
+
+    size_t size = strlen(temp) + 1;
+    tmp_dir = malloc(size);
+    memset(tmp_dir, '\0', size);
+    strcpy(tmp_dir, temp);
     return tmp_dir;
-    ERROR:
-    assertf(false, "[cross_tmp_dir] unsupported BUILD_OS/BUILD_ARCH pair %s/%s", BUILD_OS, BUILD_ARCH);
-    exit(1);
 }
 
 static inline char *parser_base_ns(char *dir) {
@@ -177,4 +180,4 @@ static inline void env_init() {
 }
 
 
-#endif//NATURE_ENV_H
+#endif //NATURE_ENV_H
