@@ -668,9 +668,12 @@ static token_type_t scanner_ident(char *word, int length) {
                 case 'o':
                     switch (word[2]) {
                         case 'n':
-                            return scanner_rest(word, length, 3, 5, "tinue", TOKEN_CONTINUE);
-                            //                        case 'r':
-                            //                            return scanner_rest(word, length, 3, 1, "o", TOKEN_CORO);
+                            switch (word[3]) {
+                                case 't':
+                                    return scanner_rest(word, length, 4, 4, "inue", TOKEN_CONTINUE);
+                                case 's':
+                                    return scanner_rest(word, length, 4, 1, "t", TOKEN_CONST);
+                            }
                     }
                     return scanner_rest(word, length, 2, 6, "ntinue", TOKEN_CONTINUE);
                 case 'a':

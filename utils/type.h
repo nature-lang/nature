@@ -348,7 +348,8 @@ struct type_alias_t {
 // 假如 type_array_t 是编译时的数据，那编译时根本就不知道 *data 的值是多少！
 // void* ptr =  malloc(sizeof(element_type) * count) // 数组初始化后最终会得到这样一份数据，这个数据将会存在的 var 中
 struct type_array_t {
-    uint64_t length;
+    void *length_expr; // analyzer 之前是 ast_expr
+    uint64_t length; // analyzer 完成后计算出来
     type_t element_type; // 这个必须要有呀
 };
 

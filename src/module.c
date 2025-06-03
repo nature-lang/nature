@@ -120,6 +120,14 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
             continue;
         }
 
+        if (stmt->assert_type == AST_STMT_CONSTDEF) {
+            ast_constdef_stmt_t *const_def = stmt->value;
+            const_def->ident = ident_with_prefix(m->ident, const_def->ident);
+            symbol_t *s = symbol_table_set(const_def->ident, SYMBOL_CONST, const_def, false);
+            ANALYZER_ASSERTF(s, "ident '%s' redeclared", const_def->ident);
+            continue;
+        }
+
         if (stmt->assert_type == AST_STMT_TYPEDEF) {
             ast_typedef_stmt_t *typedef_stmt = stmt->value;
             typedef_stmt->ident = ident_with_prefix(m->ident, typedef_stmt->ident);

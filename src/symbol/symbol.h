@@ -57,13 +57,14 @@ typedef enum {
     SYMBOL_VAR = 1,
     SYMBOL_TYPE,
     SYMBOL_FN,
+    SYMBOL_CONST,
 } symbol_type_t;
 
 typedef struct {
     string ident; // 符号唯一标识
     bool is_local; // 对应 elf 符号中的 global/local, 表示能否被外部链接链接到
     symbol_type_t type;
-    void *ast_value; // ast_typedef_stmt/ast_var_decl/ast_fndef_t/closure_t
+    void *ast_value; // ast_typedef_stmt/ast_var_decl/ast_fndef_t/closure_t/ast_constdef_stmt_t
     int64_t ref_count; // 引用计数
 } symbol_t;
 
@@ -91,4 +92,4 @@ void symbol_table_set_var(char *unique_ident, type_t type);
 
 void symbol_init();
 
-#endif//NATURE_SRC_AST_SYMBOL_H_
+#endif //NATURE_SRC_AST_SYMBOL_H_

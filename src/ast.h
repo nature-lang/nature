@@ -65,6 +65,7 @@ typedef enum {
     AST_STMT_CONTINUE,
     AST_STMT_IMPORT,
     AST_STMT_VARDEF,
+    AST_STMT_CONSTDEF,
     AST_STMT_VAR_TUPLE_DESTR,
     AST_STMT_ASSIGN,
     AST_STMT_GLOBAL_ASSIGN,
@@ -306,6 +307,13 @@ typedef struct {
     // 变量引用问题。
     char *heap_ident;
 } ast_var_decl_t;
+
+typedef struct {
+    char *ident;
+    type_t type;
+    ast_expr_t *right;
+    bool processing;
+} ast_constdef_stmt_t;
 
 typedef struct {
     ast_expr_t left; // a  或 foo.bar.car 或者 d[0] 或者 (xx, xx, xx)

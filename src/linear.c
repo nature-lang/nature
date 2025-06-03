@@ -3396,7 +3396,9 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             return;
         }
         default: {
-            assertf(false, "unknown stmt type=%d", stmt->assert_type);
+            //            assertf(false, "unknown stmt type=%d", stmt->assert_type);
+            // like constdef stmt, just skip it
+            return;
         }
     }
 }

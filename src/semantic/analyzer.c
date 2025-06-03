@@ -374,6 +374,14 @@ static void analyzer_type(module_t *m, type_t *type) {
 
     if (type->kind == TYPE_ARR) {
         type_array_t *array = type->array;
+        analyzer_expr(m, array->length_expr);
+        ANALYZER_ASSERTF(((ast_expr_t *) array->length_expr)->assert_type == AST_EXPR_LITERAL, "array length must be declared using constants or literals");
+        ast_literal_t *literal = ((ast_expr_t *) array->length_expr)->value;
+        ANALYZER_ASSERTF(is_integer(literal->kind), "array length must be declared integer type")
+        int64_t length = strtoll(literal->value, NULL, 0);
+        ANALYZER_ASSERTF(length > 0, "array length Initialization failed");
+        array->length = length;
+
         analyzer_type(m, &array->element_type);
         return;
     }
@@ -833,6 +841,15 @@ static void analyzer_var_decl(module_t *m, ast_var_decl_t *var_decl, bool redecl
     var_decl->ident = local->unique_ident;
 }
 
+static void analyzer_constdef(module_t *m, ast_constdef_stmt_t *constdef) {
+    assert(constdef->right);
+    analyzer_expr(m, constdef->right);
+    ANALYZER_ASSERTF(constdef->right->assert_type == AST_EXPR_LITERAL, "const cannot be initialized");
+
+    local_ident_t *local = local_ident_new(m, SYMBOL_CONST, constdef, constdef->ident);
+    constdef->ident = local->unique_ident;
+}
+
 static void analyzer_vardef(module_t *m, ast_vardef_stmt_t *vardef) {
     assert(vardef->right);
     analyzer_expr(m, vardef->right);
@@ -1266,14 +1283,17 @@ static bool analyzer_local_ident(module_t *m, ast_expr_t *expr) {
     if (type == SYMBOL_FN) {
         return true;
     } else if (free_var_index >= 0) {
-        // 如果使用的 ident 是逃逸的变量，则需要使用 access_env 代替
-        // 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
-        expr->assert_type = AST_EXPR_ENV_ACCESS;
-        ast_env_access_t *env_access = NEW(ast_env_access_t);
-        env_access->index = free_var_index;
-        // 外部到 ident 可能已经修改了名字,这里进行冗于记录
-        env_access->unique_ident = ident->literal;
-        expr->value = env_access;
+        if (type == SYMBOL_VAR) {
+            // 如果使用的 ident 是逃逸的变量，则需要使用 access_env 代替
+            // 假如 foo 是外部变量，则 foo 改写成 env[free_var_index] 从而达到闭包的效果
+            expr->assert_type = AST_EXPR_ENV_ACCESS;
+            ast_env_access_t *env_access = NEW(ast_env_access_t);
+            env_access->index = free_var_index;
+            // 外部到 ident 可能已经修改了名字,这里进行冗于记录
+            env_access->unique_ident = ident->literal;
+            expr->value = env_access;
+        }
+
         return true;
     }
 
@@ -1305,7 +1325,6 @@ static bool analyzer_as_star_or_builtin_ident(module_t *m, ast_ident *ident) {
 }
 
 /**
- *
  * @param m
  * @param expr
  */
@@ -1328,6 +1347,7 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
         return true;
     }
 
+    // import as * or builtin ident
     if (analyzer_as_star_or_builtin_ident(m, ident)) {
         return true;
     }
@@ -1394,13 +1414,241 @@ static void rewrite_select_expr(module_t *m, ast_expr_t *expr) {
     analyzer_expr(m, &select->left);
 }
 
-static void analyzer_binary(module_t *m, ast_binary_expr_t *expr) {
-    analyzer_expr(m, &expr->left);
-    analyzer_expr(m, &expr->right);
+static void analyzer_constant_folding(module_t *m, ast_expr_t *expr) {
+    if (expr->assert_type == AST_EXPR_BINARY) {
+        ast_binary_expr_t *binary_expr = expr->value;
+        if (binary_expr->left.assert_type != AST_EXPR_LITERAL || binary_expr->right.assert_type != AST_EXPR_LITERAL) {
+            return;
+        }
+        ast_literal_t *left_literal = binary_expr->left.value;
+        ast_literal_t *right_literal = binary_expr->right.value;
+
+        // 处理字符串加法运算（字符串连接）
+        if (left_literal->kind == TYPE_STRING && right_literal->kind == TYPE_STRING && binary_expr->op == AST_OP_ADD) {
+            // 计算连接后的字符串长度
+            size_t left_len = strlen(left_literal->value);
+            size_t right_len = strlen(right_literal->value);
+            size_t total_len = left_len + right_len + 1; // +1 for null terminator
+
+            // 分配内存并连接字符串
+            char *result_str = malloc(total_len);
+            strcpy(result_str, left_literal->value);
+            strcat(result_str, right_literal->value);
+
+            // 创建结果字面量
+            ast_literal_t *result_literal = NEW(ast_literal_t);
+            result_literal->kind = TYPE_STRING;
+            result_literal->value = result_str;
+            result_literal->len = total_len - 1; // 不包括 null terminator
+
+            expr->assert_type = AST_EXPR_LITERAL;
+            expr->value = result_literal;
+            return;
+        }
+
+        // 处理数字常量的算术运算（包括整数和浮点数）
+        if (is_number(left_literal->kind) && is_number(right_literal->kind)) {
+            bool has_float = is_float(left_literal->kind) || is_float(right_literal->kind);
+            bool can_fold = true;
+
+            if (has_float) {
+                // 使用 double 进行浮点数计算以提高精度
+                double left_val = strtod(left_literal->value, NULL);
+                double right_val = strtod(right_literal->value, NULL);
+                double result = 0.0;
+
+                switch (binary_expr->op) {
+                    case AST_OP_ADD:
+                        result = left_val + right_val;
+                        break;
+                    case AST_OP_SUB:
+                        result = left_val - right_val;
+                        break;
+                    case AST_OP_MUL:
+                        result = left_val * right_val;
+                        break;
+                    case AST_OP_DIV:
+                        if (right_val != 0.0) {
+                            result = left_val / right_val;
+                        } else {
+                            can_fold = false; // 除零错误，不进行折叠
+                        }
+                        break;
+                    case AST_OP_REM:
+                        if (right_val != 0.0) {
+                            result = fmod(left_val, right_val);
+                        } else {
+                            can_fold = false;
+                        }
+                        break;
+                    default:
+                        can_fold = false; // 浮点数不支持位运算
+                        break;
+                }
+
+                if (can_fold) {
+                    // 将二元表达式替换为浮点数常量字面量
+                    ast_literal_t *result_literal = NEW(ast_literal_t);
+                    result_literal->kind = TYPE_FLOAT; // 默认使用 double 精度
+                    result_literal->value = malloc(64);
+                    snprintf(result_literal->value, 64, "%.17g", result); // 使用高精度格式
+
+                    expr->assert_type = AST_EXPR_LITERAL;
+                    expr->value = result_literal;
+                }
+            } else {
+                // 整数运算
+                int64_t left_val = strtoll(left_literal->value, NULL, 0);
+                int64_t right_val = strtoll(right_literal->value, NULL, 0);
+                int64_t result = 0;
+
+                switch (binary_expr->op) {
+                    case AST_OP_ADD:
+                        result = left_val + right_val;
+                        break;
+                    case AST_OP_SUB:
+                        result = left_val - right_val;
+                        break;
+                    case AST_OP_MUL:
+                        result = left_val * right_val;
+                        break;
+                    case AST_OP_DIV:
+                        if (right_val != 0) {
+                            result = left_val / right_val;
+                        } else {
+                            can_fold = false; // 除零错误，不进行折叠
+                        }
+                        break;
+                    case AST_OP_REM:
+                        if (right_val != 0) {
+                            result = left_val % right_val;
+                        } else {
+                            can_fold = false;
+                        }
+                        break;
+                    case AST_OP_AND:
+                        result = left_val & right_val;
+                        break;
+                    case AST_OP_OR:
+                        result = left_val | right_val;
+                        break;
+                    case AST_OP_XOR:
+                        result = left_val ^ right_val;
+                        break;
+                    case AST_OP_LSHIFT:
+                        result = left_val << right_val;
+                        break;
+                    case AST_OP_RSHIFT:
+                        result = left_val >> right_val;
+                        break;
+                    default:
+                        can_fold = false;
+                        break;
+                }
+
+                if (can_fold) {
+                    // 将二元表达式替换为整数常量字面量
+                    ast_literal_t *result_literal = NEW(ast_literal_t);
+                    result_literal->kind = TYPE_INT;
+                    result_literal->value = malloc(32);
+                    snprintf(result_literal->value, 32, "%lld", result);
+
+                    expr->assert_type = AST_EXPR_LITERAL;
+                    expr->value = result_literal;
+                }
+            }
+        }
+    } else if (expr->assert_type == AST_EXPR_UNARY) {
+        ast_unary_expr_t *unary_expr = expr->value;
+
+        // 检查操作数是否是常量
+        if (unary_expr->operand.assert_type == AST_EXPR_LITERAL) {
+            ast_literal_t *operand_literal = unary_expr->operand.value;
+
+            if (is_number(operand_literal->kind)) {
+                bool can_fold = true;
+
+                if (is_float(operand_literal->kind)) {
+                    // 浮点数一元运算
+                    double operand_val = strtod(operand_literal->value, NULL);
+                    double result = 0.0;
+
+                    switch (unary_expr->op) {
+                        case AST_OP_NEG:
+                            result = -operand_val;
+                            break;
+                        default:
+                            can_fold = false; // 浮点数不支持位运算
+                            break;
+                    }
+
+                    if (can_fold) {
+                        // 将一元表达式替换为浮点数常量字面量
+                        ast_literal_t *result_literal = NEW(ast_literal_t);
+                        result_literal->kind = TYPE_FLOAT64;
+                        result_literal->value = malloc(64);
+                        snprintf(result_literal->value, 64, "%.17g", result);
+
+                        expr->assert_type = AST_EXPR_LITERAL;
+                        expr->value = result_literal;
+                    }
+                } else {
+                    // 整数一元运算
+                    int64_t operand_val = strtoll(operand_literal->value, NULL, 0);
+                    int64_t result = 0;
+
+                    switch (unary_expr->op) {
+                        case AST_OP_NEG:
+                            result = -operand_val;
+                            break;
+                        case AST_OP_BNOT:
+                            result = ~operand_val;
+                            break;
+                        default:
+                            can_fold = false;
+                            break;
+                    }
+
+                    if (can_fold) {
+                        // 将一元表达式替换为整数常量字面量
+                        ast_literal_t *result_literal = NEW(ast_literal_t);
+                        result_literal->kind = TYPE_INT;
+                        result_literal->value = malloc(32);
+                        snprintf(result_literal->value, 32, "%lld", result);
+
+                        expr->assert_type = AST_EXPR_LITERAL;
+                        expr->value = result_literal;
+                    }
+                }
+            } else if (operand_literal->kind == TYPE_BOOL && unary_expr->op == AST_OP_NOT) {
+                // 布尔值取反
+                bool operand_val = strcmp(operand_literal->value, "true") == 0;
+                bool result = !operand_val;
+
+                ast_literal_t *result_literal = NEW(ast_literal_t);
+                result_literal->kind = TYPE_BOOL;
+                result_literal->value = result ? "true" : "false";
+
+                expr->assert_type = AST_EXPR_LITERAL;
+                expr->value = result_literal;
+            }
+        }
+    }
 }
 
-static void analyzer_unary(module_t *m, ast_unary_expr_t *expr) {
-    analyzer_expr(m, &expr->operand);
+static void analyzer_binary(module_t *m, ast_expr_t *expr) {
+    ast_binary_expr_t *binary_expr = expr->value;
+    analyzer_expr(m, &binary_expr->left);
+    analyzer_expr(m, &binary_expr->right);
+
+    analyzer_constant_folding(m, expr);
+}
+
+static void analyzer_unary(module_t *m, ast_expr_t *expr) {
+    ast_unary_expr_t *unary_expr = expr->value;
+    analyzer_expr(m, &unary_expr->operand);
+
+    analyzer_constant_folding(m, expr);
 }
 
 /**
@@ -1542,16 +1790,45 @@ static void analyzer_typedef_stmt(module_t *m, ast_typedef_stmt_t *stmt) {
     stmt->ident = local->unique_ident;
 }
 
+static void analyzer_constant_propagation(module_t *m, ast_expr_t *expr) {
+    assert(expr->assert_type == AST_EXPR_IDENT);
+    ast_ident *ident = expr->value;
+    symbol_t *s = symbol_table_get(ident->literal);
+    assert(s);
+
+    if (s->type != SYMBOL_CONST) {
+        return;
+    }
+
+    ast_constdef_stmt_t *constdef_stmt = s->ast_value;
+    ANALYZER_ASSERTF(constdef_stmt->processing == false, " const initialization cycle");
+
+    constdef_stmt->processing = true;
+    analyzer_expr(m, constdef_stmt->right);
+    constdef_stmt->processing = false;
+
+    ANALYZER_ASSERTF(constdef_stmt->right->assert_type == AST_EXPR_LITERAL, "const cannot be initialized");
+    ast_literal_t *right_literal = constdef_stmt->right->value;
+
+    ast_literal_t *literal = NEW(ast_literal_t);
+    literal->kind = right_literal->kind;
+    literal->value = strdup(right_literal->value);
+    literal->len = right_literal->len;
+
+    expr->value = literal;
+    expr->assert_type = AST_EXPR_LITERAL;
+}
+
 static void analyzer_expr(module_t *m, ast_expr_t *expr) {
     m->current_line = expr->line;
     m->current_column = expr->column;
 
     switch (expr->assert_type) {
         case AST_EXPR_BINARY: {
-            return analyzer_binary(m, expr->value);
+            return analyzer_binary(m, expr);
         }
         case AST_EXPR_UNARY: {
-            return analyzer_unary(m, expr->value);
+            return analyzer_unary(m, expr);
         }
         case AST_CATCH: {
             return analyzer_catch(m, expr->value);
@@ -1613,6 +1890,12 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
             if (!result) {
                 ANALYZER_ASSERTF(false, "identifier '%s' undeclared \n", ((ast_ident *) expr->value)->literal);
             }
+
+            // Constant Propagation, ident may be rewritten as env access when analyzer
+            if (expr->assert_type == AST_EXPR_IDENT) {
+                analyzer_constant_propagation(m, expr);
+            }
+
             return;
         }
         case AST_MATCH: {
@@ -1651,6 +1934,9 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_STMT_VARDEF: {
             return analyzer_vardef(m, stmt->value);
+        }
+        case AST_STMT_CONSTDEF: {
+            return analyzer_constdef(m, stmt->value);
         }
         case AST_STMT_VAR_TUPLE_DESTR: {
             return analyzer_var_tuple_destr_stmt(m, stmt->value);
@@ -1740,7 +2026,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
             // 将 vardef 转换成 assign stmt，然后导入到 fn init 中进行初始化
             ast_stmt_t *assign_stmt = NEW(ast_stmt_t);
             ast_assign_stmt_t *assign = NEW(ast_assign_stmt_t);
-            assign->left = (ast_expr_t){
+            assign->left = (ast_expr_t) {
                     .line = stmt->line,
                     .column = stmt->column,
                     .assert_type = AST_EXPR_IDENT,
@@ -1756,6 +2042,15 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
 
             // 清空 global stmt 的 var right
             vardef->right = NULL;
+            continue;
+        }
+
+        if (stmt->assert_type == AST_STMT_CONSTDEF) {
+            // 已经在 module_build 注册进 global symbol 中，此处不需要进行特殊处理
+            ast_constdef_stmt_t *constdef_stmt = stmt->value;
+            analyzer_expr(m, constdef_stmt->right);
+            // right must literal
+            ANALYZER_ASSERTF(constdef_stmt->right->assert_type == AST_EXPR_LITERAL, "const cannot be initialized");
             continue;
         }
 
@@ -1858,7 +2153,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         // 添加调用指令(后续 root module 会将这条指令添加到 main body 中)
         ast_stmt_t *call_stmt = NEW(ast_stmt_t);
         ast_call_t *call = NEW(ast_call_t);
-        call->left = (ast_expr_t){
+        call->left = (ast_expr_t) {
                 .assert_type = AST_EXPR_IDENT,
                 .value = ast_new_ident(s->ident), // module.init
                 .line = 1,
