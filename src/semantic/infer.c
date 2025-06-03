@@ -1073,7 +1073,7 @@ static type_t infer_async(module_t *m, ast_expr_t *expr, type_t target_type) {
         infer_fn_decl(m, co_expr->closure_fn, type_kind_new(TYPE_UNKNOWN));
         infer_fn_decl(m, co_expr->closure_fn_void, type_kind_new(TYPE_UNKNOWN));
 
-        first_arg = (ast_expr_t){
+        first_arg = (ast_expr_t) {
                 .line = expr->line,
                 .column = expr->column,
                 .assert_type = AST_FNDEF,
@@ -3423,6 +3423,12 @@ STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
     if (in_heap == true) {
+        t.in_heap = true;
+    }
+
+    // 固定数组的大小暂时禁止超过 64KB, 如果需要超过 64 KB 可以使用 vec?
+    // 如果 array 超过 64KB 则在堆上进行分配
+    if (t.kind == TYPE_ARR && type_sizeof(t) > (64 * 1024)) {
         t.in_heap = true;
     }
 

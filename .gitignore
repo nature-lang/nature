@@ -9,3 +9,4 @@ tmp/
 .DS_store
 test.text
 libruntime.a
+.clion.source.upload.marker

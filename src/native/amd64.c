@@ -290,7 +290,7 @@ static slice_t *amd64_native_clv(closure_t *c, lir_op_t *op) {
 
     if (output->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *temp = output->value;
-        uint16_t size = type_sizeof(temp->type);
+        uint64_t size = type_sizeof(temp->type);
 
         assertf(size <= QWORD, "only can clv size <= %d, actual=%d", QWORD, size);
         // amd64 目前仅支持
@@ -737,14 +737,15 @@ static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
     slice_push(operations, AMD64_INST("push", AMD64_REG(rbp))); // push 会移动 rsp 至臻，所以不需要再次处理
     slice_push(operations, AMD64_INST("mov", AMD64_REG(rbp), AMD64_REG(rsp))); // 保存栈指针
     if (offset != 0) {
+        // offset 范围处理
         slice_push(operations, AMD64_INST("sub", AMD64_REG(rsp), AMD64_UINT32(offset)));
     }
 
     //    c->stack_offset = offset;
     // gc_bits 补 0
     if (c->call_stack_max_offset) {
-        uint16_t bits_start = c->stack_offset / POINTER_SIZE;
-        uint16_t bits_count = c->call_stack_max_offset / POINTER_SIZE;
+        uint64_t bits_start = c->stack_offset / POINTER_SIZE;
+        uint64_t bits_count = c->call_stack_max_offset / POINTER_SIZE;
         for (int i = 0; i < bits_count; ++i) {
             bitmap_grow_set(c->stack_gc_bits, bits_start + i, 0);
         }

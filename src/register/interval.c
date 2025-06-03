@@ -1238,16 +1238,16 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
 
     // struct 和 array 在 var 栈只真用 8byte 指针
     // 由于栈是从高向低增长的，所以需要先预留 size
-    uint16_t size = type_kind_sizeof(i->var->type.kind);
+    uint64_t size = type_kind_sizeof(i->var->type.kind);
     assertf(size <= POINTER_SIZE && size > 0, "type %s size %d exception", type_format(i->var->type), size);
-    uint16_t align = size;
+    uint64_t align = size;
 
     c->stack_offset += size;
     c->stack_offset = align_up(c->stack_offset, align);
     slice_push(c->stack_vars, i->var);
 
     // bitmap size
-    uint16_t bit_index = (c->stack_offset - 1) / POINTER_SIZE;
+    uint64_t bit_index = (c->stack_offset - 1) / POINTER_SIZE;
     bool is_ptr = type_is_pointer_heap(i->var->type);
     bitmap_grow_set(c->stack_gc_bits, bit_index, is_ptr);
 

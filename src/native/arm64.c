@@ -50,6 +50,19 @@ static void arm64_mov_imm(lir_op_t *op, slice_t *operations, arm64_asm_operand_t
     }
 }
 
+/**
+ * 超过 4095 需要借助 x16 寄存器中转
+ */
+static arm64_asm_operand_t *arm64_imm_operand(lir_op_t *op, slice_t *operations, int64_t offset) {
+    arm64_asm_operand_t *offset_operand = ARM64_IMM(offset);
+    if (offset < -(1 << 12) || offset >= (1 << 12)) {
+        arm64_asm_operand_t *free_reg = ARM64_REG(x16);
+        arm64_mov_imm(op, operations, free_reg, offset);
+        offset_operand = free_reg;
+    }
+    return offset_operand;
+}
+
 static bool arm64_is_integer_operand(lir_operand_t *operand) {
     if (operand->assert_type == LIR_OPERAND_REG) {
         reg_t *reg = operand->value;
@@ -170,9 +183,13 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
     }
 
     // indirect 有符号偏移范围 [-256, 255], 如果超出范围，需要借助临时寄存器 x16 进行转换(此处转换不需要考虑 float 类型)
-    if (result && result->type == ARM64_ASM_OPERAND_INDIRECT && result->indirect.offset < -256) {
-        int64_t offset = result->indirect.offset * -1;
-        slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(x16), ARM64_REG(result->indirect.reg), ARM64_IMM(offset)));
+    if (result && result->type == ARM64_ASM_OPERAND_INDIRECT && (result->indirect.offset < -256 || result->indirect.offset > 255)) {
+        //        int64_t offset = result->indirect.offset * -1;
+
+        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, result->indirect.offset);
+
+        // sub x16, xi -> x16
+        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(result->indirect.reg), offset_operand));
 
         // 基于 x16 重新生成 indirect
         result->indirect.reg = x16;
@@ -345,8 +362,10 @@ static slice_t *arm64_native_mov(closure_t *c, lir_op_t *op) {
             } else {
                 // REG -> MEM
                 if (result->size == BYTE) {
+                    assert(source->type == ARM64_ASM_OPERAND_REG && source->size == DWORD);
                     slice_push(operations, ARM64_INST(R_STRB, source, result));
                 } else if (result->size == WORD) {
+                    assert(source->type == ARM64_ASM_OPERAND_REG && source->size == DWORD);
                     slice_push(operations, ARM64_INST(R_STRH, source, result));
                 } else {
                     slice_push(operations, ARM64_INST(R_STR, source, result));
@@ -836,14 +855,16 @@ static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
 
     // 如果需要，调整栈指针以分配栈空间
     if (offset != 0) {
-        slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), ARM64_IMM(offset)));
+        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, offset);
+
+        slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
     }
 
 
     // gc_bits 补 0
     if (c->call_stack_max_offset) {
-        uint16_t bits_start = c->stack_offset / POINTER_SIZE;
-        uint16_t bits_count = c->call_stack_max_offset / POINTER_SIZE;
+        uint64_t bits_start = c->stack_offset / POINTER_SIZE;
+        uint64_t bits_count = c->call_stack_max_offset / POINTER_SIZE;
         for (int i = 0; i < bits_count; ++i) {
             bitmap_grow_set(c->stack_gc_bits, bits_start + i, 0);
         }
@@ -859,7 +880,8 @@ slice_t *arm64_native_fn_end(closure_t *c, lir_op_t *op) {
 
     // 恢复栈帧
     if (c->stack_offset != 0) {
-        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(sp), ARM64_REG(sp), ARM64_IMM(c->stack_offset)));
+        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, c->stack_offset);
+        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
     }
 
     // 恢复 fp(x29) 和 lr(x30), ARM64_INDIRECT(sp, 16, 2) 2 表示 post-index 模式
@@ -901,7 +923,8 @@ static slice_t *arm64_native_lea(closure_t *c, lir_op_t *op) {
             offset = mem->offset;
         }
 
-        slice_push(operations, ARM64_INST(R_ADD, result, ARM64_REG(base), ARM64_IMM(offset)));
+        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, offset);
+        slice_push(operations, ARM64_INST(R_ADD, result, ARM64_REG(base), offset_operand));
     }
     return operations;
 }

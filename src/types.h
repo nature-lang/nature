@@ -268,7 +268,7 @@ typedef struct {
 } loop_t;
 
 typedef struct basic_block_t {
-    uint16_t id; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
+    uint64_t id; // label 标号, 基本块编号(可以方便用于数组索引)， 和 op_label 还是要稍微区分一下,
     string name;
 
     // op pointer

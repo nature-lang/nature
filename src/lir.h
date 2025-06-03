@@ -285,6 +285,17 @@ static inline lir_operand_t *int_operand(uint64_t val) {
     return operand;
 }
 
+static inline lir_operand_t *integer_operand(int64_t val, type_kind kind) {
+    assert(is_integer_or_anyptr(kind));
+    lir_imm_t *imm_operand = NEW(lir_imm_t);
+    imm_operand->kind = kind;
+    imm_operand->int_value = val;
+    lir_operand_t *operand = NEW(lir_operand_t);
+    operand->assert_type = LIR_OPERAND_IMM;
+    operand->value = imm_operand;
+    return operand;
+}
+
 static inline lir_operand_t *bool_operand(bool val) {
     lir_imm_t *imm_operand = NEW(lir_imm_t);
     imm_operand->kind = TYPE_BOOL;
@@ -838,7 +849,7 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
     assert(dst_operand->assert_type == LIR_OPERAND_VAR);
     assert(is_stack_ref_big_type(t));
 
-    uint16_t size = type_sizeof(t);
+    uint64_t size = type_sizeof(t);
 
     // 为了方便和寄存器进行交换，这里总是按照指针地址对齐
     c->stack_offset += size;
@@ -848,8 +859,8 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
     assert(rtype.size == size);
 
     // 16, 0, 1
-    uint16_t bit_index_end = (c->stack_offset - 1) / POINTER_SIZE;
-    uint16_t bit_index_count = size / POINTER_SIZE;
+    uint64_t bit_index_end = (c->stack_offset - 1) / POINTER_SIZE;
+    uint64_t bit_index_count = size / POINTER_SIZE;
     if (bit_index_count == 0) {
         bit_index_count = 1;
     }
@@ -1011,7 +1022,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
 
 closure_t *lir_closure_new(ast_fndef_t *fndef);
 
-static inline basic_block_t *lir_new_block(char *name, uint16_t label_index) {
+static inline basic_block_t *lir_new_block(char *name, uint64_t label_index) {
     basic_block_t *basic_block = NEW(basic_block_t);
     basic_block->name = name;
     basic_block->id = label_index;
@@ -1042,7 +1053,7 @@ static inline basic_block_t *lir_new_block(char *name, uint16_t label_index) {
     return basic_block;
 }
 
-static inline bool lir_blocks_contains(slice_t *blocks, uint16_t id) {
+static inline bool lir_blocks_contains(slice_t *blocks, uint64_t id) {
     for (int i = 0; i < blocks->count; ++i) {
         basic_block_t *block = blocks->take[i];
         if (block->id == id) {
@@ -1253,6 +1264,6 @@ static inline bool lir_can_lea(lir_op_t *op) {
     return false;
 }
 
-linked_t *lir_memory_mov(module_t *m, uint16_t size, lir_operand_t *dst, lir_operand_t *src);
+linked_t *lir_memory_mov(module_t *m, uint64_t size, lir_operand_t *dst, lir_operand_t *src);
 
 #endif // NATURE_SRC_LIR_H_
