@@ -172,7 +172,7 @@ rtype_t rtype_array(type_array_t *t) {
 
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
 
-    uint16_t offset = 0;
+    uint64_t offset = 0;
     rtype.last_ptr = rtype_array_gc_bits(rtype.malloc_gc_bits, &offset, t);
 
     return rtype;
@@ -299,9 +299,9 @@ static rtype_t rtype_fn(type_fn_t *t) {
     return rtype;
 }
 
-static uint16_t rtype_array_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_array_t *t) {
+static uint64_t rtype_array_gc_bits(uint8_t *gc_bits, uint64_t *offset, type_array_t *t) {
     // offset 已经按照 align 对齐过了，这里不需要重复对齐
-    uint16_t last_ptr_offset = 0;
+    uint64_t last_ptr_offset = 0;
 
     for (int i = 0; i < t->length; ++i) {
         uint64_t last_ptr_temp_offset = 0;
@@ -310,7 +310,7 @@ static uint16_t rtype_array_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_arr
         } else if (t->element_type.kind == TYPE_ARR) {
             last_ptr_temp_offset = rtype_array_gc_bits(gc_bits, offset, t->element_type.array);
         } else {
-            uint16_t bit_index = *offset / POINTER_SIZE;
+            uint64_t bit_index = *offset / POINTER_SIZE;
             if (type_is_pointer_heap(t->element_type)) {
                 bitmap_set(gc_bits, bit_index);
                 last_ptr_temp_offset = *offset;
@@ -327,9 +327,9 @@ static uint16_t rtype_array_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_arr
     return last_ptr_offset;
 }
 
-static uint16_t rtype_struct_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_struct_t *t) {
+static uint64_t rtype_struct_gc_bits(uint8_t *gc_bits, uint64_t *offset, type_struct_t *t) {
     // offset 已经按照 align 对齐过了，这里不需要重复对齐
-    uint16_t last_ptr_offset = 0;
+    uint64_t last_ptr_offset = 0;
     for (int i = 0; i < t->properties->length; ++i) {
         struct_property_t *p = ct_list_value(t->properties, i);
 
@@ -342,9 +342,9 @@ static uint16_t rtype_struct_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_st
         } else if (p->type.kind == TYPE_ARR) {
             last_ptr_temp_offset = rtype_array_gc_bits(gc_bits, offset, p->type.array);
         } else {
-            uint16_t size = type_sizeof(p->type); // 等待存储的 struct size
+            uint64_t size = type_sizeof(p->type); // 等待存储的 struct size
             // 这里就是存储位置
-            uint16_t bit_index = *offset / POINTER_SIZE;
+            uint64_t bit_index = *offset / POINTER_SIZE;
 
             *offset += size;
             bool is_ptr = type_is_pointer_heap(p->type);
@@ -373,7 +373,7 @@ static uint16_t rtype_struct_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_st
 static rtype_t rtype_struct(type_struct_t *t) {
     char *str = itoa(TYPE_STRUCT);
 
-    uint16_t size = type_struct_sizeof(t);
+    uint64_t size = type_struct_sizeof(t);
     if (size == 0) {
         rtype_t rtype = {
                 .size = 1, // 空 struct 默认占用 1 一个字节, 让 gc malloc 可以编译通过
@@ -388,7 +388,7 @@ static rtype_t rtype_struct(type_struct_t *t) {
         return rtype;
     }
 
-    uint16_t offset = 0; // 基于 offset 计算 gc bits
+    uint64_t offset = 0; // 基于 offset 计算 gc bits
     uint8_t *gc_bits = malloc_gc_bits(size);
 
     // 假设没有 struct， 可以根据所有 property 计算 gc bits
@@ -435,7 +435,7 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
     for (uint64_t i = 0; i < t->elements->length; ++i) {
         type_t *element_type = ct_list_value(t->elements, i);
 
-        uint16_t element_size = type_sizeof(*element_type);
+        uint64_t element_size = type_sizeof(*element_type);
         int element_align = type_alignof(*element_type);
 
         // 按 offset 对齐
@@ -473,7 +473,7 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
     return rtype;
 }
 
-uint8_t type_kind_sizeof(type_kind t) {
+uint64_t type_kind_sizeof(type_kind t) {
     assert(t > 0);
 
     switch (t) {
@@ -499,17 +499,17 @@ uint8_t type_kind_sizeof(type_kind t) {
     }
 }
 
-uint16_t type_struct_sizeof(type_struct_t *s) {
+uint64_t type_struct_sizeof(type_struct_t *s) {
     // 只有当 struct 没有元素，或者有嵌套 struct 依旧没有元素时， align 才为 0
     if (s->align == 0) {
         return 0; // 空 struct 占用 1 size, 让 linear/lower 都可以正常工作
     }
 
-    uint16_t size = 0;
+    uint64_t size = 0;
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *p = ct_list_value(s->properties, i);
 
-        uint16_t element_size = type_sizeof(p->type);
+        uint64_t element_size = type_sizeof(p->type);
         uint8_t element_align = type_alignof(p->type);
 
         size = align_up(size, element_align);
@@ -526,7 +526,7 @@ uint16_t type_struct_sizeof(type_struct_t *s) {
  * @param t
  * @return
  */
-uint16_t type_sizeof(type_t t) {
+uint64_t type_sizeof(type_t t) {
     if (t.kind == TYPE_STRUCT) {
         uint64_t size = type_struct_sizeof(t.struct_);
         if (size == 0) {
@@ -542,7 +542,7 @@ uint16_t type_sizeof(type_t t) {
     return type_kind_sizeof(t.kind);
 }
 
-uint16_t type_alignof(type_t t) {
+uint64_t type_alignof(type_t t) {
     if (t.kind == TYPE_STRUCT) {
         //        assert(t.struct_->align > 0);
         return t.struct_->align;

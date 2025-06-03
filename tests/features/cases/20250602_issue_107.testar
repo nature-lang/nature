@@ -1,0 +1,44 @@
+=== test_big_global_arr
+--- main.n
+[i64;1024] big_arr = []
+
+fn main() {
+    println(big_arr[0], big_arr[1])
+}
+
+--- output.txt
+0 0
+
+=== test_arr_default_value
+--- main.n
+[[i32;30];50] game_map = []
+
+type tank_t = struct {
+    f32 x
+    f32 y
+    i32 direction
+    i32 health
+    [[bool;3];3] pattern
+}
+
+type bullet_t = struct {
+    f32 x
+    f32 y
+    i32 direction
+    bool active
+    bool is_player
+}
+
+var player_tank = tank_t{}
+[tank_t;8] enemy_tanks = []  // MAX_ENEMIES = 8
+[bullet_t;20] bullets = []   // MAX_BULLETS = 20
+
+i32 enemy_spawn_counter = 0
+i32 enemy_count = 0
+
+fn main() {
+    println(bullets[0].active, bullets[1].is_player)
+}
+
+--- output.txt
+false false

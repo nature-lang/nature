@@ -306,11 +306,11 @@ linear_unsafe_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target
 }
 
 // target 中保存了栈地址，开始向上清理
-static void linear_default_empty_stack(module_t *m, lir_operand_t *target, uint16_t offset, uint64_t size) {
-    uint16_t remind = size;
+static void linear_default_empty_stack(module_t *m, lir_operand_t *target, uint64_t offset, uint64_t size) {
+    uint64_t remind = size;
     while (remind > 0) {
-        uint16_t count = 0;
-        uint16_t item_size = 0; // unit byte
+        uint64_t count = 0;
+        uint64_t item_size = 0; // unit byte
         type_kind kind;
         if (remind >= QWORD) {
             kind = TYPE_UINT64;
@@ -328,12 +328,8 @@ static void linear_default_empty_stack(module_t *m, lir_operand_t *target, uint1
 
         count = remind / item_size;
         for (int i = 0; i < count; ++i) {
-            lir_imm_t *imm_operand = NEW(lir_imm_t);
-            imm_operand->kind = TYPE_INT;
-            imm_operand->uint_value = 0;
-            lir_operand_t *src = operand_new(LIR_OPERAND_IMM, imm_operand);
             lir_operand_t *dst = indirect_addr_operand(m, type_kind_new(kind), target, offset);
-            OP_PUSH(lir_op_move(dst, src));
+            OP_PUSH(lir_op_move(dst, integer_operand(0, kind)));
             offset += item_size;
         }
 
@@ -436,7 +432,7 @@ static lir_operand_t *linear_default_tuple(module_t *m, type_t t, lir_operand_t 
         type_t *element = ct_list_value(t.tuple->elements, i);
 
         uint64_t element_size = type_sizeof(*element);
-        uint16_t element_align = type_alignof(*element);
+        uint64_t element_align = type_alignof(*element);
 
         // tuple 和 struct 一样需要对齐，不然没法做 gc_bits
         offset = align_up(offset, element_align);
@@ -1001,8 +997,8 @@ static void linear_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_operan
     for (int i = 0; i < destr->elements->length; ++i) {
         ast_expr_t *element = ct_list_value(destr->elements, i);
 
-        uint16_t element_size = type_sizeof(element->type);
-        uint16_t element_align = type_alignof(element->type);
+        uint64_t element_size = type_sizeof(element->type);
+        uint64_t element_align = type_alignof(element->type);
 
         offset = align_up(offset, element_align);
 
@@ -1059,9 +1055,9 @@ static void linear_var_tuple_destr(module_t *m, ast_tuple_destr_t *destr, lir_op
     for (int i = 0; i < destr->elements->length; ++i) {
         // 这里的 element 指的是左侧值的 element(一般都是 ident, 或者 access/select)
         ast_expr_t *element = ct_list_value(destr->elements, i);
-        uint16_t element_size = type_sizeof(element->type);
+        uint64_t element_size = type_sizeof(element->type);
 
-        uint16_t element_align = type_alignof(element->type);
+        uint64_t element_align = type_alignof(element->type);
 
         offset = align_up(offset, element_align);
 
@@ -1492,7 +1488,7 @@ static void linear_select(module_t *m, ast_select_stmt_t *select_stmt) {
                 assert(recv_target);
                 OP_PUSH(lir_op_move(dst_msg_ptr, lea_operand_pointer(m, recv_target)));
             } else {
-                OP_PUSH(lir_op_move(dst_msg_ptr, int_operand(0)));
+                OP_PUSH(lir_op_move(dst_msg_ptr, integer_operand(0, TYPE_ANYPTR)));
             }
         } else {
             casi = send_offset / (POINTER_SIZE * 2);
@@ -2082,6 +2078,7 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
         target = temp_var_operand_with_alloc(m, type_array);
     }
 
+    bool arr_in_heap = type_array.in_heap;
     assert(target && target->assert_type == LIR_OPERAND_VAR);
 
     uint64_t rtype_hash = ct_find_rtype_hash(type_array);
@@ -2090,6 +2087,7 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
     OP_PUSH(lir_op_move(target_ref, target));
 
     int64_t offset = 0;
+    // 无论 array 分配在栈还是堆，都需要进行数据初始化，当然有一些例外情况可以进行优化
     for (int i = 0; i < type_array.array->length; ++i) {
         lir_operand_t *item_target = linear_inline_arr_element_addr_not_check(m, target_ref, int_operand(i),
                                                                               type_array);
@@ -2102,8 +2100,12 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
             ast_expr_t *item_expr = ct_list_value(ast->elements, i);
             linear_expr(m, *item_expr, item_target);
         } else {
-            // gen zero value, to item_target, 如果剩余类型时 vec 等类型，则会产生 vec_new 进行 default 填充
-            linear_default_operand(m, type_array.array->element_type, item_target);
+            // in stack
+            if (arr_in_heap && is_scala_type(type_array.array->element_type)) {
+                // default is zero, not need set default value
+            } else {
+                linear_default_operand(m, type_array.array->element_type, item_target);
+            }
         }
     }
 
@@ -2517,7 +2519,7 @@ static lir_operand_t *linear_sizeof_expr(module_t *m, ast_expr_t expr, lir_opera
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-    uint16_t size = type_sizeof(ast->target_type);
+    uint64_t size = type_sizeof(ast->target_type);
 
     OP_PUSH(lir_op_move(target, int_operand(size)));
     return target;
@@ -3330,7 +3332,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_FNDEF: {
             linear_fn_decl(m,
-                           (ast_expr_t){
+                           (ast_expr_t) {
                                    .line = stmt->line,
                                    .assert_type = stmt->assert_type,
                                    .value = stmt->value,
@@ -3342,7 +3344,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             ast_call_t *call = stmt->value;
             // stmt 中都 call 都是没有返回值的
             linear_call(m,
-                        (ast_expr_t){
+                        (ast_expr_t) {
                                 .line = stmt->line,
                                 .column = stmt->column,
                                 .assert_type = AST_CALL,
@@ -3356,7 +3358,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             ast_catch_t *catch = stmt->value;
             linear_catch_expr(m,
-                              (ast_expr_t){
+                              (ast_expr_t) {
                                       .line = stmt->line,
                                       .column = stmt->column,
                                       .assert_type = AST_CATCH,

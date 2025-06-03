@@ -108,7 +108,7 @@ static inline char *bitmap_to_str(uint8_t *bits, uint64_t count) {
 
 // 如果 index 超过了
 static inline void bitmap_grow_set(bitmap_t *b, uint64_t index, bool test) {
-    uint16_t need_size = index / 8;
+    uint64_t need_size = index / 8;
     if (need_size > b->size) {
         uint8_t *new_bits = mallocz(need_size * 2);
         memcpy(new_bits, b->bits, b->size);

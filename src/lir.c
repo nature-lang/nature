@@ -59,13 +59,13 @@ lir_operand_t *lir_reg_operand(uint8_t index, type_kind kind) {
     return operand_new(LIR_OPERAND_REG, reg);
 }
 
-linked_t *lir_memory_mov(module_t *m, uint16_t size, lir_operand_t *dst, lir_operand_t *src) {
+linked_t *lir_memory_mov(module_t *m, uint64_t size, lir_operand_t *dst, lir_operand_t *src) {
     linked_t *result = linked_new();
-    uint16_t remind = size;
-    uint16_t offset = 0;
+    uint64_t remind = size;
+    uint64_t offset = 0;
     while (remind > 0) {
-        uint16_t count = 0;
-        uint16_t item_size = 0; // unit byte
+        uint64_t count = 0;
+        uint64_t item_size = 0; // unit byte
         type_kind kind;
         if (remind >= QWORD) {
             kind = TYPE_UINT64;

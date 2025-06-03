@@ -5,11 +5,11 @@ static int arm64_hfa_aux(type_t type, int32_t *fsize, int num) {
     assert(fsize != NULL);
     assert(num >= 0);
 
-    uint16_t size = type_sizeof(type);
+    uint64_t size = type_sizeof(type);
 
     if (is_float(type.kind)) {
-        uint16_t n = size;
-        uint16_t a = type_alignof(type);
+        uint64_t n = size;
+        uint64_t a = type_alignof(type);
         if (num >= 4 || (*fsize && *fsize != n)) {
             return -1;
         }
@@ -24,13 +24,13 @@ static int arm64_hfa_aux(type_t type, int32_t *fsize, int num) {
         assert(s->properties != NULL);
 
         int num0 = num;
-        uint16_t offset = 0;
+        uint64_t offset = 0;
 
         for (int i = 0; i < s->properties->length; ++i) {
             struct_property_t *p = ct_list_value(s->properties, i);
             assert(p != NULL);
-            uint16_t element_size = type_sizeof(p->type);
-            uint16_t element_align = type_alignof(p->type);
+            uint64_t element_size = type_sizeof(p->type);
+            uint64_t element_align = type_alignof(p->type);
             offset = align_up(offset, element_align);
             if (offset != (num - num0) * *fsize) {
                 return -1;
@@ -76,8 +76,8 @@ static int64_t arm64_pcs_aux(int64_t n, type_t *args_types, int64_t *args_pos) {
 
     for (i = 0; i < n; i++) {
         int hfa = arm64_hfa(args_types[i], 0);
-        uint16_t size;
-        uint16_t align;
+        uint64_t size;
+        uint64_t align;
 
         // 数组总是作为指针进行处理
         if (args_types[i].kind == TYPE_FN) {
@@ -443,7 +443,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         // sp operand
         lir_operand_t *dst = indirect_addr_operand(c->module, arg_type, sp_operand, sp_offset);
 
-        uint16_t size = type_sizeof(arg_type);
+        uint64_t size = type_sizeof(arg_type);
 
         if ((arg_item_pos & 1) || (size <= 8)) {
             linked_push(result, lir_op_move(dst, arg_operand));
@@ -464,7 +464,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
     for (int i = 0; i < args->count; ++i) {
         lir_operand_t *arg_operand = args->take[i];
         type_t arg_type = lir_operand_type(arg_operand);
-        uint16_t size = type_sizeof(arg_type);
+        uint64_t size = type_sizeof(arg_type);
 
         int64_t arg_pos = args_pos[i + 1];
         int64_t reg_index = arg_pos >> 1;
@@ -572,7 +572,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
 
 
     // struct 通过指针传递时不需要考虑 hfa 优化。下面才需要考虑 hfa 优化。
-    uint8_t call_result_size = type_sizeof(call_result_type);
+    uint64_t call_result_size = type_sizeof(call_result_type);
     if (call_result_type.kind == TYPE_STRUCT) {
         // 返回值通过 1 到两个寄存器进行返回, 需要记录在 output_regs 中保证 use def 链完整，方便后续的寄存器分配
         slice_t *output_regs = slice_new();
@@ -677,7 +677,7 @@ linked_t *arm64_lower_fn_end(closure_t *c, lir_op_t *op) {
 
     // return_operand 的相关空间由 caller 提供
     type_t return_type = lir_operand_type(return_operand);
-    uint8_t return_size = type_sizeof(return_type);
+    uint64_t return_size = type_sizeof(return_type);
 
     if (return_type.kind == TYPE_STRUCT) {
         int32_t fsize = 0;

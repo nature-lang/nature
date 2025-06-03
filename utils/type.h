@@ -533,9 +533,9 @@ typedef struct {
 // list 的唯一标识， 比如 [int] a, [int] b , [float] c   等等，其实只有一种类型
 // 区分是否是同一种类型，就看 ct_reflect_type 中的 gc_bits 是否一致
 
-static uint16_t rtype_struct_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_struct_t *t);
+static uint64_t rtype_struct_gc_bits(uint8_t *gc_bits, uint64_t *offset, type_struct_t *t);
 
-static uint16_t rtype_array_gc_bits(uint8_t *gc_bits, uint16_t *offset, type_array_t *t);
+static uint64_t rtype_array_gc_bits(uint8_t *gc_bits, uint64_t *offset, type_array_t *t);
 
 rtype_t reflect_type(type_t t);
 
@@ -555,18 +555,18 @@ uint64_t ct_find_rtype_hash(type_t t);
  * @param t
  * @return
  */
-uint8_t type_kind_sizeof(type_kind t);
+uint64_t type_kind_sizeof(type_kind t);
 
-uint16_t type_struct_sizeof(type_struct_t *s);
+uint64_t type_struct_sizeof(type_struct_t *s);
 
 /**
  * 类型在内存中(stack,array,var,reg) 中占用的大小,单位 byte
  * @param t
  * @return
  */
-uint16_t type_sizeof(type_t t);
+uint64_t type_sizeof(type_t t);
 
-uint16_t type_alignof(type_t t);
+uint64_t type_alignof(type_t t);
 
 rtype_t rtype_base(type_kind kind);
 

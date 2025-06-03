@@ -407,7 +407,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
         }
 
         // 已经在栈上为大结构体预留预留了足够的空间
-        uint16_t align_size = align_up(type_sizeof(arg_type), POINTER_SIZE);
+        uint64_t align_size = align_up(type_sizeof(arg_type), POINTER_SIZE);
         rsp_offset += align_size;
     }
 
@@ -635,7 +635,7 @@ static amd64_class_t amd64_classify_merge(amd64_class_t a, amd64_class_t b) {
 }
 
 int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint64_t offset) {
-    uint16_t size = type_sizeof(t);
+    uint64_t size = type_sizeof(t);
 
     if (size > 16) {
         return 0;
@@ -661,8 +661,8 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
         for (int i = 0; i < type_struct->properties->length; i++) {
             struct_property_t *p = ct_list_value(type_struct->properties, i);
             type_t element_type = p->type;
-            uint16_t element_size = type_sizeof(element_type);
-            uint16_t element_align = element_size;
+            uint64_t element_size = type_sizeof(element_type);
+            uint64_t element_align = element_size;
             if (p->type.kind == TYPE_STRUCT) {
                 element_align = p->type.struct_->align;
             } else if (p->type.kind == TYPE_ARR) {
