@@ -72,14 +72,14 @@ static inline int feature_test_build() {
 }
 
 typedef struct {
-    char *name;      // 文件名称
-    uint8_t *content;// 文件内容
+    char *name; // 文件名称
+    uint8_t *content; // 文件内容
     uint64_t length; // 文件长度
 } testar_case_file_t;
 
 typedef struct {
-    char *name;    // 测试用例名称
-    slice_t *files;// testar_case_file_t
+    char *name; // 测试用例名称
+    slice_t *files; // testar_case_file_t
 } testar_case_t;
 
 /**
@@ -100,13 +100,13 @@ static inline testar_case_file_t *parse_file(char *content, size_t *offset) {
         free(file);
         return NULL;
     }
-    start += 4;// 跳过 "--- "
+    start += 4; // 跳过 "--- "
 
     // 检查是否是文件引用格式 "file: path/to/file"
     bool is_file_ref = false;
     if (strncmp(start, "file:", 5) == 0) {
         is_file_ref = true;
-        start += 5;// 跳过 "file:"
+        start += 5; // 跳过 "file:"
         // 跳过可能的空格
         while (*start == ' ') {
             start++;
@@ -130,9 +130,9 @@ static inline testar_case_file_t *parse_file(char *content, size_t *offset) {
         // 获取文件名（路径的最后一部分）
         char *basename = strrchr(file_path, '/');
         if (basename) {
-            basename++;// 跳过 '/'
+            basename++; // 跳过 '/'
         } else {
-            basename = file_path;// 没有路径分隔符，整个就是文件名
+            basename = file_path; // 没有路径分隔符，整个就是文件名
         }
 
         // 更新文件名为基本名称
@@ -214,7 +214,7 @@ static inline slice_t *testar_decompress(char *content) {
         test_case->files = slice_new();
 
         // 读取测试用例名称
-        char *name_start = content + offset + 4;// 跳过 "=== "
+        char *name_start = content + offset + 4; // 跳过 "=== "
         char *name_end = strchr(name_start, '\n');
         size_t name_len = name_end - name_start;
         test_case->name = malloc(name_len + 1);
@@ -259,11 +259,11 @@ static inline char *unescape_string(const char *input) {
                     break;
                 case 's':
                     *p++ = ' ';
-                    break;// 自定义空格转义
+                    break; // 自定义空格转义
                 case '\\':
                     *p++ = '\\';
                     break;
-                default:// 保持原样
+                default: // 保持原样
                     *p++ = '\\';
                     *p++ = *input;
                     break;
@@ -399,4 +399,4 @@ static inline void feature_test_package_sync() {
     feature_test_build();        \
     test_basic();
 
-#endif// NATURE_TEST_H
+#endif // NATURE_TEST_H

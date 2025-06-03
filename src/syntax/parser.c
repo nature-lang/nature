@@ -181,6 +181,14 @@ static bool parser_must_stmt_end(module_t *m) {
     return false;
 }
 
+static bool parser_is_const_type(module_t *m) {
+    return parser_is(m, TOKEN_INT) ||
+           parser_is(m, TOKEN_I8) || parser_is(m, TOKEN_I16) || parser_is(m, TOKEN_I32) || parser_is(m, TOKEN_I64) ||
+           parser_is(m, TOKEN_UINT) || parser_is(m, TOKEN_U8) || parser_is(m, TOKEN_U16) || parser_is(m, TOKEN_U32) ||
+           parser_is(m, TOKEN_U64) || parser_is(m, TOKEN_FLOAT) || parser_is(m, TOKEN_F32) || parser_is(m, TOKEN_F64) ||
+           parser_is(m, TOKEN_BOOL) || parser_is(m, TOKEN_STRING);
+}
+
 static bool parser_is_basic_type(module_t *m) {
     if (parser_is(m, TOKEN_VAR) || parser_is(m, TOKEN_NULL) || parser_is(m, TOKEN_INT) || parser_is(m, TOKEN_VOID) ||
         parser_is(m, TOKEN_I8) || parser_is(m, TOKEN_I16) || parser_is(m, TOKEN_I32) || parser_is(m, TOKEN_I64) ||
@@ -342,13 +350,16 @@ static type_t parser_single_type(module_t *m) {
     if (parser_consume(m, TOKEN_LEFT_SQUARE)) {
         type_t element_type = parser_type(m);
         if (parser_consume(m, TOKEN_STMT_EOF)) {
-            token_t *t = parser_must(m, TOKEN_LITERAL_INT);
-            int length = atoi(t->literal);
-            PARSER_ASSERTF(length > 0, "array len must > 0")
+            //            token_t *t = parser_must(m, TOKEN_LITERAL_INT);
+            //            int length = atoi(t->literal);
+            //            PARSER_ASSERTF(length > 0, "array len must > 0")
+            ast_expr_t *length_expr = expr_new_ptr(m);
+            *length_expr = parser_expr(m);
 
             type_array_t *type_arr = NEW(type_array_t);
             type_arr->element_type = element_type;
-            type_arr->length = length;
+            type_arr->length = 0;
+            type_arr->length_expr = length_expr;
             parser_must(m, TOKEN_RIGHT_SQUARE);
             result.kind = TYPE_ARR;
             result.array = type_arr;
@@ -2233,6 +2244,29 @@ static ast_tuple_destr_t *parser_var_tuple_destr(module_t *m) {
     return result;
 }
 
+static ast_stmt_t *parser_constdef_stmt(module_t *m) {
+    ast_stmt_t *result = stmt_new(m);
+
+    parser_must(m, TOKEN_CONST);
+    ast_constdef_stmt_t *constdef = NEW(ast_constdef_stmt_t);
+
+    // 可选的 const 类型， string/int(i..)/float(f..)
+    // 暂时看来没有用，如果需要在使用的时候主动进行 as
+    //    if (parser_is_const_type(m)) {
+    //        constdef->type = parser_single_type(m);
+    //    }
+
+    token_t *ident_token = parser_must(m, TOKEN_IDENT);
+    constdef->ident = ident_token->literal;
+    parser_must(m, TOKEN_EQUAL);
+    constdef->right = expr_new_ptr(m);
+    *constdef->right = parser_expr(m);
+
+    result->assert_type = AST_STMT_CONSTDEF;
+    result->value = constdef;
+    return result;
+}
+
 /**
  * var a = xxx
  * var (a, b) = xx
@@ -2673,6 +2707,8 @@ static ast_stmt_t *parser_stmt(module_t *m) {
     if (parser_is(m, TOKEN_VAR)) {
         // 更快的发现类型推断上的问题
         return parser_var_begin_stmt(m);
+    } else if (parser_is(m, TOKEN_CONST)) {
+        return parser_constdef_stmt(m);
     } else if (is_type_begin_stmt(m)) {
         return parser_type_begin_stmt(m);
     } else if (parser_is(m, TOKEN_LEFT_PAREN)) {
@@ -2722,6 +2758,8 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
     // module parser 只包含着几种简单语句
     if (parser_is(m, TOKEN_VAR)) {
         return parser_var_begin_stmt(m);
+    } else if (parser_is(m, TOKEN_CONST)) {
+        return parser_constdef_stmt(m);
     } else if (is_type_begin_stmt(m)) {
         return parser_type_begin_stmt(m);
     } else if (parser_is(m, TOKEN_LABEL)) {

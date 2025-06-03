@@ -1390,7 +1390,7 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
         return infer_fn_decl(m, fndef, type_kind_new(TYPE_UNKNOWN));
     }
 
-    INFER_ASSERTF(false, "symbol type not expect");
+    INFER_ASSERTF(false, "unable to recognize symbol type");
     exit(1);
 }
 

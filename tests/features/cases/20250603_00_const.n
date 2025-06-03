@@ -1,0 +1,10 @@
+const B0 = 10
+
+[int;B0] global_arr = []
+
+fn main() {
+    const b1 = 12
+    [int;B0 + b1] local_arr = []
+
+    println(global_arr[0], global_arr[9], local_arr[11])
+}
