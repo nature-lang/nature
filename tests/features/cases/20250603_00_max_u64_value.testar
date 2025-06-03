@@ -1,0 +1,9 @@
+=== test_max_u64_value
+--- main.n
+fn main():void! {
+    u64 max = 18446744073709551615
+    println(max)
+}
+
+--- output.txt
+18446744073709551615
