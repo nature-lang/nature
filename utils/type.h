@@ -713,10 +713,16 @@ static inline bool is_float(type_kind kind) {
 }
 
 
+static inline bool is_signed_integer(type_kind kind) {
+    return kind == TYPE_INT || kind == TYPE_INT8 || kind == TYPE_INT16 || kind == TYPE_INT32 || kind == TYPE_INT64;
+}
+
+static inline bool is_unsigned_integer(type_kind kind) {
+    return kind == TYPE_UINT || kind == TYPE_UINT8 || kind == TYPE_UINT16 || kind == TYPE_UINT32 || kind == TYPE_UINT64;
+}
+
 static inline bool is_integer(type_kind kind) {
-    return kind == TYPE_INT || kind == TYPE_INT8 || kind == TYPE_INT16 || kind == TYPE_INT32 || kind == TYPE_INT64 ||
-           kind == TYPE_UINT ||
-           kind == TYPE_UINT8 || kind == TYPE_UINT16 || kind == TYPE_UINT32 || kind == TYPE_UINT64;
+    return is_signed_integer(kind) || is_unsigned_integer(kind);
 }
 
 static inline bool is_integer_or_anyptr(type_kind kind) {

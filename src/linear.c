@@ -3122,14 +3122,28 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
 
     if (is_integer(literal->kind)) {
         char *convert_endptr;
-        int64_t i = strtoll(literal->value, &convert_endptr, 0);
+        union {
+            uint64_t u;
+            int64_t s;
+        } i;
+        const bool is_unsigned = is_unsigned_integer(literal->kind);
+
+        if (is_unsigned) {
+            i.u = strtoull(literal->value, &convert_endptr, 0);
+        } else {
+            i.s = strtoll(literal->value, &convert_endptr, 0);
+        }
         if (*convert_endptr != '\0') {
             LINEAR_ASSERTF(false, "covert '%s' to number failed", literal->value)
         }
 
         lir_imm_t *imm_operand = NEW(lir_imm_t);
         imm_operand->kind = cross_kind_trans(literal->kind);
-        imm_operand->int_value = i;
+        if (is_unsigned) {
+            imm_operand->uint_value = i.u;
+        } else {
+            imm_operand->int_value = i.s;
+        }
         lir_operand_t *src = operand_new(LIR_OPERAND_IMM, imm_operand);
         return linear_super_move(m, expr.type, target, src);
     }
