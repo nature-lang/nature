@@ -1,42 +1,35 @@
-type vector2_t = struct{
-    f32 x     // Vector x component
-    f32 y     // Vector y component
+fn dump(f32 amount) {
+    println(amount)
 }
 
-type color_t = struct{
-    u8 r
-    u8 g
-    u8 b
-    u8 a
-}
-
-type tank_t = struct {
-    vector2_t position
-    i32 direction
-    bool active
-    f32 speed
-    i32 health
-    color_t color
-}
-
-type rectangle_t = struct{
-    f32 x        // Rectangle top-left corner position x
-    f32 y        // Rectangle top-left corner position y
-    f32 width    // Rectangle width
-    f32 height   // Rectangle height
-}
-
-fn get_tank_rect(tank_t t):rectangle_t {
-    return rectangle_t{x = t.position.x, y = t.position.y, width = 10.0, height = 10.0}
+type atm_t = struct {
+    string name
+    string address
+    f32 amount
+    int count
+    string bank
 }
 
 fn main() {
-    var t = tank_t{
-        position = vector2_t{
-            x = 3.0,
-            y = 4.0,
-        },
+    [atm_t] list = vec_new(atm_t{}, 8)
+
+    list[0] = atm_t{
+        amount = 100,
     }
-    var r = get_tank_rect(t)
-    println(r.x, r.y, r.width, r.height)
+
+    list[3] = atm_t{
+        amount = 400,
+    }
+
+    list[5] = atm_t{
+        amount = 600,
+    }
+
+    list[7] = atm_t{
+        amount = 800,
+    }
+
+    for int i = 0; i < 8; i += 1 {
+        dump(list[i].amount)
+    }
 }
