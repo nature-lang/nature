@@ -329,9 +329,9 @@ linked_t *arm64_lower_fn_begin(closure_t *c, lir_op_t *op) {
         int32_t hfa_count = arm64_hfa(return_type, &fsize);
 
         if (hfa_count > 0 && hfa_count <= 4) {
-            // HFA 返回值不需要特殊处理，直接使用 v0-v3 寄存器
-            // 增加 nop 指令让参数更加完整
-            linked_push(result, lir_op_output(LIR_OPCODE_NOP, c->return_operand));
+            // hfa 可能存在小于 < 16byte 等情况，此时 caller 不会为 struct 申请空间，所以需要在 calle 中申请栈空间临时存放结构体数据
+            // 并在 fn end 时将数据从栈中移动到 hfa 要求的目标结构体 v0-v3 中
+            linked_push(result, lir_stack_alloc(c, return_type, c->return_operand));
         } else if (return_type.kind == TYPE_ARR || type_sizeof(return_type) > 16) {
             assert(return_type.kind == TYPE_STRUCT || return_type.kind == TYPE_ARR);
 
@@ -344,7 +344,7 @@ linked_t *arm64_lower_fn_begin(closure_t *c, lir_op_t *op) {
             lir_operand_t *x8_reg = operand_new(LIR_OPERAND_REG, x8);
             linked_push(result, lir_op_move(return_operand, x8_reg));
         } else {
-            // 小于等于 16 字节的结构体或基本类型，不需要特殊处理
+            // 小于等于 16 字节的基本类型，不需要特殊处理, 结构体则需要由 callee 申请临时空间
             if (return_type.kind == TYPE_STRUCT) {
                 linked_push(result, lir_stack_alloc(c, return_type, c->return_operand));
             } else {
@@ -636,13 +636,12 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
 
             int64_t struct_offset = 0;
             for (int j = 0; j < n; ++j) {
-                struct_offset += fsize;
-
                 lir_operand_t *src_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index + j, ftype_kind));
                 lir_operand_t *dst_operand = indirect_addr_operand(c->module, type_kind_new(ftype_kind),
                                                                    call_result, struct_offset);
 
                 linked_push(result, lir_op_move(dst_operand, src_operand));
+                struct_offset += fsize;
             }
         }
     } else {
@@ -664,6 +663,9 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
     return result;
 }
 
+/**
+ * 从 return operand 取出数据存放在 abi 要求的寄存器中
+ */
 linked_t *arm64_lower_fn_end(closure_t *c, lir_op_t *op) {
     assert(c != NULL);
     assert(op != NULL);
@@ -684,7 +686,7 @@ linked_t *arm64_lower_fn_end(closure_t *c, lir_op_t *op) {
         int32_t hfa_count = arm64_hfa(return_type, &fsize);
 
         if (hfa_count > 0 && hfa_count <= 4) {
-            // HFA 优化情况
+            // 使用 HFA 优化
             type_kind ftype_kind = (fsize == 4) ? TYPE_FLOAT32 : TYPE_FLOAT64;
             for (int i = 0; i < hfa_count; i++) {
                 lir_operand_t *src = indirect_addr_operand(c->module, type_kind_new(ftype_kind), return_operand,
