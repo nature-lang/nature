@@ -1,0 +1,150 @@
+=== test_array_access
+--- main.n
+type color_t = struct{
+    u8 r
+    u8 g
+    u8 b
+    u8 a
+}
+
+[color_t;3] colors = [
+    color_t{r = 186, g = 207, b = 139, a = 255},
+    color_t{r = 186, g = 207, b = 139, a = 255},
+    color_t{r = 186, g = 207, b = 139, a = 255},
+]
+
+
+fn draw_rectangle(color_t c) {
+    println(c.r, c.g, c.b, c.a)
+}
+
+fn main() {
+    draw_rectangle(colors[0])
+}
+
+--- output.txt
+186 207 139 255
+
+=== test_vec_access
+--- main.n
+type color_t = struct{
+    u8 r
+    u8 g
+    u8 b
+    u8 a
+}
+
+[color_t] colors = [
+    color_t{r = 186, g = 207, b = 139, a = 255},
+    color_t{r = 186, g = 207, b = 139, a = 255},
+    color_t{r = 186, g = 207, b = 139, a = 255},
+]
+
+
+fn draw_rectangle(color_t c) {
+    println(c.r, c.g, c.b, c.a)
+}
+
+fn main() {
+    draw_rectangle(colors[1])
+}
+
+--- output.txt
+186 207 139 255
+
+=== test_array_assign
+--- main.n
+fn dump(f32 amount) {
+    println(amount)
+}
+
+type atm_t = struct {
+    string name
+    string address
+    f32 amount
+    int count
+    string bank
+}
+
+fn main() {
+    [atm_t;8] array = []
+
+    array[0] = atm_t{
+        amount = 100,
+    }
+
+    array[3] = atm_t{
+        amount = 400,
+    }
+
+    array[5] = atm_t{
+        amount = 600,
+    }
+
+    array[7] = atm_t{
+        amount = 800,
+    }
+
+    for int i = 0; i < 8; i += 1 {
+        dump(array[i].amount)
+    }
+}
+
+--- output.txt
+100.000000
+0.000000
+0.000000
+400.000000
+0.000000
+600.000000
+0.000000
+800.000000
+
+
+=== test_vec_assign
+--- main.n
+fn dump(f32 amount) {
+    println(amount)
+}
+
+type atm_t = struct {
+    string name
+    string address
+    f32 amount
+    int count
+    string bank
+}
+
+fn main() {
+    [atm_t] list = vec_new(atm_t{}, 8)
+
+    list[0] = atm_t{
+        amount = 100,
+    }
+
+    list[3] = atm_t{
+        amount = 400,
+    }
+
+    list[5] = atm_t{
+        amount = 600,
+    }
+
+    list[7] = atm_t{
+        amount = 800,
+    }
+
+    for int i = 0; i < 8; i += 1 {
+        dump(list[i].amount)
+    }
+}
+
+--- output.txt
+100.000000
+0.000000
+0.000000
+400.000000
+0.000000
+600.000000
+0.000000
+800.000000

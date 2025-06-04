@@ -1967,6 +1967,13 @@ static lir_operand_t *linear_vec_access(module_t *m, ast_expr_t expr, lir_operan
 
     if (!is_stack_ref_big_type(expr.type)) {
         src = indirect_addr_operand(m, expr.type, src, 0);
+    } else {
+        if (target == NULL) {
+            //            target = temp_var_operand_with_alloc(m, expr.type);
+            assert(src->assert_type == LIR_OPERAND_VAR);
+            lir_var_t *src_var = src->value;
+            src_var->type = type_copy(expr.type);
+        }
     }
 
     // bug: probindex[0].index = 1, 所以 target 应该由外部控制，如果没有 target 就返回引用的指针
@@ -2027,6 +2034,8 @@ static lir_operand_t *linear_vec_new(module_t *m, ast_expr_t expr, lir_operand_t
 /**
  * int a = list[0]
  * list[0] = a
+ *
+ * target 不存在时表明需要地址引用, 比如 array_assign 中就调用了 array_access
  */
 static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_array_access_t *ast = expr.value;
@@ -2047,7 +2056,7 @@ static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_oper
     if (ast->left.type.kind == TYPE_PTR || ast->left.type.kind == TYPE_RAWPTR) {
         arr_type = ast->left.type.ptr->value_type;
     }
-
+    // item_targe 的类型是 ptr, 指向了 element_addr,
     lir_operand_t *item_target = linear_inline_arr_element_addr(m, array_target, index_target, arr_type);
 
     //    push_rt_call(m, RT_CALL_ARRAY_ELEMENT_ADDR, item_target, 3, array_target, int_operand(rtype_hash),
@@ -2055,6 +2064,13 @@ static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_oper
 
     if (!is_stack_ref_big_type(expr.type)) {
         item_target = indirect_addr_operand(m, expr.type, item_target, 0);
+    } else {
+        if (target == NULL) {
+            //            target = temp_var_operand_with_alloc(m, expr.type);
+            assert(item_target->assert_type == LIR_OPERAND_VAR);
+            lir_var_t *item_var = item_target->value;
+            item_var->type = type_copy(expr.type);
+        }
     }
 
     // 如果此时 list 发生了 grow, 则该地址会变成一个无效的脏地址，比如 grow(list).foo = list[1]
