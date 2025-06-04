@@ -1551,7 +1551,7 @@ static void analyzer_constant_folding(module_t *m, ast_expr_t *expr) {
                     ast_literal_t *result_literal = NEW(ast_literal_t);
                     result_literal->kind = TYPE_INT;
                     result_literal->value = malloc(32);
-                    snprintf(result_literal->value, 32, "%lld", result);
+                    snprintf(result_literal->value, 32, "%ld", result);
 
                     expr->assert_type = AST_EXPR_LITERAL;
                     expr->value = result_literal;
@@ -1614,7 +1614,7 @@ static void analyzer_constant_folding(module_t *m, ast_expr_t *expr) {
                         ast_literal_t *result_literal = NEW(ast_literal_t);
                         result_literal->kind = TYPE_INT;
                         result_literal->value = malloc(32);
-                        snprintf(result_literal->value, 32, "%lld", result);
+                        snprintf(result_literal->value, 32, "%ld", result);
 
                         expr->assert_type = AST_EXPR_LITERAL;
                         expr->value = result_literal;

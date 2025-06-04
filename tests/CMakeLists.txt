@@ -12,9 +12,11 @@ endif ()
 message("LIBC_STATIC: ${LIBC_STATIC}")
 
 add_executable(test_arm64_encoding test_arm64_encoding.c ${UTILS} ${SRC})
+target_link_libraries(test_arm64_encoding m)
 add_test(test_arm64_encoding test_arm64_encoding)
 
 add_executable(test_amd64_encoding test_amd64_encoding.c ${UTILS} ${SRC})
+target_link_libraries(test_amd64_encoding m)
 add_test(test_amd64_encoding test_amd64_encoding)
 
 # ---------------------------------- cases 测试 ------------------------------------------
@@ -30,6 +32,7 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
 
     # 生成测试可执行文件
     add_executable(${TEST_NAME} ${TEST_SOURCE} ${SRC} ${CMD} ${UTILS})
+    target_link_libraries(${TEST_NAME} m pthread) # 链接数学计算库
 
     # 查找对应的测试用例文件或目录
     set(CASE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}")

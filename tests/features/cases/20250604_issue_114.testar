@@ -1,3 +1,5 @@
+=== test_big_struct
+--- main.n
 type vector2_t = struct{
     f32 x     // Vector x component
     f32 y     // Vector y component
@@ -40,3 +42,6 @@ fn main() {
     var r = get_tank_rect(t)
     println(r.x, r.y, r.width, r.height)
 }
+
+--- output.txt
+3.000000 4.000000 10.000000 10.000000
