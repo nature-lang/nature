@@ -1,35 +1,36 @@
-fn dump(f32 amount) {
+fn dump<T>(T amount) {
     println(amount)
 }
 
-type atm_t = struct {
-    string name
-    string address
-    f32 amount
-    int count
-    string bank
+type vector2_t = struct{
+    f32 x     // Vector x component
+    f32 y     // Vector y component
+}
+
+type direction_t = i32
+
+type tank_t = struct {
+    vector2_t position
+    direction_t direction
+    bool active
+    f32 speed
+    i32 health
+}
+
+var player = {'a': vector2_t{x=890, y=860}, 'b': vector2_t{x=-100, y=-1}}
+
+fn fire_bullet(vector2_t position, direction_t direction, bool is_player) {
+    dump(position.x)
+    dump(position.y)
+    dump(direction)
+    dump(is_player)
+}
+
+fn test1() {
+    fire_bullet(player['a'], 0, true)
+    fire_bullet(player['b'], 0, true)
 }
 
 fn main() {
-    [atm_t] list = vec_new(atm_t{}, 8)
-
-    list[0] = atm_t{
-        amount = 100,
-    }
-
-    list[3] = atm_t{
-        amount = 400,
-    }
-
-    list[5] = atm_t{
-        amount = 600,
-    }
-
-    list[7] = atm_t{
-        amount = 800,
-    }
-
-    for int i = 0; i < 8; i += 1 {
-        dump(list[i].amount)
-    }
+    test1()
 }

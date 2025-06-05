@@ -37,3 +37,8 @@ void init_safepoint(int64_t v) {
 int64_t get_safepoint() {
     return tls_safepoint;
 }
+
+void test_arm64_abi_draw_line_ex(vector2_t v1, vector2_t v2) {
+    printf("v1 %f, %f\n", v1.x, v1.y);
+    printf("v2 %f, %f\n", v1.x, v2.y);
+}

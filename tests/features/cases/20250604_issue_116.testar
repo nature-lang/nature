@@ -148,3 +148,145 @@ fn main() {
 600.000000
 0.000000
 800.000000
+
+
+=== test_struct_access
+--- main.n
+fn dump<T>(T amount) {
+    println(amount)
+}
+
+type vector2_t = struct{
+    f32 x     // Vector x component
+    f32 y     // Vector y component
+}
+
+type direction_t = i32
+
+type tank_t = struct {
+    vector2_t position
+    direction_t direction
+    bool active
+    f32 speed
+    i32 health
+}
+
+tank_t player = tank_t{
+    position = vector2_t{x=890, y=860},
+    direction = 12,
+    active = true,
+}
+
+fn fire_bullet(vector2_t position, direction_t direction, bool is_player) {
+    dump(position.x)
+    dump(position.y)
+    dump(direction)
+    dump(is_player)
+}
+
+fn test1() {
+    fire_bullet(player.position, 0, true)
+}
+
+fn main() {
+    test1()
+}
+
+--- output.txt
+890.000000
+860.000000
+0
+true
+
+=== test_tup_access
+--- main.n
+fn dump<T>(T amount) {
+    println(amount)
+}
+
+type vector2_t = struct{
+    f32 x     // Vector x component
+    f32 y     // Vector y component
+}
+
+type direction_t = i32
+
+type tank_t = struct {
+    vector2_t position
+    direction_t direction
+    bool active
+    f32 speed
+    i32 health
+}
+
+var player = (vector2_t{x=890, y=860}, 12, true)
+
+fn fire_bullet(vector2_t position, direction_t direction, bool is_player) {
+    dump(position.x)
+    dump(position.y)
+    dump(direction)
+    dump(is_player)
+}
+
+fn test1() {
+    fire_bullet(player[0], 0, true)
+}
+
+fn main() {
+    test1()
+}
+
+--- output.txt
+890.000000
+860.000000
+0
+true
+
+=== test_map_struct_access
+--- main.n
+fn dump<T>(T amount) {
+    println(amount)
+}
+
+type vector2_t = struct{
+    f32 x     // Vector x component
+    f32 y     // Vector y component
+}
+
+type direction_t = i32
+
+type tank_t = struct {
+    vector2_t position
+    direction_t direction
+    bool active
+    f32 speed
+    i32 health
+}
+
+var player = {'a': vector2_t{x=890, y=860}, 'b': vector2_t{x=-100, y=-1}}
+
+fn fire_bullet(vector2_t position, direction_t direction, bool is_player) {
+    dump(position.x)
+    dump(position.y)
+    dump(direction)
+    dump(is_player)
+}
+
+fn test1() {
+    fire_bullet(player['a'], 0, true)
+    fire_bullet(player['b'], 0, true)
+}
+
+fn main() {
+    test1()
+}
+
+--- output.txt
+890.000000
+860.000000
+0
+true
+-100.000000
+-1.000000
+0
+true
