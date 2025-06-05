@@ -1,24 +1,5 @@
 import co
 
-// type waitq_t = struct{
-//     rawptr<co.linkco_t> head
-//    rawptr<co.linkco_t> rear
-//}
-
-// type chan<T> = struct{
-//     [T] buf
-//     waitq_t sendq
-//    waitq_t recvq
-
-//    i64 buf_front
-//    i64 buf_rear
-
-//    int msg_size
-
-//    [u8;40] lock
-//    bool closed
-//}
-
 // var ch = chan_new<T>()
 fn chan_new<T>(...[int] args):chan<T> {
     int rhash = @reflect_hash(chan<T>)

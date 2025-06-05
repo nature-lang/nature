@@ -184,15 +184,6 @@ static amd64_asm_operand_t *lir_operand_trans_amd64(closure_t *c, lir_op_t *op, 
     assert(false && "operand type not expected");
 }
 
-
-//static asm_operation_t *reg_cleanup(reg_t *reg) {
-//    // TODO ah/bh/ch/dh 不能这么清理
-//
-//    reg_t *r = (reg_t *) reg_find(reg->index, QWORD);
-//    assert(r && "reg not found");
-//    return ASM_INST("xor", { REG(r), REG(r) });
-//}
-
 /**
  * op->result must reg
  * @param c

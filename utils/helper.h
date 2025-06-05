@@ -37,14 +37,6 @@ static char tlsprintf_buf[1024];
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
-// #undef free
-// #define free(_ptr) \
-//     do {                 \
-//         if (_ptr) {     \
-//             free(_ptr); \
-//         }              \
-//     } while(0)
-
 
 static inline void *reallocator(void *ptr, uint64_t size) {
     void *ptr1;
@@ -610,19 +602,6 @@ static inline void sys_memory_used_exec(void *addr, uint64_t size) {
            span, &span->alloc_locker,
            (void *) span->base, pages_count * ALLOC_PAGE_SIZE);
 }
-
-// darwin/arm64 一旦声明为 exec 后就无法去掉
-//static inline void sys_memory_unused_exec(void *addr, uint64_t size) {
-//    // 增加 EXEC
-//    if (mprotect(addr, size, PROT_READ | PROT_WRITE) == -1) {
-//        assertf(false, "mprotect failed, page_start=%p, size=%lu, err=%s", (void *) addr,
-//                size,
-//                strerror(errno));
-//    }
-//    DEBUGF("[sys_memory_unused_exec] jit span malloc and mprotect success, mspan=%p, mspan_lock=%p, base=%p, pages_size=%ld",
-//           span, &span->alloc_locker,
-//           (void *) span->base, pages_count * ALLOC_PAGE_SIZE);
-//}
 
 static inline void *sys_memory_alloc(uint64_t size) {
     void *ptr;

@@ -44,10 +44,6 @@ static inline void signal_handle(int sig) {
         // 设置 recv 的值
         atomic_store(&signal_recv, recv);
 
-//        if (signal_loop_co) {
-//            // TODO 如果已经存在，则避免重复写入
-//            co_ready(signal_loop_co);
-//        }
         DEBUGF("[runtime.signal_handle] signal %d received, current signal_recv %ld", sig, signal_recv);
         pthread_mutex_unlock(&signal_locker);
         return;

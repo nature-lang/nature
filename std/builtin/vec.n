@@ -1,14 +1,5 @@
 import runtime
 
-// 暂时无法通过 struct 推导
-// type vec<T> = struct{
-//    anyptr data
-//    int len
-//    int cap
-//    int reflect_hash
-//    int ele_reflect_hash
-// }
-
 fn vec_new<T>(T value, int len):vec<T> {
     int hash = @reflect_hash(vec<T>)
     int element_hash = @reflect_hash(T)

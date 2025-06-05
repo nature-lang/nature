@@ -1384,40 +1384,6 @@ void resolve_data_flow(closure_t *c) {
 }
 
 /**
- * 如果是 input 则 使用 op_id < last_range->to+1
- * output 则不用
- * @param i
- * @param op_id
- * @return
- */
-//interval_t *interval_child_at(interval_t *i, int op_id, bool is_use) {
-//    assert(op_id >= 0 && "invalid op_id (method can not be called for spill moves)");
-//
-//    if (linked_empty(i->children)) {
-//        return i;
-//    }
-//
-//    int last_to_offset = is_use ? 1 : 0;
-//
-//    if (i->first_range->from <= op_id && op_id < (i->last_range->to + last_to_offset)) {
-//        return i;
-//    }
-//
-//    assertf(i->children->count > 0, "interval=%s not contains op_id=%d", i->var->ident, op_id);
-//
-//    // i->var 在不同的指令处可能作为 input 也可能作为 output
-//    // 甚至在同一条指令处即作为 input，又作为 output， 比如 20: v1 + 1 -> v2
-//    LINKED_FOR(i->children) {
-//        interval_t *child = LINKED_VALUE();
-//        if (child->first_range->from <= op_id && op_id < (child->last_range->to + last_to_offset)) {
-//            return child;
-//        }
-//    }
-//
-//    assert(false && "op_id not in interval");
-//}
-
-/**
  * 由于 ssa resolve 的存在，所以存在从 interval A(stack A) 移动到 interval B(stackB)
  * 但是大多数寄存器不支持从 stack 移动到 stack，所以必须给 phi def 添加一个寄存器，也就是 use_pos kind = MUST
  *

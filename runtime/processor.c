@@ -713,38 +713,6 @@ void mark_ptr_black(void *value) {
 }
 
 /**
- * TODO target use debug, can delete
- * yield 的入口也是这里
- * @param target
- */
-//void pre_tplcall_hook() {
-//    coroutine_t *co = coroutine_get();
-//    n_processor_t *p = processor_get();
-//
-//    // 这里需要抢占到锁再进行更新，否则和 wait_sysmon 存在冲突。
-//    // 如果 wait_sysmon 已经获取了锁，则会阻塞在此处等待 wait_symon 进行抢占, 避免再次进入 is_tpl
-//    processor_set_status(p, P_STATUS_TPLCALL);
-//
-//    CO_SCAN_REQUIRE(co)
-//}
-
-//void post_tplcall_hook() {
-//    n_processor_t *p = processor_get();
-//    TRACEF("[runtime.post_tplcall_hook] p=%p, p_index_%d=%d will set processor_status, running",
-//           processor_get(),
-//           p->share, p->index);
-//    processor_set_status(p, P_STATUS_RUNNING);
-//}
-//
-//void post_rtcall_hook(char *target) {
-//    n_processor_t *p = processor_get();
-//    DEBUGF("[runtime.post_rtcall_hook] p=%p, target=%s, p_index_%d=%d will set processor_status, running",
-//           processor_get(), target,
-//           p->share, p->index);
-//    processor_set_status(p, P_STATUS_RUNNING);
-//}
-
-/**
  * 一定是开启了 gc_barrier 才会进行 scan co_list, 如果 rti_gc_malloc 在 gc_barrier 之前调用
  * 且 co 没有赋值给 co_list, 则 new co 不能正确的被 mark, 会被错误清理, result 同理
  * @param fn

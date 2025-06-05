@@ -322,39 +322,3 @@ void amd64_reg_init() {
     zmm14 = reg_new("zmm14", 14, LIR_FLAG_ALLOC_FLOAT, ZWORD, 0);
     zmm15 = reg_new("zmm15", 15, LIR_FLAG_ALLOC_FLOAT, ZWORD, 0);
 }
-
-/**
- * TODO 选择 fit reg 还是大 reg?
- * amd64 下统一使用 8byte 寄存器或者 16byte xmm 寄存器
- * 返回下一个可用的寄存器或者内存地址
- * 但是这样就需要占用 rbp 偏移，怎么做？
- * 每个函数定义的最开始已经使用 sub n => rsp, 已经申请了栈空间 [0 ~ n]
- * 后续函数中调用其他函数所使用的栈空间都是在 [n ~ 无限] 中, 直接通过 push 操作即可
- * 但是需要注意 push 的顺序，最后的参数先 push (也就是指令反向 merge)
- * 如果返回了 NULL 就说明没有可用的寄存器啦，加一条 push 就行了
- * @param count
- * @param size
- * @return
- */
-//reg_t *amd64_fn_param_next_reg(uint8_t *used, type_kind kind) {
-//    bool floated = is_float(kind);
-//    uint8_t used_index = 0;
-//    if (floated) {
-//        used_index = 1;
-//    }
-//    uint8_t index = used[used_index]++;
-//    uint8_t int_param_indexes[] = {7, 6, 2, 1, 8, 9};
-//    // 通用寄存器 (0~5 = 6 个) rdi, rsi, rdx, rcx, r8, r9
-//    if (!floated && index <= 5) {
-//        uint8_t reg_index = int_param_indexes[index];
-//        return (reg_t *) cross_reg_select(reg_index, kind);
-//    }
-//
-//    // 浮点寄存器(0~7 = 8 个) xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7
-//    if (floated && index <= 7) {
-//        return (reg_t *) cross_reg_select(index, kind);
-//    }
-//
-//    return NULL;
-//}
-
