@@ -513,14 +513,14 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
 
                 int64_t struct_offset = 0;
                 for (int j = 0; j < n; ++j) {
-                    struct_offset += fsize;
-
                     lir_operand_t *dst_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index + j, ftype_kind));
                     lir_operand_t *src_operand = indirect_addr_operand(c->module, type_kind_new(ftype_kind),
                                                                        arg_operand, struct_offset);
 
                     linked_push(result, lir_op_move(dst_operand, src_operand));
                     slice_push(use_regs, dst_operand->value);
+
+                    struct_offset += fsize;
                 }
             } else {
                 lir_operand_t *dst_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, arg_type.kind));

@@ -2312,12 +2312,22 @@ static lir_operand_t *linear_struct_select(module_t *m, ast_expr_t expr, lir_ope
     assert(type_struct.kind == TYPE_STRUCT);
 
     uint64_t offset = type_struct_offset(type_struct.struct_, ast->key);
+
+    // 如果 target 存在则进行数据 copy, 否则优先返回引用 operand
+    // 对于 scala type 返回 [struct_target+offset|scala type]
+    // 对于 big type 使用 lea 加载指针地址，并返回对应的指针类型
+
     // 先找到存放地址(可以用 indirect addr 算出来, 也可以直接用加法算出来？)
     // 总之先找到存放数据的 addr(这里直接计算出了)
     lir_operand_t *src = indirect_addr_operand(m, expr.type, struct_target, offset);
 
     if (is_stack_ref_big_type(expr.type)) {
         src = lea_operand_pointer(m, src);
+        assert(src->assert_type == LIR_OPERAND_VAR);
+        lir_var_t *src_var = src->value;
+
+        // 调整为 expr.type
+        src_var->type = type_copy(expr.type);
     }
 
     return linear_super_move(m, expr.type, target, src);
@@ -2334,6 +2344,7 @@ static lir_operand_t *linear_struct_select(module_t *m, ast_expr_t expr, lir_ope
 static lir_operand_t *linear_tuple_access(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_tuple_access_t *ast = expr.value;
 
+    // may be symbol_var
     lir_operand_t *tuple_target = linear_expr(m, ast->left, NULL);
     type_t t = ast->left.type;
     uint64_t item_size = type_sizeof(ast->element_type);
@@ -2344,6 +2355,11 @@ static lir_operand_t *linear_tuple_access(module_t *m, ast_expr_t expr, lir_oper
     // 如果是 struct/arr 的话，src 中存储的应该是指向的 addr, 从而方便 super move
     if (is_stack_ref_big_type(ast->element_type)) {
         src = lea_operand_pointer(m, src);
+        assert(src->assert_type == LIR_OPERAND_VAR);
+        lir_var_t *src_var = src->value;
+
+        // 调整为 expr.type
+        src_var->type = type_copy(expr.type);
     }
 
     return linear_super_move(m, ast->element_type, target, src);

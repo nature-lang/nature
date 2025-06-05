@@ -45,3 +45,51 @@ fn main() {
 
 --- output.txt
 3.000000 4.000000 10.000000 10.000000
+
+
+=== test_hfa_float_param
+--- main.n
+fn dump(f32 amount) {
+    println(amount)
+}
+
+type vector2_t = struct{
+    f32 x     // Vector x component
+    f32 y     // Vector y component
+}
+
+fn draw_line_ex(vector2_t v1, vector2_t v2) {
+    dump(v1.x)
+    dump(v1.y)
+    dump(v2.x)
+    dump(v2.y)
+}
+
+
+#linkid test_arm64_abi_draw_line_ex
+fn test_arm64_abi_draw_line_ex(vector2_t v1, vector2_t v2)
+
+fn test1() {
+    var v1 = vector2_t{x = 915, y = 920}
+    var v2 = vector2_t{x = 900, y = 895}
+    draw_line_ex(v1, v2)
+}
+
+fn test2() {
+    var v1 = vector2_t{x = -915.0, y = -920.0}
+    var v2 = vector2_t{x = 900.0, y = 895.0}
+    test_arm64_abi_draw_line_ex(v1, v2)
+}
+
+fn main() {
+    test1()
+    test2()
+}
+
+--- output.txt
+915.000000
+920.000000
+900.000000
+895.000000
+v1 -915.000000, -920.000000
+v2 -915.000000, 895.000000

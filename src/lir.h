@@ -953,12 +953,16 @@ static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir
     // comment: indirect symbol var 在 lower symbol var 需要嵌套处理，比较麻烦， 所以需要通过手段消除 symbol_var 嵌套带来的问题
     // 尽量在外部就尽量通过一些手段消除 symbol_var 带来的影响, 只保留简单的 scalar 类型的 symbol_var
     // 如果 base 是 global symbol var, 则加载 symbol addr 作为 indirect base
-    //    if (base->assert_type == LIR_OPERAND_SYMBOL_VAR) {
-    //        lir_symbol_var_t *symbol_var = base->value;
-    //        lir_operand_t *temp = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-    //        // 没有原始类型判断不出来！还是外部进行处理的吧
-    //
-    //    }
+    if (base->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        lir_symbol_var_t *symbol_var = base->value;
+        // 由于所有架构的 lower 都需要特殊处理 indirect base = symbol_var 的情况。此处对 base 进行特殊处理 (vec/tup/map) 三种情况包含 indirect 的情况
+        assertf(symbol_var->kind == TYPE_VEC || symbol_var->kind == TYPE_TUPLE || symbol_var->kind == TYPE_STRING || symbol_var->kind == TYPE_MAP,
+                "unexpected symbol var type in indirect address");
+        lir_operand_t *temp = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        OP_PUSH(lir_op_move(temp, base));
+        base = temp;
+        // 没有原始类型判断不出来！还是外部进行处理消除 symbol_var 吧
+    }
 
     assertf(base->assert_type == LIR_OPERAND_VAR || base->assert_type == LIR_OPERAND_REG,
             "indirect addr only support var operand");
