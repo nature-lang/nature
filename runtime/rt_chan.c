@@ -696,7 +696,6 @@ int rt_chan_select(scase *cases, int16_t sends_count, int16_t recvs_count, bool 
     selunlock(cases, lockorder, cases_count);
     case_success = false;
     cases[casi].chan->successful = false;
-//    rt_throw("recv on closed channel", false);
     goto RETC;
 
     SEND:
@@ -708,17 +707,11 @@ int rt_chan_select(scase *cases, int16_t sends_count, int16_t recvs_count, bool 
     selunlock(cases, lockorder, cases_count);
     case_success = false;
     cases[casi].chan->successful = false;
-//    rt_throw("recv on closed channel", false);
-//    rt_throw("send on closed channel", false);
     goto RETC;
 
     RETC:
     if (casi >= 0) {
-//        if (casi < sends_count) {
-//            cases[casi].chan->send_success = recv_ok
-//        } else {
-//            cases[casi].chan->send_success = recv_ok
-//        }
+
     }
 
     free(order);

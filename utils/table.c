@@ -2,17 +2,6 @@
 #include "helper.h"
 #include "stdlib.h"
 
-//static uint32_t table_hash_string(const string key) {
-//    uint32_t hash = 2166136261u;
-//    while (key != NULL && *key != '\0') {
-//        hash ^= *key;
-//        hash *= 16777619;
-//        ++key;
-//    }
-//
-//    return hash;
-//}
-
 void table_init(table_t *t) {
     t->count = 0;
     t->capacity = 0;

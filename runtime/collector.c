@@ -713,50 +713,6 @@ static void gc_work() {
            share_p->index);
 }
 
-/**
- * 需要在 stw 期间调用，扫描所有的 solo_stack
- */
-//static void scan_solo_stack() {
-//    DEBUGF("[runtime_gc.scan_solo_stack] start");
-//    mutex_lock(&solo_processor_locker);
-//
-//    PROCESSOR_FOR(solo_processor_list) {
-//        if (p->status == P_STATUS_EXIT) {
-//            continue;
-//        }
-//
-//        coroutine_t *solo_co = rt_linked_fixalloc_first(&p->co_list)->value;
-//        if (solo_co->status == CO_STATUS_DEAD) {
-//            continue;
-//        }
-//
-//        if (span_of((addr_t) solo_co->fn)) {
-//            int assist_p_index = p->index % cpu_count;
-//            n_processor_t *assist_p = processor_index[assist_p_index];
-//            assert(assist_p);
-//            insert_gc_worklist(&assist_p->gc_worklist, solo_co->fn);
-//        }
-//
-//        if (!solo_co->aco.inited) {
-//            DEBUGF("[runtime_gc.scan_solo_stack] co=%p, fn=%p not init, will skip", solo_co, solo_co->fn);
-//            continue;
-//        }
-//
-//        // 已经扫描过 stack 了
-//        if (solo_co->gc_black == memory->gc_count) {
-//            DEBUGF("[runtime_gc.scan_solo_stack] co=%p, gc_black=%lu, gc_count=%lu, will skip", solo_co,
-//                   solo_co->gc_black, memory->gc_count);
-//            continue;
-//        }
-//
-//        // p 必须处于 stw 状态
-//        assert(processor_need_stw(p));
-//
-//        scan_stack(p, solo_co);
-//    }
-//    mutex_unlock(&solo_processor_locker);
-//    DEBUGF("[runtime_gc.scan_solo_stack] completed");
-//}
 
 /**
  * gc work 会主动 yield，所以整个 coroutine 不允许被抢占。抢占时需要根据 co->gc_work 进行判断

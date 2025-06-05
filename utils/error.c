@@ -3,20 +3,6 @@
 #include <stdarg.h>
 #include "error.h"
 
-//void error_exit(int code, char *message) {
-//  printf("exception, message: %s\n", message);
-//  exit(code);
-//
-//  va_list args;
-//  char *buf = mallocz(sizeof(char) * ERROR_STR_COUNT);
-//  va_start(args, format);
-//  vsprintf(buf, format, args);
-//  va_end(args);
-//
-//  printf("line: %d, %s", line, buf);
-//  exit(1);
-//}
-
 void error_exit(char *format, ...) {
     va_list args;
     char *buf = malloc(sizeof(char) * ERROR_STR_COUNT);
