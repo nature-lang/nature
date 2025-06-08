@@ -86,7 +86,7 @@ fn main() {
 compile and execute  
   
 ```sh
-> nature build main.n && . /main   
+> nature build main.n && ./main   
 hello nature 
 ```   
   
