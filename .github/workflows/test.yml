@@ -1,0 +1,77 @@
+name: Test
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  test:
+    name: Test (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+            - target: linux-arm64
+              runs-on: ubuntu-24.04-arm
+            - target: linux-amd64
+              runs-on: ubuntu-latest
+            - target: darwin-amd64
+              runs-on: macos-13
+            - target: darwin-arm64
+              runs-on: macos-latest
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: true
+
+      - name: Setup Go for package
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      - name: Setup Rust for nls
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Setup Musl for Linux
+        if: ${{ contains(matrix.target, 'linux') }}
+        run: sudo apt-get install musl-tools
+
+      - name: Build Runtime
+        uses: threeal/cmake-action@v2.1.0
+        with:
+          c-compiler: ${{ contains(matrix.target, 'linux') && 'musl-gcc' || 'clang' }}
+          build-dir: build-runtime
+          args: -S runtime
+          options: |
+            CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+            CMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/${{ matrix.target }}-toolchain.cmake
+          build-args:
+            --target runtime
+
+      - name: Build Project
+        uses: threeal/cmake-action@v2.1.0
+        with:
+          c-compiler: ${{ matrix.c-compiler }}
+          build-dir: build-release
+          options: |
+            CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+            CMAKE_VERBOSE_MAKEFILE=ON
+            CPACK_OUTPUT_FILE_PREFIX=${{ github.workspace }}/release
+          build-args:
+            -- -j2
+
+      - name: Test
+        uses: threeal/ctest-action@v1.1.0
+        with:
+          test-dir: build-release/tests
+          args:
+            -E "20250418_00_playground|20250324_00_llama" # exclude testcase '20250418_00_playground' '20250324_00_llama'
