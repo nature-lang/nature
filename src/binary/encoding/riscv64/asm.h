@@ -25,6 +25,7 @@
     _operand->symbol.name = _name;                                \
     _operand->symbol.is_local = _is_local;                        \
     _operand->symbol.offset = _offset;                            \
+    _operand->symbol.reloc_type = _reloc_type;                    \
     _operand;                                                     \
 })
 
@@ -58,7 +59,8 @@
 })
 
 typedef enum {
-    RV_NOOP,
+    RV_NOOP, // = 0
+    RV_LABEL,
     RV_MV,
     RV_LI,
     RV_LA,
@@ -218,6 +220,8 @@ typedef enum {
 } riscv64_asm_operand_type_t;
 
 static char *riscv64_raw_op_names[] = {
+        "noop",
+        "label",
         "mv",
         "li",
         "la",
@@ -350,6 +354,7 @@ static char *riscv64_raw_op_names[] = {
 
 typedef enum {
     O_NOOP,
+    O_LABEL,
     O_MV,
     O_LI,
     O_LA,
@@ -505,11 +510,26 @@ static const struct {
         {"rmm", RISCV64_RMM},
 };
 
+typedef enum {
+    ASM_RISCV64_RELOC_NONE = 0,
+    ASM_RISCV64_RELOC_BRANCH, // beq x1, x2, symbol
+    ASM_RISCV64_RELOC_JAL, // jal symbol(+-1M)
+    ASM_RISCV64_RELOC_CALL, // call symbol  R_RISCV_PCREL_HI20 + R_RISCV_PCREL_LO12_I, la 指令使用同样的方式
+
+    //    ASM_RISCV64_RELOC_HI20,
+    //    ASM_RISCV64_RELOC_LO12_I,
+    //    ASM_RISCV64_RELOC_LO12_S,
+
+    //    ASM_RISCV64_RELOC_PCREL_HI20,
+    //    ASM_RISCV64_RELOC_PCREL_LO12_I,
+    //    ASM_RISCV64_RELOC_PCREL_LO12_S,
+} asm_riscv64_reloc_type;
+
 typedef struct {
     char *name;
     bool is_local;
     int64_t offset; // 汇编器识别 offset
-    //    asm_arm64_reloc_type reloc_type; // 重定位类型 todo
+    asm_riscv64_reloc_type reloc_type;
 } riscv64_asm_operand_symbol_t;
 
 typedef struct {

@@ -100,7 +100,7 @@ static void test_basic() {
     TEST_EQ(inst, 0x07, 0xB0, 0x02, 0x00);
 
     inst = RISCV64_INST(RV_FADD_S, RO_REG(FT0), RO_REG(FT1), RO_REG(FT2));
-    TEST_EQ(inst, 0x53, 0xf0, 0x20, 0x00); 
+    TEST_EQ(inst, 0x53, 0xf0, 0x20, 0x00);
 
     inst = RISCV64_INST(RV_FSUB_S, RO_REG(FT0), RO_REG(FT1), RO_REG(FT2));
     TEST_EQ(inst, 0x53, 0xf0, 0x20, 0x08);
@@ -121,7 +121,13 @@ static void test_basic() {
     TEST_EQ(inst, 0x07, 0xA0, 0x02, 0x00);
 
     inst = RISCV64_INST(RV_FSW, RO_REG(FT0), RO_INDIRECT(T0, 0, DWORD));
-    TEST_EQ(inst, 0x27, 0xA0, 0x02, 0x00); 
+    TEST_EQ(inst, 0x27, 0xA0, 0x02, 0x00);
+
+    inst = RISCV64_INST(RV_J, RO_IMM(6));
+    TEST_EQ(inst, 0x19, 0xA0);
+
+    inst = RISCV64_INST(RV_J, RO_SYM("foo", false, 0, ASM_RISCV64_RELOC_JAL));
+    TEST_EQ(inst, 0x01, 0xA0);
 }
 
 int main(void) {

@@ -70,11 +70,19 @@ int runtime_main(int argc, char *argv[]) __asm("main");
         __asm__ volatile("mov %%rbp, %0" : "=r"(_rbp_value)); \
         fetch_addr_value(_rbp_value + POINTER_SIZE);           \
     });
-#elif __ARM64
+#elif defined(__ARM64)
 #define CALLER_RET_ADDR(_co)                                          \
     ({                                                                \
         addr_t _fp_value;                                             \
         __asm__ volatile("mov %0, x29" : "=r"(_fp_value));            \
+        uint64_t _value = fetch_addr_value(_fp_value + POINTER_SIZE); \
+        _value;                                                       \
+    });
+#elif defined(__RISCV64)
+#define CALLER_RET_ADDR(_co)                                          \
+    ({                                                                \
+        addr_t _fp_value;                                             \
+        __asm__ volatile("mv %0, fp" : "=r"(_fp_value));              \
         uint64_t _value = fetch_addr_value(_fp_value + POINTER_SIZE); \
         _value;                                                       \
     });

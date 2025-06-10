@@ -296,7 +296,7 @@ typedef enum {
 } arm64_asm_cond_type;
 
 typedef enum {
-    ARM64_RELOC_NONE = 0,
+    ASM_ARM64_RELOC_NONE = 0,
     ASM_ARM64_RELOC_LO12, // :lo12:
     ASM_ARM64_RELOC_HI12, // :hi12:
     ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12,

@@ -196,8 +196,7 @@ static string riscv64_asm_operand_to_string(riscv64_asm_operand_t *operand) {
         }
         case RISCV64_ASM_OPERAND_ROUNDMODE: {
             static char *round_modes[] = {
-                "rne", "rtz", "rdn", "rup", "rmm"
-            };
+                    "rne", "rtz", "rdn", "rup", "rmm"};
             if (operand->round_mode >= RISCV64_RNE && operand->round_mode <= RISCV64_RMM) {
                 return round_modes[operand->round_mode];
             }
@@ -284,11 +283,7 @@ void riscv64_asm_op_to_string(int i, riscv64_asm_inst_t *op) {
     printf("%lu\t", op->op_id);
 
     // 处理标签的特殊情况
-    if (op->raw_opcode == RV_NOOP && str_equal(riscv64_raw_op_names[0], "label")) {
-        printf("%s  ", "label");
-    } else {
-        printf("\t\t%s  ", riscv64_raw_op_names[op->raw_opcode]);
-    }
+    printf("\t\t%s  ", riscv64_raw_op_names[op->raw_opcode]);
 
     // RISC-V 指令格式通常是: opcode dest, source1, source2
     // 例如: add rd, rs1, rs2

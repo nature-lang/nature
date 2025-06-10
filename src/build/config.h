@@ -165,6 +165,11 @@ static inline void env_init() {
                 "unsupported architecture. set BUILD_ARCH=amd64 or BUILD_ARCH=arm64 env to compile.");
     }
 
+    // ARCH_RISCV64 不支持 darwin 平台
+    if (BUILD_ARCH == ARCH_RISCV64 && BUILD_OS == OS_DARWIN) {
+        assertf(false, "riscv64 unsupported darwin platform");
+    }
+
     // darwin 不支持跨平台编译, 必须在当前平台编译
 #ifndef __DARWIN
     assertf(BUILD_OS != OS_DARWIN, "darwin does not support cross-compilation, please compile on the darwin platform");

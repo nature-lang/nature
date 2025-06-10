@@ -101,8 +101,8 @@ static linked_t *riscv64_lower_imm(closure_t *c, lir_op_t *op) {
 }
 
 /**
- * 在RISC-V中处理符号变量
- * RISC-V使用la指令加载符号地址，这需要处理为两条指令：auipc+addi
+ * 在 RISC-V 中处理符号变量
+ * RISC-V 使用 la 指令加载符号地址，这需要处理为两条指令：auipc + addi
  */
 static linked_t *riscv64_lower_symbol_var(closure_t *c, lir_op_t *op) {
     assert(c);
@@ -111,7 +111,10 @@ static linked_t *riscv64_lower_symbol_var(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
     assert(list);
 
-    if (op->code == LIR_OPCODE_LEA || op->code == LIR_OPCODE_LABEL) {
+    if (op->code == LIR_OPCODE_LEA ||
+        op->code == LIR_OPCODE_LABEL ||
+        op->code == LIR_OPCODE_BEQ ||
+        op->code == LIR_OPCODE_BAL) {
         return list;
     }
 
@@ -209,7 +212,7 @@ static linked_t *riscv64_lower_ternary(closure_t *c, lir_op_t *op) {
 static linked_t *riscv64_lower_safepoint(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
-    // 创建临时寄存器存储标志地址，使用a0寄存器
+    // 创建临时寄存器存储标志地址
     lir_operand_t *result_reg = lir_reg_operand(A0->index, TYPE_ANYPTR);
     op->output = result_reg;
 
@@ -237,16 +240,6 @@ static linked_t *riscv64_lower_lea(closure_t *c, lir_op_t *op) {
         linked_push(list, lir_op_move(dst, op->output));
     }
 
-    return list;
-}
-
-/**
- * 处理输出操作数
- */
-static linked_t *riscv64_lower_output(closure_t *c, lir_op_t *op) {
-    linked_t *list = linked_new();
-    op->output = riscv64_convert_use_var(c, list, op->output);
-    linked_push(list, op);
     return list;
 }
 
@@ -326,7 +319,7 @@ static void riscv64_lower_block(closure_t *c, basic_block_t *block) {
 }
 
 /**
- * RISC-V 64位架构的指令降级处理入口函数
+ * RISC-V 64 位架构的指令降级处理入口函数
  */
 void riscv64_lower(closure_t *c) {
     // 按基本块遍历所有指令

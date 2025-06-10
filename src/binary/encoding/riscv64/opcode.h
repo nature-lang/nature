@@ -177,7 +177,17 @@ static inline void make_code32(riscv64_asm_inst_t *inst, uint32_t *buf, int len)
 #define C_SD(rs2, imm, rs1) MAKE_CODE16(inst, 0xe000 | (EXTRACT_IMM(imm, 5, 3) << 10) | (to_rvc_reg(rs1) << 7) | (EXTRACT_IMM(imm, 7, 6) << 5) | (to_rvc_reg(rs2) << 2))
 #define C_LDSP(rd, imm) MAKE_CODE16(inst, 0x6002 | (EXTRACT_IMM(imm, 5, 5) << 12) | ((rd) << 7) | (EXTRACT_IMM(imm, 4, 3) << 5) | (EXTRACT_IMM(imm, 8, 6) << 2))
 #define C_SDSP(rs, imm) MAKE_CODE16(inst, 0xe002 | (EXTRACT_IMM(imm, 5, 3) << 10) | (EXTRACT_IMM(imm, 8, 6) << 7) | ((rs) << 2))
-#define C_J() MAKE_CODE16(inst, 0xa001)
+// #define C_J() MAKE_CODE16(inst, 0xa001)
+#define C_J(imm) MAKE_CODE16(inst, 0xa001 | \
+    (EXTRACT_IMM(imm, 11, 11) << 12) | \
+    (EXTRACT_IMM(imm, 4, 4) << 11) | \
+    (EXTRACT_IMM(imm, 9, 8) << 9) | \
+    (EXTRACT_IMM(imm, 10, 10) << 8) | \
+    (EXTRACT_IMM(imm, 6, 6) << 7) | \
+    (EXTRACT_IMM(imm, 7, 7) << 6) | \
+    (EXTRACT_IMM(imm, 3, 1) << 3) | \
+    (EXTRACT_IMM(imm, 5, 5) << 2))
+
 #define C_JR(rs) MAKE_CODE16(inst, 0x8002 | ((rs) << 7))
 #define C_JALR(rs) MAKE_CODE16(inst, 0x9002 | ((rs) << 7))
 #define C_BEQZ(rs) MAKE_CODE16(inst, 0xc001 | (to_rvc_reg(rs) << 7))
@@ -191,7 +201,7 @@ static inline void make_code32(riscv64_asm_inst_t *inst, uint32_t *buf, int len)
 // Pseudo instructions
 #define P_RET() C_JR(OPCODE_RA)
 #define P_LI(rd, imm) W_ADDI(rd, OPCODE_ZERO, imm)
-#define P_NEG(rd, rs) W_SUB(rd, OPCODE_ZERO, rs)
+#define RP_NEG(rd, rs) W_SUB(rd, OPCODE_ZERO, rs)
 #define P_NOT(rd, rs) W_XORI(rd, rs, -1)
 #define P_SEXT_B(rd, rs)                    \
     do {                                    \

@@ -65,7 +65,7 @@ void riscv64_reg_init() {
     r_x28 = reg_new("x28", 28, LIR_FLAG_ALLOC_INT, QWORD, 23); // t3: Temporary (Caller)
     r_x29 = reg_new("x29", 29, LIR_FLAG_ALLOC_INT, QWORD, 24); // t4: Temporary (Caller)
     r_x30 = reg_new("x30", 30, LIR_FLAG_ALLOC_INT, QWORD, 25); // t5: Temporary (Caller)
-    r_x31 = reg_new("x31", 31, LIR_FLAG_ALLOC_INT, QWORD, 26); // t6: Temporary (Caller)
+    r_x31 = reg_new("x31", 31, LIR_FLAG_ALLOC_INT, QWORD, 0); // t6: Temporary (Caller)
 
     // Program Counter (not a GPR, but essential for control flow)
     r_pc = reg_new("pc", -1, 0, QWORD, 0); // Using -1 as a conventional ID for PC
@@ -109,5 +109,5 @@ void riscv64_reg_init() {
     r_f28 = reg_new("f28", 28, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 29); // ft8: FP temporary (Caller)
     r_f29 = reg_new("f29", 29, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 30); // ft9: FP temporary (Caller)
     r_f30 = reg_new("f30", 30, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 31); // ft10: FP temporary (Caller)
-    r_f31 = reg_new("f31", 31, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 32); // ft11: FP temporary (Caller) - Note: RISCV64_ALLOC_FLOAT_REG_COUNT is 31, so this ID might be f_offset + 31 if we count from 0. Let's assume allocatable IDs are 1-based for consistency with the define.
+    r_f31 = reg_new("f31", 31, LIR_FLAG_ALLOC_FLOAT, QWORD, 0); // ft11: FP temporary (Caller) - Note: RISCV64_ALLOC_FLOAT_REG_COUNT is 31, so this ID might be f_offset + 31 if we count from 0. Let's assume allocatable IDs are 1-based for consistency with the define.
 }

@@ -1,14 +1,10 @@
 import co
-import fmt
-import process
-import time
-import syscall
-import fs
-import io
-import strings
+
+fn sum(int a, int b):i64 {
+    return a + b
+}
 
 fn main() {
-    // 直接申请 9217 个内存
-    var items = vec_new<u8>(0, 9217)
-    println(items.len())
+    int a = 111
+    sum(a, 2)
 }

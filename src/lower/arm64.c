@@ -246,14 +246,6 @@ static linked_t *arm64_lower_lea(closure_t *c, lir_op_t *op) {
     return list;
 }
 
-
-static linked_t *arm64_lower_output(closure_t *c, lir_op_t *op) {
-    linked_t *list = linked_new();
-    op->output = arm64_convert_use_var(c, list, op->output);
-    linked_push(list, op);
-    return list;
-}
-
 static void arm64_lower_block(closure_t *c, basic_block_t *block) {
     assert(c);
     assert(block);

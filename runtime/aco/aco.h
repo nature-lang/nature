@@ -48,6 +48,11 @@
 #define ACO_REG_IDX_SP 14
 #define ACO_REG_IDX_BP 12
 #define ACO_REG_IDX_FPU 15
+#elif defined(__riscv) && (__riscv_xlen == 64)
+#define ACO_REG_IDX_RETADDR 0
+#define ACO_REG_IDX_SP 1
+#define ACO_REG_IDX_BP 2
+#define ACO_REG_IDX_FPU 15
 #else
 #error "platform no support yet"
 #endif
@@ -94,9 +99,11 @@ typedef void (*aco_cofuncp_t)(void);
 
 struct aco_s {
 #ifdef __AMD64
-    void *reg[9]; // amd64 试用
+    void *reg[9]; // amd64 使用
 #elif __ARM64
     void* reg[16];
+#elif defined(__riscv) && (__riscv_xlen == 64)
+    void* reg[16]; // riscv64 使用 16 个寄存器
 #else
 #error "platform no support yet"
 #endif
