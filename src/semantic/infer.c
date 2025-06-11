@@ -2482,9 +2482,6 @@ static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
     literal->kind = literal_type.kind;
 
     type_kind target_kind = target_type.kind;
-    if (target_kind == TYPE_ANYPTR) {
-        target_kind = TYPE_UINT;
-    }
     target_kind = cross_kind_trans(target_kind);
 
     if (is_float(literal_type.kind) && is_float(target_kind)) {
@@ -2504,9 +2501,19 @@ static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
         return target_type;
     }
 
+    // anyptr 可以和 null 比较
+    if (literal_type.kind == TYPE_NULL && target_kind == TYPE_ANYPTR) {
+        literal->kind = target_kind;
+        literal->value = "0"; // convert to 0 can convert in linear_literal
+        return target_type;
+    }
+
     // float 转换为 int 会导致数据丢失，所以不进行自动转换, 请手动使用 as 转换
-    if (is_integer(literal_type.kind) && is_integer(target_kind)) {
+    if (is_integer(literal_type.kind) && is_integer_or_anyptr(target_kind)) {
         int64_t i = atoll(literal->value);
+        if (target_kind == TYPE_ANYPTR) {
+            target_kind = cross_kind_trans(TYPE_UINT);
+        }
         if (integer_range_check(target_kind, i)) { // range 匹配直接返回，否则应该直接报错
             literal->kind = target_kind;
             return target_type;

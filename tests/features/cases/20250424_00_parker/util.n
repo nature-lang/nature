@@ -75,7 +75,7 @@ fn rand_letter(int len):string {
     libc.srand(time.unix() as u32)
 
     for i,v in result {
-        int char_index = libc.rand() % charset.len()
+        int char_index = libc.rand() as int % charset.len()
         result[i] = charset[char_index]
     }
 

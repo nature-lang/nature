@@ -1,3 +1,250 @@
+type cstr = anyptr
+
+#linkid rt_string_ref
+fn string.to_cstr():cstr
+
+#linkid rt_string_new
+fn cstr.to_string():string
+
+// stdlib.h
+#linkid atoi
+fn atoi(cstr str):i32
+
+#linkid atol
+fn atol(cstr str):i64
+
+#linkid atof
+fn atof(cstr str):f64
+
+#linkid strtof
+fn strtof(cstr str, anyptr endptr):f32
+
+#linkid strtod
+fn strtod(cstr str, anyptr endptr):f64
+
+#linkid strtol
+fn strtol(cstr str, anyptr endptr, i32 base):i64
+
+#linkid strtoul
+fn strtoul(cstr str, anyptr endptr, i32 base):u64
+
+#linkid rand
+fn rand():i32
+
+#linkid srand
+fn srand(u32 seed):void
+
+#linkid malloc
+fn malloc(u64 size):anyptr
+
+#linkid calloc
+fn calloc(u64 nmemb, u64 size):anyptr
+
+#linkid realloc
+fn realloc(anyptr p, u64 size):anyptr
+
+#linkid free
+fn free(anyptr p):void
+
+#linkid aligned_alloc
+fn aligned_alloc(u64 alignment, u64 size):anyptr
+
+#linkid abort
+fn abort()
+
+#linkid atexit
+fn atexit(anyptr func):i32
+
+#linkid exit
+fn exit(i32 status)
+
+#linkid _Exit
+fn _exit(i32 status)
+
+#linkid at_quick_exit
+fn at_quick_exit(anyptr func):i32
+
+#linkid quick_exit
+fn quick_exit(i32 status)
+
+#linkid getenv
+fn getenv(cstr name):cstr
+
+#linkid system
+fn system(cstr command):i32
+
+#linkid abs
+fn abs(i32 x):i32
+
+#linkid labs
+fn labs(i64 x):i64
+
+type div_t = struct {
+    i32 quot
+    i32 rem
+}
+
+type ldiv_t = struct {
+    i64 quot
+    i64 rem
+}
+
+#linkid div
+fn div(i32 numer, i32 denom):div_t
+
+#linkid ldiv
+fn ldiv(i64 numer, i64 denom):ldiv_t
+
+#linkid mblen
+fn mblen(cstr s, u64 n):i32
+
+#linkid mbtowc
+fn mbtowc(anyptr pwc, cstr s, u64 n):i32
+
+#linkid wctomb
+fn wctomb(cstr s, i32 wc):i32
+
+#linkid mbstowcs
+fn mbstowcs(anyptr pwcs, cstr s, u64 n):u64
+
+#linkid wcstombs
+fn wcstombs(cstr s, anyptr pwcs, u64 n):u64
+
+#linkid posix_memalign
+fn posix_memalign(anyptr memptr, u64 alignment, u64 size):i32
+
+#linkid setenv
+fn setenv(cstr name, cstr value, i32 overwrite):i32
+
+#linkid unsetenv
+fn unsetenv(cstr name):i32
+
+#linkid putenv
+fn putenv(cstr str):i32
+
+#linkid mkstemp
+fn mkstemp(cstr template):i32
+
+#linkid mkostemp
+fn mkostemp(cstr template, i32 flags):i32
+
+#linkid mkdtemp
+fn mkdtemp(cstr template):cstr
+
+#linkid mktemp
+fn mktemp(cstr template):cstr
+
+#linkid mkstemps
+fn mkstemps(cstr template, i32 suffixlen):i32
+
+#linkid mkostemps
+fn mkostemps(cstr template, i32 suffixlen, i32 flags):i32
+
+#linkid getsubopt
+fn getsubopt(anyptr optionp, anyptr tokens, anyptr valuep):i32
+
+#linkid rand_r
+fn rand_r(rawptr<u32> seed):i32
+
+#linkid realpath
+fn realpath(cstr path, cstr resolved_path):cstr
+
+#linkid random
+fn random():i64
+
+#linkid srandom
+fn srandom(u32 seed):void
+
+#linkid initstate
+fn initstate(u32 seed, cstr state, u64 size):cstr
+
+#linkid setstate
+fn setstate(cstr state):cstr
+
+#linkid posix_openpt
+fn posix_openpt(i32 flags):i32
+
+#linkid grantpt
+fn grantpt(i32 fd):i32
+
+#linkid unlockpt
+fn unlockpt(i32 fd):i32
+
+#linkid ptsname_r
+fn ptsname_r(i32 fd, cstr buf, u64 buflen):i32
+
+#linkid l64a
+fn l64a(i64 value):cstr
+
+#linkid a64l
+fn a64l(cstr s):i64
+
+#linkid setkey
+fn setkey(cstr key):void
+
+#linkid drand48
+fn drand48():f64
+
+#linkid erand48
+fn erand48(anyptr xsubi):f64
+
+#linkid lrand48
+fn lrand48():i64
+
+#linkid nrand48
+fn nrand48(anyptr xsubi):i64
+
+#linkid mrand48
+fn mrand48():i64
+
+#linkid jrand48
+fn jrand48(anyptr xsubi):i64
+
+#linkid srand48
+fn srand48(i64 seedval):void
+
+#linkid seed48
+fn seed48(anyptr seed16v):rawptr<u16>
+
+#linkid lcong48
+fn lcong48(anyptr param):void
+
+#linkid valloc
+fn valloc(u64 size):anyptr
+
+#linkid memalign
+fn memalign(u64 alignment, u64 size):anyptr
+
+#linkid reallocarray
+fn reallocarray(anyptr p, u64 nmemb, u64 size):anyptr
+
+#linkid getloadavg
+fn getloadavg(rawptr<f64> loadavg, i32 nelem):i32
+
+#linkid clearenv
+fn clearenv():i32
+
+#linkid ecvt
+fn ecvt(f64 number, i32 ndigits, rawptr<i32> decpt, rawptr<i32> sign):cstr
+
+#linkid fcvt
+fn fcvt(f64 number, i32 ndigits, rawptr<i32> decpt, rawptr<i32> sign):cstr
+
+#linkid gcvt
+fn gcvt(f64 number, i32 ndigit, cstr buf):cstr
+
+#linkid secure_getenv
+fn secure_getenv(cstr name):cstr
+
+
+
+
+
+
+
+
+
+// TODO
 #linkid std_args
 fn std_args():[string]
 
@@ -106,17 +353,8 @@ fn sleep(int second)
 #linkid usleep
 fn usleep(u32 usec):i32
 
-#linkid strtol
-fn strtol(anyptr str, anyptr endptr, i32 base):i64
-
 #linkid prctl
 fn prctl(int option, u64 arg2, u64 arg3, u64 arg4, u64 arg5):int
-
-#linkid srand
-fn srand(u32 seed)
-
-#linkid rand
-fn rand():int
 
 #linkid clock
 fn clock():int
@@ -134,23 +372,21 @@ fn get_envs():[string]
 #linkid rt_strerror
 fn strerror():string
 
-#linkid exit
-fn exit(i32 status)
 
 #linkid fork
 fn fork():int
 
 #linkid getcwd
-fn getcwd(anyptr path, uint size):anyptr
+fn getcwd(cstr path, uint size):cstr
 
 #linkid strlen
-fn strlen(anyptr str):uint
+fn strlen(cstr str):uint
 
 #linkid strstr
-fn strstr(anyptr haystack, anyptr needle):anyptr
+fn strstr(cstr haystack, cstr needle):cstr
 
 #linkid strrstr
-fn strrstr(anyptr haystack, anyptr needle):anyptr
+fn strrstr(cstr haystack, cstr needle):cstr
 
 #linkid memmove
 fn memmove(anyptr dst, anyptr src, int len)

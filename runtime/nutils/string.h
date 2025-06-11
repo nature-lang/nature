@@ -5,10 +5,6 @@
 
 n_string_t *string_new(void *raw_string, int64_t length);
 
-n_string_t *rt_string_ref_new(void *raw_string, int64_t length);
-
-void *rt_string_ref(n_string_t *n_str);
-
 n_string_t *string_concat(n_string_t *a, n_string_t *b);
 
 n_bool_t string_ee(n_string_t *a, n_string_t *b);

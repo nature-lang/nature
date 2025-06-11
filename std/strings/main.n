@@ -30,7 +30,7 @@ fn string.find_after(string sub, int after):int {
     }
 
     anyptr base = self.ref()
-    anyptr temp = libc.strstr((base as uint + after as uint) as anyptr, sub.ref())
+    var temp = libc.strstr((base as uint + after as uint) as libc.cstr, sub.to_cstr())
     if temp == 0 {
         return -1
     }

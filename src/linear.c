@@ -3073,13 +3073,19 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
         return linear_super_move(m, expr.type, target, src);
     }
 
-    if (is_integer(literal->kind)) {
+    if (is_integer_or_anyptr(literal->kind)) {
         char *convert_endptr;
         union {
             uint64_t u;
             int64_t s;
         } i;
-        const bool is_unsigned = is_unsigned_integer(literal->kind);
+
+        type_kind literal_kind = literal->kind;
+        if (literal_kind == TYPE_ANYPTR) {
+            literal_kind = cross_kind_trans(TYPE_UINT);
+        }
+
+        const bool is_unsigned = is_unsigned_integer(literal_kind);
 
         if (is_unsigned) {
             i.u = strtoull(literal->value, &convert_endptr, 0);
@@ -3091,7 +3097,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         lir_imm_t *imm_operand = NEW(lir_imm_t);
-        imm_operand->kind = cross_kind_trans(literal->kind);
+        imm_operand->kind = cross_kind_trans(literal_kind);
         if (is_unsigned) {
             imm_operand->uint_value = i.u;
         } else {

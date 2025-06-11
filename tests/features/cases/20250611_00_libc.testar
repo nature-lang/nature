@@ -1,0 +1,367 @@
+=== test_atoi
+--- main.n
+import libc
+
+fn main():void {
+    var result1 = libc.atoi('123'.to_cstr())
+    var result2 = libc.atoi('-456'.to_cstr())
+    var result3 = libc.atoi('0'.to_cstr())
+    var result4 = libc.atoi('  789'.to_cstr())
+
+    println('atoi("123"):', result1)
+    println('atoi("-456"):', result2)
+    println('atoi("0"):', result3)
+    println('atoi("  789"):', result4)
+}
+
+--- output.txt
+atoi("123"): 123
+atoi("-456"): -456
+atoi("0"): 0
+atoi("  789"): 789
+
+
+
+=== test_atol
+--- main.n
+import libc
+
+fn main():void {
+    var result1 = libc.atol('1234567890'.to_cstr())
+    var result2 = libc.atol('-9876543210'.to_cstr())
+
+    println('atol("1234567890"):', result1)
+    println('atol("-9876543210"):', result2)
+}
+
+--- output.txt
+atol("1234567890"): 1234567890
+atol("-9876543210"): -9876543210
+
+
+=== test_atof
+--- main.n
+import libc
+
+fn main():void {
+    var result1 = libc.atof('3.14159'.to_cstr())
+    var result2 = libc.atof('-2.718'.to_cstr())
+    var result3 = libc.atof('0.0'.to_cstr())
+
+    println('atof("3.14159"):', result1)
+    println('atof("-2.718"):', result2)
+    println('atof("0.0"):', result3)
+}
+
+--- output.txt
+atof("3.14159"): 3.141590
+atof("-2.718"): -2.718000
+atof("0.0"): 0.000000
+
+=== test_strtol
+--- main.n
+import libc
+
+fn main():void {
+    var result1 = libc.strtol('123'.to_cstr(), 0, 10)
+    var result2 = libc.strtol('0xff'.to_cstr(), 0, 16)
+    var result3 = libc.strtol('1010'.to_cstr(), 0, 2)
+    var result4 = libc.strtol('777'.to_cstr(), 0, 8)
+
+    println('strtol("123", null, 10):', result1)
+    println('strtol("0xff", null, 16):', result2)
+    println('strtol("1010", null, 2):', result3)
+    println('strtol("777", null, 8):', result4)
+}
+
+--- output.txt
+strtol("123", null, 10): 123
+strtol("0xff", null, 16): 255
+strtol("1010", null, 2): 10
+strtol("777", null, 8): 511
+
+=== test_strtoul
+--- main.n
+import libc
+
+fn main():void {
+    var result1 = libc.strtoul('4294967295'.to_cstr(), 0, 10)
+    var result2 = libc.strtoul('0xFFFFFFFF'.to_cstr(), 0, 16)
+
+    println('strtoul("4294967295", 0, 10):', result1)
+    println('strtoul("0xFFFFFFFF", 0, 16):', result2)
+}
+
+--- output.txt
+strtoul("4294967295", 0, 10): 4294967295
+strtoul("0xFFFFFFFF", 0, 16): 4294967295
+
+=== test_strtof
+--- main.n
+import libc
+
+fn main():void {
+    var result1 = libc.strtof('3.14'.to_cstr(), 0)
+    var result2 = libc.strtof('-2.5'.to_cstr(), 0)
+
+    println('strtof("3.14", null):', result1)
+    println('strtof("-2.5", null):', result2)
+}
+
+--- output.txt
+strtof("3.14", null): 3.140000
+strtof("-2.5", null): -2.500000
+
+
+=== test_strtod
+--- main.n
+import libc
+
+fn main():void {
+    var result1 = libc.strtod('3.141592653589793'.to_cstr(), 0)
+    var result2 = libc.strtod('-2.718281828459045'.to_cstr(), 0)
+
+    println('strtod("3.141592653589793", null):', result1)
+    println('strtod("-2.718281828459045", null):', result2)
+}
+
+--- output.txt
+strtod("3.141592653589793", null): 3.141593
+strtod("-2.718281828459045", null): -2.718282
+
+=== test_anyptr_null
+--- main.n
+fn main() {
+    anyptr a = 12
+    var a1 = a == 0
+    var a2 = a != 0
+    var a3 = a == null
+    var a4 =  a != null
+    println(a1, a2, a3, a4)
+}
+
+--- output.txt
+false true false true
+
+=== test_malloc_free
+--- main.n
+import libc
+
+fn main():void {
+    var p = libc.malloc(100)
+    if p != null {
+        println('malloc(100) success')
+        libc.free(p)
+        println('free() success')
+    } else {
+        println('malloc failed')
+    }
+}
+
+--- output.txt
+malloc(100) success
+free() success
+
+=== test_calloc
+--- main.n
+import libc
+
+fn main():void {
+    var p = libc.calloc(10, 4)
+    if p != null {
+        println('calloc(10, 4) success')
+        libc.free(p)
+        println('free() success')
+    } else {
+        println('calloc failed')
+    }
+}
+
+--- output.txt
+calloc(10, 4) success
+free() success
+
+
+=== test_realloc
+--- main.n
+import libc
+
+fn main():void {
+    var p = libc.malloc(50)
+    if p != null {
+        println('malloc(50) success')
+        var new_ptr = libc.realloc(p, 100)
+        if new_ptr != null {
+            println('realloc(p, 100) success')
+            libc.free(new_ptr)
+            println('free() success')
+        } else {
+            println('realloc failed')
+            libc.free(p)
+        }
+    } else {
+        println('malloc failed')
+    }
+}
+
+--- output.txt
+malloc(50) success
+realloc(p, 100) success
+free() success
+
+
+=== test_abs_labs
+--- main.n
+import libc
+
+fn main():void {
+    var result1 = libc.abs(-123)
+    var result2 = libc.abs(456)
+    var result3 = libc.labs(-1234567890)
+    var result4 = libc.labs(9876543210)
+
+    println('abs(-123):', result1)
+    println('abs(456):', result2)
+    println('labs(-1234567890):', result3)
+    println('labs(9876543210):', result4)
+}
+
+--- output.txt
+abs(-123): 123
+abs(456): 456
+labs(-1234567890): 1234567890
+labs(9876543210): 9876543210
+
+
+=== test_div_ldiv
+--- main.n
+import libc
+
+fn main():void {
+    var result1 = libc.div(17, 5)
+    var result2 = libc.ldiv(123456789, 1000)
+
+    println('div(17, 5) quot:', result1.quot, 'rem:', result1.rem)
+    println('ldiv(123456789, 1000) quot:', result2.quot, 'rem:', result2.rem)
+}
+
+--- output.txt
+div(17, 5) quot: 3 rem: 2
+ldiv(123456789, 1000) quot: 123456 rem: 789
+
+
+=== test_rand_srand
+--- main.n
+import libc
+
+fn main():void {
+    libc.srand(42)
+    var r1 = libc.rand()
+    var r2 = libc.rand()
+
+    println('srand(42) called')
+    println('rand() result 1:', r1)
+    println('rand() result 2:', r2)
+
+    // 重新设置种子，应该得到相同的序列
+    libc.srand(42)
+    var r3 = libc.rand()
+    var r4 = libc.rand()
+
+    println('srand(42) called again')
+    println('rand() result 3:', r3)
+    println('rand() result 4:', r4)
+
+    if r1 == r3 && r2 == r4 {
+        println('random sequence reproducible')
+    }
+}
+
+--- output.txt
+srand(42) called
+rand() result 1: 311430560
+rand() result 2: 131117839
+srand(42) called again
+rand() result 3: 311430560
+rand() result 4: 131117839
+random sequence reproducible
+
+
+=== test_getenv_setenv
+--- main.n
+import libc
+
+fn main():void {
+    var result = libc.setenv('TEST_VAR'.to_cstr(), 'test_value'.to_cstr(), 1)
+    println('setenv result:', result)
+
+    var value = libc.getenv('TEST_VAR'.to_cstr())
+    if value != null {
+        println('getenv("TEST_VAR"):',  value.to_string())
+    } else {
+        println('getenv("TEST_VAR"): null')
+    }
+
+    libc.unsetenv('TEST_VAR'.to_cstr())
+    value = libc.getenv('TEST_VAR'.to_cstr())
+    if value == null {
+        println('unsetenv success, TEST_VAR is null')
+    }
+}
+
+--- output.txt
+setenv result: 0
+getenv("TEST_VAR"): test_value
+unsetenv success, TEST_VAR is null
+
+
+=== test_cstr_to_string
+--- main.n
+import libc
+
+fn main() {
+    var cs = 'hello world'.to_cstr()
+    var str = cs.to_string()
+    println(str)
+}
+
+--- output.txt
+hello world
+
+=== test_system
+--- main.n
+import libc
+
+fn main():void {
+    var result = libc.system('echo "Hello from system call"'.to_cstr())
+    println('system() exit code:', result)
+}
+
+--- output.txt
+Hello from system call
+system() exit code: 0
+
+=== test_clearenv
+--- main.n
+import libc
+
+fn main():void {
+    libc.setenv('CLEAR_TEST'.to_cstr(), 'value'.to_cstr(), 1)
+    var value = libc.getenv('CLEAR_TEST'.to_cstr())
+    if value != null {
+        println('Before clearenv, CLEAR_TEST:', value.to_string())
+    }
+
+    var result = libc.clearenv()
+    println('clearenv() result:', result)
+
+    value = libc.getenv('CLEAR_TEST'.to_cstr())
+    if value == null {
+        println('After clearenv, CLEAR_TEST is null')
+    }
+}
+
+--- output.txt
+Before clearenv, CLEAR_TEST: value
+clearenv() result: 0
+After clearenv, CLEAR_TEST is null
