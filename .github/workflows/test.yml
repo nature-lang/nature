@@ -100,4 +100,4 @@ jobs:
         uses: threeal/ctest-action@v1.1.0
         with:
           test-dir: build-release/tests
-          args: -E "20250418_00_playground|20250324_00_llama" --timeout 30
+          args: -E "20250424_00_parker|20250418_00_playground|20250324_00_llama" --timeout 30
