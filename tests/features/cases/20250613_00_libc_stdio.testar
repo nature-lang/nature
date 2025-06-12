@@ -1,0 +1,193 @@
+=== test_fopen_fclose
+--- main.n
+import libc
+
+fn main():void {
+    var file = libc.fopen('test.txt'.to_cstr(), 'w'.to_cstr())
+    if file != null {
+        println('fopen("test.txt", "w") success')
+        var result = libc.fclose(file)
+        println('fclose() result:', result)
+        libc.remove('test.txt'.to_cstr())
+    } else {
+        println('fopen failed')
+    }
+}
+
+--- output.txt
+fopen("test.txt", "w") success
+fclose() result: 0
+
+
+=== test_fwrite_fread
+--- main.n
+import libc
+
+fn main():void {
+    var file = libc.fopen('test.txt'.to_cstr(), 'w'.to_cstr())
+    if file != null {
+        var data = 'Hello World'.to_cstr() as anyptr
+        var written = libc.fwrite(data, 1, 11, file)
+        println('fwrite() bytes written:', written)
+        libc.fclose(file)
+        
+        file = libc.fopen('test.txt'.to_cstr(), 'r'.to_cstr())
+        if file != null {
+            var buffer = libc.malloc(20)
+            var read_bytes = libc.fread(buffer, 1, 11, file)
+            println('fread() bytes read:', read_bytes)
+            libc.fclose(file)
+            libc.free(buffer)
+        }
+        libc.remove('test.txt'.to_cstr())
+    }
+}
+
+--- output.txt
+fwrite() bytes written: 11
+fread() bytes read: 11
+
+
+=== test_fputc_fgetc
+--- main.n
+import libc
+
+fn main():void {
+    var file = libc.fopen('test.txt'.to_cstr(), 'w'.to_cstr())
+    if file != null {
+        var result1 = libc.fputc(65, file)  // 'A'
+        var result2 = libc.fputc(66, file)  // 'B'
+        println('fputc(65) result:', result1)
+        println('fputc(66) result:', result2)
+        libc.fclose(file)
+        
+        file = libc.fopen('test.txt'.to_cstr(), 'r'.to_cstr())
+        if file != null {
+            var c1 = libc.fgetc(file)
+            var c2 = libc.fgetc(file)
+            println('fgetc() result 1:', c1)
+            println('fgetc() result 2:', c2)
+            libc.fclose(file)
+        }
+        libc.remove('test.txt'.to_cstr())
+    }
+}
+
+--- output.txt
+fputc(65) result: 65
+fputc(66) result: 66
+fgetc() result 1: 65
+fgetc() result 2: 66
+
+
+
+=== test_fseek_ftell
+--- main.n
+import libc
+
+fn main():void {
+    var file = libc.fopen('test.txt'.to_cstr(), 'w'.to_cstr())
+    if file != null {
+        libc.fputs('0123456789'.to_cstr(), file)
+        libc.fclose(file)
+        
+        file = libc.fopen('test.txt'.to_cstr(), 'r'.to_cstr())
+        if file != null {
+            var pos1 = libc.ftell(file)
+            println('initial position:', pos1)
+            
+            var seek_result = libc.fseek(file, 5, libc.SEEK_SET)
+            println('fseek(5, SEEK_SET) result:', seek_result)
+            
+            var pos2 = libc.ftell(file)
+            println('position after seek:', pos2)
+            
+            var c = libc.fgetc(file)
+            println('character at position 5:', c)
+            
+            libc.fclose(file)
+        }
+        libc.remove('test.txt'.to_cstr())
+    }
+}
+
+--- output.txt
+initial position: 0
+fseek(5, SEEK_SET) result: 0
+position after seek: 5
+character at position 5: 53
+
+=== test_rewind
+--- main.n
+import libc
+
+fn main():void {
+    var file = libc.fopen('test.txt'.to_cstr(), 'w'.to_cstr())
+    if file != null {
+        libc.fputs('ABCDEF'.to_cstr(), file)
+        libc.fclose(file)
+        
+        file = libc.fopen('test.txt'.to_cstr(), 'r'.to_cstr())
+        if file != null {
+            var c1 = libc.fgetc(file)
+            var c2 = libc.fgetc(file)
+            println('read characters:', c1, c2)
+            
+            libc.rewind(file)
+            var pos = libc.ftell(file)
+            println('position after rewind:', pos)
+            
+            var c3 = libc.fgetc(file)
+            println('first character after rewind:', c3)
+            
+            libc.fclose(file)
+        }
+        libc.remove('test.txt'.to_cstr())
+    }
+}
+
+--- output.txt
+read characters: 65 66
+position after rewind: 0
+first character after rewind: 65
+
+
+=== test_tmpfile
+--- main.n
+import libc
+
+fn main():void {
+    var temp_file = libc.tmpfile()
+    if temp_file != null {
+        println('tmpfile() success')
+        
+        var write_result = libc.fputs('temporary data'.to_cstr(), temp_file)
+        println('write to temp file result:', write_result)
+        
+        libc.rewind(temp_file)
+        
+        var buffer = libc.malloc(100)
+        var read_result = libc.fgets(buffer as libc.cstr, 100, temp_file)
+        if read_result != null {
+            println('read from temp file:', read_result.to_string())
+        }
+        
+        libc.fclose(temp_file)
+        libc.free(buffer)
+    } else {
+        println('tmpfile() failed')
+    }
+}
+
+
+=== test_const_symbol_in_other_package
+--- main.n
+import libc
+
+fn main() {
+    var s = libc.SEEK_SET     
+    println(s, libc.SEEK_END)
+}
+
+--- output.txt
+0 2
