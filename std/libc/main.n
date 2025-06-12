@@ -221,9 +221,6 @@ fn reallocarray(anyptr p, u64 nmemb, u64 size):anyptr
 #linkid getloadavg
 fn getloadavg(rawptr<f64> loadavg, i32 nelem):i32
 
-#linkid clearenv
-fn clearenv():i32
-
 #linkid ecvt
 fn ecvt(f64 number, i32 ndigits, rawptr<i32> decpt, rawptr<i32> sign):cstr
 
@@ -237,8 +234,260 @@ fn gcvt(f64 number, i32 ndigit, cstr buf):cstr
 fn secure_getenv(cstr name):cstr
 
 
+// stdio.h
+type fileptr = anyptr
+
+// stdio.h constants
+const EOF = -1
+const SEEK_SET = 0
+const SEEK_CUR = 1
+const SEEK_END = 2
+const _IOFBF = 0
+const _IOLBF = 1
+const _IONBF = 2
+const BUFSIZ = 1024
+const FILENAME_MAX = 4096
+const FOPEN_MAX = 1000
+const TMP_MAX = 10000
+const L_tmpnam = 20
+const L_ctermid = 20
+const L_cuserid = 20
+
+// fpos_t type
+type fpos_t = struct {
+    [u8;16] __opaque
+    i64 __lldata
+    f64 __align
+}
+
+#linkid fopen
+fn fopen(cstr filename, cstr mode):fileptr
+
+#linkid freopen
+fn freopen(cstr filename, cstr mode, fileptr stream):fileptr
+
+#linkid fclose
+fn fclose(fileptr stream):i32
+
+#linkid remove
+fn remove(cstr filename):i32
+
+#linkid rename
+fn rename(cstr old_name, cstr new_name):i32
+
+#linkid feof
+fn feof(fileptr stream):i32
+
+#linkid ferror
+fn ferror(fileptr stream):i32
+
+#linkid fflush
+fn fflush(fileptr stream):i32
+
+#linkid clearerr
+fn clearerr(fileptr stream):void
+
+#linkid fseek
+fn fseek(fileptr stream, i64 offset, i32 whence):i32
+
+#linkid ftell
+fn ftell(fileptr stream):i64
+
+#linkid rewind
+fn rewind(fileptr stream):void
+
+#linkid fgetpos
+fn fgetpos(fileptr stream, rawptr<fpos_t> pos):i32
+
+#linkid fsetpos
+fn fsetpos(fileptr stream, rawptr<fpos_t> pos):i32
+
+#linkid fread
+fn fread(anyptr p, u64 size, u64 nmemb, fileptr stream):u64
+
+#linkid fwrite
+fn fwrite(anyptr p, u64 size, u64 nmemb, fileptr stream):u64
+
+#linkid fgetc
+fn fgetc(fileptr stream):i32
+
+#linkid getc
+fn getc(fileptr stream):i32
+
+#linkid getchar
+fn getchar():i32
+
+#linkid ungetc
+fn ungetc(i32 c, fileptr stream):i32
+
+#linkid fputc
+fn fputc(i32 c, fileptr stream):i32
+
+#linkid putc
+fn putc(i32 c, fileptr stream):i32
+
+#linkid putchar
+fn putchar(i32 c):i32
+
+#linkid fgets
+fn fgets(cstr s, i32 size, fileptr stream):cstr
+
+#linkid fputs
+fn fputs(cstr s, fileptr stream):i32
+
+#linkid puts
+fn puts(cstr s):i32
+
+// Error handling
+#linkid perror
+fn perror(cstr s):void
+
+// Buffer control
+#linkid setvbuf
+fn setvbuf(fileptr stream, cstr buffer, i32 mode, u64 size):i32
+
+#linkid setbuf
+fn setbuf(fileptr stream, cstr buffer):void
+
+// Temporary files
+#linkid tmpnam
+fn tmpnam(cstr s):cstr
+
+#linkid tmpfile
+fn tmpfile():fileptr
 
 
+// POSIX extensions
+#linkid fmemopen
+fn fmemopen(anyptr buffer, u64 size, cstr mode):fileptr
+
+#linkid open_memstream
+fn open_memstream(rawptr<cstr> bufp, rawptr<u64> sizep):fileptr
+
+#linkid fdopen
+fn fdopen(i32 fd, cstr mode):fileptr
+
+#linkid popen
+fn popen(cstr command, cstr t):fileptr
+
+#linkid pclose
+fn pclose(fileptr stream):i32
+
+#linkid fileno
+fn fileno(fileptr stream):i32
+
+#linkid fseeko
+fn fseeko(fileptr stream, i64 offset, i32 whence):i32
+
+#linkid ftello
+fn ftello(fileptr stream):i64
+
+// File locking
+#linkid flockfile
+fn flockfile(fileptr stream):void
+
+#linkid ftrylockfile
+fn ftrylockfile(fileptr stream):i32
+
+#linkid funlockfile
+fn funlockfile(fileptr stream):void
+
+// Unlocked I/O
+#linkid getc_unlocked
+fn getc_unlocked(fileptr stream):i32
+
+#linkid getchar_unlocked
+fn getchar_unlocked():i32
+
+#linkid putc_unlocked
+fn putc_unlocked(i32 c, fileptr stream):i32
+
+#linkid putchar_unlocked
+fn putchar_unlocked(i32 c):i32
+
+#linkid fgetc_unlocked
+fn fgetc_unlocked(fileptr stream):i32
+
+#linkid fputc_unlocked
+fn fputc_unlocked(i32 c, fileptr stream):i32
+
+#linkid fflush_unlocked
+fn fflush_unlocked(fileptr stream):i32
+
+#linkid fread_unlocked
+fn fread_unlocked(anyptr p, u64 size, u64 nmemb, fileptr stream):u64
+
+#linkid fwrite_unlocked
+fn fwrite_unlocked(anyptr p, u64 size, u64 nmemb, fileptr stream):u64
+
+#linkid clearerr_unlocked
+fn clearerr_unlocked(fileptr stream):void
+
+#linkid feof_unlocked
+fn feof_unlocked(fileptr stream):i32
+
+#linkid ferror_unlocked
+fn ferror_unlocked(fileptr stream):i32
+
+#linkid fileno_unlocked
+fn fileno_unlocked(fileptr stream):i32
+
+#linkid fgets_unlocked
+fn fgets_unlocked(cstr s, i32 size, fileptr stream):cstr
+
+#linkid fputs_unlocked
+fn fputs_unlocked(cstr s, fileptr stream):i32
+
+// Line-oriented I/O
+#linkid getdelim
+fn getdelim(rawptr<cstr> lineptr, rawptr<u64> n, i32 delim, fileptr stream):i64
+
+#linkid getline
+fn getline(rawptr<cstr> lineptr, rawptr<u64> n, fileptr stream):i64
+
+// Additional functions
+#linkid renameat
+fn renameat(i32 olddirfd, cstr oldpath, i32 newdirfd, cstr newpath):i32
+
+#linkid ctermid
+fn ctermid(cstr s):cstr
+
+#linkid tempnam
+fn tempnam(cstr dir, cstr pfx):cstr
+
+#linkid cuserid
+fn cuserid(cstr s):cstr
+
+#linkid setlinebuf
+fn setlinebuf(fileptr stream):void
+
+#linkid setbuffer
+fn setbuffer(fileptr stream, cstr buffer, u64 size):void
+
+#linkid getw
+fn getw(fileptr stream):i32
+
+#linkid putw
+fn putw(i32 w, fileptr stream):i32
+
+#linkid fgetln
+fn fgetln(fileptr stream, rawptr<u64> len):cstr
+
+// Cookie I/O function types
+type cookie_read_function_t = fn(anyptr, cstr, u64):i64
+type cookie_write_function_t = fn(anyptr, cstr, u64):i64
+type cookie_seek_function_t = fn(anyptr, rawptr<i64>, i32):i32
+type cookie_close_function_t = fn(anyptr):i32
+
+type cookie_io_functions_t = struct {
+    cookie_read_function_t read
+    cookie_write_function_t write
+    cookie_seek_function_t seek
+    cookie_close_function_t close
+}
+
+#linkid fopencookie
+fn fopencookie(anyptr cookie, cstr mode, cookie_io_functions_t io_funcs):fileptr
 
 
 

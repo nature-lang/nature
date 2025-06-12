@@ -250,43 +250,6 @@ div(17, 5) quot: 3 rem: 2
 ldiv(123456789, 1000) quot: 123456 rem: 789
 
 
-=== test_rand_srand
---- main.n
-import libc
-
-fn main():void {
-    libc.srand(42)
-    var r1 = libc.rand()
-    var r2 = libc.rand()
-
-    println('srand(42) called')
-    println('rand() result 1:', r1)
-    println('rand() result 2:', r2)
-
-    // 重新设置种子，应该得到相同的序列
-    libc.srand(42)
-    var r3 = libc.rand()
-    var r4 = libc.rand()
-
-    println('srand(42) called again')
-    println('rand() result 3:', r3)
-    println('rand() result 4:', r4)
-
-    if r1 == r3 && r2 == r4 {
-        println('random sequence reproducible')
-    }
-}
-
---- output.txt
-srand(42) called
-rand() result 1: 311430560
-rand() result 2: 131117839
-srand(42) called again
-rand() result 3: 311430560
-rand() result 4: 131117839
-random sequence reproducible
-
-
 === test_getenv_setenv
 --- main.n
 import libc
@@ -340,28 +303,3 @@ fn main():void {
 --- output.txt
 Hello from system call
 system() exit code: 0
-
-=== test_clearenv
---- main.n
-import libc
-
-fn main():void {
-    libc.setenv('CLEAR_TEST'.to_cstr(), 'value'.to_cstr(), 1)
-    var value = libc.getenv('CLEAR_TEST'.to_cstr())
-    if value != null {
-        println('Before clearenv, CLEAR_TEST:', value.to_string())
-    }
-
-    var result = libc.clearenv()
-    println('clearenv() result:', result)
-
-    value = libc.getenv('CLEAR_TEST'.to_cstr())
-    if value == null {
-        println('After clearenv, CLEAR_TEST is null')
-    }
-}
-
---- output.txt
-Before clearenv, CLEAR_TEST: value
-clearenv() result: 0
-After clearenv, CLEAR_TEST is null

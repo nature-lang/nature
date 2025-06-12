@@ -1882,7 +1882,14 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         case AST_EXPR_SELECT: {
             // analyzer 仅进行了变量重命名
             // 此时作用域不明确，无法进行任何的表达式改写。
-            return rewrite_select_expr(m, expr);
+            rewrite_select_expr(m, expr);
+
+            // Constant Propagation, The select expression may be rewritten as an identity expression
+            if (expr->assert_type == AST_EXPR_IDENT) {
+                analyzer_constant_propagation(m, expr);
+            }
+
+            return;
         }
         case AST_EXPR_IDENT: {
             // ident unique 改写并注册到符号表中
