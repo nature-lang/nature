@@ -36,6 +36,12 @@ jobs:
         with:
           go-version: stable
 
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: nls
+          prefix-key: nls
+          cache-on-failure: true
       - name: Setup Rust for nls
         uses: dtolnay/rust-toolchain@master
         with:
@@ -44,6 +50,23 @@ jobs:
       - name: Setup Musl for Linux
         if: ${{ contains(matrix.target, 'linux') }}
         run: sudo apt-get install musl-tools
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          append-timestamp: false
+          key: ${{ matrix.target }}
+      
+      - name: Set job parallelism
+        id: parallelism
+        run: |
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            echo "j_flag=$(nproc)" >> $GITHUB_OUTPUT
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            echo "j_flag=$(sysctl -n hw.ncpu)" >> $GITHUB_OUTPUT
+          else
+            echo "j_flag=2" >> $GITHUB_OUTPUT
+          fi
 
       - name: Build Runtime
         uses: threeal/cmake-action@v2.1.0
@@ -54,6 +77,8 @@ jobs:
           options: |
             CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
             CMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/${{ matrix.target }}-toolchain.cmake
+            CMAKE_C_COMPILER_LAUNCHER=ccache
+            CMAKE_CXX_COMPILER_LAUNCHER=ccache
           build-args:
             --target runtime
 
@@ -66,12 +91,13 @@ jobs:
             CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
             CMAKE_VERBOSE_MAKEFILE=ON
             CPACK_OUTPUT_FILE_PREFIX=${{ github.workspace }}/release
+            CMAKE_C_COMPILER_LAUNCHER=ccache
+            CMAKE_CXX_COMPILER_LAUNCHER=ccache
           build-args:
-            -- -j2
+            -- -j${{ steps.parallelism.outputs.j_flag }}
 
       - name: Test
         uses: threeal/ctest-action@v1.1.0
         with:
           test-dir: build-release/tests
-          args:
-            -E "20250418_00_playground|20250324_00_llama" # exclude testcase '20250418_00_playground' '20250324_00_llama'
+          args: -E "20250418_00_playground|20250324_00_llama" --timeout 30
