@@ -9,7 +9,7 @@ fn copy<T>([u8] buf, rawptr<T> dst):void! {
         throw errorf('buffer too small')
     }
 
-    libc.memmove(dst as anyptr, buf.ref(), size)
+    libc.memmove(dst as anyptr, buf.ref(), size as u64)
 }
 
 fn read_u8_le([u8] buf):u8! {

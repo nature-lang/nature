@@ -5,3 +5,7 @@ fn string.len():int
 
 #linkid rt_string_ref
 fn string.ref():anyptr
+
+fn string.char():u8 {
+    return self[0]
+}

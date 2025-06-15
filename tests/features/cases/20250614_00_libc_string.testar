@@ -1,0 +1,298 @@
+=== test_strlen
+--- main.n
+import libc
+
+fn main():void {
+    var str1 = 'Hello World'.to_cstr()
+    var len1 = libc.strlen(str1)
+    println('strlen("Hello World"):', len1)
+    
+    var str2 = ''.to_cstr()
+    var len2 = libc.strlen(str2)
+    println('strlen(""):', len2)
+    
+    var str3 = 'A'.to_cstr()
+    var len3 = libc.strlen(str3)
+    println('strlen("A"):', len3)
+}
+
+--- output.txt
+strlen("Hello World"): 11
+strlen(""): 0
+strlen("A"): 1
+
+
+=== test_strcpy_strncpy
+--- main.n
+import libc
+
+fn main():void {
+    var dest = libc.malloc(20) as libc.cstr
+    var src = 'Hello'.to_cstr()
+    
+    var result1 = libc.strcpy(dest, src)
+    println('strcpy result:', result1.to_string())
+    
+    var dest2 = libc.malloc(20) as libc.cstr
+    var result2 = libc.strncpy(dest2, 'World123'.to_cstr(), 5)
+    println('strncpy result:', result2.to_string())
+    
+    libc.free(dest as anyptr)
+    libc.free(dest2 as anyptr)
+}
+
+--- output.txt
+strcpy result: Hello
+strncpy result: World
+
+
+=== test_strcat_strncat
+--- main.n
+import libc
+
+fn main():void {
+    var dest = libc.malloc(30) as libc.cstr
+    libc.strcpy(dest, 'Hello'.to_cstr())
+    
+    var result1 = libc.strcat(dest, ' World'.to_cstr())
+    println('strcat result:', result1.to_string())
+    
+    var dest2 = libc.malloc(30) as libc.cstr
+    libc.strcpy(dest2, 'Hello'.to_cstr())
+    var result2 = libc.strncat(dest2, ' Beautiful World'.to_cstr(), 10)
+    println('strncat result:', result2.to_string())
+    
+    libc.free(dest as anyptr)
+    libc.free(dest2 as anyptr)
+}
+
+--- output.txt
+strcat result: Hello World
+strncat result: Hello Beautiful
+
+
+=== test_strcmp_strncmp
+--- main.n
+import libc
+
+fn main():void {
+    var str1 = 'Hello'.to_cstr()
+    var str2 = 'Hello'.to_cstr()
+    var str3 = 'World'.to_cstr()
+    
+    var cmp1 = libc.strcmp(str1, str2)
+    println('strcmp("Hello", "Hello"):', cmp1)
+    
+    var cmp2 = libc.strcmp(str1, str3)
+    println('strcmp("Hello", "World") < 0:', cmp2 < 0)
+    
+    var cmp3 = libc.strncmp('Hello123'.to_cstr(), 'Hello456'.to_cstr(), 5)
+    println('strncmp("Hello123", "Hello456", 5):', cmp3)
+    
+    var cmp4 = libc.strncmp('Hello123'.to_cstr(), 'Hello456'.to_cstr(), 8)
+    println('strncmp("Hello123", "Hello456", 8) != 0:', cmp4 != 0)
+}
+
+--- output.txt
+strcmp("Hello", "Hello"): 0
+strcmp("Hello", "World") < 0: true
+strncmp("Hello123", "Hello456", 5): 0
+strncmp("Hello123", "Hello456", 8) != 0: true
+
+
+=== test_strchr_strrchr
+--- main.n
+import libc
+
+fn main():void {
+    var str = 'Hello World'.to_cstr()
+    
+    var result1 = libc.strchr(str, 'o'.char() as i32)
+    if result1 != null {
+        println('strchr found "o" at position:', (result1 as u64) - (str as u64))
+    }
+    
+    var result2 = libc.strrchr(str, 'o'.char() as i32)
+    if result2 != null {
+        println('strrchr found last "o" at position:', (result2 as u64) - (str as u64))
+    }
+    
+    var result3 = libc.strchr(str, 'x'.char() as i32)
+    println('strchr for "x" found:', result3 != null)
+}
+
+--- output.txt
+strchr found "o" at position: 4
+strrchr found last "o" at position: 7
+strchr for "x" found: false
+
+
+=== test_strstr
+--- main.n
+import libc
+
+fn main():void {
+    var haystack = 'Hello Beautiful World'.to_cstr()
+    
+    var result1 = libc.strstr(haystack, 'Beautiful'.to_cstr())
+    if result1 != null {
+        println('strstr found "Beautiful" at position:', (result1 as u64) - (haystack as u64))
+    }
+    
+    var result2 = libc.strstr(haystack, 'World'.to_cstr())
+    if result2 != null {
+        println('strstr found "World":', result2.to_string())
+    }
+    
+    var result3 = libc.strstr(haystack, 'NotFound'.to_cstr())
+    println('strstr for "NotFound" found:', result3 != null)
+}
+
+--- output.txt
+strstr found "Beautiful" at position: 6
+strstr found "World": World
+strstr for "NotFound" found: false
+
+
+=== test_memcpy_memmove
+--- main.n
+import libc
+
+fn main():void {
+    var src = 'Hello World'.to_cstr()
+    var dest1 = libc.malloc(20)
+    var dest2 = libc.malloc(20)
+    
+    libc.memcpy(dest1, src as anyptr, 11)
+    println('memcpy result:', (dest1 as libc.cstr).to_string())
+    
+    libc.memmove(dest2, src as anyptr, 11)
+    println('memmove result:', (dest2 as libc.cstr).to_string())
+    
+    // Test overlapping memory with memmove
+    var buffer = libc.malloc(20) as libc.cstr
+    libc.strcpy(buffer, '0123456789'.to_cstr())
+    libc.memmove((buffer as u64 + 2) as anyptr, buffer as anyptr, 5)
+    println('memmove overlapping result:', buffer.to_string())
+    
+    libc.free(dest1)
+    libc.free(dest2)
+    libc.free(buffer as anyptr)
+}
+
+--- output.txt
+memcpy result: Hello World
+memmove result: Hello World
+memmove overlapping result: 0101234789
+
+
+=== test_memset_memcmp
+--- main.n
+import libc
+
+fn main():void {
+    var buffer = libc.malloc(10)
+    
+    libc.memset(buffer, 'A'.char() as i32, 5)
+    libc.memset((buffer as u64 + 5) as anyptr, 0, 5)
+    println('memset result:', (buffer as libc.cstr).to_string())
+    
+    var buffer2 = libc.malloc(10)
+    libc.memset(buffer2, 'A'.char() as i32, 5)
+    libc.memset((buffer2 as u64 + 5) as anyptr, 0, 5)
+    
+    var cmp_result = libc.memcmp(buffer, buffer2, 5)
+    println('memcmp equal buffers:', cmp_result)
+    
+    libc.memset(buffer2, 'B'.char() as i32, 1)
+    var cmp_result2 = libc.memcmp(buffer, buffer2, 5)
+    println('memcmp different buffers != 0:', cmp_result2 != 0)
+    
+    libc.free(buffer)
+    libc.free(buffer2)
+}
+
+--- output.txt
+memset result: AAAAA
+memcmp equal buffers: 0
+memcmp different buffers != 0: true
+
+
+=== test_memchr
+--- main.n
+import libc
+
+fn main():void {
+    var data = 'Hello World'.to_cstr()
+    
+    var result1 = libc.memchr(data as anyptr, 'o'.char() as i32, 11)
+    if result1 != null {
+        println('memchr found "o" at position:', (result1 as u64) - (data as u64))
+    }
+    
+    var result2 = libc.memchr(data as anyptr, 'x'.char() as i32, 11)
+    println('memchr for "x" found:', result2 != null)
+    
+    var result3 = libc.memchr(data as anyptr, 'W'.char() as i32, 11)
+    if result3 != null {
+        println('memchr found "W" at position:', (result3 as u64) - (data as u64))
+    }
+}
+
+--- output.txt
+memchr found "o" at position: 4
+memchr for "x" found: false
+memchr found "W" at position: 6
+
+
+=== test_strcspn_strspn
+--- main.n
+import libc
+
+fn main():void {
+    var str = 'Hello123World'.to_cstr()
+    
+    var cspn_result = libc.strcspn(str, '0123456789'.to_cstr())
+    println('strcspn - chars before digits:', cspn_result)
+    
+    var spn_result = libc.strspn('123456abc'.to_cstr(), '0123456789'.to_cstr())
+    println('strspn - initial digits count:', spn_result)
+    
+    var spn_result2 = libc.strspn('abcdef'.to_cstr(), '0123456789'.to_cstr())
+    println('strspn - no matching chars:', spn_result2)
+}
+
+--- output.txt
+strcspn - chars before digits: 5
+strspn - initial digits count: 6
+strspn - no matching chars: 0
+
+
+=== test_strpbrk
+--- main.n
+import libc
+
+fn main():void {
+    var str = 'Hello World 123'.to_cstr()
+    
+    var result1 = libc.strpbrk(str, '0123456789'.to_cstr())
+    if result1 != null {
+        println('strpbrk found digit at position:', (result1 as u64) - (str as u64))
+        println('strpbrk found:', result1.to_string())
+    }
+    
+    var result2 = libc.strpbrk(str, 'xyz'.to_cstr())
+    println('strpbrk for "xyz" found:', result2 != null)
+    
+    var str3 = 'abcdef'.to_cstr()
+    var result3 = libc.strpbrk(str3, 'def'.to_cstr())
+    if result3 != null {
+        println('strpbrk found "def" char at position:', (result3 as u64) - (str3 as u64))
+    }
+}
+
+--- output.txt
+strpbrk found digit at position: 12
+strpbrk found: 123
+strpbrk for "xyz" found: false
+strpbrk found "def" char at position: 3

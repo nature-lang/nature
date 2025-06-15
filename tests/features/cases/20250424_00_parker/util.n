@@ -120,7 +120,7 @@ fn run_target(string target_path):int! {
     // 9 = SIGKILL
     var result = libc.prctl(1, 9, 0, 0, 0)
     if result == -1 {
-       throw errorf('set pdeathsig err=%s', libc.strerror())
+       throw errorf('set pdeathsig err=%s', libc.error_string())
     }
 
     // 读取当前进程 id

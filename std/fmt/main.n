@@ -316,8 +316,8 @@ fn sscanf(string str, string format, ...[any] args):int {
             
             // 解析数字，考虑宽度限制
             for str_i < str_len && (width <= 0 || char_count < width) && 
-                str_sources[str_i] >= '0'.ascii() && str_sources[str_i] <= '9'.ascii() {
-                value = value * 10 + (str_sources[str_i] - '0'.ascii()) as int
+                str_sources[str_i] >= '0'.char() && str_sources[str_i] <= '9'.char() {
+                value = value * 10 + (str_sources[str_i] - '0'.char()) as int
                 str_i += 1
                 char_count += 1
                 has_digit = true

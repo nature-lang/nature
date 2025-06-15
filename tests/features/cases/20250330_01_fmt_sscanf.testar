@@ -86,9 +86,9 @@ fn main() {
     var matched = fmt.sscanf(input, "%c %c %c", &c1, &c2, &c3)
 
     assert(matched == 3)
-    assert(c1 == 'a'.ascii())
-    assert(c2 == 'b'.ascii())
-    assert(c3 == 'c'.ascii())
+    assert(c1 == 'a'.char())
+    assert(c2 == 'b'.char())
+    assert(c3 == 'c'.char())
 }
 
 === test_sscanf_float
@@ -135,7 +135,7 @@ fn main() {
     assert(matched == 4)
     assert(str == "test")
     assert(num == 123)
-    assert(ch == 'x'.ascii())
+    assert(ch == 'x'.char())
     assert(flt == 3.14)
 }
 

@@ -254,7 +254,7 @@ fn transformer.forward(int token, int pos):[f32]! {
     // 复制 token embedding 到 x(首先为 x ref 分配足够的空间)
     s.x = vec_new<f32>(0, dim)
     anyptr content_row = w.token_embedding_table as anyptr + token as anyptr * dim as anyptr * @sizeof(f32)
-    libc.memcpy(s.x.ref(), content_row, dim * @sizeof(f32)) // 直接进行不安全k的数据 copy
+    libc.memcpy(s.x.ref(), content_row, dim as u64 * @sizeof(f32)) // 直接进行不安全k的数据 copy
     [f32] x = s.x
 
     // logf('token %d, forward will handle layers, pos %d s.xb2: %f, %f, %f, %f', token, pos, s.xb2[0], s.xb2[1], s.xb2[2], s.xb2[3])
@@ -329,7 +329,7 @@ fn transformer.forward(int token, int pos):[f32]! {
 
             // weighted sum of the values, store back into xb
             [f32] xb = s.xb.slice(h_idx * head_size, (h_idx + 1) * head_size)
-            libc.memset(xb.ref(), 0, head_size * @sizeof(f32))
+            libc.memset(xb.ref(), 0, head_size as u64 * @sizeof(f32))
 
             for int t = 0; t <= pos; t+=1 {
                 // get the value vector for this head and at this timestep
@@ -465,7 +465,7 @@ fn transformer_new(string path):ptr<transformer>! {
 fn tokenizer_t.decode(int prev_token, int token):string! {
     string piece = self.vocab[token]
     // following BOS (1) token, sentencepiece decoder strips any leading whitespace (see PR #89)
-    if prev_token == 1 && piece[0] == ' '.ascii() {
+    if prev_token == 1 && piece[0] == ' '.char() {
         piece = piece.slice(1, piece.len())
     }
 
@@ -916,18 +916,18 @@ fn main():void! {
 
     for int i = 2; i < args_len; i+=2 {
         if i + 1 >= args_len { error_usage() } // must have arg after flag
-        if args[i][0] != '-'.ascii() { error_usage() } // must start with dash
+        if args[i][0] != '-'.char() { error_usage() } // must start with dash
         if args[i].len() != 2 { error_usage() }  // must be -x (one dash, one letter)
 
         match args[i][1] {
-            't'.ascii() -> { temperature = args[i+1].to_float() as f32 }
-            'p'.ascii() -> { topp = args[i+1].to_float() as f32 }
-            's'.ascii() -> { rng_seed = args[i+1].to_int() as u64 }
-            'n'.ascii() -> { steps = args[i+1].to_int() }
-            'i'.ascii() -> { prompt = args[i+1] }
-            'z'.ascii() -> { tokenizer_path = args[i+1] }
-            'm'.ascii() -> { mode = args[i+1] }
-            'y'.ascii() -> { system_prompt = args[i+1] }
+            't'.char() -> { temperature = args[i+1].to_float() as f32 }
+            'p'.char() -> { topp = args[i+1].to_float() as f32 }
+            's'.char() -> { rng_seed = args[i+1].to_int() as u64 }
+            'n'.char() -> { steps = args[i+1].to_int() }
+            'i'.char() -> { prompt = args[i+1] }
+            'z'.char() -> { tokenizer_path = args[i+1] }
+            'm'.char() -> { mode = args[i+1] }
+            'y'.char() -> { system_prompt = args[i+1] }
             _ -> {
                 error_usage()
             }

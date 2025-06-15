@@ -731,7 +731,7 @@ fn wait(int pid, int option):(int, int)! {
     var status = 0
     int result = libc.waitpid(pid, &status, option)
     if result == -1 {
-        throw errorf(libc.strerror())
+        throw errorf(libc.error_string())
     }
 
     return (result, status)

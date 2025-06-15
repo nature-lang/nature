@@ -250,12 +250,12 @@ fn buf_reader<T>.read_line():string! {
         throw errorf('EOF')
     }
 
-    var bytes = self.read_until('\n'.ascii())
+    var bytes = self.read_until('\n'.char())
 
     // 处理 \r\n
-    if bytes.len() > 0 && bytes[bytes.len() - 1] == '\n'.ascii() {
+    if bytes.len() > 0 && bytes[bytes.len() - 1] == '\n'.char() {
         bytes = bytes.slice(0, bytes.len() - 1)
-        if bytes.len() > 0 && bytes[bytes.len() - 1] == '\r'.ascii() {
+        if bytes.len() > 0 && bytes[bytes.len() - 1] == '\r'.char() {
             bytes = bytes.slice(0, bytes.len() - 1)
         }
     }

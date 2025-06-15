@@ -253,7 +253,7 @@ fn string.to_int():int! {
     var start = 0
     var negative = false
 
-    if self[0] == '-'.ascii() {
+    if self[0] == '-'.char() {
         negative = true
         start = 1
         if self.len() == 1 {
@@ -262,7 +262,7 @@ fn string.to_int():int! {
     }
 
     for int i = start; i < self.len(); i += 1 {
-        if self[i] != ' '.ascii() {
+        if self[i] != ' '.char() {
             start = i
             break
         }
@@ -270,7 +270,7 @@ fn string.to_int():int! {
 
     for int i = start; i < self.len(); i += 1 {
         var c = self[i]
-        if c < '0'.ascii() || c > '9'.ascii() {
+        if c < '0'.char() || c > '9'.char() {
             throw errorf("invalid character in number")
         }
 
@@ -278,7 +278,7 @@ fn string.to_int():int! {
             throw errorf("number too large")
         }
 
-        result = result * 10 + (c - '0'.ascii()) as int
+        result = result * 10 + (c - '0'.char()) as int
     }
 
     if negative {
@@ -297,7 +297,7 @@ fn string.to_float():float! {
     var start = 0
     var negative = false
 
-    if self[0] == '-'.ascii() {
+    if self[0] == '-'.char() {
         negative = true
         start = 1
         if self.len() == 1 {
@@ -307,7 +307,7 @@ fn string.to_float():float! {
 
     // 跳过前导空格
     for int i = start; i < self.len(); i += 1 {
-        if self[i] != ' '.ascii() {
+        if self[i] != ' '.char() {
             start = i
             break
         }
@@ -316,7 +316,7 @@ fn string.to_float():float! {
     var decimal_point = -1
     for int i = start; i < self.len(); i += 1 {
         var c = self[i]
-        if c == '.'.ascii() {
+        if c == '.'.char() {
             if decimal_point != -1 {
                 throw errorf("invalid float format: multiple decimal points")
             }
@@ -324,17 +324,17 @@ fn string.to_float():float! {
             continue
         }
         
-        if c < '0'.ascii() || c > '9'.ascii() {
+        if c < '0'.char() || c > '9'.char() {
             throw errorf("invalid character in float")
         }
 
         if decimal_point == -1 {
             // 处理整数部分
-            result = result * 10.0 + (c - '0'.ascii()) as float
+            result = result * 10.0 + (c - '0'.char()) as float
         } else {
             // 处理小数部分
             var decimal_place = i - decimal_point
-            var decimal_value = (c - '0'.ascii()) as float
+            var decimal_value = (c - '0'.char()) as float
             var multiplier = 0.1
             
             // 计算正确的小数位乘数
