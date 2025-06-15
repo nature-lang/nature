@@ -783,7 +783,7 @@ fn wait(int pid, int option):(int, int)! {
     var status = 0
     int result = call6(SYS_WAIT4, pid as anyptr, &status as anyptr, option as anyptr, 0, 0, 0)
     if result == -1 {
-        throw errorf(libc.strerror())
+        throw errorf(libc.error_string())
     }
     return (result, status)
 }

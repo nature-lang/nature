@@ -1,0 +1,280 @@
+=== test_basic_math
+--- main.n
+import libc
+
+fn main():void {
+    var x = 2.0
+    var y = 3.0
+    
+    var sqrt_result = libc.sqrt(4.0)
+    println('sqrt(4.0):', sqrt_result)
+    
+    var pow_result = libc.pow(x, y)
+    println('pow(2.0, 3.0):', pow_result)
+    
+    var abs_result = libc.fabs(-5.5)
+    println('fabs(-5.5):', abs_result)
+    
+    var round_result = libc.round(3.7)
+    println('round(3.7):', round_result)
+}
+
+--- output.txt
+sqrt(4.0): 2.000000
+pow(2.0, 3.0): 8.000000
+fabs(-5.5): 5.500000
+round(3.7): 4.000000
+
+
+=== test_trigonometric
+--- main.n
+import libc
+
+fn main():void {
+    // 测试三角函数
+    var pi_half = libc.M_PI / 2.0
+    
+    var sin_result = libc.sin(pi_half)
+    println('sin(π/2) ≈ 1:', sin_result > 0.99 && sin_result < 1.01)
+    
+    var cos_result = libc.cos(0.0)
+    println('cos(0):', cos_result)
+    
+    var tan_result = libc.tan(libc.M_PI / 4.0)
+    println('tan(π/4) ≈ 1:', tan_result > 0.99 && tan_result < 1.01)
+    
+    var asin_result = libc.asin(1.0)
+    println('asin(1) ≈ π/2:', asin_result > 1.57 && asin_result < 1.58)
+}
+
+--- output.txt
+sin(π/2) ≈ 1: true
+cos(0): 1.000000
+tan(π/4) ≈ 1: true
+asin(1) ≈ π/2: true
+
+
+=== test_logarithmic
+--- main.n
+import libc
+
+fn main():void {
+    // 测试对数和指数函数
+    var exp_result = libc.exp(1.0)
+    println('exp(1) ≈ e:', exp_result > 2.71 && exp_result < 2.72)
+    
+    var log_result = libc.log(libc.M_E)
+    println('log(e) ≈ 1:', log_result > 0.99 && log_result < 1.01)
+    
+    var log10_result = libc.log10(100.0)
+    println('log10(100):', log10_result)
+    
+    var log2_result = libc.log2(8.0)
+    println('log2(8):', log2_result)
+}
+
+--- output.txt
+exp(1) ≈ e: true
+log(e) ≈ 1: true
+log10(100): 2.000000
+log2(8): 3.000000
+
+
+=== test_rounding_functions
+--- main.n
+import libc
+
+fn main():void {
+    // 测试取整函数
+    var x = 3.7
+    var y = -2.3
+    
+    var ceil_result1 = libc.ceil(x)
+    println('ceil(3.7):', ceil_result1)
+    
+    var floor_result1 = libc.floor(x)
+    println('floor(3.7):', floor_result1)
+    
+    var ceil_result2 = libc.ceil(y)
+    println('ceil(-2.3):', ceil_result2)
+    
+    var floor_result2 = libc.floor(y)
+    println('floor(-2.3):', floor_result2)
+    
+    var trunc_result = libc.trunc(-3.8)
+    println('trunc(-3.8):', trunc_result)
+}
+
+--- output.txt
+ceil(3.7): 4.000000
+floor(3.7): 3.000000
+ceil(-2.3): -2.000000
+floor(-2.3): -3.000000
+trunc(-3.8): -3.000000
+
+
+=== test_float_functions
+--- main.n
+import libc
+
+fn main():void {
+    // 测试浮点数函数
+    var x = 5.5
+    var y = 2.5
+    
+    var fmod_result = libc.fmod(x, y)
+    println('fmod(5.5, 2.5):', fmod_result)
+    
+    var fmax_result = libc.fmax(x, y)
+    println('fmax(5.5, 2.5):', fmax_result)
+    
+    var fmin_result = libc.fmin(x, y)
+    println('fmin(5.5, 2.5):', fmin_result)
+    
+    var copysign_result = libc.copysign(3.0, -1.0)
+    println('copysign(3.0, -1.0):', copysign_result)
+}
+
+--- output.txt
+fmod(5.5, 2.5): 0.500000
+fmax(5.5, 2.5): 5.500000
+fmin(5.5, 2.5): 2.500000
+copysign(3.0, -1.0): -3.000000
+
+
+=== test_hyperbolic_functions
+--- main.n
+import libc
+
+fn main():void {
+    // 测试双曲函数
+    var x = 1.0
+    
+    var sinh_result = libc.sinh(x)
+    println('sinh(1) > 1:', sinh_result > 1.0)
+    
+    var cosh_result = libc.cosh(0.0)
+    println('cosh(0):', cosh_result)
+    
+    var tanh_result = libc.tanh(0.0)
+    println('tanh(0):', tanh_result)
+    
+    var asinh_result = libc.asinh(0.0)
+    println('asinh(0):', asinh_result)
+}
+
+--- output.txt
+sinh(1) > 1: true
+cosh(0): 1.000000
+tanh(0): 0.000000
+asinh(0): 0.000000
+
+
+=== test_special_functions
+--- main.n
+import libc
+
+fn main():void {
+    // 测试特殊函数
+    var cbrt_result = libc.cbrt(8.0)
+    println('cbrt(8):', cbrt_result)
+    
+    var hypot_result = libc.hypot(3.0, 4.0)
+    println('hypot(3, 4):', hypot_result)
+    
+    var remainder_result = libc.remainder(7.0, 3.0)
+    println('remainder(7, 3):', remainder_result)
+    
+    var nearbyint_result = libc.nearbyint(2.7)
+    println('nearbyint(2.7):', nearbyint_result)
+}
+
+--- output.txt
+cbrt(8): 2.000000
+hypot(3, 4): 5.000000
+remainder(7, 3): 1.000000
+nearbyint(2.7): 3.000000
+
+
+=== test_float32_functions
+--- main.n
+import libc
+
+fn main():void {
+    // 测试 float32 版本的函数
+    f32 x = 4.0
+    f32 y = 2.0
+    
+    var sqrtf_result = libc.sqrtf(x)
+    println('sqrtf(4.0):', sqrtf_result)
+    
+    var powf_result = libc.powf(y, 3.0)
+    println('powf(2.0, 3.0):', powf_result)
+    
+    var sinf_result = libc.sinf(0.0)
+    println('sinf(0):', sinf_result)
+    
+    var cosf_result = libc.cosf(0.0)
+    println('cosf(0):', cosf_result)
+    
+    var fabsf_result = libc.fabsf(-3.5)
+    println('fabsf(-3.5):', fabsf_result)
+}
+
+--- output.txt
+sqrtf(4.0): 2.000000
+powf(2.0, 3.0): 8.000000
+sinf(0): 0.000000
+cosf(0): 1.000000
+fabsf(-3.5): 3.500000
+
+
+=== test_math_constants
+--- main.n
+import libc
+
+fn main():void {
+    // 测试数学常量
+    println('M_PI > 3.14:', libc.M_PI > 3.14)
+    println('M_E > 2.71:', libc.M_E > 2.71)
+    println('M_LOG2E > 1.44:', libc.M_LOG2E > 1.44)
+    println('M_LN2 > 0.69:', libc.M_LN2 > 0.69)
+    println('M_SQRT2 > 1.41:', libc.M_SQRT2 > 1.41)
+}
+
+--- output.txt
+M_PI > 3.14: true
+M_E > 2.71: true
+M_LOG2E > 1.44: true
+M_LN2 > 0.69: true
+M_SQRT2 > 1.41: true
+
+
+=== test_advanced_functions
+--- main.n
+import libc
+
+fn main():void {
+    // 测试高级数学函数
+    var exp2_result = libc.exp2(3.0)
+    println('exp2(3) = 2^3:', exp2_result)
+    
+    var expm1_result = libc.expm1(0.0)
+    println('expm1(0) = exp(0)-1:', expm1_result)
+    
+    var log1p_result = libc.log1p(0.0)
+    println('log1p(0) = log(1+0):', log1p_result)
+    
+    var logb_result = libc.logb(8.0)
+    println('logb(8):', logb_result)
+    
+    var rint_result = libc.rint(2.3)
+    println('rint(2.3):', rint_result)
+}
+
+--- output.txt
+exp2(3) = 2^3: 8.000000
+expm1(0) = exp(0)-1: 0.000000
+log1p(0) = log(1+0): 0.000000
+logb(8): 3.000000
+rint(2.3): 2.000000

@@ -48,11 +48,11 @@ fn main():void! {
 
     var br = new io.buf_reader<ptr<io.buffer>>(rd)
 
-    var line = br.read_until('\n'.ascii())
+    var line = br.read_until('\n'.char())
     assert(line as string == 'hello\n')
     println(line as string)
 
-    line = br.read_until('\n'.ascii())
+    line = br.read_until('\n'.char())
     assert(line as string == 'world\n')
     println(line as string)
 }
@@ -71,13 +71,13 @@ fn main():void! {
     var rd = new io.buffer()
     var data = vec_new<u8>(0, 4096 + 100)
     for int i = 0; i < data.len(); i += 1 {
-       data[i] = 'a'.ascii()
+       data[i] = 'a'.char()
     }
     rd.write(data)
 
     var br = new io.buf_reader<ptr<io.buffer>>(rd)
     // until triggers fill until the entire buf is full without any successful data reading
-    var line = br.read_until('\n'.ascii())
+    var line = br.read_until('\n'.char())
     println('read until buffer full', line.len())
 }
 
@@ -94,12 +94,12 @@ fn main():void! {
     rd.write("hello world" as [u8]) // no delim
     var br = new io.buf_reader<ptr<io.buffer>>(rd)
 
-    var line = br.read_until('\n'.ascii())
+    var line = br.read_until('\n'.char())
     assert(line as string == "hello world")
     // check end is delim
     println("read data: " + (line as string), (line as string).ends_with('\n'))
 
-    line = br.read_until('\n'.ascii())
+    line = br.read_until('\n'.char())
     assert(line.len() == 0)
 }
 
@@ -225,10 +225,10 @@ fn main():void! {
     var br = new io.buf_reader<ptr<io.buffer>>(rd)
 
     u8 b = br.read_byte()
-    assert(b == 'H'.ascii())
+    assert(b == 'H'.char())
 
     b = br.read_byte()
-    assert(b == 'e'.ascii())
+    assert(b == 'e'.char())
 
     for int i = 0; i < 3; i += 1 {
         b = br.read_byte()

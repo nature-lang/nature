@@ -37,7 +37,7 @@ fn listdir(string path):[string]! {
 
     var dir = dirent.opendir(path.ref())
     if dir == 0 {
-        throw errorf('opendir failed: ' + libc.strerror())
+        throw errorf('opendir failed: ' + libc.error_string())
     }
 
     for true {

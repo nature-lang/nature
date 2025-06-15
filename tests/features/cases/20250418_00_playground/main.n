@@ -18,27 +18,27 @@ var nature_path = '/usr/local/nature/bin/nature'
 fn json_escape(string s):string {
     [u8] buf = []
     for c in s {
-        if c == `"`.ascii() {
-            buf.push('\\'.ascii())
-            buf.push('"'.ascii())
-        } else if c == '\\'.ascii() {
-            buf.push('\\'.ascii())
-            buf.push('\\'.ascii())
-        } else if c == '\n'.ascii() {
-            buf.push('\\'.ascii())
-            buf.push('n'.ascii())
-        } else if c == '\r'.ascii() {
-            buf.push('\\'.ascii())
-            buf.push('r'.ascii())
-        } else if c == '\t'.ascii() {
-            buf.push('\\'.ascii())
-            buf.push('t'.ascii())
-        } else if c == '\b'.ascii() {
-            buf.push('\\'.ascii())
-            buf.push('b'.ascii())
-        } else if c == '\f'.ascii() {
-            buf.push('\\'.ascii())
-            buf.push('f'.ascii())
+        if c == `"`.char() {
+            buf.push('\\'.char())
+            buf.push('"'.char())
+        } else if c == '\\'.char() {
+            buf.push('\\'.char())
+            buf.push('\\'.char())
+        } else if c == '\n'.char() {
+            buf.push('\\'.char())
+            buf.push('n'.char())
+        } else if c == '\r'.char() {
+            buf.push('\\'.char())
+            buf.push('r'.char())
+        } else if c == '\t'.char() {
+            buf.push('\\'.char())
+            buf.push('t'.char())
+        } else if c == '\b'.char() {
+            buf.push('\\'.char())
+            buf.push('b'.char())
+        } else if c == '\f'.char() {
+            buf.push('\\'.char())
+            buf.push('f'.char())
         } else {
             buf.push(c)
         }
