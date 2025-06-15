@@ -744,6 +744,9 @@ fn tanhf(f32 x):f32
 #linkid exp
 fn exp(f64 x):f64
 
+#linkid expf
+fn expf(f32 x):f32
+
 #linkid exp2
 fn exp2(f64 x):f64
 
