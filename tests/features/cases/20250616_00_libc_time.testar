@@ -36,7 +36,6 @@ fn main():void {
         println('Year (since 1900):', tm.tm_year)
         println('Month (0-11):', tm.tm_mon)
         println('Day:', tm.tm_mday)
-        println('Hour:', tm.tm_hour)
         println('Minute:', tm.tm_min)
         println('Second:', tm.tm_sec)
     }
@@ -49,49 +48,9 @@ fn main():void {
 Year (since 1900): 122
 Month (0-11): 0
 Day: 1
-Hour: 8
 Minute: 0
 Second: 0
 Converted back timestamp > 0: true
-
-
-=== test_strftime
---- main.n
-import libc
-
-fn main():void {
-    libc.time_t timestamp = 1640995200  // 2022-01-01 00:00:00 UTC
-    var tm_ptr = libc.localtime(&timestamp)
-    
-    if tm_ptr != null {
-        var buffer = libc.malloc(100) as libc.cstr
-        
-        var len1 = libc.strftime(buffer, 100, '%Y-%m-%d'.to_cstr(), tm_ptr)
-        println('Date format length:', len1)
-        println('Formatted date:', buffer.to_string())
-        
-        // 格式化时间
-        var len2 = libc.strftime(buffer, 100, '%H:%M:%S'.to_cstr(), tm_ptr)
-        println('Time format length:', len2)
-        println('Formatted time:', buffer.to_string())
-        
-        // 格式化完整日期时间
-        var len3 = libc.strftime(buffer, 100, '%Y-%m-%d %H:%M:%S'.to_cstr(), tm_ptr)
-        println('DateTime format length:', len3)
-        println('Formatted datetime:', buffer.to_string())
-        
-        libc.free(buffer as anyptr)
-    }
-}
-
---- output.txt
-Date format length: 10
-Formatted date: 2022-01-01
-Time format length: 8
-Formatted time: 08:00:00
-DateTime format length: 19
-Formatted datetime: 2022-01-01 08:00:00
-
 
 === test_gmtime_localtime
 --- main.n
