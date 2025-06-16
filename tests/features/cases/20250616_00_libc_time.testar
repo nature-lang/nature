@@ -1,0 +1,248 @@
+=== test_basic_time
+--- main.n
+import libc
+
+fn main():void {
+    // 测试基本时间函数
+    var current_time = libc.time(null)
+    println('Current timestamp > 0:', current_time > 0)
+    
+    var clock_ticks = libc.clock()
+    println('Clock ticks >= 0:', clock_ticks >= 0)
+    
+    // 测试时间差
+    var time1 = current_time
+    var time2 = current_time + 3600  // 1小时后
+    var diff = libc.difftime(time2, time1)
+    println('Time difference (1 hour):', diff)
+}
+
+--- output.txt
+Current timestamp > 0: true
+Clock ticks >= 0: true
+Time difference (1 hour): 3600.000000
+
+
+=== test_tm_struct_conversion
+--- main.n
+import libc
+
+fn main():void {
+    libc.time_t timestamp = 1640995200  // 2022-01-01 00:00:00 UTC
+    
+    var tm_ptr = libc.localtime(&timestamp)
+    if tm_ptr != null {
+        var tm = *tm_ptr
+        println('Year (since 1900):', tm.tm_year)
+        println('Month (0-11):', tm.tm_mon)
+        println('Day:', tm.tm_mday)
+        println('Minute:', tm.tm_min)
+        println('Second:', tm.tm_sec)
+    }
+    
+    var new_timestamp = libc.mktime(tm_ptr)
+    println('Converted back timestamp > 0:', new_timestamp > 0)
+}
+
+--- output.txt
+Year (since 1900): 122
+Month (0-11): 0
+Day: 1
+Minute: 0
+Second: 0
+Converted back timestamp > 0: true
+
+=== test_gmtime_localtime
+--- main.n
+import libc
+
+fn main():void {
+    // 测试 GMT 和本地时间转换
+    libc.time_t timestamp = 1640995200  // 2022-01-01 00:00:00 UTC
+    
+    var gm_ptr = libc.gmtime(&timestamp)
+    var local_ptr = libc.localtime(&timestamp)
+    
+    if gm_ptr != null && local_ptr != null {
+        var gm_tm = *gm_ptr
+        var local_tm = *local_ptr
+        
+        println('GMT year:', gm_tm.tm_year + 1900)
+        println('GMT month:', gm_tm.tm_mon + 1)
+        println('GMT day:', gm_tm.tm_mday)
+        
+        println('Local year:', local_tm.tm_year + 1900)
+        println('Local month:', local_tm.tm_mon + 1)
+        println('Local day:', local_tm.tm_mday)
+        
+        // 检查是否为同一天（可能因时区不同）
+        var same_day = gm_tm.tm_year == local_tm.tm_year && 
+                      gm_tm.tm_mon == local_tm.tm_mon && 
+                      gm_tm.tm_mday == local_tm.tm_mday
+        println('Same day (may vary by timezone):', same_day)
+    }
+}
+
+--- output.txt
+GMT year: 2022
+GMT month: 1
+GMT day: 1
+Local year: 2022
+Local month: 1
+Local day: 1
+Same day (may vary by timezone): true
+
+
+=== test_sleep_functions
+--- main.n
+import libc
+
+fn main():void {
+    // 测试睡眠函数
+    var start_time = libc.time(null)
+    
+    // 睡眠 1 秒
+    libc.sleep(1)
+    
+    var end_time = libc.time(null)
+    var elapsed = libc.difftime(end_time, start_time)
+    
+    println('Sleep 1 second - elapsed >= 1:', elapsed >= 1.0)
+    
+    // 测试微秒睡眠
+    var start_clock = libc.clock()
+    libc.usleep(100000)  // 100ms
+    var end_clock = libc.clock()
+    
+    println('usleep completed successfully:', end_clock >= start_clock)
+}
+
+--- output.txt
+Sleep 1 second - elapsed >= 1: true
+usleep completed successfully: true
+
+
+=== test_time_constants
+--- main.n
+import libc
+
+fn main():void {
+    println('TIME_UTC:', libc.TIME_UTC)
+    println('CLOCK_REALTIME:', libc.CLOCK_REALTIME)
+    println('CLOCK_MONOTONIC:', libc.CLOCK_MONOTONIC)
+    println('CLOCK_PROCESS_CPUTIME_ID:', libc.CLOCK_PROCESS_CPUTIME_ID)
+    println('CLOCK_THREAD_CPUTIME_ID:', libc.CLOCK_THREAD_CPUTIME_ID)
+    
+    // 验证常量值
+    println('CLOCK_REALTIME == 0:', libc.CLOCK_REALTIME == 0)
+    println('CLOCK_MONOTONIC == 1:', libc.CLOCK_MONOTONIC == 1)
+}
+
+--- output.txt
+TIME_UTC: 1
+CLOCK_REALTIME: 0
+CLOCK_MONOTONIC: 1
+CLOCK_PROCESS_CPUTIME_ID: 2
+CLOCK_THREAD_CPUTIME_ID: 3
+CLOCK_REALTIME == 0: true
+CLOCK_MONOTONIC == 1: true
+
+
+=== test_timespec_operations
+--- main.n
+import libc
+
+fn main():void {
+    // 测试 timespec 结构体操作
+    var ts = libc.timespec {
+        tv_sec = 1640995200,
+        tv_nsec = 500000000,  // 0.5 秒
+    }
+    
+    println('Timespec seconds:', ts.tv_sec)
+    println('Timespec nanoseconds:', ts.tv_nsec)
+    
+    // 测试 timespec_get
+    var current_ts = libc.timespec{tv_sec = 0, tv_nsec = 0}
+    var result = libc.timespec_get(&current_ts, libc.TIME_UTC)
+    
+    println('timespec_get result:', result)
+    println('Current timespec seconds > 0:', current_ts.tv_sec > 0)
+    println('Current timespec nanoseconds >= 0:', current_ts.tv_nsec >= 0)
+}
+
+--- output.txt
+Timespec seconds: 1640995200
+Timespec nanoseconds: 500000000
+timespec_get result: 1
+Current timespec seconds > 0: true
+Current timespec nanoseconds >= 0: true
+
+
+=== test_clock_functions
+--- main.n
+import libc
+
+fn main():void {
+    // 测试时钟函数 - 只测试通常支持的时钟
+    var ts = libc.timespec{tv_sec = 0, tv_nsec = 0}
+    
+    // 获取实时时钟 - 大多数系统都支持
+    var result1 = libc.clock_gettime(libc.CLOCK_REALTIME, &ts)
+    println('clock_gettime REALTIME result:', result1)
+    println('REALTIME seconds > 0:', ts.tv_sec > 0)
+    
+    // 获取时钟分辨率
+    var res_ts = libc.timespec{tv_sec = 0, tv_nsec = 0}
+    var result3 = libc.clock_getres(libc.CLOCK_REALTIME, &res_ts)
+    println('clock_getres result:', result3)
+    println('Clock resolution nanoseconds > 0:', res_ts.tv_nsec > 0)
+}
+
+--- output.txt
+clock_gettime REALTIME result: 0
+REALTIME seconds > 0: true
+clock_getres result: 0
+Clock resolution nanoseconds > 0: true
+
+
+=== test_nanosleep
+--- main.n
+import libc
+
+fn main():void {
+    // 测试纳秒级睡眠
+    var sleep_time = libc.timespec {
+        tv_sec = 0,
+        tv_nsec = 100000000,  // 100ms
+    }
+    
+    var start_time = libc.time(null)
+    var result = libc.nanosleep(&sleep_time, null)
+    var end_time = libc.time(null)
+    
+    println('nanosleep result:', result)
+    
+    var elapsed = libc.difftime(end_time, start_time)
+    println('Nanosleep elapsed >= 0:', elapsed >= 0.0)
+    
+    // 测试剩余时间
+    var long_sleep = libc.timespec {
+        tv_sec = 1,
+        tv_nsec = 0,
+    }
+    var remaining = libc.timespec{tv_sec = 0, tv_nsec = 0}
+    
+    // 这个测试可能会实际睡眠，所以使用较短时间
+    var short_sleep = libc.timespec {
+        tv_sec = 0,
+        tv_nsec = 10000000,  // 10ms
+    }
+    var result2 = libc.nanosleep(&short_sleep, &remaining)
+    println('Short nanosleep result:', result2)
+}
+
+--- output.txt
+nanosleep result: 0
+Nanosleep elapsed >= 0: true
+Short nanosleep result: 0

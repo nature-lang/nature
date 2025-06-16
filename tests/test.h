@@ -78,8 +78,14 @@ typedef struct {
 } testar_case_file_t;
 
 typedef struct {
+    char *os;        // 操作系统限制 (linux, darwin, windows)
+    int timeout;     // 超时时间（秒），0表示无限制
+} testar_case_attrs_t;
+
+typedef struct {
     char *name; // 测试用例名称
     slice_t *files; // testar_case_file_t
+    testar_case_attrs_t *attrs; // 测试用例属性
 } testar_case_t;
 
 /**
@@ -196,6 +202,88 @@ static inline testar_case_file_t *parse_file(char *content, size_t *offset) {
 }
 
 /**
+ * 解析测试用例属性
+ * 格式: test_name[os=linux,timeout=10]
+ */
+static inline testar_case_attrs_t *parse_test_attrs(char *name_with_attrs, char **pure_name) {
+    testar_case_attrs_t *attrs = malloc(sizeof(testar_case_attrs_t));
+    attrs->os = NULL;
+    attrs->timeout = 0;
+    
+    // 查找属性开始位置
+    char *attr_start = strchr(name_with_attrs, '[');
+    if (!attr_start) {
+        // 没有属性，返回纯名称
+        *pure_name = strdup(name_with_attrs);
+        return attrs;
+    }
+    
+    // 提取纯名称（去掉属性部分）
+    size_t name_len = attr_start - name_with_attrs;
+    *pure_name = malloc(name_len + 1);
+    strncpy(*pure_name, name_with_attrs, name_len);
+    (*pure_name)[name_len] = '\0';
+    
+    // 查找属性结束位置
+    char *attr_end = strchr(attr_start, ']');
+    if (!attr_end) {
+        return attrs; // 格式错误，返回默认属性
+    }
+    
+    // 提取属性字符串
+    attr_start++; // 跳过 '['
+    size_t attr_len = attr_end - attr_start;
+    char *attr_str = malloc(attr_len + 1);
+    strncpy(attr_str, attr_start, attr_len);
+    attr_str[attr_len] = '\0';
+    
+    // 解析属性键值对
+    char *token = strtok(attr_str, ",");
+    while (token) {
+        // 去除前后空格
+        while (*token == ' ') token++;
+        char *end = token + strlen(token) - 1;
+        while (end > token && *end == ' ') *end-- = '\0';
+        
+        // 查找等号
+        char *eq = strchr(token, '=');
+        if (eq) {
+            *eq = '\0';
+            char *key = token;
+            char *value = eq + 1;
+            
+            if (strcmp(key, "os") == 0) {
+                attrs->os = strdup(value);
+            } else if (strcmp(key, "timeout") == 0) {
+                attrs->timeout = atoi(value);
+            }
+        }
+        
+        token = strtok(NULL, ",");
+    }
+    
+    free(attr_str);
+    return attrs;
+}
+
+/**
+ * 检查当前系统是否匹配指定的操作系统
+ */
+static inline bool is_os_match(const char *required_os) {
+    if (!required_os) return true; // 没有限制
+    
+#ifdef __linux__
+    return strcmp(required_os, "linux") == 0;
+#elif defined(__APPLE__)
+    return strcmp(required_os, "darwin") == 0;
+#elif defined(_WIN32)
+    return strcmp(required_os, "windows") == 0;
+#else
+    return false; // 未知系统
+#endif
+}
+
+/**
  * 基于 ===xxx 进行分隔, 进行多次测试用例测试
  */
 static inline slice_t *testar_decompress(char *content) {
@@ -213,13 +301,17 @@ static inline slice_t *testar_decompress(char *content) {
         testar_case_t *test_case = malloc(sizeof(testar_case_t));
         test_case->files = slice_new();
 
-        // 读取测试用例名称
+        // 读取测试用例名称（包含可能的属性）
         char *name_start = content + offset + 4; // 跳过 "=== "
         char *name_end = strchr(name_start, '\n');
         size_t name_len = name_end - name_start;
-        test_case->name = malloc(name_len + 1);
-        strncpy(test_case->name, name_start, name_len);
-        test_case->name[name_len] = '\0';
+        char *name_with_attrs = malloc(name_len + 1);
+        strncpy(name_with_attrs, name_start, name_len);
+        name_with_attrs[name_len] = '\0';
+        
+        // 解析属性和纯名称
+        test_case->attrs = parse_test_attrs(name_with_attrs, &test_case->name);
+        free(name_with_attrs);
 
         // 更新偏移量到文件内容开始处
         offset = name_end - content + 1;
@@ -304,8 +396,26 @@ static inline void feature_testar_test(char *custom_target) {
         if (custom_target && !str_equal(custom_target, test_case->name)) {
             continue;
         }
+        
+        // 检查操作系统限制
+        if (!is_os_match(test_case->attrs->os)) {
+            printf("test case skipped=== %s (os mismatch: required %s)\n", 
+                   test_case->name, test_case->attrs->os);
+            continue;
+        }
 
-        printf("test case start=== %s\n", test_case->name);
+        printf("test case start=== %s", test_case->name);
+        if (test_case->attrs->os) {
+            printf(" [os=%s", test_case->attrs->os);
+            if (test_case->attrs->timeout > 0) {
+                printf(",timeout=%d", test_case->attrs->timeout);
+            }
+            printf("]\n");
+        } else if (test_case->attrs->timeout > 0) {
+            printf(" [timeout=%d]\n", test_case->attrs->timeout);
+        } else {
+            printf("\n");
+        }
 
         assertf(test_case->files->count > 0, "test case '%s' must have main.n", test_case->name);
 
@@ -342,6 +452,13 @@ static inline void feature_testar_test(char *custom_target) {
 
         // 固定格式生命
         char *entry = "main.n";
+        
+        // 设置超时处理（如果指定了timeout）
+        if (test_case->attrs->timeout > 0) {
+            // 这里可以添加超时处理逻辑
+            // 例如使用 alarm() 或其他超时机制
+            alarm(test_case->attrs->timeout);
+        }
 
         COMPILER_TRY {
             build(entry, false);
@@ -371,7 +488,11 @@ static inline void feature_testar_test(char *custom_target) {
                 assertf(false, "%s failed: %s", test_case->name, test_error_msg);
             }
         };
-
+        
+        // 取消超时设置
+        if (test_case->attrs->timeout > 0) {
+            alarm(0);
+        }
 
         // 进行编译
         printf("test case success === %s\n", test_case->name);

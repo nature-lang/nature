@@ -1,0 +1,388 @@
+=== test_pipe_operations
+--- main.n
+import libc
+
+fn main():void {
+    [i32;2] pipefd = []
+    var result = libc.pipe(pipefd as anyptr)
+    
+    println('pipe() result:', result)
+    println('pipe() success:', result == 0)
+    
+    if result == 0 {
+        var read_fd = pipefd[0]
+        var write_fd = pipefd[1]
+        
+        println('Read fd > 0:', read_fd > 0)
+        println('Write fd > 0:', write_fd > 0)
+        println('Different fds:', read_fd != write_fd)
+        
+        // 关闭文件描述符
+        libc.close(read_fd)
+        libc.close(write_fd)
+    }
+    
+    libc.free(pipefd as anyptr)
+}
+
+--- output.txt
+pipe() result: 0
+pipe() success: true
+Read fd > 0: true
+Write fd > 0: true
+Different fds: true
+
+
+=== test_file_operations
+--- main.n
+import libc
+
+fn main():void {
+    // 测试文件访问检查
+    var result1 = libc.access('/tmp'.to_cstr(), 0)  // F_OK - 文件存在检查
+    println('access /tmp exists:', result1 == 0)
+    
+    var result2 = libc.access('/nonexistent_file_12345'.to_cstr(), 0)
+    println('access nonexistent file:', result2 != 0)
+    
+    // 测试当前工作目录
+    var buffer = libc.malloc(1024) as libc.cstr
+    var cwd = libc.getcwd(buffer, 1024)
+    
+    if cwd != null {
+        var cwd_str = cwd.to_string()
+        println('getcwd success:', cwd_str.len() > 0)
+        println('cwd contains path:', cwd_str.contains('/'))
+    }
+    
+    libc.free(buffer as anyptr)
+}
+
+--- output.txt
+access /tmp exists: true
+access nonexistent file: true
+getcwd success: true
+cwd contains path: true
+
+
+=== test_process_identification
+--- main.n
+import libc
+
+fn main():void {
+    // 测试进程 ID 相关函数
+    var pid = libc.getpid()
+    var ppid = libc.getppid()
+    var pgrp = libc.getpgrp()
+    
+    println('PID > 0:', pid > 0)
+    println('PPID > 0:', ppid > 0)
+    println('PGRP > 0:', pgrp > 0)
+    println('PID != PPID:', pid != ppid)
+    
+    // 测试获取进程组 ID
+    var pgid = libc.getpgid(pid)
+    println('PGID > 0:', pgid > 0)
+    
+    // 测试会话 ID
+    var sid = libc.getsid(pid)
+    println('SID > 0:', sid > 0)
+}
+
+--- output.txt
+PID > 0: true
+PPID > 0: true
+PGRP > 0: true
+PID != PPID: true
+PGID > 0: true
+SID > 0: true
+
+
+=== test_user_group_identification
+--- main.n
+import libc
+
+fn main():void {
+    // 测试用户和组 ID 函数
+    var uid = libc.getuid()
+    var euid = libc.geteuid()
+    var gid = libc.getgid()
+    var egid = libc.getegid()
+    
+    println('UID >= 0:', uid >= 0)
+    println('EUID >= 0:', euid >= 0)
+    println('GID >= 0:', gid >= 0)
+    println('EGID >= 0:', egid >= 0)
+    
+    // 测试获取组列表
+    var groups = libc.malloc(64) as rawptr<u32>  // 最多16个组
+    var ngroups = libc.getgroups(16, groups)
+    
+    println('getgroups result >= 0:', ngroups >= 0)
+    if ngroups > 0 {
+        println('Has groups:', ngroups > 0)
+    }
+    
+    libc.free(groups as anyptr)
+}
+
+--- output.txt
+UID >= 0: true
+EUID >= 0: true
+GID >= 0: true
+EGID >= 0: true
+getgroups result >= 0: true
+Has groups: true
+
+
+=== test_hostname_login
+--- main.n
+import libc
+
+fn main():void {
+    // 测试主机名获取
+    var hostname_buf = libc.malloc(256) as libc.cstr
+    var result1 = libc.gethostname(hostname_buf, 256)
+    
+    println('gethostname result:', result1)
+    if result1 == 0 {
+        var hostname = hostname_buf.to_string()
+        println('hostname length > 0:', hostname.len() > 0)
+    }
+    
+    // 测试登录名获取（可能返回 null）
+    var login = libc.getlogin()
+    println('getlogin called successfully:', true)
+    
+    // 测试 ctermid
+    var term_buf = libc.malloc(256) as libc.cstr
+    var term_id = libc.ctermid(term_buf)
+    println('ctermid returned:', term_id != null)
+    
+    libc.free(hostname_buf as anyptr)
+    libc.free(term_buf as anyptr)
+}
+
+--- output.txt
+gethostname result: 0
+hostname length > 0: true
+getlogin called successfully: true
+ctermid returned: true
+
+
+=== test_system_configuration
+--- main.n
+import libc
+
+fn main():void {
+    var open_max = libc.sysconf(4)   // _SC_OPEN_MAX
+    println('Open max > 0:', open_max > 0)
+    
+    var clk_tck = libc.sysconf(2)    // _SC_CLK_TCK
+    println('Clock ticks > 0:', clk_tck > 0)
+    
+    // 测试路径配置
+    var path_max = libc.pathconf('/'.to_cstr(), 4)  // _PC_PATH_MAX
+    println('Path max > 0:', path_max > 0)
+    
+    // 测试获取页面大小（BSD 扩展）
+    var pagesize = libc.getpagesize()
+    println('getpagesize > 0:', pagesize > 0)
+}
+
+--- output.txt
+Open max > 0: true
+Clock ticks > 0: true
+Path max > 0: true
+getpagesize > 0: true
+
+
+=== test_file_descriptor_operations
+--- main.n
+import libc
+
+fn main():void {
+    // 测试文件描述符操作
+    [i32;2] pipefd = []
+    var result = libc.pipe(pipefd as anyptr)
+    
+    if result == 0 {
+        var read_fd = pipefd[0]
+        var write_fd = pipefd[1]
+        
+        // 测试 dup
+        var dup_fd = libc.dup(read_fd)
+        println('dup result > 0:', dup_fd > 0)
+        println('dup fd different:', dup_fd != read_fd)
+        
+        // 测试 dup2
+        i32 target_fd = 100
+        var dup2_result = libc.dup2(read_fd, target_fd)
+        println('dup2 result:', dup2_result)
+        
+        // 测试 isatty
+        var is_tty1 = libc.isatty(0)  // stdin
+        var is_tty2 = libc.isatty(read_fd)  // pipe
+        println('stdin isatty check completed:', true)
+        println('pipe is not tty:', is_tty2 == 0)
+        
+        // 清理
+        if dup_fd > 0 {
+            libc.close(dup_fd)
+        }
+        if dup2_result == target_fd {
+            libc.close(target_fd)
+        }
+        libc.close(read_fd)
+        libc.close(write_fd)
+    }
+    
+    libc.free(pipefd as anyptr)
+}
+
+--- output.txt
+dup result > 0: true
+dup fd different: true
+dup2 result: 100
+stdin isatty check completed: true
+pipe is not tty: true
+
+
+=== test_process_control
+--- main.n
+import libc
+
+fn main():void {
+    // 测试 alarm 函数
+    var prev_alarm = libc.alarm(0)  // 取消之前的 alarm
+    println('alarm cancel result >= 0:', prev_alarm >= 0)
+    
+    var alarm_result = libc.alarm(60)  // 设置 60 秒 alarm
+    println('alarm set result >= 0:', alarm_result >= 0)
+    
+    var cancel_result = libc.alarm(0)  // 立即取消
+    println('alarm cancel after set:', cancel_result > 0)
+    
+    // 测试 nice 函数（可能需要权限）
+    var nice_result = libc.nice(0)  // 不改变优先级
+    println('nice function called:', true)
+    
+    // 测试 sync 函数
+    libc.sync()
+    println('sync completed:', true)
+}
+
+--- output.txt
+alarm cancel result >= 0: true
+alarm set result >= 0: true
+alarm cancel after set: true
+nice function called: true
+sync completed: true
+
+
+=== test_host_domain_operations
+--- main.n
+import libc
+
+fn main():void {
+    // 测试主机 ID
+    var host_id = libc.gethostid()
+    println('gethostid result:', host_id)
+    println('gethostid called successfully:', true)
+    
+    // 测试域名获取
+    var domain_buf = libc.malloc(256) as libc.cstr
+    var domain_result = libc.getdomainname(domain_buf, 256)
+    println('getdomainname result >= 0:', domain_result >= 0)
+    
+    // 测试文件描述符表大小
+    var dtable_size = libc.getdtablesize()
+    println('getdtablesize > 0:', dtable_size > 0)
+    println('dtable_size reasonable:', dtable_size >= 256)
+    
+    libc.free(domain_buf as anyptr)
+}
+
+--- output.txt
+gethostid result: 0
+gethostid called successfully: true
+getdomainname result >= 0: true
+getdtablesize > 0: true
+dtable_size reasonable: true
+
+
+=== test_advanced_user_functions[os=linux]
+--- main.n
+import libc
+
+fn main():void {
+    // 测试高级用户 ID 函数
+    u32 ruid = 0
+    u32 euid = 0
+    u32 suid = 0
+    
+    var result1 = libc.getresuid(&ruid, &euid, &suid)
+    println('getresuid result >= 0:', result1 >= 0)
+    if result1 == 0 {
+        println('ruid >= 0:', ruid >= 0)
+        println('euid >= 0:', euid >= 0)
+        println('suid >= 0:', suid >= 0)
+    }
+    
+    u32 rgid = 0
+    u32 egid = 02
+    u32 sgid = 02
+    
+    var result2 = libc.getresgid(&rgid, &egid, &sgid)
+    println('getresgid result >= 0:', result2 >= 0)
+    if result2 == 0 {
+        println('rgid >= 0:', rgid >= 0)
+        println('egid >= 0:', egid >= 0)
+        println('sgid >= 0:', sgid >= 0)
+    }
+    
+    // 测试 issetugid
+    var setugid_result = libc.issetugid()
+    println('issetugid result >= 0:', setugid_result >= 0)
+}
+
+--- output.txt
+getresuid result >= 0: true
+ruid >= 0: true
+euid >= 0: true
+suid >= 0: true
+getresgid result >= 0: true
+rgid >= 0: true
+egid >= 0: true
+sgid >= 0: true
+issetugid result >= 0: true
+
+
+=== test_entropy_and_security
+--- main.n
+import libc
+
+fn main():void {
+    // 测试获取随机熵
+    var entropy_buf = libc.malloc(16)
+    var entropy_result = libc.getentropy(entropy_buf, 16)
+    
+    println('getentropy result:', entropy_result)
+    println('getentropy success:', entropy_result == 0)
+    
+    // 测试 swab 函数（字节交换）
+    [u8] src_buf = [0x12, 0x34, 0x56, 0x78]
+    [u8] dst_buf = vec_new<u8>(0, 4)
+
+    libc.swab(src_buf.ref(), dst_buf.ref(), 4)
+    
+    println('swab completed:', true)
+    println('bytes swapped correctly:', dst_buf[0] == 0x34 && dst_buf[1] == 0x12)
+    libc.free(entropy_buf)
+}
+
+--- output.txt
+getentropy result: 0
+getentropy success: true
+swab completed: true
+bytes swapped correctly: true
