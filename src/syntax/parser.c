@@ -2601,7 +2601,10 @@ static ast_stmt_t *parser_label(module_t *m) {
             parser_must(m, TOKEN_IDENT);
         } else {
             // 不认识的 label 不做处理, 直接跳过
-            PARSER_ASSERTF(false, "unknown fn label '%s'", token->literal);
+            // PARSER_ASSERTF(false, "unknown fn label '%s'", token->literal);
+            // advance ident or literal string
+            parser_consume(m, TOKEN_IDENT); // Optional
+            parser_consume(m, TOKEN_LITERAL_STRING); // Optional
         }
     } while (parser_is(m, TOKEN_LABEL));
 

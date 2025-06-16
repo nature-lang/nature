@@ -449,9 +449,6 @@ fn getline(rawptr<cstr> lineptr, rawptr<u64> n, fileptr stream):i64
 #linkid renameat
 fn renameat(i32 olddirfd, cstr oldpath, i32 newdirfd, cstr newpath):i32
 
-#linkid ctermid
-fn ctermid(cstr s):cstr
-
 #linkid tempnam
 fn tempnam(cstr dir, cstr pfx):cstr
 
@@ -614,7 +611,7 @@ fn memccpy(anyptr dst, anyptr src, i32 c, u64 n):anyptr
 
 // GNU/BSD extensions
 #linkid strsep
-fn strsep(rawptr<cstr> stringp, cstr delim):cstr
+fn strsep(rawptr<cstr> strp, cstr delim):cstr
 
 #linkid strlcat
 fn strlcat(cstr dst, cstr src, u64 size):u64
@@ -1092,6 +1089,763 @@ fn pow10(f64 x):f64
 fn pow10f(f32 x):f32
 
 
+// time.h
+// Time types
+type time_t = i64
+type clock_t = i64
+type clockid_t = i32
+type timer_t = anyptr
+
+// Time constants
+const CLOCKS_PER_SEC = 1000000
+const TIME_UTC = 1
+
+// Clock types
+const CLOCK_REALTIME = 0
+const CLOCK_MONOTONIC = 1
+const CLOCK_PROCESS_CPUTIME_ID = 2
+const CLOCK_THREAD_CPUTIME_ID = 3
+const CLOCK_MONOTONIC_RAW = 4
+const CLOCK_REALTIME_COARSE = 5
+const CLOCK_MONOTONIC_COARSE = 6
+const CLOCK_BOOTTIME = 7
+const CLOCK_REALTIME_ALARM = 8
+const CLOCK_BOOTTIME_ALARM = 9
+const CLOCK_SGI_CYCLE = 10
+const CLOCK_TAI = 11
+
+// Timer constants
+const TIMER_ABSTIME = 1
+
+// Time structures
+type timespec = struct {
+    i64 tv_sec
+    i64 tv_nsec
+}
+
+type itimerspec = struct {
+    timespec it_interval
+    timespec it_value
+}
+
+/* ISO C `broken-down time' structure.  */
+type tm = struct {
+    i32 tm_sec
+    i32 tm_min
+    i32 tm_hour
+    i32 tm_mday
+    i32 tm_mon
+    i32 tm_year
+    i32 tm_wday
+    i32 tm_yday
+    i32 tm_isdst
+    i64 __tm_gmtoff
+    cstr __tm_zone
+}
+
+// Basic time functions
+#linkid time
+fn time(rawptr<time_t> t):time_t
+
+#linkid clock
+fn clock():clock_t
+
+#linkid difftime
+fn difftime(time_t time1, time_t time0):f64
+
+#linkid mktime
+fn mktime(rawptr<tm> time_info):time_t
+
+// Time formatting
+#linkid strftime
+fn strftime(cstr s, u64 size, cstr format, rawptr<tm> time_info):u64
+
+#linkid strftime_l
+fn strftime_l(cstr s, u64 size, cstr format, rawptr<tm> time_info, locale_t locale):u64
+
+// Time conversion functions
+#linkid localtime
+fn localtime(rawptr<time_t> timestamp):rawptr<tm>
+
+#linkid gmtime
+fn gmtime(rawptr<time_t> timestamp):rawptr<tm>
+
+#linkid asctime
+fn asctime(rawptr<tm> tm):cstr
+
+#linkid ctime
+fn ctime(rawptr<time_t> timestamp):cstr
+
+// Thread-safe versions
+#linkid localtime_r
+fn localtime_r(rawptr<time_t> timestamp, rawptr<tm> result):rawptr<tm>
+
+#linkid gmtime_r
+fn gmtime_r(rawptr<time_t> timestamp, rawptr<tm> result):rawptr<tm>
+
+#linkid asctime_r
+fn asctime_r(rawptr<tm> tm, cstr buf):cstr
+
+#linkid ctime_r
+fn ctime_r(rawptr<time_t> timestamp, cstr buf):cstr
+
+// Time parsing
+#linkid strptime
+fn strptime(cstr s, cstr format, rawptr<tm> tm):cstr
+
+// High-resolution time functions
+#linkid timespec_get
+fn timespec_get(rawptr<timespec> ts, i32 base):i32
+
+#linkid nanosleep
+fn nanosleep(rawptr<timespec> req, rawptr<timespec> rem):i32
+
+// Clock functions
+#linkid clock_getres
+fn clock_getres(clockid_t clk_id, rawptr<timespec> res):i32
+
+#linkid clock_gettime
+fn clock_gettime(clockid_t clk_id, rawptr<timespec> tp):i32
+
+#linkid clock_settime
+fn clock_settime(clockid_t clk_id, rawptr<timespec> tp):i32
+
+#linkid clock_nanosleep
+fn clock_nanosleep(clockid_t clk_id, i32 flags, rawptr<timespec> req, rawptr<timespec> rem):i32
+
+#linkid clock_getcpuclockid
+fn clock_getcpuclockid(i32 pid, rawptr<clockid_t> clk_id):i32
+
+// Timer functions
+#linkid timer_create
+fn timer_create(clockid_t clk_id, anyptr sevp, rawptr<timer_t> timerid):i32
+
+#linkid timer_delete
+fn timer_delete(timer_t timerid):i32
+
+#linkid timer_settime
+fn timer_settime(timer_t timerid, i32 flags, rawptr<itimerspec> new_value, rawptr<itimerspec> old_value):i32
+
+#linkid timer_gettime
+fn timer_gettime(timer_t timerid, rawptr<itimerspec> curr_value):i32
+
+#linkid timer_getoverrun
+fn timer_getoverrun(timer_t timerid):i32
+
+// Timezone functions
+#linkid tzset
+fn tzset():void
+
+// GNU/BSD extensions
+#linkid stime
+fn stime(rawptr<time_t> t):i32
+
+#linkid timegm
+fn timegm(rawptr<tm> tm):time_t
+
+#linkid getdate
+fn getdate(cstr str):rawptr<tm>
+
+// unistd.h - File operations
+#linkid pipe
+fn pipe(anyptr pipefd):i32
+
+#linkid pipe2
+fn pipe2(anyptr pipefd, i32 flags):i32
+
+#linkid close
+fn close(i32 fd):i32
+
+#linkid posix_close
+fn posix_close(i32 fd, i32 flags):i32
+
+#linkid dup
+fn dup(i32 oldfd):i32
+
+#linkid dup2
+fn dup2(i32 oldfd, i32 newfd):i32
+
+#linkid dup3
+fn dup3(i32 oldfd, i32 newfd, i32 flags):i32
+
+#linkid lseek
+fn lseek(i32 fd, i64 offset, i32 whence):i64
+
+#linkid fsync
+fn fsync(i32 fd):i32
+
+#linkid fdatasync
+fn fdatasync(i32 fd):i32
+
+#linkid read
+fn read(i32 fd, anyptr buf, u64 count):i64
+
+#linkid write
+fn write(i32 fd, anyptr buf, u64 count):i64
+
+#linkid pread
+fn pread(i32 fd, anyptr buf, u64 count, i64 offset):i64
+
+#linkid pwrite
+fn pwrite(i32 fd, anyptr buf, u64 count, i64 offset):i64
+
+// unistd.h - File ownership and permissions
+#linkid chown
+fn chown(cstr path, u32 owner, u32 group):i32
+
+#linkid fchown
+fn fchown(i32 fd, u32 owner, u32 group):i32
+
+#linkid lchown
+fn lchown(cstr path, u32 owner, u32 group):i32
+
+#linkid fchownat
+fn fchownat(i32 dirfd, cstr path, u32 owner, u32 group, i32 flags):i32
+
+// unistd.h - File linking
+#linkid link
+fn link(cstr oldpath, cstr newpath):i32
+
+#linkid linkat
+fn linkat(i32 olddirfd, cstr oldpath, i32 newdirfd, cstr newpath, i32 flags):i32
+
+#linkid symlink
+fn symlink(cstr target, cstr linkpath):i32
+
+#linkid symlinkat
+fn symlinkat(cstr target, i32 newdirfd, cstr linkpath):i32
+
+#linkid readlink
+fn readlink(cstr path, cstr buf, u64 bufsiz):i64
+
+#linkid readlinkat
+fn readlinkat(i32 dirfd, cstr path, cstr buf, u64 bufsiz):i64
+
+#linkid unlink
+fn unlink(cstr path):i32
+
+#linkid unlinkat
+fn unlinkat(i32 dirfd, cstr path, i32 flags):i32
+
+#linkid rmdir
+fn rmdir(cstr path):i32
+
+#linkid truncate
+fn truncate(cstr path, i64 length):i32
+
+#linkid ftruncate
+fn ftruncate(i32 fd, i64 length):i32
+
+// unistd.h - File access
+#linkid access
+fn access(cstr path, i32 mode):i32
+
+#linkid faccessat
+fn faccessat(i32 dirfd, cstr path, i32 mode, i32 flags):i32
+
+// unistd.h - Directory operations
+#linkid chdir
+fn chdir(cstr path):i32
+
+#linkid fchdir
+fn fchdir(i32 fd):i32
+
+// unistd.h - Process control
+#linkid alarm
+fn alarm(u32 seconds):u32
+
+#linkid sleep
+fn sleep(int second)
+
+#linkid usleep
+fn usleep(u32 usec):i32
+
+#linkid pause
+fn pause():i32
+
+#linkid _Fork
+fn _fork():i32
+
+#linkid execve
+fn execve(cstr filename, rawptr<cstr> argv, rawptr<cstr> envp):i32
+
+#linkid execv
+fn execv(cstr path, rawptr<cstr> argv):i32
+
+// not support
+// #linkid execle
+// fn execle(cstr path, cstr arg, ...):i32
+
+// #linkid execl
+// fn execl(cstr path, cstr arg, ...):i32
+
+// #linkid execvp
+// fn execvp(cstr file, rawptr<cstr> argv):i32
+
+// #linkid execlp
+// fn execlp(cstr file, cstr arg, ...):i32
+
+// #linkid fexecve
+// fn fexecve(i32 fd, rawptr<cstr> argv, rawptr<cstr> envp):i32
+
+// unistd.h - Process identification
+#linkid getpid
+fn getpid():i32
+
+#linkid getppid
+fn getppid():i32
+
+#linkid getpgrp
+fn getpgrp():i32
+
+#linkid getpgid
+fn getpgid(i32 pid):i32
+
+#linkid setpgid
+fn setpgid(i32 pid, i32 pgid):i32
+
+#linkid setsid
+fn setsid():i32
+
+#linkid getsid
+fn getsid(i32 pid):i32
+
+#linkid ttyname
+fn ttyname(i32 fd):cstr
+
+#linkid ttyname_r
+fn ttyname_r(i32 fd, cstr buf, u64 buflen):i32
+
+#linkid isatty
+fn isatty(i32 fd):i32
+
+#linkid tcgetpgrp
+fn tcgetpgrp(i32 fd):i32
+
+#linkid tcsetpgrp
+fn tcsetpgrp(i32 fd, i32 pgrp):i32
+
+// unistd.h - User and group identification
+#linkid getuid
+fn getuid():u32
+
+#linkid geteuid
+fn geteuid():u32
+
+#linkid getgid
+fn getgid():u32
+
+#linkid getegid
+fn getegid():u32
+
+#linkid getgroups
+fn getgroups(i32 size, rawptr<u32> list):i32
+
+#linkid setuid
+fn setuid(u32 uid):i32
+
+#linkid seteuid
+fn seteuid(u32 euid):i32
+
+#linkid setgid
+fn setgid(u32 gid):i32
+
+#linkid setegid
+fn setegid(u32 egid):i32
+
+// unistd.h - Login and hostname
+#linkid getlogin
+fn getlogin():cstr
+
+#linkid getlogin_r
+fn getlogin_r(cstr buf, u64 bufsize):i32
+
+#linkid gethostname
+fn gethostname(cstr name, u64 len):i32
+
+#linkid ctermid
+fn ctermid(cstr s):cstr
+
+// unistd.h - Command line options
+#linkid getopt
+fn getopt(i32 argc, rawptr<cstr> argv, cstr optstring):i32
+
+// unistd.h - Configuration
+#linkid pathconf
+fn pathconf(cstr path, i32 name):i64
+
+#linkid fpathconf
+fn fpathconf(i32 fd, i32 name):i64
+
+#linkid sysconf
+fn sysconf(i32 name):i64
+
+#linkid confstr
+fn confstr(i32 name, cstr buf, u64 len):u64
+
+// unistd.h - POSIX extensions
+#linkid setreuid
+fn setreuid(u32 ruid, u32 euid):i32
+
+#linkid setregid
+fn setregid(u32 rgid, u32 egid):i32
+
+#linkid lockf
+fn lockf(i32 fd, i32 cmd, i64 len):i32
+
+#linkid gethostid
+fn gethostid():i64
+
+#linkid nice
+fn nice(i32 inc):i32
+
+#linkid sync
+fn sync():void
+
+#linkid setpgrp
+fn setpgrp():i32
+
+#linkid crypt
+fn crypt(cstr key, cstr salt):cstr
+
+#linkid encrypt
+fn encrypt(cstr block, i32 edflag):void
+
+#linkid swab
+fn swab(anyptr from, anyptr to, i64 n):void
+
+#linkid ualarm
+fn ualarm(u32 value, u32 interval):u32
+
+// unistd.h - BSD/GNU extensions
+#linkid brk
+fn brk(anyptr addr):i32
+
+#linkid sbrk
+fn sbrk(i64 increment):anyptr
+
+#linkid vfork
+fn vfork():i32
+
+#linkid vhangup
+fn vhangup():i32
+
+#linkid chroot
+fn chroot(cstr path):i32
+
+#linkid getpagesize
+fn getpagesize():i32
+
+#linkid getdtablesize
+fn getdtablesize():i32
+
+#linkid sethostname
+fn sethostname(cstr name, u64 len):i32
+
+#linkid getdomainname
+fn getdomainname(cstr name, u64 len):i32
+
+#linkid setdomainname
+fn setdomainname(cstr name, u64 len):i32
+
+#linkid setgroups
+fn setgroups(u64 size, rawptr<u32> list):i32
+
+#linkid getpass
+fn getpass(cstr prompt):cstr
+
+#linkid daemon
+fn daemon(i32 nochdir, i32 noclose):i32
+
+#linkid setusershell
+fn setusershell():void
+
+#linkid endusershell
+fn endusershell():void
+
+#linkid getusershell
+fn getusershell():cstr
+
+#linkid acct
+fn acct(cstr filename):i32
+
+// #linkid syscall
+// fn syscall(i64 number, ...):i64
+
+#linkid execvpe
+fn execvpe(cstr file, rawptr<cstr> argv, rawptr<cstr> envp):i32
+
+#linkid issetugid
+fn issetugid():i32
+
+#linkid getentropy
+fn getentropy(anyptr buffer, u64 length):i32
+
+// unistd.h - GNU extensions
+#os linux #linkid setresuid
+fn setresuid(u32 ruid, u32 euid, u32 suid):i32
+
+#os linux #linkid setresgid
+fn setresgid(u32 rgid, u32 egid, u32 sgid):i32
+
+#linkid getresuid
+fn getresuid(rawptr<u32> ruid, rawptr<u32> euid, rawptr<u32> suid):i32
+
+#os linux #linkid getresgid
+fn getresgid(rawptr<u32> rgid, rawptr<u32> egid, rawptr<u32> sgid):i32
+
+#linkid get_current_dir_name
+fn get_current_dir_name():cstr
+
+#linkid syncfs
+fn syncfs(i32 fd):i32
+
+#linkid euidaccess
+fn euidaccess(cstr pathname, i32 mode):i32
+
+#linkid eaccess
+fn eaccess(cstr pathname, i32 mode):i32
+
+#linkid copy_file_range
+fn copy_file_range(i32 fd_in, rawptr<i64> off_in, i32 fd_out, rawptr<i64> off_out, u64 len, u32 flags):i64
+
+#linkid gettid
+fn gettid():i32
+
+// fcntl.h
+// Type definitions
+type off_t = i64
+type pid_t = i32
+type mode_t = u32
+
+// File lock structure
+type flock = struct {
+    i16 l_type
+    i16 l_whence
+    off_t l_start
+    off_t l_len
+    pid_t l_pid
+}
+
+// File access modes
+const O_ACCMODE = 0o3
+const O_RDONLY = 0o0
+const O_WRONLY = 0o1
+const O_RDWR = 0o2
+const O_SEARCH = 0o200000000
+const O_EXEC = 0o200000000
+const O_PATH = 0o200000000
+const O_TTY_INIT = 0
+
+// File creation flags
+const O_CREAT = 0o100
+const O_EXCL = 0o200
+const O_NOCTTY = 0o400
+const O_TRUNC = 0o1000
+
+// File status flags
+const O_APPEND = 0o2000
+const O_ASYNC = 0o20000
+const O_DSYNC = 0o10000
+const O_NONBLOCK = 0o4000
+const O_NDELAY = 0o4000
+const O_SYNC = 0o4010000
+
+// fcntl commands
+const F_DUPFD = 0
+const F_GETFD = 1
+const F_SETFD = 2
+const F_GETFL = 3
+const F_SETFL = 4
+const F_GETLK = 5
+const F_SETLK = 6
+const F_SETLKW = 7
+const F_GETOWN = 9
+const F_SETOWN = 8
+
+// OFD locks
+const F_OFD_GETLK = 36
+const F_OFD_SETLK = 37
+const F_OFD_SETLKW = 38
+
+// Additional fcntl commands
+const F_DUPFD_CLOEXEC = 1030
+
+// Lock types
+const F_RDLCK = 0
+const F_WRLCK = 1
+const F_UNLCK = 2
+
+// File descriptor flags
+const FD_CLOEXEC = 1
+
+// AT constants
+const AT_FDCWD = -100
+const AT_SYMLINK_NOFOLLOW = 0x100
+const AT_REMOVEDIR = 0x200
+const AT_SYMLINK_FOLLOW = 0x400
+const AT_EACCESS = 0x200
+const AT_NO_AUTOMOUNT = 0x800
+const AT_EMPTY_PATH = 0x1000
+const AT_STATX_SYNC_TYPE = 0x6000
+const AT_STATX_SYNC_AS_STAT = 0x0000
+const AT_STATX_FORCE_SYNC = 0x2000
+const AT_STATX_DONT_SYNC = 0x4000
+const AT_RECURSIVE = 0x8000
+
+// POSIX advisory information constants
+const POSIX_FADV_NORMAL = 0
+const POSIX_FADV_RANDOM = 1
+const POSIX_FADV_SEQUENTIAL = 2
+const POSIX_FADV_WILLNEED = 3
+const POSIX_FADV_DONTNEED = 4
+const POSIX_FADV_NOREUSE = 5
+
+
+// File mode constants
+const S_ISUID = 0o4000
+const S_ISGID = 0o2000
+const S_ISVTX = 0o1000
+const S_IRUSR = 0o400
+const S_IWUSR = 0o200
+const S_IXUSR = 0o100
+const S_IRWXU = 0o700
+const S_IRGRP = 0o40
+const S_IWGRP = 0o20
+const S_IXGRP = 0o10
+const S_IRWXG = 0o70
+const S_IROTH = 0o4
+const S_IWOTH = 0o2
+const S_IXOTH = 0o1
+const S_IRWXO = 0o7
+
+// Access mode constants
+const F_OK = 0
+const R_OK = 4
+const W_OK = 2
+const X_OK = 1
+
+// File locking constants
+const F_ULOCK = 0
+const F_LOCK = 1
+const F_TLOCK = 2
+const F_TEST = 3
+
+// Additional fcntl commands (GNU/Linux extensions)
+const F_SETLEASE = 1024
+const F_GETLEASE = 1025
+const F_NOTIFY = 1026
+const F_CANCELLK = 1029
+const F_SETPIPE_SZ = 1031
+const F_GETPIPE_SZ = 1032
+const F_ADD_SEALS = 1033
+const F_GET_SEALS = 1034
+
+// File sealing constants
+const F_SEAL_SEAL = 0x0001
+const F_SEAL_SHRINK = 0x0002
+const F_SEAL_GROW = 0x0004
+const F_SEAL_WRITE = 0x0008
+const F_SEAL_FUTURE_WRITE = 0x0010
+
+// Read/write hint constants
+const F_GET_RW_HINT = 1035
+const F_SET_RW_HINT = 1036
+const F_GET_FILE_RW_HINT = 1037
+const F_SET_FILE_RW_HINT = 1038
+
+const RWF_WRITE_LIFE_NOT_SET = 0
+const RWH_WRITE_LIFE_NONE = 1
+const RWH_WRITE_LIFE_SHORT = 2
+const RWH_WRITE_LIFE_MEDIUM = 3
+const RWH_WRITE_LIFE_LONG = 4
+const RWH_WRITE_LIFE_EXTREME = 5
+
+// Directory notification constants
+const DN_ACCESS = 0x00000001
+const DN_MODIFY = 0x00000002
+const DN_CREATE = 0x00000004
+const DN_DELETE = 0x00000008
+const DN_RENAME = 0x00000010
+const DN_ATTRIB = 0x00000020
+const DN_MULTISHOT = 0x80000000
+
+// File owner types
+const F_OWNER_TID = 0
+const F_OWNER_PID = 1
+const F_OWNER_PGRP = 2
+const F_OWNER_GID = 2
+
+
+// Fallocate flags
+const FALLOC_FL_KEEP_SIZE = 1
+const FALLOC_FL_PUNCH_HOLE = 2
+const MAX_HANDLE_SZ = 128
+
+// Sync file range flags
+const SYNC_FILE_RANGE_WAIT_BEFORE = 1
+const SYNC_FILE_RANGE_WRITE = 2
+const SYNC_FILE_RANGE_WAIT_AFTER = 4
+
+// Splice flags
+const SPLICE_F_MOVE = 1
+const SPLICE_F_NONBLOCK = 2
+const SPLICE_F_MORE = 4
+const SPLICE_F_GIFT = 8
+
+// Basic file operations
+#linkid creat
+fn creat(cstr pathname, mode_t mode):i32
+
+#linkid fcntl
+fn fcntl(i32 fd, i32 cmd, anyptr flag):i32
+
+#linkid open
+fn open(cstr pathname, i32 flags, u32 mode):i32
+
+#linkid openat
+fn openat(i32 dirfd, cstr pathname, i32 flags, u32 mode):i32
+
+// POSIX advisory functions
+#linkid posix_fadvise
+fn posix_fadvise(i32 fd, off_t offset, off_t len, i32 advice):i32
+
+#linkid posix_fallocate
+fn posix_fallocate(i32 fd, off_t offset, off_t len):i32
+
+// GNU/Linux extensions
+#linkid fallocate
+fn fallocate(i32 fd, i32 mode, off_t offset, off_t len):i32
+
+#linkid name_to_handle_at
+fn name_to_handle_at(i32 dirfd, cstr pathname, anyptr handle, rawptr<i32> mount_id, i32 flags):i32
+
+#linkid open_by_handle_at
+fn open_by_handle_at(i32 mount_fd, anyptr handle, i32 flags):i32
+
+#linkid readahead
+fn readahead(i32 fd, off_t offset, u64 count):i64
+
+#linkid sync_file_range
+fn sync_file_range(i32 fd, off_t offset, off_t nbytes, u32 flags):i32
+
+// Splice operations
+#linkid vmsplice
+fn vmsplice(i32 fd, anyptr iov, u64 nr_segs, u32 flags):i64
+
+#linkid splice
+fn splice(i32 fd_in, rawptr<off_t> off_in, i32 fd_out, rawptr<off_t> off_out, u64 len, u32 flags):i64
+
+#linkid tee
+fn tee(i32 fd_in, i32 fd_out, u64 len, u32 flags):i64
+
+
+// signal.h
+
+
+
+
+
 
 
 
@@ -1140,33 +1894,6 @@ int MAP_NOEXTEND = 0x100
 int MAP_NORESERVE = 0x40
 int MAP_PRIVATE = 0x2
 int MAP_RENAME = 0x20
-
-/* ISO C `broken-down time' structure.  */
-type tm_t = struct {
-    i32 tm_sec
-    i32 tm_min
-    i32 tm_hour
-    i32 tm_mday
-    i32 tm_mon
-    i32 tm_year
-    i32 tm_wday
-    i32 tm_yday
-    i32 tm_isdst
-    i64 tm_gmtoff
-    anyptr tm_zone
-}
-
-// 标准库函数, 返回值是静态值，不用处理 gc 但是线程不安全
-#linkid localtime
-fn localtime(rawptr<i64> timestamp):rawptr<tm_t>
-
-// 将 time_info_t 转换为时间戳
-#linkid mktime
-fn mktime(rawptr<tm_t> time_info):i64
-
-// strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S', &tp)
-#linkid strftime
-fn strftime(anyptr s, i64 size, anyptr format, rawptr<tm_t> time_info):i64
 
 // 通过空值 options 实现阻塞和非阻塞模式
 #linkid waitpid
@@ -1217,17 +1944,8 @@ fn sigprocmask(i32 how, ptr<sigset_t> sigset, rawptr<sigset_t> oldset):i32
 #linkid signalfd
 fn signalfd(int fd, ptr<sigset_t> mask, i32 flags):i32
 
-#linkid sleep
-fn sleep(int second)
-
-#linkid usleep
-fn usleep(u32 usec):i32
-
 #linkid prctl
 fn prctl(int option, u64 arg2, u64 arg3, u64 arg4, u64 arg5):int
-
-#linkid clock
-fn clock():int
 
 #linkid uv_hrtime
 fn uv_hrtime():u64

@@ -5,7 +5,7 @@ import libc
 type time_t = struct {
     i64 sec
     i64 nsec
-    rawptr<libc.tm_t> tm
+    rawptr<libc.tm> tm
 }
 
 fn time_t.timestamp():i64 {
@@ -23,8 +23,8 @@ fn time_t.ns_timestamp():i64 {
 fn time_t.datetime():string {
     var buf = vec_new<u8>(0, 100)// 必须预留足够大的空间,才能正常引用
 
-   var len = libc.strftime(buf.ref(), buf.len(), '%Y-%m-%d %H:%M:%S'.ref(), self.tm)
-   buf = buf.slice(0, len)
+   var len = libc.strftime(buf.ref() as libc.cstr, buf.len() as u64, '%Y-%m-%d %H:%M:%S'.to_cstr(), self.tm)
+   buf = buf.slice(0, len as i64)
 
    return buf as string
 }
@@ -38,7 +38,7 @@ fn now():time_t {
     var t = time_t{
         sec = sys_time.sec,
         nsec = sys_time.nsec,
-        tm = libc.localtime(&sys_time.sec),
+        tm = libc.localtime(&(sys_time.sec as libc.time_t)),
     }
 
     return t

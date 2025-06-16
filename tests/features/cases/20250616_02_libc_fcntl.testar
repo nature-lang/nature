@@ -1,0 +1,354 @@
+=== test_basic_file_operations[os=linux]
+--- main.n
+import libc
+
+fn main():void {
+    // 测试 creat 函数
+    var fd1 = libc.creat('/tmp/test_creat.txt'.to_cstr(), 0o644)
+    println('creat result > 0:', fd1 > 0)
+    
+    if fd1 > 0 {
+        libc.close(fd1)
+        libc.unlink('/tmp/test_creat.txt'.to_cstr())
+    }
+    
+    // 测试 open 函数
+    var fd2 = libc.open('/tmp/test_open.txt'.to_cstr(), libc.O_CREAT | libc.O_WRONLY, 0o644)
+    println('open with O_CREAT result > 0:', fd2 > 0)
+    
+    if fd2 > 0 {
+        // 测试 fcntl 获取文件状态标志
+        var flags = libc.fcntl(fd2, libc.F_GETFL, 0)
+        println('fcntl F_GETFL result >= 0:', flags >= 0)
+        println('file is writable:', (flags & libc.O_ACCMODE) == libc.O_WRONLY)
+        
+        libc.close(fd2)
+        libc.unlink('/tmp/test_open.txt'.to_cstr())
+    }
+}
+
+--- output.txt
+creat result > 0: true
+open with O_CREAT result > 0: true
+fcntl F_GETFL result >= 0: true
+file is writable: true
+
+
+=== test_fcntl_operations[os=linux]
+--- main.n
+import libc
+
+fn main():void {
+    var fd = libc.open('/tmp/test_fcntl.txt'.to_cstr(), libc.O_CREAT | libc.O_RDWR, 0o644)
+    
+    if fd > 0 {
+        // 测试 F_DUPFD
+        var dup_fd = libc.fcntl(fd, libc.F_DUPFD, 10)
+        println('fcntl F_DUPFD result > 0:', dup_fd > 0)
+        println('duplicated fd >= 10:', dup_fd >= 10)
+        
+        // 测试 F_GETFD 和 F_SETFD
+        var fd_flags = libc.fcntl(fd, libc.F_GETFD, 0)
+        println('fcntl F_GETFD result >= 0:', fd_flags >= 0)
+        
+        var set_result = libc.fcntl(fd, libc.F_SETFD, libc.FD_CLOEXEC)
+        println('fcntl F_SETFD result >= 0:', set_result >= 0)
+        
+        var new_flags = libc.fcntl(fd, libc.F_GETFD, 0)
+        println('FD_CLOEXEC flag set:', (new_flags & libc.FD_CLOEXEC) != 0)
+        
+        // 清理
+        if dup_fd > 0 {
+            libc.close(dup_fd)
+        }
+        libc.close(fd)
+        libc.unlink('/tmp/test_fcntl.txt'.to_cstr())
+    }
+}
+
+--- output.txt
+fcntl F_DUPFD result > 0: true
+duplicated fd >= 10: true
+fcntl F_GETFD result >= 0: true
+fcntl F_SETFD result >= 0: true
+FD_CLOEXEC flag set: true
+
+
+=== test_file_locking[os=linux]
+--- main.n
+import libc
+
+fn main():void {
+    var fd = libc.open('/tmp/test_lock.txt'.to_cstr(), libc.O_CREAT | libc.O_RDWR, 0o644)
+    
+    if fd > 0 {
+        // 创建文件锁结构
+        libc.flock lock = libc.flock {
+            l_type = libc.F_WRLCK,
+            l_whence = libc.SEEK_SET,
+            l_start = 0,
+            l_len = 0,
+            l_pid = 0,
+        }
+        
+        // 测试设置写锁
+        var lock_result = libc.fcntl(fd, libc.F_SETLK, &lock as anyptr)
+        println('fcntl F_SETLK result >= 0:', lock_result >= 0)
+        
+        // 测试获取锁信息
+        libc.flock test_lock = libc.flock {
+            l_type = libc.F_WRLCK,
+            l_whence = libc.SEEK_SET,
+            l_start = 0,
+            l_len = 0,
+            l_pid = 0,
+        }
+        
+        var getlk_result = libc.fcntl(fd, libc.F_GETLK, &test_lock as anyptr)
+        println('fcntl F_GETLK result >= 0:', getlk_result >= 0)
+        
+        // 解锁
+        lock.l_type = libc.F_UNLCK
+        var unlock_result = libc.fcntl(fd, libc.F_SETLK, &lock as anyptr)
+        println('fcntl unlock result >= 0:', unlock_result >= 0)
+        
+        // 测试 lockf 函数
+        var lockf_result = libc.lockf(fd, libc.F_TLOCK, 0)
+        println('lockf F_TLOCK called:', true)
+        
+        if lockf_result == 0 {
+            var unlock_lockf = libc.lockf(fd, libc.F_ULOCK, 0)
+            println('lockf unlock result >= 0:', unlock_lockf >= 0)
+        }
+        
+        libc.close(fd)
+        libc.unlink('/tmp/test_lock.txt'.to_cstr())
+    }
+}
+
+--- output.txt
+fcntl F_SETLK result >= 0: true
+fcntl F_GETLK result >= 0: true
+fcntl unlock result >= 0: true
+lockf F_TLOCK called: true
+lockf unlock result >= 0: true
+
+
+=== test_openat_operations[os=linux]
+--- main.n
+import libc
+
+fn main():void {
+    // 测试 openat 函数
+    var fd = libc.openat(libc.AT_FDCWD, '/tmp/test_openat.txt'.to_cstr(), libc.O_CREAT | libc.O_RDWR, 0o644)
+    println('openat result > 0:', fd > 0)
+    
+    if fd > 0 {
+        // 写入一些数据
+        var data = 'Hello, openat!'.to_cstr()
+        var write_result = libc.write(fd, data as anyptr, 14)
+        println('write result > 0:', write_result > 0)
+        
+        // 测试文件访问权限
+        var access_result = libc.access('/tmp/test_openat.txt'.to_cstr(), libc.F_OK)
+        println('file exists after openat:', access_result == 0)
+        
+        var read_access = libc.access('/tmp/test_openat.txt'.to_cstr(), libc.R_OK)
+        println('file readable:', read_access == 0)
+        
+        var write_access = libc.access('/tmp/test_openat.txt'.to_cstr(), libc.W_OK)
+        println('file writable:', write_access == 0)
+        
+        libc.close(fd)
+        libc.unlink('/tmp/test_openat.txt'.to_cstr())
+    }
+}
+
+--- output.txt
+openat result > 0: true
+write result > 0: true
+file exists after openat: true
+file readable: true
+file writable: true
+
+
+=== test_posix_advisory_functions[os=linux]
+--- main.n
+import libc
+
+fn main():void {
+    var fd = libc.open('/tmp/test_advisory.txt'.to_cstr(), libc.O_CREAT | libc.O_RDWR, 0o644)
+    
+    if fd > 0 {
+        // 写入一些数据
+        var data = 'Test data for advisory functions'.to_cstr()
+        libc.write(fd, data as anyptr, 32)
+        
+        // 测试 posix_fadvise
+        var fadvise_result = libc.posix_fadvise(fd, 0, 32, libc.POSIX_FADV_SEQUENTIAL)
+        println('posix_fadvise SEQUENTIAL result >= 0:', fadvise_result >= 0)
+        
+        var fadvise_random = libc.posix_fadvise(fd, 0, 32, libc.POSIX_FADV_RANDOM)
+        println('posix_fadvise RANDOM result >= 0:', fadvise_random >= 0)
+        
+        var fadvise_willneed = libc.posix_fadvise(fd, 0, 32, libc.POSIX_FADV_WILLNEED)
+        println('posix_fadvise WILLNEED result >= 0:', fadvise_willneed >= 0)
+        
+        // 测试 posix_fallocate
+        var fallocate_result = libc.posix_fallocate(fd, 100, 1024)
+        println('posix_fallocate result >= 0:', fallocate_result >= 0)
+        
+        libc.close(fd)
+        libc.unlink('/tmp/test_advisory.txt'.to_cstr())
+    }
+}
+
+--- output.txt
+posix_fadvise SEQUENTIAL result >= 0: true
+posix_fadvise RANDOM result >= 0: true
+posix_fadvise WILLNEED result >= 0: true
+posix_fallocate result >= 0: true
+
+
+=== test_linux_extensions[os=linux]
+--- main.n
+import libc
+
+fn main():void {
+    var fd = libc.open('/tmp/test_linux_ext.txt'.to_cstr(), libc.O_CREAT | libc.O_RDWR, 0o644)
+    
+    if fd > 0 {
+        // 测试 fallocate
+        var fallocate_result = libc.fallocate(fd, 0, 0, 1024)
+        println('fallocate result >= 0:', fallocate_result >= 0)
+        
+        // 测试 readahead
+        var readahead_result = libc.readahead(fd, 0, 512)
+        println('readahead result >= 0:', readahead_result >= 0)
+        
+        // 测试 sync_file_range
+        var sync_result = libc.sync_file_range(fd, 0, 1024, libc.SYNC_FILE_RANGE_WRITE)
+        println('sync_file_range result >= 0:', sync_result >= 0)
+        
+        libc.close(fd)
+        libc.unlink('/tmp/test_linux_ext.txt'.to_cstr())
+    }
+}
+
+--- output.txt
+fallocate result >= 0: true
+readahead result >= 0: true
+sync_file_range result >= 0: true
+
+
+=== test_splice_operations[os=linux]
+--- main.n
+import libc
+
+fn main():void {
+    // 创建管道用于测试 splice 和 tee
+    [i32;2] pipefd1 = []
+    [i32;2] pipefd2 = []
+    
+    var pipe1_result = libc.pipe(pipefd1 as anyptr)
+    var pipe2_result = libc.pipe(pipefd2 as anyptr)
+    
+    if pipe1_result == 0 && pipe2_result == 0 {
+        var read_fd1 = pipefd1[0]
+        var write_fd1 = pipefd1[1]
+        var read_fd2 = pipefd2[0]
+        var write_fd2 = pipefd2[1]
+        
+        // 向第一个管道写入数据
+        var data = 'Test data for splice'.to_cstr()
+        var write_result = libc.write(write_fd1, data as anyptr, 20)
+        println('write to pipe1 result > 0:', write_result > 0)
+        
+        // 测试 tee 函数（复制数据）
+        var tee_result = libc.tee(read_fd1, write_fd2, 20, 0)
+        println('tee result > 0:', tee_result > 0)
+        
+        // 测试 splice 函数
+        var splice_result = libc.splice(read_fd2, null, write_fd1, null, 10, 0)
+        println('splice function called:', true)
+        
+        // 清理
+        libc.close(read_fd1)
+        libc.close(write_fd1)
+        libc.close(read_fd2)
+        libc.close(write_fd2)
+    }
+    
+    libc.free(pipefd1 as anyptr)
+    libc.free(pipefd2 as anyptr)
+}
+
+--- output.txt
+write to pipe1 result > 0: true
+tee result > 0: true
+splice function called: true
+
+
+=== test_file_constants
+--- main.n
+import libc
+
+fn main():void {
+    // 测试文件访问模式常量
+    println('O_RDONLY value:', libc.O_RDONLY)
+    println('O_WRONLY value:', libc.O_WRONLY)
+    println('O_RDWR value:', libc.O_RDWR)
+    println('O_ACCMODE correct:', libc.O_ACCMODE == 0o3)
+    
+    // 测试文件创建标志
+    println('O_CREAT value > 0:', libc.O_CREAT > 0)
+    println('O_EXCL value > 0:', libc.O_EXCL > 0)
+    println('O_TRUNC value > 0:', libc.O_TRUNC > 0)
+    
+    // 测试文件状态标志
+    println('O_APPEND value > 0:', libc.O_APPEND > 0)
+    println('O_NONBLOCK value > 0:', libc.O_NONBLOCK > 0)
+    println('O_SYNC value > 0:', libc.O_SYNC > 0)
+    
+    // 测试 fcntl 命令常量
+    println('F_DUPFD value:', libc.F_DUPFD)
+    println('F_GETFD value:', libc.F_GETFD)
+    println('F_SETFD value:', libc.F_SETFD)
+    println('F_GETFL value:', libc.F_GETFL)
+    println('F_SETFL value:', libc.F_SETFL)
+    
+    // 测试锁类型常量
+    println('F_RDLCK value:', libc.F_RDLCK)
+    println('F_WRLCK value:', libc.F_WRLCK)
+    println('F_UNLCK value:', libc.F_UNLCK)
+    
+    // 测试文件权限常量
+    println('S_IRUSR value:', libc.S_IRUSR)
+    println('S_IWUSR value:', libc.S_IWUSR)
+    println('S_IXUSR value:', libc.S_IXUSR)
+    println('S_IRWXU correct:', libc.S_IRWXU == 0o700)
+}
+
+--- output.txt
+O_RDONLY value: 0
+O_WRONLY value: 1
+O_RDWR value: 2
+O_ACCMODE correct: true
+O_CREAT value > 0: true
+O_EXCL value > 0: true
+O_TRUNC value > 0: true
+O_APPEND value > 0: true
+O_NONBLOCK value > 0: true
+O_SYNC value > 0: true
+F_DUPFD value: 0
+F_GETFD value: 1
+F_SETFD value: 2
+F_GETFL value: 3
+F_SETFL value: 4
+F_RDLCK value: 0
+F_WRLCK value: 1
+F_UNLCK value: 2
+S_IRUSR value: 256
+S_IWUSR value: 128
+S_IXUSR value: 64
+S_IRWXU correct: true
