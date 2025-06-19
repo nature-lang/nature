@@ -43,3 +43,9 @@ rtype_t vec_rtype = {0};
 // TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
 // TYPE_GC_SCAN);
 rtype_t fn_rtype = {0};
+
+rtype_t *rt_find_rtype(int64_t hash) {
+    rtype_t *result = sc_map_get_64v(&rt_rtype_map, hash);
+
+    return result;
+}

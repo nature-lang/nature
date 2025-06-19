@@ -105,7 +105,7 @@ void rtypes_deserialize() {
 
         if (r->length > 0) {
             uint64_t size = r->length * sizeof(uint64_t);
-            r->element_hashes = (uint64_t *) gc_bits_offset;
+            r->hashes = (uint64_t *) gc_bits_offset;
             gc_bits_offset += size;
         }
 
