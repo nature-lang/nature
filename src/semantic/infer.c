@@ -609,8 +609,8 @@ static bool can_assign_to_union(type_t t) {
 static bool literal_as_check(module_t *m, ast_literal_t *literal, type_t target_type) {
     assert(is_number(target_type.kind));
 
-    type_kind literal_kind = cross_kind_trans(literal->kind);
-    type_kind target_kind = cross_kind_trans(target_type.kind);
+    type_kind literal_kind = literal->kind;
+    type_kind target_kind = target_type.kind;
 
     if (is_integer(literal->kind) && is_integer(target_type.kind)) {
         int64_t i = atoll(literal->value);
@@ -2482,7 +2482,6 @@ static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
     literal->kind = literal_type.kind;
 
     type_kind target_kind = target_type.kind;
-    target_kind = cross_kind_trans(target_kind);
 
     if (is_float(literal_type.kind) && is_float(target_kind)) {
         literal->kind = target_kind;
@@ -2512,7 +2511,7 @@ static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
     if (is_integer(literal_type.kind) && is_integer_or_anyptr(target_kind)) {
         int64_t i = atoll(literal->value);
         if (target_kind == TYPE_ANYPTR) {
-            target_kind = cross_kind_trans(TYPE_UINT);
+            target_kind = TYPE_UINT;
         }
         if (integer_range_check(target_kind, i)) { // range 匹配直接返回，否则应该直接报错
             literal->kind = target_kind;
@@ -3449,7 +3448,7 @@ STATUS_DONE:
         t.args = args;
     }
 
-    t.kind = cross_kind_trans(t.kind);
+    t.kind = t.kind;
 
     // 计算 reflect type
     ct_reflect_type(t);

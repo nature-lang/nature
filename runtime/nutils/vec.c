@@ -396,10 +396,10 @@ n_vec_t *rti_vec_new(rtype_t *element_rtype, int64_t length, int64_t capacity) {
 }
 
 /**
- * 类似Go的copy内置函数，返回实际复制的元素数量
- * @param dst 目标vec（必须预先分配空间）
- * @param src 源vec
- * @return 实际复制的元素数量（取dst剩余空间和src长度的最小值）
+ * 类似 Go 的copy 内置函数，返回实际复制的元素数量
+ * @param dst 目标 vec（必须预先分配空间）
+ * @param src 源 vec
+ * @return 实际复制的元素数量（取 dst 剩余空间和src长度的最小值）
  */
 uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t *src) {
     uint64_t copy_len = src->length < dst->length ? src->length : dst->length;

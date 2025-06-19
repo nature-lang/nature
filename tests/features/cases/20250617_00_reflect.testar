@@ -1,0 +1,338 @@
+=== test_basic
+--- main.n
+import reflect
+
+type person_t = struct{
+    int a
+    bool b
+    string c
+}
+
+fn main() {
+    var p = person_t{}
+    var t = reflect.typeof(p)
+    println(t.size)
+    println(t.hash)
+    println(t.kind)
+
+    println(t.align)
+    println(t.hashes.len())
+
+    for element_hash in t.hashes {
+        println(element_hash)
+        var element_type = reflect.typeof_hash(element_hash)
+        println(element_type.size, element_type.hash, element_type.kind, element_type.hashes.len())
+    }
+}
+
+--- output.txt
+24
+3187296274
+19
+0
+3
+1007465396
+8 1007465396 9 0
+923577301
+1 923577301 2 0
+518729469
+40 518729469 13 0
+
+=== test_nesting
+--- main.n
+import reflect
+
+type clothing_t = struct{
+    string pants
+    string jacket
+}
+
+type person_t = struct{
+    int a
+    bool b
+    clothing_t c
+    string d
+}
+
+fn main() {
+    var p = person_t{}
+    var t = reflect.typeof(p)
+    println(t.size)
+    println(t.hash)
+    println(t.kind)
+
+    println(t.align)
+    println(t.hashes.len())
+
+    var clothing_hash = t.hashes[2]
+    var clothing_type = reflect.typeof_hash(clothing_hash)
+    assert(clothing_type.size == 16)
+    assert(clothing_type.kind == reflect.TYPE_STRUCT)
+
+    for element_hash in clothing_type.hashes {
+        println(element_hash)
+        var element_type = reflect.typeof_hash(element_hash)
+        println(element_type.size, element_type.hash, element_type.kind, element_type.hashes.len())
+    }
+}
+
+--- output.txt
+40
+1188823133
+19
+0
+4
+518729469
+40 518729469 13 0
+518729469
+40 518729469 13 0
+
+
+=== test_basic_type
+--- main.n
+import reflect
+
+
+fn main() {
+    float f = 3.14
+    var t = reflect.typeof(f)
+    println(t.size)
+    println(t.kind)
+    println(t.hashes.len())
+
+    f32 f2 = 3.14
+    t = reflect.typeof(f2)
+    println(t.size)
+    println(t.kind)
+    println(t.hashes.len())
+
+    var a = null // type is null, size is 8
+    t = reflect.typeof(a)
+    println(t.size)
+    println(t.kind)
+    println(t.hashes.len())
+
+    var b = true // type is null, size is 8
+    t = reflect.typeof(b)
+    println(t.size)
+    println(t.kind)
+    println(t.hashes.len())
+
+    var c = 'hello world'
+    t = reflect.typeof(c)
+    println(t.size)
+    println(t.kind)
+    println(t.hashes.len())
+}
+
+--- output.txt
+8
+12
+0
+4
+11
+0
+8
+1
+0
+1
+2
+0
+40
+13
+0
+
+
+=== test_reflect_vec
+--- main.n
+import reflect
+
+fn main() {
+    [f32] list = [1.1, 2.2, 3.3]
+    var t = reflect.typeof(list)
+    println(t.size)
+    println(t.kind)
+    println(t.hashes.len())
+
+    var et = reflect.typeof_hash(t.hashes[0])
+    println(et.size)
+    println(et.kind)
+    println(et.hashes.len())
+}
+
+--- output.txt
+40
+14
+1
+4
+11
+0
+
+=== test_reflect_arr
+--- main.n
+import reflect
+
+fn main() {
+    [u16;3] list = [1, 3, 5]
+    var t = reflect.typeof(list)
+    println(t.size) // 2 * 3 = 6
+    println(t.kind) // arr
+    println(t.hashes.len()) // len 反应了数组的长度，而不是元素信息, == 3
+
+    var et = reflect.typeof_hash(t.hashes[0])
+    println(et.size)
+    println(et.kind)
+    println(et.hashes.len())
+}
+
+--- output.txt
+6
+15
+3
+2
+6
+0
+
+=== test_reflect_map
+--- main.n
+import reflect
+
+fn main() {
+    {string:[int]} m = {
+        'a1': [1, 2, 3],
+        'a2': [5, 8, 9, 10],
+        'a3': [],
+    }
+
+    var t = reflect.typeof(m)
+    println(t.size)
+    println(t.kind)
+    println(t.hashes.len()) // = 2
+
+    var kt = reflect.typeof_hash(t.hashes[0])
+    println(kt.size)
+    println(kt.kind)
+    println(kt.hashes.len())
+
+    var vt = reflect.typeof_hash(t.hashes[1])
+    println(vt.size)
+    println(vt.kind)
+    println(vt.hashes.len())
+}
+
+--- output.txt
+56
+16
+2
+40
+13
+0
+40
+14
+1
+
+=== test_reflect_set
+--- main.n
+import reflect
+
+fn main() {
+    {string} s = {
+        'hello',
+        'world',
+        'nature',
+    }
+
+    var t = reflect.typeof(s)
+    println(t.size)
+    println(t.kind)
+    println(t.hashes.len())
+
+    var kt = reflect.typeof_hash(t.hashes[0])
+    println(kt.size)
+    println(kt.kind)
+    println(kt.hashes.len())
+}
+
+--- output.txt
+40
+17
+1
+40
+13
+0
+
+=== test_reflect_tup
+--- main.n
+import reflect
+
+fn main() {
+    var tuple = (1, 2, 3, true, false, true, 'hello', [1.1, 2.2], {2, 3, 4})
+
+    var t = reflect.typeof(tuple)
+    println(t.size)
+    println(t.kind)
+    println(t.hashes.len())
+
+    for element_hash in t.hashes {
+        var element_type = reflect.typeof_hash(element_hash)
+        println(element_type.size, element_type.hash, element_type.kind, element_type.hashes.len())
+    }
+}
+
+--- output.txt
+56
+18
+9
+8 1007465396 9 0
+8 1007465396 9 0
+8 1007465396 9 0
+1 923577301 2 0
+1 923577301 2 0
+1 923577301 2 0
+40 518729469 13 0
+40 996123909 14 1
+40 4209388247 17 1
+
+=== test_reflect_ptr
+--- main.n
+import reflect
+
+fn main() {
+    ptr<i32> p = new i32(12)
+
+    var t = reflect.typeof(p)
+    println(t.size)
+    println(t.kind)
+    println(t.hashes.len())
+
+    var kt = reflect.typeof_hash(t.hashes[0])
+    println(kt.size)
+    println(kt.kind)
+    println(kt.hashes.len())
+
+    var q = 13
+    rawptr<int> p2 = &q
+    t = reflect.typeof(p2)
+    println(t.size)
+    println(t.kind)
+    println(t.hashes.len())
+
+    kt = reflect.typeof_hash(t.hashes[0])
+    println(kt.size)
+    println(kt.kind)
+    println(kt.hashes.len())
+}
+
+--- output.txt
+8
+23
+1
+4
+7
+0
+8
+24
+1
+8
+9
+0

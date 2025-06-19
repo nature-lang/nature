@@ -16,14 +16,12 @@ char **command_argv;
 #define _NUMBER_CASTING(_kind, _input_value, _debug_int64_value)                                                                        \
     {                                                                                                                                   \
         switch (_kind) {                                                                                                                \
-            case TYPE_FLOAT:                                                                                                            \
             case TYPE_FLOAT64:                                                                                                          \
                 *(double *) output_ref = (double) _input_value;                                                                         \
                 return;                                                                                                                 \
             case TYPE_FLOAT32:                                                                                                          \
                 *(float *) output_ref = (float) _input_value;                                                                           \
                 return;                                                                                                                 \
-            case TYPE_INT:                                                                                                              \
             case TYPE_INT64:                                                                                                            \
                 *(int64_t *) output_ref = (int64_t) _input_value;                                                                       \
                 return;                                                                                                                 \
@@ -37,7 +35,6 @@ char **command_argv;
             case TYPE_INT8:                                                                                                             \
                 *(int8_t *) output_ref = (int8_t) _input_value;                                                                         \
                 return;                                                                                                                 \
-            case TYPE_UINT:                                                                                                             \
             case TYPE_UINT64:                                                                                                           \
                 *(uint64_t *) output_ref = (uint64_t) (int64_t) _input_value;                                                           \
                 return;                                                                                                                 \
@@ -71,7 +68,6 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
     memmove(&v, input_ref, input_rtype->size);
 
     switch (input_rtype->kind) {
-        case TYPE_FLOAT:
         case TYPE_FLOAT64: {
             _NUMBER_CASTING(output_rtype->kind, v.f64_value, v.i64_value);
         }
@@ -79,7 +75,6 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
             _NUMBER_CASTING(output_rtype->kind, v.f32_value, v.i64_value);
         }
             // 其他类型保持不变
-        case TYPE_INT:
         case TYPE_INT64:
             _NUMBER_CASTING(output_rtype->kind, v.i64_value, v.i64_value);
         case TYPE_INT32:
@@ -88,7 +83,6 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
             _NUMBER_CASTING(output_rtype->kind, v.i16_value, v.i64_value);
         case TYPE_INT8:
             _NUMBER_CASTING(output_rtype->kind, v.i8_value, v.i64_value);
-        case TYPE_UINT:
         case TYPE_UINT64:
             _NUMBER_CASTING(output_rtype->kind, v.u64_value, v.i64_value);
         case TYPE_UINT32:

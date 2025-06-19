@@ -167,4 +167,7 @@ static inline void builtin_rtype_init() {
                         TYPE_GC_NOSCAN, TYPE_GC_SCAN);
 }
 
+
+rtype_t *rt_find_rtype(int64_t hash);
+
 #endif //RTYPE_H

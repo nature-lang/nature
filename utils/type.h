@@ -64,53 +64,53 @@ typedef enum {
 typedef enum {
     // 基础类型
     TYPE_NULL = 1,
-    TYPE_BOOL,
+    TYPE_BOOL = 2,
 
-    TYPE_INT8,
-    TYPE_UINT8, // uint8 ~ int 的顺序不可变，用于隐式类型转换
-    TYPE_INT16,
-    TYPE_UINT16,
-    TYPE_INT32,
-    TYPE_UINT32, // value=10
-    TYPE_INT64,
-    TYPE_UINT64,
-    TYPE_INT, // value=15
-    TYPE_UINT,
+    TYPE_INT8 = 3,
+    TYPE_UINT8 = 4, // uint8 ~ int 的顺序不可变，用于隐式类型转换
+    TYPE_INT16 = 5,
+    TYPE_UINT16 = 6,
+    TYPE_INT32 = 7,
+    TYPE_UINT32 = 8,
+    TYPE_INT64 = 9,
+    TYPE_UINT64 = 10,
+    TYPE_INT = 9,
+    TYPE_UINT = 10,
 
-    TYPE_FLOAT32,
-    TYPE_FLOAT, // f64
-    TYPE_FLOAT64, // value = 5
+    TYPE_FLOAT32 = 11,
+    TYPE_FLOAT64 = 12,
+    TYPE_FLOAT = 12,
 
     // 复合类型
-    TYPE_STRING,
-    TYPE_VEC,
-    TYPE_ARR,
-    TYPE_MAP, // value = 20
-    TYPE_SET,
-    TYPE_CHAN,
-    TYPE_COROUTINE_T,
-    TYPE_TUPLE,
-    TYPE_STRUCT,
-    TYPE_FN, // 具体的 fn 类型
+    TYPE_STRING = 13,
+    TYPE_VEC = 14,
+    TYPE_ARR = 15,
+    TYPE_MAP = 16,
+    TYPE_SET = 17,
+    TYPE_TUPLE = 18,
+    TYPE_STRUCT = 19,
+    TYPE_FN = 20, // 具体的 fn 类型
+    TYPE_CHAN = 21,
+    TYPE_COROUTINE_T = 22,
 
     // 指针类型
-    TYPE_PTR, // ptr<T> 不允许为 null 的安全指针
+    TYPE_PTR = 23, // ptr<T> 不允许为 null 的安全指针
     // 允许为 null 的指针， unsafe_ptr<type>, 可以通过 is 断言，可以通过 as 转换为 ptr<>。
     // 其在内存上，等于一个指针的占用大小
-    TYPE_RAWPTR, // rawptr<T> // 允许为 null 的不安全指针，也可能是错乱的悬空指针，暂时无法保证其正确性
-    TYPE_ANYPTR, // anyptr 没有具体类型，相当于 uintptr
+    TYPE_RAWPTR = 24, // rawptr<T> // 允许为 null 的不安全指针，也可能是错乱的悬空指针，暂时无法保证其正确性
+    TYPE_ANYPTR = 25, // anyptr 没有具体类型，相当于 uintptr
+
+    TYPE_UNION = 26,
+    TYPE_VOID, // 表示函数无返回值
+    TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
+    TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
+    TYPE_INTERFACE,
+    TYPE_ENUM,
 
     TYPE_FN_T, // 底层类型
     TYPE_INTEGER_T, // 底层类型
     TYPE_FLOATER_T, // 底层类型
     TYPE_ALL_T, // 通配所有类型
-
-    TYPE_VOID, // 表示函数无返回值
-    TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
-    TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
-    TYPE_UNION,
-    TYPE_INTERFACE,
-    TYPE_ENUM,
 
     //    TYPE_ALIAS, // 声明一个新的类型时注册的 type 的类型是这个
     //    TYPE_PARAM, // type formal param type foo<f1, f2> = f1|f2, 其中 f1 就是一个 param
@@ -150,11 +150,11 @@ static string type_kind_str[] = {
         [TYPE_STRING] = "string",
         [TYPE_RAW_STRING] = "raw_string",
         [TYPE_BOOL] = "bool",
-        [TYPE_FLOAT] = "float",
+        // [TYPE_FLOAT] = "float",
         [TYPE_FLOAT32] = "f32",
         [TYPE_FLOAT64] = "f64",
-        [TYPE_INT] = "int",
-        [TYPE_UINT] = "uint",
+        // [TYPE_INT] = "int",
+        // [TYPE_UINT] = "uint",
         [TYPE_INT8] = "i8",
         [TYPE_INT16] = "i16",
         [TYPE_INT32] = "i32",
@@ -203,7 +203,7 @@ typedef struct {
     uint64_t gc_bits; // 从右到左，每个 bit 代表一个指针的位置，如果为 1，表示该位置是一个指针，需要 gc
     uint8_t align; // struct/list 最终对齐的字节数
     uint16_t length; // struct/tuple/array 类型的长度
-    uint64_t *element_hashes;
+    uint64_t *hashes;
 } rtype_t;
 
 // 类型描述信息 start
@@ -878,25 +878,10 @@ static inline bool float_range_check(type_kind kind, double f) {
     }
 }
 
-
-static inline type_kind cross_kind_trans(type_kind kind) {
-    if (kind == TYPE_FLOAT) {
-        return TYPE_FLOAT64;
-    }
-    if (kind == TYPE_INT) {
-        return TYPE_INT64;
-    }
-    if (kind == TYPE_UINT) {
-        return TYPE_UINT64;
-    }
-
-    return kind;
-}
-
 static inline type_t type_integer_t_new() {
     type_t t = type_kind_new(TYPE_IDENT);
     t.status = REDUCTION_STATUS_DONE;
-    t.kind = cross_kind_trans(TYPE_INT);
+    t.kind = TYPE_INT;
     t.ident = INTEGER_T_IDENT;
     t.ident_kind = TYPE_IDENT_BUILTIN;
     t.args = NULL;

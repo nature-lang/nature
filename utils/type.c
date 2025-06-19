@@ -33,10 +33,13 @@ static rtype_t rtype_rawptr(type_ptr_t *t) {
             .hash = hash,
             .last_ptr = POINTER_SIZE,
             .kind = TYPE_RAWPTR,
+            .length = 1,
+            .hashes = mallocz(sizeof(uint64_t)),
     };
     // 计算 gc_bits
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
     bitmap_set(rtype.malloc_gc_bits, 0);
+    rtype.hashes[0] = value_rtype.hash;
 
     return rtype;
 }
@@ -75,10 +78,13 @@ static rtype_t rtype_pointer(type_ptr_t *t) {
             .hash = hash,
             .last_ptr = POINTER_SIZE,
             .kind = TYPE_PTR,
+            .length = 1,
+            .hashes = mallocz(sizeof(uint64_t)),
     };
     // 计算 gc_bits
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
     bitmap_set(rtype.malloc_gc_bits, 0);
+    rtype.hashes[0] = value_rtype.hash;
 
     return rtype;
 }
@@ -119,11 +125,15 @@ static rtype_t rtype_vec(type_vec_t *t) {
             .hash = hash,
             .last_ptr = POINTER_SIZE,
             .kind = TYPE_VEC,
+            .length = 1,
+            .hashes = mallocz(sizeof(uint64_t)),
     };
+
     // 计算 gc_bits
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
     bitmap_set(rtype.malloc_gc_bits, 0);
 
+    rtype.hashes[0] = element_rtype.hash;
     return rtype;
 }
 
@@ -138,6 +148,8 @@ static rtype_t rtype_chan(type_chan_t *t) {
             .hash = hash,
             .last_ptr = POINTER_SIZE * 5,
             .kind = TYPE_CHAN,
+            .length = 1,
+            .hashes = mallocz(sizeof(uint64_t)),
     };
 
     // 计算 gc_bits
@@ -147,6 +159,7 @@ static rtype_t rtype_chan(type_chan_t *t) {
     bitmap_set(rtype.malloc_gc_bits, 2);
     bitmap_set(rtype.malloc_gc_bits, 3);
     bitmap_set(rtype.malloc_gc_bits, 4);
+    rtype.hashes[0] = element_rtype.hash;
 
     return rtype;
 }
@@ -167,13 +180,15 @@ rtype_t rtype_array(type_array_t *t) {
             .size = element_size * t->length,
             .hash = hash,
             .kind = TYPE_ARR,
-            .length = t->length,
+            .length = t->length, // array length 特殊占用
+            .hashes = mallocz(sizeof(uint64_t)),
     };
 
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
 
     uint64_t offset = 0;
     rtype.last_ptr = rtype_array_gc_bits(rtype.malloc_gc_bits, &offset, t);
+    rtype.hashes[0] = element_rtype.hash;
 
     return rtype;
 }
@@ -195,12 +210,17 @@ static rtype_t rtype_map(type_map_t *t) {
             .hash = hash,
             .last_ptr = POINTER_SIZE * 3, // hash_table + key_data + value_data
             .kind = TYPE_MAP,
+            .length = 2,
+            .hashes = mallocz(sizeof(uint64_t) * 2),
     };
+
     // 计算 gc_bits
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
     bitmap_set(rtype.malloc_gc_bits, 0); // hash_table
     bitmap_set(rtype.malloc_gc_bits, 1); // key_data
     bitmap_set(rtype.malloc_gc_bits, 2); // value_data
+    rtype.hashes[0] = key_rtype.hash;
+    rtype.hashes[1] = value_rtype.hash;
 
     return rtype;
 }
@@ -220,11 +240,15 @@ static rtype_t rtype_set(type_set_t *t) {
             .hash = hash,
             .last_ptr = POINTER_SIZE * 2, // hash_table + key_data
             .kind = TYPE_SET,
+            .length = 1,
+            .hashes = mallocz(sizeof(uint64_t)),
     };
     // 计算 gc_bits
     rtype.malloc_gc_bits = malloc_gc_bits(rtype.size);
     bitmap_set(rtype.malloc_gc_bits, 0); // hash_table
     bitmap_set(rtype.malloc_gc_bits, 1); // key_data
+
+    rtype.hashes[0] = key_rtype.hash;
 
     return rtype;
 }
@@ -243,7 +267,8 @@ static rtype_t rtype_interface(type_t t) {
             .hash = hash,
             .kind = TYPE_INTERFACE,
             .last_ptr = POINTER_SIZE * 2,
-            .malloc_gc_bits = malloc_gc_bits(POINTER_SIZE * 2)};
+            .malloc_gc_bits = malloc_gc_bits(POINTER_SIZE * 2),
+    };
 
     bitmap_set(rtype.malloc_gc_bits, 0);
     bitmap_set(rtype.malloc_gc_bits, 1);
@@ -265,7 +290,8 @@ static rtype_t rtype_union(type_union_t *t) {
             .hash = hash,
             .kind = TYPE_UNION,
             .last_ptr = POINTER_SIZE,
-            .malloc_gc_bits = malloc_gc_bits(POINTER_SIZE * 2)};
+            .malloc_gc_bits = malloc_gc_bits(POINTER_SIZE * 2),
+    };
 
     bitmap_set(rtype.malloc_gc_bits, 0);
 
@@ -381,7 +407,7 @@ static rtype_t rtype_struct(type_struct_t *t) {
                 .kind = TYPE_STRUCT,
                 .malloc_gc_bits = malloc_gc_bits(1),
                 .length = t->properties->length,
-                .element_hashes = NULL,
+                .hashes = NULL,
                 .last_ptr = 0,
         };
 
@@ -414,7 +440,7 @@ static rtype_t rtype_struct(type_struct_t *t) {
             .kind = TYPE_STRUCT,
             .malloc_gc_bits = gc_bits,
             .length = t->properties->length,
-            .element_hashes = element_hash_list,
+            .hashes = element_hash_list,
             .last_ptr = last_ptr_offset,
     };
 
@@ -431,6 +457,9 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
     uint64_t offset = 0;
     uint64_t need_gc_count = 0;
     uint16_t need_gc_offsets[UINT16_MAX] = {0};
+
+    uint64_t *element_hash_list = mallocz(sizeof(uint64_t) * t->elements->length);
+
     // 记录需要 gc 的 key 的
     for (uint64_t i = 0; i < t->elements->length; ++i) {
         type_t *element_type = ct_list_value(t->elements, i);
@@ -450,6 +479,8 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
             need_gc_offsets[need_gc_count++] = offset;
         }
 
+        element_hash_list[i] = rtype.hash;
+
         offset += element_size;
     }
     uint64_t size = align_up(offset, t->align);
@@ -458,7 +489,10 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
             .size = size,
             .hash = hash_string(str),
             .kind = TYPE_TUPLE,
-            .malloc_gc_bits = malloc_gc_bits(size)};
+            .malloc_gc_bits = malloc_gc_bits(size),
+            .length = t->elements->length,
+            .hashes = element_hash_list,
+    };
 
     if (need_gc_count > 0) {
         // 默认 size 8byte 对齐了
@@ -945,7 +979,6 @@ char *type_origin_format(type_t t) {
 }
 
 type_t type_kind_new(type_kind kind) {
-    kind = cross_kind_trans(kind);
     type_t result = {
             .status = REDUCTION_STATUS_DONE,
             .kind = kind,
@@ -966,7 +999,6 @@ type_t type_kind_new(type_kind kind) {
 }
 
 type_t type_new(type_kind kind, void *value) {
-    kind = cross_kind_trans(kind);
     type_t result = {
             .kind = kind,
             .value = value,

@@ -3035,8 +3035,6 @@ static void linear_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
  */
 static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_literal_t *literal = expr.value;
-    literal->kind = cross_kind_trans(literal->kind);
-
     if (literal->kind == TYPE_STRING) {
         if (!target) {
             target = temp_var_operand(m, expr.type);
@@ -3082,7 +3080,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
 
         type_kind literal_kind = literal->kind;
         if (literal_kind == TYPE_ANYPTR) {
-            literal_kind = cross_kind_trans(TYPE_UINT);
+            literal_kind = TYPE_UINT;
         }
 
         const bool is_unsigned = is_unsigned_integer(literal_kind);
@@ -3097,7 +3095,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         lir_imm_t *imm_operand = NEW(lir_imm_t);
-        imm_operand->kind = cross_kind_trans(literal_kind);
+        imm_operand->kind = literal_kind;
         if (is_unsigned) {
             imm_operand->uint_value = i.u;
         } else {
@@ -3109,7 +3107,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
 
     if (literal->kind == TYPE_FLOAT32) {
         lir_imm_t *imm_operand = NEW(lir_imm_t);
-        imm_operand->kind = cross_kind_trans(literal->kind);
+        imm_operand->kind = literal->kind;
         imm_operand->f32_value = (float) atof(literal->value);
         lir_operand_t *src = operand_new(LIR_OPERAND_IMM, imm_operand);
         return linear_super_move(m, expr.type, target, src);
@@ -3117,7 +3115,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
 
     if (literal->kind == TYPE_FLOAT64) {
         lir_imm_t *imm_operand = NEW(lir_imm_t);
-        imm_operand->kind = cross_kind_trans(literal->kind);
+        imm_operand->kind = literal->kind;
         imm_operand->f64_value = atof(literal->value);
         lir_operand_t *src = operand_new(LIR_OPERAND_IMM, imm_operand);
         return linear_super_move(m, expr.type, target, src);

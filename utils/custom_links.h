@@ -176,8 +176,8 @@ static uint8_t *rtypes_serialize() {
         rtype_t *r = ct_list_value(ct_rtype_list, i);
 
         // array 占用了 length 字段，但是程element_hashes 是没有值的。
-        if (r->length > 0 && r->element_hashes) {
-            memmove(p, r->element_hashes, r->length * sizeof(uint64_t));
+        if (r->length > 0 && r->hashes) {
+            memmove(p, r->hashes, r->length * sizeof(uint64_t));
         }
 
         p += r->length * sizeof(uint64_t);
