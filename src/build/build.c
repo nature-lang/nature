@@ -64,10 +64,15 @@ static void elf_custom_links() {
     ctx->data_fndef_section = elf_section_new(ctx, ".data.fndef", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
     ctx->data_symdef_section = elf_section_new(ctx, ".data.symdef", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
 
+    ctx->ndata_section = elf_section_new(ctx, ".ndata", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+    ctx->nstrtable_section = elf_section_new(ctx, ".nstrtable", SHT_PROGBITS, SHF_ALLOC | SHF_WRITE);
+
+    Elf64_Sym sym;
+
     // rtype --------------------------------------------------------------------------
     ct_rtype_data = rtypes_serialize();
     elf_put_data(ctx->data_rtype_section, ct_rtype_data, ct_rtype_size);
-    Elf64_Sym sym = {
+    sym = (Elf64_Sym) {
             .st_shndx = ctx->data_rtype_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -119,6 +124,29 @@ static void elf_custom_links() {
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_SYMDEF_DATA);
     elf_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, QWORD);
 
+
+    // ndata --------------------------------------------------------------------------
+    elf_put_data(ctx->ndata_section, ct_data, ct_data_len);
+    sym = (Elf64_Sym) {
+            .st_shndx = ctx->ndata_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_data_len,
+    };
+    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_DATA);
+
+    // nstrtable --------------------------------------------------------------------------
+    elf_put_data(ctx->nstrtable_section, (uint8_t *) ct_strtable_data, ct_strtable_len);
+    sym = (Elf64_Sym) {
+            .st_shndx = ctx->nstrtable_section->sh_index,
+            .st_value = 0,
+            .st_other = 0,
+            .st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT),
+            .st_size = ct_strtable_len,
+    };
+    elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_STRTABLE_DATA);
+
     // custom_global symbol
     // ------------------------------------------------------------------------------------------------------
     double f64_mask = -0.0;
@@ -140,6 +168,9 @@ static void mach_custom_links() {
     ctx->data_fndef_section = mach_section_new(ctx, "__data_fndef", "__DATA", S_REGULAR);
     ctx->data_symdef_section = mach_section_new(ctx, "__data_symdef", "__DATA", S_REGULAR);
     ctx->data_caller_section = mach_section_new(ctx, "__data_caller", "__DATA", S_REGULAR);
+
+    ctx->ndata_section = mach_section_new(ctx, "__ndata", "__DATA", S_REGULAR);
+    ctx->nstrtable_section = mach_section_new(ctx, "__nstrtable", "__DATA", S_REGULAR);
 
 
     // rtype --------------------------------------------------------------------------
@@ -194,6 +225,24 @@ static void mach_custom_links() {
                                       },
                  SYMBOL_SYMDEF_DATA);
     macho_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, QWORD);
+
+    // ndata --------------------------------------------------------------------------
+    mach_put_data(ctx->ndata_section, ct_data, ct_data_len);
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
+                                              .n_type = N_SECT | N_EXT,
+                                              .n_sect = ctx->ndata_section->sh_index,
+                                              .n_value = 0, // in section data offset
+                                      },
+                 SYMBOL_DATA);
+
+    // strtable
+    mach_put_data(ctx->nstrtable_section, (uint8_t *) ct_strtable_data, ct_strtable_len);
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
+                                              .n_type = N_SECT | N_EXT,
+                                              .n_sect = ctx->nstrtable_section->sh_index,
+                                              .n_value = 0, // in section data offset
+                                      },
+                 SYMBOL_STRTABLE_DATA);
 
 
     // custom_global symbol

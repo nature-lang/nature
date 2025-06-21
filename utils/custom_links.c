@@ -1,5 +1,9 @@
 #include "custom_links.h"
 
+char *rt_strtable_ptr = NULL;
+
+uint8_t *rt_data_ptr = NULL;
+
 symdef_t *rt_symdef_ptr = NULL;
 
 fndef_t *rt_fndef_ptr = NULL;
@@ -7,6 +11,17 @@ fndef_t *rt_fndef_ptr = NULL;
 caller_t *rt_caller_ptr = NULL;
 
 struct sc_map_64v rt_caller_map;
+
+// - strtable
+uint64_t ct_strtable_len = 0;
+uint64_t ct_strtable_cap = 0;
+char *ct_strtable_data = NULL;
+
+// - data
+uint64_t ct_data_len = 0;
+uint64_t ct_data_cap = 0;
+uint8_t *ct_data = NULL;
+
 
 // - symdef
 uint64_t ct_symdef_size = 0; // 数量

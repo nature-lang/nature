@@ -100,12 +100,13 @@ void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_
 static inline void panic_dump(coroutine_t *co, caller_t *caller, char *msg) {
     // pre_rtcall_hook 中已经记录了 ret addr
     char *dump_msg;
+    uint64_t relpath_offset = ((fndef_t *) caller->data)->relpath_offset;
     if (co->main) {
         dump_msg = tlsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", msg,
-                             ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
+                             STRTABLE(relpath_offset), caller->line, caller->column);
     } else {
         dump_msg = tlsprintf("coroutine '%ld' panic: '%s' at %s:%d:%d\n", co->id, msg,
-                             ((fndef_t *) caller->data)->rel_path, caller->line, caller->column);
+                             STRTABLE(relpath_offset), caller->line, caller->column);
     }
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
     // panic msg
@@ -504,9 +505,7 @@ void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
         n_interface_t *error = n_error_new(string_new(msg, strlen(msg)), true);
         assert(error->method_count == 1);
 
-        DEBUGF("[runtime.co_throw_error_msg] co=%p, error=%p, path=%s, line=%ld, column=%ld, msg=%s", co, (void *) error, path,
-               line,
-               column, (char *) msg);
+        DEBUGF("[runtime.co_throw_error_msg] co=%p, error=%p, msg=%s", co, (void *) error, (char *) msg);
 
         assert(co->traces == NULL);
 
@@ -515,8 +514,8 @@ void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
         n_vec_t *traces = rti_vec_new(&errort_trace_rtype, 0, 0);
         rti_write_barrier_ptr(&co->traces, traces, false);
         n_trace_t trace = {
-                .path = string_new(caller_fn->rel_path, strlen(caller_fn->rel_path)),
-                .ident = string_new(caller_fn->name, strlen(caller_fn->name)),
+                .path = string_new(STRTABLE(caller_fn->relpath_offset), strlen(STRTABLE(caller_fn->relpath_offset))),
+                .ident = string_new(STRTABLE(caller_fn->name_offset), strlen(STRTABLE(caller_fn->name_offset))),
                 .line = caller->line,
                 .column = caller->column,
         };

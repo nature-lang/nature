@@ -271,7 +271,7 @@ elf_arm64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
             write32le(ptr, (read32le(ptr) & 0xfff003ff) | (hi12 << 10));
             break;
         }
-        case R_AARCH64_TLSLE_ADD_TPREL_LO12: 
+        case R_AARCH64_TLSLE_ADD_TPREL_LO12:
         case R_AARCH64_TLSLE_ADD_TPREL_LO12_NC: {
             Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
             section_t *s = SEC_TACK(sym->st_shndx);
@@ -437,7 +437,7 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
                             .column = operation->column,
                     };
                     if (call_target) {
-                        str_rcpy(caller.target_name, call_target, 24);
+                        caller.target_name_offset = strtable_put(call_target);
                     }
 
                     ct_list_push(ct_caller_list, &caller);
@@ -548,7 +548,7 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
                 if (!operand->symbol.is_local) {
                     n_type |= N_EXT;
                 }
-                temp->sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                temp->sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
                                                                             .n_sect = ctx->text_section->sh_index,
                                                                             .n_value = *temp->offset,
                                                                             .n_type = n_type,
@@ -594,7 +594,7 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     uint64_t sym_index = (uint64_t) table_get(symtab_hash, rel_operand->symbol.name);
                     if (sym_index == 0) {
                         // 添加未定义符号
-                        sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+                        sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
                                                                               .n_sect = NO_SECT,
                                                                               .n_value = 0,
                                                                               .n_type = N_UNDF | N_EXT,
@@ -634,7 +634,7 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
                             .column = operation->column,
                     };
                     if (call_target) {
-                        strncpy(caller.target_name, call_target, 23);
+                        caller.target_name_offset = strtable_put(call_target);
                     }
 
                     ct_list_push(ct_caller_list, &caller);
@@ -653,7 +653,7 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
         uint64_t sym_index = (uint64_t) table_get(symtab_hash, temp->rel_symbol);
         if (sym_index == 0) {
             // 添加未定义符号
-            sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+            sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
                                                                   .n_sect = NO_SECT,
                                                                   .n_value = 0,
                                                                   .n_type = N_UNDF | N_EXT,
