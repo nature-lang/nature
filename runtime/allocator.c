@@ -877,12 +877,12 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
 static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, rtype_t *rtype) {
     DEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start", (void *) addr, size, obj_size);
 
-    uint8_t *gc_bits = rtype->malloc_gc_bits;
-    if (rtype->malloc_gc_bits == NULL) {
+    uint8_t *gc_bits = RTDATA(rtype->malloc_gc_bits_offset);
+    if (rtype->malloc_gc_bits_offset == -1) {
         gc_bits = (uint8_t *) &rtype->gc_bits;
     }
 
-    bool arr_ptr = rtype->kind == TYPE_ARR && rtype->last_ptr > 0 && rtype->malloc_gc_bits == NULL;
+    bool arr_ptr = rtype->kind == TYPE_ARR && rtype->last_ptr > 0 && rtype->malloc_gc_bits_offset == -1;
 
     int index = 0;
     addr_t end = addr + obj_size;
@@ -1317,7 +1317,7 @@ void *gc_malloc(uint64_t rhash) {
 
     // uint64_t stage2 = uv_hrtime();
     DEBUGF("[gc_malloc] rhash=%lu, malloc size is %lu, last_ptr %lu, rtype bits: %s", rhash, rtype->size, rtype->last_ptr,
-           bitmap_to_str(rtype->malloc_gc_bits,
+           bitmap_to_str(RTDATA(rtype->malloc_gc_bits_offset),
                          calc_gc_bits_size(rtype->size, POINTER_SIZE)));
 
     void *result = rti_gc_malloc(rtype->size, rtype);

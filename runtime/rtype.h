@@ -1,9 +1,9 @@
 #ifndef RUNTIME_RTYPE_H
 #define RUNTIME_RTYPE_H
 
-#include "utils/type.h"
-#include "utils/sc_map.h"
 #include "utils/bitmap.h"
+#include "utils/sc_map.h"
+#include "utils/type.h"
 
 extern struct sc_map_64v rt_rtype_map;
 
@@ -50,31 +50,32 @@ extern rtype_t vec_rtype;
 extern rtype_t fn_rtype;
 
 // 默认是 uint8[8] == uint8* , 因为指针占用 8 byte
-#define GC_RTYPE(_kind, _count, ...) ({ \
-    assert(_count <= 32); \
-    uint64_t _gc_bits = 0; \
-    uint64_t _size = 0; \
-    uint64_t _last_ptr = 0; \
-    if (_count > 0) { \
-        uint8_t _bit_values[_count] = {__VA_ARGS__}; \
-        for (int _i = 0; _i < _count; _i++) { \
-            if (_bit_values[_i]) { \
-                _gc_bits |= 1 << _i; \
-                _last_ptr = (_i + 1) * POINTER_SIZE; \
-            } \
-        } \
-    } \
-    _size = _count * POINTER_SIZE; \
-    if (_size == 0) _size = type_kind_sizeof(_kind); \
-    uint64_t _hash = ((uint64_t)_kind << 56) | (_size << 32) | _gc_bits; \
-    (rtype_t) { \
-        .size = _size, \
-        .kind = _kind, \
-        .last_ptr = _last_ptr, \
-        .in_heap = kind_in_heap(_kind), \
-        .gc_bits = _gc_bits, \
-        .hash = _hash \
-    }; \
+#define GC_RTYPE(_kind, _count, ...) ({                                   \
+    assert(_count <= 32);                                                 \
+    uint64_t _gc_bits = 0;                                                \
+    uint64_t _size = 0;                                                   \
+    uint64_t _last_ptr = 0;                                               \
+    if (_count > 0) {                                                     \
+        uint8_t _bit_values[_count] = {__VA_ARGS__};                      \
+        for (int _i = 0; _i < _count; _i++) {                             \
+            if (_bit_values[_i]) {                                        \
+                _gc_bits |= 1 << _i;                                      \
+                _last_ptr = (_i + 1) * POINTER_SIZE;                      \
+            }                                                             \
+        }                                                                 \
+    }                                                                     \
+    _size = _count * POINTER_SIZE;                                        \
+    if (_size == 0) _size = type_kind_sizeof(_kind);                      \
+    uint64_t _hash = ((uint64_t) _kind << 56) | (_size << 32) | _gc_bits; \
+    (rtype_t){                                                            \
+            .size = _size,                                                \
+            .kind = _kind,                                                \
+            .last_ptr = _last_ptr,                                        \
+            .in_heap = kind_in_heap(_kind),                               \
+            .malloc_gc_bits_offset = -1,                                  \
+            .hashes_offset = -1,                                          \
+            .gc_bits = _gc_bits,                                          \
+            .hash = _hash};                                               \
 })
 
 static inline uint8_t *uint64_to_uint8_array(uint64_t value) {
@@ -96,10 +97,11 @@ static inline rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
             .hash = 0, // runtime 生成的没有 hash 值，不需要进行 hash 定位
             .kind = TYPE_ARR,
             .length = length,
+            .malloc_gc_bits_offset = -1,
+            .hashes_offset = -1,
     };
 
     rtype.last_ptr = element_rtype->last_ptr > 0; // element 包含指针数据
-    rtype.malloc_gc_bits = NULL;
 
     return rtype;
 }

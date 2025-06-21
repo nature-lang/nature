@@ -190,7 +190,7 @@ static string type_kind_str[] = {
 // reflect type
 // 所有的 type 都可以转化成该结构
 typedef struct {
-    char ident[56]; // 类型unique ident 缓存，用于定义一些常用的 rtype, 比如 throwable rtype
+    uint64_t ident_offset;
     uint64_t size; // 无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
     uint8_t in_heap; // 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是
 
@@ -198,12 +198,16 @@ typedef struct {
     int64_t hash; // 做类型推断时能够快速判断出类型是否相等
     uint64_t last_ptr; // 类型对应的堆数据中最后一个包含指针的字节数
     type_kind kind; // 类型的种类
-    uint8_t *malloc_gc_bits;
+
+    // ct rtype 使用该字段
+    int64_t malloc_gc_bits_offset; // NULL == -1
+
     // 类型 bit 数据(按 uint8 对齐), 在内存中分配空间, 如果为 NULL, 则直接使用 gc_bits, 如果为 NULL, 则直接使用 gc_bits, 如果为 NULL, 则直接使用 gc_bits, 如果为 NULL, 则直接使用 gc_bits
+    // runtime GC_RTYPE 使用该字段(malloc_gc_bits_offset 中的数据无法再进一步修改)
     uint64_t gc_bits; // 从右到左，每个 bit 代表一个指针的位置，如果为 1，表示该位置是一个指针，需要 gc
     uint8_t align; // struct/list 最终对齐的字节数
     uint16_t length; // struct/tuple/array 类型的长度
-    uint64_t *hashes;
+    int64_t hashes_offset;
 } rtype_t;
 
 // 类型描述信息 start
@@ -534,9 +538,9 @@ typedef struct {
 // list 的唯一标识， 比如 [int] a, [int] b , [float] c   等等，其实只有一种类型
 // 区分是否是同一种类型，就看 ct_reflect_type 中的 gc_bits 是否一致
 
-static uint64_t rtype_struct_gc_bits(uint8_t *gc_bits, uint64_t *offset, type_struct_t *t);
+static uint64_t rtype_struct_gc_bits(uint64_t gc_bits_offset, uint64_t *offset, type_struct_t *t);
 
-static uint64_t rtype_array_gc_bits(uint8_t *gc_bits, uint64_t *offset, type_array_t *t);
+static uint64_t rtype_array_gc_bits(uint64_t gc_bits_offset, uint64_t *offset, type_array_t *t);
 
 rtype_t reflect_type(type_t t);
 

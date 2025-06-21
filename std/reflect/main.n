@@ -55,6 +55,7 @@ type rtype_t = struct{
     u8 align
     u16 length
     anyptr hashes // element hashes
+    anyptr attach
 }
 
 #linkid rt_find_rtype

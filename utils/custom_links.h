@@ -28,7 +28,7 @@ typedef struct {
 
     uint64_t name_offset;
     uint64_t relpath_offset; // 文件路径
-    uint64_t gc_bits_offset; //  //  uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size, POINTER_SIZE);
+    uint64_t gc_bits_offset; // uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size, POINTER_SIZE);
 } fndef_t;
 
 typedef struct {
@@ -96,6 +96,8 @@ extern char *ct_strtable_data;
 extern uint64_t ct_data_len;
 extern uint64_t ct_data_cap;
 extern uint8_t *ct_data;
+
+#define CTDATA(_offset) (ct_data + _offset)
 
 // - symdef
 extern uint64_t ct_symdef_size; // 数量
@@ -165,34 +167,10 @@ static uint8_t *rtypes_serialize() {
     // 按 count 进行一次序列化，然后将 gc_bits 按顺序追加
     // 计算 ct_reflect_type
     uint8_t *data = mallocz(ct_rtype_size);
-    uint8_t *p = data;
 
     // rtypes 整体一次性移动到 data 中，随后再慢慢移动 gc_bits
     uint64_t size = ct_rtype_list->length * sizeof(rtype_t);
-    memmove(p, ct_rtype_list->take, size);
-
-    // 移动 gc_bits
-    p = p + size; // byte 类型，所以按字节移动
-    for (int i = 0; i < ct_rtype_list->length; ++i) {
-        rtype_t *r = ct_list_value(ct_rtype_list, i); // take 的类型是字节，所以这里按字节移动
-        uint64_t gc_bits_size = calc_gc_bits_size(r->size, POINTER_SIZE);
-        if (gc_bits_size) {
-            memmove(p, r->malloc_gc_bits, gc_bits_size);
-        }
-        p += gc_bits_size;
-    }
-
-    // 移动 element_hashes
-    for (int i = 0; i < ct_rtype_list->length; ++i) {
-        rtype_t *r = ct_list_value(ct_rtype_list, i);
-
-        // array 占用了 length 字段，但是程element_hashes 是没有值的。
-        if (r->length > 0 && r->hashes) {
-            memmove(p, r->hashes, r->length * sizeof(uint64_t));
-        }
-
-        p += r->length * sizeof(uint64_t);
-    }
+    memmove(data, ct_rtype_list->take, size);
 
     return data;
 }
@@ -256,7 +234,11 @@ static inline uint64_t data_put(uint8_t *data, uint64_t len) {
     }
 
     // 复制数据到数据区
-    memcpy(ct_data + ct_data_len, data, len);
+    if (data) {
+        memcpy(ct_data + ct_data_len, data, len);
+    } else {
+        memset(ct_data + ct_data_len, 0, len);
+    }
 
     // 更新数据长度
     uint64_t offset = ct_data_len;
