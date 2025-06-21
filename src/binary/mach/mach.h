@@ -81,6 +81,8 @@ typedef struct {
     mach_section_t *data_fndef_section;
     mach_section_t *data_symdef_section;
     mach_section_t *data_caller_section;
+    mach_section_t *ndata_section;
+    mach_section_t *nstrtable_section;
 
     // segment 在 obj 文件中并不会有实际的数据结构存储，而是包含在 section->segname 中
     // obj 文件通常只有一个 segment_command LC_SEGMENT_64 引导所有的 sections

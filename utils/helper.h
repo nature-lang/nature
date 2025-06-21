@@ -598,9 +598,6 @@ static inline void sys_memory_used_exec(void *addr, uint64_t size) {
                 size,
                 strerror(errno));
     }
-    DEBUGF("[sys_memory_used_exec] jit span malloc and mprotect success, mspan=%p, mspan_lock=%p, base=%p, pages_size=%ld",
-           span, &span->alloc_locker,
-           (void *) span->base, pages_count * ALLOC_PAGE_SIZE);
 }
 
 static inline void *sys_memory_alloc(uint64_t size) {

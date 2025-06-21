@@ -435,10 +435,10 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
             Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
             section_t *s = SEC_TACK(sym->st_shndx);
 
-            int32_t x = (int32_t)sym->st_value - ((int32_t)s->sh_addr + (int32_t)s->data_count);
+            int32_t x = (int32_t) sym->st_value - ((int32_t) s->sh_addr + (int32_t) s->data_count);
 
-//            log_debug("[elf_amd64_relocate] R_X86_64_TPOFF32, st_value=%ld, s->sh_addr=%ld, s->data_count=%ld, x=%lx",
-//                      sym->st_value, s->sh_addr, s->data_count, (uint32_t) x);
+            //            log_debug("[elf_amd64_relocate] R_X86_64_TPOFF32, st_value=%ld, s->sh_addr=%ld, s->data_count=%ld, x=%lx",
+            //                      sym->st_value, s->sh_addr, s->data_count, (uint32_t) x);
 
             add32le(ptr, x);
             break;
@@ -607,7 +607,7 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
                             .column = operation->column,
                     };
                     if (call_target) {
-                        str_rcpy(caller.target_name, call_target, 24);
+                        caller.target_name_offset = strtable_put(call_target);
                     }
 
                     ct_list_push(ct_caller_list, &caller);
@@ -804,7 +804,7 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
                             .column = operation->column,
                     };
                     if (call_target) {
-                        str_rcpy(caller.target_name, call_target, 24);
+                        caller.target_name_offset = strtable_put(call_target);
                     }
 
                     ct_list_push(ct_caller_list, &caller);

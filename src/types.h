@@ -609,6 +609,8 @@ typedef struct {
     section_t *data_caller_section;
     section_t *data_fndef_section;
     section_t *data_symdef_section;
+    section_t *ndata_section;
+    section_t *nstrtable_section;
 
     // debug section
     /* debug sections */

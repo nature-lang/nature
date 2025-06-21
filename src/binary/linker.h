@@ -4,29 +4,29 @@
 /**
  * 包含 loader 和 linker 两部分
  */
-#include <stdlib.h>
-#include <stdint.h>
 #include "src/binary/elf/elf.h"
 #include "src/binary/mach/mach.h"
+#include "src/build/config.h"
+#include "src/lir.h"
+#include "src/symbol/symbol.h"
+#include "src/types.h"
+#include "utils/custom_links.h"
 #include "utils/slice.h"
 #include "utils/table.h"
-#include "src/types.h"
-#include "src/build/config.h"
-#include "utils/custom_links.h"
-#include "src/symbol/symbol.h"
-#include "src/lir.h"
+#include <stdint.h>
+#include <stdlib.h>
 
 #define CONFIG_NEW_MACHO 1
 
 #define SEC_TACK(_sh_index) ((section_t *) ctx->sections->take[_sh_index])
 
-#define SEC_START(_type, _section) ((_type*) _section->data)
+#define SEC_START(_type, _section) ((_type *) _section->data)
 
-#define SEC_END(_type, _section) ((_type*) (_section->data + _section->data_count))
+#define SEC_END(_type, _section) ((_type *) (_section->data + _section->data_count))
 
 #define addr_t uint64_t
 
-# define REL_SECTION_FMT ".rela%s"
+#define REL_SECTION_FMT ".rela%s"
 
 
 /* Whether to generate a GOT/PLT entry and when. NO_GOTPLT_ENTRY is first so
@@ -39,12 +39,12 @@ enum gotplt_entry {
 };
 
 /* relocation type for 32 bit data relocation */
-#define R_DATA_32   R_X86_64_32S
-#define R_DATA_PTR  R_X86_64_64
-#define R_JMP_SLOT  R_X86_64_JUMP_SLOT
-#define R_GLOB_DAT  R_X86_64_GLOB_DAT
-#define R_COPY      R_X86_64_COPY
-#define R_RELATIVE  R_X86_64_RELATIVE
+#define R_DATA_32 R_X86_64_32S
+#define R_DATA_PTR R_X86_64_64
+#define R_JMP_SLOT R_X86_64_JUMP_SLOT
+#define R_GLOB_DAT R_X86_64_GLOB_DAT
+#define R_COPY R_X86_64_COPY
+#define R_RELATIVE R_X86_64_RELATIVE
 
 
 /* special flag to indicate that the section should not be linked to the other ones */
@@ -54,7 +54,7 @@ enum gotplt_entry {
 
 #define ST_ASM_SET 0x04
 
-#define ARMAG  "!<arch>\012"    /* For COFF and a.out archives */
+#define ARMAG "!<arch>\012" /* For COFF and a.out archives */
 #define ARFMAG "`\n"
 
 typedef struct {
@@ -163,7 +163,7 @@ static inline uint64_t collect_fndef_list(void *ctx) {
     uint64_t rel_offset = 0;
 
     uint64_t count = 0;
-    uint64_t size_with_bits = 0;
+    uint64_t size = 0;
     // - 遍历全局符号表中的所有 fn 数据就行了
     SLICE_FOR(symbol_fn_list) {
         symbol_t *s = SLICE_VALUE(symbol_fn_list);
@@ -182,16 +182,14 @@ static inline uint64_t collect_fndef_list(void *ctx) {
         c->rt_fndef_index = count;
 
         fndef_t *f = &ct_fndef_list[count++];
+        size += sizeof(fndef_t);
+
         f->fn_runtime_reg = c->fn_runtime_reg;
         f->fn_runtime_stack = c->fn_runtime_stack;
         f->stack_size = c->stack_offset; // native 的时候已经进行了 16byte 对齐了
-        f->gc_bits = c->stack_gc_bits->bits;
-
-        size_with_bits += sizeof(fndef_t);
-        size_with_bits += calc_gc_bits_size(f->stack_size, POINTER_SIZE);
-
-        strcpy(f->name, c->linkident);
-        strcpy(f->rel_path, c->fndef->rel_path);
+        f->gc_bits_offset = data_put(c->stack_gc_bits->bits, calc_gc_bits_size(f->stack_size, POINTER_SIZE));
+        f->name_offset = strtable_put(c->linkident);
+        f->relpath_offset = strtable_put(c->fndef->rel_path);
         f->line = c->fndef->line;
         f->column = c->fndef->column;
 
@@ -207,10 +205,10 @@ static inline uint64_t collect_fndef_list(void *ctx) {
             stack_slot = var_stack_slot(c, var) * -1;
 
             log_trace(
-                "[stack_vars.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
-                c->linkident, var->ident, type_format(var->type), type_sizeof(var->type),
-                type_is_pointer_heap(var->type),
-                (stack_slot / POINTER_SIZE) - 1, stack_slot);
+                    "[stack_vars.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
+                    c->linkident, var->ident, type_format(var->type), type_sizeof(var->type),
+                    type_is_pointer_heap(var->type),
+                    (stack_slot / POINTER_SIZE) - 1, stack_slot);
         }
 
         if (BUILD_OS == OS_LINUX) {
@@ -223,9 +221,11 @@ static inline uint64_t collect_fndef_list(void *ctx) {
 
         rel_offset += sizeof(fndef_t);
     }
+
     ct_fndef_count = count;
-    log_debug("[collect_fndef_list] count=%lu, size_with_bits=%lu", ct_fndef_count, size_with_bits);
-    return size_with_bits;
+    log_debug("[collect_fndef_list] count=%lu, size_with_bits=%lu", ct_fndef_count, size);
+
+    return size;
 }
 
 static inline uint64_t collect_symdef_list(void *ctx) {
@@ -244,7 +244,7 @@ static inline uint64_t collect_symdef_list(void *ctx) {
         symdef->need_gc = type_is_pointer_heap(var_decl->type);
         symdef->size = type_sizeof(var_decl->type); // 符号的大小
         symdef->base = 0; // 这里引用了全局符号表段地址
-        strcpy(symdef->name, var_decl->ident);
+        symdef->name_offset = strtable_put(var_decl->ident);
 
         if (BUILD_OS == OS_LINUX) {
             elf_context_t *elf_ctx = ctx;

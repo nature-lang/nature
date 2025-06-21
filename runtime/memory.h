@@ -168,6 +168,15 @@ void uncache_span(mcentral_t *mcentral, mspan_t *span);
 
 void mheap_free_span(mheap_t *mheap, mspan_t *span);
 
+
+static inline void ndata_deserialize() {
+    rt_data_ptr = &rt_data;
+}
+
+static inline void nstrtable_deserialize() {
+    rt_strtable_ptr = &rt_strtable_data;
+}
+
 void rtypes_deserialize();
 
 void fndefs_deserialize();

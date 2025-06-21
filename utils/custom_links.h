@@ -2,8 +2,8 @@
 #define NATURE_CUSTOM_LINKS_H
 
 #include "ct_list.h"
-#include "type.h"
 #include "src/types.h"
+#include "type.h"
 #include "utils/sc_map.h"
 
 /**
@@ -14,7 +14,7 @@ typedef struct {
     addr_t base; // data 中的数据对应的虚拟内存中的地址(通常在 .data section 中)
     uint64_t size;
     bool need_gc; // 符号和栈中的 var 一样最大的值不会超过 8byte,所以使用 bool 就可以判断了
-    char name[80];
+    uint64_t name_offset;
 } symdef_t;
 
 typedef struct {
@@ -25,9 +25,10 @@ typedef struct {
     int64_t stack_size; // 基于当前函数 frame 占用的栈的大小(主要包括 args 和 locals，不包括 prev rbp 和 return addr)
     uint64_t line;
     uint64_t column;
-    char name[80]; // 函数名称
-    char rel_path[256]; // 文件路径 TODO 可以像 elf 文件一样做 str 段优化。
-    uint8_t *gc_bits; // 基于 stack_offset 计算出的 gc_bits TODO 做成数据段优化
+
+    uint64_t name_offset;
+    uint64_t relpath_offset; // 文件路径
+    uint64_t gc_bits_offset; //  //  uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size, POINTER_SIZE);
 } fndef_t;
 
 typedef struct {
@@ -35,19 +36,21 @@ typedef struct {
     uint64_t line; // line
     uint64_t column; // column
     void *data; // fn_base 对应的 fn_name, 只占用 8byte 的地址数据, collect 收集完成时会被替换成 fndef list 中对应的 index
-    char target_name[24]; // 调试使用
+    uint64_t target_name_offset;
 } caller_t;
 
 
 // gc 基于此进行全部符号的遍历
 // 连接器传输到 runtime 中的符号数据
-#define SYMBOL_FN_MAIN_BASE "rt_fn_main_base"
+#define SYMBOL_STRTABLE_DATA "rt_strtable_data"
 
-#define SYMBOL_SYMDEF_COUNT  "rt_symdef_count"
+#define SYMBOL_DATA "rt_data"
+
+#define SYMBOL_SYMDEF_COUNT "rt_symdef_count"
 #define SYMBOL_SYMDEF_DATA "rt_symdef_data"
 
-#define SYMBOL_FNDEF_COUNT  "rt_fndef_count"
-#define SYMBOL_FNDEF_DATA  "rt_fndef_data"
+#define SYMBOL_FNDEF_COUNT "rt_fndef_count"
+#define SYMBOL_FNDEF_DATA "rt_fndef_data"
 
 #define SYMBOL_CALLER_COUNT "rt_caller_count"
 #define SYMBOL_CALLER_DATA "rt_caller_data"
@@ -57,6 +60,16 @@ typedef struct {
 
 
 extern addr_t rt_fn_main_base;
+
+extern char rt_strtable_data; // Put the symbol through the linker
+extern char *rt_strtable_ptr;
+
+#define STRTABLE(_offset) (rt_strtable_ptr + _offset)
+
+extern uint8_t rt_data;
+extern uint8_t *rt_data_ptr;
+
+#define RTDATA(_offset) (rt_data_ptr + _offset)
 
 extern uint64_t rt_symdef_count;
 extern symdef_t rt_symdef_data; // &rt_symdef_data 指向 .data.symdef section 所在地址
@@ -71,9 +84,18 @@ extern caller_t rt_caller_data;
 extern caller_t *rt_caller_ptr;
 extern struct sc_map_64v rt_caller_map;
 
-
 extern uint64_t rt_rtype_count;
 extern rtype_t rt_rtype_data;
+
+// - strtable
+extern uint64_t ct_strtable_len;
+extern uint64_t ct_strtable_cap;
+extern char *ct_strtable_data;
+
+// - data
+extern uint64_t ct_data_len;
+extern uint64_t ct_data_cap;
+extern uint8_t *ct_data;
 
 // - symdef
 extern uint64_t ct_symdef_size; // 数量
@@ -103,20 +125,9 @@ static inline uint8_t *fndefs_serialize() {
     // 按 count 进行一次序列化，然后将 gc_bits 按顺序追加
     uint8_t *data = mallocz(ct_fndef_size);
 
-    uint8_t *p = data;
     // 首先将 fndef 移动到 data 中
     uint64_t size = ct_fndef_count * sizeof(fndef_t);
-    memmove(p, ct_fndef_list, size);
-
-    // 将 gc_bits 移动到数据尾部
-    p = p + size; // byte 类型，所以按字节移动
-    for (int i = 0; i < ct_fndef_count; ++i) {
-        fndef_t *f = &ct_fndef_list[i];
-        uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size, POINTER_SIZE);
-        memmove(p, f->gc_bits, gc_bits_size);
-        p += gc_bits_size;
-    }
-
+    memmove(data, ct_fndef_list, size);
     return data;
 }
 
@@ -186,5 +197,72 @@ static uint8_t *rtypes_serialize() {
     return data;
 }
 
+static inline uint64_t strtable_put(char *str) {
+    // 首次初始化检查
+    if (ct_strtable_cap == 0) {
+        // 初始化字符串表数据
+        ct_strtable_cap = 1024; // 初始容量
+        ct_strtable_data = mallocz(ct_strtable_cap);
+        ct_strtable_len = 0;
+    }
+    // 使用 strstr 检查字符串是否已存在
+    if (ct_strtable_len > 0) {
+        char *result = memmem(ct_strtable_data, ct_strtable_len, str, strlen(str));
+        if (result) { // 找到了指针
+            return result - ct_strtable_data;
+        }
+    }
+
+    // 计算字符串长度（包括 \0 分隔符）
+    uint64_t str_len = strlen(str) + 1;
+
+    // 检查是否需要扩容
+    if ((ct_strtable_len + str_len) > ct_strtable_cap) {
+        // 需要扩容
+        while (ct_strtable_len + str_len > ct_strtable_cap) {
+            ct_strtable_cap *= 2;
+        }
+
+        ct_strtable_data = (char *) realloc(ct_strtable_data, ct_strtable_cap);
+    }
+
+    // 记录当前偏移量
+    uint64_t offset = ct_strtable_len;
+
+    // 复制字符串到字符串表（包括 \0）
+    memcpy(ct_strtable_data + offset, str, str_len);
+
+    // 更新字符串表长度
+    ct_strtable_len += str_len;
+
+    return offset;
+}
+
+static inline uint64_t data_put(uint8_t *data, uint64_t len) {
+    if (ct_data == NULL) {
+        ct_data_cap = 1024;
+        ct_data = mallocz(ct_data_cap);
+        ct_data_len = 0;
+    }
+
+    // 检查是否需要扩容
+    if ((ct_data_len + len) > ct_data_cap) {
+        // 需要扩容
+        while (ct_data_len + len > ct_data_cap) {
+            ct_data_cap *= 2;
+        }
+        ct_data = realloc(ct_data, ct_data_cap);
+        assert(ct_data);
+    }
+
+    // 复制数据到数据区
+    memcpy(ct_data + ct_data_len, data, len);
+
+    // 更新数据长度
+    uint64_t offset = ct_data_len;
+    ct_data_len += len;
+
+    return offset;
+}
 
 #endif //NATURE_CUSTOM_LINKS_H

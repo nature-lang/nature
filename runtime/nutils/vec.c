@@ -181,7 +181,8 @@ void rti_vec_assign(n_vec_t *l, uint64_t index, void *ref) {
     // assert(index <= l->length - 1 && "index out of range [%d] with length %d", index, l->length);
     assert(index <= l->length - 1 && "index out of range"); // TODO runtime 错误提示优化
 
-    DEBUGF("[runtime.rti_vec_assign] element_size=%lu", element_size);
+    DEBUGF("[runtime.rti_vec_assign] element_size=%lu", l->element_size);
+
     // 计算 offset
     uint64_t offset = l->element_size * index; // (size unit byte) * index
     void *p = l->data + offset;

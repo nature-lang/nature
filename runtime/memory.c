@@ -30,34 +30,16 @@ void callers_deserialize() {
 
         sc_map_put_64v(&rt_caller_map, caller->offset, caller);
         DEBUGF("[runtime.callers_deserialize] call '%s' ret_addr=%p, in fn=%s(%p), file=%s",
-               caller->target_name,
-               (void *) caller->offset, f->name,
+               STRTABLE(caller->target_name_offset),
+               (void *) caller->offset, STRTABLE(f->name_offset),
                (void *) f->base,
-               f->rel_path);
+               STRTABLE(f->relpath_offset));
     }
 }
 
 void fndefs_deserialize() {
     rt_fndef_ptr = &rt_fndef_data;
-
     DEBUGF("[fndefs_deserialize] rt_fndef_ptr addr: %p", rt_fndef_ptr);
-
-    uint8_t *gc_bits_offset = ((uint8_t *) rt_fndef_ptr) + rt_fndef_count * sizeof(fndef_t);
-    for (int i = 0; i < rt_fndef_count; ++i) {
-        fndef_t *f = &rt_fndef_ptr[i];
-        uint64_t gc_bits_size = calc_gc_bits_size(f->stack_size, POINTER_SIZE);
-        f->gc_bits = gc_bits_offset;
-
-        DEBUGF(
-                "[fndefs_deserialize] name=%s, base=%p, size=%lu, stack_size=%lu,"
-                "fn_runtime_stack=%p, fn_runtime_reg=%p, gc_bits(%lu)=%s",
-                f->name, (void *) f->base, f->size, f->stack_size, (void *) f->fn_runtime_stack,
-                (void *) f->fn_runtime_reg,
-                gc_bits_size,
-                bitmap_to_str(f->gc_bits, f->stack_size / POINTER_SIZE));
-
-        gc_bits_offset += gc_bits_size;
-    }
 }
 
 /**
@@ -123,7 +105,7 @@ void symdefs_deserialize() {
     for (int i = 0; i < rt_symdef_count; ++i) {
         symdef_t s = rt_symdef_ptr[i];
         DEBUGF("[runtime.symdefs_deserialize] name=%s, .data_base=0x%lx, size=%ld, need_gc=%d, base_int_value=0x%lx",
-               s.name, s.base,
+               STRTABLE(s.name_offset), s.base,
                s.size, s.need_gc, fetch_int_value(s.base, s.size));
     }
 }

@@ -191,9 +191,9 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             }
         } else {
             DEBUGF("[sweep_span] will sweep, span_base=%p, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
-                    span->base,
-                    (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
-                    bitmap_test(span->gcmark_bits, i));
+                   span->base,
+                   (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
+                   bitmap_test(span->gcmark_bits, i));
         }
     }
 
@@ -359,8 +359,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     size = save_stack.valid_sz;
     assert(size > 0);
 
-    DEBUGF("[runtime_gc.scan_stack] co=%p will scan stack, scan_sp=%p, valid_size=%lu", co,
-           (void *) scan_sp, size);
+    DEBUGF("[runtime_gc.scan_stack] co=%p will scan stack, valid_size=%lu", co, size);
 
 
 #ifdef DEBUG_LOG
@@ -373,7 +372,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         fndef_t *fn = find_fn(v, p);
         DEBUGF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i,
                temp_cursor, v,
-               fn ? fn->name : "", fn ? fn->stack_size : 0);
+               fn ? STRTABLE(fn->name_offset) : "", fn ? fn->stack_size : 0);
         temp_cursor += POINTER_SIZE;
         temp_i += 1;
     }
@@ -400,7 +399,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         // check prev value is nature fn
         fndef_t *fn = find_fn(ret_addr, p);
         DEBUGF("[runtime_gc.scan_stack] find frame_bp=%p, bp_offset=%ld, ret_addr=%p, fn=%s",
-               (void *) share_stack_frame_bp, bp_offset, (void *) ret_addr, fn ? fn->name : "-");
+               (void *) share_stack_frame_bp, bp_offset, (void *) ret_addr, fn ? STRTABLE(fn->name_offset) : "-");
 
         if (fn) {
             found = true;
@@ -457,7 +456,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
             break;
         }
 
-        DEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p, fn->stack_size=%ld, bp=%p", fn->name,
+        DEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p, fn->stack_size=%ld, bp=%p", STRTABLE(fn->name_offset),
                (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
 
         // share_stack_frame_bp 是 fn 对应的帧的值,已经从帧中取了出来, 原来保存再 BP 寄存器中，现在保存再帧中
@@ -471,8 +470,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         // 基于 fn 的 size 计算 ptr_count
         int64_t ptr_count = fn->stack_size / POINTER_SIZE;
         for (int i = 0; i < ptr_count; ++i) {
-            bool is_ptr = bitmap_test(fn->gc_bits, i);
-            DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, is_ptr=%d, may_value=%p", fn->name, i,
+            bool is_ptr = bitmap_test(RTDATA(fn->gc_bits_offset), i);
+            DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, is_ptr=%d, may_value=%p", STRTABLE(fn->name_offset), i,
                    ptr_count - 1, is_ptr,
                    (void *) fetch_int_value(frame_cursor, 8));
 
@@ -496,7 +495,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         ret_addr = fetch_addr_value(stack_top_ptr + bp_offset + POINTER_SIZE);
     }
 
-    DEBUGF("[runtime_gc.scan_stack] completed, p_index=%d, co=%p, scan_fn_count=%d", p->index, co, scan_fn_count);
+    DEBUGF("[runtime_gc.scan_stack] completed, p_index=%d, co=%p", p->index, co);
 }
 
 /**
@@ -648,20 +647,20 @@ static void gc_work() {
         current = current->succ;
 
         DEBUGF(
-                "[runtime_gc.gc_work] will scan_stack p_index=%d, co=%p, status=%d, gc_work=%d, is_main=%d, gc_black=%lu/gc_count=%lu, aco=%p",
+                "[runtime_gc.gc_work] will scan_stack p_index=%d, co=%p, status=%d, is_main=%d, gc_black=%lu/gc_count=%lu, aco=%p",
                 share_p->index,
-                wait_co, wait_co->status, wait_co->gc_work, wait_co->main, wait_co->gc_black, memory->gc_count,
+                wait_co, wait_co->status, wait_co->main, wait_co->gc_black, memory->gc_count,
                 &wait_co->aco);
 
         if (wait_co->status == CO_STATUS_DEAD) {
-            DEBUGF("[runtime_gc.gc_work] co=%p, main=%d, gc_work=%d, status=dead, will remove",
-                   wait_co, wait_co->main, wait_co->gc_work);
+            DEBUGF("[runtime_gc.gc_work] co=%p, main=%d, status=dead, will remove",
+                   wait_co, wait_co->main);
 
             coroutine_free(wait_co);
 
             rt_linked_fixalloc_remove(&share_p->co_list, node);
-            DEBUGF("[runtime_gc.gc_work] co=%p, main=%d, gc_work=%d, status=dead, remove completed",
-                   wait_co, wait_co->main, wait_co->gc_work);
+            DEBUGF("[runtime_gc.gc_work] co=%p, main=%d, status=dead, remove completed",
+                   wait_co, wait_co->main);
 
             continue;
         }
@@ -772,7 +771,7 @@ static void scan_global() {
             continue;
         }
 
-        RDEBUGF("[runtime.scan_global] name=%s, .data_base=0x%lx, size=%ld, need_gc=%d, base_int_value=0x%lx", s.name,
+        RDEBUGF("[runtime.scan_global] name=%s, .data_base=0x%lx, size=%ld, need_gc=%d, base_int_value=0x%lx", STRTABLE(s.name_offset),
                 s.base, s.size,
                 s.need_gc, fetch_int_value(s.base, s.size));
 
@@ -910,6 +909,6 @@ void runtime_gc() {
     next_gc_bytes = _next_gc_bytes;
     gc_stage = GC_STAGE_OFF;
     DEBUGF("[runtime_gc] gc stage: GC_OFF, gc_barrier_stop, current_allocated=%ldKB, cleanup=%ldKB",
-            allocated_bytes / 1024,
-            (before - allocated_bytes) / 1024);
+           allocated_bytes / 1024,
+           (before - allocated_bytes) / 1024);
 }

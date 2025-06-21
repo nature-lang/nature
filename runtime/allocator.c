@@ -567,8 +567,8 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
  */
 static void mheap_set_spans(mspan_t *span) {
     DEBUGF("[mheap_set_spans] start, span=%p, base=%p, spc=%d, obj_size=%lu, pages_count=%lu", span,
-            (void *) span->base, span->spanclass,
-            span->obj_size, span->pages_count);
+           (void *) span->base, span->spanclass,
+           span->obj_size, span->pages_count);
 
     for (int i = 0; i < span->pages_count; i++) {
         addr_t cursor_addr = span->base + (i * ALLOC_PAGE_SIZE);
@@ -593,8 +593,8 @@ static void mheap_set_spans(mspan_t *span) {
 
 static void mheap_clear_spans(mspan_t *span) {
     DEBUGF("[mheap_clear_spans] span=%p, base=%p, obj_size: %lu, pages_count: %lu", span, (void *) span->base,
-            span->obj_size,
-            span->pages_count);
+           span->obj_size,
+           span->pages_count);
 
     for (int i = 0; i < span->pages_count; i++) {
         addr_t cursor_addr = span->base + (i * ALLOC_PAGE_SIZE);
@@ -604,8 +604,8 @@ static void mheap_clear_spans(mspan_t *span) {
 
 
         DEBUGF("[mheap_clear_spans] arena_base: %p, page_index=%lu set span=%p, span_base=%p, pages_count=%ld",
-                (void *) arena->base, page_index, span,
-                (void *) span->base, span->pages_count)
+               (void *) arena->base, page_index, span,
+               (void *) span->base, span->pages_count)
 
         if (arena->spans[page_index] == NULL) {
             assert(false && "span not set");
@@ -1041,8 +1041,8 @@ arena_hint_t *arena_hints_init() {
  */
 void mheap_free_span(mheap_t *mheap, mspan_t *span) {
     DEBUGF("[mheap_free_span] start, span->base=%p, pages_count=%lu, chunk_index=%lu", (void *) span->base,
-            span->pages_count,
-            chunk_index(span->base));
+           span->pages_count,
+           chunk_index(span->base));
 
     // 从 page_alloc 的视角清理 span 对应的内存页
     // chunks bit = 0 表示空闲, 1 表示占用
@@ -1061,8 +1061,8 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
 
     // 将物理内存归还给操作系统
     DEBUGF("[mheap_free_span] remove_total_bytes=%lu MB, span.base=%p, span.pages_count=%ld, remove_size=%lu",
-            remove_total_bytes / 1024 / 1024, (void *) span->base, span->pages_count,
-            span->pages_count * ALLOC_PAGE_SIZE);
+           remove_total_bytes / 1024 / 1024, (void *) span->base, span->pages_count,
+           span->pages_count * ALLOC_PAGE_SIZE);
 
     sys_memory_unused((void *) span->base, span->pages_count * ALLOC_PAGE_SIZE);
 
@@ -1119,6 +1119,9 @@ void memory_init() {
     DEBUGF("[memory_init] fndef count = %lu", rt_fndef_count);
     DEBUGF("[memory_init] symdef count = %lu", rt_symdef_count);
     DEBUGF("[memory_init] rtype count = %lu", rt_rtype_count);
+
+    nstrtable_deserialize();
+    ndata_deserialize();
 
     fndefs_deserialize();
     DEBUGF("[memory_init] fndefs_deserialize success");
@@ -1200,7 +1203,7 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
     }
 
     DEBUGF("[rti_gc_malloc] end p_index=%d, co=%p, result=%p, size=%d, hash=%d",
-            p->index, coroutine_get(), ptr, size, rtype ? rtype->hash : 0);
+           p->index, coroutine_get(), ptr, size, rtype ? rtype->hash : 0);
 
     // jit span 不用清 0， 权限不足也无法进行清零
     if (rtype && rtype->kind != TYPE_GC_FN) {
