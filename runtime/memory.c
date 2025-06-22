@@ -53,18 +53,6 @@ void rtypes_deserialize() {
     builtin_rtype_init();
 
     rtype_t *rt_rtype_ptr = &rt_rtype_data;
-    uint8_t *gc_bits_offset = (uint8_t *) (rt_rtype_ptr + rt_rtype_count);
-
-    // gc bits
-    uint64_t count = 0;
-    for (int i = 0; i < rt_rtype_count; ++i) {
-        rtype_t *r = &rt_rtype_ptr[i];
-        uint64_t gc_bits_size = calc_gc_bits_size(r->size, POINTER_SIZE);
-
-        r->malloc_gc_bits = gc_bits_offset;
-        gc_bits_offset += gc_bits_size;
-        count++;
-    }
 
     // element_hashs
     for (int i = 0; i < rt_rtype_count; ++i) {
@@ -81,23 +69,14 @@ void rtypes_deserialize() {
             vec_rtype = *r;
         } else if (r->kind == TYPE_GC_FN) {
             fn_rtype = *r;
-        } else if (str_equal(r->ident, THROWABLE_IDENT)) {
+        } else if (str_equal(STRTABLE(r->ident_offset), THROWABLE_IDENT)) {
             throwable_rtype = *r;
-        }
-
-        if (r->length > 0) {
-            uint64_t size = r->length * sizeof(uint64_t);
-            r->hashes = (uint64_t *) gc_bits_offset;
-            gc_bits_offset += size;
         }
 
         // rtype 已经组装完毕，现在加入到 rtype table 中
         sc_map_put_64v(&rt_rtype_map, r->hash, r);
         RDEBUGF("[rtypes_deserialize] hash=%ld to table success, kind=%s", r->hash, type_kind_str[r->kind]);
     }
-
-
-    RDEBUGF("[rtypes_deserialize] count=%lu", count);
 }
 
 void symdefs_deserialize() {

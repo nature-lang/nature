@@ -1,0 +1,28 @@
+=== test_for_in_struct
+--- main.n
+type rtype_struct_t = struct{
+    i64 name_offset
+    i64 hash
+    i64 offset
+}
+
+fn main() {
+    var fields = vec_new<rtype_struct_t>(rtype_struct_t{}, 3)
+    fields[0].name_offset = 4
+    fields[0].hash = 1007465396
+    fields[0].offset = 0
+
+    fields[1].name_offset = 29
+    fields[1].hash = 923577301
+    fields[1].offset = 8
+
+
+    for i,field in fields {
+        println(i, field.name_offset, field.hash, field.offset)
+    }
+}
+
+--- output.txt
+0 4 1007465396 0
+1 29 923577301 8
+2 0 0 0

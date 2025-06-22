@@ -49,3 +49,11 @@ rtype_t *rt_find_rtype(int64_t hash) {
 
     return result;
 }
+
+void *rt_find_data(int64_t offset) {
+    return RTDATA(offset);
+}
+
+void *rt_find_strtable(int64_t offset) {
+    return STRTABLE(offset);
+}

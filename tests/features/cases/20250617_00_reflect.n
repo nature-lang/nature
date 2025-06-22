@@ -1,27 +1,14 @@
 import reflect
 
 fn main() {
-    ptr<i32> p = new i32(12)
-
-    var t = reflect.typeof(p)
+    [f32] list = [1.1, 2.2, 3.3]
+    var t = reflect.typeof(list)
     println(t.size)
     println(t.kind)
     println(t.hashes.len())
 
-    var kt = reflect.typeof_hash(t.hashes[0])
-    println(kt.size)
-    println(kt.kind)
-    println(kt.hashes.len())
-
-    var q = 13
-    rawptr<int> p2 = &q
-    t = reflect.typeof(p2)
-    println(t.size)
-    println(t.kind)
-    println(t.hashes.len())
-
-    kt = reflect.typeof_hash(t.hashes[0])
-    println(kt.size)
-    println(kt.kind)
-    println(kt.hashes.len())
+    var et = reflect.typeof_hash(t.hashes[0])
+    println(et.size)
+    println(et.kind)
+    println(et.hashes.len())
 }

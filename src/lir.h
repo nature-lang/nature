@@ -6,6 +6,7 @@
 #include "src/symbol/symbol.h"
 #include "src/types.h"
 #include "utils/bitmap.h"
+#include "utils/custom_links.h"
 #include "utils/helper.h"
 #include "utils/linked.h"
 #include "utils/table.h"
@@ -865,7 +866,9 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
         bit_index_count = 1;
     }
     for (int i = 0; i < bit_index_count; ++i) {
-        bool test = bitmap_test(rtype.malloc_gc_bits, i);
+        // ct 阶段读取
+        uint8_t *malloc_gc_bits = CTDATA(rtype.malloc_gc_bits_offset);
+        bool test = bitmap_test(malloc_gc_bits, i);
         bitmap_grow_set(c->stack_gc_bits, bit_index_end - i, test);
     }
 

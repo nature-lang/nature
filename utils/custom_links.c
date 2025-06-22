@@ -16,6 +16,7 @@ struct sc_map_64v rt_caller_map;
 uint64_t ct_strtable_len = 0;
 uint64_t ct_strtable_cap = 0;
 char *ct_strtable_data = NULL;
+struct sc_map_s64 ct_startable_map;
 
 // - data
 uint64_t ct_data_len = 0;

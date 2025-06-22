@@ -80,7 +80,7 @@ fn main():void! {
     assert(sum > -500 && sum < 500)
 }
 
-=== test_chan_done
+=== test_chan_done[repeat=5]
 --- main.n
 import co
 import time
@@ -103,11 +103,11 @@ fn main():void! {
         done.recv()
     }
 
-    assert(time.unix() - start < 2)
     println('done, use time: ', time.unix() - start)
+    assert(time.unix() - start < 2)
 }
 
-=== test_chan_done2
+=== test_chan_done2[repeat=5]
 --- main.n
 import co
 import time
@@ -137,7 +137,7 @@ fn main():void! {
     println('done, use time: ', time.unix() - start)
 }
 
-=== test_chan_done3
+=== test_chan_done3[repeat=20]
 --- main.n
 import co
 import time
