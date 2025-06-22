@@ -17,11 +17,12 @@ fn main() {
 
     println(t.align)
     println(t.hashes.len())
+    println(t.fields.len())
 
-    for element_hash in t.hashes {
-        println(element_hash)
-        var element_type = reflect.typeof_hash(element_hash)
-        println(element_type.size, element_type.hash, element_type.kind, element_type.hashes.len())
+    for field in t.fields {
+        println(field.name, field.hash, field.offset)
+        var field_type = reflect.typeof_hash(field.hash)
+        println(field_type.size, field_type.hash, field_type.kind, field_type.hashes.len())
     }
 }
 
@@ -30,12 +31,13 @@ fn main() {
 3187296274
 19
 0
+0
 3
-1007465396
+a 1007465396 0
 8 1007465396 9 0
-923577301
+b 923577301 8
 1 923577301 2 0
-518729469
+c 518729469 16
 40 518729469 13 0
 
 === test_nesting
@@ -62,16 +64,16 @@ fn main() {
     println(t.kind)
 
     println(t.align)
-    println(t.hashes.len())
+    println(t.fields.len())
 
-    var clothing_hash = t.hashes[2]
-    var clothing_type = reflect.typeof_hash(clothing_hash)
+    var clothing_fields = t.fields[2]
+    var clothing_type = reflect.typeof_hash(clothing_fields.hash)
     assert(clothing_type.size == 16)
     assert(clothing_type.kind == reflect.TYPE_STRUCT)
 
-    for element_hash in clothing_type.hashes {
-        println(element_hash)
-        var element_type = reflect.typeof_hash(element_hash)
+    for field in clothing_type.fields {
+        println(field.hash)
+        var element_type = reflect.typeof_hash(field.hash)
         println(element_type.size, element_type.hash, element_type.kind, element_type.hashes.len())
     }
 }

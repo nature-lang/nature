@@ -101,7 +101,7 @@ static type_struct_t *type_struct_copy(type_struct_t *temp) {
     for (int i = 0; i < temp->properties->length; ++i) {
         struct_property_t *temp_property = ct_list_value(temp->properties, i);
         struct_property_t *property = COPY_NEW(struct_property_t, temp_property);
-        property->key = strdup(temp_property->key);
+        property->name = strdup(temp_property->name);
         property->type = type_copy(temp_property->type);
 
         property->right = ast_expr_copy(property->right);
@@ -238,7 +238,7 @@ static ast_new_expr_t *ast_new_expr_copy(ast_new_expr_t *temp) {
             struct_property_t *temp_property = ct_list_value(temp->properties, i);
             struct_property_t *property = NEW(struct_property_t);
             property->type = type_copy(temp_property->type);
-            property->key = strdup(temp_property->key);
+            property->name = strdup(temp_property->name);
             property->right = ast_expr_copy(temp_property->right);
             ct_list_push(properties, property);
         }
@@ -399,7 +399,7 @@ static ast_struct_new_t *ast_struct_new_copy(ast_struct_new_t *temp) {
 
         struct_property_t *property = NEW(struct_property_t);
         property->type = type_copy(temp_property->type);
-        property->key = strdup(temp_property->key);
+        property->name = strdup(temp_property->name);
         property->right = ast_expr_copy(temp_property->right);
         ct_list_push(properties, property);
     }

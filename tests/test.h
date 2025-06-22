@@ -480,6 +480,29 @@ static inline void feature_testar_test(char *custom_target) {
 
         COMPILER_TRY {
             build(entry, false);
+
+            int total_runs = test_case->attrs->repeat + 1;
+            for (int run = 1; run <= total_runs; run++) {
+                if (run > 1) {
+                    printf("test case repeat %d/%d === %s\n", run - 1, test_case->attrs->repeat, test_case->name);
+                }
+
+                // 执行并测试
+                if (output_file) {
+                    char *output = exec_output();
+                    char *expected = unescape_string((char *) output_file->content);
+                    assertf(str_equal(output, expected), "n %s failed\nexpect: %s\nactual: %s",
+                            test_case->name, output_file->content, output);
+                } else {
+                    int32_t status = 0;
+                    char *output = exec_output_status(&status);
+                    if (status != 0) {
+                        assertf(false, "%s failed: %s", test_case->name, output);
+                    } else {
+                        printf("%s", output);
+                    }
+                }
+            }
         }
         else {
             // 编译错误处理
@@ -490,29 +513,6 @@ static inline void feature_testar_test(char *custom_target) {
                 assertf(false, "%s failed: %s", test_case->name, test_error_msg);
             }
         };
-
-        int total_runs = test_case->attrs->repeat + 1;
-        for (int run = 1; run <= total_runs; run++) {
-            if (run > 1) {
-                printf("test case repeat %d/%d === %s\n", run - 1, test_case->attrs->repeat, test_case->name);
-            }
-
-            // 执行并测试
-            if (output_file) {
-                char *output = exec_output();
-                char *expected = unescape_string((char *) output_file->content);
-                assertf(str_equal(output, expected), "n %s failed\nexpect: %s\nactual: %s",
-                        test_case->name, output_file->content, output);
-            } else {
-                int32_t status = 0;
-                char *output = exec_output_status(&status);
-                if (status != 0) {
-                    assertf(false, "%s failed: %s", test_case->name, output);
-                } else {
-                    printf("%s", output);
-                }
-            }
-        }
 
         // 取消超时设置
         if (test_case->attrs->timeout > 0) {

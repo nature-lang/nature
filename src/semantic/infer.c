@@ -474,7 +474,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
             struct_property_t *right_property = ct_list_value(right_struct->properties, i);
 
             // key 比较
-            if (!str_equal(left_property->key, right_property->key)) {
+            if (!str_equal(left_property->name, right_property->name)) {
                 return false;
             }
 
@@ -1647,11 +1647,11 @@ static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, 
     table_t *exists = table_new();
     for (int i = 0; i < properties->length; ++i) {
         struct_property_t *struct_property = ct_list_value(properties, i);
-        struct_property_t *expect_property = type_struct_property(type_struct, struct_property->key);
+        struct_property_t *expect_property = type_struct_property(type_struct, struct_property->name);
 
-        INFER_ASSERTF(expect_property, "not found property '%s'", struct_property->key);
+        INFER_ASSERTF(expect_property, "not found property '%s'", struct_property->name);
 
-        table_set(exists, struct_property->key, struct_property);
+        table_set(exists, struct_property->name, struct_property);
 
         // struct_decl 已经是被还原过的类型了
         infer_right_expr(m, struct_property->right, expect_property->type);
@@ -1666,10 +1666,10 @@ static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, 
     for (int i = 0; i < default_properties->length; ++i) {
         struct_property_t *d = ct_list_value(default_properties, i);
         // 右值复制
-        if (!d->right || table_exist(exists, d->key)) {
+        if (!d->right || table_exist(exists, d->name)) {
             continue;
         }
-        table_set(exists, d->key, d);
+        table_set(exists, d->name, d);
 
         ct_list_push(properties, d);
     }
@@ -1677,13 +1677,13 @@ static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, 
     // check has default values.
     for (int i = 0; i < type_struct->properties->length; ++i) {
         struct_property_t *property = ct_list_value(type_struct->properties, i);
-        if (table_exist(exists, property->key)) {
+        if (table_exist(exists, property->name)) {
             continue;
         }
 
         // check can default value
         if (must_assign_value(property->type)) {
-            INFER_ASSERTF(false, "struct filed '%s' must be assigned default value", property->key,
+            INFER_ASSERTF(false, "struct filed '%s' must be assigned default value", property->name,
                           type_origin_format(property->type));
         }
     }
@@ -2981,7 +2981,8 @@ static type_t reduction_struct(module_t *m, type_t t) {
 
     type_struct_t *s = t.struct_;
 
-    int max_align = 0;
+    int64_t max_align = 0;
+    int64_t offset = 0;
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *p = ct_list_value(s->properties, i);
 
@@ -2992,17 +2993,23 @@ static type_t reduction_struct(module_t *m, type_t t) {
         if (p->right) {
             type_t right_type = infer_right_expr(m, p->right, p->type);
             if (p->type.kind == TYPE_UNKNOWN) {
-                INFER_ASSERTF(type_confirmed(right_type), "struct property '%s' type not confirmed", p->key);
+                INFER_ASSERTF(type_confirmed(right_type), "struct property '%s' type not confirmed", p->name);
                 p->type = right_type;
             }
         }
 
-        int item_align = type_alignof(p->type);
-        if (item_align > max_align) {
-            max_align = item_align;
+        int64_t field_align = type_alignof(p->type);
+        if (field_align > max_align) {
+            max_align = field_align;
         }
+        int64_t field_size = type_sizeof(p->type);
+        offset = align_up(offset, field_align);
 
-        INFER_ASSERTF(type_confirmed(p->type), "struct property '%s' type not confirmed", p->key);
+        p->align = field_align;
+        p->offset = offset;
+
+        offset += field_size;
+        INFER_ASSERTF(type_confirmed(p->type), "struct property '%s' type not confirmed", p->name);
     }
     t.struct_->align = max_align;
     return t;

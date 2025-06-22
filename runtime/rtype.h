@@ -4,6 +4,7 @@
 #include "utils/bitmap.h"
 #include "utils/sc_map.h"
 #include "utils/type.h"
+#include "utils/custom_links.h"
 
 extern struct sc_map_64v rt_rtype_map;
 
@@ -75,11 +76,9 @@ extern rtype_t fn_rtype;
             .malloc_gc_bits_offset = -1,                                  \
             .hashes_offset = -1,                                          \
             .gc_bits = _gc_bits,                                          \
-            .hash = _hash};                                               \
+            .hash = _hash,                                                \
+    };                                                                    \
 })
-
-static inline uint8_t *uint64_to_uint8_array(uint64_t value) {
-}
 
 /**
  * TODO struct/arr 计算异常, 应该采用递归的方式正确计算
@@ -171,5 +170,9 @@ static inline void builtin_rtype_init() {
 
 
 rtype_t *rt_find_rtype(int64_t hash);
+
+void *rt_find_data(int64_t offset);
+
+void *rt_find_strtable(int64_t offset);
 
 #endif //RTYPE_H

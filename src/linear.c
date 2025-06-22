@@ -402,11 +402,11 @@ static lir_operand_t *linear_struct_fill_default(module_t *m, type_t t, lir_oper
     for (int i = 0; i < t.struct_->properties->length; ++i) {
         struct_property_t *p = ct_list_value(t.struct_->properties, i);
 
-        if (exists && table_exist(exists, p->key)) {
+        if (exists && table_exist(exists, p->name)) {
             continue;
         }
 
-        uint64_t offset = type_struct_offset(t.struct_, p->key);
+        uint64_t offset = type_struct_offset(t.struct_, p->name);
         lir_operand_t *dst = indirect_addr_operand(m, p->type, target, offset);
         if (is_stack_ref_big_type(p->type)) {
             dst = lea_operand_pointer(m, dst);
@@ -1254,18 +1254,18 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     // gen value
     if (ast->second) {
         lir_operand_t *second_target = linear_var_decl(m, ast->second);
+        lir_operand_t *second_ref;
 
-        // var_decl 没有进行初始化，而是直接通过指针传递数据， 所以需要进行一下 nop def 初始化
-        // 让 ssa def 完整
-        OP_PUSH(lir_op_nop_def(second_target));
-
-        lir_operand_t *value_ref = second_target;
-        if (!is_stack_ref_big_type(ast->second->type)) {
-            value_ref = lea_operand_pointer(m, second_target);
+        if (is_stack_ref_big_type(ast->second->type)) {
+            second_ref = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            OP_PUSH(lir_op_move(second_ref, second_target));
+        } else {
+            OP_PUSH(lir_op_nop_def(second_target));
+            second_ref = lea_operand_pointer(m, second_target);
         }
 
         push_rt_call(m, RT_CALL_ITERATOR_TAKE_VALUE, NULL, 4, iterator_target, int_operand(rtype_hash), cursor_operand,
-                     value_ref);
+                     second_ref);
     }
     // block
     linear_body(m, ast->body);
@@ -2397,10 +2397,10 @@ static lir_operand_t *linear_struct_new(module_t *m, ast_expr_t expr, lir_operan
     for (int i = 0; i < ast->properties->length; ++i) {
         struct_property_t *p = ct_list_value(ast->properties, i);
 
-        table_set(exists, p->key, p);
+        table_set(exists, p->name, p);
 
         // struct 的 key.key 是不允许使用表达式的, 计算偏移，进行 move
-        uint64_t offset = type_struct_offset(t.struct_, p->key);
+        uint64_t offset = type_struct_offset(t.struct_, p->name);
 
         assertf(p->right, "struct new property_expr value empty");
         ast_expr_t *property_expr = p->right;
@@ -2479,9 +2479,9 @@ static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_
         for (int i = 0; i < new_expr->properties->length; ++i) {
             struct_property_t *p = ct_list_value(new_expr->properties, i);
 
-            table_set(exists, p->key, p);
+            table_set(exists, p->name, p);
             // struct 的 key.key 是不允许使用表达式的, 计算偏移，进行 move
-            uint64_t offset = type_struct_offset(type_struct, p->key);
+            uint64_t offset = type_struct_offset(type_struct, p->name);
 
             assertf(p->right, "struct new property_expr value empty");
             ast_expr_t *property_expr = p->right;

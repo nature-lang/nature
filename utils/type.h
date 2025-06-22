@@ -187,6 +187,12 @@ static string type_kind_str[] = {
         [TYPE_NULL] = "null",
 };
 
+typedef struct {
+    int64_t name_offset;
+    int64_t hash; // type hash
+    int64_t offset; // offset of field
+} rtype_field_t;
+
 // reflect type
 // 所有的 type 都可以转化成该结构
 typedef struct {
@@ -194,7 +200,7 @@ typedef struct {
     uint64_t size; // 无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
     uint8_t in_heap; // 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是
 
-    // pointer 数据
+    // pointer
     int64_t hash; // 做类型推断时能够快速判断出类型是否相等
     uint64_t last_ptr; // 类型对应的堆数据中最后一个包含指针的字节数
     type_kind kind; // 类型的种类
@@ -375,8 +381,10 @@ struct type_map_t {
 // 这种数据一旦确定就不会变化了,就将其存储在编译时就行了
 typedef struct {
     type_t type;
-    char *key;
+    char *name;
     void *right; // ast_expr, 不允许 fn def
+    int64_t offset;
+    int64_t align;
 } struct_property_t;
 
 // 比如 type_struct_t 结构，如何能够将其传递到运行时，一旦运行时知道了该结构，编译时就不用费劲心机的在 lir

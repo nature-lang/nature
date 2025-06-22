@@ -91,6 +91,7 @@ extern rtype_t rt_rtype_data;
 extern uint64_t ct_strtable_len;
 extern uint64_t ct_strtable_cap;
 extern char *ct_strtable_data;
+extern struct sc_map_s64 ct_startable_map;
 
 // - data
 extern uint64_t ct_data_len;
@@ -182,14 +183,22 @@ static inline uint64_t strtable_put(char *str) {
         ct_strtable_cap = 1024; // 初始容量
         ct_strtable_data = mallocz(ct_strtable_cap);
         ct_strtable_len = 0;
+
+        sc_map_init_s64(&ct_startable_map, 0, 0);
     }
+
     // 使用 strstr 检查字符串是否已存在
-    if (ct_strtable_len > 0) {
-        char *result = memmem(ct_strtable_data, ct_strtable_len, str, strlen(str));
-        if (result) { // 找到了指针
-            return result - ct_strtable_data;
-        }
+    uint64_t offset = sc_map_get_s64(&ct_startable_map, str);
+    if (sc_map_found(&ct_startable_map)) {
+        return offset;
     }
+
+    //    if (ct_strtable_len > 0) {
+    //        char *result = memmem(ct_strtable_data, ct_strtable_len, str, strlen(str));
+    //        if (result) { // 找到了指针
+    //            return result - ct_strtable_data;
+    //        }
+    //    }
 
     // 计算字符串长度（包括 \0 分隔符）
     uint64_t str_len = strlen(str) + 1;
@@ -205,7 +214,7 @@ static inline uint64_t strtable_put(char *str) {
     }
 
     // 记录当前偏移量
-    uint64_t offset = ct_strtable_len;
+    offset = ct_strtable_len;
 
     // 复制字符串到字符串表（包括 \0）
     memcpy(ct_strtable_data + offset, str, str_len);

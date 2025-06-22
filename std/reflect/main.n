@@ -1,4 +1,5 @@
 import unsafe
+import libc
 
 const TYPE_NULL = 1
 const TYPE_BOOL = 2
@@ -34,34 +35,55 @@ const TYPE_ANYPTR = 25
 
 const TYPE_UNION = 26
 
+type type_field_t = struct{
+    string name
+    int hash
+    int offset
+}
+
 type type_t = struct{
     int size
     int hash
     int kind
     u8 align
     [int] hashes
+    [type_field_t] fields // type struct exclusive
+}
+
+type rtype_struct_t = struct{
+    i64 name_offset
+    i64 hash
+    i64 offset
 }
 
 type rtype_t = struct{
-    [u8;56] ident
+    u64 ident_offset
     u64 size
     u8 in_heap
 
     i64 hash
     u64 last_ptr
     u32 kind // type_kind
-    anyptr malloc_gc_bits
+    i64 malloc_gc_bits_offset
     u64 gc_bits
     u8 align
     u16 length
-    anyptr hashes // element hashes
-    anyptr attach
+    i64 hashes_offset
 }
 
 #linkid rt_find_rtype
 fn find_rtype(int hash):rawptr<rtype_t>
 
+#linkid rt_find_data
+fn find_data(int offset):anyptr
+
+#linkid rt_find_strtable
+fn find_strtable(int offset):libc.cstr
+
 fn typeof_hash(i64 hash):type_t! {
+    if hash <= 0 {
+        throw errorf('hash must be greater than 0')
+    }
     var r = find_rtype(hash)
 
     var t = type_t{
@@ -69,13 +91,29 @@ fn typeof_hash(i64 hash):type_t! {
         hash = r.hash,
         kind = r.kind as int,
         align = r.align,
-        hashes = vec_new<int>(0, r.length as int),
+        hashes = vec_new<int>(0, 0),
+        fields = vec_new<type_field_t>(type_field_t{}, 0),
     }
 
-    if r.length > 0 {
-        var temp_hashes = unsafe.vec_new(r.hashes as rawptr<i64>, r.length as int)
-        var len = t.hashes.copy(temp_hashes)
-        assert(len == t.hashes.len())
+    if r.kind == TYPE_STRUCT {
+        t.fields = vec_new<type_field_t>(type_field_t{}, r.length as int)
+        var temp_fields = unsafe.vec_new(find_data(r.hashes_offset) as rawptr<rtype_struct_t>, r.length as int)
+
+        for i,field in temp_fields {
+            t.fields[i] = type_field_t{
+                name = find_strtable(field.name_offset).to_string(),
+                hash = field.hash,
+                offset = field.offset,
+            }
+        }
+    } else {
+        if r.length > 0 {
+            t.hashes = vec_new<int>(0, r.length as int)
+
+            var temp_hashes = unsafe.vec_new(find_data(r.hashes_offset) as rawptr<i64>, r.length as int)
+            var len = t.hashes.copy(temp_hashes)
+            assert(len == t.hashes.len())
+        }
     }
 
     return t

@@ -2,7 +2,7 @@ fn main() {
     var list = [1, 1, 2, 3, 5, 8, 13, 21, 34]
     int foo = 0
     int bar = 0
-    for k, v in list {
+    for k,v in list {
         foo += k
         bar += v
     }

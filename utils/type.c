@@ -43,7 +43,7 @@ static rtype_t rtype_rawptr(type_ptr_t *t) {
     rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
 
-    (CTDATA(rtype.hashes_offset))[0] = value_rtype.hash;
+    ((int64_t *) CTDATA(rtype.hashes_offset))[0] = value_rtype.hash;
 
     return rtype;
 }
@@ -93,7 +93,7 @@ static rtype_t rtype_pointer(type_ptr_t *t) {
     rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
 
-    (CTDATA(rtype.hashes_offset))[0] = value_rtype.hash;
+    ((int64_t *) CTDATA(rtype.hashes_offset))[0] = value_rtype.hash;
 
 
     return rtype;
@@ -146,7 +146,7 @@ static rtype_t rtype_vec(type_vec_t *t) {
     rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
 
-    (CTDATA(rtype.hashes_offset))[0] = element_rtype.hash;
+    ((int64_t *) CTDATA(rtype.hashes_offset))[0] = element_rtype.hash;
 
     return rtype;
 }
@@ -176,7 +176,7 @@ static rtype_t rtype_chan(type_chan_t *t) {
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 3);
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 4);
 
-    (CTDATA(rtype.hashes_offset))[0] = element_rtype.hash;
+    ((int64_t *) CTDATA(rtype.hashes_offset))[0] = element_rtype.hash;
 
     return rtype;
 }
@@ -207,7 +207,7 @@ rtype_t rtype_array(type_array_t *t) {
     uint64_t offset = 0;
     rtype.last_ptr = rtype_array_gc_bits(rtype.malloc_gc_bits_offset, &offset, t);
 
-    (CTDATA(rtype.hashes_offset))[0] = element_rtype.hash;
+    ((int64_t *) CTDATA(rtype.hashes_offset))[0] = element_rtype.hash;
 
     return rtype;
 }
@@ -240,8 +240,8 @@ static rtype_t rtype_map(type_map_t *t) {
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 1); // key_data
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 2); // value_data
 
-    (CTDATA(rtype.hashes_offset))[0] = key_rtype.hash;
-    (CTDATA(rtype.hashes_offset))[1] = value_rtype.hash;
+    ((int64_t *) CTDATA(rtype.hashes_offset))[0] = key_rtype.hash;
+    ((int64_t *) CTDATA(rtype.hashes_offset))[1] = value_rtype.hash;
 
     return rtype;
 }
@@ -270,7 +270,7 @@ static rtype_t rtype_set(type_set_t *t) {
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0); // hash_table
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 1); // key_data
 
-    (CTDATA(rtype.hashes_offset))[0] = key_rtype.hash;
+    ((int64_t *) CTDATA(rtype.hashes_offset))[0] = key_rtype.hash;
 
     return rtype;
 }
@@ -443,20 +443,27 @@ static rtype_t rtype_struct(type_struct_t *t) {
     }
 
     uint64_t offset = 0; // 基于 offset 计算 gc bits
-    uint64_t gc_bits_offset = data_put(NULL, calc_gc_bits_size(size, POINTER_SIZE));
+    int64_t gc_bits_offset = data_put(NULL, calc_gc_bits_size(size, POINTER_SIZE));
+
+    int64_t fields_size = sizeof(rtype_field_t) * t->properties->length;
+    rtype_field_t *fields = mallocz(fields_size);
 
     // 假设没有 struct， 可以根据所有 property 计算 gc bits
     uint16_t last_ptr_offset = rtype_struct_gc_bits(gc_bits_offset, &offset, t);
-
-
-    uint64_t hashes_offset = data_put(NULL, sizeof(uint64_t) * t->properties->length);
 
     // 记录需要 gc 的 key 的
     int hash_index = 0;
     for (int i = 0; i < t->properties->length; ++i) {
         struct_property_t *p = ct_list_value(t->properties, i);
         rtype_t element_rtype = ct_reflect_type(p->type);
-        (CTDATA(hashes_offset))[i] = element_rtype.hash;
+
+        rtype_field_t field = {
+                .name_offset = strtable_put(p->name),
+                .offset = p->offset,
+                .hash = element_rtype.hash,
+        };
+
+        fields[i] = field;
 
         str = str_connect(str, itoa(element_rtype.hash));
     }
@@ -467,8 +474,8 @@ static rtype_t rtype_struct(type_struct_t *t) {
             .kind = TYPE_STRUCT,
             .malloc_gc_bits_offset = gc_bits_offset,
             .length = t->properties->length,
-            .hashes_offset = hashes_offset,
             .last_ptr = last_ptr_offset,
+            .hashes_offset = data_put((uint8_t *) fields, fields_size),
     };
 
     return rtype;
@@ -506,7 +513,7 @@ static rtype_t rtype_tuple(type_tuple_t *t) {
             need_gc_offsets[need_gc_count++] = offset;
         }
 
-        (CTDATA(hashes_offset))[i] = rtype.hash;
+        ((int64_t *) CTDATA(hashes_offset))[i] = rtype.hash;
 
         offset += element_size;
     }
@@ -837,16 +844,16 @@ uint64_t type_struct_offset(type_struct_t *s, char *key) {
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *p = ct_list_value(s->properties, i);
 
-        int element_size = type_sizeof(p->type);
-        int element_align = type_alignof(p->type);
+        int64_t field_size = type_sizeof(p->type);
+        int64_t field_align = type_alignof(p->type);
 
-        offset = align_up(offset, element_align);
-        if (str_equal(p->key, key)) {
+        offset = align_up(offset, field_align);
+        if (str_equal(p->name, key)) {
             // found
             return offset;
         }
 
-        offset += element_size;
+        offset += field_size;
     }
 
     assertf(false, "key=%s not found in struct", key);
@@ -856,7 +863,7 @@ uint64_t type_struct_offset(type_struct_t *s, char *key) {
 struct_property_t *type_struct_property(type_struct_t *s, char *key) {
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *p = ct_list_value(s->properties, i);
-        if (str_equal(p->key, key)) {
+        if (str_equal(p->name, key)) {
             return p;
         }
     }
