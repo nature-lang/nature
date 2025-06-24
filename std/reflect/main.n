@@ -1,39 +1,41 @@
 import unsafe
 import libc
 
-const TYPE_NULL = 1
-const TYPE_BOOL = 2
-const TYPE_I8 = 3
-const TYPE_U8 = 4
-const TYPE_I16 = 5
-const TYPE_U16 = 6
-const TYPE_I32 = 7
-const TYPE_U32 = 8
-const TYPE_I64 = 9
-const TYPE_U64 = 10
-const TYPE_INT = 9 // trans i64 in compiler time
-const TYPE_UINT = 10 // trans u64 in compiler time
+const NULL = 1
+const BOOL = 2
+const I8 = 3
+const U8 = 4
+const I16 = 5
+const U16 = 6
+const I32 = 7
+const U32 = 8
+const I64 = 9
+const U64 = 10
+const INT = 9 // trans i64 in compiler time
+const UINT = 10 // trans u64 in compiler time
 
-const TYPE_F32 = 11
-const TYPE_F64 = 12
-const TYPE_FLOAT = 12 // trans f64 in compiler time
+const F32 = 11
+const F64 = 12
+const FLOAT = 12 // trans f64 in compiler time
 
-const TYPE_STRING = 13
-const TYPE_VEC = 14
-const TYPE_ARR = 15
-const TYPE_MAP = 16
-const TYPE_SET = 17
-const TYPE_TUP = 18
-const TYPE_STRUCT = 19
-const TYPE_FN = 20
-const TYPE_CHAN = 21
-const TYPE_COROUTINE_T = 22
+const STRING = 13
+const VEC = 14
+const ARR = 15
+const MAP = 16
+const SET = 17
+const TUP = 18
+const STRUCT = 19
+const FN = 20
+const CHAN = 21
+const COROUTINE_T = 22
 
-const TYPE_PTR = 23
-const TYPE_RAWPTR = 24
-const TYPE_ANYPTR = 25
+const PTR = 23
+const RAWPTR = 24
+const ANYPTR = 25
 
-const TYPE_UNION = 26
+const UNION = 26
+
+const PTR_SIZE = 8
 
 type type_field_t = struct{
     string name
@@ -84,10 +86,11 @@ fn typeof_hash(i64 hash):type_t! {
     if hash <= 0 {
         throw errorf('hash must be greater than 0')
     }
+
     var r = find_rtype(hash)
 
     var t = type_t{
-        size = r.size as int,
+        size = sizeof_rtype(r),
         hash = r.hash,
         kind = r.kind as int,
         align = r.align,
@@ -95,7 +98,7 @@ fn typeof_hash(i64 hash):type_t! {
         fields = vec_new<type_field_t>(type_field_t{}, 0),
     }
 
-    if r.kind == TYPE_STRUCT {
+    if r.kind == STRUCT {
         t.fields = vec_new<type_field_t>(type_field_t{}, r.length as int)
         var temp_fields = unsafe.vec_new(find_data(r.hashes_offset) as rawptr<rtype_struct_t>, r.length as int)
 
@@ -119,7 +122,125 @@ fn typeof_hash(i64 hash):type_t! {
     return t
 }
 
-fn typeof<T>(T t):type_t! {
+fn sizeof_rtype(rawptr<rtype_t> r):int {
+    return match r.kind {
+        STRING|VEC|MAP|SET|TUP|FN|CHAN|COROUTINE_T|UNION -> PTR_SIZE
+        _ -> r.size as int
+    }
+}
+
+fn typeof<T>(T v):type_t! {
     var hash = @reflect_hash(T)
     return typeof_hash(hash)
+}
+
+// kind base to string
+fn type_t.to_string():string {
+    return match self.kind {
+        NULL -> 'null'
+        BOOL -> 'bool'
+        I8 -> 'i8'
+        U8 -> 'u8'
+        I16 -> 'i16'
+        U16 -> 'u16'
+        I32 -> 'i32'
+        U32 -> 'u32'
+        I64 -> 'i64'
+        U64 -> 'u64'
+        F32 -> 'f32'
+        F64 -> 'f64'
+        STRING -> 'string'
+        VEC -> 'vec'
+        ARR -> 'arr'
+        MAP -> 'map'
+        SET -> 'set'
+        TUP -> 'tup'
+        STRUCT -> 'struct'
+        FN -> 'fn'
+        CHAN -> 'chan'
+        COROUTINE_T -> 'coroutine_t'
+        PTR -> 'ptr'
+        RAWPTR -> 'rawptr'
+        ANYPTR -> 'anyptr'
+        UNION -> 'union'
+        _ -> 'unknown'
+    }
+}
+
+
+
+
+
+// ----------------------------------------------- value of ------------------------------------------------------------
+type vec_t = struct{
+    anyptr data
+    i64 length
+    i64 capacity
+    i64 element_size
+    i64 hash
+}
+
+type string_t = vec_t
+
+type map_t = struct{
+    anyptr hash_table
+    anyptr key_data
+    anyptr value_data
+    i64 key_hash
+    i64 value_hash
+    i64 length
+    i64 capacity
+}
+
+type set_t = struct{
+    anyptr hash_table
+    anyptr key_data
+    i64 key_hash
+    i64 length
+    i64 capacity
+}
+
+type union_t = struct{
+    anyptr value
+    rawptr<rtype_t> rtype
+}
+
+type value_t = struct{
+    type_t t
+    anyptr v
+}
+
+fn valueof<T>(T v):value_t! {
+    var t = typeof<T>(v)
+    if t.kind != VEC && t.kind != MAP && t.kind != SET {
+        throw errorf('not value support type')
+    }
+
+    var result = value_t{
+        t = t,
+        v = v as anyptr,
+    }
+
+    return result
+}
+
+fn value_t.len():int {
+    if self.t.kind == VEC {
+        var v = self.v as rawptr<vec_t>
+        return v.length as int
+    }
+
+
+    if self.t.kind == MAP {
+        var v = self.v as rawptr<map_t>
+        return v.length as int
+    }
+
+    if self.t.kind == SET {
+        var v = self.v as rawptr<set_t>
+        return v.length as int
+    }
+
+    assert(false)
+    return 0
 }

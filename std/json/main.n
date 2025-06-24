@@ -1,0 +1,164 @@
+import reflect
+import fmt
+import unsafe
+
+// Convert object to json string
+fn serialize<T>(T object):string! {
+    var t = reflect.typeof(object)
+    return serialize_value(&object as anyptr, t) as string
+}
+
+fn serialize_value(anyptr p, reflect.type_t t):[u8]! {
+    return match t.kind {
+        reflect.NULL -> 'null' as [u8]
+        reflect.BOOL -> {
+            var bool_val = unsafe.ptr_to<bool>(p)
+
+            if bool_val {
+                return "true" as [u8]
+            } else {
+                return "false" as [u8]
+            }
+        }
+        reflect.I8 -> {
+            var i8_val = unsafe.ptr_to<i8>(p)
+            return fmt.sprintf('%d', i8_val) as [u8]
+        }
+        reflect.I16 -> {
+            var i16_val = unsafe.ptr_to<i16>(p)
+            return fmt.sprintf('%d', i16_val) as [u8]
+        }
+        reflect.I32 -> {
+            var i32_val = unsafe.ptr_to<i32>(p)
+            return fmt.sprintf('%d', i32_val) as [u8]
+        }
+        reflect.I64 -> {
+            var i64_val = unsafe.ptr_to<i64>(p)
+            return fmt.sprintf('%d', i64_val) as [u8]
+        }
+        reflect.U8 -> {
+            var u8_val = unsafe.ptr_to<u8>(p)
+            return fmt.sprintf('%d', u8_val) as [u8]
+        }
+        reflect.U16 -> {
+            var u16_val = unsafe.ptr_to<u16>(p)
+            return fmt.sprintf('%d', u16_val) as [u8]
+        }
+        reflect.U32 -> {
+            var u32_val = unsafe.ptr_to<u32>(p)
+            return fmt.sprintf('%d', u32_val) as [u8]
+        }
+        reflect.U64 -> {
+            var u64_val = unsafe.ptr_to<u64>(p)
+            return fmt.sprintf('%d', u64_val) as [u8]
+        }
+        reflect.F32 -> {
+            var f32_val = unsafe.ptr_to<f32>(p)
+            return fmt.sprintf('%f', f32_val) as [u8]
+        }
+        reflect.F64 -> {
+            var f64_val = unsafe.ptr_to<f64>(p)
+            return fmt.sprintf('%f', f64_val) as [u8]
+        }
+        reflect.STRING -> {
+            var string_val = unsafe.ptr_to<string>(p)
+            return fmt.sprintf('\"%s\"', string_val) as [u8]
+        }
+        reflect.UNION -> {
+            var v = unsafe.ptr_to<anyptr>(p)
+            var rv = v as rawptr<reflect.union_t>
+
+            // get value p
+            var union_p = &rv.value as anyptr
+            var union_t = reflect.typeof_hash(rv.rtype.hash)
+            return serialize_value(union_p, union_t)
+        }
+        reflect.STRUCT -> serialize_struct(p, t)
+        reflect.VEC -> serialize_vec(p, t)
+        reflect.MAP -> serialize_map(p, t)
+        _ -> {
+            throw errorf('unsupported type `%s`', t.to_string())
+            return []
+        }
+    }
+}
+
+// v is a pointer pointing to a struct value (maybe greater than 8byte), and the source may be stack or heap
+fn serialize_struct(anyptr p, reflect.type_t t):[u8]! {
+    [u8] result = ['{'.char()]
+
+    var len = t.fields.len()
+
+    for i,field in t.fields {
+        var element_ptr = p + field.offset as anyptr
+        var element_type = reflect.typeof_hash(field.hash)
+        var element_v = serialize_value(element_ptr, element_type)
+        var field_name = field.name
+        result.push('"'.char())
+        result.append(field_name as [u8])
+        result.push('"'.char())
+        result.push(':'.char())
+        result.append(element_v)
+        if i < len - 1 {
+            result.push(','.char())
+        }
+    }
+    result.push('}'.char())
+    return result
+}
+
+fn serialize_vec(anyptr p, reflect.type_t t):[u8]! {
+    var v = unsafe.ptr_to<anyptr>(p)
+    var rv = v as rawptr<reflect.vec_t>
+
+    var element_type = reflect.typeof_hash(t.hashes[0])
+    var len = rv.length
+
+    [u8] result = ['['.char()]
+
+    for int i = 0; i < len; i += 1 {
+        var element_ptr = rv.data + (i * element_type.size) as anyptr
+        var element_v = serialize_value(element_ptr, element_type)
+        result.append(element_v)
+
+        if i < len - 1 {
+            result.push(','.char())
+        }
+    }
+
+    result.push(']'.char())
+    return result
+}
+
+fn serialize_map(anyptr p, reflect.type_t t):[u8]! {
+    var v = unsafe.ptr_to<anyptr>(p)
+    var rv = v as rawptr<reflect.map_t>
+
+    var key_type = reflect.typeof_hash(rv.key_hash as int)
+    var val_type = reflect.typeof_hash(rv.value_hash as int)
+    var len = rv.length as int
+
+    [u8] result = ['{'.char()]
+    for int i = 0; i < len; i += 1 {
+        var key_ptr = rv.key_data + (i * key_type.size) as anyptr
+        var key_v = serialize_value(key_ptr, key_type)
+        result.append(key_v)
+
+        result.push(':'.char())
+
+        var val_ptr = rv.value_data + (i * val_type.size) as anyptr
+        var val_v = serialize_value(val_ptr, val_type)
+        result.append(val_v)
+
+        if i < len - 1 {
+            result.push(','.char())
+        }
+    }
+
+    result.push('}'.char())
+    return result
+}
+
+// Convert json string to object
+fn deserialize<T>(string data):T! {
+}

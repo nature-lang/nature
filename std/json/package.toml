@@ -1,0 +1,8 @@
+name = "json"
+version = "0.1.0"
+authors = ["weiwenhao <wwhacker@qq.com>"]
+description = "libc package"
+license = "MIT"
+type = "lib"
+
+[dependencies]

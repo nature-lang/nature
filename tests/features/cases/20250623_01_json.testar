@@ -1,0 +1,207 @@
+=== test_serialize_vec_int
+--- main.n
+import json
+
+fn main() {
+    var list = [1, 2, 3, 4, 4, 3, 2, 1, -1, -2, -3, -4]
+    var str = json.serialize(list)
+    println(str)
+}
+
+--- output.txt
+[1,2,3,4,4,3,2,1,-1,-2,-3,-4]
+
+=== test_serialize_vec_string
+--- main.n
+import json
+
+fn main() {
+    var list = ['hello', 'world']
+    var str = json.serialize(list)
+    println(str)
+}
+
+--- output.txt
+["hello","world"]
+
+=== test_serialize_vec_any
+--- main.n
+import json
+
+fn main() {
+    [any] list = ['hello', 1, true]
+    var str = json.serialize(list)
+    println(str)
+}
+
+--- output.txt
+["hello",1,true]
+
+=== test_serialize_vec_any2
+--- main.n
+import json
+
+fn main() {
+    [[any]] list = [['hello', 1, true], ['world', 2, false]]
+    var str = json.serialize(list)
+    println(str)
+}
+
+--- output.txt
+[["hello",1,true],["world",2,false]]
+
+=== test_serialize_map
+--- main.n
+import json
+
+fn main() {
+    var m = {'a':1, 'b':2, 'c':3, 'd':4}
+    var str = json.serialize(m)
+    println(str)
+}
+
+--- output.txt
+{"a":1,"b":2,"c":3,"d":4}
+
+=== test_serialize_map2
+--- main.n
+import json
+
+fn main() {
+    {string:any} m = {'a':vec_new<u8>(0, 0), 'b':true, 'c':{1:2, 2:4, 4:8}, 'd':4}
+    var str = json.serialize(m)
+    println(str)
+}
+
+--- output.txt
+{"a":[],"b":true,"c":{1:2,2:4,4:8},"d":4}
+
+
+=== test_serialize_map3
+--- main.n
+import json
+
+fn main() {
+    {string:int?} m = {'a': null,  'b': 12, 'c': null, 'd': 4}
+    var str = json.serialize(m)
+    println(str)
+}
+
+--- output.txt
+{"a":null,"b":12,"c":null,"d":4}
+
+
+=== test_serialize_unsupported
+--- main.n
+import json
+import strings
+
+fn main() {
+    {i64} s = {1, 2, 3}
+    var str = json.serialize(s) catch e {
+        panic(e.msg())
+    }
+}
+
+--- output.txt
+coroutine 'main' panic: 'unsupported type `set`' at cases/20250623_01_json.n:7:15
+
+=== test_serialize_struct
+--- main.n
+import json
+
+type book_t = struct{
+    string title
+    string author
+    string isbn
+    f32 price
+    int pages
+}
+
+fn main() {
+    var b = book_t{
+        title = "To Kill a Mockingbird",
+        author = "Harper Lee",
+        isbn = "978-0-06-112008-4",
+        price = 15.99,
+        pages = 376,
+    }
+
+    var str = json.serialize(b)
+    println(str)
+}
+
+--- output.txt
+{"title":"To Kill a Mockingbird","author":"Harper Lee","isbn":"978-0-06-112008-4","price":15.989999,"pages":376}
+
+=== test_serialize_struct2
+--- main.n
+import json
+
+type stock_t = struct{
+    int stock
+    f32 discount
+    int code
+}
+
+type book_t = struct{
+    string title
+    string author
+    string isbn
+    f32 price
+    int pages
+    [string] comments
+    stock_t stock
+}
+
+fn main() {
+    var books = vec_new<book_t>(book_t{}, 3)
+
+    books[0] = book_t{
+        title = "To Kill a Mockingbird",
+        author = "Harper Lee",
+        isbn = "978-0-06-112008-4",
+        price = 15.99,
+        pages = 376,
+        comments = ["Classic American literature", "Explores race and justice", "Must-read masterpiece"],
+        stock = stock_t{
+            stock = 25,
+            discount = 0.15,
+            code = 1001,
+        },
+    }
+
+    books[1] = book_t{
+        title = "1984",
+        author = "George Orwell",
+        isbn = "978-0-452-28423-4",
+        price = 13.95,
+        pages = 328,
+        comments = ["Dystopian classic", "Thought-provoking", "Prophetic work"],
+        stock = stock_t{
+            stock = 18,
+            discount = 0.20,
+            code = 1002,
+        },
+    }
+
+    books[2] = book_t{
+        title = "Pride and Prejudice",
+        author = "Jane Austen",
+        isbn = "978-0-14-143951-8",
+        price = 12.99,
+        pages = 432,
+        comments = ["Romantic classic", "Social commentary", "Timeless love story"],
+        stock = stock_t{
+            stock = 32,
+            discount = 0.10,
+            code = 1003,
+        },
+    }
+
+    var str = json.serialize(books)
+    println(str)
+}
+
+--- output.txt
+[{"title":"To Kill a Mockingbird","author":"Harper Lee","isbn":"978-0-06-112008-4","price":15.989999,"pages":376,"comments":["Classic American literature","Explores race and justice","Must-read masterpiece"],"stock":{"stock":25,"discount":0.150000,"code":1001}},{"title":"1984","author":"George Orwell","isbn":"978-0-452-28423-4","price":13.949999,"pages":328,"comments":["Dystopian classic","Thought-provoking","Prophetic work"],"stock":{"stock":18,"discount":0.200000,"code":1002}},{"title":"Pride and Prejudice","author":"Jane Austen","isbn":"978-0-14-143951-8","price":12.989999,"pages":432,"comments":["Romantic classic","Social commentary","Timeless love story"],"stock":{"stock":32,"discount":0.100000,"code":1003}}]

@@ -1330,7 +1330,7 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_typ
         INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
                       "cannot load address of an literal or call");
 
-        INFER_ASSERTF(operand_type.kind != TYPE_UNION, "cannot load address of an union type");
+        //        INFER_ASSERTF(operand_type.kind != TYPE_UNION, "cannot load address of an union type");
 
 
         return type_rawptrof(operand_type);
