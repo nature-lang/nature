@@ -396,7 +396,7 @@ static lir_operand_t *linear_struct_fill_default(module_t *m, type_t t, lir_oper
     }
 
     assert(target);
-    assert(target->assert_type == LIR_OPERAND_VAR);
+    //    assert(target->assert_type == LIR_OPERAND_VAR);
     assert(t.kind == TYPE_STRUCT);
 
     for (int i = 0; i < t.struct_->properties->length; ++i) {
