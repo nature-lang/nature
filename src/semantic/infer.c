@@ -2488,6 +2488,12 @@ static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
 
     type_kind target_kind = target_type.kind;
 
+    if (literal_type.kind == TYPE_STRING && target_kind == TYPE_STRING) {
+        literal->kind = target_kind;
+        return target_type;
+    }
+
+
     if (is_float(literal_type.kind) && is_float(target_kind)) {
         literal->kind = target_kind;
         return target_type;
@@ -3475,12 +3481,12 @@ static void infer_generics_param_constraints(module_t *m, type_t *impl_type, lis
     char *impl_ident = impl_type->ident;
     symbol_t *symbol = symbol_table_get(impl_ident);
 
-    INFER_ASSERTF(symbol, "type alias '%s' not found", impl_ident);
-    INFER_ASSERTF(symbol->type == SYMBOL_TYPE, "'%s' is not a type alias", symbol->ident);
+    INFER_ASSERTF(symbol, "type '%s' not found", impl_ident);
+    INFER_ASSERTF(symbol->type == SYMBOL_TYPE, "'%s' not type", symbol->ident);
     ast_typedef_stmt_t *ast_stmt = symbol->ast_value;
     list_t *params = ast_stmt->params;
 
-    INFER_ASSERTF(params->length == generics_params->length, "type alias '%s' param not match", impl_ident);
+    INFER_ASSERTF(params->length == generics_params->length, "type '%s' param not match", impl_ident);
     if (generics_params->length == 0) {
         return;
     }
@@ -3688,7 +3694,7 @@ void cartesian_product(list_t *generics_params, int depth, type_t **temp_product
  * @param generics_params
  * @return
  */
-static slice_t *generics_constraints_product(module_t *m, type_t *impl_type, list_t *generics_params) {
+static slice_t *generics_constraints_valid_product(module_t *m, type_t *impl_type, list_t *generics_params) {
     slice_t *hash_list = slice_new();
 
     // 要么全部是 any， 要么不能全部是 any, 避免复杂的匹配情况
@@ -3718,23 +3724,15 @@ static slice_t *generics_constraints_product(module_t *m, type_t *impl_type, lis
             }
         }
 
-        if (param->constraints.any) {
-            return hash_list; // 存在 any 则无法进行具体数量的组合约束
-        }
-
-        if (param->constraints.and) {
-            // 与 impl type 进行一次联合校验
+        // Only 'or' can constraints product
+        if (param->constraints.any || param->constraints.and) {
             if (ident_is_def_or_alias(impl_type)) { // type ident 才会存在 args
                 infer_generics_param_constraints(m, impl_type, generics_params);
             }
 
-            return hash_list; // and 表示这是 interface, 同样无法进行类型约束
+            return hash_list; // 存在 any 则无法进行具体数量的组合约束
         }
     }
-
-    // 要么全都是 any 要么全都不是 any
-    //    INFER_ASSERTF(any_count == 0 || any_count == generics_params->length,
-    //                  "all generics params must have constraints or all none");
 
     if (ident_is_def_or_alias(impl_type)) { // type ident 才会存在 args
         infer_generics_param_constraints(m, impl_type, generics_params);
@@ -3791,7 +3789,8 @@ void pre_infer(module_t *m) {
         // 对泛型约束进行排列组合进行生成 ast_fndef 并注册到符号表中 但不进行具体函数生成, 因为 all_t 可以生成无数类型的函数，
         // 仅仅通过 call 匹配出具体类型时才进行具体的函数类型生成, 所以仅仅是注册到符号表时的 key 有所不同
         // 如果泛型类型为 any， 则返回的 generics_args 为 null
-        slice_t *generics_args = generics_constraints_product(m, &fndef->impl_type, fndef->generics_params);
+        slice_t *generics_args = generics_constraints_valid_product(m, &fndef->impl_type, fndef->generics_params);
+
         if (generics_args->count == 0) {
             // 基础名称覆盖注册
             symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);

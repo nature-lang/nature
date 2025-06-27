@@ -1,0 +1,33 @@
+import fmt
+type Display = interface {
+	fn to_string(): string;
+};
+
+type DisplayPair<T, U>:Display = struct {
+	T first;
+	U second;
+};
+
+type Int<T>:Display = T
+type String:Display = string
+
+fn Int<T>.to_string(): string {
+	//this function returns a string.
+	return fmt.sprintf("%d", *self)
+}
+
+fn String.to_string():string {
+	//this function returns a string.
+	return self as string;
+}
+
+fn DisplayPair<T, U>.to_string():string {
+	//this function returns a string.
+	return fmt.sprintf("DisplayPair(%s, %s)", self.first.to_string(), self.second.to_string());
+}
+
+fn main() {
+	String str_value = "Hello, World!" // Literal quantities should be automatically inferred as custom string types
+	var display_pair = DisplayPair<Int<i32>, String>{first = -1, second = str_value};
+	println("DisplayPair: ", display_pair.to_string())
+}

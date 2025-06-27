@@ -12,7 +12,7 @@ type seeker = interface{
     fn seek(int offset, int whence):int!
 }
 
-type buffer: reader, writer = struct{
+type buffer:reader, writer = struct{
     [u8] buf
     int offset
 }
@@ -81,7 +81,7 @@ fn buffer.read_all():[u8]! {
     return result
 }
 
-type buf_reader<T: reader>: reader = struct{
+type buf_reader<T:reader>:reader = struct{
     T rd
     [u8] buf = vec_new<u8>(0, 4096)
     int r
@@ -89,11 +89,11 @@ type buf_reader<T: reader>: reader = struct{
     bool eof
 }
 
-fn buf_reader<T>.size():int {
+fn buf_reader<T:reader>.size():int {
     return self.buf.len()
 }
 
-fn buf_reader<T>.reset(T rd) {
+fn buf_reader<T:reader>.reset(T rd) {
     self.rd = rd
     if self.buf.len() == 0 {
         self.buf = vec_new<u8>(0, 4096)
@@ -104,7 +104,7 @@ fn buf_reader<T>.reset(T rd) {
 }
 
 #local
-fn buf_reader<T>.fill():void! {
+fn buf_reader<T:reader>.fill():void! {
     if self.r > 0 {
         // Copy unread data to the buffer start position
         self.buf.copy(self.buf.slice(self.r, self.w))
@@ -140,7 +140,7 @@ fn buf_reader<T>.fill():void! {
     throw errorf('no progress')
 }
 
-fn buf_reader<T>.read([u8] buf):int! {
+fn buf_reader<T:reader>.read([u8] buf):int! {
     if buf.len() == 0 {
         if self.buffered() > 0 {
             return 0
@@ -179,11 +179,11 @@ fn buf_reader<T>.read([u8] buf):int! {
     return n 
 }
 
-fn buf_reader<T>.buffered():int {
+fn buf_reader<T:reader>.buffered():int {
     return self.w - self.r
 }
 
-fn buf_reader<T>.read_until(u8 delim):[u8] {
+fn buf_reader<T:reader>.read_until(u8 delim):[u8] {
     [u8] result = vec_new<u8>(0, 0)
     var has_error = false
 
@@ -227,7 +227,7 @@ fn buf_reader<T>.read_until(u8 delim):[u8] {
     return result
 }
 
-fn buf_reader<T>.read_exact([u8] buf):void! {
+fn buf_reader<T:reader>.read_exact([u8] buf):void! {
     int total = 0
     for total < buf.len() {
         int n = self.read(buf.slice(total, buf.len()))
@@ -235,7 +235,7 @@ fn buf_reader<T>.read_exact([u8] buf):void! {
     }
 }
 
-fn buf_reader<T>.read_byte():u8! {
+fn buf_reader<T:reader>.read_byte():u8! {
     if self.r == self.w {
         self.fill()
     }
@@ -245,7 +245,7 @@ fn buf_reader<T>.read_byte():u8! {
     return b
 }
 
-fn buf_reader<T>.read_line():string! {
+fn buf_reader<T:reader>.read_line():string! {
     if self.eof {
         throw errorf('EOF')
     }
@@ -263,5 +263,5 @@ fn buf_reader<T>.read_line():string! {
     return bytes as string
 }
 
-// fn buf_reader<T>.copy([u8] buf, anyptr raw) {
+// fn buf_reader<T:reader>.copy([u8] buf, anyptr raw) {
 // }
