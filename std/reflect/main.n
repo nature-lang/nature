@@ -37,7 +37,7 @@ const UNION = 26
 
 const PTR_SIZE = 8
 
-type type_field_t = struct{
+type field_t = struct{
     string name
     int hash
     int offset
@@ -49,7 +49,7 @@ type type_t = struct{
     int kind
     u8 align
     [int] hashes
-    [type_field_t] fields // type struct exclusive
+    [field_t] fields // type struct exclusive
 }
 
 type rtype_struct_t = struct{
@@ -95,15 +95,15 @@ fn typeof_hash(i64 hash):type_t! {
         kind = r.kind as int,
         align = r.align,
         hashes = vec_new<int>(0, 0),
-        fields = vec_new<type_field_t>(type_field_t{}, 0),
+        fields = vec_new<field_t>(field_t{}, 0),
     }
 
     if r.kind == STRUCT {
-        t.fields = vec_new<type_field_t>(type_field_t{}, r.length as int)
+        t.fields = vec_new<field_t>(field_t{}, r.length as int)
         var temp_fields = unsafe.vec_new(find_data(r.hashes_offset) as rawptr<rtype_struct_t>, r.length as int)
 
         for i,field in temp_fields {
-            t.fields[i] = type_field_t{
+            t.fields[i] = field_t{
                 name = find_strtable(field.name_offset).to_string(),
                 hash = field.hash,
                 offset = field.offset,

@@ -306,19 +306,33 @@ static rtype_t rtype_interface(type_t t) {
  * @return
  */
 static rtype_t rtype_union(type_union_t *t) {
-    uint32_t hash = hash_string(itoa(TYPE_UNION));
+    char *str = itoa(TYPE_UNION);
 
     rtype_t rtype = {
             .size = POINTER_SIZE * 2, // element_rtype + value(并不知道 value 的类型)
-            .hash = hash,
+            .hash = 0,
             .kind = TYPE_UNION,
             .last_ptr = POINTER_SIZE,
             .malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(POINTER_SIZE * 2, POINTER_SIZE)),
+            .length = t->elements->length,
             .hashes_offset = -1,
     };
 
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
+    if (t->elements->length > 0) {
+        int64_t size = sizeof(int64_t) * t->elements->length;
+        int64_t *hashes = mallocz(size);
+        for (int i = 0; i < t->elements->length; ++i) {
+            type_t *element_type = ct_list_value(t->elements, i);
+            rtype_t element_rtype = ct_reflect_type(*element_type);
+            hashes[i] = element_rtype.hash;
 
+            rtype.hashes_offset = data_put((uint8_t *) hashes, size);
+            str = str_connect(str, itoa(element_rtype.hash));
+        }
+    }
+
+    rtype.hash = hash_string(str);
     return rtype;
 }
 

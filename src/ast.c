@@ -267,6 +267,12 @@ static ast_macro_reflect_hash_expr_t *ast_reflect_hash_expr_copy(ast_macro_refle
     return expr;
 }
 
+static ast_macro_default_expr_t *ast_default_expr_copy(ast_macro_default_expr_t *temp) {
+    ast_macro_default_expr_t *expr = COPY_NEW(ast_macro_default_expr_t, temp);
+    expr->target_type = type_copy(temp->target_type);
+    return expr;
+}
+
 static ast_macro_type_eq_expr_t *ast_type_eq_expr_copy(ast_macro_type_eq_expr_t *temp) {
     ast_macro_type_eq_expr_t *expr = COPY_NEW(ast_macro_type_eq_expr_t, temp);
     expr->left_type = type_copy(temp->left_type);
@@ -568,7 +574,7 @@ ast_expr_t *ast_expr_copy(ast_expr_t *temp) {
             break;
         }
         case AST_MACRO_EXPR_DEFAULT: {
-            expr->value = NULL;
+            expr->value = ast_default_expr_copy(temp->value);
             break;
         }
         case AST_MACRO_EXPR_REFLECT_HASH: {

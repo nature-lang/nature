@@ -1,66 +1,11 @@
 import json
 
-type stock_t = struct{
-    int stock
-    f32 discount
-    int code
-}
-
-type book_t = struct{
-    string title
-    string author
-    string isbn
-    f32 price
-    int pages
-    [string] comments
-    stock_t stock
-}
-
 fn main() {
-    var books = vec_new<book_t>(book_t{}, 3)
+    var s = `12`
+    var b = json.deserialize<u8>(s)
+    println(b)
 
-    books[0] = book_t{
-        title = "To Kill a Mockingbird",
-        author = "Harper Lee",
-        isbn = "978-0-06-112008-4",
-        price = 15.99,
-        pages = 376,
-        comments = ["Classic American literature", "Explores race and justice", "Must-read masterpiece"],
-        stock = stock_t{
-            stock = 25,
-            discount = 0.15,
-            code = 1001,
-        },
-    }
-
-    books[1] = book_t{
-        title = "1984",
-        author = "George Orwell",
-        isbn = "978-0-452-28423-4",
-        price = 13.95,
-        pages = 328,
-        comments = ["Dystopian classic", "Thought-provoking", "Prophetic work"],
-        stock = stock_t{
-            stock = 18,
-            discount = 0.20,
-            code = 1002,
-        },
-    }
-
-    books[2] = book_t{
-        title = "Pride and Prejudice",
-        author = "Jane Austen",
-        isbn = "978-0-14-143951-8",
-        price = 12.99,
-        pages = 432,
-        comments = ["Romantic classic", "Social commentary", "Timeless love story"],
-        stock = stock_t{
-            stock = 32,
-            discount = 0.10,
-            code = 1003,
-        },
-    }
-
-    var str = json.serialize(books)
+    s = `"hello world"`
+    string str = json.deserialize<string>(s)
     println(str)
 }

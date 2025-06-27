@@ -464,7 +464,7 @@ static lir_operand_t *linear_default_operand(module_t *m, type_t t, lir_operand_
         return target;
     }
 
-    if (t.kind == TYPE_UNION && t.union_->nullable) {
+    if (t.kind == TYPE_UNION && (t.union_->nullable || t.union_->any)) {
         return linear_default_nullable(m, t, target);
     }
 
@@ -2520,7 +2520,8 @@ static lir_operand_t *linear_default_expr(module_t *m, ast_expr_t expr, lir_oper
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-    return linear_default_operand(m, expr.type, target);
+    ast_macro_default_expr_t *macro_default_expr = expr.value;
+    return linear_default_operand(m, macro_default_expr->target_type, target);
 }
 
 static lir_operand_t *linear_ula_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {

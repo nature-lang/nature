@@ -3011,8 +3011,11 @@ static ast_expr_t parser_expr_with_precedence(module_t *m) {
 static ast_expr_t parser_macro_default_expr(module_t *m) {
     ast_expr_t result = expr_new(m);
     parser_must(m, TOKEN_LEFT_PAREN);
+    ast_macro_default_expr_t *default_expr = NEW(ast_macro_default_expr_t);
+
+    default_expr->target_type = parser_type(m);
+
     parser_must(m, TOKEN_RIGHT_PAREN);
-    ast_macro_default_expr_t *default_expr = NULL;
     result.assert_type = AST_MACRO_EXPR_DEFAULT;
     result.value = default_expr;
     return result;

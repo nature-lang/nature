@@ -3,7 +3,7 @@
 #include "array.h"
 #include "runtime/runtime.h"
 
-static void rt_vec_grow(n_vec_t *vec, rtype_t *element_rtype, int custom_capacity) {
+static void rti_vec_grow(n_vec_t *vec, rtype_t *element_rtype, int custom_capacity) {
 
 
     if (custom_capacity) {
@@ -209,6 +209,13 @@ void *rt_vec_ref(n_vec_t *l) {
     return l->data;
 }
 
+void rt_vec_grow(n_vec_t *vec, int64_t element_hash, int custom_capacity) {
+    assert(element_hash);
+    rtype_t *element_rtype = rt_find_rtype(element_hash);
+    assert(element_rtype);
+    rti_vec_grow(vec, element_rtype, custom_capacity);
+}
+
 /**
  * ref 指向 element value 值所在的地址，其可能是一个栈地址，也可能是一个堆地址
  * @param vec
@@ -241,7 +248,7 @@ void rt_vec_push(n_vec_t *vec, int64_t element_hash, void *ref) {
     if (vec->length == vec->capacity) {
         DEBUGF("[vec_push] current len=%lu equals cap, trigger grow, next capacity=%lu", vec->length,
                vec->capacity * 2);
-        rt_vec_grow(vec, element_rtype, 0);
+        rti_vec_grow(vec, element_rtype, 0);
     }
 
     uint64_t index = vec->length++;
@@ -296,7 +303,7 @@ void rt_vec_append(n_vec_t *dst, n_vec_t *src, int64_t element_hash) {
 
     // assert(dst->ele_rhash == src->ele_rhash && "The types of the two vecs are different");
     if (dst->length + src->length > dst->capacity) {
-        rt_vec_grow(dst, element_rtype, dst->length + src->length + 1);
+        rti_vec_grow(dst, element_rtype, dst->length + src->length + 1);
     }
 
     memmove(dst->data + dst->length * dst->element_size, src->data, src->length * src->element_size);
@@ -358,7 +365,7 @@ n_anyptr_t rt_vec_iterator(n_vec_t *l, int64_t element_hash) {
     if (l->length == l->capacity) {
         DEBUGF("[rt_vec_iterator] current_length=%lu == capacity, trigger grow, next capacity=%lu", l->length,
                l->capacity * 2);
-        rt_vec_grow(l, element_rtype, 0);
+        rti_vec_grow(l, element_rtype, 0);
     }
     uint64_t index = l->length++;
 

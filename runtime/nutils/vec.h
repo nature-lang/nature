@@ -56,6 +56,8 @@ void rt_vec_append(n_vec_t *dst, n_vec_t *src, int64_t element_hash);
  */
 void rt_vec_push(n_vec_t *vec, int64_t element_hash, void *ref);
 
+void rt_vec_grow(n_vec_t *vec, int64_t element_hash, int custom_capacity);
+
 n_anyptr_t rt_vec_iterator(n_vec_t *l, int64_t element_hash);
 
 /**
@@ -79,4 +81,4 @@ n_vec_t *rt_vec_concat(n_vec_t *a, n_vec_t *b, int64_t element_hash);
 
 uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t *src);
 
-#endif//NATURE_VEC_H
+#endif //NATURE_VEC_H

@@ -1,3 +1,5 @@
+import libc
+
 fn vec_new<T>(rawptr<T> p, int len):vec<T>! {
     if len < 0 {
         throw errorf("invalid vec index '%d' (must be non-negative)", len)
@@ -14,4 +16,12 @@ fn unsafe_vec_new(int hash, int ele_hash, int len, anyptr p):anyptr
 
 fn ptr_to<T>(anyptr p):T {
     return *(p as rawptr<T>)
+}
+
+fn ptr_copy<T>(anyptr dst, rawptr<T> src) {
+    var dst2 = dst as rawptr<T>
+
+    var size = @sizeof(T)
+    // *dst2 = *src
+    libc.memmove(dst, src as anyptr, size as u64)
 }

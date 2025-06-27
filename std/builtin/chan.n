@@ -26,7 +26,7 @@ fn chan<T>.on_send(T msg):void {
 }
 
 fn chan<T>.recv():T! {
-    T msg = @default()
+    var msg = @default(T)
     rt_chan_recv(self as anyptr, &msg as anyptr, false)
 
     return msg
@@ -34,12 +34,12 @@ fn chan<T>.recv():T! {
 
 // The specific logic is already handled at compiler time, and this function is mainly used for compiler front-end validation
 fn chan<T>.on_recv():T {
-    T msg = @default()
+    var msg = @default(T)
     return msg
 }
 
 fn chan<T>.try_recv():(T, bool)! {
-    T msg = @default()
+    var msg = @default(T)
     bool is_recv = rt_chan_recv(self as anyptr, &msg as anyptr, true)
     return (msg, is_recv)
 }

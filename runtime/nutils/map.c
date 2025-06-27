@@ -130,7 +130,6 @@ n_anyptr_t rt_map_access(n_map_t *m, void *key_ref) {
 }
 
 n_anyptr_t rt_map_assign(n_map_t *m, void *key_ref) {
-
     if ((double) m->length + 1 > (double) m->capacity * HASH_MAX_LOAD) {
         map_grow(m);
     }

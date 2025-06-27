@@ -1,6 +1,7 @@
 import reflect
 import fmt
 import unsafe
+import runtime
 
 // Convert object to json string
 fn serialize<T>(T object):string! {
@@ -90,15 +91,15 @@ fn serialize_struct(anyptr p, reflect.type_t t):[u8]! {
     var len = t.fields.len()
 
     for i,field in t.fields {
-        var element_ptr = p + field.offset as anyptr
-        var element_type = reflect.typeof_hash(field.hash)
-        var element_v = serialize_value(element_ptr, element_type)
+        var field_ptr = p + field.offset as anyptr
+        var field_type = reflect.typeof_hash(field.hash)
+        var field_v = serialize_value(field_ptr, field_type)
         var field_name = field.name
         result.push('"'.char())
         result.append(field_name as [u8])
         result.push('"'.char())
         result.push(':'.char())
-        result.append(element_v)
+        result.append(field_v)
         if i < len - 1 {
             result.push(','.char())
         }
@@ -159,6 +160,405 @@ fn serialize_map(anyptr p, reflect.type_t t):[u8]! {
     return result
 }
 
+type deserialize_t = struct{
+    int cursor
+    [u8] data
+}
+
 // Convert json string to object
-fn deserialize<T>(string data):T! {
+fn deserialize<T>(string s):T! {
+    var val = @default(T)
+    var t = reflect.typeof(val)
+
+    var d = new deserialize_t(data = s as [u8])
+    d.parser(&val as anyptr, t)
+
+    return val
+}
+
+fn deserialize_t.parser(anyptr p, reflect.type_t t):void! {
+    self.skip_whitespace()
+
+    match t.kind {
+        reflect.BOOL -> {
+            var bool_val = self.parser_bool()
+            unsafe.ptr_copy<bool>(p, &bool_val)
+        }
+        reflect.U8 -> {
+            var float_val = self.parser_number()
+            var u8_val = float_val as u8
+            unsafe.ptr_copy<u8>(p, &u8_val)
+        }
+        reflect.U16 -> {
+            var float_val = self.parser_number()
+            var u16_val = float_val as u16
+            unsafe.ptr_copy<u16>(p, &u16_val)
+        }
+        reflect.U32 -> {
+            var float_val = self.parser_number()
+            var u32_val = float_val as u32
+            unsafe.ptr_copy<u32>(p, &u32_val)
+        }
+        reflect.U64 -> {
+            var float_val = self.parser_number()
+            var u64_val = float_val as u64
+            unsafe.ptr_copy<u64>(p, &u64_val)
+        }
+        reflect.I8 -> {
+            var float_val = self.parser_number()
+            var i8_val = float_val as i8
+            unsafe.ptr_copy<i8>(p, &i8_val)
+        }
+        reflect.I16 -> {
+            var float_val = self.parser_number()
+            var i16_val = float_val as i16
+            unsafe.ptr_copy<i16>(p, &i16_val)
+        }
+        reflect.I32 -> {
+            var float_val = self.parser_number()
+            var i32_val = float_val as i32
+            unsafe.ptr_copy<i32>(p, &i32_val)
+        }
+        reflect.I64 -> {
+            var float_val = self.parser_number()
+            var i64_val = float_val as i64
+            unsafe.ptr_copy<i64>(p, &i64_val)
+        }
+        reflect.F32 -> {
+            var float_val = self.parser_number()
+            var f32_val = float_val as f32
+            unsafe.ptr_copy<f32>(p, &f32_val)
+        }
+        reflect.F64 -> {
+            var float_val = self.parser_number()
+            unsafe.ptr_copy<f64>(p, &float_val)
+        }
+        reflect.STRING -> {
+            var string_val = self.parser_string()
+            unsafe.ptr_copy<string>(p, &string_val)
+        }
+        reflect.VEC -> self.parser_vec(p, t)
+        reflect.MAP -> self.parser_map(p, t)
+        reflect.STRUCT -> self.parser_struct(p, t)
+        reflect.UNION -> {
+            if t.hashes.len() > 0 { // not any
+                throw errorf('only `any` type deserialize is supported')
+            }
+            var any_val = self.parser_any()
+            unsafe.ptr_copy<any>(p, &any_val)
+        }
+        _ -> {
+            throw errorf('unsupported type `%s`', t.to_string())
+        }
+    }
+}
+
+// p points to the stack address of struct
+fn deserialize_t.parser_struct(anyptr p, reflect.type_t t):void! {
+    self.must('{')
+    if self.consume('}') {
+        return
+    }
+
+    var len = t.fields.len()
+    {string:reflect.field_t} m = {}
+    for i,field in t.fields {
+        m[field.name] = field
+    }
+
+    for true {
+        string key = self.parser_string()
+        self.must(':')
+
+        if !m.contains(key) {
+            // skip value
+            self.parser_any()
+        } else {
+            var field = m[key]
+            var field_ptr = p + field.offset as anyptr
+            var field_type = reflect.typeof_hash(field.hash)
+            self.parser(field_ptr, field_type)
+        }
+
+        if self.consume('}') {
+            break
+        } else {
+            self.must(',')
+        }
+    }
+}
+
+fn deserialize_t.parser_vec(anyptr p, reflect.type_t t):void! {
+    anyptr v = unsafe.ptr_to<anyptr>(p)
+    var rv = v as rawptr<reflect.vec_t>
+    rv.length = 0 // Assignment from zero
+    self.must('[')
+    if self.consume(']') {
+        return
+    }
+
+    var element_type = reflect.typeof_hash(t.hashes[0])
+    for true {
+        if  rv.length == rv.capacity {
+            runtime.vec_grow(v, t.hashes[0], 0)
+        }
+
+        assert(rv.length < rv.capacity)
+        self.parser(rv.data + (rv.length * element_type.size) as anyptr, element_type)
+        rv.length += 1
+
+        if self.consume(']') {
+            break
+        } else {
+            self.must(',')
+        }
+    }
+}
+
+fn deserialize_t.parser_map(anyptr p, reflect.type_t t):void! {
+    anyptr v = unsafe.ptr_to<anyptr>(p)
+    var rv = v as rawptr<reflect.map_t>
+    self.must('{')
+    if self.consume('}') {
+        return
+    }
+    
+    var val_type = reflect.typeof_hash(t.hashes[1])
+
+    for true {
+        // parser key(type is string) 
+        string key = self.parser_string()
+        var val_p = runtime.map_assign(v, &key as anyptr)
+        self.must(':')
+        self.parser(val_p, val_type)
+
+        self.skip_whitespace()
+        if self.consume('}') {
+            break
+        } else {
+            self.must(',')
+        }
+    }
+}
+
+fn deserialize_t.parser_bool():bool! {
+    self.skip_whitespace()
+    
+    if self.cursor >= self.data.len() {
+        throw errorf('unexpected end of input at position %d', self.cursor)
+    }
+    
+    // check "true"
+    if self.consume('true') {
+        return true
+    }
+    
+    // check "false"
+    if self.consume('false') {
+        return false
+    }
+    
+    throw errorf('expected boolean value at position %d', self.cursor)
+}
+
+fn deserialize_t.parser_number():f64! {
+    var start = self.cursor
+    var negative = false
+    var len = self.data.len()
+    
+    // handle negative
+    if self.consume('-') {
+        negative = true
+    }
+    
+    if self.cursor >= len || !self.is_digit(self.data[self.cursor]) {
+        throw errorf('invalid number format at position %d', self.cursor)
+    }
+    
+    var integer_part = 0.0
+    
+    // parser integer part
+    for self.cursor < len && self.is_digit(self.data[self.cursor]) {
+        integer_part = integer_part * 10.0 + (self.data[self.cursor] - '0'.char()) as f64
+        self.cursor += 1
+    }
+    
+    var result = integer_part
+    
+    // parsing optional fractional parts
+    if self.cursor < len && self.data[self.cursor] == '.'.char() {
+        self.cursor += 1
+        var decimal_part = 0.0
+        var decimal_places = 1.0
+        
+        for self.cursor < len && self.is_digit(self.data[self.cursor]) {
+            decimal_places *= 10.0
+            decimal_part = decimal_part * 10.0 + (self.data[self.cursor] - '0'.char()) as f64
+            self.cursor += 1
+        }
+        
+        result += decimal_part / decimal_places
+    }
+    
+    // parsing the optional index component
+    if self.cursor < len && (self.data[self.cursor] == 'e'.char() || self.data[self.cursor] == 'E'.char()) {
+        self.cursor += 1
+        var exp_negative = false
+        
+        if self.cursor < len && self.data[self.cursor] == '-'.char() {
+            exp_negative = true
+            self.cursor += 1
+        } else if self.cursor < len && self.data[self.cursor] == '+'.char() {
+            self.cursor += 1
+        }
+        
+        var exponent = 0
+        for self.cursor < len && self.is_digit(self.data[self.cursor]) {
+            exponent = exponent * 10 + (self.data[self.cursor] - '0'.char()) as int
+            self.cursor += 1
+        }
+        
+        var exp_multiplier = 1.0
+        for int i = 0; i < exponent; i += 1 {
+            exp_multiplier *= 10.0
+        }
+        
+        if exp_negative {
+            result /= exp_multiplier
+        } else {
+            result *= exp_multiplier
+        }
+    }
+    
+    if negative {
+        result = -result
+    }
+    
+    return result
+}
+
+
+fn deserialize_t.parser_string():string! {
+    self.must(`"`)
+
+    var start = self.cursor
+    [u8] result = []
+    
+    for self.cursor < self.data.len() {
+        var c = self.data[self.cursor]
+        
+        if c == '"'.char() {
+            self.cursor += 1 // skip end quote
+            return result as string
+        }
+        
+        if c == '\\'.char() {
+            self.cursor += 1
+            if self.cursor >= self.data.len() {
+                throw errorf('unexpected end of string at position %d', self.cursor)
+            }
+            
+            var escaped = self.data[self.cursor]
+            match escaped {
+                '"'.char() -> result.push('"'.char())
+                '\\'.char() -> result.push('\\'.char())
+                '/'.char() -> result.push('/'.char())
+                'b'.char() -> result.push('\b'.char())
+                'f'.char() -> result.push('\f'.char())
+                'n'.char() -> result.push('\n'.char())
+                'r'.char() -> result.push('\r'.char())
+                't'.char() -> result.push('\t'.char())
+                _ -> {
+                    throw errorf('invalid escape sequence at position %d', self.cursor)
+                }
+            }
+        } else {
+            result.push(c)
+        }
+        
+        self.cursor += 1
+    }
+    
+    throw errorf('unterminated string at position %d', start)
+}
+
+fn deserialize_t.parser_any():any! {
+    if self.cursor >= self.data.len() {
+        throw errorf('unexpected end of input at position %d', self.cursor)
+    }
+
+    self.skip_whitespace()
+    var c = self.data[self.cursor]
+
+     match c {
+        'n'.char() -> {
+            self.must('null')
+            return null
+        }
+        't'.char()|'f'.char() -> {
+            return self.parser_bool()
+        }
+        '"'.char() -> {
+            return self.parser_string()
+        }
+        '{'.char() -> {
+            {string:any} val = {}
+            var t = reflect.typeof(val)
+            self.parser_map(&val as anyptr, t)
+            return val
+        }
+        '['.char() -> {
+            // [any]
+            [any] val = []
+            var t = reflect.typeof(val)
+            self.parser_vec(&val as anyptr, t)
+            return val
+        }
+        _ -> {
+            // number type default float
+            return self.parser_number()
+        }
+    }
+}
+
+
+fn deserialize_t.skip_whitespace() {
+    for self.cursor < self.data.len() {
+        var c = self.data[self.cursor]
+        if c == ' '.char() || c == '\t'.char() || c == '\n'.char() || c == '\r'.char() {
+            self.cursor += 1
+        } else {
+            break
+        }
+    }
+}
+
+fn deserialize_t.is_digit(u8 ch):bool {
+    return ch >= '0'.char() && ch <= '9'.char()
+}
+
+fn deserialize_t.consume(string s):bool {
+    self.skip_whitespace()
+    
+    var bytes = s as [u8]
+    var len = bytes.len()
+    
+    if self.cursor + len > self.data.len() {
+        return false
+    }
+    
+    for int i=0; i < len; i+=1 {
+        if self.data[self.cursor + i] != bytes[i] {
+            return false
+        }
+    }
+    
+    self.cursor += len
+    return true
+}
+
+fn deserialize_t.must(string s):void! {
+    if !self.consume(s) {
+        throw errorf('expected `%s` at position %d', s, self.cursor)
+    }
 }
