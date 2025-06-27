@@ -38,7 +38,7 @@ a 1007465396 0
 b 923577301 8
 1 923577301 2 0
 c 518729469 16
-40 518729469 13 0
+8 518729469 13 0
 
 === test_nesting
 --- main.n
@@ -69,7 +69,7 @@ fn main() {
     var clothing_fields = t.fields[2]
     var clothing_type = reflect.typeof_hash(clothing_fields.hash)
     assert(clothing_type.size == 16)
-    assert(clothing_type.kind == reflect.TYPE_STRUCT)
+    assert(clothing_type.kind == reflect.STRUCT)
 
     for field in clothing_type.fields {
         println(field.hash)
@@ -85,9 +85,9 @@ fn main() {
 0
 4
 518729469
-40 518729469 13 0
+8 518729469 13 0
 518729469
-40 518729469 13 0
+8 518729469 13 0
 
 
 === test_basic_type
@@ -140,7 +140,7 @@ fn main() {
 1
 2
 0
-40
+8
 13
 0
 
@@ -163,7 +163,7 @@ fn main() {
 }
 
 --- output.txt
-40
+8
 14
 1
 4
@@ -223,13 +223,13 @@ fn main() {
 }
 
 --- output.txt
-56
+8
 16
 2
-40
+8
 13
 0
-40
+8
 14
 1
 
@@ -256,10 +256,10 @@ fn main() {
 }
 
 --- output.txt
-40
+8
 17
 1
-40
+8
 13
 0
 
@@ -282,7 +282,7 @@ fn main() {
 }
 
 --- output.txt
-56
+8
 18
 9
 8 1007465396 9 0
@@ -291,9 +291,9 @@ fn main() {
 1 923577301 2 0
 1 923577301 2 0
 1 923577301 2 0
-40 518729469 13 0
-40 996123909 14 1
-40 4209388247 17 1
+8 518729469 13 0
+8 996123909 14 1
+8 4209388247 17 1
 
 === test_reflect_ptr
 --- main.n
@@ -338,3 +338,53 @@ fn main() {
 8
 9
 0
+
+
+=== test_valueof_basic
+--- main.n
+import reflect
+
+fn main() {
+    [f32] list = [1.1, 2.2]
+    var v = reflect.valueof(list)
+    println(v.len())
+
+    {i8} s = {1, 2, -1, -2, -5}
+    v = reflect.valueof(s)
+    println(v.len())
+
+    {i8:f32} m = {1: 1.1, 2: 2.2, 3: 3.3}
+    v = reflect.valueof(m)
+    println(v.len())
+}
+
+--- output.txt
+2
+5
+3
+
+=== test_valueof_t
+--- main.n
+import reflect
+
+fn main() {
+    [f32] list = [1.1, 2.2]
+    var v = list as anyptr as rawptr<reflect.vec_t>
+    println(v.data > 0xc000000000, v.length, v.capacity, v.element_size, v.hash)
+}
+
+--- output.txt
+true 2 2 4 1844935070
+
+=== test_any
+--- main.n
+import json
+
+fn main() {
+    any av = 'hello'
+    var str = json.serialize(av)
+    println(str)
+}
+
+--- output.txt
+"hello"

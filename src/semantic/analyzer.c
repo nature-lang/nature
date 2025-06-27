@@ -1016,6 +1016,10 @@ static void analyzer_reflect_hash_expr(module_t *m, ast_macro_reflect_hash_expr_
     analyzer_type(m, &expr->target_type);
 }
 
+static void analyzer_default_expr(module_t *m, ast_macro_default_expr_t *expr) {
+    analyzer_type(m, &expr->target_type);
+}
+
 static void analyzer_type_eq_expr(module_t *m, ast_macro_type_eq_expr_t *expr) {
     analyzer_type(m, &expr->left_type);
     analyzer_type(m, &expr->right_type);
@@ -1844,6 +1848,9 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         }
         case AST_MACRO_EXPR_ULA: {
             return analyzer_ula_expr(m, expr->value);
+        }
+        case AST_MACRO_EXPR_DEFAULT: {
+            return analyzer_default_expr(m, expr->value);
         }
         case AST_MACRO_EXPR_REFLECT_HASH: {
             return analyzer_reflect_hash_expr(m, expr->value);

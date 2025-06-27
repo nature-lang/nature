@@ -1,0 +1,400 @@
+=== test_serialize_vec_int
+--- main.n
+import json
+
+fn main() {
+    var list = [1, 2, 3, 4, 4, 3, 2, 1, -1, -2, -3, -4]
+    var str = json.serialize(list)
+    println(str)
+}
+
+--- output.txt
+[1,2,3,4,4,3,2,1,-1,-2,-3,-4]
+
+=== test_serialize_vec_string
+--- main.n
+import json
+
+fn main() {
+    var list = ['hello', 'world']
+    var str = json.serialize(list)
+    println(str)
+}
+
+--- output.txt
+["hello","world"]
+
+=== test_serialize_vec_any
+--- main.n
+import json
+
+fn main() {
+    [any] list = ['hello', 1, true]
+    var str = json.serialize(list)
+    println(str)
+}
+
+--- output.txt
+["hello",1,true]
+
+=== test_serialize_vec_any2
+--- main.n
+import json
+
+fn main() {
+    [[any]] list = [['hello', 1, true], ['world', 2, false]]
+    var str = json.serialize(list)
+    println(str)
+}
+
+--- output.txt
+[["hello",1,true],["world",2,false]]
+
+=== test_serialize_map
+--- main.n
+import json
+
+fn main() {
+    var m = {'a':1, 'b':2, 'c':3, 'd':4}
+    var str = json.serialize(m)
+    println(str)
+}
+
+--- output.txt
+{"a":1,"b":2,"c":3,"d":4}
+
+=== test_serialize_map2
+--- main.n
+import json
+
+fn main() {
+    {string:any} m = {'a':vec_new<u8>(0, 0), 'b':true, 'c':{1:2, 2:4, 4:8}, 'd':4}
+    var str = json.serialize(m)
+    println(str)
+}
+
+--- output.txt
+{"a":[],"b":true,"c":{1:2,2:4,4:8},"d":4}
+
+
+=== test_serialize_map3
+--- main.n
+import json
+
+fn main() {
+    {string:int?} m = {'a': null,  'b': 12, 'c': null, 'd': 4}
+    var str = json.serialize(m)
+    println(str)
+}
+
+--- output.txt
+{"a":null,"b":12,"c":null,"d":4}
+
+
+=== test_serialize_unsupported
+--- main.n
+import json
+import strings
+
+fn main() {
+    {i64} s = {1, 2, 3}
+    var str = json.serialize(s) catch e {
+        panic(e.msg())
+    }
+}
+
+--- output.txt
+coroutine 'main' panic: 'unsupported type `set`' at nature-test/main.n:7:15
+
+=== test_serialize_struct
+--- main.n
+import json
+
+type book_t = struct{
+    string title
+    string author
+    string isbn
+    f32 price
+    int pages
+}
+
+fn main() {
+    var b = book_t{
+        title = "To Kill a Mockingbird",
+        author = "Harper Lee",
+        isbn = "978-0-06-112008-4",
+        price = 15.99,
+        pages = 376,
+    }
+
+    var str = json.serialize(b)
+    println(str)
+}
+
+--- output.txt
+{"title":"To Kill a Mockingbird","author":"Harper Lee","isbn":"978-0-06-112008-4","price":15.989999,"pages":376}
+
+=== test_serialize_struct2
+--- main.n
+import json
+
+type stock_t = struct{
+    int stock
+    f32 discount
+    int code
+}
+
+type book_t = struct{
+    string title
+    string author
+    string isbn
+    f32 price
+    int pages
+    [string] comments
+    stock_t stock
+}
+
+fn main() {
+    var books = vec_new<book_t>(book_t{}, 3)
+
+    books[0] = book_t{
+        title = "To Kill a Mockingbird",
+        author = "Harper Lee",
+        isbn = "978-0-06-112008-4",
+        price = 15.99,
+        pages = 376,
+        comments = ["Classic American literature", "Explores race and justice", "Must-read masterpiece"],
+        stock = stock_t{
+            stock = 25,
+            discount = 0.15,
+            code = 1001,
+        },
+    }
+
+    books[1] = book_t{
+        title = "1984",
+        author = "George Orwell",
+        isbn = "978-0-452-28423-4",
+        price = 13.95,
+        pages = 328,
+        comments = ["Dystopian classic", "Thought-provoking", "Prophetic work"],
+        stock = stock_t{
+            stock = 18,
+            discount = 0.20,
+            code = 1002,
+        },
+    }
+
+    books[2] = book_t{
+        title = "Pride and Prejudice",
+        author = "Jane Austen",
+        isbn = "978-0-14-143951-8",
+        price = 12.99,
+        pages = 432,
+        comments = ["Romantic classic", "Social commentary", "Timeless love story"],
+        stock = stock_t{
+            stock = 32,
+            discount = 0.10,
+            code = 1003,
+        },
+    }
+
+    var str = json.serialize(books)
+    println(str)
+}
+
+--- output.txt
+[{"title":"To Kill a Mockingbird","author":"Harper Lee","isbn":"978-0-06-112008-4","price":15.989999,"pages":376,"comments":["Classic American literature","Explores race and justice","Must-read masterpiece"],"stock":{"stock":25,"discount":0.150000,"code":1001}},{"title":"1984","author":"George Orwell","isbn":"978-0-452-28423-4","price":13.949999,"pages":328,"comments":["Dystopian classic","Thought-provoking","Prophetic work"],"stock":{"stock":18,"discount":0.200000,"code":1002}},{"title":"Pride and Prejudice","author":"Jane Austen","isbn":"978-0-14-143951-8","price":12.989999,"pages":432,"comments":["Romantic classic","Social commentary","Timeless love story"],"stock":{"stock":32,"discount":0.100000,"code":1003}}]
+
+
+=== test_deserialize_bool
+--- main.n
+import json
+
+fn main() {
+    var s = `true`
+    var b = json.deserialize<bool>(s)
+    println(b)
+
+    s = `false`
+    b = json.deserialize<bool>(s)
+    println(b)
+}
+
+--- output.txt
+true
+false
+
+=== test_deserialize_failed
+--- main.n
+import json
+
+fn main() {
+    var s = `-12`
+    var b = json.deserialize<bool>(s) catch e {
+        panic(e.msg())
+    }
+    println(b)
+
+    s = `232`
+    b = json.deserialize<bool>(s)
+    println(b)
+}
+
+--- output.txt
+coroutine 'main' panic: 'expected boolean value at position 0' at nature-test/main.n:6:15
+
+=== test_deserialize_u8_string
+--- main.n
+import json
+
+fn main() {
+    var s = `12`
+    var b = json.deserialize<u8>(s) catch e {
+        panic(e.msg())
+    }
+    println(b)
+
+    s = `232`
+    b = json.deserialize<u8>(s)
+    println(b)
+
+    s = `"hello world"`
+    string str = json.deserialize<string>(s)
+    println(str)
+}
+
+--- output.txt
+12
+232
+hello world
+
+
+=== test_deserialize_vec
+--- main.n
+import json
+
+fn main() {
+    var s = `[1, 2, 3, 4]`
+    var b = json.deserialize<[u8]>(s)
+    println(b[0], b[1], b[2], b[3])
+}
+
+--- output.txt
+1 2 3 4
+
+
+=== test_deserialize_map
+--- main.n
+import json
+
+fn main() {
+    var s = ` { "key1" :  12 , "key" : 13 ,\n\r "key-1" : -1 }`
+    var m = json.deserialize<{string:int}>(s)
+    println(m['key1'], m['key'], m['key-1'])
+}
+
+--- output.txt
+12 13 -1
+
+=== test_deserialize_map2
+--- main.n
+import json
+
+fn main() {
+    var s = ` { "key1" :  12 , "key" : ["a", "b", false] ,\n\r "key-1" : true }`
+    var m = json.deserialize<{string:any}>(s)
+    println(m['key1'], (m['key'] as [any])[0], (m['key'] as [any])[1], (m['key'] as [any])[2], m['key-1'])
+}
+
+--- output.txt
+12.000000 a b false true
+
+
+=== test_deserialize_struct_failed
+--- main.n
+import json
+
+fn main() {
+    var s = ` { "key1" :  12 , "key" : ['a', 'b', '123'] ,\n\r  "unmatch" : "default", "key_1" : true  }`
+
+    type foo_t = struct{
+        [string] key
+        int key1
+        bool key_1
+    }
+
+    var f = json.deserialize<foo_t>(s) catch e {
+        panic(e.msg())
+    }
+    println(f.key1, f.key[0], f.key[1], f.key[2], f.key_1)
+}
+
+--- output.txt
+coroutine 'main' panic: 'expected `"` at position 27' at nature-test/main.n:13:15
+
+=== test_deserialize_struct
+--- main.n
+import json
+
+fn main() {
+    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,\n\r  "unmatch" : "default", "key_1" : true  }`
+
+    type foo_t = struct{
+        [string] key
+        int key1
+        bool key_1
+    }
+
+    var f = json.deserialize<foo_t>(s)
+    println(f.key1, f.key[0], f.key[1], f.key[2], f.key_1)
+}
+
+--- output.txt
+12 a b 123 true
+
+
+=== test_deserialize_any_failed
+--- main.n
+import json
+
+fn main() {
+    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,\n\r  "unmatch" : "default", "key_1" : true  }`
+
+    var a = json.deserialize<any>(s)
+    var m = a as {string:any}
+    println(m['key1'], (m['key'] as [string])[2])
+}
+
+--- output.txt
+coroutine 'main' panic: 'type assert failed' at nature-test/main.n:8:27
+
+=== test_deserialize_any_failed2
+--- main.n
+import json
+
+fn main() {
+    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,\n\r  "unmatch" : "default", "key_1" : true  }`
+
+    var a = json.deserialize<any>(s)
+    var m = a as {string:any}
+    println(m['key1'] as int)
+}
+
+--- output.txt
+coroutine 'main' panic: 'type assert failed' at nature-test/main.n:8:18
+
+=== test_deserialize_any
+--- main.n
+import json
+
+fn main() {
+    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,\n\r  "unmatch" : "default", "key_1" : true  }`
+
+    var a = json.deserialize<any>(s)
+    var m = a as {string:any}
+    println(m['key1'] as float, (m['key'] as [any])[2] as string)
+}
+
+--- output.txt
+12.000000 123

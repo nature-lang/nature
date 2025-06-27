@@ -1,0 +1,11 @@
+import json
+
+fn main() {
+    var s = `12`
+    var b = json.deserialize<u8>(s)
+    println(b)
+
+    s = `"hello world"`
+    string str = json.deserialize<string>(s)
+    println(str)
+}

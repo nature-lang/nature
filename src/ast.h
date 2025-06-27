@@ -199,6 +199,7 @@ typedef struct {
 } ast_match_is_expr_t;
 
 typedef struct {
+    type_t target_type;
 } ast_macro_default_expr_t;
 
 typedef struct {

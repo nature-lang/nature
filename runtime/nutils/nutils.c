@@ -127,11 +127,11 @@ n_ptr_t *rawptr_assert(n_rawptr_t *rawptr) {
 void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref) {
 
     if (mu->rtype->hash != target_rtype_hash) {
-        DEBUGF("[interface_assert] type assert error, mu->rtype->kind: %s, target_rtype_hash: %ld",
+        DEBUGF("[interface_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        rti_throw("type assert error", true);
+        rti_throw("type assert failed", true);
         return;
     }
 
@@ -159,11 +159,11 @@ void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
 
     if (mu->rtype->hash != target_rtype_hash) {
-        DEBUGF("[union_assert] type assert error, mu->rtype->kind: %s, target_rtype_hash: %ld",
+        DEBUGF("[union_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
                type_kind_str[mu->rtype->kind],
                target_rtype_hash);
 
-        rti_throw("type assert error", true);
+        rti_throw("type assert failed", true);
         return;
     }
 

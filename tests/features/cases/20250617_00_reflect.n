@@ -1,14 +1,7 @@
 import reflect
 
 fn main() {
-    [f32] list = [1.1, 2.2, 3.3]
-    var t = reflect.typeof(list)
-    println(t.size)
-    println(t.kind)
-    println(t.hashes.len())
-
-    var et = reflect.typeof_hash(t.hashes[0])
-    println(et.size)
-    println(et.kind)
-    println(et.hashes.len())
+    [f32] list = [1.1, 2.2]
+    var v = list as anyptr as rawptr<reflect.vec_t>
+    println(v.data > 0xc000000000, v.length, v.capacity, v.element_size, v.hash)
 }

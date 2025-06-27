@@ -1258,6 +1258,11 @@ static type_t infer_match_is_expr(module_t *m, ast_match_is_expr_t *is_expr) {
     return type_kind_new(TYPE_BOOL);
 }
 
+static type_t infer_macro_default_expr(module_t *m, ast_macro_default_expr_t *expr) {
+    expr->target_type = reduction_type(m, expr->target_type);
+    return expr->target_type;
+}
+
 static type_t infer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     type_t t = infer_right_expr(m, &is_expr->src, type_kind_new(TYPE_UNKNOWN));
     is_expr->target_type = reduction_type(m, is_expr->target_type);
@@ -1330,7 +1335,7 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_typ
         INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
                       "cannot load address of an literal or call");
 
-        INFER_ASSERTF(operand_type.kind != TYPE_UNION, "cannot load address of an union type");
+        //        INFER_ASSERTF(operand_type.kind != TYPE_UNION, "cannot load address of an union type");
 
 
         return type_rawptrof(operand_type);
@@ -1830,7 +1835,7 @@ static type_t infer_access_expr(module_t *m, ast_expr_t *expr) {
         return *type;
     }
 
-    INFER_ASSERTF(false, "access only support must map/list/tuple, cannot '%s'", type_format(left_type));
+    INFER_ASSERTF(false, "access only support must map|vec|tup, cannot '%s'", type_format(left_type));
     exit(1);
 }
 
@@ -2795,7 +2800,7 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
             return infer_ula_expr(m, expr->value);
         }
         case AST_MACRO_EXPR_DEFAULT: {
-            return target_type;
+            return infer_macro_default_expr(m, expr->value);
         }
         case AST_MACRO_EXPR_TYPE_EQ: {
             return infer_type_eq_expr(m, expr);
