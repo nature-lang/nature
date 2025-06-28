@@ -258,21 +258,21 @@ static void processor_sysmon() {
         assert(co); // p co 切换期间不会清空 co 了
         if (co->flag & FLAG(CO_FLAG_RTFN)) { // rt fn 包括 gc_work/signal_handle
             DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p is runtime fn, will skip", p->index,
-                    (uint64_t) p->thread_id, p->coroutine);
+                   (uint64_t) p->thread_id, p->coroutine);
             continue;
         }
 
         uint64_t co_start_at = p->co_started_at;
         if (co_start_at == 0) {
             DEBUGF("[wait_sysmon.share] p_index=%d, co=%p/%p co_stared_at = 0, will skip", p->index, p->coroutine,
-                    co);
+                   co);
             continue;
         }
         uint64_t time = (uv_hrtime() - co_start_at);
         if (time < CO_TIMEOUT) {
             DEBUGF("[processor_sysmon] p_index=%d, co=%p/%p run not timeout(%lu ms), will skip", p->index,
-                    p->coroutine, co,
-                    time / 1000 / 1000);
+                   p->coroutine, co,
+                   time / 1000 / 1000);
             continue;
         }
 
@@ -280,140 +280,27 @@ static void processor_sysmon() {
         *p->tls_yield_safepoint_ptr = true;
 
         DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p run timeout=%d ms(co_start=%ld) set tls yield safepoint=true", p->index,
-                (uint64_t) p->thread_id, p->coroutine, time / 1000 / 1000, co_start_at / 1000 / 1000);
+               (uint64_t) p->thread_id, p->coroutine, time / 1000 / 1000, co_start_at / 1000 / 1000);
     }
-
-
-    //            RDEBUGF("[wait_sysmon.share] runtime timeout(%lu ms), wait locker, p_index_%d=%d(%lu)", time / 1000 / 1000,
-    //                    p->share, p->index,
-    //                    (uint64_t) p->thread_id);
-    //
-    //            RDEBUGF("warning deadlock: processor %d run timeout(%lu ms)", p->index, time / 1000 / 1000);
-    //
-    //
-    //            // 尝试 10ms 获取抢占 disable_preempt_locker,避免抢占期间抢占状态变更成不可抢占, 如果获取不到就跳过
-    //            // 但是可以从 not -> can
-    //            int trylock = mutex_times_trylock(&p->thread_locker, 10);
-    //            if (trylock == -1) {
-    //                RDEBUGF("[wait_sysmon.share] trylock failed, p_index_%d=%d(%lu)", p->share, p->index,
-    //                        (uint64_t) p->thread_id);
-    //                continue;
-    //            }
-    //
-    //            // yield/exit 首先就设置 can_preempt = false, 这里就无法完成。所以 p->coroutine 一旦设置就无法被清空或者切换
-    //            RDEBUGF("[wait_sysmon.share.thread_locker] try locker success, p_index_%d=%d", p->share, p->index);
-    //
-    //            // 判断当前是否是可抢占状态
-    //            if (p->status != P_STATUS_RUNNING && p->status != P_STATUS_TPLCALL && p->status != P_STATUS_RTCALL) {
-    //                RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d, status=%d cannot preempt, goto unlock", p->index,
-    //                        p->status);
-    //                goto SHARE_UNLOCK_NEXT;
-    //            }
-    //
-    //            // 获取了 thread_locker 此时协程的状态被锁定，且 p->co 也不再允许进行切换
-    //            // 但是获取该锁期间，status/p->co 可能都发生了变化，所以需要重新进行判断
-    //            // 成功获取到 locker 并且当前 can_preempt = true 允许抢占，
-    //            // 但是这期间可能已经发生了 co 切换，所以再次进行 co_start 超时的判断
-    //            co = p->coroutine;
-    //            assert(co);
-    //            // 协程发生了切换，原来的超时已经失效
-    //            if (co->flag & FLAG(CO_FLAG_RTFN)) {
-    //                RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d, co=%p is runtime fn, goto unlock", p->index, co);
-    //                goto SHARE_UNLOCK_NEXT;
-    //            }
-    //
-    //            // 由于获取了锁，此时 p->co_started_at 无法被重新赋值，所以再次获取时间判断超时
-    //            co_start_at = p->co_started_at;
-    //            if (co_start_at == 0) {
-    //                RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d, co=%p co_stared_at = 0, goto unlock", p->index,
-    //                        co);
-    //                goto SHARE_UNLOCK_NEXT;
-    //            }
-    //            time = (uv_hrtime() - co_start_at);
-    //            if (time < CO_TIMEOUT) {
-    //                RDEBUGF("[wait_sysmon.share.thread_locker] p_index=%d, co=%p not timeout(%lu ms), goto unlock",
-    //                        p->index, p->coroutine,
-    //                        time / 1000 / 1000);
-    //                goto SHARE_UNLOCK_NEXT;
-    //            }
-    //
-    //            // 无限等待状态变成 running, 而不会主动抢占，但是会日志提醒主线程占用？还是强制抢占呢?
-    //            // 只要 wait_sysmon 是干净的，强制抢占的话，时间是不是可以短一点, 另外 sprintf 总是可能卡死的
-    //
-    //            // 基于协作的原则，还是不进行强制抢占，还是使用 deadlock 进行提醒，时间可以设置久一点，500ms
-    //            int count = 0;
-    //            while (true) {
-    //                // 进入到允许抢占状态
-    //                if (p->status == P_STATUS_RUNNING) {
-    //                    DEBUGF(
-    //                            "[wait_sysmon.share.thread_locker] p_index=%d(%lu), p_status=%d co=%p in running, use count=%d",
-    //                            p->index,
-    //                            (uint64_t) p->thread_id, p->status, p->coroutine, count);
-    //                    if (count > 200) {
-    //                        DEBUGF(
-    //                                "[wait_sysmon.share.thread_locker] p_index=%d(%lu), p_status=%d co=%p syscall timout use count=%d",
-    //                                p->index,
-    //                                (uint64_t) p->thread_id, p->status, p->coroutine, count);
-    //                    }
-    //                    break;
-    //                }
-    //
-    //                // 进入到 STW 安全状态
-    //                if (p->status == P_STATUS_DISPATCH) {
-    //                    RDEBUGF(
-    //                            "[wait_sysmon.share.thread_locker] p_index=%d(%lu), p_status=%d co=%p change dispatch, will unlock",
-    //                            p->index,
-    //                            (uint64_t) p->thread_id, p->status, p->coroutine);
-    //                    goto SHARE_UNLOCK_NEXT;
-    //                }
-    //
-    //                count++;
-    //                usleep(1 * 1000);
-    //            }
-    //
-    //            // 抢占超时
-    //            // if (p->status == P_STATUS_TPLCALL || p->status == P_STATUS_RTCALL) {
-    //            //     assertf(false, "deadlock: syscall run timeout, p_index=%d(%lu), co=%p", p->index, (uint64_t)p->thread_id, p->coroutine);
-    //            // }
-    //
-    //            assert(p->status == P_STATUS_RUNNING);
-    //
-    //            // 开始抢占
-    //            DEBUGF(
-    //                    "[wait_sysmon.share.thread_locker] p_index=%d(%lu), p_status=%d co=%p run timeout(%lu ms), will send SIGURG",
-    //                    p->index,
-    //                    (uint64_t) p->thread_id, p->status, p->coroutine, time / 1000 / 1000);
-    //
-    //            // 发送信号强制中断线程
-    //            if (pthread_kill(p->thread_id, SIGURG) != 0) {
-    //                assert(false && "error sending SIGURG to thread");
-    //            }
-    //
-    //            // 直接更新 can_preempt 的值以及清空 co_start_t 避免被重复抢占
-    //            DEBUGF("[wait_sysmon.share.thread_locker] p_index=%d send SIGURG success", p->index);
-    //            p->status = P_STATUS_PREEMPT;
-    //        SHARE_UNLOCK_NEXT:
-    //            mutex_unlock(&p->thread_locker);
-    //            DEBUGF("[wait_sysmon.share.thread_locker] unlocker, p_index_%d=%d", p->share, p->index);
-    //        }
 }
 
 static void wait_sysmon() {
     // 每 50 * 10ms 进行 eval 一次
-    int gc_eval_count = WAIT_MID_TIME;
+    int gc_eval_count = WAIT_SHORT_TIME;
 
     // 循环监控(每 10ms 监控一次)
     while (true) {
+        DEBUGF("[wait_sysmon] will processor sysmon ");
+
         processor_sysmon();
 
+        DEBUGF("[wait_sysmon] sysmon end, will eval gc %ld", gc_eval_count);
         // - GC 判断 (每 100ms 进行一次)
         if (gc_eval_count <= 0) {
             runtime_eval_gc();
             gc_eval_count = WAIT_SHORT_TIME; // 10 * 10ms = 100ms
         }
-
         gc_eval_count--;
-
         usleep(WAIT_SHORT_TIME * 1000); // 10ms
     }
 }
