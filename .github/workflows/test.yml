@@ -57,6 +57,26 @@ jobs:
           append-timestamp: false
           key: ${{ matrix.target }}
       
+      # 添加模型文件缓存步骤
+      - name: Cache LLaMA model files
+        uses: actions/cache@v4
+        with:
+          path: tests/features/cases/20250324_00_llama/stories15M.bin
+          key: llama-model-stories15M-${{ hashFiles('tests/features/cases/20250324_00_llama/README.md') }}
+          restore-keys: |
+            llama-model-stories15M-
+      
+      # 添加模型文件下载步骤
+      - name: Download LLaMA model file
+        run: |
+          cd tests/features/cases/20250324_00_llama
+          if [ ! -f "stories15M.bin" ]; then
+            echo "Downloading stories15M.bin model file..."
+            wget https://huggingface.co/karpathy/tinyllamas/resolve/main/stories15M.bin
+          else
+            echo "Model file stories15M.bin already exists (from cache)"
+          fi
+      
       - name: Set job parallelism
         id: parallelism
         run: |
@@ -100,4 +120,4 @@ jobs:
         uses: threeal/ctest-action@v1.1.0
         with:
           test-dir: build-release/tests
-          args: -E "20250424_00_parker|20250418_00_playground|20250324_00_llama" --timeout 80
+          args: -E "20250424_00_parker|20250418_00_playground" --timeout 80
