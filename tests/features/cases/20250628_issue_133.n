@@ -1,0 +1,29 @@
+type Pair<T,U> = struct {
+	T first;
+	U second;
+};
+
+fn Pair<T,U>.get_first(): T {
+	return self.first;
+}
+
+fn Pair<T,U>.get_second(): U {
+	return self.second;
+}
+
+type Message = struct {
+	string content;
+	i32 id;
+};
+
+fn Message.get_content(): string {
+	return self.content;
+}
+
+fn main() {
+	//compiler error: Assertion failed: target->assert_type == LIR_OPERAND_VAR (/app/src/linear.c: linear_struct_fill_default: 403) Aborted (core dumped)
+	var pair2 = Pair<i32, ptr<Message>> {first = 1000000000, second = new Message(content = "err msg", id = -1)}
+	println("First: ", pair2.first);
+	println("Second: ", pair2.second.get_content());
+}
+
