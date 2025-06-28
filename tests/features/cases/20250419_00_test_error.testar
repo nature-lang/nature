@@ -41,3 +41,35 @@ fn main():void! {
 fn main() {
     assert(global_arr[0] == 1 && global_arr[1] == 2)
 }
+
+=== test_amd64_struct_param
+--- main.n
+type type_t = struct{
+    int size
+    int hash
+    int v
+}
+
+fn type_t.to_string() {
+    println(self.size)
+}
+
+fn bar(type_t t) {
+    println(t.size)
+}
+
+fn foo(type_t foov) {
+    bar(foov)
+    foov.to_string()
+}
+
+fn main() {
+    var t = type_t{
+        size = 124,
+    }
+    foo(t)
+}
+
+--- output.txt
+124
+124
