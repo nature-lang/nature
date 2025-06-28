@@ -1,2 +1,23 @@
-fn main() {
+import co
+import time
+
+fn main():void! {
+    i64 start = time.now().ms_timestamp()
+    int count = 1000
+    var done = chan_new<bool>()
+    var mockfn = fn(int id):void! {
+        co.sleep(1000)
+
+        done.send(true)
+    }
+    for int i = 0; i < count; i+=1 {
+        go mockfn(i)
+    }
+
+    for int i = 0; i < count; i+=1 {
+        done.recv()
+    }
+    var end = time.now().ms_timestamp()
+    println('done, use time: ', end, start, end - start)
+    assert(end - start < 2000)
 }
