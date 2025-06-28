@@ -17,7 +17,9 @@ fn alloc():[i64] {
 fn main() {
     var list = alloc()
     var before = runtime.malloc_bytes()
-    co.sleep(1000) // 等待 gc 完成
+
+    co.sleep(2000) // wait gc completed
+
     var take = list[9999]
     var after = runtime.malloc_bytes()
     println(before, take, after)
