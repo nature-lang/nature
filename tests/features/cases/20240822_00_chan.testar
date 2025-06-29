@@ -115,13 +115,9 @@ fn main():void! {
     i64 start = time.now().ms_timestamp()
     int count = 1000
     var done = chan_new<bool>()
-    var ids = set_new<int>()
-
     for int i = 0; i < count; i+=1 {
         go fn(int id):void! {
             co.sleep(100)
-            ids.add(id)
-
             done.send(true)
         }(i)
     }
@@ -144,13 +140,10 @@ fn main():void! {
     i64 start = time.now().ms_timestamp()
     int count = 1000
     var done = chan_new<bool>()
-    var ids = set_new<int>()
-    ids.add(100)
 
     for int i = 0; i < count; i+=1 {
         go fn():void! {
             co.sleep(100)
-            ids.add(i)
 
             done.send(true)
         }()
