@@ -7,8 +7,7 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    char *str = "hello world 2024\n"
-                "use time 2\n";
+    char *str = "hello world 2024\n";
 
     assert_string_equal(raw, str);
 }
