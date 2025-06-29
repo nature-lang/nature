@@ -17,7 +17,7 @@ extern n_processor_t *processor_index[1024];
 extern n_processor_t *processor_list; // 共享协程列表的数量一般就等于线程数量
 
 //extern n_processor_t *solo_processor_list; // 独享协程列表其实就是多线程
-extern coroutine_t *main_coroutine;
+extern bool main_coroutine_exited;
 
 //extern mutex_t solo_processor_locker; // 删除 solo processor 需要先获取该锁
 extern int64_t coroutine_count;

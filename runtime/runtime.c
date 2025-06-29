@@ -22,7 +22,7 @@ int runtime_main(int argc, char *argv[]) {
     log_set_level(LOG_FATAL);
 #endif
     // - read arg
-    RDEBUGF("[runtime_main] start, argc=%d, argv=%p", argc, argv);
+    DEBUGF("[runtime_main] start, argc=%d, argv=%p", argc, argv);
     command_argc = argc;
     command_argv = argv;
 
@@ -39,7 +39,6 @@ int runtime_main(int argc, char *argv[]) {
 
     // - 提取 main 进行 coroutine 创建调度，需要等待 processor init 加载完成
     coroutine_t *main_co = rt_coroutine_new((void *) user_main, FLAG(CO_FLAG_MAIN), NULL, NULL);
-    main_coroutine = main_co;
     rt_coroutine_dispatch(main_co);
     RDEBUGF("[runtime_main] main_co dispatch success")
 
