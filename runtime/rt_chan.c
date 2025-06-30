@@ -9,11 +9,11 @@ typedef struct {
 
 static void selunlock(scase *cases, int16_t *lockorder, int16_t norder);
 
-static bool buf_empty(n_chan_t *ch) {
+static inline bool buf_empty(n_chan_t *ch) {
     return ch->buf_front == ch->buf_rear;
 }
 
-static bool buf_full(n_chan_t *ch) {
+static inline bool buf_full(n_chan_t *ch) {
     if (ch->buf->length == 0) {
         return true;
     }
@@ -23,7 +23,7 @@ static bool buf_full(n_chan_t *ch) {
 /**
  * 从队列头部取出元素
  */
-static void buf_pop(n_chan_t *ch, void *msg_ptr) {
+static inline void buf_pop(n_chan_t *ch, void *msg_ptr) {
     assert(!buf_empty(ch));
 
     if (msg_ptr) {
@@ -46,12 +46,12 @@ static void *buf_next_ref(n_chan_t *ch) {
 }
 
 
-static bool waitq_empty(waitq_t *waitq) {
+static inline bool waitq_empty(waitq_t *waitq) {
     assert(waitq);
     return waitq->head == NULL;
 }
 
-static void waitq_push(waitq_t *waitq, linkco_t *linkco) {
+static inline void waitq_push(waitq_t *waitq, linkco_t *linkco) {
     assert(waitq);
 
     assert(linkco->next == NULL);
@@ -71,7 +71,7 @@ static void waitq_push(waitq_t *waitq, linkco_t *linkco) {
     }
 }
 
-static void waitq_remove(waitq_t *waitq, linkco_t *lc) {
+static inline void waitq_remove(waitq_t *waitq, linkco_t *lc) {
     linkco_t *x = lc->prev;
     linkco_t *y = lc->next;
     if (x != NULL) {
@@ -105,7 +105,7 @@ static void waitq_remove(waitq_t *waitq, linkco_t *lc) {
     }
 }
 
-static linkco_t *waitq_pop(waitq_t *waitq) {
+static inline linkco_t *waitq_pop(waitq_t *waitq) {
     assert(waitq);
 
     while (true) {

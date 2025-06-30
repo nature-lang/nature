@@ -7,13 +7,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-static void test_basic() {
-    char *raw = exec_output();
-    return;// 不报错就行了, 不需要判断时间
-    char *str = "";
-    assert_string_equal(raw, str);
-}
-
 int main(void) {
-    TEST_WITH_PACKAGE
+    TEST_EXEC_IMM
 }

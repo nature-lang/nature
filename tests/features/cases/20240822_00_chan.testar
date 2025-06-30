@@ -86,12 +86,11 @@ import co
 import time
 
 fn main():void! {
-    i64 start = time.unix()
-    int count = 100
+    i64 start = time.now().ms_timestamp()
+    int count = 1000
     var done = chan_new<bool>()
     var mockfn = fn(int id):void! {
         co.sleep(1000)
-        // println(id, 'coroutine end')
 
         done.send(true)
     }
@@ -102,29 +101,23 @@ fn main():void! {
     for int i = 0; i < count; i+=1 {
         done.recv()
     }
-
-    println('done, use time: ', time.unix() - start)
-    assert(time.unix() - start < 2)
+    var end = time.now().ms_timestamp()
+    println('done, use time: ', end, start, end - start)
+    assert(end - start < 2000)
 }
 
-=== test_chan_done2[repeat=5]
+=== test_chan_done2[repeat=50]
 --- main.n
 import co
 import time
 
 fn main():void! {
-    i64 start = time.unix()
-    int count = 100
+    i64 start = time.now().ms_timestamp()
+    int count = 1000
     var done = chan_new<bool>()
-    var ids = set_new<int>()
-
     for int i = 0; i < count; i+=1 {
         go fn(int id):void! {
-            co.sleep(1000)
-            // set 不是线程安全的，所以 add 可能会失败
-            ids.add(id)
-            // println(id, 'coroutine end', succ)
-
+            co.sleep(100)
             done.send(true)
         }(i)
     }
@@ -133,27 +126,24 @@ fn main():void! {
         done.recv()
     }
 
-    assert(time.unix() - start == 1)
-    println('done, use time: ', time.unix() - start)
+    var end = time.now().ms_timestamp()
+    println('done, use time: ', end, start, end - start)
+    assert(end - start < 200)
 }
 
-=== test_chan_done3[repeat=20]
+=== test_chan_done3[repeat=200]
 --- main.n
 import co
 import time
 
 fn main():void! {
-    i64 start = time.unix()
-    int count = 100
+    i64 start = time.now().ms_timestamp()
+    int count = 1000
     var done = chan_new<bool>()
-    var ids = set_new<int>()
-    ids.add(100)
 
     for int i = 0; i < count; i+=1 {
         go fn():void! {
-            co.sleep(1000)
-            ids.add(i)
-            // println(i, 'coroutine end', succ)
+            co.sleep(100)
 
             done.send(true)
         }()
@@ -163,7 +153,7 @@ fn main():void! {
         done.recv()
     }
 
-    var end = time.unix()
-    println('done, use time: ', end - start)
-    assert(end - start <= 1)
+    var end = time.now().ms_timestamp()
+    println('done, use time: ', end, start, end - start)
+    assert(end - start < 200)
 }

@@ -611,18 +611,28 @@ static void linear_escape_rewrite(module_t *m, ast_var_decl_t *var_decl, bool fo
         return;
     }
 
-    lir_operand_t *temp_operand = temp_var_operand(m, type_ptrof(symbol_var->type));
-    symbol_var->heap_ident = ((lir_var_t *) temp_operand->value)->ident;
+
+    type_t heap_type = type_ptrof(symbol_var->type);
+    if (is_stack_ref_big_type(symbol_var->type)) {
+        heap_type = symbol_var->type;
+    }
+
+    // 由于数据在堆中分配，所以不需要调用 temp_var_operand_with_alloc 触发栈分配
+    lir_operand_t *heap_operand = temp_var_operand(m, heap_type);
+    symbol_var->heap_ident = ((lir_var_t *) heap_operand->value)->ident;
+
+    lir_operand_t *temp_operand = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
 
     // - 基于原始类型申请堆空间,此时 temp_operand 时一个指针类型
     uint64_t rtype_hash = ct_find_rtype_hash(symbol_var->type);
     push_rt_call(m, RT_CALL_GC_MALLOC, temp_operand, 1, int_operand(rtype_hash));
+    OP_PUSH(lir_op_move(heap_operand, temp_operand));
 
     // - mov src 则是原始数据
     lir_operand_t *src = lir_var_operand(m, var_decl->ident);
-    lir_operand_t *dst = temp_operand;
+    lir_operand_t *dst = heap_operand;
     if (!is_stack_ref_big_type(var_decl->type)) {
-        dst = indirect_addr_operand(m, var_decl->type, temp_operand, 0);
+        dst = indirect_addr_operand(m, var_decl->type, heap_operand, 0);
     }
 
     linear_super_move(m, var_decl->type, dst, src);
@@ -1674,7 +1684,8 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
 
                 // no check
                 lir_operand_t *index_target = int_operand(index);
-                lir_operand_t *arg_dst_target = linear_inline_vec_element_addr_no_check(m, rest_vec_target, index_target, vec_element_type);
+                lir_operand_t *arg_dst_target = linear_inline_vec_element_addr_no_check(m, rest_vec_target,
+                                                                                        index_target, vec_element_type);
 
                 // 基于 vec_element_type 判断 assign 的 item 类型
                 if (is_gc_alloc(vec_element_type.kind)) {
@@ -2009,7 +2020,8 @@ static lir_operand_t *linear_vec_new(module_t *m, ast_expr_t expr, lir_operand_t
 
             lir_operand_t *index_target = int_operand(i);
 
-            lir_operand_t *item_dst_target = linear_inline_vec_element_addr_no_check(m, vec_target, index_target, vec_element_type);
+            lir_operand_t *item_dst_target = linear_inline_vec_element_addr_no_check(m, vec_target, index_target,
+                                                                                     vec_element_type);
 
             lir_operand_t *item_src_target = linear_expr(m, *item_expr, NULL);
 
@@ -2900,7 +2912,7 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
         }
 
         OP_PUSH(lir_op_bal(handle_end->output));
-    LINEAR_HANDLE_BODY:
+        LINEAR_HANDLE_BODY:
         OP_PUSH(handle_start);
         linear_body(m, match_case->handle_body);
         // 只要运行了 exec， 就直接结束 case 而不是继续执行。

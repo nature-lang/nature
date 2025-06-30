@@ -16,7 +16,7 @@ n_processor_t *processor_list; // 共享协程列表的数量一般就等于线�
 //mutex_t solo_processor_locker; // 删除 solo processor 需要先获取该锁
 
 int64_t coroutine_count; // coroutine 累计数量
-coroutine_t *main_coroutine = NULL;
+bool main_coroutine_exited = false;
 
 rt_linked_fixalloc_t global_gc_worklist;
 
@@ -76,9 +76,9 @@ NO_OPTIMIZE void co_preempt_yield() {
     // 接下来将直接 return 到用户态，不经过 post_tpl_hook, 所以直接更新为允许抢占
     // yield 切换回了用户态，此时允许抢占，所以不能再使用 RDEBUG, 而是 DEBUG
     DEBUGF("[runtime.co_preempt_yield] yield resume end, will set running, p_index=%d, p_status=%d co=%p, p->co=%p, share_stack.base=%p, share_stack.top(sp)=%p, co_start_at=%ld",
-            p->index,
-            p->status, co, p->coroutine, p->share_stack.align_retptr, co->aco.reg[ACO_REG_IDX_SP],
-            p->co_started_at / 1000 / 1000);
+           p->index,
+           p->status, co, p->coroutine, p->share_stack.align_retptr, co->aco.reg[ACO_REG_IDX_SP],
+           p->co_started_at / 1000 / 1000);
 
     //    co_set_status(p, co, CO_STATUS_RUNNING);
     //    processor_set_status(p, P_STATUS_RUNNING);
@@ -234,7 +234,7 @@ NO_OPTIMIZE static void coroutine_wrapper() {
     ((void_fn_t) co->fn)();
 
     DEBUGF(
-            "[runtime.coroutine_wrapper] user fn completed, p_index=%d co=%p, main=%d, rt_fn=%d,err=%p, will set status to rtcall",
+            "[runtime.coroutine_wrapper] user fn completed, p_index=%d co=%p, main=%d, rt_fn=%d,err=%p",
             p->index, co,
             co->main, co->flag & FLAG(CO_FLAG_RTFN), co->error);
 
@@ -259,6 +259,11 @@ NO_OPTIMIZE static void coroutine_wrapper() {
     }
 
     co_set_status(p, co, CO_STATUS_DEAD);
+    if (co->main) {
+        main_coroutine_exited = true;
+        DEBUGF("[runtime.coroutine_wrapper] co=%p main exited", co);
+    }
+
     mutex_unlock(&co->dead_locker);
 
     DEBUGF("[runtime.coroutine_wrapper] co=%p will dead", co);
@@ -378,7 +383,6 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
     // 核心 resume
     aco_resume(&co->aco);
 
-    // rtcall/tplcall 都可以无锁进入到 dispatch 状态，dispatch 状态是一个可以安全 stw 的状态
     TRACEF(
             "[coroutine_resume] resume back, p_index=%d(%d), co=%p, status=%d, rt_fn=%d",
             p->index, p->status, co, co->status, co->flag & FLAG(CO_FLAG_RTFN));
@@ -424,32 +428,18 @@ static void processor_run(void *raw) {
     p->tls_yield_safepoint_ptr = &tls_yield_safepoint;
 
     // 注册线程信号监听, 用于抢占式调度
-    // 分配备用信号栈
-    //    stack_t *ss = NEW(stack_t);
-    //    ss->ss_sp = mallocz(SIGSTKSZ);
-    //    ss->ss_size = SIGSTKSZ;
-    //    ss->ss_flags = 0;
-    //    sigaltstack(ss, NULL); // 配置为信号处理函数使用栈
-
-    //    p->sig.sa_flags = SA_SIGINFO | SA_RESTART;
-    //    p->sig.sa_sigaction = thread_handle_sig;
-
-    //    if (sigaction(SIGURG, &p->sig, NULL) == -1) {
-    //        assert(false && "sigaction failed");
-    //    }
-
     // 将 p 存储在线程维度全局遍历中，方便直接在 coroutine 运行中读取相关的 processor
     uv_key_set(&tls_processor_key, p);
 
-    int64_t run_count = 0;
-
     // 对 p 进行调度处理(p 上面可能还没有 coroutine)
     while (true) {
-        // TRACEF("[runtime.processor_run] handle, p_index_%d=%d", p->share, p->index);
+        TRACEF("[runtime.processor_run] handle, p_index=%d, main_exited=%d, running_count=%ld", p->index, main_coroutine_exited,
+               p->runnable_list.count);
+
         // - stw
         if (p->need_stw > 0) {
         STW_WAIT:
-            DEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index=%d", p->need_stw, p->index);
+            DEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index=%d, main_exited=%d", p->need_stw, p->index, main_coroutine_exited);
             p->in_stw = p->need_stw;
 
             // runtime_gc 线程会解除 safe 状态，所以这里一直等待即可
@@ -459,20 +449,20 @@ static void processor_run(void *raw) {
                 usleep(WAIT_BRIEF_TIME * 1000); // 1ms
             }
 
-            DEBUGF("[runtime.processor_run] p_index=%d, stw completed, need_stw=%lu, safe_point=%lu",
+            DEBUGF("[runtime.processor_run] p_index=%d, stw completed, need_stw=%lu, safe_point=%lu, main_exited=%d",
                     p->index, p->need_stw,
-                    p->in_stw);
+                    p->in_stw, main_coroutine_exited);
         }
 
         // - exit
-        if (main_coroutine->status == CO_STATUS_DEAD) {
-            RDEBUGF("[runtime.processor_run] main coroutine dead, goto exit");
+        if (main_coroutine_exited) {
+            DEBUGF("[runtime.processor_run] main coroutine dead, goto exit");
             goto EXIT;
         }
 
         // - 处理 coroutine (找到 io 可用的 goroutine)
-        uint64_t time_start = uv_hrtime();
-        while (p->runnable_list.count > 0) {
+        int64_t handle_limit = 100;
+        while (p->runnable_list.count > 0 && handle_limit > 0) {
             coroutine_t *co = rt_linked_fixalloc_pop(&p->runnable_list);
             assert(co);
 
@@ -480,7 +470,7 @@ static void processor_run(void *raw) {
                     co->status);
 
             coroutine_resume(p, co);
-            run_count++;
+            handle_limit--;
 
             if (p->need_stw > 0) {
                 RDEBUGF("[runtime.processor_run] coroutine resume and p need stw, will goto stw, p_index=%d, co=%p",
@@ -488,25 +478,13 @@ static void processor_run(void *raw) {
                 goto STW_WAIT;
             }
 
+            if (main_coroutine_exited) {
+                goto EXIT;
+            }
+
             RDEBUGF("[runtime.processor_run] coroutine resume back, p_index=%d, co=%p",
                     p->index, co);
         }
-
-        // solo processor exit check
-        //        if (!p->share) {
-        //            assert(p->co_list.count == 1);
-        //            coroutine_t *solo_co = rt_linked_fixalloc_first(&p->co_list)->value;
-        //            assertf(solo_co, "solo_co is null, p_index_%d=%d, co_list linked_node=%p", p->share, p->index,
-        //                    rt_linked_fixalloc_first(&p->co_list));
-        //
-        //            if (solo_co->status == CO_STATUS_DEAD) {
-        //                RDEBUGF(
-        //                        "[runtime.processor_run] solo processor co exit, will exit processor run, p_index=%d, co=%p, status=%d",
-        //                        p->index,
-        //                        solo_co, solo_co->status);
-        //                goto EXIT;
-        //            }
-        //        }
 
         // - 处理 io 就绪事件(也就是 run 指定时间的 libuv)
         io_run(p, WAIT_BRIEF_TIME * 5);
@@ -517,7 +495,7 @@ EXIT:
     p->thread_id = 0;
     processor_set_status(p, P_STATUS_EXIT);
 
-    RDEBUGF("[runtime.processor_run] exited, p_index=%d", p->index);
+    DEBUGF("[runtime.processor_run] exited, p_index=%d", p->index);
 }
 
 void rt_coroutine_dispatch(coroutine_t *co) {

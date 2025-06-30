@@ -8,12 +8,12 @@ static void rt_set_data_index(n_set_t *m, uint64_t hash_index, uint64_t data_ind
 
 // no grow
 static bool _rt_set_add(n_set_t *m, void *key_ref) {
-    DEBUGF("[runtime.rt_set_add] key_ref=%p, key_rtype_hash=%lu, len=%lu, cap=%lu", key_ref, m->key_rtype_hash,
-           m->length, m->capacity);
+    DEBUGF("[runtime._rt_set_add] key_ref=%p, key_rtype_hash=%lu, len=%lu, cap=%lu", key_ref, m->key_rtype_hash,
+            m->length, m->capacity);
 
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
     uint64_t hash_value = m->hash_table[hash_index];
-    DEBUGF("[runtime.rt_set_add] hash_index=%lu, hash_value=%lu", hash_index, hash_value);
+    DEBUGF("[runtime._rt_set_add] hash_index=%lu, hash_value=%lu", hash_index, hash_value);
 
     uint64_t key_index;
     bool added = false;
@@ -49,7 +49,7 @@ static bool _rt_set_add(n_set_t *m, void *key_ref) {
 
 static void rt_set_grow(n_set_t *m) {
     DEBUGF("[runtime.rt_set_grow] len=%lu, cap=%lu, key_data=%p, hash_table=%p", m->length, m->capacity, m->key_data,
-           m->hash_table);
+            m->hash_table);
 
     assert(m->key_rtype_hash > 0);
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
@@ -114,8 +114,8 @@ n_set_t *rt_set_new(uint64_t rtype_hash, uint64_t key_hash) {
  * @return
  */
 bool rt_set_add(n_set_t *m, void *key_ref) {
-    DEBUGF("[runtime.rt_set_add] key_ref=%p, key_rtype_hash=%lu, len=%lu, cap=%lu", key_ref, m->key_rtype_hash,
-           m->length, m->capacity);
+    DEBUGF("[runtime.rt_set_add] key_ref=%p, key_rtype_hash=%lu, len=%lu, cap=%lu, need_grow=%d", key_ref, m->key_rtype_hash,
+            m->length, m->capacity, (double) m->length + 1 > (double) m->capacity * HASH_MAX_LOAD);
 
     // 扩容
     if ((double) m->length + 1 > (double) m->capacity * HASH_MAX_LOAD) {
