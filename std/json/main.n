@@ -61,10 +61,6 @@ fn serialize_value(anyptr p, reflect.type_t t):[u8]! {
             var f64_val = unsafe.ptr_to<f64>(p)
             return fmt.sprintf('%f', f64_val) as [u8]
         }
-        reflect.STRING -> {
-            var string_val = unsafe.ptr_to<string>(p)
-            return fmt.sprintf('\"%s\"', string_val) as [u8]
-        }
         reflect.UNION -> {
             var v = unsafe.ptr_to<anyptr>(p)
             var rv = v as rawptr<reflect.union_t>
@@ -74,6 +70,7 @@ fn serialize_value(anyptr p, reflect.type_t t):[u8]! {
             var union_t = reflect.typeof_hash(rv.rtype.hash)
             return serialize_value(union_p, union_t)
         }
+        reflect.STRING -> serialize_string(unsafe.ptr_to<string>(p))
         reflect.STRUCT -> serialize_struct(p, t)
         reflect.VEC -> serialize_vec(p, t)
         reflect.MAP -> serialize_map(p, t)
@@ -82,6 +79,58 @@ fn serialize_value(anyptr p, reflect.type_t t):[u8]! {
             return []
         }
     }
+}
+
+fn serialize_string(string s):[u8] {
+    [u8] result = ['\"'.char()]
+    
+    var bytes = s as [u8]
+    for i, c in bytes {
+        match c {
+            '\"'.char() -> {
+                result.push('\\'.char())
+                result.push('\"'.char())
+            }
+            '\\'.char() -> {
+                result.push('\\'.char())
+                result.push('\\'.char())
+            }
+            '\b'.char() -> {
+                result.push('\\'.char())
+                result.push('b'.char())
+            }
+            '\f'.char() -> {
+                result.push('\\'.char())
+                result.push('f'.char())
+            }
+            '\n'.char() -> {
+                result.push('\\'.char())
+                result.push('n'.char())
+            }
+            '\r'.char() -> {
+                result.push('\\'.char())
+                result.push('r'.char())
+            }
+            '\t'.char() -> {
+                result.push('\\'.char())
+                result.push('t'.char())
+            }
+            _ -> {
+                // 对于控制字符（0-31），使用unicode转义
+                if c < 32 {
+                    result.push('\\'.char())
+                    result.push('u'.char())
+                    var hex = fmt.sprintf('%04x', c as int)
+                    result.append(hex as [u8])
+                } else {
+                    result.push(c)
+                }
+            }
+        }
+    }
+    
+    result.push('\"'.char())
+    return result
 }
 
 // v is a pointer pointing to a struct value (maybe greater than 8byte), and the source may be stack or heap
@@ -460,7 +509,7 @@ fn deserialize_t.parser_string():string! {
             
             var escaped = self.data[self.cursor]
             match escaped {
-                '"'.char() -> result.push('"'.char())
+                '"'.char() -> result.push('\"'.char())
                 '\\'.char() -> result.push('\\'.char())
                 '/'.char() -> result.push('/'.char())
                 'b'.char() -> result.push('\b'.char())
@@ -473,6 +522,11 @@ fn deserialize_t.parser_string():string! {
                 }
             }
         } else {
+            // detect unescaped characters
+            if c == 9 || c == 10 || c == 13 {
+                throw errorf('invalid character in string literal at position %d', self.cursor)
+            }
+
             result.push(c)
         }
         
