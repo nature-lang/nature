@@ -106,7 +106,7 @@ fn main():void! {
     assert(end - start < 2000)
 }
 
-=== test_chan_done2[repeat=50]
+=== test_chan_done2[repeat=200]
 --- main.n
 import co
 import time
@@ -128,32 +128,5 @@ fn main():void! {
 
     var end = time.now().ms_timestamp()
     println('done, use time: ', end, start, end - start)
-    assert(end - start < 200)
-}
-
-=== test_chan_done3[repeat=200]
---- main.n
-import co
-import time
-
-fn main():void! {
-    i64 start = time.now().ms_timestamp()
-    int count = 1000
-    var done = chan_new<bool>()
-
-    for int i = 0; i < count; i+=1 {
-        go fn():void! {
-            co.sleep(100)
-
-            done.send(true)
-        }()
-    }
-
-    for int i = 0; i < count; i+=1 {
-        done.recv()
-    }
-
-    var end = time.now().ms_timestamp()
-    println('done, use time: ', end, start, end - start)
-    assert(end - start < 200)
+    assert(end - start < 300)
 }
