@@ -256,15 +256,20 @@ static autobuf_t *scanner_string_advance(module_t *m, char close_char) {
     m->s_cursor.guard++; // 跳过 open_char
     char escape_char = '\\';
 
+    // 判断是否为反引号字符串（原始字符串）
+    bool is_raw_string = (close_char == '`');
+
     // 由于包含字符串处理, 所以这里不使用 scanner_gen_word 直接生成
     autobuf_t *buf = autobuf_new(10);
 
     while (*m->s_cursor.guard != close_char && !scanner_at_eof(m)) {
         char guard = *m->s_cursor.guard;
 
-        SCANNER_ASSERTF(guard != '\n', "string cannot newline")
+        if (!is_raw_string && guard == '\n') {
+            SCANNER_ASSERTF(false, "string cannot newline")
+        }
 
-        if (guard == escape_char) {
+        if (!is_raw_string && guard == escape_char) {
             // 跳过转义字符
             m->s_cursor.guard++;
 

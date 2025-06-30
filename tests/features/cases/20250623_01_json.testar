@@ -289,7 +289,8 @@ fn main() {
 import json
 
 fn main() {
-    var s = ` { "key1" :  12 , "key" : 13 ,\n\r "key-1" : -1 }`
+    var s = ` { "key1" :  12 , "key" : 13 ,
+    "key-1" : -1 }`
     var m = json.deserialize<{string:int}>(s)
     println(m['key1'], m['key'], m['key-1'])
 }
@@ -302,7 +303,8 @@ fn main() {
 import json
 
 fn main() {
-    var s = ` { "key1" :  12 , "key" : ["a", "b", false] ,\n\r "key-1" : true }`
+    var s = ` { "key1" :  12 , "key" : ["a", "b", false] ,
+     "key-1" : true }`
     var m = json.deserialize<{string:any}>(s)
     println(m['key1'], (m['key'] as [any])[0], (m['key'] as [any])[1], (m['key'] as [any])[2], m['key-1'])
 }
@@ -316,7 +318,8 @@ fn main() {
 import json
 
 fn main() {
-    var s = ` { "key1" :  12 , "key" : ['a', 'b', '123'] ,\n\r  "unmatch" : "default", "key_1" : true  }`
+    var s = ` { "key1" :  12 , "key" : ['a', 'b', '123'] ,
+      "unmatch" : "default", "key_1" : true  }`
 
     type foo_t = struct{
         [string] key
@@ -331,14 +334,15 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' panic: 'expected `"` at position 27' at nature-test/main.n:13:15
+coroutine 'main' panic: 'expected `"` at position 27' at nature-test/main.n:14:15
 
 === test_deserialize_struct
 --- main.n
 import json
 
 fn main() {
-    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,\n\r  "unmatch" : "default", "key_1" : true  }`
+    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,
+      "unmatch" : "default", "key_1" : true  }`
 
     type foo_t = struct{
         [string] key
@@ -359,7 +363,8 @@ fn main() {
 import json
 
 fn main() {
-    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,\n\r  "unmatch" : "default", "key_1" : true  }`
+    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,
+      "unmatch" : "default", "key_1" : true  }`
 
     var a = json.deserialize<any>(s)
     var m = a as {string:any}
@@ -367,14 +372,15 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' panic: 'type assert failed' at nature-test/main.n:8:27
+coroutine 'main' panic: 'type assert failed' at nature-test/main.n:9:27
 
 === test_deserialize_any_failed2
 --- main.n
 import json
 
 fn main() {
-    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,\n\r  "unmatch" : "default", "key_1" : true  }`
+    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,
+      "unmatch" : "default", "key_1" : true  }`
 
     var a = json.deserialize<any>(s)
     var m = a as {string:any}
@@ -382,14 +388,15 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' panic: 'type assert failed' at nature-test/main.n:8:18
+coroutine 'main' panic: 'type assert failed' at nature-test/main.n:9:18
 
 === test_deserialize_any
 --- main.n
 import json
 
 fn main() {
-    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,\n\r  "unmatch" : "default", "key_1" : true  }`
+    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,
+      "unmatch" : "default", "key_1" : true  }`
 
     var a = json.deserialize<any>(s)
     var m = a as {string:any}

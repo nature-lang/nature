@@ -1,0 +1,106 @@
+=== test_backquotes1
+--- main.n
+fn main() {
+    var s = `hello
+ world`
+    println(s.len(), s)
+}
+
+--- output.txt
+12 hello
+ world
+
+=== test_backquotes2
+--- main.n
+fn main() {
+    var s = `\n\"`
+    println(s.len())
+}
+
+--- output.txt
+4
+
+=== test_json_escape_failed
+--- main.n
+import json
+
+fn main() {
+    var j = '"hello\n world"'
+    var s = json.deserialize<string>(j) catch e {
+        panic(e.msg())
+    }
+    println(s)
+}
+
+--- output.txt
+coroutine 'main' panic: 'invalid character in string literal at position 6' at nature-test/main.n:6:15
+
+
+=== test_json_escape_failed2
+--- main.n
+import json
+
+fn main() {
+    var j = '"hello\\ world"'
+    var s = json.deserialize<string>(j) catch e {
+        panic(e.msg())
+    }
+    println(s)
+}
+
+--- output.txt
+coroutine 'main' panic: 'invalid escape sequence at position 7' at nature-test/main.n:6:15
+
+=== test_json_escape
+--- main.n
+import json
+
+fn main() {
+    var j = '"hello\\nworld"'
+    var s = json.deserialize<string>(j) catch e {
+        panic(e.msg())
+    }
+    println(s)
+}
+
+--- output.txt
+hello
+world
+
+=== test_json_escape2
+--- main.n
+import json
+
+fn main() {
+    var j = `"hello\nworld"`
+    var s = json.deserialize<string>(j) catch e {
+        panic(e.msg())
+    }
+    println(s)
+}
+
+--- output.txt
+hello
+world
+
+=== test_json_escape3
+--- main.n
+import json
+
+fn main() {
+    var s = `hello\nworld`
+    var j = json.serialize(s)
+    println(j)
+    assert(j.len() == 15 && j == `"hello\\nworld"`)
+}
+
+=== test_json_escape4
+--- main.n
+import json
+
+fn main() {
+    var s = "hello\nworld"
+    var j = json.serialize(s)
+    println(j, j.len())
+    assert(j.len() == 14 && j == `"hello\nworld"`)
+}
