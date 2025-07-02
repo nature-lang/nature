@@ -114,6 +114,91 @@ static uint8_t gen_mov_reg_codes(uint8_t *codes, uint64_t reg_index, uint64_t fn
 }
 
 
+#elif defined(__RISCV64)
+
+/**
+ * RISCV64 加载 64 位立即数并跳转
+ * 例如加载地址 0x40007fffb8:
+ * lui t0, %hi(addr)     // 加载高20位
+ * addi t0, t0, %lo(addr) // 加载低12位
+ * jalr x0, t0, 0        // 跳转到 t0 寄存器地址
+ */
+static uint8_t gen_jmp_addr_codes(uint8_t *codes, uint64_t addr) {
+    // 使用 t0 寄存器 (x5) 作为临时寄存器
+    uint32_t *instr = (uint32_t *)codes;
+
+    // LUI t0, %hi(addr) - 加载高20位到 t0
+    uint32_t hi20 = (addr + 0x800) >> 12; // 加 0x800 处理符号扩展
+    instr[0] = 0x00000037 | (5 << 7) | (hi20 << 12); // LUI x5, imm
+
+    // ADDI t0, t0, %lo(addr) - 加载低12位
+    uint32_t lo12 = addr & 0xfff;
+    instr[1] = 0x00000013 | (5 << 7) | (5 << 15) | (lo12 << 20); // ADDI x5, x5, imm
+
+    // JALR x0, t0, 0 - 跳转到 t0 地址
+    instr[2] = 0x00000067 | (0 << 7) | (5 << 15); // JALR x0, x5, 0
+
+    return 12;
+}
+
+/**
+ * RISCV64 版本的栈存储实现
+ * fn_addr = 0x40007fffb8
+ * stack_offset = 0x10
+ *
+ * 汇编指令为:
+ * lui t0, %hi(addr)     // 加载地址高位到 t0
+ * addi t0, t0, %lo(addr) // 加载地址低位
+ * sd t0, offset(fp)     // 将 t0 存储到 fp+offset
+ *
+ * @param codes 输出的机器码缓冲区
+ * @param stack_offset 栈偏移量
+ * @param fn_runtime_ptr 要存储的函数指针
+ * @return 返回生成的机器码长度(12字节)
+ */
+static uint8_t gen_mov_stack_codes(uint8_t *codes, uint64_t stack_offset, uint64_t fn_runtime_ptr) {
+    uint32_t *instr = (uint32_t *)codes;
+
+    // LUI t0, %hi(fn_runtime_ptr)
+    uint32_t hi20 = (fn_runtime_ptr + 0x800) >> 12;
+    instr[0] = 0x00000037 | (5 << 7) | (hi20 << 12); // LUI x5, imm
+
+    // ADDI t0, t0, %lo(fn_runtime_ptr)
+    uint32_t lo12 = fn_runtime_ptr & 0xfff;
+    instr[1] = 0x00000013 | (5 << 7) | (5 << 15) | (lo12 << 20); // ADDI x5, x5, imm
+
+    // SD t0, offset(fp) - 存储到栈
+    // fp 是 x8 寄存器，offset 需要编码到指令中
+    uint32_t offset_hi = (stack_offset >> 5) & 0x7f;
+    uint32_t offset_lo = stack_offset & 0x1f;
+    instr[2] = 0x00003023 | (offset_lo << 7) | (8 << 15) | (5 << 20) | (offset_hi << 25); // SD x5, offset(x8)
+
+    return 12;
+}
+
+/**
+ * RISCV64 参数寄存器: a0-a7 (x10-x17)
+ */
+static uint8_t gen_mov_reg_codes(uint8_t *codes, uint64_t reg_index, uint64_t fn_runtime_ptr) {
+    if (reg_index > 7) {
+        assert(false && "RISCV64 only supports a0-a7 as parameter registers");
+    }
+
+    uint32_t *instr = (uint32_t *)codes;
+    uint32_t target_reg = 10 + reg_index; // a0-a7 对应 x10-x17
+
+    // LUI target_reg, %hi(fn_runtime_ptr)
+    uint32_t hi20 = (fn_runtime_ptr + 0x800) >> 12;
+    instr[0] = 0x00000037 | (target_reg << 7) | (hi20 << 12);
+
+    // ADDI target_reg, target_reg, %lo(fn_runtime_ptr)
+    uint32_t lo12 = fn_runtime_ptr & 0xfff;
+    instr[1] = 0x00000013 | (target_reg << 7) | (target_reg << 15) | (lo12 << 20);
+
+    return 8;
+}
+
+
 #else
 /**
  * ARM64 加载 64 位立即数需要使用多条指令

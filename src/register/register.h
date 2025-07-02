@@ -9,6 +9,7 @@
 #include "utils/type.h"
 #include "arch/amd64.h"
 #include "arch/arm64.h"
+#include "arch/riscv64.h"
 
 // -------- reg start -----------
 extern table_t *reg_table; // 根据 index 和 size 定位具体的寄存器
@@ -24,6 +25,8 @@ static inline void reg_init() {
         return amd64_reg_init();
     } else if (BUILD_ARCH == ARCH_ARM64) {
         return arm64_reg_init();
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        return riscv64_reg_init();
     }
 
     assertf(false, "not support arch %d", BUILD_ARCH);
@@ -34,6 +37,8 @@ static inline uint8_t alloc_reg_count() {
         return AMD64_ALLOC_REG_COUNT;
     } else if (BUILD_ARCH == ARCH_ARM64) {
         return ARM64_ALLOC_REG_COUNT;
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        return RISCV64_ALLOC_REG_COUNT;
     }
 
     assertf(false, "not support arch %d", BUILD_ARCH);

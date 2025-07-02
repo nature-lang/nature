@@ -1,0 +1,14 @@
+type test_t = struct{
+    f32 a
+    f32 b
+}
+
+fn callee(f32 a1, f32 a2, f32 a3, f32 a4, f32 a5, f32 a6, test_t test):f32 {
+    return test.a + test.b
+}
+
+fn main() {
+    var foo = test_t{}
+    callee(1, 2, 3, 4, 5, 6, foo)
+    println('hello world')
+}

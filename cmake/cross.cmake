@@ -52,3 +52,8 @@ if (CMAKE_SYSTEM_PROCESSOR MATCHES arm64)
     message("add compile def __ARM64")
     add_compile_definitions(__ARM64=1)
 endif ()
+
+if (CMAKE_SYSTEM_PROCESSOR MATCHES riscv64)
+    message("add compile def __riscv64")
+    add_compile_definitions(__RISCV64=1)
+endif ()

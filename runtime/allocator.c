@@ -522,7 +522,7 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
     uint64_t alloc_size = align_up((int64_t) *size, ARENA_SIZE);
 
     DEBUGF("[mheap_sys_alloc] hint addr=%p, need_size=%luM, align_alloc_size=%luM", (void *) hint->addr,
-           *size / 1024 / 1024, alloc_size / 1024 / 1024);
+            *size / 1024 / 1024, alloc_size / 1024 / 1024);
 
     void *v = NULL;
     while (true) {
@@ -533,6 +533,7 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
             hint->addr += alloc_size;
             break;
         }
+        DEBUGF("hint addr %p, actual alloc addr %p", (void *) hint->addr, v)
 
         // 分配失败
         // 释放刚刚申请的内存区域

@@ -3,6 +3,7 @@
 
 #include "src/native/amd64.h"
 #include "src/native/arm64.h"
+#include "src/native/riscv64.h"
 
 void asm_op_to_string(int i, void *op);
 

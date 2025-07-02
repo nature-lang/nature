@@ -19,6 +19,9 @@ add_executable(test_amd64_encoding test_amd64_encoding.c ${UTILS} ${SRC})
 target_link_libraries(test_amd64_encoding m)
 add_test(test_amd64_encoding test_amd64_encoding)
 
+add_executable(test_riscv64_encoding test_riscv64_encoding.c ${UTILS} ${SRC})
+add_test(test_riscv64_encoding test_riscv64_encoding)
+
 # ---------------------------------- cases 测试 ------------------------------------------
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)
 message("[test cases]make temp dir ${CMAKE_CURRENT_SOURCE_DIR}/tmp success")

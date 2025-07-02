@@ -1,6 +1,6 @@
 #include "register.h"
-#include "utils/helper.h"
 #include "arch/amd64.h"
+#include "utils/helper.h"
 #include <assert.h>
 
 table_t *reg_table; // 根据 index 和 size 定位具体的寄存器
@@ -14,6 +14,10 @@ reg_t *reg_select(uint8_t index, type_kind kind) {
     // arm64 平台中通用寄存器最小为 4byte, 就是 wn 中
     if (BUILD_ARCH == ARCH_ARM64 && size < DWORD) {
         size = DWORD;
+    }
+
+    if (BUILD_ARCH == ARCH_RISCV64 && size < QWORD) {
+        size = QWORD;
     }
 
     return reg_find(alloc_type, index, size);
@@ -59,9 +63,12 @@ lir_flag_t type_kind_trans_alloc(type_kind kind) {
 
 reg_t *covert_alloc_reg(reg_t *reg) {
     if (reg->flag & FLAG(LIR_FLAG_ALLOC_FLOAT)) {
-        return reg_find(LIR_FLAG_ALLOC_FLOAT, reg->index, OWORD);
+        if (BUILD_ARCH == ARCH_RISCV64) {
+            return reg_find(LIR_FLAG_ALLOC_FLOAT, reg->index, QWORD);
+        } else {
+            return reg_find(LIR_FLAG_ALLOC_FLOAT, reg->index, OWORD);
+        }
     }
 
     return reg_find(LIR_FLAG_ALLOC_INT, reg->index, QWORD);
 }
-

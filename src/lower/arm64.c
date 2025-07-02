@@ -131,13 +131,6 @@ static linked_t *arm64_lower_symbol_var(closure_t *c, lir_op_t *op) {
         op->output = arm64_convert_lea_symbol_var(c, list, op->output);
     }
 
-    // TODO 可能需要嵌套 symbol 处理
-    //    slice_t *sym_operands = extract_op_operands(op, FLAG(LIR_OPERAND_SYMBOL_VAR), 0, false);
-    //    for (int i = 0; i < sym_operands->count; ++i) {
-    //        lir_operand_t *operand = sym_operands->take[0];
-    //        // 添加 lea 指令将 symbol 地址添加到 var 中, 这样在寄存器分配阶段 var 必定分配到寄存器。native 阶段则可以使用 adrp + add 指令将 sym 地址添加到寄存器中
-    //        lir_op_lea()
-    //    }
     return list;
 }
 
@@ -250,14 +243,6 @@ static linked_t *arm64_lower_lea(closure_t *c, lir_op_t *op) {
         linked_push(list, lir_op_move(dst, op->output));
     }
 
-    return list;
-}
-
-
-static linked_t *arm64_lower_output(closure_t *c, lir_op_t *op) {
-    linked_t *list = linked_new();
-    op->output = arm64_convert_use_var(c, list, op->output);
-    linked_push(list, op);
     return list;
 }
 

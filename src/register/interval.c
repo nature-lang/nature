@@ -41,7 +41,7 @@ static interval_t *_interval_child_at(interval_t *i, int op_id, bool is_input) {
  */
 static alloc_kind_e alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var) {
     if (lir_op_contain_cmp(op)) {
-        if (BUILD_ARCH == ARCH_ARM64 && lir_op_scc(op)) {
+        if ((BUILD_ARCH == ARCH_ARM64 || BUILD_ARCH == ARCH_RISCV64) && lir_op_scc(op)) {
             return ALLOC_KIND_MUST;
         }
 
@@ -61,7 +61,7 @@ static alloc_kind_e alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var
 
         if (first->assert_type == LIR_OPERAND_IMM) {
             lir_imm_t *imm = first->value;
-            if (BUILD_ARCH == ARCH_ARM64) {
+            if (BUILD_ARCH == ARCH_ARM64 || BUILD_ARCH == ARCH_RISCV64) {
                 return ALLOC_KIND_MUST;
             }
 
@@ -121,7 +121,8 @@ static alloc_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var
         }
     }
 
-    if (BUILD_ARCH == ARCH_ARM64 && (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT || op->code == LIR_OPCODE_NEG) ||
+    if ((BUILD_ARCH == ARCH_ARM64 || BUILD_ARCH == ARCH_RISCV64) &&
+                (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT || op->code == LIR_OPCODE_NEG) ||
         lir_op_call(op) || lir_op_convert(op)) {
         return ALLOC_KIND_MUST;
     }
@@ -136,18 +137,10 @@ static alloc_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var
             return ALLOC_KIND_MUST;
         }
 
-        // if (BUILD_ARCH == ARCH_ARM64) {
-        //     // arm64 除了 ldr 和 str 指令外，其他所有指令都不允许操作 mem
-        //     if (var->flag & FLAG(LIR_FLAG_SECOND) && op->first->assert_type == LIR_OPERAND_VAR) {
-        //         return ALLOC_KIND_MUST;
-        //     }
-        // } else {
-        // second 只能是在 first 非 var 的情况下才能分配寄存器
         if (var->flag & FLAG(LIR_FLAG_SECOND) && op->first->assert_type != LIR_OPERAND_VAR) {
             // 优先将寄存器分配给 first, 仅当 first 不是 var 时才分配给 second
             return ALLOC_KIND_MUST;
         }
-        // }
     }
     return ALLOC_KIND_SHOULD;
 }
@@ -868,7 +861,7 @@ int interval_next_intersect(closure_t *c, interval_t *current, interval_t *selec
 
     // 没有交集，返回 select_first_cover
     result = select_first_cover;
-    END:
+END:
 
     // 此时应该返回 select 大于 current->first_range->from 的首个 cover select 的节点
     // 因为即使没有交集，该寄存器的最大空闲时间也是到这个节点
@@ -942,7 +935,7 @@ int old_interval_next_intersect(closure_t *c, interval_t *current, interval_t *s
     result = select_first_cover;
     // 如果 select_first_cover 在 label 的位置，则其占用的空间范围应该前移
 
-    END:
+END:
 
     // 此时应该返回 select 大于 current->first_range->from 的首个 cover select 的节点
     // 因为即使没有交集，该寄存器的最大空闲时间也是到这个节点

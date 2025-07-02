@@ -104,6 +104,9 @@ static inline char *arch_to_string(uint8_t arch) {
     if (arch == ARCH_ARM64) {
         return "arm64";
     }
+    if (arch == ARCH_RISCV64) {
+        return "riscv64";
+    }
     return NULL;
 }
 
@@ -123,6 +126,9 @@ static inline uint8_t arch_to_uint8(char *arch) {
     }
     if (str_equal(arch, "arm64")) {
         return ARCH_ARM64;
+    }
+    if (str_equal(arch, "riscv64")) {
+        return ARCH_RISCV64;
     }
     return 0;
 }
@@ -157,9 +163,14 @@ static inline void env_init() {
         assertf(false, "only support compiles to os linux/darwin");
     }
 
-    if (BUILD_ARCH != ARCH_AMD64 && BUILD_ARCH != ARCH_ARM64) {
+    if (BUILD_ARCH != ARCH_AMD64 && BUILD_ARCH != ARCH_ARM64 && BUILD_ARCH != ARCH_RISCV64) {
         assertf(false,
                 "unsupported architecture. set BUILD_ARCH=amd64 or BUILD_ARCH=arm64 env to compile.");
+    }
+
+    // ARCH_RISCV64 不支持 darwin 平台
+    if (BUILD_ARCH == ARCH_RISCV64 && BUILD_OS == OS_DARWIN) {
+        assertf(false, "riscv64 unsupported darwin platform");
     }
 
     // darwin 不支持跨平台编译, 必须在当前平台编译

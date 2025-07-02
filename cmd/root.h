@@ -23,12 +23,12 @@ void cmd_entry(int argc, char **argv) {
     }
 
     struct option long_options[] = {
-            {"archive", no_argument,       NULL, 0},
-            {"output",  required_argument, NULL, 'o'},
-            {"target",  required_argument, NULL, 1},
-            {"ld",      required_argument, NULL, 2},
+            {"archive", no_argument, NULL, 0},
+            {"output", required_argument, NULL, 'o'},
+            {"target", required_argument, NULL, 1},
+            {"ld", required_argument, NULL, 2},
             {"ldflags", required_argument, NULL, 3},
-            {NULL, 0,                      NULL, 0}};
+            {NULL, 0, NULL, 0}};
 
     int option_index = 0;
     int c;
@@ -41,7 +41,7 @@ void cmd_entry(int argc, char **argv) {
         switch (c) {
             case 'o': {
                 char *o_arg = optarg;
-                
+
                 // 如果包含路径分隔符，则解析目录和文件名
                 if (strchr(o_arg, '/') != NULL) {
                     // 解析出目录路径
@@ -60,7 +60,7 @@ void cmd_entry(int argc, char **argv) {
                         }
                         // assertf(dir_exists(BUILD_OUTPUT_DIR), "build output dir='%s' not exists", BUILD_OUTPUT_DIR);
                     }
-                    
+
                     // 解析出文件名称
                     char *output_name = file_name(o_arg);
                     if (strlen(output_name) > 0) {
@@ -80,6 +80,9 @@ void cmd_entry(int argc, char **argv) {
                 } else if (strcmp(target, "linux_arm64") == 0) {
                     BUILD_OS = OS_LINUX;
                     BUILD_ARCH = ARCH_ARM64;
+                } else if (strcmp(target, "linux_riscv64") == 0) {
+                    BUILD_OS = OS_LINUX;
+                    BUILD_ARCH = ARCH_RISCV64;
                 } else if (strcmp(target, "darwin_amd64") == 0) {
                     BUILD_OS = OS_DARWIN;
                     BUILD_ARCH = ARCH_AMD64;
@@ -117,4 +120,4 @@ void cmd_entry(int argc, char **argv) {
     build(build_file, is_archive);
 }
 
-#endif//NATURE_ROOT_H
+#endif //NATURE_ROOT_H

@@ -467,8 +467,8 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
  * @param ctx
  * @param closures
  */
-static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *closures) {
-    if (closures->count == 0) {
+static inline void elf_amd64_operation_encodings(elf_context_t *ctx, module_t *m) {
+    if (m->closures->count == 0) {
         return;
     }
 
@@ -476,8 +476,8 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
     uint64_t section_offset = 0; // text section slot
 
     // 一次遍历
-    for (int i = 0; i < closures->count; ++i) {
-        closure_t *c = closures->take[i];
+    for (int i = 0; i < m->closures->count; ++i) {
+        closure_t *c = m->closures->take[i];
 
         uint64_t fn_offset = 0;
 
@@ -661,8 +661,8 @@ static inline void elf_amd64_operation_encodings(elf_context_t *ctx, slice_t *cl
     }
 
     // 代码段已经确定，生成 text 数据
-    for (int i = 0; i < closures->count; ++i) {
-        closure_t *c = closures->take[i];
+    for (int i = 0; i < m->closures->count; ++i) {
+        closure_t *c = m->closures->take[i];
         c->text_count = 0;
         for (int j = 0; j < c->asm_build_temps->count; ++j) {
             amd64_build_temp_t *temp = c->asm_build_temps->take[j];

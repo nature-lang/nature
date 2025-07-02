@@ -309,8 +309,8 @@ arm64_rewrite_rel_symbol(arm64_asm_inst_t *operation, arm64_asm_operand_t *opera
     operand->type = ARM64_ASM_OPERAND_IMMEDIATE;
 }
 
-static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *closures) {
-    if (closures->count == 0) {
+static inline void elf_arm64_operation_encodings(elf_context_t *ctx, module_t *m) {
+    if (m->closures->count == 0) {
         return;
     }
 
@@ -318,8 +318,8 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
     uint64_t section_offset = 0; // text section slot
 
     // 第一遍扫描
-    for (int i = 0; i < closures->count; ++i) {
-        closure_t *c = closures->take[i];
+    for (int i = 0; i < m->closures->count; ++i) {
+        closure_t *c = m->closures->take[i];
 
         uint64_t fn_offset = 0;
 
@@ -497,8 +497,8 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, slice_t *cl
     }
 
     // 生成最终的代码段数据
-    for (int i = 0; i < closures->count; ++i) {
-        closure_t *c = closures->take[i];
+    for (int i = 0; i < m->closures->count; ++i) {
+        closure_t *c = m->closures->take[i];
         c->text_count = 0;
         for (int j = 0; j < c->asm_build_temps->count; ++j) {
             arm64_build_temp_t *temp = c->asm_build_temps->take[j];

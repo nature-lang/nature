@@ -9,14 +9,17 @@
 #include "config.h"
 #include "src/binary/arch/amd64.h"
 #include "src/binary/arch/arm64.h"
+#include "src/binary/arch/riscv64.h"
 #include "src/binary/mach/mach.h"
 #include "src/cfg.h"
 #include "src/debug/debug.h"
 #include "src/linear.h"
 #include "src/lower/amd64.h"
 #include "src/lower/arm64.h"
+#include "src/lower/riscv64.h"
 #include "src/native/amd64.h"
 #include "src/native/arm64.h"
+#include "src/native/riscv64.h"
 #include "src/register/linearscan.h"
 #include "src/semantic/analyzer.h"
 #include "src/semantic/infer.h"
@@ -296,9 +299,11 @@ static void elf_assembler_module(module_t *m) {
     }
 
     if (BUILD_ARCH == ARCH_AMD64) {
-        elf_amd64_operation_encodings(ctx, m->closures);
+        elf_amd64_operation_encodings(ctx, m);
     } else if (BUILD_ARCH == ARCH_ARM64) {
-        elf_arm64_operation_encodings(ctx, m->closures);
+        elf_arm64_operation_encodings(ctx, m);
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        elf_riscv64_operation_encodings(ctx, m);
     } else {
         assert(false);
     }
@@ -381,6 +386,7 @@ static void linker_elf_exe(slice_t *modules) {
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
 
+        log_debug("load module object file: %s, %s", m->rel_path, m->object_file);
         fd = check_open(m->object_file, O_RDONLY | O_BINARY);
         load_object_file(ctx, fd, 0); // 加载并解析目标文件
     }
@@ -394,8 +400,7 @@ static void linker_elf_exe(slice_t *modules) {
     slice_push(linker_libs, lib_file_path(LIBUV_FILE));
     slice_push(linker_libs, lib_file_path(LIBC_FILE));
 
-    // arm64 需要 libc
-    if (BUILD_ARCH == ARCH_ARM64) {
+    if (BUILD_ARCH == ARCH_ARM64 || BUILD_ARCH == ARCH_RISCV64) {
         slice_push(linker_libs, lib_file_path(LIBGCC_FILE));
     }
 
@@ -515,7 +520,7 @@ static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
 
     // 对于 ELF 格式，链接命令格式不同于 Mach-O
     snprintf(cmd, sizeof(cmd),
-             "%s -o %s %s @%s %s 2>/dev/null",
+             "%s -w -o %s %s @%s %s",
              use_ld,
              output,
              ldflags,
@@ -980,6 +985,9 @@ static void cross_lower(closure_t *c) {
     } else if (BUILD_ARCH == ARCH_ARM64) {
         arm64_lower(c);
         return;
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        riscv64_lower(c);
+        return;
     }
 
     assert(false && "not support arch");
@@ -991,6 +999,9 @@ static inline void cross_native(closure_t *c) {
         return;
     } else if (BUILD_ARCH == ARCH_ARM64) {
         arm64_native(c);
+        return;
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        riscv64_native(c);
         return;
     }
 
