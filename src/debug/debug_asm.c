@@ -172,6 +172,43 @@ static string arm64_asm_operand_to_string(arm64_asm_operand_t *operand) {
     }
 }
 
+static string riscv64_asm_operand_to_string(riscv64_asm_operand_t *operand) {
+    switch (operand->type) {
+        case RISCV64_ASM_OPERAND_FREG:
+        case RISCV64_ASM_OPERAND_REG: {
+            return operand->reg.name;
+        }
+        case RISCV64_ASM_OPERAND_IMMEDIATE: {
+            return dsprintf("%ld", operand->immediate);
+        }
+        case RISCV64_ASM_OPERAND_SYMBOL: {
+            if (operand->symbol.offset != 0) {
+                return dsprintf("%s%s%ld",
+                                operand->symbol.name,
+                                operand->symbol.offset >= 0 ? "+" : "",
+                                operand->symbol.offset);
+            }
+            return operand->symbol.name;
+        }
+        case RISCV64_ASM_OPERAND_INDIRECT: {
+            // RISC-V 间接寻址格式: offset(reg)
+            return dsprintf("%ld(%s)", operand->indirect.offset, operand->indirect.reg->name);
+        }
+        case RISCV64_ASM_OPERAND_ROUNDMODE: {
+            static char *round_modes[] = {
+                    "rne", "rtz", "rdn", "rup", "rmm"};
+            if (operand->round_mode >= RISCV64_RNE && operand->round_mode <= RISCV64_RMM) {
+                return round_modes[operand->round_mode];
+            }
+            return "";
+        }
+        default: {
+            assert(false && "unknown operand type");
+            return "unknown";
+        }
+    }
+}
+
 void amd64_asm_op_to_string(int i, amd64_asm_inst_t *op) {
     printf("%lu\t", op->op_id);
     if (str_equal(op->name, "label")) {
@@ -242,11 +279,56 @@ void arm64_asm_op_to_string(int i, arm64_asm_inst_t *op) {
     fflush(stdout);
 }
 
+void riscv64_asm_op_to_string(int i, riscv64_asm_inst_t *op) {
+    printf("%lu\t", op->op_id);
+
+    // 处理标签的特殊情况
+    printf("\t\t%s  ", riscv64_raw_op_names[op->raw_opcode]);
+
+    // RISC-V 指令格式通常是: opcode dest, source1, source2
+    // 例如: add rd, rs1, rs2
+    switch (op->count) {
+        case 0:
+            break;
+        case 1:
+            printf("%s", riscv64_asm_operand_to_string(op->operands[0]));
+            break;
+        case 2:
+            // 大多数双操作数指令格式为: dest, source
+            printf("%s, %s",
+                   riscv64_asm_operand_to_string(op->operands[0]),
+                   riscv64_asm_operand_to_string(op->operands[1]));
+            break;
+        case 3:
+            // 三操作数指令格式为: dest, source1, source2
+            printf("%s, %s, %s",
+                   riscv64_asm_operand_to_string(op->operands[0]),
+                   riscv64_asm_operand_to_string(op->operands[1]),
+                   riscv64_asm_operand_to_string(op->operands[2]));
+            break;
+        case 4:
+            // 特殊情况，如需要四个操作数的指令
+            printf("%s, %s, %s, %s",
+                   riscv64_asm_operand_to_string(op->operands[0]),
+                   riscv64_asm_operand_to_string(op->operands[1]),
+                   riscv64_asm_operand_to_string(op->operands[2]),
+                   riscv64_asm_operand_to_string(op->operands[3]));
+            break;
+        default:
+            printf("not_support");
+    }
+
+    printf("\n");
+    fflush(stdout);
+}
+
 void asm_op_to_string(int i, void *op) {
     if (BUILD_ARCH == ARCH_AMD64) {
         return amd64_asm_op_to_string(i, op);
     } else if (BUILD_ARCH == ARCH_ARM64) {
         return arm64_asm_op_to_string(i, op);
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        return riscv64_asm_op_to_string(i, op);
     }
 
     assert(false);

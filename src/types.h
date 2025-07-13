@@ -9,6 +9,7 @@
 #include "utils/bitmap.h"
 #include "utils/ct_list.h"
 #include "utils/linked.h"
+#include "utils/sc_map.h"
 #include "utils/slice.h"
 #include "utils/stack.h"
 #include "utils/table.h"
@@ -631,6 +632,12 @@ typedef struct {
     uint64_t file_offset;
     char *output; // 完整路径名称
     uint8_t output_type;
+
+    // riscv64 专用
+    struct {
+        uint64_t addr;
+        uint64_t val;
+    } last_hi;
 
     // macho_专用
     void *macho; // macho 结构缓存

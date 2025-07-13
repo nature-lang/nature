@@ -24,7 +24,16 @@ extern int64_t coroutine_count;
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
 
+extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint1; // gc 全局 safepoint 标识，通常配合 stw 使用
+extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint2; // gc 全局 safepoint 标识，通常配合 stw 使用
+extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint3; // gc 全局 safepoint 标识，通常配合 stw 使用
+
 extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint; // gc 全局 safepoint 标识，通常配合 stw 使用
+
+extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint4; // gc 全局 safepoint 标识，通常配合 stw 使用
+extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint5; // gc 全局 safepoint 标识，通常配合 stw 使用
+extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint6; // gc 全局 safepoint 标识，通常配合 stw 使用
+
 
 // processor gc_finished 后新产生的 shade ptr 会存入到该全局工作队列中，在 gc_mark_done 阶段进行单线程处理
 extern rt_linked_fixalloc_t global_gc_worklist; // 全局 gc worklist

@@ -73,8 +73,8 @@ typedef enum {
     TYPE_INT32 = 7,
     TYPE_UINT32 = 8,
     TYPE_INT64 = 9,
-    TYPE_UINT64 = 10,
     TYPE_INT = 9,
+    TYPE_UINT64 = 10,
     TYPE_UINT = 10,
 
     TYPE_FLOAT32 = 11,
@@ -871,7 +871,7 @@ static inline bool integer_range_check(type_kind kind, int64_t i) {
         case TYPE_INT32:
             return i >= INT32_MIN && i <= INT32_MAX;
         case TYPE_UINT64:
-            return i >= 0 && i <= UINT64_MAX;
+            return (uint64_t) i >= 0 && (uint64_t) i <= UINT64_MAX;
         case TYPE_INT64:
             return i >= INT64_MIN && i <= INT64_MAX;
         default:

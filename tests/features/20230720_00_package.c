@@ -32,7 +32,7 @@ static void test_basic() {
                 "this is other\n"
                 "hello local in cross darwin\n";
     } else if (BUILD_OS == OS_LINUX) {
-        if (BUILD_ARCH == ARCH_ARM64) {
+        if (BUILD_ARCH == ARCH_ARM64 || BUILD_ARCH == ARCH_RISCV64) {
             str = "util.sum(1, 2) = 3\n"
                     "this is other\n"
                     "this is pool\n"

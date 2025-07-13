@@ -786,7 +786,7 @@ static inline lir_operand_t *lir_reset_operand(lir_operand_t *operand, uint8_t p
  */
 static inline void lir_set_quick_op(basic_block_t *block) {
     linked_node *current = linked_first(block->operations)->succ;
-    while (current->value != NULL && OP(current)->code == LIR_OPCODE_PHI) {
+    while (current->value != NULL && (OP(current)->code == LIR_OPCODE_PHI || OP(current)->code == LIR_OPCODE_LABEL)) {
         current = current->succ;
     }
     assert(current);

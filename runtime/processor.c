@@ -23,7 +23,15 @@ rt_linked_fixalloc_t global_gc_worklist;
 uv_key_t tls_processor_key = 0;
 uv_key_t tls_coroutine_key = 0;
 
+_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint1 = false;
+_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint2 = false;
+_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint3 = false;
+
 _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint = false;
+
+_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint4 = false;
+_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint5 = false;
+_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint6 = false;
 
 uint64_t assist_preempt_yield_ret_addr = 0;
 
@@ -59,8 +67,8 @@ NO_OPTIMIZE void co_preempt_yield() {
     assert(p);
 
     DEBUGF(
-            "[runtime.co_preempt_yield] p_index=%d(%d), co=%p, p_status=%d,  will yield, co_start=%ld",
-            p->index, p->status, co, co->status, p->co_started_at / 1000 / 1000);
+            "[runtime.co_preempt_yield] p_index=%d(%d), co=%p, p_status=%d,  will yield, co_start=%ld, assist_preempt_yield_ret_addr= %p",
+            p->index, p->status, co, co->status, p->co_started_at / 1000 / 1000, (void *) assist_preempt_yield_ret_addr);
 
     p->status = P_STATUS_PREEMPT; // 抢占返回标志
 
@@ -97,9 +105,8 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     coroutine_t *co = p->coroutine;
     assert(co);
 
+
 #ifdef __AMD64
-
-
 #ifdef __LINUX
 #define CTX_RSP ctx->uc_mcontext.gregs[REG_RSP]
 #define CTX_RIP ctx->uc_mcontext.gregs[REG_RIP]
@@ -107,14 +114,11 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
 #define CTX_RSP ctx->uc_mcontext->__ss.__rsp
 #define CTX_RIP ctx->uc_mcontext->__ss.__rip
 #endif
-
     // int REG_RBP = 10;
     int REG_RSP = 15;
     int REG_RIP = 16;
-
     uint64_t *rsp = (uint64_t *) CTX_RSP;
     uint64_t rip = CTX_RIP;
-
     // rip 已经存到了 rsp 里面,只要能定位到 bp_offset 就行了。
     fndef_t *fn = find_fn(rip, p);
     if (fn) {
@@ -131,11 +135,9 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     // 由于被抢占的函数可以会在没有 sub 保留 rsp 的情况下使用 rsp-0x10 这样的空间地址
     // 所以需要为 rsp 预留足够的栈空间给被抢占的函数, 避免后续的操作污染被抢占的函数
     rsp -= 128; // 一个指针是 8byte, 所以这里是 128 * 8 = 1024 个字节
-
     // push rip
     rsp--; // 栈中预留返回地址
     *rsp = rip;
-
     RDEBUGF("[runtime.thread_handle_sig] rip=%p save to %p, co=%p, scan_ret_addr=%p, scan_offset=%lu, fn=%p",
             (void *) rip, rsp, co,
             (void *) co->scan_ret_addr, co->scan_offset, fn);
@@ -144,7 +146,6 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     CTX_RIP = (int64_t) assist_preempt_yield;
 
 #elif defined(__ARM64)
-
 #ifdef __LINUX
 #define CTX_SP ctx->uc_mcontext.sp
 #define CTX_PC ctx->uc_mcontext.pc
@@ -187,6 +188,46 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     CTX_SP = (uint64_t) sp;
     CTX_PC = (uint64_t) assist_preempt_yield;
     CTX_LR = (uint64_t) assist_preempt_yield; // 确保返回地址也指向抢占处理函数
+
+#elif defined(__RISCV64)
+    // RISCV64 架构支持
+    // 在 RISCV64 Linux 下，寄存器通过 __gregs 数组访问
+#define CTX_SP ctx->uc_mcontext.__gregs[2] // x2 是栈指针 (sp)
+#define CTX_PC ctx->uc_mcontext.__gregs[0] // pc 寄存器
+#define CTX_RA ctx->uc_mcontext.__gregs[1] // x1 是返回地址寄存器 (ra)
+
+    uint64_t *sp = (uint64_t *) CTX_SP;
+    uint64_t pc = CTX_PC;
+    uint64_t ra = CTX_RA; // 保存返回地址寄存器
+
+    // 查找当前执行的函数
+    fndef_t *fn = find_fn(pc, p);
+    if (fn) {
+        // 基于当前 sp 计算扫描偏移
+        uint64_t sp_addr = (uint64_t) sp;
+        //        co->scan_ret_addr = pc;
+        //        co->scan_offset = (uint64_t) co->p->share_stack.align_retptr - sp_addr;
+    } else {
+        // c 语言段被抢占,采用保守扫描策略
+        //        co->scan_ret_addr = 0;
+        //        co->scan_offset = (uint64_t) co->p->share_stack.align_retptr - (uint64_t) sp;
+    }
+
+    // 为被抢占的函数预留栈空间
+    sp -= 128; // 1024 字节的安全区域
+
+    // RISCV64 中保存程序计数器和返回地址
+    sp -= 2; // 预留两个位置,一个给 pc,一个给 ra
+    sp[0] = pc;
+    sp[1] = ra;
+
+    RDEBUGF("[runtime.thread_handle_sig] pc=%p ra=%p save to %p, co=%p, fn=%p",
+            (void *) pc, (void *) ra, sp, co, fn);
+
+    // 更新上下文
+    CTX_SP = (uint64_t) sp;
+    CTX_PC = (uint64_t) assist_preempt_yield;
+    CTX_RA = (uint64_t) assist_preempt_yield; // 确保返回地址也指向抢占处理函数
 
 #else
 #error "platform no support yet"
@@ -410,8 +451,10 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
 // handle by thread
 static void processor_run(void *raw) {
     n_processor_t *p = raw;
-    DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, loop=%p, yield_safepoint_ptr=%p", p->index, p,
-            &p->uv_loop, &tls_yield_safepoint);
+    DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, loop=%p, yield_safepoint_ptr=%p(%ld)", p->index, p,
+            &p->uv_loop, &tls_yield_safepoint, tls_yield_safepoint);
+
+    DEBUGF("[runtime.processor_run] tls1 %p, tls2 %p, tls3 %p tls4 %p, tls5 %p, tls6 %p", &tls_yield_safepoint1, &tls_yield_safepoint2, &tls_yield_safepoint3, &tls_yield_safepoint4, &tls_yield_safepoint5, &tls_yield_safepoint6);
 
     processor_set_status(p, P_STATUS_DISPATCH);
 
@@ -450,8 +493,8 @@ static void processor_run(void *raw) {
             }
 
             DEBUGF("[runtime.processor_run] p_index=%d, stw completed, need_stw=%lu, safe_point=%lu, main_exited=%d",
-                    p->index, p->need_stw,
-                    p->in_stw, main_coroutine_exited);
+                   p->index, p->need_stw,
+                   p->in_stw, main_coroutine_exited);
         }
 
         // - exit

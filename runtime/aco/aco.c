@@ -23,7 +23,7 @@
 static uint64_t share_stack_base = MMAP_SHARE_STACK_BASE;
 
 void aco_runtime_test(void) {
-#if  defined(__x86_64__) || defined(__aarch64__)
+#if  defined(__x86_64__) || defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64))
     assert(sizeof(void *) == 8 && "require 'sizeof(void*) == 8'");
     assert(sizeof(__uint128_t) == 16 && "require 'sizeof(__uint128_t) == 16'");
 #else
@@ -269,12 +269,12 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
     p->sz = sz - u_pgsz;
 
     p->owner = NULL;
-#if defined(__x86_64__) || defined(__aarch64__)
+#if defined(__x86_64__) || defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64))
     uintptr_t u_p = (uintptr_t) (p->sz - (sizeof(void *) << 1) + (uintptr_t) p->ptr);
     u_p = (u_p >> 4) << 4;
     p->align_highptr = (void *) u_p;
 
-#ifdef __aarch64__
+#if defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64))
     // aarch64 hardware-enforces 16 byte stack alignment
     p->align_retptr  = (void*)(u_p - 16);
 #else
@@ -312,7 +312,12 @@ void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack,
         aco->reg[ACO_REG_IDX_RETADDR] = (void *) fp;
         aco->reg[ACO_REG_IDX_SP] = aco->share_stack->align_retptr;
         aco->reg[ACO_REG_IDX_FPU] = uv_key_get(&aco_gtls_fpucw_mxcsr);
+
 #elif defined(__aarch64__)
+        aco->reg[ACO_REG_IDX_RETADDR] = (void*)fp;
+        aco->reg[ACO_REG_IDX_SP] = aco->share_stack->align_retptr;
+
+#elif defined(__riscv) && (__riscv_xlen == 64)
         aco->reg[ACO_REG_IDX_RETADDR] = (void*)fp;
         aco->reg[ACO_REG_IDX_SP] = aco->share_stack->align_retptr;
 #else
@@ -330,7 +335,7 @@ void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack,
 
         assert(aco->save_stack.ptr);
         aco->save_stack.sz = save_stack_sz;
-#if defined(__x86_64__) || defined(__aarch64__)
+#if defined(__x86_64__) || defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64))
         aco->save_stack.valid_sz = 0;
 #else
 #error "platform no support yet"
@@ -361,7 +366,7 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
             aco_t *owner_co = resume_co->share_stack->owner;
             assert(owner_co->share_stack == resume_co->share_stack);
 
-#if defined(__x86_64__) || defined(__aarch64__)
+#if defined(__x86_64__) || defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64))
             assert(((uintptr_t) (owner_co->share_stack->align_retptr) >= (uintptr_t) (owner_co->reg[ACO_REG_IDX_SP])) &&
                    ((uintptr_t) (owner_co->share_stack->align_highptr) -
                             (uintptr_t) (owner_co->share_stack->align_limit) <=
@@ -407,7 +412,7 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
         }
 
         assert(resume_co->share_stack->owner == NULL);
-#if defined(__x86_64__) || defined(__aarch64__)
+#if defined(__x86_64__) || defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64))
         assert(resume_co->save_stack.valid_sz <= resume_co->share_stack->align_limit - sizeof(void *));
         // TODO: optimize the performance penalty of memcpy function call
         //   for very short memory span
@@ -442,6 +447,9 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
     }
 
     uv_key_set(&aco_gtls_co, resume_co);
+
+    DEBUGF("[aco_resume] will call acosw asm, switch to use code")
+
     acosw(resume_co->main_co, resume_co);
     uv_key_set(&aco_gtls_co, resume_co->main_co);
 }

@@ -296,7 +296,7 @@ typedef enum {
 } arm64_asm_cond_type;
 
 typedef enum {
-    ARM64_RELOC_NONE = 0,
+    ASM_ARM64_RELOC_NONE = 0,
     ASM_ARM64_RELOC_LO12, // :lo12:
     ASM_ARM64_RELOC_HI12, // :hi12:
     ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12,
@@ -470,7 +470,6 @@ typedef struct {
     _extend_operand;                                                 \
 })
 
-// 如何在 native 阶段生成 asm_arm64_inst_t?
 #define ARM64_INST(_raw_opcode, ...) ({                      \
     arm64_asm_inst_t *_inst = NEW(arm64_asm_inst_t);        \
     _inst->op_id = op->id;                                  \
@@ -593,6 +592,7 @@ typedef struct {
 #define FCVT(dsz, rt, rn) (0x1e224000 | ((1 - (dsz)) << 22) | ((dsz) << 15) | ((rn) << 5) | (rt))
 #define FCVTZS(dsz, rt, ssz, rn) (0x1e380000 | ((dsz) << 31) | ((ssz) << 22) | ((rn) << 5) | (rt))
 #define FCVTZU(dsz, rt, ssz, rn) (0x1e390000 | ((dsz) << 31) | ((ssz) << 22) | ((rn) << 5) | (rt))
+
 extern arm64_opr_flags_list arm64_opcode_map[];
 
 void arm64_match_opcode(arm64_asm_inst_t *inst);

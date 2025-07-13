@@ -1,5 +1,7 @@
 include(CTest)
 
+set(CTEST_TEST_TIMEOUT 300)
+
 # runtime test
 ENABLE_LANGUAGE(ASM)
 FILE(GLOB_RECURSE RUNTIMES ../runtime/*c ../runtime/aco/acosw.S)
@@ -11,13 +13,22 @@ else ()
 endif ()
 message("LIBC_STATIC: ${LIBC_STATIC}")
 
-add_executable(test_arm64_encoding test_arm64_encoding.c ${UTILS} ${SRC})
-target_link_libraries(test_arm64_encoding m)
+# 创建静态库，避免重复编译
+add_library(nature_common_test STATIC ${SRC} ${CMD} ${UTILS})
+target_include_directories(nature_common_test PUBLIC ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR})
+target_compile_definitions(nature_common_test PRIVATE TEST_MODE)
+
+add_executable(test_arm64_encoding test_arm64_encoding.c)
+target_link_libraries(test_arm64_encoding nature_common_test m)
 add_test(test_arm64_encoding test_arm64_encoding)
 
-add_executable(test_amd64_encoding test_amd64_encoding.c ${UTILS} ${SRC})
-target_link_libraries(test_amd64_encoding m)
+add_executable(test_amd64_encoding test_amd64_encoding.c)
+target_link_libraries(test_amd64_encoding nature_common_test m)
 add_test(test_amd64_encoding test_amd64_encoding)
+
+add_executable(test_riscv64_encoding test_riscv64_encoding.c)
+target_link_libraries(test_riscv64_encoding nature_common_test m)
+add_test(test_riscv64_encoding test_riscv64_encoding)
 
 # ---------------------------------- cases 测试 ------------------------------------------
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)
@@ -30,13 +41,13 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
     get_filename_component(TEST_NAME ${TEST_SOURCE} NAME_WE)
     message("[test cases] find test source ${TEST_SOURCE}")
 
-    # 生成测试可执行文件
-    add_executable(${TEST_NAME} ${TEST_SOURCE} ${SRC} ${CMD} ${UTILS})
-    target_link_libraries(${TEST_NAME} m pthread) # 链接数学计算库
+    # 生成测试可执行文件 - 只链接静态库，不重复编译源文件
+    add_executable(${TEST_NAME} ${TEST_SOURCE})
+    target_link_libraries(${TEST_NAME} nature_common_test m pthread) # 链接数学计算库
 
     # 查找对应的测试用例文件或目录
     set(CASE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}")
-    
+
     # 判断是文件夹还是文件来设置工作目录和入口文件
     # testar 和 n 文件可以同时存在，在 main 中选择自己需要的测试方式
     if (IS_DIRECTORY ${CASE_PATH})
@@ -60,7 +71,7 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
             ENVIRONMENT "BUILD_OS=$ENV{BUILD_OS};BUILD_ARCH=$ENV{BUILD_ARCH};NPKG_PATH=${PACKAGE_BINARY_PATH};BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};TESTAR_FILE=${TESTAR_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};PATH=/usr/local/nature/bin:$ENV{PATH};")
 
     message("[test cases] register test ${TEST_NAME} success, work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}, testar_file=${TESTAR_FILE}")
-endforeach()
+endforeach ()
 
 # ---------------------------------- 通过环境变量启用 runtime main debug 测试 ------------------------------------------
 if (DEFINED ENV{RUNTIME_DEBUG_CASE})
@@ -95,7 +106,7 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
             COMMENT "Generating ${LIBMAIN_STATIC}"
     )
 
-    add_custom_target(generate_libmain ALL
+    add_custom_target(generate_libmain
             DEPENDS ${LIBMAIN_STATIC}
             COMMENT "Trigger libmain.a generation"
     )

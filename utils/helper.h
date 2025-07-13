@@ -119,14 +119,14 @@ static inline void *mallocz(uint64_t size) {
     fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
     fflush(stdout);
 
-#define TRNDEBUGF(scale, format, ...)                                                                                                  \
-    do {                                                                                                                               \
-        if ((uv_hrtime() % 1000) < (scale)) {                                                                                              \
+#define TRNDEBUGF(scale, format, ...)                                                                                                   \
+    do {                                                                                                                                \
+        if ((uv_hrtime() % 1000) < (scale)) {                                                                                           \
             fprintf(stdout, "[%lu] TRNDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
-            fflush(stdout);                                                                                                            \
-        }                                                                                                                              \
-    } while(0)
-    
+            fflush(stdout);                                                                                                             \
+        }                                                                                                                               \
+    } while (0)
+
 #define TESTDUMP(format, ...)                                                                                                 \
     fprintf(stdout, "[%lu] TDEBUG-%lu: " format "\n", uv_hrtime() / 1000 / 1000, (uint64_t) uv_thread_self(), ##__VA_ARGS__); \
     fflush(stdout);

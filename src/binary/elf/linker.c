@@ -9,6 +9,7 @@
 #include "elf.h"
 #include "src/binary/arch/amd64.h"
 #include "src/binary/arch/arm64.h"
+#include "src/binary/arch/riscv64.h"
 #include "utils/custom_links.h"
 #include "utils/error.h"
 
@@ -17,6 +18,8 @@ static uint64_t elf_create_plt_entry(elf_context_t *ctx, uint64_t got_offset, sy
         return amd64_create_plt_entry(ctx, got_offset, attr);
     } else if (BUILD_ARCH == ARCH_ARM64) {
         return arm64_create_plt_entry(ctx, got_offset, attr);
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        return riscv64_create_plt_entry(ctx, got_offset, attr);
     }
 
     assert(false && "not support arch");
@@ -27,6 +30,8 @@ static int8_t elf_is_code_relocate(uint64_t relocate_type) {
         return amd64_is_code_relocate(relocate_type);
     } else if (BUILD_ARCH == ARCH_ARM64) {
         return arm64_is_code_relocate(relocate_type);
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        return riscv64_is_code_relocate(relocate_type);
     }
     assert(false && "not support arch");
 }
@@ -44,6 +49,12 @@ static int elf_got_rel_type(bool is_code_rel) {
         } else {
             return R_AARCH64_GLOB_DAT;
         }
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        if (is_code_rel) {
+            return R_RISCV_JUMP_SLOT;
+        } else {
+            return R_RISCV_64;
+        }
     }
 
     assert(false && "not support arch");
@@ -54,6 +65,8 @@ static int elf_gotplt_entry_type(uint64_t relocate_type) {
         return amd64_gotplt_entry_type(relocate_type);
     } else if (BUILD_ARCH == ARCH_ARM64) {
         return arm64_gotplt_entry_type(relocate_type);
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        return riscv64_gotplt_entry_type(relocate_type);
     }
     assert(false && "not support arch");
 }
@@ -63,6 +76,8 @@ static inline uint64_t elf_start_addr() {
         return AMD64_ELF_START_ADDR;
     } else if (BUILD_ARCH == ARCH_ARM64) {
         return ARM64_ELF_START_ADDR;
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        return RISCV64_ELF_START_ADDR;
     }
     assert(false && "not support arch");
 }
@@ -72,6 +87,8 @@ static inline uint64_t elf_page_size() {
         return AMD64_64_ELF_PAGE_SIZE;
     } else if (BUILD_ARCH == ARCH_ARM64) {
         return ARM64_ELF_PAGE_SIZE;
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        return RISCV64_ELF_PAGE_SIZE;
     }
     assert(false && "not support arch");
     return 0;
@@ -86,6 +103,10 @@ static inline void elf_relocate(elf_context_t *l, Elf64_Rela *rel, int type, uin
         return elf_arm64_relocate(l, rel, type, ptr, addr, val);
     }
 
+    if (BUILD_ARCH == ARCH_RISCV64) {
+        return elf_riscv64_relocate(l, rel, type, ptr, addr, val);
+    }
+
     assert(false && "not support arch");
 }
 
@@ -94,6 +115,8 @@ static inline uint16_t elf_ehdr_machine() {
         return EM_X86_64;
     } else if (BUILD_ARCH == ARCH_ARM64) {
         return EM_AARCH64;
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        return EM_RISCV;
     }
 
     assert(false && "not support arch");
@@ -111,9 +134,9 @@ static int sort_sections(elf_context_t *ctx) {
                 if (s->sh_flags & SHF_WRITE) {
                     base_weight = 0x200;
                 }
-//                if (s->sh_flags & SHF_TLS) {
-//                    base_weight += 0x200;
-//                }
+                //                if (s->sh_flags & SHF_TLS) {
+                //                    base_weight += 0x200;
+                //                }
             } else if (s->sh_name) {
                 base_weight = 0x700;
             } else {
@@ -419,6 +442,8 @@ static sym_attr_t *put_got_entry(elf_context_t *ctx, int relocate_type, uint64_t
 
     if (BUILD_ARCH == ARCH_ARM64) {
         need_plt_entry = relocate_type == R_AARCH64_JUMP_SLOT;
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        need_plt_entry = relocate_type == R_RISCV_JUMP_SLOT;
     }
 
 
@@ -550,7 +575,7 @@ void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset) {
         }
 
 
-        FOUND:
+    FOUND:
         if (!is_tbss) {
             // 在ctx 中找到了同名 section 但是段类型不相同
             assertf(shdr->sh_type == global_section->sh_type, "[load_object_file] sh %s code invalid", shdr_name);
@@ -660,14 +685,15 @@ void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset) {
             uint64_t rel_type = ELF64_R_TYPE(rel->r_info); // 重定位类型
             uint64_t sym_index = ELF64_R_SYM(rel->r_info); // 重定位符号在符号表中的索引
 
-            assertf(sym_index < sym_count, "[load_object_file] rel sym index exception");
+            assertf(sym_index < sym_count, "rel sym index exception");
 
-            sym_index = symtab_index_map[sym_index];
-            if (!sym_index /**&& code != R_RISCV_ALIGN && code != R_RISCV_RELAX **/) {
-                error_exit("[load_object_file] sym index not found");
+            uint64_t new_sym_index = symtab_index_map[sym_index];
+
+            if (!new_sym_index && rel_type != R_RISCV_ALIGN && rel_type != R_RISCV_RELAX) {
+                assertf(false, "patch new sym index == 0 zero, old sym index is %d", sym_index);
             }
 
-            rel->r_info = ELF64_R_INFO(sym_index, rel_type);
+            rel->r_info = ELF64_R_INFO(new_sym_index, rel_type);
             rel->r_offset += apply_offset;
         }
     }
@@ -767,14 +793,14 @@ uint64_t elf_set_sym(elf_context_t *ctx, Elf64_Sym *sym, char *name) {
         goto DEF;
     }
 
-    PATCH:
+PATCH:
     exist_sym->st_info = ELF64_ST_INFO(sym_bind, sym_type);
     exist_sym->st_shndx = sym->st_shndx;
     exist_sym->st_value = sym->st_value;
     exist_sym->st_size = sym->st_size;
     return sym_index;
 
-    DEF:
+DEF:
     sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, sym, name);
     return sym_index;
 }
@@ -881,7 +907,7 @@ void elf_build_got_entries(elf_context_t *ctx, uint64_t got_sym_index) {
 
     // 一次遍历(基于 R_JMP_SLOT 构建 plt 段)
     int pass = 0;
-    REDO:
+REDO:
     for (int sh_index = 1; sh_index < ctx->sections->count; ++sh_index) {
         section_t *s = ctx->sections->take[sh_index];
         // 仅需要符号表重定位表
@@ -896,6 +922,7 @@ void elf_build_got_entries(elf_context_t *ctx, uint64_t got_sym_index) {
             uint64_t type = ELF64_R_TYPE(rel->r_info); // 重定位类型
             uint64_t sym_index = ELF64_R_SYM(rel->r_info);
             Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+            char *name = (char *) ctx->symtab_section->link->data + sym->st_name;
 
             int gotplt_type = elf_gotplt_entry_type(type);
             if (gotplt_type == -1) {
@@ -994,6 +1021,8 @@ elf_put_rel_data(elf_context_t *ctx, section_t *apply_section, uint64_t rel_offs
         reloc_type = R_X86_64_64;
     } else if (BUILD_ARCH == ARCH_ARM64) {
         reloc_type = R_AARCH64_ABS64; // 使用适合 ARM64 的重定位类型
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        reloc_type = R_RISCV_64; // 使用适合 RISC-V 64 的重定位类型
     } else {
         assert(false && "Unsupported architecture");
     }
@@ -1069,7 +1098,7 @@ void elf_relocate_symbols(elf_context_t *ctx, section_t *sym_section) {
             // 对于 TLS 变量，需要计算其相对于 TLS 段起始的偏移
             sym->st_value += s->sh_addr;
         }
-        FOUND:;
+    FOUND:;
     }
 }
 
@@ -1093,12 +1122,6 @@ void elf_relocate_sections(elf_context_t *ctx) {
  * @param rel_section
  */
 void elf_relocate_section(elf_context_t *ctx, section_t *apply_section, section_t *rel_section) {
-    // log_debug("[elf_relocate_section] rel: %s,t=%lu,flag=%lu, apply: %s",
-    //        rel_section->name,
-    //        rel_section->sh_type,
-    //        rel_section->sh_flags,
-    //        apply_section->name);
-
     Elf64_Sym *sym = NULL;
     Elf64_Rela *rel = NULL;
     uint8_t *ptr = NULL;
@@ -1165,6 +1188,16 @@ void elf_fill_got(elf_context_t *ctx) {
                         elf_fill_got_entry(ctx, rel);
                         break;
                 }
+            } else if (BUILD_ARCH == ARCH_RISCV64) {
+                switch (ELF64_R_TYPE(rel->r_info)) {
+                    case R_RISCV_GOT_HI20:
+                    case R_RISCV_PCREL_HI20:
+                    case R_RISCV_PCREL_LO12_I:
+                    case R_RISCV_PCREL_LO12_S:
+                    case R_RISCV_CALL_PLT:
+                        elf_fill_got_entry(ctx, rel);
+                        break;
+                }
             }
         }
     }
@@ -1173,6 +1206,7 @@ void elf_fill_got(elf_context_t *ctx) {
 void elf_fill_got_entry(elf_context_t *ctx, Elf64_Rela *rel) {
     int sym_index = ELF64_R_SYM(rel->r_info);
     Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+    char *sym_name = (char *) ctx->symtab_section->link->data + sym->st_name;
     sym_attr_t *attr = elf_get_sym_attr(ctx, sym_index, 0);
     unsigned offset = attr->got_offset;
 
@@ -1388,8 +1422,12 @@ void sort_symbols(elf_context_t *ctx, section_t *s) {
         for (rel = SEC_START(Elf64_Rela, rel_section); rel < SEC_END(Elf64_Rela, rel_section); rel++) {
             uint64_t sym_index = ELF64_R_SYM(rel->r_info);
             int type = ELF64_R_TYPE(rel->r_info);
-            sym_index = symtab_index_map[sym_index];
-            rel->r_info = ELF64_R_INFO(sym_index, type);
+            uint64_t new_sym_index = sym_index = symtab_index_map[sym_index];
+            if (sym_index > 0) {
+                assert(new_sym_index > 0);
+            }
+
+            rel->r_info = ELF64_R_INFO(new_sym_index, type);
         }
     }
 
@@ -1470,7 +1508,7 @@ void load_archive(elf_context_t *ctx, int fd) {
             load_object_file(ctx, fd, offset);
             ++bound;
 
-            CONTINUE:
+        CONTINUE:
             i++;
             sym_name += strlen(sym_name) + 1;
         }
@@ -1484,6 +1522,8 @@ elf_context_t *elf_context_new(char *output, uint8_t type) {
     ctx->output_type = type;
     ctx->sections = slice_new();
     slice_push(ctx->sections, NULL);
+
+    ctx->private_sections = slice_new();
 
     ctx->symtab_hash = table_new();
     /* create standard sections */
@@ -1577,6 +1617,20 @@ uint64_t elf_put_global_symbol(elf_context_t *ctx, char *name, void *value, uint
     return offset;
 }
 
+static inline uint32_t elf_ehdr_flags() {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return 0;
+    } else if (BUILD_ARCH == ARCH_ARM64) {
+        return 0;
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        // 设置为64位硬件双精度浮点ABI
+        return 0x5; // rvc + double-float ABI
+    }
+
+    assert(false && "not support arch");
+    return 0;
+}
+
 void elf_output(elf_context_t *ctx) {
     FILE *f;
     unlink(ctx->output);
@@ -1619,6 +1673,7 @@ void elf_output(elf_context_t *ctx) {
 
     ehdr.e_machine = elf_ehdr_machine();
     ehdr.e_version = EV_CURRENT;
+    ehdr.e_flags = elf_ehdr_flags();
     ehdr.e_shoff = ctx->file_offset;
     ehdr.e_ehsize = sizeof(Elf64_Ehdr);
     ehdr.e_shentsize = sizeof(Elf64_Shdr);

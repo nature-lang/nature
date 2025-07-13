@@ -348,7 +348,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
     // 由于 nature 支持调用 c 语言，所以 frame_bp 可能是 c 代码，此时不需要进行 scan_stack
     // 直到遇到 nature code, 才需要进行 stack
-    // 基于 frame_bp + ret_addr 想栈底，目前采用协作式调度后，只有 safepoint 或者 再 c 代码中进行 yield, 这里的 c 代码一定是再 runtime 中进行 yield，采用了
+    // 基于 frame_bp + ret_addr 想栈底，目前采用协作式调度后，只有 safepoint 或者 再 c 代码中进行 yield, 这里的 c 代码一定是在 runtime 中进行 yield，并且由于采用了
     // -fno-omit-frame-pointer 方式，所以存在完整的栈帧
     addr_t stack_top_ptr = (addr_t) co->aco.save_stack.ptr;
     assert(stack_top_ptr > 0);
@@ -406,19 +406,33 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
             break;
         }
 
+#ifdef __RISCV64
+        // bp value 和 ret_addr 不是那么同步
+        share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset - POINTER_SIZE - POINTER_SIZE);
+        // save_stack.ptr 指向栈顶, new ret_addr, ret_addr 总是在 prev_bp 的前一个位置(+pointer_size)
+        ret_addr = fetch_addr_value(stack_top_ptr + bp_offset - POINTER_SIZE);
+#else
         // bp value 和 ret_addr 不是那么同步
         share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset);
-        // save_stack.ptr 指向栈顶
+        // save_stack.ptr 指向栈顶, new ret_addr, ret_addr 总是在 prev_bp 的前一个位置(+pointer_size)
         ret_addr = fetch_addr_value(stack_top_ptr + bp_offset + POINTER_SIZE);
+#endif
     }
 
     if (found_assist) {
-        // 进行保守的栈扫描
+        // 进行保守的栈帧扫描
         // share_stack_frame_bp 是 fn 对应的帧的值,已经从帧中取了出来, 原来保存再 BP 寄存器中，现在保存再帧中
         addr_t bp_offset = share_stack_frame_bp - sp_value;
-        addr_t frame_cursor = stack_top_ptr + bp_offset; // 指向了栈底
-        frame_cursor -= POINTER_SIZE; // -8 才能向上取值
 
+        addr_t frame_cursor = stack_top_ptr + bp_offset; // 指向了栈底
+
+#ifdef __RISCV64
+        frame_cursor -= (POINTER_SIZE * 3); // (-24 = -8 是固定的, -16 是跳过 ret_addr 和 prev fp) 才能持续到 stack top 取值
+#else
+        frame_cursor -= POINTER_SIZE; // -8 才能持续到 stack top 取值
+#endif
+
+        // 遍历所有的 c 语言地址部分
         while (frame_cursor >= stack_top_ptr) {
             addr_t value = fetch_addr_value(frame_cursor);
 
@@ -438,8 +452,13 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
         // 重新提取 ret_addr 和 share_stack_frame_bp, ret_addr 必须存在于 nature 代码
         // 只有 nature 代码通过 safepoint 才能调用到 assist_preempt_yield
+#ifdef __RISCV64
+        share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset - POINTER_SIZE - POINTER_SIZE);
+        ret_addr = fetch_addr_value(stack_top_ptr + bp_offset - POINTER_SIZE);
+#else
         share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset);
         ret_addr = fetch_addr_value(stack_top_ptr + bp_offset + POINTER_SIZE);
+#endif
         found = true;
     }
 
@@ -457,14 +476,19 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         }
 
         DEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p, fn->stack_size=%ld, bp=%p", STRTABLE(fn->name_offset),
-               (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
+                (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
 
         // share_stack_frame_bp 是 fn 对应的帧的值,已经从帧中取了出来, 原来保存再 BP 寄存器中，现在保存再帧中
         addr_t bp_offset = share_stack_frame_bp - sp_value;
+        DEBUGF("[runtime_gc.scan_stack] share_stack_frame_bp %p, sp value %p, offset %p",
+                (void *) share_stack_frame_bp, (void *) sp_value, (void *) bp_offset)
+        assert(bp_offset < 1000000);
 
         // 将 share 转换为 prev 偏移量
-        addr_t frame_cursor = stack_top_ptr + bp_offset; // 指向了栈底
+        addr_t frame_cursor = stack_top_ptr + bp_offset; // stack_top_ptr 指向了 sp top
 
+        // nature 代码对于 riscv64/arm64/amd64 采用了同样的栈帧布局 stack_top(0) -> [local_var..., fp, prev_fp, ret_addr, local_var...] -> max
+        // 所以不需要像 c 代码部分一样，对 riscv64 进行特殊处理
         frame_cursor -= POINTER_SIZE; // -8 之后才能向上取值
 
         // 基于 fn 的 size 计算 ptr_count
@@ -472,8 +496,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         for (int i = 0; i < ptr_count; ++i) {
             bool is_ptr = bitmap_test(RTDATA(fn->gc_bits_offset), i);
             DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, is_ptr=%d, may_value=%p", STRTABLE(fn->name_offset), i,
-                   ptr_count - 1, is_ptr,
-                   (void *) fetch_int_value(frame_cursor, 8));
+                    ptr_count - 1, is_ptr,
+                    (void *) fetch_int_value(frame_cursor, 8));
 
             // 即使当前 slot 的类型是 ptr 但是可能存在还没有存储值, 所以需要重复判断
             if (is_ptr) {

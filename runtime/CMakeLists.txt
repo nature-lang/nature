@@ -32,7 +32,7 @@ endif ()
 if (CMAKE_BUILD_TYPE MATCHES Debug)
     message("DEBUGF enabled")
     # runtime debug 标志
-    add_compile_definitions(DEBUG_LOG)
+    add_compile_definitions(RUNTIME_DEBUG_LOG)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2 -fno-omit-frame-pointer")
 endif ()
 

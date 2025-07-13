@@ -248,12 +248,6 @@ static linked_t *amd64_lower_safepoint(closure_t *c, lir_op_t *op) {
     } else {
         result_operand = lir_regs_operand(2, rax, rdi);
     }
-    // 预留 rax 寄存器存储 call 的结果
-    //    lir_operand_t *result_reg = lir_reg_operand(rax->index, TYPE_ANYPTR);
-
-    // 预留 rdi 用于参数(rdi 在 use 会导致 reg 的 use-def 异常), 只保留
-    //    lir_operand_t *first_reg = lir_reg_operand(rdi->index, TYPE_ANYPTR);
-
 
     // 增加 label continue
     linked_push(list, lir_op_new(op->code, NULL, NULL, result_operand));

@@ -44,7 +44,7 @@ static void test_basic() {
 
     assert_string_equal(raw, expect);
 }
-#elif __ARM64
+#elif __ARM64 || __RISCV64
 static void test_basic() {
     struct stat *s = mock_stat();
     struct stat *s2 = mock_fstat();

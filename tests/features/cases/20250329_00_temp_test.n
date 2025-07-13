@@ -1,23 +1,46 @@
 import co
-import time
+import runtime
 
-fn main():void! {
-    i64 start = time.now().ms_timestamp()
-    int count = 1000
-    var done = chan_new<bool>()
-    var mockfn = fn(int id):void! {
-        co.sleep(1000)
+fn test_break() {
 
-        done.send(true)
-    }
-    for int i = 0; i < count; i+=1 {
-        go mockfn(i)
-    }
-
-    for int i = 0; i < count; i+=1 {
-        done.recv()
-    }
-    var end = time.now().ms_timestamp()
-    println('done, use time: ', end, start, end - start)
-    assert(end - start < 2000)
 }
+
+fn test_cpu_calc() {
+    int count = 0
+    for true {
+        test_break()
+        count += 1
+    }
+}
+
+fn alloc() {
+   var data1 = vec_new<i64>(0, 10240)
+   var data2 = vec_new<i64>(0, 10240)
+   var data3 = vec_new<i64>(0, 10240)
+   var data4 = vec_new<i64>(0, 10240)
+   var data5 = vec_new<i64>(0, 10240)
+   var data6 = vec_new<i64>(0, 10240)
+   var data7 = vec_new<i64>(0, 10240)
+   var data8 = vec_new<i64>(0, 10240)
+   var data9 = vec_new<i64>(0, 10240)
+   var data10 = vec_new<i64>(0, 10240)
+}
+
+fn main() {
+    go test_cpu_calc()
+
+    // allocate big memoory
+    alloc()
+    var start = runtime.malloc_bytes()
+    println('allocate bytes:', start)
+    // assert(start > 8000000)
+
+    for int i = 0; i < 10; i+=1 {
+        println('hello world')
+        co.sleep(100)
+    }
+    var end = runtime.malloc_bytes() // gc timeout, cannot gc
+    println('allocate bytes:', end)
+    // assert(end < 10000)
+}
+

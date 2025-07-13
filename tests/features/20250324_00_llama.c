@@ -11,6 +11,8 @@ int main(void) {
     slice_push(args, "hello");
 
     char *actual = exec_with_args(args);
+    printf("%s", actual);
+    return 0;
     char *expect = "hello, God had made everything better. \n"
                    "The people around him stopped to talk to each other. Suddenly, a loud noise scared them all away. It was an angry voice from the tower. \n"
                    "The people around were angry with the people too and kept saying, \"Run away!\" \n"

@@ -6,9 +6,11 @@
 #else
 .type  acosw, @function
 #endif
-#ifndef __ARM64
+
+#if !defined(__ARM64) && !defined(__RISCV64)
 .intel_syntax noprefix
 #endif
+
 acosw:
 #ifdef __AMD64
 /*
@@ -83,9 +85,62 @@ acosw:
  #endif
 
      br      x30
+
+
+#elif defined(__RISCV64)
+     // a0 - from_co | a1 - to_co
+
+     // Save callee-saved registers to from_co
+     sd      s0,  0(a0)      // s0/fp
+     sd      s1,  8(a0)      // s1
+     sd      s2,  16(a0)     // s2
+     sd      s3,  24(a0)     // s3
+     sd      s4,  32(a0)     // s4
+     sd      s5,  40(a0)     // s5
+     sd      s6,  48(a0)     // s6
+     sd      s7,  56(a0)     // s7
+     sd      s8,  64(a0)     // s8
+     sd      s9,  72(a0)     // s9
+     sd      s10, 80(a0)     // s10
+     sd      s11, 88(a0)     // s11
+     sd      ra,  96(a0)     // return address
+     sd      sp,  104(a0)    // stack pointer
+#ifndef ACO_CONFIG_SHARE_FPU_MXCSR_ENV
+     frcsr   t0              // read floating-point control and status register
+     sd      t0,  112(a0)    // fcsr
+#endif
+
+     // Restore callee-saved registers from to_co
+     ld      s0,  0(a1)      // s0/fp
+     ld      s1,  8(a1)      // s1
+     ld      s2,  16(a1)     // s2
+     ld      s3,  24(a1)     // s3
+     ld      s4,  32(a1)     // s4
+     ld      s5,  40(a1)     // s5
+     ld      s6,  48(a1)     // s6
+     ld      s7,  56(a1)     // s7
+     ld      s8,  64(a1)     // s8
+     ld      s9,  72(a1)     // s9
+     ld      s10, 80(a1)     // s10
+     ld      s11, 88(a1)     // s11
+     ld      ra,  96(a1)     // return address
+     ld      sp,  104(a1)    // stack pointer
+#ifndef ACO_CONFIG_SHARE_FPU_MXCSR_ENV
+     ld      t0,  112(a1)    // fcsr
+     fscsr   t0              // write floating-point control and status register
+#endif
+
+     jr      ra              // jump to return address
+
+     
 #else
     #error "platform not support"
 #endif
+
+
+
+
+
 
 
 // ----------------------------------------------------------------------------------------
@@ -274,11 +329,168 @@ assist_preempt_yield:
     // add sp, sp, #1032          // 恢复栈指针
     ret                        // 返回到被中断的位置, 基于 x30 中的值进行返回
 
+#elif defined(__RISCV64)
+    // 保存栈帧
+    addi sp, sp, -16
+    sd ra, 8(sp)
+    sd s0, 0(sp)
+    addi s0, sp, 16
+    
+    // 为寄存器保存分配栈空间
+    // 32个通用寄存器 + 32个浮点寄存器 = 64 * 8 = 512 字节
+    addi sp, sp, -512
+    
+    // 保存通用寄存器 (x0-x31)
+    // x0 是硬连线为0的寄存器，不需要保存
+    sd x1, 0(sp)     // ra (return address)
+    sd x2, 8(sp)     // sp (stack pointer) - 保存原始值
+    sd x3, 16(sp)    // gp (global pointer)
+    sd x4, 24(sp)    // tp (thread pointer)
+    sd x5, 32(sp)    // t0
+    sd x6, 40(sp)    // t1
+    sd x7, 48(sp)    // t2
+    sd x8, 56(sp)    // s0/fp
+    sd x9, 64(sp)    // s1
+    sd x10, 72(sp)   // a0
+    sd x11, 80(sp)   // a1
+    sd x12, 88(sp)   // a2
+    sd x13, 96(sp)   // a3
+    sd x14, 104(sp)  // a4
+    sd x15, 112(sp)  // a5
+    sd x16, 120(sp)  // a6
+    sd x17, 128(sp)  // a7
+    sd x18, 136(sp)  // s2
+    sd x19, 144(sp)  // s3
+    sd x20, 152(sp)  // s4
+    sd x21, 160(sp)  // s5
+    sd x22, 168(sp)  // s6
+    sd x23, 176(sp)  // s7
+    sd x24, 184(sp)  // s8
+    sd x25, 192(sp)  // s9
+    sd x26, 200(sp)  // s10
+    sd x27, 208(sp)  // s11
+    sd x28, 216(sp)  // t3
+    sd x29, 224(sp)  // t4
+    sd x30, 232(sp)  // t5
+    sd x31, 240(sp)  // t6
+    
+    // 保存浮点寄存器 (f0-f31)
+    fsd f0, 248(sp)
+    fsd f1, 256(sp)
+    fsd f2, 264(sp)
+    fsd f3, 272(sp)
+    fsd f4, 280(sp)
+    fsd f5, 288(sp)
+    fsd f6, 296(sp)
+    fsd f7, 304(sp)
+    fsd f8, 312(sp)
+    fsd f9, 320(sp)
+    fsd f10, 328(sp)
+    fsd f11, 336(sp)
+    fsd f12, 344(sp)
+    fsd f13, 352(sp)
+    fsd f14, 360(sp)
+    fsd f15, 368(sp)
+    fsd f16, 376(sp)
+    fsd f17, 384(sp)
+    fsd f18, 392(sp)
+    fsd f19, 400(sp)
+    fsd f20, 408(sp)
+    fsd f21, 416(sp)
+    fsd f22, 424(sp)
+    fsd f23, 432(sp)
+    fsd f24, 440(sp)
+    fsd f25, 448(sp)
+    fsd f26, 456(sp)
+    fsd f27, 464(sp)
+    fsd f28, 472(sp)
+    fsd f29, 480(sp)
+    fsd f30, 488(sp)
+    fsd f31, 496(sp)
+    
+    // 调用协程切换函数
+    call SYM(co_preempt_yield)
+    
+    // 恢复浮点寄存器
+    fld f31, 496(sp)
+    fld f30, 488(sp)
+    fld f29, 480(sp)
+    fld f28, 472(sp)
+    fld f27, 464(sp)
+    fld f26, 456(sp)
+    fld f25, 448(sp)
+    fld f24, 440(sp)
+    fld f23, 432(sp)
+    fld f22, 424(sp)
+    fld f21, 416(sp)
+    fld f20, 408(sp)
+    fld f19, 400(sp)
+    fld f18, 392(sp)
+    fld f17, 384(sp)
+    fld f16, 376(sp)
+    fld f15, 368(sp)
+    fld f14, 360(sp)
+    fld f13, 352(sp)
+    fld f12, 344(sp)
+    fld f11, 336(sp)
+    fld f10, 328(sp)
+    fld f9, 320(sp)
+    fld f8, 312(sp)
+    fld f7, 304(sp)
+    fld f6, 296(sp)
+    fld f5, 288(sp)
+    fld f4, 280(sp)
+    fld f3, 272(sp)
+    fld f2, 264(sp)
+    fld f1, 256(sp)
+    fld f0, 248(sp)
+    
+    // 恢复通用寄存器
+    ld x31, 240(sp)  // t6
+    ld x30, 232(sp)  // t5
+    ld x29, 224(sp)  // t4
+    ld x28, 216(sp)  // t3
+    ld x27, 208(sp)  // s11
+    ld x26, 200(sp)  // s10
+    ld x25, 192(sp)  // s9
+    ld x24, 184(sp)  // s8
+    ld x23, 176(sp)  // s7
+    ld x22, 168(sp)  // s6
+    ld x21, 160(sp)  // s5
+    ld x20, 152(sp)  // s4
+    ld x19, 144(sp)  // s3
+    ld x18, 136(sp)  // s2
+    ld x17, 128(sp)  // a7
+    ld x16, 120(sp)  // a6
+    ld x15, 112(sp)  // a5
+    ld x14, 104(sp)  // a4
+    ld x13, 96(sp)   // a3
+    ld x12, 88(sp)   // a2
+    ld x11, 80(sp)   // a1
+    ld x10, 72(sp)   // a0
+    ld x9, 64(sp)    // s1
+    ld x8, 56(sp)    // s0/fp
+    ld x7, 48(sp)    // t2
+    ld x6, 40(sp)    // t1
+    ld x5, 32(sp)    // t0
+    ld x4, 24(sp)    // tp
+    ld x3, 16(sp)    // gp
+    // x2 (sp) 会在最后恢复
+    ld x1, 0(sp)     // ra
+    
+    // 恢复栈指针
+    addi sp, sp, 512
+    
+    // 恢复栈帧
+    ld s0, 0(sp)
+    ld ra, 8(sp)
+    addi sp, sp, 16
+    // 返回
+    ret
+
 #else
-#error "platform not support"
+    #error "platform not support"
 #endif
-
-
 
 
 .globl aco_save_reg
@@ -287,7 +499,7 @@ assist_preempt_yield:
 .type  aco_save_reg, @function
 #endif
 
-#ifndef __ARM64
+#if !defined(__ARM64) && !defined(__RISCV64)
 .intel_syntax noprefix
 #endif
 
@@ -322,16 +534,40 @@ aco_save_reg:
     str x2, [x0, #96]
     ret
 
+#elif defined(__RISCV64)
+    // a0 contains target address
+    // Save callee-saved registers
+    sd      s0,  0(a0)      // s0/fp
+    sd      s1,  8(a0)      // s1
+    sd      s2,  16(a0)     // s2
+    sd      s3,  24(a0)     // s3
+    sd      s4,  32(a0)     // s4
+    sd      s5,  40(a0)     // s5
+    sd      s6,  48(a0)     // s6
+    sd      s7,  56(a0)     // s7
+    sd      s8,  64(a0)     // s8
+    sd      s9,  72(a0)     // s9
+    sd      s10, 80(a0)     // s10
+    sd      s11, 88(a0)     // s11
+    sd      ra,  96(a0)     // return address
+    sd      sp,  104(a0)    // stack pointer
+#ifndef ACO_CONFIG_SHARE_FPU_MXCSR_ENV
+    frcsr   t0              // read floating-point control and status register
+    sd      t0,  112(a0)    // fcsr
+#endif
+    ret
+
 #else
     #error "platform not support"
 #endif
+
 
 .globl aco_save_fpucw_mxcsr
 #if defined(__DARWIN)
 #else
 .type  aco_save_fpucw_mxcsr, @function
 #endif
-#ifndef __ARM64
+#if !defined(__ARM64) && !defined(__RISCV64)
 .intel_syntax noprefix
 #endif
 
@@ -343,6 +579,10 @@ aco_save_fpucw_mxcsr:
 #elif __ARM64
     mrs x1, fpcr
     str x1, [x0]
+    ret
+#elif __RISCV64
+    frcsr   t0              // read floating-point control and status register
+    sd      t0, 0(a0)       // store fcsr
     ret
 #else
     #error "platform not support"
@@ -362,7 +602,7 @@ aco_save_fpucw_mxcsr:
 .type  aco_funcp_protector_asm, @function
 #endif
 
-#ifndef __ARM64
+#if !defined(__ARM64) && !defined(__RISCV64)
 .intel_syntax noprefix
 #endif
 
@@ -384,6 +624,17 @@ aco_funcp_protector_asm:
     bl      abort
     #endif
 
+    ret
+#elif defined(__RISCV64)
+    // Align stack pointer to 16-byte boundary
+    andi    sp, sp, -16
+#if defined(__DARWIN)
+    call    _aco_funcp_protector
+    call    _abort
+#else
+    call    aco_funcp_protector
+    call    abort
+#endif
     ret
 #else
     #error "platform not support"

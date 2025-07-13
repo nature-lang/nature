@@ -40,14 +40,22 @@ int runtime_main(int argc, char *argv[]) __asm("main");
     ({                                                        \
         uint64_t _rbp_value;                                  \
         __asm__ volatile("mov %%rbp, %0" : "=r"(_rbp_value)); \
-        fetch_addr_value(_rbp_value + POINTER_SIZE);           \
+        fetch_addr_value(_rbp_value + POINTER_SIZE);          \
     });
-#elif __ARM64
+#elif defined(__ARM64)
 #define CALLER_RET_ADDR(_co)                                          \
     ({                                                                \
         addr_t _fp_value;                                             \
         __asm__ volatile("mov %0, x29" : "=r"(_fp_value));            \
         uint64_t _value = fetch_addr_value(_fp_value + POINTER_SIZE); \
+        _value;                                                       \
+    });
+#elif defined(__RISCV64)
+#define CALLER_RET_ADDR(_co)                                          \
+    ({                                                                \
+        addr_t _fp_value;                                             \
+        __asm__ volatile("mv %0, s0" : "=r"(_fp_value));              \
+        uint64_t _value = fetch_addr_value(_fp_value - POINTER_SIZE); \
         _value;                                                       \
     });
 #else
@@ -82,14 +90,28 @@ int runtime_main(int argc, char *argv[]) __asm("main");
 #define PAGE_ALLOC_CHUNK_SPLIT 8192 // 每组 chunks 中的元素的数量
 
 #define MMAP_SHARE_STACK_BASE 0xa000000000
+
+#ifdef __RISCV64
+#define ARENA_HINT_BASE 0x400000000 // 虚拟地址 offset addr = 16G
+#else
 #define ARENA_HINT_BASE 0xc000000000 // 0x00c0 << 32 // 单位字节，表示虚拟地址 offset addr = 0.75T
+#endif
+
+
 #ifdef __AMD64
 #define ARENA_HINT_MAX 0x800000000000 // 128T
+#define ARENA_HINT_SIZE 1099511627776 // 1 << 40, 1T
+#define ARENA_HINT_COUNT 128 // 0.75T ~ 128T
+#elif defined(__RISCV64)
+#define ARENA_HINT_MAX 0x800000000000 // 256G
+#define ARENA_HINT_SIZE 8589934592 // 8G
+#define ARENA_HINT_COUNT 32 // 0.75T ~ 128T
 #else
 #define ARENA_HINT_MAX 0x1000000000000 // 256T
+#define ARENA_HINT_SIZE 1099511627776 * 2 // 1 << 40, 2T
+#define ARENA_HINT_COUNT 128 // 0.75T ~ 256T
 #endif
-#define ARENA_HINT_SIZE 1099511627776 // 1 << 40
-#define ARENA_HINT_COUNT 128 // 0.75T ~ 128T
+
 
 #define ARENA_BASE_OFFSET ARENA_HINT_BASE
 

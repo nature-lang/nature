@@ -69,6 +69,7 @@ static int arm64_hfa(type_t type, int32_t *fsize) {
 }
 
 static int64_t arm64_pcs_aux(int64_t n, type_t *args_types, int64_t *args_pos) {
+    // pos 首位用于记录值传递还是指针传递
     int nx = 0; // 下一个整数寄存器
     int nv = 0; // 下一个向量寄存器
     int64_t ns = 32; // 下一个栈偏移, 前面 32 个数字被寄存器和值传递类型(值传递 &1=0或者指针传递&1=1)占用
@@ -79,24 +80,25 @@ static int64_t arm64_pcs_aux(int64_t n, type_t *args_types, int64_t *args_pos) {
         uint64_t size;
         uint64_t align;
 
-        // 数组总是作为指针进行处理
-        if (args_types[i].kind == TYPE_FN) {
-            size = align = 8;
+        // 数组总是作为指针进行处理, caller 和 callee 都会通过该函数进行分析参数位置
+        // 所以 arr 无论是否进行特殊处理都不会存在问题
+        if (args_types[i].kind == TYPE_ARR) {
+            size = align = POINTER_SIZE;
         } else {
-            size = type_sizeof(args_types[i]);
+            size = type_sizeof(args_types[i]); // 计算 size 和 align
             align = type_alignof(args_types[i]);
         }
 
         if (hfa) {
         } else if (size > 16 || args_types[i].kind == TYPE_ARR) {
-            // type_arr 总是作为大型结构体进行处理
-            // 大于16字节的结构体通过指针传递, 如果有空余的寄存器(nx < 8)，则指针需要占用一个寄存器
+            // type_arr 总是作为大型结构体进行处理(无论是否空间小于 16), 大型结构体即通过指针传递
+            // 大于 16 字节的结构体通过指针传递, 如果有空余的寄存器(nx < 8)，则指针需要占用一个寄存器
             if (nx < 8) {
                 args_pos[i] = (nx++ << 1) | 1;
             } else {
                 // 指针被推入栈中
                 ns = align_up(ns, 8);
-                args_pos[i] = ns | 1; // |1 标记大型结构体
+                args_pos[i] = ns | 1; // |1 标记大型结构体，需要通过指针传递
                 ns += 8;
             }
 
@@ -229,10 +231,8 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
         int64_t arg_pos = args_pos[i];
 
         if (arg_pos < 16) {
-            // 通过整数寄存器传递
-
             if (param_type.kind == TYPE_STRUCT && !(arg_pos & 1)) {
-                // 位  param 申请足够的栈空间来接收寄存器中传递的结构体参数
+                // 为 param 申请足够的栈空间来接收寄存器中传递的结构体参数
                 linked_push(result, lir_stack_alloc(c, param_type, dst_param)); // dst_param def
 
                 // 结构体可能占用两个寄存器
@@ -394,7 +394,8 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
     } else {
         // 计算 call result pos
         arm64_pcs_aux(1, args_type, args_pos);
-        assert(args_pos[0] == 0 | args_pos[0] == 1 || args_pos[0] == 16); // v0 或者 x0 寄存器
+
+        assert(args_pos[0] == 0 || args_pos[0] == 1 || args_pos[0] == 16); // v0 或者 x0 寄存器
         if (args_type[0].kind == TYPE_ARR) {
             assert(args_pos[0] == 1);
         }
@@ -542,24 +543,16 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
 
     // 如果函数的返回值是一个结构体，并且超过了 16byte, caller 需要为该返回值申请足够的 stack 空间，并将 stack 地址放到 x8 寄存器中
     if (args_pos[0] == 1) {
-        assert(call_result_type.kind == TYPE_STRUCT || call_result_type.kind == TYPE_ARR);
-
         assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
-        assert(is_stack_ref_big_type(lir_operand_type(call_result)));
+        assert(is_stack_ref_big_type(call_result_type));
 
         lir_operand_t *result_reg_operand = operand_new(LIR_OPERAND_REG, x8);
 
         // linear call 的时候没有为 result 申请空间，此处进行空间申请, 为 call 申请了空间，并将空间地址放在 x8 寄存器, callee 会使用该寄存器
         linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
         linked_push(result, lir_op_move(result_reg_operand, call_result));
-    }
 
-
-    // 返回值处理: 参数已经处理完毕，开始调用 call 指令。其中 call_result
-    if (args_pos[0] == 1) {
         // callee 已经将数据写入到了 call_result(x8寄存器对应的栈空间中)，此时不需要显式的处理 call_result,
-        assert(call_result_type.kind == TYPE_STRUCT || call_result_type.kind == TYPE_ARR);
-
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, NULL, op->line, op->column));
         return result;
     }
