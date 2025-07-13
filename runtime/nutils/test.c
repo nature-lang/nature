@@ -1,6 +1,8 @@
 #include "test.h"
 
 #include "process.h"
+#include "runtime/processor.h"
+
 #include <stdlib.h>
 
 static void __attribute__((noinline)) test_sleep_yield() {

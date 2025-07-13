@@ -92,6 +92,56 @@ fn main() {
     assert(end > 8000000)
 }
 
+=== test_coroutine_gc_safepoint
+--- main.n
+import co
+import runtime
+
+fn test_break() {
+
+}
+
+fn test_cpu_calc() {
+    int count = 0
+    for true {
+        test_break()
+        count += 1
+    }
+}
+
+fn alloc() {
+   var data1 = vec_new<i64>(0, 10240)
+   var data2 = vec_new<i64>(0, 10240)
+   var data3 = vec_new<i64>(0, 10240)
+   var data4 = vec_new<i64>(0, 10240)
+   var data5 = vec_new<i64>(0, 10240)
+   var data6 = vec_new<i64>(0, 10240)
+   var data7 = vec_new<i64>(0, 10240)
+   var data8 = vec_new<i64>(0, 10240)
+   var data9 = vec_new<i64>(0, 10240)
+   var data10 = vec_new<i64>(0, 10240)
+}
+
+fn main() {
+    go test_cpu_calc()
+
+    // allocate big memoory
+    alloc()
+    var start = runtime.malloc_bytes()
+    println('allocate bytes:', start)
+    // assert(start > 8000000)
+
+    for int i = 0; i < 10; i+=1 {
+        println('hello world')
+        co.sleep(100)
+    }
+    var end = runtime.malloc_bytes() // gc timeout, cannot gc
+    println('allocate bytes:', end)
+    // assert(end < 10000)
+}
+
+
+
 === test_scan_stack
 --- main.n
 import runtime

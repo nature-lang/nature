@@ -23,7 +23,15 @@ rt_linked_fixalloc_t global_gc_worklist;
 uv_key_t tls_processor_key = 0;
 uv_key_t tls_coroutine_key = 0;
 
+_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint1 = false;
+_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint2 = false;
+_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint3 = false;
+
 _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint = false;
+
+_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint4 = false;
+_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint5 = false;
+_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint6 = false;
 
 uint64_t assist_preempt_yield_ret_addr = 0;
 
@@ -59,8 +67,8 @@ NO_OPTIMIZE void co_preempt_yield() {
     assert(p);
 
     DEBUGF(
-            "[runtime.co_preempt_yield] p_index=%d(%d), co=%p, p_status=%d,  will yield, co_start=%ld",
-            p->index, p->status, co, co->status, p->co_started_at / 1000 / 1000);
+            "[runtime.co_preempt_yield] p_index=%d(%d), co=%p, p_status=%d,  will yield, co_start=%ld, assist_preempt_yield_ret_addr= %p",
+            p->index, p->status, co, co->status, p->co_started_at / 1000 / 1000, (void *) assist_preempt_yield_ret_addr);
 
     p->status = P_STATUS_PREEMPT; // 抢占返回标志
 
@@ -184,9 +192,9 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
 #elif defined(__RISCV64)
     // RISCV64 架构支持
     // 在 RISCV64 Linux 下，寄存器通过 __gregs 数组访问
-#define CTX_SP ctx->uc_mcontext.__gregs[2]   // x2 是栈指针 (sp)
-#define CTX_PC ctx->uc_mcontext.__gregs[0]   // pc 寄存器
-#define CTX_RA ctx->uc_mcontext.__gregs[1]   // x1 是返回地址寄存器 (ra)
+#define CTX_SP ctx->uc_mcontext.__gregs[2] // x2 是栈指针 (sp)
+#define CTX_PC ctx->uc_mcontext.__gregs[0] // pc 寄存器
+#define CTX_RA ctx->uc_mcontext.__gregs[1] // x1 是返回地址寄存器 (ra)
 
     uint64_t *sp = (uint64_t *) CTX_SP;
     uint64_t pc = CTX_PC;
@@ -443,8 +451,10 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
 // handle by thread
 static void processor_run(void *raw) {
     n_processor_t *p = raw;
-    DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, loop=%p, yield_safepoint_ptr=%p", p->index, p,
-            &p->uv_loop, &tls_yield_safepoint);
+    DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, loop=%p, yield_safepoint_ptr=%p(%ld)", p->index, p,
+            &p->uv_loop, &tls_yield_safepoint, tls_yield_safepoint);
+
+    DEBUGF("[runtime.processor_run] tls1 %p, tls2 %p, tls3 %p tls4 %p, tls5 %p, tls6 %p", &tls_yield_safepoint1, &tls_yield_safepoint2, &tls_yield_safepoint3, &tls_yield_safepoint4, &tls_yield_safepoint5, &tls_yield_safepoint6);
 
     processor_set_status(p, P_STATUS_DISPATCH);
 
@@ -483,8 +493,8 @@ static void processor_run(void *raw) {
             }
 
             DEBUGF("[runtime.processor_run] p_index=%d, stw completed, need_stw=%lu, safe_point=%lu, main_exited=%d",
-                    p->index, p->need_stw,
-                    p->in_stw, main_coroutine_exited);
+                   p->index, p->need_stw,
+                   p->in_stw, main_coroutine_exited);
         }
 
         // - exit

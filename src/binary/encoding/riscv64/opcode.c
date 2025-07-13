@@ -10,6 +10,8 @@ riscv64_opr_flags_list riscv64_opcode_map[] = {
         [RV_MV] = {1, (riscv64_opr_flags *[]) {&(riscv64_opr_flags) {O_MV, {RISCV64_R64, RISCV64_R64}}}},
         [RV_LI] = {1, (riscv64_opr_flags *[]) {&(riscv64_opr_flags) {O_LI, {RISCV64_R64, RISCV64_IMM}}}},
         [RV_LA] = {1, (riscv64_opr_flags *[]) {&(riscv64_opr_flags) {O_LA, {RISCV64_R64, RISCV64_SYM}}}},
+        [RV_LUIS] = {1, (riscv64_opr_flags *[]) {&(riscv64_opr_flags) {O_LUIS, {RISCV64_R64, RISCV64_SYM}}}},
+        [RV_ADDIS] = {1, (riscv64_opr_flags *[]) {&(riscv64_opr_flags) {O_ADDIS, {RISCV64_R64, RISCV64_SYM}}}},
         [RV_ADD] = {1, (riscv64_opr_flags *[]) {&(riscv64_opr_flags) {O_ADD, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
         [RV_ADDW] = {1, (riscv64_opr_flags *[]) {&(riscv64_opr_flags) {O_ADDW, {RISCV64_R64, RISCV64_R64, RISCV64_R64}}}},
         [RV_ADDI] = {1, (riscv64_opr_flags *[]) {&(riscv64_opr_flags) {O_ADDI, {RISCV64_R64, RISCV64_R64, RISCV64_IMM}}}},
@@ -591,6 +593,18 @@ static unsigned char *asm_la(riscv64_asm_inst_t *inst) {
     return inst->opcode_data;
 }
 
+static unsigned char *asm_luis(riscv64_asm_inst_t *inst) {
+    int rd = inst->operands[0]->reg.index;
+    W_LUI(rd, 0);
+    return inst->opcode_data;
+}
+
+static unsigned char *asm_addis(riscv64_asm_inst_t *inst) {
+    int rd = inst->operands[0]->reg.index;
+    W_ADDI(rd, rd, 0);
+    return inst->opcode_data;
+}
+
 static unsigned char *asm_ld(riscv64_asm_inst_t *inst) {
     int rd = inst->operands[0]->reg.index;
     int64_t ofs = inst->operands[1]->indirect.offset;
@@ -686,7 +700,19 @@ static unsigned char *asm_j(riscv64_asm_inst_t *inst) {
         imm = inst->operands[0]->immediate;
     }
 
-    C_J(imm);
+    // 检查偏移量范围来选择指令格式
+    // C_J 压缩指令范围: ±2KB (±2048, 即 -2048 到 +2047)
+    // W_JAL 标准指令范围: ±1MB (±1048576, 即 -1048576 到 +1048575)
+    //    if (imm >= -2048 && imm < 2048) {
+    // 使用压缩跳转指令 (16位)
+    //        C_J(imm);
+    //    } else if (imm >= -1048576 && imm < 1048576) {
+    // 使用标准跳转指令 (32位)
+    W_JAL(0, imm); // x0 作为目标寄存器，实现无条件跳转
+    //    } else {
+    //        assertf(false, "invalid jump offset: %ld", imm);
+    //    }
+
     return inst->opcode_data;
 }
 
@@ -712,18 +738,6 @@ static unsigned char *asm_jalr(riscv64_asm_inst_t *inst) {
 unsigned char *asm_bxx(riscv64_asm_inst_t *inst) {
     int rs1 = inst->operands[0]->reg.index;
     int rs2 = inst->operands[1]->reg.index;
-    if (rs2 == OPCODE_ZERO && is_rvc_reg(rs1)) {
-        switch (inst->opcode) {
-            case O_BEQ:
-                C_BEQZ(rs1);
-                return inst->opcode_data;
-            case O_BNE:
-                C_BNEZ(rs1);
-                return inst->opcode_data;
-            default:
-                break;
-        }
-    }
 
     riscv64_asm_operand_t *opr3 = inst->operands[2];
     int64_t offset = 0;
@@ -734,6 +748,19 @@ unsigned char *asm_bxx(riscv64_asm_inst_t *inst) {
     } else {
         assert(false); // 不支持的操作数类型
         return 0;
+    }
+
+    if (rs2 == OPCODE_ZERO && is_rvc_reg(rs1)) {
+        switch (inst->opcode) {
+            case O_BEQ:
+                C_BEQZ(rs1, offset);
+                return inst->opcode_data;
+            case O_BNE:
+                C_BNEZ(rs1, offset);
+                return inst->opcode_data;
+            default:
+                break;
+        }
     }
 
     static const int k_funct3_table[] = {_BEQ, _BNE, _BLT, _BGE, _BLTU, _BGEU};
@@ -1119,6 +1146,8 @@ static riscv64_opcode_handle_fn riscv64_opcode_handle_table[] = {
         [O_MV] = asm_mv,
         [O_LI] = asm_li,
         [O_LA] = asm_la,
+        [O_LUIS] = asm_luis,
+        [O_ADDIS] = asm_addis,
         [O_ADD] = asm_3r,
         [O_ADDW] = asm_3r,
         [O_ADDI] = asm_2ri,

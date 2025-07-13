@@ -39,6 +39,12 @@ void callers_deserialize() {
 
 void fndefs_deserialize() {
     rt_fndef_ptr = &rt_fndef_data;
+    // debug
+    //    for (int i = 0; i < rt_fndef_count; ++i) {
+    //        fndef_t *fn = &rt_fndef_ptr[i];
+    //        TDEBUGF("[fndefs_deserialize] fn base %p, name %s ", (void *) fn->base, STRTABLE(fn->name_offset));
+    //    }
+
     DEBUGF("[fndefs_deserialize] rt_fndef_ptr addr: %p", rt_fndef_ptr);
 }
 

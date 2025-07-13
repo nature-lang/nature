@@ -685,15 +685,15 @@ void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset) {
             uint64_t rel_type = ELF64_R_TYPE(rel->r_info); // 重定位类型
             uint64_t sym_index = ELF64_R_SYM(rel->r_info); // 重定位符号在符号表中的索引
 
-            assertf(sym_index < sym_count, "[load_object_file] rel sym index exception");
+            assertf(sym_index < sym_count, "rel sym index exception");
 
-            sym_index = symtab_index_map[sym_index];
+            uint64_t new_sym_index = symtab_index_map[sym_index];
 
-            if (!sym_index && rel_type != R_RISCV_ALIGN && rel_type != R_RISCV_RELAX) {
-                error_exit("[load_object_file] sym index not found");
+            if (!new_sym_index && rel_type != R_RISCV_ALIGN && rel_type != R_RISCV_RELAX) {
+                assertf(false, "patch new sym index == 0 zero, old sym index is %d", sym_index);
             }
 
-            rel->r_info = ELF64_R_INFO(sym_index, rel_type);
+            rel->r_info = ELF64_R_INFO(new_sym_index, rel_type);
             rel->r_offset += apply_offset;
         }
     }
@@ -922,6 +922,7 @@ REDO:
             uint64_t type = ELF64_R_TYPE(rel->r_info); // 重定位类型
             uint64_t sym_index = ELF64_R_SYM(rel->r_info);
             Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+            char *name = (char *) ctx->symtab_section->link->data + sym->st_name;
 
             int gotplt_type = elf_gotplt_entry_type(type);
             if (gotplt_type == -1) {
@@ -1121,12 +1122,6 @@ void elf_relocate_sections(elf_context_t *ctx) {
  * @param rel_section
  */
 void elf_relocate_section(elf_context_t *ctx, section_t *apply_section, section_t *rel_section) {
-    // log_debug("[elf_relocate_section] rel: %s,t=%lu,flag=%lu, apply: %s",
-    //        rel_section->name,
-    //        rel_section->sh_type,
-    //        rel_section->sh_flags,
-    //        apply_section->name);
-
     Elf64_Sym *sym = NULL;
     Elf64_Rela *rel = NULL;
     uint8_t *ptr = NULL;
@@ -1199,7 +1194,6 @@ void elf_fill_got(elf_context_t *ctx) {
                     case R_RISCV_PCREL_HI20:
                     case R_RISCV_PCREL_LO12_I:
                     case R_RISCV_PCREL_LO12_S:
-                    case R_RISCV_CALL:
                     case R_RISCV_CALL_PLT:
                         elf_fill_got_entry(ctx, rel);
                         break;
@@ -1212,6 +1206,7 @@ void elf_fill_got(elf_context_t *ctx) {
 void elf_fill_got_entry(elf_context_t *ctx, Elf64_Rela *rel) {
     int sym_index = ELF64_R_SYM(rel->r_info);
     Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+    char *sym_name = (char *) ctx->symtab_section->link->data + sym->st_name;
     sym_attr_t *attr = elf_get_sym_attr(ctx, sym_index, 0);
     unsigned offset = attr->got_offset;
 
@@ -1427,8 +1422,12 @@ void sort_symbols(elf_context_t *ctx, section_t *s) {
         for (rel = SEC_START(Elf64_Rela, rel_section); rel < SEC_END(Elf64_Rela, rel_section); rel++) {
             uint64_t sym_index = ELF64_R_SYM(rel->r_info);
             int type = ELF64_R_TYPE(rel->r_info);
-            sym_index = symtab_index_map[sym_index];
-            rel->r_info = ELF64_R_INFO(sym_index, type);
+            uint64_t new_sym_index = sym_index = symtab_index_map[sym_index];
+            if (sym_index > 0) {
+                assert(new_sym_index > 0);
+            }
+
+            rel->r_info = ELF64_R_INFO(new_sym_index, type);
         }
     }
 
@@ -1523,6 +1522,8 @@ elf_context_t *elf_context_new(char *output, uint8_t type) {
     ctx->output_type = type;
     ctx->sections = slice_new();
     slice_push(ctx->sections, NULL);
+
+    ctx->private_sections = slice_new();
 
     ctx->symtab_hash = table_new();
     /* create standard sections */
@@ -1625,7 +1626,7 @@ static inline uint32_t elf_ehdr_flags() {
         // 设置为64位硬件双精度浮点ABI
         return 0x5; // rvc + double-float ABI
     }
-    
+
     assert(false && "not support arch");
     return 0;
 }

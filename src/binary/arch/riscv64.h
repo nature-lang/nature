@@ -26,45 +26,12 @@ static inline uint64_t riscv64_create_plt_entry(elf_context_t *ctx, uint64_t got
     section_t *plt = ctx->plt;
 
     if (plt->data_count == 0) {
-        // PLT0 entry (32 bytes)
-        uint8_t *p = section_ptr_add(plt, 32);
-
-        // auipc t2, %pcrel_hi(.got.plt)
-        write32le(p, 0x00000397); // auipc t2, 0
-
-        // ld t2, %pcrel_lo(.got.plt)(t2)
-        write32le(p + 4, 0x0003b383); // ld t2, 0(t2)
-
-        // auipc t1, %pcrel_hi(.got.plt+8)
-        write32le(p + 8, 0x00000317); // auipc t1, 0
-
-        // ld t1, %pcrel_lo(.got.plt+8)(t1)
-        write32le(p + 12, 0x00033303); // ld t1, 0(t1)
-
-        // jalr t1
-        write32le(p + 16, 0x00030067); // jalr t1
-
-        // nop
-        write32le(p + 20, 0x00000013); // nop
-        write32le(p + 24, 0x00000013); // nop
-        write32le(p + 28, 0x00000013); // nop
+        section_ptr_add(plt, 32);
     }
-
-    // Create PLT entry (16 bytes)
     uint64_t plt_offset = plt->data_count;
+
     uint8_t *p = section_ptr_add(plt, 16);
-
-    // auipc t2, %pcrel_hi(got_entry)
-    write32le(p, 0x00000397); // auipc t2, 0
-
-    // ld t2, %pcrel_lo(got_entry)(t2)
-    write32le(p + 4, 0x0003b383); // ld t2, 0(t2)
-
-    // jalr t1, t2
-    write32le(p + 8, 0x000380e7); // jalr t1, t2
-
-    // nop
-    write32le(p + 12, 0x00000013); // nop
+    write64le(p, got_offset);
 
     return plt_offset;
 }
@@ -72,37 +39,44 @@ static inline uint64_t riscv64_create_plt_entry(elf_context_t *ctx, uint64_t got
 static inline int riscv64_gotplt_entry_type(uint64_t relocate_type) {
     switch (relocate_type) {
         case R_RISCV_NONE:
-        case R_RISCV_32:
-        case R_RISCV_64:
+        case R_RISCV_ALIGN:
         case R_RISCV_RELAX:
         case R_RISCV_RVC_BRANCH:
         case R_RISCV_RVC_JUMP:
-        case R_RISCV_32_PCREL:
-        case R_RISCV_PCREL_HI20:
-        case R_RISCV_PCREL_LO12_I:
-        case R_RISCV_PCREL_LO12_S:
+        case R_RISCV_JUMP_SLOT:
         case R_RISCV_TPREL_HI20:
         case R_RISCV_TPREL_LO12_I:
+        case R_RISCV_TPREL_LO12_S:
         case R_RISCV_TPREL_ADD:
         case R_RISCV_ADD16:
-        case R_RISCV_ADD32:
-        case R_RISCV_ADD64:
         case R_RISCV_SUB6:
         case R_RISCV_SUB8:
         case R_RISCV_SUB16:
-        case R_RISCV_SUB32:
-        case R_RISCV_SUB64:
         case R_RISCV_SET6:
         case R_RISCV_SET8:
         case R_RISCV_SET16:
         case R_RISCV_SET_ULEB128:
         case R_RISCV_SUB_ULEB128:
+        case R_RISCV_TLSDESC_HI20:
+        case R_RISCV_TLSDESC_LOAD_LO12:
+        case R_RISCV_TLSDESC_ADD_LO12:
+        case R_RISCV_TLSDESC_CALL:
             return NO_GOTPLT_ENTRY;
 
-        case R_RISCV_CALL:
-        case R_RISCV_CALL_PLT:
-        case R_RISCV_JAL:
         case R_RISCV_BRANCH:
+        case R_RISCV_CALL:
+        case R_RISCV_PCREL_HI20:
+        case R_RISCV_PCREL_LO12_I:
+        case R_RISCV_PCREL_LO12_S:
+        case R_RISCV_32_PCREL:
+        case R_RISCV_ADD32:
+        case R_RISCV_ADD64:
+        case R_RISCV_SUB32:
+        case R_RISCV_SUB64:
+        case R_RISCV_32:
+        case R_RISCV_64:
+        case R_RISCV_JAL:
+        case R_RISCV_CALL_PLT:
             return AUTO_GOTPLT_ENTRY;
 
         case R_RISCV_GOT_HI20:
@@ -115,24 +89,32 @@ static inline int riscv64_gotplt_entry_type(uint64_t relocate_type) {
 
 static inline int8_t riscv64_is_code_relocate(uint64_t relocate_type) {
     switch (relocate_type) {
-        case R_RISCV_32:
-        case R_RISCV_64:
+        case R_RISCV_BRANCH:
+        case R_RISCV_CALL:
+        case R_RISCV_JAL:
+            return 1;
+
+        case R_RISCV_GOT_HI20:
         case R_RISCV_PCREL_HI20:
         case R_RISCV_PCREL_LO12_I:
         case R_RISCV_PCREL_LO12_S:
-        case R_RISCV_HI20:
-        case R_RISCV_LO12_I:
-        case R_RISCV_LO12_S:
-        case R_RISCV_GOT_HI20:
-        case R_RISCV_COPY:
-        case R_RISCV_RELATIVE:
+        case R_RISCV_32_PCREL:
+        case R_RISCV_SET6:
+        case R_RISCV_SET8:
+        case R_RISCV_SET16:
+        case R_RISCV_SUB6:
+        case R_RISCV_ADD16:
+        case R_RISCV_ADD32:
+        case R_RISCV_ADD64:
+        case R_RISCV_SUB8:
+        case R_RISCV_SUB16:
+        case R_RISCV_SUB32:
+        case R_RISCV_SUB64:
+        case R_RISCV_32:
+        case R_RISCV_64:
             return 0;
 
-        case R_RISCV_CALL:
         case R_RISCV_CALL_PLT:
-        case R_RISCV_JAL:
-        case R_RISCV_BRANCH:
-        case R_RISCV_JUMP_SLOT:
             return 1;
     }
     return -1;
@@ -148,6 +130,10 @@ static inline bool riscv64_is_call_op(riscv64_asm_inst_t *operation) {
 
 static inline bool riscv64_is_branch_op(riscv64_asm_inst_t *operation) {
     return operation->raw_opcode >= RV_J && operation->raw_opcode <= RV_BGEU;
+}
+
+static inline bool riscv64_is_bxx_op(riscv64_asm_inst_t *operation) {
+    return operation->raw_opcode >= RV_BEQ && operation->raw_opcode <= RV_BGEU;
 }
 
 static inline riscv64_asm_operand_t *riscv64_extract_symbol_operand(riscv64_asm_inst_t *operation) {
@@ -174,15 +160,164 @@ static inline riscv64_build_temp_t *riscv64_build_temp_new(riscv64_asm_inst_t *o
 
 static inline void
 elf_riscv64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, uint64_t addr, uint64_t val) {
+    uint64_t off64;
+    uint32_t off32;
     int sym_index = ELF64_R_SYM(rel->r_info);
+    Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+    char *sym_name = (char *) ctx->symtab_section->link->data + sym->st_name;
+    //    log_debug("[elf_riscv64_relocate] sym %s, type %d", sym_name, type);
 
     switch (type) {
-        case R_RISCV_64:
-            add64le(ptr, val);
+        case R_RISCV_ALIGN:
+        case R_RISCV_RELAX:
+            return;
+
+        case R_RISCV_BRANCH:
+            off64 = val - addr;
+            if ((off64 + (1 << 12)) & ~(uint64_t) 0x1ffe) {
+                assertf(false, "R_RISCV_BRANCH relocation failed (val=%lx, addr=%lx)", (long) val, (long) addr);
+            }
+            off32 = off64 >> 1;
+            write32le(ptr, (read32le(ptr) & ~0xfe000f80) | ((off32 & 0x800) << 20) | ((off32 & 0x3f0) << 21) | ((off32 & 0x00f) << 8) | ((off32 & 0x400) >> 3));
             break;
+        case R_RISCV_JAL:
+            off64 = val - addr;
+            if ((off64 + (1 << 21)) & ~(((uint64_t) 1 << 22) - 2)) {
+                assertf(false, "R_RISCV_JAL relocation failed (val=%lx, addr=%lx)", (long) val, (long) addr);
+            }
+            off32 = off64;
+            write32le(ptr, (read32le(ptr) & 0xfff) | (((off32 >> 12) & 0xff) << 12) | (((off32 >> 11) & 1) << 20) | (((off32 >> 1) & 0x3ff) << 21) | (((off32 >> 20) & 1) << 31));
+            break;
+
+        case R_RISCV_CALL:
+        case R_RISCV_CALL_PLT:
+            write32le(ptr, (read32le(ptr) & 0xfff) | ((val - addr + 0x800) & ~0xfff));
+            write32le(ptr + 4, (read32le(ptr + 4) & 0xfffff) | (((val - addr) & 0xfff) << 20));
+            break;
+
+        case R_RISCV_PCREL_HI20:
+            off64 = (int64_t) (val - addr + 0x800) >> 12;
+            if ((off64 + ((uint64_t) 1 << 20)) >> 21) {
+                assertf(false, "R_RISCV_PCREL_HI20 relocation failed: off=%lx", (long) off64);
+            }
+            write32le(ptr, (read32le(ptr) & 0xfff) | ((off64 & 0xfffff) << 12));
+            ctx->last_hi.addr = addr;
+            ctx->last_hi.val = val;
+            break;
+
+        case R_RISCV_GOT_HI20:
+            val = ctx->got->sh_addr + elf_get_sym_attr(ctx, sym_index, 0)->got_offset;
+            off64 = (int64_t) (val - addr + 0x800) >> 12;
+            if ((off64 + ((uint64_t) 1 << 20)) >> 21) {
+                assertf(false, "R_RISCV_GOT_HI20 relocation failed");
+            }
+            ctx->last_hi.addr = addr;
+            ctx->last_hi.val = val;
+            write32le(ptr, (read32le(ptr) & 0xfff) | ((off64 & 0xfffff) << 12));
+            break;
+
+        case R_RISCV_PCREL_LO12_I:
+            if (val != ctx->last_hi.addr) {
+                assertf(false, "unsupported hi/lo pcrel reloc scheme");
+            }
+            val = ctx->last_hi.val;
+            addr = ctx->last_hi.addr;
+            write32le(ptr, (read32le(ptr) & 0xfffff) | (((val - addr) & 0xfff) << 20));
+            break;
+
+        case R_RISCV_PCREL_LO12_S:
+            if (val != ctx->last_hi.addr) {
+                assertf(false, "unsupported hi/lo pcrel reloc scheme");
+            }
+            val = ctx->last_hi.val;
+            addr = ctx->last_hi.addr;
+            off32 = val - addr;
+            write32le(ptr, (read32le(ptr) & ~0xfe000f80) | ((off32 & 0xfe0) << 20) | ((off32 & 0x01f) << 7));
+            break;
+
+        case R_RISCV_RVC_BRANCH:
+            off64 = (val - addr);
+            if ((off64 + (1 << 8)) & ~(uint64_t) 0x1fe) {
+                assertf(false, "R_RISCV_RVC_BRANCH relocation failed (val=%lx, addr=%lx)", (long) val, (long) addr);
+            }
+            off32 = off64;
+            write16le(ptr, (read16le(ptr) & 0xe383) | (((off32 >> 5) & 1) << 2) | (((off32 >> 1) & 3) << 3) | (((off32 >> 6) & 3) << 5) | (((off32 >> 3) & 3) << 10) | (((off32 >> 8) & 1) << 12));
+            break;
+
+        case R_RISCV_RVC_JUMP:
+            off64 = (val - addr);
+            if ((off64 + (1 << 11)) & ~(uint64_t) 0xffe) {
+                assertf(false, "R_RISCV_RVC_JUMP relocation failed (val=%lx, addr=%lx)", (long) val, (long) addr);
+            }
+            off32 = off64;
+            write16le(ptr, (read16le(ptr) & 0xe003) | (((off32 >> 5) & 1) << 2) | (((off32 >> 1) & 7) << 3) | (((off32 >> 7) & 1) << 6) | (((off32 >> 6) & 1) << 7) | (((off32 >> 10) & 1) << 8) | (((off32 >> 8) & 3) << 9) | (((off32 >> 4) & 1) << 11) | (((off32 >> 11) & 1) << 12));
+            break;
+
         case R_RISCV_32:
             add32le(ptr, val);
             break;
+
+        case R_RISCV_64:
+        case R_RISCV_JUMP_SLOT:
+            add64le(ptr, val);
+            break;
+
+        case R_RISCV_ADD64:
+            write64le(ptr, read64le(ptr) + val);
+            break;
+
+        case R_RISCV_ADD32:
+            write32le(ptr, read32le(ptr) + val);
+            break;
+
+        case R_RISCV_SUB64:
+            write64le(ptr, read64le(ptr) - val);
+            break;
+
+        case R_RISCV_SUB32:
+            write32le(ptr, read32le(ptr) - val);
+            break;
+
+        case R_RISCV_ADD16:
+            write16le(ptr, read16le(ptr) + val);
+            break;
+
+        case R_RISCV_SUB8:
+            *ptr -= val;
+            break;
+
+        case R_RISCV_SUB16:
+            write16le(ptr, read16le(ptr) - val);
+            break;
+
+        case R_RISCV_SET6:
+            *ptr = (*ptr & ~0x3f) | (val & 0x3f);
+            break;
+
+        case R_RISCV_SET8:
+            *ptr = (*ptr & ~0xff) | (val & 0xff);
+            break;
+
+        case R_RISCV_SET16:
+            *ptr = (*ptr & ~0xffff) | (val & 0xffff);
+            break;
+
+        case R_RISCV_SUB6:
+            *ptr = (*ptr & ~0x3f) | ((*ptr - val) & 0x3f);
+            break;
+
+        case R_RISCV_32_PCREL:
+            add32le(ptr, val - addr);
+            break;
+
+        case R_RISCV_COPY:
+            break;
+
+        case R_RISCV_RELATIVE:
+            write64le(ptr, ctx->text_section->sh_addr + rel->r_addend);
+            break;
+
+        // 保留原有的其他重定位类型
         case R_RISCV_HI20: {
             uint32_t hi20 = (val + 0x800) >> 12;
             write32le(ptr, (read32le(ptr) & 0xfff) | (hi20 << 12));
@@ -198,109 +333,42 @@ elf_riscv64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr
             write32le(ptr, (read32le(ptr) & 0x1fff07f) | ((lo12 & 0x1f) << 7) | ((lo12 & 0xfe0) << 20));
             break;
         }
-        case R_RISCV_PCREL_HI20: {
-            uint64_t pc_rel = val - addr;
-            uint32_t hi20 = (pc_rel + 0x800) >> 12;
+        case R_RISCV_TPREL_HI20: {
+            Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+            section_t *s = SEC_TACK(sym->st_shndx);
+            uint64_t tprel = val - s->sh_addr; // 计算相对于TLS段的偏移
+            uint32_t hi20 = (tprel + 0x800) >> 12;
             write32le(ptr, (read32le(ptr) & 0xfff) | (hi20 << 12));
             break;
         }
-        case R_RISCV_PCREL_LO12_I: {
-            uint64_t pc_rel = val - addr;
-            uint32_t lo12 = pc_rel & 0xfff;
+        case R_RISCV_TPREL_LO12_I: {
+            Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+            section_t *s = SEC_TACK(sym->st_shndx);
+            uint64_t tprel = val - s->sh_addr; // 计算相对于TLS段的偏移
+            uint32_t lo12 = tprel & 0xfff;
             write32le(ptr, (read32le(ptr) & 0xfffff) | (lo12 << 20));
             break;
         }
-        case R_RISCV_PCREL_LO12_S: {
-            uint64_t pc_rel = val - addr;
-            uint32_t lo12 = pc_rel & 0xfff;
-            write32le(ptr, (read32le(ptr) & 0x1fff07f) | ((lo12 & 0x1f) << 7) | ((lo12 & 0xfe0) << 20));
+        case R_RISCV_TPREL_LO12_S: {
+            Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
+            section_t *s = SEC_TACK(sym->st_shndx);
+            uint64_t tprel = val - s->sh_addr; // 计算相对于TLS段的偏移
+            uint32_t lo12 = tprel & 0xfff;
+            write32le(ptr, (read32le(ptr) & 0x1fff07f) |
+                                   ((lo12 & 0x1f) << 7) | ((lo12 & 0xfe0) << 20));
             break;
         }
-        case R_RISCV_CALL:
-        case R_RISCV_CALL_PLT: {
-            uint64_t pc_rel = val - addr;
-            if (((pc_rel + (1ULL << 31)) >> 32) != 0) {
-                assertf(0, "R_RISCV_CALL relocation out of range");
-            }
-            // AUIPC + JALR sequence
-            uint32_t hi20 = (pc_rel + 0x800) >> 12;
-            uint32_t lo12 = pc_rel & 0xfff;
-            write32le(ptr, (read32le(ptr) & 0xfff) | (hi20 << 12));
-            write32le(ptr + 4, (read32le(ptr + 4) & 0xfffff) | (lo12 << 20));
+        case R_RISCV_TPREL_ADD:
+            break;
+
+        // 新增的重定位类型
+        case R_RISCV_PLT32: {
+            // PLT 32位相对重定位
+            uint64_t plt_addr = ctx->plt->sh_addr + elf_get_sym_attr(ctx, sym_index, 0)->plt_offset;
+            uint64_t pc_rel = plt_addr - addr;
+            write32le(ptr, pc_rel);
             break;
         }
-        case R_RISCV_JAL: {
-            uint64_t pc_rel = val - addr;
-            if (((pc_rel + (1ULL << 20)) >> 21) != 0) {
-                assertf(0, "R_RISCV_JAL relocation out of range");
-            }
-            uint32_t imm = pc_rel & 0x1fffff;
-            uint32_t jal_imm = ((imm & 0x100000) << 11) | (imm & 0xff000) | ((imm & 0x800) << 9) | ((imm & 0x7fe) << 20);
-            write32le(ptr, (read32le(ptr) & 0xfff) | jal_imm);
-            break;
-        }
-        case R_RISCV_BRANCH: {
-            uint64_t pc_rel = val - addr;
-            if (((pc_rel + (1ULL << 12)) >> 13) != 0) {
-                assertf(0, "R_RISCV_BRANCH relocation out of range");
-            }
-            uint32_t imm = pc_rel & 0x1fff;
-            uint32_t branch_imm = ((imm & 0x1000) << 19) | ((imm & 0x7e0) << 20) | ((imm & 0x1e) << 7) | ((imm & 0x800) >> 4);
-            write32le(ptr, (read32le(ptr) & 0x1fff07f) | branch_imm);
-            break;
-        }
-        case R_RISCV_GOT_HI20: {
-            uint64_t got_addr = ctx->got->sh_addr + elf_get_sym_attr(ctx, sym_index, 0)->got_offset;
-            uint64_t pc_rel = got_addr - addr;
-            uint32_t hi20 = (pc_rel + 0x800) >> 12;
-            write32le(ptr, (read32le(ptr) & 0xfff) | (hi20 << 12));
-            break;
-        }
-        case R_RISCV_COPY:
-            break;
-        case R_RISCV_JUMP_SLOT:
-            write64le(ptr, val - rel->r_addend);
-            break;
-        case R_RISCV_RELATIVE:
-            write64le(ptr, ctx->text_section->sh_addr + rel->r_addend);
-            break;
-        case R_RISCV_ADD16:
-            write16le(ptr, read16le(ptr) + val);
-            break;
-        case R_RISCV_SUB16:
-            write16le(ptr, read16le(ptr) - val);
-            break;
-        case R_RISCV_SUB32:
-            write32le(ptr, read32le(ptr) - val);
-            break;
-        case R_RISCV_RELAX:
-            // RELAX 重定位通常用于链接时优化，不需要运行时处理
-            break;
-        case R_RISCV_RVC_BRANCH: {
-            // 压缩指令分支重定位 (13位偏移)
-            uint64_t pc_rel = val - addr;
-            if (((pc_rel + (1ULL << 8)) >> 9) != 0) {
-                assertf(0, "R_RISCV_RVC_BRANCH relocation out of range");
-            }
-            uint16_t imm = pc_rel & 0x1ff;
-            uint16_t branch_imm = ((imm & 0x100) << 4) | ((imm & 0x18) << 7) | ((imm & 0x6) << 1) | ((imm & 0x60) >> 1) | ((imm & 0x80) >> 3);
-            write16le(ptr, (read16le(ptr) & 0xe383) | branch_imm);
-            break;
-        }
-        case R_RISCV_RVC_JUMP: {
-            // 压缩指令跳转重定位 (12位偏移)
-            uint64_t pc_rel = val - addr;
-            if (((pc_rel + (1ULL << 11)) >> 12) != 0) {
-                assertf(0, "R_RISCV_RVC_JUMP relocation out of range");
-            }
-            uint16_t imm = pc_rel & 0xfff;
-            uint16_t jump_imm = ((imm & 0x800) << 1) | ((imm & 0x400) >> 2) | ((imm & 0x300) >> 1) | ((imm & 0x80) >> 1) | ((imm & 0x40) << 1) | ((imm & 0x20) >> 3) | ((imm & 0x10) << 7) | ((imm & 0xe) << 2);
-            write16le(ptr, (read16le(ptr) & 0xe003) | jump_imm);
-            break;
-        }
-        case R_RISCV_ADD32:
-            write32le(ptr, read32le(ptr) + val);
-            break;
         case R_RISCV_SET_ULEB128: {
             // 设置 ULEB128 编码的值
             uint8_t *p = ptr;
@@ -337,59 +405,39 @@ elf_riscv64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr
             *p = result & 0x7f;
             break;
         }
-        case R_RISCV_32_PCREL: {
-            uint64_t pc_rel = val - addr;
-            write32le(ptr, pc_rel);
-            break;
-        }
-        case R_RISCV_TPREL_HI20: {
-            // Thread-local storage high 20 bits
+        case R_RISCV_TLSDESC_HI20: {
+            // TLS 描述符高 20 位
+            // 这通常用于 TLS 描述符的高位地址计算
             uint32_t hi20 = (val + 0x800) >> 12;
             write32le(ptr, (read32le(ptr) & 0xfff) | (hi20 << 12));
             break;
         }
-        case R_RISCV_TPREL_LO12_I: {
-            // Thread-local storage low 12 bits (I-type)
+        case R_RISCV_TLSDESC_LOAD_LO12: {
+            // TLS 描述符加载低 12 位 (I-type)
             uint32_t lo12 = val & 0xfff;
             write32le(ptr, (read32le(ptr) & 0xfffff) | (lo12 << 20));
             break;
         }
-        case R_RISCV_TPREL_ADD:
-            // Thread-local storage add (no operation needed)
-            break;
-        case R_RISCV_ADD64:
-            write64le(ptr, read64le(ptr) + val);
-            break;
-        case R_RISCV_SUB6: {
-            uint8_t current = *ptr;
-            *ptr = (current & 0xc0) | ((current - val) & 0x3f);
+        case R_RISCV_TLSDESC_ADD_LO12: {
+            // TLS 描述符加法低 12 位 (S-type)
+            uint32_t lo12 = val & 0xfff;
+            write32le(ptr, (read32le(ptr) & 0x1fff07f) | ((lo12 & 0x1f) << 7) | ((lo12 & 0xfe0) << 20));
             break;
         }
-        case R_RISCV_SUB8:
-            *ptr = *ptr - val;
+        case R_RISCV_TLSDESC_CALL:
+            // TLS 描述符调用 - 通常不需要运行时处理
+            // 这个重定位类型主要在链接时处理
             break;
-        case R_RISCV_SUB64:
-            write64le(ptr, read64le(ptr) - val);
-            break;
-        case R_RISCV_SET6: {
-            *ptr = (*ptr & 0xc0) | (val & 0x3f);
-            break;
-        }
-        case R_RISCV_SET8:
-            *ptr = val;
-            break;
-        case R_RISCV_SET16:
-            write16le(ptr, val);
-            break;
+
         default:
-            assertf(0, "Unhandled relocation type %x at %lx", type, addr);
-            //            log_error("unhandled relocation type %d", type);
+            assertf(false, "Unhandled relocation type %d at %lx", type, addr);
             break;
     }
 }
 
+
 static inline void
-riscv64_rewrite_rel_symbol(riscv64_asm_inst_t *operation, riscv64_asm_operand_t *operand, uint64_t rel_diff) {
+riscv64_rewrite_rel_symbol(riscv64_asm_inst_t *operation, riscv64_asm_operand_t *operand, int64_t rel_diff) {
     int addend = 0;
 
     // 如果不是符号操作数,直接返回
@@ -452,10 +500,16 @@ static inline void elf_riscv64_operation_encodings(elf_context_t *ctx, module_t 
                     if (riscv64_is_branch_op(operation) && sym_index > 0) {
                         // 已存在的符号，计算相对偏移并进行符号改写
                         Elf64_Sym sym = ((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
-                        int64_t rel_diff = sym.st_value - section_offset;
+                        int64_t rel_diff = (int64_t) sym.st_value - (int64_t) section_offset;
+
+                        if (riscv64_is_bxx_op(operation)) {
+                            assert(rel_diff >= -4096);
+                            assert(rel_diff <= 4094);
+                        }
+
                         riscv64_rewrite_rel_symbol(operation, rel_operand, rel_diff);
                     } else {
-                        // 未知符号，不做处理，依旧使用 symbol 参数
+                        // 未知符号，暂时不做处理，依旧使用 symbol 参数
                         temp->rel_operand = rel_operand;
                         temp->rel_symbol = rel_operand->symbol.name;
                     }
@@ -470,6 +524,15 @@ static inline void elf_riscv64_operation_encodings(elf_context_t *ctx, module_t 
                         reloc_type = R_RISCV_CALL;
                     } else if (rel_operand->symbol.reloc_type == ASM_RISCV64_RELOC_JAL) {
                         reloc_type = R_RISCV_JAL;
+                    } else if (rel_operand->symbol.reloc_type == ASM_RISCV64_RELOC_TPREL_HI20) {
+                        reloc_type = R_RISCV_TPREL_HI20;
+                        st_type = STT_TLS;
+                    } else if (rel_operand->symbol.reloc_type == ASM_RISCV64_RELOC_TPREL_LO12_I) {
+                        reloc_type = R_RISCV_TPREL_LO12_I;
+                        st_type = STT_TLS;
+                    } else if (rel_operand->symbol.reloc_type == ASM_RISCV64_RELOC_TPREL_LO12_S) {
+                        reloc_type = R_RISCV_TPREL_LO12_S;
+                        st_type = STT_TLS;
                     } else {
                         assertf(false, "unknown reloc type");
                     }
@@ -487,6 +550,7 @@ static inline void elf_riscv64_operation_encodings(elf_context_t *ctx, module_t 
                         };
                         sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, rel_operand->symbol.name);
                     }
+                    assert(sym_index > 0);
 
                     // 生成重定位信息
                     temp->sym_index = sym_index;
@@ -527,7 +591,7 @@ static inline void elf_riscv64_operation_encodings(elf_context_t *ctx, module_t 
                             .column = operation->column,
                     };
                     if (call_target) {
-                        str_rcpy(caller.target_name, call_target, 24);
+                        caller.target_name_offset = strtable_put(call_target);
                     }
 
                     ct_list_push(ct_caller_list, &caller);
@@ -557,9 +621,19 @@ static inline void elf_riscv64_operation_encodings(elf_context_t *ctx, module_t 
         }
 
         Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
-        if (sym->st_value > 0) {
+        char *name = (char *) ctx->symtab_section->link->data + sym->st_name;
+        assert(sym_index > 0);
+
+        // rv_call 需要拆分为 auipc + jalr，重定位较为困难
+        if (riscv64_is_branch_op(temp->operation) && sym->st_value > 0) {
             // 内部符号，计算相对偏移
-            uint64_t rel_diff = sym->st_value - *temp->offset;
+            int64_t rel_diff = (int64_t) sym->st_value - *temp->offset;
+
+            if (riscv64_is_bxx_op(temp->operation)) {
+                assert(rel_diff >= -4096);
+                assert(rel_diff <= 4094);
+            }
+
             riscv64_rewrite_rel_symbol(temp->operation, temp->rel_operand, rel_diff);
 
             riscv64_asm_inst_encoding(temp->operation, NULL);
@@ -579,7 +653,8 @@ static inline void elf_riscv64_operation_encodings(elf_context_t *ctx, module_t 
                     // 处理分支指令
                     reloc_type = R_RISCV_BRANCH;
                     break;
-            }
+            };
+            assert(sym_index > 0);
 
             // 确认是外部符号，进行重定位处理
             temp->rel = elf_put_relocate(ctx, ctx->symtab_section, ctx->text_section,
@@ -597,10 +672,6 @@ static inline void elf_riscv64_operation_encodings(elf_context_t *ctx, module_t 
             if (temp->data_count == 0) {
                 continue;
             }
-            // 看看奇怪的 a009 是怎么来的，不应该有这个才对！
-            printf("c=%s, offset=0x%lx\n", c->linkident, ctx->text_section->data_count);
-            asm_op_to_string(0, temp->operation);
-            code_to_string(temp->data, temp->data_count);
 
             elf_put_data(ctx->text_section, temp->data, temp->data_count);
             c->text_count += temp->data_count;

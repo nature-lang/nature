@@ -73,7 +73,7 @@ void rt_coroutine_sleep(int64_t ms) {
     uv_timer_start(timer, uv_on_timer, ms, 0);
 
     DEBUGF("[runtime.rt_coroutine_sleep] start, co=%p uv_loop=%p, p_index=%d, timer=%p, timer_value=%lu", co,
-           &p->uv_loop, p->index, &timer, fetch_addr_value((addr_t) &timer));
+            &p->uv_loop, p->index, &timer, fetch_addr_value((addr_t) &timer));
 
     // 退出等待 io 事件就绪
     co_yield_waiting(co, NULL, NULL);

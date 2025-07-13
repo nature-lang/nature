@@ -32,10 +32,10 @@
 /* Whether to generate a GOT/PLT entry and when. NO_GOTPLT_ENTRY is first so
    that unknown relocation don't create a GOT or PLT entry */
 enum gotplt_entry {
-    NO_GOTPLT_ENTRY, /* never generate (eg. GLOB_DAT & JMP_SLOT relocs) */
-    BUILD_GOT_ONLY, /* only build GOT (eg. TPOFF relocs) */
-    AUTO_GOTPLT_ENTRY, /* generate if sym is UNDEF */
-    ALWAYS_GOTPLT_ENTRY /* always generate (eg. PLTOFF relocs) */
+    NO_GOTPLT_ENTRY = 0, /* never generate (eg. GLOB_DAT & JMP_SLOT relocs) */
+    BUILD_GOT_ONLY = 1, /* only build GOT (eg. TPOFF relocs) */
+    AUTO_GOTPLT_ENTRY = 2, /* generate if sym is UNDEF */
+    ALWAYS_GOTPLT_ENTRY = 3 /* always generate (eg. PLTOFF relocs) */
 };
 
 /* relocation type for 32 bit data relocation */

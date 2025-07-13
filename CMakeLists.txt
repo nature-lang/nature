@@ -104,10 +104,18 @@ add_custom_target(${PACKAGE_BINARY_NAME} ALL
 
 # custom rust build package nls
 #CARGO_TARGET_DIR=/custom/path cargo build --release
+# 查找 cargo 命令，类似 gobin 的方式
+find_program(CARGOBIN cargo
+        PATHS $ENV{HOME}/.cargo/bin /usr/local/bin /opt/cargo/bin
+        DOC "Cargo compiler"
+        REQUIRED
+)
+message(STATUS "CARGOBIN set to: ${CARGOBIN}")
+
 set(LSP_BINARY_NAME nls)
 if(DEFINED RUST_TARGET)
     add_custom_target(${LSP_BINARY_NAME} ALL
-            COMMAND CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR} cargo build --release --target ${RUST_TARGET}
+            COMMAND CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR} ${CARGOBIN} build --release --target ${RUST_TARGET}
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/nls
             COMMENT "nature language server nls"
     )
@@ -115,7 +123,7 @@ if(DEFINED RUST_TARGET)
     set(LSP_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${RUST_TARGET}/release/${LSP_BINARY_NAME})
 else()
     add_custom_target(${LSP_BINARY_NAME} ALL
-            COMMAND CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR} cargo build --release
+            COMMAND CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR} ${CARGOBIN} build --release
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/nls
             COMMENT "nature language server nls"
     )

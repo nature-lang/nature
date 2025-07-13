@@ -9,6 +9,12 @@ extern reg_t *r_x8, *r_x9, *r_x10, *r_x11, *r_x12, *r_x13, *r_x14, *r_x15;
 extern reg_t *r_x16, *r_x17, *r_x18, *r_x19, *r_x20, *r_x21, *r_x22, *r_x23;
 extern reg_t *r_x24, *r_x25, *r_x26, *r_x27, *r_x28, *r_x29, *r_x30, *r_x31;
 
+// 32-bit aliases for general-purpose registers
+extern reg_t *r_x0w, *r_x1w, *r_x2w, *r_x3w, *r_x4w, *r_x5w, *r_x6w, *r_x7w;
+extern reg_t *r_x8w, *r_x9w, *r_x10w, *r_x11w, *r_x12w, *r_x13w, *r_x14w, *r_x15w;
+extern reg_t *r_x16w, *r_x17w, *r_x18w, *r_x19w, *r_x20w, *r_x21w, *r_x22w, *r_x23w;
+extern reg_t *r_x24w, *r_x25w, *r_x26w, *r_x27w, *r_x28w, *r_x29w, *r_x30w, *r_x31w;
+
 // Special registers (aliases for general-purpose registers or dedicated)
 extern reg_t *r_zero; // Hardwired zero (alias for x0)
 extern reg_t *r_ra;   // Return address (alias for x1)
@@ -23,6 +29,12 @@ extern reg_t *r_f0, *r_f1, *r_f2, *r_f3, *r_f4, *r_f5, *r_f6, *r_f7;
 extern reg_t *r_f8, *r_f9, *r_f10, *r_f11, *r_f12, *r_f13, *r_f14, *r_f15;
 extern reg_t *r_f16, *r_f17, *r_f18, *r_f19, *r_f20, *r_f21, *r_f22, *r_f23;
 extern reg_t *r_f24, *r_f25, *r_f26, *r_f27, *r_f28, *r_f29, *r_f30, *r_f31;
+
+// 32-bit aliases for floating-point registers
+extern reg_t *r_f0s, *r_f1s, *r_f2s, *r_f3s, *r_f4s, *r_f5s, *r_f6s, *r_f7s;
+extern reg_t *r_f8s, *r_f9s, *r_f10s, *r_f11s, *r_f12s, *r_f13s, *r_f14s, *r_f15s;
+extern reg_t *r_f16s, *r_f17s, *r_f18s, *r_f19s, *r_f20s, *r_f21s, *r_f22s, *r_f23s;
+extern reg_t *r_f24s, *r_f25s, *r_f26s, *r_f27s, *r_f28s, *r_f29s, *r_f30s, *r_f31s;
 
 #define ZEROREG r_x0
 #define RA r_x1

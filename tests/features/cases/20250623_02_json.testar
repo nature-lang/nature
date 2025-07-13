@@ -1,0 +1,198 @@
+=== test_deserialize_bool
+--- main.n
+import json
+
+fn main() {
+    var s = `true`
+    var b = json.deserialize<bool>(s)
+    println(b)
+
+    s = `false`
+    b = json.deserialize<bool>(s)
+    println(b)
+}
+
+--- output.txt
+true
+false
+
+=== test_deserialize_failed
+--- main.n
+import json
+
+fn main() {
+    var s = `-12`
+    var b = json.deserialize<bool>(s) catch e {
+        panic(e.msg())
+    }
+    println(b)
+
+    s = `232`
+    b = json.deserialize<bool>(s)
+    println(b)
+}
+
+--- output.txt
+coroutine 'main' panic: 'expected boolean value at position 0' at nature-test/main.n:6:15
+
+=== test_deserialize_u8_string
+--- main.n
+import json
+
+fn main() {
+    var s = `12`
+    var b = json.deserialize<u8>(s) catch e {
+        panic(e.msg())
+    }
+    println(b)
+
+    s = `232`
+    b = json.deserialize<u8>(s)
+    println(b)
+
+    s = `"hello world"`
+    string str = json.deserialize<string>(s)
+    println(str)
+}
+
+--- output.txt
+12
+232
+hello world
+
+
+=== test_deserialize_vec
+--- main.n
+import json
+
+fn main() {
+    var s = `[1, 2, 3, 4]`
+    var b = json.deserialize<[u8]>(s)
+    println(b[0], b[1], b[2], b[3])
+}
+
+--- output.txt
+1 2 3 4
+
+
+=== test_deserialize_map
+--- main.n
+import json
+
+fn main() {
+    var s = ` { "key1" :  12 , "key" : 13 ,
+    "key-1" : -1 }`
+    var m = json.deserialize<{string:int}>(s)
+    println(m['key1'], m['key'], m['key-1'])
+}
+
+--- output.txt
+12 13 -1
+
+=== test_deserialize_map2
+--- main.n
+import json
+
+fn main() {
+    var s = ` { "key1" :  12 , "key" : ["a", "b", false] ,
+     "key-1" : true }`
+    var m = json.deserialize<{string:any}>(s)
+    println(m['key1'], (m['key'] as [any])[0], (m['key'] as [any])[1], (m['key'] as [any])[2], m['key-1'])
+}
+
+--- output.txt
+12.000000 a b false true
+
+
+=== test_deserialize_struct_failed
+--- main.n
+import json
+
+fn main() {
+    var s = ` { "key1" :  12 , "key" : ['a', 'b', '123'] ,
+      "unmatch" : "default", "key_1" : true  }`
+
+    type foo_t = struct{
+        [string] key
+        int key1
+        bool key_1
+    }
+
+    var f = json.deserialize<foo_t>(s) catch e {
+        panic(e.msg())
+    }
+    println(f.key1, f.key[0], f.key[1], f.key[2], f.key_1)
+}
+
+--- output.txt
+coroutine 'main' panic: 'expected `"` at position 27' at nature-test/main.n:14:15
+
+=== test_deserialize_struct
+--- main.n
+import json
+
+fn main() {
+    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,
+      "unmatch" : "default", "key_1" : true  }`
+
+    type foo_t = struct{
+        [string] key
+        int key1
+        bool key_1
+    }
+
+    var f = json.deserialize<foo_t>(s)
+    println(f.key1, f.key[0], f.key[1], f.key[2], f.key_1)
+}
+
+--- output.txt
+12 a b 123 true
+
+
+=== test_deserialize_any_failed
+--- main.n
+import json
+
+fn main() {
+    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,
+      "unmatch" : "default", "key_1" : true  }`
+
+    var a = json.deserialize<any>(s)
+    var m = a as {string:any}
+    println(m['key1'], (m['key'] as [string])[2])
+}
+
+--- output.txt
+coroutine 'main' panic: 'type assert failed' at nature-test/main.n:9:27
+
+=== test_deserialize_any_failed2
+--- main.n
+import json
+
+fn main() {
+    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,
+      "unmatch" : "default", "key_1" : true  }`
+
+    var a = json.deserialize<any>(s)
+    var m = a as {string:any}
+    println(m['key1'] as int)
+}
+
+--- output.txt
+coroutine 'main' panic: 'type assert failed' at nature-test/main.n:9:18
+
+=== test_deserialize_any
+--- main.n
+import json
+
+fn main() {
+    var s = ` { "key1" :  12 , "key" : ["a", "b", "123"] ,
+      "unmatch" : "default", "key_1" : true  }`
+
+    var a = json.deserialize<any>(s)
+    var m = a as {string:any}
+    println(m['key1'] as float, (m['key'] as [any])[2] as string)
+}
+
+--- output.txt
+12.000000 123

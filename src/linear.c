@@ -186,7 +186,7 @@ linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_opera
 
     OP_PUSH(lir_op_new(LIR_OPCODE_USLT, index_target, length_target, cmp_result));
 
-    char *cmd_label_ident = label_ident_with_unique("vec_index_cmp");
+    char *cmd_label_ident = label_ident_with_unique(str_connect(m->current_closure->linkident, ".vcmp"));
     char *end_label_ident = str_connect(cmd_label_ident, LABEL_END_SUFFIX);
     lir_operand_t *cmp_end_label = lir_label_operand(end_label_ident, true);
 
@@ -2912,7 +2912,7 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
         }
 
         OP_PUSH(lir_op_bal(handle_end->output));
-        LINEAR_HANDLE_BODY:
+    LINEAR_HANDLE_BODY:
         OP_PUSH(handle_start);
         linear_body(m, match_case->handle_body);
         // 只要运行了 exec， 就直接结束 case 而不是继续执行。

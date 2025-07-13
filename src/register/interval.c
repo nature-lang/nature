@@ -350,19 +350,23 @@ static bool resolve_blocked(int8_t *block_regs, interval_t *from, interval_t *to
 /**
  * 同一个 id 可能需要插入多个值，此时按先后顺序插入
  * @param block
- * @param id
+ * @param insert_id
  * @param src_i
  * @param dst_i
  */
-static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, interval_t *dst_i, bool imm_replace,
+static void block_insert_mov(basic_block_t *block, int insert_id, interval_t *src_i, interval_t *dst_i, bool imm_replace,
                              bool is_resolve) {
     LINKED_FOR(block->operations) {
         lir_op_t *op = LINKED_VALUE();
-        if (op->id <= id) {
+        if (op->id <= insert_id) {
             continue;
         }
 
-        // op->id > id 才会进来
+        // 此时 op->id 大于目标 id, 只要 insert 到 op->id 的前面就行，op->id 的前面也是相同 insert id 的最后方。
+        if (op->code == LIR_OPCODE_LABEL) {
+            assert(false);
+        }
+
 
         // last->id < id < op->id
         lir_operand_t *dst = operand_new(LIR_OPERAND_VAR, dst_i->var);
@@ -373,7 +377,7 @@ static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, in
         }
 
         lir_op_t *mov_op = lir_op_move(dst, src);
-        mov_op->id = id;
+        mov_op->id = insert_id;
         mov_op->is_resolve = is_resolve;
         linked_insert_before(block->operations, LINKED_NODE(), mov_op);
 
@@ -382,7 +386,7 @@ static void block_insert_mov(basic_block_t *block, int id, interval_t *src_i, in
         }
         return;
     }
-    assertf(false, "id=%v notfound in block=%s", id, block->name);
+    assertf(false, "id=%v notfound in block=%s", insert_id, block->name);
 }
 
 static void closure_insert_mov(closure_t *c, int insert_id, interval_t *src_i, interval_t *dst_i) {
@@ -392,6 +396,7 @@ static void closure_insert_mov(closure_t *c, int insert_id, interval_t *src_i, i
         lir_op_t *first = linked_first(block->operations)->value;
         lir_op_t *last = OP(block->last_op);
         if (first->id <= insert_id && insert_id < last->id) {
+            assert(first->id != insert_id);
             block_insert_mov(block, insert_id, src_i, dst_i, false, false);
             return;
         }
@@ -531,7 +536,7 @@ void interval_build(closure_t *c) {
         }
 
 
-        int block_from = OP(linked_first(block->operations))->id;
+        int block_from = OP(linked_first(block->operations))->id; // 虽然是 label, 但是同样是为了连续性, 从而可以 merge range
         int block_to = OP(block->last_op)->id + 2; // +2 是为了让 interval lifetime 具有连续性，从而在 add range 时能够进行 merge
 
         // lives(out) in add full range 遍历所有的 lives(union all succ, so it similar live_out),直接添加跨越整个块到间隔
@@ -896,81 +901,6 @@ END:
     return result;
 }
 
-int old_interval_next_intersect(closure_t *c, interval_t *current, interval_t *select) {
-    assertf(select->ranges->count > 0, "select interval=%d not ranges, cannot calc intersection", select->index);
-    assertf(select->last_range->to > current->first_range->from, "select interval=%d is expired", select->index);
-
-    int position = current->first_range->from; // first_from 指向 range 的开头
-
-    int64_t end = max(current->last_range->to, select->last_range->to);
-
-    int result = 0;
-    int select_first_cover = -1;
-    // first covert select position
-    while (position < end) {
-        bool cover_current = interval_covered(current, position, false);
-        bool cover_select = interval_covered(select, position, false);
-
-        if (select_first_cover == -1 && cover_select) {
-            select_first_cover = position;
-        }
-
-        if (cover_current && cover_select) {
-            result = position;
-            goto END;
-        }
-
-        // 已经超过了 current 表示不可能存在交集，此时找到 select 在 current->last_to 之后都最后一个使用位置即可
-        if (position > current->last_range->to && cover_select) {
-            result = position;
-            goto END;
-        }
-        position++;
-    }
-
-    assertf(select_first_cover >= 0, "select range not found any intersection from=%d to=%d",
-            current->first_range->from,
-            end);
-
-    result = select_first_cover;
-    // 如果 select_first_cover 在 label 的位置，则其占用的空间范围应该前移
-
-END:
-
-    // 此时应该返回 select 大于 current->first_range->from 的首个 cover select 的节点
-    // 因为即使没有交集，该寄存器的最大空闲时间也是到这个节点
-    // current ---              ----
-    // select         ---
-    assert(result > 0);
-
-    // result 位于 label 时，这是一个不可用位置，所以增加其覆盖范围。便于更加正确的计算 reg 的生命周期
-    for (int i = c->blocks->count - 1; i >= 0; --i) {
-        basic_block_t *b = c->blocks->take[i];
-        lir_op_t *label_op = linked_first(b->operations)->value;
-
-        if (label_op->id < result) {
-            break;
-        }
-
-        // 计算交集的时候刻意避免了 before = label 的位置
-        // 在 before 之前找到一个合适的位置进行溢出。这里直接向前推断到
-        if (label_op->id == result) {
-            assert(i > 0);
-            b = c->blocks->take[i - 1];
-
-
-            if (b->succs->count == 1) {
-                return OP(b->last_op)->id - 1; // 插入在 branch 之前即可
-            } else {
-                assert(b->succs->count == 2); // 存在两个 branch 语句，所以需要 - 3
-                return OP(b->last_op)->id - 3;
-            }
-        }
-    }
-
-    return result;
-}
-
 /**
  * - 不能在边界进行切分，会导致 resolve_data_flow 检测边界异常插入重复的 mov
  * - 不要在 for 循环内部的 block 中进行切分, 循环中的 live_in 计算是完整的
@@ -989,8 +919,8 @@ int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int befor
         // assert(label_op->id != before);
 
         // 计算交集的时候刻意避免了 before = label 的位置
-        // 在 before 之前找到一个合适的位置进行溢出。这里直接向前推断到
-        if (label_op->id == before) {
+        // 在 before 之前找到一个合适的位置进行溢出。这里直接向前推断到, 加入 label = 10, before = 11, 此时只能插入到更加前面。
+        if (label_op->id == before || label_op->id == (before - 1)) {
             assert(i > 0);
             b = c->blocks->take[i - 1];
 
@@ -1464,12 +1394,15 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
             // 只有一个 succ, 说明只有一个 branch op, 直接插入到 branch op 之前即可
             // insert before last op
             r->insert_id = last_op->id - 1;
+            assert(r->insert_id >= OP(linked_first(from->operations))->id);
         } else {
+            assert(false);
             r->insert_id = last_op->id + 1; // ? 好像没有这种情况
         }
     } else {
         r->insert_block = to;
-        r->insert_id = OP(to->first_op)->id - 1; // 插入到 label 之后，首个之类之前
+        r->insert_id = OP(to->first_op)->id - 1; // 插入到 label 之后，首个指令之前
+        assert(r->insert_id >= OP(linked_first(to->operations))->id);
     }
 }
 

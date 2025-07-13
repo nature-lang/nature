@@ -86,18 +86,14 @@ lir_operand_trans_riscv64(closure_t *c, lir_op_t *op, lir_operand_t *operand, sl
     // 如果偏移量超出范围，需要使用临时寄存器
     if (result && result->type == RISCV64_ASM_OPERAND_INDIRECT &&
         (result->indirect.offset < -2048 || result->indirect.offset > 2047)) {
-        // TODO issue handle
-        assert("data movement range exceeds +-2048");
         //         使用t6(x31)作为临时寄存器
-        //        riscv64_asm_operand_t *temp_reg = RO_REG(T6);
+        riscv64_asm_operand_t *temp_reg = RO_REG(T6);
 
-        // 计算基址和偏移量的和
-        //        slice_push(operations, RISCV64_INST(RV_MV, temp_reg, RO_REG(result->indirect.reg)));
-        //        riscv64_mov_imm(op, operations, RO_REG(T6), result->indirect.offset);
-        //        slice_push(operations, RISCV64_INST(RV_ADD, temp_reg, temp_reg, RO_REG(T6)));
+        riscv64_mov_imm(op, operations, RO_REG(T6), result->indirect.offset);
+        slice_push(operations, RISCV64_INST(RV_ADD, RO_REG(T6), RO_REG(T6), RO_REG(result->indirect.reg)));
 
         // 使用临时寄存器和零偏移量创建新的间接寻址操作数
-        //        result = RO_INDIRECT(T6, 0, mem_size);
+        result = RO_INDIRECT(T6, 0, mem_size);
     }
 
     // 如果是非 MOVE 指令的第二个操作数且是内存操作数，需要先加载到寄存器
@@ -212,6 +208,7 @@ static slice_t *riscv64_native_mov(closure_t *c, lir_op_t *op) {
                 // REG -> REG
                 slice_push(operations, RISCV64_INST(RV_MV, result, source));
             } else {
+                assert(result->size > 0);
                 // REG -> MEM
                 if (result->size == BYTE) {
                     slice_push(operations, RISCV64_INST(RV_SB, source, result));
@@ -258,7 +255,7 @@ static slice_t *riscv64_native_mov(closure_t *c, lir_op_t *op) {
             if (source->size == BYTE) {
                 // 检查是否为有符号类型
                 if (is_signed(operand_type_kind(op->first))) {
-                    slice_push(operations, RISCV64_INST(RV_LB, result, source)); // RISC-V的LB已经是符号扩展
+                    slice_push(operations, RISCV64_INST(RV_LB, result, source)); // RISC-V的 LB 已经是符号扩展
                 } else {
                     slice_push(operations, RISCV64_INST(RV_LBU, result, source)); // 无符号加载
                 }
@@ -806,21 +803,26 @@ static slice_t *riscv64_native_beq(closure_t *c, lir_op_t *op) {
     assert(target->type == RISCV64_ASM_OPERAND_SYMBOL);
     target->symbol.reloc_type = ASM_RISCV64_RELOC_BRANCH;
 
-    // RISC-V 的 BEQ 指令需要两个寄存器进行比较
+    // 使用反转跳转模式：BNE + J 来避免跳转范围限制
+    riscv64_asm_operand_t *skip_target = RO_IMM(8);
+
     if (second->type == RISCV64_ASM_OPERAND_IMMEDIATE) {
         if (second->immediate == 0) {
-            // 如果比较的是0，可以直接使用BEQ
-            slice_push(operations, RISCV64_INST(RV_BEQ, first, RO_REG(ZEROREG), target));
+            // 如果比较的是0，使用 BNE first, zero, 8
+            skip_target = RO_IMM(6);
+            slice_push(operations, RISCV64_INST(RV_BNE, first, RO_REG(ZEROREG), skip_target));
         } else {
             // 否则需要先加载立即数到临时寄存器
             riscv64_asm_operand_t *temp_reg = RO_REG(T6);
             riscv64_mov_imm(op, operations, temp_reg, second->immediate);
-            slice_push(operations, RISCV64_INST(RV_BEQ, first, temp_reg, target));
+            slice_push(operations, RISCV64_INST(RV_BNE, first, temp_reg, skip_target));
         }
     } else {
         // 寄存器间比较
-        slice_push(operations, RISCV64_INST(RV_BEQ, first, second, target));
+        slice_push(operations, RISCV64_INST(RV_BNE, first, second, skip_target));
     }
+
+    slice_push(operations, RISCV64_INST(RV_J, target));
 
     return operations;
 }
@@ -957,15 +959,20 @@ static slice_t *riscv64_native_fn_begin(closure_t *c, lir_op_t *op) {
     // 保存返回地址和帧指针
     // 对于RISC-V，需要保存ra(x1)和fp(s0/x8)
     slice_push(operations, RISCV64_INST(RV_ADDI, RO_REG(R_SP), RO_REG(R_SP), RO_IMM(-16)));
-    slice_push(operations, RISCV64_INST(RV_SD, RO_REG(RA), RO_INDIRECT(R_SP, 8, QWORD)));
-    slice_push(operations, RISCV64_INST(RV_SD, RO_REG(R_FP), RO_INDIRECT(R_SP, 0, QWORD)));
+    slice_push(operations, RISCV64_INST(RV_SD, RO_REG(RA), RO_INDIRECT(R_SP, 8, QWORD))); // ret_addr
+    slice_push(operations, RISCV64_INST(RV_SD, RO_REG(R_FP), RO_INDIRECT(R_SP, 0, QWORD))); // prev_fp
 
-    // 更新帧指针
+    // 更新帧指针(fp+0 = prev_fp, fp+8 = ret_addr)
     slice_push(operations, RISCV64_INST(RV_ADDI, RO_REG(R_FP), RO_REG(R_SP), RO_IMM(0)));
 
     // 分配栈空间
     if (offset > 0) {
-        slice_push(operations, RISCV64_INST(RV_ADDI, RO_REG(R_SP), RO_REG(R_SP), RO_IMM(-offset)));
+        if (offset > 2047) {
+            riscv64_mov_imm(op, operations, RO_REG(T6), offset);
+            slice_push(operations, RISCV64_INST(RV_SUB, RO_REG(R_SP), RO_REG(R_SP), RO_REG(T6)));
+        } else {
+            slice_push(operations, RISCV64_INST(RV_ADDI, RO_REG(R_SP), RO_REG(R_SP), RO_IMM(-offset)));
+        }
     }
 
     // gc_bits 补 0
@@ -988,8 +995,13 @@ static slice_t *riscv64_native_fn_end(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     // 恢复栈指针
-    if (c->stack_offset != 0) {
-        slice_push(operations, RISCV64_INST(RV_ADDI, RO_REG(R_SP), RO_REG(R_SP), RO_IMM(c->stack_offset)));
+    if (c->stack_offset > 0) {
+        if (c->stack_offset > 2047) {
+            riscv64_mov_imm(op, operations, RO_REG(T6), c->stack_offset);
+            slice_push(operations, RISCV64_INST(RV_ADD, RO_REG(R_SP), RO_REG(R_SP), RO_REG(T6)));
+        } else {
+            slice_push(operations, RISCV64_INST(RV_ADDI, RO_REG(R_SP), RO_REG(R_SP), RO_IMM(c->stack_offset)));
+        }
     }
 
     // 恢复帧指针和返回地址
@@ -1134,8 +1146,6 @@ static slice_t *riscv64_native_trunc(closure_t *c, lir_op_t *op) {
 
 static slice_t *riscv64_native_safepoint(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
-    return operations; // TODO 暂时不添加 safepoint
-
     assert(op->output && op->output->assert_type == LIR_OPERAND_REG);
     assert(BUILD_OS == OS_LINUX);
 
@@ -1143,28 +1153,23 @@ static slice_t *riscv64_native_safepoint(closure_t *c, lir_op_t *op) {
     assert(a0_reg->index == A0->index);
 
     riscv64_asm_operand_t *a0_operand = RO_REG(a0_reg);
-    a0_operand->size = a0_reg->size;
+    riscv64_asm_operand_t *t6_operand = RO_REG(T6);
 
-    // 在 Linux 上，RISC-V 使用 tp 寄存器 (x4) 作为 TLS 基址
-    // 1. 加载 TLS 变量地址到 a0
-    // 使用 LA 指令加载 TLS 变量的地址
-    riscv64_asm_operand_t *tls_symbol = RO_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_RISCV64_RELOC_CALL);
-    slice_push(operations, RISCV64_INST(RV_LA, a0_operand, tls_symbol));
+    slice_push(operations, RISCV64_INST(RV_LUIS, t6_operand, RO_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_RISCV64_RELOC_TPREL_HI20)));
+    slice_push(operations, RISCV64_INST(RV_ADDIS, t6_operand, RO_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_RISCV64_RELOC_TPREL_LO12_I)));
+    slice_push(operations, RISCV64_INST(RV_ADD, t6_operand, t6_operand, RO_REG(TP)));
+    slice_push(operations, RISCV64_INST(RV_LD, a0_operand, RO_INDIRECT(T6, 0, QWORD)));
 
-    // 2. 从 TLS 变量地址加载实际的 safepoint 值
-    // ld a0, 0(a0)
-    slice_push(operations, RISCV64_INST(RV_LD, a0_operand, RO_INDIRECT(a0_reg, 0, POINTER_SIZE)));
 
-    // 3. 检查 safepoint 值是否为 0
-    // beq a0, zero, skip_call (跳过 8 字节，即跳过下面的 call 指令)
-    slice_push(operations, RISCV64_INST(RV_BEQ, a0_operand, RO_REG(ZEROREG), RO_IMM(8)));
+    // 比较值是否为 0
+    slice_push(operations, RISCV64_INST(RV_BEQ, a0_operand, RO_REG(ZEROREG), RO_IMM(10)));
 
-    // 4. 如果不为 0，调用 assist_preempt_yield 函数
-    riscv64_asm_operand_t *yield_func = RO_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, ASM_RISCV64_RELOC_CALL);
-    slice_push(operations, RISCV64_INST(RV_CALL, yield_func));
+    // 如果不为 0，调用 assist_preempt_yield 函数
+    slice_push(operations, RISCV64_INST(RV_CALL, RO_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, ASM_RISCV64_RELOC_CALL)));
 
     return operations;
 }
+
 
 static slice_t *riscv64_native_push(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();

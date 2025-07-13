@@ -130,6 +130,7 @@ static int64_t riscv64_pcs_aux(int64_t n, type_t *args_types, pos_item_t *args_p
             if (areg[0] < 8) {
                 // 整数寄存器足够
                 args_pos[i].main = (areg[0]++ << 1) | 1; // 添加指针标记
+                args_pos[i].main_filed_offset = 0 << 8 | TYPE_ANYPTR; // 通过指针传递
             } else {
                 args_pos[i].main = ns | 1;
                 ns += POINTER_SIZE;
@@ -211,18 +212,35 @@ static linked_t *riscv64_lower_params(closure_t *c, slice_t *param_vars) {
         return result;
     }
 
-    pos_item_t *args_pos = mallocz(param_vars->count * sizeof(pos_item_t));
-    type_t *args_type = mallocz(param_vars->count * sizeof(type_t));
+    pos_item_t *args_pos = mallocz((param_vars->count + 1) * sizeof(pos_item_t));
+    type_t *args_type = mallocz((param_vars->count + 1) * sizeof(type_t));
     assert(args_pos != NULL);
     assert(args_type != NULL);
 
+
+    type_t return_type = type_kind_new(TYPE_VOID);
+    if (c->return_operand) {
+        return_type = lir_operand_type(c->return_operand);
+    }
+
+    args_type[0] = return_type;
     for (int i = 0; i < param_vars->count; ++i) {
         lir_var_t *var = param_vars->take[i];
         assert(var != NULL);
-        args_type[i] = var->type;
+        args_type[i + 1] = var->type;
     }
 
-    int64_t stack_offset = riscv64_pcs_aux(param_vars->count, args_type, args_pos);
+    int64_t stack_offset;
+    if (return_type.kind == TYPE_STRUCT && type_sizeof(return_type) > 16) {
+        stack_offset = riscv64_pcs_aux(param_vars->count + 1, args_type, args_pos);
+
+        args_pos = args_pos + 1;
+        args_type = args_type + 1;
+    } else {
+        args_pos = args_pos + 1;
+        args_type = args_type + 1;
+        stack_offset = riscv64_pcs_aux(param_vars->count, args_type, args_pos);
+    }
 
     for (int i = 0; i < param_vars->count; ++i) {
         lir_var_t *var = param_vars->take[i];
@@ -343,12 +361,12 @@ linked_t *riscv64_lower_fn_begin(closure_t *c, lir_op_t *op) {
         if (return_type.kind == TYPE_ARR || type_sizeof(return_type) > 16) {
             assert(return_type.kind == TYPE_STRUCT || return_type.kind == TYPE_ARR);
 
-            // 大于16字节的结构体通过内存返回，A0中存储返回地址
+            // 大于 16 字节的结构体通过内存返回，A0 中存储返回地址
             lir_operand_t *return_operand = c->return_operand;
             assert(return_operand->assert_type == LIR_OPERAND_VAR);
 
-            // 从A0寄存器获取返回地址引用
-            lir_operand_t *A0_reg = operand_new(LIR_OPERAND_REG, A0);
+            // 从 A0 寄存器获取返回地址引用
+            lir_operand_t *A0_reg = lir_reg_operand(A0->index, TYPE_ANYPTR);
             linked_push(result, lir_op_move(return_operand, A0_reg));
         } else {
             // 将会触发扁平化处理，不需要做什么特殊处理, 但是需要创建 output, 保证 reg 可用
@@ -413,7 +431,7 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
     // 计算参数传递需要的栈空间, +1 表示跳过 result 处理， result 在上面已经计算处理完成
     int64_t stack_offset;
     if (call_result_type.kind == TYPE_STRUCT && type_sizeof(call_result_type) > 16) {
-        // 作为大型结构体占用 a0 寄存器, 即占用一个参数位置
+        // 返回值作为大型结构体占用 a0 寄存器, 即占用一个参数位置
         stack_offset = riscv64_pcs_aux(args_count + 1, args_type, args_pos);
     } else {
         stack_offset = riscv64_pcs_aux(args_count, args_type + 1, args_pos + 1);

@@ -699,7 +699,7 @@ fn rmdir(string path):void! {
 }
 
 fn rename(string oldpath, string newpath):void! {
-    call6(SYS_RENAMEAT, AT_FDCWD as anyptr, oldpath.ref(), AT_FDCWD as anyptr, newpath.ref(), 0, 0)
+    call6(SYS_RENAMEAT2, AT_FDCWD as anyptr, oldpath.ref(), AT_FDCWD as anyptr, newpath.ref(), 0, 0)
 }
 
 fn exit(int status):void! {
@@ -731,7 +731,7 @@ fn wait(int pid, int option):(int, int)! {
     var status = 0
     int result = libc.waitpid(pid, &status, option)
     if result == -1 {
-        throw errorf(libc.strerror())
+        throw errorf(libc.error_string())
     }
 
     return (result, status)

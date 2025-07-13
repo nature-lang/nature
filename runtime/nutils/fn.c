@@ -118,84 +118,164 @@ static uint8_t gen_mov_reg_codes(uint8_t *codes, uint64_t reg_index, uint64_t fn
 
 /**
  * RISCV64 加载 64 位立即数并跳转
- * 例如加载地址 0x40007fffb8:
- * lui t0, %hi(addr)     // 加载高20位
- * addi t0, t0, %lo(addr) // 加载低12位
- * jalr x0, t0, 0        // 跳转到 t0 寄存器地址
+ * 例如 addr = 0x4000328c0:
+ * lui t6, 0x40003     // 加载高20位
+ * addi t6, t6, 0x28c // 加载低12位
+ * jalr x0, t6, 0        // 不需要保存返回地址
  */
 static uint8_t gen_jmp_addr_codes(uint8_t *codes, uint64_t addr) {
-    // 使用 t0 寄存器 (x5) 作为临时寄存器
-    uint32_t *instr = (uint32_t *)codes;
+    // 使用 t6 作为临时寄存器
+    uint32_t *instr = (uint32_t *) codes;
 
-    // LUI t0, %hi(addr) - 加载高20位到 t0
+    // t6 寄存器编号为 31
+    const uint32_t t6 = 31;
+
+    // 提取地址的高20位和低12位
     uint32_t hi20 = (addr + 0x800) >> 12; // 加 0x800 处理符号扩展
-    instr[0] = 0x00000037 | (5 << 7) | (hi20 << 12); // LUI x5, imm
-
-    // ADDI t0, t0, %lo(addr) - 加载低12位
     uint32_t lo12 = addr & 0xfff;
-    instr[1] = 0x00000013 | (5 << 7) | (5 << 15) | (lo12 << 20); // ADDI x5, x5, imm
 
-    // JALR x0, t0, 0 - 跳转到 t0 地址
-    instr[2] = 0x00000067 | (0 << 7) | (5 << 15); // JALR x0, x5, 0
+    // 如果低12位的最高位为1，需要调整符号扩展
+    if (lo12 & 0x800) {
+        lo12 |= 0xfffff000; // 符号扩展
+    }
+
+    // 生成 lui t6, hi20 指令
+    // LUI 格式: imm[31:12] | rd[11:7] | opcode[6:0]
+    // opcode = 0x37 (LUI)
+    instr[0] = (hi20 << 12) | (t6 << 7) | 0x37;
+
+    // 生成 addi t6, t6, lo12 指令
+    // I-type 格式: imm[31:20] | rs1[19:15] | funct3[14:12] | rd[11:7] | opcode[6:0]
+    // opcode = 0x13 (OP-IMM), funct3 = 0x0 (ADDI)
+    instr[1] = (lo12 << 20) | (t6 << 15) | (0x0 << 12) | (t6 << 7) | 0x13;
+
+    // 生成 jalr x0, t6, 0 指令
+    // I-type 格式: imm[31:20] | rs1[19:15] | funct3[14:12] | rd[11:7] | opcode[6:0]
+    // opcode = 0x67 (JALR), funct3 = 0x0, rd = x0 (不保存返回地址)
+    instr[2] = (0 << 20) | (t6 << 15) | (0x0 << 12) | (0 << 7) | 0x67;
 
     return 12;
 }
 
 /**
- * RISCV64 版本的栈存储实现
- * fn_addr = 0x40007fffb8
- * stack_offset = 0x10
- *
- * 汇编指令为:
- * lui t0, %hi(addr)     // 加载地址高位到 t0
- * addi t0, t0, %lo(addr) // 加载地址低位
- * sd t0, offset(fp)     // 将 t0 存储到 fp+offset
- *
- * @param codes 输出的机器码缓冲区
- * @param stack_offset 栈偏移量
- * @param fn_runtime_ptr 要存储的函数指针
- * @return 返回生成的机器码长度(12字节)
+ * 生成将48位地址加载到栈的指令序列
+ * 支持完整的48位地址空间
  */
 static uint8_t gen_mov_stack_codes(uint8_t *codes, uint64_t stack_offset, uint64_t fn_runtime_ptr) {
-    uint32_t *instr = (uint32_t *)codes;
+    uint32_t *instr = (uint32_t *) codes;
+    uint8_t instr_count = 0;
 
-    // LUI t0, %hi(fn_runtime_ptr)
-    uint32_t hi20 = (fn_runtime_ptr + 0x800) >> 12;
-    instr[0] = 0x00000037 | (5 << 7) | (hi20 << 12); // LUI x5, imm
+    // 检查是否可以使用32位优化路径
+    if ((fn_runtime_ptr >> 32) == 0) {
+        // 32位地址优化路径：LUI + ADDI
+        uint32_t hi20 = (fn_runtime_ptr + 0x800) >> 12;
+        uint32_t lo12 = fn_runtime_ptr & 0xfff;
 
-    // ADDI t0, t0, %lo(fn_runtime_ptr)
-    uint32_t lo12 = fn_runtime_ptr & 0xfff;
-    instr[1] = 0x00000013 | (5 << 7) | (5 << 15) | (lo12 << 20); // ADDI x5, x5, imm
+        instr[0] = 0x00000037 | (5 << 7) | (hi20 << 12); // LUI x5, hi20
+        instr[1] = 0x00000013 | (5 << 7) | (5 << 15) | (lo12 << 20); // ADDI x5, x5, lo12
+        instr_count = 2;
+    } else {
+        // 48位地址完整路径：构建完整的48位地址
+        uint64_t addr = fn_runtime_ptr;
 
-    // SD t0, offset(fp) - 存储到栈
-    // fp 是 x8 寄存器，offset 需要编码到指令中
+        // 第一步：加载高16位到x5 (bits 47-32)
+        uint32_t hi16 = (addr >> 32) & 0xffff;
+        if (hi16 != 0) {
+            uint32_t hi16_upper = (hi16 + 0x800) >> 12; // 处理符号扩展
+            uint32_t hi16_lower = hi16 & 0xfff;
+
+            instr[0] = 0x00000037 | (5 << 7) | (hi16_upper << 12); // LUI x5, hi16_upper
+            instr[1] = 0x00000013 | (5 << 7) | (5 << 15) | (hi16_lower << 20); // ADDI x5, x5, hi16_lower
+            instr[2] = 0x00001013 | (5 << 7) | (5 << 15) | (32 << 20); // SLLI x5, x5, 32
+            instr_count = 3;
+        } else {
+            instr[0] = 0x00000013 | (5 << 7) | (0 << 15) | (0 << 20); // ADDI x5, x0, 0
+            instr_count = 1;
+        }
+
+        // 第二步：处理低32位 (bits 31-0)
+        uint32_t lo32 = addr & 0xffffffff;
+        if (lo32 != 0) {
+            uint32_t lo32_hi = (lo32 + 0x800) >> 12;
+            uint32_t lo32_lo = lo32 & 0xfff;
+
+            // 使用临时寄存器x6构建低32位
+            instr[instr_count] = 0x00000037 | (6 << 7) | (lo32_hi << 12); // LUI x6, lo32_hi
+            instr[instr_count + 1] = 0x00000013 | (6 << 7) | (6 << 15) | (lo32_lo << 20); // ADDI x6, x6, lo32_lo
+
+            // 合并高位和低位
+            instr[instr_count + 2] = 0x00006033 | (5 << 7) | (5 << 15) | (6 << 20); // OR x5, x5, x6
+            instr_count += 3;
+        }
+    }
+
+    // 存储到栈：SD x5, offset(x8)
     uint32_t offset_hi = (stack_offset >> 5) & 0x7f;
     uint32_t offset_lo = stack_offset & 0x1f;
-    instr[2] = 0x00003023 | (offset_lo << 7) | (8 << 15) | (5 << 20) | (offset_hi << 25); // SD x5, offset(x8)
+    instr[instr_count] = 0x00003023 | (offset_lo << 7) | (8 << 15) | (5 << 20) | (offset_hi << 25);
+    instr_count++;
 
-    return 12;
+    return instr_count * 4; // 返回字节数
 }
 
 /**
+ * 生成将48位地址加载到寄存器的指令序列
  * RISCV64 参数寄存器: a0-a7 (x10-x17)
  */
 static uint8_t gen_mov_reg_codes(uint8_t *codes, uint64_t reg_index, uint64_t fn_runtime_ptr) {
-    if (reg_index > 7) {
-        assert(false && "RISCV64 only supports a0-a7 as parameter registers");
+    assertf(reg_index <= 17 && reg_index >= 10, "RISCV64 only supports a0-a7 as parameter registers, actual %d", reg_index);
+
+    uint32_t *instr = (uint32_t *) codes;
+    uint32_t target_reg = reg_index;
+    uint8_t instr_count = 0;
+
+    // 检查是否可以使用32位优化路径
+    if ((fn_runtime_ptr >> 32) == 0) {
+        // 32位地址优化路径：LUI + ADDI
+        uint32_t hi20 = (fn_runtime_ptr + 0x800) >> 12;
+        uint32_t lo12 = fn_runtime_ptr & 0xfff;
+
+        instr[0] = 0x00000037 | (target_reg << 7) | (hi20 << 12); // LUI target_reg, hi20
+        instr[1] = 0x00000013 | (target_reg << 7) | (target_reg << 15) | (lo12 << 20); // ADDI target_reg, target_reg, lo12
+        instr_count = 2;
+    } else {
+        // 48 位地址完整路径
+        uint64_t addr = fn_runtime_ptr;
+
+        // 第一步：加载高16位 (bits 47-32)
+        uint32_t hi16 = (addr >> 32) & 0xffff;
+        if (hi16 != 0) {
+            uint32_t hi16_upper = (hi16 + 0x800) >> 12;
+            uint32_t hi16_lower = hi16 & 0xfff;
+
+            instr[0] = 0x00000037 | (target_reg << 7) | (hi16_upper << 12); // LUI target_reg, hi16_upper
+            instr[1] = 0x00000013 | (target_reg << 7) | (target_reg << 15) | (hi16_lower << 20); // ADDI target_reg, target_reg, hi16_lower
+            instr[2] = 0x00001013 | (target_reg << 7) | (target_reg << 15) | (32 << 20); // SLLI target_reg, target_reg, 32
+            instr_count = 3;
+        } else {
+            instr[0] = 0x00000013 | (target_reg << 7) | (0 << 15) | (0 << 20); // ADDI target_reg, x0, 0
+            instr_count = 1;
+        }
+
+        // 第二步：处理低32位 (bits 31-0)
+        uint32_t lo32 = addr & 0xffffffff;
+        if (lo32 != 0) {
+            uint32_t lo32_hi = (lo32 + 0x800) >> 12;
+            uint32_t lo32_lo = lo32 & 0xfff;
+
+            // 使用临时寄存器x31构建低32位（避免与参数寄存器冲突）
+            instr[instr_count] = 0x00000037 | (31 << 7) | (lo32_hi << 12); // LUI x31, lo32_hi
+            instr[instr_count + 1] = 0x00000013 | (31 << 7) | (31 << 15) | (lo32_lo << 20); // ADDI x31, x31, lo32_lo
+
+            // 合并高位和低位
+            instr[instr_count + 2] = 0x00006033 | (target_reg << 7) | (target_reg << 15) | (31 << 20); // OR target_reg, target_reg, x31
+            instr_count += 3;
+        }
     }
 
-    uint32_t *instr = (uint32_t *)codes;
-    uint32_t target_reg = 10 + reg_index; // a0-a7 对应 x10-x17
+    DEBUGF("[fn.gen_mov_reg_codes] reg_index=%ld, fn_runtime_ptr=%p, instr_count=%d", reg_index, (void *) fn_runtime_ptr, instr_count);
 
-    // LUI target_reg, %hi(fn_runtime_ptr)
-    uint32_t hi20 = (fn_runtime_ptr + 0x800) >> 12;
-    instr[0] = 0x00000037 | (target_reg << 7) | (hi20 << 12);
-
-    // ADDI target_reg, target_reg, %lo(fn_runtime_ptr)
-    uint32_t lo12 = fn_runtime_ptr & 0xfff;
-    instr[1] = 0x00000013 | (target_reg << 7) | (target_reg << 15) | (lo12 << 20);
-
-    return 8;
+    return instr_count * 4; // 返回字节数
 }
 
 
@@ -305,14 +385,14 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime_ptr, 
         codes[size++] = temp_codes[i];
     }
 
+    assert(size < 80);
     memcpy(fn_runtime_ptr->closure_jit_codes, codes, size);
-#ifdef __ARM64
-#ifdef __DARWIN
+
+// 统一的指令缓存同步
+#if defined(__DARWIN) && defined(__ARM64)
     sys_icache_invalidate(fn_runtime_ptr->closure_jit_codes, size);
-#elif defined(__LINUX)
-    __builtin___clear_cache(fn_runtime_ptr->closure_jit_codes, fn_runtime_ptr->closure_jit_codes + size);
-#endif
-    // arm64 清理缓存
+#elif defined(__LINUX) && (defined(__ARM64) || defined(__RISCV64))
+    __builtin___clear_cache((void*)fn_runtime_ptr->closure_jit_codes, fn_runtime_ptr->closure_jit_codes + size);
 #endif
 }
 

@@ -12,6 +12,8 @@ static void test_basic() {
             "void return, f32|bool+int|string dump true hello world\n"
 #if defined(__DARWIN) && defined(__ARM64)
             "bar_t any dump 233.332993 0xc000004180\n";
+#elif defined(__RISCV64)
+            "bar_t any dump 233.332993 0x400002180\n";
 #else
             "bar_t any dump 233.332993 0xc000002180\n";
 #endif

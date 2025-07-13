@@ -53,12 +53,12 @@ char **command_argv;
         }                                                                                                                               \
     }
 
-void number_casting(uint64_t input_rtype_hash, void *input_ref, uint64_t output_rtype_hash, void *output_ref) {
+void number_casting(uint64_t input_hash, void *input_ref, uint64_t output_hash, void *output_ref) {
 
-    rtype_t *input_rtype = rt_find_rtype(input_rtype_hash);
-    rtype_t *output_rtype = rt_find_rtype(output_rtype_hash);
-    assertf(input_rtype, "cannot find input_rtype by hash %lu", input_rtype_hash);
-    assertf(output_rtype, "cannot find output_rtype by hash %lu", output_rtype_hash);
+    rtype_t *input_rtype = rt_find_rtype(input_hash);
+    rtype_t *output_rtype = rt_find_rtype(output_hash);
+    assertf(input_rtype, "cannot find input_rtype by hash %lu", input_hash);
+    assertf(output_rtype, "cannot find output_rtype by hash %lu", output_hash);
 
     DEBUGF("[number_casting] input_kind=%s, input_ref=%p,input_int64(%ld), output_kind=%s, output_ref=%p",
            type_kind_str[input_rtype->kind], input_ref, fetch_int_value((addr_t) input_ref, input_rtype->size),
@@ -494,6 +494,7 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
 void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
     coroutine_t *co = coroutine_get();
     addr_t ret_addr = CALLER_RET_ADDR(co);
+
     assert(ret_addr);
 
     caller_t *caller = sc_map_get_64v(&rt_caller_map, ret_addr);

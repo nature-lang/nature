@@ -54,8 +54,8 @@ int runtime_main(int argc, char *argv[]) __asm("main");
 #define CALLER_RET_ADDR(_co)                                          \
     ({                                                                \
         addr_t _fp_value;                                             \
-        __asm__ volatile("mv %0, fp" : "=r"(_fp_value));              \
-        uint64_t _value = fetch_addr_value(_fp_value + POINTER_SIZE); \
+        __asm__ volatile("mv %0, s0" : "=r"(_fp_value));              \
+        uint64_t _value = fetch_addr_value(_fp_value - POINTER_SIZE); \
         _value;                                                       \
     });
 #else

@@ -10,6 +10,12 @@ reg_t *r_x8, *r_x9, *r_x10, *r_x11, *r_x12, *r_x13, *r_x14, *r_x15;
 reg_t *r_x16, *r_x17, *r_x18, *r_x19, *r_x20, *r_x21, *r_x22, *r_x23;
 reg_t *r_x24, *r_x25, *r_x26, *r_x27, *r_x28, *r_x29, *r_x30, *r_x31;
 
+// 32-bit aliases for general-purpose registers
+reg_t *r_x0w, *r_x1w, *r_x2w, *r_x3w, *r_x4w, *r_x5w, *r_x6w, *r_x7w;
+reg_t *r_x8w, *r_x9w, *r_x10w, *r_x11w, *r_x12w, *r_x13w, *r_x14w, *r_x15w;
+reg_t *r_x16w, *r_x17w, *r_x18w, *r_x19w, *r_x20w, *r_x21w, *r_x22w, *r_x23w;
+reg_t *r_x24w, *r_x25w, *r_x26w, *r_x27w, *r_x28w, *r_x29w, *r_x30w, *r_x31w;
+
 // Special registers (aliases for general-purpose registers or dedicated)
 reg_t *r_zero; // Hardwired zero (alias for x0)
 reg_t *r_ra;   // Return address (alias for x1)
@@ -24,6 +30,12 @@ reg_t *r_f0, *r_f1, *r_f2, *r_f3, *r_f4, *r_f5, *r_f6, *r_f7;
 reg_t *r_f8, *r_f9, *r_f10, *r_f11, *r_f12, *r_f13, *r_f14, *r_f15;
 reg_t *r_f16, *r_f17, *r_f18, *r_f19, *r_f20, *r_f21, *r_f22, *r_f23;
 reg_t *r_f24, *r_f25, *r_f26, *r_f27, *r_f28, *r_f29, *r_f30, *r_f31;
+
+// 32-bit aliases for floating-point registers
+reg_t *r_f0s, *r_f1s, *r_f2s, *r_f3s, *r_f4s, *r_f5s, *r_f6s, *r_f7s;
+reg_t *r_f8s, *r_f9s, *r_f10s, *r_f11s, *r_f12s, *r_f13s, *r_f14s, *r_f15s;
+reg_t *r_f16s, *r_f17s, *r_f18s, *r_f19s, *r_f20s, *r_f21s, *r_f22s, *r_f23s;
+reg_t *r_f24s, *r_f25s, *r_f26s, *r_f27s, *r_f28s, *r_f29s, *r_f30s, *r_f31s;
 
 void riscv64_reg_init() {
     // General-purpose registers initialization
@@ -67,6 +79,40 @@ void riscv64_reg_init() {
     r_x30 = reg_new("t5", 30, LIR_FLAG_ALLOC_INT, QWORD, 25); // t5: Temporary (Caller)
     r_x31 = reg_new("t6", 31, LIR_FLAG_ALLOC_INT, QWORD, 0); // t6: Temporary (Caller)
 
+    // 32-bit general-purpose registers initialization
+    r_x0w = reg_new("zerow", 0, 0, DWORD, 0);
+    r_x1w = reg_new("raw", 1, 0, DWORD, 0);
+    r_x2w = reg_new("spw", 2, 0, DWORD, 0);
+    r_x3w = reg_new("gpw", 3, 0, DWORD, 0);
+    r_x4w = reg_new("tpw", 4, 0, DWORD, 0);
+    r_x5w = reg_new("t0w", 5, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x6w = reg_new("t1w", 6, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x7w = reg_new("t2w", 7, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x8w = reg_new("s0w", 8, 0, DWORD, 0);
+    r_x9w = reg_new("s1w", 9, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x10w = reg_new("a0w", 10, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x11w = reg_new("a1w", 11, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x12w = reg_new("a2w", 12, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x13w = reg_new("a3w", 13, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x14w = reg_new("a4w", 14, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x15w = reg_new("a5w", 15, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x16w = reg_new("a6w", 16, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x17w = reg_new("a7w", 17, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x18w = reg_new("s2w", 18, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x19w = reg_new("s3w", 19, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x20w = reg_new("s4w", 20, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x21w = reg_new("s5w", 21, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x22w = reg_new("s6w", 22, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x23w = reg_new("s7w", 23, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x24w = reg_new("s8w", 24, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x25w = reg_new("s9w", 25, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x26w = reg_new("s10w", 26, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x27w = reg_new("s11w", 27, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x28w = reg_new("t3w", 28, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x29w = reg_new("t4w", 29, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x30w = reg_new("t5w", 30, LIR_FLAG_ALLOC_INT, DWORD, 0);
+    r_x31w = reg_new("t6w", 31, LIR_FLAG_ALLOC_INT, DWORD, 0);
+
     // Program Counter (not a GPR, but essential for control flow)
     r_pc = reg_new("pc", -1, 0, QWORD, 0); // Using -1 as a conventional ID for PC
 
@@ -109,5 +155,39 @@ void riscv64_reg_init() {
     r_f28 = reg_new("f28", 28, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 29); // ft8: FP temporary (Caller)
     r_f29 = reg_new("f29", 29, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 30); // ft9: FP temporary (Caller)
     r_f30 = reg_new("f30", 30, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 31); // ft10: FP temporary (Caller)
-    r_f31 = reg_new("f31", 31, LIR_FLAG_ALLOC_FLOAT, QWORD, 0); // ft11: FP temporary (Caller) - Note: RISCV64_ALLOC_FLOAT_REG_COUNT is 31, so this ID might be f_offset + 31 if we count from 0. Let's assume allocatable IDs are 1-based for consistency with the define.
+    r_f31 = reg_new("f31", 31, LIR_FLAG_ALLOC_FLOAT, QWORD, 0); // ft11: FP temporary (Caller)
+
+    // 32-bit floating-point registers initialization
+    r_f0s  = reg_new("f0s",  0,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f1s  = reg_new("f1s",  1,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f2s  = reg_new("f2s",  2,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f3s  = reg_new("f3s",  3,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f4s  = reg_new("f4s",  4,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f5s  = reg_new("f5s",  5,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f6s  = reg_new("f6s",  6,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f7s  = reg_new("f7s",  7,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f8s  = reg_new("f8s",  8,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f9s  = reg_new("f9s",  9,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f10s = reg_new("f10s", 10, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f11s = reg_new("f11s", 11, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f12s = reg_new("f12s", 12, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f13s = reg_new("f13s", 13, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f14s = reg_new("f14s", 14, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f15s = reg_new("f15s", 15, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f16s = reg_new("f16s", 16, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f17s = reg_new("f17s", 17, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f18s = reg_new("f18s", 18, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f19s = reg_new("f19s", 19, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f20s = reg_new("f20s", 20, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f21s = reg_new("f21s", 21, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f22s = reg_new("f22s", 22, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f23s = reg_new("f23s", 23, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f24s = reg_new("f24s", 24, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f25s = reg_new("f25s", 25, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f26s = reg_new("f26s", 26, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f27s = reg_new("f27s", 27, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f28s = reg_new("f28s", 28, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f29s = reg_new("f29s", 29, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f30s = reg_new("f30s", 30, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f31s = reg_new("f31s", 31, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
 }

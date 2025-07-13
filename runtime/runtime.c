@@ -17,10 +17,6 @@ extern void user_main(void) __asm("main.main");
  * crt1.o _start -> main  -> entry
  */
 int runtime_main(int argc, char *argv[]) {
-    // - init log
-#ifndef DEBUG_LOG
-    log_set_level(LOG_FATAL);
-#endif
     // - read arg
     DEBUGF("[runtime_main] start, argc=%d, argv=%p", argc, argv);
     command_argc = argc;

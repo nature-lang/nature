@@ -1,8 +1,8 @@
 #include "tests/test.h"
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 // 执行 curl 命令并获取输出
 char *http_get(const char *path) {

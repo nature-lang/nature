@@ -17,7 +17,7 @@ reg_t *reg_select(uint8_t index, type_kind kind) {
     }
 
     if (BUILD_ARCH == ARCH_RISCV64 && size < QWORD) {
-        size = QWORD;
+        size = DWORD;
     }
 
     return reg_find(alloc_type, index, size);

@@ -190,8 +190,8 @@ static inline void make_code32(riscv64_asm_inst_t *inst, uint32_t *buf, int len)
 
 #define C_JR(rs) MAKE_CODE16(inst, 0x8002 | ((rs) << 7))
 #define C_JALR(rs) MAKE_CODE16(inst, 0x9002 | ((rs) << 7))
-#define C_BEQZ(rs) MAKE_CODE16(inst, 0xc001 | (to_rvc_reg(rs) << 7))
-#define C_BNEZ(rs) MAKE_CODE16(inst, 0xe001 | (to_rvc_reg(rs) << 7))
+#define C_BEQZ(rs, ofs) MAKE_CODE16(inst, 0xc001 | (to_rvc_reg(rs) << 7) | SWIZZLE_C_BXX(ofs))
+#define C_BNEZ(rs, ofs) MAKE_CODE16(inst, 0xe001 | (to_rvc_reg(rs) << 7) | SWIZZLE_C_BXX(ofs))
 
 #define C_FLD(rd, imm, rs) MAKE_CODE16(inst, 0x2000 | (EXTRACT_IMM(imm, 5, 3) << 10) | (to_rvc_freg(rs) << 7) | (EXTRACT_IMM(imm, 7, 6) << 5) | (to_rvc_freg(rd) << 2))
 #define C_FSD(rs2, imm, rs1) MAKE_CODE16(inst, 0xa000 | (EXTRACT_IMM(imm, 5, 3) << 10) | (to_rvc_freg(rs1) << 7) | (EXTRACT_IMM(imm, 7, 6) << 5) | (to_rvc_freg(rs2) << 2))

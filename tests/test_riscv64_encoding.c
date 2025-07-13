@@ -25,7 +25,7 @@ static void test_dump(uint32_t encoding) {
 }
 
 #define TEST_EQ(inst, ...) ({                                                        \
-    uint8_t *data = riscv64_asm_inst_encoding(inst, NULL);                                 \
+    uint8_t *data = riscv64_asm_inst_encoding(inst, NULL);                           \
     uint8_t expected[] = {__VA_ARGS__};                                              \
     size_t expected_size = sizeof(expected);                                         \
                                                                                      \
@@ -124,10 +124,13 @@ static void test_basic() {
     TEST_EQ(inst, 0x27, 0xA0, 0x02, 0x00);
 
     inst = RISCV64_INST(RV_J, RO_IMM(6));
-    TEST_EQ(inst, 0x19, 0xA0);
+    TEST_EQ(inst, 0x6f, 0x00, 0x60, 0x00);
 
     inst = RISCV64_INST(RV_J, RO_SYM("foo", false, 0, ASM_RISCV64_RELOC_JAL));
-    TEST_EQ(inst, 0x01, 0xA0);
+    TEST_EQ(inst, 0x6f, 0x00, 0x00, 0x00);
+
+    inst = RISCV64_INST(RV_J, RO_IMM(-4096));
+    TEST_EQ(inst, 0x6f, 0xf0, 0x0f, 0x80);
 }
 
 int main(void) {

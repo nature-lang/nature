@@ -329,171 +329,168 @@ assist_preempt_yield:
     // add sp, sp, #1032          // 恢复栈指针
     ret                        // 返回到被中断的位置, 基于 x30 中的值进行返回
 
-
 #elif defined(__RISCV64)
-    // Save frame pointer and return address
-    addi    sp, sp, -16
-    sd      s0, 0(sp)
-    sd      ra, 8(sp)
-    addi    s0, sp, 16
+    // 保存栈帧
+    addi sp, sp, -16
+    sd ra, 8(sp)
+    sd s0, 0(sp)
+    addi s0, sp, 16
     
-    // Allocate space for all registers (32 general + 32 floating point)
-    addi    sp, sp, -512
+    // 为寄存器保存分配栈空间
+    // 32个通用寄存器 + 32个浮点寄存器 = 64 * 8 = 512 字节
+    addi sp, sp, -512
     
-    // Save general-purpose registers
-    sd      x1,  0(sp)      // ra
-    sd      x2,  8(sp)      // sp (will be updated)
-    sd      x3,  16(sp)     // gp
-    sd      x4,  24(sp)     // tp
-    sd      x5,  32(sp)     // t0
-    sd      x6,  40(sp)     // t1
-    sd      x7,  48(sp)     // t2
-    sd      x8,  56(sp)     // s0/fp
-    sd      x9,  64(sp)     // s1
-    sd      x10, 72(sp)     // a0
-    sd      x11, 80(sp)     // a1
-    sd      x12, 88(sp)     // a2
-    sd      x13, 96(sp)     // a3
-    sd      x14, 104(sp)    // a4
-    sd      x15, 112(sp)    // a5
-    sd      x16, 120(sp)    // a6
-    sd      x17, 128(sp)    // a7
-    sd      x18, 136(sp)    // s2
-    sd      x19, 144(sp)    // s3
-    sd      x20, 152(sp)    // s4
-    sd      x21, 160(sp)    // s5
-    sd      x22, 168(sp)    // s6
-    sd      x23, 176(sp)    // s7
-    sd      x24, 184(sp)    // s8
-    sd      x25, 192(sp)    // s9
-    sd      x26, 200(sp)    // s10
-    sd      x27, 208(sp)    // s11
-    sd      x28, 216(sp)    // t3
-    sd      x29, 224(sp)    // t4
-    sd      x30, 232(sp)    // t5
-    sd      x31, 240(sp)    // t6
+    // 保存通用寄存器 (x0-x31)
+    // x0 是硬连线为0的寄存器，不需要保存
+    sd x1, 0(sp)     // ra (return address)
+    sd x2, 8(sp)     // sp (stack pointer) - 保存原始值
+    sd x3, 16(sp)    // gp (global pointer)
+    sd x4, 24(sp)    // tp (thread pointer)
+    sd x5, 32(sp)    // t0
+    sd x6, 40(sp)    // t1
+    sd x7, 48(sp)    // t2
+    sd x8, 56(sp)    // s0/fp
+    sd x9, 64(sp)    // s1
+    sd x10, 72(sp)   // a0
+    sd x11, 80(sp)   // a1
+    sd x12, 88(sp)   // a2
+    sd x13, 96(sp)   // a3
+    sd x14, 104(sp)  // a4
+    sd x15, 112(sp)  // a5
+    sd x16, 120(sp)  // a6
+    sd x17, 128(sp)  // a7
+    sd x18, 136(sp)  // s2
+    sd x19, 144(sp)  // s3
+    sd x20, 152(sp)  // s4
+    sd x21, 160(sp)  // s5
+    sd x22, 168(sp)  // s6
+    sd x23, 176(sp)  // s7
+    sd x24, 184(sp)  // s8
+    sd x25, 192(sp)  // s9
+    sd x26, 200(sp)  // s10
+    sd x27, 208(sp)  // s11
+    sd x28, 216(sp)  // t3
+    sd x29, 224(sp)  // t4
+    sd x30, 232(sp)  // t5
+    sd x31, 240(sp)  // t6
     
-    // Save floating-point registers
-    fsd     f0,  248(sp)
-    fsd     f1,  256(sp)
-    fsd     f2,  264(sp)
-    fsd     f3,  272(sp)
-    fsd     f4,  280(sp)
-    fsd     f5,  288(sp)
-    fsd     f6,  296(sp)
-    fsd     f7,  304(sp)
-    fsd     f8,  312(sp)
-    fsd     f9,  320(sp)
-    fsd     f10, 328(sp)
-    fsd     f11, 336(sp)
-    fsd     f12, 344(sp)
-    fsd     f13, 352(sp)
-    fsd     f14, 360(sp)
-    fsd     f15, 368(sp)
-    fsd     f16, 376(sp)
-    fsd     f17, 384(sp)
-    fsd     f18, 392(sp)
-    fsd     f19, 400(sp)
-    fsd     f20, 408(sp)
-    fsd     f21, 416(sp)
-    fsd     f22, 424(sp)
-    fsd     f23, 432(sp)
-    fsd     f24, 440(sp)
-    fsd     f25, 448(sp)
-    fsd     f26, 456(sp)
-    fsd     f27, 464(sp)
-    fsd     f28, 472(sp)
-    fsd     f29, 480(sp)
-    fsd     f30, 488(sp)
-    fsd     f31, 496(sp)
+    // 保存浮点寄存器 (f0-f31)
+    fsd f0, 248(sp)
+    fsd f1, 256(sp)
+    fsd f2, 264(sp)
+    fsd f3, 272(sp)
+    fsd f4, 280(sp)
+    fsd f5, 288(sp)
+    fsd f6, 296(sp)
+    fsd f7, 304(sp)
+    fsd f8, 312(sp)
+    fsd f9, 320(sp)
+    fsd f10, 328(sp)
+    fsd f11, 336(sp)
+    fsd f12, 344(sp)
+    fsd f13, 352(sp)
+    fsd f14, 360(sp)
+    fsd f15, 368(sp)
+    fsd f16, 376(sp)
+    fsd f17, 384(sp)
+    fsd f18, 392(sp)
+    fsd f19, 400(sp)
+    fsd f20, 408(sp)
+    fsd f21, 416(sp)
+    fsd f22, 424(sp)
+    fsd f23, 432(sp)
+    fsd f24, 440(sp)
+    fsd f25, 448(sp)
+    fsd f26, 456(sp)
+    fsd f27, 464(sp)
+    fsd f28, 472(sp)
+    fsd f29, 480(sp)
+    fsd f30, 488(sp)
+    fsd f31, 496(sp)
     
-    // Update saved sp to point to the correct location
-    addi    t0, s0, 0
-    sd      t0, 8(sp)
+    // 调用协程切换函数
+    call SYM(co_preempt_yield)
     
-    call    SYM(co_preempt_yield)
+    // 恢复浮点寄存器
+    fld f31, 496(sp)
+    fld f30, 488(sp)
+    fld f29, 480(sp)
+    fld f28, 472(sp)
+    fld f27, 464(sp)
+    fld f26, 456(sp)
+    fld f25, 448(sp)
+    fld f24, 440(sp)
+    fld f23, 432(sp)
+    fld f22, 424(sp)
+    fld f21, 416(sp)
+    fld f20, 408(sp)
+    fld f19, 400(sp)
+    fld f18, 392(sp)
+    fld f17, 384(sp)
+    fld f16, 376(sp)
+    fld f15, 368(sp)
+    fld f14, 360(sp)
+    fld f13, 352(sp)
+    fld f12, 344(sp)
+    fld f11, 336(sp)
+    fld f10, 328(sp)
+    fld f9, 320(sp)
+    fld f8, 312(sp)
+    fld f7, 304(sp)
+    fld f6, 296(sp)
+    fld f5, 288(sp)
+    fld f4, 280(sp)
+    fld f3, 272(sp)
+    fld f2, 264(sp)
+    fld f1, 256(sp)
+    fld f0, 248(sp)
     
-    // Restore floating-point registers
-    fld     f31, 496(sp)
-    fld     f30, 488(sp)
-    fld     f29, 480(sp)
-    fld     f28, 472(sp)
-    fld     f27, 464(sp)
-    fld     f26, 456(sp)
-    fld     f25, 448(sp)
-    fld     f24, 440(sp)
-    fld     f23, 432(sp)
-    fld     f22, 424(sp)
-    fld     f21, 416(sp)
-    fld     f20, 408(sp)
-    fld     f19, 400(sp)
-    fld     f18, 392(sp)
-    fld     f17, 384(sp)
-    fld     f16, 376(sp)
-    fld     f15, 368(sp)
-    fld     f14, 360(sp)
-    fld     f13, 352(sp)
-    fld     f12, 344(sp)
-    fld     f11, 336(sp)
-    fld     f10, 328(sp)
-    fld     f9,  320(sp)
-    fld     f8,  312(sp)
-    fld     f7,  304(sp)
-    fld     f6,  296(sp)
-    fld     f5,  288(sp)
-    fld     f4,  280(sp)
-    fld     f3,  272(sp)
-    fld     f2,  264(sp)
-    fld     f1,  256(sp)
-    fld     f0,  248(sp)
+    // 恢复通用寄存器
+    ld x31, 240(sp)  // t6
+    ld x30, 232(sp)  // t5
+    ld x29, 224(sp)  // t4
+    ld x28, 216(sp)  // t3
+    ld x27, 208(sp)  // s11
+    ld x26, 200(sp)  // s10
+    ld x25, 192(sp)  // s9
+    ld x24, 184(sp)  // s8
+    ld x23, 176(sp)  // s7
+    ld x22, 168(sp)  // s6
+    ld x21, 160(sp)  // s5
+    ld x20, 152(sp)  // s4
+    ld x19, 144(sp)  // s3
+    ld x18, 136(sp)  // s2
+    ld x17, 128(sp)  // a7
+    ld x16, 120(sp)  // a6
+    ld x15, 112(sp)  // a5
+    ld x14, 104(sp)  // a4
+    ld x13, 96(sp)   // a3
+    ld x12, 88(sp)   // a2
+    ld x11, 80(sp)   // a1
+    ld x10, 72(sp)   // a0
+    ld x9, 64(sp)    // s1
+    ld x8, 56(sp)    // s0/fp
+    ld x7, 48(sp)    // t2
+    ld x6, 40(sp)    // t1
+    ld x5, 32(sp)    // t0
+    ld x4, 24(sp)    // tp
+    ld x3, 16(sp)    // gp
+    // x2 (sp) 会在最后恢复
+    ld x1, 0(sp)     // ra
     
-    // Restore general-purpose registers (except sp and s0)
-    ld      x31, 240(sp)    // t6
-    ld      x30, 232(sp)    // t5
-    ld      x29, 224(sp)    // t4
-    ld      x28, 216(sp)    // t3
-    ld      x27, 208(sp)    // s11
-    ld      x26, 200(sp)    // s10
-    ld      x25, 192(sp)    // s9
-    ld      x24, 184(sp)    // s8
-    ld      x23, 176(sp)    // s7
-    ld      x22, 168(sp)    // s6
-    ld      x21, 160(sp)    // s5
-    ld      x20, 152(sp)    // s4
-    ld      x19, 144(sp)    // s3
-    ld      x18, 136(sp)    // s2
-    ld      x17, 128(sp)    // a7
-    ld      x16, 120(sp)    // a6
-    ld      x15, 112(sp)    // a5
-    ld      x14, 104(sp)    // a4
-    ld      x13, 96(sp)     // a3
-    ld      x12, 88(sp)     // a2
-    ld      x11, 80(sp)     // a1
-    ld      x10, 72(sp)     // a0
-    ld      x9,  64(sp)     // s1
-    // x8 (s0) will be restored later
-    ld      x7,  48(sp)     // t2
-    ld      x6,  40(sp)     // t1
-    ld      x5,  32(sp)     // t0
-    ld      x4,  24(sp)     // tp
-    ld      x3,  16(sp)     // gp
-    // x2 (sp) will be restored by frame unwinding
-    ld      x1,  0(sp)      // ra
+    // 恢复栈指针
+    addi sp, sp, 512
     
-    // Restore stack pointer and frame
-    addi    sp, sp, 512
-    ld      s0, 0(sp)
-    ld      ra, 8(sp)
-    addi    sp, sp, 16
-    
+    // 恢复栈帧
+    ld s0, 0(sp)
+    ld ra, 8(sp)
+    addi sp, sp, 16
+    // 返回
     ret
 
 #else
-#error "platform not support"
+    #error "platform not support"
 #endif
-
-
-
 
 
 .globl aco_save_reg

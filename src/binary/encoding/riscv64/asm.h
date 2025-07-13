@@ -7,6 +7,7 @@
 #define RO_INDIRECT(_reg, _offset, _size) ({                               \
     riscv64_asm_operand_t *_indirect_operand = NEW(riscv64_asm_operand_t); \
     _indirect_operand->type = RISCV64_ASM_OPERAND_INDIRECT;                \
+    _indirect_operand->size = _size;                                       \
     _indirect_operand->indirect.reg = _reg;                                \
     _indirect_operand->indirect.offset = _offset;                          \
     _indirect_operand;                                                     \
@@ -64,6 +65,8 @@ typedef enum {
     RV_MV,
     RV_LI,
     RV_LA,
+    RV_LUIS,
+    RV_ADDIS,
     RV_ADD,
     RV_ADDW,
     RV_ADDI,
@@ -225,6 +228,8 @@ static char *riscv64_raw_op_names[] = {
         "mv",
         "li",
         "la",
+        "lui",
+        "addi",
         "add",
         "addw",
         "addi",
@@ -358,6 +363,8 @@ typedef enum {
     O_MV,
     O_LI,
     O_LA,
+    O_LUIS,
+    O_ADDIS,
     O_ADD,
     O_ADDW,
     O_ADDI,
@@ -516,13 +523,9 @@ typedef enum {
     ASM_RISCV64_RELOC_JAL, // jal symbol(+-1M)
     ASM_RISCV64_RELOC_CALL, // call symbol  R_RISCV_PCREL_HI20 + R_RISCV_PCREL_LO12_I, la 指令使用同样的方式
 
-    //    ASM_RISCV64_RELOC_HI20,
-    //    ASM_RISCV64_RELOC_LO12_I,
-    //    ASM_RISCV64_RELOC_LO12_S,
-
-    //    ASM_RISCV64_RELOC_PCREL_HI20,
-    //    ASM_RISCV64_RELOC_PCREL_LO12_I,
-    //    ASM_RISCV64_RELOC_PCREL_LO12_S,
+    ASM_RISCV64_RELOC_TPREL_HI20,
+    ASM_RISCV64_RELOC_TPREL_LO12_I,
+    ASM_RISCV64_RELOC_TPREL_LO12_S,
 } asm_riscv64_reloc_type;
 
 typedef struct {

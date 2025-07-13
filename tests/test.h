@@ -434,6 +434,7 @@ static inline void feature_testar_test(char *custom_target) {
             printf("]");
         }
         printf("\n");
+        fflush(stdout);
 
         assertf(test_case->files->count > 0, "test case '%s' must have main.n", test_case->name);
 
@@ -521,6 +522,7 @@ static inline void feature_testar_test(char *custom_target) {
 
         // 进行编译
         printf("test case success === %s\n", test_case->name);
+        fflush(stdout);
     }
 }
 

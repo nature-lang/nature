@@ -127,7 +127,6 @@ static void elf_custom_links() {
     elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, SYMBOL_SYMDEF_DATA);
     elf_put_global_symbol(ctx, SYMBOL_SYMDEF_COUNT, &ct_symdef_count, QWORD);
 
-
     // ndata --------------------------------------------------------------------------
     elf_put_data(ctx->ndata_section, ct_data, ct_data_len);
     sym = (Elf64_Sym) {
@@ -502,7 +501,7 @@ static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
     slice_push(linker_libs, lib_file_path(LIBC_FILE));
 
     // arm64 需要 libgcc
-    if (BUILD_ARCH == ARCH_ARM64) {
+    if (BUILD_ARCH == ARCH_ARM64 || BUILD_ARCH == ARCH_RISCV64) {
         slice_push(linker_libs, lib_file_path(LIBGCC_FILE));
     }
 
