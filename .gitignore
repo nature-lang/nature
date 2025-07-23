@@ -10,3 +10,4 @@ tmp/
 test.text
 libruntime.a
 .clion.source.upload.marker
+.zig-cache/*
