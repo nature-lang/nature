@@ -13,7 +13,7 @@ pub fn build(b: *std.Build) !void {
     const lib_path_os = switch (os) {
         .macos => "darwin",
         .linux => "linux",
-        else => "lnknown",
+        else => "unknown",
     };
     const lib_path_arch = switch (arch) {
         .x86_64 => "amd64",
@@ -84,7 +84,7 @@ pub fn build(b: *std.Build) !void {
             exe.root_module.addCMacro("__ARM64", "1");
         },
         .x86_64 => {
-            exe.root_module.addCMacro("__X86_64", "1");
+            exe.root_module.addCMacro("__AMD64", "1");
         },
         else => {},
     }
@@ -155,7 +155,7 @@ pub fn buildRuntime(
             lib.root_module.addCMacro("__ARM64", "1");
         },
         .x86_64 => {
-            lib.root_module.addCMacro("__X86_64", "1");
+            lib.root_module.addCMacro("__AMD64", "1");
         },
         else => {},
     }
@@ -195,7 +195,7 @@ fn recursiveFindCFiles(
     result: *std.ArrayList([]const u8),
 ) !void {
     var dir = std.fs.cwd().openDir(base_dir, .{ .iterate = true }) catch |err| {
-        std.log.debug("无法访问目录 '{s}': {s}", .{ base_dir, @errorName(err) });
+        std.log.debug(" Failed to open directory '{s}': {s}", .{ base_dir, @errorName(err) });
         return;
     };
     defer dir.close();
@@ -212,7 +212,7 @@ fn recursiveFindCFiles(
                 try result.append(file_path);
             },
             .directory => try recursiveFindCFiles(allocator, full_path, result),
-            else => {}, // 忽略其他文件类型
+            else => {},
         }
     }
 }
