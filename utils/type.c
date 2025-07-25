@@ -61,7 +61,7 @@ static rtype_t rtype_anyptr(type_kind kind) {
             .malloc_gc_bits_offset = -1,
     };
 
-    // 计算 gc_bits
+    // 计算 gc_bits, 在当前的设计中，anyptr 同样会被 gc 追踪
     rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
 
@@ -74,7 +74,7 @@ static rtype_t rtype_anyptr(type_kind kind) {
  * @param t
  * @return
  */
-static rtype_t rtype_pointer(type_ptr_t *t) {
+static rtype_t rtype_ptr(type_ptr_t *t) {
     rtype_t value_rtype = reflect_type(t->value_type);
 
     char *str = dsprintf("%d_%lu", TYPE_PTR, value_rtype.hash);
@@ -686,7 +686,7 @@ rtype_t reflect_type(type_t t) {
             rtype = rtype_string();
             break;
         case TYPE_PTR:
-            rtype = rtype_pointer(t.ptr);
+            rtype = rtype_ptr(t.ptr);
             break;
         case TYPE_RAWPTR:
             rtype = rtype_rawptr(t.ptr);

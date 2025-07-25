@@ -3255,6 +3255,7 @@ static ast_expr_t parser_macro_async_expr(module_t *m) {
     parser_must(m, TOKEN_LEFT_PAREN);
 
     ast_expr_t call_expr = parser_expr(m);
+    INFER_ASSERTF(call_expr.assert_type == AST_CALL, "@async first arg must be call");
 
     async_expr->args_copy_stmts = async_args_copy(m, call_expr);
 

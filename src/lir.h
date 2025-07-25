@@ -61,7 +61,6 @@
 
 #define RT_CALL_WRITE_BARRIER "write_barrier"
 
-#define RT_CALL_ARRAY_ELEMENT_ADDR "array_element_addr"
 #define RT_CALL_RAWPTR_VALID "rawptr_valid"
 
 #define RT_CALL_MAP_NEW "rt_map_new"
@@ -112,7 +111,6 @@
 #define RT_CALL_FN_NEW "fn_new"
 
 #define RT_CALL_ENV_NEW "env_new"
-#define RT_CALL_ENV_CLOSURE "env_closure"
 #define RT_CALL_ENV_ASSIGN_REF "env_assign_ref" // 实际代码位置对 env 的访问
 #define RT_CALL_ENV_ELEMENT_VALUE "env_element_value" // heap addr
 
@@ -233,7 +231,7 @@ static inline bool is_rtcall(string target) {
     return str_equal(target, RT_CALL_SET_ADD) || str_equal(target, RT_CALL_SET_DELETE) ||
            str_equal(target, RT_CALL_SET_CONTAINS) || str_equal(target, RT_CALL_SET_NEW) ||
            str_equal(target, RT_CALL_VEC_CAP) || str_equal(target, RT_CALL_WRITE_BARRIER) ||
-           str_equal(target, RT_CALL_ARRAY_ELEMENT_ADDR) || str_equal(target, RT_CALL_RAWPTR_VALID) ||
+           str_equal(target, RT_CALL_RAWPTR_VALID) ||
            str_equal(target, RT_CALL_MAP_NEW) || str_equal(target, RT_CALL_MAP_ACCESS) ||
            str_equal(target, RT_CALL_MAP_ASSIGN) || str_equal(target, RT_CALL_MAP_LENGTH) ||
            str_equal(target, RT_CALL_MAP_DELETE) || str_equal(target, RT_CALL_TUPLE_NEW) ||
@@ -243,7 +241,7 @@ static inline bool is_rtcall(string target) {
            str_equal(target, RT_CALL_UNION_ASSERT) || str_equal(target, RT_CALL_RAWPTR_ASSERT) ||
            str_equal(target, RT_CALL_ITERATOR_NEXT_KEY) || str_equal(target, RT_CALL_ITERATOR_NEXT_VALUE) ||
            str_equal(target, RT_CALL_ITERATOR_TAKE_VALUE) || str_equal(target, RT_CALL_FN_NEW) ||
-           str_equal(target, RT_CALL_ENV_NEW) || str_equal(target, RT_CALL_ENV_CLOSURE) ||
+           str_equal(target, RT_CALL_ENV_NEW) ||
            str_equal(target, RT_CALL_ENV_ASSIGN_REF) || str_equal(target, RT_CALL_ENV_ELEMENT_VALUE) ||
            str_equal(target, RT_CALL_STRING_NEW) || str_equal(target, RT_CALL_STRING_CONCAT) ||
            str_equal(target, RT_CALL_STRING_EE) || str_equal(target, RT_CALL_STRING_NE) ||

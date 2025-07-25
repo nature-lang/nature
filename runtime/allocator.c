@@ -522,7 +522,7 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
     uint64_t alloc_size = align_up((int64_t) *size, ARENA_SIZE);
 
     DEBUGF("[mheap_sys_alloc] hint addr=%p, need_size=%luM, align_alloc_size=%luM", (void *) hint->addr,
-            *size / 1024 / 1024, alloc_size / 1024 / 1024);
+           *size / 1024 / 1024, alloc_size / 1024 / 1024);
 
     void *v = NULL;
     while (true) {
@@ -868,8 +868,36 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
     return 0;
 }
 
+static inline void heap_arena_bits_batch_handle(addr_t start, addr_t end, bool is_clear) {
+    if (start == end) {
+        return;
+    }
+
+    while (start < end) {
+        addr_t temp_end = end;
+        arena_t *arena = memory->mheap->arenas[arena_index(start)];
+        arena_t *end_arena = memory->mheap->arenas[arena_index(temp_end)];
+        if (arena != end_arena) {
+            temp_end = (arena->base + ARENA_SIZE);
+        }
+
+        // 1 个 ptr 需要 2 个bit 标记
+        uint64_t ptr_count = (temp_end - start) / POINTER_SIZE;
+        uint64_t index_start = arena_bits_index(arena, start);
+
+        // batch clear
+        if (is_clear) {
+            bitmap_batch_clear(arena->bits, index_start, ptr_count * 2);
+        } else {
+            bitmap_batch_set(arena->bits, index_start, ptr_count * 2);
+        }
+
+        start = temp_end;
+    }
+}
+
 /**
- * 设置 arena_t 的 bits 具体怎么设置可以参考 arenat_t 中的注释
+ * 设置 arena_t 的 bits 具体怎么设置可以参考 arenat_t 中的注释, 通常情况下 size < obj_size
  * @param addr
  * @param size
  * @param obj_size
@@ -877,6 +905,7 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
  */
 static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, rtype_t *rtype) {
     DEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start", (void *) addr, size, obj_size);
+    assert(rtype->last_ptr > 0);
 
     uint8_t *gc_bits = RTDATA(rtype->malloc_gc_bits_offset);
     if (rtype->malloc_gc_bits_offset == -1) {
@@ -884,39 +913,61 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
     }
 
     bool arr_ptr = rtype->kind == TYPE_ARR && rtype->last_ptr > 0 && rtype->malloc_gc_bits_offset == -1;
+    if (arr_ptr) {
+        heap_arena_bits_batch_handle(addr, addr + obj_size, false);
+        return;
+    }
+
+    bool fn_ptr = rtype->kind == TYPE_GC_FN;
+    if (fn_ptr) {
+        assert(rtype->last_ptr == 12 * POINTER_SIZE);
+        heap_arena_bits_batch_handle(addr, addr + obj_size, true);
+
+        // set last = 1
+        addr_t env_addr = (addr + size - POINTER_SIZE);
+        arena_t *arena = memory->mheap->arenas[arena_index(env_addr)];
+        uint64_t bit_index = arena_bits_index(arena, env_addr);
+        bitmap_set(arena->bits, bit_index);
+        return;
+    }
+
+    // index 计算错误，不能这么算? 奇怪的 index 算法导致 gc_bits 不能这么直接清理。
+    addr_t clear_start_addr = addr + rtype->last_ptr;
+    heap_arena_bits_batch_handle(clear_start_addr, addr + obj_size, true);
 
     int index = 0;
-    addr_t end = addr + obj_size;
+    addr_t end = clear_start_addr;
     for (addr_t temp_addr = addr; temp_addr < end; temp_addr += POINTER_SIZE) {
         arena_t *arena = memory->mheap->arenas[arena_index(temp_addr)];
         assert(arena && "cannot find arena by addr");
         uint64_t bit_index = arena_bits_index(arena, temp_addr);
-
         DEBUGF("[runtime.heap_arena_bits_set] bit_index=%lu, temp_addr=%p, addr=%p, obj_size=%lu", bit_index,
                (void *) temp_addr,
                (void *) addr, obj_size);
 
 
-        if (arr_ptr) {
-            bitmap_set(arena->bits, bit_index);
+        if (bitmap_test(gc_bits, index)) {
+            bitmap_set(arena->bits, bit_index); // 1 表示为指针
         } else {
-            int bit_value;
-            if (bitmap_test(gc_bits, index)) {
-                bitmap_set(arena->bits, bit_index); // 1 表示为指针
-                bit_value = 1;
-            } else {
-                bitmap_clear(arena->bits, bit_index);
-                bit_value = 0;
-            }
-
-            DEBUGF(
-                    "[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value = % d ",
-                    type_kind_str[rtype->kind], size, addr, temp_addr, bit_index, bit_value);
+            bitmap_clear(arena->bits, bit_index);
         }
 
+        DEBUGF(
+                "[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value = %d",
+                type_kind_str[rtype->kind], size, addr, temp_addr, bit_index);
 
         index += 1;
     }
+
+
+    // TODO check gc bits 和 lastptr 不一致问题, clear start 后
+    //    for (addr_t temp_addr = clear_start_addr; temp_addr < addr + obj_size; temp_addr += POINTER_SIZE) {
+    //        arena_t *arena = memory->mheap->arenas[arena_index(temp_addr)];
+    //        assert(arena && "cannot find arena by addr");
+    //        uint64_t bit_index = arena_bits_index(arena, temp_addr);
+    //        assert(bitmap_test(gc_bits, index) == 0);
+    //        index += 1;
+    //    }
 
     TRACEF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, unlock, end", (void *) addr, size, obj_size);
 }
@@ -1164,12 +1215,12 @@ mspan_t *span_of(addr_t addr) {
  * @return
  */
 void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
-    uint64_t start = uv_hrtime();
-    n_processor_t *p = processor_get();
-    if (!p) {
-        p = processor_index[0];
-    }
-    assert(p);
+    // uint64_t start = uv_hrtime();
+    // n_processor_t *p = processor_get();
+    // if (!p) {
+    // p = processor_index[0];
+    // }
+    // assert(p);
 
     //    if (!p->share) {
     //        MDEBUGF("[rti_gc_malloc] solo need gc_stw_locker p_index_%d=%d, co=%p", p->share, p->index, coroutine_get());
@@ -1198,8 +1249,8 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
     // 如果当前写屏障开启，则新分配的对象都是黑色(不在工作队列且被 span 标记), 避免在本轮被 GC 清理
     if (gc_barrier_get()) {
         DEBUGF("[rti_gc_malloc] p_index=%d(%lu), p_status=%d, gc barrier enabled, will mark ptr as black, ptr=%p",
-               p->index,
-               (uint64_t) p->thread_id, p->status, ptr);
+                processor_get()->index,
+                (uint64_t) processor_get()->thread_id, processor_get()->status, ptr);
         mark_ptr_black(ptr);
     }
 

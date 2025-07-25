@@ -1,8 +1,8 @@
 #ifndef NATURE_FN_H
 #define NATURE_FN_H
 
-#include "utils/type.h"
 #include "utils/mutex.h"
+#include "utils/type.h"
 
 extern table_t *env_upvalue_table;
 extern mutex_t env_upvalue_locker;
@@ -11,10 +11,6 @@ extern mutex_t env_upvalue_locker;
 void *fn_new(addr_t fn_addr, envs_t *envs);
 
 envs_t *env_new(uint64_t length);
-
-void env_assign(envs_t *envs, uint64_t rtype_hash, uint64_t env_index, addr_t stack_addr);
-
-void env_closure(addr_t stack_addr, uint64_t rtype_hash);
 
 void *env_element_value(runtime_fn_t *fn, uint64_t index);
 
@@ -35,4 +31,4 @@ void env_access_ref(runtime_fn_t *fn, uint64_t index, void *dst_ref, uint64_t si
 void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t size);
 
 
-#endif//NATURE_FN_H
+#endif //NATURE_FN_H

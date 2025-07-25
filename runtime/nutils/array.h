@@ -30,6 +30,4 @@ static inline n_array_t *rti_array_new(rtype_t *element_rtype, uint64_t length) 
     return addr;
 }
 
-n_anyptr_t array_element_addr(n_array_t *data, uint64_t rtype_hash, uint64_t index);
-
 #endif // NATURE_BASE_H

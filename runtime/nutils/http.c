@@ -10,7 +10,7 @@ mutex_t uv_thread_locker = {0};
 uv_loop_t uv_global_loop = {0};
 
 static inline void on_async_close_cb(uv_handle_t *handle) {
-    conn_ctx_t *ctx = CONTAINER_OF(handle, conn_ctx_t, async_handle);
+    http_conn_t *ctx = CONTAINER_OF(handle, http_conn_t, async_handle);
     DEBUGF("[on_async_close_cb] ctx: %p", ctx);
 
     ctx->read_buf_len = 0;
@@ -21,7 +21,7 @@ static inline void on_async_close_cb(uv_handle_t *handle) {
 }
 
 static inline void on_close_cb(uv_handle_t *handle) {
-    conn_ctx_t *ctx = CONTAINER_OF(handle, conn_ctx_t, client_handle);
+    http_conn_t *ctx = CONTAINER_OF(handle, http_conn_t, client_handle);
     DEBUGF("[on_close_cb] ctx, %p, client_handle: %p, async_handle: %p",
            ctx, &ctx->client_handle, ctx->async_handle);
 
@@ -49,8 +49,8 @@ static inline void on_write_end_cb(uv_write_t *write_req, int status) {
         DEBUGF("[on_write_end_cb] %s", msg);
     }
 
-    conn_ctx_t *ctx = CONTAINER_OF(write_req, conn_ctx_t, write_req);
-    uv_close((uv_handle_t *) &ctx->client_handle, on_close_cb);
+    http_conn_t *conn = CONTAINER_OF(write_req, http_conn_t, write_req);
+    uv_close((uv_handle_t *) &conn->client_handle, on_close_cb);
 }
 
 /**
@@ -59,7 +59,7 @@ static inline void on_write_end_cb(uv_write_t *write_req, int status) {
  * @param buf
  */
 static inline void http_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
-    conn_ctx_t *ctx = CONTAINER_OF(handle, conn_ctx_t, client_handle);
+    http_conn_t *ctx = CONTAINER_OF(handle, http_conn_t, client_handle);
     DEBUGF("[uv_alloc_buffer] suggested_size: %ld", suggested_size);
     ctx->read_buf_cap += HTTP_PARSER_BUF_SIZE;
 
@@ -75,22 +75,22 @@ static inline void http_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_si
 }
 
 static inline void async_conn_handle_cb(uv_async_t *handle) {
-    conn_ctx_t *ctx = CONTAINER_OF(handle, conn_ctx_t, async_handle);
-    DEBUGF("[async_conn_handle_cb] ctx: %p, client_handle: %p", ctx, handle);
+    http_conn_t *conn = CONTAINER_OF(handle, http_conn_t, async_handle);
+    DEBUGF("[async_conn_handle_cb] ctx: %p, client_handle: %p", conn, handle);
 
     // assert(uv_is_active((uv_handle_t*)&ctx->client_handle));
     // assert(ctx->write_buf.len > 0);
 
-    int result = uv_write(&ctx->write_req, (uv_stream_t *) &ctx->client_handle, &ctx->write_buf, 1, on_write_end_cb);
+    int result = uv_write(&conn->write_req, (uv_stream_t *) &conn->client_handle, &conn->write_buf, 1, on_write_end_cb);
     if (result) {
-        uv_close((uv_handle_t *) &ctx->client_handle, on_close_cb);
+        uv_close((uv_handle_t *) &conn->client_handle, on_close_cb);
     }
 }
 
 static inline void on_read_cb(uv_stream_t *client_handle, ssize_t nread, const uv_buf_t *buf) {
     DEBUGF("[on_read_cb] client: %p, nread: %ld", client_handle, nread);
 
-    conn_ctx_t *ctx = CONTAINER_OF(client_handle, conn_ctx_t, client_handle);
+    http_conn_t *ctx = CONTAINER_OF(client_handle, http_conn_t, client_handle);
 
     if (nread < 0) {
         if (nread == UV_EOF) {
@@ -126,20 +126,20 @@ static inline void on_read_cb(uv_stream_t *client_handle, ssize_t nread, const u
     rt_coroutine_dispatch(sub_conn_handler_co);
 }
 
-void rt_uv_conn_resp(conn_ctx_t *ctx, n_string_t *resp_data) {
-    DEBUGF("[rt_uv_conn_resp] ctx: %p, client_handle: %p", ctx, &ctx->client_handle);
+void rt_uv_conn_resp(http_conn_t *conn, n_string_t *resp_data) {
+    DEBUGF("[rt_uv_conn_resp] ctx: %p, client_handle: %p", conn, &conn->client_handle);
 
     // 进行数据 copy 避免 resp_data 后续被清理掉
-    ctx->write_buf.base = malloc(resp_data->length + 1);
-    ctx->write_buf.len = resp_data->length;
-    memmove(ctx->write_buf.base, resp_data->data, resp_data->length);
-    ctx->write_buf.base[resp_data->length] = '\0';
+    conn->write_buf.base = malloc(resp_data->length + 1);
+    conn->write_buf.len = resp_data->length;
+    memmove(conn->write_buf.base, resp_data->data, resp_data->length);
+    conn->write_buf.base[resp_data->length] = '\0';
 
-    uv_async_send(&ctx->async_handle);
+    uv_async_send(&conn->async_handle);
 }
 
 static int http_parser_on_url_cb(llhttp_t *parser, const char *at, size_t length) {
-    conn_ctx_t *ctx = CONTAINER_OF(parser, conn_ctx_t, parser);
+    http_conn_t *ctx = CONTAINER_OF(parser, http_conn_t, parser);
     ctx->url_at = at;
     ctx->url_len = length;
 
@@ -157,7 +157,7 @@ static int http_parser_on_url_cb(llhttp_t *parser, const char *at, size_t length
 }
 
 static int http_parser_on_header_field_cb(llhttp_t *parser, const char *at, size_t length) {
-    conn_ctx_t *ctx = CONTAINER_OF(parser, conn_ctx_t, parser);
+    http_conn_t *ctx = CONTAINER_OF(parser, http_conn_t, parser);
     ctx->headers[ctx->headers_len].name_at = at;
     ctx->headers[ctx->headers_len].name_len = length;
 
@@ -169,7 +169,7 @@ static int http_parser_on_header_field_cb(llhttp_t *parser, const char *at, size
 }
 
 static int http_parser_on_header_value_cb(llhttp_t *parser, const char *at, size_t length) {
-    conn_ctx_t *ctx = CONTAINER_OF(parser, conn_ctx_t, parser);
+    http_conn_t *ctx = CONTAINER_OF(parser, http_conn_t, parser);
     ctx->headers[ctx->headers_len].value_at = at;
     ctx->headers[ctx->headers_len].value_len = length;
     ctx->headers_len++;
@@ -183,14 +183,14 @@ static int http_parser_on_header_value_cb(llhttp_t *parser, const char *at, size
 }
 
 static int http_parser_on_body_cb(llhttp_t *parser, const char *at, size_t length) {
-    conn_ctx_t *ctx = CONTAINER_OF(parser, conn_ctx_t, parser);
+    http_conn_t *ctx = CONTAINER_OF(parser, http_conn_t, parser);
     ctx->body_at = at;
     ctx->body_len = length;
     return 0;
 }
 
 static int http_parser_on_message_complete_cb(llhttp_t *parser) {
-    conn_ctx_t *ctx = CONTAINER_OF(parser, conn_ctx_t, parser);
+    http_conn_t *ctx = CONTAINER_OF(parser, http_conn_t, parser);
     ctx->parser_completed = 1;
     ctx->method = llhttp_get_method(parser);
     return 0;
@@ -204,11 +204,11 @@ static int http_parser_on_message_complete_cb(llhttp_t *parser) {
  * @param server
  * @param status
  */
-static void on_new_conn_cb(uv_stream_t *server, int status) {
-    DEBUGF("[accept_new_conn] status: %d", status);
+static void on_http_conn_cb(uv_stream_t *server, int status) {
+    DEBUGF("[on_http_conn_cb] status: %d", status);
 
     if (status < 0) {
-        DEBUGF("[accept_new_conn] new connection error: %s", uv_strerror(status));
+        DEBUGF("[on_http_conn_cb] new connection error: %s", uv_strerror(status));
         return;
     }
 
@@ -218,7 +218,7 @@ static void on_new_conn_cb(uv_stream_t *server, int status) {
     n_processor_t *p = listen_co->p;
 
     // 初始化 client 数据 accept loop 和 listen loop 必须使用同一个 loop
-    conn_ctx_t *ctx = mallocz(sizeof(conn_ctx_t));
+    http_conn_t *ctx = mallocz(sizeof(http_conn_t));
     assert(ctx);
     ctx->n_server = listen_co->data;
     ctx->read_buf_len = 0;
@@ -233,7 +233,7 @@ static void on_new_conn_cb(uv_stream_t *server, int status) {
     uv_tcp_init(server->loop, &ctx->client_handle);
     int result = uv_accept(server, (uv_stream_t *) &ctx->client_handle);
     if (result) {
-        DEBUGF("[accept_new_conn] uv_accept failed: %s", uv_strerror(result));
+        DEBUGF("[on_http_conn_cb] uv_accept failed: %s", uv_strerror(result));
         uv_close((uv_handle_t *) &ctx->client_handle, on_close_cb);
         return;
     }
@@ -241,7 +241,7 @@ static void on_new_conn_cb(uv_stream_t *server, int status) {
     ctx->client_handle.data = listen_co;
     result = uv_read_start((uv_stream_t *) &ctx->client_handle, http_alloc_buffer_cb, on_read_cb);
     if (result) {
-        DEBUGF("[rt_uv_read] uv_read_start failed: %s", uv_strerror(result));
+        DEBUGF("[on_http_conn_cb] uv_read_start failed: %s", uv_strerror(result));
         uv_close((uv_handle_t *) &ctx->client_handle, on_close_cb);
         return;
     }
@@ -251,13 +251,13 @@ static void on_new_conn_cb(uv_stream_t *server, int status) {
 }
 
 static inline void on_server_close_cb(uv_handle_t *handle) {
-    n_server_t *ctx = handle->data;
+    n_http_server_t *ctx = handle->data;
     free(ctx->uv_server_handler);
 
     co_ready(ctx->listen_co);
 }
 
-void rt_uv_http_close(n_server_t *server_ctx) {
+void rt_uv_http_close(n_http_server_t *server_ctx) {
     server_ctx->uv_server_handler->data = server_ctx;
     uv_close(server_ctx->uv_server_handler, on_server_close_cb);
 }
@@ -265,7 +265,7 @@ void rt_uv_http_close(n_server_t *server_ctx) {
 /**
  * @param server_ctx
  */
-void rt_uv_http_listen(n_server_t *server_ctx) {
+void rt_uv_http_listen(n_http_server_t *server_ctx) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
     co->data = server_ctx;
@@ -283,7 +283,7 @@ void rt_uv_http_listen(n_server_t *server_ctx) {
 
 
     // 新的请求进来将会触发 new connection 回调
-    int result = uv_listen((uv_stream_t *) uv_server, DEFAULT_BACKLOG, on_new_conn_cb);
+    int result = uv_listen((uv_stream_t *) uv_server, DEFAULT_BACKLOG, on_http_conn_cb);
     if (result) {
         // 端口占用等错误
         rti_co_throw(co, tlsprintf("uv listen failed: %s", uv_strerror(result)), false);

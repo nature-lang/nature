@@ -36,6 +36,61 @@ static inline void bitmap_set(uint8_t *bits, uint64_t index) {
     bits[index / 8] |= 1 << (index & 7);
 }
 
+
+static inline void bitmap_batch_clear(uint8_t *bits, uint64_t index, uint64_t clear_count) {
+    if (clear_count == 0) {
+        return;
+    }
+    
+    uint64_t end_index = index + clear_count;
+    uint64_t current_index = index;
+    
+    while (current_index < end_index) {
+        uint64_t byte_index = current_index / 8;
+        uint8_t bit_offset = current_index & 7;
+        
+        // 计算当前字节中需要清除的位数
+        uint8_t bits_in_current_byte = 8 - bit_offset;
+        uint64_t remaining_bits = end_index - current_index;
+        uint8_t bits_to_clear = (bits_in_current_byte < remaining_bits) ? bits_in_current_byte : remaining_bits;
+        
+        // 创建掩码
+        uint8_t mask = ((1 << bits_to_clear) - 1) << bit_offset;
+        
+        // 清除位
+        bits[byte_index] &= ~mask;
+        
+        current_index += bits_to_clear;
+    }
+}
+
+static inline void bitmap_batch_set(uint8_t *bits, uint64_t index, uint64_t set_count) {
+    if (set_count == 0) {
+        return;
+    }
+
+    uint64_t end_index = index + set_count;
+    uint64_t current_index = index;
+
+    while (current_index < end_index) {
+        uint64_t byte_index = current_index / 8;
+        uint8_t bit_offset = current_index & 7;
+
+        // 计算当前字节中需要设置的位数
+        uint8_t bits_in_current_byte = 8 - bit_offset;
+        uint64_t remaining_bits = end_index - current_index;
+        uint8_t bits_to_set = (bits_in_current_byte < remaining_bits) ? bits_in_current_byte : remaining_bits;
+
+        // 创建掩码
+        uint8_t mask = ((1 << bits_to_set) - 1) << bit_offset;
+
+        // 设置位
+        bits[byte_index] |= mask;
+
+        current_index += bits_to_set;
+    }
+}
+
 static inline void bitmap_clear(uint8_t *bits, uint64_t index) {
     // ~ 表示二进制取反
     bits[index / 8] &= ~(1 << (index & 7));

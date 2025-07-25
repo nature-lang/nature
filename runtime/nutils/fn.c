@@ -392,7 +392,7 @@ static void gen_closure_jit_codes(fndef_t *fndef, runtime_fn_t *fn_runtime_ptr, 
 #if defined(__DARWIN) && defined(__ARM64)
     sys_icache_invalidate(fn_runtime_ptr->closure_jit_codes, size);
 #elif defined(__LINUX) && (defined(__ARM64) || defined(__RISCV64))
-    __builtin___clear_cache((void*)fn_runtime_ptr->closure_jit_codes, fn_runtime_ptr->closure_jit_codes + size);
+    __builtin___clear_cache((void *) fn_runtime_ptr->closure_jit_codes, fn_runtime_ptr->closure_jit_codes + size);
 #endif
 }
 
@@ -457,40 +457,6 @@ envs_t *env_new(uint64_t length) {
     return envs;
 }
 
-/*
- * stack 需要被回收，但是 stack addr 缺被引用了，此时需要将 stack addr 的值 copy 到 upvalue 中
- */
-void env_closure(uint64_t stack_addr, uint64_t rtype_hash) {
-
-
-    mutex_lock(&env_upvalue_locker);
-
-    upvalue_t *upvalue = table_get(env_upvalue_table, utoa(stack_addr));
-    assert(upvalue && "not found stack addr upvalue, cannot close");
-    DEBUGF("[runtime.env_closure] stack_addr=0x%lx, find_upvalue=%p, upvalue->ref=%p, rtype_hash=%lu", stack_addr,
-           upvalue, upvalue->ref,
-           rtype_hash);
-
-    rtype_t *rtype = rt_find_rtype(rtype_hash);
-
-    if (rtype->size <= 8) {
-        uint64_t value = fetch_addr_value(stack_addr);
-        upvalue->value.uint_value = value;
-        upvalue->ref = &upvalue->value;
-    } else {
-        // 如果 rtype->size > 8, 则需要从堆中申请空间存放 struct, 避免空间不足。
-        void *new_value = rti_gc_malloc(rtype->size, rtype);
-        DEBUGF("[runtime.env_closure] size gt 8byte, malloc new_value=%p", new_value);
-        memcpy(new_value, (void *) stack_addr, rtype->size);
-        upvalue->ref = new_value;
-    }
-
-    DEBUGF("[runtime.env_closure] closure success, upvalue->ref=%p stack_addr=0x%lx, ", upvalue->ref, stack_addr);
-
-    table_delete(env_upvalue_table, utoa(stack_addr));
-
-    mutex_unlock(&env_upvalue_locker);
-}
 
 void env_assign_ref(runtime_fn_t *fn, uint64_t index, void *src_ref, uint64_t size) {
     uint64_t start = uv_hrtime();

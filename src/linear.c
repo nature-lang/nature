@@ -813,7 +813,6 @@ static void linear_tuple_assign(module_t *m, ast_assign_stmt_t *stmt) {
     uint64_t offset = type_tuple_offset(tuple_type.tuple, tuple_access->index);
     lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, tuple_target, offset);
 
-    // TODO write barrier
     if (is_gc_alloc(stmt->left.type.kind)) {
         lir_operand_t *obj = linear_expr(m, stmt->right, NULL);
         lir_operand_t *dst_slot = lea_operand_pointer(m, dst);
@@ -860,29 +859,30 @@ static void linear_env_assign(module_t *m, ast_assign_stmt_t *stmt) {
 
     lir_operand_t *values_operand = linear_inline_env_values(m);
 
-    // move [values+x] -> dst_ptr
-    lir_operand_t *dst_ptr = temp_var_operand(m, type_ptrof(stmt->right.type));
-    size_t values_offset = ast->index * POINTER_SIZE;
-    OP_PUSH(lir_op_move(dst_ptr,
-                        indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), values_operand, values_offset)));
+    // move [values+x] -> dst_ptr(dst_ptr is heap_value)
+    lir_operand_t *env_offset_operand = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), values_operand, ast->index * POINTER_SIZE);
 
 
     if (is_stack_ref_big_type(stmt->right.type)) {
         assert(stmt->right.type.in_heap);
     }
 
-    // 计算在 envs 中 values 的 offset
-    // move dst -> [values + x]
-    rtype_t rtype = ct_reflect_type(stmt->left.type);
-    if (rtype.size <= POINTER_SIZE) {
-        lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, dst_ptr, 0);
-        OP_PUSH(lir_op_move(dst, src));
-    } else {
-        linked_concat(m->current_closure->operations, lir_memory_mov(m, rtype.size, dst_ptr, src));
-    }
+    if (is_stack_alloc_type(stmt->left.type)) {
+        // mov to indirect(dst_ptr)
+        lir_operand_t *dst_ptr = temp_var_operand(m, type_ptrof(stmt->right.type));
+        OP_PUSH(lir_op_move(dst_ptr, env_offset_operand)); // mov env_values[0] -> dst_ptr
 
-    //    push_rt_call(m, RT_CALL_ENV_ASSIGN_REF, NULL, 4, m->current_closure->fn_runtime_operand, index, src_ref,
-    //                 int_operand(size));
+        if (is_stack_ref_big_type(stmt->left.type)) {
+            linked_concat(m->current_closure->operations, lir_memory_mov(m, size, dst_ptr, src));
+        } else {
+            lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, dst_ptr, 0);
+            OP_PUSH(lir_op_move(dst, src));
+        }
+    } else {
+        // vec/map...
+        lir_operand_t *dst_ptr = lea_operand_pointer(m, env_offset_operand);
+        push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst_ptr, src);
+    }
 }
 
 static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
@@ -896,7 +896,6 @@ static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
     push_rt_call(m, RT_CALL_MAP_ASSIGN, dst, 2, map_target, key_ref);
 
 
-    // TODO write barrier
     if (is_gc_alloc(stmt->left.type.kind)) {
         // 不包含 struct/array
         lir_operand_t *obj = linear_expr(m, stmt->right, NULL);
@@ -2192,15 +2191,14 @@ static lir_operand_t *linear_env_access(module_t *m, ast_expr_t expr, lir_operan
     lir_operand_t *values_operand = linear_inline_env_values(m);
 
     // move [values+x] -> dst_ptr (values 中的值已经取了出来，丢到了 dst_ptr 里面)
-    size_t values_offset = ast->index * POINTER_SIZE;
-    lir_operand_t *src_ptr = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), values_operand, values_offset);
+    lir_operand_t *src_ptr = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), values_operand, ast->index * POINTER_SIZE);
 
     // 把 values 中存储的值取出来，放在 target 中
     if (!target) {
         target = temp_var_operand(m, expr.type);
     }
 
-    // 传递值而不是指针，像其他的 escape 一样, 传递值而不是指针。所以此处需要进一步取值
+    // envs 中总是存储的堆指针，即使是 scala 类型的数据, 所以此处需要进一步 indirect 获取对应的值，而不是 ptr value
     if (is_scala_type(expr.type)) {
         src_ptr = indirect_addr_operand(m, expr.type, src_ptr, 0);
     }
@@ -3150,10 +3148,8 @@ static lir_operand_t *linear_capture_expr(module_t *m, ast_expr_t *expr) {
         assertf(m->current_closure->fn_runtime_operand, "have env access, must have fn_runtime_operand");
         ast_env_access_t *env_access = expr->value;
 
-        // env value 是什么东西。值还是指针，就指
         lir_operand_t *values_operand = linear_inline_env_values(m);
-        size_t values_offset = env_access->index * POINTER_SIZE;
-        lir_operand_t *env_value_ptr = indirect_addr_operand(m, expr->type, values_operand, values_offset);
+        lir_operand_t *env_value_ptr = indirect_addr_operand(m, expr->type, values_operand, env_access->index * POINTER_SIZE);
 
         return env_value_ptr;
     } else if (expr->assert_type == AST_EXPR_IDENT) {
@@ -3171,6 +3167,7 @@ static lir_operand_t *linear_capture_expr(module_t *m, ast_expr_t *expr) {
         }
 
         // fn/vec/map/tup/set/string 都走这里直接访问原 var
+        // struct/arr 同样直接访问原 ptr
         return lir_var_operand(m, symbol_var->ident);
     }
 
@@ -3233,20 +3230,39 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
     for (int i = 0; i < fndef->capture_exprs->length; ++i) {
         ast_expr_t *item = ct_list_value(fndef->capture_exprs, i);
 
-        // - mov env[0] -> value_arr
+        // - mov env[0] -> values_arr
         // - mov src_ptr -> value_arr[0]
-        // env 中直接存储了元素在堆上的地址，不需要在关注 upvalue 是否 close
+        // 所有的 capture var 都会在堆中分配, linear_capture_expr 返回的也是堆上的引用变量的 ident(type.in_heap = true)
+        // env 中直接存储了元素在堆上的地址，不需要再关注 upvalue 是否 close
+        // 对于 scala type 比如 int 等，此时 ident 存储的是一个指针类型的数据，所以需要堆 ident 进行 indirect 才能获取具体的值
+        // 当然实际存储时，只需要存储 ident 对应的堆的 ptr 即可, 由于此处固定堆指针，所以总是需要通过 write barrier 写入
         lir_operand_t *src_ptr = linear_capture_expr(m, item);
 
         // dst addr
-        lir_operand_t *values_operand = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
+        lir_operand_t *values_operand = temp_var_operand_with_alloc(m, type_kind_new(TYPE_GC_ENV_VALUES));
         OP_PUSH(lir_op_move(values_operand,
                             indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), env_operand, 0)));
 
         // src_ptr 一定是一个指针类型的地址, 比如 PTR/STRING/VEC 等等，所以此处可以直接使用 TYPE_ANYPTR
         lir_operand_t *dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), values_operand,
                                                    i * POINTER_SIZE);
-        OP_PUSH(lir_op_move(dst, src_ptr));
+
+        if (src_ptr->assert_type == LIR_OPERAND_VAR) {
+            lir_var_t *src_var = src_ptr->value;
+            if (is_stack_ref_big_type(src_var->type)) {
+                src_var->type = type_kind_new(TYPE_ANYPTR); // writer_barrier 参数不能是 struct
+            }
+        } else {
+            lir_indirect_addr_t *src_indirect = src_ptr->value;
+            if (is_stack_ref_big_type(src_indirect->type)) {
+                src_indirect->type = type_kind_new(TYPE_ANYPTR);
+            }
+        }
+
+
+        lir_operand_t *dst_ptr = lea_operand_pointer(m, dst);
+        push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst_ptr, src_ptr);
+        //        OP_PUSH(lir_op_move(dst, src_ptr));
     }
 
     return linear_super_move(m, fndef->type, target, result);

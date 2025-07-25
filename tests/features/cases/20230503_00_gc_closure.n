@@ -20,22 +20,23 @@ fn main() {
             i += 1
         }
 
-        println(runtime.malloc_bytes())
-        println(atms[10](10))
-        println(atms[599](100))
-        println(atms[999](200))
+        assert(runtime.malloc_bytes() > 100000 && runtime.malloc_bytes() < 200000) // 144xxx
+        assert(atms[10](10) == 990)
+        assert(atms[599](100) == 900)
+        assert(atms[999](200) == 800)
 
         runtime.gc()
         co.sleep(500) // wait gc finish
-        println(runtime.malloc_bytes())
-        println(atms[10](10))
-        println(atms[599](100))
-        println(atms[999](200))
+        assert(runtime.malloc_bytes() > 100000 && runtime.malloc_bytes() < 200000)
+        assert(atms[10](10) == 980)
+        assert(atms[599](100) == 800)
+        assert(atms[999](200) == 600)
     }
 
     makes()
 
     runtime.gc()
-    co.sleep(500)
+    co.sleep(1000)
     println(runtime.malloc_bytes())
+    assert(runtime.malloc_bytes() < 2500)
 }
