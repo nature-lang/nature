@@ -73,3 +73,77 @@ fn main() {
 --- output.txt
 124
 124
+
+=== test_env_vec
+--- main.n
+import co
+import runtime
+
+fn get_list_fn():fn():[int] {
+    var list = [1, 2, 3]
+
+    return fn():[int] {
+        // env assign
+        list[0] = 11
+        list[1] = 22
+        list[2] = 33
+
+        // list assign
+        list = [list[0] * 2, list[1] * 2, list[2] * 2]
+
+        return list
+    }
+}
+
+fn main() {
+    // start server
+    var list_fn = get_list_fn()
+    var list = list_fn()
+
+    // gc
+    runtime.gc()
+    co.sleep(1000)
+
+    println(list[0], list[1], list[2])
+}
+
+--- output.txt
+22 44 66
+
+=== test_nest_closure
+--- main.n
+import co
+import runtime
+
+fn main() {
+    int a = 12
+    var foo = fn():int {
+        var bar = fn():int {
+            a = a * 2
+            return a * 3
+        }
+
+        return bar()
+    }
+
+    var b = foo()
+
+    runtime.gc()
+    co.sleep(1000)
+
+    println(a, b)
+}
+
+--- output.txt
+24 72
+
+=== test_vec_slice_panic
+--- main.n
+fn main() {
+    var buf = vec_new<u8>(0, 3)
+    buf.slice(0, 6)
+    println('no no no!')
+}
+
+--- output.txt
+coroutine 'main' panic: 'slice [0:6] out of vec with length 3' at std/builtin/vec.n:32:15

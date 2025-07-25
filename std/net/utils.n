@@ -1,0 +1,8 @@
+fn split_host(string host):(string, int)! {
+    var list = host.split(':')
+    if list[0] == '' {
+        list[0] = '0.0.0.0'
+    }
+
+    return (list[0], list[1].to_int())
+}

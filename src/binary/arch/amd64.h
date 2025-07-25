@@ -427,7 +427,6 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
             } else {
                 assertf(false, "[elf_amd64_relocate] unexpected R_X86_64_TLSLD pattern");
             }
-
             break;
         }
         case R_X86_64_DTPOFF32:

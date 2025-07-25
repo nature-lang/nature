@@ -30,6 +30,10 @@ add_executable(test_riscv64_encoding test_riscv64_encoding.c)
 target_link_libraries(test_riscv64_encoding nature_common_test m)
 add_test(test_riscv64_encoding test_riscv64_encoding)
 
+add_executable(test_bitmap test_bitmap.c)
+target_link_libraries(test_bitmap nature_common_test m)
+add_test(test_bitmap test_bitmap)
+
 # ---------------------------------- cases 测试 ------------------------------------------
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)
 message("[test cases]make temp dir ${CMAKE_CURRENT_SOURCE_DIR}/tmp success")
@@ -98,17 +102,12 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
     message("[test_runtime_debug] work_dir: ${WORK_DIR}, entry: ${ENTRY}")
 
     set(LIBMAIN_STATIC ${CMAKE_CURRENT_SOURCE_DIR}/tmp/libmain.a)
-    add_custom_command(
-            OUTPUT ${LIBMAIN_STATIC}
+    add_custom_target(generate_libmain ALL
+            COMMAND ${CMAKE_COMMAND} -E remove -f ${LIBMAIN_STATIC}
             COMMAND env BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp NATURE_ROOT=${PROJECT_SOURCE_DIR} $<TARGET_FILE:nature> build --archive ${ENTRY}
             WORKING_DIRECTORY ${WORK_DIR}
             DEPENDS nature
-            COMMENT "Generating ${LIBMAIN_STATIC}"
-    )
-
-    add_custom_target(generate_libmain
-            DEPENDS ${LIBMAIN_STATIC}
-            COMMENT "Trigger libmain.a generation"
+            COMMENT "Force rebuilding ${LIBMAIN_STATIC}"
     )
 
     message("[test_runtime_debug] LIBMAIN_STATIC: ${LIBMAIN_STATIC}")

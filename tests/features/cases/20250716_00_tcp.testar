@@ -1,0 +1,183 @@
+=== test_basic
+--- main.n
+import net.tcp
+import co
+
+fn server():void! {
+    var listener = tcp.listen('127.0.0.1:8080')
+
+    for true {
+        var conn = listener.accept()
+        @async(fn():void! {
+            var buf = vec_new<u8>(0, 1024)
+            for true {
+                var len = conn.read(buf) catch e {
+                    println('conn read err:', e.msg())
+                    break -1
+                }
+                if len == -1 {
+                    break
+                }
+                conn.write(buf.slice(0, len))
+            }
+
+            conn.close()
+        }(), co.SAME)
+    }
+
+    listener.close()
+}
+
+fn main() {
+    // start server
+    go server()
+
+    co.sleep(1000)
+
+    var conn = tcp.connect('127.0.0.1:8080')
+    var buf = vec_new<u8>(0, 1024)
+    // write
+    conn.write('hello world' as [u8])
+    // read
+    var len = conn.read(buf)
+    println('read buf 1:', buf.slice(0, len) as string)
+
+    conn.write('hello nature' as [u8])
+    len =  conn.read(buf)
+    println('read buf 2:', buf.slice(0, len) as string)
+
+    conn.close()
+}
+
+--- output.txt
+read buf 1: hello world
+read buf 2: hello nature
+
+=== test_connect_timeout
+--- main.n
+import net.tcp
+import co
+
+fn main() {
+    var conn = tcp.connect_timeout('10.255.255.1:8080', 1000) catch e {
+        throw errorf(e.msg())
+    }
+    conn.close()
+}
+
+--- output.txt
+coroutine 'main' uncaught error: 'connection timeout' at nature-test/main.n:6:22
+
+
+=== test_cross_goroutine
+--- main.n
+import net.tcp
+import co
+import runtime
+import time
+
+fn server():void! {
+    var listener = tcp.listen('0.0.0.0:8080')
+    var buf = vec_new<u8>(0, 1024)
+    println('server is start')
+    var response = 'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 11\r\nConnection: close\r\n\r\nhello world'
+
+    for true {
+        var c = listener.accept()
+        go fn(ptr<tcp.conn_t> conn):void! {
+            conn.read(buf) catch e {
+                conn.close()
+                return
+            }
+
+            conn.write(response as [u8])
+            conn.close()
+        }(c)
+    }
+
+    listener.close()
+}
+
+fn main() {
+    // start server
+    go server()
+
+    // 等待 server 启动成功
+    co.sleep(500)
+
+   var resp_buf = vec_new<u8>(0, 1024)
+
+    // client
+    int start = time.now().ms_timestamp()
+    int count = 100
+    var done = chan_new<bool>()
+    for int i = 0; i < count; i += 1 {
+        go fn(int i):void! {
+           var conn = tcp.connect('127.0.0.1:8080')
+
+            // 构造HTTP GET请求
+            var http_request = 'GET / HTTP/1.1\r\n' +
+                                 'Host: 127.0.0.1:8080\r\n' +
+                                 'Connection: close\r\n' +
+                                 '\r\n'
+
+            conn.write(http_request as [u8])
+            int len = conn.read(resp_buf)
+            conn.close()
+            // println(resp_buf.slice(0, len) as string)
+            done.send(true)
+        }(i)
+    }
+
+    for int i = 0; i < count; i += 1 {
+        done.recv()
+    }
+
+    var end = time.now().ms_timestamp()
+    println('done, use time(ms): ', end - start)
+    assert(end - start < 1000)
+}
+
+=== test_close
+--- main.n
+import net.tcp
+import co
+import runtime
+import time
+
+fn server():void! {
+    var listener = tcp.listen('0.0.0.0:8080')
+    var buf = vec_new<u8>(0, 1024)
+    println('server is start')
+    var response = 'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 11\r\nConnection: close\r\n\r\nhello world'
+
+    var conn = listener.accept()
+
+    conn.close()
+
+    conn.read(buf) catch e {
+        panic(e.msg())
+        return
+    }
+
+    conn.write(response as [u8])
+
+    listener.close()
+}
+
+fn main() {
+    // start server
+    go server()
+
+    // 等待 server 启动成功
+    co.sleep(500)
+
+    var conn = tcp.connect('127.0.0.1:8080')
+    conn.close()
+
+    co.sleep(500) // wait exception
+}
+
+--- output.txt
+server is start
+coroutine '1' panic: 'conn closed' at nature-test/main.n:17:15

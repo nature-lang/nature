@@ -26,13 +26,13 @@ typedef struct {
     void *routers[8];
     uv_handle_t *uv_server_handler;
     coroutine_t *listen_co;
-} n_server_t;
+} n_http_server_t;
 
 /**
 * 不能改变顺序
 */
 typedef struct {
-    n_server_t *n_server;
+    n_http_server_t *n_server;
 
     void *read_buf; // 默认申请 4096 空间 buf
     const char *url_at;
@@ -68,12 +68,12 @@ typedef struct {
     uv_async_t async_handle;
     uv_write_t write_req;
     uv_buf_t write_buf;
-} conn_ctx_t;
+} http_conn_t;
 
-void rt_uv_conn_resp(conn_ctx_t *ctx, n_string_t *resp_data);
+void rt_uv_conn_resp(http_conn_t *conn, n_string_t *resp_data);
 
-void rt_uv_http_listen(n_server_t *server_ctx);
+void rt_uv_http_listen(n_http_server_t *server_ctx);
 
-void rt_uv_http_close(n_server_t *server_ctx);
+void rt_uv_http_close(n_http_server_t *server_ctx);
 
 #endif //LIBUV_H

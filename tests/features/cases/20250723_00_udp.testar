@@ -1,0 +1,224 @@
+=== test_gc_closure
+--- main.n
+import net.udp
+import co
+import runtime
+import time
+
+fn server():void! {
+    var buf = vec_new<u8>(0, 1024)
+    var addr = udp.addr_t{
+        ip = '127.0.0.1',
+        port = 8088,
+    }
+
+    for int i = 0; i < 100; i += 1 {
+        go fn():void! {
+            var socket = udp.bind('0.0.0.0:8088')
+            for int i = 0; i < 1000; i += 1 {
+                socket.sendto('hello' as [u8], addr)
+            }
+        }()
+
+    }
+}
+
+fn main() {
+    server()
+    co.sleep(1000)
+}
+
+=== test_basic
+--- main.n
+import net.udp
+import co
+import runtime
+import time
+
+var count = 0
+
+fn echo_server():void! {
+    var buf = vec_new<u8>(0, 1024)
+    var socket = udp.bind('0.0.0.0:8088')
+    for true {
+        var (len, addr) = socket.recvfrom(buf)
+        socket.sendto(buf.slice(0, len), addr)
+    }
+
+    socket.close()
+}
+
+fn send():void! {
+    var conn = udp.connect('127.0.0.1:8088')
+    conn.write('hello world!!' as [u8])
+    var buf = vec_new<u8>(0, 1024)
+
+    var len = conn.read(buf)
+    println('send success, recv msg', buf.slice(0, len) as string)
+    conn.close()
+}
+
+fn main() {
+    go echo_server()
+    co.sleep(500) // wait server start
+
+    var start = time.now().ms_timestamp()
+    for int i = 0; i < 100; i += 1 {
+        send()
+    }
+    var end = time.now().ms_timestamp()
+    assert(end - start < 5000)
+}
+
+--- output.txt
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+send success, recv msg hello world!!
+
+
+=== test_closed_panic
+--- main.n
+import net.udp
+import co
+import runtime
+import time
+
+var count = 0
+
+fn echo_server():void! {
+    var buf = vec_new<u8>(0, 1024)
+    var socket = udp.bind('0.0.0.0:8088')
+    for true {
+        var (len, addr) = socket.recvfrom(buf)
+        socket.sendto(buf.slice(0, len), addr)
+    }
+
+    socket.close()
+}
+
+fn send():void! {
+    var conn = udp.connect('127.0.0.1:8088')
+    conn.write('hello world!!' as [u8])
+    var buf = vec_new<u8>(0, 1024)
+
+    var len = conn.read(buf)
+    println('send success, recv msg', buf.slice(0, len) as string)
+    conn.close()
+
+    conn.read(buf) catch e {
+        panic(e.msg())
+    }
+}
+
+fn main() {
+    go echo_server()
+    co.sleep(500) // wait server start
+
+    var start = time.now().ms_timestamp()
+    for int i = 0; i < 100; i += 1 {
+        send()
+    }
+    var end = time.now().ms_timestamp()
+    assert(end - start < 5000)
+}
+
+--- output.txt
+send success, recv msg hello world!!
+coroutine 'main' panic: 'socket closed' at nature-test/main.n:29:15

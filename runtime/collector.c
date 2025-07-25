@@ -476,12 +476,12 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         }
 
         DEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p, fn->stack_size=%ld, bp=%p", STRTABLE(fn->name_offset),
-                (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
+               (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
 
         // share_stack_frame_bp 是 fn 对应的帧的值,已经从帧中取了出来, 原来保存再 BP 寄存器中，现在保存再帧中
         addr_t bp_offset = share_stack_frame_bp - sp_value;
         DEBUGF("[runtime_gc.scan_stack] share_stack_frame_bp %p, sp value %p, offset %p",
-                (void *) share_stack_frame_bp, (void *) sp_value, (void *) bp_offset)
+               (void *) share_stack_frame_bp, (void *) sp_value, (void *) bp_offset)
         assert(bp_offset < 1000000);
 
         // 将 share 转换为 prev 偏移量
@@ -496,8 +496,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         for (int i = 0; i < ptr_count; ++i) {
             bool is_ptr = bitmap_test(RTDATA(fn->gc_bits_offset), i);
             DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, is_ptr=%d, may_value=%p", STRTABLE(fn->name_offset), i,
-                    ptr_count - 1, is_ptr,
-                    (void *) fetch_int_value(frame_cursor, 8));
+                   ptr_count - 1, is_ptr,
+                   (void *) fetch_int_value(frame_cursor, 8));
 
             // 即使当前 slot 的类型是 ptr 但是可能存在还没有存储值, 所以需要重复判断
             if (is_ptr) {
@@ -933,6 +933,6 @@ void runtime_gc() {
     next_gc_bytes = _next_gc_bytes;
     gc_stage = GC_STAGE_OFF;
     DEBUGF("[runtime_gc] gc stage: GC_OFF, gc_barrier_stop, current_allocated=%ldKB, cleanup=%ldKB",
-           allocated_bytes / 1024,
-           (before - allocated_bytes) / 1024);
+            allocated_bytes / 1024,
+            (before - allocated_bytes) / 1024);
 }

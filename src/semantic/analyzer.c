@@ -434,7 +434,7 @@ static void analyzer_type(module_t *m, type_t *type) {
  * ptr/anyptr/rawptr/all_t/fn_t 不作为关键字，如果用户没有自定义覆盖, 则转换为需要的类型
  */
 static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
-    assert(type->ident_kind == TYPE_IDENT_UNKNOWN);
+    assert(type->ident_kind == TYPE_IDENT_UNKNOWN || type->ident_kind == TYPE_IDENT_INTERFACE);
     assert(type->import_as == NULL);
 
     // void ptr

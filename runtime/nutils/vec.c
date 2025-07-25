@@ -39,10 +39,6 @@ n_vec_t *rt_unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t length) {
     assertf(hash > 0, "hash must be a valid hash");
     assertf(element_hash > 0, "element_hash must be a valid hash");
 
-    if (length < 0) {
-        char *msg = tlsprintf("len must be greater than 0");
-        rti_throw(msg, true);
-    }
     int64_t capacity = length;
     if (capacity == 0) {
         capacity = VEC_DEFAULT_CAPACITY;
@@ -82,6 +78,7 @@ n_vec_t *rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *va
     if (length < 0) {
         char *msg = tlsprintf("len must be greater than 0");
         rti_throw(msg, true);
+        return NULL;
     }
     int64_t capacity = length;
     if (capacity == 0) {
@@ -122,6 +119,7 @@ n_vec_t *rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity) {
     if (capacity < 0) {
         char *msg = tlsprintf("cap must be greater than 0");
         rti_throw(msg, true);
+        return NULL;
     }
 
 

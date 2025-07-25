@@ -238,17 +238,19 @@ static void processor_uv_close(n_processor_t *p) {
     // 关闭 uv_loop
     RDEBUGF("[runtime.processor_uv_close] will close loop=%p, loop_req_count=%u, p_index=%d", &p->uv_loop,
             p->uv_loop.active_reqs.count, p->index);
-    uv_close((uv_handle_t *) &p->timer, NULL); // io_run 等待 close 完成！
 
-    uv_run(&p->uv_loop, UV_RUN_DEFAULT); // 等待上面注册的 uv_close 完成
+    // TODO The process has been shut down and doesn't need to be concerned about overflow?
+    //    uv_close((uv_handle_t *) &p->timer, NULL); // io_run 等待 close 完成！
 
-    int result = uv_loop_close(&p->uv_loop);
+    //    uv_run(&p->uv_loop, UV_RUN_DEFAULT); // 等待上面注册的 uv_close 完成
 
-    if (result != 0) {
-        DEBUGF("[runtime.processor_uv_close] uv loop close failed, code=%d, msg=%s, p_index=%d", result,
-               uv_strerror(result), p->index);
-        assert(false && "uv loop close failed");
-    }
+    //    int result = uv_loop_close(&p->uv_loop);
+    //    if (result) {
+    //        DEBUGF("[runtime.processor_uv_close] uv loop close failed, code=%d, msg=%s, p_index=%d", result,
+    //               uv_strerror(result), p->index);
+    //
+    //        assert(false && "uv loop close failed");
+    //    }
 
     RDEBUGF("[runtime.processor_uv_close] processor uv close success p_index=%d", p->index);
 }
@@ -260,7 +262,7 @@ NO_OPTIMIZE static void coroutine_wrapper() {
     assert(p);
 
     DEBUGF("[runtime.coroutine_wrapper] p_index=%d, p_status=%d co=%p, fn=%p main=%d, rt_co=%d", p->index, p->status,
-           co, co->fn, co->main, co->flag & FLAG(CO_FLAG_RTFN));
+            co, co->fn, co->main, co->flag & FLAG(CO_FLAG_RTFN));
 
     co_set_status(p, co, CO_STATUS_RUNNING);
     processor_set_status(p, P_STATUS_RUNNING);
@@ -366,13 +368,9 @@ void processor_all_start() {
     DEBUGF("[runtime_gc.processor_all_start] all processor stw completed");
 }
 
-void uv_stop_callback(uv_timer_t *timer) {
+void on_timer_stop_cb(uv_timer_t *timer) {
     n_processor_t *p = timer->data;
-    // DEBUGF("[runtime.io_run.uv_stop_callback] loop=%p, p_index=%d", timer->loop, p->index);
-
     uv_timer_stop(timer);
-    // uv_close((uv_handle_t *)timer, NULL);
-
     uv_stop(timer->loop);
 }
 
@@ -384,8 +382,7 @@ int io_run(n_processor_t *p, uint64_t timeout_ms) {
     p->timer.data = p;
 
     // 设置计时器超时回调，这将在超时后停止事件循环
-    uv_timer_start(&p->timer, uv_stop_callback, timeout_ms, 0); // 只触发一次
-
+    uv_timer_start(&p->timer, on_timer_stop_cb, timeout_ms, 0); // 只触发一次
 
     // DEBUGF("[runtime.io_run] uv_run start, p_index=%d, loop=%p", p->index, p->uv_loop);
     return uv_run(&p->uv_loop, UV_RUN_DEFAULT);
@@ -452,7 +449,7 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
 static void processor_run(void *raw) {
     n_processor_t *p = raw;
     DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, loop=%p, yield_safepoint_ptr=%p(%ld)", p->index, p,
-            &p->uv_loop, &tls_yield_safepoint, tls_yield_safepoint);
+           &p->uv_loop, &tls_yield_safepoint, tls_yield_safepoint);
 
     DEBUGF("[runtime.processor_run] tls1 %p, tls2 %p, tls3 %p tls4 %p, tls5 %p, tls6 %p", &tls_yield_safepoint1, &tls_yield_safepoint2, &tls_yield_safepoint3, &tls_yield_safepoint4, &tls_yield_safepoint5, &tls_yield_safepoint6);
 

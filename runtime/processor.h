@@ -77,6 +77,7 @@ static inline void co_set_status(n_processor_t *p, coroutine_t *co, co_status_t 
     assert(p);
     assert(co);
 
+    //    TDEBUGF("[co_set_status] co=%p set status %d", co, status);
     // solo processor 在 stw 期间禁止切换 co 的状态
     co->status = status;
 }
@@ -132,6 +133,8 @@ static inline void co_yield_waiting(coroutine_t *co, unlock_fn unlock_fn, void *
     // 这里作为一个整体，不再允许抢占
     // syscall -> waiting
     co_set_status(co->p, co, CO_STATUS_WAITING);
+    DEBUGF("[runtime.co_yield_waiting] p_index=%d, co=%p, set co_status=%d, will yield", co->p->index, co,
+           co->status);
 
     _co_yield(co->p, co);
 

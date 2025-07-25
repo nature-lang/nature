@@ -12,7 +12,7 @@ fn vec_new<T>(rawptr<T> p, int len):vec<T>! {
 }
 
 #local #linkid unsafe_vec_new
-fn unsafe_vec_new(int hash, int ele_hash, int len, anyptr p):anyptr
+fn unsafe_vec_new(int hash, int ele_hash, int len, anyptr p):anyptr!
 
 fn ptr_to<T>(anyptr p):T {
     return *(p as rawptr<T>)
