@@ -69,27 +69,7 @@ pub fn build(b: *std.Build) !void {
     exe.addIncludePath(.{ .cwd_relative = "./" });
     exe.addIncludePath(.{ .cwd_relative = "./include/" });
 
-    switch (os) {
-        .macos => {
-            exe.root_module.addCMacro("__DARWIN", "1");
-            exe.root_module.addCMacro("_DARWIN_C_SOURCE", "1");
-        },
-        .linux => {
-            exe.root_module.addCMacro("__LINUX", "1");
-        },
-        else => {},
-    }
-    switch (arch) {
-        .aarch64 => {
-            exe.root_module.addCMacro("__ARM64", "1");
-        },
-        .x86_64 => {
-            exe.root_module.addCMacro("__AMD64", "1");
-        },
-        else => {},
-    }
-
-    exe.root_module.addCMacro("_XOPEN_SOURCE", "700");
+    setCMacros(exe, target);
 
     const nature_main = &.{"main.c"};
     const nature_src = try findCFiles(b.allocator, "src");
@@ -138,43 +118,21 @@ pub fn buildRuntime(
         "runtime/aco/aco.c",
         "runtime/aco/acosw.S",
     };
-    const os = target.result.os.tag;
-    const arch = target.result.cpu.arch;
-    switch (os) {
-        .macos => {
-            lib.root_module.addCMacro("__DARWIN", "1");
-            lib.root_module.addCMacro("_DARWIN_C_SOURCE", "1");
-        },
-        .linux => {
-            lib.root_module.addCMacro("__LINUX", "1");
-        },
-        else => {},
-    }
-    switch (arch) {
-        .aarch64 => {
-            lib.root_module.addCMacro("__ARM64", "1");
-        },
-        .x86_64 => {
-            lib.root_module.addCMacro("__AMD64", "1");
-        },
-        else => {},
-    }
 
-    lib.root_module.addCMacro("_XOPEN_SOURCE", "700");
+    setCMacros(lib, target);
 
-    mod.addIncludePath(.{ .cwd_relative = "./" });
-    mod.addIncludePath(.{ .cwd_relative = "./include/" });
+    lib.addIncludePath(.{ .cwd_relative = "./" });
+    lib.addIncludePath(.{ .cwd_relative = "./include/" });
 
     const nature_utils = try findCFiles(b.allocator, "utils");
     defer {
         for (nature_utils.items) |path| b.allocator.free(path);
         nature_utils.deinit();
     }
-    mod.addCSourceFiles(.{ .files = aco, .flags = &.{"-std=gnu11"} });
-    mod.addCSourceFiles(.{ .files = nature_utils.items, .flags = &.{"-std=gnu11"} });
+    lib.addCSourceFiles(.{ .files = aco, .flags = &.{"-std=gnu11"} });
+    lib.addCSourceFiles(.{ .files = nature_utils.items, .flags = &.{"-std=gnu11"} });
 
-    mod.addLibraryPath(b.path(lib_path));
-    mod.linkSystemLibrary("uv", .{ .weak = true });
+    lib.addLibraryPath(b.path(lib_path));
 
     // Install the runtime library.
     b.installArtifact(lib);
@@ -214,5 +172,34 @@ fn recursiveFindCFiles(
             .directory => try recursiveFindCFiles(allocator, full_path, result),
             else => {},
         }
+    }
+}
+
+fn setCMacros(compile: *std.Build.Step.Compile, target: std.Build.ResolvedTarget) void {
+    const os = target.result.os.tag;
+    const arch = target.result.cpu.arch;
+    switch (os) {
+        .macos => {
+            compile.root_module.addCMacro("__DARWIN", "1");
+            compile.root_module.addCMacro("_DARWIN_C_SOURCE", "1");
+            compile.root_module.addCMacro("_XOPEN_SOURCE", "700");
+        },
+        .linux => {
+            compile.root_module.addCMacro("__LINUX", "1");
+            compile.root_module.addCMacro("_GNU_SOURCE", "1");
+        },
+        else => {},
+    }
+    switch (arch) {
+        .aarch64 => {
+            compile.root_module.addCMacro("__ARM64", "1");
+        },
+        .x86_64 => {
+            compile.root_module.addCMacro("__AMD64", "1");
+        },
+        .riscv64 => {
+            compile.root_module.addCMacro("__RISCV64", "1");
+        },
+        else => {},
     }
 }
