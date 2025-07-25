@@ -18,6 +18,7 @@ pub fn build(b: *std.Build) !void {
     const lib_path_arch = switch (arch) {
         .x86_64 => "amd64",
         .aarch64 => "arm64",
+        .riscv64 => "riscv64",
         else => "unknown",
     };
 
