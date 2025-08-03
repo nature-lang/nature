@@ -107,7 +107,8 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
             COMMAND env BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp NATURE_ROOT=${PROJECT_SOURCE_DIR} $<TARGET_FILE:nature> build --archive ${ENTRY}
             WORKING_DIRECTORY ${WORK_DIR}
             DEPENDS nature
-            COMMENT "Force rebuilding ${LIBMAIN_STATIC}"
+            BYPRODUCTS ${LIBMAIN_STATIC}
+            COMMENT "force rebuilding ${LIBMAIN_STATIC}"
     )
 
     message("[test_runtime_debug] LIBMAIN_STATIC: ${LIBMAIN_STATIC}")
@@ -121,7 +122,7 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
     #    endif ()
     # target_compile_definitions(test_runtime_debug PRIVATE NDEBUG)
 
-    add_dependencies(test_runtime_debug generate_libmain)  # 添加这行
+    add_dependencies(test_runtime_debug generate_libmain)
 
     target_link_libraries(test_runtime_debug ${LIBMAIN_STATIC} ${LIBUV_STATIC} ${LIBC_STATIC})
     add_test(NAME test_runtime_debug COMMAND test_runtime_debug WORKING_DIRECTORY ${WORK_DIR})

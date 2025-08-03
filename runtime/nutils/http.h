@@ -64,7 +64,7 @@ typedef struct {
     llhttp_settings_t settings;
 
     // libuv data
-    uv_tcp_t client_handle;
+    uv_tcp_t handle;
     uv_async_t async_handle;
     uv_write_t write_req;
     uv_buf_t write_buf;

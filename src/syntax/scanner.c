@@ -337,7 +337,11 @@ scanner_rest(char *word, int word_length, int8_t rest_start, int8_t rest_length,
  * next not {
  * @return
  */
-static bool scanner_need_stmt_end(module_t *m, token_t *prev_token) {
+static bool scanner_need_stmt_end(module_t *m, token_t *prev_token, token_t *next_token) {
+    if (next_token && next_token->type == TOKEN_DOT) {
+        return false;
+    }
+
     // 以这些类型结束行时，自动加入结束符号，如果后面还希望加表达式，比如 return a; 那请不要在 return 和 a 之间添加换行符
     // var a = new int，类似这种情况，类型也会作为表达式的结尾。需要进行识别
     switch (prev_token->type) {
@@ -563,9 +567,11 @@ linked_t *scanner(module_t *m) {
         }
 
         linked_node *prev_node = linked_last(list);
+        token_t *next_token = scanner_item(m, prev_node); // 预扫描一个字符，用于辅助 stmt_end 插入判断
+
         if (has_newline && prev_node) {
             token_t *prev_token = prev_node->value;
-            if (scanner_need_stmt_end(m, prev_token)) {
+            if (scanner_need_stmt_end(m, prev_token, next_token)) {
                 token_t *stmt_end = token_new(TOKEN_STMT_EOF, ";", prev_token->line,
                                               prev_token->column + prev_token->length + 1);
 
@@ -574,7 +580,6 @@ linked_t *scanner(module_t *m) {
             }
         }
 
-        token_t *next_token = scanner_item(m, prev_node); // 预扫描一个字符，用于辅助 stmt_end 插入判断
         linked_push(list, next_token);
     }
 

@@ -1,0 +1,353 @@
+import time
+import fmt
+import net.tcp
+import net.dns
+import net.url
+import net.tls
+import net.types
+import io
+import json
+import co
+
+type multipart_item_t = struct{
+    string name
+    string filename 
+    string value
+    string content_type    
+}
+
+type multipart_t = struct{
+    string boundary
+    [multipart_item_t] items
+}
+
+fn multipart_t_new():ptr<multipart_t> {
+    return new multipart_t(
+        boundary = generate_boundary(),
+        items = [],
+    )
+}
+
+fn generate_boundary():string {
+    var timestamp = time.now().ms_timestamp()
+    return fmt.sprintf("----formdata-boundary-%d", timestamp)
+}
+
+fn multipart_t.text(string name, string value):ptr<multipart_t> {
+    var item = multipart_item_t{
+        name = name,
+        filename = "",
+        value = value,
+        content_type = "text/plain",
+    }
+    self.items.push(item)
+    return self
+}
+
+fn multipart_t.file(string name, string filename, string data):ptr<multipart_t> {
+    var content_type = "application/octet-stream" 
+
+    if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
+        content_type = "image/jpeg"
+    } else if filename.ends_with(".png") {
+        content_type = "image/png"
+    } else if filename.ends_with(".txt") {
+        content_type = "text/plain"
+    } else if filename.ends_with(".pdf") {
+        content_type = "application/pdf"
+    }
+
+    var item = multipart_item_t{
+        name = name,
+        filename = filename,
+        value = data,
+        content_type = content_type,
+    }
+    self.items.push(item)
+    return self
+}
+
+fn multipart_t.serialize():string {
+    var result = ""
+    
+    for item in self.items {
+        result += "--" + self.boundary + "\r\n"
+        result += fmt.sprintf("Content-Disposition: form-data; name=\"%s\"", item.name)
+        
+        if item.filename != "" {
+            result += fmt.sprintf("; filename=\"%s\"", item.filename)
+        }
+        
+        result += "\r\n"
+        result += fmt.sprintf("Content-Type: %s\r\n", item.content_type)
+        result += "\r\n"
+        result += item.value + "\r\n"
+    }
+    
+    result += "--" + self.boundary + "--\r\n"
+    return result
+}
+
+type request_t = struct{
+    string method
+    {string:string} headers
+    int timeout
+    string body
+    string url
+    url.url_t u
+    string remote_ip
+    int remote_port
+    string version
+}
+
+type config_t = struct{
+    string method
+    {string:string} headers
+    int timeout  // ms
+    string body
+}
+
+type response_t = struct{
+    string version // http version
+    {string:string} headers
+    int status // http code
+    string message // default http msg
+    int length // content length
+    string body // body delay read?
+    string content_type // default application/json
+    string charset
+    bool body_read
+    ptr<io.buf_reader<types.connable>> buf_conn
+}
+
+fn new():ptr<request_t> {
+    return new request_t()
+}
+
+fn request_t.get(string url):ptr<request_t> {
+    self.url = url
+    self.method = 'GET'
+    return self
+}
+
+fn request_t.post(string url):ptr<request_t> {
+    self.url = url
+    self.method = 'POST'
+    return self
+}
+
+fn request_t.put(string url):ptr<request_t> {
+    self.url = url
+    self.method = 'PUT'
+    return self
+}
+
+fn request_t.patch(string url):ptr<request_t> {
+    self.url = url
+    self.method = 'PATCH'
+    return self
+}
+
+fn request_t.delete(string url):ptr<request_t> {
+    self.url = url
+    self.method = 'DELETE'
+    return self
+}
+
+fn request_t.options(string url):ptr<request_t> {
+    self.url = url
+    self.method = 'OPTIONS'
+    return self
+}
+
+fn request_t.head(string url):ptr<request_t> {
+    self.url = url
+    self.method = 'HEAD'
+    return self
+}
+
+fn request_t.timeout(int timeout):ptr<request_t> {
+    self.timeout = timeout
+    return self
+}
+
+fn request_t.header(string key, string value):ptr<request_t> {
+    self.headers[key] = value
+    return self
+}
+
+fn request_t.content(string content):ptr<request_t> {
+    self.body = content
+    return self
+}
+
+fn request_t.multipart(ptr<multipart_t> mp):ptr<request_t> {
+    self.body = mp.serialize()
+    self.headers['Content-Type'] = fmt.sprintf("multipart/form-data; boundary=%s", mp.boundary)
+    return self
+}
+
+fn request_t.json(any b):ptr<request_t>! {
+    self.body = json.serialize(b)
+    self.headers['Content-type'] = 'application/json'
+    return self
+}
+
+fn request_t.form({string:string} data):ptr<request_t> {
+    var form_data = ""
+    var first = true
+    
+    for key, value in data {
+        if !first {
+            form_data += "&"
+        }
+        form_data += url.encode(key) + "=" + url.encode(value)
+        first = false
+    }
+    
+    self.body = form_data
+    self.headers['Content-Type'] = 'application/x-www-form-urlencoded'
+    return self
+}
+
+fn request_t.fill_port() {
+    match {
+        self.u.port > 0 -> {
+            self.remote_port = self.u.port
+        }
+        self.u.scheme == 'http' -> {
+            self.remote_port = 80
+        }
+        self.u.scheme == 'https' -> {
+            self.remote_port = 443
+        }
+        _ -> panic('unreachable')
+    }
+}
+
+fn request_t.fill_headers() {
+    self.headers['Host'] = self.u.authority
+    self.headers['User-Agent'] = 'Nature-HTTP-Client/1.0'
+    self.headers['Content-Length'] = fmt.sprintf('%d', self.body.len())
+}
+
+fn request_t.tcp_buf():[u8]! {
+    var buf = vec_cap<u8>(1024)
+
+    u8 space_char = 32
+    buf.append(self.method as [u8])
+    buf.push(space_char)
+    buf.append(self.u.request_uri() as [u8])
+    buf.push(space_char)
+    buf.append(self.version as [u8])
+    buf.append('\r\n' as [u8])
+
+    for k, v in self.headers {
+        buf.append(k as [u8])
+        buf.append(': ' as [u8])
+        buf.append(v as [u8])
+        buf.append('\r\n' as [u8])
+    }
+
+    buf.append('\r\n' as [u8])
+    buf.append(self.body as [u8])
+
+    return buf
+}
+
+fn request_t.send():ptr<response_t>! {
+    self.u = url.parse(self.url)
+    self.remote_ip = dns.lookup(self.u.hostname)[0]
+    self.version = 'HTTP/1.1'
+    self.fill_port()
+    self.fill_headers()
+
+    types.connable? temp_conn = null
+    if self.u.scheme == 'https' {
+        temp_conn = tls.connect_timeout(fmt.sprintf('%s:%d', self.remote_ip, self.remote_port), self.timeout)
+    } else {
+        temp_conn = tcp.connect_timeout(fmt.sprintf('%s:%d', self.remote_ip, self.remote_port), self.timeout)
+    }
+
+    var conn = temp_conn as types.connable
+    var buf = self.tcp_buf()
+    conn.write(buf)
+
+    co.sleep(1000)
+
+    // read resp
+    var br = new io.buf_reader<types.connable>(rd = conn)
+
+    var resp = new response_t(buf_conn = br)
+    resp.version = (br.read_until(' '.char()) as string).rtrim([' '])
+    var status = (br.read_until(' '.char()) as string).rtrim([' '])
+    resp.status = status.to_int() catch e {
+        break 0
+    }
+    resp.message = br.read_line()
+    for true {
+        var line = br.read_line()
+
+        // if empty line, break
+        if line == '' {
+            break
+        }
+
+        // parser header(trim)
+        var pair = line.split(':')
+        if pair.len() == 2 {
+            var key = pair[0].trim([' '])
+            var value = pair[1].trim([' '])
+            resp.headers[key] = value
+
+            if key == 'Content-Length' {
+                resp.length = value.to_int()
+            }
+        }
+    }
+
+    return resp
+}
+
+fn get(string url, config_t c):ptr<response_t>! {
+    c.method = 'GET'
+    return fetch(url, c)
+}
+
+fn post(string url, string body, config_t c):ptr<response_t>! {
+    c.method = 'POST'
+    c.body = body
+
+    return fetch(url, c)
+}
+
+fn fetch(string url, config_t c):ptr<response_t>! {
+    var req = new()
+    req.method = c.method // TODO check
+    req.url = url
+    req.headers = c.headers
+    req.timeout = c.timeout
+    req.body = c.body
+    
+    return req.send()
+}
+
+
+fn response_t.status():int {
+    return self.status
+}
+
+fn response_t.text():string! {
+    if self.body_read {
+        return self.body
+    }
+    self.body_read = true
+    if self.length == 0 {
+        return self.body
+    }
+
+    var buf = vec_new<u8>(0, self.length)
+    self.buf_conn.read_exact(buf)
+    self.body = buf as string
+    return self.body
+}

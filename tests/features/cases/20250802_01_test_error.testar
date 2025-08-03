@@ -1,0 +1,50 @@
+=== test_nullable_type
+--- main.n
+import io
+
+type connable = interface{}
+
+fn main() {
+    connable? maybe = null
+    println(maybe)
+    assert(maybe is null)
+}
+
+
+=== test_json_serialize_any
+--- main.n
+import http.client
+import json
+import http
+
+fn test(any b):string! {
+    return json.serialize(b)
+}
+
+type user_t = struct{
+    string email
+}
+
+fn main() {
+    any u = user_t{email = 'wwhacker@qq.com'}
+    var str = json.serialize(u)
+    println(str)
+}
+
+--- output.txt
+{"email":"wwhacker@qq.com"}
+
+
+=== test_url_encode
+--- main.n
+import net.url
+
+fn main() {
+    var encoded = url.encode("hello world")
+    println(encoded)
+    assert(encoded == 'hello+world')
+
+    var encoded2 = url.encode("用户名=张三")
+    println(encoded2)
+    assert(encoded2 == '%E7%94%A8%E6%88%B7%E5%90%8D%3D%E5%BC%A0%E4%B8%89')
+}

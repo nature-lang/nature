@@ -65,9 +65,15 @@ fn serialize_value(anyptr p, reflect.type_t t):[u8]! {
             var v = unsafe.ptr_to<anyptr>(p)
             var rv = v as rawptr<reflect.union_t>
 
+            var union_t = reflect.typeof_hash(rv.rtype.hash)
+
             // get value p
             var union_p = &rv.value as anyptr
-            var union_t = reflect.typeof_hash(rv.rtype.hash)
+            if union_t.kind == reflect.STRUCT || union_t.kind == reflect.ARR {
+                // struct/arr 在 union 中存储的已经是一个堆指针了，所以不需要再次进行 &取引用
+                union_p = rv.value
+            }
+
             return serialize_value(union_p, union_t)
         }
         reflect.STRING -> serialize_string(unsafe.ptr_to<string>(p))

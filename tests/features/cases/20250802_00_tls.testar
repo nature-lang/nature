@@ -1,0 +1,20 @@
+=== test_basic
+--- main.n
+import net.tls
+
+fn main() {
+    var conn = tls.connect('34.160.111.145:443')
+    var http_request = 'GET /ip HTTP/1.1\r\n' +
+                       'Host: ifconfig.me\r\n' +
+                       'User-Agent: nature-client/1.0' +
+                       'Accept: application/json\r\n' +
+                       'Connection: close\r\n' +
+                       '\r\n'
+
+    conn.write(http_request as [u8])
+    var resp_buf = vec_new<u8>(0, 1024)
+    int len = conn.read(resp_buf)
+    conn.close()
+    println(len, resp_buf.slice(0, len) as string)
+    assert(len < 300 && len > 200)
+}

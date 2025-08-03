@@ -49,17 +49,31 @@ fn string.reverse():string {
     return result as string
 }
 
-fn string.rfind(string sub, int before):int {
-    var reversed = self.reverse()
-    sub = sub.reverse()
-
-    var index = reversed.find_after(sub, reversed.len() - before)
-    if index == -1 {
-        return index
+fn string.rfind(string sub):int {
+    if sub.len() == 0 {
+        return -1
     }
-
-    return reversed.len() - index - sub.len()
+    
+    if sub.len() > self.len() {
+        return -1
+    }
+    
+    for int i = self.len() - sub.len(); i >= 0; i -= 1 {
+        var found = true
+        for int j = 0; j < sub.len(); j += 1 {
+            if self[i + j] != sub[j] {
+                found = false
+                break
+            }
+        }
+        if found {
+            return i
+        }
+    }
+    
+    return -1
 }
+
 
 fn string.ends_with(string ends):bool {
     if ends.len() > self.len() {
@@ -351,4 +365,33 @@ fn string.to_float():float! {
     }
 
     return result
+}
+
+
+fn string.to_lower():string {
+    var result = vec_new<u8>(0, self.len())
+    
+    for i, c in self {
+        if c >= 'A'.char() && c <= 'Z'.char() {
+            result[i] = c + ('a'.char() - 'A'.char())
+        } else {
+            result[i] = c
+        }
+    }
+    
+    return result as string
+}
+
+fn string.to_upper():string {
+    var result = vec_new<u8>(0, self.len())
+    
+    for i, c in self {
+        if c >= 'a'.char() && c <= 'z'.char() {
+            result[i] = c - ('a'.char() - 'A'.char())
+        } else {
+            result[i] = c
+        }
+    }
+    
+    return result as string
 }

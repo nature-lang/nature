@@ -222,3 +222,37 @@ fn main() {
 --- output.txt
 send success, recv msg hello world!!
 coroutine 'main' panic: 'socket closed' at nature-test/main.n:29:15
+
+=== test_dns
+--- main.n
+import co
+import runtime
+import net.dns
+
+
+fn main() {
+    var ips = dns.lookup('www.baidu.com')
+    for ip in ips {
+        println(ip)
+        assert(ip.len() > 10)
+    }
+}
+
+=== test_dns_failed
+--- main.n
+import co
+import runtime
+import net.dns
+
+fn main() {
+    var ips = dns.lookup('www.notfoundanything.com') catch e {
+        panic(e.msg())
+    }
+    for ip in ips {
+        println(ip)
+        assert(ip.len() > 10)
+    }
+}
+
+--- output.txt
+coroutine 'main' panic: 'unknown node or service' at nature-test/main.n:7:15

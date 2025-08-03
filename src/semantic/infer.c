@@ -65,6 +65,37 @@ bool generics_constraints_compare(ast_generics_constraints *left, ast_generics_c
     return true;
 }
 
+/**
+ * 递归查找 stmt 中是否包含 target_interface
+ */
+static bool check_impl_interface_contains(module_t *m, ast_typedef_stmt_t *stmt, type_t *find_target_interface) {
+    if (!stmt->impl_interfaces) {
+        return false;
+    }
+
+    for (int i = 0; i < stmt->impl_interfaces->length; ++i) {
+        type_t *impl_interface = ct_list_value(stmt->impl_interfaces, i);
+        if (str_equal(impl_interface->ident, find_target_interface->ident)) {
+            return true;
+        }
+
+        symbol_t *s = symbol_table_get(impl_interface->ident);
+        if (!s) {
+            continue;
+        }
+
+        assert(s && s->type == SYMBOL_TYPE);
+        ast_typedef_stmt_t *typedef_stmt = s->ast_value;
+        if (typedef_stmt->impl_interfaces == NULL) {
+            continue;
+        }
+
+        return check_impl_interface_contains(m, typedef_stmt, find_target_interface);
+    }
+
+    return false;
+}
+
 static void generics_constraints_check(module_t *m, ast_generics_constraints *constraints, type_t *src) {
     // 对 constraints 进行类型还原
     for (int j = 0; j < constraints->elements->length; ++j) {
@@ -110,9 +141,9 @@ static void generics_constraints_check(module_t *m, ast_generics_constraints *co
     // check interface
     if (constraints->and) {
         for (int i = 0; i < constraints->elements->length; ++i) {
-            type_t *interface_type = ct_list_value(constraints->elements, i);
-            assert(interface_type->ident_kind == TYPE_IDENT_INTERFACE);
-            assert(interface_type->kind == TYPE_INTERFACE);
+            type_t *expect_interface_type = ct_list_value(constraints->elements, i);
+            assert(expect_interface_type->ident_kind == TYPE_IDENT_INTERFACE);
+            assert(expect_interface_type->kind == TYPE_INTERFACE);
 
             type_t temp_target_type = *src;
             if (src->kind == TYPE_PTR || src->kind == TYPE_RAWPTR) {
@@ -123,30 +154,22 @@ static void generics_constraints_check(module_t *m, ast_generics_constraints *co
 
             symbol_t *s = symbol_table_get(temp_target_type.ident);
             if (!s) { // maybe builtin type
-                if (interface_type->interface->elements->length > 0) {
+                if (expect_interface_type->interface->elements->length > 0) {
                     INFER_ASSERTF(false, "type '%s' not impl '%s' interface", temp_target_type.ident,
-                                  interface_type->ident);
+                                  expect_interface_type->ident);
                 }
 
                 // empty interface
                 continue;
             }
 
+
             assert(s && s->type == SYMBOL_TYPE);
             ast_typedef_stmt_t *typedef_stmt = s->ast_value;
-            bool found = false;
-            if (typedef_stmt->impl_interfaces) {
-                for (int j = 0; j < typedef_stmt->impl_interfaces->length; ++j) {
-                    type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, j);
-                    assert(impl_interface->ident_kind == TYPE_IDENT_INTERFACE);
-                    if (str_equal(impl_interface->ident, interface_type->ident)) {
-                        found = true;
-                    }
-                }
-            }
+            bool found = check_impl_interface_contains(m, typedef_stmt, expect_interface_type);
             // 禁止鸭子类型
-            INFER_ASSERTF(found, "type '%s' not impl '%s' interface", temp_target_type.ident, interface_type->ident);
-            check_typedef_impl(m, interface_type, temp_target_type.ident, typedef_stmt);
+            INFER_ASSERTF(found, "type '%s' not impl '%s' interface", temp_target_type.ident, expect_interface_type->ident);
+            check_typedef_impl(m, expect_interface_type, temp_target_type.ident, typedef_stmt);
         }
 
         return;
@@ -1651,18 +1674,18 @@ static type_t infer_set_new(module_t *m, ast_set_new_t *set_new, type_t target_t
 static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, list_t *properties) {
     table_t *exists = table_new();
     for (int i = 0; i < properties->length; ++i) {
-        struct_property_t *struct_property = ct_list_value(properties, i);
-        struct_property_t *expect_property = type_struct_property(type_struct, struct_property->name);
+        struct_property_t *actual_property = ct_list_value(properties, i);
+        struct_property_t *expect_property = type_struct_property(type_struct, actual_property->name);
 
-        INFER_ASSERTF(expect_property, "not found property '%s'", struct_property->name);
+        INFER_ASSERTF(expect_property, "not found property '%s'", actual_property->name);
 
-        table_set(exists, struct_property->name, struct_property);
+        table_set(exists, actual_property->name, actual_property);
 
         // struct_decl 已经是被还原过的类型了
-        infer_right_expr(m, struct_property->right, expect_property->type);
+        infer_right_expr(m, actual_property->right, expect_property->type);
 
         // type 冗余,方便计算 size (不能用来计算 offset)
-        struct_property->type = expect_property->type;
+        actual_property->type = expect_property->type;
     }
 
 
@@ -3002,7 +3025,13 @@ static type_t reduction_struct(module_t *m, type_t t) {
         }
 
         if (p->right) {
+            // save line and column
+            int line = m->current_line;
+            int column = m->current_column;
             type_t right_type = infer_right_expr(m, p->right, p->type);
+            m->current_line = line;
+            m->current_column = column;
+
             if (p->type.kind == TYPE_UNKNOWN) {
                 INFER_ASSERTF(type_confirmed(right_type), "struct property '%s' type not confirmed", p->name);
                 p->type = right_type;
@@ -3149,6 +3178,15 @@ check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast
     assert(impl_interface->status == REDUCTION_STATUS_DONE);
     assert(impl_interface->kind == TYPE_INTERFACE);
     type_interface_t *interface_type = impl_interface->interface;
+    if (typedef_stmt->is_interface) {
+        for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
+            type_t *actual_impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
+            if (str_equal(actual_impl_interface->ident, impl_interface->ident)) {
+                return;
+            }
+        }
+        INFER_ASSERTF(false, "interface '%s' impl not contains '%s'", typedef_stmt->ident, impl_interface->ident);
+    }
 
     // check impl
     for (int j = 0; j < interface_type->elements->length; ++j) {
