@@ -200,41 +200,78 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
 
     linked_t *list = linked_new();
 
-    lir_operand_t *ax_operand = lir_reg_operand(rax->index, operand_type_kind(op->output));
-    lir_operand_t *dx_operand = lir_reg_operand(rdx->index, operand_type_kind(op->output));
+    type_kind output_kind = operand_type_kind(op->output);
 
     // second cannot imm?
     if (op->second->assert_type != LIR_OPERAND_VAR) {
         op->second = amd64_convert_first_to_temp(c, list, op->second);
     }
 
-    // mov first -> rax
-    linked_push(list, lir_op_move(ax_operand, op->first));
-
     lir_opcode_t op_code = op->code;
-    lir_operand_t *result_operand = ax_operand;
     if (op->code == LIR_OPCODE_UREM) {
         op_code = LIR_OPCODE_UDIV; // rem 也是基于 div 计算得到的
-        result_operand = dx_operand; // 余数固定寄存器
     }
     if (op->code == LIR_OPCODE_SREM) {
         op_code = LIR_OPCODE_SDIV;
-        result_operand = dx_operand; // 余数固定寄存器
     }
 
     assert(op_code == LIR_OPCODE_UDIV || op_code == LIR_OPCODE_SDIV);
 
-    // 64位操作系统中寄存器大小当然只有64位，因此，idiv使用rdx:rax作为被除数
-    // 即rdx中的值作为高64位、rax中的值作为低64位
-    // 格式：idiv src，结果存储在rax中
-    // 因此，在使用idiv进行计算时，rdx 中不得为随机值，否则会发生浮点异常。
-    linked_push(list, lir_op_new(LIR_OPCODE_CLR, NULL, NULL, dx_operand));
+    // 根据操作数类型选择合适的寄存器处理方式
+    if (output_kind == TYPE_UINT8 || output_kind == TYPE_INT8) {
+        // 8位除法特殊处理
+        // 被除数需要在AX(16位)，商在AL，余数在AH
 
-    // mul 使用 rax:rdx 两个寄存器，需要调整 result_operand
+        // 清零AX寄存器
+        linked_push(list, lir_op_new(LIR_OPCODE_CLR, NULL, NULL, operand_new(LIR_OPERAND_REG, ax)));
 
-    // [div|mul|rem] rax, v2 -> rax+rdx
-    linked_push(list, lir_op_new(op_code, ax_operand, op->second, result_operand));
-    linked_push(list, lir_op_move(op->output, result_operand));
+        // 将被除数加载到AL
+        lir_operand_t *al_operand = operand_new(LIR_OPERAND_REG, al);
+        lir_operand_t *ah_operand = operand_new(LIR_OPERAND_REG, ah);
+        linked_push(list, lir_op_move(al_operand, op->first));
+
+        // 执行8位除法，被除数在AX，除数是8位操作数
+        linked_push(list, lir_op_new(op_code, al_operand, op->second, al_operand));
+
+        // 根据操作类型选择结果寄存器
+        lir_operand_t *result_operand;
+        if (op->code == LIR_OPCODE_UREM || op->code == LIR_OPCODE_SREM) {
+            // 余数在 AH
+            result_operand = ah_operand; // AH寄存器
+        } else {
+            // 商在 AL
+            result_operand = al_operand;
+        }
+
+        linked_push(list, lir_op_move(op->output, result_operand));
+
+    } else {
+        // 16位及以上的除法处理（原有逻辑）
+        lir_operand_t *ax_operand = lir_reg_operand(rax->index, output_kind);
+        lir_operand_t *dx_operand = lir_reg_operand(rdx->index, output_kind);
+
+        // 清零高位寄存器
+        if (output_kind == TYPE_UINT16 || output_kind == TYPE_INT16) {
+            // 16位除法：清零DX
+            linked_push(list, lir_op_new(LIR_OPCODE_CLR, NULL, NULL, lir_reg_operand(rdx->index, TYPE_UINT16)));
+        } else {
+            // 32位及以上：清零EDX/RDX
+            linked_push(list, lir_op_new(LIR_OPCODE_CLR, NULL, NULL, dx_operand));
+        }
+
+        // 将被除数加载到AX/EAX/RAX
+        linked_push(list, lir_op_move(ax_operand, op->first));
+
+        // 选择结果寄存器
+        lir_operand_t *result_operand = ax_operand; // 商
+        if (op->code == LIR_OPCODE_UREM || op->code == LIR_OPCODE_SREM) {
+            result_operand = dx_operand; // 余数
+        }
+
+        // 执行除法
+        linked_push(list, lir_op_new(op_code, ax_operand, op->second, result_operand));
+        linked_push(list, lir_op_move(op->output, result_operand));
+    }
 
     return list;
 }

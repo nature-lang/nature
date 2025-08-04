@@ -49,6 +49,7 @@ static void test_dump(uint32_t encoding) {
             printf("%02X ", data[i]);                                       \
         }                                                                   \
         printf("\n");                                                       \
+        fflush(stdout);                                                     \
         assert(0);                                                          \
     }                                                                       \
 })
@@ -57,9 +58,16 @@ static void test_dump(uint32_t encoding) {
 
 static void test_basic() {
     lir_op_t *op = NEW(lir_op_t);
+    amd64_asm_inst_t *inst;
+
+    inst = AMD64_INST("mov", AMD64_REG(al), AMD64_REG(ah));
+    TEST_EQ(*inst, 0x8A, 0xC4);
+
+    inst = AMD64_INST("mov", AMD64_REG(ah), AMD64_REG(al));
+    TEST_EQ(*inst, 0x8A, 0xE0);
 
     // mov rax, QWORD PTR fs:tls_safepoint@tpoff
-    amd64_asm_inst_t *inst = AMD64_INST("mov", AMD64_REG(rax), AMD64_SEG_OFFSET("fs", 0));
+    inst = AMD64_INST("mov", AMD64_REG(rax), AMD64_SEG_OFFSET("fs", 0));
     TEST_EQ(*inst, 0x64, 0x48, 0x8B, 0x04, 0x25, 0x00, 0x00, 0x00, 0x00);
 
     inst = AMD64_INST("mov", AMD64_REG(rax), AMD64_SEG_OFFSET("gs", 0));

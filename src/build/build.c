@@ -398,10 +398,7 @@ static void linker_elf_exe(slice_t *modules) {
     slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
     slice_push(linker_libs, lib_file_path(LIBUV_FILE));
     slice_push(linker_libs, lib_file_path(LIBC_FILE));
-
-    if (BUILD_ARCH == ARCH_ARM64 || BUILD_ARCH == ARCH_RISCV64) {
-        slice_push(linker_libs, lib_file_path(LIBGCC_FILE));
-    }
+    slice_push(linker_libs, lib_file_path(LIBGCC_FILE));
 
     for (int i = 0; i < linker_libs->count; ++i) {
         char *path = linker_libs->take[i];
@@ -501,9 +498,7 @@ static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
     slice_push(linker_libs, lib_file_path(LIBC_FILE));
 
     // arm64 需要 libgcc
-    if (BUILD_ARCH == ARCH_ARM64 || BUILD_ARCH == ARCH_RISCV64) {
-        slice_push(linker_libs, lib_file_path(LIBGCC_FILE));
-    }
+    slice_push(linker_libs, lib_file_path(LIBGCC_FILE));
 
     char libs_str[4096] = ""; // 用于存储库文件路径字符串
     // 拼接 linker_libs 中的库文件路径
@@ -517,10 +512,13 @@ static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
     char *output = path_join(TEMP_DIR, LINKER_OUTPUT);
     char cmd[8192];
 
+    char *no_warning = "--no-warn-mismatch --no-warn-search-mismatch";
+
     // 对于 ELF 格式，链接命令格式不同于 Mach-O
     snprintf(cmd, sizeof(cmd),
-             "%s -w -o %s %s @%s %s",
+             "%s %s -o %s %s @%s %s",
              use_ld,
+             no_warning,
              output,
              ldflags,
              objects_file,

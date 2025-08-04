@@ -45,19 +45,19 @@ amd64_opcode_inst_t idiv_rm64 = {"idiv", "idiv", 0, {0xF7}, {OPCODE_EXT_REX_W, O
 }};
 // 无符号除法指令
 amd64_opcode_inst_t div_rm8 = {"div", "div", 0, {0xF6}, {OPCODE_EXT_SLASH6}, {
-    {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+        {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
 }};
 amd64_opcode_inst_t div_rex_rm8 = {"div", "div", 0, {0xF6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH6}, {
-    {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+        {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
 }};
 amd64_opcode_inst_t div_rm16 = {"div", "div", 0x66, {0xF7}, {OPCODE_EXT_SLASH6}, {
-    {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+        {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
 }};
 amd64_opcode_inst_t div_rm32 = {"div", "div", 0, {0xF7}, {OPCODE_EXT_SLASH6}, {
-    {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+        {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
 }};
 amd64_opcode_inst_t div_rm64 = {"div", "div", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH6}, {
-    {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+        {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
 }};
 
 
@@ -76,19 +76,19 @@ amd64_opcode_inst_t imul_rm64 = {"imul", "imul", 0, {0xF7}, {OPCODE_EXT_REX_W, O
 
 // 无符号乘法指令
 amd64_opcode_inst_t mul_rm8 = {"mul", "mul", 0, {0xF6}, {OPCODE_EXT_SLASH4}, {
-    {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+        {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
 }};
 amd64_opcode_inst_t mul_rex_rm8 = {"mul", "mul", 0, {0xF6}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH4}, {
-    {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+        {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
 }};
 amd64_opcode_inst_t mul_rm16 = {"mul", "mul", 0x66, {0xF7}, {OPCODE_EXT_SLASH4}, {
-    {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+        {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
 }};
 amd64_opcode_inst_t mul_rm32 = {"mul", "mul", 0, {0xF7}, {OPCODE_EXT_SLASH4}, {
-    {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+        {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
 }};
 amd64_opcode_inst_t mul_rm64 = {"mul", "mul", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH4}, {
-    {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+        {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
 }};
 
 // add------------------------------------------------------------------------------------------------------
@@ -213,12 +213,15 @@ amd64_opcode_inst_t mov_rm64_r64 = {"mov", "mov", 0, {0x89}, {OPCODE_EXT_REX_W, 
 amd64_opcode_inst_t mov_r8_rm8 = {"mov", "mov", 0, {0x8A}, {OPCODE_EXT_SLASHR},
                                   {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
                                    {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+
 amd64_opcode_inst_t mov_rex_r8_rm8 = {"mov", "mov", 0, {0x8A}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
                                       {{OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG},
                                        {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}}};
+
 amd64_opcode_inst_t mov_r16_rm16 = {"mov", "mov", 0x66, {0x8B}, {OPCODE_EXT_SLASHR},
                                     {{OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}};
+
 amd64_opcode_inst_t mov_r32_rm32 = {"mov", "mov", 0, {0x8B}, {OPCODE_EXT_SLASHR},
                                     {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
@@ -582,20 +585,20 @@ amd64_opcode_inst_t sar_rm64_cl = {"sar", "sar", 0, {0xD3}, {OPCODE_EXT_REX_W, O
 
 
 amd64_opcode_inst_t shr_rm8_cl = {"shr", "shr", 0, {0xD2}, {OPCODE_EXT_SLASH5},
-                                    {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                    {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+                                  {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                   {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
 amd64_opcode_inst_t shr_rex_rm8_cl = {"shr", "shr", 0, {0xD2}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH5},
-                                    {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
-                                        {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+                                      {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                       {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
 amd64_opcode_inst_t shr_rm16_cl = {"shr", "shr", 0x66, {0xD3}, {OPCODE_EXT_SLASH5},
-                                    {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                                   {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
                                     {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
 amd64_opcode_inst_t shr_rm32_cl = {"shr", "shr", 0, {0xD3}, {OPCODE_EXT_SLASH5},
-                                    {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                                   {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
                                     {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
 amd64_opcode_inst_t shr_rm64_cl = {"shr", "shr", 0, {0xD3}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5},
-                                    {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
-                                      {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+                                   {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                                    {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
 
 
 // float ------------------------------------------------------------------------------------------------------
@@ -1396,9 +1399,9 @@ static bool has_rex_extension(opcode_ext *list) {
     return false;
 }
 
-amd64_opcode_inst_t *opcode_select(amd64_asm_inst_t operation) {
-    amd64_opcode_tree_node_t *current = table_get(opcode_tree_root->succs, operation.name);
-    assert(current != NULL && dsprintf("cannot identify asm operation %s ", operation.name));
+amd64_opcode_inst_t *opcode_select(amd64_asm_inst_t *asm_inst) {
+    amd64_opcode_tree_node_t *current = table_get(opcode_tree_root->succs, asm_inst->name);
+    assert(current != NULL && dsprintf("cannot identify asm operation %s ", asm_inst->name));
 
     // 这里仅使用了大小匹配，但是对于 r8 和 rm8 存在一些特殊情况需要处理
     // 比如 ah 寄存器对应的操作码必须包含扩展 rex
@@ -1408,8 +1411,8 @@ amd64_opcode_inst_t *opcode_select(amd64_asm_inst_t operation) {
 
     // TODO has ax 并优先选择携带 ax 的寄存器
 
-    for (int i = 0; i < operation.count; ++i) {
-        amd64_asm_operand_t *operand = operation.operands[i];
+    for (int i = 0; i < asm_inst->count; ++i) {
+        amd64_asm_operand_t *operand = asm_inst->operands[i];
         reg_t *reg = NULL;
         reg_t *reg2 = NULL;
         if (operand->type == AMD64_ASM_OPERAND_TYPE_REG) {
@@ -1449,7 +1452,7 @@ amd64_opcode_inst_t *opcode_select(amd64_asm_inst_t operation) {
 
         // current 匹配
         bool exists = table_exist(current->succs, key);
-        assertf(exists, "cannot identify asm operation %s with operand %d", operation.name, i);
+        assertf(exists, "cannot identify asm operation %s with operand %d", asm_inst->name, i);
         current = table_get(current->succs, key);
     }
 
@@ -1459,35 +1462,31 @@ amd64_opcode_inst_t *opcode_select(amd64_asm_inst_t operation) {
             .count = 0,
             .list = malloc(sizeof(amd64_opcode_inst_t) * 10)};
 
+    asm_inst->need_rex_ext = has64_reg;
+
     /**
      * 上面只进行了 size 和 type 等匹配，现在需要进行一些特殊规则的过滤
      * 1. 如果 asm 中使用了 sh/ch/dh/bh 这四个旧版本寄存器，则 inst 中不能包含 rex/rexw 64位标识(rex 标识会将数据编译到 al/bl/cl/dl 寄存器中)。
      */
     for (int i = 0; i < temps.count; ++i) {
         amd64_opcode_inst_t *inst = temps.list[i];
+        // sh/ch/dh/bh 指令不能包含 rex 前缀
         if (has_high_eight_reg && has_rex_extension(inst->extensions)) {
             continue;
         }
 
-        if (has64_reg && !has_64_extension(inst->extensions)) {
-            // 找一个空闲到位置， 主动带上 EXT_REX, 暂时不需要这样到安全限制
-            // 只要包含 rex ext, 就能够激活 rex.b/w 等标识的编译，看起来是一个安全机制
-            for (int j = 0; j < 4; ++j) {
-                if (!inst->extensions[j]) {
-                    inst->extensions[j] = OPCODE_EXT_REX;
-                    break;
-                }
-            }
-        }
+//        if (has64_reg && !has_64_extension(inst->extensions)) {
+//            continue;
+//        }
 
-        // 和 has ax 协作从而优先使用携带 ax 的寄存器
 
         insts.list[insts.count++] = inst;
     }
+
     if (insts.count == 0) {
         assertf(false,
                 "[opcode_select] operation %s  not match insts,  has 64: %d, has high eight: %d",
-                operation.name,
+                asm_inst->name,
                 has64_reg,
                 has_high_eight_reg);
     }
@@ -1550,7 +1549,7 @@ static modrm_t *new_modrm() {
     return m;
 }
 
-static void parser_ext(amd64_binary_format_t *format, opcode_ext ext) {
+static void build_ext(amd64_binary_format_t *format, opcode_ext ext) {
     if (ext == OPCODE_EXT_SLASH0) {
         if (format->modrm == NULL) {
             format->modrm = new_modrm();
@@ -1744,9 +1743,14 @@ amd64_binary_format_t *opcode_fill(amd64_opcode_inst_t *inst, amd64_asm_inst_t a
     for (int j = 0; j < 4; ++j) {
         opcode_ext ext = inst->extensions[j];
         if (ext > 0) {
-            parser_ext(format, ext);
+            build_ext(format, ext);
             ext_exists[ext] = true;
         }
+    }
+
+    if (asm_inst.need_rex_ext && ext_exists[OPCODE_EXT_REX] == false && ext_exists[OPCODE_EXT_REX_W] == false) {
+        build_ext(format, OPCODE_EXT_REX);
+        ext_exists[OPCODE_EXT_REX] = true;
     }
 
 
@@ -2178,7 +2182,7 @@ amd64_opcode_inst_t *amd64_asm_inst_encoding(amd64_asm_inst_t inst, uint8_t *dat
     assert(opcode_tree_root);
     *count = 0;
 
-    amd64_opcode_inst_t *opcode = opcode_select(inst);
+    amd64_opcode_inst_t *opcode = opcode_select(&inst);
     amd64_binary_format_t *format = opcode_fill(opcode, inst);
     opcode_format_encoding(format, data, count);
     //    data = realloc(data, *count); // 这里如果修改 data 的地址会导致外面的引用位置改变

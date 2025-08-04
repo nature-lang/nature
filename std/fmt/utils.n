@@ -43,7 +43,7 @@ fn utos_with<T>(T i, string fill, u8 width):string {
         T rem = i % base
         result.push(rem as u8 + ascii('0'))
 
-        i = i / 10
+        i = i / base
     }
 
     // 填充字符
