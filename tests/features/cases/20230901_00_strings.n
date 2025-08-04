@@ -67,9 +67,8 @@ fn main():void! {
 
     // rfind
     var s10 = 'helloxworldxworld'
-    println('rfind wo:', s10.rfind('wo', s10.len()))
-    println('rfind wo:', s10.rfind('wo', 12))
-    println('rfind wo:', s10.rfind('r', s10.len()))
+    println('rfind wo:', s10.rfind('wo'))
+    println('rfind wo:', s10.rfind('r'))
 
     // to int
     assert("123".to_int() == 123)
@@ -85,4 +84,11 @@ fn main():void! {
     var s13 = "999999999999999999999".to_int() catch e {
         assert(e.msg() == "number too large")
     }
+
+    assert("Hello".to_lower() == "hello")
+    assert("hello".to_upper() == "HELLO")
+    assert("MiXeD".to_lower() == "mixed")
+    assert("MiXeD".to_upper() == "MIXED")
+    assert("123ABC".to_lower() == "123abc")
+    assert("123abc".to_upper() == "123ABC")
 }

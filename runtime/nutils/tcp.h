@@ -16,7 +16,6 @@ typedef struct {
     uv_tcp_t handle;
     uv_async_t async;
     uv_write_t write_req;
-    bool closed;
 } inner_conn_t;
 
 typedef struct {
@@ -31,6 +30,7 @@ typedef struct {
 
 typedef struct {
     inner_conn_t *conn;
+    bool closed;
 } n_tcp_conn_t;
 
 static inline void on_conn_close_async_cb(uv_handle_t *handle) {
@@ -131,14 +131,14 @@ static inline bool yield_async_udp_send(coroutine_t *co, void *data) {
 
 // read once
 int64_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t *buf) {
-    inner_conn_t *conn = n_conn->conn;
     coroutine_t *co = coroutine_get();
-    conn->co = co;
-
-    if (conn->closed) {
+    if (n_conn->closed) {
         rti_co_throw(co, "conn closed", false);
         return 0;
     }
+
+    inner_conn_t *conn = n_conn->conn;
+    conn->co = co;
 
     conn->handle.data = conn;
     conn->data = buf;
@@ -171,13 +171,14 @@ int64_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t *buf) {
 }
 
 int64_t rt_uv_tcp_write(n_tcp_conn_t *n_conn, n_vec_t *buf) {
-    inner_conn_t *conn = n_conn->conn;
     coroutine_t *co = coroutine_get();
-    conn->co = co;
-    if (conn->closed) {
+    if (n_conn->closed) {
         rti_co_throw(co, "conn closed", false);
         return 0;
     }
+
+    inner_conn_t *conn = n_conn->conn;
+    conn->co = co;
 
     conn->handle.data = conn;
     if (conn->handle.loop != &co->p->uv_loop) {
@@ -405,14 +406,13 @@ void rt_uv_tcp_server_close(n_tcp_server_t *server) {
 }
 
 void rt_uv_tcp_conn_close(n_tcp_conn_t *n_conn) {
-    inner_conn_t *conn = n_conn->conn;
-    coroutine_t *co = coroutine_get();
-
-    if (conn->closed) {
+    if (n_conn->closed) {
         return;
     }
+    n_conn->closed = true;
 
-    conn->closed = true;
+    inner_conn_t *conn = n_conn->conn;
+    coroutine_t *co = coroutine_get();
 
     if (conn->handle.loop != &co->p->uv_loop) {
         DEBUGF("conn(co(%p)) handle loop %p != current co(%p) loop %p", conn->co, conn->handle.loop, co, &co->p->uv_loop);

@@ -1,0 +1,319 @@
+=== test_basic
+--- main.n
+import http.client
+
+fn main() {
+    var resp = client.new().get('https://ifconfig.me/ip').send()
+    var body = resp.text()
+    println(body)
+    println(resp.status)
+    assert(resp.status == 200)
+}
+
+=== test_basic2
+--- main.n
+import http.client
+
+fn main() {
+    var resp = client.new().get('https://ifconfig.me/ip').send()
+    var body = resp.text()
+    println(body)
+    println(resp.status)
+    assert(resp.status == 200)
+}
+
+=== test_404
+--- main.n
+import http.client
+import json
+import http
+import co
+
+type user_t = struct{
+    string username
+    string password
+    string email
+    i64 birthday
+    u8 gender
+}
+
+type msg_t = struct{
+    int code
+    string msg
+}
+
+fn server():void! {
+    var app = http.server()
+    app.post('register', fn(http.request_t req, ptr<http.response_t> res) {
+        var body = req.body
+        println('recv register body', body)
+        println('register success')
+
+        res.headers['Content-Type'] = 'application/json'
+        var str = json.serialize(msg_t{
+                    code = 1,
+                    msg = 'successful',
+                }) catch e {
+                    res.status = 500
+                    res.send('Internal error')
+                    return
+                }
+
+        res.send(str)
+    })
+
+    app.listen(8888)
+}
+
+fn main() {
+    go server()
+    co.sleep(1000)
+
+    var u = user_t{
+            username = 'hualaka',
+            password = '123456',
+            email = 'wwhacker@qq.com',
+            birthday = 1754173053,
+            gender = 1,
+        }
+
+    var resp = client.new().json(u)
+            .get('http://127.0.0.1:8888/register')
+            .send()
+
+    var body = resp.text()
+    println(body)
+    println(resp.status)
+    assert(resp.status == 404)
+}
+
+=== test_fetch
+--- main.n
+import http.client
+import json
+import http
+import co
+
+type user_t = struct{
+    string username
+    string password
+    string email
+    i64 birthday
+    u8 gender
+}
+
+type msg_t = struct{
+    int code
+    string msg
+}
+
+fn server():void! {
+    var app = http.server()
+    app.post('/register', fn(http.request_t req, ptr<http.response_t> res) {
+        var body = req.body
+        println('recv register body', body)
+        println('register success')
+
+        res.headers['Content-Type'] = 'application/json'
+        var str = json.serialize(msg_t{
+                    code = 1,
+                    msg = 'successful',
+                }) catch e {
+                    res.status = 500
+                    res.send('Internal error')
+                    return
+                }
+
+        res.send(str)
+    })
+
+    app.listen(8888)
+}
+
+fn main() {
+    go server()
+    co.sleep(1000)
+
+    var u = user_t{
+            username = 'hualaka',
+            password = '123456',
+            email = 'wwhacker@qq.com',
+            birthday = 1754173053, // unix
+            gender = 1,
+        }
+
+    var body_str = json.serialize(u)
+    var resp = client.post('http://127.0.0.1:8888/register', body_str, client.config_t{})
+
+    var body = resp.text()
+    var msg = json.deserialize<msg_t>(body)
+    println(resp.status, msg.code, msg.msg)
+    assert(resp.status == 200 && msg.code == 1 && msg.msg == 'successful')
+}
+
+=== test_client_new
+--- main.n
+import http.client
+import json
+import http
+import co
+
+type user_t = struct{
+    string username
+    string password
+    string email
+    i64 birthday
+    u8 gender
+}
+
+type msg_t = struct{
+    int code
+    string msg
+}
+
+fn server():void! {
+    var app = http.server()
+    app.post('/register', fn(http.request_t req, ptr<http.response_t> res) {
+        var body = req.body
+        println('recv register body', body)
+        println('register success')
+
+        res.headers['Content-Type'] = 'application/json'
+        var str = json.serialize(msg_t{
+                    code = 1,
+                    msg = 'successful',
+                }) catch e {
+                    res.status = 500
+                    res.send('Internal error')
+                    return
+                }
+
+        res.send(str)
+    })
+
+    app.listen(8888)
+}
+
+fn main() {
+    go server()
+    co.sleep(1000)
+
+    var u = user_t{
+            username = 'hualaka',
+            password = '123456',
+            email = 'wwhacker@qq.com',
+            birthday = 1754173053, // unix
+            gender = 1,
+        }
+
+    var resp = client.new().json(u)
+            .post('http://127.0.0.1:8888/register')
+            .send()
+
+    var body = resp.text()
+    var msg = json.deserialize<msg_t>(body)
+    println(resp.status, msg.code, msg.msg)
+    assert(resp.status == 200 && msg.code == 1 && msg.msg == 'successful')
+}
+
+=== test_client_form
+--- main.n
+import http.client
+import json
+import http
+import co
+
+type msg_t = struct{
+    string status
+    string message
+}
+
+fn server():void! {
+    var app = http.server()
+    app.post('/register', fn(http.request_t req, ptr<http.response_t> res) {
+        var body = req.body
+        println('recv register body', body)
+        println('register success')
+
+        res.headers['Content-Type'] = 'application/json'
+        res.send(`
+            {
+                "status": "success",
+                "message": "register successful",
+                "data": {
+                    "username": "xxx"
+                }
+            }
+        `)
+    })
+
+    app.listen(8888)
+}
+
+fn main() {
+    go server()
+    co.sleep(1000)
+
+    var resp = client.new().form({'username':'小明', 'email': 'test@example.com', 'password': '123456'})
+            .post('http://127.0.0.1:8888/register')
+            .send()
+
+    var body = resp.text()
+    var msg = json.deserialize<msg_t>(body)
+    println(resp.status, msg.status, msg.message)
+    assert(resp.status == 200 && msg.status == 'success' && msg.message == 'register successful')
+}
+
+=== test_upload
+--- main.n
+import http.client
+import json
+import http
+import co
+import fs
+import syscall
+
+type msg_t = struct{
+    string status
+    string message
+}
+
+fn server():void! {
+    var app = http.server()
+    app.post('/upload', fn(http.request_t req, ptr<http.response_t> res) {
+        var body = req.body
+        println('recv form body', body)
+
+        res.headers['Content-Type'] = 'application/json'
+        res.send(`
+            {
+                "status": "success",
+                "message": "upload successful"
+            }
+        `)
+    })
+
+    app.listen(8080)
+}
+
+fn main() {
+    go server()
+    co.sleep(1000)
+
+    var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
+
+    var parts = client.multipart_t_new()
+        .text('username', 'nature user')
+        .text('message', 'hello from nature!')
+        .file('testfile', 'test.txt', f.content())
+
+    var resp = client.new().multipart(parts).post('http://127.0.0.1:8080/upload').send()
+
+    var body = resp.text()
+    var m = json.deserialize<msg_t>(body)
+    println(m.status, m.message)
+    assert(m.status == 'success' && m.message == 'upload successful')
+}
+
+--- test.txt
+hello world file world

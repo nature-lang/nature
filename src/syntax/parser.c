@@ -1566,9 +1566,20 @@ static bool is_type_begin_stmt(module_t *m) {
         return true;
     }
 
+    // ident?
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_QUESTION)) {
+        return true;
+    }
+
     // package.ident foo = xxx
     if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) &&
         parser_next_is(m, 3, TOKEN_IDENT)) {
+        return true;
+    }
+
+    // package.ident? foo = null
+    if (parser_is(m, TOKEN_IDENT) && parser_next_is(m, 1, TOKEN_DOT) && parser_next_is(m, 2, TOKEN_IDENT) &&
+        parser_next_is(m, 3, TOKEN_QUESTION)) {
         return true;
     }
 
@@ -2306,7 +2317,7 @@ static ast_stmt_t *parser_var_begin_stmt(module_t *m) {
 static ast_stmt_t *parser_type_begin_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     // 类型解析
-    type_t typedecl = parser_type(m);
+    type_t t = parser_type(m);
 
     token_t *ident_token = parser_advance(m);
 
@@ -2314,7 +2325,7 @@ static ast_stmt_t *parser_type_begin_stmt(module_t *m) {
     PARSER_ASSERTF(!parser_is(m, TOKEN_LEFT_PAREN), "only support var (a, b) this form decl assign");
 
     ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
-    var_decl->type = typedecl;
+    var_decl->type = t;
     var_decl->ident = ident_token->literal;
 
     // 声明必须赋值

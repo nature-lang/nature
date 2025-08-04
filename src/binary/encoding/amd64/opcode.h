@@ -245,7 +245,7 @@ void opcode_find_succs(amd64_opcode_tree_node_t *node, amd64_opcode_inst_t *inst
  * 2. tree 结构进一步选择
  * 3. 得到 opcodes 列表，堆一些特殊 inst 做简单过滤
  */
-amd64_opcode_inst_t *opcode_select(amd64_asm_inst_t operation);
+amd64_opcode_inst_t *opcode_select(amd64_asm_inst_t *asm_inst);
 
 /**
  * 指令填充

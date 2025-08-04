@@ -36,8 +36,10 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2 -fno-omit-frame-pointer")
 endif ()
 
+include_directories(mbedtls/include)
 include_directories(../include)
 include_directories(../)
+
 aux_source_directory(../utils UTILS)
 FILE(GLOB_RECURSE RUNTIMES ./*c aco/acosw.S)
 
@@ -49,6 +51,5 @@ set_target_properties(runtime PROPERTIES
 
 # 链接 libuv
 target_link_libraries(runtime uv)
-
 
 message("runtime register success")

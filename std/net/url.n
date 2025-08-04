@@ -1,0 +1,267 @@
+type url_t = struct{
+    string url
+    string scheme
+    string authority
+    string hostname
+    int port
+    string path
+    string fragment
+    string raw_query
+}
+
+type query_t = {string:[string]}
+
+const SCHEME = 1
+const AUTHORITY = 2
+const PATH = 3
+const QUERY = 4
+const FRAGMENT = 5
+
+
+fn parse(string url):url_t! {
+    if url.len() == 0 {
+        throw errorf('url cannot empty')
+    }
+
+    var result = url_t{url=url}
+    var state = SCHEME
+    var start = 0
+    var i = 0
+    
+    for i < url.len() {
+        var ch = url[i]
+        
+        match state {
+            SCHEME -> {
+                if ch == ':'[0] {
+                    result.scheme = url.slice(start, i)
+
+                    if i + 2 < url.len() && url[i+1] == '/'[0] && url[i+2] == '/'[0] {
+                        state = AUTHORITY
+                        i += 2  // skip //
+                        start = i + 1
+                    } else {
+                       throw errorf('invalid url format')
+                    }
+                }
+            }
+            AUTHORITY -> {
+                if ch == '/'[0] { // scheme://authority/
+                    parse_authority(&result, url.slice(start, i))
+                    state = PATH
+                    start = i
+                } else if ch == '?'[0] { // scheme://authority?key=value
+                    parse_authority(&result, url.slice(start, i))
+                    state = QUERY
+                    start = i + 1
+                } else if ch == '#'[0] { // scheme://authority#fragment
+                    parse_authority(&result, url.slice(start, i))
+                    state = FRAGMENT
+                    start = i + 1
+                }
+            }
+            PATH -> { 
+                if ch == '?'[0] { // scheme://authority/path?key=value
+                    result.path = url.slice(start, i)
+                    state = QUERY
+                    start = i + 1
+                } else if ch == '#'[0] { // scheme://authority/path#fragment
+                    result.path = url.slice(start, i)
+                    state = FRAGMENT
+                    start = i + 1
+                }
+            }
+            QUERY -> {
+                if ch == '#'[0] {
+                    result.raw_query = url.slice(start, i)
+                    state = FRAGMENT
+                    start = i + 1
+                }
+            }
+            FRAGMENT -> {
+                // Fragment is the last state, continue to read until the end
+            }
+            _ -> panic('unreachable')
+        }
+        
+        i += 1
+    }
+    
+    // handle last state
+    match state {
+        SCHEME -> {
+            throw errorf('invalid url format')
+        }
+        AUTHORITY -> { // scheme://authority
+            parse_authority(&result, url.slice(start, i))
+        }
+        PATH -> { // scheme://authority/path
+            result.path = url.slice(start, i)
+        }
+        QUERY -> { // scheme://authority/path?key=value
+            result.raw_query = url.slice(start, i)
+        }
+        FRAGMENT -> {
+            result.fragment = url.slice(start, i)
+        }
+        _ -> panic('unreachable')
+    }
+
+    if result.path.len() == 0 {
+        result.path = '/'
+    }
+
+    
+    return result
+}
+
+fn parse_authority(rawptr<url_t> result, string authority) {
+    result.authority = authority
+    
+    var colon_pos = authority.rfind(':')
+    if colon_pos != -1 {
+        var port_str = authority.slice(colon_pos+1,authority.len())
+        result.port = port_str.to_int() catch e {
+            break 0
+        }
+        result.hostname = authority.slice(0,colon_pos)
+    } else {
+        result.hostname = authority
+    }
+}
+
+fn query_t.get(string key):string {
+    if !self.contains(key) {
+        return ''
+    }
+
+    return self[key][0]
+}
+
+fn url_t.query():query_t {
+    query_t result = {}
+    
+    if self.raw_query.len() == 0 {
+        return result
+    }
+    
+    var pairs = self.raw_query.split('&')
+    for pair in pairs {
+        var kv = pair.split('=')
+        if kv.len() >= 1 {
+            var key = kv[0]
+            var value = ""
+            if kv.len() == 2 {
+                value = kv[1]
+            }
+
+
+            key = decode(key)
+            value = decode(value)
+
+            if result.contains(key) {
+                result[key].push(value)
+            } else {
+                result[key] = [value]
+            }
+        }
+    }
+    
+    return result
+}
+
+fn url_t.request_uri():string {
+    if self.raw_query.len() > 0 {
+        return self.path + '?' + self.raw_query
+    } else {
+        return self.path
+    }
+}
+
+fn decode(string s):string {
+    if s.len() == 0 {
+        return s
+    }
+    
+    var result = vec_cap<u8>(s.len())
+    var i = 0
+    
+    for i < s.len() {
+        var ch = s[i]
+        
+        if ch == '%'[0] && i + 2 < s.len() {
+            var hex1 = s[i + 1]
+            var hex2 = s[i + 2]
+            
+            var val1 = hex_to_int(hex1)
+            var val2 = hex_to_int(hex2)
+            
+            if val1 != -1 && val2 != -1 {
+                var decoded_char = (val1 * 16 + val2) as u8
+                result.push(decoded_char)
+                i += 3 
+                continue
+            }
+        } else if ch == '+'[0] {
+            result.push(32 as u8)  // 空格的 ASCII 码
+            i += 1
+            continue
+        }
+        
+        result.push(ch)
+        i += 1
+    }
+    
+    return result as string
+}
+
+fn hex_to_int(u8 ch):int {
+    if ch >= '0'.char() && ch <= '9'.char() {
+        return (ch - '0'.char()) as int
+    } else if ch >= 'A'.char() && ch <= 'F'.char() {
+        return (ch - 'A'.char() + 10) as int
+    } else if ch >= 'a'.char() && ch <= 'f'.char() {
+        return (ch - 'a'.char() + 10) as int
+    }
+    return -1 
+}
+
+
+fn encode(string s):string {
+    if s.len() == 0 {
+        return s
+    }
+    
+    var result = vec_cap<u8>(s.len() * 3) // Preallocate enough space, and at worst, each character becomes %XX
+    
+    for i,ch in s  {
+        if (ch >= 'A'.char() && ch <= 'Z'.char()) ||
+           (ch >= 'a'.char() && ch <= 'z'.char()) ||
+           (ch >= '0'.char() && ch <= '9'.char()) ||
+           ch == '-'.char() || ch == '_'.char() || 
+           ch == '.'.char() || ch == '~'.char() {
+            result.push(ch)
+        } else if ch == ' '.char() {
+            result.push('+'.char())
+        } else {
+            result.push('%'.char())
+            
+            var high = (ch >> 4) & 0x0F
+            var low = ch & 0x0F
+            
+            result.push(int_to_hex(high as int))
+            result.push(int_to_hex(low as int))
+        }
+    }
+    
+    return result as string
+}
+
+fn int_to_hex(int val):u8 {
+    if val >= 0 && val <= 9 {
+        return '0'.char() + val as u8
+    } else if val >= 10 && val <= 15 {
+        return 'A'.char() + val as u8 - 10
+    }
+    return '0'.char() 
+}

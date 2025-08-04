@@ -335,6 +335,7 @@ static slice_t *amd64_native_div(closure_t *c, lir_op_t *op) {
     if (amd64_is_integer_operand(op->output)) {
         assertf(op->first->assert_type == LIR_OPERAND_REG, "div op first must reg");
         assertf(op->second->assert_type != LIR_OPERAND_IMM, "div op second cannot imm");
+
         reg_t *first_reg = op->first->value;
         reg_t *output_reg = op->output->value;
         assertf(first_reg->index == rax->index, "div op first reg must rax");
@@ -850,59 +851,6 @@ static slice_t *amd64_native_safepoint(closure_t *c, lir_op_t *op) {
 
     slice_push(operations, AMD64_INST("call", AMD64_SYMBOL(ASSIST_PREEMPT_YIELD_IDENT, false)));
 
-
-    // arm64 参考实现
-    // // cmp x0,#0x0
-    // slice_push(operations, ARM64_INST(R_CMP, x0_operand, ARM64_IMM(0)));
-
-    // // b.eq 跳过 bl 指令
-    // slice_push(operations, ARM64_INST(R_BEQ, ARM64_IMM(8)));
-
-    // slice_push(operations, ARM64_INST(R_BL, ARM64_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, 0)));
-
-    // // 加载 tls_yield_safepoint 的指针
-    // if (BUILD_OS == OS_DARWIN) {
-    //     // 处理 TLS 变量
-    //     // 1. 使用 ADRP 加载 TLS 变量的页地址
-    //     arm64_asm_operand_t *tlv_page = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_ARM64_RELOC_TLVP_LOAD_PAGE21);
-    //     slice_push(operations, ARM64_INST(R_ADRP, x0_operand, tlv_page));
-
-    //     // 2. 加载 TLV getter 函数的地址
-    //     assert(op->output->assert_type == LIR_OPERAND_REG);
-    //     reg_t *result_reg = op->output->value;
-    //     assert(result_reg->index == x0->index);
-    //     slice_push(operations, ARM64_INST(R_LDR, x0_operand, ARM64_INDIRECT_SYM(result_reg, TLS_YIELD_SAFEPOINT_IDENT, ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12)));
-
-    //     // 3.?
-    //     slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(x16), ARM64_INDIRECT(result_reg, 0, 0, QWORD)));
-
-    //     // 3. 调用 TLV get 函数获取实际的 TLS 变量地址
-    //     slice_push(operations, ARM64_INST(R_BLR, ARM64_REG(x16)));
-    // } else {
-    //     // 1. 使用 MRS 指令读取 TPIDR_EL0 寄存器（TLS 基址）到结果寄存器
-    //     slice_push(operations, ARM64_INST(R_MRS, x0_operand, ARM64_IMM(TPIDR_EL0)));
-
-    //     // 2.1 添加高12位偏移量
-    //     arm64_asm_operand_t *tls_hi12_operand = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_ARM64_RELOC_TLSLE_ADD_TPREL_HI12);
-    //     slice_push(operations, ARM64_INST(R_ADD, x0_operand, x0_operand, tls_hi12_operand));
-
-    //     // 2.2 添加低12位偏移量
-    //     arm64_asm_operand_t *tls_lo12_operand = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12_NC);
-    //     slice_push(operations, ARM64_INST(R_ADD, x0_operand, x0_operand, tls_lo12_operand));
-    // }
-
-    // // ldr x0, [x0]
-    // //    arm64_asm_operand_t *w0_operand = ARM64_REG(w0);
-    // //    w0_operand->size = w0_reg->size;
-    // slice_push(operations, ARM64_INST(R_LDR, x0_operand, ARM64_INDIRECT(x0_reg, 0, 0, POINTER_SIZE)));
-
-    // // cmp x0,#0x0
-    // slice_push(operations, ARM64_INST(R_CMP, x0_operand, ARM64_IMM(0)));
-
-    // // b.eq 跳过 bl 指令
-    // slice_push(operations, ARM64_INST(R_BEQ, ARM64_IMM(8)));
-
-    // slice_push(operations, ARM64_INST(R_BL, ARM64_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, 0)));
 
     return operations;
 }

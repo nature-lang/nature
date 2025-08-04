@@ -1,46 +1,214 @@
-import co
-import runtime
-
-fn test_break() {
-
-}
-
-fn test_cpu_calc() {
-    int count = 0
-    for true {
-        test_break()
-        count += 1
-    }
-}
-
-fn alloc() {
-   var data1 = vec_new<i64>(0, 10240)
-   var data2 = vec_new<i64>(0, 10240)
-   var data3 = vec_new<i64>(0, 10240)
-   var data4 = vec_new<i64>(0, 10240)
-   var data5 = vec_new<i64>(0, 10240)
-   var data6 = vec_new<i64>(0, 10240)
-   var data7 = vec_new<i64>(0, 10240)
-   var data8 = vec_new<i64>(0, 10240)
-   var data9 = vec_new<i64>(0, 10240)
-   var data10 = vec_new<i64>(0, 10240)
-}
+import net.url
 
 fn main() {
-    go test_cpu_calc()
+    println("Testing URL parser...")
 
-    // allocate big memoory
-    alloc()
-    var start = runtime.malloc_bytes()
-    println('allocate bytes:', start)
-    // assert(start > 8000000)
+    // Test 1: Basic HTTP URL
+    test_basic_http()
 
-    for int i = 0; i < 10; i+=1 {
-        println('hello world')
-        co.sleep(100)
-    }
-    var end = runtime.malloc_bytes() // gc timeout, cannot gc
-    println('allocate bytes:', end)
-    // assert(end < 10000)
+    // Test 2: HTTPS URL with port
+    test_https_with_port()
+
+    // Test 3: URL with path
+    test_url_with_path()
+
+    // Test 4: URL with query parameters
+    test_url_with_query()
+
+    // Test 5: URL with fragment
+    test_url_with_fragment()
+
+    // Test 6: Complete URL with all components
+    test_complete_url()
+
+    // Test 7: URL with encoded characters
+    test_url_with_encoding()
+
+    // Test 8: URL with multiple query parameters
+    test_multiple_query_params()
+
+    // Test 9: Edge cases
+    test_edge_cases()
+
+    // Test 10: Error cases
+    test_error_cases()
+
+    println("All tests completed!")
 }
 
+fn test_basic_http():void! {
+    println("Test 1: Basic HTTP URL")
+    var result = url.parse("http://example.com")
+    assert(result.scheme == "http")
+    assert(result.hostname == "example.com")
+    assert(result.authority == "example.com")
+    assert(result.port == 0)
+    assert(result.path == "/")
+    assert(result.raw_query == "")
+    assert(result.fragment == "")
+    println("✓ Basic HTTP URL test passed")
+}
+
+fn test_https_with_port():void! {
+    println("Test 2: HTTPS URL with port")
+    var result = url.parse("https://example.com:8080")
+    assert(result.scheme == "https")
+    assert(result.hostname == "example.com")
+    assert(result.authority == "example.com:8080")
+    assert(result.port == 8080)
+    assert(result.path == "/")
+    assert(result.raw_query == "")
+    assert(result.fragment == "")
+    println("✓ HTTPS with port test passed")
+}
+
+fn test_url_with_path():void! {
+    println("Test 3: URL with path")
+    var result = url.parse("http://example.com/api/users")
+    assert(result.scheme == "http")
+    assert(result.hostname == "example.com")
+    assert(result.authority == "example.com")
+    assert(result.port == 0)
+    assert(result.path == "/api/users")
+    assert(result.raw_query == "")
+    assert(result.fragment == "")
+    println("✓ URL with path test passed")
+}
+
+fn test_url_with_query():void! {
+    println("Test 4: URL with query parameters")
+    var result = url.parse("http://example.com/search?q=test")
+    assert(result.scheme == "http")
+    assert(result.hostname == "example.com")
+    assert(result.authority == "example.com")
+    assert(result.port == 0)
+    assert(result.path == "/search")
+    assert(result.raw_query == "q=test")
+    assert(result.fragment == "")
+
+    // Test query parsing
+    var query = result.query()
+    assert(query.get("q") == "test")
+    assert(query["q"][0] == "test")
+    println("✓ URL with query test passed")
+}
+
+fn test_url_with_fragment():void! {
+    println("Test 5: URL with fragment")
+    var result = url.parse("http://example.com/page#section1")
+    assert(result.scheme == "http")
+    assert(result.hostname == "example.com")
+    assert(result.authority == "example.com")
+    assert(result.port == 0)
+    assert(result.path == "/page")
+    assert(result.raw_query == "")
+    assert(result.fragment == "section1")
+    println("✓ URL with fragment test passed")
+}
+
+fn test_complete_url():void! {
+    println("Test 6: Complete URL with all components")
+    var result = url.parse("https://api.example.com:443/v1/users?id=123&name=john#profile")
+    assert(result.scheme == "https")
+    assert(result.hostname == "api.example.com")
+    assert(result.authority == "api.example.com:443")
+    assert(result.port == 443)
+    assert(result.path == "/v1/users")
+    assert(result.raw_query == "id=123&name=john")
+    assert(result.fragment == "profile")
+
+    // Test query parsing
+    var query = result.query()
+    assert(query.get("id") == "123")
+    assert(query.get("name") == "john")
+    println("✓ Complete URL test passed")
+}
+
+fn test_url_with_encoding():void! {
+    println("Test 7: URL with encoded characters")
+    var result = url.parse("http://example.com/search?q=hello%20world&name=john+doe")
+    assert(result.scheme == "http")
+    assert(result.hostname == "example.com")
+    assert(result.authority == "example.com")
+    assert(result.path == "/search")
+    assert(result.raw_query == "q=hello%20world&name=john+doe")
+
+    // Test URL decoding
+    var query = result.query()
+    assert(query["q"][0] == "hello world")  // %20 should decode to space
+    assert(query["name"][0] == "john doe")  // + should decode to space
+    println("✓ URL encoding test passed")
+}
+
+fn test_multiple_query_params():void! {
+    println("Test 8: Multiple query parameters")
+    var result = url.parse("http://example.com/api?tags=red&tags=blue&tags=green&limit=10")
+    assert(result.raw_query == "tags=red&tags=blue&tags=green&limit=10")
+
+    var query = result.query()
+    assert(query["tags"].len() == 3)
+    assert(query["tags"][0] == "red")
+    assert(query["tags"][1] == "blue")
+    assert(query["tags"][2] == "green")
+    assert(query["limit"][0] == "10")
+    println("✓ Multiple query parameters test passed")
+}
+
+fn test_edge_cases():void! {
+    println("Test 9: Edge cases")
+
+    // URL with only scheme and authority
+    var result1 = url.parse("ftp://files.example.com")
+    assert(result1.scheme == "ftp")
+    assert(result1.hostname == "files.example.com")
+    assert(result1.path == "/")
+
+    // URL with empty path but with query
+    var result2 = url.parse("http://example.com?search=test")
+    assert(result2.scheme == "http")
+    assert(result2.hostname == "example.com")
+    assert(result2.path == "/")
+    assert(result2.raw_query == "search=test")
+
+    // URL with empty query value
+    var result3 = url.parse("http://example.com/page?empty=&filled=value")
+    var query3 = result3.query()
+    assert(query3["empty"][0] == "")
+    assert(query3["filled"][0] == "value")
+
+    // URL with root path
+    var result4 = url.parse("http://example.com/")
+    assert(result4.path == "/")
+
+    println("✓ Edge cases test passed")
+}
+
+fn test_error_cases():void! {
+    println("Test 10: Error cases")
+
+    // Test empty URL
+    try {
+        url.parse("")
+        assert(false) // Should not reach here
+    } catch e {
+        println("✓ Empty URL correctly throws error", e.msg())
+    }
+
+    // Test invalid URL format (missing //)
+    try {
+        url.parse("http:example.com")
+        assert(false) // Should not reach here
+    } catch e {
+        println("✓ Invalid URL format correctly throws error", e.msg())
+    }
+
+    // Test URL with only scheme
+    try {
+        url.parse("http:")
+        assert(false) // Should not reach here
+    } catch e {
+        println("✓ Incomplete URL correctly throws error", e.msg())
+    }
+
+    println("✓ Error cases test passed")
+}

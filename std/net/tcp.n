@@ -1,7 +1,8 @@
 import net.utils
 import strings
 import io
-import co.types
+import co.types as co_types
+import net.types
 
 type server_t = struct{
     string ip
@@ -9,13 +10,14 @@ type server_t = struct{
 
     anyptr server_handle
     anyptr listen_co
-    types.linkco_list_t waiters
+    co_types.linkco_list_t waiters
     anyptr accept_list
     bool closed
 }
 
-type conn_t:io.reader, io.writer = struct{
+type conn_t:types.connable = struct{
     anyptr conn
+    bool closed
 }
 
 #linkid rt_uv_tcp_listen

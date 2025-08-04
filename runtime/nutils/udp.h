@@ -155,7 +155,7 @@ int64_t rt_uv_udp_sendto(n_udp_socket_t *s, n_vec_t *buf, n_udp_addr_t udp_addr)
     s->data = buf;
 
     if (s->handle->loop != &co->p->uv_loop) {
-        rti_throw("can not call udp sendto in other processor(can use @async(..., co.SAME) create coroutine), it's a rac", false);
+        rti_throw("processor threads are not safe", false);
         return 0;
     }
 
@@ -174,7 +174,7 @@ int64_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t *buf, n_udp_addr_t *addr) 
     DEBUGF("[rt_uv_udp_recvfrom] start")
     coroutine_t *co = coroutine_get();
     if (s->handle->loop != &co->p->uv_loop) {
-        rti_throw("can not call udp recvfrom in other processor(can use @async(..., co.SAME) create coroutine), it's a race", false);
+        rti_throw("processor threads are not safe", false);
         return 0;
     }
 

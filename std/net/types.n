@@ -1,0 +1,3 @@
+import io
+
+type connable:io.writer,io.reader = interface{}

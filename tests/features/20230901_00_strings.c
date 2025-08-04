@@ -34,7 +34,6 @@ static void test_basic() {
                 " world  nice to meet you \n"
                 "helloworld reverse:  dlrowolleh\n"
                 "rfind wo: 12\n"
-                "rfind wo: 6\n"
                 "rfind wo: 14\n";
     assert_string_equal(raw, str);
 }

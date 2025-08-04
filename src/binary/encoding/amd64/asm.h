@@ -250,6 +250,7 @@ typedef struct {
     uint64_t op_id;
     string name; // 指令名称 operator symbol
     uint8_t prefix; // 自定义指令前缀，覆盖
+    bool need_rex_ext; // reg index > 7, e.g. r8,r9,r8w...
     uint8_t count;
     amd64_asm_operand_t *operands[4]; // 最多 4 个参数
     int line;

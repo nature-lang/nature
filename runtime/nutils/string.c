@@ -12,11 +12,10 @@
  * @return
  */
 n_string_t *string_new(void *raw_string, int64_t length) {
-
     TRACEF("[string_new] raw_string=%s, length=%lu, ptr=%p", (char *) raw_string, length, raw_string);
 
     // byte 数组，先手动创建一个简单类型
-    int64_t capacity = length + 1;// +1 预留 '\0' 空间 给 string_ref 时使用
+    int64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
 
     n_array_t *data = rti_array_new(&string_element_rtype, capacity);
 
