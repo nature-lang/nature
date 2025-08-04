@@ -63,9 +63,9 @@ int ROUTES_HEAD = 6
 int ROUTES_ALL = 7
 
 
-type callback_fn = fn(request_t, ptr<response_t>)
+type callback_fn = fn(request_t, ptr<response_t>):void!
 
-fn callback_notfound(request_t req, ptr<response_t> res) {
+fn callback_notfound(request_t req, ptr<response_t> res):void! {
     res.status = 404
     res.message = 'Not Found'
     res.send('404 not found')
@@ -217,7 +217,10 @@ fn conn_handler():void! {
     var res = response_new()
 
     var handler = ctx.server.find_callback(req.method, req.path)
-    handler(req, res)
+    handler(req, res) catch e {
+        res.status = 500
+        res.send('Internal error')
+    }
     uv.conn_resp(ctx, res.to_str())
 }
 

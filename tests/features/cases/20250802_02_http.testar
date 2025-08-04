@@ -44,20 +44,13 @@ type msg_t = struct{
 
 fn server():void! {
     var app = http.server()
-    app.post('register', fn(http.request_t req, ptr<http.response_t> res) {
+    app.post('register', fn(http.request_t req, ptr<http.response_t> res):void! {
         var body = req.body
         println('recv register body', body)
         println('register success')
 
         res.headers['Content-Type'] = 'application/json'
-        var str = json.serialize(msg_t{
-                    code = 1,
-                    msg = 'successful',
-                }) catch e {
-                    res.status = 500
-                    res.send('Internal error')
-                    return
-                }
+        var str = json.serialize(msg_t{code = 1, msg = 'successful'})
 
         res.send(str)
     })
@@ -109,20 +102,13 @@ type msg_t = struct{
 
 fn server():void! {
     var app = http.server()
-    app.post('/register', fn(http.request_t req, ptr<http.response_t> res) {
+    app.post('/register', fn(http.request_t req, ptr<http.response_t> res):void! {
         var body = req.body
         println('recv register body', body)
         println('register success')
 
         res.headers['Content-Type'] = 'application/json'
-        var str = json.serialize(msg_t{
-                    code = 1,
-                    msg = 'successful',
-                }) catch e {
-                    res.status = 500
-                    res.send('Internal error')
-                    return
-                }
+        var str = json.serialize(msg_t{code = 1,msg = 'successful'})
 
         res.send(str)
     })
@@ -173,20 +159,13 @@ type msg_t = struct{
 
 fn server():void! {
     var app = http.server()
-    app.post('/register', fn(http.request_t req, ptr<http.response_t> res) {
+    app.post('/register', fn(http.request_t req, ptr<http.response_t> res):void! {
         var body = req.body
         println('recv register body', body)
         println('register success')
 
         res.headers['Content-Type'] = 'application/json'
-        var str = json.serialize(msg_t{
-                    code = 1,
-                    msg = 'successful',
-                }) catch e {
-                    res.status = 500
-                    res.send('Internal error')
-                    return
-                }
+        var str = json.serialize(msg_t{code = 1,msg = 'successful'})
 
         res.send(str)
     })
@@ -230,7 +209,7 @@ type msg_t = struct{
 
 fn server():void! {
     var app = http.server()
-    app.post('/register', fn(http.request_t req, ptr<http.response_t> res) {
+    app.post('/register', fn(http.request_t req, ptr<http.response_t> res):void! {
         var body = req.body
         println('recv register body', body)
         println('register success')
@@ -280,7 +259,7 @@ type msg_t = struct{
 
 fn server():void! {
     var app = http.server()
-    app.post('/upload', fn(http.request_t req, ptr<http.response_t> res) {
+    app.post('/upload', fn(http.request_t req, ptr<http.response_t> res):void! {
         var body = req.body
         println('recv form body', body)
 
