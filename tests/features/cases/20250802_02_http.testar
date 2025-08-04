@@ -296,3 +296,60 @@ fn main() {
 
 --- test.txt
 hello world file world
+
+=== test_internal_error
+--- main.n
+import http.client
+import json
+import http
+import co
+
+type user_t = struct{
+    string username
+    string password
+    string email
+    i64 birthday
+    u8 gender
+}
+
+type msg_t = struct{
+    int code
+    string msg
+}
+
+fn server():void! {
+    var app = http.server()
+    app.post('/register', fn(http.request_t req, ptr<http.response_t> res):void! {
+        var body = req.body
+        println('recv register body', body)
+        println('register success')
+
+        res.headers['Content-Type'] = 'application/json'
+        var str = json.serialize(new msg_t(code = 1, msg = 'successful'))
+        res.send(str)
+    })
+
+    app.listen(8888)
+}
+
+fn main() {
+    go server()
+    co.sleep(1000)
+
+    var u = user_t{
+            username = 'hualaka',
+            password = '123456',
+            email = 'wwhacker@qq.com',
+            birthday = 1754173053,
+            gender = 1,
+        }
+
+    var resp = client.new().json(u)
+            .post('http://127.0.0.1:8888/register')
+            .send()
+
+    var body = resp.text()
+    println(body)
+    println(resp.status)
+    assert(resp.status == 500)
+}
