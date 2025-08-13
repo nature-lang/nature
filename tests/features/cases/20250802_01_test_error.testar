@@ -149,3 +149,195 @@ fn main():void! {
     println(d)
     assert(d == 310267808)
 }
+
+=== test_i16_cmp
+--- main.n
+fn dump(bool v) {
+    println(v)
+}
+
+fn main():void! {
+    i16 original_i16 = -12345
+    i16 read_i16 = -12345
+
+    dump(read_i16 == original_i16)
+    assert(read_i16 == original_i16)
+}
+
+
+=== test_mem_write
+--- main.n
+import mem
+
+fn main():void! {
+    // Test Little Endian write functions
+
+    // Test write_u8_le
+    var u8_bytes = mem.write_u8_le(0x42)
+    assert(u8_bytes.len() == 1)
+    assert(u8_bytes[0] == 0x42)
+
+    // Test write_u16_le
+    var u16_bytes = mem.write_u16_le(0x1234)
+    assert(u16_bytes.len() == 2)
+    assert(u16_bytes[0] == 0x34) // low byte
+    assert(u16_bytes[1] == 0x12) // high byte
+
+    // Test write_u32_le
+    var u32_bytes = mem.write_u32_le(0x12345678)
+    assert(u32_bytes.len() == 4)
+    assert(u32_bytes[0] == 0x78)
+    assert(u32_bytes[1] == 0x56)
+    assert(u32_bytes[2] == 0x34)
+    assert(u32_bytes[3] == 0x12)
+
+    // Test write_u64_le
+    var u64_bytes = mem.write_u64_le(0x123456789ABCDEF0)
+    assert(u64_bytes.len() == 8)
+    assert(u64_bytes[0] == 0xF0)
+    assert(u64_bytes[1] == 0xDE)
+    assert(u64_bytes[2] == 0xBC)
+    assert(u64_bytes[3] == 0x9A)
+    assert(u64_bytes[4] == 0x78)
+    assert(u64_bytes[5] == 0x56)
+    assert(u64_bytes[6] == 0x34)
+    assert(u64_bytes[7] == 0x12)
+
+    // Test signed integer write functions
+    var i8_bytes = mem.write_i8_le(-1)
+    assert(i8_bytes.len() == 1)
+    assert(i8_bytes[0] == 0xFF)
+
+    var i16_bytes = mem.write_i16_le(-1)
+    assert(i16_bytes.len() == 2)
+    assert(i16_bytes[0] == 0xFF)
+    assert(i16_bytes[1] == 0xFF)
+
+    var i32_bytes = mem.write_i32_le(-1)
+    assert(i32_bytes.len() == 4)
+    assert(i32_bytes[0] == 0xFF)
+    assert(i32_bytes[1] == 0xFF)
+    assert(i32_bytes[2] == 0xFF)
+    assert(i32_bytes[3] == 0xFF)
+
+    var i64_bytes = mem.write_i64_le(-1)
+    assert(i64_bytes.len() == 8)
+    for int i = 0; i < 8; i += 1 {
+        assert(i64_bytes[i] == 0xFF)
+    }
+
+    // Test Big Endian write functions
+
+    // Test write_u16_be
+    var u16_be_bytes = mem.write_u16_be(0x1234)
+    assert(u16_be_bytes.len() == 2)
+    assert(u16_be_bytes[0] == 0x12) // high byte
+    assert(u16_be_bytes[1] == 0x34) // low byte
+
+    // Test write_u32_be
+    var u32_be_bytes = mem.write_u32_be(0x12345678)
+    assert(u32_be_bytes.len() == 4)
+    assert(u32_be_bytes[0] == 0x12)
+    assert(u32_be_bytes[1] == 0x34)
+    assert(u32_be_bytes[2] == 0x56)
+    assert(u32_be_bytes[3] == 0x78)
+
+    // Test write_u64_be
+    var u64_be_bytes = mem.write_u64_be(0x123456789ABCDEF0)
+    assert(u64_be_bytes.len() == 8)
+    assert(u64_be_bytes[0] == 0x12)
+    assert(u64_be_bytes[1] == 0x34)
+    assert(u64_be_bytes[2] == 0x56)
+    assert(u64_be_bytes[3] == 0x78)
+    assert(u64_be_bytes[4] == 0x9A)
+    assert(u64_be_bytes[5] == 0xBC)
+    assert(u64_be_bytes[6] == 0xDE)
+    assert(u64_be_bytes[7] == 0xF0)
+
+    // Test read-write consistency - Little Endian
+    u16 original_u16 = 0x1234
+    var written_u16 = mem.write_u16_le(original_u16)
+    var read_u16 = mem.read_u16_le(written_u16)
+    assert(read_u16 == original_u16)
+
+    u32 original_u32 = 0x12345678
+    var written_u32 = mem.write_u32_le(original_u32)
+    var read_u32 = mem.read_u32_le(written_u32)
+    assert(read_u32 == original_u32)
+
+    u64 original_u64 = 0x123456789ABCDEF0
+    var written_u64 = mem.write_u64_le(original_u64)
+    var read_u64 = mem.read_u64_le(written_u64)
+    assert(read_u64 == original_u64)
+
+    // Test read-write consistency - Big Endian
+    u16 original_u16_be = 0x1234
+    var written_u16_be = mem.write_u16_be(original_u16_be)
+    var read_u16_be = mem.read_u16_be(written_u16_be)
+    assert(read_u16_be == original_u16_be)
+
+    u32 original_u32_be = 0x12345678
+    var written_u32_be = mem.write_u32_be(original_u32_be)
+    var read_u32_be = mem.read_u32_be(written_u32_be)
+    assert(read_u32_be == original_u32_be)
+
+    u64 original_u64_be = 0x123456789ABCDEF0
+    var written_u64_be = mem.write_u64_be(original_u64_be)
+    var read_u64_be = mem.read_u64_be(written_u64_be)
+    assert(read_u64_be == original_u64_be)
+
+    // Test signed integer read-write consistency
+    i16 original_i16 = -12345
+    var written_i16 = mem.write_i16_le(original_i16)
+    var read_i16 = mem.read_i16_le(written_i16)
+    assert(read_i16 == original_i16)
+
+    i32 original_i32 = -123456789
+    var written_i32 = mem.write_i32_le(original_i32)
+    var read_i32 = mem.read_i32_le(written_i32)
+    assert(read_i32 == original_i32)
+
+    i64 original_i64 = -1234567890123456789
+    var written_i64 = mem.write_i64_le(original_i64)
+    var read_i64 = mem.read_i64_le(written_i64)
+    assert(read_i64 == original_i64)
+
+    println("All mem write function tests passed!")
+}
+
+=== test_const_select
+--- main.n
+const str = "hello"
+
+fn main():void! {
+    println(str.len())
+    assert(str.len() == 5)
+}
+
+=== test_or_equal_and_equal
+--- main.n
+fn main():void! {
+    var val = 18
+    val |= 8
+    println(val)
+    assert(val == 26)
+
+    val &= 8
+    println(val)
+    assert(val == 8)
+}
+
+
+=== test_base64
+--- main.n
+import base64
+
+fn main() {
+    var encode_str = base64.encode('hello world' as [u8]) as string
+    println(encode_str)
+    assert(encode_str == 'aGVsbG8gd29ybGQ=')
+
+    var str = base64.decode(encode_str as [u8]) as string
+    println(str)
+    assert(str == 'hello world')
+}

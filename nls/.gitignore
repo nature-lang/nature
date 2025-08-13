@@ -1,0 +1,9 @@
+.idea/
+/target
+node_modules
+out/
+.pnpm-debug.log
+*.ast 
+dist/
+*.vsix
+.history

@@ -1,0 +1,76 @@
+=== test_md5
+--- main.n
+import crypto.md5
+
+fn main():void! {
+    var m = md5.new()
+    m.update('hello world' as [u8])
+    var result = m.hex()
+    println(result)
+    assert(result == '5eb63bbbe01eeed093cb22bb8f5acdc3')
+
+    var m2 = md5.new()
+    result = m2.update('hello' as [u8]).update('world' as [u8]).hex()
+    println(result)
+    assert(result == 'fc5e038d38a57032085441e7fe7010b0')
+}
+
+=== test_sha256
+--- main.n
+import crypto.sha256
+
+fn main():void! {
+    var m = sha256.new()
+    m.update('hello world' as [u8])
+    var result = m.hex()
+    println(result)
+    assert(result == 'b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9')
+
+    var m2 = sha256.new()
+    result = m2.update('hello' as [u8]).update('world' as [u8]).hex()
+    println(result)
+    assert(result == '936a185caaa266bb9cbe981e9e05cb78cd732b0b3280eb944412bb6f8f8f07af')
+}
+
+=== test_sha256_simple
+--- main.n
+import crypto.sha256
+
+fn main():void! {
+    var result = sha256.hex('hello world')
+    println(result)
+    assert(result == 'b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9')
+}
+
+=== test_escape_string_x
+--- main.n
+fn main():void! {
+    println('world\x4dhello')
+}
+
+--- output.txt
+worldMhello
+
+=== test_escape_string_x_failed
+--- main.n
+fn main():void! {
+    println('world\x4mhello')
+}
+
+--- output.txt
+nature-test/main.n:2:17: invalid hex escape sequence \x4m
+
+=== test_hmac
+--- main.n
+import crypto.hmac
+
+fn main() {
+    var hasher = hmac.new(hmac.SHA256, 'your-secret-key' as [u8])
+    var result = hasher.update('hello world' as [u8]).hex()
+    println(result)
+    assert(result == '5cb712a754ccc2e48f5aa5f3781e0632005b17cd2116fb8275f7230bb1ce9f50')
+
+    result = hmac.hex(hmac.MD5, 'secret' as [u8], 'message' as [u8])
+    println(result)
+    assert(result == '7e0d0767775312154ba16fd3af9771a2')
+}

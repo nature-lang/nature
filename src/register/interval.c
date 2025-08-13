@@ -1298,7 +1298,7 @@ void resolve_data_flow(closure_t *c) {
 
             // 对一条边的处理完毕，可能涉及多个寄存器，stack, 也有可能一个寄存器被多次操作,所以需要处理覆盖问题
             // 同一条边上的所有 resolve 操作只插入在同一块中，要么是在 from、要么是在 to。 tips: 所有的 critical edge 都已经被处理了
-            resolve_find_insert_pos(&r, from, to);
+            resolve_find_insert_pos(c, &r, from, to);
 
             // 按顺序插入 move
             resolve_mappings(c, &r);
@@ -1383,7 +1383,7 @@ void resolve_mappings(closure_t *c, resolver_t *r) {
     }
 }
 
-void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *to) {
+void resolve_find_insert_pos(closure_t *c, resolver_t *r, basic_block_t *from, basic_block_t *to) {
     if (from->succs->count <= 1) {
         // from only one succ
         // insert before branch
@@ -1401,7 +1401,7 @@ void resolve_find_insert_pos(resolver_t *r, basic_block_t *from, basic_block_t *
         }
     } else {
         r->insert_block = to;
-        r->insert_id = OP(to->first_op)->id - 1; // 插入到 label 之后，首个指令之前
+        r->insert_id = OP(linked_first(to->operations))->id + 1; // 插入到 label 之后，首个指令之前? 那应该 label op + 1 才对
         assert(r->insert_id >= OP(linked_first(to->operations))->id);
     }
 }

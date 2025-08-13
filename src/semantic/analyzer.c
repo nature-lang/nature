@@ -1896,6 +1896,13 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
                 analyzer_constant_propagation(m, expr);
             }
 
+            if (expr->assert_type == AST_EXPR_SELECT) {
+                ast_expr_select_t *select = expr->value;
+                if (select->left.assert_type == AST_EXPR_IDENT) {
+                    analyzer_constant_propagation(m, &select->left);
+                }
+            }
+
             return;
         }
         case AST_EXPR_IDENT: {

@@ -16,6 +16,7 @@ typedef struct {
     uv_tcp_t handle;
     uv_async_t async;
     uv_write_t write_req;
+    uv_timer_t timer;
 } inner_conn_t;
 
 typedef struct {
@@ -221,6 +222,10 @@ static inline void on_tcp_connect_cb(uv_connect_t *conn_req, int status) {
         return;
     }
 
+    if (uv_is_active((uv_handle_t *) &conn->timer)) {
+        uv_timer_stop(&conn->timer);
+    }
+
     if (status < 0) {
         DEBUGF("[on_tcp_connect_cb] connection failed: %s", uv_strerror(status));
         rti_co_throw(conn->co, tlsprintf("connection failed: %s", uv_strerror(status)), false);
@@ -267,20 +272,15 @@ void rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t *addr, n_int64_t port, n
     connect_req->data = conn;
     uv_tcp_connect(connect_req, &conn->handle, (const struct sockaddr *) &dest, on_tcp_connect_cb);
 
-    uv_timer_t *timer = NULL;
     if (timeout_ms > 0) {
-        timer = malloc(sizeof(uv_timer_t));
-        timer->data = conn;
-        uv_timer_init(&p->uv_loop, timer);
-        uv_timer_start(timer, on_conn_timeout_cb, timeout_ms, 0); // repeat == 0
+        conn->timer.data = conn;
+        uv_timer_init(&p->uv_loop, &conn->timer);
+        uv_timer_start(&conn->timer, on_conn_timeout_cb, timeout_ms, 0); // repeat == 0
     }
-
 
     // yield wait conn
     co_yield_waiting(co, NULL, NULL);
 
-    // 释放上面用不到的各种资源
-    timer ? free(timer) : 0;
     free(connect_req);
 
     if (co->has_error) {

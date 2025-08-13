@@ -228,9 +228,23 @@ static token_type_t scanner_special_char(module_t *m) {
             return TOKEN_RIGHT_ANGLE; // >
         }
         case '&':
-            return scanner_match(m, '&') ? TOKEN_AND_AND : TOKEN_AND;
+            if (scanner_match(m, '=')) {
+                return TOKEN_AND_EQUAL;
+            }
+            if (scanner_match(m, '&')) {
+                return TOKEN_AND_AND;
+            }
+
+            return TOKEN_AND;
         case '|':
-            return scanner_match(m, '|') ? TOKEN_OR_OR : TOKEN_OR;
+            if (scanner_match(m, '=')) {
+                return TOKEN_OR_EQUAL;
+            }
+            if (scanner_match(m, '|')) {
+                return TOKEN_OR_OR;
+            }
+
+            return TOKEN_OR;
         case '~':
             return TOKEN_TILDE;
         case '^':
@@ -299,6 +313,45 @@ static autobuf_t *scanner_string_advance(module_t *m, char close_char) {
                 case '0':
                     guard = '\0';
                     break;
+
+                case 'x': {
+                    if (m->s_cursor.guard[1] == '\0' || m->s_cursor.guard[2] == '\0') {
+                        dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
+                                    "incomplete hex escape sequence");
+                        break;
+                    }
+
+                    char hex1 = m->s_cursor.guard[1];
+                    char hex2 = m->s_cursor.guard[2];
+
+                    if (!scanner_is_hex_number(m, hex1) || !scanner_is_hex_number(m, hex2)) {
+                        dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
+                                    "invalid hex escape sequence \\x%c%c", hex1, hex2);
+                        break;
+                    }
+
+                    int value = 0;
+                    if (hex1 >= '0' && hex1 <= '9') {
+                        value = (hex1 - '0') << 4;
+                    } else if (hex1 >= 'a' && hex1 <= 'f') {
+                        value = (hex1 - 'a' + 10) << 4;
+                    } else if (hex1 >= 'A' && hex1 <= 'F') {
+                        value = (hex1 - 'A' + 10) << 4;
+                    }
+
+                    if (hex2 >= '0' && hex2 <= '9') {
+                        value |= (hex2 - '0');
+                    } else if (hex2 >= 'a' && hex2 <= 'f') {
+                        value |= (hex2 - 'a' + 10);
+                    } else if (hex2 >= 'A' && hex2 <= 'F') {
+                        value |= (hex2 - 'A' + 10);
+                    }
+
+                    guard = (char) value;
+
+                    m->s_cursor.guard += 2;
+                    break;
+                }
                 case '\\':
                 case '\'':
                 case '\"':

@@ -3094,9 +3094,9 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
             literal_kind = TYPE_UINT;
         }
 
-        const bool is_unsigned = is_unsigned_integer(literal_kind);
+        const bool is_uint = is_unsigned(literal_kind);
 
-        if (is_unsigned) {
+        if (is_uint) {
             i.u = strtoull(literal->value, &convert_endptr, 0);
         } else {
             i.s = strtoll(literal->value, &convert_endptr, 0);
@@ -3107,7 +3107,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
 
         lir_imm_t *imm_operand = NEW(lir_imm_t);
         imm_operand->kind = literal_kind;
-        if (is_unsigned) {
+        if (is_uint) {
             imm_operand->uint_value = i.u;
         } else {
             imm_operand->int_value = i.s;

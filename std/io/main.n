@@ -22,6 +22,11 @@ fn buffer.write([u8] buf):int! {
     return buf.len()
 }
 
+fn buffer.write_byte(u8 byte):int! {
+    self.buf.push(byte)
+    return self.buf.len()
+}
+
 // The read buf will be discarded (by offset), only when offset >= buf reset discard
 fn buffer.read([u8] buf):int! {
     if self.empty() {
