@@ -1,0 +1,102 @@
+import libc
+import crypto.types
+
+const MD5 = 0x03
+const RIPEMD160 = 0x04
+const SHA1 = 0x05
+const SHA224= 0x08
+const SHA256 = 0x09
+const SHA384 = 0x0a
+const SHA512 = 0x0b
+const SHA3_224 = 0x10
+const SHA3_256 = 0x11
+const SHA3_384 = 0x12
+const SHA3_512 = 0x13
+
+
+type hmac_t = struct{
+    anyptr md_info
+    int hasher_type
+    int output_size
+    types.mbedtls_md_context_t mbed_ctx
+}
+
+fn new(int hasher_type, [u8] secret):ptr<hmac_t> {
+    var h = new hmac_t()
+    h.hasher_type = hasher_type
+    
+    // 根据哈希算法类型设置输出大小
+    if hasher_type == MD5 {
+        h.output_size = 16  // MD5 输出 16 字节
+    } else if hasher_type == RIPEMD160 {
+        h.output_size = 20  // RIPEMD160 输出 20 字节
+    } else if hasher_type == SHA1 {
+        h.output_size = 20  // SHA1 输出 20 字节
+    } else if hasher_type == SHA224 {
+        h.output_size = 28  // SHA224 输出 28 字节
+    } else if hasher_type == SHA256 {
+        h.output_size = 32  // SHA256 输出 32 字节
+    } else if hasher_type == SHA384 {
+        h.output_size = 48  // SHA384 输出 48 字节
+    } else if hasher_type == SHA512 {
+        h.output_size = 64  // SHA512 输出 64 字节
+    } else if hasher_type == SHA3_224 {
+        h.output_size = 28  // SHA3-224 输出 28 字节
+    } else if hasher_type == SHA3_256 {
+        h.output_size = 32  // SHA3-256 输出 32 字节
+    } else if hasher_type == SHA3_384 {
+        h.output_size = 48  // SHA3-384 输出 48 字节
+    } else if hasher_type == SHA3_512 {
+        h.output_size = 64  // SHA3-512 输出 64 字节
+    } else {
+        h.output_size = 32  // 默认 SHA256 输出 32 字节
+    }
+    
+    types.mbedtls_md_init(&h.mbed_ctx)
+    
+    h.md_info = types.mbedtls_md_info_from_type(hasher_type as i32)
+    
+    types.mbedtls_md_setup(&h.mbed_ctx, h.md_info, 1)
+    
+    types.mbedtls_md_hmac_starts(&h.mbed_ctx, (secret as string).to_cstr(), secret.len())
+    
+    return h
+}
+
+fn hmac_t.update([u8] message):ptr<hmac_t> {
+    types.mbedtls_md_hmac_update(&self.mbed_ctx, (message as string).to_cstr(), message.len())
+    return self
+}
+
+fn hmac_t.finish():[u8] {
+    var output = vec_new<u8>(0, self.output_size)
+    types.mbedtls_md_hmac_finish(&self.mbed_ctx, output.ref())
+    
+    types.mbedtls_md_free(&self.mbed_ctx)
+    
+    return output
+}
+
+fn hmac_t.hex():string {
+    var output = vec_new<u8>(0, self.output_size)
+    types.mbedtls_md_hmac_finish(&self.mbed_ctx, output.ref())
+    
+    types.mbedtls_md_free(&self.mbed_ctx)
+    
+    var hex_chars = "0123456789abcdef"
+    [u8] result = []
+    
+    for i,v in output {
+        var byte_val = output[i]
+        var high = (byte_val >> 4) & 0x0F
+        var low = byte_val & 0x0F
+        result.push(hex_chars[high])
+        result.push(hex_chars[low])
+    }
+    
+    return result as string
+}
+
+fn hex(int hasher_type, [u8] secret, [u8] message):string {
+    return new(hasher_type, secret).update(message).hex()
+}
