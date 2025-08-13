@@ -107,10 +107,42 @@ static void arm64_gen_cmp(lir_op_t *op, slice_t *operations, arm64_asm_operand_t
 }
 
 static arm64_asm_operand_t *convert_operand_to_free_reg(lir_op_t *op, slice_t *operations, arm64_asm_operand_t *source,
-                                                        bool is_int,
+                                                        lir_operand_t *operand,
                                                         uint8_t size) {
+
+    bool is_int = false;
+    bool is_uint = false;
+    if (operand->assert_type == LIR_OPERAND_REG) {
+        reg_t *reg = operand->value;
+        is_int = reg->flag & FLAG(LIR_FLAG_ALLOC_INT);
+    } else {
+        type_kind kind = operand_type_kind(operand);
+        if (is_float(kind)) {
+            // not handle
+        } else if (is_signed(kind)) {
+            is_int = true;
+        } else {
+            is_uint = true; // bool/uint...
+        }
+    }
+
     arm64_asm_operand_t *free_reg;
     if (is_int) {
+        if (size <= 4) {
+            free_reg = ARM64_REG(w16);
+        } else {
+            free_reg = ARM64_REG(x16);
+        }
+
+        // 基于 x16/w16/d16/s16 临时寄存器做一个 ldr mem -> reg, return reg
+        if (size == BYTE) {
+            slice_push(operations, ARM64_INST(R_LDRSB, free_reg, source));
+        } else if (size == WORD) {
+            slice_push(operations, ARM64_INST(R_LDRSH, free_reg, source));
+        } else {
+            slice_push(operations, ARM64_INST(R_LDR, free_reg, source));
+        }
+    } else if (is_uint) {
         if (size <= 4) {
             free_reg = ARM64_REG(w16);
         } else {
@@ -123,7 +155,7 @@ static arm64_asm_operand_t *convert_operand_to_free_reg(lir_op_t *op, slice_t *o
         } else if (size == WORD) {
             slice_push(operations, ARM64_INST(R_LDRH, free_reg, source));
         } else {
-            slice_push(operations, ARM64_INST(R_LDR, free_reg, source));
+            slice_push(operations, ARM64_INST(R_LDR, free_reg, source)); // ldr 可以根据寄存器选择 32 还是 64bit
         }
     } else {
         if (size == 4) {
@@ -198,7 +230,7 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
 
     // 只有 MOVE(str/ldr) 指令可以操作内存地址
     if (operand->pos == LIR_FLAG_SECOND && lir_is_mem(operand) && op->code != LIR_OPCODE_MOVE) {
-        return convert_operand_to_free_reg(op, operations, result, arm64_is_integer_operand(operand), mem_size);
+        return convert_operand_to_free_reg(op, operations, result, operand, mem_size);
     }
 
     if (result) {
