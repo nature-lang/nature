@@ -1,0 +1,28 @@
+[package]
+name = "nls"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[env]
+RUST_LOG = "debug"
+
+[dependencies]
+env_logger = "0.11.5"
+ropey = "1.5.0"
+serde_json = "1.0.78"
+tokio = { version = "1.17.0", features = ["full"] }
+tower-lsp = { version = "0.20.0", features = ["proposed"]}
+serde = { version = "1.0", features = ["derive"] }
+dashmap = "6.1.0"
+log = "0.4.14"
+im-rc = "15.0.0"
+oxc_index = "0.36.0"
+anyhow = "1.0.93"
+thiserror = "2.0.3"
+rust-lapper = "1.1.0"
+strum = "0.25"
+strum_macros = "0.25"
+toml = "0.8"
+lazy_static = "1.4.0"
+
