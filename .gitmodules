@@ -1,6 +1,3 @@
 [submodule "package"]
 	path = package
 	url = https://github.com/nature-lang/package.git
-[submodule "nls"]
-	path = nls
-	url = https://github.com/nature-lang/nls.git

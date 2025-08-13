@@ -1,214 +1,819 @@
-import net.url
+import io
+import net.tcp
+import fmt
+import mem
+import crypto.md5
+import crypto.sha256
+import crypto.hmac
+import time
+import libc
+import base64
+import syscall
+import co
+
+u32 startup_msg = 0x00030000
+
+const AUTH_OK = 0
+const AUTH_CLEARTEXT_PASSWORD = 3
+const AUTH_MD5_PASSWORD = 5
+const AUTH_SASL = 10
+const AUTH_SASL_CONTINUE = 11
+const AUTH_SASL_FINAL = 12
+
+const QUERY = 81 // Q
+const READY_FOR_QUERY = 90 // Z
+const ROW_DESCRIPTION = 84 // T
+const COMMAND_COMPLETE = 67 // C
+const DATA_ROW = 68 // D
+const ERROR_RESPONSE = 69 // E
+const PASSWORD_MESSAGE = 112 // p
+
+type scram_auth = struct{
+    string username
+    string password
+    string client_nonce
+    string server_nonce
+    [u8] salt
+    int iterations
+    string client_first_msg_bare
+    string server_first_message
+    string auth_message
+}
+
+// 查询结果类型
+type query_result_t = struct {
+    [string] columns     // 列名
+    [[string]] rows      // 数据行
+}
+
+// 执行结果类型
+type execute_result_t = struct {
+    int affected_rows    // 影响的行数
+    string command       // 执行的命令类型 (INSERT, UPDATE, DELETE 等)
+}
+
+type client_t = struct{
+    string host
+    int port
+    string username
+    string password
+    string database
+    ptr<tcp.conn_t> conn
+    scram_auth sa
+    bool closed
+}
+
+fn connect(string host, int port, string username, string password, string database):ptr<client_t>! {
+    println('[connect] start connect')
+    var conn = tcp.connect_timeout(fmt.sprintf('%s:%d', host, port), 10000)
+
+    println('[connect] conn success')
+
+    var client = new client_t(host, port, username, password, database, conn)
+
+    // Send startup message
+    client.startup()
+    println('[connect] startup end')
+
+    // Handle authentication
+    client.auth(username, password)
+    println('[connect] auth end')
+
+    // Wait for server ready
+    client.wait_for_ready()
+    println('[connect] wait for ready')
+
+    return client
+}
+
+fn client_t.startup():void! {
+    var buf = new io.buffer()
+    var startup_msg_buf = mem.write_u32_be(startup_msg)
+    buf.write(startup_msg_buf)
+
+    buf.write('user' as [u8])
+    buf.write_byte(0)
+    buf.write(self.username as [u8])
+    buf.write_byte(0)
+
+    buf.write('database' as [u8])
+    buf.write_byte(0)
+    buf.write(self.database as [u8])
+    buf.write_byte(0)
+
+    buf.write_byte(0) // End marker
+
+    u32 msg_len = buf.len() as u32 + 4
+
+    // Create a new buffer to store message header + message body
+    var msg_buf = new io.buffer()
+    msg_buf.write(mem.write_u32_be(msg_len)) // Write message length
+    msg_buf.write(buf.read_all()) // Write message body
+
+
+    // Send message to server
+    var msg = msg_buf.read_all()
+    self.conn.write(msg)
+}
+
+fn client_t.auth(string username, string password):void! {
+    for true {
+        var (msg_type, msg_buf) = self.read_msg()
+
+        match msg_type {
+            'R'.char() -> { // Authentication request
+                if msg_buf.len() < 4 {
+                    throw errorf('invalid message format')
+                }
+
+                u32 auth_type = mem.read_u32_be(msg_buf)
+                match auth_type {
+                    AUTH_OK -> {
+                        return
+                    }
+                    AUTH_CLEARTEXT_PASSWORD -> {
+                        self.send_password(password)
+                    }
+                    AUTH_MD5_PASSWORD -> {
+                        if msg_buf.len() < 8 {
+                            throw errorf('invalid message format')
+                        }
+
+                        var salt = msg_buf.slice(4, 8)
+                        self.send_md5_password(username, password, salt)
+                    }
+                    AUTH_SASL -> {
+                        var mechanisms = self.parse_sasl_mechanisms(msg_buf.slice(4, msg_buf.len()))
+                        if !self.contains_mechanism(mechanisms, 'SCRAM-SHA-256') {
+                            throw errorf('unsupported mechanism SCRAM-SHA-256')
+                        }
+
+                        self.start_scram_auth(username, password)
+                    }
+                    AUTH_SASL_CONTINUE  -> {
+                        self.continue_scram_auth(msg_buf.slice(4, msg_buf.len()));
+                    }
+                    AUTH_SASL_FINAL -> {
+                        self.finalize_scram_auth(msg_buf.slice(4, msg_buf.len()))
+                    }
+                    _ -> {}
+                }
+            }
+            'E'.char() -> {
+                var msg = self.parse_error_msg(msg_buf)
+                throw errorf(msg)
+            }
+            _ -> {}
+        }
+    }
+}
+
+fn client_t.parse_error_msg([u8] data):string {
+    var result = vec_cap<u8>(data.len())
+
+    int i = 0
+    for i < data.len() {
+        if data[i] == 0 {
+            break
+        }
+
+        var file_type = data[i]
+        i += 1
+
+        var start  = i
+        for i < data.len() && data[i] != 0 {
+            i += 1
+        }
+
+        if i > start {
+            var value = data.slice(start, i)
+            if file_type == 'M'[0] {
+                result.append(value)
+            }
+        }
+
+        i += 1
+    }
+
+    return result as string
+}
+
+fn client_t.parse_row_description([u8] data):[string] {
+    if data.len() < 2 {
+        return []
+    }
+
+    u16 field_count = mem.read_u16_be(data.slice(0, 2)) catch e {
+        panic(e.msg())
+    }
+    [string] columns = []
+
+    var offset = 2
+    for int i = 0; i < field_count as int && offset < data.len(); i += 1 {
+        // Find field name end position
+        var name_end = offset
+        for name_end < data.len() && data[name_end] != 0 {
+            name_end += 1
+        }
+
+        if name_end < data.len() {
+            columns.push(data.slice(offset, name_end) as string)
+            offset = name_end + 19 // Skip field name terminator and other field info
+        }
+    }
+
+    return columns
+}
+
+fn client_t.parse_data_row([u8] data):[string] {
+    if data.len() < 2 {
+        return []
+    }
+
+    u16 field_count = mem.read_u16_be(data.slice(0, 2)) catch e {
+        panic(e.msg())
+    }
+    [string] values = []
+
+    var offset = 2
+    for int i = 0; i < field_count as int && offset < data.len(); i += 1 {
+        if offset + 4 > data.len() {
+            break
+        }
+
+        i32 field_len = mem.read_i32_be(data.slice(offset, offset + 4)) catch e {
+            panic(e.msg())
+        }
+        offset += 4
+
+        if field_len == -1 {
+            values.push('NULL')
+        } else if offset + field_len as int <= data.len() {
+            values.push(data.slice(offset, offset + field_len as int) as string)
+            offset += field_len as int
+        }
+    }
+
+    return values
+}
+
+fn client_t.parse_error_message([u8] data):string {
+    string result = ''
+    var i = 0
+    for i < data.len() {
+        if data[i] == 0 {
+            break
+        }
+        var field_type = data[i]
+        i += 1
+
+        // Find field value end position
+        var start = i
+        for i < data.len() && data[i] != 0 {
+            i += 1
+        }
+
+        if i > start {
+            string value = data.slice(start, i) as string
+            match field_type {
+                'M'.char() -> { // Message
+                    result += value
+                }
+                _ -> {}
+            }
+        }
+        i += 1 // Skip terminator
+    }
+    return result
+}
+
+fn client_t.close() {
+    if self.closed {
+        return
+    }
+    self.conn.close()
+    self.closed = true
+}
+
+
+fn client_t.read_msg():(u8, [u8])! {
+    var msg_type_buf = vec_new<u8>(0, 1)
+    var len = self.conn.read(msg_type_buf)
+
+    var msg_type = msg_type_buf[0]
+
+    var len_buf = vec_new<u8>(0, 4)
+    len = self.conn.read(len_buf)
+
+    u32 msg_len = mem.read_u32_be(len_buf)
+
+    var body_buf = vec_new<u8>(0, msg_len as int - 4)
+    len = self.conn.read(body_buf)
+    if body_buf.len() != len {
+        throw errorf('truncate message')
+    }
+
+    return (msg_type, body_buf)
+}
+
+fn client_t.send_password(string password):void! {
+    var buf = new io.buffer()
+    buf.write_byte(PASSWORD_MESSAGE)
+
+    var msg_len = password.len() + 5
+    buf.write(mem.write_u32_be(msg_len as u32))
+    buf.write(password as [u8])
+    buf.write_byte(0)
+
+    self.conn.write(buf.read_all())
+}
+
+fn client_t.send_md5_password(string username, string password, [u8] salt):void! {
+    var inner = md5.new().update((password + username) as [u8]).finish()
+    inner.append(salt)
+    string outer = md5.hex(inner as string)
+
+    var md5_password = 'md5' + outer
+
+    self.send_password(md5_password)
+}
+
+fn client_t.parse_sasl_mechanisms([u8] data):[string] {
+    [string] result = []
+    var start = 0
+    for i, b in data {
+        if b == 0 {
+            if i > start {
+                result.push(data.slice(start, i) as string)
+            }
+
+            start = i + 1
+        }
+    }
+
+    return result
+}
+
+fn client_t.contains_mechanism([string] mechanisms, string target):bool {
+    for _, mechanism in mechanisms {
+        if mechanism == target {
+            return true
+        }
+    }
+    return false
+}
+
+fn gen_client_nonce():string {
+    var notice = vec_new<u8>(0, 18)
+    libc.srand(time.unix() as u32)
+
+    for int i = 0; i < 18; i +=1 {
+        var r = (libc.rand() % 256) as u8
+        notice[i] = r
+    }
+
+    return base64.encode(notice) as string
+}
+
+fn client_t.start_scram_auth(string username, string password):void! {
+    self.sa.username = username
+    self.sa.password = password
+    self.sa.client_nonce = gen_client_nonce()
+
+    self.sa.client_first_msg_bare = fmt.sprintf('n=%s,r=%s', username, self.sa.client_nonce)
+
+    var client_first_msg = 'n,,' + self.sa.client_first_msg_bare
+
+    // Send SASL response
+    var buf = new io.buffer()
+    buf.write_byte(PASSWORD_MESSAGE)
+    var msg_len = 4 + 'SCRAM-SHA-256'.len() + 1 + 4 + client_first_msg.len()
+    buf.write(mem.write_u32_be(msg_len as u32))
+    buf.write('SCRAM-SHA-256' as [u8])
+
+    buf.write_byte(0)
+    buf.write(mem.write_u32_be(client_first_msg.len() as u32))
+    buf.write(client_first_msg as [u8])
+
+    var msg = buf.read_all()
+    self.conn.write(msg)
+}
+
+fn client_t.continue_scram_auth([u8] data):void! {
+    self.sa.server_first_message = data as string
+
+    var parts = self.sa.server_first_message.split(',')
+    for part in parts {
+        if part.len() < 3 || part[1] != '='[0] {
+            continue
+        }
+
+        var key = part[0]
+        string value = part.slice(2, part.len())
+        match key {
+            'r'.char() -> {
+                self.sa.server_nonce = value
+            }
+            's'.char() -> {
+                self.sa.salt = base64.decode(value as [u8])
+            }
+            'i'.char() -> {
+                self.sa.iterations = value.to_int()
+            }
+            _ -> panic('unknown scram auth key')
+        }
+    }
+
+    // Verify server nonce
+    if !self.sa.server_nonce.starts_with(self.sa.client_nonce) {
+        throw errorf('server nonce does not start with client nonce')
+    }
+
+    // Generate client final message
+    string msg = self.gen_client_final_msg()
+
+    var buf = new io.buffer()
+    buf.write_byte(PASSWORD_MESSAGE)
+    var msg_len = 4 + msg.len()
+
+    buf.write(mem.write_u32_be(msg_len as u32))
+    buf.write(msg as [u8])
+    var bytes = buf.read_all()
+    self.conn.write(bytes)
+}
+
+fn client_t.gen_client_final_msg():string! {
+    string client_final_without_proof = fmt.sprintf('c=biws,r=%s', self.sa.server_nonce)
+
+    self.sa.auth_message = fmt.sprintf('%s,%s,%s',
+        self.sa.client_first_msg_bare,
+        self.sa.server_first_message,
+        client_final_without_proof)
+
+    // Calculate SaltedPassword
+    var salted_password = self.pbkdf2(self.sa.password as [u8], self.sa.salt, self.sa.iterations, 32)
+
+    // Calculate ClientKey
+    var client_key = hmac.new(hmac.SHA256, salted_password).update('Client Key' as [u8]).finish()
+
+    // Calculate StoredKey
+    var stored_key = sha256.new().update(client_key).finish()
+
+    // Calculate ClientSignature
+    var client_signature = hmac.new(hmac.SHA256, stored_key).update(self.sa.auth_message as [u8]).finish()
+
+    // Calculate ClientProof (ClientKey XOR ClientSignature)
+    var client_proof = vec_new<u8>(0, client_key.len())
+    for int i = 0; i < client_key.len(); i += 1 {
+        client_proof[i] = client_key[i] ^ client_signature[i]
+    }
+
+    // Encode ClientProof
+    string client_proof_b64 = base64.encode(client_proof) as string
+
+    // Build complete client final message
+    var result = fmt.sprintf('%s,p=%s', client_final_without_proof, client_proof_b64)
+
+    return result
+}
+
+fn client_t.pbkdf2([u8] password, [u8] salt, int iterations, int key_len):[u8]! {
+    var hash_len = 32 // SHA-256 output length
+    var num_blocks = (key_len + hash_len - 1) / hash_len
+
+    var result = vec_cap<u8>(32)
+    var salt_len = salt.len()
+
+    for int i = 1; i <= num_blocks; i += 1 {
+        // U1 = PRF(password, salt || INT(i))
+        var block = vec_new<u8>(0, salt_len + 4)
+        block.copy(salt)
+
+        // Add big-endian i
+        var be_buf = mem.write_u32_be(i as u32)
+        block[salt_len] =  be_buf[0]
+        block[salt_len + 1] =  be_buf[1]
+        block[salt_len + 2] =  be_buf[2]
+        block[salt_len + 3] = be_buf[3]
+
+        var u = hmac.new(hmac.SHA256, password).update(block).finish()
+        result.append(u)
+
+        // U2, U3, ... = PRF(password, U(i-1))
+        for int j = 1; j < iterations; j += 1 {
+            u = hmac.new(hmac.SHA256, password).update(u).finish()
+            for int k = 0; k < u.len(); k += 1 {
+                result[result.len() - u.len() + k] ^= u[k]
+            }
+        }
+    }
+
+    return result.slice(0, key_len)
+}
+
+fn client_t.finalize_scram_auth([u8] data):void! {
+    string server_final_message = data as string
+
+    // Parse server verification
+    if server_final_message.starts_with('v=') {
+        string server_signature_b64 = server_final_message.slice(2, server_final_message.len())
+        var received_signature = base64.decode(server_signature_b64 as [u8])
+
+        // Calculate expected server signature
+        var salted_password = self.pbkdf2(self.sa.password as [u8], self.sa.salt, self.sa.iterations, 32)
+        var server_key = hmac.new(hmac.SHA256, salted_password).update('Server Key' as [u8]).finish()
+        var expected_signature = hmac.new(hmac.SHA256, server_key).update(self.sa.auth_message as [u8]).finish()
+
+        // Compare signatures
+        if received_signature.len() != expected_signature.len() {
+            throw errorf('server signature verification failed')
+        }
+
+        for int i = 0; i < received_signature.len(); i += 1 {
+            if received_signature[i] != expected_signature[i] {
+                throw errorf('server signature verification failed')
+            }
+        }
+
+        return
+    }
+
+    if server_final_message.starts_with('e=') {
+        throw errorf('SCRAM error: %s', server_final_message.slice(2, server_final_message.len()))
+    }
+
+    throw errorf('unknown server final message format')
+}
+
+fn client_t.wait_for_ready():void! {
+    for true {
+        var (msg_type, _) = self.read_msg()
+        if msg_type == READY_FOR_QUERY {
+            return
+        }
+    }
+}
+
+fn client_t.query(string sql):query_result_t! {
+    if self.closed {
+        throw errorf('db closed')
+    }
+
+    // Send query message
+    var buf = new io.buffer()
+    buf.write_byte(QUERY)
+
+    var msg_len = sql.len() + 5
+    buf.write(mem.write_u32_be(msg_len as u32))
+    buf.write(sql as [u8])
+    buf.write_byte(0)
+
+    self.conn.write(buf.read_all())
+
+    // Handle query result
+    return self.handle_query_result()
+}
+
+fn client_t.execute(string sql):execute_result_t! {
+    if self.closed {
+        throw errorf('db closed')
+    }
+
+    // Send query message
+    var buf = new io.buffer()
+    buf.write_byte(QUERY)
+
+    var msg_len = sql.len() + 5
+    buf.write(mem.write_u32_be(msg_len as u32))
+    buf.write(sql as [u8])
+    buf.write_byte(0)
+
+    self.conn.write(buf.read_all())
+
+    // Handle execute result
+    return self.handle_execute_result()
+}
+
+fn client_t.handle_query_result():query_result_t! {
+    [string] columns = []
+    [[string]] rows = []
+    var command_complete = false
+
+    for true {
+        var (msg_type, msg_data) = self.read_msg()
+
+        match msg_type {
+            ROW_DESCRIPTION -> {
+                columns = self.parse_row_description(msg_data)
+            }
+            DATA_ROW -> {
+                var row = self.parse_data_row(msg_data)
+                rows.push(row)
+            }
+            COMMAND_COMPLETE -> {
+                command_complete = true
+            }
+            READY_FOR_QUERY -> {
+                // Ready for next query
+                return query_result_t{
+                    columns = columns,
+                    rows = rows,
+                }
+            }
+            ERROR_RESPONSE -> {
+                var error_msg = self.parse_error_message(msg_data)
+                throw errorf('query error: %s', error_msg)
+            }
+            _ -> {
+                return query_result_t{
+                    columns = columns,
+                    rows = rows,
+                }
+            }
+        }
+    }
+
+    return query_result_t{
+        columns = columns,
+        rows = rows,
+    }
+}
+
+fn client_t.handle_execute_result():execute_result_t! {
+    string command = ''
+    int affected_rows = 0
+
+    for true {
+        var (msg_type, msg_data) = self.read_msg()
+
+        match msg_type {
+            COMMAND_COMPLETE -> {
+                var command_tag = msg_data.slice(0, msg_data.len() - 1) as string
+                var parts = command_tag.split(' ')
+                if parts.len() > 0 {
+                    command = parts[0]
+                }
+                if parts.len() > 1 {
+                    affected_rows = parts[parts.len() - 1].to_int() catch e {break 0}
+                }
+            }
+            READY_FOR_QUERY -> {
+                return execute_result_t{
+                    command = command,
+                    affected_rows = affected_rows,
+                }
+            }
+            ERROR_RESPONSE -> {
+                var error_msg = self.parse_error_message(msg_data)
+                throw errorf('execute error: %s', error_msg)
+            }
+            _ -> {}
+        }
+    }
+
+    return execute_result_t{
+        command = command,
+        affected_rows = affected_rows,
+    }
+}
+
+
+fn query_result_t.dump():void {
+    if self.columns.len() == 0 && self.rows.len() == 0 {
+        fmt.printf('No query results\n')
+        return
+    }
+
+    // 构建完整的结果集（包含列名和数据行）
+    [[string]] full_result = []
+    if self.columns.len() > 0 {
+        full_result.push(self.columns)
+    }
+    full_result.append(self.rows)
+
+    if full_result.len() == 0 {
+        fmt.printf('No query results\n')
+        return
+    }
+
+    // Calculate maximum width for each column
+    [int] col_widths = []
+    for int i = 0; i < full_result[0].len(); i += 1 {
+        col_widths.push(0)
+    }
+
+    for row in full_result {
+        for int i = 0; i < row.len(); i += 1 {
+            if row[i].len() > col_widths[i] {
+                col_widths[i] = row[i].len()
+            }
+        }
+    }
+
+    // Print header separator
+    fmt.printf('+')
+    for width in col_widths {
+        for int j = 0; j < width + 2; j += 1 {
+            fmt.printf('-')
+        }
+        fmt.printf('+')
+    }
+    fmt.printf('\n')
+
+    // Print each row
+    for int row_index = 0; row_index < full_result.len(); row_index += 1 {
+        var row = full_result[row_index]
+        fmt.printf('|')
+        for int i = 0; i < row.len(); i += 1 {
+            fmt.printf(' %s ', row[i])
+            var padding = col_widths[i] - row[i].len()
+            for int j = 0; j < padding; j += 1 {
+                fmt.printf(' ')
+            }
+            fmt.printf('|')
+        }
+        fmt.printf('\n')
+
+        // Print separator after header
+        if row_index == 0 && self.columns.len() > 0 {
+            fmt.printf('+')
+            for width in col_widths {
+                for int j = 0; j < width + 2; j += 1 {
+                    fmt.printf('-')
+                }
+                fmt.printf('+')
+            }
+            fmt.printf('\n')
+        }
+    }
+
+    // Print bottom separator
+    fmt.printf('+')
+    for width in col_widths {
+        for int j = 0; j < width + 2; j += 1 {
+            fmt.printf('-')
+        }
+        fmt.printf('+')
+    }
+    fmt.printf('\n')
+}
 
 fn main() {
-    println("Testing URL parser...")
+    println('start connect')
 
-    // Test 1: Basic HTTP URL
-    test_basic_http()
+    // Connect to database
+    var client = connect('localhost', 5432, 'postgres', 'root', 'test_db')
 
-    // Test 2: HTTPS URL with port
-    test_https_with_port()
+    println('connect success')
 
-    // Test 3: URL with path
-    test_url_with_path()
+    // Simple query test
+    var version = client.query('SELECT version();')
+    version.dump()
 
-    // Test 4: URL with query parameters
-    test_url_with_query()
+    // Create users table - 使用 execute API
+    var drop_result = client.execute('DROP TABLE IF EXISTS users;')
 
-    // Test 5: URL with fragment
-    test_url_with_fragment()
+    var create_result = client.execute('CREATE TABLE users (id SERIAL PRIMARY KEY, name VARCHAR(100), email VARCHAR(100), age INTEGER);')
 
-    // Test 6: Complete URL with all components
-    test_complete_url()
+    // Insert data - 使用 execute API
+    var insert1 = client.execute("INSERT INTO users (name, email, age) VALUES ('John', 'john@example.com', 25);")
+    println('affected rows: ', insert1.affected_rows)
 
-    // Test 7: URL with encoded characters
-    test_url_with_encoding()
+    var insert2 = client.execute("INSERT INTO users (name, email, age) VALUES ('Alice', 'alice@example.com', 30);")
+    println('affected rows: ', insert2.affected_rows)
 
-    // Test 8: URL with multiple query parameters
-    test_multiple_query_params()
+    var insert3 = client.execute("INSERT INTO users (name, email, age) VALUES ('Bob', 'bob@example.com', 28);")
+    println('affected rows: ', insert3.affected_rows)
 
-    // Test 9: Edge cases
-    test_edge_cases()
+    println('Data inserted successfully')
 
-    // Test 10: Error cases
-    test_error_cases()
+    // Query all users - 使用 query API
+    println('\nQuery all users:')
+    var all_users = client.query('SELECT * FROM users ORDER BY id;')
+    all_users.dump()
 
-    println("All tests completed!")
-}
+    // Query by condition - 使用 query API
+    println('\nQuery users older than 25:')
+    var filtered_users = client.query('SELECT * FROM users WHERE age > 25 ORDER BY id;')
+    filtered_users.dump()
 
-fn test_basic_http():void! {
-    println("Test 1: Basic HTTP URL")
-    var result = url.parse("http://example.com")
-    assert(result.scheme == "http")
-    assert(result.hostname == "example.com")
-    assert(result.authority == "example.com")
-    assert(result.port == 0)
-    assert(result.path == "/")
-    assert(result.raw_query == "")
-    assert(result.fragment == "")
-    println("✓ Basic HTTP URL test passed")
-}
+    // Update data - 使用 execute API
+    var update_result = client.execute("UPDATE users SET age = 26 WHERE name = 'John';")
+    println('\nUpdated John\'s age to 26, Affected rows: ', update_result.affected_rows)
 
-fn test_https_with_port():void! {
-    println("Test 2: HTTPS URL with port")
-    var result = url.parse("https://example.com:8080")
-    assert(result.scheme == "https")
-    assert(result.hostname == "example.com")
-    assert(result.authority == "example.com:8080")
-    assert(result.port == 8080)
-    assert(result.path == "/")
-    assert(result.raw_query == "")
-    assert(result.fragment == "")
-    println("✓ HTTPS with port test passed")
-}
+    // Delete data - 使用 execute API
+    var delete_result = client.execute("DELETE FROM users WHERE name = 'Alice';")
+    println('Deleted Alice\'s record: ', delete_result.affected_rows)
 
-fn test_url_with_path():void! {
-    println("Test 3: URL with path")
-    var result = url.parse("http://example.com/api/users")
-    assert(result.scheme == "http")
-    assert(result.hostname == "example.com")
-    assert(result.authority == "example.com")
-    assert(result.port == 0)
-    assert(result.path == "/api/users")
-    assert(result.raw_query == "")
-    assert(result.fragment == "")
-    println("✓ URL with path test passed")
-}
+    // View final user list - 使用 query API
+    println('\nFinal user list:')
+    var final_users = client.query('SELECT * FROM users ORDER BY id;')
+    final_users.dump()
 
-fn test_url_with_query():void! {
-    println("Test 4: URL with query parameters")
-    var result = url.parse("http://example.com/search?q=test")
-    assert(result.scheme == "http")
-    assert(result.hostname == "example.com")
-    assert(result.authority == "example.com")
-    assert(result.port == 0)
-    assert(result.path == "/search")
-    assert(result.raw_query == "q=test")
-    assert(result.fragment == "")
+    // Statistics - 使用 query API
+    println('\nStatistics:')
+    var avg_users = client.query('SELECT COUNT(*) as total_users, AVG(age) as average_age FROM users;')
+    avg_users.dump()
 
-    // Test query parsing
-    var query = result.query()
-    assert(query.get("q") == "test")
-    assert(query["q"][0] == "test")
-    println("✓ URL with query test passed")
-}
-
-fn test_url_with_fragment():void! {
-    println("Test 5: URL with fragment")
-    var result = url.parse("http://example.com/page#section1")
-    assert(result.scheme == "http")
-    assert(result.hostname == "example.com")
-    assert(result.authority == "example.com")
-    assert(result.port == 0)
-    assert(result.path == "/page")
-    assert(result.raw_query == "")
-    assert(result.fragment == "section1")
-    println("✓ URL with fragment test passed")
-}
-
-fn test_complete_url():void! {
-    println("Test 6: Complete URL with all components")
-    var result = url.parse("https://api.example.com:443/v1/users?id=123&name=john#profile")
-    assert(result.scheme == "https")
-    assert(result.hostname == "api.example.com")
-    assert(result.authority == "api.example.com:443")
-    assert(result.port == 443)
-    assert(result.path == "/v1/users")
-    assert(result.raw_query == "id=123&name=john")
-    assert(result.fragment == "profile")
-
-    // Test query parsing
-    var query = result.query()
-    assert(query.get("id") == "123")
-    assert(query.get("name") == "john")
-    println("✓ Complete URL test passed")
-}
-
-fn test_url_with_encoding():void! {
-    println("Test 7: URL with encoded characters")
-    var result = url.parse("http://example.com/search?q=hello%20world&name=john+doe")
-    assert(result.scheme == "http")
-    assert(result.hostname == "example.com")
-    assert(result.authority == "example.com")
-    assert(result.path == "/search")
-    assert(result.raw_query == "q=hello%20world&name=john+doe")
-
-    // Test URL decoding
-    var query = result.query()
-    assert(query["q"][0] == "hello world")  // %20 should decode to space
-    assert(query["name"][0] == "john doe")  // + should decode to space
-    println("✓ URL encoding test passed")
-}
-
-fn test_multiple_query_params():void! {
-    println("Test 8: Multiple query parameters")
-    var result = url.parse("http://example.com/api?tags=red&tags=blue&tags=green&limit=10")
-    assert(result.raw_query == "tags=red&tags=blue&tags=green&limit=10")
-
-    var query = result.query()
-    assert(query["tags"].len() == 3)
-    assert(query["tags"][0] == "red")
-    assert(query["tags"][1] == "blue")
-    assert(query["tags"][2] == "green")
-    assert(query["limit"][0] == "10")
-    println("✓ Multiple query parameters test passed")
-}
-
-fn test_edge_cases():void! {
-    println("Test 9: Edge cases")
-
-    // URL with only scheme and authority
-    var result1 = url.parse("ftp://files.example.com")
-    assert(result1.scheme == "ftp")
-    assert(result1.hostname == "files.example.com")
-    assert(result1.path == "/")
-
-    // URL with empty path but with query
-    var result2 = url.parse("http://example.com?search=test")
-    assert(result2.scheme == "http")
-    assert(result2.hostname == "example.com")
-    assert(result2.path == "/")
-    assert(result2.raw_query == "search=test")
-
-    // URL with empty query value
-    var result3 = url.parse("http://example.com/page?empty=&filled=value")
-    var query3 = result3.query()
-    assert(query3["empty"][0] == "")
-    assert(query3["filled"][0] == "value")
-
-    // URL with root path
-    var result4 = url.parse("http://example.com/")
-    assert(result4.path == "/")
-
-    println("✓ Edge cases test passed")
-}
-
-fn test_error_cases():void! {
-    println("Test 10: Error cases")
-
-    // Test empty URL
-    try {
-        url.parse("")
-        assert(false) // Should not reach here
-    } catch e {
-        println("✓ Empty URL correctly throws error", e.msg())
-    }
-
-    // Test invalid URL format (missing //)
-    try {
-        url.parse("http:example.com")
-        assert(false) // Should not reach here
-    } catch e {
-        println("✓ Invalid URL format correctly throws error", e.msg())
-    }
-
-    // Test URL with only scheme
-    try {
-        url.parse("http:")
-        assert(false) // Should not reach here
-    } catch e {
-        println("✓ Incomplete URL correctly throws error", e.msg())
-    }
-
-    println("✓ Error cases test passed")
+    client.close()
 }
