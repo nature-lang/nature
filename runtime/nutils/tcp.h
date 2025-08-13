@@ -222,7 +222,9 @@ static inline void on_tcp_connect_cb(uv_connect_t *conn_req, int status) {
         return;
     }
 
-    uv_timer_stop(&conn->timer);
+    if (uv_is_active((uv_handle_t *) &conn->timer)) {
+        uv_timer_stop(&conn->timer);
+    }
 
     if (status < 0) {
         DEBUGF("[on_tcp_connect_cb] connection failed: %s", uv_strerror(status));

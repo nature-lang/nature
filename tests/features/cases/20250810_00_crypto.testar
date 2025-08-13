@@ -37,7 +37,7 @@ fn main():void! {
 import crypto.sha256
 
 fn main():void! {
-    var result = sha256.hex('hello world' as [u8])
+    var result = sha256.hex('hello world')
     println(result)
     assert(result == 'b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9')
 }
@@ -61,6 +61,7 @@ fn main():void! {
 nature-test/main.n:2:17: invalid hex escape sequence \x4m
 
 === test_hmac
+--- main.n
 import crypto.hmac
 
 fn main() {
