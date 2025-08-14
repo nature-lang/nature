@@ -52,7 +52,7 @@ static void linear_prehandle(closure_t *c) {
 
             // If label is followed by branch, then next_id is added
             op->id = next_id;
-            if (op->code == LIR_OPCODE_LABEL && lir_op_branch(current->succ->value)) {
+            if (op->code == LIR_OPCODE_LABEL) {
                 next_id += 4;
             } else {
                 next_id += 2;

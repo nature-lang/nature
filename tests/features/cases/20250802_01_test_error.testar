@@ -341,3 +341,22 @@ fn main() {
     println(str)
     assert(str == 'hello world')
 }
+
+=== test_resolve_flow
+--- main.n
+fn int_to_hex(int val):u8 {
+    if val >= 0 && val <= 9 {
+        return '0'.char() + val as u8
+    } else if val >= 10 && val <= 15 { // bug 就是没进来 if.
+        return 'A'.char() + val as u8 - 10
+    }
+    return '0'.char()
+}
+
+fn main() {
+    var temp = int_to_hex(14)
+    assert(temp == 69)
+
+    temp = int_to_hex(11)
+    assert(temp == 66)
+}

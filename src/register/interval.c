@@ -1402,6 +1402,7 @@ void resolve_find_insert_pos(closure_t *c, resolver_t *r, basic_block_t *from, b
     } else {
         r->insert_block = to;
         r->insert_id = OP(linked_first(to->operations))->id + 1; // 插入到 label 之后，首个指令之前? 那应该 label op + 1 才对
+        //        r->insert_id = OP(to->first_op)->id - 1; // 插入到 label 之后，首个指令之前
         assert(r->insert_id >= OP(linked_first(to->operations))->id);
     }
 }
