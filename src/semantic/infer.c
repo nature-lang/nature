@@ -90,7 +90,11 @@ static bool check_impl_interface_contains(module_t *m, ast_typedef_stmt_t *stmt,
             continue;
         }
 
-        return check_impl_interface_contains(m, typedef_stmt, find_target_interface);
+        if (check_impl_interface_contains(m, typedef_stmt, find_target_interface)) {
+            return true;
+        }
+
+        // continue
     }
 
     return false;
@@ -938,16 +942,8 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
         symbol_t *s = symbol_table_get(temp_target_type.ident);
         assert(s && s->type == SYMBOL_TYPE);
         ast_typedef_stmt_t *typedef_stmt = s->ast_value;
-        bool found = false;
-        if (typedef_stmt->impl_interfaces) {
-            for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
-                type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
-                assert(impl_interface->ident_kind == TYPE_IDENT_INTERFACE);
-                if (str_equal(impl_interface->ident, src_type.ident)) {
-                    found = true;
-                }
-            }
-        }
+
+        bool found = check_impl_interface_contains(m, typedef_stmt, &src_type);
         // 禁止鸭子类型
         INFER_ASSERTF(found, "type '%s' not impl '%s' interface", src_type.ident, src_type.ident);
         check_typedef_impl(m, &src_type, temp_target_type.ident, typedef_stmt);
@@ -2932,16 +2928,7 @@ static ast_expr_t as_to_interface(module_t *m, ast_expr_t *expr, type_t interfac
     ast_typedef_stmt_t *typedef_stmt = s->ast_value;
 
     // check actual_type impl 是否包含 target_type.ident
-    bool found = false;
-    if (typedef_stmt->impl_interfaces) {
-        for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
-            type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
-            assert(impl_interface->ident_kind == TYPE_IDENT_INTERFACE);
-            if (str_equal(impl_interface->ident, interface_type.ident)) {
-                found = true;
-            }
-        }
-    }
+    bool found = check_impl_interface_contains(m, typedef_stmt, &interface_type);
     // 禁止鸭子类型
     INFER_ASSERTF(found, "type '%s' not impl '%s' interface", src_type.ident, interface_type.ident);
 

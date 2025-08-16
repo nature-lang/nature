@@ -6,6 +6,7 @@ import net.url
 import net.tls
 import net.types
 import io
+import io.buf
 import json
 import co
 
@@ -117,7 +118,7 @@ type response_t = struct{
     string content_type // default application/json
     string charset
     bool body_read
-    ptr<io.buf_reader<types.connable>> buf_conn
+    ptr<buf.reader<types.connable>> buf_conn
 }
 
 fn new():ptr<request_t> {
@@ -276,7 +277,7 @@ fn request_t.send():ptr<response_t>! {
     co.sleep(1000)
 
     // read resp
-    var br = new io.buf_reader<types.connable>(rd = conn)
+    var br = new buf.reader<types.connable>(rd = conn)
 
     var resp = new response_t(buf_conn = br)
     resp.version = (br.read_until(' '.char()) as string).rtrim([' '])

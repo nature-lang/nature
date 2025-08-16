@@ -1,3 +1,8 @@
+fn test():i16 {
+    u8 a2 = 255
+    return a2 as i16
+}
+
 fn main() {
-    println('hello world')
+    println(test())
 }

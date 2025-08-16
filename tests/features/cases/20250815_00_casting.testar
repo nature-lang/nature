@@ -1,0 +1,105 @@
+=== test_ext
+--- main.n
+fn main() {
+    u8 a1 = 18
+    u8 a2 = 255
+    u16 a3 = 8888
+    u32 a4 = 889999
+    println(a1 as u16, a2 as u16, a1 as u32, a2 as u64, a3 as u32, a4 as u64)
+    println(a1 as i8, a2 as i8, a1 as i16, a2 as i16, a1 as i32, a2 as i64, a3 as i32, a3 as i64, a4 as i64)
+
+    i8 b1 = -32
+    i8 b2 = 120
+    i16 b3 = -1000
+    i16 b4 = 10000
+    i32 b5  = 111111
+    i32 b6  = -111111
+    println(b1 as i16, b2 as i16, b1 as i32, b2 as i32, b1 as i64, b2 as i64)
+    println(b3 as i32, b4 as i32, b3 as i64, b4 as i64, b5 as i64, b6 as i64)
+
+    println(b1 as u16, b2 as u16, b1 as u32, b2 as u32, b1 as u64, b2 as u64)
+    println(b3 as u32, b4 as u32, b3 as u64, b4 as u64, b5 as u64, b6 as u64)
+}
+
+--- output.txt
+18 255 18 255 8888 889999
+18 -1 18 255 18 255 8888 8888 889999
+-32 120 -32 120 -32 120
+-1000 10000 -1000 10000 111111 -111111
+65504 120 4294967264 120 18446744073709551584 120
+4294966296 10000 18446744073709550616 10000 111111 18446744073709440505
+
+=== test_trunc
+--- main.n
+fn main() {
+    u16 a1 = 8888
+    u32 a2 = 889999
+    u64 a3 = 9999999
+    println(a1 as u8, a2 as u16, a2 as u8, a3 as u32, a3 as u16, a3 as u8)
+    println(a1 as i8, a2 as i16, a2 as i8, a3 as i32, a3 as i16, a3 as i8)
+
+    i16 b1 = -1000
+    i16 b2 = 10000
+    i32 b3  = 111111
+    i32 b4  = -111111
+    i64 b5 = 881928739123
+    i64 b6 = -881928739123
+    println(b1 as i8, b2 as i8, b3 as i8, b4 as i8, b5 as i8, b6 as i8)
+    println(b3 as i16, b4 as i16, b5 as i16, b6 as i16, b5 as i32, b6 as i32)
+
+    println(b1 as u8, b2 as u8, b3 as u8, b4 as u8, b5 as u8, b6 as u8)
+    println(b3 as u16, b4 as u16, b5 as u16, b6 as u16, b5 as u32, b6 as u32)
+}
+
+--- output.txt
+184 38031 143 9999999 38527 127
+-72 -27505 -113 9999999 -27009 127
+24 16 7 -7 51 -51
+-19961 19961 -26317 26317 1460443443 -1460443443
+24 16 7 249 51 205
+45575 19961 39219 26317 1460443443 2834523853
+
+
+=== test_float
+--- main.n
+fn main() {
+    f32 a1 = 3.1415123
+    f32 a2 = -3.15222
+    f64 a3 = 234234.234234
+    f64 a4 = -234234.234234
+
+    println(a1 as f64, a2 as f64, a3 as f32, a4 as f32)
+}
+
+--- output.txt
+3.141512 -3.152220 234234.234375 -234234.234375
+
+=== test_number
+--- main.n
+fn main() {
+    f32 a1 = 3.1415123
+    f32 a2 = -3.15222
+    f64 a3 = 234234.234234
+    f64 a4 = -234234.234234
+
+    println(a1 as u8, a2 as u8, a3 as u8, a4 as u8)
+    println(a1 as u16, a2 as u16, a3 as u16, a4 as u16)
+    println(a1 as u32, a2 as u32, a3 as u32, a4 as u32)
+
+    println(a1 as u64, a2 as u64, a3 as u64, a4 as u64)
+
+    println(a1 as i8, a2 as i8, a3 as i8, a4 as i8)
+    println(a1 as i16, a2 as i16, a3 as i16, a4 as i16)
+    println(a1 as i32, a2 as i32, a3 as i32, a4 as i32)
+    println(a1 as i64, a2 as i64, a3 as i64, a4 as i64)
+}
+
+--- output.txt
+3 253 250 6
+3 65533 37626 27910
+3 4294967293 234234 4294733062
+3 18446744073709551613 234234 18446744073709317382
+3 -3 -6 6
+3 -3 -27910 27910
+3 -3 234234 -234234
+3 -3 234234 -234234

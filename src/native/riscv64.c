@@ -1144,6 +1144,148 @@ static slice_t *riscv64_native_trunc(closure_t *c, lir_op_t *op) {
     return operations;
 }
 
+static slice_t *riscv64_native_ftrunc(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    riscv64_asm_operand_t *source = lir_operand_trans_riscv64(c, op, op->first, operations);
+    riscv64_asm_operand_t *result = lir_operand_trans_riscv64(c, op, op->output, operations);
+
+    // f64 -> f32 转换
+    slice_push(operations, RISCV64_INST(RV_FCVT_S_D, result, source));
+
+    return operations;
+}
+
+/**
+ * 实现浮点数扩展指令(FEXT) - 单精度到双精度
+ */
+static slice_t *riscv64_native_fext(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    riscv64_asm_operand_t *source = lir_operand_trans_riscv64(c, op, op->first, operations);
+    riscv64_asm_operand_t *result = lir_operand_trans_riscv64(c, op, op->output, operations);
+
+    slice_push(operations, RISCV64_INST(RV_FCVT_D_S, result, source));
+
+    return operations;
+}
+
+/**
+ * 实现浮点数转有符号整数指令(FTOSI)
+ */
+static slice_t *riscv64_native_ftosi(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    riscv64_asm_operand_t *source = lir_operand_trans_riscv64(c, op, op->first, operations);
+    riscv64_asm_operand_t *result = lir_operand_trans_riscv64(c, op, op->output, operations);
+
+    // 根据源浮点数精度和目标整数大小选择指令
+    if (source->size == DWORD) {
+        // 单精度浮点转整数
+        if (result->size == DWORD) {
+            slice_push(operations, RISCV64_INST(RV_FCVT_W_S, result, source, RO_RDM(RISCV64_RTZ))); // RTZ模式
+        } else {
+            slice_push(operations, RISCV64_INST(RV_FCVT_L_S, result, source, RO_RDM(RISCV64_RTZ))); // RTZ模式
+        }
+    } else {
+        // 双精度浮点转整数
+        if (result->size == DWORD) {
+            slice_push(operations, RISCV64_INST(RV_FCVT_W_D, result, source, RO_RDM(RISCV64_RTZ))); // RTZ模式
+        } else {
+            slice_push(operations, RISCV64_INST(RV_FCVT_L_D, result, source, RO_RDM(RISCV64_RTZ))); // RTZ模式
+        }
+    }
+
+    return operations;
+}
+
+static slice_t *riscv64_native_ftoui(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    riscv64_asm_operand_t *source = lir_operand_trans_riscv64(c, op, op->first, operations);
+    riscv64_asm_operand_t *result = lir_operand_trans_riscv64(c, op, op->output, operations);
+
+
+    // 根据源浮点数精度和目标整数大小选择指令
+    if (source->size == DWORD) {
+        // 单精度浮点转无符号整数
+        if (result->size == DWORD) {
+            slice_push(operations, RISCV64_INST(RV_FCVT_W_S, result, source, RO_RDM(RISCV64_RTZ))); // RTZ模式
+        } else {
+            slice_push(operations, RISCV64_INST(RV_FCVT_L_S, result, source, RO_RDM(RISCV64_RTZ))); // RTZ模式
+        }
+    } else {
+        // 双精度浮点转无符号整数
+        if (result->size == DWORD) {
+            slice_push(operations, RISCV64_INST(RV_FCVT_W_D, result, source, RO_RDM(RISCV64_RTZ))); // RTZ模式
+        } else {
+            slice_push(operations, RISCV64_INST(RV_FCVT_L_D, result, source, RO_RDM(RISCV64_RTZ))); // RTZ模式
+        }
+    }
+
+    return operations;
+}
+
+
+/**
+ * 实现有符号整数转浮点数指令(SITOF)
+ */
+static slice_t *riscv64_native_sitof(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    riscv64_asm_operand_t *source = lir_operand_trans_riscv64(c, op, op->first, operations);
+    riscv64_asm_operand_t *result = lir_operand_trans_riscv64(c, op, op->output, operations);
+
+    // 根据源整数大小和目标浮点数精度选择指令
+    if (result->size == DWORD) {
+        // 转换为单精度浮点数
+        if (source->size == DWORD) {
+            slice_push(operations, RISCV64_INST(RV_FCVT_S_W, result, source));
+        } else {
+            slice_push(operations, RISCV64_INST(RV_FCVT_S_L, result, source));
+        }
+    } else {
+        // 转换为双精度浮点数
+        if (source->size == DWORD) {
+            slice_push(operations, RISCV64_INST(RV_FCVT_D_W, result, source));
+        } else {
+            slice_push(operations, RISCV64_INST(RV_FCVT_D_L, result, source));
+        }
+    }
+
+    return operations;
+}
+
+/**
+ * 实现无符号整数转浮点数指令(UITOF)
+ */
+static slice_t *riscv64_native_uitof(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    riscv64_asm_operand_t *source = lir_operand_trans_riscv64(c, op, op->first, operations);
+    riscv64_asm_operand_t *result = lir_operand_trans_riscv64(c, op, op->output, operations);
+
+    // 根据源整数大小和目标浮点数精度选择指令
+    if (result->size == DWORD) {
+        // 转换为单精度浮点数
+        if (source->size == DWORD) {
+            slice_push(operations, RISCV64_INST(RV_FCVT_S_WU, result, source));
+        } else {
+            slice_push(operations, RISCV64_INST(RV_FCVT_S_LU, result, source));
+        }
+    } else {
+        // 转换为双精度浮点数
+        if (source->size == DWORD) {
+            slice_push(operations, RISCV64_INST(RV_FCVT_D_WU, result, source));
+        } else {
+            slice_push(operations, RISCV64_INST(RV_FCVT_D_LU, result, source));
+        }
+    }
+
+    return operations;
+}
+
+
 static slice_t *riscv64_native_safepoint(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
     assert(op->output && op->output->assert_type == LIR_OPERAND_REG);
@@ -1236,9 +1378,19 @@ static riscv64_native_fn riscv64_native_table[] = {
 
         [LIR_OPCODE_MOVE] = riscv64_native_mov,
         [LIR_OPCODE_LEA] = riscv64_native_lea,
+
+        // 类型扩展
         [LIR_OPCODE_UEXT] = riscv64_native_zext,
         [LIR_OPCODE_SEXT] = riscv64_native_sext,
         [LIR_OPCODE_TRUNC] = riscv64_native_trunc,
+        [LIR_OPCODE_FTRUNC] = riscv64_native_ftrunc,
+        [LIR_OPCODE_FEXT] = riscv64_native_fext,
+        [LIR_OPCODE_FTOSI] = riscv64_native_ftosi,
+        [LIR_OPCODE_FTOUI] = riscv64_native_ftoui,
+        [LIR_OPCODE_SITOF] = riscv64_native_sitof,
+        [LIR_OPCODE_UITOF] = riscv64_native_uitof,
+
+
         [LIR_OPCODE_FN_BEGIN] = riscv64_native_fn_begin,
         [LIR_OPCODE_FN_END] = riscv64_native_fn_end,
 

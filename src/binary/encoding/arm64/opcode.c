@@ -291,7 +291,7 @@ static uint32_t asm_ldrstr(arm64_asm_inst_t *inst) {
                     if (offset >= 0) {
                         if (inst->opcode == LDR) {
                             offset = offset >> (2 + sz);
-                        } else if (inst->opcode == LDRH) {
+                        } else if (inst->opcode == LDRH || inst->opcode == LDRSH) {
                             offset = offset >> 1;
                         }
 

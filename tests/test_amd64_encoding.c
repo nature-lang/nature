@@ -108,6 +108,36 @@ static void test_basic() {
 
     inst = AMD64_INST("imul", AMD64_REG(rax));
     TEST_EQ(*inst, 0x48, 0xF7, 0xE8);
+
+    inst = AMD64_INST("cvtsi2ss", AMD64_REG(xmm1s32), AMD64_REG(eax));
+    TEST_EQ(*inst, 0xF3, 0x0F, 0x2A, 0xC8);
+
+    inst = AMD64_INST("cvtsi2ss", AMD64_REG(xmm1s32), AMD64_REG(rax));
+    TEST_EQ(*inst, 0xF3, 0x48, 0x0F, 0x2A, 0xC8);
+
+    inst = AMD64_INST("cvtsi2sd", AMD64_REG(xmm1s64), AMD64_REG(eax));
+    TEST_EQ(*inst, 0xF2, 0x0F, 0x2A, 0xC8);
+
+    inst = AMD64_INST("cvtsi2sd", AMD64_REG(xmm1s64), AMD64_REG(rax));
+    TEST_EQ(*inst, 0xF2, 0x48, 0x0F, 0x2A, 0xC8);
+
+    inst = AMD64_INST("cvttss2si", AMD64_REG(eax), AMD64_REG(xmm2s32));
+    TEST_EQ(*inst, 0xF3, 0x0F, 0x2C, 0xC2);
+
+    inst = AMD64_INST("cvttss2si", AMD64_REG(rax), AMD64_REG(xmm2s32));
+    TEST_EQ(*inst, 0xF3, 0x48, 0x0F, 0x2C, 0xC2);
+
+    inst = AMD64_INST("cvttsd2si", AMD64_REG(eax), AMD64_REG(xmm2s64));
+    TEST_EQ(*inst, 0xF2, 0x0F, 0x2C, 0xC2);
+
+    inst = AMD64_INST("cvttsd2si", AMD64_REG(rax), AMD64_REG(xmm2s64));
+    TEST_EQ(*inst, 0xF2, 0x48, 0x0F, 0x2C, 0xC2);
+
+    inst = AMD64_INST("cvtss2sd", AMD64_REG(xmm1s64), AMD64_REG(xmm2s32));
+    TEST_EQ(*inst, 0xF3, 0x0F, 0x5A, 0xCA);
+
+    inst = AMD64_INST("cvtsd2ss", AMD64_REG(xmm1s32), AMD64_REG(xmm2s64));
+    TEST_EQ(*inst, 0xF2, 0x0F, 0x5A, 0xCA);
 }
 
 

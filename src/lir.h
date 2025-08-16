@@ -77,8 +77,6 @@
 // 参考 python, tuple 不允许单独赋值，必须初始化时进行赋值
 #define RT_CALL_TUPLE_NEW "tuple_new"
 
-#define RT_CALL_BOOL_CASTING "bool_casting"
-#define RT_CALL_NUMBER_CASTING "number_casting"
 #define RT_CALL_ANYPTR_CASTING "anyptr_casting"
 #define RT_CALL_CASTING_TO_ANYPTR "casting_to_anyptr"
 
@@ -235,7 +233,6 @@ static inline bool is_rtcall(string target) {
            str_equal(target, RT_CALL_MAP_NEW) || str_equal(target, RT_CALL_MAP_ACCESS) ||
            str_equal(target, RT_CALL_MAP_ASSIGN) || str_equal(target, RT_CALL_MAP_LENGTH) ||
            str_equal(target, RT_CALL_MAP_DELETE) || str_equal(target, RT_CALL_TUPLE_NEW) ||
-           str_equal(target, RT_CALL_BOOL_CASTING) || str_equal(target, RT_CALL_NUMBER_CASTING) ||
            str_equal(target, RT_CALL_ANYPTR_CASTING) || str_equal(target, RT_CALL_CASTING_TO_ANYPTR) ||
            str_equal(target, RT_CALL_UNION_CASTING) || str_equal(target, RT_CALL_UNION_IS) ||
            str_equal(target, RT_CALL_UNION_ASSERT) || str_equal(target, RT_CALL_RAWPTR_ASSERT) ||
@@ -711,7 +708,7 @@ static inline lir_op_t *lir_op_bal(lir_operand_t *label) {
     return lir_op_new(LIR_OPCODE_BAL, NULL, NULL, lir_copy_label_operand(label));
 }
 
-static inline lir_op_t *lir_op_zext(lir_operand_t *dst, lir_operand_t *src) {
+static inline lir_op_t *lir_op_uext(lir_operand_t *dst, lir_operand_t *src) {
     return lir_op_new(LIR_OPCODE_UEXT, src, NULL, dst);
 }
 
@@ -1113,9 +1110,20 @@ static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
     return false;
 }
 
+static inline bool lir_op_convert(lir_op_t *op) {
+    return op->code == LIR_OPCODE_UEXT ||
+           op->code == LIR_OPCODE_SEXT ||
+           op->code == LIR_OPCODE_TRUNC ||
+           op->code == LIR_OPCODE_FTRUNC ||
+           op->code == LIR_OPCODE_FEXT ||
+           op->code == LIR_OPCODE_FTOSI ||
+           op->code == LIR_OPCODE_FTOUI ||
+           op->code == LIR_OPCODE_SITOF ||
+           op->code == LIR_OPCODE_UITOF;
+}
+
 static inline bool lir_op_like_move(lir_op_t *op) {
-    return op->code == LIR_OPCODE_MOVE || op->code == LIR_OPCODE_SEXT || op->code == LIR_OPCODE_UEXT ||
-           op->code == LIR_OPCODE_TRUNC;
+    return op->code == LIR_OPCODE_MOVE || lir_op_convert(op);
 }
 
 static inline bool lir_op_contain_cmp(lir_op_t *op) {
@@ -1127,10 +1135,6 @@ static inline bool lir_op_contain_cmp(lir_op_t *op) {
 
 static inline bool lir_op_term(lir_op_t *op) {
     return (op->code == LIR_OPCODE_ADD || op->code == LIR_OPCODE_SUB);
-}
-
-static inline bool lir_op_convert(lir_op_t *op) {
-    return op->code == LIR_OPCODE_UEXT || op->code == LIR_OPCODE_SEXT || op->code == LIR_OPCODE_TRUNC;
 }
 
 static inline bool lir_op_ternary(lir_op_t *op) {

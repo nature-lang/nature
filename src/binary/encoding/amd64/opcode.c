@@ -350,6 +350,46 @@ amd64_opcode_inst_t cmp_r64_rm64 = {"cmp", "cmp", 0, {0x3B}, {OPCODE_EXT_REX_W, 
 // setcc ------------------------------------------------------------------------------------------------------
 amd64_opcode_inst_t seta_rm8 = {"seta", "seta", 0, {0x0F, 0x97}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
 amd64_opcode_inst_t setae_rm8 = {"setae", "setae", 0, {0x0F, 0x93}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+
+amd64_opcode_inst_t cvtsi2ss_xmm_rm32 = {"cvtsi2ss", "cvtsi2ss", 0xF3, {0x0F, 0x2A}, {OPCODE_EXT_SLASHR},
+                                          {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
+                                           {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t cvtsi2ss_xmm_rm64 = {"cvtsi2ss", "cvtsi2ss", 0xF3, {0x0F, 0x2A}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                                          {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
+                                           {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t cvtsi2sd_xmm_rm32 = {"cvtsi2sd", "cvtsi2sd", 0xF2, {0x0F, 0x2A}, {OPCODE_EXT_SLASHR},
+                                          {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
+                                           {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t cvtsi2sd_xmm_rm64 = {"cvtsi2sd", "cvtsi2sd", 0xF2, {0x0F, 0x2A}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                                          {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
+                                           {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t cvttss2si_r32_xmm = {"cvttss2si", "cvttss2si", 0xF3, {0x0F, 0x2C}, {OPCODE_EXT_SLASHR},
+                                          {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
+                                           {OPERAND_TYPE_XMM2S32, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t cvttss2si_r64_xmm = {"cvttss2si", "cvttss2si", 0xF3, {0x0F, 0x2C}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                                          {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                                           {OPERAND_TYPE_XMM2S32, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t cvttsd2si_r32_xmm = {"cvttsd2si", "cvttsd2si", 0xF2, {0x0F, 0x2C}, {OPCODE_EXT_SLASHR},
+                                          {{OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG},
+                                           {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t cvttsd2si_r64_xmm = {"cvttsd2si", "cvttsd2si", 0xF2, {0x0F, 0x2C}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                                          {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
+                                           {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t cvtss2sd_xmm_xmm = {"cvtss2sd", "cvtss2sd", 0xF3, {0x0F, 0x5A}, {OPCODE_EXT_SLASHR},
+                                         {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
+                                          {OPERAND_TYPE_XMM2S32, ENCODING_TYPE_MODRM_RM}}};
+
+amd64_opcode_inst_t cvtsd2ss_xmm_xmm = {"cvtsd2ss", "cvtsd2ss", 0xF2, {0x0F, 0x5A}, {OPCODE_EXT_SLASHR},
+                                         {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
+                                          {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_RM}}};
 amd64_opcode_inst_t setb_rm8 = {"setb", "setb", 0, {0x0F, 0x92}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
 amd64_opcode_inst_t setbe_rm8 = {"setbe", "setbe", 0, {0x0F, 0x96}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
 amd64_opcode_inst_t setg_rm8 = {"setg", "setg", 0, {0x0F, 0x9F}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
@@ -877,6 +917,17 @@ void amd64_opcode_init() {
     opcode_tree_build(&setne_rex_rm8);
     opcode_tree_build(&seta_rm8);
     opcode_tree_build(&setae_rm8);
+
+    opcode_tree_build(&cvtsi2ss_xmm_rm32);
+    opcode_tree_build(&cvtsi2ss_xmm_rm64);
+    opcode_tree_build(&cvtsi2sd_xmm_rm32);
+    opcode_tree_build(&cvtsi2sd_xmm_rm64);
+    opcode_tree_build(&cvttss2si_r32_xmm);
+    opcode_tree_build(&cvttss2si_r64_xmm);
+    opcode_tree_build(&cvttsd2si_r32_xmm);
+    opcode_tree_build(&cvttsd2si_r64_xmm);
+    opcode_tree_build(&cvtss2sd_xmm_xmm);
+    opcode_tree_build(&cvtsd2ss_xmm_xmm);
     opcode_tree_build(&setb_rm8);
     opcode_tree_build(&setbe_rm8);
     opcode_tree_build(&setg_rm8);

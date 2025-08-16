@@ -426,8 +426,8 @@ impl<'a> Typesys<'a> {
         };
 
         let mut typedef = typedef_mutex.lock().unwrap();
-        start = typedef.symbol_start;
-        end = typedef.symbol_end;
+        let typedef_start = typedef.symbol_start;
+        let typedef_end = typedef.symbol_end;
 
         // 处理泛型参数
         if typedef.params.len() > 0 {
@@ -943,16 +943,7 @@ impl<'a> Typesys<'a> {
 
             if let SymbolKind::Type(typedef_mutex) = symbol.kind.clone() {
                 let typedef = typedef_mutex.lock().unwrap();
-                let mut found = false;
-                for interface in &typedef.impl_interfaces {
-                    assert!(interface.ident_kind == TypeIdentKind::Interface);
-
-                    // str check
-                    if interface.ident == src_type.ident {
-                        found = true;
-                        break;
-                    }
-                }
+                let found = self.check_impl_interface_contains(&typedef, &src_type);
 
                 // 禁止制鸭子类型
                 if !found {
@@ -2217,14 +2208,7 @@ impl<'a> Typesys<'a> {
         let typedef_stmt = typedef_stmt_mutex.lock().unwrap();
 
         // 检查类型是否实现了目标接口
-        let mut found = false;
-        for impl_interface in &typedef_stmt.impl_interfaces {
-            assert!(matches!(impl_interface.ident_kind, TypeIdentKind::Interface));
-            if impl_interface.ident == interface_type.ident {
-                found = true;
-                break;
-            }
-        }
+        let found = self.check_impl_interface_contains(&typedef_stmt, &interface_type);
 
         // 禁止鸭子类型
         if !found {
@@ -2578,7 +2562,13 @@ impl<'a> Typesys<'a> {
             if let AstNode::VarDecl(var_decl_mutex) = &expr.node {
                 {
                     let mut var_decl = var_decl_mutex.lock().unwrap();
-                    assert!(var_decl.symbol_id > 0);
+                    if var_decl.symbol_id == 0 {
+                        return Err(AnalyzerError {
+                            start: 0,
+                            end: 0,
+                            message: "var symbol id is zero, cannot infer".to_string(),
+                        });
+                    }
 
                     var_decl.type_ = target_type.clone();
                     assert!(var_decl.type_.kind.is_exist());
@@ -4265,16 +4255,7 @@ impl<'a> Typesys<'a> {
 
                     if let SymbolKind::Type(typedef_mutex) = symbol.kind.clone() {
                         let typedef = typedef_mutex.lock().unwrap();
-                        let mut found = false;
-                        for interface in &typedef.impl_interfaces {
-                            assert!(interface.ident_kind == TypeIdentKind::Interface);
-
-                            // str check
-                            if interface.ident == constraint.ident {
-                                found = true;
-                                break;
-                            }
-                        }
+                        let found = self.check_impl_interface_contains(&typedef, constraint);
 
                         // 禁止制鸭子类型
                         if !found {
@@ -4304,6 +4285,35 @@ impl<'a> Typesys<'a> {
         }
 
         return Ok(());
+    }
+
+    fn check_impl_interface_contains(&mut self, typedef_stmt: &TypedefStmt, find_target_interface: &Type) -> bool {
+
+        if typedef_stmt.impl_interfaces.len() == 0 {
+            return false;
+        }
+
+        for impl_interface in &typedef_stmt.impl_interfaces {
+
+            if impl_interface.ident == find_target_interface.ident {
+                return true;
+            }
+
+            // find impl interface from symbol table
+            let symbol = match self.symbol_table.find_global_symbol(&impl_interface.ident) {
+                Some(s) => s,
+                None => continue,
+            };
+
+            if let SymbolKind::Type(def_type_mutex) = symbol.kind.clone() {
+                let t = def_type_mutex.lock().unwrap();
+                if self.check_impl_interface_contains(&t, find_target_interface) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     fn infer_generics_param_constraints(&mut self, impl_type: Type, generics_params: &mut Vec<GenericsParam>) -> Result<(), String> {
