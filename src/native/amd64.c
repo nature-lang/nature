@@ -664,6 +664,7 @@ static slice_t *amd64_native_trunc(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_ftrunc(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
+    assert(op->first->assert_type == LIR_OPERAND_REG);
     assert(op->output->assert_type == LIR_OPERAND_REG);
 
     amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
@@ -684,6 +685,7 @@ static slice_t *amd64_native_ftrunc(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_fext(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
+    assert(op->first->assert_type == LIR_OPERAND_REG);
     assert(op->output->assert_type == LIR_OPERAND_REG);
 
     amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
@@ -704,6 +706,7 @@ static slice_t *amd64_native_fext(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_ftosi(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
+    assert(op->first->assert_type == LIR_OPERAND_REG);
     assert(op->output->assert_type == LIR_OPERAND_REG);
 
     amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
@@ -712,7 +715,9 @@ static slice_t *amd64_native_ftosi(closure_t *c, lir_op_t *op) {
 
     if (output->size < DWORD) {
         reg_t *output_reg = output->value;
-        output = AMD64_REG(reg_select(output_reg->index, TYPE_UINT32));
+        amd64_asm_operand_t *new_output = AMD64_REG(reg_select(output_reg->index, TYPE_UINT32));
+        slice_push(operations, AMD64_INST("movzx", new_output, output));
+        output = new_output;
     }
 
     if (first->size == QWORD) {
@@ -735,17 +740,27 @@ static slice_t *amd64_native_ftosi(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_ftoui(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
+    assert(op->first->assert_type == LIR_OPERAND_REG);
     assert(op->output->assert_type == LIR_OPERAND_REG);
 
     amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
     amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
 
-    if (output->size < DWORD) {
-        reg_t *output_reg = output->value;
-        output = AMD64_REG(reg_select(output_reg->index, TYPE_UINT32));
+    int first_size = first->size;
+    int output_size = output->size;
+
+    reg_t *output_reg = output->value;
+    if (output_size < DWORD) {
+        amd64_asm_operand_t *new_output = AMD64_REG(reg_select(output_reg->index, TYPE_UINT32));
+        slice_push(operations, AMD64_INST("movzx", new_output, output));
+        output = new_output;
+    } else if (output_size == DWORD) {
+        amd64_asm_operand_t *new_output = AMD64_REG(reg_select(output_reg->index, TYPE_UINT64));
+        slice_push(operations, AMD64_INST("movzx", new_output, output));
+        output = new_output;
     }
 
-    if (first->size == DWORD) {
+    if (first_size == DWORD) {
         slice_push(operations, AMD64_INST("cvttss2si", output, first));
     } else {
         slice_push(operations, AMD64_INST("cvttsd2si", output, first));
@@ -771,7 +786,11 @@ static slice_t *amd64_native_sitof(closure_t *c, lir_op_t *op) {
 
     if (first->size < DWORD) {
         reg_t *first_reg = first->value;
-        first = AMD64_REG(reg_select(first_reg->index, TYPE_UINT32));
+        amd64_asm_operand_t *new_first = AMD64_REG(reg_select(first_reg->index, TYPE_UINT32));
+
+        // 清空寄存器的高位部分
+        slice_push(operations, AMD64_INST("movzx", new_first, first));
+        first = new_first;
     }
 
     // 根据输出类型选择指令
@@ -795,20 +814,41 @@ static slice_t *amd64_native_sitof(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_uitof(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
+    assert(op->first->assert_type == LIR_OPERAND_REG);
     assert(op->output->assert_type == LIR_OPERAND_REG);
 
     amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
     amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
+    reg_t *first_reg = first->value;
+    int first_size = first->size;
 
-    if (first->size < DWORD) {
-        reg_t *first_reg = first->value;
-        first = AMD64_REG(reg_select(first_reg->index, TYPE_UINT32));
+    if (first_size < DWORD) {
+        amd64_asm_operand_t *new_first = AMD64_REG(reg_select(first_reg->index, TYPE_UINT32));
+        slice_push(operations, AMD64_INST("movzx", new_first, first));
+        first = new_first;
+    } else if (first_size == DWORD) {
+        amd64_asm_operand_t *new_first = AMD64_REG(reg_select(first_reg->index, TYPE_UINT64));
+        slice_push(operations, AMD64_INST("movzx", new_first, first));
+        first = new_first;
     }
 
-    if (output->size == DWORD) {
-        slice_push(operations, AMD64_INST("cvtsi2ss", output, first));
+    if (first_size <= DWORD) {
+        // 32位及以下直接转换
+        if (output->size == DWORD) {
+            slice_push(operations, AMD64_INST("cvtsi2ss", output, first));
+        } else {
+            slice_push(operations, AMD64_INST("cvtsi2sd", output, first));
+        }
     } else {
-        slice_push(operations, AMD64_INST("cvtsi2sd", output, first));
+        // 64位：统一使用右移-转换-乘2
+        slice_push(operations, AMD64_INST("shr", first, AMD64_UINT8(1)));
+        if (output->size == DWORD) {
+            slice_push(operations, AMD64_INST("cvtsi2ss", output, first));
+            slice_push(operations, AMD64_INST("add", output, output));
+        } else {
+            slice_push(operations, AMD64_INST("cvtsi2sd", output, first));
+            slice_push(operations, AMD64_INST("add", output, output));
+        }
     }
 
     return operations;

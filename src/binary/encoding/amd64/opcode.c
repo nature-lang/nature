@@ -640,6 +640,22 @@ amd64_opcode_inst_t shr_rm64_cl = {"shr", "shr", 0, {0xD3}, {OPCODE_EXT_REX_W, O
                                    {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
                                     {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
 
+amd64_opcode_inst_t shr_rm8_imm8 = {"shr", "shr", 0, {0xC0}, {OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
+                                    {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                     {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t shr_rex_rm8_imm8 = {"shr", "shr", 0, {0xC0}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
+                                        {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                         {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t shr_rm16_imm8 = {"shr", "shr", 0x66, {0xC1}, {OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
+                                     {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                                      {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t shr_rm32_imm8 = {"shr", "shr", 0, {0xC1}, {OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
+                                     {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                                      {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+amd64_opcode_inst_t shr_rm64_imm8 = {"shr", "shr", 0, {0xC1}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH5, OPCODE_EXT_IMM_BYTE},
+                                     {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                                      {OPERAND_TYPE_IMM8, ENCODING_TYPE_IMM}}};
+
 
 // float ------------------------------------------------------------------------------------------------------
 // float xor ------------------------------------------------------------------------------------------------------
@@ -1014,6 +1030,13 @@ void amd64_opcode_init() {
     opcode_tree_build(&shr_rm16_cl);
     opcode_tree_build(&shr_rm32_cl);
     opcode_tree_build(&shr_rm64_cl);
+
+    opcode_tree_build(&shr_rex_rm8_imm8);
+    opcode_tree_build(&shr_rm8_imm8);
+    opcode_tree_build(&shr_rm16_imm8);
+    opcode_tree_build(&shr_rm32_imm8);
+    opcode_tree_build(&shr_rm64_imm8);
+
 
     // 浮点数算数运算
     opcode_tree_build(&movsd_xmm1_m64); // 内存到 xmm

@@ -52,5 +52,5 @@ fn main() {
     u32 d92 = s9 as u32
     i8 d93 = s9 as i8
     f32 d94 = d92 as f32
-    print(s9, d90, d91, d92, d93, d94, '\n')
+    println(s9, d90, d91, d92, d93, d94)
 }

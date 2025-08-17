@@ -2638,7 +2638,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     // 数值类型转换
     if (is_integer(as_expr->target_type.kind) && is_integer(as_expr->src.type.kind)) {
         if (target_size > src_size) {
-            if (is_unsigned(as_expr->target_type.kind) && is_unsigned(as_expr->src.type.kind)) {
+            if (is_unsigned(as_expr->src.type.kind)) {
                 OP_PUSH(lir_op_uext(target, src_operand));
             } else {
                 OP_PUSH(lir_op_sext(target, src_operand));
