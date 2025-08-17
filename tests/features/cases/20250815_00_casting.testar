@@ -86,8 +86,6 @@ fn main() {
     println(a1 as u16, a2 as u16, a3 as u16, a4 as u16)
     println(a1 as u32, a2 as u32, a3 as u32, a4 as u32)
 
-    println(a1 as u64, a2 as u64, a3 as u64, a4 as u64)
-
     println(a1 as i8, a2 as i8, a3 as i8, a4 as i8)
     println(a1 as i16, a2 as i16, a3 as i16, a4 as i16)
     println(a1 as i32, a2 as i32, a3 as i32, a4 as i32)
@@ -98,11 +96,56 @@ fn main() {
 3 253 250 6
 3 65533 37626 27910
 3 4294967293 234234 4294733062
-3 18446744073709551613 234234 18446744073709317382
 3 -3 -6 6
 3 -3 -27910 27910
 3 -3 234234 -234234
 3 -3 234234 -234234
+
+=== test_number_f_to_u64_1[arch=amd64]
+--- main.n
+fn main() {
+    f32 a1 = 3.1415123
+    f32 a2 = -3.15222
+    f64 a3 = 234234.234234
+    f64 a4 = -234234.234234
+
+
+    println(a1 as u64, a2 as u64, a3 as u64, a4 as u64)
+}
+
+--- output.txt
+3 18446744073709551613 234234 18446744073709317382
+
+
+=== test_number_f_to_u64_2[arch=arm64]
+--- main.n
+fn main() {
+    f32 a1 = 3.1415123
+    f32 a2 = -3.15222
+    f64 a3 = 234234.234234
+    f64 a4 = -234234.234234
+
+
+    println(a1 as u64, a2 as u64, a3 as u64, a4 as u64)
+}
+
+--- output.txt
+3 0 234234 0
+
+=== test_number_f_to_u64_3[arch=riscv64]
+--- main.n
+fn main() {
+    f32 a1 = 3.1415123
+    f32 a2 = -3.15222
+    f64 a3 = 234234.234234
+    f64 a4 = -234234.234234
+
+
+    println(a1 as u64, a2 as u64, a3 as u64, a4 as u64)
+}
+
+--- output.txt
+3 0 234234 0
 
 
 === test_u32_to_f
