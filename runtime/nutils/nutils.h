@@ -31,10 +31,6 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref);
 
 n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods);
 
-void number_casting(uint64_t input_hash, void *input_ref, uint64_t output_hash, void *output_ref);
-
-n_bool_t bool_casting(uint64_t input_rtype_hash, int64_t int_value, double float_value);
-
 int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, void *key_ref);
 
 int64_t iterator_next_value(void *iterator, int64_t hash, int64_t cursor, void *value_ref);

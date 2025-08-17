@@ -41,7 +41,7 @@ linear_inline_arr_element_addr_not_check(module_t *m, lir_operand_t *arr_target,
     type_kind index_kind = operand_type_kind(index_target);
     if (type_kind_sizeof(index_kind) < POINTER_SIZE) {
         lir_operand_t *temp_index_target = temp_var_operand(m, type_kind_new(TYPE_INT));
-        OP_PUSH(lir_op_zext(temp_index_target, index_target));
+        OP_PUSH(lir_op_uext(temp_index_target, index_target));
         index_target = temp_index_target;
     }
 
@@ -66,7 +66,7 @@ linear_inline_arr_element_addr(module_t *m, lir_operand_t *arr_target, lir_opera
     type_kind index_kind = operand_type_kind(index_target);
     if (type_kind_sizeof(index_kind) < POINTER_SIZE) {
         lir_operand_t *temp_index_target = temp_var_operand(m, type_kind_new(TYPE_INT));
-        OP_PUSH(lir_op_zext(temp_index_target, index_target));
+        OP_PUSH(lir_op_uext(temp_index_target, index_target));
         index_target = temp_index_target;
     }
 
@@ -118,7 +118,7 @@ linear_inline_vec_element_addr_no_check(module_t *m, lir_operand_t *vec_target, 
 
     if (type_kind_sizeof(index_kind) < POINTER_SIZE) {
         lir_operand_t *temp_index_target = temp_var_operand(m, type_kind_new(TYPE_INT));
-        OP_PUSH(lir_op_zext(temp_index_target, index_target));
+        OP_PUSH(lir_op_uext(temp_index_target, index_target));
 
         index_target = temp_index_target;
     }
@@ -164,7 +164,7 @@ linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_opera
 
     if (type_kind_sizeof(index_kind) < POINTER_SIZE) {
         lir_operand_t *temp_index_target = temp_var_operand(m, type_kind_new(TYPE_INT));
-        OP_PUSH(lir_op_zext(temp_index_target, index_target));
+        OP_PUSH(lir_op_uext(temp_index_target, index_target));
 
         index_target = temp_index_target;
     }
@@ -2632,29 +2632,44 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     uint64_t src_rtype_hash = ct_find_rtype_hash(as_expr->src.type);
+    uint64_t target_size = type_sizeof(as_expr->target_type);
+    uint64_t src_size = type_sizeof(as_expr->src.type);
 
     // 数值类型转换
-    if (is_number(as_expr->target_type.kind) && is_number(as_expr->src.type.kind)) {
-        if (is_integer(as_expr->target_type.kind) && is_integer(as_expr->src.type.kind) &&
-            type_sizeof(as_expr->target_type) == type_sizeof(as_expr->src.type)) {
-            OP_PUSH(lir_op_move(target, src_operand));
+    if (is_integer(as_expr->target_type.kind) && is_integer(as_expr->src.type.kind)) {
+        if (target_size > src_size) {
+            if (is_unsigned(as_expr->src.type.kind)) {
+                OP_PUSH(lir_op_uext(target, src_operand));
+            } else {
+                OP_PUSH(lir_op_sext(target, src_operand));
+            }
+        } else if (target_size < src_size) {
+            OP_PUSH(lir_op_trunc(target, src_operand));
         } else {
-            lir_operand_t *output_rtype = int_operand(ct_find_rtype_hash(as_expr->target_type));
-            OP_PUSH(lir_op_nop_def(target)); // 如何清理多余的 nop 指令？
-            lir_operand_t *output_ref = lea_operand_pointer(m, target);
-            lir_operand_t *input_ref = lea_operand_pointer(m, src_operand);
-
-            push_rt_call(m, RT_CALL_NUMBER_CASTING, NULL, 4, int_operand(src_rtype_hash), input_ref, output_rtype,
-                         output_ref);
+            OP_PUSH(lir_op_move(target, src_operand));
         }
 
-
         return target;
-    }
-
-    // bool 类型转换
-    if (as_expr->target_type.kind == TYPE_BOOL) {
-        push_rt_call(m, RT_CALL_BOOL_CASTING, target, 2, int_operand(src_rtype_hash), src_operand);
+    } else if (is_float(as_expr->target_type.kind) && is_float(as_expr->src.type.kind)) {
+        if (target_size > src_size) {
+            OP_PUSH(lir_op_new(LIR_OPCODE_FEXT, src_operand, NULL, target));
+        } else if (target_size < src_size) {
+            OP_PUSH(lir_op_new(LIR_OPCODE_FTRUNC, src_operand, NULL, target));
+        } else {
+            OP_PUSH(lir_op_move(target, src_operand));
+        }
+        return target;
+    } else if (is_float(as_expr->target_type.kind) && is_unsigned(as_expr->src.type.kind)) {
+        OP_PUSH(lir_op_new(LIR_OPCODE_UITOF, src_operand, NULL, target));
+        return target;
+    } else if (is_float(as_expr->target_type.kind) && is_integer(as_expr->src.type.kind)) {
+        OP_PUSH(lir_op_new(LIR_OPCODE_SITOF, src_operand, NULL, target));
+        return target;
+    } else if (is_unsigned(as_expr->target_type.kind) && is_float(as_expr->src.type.kind)) {
+        OP_PUSH(lir_op_new(LIR_OPCODE_FTOUI, src_operand, NULL, target));
+        return target;
+    } else if (is_signed(as_expr->target_type.kind) && is_float(as_expr->src.type.kind)) {
+        OP_PUSH(lir_op_new(LIR_OPCODE_FTOSI, src_operand, NULL, target));
         return target;
     }
 

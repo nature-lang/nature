@@ -7,6 +7,7 @@ import fmt
 import libc
 import unsafe
 import io
+import io.buf
 
 fn logf(string format, ...[any] args) {
     var msg = fmt.sprintf(format, ...args)
@@ -639,7 +640,7 @@ fn tokenizer_new(string tokenizer_path, int vocab_size):ptr<tokenizer_t>! {
     }
 
     var f = fs.open(tokenizer_path, syscall.O_RDONLY, 0)
-    var file_reader = new io.buf_reader<ptr<fs.file_t>>(rd = f)
+    var file_reader = new buf.reader<ptr<fs.file_t>>(rd = f)
 
 
     var i32_buf = vec_new<u8>(0, 4)

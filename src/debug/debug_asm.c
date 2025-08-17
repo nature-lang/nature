@@ -32,6 +32,10 @@ static string amd64_asm_operand_to_string(amd64_asm_operand_t *operand) {
             asm_disp_reg_t *disp = value;
             return dsprintf("[%s%+d|%d]", disp->reg->name, disp->disp, operand->size);
         }
+        case AMD64_ASM_OPERAND_TYPE_SEG_OFFSET: {
+            asm_seg_offset_t *seg = value;
+            return dsprintf("[%s%+d]", seg->name, seg->offset);
+        }
         case AMD64_ASM_OPERAND_TYPE_RIP_RELATIVE: {
             return dsprintf("[rip%+d|%d]", ((asm_rip_relative_t *) value)->disp, operand->size);
         }

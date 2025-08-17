@@ -1,0 +1,96 @@
+=== test_writer_basic
+--- main.n
+import io
+import io.buf
+
+fn main():void! {
+    var wr = new io.buffer()
+    var bw = new buf.writer<ptr<io.buffer>>(wr)
+
+    // Test available space
+    println("initial available:", bw.available())
+    assert(bw.available() == 4096)
+
+    // Test write
+    var data = "hello world" as [u8]
+    var n = bw.write(data)
+    println("wrote bytes:", n)
+    assert(n == data.len())
+
+    // Test available after write
+    println("available after write:", bw.available())
+    assert(bw.available() == 4096 - data.len())
+
+    // Test buffered
+    println("buffered:", bw.buffered())
+    assert(bw.buffered() == data.len())
+
+    // Data should not be in underlying writer yet
+    println("underlying buffer size before flush:", wr.len())
+    assert(wr.len() == 0)
+
+    // Test flush
+    bw.flush()
+    println("underlying buffer size after flush:", wr.len())
+    assert(wr.len() == data.len())
+
+    // Test available after flush
+    println("available after flush:", bw.available())
+    assert(bw.available() == 4096)
+
+    // Test buffered after flush
+    println("buffered after flush:", bw.buffered())
+    assert(bw.buffered() == 0)
+
+    // Verify data
+    var result = wr.read_all()
+    println("written data:", result as string)
+    assert(result as string == "hello world")
+}
+
+
+
+=== test_writer_byte_operations
+--- main.n
+import io
+import io.buf
+
+fn main():void! {
+    var wr = new io.buffer()
+    var bw = new buf.writer<ptr<io.buffer>>(wr)
+
+    // Test write_byte
+    bw.write_byte('H'.char())
+    bw.write_byte('e'.char())
+    bw.write_byte('l'.char())
+    bw.write_byte('l'.char())
+    bw.write_byte('o'.char())
+
+    println("buffered after write_byte:", bw.buffered())
+    assert(bw.buffered() == 5)
+
+    println("available after write_byte:", bw.available())
+    assert(bw.available() == 4091)
+
+    // Test mixed write operations
+    var data = " World!" as [u8]
+    var n = bw.write(data)
+    println("wrote additional bytes:", n)
+    assert(n == data.len())
+
+    println("total buffered:", bw.buffered())
+    assert(bw.buffered() == 12)
+
+    // Flush and verify
+    bw.flush()
+    var result = wr.read_all()
+    println("final result:", result as string)
+    assert(result as string == "Hello World!")
+
+    // Test buffer state after flush
+    println("available after final flush:", bw.available())
+    assert(bw.available() == 4096)
+
+    println("buffered after final flush:", bw.buffered())
+    assert(bw.buffered() == 0)
+}

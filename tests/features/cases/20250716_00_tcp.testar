@@ -402,6 +402,7 @@ fn test_error_cases():void! {
 === test_conn_interface
 --- main.n
 import io
+import io.buf
 import net.tcp
 import net.types
 
@@ -415,7 +416,7 @@ fn main() {
                        '\r\n'
 
     conn.write(http_request as [u8])
-    var br = new io.buf_reader<types.connable>(rd = conn)
+    var br = new buf.reader<types.connable>(rd = conn)
     var line1 = br.read_line()
     println(line1)
     assert(line1 == 'HTTP/1.1 200 OK')

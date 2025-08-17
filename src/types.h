@@ -385,9 +385,15 @@ typedef enum {
     LIR_OPCODE_NEG, // -取负数
 
     // int 类型转换
-    LIR_OPCODE_UEXT, // int 无符号扩展
-    LIR_OPCODE_SEXT, // int 有符号扩展
-    LIR_OPCODE_TRUNC, // int 大位宽截断
+    LIR_OPCODE_UEXT, // int 无符号扩展 (u8 -> u32, u8 -> u64)
+    LIR_OPCODE_SEXT, // int 有符号扩展 (i8 -> i32, i8 -> i64)
+    LIR_OPCODE_TRUNC, // int 大位宽截断 (i64 -> i32, i64 -> i8)
+    LIR_OPCODE_FTRUNC,
+    LIR_OPCODE_FEXT,
+    LIR_OPCODE_FTOSI,
+    LIR_OPCODE_FTOUI,
+    LIR_OPCODE_SITOF,
+    LIR_OPCODE_UITOF,
 
 
     // 向量运算相关指令

@@ -1,3 +1,17 @@
+fn sum<T>(T a, T b):T {
+    return a + b
+}
+
+fn test():f32 {
+   i32 a2 = 333
+   i16 b2 = 666
+   var c2 = sum(a2 as i16, b2)
+
+   i8 a3 = 12
+   f32 b4 = a3 as f32
+   return b4
+}
+
 fn main() {
-    println('hello world')
+    println(test())
 }

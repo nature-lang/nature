@@ -359,6 +359,30 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
+        if (lir_op_convert(op)) {
+            if (op->code == LIR_OPCODE_UITOF) {
+                lir_operand_t *ax_operand = lir_reg_operand(rax->index, operand_type_kind(op->first));
+                linked_push(operations, lir_op_move(ax_operand, op->first));
+                op->first = ax_operand;
+                linked_push(operations, op);
+            } else if (op->first->assert_type != LIR_OPERAND_VAR) {
+                op->first = amd64_convert_first_to_temp(c, operations, op->first);
+                linked_push(operations, op);
+            } else {
+                linked_push(operations, op);
+            }
+
+
+            if (op->output->assert_type != LIR_OPERAND_VAR) {
+                lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(op->output));
+                lir_operand_t *output = op->output;
+                op->output = lir_reset_operand(temp, op->output->pos); // replace output
+                linked_push(operations, lir_op_move(output, temp));
+            }
+
+            continue;
+        }
+
         if (lir_op_like_move(op) && !lir_can_mov(op)) {
             op->first = amd64_convert_first_to_temp(c, operations, op->first);
             linked_push(operations, op);

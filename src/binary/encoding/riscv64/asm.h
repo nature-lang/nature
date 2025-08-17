@@ -13,6 +13,13 @@
     _indirect_operand;                                                     \
 })
 
+#define RO_RDM(_mode) ({                                               \
+    riscv64_asm_operand_t *_operand = NEW(riscv64_asm_operand_t); \
+    _operand->type = RISCV64_ASM_OPERAND_ROUNDMODE;               \
+    _operand->round_mode = _mode;                                   \
+    _operand;                                                     \
+})
+
 #define RO_IMM(_imm) ({                                               \
     riscv64_asm_operand_t *_imm_operand = NEW(riscv64_asm_operand_t); \
     _imm_operand->type = RISCV64_ASM_OPERAND_IMMEDIATE;               \

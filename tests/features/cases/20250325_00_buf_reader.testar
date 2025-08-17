@@ -1,12 +1,13 @@
 === test_read
 --- main.n
 import io
+import io.buf
 
 fn main():void! {
     var rd = io.buffer{}
     rd.write('hello world' as [u8])
 
-    var br = new io.buf_reader<io.buffer>(rd)
+    var br = new buf.reader<io.buffer>(rd)
 
     var buf = vec_new<u8>(0, 5)
     var n = br.read(buf)
@@ -19,10 +20,11 @@ fn main():void! {
 === test_read_empty
 --- main.n
 import io
+import io.buf
 
 fn main():void! {
     var rd = io.buffer{}
-    var br = new io.buf_reader<io.buffer>(rd)
+    var br = new buf.reader<io.buffer>(rd)
 
     var buf = vec_new<u8>(0, 5)
     try {
@@ -40,13 +42,14 @@ EOF
 === test_read_until
 --- main.n
 import io
+import io.buf
 import strings
 
 fn main():void! {
     var rd = new io.buffer()
     rd.write('hello\nworld\n' as [u8])
 
-    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ptr<io.buffer>>(rd)
 
     var line = br.read_until('\n'.char())
     assert(line as string == 'hello\n')
@@ -64,6 +67,7 @@ world\n
 === test_read_until_buffer_full
 --- main.n
 import io
+import io.buf
 import strings
 
 fn main():void! {
@@ -75,7 +79,7 @@ fn main():void! {
     }
     rd.write(data)
 
-    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ptr<io.buffer>>(rd)
     // until triggers fill until the entire buf is full without any successful data reading
     var line = br.read_until('\n'.char())
     println('read until buffer full', line.len())
@@ -87,12 +91,13 @@ read until buffer full 4096
 === test_read_until_eof
 --- main.n
 import io
+import io.buf
 import strings
 
 fn main():void! {
     var rd = new io.buffer()
     rd.write("hello world" as [u8]) // no delim
-    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ptr<io.buffer>>(rd)
 
     var line = br.read_until('\n'.char())
     assert(line as string == "hello world")
@@ -109,13 +114,14 @@ read data: hello world false
 === test_read_exact
 --- main.n
 import io
+import io.buf
 import strings
 
 fn main():void! {
     var rd = new io.buffer()
     rd.write("hello world" as [u8])
 
-    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ptr<io.buffer>>(rd)
 
     var buf = vec_new<u8>(0, 5)
     br.read_exact(buf)
@@ -143,12 +149,13 @@ expected error: EOF
 === test_read_exact_empty
 --- main.n
 import io
+import io.buf
 import strings
 
 fn main():void! {
     // empty buffer
     var rd = new io.buffer()
-    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ptr<io.buffer>>(rd)
 
     var buf = vec_new<u8>(0, 5)
     try {
@@ -167,13 +174,14 @@ expected error: EOF
 === test_partial_read
 --- main.n
 import io
+import io.buf
 import strings
 
 fn main():void! {
     var rd = new io.buffer()
     rd.write("abc" as [u8])
 
-    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ptr<io.buffer>>(rd)
 
     var buf = vec_new<u8>(0, 5)
     try {
@@ -191,13 +199,14 @@ expected error: EOF
 === test_read_zero_length
 --- main.n
 import io
+import io.buf
 import strings
 
 fn main():void! {
     var rd = new io.buffer()
     rd.write("hello" as [u8])
 
-    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ptr<io.buffer>>(rd)
 
     var empty_buf = vec_cap<u8>(0)
     br.read_exact(empty_buf)
@@ -216,13 +225,14 @@ subsequent data: hello
 === test_read_byte
 --- main.n
 import io
+import io.buf
 import strings
 import fmt
 
 fn main():void! {
     var rd = new io.buffer()
     rd.write("Hello" as [u8])
-    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ptr<io.buffer>>(rd)
 
     u8 b = br.read_byte()
     assert(b == 'H'.char())
@@ -252,13 +262,14 @@ expected err: EOF
 === test_read_line
 --- main.n
 import io
+import io.buf
 import strings
 import fmt
 
 fn main():void! {
     var rd = new io.buffer()
     rd.write("Hello\nWorld\r\nTest\rEnd" as [u8])
-    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ptr<io.buffer>>(rd)
 
     // Test \n line ending
     var line = br.read_line()
@@ -293,13 +304,14 @@ catch e: EOF
 === test_read_empty_line
 --- main.n
 import io
+import io.buf
 import strings
 import fmt
 
 fn main():void! {
     var rd = new io.buffer()
     rd.write("\n\n\nHello\n\n" as [u8])
-    var br = new io.buf_reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ptr<io.buffer>>(rd)
 
     for int i = 0; i < 6; i += 1 {
         var line = br.read_line()

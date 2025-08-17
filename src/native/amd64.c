@@ -628,20 +628,227 @@ static slice_t *amd64_native_call(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_trunc(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
+    assert(op->output->assert_type == LIR_OPERAND_REG && op->first->assert_type == LIR_OPERAND_REG);
+
+    amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
+    amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
+    int64_t output_size = op->output->size;
+    int64_t first_size = op->first->size;
+    assert(output_size < first_size); // 截断操作，输出尺寸应该小于输入尺寸
+
+    type_kind output_kind;
+    if (output_size == WORD) {
+        output_kind = TYPE_UINT16;
+    } else if (output_size == BYTE) {
+        output_kind = TYPE_UINT8;
+    } else {
+        output_kind = TYPE_UINT32;
+    }
+
+    reg_t *first_reg = first->value;
+    amd64_asm_operand_t *fit_first = AMD64_REG(reg_select(first_reg->index, output_kind));
+
+
+    asm_mov(operations, op, output, fit_first);
+
+    return operations;
+}
+
+
+/**
+ * 浮点数截断 (double -> float)
+ * @param c
+ * @param op
+ * @return
+ */
+static slice_t *amd64_native_ftrunc(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->first->assert_type == LIR_OPERAND_REG);
     assert(op->output->assert_type == LIR_OPERAND_REG);
 
     amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
     amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
-    int64_t size = op->output->size;
-    assert(size > 0);
 
-    // 使用 and 指令进行截断
-    if (output->size == BYTE) {
-        slice_push(operations, AMD64_INST("and", output, AMD64_UINT32(0xff)));
-    } else if (output->size == WORD) {
-        slice_push(operations, AMD64_INST("and", output, AMD64_UINT32(0xffff)));
-    } else if (output->size == DWORD) {
-        slice_push(operations, AMD64_INST("and", output, AMD64_UINT32(0xffffffff)));
+    // cvtsd2ss xmm_dst, xmm_src (double to float)
+    slice_push(operations, AMD64_INST("cvtsd2ss", output, first));
+
+    return operations;
+}
+
+/**
+ * 浮点数扩展 (float -> double)
+ * @param c
+ * @param op
+ * @return
+ */
+static slice_t *amd64_native_fext(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->first->assert_type == LIR_OPERAND_REG);
+    assert(op->output->assert_type == LIR_OPERAND_REG);
+
+    amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
+    amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
+
+    // cvtss2sd xmm_dst, xmm_src (float to double)
+    slice_push(operations, AMD64_INST("cvtss2sd", output, first));
+
+    return operations;
+}
+
+/**
+ * 浮点数转有符号整数
+ * @param c
+ * @param op
+ * @return
+ */
+static slice_t *amd64_native_ftosi(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->first->assert_type == LIR_OPERAND_REG);
+    assert(op->output->assert_type == LIR_OPERAND_REG);
+
+    amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
+    amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
+
+
+    if (output->size < DWORD) {
+        reg_t *output_reg = output->value;
+        amd64_asm_operand_t *new_output = AMD64_REG(reg_select(output_reg->index, TYPE_UINT32));
+        slice_push(operations, AMD64_INST("movzx", new_output, output));
+        output = new_output;
+    }
+
+    if (first->size == QWORD) {
+        // cvttsd2si reg64, xmm (double to int64)
+        slice_push(operations, AMD64_INST("cvttsd2si", output, first));
+    } else {
+        // cvttss2si reg32, xmm (float to int32)
+        slice_push(operations, AMD64_INST("cvttss2si", output, first));
+    }
+
+    return operations;
+}
+
+/**
+ * 浮点数转无符号整数
+ * @param c
+ * @param op
+ * @return
+ */
+static slice_t *amd64_native_ftoui(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->first->assert_type == LIR_OPERAND_REG);
+    assert(op->output->assert_type == LIR_OPERAND_REG);
+
+    amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
+    amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
+
+    int first_size = first->size;
+    int output_size = output->size;
+
+    reg_t *output_reg = output->value;
+    if (output_size < DWORD) {
+        amd64_asm_operand_t *new_output = AMD64_REG(reg_select(output_reg->index, TYPE_UINT32));
+        slice_push(operations, AMD64_INST("movzx", new_output, output));
+        output = new_output;
+    } else if (output_size == DWORD) {
+        amd64_asm_operand_t *new_output = AMD64_REG(reg_select(output_reg->index, TYPE_UINT64));
+        slice_push(operations, AMD64_INST("movzx", new_output, output));
+        output = new_output;
+    }
+
+    if (first_size == DWORD) {
+        slice_push(operations, AMD64_INST("cvttss2si", output, first));
+    } else {
+        slice_push(operations, AMD64_INST("cvttsd2si", output, first));
+    }
+
+    return operations;
+}
+
+/**
+ * 有符号整数转浮点数
+ * @param c
+ * @param op
+ * @return
+ */
+static slice_t *amd64_native_sitof(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->output->assert_type == LIR_OPERAND_REG);
+    assert(op->first->assert_type == LIR_OPERAND_REG);
+
+    amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
+    amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
+
+    if (first->size < DWORD) {
+        reg_t *first_reg = first->value;
+        amd64_asm_operand_t *new_first = AMD64_REG(reg_select(first_reg->index, TYPE_UINT32));
+
+        // 清空寄存器的高位部分
+        slice_push(operations, AMD64_INST("movzx", new_first, first));
+        first = new_first;
+    }
+
+    // 根据输出类型选择指令
+    if (output->size == DWORD) {
+        // cvtsi2ss xmm, reg (int to float)
+        slice_push(operations, AMD64_INST("cvtsi2ss", output, first));
+    } else {
+        // cvtsi2sd xmm, reg (int to double)
+        slice_push(operations, AMD64_INST("cvtsi2sd", output, first));
+    }
+
+    return operations;
+}
+
+/**
+ * 无符号整数转浮点数
+ * @param c
+ * @param op
+ * @return
+ */
+static slice_t *amd64_native_uitof(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->first->assert_type == LIR_OPERAND_REG);
+    assert(op->output->assert_type == LIR_OPERAND_REG);
+
+    amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
+    amd64_asm_operand_t *output = lir_operand_trans_amd64(c, op, op->output);
+    reg_t *first_reg = first->value;
+    int first_size = first->size;
+
+    if (first_size < DWORD) {
+        amd64_asm_operand_t *new_first = AMD64_REG(reg_select(first_reg->index, TYPE_UINT32));
+        slice_push(operations, AMD64_INST("movzx", new_first, first));
+        first = new_first;
+    } else if (first_size == DWORD) {
+        amd64_asm_operand_t *new_first = AMD64_REG(reg_select(first_reg->index, TYPE_UINT64));
+        slice_push(operations, AMD64_INST("movzx", new_first, first));
+        first = new_first;
+    }
+
+    if (first_size <= DWORD) {
+        // 32位及以下直接转换
+        if (output->size == DWORD) {
+            slice_push(operations, AMD64_INST("cvtsi2ss", output, first));
+        } else {
+            slice_push(operations, AMD64_INST("cvtsi2sd", output, first));
+        }
+    } else {
+        // 64位：统一使用右移-转换-乘2
+        slice_push(operations, AMD64_INST("shr", first, AMD64_UINT8(1)));
+        if (output->size == DWORD) {
+            slice_push(operations, AMD64_INST("cvtsi2ss", output, first));
+            slice_push(operations, AMD64_INST("add", output, output));
+        } else {
+            slice_push(operations, AMD64_INST("cvtsi2sd", output, first));
+            slice_push(operations, AMD64_INST("add", output, output));
+        }
     }
 
     return operations;
@@ -873,6 +1080,12 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_UEXT] = amd64_native_zext,
         [LIR_OPCODE_SEXT] = amd64_native_sext,
         [LIR_OPCODE_TRUNC] = amd64_native_trunc,
+        [LIR_OPCODE_FTRUNC] = amd64_native_ftrunc,
+        [LIR_OPCODE_FEXT] = amd64_native_fext,
+        [LIR_OPCODE_FTOSI] = amd64_native_ftosi,
+        [LIR_OPCODE_FTOUI] = amd64_native_ftoui,
+        [LIR_OPCODE_SITOF] = amd64_native_sitof,
+        [LIR_OPCODE_UITOF] = amd64_native_uitof,
 
         [LIR_OPCODE_SAFEPOINT] = amd64_native_safepoint,
 

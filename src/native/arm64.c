@@ -305,30 +305,33 @@ static slice_t *arm64_native_trunc(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
-    int64_t size = op->output->size;
-    assert(size > 0);
+    int64_t source_size = op->first->size;
+    int64_t result_size = op->output->size;
 
-    // 先将源操作数移动到目标寄存器
-    slice_push(operations, ARM64_INST(R_MOV, result, source));
+    assert(source_size > result_size); // 确保是截断操作
+    assert(result_size > 0);
+    arm64_asm_operand_t *temp_reg = ARM64_REG(w16);
+    temp_reg->size = DWORD;
+    arm64_asm_operand_t *w_result = ARM64_REG(reg_select(result->reg.index, TYPE_INT32));
+    arm64_asm_operand_t *w_source = ARM64_REG(reg_select(source->reg.index, TYPE_INT32));
 
-    // 根据目标寄存器的大小应用适当的掩码进行截断
-    if (size == BYTE) {
-        // 截断为 8 位 (1 字节)
-        slice_push(operations, ARM64_INST(R_AND, result, result, ARM64_IMM(0xFF)));
-    } else if (size == WORD) {
-        // 截断为 16 位 (2 字节)
-        slice_push(operations, ARM64_INST(R_AND, result, result, ARM64_IMM(0xFFFF)));
-    } else if (size == DWORD) {
-        // 截断为 32 位 (4 字节)
-        // 对于 W 寄存器，高 32 位自动清零，不需要额外的 AND 操作
-        if (result->type == ARM64_ASM_OPERAND_REG && result->reg.size == QWORD) {
-            // 如果是 X 寄存器，需要显式截断高 32 位
-            slice_push(operations, ARM64_INST(R_AND, result, result, ARM64_IMM(0xFFFFFFFF)));
-        }
+    if (source_size == QWORD && result_size == DWORD) {
+        // 64位到32位：确保使用W寄存器，这会自动截断高32位
+        // 如果result已经是W寄存器，直接移动；否则需要转换
+        slice_push(operations, ARM64_INST(R_MOV, w_result, w_source));
+    } else if (result_size == WORD) {
+        // 截断到16位：使用AND掩码
+        slice_push(operations, ARM64_INST(R_MOV, temp_reg, ARM64_IMM(0xFFFF)));
+        slice_push(operations, ARM64_INST(R_AND, w_result, w_source, temp_reg));
+    } else if (result_size == BYTE) {
+        // 截断到8位：使用AND掩码
+        slice_push(operations, ARM64_INST(R_MOV, temp_reg, ARM64_IMM(0xFF)));
+        slice_push(operations, ARM64_INST(R_AND, w_result, w_source, temp_reg));
     }
 
     return operations;
 }
+
 
 static slice_t *arm64_native_sext(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
@@ -338,8 +341,15 @@ static slice_t *arm64_native_sext(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
-    if (source->size == DWORD && result->size == QWORD) {
+    int64_t result_size = op->output->size;
+    int64_t source_size = op->first->size;
+
+    if (result_size == QWORD) {
         slice_push(operations, ARM64_INST(R_SXTW, result, source));
+    } else if (result_size == DWORD) {
+        slice_push(operations, ARM64_INST(R_SXTH, result, source));
+    } else if (result_size == WORD) {
+        slice_push(operations, ARM64_INST(R_SXTB, result, source));
     } else {
         slice_push(operations, ARM64_INST(R_MOV, result, source));
     }
@@ -347,7 +357,7 @@ static slice_t *arm64_native_sext(closure_t *c, lir_op_t *op) {
     return operations;
 }
 
-static slice_t *arm64_native_zext(closure_t *c, lir_op_t *op) {
+static slice_t *arm64_native_uext(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
@@ -355,14 +365,109 @@ static slice_t *arm64_native_zext(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
-    if (source->size == DWORD && result->size == QWORD) {
+    int64_t result_size = op->output->size;
+    int64_t source_size = op->first->size;
+
+    if (result_size == QWORD) {
         slice_push(operations, ARM64_INST(R_UXTW, result, source));
+    } else if (result_size == DWORD) {
+        slice_push(operations, ARM64_INST(R_UXTH, result, source));
+    } else if (result_size == WORD) {
+        slice_push(operations, ARM64_INST(R_UXTB, result, source));
     } else {
         slice_push(operations, ARM64_INST(R_MOV, result, source));
     }
 
     return operations;
 }
+
+static slice_t *arm64_native_ftrunc(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
+    arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
+
+    // double 转 float: fcvt s0, d0
+    slice_push(operations, ARM64_INST(R_FCVT, result, source));
+
+    return operations;
+}
+
+static slice_t *arm64_native_fext(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
+    arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
+
+    // float 转 double: fcvt d0, s0
+    slice_push(operations, ARM64_INST(R_FCVT, result, source));
+
+    return operations;
+}
+
+static slice_t *arm64_native_ftosi(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
+    arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
+
+    // 浮点数转有符号整数: fcvtzs w0, s0 或 fcvtzs x0, d0
+    slice_push(operations, ARM64_INST(R_FCVTZS, result, source));
+
+    return operations;
+}
+
+static slice_t *arm64_native_ftoui(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    arm64_asm_operand_t *first = lir_operand_trans_arm64(c, op, op->first, operations);
+    arm64_asm_operand_t *output = lir_operand_trans_arm64(c, op, op->output, operations);
+    int first_size = first->size;
+    int output_size = output->size;
+
+    if (output_size < DWORD) {
+        arm64_asm_operand_t *new_output = ARM64_REG(reg_select(output->reg.index, TYPE_UINT32));
+        slice_push(operations, ARM64_INST(R_UXTH, new_output, output));
+        output = new_output;
+    } else if (output_size == DWORD) {
+        arm64_asm_operand_t *new_output = ARM64_REG(reg_select(output->reg.index, TYPE_UINT64));
+        slice_push(operations, ARM64_INST(R_UXTW, new_output, output));
+        output = new_output;
+    }
+
+    if (output_size == QWORD) {
+        slice_push(operations, ARM64_INST(R_FCVTZU, output, first));
+    } else {
+        slice_push(operations, ARM64_INST(R_FCVTZS, output, first));
+    }
+
+    return operations;
+}
+
+static slice_t *arm64_native_sitof(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
+    arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
+
+    // 有符号整数转浮点数: scvtf s0, w0 或 scvtf d0, x0
+    slice_push(operations, ARM64_INST(R_SCVTF, result, source));
+
+    return operations;
+}
+
+static slice_t *arm64_native_uitof(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    arm64_asm_operand_t *first = lir_operand_trans_arm64(c, op, op->first, operations);
+    arm64_asm_operand_t *output = lir_operand_trans_arm64(c, op, op->output, operations);
+
+    // 无符号整数转浮点数: ucvtf s0, w0 或 ucvtf d0, x0
+    slice_push(operations, ARM64_INST(R_UCVTF, output, first));
+
+    return operations;
+}
+
 
 /**
  * op->result must reg
@@ -1092,9 +1197,16 @@ arm64_native_fn arm64_native_table[] = {
 
         [LIR_OPCODE_MOVE] = arm64_native_mov,
         [LIR_OPCODE_LEA] = arm64_native_lea,
-        [LIR_OPCODE_UEXT] = arm64_native_zext,
+        [LIR_OPCODE_UEXT] = arm64_native_uext,
         [LIR_OPCODE_SEXT] = arm64_native_sext,
         [LIR_OPCODE_TRUNC] = arm64_native_trunc,
+        [LIR_OPCODE_FTRUNC] = arm64_native_ftrunc,
+        [LIR_OPCODE_FEXT] = arm64_native_fext,
+        [LIR_OPCODE_FTOSI] = arm64_native_ftosi,
+        [LIR_OPCODE_FTOUI] = arm64_native_ftoui,
+        [LIR_OPCODE_SITOF] = arm64_native_sitof,
+        [LIR_OPCODE_UITOF] = arm64_native_uitof,
+
         [LIR_OPCODE_FN_BEGIN] = arm64_native_fn_begin,
         [LIR_OPCODE_FN_END] = arm64_native_fn_end,
 

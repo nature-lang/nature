@@ -79,6 +79,7 @@ typedef struct {
 
 typedef struct {
     char *os; // 操作系统限制 (linux, darwin, windows)
+    char *arch; // CPU架构限制 (amd64, arm64, riscv64)
     int timeout; // 超时时间（秒），0表示无限制
     int repeat; // 重复次数
 } testar_case_attrs_t;
@@ -209,6 +210,7 @@ static inline testar_case_file_t *parse_file(char *content, size_t *offset) {
 static inline testar_case_attrs_t *parse_test_attrs(char *name_with_attrs, char **pure_name) {
     testar_case_attrs_t *attrs = malloc(sizeof(testar_case_attrs_t));
     attrs->os = NULL;
+    attrs->arch = NULL;
     attrs->timeout = 0;
     attrs->repeat = 0; // 默认只执行一次
 
@@ -256,6 +258,8 @@ static inline testar_case_attrs_t *parse_test_attrs(char *name_with_attrs, char 
 
             if (strcmp(key, "os") == 0) {
                 attrs->os = strdup(value);
+            } else if (strcmp(key, "arch") == 0) {
+                attrs->arch = strdup(value);
             } else if (strcmp(key, "timeout") == 0) {
                 attrs->timeout = atoi(value);
             } else if (strcmp(key, "repeat") == 0) {
@@ -284,6 +288,23 @@ static inline bool is_os_match(const char *required_os) {
     return strcmp(required_os, "windows") == 0;
 #else
     return false; // 未知系统
+#endif
+}
+
+/**
+ * 检查当前系统是否匹配指定的CPU架构
+ */
+static inline bool is_arch_match(const char *required_arch) {
+    if (!required_arch) return true; // 没有限制
+
+#if defined(__x86_64__) || defined(_M_X64)
+    return strcmp(required_arch, "amd64") == 0;
+#elif defined(__aarch64__) || defined(_M_ARM64)
+    return strcmp(required_arch, "arm64") == 0;
+#elif defined(__riscv) && (__riscv_xlen == 64)
+    return strcmp(required_arch, "riscv64") == 0;
+#else
+    return false; // 未知架构
 #endif
 }
 
@@ -408,15 +429,28 @@ static inline void feature_testar_test(char *custom_target) {
             continue;
         }
 
+        // 检查CPU架构限制
+        if (!is_arch_match(test_case->attrs->arch)) {
+            printf("test case skipped=== %s (arch mismatch: required %s)\n",
+                   test_case->name, test_case->attrs->arch);
+            continue;
+        }
+
         printf("test case start=== %s", test_case->name);
         // 收集所有需要显示的属性
-        bool has_attrs = test_case->attrs->os || test_case->attrs->timeout > 0 || test_case->attrs->repeat > 0;
+        bool has_attrs = test_case->attrs->os || test_case->attrs->arch || test_case->attrs->timeout > 0 || test_case->attrs->repeat > 0;
         if (has_attrs) {
             printf(" [");
             bool first = true;
 
             if (test_case->attrs->os) {
                 printf("os=%s", test_case->attrs->os);
+                first = false;
+            }
+
+            if (test_case->attrs->arch) {
+                if (!first) printf(",");
+                printf("arch=%s", test_case->attrs->arch);
                 first = false;
             }
 

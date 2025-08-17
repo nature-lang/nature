@@ -24,27 +24,30 @@ static void test_dump(uint32_t encoding) {
     printf("%02X %02X %02X %02X\n", byte0, byte1, byte2, byte3);
 }
 
-#define TEST_EQ(inst, ...) ({ \
-    uint8_t count = 0; \
-    uint32_t encoding = arm64_asm_inst_encoding(inst, &count); \
-    uint8_t actual[4] = { \
-        encoding & 0xFF, \
-        (encoding >> 8) & 0xFF, \
-        (encoding >> 16) & 0xFF, \
-        (encoding >> 24) & 0xFF \
-    }; \
-    uint8_t expected[] = { __VA_ARGS__ }; \
-    for (int i = 0; i < 4; i++) { \
-        assertf(actual[i] == expected[i],"Encoding mismatch\nExpected: %02X %02X %02X %02X\nActual:   %02X %02X %02X %02X\n", \
-            expected[0], expected[1], expected[2], expected[3], \
-            actual[0], actual[1], actual[2], actual[3]); \
-    } \
+#define TEST_EQ(inst, ...) ({                                                                                                  \
+    uint8_t count = 0;                                                                                                         \
+    uint32_t encoding = arm64_asm_inst_encoding(inst, &count);                                                                 \
+    uint8_t actual[4] = {                                                                                                      \
+            encoding & 0xFF,                                                                                                   \
+            (encoding >> 8) & 0xFF,                                                                                            \
+            (encoding >> 16) & 0xFF,                                                                                           \
+            (encoding >> 24) & 0xFF};                                                                                          \
+    uint8_t expected[] = {__VA_ARGS__};                                                                                        \
+    for (int i = 0; i < 4; i++) {                                                                                              \
+        assertf(actual[i] == expected[i], "Encoding mismatch\nExpected: %02X %02X %02X %02X\nActual:   %02X %02X %02X %02X\n", \
+                expected[0], expected[1], expected[2], expected[3],                                                            \
+                actual[0], actual[1], actual[2], actual[3]);                                                                   \
+    }                                                                                                                          \
 })
 
 static void test_basic() {
     lir_op_t *op = NEW(lir_op_t);
+    arm64_asm_inst_t *inst;
 
-    arm64_asm_inst_t *inst = ARM64_INST(R_SUB, ARM64_REG(x8), ARM64_REG(x10), ARM64_IMM(0x10));
+    inst = ARM64_INST(R_LDRSH, ARM64_REG(w1), ARM64_INDIRECT(x0, 2, 0, 2));
+    TEST_EQ(inst, 0x01, 0x04, 0xc0, 0x79);
+
+    inst = ARM64_INST(R_SUB, ARM64_REG(x8), ARM64_REG(x10), ARM64_IMM(0x10));
     TEST_EQ(inst, 0x48, 0x41, 0x00, 0xD1);
 
     inst = ARM64_INST(R_MRS, ARM64_REG(x0), ARM64_IMM(TPIDR_EL0));

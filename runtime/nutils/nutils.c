@@ -12,91 +12,6 @@
 int command_argc;
 char **command_argv;
 
-
-#define _NUMBER_CASTING(_kind, _input_value, _debug_int64_value)                                                                        \
-    {                                                                                                                                   \
-        switch (_kind) {                                                                                                                \
-            case TYPE_FLOAT64:                                                                                                          \
-                *(double *) output_ref = (double) _input_value;                                                                         \
-                return;                                                                                                                 \
-            case TYPE_FLOAT32:                                                                                                          \
-                *(float *) output_ref = (float) _input_value;                                                                           \
-                return;                                                                                                                 \
-            case TYPE_INT64:                                                                                                            \
-                *(int64_t *) output_ref = (int64_t) _input_value;                                                                       \
-                return;                                                                                                                 \
-            case TYPE_INT32:                                                                                                            \
-                *(int32_t *) output_ref = (int32_t) _input_value;                                                                       \
-                return;                                                                                                                 \
-            case TYPE_INT16:                                                                                                            \
-                *(int16_t *) output_ref = (int16_t) _input_value;                                                                       \
-                DEBUGF("[runtime.number_casting] output(i16): %d, debug_input(i64): %ld", *(int16_t *) output_ref, _debug_int64_value); \
-                return;                                                                                                                 \
-            case TYPE_INT8:                                                                                                             \
-                *(int8_t *) output_ref = (int8_t) _input_value;                                                                         \
-                return;                                                                                                                 \
-            case TYPE_UINT64:                                                                                                           \
-                *(uint64_t *) output_ref = (uint64_t) (int64_t) _input_value;                                                           \
-                return;                                                                                                                 \
-            case TYPE_UINT32:                                                                                                           \
-                *(uint32_t *) output_ref = (uint32_t) (int32_t) _input_value;                                                           \
-                return;                                                                                                                 \
-            case TYPE_UINT16:                                                                                                           \
-                *(uint16_t *) output_ref = (uint16_t) (int16_t) _input_value;                                                           \
-                return;                                                                                                                 \
-            case TYPE_UINT8:                                                                                                            \
-                *(uint8_t *) output_ref = (uint8_t) (int8_t) _input_value;                                                              \
-                return;                                                                                                                 \
-            default:                                                                                                                    \
-                assert(false && "cannot scanner_number_convert type");                                                                  \
-                exit(1);                                                                                                                \
-        }                                                                                                                               \
-    }
-
-void number_casting(uint64_t input_hash, void *input_ref, uint64_t output_hash, void *output_ref) {
-
-    rtype_t *input_rtype = rt_find_rtype(input_hash);
-    rtype_t *output_rtype = rt_find_rtype(output_hash);
-    assertf(input_rtype, "cannot find input_rtype by hash %lu", input_hash);
-    assertf(output_rtype, "cannot find output_rtype by hash %lu", output_hash);
-
-    DEBUGF("[number_casting] input_kind=%s, input_ref=%p,input_int64(%ld), output_kind=%s, output_ref=%p",
-           type_kind_str[input_rtype->kind], input_ref, fetch_int_value((addr_t) input_ref, input_rtype->size),
-           type_kind_str[output_rtype->kind], output_ref);
-
-    value_casting v = {0};
-    memmove(&v, input_ref, input_rtype->size);
-
-    switch (input_rtype->kind) {
-        case TYPE_FLOAT64: {
-            _NUMBER_CASTING(output_rtype->kind, v.f64_value, v.i64_value);
-        }
-        case TYPE_FLOAT32: {
-            _NUMBER_CASTING(output_rtype->kind, v.f32_value, v.i64_value);
-        }
-            // 其他类型保持不变
-        case TYPE_INT64:
-            _NUMBER_CASTING(output_rtype->kind, v.i64_value, v.i64_value);
-        case TYPE_INT32:
-            _NUMBER_CASTING(output_rtype->kind, v.i32_value, v.i64_value);
-        case TYPE_INT16:
-            _NUMBER_CASTING(output_rtype->kind, v.i16_value, v.i64_value);
-        case TYPE_INT8:
-            _NUMBER_CASTING(output_rtype->kind, v.i8_value, v.i64_value);
-        case TYPE_UINT64:
-            _NUMBER_CASTING(output_rtype->kind, v.u64_value, v.i64_value);
-        case TYPE_UINT32:
-            _NUMBER_CASTING(output_rtype->kind, v.u32_value, v.i64_value);
-        case TYPE_UINT16:
-            _NUMBER_CASTING(output_rtype->kind, v.u16_value, v.i64_value);
-        case TYPE_UINT8:
-            _NUMBER_CASTING(output_rtype->kind, v.u8_value, v.i64_value);
-        default:
-            assert(false && "type cannot ident");
-            exit(1);
-    }
-}
-
 static inline void panic_dump(coroutine_t *co, caller_t *caller, char *msg) {
     // pre_rtcall_hook 中已经记录了 ret addr
     char *dump_msg;
@@ -289,23 +204,6 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
            mu->value.i64_value);
 
     return mu;
-}
-
-/**
- * null/false/0 会转换成 false, 其他都是 true
- * @param input_rtype_hash
- * @param int_value
- * @return
- */
-n_bool_t bool_casting(uint64_t input_rtype_hash, int64_t int_value, double float_value) {
-    DEBUGF("[runtime.bool_casting] input_rtype_hash=%lu, int_value=%lu, f64_value=%f", input_rtype_hash, int_value,
-           float_value);
-    rtype_t *input_rtype = rt_find_rtype(input_rtype_hash);
-    if (is_float(input_rtype->kind)) {
-        return float_value != 0;
-    }
-
-    return int_value != 0;
 }
 
 /**
