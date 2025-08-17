@@ -1077,12 +1077,15 @@ static slice_t *riscv64_native_sext(closure_t *c, lir_op_t *op) {
     riscv64_asm_operand_t *source = lir_operand_trans_riscv64(c, op, op->first, operations);
     riscv64_asm_operand_t *result = lir_operand_trans_riscv64(c, op, op->output, operations);
 
+    int64_t result_size = op->output->size;
+    int64_t source_size = op->first->size;
+
     // 根据源操作数大小选择合适的符号扩展指令
-    if (source->size == BYTE) {
+    if (result_size == BYTE) {
         slice_push(operations, RISCV64_INST(RV_SEXT_B, result, source));
-    } else if (source->size == WORD) {
+    } else if (result_size == DWORD) {
         slice_push(operations, RISCV64_INST(RV_SEXT_H, result, source));
-    } else if (source->size == DWORD && result->size == QWORD) {
+    } else if (result_size == QWORD) {
         slice_push(operations, RISCV64_INST(RV_SEXT_W, result, source));
     } else {
         // 其他情况，直接移动
@@ -1095,18 +1098,20 @@ static slice_t *riscv64_native_sext(closure_t *c, lir_op_t *op) {
 /**
  * 无符号扩展指令(ZEXT)
  */
-static slice_t *riscv64_native_zext(closure_t *c, lir_op_t *op) {
+static slice_t *riscv64_native_uext(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     riscv64_asm_operand_t *source = lir_operand_trans_riscv64(c, op, op->first, operations);
     riscv64_asm_operand_t *result = lir_operand_trans_riscv64(c, op, op->output, operations);
 
-    // 根据源操作数大小选择合适的无符号扩展指令
-    if (source->size == BYTE) {
+    int64_t source_size = op->first->size;
+    int64_t result_size = op->output->size;
+
+    if (result_size == BYTE) {
         slice_push(operations, RISCV64_INST(RV_ZEXT_B, result, source));
-    } else if (source->size == WORD) {
+    } else if (result_size == DWORD) {
         slice_push(operations, RISCV64_INST(RV_ZEXT_H, result, source));
-    } else if (source->size == DWORD && result->size == QWORD) {
+    } else if (result_size == QWORD) {
         slice_push(operations, RISCV64_INST(RV_ZEXT_W, result, source));
     } else {
         // 其他情况，直接移动
@@ -1122,23 +1127,34 @@ static slice_t *riscv64_native_zext(closure_t *c, lir_op_t *op) {
 static slice_t *riscv64_native_trunc(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
+    assert(op->output->assert_type == LIR_OPERAND_REG || op->first->assert_type == LIR_OPERAND_REG);
+
     riscv64_asm_operand_t *source = lir_operand_trans_riscv64(c, op, op->first, operations);
     riscv64_asm_operand_t *result = lir_operand_trans_riscv64(c, op, op->output, operations);
 
     // 先将源操作数移动到目标寄存器
-    slice_push(operations, RISCV64_INST(RV_MV, result, source));
+    if (result->reg.index != source->reg.index) {
+        slice_push(operations, RISCV64_INST(RV_MV, result, source));
+    }
+
+    int64_t source_size = op->first->size;
+    int64_t result_size = op->output->size;
+    assert(source_size > result_size); // 确保是截断操作
+    assert(result_size > 0);
+    riscv64_asm_operand_t *temp_reg = RO_REG(r_x31w);
+    temp_reg->size = DWORD;
+    riscv64_asm_operand_t *w_result = RO_REG(reg_select(result->reg.index, TYPE_INT32));
+    riscv64_asm_operand_t *w_source = RO_REG(reg_select(source->reg.index, TYPE_INT32));
 
     // 根据目标寄存器的大小应用适当的掩码进行截断
-    if (result->size == BYTE) {
-        // 截断为8位
-        slice_push(operations, RISCV64_INST(RV_ANDI, result, result, RO_IMM(0xFF)));
-    } else if (result->size == WORD) {
-        // 截断为16位
-        slice_push(operations, RISCV64_INST(RV_ANDI, result, result, RO_IMM(0xFFFF)));
-    } else if (result->size == DWORD) {
-        // 截断为32位
-        // 在RISC-V中，32位操作自动清除高32位
-        slice_push(operations, RISCV64_INST(RV_ADDW, result, result, RO_REG(ZEROREG)));
+    if (source_size == QWORD && result_size == DWORD) {
+        slice_push(operations, RISCV64_INST(RV_MV, w_result, w_source));
+    } else if (result_size == WORD) {
+        slice_push(operations, RISCV64_INST(RV_LI, temp_reg, RO_IMM(0xFFFF)));
+        slice_push(operations, RISCV64_INST(RV_AND, w_result, w_source, temp_reg));
+    } else if (result_size == BYTE) {
+        slice_push(operations, RISCV64_INST(RV_LI, temp_reg, RO_IMM(0xFF)));
+        slice_push(operations, RISCV64_INST(RV_AND, w_result, w_source, temp_reg));
     }
 
     return operations;
@@ -1210,16 +1226,16 @@ static slice_t *riscv64_native_ftoui(closure_t *c, lir_op_t *op) {
     if (source->size == DWORD) {
         // 单精度浮点转无符号整数
         if (result->size == DWORD) {
-            slice_push(operations, RISCV64_INST(RV_FCVT_W_S, result, source, RO_RDM(RISCV64_RTZ))); // RTZ模式
-        } else {
             slice_push(operations, RISCV64_INST(RV_FCVT_L_S, result, source, RO_RDM(RISCV64_RTZ))); // RTZ模式
+        } else {
+            slice_push(operations, RISCV64_INST(RV_FCVT_LU_S, result, source, RO_RDM(RISCV64_RTZ))); // RTZ模式
         }
     } else {
         // 双精度浮点转无符号整数
         if (result->size == DWORD) {
-            slice_push(operations, RISCV64_INST(RV_FCVT_W_D, result, source, RO_RDM(RISCV64_RTZ))); // RTZ模式
-        } else {
             slice_push(operations, RISCV64_INST(RV_FCVT_L_D, result, source, RO_RDM(RISCV64_RTZ))); // RTZ模式
+        } else {
+            slice_push(operations, RISCV64_INST(RV_FCVT_LU_D, result, source, RO_RDM(RISCV64_RTZ))); // RTZ模式
         }
     }
 
@@ -1239,14 +1255,14 @@ static slice_t *riscv64_native_sitof(closure_t *c, lir_op_t *op) {
     // 根据源整数大小和目标浮点数精度选择指令
     if (result->size == DWORD) {
         // 转换为单精度浮点数
-        if (source->size == DWORD) {
+        if (source->size <= DWORD) {
             slice_push(operations, RISCV64_INST(RV_FCVT_S_W, result, source));
         } else {
             slice_push(operations, RISCV64_INST(RV_FCVT_S_L, result, source));
         }
     } else {
         // 转换为双精度浮点数
-        if (source->size == DWORD) {
+        if (source->size <= DWORD) {
             slice_push(operations, RISCV64_INST(RV_FCVT_D_W, result, source));
         } else {
             slice_push(operations, RISCV64_INST(RV_FCVT_D_L, result, source));
@@ -1268,14 +1284,14 @@ static slice_t *riscv64_native_uitof(closure_t *c, lir_op_t *op) {
     // 根据源整数大小和目标浮点数精度选择指令
     if (result->size == DWORD) {
         // 转换为单精度浮点数
-        if (source->size == DWORD) {
+        if (source->size <= DWORD) {
             slice_push(operations, RISCV64_INST(RV_FCVT_S_WU, result, source));
         } else {
             slice_push(operations, RISCV64_INST(RV_FCVT_S_LU, result, source));
         }
     } else {
         // 转换为双精度浮点数
-        if (source->size == DWORD) {
+        if (source->size <= DWORD) {
             slice_push(operations, RISCV64_INST(RV_FCVT_D_WU, result, source));
         } else {
             slice_push(operations, RISCV64_INST(RV_FCVT_D_LU, result, source));
@@ -1380,7 +1396,7 @@ static riscv64_native_fn riscv64_native_table[] = {
         [LIR_OPCODE_LEA] = riscv64_native_lea,
 
         // 类型扩展
-        [LIR_OPCODE_UEXT] = riscv64_native_zext,
+        [LIR_OPCODE_UEXT] = riscv64_native_uext,
         [LIR_OPCODE_SEXT] = riscv64_native_sext,
         [LIR_OPCODE_TRUNC] = riscv64_native_trunc,
         [LIR_OPCODE_FTRUNC] = riscv64_native_ftrunc,

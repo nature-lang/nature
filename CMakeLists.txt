@@ -85,50 +85,61 @@ include_directories(.)
 add_executable(nature main.c ${SRC} ${CMD} ${UTILS})
 target_link_libraries(nature m) # 链接数学计算库
 
-# custom golang build package npkg
+# custom golang build package npkg (optional)
 set(PACKAGE_BINARY_NAME npkg)
 set(PACKAGE_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME})
 
 find_program(GOBIN go
         PATHS /usr/local/go/bin /opt/go/bin
         DOC "Go compiler"
-        REQUIRED
-)
-message(STATUS "GOBIN set to: ${GOBIN}")
-
-add_custom_target(${PACKAGE_BINARY_NAME} ALL
-        COMMAND CGO_ENABLED=0 GOOS=${CMAKE_SYSTEM_NAME} GOARCH=${CMAKE_SYSTEM_PROCESSOR} ${GOBIN} build -o ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} ${PROJECT_SOURCE_DIR}/package/main.go
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/package
-        COMMENT "package manager npkg"
 )
 
-# custom rust build package nls
+if(GOBIN)
+    message(STATUS "GOBIN found: ${GOBIN}")
+    add_custom_target(${PACKAGE_BINARY_NAME} ALL
+            COMMAND CGO_ENABLED=0 GOOS=${CMAKE_SYSTEM_NAME} GOARCH=${CMAKE_SYSTEM_PROCESSOR} ${GOBIN} build -o ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} ${PROJECT_SOURCE_DIR}/package/main.go
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/package
+            COMMENT "package manager npkg"
+    )
+    set(BUILD_NPKG TRUE)
+else()
+    message(STATUS "Go compiler not found, skipping npkg build")
+    set(BUILD_NPKG FALSE)
+endif()
+
+# custom rust build package nls (optional)
 #CARGO_TARGET_DIR=/custom/path cargo build --release
 # 查找 cargo 命令，类似 gobin 的方式
 find_program(CARGOBIN cargo
         PATHS $ENV{HOME}/.cargo/bin /usr/local/bin /opt/cargo/bin
         DOC "Cargo compiler"
-        REQUIRED
 )
-message(STATUS "CARGOBIN set to: ${CARGOBIN}")
 
-set(LSP_BINARY_NAME nls)
-if(DEFINED RUST_TARGET)
-    add_custom_target(${LSP_BINARY_NAME} ALL
-            COMMAND CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR} ${CARGOBIN} build --release --target ${RUST_TARGET}
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/nls
-            COMMENT "nature language server nls"
-    )
+if(CARGOBIN)
+    message(STATUS "CARGOBIN found: ${CARGOBIN}")
+    
+    set(LSP_BINARY_NAME nls)
+    if(DEFINED RUST_TARGET)
+        add_custom_target(${LSP_BINARY_NAME} ALL
+                COMMAND CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR} ${CARGOBIN} build --release --target ${RUST_TARGET}
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/nls
+                COMMENT "nature language server nls"
+        )
 
-    set(LSP_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${RUST_TARGET}/release/${LSP_BINARY_NAME})
+        set(LSP_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${RUST_TARGET}/release/${LSP_BINARY_NAME})
+    else()
+        add_custom_target(${LSP_BINARY_NAME} ALL
+                COMMAND CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR} ${CARGOBIN} build --release
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/nls
+                COMMENT "nature language server nls"
+        )
+
+        set(LSP_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/release/${LSP_BINARY_NAME})
+    endif()
+    set(BUILD_NLS TRUE)
 else()
-    add_custom_target(${LSP_BINARY_NAME} ALL
-            COMMAND CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR} ${CARGOBIN} build --release
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/nls
-            COMMENT "nature language server nls"
-    )
-
-    set(LSP_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/release/${LSP_BINARY_NAME})
+    message(STATUS "Cargo compiler not found, skipping nls build")
+    set(BUILD_NLS FALSE)
 endif()
 
 

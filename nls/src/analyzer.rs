@@ -32,6 +32,9 @@ const TARGET_ARCH: &str = "amd64";
 #[cfg(target_arch = "aarch64")]
 const TARGET_ARCH: &str = "arm64";
 
+#[cfg(target_arch = "riscv64")]
+const TARGET_ARCH: &str = "riscv64";
+
 lazy_static! {
     static ref STD_PACKAGES: Mutex<Option<HashSet<String>>> = Mutex::new(None);
 }

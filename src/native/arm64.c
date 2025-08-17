@@ -327,9 +327,6 @@ static slice_t *arm64_native_trunc(closure_t *c, lir_op_t *op) {
         // 截断到8位：使用AND掩码
         slice_push(operations, ARM64_INST(R_MOV, temp_reg, ARM64_IMM(0xFF)));
         slice_push(operations, ARM64_INST(R_AND, w_result, w_source, temp_reg));
-    } else {
-        // 其他情况，可能需要更复杂的处理
-        assertf(false, "Unsupported trunc operation: %ld -> %ld", source_size, result_size);
     }
 
     return operations;
@@ -344,11 +341,14 @@ static slice_t *arm64_native_sext(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
-    if (result->size == QWORD) {
+    int64_t result_size = op->output->size;
+    int64_t source_size = op->first->size;
+
+    if (result_size == QWORD) {
         slice_push(operations, ARM64_INST(R_SXTW, result, source));
-    } else if (result->size == DWORD) {
+    } else if (result_size == DWORD) {
         slice_push(operations, ARM64_INST(R_SXTH, result, source));
-    } else if (result->size == WORD) {
+    } else if (result_size == WORD) {
         slice_push(operations, ARM64_INST(R_SXTB, result, source));
     } else {
         slice_push(operations, ARM64_INST(R_MOV, result, source));
@@ -365,11 +365,14 @@ static slice_t *arm64_native_uext(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
-    if (result->size == QWORD) {
+    int64_t result_size = op->output->size;
+    int64_t source_size = op->first->size;
+
+    if (result_size == QWORD) {
         slice_push(operations, ARM64_INST(R_UXTW, result, source));
-    } else if (result->size == DWORD) {
+    } else if (result_size == DWORD) {
         slice_push(operations, ARM64_INST(R_UXTH, result, source));
-    } else if (result->size == WORD) {
+    } else if (result_size == WORD) {
         slice_push(operations, ARM64_INST(R_UXTB, result, source));
     } else {
         slice_push(operations, ARM64_INST(R_MOV, result, source));
@@ -417,18 +420,26 @@ static slice_t *arm64_native_ftosi(closure_t *c, lir_op_t *op) {
 static slice_t *arm64_native_ftoui(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
-    arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
-    arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
+    arm64_asm_operand_t *first = lir_operand_trans_arm64(c, op, op->first, operations);
+    arm64_asm_operand_t *output = lir_operand_trans_arm64(c, op, op->output, operations);
+    int first_size = first->size;
+    int output_size = output->size;
 
-    //    if (op->output->size == QWORD) {
-    //        // 浮点数转无符号整数: fcvtzu w0, s0 或 fcvtzu x0, d0
-    //        slice_push(operations, ARM64_INST(R_FCVTZU, result, source));
-    //    } else {
-    //    arm64_asm_operand_t *temp_reg = ARM64_REG(w16);
-    //    temp_reg->size = DWORD;
-    slice_push(operations, ARM64_INST(R_FCVTZS, result, source));
-    //    slice_push(operations, ARM64_INST(R_MOV, result, temp_reg));
-    //    }
+    if (output_size < DWORD) {
+        arm64_asm_operand_t *new_output = ARM64_REG(reg_select(output->reg.index, TYPE_UINT32));
+        slice_push(operations, ARM64_INST(R_UXTH, new_output, output));
+        output = new_output;
+    } else if (output_size == DWORD) {
+        arm64_asm_operand_t *new_output = ARM64_REG(reg_select(output->reg.index, TYPE_UINT64));
+        slice_push(operations, ARM64_INST(R_UXTW, new_output, output));
+        output = new_output;
+    }
+
+    if (output_size == QWORD) {
+        slice_push(operations, ARM64_INST(R_FCVTZU, output, first));
+    } else {
+        slice_push(operations, ARM64_INST(R_FCVTZS, output, first));
+    }
 
     return operations;
 }
@@ -448,11 +459,11 @@ static slice_t *arm64_native_sitof(closure_t *c, lir_op_t *op) {
 static slice_t *arm64_native_uitof(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
-    arm64_asm_operand_t *source = lir_operand_trans_arm64(c, op, op->first, operations);
-    arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
+    arm64_asm_operand_t *first = lir_operand_trans_arm64(c, op, op->first, operations);
+    arm64_asm_operand_t *output = lir_operand_trans_arm64(c, op, op->output, operations);
 
     // 无符号整数转浮点数: ucvtf s0, w0 或 ucvtf d0, x0
-    slice_push(operations, ARM64_INST(R_UCVTF, result, source));
+    slice_push(operations, ARM64_INST(R_UCVTF, output, first));
 
     return operations;
 }
