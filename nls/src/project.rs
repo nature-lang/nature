@@ -4,9 +4,9 @@ use crate::analyzer::semantic::Semantic;
 use crate::analyzer::symbol::{NodeId, SymbolTable};
 use crate::analyzer::syntax::Syntax;
 use crate::analyzer::typesys::Typesys;
+use crate::analyzer::flow::Flow;
 use crate::analyzer::{analyze_imports, register_global_symbol};
 use crate::package::parse_package;
-use crate::utils::errors_push;
 use log::debug;
 use ropey::Rope;
 use std::collections::{HashMap, HashSet};
@@ -375,6 +375,7 @@ impl Project {
             let mut module_db = self.module_db.lock().unwrap();
             let mut symbol_table = self.symbol_table.lock().unwrap();
             let m = &mut module_db[index];
+            m.all_fndefs = Vec::new();
             Semantic::new(m, &mut symbol_table).analyze();
         }
 
@@ -387,11 +388,16 @@ impl Project {
             m.analyzer_errors.extend(errors);
         }
 
+
         for index in module_indexes.clone() {
             let mut module_db = self.module_db.lock().unwrap();
             let mut symbol_table = self.symbol_table.lock().unwrap();
             let m = &mut module_db[index];
-            let errors = Typesys::new(&mut symbol_table, m).infer();
+            let mut errors = Typesys::new(&mut symbol_table, m).infer();
+            m.analyzer_errors.extend(errors);
+
+            // check returns
+            errors = Flow::new(m).analyze();
             m.analyzer_errors.extend(errors);
         }
 

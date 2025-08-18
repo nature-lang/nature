@@ -3642,17 +3642,22 @@ impl<'a> Typesys<'a> {
         }
 
         // 检查类型状态
-        if !Type::ident_is_parm(&dst) {
-            assert!(dst.status == ReductionStatus::Done, "type '{}' not reduction", dst);
-        }
-        if !Type::ident_is_parm(&src) {
-            assert!(src.status == ReductionStatus::Done, "type '{}' not reduction", src);
+        if !Type::ident_is_param(&dst) {
+            if dst.status != ReductionStatus::Done {
+                return false;
+            }
         }
 
-        assert!(
-            !matches!(dst.kind, TypeKind::Unknown) && !matches!(src.kind, TypeKind::Unknown),
-            "type unknown cannot infer"
-        );
+        if !Type::ident_is_param(&src) {
+            if src.status != ReductionStatus::Done {
+                return false;
+            }
+        }
+
+        if matches!(dst.kind, TypeKind::Unknown) || matches!(src.kind, TypeKind::Unknown) {
+            return false;
+        }
+
 
         if dst.ident_kind == TypeIdentKind::Builtin && dst.ident == "all_t".to_string() {
             return true;
@@ -3683,7 +3688,7 @@ impl<'a> Typesys<'a> {
         }
 
         // 处理泛型参数
-        if Type::ident_is_parm(&dst) {
+        if Type::ident_is_param(&dst) {
             assert!(src.status == ReductionStatus::Done);
             // let generics_param_table = generics_param_table.as_mut().unwrap();
             let param_ident = dst.ident.clone();
