@@ -1,10 +1,10 @@
 use crate::analyzer::common::{AnalyzerError, AstFnDef, AstNode, ImportStmt, PackageConfig, Stmt};
+use crate::analyzer::flow::Flow;
 use crate::analyzer::lexer::{Lexer, Token};
 use crate::analyzer::semantic::Semantic;
 use crate::analyzer::symbol::{NodeId, SymbolTable};
 use crate::analyzer::syntax::Syntax;
 use crate::analyzer::typesys::Typesys;
-use crate::analyzer::flow::Flow;
 use crate::analyzer::{analyze_imports, register_global_symbol};
 use crate::package::parse_package;
 use log::debug;
@@ -170,7 +170,7 @@ impl Project {
 
         // handle builtin list
         for file_path in builtin_list {
-            project.build(&file_path, "").await;
+            project.build(&file_path, "", None).await;
         }
 
         return project;
@@ -211,7 +211,7 @@ impl Project {
             }
 
             // build
-            self.build(&item.path, "").await;
+            self.build(&item.path, "", None).await;
         }
     }
 
@@ -249,7 +249,7 @@ impl Project {
         result
     }
 
-    pub async fn build(&mut self, main_path: &str, module_ident: &str) -> usize {
+    pub async fn build(&mut self, main_path: &str, module_ident: &str, content_option: Option<String>) -> usize {
         // 所有未编译的 import 模块, 都需要进行关联处理
         let mut worklist: Vec<ImportStmt> = Vec::new();
         let mut handled: HashSet<String> = HashSet::new();
@@ -272,12 +272,13 @@ impl Project {
             let index: usize = if let Some(i) = index_option {
                 // 如果 import module 已经存在 module 则不需要进行重复编译, main path module 则进行强制更新
                 if import_stmt.full_path == main_path {
-                    // 需要更新现有模块的内容
-                    let content = std::fs::read_to_string(&import_stmt.full_path).unwrap();
-                    let mut module_db = self.module_db.lock().unwrap();
-                    let m = &mut module_db[i];
-                    m.source = content;
-                    m.rope = ropey::Rope::from_str(&m.source);
+                    // 需要更新现有模块的内容(也就是当前文件)
+                    if let Some(ref content) = content_option {
+                        let mut module_db = self.module_db.lock().unwrap();
+                        let m = &mut module_db[i];
+                        m.source = content.clone();
+                        m.rope = ropey::Rope::from_str(&m.source);
+                    }
                     i.clone()
                 } else {
                     continue;
@@ -387,7 +388,6 @@ impl Project {
             let errors = Typesys::new(&mut symbol_table, m).pre_infer();
             m.analyzer_errors.extend(errors);
         }
-
 
         for index in module_indexes.clone() {
             let mut module_db = self.module_db.lock().unwrap();

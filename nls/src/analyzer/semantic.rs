@@ -31,8 +31,8 @@ impl<'a> Semantic<'a> {
         }
     }
 
-    fn enter_scope(&mut self, kind: ScopeKind) {
-        let scope_id = self.symbol_table.create_scope(kind, self.current_scope_id);
+    fn enter_scope(&mut self, kind: ScopeKind, start: usize, end: usize) {
+        let scope_id = self.symbol_table.create_scope(kind, self.current_scope_id, start, end);
         self.current_scope_id = scope_id;
     }
 
@@ -764,7 +764,11 @@ impl<'a> Semantic<'a> {
             fn_init.symbol_name = format_global_ident(self.module.ident.clone(), "init".to_string());
             fn_init.fn_name = fn_init.symbol_name.clone();
             fn_init.return_type = Type::new(TypeKind::Void);
-            fn_init.body = var_assign_list;
+            fn_init.body = AstBody{
+                stmts: var_assign_list,
+                start: 0,
+                end: 0,
+            };
 
             global_fn_stmt_list.push(Arc::new(Mutex::new(fn_init)));
         }
@@ -851,8 +855,13 @@ impl<'a> Semantic<'a> {
                 fndef.is_generics = true;
             }
 
-            if fndef.is_tpl {
-                assert!(fndef.body.len() == 0);
+            if fndef.is_tpl && fndef.body.stmts.len() == 0 {
+                // assert!(fndef.body.stmts.len() == 0);
+                errors_push(self.module, AnalyzerError{
+                    start: fndef.symbol_start,
+                    end: fndef.symbol_end,
+                    message: "tpl fn cannot have body".to_string()
+                })
             }
 
             self.analyze_type(&mut fndef.return_type);
@@ -894,7 +903,7 @@ impl<'a> Semantic<'a> {
                 }
             }
 
-            self.enter_scope(ScopeKind::GlobalFn(fndef_mutex.clone()));
+            self.enter_scope(ScopeKind::GlobalFn(fndef_mutex.clone()), fndef.symbol_start, fndef.symbol_end);
 
             // 函数形参处理
             for param_mutex in &fndef.params {
@@ -931,7 +940,7 @@ impl<'a> Semantic<'a> {
                 std::mem::take(&mut fndef.body)
             };
 
-            if body.len() > 0 {
+            if body.stmts.len() > 0 {
                 self.analyze_body(&mut body);
             }
 
@@ -951,8 +960,8 @@ impl<'a> Semantic<'a> {
         self.exit_scope();
     }
 
-    pub fn analyze_body(&mut self, body: &mut Vec<Box<Stmt>>) {
-        for stmt in body {
+    pub fn analyze_body(&mut self, body: &mut AstBody) {
+        for stmt in &mut body.stmts {
             self.analyze_stmt(stmt);
         }
     }
@@ -1070,7 +1079,7 @@ impl<'a> Semantic<'a> {
         return false;
     }
 
-    pub fn analyze_match(&mut self, subject: &mut Option<Box<Expr>>, cases: &mut Vec<MatchCase>) {
+    pub fn analyze_match(&mut self, subject: &mut Option<Box<Expr>>, cases: &mut Vec<MatchCase>, start: usize, end: usize) {
         let mut subject_ident: Option<String> = None;
         let mut subject_symbol_id: NodeId = 0;
 
@@ -1084,7 +1093,7 @@ impl<'a> Semantic<'a> {
             self.analyze_expr(subject_expr);
         }
 
-        self.enter_scope(ScopeKind::Local);
+        self.enter_scope(ScopeKind::Local, start, end);
         let cases_len = cases.len();
         for (i, case) in cases.iter_mut().enumerate() {
             let cond_list_len = case.cond_list.len();
@@ -1135,15 +1144,18 @@ impl<'a> Semantic<'a> {
                 let Some(subject_literal) = subject_ident.clone() else { unreachable!() };
                 let Some(cond_expr) = case.cond_list.first() else { unreachable!() };
                 let AstNode::MatchIs(target_type) = &cond_expr.node else { unreachable!() };
-                case.handle_body.insert(
+                case.handle_body.stmts.insert(
                     0,
                     self.auto_as_stmt(cond_expr.start, cond_expr.end, &subject_literal, subject_symbol_id, target_type),
                 );
             }
 
-            self.enter_scope(ScopeKind::Local);
-            self.analyze_body(&mut case.handle_body);
-            self.exit_scope();
+            if case.handle_body.stmts.len() > 0 {
+                self.enter_scope(ScopeKind::Local, case.handle_body.start, case.handle_body.end);
+                self.analyze_body(&mut case.handle_body);
+                self.exit_scope();
+            }
+
         }
         self.exit_scope();
     }
@@ -1185,10 +1197,11 @@ impl<'a> Semantic<'a> {
             AstNode::Catch(try_expr, catch_err, catch_body) => {
                 self.analyze_expr(try_expr);
 
-                self.enter_scope(ScopeKind::Local);
+                self.enter_scope(ScopeKind::Local, catch_body.start, catch_body.end);
                 self.analyze_var_decl(catch_err);
                 self.analyze_body(catch_body);
                 self.exit_scope();
+
             }
             AstNode::As(type_, src) => {
                 self.analyze_type(type_);
@@ -1292,7 +1305,7 @@ impl<'a> Semantic<'a> {
                 // propagation
                 self.constant_propagation(expr);
             }
-            AstNode::Match(subject, cases) => self.analyze_match(subject, cases),
+            AstNode::Match(subject, cases) => self.analyze_match(subject, cases, expr.start, expr.end),
             AstNode::Call(call) => self.analyze_call(call),
             AstNode::MacroAsync(async_expr) => self.analyze_async(async_expr),
             AstNode::FnDef(fndef_mutex) => self.analyze_local_fndef(fndef_mutex),
@@ -1402,7 +1415,7 @@ impl<'a> Semantic<'a> {
 
         self.analyze_type(&mut fndef.return_type);
 
-        self.enter_scope(ScopeKind::LocalFn(fndef_mutex.clone()));
+        self.enter_scope(ScopeKind::LocalFn(fndef_mutex.clone()), fndef.symbol_start, fndef.symbol_end);
 
         // 形参处理
         for param_mutex in &fndef.params {
@@ -1537,7 +1550,7 @@ impl<'a> Semantic<'a> {
         })
     }
 
-    pub fn analyze_if(&mut self, cond: &mut Box<Expr>, consequent: &mut Vec<Box<Stmt>>, alternate: &mut Vec<Box<Stmt>>) {
+    pub fn analyze_if(&mut self, cond: &mut Box<Expr>, consequent: &mut AstBody, alternate: &mut AstBody) {
         // if has is expr push T e = e as T
         if let Some(is_expr) = self.extract_is_expr(cond) {
             assert!(matches!(is_expr.node, AstNode::Is(..)));
@@ -1547,16 +1560,16 @@ impl<'a> Semantic<'a> {
 
             let ast_stmt = self.auto_as_stmt(is_expr.start, is_expr.end, &ident, *symbol_id, &target_type);
             // insert ast_stmt to consequent first
-            consequent.insert(0, ast_stmt);
+            consequent.stmts.insert(0, ast_stmt);
         }
 
         self.analyze_expr(cond);
 
-        self.enter_scope(ScopeKind::Local);
+        self.enter_scope(ScopeKind::Local, consequent.start, consequent.end);
         self.analyze_body(consequent);
         self.exit_scope();
 
-        self.enter_scope(ScopeKind::Local);
+        self.enter_scope(ScopeKind::Local, alternate.start, alternate.end);
         self.analyze_body(alternate);
         self.exit_scope();
     }
@@ -1618,17 +1631,17 @@ impl<'a> Semantic<'a> {
             AstNode::Catch(try_expr, catch_err, catch_body) => {
                 self.analyze_expr(try_expr);
 
-                self.enter_scope(ScopeKind::Local);
+                self.enter_scope(ScopeKind::Local, stmt.start, stmt.end);
                 self.analyze_var_decl(&catch_err);
                 self.analyze_body(catch_body);
                 self.exit_scope();
             }
             AstNode::TryCatch(try_body, catch_err, catch_body) => {
-                self.enter_scope(ScopeKind::Local);
+                self.enter_scope(ScopeKind::Local, stmt.start, stmt.end);
                 self.analyze_body(try_body);
                 self.exit_scope();
 
-                self.enter_scope(ScopeKind::Local);
+                self.enter_scope(ScopeKind::Local, stmt.start, stmt.end);
                 self.analyze_var_decl(&catch_err);
                 self.analyze_body(catch_body);
                 self.exit_scope();
@@ -1639,7 +1652,7 @@ impl<'a> Semantic<'a> {
                     if let Some(on_call) = &mut case.on_call {
                         self.analyze_call(on_call);
                     }
-                    self.enter_scope(ScopeKind::Local);
+                    self.enter_scope(ScopeKind::Local, stmt.start, stmt.end);
                     if let Some(recv_var) = &case.recv_var {
                         self.analyze_var_decl(recv_var);
                     }
@@ -1651,8 +1664,8 @@ impl<'a> Semantic<'a> {
                         errors_push(
                             self.module,
                             AnalyzerError {
-                                start: case.handle_body[0].start,
-                                end: case.handle_body[0].end,
+                                start: case.handle_body.start,
+                                end: case.handle_body.end,
                                 message: "default case must be the last case".to_string(),
                             },
                         );
@@ -1667,14 +1680,14 @@ impl<'a> Semantic<'a> {
             }
             AstNode::ForCond(condition, body) => {
                 self.analyze_expr(condition);
-                self.enter_scope(ScopeKind::Local);
+                self.enter_scope(ScopeKind::Local, stmt.start, stmt.end);
                 self.analyze_body(body);
                 self.exit_scope();
             }
             AstNode::ForIterator(iterate, first, second, body) => {
                 self.analyze_expr(iterate);
 
-                self.enter_scope(ScopeKind::Local);
+                self.enter_scope(ScopeKind::Local, stmt.start, stmt.end);
                 self.analyze_var_decl(first);
                 if let Some(second) = second {
                     self.analyze_var_decl(second);
@@ -1683,7 +1696,7 @@ impl<'a> Semantic<'a> {
                 self.exit_scope();
             }
             AstNode::ForTradition(init, condition, update, body) => {
-                self.enter_scope(ScopeKind::Local);
+                self.enter_scope(ScopeKind::Local, stmt.start, stmt.end);
                 self.analyze_stmt(init);
                 self.analyze_expr(condition);
                 self.analyze_stmt(update);

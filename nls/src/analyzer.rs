@@ -5,6 +5,7 @@ pub mod semantic;
 pub mod symbol;
 pub mod syntax;
 pub mod typesys;
+pub mod completion;
 
 use std::path::Path;
 

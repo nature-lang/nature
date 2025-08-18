@@ -2,6 +2,7 @@ use dashmap::DashMap;
 use log::debug;
 use nls::analyzer::lexer::{TokenType, LEGEND_TYPE};
 use nls::analyzer::module_unique_ident;
+use nls::analyzer::completion::{CompletionProvider, extract_prefix_at_position, CompletionItemKind};
 use nls::package::parse_package;
 use nls::project::Project;
 use nls::utils::offset_to_position;
@@ -369,7 +370,7 @@ impl LanguageServer for Backend {
     }
 
     async fn inlay_hint(&self, _params: tower_lsp::lsp_types::InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
-        // debug!("inlay hint");
+        // dbg!("inlay hint");
         // let uri = &params.text_document.uri;
         // let mut hashmap = HashMap::new();
         // if let Some(ast) = self.ast_map.get(uri.as_str()) {
@@ -429,49 +430,67 @@ impl LanguageServer for Backend {
     }
 
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
-        let _uri = params.text_document_position.text_document.uri;
-        let _position = params.text_document_position.position;
-        let completions = || -> Option<Vec<CompletionItem>> {
-            // let rope = self.document_map.get(&uri.to_string())?;
-            // let ast = self.ast_map.get(&uri.to_string())?;
-            // let char = rope.try_line_to_char(position.line as usize).ok()?;
-            // let offset = char + position.character as usize;
-            // let completions = completion(&ast, offset);
-            // let mut ret = Vec::with_capacity(completions.len());
-            // for (_, item) in completions {
-            //     match item {
-            //         nls::completion::ImCompleteCompletionItem::Variable(var) => {
-            //             ret.push(CompletionItem {
-            //                 label: var.clone(),
-            //                 insert_text: Some(var.clone()),
-            //                 kind: Some(CompletionItemKind::VARIABLE),
-            //                 detail: Some(var),
-            //                 ..Default::default()
-            //             });
-            //         }
-            //         nls::completion::ImCompleteCompletionItem::Function(name, args) => {
-            //             ret.push(CompletionItem {
-            //                 label: name.clone(),
-            //                 kind: Some(CompletionItemKind::FUNCTION),
-            //                 detail: Some(name.clone()),
-            //                 insert_text: Some(format!(
-            //                     "{}({})",
-            //                     name,
-            //                     args.iter()
-            //                         .enumerate()
-            //                         .map(|(index, item)| { format!("${{{}:{}}}", index + 1, item) })
-            //                         .collect::<Vec<_>>()
-            //                         .join(",")
-            //                 )),
-            //                 insert_text_format: Some(InsertTextFormat::SNIPPET),
-            //                 ..Default::default()
-            //             });
-            //         }
-            //     }
-            // }
-            // Some(ret)
-            None
+        dbg!("completion requested");
+
+        let uri = params.text_document_position.text_document.uri;
+        let position: Position = params.text_document_position.position;
+        
+        let completions = || -> Option<Vec<tower_lsp::lsp_types::CompletionItem>> {
+            let file_path = uri.path();
+            let project = self.get_file_project(&file_path)?;
+            
+            // 获取模块索引
+            let module_index = {
+                let module_handled = project.module_handled.lock().unwrap();
+                module_handled.get(file_path)?.clone()
+            };
+
+            let mut module_db = project.module_db.lock().unwrap();
+            let module = &mut module_db[module_index];
+            
+            // 将LSP位置转换为字节偏移
+            let rope = &module.rope;
+            let line_char = rope.try_line_to_char(position.line as usize).ok()?;
+            let byte_offset = line_char + position.character as usize;
+            
+            // 获取当前位置的前缀
+            let text = rope.to_string();
+            let prefix = extract_prefix_at_position(&text, byte_offset);
+            debug!("Extracted prefix: '{}', module_ident '{}', raw_text '{}'", prefix, module.ident.clone(), text);
+            
+            // 获取符号表
+            let mut symbol_table = project.symbol_table.lock().unwrap();
+            // 创建完成提供器并获取完成项
+            let completion_items = CompletionProvider::new(&mut symbol_table, module).get_completions(byte_offset, &prefix);
+            
+            // 转换为LSP格式
+            let lsp_items: Vec<tower_lsp::lsp_types::CompletionItem> = completion_items.into_iter()
+                .map(|item| {
+                    let lsp_kind = match item.kind {
+                        CompletionItemKind::Variable => tower_lsp::lsp_types::CompletionItemKind::VARIABLE,
+                        CompletionItemKind::Parameter => tower_lsp::lsp_types::CompletionItemKind::VARIABLE,
+                        CompletionItemKind::Function => tower_lsp::lsp_types::CompletionItemKind::FUNCTION,
+                        CompletionItemKind::Constant => tower_lsp::lsp_types::CompletionItemKind::CONSTANT,
+                    };
+                    
+                    tower_lsp::lsp_types::CompletionItem {
+                        label: item.label,
+                        kind: Some(lsp_kind),
+                        detail: item.detail,
+                        documentation: item.documentation.map(|doc| {
+                            tower_lsp::lsp_types::Documentation::String(doc)
+                        }),
+                        insert_text: Some(item.insert_text),
+                        sort_text: item.sort_text,
+                        ..Default::default()
+                    }
+                })
+                .collect();
+            
+            debug!("Returning {} completion items", lsp_items.len());
+            Some(lsp_items)
         }();
+        
         Ok(completions.map(CompletionResponse::Array))
     }
 
@@ -624,7 +643,6 @@ impl Backend {
     }
 
     async fn on_change<'a>(&self, params: TextDocumentItem<'a>) {
-        dbg!(&params.uri);
         debug!(
             r#"Text content:
         {}
@@ -636,7 +654,6 @@ impl Backend {
         let Some(mut project) = self.get_file_project(&file_path) else {
             unreachable!()
         };
-        debug!("file {} change in project {:?}", file_path, project.root);
 
         // package.toml specail handle
         if file_path.ends_with("package.toml") {
@@ -647,7 +664,7 @@ impl Backend {
         debug!("will build, module ident: {}", module_ident);
 
         //  基于 project path 计算 moudle ident
-        let module_index = project.build(&file_path, &module_ident).await;
+        let module_index = project.build(&file_path, &module_ident, Some(params.text.to_string())).await;
         debug!("build success");
 
         let diagnostics = {

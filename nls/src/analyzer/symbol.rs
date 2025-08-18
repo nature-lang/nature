@@ -18,7 +18,7 @@ pub struct Arena<T> {
 
 impl<T> Arena<T> {
     fn new() -> Self {
-        Arena { 
+        Arena {
             items: HashMap::new(),
             next_id: 1,
         }
@@ -61,7 +61,7 @@ pub struct Symbol {
     pub kind: SymbolKind,
     pub defined_in: NodeId, // defined in scope
     pub is_local: bool, // 是否是 module 级别的 global symbol
-    pub pos: usize,         // 符号定义的其实位置
+    pub pos: usize,         // 符号定义的起始
 
     // local symbol 需要一些额外信息
     pub is_capture: bool, // 如果变量被捕获，则需要分配到堆中，避免作用域问题
@@ -124,7 +124,7 @@ impl SymbolTable {
             global_scope_id: 0,
         };
 
-        result.global_scope_id = result.create_scope(ScopeKind::Global, 0);
+        result.global_scope_id = result.create_scope(ScopeKind::Global, 0, 0, 0);
 
         result
     }
@@ -134,13 +134,13 @@ impl SymbolTable {
     }
 
     // 创建新的作用域
-    pub fn create_scope(&mut self, kind: ScopeKind, parent_id: NodeId) -> NodeId {
+    pub fn create_scope(&mut self, kind: ScopeKind, parent_id: NodeId, start: usize, end: usize) -> NodeId {
         let new_scope = Scope {
             parent: parent_id,
             symbols: Vec::new(),
             children: Vec::new(),
             symbol_map: HashMap::new(),
-            range: (0, 0),
+            range: (start, end),
             kind,
             frees: HashMap::new(),
         };
@@ -184,7 +184,7 @@ impl SymbolTable {
             // return *scope_id;
         }
 
-        let scope_id = self.create_scope(ScopeKind::Module(moudel_ident.clone()), self.global_scope_id);
+        let scope_id = self.create_scope(ScopeKind::Module(moudel_ident.clone()), self.global_scope_id, 0, 0);
         self.module_scopes.insert(moudel_ident, scope_id);
         scope_id
     }
@@ -219,7 +219,7 @@ impl SymbolTable {
 
                 self.symbols.remove(*global_symbol_id);
                 global_scope.symbol_map.remove(ident);
-            } 
+            }
 
 
             self.symbols.remove(*module_symbol_id);
@@ -250,7 +250,7 @@ impl SymbolTable {
         if let Some(&_) = global_scope.symbol_map.get(&global_ident) {
             // 获取已存在的符号
             return Err(format!("redeclare global ident '{}'", global_ident));
-        } 
+        }
 
         let symbol = Symbol {
             ident: global_ident.clone(),
@@ -268,7 +268,7 @@ impl SymbolTable {
         // scope.symbols.push(symbol_id); // 为了方便清理, 不添加到 symbols  中
         global_scope.symbol_map.insert(global_ident.clone(), global_symbol_id);
 
-        debug!("define global symbol {}, global symbol_id: {}, defined_in_scope_id: {}", &global_ident, global_symbol_id, defined_in);
+        // debug!("define global symbol {}, global symbol_id: {}, defined_in_scope_id: {}", &global_ident, global_symbol_id, defined_in);
 
         Ok(global_symbol_id)
     }
@@ -325,7 +325,7 @@ impl SymbolTable {
             scope.symbol_map.insert(ident.clone(), symbol_id);
         }
 
-        debug!("define symbol {}, module symbol_id: {}, defined_in_scope_id: {}",  &ident, symbol_id, scope_id);
+        // debug!("define symbol {}, module symbol_id: {}, defined_in_scope_id: {}",  &ident, symbol_id, scope_id);
 
         Ok(symbol_id)
     }
@@ -422,15 +422,19 @@ impl SymbolTable {
         self.symbols.get_mut(id)
     }
 
+    pub fn get_symbol_ref(&self, id: NodeId) -> Option<&Symbol> {
+        self.symbols.get(id)
+    }
+
     // 打印作用域树（用于调试）
     pub fn print_scope_tree(&self, scope_id: NodeId, indent: usize) {
         if let Some(scope) = self.scopes.get(scope_id) {
-            println!("{}Scope {:?}:", " ".repeat(indent), scope_id);
+            debug!("{}Scope {:?}:", " ".repeat(indent), scope_id);
 
             // 打印该作用域中的符号
             for &symbol_id in &scope.symbols {
                 if let Some(symbol) = self.symbols.get(symbol_id) {
-                    println!("{}  Symbol: {} ({:?})", " ".repeat(indent), symbol.ident, symbol.kind);
+                    debug!("{}  Symbol: {} ({:?})", " ".repeat(indent), symbol.ident, symbol.kind);
                 }
             }
 

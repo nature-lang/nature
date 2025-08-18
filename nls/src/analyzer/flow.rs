@@ -1,4 +1,4 @@
-use crate::analyzer::common::{AnalyzerError, AstCall, AstFnDef, AstNode, Expr, Stmt, TypeKind, VarDeclExpr};
+use crate::analyzer::common::{AnalyzerError, AstBody, AstCall, AstFnDef, AstNode, Expr, Stmt, TypeKind, VarDeclExpr};
 use crate::project::Module;
 use std::sync::{Arc, Mutex};
 
@@ -35,11 +35,11 @@ impl<'a> Flow<'a> {
         }
     }
 
-    fn analyze_body(&mut self, stmts: &Vec<Box<Stmt>>) -> (bool, bool) {
+    fn analyze_body(&mut self, body: &AstBody) -> (bool, bool) {
         let mut has_return = false;
         let mut has_break = false;
 
-        for stmt in stmts {
+        for stmt in &body.stmts {
             let (item_has_return, item_has_break) = self.analyze_stmt(stmt);
             has_return = has_return || item_has_return;
             has_break = has_break || item_has_break;
@@ -77,11 +77,11 @@ impl<'a> Flow<'a> {
                 }
                 (false, false)
             }
-            AstNode::If(condition, then_stmts, else_stmts) => {
+            AstNode::If(condition, then_body, else_body) => {
                 self.analyze_expr(condition);
-                let (then_has_return, then_has_break) = self.analyze_body(then_stmts);
-                let (else_has_return, else_has_break) = if !else_stmts.is_empty() {
-                    self.analyze_body(else_stmts)
+                let (then_has_return, then_has_break) = self.analyze_body(then_body);
+                let (else_has_return, else_has_break) = if !else_body.stmts.is_empty() {
+                    self.analyze_body(else_body)
                 } else {
                     (false, false)
                 };
