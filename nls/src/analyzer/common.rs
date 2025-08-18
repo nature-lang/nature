@@ -173,7 +173,7 @@ impl Type {
         }
     }
 
-    pub fn ident_is_parm(&self) -> bool {
+    pub fn ident_is_param(&self) -> bool {
         if self.kind != TypeKind::Ident {
             return false;
         }

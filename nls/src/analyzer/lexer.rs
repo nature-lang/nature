@@ -1152,7 +1152,6 @@ impl Lexer {
         // must close char, 跳过结束引号，但不计入 token 长度
         self.guard_advance();
 
-        dbg!(&result);
         result
     }
 

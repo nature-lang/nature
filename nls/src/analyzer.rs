@@ -1,5 +1,6 @@
 pub mod common;
 pub mod lexer; // 声明子模块
+pub mod flow;
 pub mod semantic;
 pub mod symbol;
 pub mod syntax;
