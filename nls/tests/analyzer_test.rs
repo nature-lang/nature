@@ -24,7 +24,7 @@ async fn test_project() {
     let module_ident = "nature-test.main";
     let file_path = "/Users/weiwenhao/Code/nature-test/main.n";
 
-    let module_index = project.build(&file_path, &module_ident).await;
+    let module_index = project.build(&file_path, &module_ident, None).await;
     dbg!(module_index);
 
     let mut module_db = project.module_db.lock().unwrap();

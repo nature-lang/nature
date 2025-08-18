@@ -552,9 +552,10 @@ impl<'a> Syntax {
         return (stmt_list, self.token_db.clone(), self.module.analyzer_errors.clone());
     }
 
-    fn parser_body(&mut self) -> Result<Vec<Box<Stmt>>, SyntaxError> {
-        let mut stmt_list = Vec::new();
+    fn parser_body(&mut self) -> Result<AstBody, SyntaxError> {
+        let mut stmts = Vec::new();
         self.must(TokenType::LeftCurly)?;
+        let start = self.prev().unwrap().start;
 
         while !self.is(TokenType::RightCurly) {
             if self.is(TokenType::Eof) {
@@ -566,7 +567,7 @@ impl<'a> Syntax {
             }
 
             match self.parser_stmt() {
-                Ok(stmt) => stmt_list.push(stmt),
+                Ok(stmt) => stmts.push(stmt),
                 Err(e) => {
                     errors_push(
                         &mut self.module,
@@ -585,8 +586,9 @@ impl<'a> Syntax {
             }
         }
         self.must(TokenType::RightCurly)?;
+        let end = self.prev().unwrap().end;
 
-        return Ok(stmt_list);
+        return Ok(AstBody { stmts, start, end });
     }
 
     fn synchronize(&mut self, current_brace_level: isize) -> bool {
@@ -1772,10 +1774,18 @@ impl<'a> Syntax {
         Ok(expr)
     }
 
-    fn parser_else_if(&mut self) -> Result<Vec<Box<Stmt>>, SyntaxError> {
-        let mut stmt_list = Vec::new();
-        stmt_list.push(self.parser_if_stmt()?);
-        Ok(stmt_list)
+    fn parser_else_if(&mut self) -> Result<AstBody, SyntaxError> {
+        // let mut stmts = Vec::new();
+        let stmt = self.parser_if_stmt()?;
+
+        let start = stmt.start;
+        let end = stmt.end;
+        // stmts.push();
+        Ok(AstBody{
+            stmts: vec![stmt],
+            start,
+            end,
+        })
     }
 
     fn parser_if_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
@@ -1793,7 +1803,7 @@ impl<'a> Syntax {
                 self.parser_body()?
             }
         } else {
-            Vec::new() // default empty vec
+            AstBody::default()
         };
 
         stmt.node = AstNode::If(condition, consequent, alternate);
@@ -3236,7 +3246,8 @@ impl<'a> Syntax {
         fndef.symbol_name = name.clone();
         fndef.fn_name = name;
 
-        let mut stmt_list = Vec::new();
+        let mut stmts = Vec::new();
+        let start = self.prev().unwrap().end;
 
         // var a = call(x, x, x)
         let mut vardef_stmt = self.stmt_new();
@@ -3267,11 +3278,17 @@ impl<'a> Syntax {
             spread: false,
         };
         call_stmt.node = AstNode::Call(call);
-        call_stmt.end = self.prev().unwrap().end;
+        let end = self.prev().unwrap().end;
+        call_stmt.end = end;
 
-        stmt_list.push(vardef_stmt);
-        stmt_list.push(call_stmt);
-        fndef.body = stmt_list;
+
+        stmts.push(vardef_stmt);
+        stmts.push(call_stmt);
+        fndef.body = AstBody{
+            stmts,
+            start,
+            end,
+        };
 
         fndef
     }
@@ -3282,6 +3299,8 @@ impl<'a> Syntax {
         fndef.is_errable = true;
         fndef.params = Vec::new();
         fndef.return_type = Type::new(TypeKind::Void);
+
+        let start = self.prev().unwrap().end;
 
         let name = format!("{}{}", LOCAL_FN_NAME, self.lambda_index);
         self.lambda_index += 1;
@@ -3297,7 +3316,14 @@ impl<'a> Syntax {
             call_stmt.end = self.prev().unwrap().end;
         }
         stmt_list.push(call_stmt);
-        fndef.body = stmt_list;
+        let end = self.prev().unwrap().end;
+
+        fndef.body = AstBody{
+            stmts: stmt_list,
+            start,
+            end,
+        };
+
         fndef
     }
 
@@ -3344,7 +3370,7 @@ impl<'a> Syntax {
             let mut select_case = SelectCase {
                 on_call: None,
                 recv_var: None,
-                handle_body: Vec::new(),
+                handle_body: AstBody::default(),
                 is_recv: false,
                 is_default: false,
                 start,
@@ -3484,7 +3510,13 @@ impl<'a> Syntax {
                 stmt.node = AstNode::Break(Some(exec_expr.clone()));
                 stmt.start = exec_expr.start.clone();
                 stmt.end = exec_expr.end.clone();
-                vec![stmt]
+                let start = stmt.start;
+                let end = stmt.end;
+                AstBody{
+                    stmts: vec![stmt],
+                    start,
+                    end,
+                }
             };
 
             self.must_stmt_end()?;

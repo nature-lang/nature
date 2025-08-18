@@ -67,8 +67,13 @@ impl GenericSpecialFnClone {
         }
     }
 
-    fn clone_body(&mut self, body: &Vec<Box<Stmt>>) -> Vec<Box<Stmt>> {
-        body.iter().map(|stmt| Box::new(self.clone_stmt(stmt))).collect()
+    fn clone_body(&mut self, body: &AstBody) -> AstBody {
+        let stmts = body.stmts.iter().map(|stmt| Box::new(self.clone_stmt(stmt))).collect();
+        return AstBody{
+            stmts,
+            start: body.start,
+            end: body.end,
+        };
     }
 
     fn clone_expr(&mut self, expr: &Expr) -> Expr {
@@ -1977,8 +1982,8 @@ impl<'a> Typesys<'a> {
 
             // 清空闭包函数体以避免推导异常
             {
-                async_expr.closure_fn.lock().unwrap().body.clear();
-                async_expr.closure_fn_void.lock().unwrap().body.clear();
+                async_expr.closure_fn.lock().unwrap().body.stmts.clear();
+                async_expr.closure_fn_void.lock().unwrap().body.stmts.clear();
             }
 
             left
@@ -1989,7 +1994,7 @@ impl<'a> Typesys<'a> {
 
             let closure_fn = if async_expr.return_type.kind == TypeKind::Void {
                 // 使用 void 版本的闭包
-                async_expr.closure_fn.lock().unwrap().body.clear();
+                async_expr.closure_fn.lock().unwrap().body.stmts.clear();
                 async_expr.closure_fn_void.clone()
             } else {
                 async_expr.closure_fn.clone()
@@ -2589,9 +2594,9 @@ impl<'a> Typesys<'a> {
 
     pub fn infer_try_catch(
         &mut self,
-        try_body: &mut Vec<Box<Stmt>>,
+        try_body: &mut AstBody,
         catch_err_mutex: &Arc<Mutex<VarDeclExpr>>,
-        catch_body: &mut Vec<Box<Stmt>>,
+        catch_body: &mut AstBody,
     ) -> Result<(), AnalyzerError> {
         self.be_caught += 1;
 
@@ -2619,7 +2624,7 @@ impl<'a> Typesys<'a> {
         &mut self,
         try_expr: &mut Box<Expr>,
         catch_err_mutex: &Arc<Mutex<VarDeclExpr>>,
-        catch_body: &mut Vec<Box<Stmt>>,
+        catch_body: &mut AstBody,
     ) -> Result<Type, AnalyzerError> {
         self.be_caught += 1;
 
@@ -3285,7 +3290,7 @@ impl<'a> Typesys<'a> {
         iterate: &mut Box<Expr>,
         first: &mut Arc<Mutex<VarDeclExpr>>,
         second: &mut Option<Arc<Mutex<VarDeclExpr>>>,
-        body: &mut Vec<Box<Stmt>>,
+        body: &mut AstBody,
     ) {
         let iterate_type = match self.infer_right_expr(iterate, Type::default()) {
             Ok(iterate_type) => iterate_type,
@@ -3574,8 +3579,8 @@ impl<'a> Typesys<'a> {
         Ok(())
     }
 
-    pub fn infer_body(&mut self, body: &mut Vec<Box<Stmt>>) {
-        for stmt in body {
+    pub fn infer_body(&mut self, body: &mut AstBody) {
+        for stmt in &mut body.stmts {
             if let Err(e) = self.infer_stmt(stmt) {
                 self.errors_push(e.start, e.end, e.message);
             }

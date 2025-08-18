@@ -871,23 +871,23 @@ pub enum AstNode {
 
     Break(Option<Box<Expr>>), // (expr)
     Continue,
-    Import(ImportStmt),                            // 比较复杂直接保留
-    VarTupleDestr(Vec<Box<Expr>>, Box<Expr>),      // (elements, right)
-    Assign(Box<Expr>, Box<Expr>),                  // (left, right)
-    Return(Option<Box<Expr>>),                     // (expr)
-    If(Box<Expr>, Vec<Box<Stmt>>, Vec<Box<Stmt>>), // (condition, consequent, alternate)
+    Import(ImportStmt),                       // 比较复杂直接保留
+    VarTupleDestr(Vec<Box<Expr>>, Box<Expr>), // (elements, right)
+    Assign(Box<Expr>, Box<Expr>),             // (left, right)
+    Return(Option<Box<Expr>>),                // (expr)
+    If(Box<Expr>, AstBody, AstBody),          // (condition, consequent, alternate)
     Throw(Box<Expr>),
-    TryCatch(Vec<Box<Stmt>>, Arc<Mutex<VarDeclExpr>>, Vec<Box<Stmt>>), // (try_body, catch_err, catch_body)
-    Let(Box<Expr>),                                                    // (expr)
-    ForIterator(Box<Expr>, Arc<Mutex<VarDeclExpr>>, Option<Arc<Mutex<VarDeclExpr>>>, Vec<Box<Stmt>>), // (iterate, first, second, body)
+    TryCatch(AstBody, Arc<Mutex<VarDeclExpr>>, AstBody), // (try_body, catch_err, catch_body)
+    Let(Box<Expr>),                                      // (expr)
+    ForIterator(Box<Expr>, Arc<Mutex<VarDeclExpr>>, Option<Arc<Mutex<VarDeclExpr>>>, AstBody), // (iterate, first, second, body)
 
-    ForCond(Box<Expr>, Vec<Box<Stmt>>),                            // (condition, body)
-    ForTradition(Box<Stmt>, Box<Expr>, Box<Stmt>, Vec<Box<Stmt>>), // (init, cond, update, body)
+    ForCond(Box<Expr>, AstBody),                            // (condition, body)
+    ForTradition(Box<Stmt>, Box<Expr>, Box<Stmt>, AstBody), // (init, cond, update, body)
 
     // 既可以作为表达式，也可以作为语句
     Call(AstCall),
-    Catch(Box<Expr>, Arc<Mutex<VarDeclExpr>>, Vec<Box<Stmt>>), // (try_expr, catch_err, catch_body)
-    Match(Option<Box<Expr>>, Vec<MatchCase>),                  // (subject, cases)
+    Catch(Box<Expr>, Arc<Mutex<VarDeclExpr>>, AstBody), // (try_expr, catch_err, catch_body)
+    Match(Option<Box<Expr>>, Vec<MatchCase>),           // (subject, cases)
 
     Select(Vec<SelectCase>, bool, i16, i16), // (cases, has_default, send_count, recv_count)
 
@@ -1091,7 +1091,7 @@ pub struct TypedefStmt {
 pub struct MatchCase {
     pub cond_list: Vec<Box<Expr>>,
     pub is_default: bool,
-    pub handle_body: Vec<Box<Stmt>>,
+    pub handle_body: AstBody,
     pub start: usize,
     pub end: usize,
 }
@@ -1102,9 +1102,25 @@ pub struct SelectCase {
     pub recv_var: Option<Arc<Mutex<VarDeclExpr>>>,
     pub is_recv: bool,
     pub is_default: bool,
-    pub handle_body: Vec<Box<Stmt>>,
+    pub handle_body: AstBody,
     pub start: usize,
     pub end: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct AstBody {
+    pub stmts: Vec<Box<Stmt>>,
+    pub start: usize,
+    pub end: usize,
+}
+impl Default for AstBody {
+    fn default() -> Self {
+        Self {
+            stmts: Vec::new(),
+            start: 0,
+            end: 0,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1114,7 +1130,7 @@ pub struct AstFnDef {
     pub return_type: Type,
     pub params: Vec<Arc<Mutex<VarDeclExpr>>>,
     pub rest_param: bool,
-    pub body: Vec<Box<Stmt>>,
+    pub body: AstBody,
     pub closure: Option<isize>,
     pub generics_special_done: bool,
     pub generics_hash_table: Option<HashMap<u64, Arc<Mutex<AstFnDef>>>>,
@@ -1157,7 +1173,11 @@ impl Default for AstFnDef {
             return_type: Type::new(TypeKind::Void),
             params: Vec::new(),
             rest_param: false,
-            body: Vec::new(),
+            body: AstBody {
+                stmts: Vec::new(),
+                start: 0,
+                end: 0,
+            },
             closure: None,
             generics_special_done: false,
             generics_hash_table: None,
