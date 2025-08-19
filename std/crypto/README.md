@@ -1,0 +1,259 @@
+# import [crypto.hmac](https://github.com/nature-lang/nature/tree/master/std/crypto/hmac.n)
+
+Cryptographic hash functions and HMAC implementation using mbedTLS.
+
+## const MD5
+
+```
+const MD5 = 0x03
+```
+
+## const RIPEMD160
+
+```
+const RIPEMD160 = 0x04
+```
+
+## const SHA1
+
+```
+const SHA1 = 0x05
+```
+
+## const SHA224
+
+```
+const SHA224 = 0x08
+```
+
+## const SHA256
+
+```
+const SHA256 = 0x09
+```
+
+## const SHA384
+
+```
+const SHA384 = 0x0a
+```
+
+## const SHA512
+
+```
+const SHA512 = 0x0b
+```
+
+## const SHA3_224
+
+```
+const SHA3_224 = 0x10
+```
+
+## const SHA3_256
+
+```
+const SHA3_256 = 0x11
+```
+
+## const SHA3_384
+
+```
+const SHA3_384 = 0x12
+```
+
+## const SHA3_512
+
+```
+const SHA3_512 = 0x13
+```
+
+## fn hex
+
+```
+fn hex(int hasher_type, [u8] secret, [u8] message):string
+```
+
+Compute HMAC and return hexadecimal string.
+
+## type hmac_t
+
+```
+type hmac_t = struct{
+    anyptr md_info
+    int hasher_type
+    int output_size
+    types.mbedtls_md_context_t mbed_ctx
+}
+```
+
+HMAC context for computing hash-based message authentication codes.
+
+### new
+
+```
+fn new(int hasher_type, [u8] secret):ptr<hmac_t>
+```
+
+Create new HMAC context with specified hash algorithm and secret key.
+
+### hmac_t.update
+
+```
+fn hmac_t.update([u8] message):ptr<hmac_t>
+```
+
+Update HMAC with message data.
+
+### hmac_t.finish
+
+```
+fn hmac_t.finish():[u8]
+```
+
+Finalize HMAC computation and return raw bytes.
+
+### hmac_t.hex
+
+```
+fn hmac_t.hex():string
+```
+
+Finalize HMAC computation and return hexadecimal string.
+
+# import [crypto.md5](https://github.com/nature-lang/nature/tree/master/std/crypto/md5.n)
+
+MD5 hash function implementation.
+
+## fn hex
+
+```
+fn hex(string input):string
+```
+
+Compute MD5 hash and return hexadecimal string.
+
+## type md5_t
+
+```
+type md5_t = struct{
+    types.mbedtls_md_context_t mbed_ctx
+}
+```
+
+MD5 hash context.
+
+### new
+
+```
+fn new():ptr<md5_t>
+```
+
+Create new MD5 hash context.
+
+### md5_t.update
+
+```
+fn md5_t.update([u8] input):ptr<md5_t>
+```
+
+Update MD5 hash with input data.
+
+### md5_t.finish
+
+```
+fn md5_t.finish():[u8]
+```
+
+Finalize MD5 computation and return raw bytes.
+
+### md5_t.hex
+
+```
+fn md5_t.hex():string
+```
+
+Finalize MD5 computation and return hexadecimal string.
+
+# import [crypto.sha256](https://github.com/nature-lang/nature/tree/master/std/crypto/sha256.n)
+
+SHA-256 hash function implementation.
+
+## fn hex
+
+```
+fn hex(string input):string
+```
+
+Compute SHA-256 hash and return hexadecimal string.
+
+## type sha256_t
+
+```
+type sha256_t = struct{
+    types.mbedtls_sha256_context mbed_ctx
+}
+```
+
+SHA-256 hash context.
+
+### new
+
+```
+fn new():ptr<sha256_t>
+```
+
+Create new SHA-256 hash context.
+
+### sha256_t.update
+
+```
+fn sha256_t.update([u8] input):ptr<sha256_t>
+```
+
+Update SHA-256 hash with input data.
+
+### sha256_t.finish
+
+```
+fn sha256_t.finish():[u8]
+```
+
+Finalize SHA-256 computation and return raw bytes.
+
+### sha256_t.hex
+
+```
+fn sha256_t.hex():string
+```
+
+Finalize SHA-256 computation and return hexadecimal string.
+
+# import [crypto.types](https://github.com/nature-lang/nature/tree/master/std/crypto/types.n)
+
+Cryptographic type definitions and mbedTLS bindings.
+
+## type mbedtls_md_context_t
+
+```
+type mbedtls_md_context_t = struct{
+    anyptr md_info
+    anyptr md_ctx
+    anyptr hmac_ctx
+}
+```
+
+mbedTLS message digest context.
+
+## type mbedtls_sha256_context
+
+```
+type mbedtls_sha256_context = struct{
+    [u8;64] buffer
+    [u32;2] total
+    [u32;8] state
+    i32 is224
+}
+```
+
+mbedTLS SHA-256 context structure.
