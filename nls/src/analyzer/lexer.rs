@@ -92,6 +92,8 @@ pub enum TokenType {
     Plus,
     #[strum(serialize = "...")]
     Ellipsis,
+    #[strum(serialize = "..")]
+    Range,
     #[strum(serialize = ":")]
     Colon,
     #[strum(serialize = ";")]
@@ -929,13 +931,7 @@ impl Lexer {
                     if self.match_char('.') {
                         return TokenType::Ellipsis;
                     } else {
-                        self.errors.push(AnalyzerError {
-                            start: self.offset,
-                            end: self.guard,
-                            message: String::from("Expected '...'"),
-                        });
-
-                        return TokenType::Ellipsis;
+                        return TokenType::Range;
                     }
                 } else {
                     TokenType::Dot

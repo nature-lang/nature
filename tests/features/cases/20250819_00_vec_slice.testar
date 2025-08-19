@@ -1,0 +1,47 @@
+=== test_basic
+--- main.n
+fn main() {
+    var list = [1, 2, 3, 4, 5]
+    var temp = list[..]
+    println('len ->', temp.len(), ', data ->', temp[0], temp[1], temp[2], temp[3], temp[4])
+}
+
+--- output.txt
+len -> 5 , data -> 1 2 3 4 5
+
+=== test_out_of_range
+--- main.n
+fn main() {
+    var list = [1, 2, 3, 4, 5]
+    var temp = list[0..6]
+    println('len ->', temp.len(), ', data ->', temp[0], temp[1], temp[2], temp[3], temp[4])
+}
+
+--- output.txt
+coroutine 'main' panic: 'slice [0:6] out of vec with length 5' at nature-test/main.n:3:24
+
+
+=== test_slice_2
+--- main.n
+fn main() {
+    var list = [1, 2, 3, 4, 5]
+    var temp = list[2..3]
+    println('len ->', temp.len(), ', data ->', temp[0])
+}
+
+--- output.txt
+len -> 1 , data -> 3
+
+=== test_catch panic
+--- main.n
+fn main() {
+    var list = [1, 2, 3, 4, 5]
+    var temp = list[2..9] catch e {
+        println(e.msg())
+    }
+    println('len ->', temp.len())
+}
+
+--- output.txt
+slice [2:9] out of vec with length 5
+len -> 0

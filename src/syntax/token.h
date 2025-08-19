@@ -22,6 +22,7 @@ typedef enum {
     TOKEN_MINUS,      // -
     TOKEN_PLUS,       // +
     TOKEN_ELLIPSIS,   // ...
+    TOKEN_RANGE,   // ...
     TOKEN_COLON,      // :
     TOKEN_SEMICOLON,  // ;
     TOKEN_SLASH,      // /

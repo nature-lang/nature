@@ -36,6 +36,7 @@ typedef enum {
 
     AST_EXPR_MAP_ACCESS,
     AST_EXPR_VEC_ACCESS,
+    AST_EXPR_VEC_SLICE,
     AST_EXPR_ARRAY_ACCESS,
     AST_EXPR_TUPLE_ACCESS,
     AST_EXPR_STRUCT_SELECT,
@@ -569,6 +570,12 @@ typedef struct {
     ast_expr_t left; // string/list/map/set/tuple
     ast_expr_t key;
 } ast_access_t;
+
+typedef struct {
+    ast_expr_t left;
+    ast_expr_t start;
+    ast_expr_t end;
+} ast_vec_slice_t;
 
 // [1,a.b, call()]
 typedef struct {

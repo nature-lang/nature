@@ -918,8 +918,6 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
         type_struct = struct_access->instance.type.ptr->value_type;
     } else if (is_struct_rawptr(type_struct)) {
         type_struct = type_struct.ptr->value_type;
-        //        push_rt_call(m, RT_CALL_RAWPTR_VALID, NULL, 1, struct_target);
-        //        linear_has_panic(m);
     }
 
     assert(type_struct.kind == TYPE_STRUCT);
@@ -1959,6 +1957,23 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     lir_opcode_t type = ast_op_convert[unary_expr->op];
     lir_op_t *unary = lir_op_new(type, first, NULL, target);
     OP_PUSH(unary);
+
+    return target;
+}
+
+static lir_operand_t *linear_vec_slice(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    ast_vec_slice_t *ast = expr.value;
+
+    lir_operand_t *vec_target = linear_expr(m, ast->left, NULL);
+    lir_operand_t *start_target = linear_expr(m, ast->start, NULL);
+    lir_operand_t *end_target = linear_expr(m, ast->end, NULL);
+
+    if (target == NULL) {
+        target = temp_var_operand_with_alloc(m, ast->left.type);
+    }
+    push_rt_call(m, RT_CALL_VEC_SLICE, target, 3, vec_target, start_target, end_target);
+
+    linear_has_panic(m);
 
     return target;
 }
@@ -3415,6 +3430,7 @@ linear_expr_fn expr_fn_table[] = {
         [AST_EXPR_ARRAY_ACCESS] = linear_array_access,
         [AST_EXPR_VEC_NEW] = linear_vec_new,
         [AST_EXPR_VEC_ACCESS] = linear_vec_access,
+        [AST_EXPR_VEC_SLICE] = linear_vec_slice,
         [AST_EXPR_MAP_NEW] = linear_map_new,
         [AST_EXPR_MAP_ACCESS] = linear_map_access,
         [AST_EXPR_STRUCT_NEW] = linear_struct_new,
