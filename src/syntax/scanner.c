@@ -190,8 +190,8 @@ static token_type_t scanner_special_char(module_t *m) {
                 if (scanner_match(m, '.')) {
                     return TOKEN_ELLIPSIS;
                 }
-                // 以及吃掉了 2 个点了，没有回头路
-                return 0;
+
+                return TOKEN_RANGE;
             }
             return TOKEN_DOT;
         }

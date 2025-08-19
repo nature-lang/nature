@@ -845,6 +845,7 @@ pub enum AstNode {
 
     MapAccess(Type, Type, Box<Expr>, Box<Expr>),         // (key_type, value_type, left, key)
     VecAccess(Type, Box<Expr>, Box<Expr>),               // (element_type, left, index)
+    VecSlice(Box<Expr>, Box<Expr>, Box<Expr>),           // left, start, end
     ArrayAccess(Type, Box<Expr>, Box<Expr>),             // (element_type, left, index)
     TupleAccess(Type, Box<Expr>, u64),                   // (element_type, left, index)
     StructSelect(Box<Expr>, String, TypeStructProperty), // (instance, key, property)

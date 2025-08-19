@@ -34,11 +34,11 @@ bool generics_constraints_compare(ast_generics_constraints *left, ast_generics_c
         return false;
     }
 
-    if (right->and &&!left->and) {
+    if (right->and && !left->and) {
         return false;
     }
 
-    if (right->or &&!left->or) {
+    if (right->or && !left->or) {
         return false;
     }
 
@@ -1481,6 +1481,14 @@ static type_t infer_vec_repeat_new(module_t *m, ast_expr_t *expr, type_t target_
     return result_type;
 }
 
+static type_t infer_vec_slice(module_t *m, ast_vec_slice_t *slice) {
+    type_t vec_type = infer_right_expr(m, &slice->left, type_kind_new(TYPE_UNKNOWN));
+    type_t start_type = infer_right_expr(m, &slice->start, type_integer_t_new());
+    type_t end_type = infer_right_expr(m, &slice->end, type_integer_t_new());
+
+    return vec_type;
+}
+
 /**
  * 这里如果有问题直接就退出了
  * [a, b(), c[1], d.foo]
@@ -2844,6 +2852,9 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
         }
         case AST_EXPR_VEC_NEW: { // literal casting
             return infer_vec_new(m, expr, target_type);
+        }
+        case AST_EXPR_VEC_SLICE: {
+            return infer_vec_slice(m, expr->value);
         }
         case AST_EXPR_ARRAY_REPEAT_NEW:
         case AST_EXPR_VEC_REPEAT_NEW: {

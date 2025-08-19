@@ -1272,6 +1272,11 @@ impl<'a> Semantic<'a> {
                 self.analyze_expr(default_element);
                 self.analyze_expr(len_expr);
             }
+            AstNode::VecSlice(left, start, end) => {
+                self.analyze_expr(left);
+                self.analyze_expr(start);
+                self.analyze_expr(end);
+            }
             AstNode::AccessExpr(left, key) => {
                 self.analyze_expr(left);
                 self.analyze_expr(key);

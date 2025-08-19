@@ -258,10 +258,14 @@ void rt_vec_push(n_vec_t *vec, int64_t element_hash, void *ref) {
  * @param rtype_hash
  * @param l
  * @param start 起始 index [start, end)
- * @param end 结束 index
+ * @param end 结束 index, end 如果 == -1 则解析为 len()
  * @return
  */
 n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
+    if (end == -1) {
+        end = l->length;
+    }
+
     // start end 检测
     if (start > l->length || end > l->length || start < 0 || end < 0) {
         char *msg = tlsprintf("slice [%d:%d] out of vec with length %d", start, end, l->length);

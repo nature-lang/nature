@@ -1690,11 +1690,76 @@ impl<'a> Syntax {
         let mut expr = self.expr_new();
 
         self.must(TokenType::LeftSquare)?;
-        let key = self.parser_expr()?;
+
+        // Check for range operations: [..expr] or [..]
+        if self.consume(TokenType::Range) {
+            let start = Box::new(Expr {
+                start: self.prev().unwrap().start,
+                end: self.prev().unwrap().end,
+                node: AstNode::Literal(TypeKind::Int64, "0".to_string()),
+                type_: Type::default(),
+                target_type: Type::default(),
+                err: false,
+            });
+
+            let end = if self.is(TokenType::RightSquare) {
+                // [..] case - slice to end
+                Box::new(Expr {
+                    start: self.prev().unwrap().start,
+                    end: self.prev().unwrap().end,
+                    node: AstNode::Literal(TypeKind::Int64, "-1".to_string()),
+                    type_: Type::default(),
+                    target_type: Type::default(),
+                    err: false,
+                })
+            } else {
+                // [..expr] case
+                self.parser_expr()?
+            };
+
+            self.must(TokenType::RightSquare)?;
+
+            expr.start = left.start;
+            expr.node = AstNode::VecSlice(left, start, end);
+            expr.end = self.prev().unwrap().end;
+
+            return Ok(expr);
+        }
+
+        // Parse first expression
+        let first = self.parser_expr()?;
+
+        // Check for range operations: [expr..expr] or [expr..]
+        if self.consume(TokenType::Range) {
+            let end = if self.is(TokenType::RightSquare) {
+                // [expr..] case - slice from expr to end
+                Box::new(Expr {
+                    start: self.prev().unwrap().start,
+                    end: self.prev().unwrap().end,
+                    node: AstNode::Literal(TypeKind::Int64, "-1".to_string()),
+                    type_: Type::default(),
+                    target_type: Type::default(),
+                    err: false,
+                })
+            } else {
+                // [expr..expr] case
+                self.parser_expr()?
+            };
+
+            self.must(TokenType::RightSquare)?;
+
+            expr.start = left.start;
+            expr.node = AstNode::VecSlice(left, first, end);
+            expr.end = self.prev().unwrap().end;
+
+            return Ok(expr);
+        }
+
+        // Regular access: [expr]
         self.must(TokenType::RightSquare)?;
 
         expr.start = left.start;
-        expr.node = AstNode::AccessExpr(left, key);
+        expr.node = AstNode::AccessExpr(left, first);
         expr.end = self.prev().unwrap().end;
 
         Ok(expr)
@@ -1781,11 +1846,7 @@ impl<'a> Syntax {
         let start = stmt.start;
         let end = stmt.end;
         // stmts.push();
-        Ok(AstBody{
-            stmts: vec![stmt],
-            start,
-            end,
-        })
+        Ok(AstBody { stmts: vec![stmt], start, end })
     }
 
     fn parser_if_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
@@ -3281,14 +3342,9 @@ impl<'a> Syntax {
         let end = self.prev().unwrap().end;
         call_stmt.end = end;
 
-
         stmts.push(vardef_stmt);
         stmts.push(call_stmt);
-        fndef.body = AstBody{
-            stmts,
-            start,
-            end,
-        };
+        fndef.body = AstBody { stmts, start, end };
 
         fndef
     }
@@ -3318,11 +3374,7 @@ impl<'a> Syntax {
         stmt_list.push(call_stmt);
         let end = self.prev().unwrap().end;
 
-        fndef.body = AstBody{
-            stmts: stmt_list,
-            start,
-            end,
-        };
+        fndef.body = AstBody { stmts: stmt_list, start, end };
 
         fndef
     }
@@ -3512,11 +3564,7 @@ impl<'a> Syntax {
                 stmt.end = exec_expr.end.clone();
                 let start = stmt.start;
                 let end = stmt.end;
-                AstBody{
-                    stmts: vec![stmt],
-                    start,
-                    end,
-                }
+                AstBody { stmts: vec![stmt], start, end }
             };
 
             self.must_stmt_end()?;

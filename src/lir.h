@@ -57,6 +57,7 @@
 // RT = runtime
 // CT = compile time
 #define RT_CALL_VEC_CAP "rt_vec_cap"
+#define RT_CALL_VEC_SLICE "rt_vec_slice"
 #define RT_CALL_UNSAFE_VEC_NEW "rt_unsafe_vec_new"
 
 #define RT_CALL_WRITE_BARRIER "write_barrier"

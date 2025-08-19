@@ -2107,6 +2107,13 @@ impl<'a> Typesys<'a> {
             AstNode::Ident(ident, symbol_id) => self.infer_ident(ident, symbol_id, expr.start, expr.end),
             AstNode::VecNew(..) => self.infer_vec_new(expr, infer_target_type),
             AstNode::VecRepeatNew(..) | AstNode::ArrRepeatNew(..) => self.infer_vec_repeat_new(expr, infer_target_type),
+            AstNode::VecSlice(left,start , end ) => {
+                let left_type = self.infer_right_expr(left, Type::default())?;
+                self.infer_right_expr(start, Type::integer_t_new())?;
+                self.infer_right_expr(end, Type::integer_t_new())?;
+
+                return Ok(left_type.clone())
+            }
             AstNode::EmptyCurlyNew => {
                 if infer_target_type.kind.is_unknown() {
                     return Ok(infer_target_type);

@@ -413,6 +413,14 @@ static ast_struct_new_t *ast_struct_new_copy(ast_struct_new_t *temp) {
     return struct_new;
 }
 
+static ast_vec_slice_t *ast_vec_slice_copy(ast_vec_slice_t *temp) {
+    ast_vec_slice_t *slice = COPY_NEW(ast_vec_slice_t, temp);
+    slice->left = *ast_expr_copy(&slice->left);
+    slice->start = *ast_expr_copy(&slice->start);
+    slice->end = *ast_expr_copy(&slice->end);
+    return slice;
+}
+
 static ast_access_t *ast_access_copy(ast_access_t *temp) {
     ast_access_t *access = COPY_NEW(ast_access_t, temp);
     access->left = *ast_expr_copy(&temp->left);
@@ -474,6 +482,10 @@ ast_expr_t *ast_expr_copy(ast_expr_t *temp) {
         }
         case AST_EXPR_ACCESS: {
             expr->value = ast_access_copy(temp->value);
+            break;
+        }
+        case AST_EXPR_VEC_SLICE: {
+            expr->value = ast_vec_slice_copy(temp->value);
             break;
         }
         case AST_EXPR_VEC_NEW: {

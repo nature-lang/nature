@@ -1717,6 +1717,12 @@ static void analyzer_vec_new(module_t *m, ast_vec_new_t *expr) {
     }
 }
 
+static void analyzer_vec_slice(module_t *m, ast_vec_slice_t *expr) {
+    analyzer_expr(m, &expr->left);
+    analyzer_expr(m, &expr->start);
+    analyzer_expr(m, &expr->end);
+}
+
 static void analyzer_new_expr(module_t *m, ast_new_expr_t *expr) {
     analyzer_type(m, &expr->type);
     if (expr->properties) {
@@ -1878,6 +1884,9 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         }
         case AST_EXPR_VEC_NEW: {
             return analyzer_vec_new(m, expr->value);
+        }
+        case AST_EXPR_VEC_SLICE: {
+            return analyzer_vec_slice(m, expr->value);
         }
         case AST_EXPR_ARRAY_REPEAT_NEW:
         case AST_EXPR_VEC_REPEAT_NEW: {

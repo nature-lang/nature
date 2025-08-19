@@ -1288,11 +1288,43 @@ static ast_expr_t parser_access(module_t *m, ast_expr_t left) {
     ast_expr_t result = expr_new(m);
 
     parser_must(m, TOKEN_LEFT_SQUARE);
-    ast_expr_t key = parser_expr(m);
+    if (parser_consume(m, TOKEN_RANGE)) { // list[..expr] | list[..]
+        ast_vec_slice_t *slice = mallocz(sizeof(ast_vec_slice_t));
+        slice->left = left;
+        slice->start = *ast_int_expr(result.line, result.column, 0);
+        if (parser_is(m, TOKEN_RIGHT_SQUARE)) {
+            slice->end = *ast_int_expr(parser_peek(m)->line, parser_peek(m)->column, -1);
+        } else {
+            slice->end = parser_expr(m);
+        }
+
+        parser_must(m, TOKEN_RIGHT_SQUARE);
+        result.assert_type = AST_EXPR_VEC_SLICE;
+        result.value = slice;
+        return result;
+    }
+
+    ast_expr_t first = parser_expr(m);
+    if (parser_consume(m, TOKEN_RANGE)) { // list[expr..expr] | list[expr..]
+        ast_vec_slice_t *slice = mallocz(sizeof(ast_vec_slice_t));
+        slice->left = left;
+        slice->start = first;
+        if (parser_is(m, TOKEN_RIGHT_SQUARE)) {
+            slice->end = *ast_int_expr(parser_peek(m)->line, parser_peek(m)->column, -1);
+        } else {
+            slice->end = parser_expr(m);
+        }
+
+        parser_must(m, TOKEN_RIGHT_SQUARE);
+        result.assert_type = AST_EXPR_VEC_SLICE;
+        result.value = slice;
+        return result;
+    }
+
     parser_must(m, TOKEN_RIGHT_SQUARE);
-    ast_access_t *access_expr = malloc(sizeof(ast_access_t));
+    ast_access_t *access_expr = mallocz(sizeof(ast_access_t));
     access_expr->left = left;
-    access_expr->key = key;
+    access_expr->key = first;
     result.assert_type = AST_EXPR_ACCESS;
     result.value = access_expr;
 
