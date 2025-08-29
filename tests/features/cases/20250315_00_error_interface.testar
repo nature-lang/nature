@@ -35,9 +35,9 @@ stack backtrace:
 0:	main.bar
 		at nature-test/main.n:2:29
 1:	main.foo
-		at nature-test/main.n:6:11
+		at nature-test/main.n:6:8
 2:	main.main
-		at nature-test/main.n:10:11
+		at nature-test/main.n:10:8
 
 === test_panic
 --- main.n
@@ -65,6 +65,7 @@ fn bar():void! {
     var list = vec_new<i8>(0, 10)
     var s = list[11] catch err {
         println('catch err:', err.msg())
+        0
     }
 }
 

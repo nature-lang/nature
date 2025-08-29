@@ -3,13 +3,14 @@ fn main():void! {
     var list = [1, 2, 3]
     var item = list[5] catch err {
         print('catch vec index err=', err.msg(), '\n')
-
+        0
     }
     println(item)
 
     any a1 = 1 as i8
     var i1 = a1 as i16 catch err1 {
         print('catch type assert err=', err1.msg(), '\n')
+        0
     }
 
     // 基于 struct fn 和 struct list 测试一下简单的链式调用
@@ -35,10 +36,12 @@ fn main():void! {
     // 异常处理
     var a2 = foo.list[8] catch err2 {
         print('chain access vec err=', err2.msg(), '\n')
+        0
     }
 
     var a3 = foo.div(10, 0) catch err3 {
         print("chain access call err=", err3.msg(), '\n')
+        0
     }
 
     println('hello world')

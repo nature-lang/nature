@@ -44,5 +44,6 @@ fn main():void! {
     // 不存在的文件
     var s3 = syscall.stat('./asserts/nofound.txt') catch err {
         println(err.msg())
+        return
     }
 }

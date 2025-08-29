@@ -24,6 +24,7 @@ fn main() {
     var s = `-12`
     var b = json.deserialize<bool>(s) catch e {
         panic(e.msg())
+        false
     }
     println(b)
 
@@ -43,6 +44,7 @@ fn main() {
     var s = `12`
     var b = json.deserialize<u8>(s) catch e {
         panic(e.msg())
+        0
     }
     println(b)
 
@@ -120,6 +122,7 @@ fn main() {
 
     var f = json.deserialize<foo_t>(s) catch e {
         panic(e.msg())
+        foo_t{}
     }
     println(f.key1, f.key[0], f.key[1], f.key[2], f.key_1)
 }

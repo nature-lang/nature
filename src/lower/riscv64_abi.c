@@ -18,7 +18,7 @@ static void reg_pass_rec(type_t *type, int *rc, int *field_offset, int offset) {
             uint16_t element_size = type_sizeof(element_type);
             uint16_t element_align = element_size;
             if (p->type.kind == TYPE_STRUCT) {
-                element_align = p->type.struct_->align;
+                element_align = type_struct_alignof(p->type.struct_);
             } else if (p->type.kind == TYPE_ARR) {
                 element_align = type_sizeof(p->type.array->element_type);
             }

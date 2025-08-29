@@ -6,9 +6,6 @@ fn hello():void! {
 fn main():void! {
     hello() catch err {
         println('catch err:', err.msg())
-        break
-        break
-        println('hello world 1')
     }
 
     // closure fn
@@ -21,13 +18,13 @@ fn main():void! {
 
     int foo = world(true) catch err {
         println('catch err:', err.msg())
-        break 12
+        12
     }
     println('foo =', foo)
 
     foo = world(false) catch err {
         println('catch err:', err.msg())
-        break 12
+        12
     }
     println('foo =', foo)
 

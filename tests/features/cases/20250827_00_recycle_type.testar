@@ -1,0 +1,237 @@
+=== test_recycle
+--- main.n
+type node_t = struct {
+    node_t next
+    int id
+}
+
+fn main() {
+    node_t n = node_t{}
+}
+
+--- output.txt
+nature-test/main.n:7:10: recycle use type 'main.node_t'
+
+=== test_must_default
+--- main.n
+type node_t = struct {
+    ptr<node_t> next
+    int id
+}
+
+fn main() {
+    node_t n = node_t{}
+}
+
+--- output.txt
+nature-test/main.n:7:22: struct filed 'next' must be assigned default value
+
+=== test_linked
+--- main.n
+type node_t = struct {
+    ptr<node_t>? next
+    int id
+}
+
+fn main() {
+    var n1 = new node_t(id = 1)
+    var n2 = new node_t(id = 2, next = n1)
+    var n3 = new node_t(id = 3, next = n2)
+
+    ptr<node_t>? tail_option = n3
+    for tail_option is ptr<node_t> {
+        var tail = tail_option as ptr<node_t>
+
+        println(tail.id)
+        tail_option = tail.next
+    }
+}
+
+--- output.txt
+3
+2
+1
+
+=== test_linked2
+--- main.n
+type node_t = struct {
+    int id
+    rawptr<node_t> next
+}
+
+fn main() {
+    var n1 = new node_t(id = 1)
+    var n2 = new node_t(id = 2, next = n1)
+    var n3 = new node_t(id = 3, next = n2)
+
+    rawptr<node_t> tail_option = n3
+    for tail_option != null {
+        var tail = tail_option as anyptr as ptr<node_t>
+
+        println(tail.id)
+        tail_option = tail.next
+    }
+}
+
+--- output.txt
+3
+2
+1
+
+
+=== test_vec_recycle
+--- main.n
+type node_t = struct {
+    int id
+    [node_t] children
+}
+
+fn main() {
+    var n1 = node_t{id = 1}
+    var n2 = node_t{id = 2}
+    var n3 = node_t{id = 3}
+
+    var parent = new node_t(id = 0)
+    parent.children.push(n1)
+    parent.children.push(n2)
+    parent.children.push(n3)
+
+    for child in parent.children {
+        println(child.id)
+    }
+}
+
+--- output.txt
+1
+2
+3
+
+=== test_mutil_recycle
+--- main.n
+type pair_t = (int, node_t)
+
+type node_t = struct {
+    int id
+    [pair_t] children
+}
+
+fn main() {
+    var n1 = node_t{id = 1}
+    var n2 = node_t{id = 2}
+    var n3 = node_t{id = 3}
+
+    var parent = new node_t(id = 0)
+    parent.children.push((100, n1))
+    parent.children.push((101, n2))
+    parent.children.push((102, n3))
+
+    for child in parent.children {
+        println(child[0], child[1].id)
+    }
+}
+
+--- output.txt
+100 1
+101 2
+102 3
+
+=== test_mutil_recycle2
+--- main.n
+type pair_t = struct{
+    int index
+    node_t node
+}
+
+type node_t = struct {
+    int id
+    [pair_t] children
+}
+
+fn main() {
+    var n1 = node_t{id = 1}
+    var n2 = node_t{id = 2}
+    var n3 = node_t{id = 3}
+
+    var parent = new node_t(id = 0)
+    parent.children.push(pair_t{index = 1003, node = n3})
+    parent.children.push(pair_t{index = 1002, node = n2})
+    parent.children.push(pair_t{index = 1001, node = n1})
+
+    for child in parent.children {
+        println(child.index, child.node.id, child.node.children.len())
+    }
+}
+
+--- output.txt
+1003 3 0
+1002 2 0
+1001 1 0
+
+=== test_mutil_recycle3
+--- main.n
+type pair_t = struct{
+    int index
+    (bool, node_t) node
+}
+
+type node_t = struct {
+    int id
+    [pair_t] children
+}
+
+fn main() {
+    var n1 = node_t{id = 1}
+    var n2 = node_t{id = 2}
+    var n3 = node_t{id = 3}
+
+    var parent = new node_t(id = 0)
+    parent.children.push(pair_t{index = 1003, node = (true, n3)})
+    parent.children.push(pair_t{index = 1002, node = (false, n2)})
+    parent.children.push(pair_t{index = 1001, node = (true, n1)})
+
+    for child in parent.children {
+        println(child.index, child.node[0], child.node[1].id, child.node[1].children.len())
+    }
+}
+
+--- output.txt
+1003 true 3 0
+1002 false 2 0
+1001 true 1 0
+
+=== test_map_recycle
+--- main.n
+type node3_t = {int:node_t}
+type node2_t = node3_t
+type node_t = node2_t
+
+fn main() {
+    node_t n = {}
+}
+
+=== test_rawptr_recycle
+--- main.n
+type node3_t = rawptr<node_t>
+type node2_t = node3_t
+type node_t = node2_t
+
+fn main() {
+    node_t n = null
+}
+
+=== test_recycle_type_def
+--- main.n
+type node3_t = node_t
+type node2_t = node3_t
+type node_t = node2_t
+
+fn test(node_t n) {
+
+}
+
+fn main() {
+
+}
+
+--- output.txt
+nature-test/main.n:5:2: recycle use type 'main.node_t'

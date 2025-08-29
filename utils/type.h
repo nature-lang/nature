@@ -58,7 +58,8 @@ typedef union {
 typedef enum {
     REDUCTION_STATUS_UNDO = 1,
     REDUCTION_STATUS_DOING = 2,
-    REDUCTION_STATUS_DONE = 3
+    REDUCTION_STATUS_DOING2 = 3,
+    REDUCTION_STATUS_DONE = 4
 } reduction_status_t;
 
 typedef enum {
@@ -129,7 +130,7 @@ typedef enum {
 typedef enum {
     TYPE_IDENT_DEF = 1,
     TYPE_IDENT_ALIAS,
-    TYPE_IDENT_PARAM,
+    TYPE_IDENT_GENERICS_PARAM,
     TYPE_IDENT_BUILTIN, // int/float/vec/string...
     TYPE_IDENT_INTERFACE, // type.impls 部分专用
     TYPE_IDENT_UNKNOWN, // use 就是还不能确定是 type alias 还是 type def
@@ -262,7 +263,6 @@ typedef struct type_set_t type_set_t;
 // (int, int, float)
 typedef struct {
     list_t *elements; // type_t
-    uint8_t align; // 最大对齐
 } type_tuple_t;
 
 typedef struct type_struct_t type_struct_t; // 目前只有 string
@@ -286,8 +286,6 @@ typedef struct type_t {
         type_tuple_t *tuple;
         type_struct_t *struct_;
         type_fn_t *fn;
-        //        type_alias_t *alias; // 这个其实是自定义类型的 ident
-        //        type_param_t *param; // 类型的一种特殊形式，更准确的说法也可以是
         type_ptr_t *ptr;
         type_union_t *union_;
         type_interface_t *interface;
@@ -383,7 +381,6 @@ typedef struct {
     type_t type;
     char *name;
     void *right; // ast_expr, 不允许 fn def
-    int64_t offset;
     int64_t align;
 } struct_property_t;
 
@@ -393,9 +390,6 @@ typedef struct {
 // 呢？
 struct type_struct_t {
     char *ident;
-    // uint8_t count;
-    // struct_property_t properties[UINT8_MAX]; // 属性列表,其每个元素的长度都是不固定的？有不固定的数组吗?
-    uint8_t align; // struct 的最大对齐 size 缓存
     list_t *properties; // struct_property_t
 };
 
@@ -542,18 +536,6 @@ typedef struct {
     uint8_t panic;
 } n_errort;
 
-// 所有的类型都会有一个唯一标识，从而避免类型的重复，不重复的类型会被加入到其中
-// list 的唯一标识， 比如 [int] a, [int] b , [float] c   等等，其实只有一种类型
-// 区分是否是同一种类型，就看 ct_reflect_type 中的 gc_bits 是否一致
-
-static uint64_t rtype_struct_gc_bits(uint64_t gc_bits_offset, uint64_t *offset, type_struct_t *t);
-
-static uint64_t rtype_array_gc_bits(uint64_t gc_bits_offset, uint64_t *offset, type_array_t *t);
-
-rtype_t reflect_type(type_t t);
-
-rtype_t ct_reflect_type(type_t t);
-
 /**
  * 将 ct_rtypes 填入到 ct_rtypes 中并返回索引
  * @param rtype
@@ -561,29 +543,27 @@ rtype_t ct_reflect_type(type_t t);
  */
 rtype_t *rtype_push(rtype_t rtype);
 
-uint64_t ct_find_rtype_hash(type_t t);
-
 /**
  * 其对应的 var 在栈上占用的空间，而不是其在堆内存中的大小
  * @param t
  * @return
  */
-uint64_t type_kind_sizeof(type_kind t);
+int64_t type_kind_sizeof(type_kind t);
 
-uint64_t type_struct_sizeof(type_struct_t *s);
+int64_t type_struct_alignof(type_struct_t *s);
+
+int64_t type_struct_sizeof(type_struct_t *s);
 
 /**
  * 类型在内存中(stack,array,var,reg) 中占用的大小,单位 byte
  * @param t
  * @return
  */
-uint64_t type_sizeof(type_t t);
+int64_t type_sizeof(type_t t);
 
-uint64_t type_alignof(type_t t);
+bool type_can_size(type_t t);
 
-rtype_t rtype_base(type_kind kind);
-
-rtype_t rtype_array(type_array_t *t);
+int64_t type_alignof(type_t t);
 
 /**
  * 基于当前 nature 中所有的栈中的数据都小于等于 8BYTE 的拖鞋之举
@@ -663,20 +643,20 @@ type_t type_kind_new(type_kind kind);
 
 type_t type_new(type_kind kind, void *value);
 
-static inline bool ident_is_param(type_t *t) {
+static inline bool ident_is_generics_param(type_t *t) {
     if (t->kind != TYPE_IDENT) {
         return false;
     }
 
-    return t->ident_kind == TYPE_IDENT_PARAM;
+    return t->ident_kind == TYPE_IDENT_GENERICS_PARAM;
 }
 
-static inline bool ident_is_def_or_alias(type_t *t) {
+static inline bool type_is_ident(type_t *t) {
     if (t->kind != TYPE_IDENT) {
         return false;
     }
 
-    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_ALIAS || t->ident_kind == TYPE_IDENT_UNKNOWN;
+    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_INTERFACE || t->ident_kind == TYPE_IDENT_UNKNOWN;
 }
 
 static inline type_t type_ident_new(char *ident, type_ident_kind kind) {

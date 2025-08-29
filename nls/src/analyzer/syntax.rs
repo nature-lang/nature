@@ -182,7 +182,7 @@ impl<'a> Syntax {
     }
 
     fn advance(&mut self) -> &Token {
-        assert!(self.current + 1 < self.token_indexes.len(), "Syntax::advance: current index out of range");
+        debug_assert!(self.current + 1 < self.token_indexes.len(), "Syntax::advance: current index out of range");
 
         let token_index = self.token_indexes[self.current];
 
@@ -552,7 +552,7 @@ impl<'a> Syntax {
         return (stmt_list, self.token_db.clone(), self.module.analyzer_errors.clone());
     }
 
-    fn parser_body(&mut self) -> Result<AstBody, SyntaxError> {
+    fn parser_body(&mut self, last_to_ret: bool) -> Result<AstBody, SyntaxError> {
         let mut stmts = Vec::new();
         self.must(TokenType::LeftCurly)?;
         let start = self.prev().unwrap().start;
@@ -566,8 +566,15 @@ impl<'a> Syntax {
                 ));
             }
 
-            match self.parser_stmt() {
-                Ok(stmt) => stmts.push(stmt),
+            match self.parser_local_stmt() {
+                Ok(mut stmt) => {
+                    if self.is(TokenType::RightCurly) && last_to_ret && matches!(stmt.node, AstNode::Fake(..)) {
+                        let AstNode::Fake(expr) = stmt.node else { unreachable!() };
+                        stmt.node = AstNode::Ret(expr)
+                    }
+
+                    stmts.push(stmt)
+                }
                 Err(e) => {
                     errors_push(
                         &mut self.module,
@@ -611,7 +618,7 @@ impl<'a> Syntax {
                 _ if brace_level == current_brace_level => {
                     // brace_level = 0 时只识别全局级别的语句
                     if brace_level == 0 {
-                        if matches!(token, TokenType::Fn | TokenType::Var | TokenType::Import | TokenType::Type) || self.is_basic_type() {
+                        if matches!(token, TokenType::Fn | TokenType::Var | TokenType::Import | TokenType::Type | TokenType::Const) || self.is_basic_type() {
                             return true;
                         }
                     } else {
@@ -625,6 +632,7 @@ impl<'a> Syntax {
                                 | TokenType::Match
                                 | TokenType::Try
                                 | TokenType::Continue
+                                | TokenType::Const
                                 | TokenType::Break
                                 | TokenType::Import
                                 | TokenType::Type
@@ -660,22 +668,46 @@ impl<'a> Syntax {
         let mut param_types = Vec::new();
 
         self.must(TokenType::LeftParen)?;
+        let mut is_rest = false;
 
+        let mut name_param_count = 0;
         if !self.consume(TokenType::RightParen) {
             // 解析参数类型列表
             loop {
+                if self.consume(TokenType::Ellipsis) {
+                    is_rest = true;
+                }
+
                 let param_type = self.parser_type()?;
                 param_types.push(param_type);
 
                 // 可选的参数名称（忽略）
-                self.consume(TokenType::Ident);
+                if self.consume(TokenType::Ident) {
+                    name_param_count += 1;
+                }
 
                 if !self.consume(TokenType::Comma) {
                     break;
                 }
+
+                if is_rest && !self.is(TokenType::RightParen) {
+                    return Err(SyntaxError(
+                        self.peek().start,
+                        self.peek().end,
+                        "can only use '...' as the final argument in the list".to_string(),
+                    ));
+                }
             }
 
             self.must(TokenType::RightParen)?;
+        }
+
+        if name_param_count != 0 && name_param_count != param_types.len() {
+            return Err(SyntaxError(
+                self.peek().start,
+                self.peek().end,
+                "fn with both named and unnamed formal parameters".to_string(),
+            ));
         }
 
         // 解析返回类型
@@ -1393,8 +1425,6 @@ impl<'a> Syntax {
     }
 
     fn parser_type_args_expr(&mut self, left: Box<Expr>) -> Result<Box<Expr>, SyntaxError> {
-        assert!(self.is(TokenType::LeftAngle));
-
         let mut expr = self.expr_new();
         expr.start = left.start;
 
@@ -1429,8 +1459,6 @@ impl<'a> Syntax {
             return Ok(expr);
         }
 
-        // 结构体初始化
-        assert!(self.is(TokenType::LeftCurly));
         let t = self.expr_to_typedef(&left, Some(generics_args));
 
         self.parser_struct_new(t)
@@ -1530,7 +1558,7 @@ impl<'a> Syntax {
             symbol_id: 0,
         };
 
-        let catch_body = self.parser_body()?;
+        let catch_body = self.parser_body(true)?;
 
         expr.node = AstNode::Catch(left, Arc::new(Mutex::new(catch_err)), catch_body);
         expr.end = self.prev().unwrap().end;
@@ -1633,47 +1661,6 @@ impl<'a> Syntax {
         expr.end = self.prev().unwrap().end;
 
         Ok(expr)
-    }
-
-    fn parser_is_tuple_typedecl(&self, current: usize) -> bool {
-        let t = &self.token_db[self.token_indexes[current]];
-        assert_eq!(t.token_type, TokenType::LeftParen, "tuple type decl start left param");
-
-        // param is left paren, so close + 1 = 1,
-        let mut close = 1;
-        let mut pos = current;
-
-        while t.token_type != TokenType::Eof {
-            pos += 1;
-            if pos >= self.token_indexes.len() {
-                return false;
-            }
-
-            let t = &self.token_db[self.token_indexes[pos]];
-
-            if t.token_type == TokenType::LeftParen {
-                close += 1;
-            }
-
-            if t.token_type == TokenType::RightParen {
-                close -= 1;
-                if close == 0 {
-                    break;
-                }
-            }
-        }
-
-        if close > 0 {
-            return false;
-        }
-
-        // (...) ident; ) 的 下一符号如果是 ident 就表示 (...) 里面是 tuple typedecl
-        let t = &self.token_db[self.token_indexes[pos + 1]];
-        if t.token_type != TokenType::Ident {
-            return false;
-        }
-
-        return true;
     }
 
     fn parser_ident_expr(&mut self) -> Result<Box<Expr>, SyntaxError> {
@@ -1855,13 +1842,13 @@ impl<'a> Syntax {
         self.must(TokenType::If)?;
 
         let condition = self.parser_expr_with_precedence()?;
-        let consequent = self.parser_body()?;
+        let consequent = self.parser_body(false)?;
 
         let alternate = if self.consume(TokenType::Else) {
             if self.is(TokenType::If) {
                 self.parser_else_if()?
             } else {
-                self.parser_body()?
+                self.parser_body(false)?
             }
         } else {
             AstBody::default()
@@ -1953,11 +1940,6 @@ impl<'a> Syntax {
             return true;
         }
 
-        // {int}/{int:int} 或 [int]
-        if self.is(TokenType::LeftCurly) || self.is(TokenType::LeftSquare) {
-            return true;
-        }
-
         if self.is(TokenType::Ptr) {
             return true;
         }
@@ -1980,38 +1962,34 @@ impl<'a> Syntax {
             return true;
         }
 
+        if self.is(TokenType::Ident) && self.next_is(1, TokenType::Question) {
+            return true;
+        }
+
         // package.ident foo = xxx
         if self.is(TokenType::Ident) && self.next_is(1, TokenType::Dot) && self.next_is(2, TokenType::Ident) && self.next_is(3, TokenType::Ident) {
             return true;
         }
 
-        // person|i8 a
-        if self.is(TokenType::Ident) && self.next_is(1, TokenType::Or) {
+        if self.is(TokenType::Ident) && self.next_is(1, TokenType::Dot) && self.next_is(2, TokenType::Ident) && self.next_is(3, TokenType::Question) {
             return true;
         }
 
-        // package.ident|i8 foo = xxx
-        if self.is(TokenType::Ident) && self.next_is(1, TokenType::Dot) && self.next_is(2, TokenType::Ident) && self.next_is(3, TokenType::Or) {
-            return true;
+
+        let current_pos = self.current;
+        let mut result = false;
+
+        match self.parser_type() {
+            Ok(_) => {
+                if self.is(TokenType::Ident) {
+                    result = true;
+                }
+            }
+            _ => {}
         }
 
-        // person<[i8]> foo
-        if self.is(TokenType::Ident) && self.next_is(1, TokenType::LeftAngle) {
-            return !self.is_call_generics();
-        }
-
-        // person.foo<[i8]>
-        if self.is(TokenType::Ident) && self.next_is(1, TokenType::Dot) && self.next_is(2, TokenType::Ident) && self.next_is(3, TokenType::LeftAngle) {
-            return !self.is_call_generics();
-        }
-
-        // (var_a, var_b) = (1, 2)
-        // (custom, int, int, (int, int), map) a = xxx
-        if self.is(TokenType::LeftParen) && self.parser_is_tuple_typedecl(self.current) {
-            return true;
-        }
-
-        false
+        self.current = current_pos;
+        result
     }
 
     fn parser_for_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
@@ -2030,7 +2008,7 @@ impl<'a> Syntax {
 
             let update = self.parser_for_init_stmt()?;
 
-            let body = self.parser_body()?;
+            let body = self.parser_body(false)?;
 
             stmt.node = AstNode::ForTradition(init, cond, update, body);
             stmt.end = self.prev().unwrap().end;
@@ -2068,7 +2046,7 @@ impl<'a> Syntax {
 
             self.must(TokenType::In)?;
             let iterate = self.parser_precedence_expr(SyntaxPrecedence::TypeCast, TokenType::Unknown)?;
-            let body = self.parser_body()?;
+            let body = self.parser_body(false)?;
 
             stmt.node = AstNode::ForIterator(iterate, Arc::new(Mutex::new(first)), second, body);
 
@@ -2077,7 +2055,7 @@ impl<'a> Syntax {
 
         // for (condition) {}
         let condition = self.parser_expr_with_precedence()?;
-        let body = self.parser_body()?;
+        let body = self.parser_body(false)?;
 
         stmt.node = AstNode::ForCond(condition, body);
 
@@ -2120,19 +2098,6 @@ impl<'a> Syntax {
     fn parser_expr_begin_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
         let left = self.parser_expr()?;
 
-        // 处理函数调用语句
-        if let AstNode::Call(call) = left.node {
-            if self.is(TokenType::Equal) {
-                return Err(SyntaxError(self.peek().start, self.peek().end, "call expr cannot assign".to_string()));
-            }
-
-            let mut stmt = self.stmt_new();
-            stmt.node = AstNode::Call(call);
-            stmt.start = left.start;
-            stmt.end = self.prev().unwrap().end;
-            return Ok(stmt);
-        }
-
         // 处理 catch 语句
         if let AstNode::Catch(try_expr, catch_err, catch_body) = left.node {
             if self.is(TokenType::Equal) || self.is(TokenType::Catch) {
@@ -2150,27 +2115,21 @@ impl<'a> Syntax {
             return Ok(stmt);
         }
 
-        // 检查表达式完整性
-        if self.is_stmt_eof() {
-            return Err(SyntaxError(self.peek().start, self.peek().end, "expr incompleteness".to_string()));
+        let t = self.peek().clone();
+        if t.is_complex_assign() || t.token_type == TokenType::Equal {
+            return self.parser_assign(left);
         }
 
-        // 处理赋值语句
-        self.parser_assign(left)
+        return Ok(self.fake_new(left));
     }
 
     fn parser_break_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
         let mut stmt = self.stmt_new();
         self.must(TokenType::Break)?;
 
-        let expr = if !self.is_stmt_eof() && !self.is(TokenType::RightCurly) {
-            Some(self.parser_expr()?)
-        } else {
-            None
-        };
-
-        stmt.node = AstNode::Break(expr);
+        stmt.node = AstNode::Break;
         stmt.end = self.prev().unwrap().end;
+
         Ok(stmt)
     }
 
@@ -2407,7 +2366,7 @@ impl<'a> Syntax {
             fndef.is_errable = true;
         }
 
-        fndef.body = self.parser_body()?;
+        fndef.body = self.parser_body(false)?;
         expr.node = AstNode::FnDef(Arc::new(Mutex::new(fndef)));
 
         // parse immediately call fn expr
@@ -2800,7 +2759,7 @@ impl<'a> Syntax {
 
                     loop {
                         let param_type = self.parser_single_type()?;
-                        assert!(param_type.ident_kind == TypeIdentKind::Param);
+                        debug_assert!(param_type.ident_kind == TypeIdentKind::Param);
 
                         if self.consume(TokenType::Colon) {
                             loop {
@@ -2919,13 +2878,15 @@ impl<'a> Syntax {
         // tpl fn not body;
         if self.is_stmt_eof() {
             fndef.is_tpl = true;
+            fndef.symbol_end = self.prev().unwrap().end;
             stmt.node = AstNode::FnDef(Arc::new(Mutex::new(fndef)));
+            stmt.end = self.prev().unwrap().end;
             return Ok(stmt);
         }
 
-        fndef.body = self.parser_body()?;
+        fndef.body = self.parser_body(false)?;
 
-        fndef.symbol_end = if let Some(prev) = self.prev() { prev.end } else { self.peek().end };
+        fndef.symbol_end = self.prev().unwrap().end;
 
         self.type_params_table = HashMap::new();
 
@@ -3085,7 +3046,7 @@ impl<'a> Syntax {
         Ok(stmt)
     }
 
-    fn parser_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
+    fn parser_local_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
         let stmt = if self.is(TokenType::Var) {
             self.parser_var_begin_stmt()?
         } else if self.is_type_begin_stmt() {
@@ -3096,8 +3057,6 @@ impl<'a> Syntax {
             self.parser_throw_stmt()?
         } else if self.is(TokenType::Let) {
             self.parser_let_stmt()?
-        } else if self.is(TokenType::Ident) || self.is(TokenType::Star) {
-            self.parser_expr_begin_stmt()?
         } else if self.is(TokenType::Label) {
             self.parser_label()?
         } else if self.is(TokenType::If) {
@@ -3130,11 +3089,7 @@ impl<'a> Syntax {
             let expr = self.parser_expr_with_precedence()?;
             self.fake_new(expr)
         } else {
-            return Err(SyntaxError(
-                self.peek().start,
-                self.peek().end,
-                format!("local statement cannot start with '{}'", self.peek().literal),
-            ));
+            self.parser_expr_begin_stmt()?
         };
 
         self.must_stmt_end()?;
@@ -3262,9 +3217,10 @@ impl<'a> Syntax {
     fn parser_macro_default_expr(&mut self) -> Result<Box<Expr>, SyntaxError> {
         let mut expr = self.expr_new();
         self.must(TokenType::LeftParen)?;
+        let target_type = self.parser_type()?;
         self.must(TokenType::RightParen)?;
 
-        expr.node = AstNode::MacroDefault;
+        expr.node = AstNode::MacroDefault(target_type);
         expr.end = self.prev().unwrap().end;
         Ok(expr)
     }
@@ -3383,7 +3339,7 @@ impl<'a> Syntax {
         let mut stmt = self.stmt_new();
         self.must(TokenType::Try)?;
 
-        let try_body = self.parser_body()?;
+        let try_body = self.parser_body(false)?;
 
         self.must(TokenType::Catch)?;
 
@@ -3399,7 +3355,7 @@ impl<'a> Syntax {
             symbol_id: 0,
         }));
 
-        let catch_body = self.parser_body()?;
+        let catch_body = self.parser_body(false)?;
 
         stmt.node = AstNode::TryCatch(try_body, catch_err, catch_body);
         stmt.end = self.prev().unwrap().end;
@@ -3442,7 +3398,7 @@ impl<'a> Syntax {
                 self.must(TokenType::RightArrow)?;
 
                 select_case.is_default = true;
-                select_case.handle_body = self.parser_body()?;
+                select_case.handle_body = self.parser_body(false)?;
                 has_default = true;
 
                 select_case.end = self.prev().unwrap().end;
@@ -3498,7 +3454,7 @@ impl<'a> Syntax {
                 })));
             }
 
-            select_case.handle_body = self.parser_body()?;
+            select_case.handle_body = self.parser_body(false)?;
             select_case.end = self.prev().unwrap().end;
             cases.push(select_case);
 
@@ -3553,13 +3509,13 @@ impl<'a> Syntax {
             self.match_cond = false;
 
             let exec_body = if self.is(TokenType::LeftCurly) {
-                self.parser_body()?
+                self.parser_body(true)?
             } else {
                 let exec_expr = self.parser_expr()?;
 
                 // gen retrun stmt
                 let mut stmt = self.stmt_new();
-                stmt.node = AstNode::Break(Some(exec_expr.clone()));
+                stmt.node = AstNode::Ret(exec_expr.clone());
                 stmt.start = exec_expr.start.clone();
                 stmt.end = exec_expr.end.clone();
                 let start = stmt.start;

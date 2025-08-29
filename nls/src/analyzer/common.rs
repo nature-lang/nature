@@ -524,7 +524,8 @@ impl Type {
                 let mut hasher = DefaultHasher::new();
                 let mut str = self.kind.to_string();
                 for prop in properties {
-                    str = format!("{}_{}", str, prop.type_.hash());
+                    str = format!("{}_{}_{}", str, prop.key, prop.type_.hash());
+
                 }
                 str.hash(&mut hasher);
                 hasher.finish()
@@ -839,7 +840,7 @@ pub enum AstNode {
     MacroTypeEq(Type, Type), // (left_type, right_type)
     MacroAsync(MacroAsyncExpr),
     MacroCall(String, Vec<MacroArg>), // (ident, args)
-    MacroDefault,
+    MacroDefault(Type),               // type
 
     New(Type, Vec<StructNewProperty>, Option<Box<Expr>>), // (type_, properties, scalar expr)
 
@@ -870,8 +871,9 @@ pub enum AstNode {
     // Statements
     Fake(Box<Expr>), // (expr)
 
-    Break(Option<Box<Expr>>), // (expr)
+    Break, // (expr)
     Continue,
+    Ret(Box<Expr>),
     Import(ImportStmt),                       // 比较复杂直接保留
     VarTupleDestr(Vec<Box<Expr>>, Box<Expr>), // (elements, right)
     Assign(Box<Expr>, Box<Expr>),             // (left, right)
@@ -1152,7 +1154,7 @@ pub struct AstFnDef {
     pub is_async: bool,
     pub is_private: bool,
     pub is_errable: bool, // 当前函数是否返回错误
-    pub break_target_types: Vec<Type>,
+    pub ret_target_types: Vec<Type>,
     pub linkid: Option<String>,
     pub fn_name: String, // default empty
     pub rel_path: Option<String>,
@@ -1200,7 +1202,7 @@ impl Default for AstFnDef {
             is_async: false,
             is_private: false,
             is_errable: false,
-            break_target_types: Vec::new(),
+            ret_target_types: Vec::new(),
             fn_name: "".to_string(),
             rel_path: None,
             symbol_start: 0,

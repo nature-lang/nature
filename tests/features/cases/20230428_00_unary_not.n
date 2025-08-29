@@ -21,6 +21,7 @@ fn main() {
 
     var g = sum(12, -1) catch err {
         println('no err')
+        0
     }
 
     bool has_err = false

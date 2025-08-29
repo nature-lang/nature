@@ -882,14 +882,16 @@ static inline void heap_arena_bits_batch_handle(addr_t start, addr_t end, bool i
         }
 
         // 1 个 ptr 需要 2 个bit 标记
-        uint64_t ptr_count = (temp_end - start) / POINTER_SIZE;
-        uint64_t index_start = arena_bits_index(arena, start);
+        // uint64_t ptr_count = (temp_end - start) / POINTER_SIZE;
+        uint64_t index_start = arena_bits_index(arena, start); // 65523
+        uint64_t index_end = arena_bits_index(arena, temp_end); // 65524
+        uint64_t index_count = (index_end - index_start);
 
         // batch clear
         if (is_clear) {
-            bitmap_batch_clear(arena->bits, index_start, ptr_count * 2);
+            bitmap_batch_clear(arena->bits, index_start, index_count);
         } else {
-            bitmap_batch_set(arena->bits, index_start, ptr_count * 2);
+            bitmap_batch_set(arena->bits, index_start, index_count);
         }
 
         start = temp_end;
@@ -915,6 +917,17 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
     bool arr_ptr = rtype->kind == TYPE_ARR && rtype->last_ptr > 0 && rtype->malloc_gc_bits_offset == -1;
     if (arr_ptr) {
         heap_arena_bits_batch_handle(addr, addr + obj_size, false);
+        //        int index = 0;
+        //        for (addr_t temp_addr = addr; temp_addr < addr + obj_size + POINTER_SIZE; temp_addr += POINTER_SIZE) {
+        //            uint64_t i = arena_index(temp_addr);
+        //            arena_t *arena = memory->mheap->arenas[i];
+        //            assert(arena && "cannot find arena by addr");
+        //            uint64_t bit_index = arena_bits_index(arena, temp_addr);
+        //
+        //            TDEBUGF("[runtime.heap_arena_bits_set] array %p + objsize %d, arena batch set, arena bit index(%d) = %d",
+        //                    addr, obj_size, index, bitmap_test(arena->bits, bit_index));
+        //            index += 1;
+        //        }
         return;
     }
 
@@ -1215,7 +1228,7 @@ mspan_t *span_of(addr_t addr) {
  * @return
  */
 void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
-    // uint64_t start = uv_hrtime();
+    uint64_t start = uv_hrtime();
     // n_processor_t *p = processor_get();
     // if (!p) {
     // p = processor_index[0];
@@ -1227,7 +1240,7 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
     //        mutex_lock(&p->gc_solo_stw_locker);
     //    }
 
-    MDEBUGF("[rti_gc_malloc] start p_index=%d", p->index);
+    //    MDEBUGF("[rti_gc_malloc] start p_index=%d", p->index);
 
     if (rtype) {
         MDEBUGF("[rti_gc_malloc] size=%ld, type_kind=%s", size, type_kind_str[rtype->kind]);
@@ -1249,13 +1262,13 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
     // 如果当前写屏障开启，则新分配的对象都是黑色(不在工作队列且被 span 标记), 避免在本轮被 GC 清理
     if (gc_barrier_get()) {
         DEBUGF("[rti_gc_malloc] p_index=%d(%lu), p_status=%d, gc barrier enabled, will mark ptr as black, ptr=%p",
-                processor_get()->index,
-                (uint64_t) processor_get()->thread_id, processor_get()->status, ptr);
+               processor_get()->index,
+               (uint64_t) processor_get()->thread_id, processor_get()->status, ptr);
         mark_ptr_black(ptr);
     }
 
-    DEBUGF("[rti_gc_malloc] end p_index=%d, co=%p, result=%p, size=%d, hash=%d",
-           p->index, coroutine_get(), ptr, size, rtype ? rtype->hash : 0);
+    //    DEBUGF("[rti_gc_malloc] end p_index=%d, co=%p, result=%p, size=%d, hash=%d",
+    //           p->index, coroutine_get(), ptr, size, rtype ? rtype->hash : 0);
 
     // jit span 不用清 0， 权限不足也无法进行清零
     if (rtype && rtype->kind != TYPE_GC_FN) {

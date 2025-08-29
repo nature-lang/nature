@@ -231,8 +231,8 @@ struct module_t {
     slice_t *global_symbols; // symbol_t, 这里只存储全局符号
     slice_t *global_vardef; // 用于在 infer 阶段进行类型推导
 
-    slice_t *global_typedef; // 记录所有的 type def
     slice_t *ast_fndefs;
+    slice_t *ast_typedefs;
     linked_t *temp_worklist; // ast_fndef
 
     slice_t *infer_temp_fndefs; // infer 阶段，type param 可能还会产生 temp_fndefs
@@ -437,7 +437,7 @@ typedef enum {
     LIR_OPCODE_RT_CALL,
 
     LIR_OPCODE_RETURN, // return != ret, 其主要是做了 mov res -> rax
-    LIR_OPCODE_BREAK, // 主要是为了做 break 校验
+    LIR_OPCODE_RET,
 
     LIR_OPCODE_LABEL,
     LIR_OPCODE_FN_BEGIN, // output 为 formals 操作数
@@ -511,8 +511,9 @@ typedef struct closure_t {
     ct_stack_t *catch_error_labels;
 
     ct_stack_t *continue_labels; // 用于 for continue lir_operand*
-    ct_stack_t *break_targets; // default type_unknown
     ct_stack_t *break_labels; // 用于 for break lir_operand*
+    ct_stack_t *ret_targets; // default type_unknown
+    ct_stack_t *ret_labels; // default type_unknown
 
     // lir_operand_t
     void *return_operand; // 返回结果，return 中如果有返回参数，则会进行一个 move 移动到该 result 中
@@ -652,10 +653,14 @@ typedef struct {
     uint32_t macho_current_version;
 } elf_context_t;
 
-type_t type_copy(type_t temp);
+type_t type_copy(module_t *m, type_t temp);
 
-bool type_union_compare(type_union_t *left, type_union_t *right);
+bool type_union_compare(type_union_t *dst, type_union_t *src);
 
-bool type_compare(type_t dst, type_t src, table_t *generics_param_table);
+bool type_generics(type_t dst, type_t src, table_t *generics_param_table);
+
+bool type_compare(type_t dst, type_t src);
+
+type_t reduction_type(module_t *m, type_t t);
 
 #endif // NATURE_TYPES_H

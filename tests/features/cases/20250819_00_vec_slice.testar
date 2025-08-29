@@ -38,6 +38,7 @@ fn main() {
     var list = [1, 2, 3, 4, 5]
     var temp = list[2..9] catch e {
         println(e.msg())
+        []
     }
     println('len ->', temp.len())
 }

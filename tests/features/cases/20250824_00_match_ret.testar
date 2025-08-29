@@ -1,0 +1,101 @@
+=== test_basic
+--- main.n
+fn div(int a, int b):int! {
+    if b == 0 {
+        throw errorf('b cannot zero')
+    }
+
+    return a / b
+}
+
+fn main() {
+    var a = match {
+        true -> 12
+        _ -> 10
+    }
+    assert(a == 12)
+    println(a)
+
+    match {
+        true -> 12
+        _ -> 10
+    }
+
+    var a1 = match {
+        (2 > 1) -> {
+            if true {
+                12
+            } else {
+                13
+            }
+
+            15
+        }
+        _ -> 0
+    }
+    assert(a1 == 15)
+    println(a1)
+
+
+    var a2 = div(10, 0) catch e {
+        10
+        println('in div catch', e.msg())
+        100
+        10000
+    }
+    assert(a2 == 10000)
+    println(a2)
+
+    var a3 = div(10, 0) catch e {}
+    assert(a3 == 0)
+    println(a3)
+
+    var a4 = div(10, 0) catch e {12}
+    assert(a4 == 12)
+    println(a4)
+}
+
+=== test_break_failed
+--- main.n
+fn div(int a, int b):int! {
+    if b == 0 {
+        throw errorf('b cannot zero')
+    }
+
+    return a / b
+}
+
+fn main() {
+    var a = match {
+        true -> {
+            break 10
+        }
+        _ -> 10
+    }
+}
+
+--- output.txt
+nature-test/main.n:12:17: excepted ';' or '}' at end of statement
+
+=== test_break_failed2
+--- main.n
+fn div(int a, int b):int! {
+    if b == 0 {
+        throw errorf('b cannot zero')
+    }
+
+    return a / b
+}
+
+fn main() {
+    var a = match {
+        true -> {
+            break
+        }
+        _ -> 10
+    }
+}
+
+--- output.txt
+nature-test/main.n:12:17: break must use in for stmt body
+

@@ -1161,7 +1161,7 @@ arm64_native_fn arm64_native_table[] = {
         [LIR_OPCODE_LABEL] = arm64_native_label,
         [LIR_OPCODE_PUSH] = arm64_native_push,
         [LIR_OPCODE_RETURN] = arm64_native_nop,
-        [LIR_OPCODE_BREAK] = arm64_native_nop,
+        [LIR_OPCODE_RET] = arm64_native_nop,
         [LIR_OPCODE_BEQ] = arm64_native_beq,
         [LIR_OPCODE_BAL] = arm64_native_bal,
 

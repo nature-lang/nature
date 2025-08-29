@@ -855,7 +855,7 @@ impl Lexer {
 
         // 处理特殊字符
         let special_type = self.special_char();
-        assert!(special_type != TokenType::Eof, "special characters are not recognized");
+        debug_assert!(special_type != TokenType::Eof, "special characters are not recognized");
 
         // 检查 import xxx as * 的特殊情况
         if special_type == TokenType::Star && !self.syntax_indexes.is_empty() {
