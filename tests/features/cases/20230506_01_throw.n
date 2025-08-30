@@ -15,15 +15,15 @@ fn main():void! {
 
     // normal
     result = rem(10, 4) catch err {
-        // default break
         println(err.msg())
+        0
     }
     println(result)
 
     // error handle
     result = rem(10, 0) catch err {
         println(err.msg())
-        break 1
+        1
     }
     println(result)
 

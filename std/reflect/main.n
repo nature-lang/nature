@@ -50,6 +50,8 @@ type type_t = struct{
     u8 align
     [int] hashes
     [field_t] fields // type struct exclusive
+
+    rawptr<rtype_t> r
 }
 
 type rtype_struct_t = struct{
@@ -96,6 +98,7 @@ fn typeof_hash(i64 hash):type_t! {
         align = r.align,
         hashes = vec_new<int>(0, 0),
         fields = vec_new<field_t>(field_t{}, 0),
+        r = r,
     }
 
     if r.kind == STRUCT {
@@ -218,7 +221,7 @@ fn valueof<T>(T v):value_t! {
 
     var result = value_t{
         t = t,
-        v = v as anyptr,
+        v = v as anyptr, // TODO union cannot use as to anyptr
     }
 
     return result

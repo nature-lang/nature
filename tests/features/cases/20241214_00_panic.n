@@ -5,6 +5,7 @@ fn main() {
     [float] list = []
     var d = list[20] catch err {
         println('catch panic: ', err.msg())
+        0
     }
 
 

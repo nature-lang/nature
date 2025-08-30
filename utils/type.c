@@ -6,556 +6,7 @@
 #include "custom_links.h"
 #include "helper.h"
 
-rtype_t rtype_base(type_kind kind) {
-    uint32_t hash = hash_string(itoa(kind));
-    rtype_t rtype = {
-            .size = type_kind_sizeof(kind), // 单位 byte
-            .hash = hash,
-            .last_ptr = 0,
-            .kind = kind,
-            .hashes_offset = -1,
-            .malloc_gc_bits_offset = -1,
-    };
-
-    if (rtype.size > 0) {
-        rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
-    }
-
-    return rtype;
-}
-
-static rtype_t rtype_rawptr(type_ptr_t *t) {
-    rtype_t value_rtype = reflect_type(t->value_type);
-
-    char *str = dsprintf("%d_%lu", TYPE_RAWPTR, value_rtype.hash);
-    uint32_t hash = hash_string(str);
-    free(str);
-    rtype_t rtype = {
-            .size = sizeof(n_ptr_t),
-            .hash = hash,
-            .last_ptr = POINTER_SIZE,
-            .kind = TYPE_RAWPTR,
-            .length = 1,
-            .hashes_offset = data_put(NULL, sizeof(uint64_t)),
-            .malloc_gc_bits_offset = -1,
-    };
-    // 计算 gc_bits
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
-
-    ((int64_t *) CTDATA(rtype.hashes_offset))[0] = value_rtype.hash;
-
-    return rtype;
-}
-
-static rtype_t rtype_anyptr(type_kind kind) {
-    char *str = dsprintf("%d", TYPE_ANYPTR);
-    uint32_t hash = hash_string(str);
-    free(str);
-    rtype_t rtype = {
-            .size = sizeof(n_ptr_t),
-            .hash = hash,
-            .last_ptr = POINTER_SIZE,
-            .kind = TYPE_ANYPTR,
-            .hashes_offset = -1,
-            .malloc_gc_bits_offset = -1,
-    };
-
-    // 计算 gc_bits, 在当前的设计中，anyptr 同样会被 gc 追踪
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
-
-    return rtype;
-}
-
-
-/**
- * hash = type_kind + element_type_hash
- * @param t
- * @return
- */
-static rtype_t rtype_ptr(type_ptr_t *t) {
-    rtype_t value_rtype = reflect_type(t->value_type);
-
-    char *str = dsprintf("%d_%lu", TYPE_PTR, value_rtype.hash);
-    uint32_t hash = hash_string(str);
-    free(str);
-    rtype_t rtype = {
-            .size = sizeof(n_ptr_t),
-            .hash = hash,
-            .last_ptr = POINTER_SIZE,
-            .kind = TYPE_PTR,
-            .length = 1,
-            .hashes_offset = data_put(NULL, sizeof(uint64_t)),
-            .malloc_gc_bits_offset = -1,
-    };
-    // 计算 gc_bits
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
-
-    ((int64_t *) CTDATA(rtype.hashes_offset))[0] = value_rtype.hash;
-
-
-    return rtype;
-}
-
-/**
- * hash = type_kind
- * @param t
- * @return
- */
-static rtype_t rtype_string() {
-    uint32_t hash = hash_string(itoa(TYPE_STRING));
-    rtype_t rtype = {
-            .size = sizeof(n_string_t),
-            .hash = hash,
-            .last_ptr = POINTER_SIZE,
-            .kind = TYPE_STRING,
-            .hashes_offset = -1,
-            .malloc_gc_bits_offset = -1,
-    };
-
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
-
-    return rtype;
-}
-
-/**
- * hash = type_kind + element_type_hash
- * @param t
- * @return
- */
-static rtype_t rtype_vec(type_vec_t *t) {
-    rtype_t element_rtype = reflect_type(t->element_type);
-
-    char *str = dsprintf("%d_%lu", TYPE_VEC, element_rtype.hash);
-    uint32_t hash = hash_string(str);
-    free(str);
-    rtype_t rtype = {
-            .size = sizeof(n_vec_t),
-            .hash = hash,
-            .last_ptr = POINTER_SIZE,
-            .kind = TYPE_VEC,
-            .length = 1,
-            .hashes_offset = data_put(NULL, sizeof(uint64_t)),
-            .malloc_gc_bits_offset = -1,
-    };
-
-    // 计算 gc_bits
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
-
-    ((int64_t *) CTDATA(rtype.hashes_offset))[0] = element_rtype.hash;
-
-    return rtype;
-}
-
-static rtype_t rtype_chan(type_chan_t *t) {
-    rtype_t element_rtype = reflect_type(t->element_type);
-
-    char *str = dsprintf("%d_%lu", TYPE_CHAN, element_rtype.hash);
-    uint32_t hash = hash_string(str);
-    free(str);
-    rtype_t rtype = {
-            .size = sizeof(n_chan_t),
-            .hash = hash,
-            .last_ptr = POINTER_SIZE * 5,
-            .kind = TYPE_CHAN,
-            .length = 1,
-            .hashes_offset = data_put(NULL, sizeof(uint64_t)),
-            .malloc_gc_bits_offset = -1,
-    };
-
-    // 计算 gc_bits
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
-
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 1);
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 2);
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 3);
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 4);
-
-    ((int64_t *) CTDATA(rtype.hashes_offset))[0] = element_rtype.hash;
-
-    return rtype;
-}
-
-/**
- * hash = type_kind + count + element_type_hash
- * @param t
- * @return
- */
-rtype_t rtype_array(type_array_t *t) {
-    rtype_t element_rtype = reflect_type(t->element_type);
-    uint64_t element_size = type_sizeof(t->element_type);
-
-    char *str = dsprintf("%d_%lu_%lu", TYPE_ARR, t->length, element_rtype.hash);
-    uint32_t hash = hash_string(str);
-    free(str);
-    rtype_t rtype = {
-            .size = element_size * t->length,
-            .hash = hash,
-            .kind = TYPE_ARR,
-            .length = t->length, // array length 特殊占用
-            .hashes_offset = data_put(NULL, sizeof(uint64_t)),
-            .malloc_gc_bits_offset = -1,
-    };
-
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
-
-    uint64_t offset = 0;
-    rtype.last_ptr = rtype_array_gc_bits(rtype.malloc_gc_bits_offset, &offset, t);
-
-    ((int64_t *) CTDATA(rtype.hashes_offset))[0] = element_rtype.hash;
-
-    return rtype;
-}
-
-/**
- * hash = type_kind + key_rtype.hash + value_rtype.hash
- * @param t
- * @return
- */
-static rtype_t rtype_map(type_map_t *t) {
-    rtype_t key_rtype = reflect_type(t->key_type);
-    rtype_t value_rtype = reflect_type(t->value_type);
-
-    char *str = dsprintf("%d_%lu_%lu", TYPE_MAP, key_rtype.hash, value_rtype.hash);
-    uint32_t hash = hash_string(str);
-    free(str);
-    rtype_t rtype = {
-            .size = sizeof(n_map_t),
-            .hash = hash,
-            .last_ptr = POINTER_SIZE * 3, // hash_table + key_data + value_data
-            .kind = TYPE_MAP,
-            .length = 2,
-            .hashes_offset = data_put(NULL, sizeof(uint64_t) * 2),
-            .malloc_gc_bits_offset = -1,
-    };
-
-    // 计算 gc_bits
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0); // hash_table
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 1); // key_data
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 2); // value_data
-
-    ((int64_t *) CTDATA(rtype.hashes_offset))[0] = key_rtype.hash;
-    ((int64_t *) CTDATA(rtype.hashes_offset))[1] = value_rtype.hash;
-
-    return rtype;
-}
-
-/**
- * @param t
- * @return
- */
-static rtype_t rtype_set(type_set_t *t) {
-    rtype_t key_rtype = reflect_type(t->element_type);
-
-    char *str = dsprintf("%d_%lu", TYPE_SET, key_rtype.hash);
-    uint32_t hash = hash_string(str);
-    free(str);
-    rtype_t rtype = {
-            .size = sizeof(n_set_t),
-            .hash = hash,
-            .last_ptr = POINTER_SIZE * 2, // hash_table + key_data
-            .kind = TYPE_SET,
-            .length = 1,
-            .hashes_offset = data_put(NULL, sizeof(uint64_t)),
-            .malloc_gc_bits_offset = -1,
-    };
-    // 计算 gc_bits
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0); // hash_table
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 1); // key_data
-
-    ((int64_t *) CTDATA(rtype.hashes_offset))[0] = key_rtype.hash;
-
-    return rtype;
-}
-
-static rtype_t rtype_interface(type_t t) {
-    char *str = itoa(TYPE_INTERFACE);
-
-    // typedef 的 right expr 没有 ident, 当然对应的 rtype 也用不上，所以不需要做额外的处理
-    if (t.ident) {
-        str = str_connect(str, t.ident); // 通过 interface 的名称进行绝对区分
-    }
-    uint32_t hash = hash_string(str);
-
-    rtype_t rtype = {
-            .size = POINTER_SIZE * 4, // element_rtype + value(并不知道 value 的类型)
-            .hash = hash,
-            .kind = TYPE_INTERFACE,
-            .last_ptr = POINTER_SIZE * 2,
-            .malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(POINTER_SIZE * 2, POINTER_SIZE)),
-            .hashes_offset = -1,
-    };
-
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 1);
-
-    return rtype;
-}
-
-/**
- * 从类型声明上无法看出 any 是否需要 gc,那就默认第二个值总是需要 gc 扫描
- * hash = type_kind
- * @param t
- * @return
- */
-static rtype_t rtype_union(type_union_t *t) {
-    char *str = itoa(TYPE_UNION);
-
-    rtype_t rtype = {
-            .size = POINTER_SIZE * 2, // element_rtype + value(并不知道 value 的类型)
-            .hash = 0,
-            .kind = TYPE_UNION,
-            .last_ptr = POINTER_SIZE,
-            .malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(POINTER_SIZE * 2, POINTER_SIZE)),
-            .length = t->elements->length,
-            .hashes_offset = -1,
-    };
-
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
-    if (t->elements->length > 0) {
-        int64_t size = sizeof(int64_t) * t->elements->length;
-        int64_t *hashes = mallocz(size);
-        for (int i = 0; i < t->elements->length; ++i) {
-            type_t *element_type = ct_list_value(t->elements, i);
-            rtype_t element_rtype = ct_reflect_type(*element_type);
-            hashes[i] = element_rtype.hash;
-
-            rtype.hashes_offset = data_put((uint8_t *) hashes, size);
-            str = str_connect(str, itoa(element_rtype.hash));
-        }
-    }
-
-    rtype.hash = hash_string(str);
-    return rtype;
-}
-
-/**
- * 无法分片 fn 是否是 closure, 所以统一都进行扫描, runtime 可以根据 fn 的地址判断是否需要进一步扫描
- * hash = type_kind + params hash + return_type hash
- * @param t
- * @return
- */
-static rtype_t rtype_fn(type_fn_t *t) {
-    char *str = itoa(TYPE_FN);
-    rtype_t return_rtype = ct_reflect_type(t->return_type);
-    str = str_connect(str, itoa(return_rtype.hash));
-    for (int i = 0; i < t->param_types->length; ++i) {
-        type_t *typeuse = ct_list_value(t->param_types, i);
-        rtype_t formal_type = ct_reflect_type(*typeuse);
-        str = str_connect(str, itoa(formal_type.hash));
-    }
-    rtype_t rtype = {
-            .size = POINTER_SIZE,
-            .hash = hash_string(str),
-            .kind = TYPE_FN,
-            .last_ptr = 0,
-            .hashes_offset = -1,
-            .malloc_gc_bits_offset = -1,
-    };
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
-
-    rtype.last_ptr = 8;
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
-
-    return rtype;
-}
-
-static uint64_t rtype_array_gc_bits(uint64_t gc_bits_offset, uint64_t *offset, type_array_t *t) {
-    // offset 已经按照 align 对齐过了，这里不需要重复对齐
-    uint64_t last_ptr_offset = 0;
-
-    for (int i = 0; i < t->length; ++i) {
-        uint64_t last_ptr_temp_offset = 0;
-        if (t->element_type.kind == TYPE_STRUCT) {
-            last_ptr_temp_offset = rtype_struct_gc_bits(gc_bits_offset, offset, t->element_type.struct_);
-        } else if (t->element_type.kind == TYPE_ARR) {
-            last_ptr_temp_offset = rtype_array_gc_bits(gc_bits_offset, offset, t->element_type.array);
-        } else {
-            uint64_t bit_index = *offset / POINTER_SIZE;
-            if (type_is_pointer_heap(t->element_type)) {
-                bitmap_set(CTDATA(gc_bits_offset), bit_index);
-                last_ptr_temp_offset = *offset;
-            }
-
-            *offset += type_sizeof(t->element_type);
-        }
-
-        if (last_ptr_temp_offset > last_ptr_offset) {
-            last_ptr_offset = last_ptr_temp_offset;
-        }
-    }
-
-    return last_ptr_offset;
-}
-
-static uint64_t rtype_struct_gc_bits(uint64_t gc_bits_offset, uint64_t *offset, type_struct_t *t) {
-    // offset 已经按照 align 对齐过了，这里不需要重复对齐
-    uint64_t last_ptr_offset = 0;
-    for (int i = 0; i < t->properties->length; ++i) {
-        struct_property_t *p = ct_list_value(t->properties, i);
-
-        // 属性基础地址对齐
-        *offset = align_up(*offset, type_alignof(p->type));
-
-        uint64_t last_ptr_temp_offset = 0;
-        if (p->type.kind == TYPE_STRUCT) {
-            last_ptr_temp_offset = rtype_struct_gc_bits(gc_bits_offset, offset, p->type.struct_);
-        } else if (p->type.kind == TYPE_ARR) {
-            last_ptr_temp_offset = rtype_array_gc_bits(gc_bits_offset, offset, p->type.array);
-        } else {
-            uint64_t size = type_sizeof(p->type); // 等待存储的 struct size
-            // 这里就是存储位置
-            uint64_t bit_index = *offset / POINTER_SIZE;
-
-            *offset += size;
-            bool is_ptr = type_is_pointer_heap(p->type);
-            if (is_ptr) {
-                bitmap_set(CTDATA(gc_bits_offset), bit_index);
-                last_ptr_temp_offset = *offset;
-            }
-        }
-
-        if (last_ptr_temp_offset > last_ptr_offset) {
-            last_ptr_offset = last_ptr_temp_offset;
-        }
-    }
-
-    // 结构体需要整体需要对齐到 align
-    *offset = align_up(*offset, t->align);
-
-    return last_ptr_offset;
-}
-
-/**
- * hash = type_kind + key type hash
- * @param t
- * @return
- */
-static rtype_t rtype_struct(type_struct_t *t) {
-    char *str = itoa(TYPE_STRUCT);
-
-    uint64_t size = type_struct_sizeof(t);
-    if (size == 0) {
-        rtype_t rtype = {
-                .size = 1, // 空 struct 默认占用 1 一个字节, 让 gc malloc 可以编译通过
-                .hash = hash_string(str),
-                .kind = TYPE_STRUCT,
-                .malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(1, POINTER_SIZE)),
-                .length = t->properties->length,
-                .hashes_offset = -1,
-                .last_ptr = 0,
-        };
-
-        return rtype;
-    }
-
-    uint64_t offset = 0; // 基于 offset 计算 gc bits
-    int64_t gc_bits_offset = data_put(NULL, calc_gc_bits_size(size, POINTER_SIZE));
-
-    int64_t fields_size = sizeof(rtype_field_t) * t->properties->length;
-    rtype_field_t *fields = mallocz(fields_size);
-
-    // 假设没有 struct， 可以根据所有 property 计算 gc bits
-    uint16_t last_ptr_offset = rtype_struct_gc_bits(gc_bits_offset, &offset, t);
-
-    // 记录需要 gc 的 key 的
-    int hash_index = 0;
-    for (int i = 0; i < t->properties->length; ++i) {
-        struct_property_t *p = ct_list_value(t->properties, i);
-        rtype_t element_rtype = ct_reflect_type(p->type);
-
-        rtype_field_t field = {
-                .name_offset = strtable_put(p->name),
-                .offset = p->offset,
-                .hash = element_rtype.hash,
-        };
-
-        fields[i] = field;
-
-        str = str_connect(str, itoa(element_rtype.hash));
-    }
-
-    rtype_t rtype = {
-            .size = size,
-            .hash = hash_string(str),
-            .kind = TYPE_STRUCT,
-            .malloc_gc_bits_offset = gc_bits_offset,
-            .length = t->properties->length,
-            .last_ptr = last_ptr_offset,
-            .hashes_offset = data_put((uint8_t *) fields, fields_size),
-    };
-
-    return rtype;
-}
-
-/**
- * 参考 struct
- * @param t
- * @return
- */
-static rtype_t rtype_tuple(type_tuple_t *t) {
-    char *str = itoa(TYPE_TUPLE);
-    uint64_t offset = 0;
-    uint64_t need_gc_count = 0;
-    uint16_t need_gc_offsets[UINT16_MAX] = {0};
-
-    uint64_t hashes_offset = data_put(NULL, sizeof(uint64_t) * t->elements->length);
-
-    // 记录需要 gc 的 key 的
-    for (uint64_t i = 0; i < t->elements->length; ++i) {
-        type_t *element_type = ct_list_value(t->elements, i);
-
-        uint64_t element_size = type_sizeof(*element_type);
-        int element_align = type_alignof(*element_type);
-
-        // 按 offset 对齐
-        offset = align_up(offset, element_align);
-        // 计算 element_rtype
-        rtype_t rtype = ct_reflect_type(*element_type);
-        str = str_connect(str, itoa(rtype.hash));
-
-        // 如果存在 heap 中就是需要 gc
-        bool need_gc = type_is_pointer_heap(*element_type);
-        if (need_gc) {
-            need_gc_offsets[need_gc_count++] = offset;
-        }
-
-        ((int64_t *) CTDATA(hashes_offset))[i] = rtype.hash;
-
-        offset += element_size;
-    }
-    uint64_t size = align_up(offset, t->align);
-
-    rtype_t rtype = {
-            .size = size,
-            .hash = hash_string(str),
-            .kind = TYPE_TUPLE,
-            .malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(size, POINTER_SIZE)),
-            .length = t->elements->length,
-            .hashes_offset = hashes_offset,
-    };
-
-    if (need_gc_count > 0) {
-        // 默认 size 8byte 对齐了
-        for (int i = 0; i < need_gc_count; ++i) {
-            uint16_t gc_offset = need_gc_offsets[i];
-            bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), gc_offset / POINTER_SIZE);
-        }
-
-        rtype.last_ptr = need_gc_offsets[need_gc_count - 1] + POINTER_SIZE;
-    }
-
-    return rtype;
-}
-
-uint64_t type_kind_sizeof(type_kind t) {
+int64_t type_kind_sizeof(type_kind t) {
     assert(t > 0);
 
     switch (t) {
@@ -581,25 +32,38 @@ uint64_t type_kind_sizeof(type_kind t) {
     }
 }
 
-uint64_t type_struct_sizeof(type_struct_t *s) {
-    // 只有当 struct 没有元素，或者有嵌套 struct 依旧没有元素时， align 才为 0
-    if (s->align == 0) {
-        return 0; // 空 struct 占用 1 size, 让 linear/lower 都可以正常工作
+int64_t type_struct_alignof(type_struct_t *s) {
+    int64_t max_align = 0;
+    for (int i = 0; i < s->properties->length; ++i) {
+        struct_property_t *p = ct_list_value(s->properties, i);
+        uint8_t element_align = type_alignof(p->type);
+        if (element_align > max_align) {
+            max_align = element_align;
+        }
     }
+    return max_align;
+}
 
-    uint64_t size = 0;
+
+// 只有当 struct 没有元素(可以存在空的 struct 嵌套)，或者有嵌套 sub struct 依旧没有元素时， align 才为 0
+int64_t type_struct_sizeof(type_struct_t *s) {
+    int64_t size = 0;
+    int64_t max_align = 0;
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *p = ct_list_value(s->properties, i);
 
-        uint64_t element_size = type_sizeof(p->type);
-        uint8_t element_align = type_alignof(p->type);
+        int64_t element_size = type_sizeof(p->type);
+        int64_t element_align = type_alignof(p->type);
+        if (element_align > max_align) {
+            max_align = element_align;
+        }
 
         size = align_up(size, element_align);
         size += element_size;
     }
 
     // struct 整体按照 max_align 对齐
-    size = align_up(size, s->align);
+    size = align_up(size, max_align);
 
     return size;
 }
@@ -608,32 +72,71 @@ uint64_t type_struct_sizeof(type_struct_t *s) {
  * @param t
  * @return
  */
-uint64_t type_sizeof(type_t t) {
+int64_t type_sizeof(type_t t) {
+    if (t.kind == TYPE_IDENT) {
+        assert(false);
+    }
+
     if (t.kind == TYPE_STRUCT) {
-        uint64_t size = type_struct_sizeof(t.struct_);
-        if (size == 0) {
-            return 1;
-        }
+        int64_t size = type_struct_sizeof(t.struct_);
         return size;
     }
 
     if (t.kind == TYPE_ARR) {
-        return t.array->length * type_sizeof(t.array->element_type);
+        int64_t element_size = type_sizeof(t.array->element_type);
+        return t.array->length * element_size;
     }
+
 
     return type_kind_sizeof(t.kind);
 }
 
-uint64_t type_alignof(type_t t) {
-    if (t.kind == TYPE_STRUCT) {
-        //        assert(t.struct_->align > 0);
-        return t.struct_->align;
+bool type_can_size(type_t t) {
+    if (t.kind == TYPE_IDENT) {
+        return false;
     }
+
+    if (t.kind == TYPE_TUPLE) {
+        for (int i = 0; i < t.tuple->elements->length; ++i) {
+            type_t *item = ct_list_value(t.tuple->elements, i);
+            if (!type_can_size(*item)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    if (t.kind == TYPE_STRUCT) {
+        for (int i = 0; i < t.struct_->properties->length; ++i) {
+            struct_property_t *p = ct_list_value(t.struct_->properties, i);
+            if (!type_can_size(p->type)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    if (t.kind == TYPE_ARR) {
+        return type_can_size(t.array->element_type);
+    }
+
+    return true;
+}
+
+int64_t type_alignof(type_t t) {
+    assert(t.kind != TYPE_IDENT);
+
+    if (t.kind == TYPE_STRUCT) {
+        return type_struct_alignof(t.struct_);
+    }
+
     if (t.kind == TYPE_ARR) {
         return type_alignof(t.array->element_type);
     }
 
-    return type_sizeof(t);
+    return type_kind_sizeof(t.kind);
 }
 
 /**
@@ -673,88 +176,6 @@ type_t type_rawptrof(type_t t) {
     return result;
 }
 
-/**
- * 仅做 reflect, 不写入任何 table 中
- * @param t
- * @return
- */
-rtype_t reflect_type(type_t t) {
-    rtype_t rtype = {0};
-
-    switch (t.kind) {
-        case TYPE_STRING:
-            rtype = rtype_string();
-            break;
-        case TYPE_PTR:
-            rtype = rtype_ptr(t.ptr);
-            break;
-        case TYPE_RAWPTR:
-            rtype = rtype_rawptr(t.ptr);
-            break;
-        case TYPE_ANYPTR:
-            rtype = rtype_anyptr(t.kind);
-            break;
-        case TYPE_VEC:
-            rtype = rtype_vec(t.vec);
-            break;
-        case TYPE_CHAN:
-            rtype = rtype_chan(t.chan);
-            break;
-        case TYPE_ARR:
-            rtype = rtype_array(t.array);
-            break;
-        case TYPE_MAP:
-            rtype = rtype_map(t.map);
-            break;
-        case TYPE_SET:
-            rtype = rtype_set(t.set);
-            break;
-        case TYPE_TUPLE:
-            rtype = rtype_tuple(t.tuple);
-            break;
-        case TYPE_STRUCT:
-            rtype = rtype_struct(t.struct_);
-            break;
-        case TYPE_FN:
-            rtype = rtype_fn(t.fn);
-            break;
-        case TYPE_UNION:
-            rtype = rtype_union(t.union_);
-            break;
-        case TYPE_INTERFACE:
-            rtype = rtype_interface(t);
-            break;
-        default:
-            if (is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_NULL || t.kind == TYPE_VOID ||
-                t.kind == TYPE_BOOL || t.kind == TYPE_INTEGER_T) {
-                rtype = rtype_base(t.kind);
-            }
-    }
-    rtype.in_heap = t.in_heap;
-    if (t.ident) {
-        rtype.ident_offset = strtable_put(t.ident);
-    }
-
-    return rtype;
-}
-
-rtype_t ct_reflect_type(type_t t) {
-    rtype_t rtype = reflect_type(t);
-    if (rtype.kind == 0) {
-        return rtype;
-    }
-
-    bool exists = table_exist(ct_rtype_table, itoa(rtype.hash));
-    if (!exists) {
-        // 添加到 ct_rtypes 并得到 index(element_rtype 是值传递并 copy)
-        rtype_t *mem = rtype_push(rtype);
-
-        // 将 index 添加到 table
-        table_set(ct_rtype_table, itoa(rtype.hash), mem);
-    }
-
-    return rtype;
-}
 
 uint64_t calc_gc_bits_size(uint64_t size, uint8_t ptr_size) {
     size = align_up(size, ptr_size);
@@ -818,16 +239,6 @@ rtype_t *rtype_push(rtype_t rtype) {
     return ct_list_value(ct_rtype_list, index);
 }
 
-/**
- * compile time
- * @param t
- * @return
- */
-uint64_t ct_find_rtype_hash(type_t t) {
-    rtype_t rtype = ct_reflect_type(t);
-    assertf(rtype.hash, "type reflect failed");
-    return rtype.hash;
-}
 
 /**
  * rtype 在堆外占用的空间大小,比如 stack,global,list value, struct value 中的占用的 size 的大小
@@ -996,7 +407,7 @@ char *type_format(type_t t) {
         return _type_format(t);
     }
 
-    if (ident_is_param(&t)) {
+    if (ident_is_generics_param(&t)) {
         return ident;
     }
 
@@ -1009,7 +420,7 @@ char *type_origin_format(type_t t) {
         return _type_format(t);
     }
 
-    if (ident_is_param(&t)) {
+    if (ident_is_generics_param(&t)) {
         return ident;
     }
 

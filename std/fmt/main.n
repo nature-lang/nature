@@ -1,5 +1,6 @@
 import fmt.utils as *
 import strings
+import reflect
 
 fn sprintf(string format, ...[any] args):string {
     var end = format.len()
@@ -77,32 +78,26 @@ fn sprintf(string format, ...[any] args):string {
         }
 
         any arg = args[arg_index]
-        arg_index += 1
 
+
+        rawptr<reflect.union_t> arg_v = *(&arg as anyptr as rawptr<rawptr<reflect.union_t>>)
+        var arg_kind = arg_v.rtype.kind
+        var i = arg_v.value as i32
+
+        arg_index += 1
         if c == ascii('d') {
-            string s = ''
-            if arg is int {
-                 s = itos_with(arg as int, fill, width)
-            }  else if arg is i8 {
-                 s = itos_with(arg as i8, fill, width)
-            }  else if arg is i16 {
-                 s = itos_with(arg as i16, fill, width)
-            } else if arg is i32 {
-                 s = itos_with(arg as i32, fill, width)
-            } else if arg is i64 {
-                 s = itos_with(arg as i64, fill, width)
-            } else if arg is uint {
-                 s = utos_with(arg as uint, fill, width)
-            } else if arg is u8 {
-                 s = utos_with(arg as u8, fill, width)
-            }  else if arg is u16 {
-                 s = utos_with(arg as u16, fill, width)
-            } else if arg is u32 {
-                 s = utos_with(arg as u32, fill, width)
-            } else if arg is u64 {
-                 s = utos_with(arg as u64, fill, width)
-            }  else {
-                 s = '%!d'
+              string s = match arg_kind {
+                reflect.INT -> itos_with(arg_v.value as i32, fill, width)
+                reflect.I8 -> itos_with(arg_v.value as i8, fill, width)
+                reflect.I16 -> itos_with(arg_v.value as i16, fill, width)
+                reflect.I32 -> itos_with(arg_v.value as i32, fill, width)
+                reflect.I64 -> itos_with(arg_v.value as i64, fill, width)
+                reflect.UINT -> utos_with(arg_v.value as uint, fill, width)
+                reflect.U8 -> utos_with(arg_v.value as u8, fill, width)
+                reflect.U16 -> utos_with(arg_v.value as u16, fill, width)
+                reflect.U32 -> utos_with(arg_v.value as u32, fill, width)
+                reflect.U64 -> utos_with(arg_v.value as u64, fill, width)
+                _ -> '%!d'
             }
 
             for c in s {
@@ -113,12 +108,11 @@ fn sprintf(string format, ...[any] args):string {
         }
 
         if c == ascii('s') {
-            string s = ''
-            if arg is string {
-                s = arg // auto as
-            } else {
-                s = '%!s'
+            string s = match arg_kind {
+                reflect.STRING -> arg_v.value as string
+                _ -> '%!s'
             }
+            
             for c in s {
                 result.push(c)
             }
@@ -140,15 +134,10 @@ fn sprintf(string format, ...[any] args):string {
 
         // 添加对 %f 格式的支持
         if c == ascii('f') {
-            string s = ''
-            if arg is float {
-                s = ftos_with(arg as float, fill, width, precision)
-            } else if arg is f32 {
-                s = ftos_with(arg as f32, fill, width, precision)
-            } else if arg is f64 {
-                s = ftos_with(arg as f64, fill, width, precision)
-            } else {
-                s = '%!f'
+            string s = match arg_kind {
+                reflect.F32 -> ftos_with(*(&arg_v.value as anyptr as rawptr<f32>), fill, width, precision)
+                reflect.F64 -> ftos_with(*(&arg_v.value as anyptr as rawptr<f64>), fill, width, precision)
+                _ -> '%!f'
             }
 
             for c in s {
@@ -160,43 +149,29 @@ fn sprintf(string format, ...[any] args):string {
 
         // 各种类型的值进行 string 处理
         if c == ascii('v') {
-            string s = ''
-            if arg is int {
-                 s = itos(arg)
-            }  else if arg is i8 {
-                 s = itos(arg)
-            }  else if arg is i16 {
-                 s = itos(arg)
-            } else if arg is i32 {
-                 s = itos(arg)
-            } else if arg is i64 {
-                 s = itos(arg)
-            } else if arg is uint {
-                 s = utos(arg)
-            } else if arg is u8 {
-                 s = utos(arg)
-            }  else if arg is u16 {
-                 s = utos(arg)
-            } else if arg is u32 {
-                 s = utos(arg)
-            } else if arg is u64 {
-                 s = utos(arg)
-            } else if arg is float {
-                 s = ftos(arg)
-            } else if arg is f64 {
-                 s = ftos(arg)
-            } else if arg is f32 {
-                 s = ftos(arg)
-            } else if arg is bool {
-                if arg {
-                    s = 'true'
-                } else {
-                    s = 'false'
+            string s = match arg_kind {
+                reflect.I8 -> itos(arg_v.value as i8)
+                reflect.I16 -> itos(arg_v.value as i16)
+                reflect.I32 -> itos(arg_v.value as i32)
+                reflect.I64 -> itos(arg_v.value as i64)
+                reflect.U8 -> utos(arg_v.value as u8)
+                reflect.U16 -> utos(arg_v.value as u16)
+                reflect.U32 -> utos(arg_v.value as u32)
+                reflect.U64 -> utos(arg_v.value as u64)
+                reflect.F32 -> ftos(*(&arg_v.value as anyptr as rawptr<f32>))
+                reflect.F64 -> ftos(*(&arg_v.value as anyptr as rawptr<f64>))
+                reflect.BOOL -> {
+                    bool v = arg_v.value as bool 
+                    string result = 'false'
+                    if v {
+                        result = 'true'   
+                    }
+
+                    result
                 }
-            } else if arg is string {
-                s = arg // auto as
-            } else {
-                s = '%!v'
+                reflect.STRING -> arg_v.value as string
+                reflect.NULL -> 'null'
+                _ -> '%!v'
             }
 
             for c in s {

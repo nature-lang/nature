@@ -59,12 +59,14 @@ fn main() {
         true -> {
             int b = 64
 
+            var result = 0
             if false {
-                break 12
+                result = 12
             } else {
                 int a = 244
-                break a
+                result = a
             }
+            result
         }
         false -> 14
         _ -> 15
@@ -75,15 +77,15 @@ fn main() {
     string b = match {
        12 > 13 -> {
            assert(false)
-           break 'error'
+           'error'
        }
        12 > 11 -> {
            var result = 'hello world'
-           break result
+           result
        }
        12 > 10 -> {
            assert(false)
-           break 'error'
+           'error'
        }
        _ -> 'not default'
     }

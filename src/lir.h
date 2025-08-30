@@ -3,6 +3,7 @@
 
 #include "src/module.h"
 #include "src/register/register.h"
+#include "src/rtype.h"
 #include "src/symbol/symbol.h"
 #include "src/types.h"
 #include "utils/bitmap.h"
@@ -13,7 +14,7 @@
 
 #define VEC_TYPE_IDENT "vec"
 
-#define GEN_REWRITE_SEPARATOR "@"
+#define GEN_REWRITE_SEPARATOR "#"
 
 #define IMPL_CONNECT_IDENT "."
 
@@ -846,13 +847,17 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
     assert(dst_operand->assert_type == LIR_OPERAND_VAR);
     assert(is_stack_ref_big_type(t));
 
-    uint64_t size = type_sizeof(t);
+    int64_t size = type_sizeof(t);
+    if (size == 0) {
+        size = 1; // 和 reflect_type 对应，并且分配合适的空间
+    }
+    assert(size > 0);
 
     // 为了方便和寄存器进行交换，这里总是按照指针地址对齐
     c->stack_offset += size;
     c->stack_offset = align_up(c->stack_offset, POINTER_SIZE); // 按照 8byte 对齐
 
-    rtype_t rtype = reflect_type(t);
+    rtype_t rtype = reflect_type(m, t);
     assert(rtype.size == size);
 
     // 16, 0, 1
@@ -878,7 +883,7 @@ static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {
     string result = var_unique_ident(m, TEMP_IDENT);
 
     // 注册到符号表
-    symbol_table_set_var(result, type);
+    symbol_table_set_var(result, type, m);
 
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
 
@@ -893,7 +898,7 @@ static inline lir_operand_t *temp_var_operand_with_alloc(module_t *m, type_t typ
     assert(type.kind > 0);
 
     string unique_ident = var_unique_ident(m, TEMP_IDENT);
-    symbol_table_set_var(unique_ident, type);
+    symbol_table_set_var(unique_ident, type, m);
 
     lir_var_t *lir_var = lir_var_new(m, unique_ident);
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var);
@@ -903,8 +908,7 @@ static inline lir_operand_t *temp_var_operand_with_alloc(module_t *m, type_t typ
         if (type.in_heap) {
             lir_var->type = type_kind_new(TYPE_ANYPTR);
 
-            uint64_t rtype_hash = ct_find_rtype_hash(type);
-            OP_PUSH(lir_rtcall(RT_CALL_GC_MALLOC, target, 1, int_operand(rtype_hash)));
+            OP_PUSH(lir_rtcall(RT_CALL_GC_MALLOC, target, 1, int_operand(type_hash(type))));
         } else {
             OP_PUSH(lir_stack_alloc(m->current_closure, type, target));
         }
@@ -917,7 +921,7 @@ static inline lir_operand_t *lower_temp_var_operand(closure_t *c, linked_t *list
     assert(type.kind > 0);
 
     string unique_ident = var_unique_ident(c->module, TEMP_IDENT);
-    symbol_table_set_var(unique_ident, type);
+    symbol_table_set_var(unique_ident, type, c->module);
 
     lir_var_t *lir_var = lir_var_new(c->module, unique_ident);
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var);
@@ -976,7 +980,7 @@ static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir
 static inline lir_operand_t *unique_var_operand_no_module(module_t *m, type_t type, char *ident) {
     string result = var_ident_with_index(m, ident);
 
-    symbol_table_set_var(result, type);
+    symbol_table_set_var(result, type, m);
 
     return operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
 }
@@ -989,7 +993,7 @@ static inline lir_operand_t *unique_var_operand_no_module(module_t *m, type_t ty
 static inline lir_operand_t *unique_var_operand(module_t *m, type_t type, char *ident) {
     string result = var_unique_ident(m, ident);
 
-    symbol_table_set_var(result, type);
+    symbol_table_set_var(result, type, m);
 
     return operand_new(LIR_OPERAND_VAR, lir_var_new(m, result));
 }

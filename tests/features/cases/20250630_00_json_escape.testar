@@ -28,6 +28,7 @@ fn main() {
     var j = '"hello\n world"'
     var s = json.deserialize<string>(j) catch e {
         panic(e.msg())
+        ''
     }
     println(s)
 }
@@ -44,6 +45,7 @@ fn main() {
     var j = '"hello\\ world"'
     var s = json.deserialize<string>(j) catch e {
         panic(e.msg())
+        ''
     }
     println(s)
 }
@@ -59,6 +61,7 @@ fn main() {
     var j = '"hello\\nworld"'
     var s = json.deserialize<string>(j) catch e {
         panic(e.msg())
+        ''
     }
     println(s)
 }
@@ -75,6 +78,7 @@ fn main() {
     var j = `"hello\nworld"`
     var s = json.deserialize<string>(j) catch e {
         panic(e.msg())
+        ''
     }
     println(s)
 }

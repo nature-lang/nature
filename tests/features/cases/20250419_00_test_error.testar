@@ -141,9 +141,10 @@ fn main() {
 --- main.n
 fn main() {
     var buf = vec_new<u8>(0, 3)
-    buf.slice(0, 6)
+    buf[0..6]
     println('no no no!')
 }
 
 --- output.txt
-coroutine 'main' panic: 'slice [0:6] out of vec with length 3' at std/builtin/vec.n:32:15
+coroutine 'main' panic: 'slice [0:6] out of vec with length 3' at nature-test/main.n:3:12
+

@@ -263,7 +263,7 @@ static void analyzer_type(module_t *m, type_t *type) {
     // 'foo' is type_alias
     // alias 可能是一些特殊符号，首先检测是否已经定义，如果没有预定义，则使用特殊符号的含义
     // 比如 anyptr/rawptr/ptr
-    if (ident_is_def_or_alias(type) || type->ident_kind == TYPE_IDENT_INTERFACE) {
+    if (type_is_ident(type) || type->ident_kind == TYPE_IDENT_INTERFACE) {
         // foo.bar
         if (type->import_as) {
             ast_import_t *import = table_get(m->import_table, type->import_as);
@@ -585,11 +585,11 @@ static void analyzer_end_scope(module_t *m) {
     }
 }
 
-static ast_stmt_t *auto_as_stmt(int line, char *subject_ident, type_t target_type) {
+static ast_stmt_t *auto_as_stmt(module_t *m, int line, char *subject_ident, type_t target_type) {
     // var x = x as T
     ast_vardef_stmt_t *vardef = NEW(ast_vardef_stmt_t);
     vardef->var_decl.ident = strdup(subject_ident);
-    vardef->var_decl.type = type_copy(target_type);
+    vardef->var_decl.type = type_copy(m, target_type);
 
     ast_expr_t expr = {
             .line = line,
@@ -599,7 +599,7 @@ static ast_stmt_t *auto_as_stmt(int line, char *subject_ident, type_t target_typ
 
     ast_as_expr_t *as_expr = NEW(ast_as_expr_t);
     as_expr->src = *ast_ident_expr(expr.line, expr.column, strdup(vardef->var_decl.ident));
-    as_expr->target_type = type_copy(target_type);
+    as_expr->target_type = type_copy(m, target_type);
     expr.value = as_expr;
     vardef->right = NEW(ast_expr_t);
     *vardef->right = expr;
@@ -637,7 +637,7 @@ static void analyzer_if(module_t *m, ast_if_stmt_t *if_stmt) {
         assert(is_cond->src.assert_type == AST_EXPR_IDENT);
         char *ident = ((ast_ident *) is_cond->src.value)->literal;
         type_t target_type = is_cond->target_type;
-        ast_stmt_t *as_stmt = auto_as_stmt(is_expr->line, ident, target_type);
+        ast_stmt_t *as_stmt = auto_as_stmt(m, is_expr->line, ident, target_type);
         slice_insert(if_stmt->consequent, 0, as_stmt);
     }
 
@@ -714,7 +714,7 @@ static void analyzer_match(module_t *m, ast_match_t *match) {
             assert(cond_expr->assert_type == AST_EXPR_MATCH_IS);
             ast_match_is_expr_t *is_cond_expr = cond_expr->value;
             slice_insert(match_case->handle_body, 0,
-                         auto_as_stmt(cond_expr->line, subject_ident, is_cond_expr->target_type));
+                         auto_as_stmt(m, cond_expr->line, subject_ident, is_cond_expr->target_type));
         }
 
         analyzer_begin_scope(m);
@@ -938,7 +938,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         // 重构关于 param 的位置
         list_t *params = ct_list_new(sizeof(ast_var_decl_t));
         // param 中需要新增一个 impl_type_alias 的参数, 参数的名称为 self, 类型则是 impl_type
-        type_t param_type = type_copy(fndef->impl_type);
+        type_t param_type = type_copy(m, fndef->impl_type);
         ast_var_decl_t param = {
                 .ident = FN_SELF_NAME,
                 .type = param_type, // 后续 infer 确定了具体类型之后再判断是否需要 ptrof
@@ -1769,12 +1769,6 @@ static void analyzer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
     analyzer_end_scope(m);
 }
 
-static void analyzer_break(module_t *m, ast_break_t *stmt) {
-    if (stmt->expr != NULL) {
-        analyzer_expr(m, stmt->expr);
-    }
-}
-
 static void analyzer_return(module_t *m, ast_return_stmt_t *stmt) {
     if (stmt->expr != NULL) {
         analyzer_expr(m, stmt->expr);
@@ -1798,6 +1792,8 @@ static void analyzer_typedef_stmt(module_t *m, ast_typedef_stmt_t *stmt) {
 
     local_ident_t *local = local_ident_new(m, SYMBOL_TYPE, stmt, stmt->ident);
     stmt->ident = local->unique_ident;
+
+    slice_push(m->ast_typedefs, stmt);
 }
 
 static void analyzer_constant_propagation(module_t *m, ast_expr_t *expr) {
@@ -1956,6 +1952,7 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
     m->current_column = stmt->column;
 
     switch (stmt->assert_type) {
+        case AST_STMT_RET:
         case AST_STMT_EXPR_FAKE: {
             return analyzer_expr_fake(m, stmt->value);
         }
@@ -2007,9 +2004,6 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_STMT_RETURN: {
             return analyzer_return(m, stmt->value);
-        }
-        case AST_STMT_BREAK: {
-            return analyzer_break(m, stmt->value);
         }
         case AST_STMT_TYPEDEF: {
             return analyzer_typedef_stmt(m, stmt->value);
@@ -2159,7 +2153,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         ANALYZER_ASSERTF(false, "non-declaration statement outside fn body")
     }
 
-    m->global_typedef = typedef_list;
+    m->ast_typedefs = typedef_list;
 
     // 添加 module init 函数
     if (global_assign_list->count > 0) {

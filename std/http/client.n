@@ -283,7 +283,7 @@ fn request_t.send():ptr<response_t>! {
     resp.version = (br.read_until(' '.char()) as string).rtrim([' '])
     var status = (br.read_until(' '.char()) as string).rtrim([' '])
     resp.status = status.to_int() catch e {
-        break 0
+        0
     }
     resp.message = br.read_line()
     for true {

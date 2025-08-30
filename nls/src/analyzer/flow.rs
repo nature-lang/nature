@@ -24,28 +24,31 @@ impl<'a> Flow<'a> {
 
     pub fn analyze_fndef(&mut self, fndef_mutex: Arc<Mutex<AstFnDef>>) {
         let fndef = fndef_mutex.lock().unwrap();
+        if fndef.is_tpl {
+            return;
+        }
 
         let (has_return, _) = self.analyze_body(&fndef.body);
         if !matches!(fndef.return_type.kind, TypeKind::Void) && !has_return {
             self.errors.push(AnalyzerError {
                 start: fndef.symbol_end,
                 end: fndef.symbol_end,
-                message: format!("missing return"),
+                message: "missing return".to_string(),
             });
         }
     }
 
     fn analyze_body(&mut self, body: &AstBody) -> (bool, bool) {
         let mut has_return = false;
-        let mut has_break = false;
+        let mut has_ret = false;
 
         for stmt in &body.stmts {
-            let (item_has_return, item_has_break) = self.analyze_stmt(stmt);
+            let (item_has_return, item_has_ret) = self.analyze_stmt(stmt);
             has_return = has_return || item_has_return;
-            has_break = has_break || item_has_break;
+            has_ret = has_ret || item_has_ret;
         }
 
-        (has_return, has_break)
+        (has_return, has_ret)
     }
 
     fn analyze_stmt(&mut self, stmt: &Box<Stmt>) -> (bool, bool) {
@@ -60,7 +63,7 @@ impl<'a> Flow<'a> {
                 self.analyze_expr(expr);
                 (true, true)
             }
-            AstNode::Break(_) => (false, true),
+            AstNode::Ret(_) => (false, true),
             AstNode::Assign(_, right) => {
                 return self.analyze_expr(right); // need check return
             }
@@ -79,13 +82,13 @@ impl<'a> Flow<'a> {
             }
             AstNode::If(condition, then_body, else_body) => {
                 self.analyze_expr(condition);
-                let (then_has_return, then_has_break) = self.analyze_body(then_body);
-                let (else_has_return, else_has_break) = if !else_body.stmts.is_empty() {
+                let (then_has_return, then_has_ret) = self.analyze_body(then_body);
+                let (else_has_return, else_has_ret) = if !else_body.stmts.is_empty() {
                     self.analyze_body(else_body)
                 } else {
                     (false, false)
                 };
-                (then_has_return && else_has_return, then_has_break || else_has_break)
+                (then_has_return && else_has_return, then_has_ret || else_has_ret)
             }
             AstNode::Fake(expr) => self.analyze_expr(expr),
 
@@ -101,23 +104,23 @@ impl<'a> Flow<'a> {
                 }
 
                 let mut has_return = true;
-                let mut has_break = true;
+                let mut has_ret = true;
                 for case in cases {
-                    let (case_has_return, case_has_break) = self.analyze_body(&case.handle_body);
+                    let (case_has_return, case_has_ret) = self.analyze_body(&case.handle_body);
                     has_return = has_return && case_has_return;
-                    has_break = has_break && case_has_break
+                    has_ret = has_ret && case_has_ret
                 }
 
-                // check has break
-                if !matches!(&expr.target_type.kind, TypeKind::Void | TypeKind::Unknown) && has_break == false {
+                // check has ret
+                if !matches!(&expr.target_type.kind, TypeKind::Void | TypeKind::Unknown) && has_ret == false {
                     self.errors.push(AnalyzerError {
                         end: expr.end,
                         start: expr.end,
-                        message: "missing break".to_string(),
+                        message: "missing ret".to_string(),
                     });
                 }
 
-                // has break 属于当前 match, 离开当前 match 后，break 作废
+                // has ret 属于当前 match, 离开当前 match 后，ret 作废
                 (has_return, false)
             }
             _ => (false, false),
