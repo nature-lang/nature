@@ -235,8 +235,6 @@ struct module_t {
     slice_t *ast_typedefs;
     linked_t *temp_worklist; // ast_fndef
 
-    slice_t *infer_temp_fndefs; // infer 阶段，type param 可能还会产生 temp_fndefs
-
     // closure_t
     slice_t *closures; // 包含 lir, 无论是 local 还是 global 都会在这里进行注册
 

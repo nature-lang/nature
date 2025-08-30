@@ -376,7 +376,7 @@ impl<'a> Semantic<'a> {
     }
 
     fn analyze_type(&mut self, t: &mut Type) {
-        if Type::ident_is_def_or_alias(t) || t.ident_kind == TypeIdentKind::Interface {
+        if Type::is_ident(t) || t.ident_kind == TypeIdentKind::Interface {
             // 处理导入的全局模式别名，例如  package.foo_t
             if !t.import_as.is_empty() {
                 // 只要存在 import as, 就必须能够在 imports 中找到对应的 import

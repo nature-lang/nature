@@ -13,56 +13,6 @@ static type_t reduction_type_ident(module_t *m, type_t t);
 
 static type_t type_param_special(module_t *m, type_t t, table_t *arg_table);
 
-static type_t analysis_type(module_t *m, type_t t) {
-    if (t.kind != TYPE_IDENT) { // trans completed
-        return t;
-    }
-    char *ident = t.ident;
-    type_ident_kind ident_kind = t.ident_kind;
-    list_t *args = t.args;
-    bool in_heap = t.in_heap;
-    assert(t.ident_kind != TYPE_IDENT_ALIAS); // analyzer 阶段需要替换完成
-
-    type_t result = t;
-
-    // 进行 ident 解析
-    if (t.ident_kind == TYPE_IDENT_INTERFACE || t.ident_kind == TYPE_IDENT_DEF || t.ident_kind == TYPE_IDENT_UNKNOWN) {
-        result = reduction_type_ident(m, t);
-        result.args = t.args;
-        result.ident = t.ident;
-        result.ident_kind = t.ident_kind;
-        result.status = REDUCTION_STATUS_DONE;
-        result.in_heap = kind_in_heap(result.kind);
-        // 固定数组的大小暂时禁止超过 64KB, 如果需要超过 64 KB 可以使用 vec?
-        // 如果 array 超过 64KB 则在堆上进行分配
-        if (result.kind == TYPE_ARR && type_sizeof(result) > (64 * 1024)) {
-            result.in_heap = true;
-        }
-
-        return result;
-    }
-
-
-    if (t.ident_kind == TYPE_IDENT_GENERICS_PARAM) {
-        if (!m->infer_type_args_stack) {
-            return t;
-        }
-
-        table_t *arg_table = stack_top(m->infer_type_args_stack);
-        assert(arg_table);
-        result = type_param_special(m, t, arg_table);
-        result.status = REDUCTION_STATUS_DONE;
-        result.in_heap = kind_in_heap(result.kind);
-        if (result.kind == TYPE_ARR && type_sizeof(result) > (64 * 1024)) {
-            result.in_heap = true;
-        }
-
-        return result;
-    }
-
-    assert(false);
-}
-
 static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_type);
 
 static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, list_t *properties);
@@ -371,6 +321,24 @@ bool type_generics(type_t dst, type_t src, table_t *generics_param_table) {
         return false;
     }
 
+    if (dst.kind == TYPE_UNION) {
+        type_union_t *dst_union = dst.union_;
+        type_union_t *src_union = src.union_;
+        if (dst_union->elements->length != src_union->elements->length) {
+            return false;
+        }
+
+        for (int i = 0; i < dst_union->elements->length; i++) {
+            type_t *dst_item = ct_list_value(dst_union->elements, i);
+            type_t *src_item = ct_list_value(src_union->elements, i);
+            if (!type_generics(*dst_item, *src_item, generics_param_table)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     if (dst.kind == TYPE_MAP) {
         type_map_t *left_map_decl = dst.map;
         type_map_t *right_map_decl = src.map;
@@ -572,19 +540,19 @@ bool type_compare(type_t dst, type_t src) {
         return true;
     }
 
-    //    if (dst.kind == TYPE_UNION) {
-    //        type_union_t *left_union_decl = dst.union_;
-    //        type_union_t *right_union_decl = src.union_;
-    //
-    //        if (left_union_decl->any) {
-    //            return true;
-    //        }
-    //
-    //        return type_union_compare(left_union_decl, right_union_decl);
-    //    }
-
     if (dst.kind != src.kind) {
         return false;
+    }
+
+    if (dst.kind == TYPE_UNION) {
+        type_union_t *left_union_decl = dst.union_;
+        type_union_t *right_union_decl = src.union_;
+
+        if (left_union_decl->any) {
+            return true;
+        }
+
+        return type_union_compare(left_union_decl, right_union_decl);
     }
 
     if (dst.kind == TYPE_MAP) {

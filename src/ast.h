@@ -718,7 +718,7 @@ ast_ident *ast_new_ident(char *literal);
 
 ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp);
 
-ast_expr_t *ast_expr_copy(module_t *m,  ast_expr_t *temp);
+ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp);
 
 static bool ast_is_arithmetic_op(ast_expr_op_t op) {
     return op == AST_OP_LSHIFT ||

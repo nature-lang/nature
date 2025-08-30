@@ -928,7 +928,7 @@ impl<'a> Syntax {
 
                 properties.push(TypeStructProperty {
                     type_: field_type.clone(),
-                    key: field_name,
+                    name: field_name,
                     value: default_value,
                     start: field_type.start,
                     end: field_type.end,
@@ -961,7 +961,7 @@ impl<'a> Syntax {
             if !self.type_params_table.is_empty() && self.type_params_table.contains_key(&first.literal) {
                 t.kind = TypeKind::Ident;
                 t.ident = first.literal.clone();
-                t.ident_kind = TypeIdentKind::Param;
+                t.ident_kind = TypeIdentKind::GenericsParam;
                 return Ok(t);
             }
 
@@ -1156,7 +1156,7 @@ impl<'a> Syntax {
 
                 properties.push(TypeStructProperty {
                     type_: field_type.clone(),
-                    key: field_name,
+                    name: field_name,
                     value: default_value,
                     start: field_type.start,
                     end: field_type.end,
@@ -2759,7 +2759,7 @@ impl<'a> Syntax {
 
                     loop {
                         let param_type = self.parser_single_type()?;
-                        debug_assert!(param_type.ident_kind == TypeIdentKind::Param);
+                        debug_assert!(param_type.ident_kind == TypeIdentKind::GenericsParam);
 
                         if self.consume(TokenType::Colon) {
                             loop {

@@ -173,20 +173,20 @@ impl Type {
         }
     }
 
-    pub fn ident_is_param(&self) -> bool {
+    pub fn ident_is_generics_param(&self) -> bool {
         if self.kind != TypeKind::Ident {
             return false;
         }
 
-        return self.ident_kind == TypeIdentKind::Param;
+        return self.ident_kind == TypeIdentKind::GenericsParam;
     }
 
-    pub fn ident_is_def_or_alias(&self) -> bool {
+    pub fn is_ident(&self) -> bool {
         if self.kind != TypeKind::Ident {
             return false;
         }
 
-        return self.ident_kind == TypeIdentKind::Def || self.ident_kind == TypeIdentKind::Alias || self.ident_kind == TypeIdentKind::Unknown;
+        return self.ident_kind == TypeIdentKind::Def || self.ident_kind == TypeIdentKind::Interface || self.ident_kind == TypeIdentKind::Unknown;
     }
 
     pub fn error() -> Self {
@@ -439,39 +439,39 @@ impl Type {
             TypeKind::Vec(element_type) => {
                 let element_hash = element_type.hash();
                 let mut hasher = DefaultHasher::new();
-                format!("{}_{}", self.kind.to_string(), element_hash).hash(&mut hasher);
+                format!("{}.{}", self.kind.to_string(), element_hash).hash(&mut hasher);
                 hasher.finish()
             }
             TypeKind::Chan(element_type) => {
                 let element_hash = element_type.hash();
                 let mut hasher = DefaultHasher::new();
-                format!("{}_{}", self.kind.to_string(), element_hash).hash(&mut hasher);
+                format!("{}.{}", self.kind.to_string(), element_hash).hash(&mut hasher);
                 hasher.finish()
             }
             TypeKind::Arr(_, length, element_type) => {
                 let element_hash = element_type.hash();
                 let mut hasher = DefaultHasher::new();
-                format!("{}_{length}_{}", self.kind.to_string(), element_hash).hash(&mut hasher);
+                format!("{}.{length}_{}", self.kind.to_string(), element_hash).hash(&mut hasher);
                 hasher.finish()
             }
             TypeKind::Map(key_type, value_type) => {
                 let key_hash = key_type.hash();
                 let value_hash = value_type.hash();
                 let mut hasher = DefaultHasher::new();
-                format!("{}_{key_hash}_{value_hash}", self.kind.to_string()).hash(&mut hasher);
+                format!("{}.{key_hash}_{value_hash}", self.kind.to_string()).hash(&mut hasher);
                 hasher.finish()
             }
             TypeKind::Set(element_type) => {
                 let element_hash = element_type.hash();
                 let mut hasher = DefaultHasher::new();
-                format!("{}_{}", self.kind.to_string(), element_hash).hash(&mut hasher);
+                format!("{}.{}", self.kind.to_string(), element_hash).hash(&mut hasher);
                 hasher.finish()
             }
             TypeKind::Tuple(elements, _) => {
                 let mut hasher = DefaultHasher::new();
                 let mut str = self.kind.to_string();
                 for element in elements {
-                    str = format!("{}_{}", str, element.hash());
+                    str = format!("{}.{}", str, element.hash());
                 }
                 str.hash(&mut hasher);
                 hasher.finish()
@@ -479,7 +479,7 @@ impl Type {
             TypeKind::Fn(type_fn) => {
                 let mut hasher = DefaultHasher::new();
                 let mut str = self.kind.to_string();
-                str = format!("{}_{}", str, type_fn.return_type.hash());
+                str = format!("{}.{}", str, type_fn.return_type.hash());
                 for param_type in &type_fn.param_types {
                     str = format!("{}_{}", str, param_type.hash());
                 }
@@ -489,32 +489,30 @@ impl Type {
             TypeKind::Ptr(value_type) => {
                 let value_hash = value_type.hash();
                 let mut hasher = DefaultHasher::new();
-                format!("{}_{}", self.kind.to_string(), value_hash).hash(&mut hasher);
+                format!("{}.{}", self.kind.to_string(), value_hash).hash(&mut hasher);
                 hasher.finish()
             }
             TypeKind::Rawptr(value_type) => {
                 let value_hash = value_type.hash();
                 let mut hasher = DefaultHasher::new();
-                format!("{}_{}", self.kind.to_string(), value_hash).hash(&mut hasher);
+                format!("{}.{}", self.kind.to_string(), value_hash).hash(&mut hasher);
                 hasher.finish()
             }
-            TypeKind::Union(any, _, elements) => {
+            TypeKind::Union(_any, _, elements) => {
                 let mut hasher = DefaultHasher::new();
                 let mut str = self.kind.to_string();
-                if *any {
-                    str = format!("{}_any", str);
-                }
                 for element in elements {
-                    str = format!("{}_{}", str, element.hash());
+                    str = format!("{}.{}", str, element.hash());
                 }
                 str.hash(&mut hasher);
                 hasher.finish()
             }
-            TypeKind::Interface(elements) => {
+            TypeKind::Interface(_elements) => {
                 let mut hasher = DefaultHasher::new();
                 let mut str = self.kind.to_string();
-                for element in elements {
-                    str = format!("{}_{}", str, element.hash());
+
+                if self.ident != "" {
+                    str = format!("{}.{}", str, self.ident);
                 }
 
                 str.hash(&mut hasher);
@@ -524,8 +522,7 @@ impl Type {
                 let mut hasher = DefaultHasher::new();
                 let mut str = self.kind.to_string();
                 for prop in properties {
-                    str = format!("{}_{}_{}", str, prop.key, prop.type_.hash());
-
+                    str = format!("{}_{}_{}", str, prop.name, prop.type_.hash());
                 }
                 str.hash(&mut hasher);
                 hasher.finish()
@@ -543,7 +540,7 @@ impl Type {
 #[derive(Debug, Clone)]
 pub struct TypeStructProperty {
     pub type_: Type,
-    pub key: String,
+    pub name: String,
     pub value: Option<Box<Expr>>,
     pub start: usize,
     pub end: usize,
@@ -583,7 +580,8 @@ pub struct TypeFn {
 pub enum ReductionStatus {
     Undo = 1,
     Doing = 2,
-    Done = 3,
+    Doing2 = 3,
+    Done = 4,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -591,7 +589,7 @@ pub enum TypeIdentKind {
     Unknown = 0,
     Def,
     Alias,
-    Param,
+    GenericsParam,
     Builtin,   // int/float/vec/string...
     Interface, // type.impls 部分专用
 }

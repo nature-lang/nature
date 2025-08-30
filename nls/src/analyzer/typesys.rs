@@ -4,6 +4,7 @@ use std::{
 };
 
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
 use log::debug;
@@ -134,7 +135,7 @@ impl GenericSpecialFnClone {
                 key.clone(),
                 TypeStructProperty {
                     type_: property.type_.clone(),
-                    key: property.key.clone(),
+                    name: property.name.clone(),
                     start: property.start,
                     end: property.end,
                     value: Some(Box::new(self.clone_expr(&property.value.as_ref().unwrap()))),
@@ -332,7 +333,68 @@ impl<'a> Typesys<'a> {
         }
     }
 
-    fn finalize_type(&mut self, t: Type, ident: String, ident_kind: TypeIdentKind, args: Vec<Type>) -> Type {
+    fn type_recycle_check(&mut self, t: &Type, visited: &mut HashSet<String>) -> Option<String> {
+        if t.ident.len() > 0 {
+            if visited.contains(&t.ident) {
+                return Some(t.ident.clone());
+            }
+
+            visited.insert(t.ident.clone());
+        }
+
+        match &t.kind {
+            TypeKind::Struct(ident, align, properties) => {
+                for property in properties {
+                    let temp = self.type_recycle_check(&property.type_, visited);
+                    if temp.is_some() {
+                        return temp;
+                    }
+                }
+            }
+            TypeKind::Arr(_, _, element_type) => {
+                return self.type_recycle_check(element_type, visited);
+            }
+            _ => {}
+        }
+
+        if t.kind == TypeKind::Ident && t.ident_kind != TypeIdentKind::GenericsParam {
+            if let Some(symbol) = self.symbol_table.get_symbol(t.symbol_id) {
+                if let SymbolKind::Type(typedef_mutex) = symbol.kind.clone() {
+                    let mut typedef = typedef_mutex.lock().unwrap();
+
+                    let mut stack_pushed = false;
+                    if t.args.len() > 0 {
+                        let mut args_table = HashMap::new();
+                        for (index, arg) in t.args.iter().enumerate() {
+                            let param = &mut typedef.params[index];
+
+                            args_table.insert(param.ident.clone(), arg.clone());
+                        }
+
+                        self.generics_args_stack.push(args_table);
+                        stack_pushed = true;
+                    }
+
+                    let temp = self.type_recycle_check(&typedef.type_expr.clone(), visited);
+                    if temp.is_some() {
+                        return temp;
+                    }
+
+                    if stack_pushed {
+                        self.generics_args_stack.pop();
+                    }
+                }
+            }
+        }
+
+        if t.ident.len() > 0 {
+            visited.remove(&t.ident);
+        }
+
+        return None;
+    }
+
+    fn finalize_type(&mut self, t: Type, ident: String, ident_kind: TypeIdentKind, args: Vec<Type>) -> Result<Type, AnalyzerError> {
         let mut result = t.clone();
         if ident_kind != TypeIdentKind::Unknown {
             result.ident_kind = ident_kind;
@@ -346,7 +408,18 @@ impl<'a> Typesys<'a> {
         result.status = ReductionStatus::Done;
         result.kind = Type::cross_kind_trans(&result.kind);
 
-        return result;
+        // recycle_check
+        let mut visited = HashSet::new();
+        let found = self.type_recycle_check(&t, &mut visited);
+        if found.is_some() {
+           return Err(AnalyzerError{
+                start: t.start,
+                end: t.end,
+                message: format!("recycle use type '{}'", found.unwrap()),
+            })
+        }
+
+        return Ok(result);
     }
 
     fn combination_interface(&mut self, typedef_stmt: &mut TypedefStmt) -> Result<(), AnalyzerError> {
@@ -407,7 +480,7 @@ impl<'a> Typesys<'a> {
         Ok(())
     }
 
-    fn reduction_typedef_or_alias(&mut self, mut t: Type) -> Result<Type, AnalyzerError> {
+    fn reduction_type_ident(&mut self, mut t: Type) -> Result<Type, AnalyzerError> {
         let start = t.start;
         let end = t.end;
 
@@ -533,12 +606,16 @@ impl<'a> Typesys<'a> {
         }
 
         // 处理循环引用
-        if typedef.type_expr.status == ReductionStatus::Doing {
+        if typedef.type_expr.status == ReductionStatus::Doing2 {
             return Ok(t);
         }
 
         // 标记正在处理,避免循环引用
-        typedef.type_expr.status = ReductionStatus::Doing;
+        if (typedef.type_expr.status == ReductionStatus::Doing) {
+            typedef.type_expr.status = ReductionStatus::Doing2;
+        } else {
+            typedef.type_expr.status = ReductionStatus::Doing;
+        }
 
         // 处理接口
         if typedef.is_interface {
@@ -671,14 +748,9 @@ impl<'a> Typesys<'a> {
                     });
                 }
 
-                let mut max_align = 0;
                 for element_type in elements.iter_mut() {
                     *element_type = self.reduction_type(element_type.clone())?;
-                    let element_align = Type::alignof(&element_type.kind);
-                    max_align = max_align.max(element_align);
                 }
-
-                *align = max_align;
             }
             TypeKind::Fn(type_fn) => {
                 type_fn.return_type = self.reduction_type(type_fn.return_type.clone())?;
@@ -689,9 +761,7 @@ impl<'a> Typesys<'a> {
             }
 
             // 处理结构体类型
-            TypeKind::Struct(_ident, align, properties) => {
-                let mut max_align = 0;
-
+            TypeKind::Struct(_ident, _align, properties) => {
                 for property in properties.iter_mut() {
                     if !property.type_.kind.is_unknown() {
                         property.type_ = self.reduction_type(property.type_.clone())?;
@@ -706,7 +776,7 @@ impl<'a> Typesys<'a> {
                                         self.errors_push(
                                             right_value.start,
                                             right_value.end,
-                                            format!("struct property '{}' type not confirmed", property.key),
+                                            format!("struct property '{}' type not confirmed", property.name),
                                         );
                                     }
 
@@ -719,19 +789,14 @@ impl<'a> Typesys<'a> {
                         }
                     }
 
-                    let item_align = Type::alignof(&property.type_.kind);
-                    max_align = max_align.max(item_align);
-
                     if !self.type_confirm(&property.type_) {
                         self.errors_push(
                             property.type_.start,
                             property.type_.end,
-                            format!("struct property '{}' type not confirmed", property.key),
+                            format!("struct property '{}' type not confirmed", property.name),
                         );
                     }
                 }
-
-                *align = max_align;
             }
 
             _ => {
@@ -748,7 +813,7 @@ impl<'a> Typesys<'a> {
 
     pub fn type_param_special(&mut self, t: Type, arg_table: HashMap<String, Type>) -> Type {
         debug_assert!(t.kind == TypeKind::Ident);
-        debug_assert!(t.ident_kind == TypeIdentKind::Param);
+        debug_assert!(t.ident_kind == TypeIdentKind::GenericsParam);
 
         let arg_type = arg_table.get(&t.ident).unwrap();
         return self.reduction_type(arg_type.clone()).unwrap();
@@ -772,49 +837,44 @@ impl<'a> Typesys<'a> {
         }
 
         if t.status == ReductionStatus::Done {
-            return Ok(self.finalize_type(t, ident, ident_kind, args));
+            return self.finalize_type(t, ident, ident_kind, args);
         }
 
-        if Type::ident_is_def_or_alias(&t) {
-            t = self.reduction_typedef_or_alias(t)?;
+        if Type::is_ident(&t) {
+            t = self.reduction_type_ident(t)?;
             // 如果原来存在 t.args 则其经过了 reduction
-            return Ok(self.finalize_type(t.clone(), ident, ident_kind, t.args));
+            return self.finalize_type(t.clone(), ident, ident_kind, t.args);
         }
 
-        if t.kind == TypeKind::Ident && t.ident_kind == TypeIdentKind::Interface {
-            t = self.reduction_typedef_or_alias(t)?;
-            return Ok(self.finalize_type(t, ident, ident_kind, args));
-        }
-
-        if t.kind == TypeKind::Ident && t.ident_kind == TypeIdentKind::Param {
+        if t.kind == TypeKind::Ident && t.ident_kind == TypeIdentKind::GenericsParam {
             if self.generics_args_stack.is_empty() {
-                return Ok(self.finalize_type(t, ident, ident_kind, args));
+                return self.finalize_type(t, ident, ident_kind, args);
             }
 
             let arg_table = self.generics_args_stack.last().unwrap();
             let result = self.type_param_special(t, arg_table.clone());
 
-            return Ok(self.finalize_type(result.clone(), result.ident.clone(), result.ident_kind, result.args));
+            return self.finalize_type(result.clone(), result.ident.clone(), result.ident_kind, result.args);
         }
 
         match &mut t.kind {
             TypeKind::Union(any, _, elements) => {
                 if *any {
-                    return Ok(self.finalize_type(t, ident, ident_kind, args));
+                    return self.finalize_type(t, ident, ident_kind, args);
                 }
 
                 for element in elements {
                     *element = self.reduction_type(element.clone())?;
                 }
 
-                return Ok(self.finalize_type(t, ident, ident_kind, args));
+                return self.finalize_type(t, ident, ident_kind, args);
             }
             TypeKind::Interface(elements) => {
                 for element in elements {
                     *element = self.reduction_type(element.clone())?;
                 }
 
-                return Ok(self.finalize_type(t, ident, ident_kind, args));
+                return self.finalize_type(t, ident, ident_kind, args);
             }
             _ => {
                 if Type::is_origin_type(&t.kind) {
@@ -825,12 +885,12 @@ impl<'a> Typesys<'a> {
                     result.ident_kind = TypeIdentKind::Builtin; // 如果 origin ident_kind 存在，则会被覆盖
                     result.args = vec![];
 
-                    return Ok(self.finalize_type(result, ident, ident_kind, args));
+                    return self.finalize_type(result, ident, ident_kind, args);
                 }
 
                 if Type::is_complex_type(&t.kind) {
                     let result = self.reduction_complex_type(t)?;
-                    return Ok(self.finalize_type(result, ident, ident_kind, args));
+                    return self.finalize_type(result, ident, ident_kind, args);
                 }
 
                 return Err(AnalyzerError {
@@ -1184,7 +1244,7 @@ impl<'a> Typesys<'a> {
         // 处理显式指定的属性
         for property in properties.iter_mut() {
             // 在类型定义中查找对应的属性
-            let expect_property = type_properties.iter().find(|p| p.key == property.key).ok_or_else(|| AnalyzerError {
+            let expect_property = type_properties.iter().find(|p| p.name == property.key).ok_or_else(|| AnalyzerError {
                 start: property.start,
                 end: property.end,
                 message: format!("not found property '{}'", property.key),
@@ -1207,16 +1267,16 @@ impl<'a> Typesys<'a> {
         // 遍历类型定义中的所有属性
         for type_prop in type_properties.iter() {
             // 如果属性已经被显式指定或没有默认值,则跳过
-            if exists.contains_key(&type_prop.key) || type_prop.value.is_none() {
+            if exists.contains_key(&type_prop.name) || type_prop.value.is_none() {
                 continue;
             }
 
-            exists.insert(type_prop.key.clone(), true);
+            exists.insert(type_prop.name.clone(), true);
 
             // 添加默认值属性
             result.push(StructNewProperty {
                 type_: type_prop.type_.clone(),
-                key: type_prop.key.clone(),
+                key: type_prop.name.clone(),
                 value: type_prop.value.clone().unwrap(),
                 start: type_prop.start,
                 end: type_prop.end,
@@ -1225,7 +1285,7 @@ impl<'a> Typesys<'a> {
 
         // 检查所有必需的属性是否都已赋值
         for type_prop in type_properties.iter() {
-            if exists.contains_key(&type_prop.key) {
+            if exists.contains_key(&type_prop.name) {
                 continue;
             }
 
@@ -1234,7 +1294,7 @@ impl<'a> Typesys<'a> {
                 return Err(AnalyzerError {
                     start: start,
                     end: end,
-                    message: format!("struct filed '{}' must be assigned default value", type_prop.key),
+                    message: format!("struct field '{}' must be assigned default value", type_prop.name),
                 });
             }
         }
@@ -1910,7 +1970,7 @@ impl<'a> Typesys<'a> {
         // 处理结构体类型的属性访问
         if let TypeKind::Struct(_, _, type_properties) = &mut deref_type.kind {
             // 查找属性
-            if let Some(property) = type_properties.iter_mut().find(|p| p.key == *key) {
+            if let Some(property) = type_properties.iter_mut().find(|p| p.name == *key) {
                 let property_type = self.reduction_type(property.type_.clone())?;
                 property.type_ = property_type.clone();
 
@@ -1921,7 +1981,7 @@ impl<'a> Typesys<'a> {
                     key.clone(),
                     TypeStructProperty {
                         type_: property_type.clone(),
-                        key: property.key.clone(),
+                        name: property.name.clone(),
                         value: property.value.clone(),
                         start: property.start,
                         end: property.end,
@@ -2489,13 +2549,11 @@ impl<'a> Typesys<'a> {
                 }
             }
 
-            _ => {
-                Err(AnalyzerError {
-                    start: expr.start,
-                    end: expr.end,
-                    message: "operand cannot be used as left value".to_string(),
-                })
-            }
+            _ => Err(AnalyzerError {
+                start: expr.start,
+                end: expr.end,
+                message: "operand cannot be used as left value".to_string(),
+            }),
         };
 
         return match type_result {
@@ -2524,7 +2582,7 @@ impl<'a> Typesys<'a> {
         // 检查变量类型是否为void(非参数类型的情况下)
         {
             let var_decl = var_decl_mutex.lock().unwrap();
-            if var_decl.type_.ident_kind != TypeIdentKind::Param && matches!(var_decl.type_.kind, TypeKind::Void) {
+            if var_decl.type_.ident_kind != TypeIdentKind::GenericsParam && matches!(var_decl.type_.kind, TypeKind::Void) {
                 return Err(AnalyzerError {
                     start: var_decl.symbol_start,
                     end: var_decl.symbol_end,
@@ -2744,7 +2802,7 @@ impl<'a> Typesys<'a> {
 
         // 如果是 struct 类型且 key 是其属性,不需要重写
         if let TypeKind::Struct(_, _, properties) = &select_left_type.kind {
-            if properties.iter().any(|p| p.key == *key) {
+            if properties.iter().any(|p| p.name == *key) {
                 return Ok(false);
             }
         }
@@ -2878,7 +2936,7 @@ impl<'a> Typesys<'a> {
                 let temp_type = self.reduction_type(formal_type.clone()).map_err(|e| e.message)?;
 
                 // 比较类型并填充泛型参数表
-                if !self.type_compare_with_generics(&temp_type, &arg_type, &mut table) {
+                if !self.type_generics(&temp_type, &arg_type, &mut table) {
                     return Err(format!("cannot infer generics type from {} to {}", arg_type, temp_type));
                 }
             }
@@ -2890,7 +2948,7 @@ impl<'a> Typesys<'a> {
             ) {
                 let temp_type = self.reduction_type(temp_fndef.return_type.clone()).map_err(|e| e.message)?;
 
-                if !self.type_compare_with_generics(&temp_type, &return_target_type, &mut table) {
+                if !self.type_compare(&temp_type, &return_target_type) {
                     return Err(format!("return type infer failed, expect={}, actual={}", return_target_type, temp_type));
                 }
             }
@@ -2923,7 +2981,7 @@ impl<'a> Typesys<'a> {
     }
 
     fn generics_args_hash(&mut self, generics_params: &Vec<GenericsParam>, args_table: HashMap<String, Type>) -> u64 {
-        let mut hash_str = "fn".to_string();
+        let mut hash_str = "fn.".to_string();
 
         // 遍历所有泛型参数
         for param in generics_params {
@@ -3440,7 +3498,7 @@ impl<'a> Typesys<'a> {
             }
             AstNode::Assign(left, right) => match self.infer_left_expr(left) {
                 Ok(left_type) => {
-                    if left_type.ident_kind != TypeIdentKind::Param && left_type.kind == TypeKind::Void {
+                    if left_type.ident_kind != TypeIdentKind::GenericsParam && left_type.kind == TypeKind::Void {
                         return Err(AnalyzerError {
                             start: left.start,
                             end: left.end,
@@ -3594,7 +3652,7 @@ impl<'a> Typesys<'a> {
                 }
             }
             AstNode::Typedef(type_alias_mutex) => {
-                self.rewrite_type_alias(type_alias_mutex);
+                self.rewrite_typedef(type_alias_mutex);
             }
             _ => {}
         }
@@ -3660,28 +3718,21 @@ impl<'a> Typesys<'a> {
     }
 
     pub fn type_compare(&mut self, dst: &Type, src: &Type) -> bool {
-        self.type_compare_with_generics(dst, src, &mut HashMap::new())
-    }
-
-    pub fn type_compare_with_generics(&mut self, dst: &Type, src: &Type, generics_param_table: &mut HashMap<String, Type>) -> bool {
         let dst = dst.clone();
         if dst.err || src.err {
             return false;
         }
 
+        debug_assert!(!Type::ident_is_generics_param(&dst));
+        debug_assert!(!Type::ident_is_generics_param(&src));
+
         // 检查类型状态
-        if !Type::ident_is_param(&dst) {
-            if dst.status != ReductionStatus::Done {
-                return false;
-            }
+        if dst.status != ReductionStatus::Done {
+            return false;
         }
-
-        if !Type::ident_is_param(&src) {
-            if src.status != ReductionStatus::Done {
-                return false;
-            }
+        if src.status != ReductionStatus::Done {
+            return false;
         }
-
         if matches!(dst.kind, TypeKind::Unknown) || matches!(src.kind, TypeKind::Unknown) {
             return false;
         }
@@ -3708,17 +3759,136 @@ impl<'a> Typesys<'a> {
             match &src.kind {
                 TypeKind::Null => return true,
                 TypeKind::Ptr(src_value_type) => {
-                    return self.type_compare_with_generics(dst_value_type, src_value_type, generics_param_table);
+                    return self.type_compare(dst_value_type, src_value_type);
                 }
                 _ => {}
             }
         }
 
+        // 即使 reduction 后，也需要通过 ident kind 进行判断, 其中 union_type 不受 type def 限制, TODO 无法区分这是 type_compare 还是 generics param handle!
+        if dst.ident_kind == TypeIdentKind::Def && !matches!(dst.kind, TypeKind::Union(..)) {
+            debug_assert!(!dst.ident.is_empty());
+            if src.ident.is_empty() {
+                return false;
+            }
+
+            if dst.ident != src.ident {
+                return false;
+            }
+
+            return true;
+        }
+
+        if src.ident_kind == TypeIdentKind::Def && !matches!(src.kind, TypeKind::Union(..)) {
+            debug_assert!(!src.ident.is_empty());
+            if dst.ident.is_empty() {
+                return false;
+            }
+
+            if dst.ident != src.ident {
+                return false;
+            }
+
+            return true;
+        }
+
+        // 如果类型不同则返回false
+        if dst.kind != src.kind {
+            return false;
+        }
+
+        // 根据不同类型进行比较
+        match (&dst.kind, &src.kind) {
+            (TypeKind::Union(left_any, _, left_types), TypeKind::Union(right_any, _, right_types)) => {
+                if *left_any {
+                    return true;
+                }
+                return self.type_union_compare(&(*left_any, left_types.clone()), &(*right_any, right_types.clone()));
+            }
+
+            (TypeKind::Map(left_key, left_value), TypeKind::Map(right_key, right_value)) => {
+                if !self.type_compare(left_key, right_key) {
+                    return false;
+                }
+                if !self.type_compare(left_value, right_value) {
+                    return false;
+                }
+
+                return true;
+            }
+
+            (TypeKind::Set(left_element), TypeKind::Set(right_element)) => self.type_compare(left_element, right_element),
+
+            (TypeKind::Chan(left_element), TypeKind::Chan(right_element)) => self.type_compare(left_element, right_element),
+
+            (TypeKind::Vec(left_element), TypeKind::Vec(right_element)) => self.type_compare(left_element, right_element),
+
+            (TypeKind::Arr(_, left_len, left_element), TypeKind::Arr(_, right_len, right_element)) => {
+                left_len == right_len && self.type_compare(left_element, right_element)
+            }
+
+            (TypeKind::Tuple(left_elements, _), TypeKind::Tuple(right_elements, _)) => {
+                if left_elements.len() != right_elements.len() {
+                    return false;
+                }
+                left_elements
+                    .iter()
+                    .zip(right_elements.iter())
+                    .all(|(left, right)| self.type_compare(left, right))
+            }
+
+            (TypeKind::Fn(left_fn), TypeKind::Fn(right_fn)) => {
+                if !self.type_compare(&left_fn.return_type, &right_fn.return_type)
+                    || left_fn.param_types.len() != right_fn.param_types.len()
+                    || left_fn.rest != right_fn.rest
+                    || left_fn.errable != right_fn.errable
+                {
+                    return false;
+                }
+
+                left_fn
+                    .param_types
+                    .iter()
+                    .zip(right_fn.param_types.iter())
+                    .all(|(left, right)| self.type_compare(left, right))
+            }
+
+            (TypeKind::Struct(_, _, left_props), TypeKind::Struct(_, _, right_props)) => {
+                if left_props.len() != right_props.len() {
+                    return false;
+                }
+                left_props
+                    .iter()
+                    .zip(right_props.iter())
+                    .all(|(left, right)| left.name == right.name && self.type_compare(&left.type_, &right.type_))
+            }
+
+            (TypeKind::Ptr(left_value), TypeKind::Ptr(right_value)) | (TypeKind::Rawptr(left_value), TypeKind::Rawptr(right_value)) => {
+                self.type_compare(left_value, right_value)
+            }
+
+            // 其他基本类型直接返回true
+            _ => true,
+        }
+    }
+
+    pub fn type_generics(&mut self, dst: &Type, src: &Type, generics_param_table: &mut HashMap<String, Type>) -> bool {
+        let dst = dst.clone();
+        if dst.err || src.err {
+            return false;
+        }
+
+        if matches!(dst.kind, TypeKind::Unknown) || matches!(src.kind, TypeKind::Unknown) {
+            return false;
+        }
+
         // 处理泛型参数
-        if Type::ident_is_param(&dst) {
+        if Type::ident_is_generics_param(&dst) {
             debug_assert!(src.status == ReductionStatus::Done);
+
             // let generics_param_table = generics_param_table.as_mut().unwrap();
             let param_ident = dst.ident.clone();
+
             if let Some(_target_type) = generics_param_table.get(&param_ident) {
                 // dst = _target_type.clone();
             } else {
@@ -3735,59 +3905,48 @@ impl<'a> Typesys<'a> {
             return false;
         }
 
-        // 即使 reduction 后，也需要通过 ident kind 进行判断, 其中 union_type 不受 type def 限制, TODO 无法区分这是 type_compare 还是 generics param handle!
-        if dst.ident_kind == TypeIdentKind::Def && !matches!(dst.kind, TypeKind::Union(..)) {
-            debug_assert!(!dst.ident.is_empty());
-            if src.ident.is_empty() {
-                return false;
-            }
-
-            if dst.ident != src.ident {
-                return false;
-            }
-
-            // ident 相同时也应该继续推导原始 kind 比较推导
-        }
-        if src.ident_kind == TypeIdentKind::Def && !matches!(src.kind, TypeKind::Union(..)) {
-            debug_assert!(!src.ident.is_empty());
-            if dst.ident.is_empty() {
-                return false;
-            }
-
-            if dst.ident != src.ident {
-                return false;
-            }
-            // ident 相同时也应该继续推导原始 kind 比较推导
-        }
-
         // 根据不同类型进行比较
         match (&dst.kind, &src.kind) {
             (TypeKind::Union(left_any, _, left_types), TypeKind::Union(right_any, _, right_types)) => {
-                if *left_any {
-                    return true;
+                if left_any != right_any {
+                    return false;
                 }
-                return self.type_union_compare(&(*left_any, left_types.clone()), &(*right_any, right_types.clone()));
+
+                if left_types.len() != right_types.len() {
+                    return false;
+                }
+
+                for i in 0..left_types.len() {
+                    let dst_item = left_types[i].clone();
+                    let src_item = right_types[i].clone();
+
+                    if !self.type_generics(&dst_item, &src_item, generics_param_table) {
+                        return false;
+                    }
+                }
+
+                return true;
             }
 
             (TypeKind::Map(left_key, left_value), TypeKind::Map(right_key, right_value)) => {
-                if !self.type_compare_with_generics(left_key, right_key, generics_param_table) {
+                if !self.type_generics(left_key, right_key, generics_param_table) {
                     return false;
                 }
-                if !self.type_compare_with_generics(left_value, right_value, generics_param_table) {
+                if !self.type_generics(left_value, right_value, generics_param_table) {
                     return false;
                 }
 
                 return true;
             }
 
-            (TypeKind::Set(left_element), TypeKind::Set(right_element)) => self.type_compare_with_generics(left_element, right_element, generics_param_table),
+            (TypeKind::Set(left_element), TypeKind::Set(right_element)) => self.type_generics(left_element, right_element, generics_param_table),
 
-            (TypeKind::Chan(left_element), TypeKind::Chan(right_element)) => self.type_compare_with_generics(left_element, right_element, generics_param_table),
+            (TypeKind::Chan(left_element), TypeKind::Chan(right_element)) => self.type_generics(left_element, right_element, generics_param_table),
 
-            (TypeKind::Vec(left_element), TypeKind::Vec(right_element)) => self.type_compare_with_generics(left_element, right_element, generics_param_table),
+            (TypeKind::Vec(left_element), TypeKind::Vec(right_element)) => self.type_generics(left_element, right_element, generics_param_table),
 
             (TypeKind::Arr(_, left_len, left_element), TypeKind::Arr(_, right_len, right_element)) => {
-                left_len == right_len && self.type_compare_with_generics(left_element, right_element, generics_param_table)
+                left_len == right_len && self.type_generics(left_element, right_element, generics_param_table)
             }
 
             (TypeKind::Tuple(left_elements, _), TypeKind::Tuple(right_elements, _)) => {
@@ -3797,11 +3956,11 @@ impl<'a> Typesys<'a> {
                 left_elements
                     .iter()
                     .zip(right_elements.iter())
-                    .all(|(left, right)| self.type_compare_with_generics(left, right, generics_param_table))
+                    .all(|(left, right)| self.type_generics(left, right, generics_param_table))
             }
 
             (TypeKind::Fn(left_fn), TypeKind::Fn(right_fn)) => {
-                if !self.type_compare_with_generics(&left_fn.return_type, &right_fn.return_type, generics_param_table)
+                if !self.type_generics(&left_fn.return_type, &right_fn.return_type, generics_param_table)
                     || left_fn.param_types.len() != right_fn.param_types.len()
                     || left_fn.rest != right_fn.rest
                     || left_fn.errable != right_fn.errable
@@ -3813,7 +3972,7 @@ impl<'a> Typesys<'a> {
                     .param_types
                     .iter()
                     .zip(right_fn.param_types.iter())
-                    .all(|(left, right)| self.type_compare_with_generics(left, right, generics_param_table))
+                    .all(|(left, right)| self.type_generics(left, right, generics_param_table))
             }
 
             (TypeKind::Struct(_, _, left_props), TypeKind::Struct(_, _, right_props)) => {
@@ -3823,11 +3982,11 @@ impl<'a> Typesys<'a> {
                 left_props
                     .iter()
                     .zip(right_props.iter())
-                    .all(|(left, right)| left.key == right.key && self.type_compare_with_generics(&left.type_, &right.type_, generics_param_table))
+                    .all(|(left, right)| left.name == right.name && self.type_generics(&left.type_, &right.type_, generics_param_table))
             }
 
             (TypeKind::Ptr(left_value), TypeKind::Ptr(right_value)) | (TypeKind::Rawptr(left_value), TypeKind::Rawptr(right_value)) => {
-                self.type_compare_with_generics(left_value, right_value, generics_param_table)
+                self.type_generics(left_value, right_value, generics_param_table)
             }
 
             // 其他基本类型直接返回true
@@ -3952,7 +4111,7 @@ impl<'a> Typesys<'a> {
     /**
      * rewrite 的核心目的就是如果当前 type 定义在泛型函数作用域中，那么需要对其进行泛型的 special
      */
-    pub fn rewrite_type_alias(&mut self, type_alias_mutex: &Arc<Mutex<TypedefStmt>>) {
+    pub fn rewrite_typedef(&mut self, type_alias_mutex: &Arc<Mutex<TypedefStmt>>) {
         // 如果不存在 params_hash 表示当前 fndef 不存在基于泛型的重写，所以 alias 也不需要进行重写
         if let Some(hash) = self.current_fn_mutex.lock().unwrap().generics_args_hash {
             // alias.ident@hash
@@ -4272,7 +4431,7 @@ impl<'a> Typesys<'a> {
                             TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => *value_type.clone(),
                             _ => {
                                 continue;
-                            },
+                            }
                         }
                     } else {
                         src.clone()
@@ -4476,7 +4635,7 @@ impl<'a> Typesys<'a> {
             }
         }
 
-        if Type::ident_is_def_or_alias(&impl_type) {
+        if Type::is_ident(&impl_type) {
             self.infer_generics_param_constraints(impl_type, generics_params)?
         }
 

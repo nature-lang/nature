@@ -84,7 +84,7 @@ static inline int64_t type_hash(type_t t) {
         } else {
             for (int i = 0; i < t.struct_->properties->length; ++i) {
                 struct_property_t *p = ct_list_value(t.struct_->properties, i);
-                str = str_connect(str, dsprintf(".%ld", type_hash(p->type)));
+                str = str_connect(str, dsprintf("%s.%ld", p->name, type_hash(p->type)));
             }
         }
         return hash_string(str);
@@ -471,12 +471,7 @@ static inline void *type_recycle_check(module_t *m, type_t *t, struct sc_map_s64
         }
     } else if (t->kind == TYPE_ARR) {
         return type_recycle_check(m, &t->array->element_type, visited);
-    } else if (t->kind == TYPE_IDENT) {
-        // generics_param skip
-        if (t->ident_kind == TYPE_IDENT_GENERICS_PARAM) {
-            return NULL;
-        }
-
+    } else if (t->kind == TYPE_IDENT && t->ident_kind != TYPE_IDENT_GENERICS_PARAM) {
         symbol_t *symbol = symbol_table_get(t->ident);
         assert(symbol);
         ast_typedef_stmt_t *typedef_stmt = symbol->ast_value;

@@ -390,3 +390,26 @@ fn main() {
 
 --- output.txt
 nature-test/main.n:2:39: fn with both named and unnamed formal parameters
+
+=== test_union_failed
+--- main.n
+type uniona = int|f32
+type unionb = int|f32|string
+
+fn main() {
+    unionb b = 'hello'
+    uniona a = b
+}
+
+--- output.txt
+nature-test/main.n:6:16: type inconsistency, expect=main.uniona(union), actual=main.unionb(union)
+
+=== test_union
+--- main.n
+type uniona = int|f32
+type unionb = int|f32|string
+
+fn main() {
+    uniona b = 3.14 as f32
+    unionb a = b
+}
