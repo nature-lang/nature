@@ -5,6 +5,7 @@ fn vec_new<T>(T value, int len):vec<T> {
     int element_hash = @reflect_hash(T)
     return runtime.vec_new(hash, element_hash, len, &value as anyptr) as vec<T> catch e {
         panic(e.msg())
+        []
     }
 }
 
@@ -13,6 +14,7 @@ fn vec_cap<T>(int cap):vec<T> {
     int element_hash = @reflect_hash(T)
     return runtime.vec_cap(hash, element_hash, cap) as vec<T> catch e {
         panic(e.msg())
+        []
     }
 }
 
@@ -30,6 +32,7 @@ fn vec<T>.append(vec<T> l2) {
 fn vec<T>.slice(int start, int end):vec<T> {
     return runtime.vec_slice(self as anyptr, start, end) as vec<T> catch e {
         panic(e.msg())
+        []
     }
 }
 

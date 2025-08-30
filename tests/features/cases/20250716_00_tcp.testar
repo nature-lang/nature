@@ -13,7 +13,7 @@ fn server():void! {
             for true {
                 var len = conn.read(buf) catch e {
                     println('conn read err:', e.msg())
-                    break -1
+                    -1
                 }
                 if len == -1 {
                     break
@@ -439,7 +439,7 @@ fn server():void! {
             for true {
                 var len = conn.read(buf) catch e {
                     println('conn read err:', e.msg())
-                    break -1
+                    -1
                 }
                 if len == -1 {
                     break

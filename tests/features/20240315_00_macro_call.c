@@ -10,7 +10,7 @@ static void test_basic() {
 
     // 字符串中包含 "main_co done"
     char *str = "1 2 4 8 4 8\n"
-                "501951850 501951850\n";
+                "2118414787 4414187\n";
     assert_string_equal(raw, str);
 }
 

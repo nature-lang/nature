@@ -44,8 +44,6 @@ fn future_t<T:void>.await():void! {
     if self.error is throwable {
         var error = self.error as throwable
         throw errorf(error.msg())
-    } else {
-        println('self.error is null')
     }
 
     return

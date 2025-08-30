@@ -88,7 +88,7 @@ symbol_t *symbol_table_get_noref(char *ident);
 
 void symbol_table_delete(char *ident);
 
-void symbol_table_set_var(char *unique_ident, type_t type);
+void symbol_table_set_var(char *unique_ident, type_t type, module_t *m);
 
 void symbol_init();
 

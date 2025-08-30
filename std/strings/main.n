@@ -123,10 +123,7 @@ fn string.find(string sub):int {
 
 fn string.slice(int start, int end):string {
     var list = self as [u8]
-    list = list.slice(start, end) catch e {
-        panic(e.msg())
-    }
-
+    list = list[start..end]
     return list as string
 }
 

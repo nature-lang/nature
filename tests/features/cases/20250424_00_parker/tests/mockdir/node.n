@@ -6,7 +6,7 @@ int count = 10
 fn main() {
     var str = syscall.get_env('REPEAT_COUNT')
     var temp = str.to_int() catch e {
-        break 0
+        0
     }
     if temp > 0 {
         println('read env count success:', temp)

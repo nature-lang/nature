@@ -160,7 +160,7 @@ fn main():void! {
     var list = [1, 2, 3, 4]
     var a = list[8] catch e {
         println('catch vec error:', e.msg())
-        break 12
+        12
     }
     println(a)
 }

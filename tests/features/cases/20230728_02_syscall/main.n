@@ -30,6 +30,7 @@ fn main():void! {
     println('rmdir success')
     var _ = syscall.stat(path2) catch err {
         print('stat err: ', err.msg(), '\n')
+        syscall.stat_t{}
     }
 
     var pid = syscall.getpid()

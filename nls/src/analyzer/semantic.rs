@@ -41,7 +41,7 @@ impl<'a> Semantic<'a> {
     }
 
     fn analyze_special_type_rewrite(&mut self, t: &mut Type) -> bool {
-        assert!(t.import_as.is_empty());
+        debug_assert!(t.import_as.is_empty());
 
         // void ptr rewrite
         if t.ident == "anyptr" {
@@ -376,7 +376,7 @@ impl<'a> Semantic<'a> {
     }
 
     fn analyze_type(&mut self, t: &mut Type) {
-        if Type::ident_is_def_or_alias(t) || t.ident_kind == TypeIdentKind::Interface {
+        if Type::is_ident(t) || t.ident_kind == TypeIdentKind::Interface {
             // 处理导入的全局模式别名，例如  package.foo_t
             if !t.import_as.is_empty() {
                 // 只要存在 import as, 就必须能够在 imports 中找到对应的 import
@@ -437,7 +437,18 @@ impl<'a> Semantic<'a> {
             }
 
             if let Some(symbol) = self.symbol_table.get_symbol(t.symbol_id) {
-                let SymbolKind::Type(typedef_mutex) = &symbol.kind else { unreachable!() };
+                let SymbolKind::Type(typedef_mutex) = &symbol.kind else {
+                    errors_push(
+                        self.module,
+                        AnalyzerError {
+                            start: t.start,
+                            end: t.end,
+                            message: format!("'{}' not a type", t.ident),
+                        },
+                    );
+                    t.err = true;
+                    return;
+                };
                 let (is_alias, is_interface) = {
                     let typedef_stmt = typedef_mutex.lock().unwrap();
                     (typedef_stmt.is_alias, typedef_stmt.is_interface)
@@ -715,7 +726,7 @@ impl<'a> Semantic<'a> {
 
                         if typedef.impl_interfaces.len() > 0 {
                             for impl_interface in &mut typedef.impl_interfaces {
-                                assert!(impl_interface.kind == TypeKind::Ident && impl_interface.ident_kind == TypeIdentKind::Interface);
+                                debug_assert!(impl_interface.kind == TypeKind::Ident && impl_interface.ident_kind == TypeIdentKind::Interface);
                                 self.analyze_type(impl_interface);
                             }
                         }
@@ -764,7 +775,7 @@ impl<'a> Semantic<'a> {
             fn_init.symbol_name = format_global_ident(self.module.ident.clone(), "init".to_string());
             fn_init.fn_name = fn_init.symbol_name.clone();
             fn_init.return_type = Type::new(TypeKind::Void);
-            fn_init.body = AstBody{
+            fn_init.body = AstBody {
                 stmts: var_assign_list,
                 start: 0,
                 end: 0,
@@ -789,9 +800,7 @@ impl<'a> Semantic<'a> {
                         self.analyze_expr(right_expr);
                     }
                 }
-                _ => {
-                    unreachable!()
-                }
+                _ => {}
             }
         }
 
@@ -856,12 +865,7 @@ impl<'a> Semantic<'a> {
             }
 
             if fndef.is_tpl && fndef.body.stmts.len() == 0 {
-                // assert!(fndef.body.stmts.len() == 0);
-                errors_push(self.module, AnalyzerError{
-                    start: fndef.symbol_start,
-                    end: fndef.symbol_end,
-                    message: "tpl fn cannot have body".to_string()
-                })
+                debug_assert!(fndef.body.stmts.len() == 0);
             }
 
             self.analyze_type(&mut fndef.return_type);
@@ -1155,7 +1159,6 @@ impl<'a> Semantic<'a> {
                 self.analyze_body(&mut case.handle_body);
                 self.exit_scope();
             }
-
         }
         self.exit_scope();
     }
@@ -1167,7 +1170,7 @@ impl<'a> Semantic<'a> {
         // closure_fn 的 fn_name 需要继承当前 fn 的 fn_name, 这样报错才会更加的精准, 当前 global 以及是 unlock 状态了，不太妥当
         let mut fndef = async_expr.closure_fn.lock().unwrap();
         let Some(global_fn_mutex) = self.symbol_table.find_global_fn(self.current_scope_id) else {
-            panic!("global fn not found")
+            return;
         };
 
         fndef.fn_name = {
@@ -1201,7 +1204,6 @@ impl<'a> Semantic<'a> {
                 self.analyze_var_decl(catch_err);
                 self.analyze_body(catch_body);
                 self.exit_scope();
-
             }
             AstNode::As(type_, src) => {
                 self.analyze_type(type_);
@@ -1211,7 +1213,7 @@ impl<'a> Semantic<'a> {
                 self.analyze_type(target_type);
                 self.analyze_expr(src);
             }
-            AstNode::MacroSizeof(target_type) => {
+            AstNode::MacroSizeof(target_type) | AstNode::MacroDefault(target_type) => {
                 self.analyze_type(target_type);
             }
             AstNode::MacroUla(src) => {
@@ -1376,7 +1378,7 @@ impl<'a> Semantic<'a> {
 
         // find global fn in symbol table
         let Some(global_fn_mutex) = self.symbol_table.find_global_fn(self.current_scope_id) else {
-            panic!("global fn not found")
+            return;
         };
         fndef.global_parent = Some(global_fn_mutex.clone());
         fndef.is_local = true;
@@ -1558,7 +1560,6 @@ impl<'a> Semantic<'a> {
     pub fn analyze_if(&mut self, cond: &mut Box<Expr>, consequent: &mut AstBody, alternate: &mut AstBody) {
         // if has is expr push T e = e as T
         if let Some(is_expr) = self.extract_is_expr(cond) {
-            assert!(matches!(is_expr.node, AstNode::Is(..)));
             let AstNode::Is(target_type, src) = is_expr.node else { unreachable!() };
 
             let AstNode::Ident(ident, symbol_id) = &src.node else { unreachable!() };
@@ -1609,7 +1610,7 @@ impl<'a> Semantic<'a> {
     }
     pub fn analyze_stmt(&mut self, stmt: &mut Box<Stmt>) {
         match &mut stmt.node {
-            AstNode::Fake(expr) => {
+            AstNode::Fake(expr) | AstNode::Ret(expr) => {
                 self.analyze_expr(expr);
             }
             AstNode::VarDecl(var_decl_mutex) => {
@@ -1709,11 +1710,6 @@ impl<'a> Semantic<'a> {
                 self.exit_scope();
             }
             AstNode::Return(expr) => {
-                if let Some(expr) = expr {
-                    self.analyze_expr(expr);
-                }
-            }
-            AstNode::Break(expr) => {
                 if let Some(expr) = expr {
                     self.analyze_expr(expr);
                 }

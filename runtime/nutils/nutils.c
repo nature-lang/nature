@@ -91,12 +91,10 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
 }
 
 bool union_is(n_union_t *mu, int64_t target_rtype_hash) {
-
     return mu->rtype->hash == target_rtype_hash;
 }
 
 bool interface_is(n_interface_t *mu, int64_t target_rtype_hash) {
-
     return mu->rtype->hash == target_rtype_hash;
 }
 
@@ -163,8 +161,7 @@ n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int
  * @param value
  * @return
  */
-n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
-
+n_union_t *union_casting(int64_t input_rtype_hash, void *value_ref) {
     // - 根据 input_rtype_hash 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
     assert(rtype && "cannot find rtype by hash");
@@ -193,15 +190,20 @@ n_union_t *union_casting(uint64_t input_rtype_hash, void *value_ref) {
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
         void *new_value = rti_gc_malloc(rtype->size, rtype);
         memmove(new_value, value_ref, out_size);
+
         //        mu->value.ptr_value = new_value;
         rti_write_barrier_ptr(&mu->value.ptr_value, new_value, false);
     } else {
+        //        if (is_gc_alloc(rtype->kind)) {
+        //            rti_write_barrier_ptr(&mu->value, *((void **) value_ref), false);
+        //        } else {
         memmove(&mu->value, value_ref, out_size);
+        //        }
     }
 
 
     DEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
-           mu->value.i64_value);
+            mu->value.i64_value);
 
     return mu;
 }
@@ -592,10 +594,8 @@ char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
 
 // mark_black_new_obj 如果 new_obj 不是从 allocator(gc_malloc) 获取的新对象，则有必要主动 mark black 避免其被 sweep
 void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj) {
-    DEBUGF("[runtime_gc.rt_write_barrier_ptr] slot=%p, new_obj=%p", slot, new_obj);
+    DEBUGF("[rt_write_barrier_ptr] slot=%p, new_obj=%p, barrier_ptr?=%d", slot, new_obj, gc_barrier_get());
     if (!gc_barrier_get()) {
-        DEBUGF("[runtime_gc.rt_write_barrier_ptr] slot: %p, new_obj: %p, gc_barrier is false, no need write barrier", slot, new_obj);
-
         *(void **) slot = new_obj;
         return;
     }

@@ -3,6 +3,8 @@ import fmt
 import unsafe
 import runtime
 
+var null_hash = @reflect_hash(null) 
+
 // Convert object to json string
 fn serialize<T>(T object):string! {
     var t = reflect.typeof(object)
@@ -232,6 +234,10 @@ fn deserialize<T>(string s):T! {
 }
 
 fn deserialize_t.parser(anyptr p, reflect.type_t t):void! {
+    if p == 0 {
+        throw errorf('parser p is zero')
+    }
+
     self.skip_whitespace()
 
     match t.kind {
@@ -296,8 +302,13 @@ fn deserialize_t.parser(anyptr p, reflect.type_t t):void! {
         reflect.MAP -> self.parser_map(p, t)
         reflect.STRUCT -> self.parser_struct(p, t)
         reflect.UNION -> {
-            if t.hashes.len() > 0 { // not any
-                throw errorf('only `any` type deserialize is supported')
+            if t.hashes.len() == 2 && t.hashes[1] == null_hash {
+                self.parser_nullable(p, t)
+                return
+            }
+
+            if t.hashes.len() > 0 { 
+                throw errorf('only `any` and nullable type deserialize is supported')
             }
             var any_val = self.parser_any()
             unsafe.ptr_copy<any>(p, &any_val)
@@ -540,6 +551,49 @@ fn deserialize_t.parser_string():string! {
     }
     
     throw errorf('unterminated string at position %d', start)
+}
+
+fn deserialize_t.parser_nullable(anyptr p, reflect.type_t t):void! {
+    if self.cursor >= self.data.len() {
+        throw errorf('unexpected end of input at position %d', self.cursor)
+    }
+
+    anyptr v = unsafe.ptr_to<anyptr>(p)
+    var rv = v as rawptr<reflect.union_t>
+
+    var target_p = &rv.value as anyptr
+
+    // default is null
+    if self.data[self.cursor] == 'n'[0] {
+        self.must('null')
+        return
+    }
+
+    if t.hashes.len() != 2 {
+        throw errorf('only support nullable union type')
+    }
+
+    var hash = t.hashes[0]
+    var target_type = reflect.typeof_hash(hash)
+    
+    match target_type.kind {
+        reflect.VEC -> {
+            var element_type = reflect.typeof_hash(target_type.hashes[0])
+            rv.value = runtime.vec_cap(hash, element_type.hash, 0)
+        }
+        reflect.MAP -> {
+            var key_type = reflect.typeof_hash(target_type.hashes[0])
+            var value_type = reflect.typeof_hash(target_type.hashes[1])
+            rv.value = runtime.map_new(hash, key_type.hash, value_type.hash)
+        }
+        reflect.STRUCT -> {
+            rv.value = runtime.gc_malloc(hash)
+        }
+        _ -> {}
+    }
+
+    self.parser(target_p, target_type)
+    rv.rtype = target_type.r
 }
 
 fn deserialize_t.parser_any():any! {

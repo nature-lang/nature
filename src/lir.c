@@ -1,5 +1,5 @@
-#include "utils/stack.h"
 #include "lir.h"
+#include "utils/stack.h"
 
 
 closure_t *lir_closure_new(ast_fndef_t *fndef) {
@@ -21,7 +21,8 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->blocks = slice_new(); // basic_block_t
 
     c->catch_error_labels = stack_new();
-    c->break_targets = stack_new();
+    c->ret_targets = stack_new();
+    c->ret_labels = stack_new();
     c->continue_labels = stack_new();
     c->break_labels = stack_new();
 
@@ -35,8 +36,8 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->interval_table = table_new();
 
     // 在需要使用的时候再初始化
-//    c->closure_vars = slice_new();
-//    c->closure_var_table = table_new();
+    //    c->closure_vars = slice_new();
+    //    c->closure_var_table = table_new();
 
     c->stack_offset = 0;
     c->stack_vars = slice_new();

@@ -2,9 +2,9 @@
 #define RUNTIME_RTYPE_H
 
 #include "utils/bitmap.h"
+#include "utils/custom_links.h"
 #include "utils/sc_map.h"
 #include "utils/type.h"
-#include "utils/custom_links.h"
 
 extern struct sc_map_64v rt_rtype_map;
 
@@ -100,7 +100,7 @@ static inline rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
             .hashes_offset = -1,
     };
 
-    rtype.last_ptr = element_rtype->last_ptr > 0; // element 包含指针数据
+    rtype.last_ptr = element_rtype->last_ptr > 0; // 根据 0 和 1 在 heap_arena_bits_set 进行特殊处理
 
     return rtype;
 }

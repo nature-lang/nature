@@ -115,8 +115,9 @@ find_program(CARGOBIN cargo
         DOC "Cargo compiler"
 )
 
-if(CARGOBIN)
+if(CARGOBIN AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/nls")
     message(STATUS "CARGOBIN found: ${CARGOBIN}")
+    message(STATUS "nls directory exists, proceeding with build")
     
     set(LSP_BINARY_NAME nls)
     if(DEFINED RUST_TARGET)

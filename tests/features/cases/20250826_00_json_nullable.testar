@@ -1,0 +1,54 @@
+=== test_basic
+--- main.n
+import json
+
+type test_t = struct{
+    int? key
+    string? key2
+}
+
+fn main() {
+    var a = `{"key":null,"key2":"hello"}`
+    var b = json.deserialize<test_t>(a)
+    println(b.key, b.key2)
+    assert(b.key is null && (b.key2 as string) == 'hello')
+}
+
+=== test_nullable_float
+--- main.n
+import json
+
+type test_t = struct{
+    int? key
+    string? key2
+    any key3
+}
+
+fn main() {
+    var a = `{"key":null,"key2":"hello","key3":[1, 2, 3]}`
+    var b = json.deserialize<test_t>(a)
+    println(b.key, b.key2, (b.key3 as [any])[0], (b.key3 as [any])[2])
+    assert(b.key is null && (b.key2 as string) == 'hello')
+}
+
+--- output.txt
+null hello 1.000000 3.000000
+
+=== test_nullable_vec
+--- main.n
+import json
+
+type test_t = struct{
+    int? key
+    string? key2
+    [u8]? key3
+}
+
+fn main() {
+    var a = `{"key":null,"key2":"hello","key3":[1, 2, 3]}`
+    var b = json.deserialize<test_t>(a)
+    println(b.key, b.key2, (b.key3 as [u8])[0], (b.key3 as [u8])[1], (b.key3 as [u8])[2])
+}
+
+--- output.txt
+null hello 1 2 3

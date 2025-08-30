@@ -91,7 +91,7 @@ int result = 0
 fn main():void! {
     result = rem(10, 0) catch err {
         test2(err.msg())
-        break 1
+        1
     }
     test(result)
 

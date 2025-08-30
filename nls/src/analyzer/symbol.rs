@@ -162,7 +162,7 @@ impl SymbolTable {
      */
     pub fn exit_scope(&mut self, scope_id: NodeId) -> NodeId {
         if let Some(scope) = self.scopes.get_mut(scope_id) {
-            assert!(scope.parent > 0, "module scope cannot exit");
+            debug_assert!(scope.parent > 0, "module scope cannot exit");
 
             return scope.parent;
         }
@@ -215,7 +215,7 @@ impl SymbolTable {
 
             let symbol_id_option = global_scope.symbol_map.get(ident);
             if let Some(global_symbol_id) = symbol_id_option {
-                assert!(global_symbol_id != module_symbol_id);
+                debug_assert!(global_symbol_id != module_symbol_id);
 
                 self.symbols.remove(*global_symbol_id);
                 global_scope.symbol_map.remove(ident);
@@ -242,7 +242,7 @@ impl SymbolTable {
     }
 
     pub fn define_global_symbol(&mut self, global_ident: String, kind: SymbolKind, pos: usize, defined_in: NodeId) -> Result<NodeId, String> {
-        assert!(global_ident != "");
+        debug_assert!(global_ident != "");
 
         // 注册到 global scope
         let global_scope = self.scopes.get_mut(self.global_scope_id).unwrap();
@@ -291,7 +291,7 @@ impl SymbolTable {
     }
 
     pub fn define_symbol_in_scope(&mut self, ident: String, kind: SymbolKind, pos: usize, scope_id: NodeId) -> Result<NodeId, String> {
-        assert!(ident != "");
+        debug_assert!(ident != "");
 
         // 检查当前作用域是否已存在同名符号
         let scope = self.scopes.get_mut(scope_id).unwrap();

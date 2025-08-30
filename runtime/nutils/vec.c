@@ -34,7 +34,7 @@ static void rti_vec_grow(n_vec_t *vec, rtype_t *element_rtype, int custom_capaci
  * 通常用于已存在元素的数组初始化
  */
 n_vec_t *rt_unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t length) {
-    DEBUGF("[rt_vec_new] hash=%lu, element_hash=%lu, len=%lu, cap=%lu", hash, element_hash, length);
+    DEBUGF("[rt_vec_new] hash=%lu, element_hash=%lu, len=%lu", hash, element_hash, length);
 
     assertf(hash > 0, "hash must be a valid hash");
     assertf(element_hash > 0, "element_hash must be a valid hash");
@@ -100,13 +100,15 @@ n_vec_t *rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *va
     if (capacity > 0) {
         vec->data = rti_array_new(element_rtype, capacity);
 
-        uint64_t zero = 0;
-        if (memcmp(value_ref, &zero, element_size) != 0) {
-            DEBUGF("[rt_vec_new] will set default value_ref=%p, element_size=%lu", value_ref, element_size);
+        if (length > 0) {
+            uint64_t zero = 0;
+            if (memcmp(value_ref, &zero, element_size) != 0) {
+                DEBUGF("[rt_vec_new] will set default value_ref=%p, element_size=%lu", value_ref, element_size);
 
-            for (int64_t i = 0; i < length; i++) {
-                void *dst = vec->data + (i * element_size);
-                memmove(dst, value_ref, element_size);
+                for (int64_t i = 0; i < length; i++) {
+                    void *dst = vec->data + (i * element_size);
+                    memmove(dst, value_ref, element_size);
+                }
             }
         }
     }

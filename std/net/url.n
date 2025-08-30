@@ -122,7 +122,7 @@ fn parse_authority(rawptr<url_t> result, string authority) {
     if colon_pos != -1 {
         var port_str = authority.slice(colon_pos+1,authority.len())
         result.port = port_str.to_int() catch e {
-            break 0
+            0
         }
         result.hostname = authority.slice(0,colon_pos)
     } else {

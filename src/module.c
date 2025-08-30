@@ -35,6 +35,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
     m->source_path = source_path;
     m->infer_type_args_stack = stack_new();
     m->ast_fndefs = slice_new();
+    m->ast_typedefs = slice_new();
     m->closures = slice_new();
     m->asm_global_symbols = slice_new(); // 文件全局符号以及 operations 编译过程中产生的局部符号
     m->asm_operations = slice_new();

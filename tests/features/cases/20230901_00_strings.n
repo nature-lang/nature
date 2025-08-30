@@ -77,12 +77,15 @@ fn main():void! {
 
     var s11 = "12a3".to_int() catch e {
         assert(e.msg() == "invalid character in number")
+        0
     }
     var s12 = "-".to_int() catch e {
         assert(e.msg() == "invalid number format")
+        0
     }
     var s13 = "999999999999999999999".to_int() catch e {
         assert(e.msg() == "number too large")
+        0
     }
 
     assert("Hello".to_lower() == "hello")

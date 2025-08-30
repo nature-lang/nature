@@ -204,6 +204,7 @@ fn send():void! {
 
     conn.read(buf) catch e {
         panic(e.msg())
+        0
     }
 }
 
@@ -247,6 +248,7 @@ import net.dns
 fn main() {
     var ips = dns.lookup('www.notfoundanything.com') catch e {
         panic(e.msg())
+        []
     }
     for ip in ips {
         println(ip)

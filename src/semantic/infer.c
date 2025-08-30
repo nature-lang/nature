@@ -9,6 +9,10 @@
 static void
 check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast_typedef_stmt_t *typedef_stmt);
 
+static type_t reduction_type_ident(module_t *m, type_t t);
+
+static type_t type_param_special(module_t *m, type_t t, table_t *arg_table);
+
 static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_type);
 
 static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, list_t *properties);
@@ -23,7 +27,7 @@ static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef);
 
 static bool union_type_contains(type_union_t *union_type, type_t sub);
 
-static void infer_break(module_t *m, ast_break_t *stmt);
+static void infer_ret(module_t *m, ast_ret_stmt_t *stmt);
 
 bool generics_constraints_compare(ast_generics_constraints *left, ast_generics_constraints *right) {
     if (left->any && !right->and) {
@@ -51,7 +55,7 @@ bool generics_constraints_compare(ast_generics_constraints *left, ast_generics_c
         bool type_found = false;
         for (int j = 0; j < left->elements->length; ++j) {
             type_t *left_type = ct_list_value(left->elements, j);
-            if (type_compare(*left_type, *right_type, NULL)) {
+            if (type_compare(*left_type, *right_type)) {
                 type_found = true;
                 break;
             }
@@ -132,7 +136,7 @@ static void generics_constraints_check(module_t *m, ast_generics_constraints *co
     if (constraints->or) {
         for (int i = 0; i < constraints->elements->length; ++i) {
             type_t *t = ct_list_value(constraints->elements, i);
-            if (type_compare(*t, *src, NULL)) {
+            if (type_compare(*t, *src)) {
                 return; // 验证成功
             }
         }
@@ -249,7 +253,7 @@ static bool union_type_contains(type_union_t *union_type, type_t sub) {
 
     for (int i = 0; i < union_type->elements->length; ++i) {
         type_t *t = ct_list_value(union_type->elements, i);
-        if (type_compare(*t, sub, NULL)) {
+        if (type_compare(*t, sub)) {
             return true;
         }
     }
@@ -257,26 +261,26 @@ static bool union_type_contains(type_union_t *union_type, type_t sub) {
     return false;
 }
 
-bool type_union_compare(type_union_t *left, type_union_t *right) {
+bool type_union_compare(type_union_t *dst, type_union_t *src) {
     // any 可以匹配任何类型，包括两个 any 之间相互赋值
-    if (left->any) {
+    if (dst->any) {
         return true;
     }
 
-    if (right->any && !left->any) {
+    if (src->any && !dst->any) {
         return false;
     }
 
     // 创建一个标记数组，用于标记left中的类型是否已经匹配
     // 遍历right中的类型，确保每个类型都存在于left中
-    for (int i = 0; i < right->elements->length; ++i) {
-        type_t *right_type = ct_list_value(right->elements, i);
+    for (int i = 0; i < src->elements->length; ++i) {
+        type_t *right_type = ct_list_value(src->elements, i);
 
         // 检查right_type是否存在于left中
         bool type_found = false;
-        for (int j = 0; j < left->elements->length; ++j) {
-            type_t *left_type = ct_list_value(left->elements, j);
-            if (type_compare(*left_type, *right_type, NULL)) {
+        for (int j = 0; j < dst->elements->length; ++j) {
+            type_t *left_type = ct_list_value(dst->elements, j);
+            if (type_compare(*left_type, *right_type)) {
                 type_found = true;
                 break;
             }
@@ -290,20 +294,190 @@ bool type_union_compare(type_union_t *left, type_union_t *right) {
     return true;
 }
 
+bool type_generics(type_t dst, type_t src, table_t *generics_param_table) {
+    assertf(dst.kind != TYPE_UNKNOWN && src.kind != TYPE_UNKNOWN, "type unknown cannot infer");
+
+    // type param special, 基于 src 计算 dst param, reduction 完成后 dst.kind 会被修改
+    if (ident_is_generics_param(&dst)) {
+        assert(src.status == REDUCTION_STATUS_DONE);
+        assert(generics_param_table);
+
+        char *param_ident = dst.ident;
+        type_t *target_type = table_get(generics_param_table, param_ident);
+        if (target_type) {
+            dst = *target_type;
+        } else {
+            target_type = NEW(type_t);
+            memmove(target_type, &src, sizeof(type_t));
+            table_set(generics_param_table, param_ident, target_type);
+            dst = *target_type;
+        }
+
+        return true;
+    }
+
+    // 类型不一致，无法处理
+    if (dst.kind != src.kind) {
+        return false;
+    }
+
+    if (dst.kind == TYPE_UNION) {
+        type_union_t *dst_union = dst.union_;
+        type_union_t *src_union = src.union_;
+        if (dst_union->elements->length != src_union->elements->length) {
+            return false;
+        }
+
+        for (int i = 0; i < dst_union->elements->length; i++) {
+            type_t *dst_item = ct_list_value(dst_union->elements, i);
+            type_t *src_item = ct_list_value(src_union->elements, i);
+            if (!type_generics(*dst_item, *src_item, generics_param_table)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    if (dst.kind == TYPE_MAP) {
+        type_map_t *left_map_decl = dst.map;
+        type_map_t *right_map_decl = src.map;
+
+        if (!type_generics(left_map_decl->key_type, right_map_decl->key_type, generics_param_table)) {
+            return false;
+        }
+
+        if (!type_generics(left_map_decl->value_type, right_map_decl->value_type, generics_param_table)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    if (dst.kind == TYPE_SET) {
+        type_set_t *left_decl = dst.set;
+        type_set_t *right_decl = src.set;
+
+        if (!type_generics(left_decl->element_type, right_decl->element_type, generics_param_table)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    if (dst.kind == TYPE_CHAN) {
+        type_chan_t *left_decl = dst.chan;
+        type_chan_t *right_decl = src.chan;
+        return type_generics(left_decl->element_type, right_decl->element_type, generics_param_table);
+    }
+
+    if (dst.kind == TYPE_VEC) {
+        type_vec_t *left_list_decl = dst.vec;
+        type_vec_t *right_list_decl = src.vec;
+        return type_generics(left_list_decl->element_type, right_list_decl->element_type, generics_param_table);
+    }
+
+    if (dst.kind == TYPE_ARR) {
+        type_array_t *left_array_decl = dst.array;
+        type_array_t *right_array_decl = src.array;
+        if (left_array_decl->length != right_array_decl->length) {
+            return false;
+        }
+        return type_generics(left_array_decl->element_type, right_array_decl->element_type, generics_param_table);
+    }
+
+    if (dst.kind == TYPE_TUPLE) {
+        type_tuple_t *left_tuple = dst.tuple;
+        type_tuple_t *right_tuple = src.tuple;
+
+        if (left_tuple->elements->length != right_tuple->elements->length) {
+            return false;
+        }
+        for (int i = 0; i < left_tuple->elements->length; ++i) {
+            type_t *left_item = ct_list_value(left_tuple->elements, i);
+            type_t *right_item = ct_list_value(right_tuple->elements, i);
+            if (!type_generics(*left_item, *right_item, generics_param_table)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (dst.kind == TYPE_FN) {
+        type_fn_t *left_type_fn = dst.fn;
+        type_fn_t *right_type_fn = src.fn;
+        if (!type_generics(left_type_fn->return_type, right_type_fn->return_type, generics_param_table)) {
+            return false;
+        }
+
+        if (left_type_fn->param_types->length != right_type_fn->param_types->length) {
+            return false;
+        }
+
+        if (left_type_fn->is_rest != right_type_fn->is_rest) {
+            return false;
+        }
+
+        if (left_type_fn->is_errable != right_type_fn->is_errable) {
+            return false;
+        }
+
+        for (int i = 0; i < left_type_fn->param_types->length; ++i) {
+            type_t *left_formal_type = ct_list_value(left_type_fn->param_types, i);
+            type_t *right_formal_type = ct_list_value(right_type_fn->param_types, i);
+            if (!type_generics(*left_formal_type, *right_formal_type, generics_param_table)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    if (dst.kind == TYPE_STRUCT) {
+        type_struct_t *left_struct = dst.struct_;
+        type_struct_t *right_struct = src.struct_;
+        if (left_struct->properties->length != right_struct->properties->length) {
+            return false;
+        }
+
+        for (int i = 0; i < left_struct->properties->length; ++i) {
+            struct_property_t *left_property = ct_list_value(left_struct->properties, i);
+            struct_property_t *right_property = ct_list_value(right_struct->properties, i);
+
+            // key 比较
+            if (!str_equal(left_property->name, right_property->name)) {
+                return false;
+            }
+
+            // type 比较
+            if (!type_generics(left_property->type, right_property->type, generics_param_table)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    if (dst.kind == TYPE_PTR || dst.kind == TYPE_RAWPTR) {
+        type_t left_pointer = dst.ptr->value_type;
+        type_t right_pointer = src.ptr->value_type;
+        return type_generics(left_pointer, right_pointer, generics_param_table);
+    }
+
+    return true;
+}
+
+
 /**
  * reduction 阶段就应该完成 cross left kind 的定位.
  * @param dst
  * @param src
  * @return
  */
-bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
-    if (!ident_is_param(&dst)) {
-        assertf(dst.status == REDUCTION_STATUS_DONE, "type '%s' not reduction", type_format(dst));
-    }
-    if (!ident_is_param(&src)) {
-        assertf(src.status == REDUCTION_STATUS_DONE, "type '%s' not reduction", type_format(src));
-    }
-
+bool type_compare(type_t dst, type_t src) {
+    assert(!ident_is_generics_param(&dst));
+    assert(!ident_is_generics_param(&src));
+    assertf(dst.status == REDUCTION_STATUS_DONE, "type '%s' not reduction", type_format(dst));
+    assertf(src.status == REDUCTION_STATUS_DONE, "type '%s' not reduction", type_format(src));
     assertf(dst.kind != TYPE_UNKNOWN && src.kind != TYPE_UNKNOWN, "type unknown cannot infer");
 
     // all_t 可以匹配任何类型
@@ -335,44 +509,23 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         if (src.kind == TYPE_PTR) {
             type_t dst_ptr = dst.ptr->value_type;
             type_t src_ptr = src.ptr->value_type;
-            return type_compare(dst_ptr, src_ptr, generics_param_table);
+            return type_compare(dst_ptr, src_ptr);
         }
     }
 
-    // type param special, 基于 src 计算 dst param, reduction 完成后 dst.kind 会被修改
-    if (ident_is_param(&dst)) {
-        assert(src.status == REDUCTION_STATUS_DONE);
-        assert(generics_param_table);
 
-        char *param_ident = dst.ident;
-        type_t *target_type = table_get(generics_param_table, param_ident);
-        if (target_type) {
-            dst = *target_type;
-        } else {
-            target_type = NEW(type_t);
-            memmove(target_type, &src, sizeof(type_t));
-            table_set(generics_param_table, param_ident, target_type);
-            dst = *target_type;
-        }
-
-        return true;
-    }
-
-    if (dst.kind != src.kind) {
-        return false;
-    }
-
-    // 即使 reduction 后，也需要通过 ident kind 进行判断, 其中 union_type 不受 type def 限制, TODO 无法区分这是 type_compare 还是 generics param handle!
+    // 即使 reduction 后，也需要通过 ident kind 进行判断, 其中 union_type 不受 type def 限制
     if (dst.ident_kind == TYPE_IDENT_DEF && dst.kind != TYPE_UNION) {
         assert(dst.ident != NULL);
         if (src.ident == NULL) {
             return false;
         }
+
         if (!str_equal(dst.ident, src.ident)) {
             return false;
         }
 
-        // 相同时应该继续推导，当前函数后续需要进行 generics param 推导
+        return true;
     }
 
     if (src.ident_kind == TYPE_IDENT_DEF && src.kind != TYPE_UNION) {
@@ -383,6 +536,12 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         if (!str_equal(dst.ident, src.ident)) {
             return false;
         }
+
+        return true;
+    }
+
+    if (dst.kind != src.kind) {
+        return false;
     }
 
     if (dst.kind == TYPE_UNION) {
@@ -400,11 +559,11 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         type_map_t *left_map_decl = dst.map;
         type_map_t *right_map_decl = src.map;
 
-        if (!type_compare(left_map_decl->key_type, right_map_decl->key_type, generics_param_table)) {
+        if (!type_compare(left_map_decl->key_type, right_map_decl->key_type)) {
             return false;
         }
 
-        if (!type_compare(left_map_decl->value_type, right_map_decl->value_type, generics_param_table)) {
+        if (!type_compare(left_map_decl->value_type, right_map_decl->value_type)) {
             return false;
         }
 
@@ -415,7 +574,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         type_set_t *left_decl = dst.set;
         type_set_t *right_decl = src.set;
 
-        if (!type_compare(left_decl->element_type, right_decl->element_type, generics_param_table)) {
+        if (!type_compare(left_decl->element_type, right_decl->element_type)) {
             return false;
         }
 
@@ -425,13 +584,13 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
     if (dst.kind == TYPE_CHAN) {
         type_chan_t *left_decl = dst.chan;
         type_chan_t *right_decl = src.chan;
-        return type_compare(left_decl->element_type, right_decl->element_type, generics_param_table);
+        return type_compare(left_decl->element_type, right_decl->element_type);
     }
 
     if (dst.kind == TYPE_VEC) {
         type_vec_t *left_list_decl = dst.vec;
         type_vec_t *right_list_decl = src.vec;
-        return type_compare(left_list_decl->element_type, right_list_decl->element_type, generics_param_table);
+        return type_compare(left_list_decl->element_type, right_list_decl->element_type);
     }
 
     if (dst.kind == TYPE_ARR) {
@@ -440,7 +599,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         if (left_array_decl->length != right_array_decl->length) {
             return false;
         }
-        return type_compare(left_array_decl->element_type, right_array_decl->element_type, generics_param_table);
+        return type_compare(left_array_decl->element_type, right_array_decl->element_type);
     }
 
     if (dst.kind == TYPE_TUPLE) {
@@ -453,7 +612,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         for (int i = 0; i < left_tuple->elements->length; ++i) {
             type_t *left_item = ct_list_value(left_tuple->elements, i);
             type_t *right_item = ct_list_value(right_tuple->elements, i);
-            if (!type_compare(*left_item, *right_item, generics_param_table)) {
+            if (!type_compare(*left_item, *right_item)) {
                 return false;
             }
         }
@@ -463,7 +622,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
     if (dst.kind == TYPE_FN) {
         type_fn_t *left_type_fn = dst.fn;
         type_fn_t *right_type_fn = src.fn;
-        if (!type_compare(left_type_fn->return_type, right_type_fn->return_type, generics_param_table)) {
+        if (!type_compare(left_type_fn->return_type, right_type_fn->return_type)) {
             return false;
         }
 
@@ -482,7 +641,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
         for (int i = 0; i < left_type_fn->param_types->length; ++i) {
             type_t *left_formal_type = ct_list_value(left_type_fn->param_types, i);
             type_t *right_formal_type = ct_list_value(right_type_fn->param_types, i);
-            if (!type_compare(*left_formal_type, *right_formal_type, generics_param_table)) {
+            if (!type_compare(*left_formal_type, *right_formal_type)) {
                 return false;
             }
         }
@@ -506,7 +665,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
             }
 
             // type 比较
-            if (!type_compare(left_property->type, right_property->type, generics_param_table)) {
+            if (!type_compare(left_property->type, right_property->type)) {
                 return false;
             }
         }
@@ -517,7 +676,7 @@ bool type_compare(type_t dst, type_t src, table_t *generics_param_table) {
     if (dst.kind == TYPE_PTR || dst.kind == TYPE_RAWPTR) {
         type_t left_pointer = dst.ptr->value_type;
         type_t right_pointer = src.ptr->value_type;
-        return type_compare(left_pointer, right_pointer, generics_param_table);
+        return type_compare(left_pointer, right_pointer);
     }
 
     return true;
@@ -558,11 +717,11 @@ static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_
             INFER_ASSERTF(formal_type, "too many arguments");
 
             // copy 出来专用于 infer, 避免对 is_tpl 造成污染(is_tpl.status = done, 会导致后续的 copy 异常)
-            type_t temp_type = type_copy(*formal_type);
+            type_t temp_type = type_copy(m, *formal_type);
             temp_type = reduction_type(m, temp_type);
 
-            bool compare = type_compare(temp_type, arg_type, generics_args_table);
-            INFER_ASSERTF(compare, "cannot infer generics type from %s to %s", type_format(arg_type),
+            bool generics = type_generics(temp_type, arg_type, generics_args_table);
+            INFER_ASSERTF(generics, "cannot generics type from %s to %s", type_format(arg_type),
                           type_format(temp_type));
         }
 
@@ -571,10 +730,10 @@ static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_
             return_target_type.kind != TYPE_VOID &&
             return_target_type.kind != TYPE_UNION &&
             return_target_type.kind != TYPE_NULL) {
-            type_t temp_type = type_copy(temp_fn->return_type);
+            type_t temp_type = type_copy(m, temp_fn->return_type);
             temp_type = reduction_type(m, temp_type);
-            bool compare = type_compare(temp_type, return_target_type, generics_args_table);
-            INFER_ASSERTF(compare, "cannot infer generics type %s", type_format(temp_type));
+            bool generics = type_generics(temp_type, return_target_type, generics_args_table);
+            INFER_ASSERTF(generics, "cannot generics type from %s", type_format(temp_type));
         }
 
         // 判断泛型参数是否全部推断完成
@@ -657,21 +816,21 @@ static char *generics_impl_args_hash(module_t *m, list_t *args) {
     for (int i = 0; i < args->length; ++i) {
         type_t *arg_type = ct_list_value(args, i);
         *arg_type = reduction_type(m, *arg_type);
-        rtype_t r = ct_reflect_type(*arg_type);
-        str = str_connect(str, itoa((int64_t) r.hash));
+
+        str = str_connect(str, itoa(type_hash(*arg_type)));
     }
 
     return itoa(hash_string(str));
 }
 
-static char *generics_args_hash(list_t *generics_params, table_t *arg_table) {
-    char *str = itoa(TYPE_FN);
+static char *generics_args_hash(module_t *m, list_t *generics_params, table_t *arg_table) {
+    char *str = "fn.";
+
     for (int i = 0; i < generics_params->length; ++i) {
         ast_generics_param_t *param = ct_list_value(generics_params, i);
         type_t *t = table_get(arg_table, param->ident);
         assert(t);
-        rtype_t r = ct_reflect_type(*t);
-        str = str_connect(str, itoa((int64_t) r.hash));
+        str = str_connect(str, itoa(type_hash(*t)));
     }
 
     return itoa(hash_string(str));
@@ -720,12 +879,11 @@ static char *rewrite_ident_use(module_t *m, char *old) {
         return old;
     }
 
-    assertf(!str_char(old, '@'), "repeat rewrite");
-
+    //    assertf(!str_char(old, '#'), "repeat rewrite");
     return str_connect_by(old, m->current_fn->generics_args_hash, GEN_REWRITE_SEPARATOR);
 }
 
-static void rewrite_type_alias(module_t *m, ast_typedef_stmt_t *stmt) {
+static void rewrite_typedef(module_t *m, ast_typedef_stmt_t *stmt) {
     assert(m->current_fn);
 
     // 如果不存在 params_hash 表示当前 fndef 不存在基于泛型的重写，所以 alias 也不需要进行重写
@@ -831,7 +989,7 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_t
     type_t right_type = infer_right_expr(m, &expr->right, right_target_type);
 
     // left type 和 right type 必须相同
-    if (!type_compare(left_type, right_type, NULL)) {
+    if (!type_compare(left_type, right_type)) {
         INFER_ASSERTF(false, "binary type inconsistency, left is '%s', right is '%s'", type_origin_format(left_type),
                       type_origin_format(right_type));
     }
@@ -983,7 +1141,7 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
         as_expr->src.type.args = target_type.args;
 
         // compare check
-        if (type_compare(as_expr->src.type, target_type, NULL)) {
+        if (type_compare(as_expr->src.type, target_type)) {
             as_expr->src.type.ident = ident;
             as_expr->src.type.ident_kind = ident_kind;
             as_expr->src.type.args = args;
@@ -1002,7 +1160,7 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
         type_t src_temp_type = as_expr->src.type;
         src_temp_type.ident = target_type.ident;
         src_temp_type.ident_kind = target_type.ident_kind;
-        if (type_compare(target_type, src_temp_type, NULL)) {
+        if (type_compare(target_type, src_temp_type)) {
             as_expr->src.type = src_temp_type;
             return target_type;
         }
@@ -1135,19 +1293,20 @@ static type_t infer_async(module_t *m, ast_expr_t *expr, type_t target_type) {
     block_expr->body = co_expr->args_copy_stmts;
 
     // add break expr
-    ast_stmt_t *break_stmt = NEW(ast_stmt_t);
-    break_stmt->line = new_call_expr->line;
-    break_stmt->column = new_call_expr->column;
-    ast_break_t *_break = NEW(ast_break_t);
-    _break->expr = new_call_expr;
-    break_stmt->assert_type = AST_STMT_BREAK;
-    break_stmt->value = _break;
+    ast_stmt_t *ret_stmt = NEW(ast_stmt_t);
+    ret_stmt->line = new_call_expr->line;
+    ret_stmt->column = new_call_expr->column;
 
-    stack_push(m->current_fn->break_target_types, &target_type);
-    infer_break(m, _break);
-    stack_pop(m->current_fn->break_target_types);
+    ast_ret_stmt_t *_ret = NEW(ast_ret_stmt_t);
+    _ret->expr = *new_call_expr;
+    ret_stmt->assert_type = AST_STMT_RET;
+    ret_stmt->value = _ret;
 
-    slice_push(block_expr->body, break_stmt);
+    stack_push(m->current_fn->ret_target_types, &target_type);
+    infer_ret(m, _ret);
+    stack_pop(m->current_fn->ret_target_types);
+
+    slice_push(block_expr->body, ret_stmt);
 
     expr->assert_type = AST_EXPR_BLOCK;
     expr->value = block_expr;
@@ -1172,7 +1331,7 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
         INFER_ASSERTF(type_confirmed(subject_type), "match subject type not confirm");
     }
 
-    stack_push(m->current_fn->break_target_types, &target_type);
+    stack_push(m->current_fn->ret_target_types, &target_type);
 
     table_t *union_table = table_new(); // key is hash
 
@@ -1203,9 +1362,7 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
                 assert(cond_expr->type.kind == TYPE_BOOL);
 
                 ast_match_is_expr_t *match_is_expr = cond_expr->value;
-                rtype_t rtype = ct_reflect_type(match_is_expr->target_type);
-
-                table_set(union_table, itoa(rtype.hash), cond_expr);
+                table_set(union_table, itoa(type_hash(match_is_expr->target_type)), cond_expr);
             } else {
                 infer_right_expr(m, cond_expr, subject_type);
             }
@@ -1221,8 +1378,7 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
             if (subject_type.kind == TYPE_UNION && !subject_type.union_->any) {
                 for (int i = 0; i < subject_type.union_->elements->length; i++) {
                     type_t *element_type = ct_list_value(subject_type.union_->elements, i);
-                    rtype_t rtype = ct_reflect_type(*element_type);
-                    if (!table_exist(union_table, itoa(rtype.hash))) {
+                    if (!table_exist(union_table, itoa(type_hash(*element_type)))) {
                         ANALYZER_ASSERTF(has_default,
                                          "match expression lacks a default case '_' and union element type lacks, for example 'is %s'",
                                          type_origin_format(*element_type))
@@ -1236,7 +1392,7 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
         } while (0);
     }
 
-    stack_pop(m->current_fn->break_target_types);
+    stack_pop(m->current_fn->ret_target_types);
     return target_type;
 }
 
@@ -1250,9 +1406,9 @@ static void infer_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
     rewrite_var_decl(m, &try_stmt->catch_err);
 
     type_t t = type_kind_new(TYPE_VOID);
-    stack_push(m->current_fn->break_target_types, &t);
+    stack_push(m->current_fn->ret_target_types, &t);
     infer_body(m, try_stmt->catch_body);
-    stack_pop(m->current_fn->break_target_types);
+    stack_pop(m->current_fn->ret_target_types);
 }
 
 static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
@@ -1261,13 +1417,15 @@ static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
     m->be_caught -= 1;
 
     type_t interface_error = interface_throwable();
+    interface_error = reduction_type(m, interface_error);
     catch_expr->catch_err.type = interface_error;
 
     rewrite_var_decl(m, &catch_expr->catch_err);
 
-    stack_push(m->current_fn->break_target_types, &t);
+
+    stack_push(m->current_fn->ret_target_types, &t);
     infer_body(m, catch_expr->catch_body);
-    stack_pop(m->current_fn->break_target_types);
+    stack_pop(m->current_fn->ret_target_types);
 
     return t;
 }
@@ -1317,7 +1475,7 @@ static type_t infer_type_eq_expr(module_t *m, ast_expr_t *expr) {
     type_eq->left_type = reduction_type(m, type_eq->left_type);
     type_eq->right_type = reduction_type(m, type_eq->right_type);
 
-    bool eq = type_compare(type_eq->left_type, type_eq->right_type, NULL);
+    bool eq = type_compare(type_eq->left_type, type_eq->right_type);
     ast_expr_t *bool_expr = ast_bool_expr(expr->line, expr->column, eq);
 
     // 直接改写 literal 表达式
@@ -1883,7 +2041,7 @@ static type_t infer_select_expr(module_t *m, ast_expr_t *expr) {
     // infer 自动解引用
     // 不能直接改写 select->instance!
     type_t left_type = select->left.type;
-    if (left_type.kind == TYPE_PTR | left_type.kind == TYPE_RAWPTR) {
+    if (left_type.kind == TYPE_PTR || left_type.kind == TYPE_RAWPTR) {
         type_t value_type = select->left.type.ptr->value_type;
         if (value_type.kind == TYPE_STRUCT) {
             left_type = value_type;
@@ -1954,7 +2112,7 @@ static ast_fndef_t *generics_special_fn(module_t *m, ast_call_t *call, type_t ta
     table_t *args_table = generics_args_table(m, temp_fn, call, target_type);
 
     // 根据具体参数计算 args_hash
-    char *args_hash = generics_args_hash(temp_fn->generics_params, args_table);
+    char *args_hash = generics_args_hash(m, temp_fn->generics_params, args_table);
     char *symbol_name = str_connect_by(temp_fn->symbol_name, args_hash, GEN_REWRITE_SEPARATOR);
 
     // 在没有基于类型约束产生重载的情况下，temp_fn 就是 tpl_fn
@@ -1980,7 +2138,7 @@ static ast_fndef_t *generics_special_fn(module_t *m, ast_call_t *call, type_t ta
     // local_children 关系也已经重新构建, analyzer_global 用于辅助 local_children 重建
     m->analyzer_global = NULL;
 
-    special_fn = ast_fndef_copy(tpl_fn);
+    special_fn = ast_fndef_copy(m, tpl_fn);
     special_fn->impl_type = tpl_fn->impl_type;
 
     // 分配泛型参数，此时泛型函数中的 type_param 还没有进行特化处理
@@ -2119,7 +2277,7 @@ static bool impl_call_rewrite(module_t *m, ast_call_t *call) {
         s = symbol_table_get(impl_symbol_name);
         if (!s) {
             // ident to default kind(need args)
-            type_t builtin_type = type_copy(destr_type);
+            type_t builtin_type = type_copy(m, destr_type);
             builtin_type.ident = NULL;
             builtin_type.ident_kind = 0;
             builtin_type.args = NULL;
@@ -2307,7 +2465,7 @@ static void infer_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     stmt->var_decl.type = reduction_type(m, stmt->var_decl.type);
     rewrite_var_decl(m, &stmt->var_decl);
 
-    if (stmt->var_decl.type.ident_kind != TYPE_IDENT_PARAM) {
+    if (stmt->var_decl.type.ident_kind != TYPE_IDENT_GENERICS_PARAM) {
         INFER_ASSERTF(stmt->var_decl.type.kind != TYPE_VOID, "cannot assign to void");
     }
 
@@ -2317,7 +2475,7 @@ static void infer_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
 
     // 需要进行类型推断
     if (stmt->var_decl.type.kind == TYPE_UNKNOWN) {
-        INFER_ASSERTF(type_confirmed(right_type), "type inference error, right type not confirmed");
+        INFER_ASSERTF(type_confirmed(right_type), "stmt right type not confirmed");
 
         stmt->var_decl.type = right_type;
         return;
@@ -2331,7 +2489,7 @@ static void infer_global_assign(module_t *m, ast_global_assign_stmt_t *stmt) {
     // left type
     // global 自动类型推导
     if (stmt->var_decl->type.kind == TYPE_UNKNOWN) {
-        INFER_ASSERTF(type_confirmed(right_type), "type inference error, right type not confirmed");
+        INFER_ASSERTF(type_confirmed(right_type), "stmt right type not confirmed");
 
         stmt->var_decl->type = right_type;
     }
@@ -2344,7 +2502,7 @@ static void infer_global_assign(module_t *m, ast_global_assign_stmt_t *stmt) {
  */
 static void infer_assign(module_t *m, ast_assign_stmt_t *stmt) {
     type_t left_type = infer_left_expr(m, &stmt->left);
-    if (left_type.ident_kind != TYPE_IDENT_PARAM) {
+    if (left_type.ident_kind != TYPE_IDENT_GENERICS_PARAM) {
         INFER_ASSERTF(left_type.kind != TYPE_VOID, "cannot assign to void");
     }
 
@@ -2386,10 +2544,7 @@ static void infer_if(module_t *m, ast_if_stmt_t *stmt) {
 static void infer_for_cond_stmt(module_t *m, ast_for_cond_stmt_t *stmt) {
     infer_right_expr(m, &stmt->condition, type_kind_new(TYPE_BOOL));
 
-    type_t t = type_kind_new(TYPE_VOID);
-    stack_push(m->current_fn->break_target_types, &t);
     infer_body(m, stmt->body);
-    stack_pop(m->current_fn->break_target_types);
 }
 
 /**
@@ -2455,10 +2610,7 @@ static void infer_for_iterator(module_t *m, ast_for_iterator_stmt_t *stmt) {
         }
     }
 
-    type_t t = type_kind_new(TYPE_VOID);
-    stack_push(m->current_fn->break_target_types, &t);
     infer_body(m, stmt->body);
-    stack_pop(m->current_fn->break_target_types);
 }
 
 static void infer_for_tradition(module_t *m, ast_for_tradition_stmt_t *stmt) {
@@ -2466,10 +2618,7 @@ static void infer_for_tradition(module_t *m, ast_for_tradition_stmt_t *stmt) {
     infer_right_expr(m, &stmt->cond, type_kind_new(TYPE_BOOL));
     infer_stmt(m, stmt->update);
 
-    type_t t = type_kind_new(TYPE_VOID);
-    stack_push(m->current_fn->break_target_types, &t);
     infer_body(m, stmt->body);
-    stack_pop(m->current_fn->break_target_types);
 }
 
 /**
@@ -2478,7 +2627,7 @@ static void infer_for_tradition(module_t *m, ast_for_tradition_stmt_t *stmt) {
  * @param stmt
  */
 static void infer_type_alias_stmt(module_t *m, ast_typedef_stmt_t *stmt) {
-    rewrite_type_alias(m, stmt);
+    rewrite_typedef(m, stmt);
 }
 
 /**
@@ -2495,16 +2644,18 @@ static void infer_return(module_t *m, ast_return_stmt_t *stmt) {
     }
 }
 
-static void infer_break(module_t *m, ast_break_t *stmt) {
-    type_t *expect_type = stack_top(m->current_fn->break_target_types);
-    assert(expect_type);
-    if (stmt->expr != NULL) {
-        type_t new_handle_type = infer_right_expr(m, stmt->expr, *expect_type);
-        if (expect_type->kind == TYPE_UNKNOWN) {
-            *expect_type = new_handle_type;
+static void infer_ret(module_t *m, ast_ret_stmt_t *stmt) {
+    type_t *target_type = stack_top(m->current_fn->ret_target_types);
+    assert(target_type);
+
+    if (target_type->kind != TYPE_VOID) {
+        type_t new_handle_type = infer_right_expr(m, &stmt->expr, *target_type);
+        if (target_type->kind == TYPE_UNKNOWN) {
+            *target_type = new_handle_type; // 类型推断
         }
     } else {
-        INFER_ASSERTF(expect_type->kind == TYPE_VOID, "break missing value expr");
+        // void 同样需要 infer
+        infer_right_expr(m, &stmt->expr, type_kind_new(TYPE_UNKNOWN));
     }
 }
 
@@ -2728,8 +2879,8 @@ static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_STMT_RETURN: {
             return infer_return(m, stmt->value);
         }
-        case AST_STMT_BREAK: {
-            return infer_break(m, stmt->value);
+        case AST_STMT_RET: {
+            return infer_ret(m, stmt->value);
         }
         case AST_STMT_TYPEDEF: {
             return infer_type_alias_stmt(m, stmt->value);
@@ -2898,7 +3049,7 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
             return infer_env_access(m, expr->value);
         }
         default: {
-            INFER_ASSERTF(false, "unknown operand %d", expr->assert_type);
+            INFER_ASSERTF(false, "unknown infer operand %d", expr->assert_type);
             exit(EXIT_FAILURE);
         }
     }
@@ -3001,7 +3152,7 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
         *expr = ast_type_as(*expr, target_type);
     }
 
-    if (!type_compare(target_type, expr->type, NULL)) {
+    if (!type_compare(target_type, expr->type)) {
         INFER_ASSERTF(false, "type inconsistency, expect=%s, actual=%s", type_format(target_type),
                       type_format(expr->type));
     }
@@ -3013,8 +3164,6 @@ static type_t reduction_struct(module_t *m, type_t t) {
 
     type_struct_t *s = t.struct_;
 
-    int64_t max_align = 0;
-    int64_t offset = 0;
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *p = ct_list_value(s->properties, i);
 
@@ -3036,20 +3185,10 @@ static type_t reduction_struct(module_t *m, type_t t) {
             }
         }
 
-        int64_t field_align = type_alignof(p->type);
-        if (field_align > max_align) {
-            max_align = field_align;
-        }
-        int64_t field_size = type_sizeof(p->type);
-        offset = align_up(offset, field_align);
-
-        p->align = field_align;
-        p->offset = offset;
-
-        offset += field_size;
         INFER_ASSERTF(type_confirmed(p->type), "struct property '%s' type not confirmed", p->name);
     }
-    t.struct_->align = max_align;
+
+    // 0 表示未初始化
     return t;
 }
 
@@ -3128,16 +3267,10 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_TUPLE) {
         type_tuple_t *tuple = t.tuple;
         INFER_ASSERTF(tuple->elements->length > 0, "tuple element empty");
-        int align = 0;
         for (int i = 0; i < tuple->elements->length; ++i) {
             type_t *element = ct_list_value(tuple->elements, i);
             *element = reduction_type(m, *element);
-            int element_align = type_alignof(*element);
-            if (element_align > align) {
-                align = element_align;
-            }
         }
-        tuple->align = align;
         return t;
     }
 
@@ -3163,7 +3296,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
 
 static type_t type_param_special(module_t *m, type_t t, table_t *arg_table) {
     assert(t.kind == TYPE_IDENT);
-    assert(t.ident_kind == TYPE_IDENT_PARAM);
+    assert(t.ident_kind == TYPE_IDENT_GENERICS_PARAM);
 
     // 实参可以没有 reduction
     type_t *arg_type = table_get(arg_table, t.ident);
@@ -3209,7 +3342,7 @@ check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast
 
         // actual_type 由于进行了 rewrite, 所以 param 包含了 self, 而 expect type 没有进行这样的处理。
         // compare
-        INFER_ASSERTF(type_compare(*expect_type, actual_type, NULL),
+        INFER_ASSERTF(type_compare(*expect_type, actual_type),
                       "the fn '%s' of type '%s' mismatch interface '%s'", ast_fndef->fn_name, typedef_ident,
                       impl_interface->ident);
     }
@@ -3239,7 +3372,7 @@ static void combination_interface(module_t *m, ast_typedef_stmt_t *typedef_stmt)
             type_t *exist_type = sc_map_get_sv(&exists, temp->fn->fn_name);
             if (exist_type) {
                 // compare
-                INFER_ASSERTF(type_compare(*exist_type, *temp, NULL), "duplicate method '%s'",
+                INFER_ASSERTF(type_compare(*exist_type, *temp), "duplicate method '%s'",
                               temp->fn->fn_name);
 
                 continue;
@@ -3258,7 +3391,7 @@ static void combination_interface(module_t *m, ast_typedef_stmt_t *typedef_stmt)
  * @param t
  * @return
  */
-static type_t reduction_typedef_or_alias(module_t *m, type_t t) {
+static type_t reduction_type_ident(module_t *m, type_t t) {
     symbol_t *symbol = symbol_table_get(t.ident);
     INFER_ASSERTF(symbol, "typedef '%s' not found", t.ident);
     INFER_ASSERTF(symbol->type == SYMBOL_TYPE, "'%s' is not a type", symbol->ident);
@@ -3306,7 +3439,7 @@ static type_t reduction_typedef_or_alias(module_t *m, type_t t) {
         }
 
         // 对右值进行 copy, 因为泛型会对 type_expr 进行多次展开, 所以需要进行 copy
-        type_t right_type_expr = type_copy(typedef_stmt->type_expr);
+        type_t right_type_expr = type_copy(m, typedef_stmt->type_expr);
 
         // reduction 部分的 struct 的 right expr 如果是 struct，也只会进行到 infer_fn_decl 而不会处理 fn body 部分
         // 所以 fn body 部分还是包含 type_param, 如果此时将 type_param_table 置空，会导致后续 infer_fndef 时解析 param 异常
@@ -3330,21 +3463,26 @@ static type_t reduction_typedef_or_alias(module_t *m, type_t t) {
 
     // 检查右值是否 reduce 完成
     if (typedef_stmt->type_expr.status == REDUCTION_STATUS_DONE) {
-        t.kind = typedef_stmt->type_expr.kind;
-        t.value = typedef_stmt->type_expr.value;
-        t.in_heap = typedef_stmt->type_expr.in_heap;
-        t.status = typedef_stmt->type_expr.status;
+        type_t temp = type_copy(m, typedef_stmt->type_expr);
+        t.kind = temp.kind;
+        t.value = temp.value;
+        t.in_heap = temp.in_heap;
+        t.status = temp.status;
+        return t;
+    }
+
+    if (typedef_stmt->type_expr.status == REDUCTION_STATUS_DOING2) {
         return t;
     }
 
     // 当前 ident 对应的 type 正在 reduction, 出现这种情况可能的原因是嵌套使用了 ident
-    // 此时直接将 ident 丢回去就可以了
     if (typedef_stmt->type_expr.status == REDUCTION_STATUS_DOING) {
-        return t;
+        typedef_stmt->type_expr.status = REDUCTION_STATUS_DOING2;
+    } else {
+        // 打上正在进行的标记,避免进入死循环
+        typedef_stmt->type_expr.status = REDUCTION_STATUS_DOING;
     }
 
-    // 打上正在进行的标记,避免进入死循环
-    typedef_stmt->type_expr.status = REDUCTION_STATUS_DOING;
 
     // interface 需要通过 ident 进行区分，所以这里将 ident 赋值给 type_expr
     if (typedef_stmt->is_interface) {
@@ -3369,14 +3507,12 @@ static type_t reduction_typedef_or_alias(module_t *m, type_t t) {
         }
     }
 
-    // combination impl interfaces
-
     // reduction_type 已经返回，现在这里可以直接修改为 done, 或者在外部的 reduction_type 中配置为 done
-
-    t.kind = typedef_stmt->type_expr.kind;
-    t.value = typedef_stmt->type_expr.value;
-    t.in_heap = typedef_stmt->type_expr.in_heap;
-    t.status = typedef_stmt->type_expr.status;
+    type_t right_type_expr = type_copy(m, typedef_stmt->type_expr);
+    t.kind = right_type_expr.kind;
+    t.value = right_type_expr.value;
+    t.in_heap = right_type_expr.in_heap;
+    t.status = right_type_expr.status;
     return t;
 }
 
@@ -3408,7 +3544,7 @@ static type_t reduction_interface_type(module_t *m, type_t t) {
     return t;
 }
 
-static type_t reduction_type(module_t *m, type_t t) {
+type_t reduction_type(module_t *m, type_t t) {
     assert(t.kind > 0);
 
     char *ident = t.ident;
@@ -3425,19 +3561,13 @@ static type_t reduction_type(module_t *m, type_t t) {
         goto STATUS_DONE;
     }
 
-
-    if (ident_is_def_or_alias(&t)) {
-        t = reduction_typedef_or_alias(m, t);
+    if (type_is_ident(&t)) {
+        t = reduction_type_ident(m, t);
         goto STATUS_DONE;
     }
 
-    if (t.kind == TYPE_IDENT && t.ident_kind == TYPE_IDENT_INTERFACE) {
-        // use interface
-        t = reduction_typedef_or_alias(m, t);
-        goto STATUS_DONE;
-    }
-
-    if (t.kind == TYPE_IDENT && t.ident_kind == TYPE_IDENT_PARAM) {
+    // 泛型参数实例化 e.g. T -> u8
+    if (t.kind == TYPE_IDENT && t.ident_kind == TYPE_IDENT_GENERICS_PARAM) {
         if (!m->infer_type_args_stack) {
             goto STATUS_DONE;
         }
@@ -3504,8 +3634,18 @@ STATUS_DONE:
 
     t.kind = t.kind;
 
-    // 计算 reflect type
-    ct_reflect_type(t);
+    struct sc_map_s64 visited;
+    sc_map_init_s64(&visited, 0, 0);
+    void *found = type_recycle_check(m, &t, &visited);
+    if (found) {
+        INFER_ASSERTF(false, "recycle use type '%s'", (char *) found);
+    }
+
+    if (type_can_size(t)) {
+        // register rtype
+        ct_register_rtype(m, t);
+    }
+
     return t;
 }
 
@@ -3762,7 +3902,7 @@ static slice_t *generics_constraints_valid_product(module_t *m, type_t *impl_typ
 
         // Only 'or' can constraints product
         if (param->constraints.any || param->constraints.and) {
-            if (ident_is_def_or_alias(impl_type)) { // type ident 才会存在 args
+            if (type_is_ident(impl_type)) { // type ident 才会存在 args
                 infer_generics_param_constraints(m, impl_type, generics_params);
             }
 
@@ -3770,7 +3910,7 @@ static slice_t *generics_constraints_valid_product(module_t *m, type_t *impl_typ
         }
     }
 
-    if (ident_is_def_or_alias(impl_type)) { // type ident 才会存在 args
+    if (type_is_ident(impl_type)) { // type ident 才会存在 args
         infer_generics_param_constraints(m, impl_type, generics_params);
     }
 
@@ -3782,7 +3922,7 @@ static slice_t *generics_constraints_valid_product(module_t *m, type_t *impl_typ
 
     SLICE_FOR(combinations) {
         table_t *arg_table = SLICE_VALUE(combinations);
-        char *arg_hash = generics_args_hash(generics_params, arg_table);
+        char *arg_hash = generics_args_hash(m, generics_params, arg_table);
         slice_push(hash_list, arg_hash);
     }
 
@@ -3847,6 +3987,8 @@ void pre_infer(module_t *m) {
     if (m->fn_init) {
         infer_fndef(m->fn_init->module, m->fn_init);
     }
+
+    // - TODO 遍历 all typedefs 进行处理, 包括 reduction + rtype push.
 }
 
 void infer(module_t *m) {

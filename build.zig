@@ -133,6 +133,13 @@ pub fn buildRuntime(
     lib.addCSourceFiles(.{ .files = aco, .flags = &.{"-std=gnu11"} });
     lib.addCSourceFiles(.{ .files = nature_utils.items, .flags = &.{"-std=gnu11"} });
 
+    const runtime_files = try findCFiles(b.allocator, "runtime");
+    defer {
+        for (runtime_files.items) |path| b.allocator.free(path);
+        runtime_files.deinit();
+    }
+    lib.addCSourceFiles(.{ .files = runtime_files.items, .flags = &.{"-std=gnu11"} });
+
     lib.addLibraryPath(b.path(lib_path));
 
     // Install the runtime library.

@@ -404,9 +404,14 @@ impl Project {
         // handle all refers
         let module_handled = self.module_handled.lock().unwrap();
         let index_option = module_handled.get(main_path);
-        let main_index = index_option.unwrap();
+        let main_index = match index_option {
+            Some(i) => i.clone(),
+            None => {
+                return 0;
+            },
+        };
 
-        let refers = self.all_references(main_index.clone());
+        let refers = self.all_references(main_index);
 
         // refers push to queue
         for refer in refers {
@@ -416,7 +421,7 @@ impl Project {
             });
         }
 
-        return *main_index;
+        return main_index;
     }
 
     /**

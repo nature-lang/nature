@@ -25,7 +25,7 @@ fn main() {
     var fut2 = go div(10, 0)
     var result = fut2.await() catch err {
         println('dive catch err: ' + err.msg())
-        break 10
+        10
     }
     println('div result', result)
 

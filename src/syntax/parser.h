@@ -111,7 +111,7 @@ typedef struct {
 
 slice_t *parser(module_t *m, linked_t *token_list);
 
-static ast_stmt_t *parser_stmt(module_t *m);
+static ast_stmt_t *parser_local_stmt(module_t *m);
 
 static ast_expr_t parser_expr_with_precedence(module_t *m);
 

@@ -360,3 +360,56 @@ fn main() {
     temp = int_to_hex(11)
     assert(temp == 66)
 }
+
+=== test_interface_have_reset
+--- main.n
+type connable = interface{
+    fn query(string sql, ...[string] args):[string]
+}
+
+type connable2 = interface{
+    fn query(string, ...[string]):[string]
+}
+
+fn main() {
+    println('hello world')
+}
+
+--- output.txt
+hello world
+
+=== test_type_fn_param_name
+--- main.n
+type connable = interface{
+    fn query(string name, ...[string]):[string]
+}
+
+fn main() {
+    println('hello world')
+}
+
+--- output.txt
+nature-test/main.n:2:39: fn with both named and unnamed formal parameters
+
+=== test_union_failed
+--- main.n
+type uniona = int|f32
+type unionb = int|f32|string
+
+fn main() {
+    unionb b = 'hello'
+    uniona a = b
+}
+
+--- output.txt
+nature-test/main.n:6:16: type inconsistency, expect=main.uniona(union), actual=main.unionb(union)
+
+=== test_union
+--- main.n
+type uniona = int|f32
+type unionb = int|f32|string
+
+fn main() {
+    uniona b = 3.14 as f32
+    unionb a = b
+}

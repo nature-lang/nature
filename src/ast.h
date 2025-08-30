@@ -70,6 +70,7 @@ typedef enum {
     AST_STMT_VAR_TUPLE_DESTR,
     AST_STMT_ASSIGN,
     AST_STMT_GLOBAL_ASSIGN,
+    AST_STMT_RET,
     AST_STMT_RETURN,
     AST_STMT_IF,
     AST_STMT_THROW,
@@ -173,7 +174,6 @@ typedef struct {
 } ast_continue_t;
 
 typedef struct {
-    ast_expr_t *expr;
 } ast_break_t;
 
 typedef struct {
@@ -331,7 +331,7 @@ typedef struct {
 
 typedef struct {
     ast_expr_t expr;
-} ast_expr_fake_stmt_t;
+} ast_expr_fake_stmt_t, ast_ret_stmt_t;
 
 // 基于 tuple 解构语法的变量快速赋值
 // var (a, b, (c, d)) = (1, 2, (3, 4))
@@ -638,6 +638,7 @@ typedef struct {
     bool is_interface; // 快速识别
     list_t *impl_interfaces; // type_t, typedef 可以实现多个接口, 对于 interface 来说则是自身扩展
     struct sc_map_sv method_table; // key = ident, value = ast_fndef_t
+    int64_t hash;
 } ast_typedef_stmt_t;
 
 // 这里包含 body, 所以属于 def
@@ -701,8 +702,8 @@ struct ast_fndef_t {
     bool is_async; // coroutine closure fn, default is false
     bool is_private;
 
-    // catch err { break 12 }
-    ct_stack_t *break_target_types;
+    // catch err { 12 }
+    ct_stack_t *ret_target_types;
 
     // dump error
     char *fn_name;
@@ -715,9 +716,9 @@ struct ast_fndef_t {
 
 ast_ident *ast_new_ident(char *literal);
 
-ast_fndef_t *ast_fndef_copy(ast_fndef_t *temp);
+ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp);
 
-ast_expr_t *ast_expr_copy(ast_expr_t *temp);
+ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp);
 
 static bool ast_is_arithmetic_op(ast_expr_op_t op) {
     return op == AST_OP_LSHIFT ||
@@ -861,7 +862,7 @@ static inline ast_fndef_t *ast_fndef_new(module_t *m, int line, int column) {
     fndef->line = line;
     fndef->column = column;
     fndef->local_children = slice_new();
-    fndef->break_target_types = stack_new();
+    fndef->ret_target_types = stack_new();
     fndef->generics_params = NULL;
     return fndef;
 }

@@ -1358,7 +1358,7 @@ static riscv64_native_fn riscv64_native_table[] = {
         [LIR_OPCODE_LABEL] = riscv64_native_label,
         [LIR_OPCODE_PUSH] = riscv64_native_push, // 待实现
         [LIR_OPCODE_RETURN] = riscv64_native_nop, // 函数返回值处理已在FN_END中完成
-        [LIR_OPCODE_BREAK] = riscv64_native_nop,
+        [LIR_OPCODE_RET] = riscv64_native_nop,
         [LIR_OPCODE_BEQ] = riscv64_native_beq,
         [LIR_OPCODE_BAL] = riscv64_native_bal,
 
