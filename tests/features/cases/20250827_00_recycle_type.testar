@@ -235,3 +235,24 @@ fn main() {
 
 --- output.txt
 nature-test/main.n:5:2: recycle use type 'main.node_t'
+
+=== test_fn_literal
+--- main.n
+import json
+import http
+import co
+
+fn post(http.callback_fn callback) {
+
+}
+
+
+fn main() {
+    post(fn(ptr<http.request_t> req, ptr<http.response_t> res):void! {
+        res.send('hello world')
+    })
+}
+
+--- output.txt
+nature-test/main.n:11:11: type inconsistency, expect=http.main.callback_fn(fn(...):void!), actual=fn(...):void!
+

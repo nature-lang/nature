@@ -69,3 +69,27 @@ fn main() {
 
 --- output.txt
 DisplayPair:  DisplayPair(-1, Hello, World!)
+
+=== test_third
+--- main.n
+import fmt
+import runtime
+
+type DisplayPair = struct{
+	i32 first
+	i32 second
+}
+
+fn i32.to_string():string {
+    // println(self, *self)
+    runtime.in_heap(self as anyptr)
+	return fmt.sprintf("%d", *self)
+}
+
+fn main() {
+	var display_pair = DisplayPair{first = 3, second = 2}
+	var str = display_pair.first.to_string()
+	var str2 = display_pair.second.to_string()
+	println(str, str2)
+	assert(str == '3' && str2 == '2')
+}

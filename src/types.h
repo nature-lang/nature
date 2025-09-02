@@ -659,6 +659,8 @@ bool type_generics(type_t dst, type_t src, table_t *generics_param_table);
 
 bool type_compare(type_t dst, type_t src);
 
+bool type_compare_no_ident(type_t dst, type_t src);
+
 type_t reduction_type(module_t *m, type_t t);
 
 #endif // NATURE_TYPES_H

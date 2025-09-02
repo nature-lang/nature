@@ -8,6 +8,7 @@ static void test_basic() {
                              "i8 area= 50\n"
                              "i8 area= 50\n"
                              "float area= 18.910000\n"
+                             "float area= 18.910000\n"
                              "float area= 18.910000\n");
 }
 

@@ -9,6 +9,8 @@
 static void
 check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast_typedef_stmt_t *typedef_stmt);
 
+static bool marking_heap_alloc(ast_expr_t *expr);
+
 static type_t reduction_type_ident(module_t *m, type_t t);
 
 static type_t type_param_special(module_t *m, type_t t, table_t *arg_table);
@@ -464,6 +466,14 @@ bool type_generics(type_t dst, type_t src, table_t *generics_param_table) {
     }
 
     return true;
+}
+
+bool type_compare_no_ident(type_t dst, type_t src) {
+    dst.ident = NULL;
+    src.ident = NULL;
+    dst.ident_kind = 0;
+    src.ident_kind = 0;
+    return type_compare(dst, src);
 }
 
 
@@ -1459,11 +1469,6 @@ static type_t infer_sizeof_expr(module_t *m, ast_macro_sizeof_expr_t *sizeof_exp
     return type_kind_new(TYPE_INT);
 }
 
-static type_t infer_ula_expr(module_t *m, ast_macro_ula_expr_t *ula_expr) {
-    type_t t = infer_right_expr(m, &ula_expr->src, type_kind_new(TYPE_UNKNOWN));
-    return type_ptrof(t);
-}
-
 static type_t infer_reflect_hash_expr(module_t *m, ast_macro_reflect_hash_expr_t *reflect_expr) {
     reflect_expr->target_type = reduction_type(m, reflect_expr->target_type);
     return type_kind_new(TYPE_INT);
@@ -1512,19 +1517,41 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_typ
         INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
                       "cannot load address of an literal or call");
 
-        //        INFER_ASSERTF(operand_type.kind != TYPE_UNION, "cannot load address of an union type");
-
-
         return type_rawptrof(operand_type);
     }
 
-    // @unsafe_la(var)
+    // @ula(var)
     if (expr->op == AST_OP_UNSAFE_LA) {
-        INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
-                      "cannot safe load address of an literal or call");
+        if (expr->operand.type.kind == TYPE_PTR) {
+            return operand_type;
+        }
 
+        INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
+                      "cannot unsafe load address of an literal or call expr");
+
+        INFER_ASSERTF(operand_type.kind != TYPE_UNION, "cannot unsafe load address of an union type");
+
+
+        return type_ptrof(operand_type);
+    }
+
+    // @sla(var)
+    if (expr->op == AST_OP_SAFE_LA) {
+        if (expr->operand.type.kind == TYPE_PTR) {
+            return operand_type;
+        }
+
+        //        INFER_ASSERTF(expr->operand.assert_type != AST_CALL,
+        //                      "cannot safe load address of an call expr");
+        //
+        //        INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL,
+        //                      "cannot safe load address of an literal expr");
+        //
+        //        INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_AS,
+        //                      "cannot safe load address of an as expr");
         INFER_ASSERTF(operand_type.kind != TYPE_UNION, "cannot safe load address of an union type");
 
+        marking_heap_alloc(&expr->operand);
 
         return type_ptrof(operand_type);
     }
@@ -2180,6 +2207,7 @@ static bool marking_heap_alloc(ast_expr_t *expr) {
         assert(s->type == SYMBOL_VAR);
         ast_var_decl_t *var = s->ast_value;
         var->type.in_heap = true;
+        expr->type.in_heap = true;
         return true;
     }
 
@@ -2187,7 +2215,6 @@ static bool marking_heap_alloc(ast_expr_t *expr) {
         ast_struct_new_t *ast = expr->value;
         expr->type.in_heap = true;
         ast->type.in_heap = true;
-
         return true;
     }
 
@@ -2195,6 +2222,11 @@ static bool marking_heap_alloc(ast_expr_t *expr) {
         ast_array_new_t *ast = expr->value;
         expr->type.in_heap = true;
 
+        return true;
+    }
+
+    if (expr->assert_type == AST_CALL) {
+        expr->type.in_heap = true;
         return true;
     }
 
@@ -2208,21 +2240,22 @@ static bool marking_heap_alloc(ast_expr_t *expr) {
 
     if (expr->assert_type == AST_EXPR_ARRAY_ACCESS) {
         ast_array_access_t *ast = expr->value;
-        return marking_heap_alloc(&ast->left);
+        return marking_heap_alloc(&ast->left); // auto marking
     }
 
     if (expr->assert_type == AST_EXPR_STRUCT_SELECT) {
         ast_struct_select_t *ast = expr->value;
-        return marking_heap_alloc(&ast->instance);
+        return marking_heap_alloc(&ast->instance); // auto marking
     }
 
     // ([1, 3, 5] as foo_t).len()
     if (expr->assert_type == AST_EXPR_AS) {
         ast_as_expr_t *ast = expr->value;
+        ast->target_type.in_heap = true;
         return marking_heap_alloc(&ast->src);
     }
 
-    // 无需进行堆分配，可能是 vec_access/map_access 这种类型。
+    // left 无需进行堆分配，可能是 vec_access/map_access 这种 left 已经在指针分配的类型
     return false;
 }
 
@@ -2249,8 +2282,8 @@ static bool impl_call_rewrite(module_t *m, ast_call_t *call) {
     }
 
     // must alloc in heap
-    //    INFER_ASSERTF(can_use_impl(select_left_type.kind), "%s cannot use impl call, must ptr<...>/vec/map...",
-    //                  type_format(select_left_type), select->key);
+    INFER_ASSERTF(select_left_type.kind != TYPE_RAWPTR, "%s cannot use impl call",
+                  type_format(select_left_type));
 
 
     // call 继承 select_left_type 的 args
@@ -2323,9 +2356,8 @@ static bool impl_call_rewrite(module_t *m, ast_call_t *call) {
 
 
     // self arg 可能在栈上分配，在 call fn 中会导致栈变量读取异常，所以需要确保 self arg 在堆上分配
-    marking_heap_alloc(self_arg);
     if (is_stack_impl(self_arg->type.kind)) { // 基于原始类型计算是否需要 load ptr
-        self_arg = ast_load_addr(self_arg); // safe_load_addr
+        self_arg = ast_safe_load_addr(self_arg); // safe_load_addr
     }
 
     ct_list_push(args, self_arg);
@@ -2979,9 +3011,6 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
         }
         case AST_MACRO_EXPR_REFLECT_HASH: {
             return infer_reflect_hash_expr(m, expr->value);
-        }
-        case AST_MACRO_EXPR_ULA: {
-            return infer_ula_expr(m, expr->value);
         }
         case AST_MACRO_EXPR_DEFAULT: {
             return infer_macro_default_expr(m, expr->value);
@@ -3738,13 +3767,15 @@ static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef) {
  */
 static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type) {
     if (fndef->type.status == REDUCTION_STATUS_DONE) {
-        // 在 pre_infer 虽然已经对所有的 fn 进行了类型推导，但是后续 infer_right_expr 再次调用时，原则上希望可以继承 type def ident
-        // 也就是 literal fn decl 自动类型转换
         if (target_type.kind != TYPE_UNKNOWN) {
-            fndef->type.ident = target_type.ident; // literal new ident 直接继承
-            fndef->type.ident_kind = target_type.ident_kind;
-            fndef->type.args = target_type.args;
+            // compare 类型比较
+            if (type_compare_no_ident(target_type, fndef->type)) {
+                fndef->type.ident = target_type.ident; // literal new ident 直接继承
+                fndef->type.ident_kind = target_type.ident_kind;
+                fndef->type.args = target_type.args;
+            }
         }
+
         return fndef->type;
     }
 
@@ -3778,14 +3809,16 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     result.status = REDUCTION_STATUS_DONE;
 
     if (target_type.kind != TYPE_UNKNOWN) {
-        result.ident = target_type.ident; // literal new ident 直接继承
-        result.ident_kind = target_type.ident_kind;
-        result.args = target_type.args;
+        // compare 类型比较
+        if (type_compare_no_ident(target_type, result)) {
+            result.ident = target_type.ident; // literal new ident 直接继承
+            result.ident_kind = target_type.ident_kind;
+            result.args = target_type.args;
+        }
     }
 
     // 冗余一份，方便计算使用
     fndef->type = result;
-
     return result;
 }
 

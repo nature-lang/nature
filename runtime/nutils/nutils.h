@@ -76,4 +76,6 @@ void *rt_string_ref(n_string_t *n_str);
 
 n_string_t *rt_string_new(n_anyptr_t raw_string);
 
-#endif// NATURE_BASIC_H
+bool rt_in_heap(n_anyptr_t addr);
+
+#endif // NATURE_BASIC_H

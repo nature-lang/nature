@@ -454,6 +454,7 @@ static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64
         slice_t *args = operand->value;
         for (int i = 0; i < args->count; ++i) {
             lir_operand_t *o = args->take[i];
+            assert(o);
             assert(o->assert_type == LIR_OPERAND_VAR || o->assert_type == LIR_OPERAND_SYMBOL_VAR ||
                    o->assert_type == LIR_OPERAND_IMM ||
                    o->assert_type == LIR_OPERAND_STACK || o->assert_type == LIR_OPERAND_REG ||

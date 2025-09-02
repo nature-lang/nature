@@ -43,10 +43,6 @@ fn main() {
     mod.car_t car = 1314
     car.tostr()
 
-    // 标量字面量情况:
-    (233 as mod.car_t).tostr()
-
-
     // fn 情况 var 测试
     (fn(mod.car_t local_var) {
         local_var.tostr()

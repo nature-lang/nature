@@ -203,7 +203,7 @@ n_union_t *union_casting(int64_t input_rtype_hash, void *value_ref) {
 
 
     DEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
-            mu->value.i64_value);
+           mu->value.i64_value);
 
     return mu;
 }
@@ -647,6 +647,11 @@ void rt_panic(n_string_t *msg) {
     caller_t *caller = sc_map_get_64v(&rt_caller_map, ret_addr);
     panic_dump(co, caller, rt_string_ref(msg));
 }
+
+bool rt_in_heap(n_anyptr_t addr) {
+    return in_heap(addr);
+}
+
 
 void rt_assert(n_bool_t cond) {
     coroutine_t *co = coroutine_get();

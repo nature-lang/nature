@@ -2507,7 +2507,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
             // first_token 是 type
             // table 就绪的情况下可以正确的解析 param
             impl_type = parser_single_type(m);
-            impl_type.ident = first_token->literal;
+            impl_type.ident = type_kind_str[impl_type.kind];
             impl_type.ident_kind = TYPE_IDENT_BUILTIN;
             impl_type.args = NULL;
         }
@@ -3292,13 +3292,28 @@ static ast_expr_t parser_macro_async_expr(module_t *m) {
 
 static ast_expr_t parser_macro_ula_expr(module_t *m) {
     ast_expr_t result = expr_new(m);
-    ast_macro_ula_expr_t *ula_expr = NEW(ast_macro_ula_expr_t);
+    ast_unary_expr_t *ula_expr = NEW(ast_unary_expr_t);
 
     parser_must(m, TOKEN_LEFT_PAREN);
-    ula_expr->src = parser_expr(m);
+    ula_expr->operand = parser_expr(m);
     parser_must(m, TOKEN_RIGHT_PAREN);
 
-    result.assert_type = AST_MACRO_EXPR_ULA;
+    ula_expr->op = AST_OP_UNSAFE_LA;
+    result.assert_type = AST_EXPR_UNARY;
+    result.value = ula_expr;
+    return result;
+}
+
+static ast_expr_t parser_macro_sla_expr(module_t *m) {
+    ast_expr_t result = expr_new(m);
+    ast_unary_expr_t *ula_expr = NEW(ast_unary_expr_t);
+
+    parser_must(m, TOKEN_LEFT_PAREN);
+    ula_expr->operand = parser_expr(m);
+    parser_must(m, TOKEN_RIGHT_PAREN);
+
+    ula_expr->op = AST_OP_SAFE_LA;
+    result.assert_type = AST_EXPR_UNARY;
     result.value = ula_expr;
     return result;
 }
@@ -3331,6 +3346,10 @@ static ast_expr_t parser_macro_call(module_t *m) {
 
     if (str_equal(token->literal, MACRO_ULA)) {
         return parser_macro_ula_expr(m);
+    }
+
+    if (str_equal(token->literal, MACRO_SLA)) {
+        return parser_macro_sla_expr(m);
     }
 
     PARSER_ASSERTF(false, "macro '%s' not defined", token->literal);

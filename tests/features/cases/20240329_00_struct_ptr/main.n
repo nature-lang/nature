@@ -30,6 +30,6 @@ fn main() {
     //    println(err.msg())
     //}
 
-    // 没有完整的 try catch, 所以无法 catch
+    // There is no complete try catch, so it cannot catch
     // b.name = 'hello'
 }

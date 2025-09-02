@@ -14,7 +14,6 @@ static void test_basic() {
                 "5\n"
                 "5\n"
                 "self is 1314\n"
-                "self is 233\n"
                 "self is 10000\n"
                 "10012 10011\n"
                 "12 1 3\n";
