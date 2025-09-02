@@ -468,6 +468,14 @@ bool type_generics(type_t dst, type_t src, table_t *generics_param_table) {
     return true;
 }
 
+bool type_compare_no_ident(type_t dst, type_t src) {
+    dst.ident = NULL;
+    src.ident = NULL;
+    dst.ident_kind = 0;
+    src.ident_kind = 0;
+    return type_compare(dst, src);
+}
+
 
 /**
  * reduction 阶段就应该完成 cross left kind 的定位.
@@ -3759,13 +3767,15 @@ static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef) {
  */
 static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type) {
     if (fndef->type.status == REDUCTION_STATUS_DONE) {
-        // 在 pre_infer 虽然已经对所有的 fn 进行了类型推导，但是后续 infer_right_expr 再次调用时，原则上希望可以继承 type def ident
-        // 也就是 literal fn decl 自动类型转换
         if (target_type.kind != TYPE_UNKNOWN) {
-            fndef->type.ident = target_type.ident; // literal new ident 直接继承
-            fndef->type.ident_kind = target_type.ident_kind;
-            fndef->type.args = target_type.args;
+            // compare 类型比较
+            if (type_compare_no_ident(target_type, fndef->type)) {
+                fndef->type.ident = target_type.ident; // literal new ident 直接继承
+                fndef->type.ident_kind = target_type.ident_kind;
+                fndef->type.args = target_type.args;
+            }
         }
+
         return fndef->type;
     }
 
@@ -3799,14 +3809,16 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     result.status = REDUCTION_STATUS_DONE;
 
     if (target_type.kind != TYPE_UNKNOWN) {
-        result.ident = target_type.ident; // literal new ident 直接继承
-        result.ident_kind = target_type.ident_kind;
-        result.args = target_type.args;
+        // compare 类型比较
+        if (type_compare_no_ident(target_type, result)) {
+            result.ident = target_type.ident; // literal new ident 直接继承
+            result.ident_kind = target_type.ident_kind;
+            result.args = target_type.args;
+        }
     }
 
     // 冗余一份，方便计算使用
     fndef->type = result;
-
     return result;
 }
 

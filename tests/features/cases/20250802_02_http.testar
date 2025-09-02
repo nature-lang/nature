@@ -102,7 +102,7 @@ type msg_t = struct{
 
 fn server():void! {
     var app = http.server()
-    app.post('/register', fn(ptr<http.request_t> req, ptr<http.response_t> res):void! {
+    app.post('/register', fn(http.request_t req, ptr<http.response_t> res):void! {
         var body = req.body
         println('recv register body', body)
         println('register success')
@@ -159,7 +159,7 @@ type msg_t = struct{
 
 fn server():void! {
     var app = http.server()
-    app.post('/register', fn(ptr<http.request_t> req, ptr<http.response_t> res):void! {
+    app.post('/register', fn(http.request_t req, ptr<http.response_t> res):void! {
         var body = req.body
         println('recv register body', body)
         println('register success')
@@ -209,7 +209,7 @@ type msg_t = struct{
 
 fn server():void! {
     var app = http.server()
-    app.post('/register', fn(ptr<http.request_t> req, ptr<http.response_t> res):void! {
+    app.post('/register', fn(http.request_t req, ptr<http.response_t> res):void! {
         var body = req.body
         println('recv register body', body)
         println('register success')
