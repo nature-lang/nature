@@ -84,14 +84,14 @@ fn find_data(int offset):anyptr
 #linkid rt_find_strtable
 fn find_strtable(int offset):libc.cstr
 
-fn typeof_hash(i64 hash):type_t! {
+fn typeof_hash(i64 hash):ptr<type_t>! {
     if hash <= 0 {
         throw errorf('hash must be greater than 0')
     }
 
     var r = find_rtype(hash)
 
-    var t = type_t{
+    var t = new type_t(
         size = sizeof_rtype(r),
         hash = r.hash,
         kind = r.kind as int,
@@ -99,7 +99,7 @@ fn typeof_hash(i64 hash):type_t! {
         hashes = vec_new<int>(0, 0),
         fields = vec_new<field_t>(field_t{}, 0),
         r = r,
-    }
+    )
 
     if r.kind == STRUCT {
         t.fields = vec_new<field_t>(field_t{}, r.length as int)
@@ -132,7 +132,7 @@ fn sizeof_rtype(rawptr<rtype_t> r):int {
     }
 }
 
-fn typeof<T>(T v):type_t! {
+fn typeof<T>(T v):ptr<type_t>! {
     var hash = @reflect_hash(T)
     return typeof_hash(hash)
 }
@@ -209,20 +209,20 @@ type union_t = struct{
 }
 
 type value_t = struct{
-    type_t t
+    ptr<type_t> t
     anyptr v
 }
 
-fn valueof<T>(T v):value_t! {
+fn valueof<T>(T v):ptr<value_t>! {
     var t = typeof<T>(v)
     if t.kind != VEC && t.kind != MAP && t.kind != SET {
         throw errorf('not value support type')
     }
 
-    var result = value_t{
+    var result = new value_t(
         t = t,
         v = v as anyptr, // TODO union cannot use as to anyptr
-    }
+    )
 
     return result
 }

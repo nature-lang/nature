@@ -598,6 +598,7 @@ static void linear_escape_rewrite(module_t *m, ast_var_decl_t *var_decl, bool fo
         return;
     }
 
+    // not need
     if (is_stack_ref_big_type(symbol_var->type) && !force_rewrite) {
         return;
     }
@@ -1581,7 +1582,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     ast_call_t *call = expr.value;
     lir_operand_t *base_target = NULL;
     type_fn_t *type_fn = NULL;
-    slice_t *params = slice_new();
+    slice_t *args = slice_new();
 
     if (call->left.assert_type == AST_EXPR_SELECT) {
         do {
@@ -1631,7 +1632,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
             lir_operand_t *self_target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             src = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), interface_target, 0);
             OP_PUSH(lir_op_move(self_target, src));
-            slice_push(params, self_target);
+            slice_push(args, self_target);
         } while (0);
     } else {
         // global ident call optimize to 'call symbol'
@@ -1662,7 +1663,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
                 // last param
                 if (type_compare(*rest_list_type, last_arg->type)) {
                     lir_operand_t *actual_operand = linear_expr(m, *last_arg, NULL);
-                    slice_push(params, actual_operand);
+                    slice_push(args, actual_operand);
                     break;
                 }
             }
@@ -1698,20 +1699,20 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
                 index += 1;
             }
 
-            slice_push(params, rest_vec_target);
+            slice_push(args, rest_vec_target);
             break;
         }
 
         // 普通情况参数处理
         ast_expr_t *actual_expr = ct_list_value(call->args, i);
         lir_operand_t *actual_operand = linear_expr(m, *actual_expr, NULL);
-        slice_push(params, actual_operand);
+        slice_push(args, actual_operand);
     }
 
     // 使用一个 int_operand(0) 预留出 fn_runtime 所需的空间,这里不需要也不能判断出 target 是否有空间引用，所以统一预留
     // 比如 [fn():int] 这样的 list 引用下的, list[0]() 无法通过类型判断出 list[0] 是否引用的外部环境，是否需要预留 fn_runtime
     // 空间,用于环境改写。 统一预留空间在最后一个参数基本不会有什么影响
-    slice_push(params, int_operand(0));
+    slice_push(args, int_operand(0));
 
     lir_operand_t *temp = NULL;
     if (call->return_type.kind != TYPE_VOID) {
@@ -1722,7 +1723,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     OP_PUSH(lir_op_safepoint());
 
     // call base_target,params -> target
-    OP_PUSH(lir_op_new(LIR_OPCODE_CALL, base_target, operand_new(LIR_OPERAND_ARGS, params), temp));
+    OP_PUSH(lir_op_new(LIR_OPCODE_CALL, base_target, operand_new(LIR_OPERAND_ARGS, args), temp));
 
     // 目标函数可能会产生错误才需要进行错误判断，并跳转到对应的 error label 或者 continue label
     if (type_fn->is_errable) {
@@ -1897,6 +1898,48 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
         return target;
     }
 
+
+    if (unary_expr->op == AST_OP_SAFE_LA) {
+        assert(!target);
+        // target must ptr or anyptr or rawptr
+        if (!target) {
+            target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        }
+
+        // not need handle analyze? only move? 需要做什么？ident 已经识别出来了。直接 move 到 target 好了
+        if (is_stack_ref_big_type(unary_expr->operand.type) || unary_expr->operand.type.kind == TYPE_PTR) {
+            OP_PUSH(lir_op_move(target, first));
+            return target;
+        }
+
+        // 如果 first->assert_type 不是 LIR_OPERAND_INDIRECT_ADDR, 则可能是 call/as/literal 表达式所产生的 var, 此时直接进行堆分配
+        if (first->assert_type != LIR_OPERAND_INDIRECT_ADDR) {
+            lir_operand_t *temp_operand = temp_var_operand(m, type_ptrof(unary_expr->operand.type));
+            int64_t rtype_hash = type_hash(unary_expr->operand.type);
+            push_rt_call(m, RT_CALL_GC_MALLOC, temp_operand, 1, int_operand(rtype_hash));
+            lir_operand_t *dst = indirect_addr_operand(m, unary_expr->operand.type, temp_operand, 0);
+            OP_PUSH(lir_op_move(dst, first));
+
+            return temp_operand;
+        }
+
+
+        lir_operand_t *src_operand;
+        if (first->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+            lir_indirect_addr_t *indirect_addr = first->value;
+            if (indirect_addr->offset == 0) {
+                // indirect addr base 就是指针本身
+                src_operand = indirect_addr->base;
+            } else {
+                src_operand = lea_operand_pointer(m, first);
+            }
+        } else {
+            src_operand = lea_operand_pointer(m, first);
+        }
+
+        return linear_super_move(m, type_kind_new(TYPE_ANYPTR), target, src_operand);
+    }
+
     // neg source -> target
     if (!target) {
         target = temp_var_operand_with_alloc(m, expr.type);
@@ -1911,20 +1954,29 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
             return target;
         }
 
-        // super_move 只有 target == null, 此时直接返回 first
-        lir_operand_t *src_operand = lea_operand_pointer(m, first);
+        if (unary_expr->op == AST_OP_UNSAFE_LA && unary_expr->operand.type.kind == TYPE_PTR) {
+            OP_PUSH(lir_op_move(target, first));
+            return target;
+        }
 
+        // super_move 只有 target == null, 此时直接返回 first
+        lir_operand_t *src_operand;
         if (first->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
             lir_indirect_addr_t *indirect_addr = first->value;
             if (indirect_addr->offset == 0) {
                 // indirect addr base 就是指针本身
                 src_operand = indirect_addr->base;
+            } else {
+                src_operand = lea_operand_pointer(m, first);
             }
+        } else {
+            src_operand = lea_operand_pointer(m, first);
         }
 
 
         return linear_super_move(m, expr.type, target, src_operand);
     }
+
 
     // *var
     // int a = *b
@@ -2206,17 +2258,22 @@ static lir_operand_t *linear_env_access(module_t *m, ast_expr_t expr, lir_operan
     // move [values+x] -> dst_ptr (values 中的值已经取了出来，丢到了 dst_ptr 里面)
     lir_operand_t *src_ptr = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), values_operand, ast->index * POINTER_SIZE);
 
-    // 把 values 中存储的值取出来，放在 target 中
-    if (!target) {
-        target = temp_var_operand(m, expr.type);
-    }
-
     // envs 中总是存储的堆指针，即使是 scala 类型的数据, 所以此处需要进一步 indirect 获取对应的值，而不是 ptr value
     if (is_scala_type(expr.type)) {
         src_ptr = indirect_addr_operand(m, expr.type, src_ptr, 0);
     }
 
-    // 无论是 struct/arr 还是 string/vec/ptr 等都直接进行
+    if (is_stack_impl(expr.type.kind) && expr.type.in_heap && !target) {
+        return src_ptr;
+    }
+
+
+    // 把 values 中存储的值取出来，放在 target 中
+    if (!target) {
+        target = temp_var_operand(m, expr.type);
+    }
+
+    // 无论是 struct/arr 还是 string/vec/ptr 等都直接进行 move, 而不是 support move
     OP_PUSH(lir_op_move(target, src_ptr));
     return target;
 }
@@ -2545,27 +2602,6 @@ static lir_operand_t *linear_default_expr(module_t *m, ast_expr_t expr, lir_oper
 
     ast_macro_default_expr_t *macro_default_expr = expr.value;
     return linear_default_operand(m, macro_default_expr->target_type, target);
-}
-
-static lir_operand_t *linear_ula_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
-    ast_macro_ula_expr_t *ula_expr = expr.value;
-
-    lir_operand_t *first = linear_expr(m, ula_expr->src, NULL);
-
-    if (!target) {
-        target = temp_var_operand_with_alloc(m, expr.type);
-    }
-
-    // 如果是 stack_type, 则直接移动到 target 即可，src 中存放的已经是一个栈指针了，没有必要再 lea 了
-    if (is_stack_ref_big_type(ula_expr->src.type)) {
-        // 必须 move target，这同时也是一个类型转换的过程
-        OP_PUSH(lir_op_move(target, first));
-        return target;
-    }
-
-    // super_move 只有 target == null, 此时直接返回 first
-    lir_operand_t *src_operand = lea_operand_pointer(m, first);
-    return linear_super_move(m, expr.type, target, src_operand);
 }
 
 static lir_operand_t *linear_sizeof_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
@@ -3439,7 +3475,6 @@ linear_expr_fn expr_fn_table[] = {
         [AST_FNDEF] = linear_fn_decl,
         [AST_EXPR_AS] = linear_as_expr,
         [AST_EXPR_IS] = linear_is_expr,
-        [AST_MACRO_EXPR_ULA] = linear_ula_expr,
         [AST_MACRO_EXPR_DEFAULT] = linear_default_expr,
         [AST_MACRO_EXPR_SIZEOF] = linear_sizeof_expr,
         [AST_MACRO_EXPR_REFLECT_HASH] = linear_reflect_hash_expr,

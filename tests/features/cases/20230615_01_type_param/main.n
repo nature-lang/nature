@@ -10,10 +10,10 @@ fn main() {
     }
 
     // struct box
-    var b = mod.box<i8, i16> {
+    var b = new mod.box<i8, i16>(
         width = 5,
         length = 10,
-    }
+    )
 
     println('i8 area=', b.area())
     println('i8 area=', b.width * b.length as i8)
@@ -22,6 +22,7 @@ fn main() {
         width = 3.1,
         length = 6.1,
     }
-    println('float area=', car.area())
+    println('float area=', @sla(car).area())
+    println('float area=', @sla(car).area())
     println('float area=', car.width * car.length)
 }

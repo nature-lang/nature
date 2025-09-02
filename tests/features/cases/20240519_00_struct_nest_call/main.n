@@ -24,7 +24,7 @@ fn main() {
     // package.p.set_age(25) // err: person_t(struct) cannot use impl call, must ptr<...>
 
     // usafe load address
-    @unsafe_load(package.p).set_age(25)
+    @ula(package.p).set_age(25)
 
     println((&p).age)
     println(p.age)

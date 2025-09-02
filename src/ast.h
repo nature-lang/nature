@@ -26,7 +26,6 @@ typedef enum {
 
     // marco
     AST_MACRO_EXPR_SIZEOF,
-    AST_MACRO_EXPR_ULA,
     AST_MACRO_EXPR_REFLECT_HASH,
     AST_MACRO_EXPR_TYPE_EQ,
     AST_MACRO_EXPR_DEFAULT,
@@ -206,12 +205,6 @@ typedef struct {
 typedef struct {
     type_t target_type;
 } ast_macro_sizeof_expr_t;
-
-// @ula(var)
-// @ula(foo.bar)
-typedef struct {
-    ast_expr_t src;
-} ast_macro_ula_expr_t;
 
 typedef struct {
     type_t left_type;
@@ -804,6 +797,17 @@ static inline ast_expr_t *ast_load_addr(ast_expr_t *target) {
     result->assert_type = AST_EXPR_UNARY;
     result->value = expr;
     result->type = type_ptrof(target->type);
+    return result;
+}
+
+static inline ast_expr_t *ast_safe_load_addr(ast_expr_t *target) {
+    ast_expr_t *result = ast_load_addr(target);
+    ast_unary_expr_t *expr = result->value;
+    expr->op = AST_OP_SAFE_LA;
+    result->type.kind = 0;
+    result->type.status = 0;
+    result->target_type.kind = 0;
+    result->target_type.status = 0;
     return result;
 }
 

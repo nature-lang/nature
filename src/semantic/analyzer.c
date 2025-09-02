@@ -1008,10 +1008,6 @@ static void analyzer_sizeof_expr(module_t *m, ast_macro_sizeof_expr_t *sizeof_ex
     analyzer_type(m, &sizeof_expr->target_type);
 }
 
-static void analyzer_ula_expr(module_t *m, ast_macro_ula_expr_t *ula_expr) {
-    analyzer_expr(m, &ula_expr->src);
-}
-
 static void analyzer_reflect_hash_expr(module_t *m, ast_macro_reflect_hash_expr_t *expr) {
     analyzer_type(m, &expr->target_type);
 }
@@ -1847,9 +1843,6 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         }
         case AST_MACRO_EXPR_SIZEOF: {
             return analyzer_sizeof_expr(m, expr->value);
-        }
-        case AST_MACRO_EXPR_ULA: {
-            return analyzer_ula_expr(m, expr->value);
         }
         case AST_MACRO_EXPR_DEFAULT: {
             return analyzer_default_expr(m, expr->value);

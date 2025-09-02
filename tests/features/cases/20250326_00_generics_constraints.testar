@@ -7,13 +7,13 @@ fn main() {
         a = 233,
         b = 333.444,
     }
-    int a = @unsafe_load(f).dump()
+    int a = @ula(f).dump()
 
     var f2 = mod.foo_t<f32, bool>{
         a = 233.333,
         b = true,
     }
-    var a2 = @unsafe_load(f2).dump()
+    var a2 = @ula(f2).dump()
 
 
     var f3 = mod.foo_t<bool, string>{
@@ -376,7 +376,7 @@ fn foo_t.to_string():string {
 }
 
 fn test<T:test_interface>(T param) {
-    println(param.to_string())
+    println(@sla(param).to_string())
 }
 
 fn main() {
@@ -404,7 +404,7 @@ type bar_t<T:test_interface> = struct{
 
 fn main() {
     var b = bar_t<int>{}
-    println(b.a.to_string())
+    println(@sla(b.a).to_string())
 }
 
 --- output.txt

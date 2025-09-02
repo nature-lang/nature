@@ -7,8 +7,8 @@ fn main() {
         gender = 1,
     }
 
-    println(p.gender, p.from, p.get_name())
-    @unsafe_load(p).set_age(24)
+    println(p.gender, p.from, @sla(p).get_name())
+    @ula(p).set_age(24)
     println(p.age)
 
     // --- ptr test

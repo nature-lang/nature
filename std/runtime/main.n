@@ -66,3 +66,6 @@ fn string_new(anyptr s):string
 
 #linkid rt_string_ref_new
 fn string_ref_new(anyptr s, int len):string
+
+#linkid rt_in_heap
+fn in_heap(anyptr addr):bool
