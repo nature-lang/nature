@@ -707,7 +707,11 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
                 // 之前的指令由于找不到相应的符号，所以暂时使用了 rel32 来填充
                 // 一旦发现定义点,就需要反推  取消反推重写逻辑,实现太复杂
                 uint32_t n_type = N_SECT;
-                if (!s->is_local) {
+
+                if (s->is_local) {
+                    n_type |= N_PEXT;
+                    n_type |= N_STAB;
+                } else {
                     n_type |= N_EXT;
                 }
                 uint64_t sym_index = mach_put_sym(ctx->symtab_command,
