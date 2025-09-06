@@ -1,0 +1,43 @@
+=== test_vec_new
+--- main.n
+fn main() {
+    any a = [1, true, 'hello']
+    println((a as [any])[0], (a as [any])[1], (a as [any])[2])
+}
+
+--- output.txt
+1 true hello
+
+=== test_map_new
+--- main.n
+import json
+
+fn main() {
+    any m = {'a':12, 'b':'hello', 'c':{'a': 1, 'b': 2}, 'd':[1, 2, true]}
+    println((m as {string:any})['a'], (m as {string:any})['b'])
+
+    var str = json.serialize(m)
+    println(str)
+}
+
+--- output.txt
+12 hello
+{"a":12,"b":"hello","c":{"a":1,"b":2},"d":[1,2,true]}
+
+=== test_map_empty
+--- main.n
+import json
+
+fn main() {
+    any m = {}
+    var m1 = m as {string:any}
+    m1['hello'] = 'world'
+    m1['nice'] = 12
+    m1['foo'] = false
+
+    var str = json.serialize(m)
+    println(str)
+}
+
+--- output.txt
+{"hello":"world","nice":12,"foo":false}
