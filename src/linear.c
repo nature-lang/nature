@@ -3258,9 +3258,9 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
     lir_operand_t *fn_symbol_operand = symbol_label_operand(m, fndef->symbol_name);
 
     if (!fndef->jit_closure_name) {
-        if (expr.target_type.kind == 0) {
-            return NULL; // 没有表达式需要接收值
-        }
+        //        if (expr.target_type.kind == 0) {
+        //            return NULL; // 没有表达式需要接收值
+        //        }
 
         OP_PUSH(lir_op_lea(target, fn_symbol_operand));
         return target;

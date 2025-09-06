@@ -218,17 +218,17 @@ pub enum TokenType {
     New,
 
     // 内置复合类型
-    #[strum(serialize = "arr")]
-    Arr,
-    #[strum(serialize = "vec")]
-    Vec,
-    #[strum(serialize = "map")]
-    Map,
-    #[strum(serialize = "tup")]
-    Tup,
-    #[strum(serialize = "set")]
-    Set,
-    #[strum(serialize = "chan")]
+    // #[strum(serialize = "arr")]
+    // Arr,
+    // #[strum(serialize = "vec")]
+    // Vec,
+    // #[strum(serialize = "map")]
+    // Map,
+    // #[strum(serialize = "tup")]
+    // Tup,
+    // #[strum(serialize = "set")]
+    // Set,
+    // #[strum(serialize = "chan")]
     Chan,
 
     // 关键字
@@ -390,11 +390,11 @@ impl Token {
             | TokenType::F64
             | TokenType::Void
             | TokenType::Any
-            | TokenType::Arr
-            | TokenType::Vec
-            | TokenType::Map
-            | TokenType::Tup
-            | TokenType::Set
+            // | TokenType::Arr
+            // | TokenType::Vec
+            // | TokenType::Map
+            // | TokenType::Tup
+            // | TokenType::Set
             | TokenType::Chan
             | TokenType::Ptr => SemanticTokenType::TYPE,
             // 所有关键字
@@ -537,7 +537,7 @@ impl Lexer {
         match word {
             "as" => TokenType::As,
             "any" => TokenType::Any,
-            "arr" => TokenType::Arr,
+            // "arr" => TokenType::Arr,
             "bool" => TokenType::Bool,
             "break" => TokenType::Break,
             "catch" => TokenType::Catch,
@@ -555,25 +555,25 @@ impl Lexer {
             "int" => TokenType::Int,
             "is" => TokenType::Is,
             "let" => TokenType::Let,
-            "map" => TokenType::Map,
+            // "map" => TokenType::Map,
             "match" => TokenType::Match,
             "select" => TokenType::Select,
             // "new" => TokenType::New, // new 可用于关键字
             "null" => TokenType::Null,
             "ptr" => TokenType::Ptr,
             "return" => TokenType::Return,
-            "set" => TokenType::Set,
+            // "set" => TokenType::Set,
             "string" => TokenType::String,
             "struct" => TokenType::Struct,
             "throw" => TokenType::Throw,
             "true" => TokenType::True,
             "try" => TokenType::Try,
-            "tup" => TokenType::Tup,
+            // "tup" => TokenType::Tup,
             "type" => TokenType::Type,
             "uint" => TokenType::Uint,
             "var" => TokenType::Var,
             "const" => TokenType::Const,
-            "vec" => TokenType::Vec,
+            // "vec" => TokenType::Vec,
             "void" => TokenType::Void,
             "interface" => TokenType::Interface,
             // 数字类型
