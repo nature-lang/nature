@@ -89,8 +89,8 @@ void symdefs_deserialize() {
     rt_symdef_ptr = &rt_symdef_data;
     for (int i = 0; i < rt_symdef_count; ++i) {
         symdef_t s = rt_symdef_ptr[i];
-        DEBUGF("[runtime.symdefs_deserialize] name=%s, .data_base=0x%lx, size=%ld, need_gc=%d, base_int_value=0x%lx",
+        DEBUGF("[runtime.symdefs_deserialize] name=%s, .data_base=0x%lx, size=%ld, hash=%d, base_int_value=0x%lx",
                STRTABLE(s.name_offset), s.base,
-               s.size, s.need_gc, fetch_int_value(s.base, s.size));
+               s.size, s.hash, fetch_int_value(s.base, s.size));
     }
 }

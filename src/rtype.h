@@ -5,11 +5,11 @@
 #include "utils/custom_links.h"
 #include "utils/type.h"
 
-static inline int64_t rtype_array_gc_bits(module_t *m, int64_t gc_bits_offset, int64_t *offset, type_array_t *t);
+static inline int64_t rtype_array_gc_bits(int64_t gc_bits_offset, int64_t *offset, type_array_t *t);
 
-static int64_t rtype_struct_gc_bits(module_t *m, int64_t gc_bits_offset, int64_t *offset, type_struct_t *t);
+static int64_t rtype_struct_gc_bits(int64_t gc_bits_offset, int64_t *offset, type_struct_t *t);
 
-static inline rtype_t reflect_type(module_t *m, type_t t);
+static inline rtype_t reflect_type(type_t t);
 
 static inline int64_t type_hash(type_t t) {
     if (t.ident_kind == TYPE_IDENT_DEF || t.ident_kind == TYPE_IDENT_INTERFACE || t.ident_kind == TYPE_IDENT_UNKNOWN) { // 存在 ident 优先基于 ident 计算 hash, 而不是递归解析
@@ -128,7 +128,7 @@ static inline int64_t type_hash(type_t t) {
     return hash_string(type_kind_str[t.kind]);
 }
 
-static inline rtype_t rtype_origin(module_t *m, type_t t) {
+static inline rtype_t rtype_origin(type_t t) {
     rtype_t rtype = {
             .size = type_sizeof(t), // 单位 byte
             .hash = type_hash(t),
@@ -145,7 +145,7 @@ static inline rtype_t rtype_origin(module_t *m, type_t t) {
     return rtype;
 }
 
-static inline rtype_t rtype_rawptr(module_t *m, type_t t) {
+static inline rtype_t rtype_rawptr(type_t t) {
     rtype_t rtype = {
             .size = sizeof(n_ptr_t),
             .hash = type_hash(t),
@@ -164,7 +164,7 @@ static inline rtype_t rtype_rawptr(module_t *m, type_t t) {
     return rtype;
 }
 
-static inline rtype_t rtype_anyptr(module_t *m, type_t t) {
+static inline rtype_t rtype_anyptr(type_t t) {
     rtype_t rtype = {
             .size = sizeof(n_ptr_t),
             .hash = type_hash(t),
@@ -187,7 +187,7 @@ static inline rtype_t rtype_anyptr(module_t *m, type_t t) {
  * @param t
  * @return
  */
-static inline rtype_t rtype_ptr(module_t *m, type_t t) {
+static inline rtype_t rtype_ptr(type_t t) {
     rtype_t rtype = {
             .size = sizeof(n_ptr_t),
             .hash = type_hash(t),
@@ -209,7 +209,7 @@ static inline rtype_t rtype_ptr(module_t *m, type_t t) {
  * @param t
  * @return
  */
-static inline rtype_t rtype_string(module_t *m, type_t t) {
+static inline rtype_t rtype_string(type_t t) {
     rtype_t rtype = {
             .size = sizeof(n_string_t),
             .hash = type_hash(t),
@@ -230,7 +230,7 @@ static inline rtype_t rtype_string(module_t *m, type_t t) {
  * @param t
  * @return
  */
-static inline rtype_t rtype_vec(module_t *m, type_t t) {
+static inline rtype_t rtype_vec(type_t t) {
     rtype_t rtype = {
             .size = sizeof(n_vec_t),
             .hash = type_hash(t),
@@ -249,7 +249,7 @@ static inline rtype_t rtype_vec(module_t *m, type_t t) {
     return rtype;
 }
 
-static inline rtype_t rtype_chan(module_t *m, type_t t) {
+static inline rtype_t rtype_chan(type_t t) {
     rtype_t rtype = {
             .size = sizeof(n_chan_t),
             .hash = type_hash(t),
@@ -279,7 +279,7 @@ static inline rtype_t rtype_chan(module_t *m, type_t t) {
  * @param t
  * @return
  */
-static inline rtype_t rtype_array(module_t *m, type_t t) {
+static inline rtype_t rtype_array(type_t t) {
     int64_t element_size = type_sizeof(t.array->element_type);
 
     rtype_t rtype = {
@@ -294,7 +294,7 @@ static inline rtype_t rtype_array(module_t *m, type_t t) {
     rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.size, POINTER_SIZE));
 
     int64_t offset = 0;
-    rtype.last_ptr = rtype_array_gc_bits(m, rtype.malloc_gc_bits_offset, &offset, t.array);
+    rtype.last_ptr = rtype_array_gc_bits(rtype.malloc_gc_bits_offset, &offset, t.array);
 
     ((int64_t *) CTDATA(rtype.hashes_offset))[0] = type_hash(t.array->element_type);
 
@@ -306,7 +306,7 @@ static inline rtype_t rtype_array(module_t *m, type_t t) {
  * @param t
  * @return
  */
-static inline rtype_t rtype_map(module_t *m, type_t t) {
+static inline rtype_t rtype_map(type_t t) {
     rtype_t rtype = {
             .size = sizeof(n_map_t),
             .hash = type_hash(t),
@@ -333,7 +333,7 @@ static inline rtype_t rtype_map(module_t *m, type_t t) {
  * @param t
  * @return
  */
-static inline rtype_t rtype_set(module_t *m, type_t t) {
+static inline rtype_t rtype_set(type_t t) {
     rtype_t rtype = {
             .size = sizeof(n_set_t),
             .hash = type_hash(t),
@@ -353,7 +353,7 @@ static inline rtype_t rtype_set(module_t *m, type_t t) {
     return rtype;
 }
 
-static inline rtype_t rtype_interface(module_t *m, type_t t) {
+static inline rtype_t rtype_interface(type_t t) {
     rtype_t rtype = {
             .size = POINTER_SIZE * 4, // element_rtype + value(并不知道 value 的类型)
             .hash = type_hash(t),
@@ -375,7 +375,7 @@ static inline rtype_t rtype_interface(module_t *m, type_t t) {
  * @param t
  * @return
  */
-static inline rtype_t rtype_union(module_t *m, type_t t) {
+static inline rtype_t rtype_union(type_t t) {
     rtype_t rtype = {
             .size = POINTER_SIZE * 2, // element_rtype + value(并不知道 value 的类型)
             .hash = type_hash(t),
@@ -406,12 +406,12 @@ static inline rtype_t rtype_union(module_t *m, type_t t) {
  * @param t
  * @return
  */
-static inline rtype_t rtype_fn(module_t *m, type_t t) {
+static inline rtype_t rtype_fn(type_t t) {
     rtype_t rtype = {
             .size = POINTER_SIZE,
             .hash = type_hash(t),
             .kind = TYPE_FN,
-            .last_ptr = 8,
+            .last_ptr = POINTER_SIZE,
             .hashes_offset = -1,
             .malloc_gc_bits_offset = -1,
     };
@@ -421,24 +421,24 @@ static inline rtype_t rtype_fn(module_t *m, type_t t) {
     return rtype;
 }
 
-static inline int64_t rtype_array_gc_bits(module_t *m, int64_t gc_bits_offset, int64_t *offset, type_array_t *t) {
+static inline int64_t rtype_array_gc_bits(int64_t gc_bits_offset, int64_t *offset, type_array_t *t) {
     // offset 已经按照 align 对齐过了，这里不需要重复对齐
     int64_t last_ptr_offset = 0;
 
     for (int i = 0; i < t->length; ++i) {
         int64_t last_ptr_temp_offset = 0;
         if (t->element_type.kind == TYPE_STRUCT) {
-            last_ptr_temp_offset = rtype_struct_gc_bits(m, gc_bits_offset, offset, t->element_type.struct_);
+            last_ptr_temp_offset = rtype_struct_gc_bits(gc_bits_offset, offset, t->element_type.struct_);
         } else if (t->element_type.kind == TYPE_ARR) {
-            last_ptr_temp_offset = rtype_array_gc_bits(m, gc_bits_offset, offset, t->element_type.array);
+            last_ptr_temp_offset = rtype_array_gc_bits(gc_bits_offset, offset, t->element_type.array);
         } else {
             int64_t bit_index = *offset / POINTER_SIZE;
             if (type_is_pointer_heap(t->element_type)) {
                 bitmap_set(CTDATA(gc_bits_offset), bit_index);
-                last_ptr_temp_offset = *offset;
             }
 
             *offset += type_sizeof(t->element_type);
+            last_ptr_temp_offset = *offset;
         }
 
         if (last_ptr_temp_offset > last_ptr_offset) {
@@ -509,7 +509,7 @@ static inline void *type_recycle_check(module_t *m, type_t *t, struct sc_map_s64
     return NULL;
 }
 
-static inline int64_t rtype_struct_gc_bits(module_t *m, int64_t gc_bits_offset, int64_t *offset, type_struct_t *t) {
+static inline int64_t rtype_struct_gc_bits(int64_t gc_bits_offset, int64_t *offset, type_struct_t *t) {
     // offset 已经按照 align 对齐过了，这里不需要重复对齐
     int64_t last_ptr_offset = 0;
     for (int i = 0; i < t->properties->length; ++i) {
@@ -520,9 +520,9 @@ static inline int64_t rtype_struct_gc_bits(module_t *m, int64_t gc_bits_offset, 
 
         int64_t last_ptr_temp_offset = 0;
         if (p->type.kind == TYPE_STRUCT) {
-            last_ptr_temp_offset = rtype_struct_gc_bits(m, gc_bits_offset, offset, p->type.struct_);
+            last_ptr_temp_offset = rtype_struct_gc_bits(gc_bits_offset, offset, p->type.struct_);
         } else if (p->type.kind == TYPE_ARR) {
-            last_ptr_temp_offset = rtype_array_gc_bits(m, gc_bits_offset, offset, p->type.array);
+            last_ptr_temp_offset = rtype_array_gc_bits(gc_bits_offset, offset, p->type.array);
         } else {
             int64_t size = type_sizeof(p->type); // 等待存储的 struct size
             // 这里就是存储位置
@@ -552,7 +552,7 @@ static inline int64_t rtype_struct_gc_bits(module_t *m, int64_t gc_bits_offset, 
  * @param t
  * @return
  */
-static inline rtype_t rtype_struct(module_t *m, type_t t) {
+static inline rtype_t rtype_struct(type_t t) {
     int64_t size = type_sizeof(t);
     if (size == 0) {
         rtype_t rtype = {
@@ -594,7 +594,7 @@ static inline rtype_t rtype_struct(module_t *m, type_t t) {
 
     // 假设没有 struct， 可以根据所有 property 计算 gc bits
     offset = 0;
-    uint16_t last_ptr_offset = rtype_struct_gc_bits(m, gc_bits_offset, &offset, t.struct_);
+    uint16_t last_ptr_offset = rtype_struct_gc_bits(gc_bits_offset, &offset, t.struct_);
 
     rtype_t rtype = {
             .size = size,
@@ -614,7 +614,7 @@ static inline rtype_t rtype_struct(module_t *m, type_t t) {
  * @param t
  * @return
  */
-static inline rtype_t rtype_tuple(module_t *m, type_t t) {
+static inline rtype_t rtype_tuple(type_t t) {
     int64_t offset = 0;
     int64_t need_gc_count = 0;
     uint16_t need_gc_offsets[UINT16_MAX] = {0};
@@ -674,55 +674,55 @@ static inline rtype_t rtype_tuple(module_t *m, type_t t) {
  * @param t
  * @return
  */
-static inline rtype_t reflect_type(module_t *m, type_t t) {
+static inline rtype_t reflect_type(type_t t) {
     assert(t.kind != TYPE_IDENT);
     rtype_t rtype = {0};
 
     switch (t.kind) {
         case TYPE_STRING:
-            rtype = rtype_string(m, t);
+            rtype = rtype_string(t);
             break;
         case TYPE_PTR:
-            rtype = rtype_ptr(m, t);
+            rtype = rtype_ptr(t);
             break;
         case TYPE_RAWPTR:
-            rtype = rtype_rawptr(m, t);
+            rtype = rtype_rawptr(t);
             break;
         case TYPE_ANYPTR:
-            rtype = rtype_anyptr(m, t);
+            rtype = rtype_anyptr(t);
             break;
         case TYPE_VEC:
-            rtype = rtype_vec(m, t);
+            rtype = rtype_vec(t);
             break;
         case TYPE_CHAN:
-            rtype = rtype_chan(m, t);
+            rtype = rtype_chan(t);
             break;
         case TYPE_ARR:
-            rtype = rtype_array(m, t);
+            rtype = rtype_array(t);
             break;
         case TYPE_MAP:
-            rtype = rtype_map(m, t);
+            rtype = rtype_map(t);
             break;
         case TYPE_SET:
-            rtype = rtype_set(m, t);
+            rtype = rtype_set(t);
             break;
         case TYPE_TUPLE:
-            rtype = rtype_tuple(m, t);
+            rtype = rtype_tuple(t);
             break;
         case TYPE_STRUCT:
-            rtype = rtype_struct(m, t);
+            rtype = rtype_struct(t);
             break;
         case TYPE_FN:
-            rtype = rtype_fn(m, t);
+            rtype = rtype_fn(t);
             break;
         case TYPE_UNION:
-            rtype = rtype_union(m, t);
+            rtype = rtype_union(t);
             break;
         case TYPE_INTERFACE:
-            rtype = rtype_interface(m, t);
+            rtype = rtype_interface(t);
             break;
         default:
-            rtype = rtype_origin(m, t);
+            rtype = rtype_origin(t);
     }
     rtype.in_heap = t.in_heap;
     if (t.ident) {
@@ -741,7 +741,7 @@ static inline void ct_register_rtype(module_t *m, type_t t) {
     bool exists = table_exist(ct_rtype_table, itoa(hash));
     //    log_debug("module %s, add rtype %ld -> %s, exists %d", m->ident, hash, type_format(t), exists);
     if (!exists) {
-        rtype_t rtype = reflect_type(m, t);
+        rtype_t rtype = reflect_type(t);
         assert(rtype.size >= 0);
         assert(rtype.hash == hash);
         rtype_t *mem_rtype = rtype_push(rtype);
