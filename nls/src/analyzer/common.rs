@@ -309,6 +309,14 @@ impl Type {
         Self::is_integer(kind) || Self::is_float(kind)
     }
 
+    pub fn is_any(kind: &TypeKind) -> bool {
+        let TypeKind::Union(any, _, _) = kind else {
+            return false;
+        };
+
+        return *any;
+    }
+
     pub fn is_origin_type(kind: &TypeKind) -> bool {
         Self::is_number(kind)
             || matches!(

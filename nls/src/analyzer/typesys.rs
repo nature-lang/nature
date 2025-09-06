@@ -343,7 +343,7 @@ impl<'a> Typesys<'a> {
         }
 
         match &t.kind {
-            TypeKind::Struct(ident, align, properties) => {
+            TypeKind::Struct(_ident, _align, properties) => {
                 for property in properties {
                     let temp = self.type_recycle_check(&property.type_, visited);
                     if temp.is_some() {
@@ -412,11 +412,11 @@ impl<'a> Typesys<'a> {
         let mut visited = HashSet::new();
         let found = self.type_recycle_check(&t, &mut visited);
         if found.is_some() {
-           return Err(AnalyzerError{
+            return Err(AnalyzerError {
                 start: t.start,
                 end: t.end,
                 message: format!("recycle use type '{}'", found.unwrap()),
-            })
+            });
         }
 
         return Ok(result);
@@ -450,7 +450,7 @@ impl<'a> Typesys<'a> {
             // 归约接口类型
             *impl_interface = match self.reduction_type(impl_interface.clone()) {
                 Ok(r) => r,
-                Err(e) => continue,
+                Err(_) => continue,
             };
 
             if let TypeKind::Interface(elements) = &impl_interface.kind {
@@ -510,8 +510,8 @@ impl<'a> Typesys<'a> {
         };
 
         let mut typedef = typedef_mutex.lock().unwrap();
-        let typedef_start = typedef.symbol_start;
-        let typedef_end = typedef.symbol_end;
+        // let typedef_start = typedef.symbol_start;
+        // let typedef_end = typedef.symbol_end;
 
         // 处理泛型参数
         if typedef.params.len() > 0 {
@@ -739,7 +739,7 @@ impl<'a> Typesys<'a> {
             }
 
             // 处理元组类型
-            TypeKind::Tuple(elements, align) => {
+            TypeKind::Tuple(elements, _align) => {
                 if elements.is_empty() {
                     return Err(AnalyzerError {
                         start: t.start,
@@ -951,7 +951,7 @@ impl<'a> Typesys<'a> {
         *target_type = self.reduction_type(target_type.clone())?;
 
         // 推导源表达式类型, 如果存在错误则停止后续比较, 直接返回错误
-        let src_type = self.infer_expr(src, Type::default())?;
+        let src_type = self.infer_expr(src, Type::default(), Type::default())?;
         if src_type.kind.is_unknown() {
             return Err(AnalyzerError {
                 start: 0,
@@ -1074,36 +1074,19 @@ impl<'a> Typesys<'a> {
 
         // 处理 typedef ident 类型转换
         if target_type.ident_kind == TypeIdentKind::Def {
-            let ident = target_type.ident.clone();
-            let ident_kind = target_type.ident_kind.clone();
-            let args = target_type.args.clone();
-
-            src.type_.ident = target_type.ident.clone();
-            src.type_.ident_kind = target_type.ident_kind.clone();
-            src.type_.args = target_type.args.clone();
-
-            // compare check
-            if self.type_compare(&src.type_, target_type) {
-                src.type_.ident = ident;
-                src.type_.ident_kind = ident_kind;
-                src.type_.args = args;
+            if self.type_compare_no_ident(target_type, &mut src.type_) {
+                src.type_.ident = target_type.ident.clone();
+                src.type_.ident_kind = target_type.ident_kind.clone();
+                src.type_.args = target_type.args.clone();
                 return Ok(target_type.clone());
             }
-
-            return Err(AnalyzerError {
-                start: expr.start,
-                end: expr.end,
-                message: format!("cannot casting to '{}'", target_type),
-            });
         }
 
         if src.type_.ident_kind == TypeIdentKind::Def && target_type.ident_kind == TypeIdentKind::Builtin {
-            let mut src_temp_type = src.type_.clone();
-            src_temp_type.ident = target_type.ident.clone();
-            src_temp_type.ident_kind = target_type.ident_kind.clone();
-
-            if self.type_compare(&target_type, &src_temp_type) {
-                src.type_ = src_temp_type.clone();
+            if self.type_compare_no_ident(target_type, &mut src.type_) {
+                src.type_.ident = target_type.ident.clone();
+                src.type_.ident_kind = target_type.ident_kind.clone();
+                src.type_.args = target_type.args.clone();
                 return Ok(target_type.clone());
             }
         }
@@ -1556,7 +1539,7 @@ impl<'a> Typesys<'a> {
         }
     }
 
-    pub fn infer_vec_new(&mut self, expr: &mut Box<Expr>, infer_target_type: Type) -> Result<Type, AnalyzerError> {
+    pub fn infer_vec_new(&mut self, expr: &mut Box<Expr>, infer_target_type: Type, literal_refer: Type) -> Result<Type, AnalyzerError> {
         let AstNode::VecNew(elements, _, _) = &mut expr.node else { unreachable!() };
 
         // 如果目标类型是数组，则将 VecNew 重写为 ArrayNew
@@ -1591,6 +1574,8 @@ impl<'a> Typesys<'a> {
         // 如果目标类型是向量，使用其元素类型
         if let TypeKind::Vec(target_element_type) = &infer_target_type.kind {
             element_type = *target_element_type.clone();
+        } else if Type::is_any(&literal_refer.kind) {
+            element_type = literal_refer.clone();
         }
 
         // 如果向量为空，必须能从目标类型确定元素类型
@@ -1634,7 +1619,14 @@ impl<'a> Typesys<'a> {
         return result;
     }
 
-    pub fn infer_map_new(&mut self, elements: &mut Vec<MapElement>, infer_target_type: Type, start: usize, end: usize) -> Result<Type, AnalyzerError> {
+    pub fn infer_map_new(
+        &mut self,
+        elements: &mut Vec<MapElement>,
+        infer_target_type: Type,
+        literal_type: Type,
+        start: usize,
+        end: usize,
+    ) -> Result<Type, AnalyzerError> {
         // 创建一个新的 Map 类型，初始化 key 和 value 类型为未知
         let mut key_type = Type::default(); // TYPE_UNKNOWN
         let mut value_type = Type::default(); // TYPE_UNKNOWN
@@ -1643,6 +1635,9 @@ impl<'a> Typesys<'a> {
         if let TypeKind::Map(target_key_type, target_value_type) = &infer_target_type.kind {
             key_type = *target_key_type.clone();
             value_type = *target_value_type.clone();
+        } else if Type::is_any(&literal_type.kind) {
+            key_type = Type::new(TypeKind::String);
+            value_type = literal_type.clone();
         }
 
         // 如果 Map 为空，必须能从目标类型确定 key 和 value 类型
@@ -2107,7 +2102,7 @@ impl<'a> Typesys<'a> {
         return Ok(result);
     }
 
-    pub fn infer_expr(&mut self, expr: &mut Box<Expr>, infer_target_type: Type) -> Result<Type, AnalyzerError> {
+    pub fn infer_expr(&mut self, expr: &mut Box<Expr>, infer_target_type: Type, literal_refer: Type) -> Result<Type, AnalyzerError> {
         if expr.type_.kind.is_exist() {
             return Ok(expr.type_.clone());
         }
@@ -2181,7 +2176,7 @@ impl<'a> Typesys<'a> {
             AstNode::Binary(op, left, right) => self.infer_binary(op.clone(), left, right, infer_target_type),
             AstNode::Unary(op, operand) => self.infer_unary(op.clone(), operand, infer_target_type),
             AstNode::Ident(ident, symbol_id) => self.infer_ident(ident, symbol_id, expr.start, expr.end),
-            AstNode::VecNew(..) => self.infer_vec_new(expr, infer_target_type),
+            AstNode::VecNew(..) => self.infer_vec_new(expr, infer_target_type, literal_refer),
             AstNode::VecRepeatNew(..) | AstNode::ArrRepeatNew(..) => self.infer_vec_repeat_new(expr, infer_target_type),
             AstNode::VecSlice(left, start, end) => {
                 let left_type = self.infer_right_expr(left, Type::default())?;
@@ -2191,8 +2186,11 @@ impl<'a> Typesys<'a> {
                 return Ok(left_type.clone());
             }
             AstNode::EmptyCurlyNew => {
-                if infer_target_type.kind.is_unknown() {
-                    return Ok(infer_target_type);
+                if Type::is_any(&literal_refer.kind) {
+                    return Ok(Type::new(TypeKind::Map(
+                        Box::new(Type::new(TypeKind::String)),
+                        Box::new(infer_target_type.clone()),
+                    )));
                 }
 
                 // 必须通过 target_type 引导才能推断出具体的类型, 所以 target_type kind 必须存在
@@ -2215,7 +2213,7 @@ impl<'a> Typesys<'a> {
 
                 return Ok(infer_target_type);
             }
-            AstNode::MapNew(elements) => self.infer_map_new(elements, infer_target_type, expr.start, expr.end),
+            AstNode::MapNew(elements) => self.infer_map_new(elements, infer_target_type, literal_refer, expr.start, expr.end),
             AstNode::SetNew(elements) => self.infer_set_new(elements, infer_target_type, expr.start, expr.end),
             AstNode::TupleNew(elements) => self.infer_tuple_new(elements, infer_target_type, expr.start, expr.end),
             AstNode::StructNew(_ident, type_, properties) => {
@@ -2445,7 +2443,12 @@ impl<'a> Typesys<'a> {
                 if !matches!(target_type.kind, TypeKind::Union(..)) {
                     target_type.clone()
                 } else {
-                    Type::new(TypeKind::Unknown)
+                    Type::default()
+                },
+                if Type::is_any(&target_type.kind) {
+                    target_type.clone()
+                } else {
+                    Type::default()
                 },
             )?;
             target_type = self.reduction_type(target_type.clone())?;
@@ -3717,6 +3720,15 @@ impl<'a> Typesys<'a> {
         true
     }
 
+    pub fn type_compare_no_ident(&mut self, dst: &mut Type, src: &mut Type) -> bool {
+        dst.ident = "".to_string();
+        src.ident = "".to_string();
+        src.ident_kind = TypeIdentKind::Unknown;
+        dst.ident_kind = TypeIdentKind::Unknown;
+
+        return self.type_compare(dst, src);
+    }
+
     pub fn type_compare(&mut self, dst: &Type, src: &Type) -> bool {
         let dst = dst.clone();
         if dst.err || src.err {
@@ -4000,9 +4012,11 @@ impl<'a> Typesys<'a> {
             let mut fndef = fndef_mutex.lock().unwrap();
             if fndef.type_.kind.is_exist() && fndef.type_.status == ReductionStatus::Done {
                 if target_type.kind.is_exist() {
-                    fndef.type_.ident = target_type.ident.clone();
-                    fndef.type_.ident_kind = target_type.ident_kind.clone();
-                    fndef.type_.args = target_type.args.clone();
+                    if self.type_compare_no_ident(&mut target_type.clone(), &mut fndef.type_) {
+                        fndef.type_.ident = target_type.ident.clone();
+                        fndef.type_.ident_kind = target_type.ident_kind.clone();
+                        fndef.type_.args = target_type.args.clone();
+                    }
                 }
 
                 return Ok(fndef.type_.clone());
@@ -4064,9 +4078,11 @@ impl<'a> Typesys<'a> {
         })));
 
         if target_type.kind.is_exist() {
-            result.ident = target_type.ident.clone();
-            result.ident_kind = target_type.ident_kind.clone();
-            result.args = target_type.args.clone();
+            if self.type_compare_no_ident(&mut target_type.clone(), &mut result) {
+                result.ident = target_type.ident.clone();
+                result.ident_kind = target_type.ident_kind.clone();
+                result.args = target_type.args.clone();
+            }
         }
 
         {

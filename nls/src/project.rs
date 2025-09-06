@@ -311,7 +311,7 @@ impl Project {
             let mut module_db = self.module_db.lock().unwrap();
             let m = &mut module_db[index];
 
-            debug!("build, m.path {}, module_dir {}, project root {}", m.path, m.dir, self.root);
+            debug!("build, m.index {}, m.path {}, module_dir {}, project root {}", m.index, m.path, m.dir, self.root);
 
             // clean module symbol table
             self.symbol_table.lock().unwrap().clean_module_scope(m.ident.clone());
@@ -356,8 +356,12 @@ impl Project {
                     //     },
                     // );
 
-                    dbg!("circular import");
+                    debug!("circular import, will handle {}", import.full_path);
                     // continue;
+                }
+
+                if import.full_path == main_path {
+                    continue;
                 }
 
                 filter_imports.push(import.clone());
@@ -415,6 +419,11 @@ impl Project {
 
         // refers push to queue
         for refer in refers {
+            debug!("{} handle to queue, refer {}", main_path, refer);
+            if refer == main_path {
+                continue;
+            }
+
             self.queue.lock().unwrap().push(QueueItem {
                 path: refer,
                 notify: Some(main_path.to_string()), // 当引用模块编译完成后，通知主模块重新编译(主模块必定已经注册完成，包含完整的 module 信息)

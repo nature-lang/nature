@@ -241,7 +241,7 @@ static inline uint64_t collect_symdef_list(void *ctx) {
 
         ast_var_decl_t *var_decl = s->ast_value;
         symdef_t *symdef = &ct_symdef_list[count++];
-        symdef->need_gc = type_is_pointer_heap(var_decl->type);
+        symdef->hash = type_hash(var_decl->type);
         symdef->size = type_sizeof(var_decl->type); // 符号的大小
         symdef->base = 0; // 这里引用了全局符号表段地址
         symdef->name_offset = strtable_put(var_decl->ident);

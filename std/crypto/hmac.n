@@ -25,7 +25,6 @@ fn new(int hasher_type, [u8] secret):ptr<hmac_t> {
     var h = new hmac_t()
     h.hasher_type = hasher_type
     
-    // 根据哈希算法类型设置输出大小
     if hasher_type == MD5 {
         h.output_size = 16  // MD5 输出 16 字节
     } else if hasher_type == RIPEMD160 {

@@ -35,12 +35,12 @@
 #define CASE_HANDLE ".CASE_HANDLE"
 #define SELECT_IDENT ".@SELECT" // 需要用到字符串匹配，所以给定特殊字符避免后续干扰
 
-#define FOR_CONTINUE_IDENT ".FOR_CONTINUE"
-#define FOR_UPDATE_IDENT ".FOR_UPDATE"
-#define FOR_END_IDENT ".FOR_END"
-#define FOR_COND_IDENT ".FOR_COND"
-#define FOR_TRADITION_IDENT ".FOR_TRADITION"
-#define FOR_ITERATOR_IDENT ".FOR_ITERATOR"
+#define FOR_CONTINUE_IDENT ".FCN"
+#define FOR_UPDATE_IDENT ".FU"
+#define FOR_END_IDENT ".FE"
+#define FOR_COND_IDENT ".FC"
+#define FOR_TRADITION_IDENT ".FT"
+#define FOR_ITERATOR_IDENT ".FI"
 #define IF_IDENT ".IF"
 #define IF_END_IDENT ".END"
 #define IF_ALTERNATE_IDENT ".ALTERNATE"
@@ -858,7 +858,7 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
     c->stack_offset += size;
     c->stack_offset = align_up(c->stack_offset, POINTER_SIZE); // 按照 8byte 对齐
 
-    rtype_t rtype = reflect_type(m, t);
+    rtype_t rtype = reflect_type(t);
     assert(rtype.size == size);
 
     // 16, 0, 1

@@ -12,9 +12,9 @@
 typedef struct {
     // base 一定要放在第一个位置，这关乎到能否争取进行重定位
     addr_t base; // data 中的数据对应的虚拟内存中的地址(通常在 .data section 中)
-    uint64_t size;
-    bool need_gc; // 符号和栈中的 var 一样最大的值不会超过 8byte,所以使用 bool 就可以判断了
-    uint64_t name_offset;
+    int64_t size;
+    int64_t hash;
+    int64_t name_offset;
 } symdef_t;
 
 typedef struct {

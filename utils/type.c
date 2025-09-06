@@ -213,11 +213,6 @@ type_alias_t *type_alias_new(char *literal, char *import_module_ident) {
  * @return
  */
 bool type_is_pointer_heap(type_t t) {
-    // type_array 和 type_struct 的 var 就是一个 pointer， 所以总是需要 gc
-    // stack 中的数据，gc 是无法扫描的
-    //    if (is_alloc_stack(t)) {
-    //        return true;
-    //    }
     if (t.in_heap) {
         return true;
     }

@@ -140,6 +140,10 @@ fn server_t.find_callback(u8 method, string path):callback_fn {
         return all_routes[path]
     }
 
+    if all_routes.contains('/') {
+        return all_routes['/']
+    }
+
     // callback_notfound 作为 ident 具有自己的类型(fn), 此处需要转换为 callback_fn, 或者定义 callback_fn 直接使用 alias 声明 而不是 type
     return callback_notfound as callback_fn
 }
