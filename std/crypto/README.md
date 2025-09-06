@@ -229,6 +229,44 @@ fn sha256_t.hex():string
 
 Finalize SHA-256 computation and return hexadecimal string.
 
+# import [crypto.bcrypt](https://github.com/nature-lang/nature/tree/master/std/crypto/bcrypt.n)
+
+bcrypt password hashing implementation using Blowfish algorithm.
+
+## const MIN_COST
+
+```
+const MIN_COST = 4
+```
+
+## const MAX_COST
+
+```
+const MAX_COST = 31
+```
+
+## const DEFAULT_COST
+
+```
+const DEFAULT_COST = 10
+```
+
+## fn hash
+
+```
+fn hash([u8] password, int cost):[u8]!
+```
+
+Generate bcrypt hash from password.
+
+## fn verify
+
+```
+fn verify([u8] hashed_password, [u8] password):void!
+```
+
+Verify if password matches the hash.
+
 # import [crypto.types](https://github.com/nature-lang/nature/tree/master/std/crypto/types.n)
 
 Cryptographic type definitions and mbedTLS bindings.

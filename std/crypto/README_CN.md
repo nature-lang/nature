@@ -229,6 +229,44 @@ fn sha256_t.hex():string
 
 完成 SHA-256 计算并返回十六进制字符串。
 
+# import [crypto.bcrypt](https://github.com/nature-lang/nature/tree/master/std/crypto/bcrypt.n)
+
+使用 Blowfish 算法的 bcrypt 密码哈希实现。
+
+## const MIN_COST
+
+```
+const MIN_COST = 4
+```
+
+## const MAX_COST
+
+```
+const MAX_COST = 31
+```
+
+## const DEFAULT_COST
+
+```
+const DEFAULT_COST = 10
+```
+
+## fn hash
+
+```
+fn hash([u8] password, int cost):[u8]!
+```
+
+生成密码的 bcrypt 哈希值。
+
+## fn verify
+
+```
+fn verify([u8] hashed_password, [u8] password):void!
+```
+
+验证密码是否与哈希值匹配。
+
 # import [crypto.types](https://github.com/nature-lang/nature/tree/master/std/crypto/types.n)
 
 加密类型定义和 mbedTLS 绑定。
