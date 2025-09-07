@@ -26,8 +26,9 @@ typedef struct {
     bool handshake_done;
 
     // UV 相关
-    uv_tcp_t handle;
+    uv_tcp_t handle; // 基础 tcp 链接
     uv_write_t write_req;
+    uv_timer_t timer;
 
     // mbedTLS 相关
     mbedtls_ssl_context ssl;
@@ -204,6 +205,10 @@ static inline void on_tls_connect_cb(uv_connect_t *conn_req, int status) {
         return;
     }
 
+    if (uv_is_active((uv_handle_t *) &conn->timer)) {
+        uv_timer_stop(&conn->timer);
+    }
+
     if (status < 0) {
         DEBUGF("[on_tls_connect_cb] connection failed: %s", uv_strerror(status));
         rti_co_throw(conn->co, tlsprintf("TLS connection failed: %s", uv_strerror(status)), false);
@@ -224,7 +229,7 @@ static inline void on_tls_timeout_cb(uv_timer_t *handle) {
 }
 
 void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t *addr, n_int64_t port, n_int64_t timeout_ms) {
-    DEBUGF("[rt_uv_tls_connect] start, addr %s, port %ld", (char *) rt_string_ref(addr), port)
+    DEBUGF("[rt_uv_tls_connect] start, addr %s, port %ld, timeout_ms %ld", (char *) rt_string_ref(addr), port, timeout_ms)
 
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
@@ -261,21 +266,20 @@ void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t *addr, n_int64_t port, n
     connect_req->data = conn;
     uv_tcp_connect(connect_req, &conn->handle, (const struct sockaddr *) &dest, on_tls_connect_cb);
 
-    uv_timer_t *timer = NULL;
     if (timeout_ms > 0) {
-        timer = malloc(sizeof(uv_timer_t));
-        timer->data = conn;
-        uv_timer_init(&p->uv_loop, timer);
-        uv_timer_start(timer, on_tls_timeout_cb, timeout_ms, 0);
+        conn->timer.data = conn;
+        uv_timer_init(&p->uv_loop, &conn->timer);
+        uv_timer_start(&conn->timer, on_tls_timeout_cb, timeout_ms, 0);
     }
 
     // yield wait conn and handshake
     co_yield_waiting(co, NULL, NULL);
-    timer ? free(timer) : 0;
     free(connect_req);
 
     if (co->has_error) {
-        uv_close((uv_handle_t *) &conn->handle, NULL);
+        if (uv_is_active((uv_handle_t *) &conn->handle)) {
+            uv_close((uv_handle_t *) &conn->handle, NULL);
+        }
         DEBUGF("[rt_uv_tls_connect] have error");
         return;
     }
@@ -367,7 +371,6 @@ void rt_uv_tls_conn_close(n_tls_conn_t *n_conn) {
     }
 
     inner_tls_conn_t *conn = n_conn->conn;
-
     n_conn->closed = true;
 
     // 发送 TLS close notify

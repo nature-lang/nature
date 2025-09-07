@@ -592,6 +592,17 @@ pub enum ReductionStatus {
     Done = 4,
 }
 
+impl Display for ReductionStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReductionStatus::Undo => write!(f, "undo"),
+            ReductionStatus::Doing => write!(f, "doing"),
+            ReductionStatus::Doing2 => write!(f, "doing2"),
+            ReductionStatus::Done => write!(f, "done"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeIdentKind {
     Unknown = 0,
@@ -935,7 +946,6 @@ pub struct Expr {
     pub type_: Type,
     pub target_type: Type,
     pub node: AstNode,
-    pub err: bool,
 }
 
 // default
@@ -947,7 +957,6 @@ impl Default for Expr {
             type_: Type::default(),
             target_type: Type::default(),
             node: AstNode::None,
-            err: false,
         }
     }
 }
@@ -960,7 +969,6 @@ impl Expr {
             type_: Type::default(),
             target_type: Type::default(),
             node: AstNode::Ident(literal, symbol_id),
-            err: false,
         }
     }
 }
@@ -1141,8 +1149,6 @@ pub struct AstFnDef {
     pub rest_param: bool,
     pub body: AstBody,
     pub closure: Option<isize>,
-    pub generics_special_done: bool,
-    pub generics_hash_table: Option<HashMap<u64, Arc<Mutex<AstFnDef>>>>,
     pub generics_args_table: Option<HashMap<String, Type>>,
     pub generics_args_hash: Option<u64>,
     pub generics_params: Option<Vec<GenericsParam>>,
@@ -1188,8 +1194,6 @@ impl Default for AstFnDef {
                 end: 0,
             },
             closure: None,
-            generics_special_done: false,
-            generics_hash_table: None,
             generics_args_table: None,
             generics_args_hash: None,
             generics_params: None,

@@ -236,8 +236,8 @@ static inline void on_tcp_connect_cb(uv_connect_t *conn_req, int status) {
     co_ready(conn->co);
 }
 
-static inline void on_conn_timeout_cb(uv_timer_t *handle) {
-    DEBUGF("[on_conn_timeout_cb] timeout set")
+static inline void on_tcp_timeout_cb(uv_timer_t *handle) {
+    DEBUGF("[on_tcp_timeout_cb] timeout set")
 
     inner_conn_t *conn = handle->data;
     conn->timeout = true;
@@ -275,16 +275,17 @@ void rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t *addr, n_int64_t port, n
     if (timeout_ms > 0) {
         conn->timer.data = conn;
         uv_timer_init(&p->uv_loop, &conn->timer);
-        uv_timer_start(&conn->timer, on_conn_timeout_cb, timeout_ms, 0); // repeat == 0
+        uv_timer_start(&conn->timer, on_tcp_timeout_cb, timeout_ms, 0); // repeat == 0
     }
 
     // yield wait conn
     co_yield_waiting(co, NULL, NULL);
-
     free(connect_req);
 
     if (co->has_error) {
-        uv_close((uv_handle_t *) &conn->handle, NULL);
+        if (uv_is_active((uv_handle_t *) &conn->handle)) {
+            uv_close((uv_handle_t *) &conn->handle, NULL);
+        }
         DEBUGF("[rt_uv_tcp_connect] have error");
         return;
     }

@@ -39,7 +39,7 @@ const ERROR_INVALID_COST = "invalid cost parameter"
 const ERROR_HASH_TOO_SHORT = "hash too short"
 const ERROR_INVALID_HASH_PREFIX = "invalid hash prefix"
 const ERROR_HASH_VERSION_TOO_NEW = "hash version too new"
-const ERROR_MISMATCHED_HASH_PASSWORD = "mismatched hash and password"
+const ERROR_NOT_VERIFY = "verify failed"
 
 // bcrypt hash structure
 type bcrypt_hash_t = struct {
@@ -416,7 +416,7 @@ fn verify([u8] hashed_password, [u8] password):void! {
     [u8] hash2 = hash_to_string(other_hash_info)
     
     if !constant_time_compare(hash1, hash2) {
-        throw errorf(ERROR_MISMATCHED_HASH_PASSWORD)
+        throw errorf(ERROR_NOT_VERIFY)
     }
 }
 

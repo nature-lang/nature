@@ -29,11 +29,10 @@ impl GenericSpecialFnClone {
     pub fn deep_clone(&mut self, fn_mutex: &Arc<Mutex<AstFnDef>>) -> Arc<Mutex<AstFnDef>> {
         let fn_def = fn_mutex.lock().unwrap();
         let mut fn_def_clone = fn_def.clone();
-        fn_def_clone.generics_hash_table = None;
-        fn_def_clone.generics_special_done = false;
 
         // type 中不包含 arc, 所以可以直接进行 clone
         fn_def_clone.type_ = fn_def.type_.clone();
+        fn_def_clone.return_type = fn_def.return_type.clone();
         // params 中包含 arc, 所以需要解构后进行 clone
         fn_def_clone.params = fn_def
             .params
@@ -202,7 +201,6 @@ impl GenericSpecialFnClone {
             type_: expr.type_.clone(),
             target_type: expr.target_type.clone(),
             node,
-            err: expr.err,
         }
     }
 
@@ -2015,7 +2013,6 @@ impl<'a> Typesys<'a> {
                 type_: Type::default(),
                 target_type: Type::default(),
                 node: AstNode::Literal(TypeKind::Int, "0".to_string()),
-                err: false,
             }));
         }
 
@@ -2078,7 +2075,6 @@ impl<'a> Typesys<'a> {
                 type_: type_.clone(),
                 target_type: type_,
                 node: AstNode::FnDef(closure_fn.clone()),
-                err: false,
             })
         };
 
@@ -2326,7 +2322,6 @@ impl<'a> Typesys<'a> {
             type_: interface_type.clone(),
             target_type: interface_type.clone(),
             node: AstNode::As(interface_type.clone(), expr.clone()),
-            err: false,
         }))
     }
 
@@ -3041,43 +3036,14 @@ impl<'a> Typesys<'a> {
             temp_fndef_mutex
         };
 
-        // tpl_fn 对应的 special_fn 已经生成过则不需要重新生成，直接返回即可
-        {
-            let mut tpl_fn = tpl_fn_mutex.lock().unwrap();
-
-            // 判断 tpl fn 是否已经 special 完成，如果已经完成，则直接返回, 为什么会出现这种情况?
-            // 相同参数得到相同的 arg_hash, 当相同 arg_hash 读取 tpl_fn 时，会从符号表中优先读取到已经存在且推导完成的 special_fn, 直接使用即可。
-            if tpl_fn.generics_special_done {
-                return Ok(tpl_fn_mutex.clone());
-            }
-
-            if tpl_fn.generics_hash_table.is_none() {
-                tpl_fn.generics_hash_table = Some(HashMap::new());
-            }
-
-            let generics_hash_table = tpl_fn.generics_hash_table.as_ref().unwrap();
-
-            // special fn exists
-            if let Some(special_fn) = generics_hash_table.get(&args_hash) {
-                return Ok(special_fn.clone());
-            }
-        }
-
         // lsp 中无论是 否 singleton 都会 clone 一份, 因为 ide 会随时会修改文件从而新增泛型示例，必须保证 tpl fn 是无污染的
-        let special_fn_mutex = {
-            let result = GenericSpecialFnClone { global_parent: None }.deep_clone(&tpl_fn_mutex);
-
-            let mut tpl_fn = tpl_fn_mutex.lock().unwrap();
-            tpl_fn.generics_hash_table.as_mut().unwrap().insert(args_hash, result.clone());
-
-            result
-        };
+        let special_fn_mutex = GenericSpecialFnClone { global_parent: None }.deep_clone(&tpl_fn_mutex);
 
         {
             let mut special_fn = special_fn_mutex.lock().unwrap();
+
             special_fn.generics_args_hash = Some(args_hash);
             special_fn.generics_args_table = Some(args_table);
-            special_fn.generics_special_done = true;
             special_fn.symbol_name = symbol_name_with_hash; // special_fn 此时已经拥有崭新的名称，接下来只需要注册到所在 module 符号表即可
             debug_assert!(!special_fn.is_local);
 
@@ -3092,8 +3058,10 @@ impl<'a> Typesys<'a> {
 
             special_fn.symbol_id = new_symbol_id;
             special_fn.type_.status = ReductionStatus::Undo;
+            special_fn.return_type.status = ReductionStatus::Undo;
             // set type_args_stack
             self.generics_args_stack.push(special_fn.generics_args_table.clone().unwrap());
+            debug!("gen special_fn {}, type status {}, return type status {}", special_fn.fn_name, special_fn.type_.status, special_fn.return_type.status);
         }
 
         self.infer_fn_decl(special_fn_mutex.clone(), Type::default()).map_err(|e| e.message)?;
@@ -3103,8 +3071,6 @@ impl<'a> Typesys<'a> {
         // handle child
         {
             let special_fn = special_fn_mutex.lock().unwrap();
-            // dbg!("special fn to work list, will infer body", &special_fn.symbol_name, &special_fn.type_);
-
             for child in special_fn.local_children.iter() {
                 // local fn 定义在 global fn 中，所以其 define_in != global_fn 的 scope_id
                 self.rewrite_local_fndef(child.clone());
@@ -3343,10 +3309,6 @@ impl<'a> Typesys<'a> {
     }
 
     pub fn infer_call(&mut self, call: &mut AstCall, target_type: Type, start: usize, end: usize, check_errable: bool) -> Result<Type, AnalyzerError> {
-        if call.left.err {
-            return Ok(Type::error());
-        }
-
         let fn_kind: TypeKind = self.infer_call_left(call, target_type, start, end)?;
 
         let TypeKind::Fn(type_fn) = fn_kind else { unreachable!() };
@@ -4731,7 +4693,7 @@ impl<'a> Typesys<'a> {
                 let scope_id = self.module.scope_id;
 
                 // 基于泛型组合进行符号注册到符号表中，但是不进行具体的函数生成，以及 type param 展开，仅仅是注册到符号表的 key 有所不同
-                // 只有当具体的 call 调用批评到具体的函数时，才会进行生成
+                // 只有当具体的 call 调用匹配到具体的函数时，才会进行生成
                 match self.generics_constraints_product(fndef.impl_type.clone(), fndef.generics_params.as_mut().unwrap()) {
                     Ok(generics_args) => {
                         if generics_args.len() == 0 {

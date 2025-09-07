@@ -296,7 +296,6 @@ impl<'a> Syntax {
             type_: Type::unknown(),
             target_type: Type::unknown(),
             node: AstNode::None,
-            err: false,
         })
     }
 
@@ -1699,7 +1698,6 @@ impl<'a> Syntax {
                 node: AstNode::Literal(TypeKind::Int64, "0".to_string()),
                 type_: Type::default(),
                 target_type: Type::default(),
-                err: false,
             });
 
             let end = if self.is(TokenType::RightSquare) {
@@ -1710,7 +1708,6 @@ impl<'a> Syntax {
                     node: AstNode::Literal(TypeKind::Int64, "-1".to_string()),
                     type_: Type::default(),
                     target_type: Type::default(),
-                    err: false,
                 })
             } else {
                 // [..expr] case
@@ -1739,7 +1736,6 @@ impl<'a> Syntax {
                     node: AstNode::Literal(TypeKind::Int64, "-1".to_string()),
                     type_: Type::default(),
                     target_type: Type::default(),
-                    err: false,
                 })
             } else {
                 // [expr..expr] case
