@@ -18,6 +18,9 @@
 #define ATOMIC _Atomic
 #endif
 
+#define LOGF(format, ...)                                                                                                  \
+    fprintf(stdout, format "\n",  ##__VA_ARGS__); \
+    fflush(stdout);
 
 #define assert_string_equal(_actual, _expect) (assertf(str_equal(_actual, _expect), "%s", _actual))
 #define assert_int_equal(_actual, _expect) (assertf((_actual) == (_expect), "%d", _actual))
@@ -61,9 +64,10 @@ static inline int feature_test_build() {
     strcpy(BUILD_OUTPUT_DIR, getenv("BUILD_OUTPUT_DIR"));
 
     COMPILER_TRY {
+        LOGF("build start\n");
         build(entry, false);
-    }
-    else {
+        LOGF("build success\n");
+    } else {
         assertf(false, "%s", (char *) test_error_msg);
         exit(1);
     }
@@ -438,7 +442,8 @@ static inline void feature_testar_test(char *custom_target) {
 
         printf("test case start=== %s", test_case->name);
         // 收集所有需要显示的属性
-        bool has_attrs = test_case->attrs->os || test_case->attrs->arch || test_case->attrs->timeout > 0 || test_case->attrs->repeat > 0;
+        bool has_attrs = test_case->attrs->os || test_case->attrs->arch || test_case->attrs->timeout > 0 ||
+                         test_case->attrs->repeat > 0;
         if (has_attrs) {
             printf(" [");
             bool first = true;
@@ -514,12 +519,14 @@ static inline void feature_testar_test(char *custom_target) {
         }
 
         COMPILER_TRY {
+            LOGF("test case build start=== %s\n", test_case->name);
             build(entry, false);
+            LOGF("test case build success=== %s\n", test_case->name);
 
             int total_runs = test_case->attrs->repeat + 1;
             for (int run = 1; run <= total_runs; run++) {
                 if (run > 1) {
-                    printf("test case repeat %d/%d === %s\n", run - 1, test_case->attrs->repeat, test_case->name);
+                    LOGF("test case repeat %d/%d === %s\n", run - 1, test_case->attrs->repeat, test_case->name);
                 }
 
                 // 执行并测试
@@ -534,12 +541,11 @@ static inline void feature_testar_test(char *custom_target) {
                     if (status != 0) {
                         assertf(false, "%s failed: %s", test_case->name, output);
                     } else {
-                        printf("%s", output);
+                        LOGF("%s", output);
                     }
                 }
             }
-        }
-        else {
+        } else {
             // 编译错误处理
             if (output_file) {
                 assertf(str_equal(test_error_msg, (char *) output_file->content), "in %s\nexpect: %s\nactual: %s",
@@ -555,7 +561,7 @@ static inline void feature_testar_test(char *custom_target) {
         }
 
         // 进行编译
-        printf("test case success === %s\n", test_case->name);
+        LOGF("test case success === %s\n", test_case->name);
         fflush(stdout);
     }
 }
