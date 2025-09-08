@@ -23,14 +23,15 @@ fn main() {
 --- main.n
 import co
 import net.tls
+import net.tcp
 
 fn main() {
-    var conn = tls.connect_timeout('64.233.170.108:465', 100) catch e {
-        println(e.msg())
+    var conn = tls.connect_timeout('64.233.170.108:465', 50) catch e {
+        println('in catch', e.msg())
 
         co.sleep(1000)
         return
     }
-
+    println('connect success')
     co.sleep(1000)
 }

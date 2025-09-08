@@ -539,7 +539,7 @@ static inline void feature_testar_test(char *custom_target) {
                     int32_t status = 0;
                     char *output = exec_output_status(&status);
                     if (status != 0) {
-                        assertf(false, "%s failed: %s", test_case->name, output);
+                        assertf(false, "%s status code %d failed: %s", test_case->name, status, output);
                     } else {
                         LOGF("%s", output);
                     }

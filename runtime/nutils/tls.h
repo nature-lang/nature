@@ -28,7 +28,9 @@ typedef struct {
     // UV 相关
     uv_tcp_t handle; // 基础 tcp 链接
     uv_write_t write_req;
+    uv_connect_t conn_req;
     uv_timer_t timer;
+    int ref_count;
 
     // mbedTLS 相关
     mbedtls_ssl_context ssl;
@@ -49,22 +51,45 @@ typedef struct {
 
 // conn->data 由 mbedtls 相关 cb 注册
 static inline void tls_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
-    inner_tls_conn_t *conn = handle->data;
+    inner_tls_conn_t *conn = CONTAINER_OF(handle, inner_tls_conn_t, handle);
     assert(conn);
 
     *buf = conn->buf;
 }
 
+static inline void on_tls_timer_close_cb(uv_handle_t *handle) {
+    inner_tls_conn_t *conn = CONTAINER_OF(handle, inner_tls_conn_t, timer);
+    DEBUGF("[on_tls_timer_close_cb] start, ref_count = %d", conn->ref_count);
+    conn->ref_count -= 1;
 
-static inline void on_tls_close_handle_cb(uv_handle_t *handle) {
+    assert(conn->ref_count >= 0);
+    if (conn->ref_count == 0) {
+        free(conn);
+        DEBUGF("[on_tls_timer_close_cb] ref count = 0, freed")
+    } else {
+        DEBUGF("[on_tls_timer_close_cb] ref count = %d, skip", conn->ref_count);
+    }
+}
+
+
+static inline void on_tls_close_cb(uv_handle_t *handle) {
     inner_tls_conn_t *conn = CONTAINER_OF(handle, inner_tls_conn_t, handle);
-    free(conn);
+    DEBUGF("[on_tls_close_cb] start, ref_count = %d", conn->ref_count);
+    conn->ref_count -= 1;
+
+    assert(conn->ref_count >= 0);
+    if (conn->ref_count == 0) {
+        free(conn);
+        DEBUGF("[on_tls_close_cb] ref count = 0, freed")
+    } else {
+        DEBUGF("[on_tls_close_cb] ref count = %d, skip", conn->ref_count);
+    }
 }
 
 static inline void on_tls_read_cb(uv_stream_t *client_handle, ssize_t nread, const uv_buf_t *buf) {
     DEBUGF("[on_tls_read_cb] client: %p, nread: %ld", client_handle, nread);
 
-    inner_tls_conn_t *conn = client_handle->data;
+    inner_tls_conn_t *conn = CONTAINER_OF(client_handle, inner_tls_conn_t, handle);
     conn->read_len = 0;
 
     if (nread < 0) {
@@ -82,7 +107,8 @@ static inline void on_tls_read_cb(uv_stream_t *client_handle, ssize_t nread, con
 }
 
 static inline void on_tls_write_end_cb(uv_write_t *write_req, int status) {
-    inner_tls_conn_t *conn = write_req->data;
+    inner_tls_conn_t *conn = CONTAINER_OF(write_req, inner_tls_conn_t, write_req);
+
     if (status < 0) {
         char *msg = tlsprintf("tls uv_write failed: %s", uv_strerror(status));
         DEBUGF("[on_tls_write_end_cb] failed: %s, co=%p", msg, conn->co);
@@ -199,7 +225,8 @@ static void tls_cleanup_ssl_context(inner_tls_conn_t *conn) {
 
 static inline void on_tls_connect_cb(uv_connect_t *conn_req, int status) {
     DEBUGF("[on_tls_connect_cb] start")
-    inner_tls_conn_t *conn = conn_req->data;
+    inner_tls_conn_t *conn = CONTAINER_OF(conn_req, inner_tls_conn_t, conn_req);
+
     if (conn->timeout) {
         DEBUGF("[on_tls_connect_cb] connection timeout, not need handle anything")
         return;
@@ -207,6 +234,7 @@ static inline void on_tls_connect_cb(uv_connect_t *conn_req, int status) {
 
     if (uv_is_active((uv_handle_t *) &conn->timer)) {
         uv_timer_stop(&conn->timer);
+        uv_close((uv_handle_t *) &conn->timer, on_tls_timer_close_cb);
     }
 
     if (status < 0) {
@@ -219,27 +247,29 @@ static inline void on_tls_connect_cb(uv_connect_t *conn_req, int status) {
 
 static inline void on_tls_timeout_cb(uv_timer_t *handle) {
     DEBUGF("[on_tls_timeout_cb] timeout set")
-
-    inner_tls_conn_t *conn = handle->data;
+    inner_tls_conn_t *conn = CONTAINER_OF(handle, inner_tls_conn_t, timer);
     conn->timeout = true;
 
     uv_timer_stop(handle);
+    uv_close((uv_handle_t *) handle, on_tls_timer_close_cb);
+
     rti_co_throw(conn->co, "TLS connection timeout", 0);
     co_ready(conn->co);
 }
 
 void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t *addr, n_int64_t port, n_int64_t timeout_ms) {
-    DEBUGF("[rt_uv_tls_connect] start, addr %s, port %ld, timeout_ms %ld", (char *) rt_string_ref(addr), port, timeout_ms)
+    DEBUGF("[rt_uv_tls_connect] start, addr %s, port %ld, timeout_ms %ld", (char *) rt_string_ref(addr), port,
+           timeout_ms)
 
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
-    inner_tls_conn_t *conn = mallocz(sizeof(inner_tls_conn_t));
+    inner_tls_conn_t *conn = malloc(sizeof(inner_tls_conn_t));
     conn->timeout = false;
     conn->data = NULL;
     conn->handshake_done = false;
     conn->read_len = 0;
-
+    conn->ref_count = 1;
     n_conn->conn = conn;
     conn->co = co;
 
@@ -257,30 +287,28 @@ void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t *addr, n_int64_t port, n
     }
 
     uv_tcp_init(&p->uv_loop, &conn->handle);
-    conn->handle.data = conn;
 
     struct sockaddr_in dest;
     uv_ip4_addr(rt_string_ref(addr), port, &dest);
 
-    uv_connect_t *connect_req = malloc(sizeof(uv_connect_t));
-    connect_req->data = conn;
-    uv_tcp_connect(connect_req, &conn->handle, (const struct sockaddr *) &dest, on_tls_connect_cb);
+    uv_tcp_connect(&conn->conn_req, &conn->handle, (const struct sockaddr *) &dest, on_tls_connect_cb);
 
     if (timeout_ms > 0) {
-        conn->timer.data = conn;
         uv_timer_init(&p->uv_loop, &conn->timer);
+        conn->ref_count += 1;
         uv_timer_start(&conn->timer, on_tls_timeout_cb, timeout_ms, 0);
     }
 
     // yield wait conn and handshake
     co_yield_waiting(co, NULL, NULL);
-    free(connect_req);
 
     if (co->has_error) {
-        if (uv_is_active((uv_handle_t *) &conn->handle)) {
-            uv_close((uv_handle_t *) &conn->handle, NULL);
+        if (!uv_is_closing((uv_handle_t *) &conn->handle)) {
+            DEBUGF("[rt_uv_tls_connect] connect need close")
+            uv_close((uv_handle_t *) &conn->handle, on_tls_close_cb);
         }
-        DEBUGF("[rt_uv_tls_connect] have error");
+
+        DEBUGF("[rt_uv_tls_connect] have error, will return");
         return;
     }
 
@@ -378,7 +406,7 @@ void rt_uv_tls_conn_close(n_tls_conn_t *n_conn) {
         mbedtls_ssl_close_notify(&conn->ssl);
     }
 
-    uv_close((uv_handle_t *) &conn->handle, on_tls_close_handle_cb);
+    uv_close((uv_handle_t *) &conn->handle, on_tls_close_cb);
 }
 
 #endif //NATURE_RUNTIME_NUTILS_TLS_H_

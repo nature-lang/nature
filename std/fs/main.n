@@ -46,7 +46,7 @@ fn file_t.content():string! {
     var s = self.stat()
     var file_size = s.size
     var buf = vec_new<u8>(0, file_size as int)
-    int n = self.read(buf)
+    int n = self.read_at(buf, 0)
     if n != file_size as int {
         throw errorf('incomplete reading')
     }

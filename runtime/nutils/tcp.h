@@ -16,7 +16,9 @@ typedef struct {
     uv_tcp_t handle;
     uv_async_t async;
     uv_write_t write_req;
+    uv_connect_t conn_req;
     uv_timer_t timer;
+    int ref_count;
 } inner_conn_t;
 
 typedef struct {
@@ -41,8 +43,29 @@ static inline void on_conn_close_async_cb(uv_handle_t *handle) {
 
 static inline void on_conn_close_handle_cb(uv_handle_t *handle) {
     inner_conn_t *conn = CONTAINER_OF(handle, inner_conn_t, handle);
-    // close async
-    uv_close((uv_handle_t *) &conn->async, on_conn_close_async_cb);
+    conn->ref_count -= 1;
+    assert(conn->ref_count >= 0);
+
+    if (conn->ref_count == 0) {
+        // close async
+        uv_close((uv_handle_t *) &conn->async, on_conn_close_async_cb);
+        DEBUGF("[on_conn_close_handle_cb] ref count = 0, will close async")
+    } else {
+        DEBUGF("[on_conn_close_handle_cb] ref count = %d, skip", conn->ref_count);
+    }
+
+}
+
+static inline void on_tcp_timer_close_cb(uv_handle_t *handle) {
+    inner_conn_t *conn = CONTAINER_OF(handle, inner_conn_t, timer);
+    conn->ref_count -= 1;
+    assert(conn->ref_count >= 0);
+    if (conn->ref_count == 0) {
+        uv_close((uv_handle_t *) &conn->async, on_conn_close_async_cb);
+        DEBUGF("[on_tcp_timer_close_cb] ref count = 0, will close async")
+    } else {
+        DEBUGF("[on_tcp_timer_close_cb] ref count = %d, skip", conn->ref_count);
+    }
 }
 
 static inline void on_tcp_close_cb(uv_handle_t *handle) {
@@ -145,7 +168,8 @@ int64_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t *buf) {
     conn->data = buf;
 
     if (conn->handle.loop != &co->p->uv_loop) {
-        DEBUGF("[rt_uv_tcp_read] diff loop, conn loop = %p, current loop = %p, co=%p, conn=%p", conn->handle.loop, &co->p->uv_loop, co, conn);
+        DEBUGF("[rt_uv_tcp_read] diff loop, conn loop = %p, current loop = %p, co=%p, conn=%p", conn->handle.loop,
+                &co->p->uv_loop, co, conn);
 
         conn->async_type = 0;
         conn->async.data = conn;
@@ -183,7 +207,8 @@ int64_t rt_uv_tcp_write(n_tcp_conn_t *n_conn, n_vec_t *buf) {
 
     conn->handle.data = conn;
     if (conn->handle.loop != &co->p->uv_loop) {
-        DEBUGF("[rt_uv_tcp_write] diff loop, conn=%p, current_co=%p|%p, conn_co=%p|%p", conn, co, &co->p->uv_loop, conn->co, conn->handle.loop);
+        DEBUGF("[rt_uv_tcp_write] diff loop, conn=%p, current_co=%p|%p, conn_co=%p|%p", conn, co, &co->p->uv_loop,
+                conn->co, conn->handle.loop);
 
         conn->data = buf;
         conn->async_type = 1;
@@ -216,7 +241,8 @@ int64_t rt_uv_tcp_write(n_tcp_conn_t *n_conn, n_vec_t *buf) {
 
 static inline void on_tcp_connect_cb(uv_connect_t *conn_req, int status) {
     DEBUGF("[on_tcp_connect_cb] start")
-    inner_conn_t *conn = conn_req->data;
+    inner_conn_t *conn = CONTAINER_OF(conn_req, inner_conn_t, conn_req);
+
     if (conn->timeout) {
         DEBUGF("[on_tcp_connect_cb] connection timeout, not need handle anything")
         return;
@@ -224,6 +250,7 @@ static inline void on_tcp_connect_cb(uv_connect_t *conn_req, int status) {
 
     if (uv_is_active((uv_handle_t *) &conn->timer)) {
         uv_timer_stop(&conn->timer);
+        uv_close((uv_handle_t *) &conn->timer, on_tcp_timer_close_cb);
     }
 
     if (status < 0) {
@@ -239,10 +266,12 @@ static inline void on_tcp_connect_cb(uv_connect_t *conn_req, int status) {
 static inline void on_tcp_timeout_cb(uv_timer_t *handle) {
     DEBUGF("[on_tcp_timeout_cb] timeout set")
 
-    inner_conn_t *conn = handle->data;
+    inner_conn_t *conn = CONTAINER_OF(handle, inner_conn_t, timer);
     conn->timeout = true;
 
     uv_timer_stop(handle);
+    uv_close((uv_handle_t *) handle, on_tcp_timer_close_cb);
+
     rti_co_throw(conn->co, "connection timeout", 0);
     co_ready(conn->co);
 }
@@ -253,9 +282,10 @@ void rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t *addr, n_int64_t port, n
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
-    inner_conn_t *conn = mallocz(sizeof(inner_conn_t));
+    inner_conn_t *conn = malloc(sizeof(inner_conn_t));
     conn->timeout = false;
     conn->data = NULL;
+    conn->ref_count = 1;
     n_conn->conn = conn;
 
     conn->co = co;
@@ -268,23 +298,20 @@ void rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t *addr, n_int64_t port, n
     struct sockaddr_in dest;
     uv_ip4_addr(rt_string_ref(addr), port, &dest);
 
-    uv_connect_t *connect_req = malloc(sizeof(uv_connect_t));
-    connect_req->data = conn;
-    uv_tcp_connect(connect_req, &conn->handle, (const struct sockaddr *) &dest, on_tcp_connect_cb);
+    uv_tcp_connect(&conn->conn_req, &conn->handle, (const struct sockaddr *) &dest, on_tcp_connect_cb);
 
     if (timeout_ms > 0) {
-        conn->timer.data = conn;
+        conn->ref_count += 1;
         uv_timer_init(&p->uv_loop, &conn->timer);
         uv_timer_start(&conn->timer, on_tcp_timeout_cb, timeout_ms, 0); // repeat == 0
     }
 
     // yield wait conn
     co_yield_waiting(co, NULL, NULL);
-    free(connect_req);
 
     if (co->has_error) {
-        if (uv_is_active((uv_handle_t *) &conn->handle)) {
-            uv_close((uv_handle_t *) &conn->handle, NULL);
+        if (!uv_is_closing((uv_handle_t *) &conn->handle)) {
+            uv_close((uv_handle_t *) &conn->handle, on_conn_close_handle_cb);
         }
         DEBUGF("[rt_uv_tcp_connect] have error");
         return;
@@ -341,7 +368,8 @@ void on_tcp_conn_cb(uv_stream_t *handle, int status) {
     n_tcp_server_t *server = handle->data;
 
     inner_conn_t *conn = mallocz(sizeof(inner_conn_t));
-    //    conn->timeout = 0;
+    conn->ref_count = 1;
+
     uv_tcp_init(handle->loop, &conn->handle);
 
     int result = uv_accept((uv_stream_t *) server->server_handle, (uv_stream_t *) &conn->handle);
@@ -407,16 +435,19 @@ void rt_uv_tcp_server_close(n_tcp_server_t *server) {
 }
 
 void rt_uv_tcp_conn_close(n_tcp_conn_t *n_conn) {
+    DEBUGF("[rt_uv_tcp_conn_close] start")
     if (n_conn->closed) {
         return;
     }
+
     n_conn->closed = true;
 
     inner_conn_t *conn = n_conn->conn;
     coroutine_t *co = coroutine_get();
 
     if (conn->handle.loop != &co->p->uv_loop) {
-        DEBUGF("conn(co(%p)) handle loop %p != current co(%p) loop %p", conn->co, conn->handle.loop, co, &co->p->uv_loop);
+        DEBUGF("conn(co(%p)) handle loop %p != current co(%p) loop %p", conn->co, conn->handle.loop, co,
+                &co->p->uv_loop);
 
         conn->async_type = 2;
         conn->async.data = conn;
