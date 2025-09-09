@@ -1030,7 +1030,6 @@ impl<'a> Semantic<'a> {
                             message: format!("identifier '{}' undeclared in '{}' module", key, left_ident),
                         },
                     );
-                    expr.err = true;
                     return;
                 }
             }
@@ -1050,7 +1049,6 @@ impl<'a> Semantic<'a> {
                     message: format!("identifier '{}.{}' undeclared", left_ident, key),
                 },
             );
-            expr.err = true;
 
             return;
         }
@@ -1306,7 +1304,6 @@ impl<'a> Semantic<'a> {
                             message: format!("identifier '{}' undeclared", ident),
                         },
                     );
-                    expr.err = true;
                 }
 
                 // propagation
@@ -1546,7 +1543,6 @@ impl<'a> Semantic<'a> {
             end,
             type_: Type::default(),
             target_type: Type::default(),
-            err: false,
         });
 
         // 创建最终的变量定义语句

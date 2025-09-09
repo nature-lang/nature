@@ -74,3 +74,22 @@ fn main() {
     println(result)
     assert(result == '7e0d0767775312154ba16fd3af9771a2')
 }
+
+=== test_bcrypt
+--- main.n
+import crypto.bcrypt
+import co
+
+fn main() {
+    var password = '123456@124...'
+    var hashed = bcrypt.hash(password as [u8], bcrypt.DEFAULT_COST)
+    println(hashed as string)
+
+    bcrypt.verify(hashed, password as [u8]) catch e {
+        println('verify failed')
+        assert(false)
+        return
+    }
+
+    println('verify success')
+}

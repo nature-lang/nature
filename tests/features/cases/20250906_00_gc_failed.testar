@@ -1,0 +1,326 @@
+=== test_global_gc1
+--- main.n
+import json
+import fmt
+import time
+import strings
+import base64
+import crypto.hmac
+import crypto.sha256
+import libc
+import co
+import runtime
+
+// JWT configuration constants
+const JWT_ALGORITHM = "HS256"
+const JWT_DEFAULT_EXPIRY = 3600 // 1 hour in seconds
+const JWT_ISSUER = "emoji-api"
+
+// JWT Header structure
+type jwt_header_t = struct {
+    string alg
+    string typ
+}
+
+// JWT Payload structure (Standard JWT Claims)
+type jwt_payload_t = struct {
+    string sub    // subject (user ID) - standard field
+    string iss    // issuer - standard field
+    int iat       // issued at (issue time) - standard field
+    int exp       // expiration time - standard field
+    int nbf       // not before (effective time) - standard field
+    string jti    // JWT ID (unique identifier) - standard field
+    {string:any} data // custom data
+}
+
+// JWT Token structure
+type jwt_token_t = struct {
+    jwt_header_t header
+    jwt_payload_t payload
+    string signature
+    string raw_token
+}
+
+// JWT configuration structure
+type jwt_config_t = struct {
+    string secret_key
+    int default_expiry
+    string issuer
+    string algorithm
+}
+
+// Global JWT configuration
+var jwt_config = jwt_config_t{
+    secret_key = "emoji-api.helloworld202509052341",
+    default_expiry = JWT_DEFAULT_EXPIRY,
+    issuer = JWT_ISSUER,
+    algorithm = JWT_ALGORITHM,
+}
+
+// Initialize JWT configuration
+fn init_jwt(string secret_key, int expiry, string issuer):void {
+    jwt_config.secret_key = secret_key
+    if expiry > 0 {
+        jwt_config.default_expiry = expiry
+    }
+    if issuer != "" {
+        jwt_config.issuer = issuer
+    }
+}
+
+// Generate JWT Token
+fn generate(string sub, {string:any} custom_data, int expiry_seconds):string! {
+    var now = time.unix()
+    var exp_time = now + jwt_config.default_expiry
+    if expiry_seconds > 0 {
+        exp_time = now + expiry_seconds
+    }
+
+    // Create header
+    var header = jwt_header_t{
+        alg = jwt_config.algorithm,
+        typ = "JWT",
+    }
+
+    // Create payload (standard JWT structure)
+    var payload = jwt_payload_t{
+        sub = sub,
+        iss = jwt_config.issuer,
+        iat = now,
+        exp = exp_time,
+        nbf = now,
+        jti = generate_jti(),
+        data = custom_data,
+    }
+
+    // Encode header and payload
+    var header_json = json.serialize(header)
+    var payload_json = json.serialize(payload)
+
+    var encoded_header = base64_url_encode(header_json)
+    var encoded_payload = base64_url_encode(payload_json)
+
+    // Create signature
+    var signing_input = encoded_header + "." + encoded_payload
+    var signature = create_signature(signing_input, jwt_config.secret_key)
+    var encoded_signature = base64_url_encode(signature as string)
+
+    return encoded_header + "." + encoded_payload + "." + encoded_signature
+}
+
+// Verify JWT Token
+fn verify(string token):jwt_token_t! {
+    var parts = token.split(".")
+    if parts.len() != 3 {
+        throw errorf("Invalid JWT format")
+    }
+
+    println('verify 1')
+    var encoded_header = parts[0]
+    var encoded_payload = parts[1]
+    var encoded_signature = parts[2]
+    println('verify 2')
+
+    // Decode header and payload
+    var header_json = base64_url_decode(encoded_header)
+    println('verify 3')
+
+    var payload_json = base64_url_decode(encoded_payload)
+
+    println('verify 4')
+    var header = json.deserialize<jwt_header_t>(header_json)
+    var payload = json.deserialize<jwt_payload_t>(payload_json)
+
+    // Verify algorithm
+    if header.alg != jwt_config.algorithm {
+        throw errorf("Invalid algorithm")
+    }
+    println('verify 5')
+
+
+    // Verify signature
+    var signing_input = encoded_header + "." + encoded_payload
+    var expected_signature = create_signature(signing_input, jwt_config.secret_key)
+    var actual_signature = base64_url_decode(encoded_signature)
+
+    println('verify 6')
+
+    if expected_signature as string != actual_signature {
+        throw errorf("Invalid signature")
+    }
+
+    // Verify time
+    var now = time.unix()
+    if payload.exp < now {
+        throw errorf("Token expired")
+    }
+
+    if payload.nbf > now {
+        throw errorf("Token not yet valid")
+    }
+
+    return jwt_token_t{
+        header = header,
+        payload = payload,
+        signature = encoded_signature,
+        raw_token = token,
+    }
+}
+
+// Refresh Token
+fn refresh_token(string token, int new_expiry):string! {
+    var jwt_token = verify(token)
+
+    // Create new token, keeping original data
+    return generate(
+        jwt_token.payload.sub,
+        jwt_token.payload.data,
+        new_expiry,
+    )
+}
+
+
+// Check if Token is expired
+fn is_token_expired(string token):bool! {
+    var parts = token.split(".")
+    if parts.len() != 3 {
+        throw errorf("Invalid JWT format")
+    }
+
+    var encoded_payload = parts[1]
+    var payload_json = base64_url_decode(encoded_payload)
+    var payload = json.deserialize<jwt_payload_t>(payload_json)
+
+    var now = time.unix()
+    return payload.exp < now
+}
+
+// Get Token remaining valid time (seconds)
+fn remaining_time(string token):int! {
+    var parts = token.split(".")
+    if parts.len() != 3 {
+        throw errorf("Invalid JWT format")
+    }
+
+    var encoded_payload = parts[1]
+    var payload_json = base64_url_decode(encoded_payload)
+    var payload = json.deserialize<jwt_payload_t>(payload_json)
+
+    var now = time.unix()
+    var remaining = payload.exp - now
+    if remaining > 0 {
+        return remaining
+    } else {
+        return 0
+    }
+}
+
+// Extract token from Authorization header
+fn extract_token_from_header(string auth_header):string! {
+    if !auth_header.starts_with("Bearer ") {
+        throw errorf("Invalid Authorization header format")
+    }
+    return auth_header[7..] // Remove "Bearer " prefix
+}
+
+fn generate_jti():string {
+    var timestamp = time.unix()
+
+    libc.srand((timestamp % 1000000) as u32)
+    var rand1 = libc.rand() as i64
+
+    libc.srand(((timestamp * 31) % 2147483647) as u32)
+    var rand2 = libc.rand()
+
+    libc.srand(((timestamp + rand1) % 2147483647) as u32)
+    var rand3 = libc.rand()
+
+    var combined = fmt.sprintf("%d-%d-%d-%d", timestamp, rand1, rand2, rand3)
+    var hasher = sha256.new()
+    var hash_result = hasher.update(combined as [u8]).hex()
+
+    return hash_result
+}
+
+// Helper function: Base64 URL encoding
+fn base64_url_encode(string data):string {
+    var encoded_bytes = base64.encode(data as [u8])
+    var encoded = encoded_bytes as string
+    encoded = encoded.replace('+', '-')
+    encoded = encoded.replace('/', '_')
+    encoded = encoded.rtrim(['='])
+    return encoded
+}
+
+// Helper function: Base64 URL decoding
+fn base64_url_decode(string data):string! {
+    var decoded_data = data
+    decoded_data = decoded_data.replace("-", "+")
+    decoded_data = decoded_data.replace("_", "/")
+
+    // Add necessary padding characters
+    var padding = 4 - (decoded_data.len() % 4)
+    if padding != 4 {
+        for int i = 0; i < padding; i+=1 {
+            decoded_data += "="
+        }
+    }
+
+    var decoded_bytes = base64.decode(decoded_data as [u8])
+    return decoded_bytes as string
+}
+
+// Helper function: Create HMAC-SHA256 signature
+fn create_signature(string data, string secret):[u8] {
+    return hmac.new(hmac.SHA256, secret as [u8]).update(data as [u8]).finish()
+}
+
+fn main():void! {
+    // init_jwt("emoji-api.helloworld202509052341", 7200, "emoji")
+    for int i = 0; i < 10; i += 1 {
+        runtime.gc()
+        co.sleep(1000)
+
+        // Generate token
+        {string:any} custom_data = {
+            "username": "john_doe",
+            "email": "john@example.com",
+        }
+
+        var token = generate("user123", custom_data, 0)
+        println("Generated token:", token)
+    }
+}
+
+=== test_global_gc2
+--- main.n
+import co
+import runtime
+
+type jwt_config_t = struct {
+    string secret_key
+    int default_expiry
+    string issuer
+    string algorithm
+}
+
+// Global JWT configuration
+var jwt_config = jwt_config_t{
+    secret_key = "emoji-api.helloworld202509052341",
+    default_expiry = 86400,
+    issuer = 'emoji',
+    algorithm = 'HS250',
+}
+
+[string;10] global_arr = ['1', 'ab', 'code1', 'code2', 'foo3', 'foo4', 'foo5', 'foo6', 'bar7', 'bar8']
+
+string hello = 'world'
+
+fn main():void! {
+    for int i = 0; i < 10; i += 1 {
+        runtime.gc()
+        co.sleep(1000)
+        println(hello.len(), global_arr[5].len(), jwt_config.issuer.len())
+    }
+}
+

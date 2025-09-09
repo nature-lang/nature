@@ -228,6 +228,14 @@ impl<'a> Syntax {
         return self.peek().token_type == token_type;
     }
 
+    fn ident_is_builtin_type(&self, t: Token) -> bool {
+        if t.literal == "vec" || t.literal == "map" || t.literal == "set" || t.literal == "tup" {
+            return true;
+        }
+
+        return false;
+    }
+
     fn consume(&mut self, token_type: TokenType) -> bool {
         if self.is(token_type) {
             self.advance();
@@ -288,7 +296,6 @@ impl<'a> Syntax {
             type_: Type::unknown(),
             target_type: Type::unknown(),
             node: AstNode::None,
-            err: false,
         })
     }
 
@@ -791,8 +798,10 @@ impl<'a> Syntax {
             return Ok(t);
         }
 
+        let token = self.peek();
         // vec<type>
-        if self.consume(TokenType::Vec) {
+        if token.literal == "vec" {
+            self.must(TokenType::Ident)?;
             self.must(TokenType::LeftAngle)?;
             let element_type = self.parser_type()?;
             self.must(TokenType::RightAngle)?;
@@ -803,7 +812,8 @@ impl<'a> Syntax {
         }
 
         // map<type,type>
-        if self.consume(TokenType::Map) {
+        if token.literal == "map" {
+            self.must(TokenType::Ident)?;
             self.must(TokenType::LeftAngle)?;
             let key_type = self.parser_type()?;
             self.must(TokenType::Comma)?;
@@ -816,7 +826,8 @@ impl<'a> Syntax {
         }
 
         // set<type>
-        if self.consume(TokenType::Set) {
+        if token.literal == "set" {
+            self.must(TokenType::Ident)?;
             self.must(TokenType::LeftAngle)?;
             let element_type = self.parser_type()?;
             self.must(TokenType::RightAngle)?;
@@ -827,7 +838,8 @@ impl<'a> Syntax {
         }
 
         // tup<type, type, ...>
-        if self.consume(TokenType::Tup) {
+        if token.literal == "tup" {
+            self.must(TokenType::Ident)?;
             self.must(TokenType::LeftAngle)?;
             let mut elements = Vec::new();
 
@@ -1686,7 +1698,6 @@ impl<'a> Syntax {
                 node: AstNode::Literal(TypeKind::Int64, "0".to_string()),
                 type_: Type::default(),
                 target_type: Type::default(),
-                err: false,
             });
 
             let end = if self.is(TokenType::RightSquare) {
@@ -1697,7 +1708,6 @@ impl<'a> Syntax {
                     node: AstNode::Literal(TypeKind::Int64, "-1".to_string()),
                     type_: Type::default(),
                     target_type: Type::default(),
-                    err: false,
                 })
             } else {
                 // [..expr] case
@@ -1726,7 +1736,6 @@ impl<'a> Syntax {
                     node: AstNode::Literal(TypeKind::Int64, "-1".to_string()),
                     type_: Type::default(),
                     target_type: Type::default(),
-                    err: false,
                 })
             } else {
                 // [expr..expr] case
@@ -1945,10 +1954,12 @@ impl<'a> Syntax {
         }
 
         // 内置复合类型
-        if matches!(
-            self.peek().token_type,
-            TokenType::Arr | TokenType::Map | TokenType::Tup | TokenType::Vec | TokenType::Set | TokenType::Chan
-        ) {
+        if matches!(self.peek().token_type, TokenType::Chan) {
+            return true;
+        }
+
+        let t = self.peek();
+        if self.ident_is_builtin_type(t.clone()) {
             return true;
         }
 
@@ -1974,7 +1985,6 @@ impl<'a> Syntax {
         if self.is(TokenType::Ident) && self.next_is(1, TokenType::Dot) && self.next_is(2, TokenType::Ident) && self.next_is(3, TokenType::Question) {
             return true;
         }
-
 
         let current_pos = self.current;
         let mut result = false;
@@ -2623,7 +2633,8 @@ impl<'a> Syntax {
             return true;
         }
 
-        if self.is(TokenType::Vec) || self.is(TokenType::Map) || self.is(TokenType::Set) {
+        let token = self.peek();
+        if self.ident_is_builtin_type(token.clone()) {
             return true;
         }
 
@@ -2747,7 +2758,7 @@ impl<'a> Syntax {
             self.current = temp_current;
 
             // 解析实现类型
-            let impl_type = if first_token.token_type == TokenType::Ident {
+            let impl_type = if (first_token.token_type == TokenType::Ident) && !self.ident_is_builtin_type(first_token.clone()) {
                 let mut t = Type::undo_new(TypeKind::Ident);
                 t.ident = self.must(TokenType::Ident)?.clone().literal;
                 t.ident_kind = TypeIdentKind::Def;

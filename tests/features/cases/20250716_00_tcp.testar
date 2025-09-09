@@ -463,3 +463,20 @@ fn main() {
     conn.write('hello world' as [u8])
     println('write success')
 }
+
+=== test_timeout2
+--- main.n
+import co
+import net.tls
+import net.tcp
+
+fn main() {
+    var conn = tcp.connect_timeout('64.233.170.108:465', 50) catch e {
+        println('in catch', e.msg())
+
+        co.sleep(1000)
+        return
+    }
+    println('connect success')
+    co.sleep(1000)
+}

@@ -209,7 +209,7 @@ typedef struct {
     // ct rtype 使用该字段
     int64_t malloc_gc_bits_offset; // NULL == -1
 
-    // 类型 bit 数据(按 uint8 对齐), 在内存中分配空间, 如果为 NULL, 则直接使用 gc_bits, 如果为 NULL, 则直接使用 gc_bits, 如果为 NULL, 则直接使用 gc_bits, 如果为 NULL, 则直接使用 gc_bits
+    // 类型 bit 数据(按 uint8 对齐), 在内存中分配空间, 如果为 NULL, 则直接使用 gc_bits
     // runtime GC_RTYPE 使用该字段(malloc_gc_bits_offset 中的数据无法再进一步修改)
     uint64_t gc_bits; // 从右到左，每个 bit 代表一个指针的位置，如果为 1，表示该位置是一个指针，需要 gc
     uint8_t align; // struct/list 最终对齐的字节数
@@ -719,6 +719,14 @@ static inline bool is_integer(type_kind kind) {
     return is_signed(kind) || is_unsigned(kind);
 }
 
+static inline bool is_any(type_t t) {
+    if (t.kind != TYPE_UNION) {
+        return false;
+    }
+
+    return t.union_->any;
+}
+
 static inline bool is_integer_or_anyptr(type_kind kind) {
     return is_integer(kind) || kind == TYPE_ANYPTR;
 }
@@ -766,6 +774,7 @@ static inline bool is_gc_alloc(type_kind kind) {
            kind == TYPE_COROUTINE_T ||
            kind == TYPE_CHAN ||
            kind == TYPE_UNION ||
+           kind == TYPE_INTERFACE ||
            kind == TYPE_FN;
 }
 

@@ -1069,7 +1069,7 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     type_t target_type = reduction_type(m, as_expr->target_type);
     as_expr->target_type = target_type;
 
-    type_t src_type = infer_expr(m, &as_expr->src, type_kind_new(TYPE_UNKNOWN));
+    type_t src_type = infer_expr(m, &as_expr->src, type_kind_new(TYPE_UNKNOWN), type_kind_new(TYPE_UNKNOWN));
     INFER_ASSERTF(src_type.kind != TYPE_UNKNOWN, "unknown as source type");
     as_expr->src.type = src_type;
 
@@ -1146,32 +1146,21 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
         type_ident_kind ident_kind = target_type.ident_kind;
         list_t *args = target_type.args;
 
-        as_expr->src.type.ident = target_type.ident;
-        as_expr->src.type.ident_kind = target_type.ident_kind;
-        as_expr->src.type.args = target_type.args;
-
-        // compare check
-        if (type_compare(as_expr->src.type, target_type)) {
+        // 原始类型匹配
+        if (type_compare_no_ident(target_type, as_expr->src.type)) {
             as_expr->src.type.ident = ident;
             as_expr->src.type.ident_kind = ident_kind;
             as_expr->src.type.args = args;
             return target_type;
         }
-
-        INFER_ASSERTF(false, "cannot casting to '%s'", type_format(target_type));
-        //            as_expr->src.type.ident = ident;
-        //            as_expr->src.type.ident_kind = ident_kind;
-        //            as_expr->src.type.args = args;
     }
 
     // ident 可以转换为 builtin 类型, 从而继承 builtin 的 impl fn, 在 self arg 传参时需要处理
     if (as_expr->src.type.ident_kind == TYPE_IDENT_DEF && target_type.ident_kind == TYPE_IDENT_BUILTIN) {
-        // 受到 ident 影响无法通过 compare, 则无法判断是否相同。
-        type_t src_temp_type = as_expr->src.type;
-        src_temp_type.ident = target_type.ident;
-        src_temp_type.ident_kind = target_type.ident_kind;
-        if (type_compare(target_type, src_temp_type)) {
-            as_expr->src.type = src_temp_type;
+        if (type_compare_no_ident(target_type, as_expr->src.type)) {
+            as_expr->src.type.ident = target_type.ident;
+            as_expr->src.type.ident_kind = target_type.ident_kind;
+            as_expr->src.type.args = target_type.args;
             return target_type;
         }
     }
@@ -1411,7 +1400,9 @@ static void infer_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
     infer_body(m, try_stmt->try_body);
     m->be_caught -= 1;
 
-    try_stmt->catch_err.type = interface_throwable();
+    type_t interface_error = interface_throwable();
+    interface_error = reduction_type(m, interface_error);
+    try_stmt->catch_err.type = interface_error;
 
     rewrite_var_decl(m, &try_stmt->catch_err);
 
@@ -1680,7 +1671,7 @@ static type_t infer_vec_slice(module_t *m, ast_vec_slice_t *slice) {
  * @param list_new
  * @return
  */
-static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type) {
+static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type, type_t literal_refer) {
     ast_vec_new_t *vec_new = expr->value;
 
     if (target_type.kind == TYPE_ARR) {
@@ -1729,6 +1720,8 @@ static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type) {
         // 如果 target 强制约定了类型则直接使用 target 的类型, 否则就自己推断
         // 考虑到 list_new 可能为空的情况，所以这里默认赋值一次
         type_vec->element_type = target_type.vec->element_type;
+    } else if (is_any(literal_refer)) {
+        type_vec->element_type = literal_refer;
     }
 
     result.vec = type_vec;
@@ -1751,14 +1744,17 @@ static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type) {
     return reduction_type(m, result);
 }
 
-static type_t infer_empty_curly_new(module_t *m, ast_expr_t *expr, type_t target_type) {
-    if (target_type.kind == TYPE_UNKNOWN) {
-        return target_type;
+static type_t infer_empty_curly_new(module_t *m, ast_expr_t *expr, type_t target_type, type_t literal_refer) {
+    if (is_any(literal_refer)) {
+        expr->assert_type = AST_EXPR_MAP_NEW; // string:any
+        type_map_t *type_map = NEW(type_map_t);
+        type_map->key_type = type_kind_new(TYPE_STRING);
+        type_map->value_type = literal_refer;
+        return type_new(TYPE_MAP, type_map);
     }
 
     // 必须要 target 引导，才能确定具体的类型
     INFER_ASSERTF(target_type.kind > 0, "map key/value type cannot confirm");
-
     INFER_ASSERTF(target_type.kind == TYPE_MAP || target_type.kind == TYPE_SET, "{} cannot ref type %s",
                   type_format(target_type));
 
@@ -1776,7 +1772,7 @@ static type_t infer_empty_curly_new(module_t *m, ast_expr_t *expr, type_t target
  * @param map_new
  * @return
  */
-static type_t infer_map_new(module_t *m, ast_map_new_t *map_new, type_t target_type) {
+static type_t infer_map_new(module_t *m, ast_map_new_t *map_new, type_t target_type, type_t literal_refer) {
     type_t result = type_kind_new(TYPE_MAP);
     result.status = REDUCTION_STATUS_UNDO;
 
@@ -1795,7 +1791,11 @@ static type_t infer_map_new(module_t *m, ast_map_new_t *map_new, type_t target_t
         // 考虑到 map 可能为空的情况，所以这里默认赋值一次, 如果为空就直接使用 target 的类型
         type_map->key_type = target_type.map->key_type;
         type_map->value_type = target_type.map->value_type;
+    } else if (is_any(literal_refer)) {
+        type_map->key_type = type_kind_new(TYPE_STRING); // default to string?
+        type_map->value_type = literal_refer;
     }
+
     result.map = type_map;
     if (map_new->elements->length == 0) {
         INFER_ASSERTF(type_confirmed(type_map->key_type), "map key type not confirm");
@@ -2985,7 +2985,7 @@ static type_t infer_left_expr(module_t *m, ast_expr_t *expr) {
  * 通过 target_type 对进行约束，但是不会强制进行比较
  * @return
  */
-static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
+static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type, type_t literal_refer) {
     SET_LINE_COLUMN(expr);
     if (expr->type.kind > 0) {
         return expr->type;
@@ -3031,7 +3031,7 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
             return infer_ident(m, expr->value);
         }
         case AST_EXPR_VEC_NEW: { // literal casting
-            return infer_vec_new(m, expr, target_type);
+            return infer_vec_new(m, expr, target_type, literal_refer);
         }
         case AST_EXPR_VEC_SLICE: {
             return infer_vec_slice(m, expr->value);
@@ -3041,10 +3041,10 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
             return infer_vec_repeat_new(m, expr, target_type);
         }
         case AST_EXPR_EMPTY_CURLY_NEW: { // literal casting
-            return infer_empty_curly_new(m, expr, target_type);
+            return infer_empty_curly_new(m, expr, target_type, literal_refer);
         }
         case AST_EXPR_MAP_NEW: { // literal casting
-            return infer_map_new(m, expr->value, target_type);
+            return infer_map_new(m, expr->value, target_type, literal_refer);
         }
         case AST_EXPR_SET_NEW: { // literal casting
             return infer_set_new(m, expr->value, target_type);
@@ -3143,7 +3143,8 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
 
     // 避免重复 reduction
     if (expr->type.kind == 0) {
-        type_t type = infer_expr(m, expr, target_type.kind != TYPE_UNION ? target_type : type_kind_new(TYPE_UNKNOWN));
+        type_t type = infer_expr(m, expr, target_type.kind != TYPE_UNION ? target_type : type_kind_new(TYPE_UNKNOWN),
+                                 is_any(target_type) ? target_type : type_kind_new(TYPE_UNKNOWN));
 
         target_type = reduction_type(m, target_type);
         expr->type = reduction_type(m, type);

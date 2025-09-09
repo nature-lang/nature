@@ -18,3 +18,20 @@ fn main() {
     println(len, resp_buf.slice(0, len) as string)
     assert(len < 300 && len > 200)
 }
+
+=== test_timeout
+--- main.n
+import co
+import net.tls
+import net.tcp
+
+fn main() {
+    var conn = tls.connect_timeout('64.233.170.108:465', 50) catch e {
+        println('in catch', e.msg())
+
+        co.sleep(1000)
+        return
+    }
+    println('connect success')
+    co.sleep(1000)
+}

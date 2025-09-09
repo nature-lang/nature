@@ -712,9 +712,9 @@ static token_type_t scanner_ident(char *word, int length) {
                 case 'n': {
                     return scanner_rest(word, length, 2, 1, "y", TOKEN_ANY);
                 }
-                case 'r': {
-                    return scanner_rest(word, length, 2, 1, "r", TOKEN_ARR);
-                }
+                    //                case 'r': {
+                    //                    return scanner_rest(word, length, 2, 1, "r", TOKEN_ARR);
+                    //                }
             }
             break;
         }
@@ -811,8 +811,8 @@ static token_type_t scanner_ident(char *word, int length) {
             switch (word[1]) {
                 case 'e': {
                     switch (word[2]) {
-                        case 't':
-                            return scanner_rest(word, length, 3, 0, "", TOKEN_SET);
+                            //                        case 't':
+                            //                            return scanner_rest(word, length, 3, 0, "", TOKEN_SET);
                         case 'l': // select
                             return scanner_rest(word, length, 3, 3, "ect", TOKEN_SELECT);
                     }
@@ -836,8 +836,8 @@ static token_type_t scanner_ident(char *word, int length) {
                     return scanner_rest(word, length, 2, 3, "row", TOKEN_THROW);
                 case 'y': // type
                     return scanner_rest(word, length, 2, 2, "pe", TOKEN_TYPE);
-                case 'u': // tup
-                    return scanner_rest(word, length, 2, 1, "p", TOKEN_TUP);
+                    //                case 'u': // tup
+                    //                    return scanner_rest(word, length, 2, 1, "p", TOKEN_TUP);
                 case 'r': {
                     switch (word[2]) {
                         case 'y':
@@ -854,8 +854,8 @@ static token_type_t scanner_ident(char *word, int length) {
             switch (word[1]) {
                 case 'a':
                     return scanner_rest(word, length, 2, 1, "r", TOKEN_VAR);
-                case 'e': // vec
-                    return scanner_rest(word, length, 2, 1, "c", TOKEN_VEC);
+                    //                case 'e': // vec
+                    //                    return scanner_rest(word, length, 2, 1, "c", TOKEN_VEC);
                 case 'o': // void
                     return scanner_rest(word, length, 2, 2, "id", TOKEN_VOID);
             }
@@ -880,8 +880,8 @@ static token_type_t scanner_ident(char *word, int length) {
             switch (word[1]) {
                 case 'a': {
                     switch (word[2]) {
-                        case 'p':
-                            return scanner_rest(word, length, 3, 0, "", TOKEN_MAP);
+                            //                        case 'p':
+                            //                            return scanner_rest(word, length, 3, 0, "", TOKEN_MAP);
                         case 't':
                             return scanner_rest(word, length, 3, 2, "ch", TOKEN_MATCH);
                     }

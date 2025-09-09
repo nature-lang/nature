@@ -62,6 +62,13 @@ static bool parser_is(module_t *m, token_type_t expect) {
     return t->type == expect;
 }
 
+static bool ident_is_builtin_type(module_t *m, token_t *token) {
+    if (str_equal(token->literal, "vec") || str_equal(token->literal, "map") || str_equal(token->literal, "set") || str_equal(token->literal, "tup")) {
+        return true;
+    }
+    return false;
+}
+
 static bool parser_ident_is(module_t *m, char *expect) {
     token_t *t = m->p_cursor.current->value;
     if (t->type != TOKEN_IDENT) {
@@ -393,8 +400,14 @@ static type_t parser_single_type(module_t *m) {
         }
     }
 
+    token_t *token = parser_peek(m);
+    //    if (str_equal(t->literal, "vec") || str_equal(t->literal, "map") || str_equal(t->literal, "tup") || str_equal(t->literal, "set")) {
+    //        return true;
+    //    }
+
     // map<type,type>
-    if (parser_consume(m, TOKEN_MAP)) {
+    if (str_equal(token->literal, "map")) {
+        parser_must(m, TOKEN_IDENT);
         parser_must(m, TOKEN_LEFT_ANGLE);
         type_map_t *map = NEW(type_map_t);
         map->key_type = parser_type(m);
@@ -407,7 +420,8 @@ static type_t parser_single_type(module_t *m) {
     }
 
     // set<type>
-    if (parser_consume(m, TOKEN_SET)) {
+    if (str_equal(token->literal, "set")) {
+        parser_must(m, TOKEN_IDENT);
         parser_must(m, TOKEN_LEFT_ANGLE);
         type_set_t *set = NEW(type_set_t);
         set->element_type = parser_type(m);
@@ -418,7 +432,8 @@ static type_t parser_single_type(module_t *m) {
     }
 
     // tup<...>
-    if (parser_consume(m, TOKEN_TUP)) {
+    if (str_equal(token->literal, "tup")) {
+        parser_must(m, TOKEN_IDENT);
         parser_must(m, TOKEN_LEFT_ANGLE);
         type_tuple_t *tuple = NEW(type_tuple_t);
         tuple->elements = ct_list_new(sizeof(type_t));
@@ -434,7 +449,8 @@ static type_t parser_single_type(module_t *m) {
     }
 
     // vec<int>
-    if (parser_consume(m, TOKEN_VEC)) {
+    if (str_equal(token->literal, "vec")) {
+        parser_must(m, TOKEN_IDENT);
         parser_must(m, TOKEN_LEFT_ANGLE);
         type_vec_t *type_vec = NEW(type_vec_t);
         type_vec->element_type = parser_type(m);
@@ -454,22 +470,6 @@ static type_t parser_single_type(module_t *m) {
         result.chan = type_chan;
         return result;
     }
-
-    // arr<int,i> replace to [int;i]
-    //    if (parser_consume(m, TOKEN_ARR)) {
-    //        parser_must(m, TOKEN_LEFT_ANGLE);
-    //        type_array_t *type_array = NEW(type_array_t);
-    //        type_array->element_type = parser_type(m);
-    //        parser_consume(m, TOKEN_COMMA);
-    //        token_t *t = parser_must(m, TOKEN_LITERAL_INT);
-    //        int length = atoi(t->literal);
-    //        PARSER_ASSERTF(length > 0, "array len must > 0")
-    //        type_array->length = length;
-    //        parser_must(m, TOKEN_RIGHT_ANGLE);
-    //        result.kind = TYPE_ARR;
-    //        result.array = type_array;
-    //        return result;
-    //    }
 
     // (int, float)
     if (parser_consume(m, TOKEN_LEFT_PAREN)) {
@@ -1597,8 +1597,12 @@ static bool is_type_begin_stmt(module_t *m) {
         return true;
     }
 
-    if (parser_is(m, TOKEN_ARR) || parser_is(m, TOKEN_MAP) || parser_is(m, TOKEN_TUP) || parser_is(m, TOKEN_VEC) ||
-        parser_is(m, TOKEN_SET) || parser_is(m, TOKEN_CHAN)) {
+    if (parser_is(m, TOKEN_CHAN)) {
+        return true;
+    }
+
+    token_t *t = parser_peek(m);
+    if (ident_is_builtin_type(m, t)) {
         return true;
     }
 
@@ -2355,7 +2359,8 @@ static bool parser_is_impl_fn(module_t *m) {
         return true;
     }
 
-    if (parser_is(m, TOKEN_VEC) || parser_is(m, TOKEN_MAP) || parser_is(m, TOKEN_SET)) {
+    token_t *token = parser_peek(m);
+    if (ident_is_builtin_type(m, token)) {
         return true;
     }
 
@@ -2478,7 +2483,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
 
         // 解析完整类型是为了让 self 类型可以验证 fn ...(foo<T, U> a, T b)...
         type_t impl_type = {0};
-        if (first_token->type == TOKEN_IDENT) {
+        if (first_token->type == TOKEN_IDENT && !ident_is_builtin_type(m, first_token)) {
             impl_type.kind = TYPE_IDENT;
             impl_type.ident = parser_must(m, TOKEN_IDENT)->literal;
             impl_type.ident_kind = TYPE_IDENT_DEF;

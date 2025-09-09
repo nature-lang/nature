@@ -544,14 +544,19 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
             // 处理标签符号定义
             if (operation->raw_opcode == R_LABEL) {
                 arm64_asm_operand_t *operand = operation->operands[0];
+                uint32_t n_desc = 0;
                 uint32_t n_type = N_SECT;
-                if (!operand->symbol.is_local) {
+                if (operand->symbol.is_local) {
+                    n_type |= N_PEXT;
+                    n_type |= N_STAB;
+                } else {
                     n_type |= N_EXT;
                 }
                 temp->sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
                                                                             .n_sect = ctx->text_section->sh_index,
                                                                             .n_value = *temp->offset,
                                                                             .n_type = n_type,
+                                                                            .n_desc = n_desc,
                                                                     },
                                                operand->symbol.name);
 

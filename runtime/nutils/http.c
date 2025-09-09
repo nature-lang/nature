@@ -128,7 +128,7 @@ static inline void on_read_cb(uv_stream_t *handle, ssize_t nread, const uv_buf_t
 }
 
 void rt_uv_conn_resp(http_conn_t *conn, n_string_t *resp_data) {
-    DEBUGF("[rt_uv_conn_resp] ctx: %p, client_handle: %p", conn, &conn->client_handle);
+    DEBUGF("[rt_uv_conn_resp] ctx: %p, client_handle: %p", conn, &conn->handle);
 
     // 进行数据 copy 避免 resp_data 后续被清理掉
     conn->write_buf.base = malloc(resp_data->length + 1);

@@ -183,17 +183,21 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             // 内存回收(未返回到堆)
             allocated_bytes -= span->obj_size;
 
-            DEBUGF("[sweep_span] will sweep, span_base=%p obj_addr=%p", span->base, (void *) (span->base + i * span->obj_size));
+            if (span->base == 0xc000008000) {
+                DEBUGF("[sweep_span] will sweep, span_base=%p obj_addr=%p", span->base, (void *) (span->base + i * span->obj_size));
+            }
 
             // TODO 直接 set 0 让 gc 问题快速暴露出来, jit class 不允许设置内存，所以跳过
             if ((span->spanclass >> 1) != JIT_SIZECLASS) {
                 memset((void *) (span->base + i * span->obj_size), 0, span->obj_size);
             }
         } else {
-            DEBUGF("[sweep_span] will sweep, span_base=%p, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
-                   span->base,
-                   (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
-                   bitmap_test(span->gcmark_bits, i));
+            if (span->base == 0xc000008000) {
+                DEBUGF("[sweep_span] will sweep, span_base=%p, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
+                       span->base,
+                       (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
+                       bitmap_test(span->gcmark_bits, i));
+            }
         }
     }
 
@@ -783,31 +787,60 @@ static void scan_pool() {
  * 除了 coroutine stack 以外的全局变量以及 runtime 中申请的内存
  */
 static void scan_global() {
-    RDEBUGF("[runtime_gc.scan_global] start");
+    DEBUGF("[runtime_gc.scan_global] start, rt_symdef_count=%ld", rt_symdef_count);
 
-    // TODO 暂时放在第一个 share processor 中，后续可以考虑放在 global worklist 中
     n_processor_t *p = processor_list;
     assert(p);
 
-    for (int i = 0; i < rt_symdef_count; ++i) {
-        symdef_t s = rt_symdef_ptr[i];
-        if (!s.need_gc) {
-            continue;
-        }
-
-        RDEBUGF("[runtime.scan_global] name=%s, .data_base=0x%lx, size=%ld, need_gc=%d, base_int_value=0x%lx", STRTABLE(s.name_offset),
-                s.base, s.size,
-                s.need_gc, fetch_int_value(s.base, s.size));
-
-        assert(s.size <= 8 && "temp do not support symbol size > 8byte");
+    for (int j = 0; j < rt_symdef_count; ++j) {
+        symdef_t s = rt_symdef_ptr[j];
+        rtype_t *rtype = rt_find_rtype(s.hash);
         assert(s.base > 0 && "s.base is zero,cannot fetch value by base");
 
-        // 触发 gc 时全局变量可能还没有进行初始化, 所以这里使用 in_heap 进行一下地址可用对判断
-        addr_t addr = fetch_addr_value(s.base);
-        if (span_of(addr)) {
-            // s.base 是 data 段中的地址， fetch_addr_value 则是取出该地址中存储的数据
-            // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
-            rt_linked_fixalloc_push(&p->gc_worklist, (void *) addr);
+        if (is_gc_alloc(rtype->kind)) {
+            addr_t addr = fetch_addr_value(s.base);
+            DEBUGF("[runtime.scan_global] name=%s, kind=%s, base=%p, addr=%p, need gc",
+                    STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base, addr);
+
+            if (span_of(addr)) {
+                // s.base 是 data 段中的地址， fetch_addr_value 则是取出该地址中存储的数据
+                // 从栈中取出指针数据值(并将该值加入到工作队列中)(这是一个堆内存的地址,该地址需要参与三色标记)
+                rt_linked_fixalloc_push(&p->gc_worklist, (void *) addr);
+            }
+        } else if (is_stack_ref_big_type_kind(rtype->kind)) {
+            int64_t current = s.base;
+            int64_t end = s.base + rtype->last_ptr;
+            int64_t index = 0;
+
+            while (current < end) {
+                uint8_t *gc_bits = RTDATA(rtype->malloc_gc_bits_offset);
+                if (rtype->malloc_gc_bits_offset == -1) {
+                    gc_bits = (uint8_t *) &rtype->gc_bits;
+                }
+
+                if (bitmap_test(gc_bits, index)) { // need gc
+                    addr_t addr = fetch_addr_value(current);
+                    if (span_of(addr)) {
+                        DEBUGF("[runtime.scan_global] name=%s, kind=%s, base=%p(%p), index=%d, addr=%p need gc",
+                                STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base, current, index, addr);
+
+                        rt_linked_fixalloc_push(&p->gc_worklist, (void *) addr);
+                    } else {
+                        DEBUGF("[runtime.scan_global] name=%s, kind=%s, base=%p(%p), index=%d, addr=%p not in span",
+                                STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base, current, index, addr);
+                    }
+                } else {
+                    DEBUGF("[runtime.scan_global] name=%s, kind=%s, base=%p(%p), index=%d, not need gc",
+                            STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base, current, index);
+                }
+
+
+                current += POINTER_SIZE;
+                index += 1;
+            }
+        } else {
+            DEBUGF("[runtime.scan_global] name=%s, kind=%s, base=%p, not need gc, skip",
+                    STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base);
         }
     }
 

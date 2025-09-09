@@ -413,3 +413,49 @@ fn main() {
     uniona b = 3.14 as f32
     unionb a = b
 }
+
+=== test_type_ident
+--- main.n
+type test_t = struct{
+    int foo
+}
+
+fn test_t.set(int a) {
+    self.foo = a
+}
+
+fn test_t.map() {
+    self.foo = 24
+}
+
+fn test_t.vec() {
+    println('hello world')
+}
+
+fn main() {
+    var t = test_t{}
+    t.set(12)
+    println(t.foo)
+    t.vec()
+}
+
+--- output.txt
+12
+hello world
+
+=== test_as_failed
+--- main.n
+type handle_fn = fn(int):void!
+
+fn main() {
+    any arg = (fn(int a, int b):void!{
+        a = 12
+    }) as handle_fn
+
+    if arg is handle_fn {
+        println('hello world')
+    }
+}
+
+--- output.txt
+nature-test/main.n:4:17: cannot casting to 'main.handle_fn(fn(...):void!)'

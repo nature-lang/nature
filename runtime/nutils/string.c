@@ -27,8 +27,8 @@ n_string_t *string_new(void *raw_string, int64_t length) {
     str->hash = string_rtype.hash;
     memmove(str->data, raw_string, length);
 
-    DEBUGF("[string_new] success, string=%p, data=%p, len=%ld, raw_str=%s", str, str->data, str->length,
-           (char *) raw_string);
+    DEBUGF("[string_new] success, string=%p, data=%p, len=%ld, ele_size=%ld, raw_str=%s", str, str->data, str->length,
+            str->element_size, (char *) raw_string);
     return str;
 }
 
