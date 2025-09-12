@@ -126,18 +126,21 @@ impl LanguageServer for Backend {
         let file_dir = std::path::Path::new(file_path).parent();
 
         if let Some(dir) = file_dir {
-            // 检查是否需要创建新的项目
-            if let Some(package_dir) = self.find_package_dir(dir) {
-                let project_root = package_dir.to_string_lossy().to_string();
+            // Check if need to create new project
+            let (project_root, log_message) = if let Some(package_dir) = self.find_package_dir(dir) {
+                (package_dir.to_string_lossy().to_string(), "Found new project at")
+            } else {
+                // If no package_dir found, use current file's directory as project root
+                (dir.to_string_lossy().to_string(), "Creating new project using file directory as root:")
+            };
 
-                // 检查这个项目是否已经存在
-                if !self.projects.contains_key(&project_root) {
-                    debug!("Found new project at {}", project_root);
-                    let project = Project::new(project_root.clone()).await;
-                    project.backend_handle_queue();
-                    debug!("project new success root: {}", project_root);
-                    self.projects.insert(project_root, project);
-                }
+            // Check if this project already exists and create if needed
+            if !self.projects.contains_key(&project_root) {
+                debug!("{} {}", log_message, project_root);
+                let project = Project::new(project_root.clone()).await;
+                project.backend_handle_queue();
+                debug!("project new success root: {}", project_root);
+                self.projects.insert(project_root, project);
             }
         }
 
