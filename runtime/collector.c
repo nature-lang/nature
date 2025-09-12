@@ -480,7 +480,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         }
 
         DEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p, fn->stack_size=%ld, bp=%p", STRTABLE(fn->name_offset),
-               (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
+                (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
 
         // share_stack_frame_bp 是 fn 对应的帧的值,已经从帧中取了出来, 原来保存再 BP 寄存器中，现在保存再帧中
         addr_t bp_offset = share_stack_frame_bp - sp_value;
@@ -499,9 +499,9 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         int64_t ptr_count = fn->stack_size / POINTER_SIZE;
         for (int i = 0; i < ptr_count; ++i) {
             bool is_ptr = bitmap_test(RTDATA(fn->gc_bits_offset), i);
-            DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, is_ptr=%d, may_value=%p", STRTABLE(fn->name_offset), i,
-                   ptr_count - 1, is_ptr,
-                   (void *) fetch_int_value(frame_cursor, 8));
+            DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, frame_cursor=%p, is_ptr=%d, may_value=%p", STRTABLE(fn->name_offset), i,
+                    ptr_count - 1, (void *) frame_cursor, is_ptr,
+                    (void *) fetch_int_value(frame_cursor, 8));
 
             // 即使当前 slot 的类型是 ptr 但是可能存在还没有存储值, 所以需要重复判断
             if (is_ptr) {
@@ -548,8 +548,8 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
     addr = span->base + (obj_index * span->obj_size);
 
     DEBUGF("[runtime_gc.handle_gc_ptr] addr=%p(%p), has_ptr=%d, span_base=%p, spc=%d, obj_index=%lu, obj_size=%lu byte",
-           (void *) addr, (void *) old,
-           spanclass_has_ptr(span->spanclass), (void *) span->base, span->spanclass, obj_index, span->obj_size);
+            (void *) addr, (void *) old,
+            spanclass_has_ptr(span->spanclass), (void *) span->base, span->spanclass, obj_index, span->obj_size);
 
     mutex_lock(&span->gcmark_locker);
 
@@ -558,16 +558,16 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
     if (bitmap_test(span->gcmark_bits, obj_index)) {
         // already marks black
         DEBUGF("[runtime_gc.handle_gc_ptr] addr=%p, span_base=%p, obj_index=%lu marked, will continue", (void *) addr,
-               (void *) span->base, obj_index);
+                (void *) span->base, obj_index);
         mutex_unlock(&span->gcmark_locker);
         return;
     }
 
     bitmap_set(span->gcmark_bits, obj_index);
     DEBUGF("[runtime_gc.handle_gc_ptr] addr=%p, span=%p, span_base=%p, obj_index=%lu marked, test=%d, obj_size=%d, spanclass_has_ptr=%d", (void *) addr,
-           span,
-           (void *) span->base,
-           obj_index, bitmap_test(span->gcmark_bits, obj_index), span->obj_size, spanclass_has_ptr(span->spanclass));
+            span,
+            (void *) span->base,
+            obj_index, bitmap_test(span->gcmark_bits, obj_index), span->obj_size, spanclass_has_ptr(span->spanclass));
 
     mutex_unlock(&span->gcmark_locker);
 
@@ -607,8 +607,8 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
                 }
             } else {
                 DEBUGF("[handle_gc_ptr] skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p", (void *) temp_addr,
-                       (void *) value, in_heap(value),
-                       span_of(value));
+                        (void *) value, in_heap(value),
+                        span_of(value));
             }
         } else {
             DEBUGF(
@@ -800,7 +800,7 @@ static void scan_global() {
         if (is_gc_alloc(rtype->kind)) {
             addr_t addr = fetch_addr_value(s.base);
             DEBUGF("[runtime.scan_global] name=%s, kind=%s, base=%p, addr=%p, need gc",
-                    STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base, addr);
+                   STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base, addr);
 
             if (span_of(addr)) {
                 // s.base 是 data 段中的地址， fetch_addr_value 则是取出该地址中存储的数据
@@ -822,16 +822,16 @@ static void scan_global() {
                     addr_t addr = fetch_addr_value(current);
                     if (span_of(addr)) {
                         DEBUGF("[runtime.scan_global] name=%s, kind=%s, base=%p(%p), index=%d, addr=%p need gc",
-                                STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base, current, index, addr);
+                               STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base, current, index, addr);
 
                         rt_linked_fixalloc_push(&p->gc_worklist, (void *) addr);
                     } else {
                         DEBUGF("[runtime.scan_global] name=%s, kind=%s, base=%p(%p), index=%d, addr=%p not in span",
-                                STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base, current, index, addr);
+                               STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base, current, index, addr);
                     }
                 } else {
                     DEBUGF("[runtime.scan_global] name=%s, kind=%s, base=%p(%p), index=%d, not need gc",
-                            STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base, current, index);
+                           STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base, current, index);
                 }
 
 
@@ -840,7 +840,7 @@ static void scan_global() {
             }
         } else {
             DEBUGF("[runtime.scan_global] name=%s, kind=%s, base=%p, not need gc, skip",
-                    STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base);
+                   STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base);
         }
     }
 
@@ -966,6 +966,6 @@ void runtime_gc() {
     next_gc_bytes = _next_gc_bytes;
     gc_stage = GC_STAGE_OFF;
     DEBUGF("[runtime_gc] gc stage: GC_OFF, gc_barrier_stop, current_allocated=%ldKB, cleanup=%ldKB",
-            allocated_bytes / 1024,
-            (before - allocated_bytes) / 1024);
+           allocated_bytes / 1024,
+           (before - allocated_bytes) / 1024);
 }

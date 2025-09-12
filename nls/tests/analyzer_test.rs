@@ -1,3 +1,4 @@
+use log::debug;
 use nls::project::Project;
 use ropey::Rope;
 
@@ -14,7 +15,12 @@ fn test_rope() {
 
 #[tokio::test]
 async fn test_project() {
-    env_logger::init();
+    // Initialize logger with error handling
+    let _ = env_logger::builder()
+        .filter_level(log::LevelFilter::Debug)
+        .try_init();
+
+    debug!("start test");
 
     let project_root = "/Users/weiwenhao/Code/nature-test";
 
@@ -24,10 +30,36 @@ async fn test_project() {
     let module_ident = "nature-test.main";
     let file_path = "/Users/weiwenhao/Code/nature-test/main.n";
 
-    let module_index = project.build(&file_path, &module_ident, None).await;
+    // Phase 1: Build with incomplete code
+    let phase1_code = r#"import json
+
+fn main() {
+    [string] images = []
+    json.serialize()
+}"#;
+    
+    println!("Phase 1 build:");
+    let module_index = project.build(&file_path, &module_ident, Some(phase1_code.to_string())).await;
     dbg!(module_index);
 
     let mut module_db = project.module_db.lock().unwrap();
     let m = &mut module_db[module_index];
-    dbg!(&m.analyzer_errors);
+    println!("Phase 1 errors: {:?}", &m.analyzer_errors);
+    drop(module_db);
+
+    // Phase 2: Build with complete code
+    let phase2_code = r#"import json
+
+fn main() {
+    [string] images = []
+    json.serialize(images)
+}"#;
+    
+    // println!("Phase 2 build:");
+    // let module_index = project.build(&file_path, &module_ident, Some(phase2_code.to_string())).await;
+    // dbg!(module_index);
+    //
+    // let mut module_db = project.module_db.lock().unwrap();
+    // let m = &mut module_db[module_index];
+    // println!("Phase 2 errors: {:?}", &m.analyzer_errors);
 }

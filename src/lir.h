@@ -411,11 +411,15 @@ static inline lir_operand_t *symbol_label_operand(module_t *m, char *ident) {
     assert(ident);
 
     symbol_t *s = symbol_table_get(ident);
-    assertf(s, "notfound symbol=%s", ident);
-    assertf(s->type == SYMBOL_FN, "symbol=%s type not fn", ident);
+    if (s) {
+        assertf(s, "notfound symbol=%s", ident);
+        assertf(s->type == SYMBOL_FN, "symbol=%s type not fn", ident);
 
-    // 构造 label
-    return lir_label_operand(ident, s->is_local);
+        // 构造 label
+        return lir_label_operand(ident, s->is_local);
+    } else {
+        return lir_label_operand(ident, false);
+    }
 }
 
 static inline lir_operand_t *symbol_var_operand(char *ident, type_kind kind) {

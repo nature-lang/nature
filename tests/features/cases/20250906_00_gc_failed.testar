@@ -324,3 +324,34 @@ fn main():void! {
     }
 }
 
+=== test_gc_nullable_failed
+--- main.n
+import json
+import runtime
+import co
+import reflect
+
+type body_t = struct{
+    any title
+    string content
+    [string] images
+    string? video
+    {string:any} layout
+}
+
+fn main() {
+    var str = `{
+    "title": "i am title",
+    "content": "晚安，世界",
+    "images": [],
+    "video": "http://video.url/1",
+    "layout": {}
+}`
+
+    var body = json.deserialize<body_t>(str)
+
+    runtime.gc()
+    co.sleep(1000)
+    println('body data ->', body.video, body.content, body.title)
+    assert((body.video as string) == 'http://video.url/1')
+}

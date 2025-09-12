@@ -170,13 +170,8 @@ n_union_t *union_casting(int64_t input_rtype_hash, void *value_ref) {
 
     TRACEF("[union_casting] input_kind=%s, in_heap=%d", type_kind_str[rtype->kind], rtype->in_heap);
 
-    type_kind gc_kind = to_gc_kind(rtype->kind);
-    if (is_gc_alloc(rtype->kind)) {
-        gc_kind = TYPE_GC_SCAN;
-    }
 
-    rtype_t union_rtype = GC_RTYPE(TYPE_UNION, 2, gc_kind, TYPE_GC_NOSCAN);
-
+    rtype_t union_rtype = GC_RTYPE(TYPE_UNION, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
     // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
     n_union_t *mu = rti_gc_malloc(sizeof(n_union_t), &union_rtype);
 

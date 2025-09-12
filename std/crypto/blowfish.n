@@ -1,4 +1,5 @@
 import fmt
+import crypto.utils
 
 // Constant definitions
 const BLOCK_SIZE = 8
@@ -545,18 +546,9 @@ fn expand_key_with_salt([u8] key, [u8] salt, rawptr<cipher_t> cipher) {
 
 // Helper function to print hexadecimal data
 fn print_hex([u8] output) {
-    var hex_chars = "0123456789abcdef"
-    [u8] result = []
-    for i,v in output {
-        var byte_val = output[i]
-        var high = (byte_val >> 4) & 0x0F
-        var low = byte_val & 0x0F
-        result.push(hex_chars[high])
-        result.push(hex_chars[low])
-    }
+    var result = utils.to_hex(output)
 
-
-    println(result as string)
+    println(result)
 }
 
 

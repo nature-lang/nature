@@ -83,7 +83,7 @@ type hmac_t = struct{
     anyptr md_info
     int hasher_type
     int output_size
-    types.mbedtls_md_context_t mbed_ctx
+    utils.mbedtls_md_context_t mbed_ctx
 }
 ```
 
@@ -137,7 +137,7 @@ fn hex(string input):string
 
 ```
 type md5_t = struct{
-    types.mbedtls_md_context_t mbed_ctx
+    utils.mbedtls_md_context_t mbed_ctx
 }
 ```
 
@@ -191,7 +191,7 @@ fn hex(string input):string
 
 ```
 type sha256_t = struct{
-    types.mbedtls_sha256_context mbed_ctx
+    utils.mbedtls_sha256_context mbed_ctx
 }
 ```
 
@@ -267,31 +267,193 @@ fn verify([u8] hashed_password, [u8] password):void!
 
 验证密码是否与哈希值匹配。
 
-# import [crypto.types](https://github.com/nature-lang/nature/tree/master/std/crypto/types.n)
 
-加密类型定义和 mbedTLS 绑定。
+# import [crypto.rsa](https://github.com/nature-lang/nature/tree/master/std/crypto/rsa.n)
 
-## type mbedtls_md_context_t
+使用 mbedTLS 的 RSA 非对称加密实现。
+
+## const SHA1
 
 ```
-type mbedtls_md_context_t = struct{
-    anyptr md_info
-    anyptr md_ctx
-    anyptr hmac_ctx
+const SHA1 = 0x05
+```
+
+## const SHA224
+
+```
+const SHA224= 0x08
+```
+
+## const SHA256
+
+```
+const SHA256 = 0x09
+```
+
+## const SHA384
+
+```
+const SHA384 = 0x0a
+```
+
+## const SHA512
+
+```
+const SHA512 = 0x0b
+```
+
+## const SHA3_224
+
+```
+const SHA3_224 = 0x10
+```
+
+## const SHA3_256
+
+```
+const SHA3_256 = 0x11
+```
+
+## const SHA3_384
+
+```
+const SHA3_384 = 0x12
+```
+
+## const SHA3_512
+
+```
+const SHA3_512 = 0x13
+```
+
+## fn generate_key
+
+```
+fn generate_key(u32 key_bits):(ptr<rsa_public_key_t>, ptr<rsa_private_key_t>)!
+```
+
+生成指定位数的 RSA 密钥对。返回公钥和私钥的元组。
+
+## fn public_key_from_pem
+
+```
+fn public_key_from_pem([u8] pem_data):ptr<rsa_public_key_t>!
+```
+
+从 PEM 格式数据创建 RSA 公钥。
+
+## fn private_key_from_pem
+
+```
+fn private_key_from_pem([u8] pem_data, [u8] password):ptr<rsa_private_key_t>!
+```
+
+从 PEM 格式数据创建 RSA 私钥，支持密码保护的私钥。
+
+## type rsa_key_generator_t
+
+```
+type rsa_key_generator_t = struct{
+    utils.mbedtls_rsa_context rsa_ctx
+    utils.mbedtls_entropy_context entropy
+    utils.mbedtls_ctr_drbg_context ctr_drbg
 }
 ```
 
-mbedTLS 消息摘要上下文。
+RSA 密钥对生成器上下文。
 
-## type mbedtls_sha256_context
+## type rsa_public_key_t
 
 ```
-type mbedtls_sha256_context = struct{
-    [u8;64] buffer
-    [u32;2] total
-    [u32;8] state
-    i32 is224
+type rsa_public_key_t = struct{
+    utils.mbedtls_rsa_context rsa_ctx
 }
 ```
 
-mbedTLS SHA-256 上下文结构。
+RSA 公钥类型，仅用于加密操作。
+
+### rsa_public_key_t.encrypt_oaep
+
+```
+fn rsa_public_key_t.encrypt_oaep(i32 hash_algo, [u8] plaintext, [u8]? label):[u8]!
+```
+
+使用 RSA 公钥和 OAEP 填充方式加密数据。支持可选的标签参数。
+
+### rsa_public_key_t.encrypt_pkcs_v15
+
+```
+fn rsa_public_key_t.encrypt_pkcs_v15([u8] plaintext):[u8]!
+```
+
+使用 RSA 公钥和 PKCS#1 v1.5 填充方式加密数据。
+
+### rsa_public_key_t.to_pem
+
+```
+fn rsa_public_key_t.to_pem():[u8]!
+```
+
+将 RSA 公钥导出为 PEM 格式。
+
+### rsa_public_key_t.free
+
+```
+fn rsa_public_key_t.free():void
+```
+
+释放 RSA 公钥资源。
+
+## type rsa_private_key_t
+
+```
+type rsa_private_key_t = struct{
+    utils.mbedtls_rsa_context rsa_ctx
+}
+```
+
+RSA 私钥类型，仅用于解密操作。
+
+### rsa_private_key_t.decrypt_oaep
+
+```
+fn rsa_private_key_t.decrypt_oaep(i32 hash_algo, [u8] ciphertext, [u8]? label):[u8]!
+```
+
+使用 RSA 私钥和 OAEP 填充方式解密数据。支持可选的标签参数。
+
+### rsa_private_key_t.decrypt_pkcs_v15
+
+```
+fn rsa_private_key_t.decrypt_pkcs_v15([u8] ciphertext):[u8]!
+```
+
+使用 RSA 私钥和 PKCS#1 v1.5 填充方式解密数据。
+
+### rsa_private_key_t.to_pem
+
+```
+fn rsa_private_key_t.to_pem():[u8]!
+```
+
+将 RSA 私钥导出为 PEM 格式。
+
+### rsa_private_key_t.free
+
+```
+fn rsa_private_key_t.free():void
+```
+
+释放 RSA 私钥资源。
+
+
+
+# import [crypto.utils](https://github.com/nature-lang/nature/tree/master/std/crypto/utils.n)
+
+## fn to_hex
+
+```
+fn to_hex([u8] input):string
+```
+
+将输入字节动态数组转换为十六进制字符串

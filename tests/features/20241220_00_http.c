@@ -3,11 +3,12 @@
 #include <string.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <signal.h>
 
 // 执行 curl 命令并获取输出
 char *http_get(const char *path) {
     char cmd[256];
-    snprintf(cmd, sizeof(cmd), "curl -s http://127.0.0.1:8888%s", path);
+    snprintf(cmd, sizeof(cmd), "curl -s --connect-timeout 5 --max-time 10 http://127.0.0.1:8888%s", path);
 
     FILE *fp = popen(cmd, "r");
     if (!fp) return NULL;
@@ -31,8 +32,13 @@ int main(void) {
         sleep(1);
         char *response = http_get("/");
         assert_string_equal(response, "hello nature");
+
         // 关闭 http 服务器
         http_get("/close");
+
+        // 直接发送 kill 信号
+        sleep(1);
+        kill(pid, SIGKILL);
 
         int status = 0;
         waitpid(pid, &status, 0); // 等待子进程结束

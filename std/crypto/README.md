@@ -83,7 +83,7 @@ type hmac_t = struct{
     anyptr md_info
     int hasher_type
     int output_size
-    types.mbedtls_md_context_t mbed_ctx
+    utils.mbedtls_md_context_t mbed_ctx
 }
 ```
 
@@ -137,7 +137,7 @@ Compute MD5 hash and return hexadecimal string.
 
 ```
 type md5_t = struct{
-    types.mbedtls_md_context_t mbed_ctx
+    utils.mbedtls_md_context_t mbed_ctx
 }
 ```
 
@@ -191,7 +191,7 @@ Compute SHA-256 hash and return hexadecimal string.
 
 ```
 type sha256_t = struct{
-    types.mbedtls_sha256_context mbed_ctx
+    utils.mbedtls_sha256_context mbed_ctx
 }
 ```
 
@@ -267,31 +267,205 @@ fn verify([u8] hashed_password, [u8] password):void!
 
 Verify if password matches the hash.
 
-# import [crypto.types](https://github.com/nature-lang/nature/tree/master/std/crypto/types.n)
+# import [crypto.rsa](https://github.com/nature-lang/nature/tree/master/std/crypto/rsa.n)
 
-Cryptographic type definitions and mbedTLS bindings.
+RSA asymmetric encryption implementation using mbedTLS.
 
-## type mbedtls_md_context_t
+## const SHA1
 
 ```
-type mbedtls_md_context_t = struct{
-    anyptr md_info
-    anyptr md_ctx
-    anyptr hmac_ctx
+const SHA1 = 0x05
+```
+
+## const SHA224
+
+```
+const SHA224= 0x08
+```
+
+## const SHA256
+
+```
+const SHA256 = 0x09
+```
+
+## const SHA384
+
+```
+const SHA384 = 0x0a
+```
+
+## const SHA512
+
+```
+const SHA512 = 0x0b
+```
+
+## const SHA3_224
+
+```
+const SHA3_224 = 0x10
+```
+
+## const SHA3_256
+
+```
+const SHA3_256 = 0x11
+```
+
+## const SHA3_384
+
+```
+const SHA3_384 = 0x12
+```
+
+## const SHA3_512
+
+```
+const SHA3_512 = 0x13
+```
+
+## fn generate_key
+
+```
+fn generate_key(u32 key_bits):(ptr<rsa_public_key_t>, ptr<rsa_private_key_t>)!
+```
+
+Generate RSA key pair with specified key size in bits. Returns a tuple of public key and private key.
+
+## fn public_key_from_pem
+
+```
+fn public_key_from_pem([u8] pem_data):ptr<rsa_public_key_t>!
+```
+
+Create RSA public key from PEM format data.
+
+## fn private_key_from_pem
+
+```
+fn private_key_from_pem([u8] pem_data, [u8] password):ptr<rsa_private_key_t>!
+```
+
+Create RSA private key from PEM format data, supporting password-protected private keys.
+
+## type rsa_key_generator_t
+
+```
+type rsa_key_generator_t = struct{
+    utils.mbedtls_rsa_context rsa_ctx
+    utils.mbedtls_entropy_context entropy
+    utils.mbedtls_ctr_drbg_context ctr_drbg
 }
 ```
 
-mbedTLS message digest context.
+RSA key pair generator context.
 
-## type mbedtls_sha256_context
+## type rsa_public_key_t
 
 ```
-type mbedtls_sha256_context = struct{
-    [u8;64] buffer
-    [u32;2] total
-    [u32;8] state
-    i32 is224
+type rsa_public_key_t = struct{
+    utils.mbedtls_rsa_context rsa_ctx
 }
 ```
 
-mbedTLS SHA-256 context structure.
+RSA public key type, used only for encryption operations.
+
+### rsa_public_key_t.encrypt_oaep
+
+```
+fn rsa_public_key_t.encrypt_oaep(i32 hash_algo, [u8] plaintext, [u8]? label):[u8]!
+```
+
+Encrypt data using RSA public key with OAEP padding. Supports optional label parameter.
+
+### rsa_public_key_t.encrypt_pkcs_v15
+
+```
+fn rsa_public_key_t.encrypt_pkcs_v15([u8] plaintext):[u8]!
+```
+
+Encrypt data using RSA public key with PKCS#1 v1.5 padding.
+
+### rsa_public_key_t.to_pem
+
+```
+fn rsa_public_key_t.to_pem():[u8]!
+```
+
+Export RSA public key as PEM format.
+
+### rsa_public_key_t.free
+
+```
+fn rsa_public_key_t.free():void
+```
+
+Release RSA public key resources.
+
+## type rsa_private_key_t
+
+```
+type rsa_private_key_t = struct{
+    utils.mbedtls_rsa_context rsa_ctx
+}
+```
+
+RSA private key type, used only for decryption operations.
+
+### rsa_private_key_t.decrypt_oaep
+
+```
+fn rsa_private_key_t.decrypt_oaep(i32 hash_algo, [u8] ciphertext, [u8]? label):[u8]!
+```
+
+Decrypt data using RSA private key with OAEP padding. Supports optional label parameter.
+
+### rsa_private_key_t.decrypt_pkcs_v15
+
+```
+fn rsa_private_key_t.decrypt_pkcs_v15([u8] ciphertext):[u8]!
+```
+
+Decrypt data using RSA private key with PKCS#1 v1.5 padding.
+
+### rsa_private_key_t.to_pem
+
+```
+fn rsa_private_key_t.to_pem():[u8]!
+```
+
+Export RSA private key as PEM format.
+
+### rsa_private_key_t.free
+
+```
+fn rsa_private_key_t.free():void
+```
+
+Release RSA private key resources.
+
+# import [crypto.utils](https://github.com/nature-lang/nature/tree/master/std/crypto/utils.n)
+
+Cryptographic utility functions.
+
+## fn to_hex
+
+```
+fn to_hex([u8] input):string
+```
+
+Convert input byte array to hexadecimal string.
+
+
+
+
+# import [crypto.utils](https://github.com/nature-lang/nature/tree/master/std/crypto/utils.n)
+
+## fn to_hex
+
+```
+fn to_hex([u8] input):string
+```
+
+Convert input byte dynamic array to hexadecimal string

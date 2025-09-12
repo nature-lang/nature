@@ -137,7 +137,11 @@ impl GenericSpecialFnClone {
                     name: property.name.clone(),
                     start: property.start,
                     end: property.end,
-                    value: Some(Box::new(self.clone_expr(&property.value.as_ref().unwrap()))),
+                    value: if property.value.is_some() {
+                        Some(Box::new(self.clone_expr(property.value.as_ref().unwrap())))
+                    } else {
+                        None
+                    },
                 },
             ),
             AstNode::TupleNew(elements) => AstNode::TupleNew(elements.iter().map(|e| Box::new(self.clone_expr(e))).collect()),
@@ -2919,6 +2923,10 @@ impl<'a> Typesys<'a> {
 
             // 遍历所有参数进行类型推导
             let args_len = args.len();
+            if args_len != temp_fndef.params.len() {
+                return Err("arguments not match".to_string());
+            }
+
             for (i, arg) in args.iter_mut().enumerate() {
                 let is_spread = spread && (i == args_len - 1);
 
@@ -2926,10 +2934,6 @@ impl<'a> Typesys<'a> {
                 let arg_type = self.infer_right_expr(arg, Type::default()).map_err(|e| e.message)?;
 
                 let formal_type = self.select_generics_fn_param(temp_fndef.clone(), i, is_spread);
-                if formal_type.err {
-                    return Err(format!("too many arguments"));
-                }
-
                 // 对形参类型进行还原
                 let temp_type = self.reduction_type(formal_type.clone()).map_err(|e| e.message)?;
 
@@ -3017,7 +3021,7 @@ impl<'a> Typesys<'a> {
 
         let symbol_name_with_hash = {
             let temp_fndef = temp_fndef_mutex.lock().unwrap();
-            //temp_fndef.symbol_name@args_hash
+            //temp_fndef.symbol_name#args_hash
             format_generics_ident(temp_fndef.symbol_name.clone(), args_hash)
         };
 
@@ -3061,7 +3065,6 @@ impl<'a> Typesys<'a> {
             special_fn.return_type.status = ReductionStatus::Undo;
             // set type_args_stack
             self.generics_args_stack.push(special_fn.generics_args_table.clone().unwrap());
-            debug!("gen special_fn {}, type status {}, return type status {}", special_fn.fn_name, special_fn.type_.status, special_fn.return_type.status);
         }
 
         self.infer_fn_decl(special_fn_mutex.clone(), Type::default()).map_err(|e| e.message)?;
@@ -4009,12 +4012,24 @@ impl<'a> Typesys<'a> {
         for (i, param_mutex) in fndef.params.iter().enumerate() {
             let param_type = {
                 let temp = param_mutex.lock().unwrap();
+
+                // debug!(
+                //     "[infer_fn_decl] fn {} handle param {}, staus {}, ident {}, have err {}",
+                //     fndef.symbol_name, temp.ident, temp.type_.status, temp.type_.ident, temp.type_.err
+                // );
+
                 temp.type_.clone()
             };
 
             // 对参数类型进行还原
             let mut param_type = self.reduction_type(param_type)?;
-            debug_assert!(param_type.kind != TypeKind::Ident);
+            if param_type.kind == TypeKind::Ident {
+                return Err(AnalyzerError {
+                    start: 0,
+                    end: 0,
+                    message: format!("cannot reduction param {}", param_type),
+                });
+            }
 
             // 为什么要在这里进行 ptr of, 只有在 infer 之后才能确定 alias 的具体类型，从而进一步判断是否需要 ptrof
             if fndef.impl_type.kind.is_exist() && i == 0 && param_type.is_stack_impl() {
@@ -4124,8 +4139,7 @@ impl<'a> Typesys<'a> {
                 return;
             }
 
-            // 不能包含 @ 符号
-            if var_decl.ident.contains('@') {
+            if var_decl.ident.contains('#') {
                 return;
             }
 
@@ -4176,6 +4190,13 @@ impl<'a> Typesys<'a> {
 
         let params = {
             let fndef: std::sync::MutexGuard<'_, AstFnDef> = self.current_fn_mutex.lock().unwrap();
+
+            // debug!(
+            //     "[infer_fndef] symbol_name is -> {}, hash is {}",
+            //     fndef.symbol_name,
+            //     fndef.generics_args_hash.unwrap_or(0)
+            // );
+
             if fndef.type_.status != ReductionStatus::Done {
                 return;
             }
@@ -4699,7 +4720,7 @@ impl<'a> Typesys<'a> {
                         if generics_args.len() == 0 {
                             // 作为泛型函数，但是没有任何泛型参数约束, 直接使用原始名称注册即可
                             // fndef.symbol_name 在 sem 阶段进行了 module ident 拼接，所以注册到符号表中的 global fn 使用了完整名称
-                            debug!("symbol {} will register to table, params_len {}", fndef.symbol_name, fndef.params.len());
+                            // debug!("symbol {} will register to table, params_len {}", fndef.symbol_name, fndef.params.len());
 
                             let _ = self.symbol_table.define_symbol_in_scope(
                                 fndef.symbol_name.clone(),
@@ -4716,7 +4737,6 @@ impl<'a> Typesys<'a> {
                                 // 多个 symbol_name 会共用同一个 symbol_id, 覆盖为最后一个即可
 
                                 // 仅仅注册了 symbol hash 符号，此时 data 还是原始 fndef_mutex
-                                debug!("gen arg symbol {} will register to table, params_len {}", symbol_name, fndef.params.len());
                                 match self
                                     .symbol_table
                                     .define_symbol_in_scope(symbol_name, SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, scope_id)

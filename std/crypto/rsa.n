@@ -1,0 +1,409 @@
+import libc
+import crypto.utils
+import time
+import fmt
+
+const SHA1 = 0x05
+const SHA224= 0x08
+const SHA256 = 0x09
+const SHA384 = 0x0a
+const SHA512 = 0x0b
+const SHA3_224 = 0x10
+const SHA3_256 = 0x11
+const SHA3_384 = 0x12
+const SHA3_512 = 0x13
+
+// RSA key pair generator context
+type rsa_key_generator_t = struct{
+    utils.mbedtls_rsa_context rsa_ctx
+    utils.mbedtls_entropy_context entropy
+    utils.mbedtls_ctr_drbg_context ctr_drbg
+}
+
+// RSA public key - only for encryption
+type rsa_public_key_t = struct{
+    utils.mbedtls_rsa_context rsa_ctx
+}
+
+// RSA private key - only for decryption
+type rsa_private_key_t = struct{
+    utils.mbedtls_rsa_context rsa_ctx
+}
+
+// Generate RSA key pair with specified key size in bits
+fn generate_key(u32 key_bits):(ptr<rsa_public_key_t>, ptr<rsa_private_key_t>)! {
+    var generator = new rsa_key_generator_t()
+    
+    // Initialize entropy and random number generator
+    utils.mbedtls_entropy_init(&generator.entropy)
+    utils.mbedtls_ctr_drbg_init(&generator.ctr_drbg)
+    
+    // Seed the random number generator
+    var seed = fmt.sprintf('%d', time.now().ms_timestamp())
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&generator.ctr_drbg, utils.mbedtls_entropy_func as anyptr, &generator.entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    if seed_result != 0 {
+        utils.mbedtls_ctr_drbg_free(&generator.ctr_drbg)
+        utils.mbedtls_entropy_free(&generator.entropy)
+        throw errorf('failed to seed RNG')
+    }
+    
+    // Initialize RSA context
+    utils.mbedtls_rsa_init(&generator.rsa_ctx)
+    
+    // Generate RSA key pair (exponent = 65537)
+    var gen_result = utils.mbedtls_rsa_gen_key(&generator.rsa_ctx, utils.mbedtls_ctr_drbg_random as anyptr, &generator.ctr_drbg as anyptr, key_bits, 65537)
+    if gen_result != 0 {
+        utils.mbedtls_rsa_free(&generator.rsa_ctx)
+        utils.mbedtls_ctr_drbg_free(&generator.ctr_drbg)
+        utils.mbedtls_entropy_free(&generator.entropy)
+        throw errorf('RSA key generation failed')
+    }
+    
+    // Create public key instance
+    var public_key = new rsa_public_key_t()
+    utils.mbedtls_rsa_init(&public_key.rsa_ctx)
+    utils.mbedtls_rsa_copy(&public_key.rsa_ctx, &generator.rsa_ctx)
+    
+    // Create private key instance
+    var private_key = new rsa_private_key_t()
+    utils.mbedtls_rsa_init(&private_key.rsa_ctx)
+    utils.mbedtls_rsa_copy(&private_key.rsa_ctx, &generator.rsa_ctx)
+    
+    // Clean up generator
+    utils.mbedtls_rsa_free(&generator.rsa_ctx)
+    utils.mbedtls_ctr_drbg_free(&generator.ctr_drbg)
+    utils.mbedtls_entropy_free(&generator.entropy)
+    
+    return (public_key, private_key)
+}
+
+// Create RSA public key from PEM format string
+fn public_key_from_pem([u8] pem_data):ptr<rsa_public_key_t>! {
+    var public_key = new rsa_public_key_t()
+    var pk = utils.mbedtls_pk_context{}
+    
+    // Initialize PK context and parse public key
+    utils.mbedtls_pk_init(&pk)
+    var parse_result = utils.mbedtls_pk_parse_public_key(&pk, (pem_data as string).to_cstr(), pem_data.len() + 1)
+    if parse_result != 0 {
+        utils.mbedtls_pk_free(&pk)
+        throw errorf('failed to parse public key PEM, error code: %d', parse_result)
+    }
+    
+    // Initialize RSA context and copy from PK context
+    utils.mbedtls_rsa_init(&public_key.rsa_ctx)
+    var pk_rsa = pk.pk_ctx as rawptr<utils.mbedtls_rsa_context>
+    var copy_result = utils.mbedtls_rsa_copy(&public_key.rsa_ctx, pk_rsa)
+    if copy_result != 0 {
+        utils.mbedtls_rsa_free(&public_key.rsa_ctx)
+        utils.mbedtls_pk_free(&pk)
+        throw errorf('failed to copy RSA key')
+    }
+    
+    // Clean up PK context
+    utils.mbedtls_pk_free(&pk)
+    
+    return public_key
+}
+
+// Create RSA private key from PEM format string
+fn private_key_from_pem([u8] pem_data, [u8] password):ptr<rsa_private_key_t>! {
+    var private_key = new rsa_private_key_t()
+    var pk = utils.mbedtls_pk_context{}
+    
+    // Initialize PK context and parse private key
+    utils.mbedtls_pk_init(&pk)
+    var pwd_ptr = null as libc.cstr
+    var pwd_len = 0
+    if password.len() > 0 {
+        pwd_ptr = (password as string).to_cstr()
+        pwd_len = password.len()
+    }
+    
+    // Initialize temporary random generator for key parsing if password is provided
+    var entropy = utils.mbedtls_entropy_context{}
+    var ctr_drbg = utils.mbedtls_ctr_drbg_context{}
+    
+    utils.mbedtls_entropy_init(&entropy)
+    utils.mbedtls_ctr_drbg_init(&ctr_drbg)
+    
+    var seed = fmt.sprintf('%d', time.now().ms_timestamp())
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, utils.mbedtls_entropy_func as anyptr, &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    if seed_result != 0 {
+        utils.mbedtls_ctr_drbg_free(&ctr_drbg)
+        utils.mbedtls_entropy_free(&entropy)
+        throw errorf('failed to seed RNG')
+    }
+    
+    var parse_result = utils.mbedtls_pk_parse_key(&pk, (pem_data as string).to_cstr(), pem_data.len() + 1, pwd_ptr, pwd_len, utils.mbedtls_ctr_drbg_random as anyptr, &ctr_drbg as anyptr)
+    if parse_result != 0 {
+        utils.mbedtls_pk_free(&pk)
+        utils.mbedtls_ctr_drbg_free(&ctr_drbg)
+        utils.mbedtls_entropy_free(&entropy)
+        throw errorf('failed to parse private key PEM, error code: %d', parse_result)
+    }
+    
+    // Initialize RSA context and copy from PK context
+    utils.mbedtls_rsa_init(&private_key.rsa_ctx)
+    var pk_rsa = pk.pk_ctx as rawptr<utils.mbedtls_rsa_context>
+    var copy_result = utils.mbedtls_rsa_copy(&private_key.rsa_ctx, pk_rsa)
+    if copy_result != 0 {
+        utils.mbedtls_rsa_free(&private_key.rsa_ctx)
+        utils.mbedtls_pk_free(&pk)
+        utils.mbedtls_ctr_drbg_free(&ctr_drbg)
+        utils.mbedtls_entropy_free(&entropy)
+        throw errorf('failed to copy RSA key')
+    }
+    
+    // Clean up temporary resources
+    utils.mbedtls_pk_free(&pk)
+    utils.mbedtls_ctr_drbg_free(&ctr_drbg)
+    utils.mbedtls_entropy_free(&entropy)
+    
+    return private_key
+}
+
+// Encrypt data using RSA public key with OAEP padding
+fn rsa_public_key_t.encrypt_oaep(i32 hash_algo, [u8] plaintext, [u8]? label):[u8]! {
+    // Initialize entropy and random number generator for encryption
+    var entropy = utils.mbedtls_entropy_context{}
+    var ctr_drbg = utils.mbedtls_ctr_drbg_context{}
+
+    utils.mbedtls_entropy_init(&entropy)
+    utils.mbedtls_ctr_drbg_init(&ctr_drbg)
+
+    var seed = fmt.sprintf('%d', time.now().ms_timestamp())
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, utils.mbedtls_entropy_func as anyptr, &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    if seed_result != 0 {
+        utils.mbedtls_ctr_drbg_free(&ctr_drbg)
+        utils.mbedtls_entropy_free(&entropy)
+        throw errorf('failed to seed RNG for encryption')
+    }
+
+    // Set padding to OAEP with SHA256
+    utils.mbedtls_rsa_set_padding(&self.rsa_ctx, utils.MBEDTLS_RSA_PKCS_V21, hash_algo)
+
+    var key_size = utils.mbedtls_rsa_get_len(&self.rsa_ctx)
+    var output = vec_new<u8>(0, key_size)
+
+    var label_ptr = 0 as libc.cstr
+    var label_len = 0
+
+    if label is [u8] {
+        label_ptr = (label as string).to_cstr()
+        label_len = label.len()
+    }
+
+    var result = utils.mbedtls_rsa_rsaes_oaep_encrypt(&self.rsa_ctx, utils.mbedtls_ctr_drbg_random as anyptr, &ctr_drbg as anyptr,
+                                                      label_ptr, label_len, plaintext.len(),
+                                                      (plaintext as string).to_cstr(), (output as string).to_cstr())
+
+    // Clean up temporary resources
+    utils.mbedtls_ctr_drbg_free(&ctr_drbg)
+    utils.mbedtls_entropy_free(&entropy)
+
+    if result != 0 {
+        throw errorf('RSA OAEP encryption failed with error code: %d', result)
+    }
+
+    return output
+}
+
+// Decrypt data using RSA private key with OAEP padding
+fn rsa_private_key_t.decrypt_oaep(i32 hash_algo, [u8] ciphertext, [u8]? label):[u8]! {
+    // Initialize entropy and random number generator for decryption
+    var entropy = utils.mbedtls_entropy_context{}
+    var ctr_drbg = utils.mbedtls_ctr_drbg_context{}
+    
+    utils.mbedtls_entropy_init(&entropy)
+    utils.mbedtls_ctr_drbg_init(&ctr_drbg)
+    
+    var seed = fmt.sprintf('%d', time.now().ms_timestamp())
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, utils.mbedtls_entropy_func as anyptr, &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    if seed_result != 0 {
+        utils.mbedtls_ctr_drbg_free(&ctr_drbg)
+        utils.mbedtls_entropy_free(&entropy)
+        throw errorf('failed to seed RNG for decryption')
+    }
+    
+    // Set padding to OAEP with SHA256
+    utils.mbedtls_rsa_set_padding(&self.rsa_ctx, utils.MBEDTLS_RSA_PKCS_V21, hash_algo)
+    
+    var key_size = utils.mbedtls_rsa_get_len(&self.rsa_ctx)
+    var output = vec_new<u8>(0, key_size)
+    var output_len = 0
+    
+    var label_ptr = null as libc.cstr
+    var label_len = 0
+    if label is [u8] {
+        label_ptr = (label as string).to_cstr()
+        label_len = label.len()
+    }
+    
+    var result = utils.mbedtls_rsa_rsaes_oaep_decrypt(&self.rsa_ctx, utils.mbedtls_ctr_drbg_random as anyptr, &ctr_drbg as anyptr,
+                                                      label_ptr, label_len, &output_len, 
+                                                      (ciphertext as string).to_cstr(), (output as string).to_cstr(), key_size)
+    
+    // Clean up temporary resources
+    utils.mbedtls_ctr_drbg_free(&ctr_drbg)
+    utils.mbedtls_entropy_free(&entropy)
+    
+    if result != 0 {
+        throw errorf('RSA OAEP decryption failed with error code: %d', result)
+    }
+
+    return output[..output_len]
+}
+
+
+// Encrypt data using RSA public key with PKCS#1 v1.5 padding
+fn rsa_public_key_t.encrypt_pkcs_v15([u8] plaintext):[u8]! {
+    // Initialize entropy and random number generator for encryption
+    var entropy = utils.mbedtls_entropy_context{}
+    var ctr_drbg = utils.mbedtls_ctr_drbg_context{}
+
+    utils.mbedtls_entropy_init(&entropy)
+    utils.mbedtls_ctr_drbg_init(&ctr_drbg)
+
+    var seed = fmt.sprintf('%d', time.now().ms_timestamp())
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, utils.mbedtls_entropy_func as anyptr, &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    if seed_result != 0 {
+        utils.mbedtls_ctr_drbg_free(&ctr_drbg)
+        utils.mbedtls_entropy_free(&entropy)
+        throw errorf('failed to seed RNG for encryption')
+    }
+
+    // Set padding to PKCS#1 v1.5
+    utils.mbedtls_rsa_set_padding(&self.rsa_ctx, utils.MBEDTLS_RSA_PKCS_V15, SHA256)
+
+    var key_size = utils.mbedtls_rsa_get_len(&self.rsa_ctx)
+    var output = vec_new<u8>(0, key_size)
+
+    var result = utils.mbedtls_rsa_pkcs1_encrypt(&self.rsa_ctx, utils.mbedtls_ctr_drbg_random as anyptr, &ctr_drbg as anyptr,
+                                                 plaintext.len(), (plaintext as string).to_cstr(),
+                                                 (output as string).to_cstr())
+
+    // Clean up temporary resources
+    utils.mbedtls_ctr_drbg_free(&ctr_drbg)
+    utils.mbedtls_entropy_free(&entropy)
+
+    if result != 0 {
+        throw errorf('RSA encryption failed with error code: %d', result)
+    }
+
+    return output
+}
+
+// Decrypt data using RSA private key with PKCS#1 v1.5 padding
+fn rsa_private_key_t.decrypt_pkcs_v15([u8] ciphertext):[u8]! {
+    // Initialize entropy and random number generator for decryption
+    var entropy = utils.mbedtls_entropy_context{}
+    var ctr_drbg = utils.mbedtls_ctr_drbg_context{}
+    
+    utils.mbedtls_entropy_init(&entropy)
+    utils.mbedtls_ctr_drbg_init(&ctr_drbg)
+    
+    var seed = fmt.sprintf('%d', time.now().ms_timestamp())
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, utils.mbedtls_entropy_func as anyptr, &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    if seed_result != 0 {
+        utils.mbedtls_ctr_drbg_free(&ctr_drbg)
+        utils.mbedtls_entropy_free(&entropy)
+        throw errorf('failed to seed RNG for decryption')
+    }
+    
+    // Set padding to PKCS#1 v1.5
+    utils.mbedtls_rsa_set_padding(&self.rsa_ctx, utils.MBEDTLS_RSA_PKCS_V15, SHA256)
+    
+    var key_size = utils.mbedtls_rsa_get_len(&self.rsa_ctx)
+    var output = vec_new<u8>(0, key_size)
+    var output_len = 0
+    
+    var result = utils.mbedtls_rsa_pkcs1_decrypt(&self.rsa_ctx, utils.mbedtls_ctr_drbg_random as anyptr, &ctr_drbg as anyptr,
+                                                 &output_len, (ciphertext as string).to_cstr(),
+                                                 (output as string).to_cstr(), key_size)
+    
+    // Clean up temporary resources
+    utils.mbedtls_ctr_drbg_free(&ctr_drbg)
+    utils.mbedtls_entropy_free(&entropy)
+    
+    if result != 0 {
+        throw errorf('RSA decryption failed with error code: %d', result)
+    }
+
+    return output[..output_len]
+}
+
+// Export RSA public key as PEM format
+fn rsa_public_key_t.to_pem():[u8]! {
+    var pem_buff = vec_new<u8>(0, 4096)
+    var pk = utils.mbedtls_pk_context{}
+
+    utils.mbedtls_pk_init(&pk)
+
+    var ret = utils.mbedtls_pk_setup(&pk, utils.mbedtls_pk_info_from_type(utils.MBEDTLS_PK_RSA))
+    if ret != 0 {
+        utils.mbedtls_pk_free(&pk)
+        throw errorf('mbedtls_pk_setup failed')
+    }
+
+    var pk_rsa = pk.pk_ctx as rawptr<utils.mbedtls_rsa_context>
+    ret = utils.mbedtls_rsa_copy(pk_rsa, &self.rsa_ctx)
+    if ret != 0 {
+        utils.mbedtls_pk_free(&pk)
+        throw errorf('mbedtls_rsa_copy failed')
+    }
+
+    ret = utils.mbedtls_pk_write_pubkey_pem(&pk, pem_buff.ref(), pem_buff.len())
+    if ret != 0 {
+        utils.mbedtls_pk_free(&pk)
+        throw errorf('mbedtls_pk_write_pubkey_pem failed')
+    }
+
+    var len = libc.strlen((pem_buff as string).to_cstr())
+
+    utils.mbedtls_pk_free(&pk)
+    return pem_buff[0..len]
+}
+
+// Export RSA private key as PEM format
+fn rsa_private_key_t.to_pem():[u8]! {
+    var pem_buff = vec_new<u8>(0, 4096)
+    var pk = utils.mbedtls_pk_context{}
+
+    utils.mbedtls_pk_init(&pk)
+
+    var ret = utils.mbedtls_pk_setup(&pk, utils.mbedtls_pk_info_from_type(utils.MBEDTLS_PK_RSA))
+    if ret != 0 {
+        utils.mbedtls_pk_free(&pk)
+        throw errorf('mbedtls_pk_setup failed')
+    }
+
+    var pk_rsa = pk.pk_ctx as rawptr<utils.mbedtls_rsa_context>
+    ret = utils.mbedtls_rsa_copy(pk_rsa, &self.rsa_ctx)
+    if ret != 0 {
+        utils.mbedtls_pk_free(&pk)
+        throw errorf('mbedtls_rsa_copy failed')
+    }
+
+    ret = utils.mbedtls_pk_write_key_pem(&pk, pem_buff.ref(), pem_buff.len())
+    if ret != 0 {
+        utils.mbedtls_pk_free(&pk)
+        throw errorf('mbedtls_pk_write_key_pem failed')
+    }
+
+    var len = libc.strlen((pem_buff as string).to_cstr())
+
+    utils.mbedtls_pk_free(&pk)
+    return pem_buff[0..len]
+}
+
+// Clean up RSA public key resources
+fn rsa_public_key_t.free():void {
+    utils.mbedtls_rsa_free(&self.rsa_ctx)
+}
+
+// Clean up RSA private key resources
+fn rsa_private_key_t.free():void {
+    utils.mbedtls_rsa_free(&self.rsa_ctx)
+}
+
