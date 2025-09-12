@@ -41,6 +41,13 @@ static bool scanner_is_string(module_t *m, char s) {
  * @return
  */
 static bool scanner_is_float(module_t *m, char *word) {
+    assert(word);
+
+    int64_t word_len = strlen(word);
+    if (word_len == 0) {
+        return false;
+    }
+
     // 是否包含 .,包含则为 float
     int dot_count = 0;
     bool has_e = false;
@@ -57,7 +64,7 @@ static bool scanner_is_float(module_t *m, char *word) {
     }
 
     // 结尾不能是 .
-    if (word[-1] == '.') {
+    if (word[word_len - 1] == '.') {
         dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column,
                     "floating-point numbers cannot end with '.'");
         return false;
