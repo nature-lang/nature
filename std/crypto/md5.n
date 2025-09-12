@@ -1,57 +1,47 @@
 import libc
-import crypto.types
+import crypto.utils
 
 
 type md5_t = struct{
-    types.mbedtls_md_context_t mbed_ctx
+    utils.mbedtls_md_context_t mbed_ctx
 }
 
 fn new():ptr<md5_t> {
     var m =  new md5_t()
-    types.mbedtls_md5_init(&m.mbed_ctx)
+    utils.mbedtls_md5_init(&m.mbed_ctx)
     //     MBEDTLS_MD_MD5=0x03,       /**< The MD5 message digest. */
-    anyptr md_info = types.mbedtls_md_info_from_type(0x03)
+    anyptr md_info = utils.mbedtls_md_info_from_type(0x03)
     assert(md_info > 0)
 
-    types.mbedtls_md_setup(&m.mbed_ctx, md_info, 0);
+    utils.mbedtls_md_setup(&m.mbed_ctx, md_info, 0);
 
-    types.mbedtls_md_starts(&m.mbed_ctx);
+    utils.mbedtls_md_starts(&m.mbed_ctx);
 
     return m
 }
 
 fn md5_t.update([u8] input):ptr<md5_t> {
-    types.mbedtls_md_update(&self.mbed_ctx, (input as string).to_cstr(), input.len());
+    utils.mbedtls_md_update(&self.mbed_ctx, (input as string).to_cstr(), input.len());
 
     return self
 }
 
 fn md5_t.finish():[u8] {
     var output = vec_new<u8>(0, 16) 
-    types.mbedtls_md_finish(&self.mbed_ctx, output.ref())
+    utils.mbedtls_md_finish(&self.mbed_ctx, output.ref())
 
-    types.mbedtls_md_free(&self.mbed_ctx);
+    utils.mbedtls_md_free(&self.mbed_ctx);
 
     return output
 }
 
 fn md5_t.hex():string {
     var output = vec_new<u8>(0, 16) 
-    types.mbedtls_md_finish(&self.mbed_ctx, output.ref())
-    types.mbedtls_md_free(&self.mbed_ctx);
+    utils.mbedtls_md_finish(&self.mbed_ctx, output.ref())
+    utils.mbedtls_md_free(&self.mbed_ctx);
 
-    var hex_chars = "0123456789abcdef"
-    [u8] result = []
-    
-    for i,v in output {
-        var byte_val = output[i]
-        var high = (byte_val >> 4) & 0x0F
-        var low = byte_val & 0x0F
-        result.push(hex_chars[high])
-        result.push(hex_chars[low])
-    }
-    
-    return result as string
+    var result = utils.to_hex(output)
+    return result
 }
 
 fn hex(string input):string {

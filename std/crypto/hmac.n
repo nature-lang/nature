@@ -1,5 +1,5 @@
 import libc
-import crypto.types
+import crypto.utils
 
 const MD5 = 0x03
 const RIPEMD160 = 0x04
@@ -18,7 +18,7 @@ type hmac_t = struct{
     anyptr md_info
     int hasher_type
     int output_size
-    types.mbedtls_md_context_t mbed_ctx
+    utils.mbedtls_md_context_t mbed_ctx
 }
 
 fn new(int hasher_type, [u8] secret):ptr<hmac_t> {
@@ -51,49 +51,39 @@ fn new(int hasher_type, [u8] secret):ptr<hmac_t> {
         h.output_size = 32  // 默认 SHA256 输出 32 字节
     }
     
-    types.mbedtls_md_init(&h.mbed_ctx)
+    utils.mbedtls_md_init(&h.mbed_ctx)
     
-    h.md_info = types.mbedtls_md_info_from_type(hasher_type as i32)
+    h.md_info = utils.mbedtls_md_info_from_type(hasher_type as i32)
     
-    types.mbedtls_md_setup(&h.mbed_ctx, h.md_info, 1)
+    utils.mbedtls_md_setup(&h.mbed_ctx, h.md_info, 1)
     
-    types.mbedtls_md_hmac_starts(&h.mbed_ctx, (secret as string).to_cstr(), secret.len())
+    utils.mbedtls_md_hmac_starts(&h.mbed_ctx, (secret as string).to_cstr(), secret.len())
     
     return h
 }
 
 fn hmac_t.update([u8] message):ptr<hmac_t> {
-    types.mbedtls_md_hmac_update(&self.mbed_ctx, (message as string).to_cstr(), message.len())
+    utils.mbedtls_md_hmac_update(&self.mbed_ctx, (message as string).to_cstr(), message.len())
     return self
 }
 
 fn hmac_t.finish():[u8] {
     var output = vec_new<u8>(0, self.output_size)
-    types.mbedtls_md_hmac_finish(&self.mbed_ctx, output.ref())
+    utils.mbedtls_md_hmac_finish(&self.mbed_ctx, output.ref())
     
-    types.mbedtls_md_free(&self.mbed_ctx)
+    utils.mbedtls_md_free(&self.mbed_ctx)
     
     return output
 }
 
 fn hmac_t.hex():string {
     var output = vec_new<u8>(0, self.output_size)
-    types.mbedtls_md_hmac_finish(&self.mbed_ctx, output.ref())
+    utils.mbedtls_md_hmac_finish(&self.mbed_ctx, output.ref())
     
-    types.mbedtls_md_free(&self.mbed_ctx)
+    utils.mbedtls_md_free(&self.mbed_ctx)
     
-    var hex_chars = "0123456789abcdef"
-    [u8] result = []
-    
-    for i,v in output {
-        var byte_val = output[i]
-        var high = (byte_val >> 4) & 0x0F
-        var low = byte_val & 0x0F
-        result.push(hex_chars[high])
-        result.push(hex_chars[low])
-    }
-    
-    return result as string
+    var result = utils.to_hex(output)
+    return result
 }
 
 fn hex(int hasher_type, [u8] secret, [u8] message):string {

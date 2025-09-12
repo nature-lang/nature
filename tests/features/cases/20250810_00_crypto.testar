@@ -93,3 +93,172 @@ fn main() {
 
     println('verify success')
 }
+
+=== test_rsa_pkcs_v15
+--- main.n
+import crypto.rsa
+import crypto.utils
+import fmt
+
+fn main() {
+    // Test 1: Generate key pair and test encryption/decryption
+    println('Test 1: Generate RSA key pair and test basic encryption/decryption')
+    var (public_key, private_key) = rsa.generate_key(2048)
+
+    var plaintext = 'hello nature' as [u8]
+    var ciphertext = public_key.encrypt_pkcs_v15(plaintext)
+    println('ciphertext hex:', utils.to_hex(ciphertext))
+
+    var decrypted = private_key.decrypt_pkcs_v15(ciphertext)
+    println('decrypted:', decrypted as string)
+    assert(decrypted as string == 'hello nature')
+
+    // Test 2: Export keys to PEM format
+    println('\nTest 2: Export keys to PEM format')
+    var public_pem = public_key.to_pem()
+    var private_pem = private_key.to_pem()
+
+    println('Public Key PEM:')
+    println(public_pem as string)
+    println('Private Key PEM:')
+    println(private_pem as string)
+
+    // Test 3: Create RSA keys from PEM format and test encryption/decryption
+    println('\nTest 3: Create RSA keys from PEM and test encryption/decryption')
+    var pub_key_from_pem = rsa.public_key_from_pem(public_pem)
+    var private_key_from_pem = rsa.private_key_from_pem(private_pem, [])
+
+    var plaintext2 = 'test from pem keys' as [u8]
+    var ciphertext2 = pub_key_from_pem.encrypt_pkcs_v15(plaintext2)
+    var decrypted2 = private_key_from_pem.decrypt_pkcs_v15(ciphertext2)
+
+    println('Original:', plaintext2 as string)
+    println('Decrypted from PEM keys:', decrypted2 as string)
+    assert(decrypted2 as string == 'test from pem keys')
+
+    // Test 4: Cross encryption/decryption between original and PEM keys
+    println('\nTest 4: Cross encryption/decryption between original and PEM keys')
+    var plaintext3 = 'cross key test' as [u8]
+
+    // Encrypt with original public key, decrypt with PEM private key
+    var cipher_orig = public_key.encrypt_pkcs_v15(plaintext3)
+    var decrypt_pem = private_key_from_pem.decrypt_pkcs_v15(cipher_orig)
+    assert(decrypt_pem as string == 'cross key test')
+
+    // Encrypt with PEM public key, decrypt with original private key
+    var cipher_pem = pub_key_from_pem.encrypt_pkcs_v15(plaintext3)
+    var decrypt_orig = private_key.decrypt_pkcs_v15(cipher_pem)
+    assert(decrypt_orig as string == 'cross key test')
+
+    println('Cross key encryption/decryption test passed!')
+
+    // Test 5: Test failure cases (empty return arrays)
+    println('\nTest 5: Test failure handling')
+    [u8] invalid_cipher = [1, 2, 3, 4, 5]  // Invalid ciphertext
+    var failed_decrypt = private_key.decrypt_pkcs_v15(invalid_cipher) catch e {
+        println('Decryption correctly failed for invalid ciphertext')
+        []
+    }
+
+    // Clean up resources
+    public_key.free()
+    private_key.free()
+    pub_key_from_pem.free()
+    private_key_from_pem.free()
+
+    println('\nAll RSA tests passed successfully!')
+}
+
+
+=== test_rsa_oaep
+--- main.n
+import crypto.rsa
+import crypto.utils
+import fmt
+
+fn main() {
+    // Test 1: Generate key pair and test OAEP encryption/decryption
+    println('Test 1: Generate RSA key pair and test OAEP encryption/decryption')
+    var (public_key, private_key) = rsa.generate_key(2048)
+
+    var plaintext = 'hello nature with OAEP' as [u8]
+    var label = 'test label' as [u8]
+    var ciphertext = public_key.encrypt_oaep(rsa.SHA256, plaintext, label)
+    println('OAEP ciphertext hex:', utils.to_hex(ciphertext))
+
+    var decrypted = private_key.decrypt_oaep(rsa.SHA256, ciphertext, label)
+    println('decrypted:', decrypted as string)
+    assert(decrypted as string == 'hello nature with OAEP')
+    println(public_key.to_pem() as string)
+
+    // Test 2: OAEP encryption/decryption with empty label
+    println('\nTest 2: OAEP encryption/decryption with empty label')
+    var plaintext_empty_label = 'test without label' as [u8]
+    [u8] empty_label = []
+    var ciphertext_empty = public_key.encrypt_oaep(rsa.SHA256, plaintext_empty_label, empty_label)
+    var decrypted_empty = private_key.decrypt_oaep(rsa.SHA256, ciphertext_empty, empty_label)
+    println('decrypted (empty label):', decrypted_empty as string)
+    assert(decrypted_empty as string == 'test without label')
+
+    // Test 3: Export keys to PEM format and test OAEP with PEM keys
+    println('\nTest 3: Export keys to PEM format and test OAEP with PEM keys')
+    var public_pem = public_key.to_pem()
+    var private_pem = private_key.to_pem()
+
+    var pub_key_from_pem = rsa.public_key_from_pem(public_pem)
+    var private_key_from_pem = rsa.private_key_from_pem(private_pem, [])
+
+    var plaintext_pem = 'OAEP test from pem keys' as [u8]
+    var label_pem = 'pem test label' as [u8]
+    var ciphertext_pem = pub_key_from_pem.encrypt_oaep(rsa.SHA256, plaintext_pem, label_pem)
+    var decrypted_pem = private_key_from_pem.decrypt_oaep(rsa.SHA256, ciphertext_pem, label_pem)
+
+    println('Original:', plaintext_pem as string)
+    println('Decrypted from PEM keys:', decrypted_pem as string)
+    assert(decrypted_pem as string == 'OAEP test from pem keys')
+
+    // Test 4: Cross OAEP encryption/decryption between original and PEM keys
+    println('\nTest 4: Cross OAEP encryption/decryption between original and PEM keys')
+    var plaintext_cross = 'cross OAEP key test' as [u8]
+    var label_cross = 'cross label' as [u8]
+
+    // Encrypt with original public key, decrypt with PEM private key
+    var cipher_orig = public_key.encrypt_oaep(rsa.SHA256, plaintext_cross, label_cross)
+    var decrypt_pem = private_key_from_pem.decrypt_oaep(rsa.SHA256, cipher_orig, label_cross)
+    assert(decrypt_pem as string == 'cross OAEP key test')
+
+    // Encrypt with PEM public key, decrypt with original private key
+    var cipher_pem_cross = pub_key_from_pem.encrypt_oaep(rsa.SHA256, plaintext_cross, label_cross)
+    var decrypt_orig = private_key.decrypt_oaep(rsa.SHA256, cipher_pem_cross, label_cross)
+    assert(decrypt_orig as string == 'cross OAEP key test')
+
+    println('Cross key OAEP encryption/decryption test passed!')
+
+    // Test 5: Test OAEP failure cases with wrong label
+    println('\nTest 5: Test OAEP failure handling with wrong label')
+    var correct_label = 'correct label' as [u8]
+    var wrong_label = 'wrong label' as [u8]
+    var test_plain = 'label test message' as [u8]
+
+    var test_cipher = public_key.encrypt_oaep(rsa.SHA256, test_plain, correct_label)
+    var failed_decrypt = private_key.decrypt_oaep(rsa.SHA256, test_cipher, wrong_label) catch e {
+        println('OAEP decryption correctly failed with wrong label')
+        []
+    }
+
+    // Test 6: Test with invalid ciphertext
+    println('\nTest 6: Test OAEP with invalid ciphertext')
+    [u8] invalid_cipher = [1, 2, 3, 4, 5]  // Invalid ciphertext
+    var failed_decrypt2 = private_key.decrypt_oaep(rsa.SHA256, invalid_cipher, empty_label) catch e {
+        println('OAEP decryption correctly failed for invalid ciphertext')
+        []
+    }
+
+    // Clean up resources
+    public_key.free()
+    private_key.free()
+    pub_key_from_pem.free()
+    private_key_from_pem.free()
+
+    println('\nAll RSA OAEP tests passed successfully!')
+}
