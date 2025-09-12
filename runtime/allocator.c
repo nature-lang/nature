@@ -1275,8 +1275,8 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
         memset(ptr, 0, size);
     }
 
-    DEBUGF("[rti_gc_malloc] end success, size=%lu, use time: %lu, rtype: %p, has_ptr: %d", size, uv_hrtime() - start,
-           rtype, rtype != NULL && rtype->last_ptr > 0);
+    DEBUGF("[rti_gc_malloc] end success, ptr=%p, size=%lu, use time: %lu, rtype: %p, has_ptr: %d", ptr, size, uv_hrtime() - start,
+            rtype, rtype != NULL && rtype->last_ptr > 0);
     return ptr;
 }
 

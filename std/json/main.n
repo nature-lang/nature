@@ -308,7 +308,7 @@ fn deserialize_t.parser(anyptr p, ptr<reflect.type_t> t):void! {
             }
 
             if t.hashes.len() > 0 { 
-                throw errorf('only `any` and nullable type deserialize is supported')
+                throw errorf('only `any` or nullable type deserialize is supported')
             }
             var any_val = self.parser_any()
             unsafe.ptr_copy<any>(p, &any_val)
@@ -575,7 +575,8 @@ fn deserialize_t.parser_nullable(anyptr p, ptr<reflect.type_t> t):void! {
 
     var hash = t.hashes[0]
     var target_type = reflect.typeof_hash(hash)
-    
+
+    // init rv value
     match target_type.kind {
         reflect.VEC -> {
             var element_type = reflect.typeof_hash(target_type.hashes[0])
