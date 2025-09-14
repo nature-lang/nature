@@ -130,3 +130,28 @@ fn main():void! {
     println('done, use time: ', end, start, end - start)
     assert(end - start < 300)
 }
+
+=== test_for_chan
+--- main.n
+import co
+
+fn handle(chan<int> ch) {
+    for v in ch {
+        println('recv v ->', v)
+    }
+}
+
+fn main() {
+    var ch = chan_new<int>()
+    go handle(ch)
+
+    ch.send(1)
+    ch.send(3)
+    ch.send(5)
+    co.sleep(100)
+}
+
+--- output.txt
+recv v -> 1
+recv v -> 3
+recv v -> 5
