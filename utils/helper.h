@@ -14,6 +14,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <dirent.h>
 
 #include "assertf.h"
 #include "errno.h"
@@ -690,6 +691,81 @@ static inline char *fullpath(char *rel) {
 static inline bool str_char(char *str, char c) {
     char *result = strchr(str, c);
     return result != NULL;
+}
+
+/**
+ * Recursively remove a directory and all its contents
+ * This function provides safe cleanup of temporary directories
+ * @param path Directory path to remove
+ * @return 0 on success, -1 on failure
+ */
+static inline int rmdir_recursive(const char *path) {
+    if (!path || strlen(path) == 0) {
+        return -1;
+    }
+
+    // Safety check: don't remove system directories
+    if (strcmp(path, "/") == 0 || strcmp(path, "/tmp") == 0 ||
+        strcmp(path, "/var") == 0 || strcmp(path, "/usr") == 0 ||
+        strcmp(path, "/home") == 0 || strcmp(path, "/Users") == 0) {
+        log_error("Refusing to remove system directory: %s", path);
+        return -1;
+    }
+
+    // Check if path exists and is a directory
+    struct stat st;
+    if (stat(path, &st) != 0) {
+        return 0; // Directory doesn't exist, consider it success
+    }
+
+    if (!S_ISDIR(st.st_mode)) {
+        // It's a file, remove it
+        return remove(path);
+    }
+
+    // Open directory
+    DIR *dir = opendir(path);
+    if (!dir) {
+        log_error("Failed to open directory: %s", path);
+        return -1;
+    }
+
+    struct dirent *entry;
+    int result = 0;
+
+    // Remove all entries in the directory
+    while ((entry = readdir(dir)) != NULL && result == 0) {
+        // Skip . and ..
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        // Build full path
+        size_t path_len = strlen(path) + strlen(entry->d_name) + 2;
+        char *full_path = malloc(path_len);
+        if (!full_path) {
+            result = -1;
+            break;
+        }
+
+        snprintf(full_path, path_len, "%s/%s", path, entry->d_name);
+
+        // Recursively remove
+        result = rmdir_recursive(full_path);
+        free(full_path);
+    }
+
+    closedir(dir);
+
+    // Remove the directory itself if all contents were removed successfully
+    if (result == 0) {
+        result = rmdir(path);
+        if (result != 0) {
+            log_error("Failed to remove directory: %s", path);
+        }
+    }
+
+    return result;
 }
 
 static inline void str_rcpy(char *dest, const char *src, size_t n) {
