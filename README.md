@@ -4,59 +4,50 @@ A general-purpose open-source programming language and compiler designed to prov
 
 ## Features
 
-- ✓ Simple, natural, consistent syntax design, even programming beginners can easily grasp, quickly get started!
-- ✓ No dependency on llvm and VM, compiles directly to target platform machine code and supports cross-compilation
-- ✓ Simple deployment, purely static linking based on musl libc, no additional dependencies, good cross-platform characteristics
-- ✓ Comprehensive type system with support for generics, union types, interfaces, null-value safety, etc.
-- ✓ Same high-performance GC implementation as go, with very short STW (Stop The World)
-- ✓ High-performance memory allocator implementation like go, similar to google/tcmalloc
-- ✓ High-performance shared-stack Coroutine implementation, capable of millions of Coroutine switches per second
-- ✓ Built-in libuv to handle IO event loops in collaboration with the concatenators
-- ✓ High-performance runtime and compiler based on a pure C implementation
-- ✓ Modularity and package management system npkg
-- ✓ Built-in implementations of common data structures and standard libraries
-- ✓ Use try+catch for error handling, match for pattern matching, channel for concurrent communication, select for concurrent processing
-- ✓ Follow the system ABI, built-in libc, you can directly call the C language standard library functions to accelerate code development
-- ✓ editor lsp support
-- ○ High-performance memory management to assist in automatic GC
-- ○ Testing DSL in hopes of utilizing AI coding efficiently and consistently
-- ○ macho cross-platform linker (lack of macho linker currently prevents cross-compilation on darwin platform)
-- ○ Collaborative scheduling system
-- ○ Cross-platform compilation support for wasm and riscv64 platforms
-- ○ Compile to readable go programming language
+- ✓ Lightweight, concise, and consistent syntax design, easy to master and get started quickly
+- ✓ Strong type system, static analysis and compilation, memory safety, exception handling, making it easy to write secure and reliable software
+- ✓ Built-in concurrency primitives: go/future/channel/select
+- ✓ Compiles directly to target platform machine code with cross-compilation and linking support, no third-party libraries like llvm required
+- ✓ Simple deployment, efficient compilation, static linking based on musl libc with good cross-platform characteristics
+- ✓ Comprehensive type system supporting generics, union types, interfaces, nullable(?), errable(!)
+- ✓ High-performance GC implementation with very short STW (Stop The World)
+- ✓ High-performance memory allocator implementation, referencing tcmalloc
+- ✓ High-performance shared-stack coroutine implementation, capable of millions of coroutine switches per second
+- ✓ High-performance IO based on libuv implementation
+- ✓ High-performance runtime and compiler based on pure C implementation
+- ✓ Built-in data structures vec/map/set/tup and common standard library implementations
+- ✓ Function calls follow system ABI, built-in libc, convenient for calling C standard library functions
+- ✓ Centralized package management system npkg
+- ✓ Editor LSP support
+- ○ More controllable GC implementation, such as gc switch, fast free obj, etc.
+- ○ Cross-linker based on zig build source code refactoring
+- ○ Improvement of collaborative scheduling system
+- ○ Compilation target support for golang, wasm
   
 ## Project Overview
 
-The nature programming language has reached an early usable version, and the syntax API is basically stable and will not change significantly before version 1.0.
+The nature programming language has reached an early usable version, with a basically stable syntax API that will not change significantly before version 1.0. Future versions will add some necessary and commonly used syntax features such as enum, ternary operators, struct labels, etc.
 
-The current version of nature source code supports compilation on the following target platforms
-- linux/amd64
-- linux/arm64
-- darwin/amd64
-- darwin/arm64
+The current version supports compilation for the following target architectures: linux_amd64, linux_arm64, linux_riscv64, darwin_amd64, darwin_arm64. Future versions will leverage zig ld to compile for Windows platforms.
 
-nature includes a set of test cases and standard libraries to test the usability of basic functionality and syntax, and a small set of projects to test overall usability, but has not yet been tested in medium to large scale projects.
-
-The core work to follow will be to improve the usability of the nature programming language, including standard library refinement, user feedback collection, and bug fixes.
+nature includes a set of test cases and standard libraries to test the usability of basic functionality and syntax, includes a set of small to medium-sized projects to test overall usability, but has not yet been tested in large-scale projects.
   
-Official website: [https://nature-lang.org](https://nature-lang.org)  
+Official website: https://nature-lang.org  
 
 
 ## Design Philosophy
 
-Go is the programming language I use in my daily work. Its syntax is simple, and it offers very convenient cross-compilation and deployment, a highly efficient and high-performance runtime implementation, and an advanced concurrent design style. However, it also has some inconvenient aspects:
+The nature programming language is a lightweight, simple, and easy-to-learn programming language that references golang in terms of design philosophy and runtime architecture.
 
-- The overly simplistic syntax leads to insufficient expressive power.
-- The type system is not sufficiently comprehensive.
-- The error handling mechanism is cumbersome.
-- Although the automatic GC and preemptive scheduling designs are excellent, they also limit the application scope of go.
-- Package management methods.
-- `interface{}`
-- ...
+nature focuses on memory safety in its syntax design, has comprehensive type system support and convenient error handling methods, uses files as module units, and adopts a centralized package management approach based on package.toml.
 
-nature is designed to be a continuation and improvement of the go programming language, and pursues certain differences. While improving the above problems, nature has runtime, GMP model, allocator, collector, coroutine, channel, std, etc. similar to go. nature also has no dependency on llvm, high compilation speed, and easy cross-compilation and deployment.
+nature natively supports concurrency primitives go+select+channel. Thanks to the libuv network library and libaco shared-stack coroutines, it has excellent concurrent performance in IO applications. When the official version is released, nature's performance will be further improved.
 
-Based on the existing features of the nature programming language, it is suitable for game engines and game development, scientific computing and AI, operating systems and the Internet of Things, the command line, and web development.
+nature has a completely self-developed compiler, assembler, and linker (which will later transition to zig ld), making nature more flexible and controllable. The source code is simple without complex third-party dependencies, making it easy to participate in contributions and perform highly customized optimizations according to language and technology development.
+
+Benefiting from simple syntax design, automated memory management, compile-time static analysis and other features, it brings extremely low coding burden, making the nature programming language very suitable for AI coding and programming beginners.
+
+As a general-purpose programming language, based on existing language features and standard library implementations, nature can be used in various fields such as web development, command-line programs, databases, network middleware, container systems, IoT devices, programming education, operating systems, game engines and game development.
 
 
 ## Install  
@@ -67,10 +58,9 @@ Download and extract the nature installer from [releases](https://github.com/nat
   
 Run the `nature -v` command to check the version, and run the `nature -h` command to check the help  
   
-```sh 
+```sh
 > nature -v
-
-nature v0.5.0 - release build 2025-05-01 
+nature v0.6.0 - release build 2025-10-01
 ```   
 
 create a main.n file  
@@ -90,35 +80,37 @@ compile and execute
 hello nature 
 ```   
   
----   
-  
 ## Documentation  
   
-Quick start [https://nature-lang.org/docs/get-started](https://nature-lang.org/docs/get-started)  
-  
-Syntax documentation [https:// nature-lang.org/docs/syntax](https://nature-lang.org/docs/syntax)  
-  
-Standard library documentation [https://nature-lang.org/stds](https://nature-lang.org/stds)  
-  
-Try in browser [https://nature-lang.org/playground](https://nature-lang.org/playground)  
-  
-LSP https://github.com/nature-lang/nls Reference README.md  
-  
-## Project examples  
-  
-[parker](https://github.com/weiwenhao/parker) Lightweight packaging tool  
+Quick start https://nature-lang.org/docs/get-started
 
-[llama.n](https://github.com/weiwenhao/llama.n) Llama2 nature language implementation  
+Syntax documentation https://nature-lang.org/docs/syntax
 
-[tetris](https://github.com/weiwenhao/tetris) Tetris implementation based on raylib, macos only  
+Standard library documentation https://nature-lang.org/stds/co
 
-[playground](https://github.com/weiwenhao/playground) playground server api implementation  
+Try in browser https://nature-lang.org/playground  
   
+## Project Examples
+
+MySQL/PostgreSQL/Redis drivers https://github.com/weiwenhao/dbdriver
+
+SQLite driver https://github.com/weiwenhao/nature-sqlite
+
+RESTful API example https://github.com/weiwenhao/emoji-api
+
+Lightweight container packaging tool and runtime https://github.com/weiwenhao/parker
+
+Llama2 inference model implementation https://github.com/weiwenhao/llama.n
+
+Tetris implementation based on raylib https://github.com/weiwenhao/tetris
+
 More syntax examples https://github.com/nature-lang/nature/tree/master/tests/features/cases  
   
-## Contribution guidelines  
+## Contribution Guidelines
   
-https://nature-lang.org/docs/contribute  
+Guide https://nature-lang.org/docs/contribute
+
+TODO https://github.com/nature-lang/nature/issues/131  
   
 ## License  
   
