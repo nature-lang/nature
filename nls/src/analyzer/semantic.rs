@@ -1011,12 +1011,12 @@ impl<'a> Semantic<'a> {
             // import package ident
             let import_stmt = self.imports.iter().find(|i| i.as_name == *left_ident);
             if let Some(import_stmt) = import_stmt {
-                debug!("import as name {}, module_ident {}, key {key}", import_stmt.as_name, import_stmt.module_ident);
+                // debug!("import as name {}, module_ident {}, key {key}", import_stmt.as_name, import_stmt.module_ident);
 
                 // select left 以及找到了，但是还是改不了？ infer 阶段能快速定位就好了。现在的关键是，找到了又怎么样, 又能做什么，也改写不了什么。只能是？
                 // 只能是添加一个 symbol_id? 但是符号本身也没有意义了？如果直接改成 ident + symbol_id 呢？还是改，只是改成了更为奇怪的存在。
                 if let Some(id) = self.symbol_table.find_module_symbol_id(&import_stmt.module_ident, key) {
-                    debug!("find symbol id {} by module_ident {}, key {key}", id, import_stmt.module_ident);
+                    // debug!("find symbol id {} by module_ident {}, key {key}", id, import_stmt.module_ident);
 
                     // 将整个 expr 直接改写成 global ident, 这也是 analyze_select_expr 的核心目录
                     expr.node = AstNode::Ident(format_global_ident(import_stmt.module_ident.clone(), key.clone()), id);
@@ -1068,7 +1068,7 @@ impl<'a> Semantic<'a> {
             *symbol_id = id;
             *ident = format_global_ident(self.module.ident.clone(), ident.clone());
 
-            debug!("analyze_ident find, synbol_id {}, new ident {}", id, ident);
+            // debug!("analyze_ident find, synbol_id {}, new ident {}", id, ident);
             return true;
         }
 

@@ -171,3 +171,18 @@ fn main() {
 
 --- output.txt
 0 0 0
+
+=== test_str_connect
+--- main.n
+const str1 = 'hello'
+const str2 = ' world'
+
+const str3 = str1 + str2
+
+fn main() {
+    const str4 = str3 + ' byebye'
+    println(str3, str4)
+}
+
+--- output.txt
+hello world hello world byebye

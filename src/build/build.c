@@ -5,8 +5,11 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <sys/stat.h>
 
 #include "config.h"
+#include "utils/helper.h"
+#include "utils/log.h"
 #include "src/binary/arch/amd64.h"
 #include "src/binary/arch/arm64.h"
 #include "src/binary/arch/riscv64.h"
@@ -1005,6 +1008,32 @@ static inline void cross_native(closure_t *c) {
     assert(false && "not support arch");
 }
 
+/**
+ * Safe cleanup of TEMP_DIR after build completion
+ * This function ensures all temporary files and directories are properly removed
+ */
+static void cleanup_temp_dir() {
+    if (!TEMP_DIR || strlen(TEMP_DIR) == 0) {
+        log_debug("TEMP_DIR is not set, skipping cleanup");
+        return;
+    }
+
+    // Additional safety check: ensure TEMP_DIR looks like a temporary directory
+    if (!strstr(TEMP_DIR, "/tmp/") && !strstr(TEMP_DIR, "nature-build")) {
+        log_warn("TEMP_DIR path looks suspicious, skipping cleanup: %s", TEMP_DIR);
+        return;
+    }
+
+    log_debug("Cleaning up temporary directory: %s", TEMP_DIR);
+
+    int result = rmdir_recursive(TEMP_DIR);
+    if (result == 0) {
+        log_debug("Successfully cleaned up TEMP_DIR: %s", TEMP_DIR);
+    } else {
+        log_warn("Failed to clean up TEMP_DIR: %s (this may be normal if files are still in use)", TEMP_DIR);
+    }
+}
+
 static void build_compiler(slice_t *modules) {
     // module 基于广度 import 进入，倒叙遍历解决依赖问题
     for (int i = modules->count - 1; i >= 0; --i) {
@@ -1132,7 +1161,9 @@ void build(char *build_entry, bool is_archive) {
     // if custom ld(macos default use linker ld)
 
     if (is_archive) {
-        return build_archive(modules);
+        build_archive(modules);
+        cleanup_temp_dir();
+        return;
     }
 
     if (strlen(USE_LD) > 0) {
@@ -1146,4 +1177,7 @@ void build(char *build_entry, bool is_archive) {
         assertf(BUILD_OS == OS_LINUX, "The cross-platform elf linker can only be used if the target is linux.");
         linker_elf_exe(modules);
     }
+
+    // Cleanup TEMP_DIR after successful build
+    cleanup_temp_dir();
 }
