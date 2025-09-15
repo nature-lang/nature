@@ -30,6 +30,7 @@ void print_help() {
     printf("  Supported Platforms:\n");
     printf("    - linux_amd64    Linux on x86-64 architecture\n");
     printf("    - linux_arm64    Linux on ARM 64-bit architecture\n");
+    printf("    - linux_riscv64  Linux on RISCV 64-bit architecture\n");
     printf("    - darwin_amd64   macOS on x86-64 architecture\n");
     printf("    - darwin_arm64   macOS on ARM 64-bit architecture (Apple Silicon)\n\n");
 
