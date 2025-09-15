@@ -3692,7 +3692,7 @@ static void infer_generics_param_constraints(module_t *m, type_t *impl_type, lis
     ast_typedef_stmt_t *ast_stmt = symbol->ast_value;
     list_t *params = ast_stmt->params;
 
-    INFER_ASSERTF(params->length == generics_params->length, "type '%s' param not match", impl_ident);
+    INFER_ASSERTF(params && params->length == generics_params->length, "type '%s' param not match", impl_ident);
     if (generics_params->length == 0) {
         return;
     }
