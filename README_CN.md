@@ -97,7 +97,7 @@ mysql/postgresql/redis 驱动 https://github.com/weiwenhao/dbdriver
 
 sqlite 驱动 https://github.com/weiwenhao/nature-sqlite
 
-RESTful api 示例 https://github.com/weiwenhao/emoji-api
+API 框架 https://github.com/weiwenhao/emoji-api
 
 轻量级容器打包工具与运行时 https://github.com/weiwenhao/parker
 
