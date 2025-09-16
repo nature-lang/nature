@@ -96,7 +96,7 @@ MySQL/PostgreSQL/Redis drivers https://github.com/weiwenhao/dbdriver
 
 SQLite driver https://github.com/weiwenhao/nature-sqlite
 
-RESTful API example https://github.com/weiwenhao/emoji-api
+API Framework https://github.com/weiwenhao/emoji-api
 
 Lightweight container packaging tool and runtime https://github.com/weiwenhao/parker
 
