@@ -113,10 +113,23 @@ static linked_t *riscv64_lower_symbol_var(closure_t *c, lir_op_t *op) {
 
     if (op->code == LIR_OPCODE_LEA ||
         op->code == LIR_OPCODE_LABEL ||
-        op->code == LIR_OPCODE_BEQ ||
         op->code == LIR_OPCODE_BAL) {
         return list;
     }
+
+    // beq 需要特殊处理
+    if (op->code == LIR_OPCODE_BEQ) {
+        if (op->first && op->first->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+            op->first = riscv64_convert_lea_symbol_var(c, list, op->first);
+        }
+
+        if (op->second && op->second->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+            op->second = riscv64_convert_lea_symbol_var(c, list, op->second);
+        }
+
+        return list;
+    }
+
 
     if (op->first && op->first->assert_type == LIR_OPERAND_SYMBOL_VAR) {
         op->first = riscv64_convert_lea_symbol_var(c, list, op->first);
@@ -262,7 +275,6 @@ static void riscv64_lower_block(closure_t *c, basic_block_t *block) {
             for (linked_node *call_node = call_operations->front; call_node != call_operations->rear;
                  call_node = call_node->succ) {
                 lir_op_t *temp_op = call_node->value;
-
                 linked_concat(operations, riscv64_lower_symbol_var(c, temp_op));
 
                 if (temp_op->code == LIR_OPCODE_MOVE && !lir_can_mov(temp_op)) {
@@ -277,7 +289,21 @@ static void riscv64_lower_block(closure_t *c, basic_block_t *block) {
         }
 
         if (op->code == LIR_OPCODE_FN_BEGIN) {
-            linked_concat(operations, riscv64_lower_fn_begin(c, op));
+            linked_t *fn_begin_operations = riscv64_lower_fn_begin(c, op);
+            for (linked_node *fn_begin_node = fn_begin_operations->front; fn_begin_node != fn_begin_operations->rear;
+                 fn_begin_node = fn_begin_node->succ) {
+                lir_op_t *temp_op = fn_begin_node->value;
+                linked_concat(operations, riscv64_lower_symbol_var(c, temp_op));
+
+                if (temp_op->code == LIR_OPCODE_MOVE && !lir_can_mov(temp_op)) {
+                    temp_op->first = riscv64_convert_use_var(c, operations, temp_op->first);
+                    linked_push(operations, temp_op);
+                    continue;
+                }
+
+                linked_push(operations, temp_op);
+            }
+
             continue;
         }
 

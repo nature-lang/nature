@@ -132,7 +132,8 @@ static int64_t riscv64_pcs_aux(int64_t n, type_t *args_types, pos_item_t *args_p
                 args_pos[i].main = (areg[0]++ << 1) | 1; // 添加指针标记
                 args_pos[i].main_filed_offset = 0 << 8 | TYPE_ANYPTR; // 通过指针传递
             } else {
-                args_pos[i].main = ns | 1;
+                args_pos[i].main = ns | 1; // 1 表示指针标记
+                args_pos[i].main_filed_offset = 0 << 8 | TYPE_ANYPTR;
                 ns += POINTER_SIZE;
             }
             continue;
@@ -300,8 +301,9 @@ static linked_t *riscv64_lower_params(closure_t *c, slice_t *param_vars) {
             lir_operand_t *src = lir_stack_operand(c->module, sp_offset, type_kind_sizeof(main_kind), main_kind);
 
             // 参数通过栈传递。
-            if (param_type.kind == TYPE_STRUCT && !(main_pos & 1)) { // 触发扁平化, 此时栈空间依旧由 callee 分配
-                linked_push(result, lir_stack_alloc(c, param_type, dst_param));
+            if (param_type.kind == TYPE_STRUCT && !(main_pos & 1)) {
+                // 触发扁平化, 此时栈空间依旧由 callee 分配
+                linked_push(result, lir_stack_alloc(c, param_type, dst_param)); // 分配栈空间
                 lir_operand_t *dst = indirect_addr_operand(c->module, type_kind_new(main_kind), dst_param, 0);
 
                 linked_push(result, lir_op_move(dst, src));

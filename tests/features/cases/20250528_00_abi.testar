@@ -95,20 +95,22 @@ fn main() {
 
 === test_struct_case5
 --- main.n
-// 触发扁平化
 type test_t = struct{
     i64 a
     i64 b
 }
 
 fn callee(int a1, int a2, int a3, int a4, int a5, int a6, int a7, test_t t) {
+    println(a1, a2, a3, a4, a5, a6, a7, t.a, t.b)
 }
 
 fn main() {
-    var t = test_t{}
+    var t = test_t{a = 8, b = 9}
     callee(1, 2, 3, 4, 5, 6, 7, t)
 }
 
+--- output.txt
+1 2 3 4 5 6 7 8 9
 
 === test_struct_case6
 --- main.n
@@ -138,7 +140,9 @@ fn callee(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, test_t
 }
 
 fn main() {
-
+    var result = callee(1, 2, 3, 4, 5, 6, 7, 8, test_t{a = 1, b = 2, c= 3})
+    println(result)
+    assert(result == 6)
 }
 
 === test_struct_case8
@@ -207,4 +211,67 @@ fn callee(f32 a1, f32 a2, f32 a3, f32 a4, f32 a5, f32 a6, test_t test):f32 {
 fn main() {
     var foo = test_t{}
     callee(1, 2, 3, 4, 5, 6, foo)
+}
+
+=== test_lower_in_amd64
+--- main.n
+type body_t = struct{
+    string title
+    string content
+    [string] images
+    string? video
+    {string:any} layout
+}
+
+type document_t = struct{
+    int id
+    int created_at
+    int updated_at
+    int user_id
+    string title
+    string content
+    [string] images
+    string? video
+    {string:any} layout
+}
+
+fn create(int user_id, string title, string content, [string] images, string? video, {string:any} layout):document_t! {
+    println(user_id)
+    return document_t{
+        layout = layout,
+    }
+}
+
+fn main() {
+    var body = body_t{
+        layout = {
+            'a': 12,
+            'b': 14,
+        },
+    }
+    var result = create(1, body.title, body.content, body.images, body.video, body.layout)
+    println(result.layout['a'], result.layout['b'])
+}
+
+--- output.txt
+1
+12 14
+
+=== test_global_symbol
+--- main.n
+var cache_load = false
+
+fn load():bool {
+    if cache_load {
+        return false
+    }
+
+    cache_load = true
+    return true
+}
+
+fn main() {
+    load()
+    println(cache_load)
+    assert(cache_load == true)
 }
