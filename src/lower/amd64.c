@@ -300,15 +300,43 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         linked_concat(operations, amd64_lower_imm(c, op));
 
         if (lir_op_call(op) && op->second->value != NULL) {
-            linked_concat(operations, amd64_lower_call(c, op));
+            linked_t *call_operations = amd64_lower_call(c, op);
+            for (linked_node *call_node = call_operations->front; call_node != call_operations->rear;
+                 call_node = call_node->succ) {
+                lir_op_t *temp_op = call_node->value;
+
+                if (temp_op->code == LIR_OPCODE_MOVE && !lir_can_mov(temp_op)) {
+                    temp_op->first = amd64_convert_first_to_temp(c, operations, temp_op->first);
+                    linked_push(operations, temp_op);
+                    continue;
+                }
+
+                linked_push(operations, temp_op);
+            }
+
             continue;
         }
+
         if (op->code == LIR_OPCODE_NEG) {
             linked_concat(operations, amd64_lower_neg(c, op));
             continue;
         }
+
         if (op->code == LIR_OPCODE_FN_BEGIN) {
-            linked_concat(operations, amd64_lower_fn_begin(c, op));
+            linked_t *fn_begin_operations = amd64_lower_fn_begin(c, op);
+            for (linked_node *fn_begin_node = fn_begin_operations->front; fn_begin_node != fn_begin_operations->rear;
+                 fn_begin_node = fn_begin_node->succ) {
+                lir_op_t *temp_op = fn_begin_node->value;
+
+                if (temp_op->code == LIR_OPCODE_MOVE && !lir_can_mov(temp_op)) {
+                    temp_op->first = amd64_convert_first_to_temp(c, operations, temp_op->first);
+                    linked_push(operations, temp_op);
+                    continue;
+                }
+
+                linked_push(operations, temp_op);
+            }
+
             continue;
         }
 

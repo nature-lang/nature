@@ -119,6 +119,17 @@ static linked_t *arm64_lower_symbol_var(closure_t *c, lir_op_t *op) {
         return list;
     }
 
+    if (op->code == LIR_OPCODE_BEQ) {
+        if (op->first && op->first->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+            op->first = arm64_convert_lea_symbol_var(c, list, op->first);
+        }
+
+        if (op->second && op->second->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+            op->second = arm64_convert_lea_symbol_var(c, list, op->second);
+        }
+        return list;
+    }
+
     if (op->first && op->first->assert_type == LIR_OPERAND_SYMBOL_VAR) {
         op->first = arm64_convert_lea_symbol_var(c, list, op->first);
     }
@@ -277,7 +288,20 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
         }
 
         if (op->code == LIR_OPCODE_FN_BEGIN) {
-            linked_concat(operations, arm64_lower_fn_begin(c, op));
+            linked_t *fn_begin_operations = arm64_lower_fn_begin(c, op);
+            for (linked_node *fn_begin_node = fn_begin_operations->front; fn_begin_node != fn_begin_operations->rear;
+                 fn_begin_node = fn_begin_node->succ) {
+                lir_op_t *temp_op = fn_begin_node->value;
+                linked_concat(operations, arm64_lower_symbol_var(c, temp_op));
+
+                if (temp_op->code == LIR_OPCODE_MOVE && !lir_can_mov(temp_op)) {
+                    temp_op->first = arm64_convert_use_var(c, operations, temp_op->first);
+                    linked_push(operations, temp_op);
+                    continue;
+                }
+
+                linked_push(operations, temp_op);
+            }
             continue;
         }
 
