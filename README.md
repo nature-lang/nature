@@ -60,7 +60,7 @@ Run the `nature -v` command to check the version, and run the `nature -h` comman
   
 ```sh
 > nature -v
-nature v0.6.0 - release build 2025-10-01
+nature vx.x.x - release build 1970-01-01
 ```   
 
 create a main.n file  
