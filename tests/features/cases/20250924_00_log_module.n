@@ -1,0 +1,79 @@
+import log
+import fmt
+import fs
+import path
+
+fn main() {
+    fmt.printf('Testing log module...\n')
+
+    // 测试基本日志功能
+    log.info('Application started')
+    log.debug('This debug message should not appear (level=INFO)')
+    log.warn('This is a warning message')
+    log.error('This is an error message')
+
+    // 测试级别设置
+    fmt.printf('\nTesting log level changes...\n')
+    log.set_level(log.DEBUG)
+    log.debug('Now debug messages appear')
+    log.trace('This trace message should not appear (level=DEBUG)')
+
+    log.set_level(log.TRACE)
+    log.trace('Now trace messages appear')
+
+    // 测试带文件信息的日志
+    fmt.printf('\nTesting file info logging...\n')
+    log.info_at('test.n', 42, 'Log message with file info')
+
+    // 测试自定义日志器
+    fmt.printf('\nTesting custom logger...\n')
+    var custom_logger = log.new_logger(log.WARN)
+    custom_logger.set_color(false)
+    custom_logger.set_time(false)
+    custom_logger.set_file_info(false)
+
+    custom_logger.log(log.INFO, '', 0, 'This INFO should not appear (level=WARN)')
+    custom_logger.log(log.WARN, '', 0, 'Custom logger warning')
+    custom_logger.log(log.ERROR, '', 0, 'Custom logger error')
+
+    // 测试文件输出
+    fmt.printf('\nTesting file output...\n')
+    var test_log_file = '/tmp/nature_log_test.log'
+
+    var file_logger = log.new_logger(log.INFO)
+    file_logger.set_output_file(test_log_file) catch err {
+        fmt.printf('Failed to set output file: %s\n', err)
+        return
+    }
+
+    file_logger.log(log.INFO, '', 0, 'Log message written to file')
+    file_logger.log(log.WARN, 'test.n', 100, 'Warning message with file info')
+
+    // 验证文件内容
+    var content = fs.read_file(test_log_file) catch err {
+        fmt.printf('Failed to read log file: %s\n', err)
+        return
+    }
+
+    fmt.printf('Log file content:\n%s\n', content)
+
+    // 清理测试文件
+    fs.remove(test_log_file) catch err {
+        fmt.printf('Failed to remove test file: %s\n', err)
+    }
+
+    // 测试配置选项
+    fmt.printf('\nTesting configuration options...\n')
+    log.set_color(false)
+    log.set_time_display(false)
+    log.set_file_display(true)
+    log.info_at('config_test.n', 200, 'Message with file info, no color/time')
+
+    // 恢复默认设置
+    log.set_color(true)
+    log.set_time_display(true)
+    log.set_file_display(true)
+    log.set_level(log.INFO)
+
+    fmt.printf('\nLog module tests completed successfully!\n')
+}

@@ -1,0 +1,242 @@
+import time
+import fmt
+import fs
+import os
+import strings
+import syscall
+
+// 日志级别常量
+const TRACE = 0
+const DEBUG = 1
+const INFO = 2
+const WARN = 3
+const ERROR = 4
+const FATAL = 5
+
+// 默认日志级别
+var DEFAULT_LEVEL = INFO
+
+// 日志级别名称映射
+var level_names = {
+    'TRACE',
+    'DEBUG',
+    'INFO',
+    'WARN',
+    'ERROR',
+    'FATAL'
+}
+
+// 日志级别颜色映射（ANSI颜色代码）
+var level_colors = {
+    '\033[0;37m',  // TRACE - 白色
+    '\033[0;36m',  // DEBUG - 青色
+    '\033[0;32m',  // INFO - 绿色
+    '\033[0;33m',  // WARN - 黄色
+    '\033[0;31m',  // ERROR - 红色
+    '\033[1;31m'   // FATAL - 亮红色
+}
+
+var color_reset = '\033[0m'
+
+// 日志器类型
+type logger_t = struct {
+    u8 level
+    bool show_color
+    bool show_time
+    bool show_file
+    ptr<fs.file_t> output_file
+}
+
+// 全局默认日志器
+var default_logger = logger_t{
+    level = DEFAULT_LEVEL,
+    show_color = true,
+    show_time = true,
+    show_file = true,
+    output_file = null as ptr<fs.file_t>
+}
+
+// 创建新的日志器
+fn new_logger(u8 level):logger_t {
+    return logger_t{
+        level = level,
+        show_color = true,
+        show_time = true,
+        show_file = true,
+        output_file = null as ptr<fs.file_t>
+    }
+}
+
+// 设置日志器输出文件
+fn logger_t.set_output_file(string file_path):logger_t! {
+    var file = fs.open(file_path, 'a') catch err {
+        return err
+    }
+
+    self.output_file = file
+    self.show_color = false // 文件输出不显示颜色
+    return self
+}
+
+// 设置日志器级别
+fn logger_t.set_level(u8 level):logger_t {
+    self.level = level
+    return self
+}
+
+// 设置是否显示颜色
+fn logger_t.set_color(bool show):logger_t {
+    self.show_color = show
+    return self
+}
+
+// 设置是否显示时间
+fn logger_t.set_time(bool show):logger_t {
+    self.show_time = show
+    return self
+}
+
+// 设置是否显示文件信息
+fn logger_t.set_file_info(bool show):logger_t {
+    self.show_file = show
+    return self
+}
+
+// 格式化日志消息
+fn logger_t.format_message(u8 level, string file, int line, string message):string {
+    var parts = vec_new<string>(0, 10)
+
+    // 添加时间戳
+    if self.show_time {
+        var now = time.now()
+        parts.push(now.datetime())
+    }
+
+    // 添加级别信息
+    var level_str = level_names[level]
+    if self.show_color {
+        level_str = fmt.sprintf('%s[%s]%s', level_colors[level], level_str, color_reset)
+    } else {
+        level_str = fmt.sprintf('[%s]', level_str)
+    }
+    parts.push(level_str)
+
+    // 添加文件信息
+    if self.show_file && file != '' {
+        var file_info = fmt.sprintf('%s:%d', file, line)
+        parts.push(file_info)
+    }
+
+    // 添加消息
+    parts.push(message)
+
+    return strings.join(parts, ' ')
+}
+
+// 输出日志消息
+fn logger_t.output(string formatted_message):void! {
+    if self.output_file != null {
+        // 输出到文件
+        self.output_file.write(formatted_message + '\n') catch err {
+            return err
+        }
+        self.output_file.flush() catch err {
+            return err
+        }
+    } else {
+        // 输出到标准输出
+        fmt.printf('%s\n', formatted_message)
+    }
+}
+
+// 核心日志方法
+fn logger_t.log(u8 level, string file, int line, string format, ...[any] args):void! {
+    if level < self.level {
+        return
+    }
+
+    var message = fmt.sprintf(format, ...args)
+    var formatted = self.format_message(level, file, line, message)
+
+    self.output(formatted) catch err {
+        return err
+    }
+
+    // FATAL级别日志后退出程序
+    if level == FATAL {
+        os.exit(1)
+    }
+}
+
+// 便捷方法 - 使用默认日志器
+fn trace(string format, ...[any] args):void! {
+    return default_logger.log(TRACE, '', 0, format, ...args)
+}
+
+fn debug(string format, ...[any] args):void! {
+    return default_logger.log(DEBUG, '', 0, format, ...args)
+}
+
+fn info(string format, ...[any] args):void! {
+    return default_logger.log(INFO, '', 0, format, ...args)
+}
+
+fn warn(string format, ...[any] args):void! {
+    return default_logger.log(WARN, '', 0, format, ...args)
+}
+
+fn error(string format, ...[any] args):void! {
+    return default_logger.log(ERROR, '', 0, format, ...args)
+}
+
+fn fatal(string format, ...[any] args):void! {
+    return default_logger.log(FATAL, '', 0, format, ...args)
+}
+
+// 带文件信息的便捷方法
+fn trace_at(string file, int line, string format, ...[any] args):void! {
+    return default_logger.log(TRACE, file, line, format, ...args)
+}
+
+fn debug_at(string file, int line, string format, ...[any] args):void! {
+    return default_logger.log(DEBUG, file, line, format, ...args)
+}
+
+fn info_at(string file, int line, string format, ...[any] args):void! {
+    return default_logger.log(INFO, file, line, format, ...args)
+}
+
+fn warn_at(string file, int line, string format, ...[any] args):void! {
+    return default_logger.log(WARN, file, line, format, ...args)
+}
+
+fn error_at(string file, int line, string format, ...[any] args):void! {
+    return default_logger.log(ERROR, file, line, format, ...args)
+}
+
+fn fatal_at(string file, int line, string format, ...[any] args):void! {
+    return default_logger.log(FATAL, file, line, format, ...args)
+}
+
+// 全局配置方法
+fn set_level(u8 level):void {
+    default_logger.level = level
+}
+
+fn set_output_file(string file_path):void! {
+    default_logger.set_output_file(file_path) catch err {
+        return err
+    }
+}
+
+fn set_color(bool show):void {
+    default_logger.show_color = show
+}
+
+fn set_time_display(bool show):void {
+    default_logger.show_time = show
+}
+
+fn set_file_display(bool show):void {
+    default_logger.show_file = show
+}
