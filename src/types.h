@@ -528,9 +528,8 @@ typedef struct closure_t {
 
     // runtime 参数可能保存在 stack 也可能保存在 reg 中。
     // 无论保存在哪里，其都是一个 8byte 的 pointer
-    uint64_t fn_runtime_reg;
     uint64_t fn_runtime_stack;
-    void *fn_runtime_operand; // lir_operand_t
+    void *env_operand; // lir_operand_t
 
     // loop collect
     int8_t loop_count;

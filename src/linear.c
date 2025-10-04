@@ -258,7 +258,7 @@ static lir_operand_t *linear_super_move(module_t *m, type_t t, lir_operand_t *ds
 }
 
 static lir_operand_t *linear_default_string(module_t *m, type_t t, lir_operand_t *target) {
-    push_rt_call(m, RT_CALL_STRING_NEW, target, 2, string_operand(""), int_operand(0));
+    push_rt_call(m, RT_CALL_STRING_NEW, target, 2, string_operand("", 0), int_operand(0));
     return target;
 }
 
@@ -527,8 +527,8 @@ static void linear_has_panic(module_t *m) {
         be_catch = true;
     }
 
-    lir_operand_t *path_operand = string_operand(m->rel_path);
-    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg);
+    lir_operand_t *path_operand = string_operand(m->rel_path, strlen(m->rel_path));
+    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg, strlen(m->current_closure->fndef->fn_name_with_pkg));
     lir_operand_t *line_operand = int_operand(m->current_line);
     lir_operand_t *column_operand = int_operand(m->current_column);
 
@@ -555,8 +555,8 @@ static void linear_has_error(module_t *m) {
 
     lir_operand_t *has_error = temp_var_operand_with_alloc(m, type_kind_new(TYPE_BOOL));
 
-    lir_operand_t *path_operand = string_operand(m->rel_path);
-    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg);
+    lir_operand_t *path_operand = string_operand(m->rel_path, strlen(m->rel_path));
+    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg, strlen(m->current_closure->fndef->fn_name_with_pkg));
     lir_operand_t *line_operand = int_operand(m->current_line);
     lir_operand_t *column_operand = int_operand(m->current_column);
 
@@ -685,25 +685,9 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
     symbol_t *s = symbol_table_get(ident->literal);
     assertf(s, "ident %s not declare");
 
-    // checking closure name
-    char *closure_name = m->current_closure->fndef->jit_closure_name;
-    if (closure_name && str_equal(s->ident, closure_name)) {
-        // symbol 中的该符号已经改写成 closure var 了，该 closure var 通过 last param 丢了进来
-        // 所以直接使用 fn 该 fn 就行了，该 fn 一定被赋值了，就放心好了
-        assertf(s->type == SYMBOL_VAR, "closure symbol=%s not var");
-        assertf(m->current_closure->fn_runtime_operand, "closure->fn_runtime_operand not init");
-        lir_operand_t *operand = m->current_closure->fn_runtime_operand;
-        lir_var_t *var = operand->value;
-        assert(str_equal(var->ident, ident->literal));
-    }
-
     if (s->type == SYMBOL_FN) {
         // 现在 symbol fn 是作为一个 type_fn 值进行传递，所以需要取出其 label 进行处理。
         // 即使是 global fn 也不例外, linear call symbol 已经进行了特殊处理，进不到这里来
-        if (!target) {
-            target = temp_var_operand_with_alloc(m, expr.type);
-        }
-
         // linkident 特殊处理
         ast_fndef_t *fndef = s->ast_value;
         char *symbol_ident = fndef->symbol_name;
@@ -711,8 +695,16 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
             symbol_ident = fndef->linkid;
         }
 
-        OP_PUSH(lir_op_lea(target, symbol_label_operand(m, symbol_ident)));
-        return target;
+        // 加载 fn 地址
+        lir_operand_t *fn_addr_operand = temp_var_operand(m, fndef->type);
+        OP_PUSH(lir_op_lea(fn_addr_operand, symbol_label_operand(m, symbol_ident)));
+
+        lir_operand_t *env_operand = int_operand(0);
+
+        lir_operand_t *result = temp_var_operand(m, fndef->type);
+        push_rt_call(m, RT_CALL_FN_NEW, result, 2, fn_addr_operand, env_operand);
+
+        return linear_super_move(m, fndef->type, target, result);
     }
 
     if (s->type == SYMBOL_VAR) {
@@ -823,15 +815,11 @@ static void linear_tuple_assign(module_t *m, ast_assign_stmt_t *stmt) {
 }
 
 static lir_operand_t *linear_inline_env_values(module_t *m) {
-    // 基于 fn_runtime_operand + index 计算出 offset 直接进行 move 操作
-    size_t envs_offset = offsetof(runtime_fn_t, envs);
-    lir_operand_t *env_operand = temp_var_operand(m, type_kind_new(TYPE_GC_ENV));
-    // lea [fn + x] -> env
-    OP_PUSH(lir_op_move(env_operand, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR),
-                                                           m->current_closure->fn_runtime_operand, envs_offset)));
+    assertf(m->current_closure->env_operand, "have env access, must have fn_runtime_operand");
+
     // mov [env+0] -> values
     lir_operand_t *values_operand = temp_var_operand(m, type_kind_new(TYPE_GC_ENV_VALUES));
-    OP_PUSH(lir_op_move(values_operand, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), env_operand, 0)));
+    OP_PUSH(lir_op_move(values_operand, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), m->current_closure->env_operand, 0)));
 
     return values_operand;
 }
@@ -850,8 +838,6 @@ static void linear_env_assign(module_t *m, ast_assign_stmt_t *stmt) {
     lir_operand_t *src = linear_expr(m, stmt->right, NULL);
     //    lir_operand_t *src_ref = lea_operand_pointer(m, src);
     uint64_t size = type_sizeof(stmt->right.type);
-
-    assertf(m->current_closure->fn_runtime_operand, "have env access, must have fn_runtime_operand");
 
     lir_operand_t *values_operand = linear_inline_env_values(m);
 
@@ -1580,9 +1566,11 @@ select_end:*/
  */
 static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_call_t *call = expr.value;
-    lir_operand_t *base_target = NULL;
+    lir_operand_t *fn_target = NULL;
     type_fn_t *type_fn = NULL;
     slice_t *args = slice_new();
+
+    bool is_global_fn = false;
 
     if (call->left.assert_type == AST_EXPR_SELECT) {
         do {
@@ -1623,9 +1611,9 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
             lir_operand_t *src = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), interface_target, POINTER_SIZE);
             OP_PUSH(lir_op_move(methods_target, src));
 
-            base_target = temp_var_operand(m, *interface_fn_type);
+            fn_target = temp_var_operand(m, *interface_fn_type); // fn target 可以直接调用
             src = indirect_addr_operand(m, *interface_fn_type, methods_target, POINTER_SIZE * index);
-            OP_PUSH(lir_op_move(base_target, src));
+            OP_PUSH(lir_op_move(fn_target, src));
             type_fn = interface_fn_type->fn;
 
             // get self, 不需要进行额外的数据分配， union_casting 中已经进行了数据处理, 直接按照 anyptr 进行数据处理即可
@@ -1633,20 +1621,24 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
             src = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), interface_target, 0);
             OP_PUSH(lir_op_move(self_target, src));
             slice_push(args, self_target);
+
+            is_global_fn = true;
         } while (0);
     } else {
         // global ident call optimize to 'call symbol'
-        base_target = global_fn_symbol(m, call->left);
-        if (!base_target) {
+        fn_target = global_fn_symbol(m, call->left);
+        if (!fn_target) {
             lir_operand_t *temp_operand = temp_var_operand_with_alloc(m, call->left.type);
-            base_target = linear_expr(m, call->left, temp_operand);
+            fn_target = linear_expr(m, call->left, temp_operand);
+        } else {
+            is_global_fn = true;
         }
 
         type_fn = call->left.type.fn;
     }
 
     assert(type_fn);
-    assert(base_target);
+    assert(fn_target);
 
 
     // call 所有的参数都丢到 params 变量中
@@ -1709,10 +1701,19 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
         slice_push(args, actual_operand);
     }
 
-    // 使用一个 int_operand(0) 预留出 fn_runtime 所需的空间,这里不需要也不能判断出 target 是否有空间引用，所以统一预留
-    // 比如 [fn():int] 这样的 list 引用下的, list[0]() 无法通过类型判断出 list[0] 是否引用的外部环境，是否需要预留 fn_runtime
-    // 空间,用于环境改写。 统一预留空间在最后一个参数基本不会有什么影响
-    slice_push(args, int_operand(0));
+
+    // 如果 base target 是 global fn symbol
+    if (!is_global_fn) {
+        // change base target, mov [base_target], base_target
+        lir_operand_t *new_fn_target = temp_var_operand(m, call->left.type);
+        lir_operand_t *env_target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+
+        OP_PUSH(lir_op_move(env_target, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), fn_target, 0)));
+        OP_PUSH(lir_op_move(new_fn_target, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), fn_target, POINTER_SIZE)));
+
+        fn_target = new_fn_target;
+        slice_push(args, env_target);
+    }
 
     lir_operand_t *temp = NULL;
     if (call->return_type.kind != TYPE_VOID) {
@@ -1723,7 +1724,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     OP_PUSH(lir_op_safepoint());
 
     // call base_target,params -> target
-    OP_PUSH(lir_op_new(LIR_OPCODE_CALL, base_target, operand_new(LIR_OPERAND_ARGS, args), temp));
+    OP_PUSH(lir_op_new(LIR_OPCODE_CALL, fn_target, operand_new(LIR_OPERAND_ARGS, args), temp));
 
     // 目标函数可能会产生错误才需要进行错误判断，并跳转到对应的 error label 或者 continue label
     if (type_fn->is_errable) {
@@ -2245,8 +2246,6 @@ static lir_operand_t *linear_array_repeat_new(module_t *m, ast_expr_t expr, lir_
  * @return
  */
 static lir_operand_t *linear_env_access(module_t *m, ast_expr_t expr, lir_operand_t *target) {
-    assertf(m->current_closure->fn_runtime_operand, "have env access, must have fn_runtime_operand");
-
     assert(expr.type.in_heap);
 
     ast_env_access_t *ast = expr.value;
@@ -2851,14 +2850,16 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     // string -> list u8
-    if (as_expr->src.type.kind == TYPE_STRING && is_list_u8(as_expr->target_type)) {
-        OP_PUSH(lir_op_move(target, src_operand));
+    if (as_expr->src.type.kind == TYPE_STRING && is_vec_u8(as_expr->target_type)) {
+        // OP_PUSH(lir_op_move(target, src_operand));
+        push_rt_call(m, RT_CALL_STRING_TO_VEC, target, 1, src_operand);
         return target;
     }
 
-    // list u8 -> string push a '\0'
-    if (is_list_u8(as_expr->src.type) && as_expr->target_type.kind == TYPE_STRING) {
-        OP_PUSH(lir_op_move(target, src_operand));
+    // list u8 -> string
+    if (is_vec_u8(as_expr->src.type) && as_expr->target_type.kind == TYPE_STRING) {
+        //        OP_PUSH(lir_op_move(target, src_operand));
+        push_rt_call(m, RT_CALL_VEC_TO_STRING, target, 1, src_operand);
         return target;
     }
 
@@ -3112,9 +3113,9 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
-        lir_operand_t *imm_c_string_operand = string_operand(literal->value);
+        lir_operand_t *imm_c_string_operand = string_operand(literal->value, literal->len);
         lir_operand_t *imm_len_operand = int_operand(literal->len);
-        push_rt_call(m, RT_CALL_STRING_NEW, target, 2, imm_c_string_operand, imm_len_operand);
+        push_rt_call(m, RT_CALL_STRING_NEW_WITH_POOL, target, 2, imm_c_string_operand, imm_len_operand);
         return target;
     }
 
@@ -3205,9 +3206,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
 static lir_operand_t *linear_capture_expr(module_t *m, ast_expr_t *expr) {
     if (expr->assert_type == AST_EXPR_ENV_ACCESS) {
         // 被 child fn 引用的 var 是更上一级的 var, local fn 也只能通过 env[n] 的方式引用
-        assertf(m->current_closure->fn_runtime_operand, "have env access, must have fn_runtime_operand");
         ast_env_access_t *env_access = expr->value;
-
         lir_operand_t *values_operand = linear_inline_env_values(m);
         lir_operand_t *env_value_ptr = indirect_addr_operand(m, expr->type, values_operand, env_access->index * POINTER_SIZE);
 
@@ -3256,35 +3255,27 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 
     // symbol label 不能使用 mov 在变量间自由的传递，所以这里将 symbol label 的 addr 加载出来返回
     lir_operand_t *fn_symbol_operand = symbol_label_operand(m, fndef->symbol_name);
+    lir_operand_t *env_operand = int_operand(0);
+    if (fndef->capture_exprs->length > 0) {
+        // make envs
+        lir_operand_t *length = int_operand(fndef->capture_exprs->length);
+        // rt_call env_new(fndef->name, length)
+        env_operand = temp_var_operand(m, type_kind_new(TYPE_GC_ENV));
 
-    if (!fndef->jit_closure_name) {
-        //        if (expr.target_type.kind == 0) {
-        //            return NULL; // 没有表达式需要接收值
-        //        }
-
-        OP_PUSH(lir_op_lea(target, fn_symbol_operand));
-        return target;
+        // 不通过 post hook 推出 rt_call 状态，避免进行抢占, 使 env_new+env_assign+fn_new 成为一个整体，避免被抢占
+        push_rt_call(m, RT_CALL_ENV_NEW, env_operand, 1, length);
     }
-
-    assert(!str_equal(fndef->jit_closure_name, ""));
 
     // 函数引用了外部的环境变量，所以需要编译成一个闭包，closure_name 本质就是一个 temp var, 指向了 fn_new 的结果
     // 即使在 for 循环中，temp var 此时依旧唯一指向 fn_new 的结果。所以 closure_new 存储的数据类型就是一个指针，指向了 heap 中
     // 不需要担心 coroutine 下的协程逃逸问题。
 
-    // make envs
-    lir_operand_t *length = int_operand(fndef->capture_exprs->length);
-    // rt_call env_new(fndef->name, length)
-    lir_operand_t *env_operand = temp_var_operand_with_alloc(m, type_kind_new(TYPE_GC_ENV));
-
-    // 不通过 post hook 推出 rt_call 状态，避免进行抢占, 使 env_new+env_assign+fn_new 成为一个整体，避免被抢占
-    push_rt_call(m, RT_CALL_ENV_NEW, env_operand, 1, length);
-
     // fn_new(env)
-    lir_operand_t *label_addr_operand = temp_var_operand_with_alloc(m, fndef->type);
-    OP_PUSH(lir_op_lea(label_addr_operand, fn_symbol_operand));
-    lir_operand_t *result = lir_var_operand(m, fndef->jit_closure_name);
-    push_rt_call(m, RT_CALL_FN_NEW, result, 2, label_addr_operand, env_operand);
+    lir_operand_t *fn_addr_operand = temp_var_operand(m, fndef->type);
+    OP_PUSH(lir_op_lea(fn_addr_operand, fn_symbol_operand));
+
+    lir_operand_t *result = temp_var_operand(m, fndef->type);
+    push_rt_call(m, RT_CALL_FN_NEW, result, 2, fn_addr_operand, env_operand);
 
     // env_assign
     for (int i = 0; i < fndef->capture_exprs->length; ++i) {
@@ -3333,9 +3324,10 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     assert(str_equal(stmt->error.type.ident, THROWABLE_IDENT));
     lir_operand_t *error_operand = linear_expr(m, stmt->error, NULL);
 
-    lir_operand_t *path_operand = string_operand(m->rel_path);
+    lir_operand_t *path_operand = string_operand(m->rel_path, strlen(m->rel_path));
     assert(m->current_closure->fndef->fn_name_with_pkg);
-    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg);
+    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg,
+                                                    strlen(m->current_closure->fndef->fn_name_with_pkg));
     lir_operand_t *line_operand = int_operand(m->current_line);
     lir_operand_t *column_operand = int_operand(m->current_column);
 
@@ -3537,11 +3529,14 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     // 和 linear_fndef 不同，linear_closure 是函数内部的空间中,添加的也是当前 fn 的形式参数
     // 当前 fn 的形式参数在 body 中都是可以随意调用的
     // if 包含 envs 则使用 custom_var_operand 注册一个临时变量，并加入到 LIR_OPCODE_FN_BEGIN 中
-    if (fndef->jit_closure_name) {
-        // 直接使用 fn->closure_name 作为 runtime name?
-        lir_operand_t *fn_runtime_operand = lir_var_operand(m, fndef->jit_closure_name);
-        slice_push(params, fn_runtime_operand->value);
-        c->fn_runtime_operand = fn_runtime_operand;
+    if (fndef->capture_exprs->length > 0) {
+        // test.env
+        char *env_symbol = str_connect(fndef->symbol_name, ".env");
+        lir_operand_t *env_operand = unique_var_operand(m, type_kind_new(TYPE_GC_ENV), env_symbol);
+        // 写入到 params 最后一个参数中
+        slice_push(params, env_operand->value); // 这个奇怪的赋值方式！？现在直接改成 env 了, 怎么命名好呢？
+
+        c->env_operand = env_operand;
     }
 
     // 返回值 operand 也 push 到 params1 里面，方便处理

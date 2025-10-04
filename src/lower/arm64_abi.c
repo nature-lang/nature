@@ -251,11 +251,6 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
                 uint8_t reg_index = arg_pos >> 1;
                 lir_operand_t *src = operand_new(LIR_OPERAND_REG, reg_select(reg_index, param_type.kind));
                 linked_push(result, lir_op_move(dst_param, src)); // dst_param def
-
-                // fn runtime operand 就是一个 type_fn 类型的指针
-                if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
-                    c->fn_runtime_reg = reg_index;
-                }
             }
         } else if (arg_pos < 32) {
             // 通过浮点寄存器传递
@@ -298,12 +293,6 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
 
                 // 直接移动栈指针，而不是进行完全的 copy
                 linked_push(result, lir_op_move(dst_param, src_ref));
-            }
-
-            // 记录最后一个参数所在的栈起点(fn_runtime_operand)
-            if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
-                assert(sp_offset > 0);
-                c->fn_runtime_stack = sp_offset;
             }
         }
     }

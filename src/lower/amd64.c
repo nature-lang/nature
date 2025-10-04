@@ -96,7 +96,7 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
 
             if (imm->kind == TYPE_RAW_STRING) {
                 // raw_string 本身就是指针类型, 首次加载时需要通过 lea 将 .data 到 raw_string 的起始地址加载到 var_operand
-                lir_operand_t *var_operand = temp_var_operand_with_alloc(c->module, type_kind_new(TYPE_RAW_STRING));
+                lir_operand_t *var_operand = temp_var_operand(c->module, type_kind_new(TYPE_RAW_STRING));
                 lir_op_t *temp_ref = lir_op_lea(var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var));
                 linked_push(list, temp_ref);
 

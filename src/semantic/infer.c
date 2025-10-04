@@ -709,7 +709,7 @@ static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_
     }
 
     // 进行参数解析，可以顺便使用 type_compare 了！
-    table_t *generics_args_table = table_new();
+    table_t *args_table = table_new();
     // call-generics_args 为 null 说明 caller 没有传递泛型 args, 此时需要根据调用参数进行自动泛型推导
     if (call->generics_args == NULL) {
         // 避免脏数据污染 is_tpl 导致后续的 copy 异常
@@ -730,7 +730,7 @@ static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_
             type_t temp_type = type_copy(m, *formal_type);
             temp_type = reduction_type(m, temp_type);
 
-            bool generics = type_generics(temp_type, arg_type, generics_args_table);
+            bool generics = type_generics(temp_type, arg_type, args_table);
             INFER_ASSERTF(generics, "cannot generics type from %s to %s", type_format(arg_type),
                           type_format(temp_type));
         }
@@ -742,17 +742,18 @@ static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_
             return_target_type.kind != TYPE_NULL) {
             type_t temp_type = type_copy(m, temp_fn->return_type);
             temp_type = reduction_type(m, temp_type);
-            bool generics = type_generics(temp_type, return_target_type, generics_args_table);
+
+            bool generics = type_generics(temp_type, return_target_type, args_table);
             INFER_ASSERTF(generics, "cannot generics type from %s", type_format(temp_type));
         }
 
         // 判断泛型参数是否全部推断完成
         for (int i = 0; i < temp_fn->generics_params->length; i++) {
             ast_generics_param_t *param = ct_list_value(temp_fn->generics_params, i);
-            INFER_ASSERTF(table_exist(generics_args_table, param->ident), "cannot infer generics param '%s'",
+            INFER_ASSERTF(table_exist(args_table, param->ident), "cannot infer generics param '%s'",
                           param->ident);
 
-            type_t *arg_type = table_get(generics_args_table, param->ident);
+            type_t *arg_type = table_get(args_table, param->ident);
             generics_constraints_check(m, &param->constraints, arg_type);
         }
         m->infer_type_args_stack = stash_stack;
@@ -762,11 +763,11 @@ static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_
             type_t *arg_type = ct_list_value(call->generics_args, i);
             *arg_type = reduction_type(m, *arg_type);
             ast_generics_param_t *param = ct_list_value(temp_fn->generics_params, i);
-            table_set(generics_args_table, param->ident, arg_type);
+            table_set(args_table, param->ident, arg_type);
         }
     }
 
-    return generics_args_table;
+    return args_table;
 }
 
 static bool can_assign_to_interface(type_t t) {
@@ -1120,11 +1121,11 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     }
 
     // 特殊类型转换 string -> [u8]
-    if (as_expr->src.type.kind == TYPE_STRING && is_list_u8(target_type)) {
+    if (as_expr->src.type.kind == TYPE_STRING && is_vec_u8(target_type)) {
         return target_type;
     }
 
-    if (is_list_u8(as_expr->src.type) && target_type.kind == TYPE_STRING) {
+    if (is_vec_u8(as_expr->src.type) && target_type.kind == TYPE_STRING) {
         return target_type;
     }
 
@@ -1587,6 +1588,9 @@ static type_t infer_ident(module_t *m, ast_ident *ident) {
     // 比如 print 和 println 都已经注册在了符号表中
     if (symbol->type == SYMBOL_FN) {
         ast_fndef_t *fndef = symbol->ast_value;
+        if (fndef->is_generics) {
+            INFER_ASSERTF(false, "generics fn `%s` cannot be passed as ident", fndef->fn_name)
+        }
         return infer_fn_decl(m, fndef, type_kind_new(TYPE_UNKNOWN));
     }
 
@@ -1987,7 +1991,7 @@ static type_t infer_access_expr(module_t *m, ast_expr_t *expr) {
         type_t key_type = infer_right_expr(m, &access->key, type_integer_t_new());
 
         // ast_access -> ast_list_access
-        ast_vec_access_t *list_access = NEW(ast_vec_access_t);
+        ast_vec_access_t *vec_access = NEW(ast_vec_access_t);
 
         type_t element_type = type_kind_new(TYPE_UINT8);
         if (left_type.kind == TYPE_VEC) {
@@ -1995,12 +1999,12 @@ static type_t infer_access_expr(module_t *m, ast_expr_t *expr) {
         }
 
         // 参数改写
-        list_access->left = access->left;
-        list_access->index = access->key;
-        list_access->element_type = element_type;
+        vec_access->left = access->left;
+        vec_access->index = access->key;
+        vec_access->element_type = element_type;
 
         expr->assert_type = AST_EXPR_VEC_ACCESS;
-        expr->value = list_access;
+        expr->value = vec_access;
 
         return element_type;
     }
@@ -2536,6 +2540,14 @@ static void infer_assign(module_t *m, ast_assign_stmt_t *stmt) {
     type_t left_type = infer_left_expr(m, &stmt->left);
     if (left_type.ident_kind != TYPE_IDENT_GENERICS_PARAM) {
         INFER_ASSERTF(left_type.kind != TYPE_VOID, "cannot assign to void");
+    }
+
+    ast_expr_t left = stmt->left;
+    if (left.assert_type == AST_EXPR_VEC_ACCESS) {
+        ast_vec_access_t *access = left.value;
+        if (access->left.type.kind == TYPE_STRING) {
+            INFER_ASSERTF(false, "string cannot chane element");
+        }
     }
 
     infer_right_expr(m, &stmt->right, left_type);
@@ -3673,7 +3685,7 @@ STATUS_DONE:
 
     if (type_can_size(t)) {
         // register rtype
-        ct_register_rtype(m, t);
+        ct_register_rtype(t);
     }
 
     return t;
@@ -3778,6 +3790,21 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
         }
 
         return fndef->type;
+    }
+
+    if (fndef->is_generics) {
+        if (!m->infer_type_args_stack) {
+            INFER_ASSERTF(false, "cannot infer generics fn `%s`", fndef->fn_name);
+        }
+
+        table_t *args_table = stack_top(m->infer_type_args_stack);
+        assert(args_table);
+
+        for (int i = 0; i < fndef->generics_params->length; i++) {
+            ast_generics_param_t *param = ct_list_value(fndef->generics_params, i);
+            INFER_ASSERTF(table_exist(args_table, param->ident), "cannot infer generics fn `%s`",
+                          fndef->fn_name);
+        }
     }
 
     // 对 fndef 进行类型还原
