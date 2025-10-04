@@ -95,7 +95,7 @@ jobs:
           build-dir: build-runtime
           args: -S runtime
           options: |
-            CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+            CMAKE_BUILD_TYPE=Debug
             CMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/${{ matrix.target }}-toolchain.cmake
             CMAKE_C_COMPILER_LAUNCHER=ccache
             CMAKE_CXX_COMPILER_LAUNCHER=ccache
