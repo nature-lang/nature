@@ -115,6 +115,9 @@
 #define RT_CALL_ENV_ELEMENT_VALUE "env_element_value" // heap addr
 
 #define RT_CALL_STRING_NEW "string_new"
+#define RT_CALL_STRING_TO_VEC "string_to_vec"
+#define RT_CALL_VEC_TO_STRING "vec_to_string"
+#define RT_CALL_STRING_NEW_WITH_POOL "string_new_with_pool"
 
 #define RT_CALL_STRING_CONCAT "string_concat"
 #define RT_CALL_STRING_EE "string_ee"
@@ -205,6 +208,8 @@ typedef struct {
         bool bool_value; // 1bit
         string string_value; // 8bit
     };
+
+    int strlen;
 
     type_kind kind;
 } lir_imm_t;
@@ -324,10 +329,11 @@ static inline lir_operand_t *float32_operand(float val) {
     return operand;
 }
 
-static inline lir_operand_t *string_operand(char *str) {
+static inline lir_operand_t *string_operand(char *str, int len) {
     lir_imm_t *imm_operand = NEW(lir_imm_t);
     imm_operand->kind = TYPE_RAW_STRING;
     imm_operand->string_value = str;
+    imm_operand->strlen = len;
     lir_operand_t *operand = NEW(lir_operand_t);
     operand->assert_type = LIR_OPERAND_IMM;
     operand->value = imm_operand;
@@ -863,7 +869,7 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
     c->stack_offset = align_up(c->stack_offset, POINTER_SIZE); // 按照 8byte 对齐
 
     rtype_t rtype = reflect_type(t);
-    assert(rtype.size == size);
+    assert(rtype.heap_size == size);
 
     // 16, 0, 1
     uint64_t bit_index_end = (c->stack_offset - 1) / POINTER_SIZE;
@@ -880,6 +886,24 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
 
     lir_operand_t *src_operand = lir_stack_operand(m, -c->stack_offset, size, t.kind);
     return lir_op_lea(dst_operand, src_operand);
+}
+
+static inline lir_operand_t *global_var_operand(module_t *m, type_t type) {
+    assert(type.kind > 0);
+
+    string unique_ident = var_unique_ident(m, TEMP_IDENT);
+
+    // 注册到符号表
+    ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
+    var_decl->type = type_copy(m, type);
+    var_decl->ident = unique_ident;
+
+    // 添加到符号表中
+    symbol_table_set(unique_ident, SYMBOL_VAR, var_decl, false);
+
+    lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var_new(m, unique_ident));
+
+    return target;
 }
 
 static inline lir_operand_t *temp_var_operand(module_t *m, type_t type) {

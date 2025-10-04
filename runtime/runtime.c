@@ -33,8 +33,11 @@ int runtime_main(int argc, char *argv[]) {
     sched_init();
     RDEBUGF("[runtime_main] processor init success");
 
+    // register const pool
+    register_const_str_pool();
+
     // - 提取 main 进行 coroutine 创建调度，需要等待 processor init 加载完成
-    coroutine_t *main_co = rt_coroutine_new((void *) user_main, FLAG(CO_FLAG_MAIN), NULL, NULL);
+    coroutine_t *main_co = rt_coroutine_new((void *) user_main, FLAG(CO_FLAG_MAIN) | FLAG(CO_FLAG_DIRECT), NULL, NULL);
     rt_coroutine_dispatch(main_co);
     RDEBUGF("[runtime_main] main_co dispatch success")
 

@@ -282,7 +282,7 @@ void rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t *addr, n_int64_t port, n
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
-    inner_conn_t *conn = malloc(sizeof(inner_conn_t));
+    inner_conn_t *conn = mallocz(sizeof(inner_conn_t));
     conn->timeout = false;
     conn->data = NULL;
     conn->ref_count = 1;
@@ -418,7 +418,7 @@ void rt_uv_tcp_listen(n_tcp_server_t *server) {
     int result = uv_listen((uv_stream_t *) uv_server, DEFAULT_BACKLOG, on_tcp_conn_cb);
     if (result) {
         // 端口占用等错误
-        rti_co_throw(co, tlsprintf("uv listen failed: %s", uv_strerror(result)), false);
+        rti_co_throw(co, tlsprintf("listen failed: %s", uv_strerror(result)), false);
         return;
     }
 

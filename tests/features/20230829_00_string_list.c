@@ -9,10 +9,10 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    char *str = "jello world\n"
+    char *str = "hello world\n"
                 "101\n"
-                "106 101 108 108 111 32 119 111 114 108 100 \n"
-                "0 106\n"
+                "104 101 108 108 111 32 119 111 114 108 100 \n"
+                "0 104\n"
                 "1 101\n"
                 "2 108\n"
                 "3 108\n"

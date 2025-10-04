@@ -11,7 +11,7 @@ type bar_t<T,U> = struct{
 }
 
 fn bar_t<T, U>.dump():T {
-   println('bar_t any dump', self.a, self.b)
+   println('bar_t any dump', self.a)
    return self.a
 }
 

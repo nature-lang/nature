@@ -137,15 +137,21 @@ int runtime_main(int argc, char *argv[]) __asm("main");
 
 #define PAGE_SUMMARY_MAX_VALUE 2LL ^ 21 // 2097152, max=start=end 的最大值
 
-#define DEFAULT_NEXT_GC_BYTES (100 * 1024) // 100KB
-#define NEXT_GC_FACTOR 2
+#ifdef TEST_MODE
+#define MIN_GC_BYTES (100 * 1024)
+#else
+#define MIN_GC_BYTES (4 * 1024 * 1024) // 4MB
+#endif
+
+#define GC_PERCENT 100
 
 #define WAIT_BRIEF_TIME 1 // ms
 #define WAIT_SHORT_TIME 10 // ms
 #define WAIT_MID_TIME 50 // ms
 #define WAIT_LONG_TIME 100 // ms
 
-typedef void (*void_fn_t)(void);
+typedef void (*void_fn_t)();
+typedef void (*env_fn_t)(void *envs);
 
 /**
  * 参考 linux, 栈从上往下增长，所以在数学意义上 base > end

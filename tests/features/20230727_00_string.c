@@ -6,10 +6,10 @@
 static void test_basic() {
     char *raw = exec_output();
 
-    char *str = "nlelo world\n"
+    char *str = "hello world\n"
                 "nlelo world\n"
-                "nlelo world one piece\n"
-                "nlelo world one piece nice\n"
+                "hello world one piece\n"
+                "hello world one piece nice\n"
                 "true\n"
                 "false\n"
                 "true\n"

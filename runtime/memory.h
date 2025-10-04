@@ -1,6 +1,7 @@
 #ifndef NATURE_MEMORY_H
 #define NATURE_MEMORY_H
 
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <ucontext.h>
@@ -15,9 +16,10 @@
 extern memory_t *memory;
 extern uint64_t remove_total_bytes; // 当前回收到物理内存中的总空间
 extern uint64_t allocated_total_bytes; // 当前分配的总空间
-extern int64_t allocated_bytes; // 当前分配的内存空间
+extern atomic_size_t allocated_bytes; // 当前分配的内存空间
 extern uint64_t next_gc_bytes; // 下一次 gc 的内存量
 extern bool gc_barrier; // gc 屏障开启标识
+extern struct sc_map_sv const_str_pool;
 
 extern uint8_t gc_stage; // gc 阶段
 extern mutex_t gc_stage_locker;
@@ -104,11 +106,14 @@ static inline bool in_heap(addr_t addr) {
  * @return
  */
 static inline arena_t *take_arena(addr_t addr) {
-    if (!in_heap(addr)) {
+    // 直接内联 in_heap 的逻辑，减少函数调用开销
+    if (addr < ARENA_HINT_BASE || addr >= memory->mheap->current_arena.end) {
         return NULL;
     }
 
     uint64_t index = arena_index(addr);
+    // 添加预取指令，提高缓存命中率
+    __builtin_prefetch(&memory->mheap->arenas[index], 0, 3);
     arena_t *arena = memory->mheap->arenas[index];
     return arena;
 }
@@ -151,6 +156,7 @@ static inline uint64_t fetch_int_value(addr_t addr, uint64_t size) {
     if (size == BYTE) {
         return *(uint8_t *) addr;
     }
+
     assert(false && "cannot fetch int value");
     exit(1);
 }
@@ -193,14 +199,15 @@ void callers_deserialize();
 
 void symdefs_deserialize();
 
+void register_const_str_pool();
+
 static inline uint64_t rt_rtype_stack_size(int64_t rhash) {
     assert(rhash > 0 && "rhash empty");
 
     rtype_t *rtype = rt_find_rtype(rhash);
 
     assert(rtype && "cannot find rtype by hash");
-
-    return rtype_stack_size(rtype, POINTER_SIZE);
+    return rtype->stack_size;
 }
 
 static inline uint8_t take_sizeclass(uint8_t spanclass) {

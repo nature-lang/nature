@@ -87,7 +87,6 @@ int64_t type_sizeof(type_t t) {
         return t.array->length * element_size;
     }
 
-
     return type_kind_sizeof(t.kind);
 }
 
@@ -232,25 +231,6 @@ rtype_t *rtype_push(rtype_t rtype) {
     ct_rtype_count += 1;
 
     return ct_list_value(ct_rtype_list, index);
-}
-
-
-/**
- * rtype 在堆外占用的空间大小,比如 stack,global,list value, struct value 中的占用的 size 的大小
- * 如果类型没有存储在堆中，则其在堆外占用的大小是就是类型本身的大小，如果类型存储在堆中，其在堆外存储的是指向堆的指针
- * 占用 POINTER_SIZE 大小
- * @param rtype
- * @return
- */
-int64_t rtype_stack_size(rtype_t *rtype, uint8_t ptr_size) {
-    assert(rtype && "rtype is null");
-
-    // 应对 vec/map/chan/string 等存储在堆中的元素，其在 stack 上占用一个指针大小
-    if (kind_in_heap(rtype->kind)) {
-        return ptr_size;
-    }
-
-    return rtype->size;
 }
 
 /**

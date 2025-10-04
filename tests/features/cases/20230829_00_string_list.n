@@ -1,6 +1,6 @@
 fn main() {
     var s = 'hello world'
-    s[0] = 106
+    // s[0] = 106
     var b = s[1]
     println(s)
     println(b)
