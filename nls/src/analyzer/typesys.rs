@@ -947,9 +947,9 @@ impl<'a> Typesys<'a> {
         return Err(format!("literal {} out of type '{}' range", literal_value, literal_kind.to_string()));
     }
 
-    pub fn infer_as_expr(&mut self, expr: &mut Box<Expr>) -> Result<Type, AnalyzerError> {
+    pub fn infer_as_expr(&mut self, as_expr: &mut Box<Expr>) -> Result<Type, AnalyzerError> {
         // 先还原目标类型
-        let AstNode::As(target_type, src) = &mut expr.node else { unreachable!() };
+        let AstNode::As(target_type, src) = &mut as_expr.node else { unreachable!() };
         *target_type = self.reduction_type(target_type.clone())?;
 
         // 推导源表达式类型, 如果存在错误则停止后续比较, 直接返回错误
@@ -979,16 +979,16 @@ impl<'a> Typesys<'a> {
         if let TypeKind::Union(any, _, elements) = &src_type.kind {
             if matches!(target_type.kind, TypeKind::Union(..)) {
                 return Err(AnalyzerError {
-                    start: expr.start,
-                    end: expr.end,
+                    start: as_expr.start,
+                    end: as_expr.end,
                     message: "union to union type is not supported".to_string(),
                 });
             }
 
             if !self.union_type_contains(&(*any, elements.clone()), &target_type) {
                 return Err(AnalyzerError {
-                    start: expr.start,
-                    end: expr.end,
+                    start: as_expr.start,
+                    end: as_expr.end,
                     message: format!("type {} not contains in union type", target_type),
                 });
             }
@@ -1006,8 +1006,8 @@ impl<'a> Typesys<'a> {
 
             if temp_target_type.ident.is_empty() || temp_target_type.ident_kind != TypeIdentKind::Def {
                 return Err(AnalyzerError {
-                    start: expr.start,
-                    end: expr.end,
+                    start: as_expr.start,
+                    end: as_expr.end,
                     message: format!("type {} not impl interface", src_type),
                 });
             }
@@ -1031,16 +1031,16 @@ impl<'a> Typesys<'a> {
                 // 禁止制鸭子类型
                 if !found {
                     return Err(AnalyzerError {
-                        start: expr.start,
-                        end: expr.end,
+                        start: as_expr.start,
+                        end: as_expr.end,
                         message: format!("type '{}' not impl '{}' interface", temp_target_type.ident, src_type),
                     });
                 }
 
                 self.check_typedef_impl(&src_type, temp_target_type.ident.clone(), &typedef)
                     .map_err(|e| AnalyzerError {
-                        start: expr.start,
-                        end: expr.end,
+                        start: as_expr.start,
+                        end: as_expr.end,
                         message: e,
                     })?;
             } else {
@@ -1065,8 +1065,8 @@ impl<'a> Typesys<'a> {
             if let AstNode::Literal(literal_kind, literal_value) = &mut src.node {
                 self.literal_as_check(literal_kind, literal_value, target_type.kind.clone())
                     .map_err(|e| AnalyzerError {
-                        start: expr.start,
-                        end: expr.end,
+                        start: as_expr.start,
+                        end: as_expr.end,
                         message: e,
                     })?;
             }
@@ -1076,7 +1076,7 @@ impl<'a> Typesys<'a> {
 
         // 处理 typedef ident 类型转换
         if target_type.ident_kind == TypeIdentKind::Def {
-            if self.type_compare_no_ident(target_type, &mut src.type_) {
+            if self.type_compare_no_ident(target_type.clone(), src.type_.clone()) {
                 src.type_.ident = target_type.ident.clone();
                 src.type_.ident_kind = target_type.ident_kind.clone();
                 src.type_.args = target_type.args.clone();
@@ -1085,7 +1085,7 @@ impl<'a> Typesys<'a> {
         }
 
         if src.type_.ident_kind == TypeIdentKind::Def && target_type.ident_kind == TypeIdentKind::Builtin {
-            if self.type_compare_no_ident(target_type, &mut src.type_) {
+            if self.type_compare_no_ident(target_type.clone(), src.type_.clone()) {
                 src.type_.ident = target_type.ident.clone();
                 src.type_.ident_kind = target_type.ident_kind.clone();
                 src.type_.args = target_type.args.clone();
@@ -1095,8 +1095,8 @@ impl<'a> Typesys<'a> {
 
         // 检查目标类型是否可以进行类型转换
         return Err(AnalyzerError {
-            start: expr.start,
-            end: expr.end,
+            start: as_expr.start,
+            end: as_expr.end,
             message: format!("cannot casting to '{}'", target_type),
         });
     }
@@ -1485,10 +1485,6 @@ impl<'a> Typesys<'a> {
         };
 
         let symbol = self.symbol_table.get_symbol(*symbol_id).unwrap();
-        // debug!(
-        //     "infer_ident {} symbol_ident: {} {} {} {}",
-        //     ident, &symbol.ident, &symbol.is_local, &symbol.defined_in, *symbol_id
-        // );
 
         let mut symbol_kind = symbol.kind.clone();
 
@@ -1528,8 +1524,20 @@ impl<'a> Typesys<'a> {
 
                 return Ok(var_decl.type_.clone());
             }
-            SymbolKind::Fn(fndef) => {
-                return self.infer_fn_decl(fndef.clone(), Type::default());
+            SymbolKind::Fn(fndef_mutex) => {
+                {
+                    // 泛型 fn 不能直接作为 ident 使用
+                    let mut fndef = fndef_mutex.lock().unwrap();
+                    if fndef.is_generics {
+                        return Err(AnalyzerError {
+                            start,
+                            end,
+                            message: format!("generic fn `{}` cannot be passed as ident", fndef.fn_name),
+                        });
+                    }
+                }
+
+                return self.infer_fn_decl(fndef_mutex.clone(), Type::default());
             }
             _ => {
                 return Err(AnalyzerError {
@@ -2451,7 +2459,6 @@ impl<'a> Typesys<'a> {
                 },
             )?;
             target_type = self.reduction_type(target_type.clone())?;
-
             expr.type_ = self.reduction_type(t)?;
             expr.target_type = target_type.clone();
         }
@@ -2927,6 +2934,7 @@ impl<'a> Typesys<'a> {
                 return Err("arguments not match".to_string());
             }
 
+            // 处理类型约束
             for (i, arg) in args.iter_mut().enumerate() {
                 let is_spread = spread && (i == args_len - 1);
 
@@ -2939,7 +2947,7 @@ impl<'a> Typesys<'a> {
 
                 // 比较类型并填充泛型参数表
                 if !self.type_generics(&temp_type, &arg_type, &mut table) {
-                    return Err(format!("cannot infer generics type from {} to {}", arg_type, temp_type));
+                    return Err(format!("cannot generics type from {} to {}", arg_type, temp_type));
                 }
             }
 
@@ -2950,8 +2958,8 @@ impl<'a> Typesys<'a> {
             ) {
                 let temp_type = self.reduction_type(temp_fndef.return_type.clone()).map_err(|e| e.message)?;
 
-                if !self.type_compare(&temp_type, &return_target_type) {
-                    return Err(format!("return type infer failed, expect={}, actual={}", return_target_type, temp_type));
+                if !self.type_generics(&temp_type, &return_target_type, &mut table) {
+                    return Err(format!("cannot generics type from {} to {}", &temp_fndef.return_type, temp_type));
                 }
             }
 
@@ -3685,13 +3693,13 @@ impl<'a> Typesys<'a> {
         true
     }
 
-    pub fn type_compare_no_ident(&mut self, dst: &mut Type, src: &mut Type) -> bool {
+    pub fn type_compare_no_ident(&mut self, mut dst: Type, mut src: Type) -> bool {
         dst.ident = "".to_string();
         src.ident = "".to_string();
         src.ident_kind = TypeIdentKind::Unknown;
         dst.ident_kind = TypeIdentKind::Unknown;
 
-        return self.type_compare(dst, src);
+        return self.type_compare(&dst, &src);
     }
 
     pub fn type_compare(&mut self, dst: &Type, src: &Type) -> bool {
@@ -3977,7 +3985,7 @@ impl<'a> Typesys<'a> {
             let mut fndef = fndef_mutex.lock().unwrap();
             if fndef.type_.kind.is_exist() && fndef.type_.status == ReductionStatus::Done {
                 if target_type.kind.is_exist() {
-                    if self.type_compare_no_ident(&mut target_type.clone(), &mut fndef.type_) {
+                    if self.type_compare_no_ident(target_type.clone(), fndef.type_.clone()) {
                         fndef.type_.ident = target_type.ident.clone();
                         fndef.type_.ident_kind = target_type.ident_kind.clone();
                         fndef.type_.args = target_type.args.clone();
@@ -3989,6 +3997,33 @@ impl<'a> Typesys<'a> {
 
             fndef.clone()
         };
+
+        if fndef.is_generics {
+            if self.generics_args_stack.is_empty() {
+                return Err(AnalyzerError {
+                    start: 0,
+                    end: 0,
+                    message: format!("cannot infer generics fn `{}`", fndef.fn_name),
+                });
+            }
+
+            // arg table 必须存在，且已经推导
+            let table = self.generics_args_stack.first().unwrap();
+            if let Some(generics_params) = &fndef.generics_params {
+                for param in generics_params {
+                    let arg_type = match table.get(&param.ident) {
+                        Some(arg_type) => arg_type,
+                        None => {
+                            return Err(AnalyzerError {
+                                start: 0,
+                                end: 0,
+                                message: format!("cannot infer generics fn {}", fndef.fn_name),
+                            })
+                        }
+                    };
+                }
+            }
+        }
 
         // 对返回类型进行还原
         let return_type = match self.reduction_type(fndef.return_type) {
@@ -4055,7 +4090,7 @@ impl<'a> Typesys<'a> {
         })));
 
         if target_type.kind.is_exist() {
-            if self.type_compare_no_ident(&mut target_type.clone(), &mut result) {
+            if self.type_compare_no_ident(target_type.clone(), result.clone()) {
                 result.ident = target_type.ident.clone();
                 result.ident_kind = target_type.ident_kind.clone();
                 result.args = target_type.args.clone();
