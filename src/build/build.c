@@ -4,12 +4,10 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <stdio.h>
-#include <unistd.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include "config.h"
-#include "utils/helper.h"
-#include "utils/log.h"
 #include "src/binary/arch/amd64.h"
 #include "src/binary/arch/arm64.h"
 #include "src/binary/arch/riscv64.h"
@@ -27,6 +25,8 @@
 #include "src/semantic/analyzer.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
+#include "utils/helper.h"
+#include "utils/log.h"
 
 // 新增的默认版本定义
 #define DEFAULT_MIN_MACOS_VERSION "11.0"
@@ -825,13 +825,14 @@ static void build_assembler(slice_t *modules) {
         slice_t *closures = slice_new();
         for (int j = 0; j < m->closures->count; ++j) {
             closure_t *c = m->closures->take[j];
+
+            slice_concat(m->asm_global_symbols, c->asm_symbols);
+
             // 基于 symbol_name 读取引用次数, 如果没有被引用过则不做编译
             symbol_t *s = symbol_table_get_noref(c->fndef->symbol_name);
             if (s->ref_count == 0 && !str_equal(c->fndef->symbol_name, FN_MAIN_LINKID)) {
                 continue;
             }
-
-            slice_concat(m->asm_global_symbols, c->asm_symbols);
 
             debug_asm(c);
 
@@ -841,6 +842,9 @@ static void build_assembler(slice_t *modules) {
 
         assembler_module(m);
     }
+
+    // append custom type
+    ct_register_rtype(type_kind_new(TYPE_RAW_STRING));
 
     assembler_custom_links();
 }
