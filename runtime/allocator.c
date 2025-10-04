@@ -120,40 +120,59 @@ static page_chunk_t *take_chunk(addr_t base) {
  * @return
  */
 static page_summary_t chunk_summarize(page_chunk_t chunk) {
-    uint32_t max = 0;
-    uint64_t bit_start = 0;
-    uint64_t bit_end = 0;
-    for (int i = 0; i < CHUNK_BITS_COUNT; ++i) {
-        bool used = bitmap_test((uint8_t *) chunk.blocks, i);
-        if (used) {
-            // 重新开始计算
-            bit_start = i + 1;
-            continue;
-        }
-
-        bit_end = i;
-        if ((bit_end + 1 - bit_start) > max) {
-            max = (bit_end + 1 - bit_start);
-        }
-    }
-
     uint16_t start = 0;
+    uint32_t max = 0;
+    uint16_t end = 0;
+
+    // 单次遍历计算 start, max 和部分 end 信息
+    uint64_t current_free_start = 0;
+    uint64_t current_free_count = 0;
+    bool found_first_used = false;
+    int last_used_index = -1;
+
     for (int i = 0; i < CHUNK_BITS_COUNT; ++i) {
         bool used = bitmap_test((uint8_t *) chunk.blocks, i);
+
         if (used) {
-            break;
+            // 记录最后一个使用位置
+            last_used_index = i;
+
+            // 如果之前有连续空闲段，更新 max
+            if (current_free_count > 0) {
+                if (current_free_count > max) {
+                    max = current_free_count;
+                }
+                current_free_count = 0;
+            }
+
+            // 计算 start（从头开始的连续空闲）
+            if (!found_first_used) {
+                start = i;
+                found_first_used = true;
+            }
+
+            current_free_start = i + 1;
+        } else {
+            // 当前位空闲
+            current_free_count++;
         }
-        start += 1;
     }
 
-    uint16_t end = 0;
-    for (int i = CHUNK_BITS_COUNT - 1; i >= 0; i--) {
-        bool used = bitmap_test((uint8_t *) chunk.blocks, i);
-        if (used) {
-            break;
-        }
-        end += 1;
+    // 处理最后的连续空闲段
+    if (current_free_count > max) {
+        max = current_free_count;
     }
+
+    // 计算 end（从尾开始的连续空闲）
+    if (last_used_index >= 0) {
+        end = CHUNK_BITS_COUNT - 1 - last_used_index;
+    } else {
+        // 全部空闲
+        start = CHUNK_BITS_COUNT;
+        max = CHUNK_BITS_COUNT;
+        end = CHUNK_BITS_COUNT;
+    }
+
     page_summary_t summary = {
             .start = start,
             .max = max,
@@ -526,11 +545,11 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
 
     void *v = NULL;
     while (true) {
-        allocated_total_bytes += alloc_size;
         v = sys_memory_reserve((void *) hint->addr, alloc_size);
         if (v == (void *) hint->addr) {
             // 分配成功, 定义下一个分配点,基于此可以获得 64MB 对齐的内存地址
             hint->addr += alloc_size;
+            allocated_total_bytes += alloc_size;
             break;
         }
         DEBUGF("hint addr %p, actual alloc addr %p", (void *) hint->addr, v)
@@ -553,7 +572,7 @@ void *mheap_sys_alloc(mheap_t *mheap, uint64_t *size) {
     }
 
     // 虚拟内存映射并不会真的写入到内存，必须触发内存页中断才行
-    DEBUGF("[mheap_sys_alloc] allocate_total_bytes=%lu, hint_addr=%p", allocated_total_bytes, (void *) hint->addr);
+    DEBUGF("[mheap_sys_alloc] allocate_total_bytes=%luMB, hint_addr=%p", allocated_total_bytes / 1024 / 1024, (void *) hint->addr);
 
     // reverse -> prepare
     sys_memory_map(v, alloc_size);
@@ -686,11 +705,6 @@ static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
 
     // - prepared -> ready
     sys_memory_used((void *) base, pages_count * ALLOC_PAGE_SIZE);
-    uint8_t sizeclass = take_sizeclass(spanclass);
-    if (sizeclass == JIT_SIZECLASS) {
-        sys_memory_used_exec((void *) base, pages_count * ALLOC_PAGE_SIZE);
-    }
-
 
     mutex_unlock(&memory->locker);
     DEBUGF("[mheap_alloc_span] success, span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span,
@@ -815,7 +829,6 @@ static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
 static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
     MDEBUGF("[runtime.mcache_alloc] start, spc=%d", spanclass);
     n_processor_t *p = processor_get();
-    assert(p);
 
     mcache_t *mcache = &p->mcache;
     mspan_t *mspan = mcache->alloc[spanclass];
@@ -931,19 +944,6 @@ static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, r
         return;
     }
 
-    bool fn_ptr = rtype->kind == TYPE_GC_FN;
-    if (fn_ptr) {
-        assert(rtype->last_ptr == 12 * POINTER_SIZE);
-        heap_arena_bits_batch_handle(addr, addr + obj_size, true);
-
-        // set last = 1
-        addr_t env_addr = (addr + size - POINTER_SIZE);
-        arena_t *arena = memory->mheap->arenas[arena_index(env_addr)];
-        uint64_t bit_index = arena_bits_index(arena, env_addr);
-        bitmap_set(arena->bits, bit_index);
-        return;
-    }
-
     // index 计算错误，不能这么算? 奇怪的 index 算法导致 gc_bits 不能这么直接清理。
     addr_t clear_start_addr = addr + rtype->last_ptr;
     heap_arena_bits_batch_handle(clear_start_addr, addr + obj_size, true);
@@ -992,10 +992,6 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
     bool has_ptr = rtype != NULL && rtype->last_ptr > 0;
 
     uint8_t sizeclass = calc_sizeclass(size);
-    if (rtype && rtype->kind == TYPE_GC_FN) {
-        sizeclass = JIT_SIZECLASS;
-    }
-
     uint8_t spanclass = make_spanclass(sizeclass, !has_ptr);
     assert(sizeclass > 0 && spanclass > 1);
 
@@ -1013,16 +1009,7 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
         heap_arena_bits_set(addr, size, span->obj_size, rtype);
     }
 
-    allocated_bytes += span->obj_size;
-
-    char *debug_kind = "";
-    if (rtype) {
-        debug_kind = type_kind_str[rtype->kind];
-    }
-    DEBUGF(
-            "[std_malloc] success, spc=%d,base=%p,alloc_count=%ld,size=%ld,kind=%s,addr=%p,alloc_bytes=%ld,gc_barrier=%d",
-            span->spanclass, (void *) span->base, span->alloc_count,
-            size, debug_kind, (void *) addr, allocated_bytes, gc_barrier_get());
+    atomic_fetch_add(&allocated_bytes, span->obj_size);
 
     assert(span_of(addr) == span && "std_malloc span not match");
 
@@ -1059,7 +1046,8 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
     bitmap_set(span->alloc_bits, 0);
     span->alloc_count += 1;
 
-    allocated_bytes += span->obj_size;
+    atomic_fetch_add(&allocated_bytes, size);
+    //    allocated_bytes += size;
 
     char *debug_kind = "";
     if (rtype) {
@@ -1109,9 +1097,11 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
            span->pages_count,
            chunk_index(span->base));
 
+    int64_t free_size = span->pages_count * ALLOC_PAGE_SIZE;
+
     // 从 page_alloc 的视角清理 span 对应的内存页
     // chunks bit = 0 表示空闲, 1 表示占用
-    chunks_set(span->base, span->pages_count * ALLOC_PAGE_SIZE, 0);
+    chunks_set(span->base, free_size, 0);
 
     RDEBUGF("[mheap_free_span] chunk set success");
 
@@ -1122,14 +1112,14 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
     // arena.bits 保存了当前 span 中的指针 bit, 当下一次当前内存被分配时会覆盖写入
     // 垃圾回收期间不会有任何指针指向该空间，因为当前 span 就是因为没有被任何 ptr 指向才被回收的
 
-    remove_total_bytes += span->pages_count * ALLOC_PAGE_SIZE;
+    remove_total_bytes += free_size;
 
     // 将物理内存归还给操作系统
     DEBUGF("[mheap_free_span] remove_total_bytes=%lu MB, span.base=%p, span.pages_count=%ld, remove_size=%lu",
            remove_total_bytes / 1024 / 1024, (void *) span->base, span->pages_count,
-           span->pages_count * ALLOC_PAGE_SIZE);
+           free_size);
 
-    sys_memory_unused((void *) span->base, span->pages_count * ALLOC_PAGE_SIZE);
+    sys_memory_unused((void *) span->base, free_size);
 
     DEBUGF("[mheap_free_span] sys_memory_unused success");
 }
@@ -1142,7 +1132,7 @@ void memory_init() {
 
     // 初始化 gc 参数
     allocated_bytes = 0;
-    next_gc_bytes = DEFAULT_NEXT_GC_BYTES;
+    next_gc_bytes = MIN_GC_BYTES;
 
     // - 初始化 mheap
     mheap_t *mheap = mallocz_big(sizeof(mheap_t)); // 所有的结构体，数组初始化为 0, 指针初始化为 null
@@ -1187,15 +1177,11 @@ void memory_init() {
 
     nstrtable_deserialize();
     ndata_deserialize();
-
     fndefs_deserialize();
-    DEBUGF("[memory_init] fndefs_deserialize success");
     callers_deserialize();
-    DEBUGF("[memory_init] callers_deserialize success");
-    symdefs_deserialize();
-    DEBUGF("[memory_init] symdefs_deserialize success");
     rtypes_deserialize();
-    DEBUGF("[memory_init] rtypes_deserialize success");
+    symdefs_deserialize();
+    DEBUGF("[memory_init] deserialize success");
 
     memory->mheap = mheap;
 }
@@ -1228,19 +1214,7 @@ mspan_t *span_of(addr_t addr) {
  * @return
  */
 void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
-    uint64_t start = uv_hrtime();
-    // n_processor_t *p = processor_get();
-    // if (!p) {
-    // p = processor_index[0];
-    // }
-    // assert(p);
-
-    //    if (!p->share) {
-    //        MDEBUGF("[rti_gc_malloc] solo need gc_stw_locker p_index_%d=%d, co=%p", p->share, p->index, coroutine_get());
-    //        mutex_lock(&p->gc_solo_stw_locker);
-    //    }
-
-    //    MDEBUGF("[rti_gc_malloc] start p_index=%d", p->index);
+    //    uint64_t start = uv_hrtime();
 
     if (rtype) {
         MDEBUGF("[rti_gc_malloc] size=%ld, type_kind=%s", size, type_kind_str[rtype->kind]);
@@ -1261,22 +1235,16 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
 
     // 如果当前写屏障开启，则新分配的对象都是黑色(不在工作队列且被 span 标记), 避免在本轮被 GC 清理
     if (gc_barrier_get()) {
-        DEBUGF("[rti_gc_malloc] p_index=%d(%lu), p_status=%d, gc barrier enabled, will mark ptr as black, ptr=%p",
-               processor_get()->index,
-               (uint64_t) processor_get()->thread_id, processor_get()->status, ptr);
         mark_ptr_black(ptr);
     }
 
     //    DEBUGF("[rti_gc_malloc] end p_index=%d, co=%p, result=%p, size=%d, hash=%d",
     //           p->index, coroutine_get(), ptr, size, rtype ? rtype->hash : 0);
 
-    // jit span 不用清 0， 权限不足也无法进行清零
-    if (rtype && rtype->kind != TYPE_GC_FN) {
-        memset(ptr, 0, size);
-    }
+    memset(ptr, 0, size);
 
-    DEBUGF("[rti_gc_malloc] end success, ptr=%p, size=%lu, use time: %lu, rtype: %p, has_ptr: %d", ptr, size, uv_hrtime() - start,
-            rtype, rtype != NULL && rtype->last_ptr > 0);
+    //    DEBUGF("[rti_gc_malloc] end success, ptr=%p, size=%lu, use time: %lu, rtype: %p, has_ptr: %d", ptr, size, uv_hrtime() - start,
+    //           rtype, rtype != NULL && rtype->last_ptr > 0);
     return ptr;
 }
 
@@ -1381,12 +1349,12 @@ void *gc_malloc(uint64_t rhash) {
     assertf(rtype, "notfound rtype by hash=%ld", rhash);
 
     // uint64_t stage2 = uv_hrtime();
-    DEBUGF("[gc_malloc] rhash=%lu, malloc size is %lu, last_ptr %lu, rtype bits: %s", rhash, rtype->size, rtype->last_ptr,
+    DEBUGF("[gc_malloc] rhash=%lu, malloc size is %lu, last_ptr %lu, rtype bits: %s", rhash, rtype->heap_size, rtype->last_ptr,
            bitmap_to_str(RTDATA(rtype->malloc_gc_bits_offset),
-                         calc_gc_bits_size(rtype->size, POINTER_SIZE)));
+                         calc_gc_bits_size(rtype->heap_size, POINTER_SIZE)));
 
-    void *result = rti_gc_malloc(rtype->size, rtype);
-    DEBUGF("[gc_malloc] size %lu, value %p", rtype->size, result);
+    void *result = rti_gc_malloc(rtype->heap_size, rtype);
+    DEBUGF("[gc_malloc] size %lu, value %p", rtype->heap_size, result);
     return result;
 }
 

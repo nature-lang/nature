@@ -194,8 +194,8 @@ n_chan_t *rt_chan_new(int64_t rhash, int64_t ele_rhash, int64_t buf_len) {
     rtype_t *element_rtype = rt_find_rtype(ele_rhash);
     assert(element_rtype && "cannot find element_rtype with hash");
 
-    n_chan_t *chan = rti_gc_malloc(rtype->size, rtype);
-    chan->msg_size = rtype_stack_size(element_rtype, POINTER_SIZE);
+    n_chan_t *chan = rti_gc_malloc(rtype->heap_size, rtype);
+    chan->msg_size = element_rtype->stack_size;
     pthread_mutex_init(&chan->lock, NULL);
 
     // ele_rhash
@@ -674,44 +674,43 @@ int rt_chan_select(scase *cases, int16_t sends_count, int16_t recvs_count, bool 
     selunlock(cases, lockorder, cases_count);
     goto RETC;
 
-    BUFRECV:
+BUFRECV:
     case_success = true;
     buf_pop(c, cas->msg_ptr);
     selunlock(cases, lockorder, cases_count);
     goto RETC;
 
-    BUFSEND:
+BUFSEND:
     case_success = true;
     void *dst_ptr = buf_next_ref(c);
     memmove(dst_ptr, cas->msg_ptr, c->msg_size);
     selunlock(cases, lockorder, cases_count);
     goto RETC;
 
-    RECV:
+RECV:
     rt_recv(c, lc, cas->msg_ptr, cases, lockorder, cases_count);
     case_success = true;
     goto RETC;
 
-    RCLOSE:
+RCLOSE:
     selunlock(cases, lockorder, cases_count);
     case_success = false;
     cases[casi].chan->successful = false;
     goto RETC;
 
-    SEND:
+SEND:
     rt_send(c, lc, cas->msg_ptr, cases, lockorder, cases_count);
 
     goto RETC;
 
-    SCLOSE:
+SCLOSE:
     selunlock(cases, lockorder, cases_count);
     case_success = false;
     cases[casi].chan->successful = false;
     goto RETC;
 
-    RETC:
+RETC:
     if (casi >= 0) {
-
     }
 
     free(order);

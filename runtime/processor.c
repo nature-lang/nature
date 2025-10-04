@@ -262,7 +262,7 @@ NO_OPTIMIZE static void coroutine_wrapper() {
     assert(p);
 
     DEBUGF("[runtime.coroutine_wrapper] p_index=%d, p_status=%d co=%p, fn=%p main=%d, rt_co=%d", p->index, p->status,
-            co, co->fn, co->main, co->flag & FLAG(CO_FLAG_RTFN));
+           co, co->fn, co->main, co->flag & FLAG(CO_FLAG_RTFN));
 
     co_set_status(p, co, CO_STATUS_RUNNING);
     processor_set_status(p, P_STATUS_RUNNING);
@@ -274,7 +274,13 @@ NO_OPTIMIZE static void coroutine_wrapper() {
     assert((addr_t) co->fn > 0);
 
     // 调用到用户函数
-    ((void_fn_t) co->fn)();
+    if (co->flag & FLAG(CO_FLAG_DIRECT)) {
+        ((void_fn_t) co->fn)();
+    } else {
+        n_fn_t *runtime_fn = co->fn;
+        ((env_fn_t) runtime_fn->fn_addr)(runtime_fn->envs);
+    }
+
 
     DEBUGF(
             "[runtime.coroutine_wrapper] user fn completed, p_index=%d co=%p, main=%d, rt_fn=%d,err=%p",
@@ -527,7 +533,7 @@ static void processor_run(void *raw) {
         }
 
         // - 处理 io 就绪事件(也就是 run 指定时间的 libuv)
-        io_run(p, WAIT_BRIEF_TIME * 5);
+        io_run(p, WAIT_BRIEF_TIME * 1);
     }
 
 EXIT:
@@ -593,13 +599,8 @@ void sched_init() {
     // - 初始化全局标识
     gc_barrier = false;
     mutex_init(&gc_stage_locker, false);
-    //    mutex_init(&solo_processor_locker, false);
     gc_stage = GC_STAGE_OFF;
     coroutine_count = 0;
-
-    // - libuv 线程锁
-    uv_loop_init(&uv_global_loop);
-    mutex_init(&uv_thread_locker, false);
 
     // - 初始化 global linkco
     mutex_init(&global_linkco_locker, false);
@@ -629,6 +630,9 @@ void sched_init() {
 
         RT_LIST_PUSH_HEAD(processor_list, p);
     }
+
+    // - set first
+    uv_key_set(&tls_processor_key, processor_list);
 }
 
 void sched_run() {

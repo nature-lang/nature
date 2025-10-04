@@ -51,7 +51,7 @@ void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
     }
 
     rtype_t *rtype = rt_find_rtype(target_rtype_hash);
-    uint64_t size = rtype_stack_size(rtype, POINTER_SIZE);
+    uint64_t size = rtype->stack_size;
 
     if (is_stack_impl(rtype->kind)) {
         memmove(value_ref, mu->value.ptr_value, size);
@@ -112,7 +112,7 @@ n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int
 
     ASSERT_ADDR(value_ref);
 
-    TRACEF("[union_casting] input_kind=%s, in_heap=%d", type_kind_str[rtype->kind], rtype->in_heap);
+    TRACEF("[union_casting] input_kind=%s", type_kind_str[rtype->kind]);
 
 
     rtype_t interface_rtype = GC_RTYPE(TYPE_INTERFACE, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
@@ -129,14 +129,14 @@ n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int
 
     DEBUGF("[interface_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
            mu, value_ref,
-           &mu->value, rtype_stack_size(rtype, POINTER_SIZE), (void *) fetch_addr_value((addr_t) value_ref));
+           &mu->value, rtype->stack_size, (void *) fetch_addr_value((addr_t) value_ref));
 
     mu->rtype = rtype;
-    uint64_t out_size = rtype_stack_size(rtype, POINTER_SIZE);
+    uint64_t stack_size = rtype->stack_size;
     if (is_stack_impl(rtype->kind)) {
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
-        void *new_value = rti_gc_malloc(rtype->size, rtype);
-        memmove(new_value, value_ref, out_size);
+        void *new_value = rti_gc_malloc(rtype->heap_size, rtype);
+        memmove(new_value, value_ref, stack_size);
         //        mu->value.ptr_value = new_value; // TODO write barrier
         rti_write_barrier_ptr(&mu->value.ptr_value, new_value, false);
     } else {
@@ -144,7 +144,7 @@ n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int
         // 如果是 vec/string 等类型，self 的类型依旧是 vec/string 等，而不是 ptr<vec>/ptr<string> 这有点多余, 因为 vec/string
         // 本来就是在堆中分配的, 传递的是一个指针, 虽然后续可以能会进行统一处理，但是目前还是需要进行特殊处理，value 中直接存放可以作为
         // fn method 传递的参数
-        memmove(&mu->value, value_ref, out_size);
+        memmove(&mu->value, value_ref, stack_size);
     }
 
     DEBUGF("[interface_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld, union_ptr_value: %p",
@@ -168,7 +168,7 @@ n_union_t *union_casting(int64_t input_rtype_hash, void *value_ref) {
 
     ASSERT_ADDR(value_ref);
 
-    TRACEF("[union_casting] input_kind=%s, in_heap=%d", type_kind_str[rtype->kind], rtype->in_heap);
+    TRACEF("[union_casting] input_kind=%s", type_kind_str[rtype->kind]);
 
 
     rtype_t union_rtype = GC_RTYPE(TYPE_UNION, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
@@ -177,23 +177,18 @@ n_union_t *union_casting(int64_t input_rtype_hash, void *value_ref) {
 
     DEBUGF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
            mu, value_ref,
-           &mu->value, rtype_stack_size(rtype, POINTER_SIZE), (void *) fetch_addr_value((addr_t) value_ref));
+           &mu->value, rtype->stack_size, (void *) fetch_addr_value((addr_t) value_ref));
     mu->rtype = rtype;
 
-    uint64_t out_size = rtype_stack_size(rtype, POINTER_SIZE);
+    uint64_t stack_size = rtype->stack_size;
     if (is_stack_ref_big_type_kind(rtype->kind)) {
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
-        void *new_value = rti_gc_malloc(rtype->size, rtype);
-        memmove(new_value, value_ref, out_size);
+        void *new_value = rti_gc_malloc(rtype->heap_size, rtype);
+        memmove(new_value, value_ref, stack_size);
 
-        //        mu->value.ptr_value = new_value;
         rti_write_barrier_ptr(&mu->value.ptr_value, new_value, false);
     } else {
-        //        if (is_gc_alloc(rtype->kind)) {
-        //            rti_write_barrier_ptr(&mu->value, *((void **) value_ref), false);
-        //        } else {
-        memmove(&mu->value, value_ref, out_size);
-        //        }
+        memmove(&mu->value, value_ref, stack_size);
     }
 
 
@@ -548,7 +543,7 @@ n_vec_t *std_args() {
 char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
     assert(rtype && "rtype is null");
     assert(data_ref && "data_ref is null");
-    uint64_t data_size = rtype_stack_size(rtype, POINTER_SIZE);
+    uint64_t data_size = rtype->stack_size;
 
     TRACEF("[rtype_value_str] rtype_kind=%s, data_ref=%p, data_size=%lu", type_kind_str[rtype->kind], data_ref,
            data_size);
@@ -720,10 +715,10 @@ n_vec_t *unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *d
     // - 进行内存申请,申请回来一段内存是 memory_vec_t 大小的内存, memory_vec_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 vec_data + 1 时会按照 sizeof(memory_vec_t) 大小的内存区域移动
     // 的技巧而已，所以这里要和数组结构做一个区分
-    n_vec_t *vec = rti_gc_malloc(vec_rtype.size, &vec_rtype);
+    n_vec_t *vec = rti_gc_malloc(vec_rtype.heap_size, &vec_rtype);
     vec->capacity = cap;
     vec->length = len;
-    vec->element_size = rtype_stack_size(element_rtype, POINTER_SIZE);
+    vec->element_size = element_rtype->stack_size;
     vec->hash = hash;
     vec->data = data_ptr;
 
@@ -733,11 +728,11 @@ n_vec_t *unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *d
 
 
 n_string_t *rt_string_ref_new(void *raw_string, int64_t length) {
-    n_string_t *str = rti_gc_malloc(string_rtype.size, &string_ref_rtype);
+    n_string_t *str = rti_gc_malloc(string_rtype.heap_size, &string_ref_rtype);
     str->data = raw_string; // 直接指向 raw_string, 而没有创建新的字符串
     str->length = length;
     str->capacity = length;
-    str->element_size = rtype_stack_size(&string_element_rtype, POINTER_SIZE);
+    str->element_size = (&string_element_rtype)->stack_size;
     str->hash = string_rtype.hash;
 
     DEBUGF("[rt_string_ref_new] create, str: %p", raw_string);
@@ -750,7 +745,6 @@ n_string_t *rt_string_ref_new(void *raw_string, int64_t length) {
  * @return
  */
 void *rt_string_ref(n_string_t *n_str) {
-
     DEBUGF("[rt_string_ref] length=%lu, data=%p", n_str->length, n_str->data);
 
     // 空间足够，且最后一位已经是 0， 可以直接返回

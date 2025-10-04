@@ -154,6 +154,7 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
     // 但是此时 span 其实并没有真的被释放,只有 alloc_count = 0 时才会触发真正的释放操作, 这里记录更新一下分配的内存值
     assert(span);
     assert(span->base > 0);
+
 #if defined(__DARWIN) && defined(__ARM64)
     assert(span->obj_count > 0 && span->obj_count <= 2048); // darwin/arm64 一页是 16k
 #else
@@ -183,21 +184,14 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             // 内存回收(未返回到堆)
             allocated_bytes -= span->obj_size;
 
-            if (span->base == 0xc000008000) {
-                DEBUGF("[sweep_span] will sweep, span_base=%p obj_addr=%p", span->base, (void *) (span->base + i * span->obj_size));
-            }
-
-            // TODO 直接 set 0 让 gc 问题快速暴露出来, jit class 不允许设置内存，所以跳过
-            if ((span->spanclass >> 1) != JIT_SIZECLASS) {
-                memset((void *) (span->base + i * span->obj_size), 0, span->obj_size);
-            }
+            DEBUGF("[sweep_span] will sweep, span_base=%p obj_addr=%p", span->base, (void *) (span->base + i * span->obj_size));
+            // TODO 测试逻辑暂时不需要
+            // memset((void *) (span->base + i * span->obj_size), 0, span->obj_size);
         } else {
-            if (span->base == 0xc000008000) {
-                DEBUGF("[sweep_span] will sweep, span_base=%p, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
-                       span->base,
-                       (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
-                       bitmap_test(span->gcmark_bits, i));
-            }
+            DEBUGF("[sweep_span] will sweep, span_base=%p, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
+                   span->base,
+                   (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
+                   bitmap_test(span->gcmark_bits, i));
         }
     }
 
@@ -215,11 +209,13 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
 
     // span 所有的 obj 都被释放，归还 span 内存给操作系统,
     // JIT span 不做 free, jit span 无法进行任何的写入操作
-    if (span->alloc_count == 0 && sizeclass != JIT_SIZECLASS) {
+    if (span->alloc_count == 0) {
         TRACEF("[sweep_span] span will free to heap, span=%p, base=0x%lx, class=%d", span, span->base, span->spanclass);
+
         mheap_free_span(memory->mheap, span);
         TRACEF("[sweep_span] span success free to heap, span=%p, base=0x%lx, class=%d", span, span->base,
                span->spanclass);
+
         free_mspan_meta(span);
         TRACEF("[sweep_span] span success free meta, span=%p, base=0x%lx, class=%d", span, span->base, span->spanclass);
 
@@ -251,6 +247,8 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
 void mcentral_sweep(mheap_t *mheap) {
     RDEBUGF("[mcentral_sweep] start");
     mutex_lock(&memory->locker);
+
+    remove_total_bytes = 0;
 
     mcentral_t *centrals = mheap->centrals;
     for (int i = 0; i < SPANCLASS_COUNT; ++i) {
@@ -480,7 +478,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         }
 
         DEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p, fn->stack_size=%ld, bp=%p", STRTABLE(fn->name_offset),
-                (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
+               (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
 
         // share_stack_frame_bp 是 fn 对应的帧的值,已经从帧中取了出来, 原来保存再 BP 寄存器中，现在保存再帧中
         addr_t bp_offset = share_stack_frame_bp - sp_value;
@@ -500,8 +498,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         for (int i = 0; i < ptr_count; ++i) {
             bool is_ptr = bitmap_test(RTDATA(fn->gc_bits_offset), i);
             DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, frame_cursor=%p, is_ptr=%d, may_value=%p", STRTABLE(fn->name_offset), i,
-                    ptr_count - 1, (void *) frame_cursor, is_ptr,
-                    (void *) fetch_int_value(frame_cursor, 8));
+                   ptr_count - 1, (void *) frame_cursor, is_ptr,
+                   (void *) fetch_int_value(frame_cursor, 8));
 
             // 即使当前 slot 的类型是 ptr 但是可能存在还没有存储值, 所以需要重复判断
             if (is_ptr) {
@@ -548,8 +546,8 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
     addr = span->base + (obj_index * span->obj_size);
 
     DEBUGF("[runtime_gc.handle_gc_ptr] addr=%p(%p), has_ptr=%d, span_base=%p, spc=%d, obj_index=%lu, obj_size=%lu byte",
-            (void *) addr, (void *) old,
-            spanclass_has_ptr(span->spanclass), (void *) span->base, span->spanclass, obj_index, span->obj_size);
+           (void *) addr, (void *) old,
+           spanclass_has_ptr(span->spanclass), (void *) span->base, span->spanclass, obj_index, span->obj_size);
 
     mutex_lock(&span->gcmark_locker);
 
@@ -558,16 +556,16 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
     if (bitmap_test(span->gcmark_bits, obj_index)) {
         // already marks black
         DEBUGF("[runtime_gc.handle_gc_ptr] addr=%p, span_base=%p, obj_index=%lu marked, will continue", (void *) addr,
-                (void *) span->base, obj_index);
+               (void *) span->base, obj_index);
         mutex_unlock(&span->gcmark_locker);
         return;
     }
 
     bitmap_set(span->gcmark_bits, obj_index);
     DEBUGF("[runtime_gc.handle_gc_ptr] addr=%p, span=%p, span_base=%p, obj_index=%lu marked, test=%d, obj_size=%d, spanclass_has_ptr=%d", (void *) addr,
-            span,
-            (void *) span->base,
-            obj_index, bitmap_test(span->gcmark_bits, obj_index), span->obj_size, spanclass_has_ptr(span->spanclass));
+           span,
+           (void *) span->base,
+           obj_index, bitmap_test(span->gcmark_bits, obj_index), span->obj_size, spanclass_has_ptr(span->spanclass));
 
     mutex_unlock(&span->gcmark_locker);
 
@@ -607,8 +605,8 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
                 }
             } else {
                 DEBUGF("[handle_gc_ptr] skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p", (void *) temp_addr,
-                        (void *) value, in_heap(value),
-                        span_of(value));
+                       (void *) value, in_heap(value),
+                       span_of(value));
             }
         } else {
             DEBUGF(
@@ -747,7 +745,7 @@ static void gc_work() {
 static void inject_gc_work_coroutine() {
     // 遍历 share processor 插入 gc coroutine
     PROCESSOR_FOR(processor_list) {
-        coroutine_t *gc_co = rt_coroutine_new((void *) gc_work, FLAG(CO_FLAG_RTFN), 0, NULL);
+        coroutine_t *gc_co = rt_coroutine_new((void *) gc_work, FLAG(CO_FLAG_RTFN) | FLAG(CO_FLAG_DIRECT), 0, NULL);
 
         rt_linked_fixalloc_push(&p->co_list, gc_co);
         rt_linked_fixalloc_push(&p->runnable_list, gc_co);
@@ -780,6 +778,13 @@ static void scan_pool() {
 
             rt_linked_fixalloc_push(&p->gc_worklist, linkco);
         }
+    }
+
+    // handle n string
+    n_processor_t *p = processor_list;
+    n_string_t *value;
+    sc_map_foreach_value(&const_str_pool, value) {
+        rt_linked_fixalloc_push(&p->gc_worklist, value);
     }
 }
 
@@ -871,8 +876,7 @@ static void gc_mark_done() {
  * @stack system
  */
 void runtime_gc() {
-    int64_t before = allocated_bytes;
-    int64_t _next_gc_bytes = allocated_bytes * NEXT_GC_FACTOR;
+    uint64_t before = allocated_bytes;
 
     // - gc stage: GC_START
     gc_stage = GC_STAGE_START;
@@ -963,9 +967,15 @@ void runtime_gc() {
 
     // -------------- STW end ----------------------------
     // 更新 next gc byts
-    next_gc_bytes = _next_gc_bytes;
+    int64_t heap_live = allocated_bytes;
+    if (heap_live < MIN_GC_BYTES) {
+        heap_live = MIN_GC_BYTES;
+    }
+    next_gc_bytes = heap_live + (heap_live * GC_PERCENT / 100);
+
     gc_stage = GC_STAGE_OFF;
-    DEBUGF("[runtime_gc] gc stage: GC_OFF, gc_barrier_stop, current_allocated=%ldKB, cleanup=%ldKB",
+    DEBUGF("[runtime_gc] gc stage: GC_OFF, gc_barrier_stop, before=%ldKB, current=%ldKB, cleanup=%ldKB, alloc_total=%ldKB, remove_to_sys=%ldKB, used=%ldKB, next_gc=%ldKB",
+           before / 1024,
            allocated_bytes / 1024,
-           (before - allocated_bytes) / 1024);
+           (before - allocated_bytes) / 1024, allocated_total_bytes / 1024, remove_total_bytes / 1024, (allocated_total_bytes - remove_total_bytes) / 1024, next_gc_bytes / 1024);
 }

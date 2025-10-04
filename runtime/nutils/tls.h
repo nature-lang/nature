@@ -19,12 +19,9 @@
 typedef struct {
     coroutine_t *co;
     int64_t read_len;
-
     void *data;
-
     bool timeout; // 是否触发了 timeout
     bool handshake_done;
-
     // UV 相关
     uv_tcp_t handle; // 基础 tcp 链接
     uv_write_t write_req;
@@ -264,7 +261,7 @@ void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t *addr, n_int64_t port, n
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
-    inner_tls_conn_t *conn = malloc(sizeof(inner_tls_conn_t));
+    inner_tls_conn_t *conn = mallocz(sizeof(inner_tls_conn_t));
     conn->timeout = false;
     conn->data = NULL;
     conn->handshake_done = false;
@@ -381,7 +378,7 @@ int64_t rt_uv_tls_write(n_tls_conn_t *n_conn, n_vec_t *buf) {
 
     conn->handle.data = conn;
 
-    // 使用 mbedTLS 写入数据
+    // 使用 mbedTLS 写入加密数据, 具体会调用的 socket 已经通过 bio 注册了
     int ret = mbedtls_ssl_write(&conn->ssl, (const unsigned char *) buf->data, buf->length);
     if (ret < 0) {
         char error_buf[256];

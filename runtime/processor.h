@@ -49,6 +49,7 @@ typedef enum {
     CO_FLAG_SAME = 2,
     CO_FLAG_MAIN = 3,
     CO_FLAG_RTFN = 4, // runtime_fn 不需要扫描 stack
+    CO_FLAG_DIRECT = 5, // 直接调用 fn, 而不需要通过 n_fn_t 进行提取
 } co_flag_t;
 
 #ifdef __LINUX

@@ -40,7 +40,7 @@ fn generate_key(u32 key_bits):(ptr<rsa_public_key_t>, ptr<rsa_private_key_t>)! {
     
     // Seed the random number generator
     var seed = fmt.sprintf('%d', time.now().ms_timestamp())
-    var seed_result = utils.mbedtls_ctr_drbg_seed(&generator.ctr_drbg, utils.mbedtls_entropy_func as anyptr, &generator.entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&generator.ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &generator.entropy as anyptr, seed.to_cstr(), seed.len() as u32)
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&generator.ctr_drbg)
         utils.mbedtls_entropy_free(&generator.entropy)
@@ -51,7 +51,7 @@ fn generate_key(u32 key_bits):(ptr<rsa_public_key_t>, ptr<rsa_private_key_t>)! {
     utils.mbedtls_rsa_init(&generator.rsa_ctx)
     
     // Generate RSA key pair (exponent = 65537)
-    var gen_result = utils.mbedtls_rsa_gen_key(&generator.rsa_ctx, utils.mbedtls_ctr_drbg_random as anyptr, &generator.ctr_drbg as anyptr, key_bits, 65537)
+    var gen_result = utils.mbedtls_rsa_gen_key(&generator.rsa_ctx, libc.to_cfn(utils.mbedtls_ctr_drbg_random as anyptr), &generator.ctr_drbg as anyptr, key_bits, 65537)
     if gen_result != 0 {
         utils.mbedtls_rsa_free(&generator.rsa_ctx)
         utils.mbedtls_ctr_drbg_free(&generator.ctr_drbg)
@@ -128,14 +128,14 @@ fn private_key_from_pem([u8] pem_data, [u8] password):ptr<rsa_private_key_t>! {
     utils.mbedtls_ctr_drbg_init(&ctr_drbg)
     
     var seed = fmt.sprintf('%d', time.now().ms_timestamp())
-    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, utils.mbedtls_entropy_func as anyptr, &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
         throw errorf('failed to seed RNG')
     }
     
-    var parse_result = utils.mbedtls_pk_parse_key(&pk, (pem_data as string).to_cstr(), pem_data.len() + 1, pwd_ptr, pwd_len, utils.mbedtls_ctr_drbg_random as anyptr, &ctr_drbg as anyptr)
+    var parse_result = utils.mbedtls_pk_parse_key(&pk, (pem_data as string).to_cstr(), pem_data.len() + 1, pwd_ptr, pwd_len, libc.to_cfn(utils.mbedtls_ctr_drbg_random as anyptr), &ctr_drbg as anyptr)
     if parse_result != 0 {
         utils.mbedtls_pk_free(&pk)
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
@@ -173,7 +173,7 @@ fn rsa_public_key_t.encrypt_oaep(i32 hash_algo, [u8] plaintext, [u8]? label):[u8
     utils.mbedtls_ctr_drbg_init(&ctr_drbg)
 
     var seed = fmt.sprintf('%d', time.now().ms_timestamp())
-    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, utils.mbedtls_entropy_func as anyptr, &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
@@ -194,9 +194,9 @@ fn rsa_public_key_t.encrypt_oaep(i32 hash_algo, [u8] plaintext, [u8]? label):[u8
         label_len = label.len()
     }
 
-    var result = utils.mbedtls_rsa_rsaes_oaep_encrypt(&self.rsa_ctx, utils.mbedtls_ctr_drbg_random as anyptr, &ctr_drbg as anyptr,
+    var result = utils.mbedtls_rsa_rsaes_oaep_encrypt(&self.rsa_ctx, libc.to_cfn(utils.mbedtls_ctr_drbg_random as anyptr), &ctr_drbg as anyptr,
                                                       label_ptr, label_len, plaintext.len(),
-                                                      (plaintext as string).to_cstr(), (output as string).to_cstr())
+                                                      (plaintext as string).to_cstr(), output.ref())
 
     // Clean up temporary resources
     utils.mbedtls_ctr_drbg_free(&ctr_drbg)
@@ -219,7 +219,7 @@ fn rsa_private_key_t.decrypt_oaep(i32 hash_algo, [u8] ciphertext, [u8]? label):[
     utils.mbedtls_ctr_drbg_init(&ctr_drbg)
     
     var seed = fmt.sprintf('%d', time.now().ms_timestamp())
-    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, utils.mbedtls_entropy_func as anyptr, &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
@@ -240,9 +240,9 @@ fn rsa_private_key_t.decrypt_oaep(i32 hash_algo, [u8] ciphertext, [u8]? label):[
         label_len = label.len()
     }
     
-    var result = utils.mbedtls_rsa_rsaes_oaep_decrypt(&self.rsa_ctx, utils.mbedtls_ctr_drbg_random as anyptr, &ctr_drbg as anyptr,
+    var result = utils.mbedtls_rsa_rsaes_oaep_decrypt(&self.rsa_ctx, libc.to_cfn(utils.mbedtls_ctr_drbg_random as anyptr), &ctr_drbg as anyptr,
                                                       label_ptr, label_len, &output_len, 
-                                                      (ciphertext as string).to_cstr(), (output as string).to_cstr(), key_size)
+                                                      (ciphertext as string).to_cstr(), output.ref(), key_size)
     
     // Clean up temporary resources
     utils.mbedtls_ctr_drbg_free(&ctr_drbg)
@@ -266,7 +266,7 @@ fn rsa_public_key_t.encrypt_pkcs_v15([u8] plaintext):[u8]! {
     utils.mbedtls_ctr_drbg_init(&ctr_drbg)
 
     var seed = fmt.sprintf('%d', time.now().ms_timestamp())
-    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, utils.mbedtls_entropy_func as anyptr, &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
@@ -279,9 +279,9 @@ fn rsa_public_key_t.encrypt_pkcs_v15([u8] plaintext):[u8]! {
     var key_size = utils.mbedtls_rsa_get_len(&self.rsa_ctx)
     var output = vec_new<u8>(0, key_size)
 
-    var result = utils.mbedtls_rsa_pkcs1_encrypt(&self.rsa_ctx, utils.mbedtls_ctr_drbg_random as anyptr, &ctr_drbg as anyptr,
+    var result = utils.mbedtls_rsa_pkcs1_encrypt(&self.rsa_ctx, libc.to_cfn(utils.mbedtls_ctr_drbg_random as anyptr), &ctr_drbg as anyptr,
                                                  plaintext.len(), (plaintext as string).to_cstr(),
-                                                 (output as string).to_cstr())
+                                                 output.ref())
 
     // Clean up temporary resources
     utils.mbedtls_ctr_drbg_free(&ctr_drbg)
@@ -304,7 +304,7 @@ fn rsa_private_key_t.decrypt_pkcs_v15([u8] ciphertext):[u8]! {
     utils.mbedtls_ctr_drbg_init(&ctr_drbg)
     
     var seed = fmt.sprintf('%d', time.now().ms_timestamp())
-    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, utils.mbedtls_entropy_func as anyptr, &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
@@ -318,9 +318,9 @@ fn rsa_private_key_t.decrypt_pkcs_v15([u8] ciphertext):[u8]! {
     var output = vec_new<u8>(0, key_size)
     var output_len = 0
     
-    var result = utils.mbedtls_rsa_pkcs1_decrypt(&self.rsa_ctx, utils.mbedtls_ctr_drbg_random as anyptr, &ctr_drbg as anyptr,
+    var result = utils.mbedtls_rsa_pkcs1_decrypt(&self.rsa_ctx, libc.to_cfn(utils.mbedtls_ctr_drbg_random as anyptr), &ctr_drbg as anyptr,
                                                  &output_len, (ciphertext as string).to_cstr(),
-                                                 (output as string).to_cstr(), key_size)
+                                                 output.ref(), key_size)
     
     // Clean up temporary resources
     utils.mbedtls_ctr_drbg_free(&ctr_drbg)

@@ -24,8 +24,8 @@ static void set_data_index(n_map_t *m, uint64_t hash_index, uint64_t data_index)
 void map_grow(n_map_t *m) {
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
     rtype_t *value_rtype = rt_find_rtype(m->value_rtype_hash);
-    uint64_t key_size = rtype_stack_size(key_rtype, POINTER_SIZE);
-    uint64_t value_size = rtype_stack_size(value_rtype, POINTER_SIZE);
+    uint64_t key_size = key_rtype->stack_size;
+    uint64_t value_size = value_rtype->stack_size;
 
     n_map_t old_map = {0};
     memmove(&old_map, m, sizeof(n_map_t));
@@ -67,15 +67,15 @@ n_map_t *rt_map_new(uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhas
     DEBUGF("[runtime.rt_map_new] map_rhash=%ld(%s-%ld), key_rhash=%ld(%s-%ld), value_rindex=%ld(%s-%ld)",
            rtype_hash,
            type_kind_str[map_rtype->kind],
-           map_rtype->size,
+           map_rtype->heap_size,
            key_rhash,
            type_kind_str[key_rtype->kind],
-           key_rtype->size,
+           key_rtype->heap_size,
            value_rhash,
            type_kind_str[value_rtype->kind],
-           value_rtype->size);
+           value_rtype->heap_size);
 
-    n_map_t *map_data = rti_gc_malloc(map_rtype->size, map_rtype);
+    n_map_t *map_data = rti_gc_malloc(map_rtype->heap_size, map_rtype);
     map_data->capacity = capacity;
     map_data->length = 0;
     map_data->key_rtype_hash = key_rhash;
@@ -139,15 +139,15 @@ n_anyptr_t rt_map_assign(n_map_t *m, void *key_ref) {
 
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
 
-    char *key_str = rtype_value_to_str(key_rtype, key_ref);
-
-    DEBUGF("[runtime.rt_map_assign] key_rtype_kind=%d, key_str=%s, hash_index=%lu, map_len=%d",
-           key_rtype->kind,
-           key_str,
-           hash_index,
-           m->length);
-
-    free((void *) key_str);
+    //    char *key_str = rtype_value_to_str(key_rtype, key_ref);
+    //
+    //    DEBUGF("[runtime.rt_map_assign] key_rtype_kind=%d, key_str=%s, hash_index=%lu, map_len=%d",
+    //           key_rtype->kind,
+    //           key_str,
+    //           hash_index,
+    //           m->length);
+    //
+    //    free((void *) key_str);
 
     uint64_t data_index = 0;
     if (hash_value_empty(hash_value)) {
@@ -168,7 +168,7 @@ n_anyptr_t rt_map_assign(n_map_t *m, void *key_ref) {
            data_index,
            m->hash_table[hash_index], key_size);
 
-    if (key_rtype->size == POINTER_SIZE) {
+    if (key_rtype->heap_size == POINTER_SIZE) {
         rti_write_barrier_ptr(m->key_data + key_size * data_index, *(void **) key_ref, false);
     } else {
         // push to key list and value list

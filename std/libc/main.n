@@ -3,6 +3,16 @@ type cstr = anyptr
 #linkid rt_string_ref
 fn string.to_cstr():cstr
 
+fn to_cfn(anyptr closure):anyptr {
+    type fn_t = struct{
+        anyptr envs
+        anyptr addr
+    }
+
+    var c = closure as rawptr<fn_t>
+    return c.addr
+}
+
 #linkid rt_string_new
 fn cstr.to_string():string
 
@@ -1840,40 +1850,22 @@ fn splice(i32 fd_in, rawptr<off_t> off_in, i32 fd_out, rawptr<off_t> off_out, u6
 fn tee(i32 fd_in, i32 fd_out, u64 len, u32 flags):i64
 
 
+
 // signal.h
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// TODO
 #linkid std_args
 fn std_args():[string]
 
 #linkid htons
 fn htons(u16 host):u16
+
+#linkid htonl
+fn htonl(u32 host):u32
+
+#linkid ntohs
+fn ntohs(u16 x):u16
+
+#linkid ntohl
+fn ntohl(u32 x):u32
 
 /*
  * Protections are chosen from these bits, or-ed together

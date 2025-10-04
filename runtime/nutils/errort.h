@@ -27,7 +27,7 @@ static inline n_string_t *rti_error_msg(n_interface_t *error) {
  * @return
  */
 static inline n_interface_t *n_error_new(n_string_t *msg, uint8_t panic) {
-    n_errort *errort = rti_gc_malloc(errort_rtype.size, &errort_rtype);
+    n_errort *errort = rti_gc_malloc(errort_rtype.heap_size, &errort_rtype);
     errort->msg = msg;
     errort->panic = panic;
     DEBUGF("[runtime.n_error_new] errort=%p, msg=%p, panic=%d", errort, msg, panic);

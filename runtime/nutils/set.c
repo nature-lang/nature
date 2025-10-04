@@ -9,7 +9,7 @@ static void rt_set_data_index(n_set_t *m, uint64_t hash_index, uint64_t data_ind
 // no grow
 static bool _rt_set_add(n_set_t *m, void *key_ref) {
     DEBUGF("[runtime._rt_set_add] key_ref=%p, key_rtype_hash=%lu, len=%lu, cap=%lu", key_ref, m->key_rtype_hash,
-            m->length, m->capacity);
+           m->length, m->capacity);
 
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
     uint64_t hash_value = m->hash_table[hash_index];
@@ -34,8 +34,6 @@ static bool _rt_set_add(n_set_t *m, void *key_ref) {
     uint64_t key_size = rt_rtype_stack_size(m->key_rtype_hash);
     void *dst = m->key_data + key_size * key_index;
 
-    rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
-
     // DEBUGF("[runtime.set_add] key_size=%lu, dst=%p, src=%p", key_size, dst, key_ref);
     // 如果 key_ref 是一个 ptr, 则需要走 write
     if (key_size == POINTER_SIZE) {
@@ -49,12 +47,12 @@ static bool _rt_set_add(n_set_t *m, void *key_ref) {
 
 static void rt_set_grow(n_set_t *m) {
     DEBUGF("[runtime.rt_set_grow] len=%lu, cap=%lu, key_data=%p, hash_table=%p", m->length, m->capacity, m->key_data,
-            m->hash_table);
+           m->hash_table);
 
     assert(m->key_rtype_hash > 0);
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
     assert(key_rtype && "cannot find key_rtype by hash");
-    uint64_t key_size = rtype_stack_size(key_rtype, POINTER_SIZE);
+    uint64_t key_size = key_rtype->stack_size;
 
     n_set_t old_set = {0};
     memmove(&old_set, m, sizeof(n_set_t));
@@ -90,7 +88,7 @@ n_set_t *rt_set_new(uint64_t rtype_hash, uint64_t key_hash) {
     rtype_t *set_rtype = rt_find_rtype(rtype_hash);
     rtype_t *key_rtype = rt_find_rtype(key_hash);
 
-    n_set_t *set_data = rti_gc_malloc(set_rtype->size, set_rtype);
+    n_set_t *set_data = rti_gc_malloc(set_rtype->heap_size, set_rtype);
     set_data->capacity = SET_DEFAULT_CAPACITY;
     set_data->length = 0;
     set_data->key_rtype_hash = key_hash;
@@ -115,7 +113,7 @@ n_set_t *rt_set_new(uint64_t rtype_hash, uint64_t key_hash) {
  */
 bool rt_set_add(n_set_t *m, void *key_ref) {
     DEBUGF("[runtime.rt_set_add] key_ref=%p, key_rtype_hash=%lu, len=%lu, cap=%lu, need_grow=%d", key_ref, m->key_rtype_hash,
-            m->length, m->capacity, (double) m->length + 1 > (double) m->capacity * HASH_MAX_LOAD);
+           m->length, m->capacity, (double) m->length + 1 > (double) m->capacity * HASH_MAX_LOAD);
 
     // 扩容
     if ((double) m->length + 1 > (double) m->capacity * HASH_MAX_LOAD) {

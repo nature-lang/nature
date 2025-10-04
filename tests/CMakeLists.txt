@@ -123,7 +123,7 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
     # target_compile_definitions(test_runtime_debug PRIVATE NDEBUG)
 
     add_dependencies(test_runtime_debug generate_libmain)
-
+#    target_compile_definitions(test_runtime_debug PRIVATE TEST_MODE=1)
     target_link_libraries(test_runtime_debug ${LIBMAIN_STATIC} ${LIBUV_STATIC} ${LIBC_STATIC})
     add_test(NAME test_runtime_debug COMMAND test_runtime_debug WORKING_DIRECTORY ${WORK_DIR})
 
