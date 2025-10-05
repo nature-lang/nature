@@ -215,7 +215,7 @@ typedef struct {
     uint32_t start;
     uint32_t end;
     uint32_t max;
-    uint8_t full; // start=end=max=2^21 最大值， full 设置为 1, 表示所有空间都是空间的
+    uint8_t full; // start=end=max=2^21 最大值， full 设置为 1, 表示所有空间都是空闲的的
 } page_summary_t; // page alloc chunk 的摘要数据，组成 [start,max,end]
 
 /**

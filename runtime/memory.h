@@ -106,14 +106,11 @@ static inline bool in_heap(addr_t addr) {
  * @return
  */
 static inline arena_t *take_arena(addr_t addr) {
-    // 直接内联 in_heap 的逻辑，减少函数调用开销
-    if (addr < ARENA_HINT_BASE || addr >= memory->mheap->current_arena.end) {
+    if (!in_heap(addr)) {
         return NULL;
     }
 
     uint64_t index = arena_index(addr);
-    // 添加预取指令，提高缓存命中率
-    __builtin_prefetch(&memory->mheap->arenas[index], 0, 3);
     arena_t *arena = memory->mheap->arenas[index];
     return arena;
 }

@@ -632,7 +632,7 @@ void sched_init() {
     }
 
     // - set first
-    uv_key_set(&tls_processor_key, processor_list);
+    uv_key_set(&tls_processor_key, processor_index[0]);
 }
 
 void sched_run() {
