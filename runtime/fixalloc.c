@@ -48,7 +48,7 @@ void *fixalloc_alloc(fixalloc_t *f) {
 
         chunk_ptr++;
         f->chunk_ptr = (uintptr_t) chunk_ptr;
-        f->chunk_rem = f->chunk_size;
+        f->chunk_rem = f->chunk_size - sizeof(fixalloc_link_t);
     }
 
     void *v = (void *) f->chunk_ptr;
