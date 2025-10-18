@@ -47,7 +47,7 @@ void shade_obj_grey(void *obj) {
     n_processor_t *p = processor_get();
 
     // gc_work_finished < memory->gc_count 就说明 share processor 正在处理 gc_work, 所以可以插入到 gc_worklist 中
-    if (p->gc_work_finished < memory->gc_count) {
+    if (p && p->gc_work_finished < memory->gc_count) {
         insert_gc_worklist(&p->gc_worklist, obj);
     } else {
         insert_gc_worklist(&global_gc_worklist, obj);
@@ -168,6 +168,8 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
 
     int alloc_count = 0;
     int free_index = -1;
+    bool has_freed = false;
+
     for (int i = 0; i < span->obj_count; ++i) {
         if (bitmap_test(span->gcmark_bits, i)) {
             alloc_count++;
@@ -179,13 +181,13 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             }
         }
 
-        // 如果 gcmark_bits(没有被标记) = 0, alloc_bits(分配过) = 1, 则表明内存被释放，可以进行释放的, TODO 这一段都属于 debug 逻辑
+        // 如果 gcmark_bits(没有被标记) = 0, alloc_bits(分配过) = 1, 则表明内存被释放，可以进行释放的
         if (bitmap_test(span->alloc_bits, i) && !bitmap_test(span->gcmark_bits, i)) {
             // 内存回收(未返回到堆)
             allocated_bytes -= span->obj_size;
+            has_freed = true;
 
             DEBUGF("[sweep_span] will sweep, span_base=%p obj_addr=%p", span->base, (void *) (span->base + i * span->obj_size));
-            // TODO 测试逻辑暂时不需要
             // memset((void *) (span->base + i * span->obj_size), 0, span->obj_size);
         } else {
             DEBUGF("[sweep_span] will sweep, span_base=%p, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
@@ -202,6 +204,11 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
     span->gcmark_bits = gcbits_new(span->obj_count);
     span->alloc_count = alloc_count;
     span->free_index = free_index == -1 ? 0 : free_index;
+
+    if (has_freed) {
+        span->needzero = 1;
+        DEBUGF("[sweep_span] span=%p has freed objects, set needzero=1", span);
+    }
 
     RDEBUGF("[sweep_span] reset gcmark_bits success, span=%p, spc=%d", span, span->spanclass)
 

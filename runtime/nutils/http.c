@@ -3,12 +3,17 @@
 #include "runtime/rt_mutex.h"
 #include "runtime/runtime.h"
 #include <strings.h>
+#include <sys/socket.h>
 
-#define DEFAULT_BACKLOG 128
+// SOMAXCONN 在 sys/socket.h 中定义
+#ifdef __LINUX
+#define DEFAULT_BACKLOG 4096
+#else
+#define DEFAULT_BACKLOG SOMAXCONN
+#endif
+
 #define FREELIST_MAX 10000
 #define FREELIST_MIN 1000
-
-static int malloc_count = 0;
 
 static http_conn_t *acquire_conn(inner_http_server_t *inner) {
     if (inner->count > 0) {
@@ -24,7 +29,7 @@ static http_conn_t *acquire_conn(inner_http_server_t *inner) {
 }
 
 static void release_conn(inner_http_server_t *inner, http_conn_t *conn) {
-    if (inner->count >= inner->max) {
+    if (inner->count > inner->max) {
         free(conn);
         return;
     }
@@ -59,7 +64,7 @@ static void free_conn(inner_http_server_t *inner) {
 }
 
 static inline void on_async_conn_close_cb(uv_handle_t *handle) {
-    http_conn_t *conn = CONTAINER_OF(handle, http_conn_t, async_handle);
+    http_conn_t *conn = CONTAINER_OF(handle, http_conn_t, async_write_handle);
     DEBUGF("[on_async_conn_close_cb] conn: %p", conn);
     assert(conn->n_server);
     inner_http_server_t *inner = conn->n_server->inner;
@@ -72,20 +77,21 @@ static inline void on_async_conn_close_cb(uv_handle_t *handle) {
         free(conn->write_buf.base);
     }
 
+    conn->n_server->inner->closed_count += 1;
     release_conn(inner, conn);
-    //    free(conn);
 }
 
 static inline void on_conn_close_cb(uv_handle_t *handle) {
     http_conn_t *conn = CONTAINER_OF(handle, http_conn_t, handle);
     DEBUGF("[on_conn_close_cb] conn, %p, client_handle: %p, async_handle: %p",
-           conn, &conn->handle, conn->async_handle);
+           conn, &conn->handle, conn->async_write_handle);
 
     // 需要先关闭 async 才能释放内存
-    if (uv_is_active((uv_handle_t *) &conn->async_handle)) {
-        uv_close((uv_handle_t *) &conn->async_handle, on_async_conn_close_cb);
+    if (uv_is_active((uv_handle_t *) &conn->async_write_handle)) {
+        uv_close((uv_handle_t *) &conn->async_write_handle, on_async_conn_close_cb);
     } else {
-        DEBUGF("[on_conn_close_cb] conn async_handle not active, not need close")
+        assert(false);
+        TDEBUGF("[on_conn_close_cb] close failed, async_write_handle not active")
     }
 }
 
@@ -97,7 +103,7 @@ static inline void on_write_end_cb(uv_write_t *write_req, int status) {
     if (status < 0) {
         // 对端可能已经关闭了连接,导致写入失败等情况
         char *msg = tlsprintf("uv_write failed: %s", uv_strerror(status));
-        DEBUGF("[on_write_end_cb] %s", msg);
+        TDEBUGF("[on_write_end_cb] %s", msg);
     }
 
     http_conn_t *conn = CONTAINER_OF(write_req, http_conn_t, write_req);
@@ -112,6 +118,9 @@ static inline void on_write_end_cb(uv_write_t *write_req, int status) {
  */
 static inline void http_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
     http_conn_t *conn = CONTAINER_OF(handle, http_conn_t, handle);
+
+    conn->n_server->inner->read_alloc_buf_count += 1;
+
     DEBUGF("[uv_alloc_buffer] suggested_size: %ld", suggested_size);
     conn->read_buf_cap += HTTP_BUFFER_SIZE;
 
@@ -133,58 +142,60 @@ static inline void http_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_si
     buf->len = HTTP_BUFFER_SIZE;
 }
 
-static inline void async_conn_handle_cb(uv_async_t *handle) {
-    http_conn_t *conn = CONTAINER_OF(handle, http_conn_t, async_handle);
-    DEBUGF("[async_conn_handle_cb] conn: %p, client_handle: %p", conn, handle);
+static inline void async_conn_write_handle_cb(uv_async_t *handle) {
+    http_conn_t *conn = CONTAINER_OF(handle, http_conn_t, async_write_handle);
+    DEBUGF("[async_conn_write_handle_cb] conn: %p, client_handle: %p", conn, handle);
+    conn->n_server->inner->resp_count += 1;
 
     int result = uv_write(&conn->write_req, (uv_stream_t *) &conn->handle, &conn->write_buf, 1, on_write_end_cb);
     if (result) {
-        uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
+        TDEBUGF("[async_conn_write_handle_cb] uv_write have err %s, is_closing %d", uv_strerror(result), uv_is_closing((uv_handle_t *) &conn->handle));
+        if (!uv_is_closing((uv_handle_t *) &conn->handle)) {
+            uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
+        }
     }
 }
 
 static inline void on_read_cb(uv_stream_t *handle, ssize_t nread, const uv_buf_t *buf) {
     DEBUGF("[on_read_cb] client: %p, nread: %ld", handle, nread);
-
     http_conn_t *conn = CONTAINER_OF(handle, http_conn_t, handle);
+    conn->n_server->inner->read_cb_count += 1;
 
     if (nread < 0) {
+        conn->n_server->inner->read_error_count += 1;
+
         if (nread == UV_EOF) {
             // do nothing
+            if (!conn->parser_completed) {
+                DEBUGF("[on_read_cb] uv_read EOF before complete");
+            }
         } else {
             DEBUGF("[on_read_cb] uv_read failed: %s", uv_strerror(nread));
-            uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
         }
+
+        uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
         return;
     }
 
-    // last_len 用于增量解析
-    llhttp_init(&conn->parser, HTTP_REQUEST, &conn->settings);
     enum llhttp_errno err = llhttp_execute(&conn->parser, buf->base, nread);
     if (err != HPE_OK) {
-        DEBUGF("[on_read_cb] llhttp_execute failed: %s", llhttp_errno_name(err));
-        // 直接关闭链接不做处理
+        TDEBUGF("[on_read_cb] llhttp_execute failed: %s", llhttp_errno_name(err));
+        // 解析错误
         uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
         return;
     }
     conn->read_buf_len += nread;
-    if (!conn->parser_completed) {
+    if (!conn->parser_completed) { // 未完整读取
+        TDEBUGF("[on_read_cb] parser not completed yet");
         return;
     }
 
-    // 创建协程，准备处理请求数据, 这里都太麻烦了。不如 data 复杂化一点，用一个结构体处理，就不用担心被 gc 杀掉
-    coroutine_t *listen_co = handle->data;
-
-    // TODO check if current
-    // 传递 coroutine 参数给到用户空间, 该参数使用
-    uv_async_init(&listen_co->p->uv_loop, &conn->async_handle, async_conn_handle_cb);
+    conn->n_server->inner->coroutine_count += 1;
     coroutine_t *conn_co = rt_coroutine_new(conn->n_server->handler, 0, NULL, conn);
     rt_coroutine_dispatch(conn_co);
 }
 
 void rt_uv_conn_resp(http_conn_t *conn, n_string_t *resp_data) {
-    DEBUGF("[rt_uv_conn_resp] conn: %p, client_handle: %p", conn, &conn->handle);
-
     // 进行数据 copy 避免 resp_data 后续被清理掉
     if ((resp_data->length + 1) < HTTP_BUFFER_SIZE) {
         conn->write_buf.base = conn->default_buf;
@@ -192,20 +203,14 @@ void rt_uv_conn_resp(http_conn_t *conn, n_string_t *resp_data) {
 
         memmove(conn->write_buf.base, resp_data->data, resp_data->length);
     } else {
+        // TODO write buf base 没有进行释放
         conn->write_buf.base = malloc(resp_data->length + 1);
         conn->write_buf.len = resp_data->length;
         memmove(conn->write_buf.base, resp_data->data, resp_data->length);
     }
 
-    coroutine_t *co = coroutine_get();
-    if (co->p != conn->n_server->inner->listen_co->p) {
-        uv_async_send(&conn->async_handle);
-    } else {
-        int result = uv_write(&conn->write_req, (uv_stream_t *) &conn->handle, &conn->write_buf, 1, on_write_end_cb);
-        if (result) {
-            uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
-        }
-    }
+    // 通知主线程触发 write, 当前 coroutine 直接返回，不 wait
+    uv_async_send(&conn->async_write_handle);
 }
 
 static int http_parser_on_url_cb(llhttp_t *parser, const char *at, size_t length) {
@@ -275,19 +280,18 @@ static int http_parser_on_message_complete_cb(llhttp_t *parser) {
  */
 static void on_http_conn_cb(uv_stream_t *server, int status) {
     DEBUGF("[on_http_conn_cb] status: %d", status);
-
+    inner_http_server_t *inner = CONTAINER_OF(server, inner_http_server_t, handle);
     if (status < 0) {
-        DEBUGF("[on_http_conn_cb] new connection error: %s", uv_strerror(status));
+        TDEBUGF("[on_http_conn_cb] new connection error: %s", uv_strerror(status));
         return;
     }
-
-    inner_http_server_t *inner = CONTAINER_OF(server, inner_http_server_t, handle);
 
     coroutine_t *listen_co = inner->listen_co;
 
     // 初始化 client 数据 accept loop 和 listen loop 必须使用同一个 loop
     http_conn_t *conn = acquire_conn(inner);
 
+    conn->create_time = uv_hrtime();
     conn->n_server = inner->server;
     llhttp_settings_init(&conn->settings);
     conn->settings.on_url = http_parser_on_url_cb;
@@ -295,40 +299,88 @@ static void on_http_conn_cb(uv_stream_t *server, int status) {
     conn->settings.on_header_value = http_parser_on_header_value_cb;
     conn->settings.on_body = http_parser_on_body_cb;
     conn->settings.on_message_complete = http_parser_on_message_complete_cb;
+    uv_async_init(&global_loop, &conn->async_write_handle, async_conn_write_handle_cb);
+    llhttp_init(&conn->parser, HTTP_REQUEST, &conn->settings);
 
-    uv_tcp_init(server->loop, &conn->handle);
+    uv_tcp_init(&global_loop, &conn->handle);
     int result = uv_accept(server, (uv_stream_t *) &conn->handle);
     if (result) {
-        DEBUGF("[on_http_conn_cb] uv_accept failed: %s", uv_strerror(result));
+        TDEBUGF("[on_http_conn_cb] uv_accept failed: %s", uv_strerror(result));
         uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
         return;
     }
 
-    // 进行 conn 读取
+    inner->conn_count += 1;
+    // 直接进行 conn 读取
     conn->handle.data = listen_co;
     result = uv_read_start((uv_stream_t *) &conn->handle, http_alloc_buffer_cb, on_read_cb);
     if (result) {
-        DEBUGF("[on_http_conn_cb] uv_read_start failed: %s", uv_strerror(result));
+        TDEBUGF("[on_http_conn_cb] uv_read_start failed: %s", uv_strerror(result));
         uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
         return;
     }
-
+    inner->read_start_count += 1; // 记录成功启动读取的连接
     DEBUGF("[accept_new_conn] accept new conn and create client co success, conn: %p, client_handle: %p", conn,
            &conn->handle);
+
+    uv_async_send(&global.async_weak);
 }
 
 static inline void on_server_close_cb(uv_handle_t *handle) {
     n_http_server_t *conn = handle->data;
-
     coroutine_t *listen_co = conn->inner->listen_co;
 
     free_conn(conn->inner);
-
     co_ready(listen_co);
 }
 
-void rt_uv_http_close(n_http_server_t *server) {
+static void uv_async_http_close(n_http_server_t *server) {
     uv_close((uv_handle_t *) &server->inner->handle, on_server_close_cb);
+}
+
+void test_timer_dump_count_cb(uv_timer_t *timer) {
+    inner_http_server_t *inner = timer->data;
+
+    int64_t pending_read = inner->read_start_count - inner->read_cb_count;
+    int64_t pending_close = inner->read_cb_count - inner->closed_count;
+    int64_t leaked = inner->conn_count - inner->closed_count;
+
+    TDEBUGF("[app_metrics] conn=%ld, read_start=%ld, alloc_cb=%ld, read_cb=%ld, read_error=%ld, "
+            "resp=%ld, closed=%ld, "
+            "pending_read=%ld, pending_close=%ld, leaked=%ld",
+            inner->conn_count, inner->read_start_count, inner->read_alloc_buf_count, inner->read_cb_count, inner->read_error_count,
+            inner->resp_count, inner->closed_count,
+            pending_read, pending_close, leaked);
+}
+
+
+// 由 libuv 通用 async 触发的回调器
+static void uv_async_http_listen(inner_http_server_t *inner) {
+    uv_tcp_init(&global_loop, &inner->handle);
+    inner->handle.data = inner->listen_co;
+    struct sockaddr_in addr;
+
+    n_http_server_t *server = inner->server;
+
+    // TODO 测试逻辑
+    //    uv_timer_t *timer = mallocz(sizeof(uv_timer_t));
+    //    uv_timer_init(&global_loop, timer);
+    //    timer->data = inner;
+    //    uv_timer_start(timer, test_timer_dump_count_cb, 1000, 1000);
+
+    uv_ip4_addr(rt_string_ref(server->addr), server->port, &addr);
+    uv_tcp_bind(&inner->handle, (const struct sockaddr *) &addr, 0);
+
+    int result = uv_listen((uv_stream_t *) &inner->handle, DEFAULT_BACKLOG, on_http_conn_cb);
+    if (result) {
+        rti_co_throw(inner->listen_co, tlsprintf("listen failed: %s", uv_strerror(result)), false);
+        co_ready(inner->listen_co);
+    }
+}
+
+
+void rt_uv_http_close(n_http_server_t *server) {
+    global_async_send(uv_async_http_close, server, 0, 0);
 }
 
 /**
@@ -344,27 +396,15 @@ void rt_uv_http_listen(n_http_server_t *server) {
     inner->max = FREELIST_MAX;
     inner->min = FREELIST_MIN;
     init_conn(inner);
-
-    uv_tcp_init(&p->uv_loop, &inner->handle);
-    inner->handle.data = co;
     inner->listen_co = co;
     inner->server = server;
-
     server->inner = inner;
 
-    struct sockaddr_in addr;
-    uv_ip4_addr(rt_string_ref(server->addr), server->port, &addr);
-    uv_tcp_bind(&inner->handle, (const struct sockaddr *) &addr, 0);
-
-    // 新的请求进来将会触发 new connection 回调
-    int result = uv_listen((uv_stream_t *) &inner->handle, DEFAULT_BACKLOG, on_http_conn_cb);
-    if (result) {
-        // 端口占用等错误
-        rti_co_throw(co, tlsprintf("listen failed: %s", uv_strerror(result)), false);
-        return;
-    }
+    global_async_send(uv_async_http_listen, inner, 0, 0);
 
     DEBUGF("[rt_uv_http_listen] listen success, port=%ld, p_index=%d", server->port, p->index);
+    // ready in on_server_close_cb
+    // TODO 可能 ready 完成了 waiting 还没有调用
     co_yield_waiting(co, NULL, NULL);
     DEBUGF("[rt_uv_http_listen] listen resume, port=%ld, and return, p_index=%d", server->port, p->index);
 }

@@ -1,5 +1,6 @@
 #include "processor.h"
 
+#include <stdatomic.h>
 #include <ucontext.h>
 
 #include "nutils/errort.h"
@@ -12,8 +13,11 @@ int cpu_count;
 n_processor_t *processor_index[1024] = {0};
 n_processor_t *processor_list; // 共享协程列表的数量一般就等于线程数量
 
-//n_processor_t *solo_processor_list; // 独享协程列表其实就是多线程
-//mutex_t solo_processor_locker; // 删除 solo processor 需要先获取该锁
+_Atomic uint64_t race_detector_counter = 0;
+
+uv_loop_t global_loop; // uv loop 事件循环
+
+global_handle_t global = {0};
 
 int64_t coroutine_count; // coroutine 累计数量
 bool main_coroutine_exited = false;
@@ -99,6 +103,8 @@ NO_OPTIMIZE void co_preempt_yield() {
  * @param ucontext
  */
 NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *ucontext) {
+    TDEBUGF("[thread_handle_sig] unexpect sig %d", sig);
+
     ucontext_t *ctx = ucontext;
     n_processor_t *p = processor_get();
     assert(p);
@@ -234,27 +240,6 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
 #endif
 }
 
-static void processor_uv_close(n_processor_t *p) {
-    // 关闭 uv_loop
-    RDEBUGF("[runtime.processor_uv_close] will close loop=%p, loop_req_count=%u, p_index=%d", &p->uv_loop,
-            p->uv_loop.active_reqs.count, p->index);
-
-    // TODO The process has been shut down and doesn't need to be concerned about overflow?
-    //    uv_close((uv_handle_t *) &p->timer, NULL); // io_run 等待 close 完成！
-
-    //    uv_run(&p->uv_loop, UV_RUN_DEFAULT); // 等待上面注册的 uv_close 完成
-
-    //    int result = uv_loop_close(&p->uv_loop);
-    //    if (result) {
-    //        DEBUGF("[runtime.processor_uv_close] uv loop close failed, code=%d, msg=%s, p_index=%d", result,
-    //               uv_strerror(result), p->index);
-    //
-    //        assert(false && "uv loop close failed");
-    //    }
-
-    RDEBUGF("[runtime.processor_uv_close] processor uv close success p_index=%d", p->index);
-}
-
 NO_OPTIMIZE static void coroutine_wrapper() {
     coroutine_t *co = aco_get_arg();
     assert(co);
@@ -288,7 +273,7 @@ NO_OPTIMIZE static void coroutine_wrapper() {
             co->main, co->flag & FLAG(CO_FLAG_RTFN), co->error);
 
 
-    // coroutine 即将退出，避免被 gc 清理，所以将 error 保存在 co->future 中?
+    // coroutine 即将退出，避免被 gc 清理，所以将 error保存在 co->future 中?
     if (co->error && co->future) {
         co->future->error = union_casting(throwable_rtype.hash, &co->error); // 将 co error 赋值给 co->future 避免被 gc
     }
@@ -374,25 +359,6 @@ void processor_all_start() {
     DEBUGF("[runtime_gc.processor_all_start] all processor stw completed");
 }
 
-void on_timer_stop_cb(uv_timer_t *timer) {
-    n_processor_t *p = timer->data;
-    uv_timer_stop(timer);
-    uv_stop(timer->loop);
-}
-
-/**
- * timeout_ms 推荐 5ms ~ 10ms
- */
-int io_run(n_processor_t *p, uint64_t timeout_ms) {
-    // 初始化计时器 (这里不会发生栈切换，所以可以在栈上直接分配)
-    p->timer.data = p;
-
-    // 设置计时器超时回调，这将在超时后停止事件循环
-    uv_timer_start(&p->timer, on_timer_stop_cb, timeout_ms, 0); // 只触发一次
-
-    // DEBUGF("[runtime.io_run] uv_run start, p_index=%d, loop=%p", p->index, p->uv_loop);
-    return uv_run(&p->uv_loop, UV_RUN_DEFAULT);
-}
 
 /**
  * 检测 coroutine 当前是否需要单独线程调度，如果不需要单独线程则直接在当前线程进行 aco_resume
@@ -454,8 +420,7 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
 // handle by thread
 static void processor_run(void *raw) {
     n_processor_t *p = raw;
-    DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, loop=%p, yield_safepoint_ptr=%p(%ld)", p->index, p,
-           &p->uv_loop, &tls_yield_safepoint, tls_yield_safepoint);
+    DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, yield_safepoint_ptr=%p(%ld)", p->index, p, &tls_yield_safepoint, tls_yield_safepoint);
 
     DEBUGF("[runtime.processor_run] tls1 %p, tls2 %p, tls3 %p tls4 %p, tls5 %p, tls6 %p", &tls_yield_safepoint1, &tls_yield_safepoint2, &tls_yield_safepoint3, &tls_yield_safepoint4, &tls_yield_safepoint5, &tls_yield_safepoint6);
 
@@ -468,8 +433,8 @@ static void processor_run(void *raw) {
     aco_share_stack_init(&p->share_stack, 0);
 
     // - 初始化 libuv
-    uv_loop_init(&p->uv_loop);
-    uv_timer_init(&p->uv_loop, &p->timer);
+    //    uv_loop_init(&p->uv_loop);
+    //    uv_timer_init(&p->uv_loop, &p->timer);
 
     p->tls_yield_safepoint_ptr = &tls_yield_safepoint;
 
@@ -506,8 +471,7 @@ static void processor_run(void *raw) {
             goto EXIT;
         }
 
-        // - 处理 coroutine (找到 io 可用的 goroutine)
-        int64_t handle_limit = 100;
+        int64_t handle_limit = 61;
         while (p->runnable_list.count > 0 && handle_limit > 0) {
             coroutine_t *co = rt_linked_fixalloc_pop(&p->runnable_list);
             assert(co);
@@ -517,27 +481,20 @@ static void processor_run(void *raw) {
 
             coroutine_resume(p, co);
             handle_limit--;
-
-            if (p->need_stw > 0) {
-                RDEBUGF("[runtime.processor_run] coroutine resume and p need stw, will goto stw, p_index=%d, co=%p",
-                        p->index, co);
-                goto STW_WAIT;
-            }
-
-            if (main_coroutine_exited) {
-                goto EXIT;
-            }
-
             RDEBUGF("[runtime.processor_run] coroutine resume back, p_index=%d, co=%p",
                     p->index, co);
         }
 
-        // - 处理 io 就绪事件(也就是 run 指定时间的 libuv)
-        io_run(p, WAIT_BRIEF_TIME * 1);
+        if (p->runnable_list.count == 0) {
+            // 阻塞运行
+            global_loop_run(1);
+        } else {
+            global_loop_run(0);
+            DEBUGF("runnable_list.count = %ld", p->runnable_list.count);
+        }
     }
 
 EXIT:
-    processor_uv_close(p);
     p->thread_id = 0;
     processor_set_status(p, P_STATUS_EXIT);
 
@@ -601,6 +558,9 @@ void sched_init() {
     mutex_init(&gc_stage_locker, false);
     gc_stage = GC_STAGE_OFF;
     coroutine_count = 0;
+
+    // - 初始化 global libuv
+    global_loop_init();
 
     // - 初始化 global linkco
     mutex_init(&global_linkco_locker, false);
@@ -826,9 +786,7 @@ void coroutine_free(coroutine_t *co) {
  * @param p
  */
 void processor_free(n_processor_t *p) {
-    DEBUGF("[wait_sysmon.processor_free] start p=%p, p_index=%d, loop=%p, share_stack=%p|%p", p, p->index,
-           &p->uv_loop,
-           &p->share_stack, p->share_stack.ptr);
+    DEBUGF("[wait_sysmon.processor_free] start p=%p, p_index=%d, share_stack=%p|%p", p, p->index, &p->share_stack, p->share_stack.ptr);
 
     coroutine_t *co = rt_linked_fixalloc_pop(&p->co_list);
     coroutine_free(co);
@@ -853,7 +811,7 @@ void processor_free(n_processor_t *p) {
                span->spanclass, span->alloc_count);
     }
 
-    RDEBUGF("[wait_sysmon.processor_free] will free uv_loop p_index=%d, loop=%p", p->index, &p->uv_loop);
+    RDEBUGF("[wait_sysmon.processor_free] will free uv_loop p_index=%d", p->index);
     int index = p->index;
 
     RDEBUGF("[wait_sysmon.processor_free] will free processor p_index=%d", index);
@@ -1089,15 +1047,181 @@ void rt_coroutine_await(coroutine_t *target_co) {
     co_set_status(src_co->p, src_co, CO_STATUS_TPLCALL);
 }
 
-void rt_processor_wake(n_processor_t *p) {
-    n_processor_t *current_p = processor_get();
-    if (current_p == p) {
+// global_loop_run 的超时回调函数
+static void global_loop_timeout_cb(uv_timer_t *timer) {
+    // uv_timer_stop(timer);
+    uv_stop(timer->loop);
+    TRACEF("[runtime.global_loop_timeout_cb] timeout triggered, stopping loop");
+}
+
+/**
+ * loop_timeout_ms = 0 表示不阻塞，直接调用 no wait, 1 表示阻塞 1ms, 2ms
+ */
+
+void global_loop_run(int loop_timeout_ms) {
+    int32_t expected = 0;
+
+    if (!atomic_compare_exchange_weak_explicit(&global.loop_owner, &expected, 1, memory_order_acquire, memory_order_relaxed)) {
+        if (loop_timeout_ms > 0) {
+            usleep(1);
+        }
+        return; // 继续处理
+    }
+    if (loop_timeout_ms == 0) {
+        uv_run(&global_loop, UV_RUN_NOWAIT);
+    } else {
+        uv_timer_start(&global.timer, global_loop_timeout_cb, loop_timeout_ms, 0);
+        uv_run(&global_loop, UV_RUN_ONCE);
+    }
+
+    atomic_store_explicit(&global.loop_owner, 0, memory_order_release);
+    TRACEF("[runtime.global_loop_run] released global_loop ownership");
+}
+
+
+static async_handle_t *acquire_async_handle() {
+    pthread_mutex_lock(&global.freelist_lock);
+    if (global.freelist_count > 0) {
+        async_handle_t *node = global.freelist;
+        global.freelist = node->next;
+        node->next = NULL;
+        global.freelist_count--;
+        pthread_mutex_unlock(&global.freelist_lock);
+        return node;
+    }
+
+    pthread_mutex_unlock(&global.freelist_lock);
+    return malloc(sizeof(async_handle_t));
+}
+
+static void release_async_handle(async_handle_t *node) {
+    pthread_mutex_lock(&global.freelist_lock);
+    if (global.freelist_count > ASYNC_HANDLE_FREELIST_MAX) {
+        free(node);
+        pthread_mutex_unlock(&global.freelist_lock);
         return;
     }
 
-    if (p->runnable_list.count != 1) {
+    node->next = global.freelist;
+    global.freelist = node;
+    global.freelist_count++;
+    pthread_mutex_unlock(&global.freelist_lock);
+}
+
+static void init_async_handle_freelist() {
+    for (int i = 0; i < ASYNC_HANDLE_FREELIST_MIN; ++i) {
+        async_handle_t *node = malloc(sizeof(async_handle_t));
+
+        node->next = global.freelist;
+        global.freelist = node;
+        global.freelist_count += 1;
+    }
+}
+
+// global async queue
+void global_loop_init() {
+    uv_loop_init(&global_loop);
+
+    global.async_queue = NULL;
+    pthread_mutex_init(&global.async_lock, NULL);
+    pthread_mutex_init(&global.freelist_lock, NULL);
+
+    // 初始化全局 async handle
+    uv_async_init(&global_loop, &global.async_handle, global_async_queue_process_cb);
+    init_async_handle_freelist();
+
+    uv_async_init(&global_loop, &global.async_weak, global_async_weak_cb);
+    uv_timer_init(&global_loop, &global.timer);
+
+
+    DEBUGF("[runtime.global_loop_init] global async queue initialized");
+}
+
+
+static inline bool global_async_handle_register(coroutine_t *co, void *data) {
+    async_handle_t *handle = data;
+    // 在 waiting 中进行注册以及触发
+    pthread_mutex_lock(&global.async_lock);
+    handle->next = global.async_queue;
+    global.async_queue = handle;
+    pthread_mutex_unlock(&global.async_lock);
+
+    // 触发 libuv async handle
+    uv_async_send(&global.async_handle);
+
+    return true;
+}
+
+void global_waiting_send(void *fn, void *arg1, void *arg2, void *arg3) {
+    assert(fn);
+
+    async_handle_t *handle = acquire_async_handle();
+
+    handle->fn = (async_fn) fn;
+    handle->arg1 = arg1;
+    handle->arg2 = arg2;
+    handle->arg3 = arg3;
+    handle->next = NULL;
+
+    co_yield_waiting(coroutine_get(), global_async_handle_register, handle);
+}
+
+
+void global_async_send(void *fn, void *arg1, void *arg2, void *arg3) {
+    assert(fn);
+
+    // 线程安全地添加到队列
+
+    // 分配 async_handle_t
+    async_handle_t *handle = acquire_async_handle();
+    handle->fn = (async_fn) fn;
+    handle->arg1 = arg1;
+    handle->arg2 = arg2;
+    handle->arg3 = arg3;
+    handle->next = NULL;
+
+
+    pthread_mutex_lock(&global.async_lock);
+    handle->next = global.async_queue;
+    global.async_queue = handle;
+    pthread_mutex_unlock(&global.async_lock);
+
+    // 触发 libuv async handle
+    uv_async_send(&global.async_handle);
+
+    DEBUGF("[runtime.global_async_send] async task pushed, fn=%p, arg=%p", fn, arg);
+}
+
+void global_async_weak_cb(uv_async_t *handle) {
+    // not anything
+}
+
+void global_async_queue_process_cb(uv_async_t *handle) {
+    DEBUGF("[runtime.global_async_queue_process_cb] processing async queue");
+    if (global.async_queue == NULL) {
         return;
     }
 
-    uv_stop(&p->uv_loop);
+    async_handle_t *tasks = NULL;
+
+    // 获取所有待处理任务
+    pthread_mutex_lock(&global.async_lock);
+    tasks = global.async_queue;
+    global.async_queue = NULL;
+    pthread_mutex_unlock(&global.async_lock);
+
+    // 处理所有任务
+    while (tasks != NULL) {
+        async_handle_t *current = tasks;
+        tasks = tasks->next;
+
+        current->fn(current->arg1, current->arg2, current->arg3);
+
+        atomic_fetch_add(&global.async_handle_count, 1);
+
+        // 释放 handle
+        release_async_handle(current);
+    }
+
+    DEBUGF("[runtime.global_async_queue_process_cb] async queue processing completed");
 }

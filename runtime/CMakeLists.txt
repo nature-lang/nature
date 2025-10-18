@@ -32,8 +32,8 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
     message("DEBUGF enabled")
     # runtime debug 标志
     # add_compile_definitions(RUNTIME_DEBUG_LOG)
-    add_compile_definitions(TEST_MODE) # TODO 测试
-    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O3 -fno-omit-frame-pointer")
+    add_compile_definitions(TEST_MODE)
+    set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2 -fno-omit-frame-pointer")
 endif ()
 
 include_directories(mbedtls/include)

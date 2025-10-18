@@ -61,8 +61,8 @@ fn command_t.spawn():ptr<process_t>! {
     var p = self.uv_spawn(self)
 
     // Scheduling in the current thread will not cause competition
-    @async(p.handle_stdout(), co.SAME)
-    @async(p.handle_stderr(), co.SAME)
+    go p.handle_stdout()
+    go p.handle_stderr()
 
     return p
 }

@@ -43,7 +43,10 @@ n_string_t *string_new_with_pool(void *raw_string, int64_t length) {
     DEBUGF("[string_new] success, string=%p, data=%p, len=%ld, ele_size=%ld, raw_str=%s", str, str->data, str->length,
            str->element_size, (char *) raw_string);
 
-    // 小字符串入池
+    // 小字符串入池,避免小字符串频繁分配
+    if (capacity <= 8) {
+        sc_map_put_sv(&const_str_pool, (char *) raw_string, str);
+    }
 
     return str;
 }

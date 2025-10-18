@@ -54,8 +54,8 @@ static inline void rt_linked_fixalloc_push(rt_linked_fixalloc_t *l, void *value)
 
     empty->prev = l->rear;
 
-    l->rear->value = value;
     l->rear->succ = empty;
+    l->rear->value = value;
 
     l->rear = empty;
     l->count++;

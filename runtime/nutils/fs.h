@@ -16,6 +16,8 @@ typedef struct {
 
     uv_fs_t req; // 对同一个文件的所有的操作都共用该 req, 不同文件操作之间通过 fd 进行关联
     uv_buf_t buf;
+    int64_t flags;
+    int64_t mode;
 } fs_context_t;
 
 fs_context_t *rt_uv_fs_open(n_string_t *path, int64_t flags, int64_t mode);

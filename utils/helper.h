@@ -20,6 +20,8 @@
 #include "errno.h"
 #include "log.h"
 
+#define LAMBDA(return_type, body) \
+    ({ return_type __fn__ body __fn__; })
 
 #ifndef O_BINARY
 #define O_BINARY 0

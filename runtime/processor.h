@@ -9,8 +9,53 @@
 #include "nutils/vec.h"
 #include "runtime.h"
 
+#define ASYNC_HANDLE_FREELIST_MAX 1000
+#define ASYNC_HANDLE_FREELIST_MIN 100
+
 #define GC_STW_WAIT_COUNT 25
 #define GC_STW_SWEEP_COUNT (GC_STW_WAIT_COUNT * 2)
+
+typedef void (*async_fn)(void *, void *, void *);
+
+typedef struct async_handle_t {
+    struct async_handle_t *next;
+    void *arg1;
+    void *arg2;
+    void *arg3;
+    async_fn fn;
+} async_handle_t;
+
+typedef struct {
+    async_handle_t *async_queue; // 单向链表
+    pthread_mutex_t async_lock; // 链表 lock
+    _Atomic int32_t loop_owner;
+    uv_timer_t timer;
+
+    uv_async_t async_handle;
+    async_handle_t *freelist; // 空闲的 handle 列表
+    pthread_mutex_t freelist_lock;
+    int freelist_count;
+
+    _Atomic int64_t async_handle_count;
+    uv_async_t async_weak; // 使用 send 快速唤醒
+} global_handle_t;
+
+extern global_handle_t global;
+
+// 全局 async 队列变量
+extern uv_loop_t global_loop; // uv loop 事件循环
+
+extern _Atomic uint64_t race_detector_counter;
+
+void global_loop_run(int loop_timeout_ms);
+
+void global_loop_init();
+
+void global_async_queue_push(async_fn fn, void *arg);
+
+void global_async_queue_process_cb(uv_async_t *handle);
+
+void global_async_weak_cb(uv_async_t *handle);
 
 extern int cpu_count;
 extern n_processor_t *processor_index[1024];
@@ -103,6 +148,15 @@ static inline void co_ready(coroutine_t *co) {
     rt_linked_fixalloc_push(&co->p->runnable_list, co);
 }
 
+//#define co_ready(co)                                          \
+//    {                                                         \
+//        coroutine_t *_co = (coroutine_t *) co;                \
+//        TDEBUGF("[co_ready] ready %p, fn %s", co, __func__);   \
+//        assert(_co->p->status != P_STATUS_EXIT);              \
+//        co_set_status(_co->p, _co, CO_STATUS_RUNNABLE);       \
+//        rt_linked_fixalloc_push(&_co->p->runnable_list, _co); \
+//    }
+
 static inline void co_yield_runnable(n_processor_t *p, coroutine_t *co) {
     DEBUGF("[runtime.co_yield_runnable] start");
     assert(p);
@@ -140,10 +194,27 @@ static inline void co_yield_waiting(coroutine_t *co, unlock_fn unlock_fn, void *
     _co_yield(co->p, co);
 
     // waiting -> syscall
-    co_set_status(co->p, co, CO_STATUS_TPLCALL);
+    co_set_status(co->p, co, CO_STATUS_RUNNING);
     DEBUGF("[runtime.co_yield_waiting] p_index=%d, co=%p, co_status=%d, yield resume", co->p->index, co,
            co->status);
 }
+
+/**
+ * 竞态检测器：使用 CAS 操作检测并发竞争
+ * 如果 CAS 失败，说明其他线程修改了计数器，存在竞争
+ */
+static inline void race_detector_check(const char *func, const char *file, int line) {
+    uint64_t expected = atomic_load(&race_detector_counter);
+    uint64_t desired = expected + 1;
+
+    // 如果 CAS 失败，说明有其他线程在同时修改这个值
+    if (!atomic_compare_exchange_strong(&race_detector_counter, &expected, desired)) {
+        assertf(false, "[RACE DETECTED] at %s() [%s:%d] - expected: %lu, actual: %lu",
+                func, file, line, desired, expected);
+    }
+}
+
+#define RACE() race_detector_check(__func__, __FILE__, __LINE__);
 
 // locker
 void *global_gc_worklist_pop();
@@ -157,17 +228,6 @@ bool processor_all_safe();
 bool processor_all_wait_safe(int max_count);
 
 void wait_all_gc_work_finished();
-
-/**
- * 阻塞特定时间的网络 io 时间, 如果有 io 事件就绪则立即返回
- * uv_run 有三种模式
- * UV_RUN_DEFAULT: 持续阻塞不返回, 可以使用 uv_stop 安全退出
- * UV_RUN_ONCE: 处理至少活跃的 fd 后返回, 如果没有活跃的 fd 则一直阻塞
- * UV_RUN_NOWAIT: 不阻塞, 如果没有事件就绪则立即返回
- * @param timeout_ms
- * @return
- */
-int io_run(n_processor_t *p, uint64_t timeout_ms);
 
 /**
  * runtime_main 会负责调用该方法，该方法读取 cpu 的核心数，然后初始化对应数量的 share_processor
@@ -221,9 +281,11 @@ void *rt_coroutine_arg();
 
 int64_t rt_processor_index();
 
-void rt_processor_wake(n_processor_t *p);
-
 // ------------ libuv 的一些回调 -----------------------
-static void uv_on_timer(uv_timer_t *timer);
+static void sleep_timer_cb(uv_timer_t *timer);
+
+void global_async_send(void *fn, void *arg1, void *arg2, void *arg3);
+
+void global_waiting_send(void *fn, void *arg1, void *arg2, void *arg3);
 
 #endif // NATURE_PROCESSOR_H

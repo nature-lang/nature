@@ -1,18 +1,15 @@
 import net.utils
 import strings
 import io
-import co.types as co_types
+import co.cross
 import net.types
 
 type server_t = struct{
     string ip
     int port
-
-    anyptr server_handle
-    anyptr listen_co
-    co_types.linkco_list_t waiters
-    anyptr accept_list
     bool closed
+
+    anyptr inner
 }
 
 type conn_t:types.connable = struct{

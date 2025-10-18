@@ -284,9 +284,18 @@ static void processor_sysmon() {
     }
 }
 
+static void on_timer_stop_cb(uv_timer_t *timer) {
+    uv_timer_stop(timer);
+
+    uv_stop(&global_loop);
+}
+
 static void wait_sysmon() {
     // 每 50 * 10ms 进行 eval 一次
     int gc_eval_count = WAIT_SHORT_TIME;
+
+    //    uv_timer_t timer;
+    //    uv_timer_init(&global_loop, &timer);
 
     // 循环监控(每 10ms 监控一次)
     while (true) {
@@ -300,8 +309,14 @@ static void wait_sysmon() {
             runtime_eval_gc();
             gc_eval_count = WAIT_SHORT_TIME; // 10 * 10ms = 100ms
         }
+
         gc_eval_count--;
+
         usleep(WAIT_SHORT_TIME * 1000); // 10ms
+
+        // libuv loop with io 10ms
+        //        uv_timer_start(&timer, on_timer_stop_cb, 10, 0); // 只触发一次
+        //        uv_run(&global_loop, UV_RUN_DEFAULT);
     }
 }
 

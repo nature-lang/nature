@@ -24,6 +24,14 @@ typedef struct {
     int min; // 50
     coroutine_t *listen_co;
     void *server;
+    int64_t conn_count;
+    int64_t read_cb_count;
+    int64_t closed_count;
+    int64_t read_alloc_buf_count;
+    int64_t read_error_count;
+    int64_t coroutine_count;
+    int64_t resp_count;
+    int64_t read_start_count; // 记录 uv_read_start 成功的次数
 } inner_http_server_t;
 
 /**
@@ -78,9 +86,10 @@ typedef struct {
 
     // libuv data
     uv_tcp_t handle;
-    uv_async_t async_handle;
+    uv_async_t async_write_handle;
     uv_write_t write_req;
     uv_buf_t write_buf;
+    int64_t create_time;
 } http_conn_t;
 
 void rt_uv_conn_resp(http_conn_t *conn, n_string_t *resp_data);

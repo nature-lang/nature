@@ -8,11 +8,13 @@ fn server():void! {
 
     for true {
         var conn = listener.accept()
-        @async(fn():void! {
+        go fn():void! {
             var buf = vec_new<u8>(0, 1024)
             for true {
                 var len = conn.read(buf) catch e {
-                    println('conn read err:', e.msg())
+                    if e.msg() != 'end of file' {
+                        println('conn read err:', e.msg())
+                    }
                     -1
                 }
                 if len == -1 {
@@ -22,7 +24,7 @@ fn server():void! {
             }
 
             conn.close()
-        }(), co.SAME)
+        }()
     }
 
     listener.close()
@@ -124,7 +126,7 @@ fn main() {
             conn.write(http_request as [u8])
             int len = conn.read(resp_buf)
             conn.close()
-            // println(resp_buf.slice(0, len) as string)
+            // println(resp_buf[0..len] as string)
             done.send(true)
         }(i)
     }
@@ -444,7 +446,7 @@ fn server():void! {
                 if len == -1 {
                     break
                 }
-                conn.write(buf.slice(0, len))
+                conn.write(buf[0..len])
             }
 
             conn.close()

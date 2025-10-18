@@ -13,6 +13,9 @@ fn to_cfn(anyptr closure):anyptr {
     return c.addr
 }
 
+const AF_INET = 2
+const AF_INET6 = 10
+
 #linkid rt_string_new
 fn cstr.to_string():string
 
@@ -1855,17 +1858,25 @@ fn tee(i32 fd_in, i32 fd_out, u64 len, u32 flags):i64
 #linkid std_args
 fn std_args():[string]
 
+// 主机顺序转网络顺序
 #linkid htons
 fn htons(u16 host):u16
 
 #linkid htonl
 fn htonl(u32 host):u32
 
+// 网络顺序转主机顺序
 #linkid ntohs
 fn ntohs(u16 x):u16
 
 #linkid ntohl
 fn ntohl(u32 x):u32
+
+#linkid inet_pton
+fn inet_pton(i32 family, anyptr src_str, anyptr dst_buf):i32
+
+#linkid inet_ntop
+fn inet_ntop(i32 family, anyptr src_buf, anyptr dst_str, i32 len):i32
 
 /*
  * Protections are chosen from these bits, or-ed together

@@ -76,7 +76,7 @@ Establish a TCP connection with specified timeout
 type server_t = struct{
     string ip
     int port
-    anyptr server_handle
+    anyptr handle
     anyptr listen_co
     co_types.linkco_list_t waiters
     anyptr accept_list
