@@ -3,14 +3,35 @@
 #include "processor.h"
 
 static uint8_t calc_sizeclass(uint64_t size) {
-    for (int i = 0; i < SIZECLASS_COUNT; ++i) {
-        uint64_t obj_size = class_obj_size[i];
-        if (size > obj_size) {
-            continue;
+    // 快速路径：精确判断常见大小
+    if (size == 1) return 1; // class 1: 8 bytes
+    if (size == 2) return 2; // class 2: 16 bytes, n_union_t,n_interface_t
+    if (size == 40) return 5; // class 5: 48 bytes, n_string_t/n_vec_t
+    if (size == 56) return 6; // class 6: 64 bytes, n_map_t
+    if (size == 128) return 10; // class 10: 128 bytes, map default space
+
+    // 使用二分搜索优化查找，时间复杂度从 O(n) 降低到 O(log n)
+    int left = 0;
+    int right = SIZECLASS_COUNT - 1;
+
+    while (left <= right) {
+        int mid = left + (right - left) / 2;
+        uint64_t obj_size = class_obj_size[mid];
+
+        if (obj_size >= size) {
+            // 找到可以容纳 size 的 obj_size，但可能还有更小的合适值
+            if (mid == 0 || class_obj_size[mid - 1] < size) {
+                // mid 是最小的能够容纳 size 的 sizeclass
+                return mid;
+            }
+            // 继续在左半部分查找
+            right = mid - 1;
+        } else {
+            // obj_size < size，需要在右半部分查找
+            left = mid + 1;
         }
-        // obj 能够刚好装下 size
-        return i;
     }
+
     assert(false && "notfound fit class");
     return 0;
 }
@@ -118,105 +139,158 @@ static page_chunk_t *take_chunk(addr_t base) {
  * @return
  */
 static page_summary_t chunk_summarize(page_chunk_t chunk) {
-    uint32_t max = 0;
-    uint64_t bit_start = 0;
-    uint64_t bit_end = 0;
-    for (int i = 0; i < CHUNK_BITS_COUNT; ++i) {
-        bool used = bitmap_test((uint8_t *) chunk.blocks, i);
-        if (used) {
-            // 重新开始计算
-            bit_start = i + 1;
-            continue;
-        }
-
-        bit_end = i;
-        if ((bit_end + 1 - bit_start) > max) {
-            max = (bit_end + 1 - bit_start);
-        }
+    // 快速检测：检查是否全部空闲
+    uint64_t combined = 0;
+    for (int i = 0; i < 8; ++i) {
+        combined |= chunk.blocks[i];
     }
 
+    if (combined == 0) {
+        // 全部空闲的快速路径
+        return (page_summary_t) {
+                .start = CHUNK_BITS_COUNT,
+                .max = CHUNK_BITS_COUNT,
+                .end = CHUNK_BITS_COUNT,
+        };
+    }
+
+    // 找到第一个使用的位（start）
     uint16_t start = 0;
-    for (int i = 0; i < CHUNK_BITS_COUNT; ++i) {
-        bool used = bitmap_test((uint8_t *) chunk.blocks, i);
-        if (used) {
+    for (int block_idx = 0; block_idx < 8; ++block_idx) {
+        uint64_t block = chunk.blocks[block_idx];
+        if (block != 0) {
+            // 使用 CTZ (Count Trailing Zeros) 找到第一个 1 的位置
+            start = block_idx * 64 + __builtin_ctzll(block);
             break;
         }
-        start += 1;
     }
 
-    uint16_t end = 0;
-    for (int i = CHUNK_BITS_COUNT - 1; i >= 0; i--) {
-        bool used = bitmap_test((uint8_t *) chunk.blocks, i);
-        if (used) {
+    // 找到最后一个使用的位（用于计算 end）
+    uint16_t last_used_index = 0;
+    for (int block_idx = 7; block_idx >= 0; --block_idx) {
+        uint64_t block = chunk.blocks[block_idx];
+        if (block != 0) {
+            // 使用 CLZ (Count Leading Zeros) 找到最后一个 1 的位置
+            last_used_index = block_idx * 64 + (63 - __builtin_clzll(block));
             break;
         }
-        end += 1;
     }
-    page_summary_t summary = {
+    uint16_t end = CHUNK_BITS_COUNT - 1 - last_used_index;
+
+    // 计算最大连续空闲段（max）
+    uint32_t max = 0;
+    uint32_t current_free = 0;
+
+    for (int block_idx = 0; block_idx < 8; ++block_idx) {
+        uint64_t block = chunk.blocks[block_idx];
+
+        if (block == 0) {
+            // 整个块都是空闲的
+            current_free += 64;
+        } else if (block == UINT64_MAX) {
+            // 整个块都被使用
+            if (current_free > max) {
+                max = current_free;
+            }
+            current_free = 0;
+        } else {
+            // 混合块：使用位操作优化
+            // 逐位扫描，寻找连续的 0（空闲位）
+            for (int bit = 0; bit < 64; ++bit) {
+                if ((block >> bit) & 1) {
+                    // 使用的位
+                    if (current_free > max) {
+                        max = current_free;
+                    }
+                    current_free = 0;
+                } else {
+                    // 空闲的位
+                    current_free++;
+                }
+            }
+        }
+    }
+
+    // 处理最后的连续空闲段
+    if (current_free > max) {
+        max = current_free;
+    }
+
+    return (page_summary_t) {
             .start = start,
             .max = max,
             .end = end,
     };
-
-    return summary;
 }
+
 
 /**
  * 寻找这一组 summaries 中的最大组合值
+ * 性能优化版本：减少分支预测失败，使用循环展开
  * @param next_summaries
  * @return
  */
 static page_summary_t merge_summarize(uint8_t level, page_summary_t next_summaries[PAGE_SUMMARY_MERGE_COUNT]) {
     uint64_t max_pages_count = summary_page_count[level + 1]; // level + 1 = next level
 
-    // max 算法参考 find 算法
+    // max 算法优化：减少条件分支，使用位运算和算术运算替代部分分支
     uint32_t max = 0;
     uint64_t continue_max = 0;
-    for (int i = 0; i < PAGE_SUMMARY_MERGE_COUNT; ++i) {
-        page_summary_t s = next_summaries[i];
-        continue_max += s.start;
 
-        if (s.max > continue_max) {
-            continue_max = s.max;
-        }
-        if (continue_max > max) {
-            max = continue_max;
-        }
+    // 循环展开优化 (8个元素，每次处理2个)
+    for (int i = 0; i < PAGE_SUMMARY_MERGE_COUNT; i += 2) {
+        // 处理第 i 个元素
+        page_summary_t s0 = next_summaries[i];
+        continue_max += s0.start;
 
-        // s.end 不等于完整 max_pages_count, 就说明 s.start 此时和 max 之间不是连续的，所以对 continue_max 进行中断
-        if (s.end != max_pages_count) {
-            continue_max = s.end;
-        }
+        // 使用条件移动减少分支预测失败
+        continue_max = (s0.max > continue_max) ? s0.max : continue_max;
+        max = (continue_max > max) ? continue_max : max;
+
+        // 如果 s.end != max_pages_count，更新 continue_max
+        // 使用算术运算减少分支
+        uint64_t is_not_full = (s0.end != max_pages_count);
+        continue_max = is_not_full ? s0.end : continue_max;
+
+        // 处理第 i+1 个元素
+        page_summary_t s1 = next_summaries[i + 1];
+        continue_max += s1.start;
+
+        continue_max = (s1.max > continue_max) ? s1.max : continue_max;
+        max = (continue_max > max) ? continue_max : max;
+
+        is_not_full = (s1.end != max_pages_count);
+        continue_max = is_not_full ? s1.end : continue_max;
     }
 
-    // 找 start
+    // 找 start - 优化：提前终止
     uint16_t start = 0;
     for (int i = 0; i < PAGE_SUMMARY_MERGE_COUNT; ++i) {
-        page_summary_t s = next_summaries[i];
-        start += s.start;
-        if (s.start == max_pages_count) {
-            continue;
+        uint16_t s_start = next_summaries[i].start;
+        start += s_start;
+        // 如果不等于 max_pages_count，直接跳出
+        if (s_start != max_pages_count) {
+            break;
         }
-        break;
     }
 
-    // 找 end
+    // 找 end - 优化：提前终止，从后向前遍历
     uint16_t end = 0;
     for (int i = PAGE_SUMMARY_MERGE_COUNT - 1; i >= 0; --i) {
-        page_summary_t s = next_summaries[i];
-        end += s.end;
-        if (s.end == max_pages_count) {
-            continue;
+        uint16_t s_end = next_summaries[i].end;
+        end += s_end;
+        // 如果不等于 max_pages_count，直接跳出
+        if (s_end != max_pages_count) {
+            break;
         }
-        break;
     }
 
     uint64_t current_level_max_page_count = summary_page_count[level];
     assert(start <= current_level_max_page_count);
     assert(max <= current_level_max_page_count);
     assert(end <= current_level_max_page_count);
-    page_summary_t summary = {.start = start, .max = max, .end = end};
 
+    page_summary_t summary = {.start = start, .max = max, .end = end};
     return summary;
 }
 
@@ -258,13 +332,15 @@ static void page_summary_update(addr_t base, uint64_t size) {
 
     // 维护 chunks summary 数据
     for (uint64_t index = lowest_base_index; index <= lowest_end_index; index++) {
-        // 计算 l1 可能为 null
-        page_chunk_t *l1_chunks = page_alloc->chunks[chunk_index_l1(index)];
+        uint64_t l1 = index / PAGE_ALLOC_CHUNK_SPLIT;
+        uint64_t l2 = index % PAGE_ALLOC_CHUNK_SPLIT;
+
+        page_chunk_t *l1_chunks = page_alloc->chunks[l1];
         assert(l1_chunks && "chunks is null");
 
-        page_chunk_t chunk = l1_chunks[chunk_index_l2(index)];
+        page_chunk_t chunk = l1_chunks[l2];
 
-        // 计算每个 chunk 的  summary
+        // 计算每个 chunk 的 summary
         lowest_summaries[index] = chunk_summarize(chunk);
     }
 
@@ -273,28 +349,39 @@ static void page_summary_update(addr_t base, uint64_t size) {
 
     // update l4 ~ l1 summary
     for (int8_t level = PAGE_SUMMARY_LEVEL - 2; level >= 0; level--) {
-        // - 计算 addr 在当前层的 index,例如在 l4 中，
-        // base_index <= ~ < end_index 之间的所有索引都需要被重新计算
-        uint64_t base_index = calc_page_summary_level_index(level, lowest_base_index);
-        uint64_t end_index = calc_page_summary_level_index(level, lowest_end_index);
+        uint64_t base_index, end_index;
+        switch (level) {
+            case 0:
+                base_index = lowest_base_index / 4096;
+                end_index = lowest_end_index / 4096;
+                break;
+            case 1:
+                base_index = lowest_base_index / 512;
+                end_index = lowest_end_index / 512;
+                break;
+            case 2:
+                base_index = lowest_base_index / 64;
+                end_index = lowest_end_index / 64;
+                break;
+            case 3:
+                base_index = lowest_base_index / 8;
+                end_index = lowest_end_index / 8;
+                break;
+            default:
+                assert(false);
+        }
 
         page_summary_t *current_summaries = page_alloc->summary[level];
         page_summary_t *next_level_summaries = page_alloc->summary[level + 1];
 
         for (uint64_t i = base_index; i <= end_index; ++i) {
+            // 优化：直接使用指针操作，避免数组复制和临时变量
             // 基于下一级别的 8 个 block, merge 出新的 summary 并赋值
             uint64_t next_summary_start = i * 8;
-            uint64_t next_summary_end = next_summary_start + 8; // 8个一组
-            page_summary_t temp_summaries[PAGE_SUMMARY_MERGE_COUNT] = {0};
-            uint8_t temp_index = 0;
-            for (uint64_t j = next_summary_start; j < next_summary_end; j++) {
-                page_summary_t temp = next_level_summaries[j];
-                temp_summaries[temp_index] = temp;
-                temp_index += 1;
-            }
 
-            // calc summary
-            current_summaries[i] = merge_summarize(level, temp_summaries);
+            // 优化：直接传递指针，避免临时数组和循环复制
+            // merge_summarize 可以直接访问 next_level_summaries[next_summary_start] 开始的 8 个元素
+            current_summaries[i] = merge_summarize(level, &next_level_summaries[next_summary_start]);
         }
     }
 }
@@ -308,11 +395,15 @@ static void page_summary_update(addr_t base, uint64_t size) {
 static void chunks_set(addr_t base, uint64_t size, uint8_t value) {
     page_alloc_t *page_alloc = &memory->mheap->page_alloc;
     uint64_t end = base + size; // 假如 base = 0， size = 3, 那么申请的空间是 [0~1), [1~2), [2~3), 其中 3 是应该不属于当前空间
-    for (uint64_t index = chunk_index(base); index <= chunk_index(end - 1); index++) {
+    uint64_t start_chunk_index = chunk_index(base);
+    uint64_t end_chunk_index = chunk_index(end - 1);
+
+    for (uint64_t index = start_chunk_index; index <= end_chunk_index; index++) {
         // 计算 chunk
         page_chunk_t *chunk = &page_alloc->chunks[chunk_index_l1(index)][chunk_index_l2(index)];
         uint64_t temp_base = chunk_base(index);
         uint64_t bit_start = 0;
+
         // temp_base 是 chunk 的起始地址
         // base 是内存的申请位置， base - temp_base / PAGE_SIZE 可以判断出当前 base 是从 chunk 的哪一部分开始申请的
         if (temp_base < base) {
@@ -324,16 +415,17 @@ static void chunks_set(addr_t base, uint64_t size, uint8_t value) {
             bit_end = CHUNK_BITS_COUNT - 1;
         }
 
-        DEBUGF("[runtime.chunks_set] chunk index: %lu, chunk block base: %p, bit_start: %lu, bit_end: %lu", index,
-                (void *) chunk->blocks,
-                bit_start, bit_end);
+        // 计算需要设置的位数量
+        uint64_t bit_count = bit_end - bit_start + 1;
 
-        for (uint64_t i = bit_start; i <= bit_end; ++i) {
-            if (value == 1) {
-                bitmap_set((uint8_t *) chunk->blocks, i);
-            } else {
-                bitmap_clear((uint8_t *) chunk->blocks, i);
-            };
+        DEBUGF("[runtime.chunks_set] chunk index: %lu, chunk block base: %p, bit_start: %lu, bit_end: %lu, bit_count: %lu",
+               index, (void *) chunk->blocks, bit_start, bit_end, bit_count);
+
+        // 使用批量操作替代逐位设置，性能提升显著
+        if (value == 1) {
+            bitmap_batch_set((uint8_t *) chunk->blocks, bit_start, bit_count);
+        } else {
+            bitmap_batch_clear((uint8_t *) chunk->blocks, bit_start, bit_count);
         }
     }
 
@@ -421,21 +513,57 @@ uint64_t page_alloc_find(uint64_t pages_count, bool must_find) {
     addr_t find_addr = 0;
     if (start == end) {
         // 从头到尾遍历找到可能的起点位置
-        uint64_t bit_start = 0;
-        uint64_t bit_end = 0;
-        // 一个 chunk 有 512 bit
+        // 一个 chunk 有 512 bit，使用块扫描优化
         page_chunk_t *chunk = take_chunk(start);
-        for (int i = 0; i < CHUNK_BITS_COUNT; i++) {
-            bool used = bitmap_test((uint8_t *) chunk->blocks, i);
-            if (used) {
-                bit_start = i + 1;
-                continue;
-            }
+        uint64_t bit_start = 0;
+        uint64_t current_free_start = 0;
+        uint64_t current_free_count = 0;
+        bool found = false;
 
-            bit_end = i;
-            // 1, 1
-            if ((bit_end + 1 - bit_start) >= pages_count) {
-                break;
+        // 按 64 位块扫描，使用位操作加速
+        for (int block_idx = 0; block_idx < 8; ++block_idx) {
+            uint64_t block = chunk->blocks[block_idx];
+            int base_bit = block_idx * 64;
+
+            if (block == 0) {
+                // 整个块都是空闲的
+                if (current_free_count == 0) {
+                    current_free_start = base_bit;
+                }
+                current_free_count += 64;
+
+                if (current_free_count >= pages_count) {
+                    bit_start = current_free_start;
+                    found = true;
+                    break;
+                }
+            } else if (block == UINT64_MAX) {
+                // 整个块都被使用，重置计数
+                current_free_count = 0;
+            } else {
+                // 混合块，逐位扫描
+                for (int bit = 0; bit < 64; ++bit) {
+                    if ((block >> bit) & 1) {
+                        // 位被使用
+                        current_free_count = 0;
+                    } else {
+                        // 位空闲
+                        if (current_free_count == 0) {
+                            current_free_start = base_bit + bit;
+                        }
+                        current_free_count++;
+
+                        if (current_free_count >= pages_count) {
+                            bit_start = current_free_start;
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (found) {
+                    break;
+                }
             }
         }
 
@@ -443,8 +571,8 @@ uint64_t page_alloc_find(uint64_t pages_count, bool must_find) {
         find_addr = chunk_base(start) + bit_start * ALLOC_PAGE_SIZE;
 
         DEBUGF(
-                "[runtime.page_alloc_find] find addr=%p, start == end, start: %lu, chunk_base: %p, bit start: %lu, bit end: %lu",
-                (void *) find_addr, start, chunk->blocks, bit_start, bit_end);
+                "[runtime.page_alloc_find] find addr=%p, start == end, start: %lu, chunk_base: %p, bit start: %lu, found: %d",
+                (void *) find_addr, start, chunk->blocks, bit_start, found);
 
         // 更新从 find_addr 对应的 bit ~ page_count 位置的所有 chunk 的 bit 为 1
     } else {
@@ -694,8 +822,8 @@ static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
 
 static void mcentral_grow(mcentral_t *mcentral) {
     DEBUGF("[runtime.mcentral_grow] spc=%d, szc=%d, need pages_count=%lu", mcentral->spanclass,
-            take_sizeclass(mcentral->spanclass),
-            take_pages_count(mcentral->spanclass));
+           take_sizeclass(mcentral->spanclass),
+           take_pages_count(mcentral->spanclass));
 
     // 从 mheap 中按 page 申请一段内存, mspan 对 mheap 是已知的， mheap 同样需要管理 mspan 列表
     uint64_t pages_count = take_pages_count(mcentral->spanclass);
@@ -734,14 +862,14 @@ static mspan_t *cache_span(mcentral_t *mcentral) {
     RT_LIST_POP_HEAD(mcentral->partial_list, &span);
 HAVE_SPAN:
     DEBUGF("[cache_span] span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span, (void *) span->base,
-            span->spanclass,
-            span->obj_count, span->alloc_count);
+           span->spanclass,
+           span->obj_count, span->alloc_count);
 
     assert(span && span->obj_count - span->alloc_count > 0 && "span unavailable");
     mutex_unlock(&mcentral->locker);
     DEBUGF("[cache_span] success, unlocked mcentral=%p, span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu",
-            mcentral, span,
-            (void *) span->base, span->spanclass, span->obj_count, span->alloc_count);
+           mcentral, span,
+           (void *) span->base, span->spanclass, span->obj_count, span->alloc_count);
     return span;
 }
 
@@ -766,8 +894,8 @@ void uncache_span(mcentral_t *mcentral, mspan_t *span) {
 
     mutex_unlock(&mcentral->locker);
     DEBUGF("[runtime.uncache_span] success mcentral=%p, span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu",
-            mcentral, span,
-            (void *) span->base, span->spanclass, span->obj_count, span->alloc_count);
+           mcentral, span,
+           (void *) span->base, span->spanclass, span->obj_count, span->alloc_count);
 }
 
 /**
@@ -794,8 +922,8 @@ static mspan_t *mcache_refill(mcache_t *mcache, uint64_t spanclass) {
     mspan = cache_span(mcentral);
     mcache->alloc[spanclass] = mspan;
     DEBUGF("[mcache_refill] mcentral=%p, spanclass=%lu|%d, mspan_base=%p - %p, obj_size=%lu, alloc_count=%lu",
-            mcentral, spanclass,
-            mspan->spanclass, (void *) mspan->base, (void *) mspan->end, mspan->obj_size, mspan->alloc_count);
+           mcentral, spanclass,
+           mspan->spanclass, (void *) mspan->base, (void *) mspan->end, mspan->obj_size, mspan->alloc_count);
 
     return mspan;
 }
@@ -814,8 +942,8 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
 
     if (mspan) {
         DEBUGF("[mcache_alloc] p_index=%d, span=%p, alloc_count=%lu, obj_count=%lu", p->index, mspan,
-                mspan->alloc_count,
-                mspan->obj_count);
+               mspan->alloc_count,
+               mspan->obj_count);
     } else {
         DEBUGF("[mcache_alloc] mspan is null");
     }
@@ -829,7 +957,6 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
 
     *span = mspan;
 
-    mutex_lock(&mspan->alloc_locker);
     int used_count = 0;
     for (uint64_t i = mspan->free_index; i < mspan->obj_count; i++) {
         bool used = bitmap_test(mspan->alloc_bits, i);
@@ -848,38 +975,55 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
         mspan->alloc_count += 1;
         used_count += 1;
 
-        mutex_unlock(&mspan->alloc_locker);
+        // 只有 GC 后回收的 span 才需要清零
+        if (mspan->needzero) {
+            DEBUGF("[runtime.mcache_alloc] p_index=%d, addr=%p need zero, obj_size=%lu", p->index, (void *) addr, mspan->obj_size);
+            memset((void *) addr, 0, mspan->obj_size);
+            
+            // 优化：如果整个 span 都分配完了，清除 needzero 标记
+            if (mspan->alloc_count == mspan->obj_count) {
+                mspan->needzero = 0;
+            }
+        }
+
         DEBUGF("[runtime.mcache_alloc] p_index=%d, find can use addr=%p", p->index, (void *) addr);
         return addr;
     }
 
     assert(used_count == mspan->alloc_count);
-    mutex_unlock(&mspan->alloc_locker);
 
     assert(false && "out of memory: mcache_alloc");
     return 0;
 }
 
+/**
+ * 1. 提前计算 arena 边界，减少条件判断
+ * 2. 优化 arena 切换逻辑
+ * 3. 使用指针算术减少数组索引开销
+ */
 static inline void heap_arena_bits_batch_handle(addr_t start, addr_t end, bool is_clear) {
-    if (start == end) {
+    if (start >= end) {
         return;
     }
 
+    arena_t **arenas = memory->mheap->arenas;
+
     while (start < end) {
-        addr_t temp_end = end;
-        arena_t *arena = memory->mheap->arenas[arena_index(start)];
-        arena_t *end_arena = memory->mheap->arenas[arena_index(temp_end)];
-        if (arena != end_arena) {
-            temp_end = (arena->base + ARENA_SIZE);
-        }
+        uint64_t current_arena_idx = arena_index(start);
+        arena_t *arena = arenas[current_arena_idx];
+        addr_t arena_end = arena->base + ARENA_SIZE;
 
-        // 1 个 ptr 需要 2 个bit 标记
-        // uint64_t ptr_count = (temp_end - start) / POINTER_SIZE;
-        uint64_t index_start = arena_bits_index(arena, start); // 65523
-        uint64_t index_end = arena_bits_index(arena, temp_end); // 65524
-        uint64_t index_count = (index_end - index_start);
+        addr_t temp_end = (arena_end < end) ? arena_end : end;
 
-        // batch clear
+        // arena_bits_index 内联展开
+        uint64_t start_ptr_count = (start - arena->base) >> 3;
+        uint64_t end_ptr_count = (temp_end - arena->base) >> 3;
+
+        uint64_t index_start = ((start_ptr_count & ~3ULL) << 1) + (start_ptr_count & 3ULL);
+        uint64_t index_end = ((end_ptr_count & ~3ULL) << 1) + (end_ptr_count & 3ULL);
+        uint64_t index_count = index_end - index_start;
+
+        // 批量操作
         if (is_clear) {
             bitmap_batch_clear(arena->bits, index_start, index_count);
         } else {
@@ -1024,9 +1168,13 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
     assert(span->obj_count == 1);
     bitmap_set(span->alloc_bits, 0);
     span->alloc_count += 1;
+    
+    if (span->needzero) {
+        memset((void *)span->base, 0, span->obj_size);
+        span->needzero = 0;
+    }
 
     atomic_fetch_add(&allocated_bytes, size);
-    //    allocated_bytes += size;
 
     char *debug_kind = "";
     if (rtype) {
@@ -1220,7 +1368,7 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
     //    TDEBUGF("[rti_gc_malloc] end p_index=%d, co=%p, result=%p, size=%d, hash=%d",
     //           p->index, coroutine_get(), ptr, size, rtype ? rtype->hash : 0);
 
-    memset(ptr, 0, size);
+    // memset(ptr, 0, size);
 
     //    TDEBUGF("[rti_gc_malloc] end success, ptr=%p, size=%lu, use time: %lu, rtype: %p, has_ptr: %d", ptr, size, uv_hrtime() - start,
     //           rtype, rtype != NULL && rtype->last_ptr > 0);
@@ -1263,6 +1411,8 @@ mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     // assert(bitmap_empty(span->alloc_bits, span->obj_count));
 
     span->gcmark_bits = gcbits_new(span->obj_count);
+    
+    span->needzero = 0;
 
     DEBUGF("[mspan_new] success, base=%lx, pages_count=%lu, spc=%d, szc=%d, obj_size=%lu, obj_count=%lu", span->base,
            span->pages_count,
