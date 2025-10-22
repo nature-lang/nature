@@ -91,7 +91,7 @@ static inline void on_conn_close_cb(uv_handle_t *handle) {
         uv_close((uv_handle_t *) &conn->async_write_handle, on_async_conn_close_cb);
     } else {
         assert(false);
-        TDEBUGF("[on_conn_close_cb] close failed, async_write_handle not active")
+        DEBUGF("[on_conn_close_cb] close failed, async_write_handle not active")
     }
 }
 
@@ -103,7 +103,7 @@ static inline void on_write_end_cb(uv_write_t *write_req, int status) {
     if (status < 0) {
         // 对端可能已经关闭了连接,导致写入失败等情况
         char *msg = tlsprintf("uv_write failed: %s", uv_strerror(status));
-        TDEBUGF("[on_write_end_cb] %s", msg);
+        DEBUGF("[on_write_end_cb] %s", msg);
     }
 
     http_conn_t *conn = CONTAINER_OF(write_req, http_conn_t, write_req);
@@ -149,7 +149,7 @@ static inline void async_conn_write_handle_cb(uv_async_t *handle) {
 
     int result = uv_write(&conn->write_req, (uv_stream_t *) &conn->handle, &conn->write_buf, 1, on_write_end_cb);
     if (result) {
-        TDEBUGF("[async_conn_write_handle_cb] uv_write have err %s, is_closing %d", uv_strerror(result), uv_is_closing((uv_handle_t *) &conn->handle));
+        DEBUGF("[async_conn_write_handle_cb] uv_write have err %s, is_closing %d", uv_strerror(result), uv_is_closing((uv_handle_t *) &conn->handle));
         if (!uv_is_closing((uv_handle_t *) &conn->handle)) {
             uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
         }
@@ -179,14 +179,14 @@ static inline void on_read_cb(uv_stream_t *handle, ssize_t nread, const uv_buf_t
 
     enum llhttp_errno err = llhttp_execute(&conn->parser, buf->base, nread);
     if (err != HPE_OK) {
-        TDEBUGF("[on_read_cb] llhttp_execute failed: %s", llhttp_errno_name(err));
+        DEBUGF("[on_read_cb] llhttp_execute failed: %s", llhttp_errno_name(err));
         // 解析错误
         uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
         return;
     }
     conn->read_buf_len += nread;
     if (!conn->parser_completed) { // 未完整读取
-        TDEBUGF("[on_read_cb] parser not completed yet");
+        DEBUGF("[on_read_cb] parser not completed yet");
         return;
     }
 
@@ -282,7 +282,7 @@ static void on_http_conn_cb(uv_stream_t *server, int status) {
     DEBUGF("[on_http_conn_cb] status: %d", status);
     inner_http_server_t *inner = CONTAINER_OF(server, inner_http_server_t, handle);
     if (status < 0) {
-        TDEBUGF("[on_http_conn_cb] new connection error: %s", uv_strerror(status));
+        DEBUGF("[on_http_conn_cb] new connection error: %s", uv_strerror(status));
         return;
     }
 
@@ -305,7 +305,7 @@ static void on_http_conn_cb(uv_stream_t *server, int status) {
     uv_tcp_init(&global_loop, &conn->handle);
     int result = uv_accept(server, (uv_stream_t *) &conn->handle);
     if (result) {
-        TDEBUGF("[on_http_conn_cb] uv_accept failed: %s", uv_strerror(result));
+        DEBUGF("[on_http_conn_cb] uv_accept failed: %s", uv_strerror(result));
         uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
         return;
     }
@@ -315,7 +315,7 @@ static void on_http_conn_cb(uv_stream_t *server, int status) {
     conn->handle.data = listen_co;
     result = uv_read_start((uv_stream_t *) &conn->handle, http_alloc_buffer_cb, on_read_cb);
     if (result) {
-        TDEBUGF("[on_http_conn_cb] uv_read_start failed: %s", uv_strerror(result));
+        DEBUGF("[on_http_conn_cb] uv_read_start failed: %s", uv_strerror(result));
         uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
         return;
     }
@@ -345,7 +345,7 @@ void test_timer_dump_count_cb(uv_timer_t *timer) {
     int64_t pending_close = inner->read_cb_count - inner->closed_count;
     int64_t leaked = inner->conn_count - inner->closed_count;
 
-    TDEBUGF("[app_metrics] conn=%ld, read_start=%ld, alloc_cb=%ld, read_cb=%ld, read_error=%ld, "
+    DEBUGF("[app_metrics] conn=%ld, read_start=%ld, alloc_cb=%ld, read_cb=%ld, read_error=%ld, "
             "resp=%ld, closed=%ld, "
             "pending_read=%ld, pending_close=%ld, leaked=%ld",
             inner->conn_count, inner->read_start_count, inner->read_alloc_buf_count, inner->read_cb_count, inner->read_error_count,

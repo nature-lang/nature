@@ -170,7 +170,7 @@ typedef struct mspan_t {
     addr_t base; // mspan 在 arena 中的起始位置
     addr_t end;
     uint8_t spanclass; // spanclass index (基于 sizeclass 通过 table 可以确定 page 的数量和 span 的数量)
-    uint8_t needzero; // 1=需要清零(GC后有脏数据), 0=不需要清零(新分配或已清零)
+    uint8_t needzero; // 1 = 需要清零(GC后有脏数据), 0 = 不需要清零(新分配或已清零)
 
     uint64_t pages_count; // page 的数量，通常可以通过 sizeclass 确定，但是如果 spanclass = 0 时，表示大型内存，其 pages
     // 是不固定的

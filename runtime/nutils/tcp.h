@@ -454,6 +454,7 @@ void rt_uv_tcp_listen(n_tcp_server_t *server) {
 
     server->inner = mallocz(sizeof(inner_server_t));
 
+    pthread_mutex_init(&server->inner->accept_locker, NULL);
     co->data = server;
     server->inner->listen_co = co;
 
