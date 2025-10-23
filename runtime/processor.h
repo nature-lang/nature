@@ -143,7 +143,9 @@ static inline void _co_yield(n_processor_t *p, coroutine_t *co) {
 }
 
 static inline void co_ready(coroutine_t *co) {
-    assert(co->p->status != P_STATUS_EXIT);
+    if (co->p->status == P_STATUS_EXIT) {
+        return;
+    }
     co_set_status(co->p, co, CO_STATUS_RUNNABLE);
     rt_linked_fixalloc_push(&co->p->runnable_list, co);
 }
