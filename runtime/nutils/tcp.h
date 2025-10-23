@@ -196,7 +196,7 @@ static inline void tcp_alloc_buffer_cb(uv_handle_t *handle, size_t suggested_siz
 
 void uv_async_tcp_read(inner_conn_t *conn, n_vec_t *buf) {
     int result = uv_read_start((uv_stream_t *) &conn->handle, tcp_alloc_buffer_cb, on_tcp_read_cb);
-    if (result) {
+    if (result < 0) {
         rti_co_throw(conn->co, tlsprintf("tcp read failed: %s", uv_strerror(result)), false);
         co_ready(conn->co);
         return;
@@ -236,7 +236,7 @@ static void uv_async_tcp_write(inner_conn_t *conn, n_vec_t *buf) {
     conn->write_req.data = conn;
 
     int result = uv_write(&conn->write_req, (uv_stream_t *) &conn->handle, &write_buf, 1, on_tcp_write_end_cb);
-    if (result) {
+    if (result < 0) {
         rti_co_throw(conn->co, tlsprintf("tcp write failed: %s", uv_strerror(result)), false);
         DEBUGF("[rt_uv_tcp_write] co=%p, tcp write failed: %s", conn->co, uv_strerror(result));
         co_ready(conn->co);
@@ -263,7 +263,7 @@ int64_t rt_uv_tcp_write(n_tcp_conn_t *n_conn, n_vec_t *buf) {
 }
 
 static inline void on_tcp_connect_cb(uv_connect_t *conn_req, int status) {
-    DEBUGF("[on_tcp_connect_cb] start")
+    DEBUGF("[on_tcp_connect_cb] start, status %d", status)
     inner_conn_t *conn = CONTAINER_OF(conn_req, inner_conn_t, conn_req);
 
     if (conn->timeout) {
@@ -391,8 +391,10 @@ void on_tcp_conn_cb(uv_stream_t *handle, int status) {
     uv_tcp_init(handle->loop, &conn->handle);
 
     int result = uv_accept((uv_stream_t *) &inner_server->handle, (uv_stream_t *) &conn->handle);
-    if (result) {
+    if (result < 0) {
         uv_close((uv_handle_t *) &conn->handle, NULL);
+        release_conn(inner_server, conn);
+        return;
     } else {
         pthread_mutex_lock(&inner_server->accept_locker);
         // push to head

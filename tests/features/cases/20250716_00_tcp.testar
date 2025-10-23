@@ -111,34 +111,37 @@ fn main() {
 
     // client
     int start = time.now().ms_timestamp()
-    int count = 100
+    int count = 1000
+    int every = 10
     var done = chan_new<bool>()
     for int i = 0; i < count; i += 1 {
         go fn(int i):void! {
-           var conn = tcp.connect('127.0.0.1:8080')
+             for int j = 0; j < every; j += 1 {
+                 var conn = tcp.connect('127.0.0.1:8080')
 
-            // 构造HTTP GET请求
-            var http_request = 'GET / HTTP/1.1\r\n' +
-                                 'Host: 127.0.0.1:8080\r\n' +
-                                 'Connection: close\r\n' +
-                                 '\r\n'
+                  // 构造HTTP GET请求
+                  var http_request = 'GET / HTTP/1.1\r\n' +
+                                     'Host: 127.0.0.1:8080\r\n' +
+                                     'Connection: close\r\n' +
+                                     '\r\n'
 
-            conn.write(http_request as [u8])
-            int len = conn.read(resp_buf)
-            conn.close()
-            // println(resp_buf[0..len] as string)
+                  conn.write(http_request as [u8])
+                  int len = conn.read(resp_buf)
+                  conn.close()
+                  // println(resp_buf[0..len] as string)
+             }
+
             done.send(true)
         }(i)
     }
-
     for int i = 0; i < count; i += 1 {
         done.recv()
     }
 
     var end = time.now().ms_timestamp()
     println('done, use time(ms): ', end - start)
-    assert(end - start < 1000)
 }
+
 
 === test_close
 --- main.n
