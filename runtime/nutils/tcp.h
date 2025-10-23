@@ -4,11 +4,7 @@
 #include "runtime/processor.h"
 #include <uv.h>
 
-#ifdef __LINUX
 #define DEFAULT_BACKLOG 4096
-#else
-#define DEFAULT_BACKLOG SOMAXCONN
-#endif
 
 #define FREELIST_MAX 10000
 #define FREELIST_MIN 1000
