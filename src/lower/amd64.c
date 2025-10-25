@@ -232,8 +232,10 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
         lir_operand_t *ah_operand = operand_new(LIR_OPERAND_REG, ah);
         linked_push(list, lir_op_move(al_operand, op->first));
 
+        lir_operand_t *dividend_operand = lir_regs_operand(2, al_operand->value, ah_operand->value);
+
         // 执行8位除法，被除数在AX，除数是8位操作数
-        linked_push(list, lir_op_new(op_code, al_operand, op->second, al_operand));
+        linked_push(list, lir_op_new(op_code, dividend_operand, op->second, al_operand));
 
         // 根据操作类型选择结果寄存器
         lir_operand_t *result_operand;
@@ -270,8 +272,11 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
             result_operand = dx_operand; // 余数
         }
 
+
+        lir_operand_t *dividend_operand = lir_regs_operand(2, ax_operand->value, dx_operand->value);
+
         // 执行除法
-        linked_push(list, lir_op_new(op_code, ax_operand, op->second, result_operand));
+        linked_push(list, lir_op_new(op_code, dividend_operand, op->second, result_operand));
         linked_push(list, lir_op_move(op->output, result_operand));
     }
 
