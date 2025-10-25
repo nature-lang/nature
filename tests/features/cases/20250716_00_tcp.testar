@@ -117,7 +117,9 @@ fn main() {
     for int i = 0; i < count; i += 1 {
         go fn(int i):void! {
              for int j = 0; j < every; j += 1 {
-                 var conn = tcp.connect('127.0.0.1:8080')
+                 var conn = tcp.connect('127.0.0.1:8080') catch e {
+                    continue
+                 }
 
                   // 构造HTTP GET请求
                   var http_request = 'GET / HTTP/1.1\r\n' +
