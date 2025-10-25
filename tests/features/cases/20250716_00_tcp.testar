@@ -126,7 +126,7 @@ fn main() {
                                      '\r\n'
 
                   conn.write(http_request as [u8])
-                  int len = conn.read(resp_buf)
+                  int len = conn.read(resp_buf) catch e {}
                   conn.close()
                   // println(resp_buf[0..len] as string)
              }
