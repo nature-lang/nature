@@ -62,7 +62,7 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
 
             if (imm->kind == TYPE_RAW_STRING) {
                 assert(imm->string_value);
-                symbol->size = strlen(imm->string_value) + 1;
+                symbol->size = imm->strlen + 1;
                 symbol->value = (uint8_t *) imm->string_value;
             } else if (imm->kind == TYPE_FLOAT64) {
                 symbol->size = type_kind_sizeof(imm->kind);
@@ -80,8 +80,10 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
             symbol_var->ident = unique_name;
 
             if (imm->kind == TYPE_RAW_STRING) {
+                symbol_table_set_raw_string(c->module, unique_name, type_kind_new(TYPE_RAW_STRING), imm->strlen);
+
                 // raw_string 本身就是指针类型, 首次加载时需要通过 lea 将 .data 到 raw_string 的起始地址加载到 var_operand
-                lir_operand_t *var_operand = temp_var_operand_with_alloc(c->module, type_kind_new(TYPE_RAW_STRING));
+                lir_operand_t *var_operand = temp_var_operand(c->module, type_kind_new(TYPE_RAW_STRING));
                 lir_op_t *temp_ref = lir_op_lea(var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var));
                 linked_push(list, temp_ref);
 

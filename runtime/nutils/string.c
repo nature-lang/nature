@@ -5,6 +5,52 @@
 #include "array.h"
 #include "vec.h"
 
+// string copy to vec
+// vec copy to string
+n_vec_t *string_to_vec(n_string_t *src) {
+    return string_new(src->data, src->length);
+}
+
+n_string_t *vec_to_string(n_vec_t *vec) {
+    return string_new_with_pool(vec->data, vec->length);
+}
+
+n_string_t *string_new_with_pool(void *raw_string, int64_t length) {
+    TRACEF("[string_new] raw_string=%s, length=%lu, ptr=%p", (char *) raw_string, length, raw_string);
+
+    n_string_t *str;
+
+    // check const
+    str = sc_map_get_sv(&const_str_pool, (char *) raw_string);
+    if (str && str->length == length) {
+        return str;
+    }
+    DEBUGF("[string_new_with_pool] not match, raw %s, length %ld, map get %s", (char *) raw_string, length, str ? (char *) str->data : "-");
+
+    // byte 数组，先手动创建一个简单类型
+    int64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
+
+    n_array_t *data = rti_array_new(&string_element_rtype, capacity);
+
+    str = rti_gc_malloc(string_rtype.heap_size, &string_rtype);
+    str->data = data;
+    str->length = length;
+    str->capacity = capacity;
+    str->element_size = (&string_element_rtype)->stack_size;
+    str->hash = string_rtype.hash;
+    memmove(str->data, raw_string, length);
+
+    DEBUGF("[string_new] success, string=%p, data=%p, len=%ld, ele_size=%ld, raw_str=%s", str, str->data, str->length,
+           str->element_size, (char *) raw_string);
+
+    // 小字符串入池,避免小字符串频繁分配
+    if (capacity <= 8) {
+        sc_map_put_sv(&const_str_pool, (char *) raw_string, str);
+    }
+
+    return str;
+}
+
 /**
  * length 不包含 '\0'
  * @param raw_string
@@ -14,21 +60,24 @@
 n_string_t *string_new(void *raw_string, int64_t length) {
     TRACEF("[string_new] raw_string=%s, length=%lu, ptr=%p", (char *) raw_string, length, raw_string);
 
+    n_string_t *str;
+
     // byte 数组，先手动创建一个简单类型
     int64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
 
     n_array_t *data = rti_array_new(&string_element_rtype, capacity);
 
-    n_string_t *str = rti_gc_malloc(string_rtype.size, &string_rtype);
+    str = rti_gc_malloc(string_rtype.heap_size, &string_rtype);
     str->data = data;
     str->length = length;
     str->capacity = capacity;
-    str->element_size = rtype_stack_size(&string_element_rtype, POINTER_SIZE);
+    str->element_size = (&string_element_rtype)->stack_size;
     str->hash = string_rtype.hash;
     memmove(str->data, raw_string, length);
+    str->data[length] = '\0';
 
     DEBUGF("[string_new] success, string=%p, data=%p, len=%ld, ele_size=%ld, raw_str=%s", str, str->data, str->length,
-            str->element_size, (char *) raw_string);
+           str->element_size, (char *) raw_string);
     return str;
 }
 
@@ -44,12 +93,12 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     memmove(data, a->data, a->length);
     memmove(data + a->length, b->data, b->length);
 
-    n_string_t *str = rti_gc_malloc(string_rtype.size, &string_rtype);
+    n_string_t *str = rti_gc_malloc(string_rtype.heap_size, &string_rtype);
     str->length = length;
     str->data = data;
     str->length = length;
     str->capacity = capacity;
-    str->element_size = rtype_stack_size(&string_element_rtype, POINTER_SIZE);
+    str->element_size = (&string_element_rtype)->stack_size;
     str->hash = string_rtype.hash;
     DEBUGF("[runtime.string_concat] success, string=%p, data=%p", str, str->data);
     return str;

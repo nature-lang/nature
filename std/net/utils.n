@@ -1,3 +1,5 @@
+import libc
+
 fn split_host(string host):(string, int)! {
     var list = host.split(':')
     if list[0] == '' {
@@ -5,4 +7,9 @@ fn split_host(string host):(string, int)! {
     }
 
     return (list[0], list[1].to_int())
+}
+
+fn is_ipv4(string ip):bool {
+    u32 in_addr = 0
+    return libc.inet_pton(libc.AF_INET, ip.ref(), &in_addr as anyptr) == 1
 }

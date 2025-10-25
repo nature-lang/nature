@@ -20,8 +20,6 @@ typedef struct {
 typedef struct {
     addr_t base; // text 虚拟地址起点,在 .data.fndef 段中占有 8byte 段空间，通过重定位补齐
     uint64_t size; // 这里的 size 是 fn 编译成二进制后占用的空间的大小
-    uint64_t fn_runtime_reg; //  0 表示不在
-    uint64_t fn_runtime_stack; // 0 就啥也不是，
     int64_t stack_size; // 基于当前函数 frame 占用的栈的大小(主要包括 args 和 locals，不包括 prev rbp 和 return addr)
     uint64_t line;
     uint64_t column;
@@ -192,13 +190,6 @@ static inline uint64_t strtable_put(char *str) {
     if (sc_map_found(&ct_startable_map)) {
         return offset;
     }
-
-    //    if (ct_strtable_len > 0) {
-    //        char *result = memmem(ct_strtable_data, ct_strtable_len, str, strlen(str));
-    //        if (result) { // 找到了指针
-    //            return result - ct_strtable_data;
-    //        }
-    //    }
 
     // 计算字符串长度（包括 \0 分隔符）
     uint64_t str_len = strlen(str) + 1;

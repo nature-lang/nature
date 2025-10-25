@@ -23,6 +23,104 @@ fn utos<T>(anyptr v):string {
     return utos_with<T>(v, '0', 0 as u8)
 }
 
+// 十六进制转换函数（小写）
+fn utos_hex_with<T>(anyptr v, string fill, u8 width):string {
+    var i = unsafe.ptr_to<T>(&v as anyptr)
+
+    T base = 16
+    var result = vec_new<u8>(0, 0)
+
+    if i == 0 {
+        if width == 0 {
+            return '0'
+        }
+
+        // 填充 width 个数的 fill 字符，并返回
+        for u8 j = 0; j < width; j+=1 {
+            result.push(ascii(fill))
+        }
+
+        return result as string
+    }
+
+    // 按 base 进行转换
+    for i != 0 {
+        T rem = i % base
+        if rem < 10 {
+            result.push(rem as u8 + ascii('0'))
+        } else {
+            result.push((rem - 10) as u8 + ascii('a'))
+        }
+
+        i = i / base
+    }
+
+    // 填充字符
+    u8 result_width = result.len() as u8
+    for width > result_width {
+       result.push(ascii(fill))        
+       result_width += 1
+    }
+
+    // 数组反转
+    reverse(result)
+
+    return result as string
+}
+
+fn utos_hex<T>(anyptr v):string {
+    return utos_hex_with<T>(v, '0', 0 as u8)
+}
+
+// 十六进制转换函数（大写）
+fn utos_hex_upper_with<T>(anyptr v, string fill, u8 width):string {
+    var i = unsafe.ptr_to<T>(&v as anyptr)
+
+    T base = 16
+    var result = vec_new<u8>(0, 0)
+
+    if i == 0 {
+        if width == 0 {
+            return '0'
+        }
+
+        // 填充 width 个数的 fill 字符，并返回
+        for u8 j = 0; j < width; j+=1 {
+            result.push(ascii(fill))
+        }
+
+        return result as string
+    }
+
+    // 按 base 进行转换
+    for i != 0 {
+        T rem = i % base
+        if rem < 10 {
+            result.push(rem as u8 + ascii('0'))
+        } else {
+            result.push((rem - 10) as u8 + ascii('A'))
+        }
+
+        i = i / base
+    }
+
+    // 填充字符
+    u8 result_width = result.len() as u8
+    for width > result_width {
+       result.push(ascii(fill))        
+       result_width += 1
+    }
+
+    // 数组反转
+    reverse(result)
+
+    return result as string
+}
+
+fn utos_hex_upper<T>(anyptr v):string {
+    return utos_hex_upper_with<T>(v, '0', 0 as u8)
+}
+
 fn utos_with<T>(anyptr v, string fill, u8 width):string {
     var i = unsafe.ptr_to<T>(&v as anyptr)
 

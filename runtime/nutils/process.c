@@ -25,11 +25,13 @@ static inline void real_exit(process_context_t *ctx) {
     if (co) {
         DEBUGF("[real_exit] will ready main co")
         co_ready(co);
+    } else {
+        DEBUGF("[real_exit] not co, not need ready")
     }
 }
 
 static inline void on_exit_cb(uv_process_t *req, int64_t exit_status, int term_signal) {
-    DEBUGF("[on_exit_cb] process exited, status: %lld, sig: %ld", exit_status, term_signal);
+    DEBUGF("[on_exit_cb] process exited, status: %ld, sig: %d", exit_status, term_signal);
     process_context_t *ctx = CONTAINER_OF(req, process_context_t, req);
     ctx->exited = true;
     ctx->exit_code = exit_status;
@@ -55,7 +57,6 @@ static inline void on_read_stderr_cb(uv_stream_t *stream, ssize_t nread, const u
     pipe_context_t *pipe_ctx = CONTAINER_OF(stream, pipe_context_t, pipe);
     coroutine_t *co = pipe_ctx->pipe.data;
 
-    // TODO 指针不能使用这种方式复原 ctx, 不准确！
     process_context_t *ctx = CONTAINER_OF(pipe_ctx, process_context_t, stderr_pipe);
 
     // 单次读取
@@ -69,7 +70,7 @@ static inline void on_read_stderr_cb(uv_stream_t *stream, ssize_t nread, const u
         }
         pipe_ctx->closed = true;
 
-        DEBUGF("[on_read_stderr_cb] nread %d, will return", nread);
+        DEBUGF("[on_read_stderr_cb] nread %ld, will return", nread);
 
         // 没有 buf 需要处理，判断退出状态, 如果满足退出状态，则进行主协程退出
         if (is_real_exit(ctx)) {
@@ -130,53 +131,14 @@ static inline void on_read_stdout_cb(uv_stream_t *stream, ssize_t nread, const u
     co_ready(co);
 }
 
-process_context_t *rt_uv_process_spawn(command_t *cmd) {
-    assert(cmd->args);
-    assert(cmd->env);
-
-    n_processor_t *p = processor_get();
-    coroutine_t *co = coroutine_get();
-
-    process_context_t *ctx = rti_gc_malloc(sizeof(process_context_t), NULL);
-    assert(ctx);
-
-    ctx->cmd = *cmd;
-    ctx->p = p;
-
-    // 初始化管道
-    ctx->stderr_pipe.name = "stderr";
-    ctx->stdout_pipe.name = "stdout";
-
+static void uv_async_process_spawn(process_context_t *ctx, coroutine_t *co) {
     // 初始化
-    uv_pipe_init(&p->uv_loop, &ctx->stderr_pipe.pipe, 0);
-    uv_pipe_init(&p->uv_loop, &ctx->stdout_pipe.pipe, 0);
-
-    int64_t arg_count = cmd->args->length + 2;// name + null
-    ctx->args = mallocz(sizeof(char *) * arg_count);
-
-    ctx->args[0] = rt_string_ref(cmd->name);
-    for (int i = 0; i < cmd->args->length; ++i) {
-        n_string_t *arg;
-        rti_vec_access(cmd->args, i, &arg);
-        ctx->args[i + 1] = rt_string_ref(arg);
-    }
-    ctx->args[arg_count - 1] = NULL;
-
-
-    if (cmd->env->length) {
-        ctx->envs = mallocz(sizeof(char *) * (cmd->env->length + 1));// +1 is null
-
-        for (int i = 0; i < cmd->env->length; ++i) {
-            n_string_t *env;
-            rti_vec_access(cmd->env, i, &env);
-            ctx->envs[i] = rt_string_ref(env);
-        }
-        ctx->envs[cmd->env->length] = NULL;
-    }
+    uv_pipe_init(&global_loop, &ctx->stderr_pipe.pipe, 0);
+    uv_pipe_init(&global_loop, &ctx->stdout_pipe.pipe, 0);
 
     uv_process_options_t options = {0};
     options.exit_cb = on_exit_cb;
-    options.file = rt_string_ref(cmd->name);
+    options.file = rt_string_ref(ctx->cmd.name);
     options.args = ctx->args;
     options.env = ctx->envs;
 
@@ -191,18 +153,77 @@ process_context_t *rt_uv_process_spawn(command_t *cmd) {
     options.stdio = stdio;
     options.stdio_count = 3;
 
-    int result = uv_spawn(&p->uv_loop, &ctx->req, &options);
+    int result = uv_spawn(&global_loop, &ctx->req, &options);
     if (result) {
         rti_co_throw(co, (char *) uv_strerror(result), false);
-        return NULL;
+    } else {
+        // 设置 pid 的值
+        ctx->pid = ctx->req.pid;
+        assert(ctx->pid);
     }
 
-    // 设置 pid 的值
-    ctx->pid = ctx->req.pid;
-    assert(ctx->pid);
+    co_ready(co);
+}
+
+process_context_t *rt_uv_process_spawn(command_t *cmd) {
+    assert(cmd->args);
+    assert(cmd->env);
+    DEBUGF("[rt_uv_process_spawn] start")
+
+
+    n_processor_t *p = processor_get();
+    coroutine_t *co = coroutine_get();
+
+    process_context_t *ctx = rti_gc_malloc(sizeof(process_context_t), NULL);
+    assert(ctx);
+
+    ctx->cmd = *cmd;
+    ctx->p = p;
+
+    // 初始化管道
+    ctx->stderr_pipe.name = "stderr";
+    ctx->stdout_pipe.name = "stdout";
+
+    int64_t arg_count = cmd->args->length + 2; // name + null
+    ctx->args = mallocz(sizeof(char *) * arg_count);
+
+    ctx->args[0] = rt_string_ref(cmd->name);
+    for (int i = 0; i < cmd->args->length; ++i) {
+        n_string_t *arg;
+        rti_vec_access(cmd->args, i, &arg);
+        ctx->args[i + 1] = rt_string_ref(arg);
+    }
+    ctx->args[arg_count - 1] = NULL;
+
+
+    if (cmd->env->length) {
+        ctx->envs = mallocz(sizeof(char *) * (cmd->env->length + 1)); // +1 is null
+
+        for (int i = 0; i < cmd->env->length; ++i) {
+            n_string_t *env;
+            rti_vec_access(cmd->env, i, &env);
+            ctx->envs[i] = rt_string_ref(env);
+        }
+        ctx->envs[cmd->env->length] = NULL;
+    }
+
+    global_waiting_send(uv_async_process_spawn, ctx, co, 0);
 
     DEBUGF("[rt_uv_process_spawn] end, ctx: %p", ctx)
     return ctx;
+}
+
+void uv_async_process_wait(process_context_t *ctx, coroutine_t *co) {
+    // check real exited, ready
+    if (is_real_exit(ctx)) {
+        DEBUGF("[uv_async_process_wait] real exit, co ready")
+        co_ready(co);
+        return;
+    }
+
+    DEBUGF("[uv_async_process_wait] wait exit")
+    // waiting real exit
+    ctx->req.data = co;
 }
 
 /**
@@ -213,46 +234,26 @@ void rt_uv_process_wait(process_context_t *ctx) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
-    // 禁止跨 processor 调用, 可以启动协程调用，但是必须在当前 processor 中
-    if (ctx->p != p) {
-        rti_co_throw(co, "cannot call process_t.wait across threads", false);
-        return;
-    }
-
-    if (ctx->exited) {
-        DEBUGF("[rt_uv_process_wait] process exited")
-        return;
-    }
-
-    DEBUGF("[rt_uv_process_wait] process %ld will yield wating", ctx->pid);
-
-    // yield wait exited
-    ctx->req.data = co;
-    co_yield_waiting(co, NULL, NULL);
+    global_waiting_send(uv_async_process_wait, ctx, co, 0);
 
     DEBUGF("[rt_uv_process_wait] process %ld exited", ctx->pid);
+}
+
+static void uv_async_process_read_stdout(process_context_t *ctx) {
+    uv_read_start((uv_stream_t *) &ctx->stdout_pipe.pipe, process_alloc_buffer_cb, on_read_stdout_cb);
 }
 
 n_string_t *rt_uv_process_read_stdout(process_context_t *ctx) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
-    assert(p == ctx->p);
 
     if (ctx->stdout_pipe.closed) {
         rti_co_throw(co, "stdout pipe closed", NULL);
         return NULL;
     }
 
-    if (ctx->p != p) {
-        rti_co_throw(co, "cannot call process_t.read_stdout across threads", false);
-        return NULL;
-    }
-
-    uv_read_start((uv_stream_t *) &ctx->stdout_pipe.pipe, process_alloc_buffer_cb, on_read_stdout_cb);
-
-    // 等待读取完成
     ctx->stdout_pipe.pipe.data = co;
-    co_yield_waiting(co, NULL, NULL);
+    global_waiting_send(uv_async_process_read_stdout, ctx, 0, 0);
 
     if (co->has_error) {
         DEBUGF("[rt_uv_process_read_stdout] co has err, will return NULL")
@@ -264,33 +265,28 @@ n_string_t *rt_uv_process_read_stdout(process_context_t *ctx) {
     return buf_string;
 }
 
+static void uv_async_process_read_stderr(process_context_t *ctx) {
+    uv_read_start((uv_stream_t *) &ctx->stderr_pipe.pipe, process_alloc_buffer_cb, on_read_stderr_cb);
+}
+
 n_string_t *rt_uv_process_read_stderr(process_context_t *ctx) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
-    assert(p == ctx->p);
-
     if (ctx->stderr_pipe.closed) {
         rti_co_throw(co, "stderr pipe closed", NULL);
         return NULL;
     }
 
-    if (ctx->p != p) {
-        rti_co_throw(co, "cannot call process_t.read_stderr across threads", false);
-        return NULL;
-    }
-
-    uv_read_start((uv_stream_t *) &ctx->stderr_pipe.pipe, process_alloc_buffer_cb, on_read_stderr_cb);
-
-    // 等待读取完成
     ctx->stderr_pipe.pipe.data = co;
-    co_yield_waiting(co, NULL, NULL);
+    global_waiting_send(uv_async_process_read_stderr, ctx, 0, 0);
 
     if (co->has_error) {
         DEBUGF("[rt_uv_process_read_stderr] co has err, will return NULL")
         return NULL;
     }
 
+    // 提取 buf 并返回
     n_string_t *buf_string = rt_string_ref_new(ctx->stderr_pipe.buffer, ctx->stderr_pipe.read_buffer_count);
-    DEBUGF("[rt_uv_process_read_stderr] read buf len: %d", buf_string->length);
+    DEBUGF("[rt_uv_process_read_stderr] read buf len: %ld", buf_string->length);
     return buf_string;
 }

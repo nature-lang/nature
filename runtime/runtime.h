@@ -137,15 +137,21 @@ int runtime_main(int argc, char *argv[]) __asm("main");
 
 #define PAGE_SUMMARY_MAX_VALUE 2LL ^ 21 // 2097152, max=start=end 的最大值
 
-#define DEFAULT_NEXT_GC_BYTES (100 * 1024) // 100KB
-#define NEXT_GC_FACTOR 2
+#ifdef TEST_MODE
+#define MIN_GC_BYTES (100 * 1024)
+#else
+#define MIN_GC_BYTES (4 * 1024 * 1024) // 4MB
+#endif
+
+#define GC_PERCENT 100
 
 #define WAIT_BRIEF_TIME 1 // ms
 #define WAIT_SHORT_TIME 10 // ms
 #define WAIT_MID_TIME 50 // ms
 #define WAIT_LONG_TIME 100 // ms
 
-typedef void (*void_fn_t)(void);
+typedef void (*void_fn_t)();
+typedef void (*env_fn_t)(void *envs);
 
 /**
  * 参考 linux, 栈从上往下增长，所以在数学意义上 base > end
@@ -160,10 +166,11 @@ typedef struct mspan_t {
     struct mspan_t *next; // mspan 是双向链表
     // struct mspan_t *prev;
 
-    uint32_t sweepgen; // 目前暂时是单线程模式，所以不需要并发垃圾回收
+    uint32_t sweepgen; 
     addr_t base; // mspan 在 arena 中的起始位置
     addr_t end;
     uint8_t spanclass; // spanclass index (基于 sizeclass 通过 table 可以确定 page 的数量和 span 的数量)
+    uint8_t needzero; // 1 = 需要清零(GC后有脏数据), 0 = 不需要清零(新分配或已清零)
 
     uint64_t pages_count; // page 的数量，通常可以通过 sizeclass 确定，但是如果 spanclass = 0 时，表示大型内存，其 pages
     // 是不固定的
@@ -209,7 +216,7 @@ typedef struct {
     uint32_t start;
     uint32_t end;
     uint32_t max;
-    uint8_t full; // start=end=max=2^21 最大值， full 设置为 1, 表示所有空间都是空间的
+    uint8_t full; // start=end=max=2^21 最大值， full 设置为 1, 表示所有空间都是空闲的的
 } page_summary_t; // page alloc chunk 的摘要数据，组成 [start,max,end]
 
 /**
@@ -438,8 +445,6 @@ struct n_processor_t {
 
     struct sigaction sig;
     uv_timer_t timer; // 辅助协程调度的定时器
-    uv_loop_t uv_loop; // uv loop 事件循环
-
     uint64_t need_stw; // 外部声明, 内部判断 是否需要 stw
     uint64_t in_stw; // 内部声明, 外部判断是否已经 stw
 

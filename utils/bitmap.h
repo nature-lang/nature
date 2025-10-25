@@ -41,26 +41,36 @@ static inline void bitmap_batch_clear(uint8_t *bits, uint64_t index, uint64_t cl
     if (clear_count == 0) {
         return;
     }
-    
+
+    uint64_t start_byte = index / 8;
+    uint8_t start_bit = index & 7;
     uint64_t end_index = index + clear_count;
-    uint64_t current_index = index;
-    
-    while (current_index < end_index) {
-        uint64_t byte_index = current_index / 8;
-        uint8_t bit_offset = current_index & 7;
-        
-        // 计算当前字节中需要清除的位数
-        uint8_t bits_in_current_byte = 8 - bit_offset;
-        uint64_t remaining_bits = end_index - current_index;
-        uint8_t bits_to_clear = (bits_in_current_byte < remaining_bits) ? bits_in_current_byte : remaining_bits;
-        
-        // 创建掩码
-        uint8_t mask = ((1 << bits_to_clear) - 1) << bit_offset;
-        
-        // 清除位
-        bits[byte_index] &= ~mask;
-        
-        current_index += bits_to_clear;
+    uint64_t end_byte = end_index / 8;
+    uint8_t end_bit = end_index & 7;
+
+    // 如果开始和结束在同一字节内
+    if (start_byte == end_byte) {
+        uint8_t mask = ((1 << clear_count) - 1) << start_bit;
+        bits[start_byte] &= ~mask;
+        return;
+    }
+
+    // 处理第一个字节的部分位
+    if (start_bit != 0) {
+        uint8_t mask = 0xFF << start_bit;
+        bits[start_byte] &= ~mask;
+        start_byte++;
+    }
+
+    // 处理中间的完整字节（使用 memset 批量清零）
+    if (start_byte < end_byte) {
+        memset(&bits[start_byte], 0, end_byte - start_byte);
+    }
+
+    // 处理最后一个字节的部分位
+    if (end_bit != 0) {
+        uint8_t mask = (1 << end_bit) - 1;
+        bits[end_byte] &= ~mask;
     }
 }
 
@@ -69,25 +79,35 @@ static inline void bitmap_batch_set(uint8_t *bits, uint64_t index, uint64_t set_
         return;
     }
 
+    uint64_t start_byte = index / 8;
+    uint8_t start_bit = index & 7;
     uint64_t end_index = index + set_count;
-    uint64_t current_index = index;
+    uint64_t end_byte = end_index / 8;
+    uint8_t end_bit = end_index & 7;
 
-    while (current_index < end_index) {
-        uint64_t byte_index = current_index / 8;
-        uint8_t bit_offset = current_index & 7;
+    // 如果开始和结束在同一字节内
+    if (start_byte == end_byte) {
+        uint8_t mask = ((1 << set_count) - 1) << start_bit;
+        bits[start_byte] |= mask;
+        return;
+    }
 
-        // 计算当前字节中需要设置的位数
-        uint8_t bits_in_current_byte = 8 - bit_offset;
-        uint64_t remaining_bits = end_index - current_index;
-        uint8_t bits_to_set = (bits_in_current_byte < remaining_bits) ? bits_in_current_byte : remaining_bits;
+    // 处理第一个字节的部分位
+    if (start_bit != 0) {
+        uint8_t mask = 0xFF << start_bit;
+        bits[start_byte] |= mask;
+        start_byte++;
+    }
 
-        // 创建掩码
-        uint8_t mask = ((1 << bits_to_set) - 1) << bit_offset;
+    // 处理中间的完整字节（使用 memset 批量设置为全 1）
+    if (start_byte < end_byte) {
+        memset(&bits[start_byte], 0xFF, end_byte - start_byte);
+    }
 
-        // 设置位
-        bits[byte_index] |= mask;
-
-        current_index += bits_to_set;
+    // 处理最后一个字节的部分位
+    if (end_bit != 0) {
+        uint8_t mask = (1 << end_bit) - 1;
+        bits[end_byte] |= mask;
     }
 }
 
@@ -109,7 +129,7 @@ static inline void bitmap_locker_clear(bitmap_t *b, uint64_t index) {
 }
 
 static inline bool bitmap_test(uint8_t *bits, uint64_t index) {
-    return bits[index / 8] & (1 << (index & 7)) ? true : false;
+    return bits[index / 8] & (1 << (index & 7));
 }
 
 static inline bool bitmap_empty(uint8_t *bits, uint64_t count) {

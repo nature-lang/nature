@@ -77,7 +77,7 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
             symbol->name = unique_name;
             if (imm->kind == TYPE_RAW_STRING) {
-                symbol->size = strlen(imm->string_value) + 1;
+                symbol->size = imm->strlen + 1;
                 symbol->value = (uint8_t *) imm->string_value;
             } else if (imm->kind == TYPE_FLOAT64) {
                 symbol->size = type_kind_sizeof(imm->kind);
@@ -95,8 +95,10 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
             symbol_var->ident = unique_name;
 
             if (imm->kind == TYPE_RAW_STRING) {
+                symbol_table_set_raw_string(c->module, unique_name, type_kind_new(TYPE_RAW_STRING), imm->strlen);
+
                 // raw_string 本身就是指针类型, 首次加载时需要通过 lea 将 .data 到 raw_string 的起始地址加载到 var_operand
-                lir_operand_t *var_operand = temp_var_operand_with_alloc(c->module, type_kind_new(TYPE_RAW_STRING));
+                lir_operand_t *var_operand = temp_var_operand(c->module, type_kind_new(TYPE_RAW_STRING));
                 lir_op_t *temp_ref = lir_op_lea(var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var));
                 linked_push(list, temp_ref);
 
@@ -230,8 +232,10 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
         lir_operand_t *ah_operand = operand_new(LIR_OPERAND_REG, ah);
         linked_push(list, lir_op_move(al_operand, op->first));
 
+        lir_operand_t *dividend_operand = lir_regs_operand(2, al_operand->value, ah_operand->value);
+
         // 执行8位除法，被除数在AX，除数是8位操作数
-        linked_push(list, lir_op_new(op_code, al_operand, op->second, al_operand));
+        linked_push(list, lir_op_new(op_code, dividend_operand, op->second, al_operand));
 
         // 根据操作类型选择结果寄存器
         lir_operand_t *result_operand;
@@ -268,8 +272,11 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
             result_operand = dx_operand; // 余数
         }
 
+
+        lir_operand_t *dividend_operand = lir_regs_operand(2, ax_operand->value, dx_operand->value);
+
         // 执行除法
-        linked_push(list, lir_op_new(op_code, ax_operand, op->second, result_operand));
+        linked_push(list, lir_op_new(op_code, dividend_operand, op->second, result_operand));
         linked_push(list, lir_op_move(op->output, result_operand));
     }
 

@@ -3,6 +3,12 @@
 
 #include "utils/type.h"
 
+n_vec_t *string_to_vec(n_string_t *src);
+
+n_string_t *vec_to_string(n_vec_t *src);
+
+n_string_t *string_new_with_pool(void *raw_string, int64_t length);
+
 n_string_t *string_new(void *raw_string, int64_t length);
 
 n_string_t *string_concat(n_string_t *a, n_string_t *b);

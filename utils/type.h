@@ -102,10 +102,11 @@ typedef enum {
     TYPE_ANYPTR = 25, // anyptr 没有具体类型，相当于 uintptr
 
     TYPE_UNION = 26,
+    TYPE_INTERFACE = 27,
+
     TYPE_VOID, // 表示函数无返回值
     TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
-    TYPE_INTERFACE,
     TYPE_ENUM,
 
     TYPE_FN_T, // 底层类型
@@ -113,18 +114,12 @@ typedef enum {
     TYPE_FLOATER_T, // 底层类型
     TYPE_ALL_T, // 通配所有类型
 
-    //    TYPE_ALIAS, // 声明一个新的类型时注册的 type 的类型是这个
-    //    TYPE_PARAM, // type formal param type foo<f1, f2> = f1|f2, 其中 f1 就是一个 param
     TYPE_IDENT,
 
-    // runtime 中使用的一种需要 gc 的 pointer base type 结构
-    TYPE_GC,
 
-    TYPE_GC_FN,
     TYPE_GC_ENV,
     TYPE_GC_ENV_VALUE,
     TYPE_GC_ENV_VALUES,
-    TYPE_GC_UPVALUE,
 } type_kind;
 
 typedef enum {
@@ -137,12 +132,9 @@ typedef enum {
 } type_ident_kind;
 
 static string type_kind_str[] = {
-        [TYPE_GC] = "gc",
-        [TYPE_GC_FN] = "runtime_fn",
         [TYPE_GC_ENV] = "env",
         [TYPE_GC_ENV_VALUE] = "env_value",
         [TYPE_GC_ENV_VALUES] = "env_values",
-        [TYPE_GC_UPVALUE] = "upvalue",
 
         [TYPE_ARR] = "arr",
 
@@ -198,8 +190,8 @@ typedef struct {
 // 所有的 type 都可以转化成该结构
 typedef struct {
     uint64_t ident_offset;
-    uint64_t size; // 无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
-    uint8_t in_heap; // 是否再堆中存储，如果数据存储在 heap 中，其在 stack,global,list value,struct value 中存储的都是
+    uint64_t heap_size; // 无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
+    uint64_t stack_size;
 
     // pointer
     int64_t hash; // 做类型推断时能够快速判断出类型是否相等
@@ -459,10 +451,9 @@ typedef struct {
 } envs_t;
 
 typedef struct {
-    uint8_t closure_jit_codes[80];
-    addr_t fn_addr;
     envs_t *envs;
-} runtime_fn_t;
+    addr_t fn_addr;
+} n_fn_t;
 
 // 指针在 64位系统中占用的大小就是 8byte = 64bit
 typedef addr_t n_ptr_t, n_rawptr_t;
@@ -504,10 +495,6 @@ typedef struct {
     uint64_t length;
     uint64_t capacity;
 } n_set_t;
-
-typedef struct {
-    void *fn_data;
-} n_fn_t; // 就占用一个指针大小
 
 /**
  * 不能随便调换顺序，这是 gc rtype 的顺序
@@ -604,8 +591,6 @@ uint64_t calc_gc_bits_size(uint64_t size, uint8_t ptr_size);
  */
 uint8_t *malloc_gc_bits(uint64_t size);
 
-int64_t rtype_stack_size(rtype_t *rtype, uint8_t ptr_size);
-
 uint64_t type_struct_offset(type_struct_t *s, char *key);
 
 struct_property_t *type_struct_property(type_struct_t *s, char *key);
@@ -625,7 +610,7 @@ static inline bool kind_in_heap(type_kind kind) {
            kind == TYPE_FN || kind == TYPE_COROUTINE_T || kind == TYPE_CHAN || kind == TYPE_INTERFACE;
 }
 
-static inline bool is_list_u8(type_t t) {
+static inline bool is_vec_u8(type_t t) {
     if (t.kind != TYPE_VEC) {
         return false;
     }

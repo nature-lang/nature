@@ -70,7 +70,7 @@ fn sprintf(string format, ...[any] args):string {
         }
 
         // c 不再 format 字符中，提示异常
-        if !{ascii('v'), ascii('c'), ascii('d'), ascii('s'), ascii('f')}.contains(c) {
+        if !{ascii('v'), ascii('c'), ascii('d'), ascii('s'), ascii('f'), ascii('x'), ascii('X')}.contains(c) {
             result.push(ascii('%'))
             result.push(ascii('?'))
             result.push(c)
@@ -135,6 +135,48 @@ fn sprintf(string format, ...[any] args):string {
                 reflect.F32 -> ftos_with<f32>(arg_v.value, fill, width, precision)
                 reflect.F64 -> ftos_with<f64>(arg_v.value, fill, width, precision)
                 _ -> '%!f'
+            }
+
+            for c in s {
+                result.push(c)
+            }
+
+            continue
+        }
+
+        // 添加对 %x 格式的支持（小写十六进制）
+        if c == ascii('x') {
+            string s = match arg_kind {
+                reflect.U8 -> utos_hex_with<u8>(arg_v.value, fill, width)
+                reflect.U16 -> utos_hex_with<u16>(arg_v.value, fill, width)
+                reflect.U32 -> utos_hex_with<u32>(arg_v.value, fill, width)
+                reflect.U64 -> utos_hex_with<u64>(arg_v.value, fill, width)
+                reflect.I8 -> utos_hex_with<u8>(arg_v.value, fill, width)
+                reflect.I16 -> utos_hex_with<u16>(arg_v.value, fill, width)
+                reflect.I32 -> utos_hex_with<u32>(arg_v.value, fill, width)
+                reflect.I64 -> utos_hex_with<u64>(arg_v.value, fill, width)
+                _ -> '%!x'
+            }
+
+            for c in s {
+                result.push(c)
+            }
+
+            continue
+        }
+
+        // 添加对 %X 格式的支持（大写十六进制）
+        if c == ascii('X') {
+            string s = match arg_kind {
+                reflect.U8 -> utos_hex_upper_with<u8>(arg_v.value, fill, width)
+                reflect.U16 -> utos_hex_upper_with<u16>(arg_v.value, fill, width)
+                reflect.U32 -> utos_hex_upper_with<u32>(arg_v.value, fill, width)
+                reflect.U64 -> utos_hex_upper_with<u64>(arg_v.value, fill, width)
+                reflect.I8 -> utos_hex_upper_with<u8>(arg_v.value, fill, width)
+                reflect.I16 -> utos_hex_upper_with<u16>(arg_v.value, fill, width)
+                reflect.I32 -> utos_hex_upper_with<u32>(arg_v.value, fill, width)
+                reflect.I64 -> utos_hex_upper_with<u64>(arg_v.value, fill, width)
+                _ -> '%!X'
             }
 
             for c in s {

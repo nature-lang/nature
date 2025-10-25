@@ -276,11 +276,6 @@ static linked_t *riscv64_lower_params(closure_t *c, slice_t *param_vars) {
             } else {
                 lir_operand_t *src = operand_new(LIR_OPERAND_REG, reg);
                 linked_push(result, lir_op_move(dst_param, src));
-
-                // 记录函数运行时参数位置, 用于 jit, 参数类型是 pointer 所以只能通过整型寄存器或者栈传递
-                if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
-                    c->fn_runtime_reg = reg_index;
-                }
             }
         } else if (main_pos < 32) { // 通过浮点寄存器传递
             int64_t reg_index = FA0->index + ((main_pos - 16) >> 1);
@@ -310,12 +305,6 @@ static linked_t *riscv64_lower_params(closure_t *c, slice_t *param_vars) {
             } else {
                 // src 存储在栈中，dst 存储在 var 中
                 linked_push(result, lir_op_move(dst_param, src));
-            }
-
-            // 记录最后一个参数在栈中的位置
-            if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
-                assert(sp_offset > 0);
-                c->fn_runtime_stack = sp_offset;
             }
         }
 

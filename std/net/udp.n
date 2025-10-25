@@ -4,31 +4,21 @@ import co.types
 import net.utils
 import libc
 import runtime
+import fmt
 
 type addr_t = struct{
-    string ip
+    [u8;16] data
     int port
+    bool v4
 }
 
 type socket_t = struct{
     addr_t addr
 
     anyptr handle
-    anyptr bind_co
-    anyptr data
-
-    anyptr head
-    anyptr tail
-    anyptr packet_count
-
-    anyptr buf
-    u64 suggested_size
-
-    anyptr write_buf
-    anyptr read_buf
-
-    bool recv_start
+    anyptr co
     bool closed
+    i32 fd
 }
 
 type conn_t:io.reader, io.writer = struct{
@@ -44,8 +34,16 @@ fn uv_udp_recvfrom(ptr<socket_t> s, [u8] buf, rawptr<addr_t> addr):int!
 
 fn bind(string host):ptr<socket_t>! {
     var (ip, port) = utils.split_host(host)
+    var addr = addr_t{port=port, v4=utils.is_ipv4(ip)}
 
-    var s = new socket_t(addr = addr_t{ip = ip, port=port})
+    // store data
+    i32 family = libc.AF_INET
+    if !addr.v4 {
+        family = libc.AF_INET6
+    }
+
+    libc.inet_pton(family, ip.ref(), &addr.data as anyptr)
+    var s = new socket_t(addr)
     uv_udp_bind(s)
 
     return s
@@ -65,7 +63,24 @@ fn socket_t.recvfrom([u8] buf):(int, addr_t)! {
 }
 
 #linkid rt_uv_udp_sendto
-fn socket_t.sendto([u8] buf, addr_t addr):int!
+fn uv_sendto(ptr<socket_t> s, [u8] buf, addr_t addr):int!
+
+fn socket_t.sendto([u8] buf, string host):int! {
+    if self.closed {
+       throw errorf('socket closed')
+    }
+
+    var (ip, port) = utils.split_host(host)
+
+    var addr = addr_t{port=port, v4=utils.is_ipv4(ip)}
+    i32 family = libc.AF_INET
+    if !addr.v4 {
+        family = libc.AF_INET6
+    }
+    libc.inet_pton(family, ip.ref(), &addr.data as anyptr)
+
+    return uv_sendto(self, buf, addr)
+}
 
 fn socket_t.connect(string host):ptr<conn_t>! {
     if self.closed {
@@ -74,7 +89,17 @@ fn socket_t.connect(string host):ptr<conn_t>! {
 
     var (ip, port) = utils.split_host(host)
 
-    var conn = new conn_t(socket = self, remote_addr = addr_t{ip=ip, port=port})
+    var addr = addr_t{port=port, v4=utils.is_ipv4(ip)}
+
+    // store data
+    i32 family = libc.AF_INET
+    if !addr.v4 {
+        family = libc.AF_INET6
+    }
+
+    libc.inet_pton(family, ip.ref(), &addr.data as anyptr)
+
+    var conn = new conn_t(socket = self, remote_addr = addr)
     return conn
 }
 
@@ -88,7 +113,7 @@ fn conn_t.write([u8] buf):int! {
         throw errorf('socket closed')
     }
 
-    return self.socket.sendto(buf, self.remote_addr)
+    return uv_sendto(self.socket, buf, self.remote_addr)
 }
 
 fn conn_t.read([u8] buf):int! {
@@ -102,4 +127,22 @@ fn conn_t.read([u8] buf):int! {
 
 fn conn_t.close() {
     self.socket.close()
+}
+
+fn addr_t.ip():string {
+    i32 family = libc.AF_INET // len = 16
+    if !self.v4 {
+        family = libc.AF_INET6 // len = 46
+    }
+
+    var data = vec_new<u8>(0, 46)
+    libc.inet_ntop(family, &self.data as anyptr, data.ref(), 46)
+
+    // slice and change to str
+    var len = libc.strlen(data.ref() as libc.cstr)
+    return data[..len] as string
+}
+
+fn addr_t.to_string():string {
+    return fmt.sprintf('%s:%d', self.ip(), self.port)
 }

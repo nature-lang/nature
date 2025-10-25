@@ -34,6 +34,7 @@ const RAWPTR = 24
 const ANYPTR = 25
 
 const UNION = 26
+const INTERFACE = 27
 
 const PTR_SIZE = 8
 
@@ -63,7 +64,7 @@ type rtype_struct_t = struct{
 type rtype_t = struct{
     u64 ident_offset
     u64 size
-    u8 in_heap
+    u64 stack_size
 
     i64 hash
     u64 last_ptr
@@ -92,7 +93,7 @@ fn typeof_hash(i64 hash):ptr<type_t>! {
     var r = find_rtype(hash)
 
     var t = new type_t(
-        size = sizeof_rtype(r),
+        size = r.stack_size as i64,
         hash = r.hash,
         kind = r.kind as int,
         align = r.align,
@@ -123,13 +124,6 @@ fn typeof_hash(i64 hash):ptr<type_t>! {
     }
 
     return t
-}
-
-fn sizeof_rtype(rawptr<rtype_t> r):int {
-    return match r.kind {
-        STRING|VEC|MAP|SET|TUP|FN|CHAN|COROUTINE_T|UNION -> PTR_SIZE
-        _ -> r.size as int
-    }
 }
 
 fn typeof<T>(T v):ptr<type_t>! {

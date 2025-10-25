@@ -20,6 +20,8 @@
 #include "errno.h"
 #include "log.h"
 
+#define LAMBDA(return_type, body) \
+    ({ return_type __fn__ body __fn__; })
 
 #ifndef O_BINARY
 #define O_BINARY 0
@@ -568,50 +570,23 @@ static inline char *str_replace(char *str, char *old, char *new) {
 }
 
 static inline void *sys_memory_reserve(void *hint, uint64_t size) {
-    void *ptr;
-#if defined(__DARWIN) && defined(__ARM64)
-    ptr = mmap(hint, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_JIT, 0, 0);
-#else
-    ptr = mmap(hint, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
-#endif
+    void *ptr = mmap(hint, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
 
     assertf(ptr, "runtime mmap failed: %s", strerror(errno));
     return ptr;
 }
 
 static inline void *sys_memory_map(void *hint, uint64_t size) {
-    void *ptr;
-#if defined(__DARWIN) && defined(__ARM64)
-    ptr = hint;
-    if (mprotect((void *) hint, size, PROT_READ | PROT_WRITE) == -1) {
-        assertf(false, "mprotect failed");
-    }
-//    ptr = mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS | MAP_JIT, 0, 0);
-#else
-    ptr = mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, 0, 0);
+    void *ptr = mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, -1, 0);
     assertf(ptr != MAP_FAILED, "runtime mmap failed: %s", strerror(errno));
     assertf(ptr, "runtime mmap failed: %s", strerror(errno));
-#endif
 
     return ptr;
 }
 
-static inline void sys_memory_used_exec(void *addr, uint64_t size) {
-    // 为 darwin/arm64 设计
-    // 数据清空, 必须在 mprotect exec 之前，exec 之后就不允许写入数据了
-    memset(addr, 0, size);
-
-    // 增加 EXEC
-    if (mprotect(addr, size, PROT_READ | PROT_WRITE | PROT_EXEC) == -1) {
-        assertf(false, "mprotect failed, page_start=%p, size=%lu, err=%s", (void *) addr,
-                size,
-                strerror(errno));
-    }
-}
-
 static inline void *sys_memory_alloc(uint64_t size) {
     void *ptr;
-    ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
+    ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     assertf(ptr, "runtime mmap failed: %s", strerror(errno));
     return ptr;
 }
@@ -647,7 +622,7 @@ static inline void sys_memory_unused(void *addr, uint64_t size) {
 
 #ifdef __LINUX
 static inline void sys_memory_used(void *addr, uint64_t size) {
-    void *ptr = mmap(addr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, 0, 0);
+    void *ptr = mmap(addr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, -1, 0);
     assertf(ptr, "runtime: out of memory");
 }
 #elif __DARWIN
@@ -656,6 +631,7 @@ static inline void sys_memory_used(void *addr, uint64_t size) {
     if (madvise(addr, size, MADV_FREE_REUSE) == -1) {
         assertf(false, "madvise failed: ", strerror(errno));
     }
+    memset(addr, 0, size);
 }
 #else
 #error "not support arch"

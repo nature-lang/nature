@@ -1,0 +1,22 @@
+=== test_generics_pass_by_ident
+--- main.n
+fn main() {
+    var f = vec_cap
+}
+
+--- output.txt
+nature-test/main.n:2:19: generics fn `vec_cap` cannot be passed as ident
+
+
+=== test_fmt_0x
+--- main.n
+import fmt
+
+fn main() {
+    fmt.printf('%02X, %02x\n', 108, 108)
+    fmt.printf('%02X, %02x\n', 200, 200)
+}
+
+--- output.txt
+6C, 6c
+C8, c8

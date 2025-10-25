@@ -72,10 +72,18 @@ fs_context_t *rt_uv_fs_from(n_int_t fd, n_string_t *name) {
     }
 
     ctx->fd = fd;
-    DEBUGF("[fs_from] create file context from fd: %d, name: %s", fd,
+    DEBUGF("[fs_from] create file context from fd: %ld, name: %s", fd,
             (char *) rt_string_ref(name));
 
     return ctx;
+}
+
+static void uv_async_fs_open(fs_context_t *ctx, char *path) {
+    int result = uv_fs_open(&global_loop, &ctx->req, path, (int) ctx->flags, (int) ctx->mode, on_open_cb);
+    if (result) {
+        rti_co_throw(ctx->req.data, (char *) uv_strerror(result), false);
+        co_ready(ctx->req.data);
+    }
 }
 
 fs_context_t *rt_uv_fs_open(n_string_t *path, int64_t flags, int64_t mode) {
@@ -83,19 +91,11 @@ fs_context_t *rt_uv_fs_open(n_string_t *path, int64_t flags, int64_t mode) {
     fs_context_t *ctx = rti_gc_malloc(sizeof(fs_context_t), NULL);
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
-
-    int result = uv_fs_open(&p->uv_loop, &ctx->req, rt_string_ref(path), (int) flags, (int) mode, on_open_cb);
-    if (result) {
-        rti_co_throw(co, (char *) uv_strerror(result), false);
-        return NULL;
-    }
-
-    // 可以 co 的恢复点
+    ctx->flags = flags;
+    ctx->mode = mode;
     ctx->req.data = co;
 
-    // yield wait file open
-    co_yield_waiting(co, NULL, NULL);
-
+    global_waiting_send(uv_async_fs_open, ctx, rt_string_ref(path), 0);
     if (co->has_error) {
         DEBUGF("[fs_open] open file failed: %s", (char *) rt_string_ref(rti_error_msg(co->error)));
         return NULL;
@@ -110,10 +110,14 @@ n_int_t rt_uv_fs_read(fs_context_t *ctx, n_vec_t *buf) {
     return rt_uv_fs_read_at(ctx, buf, -1);
 }
 
+static void uv_async_fs_read_at(fs_context_t *ctx, int offset) {
+    uv_fs_read(&global_loop, &ctx->req, ctx->fd, &ctx->buf, 1, offset, on_read_cb);
+}
+
 n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     coroutine_t *co = coroutine_get();
     n_processor_t *p = processor_get();
-    DEBUGF("[rt_uv_fs_read] read file: %d", ctx->fd);
+    DEBUGF("[rt_uv_fs_read] read file: %ld", ctx->fd);
 
     if (ctx->closed) {
         rti_co_throw(co, "fd already closed", false);
@@ -125,12 +129,10 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     ctx->data_len = 0; // 记录实际读取的数量
     ctx->data = (char *) buf->data;
     ctx->buf = uv_buf_init(ctx->data, buf->length);
+    ctx->req.data = co;
 
     // 基于 fd offset 进行读取
-    ctx->req.data = co;
-    uv_fs_read(&p->uv_loop, &ctx->req, ctx->fd, &ctx->buf, 1, offset, on_read_cb);
-
-    co_yield_waiting(co, NULL, NULL);
+    global_waiting_send(uv_async_fs_read_at, ctx, (void *) offset, 0);
 
     if (co->has_error) {
         DEBUGF("[rt_uv_fs_read] read file failed: %s", (char *) rt_string_ref(rti_error_msg(co->error)));
@@ -142,6 +144,14 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     return ctx->data_len;
 }
 
+static void uv_async_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
+    // 配置写入缓冲区
+    uv_buf_t uv_buf = uv_buf_init((char *) buf->data, buf->length);
+
+    // 发起异步写入请求，指定偏移量
+    uv_fs_write(&global_loop, &ctx->req, ctx->fd, &uv_buf, 1, offset, on_write_cb);
+}
+
 n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     coroutine_t *co = coroutine_get();
     n_processor_t *p = processor_get();
@@ -151,19 +161,10 @@ n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
         return 0;
     }
 
-    DEBUGF("[fs_write_at] write file: %d, offset: %d, data_len: %ld", ctx->fd, offset, buf->length);
-
-    // 配置写入缓冲区
-    uv_buf_t uv_buf = uv_buf_init((char *) buf->data, buf->length);
-
-    // 设置协程恢复点
+    DEBUGF("[fs_write_at] write file: %ld, offset: %d, data_len: %ld", ctx->fd, offset, buf->length);
     ctx->req.data = co;
 
-    // 发起异步写入请求，指定偏移量
-    uv_fs_write(&p->uv_loop, &ctx->req, ctx->fd, &uv_buf, 1, offset, on_write_cb);
-
-    // 挂起协程等待写入完成
-    co_yield_waiting(co, NULL, NULL);
+    global_waiting_send(uv_async_fs_write_at, ctx, buf, (void *) (int64_t) offset);
 
     if (co->has_error) {
         DEBUGF("[fs_write_at] write file failed: %s", (char *) rt_string_ref(rti_error_msg(co->error)));
@@ -181,30 +182,30 @@ n_int_t rt_uv_fs_write(fs_context_t *ctx, n_vec_t *buf) {
     return rt_uv_fs_write_at(ctx, buf, -1);
 }
 
-void rt_uv_fs_close(fs_context_t *ctx) {
-    n_processor_t *p = processor_get();
-    DEBUGF("[fs_close] close file: %d", ctx->fd);
-
-    // 重复关闭直接返回
-    if (ctx->closed) {
-        return;
-    }
-
+static void uv_async_fs_close(fs_context_t *ctx, coroutine_t *co) {
     // 同步方式关闭文件
-    int result = uv_fs_close(&p->uv_loop, &ctx->req, ctx->fd, NULL);
+    int result = uv_fs_close(&global_loop, &ctx->req, ctx->fd, NULL);
     if (result < 0) {
         DEBUGF("[fs_close] close file failed: %s", uv_strerror(result));
     } else {
         DEBUGF("[fs_close] close file success");
     }
-
-    // 清理请求和释放内存
     uv_fs_req_cleanup(&ctx->req);
+
+    co_ready(co);
+}
+
+void rt_uv_fs_close(fs_context_t *ctx) {
+    n_processor_t *p = processor_get();
+    DEBUGF("[fs_close] close file: %ld", ctx->fd);
+
+    // 重复关闭直接返回
+    if (ctx->closed) {
+        return;
+    }
     ctx->closed = true;
 
-    // ctx 的内存应该由 GC 释放，而不是此处主动释放。
-    // 否则 用户端 再次读取 ctx 从而出现奇怪的行为！
-    //    free(ctx);
+    global_waiting_send(uv_async_fs_close, ctx, coroutine_get(), 0);
 }
 
 
@@ -228,6 +229,15 @@ static void on_stat_cb(uv_fs_t *req) {
     // Note: req cleanup is handled in the main function after coroutine resumes
 }
 
+static void uv_async_fs_stat(fs_context_t *ctx, coroutine_t *co) {
+    // Initiate async stat request
+    int result = uv_fs_fstat(&global_loop, &ctx->req, ctx->fd, on_stat_cb);
+    if (result < 0) {
+        rti_co_throw(co, (char *) uv_strerror(result), false);
+        co_ready(co);
+    }
+}
+
 uv_stat_t rt_uv_fs_stat(fs_context_t *ctx) {
     coroutine_t *co = coroutine_get();
     n_processor_t *p = processor_get();
@@ -243,15 +253,7 @@ uv_stat_t rt_uv_fs_stat(fs_context_t *ctx) {
     // Set up coroutine resume point
     ctx->req.data = co;
 
-    // Initiate async stat request
-    int result = uv_fs_fstat(&p->uv_loop, &ctx->req, ctx->fd, on_stat_cb);
-    if (result < 0) {
-        rti_co_throw(co, (char *) uv_strerror(result), false);
-        return stat_result;
-    }
-
-    // Suspend coroutine waiting for stat operation to complete
-    co_yield_waiting(co, NULL, NULL);
+    global_waiting_send(uv_async_fs_stat, ctx, co, 0);
 
     if (co->has_error) {
         DEBUGF("[rt_uv_fs_stat] stat file failed: %s", (char *) rt_string_ref(rti_error_msg(co->error)));

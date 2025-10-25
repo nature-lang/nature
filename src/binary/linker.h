@@ -184,8 +184,6 @@ static inline uint64_t collect_fndef_list(void *ctx) {
         fndef_t *f = &ct_fndef_list[count++];
         size += sizeof(fndef_t);
 
-        f->fn_runtime_reg = c->fn_runtime_reg;
-        f->fn_runtime_stack = c->fn_runtime_stack;
         f->stack_size = c->stack_offset; // native 的时候已经进行了 16byte 对齐了
         f->gc_bits_offset = data_put(c->stack_gc_bits->bits, calc_gc_bits_size(f->stack_size, POINTER_SIZE));
         f->name_offset = strtable_put(c->linkident);
@@ -242,10 +240,14 @@ static inline uint64_t collect_symdef_list(void *ctx) {
         ast_var_decl_t *var_decl = s->ast_value;
         symdef_t *symdef = &ct_symdef_list[count++];
         symdef->hash = type_hash(var_decl->type);
-        symdef->size = type_sizeof(var_decl->type); // 符号的大小
+        symdef->size = type_sizeof(var_decl->type);
+        if (var_decl->type.kind == TYPE_RAW_STRING) {
+            symdef->size = (int64_t) s->data;
+        }
         symdef->base = 0; // 这里引用了全局符号表段地址
         symdef->name_offset = strtable_put(var_decl->ident);
 
+        // 注册重定位完成堆 base 的处理
         if (BUILD_OS == OS_LINUX) {
             elf_context_t *elf_ctx = ctx;
             elf_put_rel_data(ctx, elf_ctx->data_symdef_section, rel_offset, var_decl->ident, STT_OBJECT);

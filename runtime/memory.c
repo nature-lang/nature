@@ -5,9 +5,13 @@
 
 uint64_t remove_total_bytes = 0; // 当前回收到物理内存中的总空间
 uint64_t allocated_total_bytes = 0; // 当前分配的总空间
-int64_t allocated_bytes = 0; // 当前分配的内存空间
+
+atomic_size_t allocated_bytes = 0; // 当前分配的内存空间
+
 uint64_t next_gc_bytes = 0; // 下一次 gc 的内存量
 bool gc_barrier; // gc 屏障开启标识
+
+struct sc_map_sv const_str_pool;
 
 uint8_t gc_stage; // gc 阶段
 mutex_t gc_stage_locker;
@@ -73,8 +77,6 @@ void rtypes_deserialize() {
             os_env_rtype = *r;
         } else if (r->kind == TYPE_VEC) {
             vec_rtype = *r;
-        } else if (r->kind == TYPE_GC_FN) {
-            fn_rtype = *r;
         } else if (str_equal(STRTABLE(r->ident_offset), THROWABLE_IDENT)) {
             throwable_rtype = *r;
         }
@@ -85,12 +87,35 @@ void rtypes_deserialize() {
     }
 }
 
-void symdefs_deserialize() {
-    rt_symdef_ptr = &rt_symdef_data;
+
+void register_const_str_pool() {
+    sc_map_init_sv(&const_str_pool, 1024, 0);
     for (int i = 0; i < rt_symdef_count; ++i) {
         symdef_t s = rt_symdef_ptr[i];
-        DEBUGF("[runtime.symdefs_deserialize] name=%s, .data_base=0x%lx, size=%ld, hash=%d, base_int_value=0x%lx",
-               STRTABLE(s.name_offset), s.base,
-               s.size, s.hash, fetch_int_value(s.base, s.size));
+        rtype_t *rtype = rt_find_rtype(s.hash);
+        if (rtype->kind != TYPE_RAW_STRING) {
+            continue;
+        }
+
+        if (sc_map_get_sv(&const_str_pool, (char *) s.base) != NULL) {
+            continue;
+        }
+
+        n_string_t *str = rt_string_new(s.base);
+        sc_map_put_sv(&const_str_pool, (char *) s.base, str);
+//        TDEBUGF("[register_const_str_pool] str = %p, str %s", str, (char *) s.base);
+    }
+};
+
+void symdefs_deserialize() {
+    rt_symdef_ptr = &rt_symdef_data;
+
+    for (int i = 0; i < rt_symdef_count; ++i) {
+        symdef_t s = rt_symdef_ptr[i];
+        rtype_t *rtype = rt_find_rtype(s.hash);
+
+        DEBUGF("[runtime.symdefs_deserialize] name=%s, .data_base=%p, size=%ld, hash=%d",
+               STRTABLE(s.name_offset), (void *) s.base,
+               s.size, s.hash);
     }
 }

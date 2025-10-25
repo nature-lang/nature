@@ -45,9 +45,6 @@ extern rtype_t os_env_rtype;
 // GC_RTYPE(TYPE_VEC, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN)
 extern rtype_t vec_rtype;
 
-//   GC_RTYPE(TYPE_GC_FN, 12, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
-// TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
-// TYPE_GC_SCAN);
 extern rtype_t fn_rtype;
 
 // 默认是 uint8[8] == uint8* , 因为指针占用 8 byte
@@ -67,12 +64,14 @@ extern rtype_t fn_rtype;
     }                                                                     \
     _size = _count * POINTER_SIZE;                                        \
     if (_size == 0) _size = type_kind_sizeof(_kind);                      \
+    uint64_t _stack_size = _size;                                         \
+    if (kind_in_heap(_kind)) _stack_size = POINTER_SIZE;                  \
     uint64_t _hash = ((uint64_t) _kind << 56) | (_size << 32) | _gc_bits; \
     (rtype_t){                                                            \
-            .size = _size,                                                \
+            .heap_size = _size,                                           \
+            .stack_size = _stack_size,                                    \
             .kind = _kind,                                                \
             .last_ptr = _last_ptr,                                        \
-            .in_heap = kind_in_heap(_kind),                               \
             .malloc_gc_bits_offset = -1,                                  \
             .hashes_offset = -1,                                          \
             .gc_bits = _gc_bits,                                          \
@@ -89,10 +88,8 @@ extern rtype_t fn_rtype;
 static inline rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
     assert(element_rtype);
 
-    uint64_t element_size = rtype_stack_size(element_rtype, POINTER_SIZE);
-
     rtype_t rtype = {
-            .size = element_size * length,
+            .heap_size = element_rtype->stack_size * length,
             .hash = 0, // runtime 生成的没有 hash 值，不需要进行 hash 定位
             .kind = TYPE_ARR,
             .length = length,
@@ -162,10 +159,7 @@ static inline void builtin_rtype_init() {
     vec_rtype = GC_RTYPE(TYPE_VEC, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
 
     // 初始化函数 rtype
-    fn_rtype = GC_RTYPE(TYPE_GC_FN, 12,
-                        TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
-                        TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
-                        TYPE_GC_NOSCAN, TYPE_GC_SCAN);
+    fn_rtype = GC_RTYPE(TYPE_FN, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
 }
 
 

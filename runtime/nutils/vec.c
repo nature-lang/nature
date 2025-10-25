@@ -46,12 +46,12 @@ n_vec_t *rt_unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t length) {
 
     rtype_t *element_rtype = rt_find_rtype(element_hash);
     assert(element_rtype && "cannot find element_rtype with hash");
-    int64_t element_size = rtype_stack_size(element_rtype, POINTER_SIZE);
+    int64_t element_size = element_rtype->stack_size;
 
     // - 进行内存申请,申请回来一段内存是 memory_vec_t 大小的内存, memory_vec_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 vec_data + 1 时会按照 sizeof(memory_vec_t) 大小的内存区域移动
     // 的技巧而已，所以这里要和数组结构做一个区分
-    n_vec_t *vec = rti_gc_malloc(vec_rtype.size, &vec_rtype);
+    n_vec_t *vec = rti_gc_malloc(vec_rtype.heap_size, &vec_rtype);
     vec->capacity = capacity;
     vec->length = length;
     vec->element_size = element_size;
@@ -87,12 +87,12 @@ n_vec_t *rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *va
 
     rtype_t *element_rtype = rt_find_rtype(element_hash);
     assert(element_rtype && "cannot find element_rtype with hash");
-    int64_t element_size = rtype_stack_size(element_rtype, POINTER_SIZE);
+    int64_t element_size = element_rtype->stack_size;
 
     // - 进行内存申请,申请回来一段内存是 memory_vec_t 大小的内存, memory_vec_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 vec_data + 1 时会按照 sizeof(memory_vec_t) 大小的内存区域移动
     // 的技巧而已，所以这里要和数组结构做一个区分
-    n_vec_t *vec = rti_gc_malloc(vec_rtype.size, &vec_rtype);
+    n_vec_t *vec = rti_gc_malloc(vec_rtype.heap_size, &vec_rtype);
     vec->capacity = capacity;
     vec->length = length;
     vec->element_size = element_size;
@@ -138,10 +138,10 @@ n_vec_t *rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity) {
     // - 进行内存申请,申请回来一段内存是 memory_vec_t 大小的内存, memory_vec_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 vec_data + 1 时会按照 sizeof(memory_vec_t) 大小的内存区域移动
     // 的技巧而已，所以这里要和数组结构做一个区分
-    n_vec_t *vec = rti_gc_malloc(vec_rtype.size, &vec_rtype);
+    n_vec_t *vec = rti_gc_malloc(vec_rtype.heap_size, &vec_rtype);
     vec->capacity = capacity;
     vec->length = length;
-    vec->element_size = rtype_stack_size(element_rtype, POINTER_SIZE);
+    vec->element_size = element_rtype->stack_size;
     vec->hash = hash;
     if (capacity > 0) {
         vec->data = rti_array_new(element_rtype, capacity);
@@ -287,7 +287,7 @@ n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end) {
            l->element_size, start, end);
     int64_t length = end - start;
 
-    n_vec_t *sliced_vec = rti_gc_malloc(vec_rtype.size, &vec_rtype);
+    n_vec_t *sliced_vec = rti_gc_malloc(vec_rtype.heap_size, &vec_rtype);
     sliced_vec->capacity = length;
     sliced_vec->length = length;
     sliced_vec->hash = l->hash;
@@ -389,15 +389,15 @@ n_vec_t *rti_vec_new(rtype_t *element_rtype, int64_t length, int64_t capacity) {
         }
     }
 
-    assert(vec_rtype.size == sizeof(n_vec_t));
+    assert(vec_rtype.heap_size == sizeof(n_vec_t));
     assert(capacity >= length && "capacity must be greater than length");
     assert(element_rtype && "ele_rtype is empty");
 
     // 申请 vec 空间
-    n_vec_t *vec = rti_gc_malloc(vec_rtype.size, &vec_rtype);
+    n_vec_t *vec = rti_gc_malloc(vec_rtype.heap_size, &vec_rtype);
     vec->capacity = capacity;
     vec->length = length;
-    vec->element_size = rtype_stack_size(element_rtype, POINTER_SIZE);
+    vec->element_size = element_rtype->stack_size;
     vec->hash = vec_rtype.hash;
 
     void *data = rti_array_new(element_rtype, capacity);

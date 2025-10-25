@@ -170,11 +170,6 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
                 linked_push(result, lir_op_move(dst_param, src));
             }
 
-            // 最后一个参数是 fn_runtime_operand 参数，将其记录下来
-            if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
-                c->fn_runtime_stack = stack_param_slot; // 最后一个参数所在的栈的起点
-            }
-
             stack_param_slot += align_up(type_sizeof(param_type), QWORD); // 参数按照 8byte 对齐
         } else {
             if (param_type.kind == TYPE_STRUCT) {
@@ -236,11 +231,6 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
                     lo_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, param_type.kind));
                 } else {
                     assert(false);
-                }
-
-                // fn runtime operand 就是一个 type_fn 类型的指针
-                if (c->fn_runtime_operand != NULL && i == param_vars->count - 1) {
-                    c->fn_runtime_reg = reg_index;
                 }
 
                 linked_push(result, lir_op_move(dst_param, lo_reg_operand));

@@ -274,14 +274,6 @@ fn typeof_hash(i64 hash):type_t!
 
 Get type information from hash value
 
-## fn sizeof_rtype
-
-```
-fn sizeof_rtype(rawptr<rtype_t> r):int
-```
-
-Get size of runtime type
-
 ## fn typeof
 
 ```

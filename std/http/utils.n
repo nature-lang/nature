@@ -40,5 +40,5 @@ fn utos(uint value):string {
        idx -= 1
     }
 
-    return buf.slice(idx + 1, 20) as string
+    return buf.slice(idx + 1, 20) as anyptr as string
 }

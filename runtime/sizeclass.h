@@ -73,26 +73,19 @@
 //    66      28672       57344        2           0      4.91%       4096
 //    67      32768       32768        1           0     12.50%       8192
 
-// jit size class(apple silicon 系统的页总是按照 16k 对齐， 所以实际上是 16384， 上面的所有的 pages size 都要 * 2)
-//    68        96         8192     102            32      19.07%      16
 
-
-/**
-* 该 span 主要为 jit 代码服务
-*/
-#define JIT_SIZECLASS 68
 #define LARGE_SIZECLASS 0
 
 /**
  * sizeclass 一共有 68 种(其中 sizeclass = 0 用于大内存对象分配，在定义中的一共是 1 - 67 种)
  * spanclass 相比于 sizeclass 多了 span 中的 obj 是否包含指针
  */
-#define SIZECLASS_COUNT 68 + 1
+#define SIZECLASS_COUNT 68
 
 /**
  * 最后一位表示 sizeclass 是否包含指针 是 0 表示 scan 类型， 1 表示 noscan 类型
  */
-#define SPANCLASS_COUNT 138
+#define SPANCLASS_COUNT 136
 
 // 不同 span 的 obj 的大小，单位 byte
 static uint64_t class_obj_size[SIZECLASS_COUNT] = {
@@ -104,15 +97,15 @@ static uint64_t class_obj_size[SIZECLASS_COUNT] = {
     4864, 5376, 6144, 6528, 6784, 6912, 8192, 9472, 9728, 10240, 10880,
     12288,
     13568, 14336, 16384, 18432, 19072, 20480, 21760, 24576, 27264, 28672,
-    32768, 96
+    32768
 };
 
-static uint8_t clas_pages_count[SIZECLASS_COUNT] = {
+static uint8_t class_pages_count[SIZECLASS_COUNT] = {
     0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
     1, 1,
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1, 2, 1, 2, 1, 3, 2, 3, 1, 3, 2, 3,
     4, 5,
-    6, 1, 7, 6, 5, 4, 3, 5, 7, 2, 9, 7, 5, 8, 3, 10, 7, 4, 1
+    6, 1, 7, 6, 5, 4, 3, 5, 7, 2, 9, 7, 5, 8, 3, 10, 7, 4
 };
 
 

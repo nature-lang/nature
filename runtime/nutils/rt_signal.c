@@ -1,5 +1,6 @@
 #include "rt_signal.h"
 
+#include "runtime/nutils/fn.h"
 #include "vec.h"
 
 // sig to ch list
@@ -55,7 +56,7 @@ void signal_notify(n_chan_t *ch, n_vec_t *signals) {
     sc_map_put_64(&signal_handlers, (uint64_t) ch, mask);
 
     if (!signal_loop_co) {
-        signal_loop_co = rt_coroutine_new(signal_loop, FLAG(CO_FLAG_RTFN), NULL, NULL);
+        signal_loop_co = rt_coroutine_new(fn_new((addr_t) signal_loop, NULL), FLAG(CO_FLAG_RTFN), NULL, NULL);
         DEBUGF("[signal_notify] pid %d builtin coroutine %p signal loop create success", getpid(), signal_loop_co);
         rt_coroutine_dispatch(signal_loop_co);
     }

@@ -62,6 +62,13 @@ int ROUTES_OPTIONS = 5
 int ROUTES_HEAD = 6
 int ROUTES_ALL = 7
 
+var HTTP_VERSION = 'HTTP/1.1'
+var HTTP_MSG_OK = 'OK'
+
+var MIME_TEXT = 'text/plain'
+var MIME_JSON = 'application/json'
+var separation = '\r\n' as anyptr as [u8]
+var separation2 = '\r\n\r\n' as anyptr as [u8]
 
 type callback_fn = fn(request_t, ptr<response_t>):void!
 
@@ -76,15 +83,20 @@ type server_t = struct{
     fn():void! handler_fn
     string addr
     int port
-    [{string:callback_fn};8] routers // TODO tire tree
-    anyptr uv_server_handler
-    anyptr listen_co
+    [{string:callback_fn};8] routers
+
+    [response_t] resonse_pool 
+
+    anyptr inner
+}
+
+fn server_t.acquire_response() {
+    
 }
 
 fn server_t.get(string path, callback_fn callback) {
     self.router_register(ROUTES_GET, path, callback)
 }
-
 
 fn server_t.post(string path, callback_fn callback) {
     self.router_register(ROUTES_POST, path, callback)
@@ -140,12 +152,9 @@ fn server_t.find_callback(u8 method, string path):callback_fn {
         return all_routes[path]
     }
 
-    if all_routes.contains('/') {
-        return all_routes['/']
+    return all_routes['/'] catch e {
+       return callback_notfound as callback_fn
     }
-
-    // callback_notfound 作为 ident 具有自己的类型(fn), 此处需要转换为 callback_fn, 或者定义 callback_fn 直接使用 alias 声明 而不是 type
-    return callback_notfound as callback_fn
 }
 
 fn server_t.listen(int port):void! {
@@ -181,62 +190,61 @@ type response_t = struct{
     int length // content length
     string body // 响应体
     string content_type // content type
-    string charset
 }
 
-fn request_new(rawptr<uv.conn_ctx_t> ctx):request_t {
+fn request_new(rawptr<uv.conn_t> conn):request_t {
     var req = request_t{
-        method = ctx.method,
-        host = runtime.string_ref_new(ctx.host_at, ctx.host_len),
-        url = runtime.string_ref_new(ctx.url_at, ctx.url_len),
-        path = runtime.string_ref_new(ctx.path_at, ctx.path_len),
+        method = conn.method,
+        host = runtime.string_ref_new(conn.host_at, conn.host_len),
+        url = runtime.string_ref_new(conn.url_at, conn.url_len),
+        path = runtime.string_ref_new(conn.path_at, conn.path_len),
     }
 
-    if ctx.body_len > 0 {
-        req.length = ctx.body_len
-        req.body = runtime.string_ref_new(ctx.body_at, ctx.body_len)
+    if conn.body_len > 0 {
+        req.length = conn.body_len
+        req.body = runtime.string_ref_new(conn.body_at, conn.body_len)
     }
 
-    if ctx.query_len > 0 {
-        req.query = runtime.string_ref_new(ctx.query_at, ctx.query_len)
+    if conn.query_len > 0 {
+        req.query = runtime.string_ref_new(conn.query_at, conn.query_len)
     }
 
-    for int i = 0; i < ctx.headers_len; i += 1 {
-        var name = runtime.string_ref_new(ctx.headers[i].name_at, ctx.headers[i].name_len)
-        var value = runtime.string_ref_new(ctx.headers[i].value_at, ctx.headers[i].value_len)
+    for int i = 0; i < conn.headers_len; i += 1 {
+        var name = runtime.string_ref_new(conn.headers[i].name_at, conn.headers[i].name_len)
+        var value = runtime.string_ref_new(conn.headers[i].value_at, conn.headers[i].value_len)
         req.headers[name] = value
     }
 
     return req
 }
 
+// call in new coroutine
 fn conn_handler():void! {
     var arg = co.arg()
     if arg == 0 {
-        throw errorf('conn_handler arg is null')
+        panic('conn_handler arg is null')
+        // throw errorf('conn_handler arg is null')
     }
-    var ctx = arg as rawptr<uv.conn_ctx_t>
+    var conn = arg as rawptr<uv.conn_t>
 
-    var req = request_new(ctx)
+    var req = request_new(conn)
     var res = response_new()
 
-    var handler = ctx.server.find_callback(req.method, req.path)
+    var handler = conn.server.find_callback(req.method, req.path)
     handler(req, res) catch e {
         res.status = 500
         res.send('Internal error')
     }
-    uv.conn_resp(ctx, res.to_str())
+    uv.conn_resp(conn, res.to_str())
 }
 
 fn response_new():ptr<response_t> {
     return new response_t(
-        version = 'HTTP/1.1',
         headers = {'Connection': 'close'},
         status = 200,
-        message = 'OK',
+        message = HTTP_MSG_OK,
         length = 0,
-        content_type = 'text/plain',
-        charset = 'utf8',
+        content_type = MIME_TEXT,
     )
 }
 
@@ -251,31 +259,31 @@ fn response_t.to_str():string {
 
     u8 space_ascii = 32
 
-    buf.append(self.version as [u8])
+    buf.append(HTTP_VERSION as anyptr as [u8])
     buf.push(space_ascii)
-    buf.append(utils.status_to_str(self.status) as [u8])
+    buf.append(utils.status_to_str(self.status) as anyptr as [u8])
     buf.push(space_ascii)
-    buf.append(self.message as [u8])
-    buf.append('\r\n' as [u8])
+    buf.append(self.message as anyptr as [u8])
+    buf.append(separation)
 
     var header_len = self.headers.len()
     for k, v in self.headers {
-        buf.append(k as [u8])
-        buf.append(': ' as [u8])
-        buf.append(v as [u8])
-        buf.append('\r\n' as [u8])
+        buf.append(k as anyptr as anyptr as [u8])
+        buf.append(': ' as anyptr as anyptr as [u8])
+        buf.append(v as anyptr as anyptr as [u8])
+        buf.append(separation)
     }
 
-    buf.append('Content-Length: ' as [u8])
-    buf.append(utils.utos(self.length as uint) as [u8])
-    buf.append('\r\n' as [u8])
+    buf.append('Content-Length: ' as anyptr as [u8])
+    buf.append(utils.utos(self.length as uint) as anyptr as [u8])
+    buf.append(separation)
 
-    buf.append('Content-Type: ' as [u8])
-    buf.append(self.content_type as [u8])
-    buf.append('; charset=' as [u8])
-    buf.append(self.charset as [u8])
-    buf.append('\r\n\r\n' as [u8])
-    buf.append(self.body as [u8])
+    buf.append('Content-Type: ' as anyptr as [u8])
+    buf.append(self.content_type as anyptr as [u8])
+    buf.append('; charset=utf-8' as anyptr as [u8])
 
-    return buf as string
+    buf.append(separation2)
+    buf.append(self.body as anyptr as [u8])
+
+    return buf as anyptr as string
 }

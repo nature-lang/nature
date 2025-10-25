@@ -25,14 +25,14 @@ set(LIB_OUTPUT_PREFIX ../lib)
 # release 时的编译优化等级
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
     # NDEBUG 会屏蔽 assert
-    set(CMAKE_C_FLAGS_RELEASE "-O2 -fno-omit-frame-pointer")
-    #    set(CMAKE_C_FLAGS_RELEASE "-O2 -DNDEBUG")
+    set(CMAKE_C_FLAGS_RELEASE "-O3 -fno-omit-frame-pointer -DNDEBUG")
 endif ()
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
     message("DEBUGF enabled")
     # runtime debug 标志
-    add_compile_definitions(RUNTIME_DEBUG_LOG)
+    # add_compile_definitions(RUNTIME_DEBUG_LOG)
+    add_compile_definitions(TEST_MODE)
     set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -O2 -fno-omit-frame-pointer")
 endif ()
 

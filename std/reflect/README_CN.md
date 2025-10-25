@@ -274,13 +274,6 @@ fn typeof_hash(i64 hash):type_t!
 
 从哈希值获取类型信息
 
-## fn sizeof_rtype
-
-```
-fn sizeof_rtype(rawptr<rtype_t> r):int
-```
-
-获取运行时类型的大小
 
 ## fn typeof
 

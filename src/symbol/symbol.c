@@ -40,16 +40,6 @@ void symbol_init() {
     symbol_typedef_list = slice_new();
 }
 
-// compiler 阶段临时生成的数据
-void symbol_table_set_var(char *unique_ident, type_t type, module_t *m) {
-    ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
-    var_decl->type = type_copy(m, type);
-    var_decl->ident = unique_ident;
-
-    // 添加到符号表中
-    symbol_table_set(unique_ident, SYMBOL_VAR, var_decl, true);
-}
-
 symbol_t *symbol_table_set(string ident, symbol_type_t type, void *ast_value, bool is_local) {
     bool overlay = table_exist(symbol_table, ident);
 

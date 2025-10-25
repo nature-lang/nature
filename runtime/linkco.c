@@ -25,7 +25,7 @@ linkco_t *rti_acquire_linkco() {
 
         // 全局借取失败，需要自己 new 一个
         if (p->linkco_count == 0) {
-            linkco_t *linkco = rti_gc_malloc(linkco_rtype.size, &linkco_rtype);
+            linkco_t *linkco = rti_gc_malloc(linkco_rtype.heap_size, &linkco_rtype);
             DEBUGF("[rti_acquire_linkco] p: %d gc_malloc linkco %p", p->index, linkco);
             //            p->linkco_cache[p->linkco_count++] = linkco;
             rti_write_barrier_ptr(&p->linkco_cache[p->linkco_count++], linkco, false);

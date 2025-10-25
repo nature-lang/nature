@@ -7,19 +7,12 @@ import time
 
 fn server():void! {
     var buf = vec_new<u8>(0, 1024)
-    var addr = udp.addr_t{
-        ip = '127.0.0.1',
-        port = 8088,
-    }
-
     for int i = 0; i < 100; i += 1 {
-        go fn():void! {
-            var socket = udp.bind('0.0.0.0:8088')
-            for int i = 0; i < 1000; i += 1 {
-                socket.sendto('hello' as [u8], addr)
-            }
-        }()
-
+        var socket = udp.bind('0.0.0.0:8088')
+        for int i = 0; i < 1000; i += 1 {
+            socket.sendto('hello' as [u8], '127.0.0.1:8088')
+        }
+        socket.close()
     }
 }
 
@@ -42,7 +35,7 @@ fn echo_server():void! {
     var socket = udp.bind('0.0.0.0:8088')
     for true {
         var (len, addr) = socket.recvfrom(buf)
-        socket.sendto(buf.slice(0, len), addr)
+        socket.sendto(buf[0..len], addr.to_string())
     }
 
     socket.close()
@@ -54,7 +47,7 @@ fn send():void! {
     var buf = vec_new<u8>(0, 1024)
 
     var len = conn.read(buf)
-    println('send success, recv msg', buf.slice(0, len) as string)
+    println('send success, recv msg', buf[0..len] as string)
     conn.close()
 }
 
@@ -187,7 +180,7 @@ fn echo_server():void! {
     var socket = udp.bind('0.0.0.0:8088')
     for true {
         var (len, addr) = socket.recvfrom(buf)
-        socket.sendto(buf.slice(0, len), addr)
+        socket.sendto(buf.slice(0, len), addr.to_string())
     }
 
     socket.close()
@@ -258,3 +251,27 @@ fn main() {
 
 --- output.txt
 coroutine 'main' panic: 'unknown node or service' at nature-test/main.n:7:15
+
+=== test_sendto_speed
+--- main.n
+import net.udp
+import co
+import runtime
+import time
+
+var count = 0
+
+fn main() {
+    var start = time.now().ms_timestamp()
+    var conn = udp.connect('127.0.0.1:8088')
+    var msg = 'hello\n' as [u8]
+
+    for int i = 0; i < 100000; i += 1 {
+        conn.write(msg)
+    }
+
+    conn.close()
+    var end = time.now().ms_timestamp()
+    println('use ms:', end - start)
+    assert(end - start < 1000)
+}

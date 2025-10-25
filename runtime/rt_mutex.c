@@ -251,7 +251,7 @@ void rt_mutex_waiter_acquire(rt_mutex_t *m, bool to_head) {
         //        assertf(m->waiter_count == m->waiters.count, "waiter_count=%lu, waiters.count=%lu", m->waiter_count,
         //                m->waiters.count);
 
-        // bug: 此时一旦解锁， release 就能读取 waiters 并 push 到 runnable list 中导致数据异常
+        // 一旦解锁， release 就能读取 waiters 并 push 到 runnable list 中导致数据异常
         // 所以需要将锁延迟到 yield 到 sched 后再进行处理
         co_yield_waiting(co, mutex_yield_commit, &m->waiters.locker);
 

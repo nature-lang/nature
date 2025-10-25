@@ -3,7 +3,7 @@
 
 #include "utils/type.h"
 
-void print(n_vec_t *args, bool with_space);
+void print(n_vec_t *args);
 
 void println(n_vec_t *args);
 

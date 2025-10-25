@@ -1,4 +1,4 @@
-use log::debug;
+use log::{debug, trace};
 
 use crate::utils::format_global_ident;
 
@@ -314,7 +314,7 @@ impl SymbolTable {
         };
 
         if let SymbolKind::Fn(fn_mutex) = &symbol.kind {
-            debug!("define fn symbol {}, fn_mutex_ptr: {:?}",  &ident, Arc::as_ptr(fn_mutex));
+            trace!("define fn symbol {}, fn_mutex_ptr: {:?}",  &ident, Arc::as_ptr(fn_mutex));
         }
 
         let symbol_id = self.symbols.alloc(symbol);
