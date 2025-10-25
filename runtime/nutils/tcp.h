@@ -171,7 +171,9 @@ static inline void on_tcp_read_cb(uv_stream_t *client_handle, ssize_t nread, con
     uv_read_stop(client_handle);
 
     // 唤醒 connect co
-    DEBUGF("[on_tcp_read_cb] will ready co %p", conn->co);
+    //    if (conn->server == NULL) {
+    //        TDEBUGF("[on_tcp_read_cb] will ready co %p, conn %p", conn->co, conn);
+    //    }
     co_ready(conn->co);
 }
 
@@ -354,22 +356,23 @@ void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
     inner_conn_t *conn = NULL;
 
     while (true) {
+        if (inner_server->accept_head == NULL) {
+            rt_coroutine_sleep(1);
+            continue;
+        }
+
         pthread_mutex_lock(&inner_server->accept_locker);
         if (inner_server->accept_head == NULL) {
             pthread_mutex_unlock(&inner_server->accept_locker);
-
-            DEBUGF("[rt_uv_tcp_accept] eagain to wait");
-            global_waiting_send(uv_async_tcp_accept, inner_server, co, NULL);
-            DEBUGF("[rt_uv_tcp_accept] eagain resume, will retry accept");
             continue;
-        } else {
-            conn = inner_server->accept_head;
-            inner_server->accept_head = inner_server->accept_head->data; // maybe null
-            pthread_mutex_unlock(&inner_server->accept_locker);
-
-            conn->handle.data = conn;
-            break;
         }
+
+        conn = inner_server->accept_head;
+        inner_server->accept_head = inner_server->accept_head->data; // maybe null
+        pthread_mutex_unlock(&inner_server->accept_locker);
+
+        conn->handle.data = conn;
+        break;
     }
 
     conn->ref_count = 1;
@@ -408,20 +411,20 @@ void on_tcp_conn_cb(uv_stream_t *handle, int status) {
     }
 
     // 唤醒一个 pop and coroutine
-    if (inner_server->waiters_count > 0) {
-        DEBUGF("[on_new_conn_cb] waiters count = %ld", inner_server->waiters.count)
-        assert(inner_server->waiters_head);
-
-        // head pop
-        coroutine_t *co = inner_server->waiters_head;
-        inner_server->waiters_head = inner_server->waiters_head->next;
-        inner_server->waiters_count--;
-        if (inner_server->waiters_head == NULL) {
-            inner_server->waiters_tail = NULL;
-        }
-
-        co_ready(co);
-    }
+    //    if (inner_server->waiters_count > 0) {
+    //        DEBUGF("[on_new_conn_cb] waiters count = %ld", inner_server->waiters.count)
+    //        assert(inner_server->waiters_head);
+    //
+    //        // head pop
+    //        coroutine_t *co = inner_server->waiters_head;
+    //        inner_server->waiters_head = inner_server->waiters_head->next;
+    //        inner_server->waiters_count--;
+    //        if (inner_server->waiters_head == NULL) {
+    //            inner_server->waiters_tail = NULL;
+    //        }
+    //
+    //        co_ready(co);
+    //    }
 
     DEBUGF("[on_new_conn_cb] handle completed");
 }
