@@ -14,7 +14,7 @@ lir_operand_t *amd64_select_return_reg(lir_operand_t *operand) {
     return operand_new(LIR_OPERAND_REG, reg_select(rax->index, kind));
 }
 
-linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
+linked_t *amd64_lower_return(closure_t *c, lir_op_t *op) {
     linked_t *result = linked_new();
     if (!c->return_operand) {
         goto END;

@@ -1307,20 +1307,19 @@ static slice_t *riscv64_native_safepoint(closure_t *c, lir_op_t *op) {
     assert(op->output && op->output->assert_type == LIR_OPERAND_REG);
     assert(BUILD_OS == OS_LINUX);
 
-    reg_t *a0_reg = op->output->value;
-    assert(a0_reg->index == A0->index);
+    reg_t *temp_reg = op->output->value;
+    assert(temp_reg->index == T5->index);
 
-    riscv64_asm_operand_t *a0_operand = RO_REG(a0_reg);
+    riscv64_asm_operand_t *t5_operand = RO_REG(T5);
     riscv64_asm_operand_t *t6_operand = RO_REG(T6);
 
     slice_push(operations, RISCV64_INST(RV_LUIS, t6_operand, RO_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_RISCV64_RELOC_TPREL_HI20)));
     slice_push(operations, RISCV64_INST(RV_ADDIS, t6_operand, RO_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_RISCV64_RELOC_TPREL_LO12_I)));
     slice_push(operations, RISCV64_INST(RV_ADD, t6_operand, t6_operand, RO_REG(TP)));
-    slice_push(operations, RISCV64_INST(RV_LD, a0_operand, RO_INDIRECT(T6, 0, QWORD)));
+    slice_push(operations, RISCV64_INST(RV_LD, t5_operand, RO_INDIRECT(T6, 0, QWORD)));
 
-
-    // 比较值是否为 0
-    slice_push(operations, RISCV64_INST(RV_BEQ, a0_operand, RO_REG(ZEROREG), RO_IMM(10)));
+    // 比较值是否为 0, 进行指令跳过
+    slice_push(operations, RISCV64_INST(RV_BEQ, t5_operand, RO_REG(ZEROREG), RO_IMM(10)));
 
     // 如果不为 0，调用 assist_preempt_yield 函数
     slice_push(operations, RISCV64_INST(RV_CALL, RO_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, ASM_RISCV64_RELOC_CALL)));
@@ -1359,7 +1358,7 @@ static riscv64_native_fn riscv64_native_table[] = {
         [LIR_OPCODE_PUSH] = riscv64_native_push, // 待实现
         [LIR_OPCODE_RETURN] = riscv64_native_nop, // 函数返回值处理已在FN_END中完成
         [LIR_OPCODE_RET] = riscv64_native_nop,
-        [LIR_OPCODE_BEQ] = riscv64_native_beq,
+        [LIR_OPCODE_BEE] = riscv64_native_beq,
         [LIR_OPCODE_BAL] = riscv64_native_bal,
 
         // 一元运算符

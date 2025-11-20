@@ -347,8 +347,8 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (op->code == LIR_OPCODE_FN_END) {
-            linked_concat(operations, amd64_lower_fn_end(c, op));
+        if (op->code == LIR_OPCODE_RETURN) {
+            linked_concat(operations, amd64_lower_return(c, op));
             continue;
         }
 

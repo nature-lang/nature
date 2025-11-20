@@ -27,15 +27,10 @@ rt_linked_fixalloc_t global_gc_worklist;
 uv_key_t tls_processor_key = 0;
 uv_key_t tls_coroutine_key = 0;
 
-_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint1 = false;
-_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint2 = false;
-_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint3 = false;
 
 _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint = false;
 
-_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint4 = false;
-_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint5 = false;
-_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint6 = false;
+uint64_t global_safepoint = 0;
 
 uint64_t assist_preempt_yield_ret_addr = 0;
 
@@ -165,19 +160,6 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
     uint64_t *sp = (uint64_t *) CTX_SP;
     uint64_t pc = CTX_PC;
     uint64_t lr = CTX_LR; // 保存返回地址的链接寄存器
-
-    // 查找当前执行的函数(协作式调度，必然能够被找到才行)
-    fndef_t *fn = find_fn(pc, p);
-    if (fn) {
-        // 基于当前 sp 计算扫描偏移
-        uint64_t sp_addr = (uint64_t) sp;
-        //        co->scan_ret_addr = pc;
-        //        co->scan_offset = (uint64_t) co->p->share_stack.align_retptr - sp_addr;
-    } else {
-        // c 语言段被抢占,采用保守扫描策略
-        //        co->scan_ret_addr = 0;
-        //        co->scan_offset = (uint64_t) co->p->share_stack.align_retptr - (uint64_t) sp;
-    }
 
     // 为被抢占的函数预留栈空间
     sp -= 128; // 1024 字节的安全区域
@@ -323,38 +305,23 @@ static void coroutine_aco_init(n_processor_t *p, coroutine_t *co) {
 }
 
 void processor_all_need_stop() {
-    uint64_t stw_time = uv_hrtime();
-    PROCESSOR_FOR(processor_list) {
-        p->need_stw = stw_time;
-    }
-
-    //    mutex_lock(&solo_processor_locker);
-    //    PROCESSOR_FOR(solo_processor_list) {
+    //    uint64_t stw_time = uv_hrtime();
+    //    PROCESSOR_FOR(processor_list) {
     //        p->need_stw = stw_time;
     //    }
-    //    mutex_unlock(&solo_processor_locker);
+    global_safepoint = uv_hrtime();
 }
 
 void processor_all_start() {
-    PROCESSOR_FOR(processor_list) {
-        p->need_stw = 0;
-        p->in_stw = 0;
-        RDEBUGF("[runtime_gc.processor_all_start] p_index=%d, thread_id=%lu set safe_point=false",
-                p->index,
-                (uint64_t) p->thread_id);
-    }
+    global_safepoint = 0;
 
-    //    mutex_lock(&solo_processor_locker);
-    //    PROCESSOR_FOR(solo_processor_list) {
+    //    PROCESSOR_FOR(processor_list) {
     //        p->need_stw = 0;
     //        p->in_stw = 0;
-    //        //        mutex_unlock(&p->gc_solo_stw_locker);
-    //
-    //        TRACEF(
-    //                "[runtime_gc.processor_all_start] p_index_%d=%d, thread_id=%lu set safe_point=false and unlock gc_stw_locker",
-    //                p->share, p->index, (uint64_t) p->thread_id);
+    //        RDEBUGF("[runtime_gc.processor_all_start] p_index=%d, thread_id=%lu set safe_point=false",
+    //                p->index,
+    //                (uint64_t) p->thread_id);
     //    }
-    //    mutex_unlock(&solo_processor_locker);
 
     DEBUGF("[runtime_gc.processor_all_start] all processor stw completed");
 }
@@ -448,13 +415,13 @@ static void processor_run(void *raw) {
                p->runnable_list.count);
 
         // - stw
-        if (p->need_stw > 0) {
+        if (global_safepoint > 0) {
         STW_WAIT:
             DEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index=%d, main_exited=%d", p->need_stw, p->index, main_coroutine_exited);
-            p->in_stw = p->need_stw;
+            p->in_stw = global_safepoint; // 进入 stw 状态
 
-            // runtime_gc 线程会解除 safe 状态，所以这里一直等待即可
-            while (processor_need_stw(p)) {
+            // runtime_gc 线程会解除 safe 状态，所以这里一直等待直到 global_safepoint 清零即可
+            while (p->in_stw == global_safepoint) {
                 TRACEF("[runtime.processor_run] p_index=%d, need_stw=%lu, safe_point=%lu stw loop....", p->index,
                        p->need_stw, p->in_stw);
                 usleep(WAIT_BRIEF_TIME * 1000); // 1ms
@@ -747,7 +714,6 @@ n_processor_t *processor_new(int index) {
 
     // uv_loop_init(&p->uv_loop);
     //    mutex_init(&p->gc_solo_stw_locker, false);
-    p->need_stw = 0;
     p->in_stw = 0;
 
     sc_map_init_64v(&p->caller_cache, 100, 0);
@@ -831,7 +797,7 @@ bool processor_all_safe() {
             continue;
         }
 
-        if (processor_need_stw(p)) {
+        if (p->in_stw == global_safepoint) {
             continue;
         }
 
@@ -840,29 +806,6 @@ bool processor_all_safe() {
                 p->index, (uint64_t) p->thread_id, p->need_stw, p->in_stw);
         return false;
     }
-
-    // safe_point 或者获取到 gc_stw_locker
-    //    mutex_lock(&solo_processor_locker);
-    //    PROCESSOR_FOR(solo_processor_list) {
-    //        if (p->status == P_STATUS_EXIT) {
-    //            continue;
-    //        }
-    //
-    //        if (processor_need_stw(p)) {
-    //            continue;
-    //        }
-    //
-    //        // 获取了锁不代表进入了安全状态,此时可能还在 user code 中, 必须要以 safe_point 为准
-    //        // if (mutex_trylock(&p->gc_stw_locker) != 0) {
-    //        //     continue;
-    //        // }
-    //        RDEBUGF("[runtime_gc.processor_all_safe] solo processor p_index_%d=%d, thread_id=%lu not safe", p->share,
-    //                p->index,
-    //                (uint64_t) p->thread_id);
-    //        mutex_unlock(&solo_processor_locker);
-    //        return false;
-    //    }
-    //    mutex_unlock(&solo_processor_locker);
 
     return true;
 }

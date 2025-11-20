@@ -91,7 +91,7 @@ static string arm64_asm_operand_to_string(arm64_asm_operand_t *operand) {
             switch (operand->indirect.prepost) {
                 case 0: // 普通间接寻址
                     return dsprintf("[%s,#%ld]",
-                                    operand->indirect.reg->name,
+                                    operand->indirect.reg ? operand->indirect.reg->name : "_",
                                     operand->indirect.offset);
                 case 1: // pre-index
                     return dsprintf("[%s,#%ld]!",

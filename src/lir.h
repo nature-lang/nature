@@ -221,6 +221,7 @@ struct lir_operand_t {
     int64_t size; // 实际位宽存储，避免寄存器分配后位宽丢失
 };
 
+static inline bool lir_op_scc(lir_op_t *op);
 
 static inline type_t lir_operand_type(lir_operand_t *operand);
 
@@ -1112,12 +1113,20 @@ static inline lir_operand_t *lir_new_phi_body(module_t *m, lir_var_t *var, uint8
     return operand;
 }
 
+static inline bool ast_op_is_cmp(ast_expr_op_t opcode) {
+    return opcode == AST_OP_LT || opcode == AST_OP_LE ||
+           opcode == AST_OP_GT || opcode == AST_OP_GE ||
+           opcode == AST_OP_EE || opcode == AST_OP_NE;
+}
+
 static inline bool lir_op_branch_cmp(lir_op_t *op) {
-    return op->code == LIR_OPCODE_BEQ;
+    return op->code == LIR_OPCODE_BEE || op->code == LIR_OPCODE_BNE ||
+           op->code == LIR_OPCODE_BGT || op->code == LIR_OPCODE_BGE ||
+           op->code == LIR_OPCODE_BLT || op->code == LIR_OPCODE_BLE;
 }
 
 static inline bool lir_op_branch(lir_op_t *op) {
-    return op->code == LIR_OPCODE_BAL || op->code == LIR_OPCODE_BEQ;
+    return op->code == LIR_OPCODE_BAL || lir_op_branch_cmp(op);
 }
 
 static inline bool lir_op_call(lir_op_t *op) {
@@ -1161,10 +1170,7 @@ static inline bool lir_op_like_move(lir_op_t *op) {
 }
 
 static inline bool lir_op_contain_cmp(lir_op_t *op) {
-    return (op->code == LIR_OPCODE_BEQ || op->code == LIR_OPCODE_SGT || op->code == LIR_OPCODE_SGE ||
-            op->code == LIR_OPCODE_SEE ||
-            op->code == LIR_OPCODE_SNE || op->code == LIR_OPCODE_SLT || op->code == LIR_OPCODE_SLE ||
-            op->code == LIR_OPCODE_USLT);
+    return (lir_op_branch_cmp(op) || lir_op_scc(op));
 }
 
 static inline bool lir_op_term(lir_op_t *op) {

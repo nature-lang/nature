@@ -231,20 +231,8 @@ static void processor_sysmon() {
     // - 监控长时间被占用的 share processor 进行抢占式调度
     PROCESSOR_FOR(processor_list) {
         // 没有需要运行的 runnable_list(等待运行的 runnable) 并且当前也不需要 stw 则不需要则不考虑抢占
-        if (p->need_stw == 0 && p->runnable_list.count == 0) {
+        if (global_safepoint == 0 && p->runnable_list.count == 0) {
             DEBUGF("[processor_sysmon] p_index=%d p_status=%d runnable_list.count == 0 cannot preempt, will skip", p->index, p->status);
-            continue;
-        }
-
-        // 还未随 thread 初始化完成
-        if (!p->tls_yield_safepoint_ptr) {
-            DEBUGF("[processor_sysmon] p_index=%d p_status=%d tls_yield_safepoint_ptr is null cannot preempt, will skip", p->index, p->status);
-            continue;
-        }
-
-        // 已经设置过辅助 GC 不需要处理
-        if (*p->tls_yield_safepoint_ptr) {
-            DEBUGF("[processor_sysmon] p_index=%d p_status=%d tls_yield_safepoint_ptr is false cannot preempt, will skip", p->index, p->status);
             continue;
         }
 
@@ -276,9 +264,6 @@ static void processor_sysmon() {
             continue;
         }
 
-        // 设置辅助 yield (如果 processor 进入 safepoint, 则会清空 safepoint)
-        *p->tls_yield_safepoint_ptr = true;
-
         DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p run timeout=%d ms(co_start=%ld) set tls yield safepoint=true", p->index,
                (uint64_t) p->thread_id, p->coroutine, time / 1000 / 1000, co_start_at / 1000 / 1000);
     }
@@ -301,7 +286,7 @@ static void wait_sysmon() {
     while (true) {
         DEBUGF("[wait_sysmon] will processor sysmon ");
 
-        processor_sysmon();
+        // processor_sysmon();
 
         DEBUGF("[wait_sysmon] sysmon end, will eval gc %ld", gc_eval_count);
         // - GC 判断 (每 100ms 进行一次)

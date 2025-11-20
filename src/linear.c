@@ -32,6 +32,15 @@ lir_opcode_t ast_op_convert[] = {
         [AST_OP_NEG] = LIR_OPCODE_NEG,
 };
 
+lir_opcode_t ast_op_to_if_alert[] = {
+        [AST_OP_LT] = LIR_OPCODE_BGE,
+        [AST_OP_LE] = LIR_OPCODE_BGT,
+        [AST_OP_GT] = LIR_OPCODE_BLE,
+        [AST_OP_GE] = LIR_OPCODE_BLT,
+        [AST_OP_EE] = LIR_OPCODE_BNE,
+        [AST_OP_NE] = LIR_OPCODE_BEE,
+};
+
 static lir_operand_t *
 linear_inline_arr_element_addr_not_check(module_t *m, lir_operand_t *arr_target, lir_operand_t *index_target,
                                          type_t arr_type) {
@@ -80,7 +89,7 @@ linear_inline_arr_element_addr(module_t *m, lir_operand_t *arr_target, lir_opera
     char *end_label_ident = str_connect(cmd_label_ident, LABEL_END_SUFFIX);
     lir_operand_t *cmp_end_label = lir_label_operand(end_label_ident, true);
 
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), cmp_result, cmp_end_label));
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), cmp_result, cmp_end_label));
 
     // TODO 共用 index out error handle label, 也就是有错误直接 goto 到这个地方，而不需要生成成百上千个
     char *error_label_ident = m->current_closure->error_label;
@@ -186,7 +195,7 @@ linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_opera
     char *end_label_ident = str_connect(cmd_label_ident, LABEL_END_SUFFIX);
     lir_operand_t *cmp_end_label = lir_label_operand(end_label_ident, true);
 
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), cmp_result, cmp_end_label));
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), cmp_result, cmp_end_label));
 
     char *error_label_ident = m->current_closure->error_label;
     bool be_catch = false;
@@ -237,15 +246,19 @@ static lir_operand_t *linear_super_move(module_t *m, type_t t, lir_operand_t *ds
     if (is_stack_ref_big_type(t) && type_sizeof(t) > 0) {
         // 如果 dst 或者 src 是 global symbol, 则需要通过 lea 指令加载到 var 中
         if (dst->assert_type == LIR_OPERAND_SYMBOL_VAR) {
-            lir_operand_t *dst_ref = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
+            lir_operand_t *dst_ref = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             OP_PUSH(lir_op_lea(dst_ref, dst));
             dst = dst_ref;
         }
 
         if (src->assert_type == LIR_OPERAND_SYMBOL_VAR) {
-            lir_operand_t *src_ref = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
+            lir_operand_t *src_ref = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             OP_PUSH(lir_op_lea(src_ref, src));
             src = src_ref;
+        }
+
+        // indirect_addr(maybe env)
+        if (src->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         }
 
         linked_t *temps = lir_memory_mov(m, type_sizeof(t), dst, src);
@@ -539,7 +552,7 @@ static void linear_has_panic(module_t *m) {
                  line_operand,
                  column_operand);
 
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), has_error, lir_label_operand(error_target_label, true)));
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), has_error, lir_label_operand(error_target_label, true)));
 }
 
 
@@ -563,7 +576,7 @@ static void linear_has_error(module_t *m) {
     // 不可抢占，也不 yield，所以不需要添加任何勾子。
     push_rt_call(m, RT_CALL_CO_HAS_ERROR, has_error, 4, path_operand, fn_name_operand, line_operand,
                  column_operand);
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), has_error, lir_label_operand(error_target_label, true)));
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), has_error, lir_label_operand(error_target_label, true)));
 }
 
 /**
@@ -1235,7 +1248,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
     }
 
     // 基于 key 已经可以判断迭代是否还有了，下面的 next value 直接根据 cursor_operand 取值即可
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, int_operand(-1), cursor_operand, lir_copy_label_operand(for_end_label->output)));
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(-1), cursor_operand, lir_copy_label_operand(for_end_label->output)));
 
     // 添加 continue label
     OP_PUSH(lir_op_label(for_continue_ident, true));
@@ -1281,7 +1294,7 @@ static void linear_for_cond(module_t *m, ast_for_cond_stmt_t *ast) {
     OP_PUSH(for_start);
 
     lir_operand_t *condition_target = linear_expr(m, ast->condition, NULL);
-    lir_op_t *cmp_goto = lir_op_new(LIR_OPCODE_BEQ, bool_operand(false), condition_target, for_end_operand);
+    lir_op_t *cmp_goto = lir_op_new(LIR_OPCODE_BEE, bool_operand(false), condition_target, for_end_operand);
 
     OP_PUSH(cmp_goto);
     OP_PUSH(lir_op_local_label(m, FOR_CONTINUE_IDENT));
@@ -1318,7 +1331,7 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
 
     // cond -> for_end
     lir_operand_t *cond_target = linear_expr(m, ast->cond, NULL);
-    lir_op_t *beq = lir_op_new(LIR_OPCODE_BEQ, bool_operand(false), cond_target, for_end_operand);
+    lir_op_t *beq = lir_op_new(LIR_OPCODE_BEE, bool_operand(false), cond_target, for_end_operand);
     OP_PUSH(beq);
 
     // continue
@@ -1369,51 +1382,71 @@ static void linear_return(module_t *m, ast_return_stmt_t *ast) {
     if (ast->expr != NULL) {
         lir_operand_t *src = linear_expr(m, *ast->expr, NULL);
         // return void_expr() 时, m->linear_current->return_operand 是 null
-        if (m->current_closure->return_operand) {
-            // OP_PUSH(lir_op_move(m->linear_current->return_operand, src));
-            linear_super_move(m, ast->expr->type, m->current_closure->return_operand, src);
-        }
+        //        if (m->current_closure->return_operand) {
+        //            linear_super_move(m, ast->expr->type, m->current_closure->return_operand, src);
+        //        }
 
         // 保留用来做 return check
-        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
+        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, src, NULL, NULL));
     }
 
     OP_PUSH(lir_op_bal(lir_label_operand(m->current_closure->end_label, false)));
 }
 
+static void linear_cmp(module_t *m, ast_expr_t *cond, lir_operand_t *cmp_target_label) {
+    bool binary_optimize = false;
+    if (cond->assert_type == AST_EXPR_BINARY) {
+        ast_binary_expr_t *binary_expr = cond->value;
+        if (ast_op_is_cmp(binary_expr->op) && binary_expr->left.type.kind != TYPE_STRING) {
+            binary_optimize = true;
+        }
+    }
+
+    if (binary_optimize) {
+        ast_binary_expr_t *binary_expr = cond->value;
+        lir_operand_t *left_target = linear_expr(m, binary_expr->left, NULL);
+        lir_operand_t *right_target = linear_expr(m, binary_expr->right, NULL);
+        lir_opcode_t opcode = ast_op_to_if_alert[binary_expr->op];
+
+        assert(opcode > 0);
+
+        OP_PUSH(lir_op_new(opcode, left_target, right_target, cmp_target_label));
+    } else {
+        lir_operand_t *condition_target = linear_expr(m, *cond, NULL);
+        lir_operand_t *false_target = bool_operand(false);
+        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, false_target, condition_target, cmp_target_label));
+    }
+}
+
 static void linear_if(module_t *m, ast_if_stmt_t *if_stmt) {
     // 编译 condition
-    lir_operand_t *condition_target = linear_expr(m, if_stmt->condition, NULL);
     char *if_label_ident = label_ident_with_unique(IF_IDENT);
+    char *end_label_ident = str_connect(if_label_ident, IF_END_IDENT);
+    char *alternate_label_ident = str_connect(if_label_ident, IF_ALTERNATE_IDENT);
 
-    // 判断结果是否为 false, false 对应 else
-    lir_operand_t *false_target = bool_operand(false);
-    lir_operand_t *end_label_operand = lir_label_operand(str_connect(if_label_ident, IF_END_IDENT), true);
-    lir_operand_t *alternate_label_operand = lir_label_operand(str_connect(if_label_ident, IF_ALTERNATE_IDENT), true);
-
-    lir_op_t *cmp_goto;
+    lir_operand_t *cmp_target_label;
     if (if_stmt->alternate->count == 0) {
-        cmp_goto = lir_op_new(LIR_OPCODE_BEQ, false_target, condition_target,
-                              lir_copy_label_operand(end_label_operand));
+        cmp_target_label = lir_label_operand(end_label_ident, true);
     } else {
-        cmp_goto = lir_op_new(LIR_OPCODE_BEQ, false_target, condition_target,
-                              lir_copy_label_operand(alternate_label_operand));
+        cmp_target_label = lir_label_operand(alternate_label_ident, true);
     }
-    OP_PUSH(cmp_goto);
+
+    linear_cmp(m, &if_stmt->condition, cmp_target_label);
+
     OP_PUSH(lir_op_label(str_connect(if_label_ident, IF_CONTINUE_IDENT), true));
 
     // 编译 consequent block
     linear_body(m, if_stmt->consequent);
-    OP_PUSH(lir_op_bal(end_label_operand));
+    OP_PUSH(lir_op_bal(lir_label_operand(end_label_ident, true)));
 
     // 编译 alternate block
     if (if_stmt->alternate->count != 0) {
-        OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, alternate_label_operand));
+        OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, lir_label_operand(alternate_label_ident, true)));
         linear_body(m, if_stmt->alternate);
     }
 
     // 追加 end_if 标签
-    OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, end_label_operand));
+    OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, lir_label_operand(end_label_ident, true)));
 }
 
 static void linear_select(module_t *m, ast_select_stmt_t *select_stmt) {
@@ -1536,7 +1569,7 @@ select_end:*/
         lir_op_t *handle_end = lir_op_label(str_connect(handle_start_ident, LABEL_END_SUFFIX), true);
 
         // beq i != 1 -> select_case_1.end
-        OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, chan_select_case_index, int_operand(i), handle_start->output));
+        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, chan_select_case_index, int_operand(i), handle_start->output));
         OP_PUSH(lir_op_bal(handle_end->output));
         OP_PUSH(handle_start);
         // handle body
@@ -1720,9 +1753,6 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
         temp = temp_var_operand(m, call->return_type);
     }
 
-    // safe point
-    OP_PUSH(lir_op_safepoint());
-
     // call base_target,params -> target
     OP_PUSH(lir_op_new(LIR_OPCODE_CALL, fn_target, operand_new(LIR_OPERAND_ARGS, args), temp));
 
@@ -1749,7 +1779,7 @@ static lir_operand_t *linear_logical_or(module_t *m, ast_expr_t expr, lir_operan
     linear_super_move(m, expr.type, target, left_src);
 
     // beq result,true -> logic_or_end
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), target, logic_end_operand));
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), target, logic_end_operand));
 
     // mov right -> result
     lir_operand_t *right_src = linear_expr(m, logical_expr->right, NULL);
@@ -1773,7 +1803,7 @@ static lir_operand_t *linear_logical_and(module_t *m, ast_expr_t expr, lir_opera
     OP_PUSH(lir_op_move(target, left_target));
 
     // beq result,true -> logic_or_end
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(false), target, logic_end_operand));
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(false), target, logic_end_operand));
 
     // mov right -> result
     lir_operand_t *right_target = linear_expr(m, logical_expr->right, NULL);
@@ -2969,7 +2999,7 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
             }
 
             lir_operand_t *cond_target = linear_expr(m, *cond_expr, NULL);
-            OP_PUSH(lir_op_new(LIR_OPCODE_BEQ, bool_operand(true), cond_target, handle_start->output));
+            OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), cond_target, handle_start->output));
         }
 
         OP_PUSH(lir_op_bal(handle_end->output));
@@ -3540,16 +3570,18 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     }
 
     // 返回值 operand 也 push 到 params1 里面，方便处理
-    if (fndef->return_type.kind != TYPE_VOID) {
-        lir_operand_t *return_operand = unique_var_operand(m, fndef->return_type, TEMP_RESULT);
-
-        slice_push(params, return_operand->value);
-
-        // 这里直接引用了 op->output->value, 在 ssa rename 时，c->return_operand 可以联动改名
-        c->return_operand = return_operand;
-    }
+    //    if (fndef->return_type.kind != TYPE_VOID) {
+    //        lir_operand_t *return_operand = unique_var_operand(m, fndef->return_type, TEMP_RESULT);
+    //
+    //        //        slice_push(params, return_operand->value);
+    //
+    //        // 这里直接引用了 op->output->value, 在 ssa rename 时，c->return_operand 可以联动改名
+    //        c->return_operand = return_operand;
+    //    }
 
     OP_PUSH(lir_op_output(LIR_OPCODE_FN_BEGIN, operand_new(LIR_OPERAND_PARAMS, params)));
+
+    OP_PUSH(lir_op_safepoint());
 
     // 参数 escape rewrite
     for (int i = 0; i < fndef->params->length; ++i) {
@@ -3569,9 +3601,9 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
 
     OP_PUSH(lir_op_label(c->end_label, true));
 
-    OP_PUSH(lir_op_safepoint());
+    //    OP_PUSH(lir_op_safepoint());
     // lower 的时候需要进行特殊的处理(return_operand 为了让 ssa use-def 链条完整)
-    OP_PUSH(lir_op_new(LIR_OPCODE_FN_END, c->return_operand, NULL, NULL));
+    OP_PUSH(lir_op_new(LIR_OPCODE_FN_END, NULL, NULL, NULL));
 
     return c;
 }

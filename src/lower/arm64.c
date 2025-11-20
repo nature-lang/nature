@@ -121,7 +121,7 @@ static linked_t *arm64_lower_symbol_var(closure_t *c, lir_op_t *op) {
         return list;
     }
 
-    if (op->code == LIR_OPCODE_BEQ) {
+    if (lir_op_branch_cmp(op)) {
         if (op->first && op->first->assert_type == LIR_OPERAND_SYMBOL_VAR) {
             op->first = arm64_convert_lea_symbol_var(c, list, op->first);
         }
@@ -221,8 +221,13 @@ static linked_t *arm64_lower_safepoint(closure_t *c, lir_op_t *op) {
 
 
     // 创建临时寄存器存储标志地址
-    lir_operand_t *result_reg = lir_reg_operand(x0->index, TYPE_ANYPTR);
-    op->output = result_reg;
+    //    lir_operand_t *result_reg;
+    //    if (BUILD_OS == OS_DARWIN) {
+    //        result_reg = lir_reg_operand(x0->index, TYPE_ANYPTR);
+    //    } else {
+    //        result_reg = lir_reg_operand(x28->index, TYPE_ANYPTR);
+    //    }
+    //    op->output = result_reg;
 
     // 增加 label continue
     linked_push(list, op);
@@ -307,8 +312,8 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (op->code == LIR_OPCODE_FN_END) {
-            linked_concat(operations, arm64_lower_fn_end(c, op));
+        if (op->code == LIR_OPCODE_RETURN) {
+            linked_concat(operations, arm64_lower_return(c, op));
             continue;
         }
 
