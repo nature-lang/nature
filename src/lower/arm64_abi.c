@@ -308,37 +308,39 @@ linked_t *arm64_lower_fn_begin(closure_t *c, lir_op_t *op) {
     linked_push(result, op); // 将 FN_BEGIN 放在最前端，后续 native 还需要使用
 
     slice_t *params = op->output->value;
+    type_t return_type = c->fndef->return_type;
 
-    if (c->return_operand) {
-        // 移除最后一个参数，其指向了 return_operand
-        slice_remove(params, params->count - 1);
+    if (return_type.kind != TYPE_VOID) {
+        // 生成在 return 时可能需要的 operand, 用于接受 caller 的大数据存储指针等
 
-        type_t return_type = lir_operand_type(c->return_operand);
         int32_t fsize = 0;
         int32_t hfa_count = arm64_hfa(return_type, &fsize);
 
         if (hfa_count > 0 && hfa_count <= 4) {
-            // hfa 可能存在小于 < 16byte 等情况，此时 caller 不会为 struct 申请空间，所以需要在 calle 中申请栈空间临时存放结构体数据
+            // hfa 可能存在小于 < 16byte 等情况，此时需要将数据存储在栈中，但 caller 不会为 struct 申请空间，所以需要在 callee 中申请栈空间临时存放结构体数据
             // 并在 fn end 时将数据从栈中移动到 hfa 要求的目标结构体 v0-v3 中
-            linked_push(result, lir_stack_alloc(c, return_type, c->return_operand));
+            //            linked_push(result, lir_stack_alloc(c, return_type, c->return_operand));
         } else if (return_type.kind == TYPE_ARR || type_sizeof(return_type) > 16) {
             assert(return_type.kind == TYPE_STRUCT || return_type.kind == TYPE_ARR);
 
+            // x8 中存储的是返回数据
+            c->return_operand = temp_var_operand(c->module, return_type);
+
             // 数组由于调用约定没有明确规定，所以我们也按照类似的处理方式
             // 大于 16 字节的结构体，通过内存返回，x8 中存储返回地址
-            lir_operand_t *return_operand = c->return_operand;
-            assert(return_operand->assert_type == LIR_OPERAND_VAR);
-
             // 从 x8 寄存器获取返回地址
             lir_operand_t *x8_reg = operand_new(LIR_OPERAND_REG, x8);
-            linked_push(result, lir_op_move(return_operand, x8_reg));
+            linked_push(result, lir_op_move(c->return_operand, x8_reg));
         } else {
-            // 小于等于 16 字节的基本类型，不需要特殊处理, 结构体则需要由 callee 申请临时空间
-            if (return_type.kind == TYPE_STRUCT) {
-                linked_push(result, lir_stack_alloc(c, return_type, c->return_operand));
-            } else {
-                linked_push(result, lir_op_output(LIR_OPCODE_NOP, c->return_operand));
-            }
+            // 小于等于 16 字节的基本类型，不需要特殊处理, 但结构体需要由 callee 申请临时空间
+            //            if (return_type.kind == TYPE_STRUCT) {
+            //                linked_push(result, lir_stack_alloc(c, return_type, c->return_operand));
+            //            }
+
+            // 不在需要进行引导了
+            //            else {
+            //                linked_push(result, lir_op_output(LIR_OPCODE_NOP, c->return_operand));
+            //            }
         }
     }
 
@@ -648,7 +650,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
 /**
  * 从 return operand 取出数据存放在 abi 要求的寄存器中
  */
-linked_t *arm64_lower_fn_end(closure_t *c, lir_op_t *op) {
+linked_t *arm64_lower_return(closure_t *c, lir_op_t *op) {
     assert(c != NULL);
     assert(op != NULL);
 
@@ -660,7 +662,7 @@ linked_t *arm64_lower_fn_end(closure_t *c, lir_op_t *op) {
     }
 
     // return_operand 的相关空间由 caller 提供
-    type_t return_type = lir_operand_type(return_operand);
+    type_t return_type = c->fndef->return_type;
     uint64_t return_size = type_sizeof(return_type);
 
     if (return_type.kind == TYPE_STRUCT) {
@@ -689,18 +691,25 @@ linked_t *arm64_lower_fn_end(closure_t *c, lir_op_t *op) {
                 linked_push(result, lir_op_move(dst_hi, src_hi));
             }
         } else {
-            // 大于 16 字节的结构体，通过内存返回，linear_return 时已经将相关数据存储在了 return_operand 中, x8 寄存器中存储的指针被传递给了 return_operand
-            // 这里什么都不需要做
+            assert(c->return_operand);
+            // fn begin 时 x8 寄存器中存储的指针被传递给了 c->return_operand
+            // 大于 16 字节的结构体，通过内存返回，linear_return 时已经将相关数据存储在了 return_operand 中,
+            // 这里也许需要进行 super move? 将数据移动到 c->return_operand 中的指向。
+            linked_concat(result, lir_memory_mov(c->module, return_size, c->return_operand, return_operand));
         }
     } else {
-        // 非结构体类型
-        lir_operand_t *dst;
-        if (is_float(return_type.kind)) {
-            dst = operand_new(LIR_OPERAND_REG, reg_select(v0->index, return_type.kind));
+        if (return_size > 16) {
+            linked_concat(result, lir_memory_mov(c->module, return_size, c->return_operand, return_operand));
         } else {
-            dst = operand_new(LIR_OPERAND_REG, reg_select(x0->index, return_type.kind));
+            // 非结构体类型
+            lir_operand_t *dst;
+            if (is_float(return_type.kind)) {
+                dst = operand_new(LIR_OPERAND_REG, reg_select(v0->index, return_type.kind));
+            } else {
+                dst = operand_new(LIR_OPERAND_REG, reg_select(x0->index, return_type.kind));
+            }
+            linked_push(result, lir_op_move(dst, return_operand));
         }
-        linked_push(result, lir_op_move(dst, return_operand));
     }
 
     op->first = NULL;

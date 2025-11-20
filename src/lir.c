@@ -62,6 +62,22 @@ lir_operand_t *lir_reg_operand(uint8_t index, type_kind kind) {
 
 linked_t *lir_memory_mov(module_t *m, uint64_t size, lir_operand_t *dst, lir_operand_t *src) {
     linked_t *result = linked_new();
+
+    // 1. 提前进行提取(indirect_addr -> var)，避免后续进行 indirect_addr_operand 时产生垃圾重复指令
+    // 2. lower 阶段，env values 产生的 indirect_addr 导致更严重的问题，indirect_addr_operand 中使用的 OP_PUSH 指令异常
+    //    lower 阶段 OP_PUSH 宏不生效。
+    if (dst->assert_type == LIR_OPERAND_INDIRECT_ADDR || dst->assert_type == LIR_OPERAND_STACK) {
+        lir_operand_t *temp = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        linked_push(result, lir_op_move(temp, dst));
+        dst = temp;
+    }
+
+    if (src->assert_type == LIR_OPERAND_INDIRECT_ADDR || src->assert_type == LIR_OPERAND_STACK) {
+        lir_operand_t *temp = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        linked_push(result, lir_op_move(temp, src));
+        src = temp;
+    }
+
     uint64_t remind = size;
     uint64_t offset = 0;
     while (remind > 0) {

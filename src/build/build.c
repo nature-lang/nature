@@ -17,6 +17,7 @@
 #include "src/linear.h"
 #include "src/lower/amd64.h"
 #include "src/lower/arm64.h"
+#include "src/lower/peephole.h"
 #include "src/lower/riscv64.h"
 #include "src/native/amd64.h"
 #include "src/native/arm64.h"
@@ -1063,15 +1064,24 @@ static void build_compiler(slice_t *modules) {
 
             debug_block_lir(c, "cfg");
 
+            // lir 向 arch 靠拢
+            cross_lower(c);
+
+            debug_block_lir(c, "lower");
+
             // 构造 ssa
             ssa(c);
 
             debug_block_lir(c, "ssa");
 
-            // lir 向 arch 靠拢
-            cross_lower(c);
+            // 窥孔指令优化
+            peephole_optimize(c);
 
-            debug_block_lir(c, "lower");
+            debug_block_lir(c, "peephole");
+
+            mark_number(c);
+
+            debug_block_lir(c, "mark_number");
 
             // 线性扫描寄存器分配
             reg_alloc(c);

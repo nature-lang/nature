@@ -300,8 +300,6 @@ void allocate_walk(closure_t *c) {
             continue;
         }
 
-        // 附近有 call 指令导致所有寄存器溢出
-
         // current is phi def, set reg_hint
         if (a->current->phi_hints->count > 0) {
             for (int i = 0; i < a->current->phi_hints->count; ++i) {
@@ -422,6 +420,20 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
         return true;
     }
 
+    // current 是拆分过的寄存器范围，first_use 可能在找到的寄存器可用声明周期之后，此时分配寄存器是没有意义的
+    // first_use 是否需要 must
+    if (free_pos[reg_id] < first_use->value) {
+        if (first_use->kind == ALLOC_KIND_MUST) { // first use 必须分配寄存器，所以需要 split 后再进行 spill
+            int optimal_position = interval_find_optimal_split_pos(c, a->current, first_use->value);
+            interval_t *child = interval_split_at(c, a->current, optimal_position);
+            sort_to_unhandled(a->unhandled, child);
+        }
+
+        spill_interval(c, a, a->current, 0);
+        linked_push(a->handled, a->current);
+        return true;
+    }
+
     // TODO last_range 之前可能存在 stack pos, find optimal split post 应该找到这之前
     // 有空闲的寄存器，但是空闲时间小于当前 current 的生命周期,需要 split current
     if (free_pos[reg_id] < a->current->last_range->to) {
@@ -453,7 +465,7 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
 
     for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
         reg_t *reg = alloc_regs[reg_id];
-       if (!(FLAG(a->current->alloc_type) & reg->flag)) {
+        if (!(FLAG(a->current->alloc_type) & reg->flag)) {
             continue;
         }
         // 这里包含了 use_pos 的设置

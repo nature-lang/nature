@@ -120,7 +120,7 @@ static linked_t *riscv64_lower_symbol_var(closure_t *c, lir_op_t *op) {
     }
 
     // beq 需要特殊处理
-    if (op->code == LIR_OPCODE_BEQ) {
+    if (lir_op_branch_cmp(op)) {
         if (op->first && op->first->assert_type == LIR_OPERAND_SYMBOL_VAR) {
             op->first = riscv64_convert_lea_symbol_var(c, list, op->first);
         }
@@ -309,7 +309,7 @@ static void riscv64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (op->code == LIR_OPCODE_FN_END) {
+        if (op->code == LIR_OPCODE_RETURN) {
             linked_concat(operations, riscv64_lower_fn_end(c, op));
             continue;
         }

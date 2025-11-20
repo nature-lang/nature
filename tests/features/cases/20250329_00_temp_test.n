@@ -1,4 +1,15 @@
-fn main() {
-    println('hello world')
+import co
+import time
+
+fn sum(int a, int b):int {
+    co.sleep(1000)
+    return a + b
 }
 
+fn main():void! {
+    var second = 233
+    var fut = go sum(1, second)
+
+    var result = fut.await()
+    println(result)
+}

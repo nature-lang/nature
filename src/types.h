@@ -414,8 +414,8 @@ typedef enum {
     LIR_OPCODE_CLR, // clean reg
     LIR_OPCODE_CLV, // clean up var, result is var，等同于首次变量注册的功能
     LIR_OPCODE_USLT, // unsigned set less than <
-    LIR_OPCODE_SLT, // set less than <
-    LIR_OPCODE_SLE, // set less eq <=
+    LIR_OPCODE_SLT, // <
+    LIR_OPCODE_SLE, // <=
     LIR_OPCODE_SGT, // >
     LIR_OPCODE_SGE, // >=
     LIR_OPCODE_SEE, // ==
@@ -427,7 +427,14 @@ typedef enum {
 
     LIR_OPCODE_PHI, // 复合指令, 位置在 first_param
     LIR_OPCODE_MOVE,
-    LIR_OPCODE_BEQ, // branch if eq a,b
+
+    LIR_OPCODE_BLT,
+    LIR_OPCODE_BLE,
+    LIR_OPCODE_BGT,
+    LIR_OPCODE_BGE,
+    LIR_OPCODE_BEE, // branch if eq a,b
+    LIR_OPCODE_BNE, // branch if eq a,b
+
     LIR_OPCODE_BAL, // branch always
     LIR_OPCODE_PUSH, // first
     LIR_OPCODE_POP, // output
@@ -513,8 +520,8 @@ typedef struct closure_t {
     ct_stack_t *ret_targets; // default type_unknown
     ct_stack_t *ret_labels; // default type_unknown
 
-    // lir_operand_t
-    void *return_operand; // 返回结果，return 中如果有返回参数，则会进行一个 move 移动到该 result 中
+    // lir_operand_t, 大返回值引导
+    void *return_operand;
     type_t type;
 
     linked_t *operations; // 指令列表

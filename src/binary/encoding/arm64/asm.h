@@ -426,18 +426,6 @@ typedef struct {
     _indirect_operand;                                                 \
 })
 
-#define ARM64_INDIRECT_SYM(_reg, _name, _reloc_type) ({                \
-    arm64_asm_operand_t *_indirect_operand = NEW(arm64_asm_operand_t); \
-    _indirect_operand->type = ARM64_ASM_OPERAND_INDIRECT;              \
-    _indirect_operand->indirect.reg = _reg;                            \
-    _indirect_operand->indirect.offset = 0;                            \
-    _indirect_operand->indirect.prepost = 0;                           \
-    _indirect_operand->indirect.indirect_sym = true;                   \
-    _indirect_operand->symbol.name = _name;                            \
-    _indirect_operand->symbol.reloc_type = _reloc_type;                \
-    _indirect_operand;                                                 \
-})
-
 #define ARM64_REG_OFFSET(_base, _index, _scale, _extend) ({              \
     arm64_asm_operand_t *_reg_offset_operand = NEW(arm64_asm_operand_t); \
     _reg_offset_operand->type = ARM64_ASM_OPERAND_REGISTER_OFFSET;       \

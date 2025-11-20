@@ -424,7 +424,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         // bp value 和 ret_addr 不是那么同步
         share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset);
         // save_stack.ptr 指向栈顶, new ret_addr, ret_addr 总是在 prev_bp 的前一个位置(+pointer_size)
-        ret_addr = fetch_addr_value(stack_top_ptr + bp_offset + POINTER_SIZE);
+        ret_addr = fetch_addr_value((stack_top_ptr + bp_offset) + POINTER_SIZE);
 #endif
     }
 
@@ -466,7 +466,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         ret_addr = fetch_addr_value(stack_top_ptr + bp_offset - POINTER_SIZE);
 #else
         share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset);
-        ret_addr = fetch_addr_value(stack_top_ptr + bp_offset + POINTER_SIZE);
+        ret_addr = fetch_addr_value((stack_top_ptr + bp_offset) + POINTER_SIZE);
 #endif
         found = true;
     }
@@ -525,7 +525,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
         // 重新提取 ret_addr 和 share_stack_frame_bp
         share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset);
-        ret_addr = fetch_addr_value(stack_top_ptr + bp_offset + POINTER_SIZE);
+        ret_addr = fetch_addr_value((stack_top_ptr + bp_offset) + POINTER_SIZE);
     }
 
     DEBUGF("[runtime_gc.scan_stack] completed, p_index=%d, co=%p", p->index, co);

@@ -445,8 +445,8 @@ struct n_processor_t {
 
     struct sigaction sig;
     uv_timer_t timer; // 辅助协程调度的定时器
-    uint64_t need_stw; // 外部声明, 内部判断 是否需要 stw
-    uint64_t in_stw; // 内部声明, 外部判断是否已经 stw
+//    uint64_t need_stw; // 外部声明, 内部判断 是否需要 stw
+    uint64_t in_stw; // 外部判断是否已经 stw
 
     // 当前 p 需要被其他线程读取的一些属性都通过该锁进行保护
     // - 如更新 p 对应的 co 的状态等
