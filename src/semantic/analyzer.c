@@ -218,35 +218,37 @@ static char *analyzer_resolve_typedef(module_t *m, analyzer_fndef_t *current, st
             ast_import_t *import = m->imports->take[i];
 
             if (str_equal(import->as, "*")) {
-                // Selective imports
-                if (!import->use_all_symbols && import->use_symbols) {
-                    bool symbol_allowed = false;
-                    char *actual_symbol = ident; // May be aliased
+                char *temp = ident_with_prefix(import->module_ident, ident);
+                if (symbol_table_get(temp)) {
+                    return temp;
+                }
+            }
+        }
 
-                    for (int j = 0; j < import->use_symbols->count; ++j) {
-                        ast_import_symbol_t *import_symbol = import->use_symbols->take[j];
-                        // Check if ident matches symbol name or alias
-                         if (str_equal(ident, import_symbol->as ? import_symbol->as : import_symbol->symbol_name)) {
-                            symbol_allowed = true;
-                            actual_symbol = import_symbol->symbol_name;  // Use original symbol name
-                            break;
-                        }
+        // - selective imports (imports with use { } clause)
+        for (int i = 0; i < m->imports->count; ++i) {
+            ast_import_t *import = m->imports->take[i];
+
+            // Check for selective imports (imports with use { } clause)
+            if (!import->use_all_symbols && import->use_symbols) {
+                bool symbol_allowed = false;
+                char *actual_symbol = ident; // May be aliased
+
+                for (int j = 0; j < import->use_symbols->count; ++j) {
+                    ast_import_symbol_t *import_symbol = import->use_symbols->take[j];
+                    // Check if ident matches symbol name or alias
+                    if (str_equal(ident, import_symbol->as ? import_symbol->as : import_symbol->symbol_name)) {
+                        symbol_allowed = true;
+                        actual_symbol = import_symbol->symbol_name;  // Use original symbol name
+                        break;
                     }
-
-                    if (!symbol_allowed) {
-                        continue; // Skip this import, symbol not in use list
-                    }
-
-                    char *temp = ident_with_prefix(import->module_ident, actual_symbol);
-                    if (symbol_table_get(temp)) {
-                        return temp;
-                    }
-
-                    continue;
                 }
 
-                // Original behavior for non-selective imports
-                char *temp = ident_with_prefix(import->module_ident, ident);
+                if (!symbol_allowed) {
+                    continue; // Skip this import, symbol not in use list
+                }
+
+                char *temp = ident_with_prefix(import->module_ident, actual_symbol);
                 if (symbol_table_get(temp)) {
                     return temp;
                 }

@@ -1,4 +1,4 @@
-import 'math.n' use { max, min as minimum, PI, E }
+import 'math.n' use { max, min as minimum, PI, E, decimal}
 
 fn main() {
     println(max(10, 20))        // Should work
@@ -8,6 +8,6 @@ fn main() {
     println(PI)                 // Should work
     println(E)                  // Should work
 
-    // decimal money = 100.50    // Does not work (yet)
-    // println(money)
+    decimal money = 100.50      // Should work
+    println(money)
 }

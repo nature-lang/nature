@@ -97,8 +97,8 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
         // 简单处理
         slice_push(m->imports, ast_import);
 
-        if (!ast_import->use_all_symbols && ast_import->use_symbols && ast_import->as) {
-            // Register each imported symbol individually
+        if (!ast_import->use_all_symbols && ast_import->use_symbols) {
+            // Register each imported symbol individually for selective imports
             for (int j = 0; j < ast_import->use_symbols->count; j++) {
                 ast_import_symbol_t *sym = ast_import->use_symbols->take[j];
                 // Use alias if present, otherwise use symbol name
