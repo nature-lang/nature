@@ -1,3 +1,9 @@
+const PI = 3.14159
+
+var E = 2.71828
+
+type decimal = float
+
 fn max(int a, int b): int {
     if a > b {
         return a
