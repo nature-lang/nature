@@ -1040,6 +1040,12 @@ pub struct TupleDestrExpr {
     pub elements: Vec<Box<Expr>>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ImportSymbol {
+    pub symbol_name: String,
+    pub as_name: Option<String>,
+}
+
 // 语句实现
 #[derive(Debug, Clone)]
 pub struct ImportStmt {
@@ -1052,6 +1058,8 @@ pub struct ImportStmt {
     pub package_conf: Option<PackageConfig>, // import package 时总是依赖该配置
     pub package_dir: String,
     pub use_links: bool,
+    pub use_all_symbols: bool,
+    pub use_symbols: Option<Vec<ImportSymbol>>,
     pub start: usize, // 冗余自 stmt, 用于 analyzer_import  能够快速处理
     pub end: usize,
 }
@@ -1067,6 +1075,8 @@ impl Default for ImportStmt {
             package_conf: None,
             package_dir: String::new(),
             use_links: false,
+            use_all_symbols: true,
+            use_symbols: None,
             module_ident: String::new(),
             start: 0,
             end: 0,
