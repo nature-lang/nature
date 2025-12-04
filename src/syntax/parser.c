@@ -2164,7 +2164,7 @@ static ast_expr_t parser_new_expr(module_t *m) {
     parser_must(m, TOKEN_LEFT_PAREN);
     if (!parser_is(m, TOKEN_RIGHT_PAREN)) {
         // has default value
-        if (parser_is(m, TOKEN_IDENT) && (parser_next_is(m, 1, TOKEN_EQUAL) || parser_next_is(m, 1, TOKEN_COMMA))) {
+        if (parser_is(m, TOKEN_IDENT) && (parser_next_is(m, 1, TOKEN_COLON) || parser_next_is(m, 1, TOKEN_COMMA))) {
             new_expr->properties = ct_list_new(sizeof(struct_property_t));
 
             // struct default value
@@ -2172,7 +2172,7 @@ static ast_expr_t parser_new_expr(module_t *m) {
                 struct_property_t item = {0};
                 token_t *ident_token = parser_must(m, TOKEN_IDENT);
                 item.name = ident_token->literal;
-                if (parser_consume(m, TOKEN_EQUAL)) {
+                if (parser_consume(m, TOKEN_COLON)) {
                     item.right = expr_new_ptr(m);
                     *((ast_expr_t *) item.right) = parser_expr(m);
                 } else {
@@ -3004,7 +3004,7 @@ static ast_expr_t parser_struct_new(module_t *m, type_t t) {
         // ident 类型
         struct_property_t item = {0};
         item.name = parser_must(m, TOKEN_IDENT)->literal;
-        parser_must(m, TOKEN_EQUAL);
+        parser_must(m, TOKEN_COLON);
         item.right = expr_new_ptr(m);
         *((ast_expr_t *) item.right) = parser_expr(m);
         ct_list_push(struct_new->properties, &item);

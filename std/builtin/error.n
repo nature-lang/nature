@@ -15,7 +15,7 @@ fn errort.msg():string {
 
 fn errorf(string format, ...[any] args):ptr<errort> {
 	var msg = fmt.sprintf(format, ...args)
-	return new errort(message = msg)
+	return new errort(message: msg)
 }
 
 

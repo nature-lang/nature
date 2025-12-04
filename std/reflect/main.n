@@ -93,13 +93,13 @@ fn typeof_hash(i64 hash):ptr<type_t>! {
     var r = find_rtype(hash)
 
     var t = new type_t(
-        size = r.stack_size as i64,
-        hash = r.hash,
-        kind = r.kind as int,
-        align = r.align,
-        hashes = vec_new<int>(0, 0),
-        fields = vec_new<field_t>(field_t{}, 0),
-        r = r,
+        size: r.stack_size as i64,
+        hash: r.hash,
+        kind: r.kind as int,
+        align: r.align,
+        hashes: vec_new<int>(0, 0),
+        fields: vec_new<field_t>(field_t{}, 0),
+        r: r,
     )
 
     if r.kind == STRUCT {
@@ -108,9 +108,9 @@ fn typeof_hash(i64 hash):ptr<type_t>! {
 
         for i,field in temp_fields {
             t.fields[i] = field_t{
-                name = find_strtable(field.name_offset).to_string(),
-                hash = field.hash,
-                offset = field.offset,
+                name: find_strtable(field.name_offset).to_string(),
+                hash: field.hash,
+                offset: field.offset,
             }
         }
     } else {
@@ -214,8 +214,8 @@ fn valueof<T>(T v):ptr<value_t>! {
     }
 
     var result = new value_t(
-        t = t,
-        v = v as anyptr, // TODO union cannot use as to anyptr
+        t: t,
+        v: v as anyptr, // TODO union cannot use as to anyptr
     )
 
     return result
