@@ -97,8 +97,19 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
         // 简单处理
         slice_push(m->imports, ast_import);
 
-        // import is_tpl 是全局导入，所以没有 is_tpl
-        if (ast_import->as && strlen(ast_import->as) > 0) {
+        if (!ast_import->use_all_symbols && ast_import->use_symbols && ast_import->as) {
+            // Register each imported symbol individually
+            for (int j = 0; j < ast_import->use_symbols->count; j++) {
+                ast_import_symbol_t *sym = ast_import->use_symbols->take[j];
+                // Use alias if present, otherwise use symbol name
+                char *local_name = sym->as ? sym->as : sym->symbol_name;
+                
+                // Create a pseudo-import entry for symbol lookup
+                // This allows direct access like: max(a, b) instead of math.max(a, b)
+                table_set(m->import_table, local_name, ast_import);
+            }
+         } else if (ast_import->as && strlen(ast_import->as) > 0) {
+             // import is_tpl 是全局导入，所以没有 is_tpl
             table_set(m->import_table, ast_import->as, ast_import);
         }
     }

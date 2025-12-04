@@ -869,6 +869,8 @@ static token_type_t scanner_ident(char *word, int length) {
         }
         case 'u': {
             switch (word[1]) {
+                case 's':
+                    return scanner_rest(word, length, 2, 1, "e", TOKEN_USE);
                 case 'i':
                     return scanner_rest(word, length, 2, 2, "nt", TOKEN_UINT);
                 case '8':

@@ -1,0 +1,7 @@
+import 'math.n' use { max, min as minimum }
+
+fn main() {
+    println(max(10, 20))        // Should work
+    println(minimum(10, 20))    // Should work (aliased)
+    // println(avg(10, 20))     // Should fail - not imported
+}

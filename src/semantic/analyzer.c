@@ -218,6 +218,34 @@ static char *analyzer_resolve_typedef(module_t *m, analyzer_fndef_t *current, st
             ast_import_t *import = m->imports->take[i];
 
             if (str_equal(import->as, "*")) {
+                // Selective imports
+                if (!import->use_all_symbols && import->use_symbols) {
+                    bool symbol_allowed = false;
+                    char *actual_symbol = ident; // May be aliased
+
+                    for (int j = 0; j < import->use_symbols->count; ++j) {
+                        ast_import_symbol_t *import_symbol = import->use_symbols->take[j];
+                        // Check if ident matches symbol name or alias
+                         if (str_equal(ident, import_symbol->as ? import_symbol->as : import_symbol->symbol_name)) {
+                            symbol_allowed = true;
+                            actual_symbol = import_symbol->symbol_name;  // Use original symbol name
+                            break;
+                        }
+                    }
+
+                    if (!symbol_allowed) {
+                        continue; // Skip this import, symbol not in use list
+                    }
+
+                    char *temp = ident_with_prefix(import->module_ident, actual_symbol);
+                    if (symbol_table_get(temp)) {
+                        return temp;
+                    }
+
+                    continue;
+                }
+
+                // Original behavior for non-selective imports
                 char *temp = ident_with_prefix(import->module_ident, ident);
                 if (symbol_table_get(temp)) {
                     return temp;
@@ -1337,6 +1365,27 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
     // analyzer_local_ident The ident rebuild has already been done, it is good to use it here
     // 避免如果存在两个位置引用了同一 ident 清空下造成同时改写两个地方的异常
     ast_ident *ident = expr->value;
+
+    // Check if ident is from a selective import
+    for (int i = 0; i < m->imports->count; ++i) {
+        ast_import_t *import = m->imports->take[i];
+        
+        if (!import->use_all_symbols && import->use_symbols) {
+            for (int j = 0; j < import->use_symbols->count; j++) {
+                ast_import_symbol_t *sym = import->use_symbols->take[j];
+                char *local_name = sym->as ? sym->as : sym->symbol_name;
+                
+                if (str_equal(ident->literal, local_name)) {
+                    // Found it! Rewrite to global name
+                    char *global_name = ident_with_prefix(import->module_ident, sym->symbol_name);
+                    if (symbol_table_get(global_name)) {
+                        ident->literal = global_name;
+                        return true;
+                    }
+                }
+            }
+        }
+    }
 
     // - 使用当前 module 中的全局符号是可以省略 module name 的, 但是 module ident 注册时 附加了 module.ident
     // 所以需要为 ident 添加上全局访问符号再看看能不能找到该 ident
