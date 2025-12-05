@@ -253,8 +253,8 @@ type test_t = struct{
 
 fn main():void! {
     var t = test_t{
-        f = 3.14,
-        i = 3,
+        f: 3.14,
+        i: 3,
     }
 
     t.f = -t.f

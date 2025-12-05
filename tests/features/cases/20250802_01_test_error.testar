@@ -26,7 +26,7 @@ type user_t = struct{
 }
 
 fn main() {
-    any u = user_t{email = 'wwhacker@qq.com'}
+    any u = user_t{email: 'wwhacker@qq.com'}
     var str = json.serialize(u)
     println(str)
 }

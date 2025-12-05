@@ -76,7 +76,7 @@ fn print_shape(measurable<i64> s) {
 }
 
 fn main():void! {
-    var r = rectangle{width = 3.0, height = 4.0}
+    var r = rectangle{width: 3.0, height: 4.0}
     print_shape(r)
 }
 
@@ -107,7 +107,7 @@ fn print_shape(measurable<i64> s) {
 }
 
 fn main():void! {
-    var r = rectangle{width=3, height=4}
+    var r = rectangle{width:3, height:4}
     print_shape(r)
 
     var r1 = new rectangle(width=15, height=18)
@@ -151,13 +151,13 @@ fn print_shape(measurable<i64> s) {
 }
 
 fn main():void! {
-    var r = rectangle{width=3, height=4}
+    var r = rectangle{width:3, height:4}
     print_shape(r)
 
     var r1 = new rectangle(width=15, height=18)
     print_shape(r1)
 
-    var c = circle{radius=5}
+    var c = circle{radius:5}
     print_shape(c)
 
     var c1 = new circle(radius=10)
@@ -212,14 +212,14 @@ fn update_and_print(measurable<i64> s, i64 i) {
 }
 
 fn main():void! {
-    var r = rectangle{width=3, height=4}
+    var r = rectangle{width:3, height:4}
     update_and_print(r, 5)
     var r1 = new rectangle(width=15, height=18)
     update_and_print(r1, 50)
     println('update after:', r.width, r.height, r1.width, r1.height)
 
 
-    var c = circle{radius=5}
+    var c = circle{radius:5}
     update_and_print(c, 100)
 
     var c1 = new circle(radius=10)
@@ -271,10 +271,10 @@ fn print_shape<T>(measurable<T> s) {
 }
 
 fn main():void! {
-    var r = rectangle{width=3, height=4}
+    var r = rectangle{width:3, height:4}
     print_shape<f64>(r)
 
-    // var c = circle<f64>{radius=5}
+    // var c = circle<f64>{radius:5}
     // print_shape(c)
 }
 
@@ -317,10 +317,10 @@ fn print_shape<T>(measurable<T> s) {
 }
 
 fn main():void! {
-    var r = rectangle{width=3, height=4}
+    var r = rectangle{width:3, height:4}
     print_shape<i64>(r)
 
-    var c = circle<f64>{radius=5}
+    var c = circle<f64>{radius:5}
     print_shape(c)
 }
 
@@ -363,10 +363,10 @@ fn print_shape<T>(measurable<T> s) {
 }
 
 fn main():void! {
-    var r = rectangle{width=3, height=4}
+    var r = rectangle{width:3, height:4}
     print_shape<i64>(r)
 
-    var c = circle{radius=5}
+    var c = circle{radius:5}
     print_shape<i64>(c)
 }
 
@@ -406,7 +406,7 @@ fn circle.perimeter():i64 {
 }
 
 fn main():void! {
-    measurable<i64> s = rectangle{width=3, height=4}
+    measurable<i64> s = rectangle{width:3, height:4}
     println(s.area(), s.perimeter())
 
     s = new circle(radius=5)
@@ -455,7 +455,7 @@ type foo_t<T> = struct{
 
 fn main():void! {
     var f = foo_t<i64>{
-       function=fn(){},
+       function:fn(){},
     }
 }
 
@@ -501,8 +501,8 @@ type foo_t<T> = struct{
 
 fn main():void! {
     var f = foo_t<i64>{
-       function = fn(){},
-       m = rectangle{width=3, height=4},
+       function: fn(){},
+       m: rectangle{width:3, height:4},
     }
 
     println(f.m.area(), f.m.perimeter())
@@ -575,7 +575,7 @@ fn update_and_print(updatable s, i64 i) {
 }
 
 fn main():void! {
-    var r = rectangle{width=3, height=4}
+    var r = rectangle{width:3, height:4}
     update_and_print(r, 5)
 }
 

@@ -65,7 +65,7 @@ fn foo(type_t foov) {
 
 fn main() {
     var t = type_t{
-        size = 124,
+        size: 124,
     }
     foo(t)
 }

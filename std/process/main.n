@@ -40,18 +40,18 @@ fn run(string name, [string] args):ptr<state_t>! {
     var stdout_buffer = new io.buffer()
     var stderr_buffer = new io.buffer()
 
-    var cmd = new command_t(name, args, stdin: fs.discard(), stdout: stdout_buffer, stderr: stderr_buffer)
+    var cmd = new command_t(name, args, stdin = fs.discard(), stdout = stdout_buffer, stderr = stderr_buffer)
     var p = cmd.spawn()
     p.wait()
 
     var stdout = stdout_buffer.read_all() as string
     var stderr = stderr_buffer.read_all() as string
 
-    return new state_t(stdout, stderr, exit_code: p.exit_code, term_sig: p.term_sig)
+    return new state_t(stdout, stderr, exit_code = p.exit_code, term_sig = p.term_sig)
 }
 
 fn command(string name, [string] args):ptr<command_t>! {
-    var cmd = new command_t(name, args, stdin: fs.discard(), stdout: fs.stdout(), stderr: fs.stderr())
+    var cmd = new command_t(name, args, stdin = fs.discard(), stdout = fs.stdout(), stderr = fs.stderr())
 
     return cmd
 }

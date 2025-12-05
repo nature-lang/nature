@@ -105,7 +105,7 @@ fn callee(int a1, int a2, int a3, int a4, int a5, int a6, int a7, test_t t) {
 }
 
 fn main() {
-    var t = test_t{a = 8, b = 9}
+    var t = test_t{a: 8, b: 9}
     callee(1, 2, 3, 4, 5, 6, 7, t)
 }
 
@@ -140,7 +140,7 @@ fn callee(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, test_t
 }
 
 fn main() {
-    var result = callee(1, 2, 3, 4, 5, 6, 7, 8, test_t{a = 1, b = 2, c= 3})
+    var result = callee(1, 2, 3, 4, 5, 6, 7, 8, test_t{a: 1, b: 2, c: 3})
     println(result)
     assert(result == 6)
 }
@@ -238,13 +238,13 @@ type document_t = struct{
 fn create(int user_id, string title, string content, [string] images, string? video, {string:any} layout):document_t! {
     println(user_id)
     return document_t{
-        layout = layout,
+        layout: layout,
     }
 }
 
 fn main() {
     var body = body_t{
-        layout = {
+        layout: {
             'a': 12,
             'b': 14,
         },

@@ -38,11 +38,11 @@ type person_t = struct{
 }
 
 fn main():void! {
-    [person_t;10] list = [person_t{p = new int(0)};0]
+    [person_t;10] list = [person_t{p: new int(0)};0]
 }
 
 --- output.txt
-nature-test/main.n:6:52: array length must be greater than 0
+nature-test/main.n:6:51: array length must be greater than 0
 
 === test_vec_init
 --- main.n
@@ -52,7 +52,7 @@ type person_t = struct{
 
 fn main():void! {
     [person_t;10] list = [person_t{
-        p = new int(2),
+        p: new int(2),
     };10]
 
     println(*list[1].p)
@@ -69,7 +69,7 @@ type person_t = struct{
 
 fn main():void! {
     [person_t;10] list = [person_t{
-        p = new int(2),
+        p: new int(2),
     };10]
 
     i8 a = 1
@@ -99,7 +99,7 @@ fn test() {
 
 fn main():void! {
     var list = [person_t{
-        p = new int(2),
+        p: new int(2),
     };10]
 
     test()

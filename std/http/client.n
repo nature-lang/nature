@@ -36,10 +36,10 @@ fn generate_boundary():string {
 
 fn multipart_t.text(string name, string value):ptr<multipart_t> {
     var item = multipart_item_t{
-        name = name,
-        filename = "",
-        value = value,
-        content_type = "text/plain",
+        name: name,
+        filename: "",
+        value: value,
+        content_type: "text/plain",
     }
     self.items.push(item)
     return self
@@ -59,10 +59,10 @@ fn multipart_t.file(string name, string filename, string data):ptr<multipart_t> 
     }
 
     var item = multipart_item_t{
-        name = name,
-        filename = filename,
-        value = data,
-        content_type = content_type,
+        name: name,
+        filename: filename,
+        value: data,
+        content_type: content_type,
     }
     self.items.push(item)
     return self
@@ -277,9 +277,9 @@ fn request_t.send():ptr<response_t>! {
     co.sleep(1000)
 
     // read resp
-    var br = new buf.reader<types.connable>(rd: conn)
+    var br = new buf.reader<types.connable>(rd = conn)
 
-    var resp = new response_t(buf_conn: br)
+    var resp = new response_t(buf_conn = br)
     resp.version = (br.read_until(' '.char()) as string).rtrim([' '])
     var status = (br.read_until(' '.char()) as string).rtrim([' '])
     resp.status = status.to_int() catch e {

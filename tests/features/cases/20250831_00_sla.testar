@@ -10,7 +10,7 @@ fn person_t.to_string():string {
 
 fn main() {
     var p = person_t{
-        name = 'xiaoming',
+        name: 'xiaoming',
     }
 
     var result = (&p).to_string()
@@ -32,7 +32,7 @@ fn person_t.to_string():string {
 
 fn main() {
     var p = person_t{
-        name = 'xiaoming',
+        name: 'xiaoming',
     }
 
     var result = @ula(p).to_string()
@@ -54,7 +54,7 @@ fn person_t.to_string():string {
 
 fn main() {
     var p = person_t{
-        name = 'xiaoming',
+        name: 'xiaoming',
     }
 
     var result = @sla(p).to_string()
@@ -75,7 +75,7 @@ type car_t = struct{
 
 fn main() {
     var c = car_t{
-        a = 24,
+        a: 24,
     }
 
     ptr<car_t> a = @sla(c)
@@ -84,7 +84,7 @@ fn main() {
 
 
     var d = car_t{
-        a = 48,
+        a: 48,
     }
     ptr<int> b = @sla(d.a)
     println(b, *b)
@@ -122,10 +122,10 @@ fn main() {
     assert(bar as anyptr == p as anyptr)
 
     var foo = foo_t{
-        mid2 = tmp_t{
-            t1 = 2,
-            t2 = 3,
-            bar = [],
+        mid2: tmp_t{
+            t1: 2,
+            t2: 3,
+            bar: [],
         },
     }
 

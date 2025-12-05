@@ -46,11 +46,11 @@ type person_t = struct {
 
 fn main() {
     [person_t] persons = [
-        person_t{ name = "Alice", age = 25, height = 165.5 },
-        person_t{ name = "Bob", age = 30, height = 180.0 },
-        person_t{ name = "Charlie", age = 20, height = 175.5 },
-        person_t{ name = "David", age = 25, height = 170.0 },
-        person_t{ name = "Eve", age = 28, height = 168.0 },
+        person_t{ name: "Alice", age: 25, height: 165.5 },
+        person_t{ name: "Bob", age: 30, height: 180.0 },
+        person_t{ name: "Charlie", age: 20, height: 175.5 },
+        person_t{ name: "David", age: 25, height: 170.0 },
+        person_t{ name: "Eve", age: 28, height: 168.0 },
     ]
     
     println("Before sort: ", persons_to_string(persons))
@@ -97,11 +97,11 @@ type person_t = struct {
 
 fn main() {
     [person_t] persons = [
-        person_t{ name = "Alice", age = 25, height = 165.5 },
-        person_t{ name = "Bob", age = 30, height = 180.0 },
-        person_t{ name = "Charlie", age = 20, height = 175.5 },
-        person_t{ name = "David", age = 25, height = 170.0 },
-        person_t{ name = "Eve", age = 28, height = 168.0 },
+        person_t{ name: "Alice", age: 25, height: 165.5 },
+        person_t{ name: "Bob", age: 30, height: 180.0 },
+        person_t{ name: "Charlie", age: 20, height: 175.5 },
+        person_t{ name: "David", age: 25, height: 170.0 },
+        person_t{ name: "Eve", age: 28, height: 168.0 },
     ]
 
     println("Before sort: ", persons_to_string(persons))
@@ -180,11 +180,11 @@ fn main() {
     
     // 测试结构体数组
     [person_t] persons = [
-        person_t{ name = "Alice", age = 20, height = 165.5 },
-        person_t{ name = "Bob", age = 25, height = 180.0 },
-        person_t{ name = "Charlie", age = 28, height = 175.5 },
-        person_t{ name = "David", age = 30, height = 170.0 },
-        person_t{ name = "Eve", age = 35, height = 168.0 },
+        person_t{ name: "Alice", age: 20, height: 165.5 },
+        person_t{ name: "Bob", age: 25, height: 180.0 },
+        person_t{ name: "Charlie", age: 28, height: 175.5 },
+        person_t{ name: "David", age: 30, height: 170.0 },
+        person_t{ name: "Eve", age: 35, height: 168.0 },
     ]
     
     int target_age = 28

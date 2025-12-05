@@ -155,15 +155,15 @@ import libc
 fn main():void {
     // 测试 timespec 结构体操作
     var ts = libc.timespec {
-        tv_sec = 1640995200,
-        tv_nsec = 500000000,  // 0.5 秒
+        tv_sec: 1640995200,
+        tv_nsec: 500000000,  // 0.5 秒
     }
     
     println('Timespec seconds:', ts.tv_sec)
     println('Timespec nanoseconds:', ts.tv_nsec)
     
     // 测试 timespec_get
-    var current_ts = libc.timespec{tv_sec = 0, tv_nsec = 0}
+    var current_ts = libc.timespec{tv_sec: 0, tv_nsec: 0}
     var result = libc.timespec_get(&current_ts, libc.TIME_UTC)
     
     println('timespec_get result:', result)
@@ -185,7 +185,7 @@ import libc
 
 fn main():void {
     // 测试时钟函数 - 只测试通常支持的时钟
-    var ts = libc.timespec{tv_sec = 0, tv_nsec = 0}
+    var ts = libc.timespec{tv_sec: 0, tv_nsec: 0}
     
     // 获取实时时钟 - 大多数系统都支持
     var result1 = libc.clock_gettime(libc.CLOCK_REALTIME, &ts)
@@ -193,7 +193,7 @@ fn main():void {
     println('REALTIME seconds > 0:', ts.tv_sec > 0)
     
     // 获取时钟分辨率
-    var res_ts = libc.timespec{tv_sec = 0, tv_nsec = 0}
+    var res_ts = libc.timespec{tv_sec: 0, tv_nsec: 0}
     var result3 = libc.clock_getres(libc.CLOCK_REALTIME, &res_ts)
     println('clock_getres result:', result3)
     println('Clock resolution nanoseconds > 0:', res_ts.tv_nsec > 0)
@@ -213,8 +213,8 @@ import libc
 fn main():void {
     // 测试纳秒级睡眠
     var sleep_time = libc.timespec {
-        tv_sec = 0,
-        tv_nsec = 100000000,  // 100ms
+        tv_sec: 0,
+        tv_nsec: 100000000,  // 100ms
     }
     
     var start_time = libc.time(null)
@@ -228,15 +228,15 @@ fn main():void {
     
     // 测试剩余时间
     var long_sleep = libc.timespec {
-        tv_sec = 1,
-        tv_nsec = 0,
+        tv_sec: 1,
+        tv_nsec: 0,
     }
-    var remaining = libc.timespec{tv_sec = 0, tv_nsec = 0}
+    var remaining = libc.timespec{tv_sec: 0, tv_nsec: 0}
     
     // 这个测试可能会实际睡眠，所以使用较短时间
     var short_sleep = libc.timespec {
-        tv_sec = 0,
-        tv_nsec = 10000000,  // 10ms
+        tv_sec: 0,
+        tv_nsec: 10000000,  // 10ms
     }
     var result2 = libc.nanosleep(&short_sleep, &remaining)
     println('Short nanosleep result:', result2)

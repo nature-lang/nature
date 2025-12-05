@@ -4,14 +4,14 @@ import runtime
 
 fn main() {
     libc.time_t timestamp = 1691656611
-    rawptr<libc.tm> ti = libc.localtime(&timestamp)
+    rawptr<libc.tm> ti = libc.gmtime(&timestamp) // switch localtime to gmtime to prevent local timezone issues when running tests
 
     string tz = ti.__tm_zone.to_string()
 
     var hour = ti.tm_hour
-    if tz == 'CST' {
-        hour -= 8
-    }
+    // if tz == 'CST' { // remove this adjustment since we are using gmtime now
+       // hour -= 8
+    //}
 
     // 51 36 8 10 7 123 4 221 0 0 UTC
     println(ti.tm_sec, ti.tm_min, hour, ti.tm_mday, ti.tm_mon, ti.tm_year, ti.tm_wday, ti.tm_yday, ti.tm_isdst)
@@ -36,7 +36,7 @@ fn main() {
 
     // UTC 1660066252
     // CST 1660037452
-    timestamp = libc.mktime(&tp)
+    timestamp = libc.timegm(&tp) // Replace mktime with timegm to prevent local timezone issues when running tests
     if tz == 'CST' {
         println(timestamp == 1660037452)
     } else if tz == 'UTC' {

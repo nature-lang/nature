@@ -8,9 +8,9 @@ type color_t = struct{
 }
 
 [color_t;3] colors = [
-    color_t{r = 186, g = 207, b = 139, a = 255},
-    color_t{r = 186, g = 207, b = 139, a = 255},
-    color_t{r = 186, g = 207, b = 139, a = 255},
+    color_t{r: 186, g: 207, b: 139, a: 255},
+    color_t{r: 186, g: 207, b: 139, a: 255},
+    color_t{r: 186, g: 207, b: 139, a: 255},
 ]
 
 
@@ -35,9 +35,9 @@ type color_t = struct{
 }
 
 [color_t] colors = [
-    color_t{r = 186, g = 207, b = 139, a = 255},
-    color_t{r = 186, g = 207, b = 139, a = 255},
-    color_t{r = 186, g = 207, b = 139, a = 255},
+    color_t{r: 186, g: 207, b: 139, a: 255},
+    color_t{r: 186, g: 207, b: 139, a: 255},
+    color_t{r: 186, g: 207, b: 139, a: 255},
 ]
 
 
@@ -70,19 +70,19 @@ fn main() {
     [atm_t;8] array = []
 
     array[0] = atm_t{
-        amount = 100,
+        amount: 100,
     }
 
     array[3] = atm_t{
-        amount = 400,
+        amount: 400,
     }
 
     array[5] = atm_t{
-        amount = 600,
+        amount: 600,
     }
 
     array[7] = atm_t{
-        amount = 800,
+        amount: 800,
     }
 
     for int i = 0; i < 8; i += 1 {
@@ -119,19 +119,19 @@ fn main() {
     [atm_t] list = vec_new(atm_t{}, 8)
 
     list[0] = atm_t{
-        amount = 100,
+        amount: 100,
     }
 
     list[3] = atm_t{
-        amount = 400,
+        amount: 400,
     }
 
     list[5] = atm_t{
-        amount = 600,
+        amount: 600,
     }
 
     list[7] = atm_t{
-        amount = 800,
+        amount: 800,
     }
 
     for int i = 0; i < 8; i += 1 {
@@ -172,9 +172,9 @@ type tank_t = struct {
 }
 
 tank_t player = tank_t{
-    position = vector2_t{x=890, y=860},
-    direction = 12,
-    active = true,
+    position: vector2_t{x:890, y:860},
+    direction: 12,
+    active: true,
 }
 
 fn fire_bullet(vector2_t position, direction_t direction, bool is_player) {
@@ -219,7 +219,7 @@ type tank_t = struct {
     i32 health
 }
 
-var player = (vector2_t{x=890, y=860}, 12, true)
+var player = (vector2_t{x:890, y:860}, 12, true)
 
 fn fire_bullet(vector2_t position, direction_t direction, bool is_player) {
     dump(position.x)
@@ -263,7 +263,7 @@ type tank_t = struct {
     i32 health
 }
 
-var player = {'a': vector2_t{x=890, y=860}, 'b': vector2_t{x=-100, y=-1}}
+var player = {'a': vector2_t{x:890, y:860}, 'b': vector2_t{x:-100, y:-1}}
 
 fn fire_bullet(vector2_t position, direction_t direction, bool is_player) {
     dump(position.x)

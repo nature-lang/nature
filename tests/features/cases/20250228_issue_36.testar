@@ -12,8 +12,8 @@ fn argh(rectangle_t r):rectangle_t {
     // println("Made it this far!")
 
     var r2 = rectangle_t{
-        width = r.width * 2,
-        length = r.length * 2,
+        width: r.width * 2,
+        length: r.length * 2,
     }
     println("Made it to here!")
     return r2
@@ -21,9 +21,9 @@ fn argh(rectangle_t r):rectangle_t {
 
 fn main() {
     var r1 = rectangle_t{
-        width = 1,
-        length = 2,
-        name = "r1",
+        width: 1,
+        length: 2,
+        name: "r1",
     }
 
     var r2 = argh(r1)
@@ -46,17 +46,17 @@ fn main() {
         // println("Made it this far!")
 
         var r2 = rectangle_t{
-            width = r.width * 2,
-            length = r.length * 2,
+            width: r.width * 2,
+            length: r.length * 2,
         }
         println("Made it to here!")
         return r2
     }
 
     var r1 = rectangle_t{
-        width = 1,
-        length = 2,
-        name = "r1",
+        width: 1,
+        length: 2,
+        name: "r1",
     }
 
     var r2 = argh(r1)
@@ -77,8 +77,8 @@ fn argh(rectangle_t r):rectangle_t {
     println("Made it this far!")
 
     var r2 = rectangle_t{
-        width = r.width * 2,
-        length = r.length * 2,
+        width: r.width * 2,
+        length: r.length * 2,
     }
     println("Made it to here!")
     return r2
@@ -86,9 +86,9 @@ fn argh(rectangle_t r):rectangle_t {
 
 fn main() {
     var r1 = rectangle_t{
-        width = 1,
-        length = 2,
-        name = "r1",
+        width: 1,
+        length: 2,
+        name: "r1",
     }
 
     var r2 = argh(r1)
@@ -111,16 +111,16 @@ fn main() {
         println("Made it this far!")
 
         var r2 = rectangle_t{
-            width = r.width * 2,
-            length = r.length * 2}
+            width: r.width * 2,
+            length: r.length * 2}
         println("Made it to here!")
         return r2
     }
 
     var r1 = rectangle_t{
-        width = 1,
-        length = 2,
-        name = "r1"}
+        width: 1,
+        length: 2,
+        name: "r1"}
 
     var r2 = argh(r1)
     assert(r2.width == 6 && r2.length == 8 && r1.width == 1 && r1.length == 2)
@@ -139,17 +139,17 @@ fn argh(rectangle_t r):rectangle_t {
     r.length = 4
 
     var r2 = rectangle_t{
-        width = r.width * 2,
-        length = r.length * 2,
+        width: r.width * 2,
+        length: r.length * 2,
     }
     return r2
 }
 
 fn main() {
     var r1 = rectangle_t{
-        width = 1,
-        length = 2,
-        name = "r1",
+        width: 1,
+        length: 2,
+        name: "r1",
     }
 
     var r2 = argh(r1)
@@ -171,16 +171,16 @@ fn main() {
         r.length = 4
 
         var r2 = rectangle_t{
-            width = r.width * 2,
-            length = r.length * 2,
+            width: r.width * 2,
+            length: r.length * 2,
         }
         return r2
     }
 
     var r1 = rectangle_t{
-        width = 1,
-        length = 2,
-        name = "r1",
+        width: 1,
+        length: 2,
+        name: "r1",
     }
 
     var r2 = argh(r1)

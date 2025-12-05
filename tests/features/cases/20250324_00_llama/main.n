@@ -448,7 +448,7 @@ fn transformer_new(string path):ptr<transformer>! {
     // 权重指针从配置结构之后开始
     anyptr weights_ptr = data as anyptr + @sizeof(config_t)
 
-    var t = new transformer(config, fd: f.fd, data: data as ptr<f32>, file_size)
+    var t = new transformer(config, fd = f.fd, data = data as ptr<f32>, file_size)
 
     t.memory_map_weights(weights_ptr, shared_weights)
 
@@ -497,8 +497,8 @@ fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
         self.sorted_vocab = vec_cap<token_index_t>(self.vocab_size)
         for int i = 0; i < self.vocab_size; i+=1 {
             self.sorted_vocab.push(token_index_t{
-                str = self.vocab[i],
-                id = i,
+                str: self.vocab[i],
+                id: i,
             })
         }
         assert(self.sorted_vocab.len() == self.vocab_size)

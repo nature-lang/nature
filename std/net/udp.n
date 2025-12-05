@@ -99,7 +99,7 @@ fn socket_t.connect(string host):ptr<conn_t>! {
 
     libc.inet_pton(family, ip.ref(), &addr.data as anyptr)
 
-    var conn = new conn_t(socket: self, remote_addr: addr)
+    var conn = new conn_t(socket = self, remote_addr = addr)
     return conn
 }
 

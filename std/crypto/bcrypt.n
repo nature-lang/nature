@@ -167,11 +167,11 @@ fn generate_salt():[u8] {
 
 fn expensive_blowfish_setup([u8] key, u32 cost, [u8] salt):blowfish.cipher_t! {
     var cipher = blowfish.cipher_t{
-        p = vec_new<u32>(0, 18),
-        s0 = vec_new<u32>(0, 256),
-        s1 = vec_new<u32>(0, 256),
-        s2 = vec_new<u32>(0, 256),
-        s3 = vec_new<u32>(0, 256),
+        p: vec_new<u32>(0, 18),
+        s0: vec_new<u32>(0, 256),
+        s1: vec_new<u32>(0, 256),
+        s2: vec_new<u32>(0, 256),
+        s3: vec_new<u32>(0, 256),
     }
     
     // Decode salt

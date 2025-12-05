@@ -87,9 +87,9 @@ type node_t = struct {
 }
 
 fn main() {
-    var n1 = node_t{id = 1}
-    var n2 = node_t{id = 2}
-    var n3 = node_t{id = 3}
+    var n1 = node_t{id: 1}
+    var n2 = node_t{id: 2}
+    var n3 = node_t{id: 3}
 
     var parent = new node_t(id = 0)
     parent.children.push(n1)
@@ -116,9 +116,9 @@ type node_t = struct {
 }
 
 fn main() {
-    var n1 = node_t{id = 1}
-    var n2 = node_t{id = 2}
-    var n3 = node_t{id = 3}
+    var n1 = node_t{id: 1}
+    var n2 = node_t{id: 2}
+    var n3 = node_t{id: 3}
 
     var parent = new node_t(id = 0)
     parent.children.push((100, n1))
@@ -148,14 +148,14 @@ type node_t = struct {
 }
 
 fn main() {
-    var n1 = node_t{id = 1}
-    var n2 = node_t{id = 2}
-    var n3 = node_t{id = 3}
+    var n1 = node_t{id: 1}
+    var n2 = node_t{id: 2}
+    var n3 = node_t{id: 3}
 
     var parent = new node_t(id = 0)
-    parent.children.push(pair_t{index = 1003, node = n3})
-    parent.children.push(pair_t{index = 1002, node = n2})
-    parent.children.push(pair_t{index = 1001, node = n1})
+    parent.children.push(pair_t{index: 1003, node: n3})
+    parent.children.push(pair_t{index: 1002, node: n2})
+    parent.children.push(pair_t{index: 1001, node: n1})
 
     for child in parent.children {
         println(child.index, child.node.id, child.node.children.len())
@@ -180,14 +180,14 @@ type node_t = struct {
 }
 
 fn main() {
-    var n1 = node_t{id = 1}
-    var n2 = node_t{id = 2}
-    var n3 = node_t{id = 3}
+    var n1 = node_t{id: 1}
+    var n2 = node_t{id: 2}
+    var n3 = node_t{id: 3}
 
     var parent = new node_t(id = 0)
-    parent.children.push(pair_t{index = 1003, node = (true, n3)})
-    parent.children.push(pair_t{index = 1002, node = (false, n2)})
-    parent.children.push(pair_t{index = 1001, node = (true, n1)})
+    parent.children.push(pair_t{index: 1003, node: (true, n3)})
+    parent.children.push(pair_t{index: 1002, node: (false, n2)})
+    parent.children.push(pair_t{index: 1001, node: (true, n1)})
 
     for child in parent.children {
         println(child.index, child.node[0], child.node[1].id, child.node[1].children.len())
