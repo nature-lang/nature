@@ -23,7 +23,7 @@ fn parse(string url):url_t! {
         throw errorf('url cannot empty')
     }
 
-    var result = url_t{url=url}
+    var result = url_t{url: url}
     var state = SCHEME
     var start = 0
     var i = 0

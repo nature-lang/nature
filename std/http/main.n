@@ -167,7 +167,7 @@ fn server_t.close() {
 }
 
 fn server():ptr<server_t> {
-    var s = new server_t(addr='0.0.0.0', handler_fn=conn_handler)
+    var s = new server_t(addr: '0.0.0.0', handler_fn: conn_handler)
     return s
 }
 

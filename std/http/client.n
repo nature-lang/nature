@@ -277,9 +277,9 @@ fn request_t.send():ptr<response_t>! {
     co.sleep(1000)
 
     // read resp
-    var br = new buf.reader<types.connable>(rd = conn)
+    var br = new buf.reader<types.connable>(rd: conn)
 
-    var resp = new response_t(buf_conn = br)
+    var resp = new response_t(buf_conn: br)
     resp.version = (br.read_until(' '.char()) as string).rtrim([' '])
     var status = (br.read_until(' '.char()) as string).rtrim([' '])
     resp.status = status.to_int() catch e {

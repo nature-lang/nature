@@ -2,12 +2,12 @@ import 'other.n'
 
 fn main() {
     var package = other.package_t{
-        t = true,
-        p = other.person_t{
-            name = 'hualaka',
-            age = 23,
-            sex = true,
-            hello = fn() {
+        t: true,
+        p: other.person_t{
+            name: 'hualaka',
+            age: 23,
+            sex: true,
+            hello: fn() {
                 println("hello world")
             },
         },

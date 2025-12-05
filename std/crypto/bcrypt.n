@@ -249,11 +249,11 @@ fn new_from_password([u8] password, int cost):bcrypt_hash_t! {
     check_cost(cost)
     
     var hash_info = bcrypt_hash_t{
-        hash = [],
-        salt = [],
-        cost = cost,
-        major = MAJOR_VERSION as u8,
-        minor = MINOR_VERSION as u8,
+        hash: [],
+        salt: [],
+        cost: cost,
+        major: MAJOR_VERSION as u8,
+        minor: MINOR_VERSION as u8,
     }
     
     // Generate and encode salt
@@ -272,11 +272,11 @@ fn new_from_hash([u8] hashed_secret):bcrypt_hash_t! {
     }
     
     var hash_info = bcrypt_hash_t{
-        hash = [],
-        salt = [],
-        cost = 0,
-        major = 0,
-        minor = 0,
+        hash: [],
+        salt: [],
+        cost: 0,
+        major: 0,
+        minor: 0,
     }
     
     int pos = 0
@@ -405,11 +405,11 @@ fn verify([u8] hashed_password, [u8] password):void! {
     [u8] other_hash = bcrypt(password, hash_info.cost, hash_info.salt)
     
     var other_hash_info = bcrypt_hash_t{
-        hash = other_hash,
-        salt = hash_info.salt,
-        cost = hash_info.cost,
-        major = hash_info.major,
-        minor = hash_info.minor,
+        hash: other_hash,
+        salt: hash_info.salt,
+        cost: hash_info.cost,
+        major: hash_info.major,
+        minor: hash_info.minor,
     }
     
     [u8] hash1 = hash_to_string(hash_info)

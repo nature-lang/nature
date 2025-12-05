@@ -2415,11 +2415,11 @@ impl<'a> Syntax {
         let mut default_expr_option = None;
 
         if !self.consume(TokenType::RightParen) {
-            if self.is(TokenType::Ident) && (self.next_is(1, TokenType::Colon) || self.next_is(1, TokenType::Comma)) {
+            if self.is(TokenType::Ident) && (self.next_is(1, TokenType::Equal) || self.next_is(1, TokenType::Comma)) {
                 while !self.is(TokenType::RightParen) {
                     let start = self.peek().start;
                     let key = self.must(TokenType::Ident)?.clone();
-                    let value = if self.consume(TokenType::Colon) {
+                    let value = if self.consume(TokenType::Equal) {
                         self.parser_expr()?
                     } else {
                         Box::new(Expr::ident(start, self.peek().end, key.literal.clone(), 0))

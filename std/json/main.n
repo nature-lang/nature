@@ -227,7 +227,7 @@ fn deserialize<T>(string s):T! {
     var val = @default(T)
     var t = reflect.typeof(val)
 
-    var d = new deserialize_t(data = s as [u8])
+    var d = new deserialize_t(data: s as [u8])
     d.parser(&val as anyptr, t)
 
     return val

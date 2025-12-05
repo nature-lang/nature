@@ -2,9 +2,9 @@ import 'mod.n' as *
 
 fn main() {
     var p = person_t{
-        name = 'hualaka',
-        from = 'china',
-        gender = 1,
+        name: 'hualaka',
+        from: 'china',
+        gender: 1,
     }
 
     println(p.gender, p.from, @sla(p).get_name())

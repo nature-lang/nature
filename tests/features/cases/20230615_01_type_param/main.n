@@ -19,8 +19,8 @@ fn main() {
     println('i8 area=', b.width * b.length as i8)
 
     var car = mod.box<f32, f32> {
-        width = 3.1,
-        length = 6.1,
+        width: 3.1,
+        length: 6.1,
     }
     println('float area=', @sla(car).area())
     println('float area=', @sla(car).area())

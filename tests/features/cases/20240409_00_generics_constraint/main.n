@@ -2,27 +2,27 @@ import 'mod.n'
 
 fn main() {
     var f = mod.bar_t<int, f32>{
-        a = 233,
-        b = 333.444,
+        a: 233,
+        b: 333.444,
     }
     int a = @ula(f).dump()
 
     var f2 = mod.foo_t<f32, bool>{
-        a = 233.333,
-        b = true,
+        a: 233.333,
+        b: true,
     }
     var a2 = @ula(f2).dump()
 
 
     var f3 = mod.foo_t<bool, string>{
-        a = true,
-        b = 'hello',
+        a: true,
+        b: 'hello',
     }
     f3.dump('world')
 
     var f4 = mod.bar_t<f32, [i32]>{
-        a = 233.333,
-        b = [1, 2, 3],
+        a: 233.333,
+        b: [1, 2, 3],
     }
     f4.dump()
 }

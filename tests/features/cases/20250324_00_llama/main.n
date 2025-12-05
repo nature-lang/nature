@@ -448,7 +448,7 @@ fn transformer_new(string path):ptr<transformer>! {
     // 权重指针从配置结构之后开始
     anyptr weights_ptr = data as anyptr + @sizeof(config_t)
 
-    var t = new transformer(config, fd = f.fd, data = data as ptr<f32>, file_size)
+    var t = new transformer(config, fd: f.fd, data: data as ptr<f32>, file_size)
 
     t.memory_map_weights(weights_ptr, shared_weights)
 
