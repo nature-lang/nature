@@ -484,6 +484,7 @@ impl LanguageServer for Backend {
                         CompletionItemKind::Function => tower_lsp::lsp_types::CompletionItemKind::FUNCTION,
                         CompletionItemKind::Constant => tower_lsp::lsp_types::CompletionItemKind::CONSTANT,
                         CompletionItemKind::Module => tower_lsp::lsp_types::CompletionItemKind::MODULE,
+                        CompletionItemKind::Struct => tower_lsp::lsp_types::CompletionItemKind::STRUCT,
                     };
 
                     // Check if insert_text contains snippet syntax

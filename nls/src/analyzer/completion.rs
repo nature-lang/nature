@@ -29,6 +29,7 @@ pub enum CompletionItemKind {
     Function,
     Constant,
     Module, // Module type for imports
+    Struct, // Type definitions (structs, typedefs)
 }
 
 pub struct CompletionProvider<'a> {
@@ -120,14 +121,25 @@ impl<'a> CompletionProvider<'a> {
         // Find imported module scope
         if let Some(&imported_scope_id) = self.symbol_table.module_scopes.get(&imported_module_ident) {
             let imported_scope = self.symbol_table.find_scope(imported_scope_id);
+            debug!("Found imported scope {} with {} symbols", imported_scope_id, imported_scope.symbols.len());
 
             // Iterate through all symbols in imported module
             for &symbol_id in &imported_scope.symbols {
                 if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
-                    // Only show public symbols (assuming all symbols are public, can add visibility check if needed)
-                    if prefix.is_empty() || symbol.ident.starts_with(prefix) {
+                    // Extract the actual symbol name (without module path)
+                    let symbol_name = extract_last_ident_part(&symbol.ident);
+                    
+                    debug!("Checking symbol: {} (extracted: {}) of kind: {:?}", symbol.ident, symbol_name, match &symbol.kind {
+                        SymbolKind::Var(_) => "Var",
+                        SymbolKind::Const(_) => "Const",
+                        SymbolKind::Fn(_) => "Fn",
+                        SymbolKind::Type(_) => "Type",
+                    });
+                    
+                    // Check prefix match against the extracted name
+                    if prefix.is_empty() || symbol_name.starts_with(prefix) {
                         let completion_item = self.create_module_completion_member(symbol);
-                        debug!("Adding module member completion: {}", completion_item.label);
+                        debug!("Adding module member completion: {} (kind: {:?})", completion_item.label, completion_item.kind);
                         completions.push(completion_item);
                     }
                 }
@@ -739,18 +751,18 @@ impl<'a> CompletionProvider<'a> {
 
     /// Create module member completion item
     fn create_module_completion_member(&self, symbol: &Symbol) -> CompletionItem {
-        let (ident, kind, detail, insert_text) = match &symbol.kind {
+        let (ident, kind, detail, insert_text, priority) = match &symbol.kind {
             SymbolKind::Var(var) => {
                 let var = var.lock().unwrap();
                 let detail = format!("var: {}", var.type_);
                 let display_ident = extract_last_ident_part(&var.ident.clone());
-                (display_ident.clone(), CompletionItemKind::Variable, Some(detail), display_ident)
+                (display_ident.clone(), CompletionItemKind::Variable, Some(detail), display_ident, 2)
             }
             SymbolKind::Const(constdef) => {
                 let constdef = constdef.lock().unwrap();
                 let detail = format!("const: {}", constdef.type_);
                 let display_ident = extract_last_ident_part(&constdef.ident.clone());
-                (display_ident.clone(), CompletionItemKind::Constant, Some(detail), display_ident)
+                (display_ident.clone(), CompletionItemKind::Constant, Some(detail), display_ident, 3)
             }
             SymbolKind::Fn(fndef) => {
                 let fndef = fndef.lock().unwrap();
@@ -760,13 +772,13 @@ impl<'a> CompletionProvider<'a> {
                 } else {
                     format!("{}()", fndef.fn_name)
                 };
-                (fndef.fn_name.clone(), CompletionItemKind::Function, Some(signature), insert_text)
+                (fndef.fn_name.clone(), CompletionItemKind::Function, Some(signature), insert_text, 0)
             }
             SymbolKind::Type(typedef) => {
                 let typedef = typedef.lock().unwrap();
                 let detail = format!("type definition");
                 let display_ident = extract_last_ident_part(&typedef.ident);
-                (display_ident.clone(), CompletionItemKind::Variable, Some(detail), display_ident)
+                (display_ident.clone(), CompletionItemKind::Struct, Some(detail), display_ident, 1)
             }
         };
 
@@ -776,7 +788,7 @@ impl<'a> CompletionProvider<'a> {
             detail,
             documentation: None,
             insert_text,
-            sort_text: Some(format!("{:08}", symbol.pos)),
+            sort_text: Some(format!("{}_{}", priority, ident)),
             additional_text_edits: Vec::new(),
         }
     }
@@ -787,19 +799,41 @@ impl<'a> CompletionProvider<'a> {
         completions.sort_by(|a, b| a.label.cmp(&b.label));
         completions.dedup_by(|a, b| a.label == b.label);
 
-        // Sort by match quality and definition position
+        // Sort by: 1) kind priority, 2) prefix match, 3) alphabetically
         completions.sort_by(|a, b| {
-            // Exact prefix match takes priority
-            let a_exact = a.label.starts_with(prefix);
-            let b_exact = b.label.starts_with(prefix);
+            // Priority order: Function > Struct > Variable > Constant > Module
+            let a_priority = match a.kind {
+                CompletionItemKind::Function => 0,
+                CompletionItemKind::Struct => 1,
+                CompletionItemKind::Variable | CompletionItemKind::Parameter => 2,
+                CompletionItemKind::Constant => 3,
+                CompletionItemKind::Module => 4,
+            };
+            let b_priority = match b.kind {
+                CompletionItemKind::Function => 0,
+                CompletionItemKind::Struct => 1,
+                CompletionItemKind::Variable | CompletionItemKind::Parameter => 2,
+                CompletionItemKind::Constant => 3,
+                CompletionItemKind::Module => 4,
+            };
 
-            match (a_exact, b_exact) {
-                (true, false) => std::cmp::Ordering::Less,
-                (false, true) => std::cmp::Ordering::Greater,
-                _ => {
-                    // Sort alphabetically
-                    a.label.cmp(&b.label)
+            // First sort by kind priority
+            match a_priority.cmp(&b_priority) {
+                std::cmp::Ordering::Equal => {
+                    // Then by prefix match
+                    let a_exact = a.label.starts_with(prefix);
+                    let b_exact = b.label.starts_with(prefix);
+
+                    match (a_exact, b_exact) {
+                        (true, false) => std::cmp::Ordering::Less,
+                        (false, true) => std::cmp::Ordering::Greater,
+                        _ => {
+                            // Finally sort alphabetically
+                            a.label.cmp(&b.label)
+                        }
+                    }
                 }
+                other => other,
             }
         });
 
