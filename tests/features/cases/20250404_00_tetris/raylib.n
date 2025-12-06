@@ -353,32 +353,32 @@ i32 NPATCH_NINE_PATCH = 0                // Npatch layout: 3x3 tiles
 i32 NPATCH_THREE_PATCH_VERTICAL = 1      // Npatch layout: 1x3 tiles
 i32 NPATCH_THREE_PATCH_HORIZONTAL = 2    // Npatch layout: 3x1 tiles
 
-var LIGHTGRAY = color_t{r = 200, g = 200, b = 200, a = 255}
-var GRAY = color_t{r = 130, g = 130, b = 130, a = 255}
-var DARKGRAY = color_t{r = 80, g = 80, b = 80, a = 255}
-var YELLOW = color_t{r = 253, g = 249, b = 0, a = 255}
-var GOLD = color_t{r = 255, g = 203, b = 0, a = 255}
-var ORANGE = color_t{r = 255, g = 161, b = 0, a = 255}
-var PINK = color_t{r = 255, g = 109, b = 194, a = 255}
-var RED = color_t{r = 230, g = 41, b = 55, a = 255}
-var MAROON = color_t{r = 190, g = 33, b = 55, a = 255}
-var GREEN = color_t{r = 0, g = 228, b = 48, a = 255}
-var LIME = color_t{r = 0, g = 158, b = 47, a = 255}
-var DARKGREEN = color_t{r = 0, g = 117, b = 44, a = 255}
-var SKYBLUE = color_t{r = 102, g = 191, b = 255, a = 255}
-var BLUE = color_t{r = 0, g = 121, b = 241, a = 255}
-var DARKBLUE = color_t{r = 0, g = 82, b = 172, a = 255}
-var PURPLE = color_t{r = 200, g = 122, b = 255, a = 255}
-var VIOLET = color_t{r = 135, g = 60, b = 190, a = 255}
-var DARKPURPLE = color_t{r = 112, g = 31, b = 126, a = 255}
-var BEIGE = color_t{r = 211, g = 176, b = 131, a = 255}
-var BROWN = color_t{r = 127, g = 106, b = 79, a = 255}
-var DARKBROWN = color_t{r = 76, g = 63, b = 47, a = 255}
-var WHITE = color_t{r = 255, g = 255, b = 255, a = 255}
-var BLACK = color_t{r = 0, g = 0, b = 0, a = 255}
-var BLANK = color_t{r = 0, g = 0, b = 0, a = 0}
-var MAGENTA = color_t{r = 255, g = 0, b = 255, a = 255}
-var RAYWHITE = color_t{r = 245, g = 245, b = 245, a = 255}
+var LIGHTGRAY = color_t{r: 200, g: 200, b: 200, a: 255}
+var GRAY = color_t{r: 130, g: 130, b: 130, a: 255}
+var DARKGRAY = color_t{r: 80, g: 80, b: 80, a: 255}
+var YELLOW = color_t{r: 253, g: 249, b: 0, a: 255}
+var GOLD = color_t{r: 255, g: 203, b: 0, a: 255}
+var ORANGE = color_t{r: 255, g: 161, b: 0, a: 255}
+var PINK = color_t{r: 255, g: 109, b: 194, a: 255}
+var RED = color_t{r: 230, g: 41, b: 55, a: 255}
+var MAROON = color_t{r: 190, g: 33, b: 55, a: 255}
+var GREEN = color_t{r: 0, g: 228, b: 48, a: 255}
+var LIME = color_t{r: 0, g: 158, b: 47, a: 255}
+var DARKGREEN = color_t{r: 0, g: 117, b: 44, a: 255}
+var SKYBLUE = color_t{r: 102, g: 191, b: 255, a: 255}
+var BLUE = color_t{r: 0, g: 121, b: 241, a: 255}
+var DARKBLUE = color_t{r: 0, g: 82, b: 172, a: 255}
+var PURPLE = color_t{r: 200, g: 122, b: 255, a: 255}
+var VIOLET = color_t{r: 135, g: 60, b: 190, a: 255}
+var DARKPURPLE = color_t{r: 112, g: 31, b: 126, a: 255}
+var BEIGE = color_t{r: 211, g: 176, b: 131, a: 255}
+var BROWN = color_t{r: 127, g: 106, b: 79, a: 255}
+var DARKBROWN = color_t{r: 76, g: 63, b: 47, a: 255}
+var WHITE = color_t{r: 255, g: 255, b: 255, a: 255}
+var BLACK = color_t{r: 0, g: 0, b: 0, a: 255}
+var BLANK = color_t{r: 0, g: 0, b: 0, a: 0}
+var MAGENTA = color_t{r: 255, g: 0, b: 255, a: 255}
+var RAYWHITE = color_t{r: 245, g: 245, b: 245, a: 255}
 
 type vector2_t = struct{
     f32 x     // Vector x component

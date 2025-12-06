@@ -2,9 +2,9 @@ import 'other.n'
 
 fn main() {
     var p = other.person_t{
-        name = 'hualaka',
-        age = 23,
-        sex = true,
+        name: 'hualaka',
+        age: 23,
+        sex: true,
     }
 
     [other.person_t] list = [p]

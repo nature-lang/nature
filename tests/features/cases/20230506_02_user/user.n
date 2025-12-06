@@ -18,9 +18,9 @@ fn register(string username, string password):void! {
     }
 
 	u = user{
-		id = id,
-		username = username,
-		password = password,
+		id: id,
+		username: username,
+		password: password,
 	}
 
 	list.push(u)

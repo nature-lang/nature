@@ -50,7 +50,7 @@ fn server():void! {
         println('register success')
 
         res.headers['Content-Type'] = 'application/json'
-        var str = json.serialize(msg_t{code = 1, msg = 'successful'})
+        var str = json.serialize(msg_t{code: 1, msg: 'successful'})
 
         res.send(str)
     })
@@ -63,11 +63,11 @@ fn main() {
     co.sleep(1000)
 
     var u = user_t{
-            username = 'hualaka',
-            password = '123456',
-            email = 'wwhacker@qq.com',
-            birthday = 1754173053,
-            gender = 1,
+            username: 'hualaka',
+            password: '123456',
+            email: 'wwhacker@qq.com',
+            birthday: 1754173053,
+            gender: 1,
         }
 
     var resp = client.new().json(u)
@@ -108,7 +108,7 @@ fn server():void! {
         println('register success')
 
         res.headers['Content-Type'] = 'application/json'
-        var str = json.serialize(msg_t{code = 1,msg = 'successful'})
+        var str = json.serialize(msg_t{code: 1,msg: 'successful'})
 
         res.send(str)
     })
@@ -121,11 +121,11 @@ fn main() {
     co.sleep(1000)
 
     var u = user_t{
-            username = 'hualaka',
-            password = '123456',
-            email = 'wwhacker@qq.com',
-            birthday = 1754173053, // unix
-            gender = 1,
+            username: 'hualaka',
+            password: '123456',
+            email: 'wwhacker@qq.com',
+            birthday: 1754173053, // unix
+            gender: 1,
         }
 
     var body_str = json.serialize(u)
@@ -165,7 +165,7 @@ fn server():void! {
         println('register success')
 
         res.headers['Content-Type'] = 'application/json'
-        var str = json.serialize(msg_t{code = 1,msg = 'successful'})
+        var str = json.serialize(msg_t{code: 1,msg: 'successful'})
 
         res.send(str)
     })
@@ -178,11 +178,11 @@ fn main() {
     co.sleep(1000)
 
     var u = user_t{
-            username = 'hualaka',
-            password = '123456',
-            email = 'wwhacker@qq.com',
-            birthday = 1754173053, // unix
-            gender = 1,
+            username: 'hualaka',
+            password: '123456',
+            email: 'wwhacker@qq.com',
+            birthday: 1754173053, // unix
+            gender: 1,
         }
 
     var resp = client.new().json(u)
@@ -337,11 +337,11 @@ fn main() {
     co.sleep(1000)
 
     var u = user_t{
-            username = 'hualaka',
-            password = '123456',
-            email = 'wwhacker@qq.com',
-            birthday = 1754173053,
-            gender = 1,
+            username: 'hualaka',
+            password: '123456',
+            email: 'wwhacker@qq.com',
+            birthday: 1754173053,
+            gender: 1,
         }
 
     var resp = client.new().json(u)

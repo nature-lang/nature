@@ -36,10 +36,10 @@ fn generate_boundary():string {
 
 fn multipart_t.text(string name, string value):ptr<multipart_t> {
     var item = multipart_item_t{
-        name = name,
-        filename = "",
-        value = value,
-        content_type = "text/plain",
+        name: name,
+        filename: "",
+        value: value,
+        content_type: "text/plain",
     }
     self.items.push(item)
     return self
@@ -59,10 +59,10 @@ fn multipart_t.file(string name, string filename, string data):ptr<multipart_t> 
     }
 
     var item = multipart_item_t{
-        name = name,
-        filename = filename,
-        value = data,
-        content_type = content_type,
+        name: name,
+        filename: filename,
+        value: data,
+        content_type: content_type,
     }
     self.items.push(item)
     return self

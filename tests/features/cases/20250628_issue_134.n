@@ -28,6 +28,6 @@ fn DisplayPair<T, U>.to_string():string {
 
 fn main() {
 	String str_value = "Hello, World!" // Literal quantities should be automatically inferred as custom string types
-	var display_pair = DisplayPair<Int<i32>, String>{first = -1, second = str_value};
+	var display_pair = DisplayPair<Int<i32>, String>{first: -1, second: str_value};
 	println("DisplayPair: ", display_pair.to_string())
 }

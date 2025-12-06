@@ -21,8 +21,8 @@ fn main():void! {
 
     // 结构体实例化
     var foo = test{
-        list = [1, 2, 3, 4, 5],
-        div = fn(int a, int b):int! {
+        list: [1, 2, 3, 4, 5],
+        div: fn(int a, int b):int! {
             if b == 0 {
                 throw errorf('divisor cannot zero')
             }

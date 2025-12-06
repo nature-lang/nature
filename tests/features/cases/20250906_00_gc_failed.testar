@@ -51,10 +51,10 @@ type jwt_config_t = struct {
 
 // Global JWT configuration
 var jwt_config = jwt_config_t{
-    secret_key = "emoji-api.helloworld202509052341",
-    default_expiry = JWT_DEFAULT_EXPIRY,
-    issuer = JWT_ISSUER,
-    algorithm = JWT_ALGORITHM,
+    secret_key: "emoji-api.helloworld202509052341",
+    default_expiry: JWT_DEFAULT_EXPIRY,
+    issuer: JWT_ISSUER,
+    algorithm: JWT_ALGORITHM,
 }
 
 // Initialize JWT configuration
@@ -78,19 +78,19 @@ fn generate(string sub, {string:any} custom_data, int expiry_seconds):string! {
 
     // Create header
     var header = jwt_header_t{
-        alg = jwt_config.algorithm,
-        typ = "JWT",
+        alg: jwt_config.algorithm,
+        typ: "JWT",
     }
 
     // Create payload (standard JWT structure)
     var payload = jwt_payload_t{
-        sub = sub,
-        iss = jwt_config.issuer,
-        iat = now,
-        exp = exp_time,
-        nbf = now,
-        jti = generate_jti(),
-        data = custom_data,
+        sub: sub,
+        iss: jwt_config.issuer,
+        iat: now,
+        exp: exp_time,
+        nbf: now,
+        jti: generate_jti(),
+        data: custom_data,
     }
 
     // Encode header and payload
@@ -160,10 +160,10 @@ fn verify(string token):jwt_token_t! {
     }
 
     return jwt_token_t{
-        header = header,
-        payload = payload,
-        signature = encoded_signature,
-        raw_token = token,
+        header: header,
+        payload: payload,
+        signature: encoded_signature,
+        raw_token: token,
     }
 }
 
@@ -306,10 +306,10 @@ type jwt_config_t = struct {
 
 // Global JWT configuration
 var jwt_config = jwt_config_t{
-    secret_key = "emoji-api.helloworld202509052341",
-    default_expiry = 86400,
-    issuer = 'emoji',
-    algorithm = 'HS250',
+    secret_key: "emoji-api.helloworld202509052341",
+    default_expiry: 86400,
+    issuer: 'emoji',
+    algorithm: 'HS250',
 }
 
 [string;10] global_arr = ['1', 'ab', 'code1', 'code2', 'foo3', 'foo4', 'foo5', 'foo6', 'bar7', 'bar8']

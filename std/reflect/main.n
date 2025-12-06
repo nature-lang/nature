@@ -108,9 +108,9 @@ fn typeof_hash(i64 hash):ptr<type_t>! {
 
         for i,field in temp_fields {
             t.fields[i] = field_t{
-                name = find_strtable(field.name_offset).to_string(),
-                hash = field.hash,
-                offset = field.offset,
+                name: find_strtable(field.name_offset).to_string(),
+                hash: field.hash,
+                offset: field.offset,
             }
         }
     } else {

@@ -9,10 +9,10 @@ fn main():void! {
     println('create socket success')
 
     var addr = syscall.sockaddr_in {
-        sin_family = syscall.AF_INET as u16,
-        sin_addr = 0x00000000,
-        sin_port = libc.htons(8080),
-        sin_zero = [],
+        sin_family: syscall.AF_INET as u16,
+        sin_addr: 0x00000000,
+        sin_port: libc.htons(8080),
+        sin_zero: [],
     }
 
     syscall.bind(sockfd, addr) catch err {

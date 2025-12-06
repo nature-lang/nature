@@ -820,8 +820,8 @@ fn gettime():timespec_t! {
     var tz = timezone_t{}
     call6(SYS_GETTIMEOFDAY, tv as anyptr, tz as anyptr, 0, 0, 0, 0)
     var result = timespec_t{
-        sec = tv.tv_sec,
-        nsec = (tv.tv_usec * 1000) as i64,
+        sec: tv.tv_sec,
+        nsec: (tv.tv_usec * 1000) as i64,
     }
     return result
 }

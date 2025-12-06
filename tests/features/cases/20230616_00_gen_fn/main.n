@@ -39,8 +39,8 @@ fn main() {
     // 5. 类型参数与泛型函数结合
     i16 a5 = 12
     var b5 = mod.box<i16, i32>{
-        width = a5,
-        length = 12,
+        width: a5,
+        length: 12,
     }
 
     var c5 = mod.area(b5)
@@ -53,8 +53,8 @@ fn main() {
 
     // 7. 嵌套类型测试 1
     var a7 = mod.box<mod.custom_t<i32>, i16>{
-        width = 66,
-        length = 77,
+        width: 66,
+        length: 77,
     }
 
     println(a7.width, a7.length, mod.area(a7))
@@ -64,8 +64,8 @@ fn main() {
     // 8. 嵌套类型测试 2
     i16 b8  = 12
     var a8 = mod.person_t<string>{
-        name = "hello",
-        age = b8 as mod.custom_t<i8>,
+        name: "hello",
+        age: b8 as mod.custom_t<i8>,
     }
     println(a8.name, a8.age)
 }

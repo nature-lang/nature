@@ -24,7 +24,7 @@ fn DisplayPair<T>.to_string():string {
 }
 
 fn main() {
-	var display_pair = DisplayPair<Int<i32>>{first = -1, second = 2}
+	var display_pair = DisplayPair<Int<i32>>{first: -1, second: 2}
 	println("DisplayPair: ", display_pair.to_string())
 }
 
@@ -63,7 +63,7 @@ fn DisplayPair<T, U>.to_string():string {
 
 fn main() {
 	String str_value = "Hello, World!" // Literal quantities should be automatically inferred as custom string types
-	var display_pair = DisplayPair<Int<i32>, String>{first = -1, second = str_value};
+	var display_pair = DisplayPair<Int<i32>, String>{first: -1, second: str_value};
 	println("DisplayPair: ", display_pair.to_string())
 }
 
@@ -87,7 +87,7 @@ fn i32.to_string():string {
 }
 
 fn main() {
-	var display_pair = DisplayPair{first = 3, second = 2}
+	var display_pair = DisplayPair{first: 3, second: 2}
 	var str = display_pair.first.to_string()
 	var str2 = display_pair.second.to_string()
 	println(str, str2)

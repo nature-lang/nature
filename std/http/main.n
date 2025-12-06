@@ -167,7 +167,7 @@ fn server_t.close() {
 }
 
 fn server():ptr<server_t> {
-    var s = new server_t(addr='0.0.0.0', handler_fn=conn_handler)
+    var s = new server_t(addr = '0.0.0.0', handler_fn = conn_handler)
     return s
 }
 
@@ -194,10 +194,10 @@ type response_t = struct{
 
 fn request_new(rawptr<uv.conn_t> conn):request_t {
     var req = request_t{
-        method = conn.method,
-        host = runtime.string_ref_new(conn.host_at, conn.host_len),
-        url = runtime.string_ref_new(conn.url_at, conn.url_len),
-        path = runtime.string_ref_new(conn.path_at, conn.path_len),
+        method: conn.method,
+        host: runtime.string_ref_new(conn.host_at, conn.host_len),
+        url: runtime.string_ref_new(conn.url_at, conn.url_len),
+        path: runtime.string_ref_new(conn.path_at, conn.path_len),
     }
 
     if conn.body_len > 0 {

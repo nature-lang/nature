@@ -84,11 +84,11 @@ fn main():void {
     if fd > 0 {
         // 创建文件锁结构
         libc.flock lock = libc.flock {
-            l_type = libc.F_WRLCK,
-            l_whence = libc.SEEK_SET,
-            l_start = 0,
-            l_len = 0,
-            l_pid = 0,
+            l_type: libc.F_WRLCK,
+            l_whence: libc.SEEK_SET,
+            l_start: 0,
+            l_len: 0,
+            l_pid: 0,
         }
         
         // 测试设置写锁
@@ -97,11 +97,11 @@ fn main():void {
         
         // 测试获取锁信息
         libc.flock test_lock = libc.flock {
-            l_type = libc.F_WRLCK,
-            l_whence = libc.SEEK_SET,
-            l_start = 0,
-            l_len = 0,
-            l_pid = 0,
+            l_type: libc.F_WRLCK,
+            l_whence: libc.SEEK_SET,
+            l_start: 0,
+            l_len: 0,
+            l_pid: 0,
         }
         
         var getlk_result = libc.fcntl(fd, libc.F_GETLK, &test_lock as anyptr)

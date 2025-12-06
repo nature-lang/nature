@@ -36,9 +36,9 @@ fn now():time_t {
     }
 
     var t = time_t{
-        sec = sys_time.sec,
-        nsec = sys_time.nsec,
-        tm = libc.localtime(&(sys_time.sec as libc.time_t)),
+        sec: sys_time.sec,
+        nsec: sys_time.nsec,
+        tm: libc.localtime(&(sys_time.sec as libc.time_t)),
     }
 
     return t

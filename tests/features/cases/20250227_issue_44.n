@@ -41,11 +41,11 @@ type AcceptRange = struct {
 }
 
 [AcceptRange;5] accept_ranges = [
-    AcceptRange{ lo = 0x80, hi = 0xbf },
-    AcceptRange{ lo = 0xa0, hi = 0xbf },
-    AcceptRange{ lo = 0x80, hi = 0x9f },
-    AcceptRange{ lo = 0x90, hi = 0xbf },
-    AcceptRange{ lo = 0x80, hi = 0x8f }]
+    AcceptRange{ lo: 0x80, hi: 0xbf },
+    AcceptRange{ lo: 0xa0, hi: 0xbf },
+    AcceptRange{ lo: 0x80, hi: 0x9f },
+    AcceptRange{ lo: 0x90, hi: 0xbf },
+    AcceptRange{ lo: 0x80, hi: 0x8f }]
 
 u8 xx = 0xF1 // invalid: size 1
 u8 _as= 0xF0 // ASCII: size 1

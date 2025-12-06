@@ -34,7 +34,7 @@ fn main() {
         string name
         bool married
     }
-    var a4 = person_t{age=20, name="John", married=false}
+    var a4 = person_t{age:20, name:"John", married:false}
     var p4 = &a4
     var b4 = *p4
 

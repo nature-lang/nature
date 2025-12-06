@@ -40,7 +40,7 @@ fn run(string name, [string] args):ptr<state_t>! {
     var stdout_buffer = new io.buffer()
     var stderr_buffer = new io.buffer()
 
-    var cmd = new command_t(name, args, stdin=fs.discard(), stdout=stdout_buffer, stderr=stderr_buffer)
+    var cmd = new command_t(name, args, stdin = fs.discard(), stdout = stdout_buffer, stderr = stderr_buffer)
     var p = cmd.spawn()
     p.wait()
 
@@ -51,7 +51,7 @@ fn run(string name, [string] args):ptr<state_t>! {
 }
 
 fn command(string name, [string] args):ptr<command_t>! {
-    var cmd = new command_t(name, args, stdin=fs.discard(), stdout=fs.stdout(), stderr=fs.stderr())
+    var cmd = new command_t(name, args, stdin = fs.discard(), stdout = fs.stdout(), stderr = fs.stderr())
 
     return cmd
 }

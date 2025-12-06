@@ -497,8 +497,8 @@ fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
         self.sorted_vocab = vec_cap<token_index_t>(self.vocab_size)
         for int i = 0; i < self.vocab_size; i+=1 {
             self.sorted_vocab.push(token_index_t{
-                str = self.vocab[i],
-                id = i,
+                str: self.vocab[i],
+                id: i,
             })
         }
         assert(self.sorted_vocab.len() == self.vocab_size)

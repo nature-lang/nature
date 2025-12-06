@@ -1485,7 +1485,7 @@ impl<'a> Syntax {
         while !self.is(TokenType::RightCurly) {
             let key = self.must(TokenType::Ident)?.literal.clone();
 
-            self.must(TokenType::Equal)?;
+            self.must(TokenType::Colon)?;
 
             let value = self.parser_expr()?;
 
@@ -2401,6 +2401,10 @@ impl<'a> Syntax {
         Ok(expr)
     }
 
+    /*
+        Assigned properties: new dog(name="Buddy", age=3)
+        Named match properties (not positional): new dog(age, name)
+    */
     fn parser_new_expr(&mut self) -> Result<Box<Expr>, SyntaxError> {
         let mut expr = self.expr_new();
         self.must(TokenType::Ident)?; // ident = new
