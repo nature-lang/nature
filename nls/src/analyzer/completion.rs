@@ -6,12 +6,20 @@ use std::collections::HashSet;
 
 #[derive(Debug, Clone)]
 pub struct CompletionItem {
-    pub label: String, // 变量名
+    pub label: String, // Variable name
     pub kind: CompletionItemKind,
-    pub detail: Option<String>, // 类型信息
+    pub detail: Option<String>, // Type information
     pub documentation: Option<String>,
-    pub insert_text: String,       // 插入文本
-    pub sort_text: Option<String>, // 排序权重
+    pub insert_text: String,       // Insert text
+    pub sort_text: Option<String>, // Sort priority
+    pub additional_text_edits: Vec<TextEdit>, // Additional text edits (for auto-import)
+}
+
+#[derive(Debug, Clone)]
+pub struct TextEdit {
+    pub line: usize,
+    pub character: usize,
+    pub new_text: String,
 }
 
 #[derive(Debug, Clone)]
@@ -20,49 +28,71 @@ pub enum CompletionItemKind {
     Parameter,
     Function,
     Constant,
+    Module, // Module type for imports
 }
 
 pub struct CompletionProvider<'a> {
     symbol_table: &'a mut SymbolTable,
     module: &'a mut Module,
+    nature_root: String,
+    project_root: String,
+    package_config: Option<crate::analyzer::common::PackageConfig>,
 }
 
 impl<'a> CompletionProvider<'a> {
-    pub fn new(symbol_table: &'a mut SymbolTable, module: &'a mut Module) -> Self {
-        Self { symbol_table, module }
+    pub fn new(
+        symbol_table: &'a mut SymbolTable,
+        module: &'a mut Module,
+        nature_root: String,
+        project_root: String,
+        package_config: Option<crate::analyzer::common::PackageConfig>,
+    ) -> Self {
+        Self {
+            symbol_table,
+            module,
+            nature_root,
+            project_root,
+            package_config,
+        }
     }
 
-    /// 主要的自动完成入口函数
+    /// Main auto-completion entry function
     pub fn get_completions(&self, position: usize, prefix: &str) -> Vec<CompletionItem> {
         dbg!("get_completions", position, &self.module.ident, self.module.scope_id, prefix);
 
-        // 检查是否在类型成员访问上下文中 (variable.field)
+        // Check if in type member access context (variable.field)
         if let Some((var_name, member_prefix)) = extract_module_member_context(prefix, position) {
-            // 先尝试作为变量类型成员访问
+            // First try as variable type member access
             let current_scope_id = self.find_innermost_scope(self.module.scope_id, position);
             if let Some(completions) = self.get_type_member_completions(&var_name, &member_prefix, current_scope_id) {
                 debug!("Found type member completions for variable '{}'", var_name);
                 return completions;
             }
             
-            // 如果不是变量，尝试作为模块成员访问
+            // If not a variable, try as module member access
             debug!("Detected module member access: {} and {}", var_name, member_prefix);
             return self.get_module_member_completions(&var_name, &member_prefix);
         }
 
-        // 普通的变量补全
+        // Normal variable completion
         let prefix = extract_prefix_at_position(prefix, position);
         debug!("Getting completions at position {} with prefix '{}'", position, prefix);
 
-        // 1. 根据位置找到当前作用域
+        // 1. Find current scope based on position
         let current_scope_id = self.find_innermost_scope(self.module.scope_id, position);
         debug!("Found scope_id {} by positon {}", current_scope_id, position);
 
-        // 2. 收集所有可见的变量符号
+        // 2. Collect all visible variable symbols
         let mut completions = Vec::new();
         self.collect_variable_completions(current_scope_id, &prefix, &mut completions, position);
 
-        // 3. 排序和过滤
+        // 3. Collect already-imported modules (show at top)
+        self.collect_imported_module_completions(&prefix, &mut completions);
+
+        // 4. Collect available modules (for auto-import)
+        self.collect_module_completions(&prefix, &mut completions);
+
+        // 5. Sort and filter
         self.sort_and_filter_completions(&mut completions, &prefix);
 
         debug!("Found {} completions", completions.len());
@@ -71,7 +101,7 @@ impl<'a> CompletionProvider<'a> {
         completions
     }
 
-    /// 获取模块成员的自动补全
+    /// Get auto-completions for module members
     pub fn get_module_member_completions(&self, imported_as_name: &str, prefix: &str) -> Vec<CompletionItem> {
         debug!("Getting module member completions for module '{}' with prefix '{}'", imported_as_name, prefix);
 
@@ -87,14 +117,14 @@ impl<'a> CompletionProvider<'a> {
         let imported_module_ident = import_stmt.unwrap().module_ident.clone();
         debug!("Imported module is '{}' find by {}", imported_module_ident, imported_as_name);
 
-        // 查找导入的模块作用域
+        // Find imported module scope
         if let Some(&imported_scope_id) = self.symbol_table.module_scopes.get(&imported_module_ident) {
             let imported_scope = self.symbol_table.find_scope(imported_scope_id);
 
-            // 遍历导入模块的所有符号
+            // Iterate through all symbols in imported module
             for &symbol_id in &imported_scope.symbols {
                 if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
-                    // 只显示公开的符号（这里假设所有符号都是公开的，你可以根据需要添加可见性检查）
+                    // Only show public symbols (assuming all symbols are public, can add visibility check if needed)
                     if prefix.is_empty() || symbol.ident.starts_with(prefix) {
                         let completion_item = self.create_module_completion_member(symbol);
                         debug!("Adding module member completion: {}", completion_item.label);
@@ -106,14 +136,14 @@ impl<'a> CompletionProvider<'a> {
             debug!("Module '{}' not found in symbol table", imported_module_ident);
         }
 
-        // 排序和过滤
+        // Sort and filter
         self.sort_and_filter_completions(&mut completions, prefix);
 
         debug!("Found {} module member completions", completions.len());
         completions
     }
 
-    /// 获取类型成员的自动补全 (for struct fields and methods)
+    /// Get auto-completions for type members (for struct fields and methods)
     pub fn get_type_member_completions(&self, var_name: &str, prefix: &str, current_scope_id: NodeId) -> Option<Vec<CompletionItem>> {
         debug!("Getting type member completions for variable '{}' with prefix '{}'", var_name, prefix);
 
@@ -151,6 +181,7 @@ impl<'a> CompletionProvider<'a> {
                         documentation: None,
                         insert_text: prop.name.clone(),
                         sort_text: Some(format!("{:08}", prop.start)),
+                        additional_text_edits: Vec::new(),
                     });
                 }
             }
@@ -178,6 +209,7 @@ impl<'a> CompletionProvider<'a> {
                                     documentation: None,
                                     insert_text: prop.name.clone(),
                                     sort_text: Some(format!("{:08}", prop.start)),
+                                    additional_text_edits: Vec::new(),
                                 });
                             }
                         }
@@ -200,6 +232,7 @@ impl<'a> CompletionProvider<'a> {
                                 documentation: None,
                                 insert_text,
                                 sort_text: Some(format!("{:08}", fndef.symbol_start)),
+                                additional_text_edits: Vec::new(),
                             });
                         }
                     }
@@ -250,6 +283,7 @@ impl<'a> CompletionProvider<'a> {
                                 documentation: None,
                                 insert_text,
                                 sort_text: Some(format!("{:08}", fndef.symbol_start)),
+                                additional_text_edits: Vec::new(),
                             });
                         }
                     }
@@ -340,14 +374,14 @@ impl<'a> CompletionProvider<'a> {
         format!("fn({}): {}", params_str, return_type)
     }
 
-    /// 从模块作用域开始，根据位置找到包含该位置的最内层作用域
+    /// Find innermost scope containing the position starting from module scope
     fn find_innermost_scope(&self, scope_id: NodeId, position: usize) -> NodeId {
         let scope = self.symbol_table.find_scope(scope_id);
         debug!("[find_innermost_scope] scope_id {}, start {}, end {}", scope_id, scope.range.0, scope.range.1);
 
-        // 检查当前作用域是否包含该位置(range.1 == 0 表示整个文件级别的作用域)
+        // Check if current scope contains this position (range.1 == 0 means file-level scope)
         if position >= scope.range.0 && (position < scope.range.1 || scope.range.1 == 0) {
-            // 检查子作用域，找到最内层的作用域
+            // Check child scopes, find innermost scope
             for &child_id in &scope.children {
                 let child_scope = self.symbol_table.find_scope(child_id);
 
@@ -363,27 +397,27 @@ impl<'a> CompletionProvider<'a> {
             return scope_id;
         }
 
-        scope_id // 如果不在范围内，返回当前作用域
+        scope_id // If not in range, return current scope
     }
 
-    /// 收集变量完成项
+    /// Collect variable completion items
     fn collect_variable_completions(&self, current_scope_id: NodeId, prefix: &str, completions: &mut Vec<CompletionItem>, position: usize) {
         let mut visited_scopes = HashSet::new();
         let mut current = current_scope_id;
 
-        // 从当前作用域向上遍历
+        // Traverse upward from current scope
         while current > 0 && !visited_scopes.contains(&current) {
             visited_scopes.insert(current);
 
             let scope = self.symbol_table.find_scope(current);
             debug!("Searching scope {} with {} symbols", current, scope.symbols.len());
 
-            // 遍历当前作用域的所有符号
+            // Iterate through all symbols in current scope
             for &symbol_id in &scope.symbols {
                 if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
                     dbg!("Found symbol will check", symbol.ident.clone(), prefix, symbol.ident.starts_with(prefix));
 
-                    // 只处理变量和常量
+                    // Only handle variables and constants
                     match &symbol.kind {
                         SymbolKind::Var(_) | SymbolKind::Const(_) => {
                             if (prefix.is_empty() || symbol.ident.starts_with(prefix)) && symbol.pos < position {
@@ -398,14 +432,281 @@ impl<'a> CompletionProvider<'a> {
             }
             current = scope.parent;
 
-            // 如果到达了根作用域，停止遍历
+            // If reached root scope, stop traversal
             if current == 0 {
                 break;
             }
         }
     }
 
-    /// 创建完成项
+    /// Collect already-imported modules as completions (show at top)
+    fn collect_imported_module_completions(&self, prefix: &str, completions: &mut Vec<CompletionItem>) {
+        debug!("Collecting imported module completions with prefix '{}'", prefix);
+
+        for import_stmt in &self.module.dependencies {
+            let module_name = &import_stmt.as_name;
+
+            // Check prefix match
+            if !prefix.is_empty() && !module_name.starts_with(prefix) {
+                continue;
+            }
+
+            debug!("Found imported module: {}", module_name);
+
+            // Determine import statement display
+            let import_display = if let Some(file) = &import_stmt.file {
+                format!("import '{}'", file)
+            } else if let Some(ref package) = import_stmt.ast_package {
+                format!("import {}", package.join("."))
+            } else {
+                format!("import {}", module_name)
+            };
+
+            completions.push(CompletionItem {
+                label: module_name.to_string(),
+                kind: CompletionItemKind::Module,
+                detail: Some(format!("imported: {}", import_display)),
+                documentation: Some(format!("Already imported module: {}", module_name)),
+                insert_text: module_name.to_string(),
+                sort_text: Some(format!("aaa_{}", module_name)), // Sort to top with "aaa" prefix
+                additional_text_edits: Vec::new(),
+            });
+        }
+    }
+
+    /// Collect available module completions (for auto-import)
+    fn collect_module_completions(&self, prefix: &str, completions: &mut Vec<CompletionItem>) {
+        debug!("Collecting module completions with prefix '{}'", prefix);
+
+        // Check which modules are already imported
+        let already_imported: HashSet<String> = self
+            .module
+            .dependencies
+            .iter()
+            .map(|dep| dep.as_name.clone())
+            .collect();
+
+        // 1. Scan .n files in current directory (file-based imports)
+        let module_dir = &self.module.dir;
+        debug!("Scanning module directory: {}", module_dir);
+
+        if let Ok(entries) = std::fs::read_dir(module_dir) {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+                    if path.is_file()
+                        && path.extension().and_then(|s| s.to_str()) == Some("n")
+                    {
+                        if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
+                            // Skip current file
+                            if path == std::path::Path::new(&self.module.path) {
+                                continue;
+                            }
+
+                            // Skip already imported modules
+                            if already_imported.contains(file_stem) {
+                                continue;
+                            }
+
+                            // Check prefix match
+                            if !prefix.is_empty() && !file_stem.starts_with(prefix) {
+                                continue;
+                            }
+
+                            debug!("Found module file: {}", file_stem);
+
+                            // Calculate import statement to insert at beginning of file
+                            let module_name = path.file_name().unwrap().to_str().unwrap();
+                            let import_statement = format!("import '{}'\n", module_name);
+
+                            completions.push(CompletionItem {
+                                label: file_stem.to_string(),
+                                kind: CompletionItemKind::Module,
+                                detail: Some(format!("{}", import_statement)),
+                                documentation: Some(format!(
+                                    "Import module from {}",
+                                    path.display()
+                                )),
+                                insert_text: file_stem.to_string(),
+                                sort_text: Some(format!("zzz_{}", file_stem)), // Sort to back
+                                additional_text_edits: vec![TextEdit {
+                                    line: 0,
+                                    character: 0,
+                                    new_text: import_statement,
+                                }],
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Scan subdirectories for package-based imports (if package.toml exists)
+        if let Some(ref pkg_config) = self.package_config {
+            self.scan_subdirectories_for_modules(
+                &self.project_root,
+                &pkg_config.package_data.name,
+                "",
+                prefix,
+                &already_imported,
+                completions,
+            );
+        }
+
+        // 3. Scan standard library packages
+        let std_dir = std::path::Path::new(&self.nature_root).join("std");
+        debug!("Scanning std directory: {}", std_dir.display());
+
+        if let Ok(entries) = std::fs::read_dir(&std_dir) {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        if let Some(module_name) = path.file_name().and_then(|s| s.to_str()) {
+                            // Exclude special directories
+                            if [".", "..", "builtin"].contains(&module_name) {
+                                continue;
+                            }
+
+                            // Skip already imported packages
+                            if already_imported.contains(module_name) {
+                                continue;
+                            }
+
+                            // Check prefix match
+                            if !prefix.is_empty() && !module_name.starts_with(prefix) {
+                                continue;
+                            }
+
+                            debug!("Found std package: {}", module_name);
+
+                            // Standard library uses import package_name syntax
+                            let import_statement = format!("import {}\n", module_name);
+
+                            completions.push(CompletionItem {
+                                label: module_name.to_string(),
+                                kind: CompletionItemKind::Module,
+                                detail: Some(format!("std: {}", import_statement)),
+                                documentation: Some(format!(
+                                    "Import standard library package: {}",
+                                    module_name
+                                )),
+                                insert_text: module_name.to_string(),
+                                sort_text: Some(format!("zzz_{}", module_name)), // Sort to back
+                                additional_text_edits: vec![TextEdit {
+                                    line: 0,
+                                    character: 0,
+                                    new_text: import_statement,
+                                }],
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Recursively scan subdirectories for package-based module imports
+    fn scan_subdirectories_for_modules(
+        &self,
+        base_dir: &str,
+        package_name: &str,
+        current_path: &str,
+        prefix: &str,
+        already_imported: &HashSet<String>,
+        completions: &mut Vec<CompletionItem>,
+    ) {
+        let scan_dir = if current_path.is_empty() {
+            std::path::PathBuf::from(base_dir)
+        } else {
+            std::path::PathBuf::from(base_dir).join(current_path)
+        };
+
+        if let Ok(entries) = std::fs::read_dir(&scan_dir) {
+            for entry in entries {
+                if let Ok(entry) = entry {
+                    let path = entry.path();
+
+                    // Check subdirectories
+                    if path.is_dir() {
+                        if let Some(dir_name) = path.file_name().and_then(|s| s.to_str()) {
+                            let new_path = if current_path.is_empty() {
+                                dir_name.to_string()
+                            } else {
+                                format!("{}/{}", current_path, dir_name)
+                            };
+
+                            // Recursively scan subdirectory
+                            self.scan_subdirectories_for_modules(
+                                base_dir,
+                                package_name,
+                                &new_path,
+                                prefix,
+                                already_imported,
+                                completions,
+                            );
+                        }
+                    }
+                    // Check .n files in subdirectories
+                    else if path.is_file()
+                        && path.extension().and_then(|s| s.to_str()) == Some("n")
+                    {
+                        if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
+                            // Skip if this is in the root directory (already handled by file-based imports)
+                            if current_path.is_empty() {
+                                continue;
+                            }
+
+                            // Build import path: package_name.folder.module_name
+                            let module_import_path = if current_path.is_empty() {
+                                format!("{}.{}", package_name, file_stem)
+                            } else {
+                                format!(
+                                    "{}.{}.{}",
+                                    package_name,
+                                    current_path.replace("/", "."),
+                                    file_stem
+                                )
+                            };
+
+                            // Skip already imported modules
+                            if already_imported.contains(file_stem) {
+                                continue;
+                            }
+
+                            // Check prefix match (match against the module name, not full path)
+                            if !prefix.is_empty() && !file_stem.starts_with(prefix) {
+                                continue;
+                            }
+
+                            debug!("Found subdirectory module: {} at {}", file_stem, module_import_path);
+
+                            let import_statement = format!("import {}\n", module_import_path);
+
+                            completions.push(CompletionItem {
+                                label: file_stem.to_string(),
+                                kind: CompletionItemKind::Module,
+                                detail: Some(format!("pkg: {}", import_statement)),
+                                documentation: Some(format!(
+                                    "Import module from package: {}",
+                                    module_import_path
+                                )),
+                                insert_text: file_stem.to_string(),
+                                sort_text: Some(format!("zzz_{}", file_stem)),
+                                additional_text_edits: vec![TextEdit {
+                                    line: 0,
+                                    character: 0,
+                                    new_text: import_statement,
+                                }],
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Create completion item
     fn create_completion_item(&self, symbol: &Symbol) -> CompletionItem {
         let (kind, detail) = match &symbol.kind {
             SymbolKind::Var(var_decl) => {
@@ -431,35 +732,41 @@ impl<'a> CompletionProvider<'a> {
             detail,
             documentation: None,
             insert_text: symbol.ident.clone(),
-            sort_text: Some(format!("{:08}", symbol.pos)), // 按定义位置排序
+            sort_text: Some(format!("{:08}", symbol.pos)), // Sort by definition position
+            additional_text_edits: Vec::new(),
         }
     }
 
-    /// 创建模块成员完成项
+    /// Create module member completion item
     fn create_module_completion_member(&self, symbol: &Symbol) -> CompletionItem {
-        let (ident, kind, detail) = match &symbol.kind {
+        let (ident, kind, detail, insert_text) = match &symbol.kind {
             SymbolKind::Var(var) => {
                 let var = var.lock().unwrap();
                 let detail = format!("var: {}", var.type_);
                 let display_ident = extract_last_ident_part(&var.ident.clone());
-                (display_ident, CompletionItemKind::Variable, Some(detail))
+                (display_ident.clone(), CompletionItemKind::Variable, Some(detail), display_ident)
             }
             SymbolKind::Const(constdef) => {
                 let constdef = constdef.lock().unwrap();
                 let detail = format!("const: {}", constdef.type_);
                 let display_ident = extract_last_ident_part(&constdef.ident.clone());
-                (display_ident, CompletionItemKind::Constant, Some(detail))
+                (display_ident.clone(), CompletionItemKind::Constant, Some(detail), display_ident)
             }
             SymbolKind::Fn(fndef) => {
                 let fndef = fndef.lock().unwrap();
-                let detail =  format!("fn: {}", fndef.type_);
-                (fndef.fn_name.clone(), CompletionItemKind::Function, Some(detail))
+                let signature = self.format_function_signature(&fndef);
+                let insert_text = if self.has_parameters(&fndef) {
+                    format!("{}($0)", fndef.fn_name)
+                } else {
+                    format!("{}()", fndef.fn_name)
+                };
+                (fndef.fn_name.clone(), CompletionItemKind::Function, Some(signature), insert_text)
             }
             SymbolKind::Type(typedef) => {
                 let typedef = typedef.lock().unwrap();
                 let detail = format!("type definition");
                 let display_ident = extract_last_ident_part(&typedef.ident);
-                (display_ident, CompletionItemKind::Variable, Some(detail))
+                (display_ident.clone(), CompletionItemKind::Variable, Some(detail), display_ident)
             }
         };
 
@@ -468,20 +775,21 @@ impl<'a> CompletionProvider<'a> {
             kind,
             detail,
             documentation: None,
-            insert_text: ident.clone(),
+            insert_text,
             sort_text: Some(format!("{:08}", symbol.pos)),
+            additional_text_edits: Vec::new(),
         }
     }
 
-    /// 排序和过滤完成项
+    /// Sort and filter completion items
     fn sort_and_filter_completions(&self, completions: &mut Vec<CompletionItem>, prefix: &str) {
-        // 去重 - 基于标签去重
+        // Deduplicate - based on label
         completions.sort_by(|a, b| a.label.cmp(&b.label));
         completions.dedup_by(|a, b| a.label == b.label);
 
-        // 按匹配度和定义位置排序
+        // Sort by match quality and definition position
         completions.sort_by(|a, b| {
-            // 精确前缀匹配优先
+            // Exact prefix match takes priority
             let a_exact = a.label.starts_with(prefix);
             let b_exact = b.label.starts_with(prefix);
 
@@ -489,18 +797,18 @@ impl<'a> CompletionProvider<'a> {
                 (true, false) => std::cmp::Ordering::Less,
                 (false, true) => std::cmp::Ordering::Greater,
                 _ => {
-                    // 按字母顺序排序
+                    // Sort alphabetically
                     a.label.cmp(&b.label)
                 }
             }
         });
 
-        // 限制返回数量
+        // Limit number of results
         completions.truncate(50);
     }
 }
 
-/// 从文本中提取光标位置的前缀
+/// Extract prefix at cursor position from text
 pub fn extract_prefix_at_position(text: &str, position: usize) -> String {
     if position == 0 {
         return String::new();
@@ -513,7 +821,7 @@ pub fn extract_prefix_at_position(text: &str, position: usize) -> String {
 
     let mut start = position;
 
-    // 向前查找标识符的开始位置
+    // Search backward for start of identifier
     while start > 0 {
         let ch = chars[start - 1];
         if ch.is_alphanumeric() || ch == '_' || ch == '.' {
@@ -523,11 +831,11 @@ pub fn extract_prefix_at_position(text: &str, position: usize) -> String {
         }
     }
 
-    // 提取前缀
+    // Extract prefix
     chars[start..position].iter().collect()
 }
 
-/// 从类似 "io.main.writer" 的标识符中提取最后一个部分 "writer"
+/// Extract last identifier part from something like "io.main.writer" to get "writer"
 fn extract_last_ident_part(ident: &str) -> String {
     if let Some(dot_pos) = ident.rfind('.') {
         ident[dot_pos + 1..].to_string()
@@ -536,7 +844,7 @@ fn extract_last_ident_part(ident: &str) -> String {
     }
 }
 
-/// 检测是否在模块成员访问上下文中，返回 (模块名, 成员前缀)
+/// Detect if in module member access context, returns (module_name, member_prefix)
 pub fn extract_module_member_context(prefix: &str, _position: usize) -> Option<(String, String)> {
     if let Some(dot_pos) = prefix.rfind('.') {
         let module_name = prefix[..dot_pos].to_string();

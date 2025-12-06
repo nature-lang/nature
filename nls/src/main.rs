@@ -461,10 +461,18 @@ impl LanguageServer for Backend {
             let prefix = extract_prefix_at_position(&text, byte_offset);
             debug!("Extracted prefix: '{}', module_ident '{}', raw_text '{}'", prefix, module.ident.clone(), text);
 
-            // 获取符号表
+            // Get symbol table and package config
             let mut symbol_table = project.symbol_table.lock().unwrap();
-            // 创建完成提供器并获取完成项
-            let completion_items = CompletionProvider::new(&mut symbol_table, module).get_completions(byte_offset, &prefix);
+            let package_config = project.package_config.lock().unwrap().clone();
+            // Create completion provider and get completion items
+            let completion_items = CompletionProvider::new(
+                &mut symbol_table,
+                module,
+                project.nature_root.clone(),
+                project.root.clone(),
+                package_config,
+            )
+            .get_completions(byte_offset, &prefix);
 
             // 转换为LSP格式
             let lsp_items: Vec<tower_lsp::lsp_types::CompletionItem> = completion_items
@@ -475,10 +483,35 @@ impl LanguageServer for Backend {
                         CompletionItemKind::Parameter => tower_lsp::lsp_types::CompletionItemKind::VARIABLE,
                         CompletionItemKind::Function => tower_lsp::lsp_types::CompletionItemKind::FUNCTION,
                         CompletionItemKind::Constant => tower_lsp::lsp_types::CompletionItemKind::CONSTANT,
+                        CompletionItemKind::Module => tower_lsp::lsp_types::CompletionItemKind::MODULE,
                     };
 
                     // Check if insert_text contains snippet syntax
                     let has_snippet = item.insert_text.contains("$0");
+
+                    // Convert additional_text_edits to LSP format
+                    let additional_edits = if !item.additional_text_edits.is_empty() {
+                        Some(
+                            item.additional_text_edits
+                                .into_iter()
+                                .map(|edit| tower_lsp::lsp_types::TextEdit {
+                                    range: tower_lsp::lsp_types::Range {
+                                        start: tower_lsp::lsp_types::Position {
+                                            line: edit.line as u32,
+                                            character: edit.character as u32,
+                                        },
+                                        end: tower_lsp::lsp_types::Position {
+                                            line: edit.line as u32,
+                                            character: edit.character as u32,
+                                        },
+                                    },
+                                    new_text: edit.new_text,
+                                })
+                                .collect(),
+                        )
+                    } else {
+                        None
+                    };
                     
                     tower_lsp::lsp_types::CompletionItem {
                         label: item.label,
@@ -492,6 +525,7 @@ impl LanguageServer for Backend {
                             Some(tower_lsp::lsp_types::InsertTextFormat::PLAIN_TEXT) 
                         },
                         sort_text: item.sort_text,
+                        additional_text_edits: additional_edits,
                         ..Default::default()
                     }
                 })
