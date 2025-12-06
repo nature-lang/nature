@@ -1,4 +1,5 @@
 use crate::analyzer::symbol::{NodeId, Symbol, SymbolKind, SymbolTable};
+use crate::analyzer::common::AstFnDef;
 use crate::project::Module;
 use log::debug;
 use std::collections::HashSet;
@@ -35,10 +36,18 @@ impl<'a> CompletionProvider<'a> {
     pub fn get_completions(&self, position: usize, prefix: &str) -> Vec<CompletionItem> {
         dbg!("get_completions", position, &self.module.ident, self.module.scope_id, prefix);
 
-        // 检查是否在模块成员访问上下文中
-        if let Some((imported_module, member_prefix)) = extract_module_member_context(prefix, position) {
-            debug!("Detected module member access: {} and {}", imported_module, member_prefix);
-            return self.get_module_member_completions(&imported_module, &member_prefix);
+        // 检查是否在类型成员访问上下文中 (variable.field)
+        if let Some((var_name, member_prefix)) = extract_module_member_context(prefix, position) {
+            // 先尝试作为变量类型成员访问
+            let current_scope_id = self.find_innermost_scope(self.module.scope_id, position);
+            if let Some(completions) = self.get_type_member_completions(&var_name, &member_prefix, current_scope_id) {
+                debug!("Found type member completions for variable '{}'", var_name);
+                return completions;
+            }
+            
+            // 如果不是变量，尝试作为模块成员访问
+            debug!("Detected module member access: {} and {}", var_name, member_prefix);
+            return self.get_module_member_completions(&var_name, &member_prefix);
         }
 
         // 普通的变量补全
@@ -102,6 +111,233 @@ impl<'a> CompletionProvider<'a> {
 
         debug!("Found {} module member completions", completions.len());
         completions
+    }
+
+    /// 获取类型成员的自动补全 (for struct fields and methods)
+    pub fn get_type_member_completions(&self, var_name: &str, prefix: &str, current_scope_id: NodeId) -> Option<Vec<CompletionItem>> {
+        debug!("Getting type member completions for variable '{}' with prefix '{}'", var_name, prefix);
+
+        // 1. Find the variable in the current scope
+        let var_symbol = self.find_variable_in_scope(var_name, current_scope_id)?;
+        
+        // 2. Get the variable's type
+        use crate::analyzer::common::TypeKind;
+        let (var_type_kind, typedef_symbol_id) = match &var_symbol.kind {
+            SymbolKind::Var(var_decl) => {
+                let var = var_decl.lock().unwrap();
+                let type_ = &var.type_;
+                
+                debug!("Variable '{}' has type: {:?}, symbol_id: {}", var_name, type_.kind, type_.symbol_id);
+                
+                (type_.kind.clone(), type_.symbol_id)
+            }
+            _ => {
+                debug!("Symbol is not a variable");
+                return None;
+            }
+        };
+
+        let mut completions = Vec::new();
+
+        // 3. Handle direct struct type (inlined)
+        if let TypeKind::Struct(_, _, properties) = &var_type_kind {
+            debug!("Variable has direct struct type with {} fields", properties.len());
+            for prop in properties {
+                if prefix.is_empty() || prop.name.starts_with(prefix) {
+                    completions.push(CompletionItem {
+                        label: prop.name.clone(),
+                        kind: CompletionItemKind::Variable,
+                        detail: Some(format!("field: {}", prop.type_)),
+                        documentation: None,
+                        insert_text: prop.name.clone(),
+                        sort_text: Some(format!("{:08}", prop.start)),
+                    });
+                }
+            }
+        }
+
+        // 4. Handle typedef reference
+        if matches!(var_type_kind, TypeKind::Ident) && typedef_symbol_id != 0 {
+            debug!("Looking up typedef with symbol_id: {}", typedef_symbol_id);
+            
+            if let Some(typedef_symbol) = self.symbol_table.get_symbol_ref(typedef_symbol_id) {
+                if let SymbolKind::Type(typedef) = &typedef_symbol.kind {
+                    let typedef = typedef.lock().unwrap();
+                    debug!("Found typedef: {}, type_expr.kind: {:?}, methods: {}", 
+                           typedef.ident, typedef.type_expr.kind, typedef.method_table.len());
+
+                    // Add struct fields from typedef
+                    if let TypeKind::Struct(_, _, properties) = &typedef.type_expr.kind {
+                        debug!("Typedef struct has {} fields", properties.len());
+                        for prop in properties {
+                            if prefix.is_empty() || prop.name.starts_with(prefix) {
+                                completions.push(CompletionItem {
+                                    label: prop.name.clone(),
+                                    kind: CompletionItemKind::Variable,
+                                    detail: Some(format!("field: {}", prop.type_)),
+                                    documentation: None,
+                                    insert_text: prop.name.clone(),
+                                    sort_text: Some(format!("{:08}", prop.start)),
+                                });
+                            }
+                        }
+                    }
+
+                    // Add methods for typedef
+                    for method in typedef.method_table.values() {
+                        let fndef = method.lock().unwrap();
+                        if prefix.is_empty() || fndef.fn_name.starts_with(prefix) {
+                            let signature = self.format_function_signature(&fndef);
+                            let insert_text = if self.has_parameters(&fndef) {
+                                format!("{}($0)", fndef.fn_name)
+                            } else {
+                                format!("{}()", fndef.fn_name)
+                            };
+                            completions.push(CompletionItem {
+                                label: fndef.fn_name.clone(),
+                                kind: CompletionItemKind::Function,
+                                detail: Some(format!("fn: {}", signature)),
+                                documentation: None,
+                                insert_text,
+                                sort_text: Some(format!("{:08}", fndef.symbol_start)),
+                            });
+                        }
+                    }
+                } else {
+                    debug!("Symbol {} is not a Type", typedef_symbol_id);
+                }
+            }
+        }
+
+        // 5. Look for methods by searching for functions with impl_type matching this type
+        // This handles cases like: fn config.helloWorld()
+        if typedef_symbol_id != 0 {
+            self.collect_impl_methods(typedef_symbol_id, prefix, &mut completions);
+        }
+
+        self.sort_and_filter_completions(&mut completions, prefix);
+        debug!("Found {} type member completions", completions.len());
+        
+        if completions.is_empty() {
+            None
+        } else {
+            Some(completions)
+        }
+    }
+
+    /// Collect methods implemented for a type (fn TypeName.method())
+    fn collect_impl_methods(&self, typedef_symbol_id: NodeId, prefix: &str, completions: &mut Vec<CompletionItem>) {
+        // Search module scope for functions with matching impl_type
+        let module_scope = self.symbol_table.find_scope(self.module.scope_id);
+        for &symbol_id in &module_scope.symbols {
+            if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
+                if let SymbolKind::Fn(fndef) = &symbol.kind {
+                    let fndef = fndef.lock().unwrap();
+                    // Check if this function's impl_type matches our typedef
+                    if fndef.impl_type.symbol_id == typedef_symbol_id {
+                        if prefix.is_empty() || fndef.fn_name.starts_with(prefix) {
+                            debug!("Found impl method: {}", fndef.fn_name);
+                            let signature = self.format_function_signature(&fndef);
+                            let insert_text = if self.has_parameters(&fndef) {
+                                format!("{}($0)", fndef.fn_name)
+                            } else {
+                                format!("{}()", fndef.fn_name)
+                            };
+                            completions.push(CompletionItem {
+                                label: fndef.fn_name.clone(),
+                                kind: CompletionItemKind::Function,
+                                detail: Some(format!("fn: {}", signature)),
+                                documentation: None,
+                                insert_text,
+                                sort_text: Some(format!("{:08}", fndef.symbol_start)),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Find a variable in the current scope and parent scopes
+    fn find_variable_in_scope(&self, var_name: &str, current_scope_id: NodeId) -> Option<&Symbol> {
+        debug!("Searching for variable '{}' starting from scope {}", var_name, current_scope_id);
+        let mut visited_scopes = HashSet::new();
+        let mut current = current_scope_id;
+
+        while current > 0 && !visited_scopes.contains(&current) {
+            visited_scopes.insert(current);
+            let scope = self.symbol_table.find_scope(current);
+            debug!("Checking scope {} with {} symbols", current, scope.symbols.len());
+
+            for &symbol_id in &scope.symbols {
+                if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
+                    match &symbol.kind {
+                        SymbolKind::Var(var_decl) => {
+                            let var = var_decl.lock().unwrap();
+                            debug!("Found var symbol: '{}' (looking for '{}')", var.ident, var_name);
+                            if var.ident == var_name {
+                                drop(var);
+                                debug!("Variable '{}' found in scope {}", var_name, current);
+                                return Some(symbol);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            current = scope.parent;
+            if current == 0 {
+                break;
+            }
+        }
+
+        debug!("Variable '{}' not found in any scope", var_name);
+        None
+    }
+
+    /// Check if function has parameters (excluding self)
+    fn has_parameters(&self, fndef: &AstFnDef) -> bool {
+        fndef.params.iter().any(|param| {
+            let param_locked = param.lock().unwrap();
+            param_locked.ident != "self"
+        })
+    }
+
+    /// Format a function signature for display
+    fn format_function_signature(&self, fndef: &AstFnDef) -> String {
+        let mut params_str = String::new();
+        let mut first = true;
+        
+        for param in fndef.params.iter() {
+            let param_locked = param.lock().unwrap();
+            
+            // Skip 'self' parameter
+            if param_locked.ident == "self" {
+                continue;
+            }
+            
+            if !first {
+                params_str.push_str(", ");
+            }
+            first = false;
+            
+            // Use the ident field from Type which contains the original type name
+            let type_str = if !param_locked.type_.ident.is_empty() {
+                param_locked.type_.ident.clone()
+            } else {
+                param_locked.type_.to_string()
+            };
+            
+            params_str.push_str(&format!("{} {}", type_str, param_locked.ident));
+        }
+        
+        if fndef.rest_param && !params_str.is_empty() {
+            params_str.push_str(", ...");
+        }
+        
+        let return_type = fndef.return_type.to_string();
+        format!("fn({}): {}", params_str, return_type)
     }
 
     /// 从模块作用域开始，根据位置找到包含该位置的最内层作用域

@@ -477,12 +477,20 @@ impl LanguageServer for Backend {
                         CompletionItemKind::Constant => tower_lsp::lsp_types::CompletionItemKind::CONSTANT,
                     };
 
+                    // Check if insert_text contains snippet syntax
+                    let has_snippet = item.insert_text.contains("$0");
+                    
                     tower_lsp::lsp_types::CompletionItem {
                         label: item.label,
                         kind: Some(lsp_kind),
                         detail: item.detail,
                         documentation: item.documentation.map(|doc| tower_lsp::lsp_types::Documentation::String(doc)),
                         insert_text: Some(item.insert_text),
+                        insert_text_format: if has_snippet { 
+                            Some(tower_lsp::lsp_types::InsertTextFormat::SNIPPET) 
+                        } else { 
+                            Some(tower_lsp::lsp_types::InsertTextFormat::PLAIN_TEXT) 
+                        },
                         sort_text: item.sort_text,
                         ..Default::default()
                     }
