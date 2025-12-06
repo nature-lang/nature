@@ -1,6 +1,6 @@
 use dashmap::DashMap;
 use log::debug;
-use nls::analyzer::completion::{extract_prefix_at_position, CompletionItemKind, CompletionProvider};
+use nls::analyzer::completion::{CompletionItemKind, CompletionProvider};
 use nls::analyzer::lexer::{TokenType, LEGEND_TYPE};
 use nls::analyzer::module_unique_ident;
 use nls::package::parse_package;
@@ -458,8 +458,7 @@ impl LanguageServer for Backend {
 
             // 获取当前位置的前缀
             let text = rope.to_string();
-            let prefix = extract_prefix_at_position(&text, byte_offset);
-            debug!("Extracted prefix: '{}', module_ident '{}', raw_text '{}'", prefix, module.ident.clone(), text);
+            debug!("Getting completions at byte_offset {}, module_ident '{}'", byte_offset, module.ident.clone());
 
             // Get symbol table and package config
             let mut symbol_table = project.symbol_table.lock().unwrap();
@@ -472,7 +471,7 @@ impl LanguageServer for Backend {
                 project.root.clone(),
                 package_config,
             )
-            .get_completions(byte_offset, &prefix);
+            .get_completions(byte_offset, &text);
 
             // 转换为LSP格式
             let lsp_items: Vec<tower_lsp::lsp_types::CompletionItem> = completion_items

@@ -58,11 +58,20 @@ impl<'a> CompletionProvider<'a> {
     }
 
     /// Main auto-completion entry function
-    pub fn get_completions(&self, position: usize, prefix: &str) -> Vec<CompletionItem> {
-        dbg!("get_completions", position, &self.module.ident, self.module.scope_id, prefix);
+    pub fn get_completions(&self, position: usize, text: &str) -> Vec<CompletionItem> {
+        dbg!("get_completions", position, &self.module.ident, self.module.scope_id);
+
+        // Check if in struct initialization context (type_name{ field: ... })
+        if let Some((type_name, field_prefix)) = extract_struct_init_context(text, position) {
+            debug!("Detected struct initialization context: type='{}', field_prefix='{}'", type_name, field_prefix);
+            let current_scope_id = self.find_innermost_scope(self.module.scope_id, position);
+            return self.get_struct_field_completions(&type_name, &field_prefix, current_scope_id);
+        }
+
+        let prefix = extract_prefix_at_position(text, position);
 
         // Check if in type member access context (variable.field)
-        if let Some((var_name, member_prefix)) = extract_module_member_context(prefix, position) {
+        if let Some((var_name, member_prefix)) = extract_module_member_context(&prefix, position) {
             // First try as variable type member access
             let current_scope_id = self.find_innermost_scope(self.module.scope_id, position);
             if let Some(completions) = self.get_type_member_completions(&var_name, &member_prefix, current_scope_id) {
@@ -76,7 +85,6 @@ impl<'a> CompletionProvider<'a> {
         }
 
         // Normal variable completion
-        let prefix = extract_prefix_at_position(prefix, position);
         debug!("Getting completions at position {} with prefix '{}'", position, prefix);
 
         // 1. Find current scope based on position
@@ -270,6 +278,53 @@ impl<'a> CompletionProvider<'a> {
         }
     }
 
+    /// Get auto-completions for struct fields during initialization (type_name{ field: ... })
+    pub fn get_struct_field_completions(&self, type_name: &str, prefix: &str, current_scope_id: NodeId) -> Vec<CompletionItem> {
+        debug!("Getting struct field completions for type '{}' with prefix '{}'", type_name, prefix);
+
+        let mut completions = Vec::new();
+
+        // Find the type symbol
+        let type_symbol = self.find_type_in_scope(type_name, current_scope_id);
+        if type_symbol.is_none() {
+            debug!("Type '{}' not found in scope", type_name);
+            return completions;
+        }
+
+        let type_symbol = type_symbol.unwrap();
+        
+        // Extract struct fields from the type
+        if let SymbolKind::Type(typedef) = &type_symbol.kind {
+            let typedef = typedef.lock().unwrap();
+            
+            use crate::analyzer::common::TypeKind;
+            if let TypeKind::Struct(_, _, properties) = &typedef.type_expr.kind {
+                debug!("Found struct type with {} fields", properties.len());
+                
+                for prop in properties {
+                    if prefix.is_empty() || prop.name.starts_with(prefix) {
+                        completions.push(CompletionItem {
+                            label: prop.name.clone(),
+                            kind: CompletionItemKind::Variable,
+                            detail: Some(format!("{}: {}", prop.name, prop.type_)),
+                            documentation: None,
+                            insert_text: format!("{}: ", prop.name),
+                            sort_text: Some(format!("{:08}", prop.start)),
+                            additional_text_edits: Vec::new(),
+                        });
+                    }
+                }
+            } else {
+                debug!("Type '{}' is not a struct type", type_name);
+            }
+        }
+
+        self.sort_and_filter_completions(&mut completions, prefix);
+        debug!("Found {} struct field completions", completions.len());
+        
+        completions
+    }
+
     /// Collect methods implemented for a type (fn TypeName.method())
     fn collect_impl_methods(&self, typedef_symbol_id: NodeId, prefix: &str, completions: &mut Vec<CompletionItem>) {
         // Search module scope for functions with matching impl_type
@@ -339,6 +394,45 @@ impl<'a> CompletionProvider<'a> {
         }
 
         debug!("Variable '{}' not found in any scope", var_name);
+        None
+    }
+
+    /// Find a type in the current scope and parent scopes
+    fn find_type_in_scope(&self, type_name: &str, current_scope_id: NodeId) -> Option<&Symbol> {
+        debug!("Searching for type '{}' starting from scope {}", type_name, current_scope_id);
+        let mut visited_scopes = HashSet::new();
+        let mut current = current_scope_id;
+
+        while current > 0 && !visited_scopes.contains(&current) {
+            visited_scopes.insert(current);
+            let scope = self.symbol_table.find_scope(current);
+            debug!("Checking scope {} with {} symbols", current, scope.symbols.len());
+
+            for &symbol_id in &scope.symbols {
+                if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
+                    match &symbol.kind {
+                        SymbolKind::Type(typedef) => {
+                            let type_def = typedef.lock().unwrap();
+                            let symbol_name = extract_last_ident_part(&type_def.ident);
+                            debug!("Found type symbol: '{}' (extracted: '{}', looking for '{}')", type_def.ident, symbol_name, type_name);
+                            if symbol_name == type_name {
+                                drop(type_def);
+                                debug!("Type '{}' found in scope {}", type_name, current);
+                                return Some(symbol);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            current = scope.parent;
+            if current == 0 {
+                break;
+            }
+        }
+
+        debug!("Type '{}' not found in any scope", type_name);
         None
     }
 
@@ -886,6 +980,70 @@ pub fn extract_module_member_context(prefix: &str, _position: usize) -> Option<(
         
         if !module_name.is_empty() {
             return Some((module_name, member_prefix));
+        }
+    }
+    
+    None
+}
+
+/// Detect if cursor is inside a struct initialization, returns (type_name, field_prefix)
+/// Handles cases like: `config{ [cursor] }` or `config{ value: 42, [cursor] }`
+pub fn extract_struct_init_context(text: &str, position: usize) -> Option<(String, String)> {
+    let chars: Vec<char> = text.chars().collect();
+    if position > chars.len() {
+        return None;
+    }
+
+    // Look backward to find the opening brace and type name
+    let mut i = position;
+    
+    // First, extract any prefix at the cursor position
+    let mut field_prefix_end = position;
+    while field_prefix_end > 0 {
+        let ch = chars[field_prefix_end - 1];
+        if ch.is_alphanumeric() || ch == '_' {
+            field_prefix_end -= 1;
+        } else {
+            break;
+        }
+    }
+    let field_prefix: String = chars[field_prefix_end..position].iter().collect();
+
+    // Look for opening brace
+    while i > 0 {
+        i -= 1;
+        let ch = chars[i];
+        
+        if ch == '{' {
+            // Found opening brace, now look for the type name before it
+            let mut type_end = i;
+            
+            // Skip whitespace between type name and brace
+            while type_end > 0 && chars[type_end - 1].is_whitespace() {
+                type_end -= 1;
+            }
+            
+            // Extract type name
+            let mut type_start = type_end;
+            while type_start > 0 {
+                let ch = chars[type_start - 1];
+                if ch.is_alphanumeric() || ch == '_' || ch == '.' {
+                    type_start -= 1;
+                } else {
+                    break;
+                }
+            }
+            
+            if type_start < type_end {
+                let type_name: String = chars[type_start..type_end].iter().collect();
+                debug!("Detected struct init context: type='{}', field_prefix='{}'", type_name, field_prefix);
+                return Some((type_name, field_prefix));
+            }
+            
+            return None;
+        } else if ch == '}' || ch == ';' {
+            // We've left the struct initialization context
+            return None;
         }
     }
     
