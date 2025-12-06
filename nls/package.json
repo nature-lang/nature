@@ -29,7 +29,12 @@
         "id": "n",
         "extensions": [
           ".n"
-        ]
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "dark": "./assets/nature-lang-icon-alternative-1.svg",
+          "light": "./assets/nature-lang-icon-alternative-1.svg"
+        }
       },
       {
         "id": "toml",
