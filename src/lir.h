@@ -1073,8 +1073,8 @@ static inline basic_block_t *lir_new_block(char *name, uint64_t label_index) {
     basic_block->use = slice_new();
     basic_block->def = slice_new();
     basic_block->loop_ends = slice_new();
-    basic_block->temp_live_in = slice_new();
-    basic_block->live_in = slice_new();
+    basic_block->alloc_live_in = slice_new();
+    basic_block->ssa_live_in = slice_new();
     basic_block->live_out = slice_new();
     basic_block->domers = slice_new();
     basic_block->df = slice_new();

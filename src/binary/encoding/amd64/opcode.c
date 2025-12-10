@@ -58,6 +58,30 @@ amd64_opcode_inst_t jbe_rel8 = {"jbe", "jbe", 0, {0x76}, {OPCODE_EXT_IMM_BYTE}, 
 amd64_opcode_inst_t jbe_rel32 = {"jbe", "jbe", 0, {0x0F, 0x86}, {OPCODE_EXT_IMM_DWORD},
                                  {OPERAND_TYPE_REL32, ENCODING_TYPE_IMM}};
 
+// jg (jump if greater) instructions
+amd64_opcode_inst_t jg_rel8 = {"jg", "jg", 0, {0x7F}, {OPCODE_EXT_IMM_BYTE}, {OPERAND_TYPE_REL8, ENCODING_TYPE_IMM}};
+
+amd64_opcode_inst_t jg_rel32 = {"jg", "jg", 0, {0x0F, 0x8F}, {OPCODE_EXT_IMM_DWORD},
+                                {OPERAND_TYPE_REL32, ENCODING_TYPE_IMM}};
+
+// jge (jump if greater or equal) instructions
+amd64_opcode_inst_t jge_rel8 = {"jge", "jge", 0, {0x7D}, {OPCODE_EXT_IMM_BYTE}, {OPERAND_TYPE_REL8, ENCODING_TYPE_IMM}};
+
+amd64_opcode_inst_t jge_rel32 = {"jge", "jge", 0, {0x0F, 0x8D}, {OPCODE_EXT_IMM_DWORD},
+                                 {OPERAND_TYPE_REL32, ENCODING_TYPE_IMM}};
+
+// jl (jump if less) instructions
+amd64_opcode_inst_t jl_rel8 = {"jl", "jl", 0, {0x7C}, {OPCODE_EXT_IMM_BYTE}, {OPERAND_TYPE_REL8, ENCODING_TYPE_IMM}};
+
+amd64_opcode_inst_t jl_rel32 = {"jl", "jl", 0, {0x0F, 0x8C}, {OPCODE_EXT_IMM_DWORD},
+                                {OPERAND_TYPE_REL32, ENCODING_TYPE_IMM}};
+
+// jle (jump if less or equal) instructions
+amd64_opcode_inst_t jle_rel8 = {"jle", "jle", 0, {0x7E}, {OPCODE_EXT_IMM_BYTE}, {OPERAND_TYPE_REL8, ENCODING_TYPE_IMM}};
+
+amd64_opcode_inst_t jle_rel32 = {"jle", "jle", 0, {0x0F, 0x8E}, {OPCODE_EXT_IMM_DWORD},
+                                 {OPERAND_TYPE_REL32, ENCODING_TYPE_IMM}};
+
 amd64_opcode_inst_t idiv_rm8 = {"idiv", "idiv", 0, {0xF6}, {OPCODE_EXT_SLASH7}, {
         {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
 }};
@@ -850,6 +874,14 @@ void amd64_opcode_init() {
     opcode_tree_build(&jb_rel32);
     opcode_tree_build(&jbe_rel8);
     opcode_tree_build(&jbe_rel32);
+    opcode_tree_build(&jg_rel8);
+    opcode_tree_build(&jg_rel32);
+    opcode_tree_build(&jge_rel8);
+    opcode_tree_build(&jge_rel32);
+    opcode_tree_build(&jl_rel8);
+    opcode_tree_build(&jl_rel32);
+    opcode_tree_build(&jle_rel8);
+    opcode_tree_build(&jle_rel32);
     opcode_tree_build(&ret);
     opcode_tree_build(&push_rm64);
     opcode_tree_build(&push_r64);

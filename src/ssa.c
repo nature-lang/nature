@@ -207,7 +207,7 @@ void ssa_live(closure_t *c) {
         slice_t *out = slice_new();
         slice_t *in = slice_new();
         ((basic_block_t *) c->blocks->take[id])->live_out = out;
-        ((basic_block_t *) c->blocks->take[id])->live_in = in;
+        ((basic_block_t *) c->blocks->take[id])->ssa_live_in = in;
     }
 
     bool changed = true;
@@ -222,9 +222,9 @@ void ssa_live(closure_t *c) {
             }
 
             slice_t *new_live_in = ssa_calc_live_in(c, c->blocks->take[id]);
-            if (ssa_live_changed(block->live_in, new_live_in)) {
+            if (ssa_live_changed(block->ssa_live_in, new_live_in)) {
                 changed = true;
-                block->live_in = new_live_in;
+                block->ssa_live_in = new_live_in;
             }
         }
     }
@@ -260,7 +260,7 @@ void ssa_add_phi(closure_t *c) {
 
                 // 变量 a 在虽然在 var_def_block 中进行了定义，但是可能在 df_block 中已经不在活跃了(live_in)
                 // 此时不需要在 df 中插入 phi
-                if (!ssa_var_belong(var, df_block->live_in)) {
+                if (!ssa_var_belong(var, df_block->ssa_live_in)) {
                     continue;
                 }
 
@@ -298,8 +298,8 @@ slice_t *ssa_calc_live_out(closure_t *c, basic_block_t *block) {
         basic_block_t *succ = block->succs->take[i];
 
         // 未在 succ 中被重新定义(def)，且离开 succ 后继续活跃的变量
-        for (int k = 0; k < succ->live_in->count; ++k) {
-            lir_var_t *var = succ->live_in->take[k];
+        for (int k = 0; k < succ->ssa_live_in->count; ++k) {
+            lir_var_t *var = succ->ssa_live_in->take[k];
             if (table_exist(exist_var, var->ident)) {
                 continue;
             }
@@ -537,8 +537,8 @@ void ssa_rename(closure_t *c) {
 
 void ssa_rename_block(closure_t *c, basic_block_t *block, struct sc_map_s64 *var_number_table, struct sc_map_sv *stack_table) {
     // rename live in(use)
-    for (int i = 0; i < block->live_in->count; ++i) {
-        lir_var_t *var = block->live_in->take[i];
+    for (int i = 0; i < block->ssa_live_in->count; ++i) {
+        lir_var_t *var = block->ssa_live_in->take[i];
         var_number_stack *stack = sc_map_get_sv(stack_table, var->old);
         assert(stack);
         if (stack->count > 0) {

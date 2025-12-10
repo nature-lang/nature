@@ -259,14 +259,11 @@ void peephole_optimize(closure_t *c) {
         changed = false;
         iterations++;
 
-        // 应用移动消除优化
-        if (peephole_move_elimination(c)) {
-            changed = true;
+        // 应用移动消除优化, amd64 不适用
+        if (BUILD_ARCH != ARCH_AMD64) {
+            if (peephole_move_elimination(c)) {
+                changed = true;
+            }
         }
-
-        // TODO 可以添加更多的窥孔优化模式
-        // if (peephole_optimize_other_pattern(c->operations)) {
-        //     changed = true;
-        // }
     }
 }

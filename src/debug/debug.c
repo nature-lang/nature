@@ -446,13 +446,13 @@ void debug_basic_block(basic_block_t *block) {
         printf("%s\t", ((basic_block_t *) block->succs->take[i])->name);
     }
     printf("\n\t\treg_live:");
-    for (int i = 0; i < block->temp_live_in->count; ++i) {
-        lir_var_t *var = block->temp_live_in->take[i];
+    for (int i = 0; i < block->alloc_live_in->count; ++i) {
+        lir_var_t *var = block->alloc_live_in->take[i];
         printf("%s\t", var->ident);
     }
     printf("\n\t\tssa_live_in:");
-    for (int i = 0; i < block->live_in->count; ++i) {
-        lir_var_t *var = block->live_in->take[i];
+    for (int i = 0; i < block->ssa_live_in->count; ++i) {
+        lir_var_t *var = block->ssa_live_in->take[i];
         printf("%s\t", var->ident);
     }
     printf("\n\n\n");

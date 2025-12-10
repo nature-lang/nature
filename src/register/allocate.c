@@ -610,6 +610,12 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
             if (i->assigned != reg_id) {
                 continue;
             }
+
+            // fixed interval 无法 spill
+            if (i->fixed) {
+                continue;
+            }
+
             spill_interval(c, a, i, first_from);
         }
 

@@ -3417,7 +3417,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_FNDEF: {
             linear_fn_decl(m,
-                           (ast_expr_t) {
+                           (ast_expr_t){
                                    .line = stmt->line,
                                    .assert_type = stmt->assert_type,
                                    .value = stmt->value,
@@ -3429,7 +3429,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             ast_call_t *call = stmt->value;
             // stmt 中都 call 都是没有返回值的
             linear_call(m,
-                        (ast_expr_t) {
+                        (ast_expr_t){
                                 .line = stmt->line,
                                 .column = stmt->column,
                                 .assert_type = AST_CALL,
@@ -3443,7 +3443,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             ast_catch_t *catch = stmt->value;
             linear_catch_expr(m,
-                              (ast_expr_t) {
+                              (ast_expr_t){
                                       .line = stmt->line,
                                       .column = stmt->column,
                                       .assert_type = AST_CATCH,

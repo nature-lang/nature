@@ -220,8 +220,8 @@ static linked_t *riscv64_lower_params(closure_t *c, slice_t *param_vars) {
 
 
     type_t return_type = type_kind_new(TYPE_VOID);
-    if (c->return_operand) {
-        return_type = lir_operand_type(c->return_operand);
+    if (c->return_big_operand) {
+        return_type = lir_operand_type(c->return_big_operand);
     }
 
     args_type[0] = return_type;
@@ -343,17 +343,17 @@ linked_t *riscv64_lower_fn_begin(closure_t *c, lir_op_t *op) {
 
     slice_t *params = op->output->value;
 
-    if (c->return_operand) {
+    if (c->return_big_operand) {
         // 移除最后一个参数，其指向了 return_operand
         slice_remove(params, params->count - 1);
 
-        type_t return_type = lir_operand_type(c->return_operand);
+        type_t return_type = lir_operand_type(c->return_big_operand);
 
         if (return_type.kind == TYPE_ARR || type_sizeof(return_type) > 16) {
             assert(return_type.kind == TYPE_STRUCT || return_type.kind == TYPE_ARR);
 
             // 大于 16 字节的结构体通过内存返回，A0 中存储返回地址
-            lir_operand_t *return_operand = c->return_operand;
+            lir_operand_t *return_operand = c->return_big_operand;
             assert(return_operand->assert_type == LIR_OPERAND_VAR);
 
             // 从 A0 寄存器获取返回地址引用
@@ -362,9 +362,9 @@ linked_t *riscv64_lower_fn_begin(closure_t *c, lir_op_t *op) {
         } else {
             // 将会触发扁平化处理，不需要做什么特殊处理, 但是需要创建 output, 保证 reg 可用
             if (return_type.kind == TYPE_STRUCT) {
-                linked_push(result, lir_stack_alloc(c, return_type, c->return_operand));
+                linked_push(result, lir_stack_alloc(c, return_type, c->return_big_operand));
             } else {
-                linked_push(result, lir_op_output(LIR_OPCODE_NOP, c->return_operand));
+                linked_push(result, lir_op_output(LIR_OPCODE_NOP, c->return_big_operand));
             }
         }
     }

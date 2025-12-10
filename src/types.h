@@ -286,9 +286,9 @@ typedef struct basic_block_t {
     slice_t *use;
     slice_t *def;
     slice_t *live_out;
-    slice_t *live_in; // ssa 阶段计算的精确 live in
+    slice_t *ssa_live_in; // ssa 阶段计算的精确 live in
     // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
-    slice_t *temp_live_in; // reg alloc interval build 阶段产生临时 live in，未计算循环产生的 live in 所以是不完整的
+    slice_t *alloc_live_in; // reg alloc interval build 阶段产生临时 live in，未计算循环产生的 live in 所以是不完整的
     // employer
     slice_t *domers; // 当前块被哪些基本块管辖
     struct basic_block_t *imm_domer; // 当前块的直接(最近)支配者
@@ -521,7 +521,7 @@ typedef struct closure_t {
     ct_stack_t *ret_labels; // default type_unknown
 
     // lir_operand_t, 大返回值引导
-    void *return_operand;
+    void *return_big_operand;
     type_t type;
 
     linked_t *operations; // 指令列表

@@ -324,13 +324,13 @@ linked_t *arm64_lower_fn_begin(closure_t *c, lir_op_t *op) {
             assert(return_type.kind == TYPE_STRUCT || return_type.kind == TYPE_ARR);
 
             // x8 中存储的是返回数据
-            c->return_operand = temp_var_operand(c->module, return_type);
+            c->return_big_operand = temp_var_operand(c->module, type_kind_new(TYPE_ANYPTR));
 
             // 数组由于调用约定没有明确规定，所以我们也按照类似的处理方式
             // 大于 16 字节的结构体，通过内存返回，x8 中存储返回地址
             // 从 x8 寄存器获取返回地址
             lir_operand_t *x8_reg = operand_new(LIR_OPERAND_REG, x8);
-            linked_push(result, lir_op_move(c->return_operand, x8_reg));
+            linked_push(result, lir_op_move(c->return_big_operand, x8_reg));
         } else {
             // 小于等于 16 字节的基本类型，不需要特殊处理, 但结构体需要由 callee 申请临时空间
             //            if (return_type.kind == TYPE_STRUCT) {
@@ -691,15 +691,15 @@ linked_t *arm64_lower_return(closure_t *c, lir_op_t *op) {
                 linked_push(result, lir_op_move(dst_hi, src_hi));
             }
         } else {
-            assert(c->return_operand);
+            assert(c->return_big_operand);
             // fn begin 时 x8 寄存器中存储的指针被传递给了 c->return_operand
             // 大于 16 字节的结构体，通过内存返回，linear_return 时已经将相关数据存储在了 return_operand 中,
             // 这里也许需要进行 super move? 将数据移动到 c->return_operand 中的指向。
-            linked_concat(result, lir_memory_mov(c->module, return_size, c->return_operand, return_operand));
+            linked_concat(result, lir_memory_mov(c->module, return_size, c->return_big_operand, return_operand));
         }
     } else {
         if (return_size > 16) {
-            linked_concat(result, lir_memory_mov(c->module, return_size, c->return_operand, return_operand));
+            linked_concat(result, lir_memory_mov(c->module, return_size, c->return_big_operand, return_operand));
         } else {
             // 非结构体类型
             lir_operand_t *dst;

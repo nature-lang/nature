@@ -513,8 +513,8 @@ void interval_build(closure_t *c) {
         // 1. calc lives in = union of successor.liveIn for each successor of b
         for (int j = 0; j < block->succs->count; ++j) {
             basic_block_t *succ = block->succs->take[j];
-            for (int k = 0; k < succ->temp_live_in->count; ++k) {
-                lir_var_t *var = succ->temp_live_in->take[k];
+            for (int k = 0; k < succ->alloc_live_in->count; ++k) {
+                lir_var_t *var = succ->alloc_live_in->take[k];
                 // 同时添加到 table 和 lives 中
                 live_add(live_table, lives, var);
             }
@@ -681,7 +681,7 @@ void interval_build(closure_t *c) {
                 }
             }
         }
-        block->temp_live_in = lives;
+        block->alloc_live_in = lives;
     }
 }
 
@@ -1230,12 +1230,26 @@ void resolve_data_flow(closure_t *c) {
                     .insert_id = 0,
             };
 
+            slice_t *live_in = slice_new();
+            table_t *live_table = table_new();
+
+            for (int j = 0; j < to->ssa_live_in->count; ++j) {
+                lir_var_t *var = to->ssa_live_in->take[j];
+                live_add(live_table, live_in, var);
+            }
+
+            for (int j = 0; j < to->alloc_live_in->count; ++j) {
+                lir_var_t *var = to->alloc_live_in->take[j];
+                live_add(live_table, live_in, var);
+            }
+
+
             // to 入口活跃则可能存在对同一个变量在进入到当前块之前就已经存在了，所以可能会进行 spill/reload
             // for each interval it live at begin of successor do ? 怎么拿这样的 interval? 最简单办法是通过 live
             // live not contain phi def interval, 这里使用的 live in 是 ssa 计算的 live in, 相较于 interval build 中的 live in 更加的完整
             // 所以这里的 var 对应的 interval 可以无法找到和 form 对应的 interval, 只是直接跳过即可
-            for (int j = 0; j < to->live_in->count; ++j) {
-                lir_var_t *var = to->live_in->take[j];
+            for (int j = 0; j < live_in->count; ++j) {
+                lir_var_t *var = live_in->take[j];
                 interval_t *parent_interval = table_get(c->interval_table, var->ident);
 
                 // phi 导致原始 live_in 存在未命名的 interval, 直接跳过就行
