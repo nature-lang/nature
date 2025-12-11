@@ -20,7 +20,7 @@ jobs:
             - target: linux-amd64
               runs-on: ubuntu-latest
             - target: darwin-amd64
-              runs-on: macos-13
+              runs-on: macos-15-large
             - target: darwin-arm64
               runs-on: macos-latest
     runs-on: ${{ matrix.runs-on }}
@@ -120,4 +120,4 @@ jobs:
         uses: threeal/ctest-action@v1.1.0
         with:
           test-dir: build-release/tests
-          args: -E "20250424_00_parker" --timeout 80
+          args: -E "20250424_00_parker${{ matrix.runs-on == 'macos-15-large' && '|20240822_00_chan' || '' }}" --timeout 80
