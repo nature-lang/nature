@@ -218,30 +218,13 @@ static linked_t *riscv64_lower_params(closure_t *c, slice_t *param_vars) {
     assert(args_pos != NULL);
     assert(args_type != NULL);
 
-
-    type_t return_type = type_kind_new(TYPE_VOID);
-    if (c->return_big_operand) {
-        return_type = lir_operand_type(c->return_big_operand);
-    }
-
-    args_type[0] = return_type;
     for (int i = 0; i < param_vars->count; ++i) {
         lir_var_t *var = param_vars->take[i];
         assert(var != NULL);
-        args_type[i + 1] = var->type;
+        args_type[i] = var->type;
     }
 
-    int64_t stack_offset;
-    if (return_type.kind == TYPE_STRUCT && type_sizeof(return_type) > 16) {
-        stack_offset = riscv64_pcs_aux(param_vars->count + 1, args_type, args_pos);
-
-        args_pos = args_pos + 1;
-        args_type = args_type + 1;
-    } else {
-        args_pos = args_pos + 1;
-        args_type = args_type + 1;
-        stack_offset = riscv64_pcs_aux(param_vars->count, args_type, args_pos);
-    }
+    int64_t stack_offset = riscv64_pcs_aux(param_vars->count, args_type, args_pos);
 
     for (int i = 0; i < param_vars->count; ++i) {
         lir_var_t *var = param_vars->take[i];
@@ -343,29 +326,26 @@ linked_t *riscv64_lower_fn_begin(closure_t *c, lir_op_t *op) {
 
     slice_t *params = op->output->value;
 
-    if (c->return_big_operand) {
-        // 移除最后一个参数，其指向了 return_operand
-        slice_remove(params, params->count - 1);
+    type_t return_type = c->fndef->return_type;
 
-        type_t return_type = lir_operand_type(c->return_big_operand);
-
+    if (return_type.kind != TYPE_VOID) {
         if (return_type.kind == TYPE_ARR || type_sizeof(return_type) > 16) {
             assert(return_type.kind == TYPE_STRUCT || return_type.kind == TYPE_ARR);
 
-            // 大于 16 字节的结构体通过内存返回，A0 中存储返回地址
-            lir_operand_t *return_operand = c->return_big_operand;
-            assert(return_operand->assert_type == LIR_OPERAND_VAR);
+            c->return_big_operand = temp_var_operand(c->module, type_kind_new(TYPE_ANYPTR));
 
+            lir_operand_t *return_operand = c->return_big_operand;
             // 从 A0 寄存器获取返回地址引用
-            lir_operand_t *A0_reg = lir_reg_operand(A0->index, TYPE_ANYPTR);
-            linked_push(result, lir_op_move(return_operand, A0_reg));
+            //            lir_operand_t *A0_reg = lir_reg_operand(A0->index, TYPE_ANYPTR);
+            //            linked_push(result, lir_op_move(c->return_big_operand, A0_reg));
+            slice_insert(params, 0, return_operand->value);
         } else {
             // 将会触发扁平化处理，不需要做什么特殊处理, 但是需要创建 output, 保证 reg 可用
-            if (return_type.kind == TYPE_STRUCT) {
-                linked_push(result, lir_stack_alloc(c, return_type, c->return_big_operand));
-            } else {
-                linked_push(result, lir_op_output(LIR_OPCODE_NOP, c->return_big_operand));
-            }
+            //            if (return_type.kind == TYPE_STRUCT) {
+            //                linked_push(result, lir_stack_alloc(c, return_type, c->return_big_operand));
+            //            } else {
+            //                linked_push(result, lir_op_output(LIR_OPCODE_NOP, c->return_big_operand));
+            //            }
         }
     }
 
@@ -421,7 +401,7 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
 
     // 计算参数传递需要的栈空间, +1 表示跳过 result 处理， result 在上面已经计算处理完成
     int64_t stack_offset;
-    if (call_result_type.kind == TYPE_STRUCT && type_sizeof(call_result_type) > 16) {
+    if ((call_result_type.kind == TYPE_STRUCT && type_sizeof(call_result_type) > 16) || call_result_type.kind == TYPE_ARR) {
         // 返回值作为大型结构体占用 a0 寄存器, 即占用一个参数位置
         stack_offset = riscv64_pcs_aux(args_count + 1, args_type, args_pos);
     } else {
@@ -661,7 +641,7 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
     return result;
 }
 
-linked_t *riscv64_lower_fn_end(closure_t *c, lir_op_t *op) {
+linked_t *riscv64_lower_return(closure_t *c, lir_op_t *op) {
     assert(c != NULL);
     assert(op != NULL);
 
@@ -672,7 +652,7 @@ linked_t *riscv64_lower_fn_end(closure_t *c, lir_op_t *op) {
         return result;
     }
 
-    type_t return_type = lir_operand_type(return_operand);
+    type_t return_type = c->fndef->return_type;
 
     pos_item_t args_pos[1] = {0};
     type_t args_type[1] = {0};
@@ -723,14 +703,19 @@ linked_t *riscv64_lower_fn_end(closure_t *c, lir_op_t *op) {
         }
 
     } else {
-        // 非结构体基础类型，直接通过 a0/f0 寄存器即可
-        lir_operand_t *dst;
-        if (is_float(return_type.kind)) {
-            dst = operand_new(LIR_OPERAND_REG, reg_select(FA0->index, return_type.kind));
+        if (return_size > 16) {
+            assert(c->return_big_operand);
+            linked_concat(result, lir_memory_mov(c->module, return_size, c->return_big_operand, return_operand));
         } else {
-            dst = operand_new(LIR_OPERAND_REG, reg_select(A0->index, return_type.kind));
+            // 非结构体基础类型，直接通过 a0/f0 寄存器即可
+            lir_operand_t *dst;
+            if (is_float(return_type.kind)) {
+                dst = operand_new(LIR_OPERAND_REG, reg_select(FA0->index, return_type.kind));
+            } else {
+                dst = operand_new(LIR_OPERAND_REG, reg_select(A0->index, return_type.kind));
+            }
+            linked_push(result, lir_op_move(dst, return_operand));
         }
-        linked_push(result, lir_op_move(dst, return_operand));
     }
 
     op->first = NULL;

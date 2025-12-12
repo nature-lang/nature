@@ -19,8 +19,6 @@ jobs:
               runs-on: ubuntu-24.04-arm
             - target: linux-amd64
               runs-on: ubuntu-latest
-            - target: darwin-amd64
-              runs-on: macos-15-large
             - target: darwin-arm64
               runs-on: macos-latest
     runs-on: ${{ matrix.runs-on }}

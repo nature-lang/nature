@@ -787,14 +787,59 @@ static slice_t *riscv64_native_scc(closure_t *c, lir_op_t *op) {
     return operations;
 }
 
-/**
- * 实现条件跳转指令(BEQ)
- */
-static slice_t *riscv64_native_beq(closure_t *c, lir_op_t *op) {
+static slice_t *riscv64_native_fbcc(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     assert(op->output->assert_type == LIR_OPERAND_SYMBOL_LABEL);
     assert(op->first->assert_type == LIR_OPERAND_REG);
+    int scc_opcode;
+    switch (op->code) {
+        case LIR_OPCODE_BEE:
+            scc_opcode = LIR_OPCODE_SEE;
+            break;
+        case LIR_OPCODE_BNE:
+            scc_opcode = LIR_OPCODE_SNE;
+            break;
+        case LIR_OPCODE_BLT:
+            scc_opcode = LIR_OPCODE_SLT;
+            break;
+        case LIR_OPCODE_BGE:
+            scc_opcode = LIR_OPCODE_SGE;
+            break;
+        case LIR_OPCODE_BGT:
+            scc_opcode = LIR_OPCODE_SGT;
+            break;
+        case LIR_OPCODE_BLE:
+            scc_opcode = LIR_OPCODE_SLE;
+            break;
+        default:
+            assert(false && "Unsupported branch comparison operation");
+            return operations;
+    }
+
+    lir_op_t *scc_op = lir_op_new(scc_opcode, op->first, op->second, lir_reg_operand(T6->index, TYPE_INT));
+    slice_concat(operations, riscv64_native_scc(c, scc_op));
+
+
+    // bee t6 == 0, skip jmp
+    riscv64_asm_operand_t *skip_target = RO_IMM(8);
+    slice_push(operations, RISCV64_INST(RV_BEQ, RO_REG(T6), RO_REG(ZEROREG), skip_target));
+
+    riscv64_asm_operand_t *target = lir_operand_trans_riscv64(c, op, op->output, operations);
+    slice_push(operations, RISCV64_INST(RV_J, target));
+
+    return operations;
+}
+
+static slice_t *riscv64_native_bcc(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    assert(op->output->assert_type == LIR_OPERAND_SYMBOL_LABEL);
+    assert(op->first->assert_type == LIR_OPERAND_REG);
+    reg_t *reg = op->first->value;
+    if (FLAG(LIR_FLAG_ALLOC_FLOAT) & reg->flag) {
+        return riscv64_native_fbcc(c, op);
+    }
 
     riscv64_asm_operand_t *first = lir_operand_trans_riscv64(c, op, op->first, operations);
     riscv64_asm_operand_t *second = lir_operand_trans_riscv64(c, op, op->second, operations);
@@ -803,23 +848,68 @@ static slice_t *riscv64_native_beq(closure_t *c, lir_op_t *op) {
     assert(target->type == RISCV64_ASM_OPERAND_SYMBOL);
     target->symbol.reloc_type = ASM_RISCV64_RELOC_BRANCH;
 
+    int branch_opcode;
+    bool need_invert = false;
+    switch (op->code) {
+        case LIR_OPCODE_BEE:
+            branch_opcode = RV_BNE;
+            break;
+        case LIR_OPCODE_BNE:
+            branch_opcode = RV_BEQ;
+            break;
+        case LIR_OPCODE_BLT:
+            branch_opcode = RV_BGE;
+            break;
+        case LIR_OPCODE_BGE:
+            branch_opcode = RV_BLT;
+            break;
+        case LIR_OPCODE_BGT:
+            branch_opcode = RV_BGE;
+            need_invert = true;
+            break;
+        case LIR_OPCODE_BLE:
+            branch_opcode = RV_BLT;
+            need_invert = true;
+            break;
+        default:
+            assert(false && "Unsupported branch comparison operation");
+            return operations;
+    }
+
+    riscv64_asm_operand_t *compare_first = first;
+    riscv64_asm_operand_t *compare_second = second;
+    if (need_invert) {
+        compare_first = second;
+        compare_second = first;
+    }
+
     // 使用反转跳转模式：BNE + J 来避免跳转范围限制
     riscv64_asm_operand_t *skip_target = RO_IMM(8);
 
-    if (second->type == RISCV64_ASM_OPERAND_IMMEDIATE) {
-        if (second->immediate == 0) {
-            // 如果比较的是0，使用 BNE first, zero, 8
-            skip_target = RO_IMM(6);
-            slice_push(operations, RISCV64_INST(RV_BNE, first, RO_REG(ZEROREG), skip_target));
+    if (compare_second->type == RISCV64_ASM_OPERAND_IMMEDIATE) {
+        if (compare_second->immediate == 0) {
+            // 如果比较的是0，使用零寄存器
+            slice_push(operations, RISCV64_INST(branch_opcode, compare_first, RO_REG(ZEROREG), skip_target));
         } else {
             // 否则需要先加载立即数到临时寄存器
             riscv64_asm_operand_t *temp_reg = RO_REG(T6);
-            riscv64_mov_imm(op, operations, temp_reg, second->immediate);
-            slice_push(operations, RISCV64_INST(RV_BNE, first, temp_reg, skip_target));
+            riscv64_mov_imm(op, operations, temp_reg, compare_second->immediate);
+            slice_push(operations, RISCV64_INST(branch_opcode, compare_first, temp_reg, skip_target));
+        }
+    } else if (compare_first->type == RISCV64_ASM_OPERAND_IMMEDIATE) {
+        if (compare_first->immediate == 0) {
+
+            // 如果比较的是0，使用零寄存器
+            slice_push(operations, RISCV64_INST(branch_opcode, RO_REG(ZEROREG), compare_second, skip_target));
+        } else {
+            // 否则需要先加载立即数到临时寄存器
+            riscv64_asm_operand_t *temp_reg = RO_REG(T6);
+            riscv64_mov_imm(op, operations, temp_reg, compare_first->immediate);
+            slice_push(operations, RISCV64_INST(branch_opcode, temp_reg, compare_second, skip_target));
         }
     } else {
         // 寄存器间比较
-        slice_push(operations, RISCV64_INST(RV_BNE, first, second, skip_target));
+        slice_push(operations, RISCV64_INST(branch_opcode, compare_first, compare_second, skip_target));
     }
 
     slice_push(operations, RISCV64_INST(RV_J, target));
@@ -991,7 +1081,7 @@ static slice_t *riscv64_native_fn_begin(closure_t *c, lir_op_t *op) {
 /**
  * 实现函数结束指令(FN_END)
  */
-static slice_t *riscv64_native_fn_end(closure_t *c, lir_op_t *op) {
+static slice_t *riscv64_native_return(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     // 恢复栈指针
@@ -1304,24 +1394,18 @@ static slice_t *riscv64_native_uitof(closure_t *c, lir_op_t *op) {
 
 static slice_t *riscv64_native_safepoint(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
-    assert(op->output && op->output->assert_type == LIR_OPERAND_REG);
-    assert(BUILD_OS == OS_LINUX);
 
-    reg_t *temp_reg = op->output->value;
-    assert(temp_reg->index == T5->index);
-
-    riscv64_asm_operand_t *t5_operand = RO_REG(T5);
     riscv64_asm_operand_t *t6_operand = RO_REG(T6);
 
-    slice_push(operations, RISCV64_INST(RV_LUIS, t6_operand, RO_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_RISCV64_RELOC_TPREL_HI20)));
-    slice_push(operations, RISCV64_INST(RV_ADDIS, t6_operand, RO_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0, ASM_RISCV64_RELOC_TPREL_LO12_I)));
-    slice_push(operations, RISCV64_INST(RV_ADD, t6_operand, t6_operand, RO_REG(TP)));
-    slice_push(operations, RISCV64_INST(RV_LD, t5_operand, RO_INDIRECT(T6, 0, QWORD)));
+    riscv64_asm_operand_t *global_safepoint_operand = RO_SYM(GLOBAL_SAFEPOINT_IDENT, false, 0, ASM_RISCV64_RELOC_CALL);
+    slice_push(operations, RISCV64_INST(RV_LA, t6_operand, global_safepoint_operand));
+
+    slice_push(operations, RISCV64_INST(RV_LD, t6_operand, RO_INDIRECT(T6, 0, QWORD)));
 
     // 比较值是否为 0, 进行指令跳过
-    slice_push(operations, RISCV64_INST(RV_BEQ, t5_operand, RO_REG(ZEROREG), RO_IMM(10)));
+    slice_push(operations, RISCV64_INST(RV_BEQ, t6_operand, RO_REG(ZEROREG), RO_IMM(12)));
 
-    // 如果不为 0，调用 assist_preempt_yield 函数
+    // 如果不为 0，调用 assist_preempt_yield 函数, call 会污染 ra 寄存器吧？
     slice_push(operations, RISCV64_INST(RV_CALL, RO_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, ASM_RISCV64_RELOC_CALL)));
 
     return operations;
@@ -1356,10 +1440,16 @@ static riscv64_native_fn riscv64_native_table[] = {
         [LIR_OPCODE_RT_CALL] = riscv64_native_call,
         [LIR_OPCODE_LABEL] = riscv64_native_label,
         [LIR_OPCODE_PUSH] = riscv64_native_push, // 待实现
-        [LIR_OPCODE_RETURN] = riscv64_native_nop, // 函数返回值处理已在FN_END中完成
+        [LIR_OPCODE_RETURN] = riscv64_native_return,
         [LIR_OPCODE_RET] = riscv64_native_nop,
-        [LIR_OPCODE_BEE] = riscv64_native_beq,
         [LIR_OPCODE_BAL] = riscv64_native_bal,
+
+        [LIR_OPCODE_BEE] = riscv64_native_bcc,
+        [LIR_OPCODE_BNE] = riscv64_native_bcc,
+        [LIR_OPCODE_BGE] = riscv64_native_bcc,
+        [LIR_OPCODE_BGT] = riscv64_native_bcc,
+        [LIR_OPCODE_BLE] = riscv64_native_bcc,
+        [LIR_OPCODE_BLT] = riscv64_native_bcc,
 
         // 一元运算符
         [LIR_OPCODE_NEG] = riscv64_native_neg,
@@ -1407,7 +1497,7 @@ static riscv64_native_fn riscv64_native_table[] = {
 
 
         [LIR_OPCODE_FN_BEGIN] = riscv64_native_fn_begin,
-        [LIR_OPCODE_FN_END] = riscv64_native_fn_end,
+        [LIR_OPCODE_FN_END] = riscv64_native_return,
 
         [LIR_OPCODE_SAFEPOINT] = riscv64_native_safepoint,
 };

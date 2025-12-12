@@ -227,10 +227,6 @@ static linked_t *riscv64_lower_ternary(closure_t *c, lir_op_t *op) {
 static linked_t *riscv64_lower_safepoint(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
-    // 创建临时寄存器存储标志地址
-    lir_operand_t *result_reg = lir_reg_operand(A0->index, TYPE_ANYPTR);
-    op->output = result_reg;
-
     linked_push(list, op);
 
     return list;
@@ -310,7 +306,7 @@ static void riscv64_lower_block(closure_t *c, basic_block_t *block) {
         }
 
         if (op->code == LIR_OPCODE_RETURN) {
-            linked_concat(operations, riscv64_lower_fn_end(c, op));
+            linked_concat(operations, riscv64_lower_return(c, op));
             continue;
         }
 
