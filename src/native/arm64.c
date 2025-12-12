@@ -193,8 +193,12 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
     if (operand->assert_type == LIR_OPERAND_STACK) {
         lir_stack_t *stack = operand->value;
         mem_size = stack->size;
+
+        int64_t sp_offset = c->stack_offset - (-stack->slot);
+        result = ARM64_INDIRECT(sp, sp_offset, 0, mem_size); // 0 表示非 pre/post index
+
         // ARM64 使用 [fp, #offset] 形式访问栈
-        result = ARM64_INDIRECT(fp, stack->slot, 0, mem_size); // 0 表示非 pre/post index
+        //        result = ARM64_INDIRECT(fp, stack->slot, 0, mem_size); // 0 表示非 pre/post index
     } else if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *indirect = operand->value;
         lir_operand_t *base = indirect->base;
@@ -565,17 +569,30 @@ static slice_t *arm64_native_mov(closure_t *c, lir_op_t *op) {
  */
 static slice_t *arm64_native_return(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
-    return operations;
-}
 
-static slice_t *arm64_native_skip(closure_t *c, lir_op_t *op) {
-    return slice_new();
+    // 恢复栈帧
+    if (c->stack_offset > 256) {
+        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, c->stack_offset);
+        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
+
+        // 恢复 fp(x29) 和 lr(x30), ARM64_INDIRECT(sp, 16, 2) 2 表示 post-index 模式
+        slice_push(operations, ARM64_INST(R_LDP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, 16, 2, OWORD)));
+    } else {
+        // 恢复栈帧
+        // 恢复 fp(x29) 和 lr(x30), ARM64_INDIRECT(sp, 16, 2) 2 表示 post-index 模式
+        slice_push(operations, ARM64_INST(R_LDP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, c->stack_offset, 0, OWORD)));
+
+        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, c->stack_offset + 16);
+        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
+    }
+
+    // 返回
+    slice_push(operations, ARM64_INST(R_RET));
+    return operations;
 }
 
 static slice_t *arm64_native_nop(closure_t *c, lir_op_t *op) {
-    slice_t *operations = slice_new();
-
-    return operations;
+    return slice_new();
 }
 
 static slice_t *arm64_native_push(closure_t *c, lir_op_t *op) {
@@ -984,17 +1001,26 @@ static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
     // 进行最终的对齐, linux arm64 中栈一般都是是按 16byte 对齐的
     offset = align_up(offset, ARM64_STACK_ALIGN_SIZE);
 
-    // 保存当前的帧指针和链接寄存器, ARM64_INDIRECT(sp, -16, 1) 最后一个参数是 1 表示 pre index, 会先进行 sub sp, sp, #16 减少 sp 的值
-    // 等价于 push sp 两次
-    slice_push(operations, ARM64_INST(R_STP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, -16, 1, OWORD)));
-    // 更新帧指针
-    slice_push(operations, ARM64_INST(R_MOV, ARM64_REG(fp), ARM64_REG(sp)));
-
-    // 如果需要，调整栈指针以分配栈空间
-    if (offset != 0) {
-        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, offset);
-
+    if (offset > (256)) {
+        // 保存当前的帧指针和链接寄存器, ARM64_INDIRECT(sp, -16, 1) 最后一个参数是 1 表示 pre index, 会先进行 sub sp, sp, #16 减少 sp 的值
+        // 等价于 push sp 两次
+        slice_push(operations, ARM64_INST(R_STP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, -16, 1, OWORD)));
+        // 更新帧指针
+        slice_push(operations, ARM64_INST(R_MOV, ARM64_REG(fp), ARM64_REG(sp)));
+        // 如果需要，调整栈指针以分配栈空间
+        if (offset != 0) {
+            arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, offset);
+            slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
+        }
+    } else {
+        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, offset + 16);
         slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
+
+        slice_push(operations, ARM64_INST(R_STP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, offset, 0, OWORD))); // offset 限制 256
+
+        // 更新帧指针      add x29, sp, #offset
+        arm64_asm_operand_t *x29_offset_operand = arm64_imm_operand(op, operations, offset);
+        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x29), ARM64_REG(sp), x29_offset_operand));
     }
 
 
@@ -1008,24 +1034,6 @@ static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
     }
 
     c->stack_offset = offset;
-    return operations;
-}
-
-
-slice_t *arm64_native_fn_end(closure_t *c, lir_op_t *op) {
-    slice_t *operations = slice_new();
-
-    // 恢复栈帧
-    if (c->stack_offset != 0) {
-        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, c->stack_offset);
-        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
-    }
-
-    // 恢复 fp(x29) 和 lr(x30), ARM64_INDIRECT(sp, 16, 2) 2 表示 post-index 模式
-    slice_push(operations, ARM64_INST(R_LDP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, 16, 2, OWORD)));
-    // [sp], #16
-    // 返回
-    slice_push(operations, ARM64_INST(R_RET));
     return operations;
 }
 
@@ -1067,7 +1075,7 @@ static slice_t *arm64_native_lea(closure_t *c, lir_op_t *op) {
 }
 
 
-static slice_t *arm64_native_beq(closure_t *c, lir_op_t *op) {
+static slice_t *arm64_native_bcc(closure_t *c, lir_op_t *op) {
     assert(op->output->assert_type == LIR_OPERAND_SYMBOL_LABEL);
     // arm64 lower 阶段必须确保所有的指令的第一个操作数是寄存器
     assert(op->first->assert_type == LIR_OPERAND_REG);
@@ -1077,13 +1085,24 @@ static slice_t *arm64_native_beq(closure_t *c, lir_op_t *op) {
     // 比较 first 是否等于 second，如果相等就跳转到 result label
     arm64_asm_operand_t *first = lir_operand_trans_arm64(c, op, op->first, operations);
     arm64_asm_operand_t *second = lir_operand_trans_arm64(c, op, op->second, operations);
-    assert(second->type == ARM64_ASM_OPERAND_REG || second->type == ARM64_ASM_OPERAND_IMMEDIATE);
+    assert(second->type == ARM64_ASM_OPERAND_REG || second->type == ARM64_ASM_OPERAND_FREG || second->type == ARM64_ASM_OPERAND_IMMEDIATE);
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
     arm64_gen_cmp(op, operations, second, first, arm64_is_integer_operand(op->first));
 
     // 如果相等则跳转(beq)到标签
-    slice_push(operations, ARM64_INST(R_BEQ, result));
+    int32_t lir_to_asm_code[] = {
+            [LIR_OPCODE_BGE] = R_BGE,
+            [LIR_OPCODE_BGT] = R_BGT,
+            [LIR_OPCODE_BLE] = R_BLE,
+            [LIR_OPCODE_BLT] = R_BLT,
+            [LIR_OPCODE_BNE] = R_BNE,
+            [LIR_OPCODE_BEE] = R_BEQ,
+    };
+
+    int32_t asm_code = lir_to_asm_code[op->code];
+
+    slice_push(operations, ARM64_INST(asm_code, result));
 
     return operations;
 }
@@ -1091,57 +1110,20 @@ static slice_t *arm64_native_beq(closure_t *c, lir_op_t *op) {
 static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
-    assert(op->output && op->output->assert_type == LIR_OPERAND_REG);
-    reg_t *x0_reg = op->output->value;
-    assert(x0_reg->index == x0->index);
+    // 直接从全局变量 global_safepoint 加载值
+    arm64_asm_operand_t *global_safepoint_operand = ARM64_SYM(GLOBAL_SAFEPOINT_IDENT, false, 0, 0);
 
-    arm64_asm_operand_t *x0_operand = ARM64_REG(x0_reg);
-    x0_operand->size = x0_reg->size;
+    slice_push(operations, ARM64_INST(R_ADRP, ARM64_REG(x16), global_safepoint_operand));
 
+    arm64_asm_operand_t *lo12_symbol_operand = ARM64_SYM(GLOBAL_SAFEPOINT_IDENT, false,
+                                                         0, ASM_ARM64_RELOC_LO12);
+    slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(x16), lo12_symbol_operand));
 
-    // 加载 tls_yield_safepoint 的指针
-    if (BUILD_OS == OS_DARWIN) {
-        // 处理 TLS 变量
-        // 1. 使用 ADRP 加载 TLS 变量的页地址
-        arm64_asm_operand_t *tlv_page = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
-                                                  ASM_ARM64_RELOC_TLVP_LOAD_PAGE21);
-        slice_push(operations, ARM64_INST(R_ADRP, x0_operand, tlv_page));
-
-        // 2. 加载 TLV getter 函数的地址
-        assert(op->output->assert_type == LIR_OPERAND_REG);
-        reg_t *result_reg = op->output->value;
-        assert(result_reg->index == x0->index);
-        slice_push(operations, ARM64_INST(R_LDR, x0_operand, ARM64_INDIRECT_SYM(result_reg, TLS_YIELD_SAFEPOINT_IDENT, ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12)));
-
-        // 3.?
-        slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(x16), ARM64_INDIRECT(result_reg, 0, 0, QWORD)));
-
-        // 3. 调用 TLV get 函数获取实际的 TLS 变量地址
-        slice_push(operations, ARM64_INST(R_BLR, ARM64_REG(x16)));
-    } else {
-        // 1. 使用 MRS 指令读取 TPIDR_EL0 寄存器（TLS 基址）到结果寄存器
-        slice_push(operations, ARM64_INST(R_MRS, x0_operand, ARM64_IMM(TPIDR_EL0)));
-
-        // 2.1 添加高12位偏移量
-        arm64_asm_operand_t *tls_hi12_operand = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
-                                                          ASM_ARM64_RELOC_TLSLE_ADD_TPREL_HI12);
-
-        slice_push(operations, ARM64_INST(R_ADD, x0_operand, x0_operand, tls_hi12_operand));
-
-        // 2.2 添加低12位偏移量
-        arm64_asm_operand_t *tls_lo12_operand = ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
-                                                          ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12_NC);
-
-        slice_push(operations, ARM64_INST(R_ADD, x0_operand, x0_operand, tls_lo12_operand));
-    }
-
-    // ldr x0, [x0]
-    //    arm64_asm_operand_t *w0_operand = ARM64_REG(w0);
-    //    w0_operand->size = w0_reg->size;
-    slice_push(operations, ARM64_INST(R_LDR, x0_operand, ARM64_INDIRECT(x0_reg, 0, 0, POINTER_SIZE)));
+    // ldr
+    slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(x16), ARM64_INDIRECT(x16, 0, 0, false)));
 
     // cmp x0,#0x0
-    slice_push(operations, ARM64_INST(R_CMP, x0_operand, ARM64_IMM(0)));
+    slice_push(operations, ARM64_INST(R_CMP, ARM64_REG(x16), ARM64_IMM(0)));
 
     // b.eq 跳过 bl 指令
     slice_push(operations, ARM64_INST(R_BEQ, ARM64_IMM(8)));
@@ -1160,10 +1142,16 @@ arm64_native_fn arm64_native_table[] = {
         [LIR_OPCODE_RT_CALL] = arm64_native_call,
         [LIR_OPCODE_LABEL] = arm64_native_label,
         [LIR_OPCODE_PUSH] = arm64_native_push,
-        [LIR_OPCODE_RETURN] = arm64_native_nop,
+        [LIR_OPCODE_RETURN] = arm64_native_return,
         [LIR_OPCODE_RET] = arm64_native_nop,
-        [LIR_OPCODE_BEQ] = arm64_native_beq,
         [LIR_OPCODE_BAL] = arm64_native_bal,
+
+        [LIR_OPCODE_BEE] = arm64_native_bcc,
+        [LIR_OPCODE_BNE] = arm64_native_bcc,
+        [LIR_OPCODE_BGE] = arm64_native_bcc,
+        [LIR_OPCODE_BGT] = arm64_native_bcc,
+        [LIR_OPCODE_BLE] = arm64_native_bcc,
+        [LIR_OPCODE_BLT] = arm64_native_bcc,
 
         // 一元运算符
         [LIR_OPCODE_NEG] = arm64_native_neg,
@@ -1208,7 +1196,7 @@ arm64_native_fn arm64_native_table[] = {
         [LIR_OPCODE_UITOF] = arm64_native_uitof,
 
         [LIR_OPCODE_FN_BEGIN] = arm64_native_fn_begin,
-        [LIR_OPCODE_FN_END] = arm64_native_fn_end,
+        [LIR_OPCODE_FN_END] = arm64_native_return,
 
         [LIR_OPCODE_SAFEPOINT] = arm64_native_safepoint,
 };

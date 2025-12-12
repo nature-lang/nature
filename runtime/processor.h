@@ -69,16 +69,9 @@ extern int64_t coroutine_count;
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
 
-extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint1; // gc 全局 safepoint 标识，通常配合 stw 使用
-extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint2; // gc 全局 safepoint 标识，通常配合 stw 使用
-extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint3; // gc 全局 safepoint 标识，通常配合 stw 使用
-
 extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint; // gc 全局 safepoint 标识，通常配合 stw 使用
 
-extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint4; // gc 全局 safepoint 标识，通常配合 stw 使用
-extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint5; // gc 全局 safepoint 标识，通常配合 stw 使用
-extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint6; // gc 全局 safepoint 标识，通常配合 stw 使用
-
+extern uint64_t global_safepoint;
 
 // processor gc_finished 后新产生的 shade ptr 会存入到该全局工作队列中，在 gc_mark_done 阶段进行单线程处理
 extern rt_linked_fixalloc_t global_gc_worklist; // 全局 gc worklist
@@ -114,10 +107,6 @@ NO_OPTIMIZE void debug_ret(uint64_t rbp, uint64_t ret_addr);
 NO_OPTIMIZE void co_preempt_yield();
 
 #define PROCESSOR_FOR(list) for (n_processor_t *p = list; p; p = p->next)
-
-static inline bool processor_need_stw(n_processor_t *p) {
-    return p->need_stw > 0 && p->need_stw == p->in_stw;
-}
 
 static inline void co_set_status(n_processor_t *p, coroutine_t *co, co_status_t status) {
     assert(p);

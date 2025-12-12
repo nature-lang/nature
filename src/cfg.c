@@ -201,7 +201,7 @@ static void ret_check(closure_t *c, table_t *handled, basic_block_t *b, char *ma
  * @return
  */
 static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
-    if (c->return_operand == NULL) {
+    if (c->return_big_operand == NULL) {
         return;
     }
 

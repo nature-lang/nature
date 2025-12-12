@@ -14,21 +14,32 @@ lir_operand_t *amd64_select_return_reg(lir_operand_t *operand) {
     return operand_new(LIR_OPERAND_REG, reg_select(rax->index, kind));
 }
 
-linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
+linked_t *amd64_lower_return(closure_t *c, lir_op_t *op) {
     linked_t *result = linked_new();
-    if (!c->return_operand) {
-        goto END;
-    }
 
     lir_operand_t *return_operand = op->first;
-    type_t t = lir_operand_type(return_operand);
+    if (!return_operand) {
+        linked_push(result, op);
+        return result;
+    }
+
+    type_t return_type = c->fndef->return_type;
+    uint64_t return_size = type_sizeof(return_type);
+
     amd64_class_t lo = AMD64_CLASS_NO;
     amd64_class_t hi = AMD64_CLASS_NO;
-    int64_t count = amd64_type_classify(t, &lo, &hi, 0);
+    int64_t count = amd64_type_classify(return_type, &lo, &hi, 0);
 
     if (count == 0) {
-        // 参数已经通过内存给到了目标, 按照规约，还需要将 return_operand 中的值 move 到 rax 中
-        linked_push(result, lir_op_move(operand_new(LIR_OPERAND_REG, rax), return_operand));
+        // 通过寄存器进行传递，此时 c->return_operand 中存储了目标空间(可能是 caller 申请的内存空间，在 fn_begin 中将该空间的指针传递给了 c->return_operand)
+        assert(c->return_big_operand);
+        linked_t *temps = lir_memory_mov(c->module, return_size, c->return_big_operand, return_operand);
+        linked_concat(result, temps);
+
+        // 将 return big_operand 中的值存储在 rax 中
+        lir_operand_t *rax_operand = operand_new(LIR_OPERAND_REG, rax);
+        linked_push(result, lir_op_move(rax_operand, c->return_big_operand));
+
         goto END;
     }
 
@@ -42,7 +53,7 @@ linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
         lo_kind = TYPE_FLOAT64;
     }
 
-    if (t.kind == TYPE_STRUCT) {
+    if (return_type.kind == TYPE_STRUCT) {
         // return_operand 保存的是一个指针，需要 indirect 这个值，将响应的值 mov 到寄存器中
         lir_operand_t *src = indirect_addr_operand(c->module, type_kind_new(lo_kind), return_operand, 0);
         linked_push(result, lir_op_move(lo_dst_reg, src));
@@ -62,11 +73,11 @@ linked_t *amd64_lower_fn_end(closure_t *c, lir_op_t *op) {
         }
     } else {
         assert(count == 1);
-        assertf(t.kind != TYPE_ARR, "array type must be pointer type");
+        assertf(return_type.kind != TYPE_ARR, "array type must be pointer type");
 
         // 由于需要直接 mov， 所以还是需要选择合适的大小
         reg_t *lo_reg = lo_dst_reg->value;
-        lo_dst_reg = operand_new(LIR_OPERAND_REG, reg_select(lo_reg->index, t.kind));
+        lo_dst_reg = operand_new(LIR_OPERAND_REG, reg_select(lo_reg->index, return_type.kind));
 
         linked_push(result, lir_op_move(lo_dst_reg, return_operand));
     }
@@ -249,37 +260,24 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
     amd64_class_t hi = AMD64_CLASS_NO;
     slice_t *params = op->output->value;
 
-    if (c->return_operand) {
-        // 为了 ssa 将 return var 添加到了 params 中，现在 从 params 中移除, 使用 nop 或者 其他方式保证 def 完整
-        slice_remove(params, params->count - 1);
+    type_t return_type = c->fndef->return_type;
 
-        type_t return_type = lir_operand_type(c->return_operand);
+    if (return_type.kind != TYPE_VOID) {
+        // 为了 ssa 将 return var 添加到了 params 中，现在 从 params 中移除, 使用 nop 或者 其他方式保证 def 完整
         int64_t count = amd64_type_classify(return_type, &lo, &hi, 0);
 
-        if (count == 0) {
-            // rdi 中保存了地址指针，现在需要走普通 mov 做一次 mov 处理就行了
-            lir_operand_t *return_operand = c->return_operand;
-            assert(return_operand->assert_type == LIR_OPERAND_VAR);
-            return_operand = lir_operand_copy(return_operand);
-            lir_var_t *var = return_operand->value;
+        if (count == 0) { // count == 0 则无法通过寄存器传递返回值
+            assert(return_type.kind == TYPE_STRUCT || return_type.kind == TYPE_ARR);
 
-            assertf(is_stack_ref_big_type(var->type), "only struct can use stack pass");
+            // return operand 总是通过寄存器 rax 或特殊寄存器返回。
+            c->return_big_operand = temp_var_operand(c->module, type_kind_new(TYPE_ANYPTR));
 
-            // 这里必须使用 ptr, 如果使用 struct，lower params 就会识别异常
-            var->type = type_ptrof(var->type);
-            slice_insert(params, 0, var); // 插入到 params 中会在 lower_params 中将 rdi 的值传递给 return_operand
+            lir_operand_t *return_operand = c->return_big_operand;
+
+            // 占用 rdi 寄存器, 在 lower_params 中会进行 move rdi -> return_operand_var
+            slice_insert(params, 0, return_operand->value);
         } else {
             assertf(return_type.kind != TYPE_ARR, "array type must be pointer type");
-
-            // 此时需要申请栈空间用于存储 c->return_operand 的结果。在 linear return 指令中会将结果数据 move 进来
-            // 申请栈空间，用于存储返回值, 返回值可能是一个小于 16byte 的 struct
-            // 此时需要栈空间暂存返回值，然后在 fn_end 时将相应的值放到相应的寄存器上
-            if (is_stack_ref_big_type(return_type)) {
-                linked_push(result, lir_stack_alloc(c, return_type, c->return_operand));
-            } else {
-                // 保证 use-def 完整，后续 reg alloc 需要定义 interval
-                linked_push(result, lir_op_output(LIR_OPCODE_NOP, c->return_operand));
-            }
         }
     }
 
@@ -504,7 +502,6 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
 
         return result;
     }
-    // TODO call_result
 
     type_t call_result_type = lir_operand_type(call_result);
 

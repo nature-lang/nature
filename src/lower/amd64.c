@@ -286,12 +286,7 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
 static linked_t *amd64_lower_safepoint(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
-    lir_operand_t *result_operand;
-    if (BUILD_OS == OS_LINUX) {
-        result_operand = operand_new(LIR_OPERAND_REG, rax);
-    } else {
-        result_operand = lir_regs_operand(2, rax, rdi);
-    }
+    lir_operand_t *result_operand = operand_new(LIR_OPERAND_REG, r15);
 
     // 增加 label continue
     linked_push(list, lir_op_new(op->code, NULL, NULL, result_operand));
@@ -347,8 +342,8 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        if (op->code == LIR_OPCODE_FN_END) {
-            linked_concat(operations, amd64_lower_fn_end(c, op));
+        if (op->code == LIR_OPCODE_RETURN) {
+            linked_concat(operations, amd64_lower_return(c, op));
             continue;
         }
 

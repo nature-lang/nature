@@ -151,8 +151,28 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_UEXT] = "UEXT ",
         [LIR_OPCODE_SEXT] = "SEXT ",
         [LIR_OPCODE_TRUNC] = "TRUNC",
-        [LIR_OPCODE_BEQ] = "BEQ",
-        [LIR_OPCODE_BAL] = "BAL ",
+        [LIR_OPCODE_FTRUNC] = "FTRUNC",
+        [LIR_OPCODE_FEXT] = "FEXT ",
+        [LIR_OPCODE_FTOSI] = "FTOSI",
+        [LIR_OPCODE_FTOUI] = "FTOUI",
+        [LIR_OPCODE_SITOF] = "SITOF",
+        [LIR_OPCODE_UITOF] = "UITOF",
+
+        // 向量运算相关指令
+        [LIR_OPCODE_VLOAD] = "VLOAD",
+        [LIR_OPCODE_VSTORE] = "VSTORE",
+        [LIR_OPCODE_VADD] = "VADD ",
+        [LIR_OPCODE_VSUB] = "VSUB ",
+        [LIR_OPCODE_VMUL] = "VMUL ",
+        [LIR_OPCODE_VDIV] = "VDIV ",
+
+        [LIR_OPCODE_BLE] = "BLE",
+        [LIR_OPCODE_BLT] = "BLT",
+        [LIR_OPCODE_BGT] = "BGT",
+        [LIR_OPCODE_BGE] = "BGE",
+        [LIR_OPCODE_BEE] = "BEE",
+        [LIR_OPCODE_BNE] = "BNE",
+        [LIR_OPCODE_BAL] = "BAL",
         [LIR_OPCODE_PUSH] = "PUSH  ",
         [LIR_OPCODE_POP] = "POP   ",
         [LIR_OPCODE_CALL] = "CALL  ",
@@ -425,14 +445,14 @@ void debug_basic_block(basic_block_t *block) {
     for (int i = 0; i < block->succs->count; ++i) {
         printf("%s\t", ((basic_block_t *) block->succs->take[i])->name);
     }
-    printf("\n\t\tlive:");
-    for (int i = 0; i < block->temp_live_in->count; ++i) {
-        lir_var_t *var = block->temp_live_in->take[i];
+    printf("\n\t\treg_live:");
+    for (int i = 0; i < block->alloc_live_in->count; ++i) {
+        lir_var_t *var = block->alloc_live_in->take[i];
         printf("%s\t", var->ident);
     }
-    printf("\n\t\tlive_in:");
-    for (int i = 0; i < block->live_in->count; ++i) {
-        lir_var_t *var = block->live_in->take[i];
+    printf("\n\t\tssa_live_in:");
+    for (int i = 0; i < block->ssa_live_in->count; ++i) {
+        lir_var_t *var = block->ssa_live_in->take[i];
         printf("%s\t", var->ident);
     }
     printf("\n\n\n");

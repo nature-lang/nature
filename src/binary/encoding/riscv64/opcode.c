@@ -750,18 +750,18 @@ unsigned char *asm_bxx(riscv64_asm_inst_t *inst) {
         return 0;
     }
 
-    if (rs2 == OPCODE_ZERO && is_rvc_reg(rs1)) {
-        switch (inst->opcode) {
-            case O_BEQ:
-                C_BEQZ(rs1, offset);
-                return inst->opcode_data;
-            case O_BNE:
-                C_BNEZ(rs1, offset);
-                return inst->opcode_data;
-            default:
-                break;
-        }
-    }
+    //    if (rs2 == OPCODE_ZERO && is_rvc_reg(rs1)) {
+    //        switch (inst->opcode) {
+    //            case O_BEQ:
+    //                C_BEQZ(rs1, offset);
+    //                return inst->opcode_data;
+    //            case O_BNE:
+    //                C_BNEZ(rs1, offset);
+    //                return inst->opcode_data;
+    //            default:
+    //                break;
+    //        }
+    //    }
 
     static const int k_funct3_table[] = {_BEQ, _BNE, _BLT, _BGE, _BLTU, _BGEU};
     int funct3 = k_funct3_table[inst->opcode - O_BEQ];

@@ -5,10 +5,41 @@
 
 
 /**
- * 处理 env closure
  * @param c
  */
 static void linear_posthandle(closure_t *c) {
+    for (int i = 0; i < c->blocks->count; ++i) {
+        basic_block_t *block = c->blocks->take[i];
+        if (OP(block->last_op)->code != LIR_OPCODE_BAL) {
+            continue; // fn_end
+        }
+
+        if (i == c->blocks->count - 1) {
+            continue;
+        }
+
+        lir_op_t *op = OP(block->last_op);
+        lir_operand_t *operand_label = op->output;
+        lir_symbol_label_t *symbol_label = operand_label->value;
+        char *label_ident = symbol_label->ident;
+
+        basic_block_t *next_block = c->blocks->take[i + 1];
+
+        if (!str_equal(label_ident, next_block->name)) {
+            continue;
+        }
+
+        // 消除 bal 指令
+        linked_remove(block->operations, block->last_op);
+
+        //                linked_node *current = linked_first(block->operations);
+        //        lir_op_t *label_op = current->value;
+        //        assert(label_op->code == LIR_OPCODE_LABEL);
+        //
+        //        while (current->value != NULL) {
+        //            lir_op_t *op = current->value;
+        //        }
+    }
 }
 
 /**
@@ -19,7 +50,6 @@ static void linear_posthandle(closure_t *c) {
  */
 static void linear_prehandle(closure_t *c) {
     // collect var defs
-    int next_id = 0;
     table_t *var_table = table_new();
     c->var_defs = slice_new();
 
@@ -42,6 +72,25 @@ static void linear_prehandle(closure_t *c) {
                 slice_push(c->var_defs, var);
                 table_set(var_table, var->ident, var);
             }
+
+            current = current->succ;
+        }
+    }
+}
+
+
+void mark_number(closure_t *c) {
+    interval_block_order(c);
+
+    int next_id = 0;
+    for (int i = 0; i < c->blocks->count; ++i) {
+        basic_block_t *block = c->blocks->take[i];
+        linked_node *current = linked_first(block->operations);
+        lir_op_t *label_op = current->value;
+        assert(label_op->code == LIR_OPCODE_LABEL);
+
+        while (current->value != NULL) {
+            lir_op_t *op = current->value;
 
             // mark
             if (op->code == LIR_OPCODE_PHI) {
@@ -84,11 +133,7 @@ static void linear_prehandle(closure_t *c) {
  * @param c
  */
 void reg_alloc(closure_t *c) {
-    interval_block_order(c);
-
     linear_prehandle(c);
-
-    debug_block_lir(c, "mark_number");
 
     interval_build(c);
 
