@@ -95,10 +95,10 @@ fn init():cgroup_t! {
     // mkdir all
     os.mkdirs(cgroup_path, 0755)
 
-    return cgroup_t {
-        id = id,
-        version = version,
-        path = cgroup_path,
-        procs_path = procs_path,
+    return cgroup_t{
+        id: id,
+        version: version,
+        path: cgroup_path,
+        procs_path: procs_path,
     }
 }

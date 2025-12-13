@@ -8,7 +8,7 @@ static void test_run() {
     remove(noded_path);
 
     setenv("RUNNER_PATH", runner_path, 1);
-//    setenv("PARKER_VERBOSE", "true", 1);
+    //    setenv("PARKER_VERBOSE", "true", 1);
 
     slice_t *args = slice_new();
     slice_push(args, &"node");
@@ -74,11 +74,20 @@ static void build_runner() {
 
 int main(void) {
 #ifdef __LINUX
-    feature_test_package_sync();
-    build_test_node();
-    build_runner();
-    build_parker();
+    COMPILER_TRY {
+        LOGF("build start\n");
+        feature_test_package_sync();
+        build_test_node();
+        build_runner();
+        build_parker();
 
-    test_run();
+        test_run();
+        LOGF("build success\n");
+    }
+    else {
+        assertf(false, "%s", (char *) test_error_msg);
+        exit(1);
+    }
+
 #endif
 }
