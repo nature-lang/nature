@@ -1235,6 +1235,13 @@ static type_t infer_async(module_t *m, ast_expr_t *expr, type_t target_type) {
     assert(fn_type.kind == TYPE_FN);
     co_expr->return_type = fn_type.fn->return_type;
 
+    if (m->in_fake_stmt && co_expr->origin_call->args->length == 0) {
+        // 清空两个 fn body, 避免 infer void 异常
+        co_expr->closure_fn->body = slice_new();
+        co_expr->closure_fn_void->body = slice_new();
+        return type_kind_new(TYPE_UNKNOWN);
+    }
+
     // -------------------------------------------- 消除 ast_async_t, 直接改造成 call async----------------------------------------------------------
     ast_expr_t first_arg = {0};
 
@@ -2479,7 +2486,9 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
 }
 
 void infer_expr_fake(module_t *m, ast_expr_fake_stmt_t *stmt) {
+    m->in_fake_stmt = true;
     infer_right_expr(m, &stmt->expr, type_kind_new(TYPE_UNKNOWN));
+    m->in_fake_stmt = false;
     if (stmt->expr.assert_type == AST_MATCH && stmt->expr.type.kind == TYPE_UNKNOWN) {
         stmt->expr.type = type_kind_new(TYPE_VOID);
         stmt->expr.target_type = type_kind_new(TYPE_VOID);

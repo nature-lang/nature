@@ -2646,6 +2646,40 @@ static lir_operand_t *linear_sizeof_expr(module_t *m, ast_expr_t expr, lir_opera
     return target;
 }
 
+static lir_operand_t *linear_macro_async(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    assert(target == NULL);
+    ast_macro_async_t *async_expr = expr.value;
+
+    lir_operand_t *flag_operand = linear_expr(m, *async_expr->flag_expr, NULL);
+
+    if (async_expr->origin_call->left.assert_type == AST_EXPR_IDENT) {
+        ast_ident *call_ident = async_expr->origin_call->left.value;
+        // check symbol is fn symbol
+        symbol_t *s = symbol_table_get(call_ident->literal);
+        assertf(s, "ident %s not declare");
+        if (s->type == SYMBOL_FN) {
+            lir_operand_t *fn_addr_operand = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            OP_PUSH(lir_op_lea(fn_addr_operand, symbol_label_operand(m, s->ident)));
+
+            // rt_call
+            push_rt_call(m, RT_CALL_COROUTINE_ASYNC2, NULL, 3, fn_addr_operand, flag_operand, bool_operand(true));
+        } else {
+            lir_operand_t *fn_operand = linear_expr(m, async_expr->origin_call->left, NULL);
+            push_rt_call(m, RT_CALL_COROUTINE_ASYNC2, NULL, 3, fn_operand, flag_operand, bool_operand(false));
+        }
+    } else {
+        lir_operand_t *fn_operand = linear_expr(m, async_expr->origin_call->left, NULL);
+        push_rt_call(m, RT_CALL_COROUTINE_ASYNC2, NULL, 3, fn_operand, flag_operand, bool_operand(false));
+    }
+
+    // is ident and global symbol
+    // direct call rt_coroutine_async, flag set direct
+    //    push_rt_call(m, )
+
+
+    return NULL;
+}
+
 static lir_operand_t *linear_reflect_hash_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_macro_sizeof_expr_t *ast = expr.value;
 
@@ -3417,7 +3451,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_FNDEF: {
             linear_fn_decl(m,
-                           (ast_expr_t){
+                           (ast_expr_t) {
                                    .line = stmt->line,
                                    .assert_type = stmt->assert_type,
                                    .value = stmt->value,
@@ -3429,7 +3463,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             ast_call_t *call = stmt->value;
             // stmt 中都 call 都是没有返回值的
             linear_call(m,
-                        (ast_expr_t){
+                        (ast_expr_t) {
                                 .line = stmt->line,
                                 .column = stmt->column,
                                 .assert_type = AST_CALL,
@@ -3443,7 +3477,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             ast_catch_t *catch = stmt->value;
             linear_catch_expr(m,
-                              (ast_expr_t){
+                              (ast_expr_t) {
                                       .line = stmt->line,
                                       .column = stmt->column,
                                       .assert_type = AST_CATCH,
@@ -3500,6 +3534,7 @@ linear_expr_fn expr_fn_table[] = {
         [AST_MACRO_EXPR_DEFAULT] = linear_default_expr,
         [AST_MACRO_EXPR_SIZEOF] = linear_sizeof_expr,
         [AST_MACRO_EXPR_REFLECT_HASH] = linear_reflect_hash_expr,
+        [AST_MACRO_ASYNC] = linear_macro_async,
         [AST_EXPR_NEW] = linear_new_expr,
         [AST_CATCH] = linear_catch_expr,
         [AST_MATCH] = linear_match_expr,
