@@ -1,13 +1,34 @@
+# Build directories
 /build
 /build-*
 /build_*
+
+# Binary and release artifacts
 bin
 release/
 tmp/
+
+# IDE and editor files
 .vscode
 .idea
+
+# OS-specific files
 .DS_store
+
+# Test and temporary files
 test.text
+
+# Library files
 libruntime.a
+
+# Upload markers
 .clion.source.upload.marker
+
+# Cache directories
 .zig-cache/*
+
+# Build artifacts
+tsconfig.tsbuildinfo
+
+# Examples
+example/

@@ -1,6 +1,6 @@
 use dashmap::DashMap;
 use log::debug;
-use nls::analyzer::completion::{extract_prefix_at_position, CompletionItemKind, CompletionProvider};
+use nls::analyzer::completion::{CompletionItemKind, CompletionProvider};
 use nls::analyzer::lexer::{TokenType, LEGEND_TYPE};
 use nls::analyzer::module_unique_ident;
 use nls::package::parse_package;
@@ -458,13 +458,20 @@ impl LanguageServer for Backend {
 
             // 获取当前位置的前缀
             let text = rope.to_string();
-            let prefix = extract_prefix_at_position(&text, byte_offset);
-            debug!("Extracted prefix: '{}', module_ident '{}', raw_text '{}'", prefix, module.ident.clone(), text);
+            debug!("Getting completions at byte_offset {}, module_ident '{}'", byte_offset, module.ident.clone());
 
-            // 获取符号表
+            // Get symbol table and package config
             let mut symbol_table = project.symbol_table.lock().unwrap();
-            // 创建完成提供器并获取完成项
-            let completion_items = CompletionProvider::new(&mut symbol_table, module).get_completions(byte_offset, &prefix);
+            let package_config = project.package_config.lock().unwrap().clone();
+            // Create completion provider and get completion items
+            let completion_items = CompletionProvider::new(
+                &mut symbol_table,
+                module,
+                project.nature_root.clone(),
+                project.root.clone(),
+                package_config,
+            )
+            .get_completions(byte_offset, &text);
 
             // 转换为LSP格式
             let lsp_items: Vec<tower_lsp::lsp_types::CompletionItem> = completion_items
@@ -475,15 +482,50 @@ impl LanguageServer for Backend {
                         CompletionItemKind::Parameter => tower_lsp::lsp_types::CompletionItemKind::VARIABLE,
                         CompletionItemKind::Function => tower_lsp::lsp_types::CompletionItemKind::FUNCTION,
                         CompletionItemKind::Constant => tower_lsp::lsp_types::CompletionItemKind::CONSTANT,
+                        CompletionItemKind::Module => tower_lsp::lsp_types::CompletionItemKind::MODULE,
+                        CompletionItemKind::Struct => tower_lsp::lsp_types::CompletionItemKind::STRUCT,
                     };
 
+                    // Check if insert_text contains snippet syntax
+                    let has_snippet = item.insert_text.contains("$0");
+
+                    // Convert additional_text_edits to LSP format
+                    let additional_edits = if !item.additional_text_edits.is_empty() {
+                        Some(
+                            item.additional_text_edits
+                                .into_iter()
+                                .map(|edit| tower_lsp::lsp_types::TextEdit {
+                                    range: tower_lsp::lsp_types::Range {
+                                        start: tower_lsp::lsp_types::Position {
+                                            line: edit.line as u32,
+                                            character: edit.character as u32,
+                                        },
+                                        end: tower_lsp::lsp_types::Position {
+                                            line: edit.line as u32,
+                                            character: edit.character as u32,
+                                        },
+                                    },
+                                    new_text: edit.new_text,
+                                })
+                                .collect(),
+                        )
+                    } else {
+                        None
+                    };
+                    
                     tower_lsp::lsp_types::CompletionItem {
                         label: item.label,
                         kind: Some(lsp_kind),
                         detail: item.detail,
                         documentation: item.documentation.map(|doc| tower_lsp::lsp_types::Documentation::String(doc)),
                         insert_text: Some(item.insert_text),
+                        insert_text_format: if has_snippet { 
+                            Some(tower_lsp::lsp_types::InsertTextFormat::SNIPPET) 
+                        } else { 
+                            Some(tower_lsp::lsp_types::InsertTextFormat::PLAIN_TEXT) 
+                        },
                         sort_text: item.sort_text,
+                        additional_text_edits: additional_edits,
                         ..Default::default()
                     }
                 })
