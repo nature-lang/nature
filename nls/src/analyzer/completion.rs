@@ -91,6 +91,11 @@ impl<'a> CompletionProvider<'a> {
         let current_scope_id = self.find_innermost_scope(self.module.scope_id, position);
         debug!("Found scope_id {} by positon {}", current_scope_id, position);
 
+        // cannot auto-import in global module scope
+        if current_scope_id == self.module.scope_id {
+            return Vec::new();
+        }
+
         // 2. Collect all visible variable symbols
         let mut completions = Vec::new();
         self.collect_variable_completions(current_scope_id, &prefix, &mut completions, position);
