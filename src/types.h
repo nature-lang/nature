@@ -199,7 +199,6 @@ struct module_t {
     // analyzer
     analyzer_fndef_t *analyzer_current;
     ast_fndef_t *analyzer_global;
-    bool analyzer_in_type_param;
 
     // 编译器前端统一使用
     int current_line;
@@ -207,13 +206,12 @@ struct module_t {
 
     // infer
     ast_fndef_t *current_fn; // 当前正在 infer 都 fn, return 时需要基于改值判断 return type
-    table_t *type_param_table; // 只有顶层 type alias 才能够使用 param, key 是 param_name, value 是具体的类型值
-    list_t *type_param_list;
     // infer 阶段为 type_param 赋值，key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
     // reduction 是递归的，所以需要一个全局变量存储当前 type_param 的具体值
     // stack 的值是 table_t*, key 是 type_param, value 是赋值的具体类型(该类型需要 reduction)
     ct_stack_t *infer_type_args_stack;
     int64_t be_caught; // 用于判断当前 call 是否则存在 catch 拦截
+    bool in_fake_stmt;
 
     // compiler
     struct closure_t *current_closure;
@@ -244,8 +242,6 @@ struct module_t {
     slice_t *asm_global_symbols; // 和架构无关
 
     // elf target.o
-    uint64_t elf_count;
-    uint8_t *elf_binary;
     string object_file;
 };
 

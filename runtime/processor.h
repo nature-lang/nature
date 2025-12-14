@@ -245,6 +245,8 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu, void *arg)
 
 coroutine_t *rt_coroutine_async(void *fn, int64_t flag, n_future_t *fu);
 
+void rt_coroutine_async2(void *fn, int64_t flag, bool is_direct);
+
 void rt_coroutine_return(void *result_ptr);
 
 /**

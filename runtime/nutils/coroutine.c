@@ -8,6 +8,14 @@ coroutine_t *rt_coroutine_async(void *fn, int64_t flag, n_future_t *fu) {
     return co;
 }
 
+void rt_coroutine_async2(void *fn, int64_t flag, bool is_direct) {
+    if (is_direct) {
+        flag |= FLAG(CO_FLAG_DIRECT);
+    }
+    coroutine_t *co = rt_coroutine_new(fn, flag, NULL, NULL);
+    rt_coroutine_dispatch(co);
+}
+
 void rt_coroutine_yield() {
     n_processor_t *p = processor_get();
     co_yield_runnable(p, p->coroutine);
