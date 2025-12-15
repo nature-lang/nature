@@ -571,20 +571,25 @@ static slice_t *arm64_native_return(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     // 恢复栈帧
-    if (c->stack_offset > 256) {
+    if (c->stack_offset > 4095) {
         arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, c->stack_offset);
-        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
+        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(sp), offset_operand));
+        slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(fp), ARM64_INDIRECT(x16, 0, 0, OWORD)));
 
-        // 恢复 fp(x29) 和 lr(x30), ARM64_INDIRECT(sp, 16, 2) 2 表示 post-index 模式
-        slice_push(operations, ARM64_INST(R_LDP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, 16, 2, OWORD)));
+        offset_operand = arm64_imm_operand(op, operations, c->stack_offset + 8);
+        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(sp), offset_operand));
+        slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(lr), ARM64_INDIRECT(x16, 0, 0, OWORD)));
+    } else if (c->stack_offset > 256) {
+        slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(fp), ARM64_INDIRECT(sp, c->stack_offset, 0, OWORD)));
+        slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(lr), ARM64_INDIRECT(sp, c->stack_offset + 8, 0, OWORD)));
     } else {
         // 恢复栈帧
         // 恢复 fp(x29) 和 lr(x30), ARM64_INDIRECT(sp, 16, 2) 2 表示 post-index 模式
         slice_push(operations, ARM64_INST(R_LDP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, c->stack_offset, 0, OWORD)));
-
-        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, c->stack_offset + 16);
-        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
     }
+
+    arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, c->stack_offset + 16);
+    slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
 
     // 返回
     slice_push(operations, ARM64_INST(R_RET));
@@ -611,6 +616,10 @@ static slice_t *arm64_native_push(closure_t *c, lir_op_t *op) {
 
 static slice_t *arm64_native_bal(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
+
+    if (need_eliminate_bal_fn_end(c, op)) {
+        return operations;
+    }
 
     // 获取跳转目标标签
     arm64_asm_operand_t *target = lir_operand_trans_arm64(c, op, op->output, operations);
@@ -992,6 +1001,14 @@ static slice_t *arm64_native_label(closure_t *c, lir_op_t *op) {
     return operations;
 }
 
+static slice_t *arm64_native_fn_end(closure_t *c, lir_op_t *op) {
+    if (c->fndef->return_type.kind == TYPE_VOID) {
+        return arm64_native_return(c, op);
+    }
+
+    return slice_new();
+}
+
 static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
@@ -1001,27 +1018,29 @@ static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
     // 进行最终的对齐, linux arm64 中栈一般都是是按 16byte 对齐的
     offset = align_up(offset, ARM64_STACK_ALIGN_SIZE);
 
-    if (offset > (256)) {
-        // 保存当前的帧指针和链接寄存器, ARM64_INDIRECT(sp, -16, 1) 最后一个参数是 1 表示 pre index, 会先进行 sub sp, sp, #16 减少 sp 的值
-        // 等价于 push sp 两次
-        slice_push(operations, ARM64_INST(R_STP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, -16, 1, OWORD)));
-        // 更新帧指针
-        slice_push(operations, ARM64_INST(R_MOV, ARM64_REG(fp), ARM64_REG(sp)));
-        // 如果需要，调整栈指针以分配栈空间
-        if (offset != 0) {
-            arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, offset);
-            slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
-        }
+
+    arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, offset + 16);
+    slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
+
+    if (offset > 4095) {
+        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, c->stack_offset);
+        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(sp), offset_operand));
+        slice_push(operations, ARM64_INST(R_STR, ARM64_REG(fp), ARM64_INDIRECT(x16, 0, 0, OWORD)));
+
+        offset_operand = arm64_imm_operand(op, operations, c->stack_offset + 8);
+        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(sp), offset_operand));
+        slice_push(operations, ARM64_INST(R_STR, ARM64_REG(lr), ARM64_INDIRECT(x16, 0, 0, OWORD)));
+    } else if (offset > 256) {
+        slice_push(operations, ARM64_INST(R_STR, ARM64_REG(fp), ARM64_INDIRECT(sp, offset, 0, OWORD)));
+        slice_push(operations, ARM64_INST(R_STR, ARM64_REG(lr), ARM64_INDIRECT(sp, offset + 8, 0, OWORD)));
     } else {
-        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, offset + 16);
-        slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
-
+        // fp = x29, lr = x30
         slice_push(operations, ARM64_INST(R_STP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, offset, 0, OWORD))); // offset 限制 256
-
-        // 更新帧指针      add x29, sp, #offset
-        arm64_asm_operand_t *x29_offset_operand = arm64_imm_operand(op, operations, offset);
-        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x29), ARM64_REG(sp), x29_offset_operand));
     }
+
+    // 更新帧指针  dd x29, sp, #offset
+    arm64_asm_operand_t *x29_offset_operand = arm64_imm_operand(op, operations, offset);
+    slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x29), ARM64_REG(sp), x29_offset_operand));
 
 
     // gc_bits 补 0
@@ -1127,6 +1146,7 @@ static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
 
     // b.eq 跳过 bl 指令
     slice_push(operations, ARM64_INST(R_BEQ, ARM64_IMM(8)));
+    //    slice_push(operations, ARM64_INST(R_CBZ, ARM64_REG(x16), ARM64_IMM(8)));
 
     slice_push(operations, ARM64_INST(R_BL, ARM64_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, 0)));
 
@@ -1196,7 +1216,7 @@ arm64_native_fn arm64_native_table[] = {
         [LIR_OPCODE_UITOF] = arm64_native_uitof,
 
         [LIR_OPCODE_FN_BEGIN] = arm64_native_fn_begin,
-        [LIR_OPCODE_FN_END] = arm64_native_return,
+        [LIR_OPCODE_FN_END] = arm64_native_fn_end,
 
         [LIR_OPCODE_SAFEPOINT] = arm64_native_safepoint,
 };

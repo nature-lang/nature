@@ -166,7 +166,7 @@ typedef struct mspan_t {
     struct mspan_t *next; // mspan 是双向链表
     // struct mspan_t *prev;
 
-    uint32_t sweepgen; 
+    uint32_t sweepgen;
     addr_t base; // mspan 在 arena 中的起始位置
     addr_t end;
     uint8_t spanclass; // spanclass index (基于 sizeclass 通过 table 可以确定 page 的数量和 span 的数量)

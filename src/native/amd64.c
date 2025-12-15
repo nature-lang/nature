@@ -240,8 +240,12 @@ static slice_t *amd64_native_push(closure_t *c, lir_op_t *op) {
 
 static slice_t *amd64_native_bal(closure_t *c, lir_op_t *op) {
     assert(op->output->assert_type == LIR_OPERAND_SYMBOL_LABEL);
-
     slice_t *operations = slice_new();
+
+    if (need_eliminate_bal_fn_end(c, op)) {
+        return operations;
+    }
+
     amd64_asm_operand_t *result = lir_operand_trans_amd64(c, op, op->output);
     slice_push(operations, AMD64_INST("jmp", result)); // result is symbol label
     return operations;
@@ -973,6 +977,15 @@ slice_t *amd64_native_return(closure_t *c, lir_op_t *op) {
     return operations;
 }
 
+
+static slice_t *amd64_native_fn_end(closure_t *c, lir_op_t *op) {
+    if (c->fndef->return_type.kind == TYPE_VOID) {
+        return amd64_native_return(c, op);
+    }
+
+    return slice_new();
+}
+
 /**
  * examples:
  * lea imm(string_ref), reg
@@ -1135,7 +1148,7 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_MOVE] = amd64_native_mov,
         [LIR_OPCODE_LEA] = amd64_native_lea,
         [LIR_OPCODE_FN_BEGIN] = amd64_native_fn_begin,
-        [LIR_OPCODE_FN_END] = amd64_native_return,
+        [LIR_OPCODE_FN_END] = amd64_native_fn_end,
 };
 
 slice_t *amd64_native_op(closure_t *c, lir_op_t *op) {
