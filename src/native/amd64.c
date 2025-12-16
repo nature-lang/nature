@@ -979,11 +979,21 @@ slice_t *amd64_native_return(closure_t *c, lir_op_t *op) {
 
 
 static slice_t *amd64_native_fn_end(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
     if (c->fndef->return_type.kind == TYPE_VOID) {
-        return amd64_native_return(c, op);
+        operations = amd64_native_return(c, op);
     }
 
-    return slice_new();
+    // assist preempt label
+    char *preempt_ident = str_connect(c->linkident, ".preempt");
+    slice_push(operations, AMD64_INST("label", AMD64_SYMBOL(preempt_ident, true)));
+    slice_push(operations, AMD64_INST("call", AMD64_SYMBOL(ASSIST_PREEMPT_YIELD_IDENT, false)));
+
+
+    char *safepoint_ident = str_connect(c->linkident, ".sp.end");
+    slice_push(operations, AMD64_INST("jmp", AMD64_SYMBOL(safepoint_ident, true)));
+
+    return operations;
 }
 
 /**
@@ -1076,11 +1086,16 @@ static slice_t *amd64_native_safepoint(closure_t *c, lir_op_t *op) {
     // cmp
     slice_push(operations, AMD64_INST("cmp", AMD64_REG(r15), AMD64_UINT32(0)));
 
+    char *preempt_ident = str_connect(c->linkident, ".preempt");
+    slice_push(operations, AMD64_INST("jne", AMD64_SYMBOL(preempt_ident, true)));
+
+    char *safepoint_ident = str_connect(c->linkident, ".sp.end");
+    slice_push(operations, AMD64_INST("label", AMD64_SYMBOL(safepoint_ident, true)));
+
     // je 如何跳过 当前指令 和 call rel32 指令
     // je 跳过 call rel32 指令
-    slice_push(operations, AMD64_INST("je", AMD64_UINT8(5))); // 5字节(call)
-
-    slice_push(operations, AMD64_INST("call", AMD64_SYMBOL(ASSIST_PREEMPT_YIELD_IDENT, false)));
+    //    slice_push(operations, AMD64_INST("je", AMD64_UINT8(5))); // 5字节(call)
+    //    slice_push(operations, AMD64_INST("call", AMD64_SYMBOL(ASSIST_PREEMPT_YIELD_IDENT, false)));
 
     return operations;
 }

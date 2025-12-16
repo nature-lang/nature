@@ -1002,11 +1002,53 @@ static slice_t *arm64_native_label(closure_t *c, lir_op_t *op) {
 }
 
 static slice_t *arm64_native_fn_end(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
     if (c->fndef->return_type.kind == TYPE_VOID) {
-        return arm64_native_return(c, op);
+        operations = arm64_native_return(c, op);
     }
 
-    return slice_new();
+    // assist preempt label
+    char *preempt_ident = str_connect(c->linkident, ".preempt");
+    slice_push(operations, ARM64_INST(R_LABEL, ARM64_SYM(preempt_ident, true, 0, 0)));
+    slice_push(operations, ARM64_INST(R_BL, ARM64_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, 0)));
+
+    char *safepoint_ident = str_connect(c->linkident, ".sp.end");
+    slice_push(operations, ARM64_INST(R_B, ARM64_SYM(safepoint_ident, true, 0, 0)));
+
+    return operations;
+}
+
+
+static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    // 直接从全局变量 global_safepoint 加载值
+    arm64_asm_operand_t *global_safepoint_operand = ARM64_SYM(GLOBAL_SAFEPOINT_IDENT, false, 0, 0);
+
+    slice_push(operations, ARM64_INST(R_ADRP, ARM64_REG(x16), global_safepoint_operand));
+
+    arm64_asm_operand_t *lo12_symbol_operand = ARM64_SYM(GLOBAL_SAFEPOINT_IDENT, false,
+                                                         0, ASM_ARM64_RELOC_LO12);
+    slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(x16), lo12_symbol_operand));
+
+    // ldr
+    slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(x16), ARM64_INDIRECT(x16, 0, 0, false)));
+
+    // cmp x0,#0x0
+    slice_push(operations, ARM64_INST(R_CMP, ARM64_REG(x16), ARM64_IMM(0)));
+
+    // b.eq 跳过 bl 指令
+    char *preempt_ident = str_connect(c->linkident, ".preempt");
+    slice_push(operations, ARM64_INST(R_BNE, ARM64_SYM(preempt_ident, true, 0, 0)));
+
+    // 增加一个跳回 label, preempt.end
+    char *safepoint_ident = str_connect(c->linkident, ".sp.end");
+    slice_push(operations, ARM64_INST(R_LABEL, ARM64_SYM(safepoint_ident, true, 0, 0)));
+
+    //    slice_push(operations, ARM64_INST(R_CBZ, ARM64_REG(x16), ARM64_IMM(8)));
+    //    slice_push(operations, ARM64_INST(R_BL, ARM64_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, 0)));
+
+    return operations;
 }
 
 static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
@@ -1122,33 +1164,6 @@ static slice_t *arm64_native_bcc(closure_t *c, lir_op_t *op) {
     int32_t asm_code = lir_to_asm_code[op->code];
 
     slice_push(operations, ARM64_INST(asm_code, result));
-
-    return operations;
-}
-
-static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
-    slice_t *operations = slice_new();
-
-    // 直接从全局变量 global_safepoint 加载值
-    arm64_asm_operand_t *global_safepoint_operand = ARM64_SYM(GLOBAL_SAFEPOINT_IDENT, false, 0, 0);
-
-    slice_push(operations, ARM64_INST(R_ADRP, ARM64_REG(x16), global_safepoint_operand));
-
-    arm64_asm_operand_t *lo12_symbol_operand = ARM64_SYM(GLOBAL_SAFEPOINT_IDENT, false,
-                                                         0, ASM_ARM64_RELOC_LO12);
-    slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(x16), lo12_symbol_operand));
-
-    // ldr
-    slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(x16), ARM64_INDIRECT(x16, 0, 0, false)));
-
-    // cmp x0,#0x0
-    slice_push(operations, ARM64_INST(R_CMP, ARM64_REG(x16), ARM64_IMM(0)));
-
-    // b.eq 跳过 bl 指令
-    slice_push(operations, ARM64_INST(R_BEQ, ARM64_IMM(8)));
-    //    slice_push(operations, ARM64_INST(R_CBZ, ARM64_REG(x16), ARM64_IMM(8)));
-
-    slice_push(operations, ARM64_INST(R_BL, ARM64_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, 0)));
 
     return operations;
 }

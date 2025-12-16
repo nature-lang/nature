@@ -334,14 +334,13 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
             co->aco.save_stack.sz, bp_value, sp_value, co->aco.share_stack->align_retptr);
 
     // save_stack 也是通过 gc 申请，即使是 gc_work 也需要标记一下
-    assert(span_of((addr_t) co->aco.save_stack.ptr) && "coroutine save stack not found span");
-
     assert(p->gc_work_finished < memory->gc_count && "gc work finished, cannot insert to gc worklist");
 
     // solo processor 的 gc_worklist 无法使用，需要使用 share processor 进行辅助
     rt_linked_fixalloc_t *worklist = &p->gc_worklist;
 
     if (co->aco.save_stack.ptr && co->aco.save_stack.sz > SAVE_STACK_DEFAULT_SIZE) {
+        assert(span_of((addr_t) co->aco.save_stack.ptr) && "coroutine save stack not found span");
         insert_gc_worklist(worklist, co->aco.save_stack.ptr);
     }
 
