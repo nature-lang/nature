@@ -340,7 +340,11 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
     // solo processor 的 gc_worklist 无法使用，需要使用 share processor 进行辅助
     rt_linked_fixalloc_t *worklist = &p->gc_worklist;
-    insert_gc_worklist(worklist, co->aco.save_stack.ptr);
+
+    if (co->aco.save_stack.ptr && co->aco.save_stack.sz > SAVE_STACK_DEFAULT_SIZE) {
+        insert_gc_worklist(worklist, co->aco.save_stack.ptr);
+    }
+
 
     if (co->error) {
         insert_gc_worklist(worklist, co->error);

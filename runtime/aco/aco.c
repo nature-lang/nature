@@ -23,7 +23,7 @@
 static uint64_t share_stack_base = MMAP_SHARE_STACK_BASE;
 
 void aco_runtime_test(void) {
-#if  defined(__x86_64__) || defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64))
+#if defined(__x86_64__) || defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64))
     assert(sizeof(void *) == 8 && "require 'sizeof(void*) == 8'");
     assert(sizeof(__uint128_t) == 16 && "require 'sizeof(__uint128_t) == 16'");
 #else
@@ -276,9 +276,9 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
 
 #if defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64))
     // aarch64 hardware-enforces 16 byte stack alignment
-    p->align_retptr  = (void*)(u_p - 16);
+    p->align_retptr = (void *) (u_p - 16);
 #else
-    p->align_retptr  = (void*)(u_p - sizeof(void*));
+    p->align_retptr = (void *) (u_p - sizeof(void *));
 #endif
 
     *((void **) (p->align_retptr)) = (void *) (aco_funcp_protector_asm);
@@ -304,7 +304,7 @@ void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack,
 
     aco->ctx.msg = NULL;
 
-    if (main_co != NULL) {// non-main co
+    if (main_co != NULL) { // non-main co
         assert(share_stack);
         aco->share_stack = share_stack;
 
@@ -314,11 +314,11 @@ void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack,
         aco->reg[ACO_REG_IDX_FPU] = uv_key_get(&aco_gtls_fpucw_mxcsr);
 
 #elif defined(__aarch64__)
-        aco->reg[ACO_REG_IDX_RETADDR] = (void*)fp;
+        aco->reg[ACO_REG_IDX_RETADDR] = (void *) fp;
         aco->reg[ACO_REG_IDX_SP] = aco->share_stack->align_retptr;
 
 #elif defined(__riscv) && (__riscv_xlen == 64)
-        aco->reg[ACO_REG_IDX_RETADDR] = (void*)fp;
+        aco->reg[ACO_REG_IDX_RETADDR] = (void *) fp;
         aco->reg[ACO_REG_IDX_SP] = aco->share_stack->align_retptr;
 #else
 #error "platform no support yet"
@@ -326,11 +326,15 @@ void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack,
         aco->main_co = main_co;
         aco->arg = arg;
         aco->fp = fp;
-        if (save_stack_sz == 0) {// save_stack 默认大小为 64byte
-            save_stack_sz = 64;
+        if (save_stack_sz == 0) {
+            save_stack_sz = SAVE_STACK_DEFAULT_SIZE;
         }
 
-        aco->save_stack.ptr = rti_gc_malloc(save_stack_sz, NULL);
+        if (save_stack_sz <= SAVE_STACK_DEFAULT_SIZE) {
+            aco->save_stack.ptr = aco->default_save_stack;
+        } else {
+            aco->save_stack.ptr = rti_gc_malloc(save_stack_sz, NULL);
+        }
         DEBUGF("[aco_create_init] save_stack.ptr=%p, size=%ld", aco->save_stack.ptr, save_stack_sz);
 
         assert(aco->save_stack.ptr);
@@ -385,7 +389,7 @@ aco_attr_no_asan void aco_resume(aco_t *resume_co) {
                         break;
                     }
                 }
-                // gc malloc TODO write_barrier
+                // gc malloc
                 owner_co->save_stack.ptr = rti_gc_malloc(owner_co->save_stack.sz, NULL);
                 assert(owner_co->save_stack.ptr);
             }

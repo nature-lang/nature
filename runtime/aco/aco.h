@@ -15,7 +15,9 @@
 #ifndef ACO_H
 #define ACO_H
 
+#include <include/uv.h>
 #include <limits.h>
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -24,10 +26,10 @@
 #include <sys/mman.h>
 #include <time.h>
 #include <unistd.h>
-#include <include/uv.h>
-#include <pthread.h>
 
 #include "runtime/fixalloc.h"
+
+#define SAVE_STACK_DEFAULT_SIZE 64
 
 #define ACO_VERSION_MAJOR 1
 #define ACO_VERSION_MINOR 2
@@ -49,10 +51,10 @@
 #define ACO_REG_IDX_BP 12
 #define ACO_REG_IDX_FPU 15
 #elif defined(__riscv) && (__riscv_xlen == 64)
-#define ACO_REG_IDX_RETADDR 12  // ra 寄存器在索引 12 (偏移量 96)
-#define ACO_REG_IDX_SP 13       // sp 寄存器在索引 13 (偏移量 104)
-#define ACO_REG_IDX_BP 0        // s0/fp 寄存器在索引 0 (偏移量 0)
-#define ACO_REG_IDX_FPU 14      // fcsr 在索引 14 (偏移量 112)
+#define ACO_REG_IDX_RETADDR 12 // ra 寄存器在索引 12 (偏移量 96)
+#define ACO_REG_IDX_SP 13 // sp 寄存器在索引 13 (偏移量 104)
+#define ACO_REG_IDX_BP 0 // s0/fp 寄存器在索引 0 (偏移量 0)
+#define ACO_REG_IDX_FPU 14 // fcsr 在索引 14 (偏移量 112)
 #else
 #error "platform no support yet"
 #endif
@@ -101,9 +103,9 @@ struct aco_s {
 #ifdef __AMD64
     void *reg[9]; // amd64 使用
 #elif defined(__ARM64)
-    void* reg[16];
+    void *reg[16];
 #elif defined(__RISCV64)
-    void* reg[16];
+    void *reg[16];
 #else
 #error "platform no support yet"
 #endif
@@ -118,15 +120,17 @@ struct aco_s {
     aco_share_stack_t *share_stack;
     aco_context_t ctx;
     bool inited;
+
+    uint8_t default_save_stack[SAVE_STACK_DEFAULT_SIZE];
 };
 
 #define aco_likely(x) (__builtin_expect(!!(x), 1))
 
 #define aco_unlikely(x) (__builtin_expect(!!(x), 0))
 
-#define aco_assert(EX) ((aco_likely(EX)) ? ((void)0) : (abort()))
+#define aco_assert(EX) ((aco_likely(EX)) ? ((void) 0) : (abort()))
 
-#define aco_assertptr(ptr) ((aco_likely((ptr) != NULL)) ? ((void)0) : (abort()))
+#define aco_assertptr(ptr) ((aco_likely((ptr) != NULL)) ? ((void) 0) : (abort()))
 
 #define aco_assertalloc_bool(b)                                                                                          \
     do {                                                                                                                 \
@@ -151,9 +155,9 @@ struct aco_s {
 #define aco_attr_no_asan
 #endif
 
-extern uv_key_t aco_gtls_co;           // aco_t*
+extern uv_key_t aco_gtls_co; // aco_t*
 extern uv_key_t aco_gtls_last_word_fp; // aco_cofuncp_t
-extern uv_key_t aco_gtls_fpucw_mxcsr;  // void*
+extern uv_key_t aco_gtls_fpucw_mxcsr; // void*
 extern pthread_mutex_t share_stack_lock;
 
 static inline void aco_init() {
@@ -206,17 +210,17 @@ aco_attr_no_asan void aco_share_spill(aco_t *aco);
         aco_yield1(get_aco_gtls_co()); \
     } while (0)
 
-#define aco_get_arg() (((aco_t *)get_aco_gtls_co())->arg)
+#define aco_get_arg() (((aco_t *) get_aco_gtls_co())->arg)
 
 #define aco_get_co()       \
     ({                     \
-        (void)0;           \
+        (void) 0;          \
         get_aco_gtls_co(); \
     })
 
 #define aco_co()           \
     ({                     \
-        (void)0;           \
+        (void) 0;          \
         get_aco_gtls_co(); \
     })
 
