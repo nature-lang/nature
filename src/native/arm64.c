@@ -1008,11 +1008,11 @@ static slice_t *arm64_native_fn_end(closure_t *c, lir_op_t *op) {
     }
 
     // assist preempt label
-    char *preempt_ident = str_connect(c->linkident, ".preempt");
+    char *preempt_ident = local_sym_with_fn(c, ".preempt");
     slice_push(operations, ARM64_INST(R_LABEL, ARM64_SYM(preempt_ident, true, 0, 0)));
     slice_push(operations, ARM64_INST(R_BL, ARM64_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, 0)));
 
-    char *safepoint_ident = str_connect(c->linkident, ".sp.end");
+    char *safepoint_ident = local_sym_with_fn(c, ".sp.end");
     slice_push(operations, ARM64_INST(R_B, ARM64_SYM(safepoint_ident, true, 0, 0)));
 
     return operations;
@@ -1038,11 +1038,11 @@ static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
     slice_push(operations, ARM64_INST(R_CMP, ARM64_REG(x16), ARM64_IMM(0)));
 
     // b.eq 跳过 bl 指令
-    char *preempt_ident = str_connect(c->linkident, ".preempt");
+    char *preempt_ident = local_sym_with_fn(c, ".preempt");
     slice_push(operations, ARM64_INST(R_BNE, ARM64_SYM(preempt_ident, true, 0, 0)));
 
     // 增加一个跳回 label, preempt.end
-    char *safepoint_ident = str_connect(c->linkident, ".sp.end");
+    char *safepoint_ident = local_sym_with_fn(c, ".sp.end");
     slice_push(operations, ARM64_INST(R_LABEL, ARM64_SYM(safepoint_ident, true, 0, 0)));
 
     //    slice_push(operations, ARM64_INST(R_CBZ, ARM64_REG(x16), ARM64_IMM(8)));

@@ -464,7 +464,7 @@ typedef struct {
     _extend_operand;                                                 \
 })
 
-#define ARM64_INST(_raw_opcode, ...) ({                      \
+#define ARM64_INST(_raw_opcode, ...) ({                     \
     arm64_asm_inst_t *_inst = NEW(arm64_asm_inst_t);        \
     _inst->op_id = op->id;                                  \
     _inst->line = op->line;                                 \

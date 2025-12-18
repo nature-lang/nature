@@ -1326,6 +1326,10 @@ static inline bool need_eliminate_bal_fn_end(closure_t *c, lir_op_t *op) {
     return str_equal(symbol_label->ident, c->end_label);
 }
 
+static inline char *local_sym_with_fn(closure_t *c, char *sym) {
+    return str_connect3(".", c->linkident, sym);
+}
+
 linked_t *lir_memory_mov(module_t *m, uint64_t size, lir_operand_t *dst, lir_operand_t *src);
 
 #endif // NATURE_SRC_LIR_H_
