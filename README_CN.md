@@ -5,27 +5,23 @@
 
 ## 特性
 
-- ✓ 轻量、简洁、一致性的语法设计，轻松掌握并快速上手使用
-- ✓ 强类型、静态分析与编译、内存安全、异常处理，轻松编写安全可靠的软件
-- ✓ 内置并发原语 go/future/channel/select
-- ✓ 直接编译为目标平台的机器码，并支持交叉编译与链接，无需第三方库如 llvm
-- ✓ 部署简单，高效编译，基于 musl libc 进行静态链接，具备良好的跨平台特性
-- ✓ 完善的类型系统，支持泛型、联合类型、interface、nullable(?)、errable(!)
-- ✓ 高性能 GC 实现，具有非常短暂的 STW (Stop The World)
-- ✓ 高性能内存分配器实现，参考 tcmalloc
-- ✓ 高性能共享栈协程实现，每秒能够进行数百万次的协程切换
-- ✓ 基于 libuv 实现的高性能 IO
-- ✓ 纯 C 实现的高性能 runtime 和编译器
-- ✓ 内置数据结构 vec/map/set/tup 和常用标准库实现
-- ✓ 函数调用遵守 system ABI，内置 libc，可以方便地调用 c 标准库函数
-- ✓ 集中式包管理系统 npkg
-- ✓ 编辑器 lsp 支持
-- ○ 更加可控的 GC 实现，如 gc switch，fast free obj 等
-- ○ 基于 zig build 源码并重构交叉链接器
-- ○ 协作式调度系统完善
-- ○ 编译 target 支持 golang、wasm
+- 轻量、简洁、一致性的语法设计，轻松掌握并快速上手使用
+- 强类型、静态分析与编译、内存安全、异常处理，轻松编写安全可靠的软件
+- 内置并发原语 go/future/channel/select
+- 直接编译为目标平台的机器码，不依赖 LLVM，并支持交叉编译
+- 部署简单，高效编译，基于 musl libc 进行静态链接，具备良好的跨平台特性
+- 完善的类型系统，支持泛型、联合类型、interface、nullable(?)、errable(!)
+- 高性能 GC 实现，具有非常短暂的 STW (Stop The World)
+- 高性能内存分配器实现，参考 tcmalloc
+- 高性能共享栈协程实现，每秒能够进行数百万次的协程切换
+- 基于 libuv 实现的高性能 IO
+- 纯 C 实现的高性能 runtime 和编译器
+- 内置数据结构 vec/map/set/tup 和常用标准库实现
+- 函数调用遵守 system ABI，内置 libc，可以方便地调用 c 标准库函数
+- 集中式包管理系统 npkg
+- 编辑器 lsp 支持
   
-## 项目概况
+## 概况
 
 nature 编程语言已经达到早期可用版本，语法 API 基本稳定，在 1.0 版本之前不会有大幅的变化，后续版本会添加一些必要且常用的语法，如 enum，三元运算符，struct label 等。
 
@@ -35,19 +31,6 @@ nature 包含一组测试用例和标准库用来测试基本功能和语法的�
  
 官网 https://nature-lang.org
 
-## 设计理念
-
-nature 编程语言是一款轻量简单，易于学习的编程语言，在设计理念和 runtime 架构上参考了 golang。
-
-nature 在语法设计上注重内存安全，有着完善的类型系统支持以及方便的错误处理方式，以文件作为 module 单位，采用基于 package.toml 的集中式包管理方式。
-
-nature 原生支持并发原语 go+select+channel，得益于 libuv 网络库和 libaco 共享栈协程，在 IO 应用上有着非常优秀的并发表现。正式版本发布时，nature 的性能将会进一步提升。
-
-nature 有着完全自研的编译器、汇编器、链接器(后续将会转向 zig ld)，这让 nature 更加灵活可控，源码简单且没有复杂的第三方依赖，可以轻松地参与贡献，并根据语言和技术发展进行高度定制与优化。
-
-得益于简单的语法设计、自动化内存管理、编译时静态分析等特性，带来了极低的编码负担，使得 nature 编程语言非常适合 AI 编码及编程新手使用。
-
-nature 作为通用编程语言，基于现有的语言特性和标准库实现，可以用于 WEB 开发、命令行程序、数据库、网络中间件、容器系统、IOT 设备、编程教学、操作系统、游戏引擎与游戏开发等各种领域。
 
 ## 安装  
   
@@ -91,7 +74,7 @@ hello nature
 在线试用 https://nature-lang.org/playground
 
 
-## 项目示例
+## 示例
 
 mysql/postgresql/redis 驱动 https://github.com/weiwenhao/dbdriver
 
@@ -106,6 +89,57 @@ Llama2 推理模型实现 https://github.com/weiwenhao/llama.n
 基于 raylib 实现的俄罗斯方块 https://github.com/weiwenhao/tetris
 
 更多语法示例 https://github.com/nature-lang/nature/tree/master/tests/features/cases
+
+## 设计理念
+
+nature 编程语言是一款轻量简单，易于学习的编程语言，在设计理念和 runtime 架构上参考了 golang。
+
+nature 在语法设计上注重内存安全，有着完善的类型系统支持以及方便的错误处理方式，以文件作为 module 单位，采用基于 package.toml 的集中式包管理方式。
+
+nature 原生支持并发原语 go+select+channel，在高并发 IO 应用上有着非常优秀的并发表现。正式版本发布时性能将会得到进一步提升。
+
+nature 有着完全自研的编译器、汇编器、链接器，这让 nature 更加灵活可控，源码简单且没有复杂的第三方依赖，可以轻松地参与贡献，并根据语言和技术发展进行高度定制与优化。
+
+得益于简单的语法设计、自动化内存管理、编译时静态分析等特性，带来了极低的编码负担，使得 nature 编程语言非常适合 AI 编码及编程新手使用。
+
+nature 作为通用编程语言，基于现有的语言特性和标准库实现，可以用于 WEB 开发、命令行程序、数据库、网络中间件、容器系统、IOT 设备、编程教学、操作系统、游戏引擎与游戏开发等各种领域。
+
+## 基准测试
+
+Linux Ubuntu 虚拟机（内核版本 6.17.8，aarch64 架构, Mac M4 芯片, 9 核, 16G）
+
+**IO: HTTP Server**
+
+`ab -n 100000 -c 1000 http://127.0.0.1:8888/`
+
+| 编程语言    | 版本       | QPS      | 平均请求耗时 |
+| ------- | -------- | -------- | ------ |
+| Nature  | v0.7+    | ~104,000 | 9ms    |
+| Golang  | go1.23.4 | ~90,000  | 11ms   |
+| Node.js | v20.16.0 | ~36,000  | 27ms   |
+
+**CPU: Fibonacci(45) time consumed** 
+
+| 编程语言    | 版本       | 耗时    |
+| ------- | -------- | ----- |
+| Nature  | v0.7+    | ~2.5s |
+| Golang  | go1.23.4 | ~2.5s |
+| Rust    | 1.85.0   | ~1.7s |
+| Node.js | v20.16.0 | ~6.0s |
+
+**C FFI: Calling 100 million c fn sqrt time consumed**
+
+| 编程语言   | 版本       | 耗时    |
+| ------ | -------- | ----- |
+| Nature | v0.7+    | ~0.2s |
+| Golang | go1.23.4 | ~2.6s |
+
+**Coroutine: 1 Million Coroutine Time/Memory consumed**
+
+| 编程语言   | 版本       | 创建耗时(ms) | 计算耗时(ms) | 空协程创建(ms) | 占用内存   |
+| ------ | -------- | -------- | -------- | -------------- | ------ |
+| Nature | v0.7+    | 540      | 564      | 170            | 900+M  |
+| Golang | go1.23.4 | 1000     | 1015     | 140            | 2500+M |
 
 
 ## 贡献指南

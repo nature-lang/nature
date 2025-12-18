@@ -4,50 +4,32 @@ A general-purpose open-source programming language and compiler designed to prov
 
 ## Features
 
-- ✓ Lightweight, concise, and consistent syntax design, easy to master and get started quickly
-- ✓ Strong type system, static analysis and compilation, memory safety, exception handling, making it easy to write secure and reliable software
-- ✓ Built-in concurrency primitives: go/future/channel/select
-- ✓ Compiles directly to target platform machine code with cross-compilation and linking support, no third-party libraries like llvm required
-- ✓ Simple deployment, efficient compilation, static linking based on musl libc with good cross-platform characteristics
-- ✓ Comprehensive type system supporting generics, union types, interfaces, nullable(?), errable(!)
-- ✓ High-performance GC implementation with very short STW (Stop The World)
-- ✓ High-performance memory allocator implementation, referencing tcmalloc
-- ✓ High-performance shared-stack coroutine implementation, capable of millions of coroutine switches per second
-- ✓ High-performance IO based on libuv implementation
-- ✓ High-performance runtime and compiler based on pure C implementation
-- ✓ Built-in data structures vec/map/set/tup and common standard library implementations
-- ✓ Function calls follow system ABI, built-in libc, convenient for calling C standard library functions
-- ✓ Centralized package management system npkg
-- ✓ Editor LSP support
-- ○ More controllable GC implementation, such as gc switch, fast free obj, etc.
-- ○ Cross-linker based on zig build source code refactoring
-- ○ Improvement of collaborative scheduling system
-- ○ Compilation target support for golang, wasm
+- Lightweight, concise, and consistent syntax design, easy to master and get started quickly
+- Strong type system, static analysis and compilation, memory safety, exception handling, making it easy to write secure and reliable software
+- Built-in concurrency primitives: go/future/channel/select
+- Compiles directly to machine code for the target platform, does not rely on LLVM, and supports cross-compilation.
+- Simple deployment, efficient compilation, static linking based on musl libc with good cross-platform characteristics
+- Comprehensive type system supporting generics, union types, interfaces, nullable(?), errable(!)
+- High-performance GC implementation with very short STW (Stop The World)
+- High-performance memory allocator implementation, referencing tcmalloc
+- High-performance shared-stack coroutine implementation, capable of millions of coroutine switches per second
+- High-performance IO based on libuv implementation
+- High-performance runtime and compiler based on pure C implementation
+- Built-in data structures vec/map/set/tup and common standard library implementations
+- Function calls follow system ABI, built-in libc, convenient for calling C standard library functions
+- Centralized package management system npkg
+- Editor LSP support
   
-## Project Overview
+## Overview
 
 The nature programming language has reached an early usable version, with a basically stable syntax API that will not change significantly before version 1.0. Future versions will add some necessary and commonly used syntax features such as enum, ternary operators, struct labels, etc.
 
 The current version supports compilation for the following target architectures: linux_amd64, linux_arm64, linux_riscv64, darwin_amd64, darwin_arm64. Future versions will leverage zig ld to compile for Windows platforms.
 
-nature includes a set of test cases and standard libraries to test the usability of basic functionality and syntax, includes a set of small to medium-sized projects to test overall usability, but has not yet been tested in large-scale projects.
+Nature includes a set of test cases and standard libraries to test the usability of basic functionality and syntax, includes a set of small to medium-sized projects to test overall usability, but has not yet been tested in large-scale projects.
   
 Official website: https://nature-lang.org  
 
-
-## Design Philosophy
-
-The nature programming language is a lightweight, simple, and easy-to-learn programming language that references golang in terms of design philosophy and runtime architecture.
-
-nature focuses on memory safety in its syntax design, has comprehensive type system support and convenient error handling methods, uses files as module units, and adopts a centralized package management approach based on package.toml.
-
-nature natively supports concurrency primitives go+select+channel. Thanks to the libuv network library and libaco shared-stack coroutines, it has excellent concurrent performance in IO applications. When the official version is released, nature's performance will be further improved.
-
-nature has a completely self-developed compiler, assembler, and linker (which will later transition to zig ld), making nature more flexible and controllable. The source code is simple without complex third-party dependencies, making it easy to participate in contributions and perform highly customized optimizations according to language and technology development.
-
-Benefiting from simple syntax design, automated memory management, compile-time static analysis and other features, it brings extremely low coding burden, making the nature programming language very suitable for AI coding and programming beginners.
-
-As a general-purpose programming language, based on existing language features and standard library implementations, nature can be used in various fields such as web development, command-line programs, databases, network middleware, container systems, IoT devices, programming education, operating systems, game engines and game development.
 
 
 ## Install  
@@ -90,7 +72,7 @@ Standard library documentation https://nature-lang.org/stds/co
 
 Try in browser https://nature-lang.org/playground  
   
-## Project Examples
+## Examples
 
 MySQL/PostgreSQL/Redis drivers https://github.com/weiwenhao/dbdriver
 
@@ -104,7 +86,59 @@ Llama2 inference model implementation https://github.com/weiwenhao/llama.n
 
 Tetris implementation based on raylib https://github.com/weiwenhao/tetris
 
-More syntax examples https://github.com/nature-lang/nature/tree/master/tests/features/cases  
+More syntax examples https://github.com/nature-lang/nature/tree/master/tests/features/cases
+
+
+## Design Philosophy
+
+The Nature programming language is a lightweight, simple, and easy-to-learn programming language that references golang in terms of design philosophy and runtime architecture.
+
+Nature focuses on memory safety in its syntax design, has comprehensive type system support and convenient error handling methods, uses files as module units, and adopts a centralized package management approach based on package.toml.
+
+Nature natively supports concurrency primitive go+select+channel, which has excellent concurrency performance in highly concurrent IO applications. Performance will be further improved when the official version is released.
+
+Nature has a completely self-developed compiler, assembler, and linker (which will later transition to zig ld), making Nature more flexible and controllable. The source code is simple without complex third-party dependencies, making it easy to participate in contributions and perform highly customized optimizations according to language and technology development.
+
+Benefiting from simple syntax design, automated memory management, compile-time static analysis and other features, it brings extremely low coding burden, making the Nature programming language very suitable for AI coding and programming beginners.
+
+As a general-purpose programming language, based on existing language features and standard library implementations, Nature can be used in various fields such as web development, command-line programs, databases, network middleware, container systems, IoT devices, programming education, operating systems, game engines and game development.
+
+## Benchmark
+
+Linux Ubuntu VM（Kernel version 6.17.8，aarch64, Mac M4, 9 cores, 16G memory）
+
+**IO: HTTP Server**
+
+`ab -n 100000 -c 1000 http://127.0.0.1:8888/`
+
+| Language| Version | QPS      | Average request time |
+| ------- | -------- | -------- | ------ |
+| Nature  | v0.7+    | ~104,000 | 9ms    |
+| Golang  | go1.23.4 | ~90,000  | 11ms   |
+| Node.js | v20.16.0 | ~36,000  | 27ms   |
+
+**CPU: Fibonacci(45) time consumed** 
+
+| Language | Version  | Time consuming |
+| ------- | -------- | ----- |
+| Nature  | v0.7+    | ~2.5s |
+| Golang  | go1.23.4 | ~2.5s |
+| Rust    | 1.85.0   | ~1.7s |
+| Node.js | v20.16.0 | ~6.0s |
+
+**C FFI: Calling 100 million c fn sqrt time consumed**
+
+| Language | Version | Time consuming |
+| ------ | -------- | ----- |
+| Nature | v0.7+    | ~0.2s |
+| Golang | go1.23.4 | ~2.6s |
+
+**Coroutine: 1 Million Coroutine Time/Memory consumed**
+
+| Language   | Version| Create(ms) | Dispatch(ms) | Empty Coroutine(ms) | Memory Consumed |
+| ------ | -------- | -------- | -------- | -------------- | ------ |
+| Nature | v0.7+    | 540      | 564      | 170            | 900+M  |
+| Golang | go1.23.4 | 1000     | 1015     | 140            | 2500+M |
   
 ## Contribution Guidelines
   
