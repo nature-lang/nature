@@ -1105,6 +1105,23 @@ static slice_t *riscv64_native_return(closure_t *c, lir_op_t *op) {
     return operations;
 }
 
+static slice_t *riscv64_native_fn_end(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+    if (c->fndef->return_type.kind == TYPE_VOID) {
+        operations = riscv64_native_return(c, op);
+    }
+
+    // assist preempt label
+    //    char *preempt_ident = str_connect(c->linkident, ".preempt");
+    //    slice_push(operations, RISCV64_INST(RV_LABEL, RO_SYM(preempt_ident, true, 0, 0)));
+    //    slice_push(operations, RISCV64_INST(RV_CALL, RO_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, 0)));
+    //
+    //    char *safepoint_ident = str_connect(c->linkident, ".sp.end");
+    //    slice_push(operations, RISCV64_INST(RV_J, RO_SYM(safepoint_ident, true, 0, 0)));
+
+    return operations;
+}
+
 /**
  * 实现加载有效地址指令(LEA)
  */
@@ -1402,10 +1419,15 @@ static slice_t *riscv64_native_safepoint(closure_t *c, lir_op_t *op) {
 
     slice_push(operations, RISCV64_INST(RV_LD, t6_operand, RO_INDIRECT(T6, 0, QWORD)));
 
+    //    char *preempt_ident = str_connect(c->linkident, ".preempt");
+    //    slice_push(operations, RISCV64_INST(RV_BNE, t6_operand, RO_REG(ZEROREG), RO_SYM(preempt_ident, true, 0, 0)));
+    //
+    //    // 增加一个跳回 label, preempt.end
+    //    char *safepoint_ident = str_connect(c->linkident, ".sp.end");
+    //    slice_push(operations, RISCV64_INST(RV_LABEL, RO_SYM(safepoint_ident, true, 0, 0)));
+
     // 比较值是否为 0, 进行指令跳过
     slice_push(operations, RISCV64_INST(RV_BEQ, t6_operand, RO_REG(ZEROREG), RO_IMM(12)));
-
-    // 如果不为 0，调用 assist_preempt_yield 函数, call 会污染 ra 寄存器吧？
     slice_push(operations, RISCV64_INST(RV_CALL, RO_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, ASM_RISCV64_RELOC_CALL)));
 
     return operations;
@@ -1497,7 +1519,7 @@ static riscv64_native_fn riscv64_native_table[] = {
 
 
         [LIR_OPCODE_FN_BEGIN] = riscv64_native_fn_begin,
-        [LIR_OPCODE_FN_END] = riscv64_native_return,
+        [LIR_OPCODE_FN_END] = riscv64_native_fn_end,
 
         [LIR_OPCODE_SAFEPOINT] = riscv64_native_safepoint,
 };

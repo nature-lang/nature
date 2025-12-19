@@ -66,8 +66,8 @@ NO_OPTIMIZE void co_preempt_yield() {
     assert(p);
 
     DEBUGF(
-            "[runtime.co_preempt_yield] p_index=%d(%d), co=%p, p_status=%d,  will yield, co_start=%ld, assist_preempt_yield_ret_addr= %p",
-            p->index, p->status, co, co->status, p->co_started_at / 1000 / 1000, (void *) assist_preempt_yield_ret_addr);
+            "[runtime.co_preempt_yield] p_index=%d(%d), co=%p, p_status=%d,  will yield, co_start=%ld, assist_preempt_yield_ret_addr=%p, global_safepoint=%ld",
+            p->index, p->status, co, co->status, p->co_started_at / 1000 / 1000, (void *) assist_preempt_yield_ret_addr, global_safepoint);
 
     p->status = P_STATUS_PREEMPT; // 抢占返回标志
 
@@ -82,10 +82,10 @@ NO_OPTIMIZE void co_preempt_yield() {
 
     // 接下来将直接 return 到用户态，不经过 post_tpl_hook, 所以直接更新为允许抢占
     // yield 切换回了用户态，此时允许抢占，所以不能再使用 RDEBUG, 而是 DEBUG
-    DEBUGF("[runtime.co_preempt_yield] yield resume end, will set running, p_index=%d, p_status=%d co=%p, p->co=%p, share_stack.base=%p, share_stack.top(sp)=%p, co_start_at=%ld",
+    DEBUGF("[runtime.co_preempt_yield] yield resume end, will set running, p_index=%d, p_status=%d co=%p, p->co=%p, share_stack.base=%p, share_stack.top(sp)=%p, co_start_at=%ld, global_safepoint=%ld",
            p->index,
            p->status, co, p->coroutine, p->share_stack.align_retptr, co->aco.reg[ACO_REG_IDX_SP],
-           p->co_started_at / 1000 / 1000);
+           p->co_started_at / 1000 / 1000, global_safepoint);
 
     //    co_set_status(p, co, CO_STATUS_RUNNING);
     //    processor_set_status(p, P_STATUS_RUNNING);
@@ -98,7 +98,7 @@ NO_OPTIMIZE void co_preempt_yield() {
  * @param ucontext
  */
 NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *ucontext) {
-    TDEBUGF("[thread_handle_sig] unexpect sig %d", sig);
+    DEBUGF("[thread_handle_sig] unexpect sig %d", sig);
 
     ucontext_t *ctx = ucontext;
     n_processor_t *p = processor_get();
@@ -417,7 +417,7 @@ static void processor_run(void *raw) {
         // - stw
         if (global_safepoint > 0) {
         STW_WAIT:
-            DEBUGF("[runtime.processor_run] need stw, set safe_point=need_stw(%lu), p_index=%d, main_exited=%d", p->need_stw, p->index, main_coroutine_exited);
+            DEBUGF("[runtime.processor_run] need stw, global_safepoint=%ld, p_index=%d, main_exited=%d", global_safepoint, p->index, main_coroutine_exited);
             p->in_stw = global_safepoint; // 进入 stw 状态
 
             // runtime_gc 线程会解除 safe 状态，所以这里一直等待直到 global_safepoint 清零即可
@@ -427,9 +427,9 @@ static void processor_run(void *raw) {
                 usleep(WAIT_BRIEF_TIME * 1000); // 1ms
             }
 
-            DEBUGF("[runtime.processor_run] p_index=%d, stw completed, need_stw=%lu, safe_point=%lu, main_exited=%d",
-                   p->index, p->need_stw,
-                   p->in_stw, main_coroutine_exited);
+            DEBUGF("[runtime.processor_run] p_index=%d, stw completed, safe_point=%lu, main_exited=%d, global_safepoint=%ld",
+                   p->index,
+                   p->in_stw, main_coroutine_exited, global_safepoint);
         }
 
         // - exit
@@ -450,6 +450,11 @@ static void processor_run(void *raw) {
             handle_limit--;
             RDEBUGF("[runtime.processor_run] coroutine resume back, p_index=%d, co=%p",
                     p->index, co);
+
+            // check stw
+            if (global_safepoint > 0) {
+                goto STW_WAIT;
+            }
         }
 
         if (p->runnable_list.count == 0) {

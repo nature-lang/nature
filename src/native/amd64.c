@@ -240,8 +240,12 @@ static slice_t *amd64_native_push(closure_t *c, lir_op_t *op) {
 
 static slice_t *amd64_native_bal(closure_t *c, lir_op_t *op) {
     assert(op->output->assert_type == LIR_OPERAND_SYMBOL_LABEL);
-
     slice_t *operations = slice_new();
+
+    if (need_eliminate_bal_fn_end(c, op)) {
+        return operations;
+    }
+
     amd64_asm_operand_t *result = lir_operand_trans_amd64(c, op, op->output);
     slice_push(operations, AMD64_INST("jmp", result)); // result is symbol label
     return operations;
@@ -973,6 +977,25 @@ slice_t *amd64_native_return(closure_t *c, lir_op_t *op) {
     return operations;
 }
 
+
+static slice_t *amd64_native_fn_end(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+    if (c->fndef->return_type.kind == TYPE_VOID) {
+        operations = amd64_native_return(c, op);
+    }
+
+    // assist preempt label
+    char *preempt_ident = str_connect(c->linkident, ".preempt");
+    slice_push(operations, AMD64_INST("label", AMD64_SYMBOL(preempt_ident, true)));
+    slice_push(operations, AMD64_INST("call", AMD64_SYMBOL(ASSIST_PREEMPT_YIELD_IDENT, false)));
+
+
+    char *safepoint_ident = str_connect(c->linkident, ".sp.end");
+    slice_push(operations, AMD64_INST("jmp", AMD64_SYMBOL(safepoint_ident, true)));
+
+    return operations;
+}
+
 /**
  * examples:
  * lea imm(string_ref), reg
@@ -1063,11 +1086,16 @@ static slice_t *amd64_native_safepoint(closure_t *c, lir_op_t *op) {
     // cmp
     slice_push(operations, AMD64_INST("cmp", AMD64_REG(r15), AMD64_UINT32(0)));
 
+    char *preempt_ident = str_connect(c->linkident, ".preempt");
+    slice_push(operations, AMD64_INST("jne", AMD64_SYMBOL(preempt_ident, true)));
+
+    char *safepoint_ident = str_connect(c->linkident, ".sp.end");
+    slice_push(operations, AMD64_INST("label", AMD64_SYMBOL(safepoint_ident, true)));
+
     // je 如何跳过 当前指令 和 call rel32 指令
     // je 跳过 call rel32 指令
-    slice_push(operations, AMD64_INST("je", AMD64_UINT8(5))); // 5字节(call)
-
-    slice_push(operations, AMD64_INST("call", AMD64_SYMBOL(ASSIST_PREEMPT_YIELD_IDENT, false)));
+    //    slice_push(operations, AMD64_INST("je", AMD64_UINT8(5))); // 5字节(call)
+    //    slice_push(operations, AMD64_INST("call", AMD64_SYMBOL(ASSIST_PREEMPT_YIELD_IDENT, false)));
 
     return operations;
 }
@@ -1135,7 +1163,7 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_MOVE] = amd64_native_mov,
         [LIR_OPCODE_LEA] = amd64_native_lea,
         [LIR_OPCODE_FN_BEGIN] = amd64_native_fn_begin,
-        [LIR_OPCODE_FN_END] = amd64_native_return,
+        [LIR_OPCODE_FN_END] = amd64_native_fn_end,
 };
 
 slice_t *amd64_native_op(closure_t *c, lir_op_t *op) {

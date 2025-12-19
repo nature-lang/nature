@@ -481,6 +481,44 @@ static uint32_t asm_bcc(arm64_asm_inst_t *inst) {
     return W_BCC(cond, offset);
 }
 
+static uint32_t asm_cbz(arm64_asm_inst_t *inst) {
+    arm64_asm_operand_t *opr1 = inst->operands[0]; // register to compare
+    arm64_asm_operand_t *opr2 = inst->operands[1]; // offset or symbol
+    uint32_t sf = opr1->reg.size == QWORD ? 1 : 0;
+    int64_t offset;
+
+    if (opr2->type == ARM64_ASM_OPERAND_IMMEDIATE) {
+        offset = opr2->immediate;
+    } else if (opr2->type == ARM64_ASM_OPERAND_SYMBOL) {
+        offset = opr2->symbol.offset;
+    } else {
+        assert(false); // 不支持的操作数类型
+        return 0;
+    }
+
+    offset = offset / 4; // 将偏移量调整为指令地址的单位
+    return W_CBZ(sf, opr1->reg.index, offset);
+}
+
+static uint32_t asm_cbnz(arm64_asm_inst_t *inst) {
+    arm64_asm_operand_t *opr1 = inst->operands[0]; // register to compare
+    arm64_asm_operand_t *opr2 = inst->operands[1]; // offset or symbol
+    uint32_t sf = opr1->reg.size == QWORD ? 1 : 0;
+    int64_t offset;
+
+    if (opr2->type == ARM64_ASM_OPERAND_IMMEDIATE) {
+        offset = opr2->immediate;
+    } else if (opr2->type == ARM64_ASM_OPERAND_SYMBOL) {
+        offset = opr2->symbol.offset;
+    } else {
+        assert(false); // 不支持的操作数类型
+        return 0;
+    }
+
+    offset = offset / 4; // 将偏移量调整为指令地址的单位
+    return W_CBNZ(sf, opr1->reg.index, offset);
+}
+
 
 static uint32_t asm_blr(arm64_asm_inst_t *inst) {
     arm64_asm_operand_t *opr1 = inst->operands[0];
@@ -782,6 +820,14 @@ arm64_opr_flags_list arm64_opcode_map[] = {
         [R_BLR] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {BLR, {R64}}}},
         [R_RET] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {RET}}},
         [R_SVC] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {SVC, {IMM}}}},
+        [R_CBZ] = {2, (arm64_opr_flags *[]) {
+                              &(arm64_opr_flags) {CBZ, {R32, SYM | IMM}},
+                              &(arm64_opr_flags) {CBZ, {R64, SYM | IMM}},
+                      }},
+        [R_CBNZ] = {2, (arm64_opr_flags *[]) {
+                              &(arm64_opr_flags) {CBNZ, {R32, SYM | IMM}},
+                              &(arm64_opr_flags) {CBNZ, {R64, SYM | IMM}},
+                      }},
         [R_MRS] = {1, (arm64_opr_flags *[]) {
                               &(arm64_opr_flags) {MRS, {R64, IMM}},
                       }}, // MRS 指令需要一个64位寄存器和一个立即数(系统寄存器编号)
@@ -997,6 +1043,8 @@ static arm64_opcode_handle_fn arm64_opcode_handle_table[] = {
         [RET] = asm_ret,
         [MRS] = asm_mrs,
         [SVC] = asm_svc,
+        [CBZ] = asm_cbz,
+        [CBNZ] = asm_cbnz,
 
         [F_LDR] = asm_f_ldrstr,
         [F_STR] = asm_f_ldrstr,

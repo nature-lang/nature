@@ -69,6 +69,8 @@ typedef enum {
     R_RET,
     R_MRS,
     R_SVC,
+    R_CBZ,
+    R_CBNZ,
 
     R_FMOV,
     R_FADD,
@@ -149,6 +151,8 @@ static char *arm64_raw_op_names[] = {
         [R_RET] = "ret",
         [R_MRS] = "mrs",
         [R_SVC] = "svc",
+        [R_CBZ] = "cbz",
+        [R_CBNZ] = "cbnz",
         [R_FMOV] = "fmov",
         [R_FADD] = "fadd",
         [R_FSUB] = "fsub",
@@ -233,6 +237,8 @@ typedef enum {
     BLR,
     RET,
     SVC,
+    CBZ,
+    CBNZ,
 
     F_LDR,
     F_STR,
@@ -458,7 +464,7 @@ typedef struct {
     _extend_operand;                                                 \
 })
 
-#define ARM64_INST(_raw_opcode, ...) ({                      \
+#define ARM64_INST(_raw_opcode, ...) ({                     \
     arm64_asm_inst_t *_inst = NEW(arm64_asm_inst_t);        \
     _inst->op_id = op->id;                                  \
     _inst->line = op->line;                                 \
@@ -532,6 +538,8 @@ typedef struct {
 #define W_BR(rn) (0xd61f0000U | ((rn) << 5))
 //#define W_BCC(cond)                                (0x54000000U | (cond))
 #define W_BCC(cond, offset) (0x54000000U | (((offset) & 0x7FFFF) << 5) | (cond))
+#define W_CBZ(sf, rt, offset) (0x34000000U | ((sf) << 31) | (((offset) & 0x7FFFF) << 5) | (rt))
+#define W_CBNZ(sf, rt, offset) (0x35000000U | ((sf) << 31) | (((offset) & 0x7FFFF) << 5) | (rt))
 
 #define W_BL(offset) (0x94000000U | ((offset) & ((1U << 26) - 1)))
 #define W_BLR(rn) (0xd63f0000U | ((rn) << 5))

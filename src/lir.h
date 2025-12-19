@@ -1311,6 +1311,25 @@ static inline bool lir_can_lea(lir_op_t *op) {
     return false;
 }
 
+static inline bool need_eliminate_bal_fn_end(closure_t *c, lir_op_t *op) {
+    // void 需要 fn_end 进行返回值处理
+    if (c->fndef->return_type.kind == TYPE_VOID) {
+        return false;
+    }
+
+    lir_operand_t *operand = op->output;
+    if (operand->assert_type != LIR_OPERAND_SYMBOL_LABEL) {
+        return false;
+    }
+
+    lir_symbol_label_t *symbol_label = operand->value;
+    return str_equal(symbol_label->ident, c->end_label);
+}
+
+static inline char *local_sym_with_fn(closure_t *c, char *sym) {
+    return str_connect3(".", c->linkident, sym);
+}
+
 linked_t *lir_memory_mov(module_t *m, uint64_t size, lir_operand_t *dst, lir_operand_t *src);
 
 #endif // NATURE_SRC_LIR_H_
