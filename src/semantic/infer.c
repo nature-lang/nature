@@ -1235,7 +1235,8 @@ static type_t infer_async(module_t *m, ast_expr_t *expr, type_t target_type) {
     assert(fn_type.kind == TYPE_FN);
     co_expr->return_type = fn_type.fn->return_type;
 
-    if (m->in_fake_stmt && co_expr->origin_call->args->length == 0) {
+    // 快速线路: 无参数，无返回值处理，无挟持外部变量，可以作为纯函数进行快速 coroutine 触发
+    if (m->in_fake_stmt && co_expr->origin_call->args->length == 0 && co_expr->closure_fn_void->capture_exprs->length == 0) {
         // 清空两个 fn body, 避免 infer void 异常
         co_expr->closure_fn->body = slice_new();
         co_expr->closure_fn_void->body = slice_new();
@@ -1257,7 +1258,7 @@ static type_t infer_async(module_t *m, ast_expr_t *expr, type_t target_type) {
         infer_fn_decl(m, co_expr->closure_fn, type_kind_new(TYPE_UNKNOWN));
         infer_fn_decl(m, co_expr->closure_fn_void, type_kind_new(TYPE_UNKNOWN));
 
-        first_arg = (ast_expr_t) {
+        first_arg = (ast_expr_t){
                 .line = expr->line,
                 .column = expr->column,
                 .assert_type = AST_FNDEF,
