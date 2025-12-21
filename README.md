@@ -119,7 +119,7 @@ Linux Ubuntu VM（Kernel version 6.17.8，aarch64, Mac M4, 9 cores, 16G memory�
 
 **CPU: Fibonacci(45) time consumed** 
 
-| Language | Version  | Time consuming |
+| Language | Version  | Time Consumed |
 | ------- | -------- | ----- |
 | Nature  | v0.7+    | ~2.5s |
 | Golang  | go1.23.4 | ~2.5s |
@@ -128,7 +128,7 @@ Linux Ubuntu VM（Kernel version 6.17.8，aarch64, Mac M4, 9 cores, 16G memory�
 
 **C FFI: Calling 100 million c fn sqrt time consumed**
 
-| Language | Version | Time consuming |
+| Language | Version | Time Consumed |
 | ------ | -------- | ----- |
 | Nature | v0.7+    | ~0.2s |
 | Golang | go1.23.4 | ~2.6s |

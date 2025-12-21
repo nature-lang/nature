@@ -29,7 +29,7 @@ nature 编程语言已经达到早期可用版本，语法 API 基本稳定，�
 
 nature 包含一组测试用例和标准库用来测试基本功能和语法的可用性，包含一组中小型项目测试整体可用性，还未经过大型的项目测试。
  
-官网 https://nature-lang.org
+官网 https://nature-lang.cn
 
 
 ## 安装  
