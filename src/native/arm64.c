@@ -243,12 +243,12 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
 
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *v = operand->value;
-        assert(v->kind != TYPE_RAW_STRING && v->kind != TYPE_FLOAT);
+        assert(v->kind != TYPE_RAW_STRING);
 
         // 根据不同类型返回立即数
         if (v->kind == TYPE_INT || v->kind == TYPE_UINT ||
             v->kind == TYPE_INT64 || v->kind == TYPE_UINT64 ||
-            v->kind == TYPE_ANYPTR) {
+            v->kind == TYPE_ANYPTR || is_float(v->kind)) {
             result = ARM64_IMM(v->uint_value);
         } else if (v->kind == TYPE_INT8 || v->kind == TYPE_UINT8 ||
                    v->kind == TYPE_INT16 || v->kind == TYPE_UINT16 ||
@@ -522,12 +522,16 @@ static slice_t *arm64_native_mov(closure_t *c, lir_op_t *op) {
             }
         }
     } else if (op->first->assert_type == LIR_OPERAND_IMM) {
-        // move imm -> reg
+        // move imm -> reg|freg
         lir_imm_t *imm = op->first->value;
-        assert(is_number(imm->kind) || imm->kind == TYPE_BOOL);
-        int64_t value = imm->int_value;
+        if (is_float(imm->kind)) {
+            slice_push(operations, ARM64_INST(R_FMOV, result, source));
+        } else {
+            assert(is_integer(imm->kind) || imm->kind == TYPE_BOOL);
+            int64_t value = imm->int_value;
+            arm64_mov_imm(op, operations, result, value);
+        }
 
-        arm64_mov_imm(op, operations, result, value);
     } else if (op->first->assert_type == LIR_OPERAND_STACK ||
                op->first->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
                op->first->assert_type == LIR_OPERAND_SYMBOL_VAR) {
@@ -1060,7 +1064,7 @@ static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
     // 进行最终的对齐, linux arm64 中栈一般都是是按 16byte 对齐的
     offset = align_up(offset, ARM64_STACK_ALIGN_SIZE);
 
-
+    // +16 用于存储 fp 和 lr
     arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, offset + 16);
     slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
 

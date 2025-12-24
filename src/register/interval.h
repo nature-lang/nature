@@ -12,7 +12,7 @@
  * 权重越大越靠前
  * @param c
  */
-void interval_block_order(closure_t *c);
+slice_t *interval_block_order(closure_t *c);
 
 /**
  * 倒序遍历排好序，编好号的 block 和 operation 构造 interval 并添加到 closure_t->interval_table 中

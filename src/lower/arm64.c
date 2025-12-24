@@ -1,5 +1,6 @@
 #include "arm64.h"
 #include "arm64_abi.h"
+#include "src/binary/encoding/arm64/fmov_imm8.h"
 
 static lir_operand_t *arm64_convert_use_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
     assert(c);
@@ -34,7 +35,7 @@ static lir_operand_t *arm64_convert_lea_symbol_var(closure_t *c, linked_t *list,
     return lir_reset_operand(result, symbol_var_operand->pos);
 }
 
-static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
+static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op, linked_t *symbol_operations) {
     assert(c);
     assert(op);
 
@@ -52,50 +53,89 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
         lir_imm_t *imm = imm_operand->value;
         assert(imm);
 
-        if (imm->kind == TYPE_RAW_STRING || is_float(imm->kind)) {
-            char *unique_name = var_unique_ident(c->module, TEMP_VAR_IDENT);
-            assert(unique_name);
+        if (imm->kind != TYPE_RAW_STRING && !is_float(imm->kind)) {
+            continue;
+        }
 
-            asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
-            assert(symbol);
-            symbol->name = unique_name;
+        // arm64 浮点 const 特殊优化, 不需要借助 global symbol， 直接基于 closure table 即可
+        if (is_float(imm->kind) && arm64_fmov_double_to_imm8(imm->f64_value) != 0xFF) {
+            char *key = itoa(imm->int_value);
+
+            lir_operand_t *local_var_operand = table_get(c->local_imm_table, key);
+            if (local_var_operand == NULL) {
+                local_var_operand = temp_var_operand(c->module, type_kind_new(imm->kind));
+                imm->uint_value = arm64_fmov_double_to_imm8(imm->f64_value);
+                lir_operand_t *new_imm_operand = lir_reset_operand(imm_operand, LIR_FLAG_FIRST);
+
+                linked_push(symbol_operations, lir_op_move(local_var_operand, new_imm_operand));
+
+
+                table_set(c->local_imm_table, key, local_var_operand);
+            }
+
+            // change imm to local var
+            lir_operand_t *temp_operand = lir_reset_operand(local_var_operand, imm_operand->pos);
+            imm_operand->assert_type = temp_operand->assert_type;
+            imm_operand->value = temp_operand->value;
+            continue;
+        }
+
+        // check value exists, if exists assign unique var ident, and add lea global to var ident
+        // and change op use imm to var ident
+        char *key;
+        if (imm->kind == TYPE_RAW_STRING) {
+            key = str_connect("s:", imm->string_value);
+        } else {
+            key = str_connect("f:", itoa(imm->int_value));
+        }
+
+        asm_global_symbol_t *global_symbol = table_get(c->module->global_symbol_table, key);
+        if (!global_symbol) {
+            char *unique_name = var_unique_ident(c->module, "g");
+            global_symbol = NEW(asm_global_symbol_t);
+            assert(global_symbol);
+            global_symbol->name = unique_name;
 
             if (imm->kind == TYPE_RAW_STRING) {
                 assert(imm->string_value);
-                symbol->size = imm->strlen + 1;
-                symbol->value = (uint8_t *) imm->string_value;
+                global_symbol->size = imm->strlen + 1;
+                global_symbol->value = (uint8_t *) imm->string_value;
             } else if (imm->kind == TYPE_FLOAT64) {
-                symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *) &imm->f64_value;
+                global_symbol->size = type_kind_sizeof(imm->kind);
+                global_symbol->value = (uint8_t *) &imm->f64_value;
             } else if (imm->kind == TYPE_FLOAT32) {
-                symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *) &imm->f32_value;
+                global_symbol->size = type_kind_sizeof(imm->kind);
+                global_symbol->value = (uint8_t *) &imm->f32_value;
             } else {
                 assertf(false, "not support type %s", type_kind_str[imm->kind]);
             }
 
-            slice_push(c->asm_symbols, symbol);
-            lir_symbol_var_t *symbol_var = NEW(lir_symbol_var_t);
-            symbol_var->kind = imm->kind;
-            symbol_var->ident = unique_name;
-
-            if (imm->kind == TYPE_RAW_STRING) {
-                symbol_table_set_raw_string(c->module, unique_name, type_kind_new(TYPE_RAW_STRING), imm->strlen);
-
-                // raw_string 本身就是指针类型, 首次加载时需要通过 lea 将 .data 到 raw_string 的起始地址加载到 var_operand
-                lir_operand_t *var_operand = temp_var_operand(c->module, type_kind_new(TYPE_RAW_STRING));
-                lir_op_t *temp_ref = lir_op_lea(var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var));
-                linked_push(list, temp_ref);
-
-                lir_operand_t *temp_operand = lir_reset_operand(var_operand, imm_operand->pos);
-                imm_operand->assert_type = temp_operand->assert_type;
-                imm_operand->value = temp_operand->value;
-            } else {
-                // float 直接修改地址，通过 rip 寻址即可, symbol value 已经添加到全局符号表中
-                imm_operand->assert_type = LIR_OPERAND_SYMBOL_VAR;
-                imm_operand->value = symbol_var;
-            }
+            symbol_table_set_raw_string(c->module, global_symbol->name, type_kind_new(TYPE_RAW_STRING), imm->strlen);
+            slice_push(c->asm_symbols, global_symbol);
+            table_set(c->module->global_symbol_table, key, global_symbol);
         }
+
+        lir_symbol_var_t *symbol_var = NEW(lir_symbol_var_t);
+        symbol_var->kind = imm->kind;
+        symbol_var->ident = global_symbol->name;
+
+
+        lir_operand_t *local_var_operand = temp_var_operand(c->module, type_kind_new(imm->kind));
+        // 就近插入, 暂时不考虑 local_var_operand 优化。
+        if (imm->kind == TYPE_RAW_STRING) {
+            linked_push(list, lir_op_lea(local_var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var)));
+        } else {
+            lir_operand_t *symbol_ptr = temp_var_operand(c->module, type_kind_new(TYPE_ANYPTR));
+            linked_push(list, lir_op_lea(symbol_ptr, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var)));
+            lir_operand_t *src = indirect_addr_operand(c->module, type_kind_new(imm->kind), symbol_ptr, 0);
+            linked_push(list, lir_op_move(local_var_operand, src));
+        }
+
+
+        // imm replace to local var
+        lir_operand_t *temp_operand = lir_reset_operand(local_var_operand, imm_operand->pos);
+        imm_operand->assert_type = temp_operand->assert_type;
+        imm_operand->value = temp_operand->value;
     }
 
     return list;
@@ -272,7 +312,25 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
     LINKED_FOR(block->operations) {
         lir_op_t *op = LINKED_VALUE();
 
-        linked_concat(operations, arm64_lower_imm(c, op));
+        linked_t *symbol_operations = linked_new();
+        linked_concat(operations, arm64_lower_imm(c, op, symbol_operations));
+
+        if (symbol_operations->count > 0) {
+            basic_block_t *first_block = c->blocks->take[0];
+            linked_t *insert_operations = first_block->operations;
+            if (block->id == first_block->id) {
+                insert_operations = operations;
+            }
+
+            // maybe empty
+            linked_node *insert_head = insert_operations->front->succ->succ; // safepoint
+
+            for (linked_node *sym_node = symbol_operations->front; sym_node != symbol_operations->rear; sym_node = sym_node->succ) {
+                lir_op_t *sym_op = sym_node->value;
+                insert_head = linked_insert_after(insert_operations, insert_head, sym_op);
+            }
+        }
+
         linked_concat(operations, arm64_lower_symbol_var(c, op));
 
         if (lir_op_call(op) && op->second->value != NULL) {

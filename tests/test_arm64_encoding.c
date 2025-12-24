@@ -1,4 +1,5 @@
 #include "src/binary/encoding/arm64/asm.h"
+#include "src/binary/encoding/arm64/fmov_imm8.h"
 #include "src/binary/encoding/arm64/opcode.h"
 #include "src/build/config.h"
 #include "src/register/arch/arm64.h"
@@ -157,10 +158,60 @@ static void test_basic() {
     // 测试 fmov s1, wzr
     inst = ARM64_INST(R_FMOV, ARM64_REG(s1), ARM64_REG(wzr)); // 0110251E
     TEST_EQ(inst, 0xE1, 0x03, 0x27, 0x1E);
+
+    // 测试 fmov s1, #2.0 (imm8 = 0x00 for 2.0)
+    // FMOV immediate encoding: 0x1e201000 | (0 << 22) | (0x00 << 13) | 1
+    // For 2.0, the 8-bit encoding is 0x00 (sign=0, exp=000, frac=0000)
+    // Actually, 2.0 in ARM64 8-bit format is 0x10 (n=16, r=0: 16/16 * 2^0 = 1.0... need to recalculate)
+    // 2.0 = 0x10 in 8-bit immediate format
+    inst = ARM64_INST(R_FMOV, ARM64_REG(s1), ARM64_IMM(0x00));
+    TEST_EQ(inst, 0x01, 0x10, 0x20, 0x1E);
+
+    // 测试 fmov d1, #2.0 (imm8 = 0x00 for 2.0)
+    inst = ARM64_INST(R_FMOV, ARM64_REG(d1), ARM64_IMM(0x00));
+    TEST_EQ(inst, 0x01, 0x10, 0x60, 0x1E);
+
+    // 测试 fmov d1, #4.0
+    // imm8 = 0x10 表示 4.0
+    inst = ARM64_INST(R_FMOV, ARM64_REG(d1), ARM64_IMM(0x10));
+    TEST_EQ(inst, 0x01, 0x10, 0x62, 0x1E);
+
+    // 测试 fmov d1, #1.0
+    // 从实际编码 1e6e1001 反推，imm8 = 0x70
+    inst = ARM64_INST(R_FMOV, ARM64_REG(d1), ARM64_IMM(0x70));
+    TEST_EQ(inst, 0x01, 0x10, 0x6E, 0x1E);
+
+    // FMOV d2, #-8.0
+    // 0210741E
+    inst = ARM64_INST(R_FMOV, ARM64_REG(d2), ARM64_IMM(-0x60));
+    TEST_EQ(inst, 0x02, 0x10, 0x74, 0x1E);
 }
 
+
+static void test_fmov_to_imm8() {
+    uint8_t imm8;
+    imm8 = arm64_fmov_double_to_imm8(1.0);
+    assert(imm8 == 0x70);
+
+
+    imm8 = arm64_fmov_double_to_imm8(4.0);
+    assert(imm8 == 0x10);
+
+    imm8 = arm64_fmov_double_to_imm8(8.0);
+    assert(imm8 == 0x20);
+
+    imm8 = arm64_fmov_double_to_imm8(-8.0);
+    assert(imm8 == 0xA0);
+
+    imm8 = arm64_fmov_double_to_imm8(-8.1);
+    assert(imm8 == 0xFF);
+
+    imm8 = arm64_fmov_double_to_imm8(-2.142);
+    assert(imm8 == 0xFF);
+}
 
 int main(void) {
     setup();
     test_basic();
+    test_fmov_to_imm8();
 }

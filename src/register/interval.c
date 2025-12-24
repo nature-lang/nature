@@ -449,7 +449,7 @@ static void block_to_depth_stack(ct_stack_t *work_list, basic_block_t *block) {
 // 优秀的排序从而构造更短更好的 lifetime interval
 // 权重越大排序越靠前
 // 权重的本质是？或者说权重越大一个基本块？
-void interval_block_order(closure_t *c) {
+slice_t *interval_block_order(closure_t *c) {
     loop_detect(c);
 
     slice_t *order_blocks = slice_new();
@@ -475,7 +475,10 @@ void interval_block_order(closure_t *c) {
         }
     }
 
+    slice_t *old_blocks = c->blocks;
     c->blocks = order_blocks;
+
+    return old_blocks;
 }
 
 /**
@@ -562,6 +565,7 @@ void interval_build(closure_t *c) {
                     lir_var_t *var = phi_body->take[j];
                     interval_t *hint_interval = operand_interval(c, operand_new(LIR_OPERAND_VAR, var));
                     assertf(hint_interval, "phi body var=%s not build interval", var->ident);
+                    // 新定义的 phi interval 优先使用 phi body 中已经分配的寄存器，避免产生冗余的 mov
                     slice_push(def_interval->phi_hints, hint_interval);
                 }
             }
@@ -582,7 +586,7 @@ void interval_build(closure_t *c) {
             }
 
             // add reg hint for move
-            if (op->code == LIR_OPCODE_MOVE) {
+            if (lir_op_mov_hint_like(op)) {
                 interval_t *first_interval = operand_interval(c, op->first);
                 interval_t *def_interval = operand_interval(c, op->output);
                 if (first_interval != NULL && def_interval != NULL) {
@@ -1066,6 +1070,7 @@ int interval_next_use_position(interval_t *i, int after_position) {
 interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     assert(position < i->last_range->to);
     assert(position > i->first_range->from);
+    assert(i->var);
 
     interval_t *child = interval_new_child(c, i);
 

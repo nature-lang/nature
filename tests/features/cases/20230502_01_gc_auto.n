@@ -6,7 +6,7 @@ fn alloc():[i64] {
     i32 b = 32
     [i64] list = []
     i64 c = 64
-    for int i = 0; i < 10000; i+=1 {
+    for int i = 0; i < 500000; i+=1 {
         list.push(i)
     }
     u32 d = 321
@@ -23,7 +23,7 @@ fn main() {
     var take = list[9999]
     var after = runtime.malloc_bytes()
     println(before, take, after)
-    assert(before > 200000 && after < 300000)
+    assert(before > 7000000 && after < 9000000)
     assert(take == 9999)
-    assert(after < 200000 && after > 100000)
+    assert(after > 3000000 && after < 5000000)
 }

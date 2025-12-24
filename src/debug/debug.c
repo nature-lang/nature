@@ -313,7 +313,7 @@ void debug_interval_var(interval_t *interval, char *stage) {
         use_pos = str_connect(use_pos, temp_use);
     }
 
-    log_debug("%s var: index(%d-%s), parent(%d-%s), assigned=(%d(%s)-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
+    printf("%s var: index(%d-%s), parent(%d-%s), assigned=(%d(%s)-%s), stack_slot=%ld, ranges=%s, use_pos=%s\n",
               stage,
               interval->index,
               interval->var ? interval->var->ident : "-", parent_index, parent_ident,
@@ -322,6 +322,8 @@ void debug_interval_var(interval_t *interval, char *stage) {
               type_str,
               stack_slot, ranges,
               use_pos);
+
+    fflush(stdout);
 }
 
 void debug_closure_interval(closure_t *c, char *stage) {
@@ -330,7 +332,7 @@ void debug_closure_interval(closure_t *c, char *stage) {
         return;
     }
 
-    log_debug("stage=%s closure=%s interval ------------------------------------------------------------------------",
+    printf("stage=%s closure=%s interval ------------------------------------------------------------------------\n",
               stage,
               c->linkident);
     for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
@@ -367,7 +369,7 @@ void debug_closure_interval(closure_t *c, char *stage) {
             use_pos = str_connect(use_pos, temp_use);
         }
 
-        log_debug("reg: index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s",
+        printf("reg: index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s\n",
                   interval->index, reg->name,
                   parent_index, parent_ident, !interval->spilled ? interval->assigned : -1, type_str, stack_slot,
                   ranges,

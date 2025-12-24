@@ -67,6 +67,7 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
         operand->assert_type = LIR_OPERAND_STACK;
         operand->value = stack;
         operand->size = stack->size;
+        operand->ref_var = var;
     } else {
         reg_t *reg = alloc_regs[i->assigned];
         assert(reg);
@@ -79,6 +80,7 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
         operand->assert_type = LIR_OPERAND_REG;
         operand->value = reg;
         operand->size = type_kind_sizeof(var->type.kind); // 实际 size
+        operand->ref_var = var;
     }
 }
 
@@ -586,7 +588,9 @@ bool allocate_block_reg(closure_t *c, allocate_t *a) {
                 continue;
             }
 
-            spill_interval(c, a, i, first_from);
+            if (!i->fixed) {
+                spill_interval(c, a, i, first_from);
+            }
         }
 
         // assign register reg to interval current

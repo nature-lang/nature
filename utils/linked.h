@@ -37,7 +37,7 @@ void linked_push(linked_t *l, void *value);// 尾入队列
 
 linked_node *linked_first(linked_t *l);// 最后一个可用元素，绝非空元素
 linked_node *linked_last(linked_t *l); // 最后一个可用元素，绝非空元素
-void linked_insert_after(linked_t *l, linked_node *prev, void *value);
+linked_node *linked_insert_after(linked_t *l, linked_node *prev, void *value);
 
 void linked_insert_before(linked_t *l, linked_node *succ, void *value);
 

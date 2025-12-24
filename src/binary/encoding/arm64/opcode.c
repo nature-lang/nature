@@ -660,7 +660,7 @@ static uint32_t asm_f_2r(arm64_asm_inst_t *inst) {
     switch (inst->opcode) {
         case FMOV:
             if (opr2->type == ARM64_ASM_OPERAND_REG) {
-                return FMOV_I(dsz, opr1->reg.index, opr2->reg.index);
+                return FMOV_Z(dsz, opr1->reg.index, opr2->reg.index);
             }
             return FMOV(dsz, opr1->reg.index, opr2->reg.index);
         case FCMP:
@@ -683,6 +683,15 @@ static uint32_t asm_f_2r(arm64_asm_inst_t *inst) {
             assert(false);
             return 0;
     }
+}
+
+static uint32_t asm_fmov_i(arm64_asm_inst_t *inst) {
+    arm64_asm_operand_t *opr1 = inst->operands[0];
+    arm64_asm_operand_t *opr2 = inst->operands[1];
+    uint32_t sz = opr1->reg.size == QWORD ? 1 : 0;
+    uint8_t imm8 = (uint8_t) (opr2->immediate & 0xFF);
+
+    return FMOV_I(sz, opr1->reg.index, imm8);
 }
 
 static uint32_t asm_mvn(arm64_asm_inst_t *inst) {
@@ -825,15 +834,17 @@ arm64_opr_flags_list arm64_opcode_map[] = {
                               &(arm64_opr_flags) {CBZ, {R64, SYM | IMM}},
                       }},
         [R_CBNZ] = {2, (arm64_opr_flags *[]) {
-                              &(arm64_opr_flags) {CBNZ, {R32, SYM | IMM}},
-                              &(arm64_opr_flags) {CBNZ, {R64, SYM | IMM}},
-                      }},
+                               &(arm64_opr_flags) {CBNZ, {R32, SYM | IMM}},
+                               &(arm64_opr_flags) {CBNZ, {R64, SYM | IMM}},
+                       }},
         [R_MRS] = {1, (arm64_opr_flags *[]) {
                               &(arm64_opr_flags) {MRS, {R64, IMM}},
                       }}, // MRS 指令需要一个64位寄存器和一个立即数(系统寄存器编号)
-        [R_FMOV] = {2, (arm64_opr_flags *[]) {
+        [R_FMOV] = {4, (arm64_opr_flags *[]) {
                                &(arm64_opr_flags) {FMOV, {F32, F32 | R32}},
                                &(arm64_opr_flags) {FMOV, {F64, F64 | R64}},
+                               &(arm64_opr_flags) {FMOV_I, {F32, IMM}},
+                               &(arm64_opr_flags) {FMOV_I, {F64, IMM}},
                        }},
         [R_FADD] = {2, (arm64_opr_flags *[]) {
                                &(arm64_opr_flags) {FADD, {F32, F32, F32}},
@@ -1051,6 +1062,7 @@ static arm64_opcode_handle_fn arm64_opcode_handle_table[] = {
         [F_LDP] = asm_f_ldpstp,
         [F_STP] = asm_f_ldpstp,
         [FMOV] = asm_f_2r,
+        [FMOV_I] = asm_fmov_i,
         [FADD] = asm_f_3r,
         [FSUB] = asm_f_3r,
         [FMUL] = asm_f_3r,

@@ -226,6 +226,7 @@ struct module_t {
 
     // 对外全局符号 -> 三种类型 var/fn/type_decl
     ast_fndef_t *fn_init;
+    table_t *global_symbol_table;
     slice_t *global_symbols; // symbol_t, 这里只存储全局符号
     slice_t *global_vardef; // 用于在 infer 阶段进行类型推导
 
@@ -544,9 +545,13 @@ typedef struct closure_t {
     slice_t *asm_operations; // 和架构相关, 首个 opcode 一定是 label
     slice_t *asm_build_temps; // 架构相关编译临时
     slice_t *asm_symbols; // asm_global_symbol_t
+    table_t *local_imm_table;
     module_t *module;
 
     uint64_t rt_fndef_index;
+
+    bool exists_call;
+    bool exists_sp;
 
     ast_fndef_t *fndef;
 } closure_t;
