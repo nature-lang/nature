@@ -231,7 +231,7 @@ static void processor_sysmon() {
     // - 监控长时间被占用的 share processor 进行抢占式调度
     PROCESSOR_FOR(processor_list) {
         // 没有需要运行的 runnable_list(等待运行的 runnable) 并且当前也不需要 stw 则不需要则不考虑抢占
-        if (global_safepoint == 0 && p->runnable_list.count == 0) {
+        if (global_safepoint.value == 0 && p->runnable_list.count == 0) {
             DEBUGF("[processor_sysmon] p_index=%d p_status=%d runnable_list.count == 0 cannot preempt, will skip", p->index, p->status);
             continue;
         }

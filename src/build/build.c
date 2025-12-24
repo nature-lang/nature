@@ -1072,12 +1072,17 @@ static void build_compiler(slice_t *modules) {
             // 窥孔指令优化
             peephole_optimize(c);
 
-            debug_block_lir(c, "peephole");
+            debug_block_lir(c, "ssa_peephole");
 
             // lir 向 arch 靠拢
             cross_lower(c);
 
             debug_block_lir(c, "lower");
+
+            // 窥孔指令优化
+            peephole_optimize(c);
+
+            debug_block_lir(c, "lower_peephole");
 
             // 线性扫描寄存器分配
             reg_alloc(c);

@@ -30,7 +30,7 @@ uv_key_t tls_coroutine_key = 0;
 
 _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint = false;
 
-uint64_t global_safepoint = 0;
+__attribute__((aligned(64))) aligned_page_t global_safepoint = {0};
 
 uint64_t assist_preempt_yield_ret_addr = 0;
 
@@ -67,7 +67,7 @@ NO_OPTIMIZE void co_preempt_yield() {
 
     DEBUGF(
             "[runtime.co_preempt_yield] p_index=%d(%d), co=%p, p_status=%d,  will yield, co_start=%ld, assist_preempt_yield_ret_addr=%p, global_safepoint=%ld",
-            p->index, p->status, co, co->status, p->co_started_at / 1000 / 1000, (void *) assist_preempt_yield_ret_addr, global_safepoint);
+            p->index, p->status, co, co->status, p->co_started_at / 1000 / 1000, (void *) assist_preempt_yield_ret_addr, global_safepoint.value);
 
     p->status = P_STATUS_PREEMPT; // 抢占返回标志
 
@@ -85,7 +85,7 @@ NO_OPTIMIZE void co_preempt_yield() {
     DEBUGF("[runtime.co_preempt_yield] yield resume end, will set running, p_index=%d, p_status=%d co=%p, p->co=%p, share_stack.base=%p, share_stack.top(sp)=%p, co_start_at=%ld, global_safepoint=%ld",
            p->index,
            p->status, co, p->coroutine, p->share_stack.align_retptr, co->aco.reg[ACO_REG_IDX_SP],
-           p->co_started_at / 1000 / 1000, global_safepoint);
+           p->co_started_at / 1000 / 1000, global_safepoint.value);
 
     //    co_set_status(p, co, CO_STATUS_RUNNING);
     //    processor_set_status(p, P_STATUS_RUNNING);
@@ -98,7 +98,7 @@ NO_OPTIMIZE void co_preempt_yield() {
  * @param ucontext
  */
 NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *ucontext) {
-    DEBUGF("[thread_handle_sig] unexpect sig %d", sig);
+    //    TDEBUGF("[thread_handle_sig] unexpect sig %d", sig);
 
     ucontext_t *ctx = ucontext;
     n_processor_t *p = processor_get();
@@ -309,11 +309,11 @@ void processor_all_need_stop() {
     //    PROCESSOR_FOR(processor_list) {
     //        p->need_stw = stw_time;
     //    }
-    global_safepoint = uv_hrtime();
+    global_safepoint.value = uv_hrtime();
 }
 
 void processor_all_start() {
-    global_safepoint = 0;
+    global_safepoint.value = 0;
 
     //    PROCESSOR_FOR(processor_list) {
     //        p->need_stw = 0;
@@ -415,13 +415,13 @@ static void processor_run(void *raw) {
                p->runnable_list.count);
 
         // - stw
-        if (global_safepoint > 0) {
+        if (global_safepoint.value > 0) {
         STW_WAIT:
-            DEBUGF("[runtime.processor_run] need stw, global_safepoint=%ld, p_index=%d, main_exited=%d", global_safepoint, p->index, main_coroutine_exited);
-            p->in_stw = global_safepoint; // 进入 stw 状态
+            DEBUGF("[runtime.processor_run] need stw, global_safepoint=%ld, p_index=%d, main_exited=%d", global_safepoint.value, p->index, main_coroutine_exited);
+            p->in_stw = global_safepoint.value; // 进入 stw 状态
 
             // runtime_gc 线程会解除 safe 状态，所以这里一直等待直到 global_safepoint 清零即可
-            while (p->in_stw == global_safepoint) {
+            while (p->in_stw == global_safepoint.value) {
                 TRACEF("[runtime.processor_run] p_index=%d, need_stw=%lu, safe_point=%lu stw loop....", p->index,
                        p->need_stw, p->in_stw);
                 usleep(WAIT_BRIEF_TIME * 1000); // 1ms
@@ -429,7 +429,7 @@ static void processor_run(void *raw) {
 
             DEBUGF("[runtime.processor_run] p_index=%d, stw completed, safe_point=%lu, main_exited=%d, global_safepoint=%ld",
                    p->index,
-                   p->in_stw, main_coroutine_exited, global_safepoint);
+                   p->in_stw, main_coroutine_exited, global_safepoint.value);
         }
 
         // - exit
@@ -452,7 +452,7 @@ static void processor_run(void *raw) {
                     p->index, co);
 
             // check stw
-            if (global_safepoint > 0) {
+            if (global_safepoint.value > 0) {
                 goto STW_WAIT;
             }
         }
@@ -802,7 +802,7 @@ bool processor_all_safe() {
             continue;
         }
 
-        if (p->in_stw == global_safepoint) {
+        if (p->in_stw == global_safepoint.value) {
             continue;
         }
 

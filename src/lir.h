@@ -1194,8 +1194,6 @@ static inline bool lir_op_ternary(lir_op_t *op) {
 
 
 static inline bool lir_op_mov_hint_like(lir_op_t *op) {
-    return op->code == LIR_OPCODE_MOVE;
-
     if (BUILD_ARCH == ARCH_AMD64) {
         return op->code == LIR_OPCODE_MOVE;
     }
