@@ -1,6 +1,6 @@
 #include "amd64.h"
-
 #include "amd64_abi.h"
+#include "lower.h"
 
 static lir_operand_t *amd64_convert_first_to_temp(closure_t *c, linked_t *list, lir_operand_t *first) {
     lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(first));
@@ -63,7 +63,7 @@ static linked_t *amd64_lower_neg(closure_t *c, lir_op_t *op) {
  * @param block
  * @param node
  */
-static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
+static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op, linked_t *symbol_operations) {
     linked_t *list = linked_new();
 
     // imm 提取
@@ -73,44 +73,7 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op) {
         lir_imm_t *imm = imm_operand->value;
 
         if (imm->kind == TYPE_RAW_STRING || is_float(imm->kind)) {
-            char *unique_name = var_unique_ident(c->module, TEMP_VAR_IDENT);
-            asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
-            symbol->name = unique_name;
-            if (imm->kind == TYPE_RAW_STRING) {
-                symbol->size = imm->strlen + 1;
-                symbol->value = (uint8_t *) imm->string_value;
-            } else if (imm->kind == TYPE_FLOAT64) {
-                symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *) &imm->f64_value;
-            } else if (imm->kind == TYPE_FLOAT32) {
-                symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *) &imm->f32_value;
-            } else {
-                assertf(false, "not support type %s", type_kind_str[imm->kind]);
-            }
-
-            slice_push(c->asm_symbols, symbol);
-            lir_symbol_var_t *symbol_var = NEW(lir_symbol_var_t);
-            symbol_var->kind = imm->kind;
-            symbol_var->ident = unique_name;
-
-            if (imm->kind == TYPE_RAW_STRING) {
-                symbol_table_set_raw_string(c->module, unique_name, type_kind_new(TYPE_RAW_STRING), imm->strlen);
-
-                // raw_string 本身就是指针类型, 首次加载时需要通过 lea 将 .data 到 raw_string 的起始地址加载到 var_operand
-                lir_operand_t *var_operand = temp_var_operand(c->module, type_kind_new(TYPE_RAW_STRING));
-                lir_op_t *temp_ref = lir_op_lea(var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var));
-                linked_push(list, temp_ref);
-
-                lir_operand_t *temp_operand = lir_reset_operand(var_operand, imm_operand->pos);
-                imm_operand->assert_type = temp_operand->assert_type;
-                imm_operand->value = temp_operand->value;
-            } else {
-                // float 直接修改地址，通过 rip 寻址即可, symbol value 已经添加到全局符号表中
-                imm_operand->assert_type = LIR_OPERAND_SYMBOL_VAR;
-                imm_operand->value = symbol_var;
-            }
-
+            lower_imm_symbol(c, imm_operand, list, symbol_operations);
         } else if (is_qword_int(imm->kind)) {
             if (op->code != LIR_OPCODE_MOVE || op->output->assert_type != LIR_OPERAND_VAR) {
                 // 大数值必须通过 reg 转化,
@@ -299,7 +262,23 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
     LINKED_FOR(block->operations) {
         lir_op_t *op = LINKED_VALUE();
 
-        linked_concat(operations, amd64_lower_imm(c, op));
+        linked_t *symbol_operations = linked_new();
+        linked_concat(operations, amd64_lower_imm(c, op, symbol_operations));
+        if (symbol_operations->count > 0) {
+            basic_block_t *first_block = c->blocks->take[0];
+            linked_t *insert_operations = first_block->operations;
+            if (block->id == first_block->id) {
+                insert_operations = operations;
+            }
+
+            // maybe empty
+            linked_node *insert_head = insert_operations->front->succ->succ; // safepoint
+
+            for (linked_node *sym_node = symbol_operations->front; sym_node != symbol_operations->rear; sym_node = sym_node->succ) {
+                lir_op_t *sym_op = sym_node->value;
+                insert_head = linked_insert_after(insert_operations, insert_head, sym_op);
+            }
+        }
 
         if (lir_op_call(op) && op->second->value != NULL) {
             linked_t *call_operations = amd64_lower_call(c, op);
