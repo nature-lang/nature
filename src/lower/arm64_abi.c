@@ -523,7 +523,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
     }
 
     // 重新生成 op->second, 用于寄存器分配记录
-    op->second = operand_new(LIR_OPERAND_REGS, use_regs);
+    op->second = lir_reset_operand(operand_new(LIR_OPERAND_REGS, use_regs), LIR_FLAG_SECOND);
     set_operand_flag(op->second);
 
     // 基于 return type 的不同类型生成不同的 call
@@ -587,7 +587,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
             }
         }
 
-        lir_operand_t *new_output = operand_new(LIR_OPERAND_REGS, output_regs);
+        lir_operand_t *new_output = lir_reset_operand(operand_new(LIR_OPERAND_REGS, output_regs), LIR_FLAG_OUTPUT);
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, new_output, op->line, op->column));
 
         // 将返回值 mov 到 call_result 中

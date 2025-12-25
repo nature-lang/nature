@@ -23,6 +23,7 @@
 #include "src/native/arm64.h"
 #include "src/native/riscv64.h"
 #include "src/register/linearscan.h"
+#include "src/schedule.h"
 #include "src/semantic/analyzer.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
@@ -79,7 +80,7 @@ static void elf_custom_links() {
     // rtype --------------------------------------------------------------------------
     ct_rtype_data = rtypes_serialize();
     elf_put_data(ctx->data_rtype_section, ct_rtype_data, ct_rtype_size);
-    sym = (Elf64_Sym){
+    sym = (Elf64_Sym) {
             .st_shndx = ctx->data_rtype_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -93,7 +94,7 @@ static void elf_custom_links() {
     ct_fndef_size = collect_fndef_list(ctx);
     ct_fndef_data = fndefs_serialize();
     elf_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
-    sym = (Elf64_Sym){
+    sym = (Elf64_Sym) {
             .st_shndx = ctx->data_fndef_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -106,7 +107,7 @@ static void elf_custom_links() {
     // caller - --------------------------------------------------------------------------
     ct_caller_data = callers_serialize();
     elf_put_data(ctx->data_caller_section, ct_caller_data, ct_caller_list->length * sizeof(caller_t));
-    sym = (Elf64_Sym){
+    sym = (Elf64_Sym) {
             .st_shndx = ctx->data_caller_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -121,7 +122,7 @@ static void elf_custom_links() {
     ct_symdef_size = collect_symdef_list(ctx);
     ct_symdef_data = symdefs_serialize();
     elf_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
-    sym = (Elf64_Sym){
+    sym = (Elf64_Sym) {
             .st_shndx = ctx->data_symdef_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -133,7 +134,7 @@ static void elf_custom_links() {
 
     // ndata --------------------------------------------------------------------------
     elf_put_data(ctx->ndata_section, ct_data, ct_data_len);
-    sym = (Elf64_Sym){
+    sym = (Elf64_Sym) {
             .st_shndx = ctx->ndata_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -144,7 +145,7 @@ static void elf_custom_links() {
 
     // nstrtable --------------------------------------------------------------------------
     elf_put_data(ctx->nstrtable_section, (uint8_t *) ct_strtable_data, ct_strtable_len);
-    sym = (Elf64_Sym){
+    sym = (Elf64_Sym) {
             .st_shndx = ctx->nstrtable_section->sh_index,
             .st_value = 0,
             .st_other = 0,
@@ -183,7 +184,7 @@ static void mach_custom_links() {
     ct_rtype_data = rtypes_serialize();
     mach_put_data(ctx->data_rtype_section, ct_rtype_data, ct_rtype_size);
     // 创建符号指向自定义数据段 __data.rtype
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
                                               .n_type = N_SECT | N_EXT,
                                               .n_sect = ctx->data_rtype_section->sh_index,
                                               .n_value = 0, // in section data offset
@@ -197,7 +198,7 @@ static void mach_custom_links() {
     ct_fndef_data = fndefs_serialize();
     mach_put_data(ctx->data_fndef_section, ct_fndef_data, ct_fndef_size);
 
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
                                               .n_type = N_SECT | N_EXT,
                                               .n_sect = ctx->data_fndef_section->sh_index,
                                               .n_value = 0, // in section data offset
@@ -210,7 +211,7 @@ static void mach_custom_links() {
     ct_caller_data = callers_serialize();
     mach_put_data(ctx->data_caller_section, ct_caller_data, ct_caller_list->length * sizeof(caller_t));
     // 注册段名称与 runtime 中的符号进行绑定
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
                                               .n_type = N_SECT | N_EXT,
                                               .n_sect = ctx->data_caller_section->sh_index,
                                               .n_value = 0, // in section data offset
@@ -224,7 +225,7 @@ static void mach_custom_links() {
     ct_symdef_data = symdefs_serialize();
     mach_put_data(ctx->data_symdef_section, ct_symdef_data, ct_symdef_size);
 
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
                                               .n_type = N_SECT | N_EXT,
                                               .n_sect = ctx->data_symdef_section->sh_index,
                                               .n_value = 0, // in section data offset
@@ -234,7 +235,7 @@ static void mach_custom_links() {
 
     // ndata --------------------------------------------------------------------------
     mach_put_data(ctx->ndata_section, ct_data, ct_data_len);
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
                                               .n_type = N_SECT | N_EXT,
                                               .n_sect = ctx->ndata_section->sh_index,
                                               .n_value = 0, // in section data offset
@@ -243,7 +244,7 @@ static void mach_custom_links() {
 
     // strtable
     mach_put_data(ctx->nstrtable_section, (uint8_t *) ct_strtable_data, ct_strtable_len);
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
                                               .n_type = N_SECT | N_EXT,
                                               .n_sect = ctx->nstrtable_section->sh_index,
                                               .n_value = 0, // in section data offset
@@ -338,7 +339,7 @@ static void mach_assembler_module(module_t *m) {
         uint64_t offset = mach_put_data(ctx->data_section, symbol->value, symbol->size);
 
         // 写入符号表
-        mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+        mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
                                                   .n_type = N_SECT | N_EXT,
                                                   .n_sect = ctx->data_section->sh_index,
                                                   .n_value = offset, // in section data offset
@@ -1083,6 +1084,11 @@ static void build_compiler(slice_t *modules) {
             peephole_optimize(c);
 
             debug_block_lir(c, "lower_peephole");
+
+            // 指令调度
+            schedule(c);
+
+            debug_block_lir(c, "schedule");
 
             // 线性扫描寄存器分配
             reg_alloc(c);

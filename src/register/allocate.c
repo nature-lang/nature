@@ -101,7 +101,7 @@ static uint8_t find_free_reg(interval_t *current, int *free_pos) {
     }
 
     for (int i = 1; i < alloc_reg_count(); ++i) {
-        if (free_pos[i] >= current->last_range->to) { // TODO 测试
+        if (free_pos[i] > current->last_range->to) { // TODO >= 和 > 产生了不同的行为
             // 如果有多个寄存器比较空闲，则优先考虑 hint
             // ~~否则优先考虑 free 时间最小的寄存器,从而可以充分利用寄存器的时间~~
             // 由于 nature 中 rt_call 较多，临时变量较多，所以寄存器利用率不高(根本用不完)

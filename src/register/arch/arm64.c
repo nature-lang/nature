@@ -98,7 +98,7 @@ void arm64_reg_init() {
     w14 = reg_new("w14", 14, LIR_FLAG_ALLOC_INT, DWORD, 0);
     w15 = reg_new("w15", 15, LIR_FLAG_ALLOC_INT, DWORD, 0);
     w16 = reg_new("w16", 16, 0, DWORD, 0); // IP0, 不参与分配
-    w17 = reg_new("w17", 17, 0, DWORD, 0); // IP1, 不参与分配
+    w17 = reg_new("w17", 17, LIR_FLAG_ALLOC_INT, DWORD, 0); // IP1, 不参与分配
     w18 = reg_new("w18", 18, LIR_FLAG_ALLOC_INT, DWORD, 0);
     w19 = reg_new("w19", 19, LIR_FLAG_ALLOC_INT, DWORD, 0);
     w20 = reg_new("w20", 20, LIR_FLAG_ALLOC_INT, DWORD, 0);
