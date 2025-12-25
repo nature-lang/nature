@@ -16,6 +16,7 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->asm_operations = slice_new();
     c->asm_build_temps = slice_new();
     c->asm_symbols = slice_new();
+    c->local_imm_table = table_new();
     c->entry = NULL;
     c->var_defs = slice_new();
     c->blocks = slice_new(); // basic_block_t

@@ -4,16 +4,32 @@
 #include <string.h>
 
 // STACK[12]
-static char *lir_operand_stack_to_string(lir_stack_t *stack) {
-    char *str = (char *) mallocz(30);
-    sprintf(str, "STACK[%ld|%ld|%s]", stack->slot, stack->size, type_kind_str[stack->kind]);
+static char *lir_operand_stack_to_string(lir_operand_t *operand) {
+    lir_stack_t *stack = operand->value;
+    char *str = (char *) mallocz(100);
+    if (operand->ref_var) {
+        snprintf(str, 100, "STACK[%s:%ld|%ld|%s]", operand->ref_var->ident, stack->slot, stack->size, type_kind_str[stack->kind]);
+    } else {
+        snprintf(str, 100, "STACK[%ld(%ld)|%s]", stack->slot, stack->size, type_kind_str[stack->kind]);
+    }
     return str;
 }
 
 // REG[rax]
-static char *lir_operand_reg_to_string(reg_t *reg) {
+static char *lir_reg_to_string(reg_t *reg) {
     char *str = (char *) mallocz(30);
     sprintf(str, "REG[%s]", reg->name);
+    return str;
+}
+
+static char *lir_operand_reg_to_string(lir_operand_t *operand) {
+    reg_t *reg = operand->value;
+    char *str = (char *) mallocz(100);
+    if (operand->ref_var) {
+        snprintf(str, 100, "REG[%s:%s]", operand->ref_var->ident, reg->name);
+    } else {
+        snprintf(str, 100, "REG[%s]", reg->name);
+    }
     return str;
 }
 
@@ -37,10 +53,10 @@ string lir_operand_to_string(lir_operand_t *operand) {
             return lir_operand_symbol_to_string((lir_symbol_var_t *) operand->value);
         }
         case LIR_OPERAND_STACK: {
-            return lir_operand_stack_to_string((lir_stack_t *) operand->value);
+            return lir_operand_stack_to_string(operand);
         }
         case LIR_OPERAND_REG: {
-            return lir_operand_reg_to_string((reg_t *) operand->value);
+            return lir_operand_reg_to_string(operand);
         }
         case LIR_OPERAND_VAR: {
             return lir_var_to_string((lir_var_t *) operand->value);
@@ -108,9 +124,9 @@ char *lir_imm_to_string(lir_imm_t *immediate) {
     } else if (is_integer(immediate->kind)) {
         len = sprintf(buf, "IMM[%ld:%s]", immediate->uint_value, type_kind_str[immediate->kind]);
     } else if (immediate->kind == TYPE_FLOAT32) {
-        len = sprintf(buf, "IMM[%f:%s]", immediate->f32_value, type_kind_str[immediate->kind]);
+        len = sprintf(buf, "IMM[%.10f:%s]", immediate->f32_value, type_kind_str[immediate->kind]);
     } else if (is_float(immediate->kind)) {
-        len = sprintf(buf, "IMM[%f:%s]", immediate->f64_value, type_kind_str[immediate->kind]);
+        len = sprintf(buf, "IMM[%.10f:%s]", immediate->f64_value, type_kind_str[immediate->kind]);
     } else if (immediate->kind == TYPE_RAW_STRING) {
         len = sprintf(buf, "IMM[%s:RAW_STRING]", immediate->string_value);
     } else {
@@ -200,7 +216,7 @@ char *lir_regs_to_string(slice_t *regs) {
     string buf = mallocz(DEBUG_STR_COUNT * (regs->count + 1));
     string params = mallocz(DEBUG_STR_COUNT * regs->count);
     for (int i = 0; i < regs->count; ++i) {
-        string src = lir_operand_reg_to_string(regs->take[i]);
+        string src = lir_reg_to_string(regs->take[i]);
         strcat(params, src);
 
         if (i < regs->count - 1) {

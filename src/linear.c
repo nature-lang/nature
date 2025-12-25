@@ -32,6 +32,15 @@ lir_opcode_t ast_op_convert[] = {
         [AST_OP_NEG] = LIR_OPCODE_NEG,
 };
 
+lir_opcode_t ast_op_to_for_continue[] = {
+        [AST_OP_LT] = LIR_OPCODE_BLT,
+        [AST_OP_LE] = LIR_OPCODE_BLE,
+        [AST_OP_GT] = LIR_OPCODE_BGT,
+        [AST_OP_GE] = LIR_OPCODE_BGE,
+        [AST_OP_EE] = LIR_OPCODE_BEE,
+        [AST_OP_NE] = LIR_OPCODE_BNE,
+};
+
 lir_opcode_t ast_op_to_if_alert[] = {
         [AST_OP_LT] = LIR_OPCODE_BGE,
         [AST_OP_LE] = LIR_OPCODE_BGT,
@@ -1185,6 +1194,63 @@ static void linear_assign(module_t *m, ast_assign_stmt_t *stmt) {
     assertf(false, "dose not support assign to %d", left.assert_type);
 }
 
+static void linear_cmp_neg(module_t *m, ast_expr_t *cond, lir_operand_t *cmp_target_label, bool is_if) {
+    bool binary_optimize = false;
+    if (cond->assert_type == AST_EXPR_BINARY) {
+        ast_binary_expr_t *binary_expr = cond->value;
+        if (ast_op_is_cmp(binary_expr->op) && binary_expr->left.type.kind != TYPE_STRING) {
+            binary_optimize = true;
+        }
+    }
+
+    if (binary_optimize) {
+        ast_binary_expr_t *binary_expr = cond->value;
+        lir_operand_t *left_target = linear_expr(m, binary_expr->left, NULL);
+        lir_operand_t *right_target = linear_expr(m, binary_expr->right, NULL);
+
+
+        lir_opcode_t opcode;
+        if (is_if) {
+            opcode = ast_op_to_if_alert[binary_expr->op];
+        } else {
+            opcode = ast_op_to_for_continue[binary_expr->op];
+        }
+
+        if (is_unsigned(binary_expr->left.type.kind)) {
+            switch (opcode) {
+                case LIR_OPCODE_BLT:
+                    opcode = LIR_OPCODE_BULT;
+                    break;
+                case LIR_OPCODE_BLE:
+                    opcode = LIR_OPCODE_BULE;
+                    break;
+                case LIR_OPCODE_BGT:
+                    opcode = LIR_OPCODE_BUGT;
+                    break;
+                case LIR_OPCODE_BGE:
+                    opcode = LIR_OPCODE_BUGE;
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        assert(opcode > 0);
+
+        OP_PUSH(lir_op_new(opcode, left_target, right_target, cmp_target_label));
+    } else {
+        lir_operand_t *condition_target = linear_expr(m, *cond, NULL);
+        lir_operand_t *cond_target;
+        if (is_if) {
+            cond_target = bool_operand(false);
+        } else {
+            cond_target = bool_operand(true);
+        }
+
+        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, cond_target, condition_target, cmp_target_label));
+    }
+}
+
 /**
  * push_rt_call get count => count
  * for_iterator:
@@ -1310,43 +1376,30 @@ static void linear_for_cond(module_t *m, ast_for_cond_stmt_t *ast) {
 }
 
 static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
-    // init
-    linear_stmt(m, ast->init);
-
     char *for_start_ident = label_ident_with_unique(FOR_TRADITION_IDENT);
-    char *for_update_ident = str_connect(for_start_ident, LABEL_UPDATE_SUFFIX);
-    char *for_continue_ident = str_connect(for_start_ident, LABEL_CONTINUE_SUFFIX);
-    char *for_end_ident = str_connect(for_start_ident, LABEL_END_SUFFIX);
+    char *for_update_ident = str_connect(for_start_ident, ".up");
+    char *for_continue_ident = str_connect(for_start_ident, ".cont");
+    char *for_cond_ident = str_connect(for_start_ident, ".cond");
+    char *for_end_ident = str_connect(for_start_ident, ".end");
 
-    lir_op_t *for_start = lir_op_label(for_start_ident, true);
-
-    lir_op_t *for_update = lir_op_label(for_update_ident, true);
-
-    lir_operand_t *for_end_operand = lir_label_operand(for_end_ident, true);
-    stack_push(m->current_closure->continue_labels, for_update->output);
-    stack_push(m->current_closure->break_labels, for_end_operand);
+    stack_push(m->current_closure->continue_labels, lir_label_operand(for_update_ident, true));
+    stack_push(m->current_closure->break_labels, lir_label_operand(for_end_ident, true));
 
     // for_tradition
-    OP_PUSH(for_start);
+    OP_PUSH(lir_op_label(for_start_ident, true));
+    linear_stmt(m, ast->init);
+    OP_PUSH(lir_op_bal(lir_label_operand(for_cond_ident, true)));
 
-    // cond -> for_end
-    lir_operand_t *cond_target = linear_expr(m, ast->cond, NULL);
-    lir_op_t *beq = lir_op_new(LIR_OPCODE_BEE, bool_operand(false), cond_target, for_end_operand);
-    OP_PUSH(beq);
-
-    // continue
     OP_PUSH(lir_op_label(for_continue_ident, true));
-
-    // block
     linear_body(m, ast->body);
 
-    // update
-    OP_PUSH(for_update);
+    OP_PUSH(lir_op_label(for_update_ident, true));
     linear_stmt(m, ast->update);
-    OP_PUSH(lir_op_bal(for_start->output));
 
-    // label for_end
-    OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, for_end_operand));
+    OP_PUSH(lir_op_label(for_cond_ident, true));
+    linear_cmp_neg(m, &ast->cond, lir_label_operand(for_continue_ident, true), false);
+
+    OP_PUSH(lir_op_label(for_end_ident, true));
 
     stack_pop(m->current_closure->continue_labels);
     stack_pop(m->current_closure->break_labels);
@@ -1393,31 +1446,6 @@ static void linear_return(module_t *m, ast_return_stmt_t *ast) {
     OP_PUSH(lir_op_bal(lir_label_operand(m->current_closure->end_label, false)));
 }
 
-static void linear_cmp(module_t *m, ast_expr_t *cond, lir_operand_t *cmp_target_label) {
-    bool binary_optimize = false;
-    if (cond->assert_type == AST_EXPR_BINARY) {
-        ast_binary_expr_t *binary_expr = cond->value;
-        if (ast_op_is_cmp(binary_expr->op) && binary_expr->left.type.kind != TYPE_STRING) {
-            binary_optimize = true;
-        }
-    }
-
-    if (binary_optimize) {
-        ast_binary_expr_t *binary_expr = cond->value;
-        lir_operand_t *left_target = linear_expr(m, binary_expr->left, NULL);
-        lir_operand_t *right_target = linear_expr(m, binary_expr->right, NULL);
-        lir_opcode_t opcode = ast_op_to_if_alert[binary_expr->op];
-
-        assert(opcode > 0);
-
-        OP_PUSH(lir_op_new(opcode, left_target, right_target, cmp_target_label));
-    } else {
-        lir_operand_t *condition_target = linear_expr(m, *cond, NULL);
-        lir_operand_t *false_target = bool_operand(false);
-        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, false_target, condition_target, cmp_target_label));
-    }
-}
-
 static void linear_if(module_t *m, ast_if_stmt_t *if_stmt) {
     // 编译 condition
     char *if_label_ident = label_ident_with_unique(IF_IDENT);
@@ -1431,7 +1459,7 @@ static void linear_if(module_t *m, ast_if_stmt_t *if_stmt) {
         cmp_target_label = lir_label_operand(alternate_label_ident, true);
     }
 
-    linear_cmp(m, &if_stmt->condition, cmp_target_label);
+    linear_cmp_neg(m, &if_stmt->condition, cmp_target_label, true);
 
     OP_PUSH(lir_op_label(str_connect(if_label_ident, IF_CONTINUE_IDENT), true));
 
@@ -1832,13 +1860,21 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
     lir_operand_t *left_target = linear_expr(m, binary_expr->left, NULL);
     lir_operand_t *right_target = linear_expr(m, binary_expr->right, NULL);
     lir_opcode_t opcode = ast_op_convert[binary_expr->op];
-    if (!is_signed(expr.target_type.kind)) {
+    if (is_unsigned(binary_expr->left.type.kind)) {
         if (opcode == LIR_OPCODE_SSHR) {
             opcode = LIR_OPCODE_USHR;
         } else if (opcode == LIR_OPCODE_SDIV) {
             opcode = LIR_OPCODE_UDIV;
         } else if (opcode == LIR_OPCODE_SREM) {
             opcode = LIR_OPCODE_UREM;
+        } else if (opcode == LIR_OPCODE_SLT) {
+            opcode = LIR_OPCODE_USLT;
+        } else if (opcode == LIR_OPCODE_SLE) {
+            opcode = LIR_OPCODE_USLE;
+        } else if (opcode == LIR_OPCODE_SGT) {
+            opcode = LIR_OPCODE_USGT;
+        } else if (opcode == LIR_OPCODE_SGE) {
+            opcode = LIR_OPCODE_USGE;
         }
     }
 
@@ -3451,7 +3487,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_FNDEF: {
             linear_fn_decl(m,
-                           (ast_expr_t) {
+                           (ast_expr_t){
                                    .line = stmt->line,
                                    .assert_type = stmt->assert_type,
                                    .value = stmt->value,
@@ -3463,7 +3499,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             ast_call_t *call = stmt->value;
             // stmt 中都 call 都是没有返回值的
             linear_call(m,
-                        (ast_expr_t) {
+                        (ast_expr_t){
                                 .line = stmt->line,
                                 .column = stmt->column,
                                 .assert_type = AST_CALL,
@@ -3477,7 +3513,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             ast_catch_t *catch = stmt->value;
             linear_catch_expr(m,
-                              (ast_expr_t) {
+                              (ast_expr_t){
                                       .line = stmt->line,
                                       .column = stmt->column,
                                       .assert_type = AST_CATCH,

@@ -694,6 +694,32 @@ static slice_t *riscv64_native_scc(closure_t *c, lir_op_t *op) {
                 }
                 break;
 
+            case LIR_OPCODE_USLE:
+                if (second->type == RISCV64_ASM_OPERAND_IMMEDIATE) {
+                    slice_push(operations, RISCV64_INST(RV_SLTIU, result, first, RO_IMM(second->immediate + 1)));
+                } else {
+                    slice_push(operations, RISCV64_INST(RV_SLTU, result, second, first));
+                    slice_push(operations, RISCV64_INST(RV_XORI, result, result, RO_IMM(1)));
+                }
+                break;
+
+            case LIR_OPCODE_USGT:
+                if (second->type == RISCV64_ASM_OPERAND_IMMEDIATE) {
+                    slice_push(operations, RISCV64_INST(RV_SLTIU, result, second, RO_IMM(first->immediate + 1)));
+                } else {
+                    slice_push(operations, RISCV64_INST(RV_SLTU, result, second, first));
+                }
+                break;
+
+            case LIR_OPCODE_USGE:
+                if (second->type == RISCV64_ASM_OPERAND_IMMEDIATE) {
+                    slice_push(operations, RISCV64_INST(RV_SLTIU, result, first, second));
+                } else {
+                    slice_push(operations, RISCV64_INST(RV_SLTU, result, first, second));
+                }
+                slice_push(operations, RISCV64_INST(RV_XORI, result, result, RO_IMM(1)));
+                break;
+
             case LIR_OPCODE_SEE:
                 if (second->type == RISCV64_ASM_OPERAND_IMMEDIATE) {
                     slice_push(operations, RISCV64_INST(RV_XORI, result, first, second));
@@ -812,6 +838,18 @@ static slice_t *riscv64_native_fbcc(closure_t *c, lir_op_t *op) {
         case LIR_OPCODE_BLE:
             scc_opcode = LIR_OPCODE_SLE;
             break;
+        case LIR_OPCODE_BULT:
+            scc_opcode = LIR_OPCODE_USLT;
+            break;
+        case LIR_OPCODE_BUGE:
+            scc_opcode = LIR_OPCODE_USGE;
+            break;
+        case LIR_OPCODE_BUGT:
+            scc_opcode = LIR_OPCODE_USGT;
+            break;
+        case LIR_OPCODE_BULE:
+            scc_opcode = LIR_OPCODE_USLE;
+            break;
         default:
             assert(false && "Unsupported branch comparison operation");
             return operations;
@@ -869,6 +907,20 @@ static slice_t *riscv64_native_bcc(closure_t *c, lir_op_t *op) {
             break;
         case LIR_OPCODE_BLE:
             branch_opcode = RV_BLT;
+            need_invert = true;
+            break;
+        case LIR_OPCODE_BULT:
+            branch_opcode = RV_BGEU;
+            break;
+        case LIR_OPCODE_BUGE:
+            branch_opcode = RV_BLTU;
+            break;
+        case LIR_OPCODE_BUGT:
+            branch_opcode = RV_BGEU;
+            need_invert = true;
+            break;
+        case LIR_OPCODE_BULE:
+            branch_opcode = RV_BLTU;
             need_invert = true;
             break;
         default:
@@ -1472,6 +1524,10 @@ static riscv64_native_fn riscv64_native_table[] = {
         [LIR_OPCODE_BGT] = riscv64_native_bcc,
         [LIR_OPCODE_BLE] = riscv64_native_bcc,
         [LIR_OPCODE_BLT] = riscv64_native_bcc,
+        [LIR_OPCODE_BUGE] = riscv64_native_bcc,
+        [LIR_OPCODE_BUGT] = riscv64_native_bcc,
+        [LIR_OPCODE_BULE] = riscv64_native_bcc,
+        [LIR_OPCODE_BULT] = riscv64_native_bcc,
 
         // 一元运算符
         [LIR_OPCODE_NEG] = riscv64_native_neg,
@@ -1500,6 +1556,9 @@ static riscv64_native_fn riscv64_native_table[] = {
         [LIR_OPCODE_SLT] = riscv64_native_scc,
         [LIR_OPCODE_USLT] = riscv64_native_scc,
         [LIR_OPCODE_SLE] = riscv64_native_scc,
+        [LIR_OPCODE_USLE] = riscv64_native_scc,
+        [LIR_OPCODE_USGT] = riscv64_native_scc,
+        [LIR_OPCODE_USGE] = riscv64_native_scc,
         [LIR_OPCODE_SEE] = riscv64_native_scc,
         [LIR_OPCODE_SNE] = riscv64_native_scc,
 

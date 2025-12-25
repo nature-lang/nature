@@ -243,12 +243,12 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
 
     if (operand->assert_type == LIR_OPERAND_IMM) {
         lir_imm_t *v = operand->value;
-        assert(v->kind != TYPE_RAW_STRING && v->kind != TYPE_FLOAT);
+        assert(v->kind != TYPE_RAW_STRING);
 
         // 根据不同类型返回立即数
         if (v->kind == TYPE_INT || v->kind == TYPE_UINT ||
             v->kind == TYPE_INT64 || v->kind == TYPE_UINT64 ||
-            v->kind == TYPE_ANYPTR) {
+            v->kind == TYPE_ANYPTR || is_float(v->kind)) {
             result = ARM64_IMM(v->uint_value);
         } else if (v->kind == TYPE_INT8 || v->kind == TYPE_UINT8 ||
                    v->kind == TYPE_INT16 || v->kind == TYPE_UINT16 ||
@@ -522,12 +522,16 @@ static slice_t *arm64_native_mov(closure_t *c, lir_op_t *op) {
             }
         }
     } else if (op->first->assert_type == LIR_OPERAND_IMM) {
-        // move imm -> reg
+        // move imm -> reg|freg
         lir_imm_t *imm = op->first->value;
-        assert(is_number(imm->kind) || imm->kind == TYPE_BOOL);
-        int64_t value = imm->int_value;
+        if (is_float(imm->kind)) {
+            slice_push(operations, ARM64_INST(R_FMOV, result, source));
+        } else {
+            assert(is_integer(imm->kind) || imm->kind == TYPE_BOOL);
+            int64_t value = imm->int_value;
+            arm64_mov_imm(op, operations, result, value);
+        }
 
-        arm64_mov_imm(op, operations, result, value);
     } else if (op->first->assert_type == LIR_OPERAND_STACK ||
                op->first->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
                op->first->assert_type == LIR_OPERAND_SYMBOL_VAR) {
@@ -974,6 +978,15 @@ static slice_t *arm64_native_scc(closure_t *c, lir_op_t *op) {
         case LIR_OPCODE_SLE:
             cond = ARM64_COND_LE;
             break;
+        case LIR_OPCODE_USLE:
+            cond = ARM64_COND_LS;
+            break;
+        case LIR_OPCODE_USGT:
+            cond = ARM64_COND_HI;
+            break;
+        case LIR_OPCODE_USGE:
+            cond = ARM64_COND_HS;
+            break;
         case LIR_OPCODE_SEE:
             cond = ARM64_COND_EQ;
             break;
@@ -1060,7 +1073,7 @@ static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
     // 进行最终的对齐, linux arm64 中栈一般都是是按 16byte 对齐的
     offset = align_up(offset, ARM64_STACK_ALIGN_SIZE);
 
-
+    // +16 用于存储 fp 和 lr
     arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, offset + 16);
     slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
 
@@ -1159,9 +1172,15 @@ static slice_t *arm64_native_bcc(closure_t *c, lir_op_t *op) {
             [LIR_OPCODE_BLT] = R_BLT,
             [LIR_OPCODE_BNE] = R_BNE,
             [LIR_OPCODE_BEE] = R_BEQ,
+            // unsigned branch
+            [LIR_OPCODE_BUGE] = R_BHS, // branch if higher or same (unsigned >=)
+            [LIR_OPCODE_BUGT] = R_BHI, // branch if higher (unsigned >)
+            [LIR_OPCODE_BULE] = R_BLS, // branch if lower or same (unsigned <=)
+            [LIR_OPCODE_BULT] = R_BLO, // branch if lower (unsigned <)
     };
 
     int32_t asm_code = lir_to_asm_code[op->code];
+    assert(asm_code);
 
     slice_push(operations, ARM64_INST(asm_code, result));
 
@@ -1187,6 +1206,10 @@ arm64_native_fn arm64_native_table[] = {
         [LIR_OPCODE_BGT] = arm64_native_bcc,
         [LIR_OPCODE_BLE] = arm64_native_bcc,
         [LIR_OPCODE_BLT] = arm64_native_bcc,
+        [LIR_OPCODE_BUGE] = arm64_native_bcc,
+        [LIR_OPCODE_BUGT] = arm64_native_bcc,
+        [LIR_OPCODE_BULE] = arm64_native_bcc,
+        [LIR_OPCODE_BULT] = arm64_native_bcc,
 
         // 一元运算符
         [LIR_OPCODE_NEG] = arm64_native_neg,
@@ -1215,6 +1238,9 @@ arm64_native_fn arm64_native_table[] = {
         [LIR_OPCODE_SLT] = arm64_native_scc,
         [LIR_OPCODE_USLT] = arm64_native_scc,
         [LIR_OPCODE_SLE] = arm64_native_scc,
+        [LIR_OPCODE_USLE] = arm64_native_scc,
+        [LIR_OPCODE_USGT] = arm64_native_scc,
+        [LIR_OPCODE_USGE] = arm64_native_scc,
         [LIR_OPCODE_SEE] = arm64_native_scc,
         [LIR_OPCODE_SNE] = arm64_native_scc,
 

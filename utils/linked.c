@@ -147,14 +147,14 @@ linked_node *linked_first(linked_t *l) {
 }
 
 // 在指定位置的后方插入节点，尾部需要是 empty 节点, rear 指向 empty
-void linked_insert_after(linked_t *l, linked_node *prev, void *value) {
+linked_node *linked_insert_after(linked_t *l, linked_node *prev, void *value) {
     linked_node *await = linked_new_node();
     await->value = value;
 
     // 如果是要在最后一个节点 直接调用 push 就行了
     if (prev == l->rear) {
         linked_push(l, value);
-        return;
+        return l->rear->prev;
     }
 
     if (prev == NULL) {
@@ -175,6 +175,7 @@ void linked_insert_after(linked_t *l, linked_node *prev, void *value) {
     }
 
     l->count++;
+    return await;
 }
 
 // 在指定位置的前方插入节点，尾部需要是 empty 节点, rear 指向 empty

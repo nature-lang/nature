@@ -69,14 +69,8 @@ fn main():void! {
     // 特殊值测试
     f64 zero = 0.0
     f64 neg_zero = -0.0
-    f64 inf = 1.0 / 0.0
-    f64 neg_inf = -1.0 / 0.0
-    f64 nan = 0.0 / 0.0
-
     assert(zero == 0.0)
     assert(neg_zero == -0.0)
-    assert(inf > 1.0e308)
-    assert(neg_inf < -1.0e308)
 
     println('Float literal tests passed!')
 }

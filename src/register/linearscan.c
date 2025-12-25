@@ -7,7 +7,9 @@
 /**
  * @param c
  */
-static void linear_posthandle(closure_t *c) {
+static void linear_posthandle(closure_t *c, slice_t *origin_blocks) {
+    c->blocks = origin_blocks;
+
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *block = c->blocks->take[i];
         if (OP(block->last_op)->code != LIR_OPCODE_BAL) {
@@ -29,7 +31,7 @@ static void linear_posthandle(closure_t *c) {
             continue;
         }
 
-        // 消除 bal 指令
+        // 消除冗余 bal 指令
         linked_remove(block->operations, block->last_op);
 
         //                linked_node *current = linked_first(block->operations);
@@ -80,8 +82,6 @@ static void linear_prehandle(closure_t *c) {
 
 
 void mark_number(closure_t *c) {
-    interval_block_order(c);
-
     int next_id = 0;
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *block = c->blocks->take[i];
@@ -91,6 +91,17 @@ void mark_number(closure_t *c) {
 
         while (current->value != NULL) {
             lir_op_t *op = current->value;
+
+            // check have stack operand
+            if (op->code == LIR_OPCODE_CALL || op->code == LIR_OPCODE_RT_CALL) {
+                c->exists_call = true;
+            }
+
+            if (op->first && op->first->assert_type == LIR_OPERAND_STACK ||
+                op->second && op->second->assert_type == LIR_OPERAND_STACK ||
+                op->output && op->output->assert_type == LIR_OPERAND_STACK) {
+                c->exists_sp = true;
+            }
 
             // mark
             if (op->code == LIR_OPCODE_PHI) {
@@ -133,6 +144,12 @@ void mark_number(closure_t *c) {
  * @param c
  */
 void reg_alloc(closure_t *c) {
+    slice_t *origin_blocks = interval_block_order(c);
+
+    mark_number(c);
+
+    debug_block_lir(c, "mark_number");
+
     linear_prehandle(c);
 
     interval_build(c);
@@ -147,5 +164,5 @@ void reg_alloc(closure_t *c) {
 
     replace_virtual_register(c);
 
-    linear_posthandle(c);
+    linear_posthandle(c, origin_blocks);
 }

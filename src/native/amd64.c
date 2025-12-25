@@ -7,8 +7,11 @@ static char *asm_setcc_integer_trans[] = {
         [LIR_OPCODE_SLT] = "setl",
         [LIR_OPCODE_USLT] = "setb",
         [LIR_OPCODE_SLE] = "setle",
+        [LIR_OPCODE_USLE] = "setbe",
         [LIR_OPCODE_SGT] = "setg",
+        [LIR_OPCODE_USGT] = "seta",
         [LIR_OPCODE_SGE] = "setge",
+        [LIR_OPCODE_USGE] = "setae",
         [LIR_OPCODE_SEE] = "sete",
         [LIR_OPCODE_SNE] = "setne",
 };
@@ -20,6 +23,29 @@ static char *asm_setcc_float_trans[] = {
         [LIR_OPCODE_SGE] = "setae",
         [LIR_OPCODE_SEE] = "sete",
         [LIR_OPCODE_SNE] = "setne",
+};
+
+
+static char *asm_bcc_integer_trans[] = {
+        [LIR_OPCODE_BLT] = "jl",
+        [LIR_OPCODE_BLE] = "jle",
+        [LIR_OPCODE_BGT] = "jg",
+        [LIR_OPCODE_BGE] = "jge",
+        [LIR_OPCODE_BULT] = "jb",
+        [LIR_OPCODE_BULE] = "jbe",
+        [LIR_OPCODE_BUGT] = "ja",
+        [LIR_OPCODE_BUGE] = "jae",
+        [LIR_OPCODE_BEE] = "je",
+        [LIR_OPCODE_BNE] = "jne",
+};
+
+static char *asm_bcc_float_trans[] = {
+        [LIR_OPCODE_BLT] = "jb",
+        [LIR_OPCODE_BLE] = "jbe",
+        [LIR_OPCODE_BGT] = "ja",
+        [LIR_OPCODE_BGE] = "jae",
+        [LIR_OPCODE_BEE] = "je",
+        [LIR_OPCODE_BNE] = "jne",
 };
 
 static slice_t *amd64_native_block(closure_t *c, basic_block_t *block);
@@ -902,8 +928,6 @@ static slice_t *amd64_native_scc(closure_t *c, lir_op_t *op) {
 
     char *asm_code;
     if (amd64_is_integer_operand(op->first)) {
-        // seta r/m8, dst - src > 0 也就是 dst > src 时, cf = zf = 0, seta 就是这两个为 0 时将结果设置为 1
-        // 也就是 dst > src 时，将 1 写入到结果中
         asm_code = asm_setcc_integer_trans[op->code];
     } else {
         asm_code = asm_setcc_float_trans[op->code];
@@ -985,12 +1009,12 @@ static slice_t *amd64_native_fn_end(closure_t *c, lir_op_t *op) {
     }
 
     // assist preempt label
-    char *preempt_ident = str_connect(c->linkident, ".preempt");
+    char *preempt_ident = local_sym_with_fn(c, ".preempt");
     slice_push(operations, AMD64_INST("label", AMD64_SYMBOL(preempt_ident, true)));
     slice_push(operations, AMD64_INST("call", AMD64_SYMBOL(ASSIST_PREEMPT_YIELD_IDENT, false)));
 
 
-    char *safepoint_ident = str_connect(c->linkident, ".sp.end");
+    char *safepoint_ident = local_sym_with_fn(c, ".sp.end");
     slice_push(operations, AMD64_INST("jmp", AMD64_SYMBOL(safepoint_ident, true)));
 
     return operations;
@@ -1041,35 +1065,16 @@ static slice_t *amd64_native_bcc(closure_t *c, lir_op_t *op) {
     // cmp 指令比较
     slice_push(operations, AMD64_INST("cmp", first, second));
 
-    // 根据操作码选择相应的条件跳转指令
-    char *branch_instr;
-    switch (op->code) {
-        case LIR_OPCODE_BEE:
-            branch_instr = "je";
-            break;
-        case LIR_OPCODE_BNE:
-            branch_instr = "jne";
-            break;
-        case LIR_OPCODE_BLT:
-            branch_instr = "jl";
-            break;
-        case LIR_OPCODE_BLE:
-            branch_instr = "jle";
-            break;
-        case LIR_OPCODE_BGT:
-            branch_instr = "jg";
-            break;
-        case LIR_OPCODE_BGE:
-            branch_instr = "jge";
-            break;
-        default:
-            assert(false && "Unsupported branch condition code");
-            branch_instr = "jmp"; // 默认情况，虽然不应该到达这里
-            break;
+    char *asm_code = NULL;
+    if (amd64_is_integer_operand(op->first)) {
+        asm_code = asm_bcc_integer_trans[op->code];
+    } else {
+        asm_code = asm_bcc_float_trans[op->code];
     }
+    assert(asm_code);
 
     // 添加条件跳转指令
-    slice_push(operations, AMD64_INST(branch_instr, result));
+    slice_push(operations, AMD64_INST(asm_code, result));
 
     return operations;
 }
@@ -1086,10 +1091,10 @@ static slice_t *amd64_native_safepoint(closure_t *c, lir_op_t *op) {
     // cmp
     slice_push(operations, AMD64_INST("cmp", AMD64_REG(r15), AMD64_UINT32(0)));
 
-    char *preempt_ident = str_connect(c->linkident, ".preempt");
+    char *preempt_ident = local_sym_with_fn(c, ".preempt");
     slice_push(operations, AMD64_INST("jne", AMD64_SYMBOL(preempt_ident, true)));
 
-    char *safepoint_ident = str_connect(c->linkident, ".sp.end");
+    char *safepoint_ident = local_sym_with_fn(c, ".sp.end");
     slice_push(operations, AMD64_INST("label", AMD64_SYMBOL(safepoint_ident, true)));
 
     // je 如何跳过 当前指令 和 call rel32 指令
@@ -1117,6 +1122,10 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_BLE] = amd64_native_bcc,
         [LIR_OPCODE_BGT] = amd64_native_bcc,
         [LIR_OPCODE_BGE] = amd64_native_bcc,
+        [LIR_OPCODE_BULT] = amd64_native_bcc,
+        [LIR_OPCODE_BULE] = amd64_native_bcc,
+        [LIR_OPCODE_BUGT] = amd64_native_bcc,
+        [LIR_OPCODE_BUGE] = amd64_native_bcc,
         [LIR_OPCODE_BAL] = amd64_native_bal,
 
         // 类型扩展
@@ -1159,6 +1168,9 @@ amd64_native_fn amd64_native_table[] = {
         [LIR_OPCODE_SNE] = amd64_native_scc,
 
         [LIR_OPCODE_USLT] = amd64_native_scc,
+        [LIR_OPCODE_USLE] = amd64_native_scc,
+        [LIR_OPCODE_USGT] = amd64_native_scc,
+        [LIR_OPCODE_USGE] = amd64_native_scc,
 
         [LIR_OPCODE_MOVE] = amd64_native_mov,
         [LIR_OPCODE_LEA] = amd64_native_lea,

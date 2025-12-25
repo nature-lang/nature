@@ -426,7 +426,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         type_t arg_type = lir_operand_type(arg_operand);
         int64_t arg_item_pos = args_pos[i + 1];
 
-        if (arg_item_pos < 32) {
+        if (arg_item_pos < 32) { // <32 通过寄存器传递
             continue;
         }
 

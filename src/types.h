@@ -226,6 +226,7 @@ struct module_t {
 
     // 对外全局符号 -> 三种类型 var/fn/type_decl
     ast_fndef_t *fn_init;
+    table_t *global_symbol_table;
     slice_t *global_symbols; // symbol_t, 这里只存储全局符号
     slice_t *global_vardef; // 用于在 infer 阶段进行类型推导
 
@@ -409,11 +410,15 @@ typedef enum {
 
     LIR_OPCODE_CLR, // clean reg
     LIR_OPCODE_CLV, // clean up var, result is var，等同于首次变量注册的功能
-    LIR_OPCODE_USLT, // unsigned set less than <
     LIR_OPCODE_SLT, // <
+    LIR_OPCODE_USLT, // unsigned set less than <
     LIR_OPCODE_SLE, // <=
+    LIR_OPCODE_USLE, // unsigned set less than or equal <=
     LIR_OPCODE_SGT, // >
+    LIR_OPCODE_USGT, // unsigned set greater than >
     LIR_OPCODE_SGE, // >=
+    LIR_OPCODE_USGE, // unsigned set greater than or equal >=
+
     LIR_OPCODE_SEE, // ==
     LIR_OPCODE_SNE, // !=
 
@@ -428,6 +433,11 @@ typedef enum {
     LIR_OPCODE_BLE,
     LIR_OPCODE_BGT,
     LIR_OPCODE_BGE,
+    LIR_OPCODE_BULT,
+    LIR_OPCODE_BULE,
+    LIR_OPCODE_BUGT,
+    LIR_OPCODE_BUGE,
+
     LIR_OPCODE_BEE, // branch if eq a,b
     LIR_OPCODE_BNE, // branch if eq a,b
 
@@ -544,9 +554,13 @@ typedef struct closure_t {
     slice_t *asm_operations; // 和架构相关, 首个 opcode 一定是 label
     slice_t *asm_build_temps; // 架构相关编译临时
     slice_t *asm_symbols; // asm_global_symbol_t
+    table_t *local_imm_table;
     module_t *module;
 
     uint64_t rt_fndef_index;
+
+    bool exists_call;
+    bool exists_sp;
 
     ast_fndef_t *fndef;
 } closure_t;

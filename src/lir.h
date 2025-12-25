@@ -218,6 +218,7 @@ struct lir_operand_t {
     void *value;
     lir_flag_t pos; // 在 opcode 中的位置信息
     int64_t size; // 实际位宽存储，避免寄存器分配后位宽丢失
+    lir_var_t *ref_var; // if replace from var
 };
 
 static inline bool lir_op_scc(lir_op_t *op);
@@ -343,6 +344,7 @@ static inline lir_operand_t *operand_new(lir_operand_type_t type, void *value) {
     lir_operand_t *operand = NEW(lir_operand_t);
     operand->assert_type = type;
     operand->value = value;
+    operand->ref_var = NULL;
     return operand;
 }
 
@@ -1120,7 +1122,9 @@ static inline bool ast_op_is_cmp(ast_expr_op_t opcode) {
 static inline bool lir_op_branch_cmp(lir_op_t *op) {
     return op->code == LIR_OPCODE_BEE || op->code == LIR_OPCODE_BNE ||
            op->code == LIR_OPCODE_BGT || op->code == LIR_OPCODE_BGE ||
-           op->code == LIR_OPCODE_BLT || op->code == LIR_OPCODE_BLE;
+           op->code == LIR_OPCODE_BLT || op->code == LIR_OPCODE_BLE ||
+           op->code == LIR_OPCODE_BUGT || op->code == LIR_OPCODE_BUGE ||
+           op->code == LIR_OPCODE_BULT || op->code == LIR_OPCODE_BULE;
 }
 
 static inline bool lir_op_branch(lir_op_t *op) {
@@ -1190,6 +1194,20 @@ static inline bool lir_op_ternary(lir_op_t *op) {
            op->code == LIR_OPCODE_OR || op->code == LIR_OPCODE_XOR;
 }
 
+
+static inline bool lir_op_mov_hint_like(lir_op_t *op) {
+    if (BUILD_ARCH == ARCH_AMD64) {
+        return op->code == LIR_OPCODE_MOVE;
+    }
+
+    // arm64 or riscv64 的 add/sub 指令对 first 和 output 允许使用不同的机要起
+    return op->code == LIR_OPCODE_MOVE ||
+           op->code == LIR_OPCODE_NOT ||
+           op->code == LIR_OPCODE_NEG ||
+           lir_op_ternary(op);
+}
+
+
 static inline bool lir_op_scc(lir_op_t *op) {
     return op->code == LIR_OPCODE_SLT ||
            op->code == LIR_OPCODE_SLE ||
@@ -1197,7 +1215,10 @@ static inline bool lir_op_scc(lir_op_t *op) {
            op->code == LIR_OPCODE_SGE ||
            op->code == LIR_OPCODE_SEE ||
            op->code == LIR_OPCODE_SNE ||
-           op->code == LIR_OPCODE_USLT;
+           op->code == LIR_OPCODE_USLT ||
+           op->code == LIR_OPCODE_USLE ||
+           op->code == LIR_OPCODE_USGT ||
+           op->code == LIR_OPCODE_USGE;
 }
 
 

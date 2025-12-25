@@ -1,5 +1,7 @@
 #include "arm64.h"
 #include "arm64_abi.h"
+#include "src/binary/encoding/arm64/fmov_imm8.h"
+#include "lower.h"
 
 static lir_operand_t *arm64_convert_use_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
     assert(c);
@@ -34,7 +36,7 @@ static lir_operand_t *arm64_convert_lea_symbol_var(closure_t *c, linked_t *list,
     return lir_reset_operand(result, symbol_var_operand->pos);
 }
 
-static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
+static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op, linked_t *symbol_operations) {
     assert(c);
     assert(op);
 
@@ -52,50 +54,11 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op) {
         lir_imm_t *imm = imm_operand->value;
         assert(imm);
 
-        if (imm->kind == TYPE_RAW_STRING || is_float(imm->kind)) {
-            char *unique_name = var_unique_ident(c->module, TEMP_VAR_IDENT);
-            assert(unique_name);
-
-            asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
-            assert(symbol);
-            symbol->name = unique_name;
-
-            if (imm->kind == TYPE_RAW_STRING) {
-                assert(imm->string_value);
-                symbol->size = imm->strlen + 1;
-                symbol->value = (uint8_t *) imm->string_value;
-            } else if (imm->kind == TYPE_FLOAT64) {
-                symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *) &imm->f64_value;
-            } else if (imm->kind == TYPE_FLOAT32) {
-                symbol->size = type_kind_sizeof(imm->kind);
-                symbol->value = (uint8_t *) &imm->f32_value;
-            } else {
-                assertf(false, "not support type %s", type_kind_str[imm->kind]);
-            }
-
-            slice_push(c->asm_symbols, symbol);
-            lir_symbol_var_t *symbol_var = NEW(lir_symbol_var_t);
-            symbol_var->kind = imm->kind;
-            symbol_var->ident = unique_name;
-
-            if (imm->kind == TYPE_RAW_STRING) {
-                symbol_table_set_raw_string(c->module, unique_name, type_kind_new(TYPE_RAW_STRING), imm->strlen);
-
-                // raw_string 本身就是指针类型, 首次加载时需要通过 lea 将 .data 到 raw_string 的起始地址加载到 var_operand
-                lir_operand_t *var_operand = temp_var_operand(c->module, type_kind_new(TYPE_RAW_STRING));
-                lir_op_t *temp_ref = lir_op_lea(var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var));
-                linked_push(list, temp_ref);
-
-                lir_operand_t *temp_operand = lir_reset_operand(var_operand, imm_operand->pos);
-                imm_operand->assert_type = temp_operand->assert_type;
-                imm_operand->value = temp_operand->value;
-            } else {
-                // float 直接修改地址，通过 rip 寻址即可, symbol value 已经添加到全局符号表中
-                imm_operand->assert_type = LIR_OPERAND_SYMBOL_VAR;
-                imm_operand->value = symbol_var;
-            }
+        if (imm->kind != TYPE_RAW_STRING && !is_float(imm->kind)) {
+            continue;
         }
+
+        lower_imm_symbol(c, imm_operand, list, symbol_operations);
     }
 
     return list;
@@ -272,7 +235,25 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
     LINKED_FOR(block->operations) {
         lir_op_t *op = LINKED_VALUE();
 
-        linked_concat(operations, arm64_lower_imm(c, op));
+        linked_t *symbol_operations = linked_new();
+        linked_concat(operations, arm64_lower_imm(c, op, symbol_operations));
+
+        if (symbol_operations->count > 0) {
+            basic_block_t *first_block = c->blocks->take[0];
+            linked_t *insert_operations = first_block->operations;
+            if (block->id == first_block->id) {
+                insert_operations = operations;
+            }
+
+            // maybe empty
+            linked_node *insert_head = insert_operations->front->succ->succ; // safepoint
+
+            for (linked_node *sym_node = symbol_operations->front; sym_node != symbol_operations->rear; sym_node = sym_node->succ) {
+                lir_op_t *sym_op = sym_node->value;
+                insert_head = linked_insert_after(insert_operations, insert_head, sym_op);
+            }
+        }
+
         linked_concat(operations, arm64_lower_symbol_var(c, op));
 
         if (lir_op_call(op) && op->second->value != NULL) {

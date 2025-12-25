@@ -1,0 +1,965 @@
+=== test_integer1
+--- main.n
+fn test_cmp():bool {
+    var a = 2
+    var b = 1
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn main() {
+    assert(test_cmp() == true)
+}
+
+=== test_float1
+--- main.n
+fn test_cmp1():bool {
+    f32 a = 2.0
+    f32 b = 1.1
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_cmp2():bool {
+    f64 i = 2.0
+    f64 stop = 1001.0
+    if i > stop {
+        return true
+    }
+    return false
+}
+
+fn main() {
+    assert(test_cmp1() == true)
+    assert(test_cmp2() == false)
+}
+
+=== test_integer_cmp
+--- main.n
+fn test_i32_gt():bool {
+    i32 a = 100
+    i32 b = 50
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_i32_lt():bool {
+    i32 a = -10
+    i32 b = 10
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn test_i32_ge():bool {
+    i32 a = 5
+    i32 b = 3
+    if a >= b {
+        return true
+    }
+    return false
+}
+
+fn test_i32_le():bool {
+    i32 a = 3
+    i32 b = 5
+    if a <= b {
+        return true
+    }
+    return false
+}
+
+fn test_i32_eq():bool {
+    i32 a = 42
+    i32 b = 42
+    if a == b {
+        return true
+    }
+    return false
+}
+
+fn test_i32_ne():bool {
+    i32 a = 3
+    i32 b = 5
+    if a != b {
+        return true
+    }
+    return false
+}
+
+fn test_i64_gt():bool {
+    i64 a = 10000000000
+    i64 b = 5000000000
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_i64_lt():bool {
+    i64 a = -10000000000
+    i64 b = -5000000000
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn test_i64_ge():bool {
+    i64 a = 10000000000
+    i64 b = 10000000000
+    if a >= b {
+        return true
+    }
+    return false
+}
+
+fn test_i64_le():bool {
+    i64 a = 5000000000
+    i64 b = 10000000000
+    if a <= b {
+        return true
+    }
+    return false
+}
+
+fn test_i64_eq():bool {
+    i64 a = 1234567890
+    i64 b = 1234567890
+    if a == b {
+        return true
+    }
+    return false
+}
+
+fn test_i64_ne():bool {
+    i64 a = 10000000000
+    i64 b = 5000000000
+    if a != b {
+        return true
+    }
+    return false
+}
+
+fn test_u32_gt():bool {
+    u32 a = 5000
+    u32 b = 3000
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_u32_lt():bool {
+    u32 a = 3000
+    u32 b = 5000
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn test_u32_ge():bool {
+    u32 a = 5000
+    u32 b = 5000
+    if a >= b {
+        return true
+    }
+    return false
+}
+
+fn test_u32_le():bool {
+    u32 a = 3000
+    u32 b = 5000
+    if a <= b {
+        return true
+    }
+    return false
+}
+
+fn test_u32_eq():bool {
+    u32 a = 4294967295
+    u32 b = 4294967295
+    if a == b {
+        return true
+    }
+    return false
+}
+
+fn test_u32_ne():bool {
+    u32 a = 4294967295
+    u32 b = 0
+    if a != b {
+        return true
+    }
+    return false
+}
+
+fn test_u64_gt():bool {
+    u64 a = 100000000000
+    u64 b = 50000000000
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_u64_lt():bool {
+    u64 a = 50000000000
+    u64 b = 100000000000
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn test_u64_ge():bool {
+    u64 a = 100000000000
+    u64 b = 100000000000
+    if a >= b {
+        return true
+    }
+    return false
+}
+
+fn test_u64_le():bool {
+    u64 a = 50000000000
+    u64 b = 100000000000
+    if a <= b {
+        return true
+    }
+    return false
+}
+
+fn test_u64_eq():bool {
+    u64 a = 18446744073709551615
+    u64 b = 18446744073709551615
+    if a == b {
+        return true
+    }
+    return false
+}
+
+fn test_u64_ne():bool {
+    u64 a = 18446744073709551615
+    u64 b = 0
+    if a != b {
+        return true
+    }
+    return false
+}
+
+fn main() {
+    assert(test_i32_gt() == true)
+    assert(test_i32_lt() == true)
+    assert(test_i32_ge() == true)
+    assert(test_i32_le() == true)
+    assert(test_i32_eq() == true)
+    assert(test_i32_ne() == true)
+    assert(test_i64_gt() == true)
+    assert(test_i64_lt() == true)
+    assert(test_i64_ge() == true)
+    assert(test_i64_le() == true)
+    assert(test_i64_eq() == true)
+    assert(test_i64_ne() == true)
+    assert(test_u32_gt() == true)
+    assert(test_u32_lt() == true)
+    assert(test_u32_ge() == true)
+    assert(test_u32_le() == true)
+    assert(test_u32_eq() == true)
+    assert(test_u32_ne() == true)
+    assert(test_u64_gt() == true)
+    assert(test_u64_lt() == true)
+    assert(test_u64_ge() == true)
+    assert(test_u64_le() == true)
+    assert(test_u64_eq() == true)
+    assert(test_u64_ne() == true)
+}
+
+=== test_float_cmp
+--- main.n
+fn test_f32_gt():bool {
+    f32 a = 5.5
+    f32 b = 3.5
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_f32_lt():bool {
+    f32 a = 3.5
+    f32 b = 5.5
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn test_f32_ge():bool {
+    f32 a = 5.5
+    f32 b = 5.5
+    if a >= b {
+        return true
+    }
+    return false
+}
+
+fn test_f32_le():bool {
+    f32 a = 3.5
+    f32 b = 5.5
+    if a <= b {
+        return true
+    }
+    return false
+}
+
+fn test_f32_eq():bool {
+    f32 a = 3.14
+    f32 b = 3.14
+    if a == b {
+        return true
+    }
+    return false
+}
+
+fn test_f32_ne():bool {
+    f32 a = 3.14
+    f32 b = 2.71
+    if a != b {
+        return true
+    }
+    return false
+}
+
+fn test_f64_gt():bool {
+    f64 a = 5.5
+    f64 b = 3.5
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_f64_lt():bool {
+    f64 a = 3.5
+    f64 b = 5.5
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn test_f64_ge():bool {
+    f64 a = 5.5
+    f64 b = 5.5
+    if a >= b {
+        return true
+    }
+    return false
+}
+
+fn test_f64_le():bool {
+    f64 a = 3.5
+    f64 b = 5.5
+    if a <= b {
+        return true
+    }
+    return false
+}
+
+fn test_f64_eq():bool {
+    f64 a = 2.71828
+    f64 b = 2.71828
+    if a == b {
+        return true
+    }
+    return false
+}
+
+fn test_f64_ne():bool {
+    f64 a = 1.414
+    f64 b = 1.414
+    if a != b {
+        return true
+    }
+    return false
+}
+
+fn main() {
+    assert(test_f32_gt() == true)
+    assert(test_f32_lt() == true)
+    assert(test_f32_ge() == true)
+    assert(test_f32_le() == true)
+    assert(test_f32_eq() == true)
+    assert(test_f32_ne() == true)
+    assert(test_f64_gt() == true)
+    assert(test_f64_lt() == true)
+    assert(test_f64_ge() == true)
+    assert(test_f64_le() == true)
+    assert(test_f64_eq() == true)
+    assert(test_f64_ne() == false)
+}
+
+=== test_special_cases
+--- main.n
+fn test_zero_gt():bool {
+    i32 a = 1
+    i32 b = 0
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_zero_lt():bool {
+    i32 a = -1
+    i32 b = 0
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn test_zero_eq():bool {
+    i32 a = 0
+    i32 b = 0
+    if a == b {
+        return true
+    }
+    return false
+}
+
+fn test_negative_gt():bool {
+    i32 a = -5
+    i32 b = -10
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_negative_lt():bool {
+    i32 a = -10
+    i32 b = -5
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn test_negative_eq():bool {
+    i32 a = -7
+    i32 b = -7
+    if a == b {
+        return true
+    }
+    return false
+}
+
+fn test_chained_and():bool {
+    i32 a = 5
+    i32 b = 3
+    i32 c = 7
+    if a > b && a < c {
+        return true
+    }
+    return false
+}
+
+fn test_chained_or():bool {
+    i32 a = 5
+    i32 b = 3
+    i32 c = 7
+    if a > b || a > c {
+        return true
+    }
+    return false
+}
+
+fn main() {
+    assert(test_zero_gt() == true)
+    assert(test_zero_lt() == true)
+    assert(test_zero_eq() == true)
+    assert(test_negative_gt() == true)
+    assert(test_negative_lt() == true)
+    assert(test_negative_eq() == true)
+    assert(test_chained_and() == true)
+    assert(test_chained_or() == true)
+}
+
+=== test_pi_test
+--- main.n
+fn pi_test():f64 {
+    var rounds = 1000000000
+    var x = 1.0
+    var pi = 1.0
+    f64 stop = (rounds + 2) as float
+
+    for f64 i = 2.0; i <= stop; i+=1 {
+        x = -x
+        pi += x / (2.0 * i - 1.0)
+    }
+
+    pi *= 4.0
+    return pi
+}
+
+fn main() {
+    var v = pi_test()
+    println(v)
+    assert(v > 3.14 && v < 3.15)
+}
+
+=== test_boundary
+--- main.n
+fn test_u8_max():bool {
+    u8 a = 255
+    u8 b = 1
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_i8_cmp():bool {
+    i8 a = 120
+    i8 b = 1
+    if a > b {
+        return true
+    }
+    return false
+}
+
+
+fn test_i8_neg_cmp():bool {
+    i8 a = -120
+    i8 b = -121
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_i8_neg_cmp2():bool {
+    i8 a = 12
+    i8 b = -121
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn main() {
+    assert(test_u8_max())
+    assert(test_i8_cmp())
+    assert(test_i8_neg_cmp())
+    assert(test_i8_neg_cmp2())
+}
+
+=== test_signed_unsigned_edge_cases
+--- main.n
+// Test signed vs unsigned comparison edge cases (bcc instructions)
+fn test_i32_vs_u32_pattern():bool {
+    i32 a = -1
+    i32 b = 1
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn test_u32_large_values():bool {
+    u32 a = 4294967295  // max u32
+    u32 b = 2147483648  // 2^31
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_i64_negative_comparison():bool {
+    i64 a = -9223372036854775807
+    i64 b = -9223372036854775806
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn test_u64_max_comparison():bool {
+    u64 a = 18446744073709551615  // max u64
+    u64 b = 9223372036854775808   // 2^63
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_i8_boundary():bool {
+    i8 a = 127   // max i8
+    i8 b = -128  // min i8
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_u8_boundary():bool {
+    u8 a = 255  // max u8
+    u8 b = 0    // min u8
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_i16_negative():bool {
+    i16 a = -32768  // min i16
+    i16 b = -32767
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn test_u16_large():bool {
+    u16 a = 65535  // max u16
+    u16 b = 32768  // 2^15
+    if a > b {
+        return true
+    }
+    return false
+}
+
+fn test_mixed_sign_i32():bool {
+    i32 a = -100
+    i32 b = 100
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn test_mixed_sign_i64():bool {
+    i64 a = -1000000000000
+    i64 b = 1000000000000
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn test_u32_near_max():bool {
+    u32 a = 4294967294
+    u32 b = 4294967295
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn test_u64_near_max():bool {
+    u64 a = 18446744073709551614
+    u64 b = 18446744073709551615
+    if a < b {
+        return true
+    }
+    return false
+}
+
+fn main() {
+    assert(test_i32_vs_u32_pattern() == true)
+    assert(test_u32_large_values() == true)
+    assert(test_i64_negative_comparison() == true)
+    assert(test_u64_max_comparison() == true)
+    assert(test_i8_boundary() == true)
+    assert(test_u8_boundary() == true)
+    assert(test_i16_negative() == true)
+    assert(test_u16_large() == true)
+    assert(test_mixed_sign_i32() == true)
+    assert(test_mixed_sign_i64() == true)
+    assert(test_u32_near_max() == true)
+    assert(test_u64_near_max() == true)
+}
+
+=== test_scc_instructions
+--- main.n
+// Test scc instructions using direct return comparison expressions
+fn test_scc_i32_gt(i32 a, i32 b):bool {
+    return a > b
+}
+
+fn test_scc_i32_lt(i32 a, i32 b):bool {
+    return a < b
+}
+
+fn test_scc_i32_ge(i32 a, i32 b):bool {
+    return a >= b
+}
+
+fn test_scc_i32_le(i32 a, i32 b):bool {
+    return a <= b
+}
+
+fn test_scc_i32_eq(i32 a, i32 b):bool {
+    return a == b
+}
+
+fn test_scc_i32_ne(i32 a, i32 b):bool {
+    return a != b
+}
+
+fn test_scc_i64_gt(i64 a, i64 b):bool {
+    return a > b
+}
+
+fn test_scc_i64_lt(i64 a, i64 b):bool {
+    return a < b
+}
+
+fn test_scc_i64_ge(i64 a, i64 b):bool {
+    return a >= b
+}
+
+fn test_scc_i64_le(i64 a, i64 b):bool {
+    return a <= b
+}
+
+fn test_scc_i64_eq(i64 a, i64 b):bool {
+    return a == b
+}
+
+fn test_scc_i64_ne(i64 a, i64 b):bool {
+    return a != b
+}
+
+fn test_scc_u32_gt(u32 a, u32 b):bool {
+    return a > b
+}
+
+fn test_scc_u32_lt(u32 a, u32 b):bool {
+    return a < b
+}
+
+fn test_scc_u32_ge(u32 a, u32 b):bool {
+    return a >= b
+}
+
+fn test_scc_u32_le(u32 a, u32 b):bool {
+    return a <= b
+}
+
+fn test_scc_u32_eq(u32 a, u32 b):bool {
+    return a == b
+}
+
+fn test_scc_u32_ne(u32 a, u32 b):bool {
+    return a != b
+}
+
+fn test_scc_u64_gt(u64 a, u64 b):bool {
+    return a > b
+}
+
+fn test_scc_u64_lt(u64 a, u64 b):bool {
+    return a < b
+}
+
+fn test_scc_u64_ge(u64 a, u64 b):bool {
+    return a >= b
+}
+
+fn test_scc_u64_le(u64 a, u64 b):bool {
+    return a <= b
+}
+
+fn test_scc_u64_eq(u64 a, u64 b):bool {
+    return a == b
+}
+
+fn test_scc_u64_ne(u64 a, u64 b):bool {
+    return a != b
+}
+
+fn test_scc_f32_gt(f32 a, f32 b):bool {
+    return a > b
+}
+
+fn test_scc_f32_lt(f32 a, f32 b):bool {
+    return a < b
+}
+
+fn test_scc_f32_ge(f32 a, f32 b):bool {
+    return a >= b
+}
+
+fn test_scc_f32_le(f32 a, f32 b):bool {
+    return a <= b
+}
+
+fn test_scc_f32_eq(f32 a, f32 b):bool {
+    return a == b
+}
+
+fn test_scc_f32_ne(f32 a, f32 b):bool {
+    return a != b
+}
+
+fn test_scc_f64_gt(f64 a, f64 b):bool {
+    return a > b
+}
+
+fn test_scc_f64_lt(f64 a, f64 b):bool {
+    return a < b
+}
+
+fn test_scc_f64_ge(f64 a, f64 b):bool {
+    return a >= b
+}
+
+fn test_scc_f64_le(f64 a, f64 b):bool {
+    return a <= b
+}
+
+fn test_scc_f64_eq(f64 a, f64 b):bool {
+    return a == b
+}
+
+fn test_scc_f64_ne(f64 a, f64 b):bool {
+    return a != b
+}
+
+fn main() {
+    // Test i32 scc instructions
+    assert(test_scc_i32_gt(100, 50) == true)
+    assert(test_scc_i32_gt(50, 100) == false)
+    assert(test_scc_i32_lt(-10, 10) == true)
+    assert(test_scc_i32_lt(10, -10) == false)
+    assert(test_scc_i32_ge(5, 3) == true)
+    assert(test_scc_i32_ge(5, 5) == true)
+    assert(test_scc_i32_ge(3, 5) == false)
+    assert(test_scc_i32_le(3, 5) == true)
+    assert(test_scc_i32_le(5, 5) == true)
+    assert(test_scc_i32_le(5, 3) == false)
+    assert(test_scc_i32_eq(42, 42) == true)
+    assert(test_scc_i32_eq(42, 43) == false)
+    assert(test_scc_i32_ne(3, 5) == true)
+    assert(test_scc_i32_ne(5, 5) == false)
+
+    // Test i64 scc instructions
+    assert(test_scc_i64_gt(10000000000, 5000000000) == true)
+    assert(test_scc_i64_lt(-10000000000, -5000000000) == true)
+    assert(test_scc_i64_ge(10000000000, 10000000000) == true)
+    assert(test_scc_i64_le(5000000000, 10000000000) == true)
+    assert(test_scc_i64_eq(1234567890, 1234567890) == true)
+    assert(test_scc_i64_ne(10000000000, 5000000000) == true)
+
+    // Test u32 scc instructions
+    assert(test_scc_u32_gt(5000, 3000) == true)
+    assert(test_scc_u32_lt(3000, 5000) == true)
+    assert(test_scc_u32_ge(5000, 5000) == true)
+    assert(test_scc_u32_le(3000, 5000) == true)
+    assert(test_scc_u32_eq(4294967295, 4294967295) == true)
+    assert(test_scc_u32_ne(4294967295, 0) == true)
+
+    // Test u64 scc instructions
+    assert(test_scc_u64_gt(100000000000, 50000000000) == true)
+    assert(test_scc_u64_lt(50000000000, 100000000000) == true)
+    assert(test_scc_u64_ge(100000000000, 100000000000) == true)
+    assert(test_scc_u64_le(50000000000, 100000000000) == true)
+    assert(test_scc_u64_eq(18446744073709551615, 18446744073709551615) == true)
+    assert(test_scc_u64_ne(18446744073709551615, 0) == true)
+
+    // Test f32 scc instructions
+    assert(test_scc_f32_gt(5.5, 3.5) == true)
+    assert(test_scc_f32_lt(3.5, 5.5) == true)
+    assert(test_scc_f32_ge(5.5, 5.5) == true)
+    assert(test_scc_f32_le(3.5, 5.5) == true)
+    assert(test_scc_f32_eq(3.14, 3.14) == true)
+    assert(test_scc_f32_ne(3.14, 2.71) == true)
+
+    // Test f64 scc instructions
+    assert(test_scc_f64_gt(5.5, 3.5) == true)
+    assert(test_scc_f64_lt(3.5, 5.5) == true)
+    assert(test_scc_f64_ge(5.5, 5.5) == true)
+    assert(test_scc_f64_le(3.5, 5.5) == true)
+    assert(test_scc_f64_eq(2.71828, 2.71828) == true)
+    assert(test_scc_f64_ne(1.414, 1.732) == true)
+}
+
+=== test_scc_edge_cases
+--- main.n
+// Test scc instructions with edge case values
+fn test_scc_i8_boundary(i8 a, i8 b):bool {
+    return a > b
+}
+
+fn test_scc_u8_boundary(u8 a, u8 b):bool {
+    return a > b
+}
+
+fn test_scc_i16_boundary(i16 a, i16 b):bool {
+    return a < b
+}
+
+fn test_scc_u16_boundary(u16 a, u16 b):bool {
+    return a >= b
+}
+
+fn test_scc_negative_zero(i32 a, i32 b):bool {
+    return a < b
+}
+
+fn test_scc_unsigned_max(u32 a, u32 b):bool {
+    return a > b
+}
+
+fn test_scc_signed_min_max(i64 a, i64 b):bool {
+    return a < b
+}
+
+fn test_scc_complex_expr(i32 a, i32 b, i32 c):bool {
+    return (a > b) && (b < c)
+}
+
+fn main() {
+    // i8 boundary tests
+    assert(test_scc_i8_boundary(127, -128) == true)
+    assert(test_scc_i8_boundary(-128, 127) == false)
+    
+    // u8 boundary tests
+    assert(test_scc_u8_boundary(255, 0) == true)
+    assert(test_scc_u8_boundary(128, 127) == true)
+    
+    // i16 boundary tests
+    assert(test_scc_i16_boundary(-32768, -32767) == true)
+    assert(test_scc_i16_boundary(32767, -32768) == false)
+    
+    // u16 boundary tests
+    assert(test_scc_u16_boundary(65535, 32768) == true)
+    assert(test_scc_u16_boundary(65535, 65535) == true)
+    
+    // Negative and zero
+    assert(test_scc_negative_zero(-1, 0) == true)
+    assert(test_scc_negative_zero(0, 1) == true)
+    assert(test_scc_negative_zero(1, 0) == false)
+    
+    // Unsigned max values
+    assert(test_scc_unsigned_max(4294967295, 2147483648) == true)
+    assert(test_scc_unsigned_max(4294967295, 4294967294) == true)
+    
+    // Signed min/max
+    assert(test_scc_signed_min_max(-9223372036854775807, 9223372036854775807) == true)
+    
+    // Complex expressions
+    assert(test_scc_complex_expr(5, 3, 7) == true)
+    assert(test_scc_complex_expr(3, 5, 7) == false)
+}
