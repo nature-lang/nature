@@ -1172,9 +1172,15 @@ static slice_t *arm64_native_bcc(closure_t *c, lir_op_t *op) {
             [LIR_OPCODE_BLT] = R_BLT,
             [LIR_OPCODE_BNE] = R_BNE,
             [LIR_OPCODE_BEE] = R_BEQ,
+            // unsigned branch
+            [LIR_OPCODE_BUGE] = R_BHS, // branch if higher or same (unsigned >=)
+            [LIR_OPCODE_BUGT] = R_BHI, // branch if higher (unsigned >)
+            [LIR_OPCODE_BULE] = R_BLS, // branch if lower or same (unsigned <=)
+            [LIR_OPCODE_BULT] = R_BLO, // branch if lower (unsigned <)
     };
 
     int32_t asm_code = lir_to_asm_code[op->code];
+    assert(asm_code);
 
     slice_push(operations, ARM64_INST(asm_code, result));
 
