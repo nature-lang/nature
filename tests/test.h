@@ -498,6 +498,7 @@ static inline void feature_testar_test(char *custom_target) {
             if (!dir_exists(dir)) {
                 system(str_connect("mkdir -p ", dir));
             }
+            free(dir);
 
             // 写入文件内容
             FILE *fp = fopen(full_path, "w");

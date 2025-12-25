@@ -50,6 +50,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
         } else {
             m->rel_path = str_replace(m->source_path, temp_dir, "");
         }
+        free(temp_dir);
         assert(m->rel_path);
 
         m->rel_path = ltrim(m->rel_path, "/");
