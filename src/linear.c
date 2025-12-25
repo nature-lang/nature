@@ -1216,6 +1216,25 @@ static void linear_cmp_neg(module_t *m, ast_expr_t *cond, lir_operand_t *cmp_tar
             opcode = ast_op_to_for_continue[binary_expr->op];
         }
 
+        if (is_unsigned(binary_expr->left.type.kind)) {
+            switch (opcode) {
+                case LIR_OPCODE_BLT:
+                    opcode = LIR_OPCODE_BULT;
+                    break;
+                case LIR_OPCODE_BLE:
+                    opcode = LIR_OPCODE_BULE;
+                    break;
+                case LIR_OPCODE_BGT:
+                    opcode = LIR_OPCODE_BUGT;
+                    break;
+                case LIR_OPCODE_BGE:
+                    opcode = LIR_OPCODE_BUGE;
+                    break;
+                default:
+                    break;
+            }
+        }
+
         assert(opcode > 0);
 
         OP_PUSH(lir_op_new(opcode, left_target, right_target, cmp_target_label));
@@ -1841,13 +1860,21 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
     lir_operand_t *left_target = linear_expr(m, binary_expr->left, NULL);
     lir_operand_t *right_target = linear_expr(m, binary_expr->right, NULL);
     lir_opcode_t opcode = ast_op_convert[binary_expr->op];
-    if (!is_signed(expr.target_type.kind)) {
+    if (is_unsigned(expr.target_type.kind)) {
         if (opcode == LIR_OPCODE_SSHR) {
             opcode = LIR_OPCODE_USHR;
         } else if (opcode == LIR_OPCODE_SDIV) {
             opcode = LIR_OPCODE_UDIV;
         } else if (opcode == LIR_OPCODE_SREM) {
             opcode = LIR_OPCODE_UREM;
+        } else if (opcode == LIR_OPCODE_SLT) {
+            opcode = LIR_OPCODE_USLT;
+        } else if (opcode == LIR_OPCODE_SLE) {
+            opcode = LIR_OPCODE_USLE;
+        } else if (opcode == LIR_OPCODE_SGT) {
+            opcode = LIR_OPCODE_USGT;
+        } else if (opcode == LIR_OPCODE_SGE) {
+            opcode = LIR_OPCODE_USGE;
         }
     }
 
@@ -3460,8 +3487,8 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_FNDEF: {
             linear_fn_decl(m,
-                           (ast_expr_t) {
-                                   .line = stmt->line,
+                           (ast_expr_t){
+                                  .line = stmt->line,
                                    .assert_type = stmt->assert_type,
                                    .value = stmt->value,
                                    .target_type = NULL},
@@ -3472,7 +3499,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             ast_call_t *call = stmt->value;
             // stmt 中都 call 都是没有返回值的
             linear_call(m,
-                        (ast_expr_t) {
+                        (ast_expr_t){
                                 .line = stmt->line,
                                 .column = stmt->column,
                                 .assert_type = AST_CALL,
@@ -3486,7 +3513,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             ast_catch_t *catch = stmt->value;
             linear_catch_expr(m,
-                              (ast_expr_t) {
+                              (ast_expr_t){
                                       .line = stmt->line,
                                       .column = stmt->column,
                                       .assert_type = AST_CATCH,

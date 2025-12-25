@@ -54,11 +54,16 @@ static inline void lower_imm_symbol(closure_t *c, lir_operand_t *imm_operand, li
         local_var_operand = table_get(c->local_imm_table, key);
         if (local_var_operand == NULL) {
             local_var_operand = temp_var_operand(c->module, type_kind_new(imm->kind));
-
             lir_operand_t *symbol_ptr = temp_var_operand(c->module, type_kind_new(TYPE_ANYPTR));
-            linked_push(symbol_operations, lir_op_lea(symbol_ptr, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var)));
-            lir_operand_t *src = indirect_addr_operand(c->module, type_kind_new(imm->kind), symbol_ptr, 0);
-            linked_push(symbol_operations, lir_op_move(local_var_operand, src));
+
+            if (BUILD_ARCH == ARCH_AMD64) {
+                linked_push(symbol_operations, lir_op_move(local_var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var)));
+            } else {
+                linked_push(symbol_operations, lir_op_lea(symbol_ptr, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var)));
+                lir_operand_t *src = indirect_addr_operand(c->module, type_kind_new(imm->kind), symbol_ptr, 0);
+                linked_push(symbol_operations, lir_op_move(local_var_operand, src));
+            }
+
 
             table_set(c->local_imm_table, key, local_var_operand);
         }

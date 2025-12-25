@@ -986,7 +986,7 @@ void amd64_opcode_init() {
     opcode_tree_build(&cmp_rm8_r8);
     opcode_tree_build(&cmp_rm16_r16);
     opcode_tree_build(&cmp_rm32_r32);
-    opcode_tree_build(&cmp_r64_rm64);
+    opcode_tree_build(&cmp_rm64_r64);
     opcode_tree_build(&cmp_rex_r8_rm8);
     opcode_tree_build(&cmp_r8_rm8);
     opcode_tree_build(&cmp_r16_rm16);
@@ -1562,6 +1562,8 @@ amd64_opcode_inst_t *opcode_select(amd64_asm_inst_t *asm_inst) {
         reg_t *reg = NULL;
         reg_t *reg2 = NULL;
         if (operand->type == AMD64_ASM_OPERAND_TYPE_REG) {
+            reg = operand->value;
+        } else if (operand->type == AMD64_ASM_OPERAND_TYPE_FREG) {
             reg = operand->value;
         } else if (operand->type == AMD64_ASM_OPERAND_TYPE_DISP_REG) {
             asm_disp_reg_t *disp = operand->value;

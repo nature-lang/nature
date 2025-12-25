@@ -134,6 +134,9 @@ static bool peephole_move_elimination_match2(closure_t *c, lir_op_t *op1, lir_op
         op2->code != LIR_OPCODE_XOR &&
         op2->code != LIR_OPCODE_NOT &&
         op2->code != LIR_OPCODE_USLT &&
+        op2->code != LIR_OPCODE_USLE &&
+        op2->code != LIR_OPCODE_USGT &&
+        op2->code != LIR_OPCODE_USGE &&
         op2->code != LIR_OPCODE_SLT &&
         op2->code != LIR_OPCODE_SLE &&
         op2->code != LIR_OPCODE_SGT &&
@@ -215,6 +218,9 @@ static bool peephole_move_elimination_match1(closure_t *c, lir_op_t *op1, lir_op
         op1->code != LIR_OPCODE_SLE &&
         op1->code != LIR_OPCODE_SGT &&
         op1->code != LIR_OPCODE_SGE &&
+        op1->code != LIR_OPCODE_USLE &&
+        op1->code != LIR_OPCODE_USGT &&
+        op1->code != LIR_OPCODE_USGE &&
         op1->code != LIR_OPCODE_SEE &&
         op1->code != LIR_OPCODE_SNE) {
         return false;

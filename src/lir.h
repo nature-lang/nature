@@ -1122,7 +1122,9 @@ static inline bool ast_op_is_cmp(ast_expr_op_t opcode) {
 static inline bool lir_op_branch_cmp(lir_op_t *op) {
     return op->code == LIR_OPCODE_BEE || op->code == LIR_OPCODE_BNE ||
            op->code == LIR_OPCODE_BGT || op->code == LIR_OPCODE_BGE ||
-           op->code == LIR_OPCODE_BLT || op->code == LIR_OPCODE_BLE;
+           op->code == LIR_OPCODE_BLT || op->code == LIR_OPCODE_BLE ||
+           op->code == LIR_OPCODE_BUGT || op->code == LIR_OPCODE_BUGE ||
+           op->code == LIR_OPCODE_BULT || op->code == LIR_OPCODE_BULE;
 }
 
 static inline bool lir_op_branch(lir_op_t *op) {
@@ -1213,7 +1215,10 @@ static inline bool lir_op_scc(lir_op_t *op) {
            op->code == LIR_OPCODE_SGE ||
            op->code == LIR_OPCODE_SEE ||
            op->code == LIR_OPCODE_SNE ||
-           op->code == LIR_OPCODE_USLT;
+           op->code == LIR_OPCODE_USLT ||
+           op->code == LIR_OPCODE_USLE ||
+           op->code == LIR_OPCODE_USGT ||
+           op->code == LIR_OPCODE_USGE;
 }
 
 

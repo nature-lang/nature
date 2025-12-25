@@ -73,7 +73,9 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op, linked_t *symbol_op
         lir_imm_t *imm = imm_operand->value;
 
         if (imm->kind == TYPE_RAW_STRING || is_float(imm->kind)) {
+
             lower_imm_symbol(c, imm_operand, list, symbol_operations);
+
         } else if (is_qword_int(imm->kind)) {
             if (op->code != LIR_OPCODE_MOVE || op->output->assert_type != LIR_OPERAND_VAR) {
                 // 大数值必须通过 reg 转化,

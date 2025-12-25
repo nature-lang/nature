@@ -978,6 +978,15 @@ static slice_t *arm64_native_scc(closure_t *c, lir_op_t *op) {
         case LIR_OPCODE_SLE:
             cond = ARM64_COND_LE;
             break;
+        case LIR_OPCODE_USLE:
+            cond = ARM64_COND_LS;
+            break;
+        case LIR_OPCODE_USGT:
+            cond = ARM64_COND_HI;
+            break;
+        case LIR_OPCODE_USGE:
+            cond = ARM64_COND_HS;
+            break;
         case LIR_OPCODE_SEE:
             cond = ARM64_COND_EQ;
             break;
@@ -1191,6 +1200,10 @@ arm64_native_fn arm64_native_table[] = {
         [LIR_OPCODE_BGT] = arm64_native_bcc,
         [LIR_OPCODE_BLE] = arm64_native_bcc,
         [LIR_OPCODE_BLT] = arm64_native_bcc,
+        [LIR_OPCODE_BUGE] = arm64_native_bcc,
+        [LIR_OPCODE_BUGT] = arm64_native_bcc,
+        [LIR_OPCODE_BULE] = arm64_native_bcc,
+        [LIR_OPCODE_BULT] = arm64_native_bcc,
 
         // 一元运算符
         [LIR_OPCODE_NEG] = arm64_native_neg,
@@ -1219,6 +1232,9 @@ arm64_native_fn arm64_native_table[] = {
         [LIR_OPCODE_SLT] = arm64_native_scc,
         [LIR_OPCODE_USLT] = arm64_native_scc,
         [LIR_OPCODE_SLE] = arm64_native_scc,
+        [LIR_OPCODE_USLE] = arm64_native_scc,
+        [LIR_OPCODE_USGT] = arm64_native_scc,
+        [LIR_OPCODE_USGE] = arm64_native_scc,
         [LIR_OPCODE_SEE] = arm64_native_scc,
         [LIR_OPCODE_SNE] = arm64_native_scc,
 
