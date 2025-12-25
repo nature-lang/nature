@@ -47,19 +47,20 @@ void cmd_entry(int argc, char **argv) {
                     // 解析出目录路径
                     char *output_dir = path_dir(o_arg);
                     if (strlen(output_dir) > 0) {
-                        char temp_path[PATH_MAX] = "";
-                        if (realpath(output_dir, temp_path) == NULL) {
+                        if (realpath(output_dir, BUILD_OUTPUT_DIR) == NULL) {
                             // assertf(false, "output dir='%s' not exists", output_dir);
                             printf("output dir '%s' not exists\n", output_dir);
+                            free(output_dir);
                             exit(EXIT_FAILURE);
                         }
-                        strcpy(BUILD_OUTPUT_DIR, temp_path);
                         if (!dir_exists(BUILD_OUTPUT_DIR)) {
-                            printf("build output dir '%s' not exists\n", BUILD_OUTPUT_DIR);
+                            printf("output path '%s' is not a directory\n", BUILD_OUTPUT_DIR);
+                            free(output_dir);
                             exit(EXIT_FAILURE);
                         }
                         // assertf(dir_exists(BUILD_OUTPUT_DIR), "build output dir='%s' not exists", BUILD_OUTPUT_DIR);
                     }
+                    free(output_dir);
 
                     // 解析出文件名称
                     char *output_name = file_name(o_arg);
@@ -74,19 +75,19 @@ void cmd_entry(int argc, char **argv) {
             }
             case 1: {
                 char *target = optarg;
-                if (strcmp(target, "linux_amd64") == 0) {
+                if (str_equal(target, "linux_amd64")) {
                     BUILD_OS = OS_LINUX;
                     BUILD_ARCH = ARCH_AMD64;
-                } else if (strcmp(target, "linux_arm64") == 0) {
+                } else if (str_equal(target, "linux_arm64")) {
                     BUILD_OS = OS_LINUX;
                     BUILD_ARCH = ARCH_ARM64;
-                } else if (strcmp(target, "linux_riscv64") == 0) {
+                } else if (str_equal(target, "linux_riscv64")) {
                     BUILD_OS = OS_LINUX;
                     BUILD_ARCH = ARCH_RISCV64;
-                } else if (strcmp(target, "darwin_amd64") == 0) {
+                } else if (str_equal(target, "darwin_amd64")) {
                     BUILD_OS = OS_DARWIN;
                     BUILD_ARCH = ARCH_AMD64;
-                } else if (strcmp(target, "darwin_arm64") == 0) {
+                } else if (str_equal(target, "darwin_arm64")) {
                     BUILD_OS = OS_DARWIN;
                     BUILD_ARCH = ARCH_ARM64;
                 } else {

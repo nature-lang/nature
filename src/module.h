@@ -69,6 +69,7 @@ static inline char *module_unique_ident(ast_import_t *import) {
 
     char *temp_dir = path_dir(import->package_dir);
     char *ident = str_replace(import->full_path, temp_dir, "");
+    free(temp_dir);
     ident = ltrim(ident, "/");
 
     ident = rtrim(ident, ".n");
