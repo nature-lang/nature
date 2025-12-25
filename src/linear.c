@@ -1860,7 +1860,7 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
     lir_operand_t *left_target = linear_expr(m, binary_expr->left, NULL);
     lir_operand_t *right_target = linear_expr(m, binary_expr->right, NULL);
     lir_opcode_t opcode = ast_op_convert[binary_expr->op];
-    if (is_unsigned(expr.target_type.kind)) {
+    if (is_unsigned(binary_expr->left.type.kind)) {
         if (opcode == LIR_OPCODE_SSHR) {
             opcode = LIR_OPCODE_USHR;
         } else if (opcode == LIR_OPCODE_SDIV) {
@@ -3488,7 +3488,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_FNDEF: {
             linear_fn_decl(m,
                            (ast_expr_t){
-                                  .line = stmt->line,
+                                   .line = stmt->line,
                                    .assert_type = stmt->assert_type,
                                    .value = stmt->value,
                                    .target_type = NULL},

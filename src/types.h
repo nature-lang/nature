@@ -410,14 +410,14 @@ typedef enum {
 
     LIR_OPCODE_CLR, // clean reg
     LIR_OPCODE_CLV, // clean up var, result is var，等同于首次变量注册的功能
-    LIR_OPCODE_USLT, // unsigned set less than <
-    LIR_OPCODE_USLE, // unsigned set less than or equal <=
     LIR_OPCODE_SLT, // <
+    LIR_OPCODE_USLT, // unsigned set less than <
     LIR_OPCODE_SLE, // <=
-    LIR_OPCODE_USGT, // unsigned set greater than >
-    LIR_OPCODE_USGE, // unsigned set greater than or equal >=
+    LIR_OPCODE_USLE, // unsigned set less than or equal <=
     LIR_OPCODE_SGT, // >
+    LIR_OPCODE_USGT, // unsigned set greater than >
     LIR_OPCODE_SGE, // >=
+    LIR_OPCODE_USGE, // unsigned set greater than or equal >=
 
     LIR_OPCODE_SEE, // ==
     LIR_OPCODE_SNE, // !=

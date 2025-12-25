@@ -928,8 +928,6 @@ static slice_t *amd64_native_scc(closure_t *c, lir_op_t *op) {
 
     char *asm_code;
     if (amd64_is_integer_operand(op->first)) {
-        // seta r/m8, dst - src > 0 也就是 dst > src 时, cf = zf = 0, seta 就是这两个为 0 时将结果设置为 1
-        // 也就是 dst > src 时，将 1 写入到结果中
         asm_code = asm_setcc_integer_trans[op->code];
     } else {
         asm_code = asm_setcc_float_trans[op->code];
