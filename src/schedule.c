@@ -89,6 +89,51 @@ static bool schedule_is_call_barrier(lir_op_t *op) {
     return op->code == LIR_OPCODE_CALL || op->code == LIR_OPCODE_RT_CALL;
 }
 
+/**
+ * 计算指令的执行延迟 (cycles)
+ * 用于关键路径分析和调度优先级计算
+ */
+static int schedule_compute_latency(lir_op_t *op) {
+    switch (op->code) {
+        // 除法和求余指令延迟最高
+        case LIR_OPCODE_SDIV:
+        case LIR_OPCODE_UDIV:
+        case LIR_OPCODE_SREM:
+        case LIR_OPCODE_UREM:
+            return 20;  // 除法延迟约 20-60 cycles
+
+        // 乘法指令
+        case LIR_OPCODE_MUL:
+            return 4;   // 乘法延迟约 3-5 cycles
+
+        // 内存读取操作
+        case LIR_OPCODE_CALL:
+        case LIR_OPCODE_RT_CALL:
+            return 10;  // 调用有较高延迟
+
+        // 浮点转换
+        case LIR_OPCODE_FTOSI:
+        case LIR_OPCODE_FTOUI:
+        case LIR_OPCODE_SITOF:
+        case LIR_OPCODE_UITOF:
+        case LIR_OPCODE_FTRUNC:
+        case LIR_OPCODE_FEXT:
+            return 4;   // 浮点转换延迟
+
+        // 默认单周期操作
+        default:
+            break;
+    }
+
+    // 内存读取操作延迟
+    if (schedule_is_mem_read(op)) {
+        return 4;  // L1 cache hit 延迟
+    }
+
+    // 默认延迟为 1 cycle
+    return 1;
+}
+
 
 /**
  * 计算指令的评分
@@ -171,6 +216,8 @@ static schedule_node_t *schedule_node_new(lir_op_t *op, linked_node *node, int i
     sn->successors = slice_new();
     sn->scheduled = false;
     sn->original_id = id;
+    sn->latency = schedule_compute_latency(op);
+    sn->priority = 0;  // 将在依赖图构建后计算
     return sn;
 }
 
@@ -196,11 +243,20 @@ static void schedule_add_dep(schedule_node_t *from, schedule_node_t *to) {
  * 返回 true 表示 a 优先级更高 (应该先调度)
  */
 static bool schedule_node_less(schedule_node_t *a, schedule_node_t *b) {
-    // 1. 首先按分数比较
+    // 1. 首先按分数比较 (保证指令类型的基本顺序)
     if (a->score != b->score) {
         return a->score < b->score;
     }
-    // 2. 分数相同时，保持原始顺序 (源码顺序)
+    // 2. 分数相同时，按关键路径优先级排序
+    //    优先调度关键路径更长的指令 (更高的 priority)
+    if (a->priority != b->priority) {
+        return a->priority > b->priority;
+    }
+    // 3. 关键路径也相同时，优先调度高延迟指令
+    if (a->latency != b->latency) {
+        return a->latency > b->latency;
+    }
+    // 4. 最后保持原始顺序
     return a->original_id < b->original_id;
 }
 
@@ -312,12 +368,23 @@ static void schedule_build_deps(closure_t *c, schedule_ctx_t *ctx) {
         // 5. CALL 屏障依赖: CALL 指令前后的指令不能跨越 CALL 重排
         // - CALL 之前的所有指令必须在 CALL 之前执行完成
         // - CALL 之后的所有指令必须在 CALL 之后执行
+        // 优化: 使用 pending 列表追踪上一个 CALL 之后的指令，复杂度从 O(n²) 降到 O(n)
         if (schedule_is_call_barrier(op)) {
-            // 当前 CALL 依赖于它之前的所有指令
-            for (int j = 0; j < i; j++) {
-                schedule_node_t *prev_node = ctx->nodes->take[j];
-                schedule_add_dep(prev_node, node);
+            // 当前 CALL 依赖于上一个 CALL 之后的所有 pending 指令
+            slice_t *pending = table_get(ctx->last_mem_op, "_pending_");
+            if (pending) {
+                for (int j = 0; j < pending->count; j++) {
+                    schedule_add_dep(pending->take[j], node);
+                }
+                pending->count = 0;  // 清空 pending 列表
             }
+
+            // 依赖上一个 CALL（保持 CALL 之间的顺序）
+            schedule_node_t *last_call = table_get(ctx->last_mem_op, "_last_call_");
+            if (last_call && last_call != node) {
+                schedule_add_dep(last_call, node);
+            }
+
             // 更新 last_call_barrier
             table_set(ctx->last_mem_op, "_last_call_", node);
         } else {
@@ -326,17 +393,75 @@ static void schedule_build_deps(closure_t *c, schedule_ctx_t *ctx) {
             if (last_call && last_call != node) {
                 schedule_add_dep(last_call, node);
             }
+
+            // 将当前指令加入 pending 列表，等待下一个 CALL 建立依赖
+            slice_t *pending = table_get(ctx->last_mem_op, "_pending_");
+            if (!pending) {
+                pending = slice_new();
+                table_set(ctx->last_mem_op, "_pending_", pending);
+            }
+            slice_push(pending, node);
         }
 
         // 6. 控制流依赖: 控制流指令必须在所有其他指令之后
         if (schedule_is_control(op)) {
             for (int j = 0; j < ctx->nodes->count; j++) {
                 schedule_node_t *other = ctx->nodes->take[j];
-                if (other != node && !schedule_is_control(other->op)) {
+                if (other != node && !schedule_is_control(other->op) && other->op->code != LIR_OPCODE_FN_END) {
                     schedule_add_dep(other, node);
                 }
             }
         }
+
+        // 7. FN_END 依赖: FN_END 必须在所有其他指令之后（包括控制流指令）
+        if (op->code == LIR_OPCODE_FN_END) {
+            for (int j = 0; j < ctx->nodes->count; j++) {
+                schedule_node_t *other = ctx->nodes->take[j];
+                if (other != node && other->op->code != LIR_OPCODE_FN_END) {
+                    schedule_add_dep(other, node);
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 递归计算节点的关键路径优先级
+ * 返回从该节点到出口的最长加权路径长度
+ */
+static int schedule_compute_priority_recursive(schedule_node_t *node) {
+    // 如果已经计算过，直接返回
+    if (node->priority > 0) {
+        return node->priority;
+    }
+
+    // 叶子节点 (没有后继): priority = 自身延迟
+    if (node->successors->count == 0) {
+        node->priority = node->latency;
+        return node->priority;
+    }
+
+    // 非叶子节点: priority = 自身延迟 + max(后继的priority)
+    int max_succ_priority = 0;
+    for (int i = 0; i < node->successors->count; i++) {
+        schedule_node_t *succ = node->successors->take[i];
+        int succ_priority = schedule_compute_priority_recursive(succ);
+        if (succ_priority > max_succ_priority) {
+            max_succ_priority = succ_priority;
+        }
+    }
+    node->priority = node->latency + max_succ_priority;
+    return node->priority;
+}
+
+/**
+ * 计算所有节点的关键路径优先级
+ */
+static void schedule_compute_priorities(schedule_ctx_t *ctx) {
+    // 从每个节点开始计算，递归会处理依赖
+    for (int i = 0; i < ctx->nodes->count; i++) {
+        schedule_node_t *node = ctx->nodes->take[i];
+        schedule_compute_priority_recursive(node);
     }
 }
 
@@ -437,6 +562,9 @@ static void schedule_block(closure_t *c, basic_block_t *block) {
 
     // 构建依赖图
     schedule_build_deps(c, &ctx);
+
+    // 计算关键路径优先级
+    schedule_compute_priorities(&ctx);
 
     // 执行调度
     schedule_execute(&ctx);

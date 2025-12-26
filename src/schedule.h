@@ -36,6 +36,8 @@ typedef struct {
     slice_t *successors; // 后继节点列表 (依赖当前指令的指令)
     bool scheduled; // 是否已被调度
     int original_id; // 原始顺序编号
+    int latency; // 指令延迟 (cycles)
+    int priority; // 关键路径优先级 (到出口的最大加权路径长度)
 } schedule_node_t;
 
 /**
