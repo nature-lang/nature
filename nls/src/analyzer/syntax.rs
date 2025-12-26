@@ -2199,6 +2199,34 @@ impl<'a> Syntax {
             "".to_string()
         };
 
+        let (use_all_symbols, use_symbols) = if self.consume(TokenType::Use) {
+            self.must(TokenType::LeftCurly)?;
+            let mut symbols = Vec::new();
+
+            loop {
+                let symbol_name = self.must(TokenType::Ident)?.literal.clone();
+                let symbol_as = if self.consume(TokenType::As) {
+                    Some(self.must(TokenType::Ident)?.literal.clone())
+                } else {
+                    None
+                };
+
+                symbols.push(ImportSymbol {
+                    symbol_name,
+                    as_name: symbol_as,
+                });
+
+                if !self.consume(TokenType::Comma) {
+                    break;
+                }
+            }
+
+            self.must(TokenType::RightCurly)?;
+            (false, Some(symbols))
+        } else {
+            (true, None)
+        };
+
         stmt.node = AstNode::Import(ImportStmt {
             file,
             ast_package,
@@ -2208,6 +2236,8 @@ impl<'a> Syntax {
             package_conf: None,
             package_dir: String::new(),
             use_links: false,
+            use_all_symbols,
+            use_symbols,
             module_ident: String::new(),
             start: stmt.start,
             end: import_end,

@@ -456,6 +456,9 @@ typedef struct {
     slice_t *ast_package; // a.b.c.d package 字符串数组
     char *as; // import "foo/bar" as xxx, import 别名，没有别名则使用 bar 作为名称
 
+    slice_t *use_symbols; // slice of ast_import_symbol_t*, NULL if not using selective imports
+    bool use_all_symbols;    // true if no 'use' clause (import all), false if selective
+
     // 通过上面的 file 或者 package 解析出的完整 package 路径
     // full_path 对应的 module 会属于某一个 package, 需要记录一下对应的 package conf, 否则单凭一个 full_path 还不足以定位到
     // 对应的 package.toml
@@ -468,6 +471,10 @@ typedef struct {
     char *module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident, 如果是 main 则默认添加 main.n
 } ast_import_t;
 
+typedef struct {
+    char *symbol_name; // The symbol name from the module (e.g., "max", "min")
+    char *as;  // Optional alias (NULL if no alias, e.g., "minimum" for "min as minimum")
+} ast_import_symbol_t;
 /**
  * 虽然共用了 ast_struct_property, 但是使用的字段是不同的，
  * 使用了 key, value

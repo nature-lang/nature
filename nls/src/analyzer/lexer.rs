@@ -293,6 +293,8 @@ pub enum TokenType {
     Fn,
     #[strum(serialize = "import")]
     Import,
+    #[strum(serialize = "use")]
+    Use,
 
     #[strum(serialize = "return")]
     Return,
@@ -571,6 +573,7 @@ impl Lexer {
             // "tup" => TokenType::Tup,
             "type" => TokenType::Type,
             "uint" => TokenType::Uint,
+            "use" => TokenType::Use,
             "var" => TokenType::Var,
             "const" => TokenType::Const,
             // "vec" => TokenType::Vec,

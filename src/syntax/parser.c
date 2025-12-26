@@ -1936,6 +1936,9 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
     parser_advance(m);
     ast_import_t *stmt = NEW(ast_import_t);
     stmt->ast_package = slice_new();
+    stmt->as = NULL;
+    stmt->use_symbols = NULL;   
+    stmt->use_all_symbols = true;
 
     token_t *token = parser_advance(m);
     if (token->type == TOKEN_LITERAL_STRING) {
@@ -1955,6 +1958,30 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
         PARSER_ASSERTF(token->type == TOKEN_IDENT || token->type == TOKEN_IMPORT_STAR, "import as must ident");
         stmt->as = token->literal;
     }
+
+    if (parser_consume(m, TOKEN_USE)) {
+        parser_must(m, TOKEN_LEFT_CURLY);
+        stmt->use_symbols = slice_new();
+        stmt->use_all_symbols = false;
+
+        do {
+            ast_import_symbol_t *import_symbol = NEW(ast_import_symbol_t);
+            token = parser_must(m, TOKEN_IDENT);
+            import_symbol->symbol_name = token->literal;
+            import_symbol->as = NULL;  // Default: no alias
+            
+            // Check for 'as' alias
+            if (parser_consume(m, TOKEN_AS)) {
+                token = parser_must(m, TOKEN_IDENT);
+                import_symbol->as = token->literal;
+            }
+            
+            slice_push(stmt->use_symbols, import_symbol);
+        } while (parser_consume(m, TOKEN_COMMA));
+        
+        parser_must(m, TOKEN_RIGHT_CURLY);
+    }
+
     result->assert_type = AST_STMT_IMPORT;
     result->value = stmt;
 

@@ -1,0 +1,13 @@
+import 'math.n' use { max, min as minimum, PI, E, decimal}
+
+fn main() {
+    println(max(10, 20))        // Should work
+    println(minimum(10, 20))    // Should work (aliased)
+    // println(avg(10, 20))     // Should fail - not imported
+
+    println(PI)                 // Should work
+    println(E)                  // Should work
+
+    decimal money = 100.50      // Should work
+    println(money)
+}

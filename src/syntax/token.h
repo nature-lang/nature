@@ -128,6 +128,7 @@ typedef enum {
     TOKEN_BOOM,
     TOKEN_FN,
     TOKEN_IMPORT,
+    TOKEN_USE,
     TOKEN_RETURN,
     TOKEN_GO,
     TOKEN_STMT_EOF, // ;
@@ -243,6 +244,7 @@ static string token_str[] = {
         [TOKEN_LET] = "let",
 
         [TOKEN_IMPORT] = "import",
+        [TOKEN_USE] = "use",
 
         // 类型相关
         [TOKEN_AS] = "as",
