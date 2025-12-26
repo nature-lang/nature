@@ -63,31 +63,30 @@ bool schedule_is_mem_write(lir_op_t *op) {
 
 /**
  * 判断指令是否需要固定位置，不能参与调度
+ * 这些指令作为调度屏障，调度只在屏障之间的"间隙"中进行
  */
 static bool schedule_is_fixed(lir_op_t *op) {
-    return op->code == LIR_OPCODE_LABEL ||
-           op->code == LIR_OPCODE_PHI ||
-           op->code == LIR_OPCODE_SAFEPOINT ||
-           op->code == LIR_OPCODE_FN_BEGIN ||
-           op->code == LIR_OPCODE_FN_END;
+    // 基本固定指令
+    if (op->code == LIR_OPCODE_LABEL ||
+        op->code == LIR_OPCODE_PHI ||
+        op->code == LIR_OPCODE_SAFEPOINT ||
+        op->code == LIR_OPCODE_FN_BEGIN ||
+        op->code == LIR_OPCODE_FN_END) {
+        return true;
+    }
+    // CALL 指令有副作用，不能跨越调度
+    if (op->code == LIR_OPCODE_CALL || op->code == LIR_OPCODE_RT_CALL) {
+        return true;
+    }
+    // 控制流指令必须保持在末尾
+    if (lir_op_branch(op) ||
+        op->code == LIR_OPCODE_RET ||
+        op->code == LIR_OPCODE_RETURN) {
+        return true;
+    }
+    return false;
 }
 
-/**
- * 判断指令是否是控制流指令
- */
-static bool schedule_is_control(lir_op_t *op) {
-    return lir_op_branch(op) ||
-           op->code == LIR_OPCODE_RET ||
-           op->code == LIR_OPCODE_RETURN;
-}
-
-/**
- * 判断指令是否是 call 屏障
- * call 指令会产生副作用，不能跨越调度
- */
-static bool schedule_is_call_barrier(lir_op_t *op) {
-    return op->code == LIR_OPCODE_CALL || op->code == LIR_OPCODE_RT_CALL;
-}
 
 /**
  * 计算指令的执行延迟 (cycles)
@@ -290,7 +289,7 @@ static schedule_node_t *schedule_pop_best(slice_t *ready) {
 
 
 /**
- * 构建依赖图
+ * 构建依赖图 (仅用于 segment 内部的非固定指令)
  */
 static void schedule_build_deps(closure_t *c, schedule_ctx_t *ctx) {
     // 遍历所有节点，构建依赖关系
@@ -352,9 +351,6 @@ static void schedule_build_deps(closure_t *c, schedule_ctx_t *ctx) {
             table_set(ctx->reg_def_table, key, node);
         }
 
-        // 注意: CALL 的 clobber 寄存器依赖已由 call 屏障（步骤5）隐式保证
-        // 因为 call 屏障阻止了所有跨 CALL 的指令重排
-
         // 4. 内存依赖: 保持内存操作的相对顺序
         bool is_mem_op = schedule_is_mem_read(op) || schedule_is_mem_write(op);
         if (is_mem_op) {
@@ -363,64 +359,6 @@ static void schedule_build_deps(closure_t *c, schedule_ctx_t *ctx) {
                 schedule_add_dep(last_mem, node);
             }
             table_set(ctx->last_mem_op, "_last_mem_", node);
-        }
-
-        // 5. CALL 屏障依赖: CALL 指令前后的指令不能跨越 CALL 重排
-        // - CALL 之前的所有指令必须在 CALL 之前执行完成
-        // - CALL 之后的所有指令必须在 CALL 之后执行
-        // 优化: 使用 pending 列表追踪上一个 CALL 之后的指令，复杂度从 O(n²) 降到 O(n)
-        if (schedule_is_call_barrier(op)) {
-            // 当前 CALL 依赖于上一个 CALL 之后的所有 pending 指令
-            slice_t *pending = table_get(ctx->last_mem_op, "_pending_");
-            if (pending) {
-                for (int j = 0; j < pending->count; j++) {
-                    schedule_add_dep(pending->take[j], node);
-                }
-                pending->count = 0;  // 清空 pending 列表
-            }
-
-            // 依赖上一个 CALL（保持 CALL 之间的顺序）
-            schedule_node_t *last_call = table_get(ctx->last_mem_op, "_last_call_");
-            if (last_call && last_call != node) {
-                schedule_add_dep(last_call, node);
-            }
-
-            // 更新 last_call_barrier
-            table_set(ctx->last_mem_op, "_last_call_", node);
-        } else {
-            // 非 CALL 指令需要依赖于前面最近的 CALL
-            schedule_node_t *last_call = table_get(ctx->last_mem_op, "_last_call_");
-            if (last_call && last_call != node) {
-                schedule_add_dep(last_call, node);
-            }
-
-            // 将当前指令加入 pending 列表，等待下一个 CALL 建立依赖
-            slice_t *pending = table_get(ctx->last_mem_op, "_pending_");
-            if (!pending) {
-                pending = slice_new();
-                table_set(ctx->last_mem_op, "_pending_", pending);
-            }
-            slice_push(pending, node);
-        }
-
-        // 6. 控制流依赖: 控制流指令必须在所有其他指令之后
-        if (schedule_is_control(op)) {
-            for (int j = 0; j < ctx->nodes->count; j++) {
-                schedule_node_t *other = ctx->nodes->take[j];
-                if (other != node && !schedule_is_control(other->op) && other->op->code != LIR_OPCODE_FN_END) {
-                    schedule_add_dep(other, node);
-                }
-            }
-        }
-
-        // 7. FN_END 依赖: FN_END 必须在所有其他指令之后（包括控制流指令）
-        if (op->code == LIR_OPCODE_FN_END) {
-            for (int j = 0; j < ctx->nodes->count; j++) {
-                schedule_node_t *other = ctx->nodes->take[j];
-                if (other != node && other->op->code != LIR_OPCODE_FN_END) {
-                    schedule_add_dep(other, node);
-                }
-            }
         }
     }
 }
@@ -508,29 +446,16 @@ static void schedule_execute(schedule_ctx_t *ctx) {
     }
 }
 
-/**
- * 将调度结果应用到基本块
- */
-static void schedule_apply(schedule_ctx_t *ctx) {
-    basic_block_t *block = ctx->block;
-
-    // 创建新的操作链表
-    linked_t *new_ops = linked_new();
-
-    for (int i = 0; i < ctx->result->count; i++) {
-        schedule_node_t *node = ctx->result->take[i];
-        linked_push(new_ops, node->op);
-    }
-
-    // 替换原链表
-    block->operations = new_ops;
-}
 
 /**
- * 对单个基本块进行指令调度
+ * 对单个 segment（固定指令之间的间隙）进行调度
  */
-static void schedule_block(closure_t *c, basic_block_t *block) {
-    if (!block || !block->operations || linked_count(block->operations) <= 1) {
+static void schedule_segment(closure_t *c, basic_block_t *block, slice_t *segment_ops, slice_t *result) {
+    // segment 太小，不需要调度，直接添加到结果
+    if (segment_ops->count <= 2) {
+        for (int i = 0; i < segment_ops->count; i++) {
+            slice_push(result, segment_ops->take[i]);
+        }
         return;
     }
 
@@ -545,19 +470,11 @@ static void schedule_block(closure_t *c, basic_block_t *block) {
     ctx.reg_def_table = table_new();
     ctx.reg_use_table = table_new();
 
-    // 收集所有指令节点
-    int id = 0;
-    linked_node *current = linked_first(block->operations);
-    while (current->value) {
-        lir_op_t *op = current->value;
-        schedule_node_t *node = schedule_node_new(op, current, id++);
+    // 收集 segment 内的指令节点
+    for (int i = 0; i < segment_ops->count; i++) {
+        lir_op_t *op = segment_ops->take[i];
+        schedule_node_t *node = schedule_node_new(op, NULL, i);
         slice_push(ctx.nodes, node);
-        current = current->succ;
-    }
-
-    // 如果指令数太少，不需要调度
-    if (ctx.nodes->count <= 2) {
-        return;
     }
 
     // 构建依赖图
@@ -569,8 +486,69 @@ static void schedule_block(closure_t *c, basic_block_t *block) {
     // 执行调度
     schedule_execute(&ctx);
 
+    // 将调度结果添加到总结果
+    for (int i = 0; i < ctx.result->count; i++) {
+        schedule_node_t *node = ctx.result->take[i];
+        slice_push(result, node->op);
+    }
+}
+
+/**
+ * 对单个基本块进行指令调度
+ * 采用分段调度策略：固定指令作为屏障，只在屏障之间的 segment 内进行调度
+ */
+static void schedule_block(closure_t *c, basic_block_t *block) {
+    if (!block || !block->operations || linked_count(block->operations) <= 1) {
+        return;
+    }
+
+    // 收集所有指令
+    slice_t *all_ops = slice_new();
+    linked_node *current = linked_first(block->operations);
+    while (current->value) {
+        slice_push(all_ops, current->value);
+        current = current->succ;
+    }
+
+    // 如果指令数太少，不需要调度
+    if (all_ops->count <= 2) {
+        return;
+    }
+
+    // 结果列表
+    slice_t *result = slice_new();
+    // 当前 segment 中的非固定指令
+    slice_t *segment = slice_new();
+
+    // 遍历所有指令，按固定指令分段
+    for (int i = 0; i < all_ops->count; i++) {
+        lir_op_t *op = all_ops->take[i];
+
+        if (schedule_is_fixed(op)) {
+            // 遇到固定指令：先调度当前 segment，再添加固定指令
+            if (segment->count > 0) {
+                schedule_segment(c, block, segment, result);
+                segment->count = 0;  // 清空 segment
+            }
+            // 固定指令直接加入结果
+            slice_push(result, op);
+        } else {
+            // 非固定指令加入当前 segment
+            slice_push(segment, op);
+        }
+    }
+
+    // 处理最后一个 segment
+    if (segment->count > 0) {
+        schedule_segment(c, block, segment, result);
+    }
+
     // 应用调度结果
-    schedule_apply(&ctx);
+    linked_t *new_ops = linked_new();
+    for (int i = 0; i < result->count; i++) {
+        linked_push(new_ops, result->take[i]);
+    }
+    block->operations = new_ops;
 }
 
 /**
