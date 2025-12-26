@@ -279,7 +279,7 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
         } else {
             // 参数通过栈传递 stack pass (过大的结构体通过栈指针+寄存器的方式传递)
 
-            int64_t sp_offset = arg_pos - 32 + 16; // 16是为保存的fp和lr预留的空间
+            int64_t sp_offset = (arg_pos & ~1) - 32 + 16; // 16是为保存的fp和lr预留的空间
             lir_operand_t *src = lir_stack_operand(c->module, sp_offset, type_sizeof(param_type), param_type.kind);
 
             if ((arg_pos & 1) || (type_sizeof(param_type) <= 8)) {
@@ -430,7 +430,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
             continue;
         }
 
-        int64_t sp_offset = arg_item_pos - 32;
+        int64_t sp_offset = (arg_item_pos & ~1) - 32;
 
         // sp operand
         lir_operand_t *dst = indirect_addr_operand(c->module, arg_type, sp_operand, sp_offset);
