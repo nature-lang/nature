@@ -23,6 +23,7 @@
 #include "src/native/arm64.h"
 #include "src/native/riscv64.h"
 #include "src/register/linearscan.h"
+#include "src/schedule.h"
 #include "src/semantic/analyzer.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
@@ -1072,7 +1073,14 @@ static void build_compiler(slice_t *modules) {
             // 窥孔指令优化
             peephole_optimize(c);
 
+            mark_number(c);
+
             debug_block_lir(c, "ssa_peephole");
+
+            // 指令调度
+            schedule(c);
+
+            debug_block_lir(c, "schedule");
 
             // lir 向 arch 靠拢
             cross_lower(c);

@@ -279,7 +279,7 @@ static linked_t *arm64_lower_params(closure_t *c, slice_t *param_vars) {
         } else {
             // 参数通过栈传递 stack pass (过大的结构体通过栈指针+寄存器的方式传递)
 
-            int64_t sp_offset = arg_pos - 32 + 16; // 16是为保存的fp和lr预留的空间
+            int64_t sp_offset = (arg_pos & ~1) - 32 + 16; // 16是为保存的fp和lr预留的空间
             lir_operand_t *src = lir_stack_operand(c->module, sp_offset, type_sizeof(param_type), param_type.kind);
 
             if ((arg_pos & 1) || (type_sizeof(param_type) <= 8)) {
@@ -430,7 +430,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
             continue;
         }
 
-        int64_t sp_offset = arg_item_pos - 32;
+        int64_t sp_offset = (arg_item_pos & ~1) - 32;
 
         // sp operand
         lir_operand_t *dst = indirect_addr_operand(c->module, arg_type, sp_operand, sp_offset);
@@ -523,7 +523,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
     }
 
     // 重新生成 op->second, 用于寄存器分配记录
-    op->second = operand_new(LIR_OPERAND_REGS, use_regs);
+    op->second = lir_reset_operand(operand_new(LIR_OPERAND_REGS, use_regs), LIR_FLAG_SECOND);
     set_operand_flag(op->second);
 
     // 基于 return type 的不同类型生成不同的 call
@@ -587,7 +587,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
             }
         }
 
-        lir_operand_t *new_output = operand_new(LIR_OPERAND_REGS, output_regs);
+        lir_operand_t *new_output = lir_reset_operand(operand_new(LIR_OPERAND_REGS, output_regs), LIR_FLAG_OUTPUT);
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, new_output, op->line, op->column));
 
         // 将返回值 mov 到 call_result 中

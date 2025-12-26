@@ -34,7 +34,7 @@ amd64_opcode_inst_t jne_rel8 = {"jne", "jne", 0, {0x75}, {OPCODE_EXT_IMM_BYTE}, 
 amd64_opcode_inst_t jne_rel32 = {"jne", "jne", 0, {0x0F, 0x85}, {OPCODE_EXT_IMM_DWORD},
                                  {OPERAND_TYPE_REL32, ENCODING_TYPE_IMM}};
 
-// ja (jump if above) instructions  
+// ja (jump if above) instructions
 amd64_opcode_inst_t ja_rel8 = {"ja", "ja", 0, {0x77}, {OPCODE_EXT_IMM_BYTE}, {OPERAND_TYPE_REL8, ENCODING_TYPE_IMM}};
 
 amd64_opcode_inst_t ja_rel32 = {"ja", "ja", 0, {0x0F, 0x87}, {OPCODE_EXT_IMM_DWORD},
@@ -400,6 +400,22 @@ amd64_opcode_inst_t cmp_r64_rm64 = {"cmp", "cmp", 0, {0x3B}, {OPCODE_EXT_REX_W, 
                                     {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG},
                                      {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
 
+// test ------------------------------------------------------------------------------------------------------
+amd64_opcode_inst_t test_rm8_r8 = {"test", "test", 0, {0x84}, {OPCODE_EXT_SLASHR},
+                                   {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                    {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t test_rex_rm8_r8 = {"test", "test", 0, {0x84}, {OPCODE_EXT_REX, OPCODE_EXT_SLASHR},
+                                       {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
+                                        {OPERAND_TYPE_R8, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t test_rm16_r16 = {"test", "test", 0x66, {0x85}, {OPCODE_EXT_SLASHR},
+                                     {{OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM},
+                                      {OPERAND_TYPE_R16, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t test_rm32_r32 = {"test", "test", 0, {0x85}, {OPCODE_EXT_SLASHR},
+                                     {{OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM},
+                                      {OPERAND_TYPE_R32, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t test_rm64_r64 = {"test", "test", 0, {0x85}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR},
+                                     {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM},
+                                      {OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}}};
 
 // setcc ------------------------------------------------------------------------------------------------------
 amd64_opcode_inst_t seta_rm8 = {"seta", "seta", 0, {0x0F, 0x97}, {}, {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
@@ -722,6 +738,23 @@ amd64_opcode_inst_t xorps_xmm1_xmm2m128 = {"xor", "xorps", 0, {0x0F, 0x57}, {OPC
 
 
 // float mov ------------------------------------------------------------------------------------------------------
+
+// movaps - 用于 xmm 寄存器之间的移动，比 movsd/movss 更高效（不需要前缀字节）
+// MOVAPS xmm1, xmm2/m128: 0F 28 /r
+amd64_opcode_inst_t movaps_xmm1_xmm2 = {"mov", "movaps", 0, {0x0F, 0x28}, {OPCODE_EXT_SLASHR},
+                                        {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
+                                         {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_RM}}};
+amd64_opcode_inst_t movaps_xmm1_xmm2_f32 = {"mov", "movaps", 0, {0x0F, 0x28}, {OPCODE_EXT_SLASHR},
+                                            {{OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG},
+                                             {OPERAND_TYPE_XMM2S32, ENCODING_TYPE_MODRM_RM}}};
+// MOVAPS xmm2/m128, xmm1: 0F 29 /r
+amd64_opcode_inst_t movaps_xmm2_xmm1 = {"mov", "movaps", 0, {0x0F, 0x29}, {OPCODE_EXT_SLASHR},
+                                        {{OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_RM},
+                                         {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG}}};
+amd64_opcode_inst_t movaps_xmm2_xmm1_f32 = {"mov", "movaps", 0, {0x0F, 0x29}, {OPCODE_EXT_SLASHR},
+                                            {{OPERAND_TYPE_XMM2S32, ENCODING_TYPE_MODRM_RM},
+                                             {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}}};
+
 amd64_opcode_inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0xF2, {0x0F, 0x10}, {OPCODE_EXT_SLASHR},
                                        {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
                                         {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_RM}}};
@@ -993,6 +1026,12 @@ void amd64_opcode_init() {
     opcode_tree_build(&cmp_r32_rm32);
     opcode_tree_build(&cmp_r64_rm64);
 
+    opcode_tree_build(&test_rex_rm8_r8);
+    opcode_tree_build(&test_rm8_r8);
+    opcode_tree_build(&test_rm16_r16);
+    opcode_tree_build(&test_rm32_r32);
+    opcode_tree_build(&test_rm64_r64);
+
     opcode_tree_build(&seta_rex_rm8);
     opcode_tree_build(&setae_rex_rm8);
     opcode_tree_build(&setb_rex_rm8);
@@ -1110,7 +1149,12 @@ void amd64_opcode_init() {
     opcode_tree_build(&shr_rm64_imm8);
 
 
-    // 浮点数算数运算
+    // movaps - xmm 寄存器之间移动，性能更好
+    opcode_tree_build(&movaps_xmm1_xmm2);
+    opcode_tree_build(&movaps_xmm1_xmm2_f32);
+    opcode_tree_build(&movaps_xmm2_xmm1);
+    opcode_tree_build(&movaps_xmm2_xmm1_f32);
+
     opcode_tree_build(&movsd_xmm1_m64); // 内存到 xmm
     opcode_tree_build(&movsd_xmm1_xmm2); // 内存到 xmm
     opcode_tree_build(&movsd_xmm1m64_xmm2); // xmm 到内存或者xmm

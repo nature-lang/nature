@@ -60,6 +60,14 @@ static void test_basic() {
     lir_op_t *op = NEW(lir_op_t);
     amd64_asm_inst_t *inst;
 
+    // movsd xmm2, xmm7
+    //    inst = AMD64_INST("mov", AMD64_REG(xmm2s64), AMD64_REG(xmm7s64));
+    //    TEST_EQ(*inst, 0xF2, 0x0F, 0x10, 0xD7);
+
+    // movaps xmm2, xmm7
+    inst = AMD64_INST("mov", AMD64_REG(xmm2s64), AMD64_REG(xmm7s64));
+    TEST_EQ(*inst, 0x0F, 0x28, 0xD7);
+
     inst = AMD64_INST("mov", AMD64_REG(al), AMD64_REG(ah));
     TEST_EQ(*inst, 0x8A, 0xC4);
 

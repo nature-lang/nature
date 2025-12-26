@@ -351,6 +351,69 @@ static void cfg_build(closure_t *c) {
 }
 
 /**
+ * 合并连续的基本块
+ * 当一个基本块只有一个后继，且该后继只有一个前驱时，可以将两个块合并
+ * 这样可以消除不必要的跳转指令
+ */
+static void cfg_merge_blocks(closure_t *c) {
+    bool changed = true;
+    while (changed) {
+        changed = false;
+        for (int i = 0; i < c->blocks->count - 1; i++) { // -1 因为需要检查 i+1
+            basic_block_t *b = c->blocks->take[i];
+            basic_block_t *next = c->blocks->take[i + 1]; // blocks 数组中的下一个块
+            
+            // 检查是否只有一个后继，且后继是 blocks 数组中的下一个块
+            if (b->succs->count != 1 || b->succs->take[0] != next) {
+                continue;
+            }
+            
+            // 检查后继是否只有一个前驱(就是当前块)
+            if (next->preds->count != 1) {
+                continue;
+            }
+            
+            // 开始合并: 将 next 的指令合并到 b
+            // 1. 移除 b 的最后一条 BAL 指令
+            linked_node *last = linked_last(b->operations);
+            if (last && OP(last)->code == LIR_OPCODE_BAL) {
+                linked_remove(b->operations, last);
+            }
+            
+            // 2. 跳过 next 的第一条 LABEL 指令，将其余指令追加到 b
+            for (linked_node *node = next->operations->front; node != next->operations->rear; node = node->succ) {
+                lir_op_t *op = node->value;
+                if (op->code == LIR_OPCODE_LABEL) {
+                    continue; // 跳过 label 指令
+                }
+                linked_push(b->operations, op);
+            }
+            
+            // 3. 更新 CFG 关系
+            // b 的后继变成 next 的后继
+            b->succs = next->succs;
+            
+            // 更新 next 的所有后继的前驱: 将 next 替换为 b
+            for (int j = 0; j < next->succs->count; j++) {
+                basic_block_t *next_succ = next->succs->take[j];
+                for (int k = 0; k < next_succ->preds->count; k++) {
+                    if (next_succ->preds->take[k] == next) {
+                        next_succ->preds->take[k] = b;
+                    }
+                }
+            }
+            
+            // 4. 从 blocks 中移除 next (位于 i+1)
+            slice_remove(c->blocks, i + 1);
+            
+            // 标记发生了变化，需要继续迭代
+            changed = true;
+            break; // 重新开始遍历
+        }
+    }
+}
+
+/**
  * l1:
  *  move
  *  move
@@ -398,6 +461,9 @@ void cfg(closure_t *c) {
     // 不可达代码块消除(需要重新编号)
     cfg_pruning(c);
 
+    // 合并连续的基本块（前驱只有一个后继，后继只有一个前驱）
+    cfg_merge_blocks(c);
+
     broken_critical_edges(c);
 
     // 重新编号 id, 后续 ssa 会使用该 id
@@ -408,8 +474,6 @@ void cfg(closure_t *c) {
 
     // 添加入口块
     c->entry = c->blocks->take[0];
-
-    debug_block_lir(c, "cfg_build_before_check");
 
     // return 分析
     return_check(c, NULL, c->entry);

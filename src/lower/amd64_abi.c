@@ -485,7 +485,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
     }
 
     // 重新生成 op->second
-    op->second = operand_new(LIR_OPERAND_REGS, use_regs);
+    op->second = lir_reset_operand(operand_new(LIR_OPERAND_REGS, use_regs), LIR_FLAG_SECOND);
     set_operand_flag(op->second);
 
     return result;
@@ -560,7 +560,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
         // 无论如何，先生成 call 指令
         slice_t *output_regs = slice_new();
         slice_push(output_regs, lo_src_reg->value); // 不能延后处理，会导致 flag 设置异常！
-        lir_operand_t *new_output = operand_new(LIR_OPERAND_REGS, output_regs);
+        lir_operand_t *new_output = lir_reset_operand(operand_new(LIR_OPERAND_REGS, output_regs), LIR_FLAG_OUTPUT);
 
         lir_operand_t *hi_src_reg;
         type_kind hi_kind;

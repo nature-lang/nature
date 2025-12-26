@@ -541,7 +541,7 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
     }
 
     // 记录使用的寄存器
-    op->second = operand_new(LIR_OPERAND_REGS, use_regs);
+    op->second = lir_reset_operand(operand_new(LIR_OPERAND_REGS, use_regs), LIR_FLAG_SECOND);
     set_operand_flag(op->second);
 
     // 处理返回值
@@ -610,7 +610,7 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
             slice_push(output_regs, hi_src->value);
         }
 
-        lir_operand_t *new_output = operand_new(LIR_OPERAND_REGS, output_regs);
+        lir_operand_t *new_output = lir_reset_operand(operand_new(LIR_OPERAND_REGS, output_regs), LIR_FLAG_OUTPUT);
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, new_output, op->line, op->column));
 
         // 进行 mov
