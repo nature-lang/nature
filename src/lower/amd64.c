@@ -105,8 +105,8 @@ static linked_t *amd64_lower_ternary(closure_t *c, lir_op_t *op) {
 
     linked_t *list = linked_new();
     // 通过一个临时 var, 让 first = output = reg, 从而将三元转换成二元表达式
-    type_kind kind = operand_type_kind(op->output);
-    lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(kind));
+    type_t t = lir_operand_type(op->output);
+    lir_operand_t *temp = temp_var_operand(c->module, t);
 
     linked_push(list, lir_op_move(temp, op->first));
     linked_push(list, lir_op_new(op->code, temp, op->second, temp));
