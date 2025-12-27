@@ -109,7 +109,7 @@ void ssa_domers(closure_t *c) {
 
     // 初始化其他 domers 为所有节点的集合 {B0,B1,B2,B3..}
     for (int i = 1; i < c->blocks->count; ++i) {
-        slice_t *other = slice_new();// basic_block_t
+        slice_t *other = slice_new(); // basic_block_t
 
         // Dom[i] = N
         for (int k = 0; k < c->blocks->count; ++k) {
@@ -246,7 +246,7 @@ void ssa_add_phi(closure_t *c) {
 
     for (int i = 0; i < c->ssa_globals->count; ++i) {
         lir_var_t *var = c->ssa_globals->take[i];
-        table_t *inserted = table_new();// key is block name
+        table_t *inserted = table_new(); // key is block name
 
         linked_t *work_list = table_get(c->ssa_var_blocks, var->ident);
         assertf(work_list, "var '%s' has use, but lack def", var->ident);
@@ -292,7 +292,7 @@ void ssa_add_phi(closure_t *c) {
  */
 slice_t *ssa_calc_live_out(closure_t *c, basic_block_t *block) {
     slice_t *live_out = slice_new();
-    table_t *exist_var = table_new();// basic var ident
+    table_t *exist_var = table_new(); // basic var ident
 
     for (int i = 0; i < block->succs->count; ++i) {
         basic_block_t *succ = block->succs->take[i];
@@ -316,7 +316,7 @@ slice_t *ssa_calc_live_out(closure_t *c, basic_block_t *block) {
  */
 slice_t *ssa_calc_live_in(closure_t *c, basic_block_t *block) {
     slice_t *live_in = slice_new();
-    table_t *exist_var = table_new();// basic var ident
+    table_t *exist_var = table_new(); // basic var ident
 
     SLICE_FOR(block->use) {
         lir_var_t *var = SLICE_VALUE(block->use);
@@ -516,8 +516,8 @@ slice_t *ssa_calc_dom_blocks(closure_t *c, basic_block_t *block) {
 
 // 前序遍历各个基本块
 void ssa_rename(closure_t *c) {
-    struct sc_map_s64 var_number_table;// def 使用，用于记录当前应该命名为多少
-    struct sc_map_sv stack_table;      // use 使用，判断使用的变量的名称
+    struct sc_map_s64 var_number_table; // def 使用，用于记录当前应该命名为多少
+    struct sc_map_sv stack_table; // use 使用，判断使用的变量的名称
     sc_map_init_s64(&var_number_table, 0, 0);
     sc_map_init_sv(&stack_table, 0, 0);
 
@@ -578,11 +578,22 @@ void ssa_rename_block(closure_t *c, basic_block_t *block, struct sc_map_s64 *var
         for (int i = 0; i < vars->count; ++i) {
             lir_var_t *var = vars->take[i];
 
-            uint8_t number = ssa_new_var_number(var, var_number_table, stack_table);// 新增定义
+            uint8_t number = ssa_new_var_number(var, var_number_table, stack_table); // 新增定义
             ssa_rename_var(var, number);
         }
 
         current = current->succ;
+    }
+
+    // rename live_out
+    for (int i = 0; i < block->live_out->count; ++i) {
+        lir_var_t *var = block->live_out->take[i];
+        var_number_stack *stack = sc_map_get_sv(stack_table, var->old);
+        assert(stack);
+        if (stack->count > 0) {
+            uint8_t number = stack->numbers[stack->count - 1];
+            ssa_rename_var(var, number);
+        }
     }
 
     // phi body 编号(之前已经放置好了 phi body，只是还没有编号)
@@ -598,7 +609,7 @@ void ssa_rename_block(closure_t *c, basic_block_t *block, struct sc_map_s64 *var
         basic_block_t *succ_block = block->succs->take[i];
         // 为 每个 phi 函数的 phi param 命名
         // lir_op_t *succ_op = succ_block->asm_operations->front->succ;
-        linked_node *op_node = linked_first(succ_block->operations)->succ;// front is label
+        linked_node *op_node = linked_first(succ_block->operations)->succ; // front is label
         while (op_node->value != NULL && OP(op_node)->code == LIR_OPCODE_PHI) {
             lir_op_t *op = OP(op_node);
             slice_t *phi_body = op->first->value;
@@ -674,7 +685,7 @@ void ssa_rename_var(lir_var_t *var, uint64_t number) {
     int64_t size = strlen(var->ident) + 10 + 3;
     char *buf = mallocz(size);
     snprintf(buf, size, "%s.s%ld", var->ident, number);
-    var->ident = buf;// 已经分配在了堆中，需要手动释放了
+    var->ident = buf; // 已经分配在了堆中，需要手动释放了
 }
 
 /**

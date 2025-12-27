@@ -20,3 +20,16 @@ fn main() {
 --- output.txt
 6C, 6c
 C8, c8
+
+=== test_return_missing
+--- main.n
+fn pi_test():f64 {
+    var a = 12
+}
+
+fn main() {
+    println(pi_test())
+}
+
+--- output.txt
+nature-test/main.n:1:3: fn main.pi_test missing return

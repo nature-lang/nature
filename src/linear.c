@@ -1352,24 +1352,28 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
  * @param ast
  */
 static void linear_for_cond(module_t *m, ast_for_cond_stmt_t *ast) {
-    lir_op_t *for_start = lir_op_local_label(m, FOR_COND_IDENT);
-    lir_operand_t *for_end_operand = lir_label_operand(label_ident_with_unique(FOR_END_IDENT), true);
-    stack_push(m->current_closure->continue_labels, for_start->output);
-    stack_push(m->current_closure->break_labels, for_end_operand);
+    char *for_start_ident = label_ident_with_unique(FOR_COND_IDENT);
+    char *for_continue_ident = str_connect(for_start_ident, ".cont");
+    char *for_cond_ident = str_connect(for_start_ident, ".cond");
+    char *for_end_ident = str_connect(for_start_ident, ".end");
 
-    OP_PUSH(for_start);
+    stack_push(m->current_closure->continue_labels, lir_label_operand(for_cond_ident, true));
+    stack_push(m->current_closure->break_labels, lir_label_operand(for_end_ident, true));
 
-    lir_operand_t *condition_target = linear_expr(m, ast->condition, NULL);
-    lir_op_t *cmp_goto = lir_op_new(LIR_OPCODE_BEE, bool_operand(false), condition_target, for_end_operand);
+    // for_cond start
+    OP_PUSH(lir_op_label(for_start_ident, true));
+    OP_PUSH(lir_op_bal(lir_label_operand(for_cond_ident, true)));
 
-    OP_PUSH(cmp_goto);
-    OP_PUSH(lir_op_local_label(m, FOR_CONTINUE_IDENT));
+    // for_continue: loop body
+    OP_PUSH(lir_op_label(for_continue_ident, true));
     linear_body(m, ast->body);
 
-    // bal => goto
-    OP_PUSH(lir_op_bal(for_start->output));
+    // for_cond: condition check at end, use linear_cmp_neg for comparison optimization
+    OP_PUSH(lir_op_label(for_cond_ident, true));
+    linear_cmp_neg(m, &ast->condition, lir_label_operand(for_continue_ident, true), false);
 
-    OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, for_end_operand));
+    // for_end
+    OP_PUSH(lir_op_label(for_end_ident, true));
 
     stack_pop(m->current_closure->continue_labels);
     stack_pop(m->current_closure->break_labels);
@@ -3487,7 +3491,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_FNDEF: {
             linear_fn_decl(m,
-                           (ast_expr_t){
+                           (ast_expr_t) {
                                    .line = stmt->line,
                                    .assert_type = stmt->assert_type,
                                    .value = stmt->value,
@@ -3499,7 +3503,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
             ast_call_t *call = stmt->value;
             // stmt 中都 call 都是没有返回值的
             linear_call(m,
-                        (ast_expr_t){
+                        (ast_expr_t) {
                                 .line = stmt->line,
                                 .column = stmt->column,
                                 .assert_type = AST_CALL,

@@ -321,14 +321,14 @@ void debug_interval_var(interval_t *interval, char *stage) {
     }
 
     printf("%s var: index(%d-%s), parent(%d-%s), assigned=(%d(%s)-%s), stack_slot=%ld, ranges=%s, use_pos=%s\n",
-              stage,
-              interval->index,
-              interval->var ? interval->var->ident : "-", parent_index, parent_ident,
-              interval->assigned,
-              alloc_regs[interval->assigned] ? alloc_regs[interval->assigned]->name : "_",
-              type_str,
-              stack_slot, ranges,
-              use_pos);
+           stage,
+           interval->index,
+           interval->var ? interval->var->ident : "-", parent_index, parent_ident,
+           interval->assigned,
+           alloc_regs[interval->assigned] ? alloc_regs[interval->assigned]->name : "_",
+           type_str,
+           stack_slot, ranges,
+           use_pos);
 
     fflush(stdout);
 }
@@ -340,8 +340,8 @@ void debug_closure_interval(closure_t *c, char *stage) {
     }
 
     printf("stage=%s closure=%s interval ------------------------------------------------------------------------\n",
-              stage,
-              c->linkident);
+           stage,
+           c->linkident);
     for (int reg_id = 1; reg_id < alloc_reg_count(); ++reg_id) {
         reg_t *reg = alloc_regs[reg_id];
         interval_t *interval = table_get(c->interval_table, reg->name);
@@ -377,10 +377,10 @@ void debug_closure_interval(closure_t *c, char *stage) {
         }
 
         printf("reg: index(%d-%s), parent(%d-%s), assigned=(%d-%s), stack_slot=%ld, ranges=%s, use_pos=%s\n",
-                  interval->index, reg->name,
-                  parent_index, parent_ident, !interval->spilled ? interval->assigned : -1, type_str, stack_slot,
-                  ranges,
-                  use_pos);
+               interval->index, reg->name,
+               parent_index, parent_ident, !interval->spilled ? interval->assigned : -1, type_str, stack_slot,
+               ranges,
+               use_pos);
     }
 
     for (int i = 0; i < c->var_defs->count; ++i) {
@@ -462,6 +462,11 @@ void debug_basic_block(basic_block_t *block) {
     printf("\n\t\tssa_live_in:");
     for (int i = 0; i < block->ssa_live_in->count; ++i) {
         lir_var_t *var = block->ssa_live_in->take[i];
+        printf("%s\t", var->ident);
+    }
+    printf("\n\t\tssa_live_out:");
+    for (int i = 0; i < block->live_out->count; ++i) {
+        lir_var_t *var = block->live_out->take[i];
         printf("%s\t", var->ident);
     }
     printf("\n\n\n");
