@@ -137,8 +137,7 @@ static void ret_check(closure_t *c, table_t *handled, basic_block_t *b, char *ma
     }
 
     // 如果当前 block 是新的 match/catch block, 也就是嵌套 match, 则需要更新 match_end_ident
-    if ((strstr(b->name, MATCH_IDENT) || strstr(b->name, CATCH_IDENT)) && !
-        strstr(b->name, LABEL_END_SUFFIX)) {
+    if ((strstr(b->name, MATCH_IDENT) || strstr(b->name, CATCH_IDENT)) && !strstr(b->name, LABEL_END_SUFFIX)) {
         // 判断 match 是否需要 ret
         bool has_ret = table_get(c->match_has_ret, b->name);
         // 更新 match_end_ident
@@ -201,7 +200,7 @@ static void ret_check(closure_t *c, table_t *handled, basic_block_t *b, char *ma
  * @return
  */
 static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
-    if (c->return_big_operand == NULL) {
+    if (c->fndef->return_type.kind == TYPE_VOID) {
         return;
     }
 
@@ -362,24 +361,29 @@ static void cfg_merge_blocks(closure_t *c) {
         for (int i = 0; i < c->blocks->count - 1; i++) { // -1 因为需要检查 i+1
             basic_block_t *b = c->blocks->take[i];
             basic_block_t *next = c->blocks->take[i + 1]; // blocks 数组中的下一个块
-            
+
             // 检查是否只有一个后继，且后继是 blocks 数组中的下一个块
             if (b->succs->count != 1 || b->succs->take[0] != next) {
                 continue;
             }
-            
+
             // 检查后继是否只有一个前驱(就是当前块)
             if (next->preds->count != 1) {
                 continue;
             }
-            
+
+            // fn_end 块必须保留，不能被合并
+            if (str_equal(next->name, c->end_label)) {
+                continue;
+            }
+
             // 开始合并: 将 next 的指令合并到 b
             // 1. 移除 b 的最后一条 BAL 指令
             linked_node *last = linked_last(b->operations);
             if (last && OP(last)->code == LIR_OPCODE_BAL) {
                 linked_remove(b->operations, last);
             }
-            
+
             // 2. 跳过 next 的第一条 LABEL 指令，将其余指令追加到 b
             for (linked_node *node = next->operations->front; node != next->operations->rear; node = node->succ) {
                 lir_op_t *op = node->value;
@@ -388,11 +392,11 @@ static void cfg_merge_blocks(closure_t *c) {
                 }
                 linked_push(b->operations, op);
             }
-            
+
             // 3. 更新 CFG 关系
             // b 的后继变成 next 的后继
             b->succs = next->succs;
-            
+
             // 更新 next 的所有后继的前驱: 将 next 替换为 b
             for (int j = 0; j < next->succs->count; j++) {
                 basic_block_t *next_succ = next->succs->take[j];
@@ -402,10 +406,10 @@ static void cfg_merge_blocks(closure_t *c) {
                     }
                 }
             }
-            
+
             // 4. 从 blocks 中移除 next (位于 i+1)
             slice_remove(c->blocks, i + 1);
-            
+
             // 标记发生了变化，需要继续迭代
             changed = true;
             break; // 重新开始遍历

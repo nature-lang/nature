@@ -156,7 +156,7 @@ static bool peephole_move_elimination_match2(closure_t *c, lir_op_t *op1, lir_op
         return false;
     }
 
-    // 检查临时变量是否在后续被使用
+    // 检查临时变量是否在后续被使用，如果后续被使用则不允许删除。
     lir_var_t *temp_var = op1->output->value;
     bool use_later = table_exist(use, temp_var->ident);
     if (use_later) {

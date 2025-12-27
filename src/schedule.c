@@ -99,16 +99,16 @@ static int schedule_compute_latency(lir_op_t *op) {
         case LIR_OPCODE_UDIV:
         case LIR_OPCODE_SREM:
         case LIR_OPCODE_UREM:
-            return 20;  // 除法延迟约 20-60 cycles
+            return 20; // 除法延迟约 20-60 cycles
 
         // 乘法指令
         case LIR_OPCODE_MUL:
-            return 4;   // 乘法延迟约 3-5 cycles
+            return 4; // 乘法延迟约 3-5 cycles
 
         // 内存读取操作
         case LIR_OPCODE_CALL:
         case LIR_OPCODE_RT_CALL:
-            return 10;  // 调用有较高延迟
+            return 10; // 调用有较高延迟
 
         // 浮点转换
         case LIR_OPCODE_FTOSI:
@@ -117,7 +117,7 @@ static int schedule_compute_latency(lir_op_t *op) {
         case LIR_OPCODE_UITOF:
         case LIR_OPCODE_FTRUNC:
         case LIR_OPCODE_FEXT:
-            return 4;   // 浮点转换延迟
+            return 4; // 浮点转换延迟
 
         // 默认单周期操作
         default:
@@ -126,7 +126,7 @@ static int schedule_compute_latency(lir_op_t *op) {
 
     // 内存读取操作延迟
     if (schedule_is_mem_read(op)) {
-        return 4;  // L1 cache hit 延迟
+        return 4; // L1 cache hit 延迟
     }
 
     // 默认延迟为 1 cycle
@@ -216,7 +216,7 @@ static schedule_node_t *schedule_node_new(lir_op_t *op, linked_node *node, int i
     sn->scheduled = false;
     sn->original_id = id;
     sn->latency = schedule_compute_latency(op);
-    sn->priority = 0;  // 将在依赖图构建后计算
+    sn->priority = 0; // 将在依赖图构建后计算
     return sn;
 }
 
@@ -438,11 +438,6 @@ static void schedule_execute(schedule_ctx_t *ctx) {
     // 3. 检查是否有循环依赖 (理论上不应该发生)
     if (ctx->result->count != ctx->nodes->count) {
         assert(false);
-        // 存在循环依赖，退回原始顺序
-        ctx->result->count = 0;
-        for (int i = 0; i < ctx->nodes->count; i++) {
-            slice_push(ctx->result, ctx->nodes->take[i]);
-        }
     }
 }
 
@@ -528,7 +523,7 @@ static void schedule_block(closure_t *c, basic_block_t *block) {
             // 遇到固定指令：先调度当前 segment，再添加固定指令
             if (segment->count > 0) {
                 schedule_segment(c, block, segment, result);
-                segment->count = 0;  // 清空 segment
+                segment->count = 0; // 清空 segment
             }
             // 固定指令直接加入结果
             slice_push(result, op);
