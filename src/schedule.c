@@ -87,6 +87,249 @@ static bool schedule_is_fixed(lir_op_t *op) {
     return false;
 }
 
+/**
+ * 判断指令是否是可消除的代码操作
+ * 用于 MOV 消除优化
+ */
+static bool schedule_is_eliminable_code_op(lir_opcode_t code) {
+    switch (code) {
+        case LIR_OPCODE_SUB:
+        case LIR_OPCODE_ADD:
+        case LIR_OPCODE_MUL:
+        case LIR_OPCODE_UDIV:
+        case LIR_OPCODE_SDIV:
+        case LIR_OPCODE_UREM:
+        case LIR_OPCODE_SREM:
+        case LIR_OPCODE_NEG:
+        case LIR_OPCODE_SSHR:
+        case LIR_OPCODE_USHR:
+        case LIR_OPCODE_USHL:
+        case LIR_OPCODE_AND:
+        case LIR_OPCODE_OR:
+        case LIR_OPCODE_XOR:
+        case LIR_OPCODE_NOT:
+        case LIR_OPCODE_USLT:
+        case LIR_OPCODE_SLT:
+        case LIR_OPCODE_SLE:
+        case LIR_OPCODE_SGT:
+        case LIR_OPCODE_SGE:
+        case LIR_OPCODE_USLE:
+        case LIR_OPCODE_USGT:
+        case LIR_OPCODE_USGE:
+        case LIR_OPCODE_SEE:
+        case LIR_OPCODE_SNE:
+            return true;
+        default:
+            return false;
+    }
+}
+
+/**
+ * 检查两个操作数是否相等（用于 MOV 消除）
+ */
+static bool operands_equal(lir_operand_t *op1, lir_operand_t *op2) {
+    if (!op1 || !op2) {
+        return false;
+    }
+
+    if (op1->assert_type != op2->assert_type) {
+        return false;
+    }
+
+    if (op1->assert_type == LIR_OPERAND_VAR) {
+        lir_var_t *var1 = op1->value;
+        lir_var_t *var2 = op2->value;
+        return strcmp(var1->ident, var2->ident) == 0;
+    }
+
+    if (op1->assert_type == LIR_OPERAND_REG) {
+        reg_t *reg1 = op1->value;
+        reg_t *reg2 = op2->value;
+        return reg1->index == reg2->index;
+    }
+
+    if (op1->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+        lir_indirect_addr_t *addr1 = op1->value;
+        lir_indirect_addr_t *addr2 = op2->value;
+        return operands_equal(addr1->base, addr2->base) && addr1->offset == addr2->offset;
+    }
+
+    return false;
+}
+
+/**
+ * 检查变量是否在 block 的 live_out 中
+ */
+static bool is_in_live_out(basic_block_t *block, lir_var_t *var) {
+    if (!block || !block->live_out || !var) {
+        return false;
+    }
+    for (int i = 0; i < block->live_out->count; i++) {
+        lir_var_t *live_var = block->live_out->take[i];
+        if (strcmp(live_var->ident, var->ident) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * 基于 DAG 的 MOV 指令消除优化
+ * 在整个 block 内进行优化
+ *
+ * Case 1: mov x -> v, 其中 mov 只有一个后继依赖，且后继是 code 指令
+ *         消除 mov，将后继 code 指令中的 v 替换为 x
+ *
+ * Case 2: code v,2 -> a, mov a -> b, 其中 code 只有一个后继依赖且该后继是 mov
+ *         消除 mov，将 code 输出改为 b
+ *
+ * 注意：如果被消除的变量在 block 的 live_out 中，则不能消除
+ */
+static void schedule_mov_elimination(schedule_ctx_t *ctx) {
+    // 需要多次迭代直到没有变化
+    bool changed = true;
+    while (changed) {
+        changed = false;
+
+        for (int i = 0; i < ctx->nodes->count; i++) {
+            schedule_node_t *node = ctx->nodes->take[i];
+            lir_op_t *op = node->op;
+
+            // Case 2: 遍历 code 指令，检查后继是否是 MOV
+            if (schedule_is_eliminable_code_op(op->code)) {
+                // code 指令必须有输出
+                if (!op->output) {
+                    continue;
+                }
+
+                // 检查是否只有一个后继
+                if (node->successors->count != 1) {
+                    continue;
+                }
+
+                // 获取唯一后继
+                schedule_node_t *succ_node = node->successors->take[0];
+                lir_op_t *succ_op = succ_node->op;
+
+                // 检查后继是否是 MOV 指令
+                if (succ_op->code != LIR_OPCODE_MOVE) {
+                    continue;
+                }
+
+                // MOV 的 src 和 dst 不能是 indirect_addr
+                if (succ_op->first && succ_op->first->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+                    continue;
+                }
+                if (succ_op->output && succ_op->output->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+                    continue;
+                }
+
+                // 检查 MOV 的 first 操作数是否等于 code 的 output
+                // 只有 mov code_output -> b 才能消除，而不是 mov x -> I_ADDR[code_output]
+                if (!operands_equal(succ_op->first, op->output)) {
+                    continue;
+                }
+
+                // 检查 code 的 output 是否在 live_out 中
+                if (op->output->assert_type == LIR_OPERAND_VAR) {
+                    lir_var_t *out_var = op->output->value;
+                    if (is_in_live_out(ctx->block, out_var)) {
+                        continue; // output 在 live_out 中，不能消除
+                    }
+                }
+
+                // 执行优化：将 code_node 的输出改为 mov 的输出
+                op->output = lir_reset_operand(succ_op->output, LIR_FLAG_OUTPUT);
+
+                // 将 mov_node 标记为 NOP
+                succ_op->code = LIR_OPCODE_NOP;
+                succ_op->first = NULL;
+                succ_op->second = NULL;
+                succ_op->output = NULL;
+
+                // 更新依赖关系：将 mov 的后继转移给 code_node
+                node->successors->count = 0;
+                for (int k = 0; k < succ_node->successors->count; k++) {
+                    schedule_node_t *mov_succ = succ_node->successors->take[k];
+                    slice_push(node->successors, mov_succ);
+                }
+
+                changed = true;
+                continue;
+            }
+
+            // Case 1: 遍历 MOV 指令，检查后继是否是 code 指令
+            if (op->code == LIR_OPCODE_MOVE) {
+                // 检查是否只有一个后继
+                if (node->successors->count != 1) {
+                    continue;
+                }
+
+                // 获取唯一后继
+                schedule_node_t *succ_node = node->successors->take[0];
+                lir_op_t *succ_op = succ_node->op;
+
+                // 检查后继是否是 code 指令
+                if (!schedule_is_eliminable_code_op(succ_op->code)) {
+                    continue;
+                }
+
+                // MOV 的 src 和 dst 不能是 indirect_addr
+                if (op->first && op->first->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+                    continue;
+                }
+                if (op->output && op->output->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+                    continue;
+                }
+
+                // 检查 mov 的 output 是否在 live_out 中
+                if (op->output && op->output->assert_type == LIR_OPERAND_VAR) {
+                    lir_var_t *out_var = op->output->value;
+                    if (is_in_live_out(ctx->block, out_var)) {
+                        continue; // output 在 live_out 中，不能消除
+                    }
+                }
+
+                if (!operands_equal(succ_op->first, op->output) || !operands_equal(succ_op->second, op->output)) {
+                    continue;
+                }
+
+                // 将后继 code 指令中对 mov output 的使用替换为 mov input
+                // 检查 first 操作数
+                if (succ_op->first && operands_equal(succ_op->first, op->output)) {
+                    succ_op->first = lir_reset_operand(op->first, LIR_FLAG_FIRST);
+                }
+                // 检查 second 操作数
+                if (succ_op->second && operands_equal(succ_op->second, op->output)) {
+                    succ_op->second = lir_reset_operand(op->first, LIR_FLAG_SECOND);
+                }
+
+                // 将 mov 标记为 NOP
+                op->code = LIR_OPCODE_NOP;
+                op->first = NULL;
+                op->second = NULL;
+                op->output = NULL;
+
+                // 更新依赖关系：mov 的前驱直接连接到 mov 的后继
+                // 由于 mov 被消除，需要更新 succ_node 的 dep_count
+                // 注意：这里不需要显式更新，因为 NOP 节点会被移除
+
+                changed = true;
+            }
+        }
+    }
+
+    // 移除所有 NOP 节点（被消除的 MOV）
+    slice_t *new_nodes = slice_new();
+    for (int i = 0; i < ctx->nodes->count; i++) {
+        schedule_node_t *node = ctx->nodes->take[i];
+        if (node->op->code != LIR_OPCODE_NOP || node->op->output != NULL) {
+            slice_push(new_nodes, node);
+        }
+    }
+    ctx->nodes = new_nodes;
+}
+
 
 /**
  * 计算指令的执行延迟 (cycles)
@@ -489,8 +732,50 @@ static void schedule_segment(closure_t *c, basic_block_t *block, slice_t *segmen
 }
 
 /**
+ * 在整个 block 级别进行 MOV 消除优化
+ * 基于整个 block 构建 DAG，检查 live_out 约束
+ */
+static void schedule_block_elimination(closure_t *c, basic_block_t *block, slice_t *all_ops) {
+    if (all_ops->count <= 2) {
+        return;
+    }
+
+    // 初始化上下文
+    schedule_ctx_t ctx;
+    ctx.block = block;
+    ctx.nodes = slice_new();
+    ctx.ready = slice_new();
+    ctx.result = slice_new();
+    ctx.var_def_table = table_new();
+    ctx.last_mem_op = table_new();
+    ctx.reg_def_table = table_new();
+    ctx.reg_use_table = table_new();
+
+    // 收集整个 block 的所有非固定指令节点
+    for (int i = 0; i < all_ops->count; i++) {
+        lir_op_t *op = all_ops->take[i];
+        // 只对非固定指令构建 DAG 节点
+        if (!schedule_is_fixed(op)) {
+            schedule_node_t *node = schedule_node_new(op, NULL, i);
+            slice_push(ctx.nodes, node);
+        }
+    }
+
+    if (ctx.nodes->count <= 1) {
+        return;
+    }
+
+    // 构建依赖图
+    schedule_build_deps(c, &ctx);
+
+    // MOV 消除优化（基于整个 block 的 DAG，检查 live_out）
+    schedule_mov_elimination(&ctx);
+}
+
+/**
  * 对单个基本块进行指令调度
- * 采用分段调度策略：固定指令作为屏障，只在屏障之间的 segment 内进行调度
+ * 1. 首先在整个 block 级别进行 MOV 消除（基于完整 DAG，检查 live_out）
+ * 2. 然后采用分段调度策略：固定指令作为屏障，只在屏障之间的 segment 内进行调度
  */
 static void schedule_block(closure_t *c, basic_block_t *block) {
     if (!block || !block->operations || linked_count(block->operations) <= 1) {
@@ -510,14 +795,28 @@ static void schedule_block(closure_t *c, basic_block_t *block) {
         return;
     }
 
-    // 结果列表
+    // 1. 在整个 block 级别进行 MOV 消除优化
+    schedule_block_elimination(c, block, all_ops);
+
+    // 2. 重新收集指令（MOV 消除后可能有变化，NOP 指令需要过滤）
+    slice_t *filtered_ops = slice_new();
+    for (int i = 0; i < all_ops->count; i++) {
+        lir_op_t *op = all_ops->take[i];
+        // 过滤掉被消除的 NOP 指令
+        if (op->code != LIR_OPCODE_NOP || op->output != NULL) {
+            slice_push(filtered_ops, op);
+        }
+    }
+
+
+    // 3. 结果列表
     slice_t *result = slice_new();
     // 当前 segment 中的非固定指令
     slice_t *segment = slice_new();
 
     // 遍历所有指令，按固定指令分段
-    for (int i = 0; i < all_ops->count; i++) {
-        lir_op_t *op = all_ops->take[i];
+    for (int i = 0; i < filtered_ops->count; i++) {
+        lir_op_t *op = filtered_ops->take[i];
 
         if (schedule_is_fixed(op)) {
             // 遇到固定指令：先调度当前 segment，再添加固定指令

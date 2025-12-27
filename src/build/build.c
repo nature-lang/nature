@@ -244,7 +244,7 @@ static void mach_custom_links() {
 
     // strtable
     mach_put_data(ctx->nstrtable_section, (uint8_t *) ct_strtable_data, ct_strtable_len);
-    mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+    mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
                                               .n_type = N_SECT | N_EXT,
                                               .n_sect = ctx->nstrtable_section->sh_index,
                                               .n_value = 0, // in section data offset
@@ -339,7 +339,7 @@ static void mach_assembler_module(module_t *m) {
         uint64_t offset = mach_put_data(ctx->data_section, symbol->value, symbol->size);
 
         // 写入符号表
-        mach_put_sym(ctx->symtab_command, &(struct nlist_64){
+        mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
                                                   .n_type = N_SECT | N_EXT,
                                                   .n_sect = ctx->data_section->sh_index,
                                                   .n_value = offset, // in section data offset
@@ -1070,17 +1070,14 @@ static void build_compiler(slice_t *modules) {
 
             debug_block_lir(c, "ssa");
 
-            // 窥孔指令优化
-            peephole_optimize(c);
-
             mark_number(c);
-
-            debug_block_lir(c, "ssa_peephole");
 
             // 指令调度
             schedule(c);
 
             debug_block_lir(c, "schedule");
+
+            peephole_pre(c);
 
             // lir 向 arch 靠拢
             cross_lower(c);
@@ -1088,9 +1085,9 @@ static void build_compiler(slice_t *modules) {
             debug_block_lir(c, "lower");
 
             // 窥孔指令优化
-            peephole_optimize(c);
+            peephole_post(c);
 
-            debug_block_lir(c, "lower_peephole");
+            debug_block_lir(c, "peephole");
 
             // 线性扫描寄存器分配
             reg_alloc(c);
