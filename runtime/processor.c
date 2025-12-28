@@ -30,7 +30,7 @@ uv_key_t tls_coroutine_key = 0;
 
 _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint = false;
 
-__attribute__((aligned(64))) aligned_page_t global_safepoint = {0};
+__attribute__((aligned(128))) aligned_page_t global_safepoint = {0};
 
 uint64_t assist_preempt_yield_ret_addr = 0;
 

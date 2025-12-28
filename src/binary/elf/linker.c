@@ -169,7 +169,7 @@ static int sort_sections(elf_context_t *ctx) {
                     sub_weight = 0x60;
                 }
                 if (s->sh_flags & SHF_EXECINSTR) {
-                    sub_weight = 0x70;
+                    sub_weight = 0x40; // 使 .text 排在 .rodata 之前
                 }
                 if (s->sh_type == SHT_NOBITS) {
                     sub_weight = 0x80;
@@ -553,22 +553,46 @@ void load_object_file(elf_context_t *ctx, int fd, uint64_t file_offset) {
         // 检查是否为 .tbss 段
         bool is_tbss = str_equal(shdr_name, ".tbss");
 
+        // 基于前缀的合并策略：将 .text.xxx 合并到 .text, .data.xxx 合并到 .data 等
+        char *merge_name = shdr_name;
+        if (strncmp(shdr_name, ".text.", 6) == 0) {
+            merge_name = ".text";
+        } else if (strncmp(shdr_name, ".data.rel.ro.local.", 19) == 0) {
+            merge_name = ".data.rel.ro.local";
+        } else if (strncmp(shdr_name, ".data.rel.local.", 16) == 0) {
+            merge_name = ".data.rel.local";
+        } else if (strncmp(shdr_name, ".data.rel.ro.", 13) == 0) {
+            merge_name = ".data.rel.ro";
+        } else if (strncmp(shdr_name, ".data.rel.", 10) == 0) {
+            merge_name = ".data.rel";
+        } else if (strncmp(shdr_name, ".data.", 6) == 0) {
+            merge_name = ".data";
+        } else if (strncmp(shdr_name, ".rodata.", 8) == 0) {
+            merge_name = ".rodata";
+        } else if (strncmp(shdr_name, ".bss.", 5) == 0) {
+            merge_name = ".bss";
+        } else if (strncmp(shdr_name, ".init_array.", 12) == 0) {
+            merge_name = ".init_array";
+        } else if (strncmp(shdr_name, ".fini_array.", 12) == 0) {
+            merge_name = ".fini_array";
+        }
+
         section_t *global_section;
         if (is_tbss) {
             global_section = ctx->tdata_section;
             assert(global_section);
         } else {
-            // n * n 的遍历查找
+            // n * n 的遍历查找，使用 merge_name 进行匹配
             for (int i = 1; i < ctx->sections->count; ++i) {
                 global_section = SEC_TACK(i);
-                if (str_equal(global_section->name, shdr_name)) {
+                if (str_equal(global_section->name, merge_name)) {
                     // 在全局 sections 中找到了同名 section
                     goto FOUND;
                 }
             }
 
-            // not found in ctx->sections, will create new section
-            global_section = elf_section_new(ctx, shdr_name, shdr->sh_type, shdr->sh_flags & ~SHF_GROUP);
+            // not found in ctx->sections, will create new section (使用 merge_name)
+            global_section = elf_section_new(ctx, merge_name, shdr->sh_type, shdr->sh_flags & ~SHF_GROUP);
             global_section->sh_addralign = shdr->sh_addralign;
             global_section->sh_entsize = shdr->sh_entsize;
             local_sections[sh_index].is_new = true;

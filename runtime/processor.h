@@ -73,10 +73,10 @@ extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_
 
 typedef struct {
     uint64_t value; // 8 bytes
-    uint8_t pad[56]; // 56 bytes padding
+    uint8_t pad[120]; // 56 bytes padding
 } aligned_page_t;
 
-extern __attribute__((aligned(64))) aligned_page_t global_safepoint;
+extern __attribute__((aligned(128))) aligned_page_t global_safepoint;
 
 // processor gc_finished 后新产生的 shade ptr 会存入到该全局工作队列中，在 gc_mark_done 阶段进行单线程处理
 extern rt_linked_fixalloc_t global_gc_worklist; // 全局 gc worklist

@@ -88,6 +88,7 @@ typedef enum {
     R_MVN,
     R_FMADD,
     R_FMSUB,
+    R_NOP,
 } arm64_asm_raw_opcode_t;
 
 static char *arm64_raw_op_names[] = {
@@ -171,6 +172,7 @@ static char *arm64_raw_op_names[] = {
         [R_MVN] = "mvn",
         [R_FMADD] = "fmadd",
         [R_FMSUB] = "fmsub",
+        [R_NOP] = "nop",
 };
 
 typedef enum {
@@ -266,6 +268,7 @@ typedef enum {
     MRS,
     FMADD,
     FMSUB,
+    NOP,
 } arm64_asm_opcode_t;
 
 typedef enum {
@@ -551,6 +554,7 @@ typedef struct {
 #define W_BL(offset) (0x94000000U | ((offset) & ((1U << 26) - 1)))
 #define W_BLR(rn) (0xd63f0000U | ((rn) << 5))
 #define W_RET(rn) (0xd65f0000U | ((rn) << 5))
+#define W_NOP() (0xD503201FU)
 #define W_SVC(imm) (0xd4000001U | ((imm) << 5))
 
 #define P_NEG(sz, rd, rm) W_SUB_S(sz, rd, ZERO, rm, 0)
