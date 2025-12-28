@@ -160,7 +160,8 @@ static inline bool arm64_is_call_op(arm64_asm_inst_t *operation) {
 }
 
 static inline bool arm64_is_branch_op(arm64_asm_inst_t *operation) {
-    return operation->raw_opcode >= R_B && operation->raw_opcode <= R_BNV;
+    return (operation->raw_opcode >= R_B && operation->raw_opcode <= R_BNV) ||
+           operation->raw_opcode == R_CBZ || operation->raw_opcode == R_CBNZ;
 }
 
 static inline arm64_asm_operand_t *arm64_extract_symbol_operand(arm64_asm_inst_t *operation) {
@@ -176,6 +177,26 @@ static inline arm64_asm_operand_t *arm64_extract_symbol_operand(arm64_asm_inst_t
         }
     }
     return NULL;
+}
+
+// Helper to get symbol name from operand (works for both SYMBOL and INDIRECT_SYM modes)
+static inline char *arm64_get_symbol_name(arm64_asm_operand_t *operand) {
+    if (operand->type == ARM64_ASM_OPERAND_SYMBOL) {
+        return operand->symbol.name;
+    } else if (operand->type == ARM64_ASM_OPERAND_INDIRECT && operand->indirect.indirect_sym) {
+        return operand->indirect.sym_name;
+    }
+    return NULL;
+}
+
+// Helper to get reloc type from operand (works for both SYMBOL and INDIRECT_SYM modes)
+static inline asm_arm64_reloc_type arm64_get_reloc_type(arm64_asm_operand_t *operand) {
+    if (operand->type == ARM64_ASM_OPERAND_SYMBOL) {
+        return operand->symbol.reloc_type;
+    } else if (operand->type == ARM64_ASM_OPERAND_INDIRECT && operand->indirect.indirect_sym) {
+        return operand->indirect.sym_reloc_type;
+    }
+    return ASM_ARM64_RELOC_NONE;
 }
 
 static inline arm64_build_temp_t *arm64_build_temp_new(arm64_asm_inst_t *operation) {
@@ -353,12 +374,13 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, module_t *m
             arm64_asm_operand_t *rel_operand = arm64_extract_symbol_operand(operation);
             char *call_target = NULL;
             if (rel_operand != NULL) {
-                assert(rel_operand->type == ARM64_ASM_OPERAND_SYMBOL);
-                call_target = rel_operand->symbol.name;
+                // 使用辅助函数获取符号名（支持 SYMBOL 和 INDIRECT_SYM 两种模式）
+                call_target = arm64_get_symbol_name(rel_operand);
 
                 // 判断是否为分支/调用指令
                 if (arm64_is_call_op(operation) || arm64_is_branch_op(operation)) {
-                    uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, rel_operand->symbol.name);
+                    assert(rel_operand->type == ARM64_ASM_OPERAND_SYMBOL);
+                    uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, call_target);
                     if (sym_index > 0) {
                         // 已存在的符号，计算相对偏移并进行符号改写
                         Elf64_Sym sym = ((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
@@ -366,30 +388,50 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, module_t *m
                         arm64_rewrite_rel_symbol(operation, rel_operand, rel_diff);
                     } else {
                         // 未知符号，不做处理，依旧使用 symbol 参数
-                        //                        arm64_rewrite_rel_symbol(operation, rel_operand, 0);
                         temp->rel_operand = rel_operand;
-                        temp->rel_symbol = rel_operand->symbol.name;
+                        temp->rel_symbol = call_target;
                     }
                 } else {
                     // 添加重定位项
                     int reloc_type = R_AARCH64_ADR_PREL_PG_HI21;
                     int st_type = STT_OBJECT;
 
-                    if (rel_operand->symbol.reloc_type == ASM_ARM64_RELOC_LO12) {
-                        reloc_type = R_AARCH64_ADD_ABS_LO12_NC;
-                    } else if (rel_operand->symbol.reloc_type == ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12) {
+                    asm_arm64_reloc_type operand_reloc_type = arm64_get_reloc_type(rel_operand);
+
+                    if (operand_reloc_type == ASM_ARM64_RELOC_LO12) {
+                        // 检查是否是 LDR/STR 指令（需要使用 LDST 重定位类型）
+                        if (operation->raw_opcode == R_LDR || operation->raw_opcode == R_LDRSW ||
+                            operation->raw_opcode == R_STR || operation->raw_opcode == R_LDRB ||
+                            operation->raw_opcode == R_LDRH || operation->raw_opcode == R_STRB ||
+                            operation->raw_opcode == R_STRH) {
+                            // 根据操作数大小选择正确的重定位类型
+                            arm64_asm_operand_t *opr = operation->operands[0];
+                            if (opr->size == QWORD) {
+                                reloc_type = R_AARCH64_LDST64_ABS_LO12_NC;
+                            } else if (opr->size == DWORD) {
+                                reloc_type = R_AARCH64_LDST32_ABS_LO12_NC;
+                            } else if (opr->size == WORD) {
+                                reloc_type = R_AARCH64_LDST16_ABS_LO12_NC;
+                            } else {
+                                reloc_type = R_AARCH64_LDST8_ABS_LO12_NC;
+                            }
+                        } else {
+                            // ADD 或其他指令使用 ADD_ABS_LO12_NC
+                            reloc_type = R_AARCH64_ADD_ABS_LO12_NC;
+                        }
+                    } else if (operand_reloc_type == ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12) {
                         reloc_type = R_AARCH64_TLSLE_ADD_TPREL_LO12;
                         st_type = STT_TLS;
-                    } else if (rel_operand->symbol.reloc_type == ASM_ARM64_RELOC_TLSLE_ADD_TPREL_HI12) {
+                    } else if (operand_reloc_type == ASM_ARM64_RELOC_TLSLE_ADD_TPREL_HI12) {
                         reloc_type = R_AARCH64_TLSLE_ADD_TPREL_HI12;
                         st_type = STT_TLS;
-                    } else if (rel_operand->symbol.reloc_type == ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12_NC) {
+                    } else if (operand_reloc_type == ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12_NC) {
                         reloc_type = R_AARCH64_TLSLE_ADD_TPREL_LO12_NC;
                         st_type = STT_TLS;
                     }
 
                     // 数据指令访问添加重定位项即可
-                    uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, rel_operand->symbol.name);
+                    uint64_t sym_index = (uint64_t) table_get(ctx->symtab_hash, call_target);
                     if (sym_index == 0) {
                         // 添加未定义符号
                         Elf64_Sym sym = {
@@ -399,7 +441,7 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, module_t *m
                                 .st_other = 0,
                                 .st_value = 0,
                         };
-                        sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, rel_operand->symbol.name);
+                        sym_index = elf_put_sym(ctx->symtab_section, ctx->symtab_hash, &sym, call_target);
                     }
 
 
@@ -568,11 +610,13 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
             arm64_asm_operand_t *rel_operand = arm64_extract_symbol_operand(operation);
             char *call_target = NULL;
             if (rel_operand != NULL) {
-                call_target = rel_operand->symbol.name;
+                // 使用辅助函数获取符号名（支持 SYMBOL 和 INDIRECT_SYM 两种模式）
+                call_target = arm64_get_symbol_name(rel_operand);
 
                 // 判断是否为分支/调用指令
                 if (arm64_is_call_op(operation) || arm64_is_branch_op(operation)) {
-                    uint64_t sym_index = (uint64_t) table_get(symtab_hash, rel_operand->symbol.name);
+                    assert(rel_operand->type == ARM64_ASM_OPERAND_SYMBOL);
+                    uint64_t sym_index = (uint64_t) table_get(symtab_hash, call_target);
                     if (sym_index > 0) {
                         // 已存在的符号，计算相对偏移并进行符号改写
                         struct nlist_64 sym = ((struct nlist_64 *) ctx->symtab_command->symbols->data)[sym_index];
@@ -581,22 +625,24 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     } else {
                         // 未知符号，不做处理，依旧使用 symbol 参数
                         temp->rel_operand = rel_operand;
-                        temp->rel_symbol = rel_operand->symbol.name;
+                        temp->rel_symbol = call_target;
                     }
                 } else {
 
                     // 添加重定位项
                     uint64_t reloc_type = ARM64_RELOC_PAGE21;
-                    if (rel_operand->symbol.reloc_type == ASM_ARM64_RELOC_LO12) {
+                    asm_arm64_reloc_type operand_reloc_type = arm64_get_reloc_type(rel_operand);
+
+                    if (operand_reloc_type == ASM_ARM64_RELOC_LO12) {
                         reloc_type = ARM64_RELOC_PAGEOFF12;
-                    } else if (rel_operand->symbol.reloc_type == ASM_ARM64_RELOC_TLVP_LOAD_PAGE21) {
+                    } else if (operand_reloc_type == ASM_ARM64_RELOC_TLVP_LOAD_PAGE21) {
                         reloc_type = ARM64_RELOC_TLVP_LOAD_PAGE21;
-                    } else if (rel_operand->symbol.reloc_type == ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12) {
+                    } else if (operand_reloc_type == ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12) {
                         reloc_type = ARM64_RELOC_TLVP_LOAD_PAGEOFF12;
                     }
 
                     // 其他指令的符号引用(如数据访问)
-                    uint64_t sym_index = (uint64_t) table_get(symtab_hash, rel_operand->symbol.name);
+                    uint64_t sym_index = (uint64_t) table_get(symtab_hash, call_target);
                     if (sym_index == 0) {
                         // 添加未定义符号
                         sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
@@ -604,7 +650,7 @@ static void mach_arm64_operation_encodings(mach_context_t *ctx, slice_t *closure
                                                                               .n_value = 0,
                                                                               .n_type = N_UNDF | N_EXT,
                                                                       },
-                                                 rel_operand->symbol.name);
+                                                 call_target);
                     }
 
                     // 生成重定位信息

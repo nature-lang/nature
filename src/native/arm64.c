@@ -1035,31 +1035,23 @@ static slice_t *arm64_native_fn_end(closure_t *c, lir_op_t *op) {
 static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
-    // 直接从全局变量 global_safepoint 加载值
+    // 1. ADRP 加载页地址
     arm64_asm_operand_t *global_safepoint_operand = ARM64_SYM(GLOBAL_SAFEPOINT_IDENT, false, 0, 0);
-
     slice_push(operations, ARM64_INST(R_ADRP, ARM64_REG(x16), global_safepoint_operand));
 
-    arm64_asm_operand_t *lo12_symbol_operand = ARM64_SYM(GLOBAL_SAFEPOINT_IDENT, false,
-                                                         0, ASM_ARM64_RELOC_LO12);
-    slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(x16), lo12_symbol_operand));
+    // 2. LDR 带 :lo12: 偏移，直接加载值（合并原来的 ADD + LDR）
+    // 使用 ARM64_INDIRECT_SYM: LDR x16, [x16, :lo12:global_safepoint]
+    // 需要使用 ARM64_REG_SIZE 设置 operand.size，用于确定正确的重定位类型
+    slice_push(operations, ARM64_INST(R_LDR, ARM64_REG_SIZE(x16, QWORD),
+                                      ARM64_INDIRECT_SYM(x16, GLOBAL_SAFEPOINT_IDENT, ASM_ARM64_RELOC_LO12, QWORD)));
 
-    // ldr
-    slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(x16), ARM64_INDIRECT(x16, 0, 0, false)));
-
-    // cmp x0,#0x0
-    slice_push(operations, ARM64_INST(R_CMP, ARM64_REG(x16), ARM64_IMM(0)));
-
-    // b.eq 跳过 bl 指令
+    // 3. CBNZ 合并 CMP + BNE: 如果 x16 != 0 则跳转到 preempt
     char *preempt_ident = local_sym_with_fn(c, ".preempt");
-    slice_push(operations, ARM64_INST(R_BNE, ARM64_SYM(preempt_ident, true, 0, 0)));
+    slice_push(operations, ARM64_INST(R_CBNZ, ARM64_REG(x16), ARM64_SYM(preempt_ident, true, 0, 0)));
 
     // 增加一个跳回 label, preempt.end
     char *safepoint_ident = local_sym_with_fn(c, ".sp.end");
     slice_push(operations, ARM64_INST(R_LABEL, ARM64_SYM(safepoint_ident, true, 0, 0)));
-
-    //    slice_push(operations, ARM64_INST(R_CBZ, ARM64_REG(x16), ARM64_IMM(8)));
-    //    slice_push(operations, ARM64_INST(R_BL, ARM64_SYM(ASSIST_PREEMPT_YIELD_IDENT, false, 0, 0)));
 
     return operations;
 }
