@@ -14,6 +14,10 @@ static uint32_t asm_noop(arm64_asm_inst_t *inst) {
     return 0;
 }
 
+static uint32_t asm_nop(arm64_asm_inst_t *inst) {
+    return W_NOP();
+}
+
 
 static uint32_t asm_mov(arm64_asm_inst_t *inst) {
     arm64_asm_operand_t *opr1 = inst->operands[0]; // dst 总是 REG
@@ -912,6 +916,7 @@ arm64_opr_flags_list arm64_opcode_map[] = {
                                 &(arm64_opr_flags) {FMSUB, {F32, F32, F32, F32}},
                                 &(arm64_opr_flags) {FMSUB, {F64, F64, F64, F64}},
                         }},
+        [R_NOP] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {NOP}}},
 };
 
 static bool match_operand_flags(arm64_asm_operand_t *operand, int flag) {
@@ -1104,6 +1109,7 @@ static arm64_opcode_handle_fn arm64_opcode_handle_table[] = {
         [MVN] = asm_mvn,
         [FMADD] = asm_f_4r,
         [FMSUB] = asm_f_4r,
+        [NOP] = asm_nop,
 };
 
 uint32_t arm64_asm_inst_encoding(arm64_asm_inst_t *inst, uint8_t *data_count) {

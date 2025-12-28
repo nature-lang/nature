@@ -88,6 +88,7 @@ typedef enum {
     R_MVN,
     R_FMADD,
     R_FMSUB,
+    R_NOP,
 } arm64_asm_raw_opcode_t;
 
 static char *arm64_raw_op_names[] = {
@@ -171,6 +172,7 @@ static char *arm64_raw_op_names[] = {
         [R_MVN] = "mvn",
         [R_FMADD] = "fmadd",
         [R_FMSUB] = "fmsub",
+        [R_NOP] = "nop",
 };
 
 typedef enum {
@@ -266,6 +268,7 @@ typedef enum {
     MRS,
     FMADD,
     FMSUB,
+    NOP,
 } arm64_asm_opcode_t;
 
 typedef enum {
@@ -342,6 +345,9 @@ typedef struct {
             reg_t *reg;
             int8_t prepost; // 0=none, 1=pre, 2=post
             bool indirect_sym;
+            // Symbol info for indirect_sym mode (LDR Xt, [Xn, :lo12:symbol])
+            char *sym_name;
+            asm_arm64_reloc_type sym_reloc_type;
         } indirect; // 间接寻址， [x0] [x0, #14]
 
         struct {
@@ -412,6 +418,19 @@ typedef struct {
     _reg_operand;                                                 \
 })
 
+// ARM64_REG with explicit size setting for relocation type selection
+#define ARM64_REG_SIZE(_reg, _size) ({                            \
+    arm64_asm_operand_t *_reg_operand = NEW(arm64_asm_operand_t); \
+    if (FLAG(LIR_FLAG_ALLOC_FLOAT) & _reg->flag) {                \
+        _reg_operand->type = ARM64_ASM_OPERAND_FREG;              \
+    } else {                                                      \
+        _reg_operand->type = ARM64_ASM_OPERAND_REG;               \
+    }                                                             \
+    _reg_operand->reg = *_reg;                                    \
+    _reg_operand->size = _size;                                   \
+    _reg_operand;                                                 \
+})
+
 #define ARM64_SYM(_name, _is_local, _offset, _reloc_type) ({  \
     arm64_asm_operand_t *_operand = NEW(arm64_asm_operand_t); \
     _operand->type = ARM64_ASM_OPERAND_SYMBOL;                \
@@ -436,6 +455,21 @@ typedef struct {
     _indirect_operand->indirect.reg = _reg;                            \
     _indirect_operand->indirect.offset = _offset;                      \
     _indirect_operand->indirect.prepost = _prepost;                    \
+    _indirect_operand->indirect.indirect_sym = false;                  \
+    _indirect_operand;                                                 \
+})
+
+// Indirect addressing with symbol offset, e.g., LDR Xt, [Xn, :lo12:symbol]
+#define ARM64_INDIRECT_SYM(_reg, _sym_name, _reloc_type, _size) ({     \
+    arm64_asm_operand_t *_indirect_operand = NEW(arm64_asm_operand_t); \
+    _indirect_operand->type = ARM64_ASM_OPERAND_INDIRECT;              \
+    _indirect_operand->size = _size;                                   \
+    _indirect_operand->indirect.reg = _reg;                            \
+    _indirect_operand->indirect.offset = 0;                            \
+    _indirect_operand->indirect.prepost = 0;                           \
+    _indirect_operand->indirect.indirect_sym = true;                   \
+    _indirect_operand->indirect.sym_name = _sym_name;                  \
+    _indirect_operand->indirect.sym_reloc_type = _reloc_type;          \
     _indirect_operand;                                                 \
 })
 
@@ -551,6 +585,7 @@ typedef struct {
 #define W_BL(offset) (0x94000000U | ((offset) & ((1U << 26) - 1)))
 #define W_BLR(rn) (0xd63f0000U | ((rn) << 5))
 #define W_RET(rn) (0xd65f0000U | ((rn) << 5))
+#define W_NOP() (0xD503201FU)
 #define W_SVC(imm) (0xd4000001U | ((imm) << 5))
 
 #define P_NEG(sz, rd, rm) W_SUB_S(sz, rd, ZERO, rm, 0)
