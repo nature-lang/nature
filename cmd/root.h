@@ -14,8 +14,7 @@
 #include <unistd.h>
 
 void cmd_entry(int argc, char **argv) {
-    // 读取最后一个参数
-    char *build_file = argv[argc - 1];
+    char *build_file = argv[optind];
 
     if (!ends_with(build_file, ".n")) {
         assertf(false, "must specify the compile target with suffix n, example: nature build main.n");

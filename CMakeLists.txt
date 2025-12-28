@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.22)
 project(nature C)
 
 set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_VERBOSE_MAKEFILE OFF)
 
 include(cmake/cross.cmake)
