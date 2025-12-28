@@ -30,6 +30,7 @@ typedef enum {
 typedef enum {
     LIR_FLAG_FIRST = 1,
     LIR_FLAG_SECOND,
+    LIR_FLAG_ADDEND, // for FMA instructions (MADD/MSUB/FMADD/FMSUB)
     LIR_FLAG_OUTPUT,
     LIR_FLAG_ALLOC_INT,
     LIR_FLAG_ALLOC_FLOAT,
@@ -379,6 +380,13 @@ typedef enum {
     LIR_OPCODE_SREM, // 有符号 REM
     LIR_OPCODE_NEG, // -取负数
 
+
+    // Fused Multiply-Add/Subtract (ARM64)
+    LIR_OPCODE_MADD, // Rd = Ra + Rn * Rm (integer)
+    LIR_OPCODE_MSUB, // Rd = Ra - Rn * Rm (integer)
+    LIR_OPCODE_FMADD, // Rd = Ra + Rn * Rm (floating-point)
+    LIR_OPCODE_FMSUB, // Rd = Ra - Rn * Rm (floating-point)
+
     // int 类型转换
     LIR_OPCODE_UEXT, // int 无符号扩展 (u8 -> u32, u8 -> u64)
     LIR_OPCODE_SEXT, // int 有符号扩展 (i8 -> i32, i8 -> i64)
@@ -477,6 +485,7 @@ typedef struct lir_op_t {
     lir_opcode_t code;
     lir_operand_t *first; // 参数1
     lir_operand_t *second; // 参数2
+    lir_operand_t *addend; // for FMA instructions (MADD/MSUB/FMADD/FMSUB)
     lir_operand_t *output; // 参数3
     int id; // 编号, 也就是寄存器分配期间的 position, 一般都是顺序编码的
     bool is_resolve;

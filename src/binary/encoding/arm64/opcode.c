@@ -651,6 +651,24 @@ static uint32_t asm_f_3r(arm64_asm_inst_t *inst) {
     }
 }
 
+static uint32_t asm_f_4r(arm64_asm_inst_t *inst) {
+    arm64_asm_operand_t *opr1 = inst->operands[0];
+    arm64_asm_operand_t *opr2 = inst->operands[1];
+    arm64_asm_operand_t *opr3 = inst->operands[2];
+    arm64_asm_operand_t *opr4 = inst->operands[3];
+    uint32_t sz = opr1->reg.size == QWORD ? 1 : 0;
+
+    switch (inst->opcode) {
+        case FMADD:
+            return FMADD(sz, opr1->reg.index, opr2->reg.index, opr3->reg.index, opr4->reg.index);
+        case FMSUB:
+            return FMSUB(sz, opr1->reg.index, opr2->reg.index, opr3->reg.index, opr4->reg.index);
+        default:
+            assert(false);
+            return 0;
+    }
+}
+
 static uint32_t asm_f_2r(arm64_asm_inst_t *inst) {
     arm64_asm_operand_t *opr1 = inst->operands[0];
     arm64_asm_operand_t *opr2 = inst->operands[1];
@@ -886,6 +904,14 @@ arm64_opr_flags_list arm64_opcode_map[] = {
                               &(arm64_opr_flags) {MVN, {R32, R32}}, // 32位寄存器
                               &(arm64_opr_flags) {MVN, {R64, R64}}, // 64位寄存器
                       }},
+        [R_FMADD] = {2, (arm64_opr_flags *[]) {
+                                &(arm64_opr_flags) {FMADD, {F32, F32, F32, F32}},
+                                &(arm64_opr_flags) {FMADD, {F64, F64, F64, F64}},
+                        }},
+        [R_FMSUB] = {2, (arm64_opr_flags *[]) {
+                                &(arm64_opr_flags) {FMSUB, {F32, F32, F32, F32}},
+                                &(arm64_opr_flags) {FMSUB, {F64, F64, F64, F64}},
+                        }},
 };
 
 static bool match_operand_flags(arm64_asm_operand_t *operand, int flag) {
@@ -1076,6 +1102,8 @@ static arm64_opcode_handle_fn arm64_opcode_handle_table[] = {
         [FCVTZS] = asm_f_2r,
         [FCVTZU] = asm_f_2r,
         [MVN] = asm_mvn,
+        [FMADD] = asm_f_4r,
+        [FMSUB] = asm_f_4r,
 };
 
 uint32_t arm64_asm_inst_encoding(arm64_asm_inst_t *inst, uint8_t *data_count) {

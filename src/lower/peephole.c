@@ -156,7 +156,7 @@ static bool peephole_move_elimination_match2(closure_t *c, lir_op_t *op1, lir_op
         return false;
     }
 
-    // 检查临时变量是否在后续被使用
+    // 检查临时变量是否在后续被使用，如果后续被使用则不允许删除。
     lir_var_t *temp_var = op1->output->value;
     bool use_later = table_exist(use, temp_var->ident);
     if (use_later) {
@@ -320,7 +320,7 @@ peephole_move_elimination(closure_t *c) {
     return optimized;
 }
 
-void peephole_optimize(closure_t *c) {
+void peephole_pre(closure_t *c) {
     bool changed = true;
     int iterations = 0;
     const int max_iterations = 10; // 防止无限循环
@@ -334,6 +334,19 @@ void peephole_optimize(closure_t *c) {
         if (peephole_strength_reduction_mul2(c)) {
             changed = true;
         }
+    }
+}
+
+
+void peephole_post(closure_t *c) {
+    bool changed = true;
+    int iterations = 0;
+    const int max_iterations = 10; // 防止无限循环
+
+    // 迭代优化直到没有更多改变或达到最大迭代次数
+    while (changed && iterations < max_iterations) {
+        changed = false;
+        iterations++;
 
         // 应用移动消除优化, amd64 不适用
         if (BUILD_ARCH != ARCH_AMD64) {

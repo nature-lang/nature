@@ -1,7 +1,7 @@
 #include "arm64.h"
 #include "arm64_abi.h"
-#include "src/binary/encoding/arm64/fmov_imm8.h"
 #include "lower.h"
+#include "src/binary/encoding/arm64/fmov_imm8.h"
 
 static lir_operand_t *arm64_convert_use_var(closure_t *c, linked_t *list, lir_operand_t *operand) {
     assert(c);
@@ -55,6 +55,29 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op, linked_t *symbol_op
         assert(imm);
 
         if (imm->kind != TYPE_RAW_STRING && !is_float(imm->kind)) {
+            continue;
+        }
+
+        // arm64 浮点 const 特殊优化, 不需要借助 global symbol， 直接基于 closure table 即可
+        if (is_float(imm->kind) && arm64_fmov_double_to_imm8(imm->f64_value) != 0xFF) {
+            char *key = itoa(imm->int_value);
+
+            lir_operand_t *local_var_operand = table_get(c->local_imm_table, key);
+            if (local_var_operand == NULL) {
+                local_var_operand = temp_var_operand(c->module, type_kind_new(imm->kind));
+                imm->uint_value = arm64_fmov_double_to_imm8(imm->f64_value);
+                lir_operand_t *new_imm_operand = lir_reset_operand(imm_operand, LIR_FLAG_FIRST);
+
+                linked_push(symbol_operations, lir_op_move(local_var_operand, new_imm_operand));
+
+
+                table_set(c->local_imm_table, key, local_var_operand);
+            }
+
+            // change imm to local var
+            lir_operand_t *temp_operand = lir_reset_operand(local_var_operand, imm_operand->pos);
+            imm_operand->assert_type = temp_operand->assert_type;
+            imm_operand->value = temp_operand->value;
             continue;
         }
 
@@ -227,6 +250,54 @@ static linked_t *arm64_lower_lea(closure_t *c, lir_op_t *op) {
     return list;
 }
 
+/**
+ * Lower FMA instructions (MADD/MSUB/FMADD/FMSUB)
+ * 将 first, second, addend 操作数转换为 VAR，从而让寄存器分配能够分配寄存器
+ *
+ * FMA instruction format:
+ *   first: mul_first (Rn)
+ *   second: mul_second (Rm)
+ *   addend: addend/minuend (Ra)
+ *   output: result (Rd)
+ *
+ * @param c
+ * @param op
+ * @return
+ */
+static linked_t *arm64_lower_fma(closure_t *c, lir_op_t *op) {
+    linked_t *list = linked_new();
+
+    // first 必须是 VAR
+    if (op->first->assert_type != LIR_OPERAND_VAR) {
+        op->first = arm64_convert_use_var(c, list, op->first);
+    }
+
+    // second 必须是 VAR
+    if (op->second->assert_type != LIR_OPERAND_VAR) {
+        op->second = arm64_convert_use_var(c, list, op->second);
+    }
+
+    // addend 必须是 VAR
+    if (op->addend->assert_type != LIR_OPERAND_VAR) {
+        op->addend = arm64_convert_use_var(c, list, op->addend);
+    }
+
+    linked_push(list, op);
+
+    // 如果 output 不是 VAR 则需要额外的 MOV
+    if (op->output->assert_type != LIR_OPERAND_VAR) {
+        lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(op->output));
+        assert(temp);
+
+        lir_operand_t *dst = op->output;
+        op->output = lir_reset_operand(temp, op->output->pos);
+
+        linked_push(list, lir_op_move(dst, op->output));
+    }
+
+    return list;
+}
+
 static void arm64_lower_block(closure_t *c, basic_block_t *block) {
     assert(c);
     assert(block);
@@ -305,6 +376,13 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
 
         if (op->code == LIR_OPCODE_LEA) {
             linked_concat(operations, arm64_lower_lea(c, op));
+            continue;
+        }
+
+        // FMA 指令处理 (MADD/MSUB/FMADD/FMSUB)
+        if (op->code == LIR_OPCODE_MADD || op->code == LIR_OPCODE_MSUB ||
+            op->code == LIR_OPCODE_FMADD || op->code == LIR_OPCODE_FMSUB) {
+            linked_concat(operations, arm64_lower_fma(c, op));
             continue;
         }
 
