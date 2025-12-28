@@ -117,7 +117,7 @@ Linux Ubuntu VM（Kernel version 6.17.8，aarch64, Mac M4, 9 cores, 16G memory�
 | Golang  | go1.23.4 | ~90,000  | 11ms   |
 | Node.js | v20.16.0 | ~36,000  | 27ms   |
 
-**CPU: Fibonacci(45) time consumed** 
+**Call: Fibonacci(45) time consumed** 
 
 | Language | Version  | Time Consumed |
 | ------- | -------- | ----- |
@@ -126,19 +126,28 @@ Linux Ubuntu VM（Kernel version 6.17.8，aarch64, Mac M4, 9 cores, 16G memory�
 | Rust    | 1.85.0   | ~1.7s |
 | Node.js | v20.16.0 | ~6.0s |
 
+**CPU: Calculate 1 billion times π**
+
+| Language | Version  | Time Consumed |
+| ------- | -------- |---------------|
+| Nature  | v0.7+    | ~759ms        |
+| Golang  | go1.23.4 | ~909ms        |
+| Rust    | 1.85.0   | ~627ms        |
+| Node.js | v20.16.0 | ~877ms        |
+
 **C FFI: Calling 100 million c fn sqrt time consumed**
 
 | Language | Version | Time Consumed |
-| ------ | -------- | ----- |
-| Nature | v0.7+    | ~0.2s |
-| Golang | go1.23.4 | ~2.6s |
+| ------ | -------- |---------------|
+| Nature | v0.7+    | ~0.07s        |
+| Golang | go1.23.4 | ~2.47s        |
 
-**Coroutine: 1 Million Coroutine Time/Memory consumed**
+**Coroutine: 1 Million Coroutine Time/Memory consumed**
 
 | Language   | Version| Create(ms) | Dispatch(ms) | Empty Coroutine(ms) | Memory Consumed |
-| ------ | -------- | -------- | -------- | -------------- | ------ |
-| Nature | v0.7+    | 540      | 564      | 170            | 900+M  |
-| Golang | go1.23.4 | 1000     | 1015     | 140            | 2500+M |
+| ------ | -------- |------------|--------------|---------------------| ------ |
+| Nature | v0.7+    | ~540       | ~564         | ~170                | 900+M  |
+| Golang | go1.23.4 | ~1000      | ~1015        | ~140                | 2500+M |
   
 ## Contribution Guidelines
   

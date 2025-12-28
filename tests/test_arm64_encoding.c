@@ -185,6 +185,11 @@ static void test_basic() {
     // 0210741E
     inst = ARM64_INST(R_FMOV, ARM64_REG(d2), ARM64_IMM(-0x60));
     TEST_EQ(inst, 0x02, 0x10, 0x74, 0x1E);
+
+    // fmadd d30, d31, d26, d24
+    // 1f5a63fe -> FE 63 5A 1F
+    inst = ARM64_INST(R_FMADD, ARM64_REG(d30), ARM64_REG(d31), ARM64_REG(d26), ARM64_REG(d24));
+    TEST_EQ(inst, 0xFE, 0x63, 0x5A, 0x1F);
 }
 
 

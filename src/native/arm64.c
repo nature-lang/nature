@@ -1148,6 +1148,60 @@ static slice_t *arm64_native_lea(closure_t *c, lir_op_t *op) {
     return operations;
 }
 
+/**
+ * FMA native code generation (MADD/MSUB/FMADD/FMSUB)
+ *
+ * MADD: Rd = Ra + Rn * Rm  (integer)
+ * MSUB: Rd = Ra - Rn * Rm  (integer)
+ * FMADD: Rd = Ra + Rn * Rm (floating-point)
+ * FMSUB: Rd = Ra - Rn * Rm (floating-point)
+ *
+ * LIR operand format:
+ *   first: Rn (mul operand 1)
+ *   second: Rm (mul operand 2)
+ *   addend: Ra (addend/minuend)
+ *   output: Rd (result)
+ */
+static slice_t *arm64_native_fma(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    // 转换为 ARM64 操作数
+    arm64_asm_operand_t *rn = lir_operand_trans_arm64(c, op, op->first, operations); // Rn
+    arm64_asm_operand_t *rm = lir_operand_trans_arm64(c, op, op->second, operations); // Rm
+    arm64_asm_operand_t *ra = lir_operand_trans_arm64(c, op, op->addend, operations); // Ra
+    arm64_asm_operand_t *rd = lir_operand_trans_arm64(c, op, op->output, operations); // Rd
+    assert(rn->type == ARM64_ASM_OPERAND_REG || rn->type == ARM64_ASM_OPERAND_FREG);
+    assert(rm->type == ARM64_ASM_OPERAND_REG || rm->type == ARM64_ASM_OPERAND_FREG);
+    assert(ra->type == ARM64_ASM_OPERAND_REG || ra->type == ARM64_ASM_OPERAND_FREG);
+    assert(rd->type == ARM64_ASM_OPERAND_REG || rd->type == ARM64_ASM_OPERAND_FREG);
+
+    // 根据 opcode 生成对应的指令
+    arm64_asm_raw_opcode_t raw_opcode;
+    switch (op->code) {
+        case LIR_OPCODE_MADD:
+            raw_opcode = R_MADD;
+            break;
+        case LIR_OPCODE_MSUB:
+            raw_opcode = R_MSUB;
+            break;
+        case LIR_OPCODE_FMADD:
+            raw_opcode = R_FMADD;
+            break;
+        case LIR_OPCODE_FMSUB:
+            raw_opcode = R_FMSUB;
+            break;
+        default:
+            assert(false && "Unsupported FMA opcode");
+            return operations;
+    }
+
+    // 生成 FMA 指令: rd = ra +/- rn * rm
+    // ARM64 格式: MADD Rd, Rn, Rm, Ra
+    slice_push(operations, ARM64_INST(raw_opcode, rd, rn, rm, ra));
+
+    return operations;
+}
+
 
 static slice_t *arm64_native_bcc(closure_t *c, lir_op_t *op) {
     assert(op->output->assert_type == LIR_OPERAND_SYMBOL_LABEL);
@@ -1231,6 +1285,12 @@ arm64_native_fn arm64_native_table[] = {
         [LIR_OPCODE_MUL] = arm64_native_mul,
         [LIR_OPCODE_UREM] = arm64_native_rem,
         [LIR_OPCODE_SREM] = arm64_native_rem,
+
+        // FMA (Fused Multiply-Add/Subtract)
+        [LIR_OPCODE_MADD] = arm64_native_fma,
+        [LIR_OPCODE_MSUB] = arm64_native_fma,
+        [LIR_OPCODE_FMADD] = arm64_native_fma,
+        [LIR_OPCODE_FMSUB] = arm64_native_fma,
 
         // 逻辑相关运算符
         [LIR_OPCODE_SGT] = arm64_native_scc,

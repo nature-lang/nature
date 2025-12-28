@@ -112,34 +112,43 @@ Linux Ubuntu 虚拟机（内核版本 6.17.8，aarch64 架构, Mac M4 芯片, 9 
 
 `ab -n 100000 -c 1000 http://127.0.0.1:8888/`
 
-| 编程语言    | 版本       | QPS      | 平均请求耗时 |
+| Language| Version | QPS      | Average request time |
 | ------- | -------- | -------- | ------ |
 | Nature  | v0.7+    | ~104,000 | 9ms    |
 | Golang  | go1.23.4 | ~90,000  | 11ms   |
 | Node.js | v20.16.0 | ~36,000  | 27ms   |
 
-**CPU: Fibonacci(45) time consumed** 
+**Call: Fibonacci(45) time consumed**
 
-| 编程语言    | 版本       | 耗时    |
+| Language | Version  | Time Consumed |
 | ------- | -------- | ----- |
 | Nature  | v0.7+    | ~2.5s |
 | Golang  | go1.23.4 | ~2.5s |
 | Rust    | 1.85.0   | ~1.7s |
 | Node.js | v20.16.0 | ~6.0s |
 
+**CPU: Calculate 1 billion times π**
+
+| Language | Version  | Time Consumed |
+| ------- | -------- |---------------|
+| Nature  | v0.7+    | ~759ms        |
+| Golang  | go1.23.4 | ~909ms        |
+| Rust    | 1.85.0   | ~627ms        |
+| Node.js | v20.16.0 | ~877ms        |
+
 **C FFI: Calling 100 million c fn sqrt time consumed**
 
-| 编程语言   | 版本       | 耗时    |
-| ------ | -------- | ----- |
-| Nature | v0.7+    | ~0.2s |
-| Golang | go1.23.4 | ~2.6s |
+| Language | Version | Time Consumed |
+| ------ | -------- |---------------|
+| Nature | v0.7+    | ~0.07s        |
+| Golang | go1.23.4 | ~2.47s        |
 
-**Coroutine: 1 Million Coroutine Time/Memory consumed**
+**Coroutine: 1 Million Coroutine Time/Memory consumed**
 
-| 编程语言   | 版本       | 创建耗时(ms) | 计算耗时(ms) | 空协程创建(ms) | 占用内存   |
-| ------ | -------- | -------- | -------- | -------------- | ------ |
-| Nature | v0.7+    | 540      | 564      | 170            | 900+M  |
-| Golang | go1.23.4 | 1000     | 1015     | 140            | 2500+M |
+| Language   | Version| Create(ms) | Dispatch(ms) | Empty Coroutine(ms) | Memory Consumed |
+| ------ | -------- |------------|--------------|---------------------| ------ |
+| Nature | v0.7+    | ~540       | ~564         | ~170                | 900+M  |
+| Golang | go1.23.4 | ~1000      | ~1015        | ~140                | 2500+M |
 
 
 ## 贡献指南

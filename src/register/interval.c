@@ -123,7 +123,7 @@ static alloc_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var
 
     if ((BUILD_ARCH == ARCH_ARM64 || BUILD_ARCH == ARCH_RISCV64) &&
                 (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT || op->code == LIR_OPCODE_NEG) ||
-        lir_op_call(op) || lir_op_convert(op)) {
+        lir_op_call(op) || lir_op_fma(op) || lir_op_convert(op)) {
         return ALLOC_KIND_MUST;
     }
 

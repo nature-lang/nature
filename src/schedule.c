@@ -330,6 +330,172 @@ static void schedule_mov_elimination(schedule_ctx_t *ctx) {
     ctx->nodes = new_nodes;
 }
 
+/**
+ * 判断操作数类型是否为浮点数
+ */
+static bool is_float_operand(lir_operand_t *operand) {
+    if (!operand) return false;
+    type_t t = lir_operand_type(operand);
+    return is_float(t.kind);
+}
+
+/**
+ * FMA 模式识别优化
+ * 识别 MUL + ADD 或 MUL + SUB 模式并合并为 MADD/MSUB/FMADD/FMSUB
+ *
+ * Pattern 1: MUL + ADD -> MADD/FMADD
+ *   MUL first, second -> mul_result
+ *   ADD mul_result, addend -> result  或  ADD addend, mul_result -> result
+ *   => MADD/FMADD first, [second, addend] -> result
+ *      result = addend + first * second
+ *
+ * Pattern 2: MUL + SUB -> MSUB/FMSUB  
+ *   MUL first, second -> mul_result
+ *   SUB minuend, mul_result -> result  (minuend 不是 mul_result)
+ *   => MSUB/FMSUB first, [second, minuend] -> result
+ *      result = minuend - first * second
+ *
+ * 使用 LIR_OPERAND_ARGS 存储多个参数 [mul_second, addend/minuend]
+ * lower 阶段会将 args 转换为 var，从而让寄存器分配能够分配寄存器
+ */
+static void schedule_fma_recognition(schedule_ctx_t *ctx) {
+    if (BUILD_ARCH != ARCH_ARM64) {
+        return; // FMA 模式识别仅在 ARM64 架构启用
+    }
+
+    bool changed = true;
+    while (changed) {
+        changed = false;
+
+        for (int i = 0; i < ctx->nodes->count; i++) {
+            schedule_node_t *mul_node = ctx->nodes->take[i];
+            lir_op_t *mul_op = mul_node->op;
+
+            // 只处理 MUL 指令
+            if (mul_op->code != LIR_OPCODE_MUL) {
+                continue;
+            }
+
+            // MUL 必须有输出
+            if (!mul_op->output || mul_op->output->assert_type != LIR_OPERAND_VAR) {
+                continue;
+            }
+
+            // MUL 必须只有一个后继
+            if (mul_node->successors->count != 1) {
+                continue;
+            }
+
+            // 获取唯一后继
+            schedule_node_t *succ_node = mul_node->successors->take[0];
+            lir_op_t *succ_op = succ_node->op;
+
+            // 检查后继是否是 ADD 或 SUB
+            if (succ_op->code != LIR_OPCODE_ADD && succ_op->code != LIR_OPCODE_SUB) {
+                continue;
+            }
+
+            // SUB ra, imm -> output 转换为 ADD ra, -imm -> output
+            // 这样可以增加 FMA 命中率，因为 ADD 模式下 mul_result 可在任意位置
+            // 而 SUB 只能在 SUB(minuend, mul_result) 时才能转换为 MSUB
+            if (succ_op->code == LIR_OPCODE_SUB && succ_op->second &&
+                succ_op->second->assert_type == LIR_OPERAND_IMM) {
+                lir_imm_t *imm = succ_op->second->value;
+                // 创建取负后的立即数
+                lir_imm_t *neg_imm = NEW(lir_imm_t);
+                neg_imm->kind = imm->kind;
+                if (imm->kind == TYPE_FLOAT32) {
+                    neg_imm->f32_value = -imm->f32_value;
+                } else if (imm->kind == TYPE_FLOAT64) {
+                    neg_imm->f64_value = -imm->f64_value;
+                } else {
+                    neg_imm->int_value = -imm->int_value;
+                }
+                // 将 SUB 转换为 ADD
+                succ_op->code = LIR_OPCODE_ADD;
+                succ_op->second->value = neg_imm;
+            }
+
+            // 检查 MUL 的 output 是否在 live_out 中
+            lir_var_t *mul_out_var = mul_op->output->value;
+            if (is_in_live_out(ctx->block, mul_out_var)) {
+                continue; // MUL output 在 live_out 中，不能消除
+            }
+
+            // 确定 FMA 操作数
+            lir_operand_t *mul_first = mul_op->first;
+            lir_operand_t *mul_second = mul_op->second;
+            lir_operand_t *mul_output = mul_op->output;
+            lir_operand_t *other_operand = NULL; // addend 或 minuend
+            bool is_valid_pattern = false;
+
+            if (succ_op->code == LIR_OPCODE_ADD) {
+                // ADD: 检查哪个操作数是 MUL 的输出
+                if (operands_equal(succ_op->first, mul_output)) {
+                    other_operand = succ_op->second; // ADD(mul_result, addend)
+                    is_valid_pattern = true;
+                } else if (operands_equal(succ_op->second, mul_output)) {
+                    other_operand = succ_op->first; // ADD(addend, mul_result)
+                    is_valid_pattern = true;
+                }
+            } else if (succ_op->code == LIR_OPCODE_SUB) {
+                // SUB: 只有 SUB(minuend, mul_result) 形式才有效
+                // result = minuend - mul_result = minuend - (first * second)
+                if (operands_equal(succ_op->second, mul_output)) {
+                    other_operand = succ_op->first; // minuend
+                    is_valid_pattern = true;
+                }
+                // 注意: SUB(mul_result, x) 不能转换为 MSUB，因为 MSUB 计算的是 Ra - Rn*Rm
+            }
+
+            if (!is_valid_pattern || !other_operand) {
+                continue;
+            }
+
+            // 确定是浮点还是整数 FMA
+            bool is_float = is_float_operand(mul_first);
+            lir_opcode_t fma_opcode;
+
+            if (succ_op->code == LIR_OPCODE_ADD) {
+                fma_opcode = is_float ? LIR_OPCODE_FMADD : LIR_OPCODE_MADD;
+            } else {
+                fma_opcode = is_float ? LIR_OPCODE_FMSUB : LIR_OPCODE_MSUB;
+            }
+
+            // 修改 succ_op 为 FMA 指令
+            // first: mul_first (Rn), second: mul_second (Rm), addend: other_operand (Ra)
+            succ_op->code = fma_opcode;
+            succ_op->first = lir_reset_operand(mul_first, LIR_FLAG_FIRST);
+            succ_op->second = lir_reset_operand(mul_second, LIR_FLAG_SECOND);
+            succ_op->addend = lir_reset_operand(other_operand, LIR_FLAG_ADDEND);
+            set_operand_flag(succ_op->addend);
+            // output 保持不变
+
+            // 将 MUL 标记为 NOP
+            mul_op->code = LIR_OPCODE_NOP;
+            mul_op->first = NULL;
+            mul_op->second = NULL;
+            mul_op->addend = NULL;
+            mul_op->output = NULL;
+
+            // 更新依赖关系：MUL 的前驱直接连接到 FMA (succ_node)
+            mul_node->successors->count = 0;
+
+            changed = true;
+        }
+    }
+
+    // 移除所有被消除的 NOP 节点
+    slice_t *new_nodes = slice_new();
+    for (int i = 0; i < ctx->nodes->count; i++) {
+        schedule_node_t *node = ctx->nodes->take[i];
+        if (node->op->code != LIR_OPCODE_NOP || node->op->output != NULL) {
+            slice_push(new_nodes, node);
+        }
+    }
+    ctx->nodes = new_nodes;
+}
+
 
 /**
  * 计算指令的执行延迟 (cycles)
@@ -770,6 +936,9 @@ static void schedule_block_elimination(closure_t *c, basic_block_t *block, slice
 
     // MOV 消除优化（基于整个 block 的 DAG，检查 live_out）
     schedule_mov_elimination(&ctx);
+
+    // FMA 模式识别优化（MUL+ADD/SUB -> MADD/MSUB/FMADD/FMSUB）
+    schedule_fma_recognition(&ctx);
 }
 
 /**

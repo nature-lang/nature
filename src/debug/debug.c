@@ -193,6 +193,11 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_FN_BEGIN] = "FN_BEGIN",
         [LIR_OPCODE_FN_END] = "FN_END",
         [LIR_OPCODE_SAFEPOINT] = "SAFEPOINT",
+
+        [LIR_OPCODE_MADD] = "MADD ",
+        [LIR_OPCODE_MSUB] = "MSUB ",
+        [LIR_OPCODE_FMADD] = "FMADD",
+        [LIR_OPCODE_FMSUB] = "FMSUB",
 };
 
 void debug_parser(int line, char *token) {
@@ -250,6 +255,12 @@ void debug_lir(closure_t *c, char *key) {
                 printf(", ");
             }
             printf("%s", lir_operand_to_string(op->second));
+        }
+        if (op->addend) {
+            if (op->first || op->second) {
+                printf(", ");
+            }
+            printf("%s", lir_operand_to_string(op->addend));
         }
         if (op->output) {
             if (op->first) {
@@ -434,6 +445,12 @@ void debug_basic_block(basic_block_t *block) {
                 printf(", ");
             }
             printf("%s", lir_operand_to_string(op->second));
+        }
+        if (op->addend) {
+            if (op->first || op->second) {
+                printf(", ");
+            }
+            printf("%s", lir_operand_to_string(op->addend));
         }
         if (op->output) {
             if (op->first) {

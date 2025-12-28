@@ -86,6 +86,8 @@ typedef enum {
     R_FCVTZS,
     R_FCVTZU,
     R_MVN,
+    R_FMADD,
+    R_FMSUB,
 } arm64_asm_raw_opcode_t;
 
 static char *arm64_raw_op_names[] = {
@@ -167,6 +169,8 @@ static char *arm64_raw_op_names[] = {
         [R_FCVTZS] = "fcvtzs",
         [R_FCVTZU] = "fcvtzu",
         [R_MVN] = "mvn",
+        [R_FMADD] = "fmadd",
+        [R_FMSUB] = "fmsub",
 };
 
 typedef enum {
@@ -260,6 +264,8 @@ typedef enum {
     FCVTZU,
     MVN,
     MRS,
+    FMADD,
+    FMSUB,
 } arm64_asm_opcode_t;
 
 typedef enum {
@@ -590,6 +596,11 @@ typedef struct {
 #define FCVT(dsz, rt, rn) (0x1e224000 | ((1 - (dsz)) << 22) | ((dsz) << 15) | ((rn) << 5) | (rt))
 #define FCVTZS(dsz, rt, ssz, rn) (0x1e380000 | ((dsz) << 31) | ((ssz) << 22) | ((rn) << 5) | (rt))
 #define FCVTZU(dsz, rt, ssz, rn) (0x1e390000 | ((dsz) << 31) | ((ssz) << 22) | ((rn) << 5) | (rt))
+
+// FMADD: Rd = Ra + Rn * Rm
+#define FMADD(sz, rd, rn, rm, ra) (0x1f000000U | ((sz) << 22) | ((rm) << 16) | ((ra) << 10) | ((rn) << 5) | (rd))
+// FMSUB: Rd = Ra - Rn * Rm
+#define FMSUB(sz, rd, rn, rm, ra) (0x1f008000U | ((sz) << 22) | ((rm) << 16) | ((ra) << 10) | ((rn) << 5) | (rd))
 
 extern arm64_opr_flags_list arm64_opcode_map[];
 

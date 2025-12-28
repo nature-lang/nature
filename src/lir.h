@@ -500,6 +500,7 @@ static inline slice_t *extract_all_operands(lir_op_t *op, uint64_t operand_flag)
     slice_t *result = recursion_extract_operands(op->output, operand_flag);
     slice_concat(result, recursion_extract_operands(op->first, operand_flag));
     slice_concat(result, recursion_extract_operands(op->second, operand_flag));
+    slice_concat(result, recursion_extract_operands(op->addend, operand_flag));
 
     return result;
 }
@@ -667,6 +668,7 @@ lir_op_new(lir_opcode_t code, lir_operand_t *first, lir_operand_t *second, lir_o
     op->code = code;
     op->first = lir_operand_copy(first); // 这里的 copy 并不深度，而是 copy 了指针！
     op->second = lir_operand_copy(second);
+    op->addend = NULL; // FMA instructions will set this separately
     op->output = lir_operand_copy(result);
 
     op->first && ((op->first->pos = LIR_FLAG_FIRST));
@@ -1177,6 +1179,10 @@ static inline bool lir_op_contain_cmp(lir_op_t *op) {
 
 static inline bool lir_op_term(lir_op_t *op) {
     return (op->code == LIR_OPCODE_ADD || op->code == LIR_OPCODE_SUB);
+}
+
+static inline bool lir_op_fma(lir_op_t *op) {
+    return op->code == LIR_OPCODE_FMADD || op->code == LIR_OPCODE_FMSUB || op->code == LIR_OPCODE_MADD || op->code == LIR_OPCODE_MSUB;
 }
 
 static inline bool lir_op_ternary(lir_op_t *op) {
