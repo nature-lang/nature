@@ -14,13 +14,6 @@
 #include <unistd.h>
 
 void cmd_entry(int argc, char **argv) {
-    char *build_file = argv[optind];
-
-    if (!ends_with(build_file, ".n")) {
-        assertf(false, "must specify the compile target with suffix n, example: nature build main.n");
-        return;
-    }
-
     struct option long_options[] = {
             {"archive", no_argument, NULL, 0},
             {"output", required_argument, NULL, 'o'},
@@ -116,6 +109,13 @@ void cmd_entry(int argc, char **argv) {
         }
     }
 
+    // the first non-option arugment
+    const char *build_file = argv[optind];
+
+    if (!ends_with(build_file, ".n")) {
+        assertf(false, "must specify the compile target with suffix n, example: nature build main.n");
+        return;
+    }
 
     build(build_file, is_archive);
 }
