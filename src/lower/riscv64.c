@@ -50,6 +50,11 @@ static linked_t *riscv64_lower_imm(closure_t *c, lir_op_t *op, linked_t *symbol_
     for (int i = 0; i < imm_operands->count; ++i) {
         lir_operand_t *imm_operand = imm_operands->take[i];
         assert(imm_operand);
+        lir_imm_t *imm = imm_operand->value;
+        assert(imm);
+        if (imm->kind != TYPE_RAW_STRING && !is_float(imm->kind)) {
+            continue;
+        }
 
         lower_imm_symbol(c, imm_operand, list, symbol_operations);
     }

@@ -1,4 +1,5 @@
 #include "riscv64.h"
+#include "src/binary/encoding/riscv64/asm.h"
 #include "src/debug/debug.h"
 #include "src/register/arch/riscv64.h"
 #include <assert.h>
@@ -635,6 +636,7 @@ static slice_t *riscv64_native_scc(closure_t *c, lir_op_t *op) {
     riscv64_asm_operand_t *first = lir_operand_trans_riscv64(c, op, op->first, operations);
     riscv64_asm_operand_t *second = lir_operand_trans_riscv64(c, op, op->second, operations);
     riscv64_asm_operand_t *result = lir_operand_trans_riscv64(c, op, op->output, operations);
+    assert(result->type == RISCV64_ASM_OPERAND_REG || result->type == RISCV64_ASM_OPERAND_FREG);
 
     // 判断是否为整数操作数
     bool is_integer = riscv64_is_integer_operand(op->first);
@@ -642,7 +644,7 @@ static slice_t *riscv64_native_scc(closure_t *c, lir_op_t *op) {
     if (is_integer) {
         // 整数比较逻辑（处理立即数）
         if (second->type == RISCV64_ASM_OPERAND_IMMEDIATE) {
-            if (second->immediate < -2048 || second->immediate > 2047) {
+            if (second->immediate < -2048 || second->immediate > 2046) {
                 riscv64_asm_operand_t *temp_reg = RO_REG(T6);
                 riscv64_mov_imm(op, operations, temp_reg, second->immediate);
                 second = temp_reg;
@@ -705,7 +707,9 @@ static slice_t *riscv64_native_scc(closure_t *c, lir_op_t *op) {
 
             case LIR_OPCODE_USGT:
                 if (second->type == RISCV64_ASM_OPERAND_IMMEDIATE) {
-                    slice_push(operations, RISCV64_INST(RV_SLTIU, result, second, RO_IMM(first->immediate + 1)));
+                    // first > second 等价于 !(first <= second) 等价于 !(first < second+1)
+                    slice_push(operations, RISCV64_INST(RV_SLTIU, result, first, RO_IMM(second->immediate + 1)));
+                    slice_push(operations, RISCV64_INST(RV_XORI, result, result, RO_IMM(1)));
                 } else {
                     slice_push(operations, RISCV64_INST(RV_SLTU, result, second, first));
                 }
