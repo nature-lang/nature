@@ -68,6 +68,16 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op, linked_t *symbol_op
                 imm->uint_value = arm64_fmov_double_to_imm8(imm->f64_value);
                 lir_operand_t *new_imm_operand = lir_reset_operand(imm_operand, LIR_FLAG_FIRST);
 
+                lir_var_t *var = local_var_operand->value; // def
+                var->flag |= FLAG(LIR_FLAG_CONST);
+                var->imm_value.uint_value = imm->uint_value; // origin value
+
+                // 创建 remat_ops 模板 (FMOV imm8)
+                linked_t *remat_ops = linked_new();
+                linked_push(remat_ops, lir_op_move(local_var_operand, new_imm_operand));
+                var->remat_ops = remat_ops;
+
+                // 虚拟模板指令，后续会被直接 spill 删除
                 linked_push(symbol_operations, lir_op_move(local_var_operand, new_imm_operand));
 
 
@@ -76,6 +86,10 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op, linked_t *symbol_op
 
             // change imm to local var
             lir_operand_t *temp_operand = lir_reset_operand(local_var_operand, imm_operand->pos);
+            lir_var_t *var = temp_operand->value;
+            var->flag |= FLAG(LIR_FLAG_CONST);
+            var->imm_value.uint_value = imm->uint_value;
+
             imm_operand->assert_type = temp_operand->assert_type;
             imm_operand->value = temp_operand->value;
             continue;

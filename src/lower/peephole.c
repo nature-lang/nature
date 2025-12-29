@@ -172,7 +172,7 @@ static bool peephole_move_elimination_match2(closure_t *c, lir_op_t *op1, lir_op
         }
 
         // 执行优化：将第二个指令的second操作数替换为MOVE的输入
-        op2->second = op1->first;
+        op2->second = lir_reset_operand(op1->first, LIR_FLAG_SECOND);
         return true;
     } else if (op2->first != NULL && operands_equal(op2->first, op1->output)) {
         // 第二个指令的输出必须等于MOVE指令的输入
@@ -181,7 +181,7 @@ static bool peephole_move_elimination_match2(closure_t *c, lir_op_t *op1, lir_op
         }
 
         // 执行优化：将第二个指令的first操作数替换为MOVE的输入
-        op2->first = op1->first;
+        op2->first = lir_reset_operand(op1->first, LIR_FLAG_FIRST);
         return true;
     }
 
@@ -246,6 +246,11 @@ static bool peephole_move_elimination_match1(closure_t *c, lir_op_t *op1, lir_op
         return false;
     }
 
+    lir_var_t *output_var = op1->output->value;
+    if (output_var->flag & FLAG(LIR_FLAG_CONST)) {
+        return false;
+    }
+
     if (!operands_equal(op1->output, op2->first)) {
         return false;
     }
@@ -257,7 +262,8 @@ static bool peephole_move_elimination_match1(closure_t *c, lir_op_t *op1, lir_op
         return false;
     }
 
-    op1->output = op2->output;
+
+    op1->output = lir_reset_operand(op2->output, LIR_FLAG_OUTPUT);
     return true;
 }
 

@@ -22,9 +22,10 @@
 typedef uint64_t flag_t;
 
 typedef enum {
-    ALLOC_KIND_NOT = 1, // 不能分配寄存器, 例如 LEA 的左值
+    ALLOC_KIND_STACK = 1, // 必须 spill 到栈中, 例如 LEA 的左值
     ALLOC_KIND_MUST = 2, // 必须分配寄存器
     ALLOC_KIND_SHOULD = 3, // 尽量分配寄存器，但不强制
+    ALLOC_KIND_FLOAT = 4, // 浮点常量 kind
 } alloc_kind_e;
 
 typedef enum {
@@ -40,6 +41,7 @@ typedef enum {
     LIR_FLAG_USE,
     LIR_FLAG_DEF,
     LIR_FLAG_INDIRECT_ADDR_BASE,
+    LIR_FLAG_CONST, // var 中存在的是常量
 } lir_flag_t;
 
 typedef enum {
@@ -309,6 +311,8 @@ typedef struct {
 
     flag_t flag;
     type_t type;
+    value_casting imm_value;
+    linked_t *remat_ops; // 重物化指令序列 (LEA + MOVE)
 } lir_var_t;
 
 typedef struct {
@@ -343,6 +347,9 @@ typedef struct interval_t {
 
     lir_flag_t alloc_type; // VR_FLAG_ALLOC_INT,VR_FLAG_ALLOC_FLOAT
     bool fixed; // 是否是物理寄存器所产生的 interval, index 对应物理寄存器的编号，通常小于 40
+
+    bool is_const_float; // 定义常量产生的 var, 比如 mov imm -> v
+    linked_t *remat_ops; // 重物化指令序列 (LEA + MOVE)
 } interval_t;
 
 typedef struct {

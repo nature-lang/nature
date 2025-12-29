@@ -526,6 +526,12 @@ static inline lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_var->old = var->old;
         new_var->type = var->type;
         new_var->flag = 0; // 即使是同一个 var 在不同的位置承担的 flag 也是不同的
+        if (var->flag & FLAG(LIR_FLAG_CONST)) {
+            new_var->flag |= FLAG(LIR_FLAG_CONST);
+        }
+
+        new_var->imm_value = var->imm_value;
+        new_var->remat_ops = var->remat_ops; // 复制 remat_ops
         new_operand->value = new_var;
         return new_operand;
     }

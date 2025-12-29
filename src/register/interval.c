@@ -51,8 +51,11 @@ static alloc_kind_e alloc_kind_of_def(closure_t *c, lir_op_t *op, lir_var_t *var
     }
 
     if (op->code == LIR_OPCODE_MOVE) {
-        // 如果 left == imm 或者 reg 则返回 should, mov 的 first 一定是 use
         assertf(var->flag & FLAG(LIR_FLAG_OUTPUT), "move def must in output");
+
+        if (var->flag & FLAG(LIR_FLAG_CONST)) {
+            return ALLOC_KIND_FLOAT;
+        }
 
         lir_operand_t *first = op->first;
         if (first->assert_type == LIR_OPERAND_REG) {
@@ -101,7 +104,11 @@ static alloc_kind_e alloc_kind_of_use(closure_t *c, lir_op_t *op, lir_var_t *var
 
     // lea 指令的 use 一定是 first, 所以不需要重复判断
     if (op->code == LIR_OPCODE_LEA) {
-        return ALLOC_KIND_NOT;
+        return ALLOC_KIND_STACK;
+    }
+
+    if (var->flag & FLAG(LIR_FLAG_CONST)) {
+        return ALLOC_KIND_MUST;
     }
 
     // arm64 和 amd64 都适用
@@ -311,10 +318,14 @@ static interval_t *interval_new_child(closure_t *c, interval_t *i) {
     if (i->var) {
         // 原先的 var 已经 with 了 module 了，所以此处不需要重复 with
         lir_var_t *var = unique_var_operand_no_module(c->module, i->var->type, i->var->ident)->value;
+        var->flag = i->var->flag;
+        var->imm_value = i->var->imm_value;
+        var->remat_ops = i->var->remat_ops; // 继承 remat_ops
 
         slice_push(c->var_defs, var);
 
         child->var = var;
+        child->remat_ops = i->remat_ops; // 继承 remat_ops
         table_set(c->interval_table, var->ident, child);
     } else {
         assert(parent->fixed);
@@ -503,6 +514,11 @@ void interval_build(closure_t *c) {
         interval_t *interval = interval_new(c);
         interval->var = var;
         interval->alloc_type = type_kind_trans_alloc(var->type.kind);
+        if (var->flag & FLAG(LIR_FLAG_CONST)) {
+            interval->is_const_float = true;
+            assert(var->remat_ops);
+            interval->remat_ops = var->remat_ops; // 复制 remat_ops
+        }
         table_set(c->interval_table, var->ident, interval);
     }
 
@@ -1165,6 +1181,12 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
 
     i->assigned = 0;
     i->spilled = true;
+
+    // 可重物化的常量不需要分配栈空间
+    if (i->is_const_float && i->remat_ops) {
+        return;
+    }
+
     if (*i->stack_slot != 0) {
         // 已经分配了 slot 了
         return;
@@ -1210,7 +1232,7 @@ use_pos_t *interval_must_reg_pos(interval_t *i) {
 use_pos_t *interval_must_stack_pos(interval_t *i) {
     LINKED_FOR(i->use_pos_list) {
         use_pos_t *pos = LINKED_VALUE();
-        if (pos->kind == ALLOC_KIND_NOT) {
+        if (pos->kind == ALLOC_KIND_STACK) {
             return pos;
         }
     }
@@ -1376,7 +1398,11 @@ void resolve_mappings(closure_t *c, resolver_t *r) {
                 continue;
             }
 
-            block_insert_mov(r->insert_block, r->insert_id, from, to, true, true);
+            if (from->is_const_float || to->is_const_float) {
+                // 常量 interval 不需要进行 mov 插入
+            } else {
+                block_insert_mov(r->insert_block, r->insert_id, from, to, true, true);
+            }
 
             if (from->assigned) {
                 block_regs[from->assigned] -= 1;
@@ -1480,7 +1506,37 @@ void replace_virtual_register(closure_t *c) {
                 interval_t *interval = _interval_child_at(parent, op->id, var->flag & FLAG(LIR_FLAG_USE));
                 assert(interval);
 
-                var_replace(operand, interval);
+                if (interval->is_const_float && var->flag & FLAG(LIR_FLAG_DEF)) {
+                    // 定义点：删除原始 mov imm -> var 指令
+                    assert(op->code == LIR_OPCODE_MOVE);
+                    linked_remove(block->operations, current);
+                } else if (interval->is_const_float && (var->flag & FLAG(LIR_FLAG_USE)) && interval->spilled) {
+                    // 使用点且已 spill：执行重物化
+                    assert(interval->remat_ops && interval->remat_ops->count > 0);
+                    assert(op->code == LIR_OPCODE_MOVE); // 应该是 MOVE 指令
+
+                    // 目标是当前指令的 output（期望值最终存放的位置）
+                    lir_operand_t *target = op->output;
+
+                    // 遍历 remat_ops 插入指令，最后一条使用 target 作为 output
+                    linked_node *insert_point = current->prev;
+                    linked_node *last_remat = linked_last(interval->remat_ops);
+                    LINKED_FOR(interval->remat_ops) {
+                        lir_op_t *template_op = LINKED_VALUE();
+                        lir_op_t *new_op = lir_op_new(
+                                template_op->code,
+                                template_op->first,
+                                template_op->second,
+                                (LINKED_NODE() == last_remat) ? target : template_op->output);
+                        new_op->id = op->id;
+                        insert_point = linked_insert_after(block->operations, insert_point, new_op);
+                    }
+
+                    // 删除原始 MOVE 指令（用 remat 替代）
+                    linked_remove(block->operations, current);
+                } else {
+                    var_replace(operand, interval);
+                }
             }
 
             if (op->code == LIR_OPCODE_MOVE) {

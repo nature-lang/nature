@@ -289,14 +289,20 @@ void allocate_walk(closure_t *c) {
         handle_inactive(a);
 
         use_pos_t *first_use = first_use_pos(a->current, 0);
-        if (!first_use || first_use->kind == ALLOC_KIND_NOT) {
+        if (!first_use || first_use->kind == ALLOC_KIND_STACK) {
             spill_interval(c, a, a->current, 0);
             linked_push(a->handled, a->current);
             continue;
         }
         // interval 使用时间过短，无法分配寄存器
-        use_pos_t *first_not = first_use_pos(a->current, ALLOC_KIND_NOT);
+        use_pos_t *first_not = first_use_pos(a->current, ALLOC_KIND_STACK);
         if (first_use->kind != ALLOC_KIND_MUST && first_not && first_not - first_use < ALLOC_USE_MIN) {
+            spill_interval(c, a, a->current, 0);
+            linked_push(a->handled, a->current);
+            continue;
+        }
+
+        if (a->current->is_const_float) {
             spill_interval(c, a, a->current, 0);
             linked_push(a->handled, a->current);
             continue;
