@@ -496,7 +496,7 @@ typedef struct lir_op_t {
     lir_operand_t *addend; // for FMA instructions (MADD/MSUB/FMADD/FMSUB)
     lir_operand_t *output; // 参数3
     int id; // 编号, 也就是寄存器分配期间的 position, 一般都是顺序编码的
-    bool is_resolve;
+    char resolve_char;
 
     int line;
     int column;

@@ -366,7 +366,7 @@ static bool resolve_blocked(int8_t *block_regs, interval_t *from, interval_t *to
  * @param dst_i
  */
 static void block_insert_mov(basic_block_t *block, int insert_id, interval_t *src_i, interval_t *dst_i, bool imm_replace,
-                             bool is_resolve) {
+                             uint8_t resolve_char) {
     LINKED_FOR(block->operations) {
         lir_op_t *op = LINKED_VALUE();
         if (op->id <= insert_id) {
@@ -389,7 +389,7 @@ static void block_insert_mov(basic_block_t *block, int insert_id, interval_t *sr
 
         lir_op_t *mov_op = lir_op_move(dst, src);
         mov_op->id = insert_id;
-        mov_op->is_resolve = is_resolve;
+        mov_op->resolve_char = resolve_char;
         linked_insert_before(block->operations, LINKED_NODE(), mov_op);
 
         if (block->first_op == LINKED_NODE()) {
@@ -408,7 +408,7 @@ static void closure_insert_mov(closure_t *c, int insert_id, interval_t *src_i, i
         lir_op_t *last = OP(block->last_op);
         if (first->id <= insert_id && insert_id < last->id) {
             assert(first->id != insert_id);
-            block_insert_mov(block, insert_id, src_i, dst_i, false, false);
+            block_insert_mov(block, insert_id, src_i, dst_i, false, '~');
             return;
         }
     }
@@ -970,6 +970,10 @@ int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int befor
     }
 
 
+    //    if (strstr(c->linkident, "crypto.blowfish.expand_key")) {
+    //        return id;
+    //    }
+
     for (int i = c->blocks->count - 1; i >= 0; --i) {
         basic_block_t *b = c->blocks->take[i];
         lir_op_t *label_op = linked_first(b->operations)->value;
@@ -1463,7 +1467,7 @@ void resolve_mappings(closure_t *c, resolver_t *r) {
             if (from->is_const_float || to->is_const_float) {
                 // 常量 interval 不需要进行 mov 插入
             } else {
-                block_insert_mov(r->insert_block, r->insert_id, from, to, true, true);
+                block_insert_mov(r->insert_block, r->insert_id, from, to, true, '!');
             }
 
             if (from->assigned) {
@@ -1485,7 +1489,7 @@ void resolve_mappings(closure_t *c, resolver_t *r) {
             interval_spill_slot(c, spill_child);
 
             // insert mov
-            block_insert_mov(r->insert_block, r->insert_id, from, spill_child, true, true);
+            block_insert_mov(r->insert_block, r->insert_id, from, spill_child, true, '!');
 
             // from update
             r->from_list->take[spill_candidate] = spill_child;
@@ -1541,6 +1545,129 @@ use_pos_t *first_use_pos(interval_t *i, alloc_kind_e kind) {
     return NULL;
 }
 
+
+/**
+ * 对同一 id 位置的 spill MOVE 操作进行冲突检测和重新排序
+ * 参考 resolve_mappings 实现，避免出现类似:
+ * 29  MOVE STACK[x] -> REG[x3]  (先执行，覆盖了 x3)
+ * 29  MOVE REG[y:x3] -> STACK[y] (后执行，但 x3 已被污染)
+ * 的问题
+ * @param block
+ */
+static void reorder_spill_moves(basic_block_t *block) {
+    linked_t *new_operations = linked_new();
+    linked_node *current = linked_first(block->operations);
+
+    while (current->value != NULL) {
+        lir_op_t *op = current->value;
+
+        // 非 spill MOVE 直接添加到新列表
+        if (op->code != LIR_OPCODE_MOVE || op->resolve_char != '~') {
+            linked_push(new_operations, op);
+            current = current->succ;
+            continue;
+        }
+
+        // 收集同一 id 的所有 spill MOVE 操作
+        int target_id = op->id;
+        slice_t *spill_moves = slice_new();
+
+        while (current->value != NULL) {
+            lir_op_t *scan_op = current->value;
+
+            // id 不同则停止收集
+            if (scan_op->id != target_id) {
+                break;
+            }
+
+            // 是 spill MOVE 则收集
+            if (scan_op->code == LIR_OPCODE_MOVE && scan_op->resolve_char == '~') {
+                slice_push(spill_moves, scan_op);
+            } else {
+                // 非 spill MOVE 的操作直接添加到新列表
+                linked_push(new_operations, scan_op);
+            }
+            current = current->succ;
+        }
+
+        // 只有一个 spill MOVE，直接添加
+        if (spill_moves->count <= 1) {
+            for (int i = 0; i < spill_moves->count; ++i) {
+                linked_push(new_operations, spill_moves->take[i]);
+            }
+            continue;
+        }
+
+        // 使用 block_regs 跟踪被 from 使用的寄存器
+        int8_t block_regs[UINT8_MAX] = {0};
+        for (int i = 0; i < spill_moves->count; ++i) {
+            lir_op_t *move_op = spill_moves->take[i];
+            lir_operand_t *from = move_op->first;
+            if (from->assert_type == LIR_OPERAND_REG) {
+                reg_t *reg = from->value;
+                if (reg->index > 0) {
+                    block_regs[reg->index] += 1;
+                }
+            }
+        }
+
+        // 按照依赖关系确定正确的顺序
+        while (spill_moves->count > 0) {
+            bool processed = false;
+
+            for (int i = 0; i < spill_moves->count; ++i) {
+                lir_op_t *move_op = spill_moves->take[i];
+                lir_operand_t *from = move_op->first;
+                lir_operand_t *to = move_op->output;
+
+                // 检查 to 是否会覆盖其他操作需要的寄存器
+                bool blocked = false;
+                if (to->assert_type == LIR_OPERAND_REG) {
+                    reg_t *to_reg = to->value;
+                    if (to_reg->index > 0 && block_regs[to_reg->index] > 0) {
+                        // 检查是否是自己引用自己 (from == to)
+                        if (from->assert_type == LIR_OPERAND_REG) {
+                            reg_t *from_reg = from->value;
+                            if (block_regs[to_reg->index] == 1 && from_reg->index == to_reg->index) {
+                                blocked = false;
+                            } else {
+                                blocked = true;
+                            }
+                        } else {
+                            blocked = true;
+                        }
+                    }
+                }
+
+                if (blocked) {
+                    continue;
+                }
+
+                // 可以安全处理这个 MOVE，添加到新列表
+                linked_push(new_operations, move_op);
+
+                // 更新 block_regs
+                if (from->assert_type == LIR_OPERAND_REG) {
+                    reg_t *reg = from->value;
+                    if (reg->index > 0) {
+                        block_regs[reg->index] -= 1;
+                    }
+                }
+
+                slice_remove(spill_moves, i);
+                processed = true;
+                break;
+            }
+
+            if (!processed) {
+                assertf(false, "circular dependency detected in spill moves at id=%d", target_id);
+            }
+        }
+    }
+
+    // 替换 block 的 operations
+    block->operations = new_operations;
+}
 
 /**
  * 虚拟寄存器替换成 stack slot 和 physical register
@@ -1629,5 +1756,11 @@ void replace_virtual_register(closure_t *c) {
 
             current = current->succ;
         }
+    }
+
+    // 对同一位置的 MOVE 操作进行冲突检测和重新排序
+    for (int i = 0; i < c->blocks->count; ++i) {
+        basic_block_t *block = c->blocks->take[i];
+        reorder_spill_moves(block);
     }
 }
