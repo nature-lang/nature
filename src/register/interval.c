@@ -253,10 +253,25 @@ static void loop_mark(closure_t *c) {
         linked_push(work_list, end);
         end->loop.index_map[loop_index] = true;
 
+        bool loop_has_call = false;
+
         do {
             basic_block_t *current = linked_pop(work_list);
 
             assert(current->loop.index_map[loop_index]);
+
+            // 检测当前 block 中是否存在 call 指令
+            if (!loop_has_call) {
+                linked_node *op_node = linked_first(current->operations);
+                while (op_node->value != NULL) {
+                    lir_op_t *op = op_node->value;
+                    if (lir_op_call(op)) {
+                        loop_has_call = true;
+                        break;
+                    }
+                    op_node = op_node->succ;
+                }
+            }
 
             if (current == header) {
                 continue;
@@ -274,6 +289,9 @@ static void loop_mark(closure_t *c) {
                 pred->loop.index_map[loop_index] = true;
             }
         } while (!linked_empty(work_list));
+
+        // 设置 loop header 的 has_call 标志
+        header->loop.has_call = loop_has_call;
     }
 }
 
@@ -929,9 +947,7 @@ END:
 
 /**
  * - 不能在边界进行切分，会导致 resolve_data_flow 检测边界异常插入重复的 mov
- * - 不要在 for 循环内部的 block 中进行切分, 循环中的 live_in 计算是完整的
- *
- * 必须小于 before, before 是被占用的点，不能使用
+ * - 不要在 for 循环内部的 block 中进行切分, 循环中的 live_in 计算是完整的, 如果循环中存在 call 指令导致 break 所有寄存器，则没有必要进行循环提取操作
  * @param c
  * @param interval
  * @param before
@@ -963,16 +979,10 @@ int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int befor
     int id = before - 1;
 
     // 检查默认切分点是否在循环中，如果是则尝试找到循环外的切分点
-    //    int first_use = current->first_range->from;
     int first_use = first_use_pos(current, 0)->value;
     if (first_use >= before) {
         return id;
     }
-
-
-    //    if (strstr(c->linkident, "crypto.blowfish.expand_key")) {
-    //        return id;
-    //    }
 
     for (int i = c->blocks->count - 1; i >= 0; --i) {
         basic_block_t *b = c->blocks->take[i];
@@ -984,6 +994,15 @@ int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int befor
             // 如果该 block 不在循环中，直接使用默认 id
             if (b->loop.depth == 0) {
                 return id;
+            }
+
+            // 如果循环中存在 call 指令导致 break 所有寄存器，则没有必要进行循环提取操作
+            int8_t loop_index = b->loop.index;
+            if (loop_index >= 0) {
+                basic_block_t *header = c->loop_headers->take[loop_index];
+                if (header->loop.has_call) {
+                    return id;
+                }
             }
 
             // 默认切分点在循环中，尝试在 first_use 之后、before 之前找到一个循环外的位置
@@ -1694,21 +1713,13 @@ void replace_virtual_register(closure_t *c) {
 
                 interval_t *interval = _interval_child_at(parent, op->id, var->flag & FLAG(LIR_FLAG_USE));
                 assert(interval);
-
-                if (parent->is_const_float && (var->flag & FLAG(LIR_FLAG_USE)) && interval->spilled) {
+                if (parent->is_const_float && op->code == LIR_OPCODE_MOVE && (var->flag & FLAG(LIR_FLAG_DEF) && interval->spilled)) {
+                    linked_remove(block->operations, current);
+                } else if (parent->is_const_float && (var->flag & FLAG(LIR_FLAG_USE)) && interval->spilled) {
                     // 使用点且已 spill：执行重物化
                     assert(parent->remat_ops && parent->remat_ops->count > 0);
                     assert(op->code == LIR_OPCODE_MOVE); // 应该是 MOVE 指令
                     assert(op->output->assert_type != LIR_OPERAND_VAR);
-
-                    //                    lir_var_t *output_var = op->output->value;
-                    //                    interval_t *output_parent = table_get(c->interval_table, output_var->ident);
-                    //                    if (output_parent->parent) {
-                    //                        output_parent = output_parent->parent;
-                    //                    }
-                    //                    interval_t *output_interval = _interval_child_at(output_parent, op->id, false);
-                    //                    var_replace(op->output, output_interval);
-                    //                    assert(op->output->assert_type != LIR_OPERAND_VAR);
 
                     // 如果是 stack 则不需要进行写入
                     lir_operand_t *output = op->output;

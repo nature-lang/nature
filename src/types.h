@@ -265,6 +265,7 @@ typedef struct {
     // innermost(最深的) loop
     uint8_t depth; // block 的嵌套级别,数字越高嵌套的越深
     bool vector; // 是否可以进行向量优化
+    bool has_call; // 循环中是否包含 call 指令，如果包含则所有寄存器都会被 break
 } loop_t;
 
 typedef struct basic_block_t {

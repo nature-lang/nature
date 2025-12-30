@@ -100,6 +100,13 @@ static uint8_t find_free_reg(interval_t *current, int *free_pos) {
         hint_reg_id = current->reg_hint->assigned;
     }
 
+    // 如果 hint 指向 fixed register，且该寄存器可用（free_pos > first_from），优先返回
+    // 这对于 CALL 参数准备（MOVE var -> fixed_reg）场景非常重要
+    // 因为 var 的值最终需要在 fixed_reg 中，直接分配可以避免不必要的 spill 和额外 MOVE
+    if (hint_reg_id > 0 && current->reg_hint->fixed && free_pos[hint_reg_id] > current->first_range->from) {
+        return hint_reg_id;
+    }
+
     for (int i = 1; i < alloc_reg_count(); ++i) {
         if (free_pos[i] > current->last_range->to) { // TODO >= 和 > 产生了不同的行为
             // 如果有多个寄存器比较空闲，则优先考虑 hint
