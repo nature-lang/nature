@@ -945,7 +945,7 @@ int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int befor
         // assert(label_op->id != before);
 
         // 计算交集的时候刻意避免了 before = label 的位置
-        // 在 before 之前找到一个合适的位置进行溢出。这里直接向前推断到, 加入 label = 10, before = 11, 此时只能插入到更加前面。
+        // 在 before 之前找到一个合适的位置进行溢出。这里直接向前推断到, 假如 label = 10, before = 11, 此时只能插入到更加前面。
         if (label_op->id == before || label_op->id == (before - 1)) {
             assert(i > 0);
             b = c->blocks->take[i - 1];
@@ -960,8 +960,70 @@ int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int befor
         }
     }
 
-
     int id = before - 1;
+
+    // 检查默认切分点是否在循环中，如果是则尝试找到循环外的切分点
+    //    int first_use = current->first_range->from;
+    int first_use = first_use_pos(current, 0)->value;
+    if (first_use >= before) {
+        return id;
+    }
+
+
+    for (int i = c->blocks->count - 1; i >= 0; --i) {
+        basic_block_t *b = c->blocks->take[i];
+        lir_op_t *label_op = linked_first(b->operations)->value;
+        int block_end = OP(b->last_op)->id;
+
+        // 找到 id 所在的 block
+        if (label_op->id <= id && id <= block_end) {
+            // 如果该 block 不在循环中，直接使用默认 id
+            if (b->loop.depth == 0) {
+                return id;
+            }
+
+            // 默认切分点在循环中，尝试在 first_use 之后、before 之前找到一个循环外的位置
+            for (int j = i; j >= 0; --j) {
+                basic_block_t *candidate = c->blocks->take[j];
+                // 跳过循环内的 block
+                if (candidate->loop.depth > 0) {
+                    continue;
+                }
+
+                int candidate_end = OP(candidate->last_op)->id;
+                lir_op_t *candidate_label = linked_first(candidate->operations)->value;
+
+                // 检查候选 block 是否在有效范围内 [first_use, before)
+                if (candidate_end <= first_use) {
+                    // 候选 block 在 first_use 之前，无效
+                    continue;
+                }
+                if (candidate_label->id >= before) {
+                    // 候选 block 在 before 之后，无效
+                    continue;
+                }
+
+                // 找到一个循环外的有效 block，计算切分位置
+                int split_pos;
+                if (candidate->succs->count == 1) {
+                    split_pos = candidate_end - 1; // 插入在 branch 之前
+                } else if (candidate->succs->count == 2) {
+                    split_pos = candidate_end - 3; // 存在两个 branch 语句
+                } else {
+                    assert(false);
+                }
+
+                // 确保切分位置在有效范围内
+                if (split_pos > first_use && split_pos < before) {
+                    return split_pos;
+                }
+            }
+
+            // 没有找到循环外的有效位置，使用默认 id
+            break;
+        }
+    }
+
     return id;
 }
 
@@ -1506,34 +1568,46 @@ void replace_virtual_register(closure_t *c) {
                 interval_t *interval = _interval_child_at(parent, op->id, var->flag & FLAG(LIR_FLAG_USE));
                 assert(interval);
 
-                if (interval->is_const_float && var->flag & FLAG(LIR_FLAG_DEF)) {
-                    // 定义点：删除原始 mov imm -> var 指令
-                    assert(op->code == LIR_OPCODE_MOVE);
-                    linked_remove(block->operations, current);
-                } else if (interval->is_const_float && (var->flag & FLAG(LIR_FLAG_USE)) && interval->spilled) {
+                if (parent->is_const_float && (var->flag & FLAG(LIR_FLAG_USE)) && interval->spilled) {
                     // 使用点且已 spill：执行重物化
-                    assert(interval->remat_ops && interval->remat_ops->count > 0);
+                    assert(parent->remat_ops && parent->remat_ops->count > 0);
                     assert(op->code == LIR_OPCODE_MOVE); // 应该是 MOVE 指令
+                    assert(op->output->assert_type != LIR_OPERAND_VAR);
 
-                    // 目标是当前指令的 output（期望值最终存放的位置）
-                    lir_operand_t *target = op->output;
+                    //                    lir_var_t *output_var = op->output->value;
+                    //                    interval_t *output_parent = table_get(c->interval_table, output_var->ident);
+                    //                    if (output_parent->parent) {
+                    //                        output_parent = output_parent->parent;
+                    //                    }
+                    //                    interval_t *output_interval = _interval_child_at(output_parent, op->id, false);
+                    //                    var_replace(op->output, output_interval);
+                    //                    assert(op->output->assert_type != LIR_OPERAND_VAR);
 
-                    // 遍历 remat_ops 插入指令，最后一条使用 target 作为 output
-                    linked_node *insert_point = current->prev;
-                    linked_node *last_remat = linked_last(interval->remat_ops);
-                    LINKED_FOR(interval->remat_ops) {
-                        lir_op_t *template_op = LINKED_VALUE();
-                        lir_op_t *new_op = lir_op_new(
-                                template_op->code,
-                                template_op->first,
-                                template_op->second,
-                                (LINKED_NODE() == last_remat) ? target : template_op->output);
-                        new_op->id = op->id;
-                        insert_point = linked_insert_after(block->operations, insert_point, new_op);
+                    // 如果是 stack 则不需要进行写入
+                    lir_operand_t *output = op->output;
+                    if (output->assert_type == LIR_OPERAND_STACK) {
+                        // float const 不需要写入到 stack
+                        linked_remove(block->operations, current);
+                    } else {
+                        assert(output->assert_type == LIR_OPERAND_REG);
+
+                        // 遍历 remat_ops 插入指令，最后一条使用 target 作为 output
+                        linked_node *insert_point = current->prev;
+                        linked_node *last_remat = linked_last(interval->remat_ops);
+                        LINKED_FOR(interval->remat_ops) {
+                            lir_op_t *template_op = LINKED_VALUE();
+                            lir_op_t *new_op = lir_op_new(
+                                    template_op->code,
+                                    template_op->first,
+                                    template_op->second,
+                                    (LINKED_NODE() == last_remat) ? output : template_op->output);
+                            new_op->id = op->id;
+                            insert_point = linked_insert_after(block->operations, insert_point, new_op);
+                        }
+
+                        // 删除原始 MOVE 指令（用 remat 替代）
+                        linked_remove(block->operations, current);
                     }
-
-                    // 删除原始 MOVE 指令（用 remat 替代）
-                    linked_remove(block->operations, current);
                 } else {
                     var_replace(operand, interval);
                 }

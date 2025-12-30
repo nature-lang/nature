@@ -78,7 +78,7 @@ static linked_t *arm64_lower_imm(closure_t *c, lir_op_t *op, linked_t *symbol_op
                 var->remat_ops = remat_ops;
 
                 // 虚拟模板指令，后续会被直接 spill 删除
-                linked_push(symbol_operations, lir_op_move(local_var_operand, new_imm_operand));
+                linked_push(symbol_operations, lir_op_nop_def(local_var_operand));
 
 
                 table_set(c->local_imm_table, key, local_var_operand);

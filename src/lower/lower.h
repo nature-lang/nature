@@ -59,7 +59,8 @@ static inline void lower_imm_symbol(closure_t *c, lir_operand_t *imm_operand, li
             var->flag |= FLAG(LIR_FLAG_CONST);
             var->imm_value.f64_value = imm->f64_value;
             var->remat_ops = linked_new();
-            linked_push(symbol_operations, lir_op_move(local_var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var)));
+
+            linked_push(symbol_operations, lir_op_nop_def(local_var_operand));
 
             if (BUILD_ARCH == ARCH_AMD64) {
                 linked_push(var->remat_ops, lir_op_move(local_var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var)));
