@@ -1,16 +1,7 @@
 import 'user.n'
 
 fn main():void! {
-    user.register('xiaowei', 'hahaha123')
-
     user.register('xiaoyou', 'nanana456')
-
-	user.register('xiaoyou', 'nanana789') catch err {
-		println(err.msg())
-	}
-
     var foo = user.find('xiaoyou')
     println(foo.username, '-', foo.password)
-
-    println('current user count=', user.list.len())
 }

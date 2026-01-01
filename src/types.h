@@ -314,6 +314,7 @@ typedef struct {
     type_t type;
     value_casting imm_value;
     linked_t *remat_ops; // 重物化指令序列 (LEA + MOVE)
+    reg_t *must_hint; // 期望分配的固定寄存器(用于 call 参数)
 } lir_var_t;
 
 typedef struct {

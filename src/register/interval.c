@@ -1,6 +1,7 @@
 #include "interval.h"
 #include "assert.h"
 #include "src/debug/debug.h"
+#include "src/lir.h"
 #include "src/ssa.h"
 #include "utils/stack.h"
 
@@ -354,6 +355,8 @@ static interval_t *interval_new_child(closure_t *c, interval_t *i) {
 
     child->parent = parent;
     child->reg_hint = parent;
+    // TODO arg 特殊情况处理。
+
     child->alloc_type = parent->alloc_type;
     child->stack_slot = parent->stack_slot;
 
@@ -537,6 +540,16 @@ void interval_build(closure_t *c) {
             assert(var->remat_ops);
             interval->remat_ops = var->remat_ops; // 复制 remat_ops
         }
+
+        if (var->must_hint != NULL) {
+            reg_t *reg = covert_alloc_reg(var->must_hint);
+            //            interval_t *hint_interval = table_get(c->interval_table, reg->name);
+            //            assert(hint_interval && hint_interval->fixed);
+            //            interval->reg_hint = hint_interval;
+            // The special type var can directly allocate the register id.
+            interval->assigned = reg->alloc_id;
+        }
+
         table_set(c->interval_table, var->ident, interval);
     }
 
@@ -610,12 +623,10 @@ void interval_build(closure_t *c) {
                 // traverse all register
                 for (int j = 1; j < alloc_reg_count(); ++j) {
                     reg_t *reg = alloc_regs[j];
-                    interval_t *interval = table_get(c->interval_table, reg->name);
+                    interval_t *fixed_interval = table_get(c->interval_table, reg->name);
+                    assert(fixed_interval);
 
-                    // 所有的寄存器将在这里溢出
-                    if (interval != NULL) {
-                        interval_add_range(c, interval, op->id, op->id + 1);
-                    }
+                    interval_add_range(c, fixed_interval, op->id, op->id + 1);
                 }
             }
 
@@ -624,12 +635,8 @@ void interval_build(closure_t *c) {
                 interval_t *first_interval = operand_interval(c, op->first);
                 interval_t *def_interval = operand_interval(c, op->output);
                 if (first_interval != NULL && def_interval != NULL) {
-                    if (!def_interval->fixed) {
+                    if (!def_interval->reg_hint && !def_interval->fixed) {
                         def_interval->reg_hint = first_interval;
-                    }
-
-                    if (!first_interval->fixed) {
-                        first_interval->reg_hint = def_interval;
                     }
                 }
             }
@@ -668,25 +675,28 @@ void interval_build(closure_t *c) {
             }
 
             // phi body 中到 var 已经在上面通过 live 到形式补充了 range, 这里不需要重复操作了
-            if (op->code != LIR_OPCODE_PHI) {
-                slice_t *use_operands = extract_op_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
-                                                            FLAG(LIR_FLAG_USE), false);
-                for (int j = 0; j < use_operands->count; ++j) {
-                    lir_operand_t *operand = use_operands->take[j];
-                    interval_t *interval = operand_interval(c, operand);
-                    if (!interval) {
-                        continue;
-                    }
-                    // 添加基于 block from 的 range
-                    interval_add_range(c, interval, block_from, op->id);
+            if (op->code == LIR_OPCODE_PHI) {
+                current = current->prev;
+                continue;
+            }
 
-                    if (!interval->fixed) {
-                        assertf(operand->assert_type == LIR_OPERAND_VAR, "only var can be lives");
-                        // phi body 一定是在当前 block 的起始位置,上面已经进行了特殊处理 merge live，所以这里不需要添加 live
-                        // 在当前块中使用，但是没有在当前块中定义，则必定是入口活跃的
-                        live_add(live_table, lives, interval->var);
-                        interval_add_use_pos(c, interval, op->id, alloc_kind_of_use(c, op, operand->value));
-                    }
+            slice_t *use_operands = extract_op_operands(op, FLAG(LIR_OPERAND_VAR) | FLAG(LIR_OPERAND_REG),
+                                                        FLAG(LIR_FLAG_USE), false);
+            for (int j = 0; j < use_operands->count; ++j) {
+                lir_operand_t *operand = use_operands->take[j];
+                interval_t *interval = operand_interval(c, operand);
+                if (!interval) { // 某些 fixed interval 无法构建 interval, 比如 ah 寄存器
+                    continue;
+                }
+                // 添加基于 block from 的 range
+                interval_add_range(c, interval, block_from, op->id);
+
+                if (!interval->fixed) {
+                    assertf(operand->assert_type == LIR_OPERAND_VAR, "only var can be lives");
+                    // phi body 一定是在当前 block 的起始位置,上面已经进行了特殊处理 merge live，所以这里不需要添加 live
+                    // 在当前块中使用，但是没有在当前块中定义，则必定是入口活跃的
+                    live_add(live_table, lives, interval->var);
+                    interval_add_use_pos(c, interval, op->id, alloc_kind_of_use(c, op, operand->value));
                 }
             }
 
@@ -1238,7 +1248,7 @@ interval_t *interval_split_at(closure_t *c, interval_t *i, int position) {
     // 划分 position
     LINKED_FOR(i->use_pos_list) {
         use_pos_t *pos = LINKED_VALUE();
-        if (pos->value < position) {
+        if (pos->value <= position) {
             continue;
         }
 
@@ -1573,119 +1583,232 @@ use_pos_t *first_use_pos(interval_t *i, alloc_kind_e kind) {
  * 的问题
  * @param block
  */
-static void reorder_spill_moves(basic_block_t *block) {
-    linked_t *new_operations = linked_new();
-    linked_node *current = linked_first(block->operations);
+typedef enum {
+    MOVE_STATUS_TO_MOVE = 0,
+    MOVE_STATUS_BEING_MOVED = 1,
+    MOVE_STATUS_MOVED = 2,
+} move_status_e;
 
-    while (current->value != NULL) {
-        lir_op_t *op = current->value;
+/**
+ * Extract the register from an operand if it exists.
+ * For REG type, returns the reg directly.
+ * For INDIRECT_ADDR type, returns the base register if base is REG.
+ * Returns NULL otherwise.
+ */
+static reg_t *extract_operand_reg(lir_operand_t *operand) {
+    if (operand == NULL) {
+        return NULL;
+    }
 
-        // 非 spill MOVE 直接添加到新列表
-        if (op->code != LIR_OPCODE_MOVE || op->resolve_char != '~') {
-            linked_push(new_operations, op);
-            current = current->succ;
-            continue;
+    if (operand->assert_type == LIR_OPERAND_REG) {
+        return operand->value;
+    }
+
+    if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+        lir_indirect_addr_t *addr = operand->value;
+        if (addr->base && addr->base->assert_type == LIR_OPERAND_REG) {
+            return addr->base->value;
         }
+    }
 
-        // 收集同一 id 的所有 spill MOVE 操作
-        int target_id = op->id;
-        slice_t *spill_moves = slice_new();
+    return NULL;
+}
 
-        while (current->value != NULL) {
-            lir_op_t *scan_op = current->value;
+/**
+ * Check if src operand uses the same register that dst operand writes to.
+ * This handles the case where src is an indirect address using a register
+ * that dst is writing to.
+ */
+static bool operand_conflicts_with_dst(lir_operand_t *src_opd, lir_operand_t *dst_opd) {
+    // First check direct equality (same type and same location)
+    if (lir_operand_equal(src_opd, dst_opd)) {
+        return true;
+    }
 
-            // id 不同则停止收集
-            if (scan_op->id != target_id) {
-                break;
-            }
+    // dst should only be REG or STACK in parallel moves (not indirect)
+    assert(dst_opd->assert_type == LIR_OPERAND_REG || dst_opd->assert_type == LIR_OPERAND_STACK);
 
-            // 是 spill MOVE 则收集
-            if (scan_op->code == LIR_OPCODE_MOVE && scan_op->resolve_char == '~') {
-                slice_push(spill_moves, scan_op);
-            } else {
-                // 非 spill MOVE 的操作直接添加到新列表
-                linked_push(new_operations, scan_op);
-            }
-            current = current->succ;
-        }
+    // Only need to check for indirect addr conflict if dst is REG
+    if (dst_opd->assert_type != LIR_OPERAND_REG) {
+        return false;
+    }
 
-        // 只有一个 spill MOVE，直接添加
-        if (spill_moves->count <= 1) {
-            for (int i = 0; i < spill_moves->count; ++i) {
-                linked_push(new_operations, spill_moves->take[i]);
-            }
-            continue;
-        }
+    // Check if src uses dst's register as a base in indirect address
+    reg_t *dst_reg = dst_opd->value;
+    reg_t *src_base_reg = extract_operand_reg(src_opd); // src operand 存在两种情况 reg， reg 和 [reg]
 
-        // 使用 block_regs 跟踪被 from 使用的寄存器
-        int8_t block_regs[UINT8_MAX] = {0};
-        for (int i = 0; i < spill_moves->count; ++i) {
-            lir_op_t *move_op = spill_moves->take[i];
-            lir_operand_t *from = move_op->first;
-            if (from->assert_type == LIR_OPERAND_REG) {
-                reg_t *reg = from->value;
-                if (reg->index > 0) {
-                    block_regs[reg->index] += 1;
-                }
-            }
-        }
+    if (src_base_reg != NULL && reg_equals(src_base_reg, dst_reg)) {
+        return true;
+    }
 
-        // 按照依赖关系确定正确的顺序
-        while (spill_moves->count > 0) {
-            bool processed = false;
+    return false;
+}
 
-            for (int i = 0; i < spill_moves->count; ++i) {
-                lir_op_t *move_op = spill_moves->take[i];
-                lir_operand_t *from = move_op->first;
-                lir_operand_t *to = move_op->output;
+static void
+move_one(closure_t *c, int i, slice_t *src, slice_t *dst, slice_t *status, slice_t *moves, linked_t *new_ops) {
+    if (lir_operand_equal(src->take[i], dst->take[i])) {
+        return;
+    }
+    lir_operand_t *current_src_opd = ((lir_op_t *) moves->take[i])->first;
+    lir_operand_t *current_dst_opd = ((lir_op_t *) moves->take[i])->output;
 
-                // 检查 to 是否会覆盖其他操作需要的寄存器
-                bool blocked = false;
-                if (to->assert_type == LIR_OPERAND_REG) {
-                    reg_t *to_reg = to->value;
-                    if (to_reg->index > 0 && block_regs[to_reg->index] > 0) {
-                        // 检查是否是自己引用自己 (from == to)
-                        if (from->assert_type == LIR_OPERAND_REG) {
-                            reg_t *from_reg = from->value;
-                            if (block_regs[to_reg->index] == 1 && from_reg->index == to_reg->index) {
-                                blocked = false;
-                            } else {
-                                blocked = true;
-                            }
-                        } else {
-                            blocked = true;
-                        }
+    status->take[i] = (void *) MOVE_STATUS_BEING_MOVED;
+
+    for (int j = 0; j < src->count; ++j) {
+        if (j == i) continue;
+
+        // Check if src[j] uses the same register that dst[i] writes to
+        if (operand_conflicts_with_dst(src->take[j], dst->take[i])) {
+            if (status->take[j] == (void *) MOVE_STATUS_TO_MOVE) {
+                move_one(c, j, src, dst, status, moves, new_ops);
+            } else if (status->take[j] == (void *) MOVE_STATUS_BEING_MOVED) {
+                // break cycle
+                lir_op_t *move_op = moves->take[j];
+                lir_operand_t *src_opd = src->take[j];
+                int type_kind = 0;
+
+                // 重新获取 src operand 的 type kind, src 里面存的是 operand
+                src_opd = move_op->first;
+                type_kind = TYPE_INT;
+                if (src_opd->assert_type == LIR_OPERAND_VAR) {
+                    lir_var_t *var = src_opd->value;
+                    type_kind = var->type.kind;
+                } else if (src_opd->assert_type == LIR_OPERAND_REG) {
+                    reg_t *reg = src_opd->value;
+                    if (reg->flag & FLAG(LIR_FLAG_ALLOC_FLOAT)) {
+                        type_kind = TYPE_FLOAT;
                     }
+                } else if (src_opd->assert_type == LIR_OPERAND_STACK) {
+                    // stack to stack 必须使用 int tem
+                    type_kind = TYPE_INT;
                 }
 
-                if (blocked) {
-                    continue;
+                assert(type_kind > 0);
+
+                int tmp_reg_index;
+                if (BUILD_ARCH == ARCH_AMD64) {
+                    tmp_reg_index = is_float(type_kind) ? xmm15->index : rbx->index;
+                } else if (BUILD_ARCH == ARCH_ARM64) {
+                    tmp_reg_index = is_float(type_kind) ? v16->index : x16->index;
+                } else if (BUILD_ARCH == ARCH_RISCV64) {
+                    tmp_reg_index = is_float(type_kind) ? r_f31->index : T6->index;
+                } else {
+                    assert(false);
                 }
 
-                // 可以安全处理这个 MOVE，添加到新列表
-                linked_push(new_operations, move_op);
-
-                // 更新 block_regs
-                if (from->assert_type == LIR_OPERAND_REG) {
-                    reg_t *reg = from->value;
-                    if (reg->index > 0) {
-                        block_regs[reg->index] -= 1;
+                lir_flag_t alloc_type = LIR_FLAG_ALLOC_INT;
+                uint8_t size = 0;
+                if (src_opd->assert_type == LIR_OPERAND_REG) {
+                    reg_t *reg = src_opd->value;
+                    if (reg->flag & FLAG(LIR_FLAG_ALLOC_FLOAT)) {
+                        alloc_type = LIR_FLAG_ALLOC_FLOAT;
                     }
+                    size = reg->size;
+                } else {
+                    type_t src_type = lir_operand_type(src_opd);
+                    if (is_float(src_type.kind)) {
+                        alloc_type = LIR_FLAG_ALLOC_FLOAT;
+                    }
+                    size = type_kind_sizeof(src_type.kind);
                 }
+                reg_t *tmp_reg = reg_select2(tmp_reg_index, alloc_type, size);
+                assert(tmp_reg);
+                lir_operand_t *tmp_operand = operand_new(LIR_OPERAND_REG, tmp_reg);
 
-                slice_remove(spill_moves, i);
-                processed = true;
-                break;
-            }
+                // instruction: tmp <- src[j]
+                lir_op_t *tmp_mov = lir_op_move(tmp_operand, src_opd);
+                tmp_mov->id = move_op->id;
+                linked_push(new_ops, tmp_mov);
 
-            if (!processed) {
-                assertf(false, "circular dependency detected in spill moves at id=%d", target_id);
+                // src[j] = tmp
+                src->take[j] = tmp_operand;
             }
         }
     }
 
-    // 替换 block 的 operations
-    block->operations = new_operations;
+    // instruction: dst[i] <- src[i]
+    lir_op_t *move_op = moves->take[i];
+
+    // 如果 src[i] 已经被修改为了 tmp, 则需要重新构建 move op
+    // 原始的 move_op 可能是 dst <- src_old, 但是现在 src_old 已经变成了 tmp (in src array)
+    // 主要是为了复用 move_op 的 id 等信息，但是 src operand 需要使用最新的
+    lir_operand_t *new_src = src->take[i];
+    if (move_op->first != new_src) {
+        move_op = lir_op_move(move_op->output, new_src);
+        move_op->id = ((lir_op_t *) moves->take[i])->id;
+    }
+
+    linked_push(new_ops, move_op);
+    status->take[i] = (void *) MOVE_STATUS_MOVED;
+}
+
+/**
+ * Leroy's Algorithm
+ * @param c
+ * @param moves
+ * @param new_ops
+ */
+void parallel_moves(closure_t *c, slice_t *moves, linked_t *new_ops) {
+    if (moves->count == 0) {
+        return;
+    }
+
+    slice_t *src = slice_new();
+    slice_t *dst = slice_new();
+    slice_t *status = slice_new();
+
+    for (int i = 0; i < moves->count; ++i) {
+        lir_op_t *op = moves->take[i];
+        slice_push(src, op->first);
+        slice_push(dst, op->output);
+        slice_push(status, (void *) MOVE_STATUS_TO_MOVE);
+    }
+
+    for (int i = 0; i < moves->count; ++i) {
+        if (status->take[i] == (void *) MOVE_STATUS_TO_MOVE) {
+            move_one(c, i, src, dst, status, moves, new_ops);
+        }
+    }
+}
+
+void handle_parallel_moves(closure_t *c) {
+    for (int i = 0; i < c->blocks->count; ++i) {
+        basic_block_t *block = c->blocks->take[i];
+        linked_t *new_ops = linked_new();
+        linked_node *current = linked_first(block->operations);
+
+        while (current->value != NULL) {
+            lir_op_t *op = current->value;
+            // op->id maybe same, but that is fine.
+            // check if is parallel move
+            if (op->code == LIR_OPCODE_MOVE && op->resolve_char == '~') {
+                slice_t *moves = slice_new();
+                int id = op->id;
+
+                // collect all parallel moves with same id
+                while (current->value != NULL) {
+                    lir_op_t *next_op = current->value;
+                    if (next_op->code != LIR_OPCODE_MOVE || next_op->resolve_char != '~' || next_op->id != id) {
+                        break;
+                    }
+
+                    slice_push(moves, next_op);
+                    current = current->succ;
+                }
+
+                if (moves->count == 1) {
+                    linked_push(new_ops, moves->take[0]);
+                } else {
+                    parallel_moves(c, moves, new_ops);
+                }
+            } else {
+                linked_push(new_ops, op);
+                current = current->succ;
+            }
+        }
+
+        block->operations = new_ops;
+    }
 }
 
 /**
@@ -1767,11 +1890,5 @@ void replace_virtual_register(closure_t *c) {
 
             current = current->succ;
         }
-    }
-
-    // 对同一位置的 MOVE 操作进行冲突检测和重新排序
-    for (int i = 0; i < c->blocks->count; ++i) {
-        basic_block_t *block = c->blocks->take[i];
-        reorder_spill_moves(block);
     }
 }

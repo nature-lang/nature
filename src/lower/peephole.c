@@ -3,35 +3,8 @@
 /**
  * 检查操作数是否相等
  */
-static bool operands_equal(lir_operand_t *op1, lir_operand_t *op2) {
-    if (!op1 || !op2) {
-        return false;
-    }
+// operands_equal removed
 
-    if (op1->assert_type != op2->assert_type) {
-        return false;
-    }
-
-    if (op1->assert_type == LIR_OPERAND_VAR) {
-        lir_var_t *var1 = op1->value;
-        lir_var_t *var2 = op2->value;
-        return strcmp(var1->ident, var2->ident) == 0;
-    }
-
-    if (op1->assert_type == LIR_OPERAND_REG) {
-        reg_t *reg1 = op1->value;
-        reg_t *reg2 = op2->value;
-        return reg1->index == reg2->index;
-    }
-
-    if (op1->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-        lir_indirect_addr_t *addr1 = op1->value;
-        lir_indirect_addr_t *addr2 = op2->value;
-        return operands_equal(addr1->base, addr2->base) && addr1->offset == addr2->offset;
-    }
-
-    return false;
-}
 
 static bool is_imm_two(lir_operand_t *operand) {
     if (!operand || operand->assert_type != LIR_OPERAND_IMM) {
@@ -165,18 +138,18 @@ static bool peephole_move_elimination_match2(closure_t *c, lir_op_t *op1, lir_op
 
     // 情况1: XXX use_reg, temp_var -> x0
     // 优化为: XXX use_reg, x0 -> x0  (其中x0是MOVE的输入)
-    if (op2->second != NULL && operands_equal(op2->second, op1->output)) {
+    if (op2->second != NULL && lir_operand_equal(op2->second, op1->output)) {
         // 第二个指令的输出必须等于MOVE指令的输入
-        if (!operands_equal(op2->output, op1->first)) {
+        if (!lir_operand_equal(op2->output, op1->first)) {
             return false;
         }
 
         // 执行优化：将第二个指令的second操作数替换为MOVE的输入
         op2->second = lir_reset_operand(op1->first, LIR_FLAG_SECOND);
         return true;
-    } else if (op2->first != NULL && operands_equal(op2->first, op1->output)) {
+    } else if (op2->first != NULL && lir_operand_equal(op2->first, op1->output)) {
         // 第二个指令的输出必须等于MOVE指令的输入
-        if (!operands_equal(op2->output, op1->first)) {
+        if (!lir_operand_equal(op2->output, op1->first)) {
             return false;
         }
 
@@ -251,7 +224,7 @@ static bool peephole_move_elimination_match1(closure_t *c, lir_op_t *op1, lir_op
         return false;
     }
 
-    if (!operands_equal(op1->output, op2->first)) {
+    if (!lir_operand_equal(op1->output, op2->first)) {
         return false;
     }
 

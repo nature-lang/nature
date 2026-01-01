@@ -124,38 +124,6 @@ static bool schedule_is_eliminable_code_op(lir_opcode_t code) {
     }
 }
 
-/**
- * 检查两个操作数是否相等（用于 MOV 消除）
- */
-static bool operands_equal(lir_operand_t *op1, lir_operand_t *op2) {
-    if (!op1 || !op2) {
-        return false;
-    }
-
-    if (op1->assert_type != op2->assert_type) {
-        return false;
-    }
-
-    if (op1->assert_type == LIR_OPERAND_VAR) {
-        lir_var_t *var1 = op1->value;
-        lir_var_t *var2 = op2->value;
-        return strcmp(var1->ident, var2->ident) == 0;
-    }
-
-    if (op1->assert_type == LIR_OPERAND_REG) {
-        reg_t *reg1 = op1->value;
-        reg_t *reg2 = op2->value;
-        return reg1->index == reg2->index;
-    }
-
-    if (op1->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-        lir_indirect_addr_t *addr1 = op1->value;
-        lir_indirect_addr_t *addr2 = op2->value;
-        return operands_equal(addr1->base, addr2->base) && addr1->offset == addr2->offset;
-    }
-
-    return false;
-}
 
 /**
  * 检查变量是否在 block 的 live_out 中
@@ -226,7 +194,7 @@ static void schedule_mov_elimination(schedule_ctx_t *ctx) {
 
                 // 检查 MOV 的 first 操作数是否等于 code 的 output
                 // 只有 mov code_output -> b 才能消除，而不是 mov x -> I_ADDR[code_output]
-                if (!operands_equal(succ_op->first, op->output)) {
+                if (!lir_operand_equal(succ_op->first, op->output)) {
                     continue;
                 }
 
@@ -290,17 +258,17 @@ static void schedule_mov_elimination(schedule_ctx_t *ctx) {
                     }
                 }
 
-                if (!operands_equal(succ_op->first, op->output) || !operands_equal(succ_op->second, op->output)) {
+                if (!lir_operand_equal(succ_op->first, op->output) || !lir_operand_equal(succ_op->second, op->output)) {
                     continue;
                 }
 
                 // 将后继 code 指令中对 mov output 的使用替换为 mov input
                 // 检查 first 操作数
-                if (succ_op->first && operands_equal(succ_op->first, op->output)) {
+                if (succ_op->first && lir_operand_equal(succ_op->first, op->output)) {
                     succ_op->first = lir_reset_operand(op->first, LIR_FLAG_FIRST);
                 }
                 // 检查 second 操作数
-                if (succ_op->second && operands_equal(succ_op->second, op->output)) {
+                if (succ_op->second && lir_operand_equal(succ_op->second, op->output)) {
                     succ_op->second = lir_reset_operand(op->first, LIR_FLAG_SECOND);
                 }
 
@@ -431,17 +399,17 @@ static void schedule_fma_recognition(schedule_ctx_t *ctx) {
 
             if (succ_op->code == LIR_OPCODE_ADD) {
                 // ADD: 检查哪个操作数是 MUL 的输出
-                if (operands_equal(succ_op->first, mul_output)) {
+                if (lir_operand_equal(succ_op->first, mul_output)) {
                     other_operand = succ_op->second; // ADD(mul_result, addend)
                     is_valid_pattern = true;
-                } else if (operands_equal(succ_op->second, mul_output)) {
+                } else if (lir_operand_equal(succ_op->second, mul_output)) {
                     other_operand = succ_op->first; // ADD(addend, mul_result)
                     is_valid_pattern = true;
                 }
             } else if (succ_op->code == LIR_OPCODE_SUB) {
                 // SUB: 只有 SUB(minuend, mul_result) 形式才有效
                 // result = minuend - mul_result = minuend - (first * second)
-                if (operands_equal(succ_op->second, mul_output)) {
+                if (lir_operand_equal(succ_op->second, mul_output)) {
                     other_operand = succ_op->first; // minuend
                     is_valid_pattern = true;
                 }

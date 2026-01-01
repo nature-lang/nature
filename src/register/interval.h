@@ -100,6 +100,10 @@ use_pos_t *interval_must_stack_pos(interval_t *i);
 
 void resolve_data_flow(closure_t *c);
 
+void handle_parallel_moves(closure_t *c);
+
+void parallel_moves(closure_t *c, slice_t *moves, linked_t *new_ops);
+
 void resolve_find_insert_pos(closure_t *c, resolver_t *r, basic_block_t *from, basic_block_t *to);
 
 void resolve_mappings(closure_t *c, resolver_t *r);

@@ -359,6 +359,7 @@ static inline lir_var_t *lir_var_new(module_t *m, char *ident) {
     var->ident = ident;
     var->old = ident;
     var->flag = 0;
+    var->must_hint = NULL;
 
     symbol_t *s = symbol_table_get(ident);
     assertf(s, "notfound symbol=%s", ident);
@@ -532,6 +533,7 @@ static inline lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
 
         new_var->imm_value = var->imm_value;
         new_var->remat_ops = var->remat_ops; // 复制 remat_ops
+        new_var->must_hint = var->must_hint; // 复制 must_hint
         new_operand->value = new_var;
         return new_operand;
     }
@@ -744,6 +746,16 @@ static inline lir_op_t *lir_op_trunc(lir_operand_t *dst, lir_operand_t *src) {
 
 static inline lir_op_t *lir_op_move(lir_operand_t *dst, lir_operand_t *src) {
     return lir_op_new(LIR_OPCODE_MOVE, src, NULL, dst);
+}
+
+/**
+ * Create a move for call arguments with resolve_char='~' marker
+ * Used for call arg preparation movs that need special ID encoding
+ */
+static inline lir_op_t *lir_op_call_arg_move(lir_operand_t *dst, lir_operand_t *src) {
+    lir_op_t *op = lir_op_new(LIR_OPCODE_MOVE, src, NULL, dst);
+    op->resolve_char = '~';
+    return op;
 }
 
 static inline lir_op_t *lir_op_lea(lir_operand_t *dst, lir_operand_t *src) {
@@ -973,6 +985,33 @@ static inline lir_operand_t *lower_temp_var_operand(closure_t *c, linked_t *list
 }
 
 /**
+ * Create a temporary variable with a must_hint for call arguments
+ * @param c closure context
+ * @param list linked list to add stack alloc op if needed
+ * @param type variable type
+ * @param hint_reg expected fixed register
+ * @return temporary variable operand with must_hint set
+ */
+static inline lir_operand_t *lower_temp_var_with_hint(closure_t *c, linked_t *list, type_t type, reg_t *hint_reg) {
+    assert(type.kind > 0);
+    assert(hint_reg != NULL);
+    string unique_ident = var_unique_ident(c->module, TEMP_IDENT);
+
+    // 符合类型直接按照 TYPE_ANYPTR 进行处理
+    if (!is_scala_type(type)) {
+        type = type_kind_new(TYPE_ANYPTR);
+    }
+    symbol_table_set_var(unique_ident, type, c->module);
+
+    lir_var_t *lir_var = lir_var_new(c->module, unique_ident);
+    lir_var->must_hint = hint_reg; // Set the register hint
+    lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var);
+
+
+    return target;
+}
+
+/**
  * @param m
  * @param operand
  * @param offset
@@ -1143,6 +1182,21 @@ static inline bool lir_op_call(lir_op_t *op) {
     return op->code == LIR_OPCODE_CALL || op->code == LIR_OPCODE_RT_CALL;
 }
 
+/**
+ * Check if two registers refer to the same physical register.
+ * For ARM64: x0/w0 are the same physical register (integer), s0/d0/v0 are the same (float).
+ * But w0 (int, index=0) and s0 (float, index=0) are DIFFERENT physical registers.
+ */
+static inline bool reg_equals(reg_t *reg_a, reg_t *reg_b) {
+    if (reg_a->index != reg_b->index) {
+        return false;
+    }
+    // Check if both are float or both are int (same register bank)
+    bool a_is_float = (reg_a->flag & FLAG(LIR_FLAG_ALLOC_FLOAT)) != 0;
+    bool b_is_float = (reg_b->flag & FLAG(LIR_FLAG_ALLOC_FLOAT)) != 0;
+    return a_is_float == b_is_float;
+}
+
 static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
     if (a->assert_type != b->assert_type) {
         return false;
@@ -1151,7 +1205,7 @@ static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
     if (a->assert_type == LIR_OPERAND_REG) {
         reg_t *reg_a = a->value;
         reg_t *reg_b = b->value;
-        return reg_a->index == reg_b->index;
+        return reg_equals(reg_a, reg_b);
     }
 
     if (a->assert_type == LIR_OPERAND_STACK) {

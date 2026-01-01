@@ -33,3 +33,27 @@ fn main() {
 
 --- output.txt
 nature-test/main.n:1:3: fn main.pi_test missing return
+
+
+=== test_string_join
+--- main.n
+import libc
+import path
+
+string procs_system = 'cgroup.procs'
+
+fn dump(string s) {
+    println(s)
+}
+
+fn test():void {
+    var temp = path.join('abic/dddd', procs_system)
+    dump(temp)
+}
+
+fn main() {
+    test()
+}
+
+--- output.txt
+abic/dddd/cgroup.procs

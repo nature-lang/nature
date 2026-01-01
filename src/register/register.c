@@ -23,6 +23,18 @@ reg_t *reg_select(uint8_t index, type_kind kind) {
     return reg_find(alloc_type, index, size);
 }
 
+reg_t *reg_select2(uint8_t index, lir_flag_t alloc_type, uint8_t size) {
+    if (BUILD_ARCH == ARCH_ARM64 && size < DWORD) {
+        size = DWORD;
+    }
+
+    if (BUILD_ARCH == ARCH_RISCV64 && size < QWORD) {
+        size = DWORD;
+    }
+
+    return reg_find(alloc_type, index, size);
+}
+
 
 char *reg_table_key(lir_flag_t alloc_type, uint8_t index, uint8_t size) {
     int64_t int_key = (int64_t) index << 8;
