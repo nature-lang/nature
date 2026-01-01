@@ -1769,6 +1769,13 @@ void parallel_moves(closure_t *c, slice_t *moves, linked_t *new_ops) {
             move_one(c, i, src, dst, status, moves, new_ops);
         }
     }
+
+    free(src->take);
+    free(dst->take);
+    free(status->take);
+    free(src);
+    free(dst);
+    free(status);
 }
 
 void handle_parallel_moves(closure_t *c) {
@@ -1807,7 +1814,9 @@ void handle_parallel_moves(closure_t *c) {
             }
         }
 
+        linked_free(block->operations);
         block->operations = new_ops;
+        lir_set_quick_op(block);
     }
 }
 
@@ -1836,7 +1845,8 @@ void replace_virtual_register(closure_t *c) {
 
                 interval_t *interval = _interval_child_at(parent, op->id, var->flag & FLAG(LIR_FLAG_USE));
                 assert(interval);
-                if (parent->is_const_float && op->code == LIR_OPCODE_MOVE && (var->flag & FLAG(LIR_FLAG_DEF) && interval->spilled)) {
+                if (parent->is_const_float && op->code == LIR_OPCODE_MOVE &&
+                    (var->flag & FLAG(LIR_FLAG_DEF) && interval->spilled)) {
                     linked_remove(block->operations, current);
                 } else if (parent->is_const_float && (var->flag & FLAG(LIR_FLAG_USE)) && interval->spilled) {
                     // 使用点且已 spill：执行重物化

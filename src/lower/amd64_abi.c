@@ -512,6 +512,13 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
 
     type_t call_result_type = lir_operand_type(call_result);
 
+    // amd64 中，大型返回值由 caller 申请空间，并将空间指针通过 rdi 寄存器传递给 calle
+    if (is_stack_ref_big_type(call_result_type)) {
+        assert(call_result->assert_type == LIR_OPERAND_VAR);
+
+        linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
+    }
+
     amd64_class_t lo = AMD64_CLASS_NO;
     amd64_class_t hi = AMD64_CLASS_NO;
     int64_t count = amd64_type_classify(call_result_type, &lo, &hi, 0);
@@ -586,12 +593,6 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
         }
 
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, new_output, op->line, op->column));
-
-        // 进行 call result 的栈空间申请, 放在 CALL 之后生成 LEA 指令，避免与 CALL 参数寄存器冲突
-        if (is_stack_ref_big_type(call_result_type)) {
-            assert(call_result->assert_type == LIR_OPERAND_VAR);
-            linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
-        }
 
         // 从 reg 中将返回值 mov 到 call_result 上
         lir_operand_t *dst = indirect_addr_operand(c->module, type_kind_new(lo_kind), call_result, 0);

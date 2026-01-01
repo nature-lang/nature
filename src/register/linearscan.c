@@ -151,6 +151,11 @@ static void reorder_resolve_ops(closure_t *c) {
 
                 // Move current past the call
                 current = call_node->succ;
+
+                free(resolve_moves->take);
+                free(resolve_moves);
+                free(non_resolve_ops->take);
+                free(non_resolve_ops);
                 continue;
             }
 
@@ -159,6 +164,7 @@ static void reorder_resolve_ops(closure_t *c) {
             current = current->succ;
         }
 
+        linked_free(block->operations);
         block->operations = new_ops;
         lir_set_quick_op(block);
     }
