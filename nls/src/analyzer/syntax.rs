@@ -2193,6 +2193,15 @@ impl<'a> Syntax {
                 
                 // Check if next is left curly for selective import BEFORE trying to parse ident
                 if self.is(TokenType::LeftCurly) {
+                    // Before breaking, check for space after dot
+                    let curly_token = self.peek();
+                    if curly_token.start != dot_token.end {
+                        return Err(SyntaxError(
+                            dot_token.end,
+                            curly_token.start,
+                            "spaces are not allowed after '.' in import paths".to_string()
+                        ));
+                    }
                     break;
                 }
                 

@@ -1972,6 +1972,15 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
             
             // Check if next is left curly for selective import
             if (parser_is(m, TOKEN_LEFT_CURLY)) {
+                // Before breaking, check for space after dot
+                token_t *curly_token = m->p_cursor.current->value;
+                if (dot_token->line == curly_token->line) {
+                    int curly_start_column = curly_token->column - curly_token->length;
+                    if (curly_start_column != dot_token->column) {
+                        dump_errorf(m, CT_STAGE_PARSER, curly_token->line, curly_token->column,
+                                    "spaces are not allowed after '.' in import paths");
+                    }
+                }
                 break;
             }
             
