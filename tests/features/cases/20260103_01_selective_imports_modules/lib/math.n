@@ -1,0 +1,14 @@
+// Math library module
+fn add(int a, int b):int {
+    return a + b
+}
+
+fn multiply(int a, int b):int {
+    return a * b
+}
+
+fn square(int x):int {
+    return x * x
+}
+
+int MATH_CONSTANT = 42

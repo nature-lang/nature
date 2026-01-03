@@ -1,0 +1,27 @@
+// Test selective imports with package/module style
+import testpkg.lib.math.{add, square, MATH_CONSTANT}
+import testpkg.utils.types.{Point, createPoint}
+import testpkg.lib.math as math
+
+fn main() {
+    // Test selective import of functions
+    var sum = add(5, 3)
+    println('add(5, 3) =', sum)
+    
+    var sq = square(4)
+    println('square(4) =', sq)
+    
+    // Test selective import of constants
+    println('MATH_CONSTANT =', MATH_CONSTANT)
+    
+    // Test selective import of types and functions
+    var p = createPoint(10, 20)
+    println('Point: x =', p.x, 'y =', p.y)
+    
+    var p2 = Point{x: 5, y: 15}
+    println('Point2: x =', p2.x, 'y =', p2.y)
+    
+    // Test mixed: selective + full module import
+    var mul = math.multiply(3, 7)
+    println('math.multiply(3, 7) =', mul)
+}

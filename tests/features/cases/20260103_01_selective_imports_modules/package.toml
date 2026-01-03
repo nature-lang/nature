@@ -1,0 +1,5 @@
+name = "testpkg"
+version = "1.0.0"
+description = "Test package for selective imports"
+license = "MIT"
+type = "bin"
