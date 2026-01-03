@@ -1,0 +1,10 @@
+=== test_selective_imports
+--- main.n
+sqrt(16) = 4.000000
+pow(2, 3) = 8.000000
+add(5, 7) = 12
+pi = 3.141593
+Point: 10 , 20
+MAX_SIZE: 100
+utils.MIN_SIZE: 10
+format_string: hello

@@ -29,6 +29,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
     m->intercept_errors = NULL;
     m->imports = slice_new();
     m->import_table = table_new();
+    m->selective_import_table = table_new();
     m->global_symbol_table = table_new();
     m->global_symbols = slice_new();
     m->global_vardef = slice_new(); // ast_vardef_stmt_t
@@ -99,8 +100,28 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
         // 简单处理
         slice_push(m->imports, ast_import);
 
-        // import is_tpl 是全局导入，所以没有 is_tpl
-        if (ast_import->as && strlen(ast_import->as) > 0) {
+        // Handle selective imports: import math.{sqrt, pow, Pi as pi}
+        if (ast_import->is_selective) {
+            for (int j = 0; j < ast_import->select_items->count; ++j) {
+                ast_import_select_item_t *item = ast_import->select_items->take[j];
+                char *local_name = item->alias ? item->alias : item->ident;
+                
+                // Check for redeclaration
+                if (table_exist(m->selective_import_table, local_name) || 
+                    table_exist(m->import_table, local_name)) {
+                    ANALYZER_ASSERTF(false, "import item '%s' conflicts with existing import", local_name);
+                }
+                
+                // Create selective import reference
+                ast_import_select_t *select_ref = NEW(ast_import_select_t);
+                select_ref->module_ident = ast_import->module_ident;
+                select_ref->original_ident = item->ident;
+                select_ref->import = ast_import;
+                
+                table_set(m->selective_import_table, local_name, select_ref);
+            }
+        } else if (ast_import->as && strlen(ast_import->as) > 0) {
+            // import is_tpl 是全局导入，所以没有 is_tpl
             table_set(m->import_table, ast_import->as, ast_import);
         }
     }

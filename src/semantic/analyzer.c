@@ -213,6 +213,15 @@ static char *analyzer_resolve_typedef(module_t *m, analyzer_fndef_t *current, st
             return global_ident;
         }
 
+        // - Check selective imports
+        ast_import_select_t *select_ref = table_get(m->selective_import_table, ident);
+        if (select_ref != NULL) {
+            char *selective_global_ident = ident_with_prefix(select_ref->module_ident, select_ref->original_ident);
+            if (symbol_table_get(selective_global_ident)) {
+                return selective_global_ident;
+            }
+        }
+
         // - import xxx as * 产生的全局符号
         for (int i = 0; i < m->imports->count; ++i) {
             ast_import_t *import = m->imports->take[i];
@@ -1344,6 +1353,29 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
     symbol_t *s = symbol_table_get(current_global_ident);
     if (s != NULL) {
         ident->literal = current_global_ident; // 找到了则修改为全局名称
+        return true;
+    }
+
+    // - Check selective imports: import math.{sqrt, pow}
+    ast_import_select_t *select_ref = table_get(m->selective_import_table, ident->literal);
+    if (select_ref != NULL) {
+        char *global_ident = ident_with_prefix(select_ref->module_ident, select_ref->original_ident);
+        
+        // Verify symbol exists
+        symbol_t *sym = symbol_table_get(global_ident);
+        if (!sym) {
+            ANALYZER_ASSERTF(false, "symbol '%s' not found in module", select_ref->original_ident);
+        }
+        
+        // Check if symbol is private (only for functions)
+        if (sym->type == SYMBOL_FN) {
+            ast_fndef_t *fndef = sym->ast_value;
+            if (fndef->is_private) {
+                ANALYZER_ASSERTF(false, "cannot import private function '%s'", select_ref->original_ident);
+            }
+        }
+        
+        ident->literal = global_ident;
         return true;
     }
 

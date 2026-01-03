@@ -1936,25 +1936,69 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
     parser_advance(m);
     ast_import_t *stmt = NEW(ast_import_t);
     stmt->ast_package = slice_new();
+    stmt->select_items = NULL;  // Initialize
+    stmt->is_selective = false;
 
     token_t *token = parser_advance(m);
     if (token->type == TOKEN_LITERAL_STRING) {
         stmt->file = token->literal;
+        
+        // Check for selective import after string: "file.n".{...}
+        if (parser_consume(m, TOKEN_DOT) && parser_is(m, TOKEN_LEFT_CURLY)) {
+            // Continue to selective import parsing below
+        }
     } else {
         PARSER_ASSERTF(token->type == TOKEN_IDENT, "import token must string");
         slice_push(stmt->ast_package, token->literal);
         while (parser_consume(m, TOKEN_DOT)) {
+            // Check if next is left curly for selective import
+            if (parser_is(m, TOKEN_LEFT_CURLY)) {
+                break;
+            }
             token = parser_must(m, TOKEN_IDENT);
             slice_push(stmt->ast_package, token->literal);
         }
     }
 
-    if (parser_consume(m, TOKEN_AS)) {
-        // 可选 as
+    // Check for selective import syntax: .{item1, item2, item3 as alias}
+    if (parser_consume(m, TOKEN_LEFT_CURLY)) {
+        stmt->is_selective = true;
+        stmt->select_items = slice_new();
+        
+        // Parse first item
+        token = parser_must(m, TOKEN_IDENT);
+        ast_import_select_item_t *item = NEW(ast_import_select_item_t);
+        item->ident = token->literal;
+        item->alias = NULL;
+        
+        if (parser_consume(m, TOKEN_AS)) {
+            token = parser_must(m, TOKEN_IDENT);
+            item->alias = token->literal;
+        }
+        slice_push(stmt->select_items, item);
+        
+        // Parse remaining items
+        while (parser_consume(m, TOKEN_COMMA)) {
+            token = parser_must(m, TOKEN_IDENT);
+            item = NEW(ast_import_select_item_t);
+            item->ident = token->literal;
+            item->alias = NULL;
+            
+            if (parser_consume(m, TOKEN_AS)) {
+                token = parser_must(m, TOKEN_IDENT);
+                item->alias = token->literal;
+            }
+            slice_push(stmt->select_items, item);
+        }
+        
+        parser_must(m, TOKEN_RIGHT_CURLY);
+    } else if (parser_consume(m, TOKEN_AS)) {
+        // Existing 'as' logic for non-selective imports
         token = parser_advance(m);
         PARSER_ASSERTF(token->type == TOKEN_IDENT || token->type == TOKEN_IMPORT_STAR, "import as must ident");
         stmt->as = token->literal;
     }
+    
     result->assert_type = AST_STMT_IMPORT;
     result->value = stmt;
 

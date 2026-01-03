@@ -2179,6 +2179,10 @@ impl<'a> Syntax {
         } else if token.token_type == TokenType::Ident {
             let mut package = vec![token.literal.clone()];
             while self.consume(TokenType::Dot) {
+                // Check if next is left curly for selective import BEFORE trying to parse ident
+                if self.is(TokenType::LeftCurly) {
+                    break;
+                }
                 let ident = self.must(TokenType::Ident)?;
                 package.push(ident.literal.clone());
                 import_end = ident.end;
@@ -2188,7 +2192,37 @@ impl<'a> Syntax {
             return Err(SyntaxError(token.start, token.end, "import token must be string or ident".to_string()));
         };
 
-        let as_name = if self.consume(TokenType::As) {
+        // Check for selective import syntax: .{item1, item2, item3 as alias}
+        // For string literals, we need to consume the dot first: 'file.n'.{...}
+        // For package imports, the dot was already consumed in the loop above
+        let has_selective_dot = if file.is_some() { self.consume(TokenType::Dot) } else { false };
+        let (is_selective, select_items) = if has_selective_dot && self.is(TokenType::LeftCurly) || self.consume(TokenType::LeftCurly) {
+            let mut items = Vec::new();
+            
+            loop {
+                let ident_token = self.must(TokenType::Ident)?;
+                let ident = ident_token.literal.clone();
+                let alias = if self.consume(TokenType::As) {
+                    Some(self.must(TokenType::Ident)?.literal.clone())
+                } else {
+                    None
+                };
+                
+                items.push(ImportSelectItem { ident, alias });
+                
+                if !self.consume(TokenType::Comma) {
+                    break;
+                }
+            }
+            
+            self.must(TokenType::RightCurly)?;
+            import_end = self.prev().unwrap().end;
+            (true, Some(items))
+        } else {
+            (false, None)
+        };
+
+        let as_name = if !is_selective && self.consume(TokenType::As) {
             let t = self.safe_advance()?.clone();
 
             if !matches!(t.token_type, TokenType::Ident | TokenType::ImportStar) {
@@ -2203,6 +2237,8 @@ impl<'a> Syntax {
             file,
             ast_package,
             as_name,
+            is_selective,
+            select_items,
             module_type: 0,
             full_path: String::new(),
             package_conf: None,

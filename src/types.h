@@ -224,6 +224,7 @@ struct module_t {
     // import/symbol/asm_global_symbols(symbol)/closure_decls
     slice_t *imports; // ast_import_t, 图遍历 imports
     table_t *import_table; // 使用处做符号改写使用
+    table_t *selective_import_table; // selective imports (ast_import_select_t*)
 
     // 对外全局符号 -> 三种类型 var/fn/type_decl
     ast_fndef_t *fn_init;

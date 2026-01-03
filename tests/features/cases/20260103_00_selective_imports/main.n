@@ -1,0 +1,29 @@
+// Test selective imports with various scenarios
+import 'math_module.n'.{sqrt, pow, PI as pi}
+import 'math_module.n'.{add}
+import 'math_module.n'.{Point}
+import 'utils.n' as utils
+import 'utils.n'.{MAX_SIZE}
+
+fn main() {
+    // Test selective import of functions
+    var a = sqrt(16.0)
+    var b = pow(2.0, 3.0)
+    var c = add(5, 7)
+    
+    // Test selective import with alias
+    println('sqrt(16) =', a)
+    println('pow(2, 3) =', b)
+    println('add(5, 7) =', c)
+    println('pi =', pi)
+    
+    // Test selective import of types
+    var p = Point{x: 10, y: 20}
+    println('Point:', p.x, ',', p.y)
+    
+    // Test mixed imports (full module + selective)
+    println('MAX_SIZE:', MAX_SIZE)
+    println('utils.MIN_SIZE:', utils.MIN_SIZE)
+    var formatted = utils.format_string('hello')
+    println('format_string:', formatted)
+}

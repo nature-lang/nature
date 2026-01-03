@@ -1042,10 +1042,18 @@ pub struct TupleDestrExpr {
 
 // 语句实现
 #[derive(Debug, Clone)]
+pub struct ImportSelectItem {
+    pub ident: String,
+    pub alias: Option<String>,
+}
+
+#[derive(Debug, Clone)]
 pub struct ImportStmt {
     pub file: Option<String>,
     pub ast_package: Option<Vec<String>>,
     pub as_name: String,
+    pub is_selective: bool,                           // NEW: true if using {item1, item2} syntax
+    pub select_items: Option<Vec<ImportSelectItem>>, // NEW: selective import items
     pub module_type: u8,
     pub module_ident: String, //  基于 full path 计算的 unique ident, 如果是 main.n 则 包含 main
     pub full_path: String,
@@ -1062,6 +1070,8 @@ impl Default for ImportStmt {
             file: None,
             ast_package: None,
             as_name: String::new(),
+            is_selective: false,
+            select_items: None,
             module_type: 0,
             full_path: String::new(),
             package_conf: None,
