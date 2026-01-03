@@ -17,6 +17,7 @@ tmp/
 
 # Test and temporary files
 test.text
+mockdir.tar.gz
 
 # Library files
 libruntime.a

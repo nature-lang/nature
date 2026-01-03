@@ -2178,14 +2178,38 @@ impl<'a> Syntax {
             (Some(token.literal.clone()), None)
         } else if token.token_type == TokenType::Ident {
             let mut package = vec![token.literal.clone()];
+            let mut prev_token = token;
             while self.consume(TokenType::Dot) {
+                let dot_token = self.prev().unwrap().clone();
+                
+                // Check for space before dot: prev_token should end right where dot starts
+                if dot_token.start != prev_token.end {
+                    return Err(SyntaxError(
+                        prev_token.end,
+                        dot_token.start,
+                        "spaces are not allowed before '.' in import paths".to_string()
+                    ));
+                }
+                
                 // Check if next is left curly for selective import BEFORE trying to parse ident
                 if self.is(TokenType::LeftCurly) {
                     break;
                 }
+                
                 let ident = self.must(TokenType::Ident)?;
+                
+                // Check for space after dot: ident should start right after dot ends
+                if ident.start != dot_token.end {
+                    return Err(SyntaxError(
+                        dot_token.end,
+                        ident.start,
+                        "spaces are not allowed after '.' in import paths".to_string()
+                    ));
+                }
+                
                 package.push(ident.literal.clone());
                 import_end = ident.end;
+                prev_token = ident.clone();
             }
             (None, Some(package))
         } else {

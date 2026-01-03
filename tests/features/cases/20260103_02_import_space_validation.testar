@@ -1,0 +1,112 @@
+=== test_import_space_before_dot
+--- main.n
+import fmt . utils
+
+fn main() {
+}
+
+--- output.txt
+nature-test/main.n:1:13: spaces are not allowed before '.' in import paths
+
+=== test_import_space_after_dot
+--- main.n
+import fmt. utils
+
+fn main() {
+}
+
+--- output.txt
+nature-test/main.n:1:18: spaces are not allowed after '.' in import paths
+
+=== test_import_spaces_both_sides
+--- main.n
+import fmt . utils . testing
+
+fn main() {
+}
+
+--- output.txt
+nature-test/main.n:1:13: spaces are not allowed before '.' in import paths
+
+=== test_import_multiple_spaces_before
+--- main.n
+import fmt  .utils
+
+fn main() {
+}
+
+--- output.txt
+nature-test/main.n:1:14: spaces are not allowed before '.' in import paths
+
+=== test_import_multiple_spaces_after
+--- main.n
+import fmt.  utils
+
+fn main() {
+}
+
+--- output.txt
+nature-test/main.n:1:19: spaces are not allowed after '.' in import paths
+
+=== test_import_tab_before_dot
+--- main.n
+import fmt	.utils
+
+fn main() {
+}
+
+--- output.txt
+nature-test/main.n:1:13: spaces are not allowed before '.' in import paths
+
+=== test_import_tab_after_dot
+--- main.n
+import fmt.	utils
+
+fn main() {
+}
+
+--- output.txt
+nature-test/main.n:1:18: spaces are not allowed after '.' in import paths
+
+=== test_import_valid_no_spaces
+--- main.n
+import syscall
+
+fn main() {
+    println('test')
+}
+
+--- output.txt
+test
+
+=== test_import_valid_multiple_dots
+--- main.n
+import fmt.utils
+
+fn main() {
+    println('test')
+}
+
+--- output.txt
+test
+
+=== test_import_space_in_selective
+--- main.n
+import fmt . utils.{foo, bar}
+
+fn main() {
+}
+
+--- output.txt
+nature-test/main.n:1:13: spaces are not allowed before '.' in import paths
+
+=== test_import_valid_selective_no_spaces
+--- main.n
+import fmt
+
+fn main() {
+    println('Hello World')
+}
+
+--- output.txt
+Hello World

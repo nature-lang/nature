@@ -1950,13 +1950,45 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
     } else {
         PARSER_ASSERTF(token->type == TOKEN_IDENT, "import token must string");
         slice_push(stmt->ast_package, token->literal);
+        token_t *prev_token = token;
         while (parser_consume(m, TOKEN_DOT)) {
+            // Get the dot token from the previous node in the linked list
+            token_t *dot_token = m->p_cursor.current->prev->value;
+            
+            // Check for space before dot: prev_token should end right before dot starts
+            // Only check if they're on the same line
+            // Note: column is the position AFTER the token, so:
+            // - prev token ends at column: prev_token->column - 1
+            // - dot starts at column: dot_token->column - dot_token->length
+            // - They should be adjacent: dot_start should equal prev_end + 1
+            if (prev_token->line == dot_token->line) {
+                int dot_start_column = dot_token->column - dot_token->length;
+                
+                if (dot_start_column != prev_token->column) {
+                    dump_errorf(m, CT_STAGE_PARSER, dot_token->line, dot_token->column, 
+                                "spaces are not allowed before '.' in import paths");
+                }
+            }
+            
             // Check if next is left curly for selective import
             if (parser_is(m, TOKEN_LEFT_CURLY)) {
                 break;
             }
+            
             token = parser_must(m, TOKEN_IDENT);
+            
+            // Check for space after dot: ident should start right after dot ends
+            // Only check if they're on the same line
+            if (dot_token->line == token->line) {
+                int ident_start_column = token->column - token->length;
+                if (ident_start_column != dot_token->column) {
+                    dump_errorf(m, CT_STAGE_PARSER, token->line, token->column,
+                                "spaces are not allowed after '.' in import paths");
+                }
+            }
+            
             slice_push(stmt->ast_package, token->literal);
+            prev_token = token;
         }
     }
 
