@@ -1214,6 +1214,19 @@ static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
         return stack_a->slot == stack_b->slot;
     }
 
+    if (a->assert_type == LIR_OPERAND_VAR) {
+        lir_var_t *var1 = a->value;
+        lir_var_t *var2 = b->value;
+        return strcmp(var1->ident, var2->ident) == 0;
+    }
+
+
+    if (a->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+        lir_indirect_addr_t *addr1 = a->value;
+        lir_indirect_addr_t *addr2 = b->value;
+        return lir_operand_equal(addr1->base, addr2->base) && addr1->offset == addr2->offset;
+    }
+
     return false;
 }
 
@@ -1262,11 +1275,7 @@ static inline bool lir_op_ternary(lir_op_t *op) {
 
 
 static inline bool lir_op_mov_hint_like(lir_op_t *op) {
-    if (BUILD_ARCH == ARCH_AMD64) {
-        return op->code == LIR_OPCODE_MOVE;
-    }
-
-    // arm64 or riscv64 的 add/sub 指令对 first 和 output 允许使用不同的机要起
+    // arm64 or riscv64 的 add/sub 指令对 first 和 output 允许使用不同的寄存器
     return op->code == LIR_OPCODE_MOVE ||
            op->code == LIR_OPCODE_NOT ||
            op->code == LIR_OPCODE_NEG ||

@@ -1,0 +1,854 @@
+import tank.raylib as ray
+import fmt
+import time
+import tank.utils
+import libc
+
+// 统一的基础像素格定义
+const BASE_PIXEL_UNIT = 10
+const SCREEN_WIDTH = 1800
+const SCREEN_HEIGHT = 960
+
+const TANK_SIZE = BASE_PIXEL_UNIT * 3
+const BULLET_SIZE = BASE_PIXEL_UNIT
+const BULLET_SPEED = 300
+const BULLET_MAX_RANGE = BASE_PIXEL_UNIT * 40
+const TANK_SPEED = 150
+const MAX_BULLETS = 10
+const MAX_ENEMIES = 5
+const WALL_SIZE = BASE_PIXEL_UNIT * 3
+const MAX_WALLS = 100
+const BACKGROUND_TILE_SIZE = BASE_PIXEL_UNIT
+const MOVE_DELAY = 0.1
+
+const DIRECTION_UP = 0
+const DIRECTION_DOWN = 1
+const DIRECTION_LEFT = 2
+const DIRECTION_RIGHT = 3
+
+type direction_t = i32
+
+type tank_t = struct {
+    ray.vector2_t position
+    direction_t direction
+    bool active
+    f32 speed
+    i32 health
+    ray.color_t color
+}
+
+type bullet_t = struct {
+    ray.vector2_t position
+    ray.vector2_t velocity
+    ray.vector2_t start_position
+    bool active
+    bool is_player_bullet
+}
+
+type wall_t = struct {
+    ray.vector2_t position
+    bool active
+}
+
+type tank_colors_t = struct {
+    [ray.color_t;9] colors
+}
+
+// 全局变量
+tank_t player = tank_t{}
+[tank_t;MAX_ENEMIES] enemies = []
+[bullet_t;MAX_BULLETS] bullets = []
+[wall_t;MAX_WALLS] walls = []
+
+var player_colors = tank_colors_t{}
+var enemy_colors = tank_colors_t{}
+i32 score = 0
+i32 enemies_killed = 0
+bool game_over = false
+bool game_won = false
+f32 last_move_time = 0.0
+
+fn init_game() {
+    // 初始化玩家
+    player = tank_t{
+        position: ray.vector2_t{x: SCREEN_WIDTH/2, y: SCREEN_HEIGHT - 50},
+        direction: DIRECTION_UP,
+        active: true,
+        speed: TANK_SPEED,
+        health: 3,
+        color: ray.GREEN,
+    }
+
+    // 批量初始化数组
+    for i32 i = 0; i < MAX_ENEMIES; i+=1 {
+        enemies[i].active = false
+    }
+    for i32 i = 0; i < MAX_BULLETS; i+=1 {
+        bullets[i].active = false
+    }
+    for i32 i = 0; i < MAX_WALLS; i+=1 {
+        walls[i].active = false
+    }
+
+    init_walls()
+    init_tank_colors()
+
+    score = 0
+    enemies_killed = 0
+    game_over = false
+    game_won = false
+
+    // 生成初始敌人
+    for i32 i = 0; i < 3; i+=1 {
+        spawn_enemy()
+    }
+}
+
+fn init_walls() {
+    i32 wall_count = 0
+    i32 max_wall_groups = 12
+
+    for i32 group = 0; group < max_wall_groups && wall_count < MAX_WALLS - 5; group+=1 {
+        i32 start_x = ray.get_random_value(2, (SCREEN_WIDTH / WALL_SIZE) - 8) * WALL_SIZE
+        i32 start_y = ray.get_random_value(2, (SCREEN_HEIGHT / WALL_SIZE) - 8) * WALL_SIZE
+
+        // 避免在玩家起始位置附近生成墙壁
+        if utils.abs(start_x - SCREEN_WIDTH/2) < 100 && utils.abs(start_y - (SCREEN_HEIGHT - 100)) < 100 {
+            continue
+        }
+
+        i32 current_x = start_x
+        i32 current_y = start_y
+        i32 segment_length = ray.get_random_value(5, 12)
+        i32 last_direction = ray.get_random_value(0, 3)
+
+        for i32 seg = 0; seg < segment_length && wall_count < MAX_WALLS; seg+=1 {
+            walls[wall_count] = wall_t{position: ray.vector2_t{x: current_x as f32, y: current_y as f32}, active: true}
+            wall_count += 1
+
+            i32 direction = DIRECTION_UP
+            if seg > 0 && ray.get_random_value(0, 100) < 70 {
+                direction = last_direction
+            } else {
+                direction = ray.get_random_value(0, 3)
+            }
+
+            match direction {
+                0 -> { current_x += WALL_SIZE }
+                1 -> { current_y += WALL_SIZE }
+                2 -> { current_x -= WALL_SIZE }
+                3 -> { current_y -= WALL_SIZE }
+                _ -> {}
+            }
+
+            if current_x < 0 || current_x >= SCREEN_WIDTH - WALL_SIZE ||
+                current_y < 0 || current_y >= SCREEN_HEIGHT - WALL_SIZE {
+                break
+            }
+            last_direction = direction
+        }
+
+        // 添加分支墙壁
+        if ray.get_random_value(0, 100) < 60 && wall_count < MAX_WALLS - 3 {
+            i32 branch_x = start_x + ray.get_random_value(-2, 2) * WALL_SIZE
+            i32 branch_y = start_y + ray.get_random_value(-2, 2) * WALL_SIZE
+
+            for i32 b = 0; b < ray.get_random_value(2, 4) && wall_count < MAX_WALLS; b+=1 {
+                if branch_x >= 0 && branch_x < SCREEN_WIDTH - WALL_SIZE &&
+                    branch_y >= 0 && branch_y < SCREEN_HEIGHT - WALL_SIZE {
+                    walls[wall_count] = wall_t{position: ray.vector2_t{x: branch_x as f32, y: branch_y as f32}, active: true}
+                    wall_count += 1
+
+                    match ray.get_random_value(0, 3) {
+                        0 -> { branch_x += WALL_SIZE }
+                        1 -> { branch_y += WALL_SIZE }
+                        2 -> { branch_x -= WALL_SIZE }
+                        3 -> { branch_y -= WALL_SIZE }
+                        _ -> {}
+                    }
+                }
+            }
+        }
+    }
+
+    // 添加散布的单个墙壁
+    for i32 i = 0; i < ray.get_random_value(8, 15) && wall_count < MAX_WALLS; i+=1 {
+        i32 x = ray.get_random_value(1, (SCREEN_WIDTH / WALL_SIZE) - 2) * WALL_SIZE
+        i32 y = ray.get_random_value(1, (SCREEN_HEIGHT / WALL_SIZE) - 2) * WALL_SIZE
+
+        bool overlap = false
+        for i32 j = 0; j < wall_count && !overlap; j+=1 {
+            if walls[j].active &&
+                libc.fabs(walls[j].position.x as f64 - x as f64) < WALL_SIZE &&
+                libc.fabs(walls[j].position.y as f64 - y as f64) < WALL_SIZE {
+                overlap = true
+            }
+        }
+
+        if !overlap && !(utils.abs(x - SCREEN_WIDTH/2) < 80 && utils.abs(y - (SCREEN_HEIGHT - 80)) < 80) {
+            walls[wall_count] = wall_t{position: ray.vector2_t{x: x as f32, y: y as f32}, active: true}
+            wall_count += 1
+        }
+    }
+}
+
+fn update_game() {
+    update_player()
+    update_enemies()
+    update_bullets()
+
+    // 检查胜利条件
+    bool all_enemies_defeated = true
+    for i32 i = 0; i < MAX_ENEMIES && all_enemies_defeated; i+=1 {
+        if enemies[i].active {
+            all_enemies_defeated = false
+        }
+    }
+
+    if all_enemies_defeated && enemies_killed >= 10 {
+        game_won = true
+    }
+    if ray.get_random_value(0, 300) == 0 {
+        spawn_enemy()
+    }
+}
+
+fn update_player() {
+    if !player.active {
+        return
+    }
+
+    ray.vector2_t old_position = player.position
+    bool should_move = false
+    direction_t move_direction = player.direction
+
+    // 检测按键
+    if ray.is_key_down(ray.KEY_W) || ray.is_key_down(ray.KEY_UP) {
+        move_direction = DIRECTION_UP
+        should_move = true
+    } else if ray.is_key_down(ray.KEY_S) || ray.is_key_down(ray.KEY_DOWN) {
+        move_direction = DIRECTION_DOWN
+        should_move = true
+    } else if ray.is_key_down(ray.KEY_A) || ray.is_key_down(ray.KEY_LEFT) {
+        move_direction = DIRECTION_LEFT
+        should_move = true
+    } else if ray.is_key_down(ray.KEY_D) || ray.is_key_down(ray.KEY_RIGHT) {
+        move_direction = DIRECTION_RIGHT
+        should_move = true
+    }
+
+    if should_move {
+        player.direction = move_direction
+
+        f32 current_time = ray.get_time() as f32
+        if current_time - last_move_time >= MOVE_DELAY {
+            last_move_time = current_time
+            ray.vector2_t dir_vector = get_direction_vector(player.direction)
+            player.position.x += dir_vector.x * BASE_PIXEL_UNIT
+            player.position.y += dir_vector.y * BASE_PIXEL_UNIT
+        }
+    }
+
+    // 边界检查
+    player.position.x = utils.fmaxf(0.0, utils.fminf(player.position.x, SCREEN_WIDTH - TANK_SIZE))
+    player.position.y = utils.fmaxf(0.0, utils.fminf(player.position.y, SCREEN_HEIGHT - TANK_SIZE))
+
+    // 碰撞检查
+    if check_collision_tank_wall(player) {
+        player.position = old_position
+    }
+
+    for i32 i = 0; i < MAX_ENEMIES; i+=1 {
+        if enemies[i].active && check_collision_tank_tank(player, enemies[i]) {
+            player.position = old_position
+            break
+        }
+    }
+
+    if ray.is_key_pressed(ray.KEY_SPACE) {
+        fire_bullet(player.position, player.direction, true)
+    }
+}
+
+fn update_enemies() {
+    for i32 i = 0; i < MAX_ENEMIES; i+=1 {
+        if !enemies[i].active {
+            continue
+        }
+
+        ray.vector2_t old_position = enemies[i].position
+
+        // 移动逻辑
+        if ray.get_random_value(0, 8) == 0 {
+            ray.vector2_t dir_vector = get_direction_vector(enemies[i].direction)
+            enemies[i].position.x += dir_vector.x * BASE_PIXEL_UNIT
+            enemies[i].position.y += dir_vector.y * BASE_PIXEL_UNIT
+        }
+
+        if ray.get_random_value(0, 30) == 0 {
+            enemies[i].direction = ray.get_random_value(0, 3) as direction_t
+        }
+
+        // 边界和碰撞检查
+        bool collision = (enemies[i].position.x < 0 || enemies[i].position.x > SCREEN_WIDTH - TANK_SIZE ||
+                         enemies[i].position.y < 0 || enemies[i].position.y > SCREEN_HEIGHT - TANK_SIZE ||
+                         check_collision_tank_wall(enemies[i]))
+
+        for i32 j = 0; j < MAX_ENEMIES && !collision; j+=1 {
+            if i != j && enemies[j].active && check_collision_tank_tank(enemies[i], enemies[j]) {
+                collision = true
+            }
+        }
+
+        if collision {
+            enemies[i].position = old_position
+            enemies[i].direction = ray.get_random_value(0, 3) as direction_t
+        }
+
+        if ray.get_random_value(0, 180) == 0 {
+            fire_bullet(enemies[i].position, enemies[i].direction, false)
+        }
+    }
+}
+
+fn update_bullets() {
+    for i32 i = 0; i < MAX_BULLETS; i+=1 {
+        if !bullets[i].active {
+            continue
+        }
+
+        bullets[i].position.x += bullets[i].velocity.x * ray.get_frame_time()
+        bullets[i].position.y += bullets[i].velocity.y * ray.get_frame_time()
+
+        // 检查射程和边界
+        if ray.vector2_distance(bullets[i].position, bullets[i].start_position) > BULLET_MAX_RANGE ||
+            bullets[i].position.x < 0 || bullets[i].position.x > SCREEN_WIDTH ||
+            bullets[i].position.y < 0 || bullets[i].position.y > SCREEN_HEIGHT ||
+            check_collision_bullet_wall(bullets[i]) {
+            bullets[i].active = false
+            continue
+        }
+
+        ray.rectangle_t bullet_rect = ray.rectangle_t{x: bullets[i].position.x, y: bullets[i].position.y, width: BULLET_SIZE, height: BULLET_SIZE}
+
+        // 玩家碰撞检查
+        if !bullets[i].is_player_bullet && player.active {
+            if ray.check_collision_recs(bullet_rect, get_tank_rect(player)) {
+                bullets[i].active = false
+                player.health -= 1
+                if player.health <= 0 {
+                    player.active = false
+                    game_over = true
+                }
+            }
+        }
+
+        // 敌人碰撞检查
+        for i32 j = 0; j < MAX_ENEMIES; j+=1 {
+            if enemies[j].active && ray.check_collision_recs(bullet_rect, get_tank_rect(enemies[j])) {
+                bullets[i].active = false
+                enemies[j].health -= 1
+                if enemies[j].health <= 0 {
+                    enemies[j].active = false
+                    score += 100
+                    enemies_killed += 1
+                }
+                break
+            }
+        }
+    }
+}
+
+fn fire_bullet(ray.vector2_t position, direction_t direction, bool is_player) {
+    for i32 i = 0; i < MAX_BULLETS; i+=1 {
+        if bullets[i].active {
+            continue
+        }
+
+        ray.vector2_t bullet_pos = ray.vector2_t{}
+        match direction {
+            DIRECTION_UP -> {
+                bullet_pos = ray.vector2_t{x: position.x + TANK_SIZE/2 - BULLET_SIZE/2, y: position.y - BULLET_SIZE}
+            }
+            DIRECTION_DOWN -> {
+                bullet_pos = ray.vector2_t{x: position.x + TANK_SIZE/2 - BULLET_SIZE/2, y: position.y + TANK_SIZE}
+            }
+            DIRECTION_LEFT -> {
+                bullet_pos = ray.vector2_t{x: position.x - BULLET_SIZE, y: position.y + TANK_SIZE/2 - BULLET_SIZE/2}
+            }
+            DIRECTION_RIGHT -> {
+                bullet_pos = ray.vector2_t{x: position.x + TANK_SIZE, y: position.y + TANK_SIZE/2 - BULLET_SIZE/2}
+            }
+            _ -> {
+                bullet_pos = ray.vector2_t{x: position.x + TANK_SIZE/2 - BULLET_SIZE/2, y: position.y + TANK_SIZE/2 - BULLET_SIZE/2}
+            }
+        }
+
+        // 对齐到网格
+        // bullet_pos.x = libc.roundf(bullet_pos.x / BASE_PIXEL_UNIT) * BASE_PIXEL_UNIT
+        // bullet_pos.y = libc.roundf(bullet_pos.y / BASE_PIXEL_UNIT) * BASE_PIXEL_UNIT
+
+        ray.vector2_t dir_vector = get_direction_vector(direction)
+        bullets[i] = bullet_t{
+            position: bullet_pos,
+            start_position: bullet_pos,
+            velocity: ray.vector2_t{x: dir_vector.x * BULLET_SPEED, y: dir_vector.y * BULLET_SPEED},
+            active: true,
+            is_player_bullet: is_player,
+        }
+
+        break
+    }
+}
+
+fn spawn_enemy() {
+    for i32 i = 0; i < MAX_ENEMIES; i+=1 {
+        if !enemies[i].active {
+            enemies[i] = tank_t{
+                position: ray.vector2_t{x: ray.get_random_value(0, SCREEN_WIDTH - TANK_SIZE) as f32, y: 0},
+                direction: DIRECTION_DOWN,
+                active: true,
+                speed: TANK_SPEED * 0.8,
+                health: 1,
+                color: ray.RED,
+            }
+            break
+        }
+    }
+}
+
+fn get_direction_vector(direction_t dir):ray.vector2_t {
+    match dir {
+        DIRECTION_UP -> {
+            return ray.vector2_t{x: 0, y: -1}
+        }
+        DIRECTION_DOWN -> {
+            return ray.vector2_t{x: 0, y: 1}
+        }
+        DIRECTION_LEFT -> {
+            return ray.vector2_t{x: -1, y: 0}
+        }
+        DIRECTION_RIGHT -> {
+            return ray.vector2_t{x: 1, y: 0}
+        }
+        _ -> {
+            println('cannot parser direct', dir)
+            return ray.vector2_t{x: 0, y: 0}
+        }
+    }
+}
+
+fn get_tank_rect(tank_t t):ray.rectangle_t {
+    var result = ray.rectangle_t{
+        x: t.position.x + 0.5,
+        y: t.position.y + 0.5,
+        width: TANK_SIZE - 1,
+        height: TANK_SIZE - 1,
+    }
+
+    return result
+}
+
+fn get_wall_rect(wall_t wall):ray.rectangle_t {
+    return ray.rectangle_t{x: wall.position.x, y: wall.position.y, width: WALL_SIZE, height: WALL_SIZE}
+}
+
+fn check_collision_tank_wall(tank_t tank):bool {
+    ray.rectangle_t tank_rect = get_tank_rect(tank)
+    for i32 i = 0; i < MAX_WALLS; i+=1 {
+        if walls[i].active && ray.check_collision_recs(tank_rect, get_wall_rect(walls[i])) {
+            return true
+        }
+    }
+    return false
+}
+
+fn check_collision_bullet_wall(bullet_t bullet):bool {
+    ray.rectangle_t bullet_rect = ray.rectangle_t{x: bullet.position.x, y: bullet.position.y, width: BULLET_SIZE, height: BULLET_SIZE}
+    for i32 i = 0; i < MAX_WALLS; i+=1 {
+        if walls[i].active && ray.check_collision_recs(bullet_rect, get_wall_rect(walls[i])) {
+            return true
+        }
+    }
+    return false
+}
+
+fn check_collision_tank_tank(tank_t tank1, tank_t tank2):bool {
+    return ray.check_collision_recs(get_tank_rect(tank1), get_tank_rect(tank2))
+}
+
+
+fn draw_wall(wall_t wall) {
+    i32 block_size = BASE_PIXEL_UNIT
+
+    // 绘制墙体阴影
+    ray.draw_rectangle((wall.position.x + 2) as i32, (wall.position.y + 2) as i32,
+                      WALL_SIZE, WALL_SIZE, ray.fade(ray.BLACK, 0.4))
+
+    // 使用更真实的砖块颜色
+    [ray.color_t;6] brick_colors = [
+        ray.color_t{r: 120, g: 72, b: 50, a: 255},   // 深棕色砖块
+        ray.color_t{r: 140, g: 85, b: 60, a: 255},   // 中棕色砖块
+        ray.color_t{r: 100, g: 60, b: 40, a: 255},   // 暗棕色砖块
+        ray.color_t{r: 160, g: 100, b: 70, a: 255},  // 浅棕色砖块
+        ray.color_t{r: 110, g: 70, b: 45, a: 255},   // 红棕色砖块
+        ray.color_t{r: 130, g: 80, b: 55, a: 255},   // 标准砖色
+    ]
+
+    // 3*3 砖块网格
+    for i32 row = 0; row < 3; row+=1 {
+        for i32 col = 0; col < 3; col+=1 {
+            ray.vector2_t block_pos = ray.vector2_t{
+                x: wall.position.x + col as f32 * block_size as f32,
+                y: wall.position.y + row as f32 * block_size as f32,
+            }
+
+            // 选择砖块颜色，创建自然的变化
+            i32 color_index = (row * 3 + col + (wall.position.x as i32 / 10) + (wall.position.y as i32 / 10)) % 6
+            ray.color_t brick_color = brick_colors[color_index]
+
+            // 绘制砖块主体
+            ray.draw_rectangle(block_pos.x as i32, block_pos.y as i32, block_size, block_size, brick_color)
+
+            // 添加砖块高光效果
+            ray.draw_rectangle(block_pos.x as i32, block_pos.y as i32, block_size, 2,
+                             ray.fade(ray.WHITE, 0.3))
+            ray.draw_rectangle(block_pos.x as i32, block_pos.y as i32, 2, block_size,
+                             ray.fade(ray.WHITE, 0.3))
+
+            // 添加砖块阴影效果
+            ray.draw_rectangle(block_pos.x as i32, (block_pos.y + block_size as f32 - 2) as i32, block_size, 2,
+                             ray.fade(ray.BLACK, 0.4))
+            ray.draw_rectangle((block_pos.x + block_size as f32 - 2) as i32, block_pos.y as i32, 2, block_size,
+                             ray.fade(ray.BLACK, 0.4))
+
+            // 绘制砖块边框
+            ray.draw_rectangle_lines(block_pos.x as i32, block_pos.y as i32, block_size, block_size,
+                                   ray.fade(ray.BLACK, 0.6))
+
+            // 添加一些随机的破损效果
+            i32 damage_chance = (row * col + color_index) % 20
+            if damage_chance < 3 {
+                ray.draw_pixel((block_pos.x + damage_chance as f32) as i32,
+                             (block_pos.y + damage_chance as f32 * 2) as i32,
+                             ray.fade(ray.BLACK, 0.7))
+            }
+        }
+    }
+}
+
+// 每一帧都会调用 draw_game 进行游戏绘制，关键问题可能出现在这里
+fn draw_game() {
+    ray.begin_drawing()
+
+    // 使用更深沉的军事风格背景色
+    ray.clear_background(ray.color_t{r: 45, g: 52, b: 40, a: 255})
+
+    // 绘制战场风格的背景纹理
+    for i32 y = 0; y < SCREEN_HEIGHT; y += BACKGROUND_TILE_SIZE {
+        for i32 x = 0; x < SCREEN_WIDTH; x += BACKGROUND_TILE_SIZE {
+            // 创建更自然的地形变化
+            f32 noise_x = x as f32 * 0.01
+            f32 noise_y = y as f32 * 0.01
+            i32 pattern = ((x/BACKGROUND_TILE_SIZE) * 7 + (y/BACKGROUND_TILE_SIZE) * 11) % 100
+
+            ray.color_t base_color = ray.color_t{r: 45, g: 52, b: 40, a: 255}
+
+            // 根据模式创建不同的地形效果
+            if pattern < 15 {
+                // 深色土地
+                base_color = ray.color_t{r: 35, g: 42, b: 30, a: 255}
+            } else if pattern < 25 {
+                // 浅色土地
+                base_color = ray.color_t{r: 55, g: 62, b: 50, a: 255}
+            } else if pattern < 30 {
+                // 草地色调
+                base_color = ray.color_t{r: 40, g: 60, b: 35, a: 255}
+            }
+
+            ray.draw_rectangle(x, y, BACKGROUND_TILE_SIZE, BACKGROUND_TILE_SIZE, base_color)
+
+            // 添加细微的纹理细节
+            if pattern % 7 == 0 {
+                ray.draw_pixel(x + pattern % BACKGROUND_TILE_SIZE,
+                             y + (pattern * 3) % BACKGROUND_TILE_SIZE,
+                             ray.fade(ray.color_t{r: 70, g: 80, b: 60, a: 255}, 0.6))
+            }
+        }
+    }
+
+    // 绘制游戏对象
+    for i32 i = 0; i < MAX_WALLS; i+=1 {
+        if walls[i].active {
+            draw_wall(walls[i])
+        }
+    }
+
+
+    // 绘制玩家坦克
+    if player.active {
+        draw_tank(player)
+    }
+
+    for i32 i = 0; i < MAX_ENEMIES; i+=1 {
+        if enemies[i].active {
+            draw_tank(enemies[i])
+        }
+    }
+
+    // 绘制子弹，增强视觉效果
+    for i32 i = 0; i < MAX_BULLETS; i+=1 {
+        if bullets[i].active {
+            ray.vector2_t bullet_center = ray.vector2_t{
+                x: bullets[i].position.x + BULLET_SIZE as f32/2,
+                y: bullets[i].position.y + BULLET_SIZE as f32/2,
+            }
+
+            if bullets[i].is_player_bullet {
+                // 玩家子弹：金黄色带光晕效果
+                ray.draw_circle_v(bullet_center, (BULLET_SIZE as f32)/2.0 + 2.0, ray.fade(ray.GOLD, 0.3))
+                ray.draw_circle_v(bullet_center, (BULLET_SIZE as f32)/2.0, ray.GOLD)
+                ray.draw_circle_v(bullet_center, (BULLET_SIZE as f32)/4.0, ray.YELLOW)
+            } else {
+                // 敌方子弹：红色带阴影效果
+                ray.draw_circle_v(ray.vector2_t{x: bullet_center.x + 1.0, y: bullet_center.y + 1.0},
+                                (BULLET_SIZE as f32)/2.0, ray.fade(ray.BLACK, 0.4))
+                ray.draw_circle_v(bullet_center, (BULLET_SIZE as f32)/2.0, ray.color_t{r: 220, g: 20, b: 20, a: 255})
+                ray.draw_circle_v(bullet_center, (BULLET_SIZE as f32)/4.0, ray.color_t{r: 255, g: 100, b: 100, a: 255})
+            }
+        }
+    }
+
+    // 绘制UI背景面板
+    ray.draw_rectangle(5, 5, 280, 100, ray.fade(ray.BLACK, 0.8))
+    ray.draw_rectangle_lines(5, 5, 280, 100, ray.fade(ray.GOLD, 0.6))
+    ray.draw_rectangle_lines(6, 6, 278, 98, ray.fade(ray.GOLD, 0.3))
+
+    // UI文字使用更好的颜色和阴影效果
+    var score_text = fmt.sprintf('Score: %d', score)
+    ray.draw_text(score_text.ref(), 16, 16, 20, ray.BLACK)  // 阴影
+    ray.draw_text(score_text.ref(), 15, 15, 20, ray.GOLD)   // 主文字
+
+    var health_text = fmt.sprintf('Health: %d', player.health)
+    ray.draw_text(health_text.ref(), 16, 41, 20, ray.BLACK)  // 阴影
+    ray.color_t health_color = ray.GREEN
+    if player.health <= 1 {
+        health_color = ray.RED
+    } else if player.health <= 2 {
+        health_color = ray.ORANGE
+    }
+    ray.draw_text(health_text.ref(), 15, 40, 20, health_color)
+
+    // 绘制生命值图标
+    for i32 i = 0; i < player.health; i+=1 {
+        ray.draw_rectangle(150 + i * 25, 42, 20, 16, health_color)
+        ray.draw_rectangle_lines(150 + i * 25, 42, 20, 16, ray.BLACK)
+    }
+
+    var enemies_text = fmt.sprintf('Enemies Killed: %d', enemies_killed)
+    ray.draw_text(enemies_text.ref(), 16, 66, 20, ray.BLACK)  // 阴影
+    ray.draw_text(enemies_text.ref(), 15, 65, 20, ray.LIGHTGRAY)
+
+    if game_over {
+        // 绘制半透明覆盖层
+        ray.draw_rectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, ray.fade(ray.BLACK, 0.8))
+
+        // 绘制游戏结束面板
+        i32 panel_width = 400
+        i32 panel_height = 200
+        i32 panel_x = SCREEN_WIDTH/2 - panel_width/2
+        i32 panel_y = SCREEN_HEIGHT/2 - panel_height/2
+
+        ray.draw_rectangle(panel_x, panel_y, panel_width, panel_height, ray.fade(ray.DARKGRAY, 0.9))
+        ray.draw_rectangle_lines(panel_x, panel_y, panel_width, panel_height, ray.RED)
+        ray.draw_rectangle_lines(panel_x + 2, panel_y + 2, panel_width - 4, panel_height - 4, ray.fade(ray.RED, 0.5))
+
+        // 游戏结束标题
+        ray.draw_text('GAME OVER'.ref(), SCREEN_WIDTH/2 - 102, SCREEN_HEIGHT/2 - 52, 40, ray.BLACK)
+        ray.draw_text('GAME OVER'.ref(), SCREEN_WIDTH/2 - 100, SCREEN_HEIGHT/2 - 50, 40, ray.RED)
+
+        var final_score_text = fmt.sprintf('Final Score: %d', score)
+        ray.draw_text(final_score_text.ref(), SCREEN_WIDTH/2 - 82, SCREEN_HEIGHT/2 + 2, 20, ray.BLACK)
+        ray.draw_text(final_score_text.ref(), SCREEN_WIDTH/2 - 80, SCREEN_HEIGHT/2, 20, ray.WHITE)
+
+        ray.draw_text('Press R to restart'.ref(), SCREEN_WIDTH/2 - 82, SCREEN_HEIGHT/2 + 32, 20, ray.BLACK)
+        ray.draw_text('Press R to restart'.ref(), SCREEN_WIDTH/2 - 80, SCREEN_HEIGHT/2 + 30, 20, ray.LIGHTGRAY)
+    }
+
+    if game_won {
+        // 绘制半透明覆盖层
+        ray.draw_rectangle(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, ray.fade(ray.BLACK, 0.8))
+
+        // 绘制胜利面板
+        i32 panel_width = 400
+        i32 panel_height = 200
+        i32 panel_x = SCREEN_WIDTH/2 - panel_width/2
+        i32 panel_y = SCREEN_HEIGHT/2 - panel_height/2
+
+        ray.draw_rectangle(panel_x, panel_y, panel_width, panel_height, ray.fade(ray.DARKGREEN, 0.9))
+        ray.draw_rectangle_lines(panel_x, panel_y, panel_width, panel_height, ray.GOLD)
+        ray.draw_rectangle_lines(panel_x + 2, panel_y + 2, panel_width - 4, panel_height - 4, ray.fade(ray.GOLD, 0.5))
+
+        // 胜利标题
+        ray.draw_text('YOU WIN!'.ref(), SCREEN_WIDTH/2 - 82, SCREEN_HEIGHT/2 - 52, 40, ray.BLACK)
+        ray.draw_text('YOU WIN!'.ref(), SCREEN_WIDTH/2 - 80, SCREEN_HEIGHT/2 - 50, 40, ray.GOLD)
+
+        var final_score_text = fmt.sprintf('Final Score: %d', score)
+        ray.draw_text(final_score_text.ref(), SCREEN_WIDTH/2 - 82, SCREEN_HEIGHT/2 + 2, 20, ray.BLACK)
+        ray.draw_text(final_score_text.ref(), SCREEN_WIDTH/2 - 80, SCREEN_HEIGHT/2, 20, ray.WHITE)
+
+        ray.draw_text('Press R to restart'.ref(), SCREEN_WIDTH/2 - 82, SCREEN_HEIGHT/2 + 32, 20, ray.BLACK)
+        ray.draw_text('Press R to restart'.ref(), SCREEN_WIDTH/2 - 80, SCREEN_HEIGHT/2 + 30, 20, ray.LIGHTGRAY)
+    }
+
+    // 绘制控制说明背景
+    ray.draw_rectangle(5, SCREEN_HEIGHT - 70, 300, 65, ray.fade(ray.BLACK, 0.6))
+    ray.draw_rectangle_lines(5, SCREEN_HEIGHT - 70, 300, 65, ray.fade(ray.WHITE, 0.4))
+
+    // 控制说明文字
+    ray.draw_text('WASD/Arrow Keys: Move'.ref(), 11, SCREEN_HEIGHT - 59, 16, ray.BLACK)
+    ray.draw_text('WASD/Arrow Keys: Move'.ref(), 10, SCREEN_HEIGHT - 60, 16, ray.LIGHTGRAY)
+
+    ray.draw_text('SPACE: Shoot'.ref(), 11, SCREEN_HEIGHT - 39, 16, ray.BLACK)
+    ray.draw_text('SPACE: Shoot'.ref(), 10, SCREEN_HEIGHT - 40, 16, ray.LIGHTGRAY)
+
+    ray.draw_text('R: Restart (when game over)'.ref(), 11, SCREEN_HEIGHT - 19, 16, ray.BLACK)
+    ray.draw_text('R: Restart (when game over)'.ref(), 10, SCREEN_HEIGHT - 20, 16, ray.LIGHTGRAY)
+
+    ray.end_drawing()
+}
+
+fn init_tank_colors() {
+    for i32 i = 0; i < 9; i+=1 {
+        player_colors.colors[i] = ray.color_t{
+            r: ray.get_random_value(100, 255) as u8,
+            g: ray.get_random_value(100, 255) as u8 ,
+            b: ray.get_random_value(100, 255) as u8,
+            a: 255,
+        }
+
+        enemy_colors.colors[i] = ray.color_t{
+            r: ray.get_random_value(150, 255) as u8,
+            g: ray.get_random_value(0, 50) as u8,
+            b: ray.get_random_value(0, 50) as u8,
+            a: 255,
+        }
+    }
+}
+
+fn draw_tank(tank_t tank) {
+    i32 block_size = BASE_PIXEL_UNIT
+
+    // 定义更精细的坦克颜色方案
+    ray.color_t main_color = ray.GREEN
+    ray.color_t accent_color = ray.color_t{r: 34, g: 139, b: 34, a: 255}
+    ray.color_t dark_color = ray.color_t{r: 0, g: 100, b: 0, a: 255}
+
+    if tank.color.r != ray.GREEN.r {
+        // 敌方坦克使用红色系
+        main_color = ray.color_t{r: 178, g: 34, b: 34, a: 255}
+        accent_color = ray.color_t{r: 139, g: 0, b: 0, a: 255}
+        dark_color = ray.color_t{r: 85, g: 0, b: 0, a: 255}
+    }
+
+    // 绘制坦克阴影
+    ray.draw_rectangle((tank.position.x + 2) as i32, (tank.position.y + 2) as i32,
+                      TANK_SIZE, TANK_SIZE, ray.fade(ray.BLACK, 0.3))
+
+    // 使用 3*3 网格绘制坦克主体
+    for i32 row = 0; row < 3; row+=1 {
+        for i32 col = 0; col < 3; col+=1 {
+            // 根据坦克方向确定炮管位置
+            bool is_barrel_block = match tank.direction {
+                DIRECTION_UP -> (row == 0 && col == 1)
+                DIRECTION_DOWN -> (row == 2 && col == 1)
+                DIRECTION_LEFT -> (row == 1 && col == 0)
+                DIRECTION_RIGHT -> (row == 1 && col == 2)
+                _ -> false
+            }
+
+            var block_pos = ray.vector2_t{
+                x: tank.position.x + col as f32 * block_size as f32,
+                y: tank.position.y + row as f32 * block_size as f32,
+            }
+
+            if !is_barrel_block {
+                // 根据位置选择颜色
+                ray.color_t block_color = main_color
+                if (row == 1 && col == 1) {
+                    // 中心块使用深色
+                    block_color = dark_color
+                } else if (row + col) % 2 == 0 {
+                    // 棋盘式颜色变化
+                    block_color = accent_color
+                }
+
+                // 绘制主体块
+                ray.draw_rectangle(block_pos.x as i32, block_pos.y as i32, block_size, block_size, block_color)
+
+                // 添加高光效果
+                ray.draw_rectangle(block_pos.x as i32, block_pos.y as i32, block_size, 2,
+                                 ray.fade(ray.WHITE, 0.4))
+                ray.draw_rectangle(block_pos.x as i32, block_pos.y as i32, 2, block_size,
+                                 ray.fade(ray.WHITE, 0.3))
+
+                // 添加阴影效果
+                ray.draw_rectangle((block_pos.x + block_size as f32 - 2) as i32, (block_pos.y + 2 as f32) as i32, 2, block_size - 2,
+                                 ray.fade(ray.BLACK, 0.3))
+                ray.draw_rectangle((block_pos.x + 2 as f32) as i32, (block_pos.y + block_size as f32 - 2) as i32, block_size - 2, 2,
+                                 ray.fade(ray.BLACK, 0.2))
+
+                // 绘制边框
+                ray.draw_rectangle_lines(block_pos.x as i32, block_pos.y as i32, block_size, block_size,
+                                       ray.fade(ray.BLACK, 0.5))
+            }
+        }
+    }
+
+    // 绘制炮管
+    var tank_center = ray.vector2_t{
+        x: tank.position.x + TANK_SIZE as f32 / 2,
+        y: tank.position.y + TANK_SIZE as f32 / 2,
+    }
+
+    var dir_vector = get_direction_vector(tank.direction)
+    var barrel_start = ray.vector2_t{
+        x: tank_center.x + dir_vector.x * (block_size as f32 / 2),
+        y: tank_center.y + dir_vector.y * (block_size as f32 / 2),
+    }
+    var barrel_end = ray.vector2_t{
+        x: barrel_start.x + dir_vector.x * (block_size as f32 * 1.2),
+        y: barrel_start.y + dir_vector.y * (block_size as f32 * 1.2),
+    }
+
+    // 绘制炮管主体
+    ray.draw_line_ex(barrel_start, barrel_end, 6, ray.color_t{r: 64, g: 64, b: 64, a: 255})
+    ray.draw_line_ex(barrel_start, barrel_end, 4, ray.color_t{r: 96, g: 96, b: 96, a: 255})
+
+    // 绘制炮管口
+    ray.draw_circle_v(barrel_end, 3, ray.BLACK)
+    ray.draw_circle_v(barrel_end, 2, ray.color_t{r: 32, g: 32, b: 32, a: 255})
+
+    // 绘制坦克中心标识
+    ray.draw_circle_v(tank_center, 4, dark_color)
+    ray.draw_circle_v(tank_center, 2, ray.fade(ray.WHITE, 0.8))
+}
+
+fn main() {
+    ray.init_window(SCREEN_WIDTH, SCREEN_HEIGHT, 'Tank War Game'.ref())
+    ray.set_target_fps(30)
+    
+    init_game()
+    
+    for !ray.window_should_close() {
+        if !game_over && !game_won {
+            update_game()
+        }
+        if ray.is_key_pressed(ray.KEY_R) && (game_over || game_won) {
+            init_game()
+        }
+        draw_game()
+    }
+    
+    ray.close_window()
+}

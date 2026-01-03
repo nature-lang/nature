@@ -326,7 +326,7 @@ static bool is_float_operand(lir_operand_t *operand) {
  * 使用 LIR_OPERAND_ARGS 存储多个参数 [mul_second, addend/minuend]
  * lower 阶段会将 args 转换为 var，从而让寄存器分配能够分配寄存器
  */
-static void schedule_fma_recognition(schedule_ctx_t *ctx) {
+static void schedule_fma_recognition(closure_t *c, schedule_ctx_t *ctx) {
     if (BUILD_ARCH != ARCH_ARM64) {
         return; // FMA 模式识别仅在 ARM64 架构启用
     }
@@ -906,7 +906,7 @@ static void schedule_block_elimination(closure_t *c, basic_block_t *block, slice
     schedule_mov_elimination(&ctx);
 
     // FMA 模式识别优化（MUL+ADD/SUB -> MADD/MSUB/FMADD/FMSUB）
-    schedule_fma_recognition(&ctx);
+    schedule_fma_recognition(c, &ctx);
 }
 
 /**
@@ -915,7 +915,7 @@ static void schedule_block_elimination(closure_t *c, basic_block_t *block, slice
  * 2. 然后采用分段调度策略：固定指令作为屏障，只在屏障之间的 segment 内进行调度
  */
 static void schedule_block(closure_t *c, basic_block_t *block) {
-    if (!block || !block->operations || linked_count(block->operations) <= 1) {
+    if (linked_count(block->operations) <= 1) {
         return;
     }
 
@@ -986,10 +986,6 @@ static void schedule_block(closure_t *c, basic_block_t *block) {
  * 对闭包中的所有基本块进行指令调度
  */
 void schedule(closure_t *c) {
-    if (!c || !c->blocks) {
-        return;
-    }
-
     for (int i = 0; i < c->blocks->count; i++) {
         basic_block_t *block = c->blocks->take[i];
         schedule_block(c, block);

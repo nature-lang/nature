@@ -125,7 +125,7 @@ static void reorder_resolve_ops(closure_t *c) {
                         break;
                     }
 
-                    if (scan_op->code == LIR_OPCODE_MOVE && scan_op->resolve_char == '~') {
+                    if (lir_op_mov_hint_like(scan_op) && scan_op->resolve_char == '~') {
                         slice_push(resolve_moves, scan_op);
                     } else {
                         // Non-resolve op (like LEA) that needs to be moved before resolve_moves
@@ -212,7 +212,10 @@ void mark_number(closure_t *c) {
                 // resolve_char 的下一个 op 必须是 mov 或者 call
                 if (current->succ) {
                     lir_op_t *succ = current->succ->value;
-                    assert(lir_op_call(succ) || succ->code == LIR_OPCODE_MOVE);
+                    assert(lir_op_call(succ) || lir_op_mov_hint_like(succ));
+                    if (!lir_op_call(succ)) {
+                        assert(succ->resolve_char == '~');
+                    }
                 }
 
                 current = current->succ;

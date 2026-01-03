@@ -380,6 +380,54 @@ static bool resolve_blocked(int8_t *block_regs, interval_t *from, interval_t *to
 }
 
 /**
+ * 为 is_const_float 的 interval 插入重物化指令
+ * @param block 目标基本块
+ * @param insert_id 插入位置的 id
+ * @param interval 带有 remat_ops 的 interval
+ * @param output 目标操作数 (REG 类型)
+ * @return true 如果成功插入重物化指令，false 如果 output 是 stack 类型不需要插入
+ */
+static bool insert_remat_ops(basic_block_t *block, int insert_id, interval_t *interval, lir_operand_t *output) {
+    interval_t *parent = interval;
+    if (parent->parent) {
+        parent = parent->parent;
+    }
+    assert(parent->is_const_float && parent->remat_ops && parent->remat_ops->count > 0);
+
+    // 如果 output 是 stack 则不需要进行写入
+    if (output->assert_type == LIR_OPERAND_STACK) {
+        return false; // 调用者需要删除原始指令
+    }
+
+    assert(output->assert_type == LIR_OPERAND_REG);
+
+    // 找到插入点
+    LINKED_FOR(block->operations) {
+        lir_op_t *op = LINKED_VALUE();
+        if (op->id <= insert_id) {
+            continue;
+        }
+
+        // 此时 op->id 大于目标 id, 只要 insert 到 op->id 的前面就行
+        linked_node *insert_point = LINKED_NODE()->prev;
+        linked_node *last_remat = linked_last(interval->remat_ops);
+        LINKED_FOR(interval->remat_ops) {
+            lir_op_t *template_op = LINKED_VALUE();
+            lir_op_t *new_op = lir_op_new(
+                    template_op->code,
+                    template_op->first,
+                    template_op->second,
+                    (LINKED_NODE() == last_remat) ? output : template_op->output);
+            new_op->id = insert_id;
+            insert_point = linked_insert_after(block->operations, insert_point, new_op);
+        }
+        return true;
+    }
+    assertf(false, "id=%d notfound in block=%s", insert_id, block->name);
+    return false;
+}
+
+/**
  * 同一个 id 可能需要插入多个值，此时按先后顺序插入
  * @param block
  * @param insert_id
@@ -1008,7 +1056,7 @@ int interval_find_optimal_split_pos(closure_t *c, interval_t *current, int befor
 
             // 如果循环中存在 call 指令导致 break 所有寄存器，则没有必要进行循环提取操作
             int8_t loop_index = b->loop.index;
-            if (loop_index >= 0) {
+            if (loop_index >= 0 && !current->is_const_float) { // const_float 依旧提取到循环的外部
                 basic_block_t *header = c->loop_headers->take[loop_index];
                 if (header->loop.has_call) {
                     return id;
@@ -1493,9 +1541,22 @@ void resolve_mappings(closure_t *c, resolver_t *r) {
                 continue;
             }
 
-            if (from->is_const_float || to->is_const_float) {
-                // 常量 interval 不需要进行 mov 插入
+            interval_t *parent = from;
+            if (from->parent) {
+                parent = from->parent;
+            }
+
+            if (parent->is_const_float) {
+                if (to->spilled) {
+                    // to is spill 就不需要插入
+                } else {
+                    // 执行重物化逻辑
+                    lir_operand_t *output = operand_new(LIR_OPERAND_VAR, to->var);
+                    var_replace(output, to);
+                    insert_remat_ops(r->insert_block, r->insert_id, from, output);
+                }
             } else {
+                // imm replace 是必须的，否则在 insert_id 部分存在识别空洞无法在 replace_virtual_register 正确进行识别。
                 block_insert_mov(r->insert_block, r->insert_id, from, to, true, '!');
             }
 
@@ -1645,42 +1706,48 @@ static bool operand_conflicts_with_dst(lir_operand_t *src_opd, lir_operand_t *ds
 }
 
 static void
-move_one(closure_t *c, int i, slice_t *src, slice_t *dst, slice_t *status, slice_t *moves, linked_t *new_ops) {
-    if (lir_operand_equal(src->take[i], dst->take[i])) {
+move_one(closure_t *c, int i, slice_t *src, slice_t *src2, slice_t *dst, slice_t *status, slice_t *moves, linked_t *new_ops) {
+    lir_op_t *current_op = moves->take[i];
+
+    // For MOVE: skip if src == dst; For ternary: always process
+    if (current_op->code == LIR_OPCODE_MOVE && lir_operand_equal(src->take[i], dst->take[i])) {
         return;
     }
-    lir_operand_t *current_src_opd = ((lir_op_t *) moves->take[i])->first;
-    lir_operand_t *current_dst_opd = ((lir_op_t *) moves->take[i])->output;
 
     status->take[i] = (void *) MOVE_STATUS_BEING_MOVED;
 
     for (int j = 0; j < src->count; ++j) {
         if (j == i) continue;
 
-        // Check if src[j] uses the same register that dst[i] writes to
-        if (operand_conflicts_with_dst(src->take[j], dst->take[i])) {
-            if (status->take[j] == (void *) MOVE_STATUS_TO_MOVE) {
-                move_one(c, j, src, dst, status, moves, new_ops);
-            } else if (status->take[j] == (void *) MOVE_STATUS_BEING_MOVED) {
-                // break cycle
-                lir_op_t *move_op = moves->take[j];
-                lir_operand_t *src_opd = src->take[j];
-                int type_kind = 0;
+        // Check if src[j] or src2[j] uses the same register that dst[i] writes to
+        bool first_conflict = operand_conflicts_with_dst(src->take[j], dst->take[i]);
+        bool second_conflict = src2->take[j] != NULL && operand_conflicts_with_dst(src2->take[j], dst->take[i]);
 
-                // 重新获取 src operand 的 type kind, src 里面存的是 operand
-                src_opd = move_op->first;
-                type_kind = TYPE_INT;
-                if (src_opd->assert_type == LIR_OPERAND_VAR) {
-                    lir_var_t *var = src_opd->value;
+        if (first_conflict || second_conflict) {
+            if (status->take[j] == (void *) MOVE_STATUS_TO_MOVE) {
+                move_one(c, j, src, src2, dst, status, moves, new_ops);
+            } else if (status->take[j] == (void *) MOVE_STATUS_BEING_MOVED) {
+                // break cycle: save src[j] (the conflicting source operand) to tmp
+                // We save the first source operand that conflicts
+                lir_op_t *move_op = moves->take[j];
+                lir_operand_t *src_opd = first_conflict ? src->take[j] : src2->take[j];
+                int type_kind = TYPE_INT;
+
+                // Get type from the original instruction's operand
+                lir_operand_t *orig_src = first_conflict ? move_op->first : move_op->second;
+                if (orig_src->assert_type == LIR_OPERAND_VAR) {
+                    lir_var_t *var = orig_src->value;
                     type_kind = var->type.kind;
-                } else if (src_opd->assert_type == LIR_OPERAND_REG) {
-                    reg_t *reg = src_opd->value;
+                } else if (orig_src->assert_type == LIR_OPERAND_REG) {
+                    reg_t *reg = orig_src->value;
                     if (reg->flag & FLAG(LIR_FLAG_ALLOC_FLOAT)) {
                         type_kind = TYPE_FLOAT;
                     }
-                } else if (src_opd->assert_type == LIR_OPERAND_STACK) {
-                    // stack to stack 必须使用 int tem
+                } else if (orig_src->assert_type == LIR_OPERAND_STACK) {
                     type_kind = TYPE_INT;
+                } else if (orig_src->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+                    lir_indirect_addr_t *addr = orig_src->value;
+                    type_kind = addr->type.kind;
                 }
 
                 assert(type_kind > 0);
@@ -1689,23 +1756,23 @@ move_one(closure_t *c, int i, slice_t *src, slice_t *dst, slice_t *status, slice
                 if (BUILD_ARCH == ARCH_AMD64) {
                     tmp_reg_index = is_float(type_kind) ? xmm15->index : rbx->index;
                 } else if (BUILD_ARCH == ARCH_ARM64) {
-                    tmp_reg_index = is_float(type_kind) ? v16->index : x16->index;
+                    tmp_reg_index = is_float(type_kind) ? v16->index : x18->index;
                 } else if (BUILD_ARCH == ARCH_RISCV64) {
-                    tmp_reg_index = is_float(type_kind) ? r_f31->index : T6->index;
+                    tmp_reg_index = is_float(type_kind) ? r_f31->index : T5->index;
                 } else {
                     assert(false);
                 }
 
                 lir_flag_t alloc_type = LIR_FLAG_ALLOC_INT;
                 uint8_t size = 0;
-                if (src_opd->assert_type == LIR_OPERAND_REG) {
-                    reg_t *reg = src_opd->value;
+                if (orig_src->assert_type == LIR_OPERAND_REG) {
+                    reg_t *reg = orig_src->value;
                     if (reg->flag & FLAG(LIR_FLAG_ALLOC_FLOAT)) {
                         alloc_type = LIR_FLAG_ALLOC_FLOAT;
                     }
                     size = reg->size;
                 } else {
-                    type_t src_type = lir_operand_type(src_opd);
+                    type_t src_type = lir_operand_type(orig_src);
                     if (is_float(src_type.kind)) {
                         alloc_type = LIR_FLAG_ALLOC_FLOAT;
                     }
@@ -1715,30 +1782,41 @@ move_one(closure_t *c, int i, slice_t *src, slice_t *dst, slice_t *status, slice
                 assert(tmp_reg);
                 lir_operand_t *tmp_operand = operand_new(LIR_OPERAND_REG, tmp_reg);
 
-                // instruction: tmp <- src[j]
-                lir_op_t *tmp_mov = lir_op_move(tmp_operand, src_opd);
+                // instruction: tmp <- src[j] (save the source value before dst[i] overwrites it)
+                lir_op_t *tmp_mov = lir_op_move(tmp_operand, orig_src);
                 tmp_mov->id = move_op->id;
                 linked_push(new_ops, tmp_mov);
 
-                // src[j] = tmp
-                src->take[j] = tmp_operand;
+                // Update src[j] or src2[j] to use tmp
+                if (first_conflict) {
+                    src->take[j] = tmp_operand;
+                }
+                if (second_conflict) {
+                    src2->take[j] = tmp_operand;
+                }
             }
         }
     }
 
-    // instruction: dst[i] <- src[i]
-    lir_op_t *move_op = moves->take[i];
+    // Build the final instruction with potentially updated source operands
+    lir_op_t *orig_op = moves->take[i];
+    lir_operand_t *new_first = src->take[i];
+    lir_operand_t *new_second = src2->take[i];
 
-    // 如果 src[i] 已经被修改为了 tmp, 则需要重新构建 move op
-    // 原始的 move_op 可能是 dst <- src_old, 但是现在 src_old 已经变成了 tmp (in src array)
-    // 主要是为了复用 move_op 的 id 等信息，但是 src operand 需要使用最新的
-    lir_operand_t *new_src = src->take[i];
-    if (move_op->first != new_src) {
-        move_op = lir_op_move(move_op->output, new_src);
-        move_op->id = ((lir_op_t *) moves->take[i])->id;
+    // Check if any source operand was modified
+    bool first_modified = (orig_op->first != new_first);
+    bool second_modified = (orig_op->second != new_second);
+
+    if (first_modified || second_modified) {
+        // Rebuild the instruction with updated operands
+        lir_op_t *new_op = lir_op_new(orig_op->code, new_first, new_second, orig_op->output);
+        new_op->id = orig_op->id;
+        new_op->resolve_char = orig_op->resolve_char;
+        linked_push(new_ops, new_op);
+    } else {
+        linked_push(new_ops, orig_op);
     }
 
-    linked_push(new_ops, move_op);
     status->take[i] = (void *) MOVE_STATUS_MOVED;
 }
 
@@ -1754,26 +1832,30 @@ void parallel_moves(closure_t *c, slice_t *moves, linked_t *new_ops) {
     }
 
     slice_t *src = slice_new();
+    slice_t *src2 = slice_new(); // for second operand of ternary ops
     slice_t *dst = slice_new();
     slice_t *status = slice_new();
 
     for (int i = 0; i < moves->count; ++i) {
         lir_op_t *op = moves->take[i];
         slice_push(src, op->first);
+        slice_push(src2, op->second); // may be NULL for MOVE
         slice_push(dst, op->output);
         slice_push(status, (void *) MOVE_STATUS_TO_MOVE);
     }
 
     for (int i = 0; i < moves->count; ++i) {
         if (status->take[i] == (void *) MOVE_STATUS_TO_MOVE) {
-            move_one(c, i, src, dst, status, moves, new_ops);
+            move_one(c, i, src, src2, dst, status, moves, new_ops);
         }
     }
 
     free(src->take);
+    free(src2->take);
     free(dst->take);
     free(status->take);
     free(src);
+    free(src2);
     free(dst);
     free(status);
 }
@@ -1788,14 +1870,14 @@ void handle_parallel_moves(closure_t *c) {
             lir_op_t *op = current->value;
             // op->id maybe same, but that is fine.
             // check if is parallel move
-            if (op->code == LIR_OPCODE_MOVE && op->resolve_char == '~') {
+            if (lir_op_mov_hint_like(op) && op->resolve_char == '~') {
                 slice_t *moves = slice_new();
                 int id = op->id;
 
                 // collect all parallel moves with same id
                 while (current->value != NULL) {
                     lir_op_t *next_op = current->value;
-                    if (next_op->code != LIR_OPCODE_MOVE || next_op->resolve_char != '~' || next_op->id != id) {
+                    if (!lir_op_mov_hint_like(next_op) || next_op->resolve_char != '~' || next_op->id != id) {
                         break;
                     }
 
@@ -1847,38 +1929,19 @@ void replace_virtual_register(closure_t *c) {
                 assert(interval);
                 if (parent->is_const_float && op->code == LIR_OPCODE_MOVE &&
                     (var->flag & FLAG(LIR_FLAG_DEF) && interval->spilled)) {
-                    linked_remove(block->operations, current);
+                    linked_remove(block->operations, current); // mov f -> spill.stack, 当前指令已经删除，直接跳过即可
+                    break;
                 } else if (parent->is_const_float && (var->flag & FLAG(LIR_FLAG_USE)) && interval->spilled) {
-                    // 使用点且已 spill：执行重物化
-                    assert(parent->remat_ops && parent->remat_ops->count > 0);
+                    // 使用点且已 spill：执行重物化 // mov spill.stack -> f, 进行重物化加载
                     assert(op->code == LIR_OPCODE_MOVE); // 应该是 MOVE 指令
                     assert(op->output->assert_type != LIR_OPERAND_VAR);
 
-                    // 如果是 stack 则不需要进行写入
-                    lir_operand_t *output = op->output;
-                    if (output->assert_type == LIR_OPERAND_STACK) {
-                        // float const 不需要写入到 stack
-                        linked_remove(block->operations, current);
-                    } else {
-                        assert(output->assert_type == LIR_OPERAND_REG);
-
-                        // 遍历 remat_ops 插入指令，最后一条使用 target 作为 output
-                        linked_node *insert_point = current->prev;
-                        linked_node *last_remat = linked_last(interval->remat_ops);
-                        LINKED_FOR(interval->remat_ops) {
-                            lir_op_t *template_op = LINKED_VALUE();
-                            lir_op_t *new_op = lir_op_new(
-                                    template_op->code,
-                                    template_op->first,
-                                    template_op->second,
-                                    (LINKED_NODE() == last_remat) ? output : template_op->output);
-                            new_op->id = op->id;
-                            insert_point = linked_insert_after(block->operations, insert_point, new_op);
-                        }
-
-                        // 删除原始 MOVE 指令（用 remat 替代）
-                        linked_remove(block->operations, current);
-                    }
+                    // 调用封装的重物化函数
+                    bool inserted = insert_remat_ops(block, op->id, interval, op->output);
+                    // 无论是否插入都需要删除原始 MOVE 指令
+                    // inserted=false 表示 output 是 stack，不需要写入
+                    // inserted=true 表示已用 remat 替代
+                    linked_remove(block->operations, current);
                 } else {
                     var_replace(operand, interval);
                 }

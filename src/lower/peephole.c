@@ -1,10 +1,5 @@
 #include "peephole.h"
 
-/**
- * 检查操作数是否相等
- */
-// operands_equal removed
-
 
 static bool is_imm_two(lir_operand_t *operand) {
     if (!operand || operand->assert_type != LIR_OPERAND_IMM) {
@@ -166,7 +161,7 @@ static bool peephole_move_elimination_match2(closure_t *c, lir_op_t *op1, lir_op
  * XXX use_reg, use_var -> def_temp_var
  * mov def_temp_var -> x0
  * ---
- * XXX use_reg, use_var -> x0
+ * XXX use_reg, use_var -> x0 (use mov id and resolve  char)
  *
  */
 static bool peephole_move_elimination_match1(closure_t *c, lir_op_t *op1, lir_op_t *op2, table_t *use) {
@@ -237,6 +232,7 @@ static bool peephole_move_elimination_match1(closure_t *c, lir_op_t *op1, lir_op
 
 
     op1->output = lir_reset_operand(op2->output, LIR_FLAG_OUTPUT);
+    op1->resolve_char = op2->resolve_char;
     return true;
 }
 

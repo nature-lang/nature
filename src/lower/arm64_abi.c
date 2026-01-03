@@ -452,20 +452,6 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
 
     slice_t *use_vars = slice_new(); // lir_var_t* - track temp vars instead of regs
 
-    // 提前为大结构体返回值分配栈空间 (在所有 MOVE ~ 之前)
-    // 如果函数的返回值是一个结构体，并且超过了 16byte, caller 需要为该返回值申请足够的 stack 空间
-    if (call_result && args_pos[0] == 1) {
-        assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
-        assert(is_stack_ref_big_type(call_result_type));
-        // linear call 的时候没有为 result 申请空间，此处进行空间申请
-        linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
-
-        // 使用 must_hint 机制将 x8 作为并行移动指令处理，与其他调用参数一致
-        lir_operand_t *x8_temp_var = lower_temp_var_with_hint(c, result, type_kind_new(TYPE_ANYPTR), x8);
-        linked_push(result, lir_op_call_arg_move(x8_temp_var, call_result));
-        slice_push(use_vars, x8_temp_var->value);
-    }
-
     // second pass: register 参数处理
     for (int i = 0; i < args->count; ++i) {
         lir_operand_t *arg_operand = args->take[i];
@@ -560,18 +546,28 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
     }
 
     // 如果函数的返回值是一个结构体，并且超过了 16byte, 需要将 stack 地址放到 x8 寄存器中
-    // (stack 空间已在 second pass 之前分配)
     if (args_pos[0] == 1) {
+        assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
+        assert(is_stack_ref_big_type(call_result_type));
 
+        lir_operand_t *result_reg_operand = operand_new(LIR_OPERAND_REG, x8);
+        linked_push(result, lir_stack_alloc(c, call_result_type, call_result)); // 为返回值分配占空间
+        linked_push(result, lir_op_move(result_reg_operand, call_result));
 
-        // 重新生成 op->second, 包含 x8 临时变量
+        // 使用 mus hint 机制处理 x8
+        lir_operand_t *x8_temp_var = lower_temp_var_with_hint(c, result, type_kind_new(TYPE_ANYPTR), x8);
+        linked_push(result, lir_op_call_arg_move(x8_temp_var, call_result));
+        slice_push(use_vars, x8_temp_var->value);
+
         op->second = lir_reset_operand(operand_new(LIR_OPERAND_VARS, use_vars), LIR_FLAG_SECOND);
         set_operand_flag(op->second);
 
         // callee 已经将数据写入到了 call_result(x8寄存器对应的栈空间中)，此时不需要显式的处理 call_result,
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, NULL, op->line, op->column));
-        return result;
+        return result; // 大返回值处理已经返回
     }
+
+    // 返回值时结构体但可以通过寄存器返回，此时依旧需要在 call 之后进行空间分配
 
     // struct 通过指针传递时不需要考虑 hfa 优化。下面才需要考虑 hfa 优化。
     uint64_t call_result_size = type_sizeof(call_result_type);
@@ -616,7 +612,6 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         }
 
         // 将返回值 mov 到 call_result 中
-
         if (args_pos[0] < 16) {
             // 通过通用寄存器传递, x0, x1
             lir_operand_t *lo_src_reg = operand_new(LIR_OPERAND_REG, x0);
