@@ -2196,7 +2196,15 @@ impl<'a> Syntax {
         // For string literals, we need to consume the dot first: 'file.n'.{...}
         // For package imports, the dot was already consumed in the loop above
         let has_selective_dot = if file.is_some() { self.consume(TokenType::Dot) } else { false };
-        let (is_selective, select_items) = if has_selective_dot && self.is(TokenType::LeftCurly) || self.consume(TokenType::LeftCurly) {
+        let should_parse_selective = if has_selective_dot {
+            self.is(TokenType::LeftCurly)
+        } else {
+            // For package imports, check if current token is LeftCurly
+            self.is(TokenType::LeftCurly)
+        };
+        
+        let (is_selective, select_items) = if should_parse_selective {
+            self.must(TokenType::LeftCurly)?; // consume the {
             let mut items = Vec::new();
             
             loop {
