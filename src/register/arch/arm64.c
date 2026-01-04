@@ -73,7 +73,11 @@ void arm64_reg_init() {
     x25 = reg_new("x25", 25, LIR_FLAG_ALLOC_INT, QWORD, 24);
     x26 = reg_new("x26", 26, LIR_FLAG_ALLOC_INT, QWORD, 25);
     x27 = reg_new("x27", 27, LIR_FLAG_ALLOC_INT, QWORD, 26);
-    x28 = reg_new("x28", 28, LIR_FLAG_ALLOC_INT, QWORD, 27);
+    if (BUILD_OS == OS_DARWIN) {
+        x28 = reg_new("x28", 28, LIR_FLAG_ALLOC_INT, QWORD, 0); // macos 需要额外预留一个寄存器用于寄存器并行移动
+    } else {
+        x28 = reg_new("x28", 28, LIR_FLAG_ALLOC_INT, QWORD, 27); // macos 需要额外预留一个寄存器用于寄存器并行移动
+    }
     x29 = reg_new("x29", 29, 0, QWORD, 0); // FP, 不参与分配
     x30 = reg_new("x30", 30, 0, QWORD, 0); // LR, 不参与分配
     fp = x29;
@@ -119,7 +123,7 @@ void arm64_reg_init() {
     xzr = reg_new("xzr", 31, 0, QWORD, 0);
     wzr = reg_new("wzr", 31, 0, DWORD, 0);
 
-    int f_index = 27;
+    int f_index = BUILD_OS == OS_DARWIN ? 26 : 27;
 
     // 浮点寄存器
     v0 = reg_new("v0", 0, LIR_FLAG_ALLOC_FLOAT, OWORD, f_index + 1);

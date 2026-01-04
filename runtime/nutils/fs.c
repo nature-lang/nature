@@ -141,6 +141,7 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
         DEBUGF("[rt_uv_fs_read] read file success");
     }
 
+    ctx->req.data = NULL;
     return ctx->data_len;
 }
 

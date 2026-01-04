@@ -243,7 +243,7 @@ fn main() {
     assert(resp.status == 200 && msg.status == 'success' && msg.message == 'register successful')
 }
 
-=== test_upload
+=== test_upload[repeat=20]
 --- main.n
 import http.client
 import json
@@ -280,18 +280,24 @@ fn main() {
     co.sleep(1000)
 
     var f = fs.open('./test.txt', syscall.O_RDONLY, 0)
+    var content =  f.content()
 
-    var parts = client.multipart_t_new()
-        .text('username', 'nature user')
-        .text('message', 'hello from nature!')
-        .file('testfile', 'test.txt', f.content())
+    for int i = 0; i < 100; i += 1 {
+        go fn():void! {
+            var parts = client.multipart_t_new()
+                 .text('username', 'nature user')
+                 .text('message', 'hello from nature!')
+                 .file('testfile', 'test.txt', content)
 
-    var resp = client.new().multipart(parts).post('http://127.0.0.1:8080/upload').send()
+            var resp = client.new().multipart(parts).post('http://127.0.0.1:8080/upload').send()
+            var body = resp.text()
+            var m = json.deserialize<msg_t>(body)
+            println(m.status, m.message)
+            assert(m.status == 'success' && m.message == 'upload successful')
+        }()
+    }
 
-    var body = resp.text()
-    var m = json.deserialize<msg_t>(body)
-    println(m.status, m.message)
-    assert(m.status == 'success' && m.message == 'upload successful')
+    co.sleep(1000)
 }
 
 --- test.txt

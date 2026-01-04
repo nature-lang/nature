@@ -36,7 +36,11 @@ static inline uint8_t alloc_reg_count() {
     if (BUILD_ARCH == ARCH_AMD64) {
         return AMD64_ALLOC_REG_COUNT;
     } else if (BUILD_ARCH == ARCH_ARM64) {
-        return ARM64_ALLOC_REG_COUNT;
+        if (BUILD_OS == OS_DARWIN) {
+            return DARWIN_ARM64_ALLOC_REG_COUNT;
+        } else {
+            return ARM64_ALLOC_REG_COUNT;
+        }
     } else if (BUILD_ARCH == ARCH_RISCV64) {
         return RISCV64_ALLOC_REG_COUNT;
     }

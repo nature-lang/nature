@@ -1756,7 +1756,11 @@ move_one(closure_t *c, int i, slice_t *src, slice_t *src2, slice_t *dst, slice_t
                 if (BUILD_ARCH == ARCH_AMD64) {
                     tmp_reg_index = is_float(type_kind) ? xmm15->index : rbx->index;
                 } else if (BUILD_ARCH == ARCH_ARM64) {
-                    tmp_reg_index = is_float(type_kind) ? v16->index : x18->index;
+                    if (BUILD_OS == OS_DARWIN) {
+                        tmp_reg_index = is_float(type_kind) ? v16->index : x28->index;
+                    } else {
+                        tmp_reg_index = is_float(type_kind) ? v16->index : x18->index;
+                    }
                 } else if (BUILD_ARCH == ARCH_RISCV64) {
                     tmp_reg_index = is_float(type_kind) ? r_f31->index : T5->index;
                 } else {

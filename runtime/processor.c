@@ -331,7 +331,7 @@ void processor_all_start() {
  * 检测 coroutine 当前是否需要单独线程调度，如果不需要单独线程则直接在当前线程进行 aco_resume
  */
 void coroutine_resume(n_processor_t *p, coroutine_t *co) {
-    assert(co->status == CO_STATUS_RUNNABLE && "coroutine status must be runnable");
+    assertf(co->status == CO_STATUS_RUNNABLE, "coroutine %p status must be runnable", co);
 
     // 首次 resume 需要进行初始化
     if (!co->aco.inited) {

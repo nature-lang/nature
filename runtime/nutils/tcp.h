@@ -155,13 +155,14 @@ static inline void on_tcp_close_cb(uv_handle_t *handle) {
 }
 
 static inline void on_tcp_read_cb(uv_stream_t *client_handle, ssize_t nread, const uv_buf_t *buf) {
-    DEBUGF("[on_tcp_read_cb] client: %p, nread: %ld", client_handle, nread);
 
     inner_conn_t *conn = client_handle->data;
+    DEBUGF("[on_tcp_read_cb] client: %p, nread: %ld, co: %p", client_handle, nread, conn->co);
+
     conn->read_len = 0;
 
     if (nread < 0) {
-        DEBUGF("[on_tcp_read_cb] uv_read failed: %s", uv_strerror(nread));
+        DEBUGF("[on_tcp_read_cb] uv_read failed: %s, co: %p", uv_strerror(nread), conn->co);
     }
 
     // read data to buf? and set len, 数据已经在 buf 里面了， nread 是读取的数量。
@@ -315,7 +316,7 @@ static void uv_async_tcp_connect(inner_conn_t *conn, struct sockaddr_in *dest, n
 }
 
 void rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t *addr, n_int64_t port, n_int64_t timeout_ms) {
-    DEBUGF("[rt_uv_tcp_connect] start, addr %s, port %ld", (char *) rt_string_ref(addr), port)
+    DEBUGF("[rt_uv_tcp_connect] start, addr %s, port %ld, co=%p", (char *) rt_string_ref(addr), port, coroutine_get())
 
     coroutine_t *co = coroutine_get();
 
@@ -331,7 +332,7 @@ void rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t *addr, n_int64_t port, n
 
     global_waiting_send(uv_async_tcp_connect, conn, dest, (void *) timeout_ms);
 
-    DEBUGF("[rt_uv_tcp_connect] resume, connect success, will return conn=%p", conn)
+    DEBUGF("[rt_uv_tcp_connect] resume, connect success, will return conn=%p, co=%p", conn, co)
 }
 
 void uv_async_tcp_accept(inner_server_t *inner_server, coroutine_t *co) {
@@ -350,8 +351,9 @@ void uv_async_tcp_accept(inner_server_t *inner_server, coroutine_t *co) {
 }
 
 void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
-    DEBUGF("[rt_uv_tcp_accept] accept start")
     coroutine_t *co = coroutine_get();
+    DEBUGF("[rt_uv_tcp_accept] accept start, co=%p", co)
+
     inner_server_t *inner_server = server->inner;
     inner_conn_t *conn = NULL;
 
@@ -382,13 +384,15 @@ void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
 }
 
 void on_tcp_conn_cb(uv_stream_t *handle, int status) {
-    DEBUGF("[on_new_conn_cb] status: %d", status);
+    inner_server_t *inner_server = handle->data;
+    inner_conn_t *conn = acquire_conn(inner_server);
+
+    DEBUGF("[on_new_conn_cb] status: %d, co=%p", status, conn->co);
     if (status < 0) {
         DEBUGF("[on_new_conn_cb] new connection error: %s", uv_strerror(status));
         return;
     }
-    inner_server_t *inner_server = handle->data;
-    inner_conn_t *conn = acquire_conn(inner_server);
+
     conn->server = inner_server;
 
     uv_tcp_init(handle->loop, &conn->handle);
@@ -426,7 +430,7 @@ void on_tcp_conn_cb(uv_stream_t *handle, int status) {
     //        co_ready(co);
     //    }
 
-    DEBUGF("[on_new_conn_cb] handle completed");
+    DEBUGF("[on_new_conn_cb] handle completed, co=%p", conn->co);
 }
 
 static void uv_async_tcp_listen(n_tcp_server_t *server) {
