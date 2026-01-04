@@ -1198,6 +1198,10 @@ static inline bool reg_equals(reg_t *reg_a, reg_t *reg_b) {
 }
 
 static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
+    if (a == NULL || b == NULL) {
+        return false;
+    }
+
     if (a->assert_type != b->assert_type) {
         return false;
     }
@@ -1294,6 +1298,39 @@ static inline bool lir_op_scc(lir_op_t *op) {
            op->code == LIR_OPCODE_USLE ||
            op->code == LIR_OPCODE_USGT ||
            op->code == LIR_OPCODE_USGE;
+}
+
+/**
+ * Check if an opcode can participate in move elimination optimization.
+ * These are opcodes where the output can potentially be coalesced with a subsequent move.
+ */
+static inline bool lir_can_mov_eliminable(lir_opcode_t code) {
+    return code == LIR_OPCODE_MOVE ||
+           code == LIR_OPCODE_SUB ||
+           code == LIR_OPCODE_ADD ||
+           code == LIR_OPCODE_MUL ||
+           code == LIR_OPCODE_UDIV ||
+           code == LIR_OPCODE_SDIV ||
+           code == LIR_OPCODE_UREM ||
+           code == LIR_OPCODE_SREM ||
+           code == LIR_OPCODE_NEG ||
+           code == LIR_OPCODE_SSHR ||
+           code == LIR_OPCODE_USHR ||
+           code == LIR_OPCODE_USHL ||
+           code == LIR_OPCODE_AND ||
+           code == LIR_OPCODE_OR ||
+           code == LIR_OPCODE_XOR ||
+           code == LIR_OPCODE_NOT ||
+           code == LIR_OPCODE_SLT ||
+           code == LIR_OPCODE_SLE ||
+           code == LIR_OPCODE_SGT ||
+           code == LIR_OPCODE_SGE ||
+           code == LIR_OPCODE_SEE ||
+           code == LIR_OPCODE_SNE ||
+           code == LIR_OPCODE_USLT ||
+           code == LIR_OPCODE_USLE ||
+           code == LIR_OPCODE_USGT ||
+           code == LIR_OPCODE_USGE;
 }
 
 

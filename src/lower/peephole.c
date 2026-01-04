@@ -85,32 +85,7 @@ static bool peephole_move_elimination_match2(closure_t *c, lir_op_t *op1, lir_op
         return false;
     }
 
-    if (op2->code != LIR_OPCODE_MOVE &&
-        op2->code != LIR_OPCODE_SUB &&
-        op2->code != LIR_OPCODE_ADD &&
-        op2->code != LIR_OPCODE_MUL &&
-        op2->code != LIR_OPCODE_UDIV &&
-        op2->code != LIR_OPCODE_SDIV &&
-        op2->code != LIR_OPCODE_UREM &&
-        op2->code != LIR_OPCODE_SREM &&
-        op2->code != LIR_OPCODE_NEG &&
-        op2->code != LIR_OPCODE_SSHR &&
-        op2->code != LIR_OPCODE_USHR &&
-        op2->code != LIR_OPCODE_USHL &&
-        op2->code != LIR_OPCODE_AND &&
-        op2->code != LIR_OPCODE_OR &&
-        op2->code != LIR_OPCODE_XOR &&
-        op2->code != LIR_OPCODE_NOT &&
-        op2->code != LIR_OPCODE_USLT &&
-        op2->code != LIR_OPCODE_USLE &&
-        op2->code != LIR_OPCODE_USGT &&
-        op2->code != LIR_OPCODE_USGE &&
-        op2->code != LIR_OPCODE_SLT &&
-        op2->code != LIR_OPCODE_SLE &&
-        op2->code != LIR_OPCODE_SGT &&
-        op2->code != LIR_OPCODE_SGE &&
-        op2->code != LIR_OPCODE_SEE &&
-        op2->code != LIR_OPCODE_SNE) {
+    if (!lir_can_mov_eliminable(op2->code)) {
         return false;
     }
 
@@ -165,32 +140,7 @@ static bool peephole_move_elimination_match2(closure_t *c, lir_op_t *op1, lir_op
  *
  */
 static bool peephole_move_elimination_match1(closure_t *c, lir_op_t *op1, lir_op_t *op2, table_t *use) {
-    if (op1->code != LIR_OPCODE_MOVE &&
-        op1->code != LIR_OPCODE_SUB &&
-        op1->code != LIR_OPCODE_ADD &&
-        op1->code != LIR_OPCODE_MUL &&
-        op1->code != LIR_OPCODE_UDIV &&
-        op1->code != LIR_OPCODE_SDIV &&
-        op1->code != LIR_OPCODE_UREM &&
-        op1->code != LIR_OPCODE_SREM &&
-        op1->code != LIR_OPCODE_NEG &&
-        op1->code != LIR_OPCODE_SSHR &&
-        op1->code != LIR_OPCODE_USHR &&
-        op1->code != LIR_OPCODE_USHL &&
-        op1->code != LIR_OPCODE_AND &&
-        op1->code != LIR_OPCODE_OR &&
-        op1->code != LIR_OPCODE_XOR &&
-        op1->code != LIR_OPCODE_NOT &&
-        op1->code != LIR_OPCODE_USLT &&
-        op1->code != LIR_OPCODE_SLT &&
-        op1->code != LIR_OPCODE_SLE &&
-        op1->code != LIR_OPCODE_SGT &&
-        op1->code != LIR_OPCODE_SGE &&
-        op1->code != LIR_OPCODE_USLE &&
-        op1->code != LIR_OPCODE_USGT &&
-        op1->code != LIR_OPCODE_USGE &&
-        op1->code != LIR_OPCODE_SEE &&
-        op1->code != LIR_OPCODE_SNE) {
+    if (!lir_can_mov_eliminable(op1->code)) {
         return false;
     }
 

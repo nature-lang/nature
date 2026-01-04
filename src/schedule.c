@@ -88,44 +88,6 @@ static bool schedule_is_fixed(lir_op_t *op) {
 }
 
 /**
- * 判断指令是否是可消除的代码操作
- * 用于 MOV 消除优化
- */
-static bool schedule_is_eliminable_code_op(lir_opcode_t code) {
-    switch (code) {
-        case LIR_OPCODE_SUB:
-        case LIR_OPCODE_ADD:
-        case LIR_OPCODE_MUL:
-        case LIR_OPCODE_UDIV:
-        case LIR_OPCODE_SDIV:
-        case LIR_OPCODE_UREM:
-        case LIR_OPCODE_SREM:
-        case LIR_OPCODE_NEG:
-        case LIR_OPCODE_SSHR:
-        case LIR_OPCODE_USHR:
-        case LIR_OPCODE_USHL:
-        case LIR_OPCODE_AND:
-        case LIR_OPCODE_OR:
-        case LIR_OPCODE_XOR:
-        case LIR_OPCODE_NOT:
-        case LIR_OPCODE_USLT:
-        case LIR_OPCODE_SLT:
-        case LIR_OPCODE_SLE:
-        case LIR_OPCODE_SGT:
-        case LIR_OPCODE_SGE:
-        case LIR_OPCODE_USLE:
-        case LIR_OPCODE_USGT:
-        case LIR_OPCODE_USGE:
-        case LIR_OPCODE_SEE:
-        case LIR_OPCODE_SNE:
-            return true;
-        default:
-            return false;
-    }
-}
-
-
-/**
  * 检查变量是否在 block 的 live_out 中
  */
 static bool is_in_live_out(basic_block_t *block, lir_var_t *var) {
@@ -153,7 +115,7 @@ static bool is_in_live_out(basic_block_t *block, lir_var_t *var) {
  *
  * 注意：如果被消除的变量在 block 的 live_out 中，则不能消除
  */
-static void schedule_mov_elimination(schedule_ctx_t *ctx) {
+static void schedule_mov_elimination(closure_t *c, schedule_ctx_t *ctx) {
     // 需要多次迭代直到没有变化
     bool changed = true;
     while (changed) {
@@ -164,7 +126,7 @@ static void schedule_mov_elimination(schedule_ctx_t *ctx) {
             lir_op_t *op = node->op;
 
             // Case 2: 遍历 code 指令，检查后继是否是 MOV
-            if (schedule_is_eliminable_code_op(op->code)) {
+            if (lir_can_mov_eliminable(op->code)) {
                 // code 指令必须有输出
                 if (!op->output) {
                     continue;
@@ -238,7 +200,7 @@ static void schedule_mov_elimination(schedule_ctx_t *ctx) {
                 lir_op_t *succ_op = succ_node->op;
 
                 // 检查后继是否是 code 指令
-                if (!schedule_is_eliminable_code_op(succ_op->code)) {
+                if (!lir_can_mov_eliminable(succ_op->code)) {
                     continue;
                 }
 
@@ -258,7 +220,7 @@ static void schedule_mov_elimination(schedule_ctx_t *ctx) {
                     }
                 }
 
-                if (!lir_operand_equal(succ_op->first, op->output) || !lir_operand_equal(succ_op->second, op->output)) {
+                if (!lir_operand_equal(succ_op->first, op->output) && !lir_operand_equal(succ_op->second, op->output)) {
                     continue;
                 }
 
@@ -281,7 +243,6 @@ static void schedule_mov_elimination(schedule_ctx_t *ctx) {
                 // 更新依赖关系：mov 的前驱直接连接到 mov 的后继
                 // 由于 mov 被消除，需要更新 succ_node 的 dep_count
                 // 注意：这里不需要显式更新，因为 NOP 节点会被移除
-
                 changed = true;
             }
         }
@@ -291,10 +252,14 @@ static void schedule_mov_elimination(schedule_ctx_t *ctx) {
     slice_t *new_nodes = slice_new();
     for (int i = 0; i < ctx->nodes->count; i++) {
         schedule_node_t *node = ctx->nodes->take[i];
-        if (node->op->code != LIR_OPCODE_NOP || node->op->output != NULL) {
-            slice_push(new_nodes, node);
+        if (node->op->code == LIR_OPCODE_NOP && node->op->output == NULL) {
+            continue;
         }
+        slice_push(new_nodes, node);
     }
+
+    free(ctx->nodes->take);
+    free(ctx->nodes);
     ctx->nodes = new_nodes;
 }
 
@@ -888,11 +853,8 @@ static void schedule_block_elimination(closure_t *c, basic_block_t *block, slice
     // 收集整个 block 的所有非固定指令节点
     for (int i = 0; i < all_ops->count; i++) {
         lir_op_t *op = all_ops->take[i];
-        // 只对非固定指令构建 DAG 节点
-        if (!schedule_is_fixed(op)) {
-            schedule_node_t *node = schedule_node_new(op, NULL, i);
-            slice_push(ctx.nodes, node);
-        }
+        schedule_node_t *node = schedule_node_new(op, NULL, i);
+        slice_push(ctx.nodes, node);
     }
 
     if (ctx.nodes->count <= 1) {
@@ -903,7 +865,7 @@ static void schedule_block_elimination(closure_t *c, basic_block_t *block, slice
     schedule_build_deps(c, &ctx);
 
     // MOV 消除优化（基于整个 block 的 DAG，检查 live_out）
-    schedule_mov_elimination(&ctx);
+    schedule_mov_elimination(c, &ctx);
 
     // FMA 模式识别优化（MUL+ADD/SUB -> MADD/MSUB/FMADD/FMSUB）
     schedule_fma_recognition(c, &ctx);

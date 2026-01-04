@@ -8,6 +8,6 @@ int main(void) {
 #ifdef __DARWIN
     feature_test_build();
 #endif
-    exec_imm_param();
+     //   exec_imm_param();
     //    feature_testar_test(NULL);
 }
