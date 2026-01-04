@@ -723,7 +723,7 @@ static inline bool is_number(type_kind kind) {
 }
 
 static inline bool is_scala_type(type_t t) {
-    return is_number(t.kind) || t.kind == TYPE_BOOL;
+    return is_number(t.kind) || t.kind == TYPE_BOOL; // TODO test || t.kind == TYPE_ANYPTR;
 }
 
 static inline bool is_stack_ref_big_type(type_t t) {

@@ -1,37 +1,5 @@
 #include "peephole.h"
 
-/**
- * 检查操作数是否相等
- */
-static bool operands_equal(lir_operand_t *op1, lir_operand_t *op2) {
-    if (!op1 || !op2) {
-        return false;
-    }
-
-    if (op1->assert_type != op2->assert_type) {
-        return false;
-    }
-
-    if (op1->assert_type == LIR_OPERAND_VAR) {
-        lir_var_t *var1 = op1->value;
-        lir_var_t *var2 = op2->value;
-        return strcmp(var1->ident, var2->ident) == 0;
-    }
-
-    if (op1->assert_type == LIR_OPERAND_REG) {
-        reg_t *reg1 = op1->value;
-        reg_t *reg2 = op2->value;
-        return reg1->index == reg2->index;
-    }
-
-    if (op1->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-        lir_indirect_addr_t *addr1 = op1->value;
-        lir_indirect_addr_t *addr2 = op2->value;
-        return operands_equal(addr1->base, addr2->base) && addr1->offset == addr2->offset;
-    }
-
-    return false;
-}
 
 static bool is_imm_two(lir_operand_t *operand) {
     if (!operand || operand->assert_type != LIR_OPERAND_IMM) {
@@ -117,32 +85,7 @@ static bool peephole_move_elimination_match2(closure_t *c, lir_op_t *op1, lir_op
         return false;
     }
 
-    if (op2->code != LIR_OPCODE_MOVE &&
-        op2->code != LIR_OPCODE_SUB &&
-        op2->code != LIR_OPCODE_ADD &&
-        op2->code != LIR_OPCODE_MUL &&
-        op2->code != LIR_OPCODE_UDIV &&
-        op2->code != LIR_OPCODE_SDIV &&
-        op2->code != LIR_OPCODE_UREM &&
-        op2->code != LIR_OPCODE_SREM &&
-        op2->code != LIR_OPCODE_NEG &&
-        op2->code != LIR_OPCODE_SSHR &&
-        op2->code != LIR_OPCODE_USHR &&
-        op2->code != LIR_OPCODE_USHL &&
-        op2->code != LIR_OPCODE_AND &&
-        op2->code != LIR_OPCODE_OR &&
-        op2->code != LIR_OPCODE_XOR &&
-        op2->code != LIR_OPCODE_NOT &&
-        op2->code != LIR_OPCODE_USLT &&
-        op2->code != LIR_OPCODE_USLE &&
-        op2->code != LIR_OPCODE_USGT &&
-        op2->code != LIR_OPCODE_USGE &&
-        op2->code != LIR_OPCODE_SLT &&
-        op2->code != LIR_OPCODE_SLE &&
-        op2->code != LIR_OPCODE_SGT &&
-        op2->code != LIR_OPCODE_SGE &&
-        op2->code != LIR_OPCODE_SEE &&
-        op2->code != LIR_OPCODE_SNE) {
+    if (!lir_can_mov_eliminable(op2->code)) {
         return false;
     }
 
@@ -165,23 +108,23 @@ static bool peephole_move_elimination_match2(closure_t *c, lir_op_t *op1, lir_op
 
     // 情况1: XXX use_reg, temp_var -> x0
     // 优化为: XXX use_reg, x0 -> x0  (其中x0是MOVE的输入)
-    if (op2->second != NULL && operands_equal(op2->second, op1->output)) {
+    if (op2->second != NULL && lir_operand_equal(op2->second, op1->output)) {
         // 第二个指令的输出必须等于MOVE指令的输入
-        if (!operands_equal(op2->output, op1->first)) {
+        if (!lir_operand_equal(op2->output, op1->first)) {
             return false;
         }
 
         // 执行优化：将第二个指令的second操作数替换为MOVE的输入
-        op2->second = op1->first;
+        op2->second = lir_reset_operand(op1->first, LIR_FLAG_SECOND);
         return true;
-    } else if (op2->first != NULL && operands_equal(op2->first, op1->output)) {
+    } else if (op2->first != NULL && lir_operand_equal(op2->first, op1->output)) {
         // 第二个指令的输出必须等于MOVE指令的输入
-        if (!operands_equal(op2->output, op1->first)) {
+        if (!lir_operand_equal(op2->output, op1->first)) {
             return false;
         }
 
         // 执行优化：将第二个指令的first操作数替换为MOVE的输入
-        op2->first = op1->first;
+        op2->first = lir_reset_operand(op1->first, LIR_FLAG_FIRST);
         return true;
     }
 
@@ -193,36 +136,11 @@ static bool peephole_move_elimination_match2(closure_t *c, lir_op_t *op1, lir_op
  * XXX use_reg, use_var -> def_temp_var
  * mov def_temp_var -> x0
  * ---
- * XXX use_reg, use_var -> x0
+ * XXX use_reg, use_var -> x0 (use mov id and resolve  char)
  *
  */
 static bool peephole_move_elimination_match1(closure_t *c, lir_op_t *op1, lir_op_t *op2, table_t *use) {
-    if (op1->code != LIR_OPCODE_MOVE &&
-        op1->code != LIR_OPCODE_SUB &&
-        op1->code != LIR_OPCODE_ADD &&
-        op1->code != LIR_OPCODE_MUL &&
-        op1->code != LIR_OPCODE_UDIV &&
-        op1->code != LIR_OPCODE_SDIV &&
-        op1->code != LIR_OPCODE_UREM &&
-        op1->code != LIR_OPCODE_SREM &&
-        op1->code != LIR_OPCODE_NEG &&
-        op1->code != LIR_OPCODE_SSHR &&
-        op1->code != LIR_OPCODE_USHR &&
-        op1->code != LIR_OPCODE_USHL &&
-        op1->code != LIR_OPCODE_AND &&
-        op1->code != LIR_OPCODE_OR &&
-        op1->code != LIR_OPCODE_XOR &&
-        op1->code != LIR_OPCODE_NOT &&
-        op1->code != LIR_OPCODE_USLT &&
-        op1->code != LIR_OPCODE_SLT &&
-        op1->code != LIR_OPCODE_SLE &&
-        op1->code != LIR_OPCODE_SGT &&
-        op1->code != LIR_OPCODE_SGE &&
-        op1->code != LIR_OPCODE_USLE &&
-        op1->code != LIR_OPCODE_USGT &&
-        op1->code != LIR_OPCODE_USGE &&
-        op1->code != LIR_OPCODE_SEE &&
-        op1->code != LIR_OPCODE_SNE) {
+    if (!lir_can_mov_eliminable(op1->code)) {
         return false;
     }
 
@@ -246,7 +164,12 @@ static bool peephole_move_elimination_match1(closure_t *c, lir_op_t *op1, lir_op
         return false;
     }
 
-    if (!operands_equal(op1->output, op2->first)) {
+    lir_var_t *output_var = op1->output->value;
+    if (output_var->flag & FLAG(LIR_FLAG_CONST)) {
+        return false;
+    }
+
+    if (!lir_operand_equal(op1->output, op2->first)) {
         return false;
     }
 
@@ -257,7 +180,9 @@ static bool peephole_move_elimination_match1(closure_t *c, lir_op_t *op1, lir_op
         return false;
     }
 
-    op1->output = op2->output;
+
+    op1->output = lir_reset_operand(op2->output, LIR_FLAG_OUTPUT);
+    op1->resolve_char = op2->resolve_char;
     return true;
 }
 

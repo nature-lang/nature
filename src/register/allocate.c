@@ -69,7 +69,14 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
         operand->size = stack->size;
         operand->ref_var = var;
     } else {
-        reg_t *reg = alloc_regs[i->assigned];
+        // 如果 var 有 must_hint，直接使用目标寄存器而非分配的寄存器
+        // 这样 mov x0 -> x0(v1) 会被自动消除
+        reg_t *reg;
+        if (var->must_hint != NULL) {
+            reg = var->must_hint;
+        } else {
+            reg = alloc_regs[i->assigned];
+        }
         assert(reg);
 
         uint8_t index = reg->index;
@@ -85,6 +92,62 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
 }
 
 /**
+ * 智能查找 hint 寄存器: 查找 reg_hint 及其 children，以及 phi_hints
+ * 类似 C1 Linear Scan 的 Interval::register_hint(bool search_split_child) 策略
+ * @param current 当前需要分配寄存器的 interval
+ * @return hint 对应的 reg_id，如果没有找到返回 0
+ */
+static uint8_t find_hint_reg(interval_t *current) {
+    uint8_t hint_reg_id = 0;
+
+    // 策略 1: 检查 reg_hint
+    interval_t *hint = current->reg_hint;
+    if (hint != NULL) {
+        // 如果 hint 本身已经分配了寄存器
+        if (hint->assigned > 0) {
+            return hint->assigned;
+        }
+
+        // 如果 hint 没有分配，但是它的 children 中有已分配的
+        // 这对应 hint 被 split 后，child 获得了寄存器的情况
+        if (hint->children != NULL && hint->children->count > 0) {
+            linked_node *child_node = linked_first(hint->children);
+            while (child_node->value != NULL) {
+                interval_t *child = (interval_t *) child_node->value;
+                if (child->assigned > 0) {
+                    return child->assigned;
+                }
+                child_node = child_node->succ;
+            }
+        }
+    }
+
+    // 策略 2: 从 phi_hints 中查找
+    // phi_hints 是 phi def interval 对应的多个 body interval
+    if (current->phi_hints != NULL && current->phi_hints->count > 0) {
+        for (int i = 0; i < current->phi_hints->count; ++i) {
+            interval_t *phi_hint = current->phi_hints->take[i];
+            if (phi_hint->assigned > 0) {
+                return phi_hint->assigned;
+            }
+            // 也检查 phi_hint 的 children
+            if (phi_hint->children != NULL && phi_hint->children->count > 0) {
+                linked_node *child_node = linked_first(phi_hint->children);
+                while (child_node->value != NULL) {
+                    interval_t *child = (interval_t *) child_node->value;
+                    if (child->assigned > 0) {
+                        return child->assigned;
+                    }
+                    child_node = child_node->succ;
+                }
+            }
+        }
+    }
+
+    return hint_reg_id;
+}
+
+/**
  * 在 free 中找到一个尽量空闲的寄存器分配给 current, 优先考虑 register hint 分配的寄存器
  * 如果相应的寄存器不能使用到 current 结束
  * @param current
@@ -92,27 +155,23 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
  * @return
  */
 static uint8_t find_free_reg(interval_t *current, int *free_pos) {
-    //    uint8_t min_full_reg_id = 0; // 能够用于整个 current lifetime 寄存器器中 free 时间最短的寄存器(hotspot LinearScanWalker::find_free_reg)
-    uint8_t full_reg_id = 0; //  能够用于整个 current lifetime 寄存器器中 free 时间最长的寄存器
+    uint8_t full_reg_id = 0; // 能够用于整个 current lifetime 的寄存器中空闲时间最长的
     uint8_t max_part_reg_id = 0; // 需要 split current to unhandled
-    uint8_t hint_reg_id = 0; // register hint 对应的 interval 分配的 reg
-    if (current->reg_hint != NULL && current->reg_hint->assigned > 0) {
-        hint_reg_id = current->reg_hint->assigned;
-    }
+
+    // 使用智能查找策略获取 hint 寄存器
+    uint8_t hint_reg_id = find_hint_reg(current);
 
     for (int i = 1; i < alloc_reg_count(); ++i) {
-        if (free_pos[i] > current->last_range->to) { // TODO >= 和 > 产生了不同的行为
-            // 如果有多个寄存器比较空闲，则优先考虑 hint
-            // ~~否则优先考虑 free 时间最小的寄存器,从而可以充分利用寄存器的时间~~
-            // 由于 nature 中 rt_call 较多，临时变量较多，所以寄存器利用率不高(根本用不完)
-            // 所以直接选取空闲时间最长的寄存器使用, 如果 rt_call 能够 inline 的话，这里可以改成 min full 逻辑
+        if (free_pos[i] >= current->last_range->to) {
+            // 寄存器在整个 interval 生命周期内都空闲
+            // 优先选择 hint 寄存器，其次选择空闲时间最长的
             if (full_reg_id == 0 || i == hint_reg_id ||
                 (full_reg_id != hint_reg_id && free_pos[i] > free_pos[full_reg_id])) {
                 full_reg_id = i;
             }
-        } else if (free_pos[i] > current->first_range->from + 1) {
-            // 如果有多个寄存器可以借给 current 使用一段时间，则优先考虑能够借用时间最长的寄存器(free[i] 最大的)
-            // 从而减少溢出的可能
+        } else if (free_pos[i] >= current->first_range->from + 1) {
+            // 寄存器部分时间空闲，需要后续 split
+            // 优先选择 hint 寄存器，其次选择空闲时间最长的
             if (max_part_reg_id == 0 || i == hint_reg_id ||
                 (max_part_reg_id != hint_reg_id && free_pos[i] > free_pos[max_part_reg_id])) {
                 max_part_reg_id = i;
@@ -139,10 +198,9 @@ static uint8_t find_free_reg(interval_t *current, int *free_pos) {
  */
 static uint8_t find_block_reg(interval_t *current, int *use_pos, int *block_pos) {
     uint8_t max_reg_id = 0; // 直接分配不用 split
-    uint8_t hint_reg_id = 0; // register hint 对应的 interval 分配的 reg
-    if (current->reg_hint != NULL && current->reg_hint->assigned > 0) {
-        hint_reg_id = current->reg_hint->assigned;
-    }
+
+    // 使用智能查找策略获取 hint 寄存器
+    uint8_t hint_reg_id = find_hint_reg(current);
 
     for (int i = 1; i < alloc_reg_count(); ++i) {
         if (use_pos[i] <= current->first_range->from + 1) {
@@ -245,6 +303,7 @@ static void spill_interval(closure_t *c, allocate_t *a, interval_t *i, int befor
     use_pos_t *must_pos = interval_must_reg_pos(child);
     if (must_pos) {
         split_pos = interval_find_optimal_split_pos(c, child, must_pos->value);
+        assert(split_pos < must_pos->value);
         interval_t *unhandled = interval_split_at(c, child, split_pos);
         sort_to_unhandled(a->unhandled, unhandled);
     }
@@ -281,7 +340,11 @@ void allocate_walk(closure_t *c) {
 
     while (a->unhandled->count != 0) {
         a->current = (interval_t *) linked_pop(a->unhandled);
-        assertf(a->current->assigned == 0, "interval must not assigned");
+        //        assertf(a->current->assigned == 0, "interval must not assigned");
+        if (a->current->assigned) {
+            linked_push(a->handled, a->current);
+            continue;
+        }
 
         // handle active
         handle_active(a);
@@ -289,14 +352,20 @@ void allocate_walk(closure_t *c) {
         handle_inactive(a);
 
         use_pos_t *first_use = first_use_pos(a->current, 0);
-        if (!first_use || first_use->kind == ALLOC_KIND_NOT) {
+        if (!first_use || first_use->kind == ALLOC_KIND_STACK) {
             spill_interval(c, a, a->current, 0);
             linked_push(a->handled, a->current);
             continue;
         }
         // interval 使用时间过短，无法分配寄存器
-        use_pos_t *first_not = first_use_pos(a->current, ALLOC_KIND_NOT);
+        use_pos_t *first_not = first_use_pos(a->current, ALLOC_KIND_STACK);
         if (first_use->kind != ALLOC_KIND_MUST && first_not && first_not - first_use < ALLOC_USE_MIN) {
+            spill_interval(c, a, a->current, 0);
+            linked_push(a->handled, a->current);
+            continue;
+        }
+
+        if (a->current->is_const_float) {
             spill_interval(c, a, a->current, 0);
             linked_push(a->handled, a->current);
             continue;
@@ -440,6 +509,9 @@ bool allocate_free_reg(closure_t *c, allocate_t *a) {
     // 有空闲的寄存器，但是空闲时间小于当前 current 的生命周期,需要 split current
     if (free_pos[reg_id] < a->current->last_range->to) {
         int optimal_position = interval_find_optimal_split_pos(c, a->current, free_pos[reg_id]);
+        if (optimal_position == a->current->first_range->from) {
+            optimal_position = free_pos[reg_id]; // 使用点进行切割
+        }
 
         // 从最佳位置切割 interval 得到 child, child 并不是一定会溢出，而是可能会再次被分配到寄存器(加入到 unhandled 中)
         interval_t *child = interval_split_at(c, a->current, optimal_position);

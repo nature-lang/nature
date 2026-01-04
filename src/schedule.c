@@ -88,76 +88,6 @@ static bool schedule_is_fixed(lir_op_t *op) {
 }
 
 /**
- * 判断指令是否是可消除的代码操作
- * 用于 MOV 消除优化
- */
-static bool schedule_is_eliminable_code_op(lir_opcode_t code) {
-    switch (code) {
-        case LIR_OPCODE_SUB:
-        case LIR_OPCODE_ADD:
-        case LIR_OPCODE_MUL:
-        case LIR_OPCODE_UDIV:
-        case LIR_OPCODE_SDIV:
-        case LIR_OPCODE_UREM:
-        case LIR_OPCODE_SREM:
-        case LIR_OPCODE_NEG:
-        case LIR_OPCODE_SSHR:
-        case LIR_OPCODE_USHR:
-        case LIR_OPCODE_USHL:
-        case LIR_OPCODE_AND:
-        case LIR_OPCODE_OR:
-        case LIR_OPCODE_XOR:
-        case LIR_OPCODE_NOT:
-        case LIR_OPCODE_USLT:
-        case LIR_OPCODE_SLT:
-        case LIR_OPCODE_SLE:
-        case LIR_OPCODE_SGT:
-        case LIR_OPCODE_SGE:
-        case LIR_OPCODE_USLE:
-        case LIR_OPCODE_USGT:
-        case LIR_OPCODE_USGE:
-        case LIR_OPCODE_SEE:
-        case LIR_OPCODE_SNE:
-            return true;
-        default:
-            return false;
-    }
-}
-
-/**
- * 检查两个操作数是否相等（用于 MOV 消除）
- */
-static bool operands_equal(lir_operand_t *op1, lir_operand_t *op2) {
-    if (!op1 || !op2) {
-        return false;
-    }
-
-    if (op1->assert_type != op2->assert_type) {
-        return false;
-    }
-
-    if (op1->assert_type == LIR_OPERAND_VAR) {
-        lir_var_t *var1 = op1->value;
-        lir_var_t *var2 = op2->value;
-        return strcmp(var1->ident, var2->ident) == 0;
-    }
-
-    if (op1->assert_type == LIR_OPERAND_REG) {
-        reg_t *reg1 = op1->value;
-        reg_t *reg2 = op2->value;
-        return reg1->index == reg2->index;
-    }
-
-    if (op1->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-        lir_indirect_addr_t *addr1 = op1->value;
-        lir_indirect_addr_t *addr2 = op2->value;
-        return operands_equal(addr1->base, addr2->base) && addr1->offset == addr2->offset;
-    }
-
-    return false;
-}
-
-/**
  * 检查变量是否在 block 的 live_out 中
  */
 static bool is_in_live_out(basic_block_t *block, lir_var_t *var) {
@@ -185,7 +115,7 @@ static bool is_in_live_out(basic_block_t *block, lir_var_t *var) {
  *
  * 注意：如果被消除的变量在 block 的 live_out 中，则不能消除
  */
-static void schedule_mov_elimination(schedule_ctx_t *ctx) {
+static void schedule_mov_elimination(closure_t *c, schedule_ctx_t *ctx) {
     // 需要多次迭代直到没有变化
     bool changed = true;
     while (changed) {
@@ -196,7 +126,7 @@ static void schedule_mov_elimination(schedule_ctx_t *ctx) {
             lir_op_t *op = node->op;
 
             // Case 2: 遍历 code 指令，检查后继是否是 MOV
-            if (schedule_is_eliminable_code_op(op->code)) {
+            if (lir_can_mov_eliminable(op->code)) {
                 // code 指令必须有输出
                 if (!op->output) {
                     continue;
@@ -226,7 +156,7 @@ static void schedule_mov_elimination(schedule_ctx_t *ctx) {
 
                 // 检查 MOV 的 first 操作数是否等于 code 的 output
                 // 只有 mov code_output -> b 才能消除，而不是 mov x -> I_ADDR[code_output]
-                if (!operands_equal(succ_op->first, op->output)) {
+                if (!lir_operand_equal(succ_op->first, op->output)) {
                     continue;
                 }
 
@@ -270,7 +200,7 @@ static void schedule_mov_elimination(schedule_ctx_t *ctx) {
                 lir_op_t *succ_op = succ_node->op;
 
                 // 检查后继是否是 code 指令
-                if (!schedule_is_eliminable_code_op(succ_op->code)) {
+                if (!lir_can_mov_eliminable(succ_op->code)) {
                     continue;
                 }
 
@@ -290,17 +220,17 @@ static void schedule_mov_elimination(schedule_ctx_t *ctx) {
                     }
                 }
 
-                if (!operands_equal(succ_op->first, op->output) || !operands_equal(succ_op->second, op->output)) {
+                if (!lir_operand_equal(succ_op->first, op->output) && !lir_operand_equal(succ_op->second, op->output)) {
                     continue;
                 }
 
                 // 将后继 code 指令中对 mov output 的使用替换为 mov input
                 // 检查 first 操作数
-                if (succ_op->first && operands_equal(succ_op->first, op->output)) {
+                if (succ_op->first && lir_operand_equal(succ_op->first, op->output)) {
                     succ_op->first = lir_reset_operand(op->first, LIR_FLAG_FIRST);
                 }
                 // 检查 second 操作数
-                if (succ_op->second && operands_equal(succ_op->second, op->output)) {
+                if (succ_op->second && lir_operand_equal(succ_op->second, op->output)) {
                     succ_op->second = lir_reset_operand(op->first, LIR_FLAG_SECOND);
                 }
 
@@ -313,7 +243,6 @@ static void schedule_mov_elimination(schedule_ctx_t *ctx) {
                 // 更新依赖关系：mov 的前驱直接连接到 mov 的后继
                 // 由于 mov 被消除，需要更新 succ_node 的 dep_count
                 // 注意：这里不需要显式更新，因为 NOP 节点会被移除
-
                 changed = true;
             }
         }
@@ -323,10 +252,14 @@ static void schedule_mov_elimination(schedule_ctx_t *ctx) {
     slice_t *new_nodes = slice_new();
     for (int i = 0; i < ctx->nodes->count; i++) {
         schedule_node_t *node = ctx->nodes->take[i];
-        if (node->op->code != LIR_OPCODE_NOP || node->op->output != NULL) {
-            slice_push(new_nodes, node);
+        if (node->op->code == LIR_OPCODE_NOP && node->op->output == NULL) {
+            continue;
         }
+        slice_push(new_nodes, node);
     }
+
+    free(ctx->nodes->take);
+    free(ctx->nodes);
     ctx->nodes = new_nodes;
 }
 
@@ -358,7 +291,7 @@ static bool is_float_operand(lir_operand_t *operand) {
  * 使用 LIR_OPERAND_ARGS 存储多个参数 [mul_second, addend/minuend]
  * lower 阶段会将 args 转换为 var，从而让寄存器分配能够分配寄存器
  */
-static void schedule_fma_recognition(schedule_ctx_t *ctx) {
+static void schedule_fma_recognition(closure_t *c, schedule_ctx_t *ctx) {
     if (BUILD_ARCH != ARCH_ARM64) {
         return; // FMA 模式识别仅在 ARM64 架构启用
     }
@@ -431,17 +364,17 @@ static void schedule_fma_recognition(schedule_ctx_t *ctx) {
 
             if (succ_op->code == LIR_OPCODE_ADD) {
                 // ADD: 检查哪个操作数是 MUL 的输出
-                if (operands_equal(succ_op->first, mul_output)) {
+                if (lir_operand_equal(succ_op->first, mul_output)) {
                     other_operand = succ_op->second; // ADD(mul_result, addend)
                     is_valid_pattern = true;
-                } else if (operands_equal(succ_op->second, mul_output)) {
+                } else if (lir_operand_equal(succ_op->second, mul_output)) {
                     other_operand = succ_op->first; // ADD(addend, mul_result)
                     is_valid_pattern = true;
                 }
             } else if (succ_op->code == LIR_OPCODE_SUB) {
                 // SUB: 只有 SUB(minuend, mul_result) 形式才有效
                 // result = minuend - mul_result = minuend - (first * second)
-                if (operands_equal(succ_op->second, mul_output)) {
+                if (lir_operand_equal(succ_op->second, mul_output)) {
                     other_operand = succ_op->first; // minuend
                     is_valid_pattern = true;
                 }
@@ -920,11 +853,8 @@ static void schedule_block_elimination(closure_t *c, basic_block_t *block, slice
     // 收集整个 block 的所有非固定指令节点
     for (int i = 0; i < all_ops->count; i++) {
         lir_op_t *op = all_ops->take[i];
-        // 只对非固定指令构建 DAG 节点
-        if (!schedule_is_fixed(op)) {
-            schedule_node_t *node = schedule_node_new(op, NULL, i);
-            slice_push(ctx.nodes, node);
-        }
+        schedule_node_t *node = schedule_node_new(op, NULL, i);
+        slice_push(ctx.nodes, node);
     }
 
     if (ctx.nodes->count <= 1) {
@@ -935,10 +865,10 @@ static void schedule_block_elimination(closure_t *c, basic_block_t *block, slice
     schedule_build_deps(c, &ctx);
 
     // MOV 消除优化（基于整个 block 的 DAG，检查 live_out）
-    schedule_mov_elimination(&ctx);
+    schedule_mov_elimination(c, &ctx);
 
     // FMA 模式识别优化（MUL+ADD/SUB -> MADD/MSUB/FMADD/FMSUB）
-    schedule_fma_recognition(&ctx);
+    schedule_fma_recognition(c, &ctx);
 }
 
 /**
@@ -947,7 +877,7 @@ static void schedule_block_elimination(closure_t *c, basic_block_t *block, slice
  * 2. 然后采用分段调度策略：固定指令作为屏障，只在屏障之间的 segment 内进行调度
  */
 static void schedule_block(closure_t *c, basic_block_t *block) {
-    if (!block || !block->operations || linked_count(block->operations) <= 1) {
+    if (linked_count(block->operations) <= 1) {
         return;
     }
 
@@ -1018,10 +948,6 @@ static void schedule_block(closure_t *c, basic_block_t *block) {
  * 对闭包中的所有基本块进行指令调度
  */
 void schedule(closure_t *c) {
-    if (!c || !c->blocks) {
-        return;
-    }
-
     for (int i = 0; i < c->blocks->count; i++) {
         basic_block_t *block = c->blocks->take[i];
         schedule_block(c, block);

@@ -161,8 +161,8 @@ extern reg_t *zmm14;
 extern reg_t *zmm15;
 
 #define AMD64_ALLOC_INT_REG_COUNT 14;
-#define AMD64_ALLOC_FLOAT_REG_COUNT 16;
-#define AMD64_ALLOC_REG_COUNT 14+16;
+#define AMD64_ALLOC_FLOAT_REG_COUNT 15;
+#define AMD64_ALLOC_REG_COUNT 14+15;
 #define AMD64_STACK_ALIGN_SIZE 16
 
 void amd64_reg_init();

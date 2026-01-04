@@ -450,7 +450,7 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         }
     }
 
-    slice_t *use_regs = slice_new(); // reg_t
+    slice_t *use_vars = slice_new(); // lir_var_t* - track temp vars instead of regs
 
     // second pass: register 参数处理
     for (int i = 0; i < args->count; ++i) {
@@ -465,28 +465,29 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
             // 直接存储在通用寄存器中
             if (arg_type.kind == TYPE_STRUCT && !(arg_pos & 1)) {
                 // 结构体存储在寄存器中
-                lir_operand_t *lo_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, TYPE_UINT64));
+                reg_t *lo_hint_reg = reg_select(reg_index, TYPE_UINT64);
                 type_t lo_type = type_kind_new(TYPE_UINT64);
-                // 结构体如果超过 8byte 则需要两个连续的寄存器，默认已经分配了连续寄存器， reg+1, 现在先处理小于 8byte 的部分
-                // 结构体中可能存在多个成员共用一个 8byte 寄存器，所以这里统一使用 UINT64 进行 8byte 的整体移动。一旦超过 8byte 则进行下一个 8byte 的整体移动
+                // 创建带hint的临时变量
+                lir_operand_t *lo_temp_var = lower_temp_var_with_hint(c, result, lo_type, lo_hint_reg);
                 lir_operand_t *src_operand = indirect_addr_operand(c->module, lo_type, arg_operand, 0);
-                linked_push(result, lir_op_move(lo_reg_operand, src_operand));
-                slice_push(use_regs, lo_reg_operand->value);
+                linked_push(result, lir_op_call_arg_move(lo_temp_var, src_operand));
+                slice_push(use_vars, lo_temp_var->value);
 
                 if (size > 8) {
                     assert(size <= 16);
-                    lir_operand_t *hi_reg_operand = operand_new(LIR_OPERAND_REG,
-                                                                reg_select(reg_index + 1, TYPE_UINT64));
+                    reg_t *hi_hint_reg = reg_select(reg_index + 1, TYPE_UINT64);
                     type_t hi_type = type_kind_new(TYPE_UINT64);
+                    lir_operand_t *hi_temp_var = lower_temp_var_with_hint(c, result, hi_type, hi_hint_reg);
                     src_operand = indirect_addr_operand(c->module, hi_type, arg_operand, QWORD);
-                    linked_push(result, lir_op_move(hi_reg_operand, src_operand));
-                    slice_push(use_regs, hi_reg_operand->value);
+                    linked_push(result, lir_op_call_arg_move(hi_temp_var, src_operand));
+                    slice_push(use_vars, hi_temp_var->value);
                 }
             } else {
-                // 进行合适大小选择
-                lir_operand_t *lo_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, arg_type.kind));
-                linked_push(result, lir_op_move(lo_reg_operand, arg_operand));
-                slice_push(use_regs, lo_reg_operand->value);
+                // 创建带hint的临时变量
+                reg_t *hint_reg = reg_select(reg_index, arg_type.kind);
+                lir_operand_t *temp_var = lower_temp_var_with_hint(c, result, arg_type, hint_reg);
+                linked_push(result, lir_op_call_arg_move(temp_var, arg_operand));
+                slice_push(use_vars, temp_var->value);
             }
         } else if (arg_pos < 32) {
             // struct 通过指针传递时，分配的寄存器总是 < 16 的通用寄存器
@@ -505,26 +506,38 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
 
                 int64_t struct_offset = 0;
                 for (int j = 0; j < n; ++j) {
-                    lir_operand_t *dst_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index + j, ftype_kind));
+                    reg_t *hint_reg = reg_select(reg_index + j, ftype_kind);
+                    lir_operand_t *temp_var = lower_temp_var_with_hint(c, result, type_kind_new(ftype_kind), hint_reg);
                     lir_operand_t *src_operand = indirect_addr_operand(c->module, type_kind_new(ftype_kind),
                                                                        arg_operand, struct_offset);
 
-                    linked_push(result, lir_op_move(dst_operand, src_operand));
-                    slice_push(use_regs, dst_operand->value);
+                    linked_push(result, lir_op_call_arg_move(temp_var, src_operand));
+                    slice_push(use_vars, temp_var->value);
 
                     struct_offset += fsize;
                 }
             } else {
-                lir_operand_t *dst_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, arg_type.kind));
-                linked_push(result, lir_op_move(dst_operand, arg_operand));
-                slice_push(use_regs, dst_operand->value);
+                reg_t *hint_reg = reg_select(reg_index, arg_type.kind);
+                lir_operand_t *temp_var = lower_temp_var_with_hint(c, result, arg_type, hint_reg);
+                linked_push(result, lir_op_call_arg_move(temp_var, arg_operand));
+                slice_push(use_vars, temp_var->value);
             }
         }
     }
 
     // 重新生成 op->second, 用于寄存器分配记录
-    op->second = lir_reset_operand(operand_new(LIR_OPERAND_REGS, use_regs), LIR_FLAG_SECOND);
+    op->second = lir_reset_operand(operand_new(LIR_OPERAND_VARS, use_vars), LIR_FLAG_SECOND);
     set_operand_flag(op->second);
+
+    // 处理 call first operand (函数指针) 的 must_hint
+    // 当 first 是 VAR 时，需要为其分配一个不参与 args_abi 的固定寄存器，避免与参数冲突
+    if (op->first && op->first->assert_type == LIR_OPERAND_VAR) {
+        lir_var_t *first_var = op->first->value;
+        type_t first_type = first_var->type;
+        lir_operand_t *first_temp_var = lower_temp_var_with_hint(c, result, first_type, x17);
+        linked_push(result, lir_op_call_arg_move(first_temp_var, op->first));
+        op->first = lir_reset_operand(first_temp_var, LIR_FLAG_FIRST);
+    }
 
     // 基于 return type 的不同类型生成不同的 call
     if (!call_result) {
@@ -532,28 +545,29 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         return result;
     }
 
-    // 如果函数的返回值是一个结构体，并且超过了 16byte, caller 需要为该返回值申请足够的 stack 空间，并将 stack 地址放到 x8 寄存器中
+    // 如果函数的返回值是一个结构体，并且超过了 16byte, 需要将 stack 地址放到 x8 寄存器中
     if (args_pos[0] == 1) {
         assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
         assert(is_stack_ref_big_type(call_result_type));
 
         lir_operand_t *result_reg_operand = operand_new(LIR_OPERAND_REG, x8);
-
-        // linear call 的时候没有为 result 申请空间，此处进行空间申请, 为 call 申请了空间，并将空间地址放在 x8 寄存器, callee 会使用该寄存器
-        linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
+        linked_push(result, lir_stack_alloc(c, call_result_type, call_result)); // 为返回值分配占空间
         linked_push(result, lir_op_move(result_reg_operand, call_result));
+
+        // 使用 mus hint 机制处理 x8
+        lir_operand_t *x8_temp_var = lower_temp_var_with_hint(c, result, type_kind_new(TYPE_ANYPTR), x8);
+        linked_push(result, lir_op_call_arg_move(x8_temp_var, call_result));
+        slice_push(use_vars, x8_temp_var->value);
+
+        op->second = lir_reset_operand(operand_new(LIR_OPERAND_VARS, use_vars), LIR_FLAG_SECOND);
+        set_operand_flag(op->second);
 
         // callee 已经将数据写入到了 call_result(x8寄存器对应的栈空间中)，此时不需要显式的处理 call_result,
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, NULL, op->line, op->column));
-        return result;
+        return result; // 大返回值处理已经返回
     }
 
-    // 由于结构体小于等于 16byte, 所以可以通过寄存器传递，此时栈中没有返回值的空间，所以需要进行空间申请
-    if (is_stack_ref_big_type(call_result_type)) {
-        assert(call_result->assert_type == LIR_OPERAND_VAR);
-        linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
-    }
-
+    // 返回值时结构体但可以通过寄存器返回，此时依旧需要在 call 之后进行空间分配
 
     // struct 通过指针传递时不需要考虑 hfa 优化。下面才需要考虑 hfa 优化。
     uint64_t call_result_size = type_sizeof(call_result_type);
@@ -590,8 +604,14 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         lir_operand_t *new_output = lir_reset_operand(operand_new(LIR_OPERAND_REGS, output_regs), LIR_FLAG_OUTPUT);
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, new_output, op->line, op->column));
 
-        // 将返回值 mov 到 call_result 中
+        // 由于结构体小于等于 16byte, 所以可以通过寄存器传递，此时栈中没有返回值的空间，所以需要进行空间申请
+        // 放在 CALL 之后生成 LEA 指令，避免与 CALL 参数寄存器冲突
+        if (is_stack_ref_big_type(call_result_type)) {
+            assert(call_result->assert_type == LIR_OPERAND_VAR);
+            linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
+        }
 
+        // 将返回值 mov 到 call_result 中
         if (args_pos[0] < 16) {
             // 通过通用寄存器传递, x0, x1
             lir_operand_t *lo_src_reg = operand_new(LIR_OPERAND_REG, x0);

@@ -430,8 +430,8 @@ void debug_basic_block(basic_block_t *block) {
     while (current->value != NULL) {
         lir_op_t *op = current->value;
         printf("%d", op->id);
-        if (op->is_resolve) {
-            printf("\t\t%s!\t", lir_opcode_to_string[op->code]);
+        if (op->resolve_char) {
+            printf("\t\t%s%c\t", lir_opcode_to_string[op->code], op->resolve_char);
         } else {
             printf("\t\t%s\t", lir_opcode_to_string[op->code]);
         }

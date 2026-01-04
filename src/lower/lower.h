@@ -54,23 +54,38 @@ static inline void lower_imm_symbol(closure_t *c, lir_operand_t *imm_operand, li
         local_var_operand = table_get(c->local_imm_table, key);
         if (local_var_operand == NULL) {
             local_var_operand = temp_var_operand(c->module, type_kind_new(imm->kind));
-            lir_operand_t *symbol_ptr = temp_var_operand(c->module, type_kind_new(TYPE_ANYPTR));
+            // add const flag
+            lir_var_t *var = local_var_operand->value; // def
+            var->flag |= FLAG(LIR_FLAG_CONST);
+            var->imm_value.f64_value = imm->f64_value;
+            var->remat_ops = linked_new();
+
+            linked_push(symbol_operations, lir_op_nop_def(local_var_operand));
 
             if (BUILD_ARCH == ARCH_AMD64) {
-                linked_push(symbol_operations, lir_op_move(local_var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var)));
+                linked_push(var->remat_ops, lir_op_move(local_var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var)));
             } else {
-                linked_push(symbol_operations, lir_op_lea(symbol_ptr, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var)));
-                lir_operand_t *src = indirect_addr_operand(c->module, type_kind_new(imm->kind), symbol_ptr, 0);
-                linked_push(symbol_operations, lir_op_move(local_var_operand, src));
+                // remat 模板使用固定寄存器
+                reg_t *fixed_reg = (BUILD_ARCH == ARCH_ARM64) ? x16 : T6;
+                lir_operand_t *reg_operand = lir_reg_operand(fixed_reg->index, TYPE_ANYPTR);
+                linked_push(var->remat_ops, lir_op_lea(reg_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var)));
+                lir_operand_t *indirect_src = indirect_addr_operand(c->module, type_kind_new(imm->kind), lir_reg_operand(fixed_reg->index, TYPE_ANYPTR), 0);
+                linked_push(var->remat_ops, lir_op_move(local_var_operand, indirect_src)); // copy 到 var 里面看起来不是这么多合理。
             }
-
-
             table_set(c->local_imm_table, key, local_var_operand);
         }
     }
 
     // imm replace to local var
     lir_operand_t *temp_operand = lir_reset_operand(local_var_operand, imm_operand->pos);
+
+    // use
+    if (is_float(imm->kind)) {
+        lir_var_t *var = temp_operand->value;
+        var->flag |= FLAG(LIR_FLAG_CONST);
+        var->imm_value.f64_value = imm->f64_value;
+    }
+
     imm_operand->assert_type = temp_operand->assert_type;
     imm_operand->value = temp_operand->value;
 }

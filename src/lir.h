@@ -359,6 +359,7 @@ static inline lir_var_t *lir_var_new(module_t *m, char *ident) {
     var->ident = ident;
     var->old = ident;
     var->flag = 0;
+    var->must_hint = NULL;
 
     symbol_t *s = symbol_table_get(ident);
     assertf(s, "notfound symbol=%s", ident);
@@ -526,6 +527,13 @@ static inline lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_var->old = var->old;
         new_var->type = var->type;
         new_var->flag = 0; // 即使是同一个 var 在不同的位置承担的 flag 也是不同的
+        if (var->flag & FLAG(LIR_FLAG_CONST)) {
+            new_var->flag |= FLAG(LIR_FLAG_CONST);
+        }
+
+        new_var->imm_value = var->imm_value;
+        new_var->remat_ops = var->remat_ops; // 复制 remat_ops
+        new_var->must_hint = var->must_hint; // 复制 must_hint
         new_operand->value = new_var;
         return new_operand;
     }
@@ -738,6 +746,16 @@ static inline lir_op_t *lir_op_trunc(lir_operand_t *dst, lir_operand_t *src) {
 
 static inline lir_op_t *lir_op_move(lir_operand_t *dst, lir_operand_t *src) {
     return lir_op_new(LIR_OPCODE_MOVE, src, NULL, dst);
+}
+
+/**
+ * Create a move for call arguments with resolve_char='~' marker
+ * Used for call arg preparation movs that need special ID encoding
+ */
+static inline lir_op_t *lir_op_call_arg_move(lir_operand_t *dst, lir_operand_t *src) {
+    lir_op_t *op = lir_op_new(LIR_OPCODE_MOVE, src, NULL, dst);
+    op->resolve_char = '~';
+    return op;
 }
 
 static inline lir_op_t *lir_op_lea(lir_operand_t *dst, lir_operand_t *src) {
@@ -967,6 +985,33 @@ static inline lir_operand_t *lower_temp_var_operand(closure_t *c, linked_t *list
 }
 
 /**
+ * Create a temporary variable with a must_hint for call arguments
+ * @param c closure context
+ * @param list linked list to add stack alloc op if needed
+ * @param type variable type
+ * @param hint_reg expected fixed register
+ * @return temporary variable operand with must_hint set
+ */
+static inline lir_operand_t *lower_temp_var_with_hint(closure_t *c, linked_t *list, type_t type, reg_t *hint_reg) {
+    assert(type.kind > 0);
+    assert(hint_reg != NULL);
+    string unique_ident = var_unique_ident(c->module, TEMP_IDENT);
+
+    // 符合类型直接按照 TYPE_ANYPTR 进行处理
+    if (!is_scala_type(type)) {
+        type = type_kind_new(TYPE_ANYPTR);
+    }
+    symbol_table_set_var(unique_ident, type, c->module);
+
+    lir_var_t *lir_var = lir_var_new(c->module, unique_ident);
+    lir_var->must_hint = hint_reg; // Set the register hint
+    lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var);
+
+
+    return target;
+}
+
+/**
  * @param m
  * @param operand
  * @param offset
@@ -1137,7 +1182,26 @@ static inline bool lir_op_call(lir_op_t *op) {
     return op->code == LIR_OPCODE_CALL || op->code == LIR_OPCODE_RT_CALL;
 }
 
+/**
+ * Check if two registers refer to the same physical register.
+ * For ARM64: x0/w0 are the same physical register (integer), s0/d0/v0 are the same (float).
+ * But w0 (int, index=0) and s0 (float, index=0) are DIFFERENT physical registers.
+ */
+static inline bool reg_equals(reg_t *reg_a, reg_t *reg_b) {
+    if (reg_a->index != reg_b->index) {
+        return false;
+    }
+    // Check if both are float or both are int (same register bank)
+    bool a_is_float = (reg_a->flag & FLAG(LIR_FLAG_ALLOC_FLOAT)) != 0;
+    bool b_is_float = (reg_b->flag & FLAG(LIR_FLAG_ALLOC_FLOAT)) != 0;
+    return a_is_float == b_is_float;
+}
+
 static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
+    if (a == NULL || b == NULL) {
+        return false;
+    }
+
     if (a->assert_type != b->assert_type) {
         return false;
     }
@@ -1145,13 +1209,26 @@ static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
     if (a->assert_type == LIR_OPERAND_REG) {
         reg_t *reg_a = a->value;
         reg_t *reg_b = b->value;
-        return reg_a->index == reg_b->index;
+        return reg_equals(reg_a, reg_b);
     }
 
     if (a->assert_type == LIR_OPERAND_STACK) {
         lir_stack_t *stack_a = a->value;
         lir_stack_t *stack_b = b->value;
         return stack_a->slot == stack_b->slot;
+    }
+
+    if (a->assert_type == LIR_OPERAND_VAR) {
+        lir_var_t *var1 = a->value;
+        lir_var_t *var2 = b->value;
+        return strcmp(var1->ident, var2->ident) == 0;
+    }
+
+
+    if (a->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+        lir_indirect_addr_t *addr1 = a->value;
+        lir_indirect_addr_t *addr2 = b->value;
+        return lir_operand_equal(addr1->base, addr2->base) && addr1->offset == addr2->offset;
     }
 
     return false;
@@ -1202,11 +1279,7 @@ static inline bool lir_op_ternary(lir_op_t *op) {
 
 
 static inline bool lir_op_mov_hint_like(lir_op_t *op) {
-    if (BUILD_ARCH == ARCH_AMD64) {
-        return op->code == LIR_OPCODE_MOVE;
-    }
-
-    // arm64 or riscv64 的 add/sub 指令对 first 和 output 允许使用不同的机要起
+    // arm64 or riscv64 的 add/sub 指令对 first 和 output 允许使用不同的寄存器
     return op->code == LIR_OPCODE_MOVE ||
            op->code == LIR_OPCODE_NOT ||
            op->code == LIR_OPCODE_NEG ||
@@ -1225,6 +1298,39 @@ static inline bool lir_op_scc(lir_op_t *op) {
            op->code == LIR_OPCODE_USLE ||
            op->code == LIR_OPCODE_USGT ||
            op->code == LIR_OPCODE_USGE;
+}
+
+/**
+ * Check if an opcode can participate in move elimination optimization.
+ * These are opcodes where the output can potentially be coalesced with a subsequent move.
+ */
+static inline bool lir_can_mov_eliminable(lir_opcode_t code) {
+    return code == LIR_OPCODE_MOVE ||
+           code == LIR_OPCODE_SUB ||
+           code == LIR_OPCODE_ADD ||
+           code == LIR_OPCODE_MUL ||
+           code == LIR_OPCODE_UDIV ||
+           code == LIR_OPCODE_SDIV ||
+           code == LIR_OPCODE_UREM ||
+           code == LIR_OPCODE_SREM ||
+           code == LIR_OPCODE_NEG ||
+           code == LIR_OPCODE_SSHR ||
+           code == LIR_OPCODE_USHR ||
+           code == LIR_OPCODE_USHL ||
+           code == LIR_OPCODE_AND ||
+           code == LIR_OPCODE_OR ||
+           code == LIR_OPCODE_XOR ||
+           code == LIR_OPCODE_NOT ||
+           code == LIR_OPCODE_SLT ||
+           code == LIR_OPCODE_SLE ||
+           code == LIR_OPCODE_SGT ||
+           code == LIR_OPCODE_SGE ||
+           code == LIR_OPCODE_SEE ||
+           code == LIR_OPCODE_SNE ||
+           code == LIR_OPCODE_USLT ||
+           code == LIR_OPCODE_USLE ||
+           code == LIR_OPCODE_USGT ||
+           code == LIR_OPCODE_USGE;
 }
 
 

@@ -1,7 +1,7 @@
 #include "riscv64.h"
-#include "utils/type.h"
-#include "utils/slice.h"
 #include "src/register/register.h"
+#include "utils/slice.h"
+#include "utils/type.h"
 #include <stdio.h>
 
 // General-purpose registers (x0-x31)
@@ -18,12 +18,12 @@ reg_t *r_x24w, *r_x25w, *r_x26w, *r_x27w, *r_x28w, *r_x29w, *r_x30w, *r_x31w;
 
 // Special registers (aliases for general-purpose registers or dedicated)
 reg_t *r_zero; // Hardwired zero (alias for x0)
-reg_t *r_ra;   // Return address (alias for x1)
-reg_t *r_sp;   // Stack pointer (alias for x2)
-reg_t *r_gp;   // Global pointer (alias for x3)
-reg_t *r_tp;   // Thread pointer (alias for x4)
-reg_t *r_fp;   // Frame pointer (alias for x8/s0)
-reg_t *r_pc;   // Program counter (not a GPR, but essential)
+reg_t *r_ra; // Return address (alias for x1)
+reg_t *r_sp; // Stack pointer (alias for x2)
+reg_t *r_gp; // Global pointer (alias for x3)
+reg_t *r_tp; // Thread pointer (alias for x4)
+reg_t *r_fp; // Frame pointer (alias for x8/s0)
+reg_t *r_pc; // Program counter (not a GPR, but essential)
 
 // Floating-point registers (f0-f31 for double-precision, also used for single-precision)
 reg_t *r_f0, *r_f1, *r_f2, *r_f3, *r_f4, *r_f5, *r_f6, *r_f7;
@@ -40,19 +40,25 @@ reg_t *r_f24s, *r_f25s, *r_f26s, *r_f27s, *r_f28s, *r_f29s, *r_f30s, *r_f31s;
 void riscv64_reg_init() {
     // General-purpose registers initialization
     // ABI Name | Register | Description | Saver | Allocatable ID (0 if not allocatable or special)
-    r_x0 = reg_new("zero", 0, 0, QWORD, 0); r_zero = r_x0; // zero: Hard-wired zero
-    r_x1 = reg_new("ra", 1, 0, QWORD, 0); r_ra = r_x1;   // ra: Return address (Caller)
-    r_x2 = reg_new("sp", 2, 0, QWORD, 0); r_sp = r_x2;   // sp: Stack pointer (Callee)
-    r_x3 = reg_new("gp", 3, 0, QWORD, 0); r_gp = r_x3;   // gp: Global pointer
-    r_x4 = reg_new("tp", 4, 0, QWORD, 0); r_tp = r_x4;   // tp: Thread pointer
+    r_x0 = reg_new("zero", 0, 0, QWORD, 0);
+    r_zero = r_x0; // zero: Hard-wired zero
+    r_x1 = reg_new("ra", 1, 0, QWORD, 0);
+    r_ra = r_x1; // ra: Return address (Caller)
+    r_x2 = reg_new("sp", 2, 0, QWORD, 0);
+    r_sp = r_x2; // sp: Stack pointer (Callee)
+    r_x3 = reg_new("gp", 3, 0, QWORD, 0);
+    r_gp = r_x3; // gp: Global pointer
+    r_x4 = reg_new("tp", 4, 0, QWORD, 0);
+    r_tp = r_x4; // tp: Thread pointer
 
-    r_x5 = reg_new("t0", 5, LIR_FLAG_ALLOC_INT, QWORD, 1);  // t0: Temporary (Caller)
-    r_x6 = reg_new("t1", 6, LIR_FLAG_ALLOC_INT, QWORD, 2);  // t1: Temporary (Caller)
-    r_x7 = reg_new("t2", 7, LIR_FLAG_ALLOC_INT, QWORD, 3);  // t2: Temporary (Caller)
+    r_x5 = reg_new("t0", 5, LIR_FLAG_ALLOC_INT, QWORD, 1); // t0: Temporary (Caller)
+    r_x6 = reg_new("t1", 6, LIR_FLAG_ALLOC_INT, QWORD, 2); // t1: Temporary (Caller)
+    r_x7 = reg_new("t2", 7, LIR_FLAG_ALLOC_INT, QWORD, 3); // t2: Temporary (Caller)
 
-    r_x8 = reg_new("s0", 8, 0, QWORD, 0); r_fp = r_x8;   // s0/fp: Saved register/frame pointer (Callee)
+    r_x8 = reg_new("s0", 8, 0, QWORD, 0);
+    r_fp = r_x8; // s0/fp: Saved register/frame pointer (Callee)
 
-    r_x9 = reg_new("s1", 9, LIR_FLAG_ALLOC_INT, QWORD, 4);  // s1: Saved register (Callee)
+    r_x9 = reg_new("s1", 9, LIR_FLAG_ALLOC_INT, QWORD, 4); // s1: Saved register (Callee)
 
     r_x10 = reg_new("a0", 10, LIR_FLAG_ALLOC_INT, QWORD, 5); // a0: Function argument/return value (Caller)
     r_x11 = reg_new("a1", 11, LIR_FLAG_ALLOC_INT, QWORD, 6); // a1: Function argument/return value (Caller)
@@ -76,7 +82,7 @@ void riscv64_reg_init() {
 
     r_x28 = reg_new("t3", 28, LIR_FLAG_ALLOC_INT, QWORD, 23); // t3: Temporary (Caller)
     r_x29 = reg_new("t4", 29, LIR_FLAG_ALLOC_INT, QWORD, 24); // t4: Temporary (Caller)
-    r_x30 = reg_new("t5", 30, LIR_FLAG_ALLOC_INT, QWORD, 25); // t5: Temporary (Caller)
+    r_x30 = reg_new("t5", 30, LIR_FLAG_ALLOC_INT, QWORD, 0); // t5: Temporary (Caller)
     r_x31 = reg_new("t6", 31, LIR_FLAG_ALLOC_INT, QWORD, 0); // t6: Temporary (Caller)
 
     // 32-bit general-purpose registers initialization
@@ -120,17 +126,17 @@ void riscv64_reg_init() {
     // ABI Name | Register | Description | Saver | Allocatable ID (offset by RISCV64_ALLOC_INT_REG_COUNT)
     int f_offset = RISCV64_ALLOC_INT_REG_COUNT;
 
-    r_f0  = reg_new("f0",  0,  LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 1);  // ft0: FP temporary (Caller)
-    r_f1  = reg_new("f1",  1,  LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 2);  // ft1: FP temporary (Caller)
-    r_f2  = reg_new("f2",  2,  LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 3);  // ft2: FP temporary (Caller)
-    r_f3  = reg_new("f3",  3,  LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 4);  // ft3: FP temporary (Caller)
-    r_f4  = reg_new("f4",  4,  LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 5);  // ft4: FP temporary (Caller)
-    r_f5  = reg_new("f5",  5,  LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 6);  // ft5: FP temporary (Caller)
-    r_f6  = reg_new("f6",  6,  LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 7);  // ft6: FP temporary (Caller)
-    r_f7  = reg_new("f7",  7,  LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 8);  // ft7: FP temporary (Caller)
+    r_f0 = reg_new("f0", 0, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 1); // ft0: FP temporary (Caller)
+    r_f1 = reg_new("f1", 1, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 2); // ft1: FP temporary (Caller)
+    r_f2 = reg_new("f2", 2, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 3); // ft2: FP temporary (Caller)
+    r_f3 = reg_new("f3", 3, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 4); // ft3: FP temporary (Caller)
+    r_f4 = reg_new("f4", 4, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 5); // ft4: FP temporary (Caller)
+    r_f5 = reg_new("f5", 5, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 6); // ft5: FP temporary (Caller)
+    r_f6 = reg_new("f6", 6, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 7); // ft6: FP temporary (Caller)
+    r_f7 = reg_new("f7", 7, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 8); // ft7: FP temporary (Caller)
 
-    r_f8  = reg_new("f8",  8,  LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 9);  // fs0: FP saved register (Callee)
-    r_f9  = reg_new("f9",  9,  LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 10); // fs1: FP saved register (Callee)
+    r_f8 = reg_new("f8", 8, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 9); // fs0: FP saved register (Callee)
+    r_f9 = reg_new("f9", 9, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 10); // fs1: FP saved register (Callee)
 
     r_f10 = reg_new("f10", 10, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 11); // fa0: FP argument/return value (Caller)
     r_f11 = reg_new("f11", 11, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 12); // fa1: FP argument/return value (Caller)
@@ -158,16 +164,16 @@ void riscv64_reg_init() {
     r_f31 = reg_new("f31", 31, LIR_FLAG_ALLOC_FLOAT, QWORD, 0); // ft11: FP temporary (Caller)
 
     // 32-bit floating-point registers initialization
-    r_f0s  = reg_new("f0s",  0,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
-    r_f1s  = reg_new("f1s",  1,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
-    r_f2s  = reg_new("f2s",  2,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
-    r_f3s  = reg_new("f3s",  3,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
-    r_f4s  = reg_new("f4s",  4,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
-    r_f5s  = reg_new("f5s",  5,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
-    r_f6s  = reg_new("f6s",  6,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
-    r_f7s  = reg_new("f7s",  7,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
-    r_f8s  = reg_new("f8s",  8,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
-    r_f9s  = reg_new("f9s",  9,  LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f0s = reg_new("f0s", 0, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f1s = reg_new("f1s", 1, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f2s = reg_new("f2s", 2, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f3s = reg_new("f3s", 3, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f4s = reg_new("f4s", 4, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f5s = reg_new("f5s", 5, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f6s = reg_new("f6s", 6, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f7s = reg_new("f7s", 7, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f8s = reg_new("f8s", 8, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
+    r_f9s = reg_new("f9s", 9, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
     r_f10s = reg_new("f10s", 10, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
     r_f11s = reg_new("f11s", 11, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
     r_f12s = reg_new("f12s", 12, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);

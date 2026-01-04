@@ -472,8 +472,23 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
         }
     }
 
-    // 记录使用的寄存器列表,用于寄存器分配
-    slice_t *use_regs = slice_new();
+    // 记录使用的临时变量列表,用于寄存器分配
+    slice_t *use_vars = slice_new();
+
+    // 提前为大结构体返回值分配栈空间 (在所有 MOVE ~ 之前)
+    // 大型结构体通过指针处理时 args_pos[0].main == 1
+    if (call_result && args_pos[0].main == 1) {
+        assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
+        assert(is_stack_ref_big_type(call_result_type));
+
+        // linear call 的时候没有为 result 申请空间，此处进行空间申请
+        linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
+
+        // 使用 must_hint 机制将 A0 作为并行移动指令处理，与其他调用参数一致
+        lir_operand_t *a0_temp_var = lower_temp_var_with_hint(c, result, type_kind_new(TYPE_ANYPTR), A0);
+        linked_push(result, lir_op_call_arg_move(a0_temp_var, call_result));
+        slice_push(use_vars, a0_temp_var->value);
+    }
 
     // 处理寄存器参数(特殊结构体参数可能会使用两个寄存器)
     for (int i = 0; i < args->count; ++i) {
@@ -501,18 +516,20 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
 
             assert(main_kind > 0);
             int64_t reg_index = A0->index + (arg_pos.main >> 1);
-            lir_operand_t *lo_dst_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, main_kind));
-            linked_push(result, lir_op_move(lo_dst_operand, lo_src_operand));
-            slice_push(use_regs, lo_dst_operand->value);
+            reg_t *hint_reg = reg_select(reg_index, main_kind);
+            lir_operand_t *lo_temp_var = lower_temp_var_with_hint(c, result, type_kind_new(main_kind), hint_reg);
+            linked_push(result, lir_op_call_arg_move(lo_temp_var, lo_src_operand));
+            slice_push(use_vars, lo_temp_var->value);
         } else if (arg_pos.main < 32) { // 超过 32 则通过栈进行传递
             if (arg_type.kind == TYPE_STRUCT && !(arg_pos.main & 1)) {
                 lo_src_operand = indirect_addr_operand(c->module, type_kind_new(main_kind), arg_operand, 0);
             }
             assert(main_kind > 0);
             int64_t reg_index = FA0->index + ((arg_pos.main - 16) >> 1);
-            lir_operand_t *lo_dst_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, main_kind));
-            linked_push(result, lir_op_move(lo_dst_operand, lo_src_operand));
-            slice_push(use_regs, lo_dst_operand->value);
+            reg_t *hint_reg = reg_select(reg_index, main_kind);
+            lir_operand_t *lo_temp_var = lower_temp_var_with_hint(c, result, type_kind_new(main_kind), hint_reg);
+            linked_push(result, lir_op_call_arg_move(lo_temp_var, lo_src_operand));
+            slice_push(use_vars, lo_temp_var->value);
         }
 
         // attach 部分处理
@@ -523,9 +540,10 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
                 }
 
                 int64_t reg_index = A0->index + (arg_pos.attach >> 1);
-                lir_operand_t *hi_dst_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, attach_kind));
-                linked_push(result, lir_op_move(hi_dst_operand, hi_src_operand));
-                slice_push(use_regs, hi_dst_operand->value);
+                reg_t *hint_reg = reg_select(reg_index, attach_kind);
+                lir_operand_t *hi_temp_var = lower_temp_var_with_hint(c, result, type_kind_new(attach_kind), hint_reg);
+                linked_push(result, lir_op_call_arg_move(hi_temp_var, hi_src_operand));
+                slice_push(use_vars, hi_temp_var->value);
             } else if (arg_pos.attach < 32) { // attach 可能通过栈传递，所以需要明确判断
                 assert(arg_pos.attach < 32 && arg_pos.attach >= 16);
                 if (arg_type.kind == TYPE_STRUCT && !(arg_pos.attach & 1)) {
@@ -533,16 +551,27 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
                 }
 
                 int64_t reg_index = FA0->index + ((arg_pos.attach - 16) >> 1);
-                lir_operand_t *hi_dst_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, attach_kind));
-                linked_push(result, lir_op_move(hi_dst_operand, hi_src_operand));
-                slice_push(use_regs, hi_dst_operand->value);
+                reg_t *hint_reg = reg_select(reg_index, attach_kind);
+                lir_operand_t *hi_temp_var = lower_temp_var_with_hint(c, result, type_kind_new(attach_kind), hint_reg);
+                linked_push(result, lir_op_call_arg_move(hi_temp_var, hi_src_operand));
+                slice_push(use_vars, hi_temp_var->value);
             }
         }
     }
 
     // 记录使用的寄存器
-    op->second = lir_reset_operand(operand_new(LIR_OPERAND_REGS, use_regs), LIR_FLAG_SECOND);
+    op->second = lir_reset_operand(operand_new(LIR_OPERAND_VARS, use_vars), LIR_FLAG_SECOND);
     set_operand_flag(op->second);
+
+    // 处理 call first operand (函数指针) 的 must_hint
+    // 当 first 是 VAR 时，需要为其分配一个不参与 args_abi 的固定寄存器，避免与参数冲突
+    if (op->first && op->first->assert_type == LIR_OPERAND_VAR) {
+        lir_var_t *first_var = op->first->value;
+        type_t first_type = first_var->type;
+        lir_operand_t *first_temp_var = lower_temp_var_with_hint(c, result, first_type, T5);
+        linked_push(result, lir_op_call_arg_move(first_temp_var, op->first));
+        op->first = lir_reset_operand(first_temp_var, LIR_FLAG_FIRST);
+    }
 
     // 处理返回值
     if (!call_result) {
@@ -551,25 +580,16 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
     }
 
     // 大型结构体通过指针处理时 == 1
+    // (stack 空间和 A0 的 MOVE ~ 已在寄存器参数处理之前完成)
     if (args_pos[0].main == 1) {
-        assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
-        assert(is_stack_ref_big_type(call_result_type));
-
-        lir_operand_t *result_reg_operand = operand_new(LIR_OPERAND_REG, A0);
-
-        // linear call 的时候没有为 result 申请空间，此处进行空间申请, 为 call 申请了空间，并将空间地址放在 x8 寄存器, callee 会使用该寄存器
-        linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
-        linked_push(result, lir_op_move(result_reg_operand, call_result));
+        // 重新生成 op->second, 包含 A0 临时变量
+        op->second = lir_reset_operand(operand_new(LIR_OPERAND_VARS, use_vars), LIR_FLAG_SECOND);
+        set_operand_flag(op->second);
 
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, NULL, op->line, op->column));
         return result;
     }
 
-    // 结构体分配栈空间
-    if (is_stack_ref_big_type(call_result_type)) {
-        assert(call_result->assert_type == LIR_OPERAND_VAR);
-        linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
-    }
 
     uint8_t call_result_size = type_sizeof(call_result_type);
     if (call_result_type.kind == TYPE_STRUCT && call_result_size <= 16) {
@@ -612,6 +632,12 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
 
         lir_operand_t *new_output = lir_reset_operand(operand_new(LIR_OPERAND_REGS, output_regs), LIR_FLAG_OUTPUT);
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, new_output, op->line, op->column));
+
+        // 结构体分配栈空间，放在 CALL 之后生成 LEA 指令，避免与 CALL 参数寄存器冲突
+        if (is_stack_ref_big_type(call_result_type)) {
+            assert(call_result->assert_type == LIR_OPERAND_VAR);
+            linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
+        }
 
         // 进行 mov
         lir_operand_t *lo_dst = indirect_addr_operand(c->module, type_kind_new(main_kind), call_result, 0);

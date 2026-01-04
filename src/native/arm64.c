@@ -527,7 +527,7 @@ static slice_t *arm64_native_mov(closure_t *c, lir_op_t *op) {
         if (is_float(imm->kind)) {
             slice_push(operations, ARM64_INST(R_FMOV, result, source));
         } else {
-            assert(is_integer(imm->kind) || imm->kind == TYPE_BOOL);
+            assert(is_integer(imm->kind) || imm->kind == TYPE_ANYPTR || imm->kind == TYPE_BOOL);
             int64_t value = imm->int_value;
             arm64_mov_imm(op, operations, result, value);
         }

@@ -671,7 +671,6 @@ n_string_t *rt_string_new(n_anyptr_t raw_string) {
     }
 
     char *str = (char *) raw_string;
-
     return string_new(str, strlen(str));
 }
 

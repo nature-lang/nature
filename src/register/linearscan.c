@@ -81,6 +81,96 @@ static void linear_prehandle(closure_t *c) {
 }
 
 
+/**
+ * Reorder non-resolve instructions (like LEA) that appear between MOVE ~ instructions 
+ * before R_CALL to be placed before the first MOVE ~ in the sequence.
+ * 
+ * Example transformation:
+ * Before:
+ *   MOVE ~  REG[a] -> REG[x0]
+ *   LEA     SYMBOL[foo] -> REG[x2]
+ *   MOVE ~  I_ADDR[REG[x2]+0] -> REG[x1]
+ *   R_CALL  ...
+ * 
+ * After:
+ *   LEA     SYMBOL[foo] -> REG[x2]
+ *   MOVE ~  REG[a] -> REG[x0]
+ *   MOVE ~  I_ADDR[REG[x2]+0] -> REG[x1]
+ *   R_CALL  ...
+ */
+static void reorder_resolve_ops(closure_t *c) {
+    for (int i = 0; i < c->blocks->count; ++i) {
+        basic_block_t *block = c->blocks->take[i];
+        linked_t *new_ops = linked_new();
+        linked_node *current = linked_first(block->operations);
+
+        while (current->value != NULL) {
+            lir_op_t *op = current->value;
+
+            // Check if we're at the start of a MOVE ~ sequence
+            if (op->code == LIR_OPCODE_MOVE && op->resolve_char == '~') {
+                // Collect all operations up to and including the call
+                slice_t *resolve_moves = slice_new(); // MOVE ~ ops
+                slice_t *non_resolve_ops = slice_new(); // Other ops (like LEA)
+                linked_node *call_node = NULL;
+
+                // Scan forward to find R_CALL and collect all ops
+                linked_node *scan = current;
+                while (scan->value != NULL) {
+                    lir_op_t *scan_op = scan->value;
+
+                    if (lir_op_call(scan_op)) {
+                        // Found the call - stop scanning
+                        call_node = scan;
+                        break;
+                    }
+
+                    if (lir_can_mov_eliminable(scan_op->code) && scan_op->resolve_char == '~') {
+                        slice_push(resolve_moves, scan_op);
+                    } else {
+                        // Non-resolve op (like LEA) that needs to be moved before resolve_moves
+                        slice_push(non_resolve_ops, scan_op);
+                    }
+
+                    scan = scan->succ;
+                }
+
+                assert(call_node);
+                // First push all non-resolve ops (like LEA)
+                for (int j = 0; j < non_resolve_ops->count; ++j) {
+                    linked_push(new_ops, non_resolve_ops->take[j]);
+                }
+
+                // Then push all resolve moves
+                for (int j = 0; j < resolve_moves->count; ++j) {
+                    linked_push(new_ops, resolve_moves->take[j]);
+                }
+
+                // Then push the call
+                linked_push(new_ops, call_node->value);
+
+                // Move current past the call
+                current = call_node->succ;
+
+                free(resolve_moves->take);
+                free(resolve_moves);
+                free(non_resolve_ops->take);
+                free(non_resolve_ops);
+                continue;
+            }
+
+            // Normal case: just push the op and move to next
+            linked_push(new_ops, op);
+            current = current->succ;
+        }
+
+        linked_free(block->operations);
+        block->operations = new_ops;
+        lir_set_quick_op(block);
+    }
+}
+
+
 void mark_number(closure_t *c) {
     int next_id = 0;
     for (int i = 0; i < c->blocks->count; ++i) {
@@ -93,7 +183,7 @@ void mark_number(closure_t *c) {
             lir_op_t *op = current->value;
 
             // check have stack operand
-            if (op->code == LIR_OPCODE_CALL || op->code == LIR_OPCODE_RT_CALL) {
+            if (lir_op_call(op)) {
                 c->exists_call = true;
             }
 
@@ -106,6 +196,28 @@ void mark_number(closure_t *c) {
             // mark
             if (op->code == LIR_OPCODE_PHI) {
                 op->id = label_op->id;
+                current = current->succ;
+                continue;
+            }
+
+            // call args 标记为 '~', 将其编号为 call_op_id - 1
+            // 这样所有 call args 与 call break regs 处于同一个 id 点
+            if (op->resolve_char == '~') {
+                op->id = next_id + 1;
+
+                if (current->succ && lir_op_call(current->succ->value)) {
+                    next_id += 2;
+                }
+
+                // resolve_char 的下一个 op 必须是 mov 或者 call
+                if (current->succ) {
+                    lir_op_t *succ = current->succ->value;
+                    assert(lir_op_call(succ) || lir_can_mov_eliminable(succ->code));
+                    if (!lir_op_call(succ)) {
+                        assert(succ->resolve_char == '~');
+                    }
+                }
+
                 current = current->succ;
                 continue;
             }
@@ -146,6 +258,8 @@ void mark_number(closure_t *c) {
 void reg_alloc(closure_t *c) {
     slice_t *origin_blocks = interval_block_order(c);
 
+    reorder_resolve_ops(c);
+
     mark_number(c);
 
     debug_block_lir(c, "mark_number");
@@ -163,6 +277,10 @@ void reg_alloc(closure_t *c) {
     resolve_data_flow(c);
 
     replace_virtual_register(c);
+
+    debug_block_lir(c, "replace_reg");
+
+    handle_parallel_moves(c);
 
     linear_posthandle(c, origin_blocks);
 }
