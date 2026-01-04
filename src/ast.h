@@ -449,12 +449,22 @@ typedef struct {
     ast_expr_t *expr;
 } ast_return_stmt_t;
 
+// Selective import item: {sqrt, pow, Pi as pi}
+typedef struct {
+    char *ident;  // symbol name to import
+    char *alias;  // optional alias (NULL if not aliased)
+} ast_import_select_item_t;
+
 // import "module_path" module_name alias
 typedef struct {
     // file or package one of the two
     char *file; // import 'xxx' or
     slice_t *ast_package; // a.b.c.d package 字符串数组
     char *as; // import "foo/bar" as xxx, import 别名，没有别名则使用 bar 作为名称
+    
+    // Selective import support: import math.{sqrt, pow, Pi as pi}
+    bool is_selective;       // true if using {item1, item2} syntax
+    slice_t *select_items;   // slice of ast_import_select_item_t*, NULL if not selective
 
     // 通过上面的 file 或者 package 解析出的完整 package 路径
     // full_path 对应的 module 会属于某一个 package, 需要记录一下对应的 package conf, 否则单凭一个 full_path 还不足以定位到
@@ -467,6 +477,13 @@ typedef struct {
 
     char *module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident, 如果是 main 则默认添加 main.n
 } ast_import_t;
+
+// Tracks a selective import reference for symbol resolution
+typedef struct {
+    char *module_ident;      // The module the symbol comes from
+    char *original_ident;    // Original symbol name in that module
+    ast_import_t *import;    // Reference to parent import
+} ast_import_select_t;
 
 /**
  * 虽然共用了 ast_struct_property, 但是使用的字段是不同的，

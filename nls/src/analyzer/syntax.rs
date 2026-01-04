@@ -2178,17 +2178,92 @@ impl<'a> Syntax {
             (Some(token.literal.clone()), None)
         } else if token.token_type == TokenType::Ident {
             let mut package = vec![token.literal.clone()];
+            let mut prev_token = token;
             while self.consume(TokenType::Dot) {
+                let dot_token = self.prev().unwrap().clone();
+                
+                // Check for space before dot: prev_token should end right where dot starts
+                if dot_token.start != prev_token.end {
+                    return Err(SyntaxError(
+                        prev_token.end,
+                        dot_token.start,
+                        "spaces are not allowed before '.' in import paths".to_string()
+                    ));
+                }
+                
+                // Check if next is left curly for selective import BEFORE trying to parse ident
+                if self.is(TokenType::LeftCurly) {
+                    // Before breaking, check for space after dot
+                    let curly_token = self.peek();
+                    if curly_token.start != dot_token.end {
+                        return Err(SyntaxError(
+                            dot_token.end,
+                            curly_token.start,
+                            "spaces are not allowed after '.' in import paths".to_string()
+                        ));
+                    }
+                    break;
+                }
+                
                 let ident = self.must(TokenType::Ident)?;
+                
+                // Check for space after dot: ident should start right after dot ends
+                if ident.start != dot_token.end {
+                    return Err(SyntaxError(
+                        dot_token.end,
+                        ident.start,
+                        "spaces are not allowed after '.' in import paths".to_string()
+                    ));
+                }
+                
                 package.push(ident.literal.clone());
                 import_end = ident.end;
+                prev_token = ident.clone();
             }
             (None, Some(package))
         } else {
             return Err(SyntaxError(token.start, token.end, "import token must be string or ident".to_string()));
         };
 
-        let as_name = if self.consume(TokenType::As) {
+        // Check for selective import syntax: .{item1, item2, item3 as alias}
+        // For string literals, we need to consume the dot first: 'file.n'.{...}
+        // For package imports, the dot was already consumed in the loop above
+        let has_selective_dot = if file.is_some() { self.consume(TokenType::Dot) } else { false };
+        let should_parse_selective = if has_selective_dot {
+            self.is(TokenType::LeftCurly)
+        } else {
+            // For package imports, check if current token is LeftCurly
+            self.is(TokenType::LeftCurly)
+        };
+        
+        let (is_selective, select_items) = if should_parse_selective {
+            self.must(TokenType::LeftCurly)?; // consume the {
+            let mut items = Vec::new();
+            
+            loop {
+                let ident_token = self.must(TokenType::Ident)?;
+                let ident = ident_token.literal.clone();
+                let alias = if self.consume(TokenType::As) {
+                    Some(self.must(TokenType::Ident)?.literal.clone())
+                } else {
+                    None
+                };
+                
+                items.push(ImportSelectItem { ident, alias });
+                
+                if !self.consume(TokenType::Comma) {
+                    break;
+                }
+            }
+            
+            self.must(TokenType::RightCurly)?;
+            import_end = self.prev().unwrap().end;
+            (true, Some(items))
+        } else {
+            (false, None)
+        };
+
+        let as_name = if !is_selective && self.consume(TokenType::As) {
             let t = self.safe_advance()?.clone();
 
             if !matches!(t.token_type, TokenType::Ident | TokenType::ImportStar) {
@@ -2203,6 +2278,8 @@ impl<'a> Syntax {
             file,
             ast_package,
             as_name,
+            is_selective,
+            select_items,
             module_type: 0,
             full_path: String::new(),
             package_conf: None,

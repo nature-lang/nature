@@ -823,6 +823,24 @@ impl<'a> Semantic<'a> {
             return Some(symbol_id);
         }
 
+        // Check selective imports: import math.{sqrt, pow, Point}
+        for import in &self.imports {
+            if import.is_selective {
+                if let Some(ref items) = import.select_items {
+                    for item in items {
+                        let local_name = item.alias.as_ref().unwrap_or(&item.ident);
+                        if local_name == ident {
+                            let global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
+                            if let Some(id) = self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id) {
+                                *ident = global_ident;
+                                return Some(id);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // import x as * 产生的全局符号
         for i in &self.imports {
             if i.as_name != "*" {
@@ -1070,6 +1088,25 @@ impl<'a> Semantic<'a> {
 
             // debug!("analyze_ident find, synbol_id {}, new ident {}", id, ident);
             return true;
+        }
+
+        // Check selective imports: import math.{sqrt, pow}
+        for import in &self.imports {
+            if import.is_selective {
+                if let Some(ref items) = import.select_items {
+                    for item in items {
+                        let local_name = item.alias.as_ref().unwrap_or(&item.ident);
+                        if local_name == ident {
+                            let global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
+                            if let Some(id) = self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id) {
+                                *ident = global_ident;
+                                *symbol_id = id;
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         if let Some((id, global_ident)) = self.analyze_as_star_or_builtin(ident) {

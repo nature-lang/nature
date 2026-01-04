@@ -1936,25 +1936,110 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
     parser_advance(m);
     ast_import_t *stmt = NEW(ast_import_t);
     stmt->ast_package = slice_new();
+    stmt->select_items = NULL;  // Initialize
+    stmt->is_selective = false;
 
     token_t *token = parser_advance(m);
     if (token->type == TOKEN_LITERAL_STRING) {
         stmt->file = token->literal;
+        
+        // Check for selective import after string: "file.n".{...}
+        if (parser_consume(m, TOKEN_DOT) && parser_is(m, TOKEN_LEFT_CURLY)) {
+            // Continue to selective import parsing below
+        }
     } else {
         PARSER_ASSERTF(token->type == TOKEN_IDENT, "import token must string");
         slice_push(stmt->ast_package, token->literal);
+        token_t *prev_token = token;
         while (parser_consume(m, TOKEN_DOT)) {
+            // Get the dot token from the previous node in the linked list
+            token_t *dot_token = m->p_cursor.current->prev->value;
+            
+            // Check for space before dot: prev_token should end right before dot starts
+            // Only check if they're on the same line
+            // Note: column is the position AFTER the token, so:
+            // - prev token ends at column: prev_token->column - 1
+            // - dot starts at column: dot_token->column - dot_token->length
+            // - They should be adjacent: dot_start should equal prev_end + 1
+            if (prev_token->line == dot_token->line) {
+                int dot_start_column = dot_token->column - dot_token->length;
+                
+                if (dot_start_column != prev_token->column) {
+                    dump_errorf(m, CT_STAGE_PARSER, dot_token->line, dot_token->column, 
+                                "spaces are not allowed before '.' in import paths");
+                }
+            }
+            
+            // Check if next is left curly for selective import
+            if (parser_is(m, TOKEN_LEFT_CURLY)) {
+                // Before breaking, check for space after dot
+                token_t *curly_token = m->p_cursor.current->value;
+                if (dot_token->line == curly_token->line) {
+                    int curly_start_column = curly_token->column - curly_token->length;
+                    if (curly_start_column != dot_token->column) {
+                        dump_errorf(m, CT_STAGE_PARSER, curly_token->line, curly_token->column,
+                                    "spaces are not allowed after '.' in import paths");
+                    }
+                }
+                break;
+            }
+            
             token = parser_must(m, TOKEN_IDENT);
+            
+            // Check for space after dot: ident should start right after dot ends
+            // Only check if they're on the same line
+            if (dot_token->line == token->line) {
+                int ident_start_column = token->column - token->length;
+                if (ident_start_column != dot_token->column) {
+                    dump_errorf(m, CT_STAGE_PARSER, token->line, token->column,
+                                "spaces are not allowed after '.' in import paths");
+                }
+            }
+            
             slice_push(stmt->ast_package, token->literal);
+            prev_token = token;
         }
     }
 
-    if (parser_consume(m, TOKEN_AS)) {
-        // 可选 as
+    // Check for selective import syntax: .{item1, item2, item3 as alias}
+    if (parser_consume(m, TOKEN_LEFT_CURLY)) {
+        stmt->is_selective = true;
+        stmt->select_items = slice_new();
+        
+        // Parse first item
+        token = parser_must(m, TOKEN_IDENT);
+        ast_import_select_item_t *item = NEW(ast_import_select_item_t);
+        item->ident = token->literal;
+        item->alias = NULL;
+        
+        if (parser_consume(m, TOKEN_AS)) {
+            token = parser_must(m, TOKEN_IDENT);
+            item->alias = token->literal;
+        }
+        slice_push(stmt->select_items, item);
+        
+        // Parse remaining items
+        while (parser_consume(m, TOKEN_COMMA)) {
+            token = parser_must(m, TOKEN_IDENT);
+            item = NEW(ast_import_select_item_t);
+            item->ident = token->literal;
+            item->alias = NULL;
+            
+            if (parser_consume(m, TOKEN_AS)) {
+                token = parser_must(m, TOKEN_IDENT);
+                item->alias = token->literal;
+            }
+            slice_push(stmt->select_items, item);
+        }
+        
+        parser_must(m, TOKEN_RIGHT_CURLY);
+    } else if (parser_consume(m, TOKEN_AS)) {
+        // Existing 'as' logic for non-selective imports
         token = parser_advance(m);
         PARSER_ASSERTF(token->type == TOKEN_IDENT || token->type == TOKEN_IMPORT_STAR, "import as must ident");
         stmt->as = token->literal;
     }
+    
     result->assert_type = AST_STMT_IMPORT;
     result->value = stmt;
 

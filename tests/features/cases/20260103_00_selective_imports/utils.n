@@ -1,0 +1,16 @@
+// Helper module for mixed import testing
+int MAX_SIZE = 100
+int MIN_SIZE = 10
+
+fn format_string(string s):string {
+    return s
+}
+
+fn parse_int(string s):int {
+    return 42
+}
+
+#local
+fn private_util():int {
+    return 1
+}
