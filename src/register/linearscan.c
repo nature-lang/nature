@@ -98,7 +98,7 @@ static void linear_prehandle(closure_t *c) {
  *   MOVE ~  I_ADDR[REG[x2]+0] -> REG[x1]
  *   R_CALL  ...
  */
-static void reorder_resolve_ops(closure_t *c) {
+static void reorder_operations(closure_t *c) {
     for (int i = 0; i < c->blocks->count; ++i) {
         basic_block_t *block = c->blocks->take[i];
         linked_t *new_ops = linked_new();
@@ -108,7 +108,7 @@ static void reorder_resolve_ops(closure_t *c) {
             lir_op_t *op = current->value;
 
             // Check if we're at the start of a MOVE ~ sequence
-            if (op->code == LIR_OPCODE_MOVE && op->resolve_char == '~') {
+            if (op->resolve_char == '~') {
                 // Collect all operations up to and including the call
                 slice_t *resolve_moves = slice_new(); // MOVE ~ ops
                 slice_t *non_resolve_ops = slice_new(); // Other ops (like LEA)
@@ -125,7 +125,7 @@ static void reorder_resolve_ops(closure_t *c) {
                         break;
                     }
 
-                    if (lir_can_mov_eliminable(scan_op->code) && scan_op->resolve_char == '~') {
+                    if (scan_op->resolve_char == '~') {
                         slice_push(resolve_moves, scan_op);
                     } else {
                         // Non-resolve op (like LEA) that needs to be moved before resolve_moves
@@ -258,7 +258,9 @@ void mark_number(closure_t *c) {
 void reg_alloc(closure_t *c) {
     slice_t *origin_blocks = interval_block_order(c);
 
-    reorder_resolve_ops(c);
+    reorder_operations(c);
+
+    debug_block_lir(c, "reorder_operations");
 
     mark_number(c);
 
