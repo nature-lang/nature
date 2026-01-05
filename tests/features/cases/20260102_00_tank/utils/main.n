@@ -1,0 +1,54 @@
+import fmt
+import time
+import mem
+import libc
+
+#linkid abs
+fn abs(i32 x):i32
+
+#linkid fmaxf
+fn fmaxf(f32 x, f32 y):f32
+
+#linkid fminf
+fn fminf(f32 x, f32 y):f32
+
+
+fn logf(string format, ...[any] args) {
+    var msg = fmt.sprintf(format, ...args)
+    var t = time.now()
+    fmt.printf('%v - %v\n', t.ms_timestamp(), msg)
+}
+
+fn random_string(int len):string {
+    var alphanum = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    var alphanum_len = alphanum.len() 
+
+    libc.srand(time.unix() as u32)
+
+    var result = vec_new<u8>(0, len)
+
+    for int i = 0; i < len; i += 1 {
+        result[i] = alphanum[libc.rand() as int % alphanum_len]
+    }
+
+    return result as string
+}
+
+
+fn u32.to_ipv4():string {
+    u8 a = ((*self >> 24) & 0xFF) as u8
+    u8 b = ((*self >> 16) & 0xFF) as u8
+    u8 c = ((*self >> 8) & 0xFF) as u8
+    u8 d = (*self & 0xFF) as u8
+
+    return fmt.sprintf("%d.%d.%d.%d", a, b, c, d)
+}
+
+fn ipv4_to_int(string ipv4):u32 {
+    u32 a = 0
+    u32 b = 0
+    u32 c = 0
+    u32 d = 0
+    fmt.sscanf(ipv4, "%d.%d.%d.%d", &a, &b, &c, &d)
+    return (a << 24) | (b << 16) | (c << 8) | d
+}

@@ -33,3 +33,135 @@ fn main() {
 
 --- output.txt
 nature-test/main.n:1:3: fn main.pi_test missing return
+
+
+=== test_string_join
+--- main.n
+import libc
+import path
+
+string procs_system = 'cgroup.procs'
+
+fn dump(string s) {
+    println(s)
+}
+
+fn test():void {
+    var temp = path.join('abic/dddd', procs_system)
+    dump(temp)
+}
+
+fn main() {
+    test()
+}
+
+--- output.txt
+abic/dddd/cgroup.procs
+
+=== test_tank_float_failed
+--- main.n
+const BASE_PIXEL_UNIT = 10
+const TANK_SIZE = 10 * 3
+
+const DIRECTION_UP = 0
+const DIRECTION_DOWN = 1
+const DIRECTION_LEFT = 2
+const DIRECTION_RIGHT = 3
+
+type direction_t = i32
+
+fn dump(f32 x, f32 y) {
+    println(x, y)
+}
+
+type vector2_t = struct{
+    f32 x
+    f32 y
+}
+
+type tank_t = struct{
+    vector2_t position
+    direction_t direction
+}
+
+
+fn get_direction_vector(direction_t dir):vector2_t {
+    match dir {
+        DIRECTION_UP -> {
+            return vector2_t{x: 0, y: -1}
+        }
+        _ -> {
+            panic('cannot parser direct')
+            return vector2_t{x: -1, y: 1}
+        }
+    }
+}
+
+var player = tank_t{}
+
+fn update_player() {
+    vector2_t dir_vector = get_direction_vector(0)
+    dump(dir_vector.x, dir_vector.y)
+}
+
+fn main() {
+   update_player()
+}
+
+--- output.txt
+0.000000 -1.000000
+
+=== test_tank_failed2
+--- main.n
+const BULLET_SIZE = 10
+
+type vector2_t = struct{
+    f32 x     // Vector x component
+    f32 y     // Vector y component
+}
+
+type color_t = struct{
+    u8 r
+    u8 g
+    u8 b
+    u8 a
+}
+
+var YELLOW = color_t{r: 253, g: 249, b: 0, a: 255}
+
+fn nop() {
+
+}
+
+fn dump(vector2_t center, f32 radius, color_t color) {
+    println(radius)
+}
+
+fn draw_game() {
+    nop()
+
+    // 绘制子弹，增强视觉效果
+    for i32 i = 0; i < 10; i+=1 {
+        var bullet_center = vector2_t{}
+
+        dump(bullet_center, BULLET_SIZE/4.0, YELLOW)
+    }
+
+    nop()
+}
+
+fn main() {
+    draw_game()
+}
+
+--- output.txt
+2.500000
+2.500000
+2.500000
+2.500000
+2.500000
+2.500000
+2.500000
+2.500000
+2.500000
+2.500000

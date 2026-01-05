@@ -5,6 +5,7 @@
 
 static inline void on_dns_resolved_cb(uv_getaddrinfo_t *req, int status, struct addrinfo *res) {
     coroutine_t *co = req->data;
+    DEBUGF("[on_dns_resolved_cb] co: %p, status: %d", co, status);
 
     if (status < 0) {
         rti_co_throw(co, (char *) uv_strerror(status), false);
@@ -41,6 +42,7 @@ static inline void on_dns_resolved_cb(uv_getaddrinfo_t *req, int status, struct 
 }
 
 void uv_async_getaddrinfo_register(uv_getaddrinfo_t *req, n_string_t *host) {
+    DEBUGF("[uv_async_getaddrinfo_register] host is %s, co=%p", (char *) rt_string_ref(host), req->data);
     struct addrinfo hints;
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC; // IPv4 or IPv6
@@ -48,6 +50,7 @@ void uv_async_getaddrinfo_register(uv_getaddrinfo_t *req, n_string_t *host) {
 
     int result = uv_getaddrinfo(&global_loop, req, on_dns_resolved_cb, rt_string_ref(host), NULL, &hints);
     if (result) {
+        DEBUGF("[uv_async_getaddrinfo_register] uv_getaddrinfo failed: %s, co=%p", uv_strerror(result), req->data);
         rti_co_throw(req->data, tlsprintf("resolve %s failed: %s", rt_string_ref(host), uv_strerror(result)), false);
         co_ready(req->data);
         return;
@@ -58,13 +61,13 @@ void rt_uv_dns_lookup(n_string_t *host, n_vec_t *ips) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
+    DEBUGF("[rt_uv_dns_lookup] start, host is %s, co=%p", (char *) rt_string_ref(host), co);
+
     uv_getaddrinfo_t *req = malloc(sizeof(uv_getaddrinfo_t));
     req->data = co;
     co->data = ips;
 
-    global_async_send(uv_async_getaddrinfo_register, req, host, 0);
-
-    co_yield_waiting(co, NULL, NULL);
+    global_waiting_send(uv_async_getaddrinfo_register, req, host, 0);
 
     free(req);
 }

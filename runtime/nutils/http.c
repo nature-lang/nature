@@ -400,11 +400,7 @@ void rt_uv_http_listen(n_http_server_t *server) {
     inner->server = server;
     server->inner = inner;
 
-    global_async_send(uv_async_http_listen, inner, 0, 0);
+    global_waiting_send(uv_async_http_listen, inner, 0, 0);
 
-    DEBUGF("[rt_uv_http_listen] listen success, port=%ld, p_index=%d", server->port, p->index);
-    // ready in on_server_close_cb
-    // TODO 可能 ready 完成了 waiting 还没有调用
-    co_yield_waiting(co, NULL, NULL);
     DEBUGF("[rt_uv_http_listen] listen resume, port=%ld, and return, p_index=%d", server->port, p->index);
 }

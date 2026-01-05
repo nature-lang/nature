@@ -1,15 +1,15 @@
 #ifndef NATURE_SRC_REGISTER_REGISTER_H_
 #define NATURE_SRC_REGISTER_REGISTER_H_
 
-#include "utils/helper.h"
-#include "src/types.h"
-#include "utils/slice.h"
-#include "utils/table.h"
-#include "src/build/config.h"
-#include "utils/type.h"
 #include "arch/amd64.h"
 #include "arch/arm64.h"
 #include "arch/riscv64.h"
+#include "src/build/config.h"
+#include "src/types.h"
+#include "utils/helper.h"
+#include "utils/slice.h"
+#include "utils/table.h"
+#include "utils/type.h"
 
 // -------- reg start -----------
 extern table_t *reg_table; // 根据 index 和 size 定位具体的寄存器
@@ -36,7 +36,11 @@ static inline uint8_t alloc_reg_count() {
     if (BUILD_ARCH == ARCH_AMD64) {
         return AMD64_ALLOC_REG_COUNT;
     } else if (BUILD_ARCH == ARCH_ARM64) {
-        return ARM64_ALLOC_REG_COUNT;
+        if (BUILD_OS == OS_DARWIN) {
+            return DARWIN_ARM64_ALLOC_REG_COUNT;
+        } else {
+            return ARM64_ALLOC_REG_COUNT;
+        }
     } else if (BUILD_ARCH == ARCH_RISCV64) {
         return RISCV64_ALLOC_REG_COUNT;
     }
@@ -48,6 +52,8 @@ static inline uint8_t alloc_reg_count() {
 char *reg_table_key(lir_flag_t alloc_type, uint8_t index, uint8_t size);
 
 reg_t *reg_select(uint8_t index, type_kind kind);
+
+reg_t *reg_select2(uint8_t index, lir_flag_t alloc_type, uint8_t size);
 
 reg_t *reg_find(lir_flag_t alloc_type, uint8_t index, size_t size);
 

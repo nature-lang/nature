@@ -251,7 +251,7 @@ void amd64_reg_init() {
     xmm12 = reg_new("xmm12", 12, LIR_FLAG_ALLOC_FLOAT, OWORD, 26);
     xmm13 = reg_new("xmm13", 13, LIR_FLAG_ALLOC_FLOAT, OWORD, 27);
     xmm14 = reg_new("xmm14", 14, LIR_FLAG_ALLOC_FLOAT, OWORD, 28);
-    xmm15 = reg_new("xmm15", 15, LIR_FLAG_ALLOC_FLOAT, OWORD, 29);
+    xmm15 = reg_new("xmm15", 15, LIR_FLAG_ALLOC_FLOAT, OWORD, 0);
 
     xmm0s32 = reg_new("xmm0s32", 0, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);
     xmm1s32 = reg_new("xmm1s32", 1, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);

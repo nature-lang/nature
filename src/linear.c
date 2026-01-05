@@ -1763,6 +1763,12 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
         // 普通情况参数处理
         ast_expr_t *actual_expr = ct_list_value(call->args, i);
         lir_operand_t *actual_operand = linear_expr(m, *actual_expr, NULL);
+        // call args 必须是 VAR 类型，避免 lower 阶段产生额外的 LEA 指令打断并行移动编号
+        if (actual_operand->assert_type != LIR_OPERAND_VAR) {
+            lir_operand_t *temp = temp_var_operand(m, actual_expr->type);
+            OP_PUSH(lir_op_move(temp, actual_operand));
+            actual_operand = temp;
+        }
         slice_push(args, actual_operand);
     }
 
@@ -3517,7 +3523,7 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_CATCH: {
             ast_catch_t *catch = stmt->value;
             linear_catch_expr(m,
-                              (ast_expr_t){
+                              (ast_expr_t) {
                                       .line = stmt->line,
                                       .column = stmt->column,
                                       .assert_type = AST_CATCH,

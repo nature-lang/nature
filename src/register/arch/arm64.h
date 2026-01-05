@@ -18,8 +18,8 @@ extern reg_t *w24, *w25, *w26, *w27, *w28, *w29, *w30;
 // 特殊寄存器
 extern reg_t *fp;
 extern reg_t *lr;
-extern reg_t *sp;  // 栈指针
-extern reg_t *pc;  // 程序计数器
+extern reg_t *sp; // 栈指针
+extern reg_t *pc; // 程序计数器
 extern reg_t *xzr; // 零寄存器
 extern reg_t *wzr; // 32位零寄存器
 
@@ -41,8 +41,9 @@ extern reg_t *s8, *s9, *s10, *s11, *s12, *s13, *s14, *s15;
 extern reg_t *s16, *s17, *s18, *s19, *s20, *s21, *s22, *s23;
 extern reg_t *s24, *s25, *s26, *s27, *s28, *s29, *s30, *s31;
 
-
 #define ARM64_ALLOC_REG_COUNT 27 + 31;
+#define DARWIN_ARM64_ALLOC_REG_COUNT 26 + 31;
+
 #define ARM64_STACK_ALIGN_SIZE 16
 
 void arm64_reg_init();

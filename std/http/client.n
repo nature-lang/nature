@@ -274,8 +274,6 @@ fn request_t.send():ptr<response_t>! {
     var buf = self.tcp_buf()
     conn.write(buf)
 
-    co.sleep(1000)
-
     // read resp
     var br = new buf.reader<types.connable>(rd = conn)
 

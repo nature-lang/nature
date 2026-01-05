@@ -419,73 +419,69 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
         assert(count != 0);
 
         if (arg_type.kind == TYPE_STRUCT) {
-            // 将 arg 中的数据 mov 到 lo/hi 寄存器中
-            lir_operand_t *lo_reg_operand;
+            lir_operand_t *lo_temp_var;
             type_kind lo_kind;
             if (lo == AMD64_CLASS_INTEGER) {
-                // 查找合适大小的 reg 进行 mov
                 uint8_t reg_index = int_reg_indices[int_reg_index++];
-                lo_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, TYPE_UINT64));
+                reg_t *hint_reg = reg_select(reg_index, TYPE_UINT64);
                 lo_kind = TYPE_UINT64;
+                lo_temp_var = lower_temp_var_with_hint(c, result, type_kind_new(lo_kind), hint_reg);
             } else if (lo == AMD64_CLASS_SSE) {
                 uint8_t reg_index = sse_reg_indices[sse_reg_index++];
-                lo_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, TYPE_FLOAT64));
+                reg_t *hint_reg = reg_select(reg_index, TYPE_FLOAT64);
                 lo_kind = TYPE_FLOAT64;
+                lo_temp_var = lower_temp_var_with_hint(c, result, type_kind_new(lo_kind), hint_reg);
             } else {
                 assert(false);
                 exit(EXIT_FAILURE);
             }
 
-            // arg 是一个地址指向对应的 struct 内存区域， indirect_addr 则是去内存中的值
-            // 这里使用了 uint64 的大小进行移动，所以在分配 struct 空间时，应该总是按照 align uint64 来操作
-            // arg 是第一个内存地址，现在需要读取其 indirect addr
             lir_operand_t *src_operand = indirect_addr_operand(c->module, type_kind_new(lo_kind), arg, 0);
-            linked_push(result, lir_op_move(lo_reg_operand, src_operand));
-            slice_push(use_regs, lo_reg_operand->value);
+            linked_push(result, lir_op_call_arg_move(lo_temp_var, src_operand));
+            slice_push(use_regs, lo_temp_var->value);
 
             if (count == 2) {
-                lir_operand_t *hi_reg_operand;
+                lir_operand_t *hi_temp_var;
                 type_kind hi_kind;
                 if (hi == AMD64_CLASS_INTEGER) {
-                    // 查找合适大小的 reg 进行 mov
                     uint8_t reg_index = int_reg_indices[int_reg_index++];
-                    hi_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, TYPE_UINT64));
+                    reg_t *hint_reg = reg_select(reg_index, TYPE_UINT64);
                     hi_kind = TYPE_UINT64;
+                    hi_temp_var = lower_temp_var_with_hint(c, result, type_kind_new(hi_kind), hint_reg);
                 } else if (hi == AMD64_CLASS_SSE) {
                     uint8_t reg_index = sse_reg_indices[sse_reg_index++];
-                    hi_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, TYPE_FLOAT64));
+                    reg_t *hint_reg = reg_select(reg_index, TYPE_FLOAT64);
                     hi_kind = TYPE_FLOAT64;
+                    hi_temp_var = lower_temp_var_with_hint(c, result, type_kind_new(hi_kind), hint_reg);
                 } else {
                     assert(false);
                     exit(EXIT_FAILURE);
                 }
 
-                // arg 是第一个内存地址，现在需要读取其 indirect addr
                 src_operand = indirect_addr_operand(c->module, type_kind_new(hi_kind), arg, QWORD);
-                linked_push(result, lir_op_move(hi_reg_operand, src_operand));
-                slice_push(use_regs, hi_reg_operand->value);
+                linked_push(result, lir_op_call_arg_move(hi_temp_var, src_operand));
+                slice_push(use_regs, hi_temp_var->value);
             }
         } else {
             assertf(count == 1, "the normal type uses only one register");
-            // 从寄存器中将数据移入到低保空间
-            lir_operand_t *lo_reg_operand;
+            lir_operand_t *lo_temp_var;
             if (lo == AMD64_CLASS_INTEGER) {
-                // 查找合适大小的 reg 进行 mov
                 uint8_t reg_index = int_reg_indices[int_reg_index++];
-                lo_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, arg_type.kind));
+                reg_t *hint_reg = reg_select(reg_index, arg_type.kind);
+                lo_temp_var = lower_temp_var_with_hint(c, result, arg_type, hint_reg);
             } else if (lo == AMD64_CLASS_SSE) {
                 uint8_t reg_index = sse_reg_indices[sse_reg_index++];
-                lo_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, arg_type.kind));
+                reg_t *hint_reg = reg_select(reg_index, arg_type.kind);
+                lo_temp_var = lower_temp_var_with_hint(c, result, arg_type, hint_reg);
             } else {
                 assert(false);
             }
-            linked_push(result, lir_op_move(lo_reg_operand, arg));
-            slice_push(use_regs, lo_reg_operand->value);
+            linked_push(result, lir_op_call_arg_move(lo_temp_var, arg));
+            slice_push(use_regs, lo_temp_var->value);
         }
     }
 
-    // 重新生成 op->second
-    op->second = lir_reset_operand(operand_new(LIR_OPERAND_REGS, use_regs), LIR_FLAG_SECOND);
+    op->second = lir_reset_operand(operand_new(LIR_OPERAND_VARS, use_regs), LIR_FLAG_SECOND);
     set_operand_flag(op->second);
 
     return result;
@@ -498,6 +494,17 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
 
     if (!call_result) {
         linked_concat(result, amd64_lower_args(c, op));
+
+        // 处理 call first operand (函数指针) 的 must_hint
+        // 当 first 是 VAR 时，需要为其分配一个不参与 args_abi 的固定寄存器，避免与参数冲突
+        if (op->first && op->first->assert_type == LIR_OPERAND_VAR) {
+            lir_var_t *first_var = op->first->value;
+            type_t first_type = first_var->type;
+            lir_operand_t *first_temp_var = lower_temp_var_with_hint(c, result, first_type, r11);
+            linked_push(result, lir_op_call_arg_move(first_temp_var, op->first));
+            op->first = lir_reset_operand(first_temp_var, LIR_FLAG_FIRST);
+        }
+
         linked_push(result, op); // call op
 
         return result;
@@ -505,7 +512,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
 
     type_t call_result_type = lir_operand_type(call_result);
 
-    // 进行 call result 的栈空间申请, 用于 callee 存入返回值， 此时已经不会触发 ssa 了，可以放心写入
+    // amd64 中，大型返回值由 caller 申请空间，并将空间指针通过 rdi 寄存器传递给 calle
     if (is_stack_ref_big_type(call_result_type)) {
         assert(call_result->assert_type == LIR_OPERAND_VAR);
 
@@ -531,6 +538,16 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
 
     // -------------------- lower args ------------------------
     linked_concat(result, amd64_lower_args(c, op));
+
+    // 处理 call first operand (函数指针) 的 must_hint
+    // 当 first 是 VAR 时，需要为其分配一个不参与 args_abi 的固定寄存器，避免与参数冲突
+    if (op->first && op->first->assert_type == LIR_OPERAND_VAR) {
+        lir_var_t *first_var = op->first->value;
+        type_t first_type = first_var->type;
+        lir_operand_t *first_temp_var = lower_temp_var_with_hint(c, result, first_type, r11);
+        linked_push(result, lir_op_call_arg_move(first_temp_var, op->first));
+        op->first = lir_reset_operand(first_temp_var, LIR_FLAG_FIRST);
+    }
 
     // 参数通过栈传递, 返回值处理
     if (count == 0) {
