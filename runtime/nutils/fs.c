@@ -1,4 +1,6 @@
 #include "fs.h"
+#include <unistd.h>  // for read()/write() fallback
+#include <errno.h>
 
 static void on_write_cb(uv_fs_t *req) {
     fs_context_t *ctx = CONTAINER_OF(req, fs_context_t, req);
@@ -6,8 +8,21 @@ static void on_write_cb(uv_fs_t *req) {
     assert(co);
 
     if (req->result < 0) {
-        // 文件写入异常，设置错误并返回
-        rti_co_throw(co, (char *) uv_strerror(req->result), false);
+        // vboxsf/NFS/9p 等文件系统不支持 pwritev，fallback 到 pwrite()
+        if (req->result == UV_ENOTSUP) {
+            ssize_t n = pwrite(ctx->fd, ctx->buf.base, ctx->buf.len, ctx->offset);
+            if (n >= 0) {
+                DEBUGF("[on_write_cb] pwritev not supported, fallback to pwrite(), bytes: %zd", n);
+                ctx->data_len = n;
+                co_ready(co);
+                uv_fs_req_cleanup(&ctx->req);
+                return;
+            }
+            rti_co_throw(co, strerror(errno), false);
+        } else {
+            // 文件写入异常，设置错误并返回
+            rti_co_throw(co, (char *) uv_strerror(req->result), false);
+        }
         co_ready(co);
         uv_fs_req_cleanup(&ctx->req);
         return;
@@ -45,8 +60,21 @@ static void on_read_cb(uv_fs_t *req) {
     coroutine_t *co = req->data;
 
     if (req->result < 0) {
-        // 文件读取异常， 设置错误并返回，不需要关闭 fd, fd 由外部控制
-        rti_co_throw(co, (char *) uv_strerror(req->result), false);
+        // vboxsf/NFS/9p 等文件系统不支持 preadv，fallback 到 pread()
+        if (req->result == UV_ENOTSUP) {
+            ssize_t n = pread(ctx->fd, ctx->data, ctx->data_cap, ctx->offset);
+            if (n >= 0) {
+                DEBUGF("[on_read_cb] preadv not supported, fallback to pread(), bytes: %zd", n);
+                ctx->data_len = n;
+                co_ready(co);
+                uv_fs_req_cleanup(&ctx->req);
+                return;
+            }
+            rti_co_throw(co, strerror(errno), false);
+        } else {
+            // 文件读取异常，设置错误并返回，不需要关闭 fd, fd 由外部控制
+            rti_co_throw(co, (char *) uv_strerror(req->result), false);
+        }
         co_ready(co);
         uv_fs_req_cleanup(&ctx->req);
         return;
@@ -130,6 +158,7 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
     ctx->data = (char *) buf->data;
     ctx->buf = uv_buf_init(ctx->data, buf->length);
     ctx->req.data = co;
+    ctx->offset = offset; // 保存 offset 用于 fallback
 
     // 基于 fd offset 进行读取
     global_waiting_send(uv_async_fs_read_at, ctx, (void *) offset, 0);
@@ -146,11 +175,12 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
 }
 
 static void uv_async_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {
-    // 配置写入缓冲区
-    uv_buf_t uv_buf = uv_buf_init((char *) buf->data, buf->length);
+    // 配置写入缓冲区并保存到 ctx 用于 fallback
+    ctx->buf = uv_buf_init((char *) buf->data, buf->length);
+    ctx->offset = offset; // 保存 offset 用于 fallback
 
     // 发起异步写入请求，指定偏移量
-    uv_fs_write(&global_loop, &ctx->req, ctx->fd, &uv_buf, 1, offset, on_write_cb);
+    uv_fs_write(&global_loop, &ctx->req, ctx->fd, &ctx->buf, 1, offset, on_write_cb);
 }
 
 n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t *buf, int offset) {

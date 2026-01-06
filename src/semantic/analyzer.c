@@ -2181,7 +2181,9 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
     m->ast_typedefs = typedef_list;
 
     // 添加 module init 函数
-    if (global_assign_list->count > 0) {
+    // 对于 main 模块，总是创建 .main.init（即使没有全局变量）
+    // 对于其他模块，只有当存在全局变量赋值时才创建
+    if (global_assign_list->count > 0 || m->type == MODULE_TYPE_MAIN) {
         ast_fndef_t *fn_init = ast_fndef_new(m, 0, 0);
         // .module.ident . init 加点避免和用户代码冲突
         fn_init->symbol_name = str_connect(".", ident_with_prefix(m->ident, FN_INIT_NAME));
@@ -2193,13 +2195,13 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         fn_init->is_errable = true;
         m->fn_init = fn_init;
 
-        // 讲 module init 函数添加到全局符号中
+        // 将 module init 函数添加到全局符号中
         symbol_t *s = symbol_table_set(fn_init->symbol_name, SYMBOL_FN, fn_init, false);
         ANALYZER_ASSERTF(s, "fn '%s' redeclared", fn_init->symbol_name);
         slice_push(m->global_symbols, s);
         slice_push(fn_list, fn_init);
 
-        // 添加调用指令(后续 root module 会将这条指令添加到 main body 中)
+        // 添加调用指令(后续会将这条指令插入到 main.main 或 .main.init 中)
         ast_stmt_t *call_stmt = NEW(ast_stmt_t);
         ast_call_t *call = NEW(ast_call_t);
         call->left = (ast_expr_t) {

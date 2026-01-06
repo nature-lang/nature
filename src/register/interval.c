@@ -680,11 +680,14 @@ void interval_build(closure_t *c) {
 
             // add reg hint for move
             if (lir_op_mov_hint_like(op)) {
+                // amd64 中可能存在破坏 ssa 唯一定值的策略，还不确定是否有其他的影响
+                // 72 MOVE 	REG[main.pi_2.s2:xmm4s64] -> REG[main.t_34:xmm6s64]
+                // 74 ADD  	REG[main.t_34:xmm6s64], REG[main.t_9.s0:xmm7s64] -> REG[main.t_34:xmm6s64]
                 interval_t *first_interval = operand_interval(c, op->first);
-                interval_t *def_interval = operand_interval(c, op->output);
-                if (first_interval != NULL && def_interval != NULL) {
-                    if (!def_interval->reg_hint && !def_interval->fixed) {
-                        def_interval->reg_hint = first_interval;
+                interval_t *output_interval = operand_interval(c, op->output);
+                if (first_interval != NULL && output_interval != NULL && first_interval != output_interval) {
+                    if (!output_interval->reg_hint && !output_interval->fixed) {
+                        output_interval->reg_hint = first_interval;
                     }
                 }
             }
