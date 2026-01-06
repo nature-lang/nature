@@ -18,6 +18,7 @@ typedef struct {
     uv_buf_t buf;
     int64_t flags;
     int64_t mode;
+    int64_t offset; // 用于 fallback 时的 pread/pwrite offset
 } fs_context_t;
 
 fs_context_t *rt_uv_fs_open(n_string_t *path, int64_t flags, int64_t mode);

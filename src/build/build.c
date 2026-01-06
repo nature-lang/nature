@@ -957,9 +957,14 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         analyzer(m, m->stmt_list);
     }
 
-    // register all module init to main module body
+    // register all module init to .main.init, then main.main calls .main.init
     assert(main_package->ast_fndefs->count > 0);
 
+    // .main.init 已经在 analyzer.c 中创建
+    ast_fndef_t *main_init_fn = main_package->fn_init;
+    assert(main_init_fn);
+
+    // 查找 main 函数
     ast_fndef_t *main_fndef = NULL;
     SLICE_FOR(main_package->ast_fndefs) {
         ast_fndef_t *f = SLICE_VALUE(main_package->ast_fndefs);
@@ -969,17 +974,35 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     }
     assert(main_fndef);
 
-    slice_t *new_body = slice_new();
+    // 构建新的 .main.init body
+    // 1. 从后往前插入所有其他模块的 call_init_stmt
+    slice_t *init_body = slice_new();
     for (int i = modules->count - 1; i >= 0; --i) {
         module_t *m = modules->take[i];
+        // 跳过 main 模块自己的 call_init_stmt，因为其内容会直接放在 .main.init 中
+        if (m == main_package) {
+            continue;
+        }
         if (m->call_init_stmt) {
-            slice_push(new_body, m->call_init_stmt);
+            slice_push(init_body, m->call_init_stmt);
         }
     }
-    if (new_body) {
-        slice_concat(new_body, main_fndef->body);
-        main_fndef->body = new_body;
+
+    // 2. 添加 .main.init 原有的表达式 (main 模块的全局变量初始化)
+    if (main_init_fn->body) {
+        slice_concat(init_body, main_init_fn->body);
     }
+    main_init_fn->body = init_body;
+
+    // 3. 在 main.main 开头插入 call .main.init (复用 analyzer.c 中创建的 call_init_stmt)
+    assert(main_package->call_init_stmt);
+
+    slice_t *main_body = slice_new();
+    slice_push(main_body, main_package->call_init_stmt);
+    if (main_fndef->body) {
+        slice_concat(main_body, main_fndef->body);
+    }
+    main_fndef->body = main_body;
 
     return modules;
 }
