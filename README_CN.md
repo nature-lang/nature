@@ -140,7 +140,7 @@ Linux Ubuntu 虚拟机（内核版本 6.17.8，aarch64 架构, Mac M4 芯片, 9 
 
 | Language | Version | Mean Time |
 |----------|---------|-----------|
-| Nature | v0.7.1 | ~73.9 ms |
+| Nature | v0.7.1 | ~73 ms |
 | Go | 1.25.5 | ~2178 ms |
 
 **Coroutine: 1 Million Coroutine Time/Memory consumed**

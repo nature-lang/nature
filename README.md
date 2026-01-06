@@ -113,9 +113,9 @@ Linux Ubuntu VM（Kernel version 6.17.8，aarch64, Mac M4, 9 cores, 16G memory�
 
 | Language | Version | QPS (req/sec) | Mean Response Time |
 |----------|---------|---------------|---------------------|
-| Nature | v0.7.1 | ~104,000 | 9.60 ms |
-| Go | 1.25.5 | ~90,000 | 11.02 ms |
-| Node.js | v25.2.0 | ~66,000 | 14.99 ms |
+| Nature | v0.7.1 | ~104,000 | 9 ms |
+| Go | 1.25.5 | ~90,000 | 11 ms |
+| Node.js | v25.2.0 | ~66,000 | 14 ms |
 
 **Call: Fibonacci(45) time consumed**
 
@@ -139,7 +139,7 @@ Linux Ubuntu VM（Kernel version 6.17.8，aarch64, Mac M4, 9 cores, 16G memory�
 
 | Language | Version | Mean Time |
 |----------|---------|-----------|
-| Nature | v0.7.1 | ~73.9 ms |
+| Nature | v0.7.1 | ~73 ms |
 | Go | 1.25.5 | ~2178 ms |
 
 **Coroutine: 1 Million Coroutine Time/Memory consumed**
