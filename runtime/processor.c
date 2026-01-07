@@ -473,6 +473,30 @@ EXIT:
     DEBUGF("[runtime.processor_run] exited, p_index=%d", p->index);
 }
 
+/**
+ * 如果 P 的线程未启动，则启动它
+ */
+static void processor_wake(n_processor_t *p) {
+    if (p->index == 0) {
+        return;  // P0 使用主线程，不需要创建
+    }
+
+    // 检查线程是否已启动
+    if (p->thread_id != 0) {
+        return;
+    }
+
+    // 加锁后 double-check
+    mutex_lock(&p->thread_locker);
+    if (p->thread_id == 0) {
+        if (uv_thread_create(&p->thread_id, processor_run, p) != 0) {
+            assert(false && "pthread_create failed");
+        }
+        DEBUGF("[processor_wake] p_index=%d started, thread_id=%ld", p->index, (uint64_t)p->thread_id);
+    }
+    mutex_unlock(&p->thread_locker);
+}
+
 void rt_coroutine_dispatch(coroutine_t *co) {
     DEBUGF("[runtime.rt_coroutine_dispatch] co=%p, fn=%p, share_processor_count=%d", co, co->fn, cpu_count);
 
@@ -502,6 +526,9 @@ void rt_coroutine_dispatch(coroutine_t *co) {
     assert(select_p);
     DEBUGF("[runtime.rt_coroutine_dispatch] select_p_index=%d will push co=%p", select_p->index,
            co);
+
+    // 按需启动 P 的线程
+    processor_wake(select_p);
 
     rt_linked_fixalloc_push(&select_p->co_list, co);
     rt_linked_fixalloc_push(&select_p->runnable_list, co);
@@ -568,17 +595,8 @@ void sched_init() {
 }
 
 void sched_run() {
-    // index 0 是 main processor, 直接使用当前主线程运行
-    for (int i = 1; i < cpu_count; ++i) {
-        n_processor_t *p = processor_index[i];
-        // 创建一个新的线程用来处理
-        if (uv_thread_create(&p->thread_id, processor_run, p) != 0) {
-            assert(false && "pthread_create failed %s");
-        }
-
-        DEBUGF("[runtime.sched_run] processor run, index=%d, thread_id=%ld", i, (uint64_t) p->thread_id);
-    }
-
+    // 懒惰启动: 只有 P0 使用主线程立即运行
+    // 其他 processor 的线程在有 coroutine 分发时按需创建 (见 processor_wake)
     processor_run(processor_index[0]);
     DEBUGF("[runtime.sched_run] main processor exited");
 }
