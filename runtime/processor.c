@@ -98,7 +98,7 @@ NO_OPTIMIZE void co_preempt_yield() {
  * @param ucontext
  */
 NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *ucontext) {
-    //    TDEBUGF("[thread_handle_sig] unexpect sig %d", sig);
+    DEBUGF("[thread_handle_sig] unexpect sig %d", sig);
 
     ucontext_t *ctx = ucontext;
     n_processor_t *p = processor_get();
@@ -477,24 +477,22 @@ EXIT:
  * 如果 P 的线程未启动，则启动它
  */
 static void processor_wake(n_processor_t *p) {
-    if (p->index == 0) {
-        return;  // P0 使用主线程，不需要创建
+    // 原子 CAS：如果已创建过则直接返回
+    bool expected = false;
+    if (!atomic_compare_exchange_strong(&p->thread_waked, &expected, true)) {
+        return; // 已创建过，直接返回
     }
 
-    // 检查线程是否已启动
-    if (p->thread_id != 0) {
-        return;
-    }
+    // CAS 成功后，立即标记为当前 gc_count
+    // 这样 all_gc_work_finished 可以判断：如果 gc_work_finished == memory->gc_count
+    // 且没有收到 gc_co，说明是本轮 GC 期间唤醒的，应该跳过
+    p->gc_work_finished = memory->gc_count;
 
-    // 加锁后 double-check
-    mutex_lock(&p->thread_locker);
-    if (p->thread_id == 0) {
-        if (uv_thread_create(&p->thread_id, processor_run, p) != 0) {
-            assert(false && "pthread_create failed");
-        }
-        DEBUGF("[processor_wake] p_index=%d started, thread_id=%ld", p->index, (uint64_t)p->thread_id);
+    // 首次创建线程
+    if (uv_thread_create(&p->thread_id, processor_run, p) != 0) {
+        assert(false && "pthread_create failed");
     }
-    mutex_unlock(&p->thread_locker);
+    DEBUGF("[processor_wake] p_index=%d started, thread_id=%ld", p->index, (uint64_t) p->thread_id);
 }
 
 void rt_coroutine_dispatch(coroutine_t *co) {
@@ -586,6 +584,11 @@ void sched_init() {
         rt_linked_fixalloc_init(&p->gc_worklist);
         p->gc_work_finished = memory->gc_count;
         processor_index[p->index] = p;
+
+        // P0 使用主线程，提前标记为已唤醒，避免 processor_wake 错误创建线程
+        if (i == 0) {
+            p->thread_waked = true;
+        }
 
         RT_LIST_PUSH_HEAD(processor_list, p);
     }
@@ -742,6 +745,7 @@ n_processor_t *processor_new(int index) {
     sc_map_init_64v(&p->caller_cache, 100, 0);
     mutex_init(&p->thread_locker, false);
     p->status = P_STATUS_INIT;
+    p->thread_waked = false;
     p->sig.sa_flags = 0;
     p->thread_id = 0;
     p->coroutine = NULL;
@@ -816,6 +820,11 @@ void processor_free(n_processor_t *p) {
  */
 bool processor_all_safe() {
     PROCESSOR_FOR(processor_list) {
+        // 跳过未唤醒的 processor
+        if (!p->thread_waked) {
+            continue;
+        }
+
         if (p->status == P_STATUS_EXIT) {
             continue;
         }
@@ -855,6 +864,12 @@ bool processor_all_wait_safe(int max_count) {
  */
 static bool all_gc_work_finished() {
     PROCESSOR_FOR(processor_list) {
+        // 跳过未唤醒的 processor（使用 thread_waked 避免竞态窗口）
+        // inject_gc_work_coroutine 也使用相同条件，确保一致性
+        if (!p->thread_waked) {
+            continue;
+        }
+
         if (p->gc_work_finished < memory->gc_count) {
             return false;
         }

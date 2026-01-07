@@ -755,6 +755,12 @@ static void gc_work() {
 static void inject_gc_work_coroutine() {
     // 遍历 share processor 插入 gc coroutine
     PROCESSOR_FOR(processor_list) {
+        // 跳过未唤醒的 processor
+        if (!p->thread_waked) {
+            continue;
+        }
+
+        DEBUGF("[inject_gc_work_coroutine] inject gc work, p_index=%d", p->index);
         coroutine_t *gc_co = rt_coroutine_new((void *) gc_work, FLAG(CO_FLAG_RTFN) | FLAG(CO_FLAG_DIRECT), 0, NULL);
 
         rt_linked_fixalloc_push(&p->co_list, gc_co);
@@ -791,7 +797,7 @@ static void scan_pool() {
     }
 
     // handle n string
-    n_processor_t *p = processor_list;
+    n_processor_t *p = processor_index[0];
     n_string_t *value;
     sc_map_foreach_value(&const_str_pool, value) {
         rt_linked_fixalloc_push(&p->gc_worklist, value);
@@ -802,10 +808,10 @@ static void scan_pool() {
  * 除了 coroutine stack 以外的全局变量以及 runtime 中申请的内存
  */
 static void scan_global() {
-    DEBUGF("[runtime_gc.scan_global] start, rt_symdef_count=%ld", rt_symdef_count);
-
-    n_processor_t *p = processor_list;
+    n_processor_t *p = processor_index[0];
     assert(p);
+
+    DEBUGF("[runtime_gc.scan_global] start, rt_symdef_count=%ld, assist_p_index=%d", rt_symdef_count, p->index);
 
     for (int j = 0; j < rt_symdef_count; ++j) {
         symdef_t s = rt_symdef_ptr[j];
@@ -985,7 +991,7 @@ void runtime_gc() {
 
     gc_stage = GC_STAGE_OFF;
     DEBUGF("[runtime_gc] gc stage: GC_OFF, gc_barrier_stop, before=%ldKB, current=%ldKB, cleanup=%ldKB, alloc_total=%ldKB, remove_to_sys=%ldKB, used=%ldKB, next_gc=%ldKB",
-           before / 1024,
-           allocated_bytes / 1024,
-           (before - allocated_bytes) / 1024, allocated_total_bytes / 1024, remove_total_bytes / 1024, (allocated_total_bytes - remove_total_bytes) / 1024, next_gc_bytes / 1024);
+            before / 1024,
+            allocated_bytes / 1024,
+            (before - allocated_bytes) / 1024, allocated_total_bytes / 1024, remove_total_bytes / 1024, (allocated_total_bytes - remove_total_bytes) / 1024, next_gc_bytes / 1024);
 }
