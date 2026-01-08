@@ -189,14 +189,15 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
         op->first = arm64_convert_use_var(c, list, op->first);
     }
 
-    if (op->code == LIR_OPCODE_MUL ||
-        op->code == LIR_OPCODE_UDIV ||
-        op->code == LIR_OPCODE_UREM ||
-        op->code == LIR_OPCODE_SDIV ||
-        op->code == LIR_OPCODE_SREM ||
-        op->code == LIR_OPCODE_XOR ||
-        op->code == LIR_OPCODE_OR ||
-        op->code == LIR_OPCODE_AND) {
+    if ((op->code == LIR_OPCODE_MUL ||
+         op->code == LIR_OPCODE_UDIV ||
+         op->code == LIR_OPCODE_UREM ||
+         op->code == LIR_OPCODE_SDIV ||
+         op->code == LIR_OPCODE_SREM ||
+         op->code == LIR_OPCODE_XOR ||
+         op->code == LIR_OPCODE_OR ||
+         op->code == LIR_OPCODE_AND) &&
+        op->second->assert_type != LIR_OPERAND_VAR) {
         op->second = arm64_convert_use_var(c, list, op->second);
     }
 
