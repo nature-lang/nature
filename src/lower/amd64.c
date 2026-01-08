@@ -36,16 +36,10 @@ static linked_t *amd64_lower_neg(closure_t *c, lir_op_t *op) {
 
     linked_push(list, lir_op_move(op->output, op->first));
 
-    // xor float 需要覆盖满整个 xmm 寄存器(128bit), 所以这里直接用 symbol 最多只能有 f64 = 64bit
-    // 这里用 xmm1 进行一个中转
-    lir_operand_t *xmm_operand = amd64_select_return_reg(op->output);
-    if (kind == TYPE_FLOAT64) {
-        linked_push(list, lir_op_move(xmm_operand, symbol_var_operand(F64_NEG_MASK_IDENT, kind)));
-    } else {
-        linked_push(list, lir_op_move(xmm_operand, symbol_var_operand(F32_NEG_MASK_IDENT, kind)));
-    }
-
-    linked_push(list, lir_op_new(LIR_OPCODE_XOR, op->output, xmm_operand, op->output));
+    // op->second 是 -0.0 立即数，已在 amd64_lower_block 中被 lower_imm 转换为 var
+    // -0.0 的位表示就是符号位掩码 (0x80000000 for f32, 0x8000000000000000 for f64)
+    assert(op->second && op->second->assert_type == LIR_OPERAND_VAR);
+    linked_push(list, lir_op_new(LIR_OPCODE_XOR, op->output, op->second, op->output));
 
     if (old_output) {
         linked_push(list, lir_op_move(old_output, op->output));
@@ -259,10 +253,33 @@ static linked_t *amd64_lower_safepoint(closure_t *c, lir_op_t *op) {
     return list;
 }
 
+/**
+ * 对于 NEG float，添加 -0.0 作为 second 操作数
+ * -0.0 的位表示就是符号位掩码 (0x80000000 for f32, 0x8000000000000000 for f64)
+ * 后续由 lower_imm 转换为 var，用于 XOR 实现取反
+ */
+static void amd64_prepare_neg_float(lir_op_t *op) {
+    if (op->code != LIR_OPCODE_NEG || !is_float(operand_type_kind(op->output))) {
+        return;
+    }
+
+    type_kind kind = operand_type_kind(op->output);
+    lir_imm_t *neg_zero_imm = NEW(lir_imm_t);
+    neg_zero_imm->kind = kind;
+    if (kind == TYPE_FLOAT64) {
+        neg_zero_imm->f64_value = -0.0;
+    } else {
+        neg_zero_imm->f32_value = -0.0f;
+    }
+    op->second = operand_new(LIR_OPERAND_IMM, neg_zero_imm);
+}
+
 static void amd64_lower_block(closure_t *c, basic_block_t *block) {
     linked_t *operations = linked_new();
     LINKED_FOR(block->operations) {
         lir_op_t *op = LINKED_VALUE();
+
+        amd64_prepare_neg_float(op);
 
         linked_t *symbol_operations = linked_new();
         linked_concat(operations, amd64_lower_imm(c, op, symbol_operations));
