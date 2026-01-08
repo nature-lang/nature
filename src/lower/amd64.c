@@ -71,20 +71,42 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op, linked_t *symbol_op
             lower_imm_symbol(c, imm_operand, list, symbol_operations);
 
         } else if (is_qword_int(imm->kind)) {
-            if (op->code != LIR_OPCODE_MOVE || op->output->assert_type != LIR_OPERAND_VAR) {
-                // 大数值必须通过 reg 转化,
-                type_kind kind = operand_type_kind(imm_operand);
-                lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(kind));
+            // mov r64,imm64 转换成 mov rm64,imm32
+            if (imm->int_value > INT32_MAX || imm->int_value < INT32_MIN) {
+                if (op->code != LIR_OPCODE_MOVE || op->output->assert_type != LIR_OPERAND_VAR) {
+                    // 大数值必须通过 reg 转化,
+                    type_kind kind = operand_type_kind(imm_operand);
+                    lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(kind));
 
-                linked_push(list, lir_op_move(temp, imm_operand));
-                temp = lir_reset_operand(temp, imm_operand->pos);
-                imm_operand->assert_type = temp->assert_type;
-                imm_operand->value = temp->value;
+                    linked_push(list, lir_op_move(temp, imm_operand));
+                    temp = lir_reset_operand(temp, imm_operand->pos);
+                    imm_operand->assert_type = temp->assert_type;
+                    imm_operand->value = temp->value;
+                }
             }
         }
     }
 
     return list;
+}
+
+/**
+ * AMD64 对于整数类型的 ADD/SUB/AND/OR/XOR 支持 imm 作为第二操作数
+ * 所以对于这些操作，不需要将 imm 转换为临时变量
+ */
+static bool amd64_ternary_support_imm(lir_op_t *op) {
+    if (op->second->assert_type != LIR_OPERAND_IMM) {
+        return false;
+    }
+    if (!is_integer_or_anyptr(operand_type_kind(op->output))) {
+        return false;
+    }
+    // ADD, SUB, AND, OR, XOR 支持 imm 作为第二操作数
+    return op->code == LIR_OPCODE_ADD ||
+           op->code == LIR_OPCODE_SUB ||
+           op->code == LIR_OPCODE_AND ||
+           op->code == LIR_OPCODE_OR ||
+           op->code == LIR_OPCODE_XOR;
 }
 
 /**
@@ -293,7 +315,8 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             // maybe empty
             linked_node *insert_head = insert_operations->front->succ->succ; // safepoint
 
-            for (linked_node *sym_node = symbol_operations->front; sym_node != symbol_operations->rear; sym_node = sym_node->succ) {
+            for (linked_node *sym_node = symbol_operations->front;
+                 sym_node != symbol_operations->rear; sym_node = sym_node->succ) {
                 lir_op_t *sym_op = sym_node->value;
                 insert_head = linked_insert_after(insert_operations, insert_head, sym_op);
             }
