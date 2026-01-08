@@ -515,6 +515,30 @@ amd64_opcode_inst_t not_rm32 = {"not", "not", 0, {0xF7}, {OPCODE_EXT_SLASH2},
 amd64_opcode_inst_t not_rm64 = {"not", "not", 0, {0xF7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH2},
                                 {{OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}}};
 
+// inc ------------------------------------------------------------------------------------------------------
+amd64_opcode_inst_t inc_rm8 = {"inc", "inc", 0, {0xFE}, {OPCODE_EXT_SLASH0},
+                               {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t inc_rex_rm8 = {"inc", "inc", 0, {0xFE}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH0},
+                                   {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t inc_rm16 = {"inc", "inc", 0x66, {0xFF}, {OPCODE_EXT_SLASH0},
+                                {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t inc_rm32 = {"inc", "inc", 0, {0xFF}, {OPCODE_EXT_SLASH0},
+                                {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t inc_rm64 = {"inc", "inc", 0, {0xFF}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH0},
+                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}};
+
+// dec ------------------------------------------------------------------------------------------------------
+amd64_opcode_inst_t dec_rm8 = {"dec", "dec", 0, {0xFE}, {OPCODE_EXT_SLASH1},
+                               {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t dec_rex_rm8 = {"dec", "dec", 0, {0xFE}, {OPCODE_EXT_REX, OPCODE_EXT_SLASH1},
+                                   {OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t dec_rm16 = {"dec", "dec", 0x66, {0xFF}, {OPCODE_EXT_SLASH1},
+                                {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t dec_rm32 = {"dec", "dec", 0, {0xFF}, {OPCODE_EXT_SLASH1},
+                                {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}};
+amd64_opcode_inst_t dec_rm64 = {"dec", "dec", 0, {0xFF}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASH1},
+                                {OPERAND_TYPE_RM64, ENCODING_TYPE_MODRM_RM}};
+
 // xor ------------------------------------------------------------------------------------------------------
 amd64_opcode_inst_t xor_rm8_imm8 = {"xor", "xor", 0, {0x80}, {OPCODE_EXT_SLASH6, OPCODE_EXT_IMM_BYTE},
                                     {{OPERAND_TYPE_RM8, ENCODING_TYPE_MODRM_RM},
@@ -1070,12 +1094,24 @@ void amd64_opcode_init() {
     opcode_tree_build(&neg_rm32);
     opcode_tree_build(&neg_rm64);
 
-    // 位运算
     opcode_tree_build(&not_rex_rm8);
     opcode_tree_build(&not_rm8);
     opcode_tree_build(&not_rm16);
     opcode_tree_build(&not_rm32);
     opcode_tree_build(&not_rm64);
+
+    opcode_tree_build(&inc_rex_rm8);
+    opcode_tree_build(&inc_rm8);
+    opcode_tree_build(&inc_rm16);
+    opcode_tree_build(&inc_rm32);
+    opcode_tree_build(&inc_rm64);
+
+    opcode_tree_build(&dec_rex_rm8);
+    opcode_tree_build(&dec_rm8);
+    opcode_tree_build(&dec_rm16);
+    opcode_tree_build(&dec_rm32);
+    opcode_tree_build(&dec_rm64);
+
 
     opcode_tree_build(&xor_rex_rm8_imm8);
     opcode_tree_build(&xor_rm8_imm8);
