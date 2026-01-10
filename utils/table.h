@@ -21,7 +21,15 @@ table_t *table_new();
 
 void table_init(table_t *t);
 
-void table_free(table_t *t);
+static inline void table_free(table_t *t) {
+    for (int i = 0; i < t->capacity; i++) {
+        if (t->entries[i].key != NULL) {
+            free(t->entries[i].key);
+        }
+    }
+    free(t->entries);
+    free(t);
+}
 
 bool table_exist(table_t *t, string key);
 

@@ -471,7 +471,7 @@ static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64
                    o->assert_type == LIR_OPERAND_IMM ||
                    o->assert_type == LIR_OPERAND_STACK || o->assert_type == LIR_OPERAND_REG ||
                    o->assert_type == LIR_OPERAND_INDIRECT_ADDR);
-            slice_concat(result, recursion_extract_operands(o, flag));
+            slice_concat_free(result, recursion_extract_operands(o, flag));
         }
         return result;
     }
@@ -499,9 +499,9 @@ static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64
 
 static inline slice_t *extract_all_operands(lir_op_t *op, uint64_t operand_flag) {
     slice_t *result = recursion_extract_operands(op->output, operand_flag);
-    slice_concat(result, recursion_extract_operands(op->first, operand_flag));
-    slice_concat(result, recursion_extract_operands(op->second, operand_flag));
-    slice_concat(result, recursion_extract_operands(op->addend, operand_flag));
+    slice_concat_free(result, recursion_extract_operands(op->first, operand_flag));
+    slice_concat_free(result, recursion_extract_operands(op->second, operand_flag));
+    slice_concat_free(result, recursion_extract_operands(op->addend, operand_flag));
 
     return result;
 }
@@ -1133,6 +1133,7 @@ static inline basic_block_t *lir_new_block(char *name, uint64_t label_index) {
     basic_block->loop.active = false;
     basic_block->loop.header = false;
     basic_block->loop.end = false;
+    basic_block->use_count = NULL; // lazy init by peephole
 
     return basic_block;
 }
@@ -1259,7 +1260,11 @@ static inline bool lir_op_term(lir_op_t *op) {
 }
 
 static inline bool lir_op_fma(lir_op_t *op) {
-    return op->code == LIR_OPCODE_FMADD || op->code == LIR_OPCODE_FMSUB || op->code == LIR_OPCODE_MADD || op->code == LIR_OPCODE_MSUB;
+    return op->code == ARM64_OPCODE_FMADD ||
+           op->code == ARM64_OPCODE_FMSUB ||
+           op->code == ARM64_OPCODE_FNMSUB ||
+           op->code == ARM64_OPCODE_MADD ||
+           op->code == ARM64_OPCODE_MSUB;
 }
 
 static inline bool lir_op_ternary(lir_op_t *op) {
@@ -1371,6 +1376,7 @@ static inline slice_t *extract_op_operands(lir_op_t *op, flag_t operand_flag, fl
         }
     }
 
+    slice_free(temps); // 释放临时 slice
     return results;
 }
 

@@ -22,6 +22,7 @@
 typedef uint64_t flag_t;
 
 typedef enum {
+    ALLOC_KIND_NULL = 0, // 不需要分配寄存器, 例如 label/symbol
     ALLOC_KIND_STACK = 1, // 必须 spill 到栈中, 例如 LEA 的左值
     ALLOC_KIND_MUST = 2, // 必须分配寄存器
     ALLOC_KIND_SHOULD = 3, // 尽量分配寄存器，但不强制
@@ -288,6 +289,7 @@ typedef struct basic_block_t {
     slice_t *use;
     slice_t *def;
     slice_t *live_out;
+    table_t *use_count; // peephole: var->ident -> use count (intptr_t)
     slice_t *ssa_live_in; // ssa 阶段计算的精确 live in
     // 一个变量如果在当前块被使用，或者再当前块的后继块中被使用，则其属于入口活跃
     slice_t *alloc_live_in; // reg alloc interval build 阶段产生临时 live in，未计算循环产生的 live in 所以是不完整的
@@ -390,13 +392,6 @@ typedef enum {
     LIR_OPCODE_SREM, // 有符号 REM
     LIR_OPCODE_NEG, // -取负数
 
-
-    // Fused Multiply-Add/Subtract (ARM64)
-    LIR_OPCODE_MADD, // Rd = Ra + Rn * Rm (integer)
-    LIR_OPCODE_MSUB, // Rd = Ra - Rn * Rm (integer)
-    LIR_OPCODE_FMADD, // Rd = Ra + Rn * Rm (floating-point)
-    LIR_OPCODE_FMSUB, // Rd = Ra - Rn * Rm (floating-point)
-
     // int 类型转换
     LIR_OPCODE_UEXT, // int 无符号扩展 (u8 -> u32, u8 -> u64)
     LIR_OPCODE_SEXT, // int 有符号扩展 (i8 -> i32, i8 -> i64)
@@ -475,6 +470,13 @@ typedef enum {
     LIR_OPCODE_SAFEPOINT,
 
     LIR_OPCODE_NOP, // 空的，不做任何操作的指令，但是将用于 ssa 的完整 use-def
+
+    // Fused Multiply-Add/Subtract (ARM64)
+    ARM64_OPCODE_MADD, // Rd = Ra + Rn * Rm (integer)
+    ARM64_OPCODE_MSUB, // Rd = Ra - Rn * Rm (integer)
+    ARM64_OPCODE_FMADD, // Rd = Ra + Rn * Rm (floating-point)
+    ARM64_OPCODE_FMSUB, // Rd = Ra - Rn * Rm (floating-point)
+    ARM64_OPCODE_FNMSUB, // Rd = Rn * Rm - Ra (floating-point)
 } lir_opcode_t;
 
 typedef struct lir_operand_t lir_operand_t;
@@ -574,6 +576,8 @@ typedef struct closure_t {
     slice_t *asm_build_temps; // 架构相关编译临时
     slice_t *asm_symbols; // asm_global_symbol_t
     table_t *local_imm_table;
+
+    linked_t *temp_ops; // MIR pass 中需要插入到 first_block 开头的指令
     module_t *module;
 
     uint64_t rt_fndef_index;

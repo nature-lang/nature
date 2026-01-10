@@ -667,6 +667,8 @@ static uint32_t asm_f_4r(arm64_asm_inst_t *inst) {
             return FMADD(sz, opr1->reg.index, opr2->reg.index, opr3->reg.index, opr4->reg.index);
         case FMSUB:
             return FMSUB(sz, opr1->reg.index, opr2->reg.index, opr3->reg.index, opr4->reg.index);
+        case FNMSUB:
+            return FNMSUB(sz, opr1->reg.index, opr2->reg.index, opr3->reg.index, opr4->reg.index);
         default:
             assert(false);
             return 0;
@@ -916,6 +918,10 @@ arm64_opr_flags_list arm64_opcode_map[] = {
                                 &(arm64_opr_flags) {FMSUB, {F32, F32, F32, F32}},
                                 &(arm64_opr_flags) {FMSUB, {F64, F64, F64, F64}},
                         }},
+        [R_FNMSUB] = {2, (arm64_opr_flags *[]) {
+                                 &(arm64_opr_flags) {FNMSUB, {F32, F32, F32, F32}},
+                                 &(arm64_opr_flags) {FNMSUB, {F64, F64, F64, F64}},
+                         }},
         [R_NOP] = {1, (arm64_opr_flags *[]) {&(arm64_opr_flags) {NOP}}},
 };
 
@@ -1109,6 +1115,7 @@ static arm64_opcode_handle_fn arm64_opcode_handle_table[] = {
         [MVN] = asm_mvn,
         [FMADD] = asm_f_4r,
         [FMSUB] = asm_f_4r,
+        [FNMSUB] = asm_f_4r,
         [NOP] = asm_nop,
 };
 

@@ -394,13 +394,6 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
             continue;
         }
 
-        // FMA 指令处理 (MADD/MSUB/FMADD/FMSUB)
-        if (op->code == LIR_OPCODE_MADD || op->code == LIR_OPCODE_MSUB ||
-            op->code == LIR_OPCODE_FMADD || op->code == LIR_OPCODE_FMSUB) {
-            linked_concat(operations, arm64_lower_fma(c, op));
-            continue;
-        }
-
         if (lir_op_ternary(op) || op->code == LIR_OPCODE_NOT || op->code == LIR_OPCODE_NEG || lir_op_convert(op)) {
             linked_concat(operations, arm64_lower_ternary(c, op));
             continue;

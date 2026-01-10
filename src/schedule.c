@@ -258,210 +258,99 @@ static void schedule_mov_elimination(closure_t *c, schedule_ctx_t *ctx) {
         slice_push(new_nodes, node);
     }
 
-    free(ctx->nodes->take);
-    free(ctx->nodes);
+    slice_free(ctx->nodes);
     ctx->nodes = new_nodes;
 }
 
 /**
- * 判断操作数类型是否为浮点数
+ * 判断操作是否是浮点操作（基于 output 操作数的类型）
+ * 如果无法获取类型，默认返回 false（整数操作）
  */
-static bool is_float_operand(lir_operand_t *operand) {
-    if (!operand) return false;
-    type_t t = lir_operand_type(operand);
-    return is_float(t.kind);
+static bool schedule_is_float_op(lir_op_t *op) {
+    if (!op->output) {
+        return false;
+    }
+    if (op->output->assert_type == LIR_OPERAND_REG) {
+        reg_t *reg = op->output->value;
+        return reg->flag & FLAG(LIR_FLAG_ALLOC_FLOAT);
+    }
+
+    type_kind kind = operand_type_kind(op->output);
+    return is_float(kind);
 }
-
-/**
- * FMA 模式识别优化
- * 识别 MUL + ADD 或 MUL + SUB 模式并合并为 MADD/MSUB/FMADD/FMSUB
- *
- * Pattern 1: MUL + ADD -> MADD/FMADD
- *   MUL first, second -> mul_result
- *   ADD mul_result, addend -> result  或  ADD addend, mul_result -> result
- *   => MADD/FMADD first, [second, addend] -> result
- *      result = addend + first * second
- *
- * Pattern 2: MUL + SUB -> MSUB/FMSUB  
- *   MUL first, second -> mul_result
- *   SUB minuend, mul_result -> result  (minuend 不是 mul_result)
- *   => MSUB/FMSUB first, [second, minuend] -> result
- *      result = minuend - first * second
- *
- * 使用 LIR_OPERAND_ARGS 存储多个参数 [mul_second, addend/minuend]
- * lower 阶段会将 args 转换为 var，从而让寄存器分配能够分配寄存器
- */
-static void schedule_fma_recognition(closure_t *c, schedule_ctx_t *ctx) {
-    if (BUILD_ARCH != ARCH_ARM64) {
-        return; // FMA 模式识别仅在 ARM64 架构启用
-    }
-
-    bool changed = true;
-    while (changed) {
-        changed = false;
-
-        for (int i = 0; i < ctx->nodes->count; i++) {
-            schedule_node_t *mul_node = ctx->nodes->take[i];
-            lir_op_t *mul_op = mul_node->op;
-
-            // 只处理 MUL 指令
-            if (mul_op->code != LIR_OPCODE_MUL) {
-                continue;
-            }
-
-            // MUL 必须有输出
-            if (!mul_op->output || mul_op->output->assert_type != LIR_OPERAND_VAR) {
-                continue;
-            }
-
-            // MUL 必须只有一个后继
-            if (mul_node->successors->count != 1) {
-                continue;
-            }
-
-            // 获取唯一后继
-            schedule_node_t *succ_node = mul_node->successors->take[0];
-            lir_op_t *succ_op = succ_node->op;
-
-            // 检查后继是否是 ADD 或 SUB
-            if (succ_op->code != LIR_OPCODE_ADD && succ_op->code != LIR_OPCODE_SUB) {
-                continue;
-            }
-
-            // SUB ra, imm -> output 转换为 ADD ra, -imm -> output
-            // 这样可以增加 FMA 命中率，因为 ADD 模式下 mul_result 可在任意位置
-            // 而 SUB 只能在 SUB(minuend, mul_result) 时才能转换为 MSUB
-            if (succ_op->code == LIR_OPCODE_SUB && succ_op->second &&
-                succ_op->second->assert_type == LIR_OPERAND_IMM) {
-                lir_imm_t *imm = succ_op->second->value;
-                // 创建取负后的立即数
-                lir_imm_t *neg_imm = NEW(lir_imm_t);
-                neg_imm->kind = imm->kind;
-                if (imm->kind == TYPE_FLOAT32) {
-                    neg_imm->f32_value = -imm->f32_value;
-                } else if (imm->kind == TYPE_FLOAT64) {
-                    neg_imm->f64_value = -imm->f64_value;
-                } else {
-                    neg_imm->int_value = -imm->int_value;
-                }
-                // 将 SUB 转换为 ADD
-                succ_op->code = LIR_OPCODE_ADD;
-                succ_op->second->value = neg_imm;
-            }
-
-            // 检查 MUL 的 output 是否在 live_out 中
-            lir_var_t *mul_out_var = mul_op->output->value;
-            if (is_in_live_out(ctx->block, mul_out_var)) {
-                continue; // MUL output 在 live_out 中，不能消除
-            }
-
-            // 确定 FMA 操作数
-            lir_operand_t *mul_first = mul_op->first;
-            lir_operand_t *mul_second = mul_op->second;
-            lir_operand_t *mul_output = mul_op->output;
-            lir_operand_t *other_operand = NULL; // addend 或 minuend
-            bool is_valid_pattern = false;
-
-            if (succ_op->code == LIR_OPCODE_ADD) {
-                // ADD: 检查哪个操作数是 MUL 的输出
-                if (lir_operand_equal(succ_op->first, mul_output)) {
-                    other_operand = succ_op->second; // ADD(mul_result, addend)
-                    is_valid_pattern = true;
-                } else if (lir_operand_equal(succ_op->second, mul_output)) {
-                    other_operand = succ_op->first; // ADD(addend, mul_result)
-                    is_valid_pattern = true;
-                }
-            } else if (succ_op->code == LIR_OPCODE_SUB) {
-                // SUB: 只有 SUB(minuend, mul_result) 形式才有效
-                // result = minuend - mul_result = minuend - (first * second)
-                if (lir_operand_equal(succ_op->second, mul_output)) {
-                    other_operand = succ_op->first; // minuend
-                    is_valid_pattern = true;
-                }
-                // 注意: SUB(mul_result, x) 不能转换为 MSUB，因为 MSUB 计算的是 Ra - Rn*Rm
-            }
-
-            if (!is_valid_pattern || !other_operand) {
-                continue;
-            }
-
-            // 确定是浮点还是整数 FMA
-            bool is_float = is_float_operand(mul_first);
-            lir_opcode_t fma_opcode;
-
-            if (succ_op->code == LIR_OPCODE_ADD) {
-                fma_opcode = is_float ? LIR_OPCODE_FMADD : LIR_OPCODE_MADD;
-            } else {
-                fma_opcode = is_float ? LIR_OPCODE_FMSUB : LIR_OPCODE_MSUB;
-            }
-
-            // 修改 succ_op 为 FMA 指令
-            // first: mul_first (Rn), second: mul_second (Rm), addend: other_operand (Ra)
-            succ_op->code = fma_opcode;
-            succ_op->first = lir_reset_operand(mul_first, LIR_FLAG_FIRST);
-            succ_op->second = lir_reset_operand(mul_second, LIR_FLAG_SECOND);
-            succ_op->addend = lir_reset_operand(other_operand, LIR_FLAG_ADDEND);
-            set_operand_flag(succ_op->addend);
-            // output 保持不变
-
-            // 将 MUL 标记为 NOP
-            mul_op->code = LIR_OPCODE_NOP;
-            mul_op->first = NULL;
-            mul_op->second = NULL;
-            mul_op->addend = NULL;
-            mul_op->output = NULL;
-
-            // 更新依赖关系：MUL 的前驱直接连接到 FMA (succ_node)
-            mul_node->successors->count = 0;
-
-            changed = true;
-        }
-    }
-
-    // 移除所有被消除的 NOP 节点
-    slice_t *new_nodes = slice_new();
-    for (int i = 0; i < ctx->nodes->count; i++) {
-        schedule_node_t *node = ctx->nodes->take[i];
-        if (node->op->code != LIR_OPCODE_NOP || node->op->output != NULL) {
-            slice_push(new_nodes, node);
-        }
-    }
-    ctx->nodes = new_nodes;
-}
-
 
 /**
  * 计算指令的执行延迟 (cycles)
  * 用于关键路径分析和调度优先级计算
+ * 延迟值基于 ARM Cortex-A72 Software Optimization Guide
  */
 static int schedule_compute_latency(lir_op_t *op) {
+    bool is_float_operation = schedule_is_float_op(op);
+
     switch (op->code) {
-        // 除法和求余指令延迟最高
+        // 除法和求余指令
         case LIR_OPCODE_SDIV:
         case LIR_OPCODE_UDIV:
         case LIR_OPCODE_SREM:
         case LIR_OPCODE_UREM:
-            return 20; // 除法延迟约 20-60 cycles
+            // 整数除法: 8-20 cycles, 浮点除法: 6-18 cycles
+            return is_float_operation ? 15 : 20;
 
         // 乘法指令
         case LIR_OPCODE_MUL:
-            return 4; // 乘法延迟约 3-5 cycles
+        case ARM64_OPCODE_MADD:
+        case ARM64_OPCODE_MSUB:
+        case ARM64_OPCODE_FMADD:
+        case ARM64_OPCODE_FMSUB:
+        case ARM64_OPCODE_FNMSUB:
+            return 4; // 浮点 FMA
 
-        // 内存读取操作
+        // 加法/减法
+        case LIR_OPCODE_ADD:
+        case LIR_OPCODE_SUB:
+            return is_float_operation ? 3 : 1; // FADD/FSUB: 3, ADD/SUB: 1
+
+        // 取负
+        case LIR_OPCODE_NEG:
+            return is_float_operation ? 3 : 1; // FNEG: 3, NEG: 1
+
+        // 调用指令
         case LIR_OPCODE_CALL:
         case LIR_OPCODE_RT_CALL:
-            return 10; // 调用有较高延迟
+            return 10;
 
-        // 浮点转换
+        // 浮点转换 (SCVTF, UCVTF, FCVTZS, FCVTZU, FCVT)
         case LIR_OPCODE_FTOSI:
         case LIR_OPCODE_FTOUI:
         case LIR_OPCODE_SITOF:
         case LIR_OPCODE_UITOF:
         case LIR_OPCODE_FTRUNC:
         case LIR_OPCODE_FEXT:
-            return 4; // 浮点转换延迟
+            return 3;
 
-        // 默认单周期操作
+        // 位运算和移位 (整数操作，1 cycle)
+        case LIR_OPCODE_AND:
+        case LIR_OPCODE_OR:
+        case LIR_OPCODE_XOR:
+        case LIR_OPCODE_NOT:
+        case LIR_OPCODE_SSHR:
+        case LIR_OPCODE_USHR:
+        case LIR_OPCODE_USHL:
+            return 1;
+
+        // 比较指令
+        case LIR_OPCODE_SLT:
+        case LIR_OPCODE_SLE:
+        case LIR_OPCODE_SGT:
+        case LIR_OPCODE_SGE:
+        case LIR_OPCODE_SEE:
+        case LIR_OPCODE_SNE:
+        case LIR_OPCODE_USLT:
+        case LIR_OPCODE_USLE:
+        case LIR_OPCODE_USGT:
+        case LIR_OPCODE_USGE:
+            return is_float_operation ? 2 : 1; // FCMP: 2, CMP: 1
+
         default:
             break;
     }
@@ -648,6 +537,7 @@ static void schedule_build_deps(closure_t *c, schedule_ctx_t *ctx) {
                 schedule_add_dep(def_node, node);
             }
         }
+        slice_free(uses);
 
         // 2. 更新变量定义表
         slice_t *defs = extract_var_operands(op, FLAG(LIR_FLAG_DEF));
@@ -655,6 +545,7 @@ static void schedule_build_deps(closure_t *c, schedule_ctx_t *ctx) {
             lir_var_t *var = defs->take[j];
             table_set(ctx->var_def_table, var->ident, node);
         }
+        slice_free(defs);
 
         // 3. 寄存器依赖: RAW/WAW/WAR 依赖
         // 3.1 RAW: 当前指令使用的寄存器必须先被定义
@@ -670,6 +561,7 @@ static void schedule_build_deps(closure_t *c, schedule_ctx_t *ctx) {
             // 更新最后使用位置 (用于 WAR)
             table_set(ctx->reg_use_table, key, node);
         }
+        slice_free(reg_uses);
 
         // 3.2 WAW 和 WAR: 当前指令定义的寄存器
         slice_t *reg_defs = extract_op_operands(op, FLAG(LIR_OPERAND_REG), FLAG(LIR_FLAG_DEF), true);
@@ -692,6 +584,7 @@ static void schedule_build_deps(closure_t *c, schedule_ctx_t *ctx) {
             // 更新寄存器定义表
             table_set(ctx->reg_def_table, key, node);
         }
+        slice_free(reg_defs);
 
         // 4. 内存依赖: 保持内存操作的相对顺序
         bool is_mem_op = schedule_is_mem_read(op) || schedule_is_mem_write(op);
@@ -830,46 +723,6 @@ static void schedule_segment(closure_t *c, basic_block_t *block, slice_t *segmen
     }
 }
 
-/**
- * 在整个 block 级别进行 MOV 消除优化
- * 基于整个 block 构建 DAG，检查 live_out 约束
- */
-static void schedule_block_elimination(closure_t *c, basic_block_t *block, slice_t *all_ops) {
-    if (all_ops->count <= 2) {
-        return;
-    }
-
-    // 初始化上下文
-    schedule_ctx_t ctx;
-    ctx.block = block;
-    ctx.nodes = slice_new();
-    ctx.ready = slice_new();
-    ctx.result = slice_new();
-    ctx.var_def_table = table_new();
-    ctx.last_mem_op = table_new();
-    ctx.reg_def_table = table_new();
-    ctx.reg_use_table = table_new();
-
-    // 收集整个 block 的所有非固定指令节点
-    for (int i = 0; i < all_ops->count; i++) {
-        lir_op_t *op = all_ops->take[i];
-        schedule_node_t *node = schedule_node_new(op, NULL, i);
-        slice_push(ctx.nodes, node);
-    }
-
-    if (ctx.nodes->count <= 1) {
-        return;
-    }
-
-    // 构建依赖图
-    schedule_build_deps(c, &ctx);
-
-    // MOV 消除优化（基于整个 block 的 DAG，检查 live_out）
-    schedule_mov_elimination(c, &ctx);
-
-    // FMA 模式识别优化（MUL+ADD/SUB -> MADD/MSUB/FMADD/FMSUB）
-    schedule_fma_recognition(c, &ctx);
-}
 
 /**
  * 对单个基本块进行指令调度
@@ -881,41 +734,14 @@ static void schedule_block(closure_t *c, basic_block_t *block) {
         return;
     }
 
-    // 收集所有指令
-    slice_t *all_ops = slice_new();
-    linked_node *current = linked_first(block->operations);
-    while (current->value) {
-        slice_push(all_ops, current->value);
-        current = current->succ;
-    }
-
-    // 如果指令数太少，不需要调度
-    if (all_ops->count <= 2) {
-        return;
-    }
-
-    // 1. 在整个 block 级别进行 MOV 消除优化
-    schedule_block_elimination(c, block, all_ops);
-
-    // 2. 重新收集指令（MOV 消除后可能有变化，NOP 指令需要过滤）
-    slice_t *filtered_ops = slice_new();
-    for (int i = 0; i < all_ops->count; i++) {
-        lir_op_t *op = all_ops->take[i];
-        // 过滤掉被消除的 NOP 指令
-        if (op->code != LIR_OPCODE_NOP || op->output != NULL) {
-            slice_push(filtered_ops, op);
-        }
-    }
-
-
     // 3. 结果列表
     slice_t *result = slice_new();
     // 当前 segment 中的非固定指令
     slice_t *segment = slice_new();
 
     // 遍历所有指令，按固定指令分段
-    for (int i = 0; i < filtered_ops->count; i++) {
-        lir_op_t *op = filtered_ops->take[i];
+    LINKED_FOR(block->operations) {
+        lir_op_t *op = LINKED_VALUE();
 
         if (schedule_is_fixed(op)) {
             // 遇到固定指令：先调度当前 segment，再添加固定指令
