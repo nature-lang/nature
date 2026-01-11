@@ -549,7 +549,7 @@ static void schedule_build_deps(closure_t *c, schedule_ctx_t *ctx) {
 
         // 3. 寄存器依赖: RAW/WAW/WAR 依赖
         // 3.1 RAW: 当前指令使用的寄存器必须先被定义
-        slice_t *reg_uses = extract_op_operands(op, FLAG(LIR_OPERAND_REG), FLAG(LIR_FLAG_USE), true);
+        slice_t *reg_uses = extract_reg_operands(op, FLAG(LIR_FLAG_USE));
         for (int j = 0; j < reg_uses->count; j++) {
             reg_t *reg = reg_alloc_find(reg_uses->take[j]);
 

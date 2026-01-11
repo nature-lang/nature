@@ -42,6 +42,7 @@ typedef enum {
     LIR_FLAG_USE,
     LIR_FLAG_DEF,
     LIR_FLAG_INDIRECT_ADDR_BASE,
+    LIR_FLAG_INDIRECT_ADDR_INDEX,
     LIR_FLAG_CONST, // var 中存在的是常量
 } lir_flag_t;
 

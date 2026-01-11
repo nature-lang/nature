@@ -1104,7 +1104,6 @@ static void build_compiler(slice_t *modules) {
             ssa(c);
 
             debug_block_lir(c, "ssa");
-
             mark_number(c);
 
             // lir 向 arch 靠拢
@@ -1114,11 +1113,14 @@ static void build_compiler(slice_t *modules) {
             cross_peephole(c);
             debug_block_lir(c, "peephole");
 
+            mark_number(c);
+
             schedule(c);
             debug_block_lir(c, "schedule");
 
             // 线性扫描寄存器分配
             reg_alloc(c);
+            debug_block_lir(c, "reg_alloc");
 
             // 基于 arch 生成汇编
             cross_native(c);

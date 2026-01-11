@@ -73,7 +73,7 @@ static bool peephole_move_elimination_match2(closure_t *c, basic_block_t *block,
 
 /**
  * XXX use_reg, use_var -> def_temp_var
- * mov def_temp_var -> x0
+ * MOV def_temp_var -> x0
  * ---
  * XXX use_reg, use_var -> x0 (use mov id and resolve  char)
  *

@@ -1,6 +1,8 @@
 #include "amd64.h"
 #include "amd64_abi.h"
 #include "lower.h"
+#include "src/lir.h"
+#include "src/types.h"
 
 static lir_operand_t *amd64_convert_first_to_temp(closure_t *c, linked_t *list, lir_operand_t *first) {
     lir_operand_t *temp = temp_var_operand_with_alloc(c->module, lir_operand_type(first));
@@ -139,7 +141,7 @@ static linked_t *amd64_lower_shift(closure_t *c, lir_op_t *op) {
     linked_push(list, lir_op_move(fit_cx_operand, op->second));
 
     type_kind kind = operand_type_kind(op->output);
-    lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(kind));
+    lir_operand_t *temp = temp_var_operand(c->module, type_kind_new(kind));
     linked_push(list, lir_op_move(temp, op->first));
 
     // 这里相当于做了一次基于寄存器的类型转换了
@@ -153,27 +155,67 @@ static linked_t *amd64_lower_shift(closure_t *c, lir_op_t *op) {
 
 static linked_t *amd64_lower_mul(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
+    type_kind output_kind = operand_type_kind(op->output);
 
-    lir_operand_t *ax_operand = lir_reg_operand(rax->index, operand_type_kind(op->output));
-    lir_operand_t *dx_operand = lir_reg_operand(rdx->index, operand_type_kind(op->output));
+    // byte 类型使用单操作数 mul (需要 rax)
+    if (output_kind == TYPE_UINT8 || output_kind == TYPE_INT8) {
+        lir_operand_t *ax_operand = lir_reg_operand(rax->index, output_kind);
 
-    // second cannot imm?
-    if (op->second->assert_type != LIR_OPERAND_VAR) {
-        op->second = amd64_convert_first_to_temp(c, list, op->second);
+        // second cannot be imm for single-operand mul
+        if (op->second->assert_type != LIR_OPERAND_VAR) {
+            op->second = amd64_convert_first_to_temp(c, list, op->second);
+        }
+
+        // mov first -> al
+        linked_push(list, lir_op_move(ax_operand, op->first));
+
+        // mul al, second -> al (only care about low bits)
+        linked_push(list, lir_op_new(op->code, ax_operand, op->second, ax_operand));
+        linked_push(list, lir_op_move(op->output, ax_operand));
+
+        return list;
     }
 
-    // mov first -> rax
-    linked_push(list, lir_op_move(ax_operand, op->first));
+    // byte 以上类型使用 imul 策略
+    // imul 支持两种形式:
+    // 1. imul r, r/m (two-operand): r = r * r/m
+    // 2. imul r, r/m, imm (three-operand): r = r/m * imm
 
-    lir_opcode_t op_code = op->code;
-    lir_operand_t *result_operand = lir_regs_operand(2, ax_operand->value, dx_operand->value);
+    // 三操作数形式: first 或 second 有一个是 imm
+    // imul 三操作数支持 first != output，无需额外 mov
+    if (op->first->assert_type == LIR_OPERAND_IMM || op->second->assert_type == LIR_OPERAND_IMM) {
+        // 确保 imm 在 second 位置
+        if (op->first->assert_type == LIR_OPERAND_IMM) {
+            lir_operand_t *temp = op->first;
+            op->first = lir_reset_operand(op->second, LIR_FLAG_FIRST);
+            op->second = lir_reset_operand(temp, LIR_FLAG_SECOND);
+        }
+        // 如果 first 仍然是 imm (两个都是 imm 的情况)，需要转换为 temp
+        if (op->first->assert_type == LIR_OPERAND_IMM) {
+            op->first = amd64_convert_first_to_temp(c, list, op->first);
+        }
 
+        // 三操作数形式 imul r, r/m, imm 要求 output 必须是寄存器
+        lir_operand_t *old_output = NULL;
+        if (op->output->assert_type != LIR_OPERAND_VAR) {
+            lir_operand_t *new_output = temp_var_operand(c->module, lir_operand_type(op->output));
+            old_output = op->output;
+            op->output = lir_reset_operand(new_output, op->output->pos);
+        }
 
-    // imul rax, v2 -> rax+rdx
-    linked_push(list, lir_op_new(op_code, ax_operand, op->second, result_operand));
-    linked_push(list, lir_op_move(op->output, ax_operand)); // 暂时不处理 rdx, 只支持 64
+        // 直接使用三操作数形式 imul output, first, second(imm)
+        linked_push(list, op);
 
-    return list;
+        if (old_output) {
+            linked_push(list, lir_op_move(old_output, op->output));
+        }
+
+        return list;
+    }
+
+    // 两个操作数都是 var: 使用二操作数形式 imul r, r/m
+    // 通过 amd64_lower_ternary 实现: mov first -> temp; imul temp, second -> temp; mov temp -> output
+    return amd64_lower_ternary(c, op);
 }
 
 static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
@@ -414,7 +456,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             if (op->code == LIR_OPCODE_UITOF) {
                 lir_operand_t *ax_operand = lir_reg_operand(rax->index, operand_type_kind(op->first));
                 linked_push(operations, lir_op_move(ax_operand, op->first));
-                op->first = ax_operand;
+                op->first = lir_reset_operand(ax_operand, LIR_FLAG_FIRST);
                 linked_push(operations, op);
             } else if (op->first->assert_type != LIR_OPERAND_VAR) {
                 op->first = amd64_convert_first_to_temp(c, operations, op->first);

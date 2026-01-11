@@ -482,7 +482,6 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
     }
 
     op->second = lir_reset_operand(operand_new(LIR_OPERAND_VARS, use_regs), LIR_FLAG_SECOND);
-    set_operand_flag(op->second);
 
     return result;
 }
