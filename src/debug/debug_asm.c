@@ -45,7 +45,8 @@ static string amd64_asm_operand_to_string(amd64_asm_operand_t *operand) {
         case AMD64_ASM_OPERAND_TYPE_SIB_REG: {
             // [base+index*scale+disp]
             asm_sib_reg_t *sib = (asm_sib_reg_t *) value;
-            return dsprintf("[%s+%s*%d+%d]", sib->base ? sib->base->name : "_", sib->index ? sib->index->name : "_", sib->scale,
+            return dsprintf("[%s+%s*%d+%d]", sib->base ? sib->base->name : "_", sib->index ? sib->index->name : "_",
+                            sib->scale,
                             sib->disp);
         }
         case AMD64_ASM_OPERAND_TYPE_SYMBOL: {
@@ -227,6 +228,9 @@ void amd64_asm_op_to_string(int i, amd64_asm_inst_t *op) {
         printf("%s -> %s",
                amd64_asm_operand_to_string(op->operands[1]),
                amd64_asm_operand_to_string(op->operands[0]));
+    } else if (op->count == 3) {
+        printf("%s, %s, %s", amd64_asm_operand_to_string(op->operands[0]),
+               amd64_asm_operand_to_string(op->operands[1]), amd64_asm_operand_to_string(op->operands[2]));
     } else if (op->count == 0) {
     } else {
         printf("not_support");

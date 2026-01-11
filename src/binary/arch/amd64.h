@@ -51,10 +51,13 @@ static inline uint64_t rip_offset(uint64_t data_count, amd64_asm_inst_t *operati
     // R_X86_64_PC32 默认就是占用 4 byte
     uint64_t offset = data_count - 4;
 
+    // 检查最后一个操作数是否是立即数
+    // 例如: movb $0x18, 0x0(%rip) -> operands[0]=imm, operands[1]=rip
+    // 例如: imul rcx, 0x0(%rip), 1 -> operands[0]=rcx, operands[1]=rip, operands[2]=imm
     if (operation->count > 1) {
-        amd64_asm_operand_t *operand = operation->operands[1];
-        if (is_imm_operand(operand)) {
-            offset -= operand->size;
+        amd64_asm_operand_t *last_operand = operation->operands[operation->count - 1];
+        if (is_imm_operand(last_operand)) {
+            offset -= last_operand->size;
         }
     }
 

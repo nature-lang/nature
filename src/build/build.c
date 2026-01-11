@@ -1113,8 +1113,6 @@ static void build_compiler(slice_t *modules) {
             cross_peephole(c);
             debug_block_lir(c, "peephole");
 
-            mark_number(c);
-
             schedule(c);
             debug_block_lir(c, "schedule");
 

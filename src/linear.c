@@ -94,7 +94,7 @@ linear_inline_arr_element_addr(module_t *m, lir_operand_t *arr_target, lir_opera
     lir_operand_t *cmp_result = temp_var_operand_with_alloc(m, type_kind_new(TYPE_BOOL));
     OP_PUSH(lir_op_new(LIR_OPCODE_USLT, index_target, length_target, cmp_result));
 
-    char *cmd_label_ident = label_ident_with_unique("arr_index_cmp");
+    char *cmd_label_ident = label_ident_with_unique(".index");
     char *end_label_ident = str_connect(cmd_label_ident, LABEL_END_SUFFIX);
     lir_operand_t *cmp_end_label = lir_label_operand(end_label_ident, true);
 
@@ -200,7 +200,7 @@ linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_opera
 
     OP_PUSH(lir_op_new(LIR_OPCODE_USLT, index_target, length_target, cmp_result));
 
-    char *cmd_label_ident = label_ident_with_unique(str_connect(m->current_closure->linkident, ".vcmp"));
+    char *cmd_label_ident = label_ident_with_unique( ".index");
     char *end_label_ident = str_connect(cmd_label_ident, LABEL_END_SUFFIX);
     lir_operand_t *cmp_end_label = lir_label_operand(end_label_ident, true);
 
