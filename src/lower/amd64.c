@@ -36,16 +36,10 @@ static linked_t *amd64_lower_neg(closure_t *c, lir_op_t *op) {
 
     linked_push(list, lir_op_move(op->output, op->first));
 
-    // xor float 需要覆盖满整个 xmm 寄存器(128bit), 所以这里直接用 symbol 最多只能有 f64 = 64bit
-    // 这里用 xmm1 进行一个中转
-    lir_operand_t *xmm_operand = amd64_select_return_reg(op->output);
-    if (kind == TYPE_FLOAT64) {
-        linked_push(list, lir_op_move(xmm_operand, symbol_var_operand(F64_NEG_MASK_IDENT, kind)));
-    } else {
-        linked_push(list, lir_op_move(xmm_operand, symbol_var_operand(F32_NEG_MASK_IDENT, kind)));
-    }
-
-    linked_push(list, lir_op_new(LIR_OPCODE_XOR, op->output, xmm_operand, op->output));
+    // op->second 是 -0.0 立即数，已在 amd64_lower_block 中被 lower_imm 转换为 var
+    // -0.0 的位表示就是符号位掩码 (0x80000000 for f32, 0x8000000000000000 for f64)
+    assert(op->second && op->second->assert_type == LIR_OPERAND_VAR);
+    linked_push(list, lir_op_new(LIR_OPCODE_XOR, op->output, op->second, op->output));
 
     if (old_output) {
         linked_push(list, lir_op_move(old_output, op->output));
@@ -77,20 +71,42 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op, linked_t *symbol_op
             lower_imm_symbol(c, imm_operand, list, symbol_operations);
 
         } else if (is_qword_int(imm->kind)) {
-            if (op->code != LIR_OPCODE_MOVE || op->output->assert_type != LIR_OPERAND_VAR) {
-                // 大数值必须通过 reg 转化,
-                type_kind kind = operand_type_kind(imm_operand);
-                lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(kind));
+            // mov r64,imm64 转换成 mov rm64,imm32
+            if (imm->int_value > INT32_MAX || imm->int_value < INT32_MIN) {
+                if (op->code != LIR_OPCODE_MOVE || op->output->assert_type != LIR_OPERAND_VAR) {
+                    // 大数值必须通过 reg 转化,
+                    type_kind kind = operand_type_kind(imm_operand);
+                    lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(kind));
 
-                linked_push(list, lir_op_move(temp, imm_operand));
-                temp = lir_reset_operand(temp, imm_operand->pos);
-                imm_operand->assert_type = temp->assert_type;
-                imm_operand->value = temp->value;
+                    linked_push(list, lir_op_move(temp, imm_operand));
+                    temp = lir_reset_operand(temp, imm_operand->pos);
+                    imm_operand->assert_type = temp->assert_type;
+                    imm_operand->value = temp->value;
+                }
             }
         }
     }
 
     return list;
+}
+
+/**
+ * AMD64 对于整数类型的 ADD/SUB/AND/OR/XOR 支持 imm 作为第二操作数
+ * 所以对于这些操作，不需要将 imm 转换为临时变量
+ */
+static bool amd64_ternary_support_imm(lir_op_t *op) {
+    if (op->second->assert_type != LIR_OPERAND_IMM) {
+        return false;
+    }
+    if (!is_integer_or_anyptr(operand_type_kind(op->output))) {
+        return false;
+    }
+    // ADD, SUB, AND, OR, XOR 支持 imm 作为第二操作数
+    return op->code == LIR_OPCODE_ADD ||
+           op->code == LIR_OPCODE_SUB ||
+           op->code == LIR_OPCODE_AND ||
+           op->code == LIR_OPCODE_OR ||
+           op->code == LIR_OPCODE_XOR;
 }
 
 /**
@@ -259,10 +275,33 @@ static linked_t *amd64_lower_safepoint(closure_t *c, lir_op_t *op) {
     return list;
 }
 
+/**
+ * 对于 NEG float，添加 -0.0 作为 second 操作数
+ * -0.0 的位表示就是符号位掩码 (0x80000000 for f32, 0x8000000000000000 for f64)
+ * 后续由 lower_imm 转换为 var，用于 XOR 实现取反
+ */
+static void amd64_prepare_neg_float(lir_op_t *op) {
+    if (op->code != LIR_OPCODE_NEG || !is_float(operand_type_kind(op->output))) {
+        return;
+    }
+
+    type_kind kind = operand_type_kind(op->output);
+    lir_imm_t *neg_zero_imm = NEW(lir_imm_t);
+    neg_zero_imm->kind = kind;
+    if (kind == TYPE_FLOAT64) {
+        neg_zero_imm->f64_value = -0.0;
+    } else {
+        neg_zero_imm->f32_value = -0.0f;
+    }
+    op->second = operand_new(LIR_OPERAND_IMM, neg_zero_imm);
+}
+
 static void amd64_lower_block(closure_t *c, basic_block_t *block) {
     linked_t *operations = linked_new();
     LINKED_FOR(block->operations) {
         lir_op_t *op = LINKED_VALUE();
+
+        amd64_prepare_neg_float(op);
 
         linked_t *symbol_operations = linked_new();
         linked_concat(operations, amd64_lower_imm(c, op, symbol_operations));
@@ -276,7 +315,8 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
             // maybe empty
             linked_node *insert_head = insert_operations->front->succ->succ; // safepoint
 
-            for (linked_node *sym_node = symbol_operations->front; sym_node != symbol_operations->rear; sym_node = sym_node->succ) {
+            for (linked_node *sym_node = symbol_operations->front;
+                 sym_node != symbol_operations->rear; sym_node = sym_node->succ) {
                 lir_op_t *sym_op = sym_node->value;
                 insert_head = linked_insert_after(insert_operations, insert_head, sym_op);
             }

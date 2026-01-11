@@ -1857,14 +1857,10 @@ void parallel_moves(closure_t *c, slice_t *moves, linked_t *new_ops) {
         }
     }
 
-    free(src->take);
-    free(src2->take);
-    free(dst->take);
-    free(status->take);
-    free(src);
-    free(src2);
-    free(dst);
-    free(status);
+    slice_free(src);
+    slice_free(src2);
+    slice_free(dst);
+    slice_free(status);
 }
 
 void handle_parallel_moves(closure_t *c) {

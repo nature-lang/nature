@@ -88,6 +88,7 @@ typedef enum {
     R_MVN,
     R_FMADD,
     R_FMSUB,
+    R_FNMSUB,
     R_NOP,
 } arm64_asm_raw_opcode_t;
 
@@ -172,6 +173,7 @@ static char *arm64_raw_op_names[] = {
         [R_MVN] = "mvn",
         [R_FMADD] = "fmadd",
         [R_FMSUB] = "fmsub",
+        [R_FNMSUB] = "fnmsub",
         [R_NOP] = "nop",
 };
 
@@ -268,6 +270,7 @@ typedef enum {
     MRS,
     FMADD,
     FMSUB,
+    FNMSUB,
     NOP,
 } arm64_asm_opcode_t;
 
@@ -636,6 +639,8 @@ typedef struct {
 #define FMADD(sz, rd, rn, rm, ra) (0x1f000000U | ((sz) << 22) | ((rm) << 16) | ((ra) << 10) | ((rn) << 5) | (rd))
 // FMSUB: Rd = Ra - Rn * Rm
 #define FMSUB(sz, rd, rn, rm, ra) (0x1f008000U | ((sz) << 22) | ((rm) << 16) | ((ra) << 10) | ((rn) << 5) | (rd))
+// FNMSUB: Rd = Rn * Rm - Ra
+#define FNMSUB(sz, rd, rn, rm, ra) (0x1f208000U | ((sz) << 22) | ((rm) << 16) | ((ra) << 10) | ((rn) << 5) | (rd))
 
 extern arm64_opr_flags_list arm64_opcode_map[];
 

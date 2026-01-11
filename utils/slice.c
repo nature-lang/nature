@@ -1,7 +1,7 @@
-#include <assert.h>
 #include "slice.h"
-#include "stdlib.h"
 #include "helper.h"
+#include "stdlib.h"
+#include <assert.h>
 
 slice_t *slice_new() {
     slice_t *s = mallocz(sizeof(slice_t));
@@ -41,6 +41,14 @@ int slice_push(slice_t *s, void *value) {
     return s->count - 1; // index
 }
 
+void slice_free(slice_t *s) {
+    if (s == NULL) {
+        return;
+    }
+    free(s->take);
+    free(s);
+}
+
 void slice_concat(slice_t *dst, slice_t *src) {
     assert(src);
     for (int i = 0; i < src->count; ++i) {
@@ -49,6 +57,7 @@ void slice_concat(slice_t *dst, slice_t *src) {
 }
 
 void slice_concat_free(slice_t *dst, slice_t *src) {
+    assert(src);
     for (int i = 0; i < src->count; ++i) {
         slice_push(dst, src->take[i]);
     }

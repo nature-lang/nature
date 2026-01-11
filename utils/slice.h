@@ -34,6 +34,8 @@ void slice_insert(slice_t *s, int index, void *value);
 
 int slice_push(slice_t *s, void *value);
 
+void slice_free(slice_t *s);
+
 void slice_concat(slice_t *dst, slice_t *src);
 
 void slice_concat_free(slice_t *dst, slice_t *src);

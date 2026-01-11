@@ -189,14 +189,15 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
         op->first = arm64_convert_use_var(c, list, op->first);
     }
 
-    if (op->code == LIR_OPCODE_MUL ||
-        op->code == LIR_OPCODE_UDIV ||
-        op->code == LIR_OPCODE_UREM ||
-        op->code == LIR_OPCODE_SDIV ||
-        op->code == LIR_OPCODE_SREM ||
-        op->code == LIR_OPCODE_XOR ||
-        op->code == LIR_OPCODE_OR ||
-        op->code == LIR_OPCODE_AND) {
+    if ((op->code == LIR_OPCODE_MUL ||
+         op->code == LIR_OPCODE_UDIV ||
+         op->code == LIR_OPCODE_UREM ||
+         op->code == LIR_OPCODE_SDIV ||
+         op->code == LIR_OPCODE_SREM ||
+         op->code == LIR_OPCODE_XOR ||
+         op->code == LIR_OPCODE_OR ||
+         op->code == LIR_OPCODE_AND) &&
+        op->second->assert_type != LIR_OPERAND_VAR) {
         op->second = arm64_convert_use_var(c, list, op->second);
     }
 
@@ -390,13 +391,6 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
 
         if (op->code == LIR_OPCODE_LEA) {
             linked_concat(operations, arm64_lower_lea(c, op));
-            continue;
-        }
-
-        // FMA 指令处理 (MADD/MSUB/FMADD/FMSUB)
-        if (op->code == LIR_OPCODE_MADD || op->code == LIR_OPCODE_MSUB ||
-            op->code == LIR_OPCODE_FMADD || op->code == LIR_OPCODE_FMSUB) {
-            linked_concat(operations, arm64_lower_fma(c, op));
             continue;
         }
 

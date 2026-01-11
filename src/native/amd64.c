@@ -595,6 +595,15 @@ static slice_t *amd64_native_add(closure_t *c, lir_op_t *op) {
     // 由于需要 first -> result 进行覆盖，所以 second 和 result 不允许是统一地址或者 reg
     assert(asm_operand_equal(first, result));
 
+    // 优化: add $1, %reg -> inc %reg
+    if (op->second->assert_type == LIR_OPERAND_IMM) {
+        lir_imm_t *imm = op->second->value;
+        if (imm->uint_value == 1) {
+            slice_push(operations, AMD64_INST("inc", result));
+            return operations;
+        }
+    }
+
     slice_push(operations, AMD64_INST("add", result, second));
 
     return operations;
@@ -619,6 +628,15 @@ static slice_t *amd64_native_sub(closure_t *c, lir_op_t *op) {
 
 
     assert(asm_operand_equal(first, result));
+
+    // 优化: sub $1, %reg -> dec %reg
+    if (op->second->assert_type == LIR_OPERAND_IMM) {
+        lir_imm_t *imm = op->second->value;
+        if (imm->uint_value == 1) {
+            slice_push(operations, AMD64_INST("dec", result));
+            return operations;
+        }
+    }
 
     //  sub imm -> result
     slice_push(operations, AMD64_INST("sub", result, second));

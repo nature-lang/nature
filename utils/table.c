@@ -8,10 +8,6 @@ void table_init(table_t *t) {
     t->entries = NULL;
 }
 
-void table_free(table_t *t) {
-    void *_ = realloc(t, 0);
-    table_init(t);
-}
 
 void *table_get(table_t *t, string key) {
     assertf(t, "table is null, called: %s");
@@ -150,7 +146,3 @@ void table_delete(table_t *t, char *key) {
     entry->key = NULL;
     entry->value = (void *) true;
 }
-
-
-
-

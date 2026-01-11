@@ -74,6 +74,7 @@ static void linear_prehandle(closure_t *c) {
                 slice_push(c->var_defs, var);
                 table_set(var_table, var->ident, var);
             }
+            slice_free(vars);
 
             current = current->succ;
         }
@@ -152,10 +153,8 @@ static void reorder_operations(closure_t *c) {
                 // Move current past the call
                 current = call_node->succ;
 
-                free(resolve_moves->take);
-                free(resolve_moves);
-                free(non_resolve_ops->take);
-                free(non_resolve_ops);
+                slice_free(resolve_moves);
+                slice_free(non_resolve_ops);
                 continue;
             }
 
