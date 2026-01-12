@@ -1,6 +1,6 @@
 # Nature Programming Language  
   
-A general-purpose open-source programming language and compiler designed to provide developers with an **elegant and concise** development experience, enabling them to build secure and reliable cross-platform software **simply and efficiently**.  
+A general-purpose system programming language and compiler, designed to build high-performance, highly reliable, and cross-platform software in a concise and elegant way.
 
 ## Features
 
@@ -105,7 +105,9 @@ As a general-purpose programming language, based on existing language features a
 
 ## Benchmark
 
-Linux Ubuntu VM（Kernel version 6.17.8，aarch64, Mac M4, 9 cores, 16G memory）
+https://github.com/nature-lang/benchmark
+
+Linux Ubuntu VM（Kernel version 6.17.8，aarch64, Mac M4, 9 cores, 8G memory）
 
 **IO: HTTP Server**
 
@@ -113,41 +115,41 @@ Linux Ubuntu VM（Kernel version 6.17.8，aarch64, Mac M4, 9 cores, 16G memory�
 
 | Language | Version | QPS (req/sec) | Mean Response Time |
 |----------|---------|---------------|---------------------|
-| Nature | v0.7.1 | ~104,000 | 9 ms |
-| Go | 1.25.5 | ~90,000 | 11 ms |
+| Nature | v0.7.2  | ~104,000 | 9 ms |
+| Go | 1.25.5  | ~90,000 | 11 ms |
 | Node.js | v25.2.0 | ~66,000 | 14 ms |
 
 **Call: Fibonacci(45) time consumed**
 
 | Language | Version | Mean Time |
 |----------|---------|-----------|
-| Nature | v0.7.1 | ~2.3 s |
-| Go | 1.25.5 | ~2.3 s |
-| Rust | 1.92.0 | ~1.7 s |
-| Node.js | v25.2.0 | ~6.0 s |
+| Nature | v0.7.2  | ~2.4 s    |
+| Go | 1.25.5  | ~2.4 s    |
+| Rust | 1.92.0  | ~1.7 s    |
+| Node.js | v25.2.0 | ~6.0 s    |
 
 **CPU: Calculate 1 billion times π**
 
 | Language | Version | Mean Time |
 |----------|---------|-----------|
-| Nature | v0.7.1 | ~762 ms |
-| Go | 1.25.5 | ~991 ms |
-| Rust | 1.92.0 | ~547 ms |
-| Node.js | v25.2.0 | ~837 ms |
+| Nature | v0.7.2  | ~512 ms   |
+| Go | 1.25.5  | ~512 ms   |
+| Rust | 1.92.0  | ~552 ms   |
+| Node.js | v25.2.0 | ~850 ms   |
 
 **FFI: Calling 100 million c fn sqrt time consumed**
 
 | Language | Version | Mean Time |
 |----------|---------|-----------|
-| Nature | v0.7.1 | ~73 ms |
-| Go | 1.25.5 | ~2178 ms |
+| Nature | v0.7.2  | ~73 ms |
+| Go | 1.25.5  | ~2178 ms |
 
 **Coroutine: 1 Million Coroutine Time/Memory consumed**
 
 | Language | Version | Creation Time | Dispatch Time | Peak Memory |
 |----------|---------|---------------|---------------|-------------|
-| Nature | v0.7.1 | ~559 ms | ~589 ms       | ~969 MB |
-| Go | 1.25.5 | ~1035 ms | ~1047 ms      | ~2580 MB |
+| Nature | v0.7.2  | ~559 ms | ~589 ms       | ~969 MB |
+| Go | 1.25.5  | ~1035 ms | ~1047 ms      | ~2580 MB |
   
 ## Contribution Guidelines
 
