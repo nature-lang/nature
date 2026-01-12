@@ -874,6 +874,8 @@ static slice_t *amd64_native_sitof(closure_t *c, lir_op_t *op) {
     }
 
     // 根据输出类型选择指令
+    // 先清零目标寄存器，消除 cvtsi2ss/cvtsi2sd 对旧值高位的假依赖
+    slice_push(operations, AMD64_INST("xor", output, output));
     if (output->size == DWORD) {
         // cvtsi2ss xmm, reg (int to float)
         slice_push(operations, AMD64_INST("cvtsi2ss", output, first));
@@ -911,6 +913,9 @@ static slice_t *amd64_native_uitof(closure_t *c, lir_op_t *op) {
         slice_push(operations, AMD64_INST("movzx", new_first, first));
         first = new_first;
     }
+
+    // 先清零目标寄存器，消除 cvtsi2ss/cvtsi2sd 对旧值高位的假依赖
+    slice_push(operations, AMD64_INST("xor", output, output));
 
     if (first_size <= DWORD) {
         // 32位及以下直接转换

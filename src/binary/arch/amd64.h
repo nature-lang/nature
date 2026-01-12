@@ -106,7 +106,7 @@ static inline bool amd64_is_jmp_op(char *name) {
  * @param rel_diff
  */
 static inline void
-amd64_rewrite_rel_symbol(amd64_asm_inst_t *operation, amd64_asm_operand_t *operand, uint64_t rel_diff) {
+amd64_rewrite_rel_symbol(amd64_asm_inst_t *operation, amd64_asm_operand_t *operand, int rel_diff) {
     // 目标 operand 已经确定了指令长度，不再是一个符号，所以不能在随意修正了
     if (operand->type != AMD64_ASM_OPERAND_TYPE_SYMBOL) {
         if (rel_diff == 0) {

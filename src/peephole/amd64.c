@@ -151,11 +151,19 @@ static bool peephole_lea_fusion(closure_t *c, basic_block_t *block, slice_t *ops
     // 创建 LEA 指令
     // LEA 的 first 是 indirect_addr，包含 index、scale 和 offset
     lir_indirect_addr_t *addr = NEW(lir_indirect_addr_t);
-    addr->base = NULL; // 不使用 base
     addr->index = lir_reset_operand(mul_op->first, LIR_FLAG_FIRST); // index = a
-    addr->scale = (int) scale;
     addr->offset = (int64_t) disp;
     addr->type = mul_type;
+
+    // scale=2 时，使用 lea (reg, reg, 1) 代替 lea (, reg, 2)
+    // 这样 base=index, scale=1, 地址计算为 reg + reg*1 = reg*2
+    if (scale == 2) {
+        addr->base = lir_reset_operand(mul_op->first, LIR_FLAG_FIRST); // base = a
+        addr->scale = 1;
+    } else {
+        addr->base = NULL; // 不使用 base
+        addr->scale = (int) scale;
+    }
 
     lir_operand_t *addr_operand = operand_new(LIR_OPERAND_INDIRECT_ADDR, addr);
     addr_operand->pos = LIR_FLAG_FIRST;
