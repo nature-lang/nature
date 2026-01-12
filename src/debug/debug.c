@@ -194,10 +194,11 @@ string lir_opcode_to_string[] = {
         [LIR_OPCODE_FN_END] = "FN_END",
         [LIR_OPCODE_SAFEPOINT] = "SAFEPOINT",
 
-        [LIR_OPCODE_MADD] = "MADD ",
-        [LIR_OPCODE_MSUB] = "MSUB ",
-        [LIR_OPCODE_FMADD] = "FMADD",
-        [LIR_OPCODE_FMSUB] = "FMSUB",
+        [ARM64_OPCODE_MADD] = "ARM64_MADD ",
+        [ARM64_OPCODE_MSUB] = "ARM64_MSUB ",
+        [ARM64_OPCODE_FMADD] = "ARM64_FMADD",
+        [ARM64_OPCODE_FMSUB] = "ARM64_FMSUB",
+        [ARM64_OPCODE_FNMSUB] = "ARM64_FNMSUB",
 };
 
 void debug_parser(int line, char *token) {

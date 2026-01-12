@@ -1606,7 +1606,15 @@ impl<'a> Syntax {
 
         let target_type = self.parser_single_type()?;
 
-        expr.node = AstNode::MatchIs(target_type);
+        // 解析可选的绑定变量名
+        let binding_ident = if self.is(TokenType::Ident) {
+            let ident = self.advance();
+            Some(ident.literal.clone())
+        } else {
+            None
+        };
+
+        expr.node = AstNode::MatchIs(target_type, binding_ident);
         expr.end = self.prev().unwrap().end;
 
         Ok(expr)
@@ -1618,8 +1626,16 @@ impl<'a> Syntax {
 
         let target_type = self.parser_single_type()?;
 
+        // 解析可选的绑定变量名
+        let binding_ident = if self.is(TokenType::Ident) {
+            let ident = self.advance();
+            Some(ident.literal.clone())
+        } else {
+            None
+        };
+
         expr.start = left.start;
-        expr.node = AstNode::Is(target_type, left);
+        expr.node = AstNode::Is(target_type, left, binding_ident);
         expr.end = self.prev().unwrap().end;
 
         Ok(expr)

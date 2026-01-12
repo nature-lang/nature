@@ -178,8 +178,8 @@ impl GenericSpecialFnClone {
                 },
             ),
             AstNode::As(type_, src) => AstNode::As(type_.clone(), Box::new(self.clone_expr(src))),
-            AstNode::Is(type_, src) => AstNode::Is(type_.clone(), Box::new(self.clone_expr(src))),
-            AstNode::MatchIs(type_) => AstNode::MatchIs(type_.clone()),
+            AstNode::Is(type_, src, binding) => AstNode::Is(type_.clone(), Box::new(self.clone_expr(src)), binding.clone()),
+            AstNode::MatchIs(type_, binding) => AstNode::MatchIs(type_.clone(), binding.clone()),
             AstNode::Catch(try_expr, catch_err, catch_body) => AstNode::Catch(
                 Box::new(self.clone_expr(try_expr)),
                 Arc::new(Mutex::new(catch_err.lock().unwrap().clone())),
@@ -1152,7 +1152,7 @@ impl<'a> Typesys<'a> {
                     }
 
                     // 处理 is 类型匹配
-                    if let AstNode::MatchIs(_target_type) = cond_expr.node.clone() {
+                    if let AstNode::MatchIs(_target_type, _binding) = cond_expr.node.clone() {
                         if !matches!(subject_type.kind, TypeKind::Union(..) | TypeKind::Interface(..)) {
                             return Err(AnalyzerError {
                                 start: cond_expr.start,
@@ -1164,7 +1164,7 @@ impl<'a> Typesys<'a> {
                         let cond_type = self.infer_right_expr(cond_expr, Type::default())?;
                         debug_assert!(matches!(cond_type.kind, TypeKind::Bool));
 
-                        let AstNode::MatchIs(target_type) = &cond_expr.node else { unreachable!() };
+                        let AstNode::MatchIs(target_type, _binding) = &cond_expr.node else { unreachable!() };
 
                         // 记录已匹配的类型, 最终可以判断 match 是否匹配了所有分支
                         union_types.insert(target_type.hash(), true);
@@ -2119,11 +2119,11 @@ impl<'a> Typesys<'a> {
             AstNode::As(_, _) => self.infer_as_expr(expr),
             AstNode::Catch(try_expr, catch_err_mutex, catch_body) => self.infer_catch(try_expr, catch_err_mutex, catch_body),
             AstNode::Match(subject, cases) => self.infer_match(subject, cases, infer_target_type, expr.start, expr.end),
-            AstNode::MatchIs(target_type) => {
+            AstNode::MatchIs(target_type, _binding) => {
                 *target_type = self.reduction_type(target_type.clone())?;
                 return Ok(Type::new(TypeKind::Bool));
             }
-            AstNode::Is(target_type, src) => {
+            AstNode::Is(target_type, src, _binding) => {
                 let src_type = self.infer_right_expr(src, Type::default())?;
 
                 *target_type = self.reduction_type(target_type.clone())?;

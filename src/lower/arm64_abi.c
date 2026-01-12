@@ -527,7 +527,6 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
 
     // 重新生成 op->second, 用于寄存器分配记录
     op->second = lir_reset_operand(operand_new(LIR_OPERAND_VARS, use_vars), LIR_FLAG_SECOND);
-    set_operand_flag(op->second);
 
     // 处理 call first operand (函数指针) 的 must_hint
     // 当 first 是 VAR 时，需要为其分配一个不参与 args_abi 的固定寄存器，避免与参数冲突
@@ -560,7 +559,6 @@ linked_t *arm64_lower_call(closure_t *c, lir_op_t *op) {
         slice_push(use_vars, x8_temp_var->value);
 
         op->second = lir_reset_operand(operand_new(LIR_OPERAND_VARS, use_vars), LIR_FLAG_SECOND);
-        set_operand_flag(op->second);
 
         // callee 已经将数据写入到了 call_result(x8寄存器对应的栈空间中)，此时不需要显式的处理 call_result,
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, NULL, op->line, op->column));

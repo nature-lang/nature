@@ -202,6 +202,7 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
     } else if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *indirect = operand->value;
         lir_operand_t *base = indirect->base;
+        assert(base);
         mem_size = type_kind_sizeof(indirect->type.kind);
 
         // 处理栈基址
@@ -1129,6 +1130,7 @@ static slice_t *arm64_native_lea(closure_t *c, lir_op_t *op) {
             offset = stack->slot;
         } else {
             lir_indirect_addr_t *mem = op->first->value;
+            assert(mem->base);
             assert(mem->base->assert_type == LIR_OPERAND_REG);
             base = mem->base->value;
             offset = mem->offset;
@@ -1141,12 +1143,13 @@ static slice_t *arm64_native_lea(closure_t *c, lir_op_t *op) {
 }
 
 /**
- * FMA native code generation (MADD/MSUB/FMADD/FMSUB)
+ * FMA native code generation (MADD/MSUB/FMADD/FMSUB/FNMSUB)
  *
  * MADD: Rd = Ra + Rn * Rm  (integer)
  * MSUB: Rd = Ra - Rn * Rm  (integer)
  * FMADD: Rd = Ra + Rn * Rm (floating-point)
  * FMSUB: Rd = Ra - Rn * Rm (floating-point)
+ * FNMSUB: Rd = Rn * Rm - Ra (floating-point)
  *
  * LIR operand format:
  *   first: Rn (mul operand 1)
@@ -1170,17 +1173,20 @@ static slice_t *arm64_native_fma(closure_t *c, lir_op_t *op) {
     // 根据 opcode 生成对应的指令
     arm64_asm_raw_opcode_t raw_opcode;
     switch (op->code) {
-        case LIR_OPCODE_MADD:
+        case ARM64_OPCODE_MADD:
             raw_opcode = R_MADD;
             break;
-        case LIR_OPCODE_MSUB:
+        case ARM64_OPCODE_MSUB:
             raw_opcode = R_MSUB;
             break;
-        case LIR_OPCODE_FMADD:
+        case ARM64_OPCODE_FMADD:
             raw_opcode = R_FMADD;
             break;
-        case LIR_OPCODE_FMSUB:
+        case ARM64_OPCODE_FMSUB:
             raw_opcode = R_FMSUB;
+            break;
+        case ARM64_OPCODE_FNMSUB:
+            raw_opcode = R_FNMSUB;
             break;
         default:
             assert(false && "Unsupported FMA opcode");
@@ -1279,10 +1285,11 @@ arm64_native_fn arm64_native_table[] = {
         [LIR_OPCODE_SREM] = arm64_native_rem,
 
         // FMA (Fused Multiply-Add/Subtract)
-        [LIR_OPCODE_MADD] = arm64_native_fma,
-        [LIR_OPCODE_MSUB] = arm64_native_fma,
-        [LIR_OPCODE_FMADD] = arm64_native_fma,
-        [LIR_OPCODE_FMSUB] = arm64_native_fma,
+        [ARM64_OPCODE_MADD] = arm64_native_fma,
+        [ARM64_OPCODE_MSUB] = arm64_native_fma,
+        [ARM64_OPCODE_FMADD] = arm64_native_fma,
+        [ARM64_OPCODE_FMSUB] = arm64_native_fma,
+        [ARM64_OPCODE_FNMSUB] = arm64_native_fma,
 
         // 逻辑相关运算符
         [LIR_OPCODE_SGT] = arm64_native_scc,

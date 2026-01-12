@@ -847,8 +847,8 @@ pub enum AstNode {
     Unary(ExprOp, Box<Expr>),             // (op, operand)
     Ident(String, NodeId),                // (ident, symbol_id)
     As(Type, Box<Expr>),                  // (target_type, src)
-    Is(Type, Box<Expr>),                  // (target_type, src)
-    MatchIs(Type),                        // (target_type)
+    Is(Type, Box<Expr>, Option<String>),  // (target_type, src, binding_ident)
+    MatchIs(Type, Option<String>),        // (target_type, binding_ident)
 
     // marco
     MacroSizeof(Type),       // (target_type)

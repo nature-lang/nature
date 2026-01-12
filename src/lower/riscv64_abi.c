@@ -561,7 +561,6 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
 
     // 记录使用的寄存器
     op->second = lir_reset_operand(operand_new(LIR_OPERAND_VARS, use_vars), LIR_FLAG_SECOND);
-    set_operand_flag(op->second);
 
     // 处理 call first operand (函数指针) 的 must_hint
     // 当 first 是 VAR 时，需要为其分配一个不参与 args_abi 的固定寄存器，避免与参数冲突
@@ -584,7 +583,6 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
     if (args_pos[0].main == 1) {
         // 重新生成 op->second, 包含 A0 临时变量
         op->second = lir_reset_operand(operand_new(LIR_OPERAND_VARS, use_vars), LIR_FLAG_SECOND);
-        set_operand_flag(op->second);
 
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, NULL, op->line, op->column));
         return result;

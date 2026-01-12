@@ -279,12 +279,18 @@ static ast_is_expr_t *ast_is_expr_copy(module_t *m, ast_is_expr_t *temp) {
     ast_is_expr_t *is_expr = COPY_NEW(ast_is_expr_t, temp);
     is_expr->src = *ast_expr_copy(m, &temp->src);
     is_expr->target_type = type_copy(m, temp->target_type);
+    if (temp->binding_ident) {
+        is_expr->binding_ident = strdup(temp->binding_ident);
+    }
     return is_expr;
 }
 
 static ast_match_is_expr_t *ast_match_is_expr_copy(module_t *m, ast_match_is_expr_t *temp) {
     ast_match_is_expr_t *is_expr = COPY_NEW(ast_match_is_expr_t, temp);
     is_expr->target_type = type_copy(m, temp->target_type);
+    if (temp->binding_ident) {
+        is_expr->binding_ident = strdup(temp->binding_ident);
+    }
     return is_expr;
 }
 

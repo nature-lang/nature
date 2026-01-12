@@ -189,9 +189,9 @@ fn rsa_public_key_t.encrypt_oaep(i32 hash_algo, [u8] plaintext, [u8]? label):[u8
     var label_ptr = 0 as libc.cstr
     var label_len = 0
 
-    if label is [u8] {
-        label_ptr = (label as string).to_cstr()
-        label_len = label.len()
+    if label is [u8] val {
+        label_ptr = (val as string).to_cstr()
+        label_len = val.len()
     }
 
     var result = utils.mbedtls_rsa_rsaes_oaep_encrypt(&self.rsa_ctx, libc.to_cfn(utils.mbedtls_ctr_drbg_random as anyptr), &ctr_drbg as anyptr,
@@ -235,9 +235,9 @@ fn rsa_private_key_t.decrypt_oaep(i32 hash_algo, [u8] ciphertext, [u8]? label):[
     
     var label_ptr = null as libc.cstr
     var label_len = 0
-    if label is [u8] {
-        label_ptr = (label as string).to_cstr()
-        label_len = label.len()
+    if label is [u8] val {
+        label_ptr = (val as string).to_cstr()
+        label_len = val.len()
     }
     
     var result = utils.mbedtls_rsa_rsaes_oaep_decrypt(&self.rsa_ctx, libc.to_cfn(utils.mbedtls_ctr_drbg_random as anyptr), &ctr_drbg as anyptr,

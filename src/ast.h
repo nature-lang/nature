@@ -192,10 +192,20 @@ typedef struct {
 typedef struct {
     type_t target_type;
     ast_expr_t src; // 将表达式转换成 target_type
-} ast_as_expr_t, ast_is_expr_t;
+} ast_as_expr_t;
+
+/**
+ * a is int v
+ */
+typedef struct {
+    type_t target_type;
+    ast_expr_t src;
+    char *binding_ident; // 可选的绑定变量名，NULL 表示不绑定
+} ast_is_expr_t;
 
 typedef struct {
     type_t target_type;
+    char *binding_ident; // 可选的绑定变量名，NULL 表示不绑定
 } ast_match_is_expr_t;
 
 typedef struct {

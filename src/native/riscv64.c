@@ -68,6 +68,7 @@ lir_operand_trans_riscv64(closure_t *c, lir_op_t *op, lir_operand_t *operand, sl
     } else if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *indirect = operand->value;
         lir_operand_t *base = indirect->base;
+        assert(base);
         mem_size = type_kind_sizeof(indirect->type.kind);
 
         // 处理栈基址
@@ -1204,6 +1205,7 @@ static slice_t *riscv64_native_lea(closure_t *c, lir_op_t *op) {
             offset = stack->slot;
         } else {
             lir_indirect_addr_t *mem = op->first->value;
+            assert(mem->base);
             assert(mem->base->assert_type == LIR_OPERAND_REG);
             base = mem->base->value;
             offset = mem->offset;

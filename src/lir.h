@@ -186,6 +186,9 @@ typedef struct {
     lir_operand_t *base; // compiler 完成后为 var,  reg alloc 后为 reg
     int64_t offset; // 偏移量是可以计算出来的, 默认为 0, 单位字节
     type_t type; // lir 为了保证通用性，只能有类型，不能有 size, 指向地址存储的数据的类型
+
+    lir_operand_t *index; // var or reg
+    int scale; // 1, 2, 4, 8
 } lir_indirect_addr_t;
 
 typedef struct {
@@ -453,11 +456,14 @@ static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64
         return result;
     }
 
-    // TODO 这不能算 def, 只有算 use 才对
     if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *addr = operand->value;
-        if (FLAG(addr->base->assert_type) & flag) {
+        if (addr->base && FLAG(addr->base->assert_type) & flag) {
             slice_push(result, addr->base);
+        }
+
+        if (addr->index && FLAG(addr->index->assert_type) & flag) {
+            slice_push(result, addr->index);
         }
         return result;
     }
@@ -471,7 +477,7 @@ static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64
                    o->assert_type == LIR_OPERAND_IMM ||
                    o->assert_type == LIR_OPERAND_STACK || o->assert_type == LIR_OPERAND_REG ||
                    o->assert_type == LIR_OPERAND_INDIRECT_ADDR);
-            slice_concat(result, recursion_extract_operands(o, flag));
+            slice_concat_free(result, recursion_extract_operands(o, flag));
         }
         return result;
     }
@@ -499,9 +505,9 @@ static inline slice_t *recursion_extract_operands(lir_operand_t *operand, uint64
 
 static inline slice_t *extract_all_operands(lir_op_t *op, uint64_t operand_flag) {
     slice_t *result = recursion_extract_operands(op->output, operand_flag);
-    slice_concat(result, recursion_extract_operands(op->first, operand_flag));
-    slice_concat(result, recursion_extract_operands(op->second, operand_flag));
-    slice_concat(result, recursion_extract_operands(op->addend, operand_flag));
+    slice_concat_free(result, recursion_extract_operands(op->first, operand_flag));
+    slice_concat_free(result, recursion_extract_operands(op->second, operand_flag));
+    slice_concat_free(result, recursion_extract_operands(op->addend, operand_flag));
 
     return result;
 }
@@ -561,6 +567,8 @@ static inline lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         new_addr->base = lir_operand_copy(addr->base);
         new_addr->offset = addr->offset;
         new_addr->type = addr->type;
+        new_addr->scale = addr->scale;
+        new_addr->index = addr->index;
         new_operand->value = new_addr;
         return new_operand;
     }
@@ -643,8 +651,14 @@ static inline void set_operand_flag(lir_operand_t *operand) {
 
     if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *addr = operand->value;
-        if (addr->base->assert_type == LIR_OPERAND_VAR) {
+        if (addr->base && addr->base->assert_type == LIR_OPERAND_VAR) {
             lir_var_t *var = addr->base->value;
+            var->flag |= FLAG(LIR_FLAG_USE);
+            var->flag |= FLAG(LIR_FLAG_INDIRECT_ADDR_BASE);
+        }
+
+        if (addr->index && addr->index->assert_type == LIR_OPERAND_VAR) {
+            lir_var_t *var = addr->index->value;
             var->flag |= FLAG(LIR_FLAG_USE);
             var->flag |= FLAG(LIR_FLAG_INDIRECT_ADDR_BASE);
         }
@@ -1133,6 +1147,7 @@ static inline basic_block_t *lir_new_block(char *name, uint64_t label_index) {
     basic_block->loop.active = false;
     basic_block->loop.header = false;
     basic_block->loop.end = false;
+    basic_block->use_count = NULL; // lazy init by peephole
 
     return basic_block;
 }
@@ -1198,6 +1213,10 @@ static inline bool reg_equals(reg_t *reg_a, reg_t *reg_b) {
 }
 
 static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
+    if (a == NULL && b == NULL) {
+        return true;
+    }
+
     if (a == NULL || b == NULL) {
         return false;
     }
@@ -1228,7 +1247,7 @@ static inline bool lir_operand_equal(lir_operand_t *a, lir_operand_t *b) {
     if (a->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *addr1 = a->value;
         lir_indirect_addr_t *addr2 = b->value;
-        return lir_operand_equal(addr1->base, addr2->base) && addr1->offset == addr2->offset;
+        return lir_operand_equal(addr1->base, addr2->base) && addr1->offset == addr2->offset && lir_operand_equal(addr1->index, addr2->index) && addr1->scale == addr2->scale;
     }
 
     return false;
@@ -1259,7 +1278,11 @@ static inline bool lir_op_term(lir_op_t *op) {
 }
 
 static inline bool lir_op_fma(lir_op_t *op) {
-    return op->code == LIR_OPCODE_FMADD || op->code == LIR_OPCODE_FMSUB || op->code == LIR_OPCODE_MADD || op->code == LIR_OPCODE_MSUB;
+    return op->code == ARM64_OPCODE_FMADD ||
+           op->code == ARM64_OPCODE_FMSUB ||
+           op->code == ARM64_OPCODE_FNMSUB ||
+           op->code == ARM64_OPCODE_MADD ||
+           op->code == ARM64_OPCODE_MSUB;
 }
 
 static inline bool lir_op_ternary(lir_op_t *op) {
@@ -1359,7 +1382,7 @@ static inline slice_t *extract_op_operands(lir_op_t *op, flag_t operand_flag, fl
             }
         } else if (operand->assert_type == LIR_OPERAND_REG) {
             reg_t *reg = operand->value;
-            if (!(reg->flag & vr_flag)) {
+            if (!(reg->flag & vr_flag)) { // TODO reg 全局共享，没有定义还是使用这种 flag。
                 continue;
             }
         }
@@ -1371,6 +1394,7 @@ static inline slice_t *extract_op_operands(lir_op_t *op, flag_t operand_flag, fl
         }
     }
 
+    slice_free(temps); // 释放临时 slice
     return results;
 }
 
@@ -1381,6 +1405,10 @@ static inline slice_t *extract_op_operands(lir_op_t *op, flag_t operand_flag, fl
  */
 static inline slice_t *extract_var_operands(lir_op_t *op, flag_t vr_flag) {
     return extract_op_operands(op, FLAG(LIR_OPERAND_VAR), vr_flag, true);
+}
+
+static inline slice_t *extract_reg_operands(lir_op_t *op, flag_t vr_flag) {
+    return extract_op_operands(op, FLAG(LIR_OPERAND_REG), vr_flag, true);
 }
 
 static inline bool lir_is_mem(lir_operand_t *operand) {

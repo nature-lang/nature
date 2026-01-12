@@ -166,6 +166,16 @@ static amd64_asm_operand_t *lir_operand_trans_amd64(closure_t *c, lir_op_t *op, 
         lir_indirect_addr_t *indirect = operand->value;
         lir_operand_t *base = indirect->base;
 
+        // LEA 融合场景: base 为 NULL，只有 index 和 scale
+        // 生成 [index*scale + disp]
+        if (base == NULL && indirect->index) {
+            assertf(indirect->index->assert_type == LIR_OPERAND_REG,
+                    "indirect addr index must be reg for LEA fusion");
+            reg_t *index_reg = indirect->index->value;
+            return SIB_REG(NULL, index_reg, indirect->scale,
+                           indirect->offset, type_kind_sizeof(indirect->type.kind));
+        }
+
         // rbp 特殊编码
         if (base->assert_type == LIR_OPERAND_STACK) {
             assert(op->code == LIR_OPCODE_LEA);
@@ -179,6 +189,15 @@ static amd64_asm_operand_t *lir_operand_trans_amd64(closure_t *c, lir_op_t *op, 
         // 虽然栈的增长方向是相反的，但是数据存储总是正向的
         reg_t *reg = base->value;
         amd64_asm_operand_t *asm_operand;
+
+        // 如果有 index，使用 SIB 编码 [base + index*scale + disp]
+        if (indirect->index) {
+            assertf(indirect->index->assert_type == LIR_OPERAND_REG,
+                    "indirect addr index must be reg");
+            reg_t *index_reg = indirect->index->value;
+            return SIB_REG(reg, index_reg, indirect->scale,
+                           indirect->offset, type_kind_sizeof(indirect->type.kind));
+        }
 
         // r12/rsp 特殊编码
         if (reg->index == rsp->index || reg->index == r12->index) {
@@ -395,38 +414,50 @@ static slice_t *amd64_native_div(closure_t *c, lir_op_t *op) {
 }
 
 /**
- * 经过 lower, 这里的指令是 div rax,operand -> rax
+ * 经过 lower, 这里处理简单乘法 (只需低位结果):
+ * 1. 如果是浮点数, 使用 fmul
+ * 2. 如果是整数 + IMM, 使用三操作数 IMUL
+ * 3. 如果是整数 + var, 使用双操作数 IMUL
  * @param c
  * @param op
  * @return
  */
 static slice_t *amd64_native_mul(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
-    assertf(op->output->assert_type == LIR_OPERAND_REGS || op->output->assert_type == LIR_OPERAND_REG,
-            "mul op output must reg");
-
-    if (op->output->assert_type == LIR_OPERAND_REGS) {
-        assertf(op->first->assert_type == LIR_OPERAND_REG, "mul op first must reg");
-        assertf(op->second->assert_type != LIR_OPERAND_IMM, "mul op second cannot imm");
-
-        reg_t *first_reg = op->first->value;
-        reg_t *output_reg = op->output->value;
-
-        assertf(first_reg->index == rax->index, "mul op first reg must rax");
-
-        amd64_asm_operand_t *second = lir_operand_trans_amd64(c, op, op->second);
-        slice_push(operations, AMD64_INST("mul", second));
-        return operations;
-    }
+    assertf(op->output->assert_type == LIR_OPERAND_REG, "mul op output must reg");
 
     amd64_asm_operand_t *first = lir_operand_trans_amd64(c, op, op->first);
     amd64_asm_operand_t *second = lir_operand_trans_amd64(c, op, op->second);
     amd64_asm_operand_t *result = lir_operand_trans_amd64(c, op, op->output);
 
-    assert(!asm_operand_equal(second, result));
-    // 浮点数是 amd64 常见的双操作数指令 mulss rm -> reg
-    asm_mov(operations, op, result, first);
-    slice_push(operations, AMD64_INST("fmul", result, second));
+    // 浮点数乘法
+    if (!amd64_is_integer_operand(op->output)) {
+        assert(!asm_operand_equal(second, result));
+        asm_mov(operations, op, result, first);
+        slice_push(operations, AMD64_INST("fmul", result, second));
+        return operations;
+    }
+
+    // byte 类型: imul 不支持 8 位操作数，使用单操作数 mul
+    // lower 阶段已保证 first 在 al 寄存器中
+    if (result->size == BYTE) {
+        assert(asm_operand_equal(first, result));
+        slice_push(operations, AMD64_INST("imul", second));
+        return operations;
+    }
+
+
+    // 整数乘法: 三操作数形式 IMUL dst, src, imm
+    if (op->second->assert_type == LIR_OPERAND_IMM) {
+        slice_push(operations, AMD64_INST("imul", result, first, second));
+        return operations;
+    }
+
+    // 整数乘法: 双操作数形式 IMUL dst, src (dst = dst * src)
+    // lower 阶段已保证 first == output
+    assert(asm_operand_equal(first, result));
+    slice_push(operations, AMD64_INST("imul", result, second));
+
     return operations;
 }
 
@@ -595,6 +626,15 @@ static slice_t *amd64_native_add(closure_t *c, lir_op_t *op) {
     // 由于需要 first -> result 进行覆盖，所以 second 和 result 不允许是统一地址或者 reg
     assert(asm_operand_equal(first, result));
 
+    // 优化: add $1, %reg -> inc %reg
+    if (op->second->assert_type == LIR_OPERAND_IMM) {
+        lir_imm_t *imm = op->second->value;
+        if (imm->uint_value == 1) {
+            slice_push(operations, AMD64_INST("inc", result));
+            return operations;
+        }
+    }
+
     slice_push(operations, AMD64_INST("add", result, second));
 
     return operations;
@@ -619,6 +659,15 @@ static slice_t *amd64_native_sub(closure_t *c, lir_op_t *op) {
 
 
     assert(asm_operand_equal(first, result));
+
+    // 优化: sub $1, %reg -> dec %reg
+    if (op->second->assert_type == LIR_OPERAND_IMM) {
+        lir_imm_t *imm = op->second->value;
+        if (imm->uint_value == 1) {
+            slice_push(operations, AMD64_INST("dec", result));
+            return operations;
+        }
+    }
 
     //  sub imm -> result
     slice_push(operations, AMD64_INST("sub", result, second));
@@ -825,6 +874,8 @@ static slice_t *amd64_native_sitof(closure_t *c, lir_op_t *op) {
     }
 
     // 根据输出类型选择指令
+    // 先清零目标寄存器，消除 cvtsi2ss/cvtsi2sd 对旧值高位的假依赖
+    slice_push(operations, AMD64_INST("xor", output, output));
     if (output->size == DWORD) {
         // cvtsi2ss xmm, reg (int to float)
         slice_push(operations, AMD64_INST("cvtsi2ss", output, first));
@@ -862,6 +913,9 @@ static slice_t *amd64_native_uitof(closure_t *c, lir_op_t *op) {
         slice_push(operations, AMD64_INST("movzx", new_first, first));
         first = new_first;
     }
+
+    // 先清零目标寄存器，消除 cvtsi2ss/cvtsi2sd 对旧值高位的假依赖
+    slice_push(operations, AMD64_INST("xor", output, output));
 
     if (first_size <= DWORD) {
         // 32位及以下直接转换

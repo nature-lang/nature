@@ -1659,20 +1659,28 @@ typedef enum {
  * For INDIRECT_ADDR type, returns the base register if base is REG.
  * Returns NULL otherwise.
  */
-static reg_t *extract_operand_reg(lir_operand_t *operand) {
+static slice_t *extract_operand_regs(lir_operand_t *operand) {
     if (operand == NULL) {
         return NULL;
     }
 
+    slice_t *result = slice_new();
     if (operand->assert_type == LIR_OPERAND_REG) {
-        return operand->value;
+        slice_push(result, operand->value);
+        return result;
     }
 
     if (operand->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *addr = operand->value;
         if (addr->base && addr->base->assert_type == LIR_OPERAND_REG) {
-            return addr->base->value;
+            slice_push(result, addr->base->value);
         }
+
+        if (addr->index && addr->index->assert_type == LIR_OPERAND_REG) {
+            slice_push(result, addr->index->value);
+        }
+
+        return result;
     }
 
     return NULL;
@@ -1699,10 +1707,17 @@ static bool operand_conflicts_with_dst(lir_operand_t *src_opd, lir_operand_t *ds
 
     // Check if src uses dst's register as a base in indirect address
     reg_t *dst_reg = dst_opd->value;
-    reg_t *src_base_reg = extract_operand_reg(src_opd); // src operand 存在两种情况 reg， reg 和 [reg]
+    slice_t *src_base_reg_list = extract_operand_regs(src_opd); // src operand 存在两种情况 reg， reg 和 [reg]
+    if (src_base_reg_list == NULL) {
+        return false;
+    }
 
-    if (src_base_reg != NULL && reg_equals(src_base_reg, dst_reg)) {
-        return true;
+    // 检测是否存在 reg 冲突
+    SLICE_FOR(src_base_reg_list) {
+        reg_t *src_reg = src_base_reg_list->take[_i];
+        if (reg_equals(src_reg, dst_reg)) {
+            return true;
+        }
     }
 
     return false;
@@ -1857,14 +1872,10 @@ void parallel_moves(closure_t *c, slice_t *moves, linked_t *new_ops) {
         }
     }
 
-    free(src->take);
-    free(src2->take);
-    free(dst->take);
-    free(status->take);
-    free(src);
-    free(src2);
-    free(dst);
-    free(status);
+    slice_free(src);
+    slice_free(src2);
+    slice_free(dst);
+    slice_free(status);
 }
 
 void handle_parallel_moves(closure_t *c) {
