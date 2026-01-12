@@ -1,7 +1,7 @@
 
 # nature 编程语言
   
-通用开源编程语言与编译器，期望为开发者提供**简洁优雅**的开发体验，**简单高效**构建出安全可靠的跨平台软件。
+通用系统型编程语言与编译器，期望用**简洁优雅**的方式的构建高性能、高可靠、跨平台软件。
 
 ## 特性
 
@@ -106,7 +106,9 @@ nature 作为通用编程语言，基于现有的语言特性和标准库实现�
 
 ## 基准测试
 
-Linux Ubuntu 虚拟机（内核版本 6.17.8，aarch64 架构, Mac M4 芯片, 9 核, 16G）
+https://github.com/nature-lang/benchmark
+
+Linux Ubuntu 虚拟机（内核版本 6.17.8，aarch64 架构, Mac M4 芯片, 9 核, 8G）
 
 **IO: HTTP Server**
 
@@ -114,41 +116,41 @@ Linux Ubuntu 虚拟机（内核版本 6.17.8，aarch64 架构, Mac M4 芯片, 9 
 
 | Language | Version | QPS (req/sec) | Mean Response Time |
 |----------|---------|---------------|---------------------|
-| Nature | v0.7.1 | ~104,000 | 9.60 ms |
-| Go | 1.25.5 | ~90,000 | 11.02 ms |
-| Node.js | v25.2.0 | ~66,000 | 14.99 ms |
+| Nature | v0.7.2  | ~104,000 | 9 ms |
+| Go | 1.25.5  | ~90,000 | 11 ms |
+| Node.js | v25.2.0 | ~66,000 | 14 ms |
 
 **Call: Fibonacci(45) time consumed**
 
 | Language | Version | Mean Time |
 |----------|---------|-----------|
-| Nature | v0.7.1 | ~2.3 s |
-| Go | 1.25.5 | ~2.3 s |
-| Rust | 1.92.0 | ~1.7 s |
-| Node.js | v25.2.0 | ~6.0 s |
+| Nature | v0.7.2  | ~2.4 s    |
+| Go | 1.25.5  | ~2.4 s    |
+| Rust | 1.92.0  | ~1.7 s    |
+| Node.js | v25.2.0 | ~6.0 s    |
 
 **CPU: Calculate 1 billion times π**
 
 | Language | Version | Mean Time |
 |----------|---------|-----------|
-| Nature | v0.7.1 | ~762 ms |
-| Go | 1.25.5 | ~991 ms |
-| Rust | 1.92.0 | ~547 ms |
-| Node.js | v25.2.0 | ~837 ms |
+| Nature | v0.7.2  | ~512 ms   |
+| Go | 1.25.5  | ~512 ms   |
+| Rust | 1.92.0  | ~552 ms   |
+| Node.js | v25.2.0 | ~850 ms   |
 
 **FFI: Calling 100 million c fn sqrt time consumed**
 
 | Language | Version | Mean Time |
 |----------|---------|-----------|
-| Nature | v0.7.1 | ~73 ms |
-| Go | 1.25.5 | ~2178 ms |
+| Nature | v0.7.2  | ~73 ms |
+| Go | 1.25.5  | ~2178 ms |
 
 **Coroutine: 1 Million Coroutine Time/Memory consumed**
 
 | Language | Version | Creation Time | Dispatch Time | Peak Memory |
 |----------|---------|---------------|---------------|-------------|
-| Nature | v0.7.1 | ~559 ms | ~589 ms       | ~969 MB |
-| Go | 1.25.5 | ~1035 ms | ~1047 ms      | ~2580 MB |
+| Nature | v0.7.2  | ~559 ms | ~589 ms       | ~969 MB |
+| Go | 1.25.5  | ~1035 ms | ~1047 ms      | ~2580 MB |
 
 
 ## 贡献指南
