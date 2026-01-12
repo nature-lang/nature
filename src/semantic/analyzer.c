@@ -594,10 +594,10 @@ static void analyzer_end_scope(module_t *m) {
     }
 }
 
-static ast_stmt_t *auto_as_stmt(module_t *m, int line, char *subject_ident, type_t target_type) {
-    // var x = x as T
+static ast_stmt_t *auto_as_stmt(module_t *m, int line, char *source_ident, char *binding_ident, type_t target_type) {
+    // var binding = source as T
     ast_vardef_stmt_t *vardef = NEW(ast_vardef_stmt_t);
-    vardef->var_decl.ident = strdup(subject_ident);
+    vardef->var_decl.ident = strdup(binding_ident);
     vardef->var_decl.type = type_copy(m, target_type);
 
     ast_expr_t expr = {
@@ -607,7 +607,7 @@ static ast_stmt_t *auto_as_stmt(module_t *m, int line, char *subject_ident, type
     };
 
     ast_as_expr_t *as_expr = NEW(ast_as_expr_t);
-    as_expr->src = *ast_ident_expr(expr.line, expr.column, strdup(vardef->var_decl.ident));
+    as_expr->src = *ast_ident_expr(expr.line, expr.column, strdup(source_ident));
     as_expr->target_type = type_copy(m, target_type);
     expr.value = as_expr;
     vardef->right = NEW(ast_expr_t);
@@ -644,10 +644,14 @@ static void analyzer_if(module_t *m, ast_if_stmt_t *if_stmt) {
     if (is_expr) {
         ast_is_expr_t *is_cond = is_expr->value;
         assert(is_cond->src.assert_type == AST_EXPR_IDENT);
-        char *ident = ((ast_ident *) is_cond->src.value)->literal;
-        type_t target_type = is_cond->target_type;
-        ast_stmt_t *as_stmt = auto_as_stmt(m, is_expr->line, ident, target_type);
-        slice_insert(if_stmt->consequent, 0, as_stmt);
+        
+        // 只有当 binding_ident 存在时才插入 auto as stmt
+        if (is_cond->binding_ident) {
+            char *source_ident = ((ast_ident *) is_cond->src.value)->literal;
+            type_t target_type = is_cond->target_type;
+            ast_stmt_t *as_stmt = auto_as_stmt(m, is_expr->line, source_ident, is_cond->binding_ident, target_type);
+            slice_insert(if_stmt->consequent, 0, as_stmt);
+        }
     }
 
     // ident 唯一标识生成
@@ -722,8 +726,12 @@ static void analyzer_match(module_t *m, ast_match_t *match) {
             ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, 0);
             assert(cond_expr->assert_type == AST_EXPR_MATCH_IS);
             ast_match_is_expr_t *is_cond_expr = cond_expr->value;
-            slice_insert(match_case->handle_body, 0,
-                         auto_as_stmt(m, cond_expr->line, subject_ident, is_cond_expr->target_type));
+            
+            // 只有当 binding_ident 存在时才插入 auto as stmt
+            if (is_cond_expr->binding_ident) {
+                slice_insert(match_case->handle_body, 0,
+                             auto_as_stmt(m, cond_expr->line, subject_ident, is_cond_expr->binding_ident, is_cond_expr->target_type));
+            }
         }
 
         analyzer_begin_scope(m);

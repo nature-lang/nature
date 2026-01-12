@@ -882,14 +882,14 @@ fn square.unique() {
 }
 
 fn use_com(combination c):int {
-    if c is square {
+    if c is square v {
         // square c = c as square, c is interface
-        c.unique()
+        v.unique()
         return 1
     }
-    if c is ptr<square> {
-        // ptr<square> c = c as ptr<square>
-        c.unique()
+    if c is ptr<square> v {
+        // ptr<square> v = c as ptr<square>
+        v.unique()
         return 2
     }
     return 0
@@ -1021,8 +1021,8 @@ fn test_t.nice():bool {
 }
 
 fn use(testable? test) {
-    if (test is testable) { // test = test as testable
-        println('testable value is', test.nice())
+    if (test is testable v) { // test = test as testable
+        println('testable value is', v.nice())
     } else {
         println('testable value is', test.nice()) // 没有 auto as, 就是 union
     }
@@ -1049,8 +1049,8 @@ fn test_t.nice():bool {
 }
 
 fn use(testable? test) {
-    if (test is testable) { // test = test as testable
-        println('testable value is', test.nice())
+    if (test is testable v) { // v = test as testable
+        println('testable value is', v.nice())
     } else {
         println('test not testable')
     }
@@ -1077,8 +1077,8 @@ fn test_t.nice():bool {
 }
 
 fn use(testable? test) {
-    if (test is testable) { // test = test as testable
-        println('testable value is', test.nice())
+    if (test is testable v) { // var v = test as testable
+        println('testable value is', v.nice())
     } else {
         println('test not testable')
     }

@@ -1,0 +1,155 @@
+=== test_basic
+--- main.n
+type union_t1 = int|float|bool|u8|i64
+
+fn bool_test():bool {
+    return true
+}
+
+fn main() {
+    int? foo = null
+    int bar = match foo {
+        is int val -> val
+        is null -> -1
+    }
+
+    assert(bar== -1)
+
+    union_t1 foo2 = 3.14
+    if foo2 is float v {
+        assert(v == 3.14)
+        v = 31.1
+    }
+
+    match foo2 {
+       is int -> assert(false)
+       is float x-> assert(x == 3.14)
+       is bool -> assert(false)
+       is u8 -> assert(false)
+    }
+
+    union_t1 foo3 = true
+    if false {
+    } else if true && (1 > 0 || 2 > 0) && foo3 is bool f && bool_test() {
+        assert(f == true)
+    } else {
+        assert(false)
+    }
+}
+
+=== test_issue_208
+--- main.n
+import "hashtable.n"
+
+fn main() {
+    var table = hashtable.newHashTable(10)
+    table.insert("name", "Alice")
+    table.insert("age", "30")
+    println(table.get("name"))
+    println(table.get("age"))
+}
+
+--- hashtable.n
+import strings
+
+type HashItem = struct {
+    string key
+    string value
+}
+
+fn newItem(string key , string value ): HashItem {
+    return HashItem {
+        key: key,
+        value: value,
+    }
+}
+
+type HashTable = struct {
+    int size
+    int count
+    [HashItem?] items
+}
+
+fn newHashTable(int size): HashTable {
+    return HashTable {
+        size: size,
+        count: 0,
+        items: vec_new<HashItem?>(null, size),
+    }
+}
+
+fn HashTable.hash(string s, int a, int m): int {
+    var hash = 0
+    for var i= 0; i < s.len(); i += 1 {
+        hash += pow(a,s.len() - (i + 1)) * s[i] as int
+        hash = hash % m
+    }
+    return hash
+}
+
+fn HashTable.getHash(string s, int num_bucket, int attempt): int {
+    var hash_a = self.hash(s, 99, num_bucket)
+    var hash_b = self.hash(s, 66, num_bucket)
+    return (hash_a + (attempt * (hash_b + 1))) % num_bucket
+}
+
+fn HashTable.insert(string key, string value) {
+    var item = newItem(key, value)
+    var idx = self.getHash(key, self.size, 0)
+    println("Inserting at index: ", idx)
+    HashItem? current_item = self.items[idx]
+    var i = 1
+    for true {
+        match current_item {
+            is HashItem-> {
+                idx = self.getHash(key, self.size, i)
+                ////type infer faild here
+                current_item = self.items[idx]
+                //current_item = self.items[idx] as HashItem
+                i += 1
+            };
+            is null -> {
+                break
+            };
+        }
+    }
+    self.items[idx] = item
+    self.count += 1
+}
+
+fn  HashTable.get(string key): string? {
+    var idx = self.getHash(key, self.size, 0)
+    HashItem? item = self.items[idx]
+    var i = 1
+    for true {
+        match item {
+            is HashItem val -> {
+                if val.key == key {
+                    return val.value
+                }
+                idx = self.getHash(key, self.size, i)
+                //type infer faild here
+                item = self.items[idx]
+                i += 1
+            };
+            is null -> {
+                break
+            };
+        }
+    }
+    return null
+}
+
+fn pow(int a, int b): int {
+    var result = 1
+    for var i = 0; i < b; i += 1 {
+        result = result * a
+    }
+    return result
+}
+
+--- output.txt
+Inserting at index:  9
+Inserting at index:  5
+Alice
+30

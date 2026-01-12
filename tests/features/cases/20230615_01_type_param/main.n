@@ -5,8 +5,8 @@ fn main() {
     println(foo)
 
     foo = [1 as i8, 2, 3]
-    if foo is [i8] {
-        print(foo[0], foo[1], foo[2], '\n')
+    if foo is [i8] v {
+        print(v[0], v[1], v[2], '\n')
     }
 
     // struct box

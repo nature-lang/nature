@@ -1166,7 +1166,7 @@ impl<'a> Semantic<'a> {
                         case.is_default = true;
                         continue;
                     }
-                } else if let AstNode::MatchIs(t) = &mut cond.node {
+                } else if let AstNode::MatchIs(t, _binding) = &mut cond.node {
                     self.analyze_type(t);
 
                     is_cond = true;
@@ -1182,11 +1182,15 @@ impl<'a> Semantic<'a> {
             if is_cond && subject_ident.is_some() {
                 let Some(subject_literal) = subject_ident.clone() else { unreachable!() };
                 let Some(cond_expr) = case.cond_list.first() else { unreachable!() };
-                let AstNode::MatchIs(target_type) = &cond_expr.node else { unreachable!() };
-                case.handle_body.stmts.insert(
-                    0,
-                    self.auto_as_stmt(cond_expr.start, cond_expr.end, &subject_literal, subject_symbol_id, target_type),
-                );
+                let AstNode::MatchIs(target_type, binding_ident) = &cond_expr.node else { unreachable!() };
+                
+                // 只有当 binding_ident 存在时才插入 auto as stmt
+                if let Some(binding) = binding_ident {
+                    case.handle_body.stmts.insert(
+                        0,
+                        self.auto_as_stmt(cond_expr.start, cond_expr.end, &subject_literal, subject_symbol_id, binding, target_type),
+                    );
+                }
             }
 
             if case.handle_body.stmts.len() > 0 {
@@ -1244,7 +1248,7 @@ impl<'a> Semantic<'a> {
                 self.analyze_type(type_);
                 self.analyze_expr(src);
             }
-            AstNode::Is(target_type, src) => {
+            AstNode::Is(target_type, src, _binding) => {
                 self.analyze_type(target_type);
                 self.analyze_expr(src);
             }
@@ -1528,7 +1532,7 @@ impl<'a> Semantic<'a> {
     }
 
     pub fn extract_is_expr(&mut self, cond: &Box<Expr>) -> Option<Box<Expr>> {
-        if let AstNode::Is(_target_type, src) = &cond.node {
+        if let AstNode::Is(_target_type, src, _binding) = &cond.node {
             // is src 必须是 ident 才能进行 自动 as 转换
             if let AstNode::Ident(..) = &src.node {
                 return Some(cond.clone());
@@ -1560,10 +1564,10 @@ impl<'a> Semantic<'a> {
         return None;
     }
 
-    pub fn auto_as_stmt(&mut self, start: usize, end: usize, subject_ident: &str, symbol_id: NodeId, target_type: &Type) -> Box<Stmt> {
-        // var x = x as T
+    pub fn auto_as_stmt(&mut self, start: usize, end: usize, source_ident: &str, symbol_id: NodeId, binding_ident: &str, target_type: &Type) -> Box<Stmt> {
+        // var binding = source as T
         let var_decl = Arc::new(Mutex::new(VarDeclExpr {
-            ident: subject_ident.to_string(),
+            ident: binding_ident.to_string(),
             type_: target_type.clone(),
             be_capture: false,
             heap_ident: None,
@@ -1573,7 +1577,7 @@ impl<'a> Semantic<'a> {
         }));
 
         // 创建标识符表达式作为 as 表达式的源
-        let src_expr = Box::new(Expr::ident(start, end, subject_ident.to_string(), symbol_id));
+        let src_expr = Box::new(Expr::ident(start, end, source_ident.to_string(), symbol_id));
         let as_expr = Box::new(Expr {
             node: AstNode::As(target_type.clone(), src_expr),
             start,
@@ -1593,13 +1597,16 @@ impl<'a> Semantic<'a> {
     pub fn analyze_if(&mut self, cond: &mut Box<Expr>, consequent: &mut AstBody, alternate: &mut AstBody) {
         // if has is expr push T e = e as T
         if let Some(is_expr) = self.extract_is_expr(cond) {
-            let AstNode::Is(target_type, src) = is_expr.node else { unreachable!() };
+            let AstNode::Is(target_type, src, binding_ident) = is_expr.node else { unreachable!() };
 
             let AstNode::Ident(ident, symbol_id) = &src.node else { unreachable!() };
 
-            let ast_stmt = self.auto_as_stmt(is_expr.start, is_expr.end, &ident, *symbol_id, &target_type);
-            // insert ast_stmt to consequent first
-            consequent.stmts.insert(0, ast_stmt);
+            // 只有当 binding_ident 存在时才插入 auto as stmt
+            if let Some(binding) = binding_ident {
+                let ast_stmt = self.auto_as_stmt(is_expr.start, is_expr.end, &ident, *symbol_id, &binding, &target_type);
+                // insert ast_stmt to consequent first
+                consequent.stmts.insert(0, ast_stmt);
+            }
         }
 
         self.analyze_expr(cond);

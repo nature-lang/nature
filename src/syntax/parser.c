@@ -1158,6 +1158,14 @@ static ast_expr_t parser_match_is_expr(module_t *m) {
 
     is_expr->target_type = parser_single_type(m);
 
+    // 解析可选的绑定变量名
+    if (parser_is(m, TOKEN_IDENT)) {
+        token_t *ident = parser_advance(m);
+        is_expr->binding_ident = ident->literal;
+    } else {
+        is_expr->binding_ident = NULL;
+    }
+
     result.assert_type = AST_EXPR_MATCH_IS;
     result.value = is_expr;
     return result;
@@ -1170,6 +1178,15 @@ static ast_expr_t parser_is_expr(module_t *m, ast_expr_t left) {
 
     is_expr->target_type = parser_single_type(m);
     is_expr->src = left;
+
+    // 解析可选的绑定变量名
+    if (parser_is(m, TOKEN_IDENT)) {
+        token_t *ident = parser_advance(m);
+        is_expr->binding_ident = ident->literal;
+    } else {
+        is_expr->binding_ident = NULL;
+    }
+
     result.assert_type = AST_EXPR_IS;
     result.value = is_expr;
     return result;
