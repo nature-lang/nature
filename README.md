@@ -1,6 +1,6 @@
 # Nature Programming Language  
   
-A general-purpose system programming language and compiler, designed to build high-performance, highly reliable, and cross-platform software in a concise and elegant way.
+A general-purpose system programming language and compiler, designed to build high-performance, safe and reliable, and cross-platform software in a concise and elegant way.
 
 ## Features
 
@@ -16,7 +16,7 @@ A general-purpose system programming language and compiler, designed to build hi
 - High-performance IO based on libuv implementation
 - High-performance runtime and compiler based on pure C implementation
 - Built-in data structures vec/map/set/tup and common standard library implementations
-- Function calls follow system ABI, built-in libc, convenient for calling C standard library functions
+- Function calls follow system ABI, built-in libc, c std functions are called without performance loss.
 - Centralized package management system npkg
 - Editor LSP support
   
@@ -24,7 +24,9 @@ A general-purpose system programming language and compiler, designed to build hi
 
 The nature programming language has reached an early usable version, with a basically stable syntax API that will not change significantly before version 1.0. Future versions will add some necessary and commonly used syntax features such as enum, ternary operators, struct labels, etc.
 
-The current version supports compilation for the following target architectures: linux_amd64, linux_arm64, linux_riscv64, darwin_amd64, darwin_arm64. Future versions will leverage zig ld to compile for Windows platforms.
+Key features to be completed include controllable memory allocator, LLM coding adaptation, DSL test framework, GUI adaptation, and WASM3.0 adaptation.
+
+The current version supports compilation for the following target architectures: linux_amd64, linux_arm64, linux_riscv64, darwin_amd64, darwin_arm64. 
 
 Nature includes a set of test cases and standard libraries to test the usability of basic functionality and syntax, includes a set of small to medium-sized projects to test overall usability, but has not yet been tested in large-scale projects.
   

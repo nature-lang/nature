@@ -1,7 +1,7 @@
 
 # nature 编程语言
   
-通用系统型编程语言与编译器，期望用**简洁优雅**的方式的构建高性能、高可靠、跨平台软件。
+通用系统型编程语言与编译器，期望用**简洁优雅**的方式构建高性能、安全可靠、跨平台软件。
 
 ## 特性
 
@@ -17,15 +17,17 @@
 - 基于 libuv 实现的高性能 IO
 - 纯 C 实现的高性能 runtime 和编译器
 - 内置数据结构 vec/map/set/tup 和常用标准库实现
-- 函数调用遵守 system ABI，内置 libc，可以方便地调用 c 标准库函数
+- 函数调用遵守 system ABI，内置 libc，无性能损耗调用 c 标准库函数
 - 集中式包管理系统 npkg
 - 编辑器 lsp 支持
   
 ## 概况
 
-nature 编程语言已经达到早期可用版本，语法 API 基本稳定，在 1.0 版本之前不会有大幅的变化，后续版本会添加一些必要且常用的语法，如 enum，三元运算符，struct label 等。
+nature 编程语言已经达到早期可用版本，语法 API 基本稳定，在 1.0 版本之前不会有大幅的变化，后续版本会添加一些必要的语法，如 enum，三元运算符，struct label 等。
 
-当前版本编译目标架构包含 linux_amd64、linux_arm64、linux_riscv64、darwin_amd64、darwin_arm64。后续版本会借助 zig ld 编译到 windows 平台。
+待完成的关键特性有可控内存分配器，LLM 编码适配，DSL 测试框架，GUI 适配，WASM3.0 适配。
+
+当前版本编译目标架构包含 linux_amd64、linux_arm64、linux_riscv64、darwin_amd64、darwin_arm64。
 
 nature 包含一组测试用例和标准库用来测试基本功能和语法的可用性，包含一组中小型项目测试整体可用性，还未经过大型的项目测试。
  
