@@ -153,3 +153,53 @@ Inserting at index:  9
 Inserting at index:  5
 Alice
 30
+
+=== test_expression_auto_as
+--- main.n
+type book_t = struct{
+    string title
+    string author
+    any a
+}
+
+fn main() {
+    var b = book_t{
+        title: "Nature Lang",
+        author: "weiwenhao",
+        a: 12,
+    }
+
+    // Test match with property access expression (b.a)
+    match b.a {
+        is int v -> println('b.a is int: ', v + 1)
+        _ -> panic('b.a is not int')
+    }
+
+    // Test if with property access expression
+    if b.a is int x {
+        println('if: b.a is int: ', x * 2)
+    } else {
+        panic('b.a is not int in if')
+    }
+
+    // Test with different type
+    b.a = 3.14
+    match b.a {
+        is float f -> println('b.a is float: ', f + 1.0)
+        _ -> panic('b.a is not float')
+    }
+
+    // Test with string
+    b.a = "hello"
+    if b.a is string s {
+        println('b.a is string: ', s)
+    } else {
+        panic('b.a is not string')
+    }
+}
+
+--- output.txt
+b.a is int:  13
+if: b.a is int:  24
+b.a is float:  4.140000
+b.a is string:  hello

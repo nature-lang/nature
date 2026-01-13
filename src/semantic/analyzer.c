@@ -594,7 +594,7 @@ static void analyzer_end_scope(module_t *m) {
     }
 }
 
-static ast_stmt_t *auto_as_stmt(module_t *m, int line, char *source_ident, char *binding_ident, type_t target_type) {
+static ast_stmt_t *auto_as_stmt(module_t *m, int line, ast_expr_t *source_expr, char *binding_ident, type_t target_type) {
     // var binding = source as T
     ast_vardef_stmt_t *vardef = NEW(ast_vardef_stmt_t);
     vardef->var_decl.ident = strdup(binding_ident);
@@ -607,7 +607,7 @@ static ast_stmt_t *auto_as_stmt(module_t *m, int line, char *source_ident, char 
     };
 
     ast_as_expr_t *as_expr = NEW(ast_as_expr_t);
-    as_expr->src = *ast_ident_expr(expr.line, expr.column, strdup(source_ident));
+    as_expr->src = *ast_expr_copy(m, source_expr);
     as_expr->target_type = type_copy(m, target_type);
     expr.value = as_expr;
     vardef->right = NEW(ast_expr_t);
@@ -622,7 +622,8 @@ static ast_stmt_t *auto_as_stmt(module_t *m, int line, char *source_ident, char 
 }
 
 static ast_expr_t *extract_is_expr(module_t *m, ast_expr_t *expr) {
-    if (expr->assert_type == AST_EXPR_IS && ((ast_is_expr_t *) expr->value)->src.assert_type == AST_EXPR_IDENT) {
+    // 支持任意表达式作为 is 表达式的源，不再限制必须是 ident
+    if (expr->assert_type == AST_EXPR_IS) {
         return expr;
     }
 
@@ -643,13 +644,11 @@ static void analyzer_if(module_t *m, ast_if_stmt_t *if_stmt) {
     ast_expr_t *is_expr = extract_is_expr(m, &if_stmt->condition);
     if (is_expr) {
         ast_is_expr_t *is_cond = is_expr->value;
-        assert(is_cond->src.assert_type == AST_EXPR_IDENT);
-        
+
         // 只有当 binding_ident 存在时才插入 auto as stmt
         if (is_cond->binding_ident) {
-            char *source_ident = ((ast_ident *) is_cond->src.value)->literal;
             type_t target_type = is_cond->target_type;
-            ast_stmt_t *as_stmt = auto_as_stmt(m, is_expr->line, source_ident, is_cond->binding_ident, target_type);
+            ast_stmt_t *as_stmt = auto_as_stmt(m, is_expr->line, &is_cond->src, is_cond->binding_ident, target_type);
             slice_insert(if_stmt->consequent, 0, as_stmt);
         }
     }
@@ -677,12 +676,8 @@ static void analyzer_throw(module_t *m, ast_throw_stmt_t *throw) {
 }
 
 static void analyzer_match(module_t *m, ast_match_t *match) {
-    char *subject_ident = NULL;
+    // 支持任意表达式作为 subject，不再限制必须是 ident
     if (match->subject) {
-        if (match->subject->assert_type == AST_EXPR_IDENT) {
-            subject_ident = strdup(((ast_ident *) match->subject->value)->literal);
-        }
-
         analyzer_expr(m, match->subject);
     }
 
@@ -721,16 +716,17 @@ static void analyzer_match(module_t *m, ast_match_t *match) {
             is_cond = false; // cond is logic, not is expr
         }
 
-        if (is_cond && subject_ident) {
+        // 支持任意表达式作为 subject
+        if (is_cond && match->subject) {
             // 添加断言 as 表达式到 handle body 中
             ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, 0);
             assert(cond_expr->assert_type == AST_EXPR_MATCH_IS);
             ast_match_is_expr_t *is_cond_expr = cond_expr->value;
-            
+
             // 只有当 binding_ident 存在时才插入 auto as stmt
             if (is_cond_expr->binding_ident) {
                 slice_insert(match_case->handle_body, 0,
-                             auto_as_stmt(m, cond_expr->line, subject_ident, is_cond_expr->binding_ident, is_cond_expr->target_type));
+                             auto_as_stmt(m, cond_expr->line, match->subject, is_cond_expr->binding_ident, is_cond_expr->target_type));
             }
         }
 
@@ -1368,13 +1364,13 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
     ast_import_select_t *select_ref = table_get(m->selective_import_table, ident->literal);
     if (select_ref != NULL) {
         char *global_ident = ident_with_prefix(select_ref->module_ident, select_ref->original_ident);
-        
+
         // Verify symbol exists
         symbol_t *sym = symbol_table_get(global_ident);
         if (!sym) {
             ANALYZER_ASSERTF(false, "symbol '%s' not found in module", select_ref->original_ident);
         }
-        
+
         // Check if symbol is private (only for functions)
         if (sym->type == SYMBOL_FN) {
             ast_fndef_t *fndef = sym->ast_value;
@@ -1382,7 +1378,7 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
                 ANALYZER_ASSERTF(false, "cannot import private function '%s'", select_ref->original_ident);
             }
         }
-        
+
         ident->literal = global_ident;
         return true;
     }

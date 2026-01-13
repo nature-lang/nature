@@ -311,7 +311,10 @@ impl Project {
             let mut module_db = self.module_db.lock().unwrap();
             let m = &mut module_db[index];
 
-            debug!("build, m.index {}, m.path {}, module_dir {}, project root {}", m.index, m.path, m.dir, self.root);
+            debug!(
+                "build, m.index {}, m.path {}, module_dir {}, project root {}",
+                m.index, m.path, m.dir, self.root
+            );
 
             // clean module symbol table
             self.symbol_table.lock().unwrap().clean_module_scope(m.ident.clone());
@@ -412,7 +415,7 @@ impl Project {
             Some(i) => i.clone(),
             None => {
                 return 0;
-            },
+            }
         };
 
         let refers = self.all_references(main_index);

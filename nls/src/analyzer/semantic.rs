@@ -599,9 +599,42 @@ impl<'a> Semantic<'a> {
     }
 
     /**
+     * 验证选择性导入的符号是否存在于目标模块中
+     * 例如: import co.mutex.{mutex_t} 时验证 mutex_t 是否真实存在
+     */
+    fn validate_selective_imports(&mut self) {
+        for import in &self.imports {
+            if !import.is_selective {
+                continue;
+            }
+
+            let Some(ref items) = import.select_items else { continue };
+
+            for item in items {
+                let global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
+                if self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id).is_some() {
+                    continue;
+                }
+
+                errors_push(
+                    self.module,
+                    AnalyzerError {
+                        start: import.start,
+                        end: import.end,
+                        message: format!("symbol '{}' not found in module '{}'", item.ident, import.module_ident),
+                    },
+                );
+            }
+        }
+    }
+
+    /**
      * analyze 之前，相关 module 的 global symbol 都已经注册完成, 这里不能再重复注册了。
      */
     pub fn analyze(&mut self) {
+        // 验证选择性导入的符号是否存在
+        self.validate_selective_imports();
+
         let mut global_fn_stmt_list = Vec::<Arc<Mutex<AstFnDef>>>::new();
 
         let mut var_assign_list = Vec::<Box<Stmt>>::new();
@@ -825,18 +858,19 @@ impl<'a> Semantic<'a> {
 
         // Check selective imports: import math.{sqrt, pow, Point}
         for import in &self.imports {
-            if import.is_selective {
-                if let Some(ref items) = import.select_items {
-                    for item in items {
-                        let local_name = item.alias.as_ref().unwrap_or(&item.ident);
-                        if local_name == ident {
-                            let global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
-                            if let Some(id) = self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id) {
-                                *ident = global_ident;
-                                return Some(id);
-                            }
-                        }
-                    }
+            if !import.is_selective {
+                continue;
+            }
+            let Some(ref items) = import.select_items else { continue };
+            for item in items {
+                let local_name = item.alias.as_ref().unwrap_or(&item.ident);
+                if local_name != ident {
+                    continue;
+                }
+                let global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
+                if let Some(id) = self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id) {
+                    *ident = global_ident;
+                    return Some(id);
                 }
             }
         }
@@ -1092,19 +1126,20 @@ impl<'a> Semantic<'a> {
 
         // Check selective imports: import math.{sqrt, pow}
         for import in &self.imports {
-            if import.is_selective {
-                if let Some(ref items) = import.select_items {
-                    for item in items {
-                        let local_name = item.alias.as_ref().unwrap_or(&item.ident);
-                        if local_name == ident {
-                            let global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
-                            if let Some(id) = self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id) {
-                                *ident = global_ident;
-                                *symbol_id = id;
-                                return true;
-                            }
-                        }
-                    }
+            if !import.is_selective {
+                continue;
+            }
+            let Some(ref items) = import.select_items else { continue };
+            for item in items {
+                let local_name = item.alias.as_ref().unwrap_or(&item.ident);
+                if local_name != ident {
+                    continue;
+                }
+                let global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
+                if let Some(id) = self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id) {
+                    *ident = global_ident;
+                    *symbol_id = id;
+                    return true;
                 }
             }
         }
@@ -1119,16 +1154,8 @@ impl<'a> Semantic<'a> {
     }
 
     pub fn analyze_match(&mut self, subject: &mut Option<Box<Expr>>, cases: &mut Vec<MatchCase>, start: usize, end: usize) {
-        let mut subject_ident: Option<String> = None;
-        let mut subject_symbol_id: NodeId = 0;
-
+        // 支持任意表达式作为 subject，不再限制必须是 ident
         if let Some(subject_expr) = subject {
-            // if ident
-            if let AstNode::Ident(ident, symbol_id) = &subject_expr.node {
-                subject_ident = Some(ident.clone());
-                subject_symbol_id = *symbol_id;
-            }
-
             self.analyze_expr(subject_expr);
         }
 
@@ -1179,17 +1206,19 @@ impl<'a> Semantic<'a> {
                 is_cond = false; // cond is logic, not is expr
             }
 
-            if is_cond && subject_ident.is_some() {
-                let Some(subject_literal) = subject_ident.clone() else { unreachable!() };
+            // 支持任意表达式作为 subject
+            if is_cond && subject.is_some() {
+                let Some(subject_expr) = subject else { unreachable!() };
                 let Some(cond_expr) = case.cond_list.first() else { unreachable!() };
-                let AstNode::MatchIs(target_type, binding_ident) = &cond_expr.node else { unreachable!() };
-                
+                let AstNode::MatchIs(target_type, binding_ident) = &cond_expr.node else {
+                    unreachable!()
+                };
+
                 // 只有当 binding_ident 存在时才插入 auto as stmt
                 if let Some(binding) = binding_ident {
-                    case.handle_body.stmts.insert(
-                        0,
-                        self.auto_as_stmt(cond_expr.start, cond_expr.end, &subject_literal, subject_symbol_id, binding, target_type),
-                    );
+                    case.handle_body
+                        .stmts
+                        .insert(0, self.auto_as_stmt(cond_expr.start, cond_expr.end, subject_expr, binding, target_type));
                 }
             }
 
@@ -1532,11 +1561,9 @@ impl<'a> Semantic<'a> {
     }
 
     pub fn extract_is_expr(&mut self, cond: &Box<Expr>) -> Option<Box<Expr>> {
-        if let AstNode::Is(_target_type, src, _binding) = &cond.node {
-            // is src 必须是 ident 才能进行 自动 as 转换
-            if let AstNode::Ident(..) = &src.node {
-                return Some(cond.clone());
-            }
+        // 支持任意表达式作为 is 表达式的源，不再限制必须是 ident
+        if let AstNode::Is(_target_type, _src, _binding) = &cond.node {
+            return Some(cond.clone());
         }
 
         // binary && extract
@@ -1564,7 +1591,7 @@ impl<'a> Semantic<'a> {
         return None;
     }
 
-    pub fn auto_as_stmt(&mut self, start: usize, end: usize, source_ident: &str, symbol_id: NodeId, binding_ident: &str, target_type: &Type) -> Box<Stmt> {
+    pub fn auto_as_stmt(&mut self, start: usize, end: usize, source_expr: &Box<Expr>, binding_ident: &str, target_type: &Type) -> Box<Stmt> {
         // var binding = source as T
         let var_decl = Arc::new(Mutex::new(VarDeclExpr {
             ident: binding_ident.to_string(),
@@ -1576,8 +1603,8 @@ impl<'a> Semantic<'a> {
             symbol_id: 0,
         }));
 
-        // 创建标识符表达式作为 as 表达式的源
-        let src_expr = Box::new(Expr::ident(start, end, source_ident.to_string(), symbol_id));
+        // 克隆源表达式作为 as 表达式的源
+        let src_expr = source_expr.clone();
         let as_expr = Box::new(Expr {
             node: AstNode::As(target_type.clone(), src_expr),
             start,
@@ -1597,13 +1624,13 @@ impl<'a> Semantic<'a> {
     pub fn analyze_if(&mut self, cond: &mut Box<Expr>, consequent: &mut AstBody, alternate: &mut AstBody) {
         // if has is expr push T e = e as T
         if let Some(is_expr) = self.extract_is_expr(cond) {
-            let AstNode::Is(target_type, src, binding_ident) = is_expr.node else { unreachable!() };
-
-            let AstNode::Ident(ident, symbol_id) = &src.node else { unreachable!() };
+            let AstNode::Is(target_type, src, binding_ident) = is_expr.node else {
+                unreachable!()
+            };
 
             // 只有当 binding_ident 存在时才插入 auto as stmt
             if let Some(binding) = binding_ident {
-                let ast_stmt = self.auto_as_stmt(is_expr.start, is_expr.end, &ident, *symbol_id, &binding, &target_type);
+                let ast_stmt = self.auto_as_stmt(is_expr.start, is_expr.end, &src, &binding, &target_type);
                 // insert ast_stmt to consequent first
                 consequent.stmts.insert(0, ast_stmt);
             }
