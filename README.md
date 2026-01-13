@@ -26,7 +26,7 @@ The nature programming language has reached an early usable version, with a basi
 
 Key features to be completed include controllable memory allocator, LLM coding adaptation, DSL test framework, GUI adaptation, and WASM3.0 adaptation.
 
-The current version supports compilation for the following target architectures: linux_amd64, linux_arm64, linux_riscv64, darwin_amd64, darwin_arm64. Future versions will leverage zig ld to compile for Windows platforms.
+The current version supports compilation for the following target architectures: linux_amd64, linux_arm64, linux_riscv64, darwin_amd64, darwin_arm64. 
 
 Nature includes a set of test cases and standard libraries to test the usability of basic functionality and syntax, includes a set of small to medium-sized projects to test overall usability, but has not yet been tested in large-scale projects.
   
