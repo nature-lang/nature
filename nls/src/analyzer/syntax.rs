@@ -473,10 +473,13 @@ impl<'a> Syntax {
 
         // 处理连续的 >> 合并
         if infix_token == TokenType::RightAngle && self.next_is(1, TokenType::RightAngle) {
+            let first_token_start = self.peek().start;
             self.advance();
 
             let token = self.peek_mut();
             token.token_type = TokenType::RightShift;
+            token.start = first_token_start;
+            token.length = 2;
             infix_token = TokenType::RightShift;
         }
 
@@ -2197,16 +2200,16 @@ impl<'a> Syntax {
             let mut prev_token = token;
             while self.consume(TokenType::Dot) {
                 let dot_token = self.prev().unwrap().clone();
-                
+
                 // Check for space before dot: prev_token should end right where dot starts
                 if dot_token.start != prev_token.end {
                     return Err(SyntaxError(
                         prev_token.end,
                         dot_token.start,
-                        "spaces are not allowed before '.' in import paths".to_string()
+                        "spaces are not allowed before '.' in import paths".to_string(),
                     ));
                 }
-                
+
                 // Check if next is left curly for selective import BEFORE trying to parse ident
                 if self.is(TokenType::LeftCurly) {
                     // Before breaking, check for space after dot
@@ -2215,23 +2218,23 @@ impl<'a> Syntax {
                         return Err(SyntaxError(
                             dot_token.end,
                             curly_token.start,
-                            "spaces are not allowed after '.' in import paths".to_string()
+                            "spaces are not allowed after '.' in import paths".to_string(),
                         ));
                     }
                     break;
                 }
-                
+
                 let ident = self.must(TokenType::Ident)?;
-                
+
                 // Check for space after dot: ident should start right after dot ends
                 if ident.start != dot_token.end {
                     return Err(SyntaxError(
                         dot_token.end,
                         ident.start,
-                        "spaces are not allowed after '.' in import paths".to_string()
+                        "spaces are not allowed after '.' in import paths".to_string(),
                     ));
                 }
-                
+
                 package.push(ident.literal.clone());
                 import_end = ident.end;
                 prev_token = ident.clone();
@@ -2251,11 +2254,11 @@ impl<'a> Syntax {
             // For package imports, check if current token is LeftCurly
             self.is(TokenType::LeftCurly)
         };
-        
+
         let (is_selective, select_items) = if should_parse_selective {
             self.must(TokenType::LeftCurly)?; // consume the {
             let mut items = Vec::new();
-            
+
             loop {
                 let ident_token = self.must(TokenType::Ident)?;
                 let ident = ident_token.literal.clone();
@@ -2264,14 +2267,14 @@ impl<'a> Syntax {
                 } else {
                     None
                 };
-                
+
                 items.push(ImportSelectItem { ident, alias });
-                
+
                 if !self.consume(TokenType::Comma) {
                     break;
                 }
             }
-            
+
             self.must(TokenType::RightCurly)?;
             import_end = self.prev().unwrap().end;
             (true, Some(items))

@@ -1,11 +1,11 @@
 pub mod common;
-pub mod lexer; // 声明子模块
+pub mod completion;
 pub mod flow;
+pub mod lexer; // 声明子模块
 pub mod semantic;
 pub mod symbol;
 pub mod syntax;
 pub mod typesys;
-pub mod completion;
 
 use std::path::Path;
 
@@ -430,7 +430,6 @@ pub fn analyze_imports(
  *  后续的统一 analyzer 时会全部进行解析, 是对原始 nature 编译器的 can_import_symbol_table 字段的优化
  */
 pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, stmts: &Vec<Box<Stmt>>) {
-
     for stmt in stmts {
         match &stmt.node {
             AstNode::VarDef(var_decl_mutex, _) => {
@@ -449,11 +448,14 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                         var_decl.symbol_id = symbol_id;
                     }
                     Err(e) => {
-                        errors_push(m, AnalyzerError {
-                            start: var_decl.symbol_start,
-                            end: var_decl.symbol_end,
-                            message: e,
-                        });
+                        errors_push(
+                            m,
+                            AnalyzerError {
+                                start: var_decl.symbol_start,
+                                end: var_decl.symbol_end,
+                                message: e,
+                            },
+                        );
                     }
                 }
 
@@ -479,11 +481,14 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                         constdef.symbol_id = symbol_id;
                     }
                     Err(e) => {
-                        errors_push(m, AnalyzerError {
-                            start: constdef.symbol_start,
-                            end: constdef.symbol_end,
-                            message: e,
-                        });
+                        errors_push(
+                            m,
+                            AnalyzerError {
+                                start: constdef.symbol_start,
+                                end: constdef.symbol_end,
+                                message: e,
+                            },
+                        );
                     }
                 }
             }
@@ -497,11 +502,14 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                     }
                     Err(e) => {
                         debug!("define module typedef {} failed: {}, in scope {}", typedef.ident, e, m.scope_id);
-                        errors_push(m, AnalyzerError {
-                            start: typedef.symbol_start,
-                            end: typedef.symbol_end,
-                            message: e,
-                        });
+                        errors_push(
+                            m,
+                            AnalyzerError {
+                                start: typedef.symbol_start,
+                                end: typedef.symbol_end,
+                                message: e,
+                            },
+                        );
                     }
                 }
 
@@ -519,11 +527,14 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                             fndef.symbol_id = symbol_id;
                         }
                         Err(_e) => {
-                            errors_push(m, AnalyzerError {
-                                start: fndef.symbol_start,
-                                end: fndef.symbol_end,
-                                message: format!("ident '{}' redeclared", fndef.symbol_name),
-                            });
+                            errors_push(
+                                m,
+                                AnalyzerError {
+                                    start: fndef.symbol_start,
+                                    end: fndef.symbol_end,
+                                    message: format!("ident '{}' redeclared", fndef.symbol_name),
+                                },
+                            );
                         }
                     }
 
