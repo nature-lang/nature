@@ -155,7 +155,7 @@ Linux Ubuntu VM（Kernel version 6.17.8，aarch64, Mac M4, 9 cores, 8G memory）
   
 ## Contribution Guidelines
 
-Deployment Guide https://github.com/nature-lang/nature/blob/master/DEVELOPMENT.md
+Development Guide https://github.com/nature-lang/nature/blob/master/DEVELOPMENT.md
 
 Contribution Guide https://nature-lang.org/docs/contribute
 
