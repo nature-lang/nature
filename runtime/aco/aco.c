@@ -203,8 +203,9 @@ void aco_funcp_protector(void) {
         assert((a) + (b) >= (a));        \
     } while (0)
 
-// safe
-void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
+// Initialize share stack from current thread's system stack
+// This uses the thread's native stack instead of mmap-allocated memory
+static void aco_share_stack_init_from_thread(aco_share_stack_t *p) {
     assert(p);
     memset(p, 0, sizeof(aco_share_stack_t));
 
@@ -214,8 +215,106 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
     pthread_mutex_init(&p->owner_lock, NULL);
 #endif
 
+    // Get current thread stack information
+    void *stack_addr = NULL;
+    size_t stack_size = 0;
+
+#ifdef __LINUX
+    pthread_attr_t attr;
+    pthread_getattr_np(pthread_self(), &attr);
+    pthread_attr_getstack(&attr, &stack_addr, &stack_size);
+    pthread_attr_destroy(&attr);
+#elif defined(__DARWIN)
+    // On macOS, use pthread_get_stackaddr_np and pthread_get_stacksize_np
+    stack_addr = pthread_get_stackaddr_np(pthread_self());
+    stack_size = pthread_get_stacksize_np(pthread_self());
+    // Note: on macOS, stack_addr is the TOP of the stack (highest address)
+    // Convert to bottom address for consistency
+    stack_addr = (void*)((uintptr_t)stack_addr - stack_size);
+#else
+    // Fallback: use a conservative estimate based on current SP
+    // Get current stack pointer and assume 8MB stack
+    void *current_sp;
+#if defined(__x86_64__)
+    asm volatile("mov %%rsp, %0" : "=r"(current_sp));
+#elif defined(__aarch64__)
+    asm volatile("mov %0, sp" : "=r"(current_sp));
+#elif defined(__riscv) && (__riscv_xlen == 64)
+    asm volatile("mv %0, sp" : "=r"(current_sp));
+#endif
+    stack_size = 8 * 1024 * 1024; // 8MB
+    stack_addr = (void*)((uintptr_t)current_sp - stack_size / 2);
+#endif
+
+    DEBUGF("[aco_share_stack_init_from_thread] stack_addr=%p, stack_size=%zu", stack_addr, stack_size);
+
+    // Set up share stack structure
+    p->real_ptr = NULL;  // NULL indicates system stack (no munmap needed)
+    p->real_sz = 0;
+    p->ptr = stack_addr;
+    p->sz = stack_size;
+    p->guard_page_enabled = 0;  // System stack already has guard page managed by OS
+    p->owner = NULL;
+
+#if defined(__x86_64__) || defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64))
+    // Reserve 4MB from the top for system use (main function, scheduler, etc.)
+    // Coroutine shared stack uses the remaining 4MB below
+    // (Thread default system stack is typically 8MB)
+    //
+    // Stack layout (addresses grow upward, stack grows downward):
+    //   stack_addr (low)  ----+
+    //                         |  Coroutine shared stack (4MB)
+    //   co_stack_top     ----+
+    //                         |  Reserved for system (4MB)
+    //   stack_top (high) ----+  <-- initial SP
+    //
+    // Reserve half of the stack for system use, the other half for coroutine shared stack
+    size_t reserved_sz = stack_size / 2;
+    uintptr_t stack_top = (uintptr_t)stack_addr + stack_size;
+    uintptr_t co_stack_top = stack_top - reserved_sz;  // Coroutine stack top, below reserved area
+    
+    // Update share stack size to reflect usable coroutine stack area
+    p->sz = stack_size - reserved_sz;
+    
+    // Calculate aligned pointers based on coroutine stack top (not system stack top)
+    uintptr_t u_p = co_stack_top - (sizeof(void*) << 1);
+    u_p = (u_p >> 4) << 4;  // 16-byte alignment
+    p->align_highptr = (void*)u_p;
+
+#if defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64))
+    // aarch64/riscv64 hardware-enforces 16 byte stack alignment
+    p->align_retptr = (void*)(u_p - 16);
+#else
+    p->align_retptr = (void*)(u_p - sizeof(void*));
+#endif
+
+    *((void**)(p->align_retptr)) = (void*)(aco_funcp_protector_asm);
+    
+    p->align_limit = p->sz - 16 - (sizeof(void*) << 1);
+#else
+#error "platform no support yet"
+#endif
+
+    DEBUGF("[aco_share_stack_init_from_thread] stack_top=%p, co_stack_top=%p, align_retptr=%p, align_limit=%zu", 
+           (void*)stack_top, (void*)co_stack_top, p->align_retptr, p->align_limit);
+}
+
+// safe
+void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
+    assert(p);
+    memset(p, 0, sizeof(aco_share_stack_t));
+
+
+#ifdef __LINUX
+    pthread_spin_init(&p->owner_lock, PTHREAD_PROCESS_SHARED);
+#else
+    pthread_mutex_init(&p->owner_lock, NULL);
+#endif
+
+    // When sz == 0, use system stack (thread's native stack)
     if (sz == 0) {
-        sz = 1024 * 1024 * 2;
+        aco_share_stack_init_from_thread(p);
+        return NULL;
     }
     if (sz < 4096) {
         sz = 4096;
@@ -292,8 +391,12 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
 // safe
 void aco_share_stack_destroy(aco_share_stack_t *sstk) {
     assert(sstk != NULL && sstk->ptr != NULL);
-    munmap(sstk->real_ptr, sstk->real_sz);
-    sstk->real_ptr = NULL;
+    // Only call munmap if this is not a system stack
+    // real_ptr == NULL indicates system stack
+    if (sstk->real_ptr != NULL) {
+        munmap(sstk->real_ptr, sstk->real_sz);
+        sstk->real_ptr = NULL;
+    }
     sstk->ptr = NULL;
 }
 
