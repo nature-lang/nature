@@ -480,6 +480,9 @@ static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
         assertf(false, "'%s' command not found. Please ensure it is installed and in your PATH.", use_ld);
     }
 
+    // 检测 ldflags 是否包含 -lc（链接 libc）
+    bool has_lc = strstr(ldflags, "-lc") != NULL;
+
     // 将 modules 中的 obj output_file 添加到文件 objects.txt 中, 用来作为 ld 的参数
     const char *objects_file = path_join(TEMP_DIR, "objects.txt");
     FILE *obj_list = fopen(objects_file, "w");
@@ -499,12 +502,20 @@ static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
     // 添加必要的库文件
     slice_push(linker_libs, lib_file_path(LIB_START_FILE));
 
+    // 如果 ldflags 链接了 -lc，则在 LIB_START_FILE 后引入 crti.o 和 crtn.o
+    if (has_lc) {
+        slice_push(linker_libs, lib_file_path("crti.o"));
+        slice_push(linker_libs, lib_file_path("crtn.o"));
+    }
+
+    slice_push(linker_libs, str_connect("@", objects_file));
     slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
     slice_push(linker_libs, lib_file_path(LIBUV_FILE));
-    slice_push(linker_libs, lib_file_path(LIBC_FILE));
 
-    // arm64 需要 libgcc
-    slice_push(linker_libs, lib_file_path(LIBGCC_FILE));
+    if (!has_lc) {
+        slice_push(linker_libs, lib_file_path(LIBC_FILE));
+        slice_push(linker_libs, lib_file_path(LIBGCC_FILE));
+    }
 
     char libs_str[4096] = ""; // 用于存储库文件路径字符串
     // 拼接 linker_libs 中的库文件路径
@@ -521,14 +532,24 @@ static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
     char *no_warning = "--no-warn-mismatch --no-warn-search-mismatch";
 
     // 对于 ELF 格式，链接命令格式不同于 Mach-O
-    snprintf(cmd, sizeof(cmd),
-             "%s %s -o %s %s @%s %s",
-             use_ld,
-             no_warning,
-             output,
-             ldflags,
-             objects_file,
-             libs_str);
+    // 当链接了 -lc 时，将 objects_file 和 libs_str 提取到 ldflags 的前面
+    if (has_lc) {
+        snprintf(cmd, sizeof(cmd),
+                 "%s %s -o %s %s %s",
+                 use_ld,
+                 no_warning,
+                 output,
+                 libs_str,
+                 ldflags);
+    } else {
+        snprintf(cmd, sizeof(cmd),
+                 "%s %s -o %s %s %s",
+                 use_ld,
+                 no_warning,
+                 output,
+                 ldflags,
+                 libs_str);
+    }
 
     // 使用 ld 命令执行链接
     log_debug("%s", cmd);
