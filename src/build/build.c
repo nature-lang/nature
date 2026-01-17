@@ -1054,6 +1054,12 @@ static inline void cross_native(closure_t *c) {
  * This function ensures all temporary files and directories are properly removed
  */
 static void cleanup_temp_dir() {
+    // verbose 模式下不删除编译临时目录，方便调试
+    if (VERBOSE) {
+        log_info("verbose mode: keeping temporary directory: %s", TEMP_DIR);
+        return;
+    }
+
     if (!TEMP_DIR || strlen(TEMP_DIR) == 0) {
         log_debug("TEMP_DIR is not set, skipping cleanup");
         return;
@@ -1180,7 +1186,12 @@ void build(char *build_entry, bool is_archive) {
 #ifdef DEBUG_LOG
     log_set_level(LOG_DEBUG);
 #else
-    log_set_level(LOG_INFO);
+    // verbose 模式下输出 log_debug 日志
+    if (VERBOSE) {
+        log_set_level(LOG_DEBUG);
+    } else {
+        log_set_level(LOG_INFO);
+    }
 #endif
 
     // 配置初始化
