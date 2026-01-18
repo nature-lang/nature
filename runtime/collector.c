@@ -321,6 +321,9 @@ void mcentral_sweep(mheap_t *mheap) {
 /**
  * save_stack 中保存着 coroutine 栈数组，其中 stack->ptr 指向了原始栈的栈顶
  * 整个 ptr 申请的空间是 sz, 实际占用的空间是 valid_sz，valid_sz 是经过 align 的空间
+ *
+ * 通过 assist_preempt_yield_ret_addr 抢占进入安全点时，寄存器分配不会将 assist_preempt_yield_ret_addr 视为 call 而 spill 所有的寄存器，这导致寄存器中可能保存了 heap 指针
+ * 寄存器会在 co_preempt_yield 保存到 acosw 函数汇编申请的栈空间中。此时需要采取保守的栈扫描策略，将可能存在的 ptr 加入到 gc mark 中
  */
 static void scan_stack(n_processor_t *p, coroutine_t *co) {
     addr_t bp_value = (addr_t) co->aco.reg[ACO_REG_IDX_BP];
@@ -354,7 +357,7 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     }
 
     if (co->flag & FLAG(CO_FLAG_RTFN)) {
-        DEBUGF("[runtime_gc.scan_stack] co=%p rutnime fn, return", co);
+        DEBUGF("[runtime_gc.scan_stack] co=%p runtime fn, return", co);
         return;
     }
 
@@ -383,8 +386,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         addr_t v = fetch_addr_value((addr_t) temp_cursor);
         fndef_t *fn = find_fn(v, p);
         DEBUGF("[runtime_gc.scan_stack] traverse i=%zu, stack.ptr=0x%lx, value=0x%lx, fn=%s, fn.size=%ld", temp_i,
-               temp_cursor, v,
-               fn ? STRTABLE(fn->name_offset) : "", fn ? fn->stack_size : 0);
+                temp_cursor, v,
+                fn ? STRTABLE(fn->name_offset) : "", fn ? fn->stack_size : 0);
         temp_cursor += POINTER_SIZE;
         temp_i += 1;
     }
@@ -405,26 +408,25 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
         if (ret_addr == assist_preempt_yield_ret_addr) {
             found_assist = true;
-            DEBUGF("[runtime_gc.scan_stack] find assist_preempt_yield_ret_addr %p, conservative treatment will be carried out");
+            DEBUGF("[runtime_gc.scan_stack] find assist_preempt_yield_ret_addr %p, conservative treatment will be carried out", (void *) assist_preempt_yield_ret_addr);
             break;
         }
         // check prev value is nature fn
         fndef_t *fn = find_fn(ret_addr, p);
         DEBUGF("[runtime_gc.scan_stack] find frame_bp=%p, bp_offset=%ld, ret_addr=%p, fn=%s",
-               (void *) share_stack_frame_bp, bp_offset, (void *) ret_addr, fn ? STRTABLE(fn->name_offset) : "-");
+                (void *) share_stack_frame_bp, bp_offset, (void *) ret_addr, fn ? STRTABLE(fn->name_offset) : "-");
 
         if (fn) {
             found = true;
             break;
         }
 
+        // 继续推进栈帧直到获取首个 nature fn
 #ifdef __RISCV64
-        // bp value 和 ret_addr 不是那么同步
         share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset - POINTER_SIZE - POINTER_SIZE);
         // save_stack.ptr 指向栈顶, new ret_addr, ret_addr 总是在 prev_bp 的前一个位置(+pointer_size)
         ret_addr = fetch_addr_value(stack_top_ptr + bp_offset - POINTER_SIZE);
 #else
-        // bp value 和 ret_addr 不是那么同步
         share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset);
         // save_stack.ptr 指向栈顶, new ret_addr, ret_addr 总是在 prev_bp 的前一个位置(+pointer_size)
         ret_addr = fetch_addr_value((stack_top_ptr + bp_offset) + POINTER_SIZE);
@@ -449,14 +451,14 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
             addr_t value = fetch_addr_value(frame_cursor);
 
             DEBUGF("[runtime_gc.scan_stack] assist_fn stack frame_cursor %p, ptr_value %p, in span %d",
-                   frame_cursor, value, span_of(value) > 0);
+                    (void *) frame_cursor, (void *) value, span_of(value) > 0);
 
             if (span_of(value)) {
                 insert_gc_worklist(worklist, (void *) value);
             } else {
                 DEBUGF("[runtime_gc.scan_stack] assist_fn skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p",
-                       (void *) frame_cursor, (void *) value,
-                       in_heap(value), span_of(value));
+                        (void *) frame_cursor, (void *) value,
+                        in_heap(value), span_of(value));
             }
 
             frame_cursor -= POINTER_SIZE;
@@ -483,17 +485,31 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     while (true) {
         fndef_t *fn = find_fn(ret_addr, p);
         if (!fn) {
-            DEBUGF("[runtime_gc.scan_stack] fn not found by ret_addr, return_addr=%p, break", (void *) ret_addr);
-            break;
+            DEBUGF("[runtime_gc.scan_stack] fn not found by ret_addr, return_addr=%p, share_stack_frame_bp=%p, bp_offset = %ld",
+                    (void *) ret_addr, (void *) share_stack_frame_bp, share_stack_frame_bp - sp_value);
+            if (share_stack_frame_bp < sp_value || share_stack_frame_bp > (addr_t) co->aco.share_stack->align_retptr) {
+                break;
+            }
+
+            // next and continue
+            addr_t bp_offset = share_stack_frame_bp - sp_value;
+#ifdef __RISCV64
+            share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset - POINTER_SIZE - POINTER_SIZE);
+            ret_addr = fetch_addr_value(stack_top_ptr + bp_offset - POINTER_SIZE);
+#else
+            share_stack_frame_bp = fetch_addr_value(stack_top_ptr + bp_offset);
+            ret_addr = fetch_addr_value((stack_top_ptr + bp_offset) + POINTER_SIZE);
+#endif
+            continue;
         }
 
         DEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p, fn->stack_size=%ld, bp=%p", STRTABLE(fn->name_offset),
-               (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
+                (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
 
-        // share_stack_frame_bp 是 fn 对应的帧的值,已经从帧中取了出来, 原来保存再 BP 寄存器中，现在保存再帧中
         addr_t bp_offset = share_stack_frame_bp - sp_value;
+        // share_stack_frame_bp 是 fn 对应的帧的值,已经从帧中取了出来, 原来保存再 BP 寄存器中，现在保存再帧中
         DEBUGF("[runtime_gc.scan_stack] share_stack_frame_bp %p, sp value %p, offset %p",
-               (void *) share_stack_frame_bp, (void *) sp_value, (void *) bp_offset)
+                (void *) share_stack_frame_bp, (void *) sp_value, (void *) bp_offset)
         assert(bp_offset < 1000000);
 
         // 将 share 转换为 prev 偏移量
@@ -508,8 +524,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         for (int i = 0; i < ptr_count; ++i) {
             bool is_ptr = bitmap_test(RTDATA(fn->gc_bits_offset), i);
             DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, frame_cursor=%p, is_ptr=%d, may_value=%p", STRTABLE(fn->name_offset), i,
-                   ptr_count - 1, (void *) frame_cursor, is_ptr,
-                   (void *) fetch_int_value(frame_cursor, 8));
+                    ptr_count - 1, (void *) frame_cursor, is_ptr,
+                    (void *) fetch_int_value(frame_cursor, 8));
 
             // 即使当前 slot 的类型是 ptr 但是可能存在还没有存储值, 所以需要重复判断
             if (is_ptr) {
@@ -518,8 +534,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
                     insert_gc_worklist(worklist, (void *) value);
                 } else {
                     DEBUGF("[runtime_gc.scan_stack] skip, cursor=%p, ptr=%p, in_heap=%d, span_of=%p",
-                           (void *) frame_cursor, (void *) value,
-                           in_heap(value), span_of(value));
+                            (void *) frame_cursor, (void *) value,
+                            in_heap(value), span_of(value));
                 }
             }
 

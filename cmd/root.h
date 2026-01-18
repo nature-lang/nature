@@ -20,6 +20,7 @@ void cmd_entry(int argc, char **argv) {
             {"target", required_argument, NULL, 1},
             {"ld", required_argument, NULL, 2},
             {"ldflags", required_argument, NULL, 3},
+            {"verbose", no_argument, NULL, 4},
             {NULL, 0, NULL, 0}};
 
     int option_index = 0;
@@ -102,6 +103,11 @@ void cmd_entry(int argc, char **argv) {
             case 3: {
                 // 处理 --ldflags 参数
                 strcpy(LDFLAGS, optarg);
+                break;
+            }
+            case 4: {
+                // 处理 --verbose 参数
+                VERBOSE = true;
                 break;
             }
             default:
