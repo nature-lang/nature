@@ -1,8 +1,8 @@
-#include <stdio.h>
 #include "cmd/root.h"
-#include "utils/helper.h"
 #include "config/config.h"
+#include "utils/helper.h"
 #include "utils/log.h"
+#include <stdio.h>
 
 #define ARGS_BUILD "build"
 
@@ -22,8 +22,9 @@ void print_help() {
     printf("  --archive     Generate static library (output: lib<name>.a)\n");
     printf("  --target      Specify target platform for cross-compilation\n");
     printf("  --ld <path>   Specify the path to the linker\n");
-    printf("  --ldflags <flags> Specify linker flags\n\n");
-    
+    printf("  --ldflags <flags> Specify linker flags\n");
+    printf("  --verbose     Enable verbose mode (show debug logs and keep temp dir)\n\n");
+
     printf("Cross Compilation:\n");
     printf("  nature build --target <platform> <source_file>\n\n");
 
@@ -40,7 +41,7 @@ void print_help() {
     printf("  nature build --archive main.n               # Generate static library\n");
     printf("  nature build --target linux_arm64 main.n    # Cross-compile for Linux ARM64\n");
     printf("  nature build --ld /usr/bin/ld main.n  # Custom linker and flags\n\n");
-    
+
     printf("Global Flags:\n");
     printf("  --help, -h    Show help information\n");
     printf("  --version, -v     Show version information\n");
