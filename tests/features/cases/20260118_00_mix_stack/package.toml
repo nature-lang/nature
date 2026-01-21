@@ -1,0 +1,10 @@
+name = "test"
+version = "0.4.0"
+authors = ["weiwenhao <wwhacker@qq.com>"]
+license = "MIT"
+type = "lib"
+
+[links]
+test = { linux_arm64 = "test_arm64.o", linux_amd64 = "test_amd64.o", linux_riscv64 = "test_riscv64.o"  }
+
+[dependencies]
