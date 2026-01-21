@@ -1,0 +1,27 @@
+import libc
+import runtime
+import co
+
+#linkid test_in_c
+fn test_in_c(anyptr callback):int
+
+fn call_by_c() {
+    println('[call_by_c] start')
+    var call_by_c = vec_new<u64>(10, 1024)
+    co.sleep(2000) // wait gc completed
+    println('[call_by_c] sleep end')
+    // alloc vec
+    // sleep wait
+}
+
+fn main() {
+    // alloc vec
+    var list = vec_new<u64>(318, 10240)
+    var list2 = vec_new<u64>(318, 10240)
+
+    runtime.gc()
+    test_in_c(libc.to_cfn(call_by_c as anyptr))
+
+    println(list[0], list[1000], list2[0], list2[1000])
+    assert(list[0] == 318 && list[1000] == 318 && list2[0] == 318 && list2[1000] == 318)
+}
