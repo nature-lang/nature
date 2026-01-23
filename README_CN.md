@@ -90,6 +90,8 @@ Llama2 推理模型实现 https://github.com/weiwenhao/llama.n
 
 基于 raylib 实现的俄罗斯方块 https://github.com/weiwenhao/tetris
 
+Nature WebView 库 https://github.com/wzzc-dev/nature-webview
+
 更多语法示例 https://github.com/nature-lang/nature/tree/master/tests/features/cases
 
 ## 设计理念
