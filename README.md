@@ -88,6 +88,8 @@ Llama2 inference model implementation https://github.com/weiwenhao/llama.n
 
 Tetris implementation based on raylib https://github.com/weiwenhao/tetris
 
+Nature WebView Package https://github.com/wzzc-dev/nature-webview
+
 More syntax examples https://github.com/nature-lang/nature/tree/master/tests/features/cases
 
 
