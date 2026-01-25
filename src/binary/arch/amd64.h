@@ -142,7 +142,7 @@ amd64_rewrite_rel_symbol(amd64_asm_inst_t *operation, amd64_asm_operand_t *opera
         asm_uint32_t *v = NEW(asm_uint32_t);
         v->value = 0;
         if (rel_diff != 0) {
-            v->value = (uint32_t)(rel_diff - data_count); // -5 表示去掉当前指令的差值
+            v->value = (uint32_t) (rel_diff - data_count); // -5 表示去掉当前指令的差值
         }
         operand->value = v;
         return;
@@ -152,7 +152,7 @@ amd64_rewrite_rel_symbol(amd64_asm_inst_t *operation, amd64_asm_operand_t *opera
     operand->type = AMD64_ASM_OPERAND_TYPE_UINT8;
     operand->size = BYTE;
     asm_uint8_t *v = NEW(asm_uint8_t);
-    v->value = (uint8_t)(rel_diff - jmp_operation_count(operation, operand->size)); // 去掉当前指令的差值
+    v->value = (uint8_t) (rel_diff - jmp_operation_count(operation, operand->size)); // 去掉当前指令的差值
     operand->value = v;
 }
 
@@ -764,8 +764,10 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     if (sym_index == 0) {
                         // 可重定位符号注册
                         sym_index = mach_put_sym(ctx->symtab_command,
-                                                 &(struct nlist_64) {.n_sect = NO_SECT, .n_value = 0, .n_type = N_UNDF |
-                                                                                                                N_EXT},
+                                                 &(struct nlist_64) {
+                                                         .n_sect = NO_SECT,
+                                                         .n_value = 0,
+                                                         .n_type = N_UNDF | N_EXT},
                                                  symbol_operand->name);
                     }
 
