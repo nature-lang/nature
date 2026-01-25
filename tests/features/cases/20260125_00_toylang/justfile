@@ -1,0 +1,4 @@
+run:build
+    ./main
+build:
+  nature build main.n

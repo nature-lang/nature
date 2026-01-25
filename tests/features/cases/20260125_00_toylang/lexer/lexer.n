@@ -1,0 +1,119 @@
+import toylang.token.token
+
+type Lexer = struct {
+    string input      // source code input
+    int position     // current position in input (points to current char)
+    int readPosition // current reading position in input (after current char)
+    string ch          // current char under examination
+    int line         // current line number
+    int column       // current column number
+}
+
+fn newLexer( string input): Lexer {
+    var l = Lexer {
+        input: input,
+        position: 0,
+        readPosition: 0,
+        ch: "",
+        line: 1,
+        column: 0,
+    }
+    l.readChar()
+    return l
+}
+
+fn Lexer.readChar() {
+    self.column += 1
+    self.position = self.readPosition
+
+    if self.readPosition >= self.input.len() {
+        self.ch = "\0" // EOF
+    } else {
+        self.ch = self.input[self.readPosition..self.readPosition + 1]
+        self.readPosition += 1
+    }
+}
+
+fn Lexer.nextToken(): token.Token {
+    // Implementation of tokenization logic goes here
+    self.skipWhitespace()
+    var tk =  match self.ch {
+        // Handle different characters and return corresponding tokens
+        "\0" -> token.newToken(token.TokenKindEof, "eof", self.line, self.column)
+        // Add more cases for other tokens
+        "-" -> token.newToken(token.TokenKindMinus, self.ch, self.line, self.column)
+        "+" -> token.newToken(token.TokenKindPlus, self.ch, self.line, self.column)
+        "*" -> token.newToken(token.TokenKindAsterisk, self.ch, self.line, self.column)
+        "/" -> token.newToken(token.TokenKindSlash, self.ch, self.line, self.column)
+        "%" -> token.newToken(token.TokenKindPercent, self.ch, self.line, self.column)
+        "=" -> token.newToken(token.TokenKindAssign, self.ch, self.line, self.column)
+        ";" -> token.newToken(token.TokenKindSemicolon, self.ch, self.line, self.column)
+        "," -> token.newToken(token.TokenKindComma, self.ch, self.line, self.column)
+        "(" -> token.newToken(token.TokenKindLParen, self.ch, self.line, self.column)
+        ")" -> token.newToken(token.TokenKindRParen, self.ch, self.line, self.column)
+        "{" -> token.newToken(token.TokenKindLBrace, self.ch, self.line, self.column)
+        "}" -> token.newToken(token.TokenKindRBrace, self.ch, self.line, self.column)
+        "<" -> token.newToken(token.TokenKindLess, self.ch, self.line, self.column)
+        _ ->  {
+            // Default case for unrecognized characters
+            if self.isAlphabet(self.ch) {
+                return self.identifierToken()
+            }
+            if self.isDigit(self.ch) {
+                // Implement number tokenization if needed
+               return self.numberToken() // 
+            }
+            self.readChar()
+            return token.newToken(token.TokenKindUnknown, self.ch, self.line, self.column) // Placeholder
+        }
+      
+    }
+    self.readChar()
+    return tk
+}
+
+fn Lexer.skipWhitespace() {
+    for self.ch == " " || self.ch == "\t" || self.ch == "\n" || self.ch == "\r" {
+        if self.ch == "\n" || self.ch == "\r" {
+            self.line += 1
+            self.column = 0
+        }
+        self.readChar()
+    }
+}
+
+fn Lexer.isAlphabet( string ch): bool {
+    return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_"
+}
+
+fn Lexer.isDigit( string ch): bool {
+    return ch >= "0" && ch <= "9"
+}
+
+fn Lexer.identifierToken(): token.Token {
+    var startPos = self.position
+    var startColumn = self.column
+    for self.isAlphabet(self.ch) || self.isDigit(self.ch) {
+        self.readChar()
+    }
+    var literal = self.input[startPos..self.position]
+    var kind = token.lookupKeyword(literal)
+    return token.newToken(kind, literal, self.line, startColumn)
+}
+
+fn Lexer.numberToken(): token.Token {
+    var startPos = self.position
+    var startColumn = self.column
+    for self.isDigit(self.ch) {
+        self.readChar()
+    }
+
+    if self.ch == "." {
+        self.readChar()
+        for self.isDigit(self.ch) {
+            self.readChar()
+        }
+    }
+    var literal = self.input[startPos..self.position]
+    return token.newToken(token.TokenKindNumber, literal, self.line, startColumn)
+}

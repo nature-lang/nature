@@ -131,8 +131,7 @@ amd64_rewrite_rel_symbol(amd64_asm_inst_t *operation, amd64_asm_operand_t *opera
 
 
     // symbol to rel32
-    // call 指令不能改写成 rel8(-128 ~ 127)
-    if (rel_diff == 0 || rel_diff > 127 || rel_diff < -128 || amd64_is_call_op(operation->name)) {
+    if (rel_diff == 0 || rel_diff > 129 || rel_diff < -126 || amd64_is_call_op(operation->name)) {
         uint8_t data_count = 5;
         if (!amd64_is_call_op(operation->name)) {
             data_count = jmp_operation_count(operation, DWORD);
@@ -143,7 +142,7 @@ amd64_rewrite_rel_symbol(amd64_asm_inst_t *operation, amd64_asm_operand_t *opera
         asm_uint32_t *v = NEW(asm_uint32_t);
         v->value = 0;
         if (rel_diff != 0) {
-            v->value = (uint32_t) (rel_diff - data_count); // -5 表示去掉当前指令的差值
+            v->value = (uint32_t)(rel_diff - data_count); // -5 表示去掉当前指令的差值
         }
         operand->value = v;
         return;
@@ -153,7 +152,7 @@ amd64_rewrite_rel_symbol(amd64_asm_inst_t *operation, amd64_asm_operand_t *opera
     operand->type = AMD64_ASM_OPERAND_TYPE_UINT8;
     operand->size = BYTE;
     asm_uint8_t *v = NEW(asm_uint8_t);
-    v->value = (uint8_t) (rel_diff - jmp_operation_count(operation, operand->size)); // 去掉当前指令的差值
+    v->value = (uint8_t)(rel_diff - jmp_operation_count(operation, operand->size)); // 去掉当前指令的差值
     operand->value = v;
 }
 
@@ -328,7 +327,8 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
         case R_X86_64_PLT32:
             /* fallthrough: val already holds the PLT slot address */
 
-        plt32pc32: {
+        plt32pc32:
+        {
             // 相对地址计算，
             // addr 保存了符号的使用位置（加载到虚拟内存中的位置）
             // val 保存了符号的定义的位置（加载到虚拟内存中的位置）
@@ -340,7 +340,8 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
             }
             // 小端写入
             add32le(ptr, diff);
-        } break;
+        }
+            break;
 
         case R_X86_64_COPY:
             break;
@@ -362,7 +363,7 @@ elf_amd64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
         case R_X86_64_GOTPCRELX:
         case R_X86_64_REX_GOTPCRELX:
             add32le(ptr, ctx->got->sh_addr - addr +
-                                 elf_get_sym_attr(ctx, sym_index, 0)->got_offset - 4);
+                         elf_get_sym_attr(ctx, sym_index, 0)->got_offset - 4);
             break;
         case R_X86_64_GOTPC32:
             add32le(ptr, ctx->got->sh_addr - addr + rel->r_addend);
@@ -762,7 +763,10 @@ static void mach_amd64_operation_encodings(mach_context_t *ctx, slice_t *closure
                     uint64_t sym_index = (uint64_t) table_get(symtab_hash, symbol_operand->name);
                     if (sym_index == 0) {
                         // 可重定位符号注册
-                        sym_index = mach_put_sym(ctx->symtab_command, &(struct nlist_64) {.n_sect = NO_SECT, .n_value = 0, .n_type = N_UNDF | N_EXT}, symbol_operand->name);
+                        sym_index = mach_put_sym(ctx->symtab_command,
+                                                 &(struct nlist_64) {.n_sect = NO_SECT, .n_value = 0, .n_type = N_UNDF |
+                                                                                                                N_EXT},
+                                                 symbol_operand->name);
                     }
 
                     // rewrite symbol
