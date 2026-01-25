@@ -1,0 +1,135 @@
+import fmt
+
+// token kind
+const TokenKindEof = 0 // end of file
+const TokenKindIdent = 1 // identifier
+const TokenKindNumber = 2 // number literal
+const TokenKindString = 3 // string literal
+const TokenKindPlus = 4 // +
+const TokenKindMinus = 5 // -
+const TokenKindAsterisk = 6 // *
+const TokenKindSlash = 7 // /
+const TokenKindPercent = 8 // %
+const TokenKindAssign = 9 // =
+const TokenKindEqual = 10 // ==
+const TokenKindNotEqual = 11 // !=
+const TokenKindLess = 12 // <
+const TokenKindLessEqual = 13 // <=
+const TokenKindGreater = 14 // >
+const TokenKindGreaterEqual = 15 // >=
+const TokenKindSemicolon = 16 // ;
+const TokenKindComma = 17 // ,
+const TokenKindLParen = 18 // (
+const TokenKindRParen = 19 // )
+const TokenKindLBrace = 20 // {
+const TokenKindRBrace = 21 // }
+const TokenKindIf = 22 // if
+const TokenKindElse = 23 // else
+const TokenKindReturn = 24 // return
+const TokenKindFunc = 25 // fn
+const TokenKindLet = 26 // let
+const TokenKindTrue = 27 // true
+const TokenKindFalse = 28 // false
+const TokenKindAnd = 29 // &&
+const TokenKindOr = 30 // ||
+const TokenKindNot = 31 // !
+const TokenKindFor = 32 // for
+const TokenKindDoubleDot = 33 // ..
+const TokenKindLBracket = 34 // [
+const TokenKindRBracket = 35 // ]
+const TokenKindColon = 36 // :
+const TokenKindDot = 37 // .
+const TokenKindPipe = 38 // |
+const TokenKindUnknown = 39 // unknown
+
+type SourcePos = struct {
+    int line // line number
+    int column // column number
+}
+
+fn SourcePos.toString(): string {
+    return "(line: " + fmt.sprintf("%d",self.line) + ", column: " + fmt.sprintf("%d",self.column) + ")"
+}
+
+type Token = struct {
+    int kind        // token kind
+    string literal  // token literal
+    SourcePos pos      // position in source
+}
+
+fn newToken( int kind,  string literal, int line, int column): Token {
+    return Token{
+        kind: kind,
+        literal: literal,
+        pos: SourcePos{
+            line: line,
+            column: column,
+        },
+    }
+}
+
+fn Token.toString(): string {
+    var kind = match self.kind {
+        TokenKindEof -> "TokenKindEof"
+        TokenKindIdent -> "TokenKindIdent"
+        TokenKindNumber -> "TokenKindNumber"
+        TokenKindString -> "TokenKindString"
+        TokenKindPlus -> "TokenKindPlus"
+        TokenKindMinus -> "TokenKindMinus"
+        TokenKindAsterisk -> "TokenKindAsterisk"
+        TokenKindSlash -> "TokenKindSlash"
+        TokenKindPercent -> "TokenKindPercent"
+        TokenKindAssign -> "TokenKindAssign"
+        TokenKindEqual -> "TokenKindEqual"
+        TokenKindNotEqual -> "TokenKindNotEqual"
+        TokenKindLess -> "TokenKindLess"
+        TokenKindLessEqual -> "TokenKindLessEqual"
+        TokenKindGreater -> "TokenKindGreater"
+        TokenKindGreaterEqual -> "TokenKindGreaterEqual"
+        TokenKindSemicolon -> "TokenKindSemicolon"
+        TokenKindComma -> "TokenKindComma"
+        TokenKindLParen -> "TokenKindLParen"
+        TokenKindRParen -> "TokenKindRParen"
+        TokenKindLBrace -> "TokenKindLBrace"
+        TokenKindRBrace -> "TokenKindRBrace"
+        TokenKindIf -> "TokenKindIf"
+        TokenKindElse -> "TokenKindElse"
+        TokenKindReturn -> "TokenKindReturn"
+        TokenKindFunc -> "TokenKindFunc"
+        TokenKindLet -> "TokenKindLet"
+        TokenKindTrue -> "TokenKindTrue"
+        TokenKindFalse -> "TokenKindFalse"
+        TokenKindAnd -> "TokenKindAnd"
+        TokenKindOr -> "TokenKindOr"
+        TokenKindNot -> "TokenKindNot"
+        TokenKindFor -> "TokenKindFor"
+        TokenKindDoubleDot -> "TokenKindDoubleDot"
+        TokenKindLBracket -> "TokenKindLBracket"
+        TokenKindRBracket -> "TokenKindRBracket"
+        TokenKindColon -> "TokenKindColon"
+        TokenKindDot -> "TokenKindDot"
+        TokenKindPipe -> "TokenKindPipe"
+        TokenKindUnknown -> "TokenKindUnknown"
+        _ -> "Unknown"
+    }
+    return "Token(kind: " + fmt.sprintf("%s",kind) + ", literal: " + fmt.sprintf("%s",self.literal) + ", pos: " + self.pos.toString() + ")"
+}
+
+var keywords = {
+    "if": TokenKindIf,
+    "else": TokenKindElse,
+    "return": TokenKindReturn,
+    "fn": TokenKindFunc,
+    "let": TokenKindLet,
+    "true": TokenKindTrue,
+    "false": TokenKindFalse,
+    "for": TokenKindFor,
+}
+
+fn lookupKeyword(string ident): int {
+    // return keywords[ident] or { TokenKindIdent }
+    var kind = keywords[ident] catch e { 
+        return TokenKindIdent 
+    }
+    return kind
+}

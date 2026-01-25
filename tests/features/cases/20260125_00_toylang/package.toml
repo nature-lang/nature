@@ -1,0 +1,10 @@
+name = "toylang"        # project name
+version = "0.0.1"        # version number
+authors = [""]
+description = "compiler project"
+license = "MIT"
+type = "bin"             # bin or lib
+entry = "main"           # library entry file (used when type = "lib")
+ 
+# dependency packages, can be specified via git or local path
+[dependencies]

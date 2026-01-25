@@ -1,0 +1,18 @@
+import "token/token.n"
+import "lexer/lexer.n"
+fn main() {
+    // var tk = token.newToken(token.TokenKindLet, "let", 1, 1)
+    // println(tk.toString())
+    // println(token.lookupKeyword("name"))
+    var lex = lexer.newLexer("let ____x00___09 = -10;\n\n\r\nlet a = if (a<1) a else 2.3333;\n")
+    for true {
+        var tok = lex.nextToken()
+        println(tok.toString())
+        if tok.kind == token.TokenKindEof {
+            break
+        }
+    }
+}
+
+
+
