@@ -17,7 +17,7 @@ const AF_INET = 2
 const AF_INET6 = 10
 
 #linkid rt_string_new
-fn cstr.to_string():string
+fn cstr.to_string(self):string
 
 // stdlib.h
 #linkid atoi

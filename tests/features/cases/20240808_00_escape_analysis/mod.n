@@ -1,11 +1,11 @@
 type bar_t = [int;5]
 
-fn bar_t.len():int {
+fn bar_t.len(self):int {
     return 5
 }
 
 type car_t = i64
 
-fn car_t.tostr() {
-    println('self is', *self)
+fn car_t.tostr(self) {
+    println('self is', self)
 }

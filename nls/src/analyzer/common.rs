@@ -398,7 +398,11 @@ impl Type {
     }
 
     pub fn is_stack_impl(&self) -> bool {
-        Self::is_number(&self.kind) || matches!(self.kind, TypeKind::Bool | TypeKind::Struct(..) | TypeKind::Arr(..))
+        Self::is_number(&self.kind)
+            || matches!(
+                self.kind,
+                TypeKind::Anyptr | TypeKind::Bool | TypeKind::Struct(..) | TypeKind::Arr(..) | TypeKind::Enum(..)
+            )
     }
 
     pub fn is_impl_builtin_type(kind: &TypeKind) -> bool {
@@ -407,6 +411,13 @@ impl Type {
                 kind,
                 TypeKind::Bool | TypeKind::String | TypeKind::Map(..) | TypeKind::Set(..) | TypeKind::Vec(..) | TypeKind::Chan(..) | TypeKind::CoroutineT
             )
+    }
+
+    pub fn is_heap_impl(&self) -> bool {
+        matches!(
+            self.kind,
+            TypeKind::String | TypeKind::Map(..) | TypeKind::Set(..) | TypeKind::Vec(..) | TypeKind::Chan(..) | TypeKind::CoroutineT
+        )
     }
 
     pub fn integer_t_new() -> Type {
@@ -554,6 +565,14 @@ pub struct TypeStructProperty {
     pub end: usize,
 }
 
+// type enum property
+#[derive(Debug, Clone)]
+pub struct TypeEnumProperty {
+    pub name: String,
+    pub value_expr: Option<Box<Expr>>,
+    pub value: Option<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct TypeFn {
     pub name: String,
@@ -603,6 +622,21 @@ impl Display for ReductionStatus {
     }
 }
 
+// Self parameter kind for impl methods
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SelfKind {
+    Null = 0,    // No self parameter
+    SelfT,       // self - value type
+    SelfRawptrT, // *self - raw pointer type
+    SelfPtrT,    // default for impl fn without explicit self
+}
+
+impl Default for SelfKind {
+    fn default() -> Self {
+        SelfKind::Null
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum TypeIdentKind {
     Unknown = 0,
@@ -611,6 +645,7 @@ pub enum TypeIdentKind {
     GenericsParam,
     Builtin,   // int/float/vec/string...
     Interface, // type.impls 部分专用
+    Enum,      // enum type
 }
 
 #[derive(Debug, Clone, Display)]
@@ -717,6 +752,9 @@ pub enum TypeKind {
 
     #[strum(serialize = "interface")]
     Interface(Vec<Type>), // elements
+
+    #[strum(serialize = "enum")]
+    Enum(Box<Type>, Vec<TypeEnumProperty>), // (element_type, properties)
 
     #[strum(serialize = "ident")]
     Ident,
@@ -1052,7 +1090,7 @@ pub struct ImportStmt {
     pub file: Option<String>,
     pub ast_package: Option<Vec<String>>,
     pub as_name: String,
-    pub is_selective: bool,                           // NEW: true if using {item1, item2} syntax
+    pub is_selective: bool,                          // NEW: true if using {item1, item2} syntax
     pub select_items: Option<Vec<ImportSelectItem>>, // NEW: selective import items
     pub module_type: u8,
     pub module_ident: String, //  基于 full path 计算的 unique ident, 如果是 main.n 则 包含 main
@@ -1106,6 +1144,7 @@ pub struct TypedefStmt {
     pub type_expr: Type,
     pub is_alias: bool,
     pub is_interface: bool,
+    pub is_enum: bool,
     pub impl_interfaces: Vec<Type>,
     pub method_table: HashMap<String, Arc<Mutex<AstFnDef>>>, // key = ident, value = ast_fndef_t
 
@@ -1157,6 +1196,8 @@ pub struct AstFnDef {
     pub return_type: Type,
     pub params: Vec<Arc<Mutex<VarDeclExpr>>>,
     pub rest_param: bool,
+    pub is_impl: bool,
+    pub self_kind: SelfKind,
     pub body: AstBody,
     pub closure: Option<isize>,
     pub generics_args_table: Option<HashMap<String, Type>>,
@@ -1198,6 +1239,8 @@ impl Default for AstFnDef {
             return_type: Type::new(TypeKind::Void),
             params: Vec::new(),
             rest_param: false,
+            is_impl: false,
+            self_kind: SelfKind::Null,
             body: AstBody {
                 stmts: Vec::new(),
                 start: 0,

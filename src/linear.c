@@ -200,7 +200,7 @@ linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_opera
 
     OP_PUSH(lir_op_new(LIR_OPCODE_USLT, index_target, length_target, cmp_result));
 
-    char *cmd_label_ident = label_ident_with_unique( ".index");
+    char *cmd_label_ident = label_ident_with_unique(".index");
     char *end_label_ident = str_connect(cmd_label_ident, LABEL_END_SUFFIX);
     lir_operand_t *cmp_end_label = lir_label_operand(end_label_ident, true);
 
@@ -1682,10 +1682,10 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
             type_fn = interface_fn_type->fn;
 
             // get self, 不需要进行额外的数据分配， union_casting 中已经进行了数据处理, 直接按照 anyptr 进行数据处理即可
-            lir_operand_t *self_target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            lir_operand_t *self_target_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             src = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), interface_target, 0);
-            OP_PUSH(lir_op_move(self_target, src));
-            slice_push(args, self_target);
+            OP_PUSH(lir_op_move(self_target_ptr, src));
+            slice_push(args, self_target_ptr);
 
             is_global_fn = true;
         } while (0);
@@ -2338,7 +2338,7 @@ static lir_operand_t *linear_env_access(module_t *m, ast_expr_t expr, lir_operan
         src_ptr = indirect_addr_operand(m, expr.type, src_ptr, 0);
     }
 
-    if (is_stack_impl(expr.type.kind) && expr.type.in_heap && !target) {
+    if (is_stack_type(expr.type.kind) && expr.type.in_heap && !target) {
         return src_ptr;
     }
 
@@ -2917,6 +2917,15 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
                 symbol_t *fn_symbol = symbol_table_get(fn_ident);
                 assert(fn_symbol);
 
+                if (ast_fndef->receiver_wrapper) {
+                    symbol_t *wrapper_fn_symbol = symbol_table_get(ast_fndef->receiver_wrapper->symbol_name);
+                    assert(wrapper_fn_symbol);
+
+                    ast_fndef = ast_fndef->receiver_wrapper;
+                    fn_ident = ast_fndef->symbol_name;
+                }
+
+                assert(ast_fndef->self_kind != PARAM_SELF_T);
                 if (ast_fndef->linkid) {
                     fn_ident = ast_fndef->linkid;
                 }
@@ -2970,6 +2979,11 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     if (is_vec_u8(as_expr->src.type) && as_expr->target_type.kind == TYPE_STRING) {
         //        OP_PUSH(lir_op_move(target, src_operand));
         push_rt_call(m, RT_CALL_VEC_TO_STRING, target, 1, src_operand);
+        return target;
+    }
+
+    if (as_expr->src.type.kind == TYPE_ENUM && is_integer(as_expr->target_type.kind)) {
+        OP_PUSH(lir_op_move(target, src_operand));
         return target;
     }
 

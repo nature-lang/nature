@@ -129,6 +129,30 @@ static type_array_t *type_array_copy(module_t *m, type_array_t *temp) {
     return array;
 }
 
+
+static type_enum_t *type_enum_copy(module_t *m, type_enum_t *temp) {
+    type_enum_t *enum_ = COPY_NEW(type_enum_t, temp);
+    enum_->element_type = type_copy(m, temp->element_type);
+
+    list_t *properties = ct_list_new(sizeof(enum_property_t));
+    for (int i = 0; i < temp->properties->length; ++i) {
+        enum_property_t *temp_property = ct_list_value(temp->properties, i);
+        enum_property_t *property = NEW(enum_property_t); // enum_property_t is not a pointer in the list? check utils/type.h
+        property->name = strdup(temp_property->name);
+        if (temp_property->value_expr) {
+            property->value_expr = ast_expr_copy(m, temp_property->value_expr);
+        }
+
+        if (temp_property->value) {
+            property->value = strdup(temp_property->value);
+        }
+
+        ct_list_push(properties, property);
+    }
+    enum_->properties = properties;
+    return enum_;
+}
+
 type_t type_copy(module_t *m, type_t temp) {
     type_t type = temp;
     if (temp.ident) {
@@ -179,6 +203,11 @@ type_t type_copy(module_t *m, type_t temp) {
         }
         case TYPE_INTERFACE: {
             type.interface = type_interface_copy(m, temp.interface);
+            break;
+        }
+
+        case TYPE_ENUM: {
+            type.enum_ = type_enum_copy(m, temp.enum_);
             break;
         }
         case TYPE_RAWPTR:

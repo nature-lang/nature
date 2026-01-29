@@ -3,10 +3,10 @@
 
 #include "nutils.h"
 #include "runtime/memory.h"
+#include "runtime/rtype.h"
 #include "string.h"
 #include "utils/type.h"
 #include "vec.h"
-#include "runtime/rtype.h"
 
 typedef n_string_t *(*error_msg_fn)(void *self);
 
