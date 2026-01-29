@@ -104,9 +104,9 @@ n_anyptr_t rt_map_access(n_map_t *m, void *key_ref) {
     uint64_t hash_value = m->hash_table[hash_index];
     if (hash_value_empty(hash_value) || hash_value_deleted(hash_value)) {
         DEBUGF("[runtime.rt_map_access] hash value=%lu, empty=%d, deleted=%d",
-               hash_value,
-               hash_value_empty(hash_value),
-               hash_value_deleted(hash_value));
+                hash_value,
+                hash_value_empty(hash_value),
+                hash_value_deleted(hash_value));
 
         char *msg = tlsprintf("key '%s' not found in map", key_str);
         rti_throw(msg, true);

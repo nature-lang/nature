@@ -1,6 +1,0 @@
-add(5, 3) = 8
-square(4) = 16
-MATH_CONSTANT = 42
-Point: x = 10 y = 20
-Point2: x = 5 y = 15
-math.multiply(3, 7) = 21

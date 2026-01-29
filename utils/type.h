@@ -129,6 +129,7 @@ typedef enum {
     TYPE_IDENT_GENERICS_PARAM,
     TYPE_IDENT_BUILTIN, // int/float/vec/string...
     TYPE_IDENT_INTERFACE, // type.impls 部分专用
+    TYPE_IDENT_ENUM,
     TYPE_IDENT_UNKNOWN, // use 就是还不能确定是 type alias 还是 type def
 } type_ident_kind;
 
@@ -179,6 +180,7 @@ static string type_kind_str[] = {
         [TYPE_RAWPTR] = "rawptr", // rawptr<type>
         [TYPE_ANYPTR] = "anyptr", // anyptr
         [TYPE_NULL] = "null",
+        [TYPE_ENUM] = "enum",
 };
 
 typedef struct {
@@ -260,6 +262,8 @@ typedef struct {
 
 typedef struct type_struct_t type_struct_t; // 目前只有 string
 
+typedef struct type_enum_t type_enum_t;
+
 typedef struct type_fn_t type_fn_t;
 
 // 类型的描述信息，无论是否还原，类型都会在这里呈现
@@ -278,6 +282,7 @@ typedef struct type_t {
         type_set_t *set;
         type_tuple_t *tuple;
         type_struct_t *struct_;
+        type_enum_t *enum_;
         type_fn_t *fn;
         type_ptr_t *ptr;
         type_union_t *union_;
@@ -387,6 +392,35 @@ struct type_struct_t {
 };
 
 /**
+ * enum 成员属性
+ * type color = enum {
+ *     RED,      // value 默认从 0 开始
+ *     GREEN,    // value = 1
+ *     BLUE = 5, // 显式指定 value = 5
+ * }
+ * type color_str = enum:string {
+ *     ORANGE = 'orange',
+ *     PURPLE = 'purple',
+ * }
+ */
+typedef struct {
+    char *name; // 成员名称，如 RED, GREEN, BLUE
+    void *value_expr; // ast_expr, 可选的值表达式
+    char *value; // 解析后的值，统一使用字符串存储
+} enum_property_t;
+
+/**
+ * enum 类型
+ * 支持两种形式:
+ * 1. type color = enum { ... }        // 默认底层类型为 int
+ * 2. type color = enum:string { ... } // 底层类型为 string
+ */
+struct type_enum_t {
+    type_t element_type; // 底层类型，默认为 TYPE_INT，也可以是 TYPE_STRING
+    list_t *properties; // enum_property_t 列表
+};
+
+/**
  * type_fn_t 是什么样的结构？怎么存储在堆内存中?
  * NO, fn 并不存储在堆中，而是存储在 .text section 中。
  * type_fn_t f 指向的函数是 text 中的虚拟地址。f() 本质上是调用 call 指令进行 rip 指针的跳转
@@ -400,6 +434,7 @@ struct type_fn_t {
     bool is_rest;
     bool is_errable;
     bool is_tpl;
+    int self_kind;
 };
 
 // 类型描述信息 end
@@ -642,7 +677,7 @@ static inline bool type_is_ident(type_t *t) {
         return false;
     }
 
-    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_INTERFACE || t->ident_kind == TYPE_IDENT_UNKNOWN;
+    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_INTERFACE || t->ident_kind == TYPE_IDENT_ENUM || t->ident_kind == TYPE_IDENT_UNKNOWN;
 }
 
 static inline type_t type_ident_new(char *ident, type_ident_kind kind) {
@@ -739,13 +774,21 @@ static inline bool is_stack_alloc_type(type_t t) {
 }
 
 static inline bool is_impl_builtin_type(type_kind kind) {
-    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_STRING ||
-           kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_CHAN ||
+    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_CHAN ||
            kind == TYPE_STRING || kind == TYPE_COROUTINE_T;
 }
 
+static inline bool is_stack_type(type_kind kind) {
+    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_STRUCT || kind == TYPE_ARR || kind == TYPE_ENUM;
+}
+
 static inline bool is_stack_impl(type_kind kind) {
-    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_STRUCT || kind == TYPE_ARR;
+    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_ANYPTR || kind == TYPE_ARR || kind == TYPE_STRUCT || kind == TYPE_ENUM;
+}
+
+static inline bool is_heap_impl(type_kind kind) {
+    return kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_CHAN ||
+           kind == TYPE_STRING || kind == TYPE_COROUTINE_T || kind == TYPE_UNION;
 }
 
 static inline bool is_gc_alloc(type_kind kind) {
@@ -791,14 +834,14 @@ static inline bool is_struct_rawptr(type_t t) {
 
 static inline bool is_map_set_key_type(type_kind kind) {
     return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_STRING || kind == TYPE_PTR || kind == TYPE_RAWPTR ||
-           kind == TYPE_ANYPTR || kind == TYPE_CHAN || kind == TYPE_STRUCT || kind == TYPE_ARR;
+           kind == TYPE_ANYPTR || kind == TYPE_CHAN || kind == TYPE_STRUCT || kind == TYPE_ARR || kind == TYPE_ENUM;
 }
 
 static inline bool is_complex_type(type_t t) {
     return t.kind == TYPE_STRUCT || t.kind == TYPE_MAP || t.kind == TYPE_VEC || t.kind == TYPE_CHAN ||
            t.kind == TYPE_ARR ||
            t.kind == TYPE_TUPLE ||
-           t.kind == TYPE_SET || t.kind == TYPE_FN || t.kind == TYPE_PTR || t.kind == TYPE_RAWPTR;
+           t.kind == TYPE_SET || t.kind == TYPE_FN || t.kind == TYPE_PTR || t.kind == TYPE_RAWPTR || t.kind == TYPE_ENUM;
 }
 
 static inline bool is_qword_int(type_kind kind) {

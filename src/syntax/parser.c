@@ -341,7 +341,7 @@ static type_t parser_single_type(module_t *m) {
         return union_type;
     }
 
-    // int/float/bool/string/void/var/self
+    // int/float/bool/string/void/var
     if (parser_is_basic_type(m)) {
         token_t *type_token = parser_advance(m);
         result.kind = token_to_kind[type_token->type];
@@ -778,6 +778,73 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
         return result;
     }
 
+    // enum
+    // type color = enum { RED, GREEN, BLUE }
+    // type color = enum { RED = 1, GREEN, BLUE }
+    // type color_str = enum:string { ORANGE = 'orange', PURPLE = 'purple' }
+    if (parser_consume(m, TOKEN_ENUM)) {
+        type_enum_t *type_enum = NEW(type_enum_t);
+        type_enum->properties = ct_list_new(sizeof(enum_property_t));
+
+        // 默认底层类型为 int
+        type_enum->element_type = type_kind_new(TYPE_INT);
+
+        // 解析可选的 :type 后缀，如 enum:string
+        if (parser_consume(m, TOKEN_COLON)) {
+            type_enum->element_type = parser_single_type(m);
+            // 目前仅支持 int 和 string 作为底层类型
+            PARSER_ASSERTF(is_integer(type_enum->element_type.kind), "enum only supports integer types");
+        }
+
+        struct sc_map_s64 exists = {0};
+        sc_map_init_s64(&exists, 0, 0);
+
+        parser_must(m, TOKEN_LEFT_CURLY);
+        while (!parser_is(m, TOKEN_RIGHT_CURLY)) {
+            enum_property_t item = {0};
+            token_t *name_token = parser_must(m, TOKEN_IDENT);
+            item.name = name_token->literal;
+
+            if (sc_map_get_s64(&exists, item.name)) {
+                PARSER_ASSERTF(false, "enum member '%s' already exists", item.name);
+            }
+            sc_map_put_s64(&exists, item.name, 1);
+
+            // 解析可选的 = value
+            if (parser_consume(m, TOKEN_EQUAL)) {
+                ast_expr_t *value_expr = expr_new_ptr(m);
+                *value_expr = parser_expr(m);
+                item.value_expr = value_expr;
+            }
+
+            ct_list_push(type_enum->properties, &item);
+
+            if (parser_is(m, TOKEN_RIGHT_CURLY)) {
+                break;
+            } else {
+                parser_must(m, TOKEN_COMMA);
+            }
+        }
+        parser_must(m, TOKEN_RIGHT_CURLY);
+
+        type_t t = {
+                .status = REDUCTION_STATUS_UNDO,
+                .line = parser_peek(m)->line,
+                .column = parser_peek(m)->column,
+                .ident = NULL,
+                .args = NULL,
+                .ident_kind = 0,
+        };
+        t.kind = TYPE_ENUM;
+        t.enum_ = type_enum;
+
+        typedef_stmt->is_enum = true;
+        typedef_stmt->type_expr = t;
+        m->parser_type_params_table = NULL;
+
+        return result;
+    }
+
     type_t t = parser_single_type(m);
 
     if (parser_consume(m, TOKEN_QUESTION)) {
@@ -878,9 +945,31 @@ static ast_var_decl_t *parser_var_decl(module_t *m) {
     return var_decl;
 }
 
-static void parser_params(module_t *m, ast_fndef_t *fn_decl) {
+static void parser_params(module_t *m, ast_fndef_t *fndef) {
     parser_must(m, TOKEN_LEFT_PAREN);
-    fn_decl->params = ct_list_new(sizeof(ast_var_decl_t));
+    fndef->params = ct_list_new(sizeof(ast_var_decl_t));
+
+    if (parser_ident_is(m, FN_SELF_NAME)) {
+        parser_advance(m); // skip self
+        // fn person_t.test(self):person_t {
+        PARSER_ASSERTF(fndef->is_impl, "keyword `self` can only be used in impl fn")
+        fndef->self_kind = PARAM_SELF_T;
+        if (!parser_is(m, TOKEN_RIGHT_PAREN)) {
+            parser_must(m, TOKEN_COMMA);
+        }
+    } else if (parser_consume(m, TOKEN_STAR) && parser_ident_is(m, FN_SELF_NAME)) {
+        parser_advance(m);
+        // fn person_t.test(*self):rawptr<person_t> {
+        PARSER_ASSERTF(fndef->is_impl, "keyword `self` can only be used in impl fn")
+        fndef->self_kind = PARAM_SELF_RAWPTR_T;
+        if (!parser_is(m, TOKEN_RIGHT_PAREN)) {
+            parser_must(m, TOKEN_COMMA);
+        }
+    } else if (fndef->is_impl) {
+        // fn person_t.test():ptr<person_t> {
+        fndef->self_kind = PARAM_SELF_PTR_T;
+    }
+
     // not formal params
     if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
         return;
@@ -888,14 +977,14 @@ static void parser_params(module_t *m, ast_fndef_t *fn_decl) {
 
     do {
         if (parser_consume(m, TOKEN_ELLIPSIS)) {
-            fn_decl->rest_param = true;
+            fndef->rest_param = true;
         }
 
         // ref 本身就是堆上的地址，所以只需要把堆上的地址交给数组就可以了
         ast_var_decl_t *ref = parser_var_decl(m);
-        ct_list_push(fn_decl->params, ref);
+        ct_list_push(fndef->params, ref);
 
-        if (fn_decl->rest_param) {
+        if (fndef->rest_param) {
             PARSER_ASSERTF(parser_is(m, TOKEN_RIGHT_PAREN), "can only use '...' as the final argument in the fn parsms");
         }
     } while (parser_consume(m, TOKEN_COMMA));
@@ -1953,13 +2042,13 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
     parser_advance(m);
     ast_import_t *stmt = NEW(ast_import_t);
     stmt->ast_package = slice_new();
-    stmt->select_items = NULL;  // Initialize
+    stmt->select_items = NULL; // Initialize
     stmt->is_selective = false;
 
     token_t *token = parser_advance(m);
     if (token->type == TOKEN_LITERAL_STRING) {
         stmt->file = token->literal;
-        
+
         // Check for selective import after string: "file.n".{...}
         if (parser_consume(m, TOKEN_DOT) && parser_is(m, TOKEN_LEFT_CURLY)) {
             // Continue to selective import parsing below
@@ -1971,7 +2060,7 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
         while (parser_consume(m, TOKEN_DOT)) {
             // Get the dot token from the previous node in the linked list
             token_t *dot_token = m->p_cursor.current->prev->value;
-            
+
             // Check for space before dot: prev_token should end right before dot starts
             // Only check if they're on the same line
             // Note: column is the position AFTER the token, so:
@@ -1980,13 +2069,13 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
             // - They should be adjacent: dot_start should equal prev_end + 1
             if (prev_token->line == dot_token->line) {
                 int dot_start_column = dot_token->column - dot_token->length;
-                
+
                 if (dot_start_column != prev_token->column) {
-                    dump_errorf(m, CT_STAGE_PARSER, dot_token->line, dot_token->column, 
+                    dump_errorf(m, CT_STAGE_PARSER, dot_token->line, dot_token->column,
                                 "spaces are not allowed before '.' in import paths");
                 }
             }
-            
+
             // Check if next is left curly for selective import
             if (parser_is(m, TOKEN_LEFT_CURLY)) {
                 // Before breaking, check for space after dot
@@ -2000,9 +2089,9 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
                 }
                 break;
             }
-            
+
             token = parser_must(m, TOKEN_IDENT);
-            
+
             // Check for space after dot: ident should start right after dot ends
             // Only check if they're on the same line
             if (dot_token->line == token->line) {
@@ -2012,7 +2101,7 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
                                 "spaces are not allowed after '.' in import paths");
                 }
             }
-            
+
             slice_push(stmt->ast_package, token->literal);
             prev_token = token;
         }
@@ -2022,33 +2111,33 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
     if (parser_consume(m, TOKEN_LEFT_CURLY)) {
         stmt->is_selective = true;
         stmt->select_items = slice_new();
-        
+
         // Parse first item
         token = parser_must(m, TOKEN_IDENT);
         ast_import_select_item_t *item = NEW(ast_import_select_item_t);
         item->ident = token->literal;
         item->alias = NULL;
-        
+
         if (parser_consume(m, TOKEN_AS)) {
             token = parser_must(m, TOKEN_IDENT);
             item->alias = token->literal;
         }
         slice_push(stmt->select_items, item);
-        
+
         // Parse remaining items
         while (parser_consume(m, TOKEN_COMMA)) {
             token = parser_must(m, TOKEN_IDENT);
             item = NEW(ast_import_select_item_t);
             item->ident = token->literal;
             item->alias = NULL;
-            
+
             if (parser_consume(m, TOKEN_AS)) {
                 token = parser_must(m, TOKEN_IDENT);
                 item->alias = token->literal;
             }
             slice_push(stmt->select_items, item);
         }
-        
+
         parser_must(m, TOKEN_RIGHT_CURLY);
     } else if (parser_consume(m, TOKEN_AS)) {
         // Existing 'as' logic for non-selective imports
@@ -2056,7 +2145,7 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
         PARSER_ASSERTF(token->type == TOKEN_IDENT || token->type == TOKEN_IMPORT_STAR, "import as must ident");
         stmt->as = token->literal;
     }
-    
+
     result->assert_type = AST_STMT_IMPORT;
     result->value = stmt;
 
@@ -2534,9 +2623,8 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
     parser_must(m, TOKEN_FN);
 
     // 第一个绝对是 ident, 第二个如果是 . 或者 < 则说明是类型扩展
-    bool is_impl_type = false;
     if (parser_is_impl_fn(m)) {
-        is_impl_type = true;
+        fndef->is_impl = true;
         linked_node *temp_current = m->p_cursor.current; // 回溯点
 
         token_t *first_token = parser_advance(m);
@@ -2635,7 +2723,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
     fndef->fn_name = token_ident->literal;
     fndef->fn_name_with_pkg = ident_with_prefix(m->ident, token_ident->literal);
 
-    if (!is_impl_type && parser_consume(m, TOKEN_LEFT_ANGLE)) {
+    if (!fndef->is_impl && parser_consume(m, TOKEN_LEFT_ANGLE)) {
         m->parser_type_params_table = table_new();
         fndef->generics_params = ct_list_new(sizeof(ast_generics_param_t));
         do {

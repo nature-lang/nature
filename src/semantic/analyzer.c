@@ -437,6 +437,20 @@ static void analyzer_type(module_t *m, type_t *type) {
             }
         }
     }
+
+    if (type->kind == TYPE_ENUM) {
+        type_enum_t *enum_decl = type->enum_;
+        // 分析底层类型
+        analyzer_type(m, &enum_decl->element_type);
+
+        // 分析每个枚举成员的可选值表达式
+        for (int i = 0; i < enum_decl->properties->length; ++i) {
+            enum_property_t *item = ct_list_value(enum_decl->properties, i);
+            if (item->value_expr) {
+                analyzer_expr(m, item->value_expr);
+            }
+        }
+    }
 }
 
 /**
@@ -948,13 +962,12 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
     // 类型定位，在 analyzer 阶段, alias 类型会被添加上 module 生成新 ident
     // fn vec<T>.vec_len() -> fn vec_len(vec<T> self)
     if (fndef->impl_type.kind > 0) {
-        // 重构关于 param 的位置
         list_t *params = ct_list_new(sizeof(ast_var_decl_t));
-        // param 中需要新增一个 impl_type_alias 的参数, 参数的名称为 self, 类型则是 impl_type
+        // param 中需要新增一个 impl_type_alias 的参数, 参数的名称为 self, 后续 ident 识别可以正常识别该 ident
         type_t param_type = type_copy(m, fndef->impl_type);
         ast_var_decl_t param = {
                 .ident = FN_SELF_NAME,
-                .type = param_type, // 后续 infer 确定了具体类型之后再判断是否需要 ptrof
+                .type = param_type,
         };
         ct_list_push(params, &param);
 

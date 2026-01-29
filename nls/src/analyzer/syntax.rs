@@ -1130,6 +1130,7 @@ impl<'a> Syntax {
         self.must(TokenType::Equal)?;
 
         let mut is_interface = false;
+        let mut is_enum = false;
         let mut exists = HashMap::new();
         let type_expr = if self.consume(TokenType::Struct) {
             self.must(TokenType::LeftCurly)?;
@@ -1218,6 +1219,62 @@ impl<'a> Syntax {
 
             is_interface = true;
             Type::undo_new(TypeKind::Interface(elements))
+        } else if self.consume(TokenType::Enum) {
+            // Parse optional underlying type: enum:u16
+            let element_type = if self.consume(TokenType::Colon) {
+                self.parser_single_type()?
+            } else {
+                Type::new(TypeKind::Int64) // default to i64
+            };
+
+            if !Type::is_integer(&element_type.kind) {
+                errors_push(
+                    &mut self.module,
+                    AnalyzerError {
+                        start: element_type.start,
+                        end: element_type.end,
+                        message: format!("enum only supports integer types"),
+                    },
+                );
+            }
+
+            self.must(TokenType::LeftCurly)?;
+
+            let mut properties: Vec<TypeEnumProperty> = Vec::new();
+
+            while !self.is(TokenType::RightCurly) {
+                let name_token = self.must(TokenType::Ident)?.clone();
+                let name = name_token.literal.clone();
+
+                // Check for duplicate enum member
+                if exists.contains_key(&name) {
+                    errors_push(
+                        &mut self.module,
+                        AnalyzerError {
+                            start: name_token.start,
+                            end: name_token.end,
+                            message: format!("enum member '{}' already exists", name),
+                        },
+                    );
+                }
+                exists.insert(name.clone(), 1);
+
+                // Parse optional = value
+                let value_expr = if self.consume(TokenType::Equal) { Some(self.parser_expr()?) } else { None };
+
+                properties.push(TypeEnumProperty { name, value_expr, value: None });
+
+                if self.is(TokenType::RightCurly) {
+                    break;
+                } else {
+                    self.must(TokenType::Comma)?;
+                }
+            }
+
+            self.must(TokenType::RightCurly)?;
+
+            is_enum = true;
+            Type::undo_new(TypeKind::Enum(Box::new(element_type), properties))
         } else {
             let mut alias_type = self.parser_single_type()?;
 
@@ -1266,6 +1323,7 @@ impl<'a> Syntax {
             type_expr,
             is_alias: false,
             is_interface,
+            is_enum,
             impl_interfaces,
             method_table: HashMap::new(),
             symbol_id: 0,
@@ -1327,6 +1385,41 @@ impl<'a> Syntax {
     fn parser_fn_params(&mut self, fn_decl: &mut AstFnDef) -> Result<(), SyntaxError> {
         self.must(TokenType::LeftParen)?;
 
+        // Handle self parameter for impl functions
+        if self.is(TokenType::Ident) && self.peek().literal == "self" {
+            self.advance(); // skip self
+                            // fn person_t.test(self):person_t {
+            if !fn_decl.is_impl {
+                return Err(SyntaxError(
+                    self.prev().unwrap().start,
+                    self.prev().unwrap().end,
+                    "keyword `self` can only be used in impl fn".to_string(),
+                ));
+            }
+            fn_decl.self_kind = SelfKind::SelfT;
+            if !self.is(TokenType::RightParen) {
+                self.must(TokenType::Comma)?;
+            }
+        } else if self.consume(TokenType::Star) && self.is(TokenType::Ident) && self.peek().literal == "self" {
+            self.advance(); // skip self
+                            // fn person_t.test(*self):rawptr<person_t> {
+            if !fn_decl.is_impl {
+                return Err(SyntaxError(
+                    self.prev().unwrap().start,
+                    self.prev().unwrap().end,
+                    "keyword `self` can only be used in impl fn".to_string(),
+                ));
+            }
+            fn_decl.self_kind = SelfKind::SelfRawptrT;
+            if !self.is(TokenType::RightParen) {
+                self.must(TokenType::Comma)?;
+            }
+        } else if fn_decl.is_impl {
+            // fn person_t.test():ptr<person_t> {
+            fn_decl.self_kind = SelfKind::SelfPtrT;
+        }
+
+        // not formal params
         if self.consume(TokenType::RightParen) {
             return Ok(());
         }
@@ -2806,6 +2899,7 @@ impl<'a> Syntax {
         // 检查是否是类型实现函数
         let is_impl_type = if self.is_impl_fn() {
             let temp_current = self.current; // 回退位置
+            fndef.is_impl = true;
 
             let first_token = self.safe_advance()?.clone();
 

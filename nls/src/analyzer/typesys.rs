@@ -624,6 +624,13 @@ impl<'a> Typesys<'a> {
             typedef.type_expr.ident_kind = TypeIdentKind::Interface;
             typedef.type_expr.ident = t.ident.clone();
         }
+
+        // 处理 enum
+        if typedef.is_enum {
+            typedef.type_expr.ident_kind = TypeIdentKind::Enum;
+            typedef.type_expr.ident = t.ident.clone();
+        }
+
         let type_expr = typedef.type_expr.clone();
 
         // 在递归调用前释放锁，避免死锁
@@ -878,6 +885,48 @@ impl<'a> Typesys<'a> {
 
                 return self.finalize_type(t, ident, ident_kind, args);
             }
+            TypeKind::Enum(element_type, properties) => {
+                // reduction element type
+                *element_type = Box::new(self.reduction_type(*element_type.clone())?);
+
+                // enum 只支持 integer 类型
+                if !Type::is_integer(&element_type.kind) {
+                    return Err(AnalyzerError {
+                        start: t.start,
+                        end: t.end,
+                        message: format!("enum only supports integer types, got '{}'", element_type),
+                    });
+                }
+
+                // 计算所有枚举成员的值
+                let mut auto_value: i64 = 0;
+                for prop in properties.iter_mut() {
+                    if let Some(value_expr) = &mut prop.value_expr {
+                        // 对表达式进行推断
+                        self.infer_right_expr(value_expr, *element_type.clone())?;
+
+                        // 目前仅支持字面量值
+                        if let AstNode::Literal(_kind, value) = &value_expr.node {
+                            prop.value = Some(value.clone());
+                            if let Ok(v) = value.parse::<i64>() {
+                                auto_value = v + 1;
+                            }
+                        } else {
+                            return Err(AnalyzerError {
+                                start: t.start,
+                                end: t.end,
+                                message: format!("enum member '{}' value must be a literal", prop.name),
+                            });
+                        }
+                    } else {
+                        // 没有显式值，使用自动递增值
+                        prop.value = Some(auto_value.to_string());
+                        auto_value += 1;
+                    }
+                }
+
+                return self.finalize_type(t, ident, ident_kind, args);
+            }
             _ => {
                 if Type::is_origin_type(&t.kind) {
                     let mut result = t.clone();
@@ -1074,6 +1123,13 @@ impl<'a> Typesys<'a> {
             return Ok(target_type.clone());
         }
 
+        // enum origin cast
+        if let TypeKind::Enum(element_type, _) = &src_type.kind {
+            if self.type_compare(element_type, &target_type) {
+                return Ok(target_type.clone());
+            }
+        }
+
         // 处理 typedef ident 类型转换
         if target_type.ident_kind == TypeIdentKind::Def {
             if self.type_compare_no_ident(target_type.clone(), src.type_.clone()) {
@@ -1129,8 +1185,8 @@ impl<'a> Typesys<'a> {
         // 将目标类型加入 break_target_types 栈
         self.ret_target_types.push(target_type.clone());
 
-        // 用于跟踪联合类型的匹配情况
-        let mut union_types = HashMap::new();
+        // 用于跟踪联合类型和 enum 的匹配情况
+        let mut exhaustive_table: HashMap<String, bool> = HashMap::new();
         let mut has_default = false;
 
         // 遍历所有 case
@@ -1164,13 +1220,22 @@ impl<'a> Typesys<'a> {
                         let cond_type = self.infer_right_expr(cond_expr, Type::default())?;
                         debug_assert!(matches!(cond_type.kind, TypeKind::Bool));
 
-                        let AstNode::MatchIs(target_type, _binding) = &cond_expr.node else { unreachable!() };
+                        let AstNode::MatchIs(target_type, _binding) = &cond_expr.node else {
+                            unreachable!()
+                        };
 
                         // 记录已匹配的类型, 最终可以判断 match 是否匹配了所有分支
-                        union_types.insert(target_type.hash(), true);
+                        exhaustive_table.insert(target_type.hash().to_string(), true);
                     } else {
                         // 普通值匹配,推导条件表达式类型
                         self.infer_right_expr(cond_expr, subject_type.clone())?;
+
+                        // 记录 enum 匹配的值 (infer 之后 enum select 表达式会被改写为 literal)
+                        if matches!(subject_type.kind, TypeKind::Enum(..)) {
+                            if let AstNode::Literal(_kind, value) = &cond_expr.node {
+                                exhaustive_table.insert(value.clone(), true);
+                            }
+                        }
                     }
                 }
             }
@@ -1185,7 +1250,7 @@ impl<'a> Typesys<'a> {
             if let TypeKind::Union(any, _, elements) = &subject_type.kind {
                 if !any {
                     for element_type in elements {
-                        if !union_types.contains_key(&element_type.hash()) {
+                        if !exhaustive_table.contains_key(&element_type.hash().to_string()) {
                             return Err(AnalyzerError {
                                 start,
                                 end,
@@ -1202,6 +1267,19 @@ impl<'a> Typesys<'a> {
                         end,
                         message: "match expression lacks a default case '_'".to_string(),
                     });
+                }
+            } else if let TypeKind::Enum(_, properties) = &subject_type.kind {
+                // enum 穷尽检查
+                for prop in properties {
+                    if let Some(value) = &prop.value {
+                        if !exhaustive_table.contains_key(value) {
+                            return Err(AnalyzerError {
+                                start,
+                                end,
+                                message: format!("match expression lacks a default case '_' and enum value lacks, for example '{}'", prop.name),
+                            });
+                        }
+                    }
                 }
             } else {
                 return Err(AnalyzerError {
@@ -1954,8 +2032,80 @@ impl<'a> Typesys<'a> {
         })
     }
 
+    /// 尝试推断 enum 成员访问表达式 (如 Color.RED)
+    /// 返回 Some((node, type)) 表示成功处理了 enum 成员访问，None 表示不是 enum 访问
+    fn try_infer_enum_select(&mut self, left: &Box<Expr>, key: &String, start: usize, end: usize) -> Result<Option<(AstNode, Type)>, AnalyzerError> {
+        // 检查 left 是否是 ident
+        let AstNode::Ident(left_ident, symbol_id) = &left.node else {
+            return Ok(None);
+        };
+
+        if *symbol_id == 0 {
+            return Ok(None);
+        }
+
+        let Some(symbol) = self.symbol_table.get_symbol(*symbol_id) else {
+            return Ok(None);
+        };
+
+        let SymbolKind::Type(typedef_mutex) = &symbol.kind else {
+            return Ok(None);
+        };
+
+        // 从锁中提取需要的数据
+        let (is_enum, type_expr, typedef_ident) = {
+            let typedef = typedef_mutex.lock().unwrap();
+            (typedef.is_enum, typedef.type_expr.clone(), typedef.ident.clone())
+        };
+
+        if !is_enum {
+            return Ok(None);
+        }
+
+        // 在释放锁之后调用 reduction_type
+        let extract_type = self.reduction_type(type_expr)?;
+
+        let TypeKind::Enum(element_type, properties) = &extract_type.kind else {
+            return Ok(None);
+        };
+
+        // 查找 enum 成员
+        let Some(prop) = properties.iter().find(|p| p.name == *key) else {
+            return Err(AnalyzerError {
+                start,
+                end,
+                message: format!("enum '{}' has no member '{}'", left_ident, key),
+            });
+        };
+
+        let Some(value) = &prop.value else {
+            return Err(AnalyzerError {
+                start,
+                end,
+                message: format!("enum '{}' member '{}' has no value", left_ident, key),
+            });
+        };
+
+        // 返回需要改写的节点和类型
+        let new_node = AstNode::Literal(element_type.kind.clone(), value.clone());
+
+        let mut result_type = extract_type.clone();
+        result_type.ident = typedef_ident;
+        result_type.ident_kind = TypeIdentKind::Def;
+
+        Ok(Some((new_node, result_type)))
+    }
+
     pub fn infer_select_expr(&mut self, expr: &mut Box<Expr>) -> Result<Type, AnalyzerError> {
+        let start = expr.start;
+        let end = expr.end;
         let AstNode::SelectExpr(left, key) = &mut expr.node else { unreachable!() };
+
+        // 首先检查是否是 enum 类型访问: Color.RED
+        if let Some((new_node, enum_type)) = self.try_infer_enum_select(left, key, start, end)? {
+            expr.node = new_node;
+            return Ok(enum_type);
+        }
 
         // 先推导左侧表达式的类型
         let left_type = self.infer_right_expr(left, Type::default())?;
@@ -2790,120 +2940,6 @@ impl<'a> Typesys<'a> {
         return Err(format!("type '{}' not impl fn'{}'", select_left_type, impl_symbol_name));
     }
 
-    fn impl_call_rewrite(&mut self, call: &mut AstCall, start: usize, end: usize) -> Result<bool, AnalyzerError> {
-        // 获取select表达式
-        let AstNode::SelectExpr(select_left, key) = &mut call.left.node.clone() else {
-            unreachable!()
-        };
-
-        // 获取left的类型(已经在之前推导过)
-        let select_left_type = self.infer_right_expr(select_left, Type::default())?;
-
-        // 解构类型判断
-        let select_left_type = if matches!(select_left_type.kind, TypeKind::Ptr(_) | TypeKind::Rawptr(_)) {
-            match &select_left_type.kind {
-                TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => *value_type.clone(),
-                _ => unreachable!(),
-            }
-        } else {
-            select_left_type.clone()
-        };
-
-        // 如果是 struct 类型且 key 是其属性,不需要重写
-        if let TypeKind::Struct(_, _, properties) = &select_left_type.kind {
-            if properties.iter().any(|p| p.name == *key) {
-                return Ok(false);
-            }
-        }
-
-        // 比如 int? 转换为 union 时就不存在 ident
-        if select_left_type.ident.is_empty() {
-            return Ok(false);
-        }
-
-        let mut impl_ident = select_left_type.ident.clone();
-        let mut impl_args = select_left_type.args.clone();
-
-        // string.len() -> string_len
-        // person_t.set_age() -> person_t_set_age()
-        // register_global_symbol 中进行类 impl_foramt
-        let mut impl_symbol_name = format_impl_ident(impl_ident.clone(), key.clone());
-
-        let (final_symbol_name, symbol_id) = match self.find_impl_call_ident(impl_symbol_name.clone(), impl_args.clone(), &select_left_type) {
-            Ok(r) => r,
-            Err(_e) => {
-                // idetn to default kind(need args)
-                let mut builtin_type = select_left_type.clone();
-                builtin_type.ident = "".to_string();
-                builtin_type.ident_kind = TypeIdentKind::Unknown;
-                builtin_type.args = Vec::new();
-                builtin_type.status = ReductionStatus::Undo;
-                builtin_type = self.reduction_type(builtin_type)?;
-
-                // builtin 测试
-                if builtin_type.ident.len() > 0 && builtin_type.ident_kind == TypeIdentKind::Builtin {
-                    impl_ident = builtin_type.ident.clone();
-                    impl_args = builtin_type.args.clone();
-                    impl_symbol_name = format_impl_ident(impl_ident.clone(), key.clone());
-
-                    // 直接返回第二次查找的结果，成功时返回结果，失败时返回错误
-                    match self.find_impl_call_ident(impl_symbol_name.clone(), impl_args.clone(), &select_left_type) {
-                        Ok(result) => {
-                            // change self arg 类型
-                            match &mut select_left.type_.kind {
-                                TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => {
-                                    *value_type = Box::new(builtin_type);
-                                }
-                                _ => {
-                                    select_left.type_ = builtin_type;
-                                }
-                            }
-
-                            result
-                        }
-                        Err(_) => {
-                            return Err(AnalyzerError {
-                                start,
-                                end,
-                                message: format!("type '{}' no impl fn '{}'", select_left_type, key),
-                            });
-                        }
-                    }
-                } else {
-                    return Err(AnalyzerError {
-                        start,
-                        end,
-                        message: format!("type '{}' no impl fn '{}'", select_left_type, key),
-                    });
-                }
-            }
-        };
-
-        // 重写 select call 为 ident call
-        call.left = Box::new(Expr::ident(call.left.start, call.left.end, final_symbol_name, symbol_id));
-
-        // 构建新的参数列表
-        let mut new_args = Vec::new();
-
-        // 添加self参数
-        let mut self_arg = select_left.clone(); // {'a':1}.del('a') -> map_del({'a':1}, 'a')
-        if self_arg.type_.is_stack_impl() {
-            // 生成 la expr &sself_arg
-            self_arg.node = AstNode::Unary(ExprOp::La, self_arg.clone());
-            self_arg.type_ = Type::ptr_of(self_arg.type_.clone());
-        }
-        new_args.push(self_arg);
-
-        new_args.extend(call.args.iter().cloned());
-
-        call.args = new_args;
-
-        // 设置泛型参数
-        call.generics_args = impl_args;
-
-        Ok(true)
-    }
-
     fn generics_args_table(
         &mut self,
         call_data: (Vec<Box<Expr>>, Vec<Type>, bool),
@@ -3243,6 +3279,250 @@ impl<'a> Typesys<'a> {
         }
     }
 
+    fn self_arg_rewrite(&mut self, type_fn: &TypeFn, self_arg: &mut Expr) -> Result<(), AnalyzerError> {
+        let self_param_type = &type_fn.param_types[0];
+        let extract_self_type = if matches!(self_param_type.kind, TypeKind::Ptr(_) | TypeKind::Rawptr(_)) {
+            match &self_param_type.kind {
+                TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => value_type.as_ref(),
+                _ => unreachable!(),
+            }
+        } else {
+            self_param_type
+        };
+
+        if extract_self_type.is_stack_impl() {
+            if matches!(self_param_type.kind, TypeKind::Ptr(_)) {
+                if matches!(self_arg.type_.kind, TypeKind::Rawptr(_)) {
+                    return Err(AnalyzerError {
+                        start: self_arg.start,
+                        end: self_arg.end,
+                        message: format!("type mismatch: method requires '{}' receiver, got '{}'", self_param_type, self_arg.type_),
+                    });
+                }
+
+                if !matches!(self_arg.type_.kind, TypeKind::Ptr(_)) {
+                    let mut new_arg = self_arg.clone();
+                    new_arg.node = AstNode::Unary(ExprOp::SafeLa, Box::new(self_arg.clone()));
+                    new_arg.type_ = Type::ptr_of(self_arg.type_.clone());
+                    new_arg.target_type = Type::default();
+                    *self_arg = new_arg;
+                }
+            } else if matches!(self_param_type.kind, TypeKind::Rawptr(_)) {
+                if matches!(self_arg.type_.kind, TypeKind::Rawptr(_) | TypeKind::Ptr(_)) {
+                    return Ok(());
+                }
+
+                let mut new_arg = self_arg.clone();
+                new_arg.node = AstNode::Unary(ExprOp::La, Box::new(self_arg.clone()));
+                new_arg.type_ = Type::rawptr_of(self_arg.type_.clone());
+                *self_arg = new_arg;
+            } else {
+                if matches!(self_arg.type_.kind, TypeKind::Rawptr(_) | TypeKind::Ptr(_)) {
+                    let mut new_arg = self_arg.clone();
+                    new_arg.node = AstNode::Unary(ExprOp::Ia, Box::new(self_arg.clone()));
+                    new_arg.type_ = Type::default();
+                    *self_arg = new_arg;
+                }
+            }
+        } else {
+            if !self_arg.type_.is_heap_impl() {
+                return Err(AnalyzerError {
+                    start: self_arg.start,
+                    end: self_arg.end,
+                    message: format!("unsupported method receiver type '{}', expected heap-allocated type", self_arg.type_),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    fn rewrite_generics_ident(&mut self, call: &mut AstCall, target_type: Type, start: usize, end: usize) -> Result<(), AnalyzerError> {
+        if !matches!(call.left.node, AstNode::Ident(_, _)) {
+            return Ok(());
+        }
+
+        let (ident, symbol_id) = match &mut call.left.node {
+            AstNode::Ident(ident, symbol_id) => (ident, symbol_id),
+            _ => return Ok(()),
+        };
+
+        if *symbol_id == 0 {
+            return Err(AnalyzerError {
+                start,
+                end,
+                message: format!("symbol '{}' not found", ident),
+            });
+        }
+
+        let symbol = self.symbol_table.get_symbol(*symbol_id).unwrap();
+
+        // 可能是 local 闭包函数，此时 type 是一个 var
+        if symbol.is_local {
+            return Ok(());
+        }
+
+        // 可能是全局维度的闭包函数
+        if !matches!(symbol.kind, SymbolKind::Fn(_)) {
+            return Ok(());
+        }
+
+        let SymbolKind::Fn(temp_fndef_mutex) = symbol.kind.clone() else {
+            return Ok(());
+        };
+
+        let temp_fndef = temp_fndef_mutex.lock().unwrap();
+        if !temp_fndef.is_generics {
+            return Ok(());
+        }
+        drop(temp_fndef);
+
+        let module_scope_id = symbol.defined_in;
+
+        // 由于存在函数重载，所以需要进行多次匹配找到最合适的 is_tpl 函数, 如果没有重载 temp_fndef 就是 tpl_fndef
+        let special_fn = self
+            .generics_special_fn(
+                (call.args.clone(), call.generics_args.clone(), call.spread.clone()),
+                target_type,
+                temp_fndef_mutex,
+                module_scope_id,
+            )
+            .map_err(|e| AnalyzerError { start, end, message: e })?;
+
+        let special_fn = special_fn.lock().unwrap();
+
+        // call ident 重写, 从而能够正确的从符号表中检索到 special_fn
+        *ident = special_fn.symbol_name.clone();
+        *symbol_id = special_fn.symbol_id;
+
+        Ok(())
+    }
+
+    fn impl_call_rewrite(&mut self, call: &mut AstCall, target_type: Type, start: usize, end: usize) -> Result<Option<TypeFn>, AnalyzerError> {
+        // 获取select表达式
+        let AstNode::SelectExpr(select_left, key) = &mut call.left.node.clone() else {
+            unreachable!()
+        };
+
+        // 获取left的类型(已经在之前推导过)
+        let select_left_type = self.infer_right_expr(select_left, Type::default())?;
+
+        // 解构类型判断
+        let select_left_type = if matches!(select_left_type.kind, TypeKind::Ptr(_) | TypeKind::Rawptr(_)) {
+            match &select_left_type.kind {
+                TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => *value_type.clone(),
+                _ => unreachable!(),
+            }
+        } else {
+            select_left_type.clone()
+        };
+
+        // 如果是 struct 类型且 key 是其属性,不需要重写
+        if let TypeKind::Struct(_, _, properties) = &select_left_type.kind {
+            if properties.iter().any(|p| p.name == *key) {
+                return Ok(None);
+            }
+        }
+
+        // 比如 int? 转换为 union 时就不存在 ident
+        if select_left_type.ident.is_empty() {
+            return Ok(None);
+        }
+
+        let mut impl_ident = select_left_type.ident.clone();
+        let mut impl_args = select_left_type.args.clone();
+
+        // string.len() -> string_len
+        // person_t.set_age() -> person_t_set_age()
+        // register_global_symbol 中进行类 impl_foramt
+        let mut impl_symbol_name = format_impl_ident(impl_ident.clone(), key.clone());
+
+        let (final_symbol_name, symbol_id) = match self.find_impl_call_ident(impl_symbol_name.clone(), impl_args.clone(), &select_left_type) {
+            Ok(r) => r,
+            Err(_e) => {
+                // idetn to default kind(need args)
+                let mut builtin_type = select_left_type.clone();
+                builtin_type.ident = "".to_string();
+                builtin_type.ident_kind = TypeIdentKind::Unknown;
+                builtin_type.args = Vec::new();
+                builtin_type.status = ReductionStatus::Undo;
+                builtin_type = self.reduction_type(builtin_type)?;
+
+                // builtin 测试
+                if builtin_type.ident.len() > 0 && builtin_type.ident_kind == TypeIdentKind::Builtin {
+                    impl_ident = builtin_type.ident.clone();
+                    impl_args = builtin_type.args.clone();
+                    impl_symbol_name = format_impl_ident(impl_ident.clone(), key.clone());
+
+                    // 直接返回第二次查找的结果，成功时返回结果，失败时返回错误
+                    match self.find_impl_call_ident(impl_symbol_name.clone(), impl_args.clone(), &select_left_type) {
+                        Ok(result) => {
+                            // change self arg 类型
+                            match &mut select_left.type_.kind {
+                                TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => {
+                                    *value_type = Box::new(builtin_type);
+                                }
+                                _ => {
+                                    select_left.type_ = builtin_type;
+                                }
+                            }
+
+                            result
+                        }
+                        Err(_) => {
+                            return Err(AnalyzerError {
+                                start,
+                                end,
+                                message: format!("type '{}' no impl fn '{}'", select_left_type, key),
+                            });
+                        }
+                    }
+                } else {
+                    return Err(AnalyzerError {
+                        start,
+                        end,
+                        message: format!("type '{}' no impl fn '{}'", select_left_type, key),
+                    });
+                }
+            }
+        };
+
+        // 重写 select call 为 ident call
+        call.left = Box::new(Expr::ident(call.left.start, call.left.end, final_symbol_name, symbol_id));
+
+        // 设置泛型参数
+        call.generics_args = impl_args;
+
+        // rewrite_generics_ident: 处理泛型函数的特殊化
+        self.rewrite_generics_ident(call, target_type.clone(), start, end)?;
+
+        // 推导左侧表达式类型
+        let left_type = self.infer_right_expr(&mut call.left, Type::default())?;
+
+        // 确保是函数类型
+        let TypeKind::Fn(type_fn) = left_type.kind else {
+            return Err(AnalyzerError {
+                start,
+                end,
+                message: "cannot call non-fn".to_string(),
+            });
+        };
+
+        // 构建新的参数列表
+        let mut new_args = Vec::new();
+
+        // 添加self参数
+        let mut self_arg = select_left.clone(); // {'a':1}.del('a') -> map_del({'a':1}, 'a')
+        self.self_arg_rewrite(&type_fn, &mut self_arg)?;
+        new_args.push(self_arg);
+
+        new_args.extend(call.args.iter().cloned());
+
+        call.args = new_args;
+
+        Ok(Some(*type_fn))
+    }
+
     pub fn infer_call_left(&mut self, call: &mut AstCall, target_type: Type, start: usize, end: usize) -> Result<TypeKind, AnalyzerError> {
         // --------------------------------------------interface call handle----------------------------------------------------------
         if let AstNode::SelectExpr(select_left, key) = &mut call.left.node {
@@ -3268,41 +3548,13 @@ impl<'a> Typesys<'a> {
 
         // --------------------------------------------impl type handle----------------------------------------------------------
         if let AstNode::SelectExpr(_, _) = &mut call.left.node {
-            let _is_rewrite = self.impl_call_rewrite(call, start, end)?;
+            if let Some(type_fn) = self.impl_call_rewrite(call, target_type.clone(), start, end)? {
+                return Ok(TypeKind::Fn(Box::new(type_fn)));
+            }
         }
 
         // --------------------------------------------generics handle----------------------------------------------------------
-        if let AstNode::Ident(ident, symbol_id) = &mut call.left.node {
-            if *symbol_id == 0 {
-                return Err(AnalyzerError {
-                    start,
-                    end,
-                    message: format!("symbol '{}' not found", ident),
-                });
-            }
-
-            match self.infer_generics_special(
-                target_type.clone(),
-                *symbol_id,
-                (call.args.clone(), call.generics_args.clone(), call.spread.clone()),
-            ) {
-                Ok(result) => {
-                    match result {
-                        Some(special_fn) => {
-                            let special_fn = special_fn.lock().unwrap();
-
-                            // ident 重写
-                            *ident = special_fn.symbol_name.clone();
-                            *symbol_id = special_fn.symbol_id; // change call ident actual symbol_id
-                        }
-                        None => {} // local fn 或者 no generics param 都不是 generics fn, 此时什么都不做
-                    }
-                }
-                Err(e) => {
-                    return Err(AnalyzerError { start, end, message: e });
-                }
-            };
-        }
+        self.rewrite_generics_ident(call, target_type.clone(), start, end)?;
 
         // 推导左侧表达式类型
         let left_type = self.infer_right_expr(&mut call.left, Type::default())?;
@@ -4067,8 +4319,27 @@ impl<'a> Typesys<'a> {
             }
 
             // 为什么要在这里进行 ptr of, 只有在 infer 之后才能确定 alias 的具体类型，从而进一步判断是否需要 ptrof
-            if fndef.impl_type.kind.is_exist() && i == 0 && param_type.is_stack_impl() {
-                param_type = Type::ptr_of(param_type);
+            // is_impl 并且是第一个参数时，根据 self_kind 处理
+            if fndef.is_impl && i == 0 {
+                if param_type.is_stack_impl() {
+                    match fndef.self_kind {
+                        SelfKind::SelfPtrT => {
+                            param_type = Type::ptr_of(param_type);
+                        }
+                        SelfKind::SelfRawptrT => {
+                            param_type = Type::rawptr_of(param_type);
+                        }
+                        SelfKind::SelfT | SelfKind::Null => {
+                            // 值类型传递，不需要转换
+                        }
+                    }
+                } else {
+                    // 堆分配类型(vec/map/set/chan等)有隐式指针接收器
+                    // 不需要转换，但必须是 SelfPtrT
+                    if fndef.self_kind != SelfKind::SelfPtrT && fndef.self_kind != SelfKind::Null {
+                        // 可以在这里添加警告或错误，但暂时只是保持原样
+                    }
+                }
             }
 
             {

@@ -87,6 +87,10 @@ int64_t type_sizeof(type_t t) {
         return t.array->length * element_size;
     }
 
+    if (t.kind == TYPE_ENUM) {
+        return type_sizeof(t.enum_->element_type);
+    }
+
     return type_kind_sizeof(t.kind);
 }
 
@@ -133,6 +137,10 @@ int64_t type_alignof(type_t t) {
 
     if (t.kind == TYPE_ARR) {
         return type_alignof(t.array->element_type);
+    }
+
+    if (t.kind == TYPE_ENUM) {
+        return type_alignof(t.enum_->element_type);
     }
 
     return type_kind_sizeof(t.kind);
@@ -358,6 +366,10 @@ char *_type_format(type_t t) {
 
     if (t.kind == TYPE_INTERFACE) {
         return "interface";
+    }
+
+    if (t.kind == TYPE_ENUM) {
+        return dsprintf("enum:%s", type_format(t.enum_->element_type));
     }
 
     return type_kind_str[t.kind];

@@ -592,6 +592,17 @@ impl<'a> Semantic<'a> {
                     }
                 }
             }
+            TypeKind::Enum(element_type, properties) => {
+                // Analyze element type
+                self.analyze_type(element_type);
+
+                // Analyze value expressions for each enum member
+                for property in properties.iter_mut() {
+                    if let Some(value_expr) = &mut property.value_expr {
+                        self.analyze_expr(value_expr);
+                    }
+                }
+            }
             _ => {
                 return;
             }

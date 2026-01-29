@@ -300,6 +300,9 @@ pub enum TokenType {
     #[strum(serialize = "interface")]
     Interface,
 
+    #[strum(serialize = "enum")]
+    Enum,
+
     #[strum(serialize = "go")]
     Go,
 
@@ -416,6 +419,7 @@ impl Token {
             | TokenType::Null
             | TokenType::Type
             | TokenType::Struct
+            | TokenType::Enum
             | TokenType::Throw
             | TokenType::Try
             | TokenType::Catch
@@ -576,6 +580,7 @@ impl Lexer {
             // "vec" => TokenType::Vec,
             "void" => TokenType::Void,
             "interface" => TokenType::Interface,
+            "enum" => TokenType::Enum,
             // 数字类型
             "f32" => TokenType::F32,
             "f64" => TokenType::F64,

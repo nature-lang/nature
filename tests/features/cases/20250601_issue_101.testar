@@ -4,8 +4,8 @@ type custom_i = interface {
     fn show_value():string
 }
 
-fn bool.show_value():string {
-    if *self {
+fn bool.show_value(self):string {
+    if self {
         return 'true'
     } else {
         return 'false'
@@ -35,8 +35,8 @@ type custom_i = interface {
     fn show_value():string
 }
 
-fn bool.show_value():string {
-    if *self {
+fn bool.show_value(self):string {
+    if self {
         return 'true'
     } else {
         return 'false'
@@ -67,10 +67,10 @@ type custom_i = interface {
     fn show_value():string
 }
 
-type my_bool: custom_i = bool
+type my_bool:custom_i = bool
 
-fn my_bool.show_value():string {
-    if *self {
+fn my_bool.show_value(self):string {
+    if self {
         return 'true'
     } else {
         return 'false'
@@ -91,7 +91,7 @@ fn main():void! {
     // println(b.show_value())  // triggers bus error
 }
 --- output.txt
-nature-test/main.n:8:12: type inconsistency, expect=bool, actual=main.my_bool(bool)
+nature-test/main.n:8:11: type inconsistency, expect=bool, actual=main.my_bool(bool)
 
 === test_union_type_method_self
 --- main.n
@@ -101,8 +101,8 @@ type custom_i = interface {
 
 type my_bool:custom_i = bool
 
-fn my_bool.show_value():string {
-    if (*self) as bool {
+fn my_bool.show_value(self):string {
+    if (self) as bool {
         return 'true'
     } else {
         return 'false'

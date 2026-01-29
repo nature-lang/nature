@@ -264,25 +264,11 @@ typedef struct {
 } ast_binary_expr_t;
 
 typedef enum {
-    MACRO_ARG_KIND_STMT = 1,
-    MACRO_ARG_KIND_EXPR,
-    MACRO_ARG_KIND_TYPE,
-} ast_macro_arg_kind_t;
-
-typedef struct {
-    ast_macro_arg_kind_t kind;
-
-    union {
-        ast_stmt_t *stmt;
-        ast_expr_t *expr;
-        type_t *type;
-    };
-} ast_macro_arg_t;
-
-typedef struct {
-    char *ident;
-    list_t *args; // ast_macro_arg_t
-} ast_macro_call_t;
+    PARAM_SELF_NULL = 0,
+    PARAM_SELF_T,
+    PARAM_SELF_RAWPTR_T,
+    PARAM_SELF_PTR_T,
+} ast_param_self_kind_t;
 
 // 值类型
 typedef struct {
@@ -461,8 +447,8 @@ typedef struct {
 
 // Selective import item: {sqrt, pow, Pi as pi}
 typedef struct {
-    char *ident;  // symbol name to import
-    char *alias;  // optional alias (NULL if not aliased)
+    char *ident; // symbol name to import
+    char *alias; // optional alias (NULL if not aliased)
 } ast_import_select_item_t;
 
 // import "module_path" module_name alias
@@ -471,10 +457,10 @@ typedef struct {
     char *file; // import 'xxx' or
     slice_t *ast_package; // a.b.c.d package 字符串数组
     char *as; // import "foo/bar" as xxx, import 别名，没有别名则使用 bar 作为名称
-    
+
     // Selective import support: import math.{sqrt, pow, Pi as pi}
-    bool is_selective;       // true if using {item1, item2} syntax
-    slice_t *select_items;   // slice of ast_import_select_item_t*, NULL if not selective
+    bool is_selective; // true if using {item1, item2} syntax
+    slice_t *select_items; // slice of ast_import_select_item_t*, NULL if not selective
 
     // 通过上面的 file 或者 package 解析出的完整 package 路径
     // full_path 对应的 module 会属于某一个 package, 需要记录一下对应的 package conf, 否则单凭一个 full_path 还不足以定位到
@@ -490,9 +476,9 @@ typedef struct {
 
 // Tracks a selective import reference for symbol resolution
 typedef struct {
-    char *module_ident;      // The module the symbol comes from
-    char *original_ident;    // Original symbol name in that module
-    ast_import_t *import;    // Reference to parent import
+    char *module_ident; // The module the symbol comes from
+    char *original_ident; // Original symbol name in that module
+    ast_import_t *import; // Reference to parent import
 } ast_import_select_t;
 
 /**
@@ -656,6 +642,7 @@ typedef struct {
     type_t type_expr; // int (类型)
     bool is_alias; // 是否仅作为别名
     bool is_interface; // 快速识别
+    bool is_enum;
     list_t *impl_interfaces; // type_t, typedef 可以实现多个接口, 对于 interface 来说则是自身扩展
     struct sc_map_sv method_table; // key = ident, value = ast_fndef_t
     int64_t hash;
@@ -687,6 +674,7 @@ struct ast_fndef_t {
     list_t *generics_params; // ast_generic_param
 
     type_t impl_type;
+    ast_param_self_kind_t self_kind;
 
     // ast_expr, 当前 fn body 中引用的外部的环境
     // 这是 parent 视角中的表达式，在 parent 中创建 child fn 时，如果发现 child fn 引用当前作用域中的变量
@@ -712,10 +700,16 @@ struct ast_fndef_t {
     bool is_local; // 是否是全局函数
     bool is_tpl; // 是否是 tpl 函数
 
+    bool is_impl; // 是否是 impl fn
+
     bool is_errable;
 
     // tpl fn 可以自定义 #linkid 宏, 用来自定义链接符号名称
     char *linkid;
+
+    // 当 self_kind == PARAM_SELF_T 时，interface 存储指针数据但方法期望值类型
+    // receiver_wrapper 用于接收指针参数，解引用后调用原函数
+    struct ast_fndef_t *receiver_wrapper;
 
     bool is_generics; // 是否是泛型
 
@@ -823,7 +817,24 @@ static inline ast_expr_t *ast_load_addr(ast_expr_t *target) {
     result->column = target->column;
     result->assert_type = AST_EXPR_UNARY;
     result->value = expr;
-    result->type = type_ptrof(target->type);
+    result->type = type_rawptrof(target->type);
+    return result;
+}
+
+static inline ast_expr_t *ast_indirect_addr(ast_expr_t *target) {
+    ast_expr_t *result = NEW(ast_expr_t);
+
+    ast_unary_expr_t *expr = NEW(ast_unary_expr_t);
+    expr->operand = *target;
+    expr->op = AST_OP_IA;
+
+    assert(target->type.kind == TYPE_RAWPTR || target->type.kind == TYPE_PTR);
+
+    result->line = target->line;
+    result->column = target->column;
+    result->assert_type = AST_EXPR_UNARY;
+    result->value = expr;
+    result->type = target->type.ptr->value_type;
     return result;
 }
 
@@ -895,6 +906,10 @@ static inline ast_fndef_t *ast_fndef_new(module_t *m, int line, int column) {
     fndef->local_children = slice_new();
     fndef->ret_target_types = stack_new();
     fndef->generics_params = NULL;
+    fndef->is_impl = false;
+    fndef->capture_exprs = ct_list_new(sizeof(ast_expr_t));
+    fndef->be_capture_locals = slice_new();
+
     return fndef;
 }
 
