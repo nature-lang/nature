@@ -810,8 +810,33 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
             }
             sc_map_put_s64(&exists, item.name, 1);
 
-            // 解析可选的 = value
-            if (parser_consume(m, TOKEN_EQUAL)) {
+            // 解析可选的 payload 类型: Name(type1, type2, ...)
+            if (parser_consume(m, TOKEN_LEFT_PAREN)) {
+                list_t *payload_types = ct_list_new(sizeof(type_t));
+                do {
+                    type_t t = parser_type(m);
+                    ct_list_push(payload_types, &t);
+                } while (parser_consume(m, TOKEN_COMMA));
+                parser_must(m, TOKEN_RIGHT_PAREN);
+
+                if (payload_types->length == 1) {
+                    // 单一类型直接使用
+                    type_t *single_type = NEW(type_t);
+                    *single_type = *(type_t *) ct_list_value(payload_types, 0);
+                    item.payload_type = single_type;
+                } else {
+                    // 多类型创建 tuple
+                    type_tuple_t *tuple = NEW(type_tuple_t);
+                    tuple->elements = payload_types;
+                    type_t *tuple_type = NEW(type_t);
+                    tuple_type->kind = TYPE_TUPLE;
+                    tuple_type->tuple = tuple;
+                    tuple_type->status = REDUCTION_STATUS_UNDO;
+                    item.payload_type = tuple_type;
+                }
+                type_enum->has_payload = true;
+            } else if (parser_consume(m, TOKEN_EQUAL)) {
+                // 解析可选的 = value (仅简单枚举)
                 ast_expr_t *value_expr = expr_new_ptr(m);
                 *value_expr = parser_expr(m);
                 item.value_expr = value_expr;

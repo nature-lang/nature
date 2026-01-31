@@ -2616,6 +2616,133 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
     return target;
 }
 
+/**
+ * 生成 tagged enum 变体构造的代码
+ * 实现方式：创建 payload 数据，然后用 union casting 包装
+ */
+static lir_operand_t *linear_tagged_enum_new(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    ast_tagged_enum_t *tagged_new = expr.value;
+
+    if (!target) {
+        target = temp_var_operand_with_alloc(m, expr.type);
+    }
+
+    type_t *payload_type = tagged_new->property->payload_type;
+
+    // 创建 payload 数据
+    lir_operand_t *payload_operand;
+
+    if (payload_type && payload_type->kind == TYPE_TUPLE) {
+        // 多参数情况：创建 tuple
+        uint64_t tuple_rtype_hash = type_hash(*payload_type);
+        payload_operand = temp_var_operand_with_alloc(m, *payload_type);
+        push_rt_call(m, RT_CALL_TUPLE_NEW, payload_operand, 1, int_operand(tuple_rtype_hash));
+
+        type_tuple_t *tuple = payload_type->tuple;
+        uint64_t offset = 0;
+        for (int i = 0; i < tagged_new->bindings->length; ++i) {
+            ast_expr_t *arg = ct_list_value(tagged_new->bindings, i);
+            type_t *element_type = ct_list_value(tuple->elements, i);
+
+            uint64_t element_size = type_sizeof(*element_type);
+            int64_t element_align = type_alignof(*element_type);
+            offset = align_up(offset, element_align);
+
+            lir_operand_t *dst = indirect_addr_operand(m, *element_type, payload_operand, offset);
+            if (is_stack_ref_big_type(*element_type)) {
+                dst = lea_operand_pointer(m, dst);
+            }
+
+            linear_expr(m, *arg, dst);
+            offset += element_size;
+        }
+    } else if (payload_type != NULL) {
+        // 单参数情况：直接使用该值
+        ast_expr_t *arg = ct_list_value(tagged_new->bindings, 0);
+        payload_operand = linear_expr(m, *arg, NULL);
+    }
+
+    // 使用 union casting 包装：(synthetic_hash, payload_ptr) -> union
+    // 使用 synthetic_hash 而非 type_hash，确保每个 variant 有唯一标识
+    lir_operand_t *payload_ptr = int_operand(0);
+    lir_operand_t *payload_type_hash = int_operand(0);
+    if (payload_type) {
+        if (is_stack_ref_big_type(*payload_type)) {
+            payload_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            OP_PUSH(lir_op_move(payload_ptr, payload_operand));
+        } else {
+            payload_ptr = lea_operand_pointer(m, payload_operand);
+        }
+
+        payload_type_hash = int_operand(type_hash(*payload_type));
+    }
+
+    push_rt_call(m, RT_CALL_ENUM_UNION_CASTING, target, 3, int_operand(tagged_new->property->value), payload_type_hash, payload_ptr);
+    return target;
+}
+
+/**
+ * 在 match case body 入口处，从 subject union 中解构 payload 并赋值到绑定变量
+ * 
+ * @param m 模块上下文
+ * @param pattern tagged match pattern
+ * @param subject_operand match subject 的 operand（union 类型）
+ */
+static void linear_enum_extract_bindings(module_t *m, ast_tagged_enum_t *pattern, lir_operand_t *subject_operand) {
+    if (!pattern->property || !pattern->property->payload_type) {
+        return; // 无 payload，无需解构
+    }
+
+    type_t *payload_type = pattern->property->payload_type;
+
+    // tuple/vec/struct/arr 等, payload 中存储的是指针，其他类型中 payload 存储的是值
+    lir_operand_t *payload_operand = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    lir_operand_t *src = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), subject_operand, QWORD);
+    OP_PUSH(lir_op_move(payload_operand, src));
+
+    if (payload_type->kind == TYPE_TUPLE) {
+        type_tuple_t *tuple = payload_type->tuple;
+        uint64_t offset = 0;
+
+        for (int i = 0; i < pattern->bindings->length; ++i) {
+            ast_expr_t *binding_expr = ct_list_value(pattern->bindings, i);
+            char *binding_name = ((ast_ident *) binding_expr->value)->literal;
+            type_t *element_type = ct_list_value(tuple->elements, i);
+
+            uint64_t element_size = type_sizeof(*element_type);
+            int element_align = type_alignof(*element_type);
+            offset = align_up(offset, element_align);
+
+            // 查找绑定变量
+            symbol_t *binding_symbol = symbol_table_get(binding_name);
+            assert(binding_symbol && binding_symbol->type == SYMBOL_VAR);
+            ast_var_decl_t *var_decl = binding_symbol->ast_value;
+
+            // 从 payload 中提取元素值
+            lir_operand_t *element_src = indirect_addr_operand(m, *element_type, payload_operand, offset);
+            if (is_stack_ref_big_type(*element_type)) {
+                element_src = lea_operand_pointer(m, element_src);
+            }
+
+            // 创建绑定变量的 operand 并赋值
+            lir_operand_t *binding_dst = operand_new(LIR_OPERAND_VAR, lir_var_new(m, var_decl->ident));
+            OP_PUSH(lir_op_move(binding_dst, element_src));
+
+            offset += element_size;
+        }
+    } else {
+        ast_expr_t *binding_expr = ct_list_value(pattern->bindings, 0);
+        char *binding_name = ((ast_ident *) binding_expr->value)->literal;
+        // 查找绑定变量
+        symbol_t *binding_symbol = symbol_table_get(binding_name);
+        assert(binding_symbol && binding_symbol->type == SYMBOL_VAR);
+        ast_var_decl_t *var_decl = binding_symbol->ast_value;
+
+        lir_operand_t *binding_dst = operand_new(LIR_OPERAND_VAR, lir_var_new(m, var_decl->ident));
+        OP_PUSH(lir_op_move(binding_dst, payload_operand));
+    }
+}
+
 static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     // 调用 runtime_malloc 进行内存申请，并将申请的结果返回，其中返回的类型是一个 pointer 结构
     if (!target) {
@@ -3079,6 +3206,13 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
                     cond_expr->assert_type = AST_EXPR_IS;
                     cond_expr->value = is_expr;
                     assert(cond_expr->type.kind == TYPE_BOOL);
+                } else if (cond_expr->assert_type == AST_EXPR_TAGGED_ENUM_PATTERN) {
+                    // 提取 subject_operand 的 id 和 cond_expr 的 id
+                    ast_tagged_enum_t *pattern = cond_expr->value;
+                    lir_operand_t *subject_extract_id = indirect_addr_operand(m, type_kind_new(TYPE_INT64), subject_operand, 0);
+                    lir_operand_t *cond_pattern_id = int_operand(pattern->property->value);
+                    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, subject_extract_id, cond_pattern_id, handle_start->output));
+                    continue;
                 } else {
                     // eq expr
                     ast_binary_expr_t *binary_expr = NEW(ast_binary_expr_t);
@@ -3099,6 +3233,17 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
         OP_PUSH(lir_op_bal(handle_end->output));
     LINEAR_HANDLE_BODY:
         OP_PUSH(handle_start);
+
+        // 处理 tagged enum pattern matching 的绑定变量赋值
+        // 在进入 handle body 之前，如果条件是 tagged pattern，需要解构 payload
+        if (match_case->cond_list->length == 1) {
+            ast_expr_t *first_cond = ct_list_value(match_case->cond_list, 0);
+            if (first_cond->assert_type == AST_EXPR_TAGGED_ENUM_PATTERN && subject_operand) {
+                ast_tagged_enum_t *pattern = first_cond->value;
+                linear_enum_extract_bindings(m, pattern, subject_operand);
+            }
+        }
+
         linear_body(m, match_case->handle_body);
         // 只要运行了 exec， 就直接结束 case 而不是继续执行。
         OP_PUSH(lir_op_bal(match_end->output));
@@ -3585,6 +3730,7 @@ linear_expr_fn expr_fn_table[] = {
         [AST_EXPR_STRUCT_NEW] = linear_struct_new,
         [AST_EXPR_STRUCT_SELECT] = linear_struct_select,
         [AST_EXPR_TUPLE_NEW] = linear_tuple_new,
+        [AST_EXPR_TAGGED_ENUM_NEW] = linear_tagged_enum_new,
         [AST_EXPR_TUPLE_ACCESS] = linear_tuple_access,
         [AST_EXPR_SET_NEW] = linear_set_new,
         [AST_CALL] = linear_call,

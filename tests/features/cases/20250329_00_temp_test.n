@@ -1,3 +1,19 @@
+type color = enum {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+fn color.to_string(self):string {
+    return match self {
+        color.RED -> 'red'
+        color.GREEN -> 'green'
+        color.BLUE -> 'blue'
+    }
+}
+
+
 fn main() {
-    println('hello world')
+    var c = color.GREEN
+    println(c.to_string(), color.BLUE.to_string())
 }

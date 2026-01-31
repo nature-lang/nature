@@ -133,18 +133,22 @@ static type_array_t *type_array_copy(module_t *m, type_array_t *temp) {
 static type_enum_t *type_enum_copy(module_t *m, type_enum_t *temp) {
     type_enum_t *enum_ = COPY_NEW(type_enum_t, temp);
     enum_->element_type = type_copy(m, temp->element_type);
+    enum_->has_payload = temp->has_payload;
 
     list_t *properties = ct_list_new(sizeof(enum_property_t));
     for (int i = 0; i < temp->properties->length; ++i) {
         enum_property_t *temp_property = ct_list_value(temp->properties, i);
-        enum_property_t *property = NEW(enum_property_t); // enum_property_t is not a pointer in the list? check utils/type.h
+        enum_property_t *property = NEW(enum_property_t);
         property->name = strdup(temp_property->name);
         if (temp_property->value_expr) {
             property->value_expr = ast_expr_copy(m, temp_property->value_expr);
         }
 
-        if (temp_property->value) {
-            property->value = strdup(temp_property->value);
+        property->value = temp_property->value;
+
+        if (temp_property->payload_type) {
+            property->payload_type = NEW(type_t);
+            *property->payload_type = type_copy(m, *temp_property->payload_type);
         }
 
         ct_list_push(properties, property);

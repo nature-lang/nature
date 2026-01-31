@@ -398,26 +398,28 @@ struct type_struct_t {
  *     GREEN,    // value = 1
  *     BLUE = 5, // 显式指定 value = 5
  * }
- * type color_str = enum:string {
- *     ORANGE = 'orange',
- *     PURPLE = 'purple',
+ * type option = enum {
+ *     some(int),  // 带关联数据的变体
+ *     none,       // 简单变体
  * }
  */
 typedef struct {
     char *name; // 成员名称，如 RED, GREEN, BLUE
     void *value_expr; // ast_expr, 可选的值表达式
-    char *value; // 解析后的值，统一使用字符串存储
+    int64_t value;
+    type_t *payload_type; // 可选的关联数据类型，NULL 表示简单变体，TYPE_TUPLE 用于多字段
 } enum_property_t;
 
 /**
  * enum 类型
  * 支持两种形式:
- * 1. type color = enum { ... }        // 默认底层类型为 int
- * 2. type color = enum:string { ... } // 底层类型为 string
+ * 1. type color = enum { ... }        // 简单枚举，底层类型为 int
+ * 2. type option = enum { some(T), none } // 带关联数据的枚举 (tagged union)
  */
 struct type_enum_t {
-    type_t element_type; // 底层类型，默认为 TYPE_INT，也可以是 TYPE_STRING
+    type_t element_type; // 底层类型（discriminant），默认为 TYPE_INT
     list_t *properties; // enum_property_t 列表
+    bool has_payload; // true 表示存在带关联数据的变体
 };
 
 /**
@@ -539,6 +541,11 @@ typedef struct {
     value_casting value;
     rtype_t *rtype;
 } n_union_t;
+
+typedef struct {
+    int64_t id;
+    value_casting value; // need gc
+} n_enum_union_t;
 
 typedef struct {
     value_casting value;

@@ -82,6 +82,8 @@
 #define RT_CALL_ANYPTR_CASTING "anyptr_casting"
 #define RT_CALL_CASTING_TO_ANYPTR "casting_to_anyptr"
 
+#define RT_CALL_ENUM_UNION_CASTING "enum_union_casting"
+
 /**
  * 将 single 类型转换为 union 类型
  */

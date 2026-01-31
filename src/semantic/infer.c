@@ -1378,14 +1378,30 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
 
                 ast_match_is_expr_t *match_is_expr = cond_expr->value;
                 table_set(exhaustive_table, itoa(type_hash(match_is_expr->target_type)), cond_expr);
-            } else {
-                infer_right_expr(m, cond_expr, subject_type);
+            } else if (subject_type.kind == TYPE_ENUM) {
+                if (subject_type.enum_->has_payload) {
+                    INFER_ASSERTF(cond_expr->assert_type == AST_EXPR_TAGGED_ENUM_PATTERN, "match tagged enum only support tagged pattern")
+                }
 
-                // 记录 enum 匹配的值 (infer 之后 enum select 表达式会被改写为 literal)
-                if (subject_type.kind == TYPE_ENUM && cond_expr->assert_type == AST_EXPR_LITERAL) {
+                // enum pattern matching (both tagged and simple)
+                if (cond_expr->assert_type == AST_EXPR_TAGGED_ENUM_PATTERN) {
+                    // tagged enum with payload: some(v)
+                    infer_right_expr(m, cond_expr, type_kind_new(TYPE_UNKNOWN));
+
+                    ast_tagged_enum_t *pattern = cond_expr->value;
+                    char *key = utoa(pattern->property->value);
+                    table_set(exhaustive_table, key, cond_expr);
+                    free(key);
+                } else {
+                    // simple enum or tagged enum without payload: none
+                    infer_right_expr(m, cond_expr, subject_type);
+                    assert(cond_expr->assert_type == AST_EXPR_LITERAL);
+
                     ast_literal_t *literal = cond_expr->value;
                     table_set(exhaustive_table, literal->value, cond_expr);
                 }
+            } else {
+                infer_right_expr(m, cond_expr, subject_type);
             }
         }
 
@@ -1414,11 +1430,14 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
                 type_enum_t *type_enum = subject_type.enum_;
                 for (int i = 0; i < type_enum->properties->length; i++) {
                     enum_property_t *prop = ct_list_value(type_enum->properties, i);
-                    if (!table_exist(exhaustive_table, prop->value)) {
+                    // tagged enum 使用 name 作为 key，简单 enum 使用 value 作为 key
+                    char *key = utoa(prop->value);
+                    if (!table_exist(exhaustive_table, key)) {
                         ANALYZER_ASSERTF(has_default,
                                          "match expression lacks a default case '_' and enum value lacks, for example '%s'",
                                          prop->name)
                     }
+                    free(key);
                 }
 
                 break; // enum completed
@@ -2135,7 +2154,8 @@ static type_t infer_select_expr(module_t *m, ast_expr_t *expr) {
                 // 将表达式改写为 literal
                 ast_literal_t *literal = NEW(ast_literal_t);
                 literal->kind = type_enum->element_type.kind;
-                literal->value = found_property->value;
+                literal->value = malloc(64);
+                snprintf(literal->value, 64, "%ld", found_property->value);
 
                 expr->assert_type = AST_EXPR_LITERAL;
                 expr->value = literal;
@@ -2601,6 +2621,147 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
     }
 
     return type_fn->return_type;
+}
+
+/**
+ * 推断 tagged enum 构造表达式
+ * AST 改写在 analyzer 阶段完成，这里做类型推断和验证
+ */
+static type_t infer_tagged_enum_new(module_t *m, ast_expr_t *expr) {
+    ast_tagged_enum_t *tagged_new = expr->value;
+
+    // 确保 enum 类型已经 reduction
+    type_t enum_type = reduction_type(m, tagged_new->enum_type);
+    type_enum_t *type_enum = enum_type.enum_;
+
+    // 更新 tagged_new 中的 enum_type
+    tagged_new->enum_type = enum_type;
+
+    // 查找对应的 variant
+    enum_property_t *found_property = NULL;
+    for (int i = 0; i < type_enum->properties->length; ++i) {
+        enum_property_t *prop = ct_list_value(type_enum->properties, i);
+        if (str_equal(prop->name, tagged_new->variant_name)) {
+            found_property = prop;
+            break;
+        }
+    }
+
+    INFER_ASSERTF(found_property != NULL, "enum '%s' has no variant '%s'",
+                  enum_type.ident, tagged_new->variant_name);
+
+    // 保存 property 引用
+    tagged_new->property = found_property;
+
+    // 验证参数数量和类型
+    type_t *payload_type = found_property->payload_type;
+    if (payload_type && payload_type->kind == TYPE_TUPLE) {
+        type_tuple_t *tuple = payload_type->tuple;
+        INFER_ASSERTF(tagged_new->bindings->length == tuple->elements->length,
+                      "enum variant '%s.%s' expects %d arguments, got %d",
+                      enum_type.ident, tagged_new->variant_name,
+                      tuple->elements->length, tagged_new->bindings->length);
+
+        // 推断每个参数
+        for (int i = 0; i < tagged_new->bindings->length; ++i) {
+            ast_expr_t *arg = ct_list_value(tagged_new->bindings, i);
+            type_t *expected_type = ct_list_value(tuple->elements, i);
+            infer_right_expr(m, arg, *expected_type);
+        }
+    } else if (payload_type != NULL) {
+        // 单一类型 payload
+        INFER_ASSERTF(tagged_new->bindings->length == 1,
+                      "enum variant '%s.%s' expects 1 argument, got %d",
+                      enum_type.ident, tagged_new->variant_name, tagged_new->bindings->length);
+
+        ast_expr_t *arg = ct_list_value(tagged_new->bindings, 0);
+        infer_right_expr(m, arg, *payload_type);
+    }
+
+    // 返回类型是 enum 类型
+    expr->type = enum_type;
+    return enum_type;
+}
+
+/**
+ * 推断 tagged enum 模式匹配表达式
+ * 用于 match 表达式中的 EnumType.Variant(v) 模式
+ */
+static type_t infer_tagged_match_pattern(module_t *m, ast_expr_t *expr) {
+    ast_tagged_enum_t *pattern = expr->value;
+
+    // 确保 enum 类型已经 reduction
+    type_t enum_type = reduction_type(m, pattern->enum_type);
+    type_enum_t *type_enum = enum_type.enum_;
+
+    // 更新 pattern 中的 enum_type
+    pattern->enum_type = enum_type;
+
+    // 查找对应的 variant
+    enum_property_t *found_property = NULL;
+    for (int i = 0; i < type_enum->properties->length; ++i) {
+        enum_property_t *prop = ct_list_value(type_enum->properties, i);
+        if (str_equal(prop->name, pattern->variant_name)) {
+            found_property = prop;
+            break;
+        }
+    }
+
+    INFER_ASSERTF(found_property != NULL, "enum '%s' has no variant '%s'",
+                  enum_type.ident, pattern->variant_name);
+
+    // 保存 property 引用
+    pattern->property = found_property;
+
+    // 为绑定变量推断类型
+    if (found_property->payload_type) {
+        type_t *payload_type = found_property->payload_type;
+
+        if (payload_type->kind == TYPE_TUPLE) {
+            type_tuple_t *tuple = payload_type->tuple;
+            INFER_ASSERTF(pattern->bindings->length == tuple->elements->length,
+                          "enum variant '%s.%s' has %d payload elements, but got %d bindings",
+                          enum_type.ident, pattern->variant_name,
+                          tuple->elements->length, pattern->bindings->length);
+
+            // 为每个绑定变量设置类型（这些变量在 analyzer 阶段已注册到符号表）
+            for (int i = 0; i < pattern->bindings->length; ++i) {
+                ast_expr_t *binding_expr = ct_list_value(pattern->bindings, i);
+                char *binding_name = ((ast_ident *) binding_expr->value)->literal;
+                type_t *element_type = ct_list_value(tuple->elements, i);
+
+                // 查找绑定变量的符号并设置类型
+                symbol_t *binding_symbol = symbol_table_get(binding_name);
+                if (binding_symbol && binding_symbol->type == SYMBOL_VAR) {
+                    ast_var_decl_t *var_decl = binding_symbol->ast_value;
+                    var_decl->type = *element_type;
+                }
+            }
+        } else {
+            // 单一类型 payload
+            INFER_ASSERTF(pattern->bindings->length == 1,
+                          "enum variant '%s.%s' has single payload, but got %d bindings",
+                          enum_type.ident, pattern->variant_name, pattern->bindings->length);
+
+            ast_expr_t *binding_expr = ct_list_value(pattern->bindings, 0);
+            char *binding_name = ((ast_ident *) binding_expr->value)->literal;
+
+            symbol_t *binding_symbol = symbol_table_get(binding_name);
+            if (binding_symbol && binding_symbol->type == SYMBOL_VAR) {
+                ast_var_decl_t *var_decl = binding_symbol->ast_value;
+                var_decl->type = *payload_type;
+            }
+        }
+    } else {
+        // 无 payload 的 variant 不应该有绑定变量
+        INFER_ASSERTF(pattern->bindings == NULL,
+                      "enum variant '%s.%s' has no payload, but got bindings",
+                      enum_type.ident, pattern->variant_name);
+    }
+
+    // 返回 enum 类型
+    expr->type = enum_type;
+    return enum_type;
 }
 
 void infer_expr_fake(module_t *m, ast_expr_fake_stmt_t *stmt) {
@@ -3209,6 +3370,12 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type, type
         }
         case AST_CALL: {
             return infer_call(m, expr->value, target_type, true);
+        }
+        case AST_EXPR_TAGGED_ENUM_NEW: {
+            return infer_tagged_enum_new(m, expr);
+        }
+        case AST_EXPR_TAGGED_ENUM_PATTERN: {
+            return infer_tagged_match_pattern(m, expr);
         }
         case AST_MACRO_ASYNC: {
             return infer_async(m, expr, target_type);
@@ -3834,31 +4001,37 @@ static type_t reduction_enum(module_t *m, type_t t) {
     type_enum_t *enum_type = t.enum_;
     enum_type->element_type = reduction_type(m, enum_type->element_type);
 
-    // enum 只支持 integer 类型
+    // enum 只支持 integer 类型作为 discriminant
     INFER_ASSERTF(is_integer(enum_type->element_type.kind),
                   "enum only supports integer types, got '%s'", type_format(enum_type->element_type));
 
-    // 计算所有枚举成员的值
+    // 计算所有枚举成员的值并处理 payload 类型
     int64_t auto_value = 0;
     for (int i = 0; i < enum_type->properties->length; ++i) {
         enum_property_t *prop = ct_list_value(enum_type->properties, i);
 
-        if (prop->value_expr) {
+        // 处理带 payload 的变体
+        if (prop->payload_type) {
+            *prop->payload_type = reduction_type(m, *prop->payload_type);
+            // 带 payload 的变体自动分配 discriminant 值
+            prop->value = auto_value++;
+        } else if (prop->value_expr) {
             ast_expr_t *value_expr = prop->value_expr;
             // 对表达式进行推断
             infer_right_expr(m, value_expr, enum_type->element_type);
 
-            // 目前仅支持字面量值
             INFER_ASSERTF(value_expr->assert_type == AST_EXPR_LITERAL,
-                          "enum member '%s' value must be a literal", prop->name);
-            ast_literal_t *lit = value_expr->value;
-            prop->value = lit->value;
-            auto_value = atoll(lit->value) + 1;
+                          "enum member '%s' value must be a integer literal", prop->name);
+
+            ast_literal_t *literal = value_expr->value;
+            INFER_ASSERTF(is_integer(literal->kind),
+                          "enum member '%s' value must be a integer literal", prop->name);
+
+            prop->value = atoll(literal->value);
+            auto_value = prop->value + 1;
         } else {
             // 没有显式值，使用自动递增值
-            char *value_str = mallocz(32);
-            sprintf(value_str, "%lld", (long long) auto_value++);
-            prop->value = value_str;
+            prop->value = auto_value++;
         }
     }
 

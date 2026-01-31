@@ -23,6 +23,8 @@ typedef enum {
     AST_EXPR_AS,
     AST_EXPR_IS,
     AST_EXPR_MATCH_IS,
+    AST_EXPR_TAGGED_ENUM_PATTERN, // option.some(v) in match
+    AST_EXPR_TAGGED_ENUM_NEW, // Option.some(42)
 
     // marco
     AST_MACRO_EXPR_SIZEOF,
@@ -612,6 +614,14 @@ typedef struct {
 typedef struct {
     list_t *elements; // 值为 ast_expr
 } ast_tuple_new_t;
+
+typedef struct {
+    type_t enum_type; // 完整的 enum 类型
+    char *variant_name; // infer 时用于定位具体的 enum
+    enum_property_t *property; // 指向 enum 中的 property
+
+    list_t *bindings; // 构造参数，*ast_expr, 可能为 null
+} ast_tagged_enum_t;
 
 typedef struct {
     uint8_t index;

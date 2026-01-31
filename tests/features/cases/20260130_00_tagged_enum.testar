@@ -1,0 +1,97 @@
+=== test_basic
+--- main.n
+type option = enum {
+    some(int),
+    none,
+}
+
+fn main() {
+    var opt = option.some(100)
+    var value = match opt {
+        option.some(v) -> v
+        option.none -> -1
+    }
+    println(value)
+    assert(value == 100)
+
+    var opt2 = option.none
+    value = match opt2 {
+       option.some(v) -> v
+       option.none -> -1
+    }
+    println(value)
+    assert(value == -1)
+}
+
+=== test_multi
+--- main.n
+type option = enum {
+    some(int),
+    can(int, int, bool),
+    none,
+}
+
+fn main() {
+    var o = option.can(1024, 2048, false)
+    var value = match o {
+        option.can(v1, v2, b) -> {
+            var result = 0
+            if b {
+                result = v1 + v2
+            } else {
+                result = v1 * v2
+            }
+
+            result
+        }
+        _ -> 1888
+    }
+    println(value)
+    assert(value == 2097152)
+
+    o = option.can(1024, 12, true)
+    value = match o {
+        option.can(v1, v2, b) -> {
+            var result = 0
+            if b {
+                result = v1 + v2
+            } else {
+                result = v1 * v2
+            }
+
+            result
+        }
+        _ -> 18882
+    }
+    println(value)
+    assert(value == 1036)
+}
+
+=== test_failed
+--- main.n
+type option = enum {
+    some(int),
+    can(int, int, bool),
+    none,
+}
+
+fn main() {
+    var o = option.can(1024, 2048, false)
+    var value = match o {
+        option.can(v1, v2, b) -> {
+            var result = 0
+            if b {
+                result = v1 + v2
+            } else {
+                result = v1 * v2
+            }
+
+            result
+        }
+    }
+    println(value)
+    assert(value == 2097152)
+}
+
+--- output.txt
+nature-test/main.n:18:18: match expression lacks a default case '_' and enum value lacks, for example 'some'

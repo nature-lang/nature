@@ -24,6 +24,10 @@ static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef);
 
 static void analyzer_call(module_t *m, ast_call_t *call);
 
+static void analyzer_call_args(module_t *m, ast_call_t *call);
+
+static bool analyzer_local_ident(module_t *m, ast_expr_t *ident_expr);
+
 char *analyzer_force_unique_ident(module_t *m) {
     if (m->ident) {
         return str_connect(m->ident, ".n.o");
@@ -689,6 +693,44 @@ static void analyzer_throw(module_t *m, ast_throw_stmt_t *throw) {
     analyzer_expr(m, &throw->error);
 }
 
+static void try_rewrite_tagged_enum_new(module_t *m, ast_expr_t *expr) {
+    ast_expr_select_t *select;
+    list_t *args = NULL;
+    assert(expr->assert_type == AST_EXPR_SELECT);
+    select = expr->value;
+
+    if (select->left.assert_type != AST_EXPR_IDENT) {
+        return;
+    }
+
+    ast_ident *left_ident = select->left.value;
+    symbol_t *symbol = symbol_table_get(left_ident->literal);
+
+    if (!symbol || symbol->type != SYMBOL_TYPE) {
+        return;
+    }
+
+    ast_typedef_stmt_t *typedef_stmt = symbol->ast_value;
+    if (!typedef_stmt->is_enum) {
+        return;
+    }
+
+    if (!typedef_stmt->type_expr.enum_->has_payload) {
+        return;
+    }
+
+    // 创建 tagged enum new 节点（类型验证在 infer 阶段完成）
+    ast_tagged_enum_t *tagged_new = NEW(ast_tagged_enum_t);
+    tagged_new->enum_type = type_ident_new(left_ident->literal, TYPE_IDENT_ENUM);
+    tagged_new->variant_name = select->key;
+    tagged_new->property = NULL; // 将在 infer 阶段填充
+    tagged_new->bindings = NULL;
+
+    // 改写表达式类型
+    expr->assert_type = AST_EXPR_TAGGED_ENUM_NEW;
+    expr->value = tagged_new;
+}
+
 static void analyzer_match(module_t *m, ast_match_t *match) {
     // 支持任意表达式作为 subject，不再限制必须是 ident
     if (match->subject) {
@@ -700,6 +742,7 @@ static void analyzer_match(module_t *m, ast_match_t *match) {
         ast_match_case_t *match_case = SLICE_VALUE(match->cases);
 
         bool is_cond = false;
+
         for (int i = 0; i < match_case->cond_list->length; ++i) {
             ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, i);
 
@@ -721,6 +764,36 @@ static void analyzer_match(module_t *m, ast_match_t *match) {
                 ast_match_is_expr_t *is_expr = cond_expr->value;
                 analyzer_type(m, &is_expr->target_type);
                 is_cond = true;
+            } else if (cond_expr->assert_type == AST_CALL) {
+                // 对于 AST_CALL，需要特殊处理以支持 tagged enum pattern matching
+                ast_call_t *call = cond_expr->value;
+
+                // 1. 先处理 call->left 从而正确判断是否为 enum 格式,
+                analyzer_expr(m, &call->left);
+                if (call->left.assert_type == AST_EXPR_TAGGED_ENUM_NEW) {
+                    for (int j = 0; j < call->args->length; ++j) {
+                        ast_expr_t *arg = ct_list_value(call->args, j);
+                        ANALYZER_ASSERTF(arg->assert_type == AST_EXPR_IDENT, "enum binding must be ident")
+                    }
+
+                    list_t *args = call->args;
+                    cond_expr->assert_type = AST_EXPR_TAGGED_ENUM_PATTERN;
+                    cond_expr->value = call->left.value;
+                    ast_tagged_enum_t *tagged_enum = cond_expr->value;
+                    tagged_enum->bindings = args;
+                    continue;
+                }
+
+                // 不是 enum pattern，正常处理 args
+                analyzer_call_args(m, call);
+                continue;
+            } else if (cond_expr->assert_type == AST_EXPR_SELECT) {
+                analyzer_expr(m, cond_expr);
+                if (cond_expr->assert_type == AST_EXPR_TAGGED_ENUM_NEW) {
+                    cond_expr->assert_type = AST_EXPR_TAGGED_ENUM_PATTERN;
+                }
+
+                continue;
             }
 
             analyzer_expr(m, cond_expr);
@@ -745,6 +818,34 @@ static void analyzer_match(module_t *m, ast_match_t *match) {
         }
 
         analyzer_begin_scope(m);
+
+        // 检测 analyzer_expr 处理后是否生成了 tagged enum pattern，如果是则注册绑定变量
+        if (match_case->cond_list->length == 1) {
+            ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, 0);
+            if (cond_expr->assert_type == AST_EXPR_TAGGED_ENUM_PATTERN) {
+                ast_tagged_enum_t *pattern = cond_expr->value;
+
+                if (pattern->bindings) {
+                    // 为每个绑定变量创建 var_decl 并注册
+                    for (int j = 0; j < pattern->bindings->length; ++j) {
+                        ast_expr_t *binding_expr = ct_list_value(pattern->bindings, j);
+                        ast_ident *ident = binding_expr->value;
+                        char *binding_name = ident->literal;
+
+                        // 创建一个临时的 var_decl 用于注册变量
+                        ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
+                        var_decl->ident = binding_name;
+                        var_decl->type = type_kind_new(TYPE_UNKNOWN); // 类型将在 infer 阶段确定
+
+                        analyzer_var_decl(m, var_decl, true);
+
+                        // 更新 bindings 中的名称为 unique_ident
+                        ident->literal = var_decl->ident;
+                    }
+                }
+            }
+        }
+
         analyzer_body(m, match_case->handle_body);
         analyzer_end_scope(m);
     }
@@ -771,18 +872,9 @@ static void analyzer_select(module_t *m, ast_select_stmt_t *select) {
 }
 
 /**
- * 函数的递归自调用分为两种类型，一种是包含名称的函数递归自调用, 一种是不包含名称的函数递归自调用。
- * 对于第一种形式， global ident 一定能够找到该 fn 进行调用。
- *
- * 现在是较为复杂的第二种情况(self 关键字现在已经被占用了，所以无法使用),
- * 也就是闭包 fn 的自调用。这
- * @param m
- * @param call
+ * 分析函数调用的泛型参数和实参（不包括 call->left）
  */
-static void analyzer_call(module_t *m, ast_call_t *call) {
-    // 函数地址 unique 改写
-    analyzer_expr(m, &call->left);
-
+static void analyzer_call_args(module_t *m, ast_call_t *call) {
     if (call->generics_args) {
         for (int i = 0; i < call->generics_args->length; ++i) {
             type_t *arg = ct_list_value(call->generics_args, i);
@@ -795,6 +887,23 @@ static void analyzer_call(module_t *m, ast_call_t *call) {
         ast_expr_t *arg = ct_list_value(call->args, i);
         analyzer_expr(m, arg);
     }
+}
+
+/**
+ * 函数的递归自调用分为两种类型，一种是包含名称的函数递归自调用, 一种是不包含名称的函数递归自调用。
+ * 对于第一种形式， global ident 一定能够找到该 fn 进行调用。
+ *
+ * 现在是较为复杂的第二种情况(self 关键字现在已经被占用了，所以无法使用),
+ * 也就是闭包 fn 的自调用。这
+ * @param m
+ * @param call
+ */
+static void analyzer_call(module_t *m, ast_call_t *call) {
+    // 函数地址 unique 改写
+    analyzer_expr(m, &call->left);
+
+    // 泛型参数和实参
+    analyzer_call_args(m, call);
 }
 
 static void analyzer_async_expr(module_t *m, ast_macro_async_t *async) {
@@ -1937,6 +2046,9 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
             // analyzer 仅进行了变量重命名
             // 此时作用域不明确，无法进行任何的表达式改写。
             rewrite_select_expr(m, expr);
+            if (expr->assert_type == AST_EXPR_SELECT) {
+                try_rewrite_tagged_enum_new(m, expr);
+            }
 
             // Constant Propagation, The select expression may be rewritten as an identity expression
             if (expr->assert_type == AST_EXPR_IDENT) {
@@ -1970,7 +2082,19 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
             return analyzer_match(m, expr->value);
         }
         case AST_CALL: {
-            return analyzer_call(m, expr->value);
+            ast_call_t *call = expr->value;
+
+            analyzer_call(m, call);
+
+            if (call->left.assert_type == AST_EXPR_TAGGED_ENUM_NEW) {
+                list_t *args = call->args;
+                expr->assert_type = AST_EXPR_TAGGED_ENUM_NEW;
+                expr->value = call->left.value;
+                ast_tagged_enum_t *tagged_enum = expr->value;
+                tagged_enum->bindings = args;
+            }
+
+            return;
         }
         case AST_MACRO_ASYNC: {
             return analyzer_async_expr(m, expr->value);
