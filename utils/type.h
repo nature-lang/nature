@@ -104,11 +104,12 @@ typedef enum {
 
     TYPE_UNION = 26,
     TYPE_INTERFACE = 27,
+    TYPE_TAGGED_UNION = 28,
+    TYPE_ENUM = 29,
 
     TYPE_VOID, // 表示函数无返回值
     TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
     TYPE_RAW_STRING, // c 语言中的 string, 目前主要用于 lir 中的 string imm
-    TYPE_ENUM,
 
     TYPE_FN_T, // 底层类型
     TYPE_INTEGER_T, // 底层类型
@@ -129,7 +130,7 @@ typedef enum {
     TYPE_IDENT_GENERICS_PARAM,
     TYPE_IDENT_BUILTIN, // int/float/vec/string...
     TYPE_IDENT_INTERFACE, // type.impls 部分专用
-    TYPE_IDENT_ENUM,
+    TYPE_IDENT_TAGGER_UNION,
     TYPE_IDENT_UNKNOWN, // use 就是还不能确定是 type alias 还是 type def
 } type_ident_kind;
 
@@ -141,6 +142,7 @@ static string type_kind_str[] = {
         [TYPE_ARR] = "arr",
 
         [TYPE_UNION] = "union",
+        [TYPE_TAGGED_UNION] = "tagged_union",
 
         [TYPE_STRING] = "string",
         [TYPE_RAW_STRING] = "raw_string",
@@ -234,7 +236,6 @@ typedef struct {
     list_t *elements; // type_t
 } type_union_t;
 
-
 typedef struct {
     list_t *elements; // type_t
 } type_interface_t;
@@ -262,6 +263,8 @@ typedef struct {
 
 typedef struct type_struct_t type_struct_t; // 目前只有 string
 
+typedef struct type_tagged_union_t type_tagged_union_t; // 目前只有 string
+
 typedef struct type_enum_t type_enum_t;
 
 typedef struct type_fn_t type_fn_t;
@@ -282,6 +285,7 @@ typedef struct type_t {
         type_set_t *set;
         type_tuple_t *tuple;
         type_struct_t *struct_;
+        type_tagged_union_t *tagged_union;
         type_enum_t *enum_;
         type_fn_t *fn;
         type_ptr_t *ptr;
@@ -389,6 +393,16 @@ typedef struct {
 struct type_struct_t {
     char *ident;
     list_t *properties; // struct_property_t
+};
+
+typedef struct {
+    char *tag;
+    type_t type;
+} tagged_union_element_t;
+
+struct type_tagged_union_t {
+    char *ident;
+    list_t *elements; // tagged_union_element_t
 };
 
 /**
@@ -543,9 +557,9 @@ typedef struct {
 } n_union_t;
 
 typedef struct {
-    int64_t id;
     value_casting value; // need gc
-} n_enum_union_t;
+    int64_t tag_hash;
+} n_tagged_union_t;
 
 typedef struct {
     value_casting value;
@@ -648,7 +662,7 @@ int64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
  */
 static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
-    return kind == TYPE_UNION || kind == TYPE_STRING || kind == TYPE_VEC ||
+    return kind == TYPE_UNION || kind == TYPE_TAGGED_UNION || kind == TYPE_STRING || kind == TYPE_VEC ||
            kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_TUPLE || kind == TYPE_GC_ENV ||
            kind == TYPE_FN || kind == TYPE_COROUTINE_T || kind == TYPE_CHAN || kind == TYPE_INTERFACE;
 }
@@ -684,7 +698,7 @@ static inline bool type_is_ident(type_t *t) {
         return false;
     }
 
-    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_INTERFACE || t->ident_kind == TYPE_IDENT_ENUM || t->ident_kind == TYPE_IDENT_UNKNOWN;
+    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_INTERFACE || t->ident_kind == TYPE_IDENT_TAGGER_UNION || t->ident_kind == TYPE_IDENT_UNKNOWN;
 }
 
 static inline type_t type_ident_new(char *ident, type_ident_kind kind) {

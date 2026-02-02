@@ -885,6 +885,8 @@ static token_type_t scanner_ident(char *word, int length) {
                     return scanner_rest(word, length, 2, 1, "2", TOKEN_U32);
                 case '6':
                     return scanner_rest(word, length, 2, 1, "4", TOKEN_U64);
+                case 'n':
+                    return scanner_rest(word, length, 2, 3, "ion", TOKEN_UNION);
             }
             break;
         }

@@ -360,6 +360,17 @@ static void analyzer_type(module_t *m, type_t *type) {
         }
     }
 
+    if (type->kind == TYPE_TAGGED_UNION) {
+        type_tagged_union_t *tagged_union = type->tagged_union;
+        if (tagged_union->elements->length > 0) {
+            for (int i = 0; i < tagged_union->elements->length; ++i) {
+                tagged_union_element_t *element = ct_list_value(tagged_union->elements, i);
+                analyzer_type(m, &element->type);
+            }
+            return;
+        }
+    }
+
     if (type->kind == TYPE_MAP) {
         type_map_t *map_decl = type->map;
         analyzer_type(m, &map_decl->key_type);
@@ -612,30 +623,50 @@ static void analyzer_end_scope(module_t *m) {
     }
 }
 
-static ast_stmt_t *auto_as_stmt(module_t *m, int line, ast_expr_t *source_expr, char *binding_ident, type_t target_type) {
+static ast_stmt_t *auto_as_stmt(module_t *m, int line, ast_expr_t *source_expr, ast_expr_t *binding, type_t target_type, ast_expr_t *union_tag) {
     // var binding = source as T
-    ast_vardef_stmt_t *vardef = NEW(ast_vardef_stmt_t);
-    vardef->var_decl.ident = strdup(binding_ident);
-    vardef->var_decl.type = type_copy(m, target_type);
+    // var (a, b) = source as T
 
-    ast_expr_t expr = {
-            .line = line,
-            .column = 0,
-            .assert_type = AST_EXPR_AS,
-    };
+    // var t = source()
+    // var binding = t as T
+    ast_expr_t *right_expr = NEW(ast_expr_t);
+    right_expr->line = line;
+    right_expr->column = 0;
+    right_expr->assert_type = AST_EXPR_AS;
 
     ast_as_expr_t *as_expr = NEW(ast_as_expr_t);
     as_expr->src = *ast_expr_copy(m, source_expr);
     as_expr->target_type = type_copy(m, target_type);
-    expr.value = as_expr;
-    vardef->right = NEW(ast_expr_t);
-    *vardef->right = expr;
-
+    as_expr->union_tag = union_tag;
+    right_expr->value = as_expr;
     ast_stmt_t *stmt = NEW(ast_stmt_t);
     stmt->line = line;
     stmt->column = 0;
-    stmt->assert_type = AST_STMT_VARDEF;
-    stmt->value = vardef;
+
+    if (binding->assert_type == AST_EXPR_IDENT) {
+        ast_vardef_stmt_t *vardef = NEW(ast_vardef_stmt_t);
+        ast_ident *ident = binding->value;
+
+        vardef->var_decl.ident = ident->literal;
+        vardef->var_decl.type = type_copy(m, target_type);
+        if (vardef->var_decl.type.kind == 0) {
+            vardef->var_decl.type.kind = TYPE_UNKNOWN;
+        }
+        vardef->right = right_expr;
+        stmt->assert_type = AST_STMT_VARDEF;
+        stmt->value = vardef;
+    } else if (binding->assert_type == AST_EXPR_TUPLE_DESTR) {
+        ast_var_tuple_def_stmt_t *tuple_def = NEW(ast_var_tuple_def_stmt_t);
+        tuple_def->tuple_destr = binding->value;
+        tuple_def->right = *right_expr;
+
+        stmt->assert_type = AST_STMT_VAR_TUPLE_DESTR;
+        stmt->value = tuple_def;
+    } else {
+        assert(false);
+    }
+
+
     return stmt;
 }
 
@@ -659,21 +690,19 @@ static ast_expr_t *extract_is_expr(module_t *m, ast_expr_t *expr) {
 }
 
 static void analyzer_if(module_t *m, ast_if_stmt_t *if_stmt) {
+    // ident 唯一标识生成
+    analyzer_expr(m, &if_stmt->condition);
+
     ast_expr_t *is_expr = extract_is_expr(m, &if_stmt->condition);
     if (is_expr) {
         ast_is_expr_t *is_cond = is_expr->value;
 
-        // 只有当 binding_ident 存在时才插入 auto as stmt
-        if (is_cond->binding_ident) {
+        if (is_cond->binding) {
             type_t target_type = is_cond->target_type;
-            ast_stmt_t *as_stmt = auto_as_stmt(m, is_expr->line, &is_cond->src, is_cond->binding_ident, target_type);
+            ast_stmt_t *as_stmt = auto_as_stmt(m, is_expr->line, is_cond->src, is_cond->binding, target_type, is_cond->union_tag);
             slice_insert(if_stmt->consequent, 0, as_stmt);
         }
     }
-
-    // ident 唯一标识生成
-    analyzer_expr(m, &if_stmt->condition);
-
 
     analyzer_begin_scope(m);
     analyzer_body(m, if_stmt->consequent);
@@ -693,7 +722,7 @@ static void analyzer_throw(module_t *m, ast_throw_stmt_t *throw) {
     analyzer_expr(m, &throw->error);
 }
 
-static void try_rewrite_tagged_enum_new(module_t *m, ast_expr_t *expr) {
+static void try_rewrite_tagged_union_new(module_t *m, ast_expr_t *expr) {
     ast_expr_select_t *select;
     list_t *args = NULL;
     assert(expr->assert_type == AST_EXPR_SELECT);
@@ -711,23 +740,20 @@ static void try_rewrite_tagged_enum_new(module_t *m, ast_expr_t *expr) {
     }
 
     ast_typedef_stmt_t *typedef_stmt = symbol->ast_value;
-    if (!typedef_stmt->is_enum) {
-        return;
-    }
-
-    if (!typedef_stmt->type_expr.enum_->has_payload) {
+    if (!typedef_stmt->is_tagged_union) {
         return;
     }
 
     // 创建 tagged enum new 节点（类型验证在 infer 阶段完成）
-    ast_tagged_enum_t *tagged_new = NEW(ast_tagged_enum_t);
-    tagged_new->enum_type = type_ident_new(left_ident->literal, TYPE_IDENT_ENUM);
-    tagged_new->variant_name = select->key;
-    tagged_new->property = NULL; // 将在 infer 阶段填充
-    tagged_new->bindings = NULL;
+    ast_tagged_union_t *tagged_new = NEW(ast_tagged_union_t);
+    tagged_new->union_type = type_ident_new(left_ident->literal, TYPE_IDENT_TAGGER_UNION);
+    tagged_new->tagged_name = select->key;
+    tagged_new->arg = NULL;
+
+    analyzer_type(m, &tagged_new->union_type);
 
     // 改写表达式类型
-    expr->assert_type = AST_EXPR_TAGGED_ENUM_NEW;
+    expr->assert_type = AST_EXPR_TAGGED_UNION_NEW;
     expr->value = tagged_new;
 }
 
@@ -742,7 +768,6 @@ static void analyzer_match(module_t *m, ast_match_t *match) {
         ast_match_case_t *match_case = SLICE_VALUE(match->cases);
 
         bool is_cond = false;
-
         for (int i = 0; i < match_case->cond_list->length; ++i) {
             ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, i);
 
@@ -760,40 +785,12 @@ static void analyzer_match(module_t *m, ast_match_t *match) {
                     match_case->is_default = true;
                     continue;
                 }
-            } else if (cond_expr->assert_type == AST_EXPR_MATCH_IS) {
-                ast_match_is_expr_t *is_expr = cond_expr->value;
-                analyzer_type(m, &is_expr->target_type);
+            } else if (cond_expr->assert_type == AST_EXPR_IS) {
+                ast_is_expr_t *is_expr = cond_expr->value;
+                if (is_expr->target_type.kind > 0) {
+                    analyzer_type(m, &is_expr->target_type);
+                }
                 is_cond = true;
-            } else if (cond_expr->assert_type == AST_CALL) {
-                // 对于 AST_CALL，需要特殊处理以支持 tagged enum pattern matching
-                ast_call_t *call = cond_expr->value;
-
-                // 1. 先处理 call->left 从而正确判断是否为 enum 格式,
-                analyzer_expr(m, &call->left);
-                if (call->left.assert_type == AST_EXPR_TAGGED_ENUM_NEW) {
-                    for (int j = 0; j < call->args->length; ++j) {
-                        ast_expr_t *arg = ct_list_value(call->args, j);
-                        ANALYZER_ASSERTF(arg->assert_type == AST_EXPR_IDENT, "enum binding must be ident")
-                    }
-
-                    list_t *args = call->args;
-                    cond_expr->assert_type = AST_EXPR_TAGGED_ENUM_PATTERN;
-                    cond_expr->value = call->left.value;
-                    ast_tagged_enum_t *tagged_enum = cond_expr->value;
-                    tagged_enum->bindings = args;
-                    continue;
-                }
-
-                // 不是 enum pattern，正常处理 args
-                analyzer_call_args(m, call);
-                continue;
-            } else if (cond_expr->assert_type == AST_EXPR_SELECT) {
-                analyzer_expr(m, cond_expr);
-                if (cond_expr->assert_type == AST_EXPR_TAGGED_ENUM_NEW) {
-                    cond_expr->assert_type = AST_EXPR_TAGGED_ENUM_PATTERN;
-                }
-
-                continue;
             }
 
             analyzer_expr(m, cond_expr);
@@ -807,44 +804,18 @@ static void analyzer_match(module_t *m, ast_match_t *match) {
         if (is_cond && match->subject) {
             // 添加断言 as 表达式到 handle body 中
             ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, 0);
-            assert(cond_expr->assert_type == AST_EXPR_MATCH_IS);
-            ast_match_is_expr_t *is_cond_expr = cond_expr->value;
+            assert(cond_expr->assert_type == AST_EXPR_IS);
 
-            // 只有当 binding_ident 存在时才插入 auto as stmt
-            if (is_cond_expr->binding_ident) {
+            ast_is_expr_t *is_cond_expr = cond_expr->value;
+            if (is_cond_expr->binding) {
+                type_t target_type = is_cond_expr->target_type;
                 slice_insert(match_case->handle_body, 0,
-                             auto_as_stmt(m, cond_expr->line, match->subject, is_cond_expr->binding_ident, is_cond_expr->target_type));
+                             auto_as_stmt(m, cond_expr->line, match->subject, is_cond_expr->binding, target_type, is_cond_expr->union_tag));
+                match_case->insert_auto_as = true;
             }
         }
 
         analyzer_begin_scope(m);
-
-        // 检测 analyzer_expr 处理后是否生成了 tagged enum pattern，如果是则注册绑定变量
-        if (match_case->cond_list->length == 1) {
-            ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, 0);
-            if (cond_expr->assert_type == AST_EXPR_TAGGED_ENUM_PATTERN) {
-                ast_tagged_enum_t *pattern = cond_expr->value;
-
-                if (pattern->bindings) {
-                    // 为每个绑定变量创建 var_decl 并注册
-                    for (int j = 0; j < pattern->bindings->length; ++j) {
-                        ast_expr_t *binding_expr = ct_list_value(pattern->bindings, j);
-                        ast_ident *ident = binding_expr->value;
-                        char *binding_name = ident->literal;
-
-                        // 创建一个临时的 var_decl 用于注册变量
-                        ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
-                        var_decl->ident = binding_name;
-                        var_decl->type = type_kind_new(TYPE_UNKNOWN); // 类型将在 infer 阶段确定
-
-                        analyzer_var_decl(m, var_decl, true);
-
-                        // 更新 bindings 中的名称为 unique_ident
-                        ident->literal = var_decl->ident;
-                    }
-                }
-            }
-        }
 
         analyzer_body(m, match_case->handle_body);
         analyzer_end_scope(m);
@@ -1157,8 +1128,33 @@ static void analyzer_type_eq_expr(module_t *m, ast_macro_type_eq_expr_t *expr) {
 }
 
 static void analyzer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
-    analyzer_type(m, &is_expr->target_type);
-    analyzer_expr(m, &is_expr->src);
+    if (is_expr->union_tag) {
+        assert(is_expr->union_tag->assert_type == AST_EXPR_SELECT);
+        analyzer_expr(m, is_expr->union_tag);
+
+        if (is_expr->union_tag->assert_type != AST_EXPR_TAGGED_UNION_NEW) {
+            ANALYZER_ASSERTF(is_expr->union_tag->assert_type == AST_EXPR_IDENT,
+                             "unexpected is expr");
+
+            ast_ident *ident = is_expr->union_tag->value;
+            is_expr->target_type.ident = ident->literal;
+            is_expr->target_type.kind = TYPE_IDENT;
+            is_expr->target_type.ident_kind = TYPE_IDENT_UNKNOWN;
+            is_expr->target_type.line = is_expr->union_tag->line;
+            is_expr->target_type.column = is_expr->union_tag->column;
+            is_expr->union_tag = NULL;
+        } else {
+            is_expr->union_tag->assert_type = AST_EXPR_TAGGED_UNION_ELEMENT;
+        }
+    }
+
+    if (is_expr->target_type.kind > 0) {
+        analyzer_type(m, &is_expr->target_type);
+    }
+
+    if (is_expr->src) {
+        analyzer_expr(m, is_expr->src);
+    }
 }
 
 /**
@@ -2046,8 +2042,9 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
             // analyzer 仅进行了变量重命名
             // 此时作用域不明确，无法进行任何的表达式改写。
             rewrite_select_expr(m, expr);
+
             if (expr->assert_type == AST_EXPR_SELECT) {
-                try_rewrite_tagged_enum_new(m, expr);
+                try_rewrite_tagged_union_new(m, expr);
             }
 
             // Constant Propagation, The select expression may be rewritten as an identity expression
@@ -2081,17 +2078,40 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         case AST_MATCH: {
             return analyzer_match(m, expr->value);
         }
+        case AST_EXPR_TAGGED_UNION_NEW: {
+            ast_tagged_union_t *tagged_union = expr->value;
+            analyzer_type(m, &tagged_union->union_type);
+            if (tagged_union->arg) {
+                analyzer_expr(m, tagged_union->arg);
+            }
+            return;
+        }
         case AST_CALL: {
             ast_call_t *call = expr->value;
 
             analyzer_call(m, call);
 
-            if (call->left.assert_type == AST_EXPR_TAGGED_ENUM_NEW) {
-                list_t *args = call->args;
-                expr->assert_type = AST_EXPR_TAGGED_ENUM_NEW;
+            // shape.ellipse -> shape.ellipse(arg)
+            if (call->left.assert_type == AST_EXPR_TAGGED_UNION_NEW) {
+                INFER_ASSERTF(call->args->length > 0, "tagged union uses parentheses but passes no arguments");
+
+                ast_expr_t *arg = ct_list_value(call->args, 0);
+                if (call->args->length > 1) {
+                    // Assemble into tuple
+                    ast_expr_t *tuple_arg = NEW(ast_expr_t);
+                    tuple_arg->line = arg->line;
+                    tuple_arg->column = arg->column;
+                    tuple_arg->assert_type = AST_EXPR_TUPLE_NEW;
+                    ast_tuple_new_t *tuple_new = NEW(ast_tuple_new_t);
+                    tuple_new->elements = call->args;
+                    tuple_arg->value = tuple_new;
+                    arg = tuple_arg;
+                }
+
+                expr->assert_type = AST_EXPR_TAGGED_UNION_NEW;
                 expr->value = call->left.value;
-                ast_tagged_enum_t *tagged_enum = expr->value;
-                tagged_enum->bindings = args;
+                ast_tagged_union_t *tagged_enum = expr->value;
+                tagged_enum->arg = arg;
             }
 
             return;

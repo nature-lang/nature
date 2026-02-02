@@ -693,11 +693,13 @@ typedef struct {
 
 type_t type_copy(module_t *m, type_t temp);
 
-bool type_union_compare(type_union_t *dst, type_union_t *src);
+bool type_union_compare(type_union_t *dst, type_union_t *src, table_t* visited);
 
 bool type_generics(type_t dst, type_t src, table_t *generics_param_table);
 
 bool type_compare(type_t dst, type_t src);
+
+bool type_compare_visited(type_t dst, type_t src, table_t *visited);
 
 bool type_compare_no_ident(type_t dst, type_t src);
 

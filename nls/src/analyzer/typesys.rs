@@ -7,8 +7,6 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
-use log::debug;
-
 use super::{
     common::{AnalyzerError, AstCall, AstNode, Expr, Stmt, Type, TypeFn, TypedefStmt, VarDeclExpr},
     symbol::{NodeId, SymbolTable},
@@ -177,9 +175,17 @@ impl GenericSpecialFnClone {
                     None
                 },
             ),
-            AstNode::As(type_, src) => AstNode::As(type_.clone(), Box::new(self.clone_expr(src))),
-            AstNode::Is(type_, src, binding) => AstNode::Is(type_.clone(), Box::new(self.clone_expr(src)), binding.clone()),
-            AstNode::MatchIs(type_, binding) => AstNode::MatchIs(type_.clone(), binding.clone()),
+            AstNode::As(type_, tag, src) => AstNode::As(
+                type_.clone(),
+                tag.as_ref().map(|e| Box::new(self.clone_expr(e))),
+                Box::new(self.clone_expr(src)),
+            ),
+            AstNode::Is(type_, union_tag, src, binding) => AstNode::Is(
+                type_.clone(),
+                union_tag.as_ref().map(|e| Box::new(self.clone_expr(e))),
+                src.as_ref().map(|e| Box::new(self.clone_expr(e))),
+                binding.as_ref().map(|e| Box::new(self.clone_expr(e))),
+            ),
             AstNode::Catch(try_expr, catch_err, catch_body) => AstNode::Catch(
                 Box::new(self.clone_expr(try_expr)),
                 Arc::new(Mutex::new(catch_err.lock().unwrap().clone())),
@@ -613,7 +619,7 @@ impl<'a> Typesys<'a> {
         }
 
         // 标记正在处理,避免循环引用
-        if (typedef.type_expr.status == ReductionStatus::Doing) {
+        if typedef.type_expr.status == ReductionStatus::Doing {
             typedef.type_expr.status = ReductionStatus::Doing2;
         } else {
             typedef.type_expr.status = ReductionStatus::Doing;
@@ -885,6 +891,13 @@ impl<'a> Typesys<'a> {
 
                 return self.finalize_type(t, ident, ident_kind, args);
             }
+            TypeKind::TaggedUnion(_, elements) => {
+                for element in elements {
+                    element.type_ = self.reduction_type(element.type_.clone())?;
+                }
+
+                return self.finalize_type(t, ident, ident_kind, args);
+            }
             TypeKind::Enum(element_type, properties) => {
                 // reduction element type
                 *element_type = Box::new(self.reduction_type(*element_type.clone())?);
@@ -998,8 +1011,9 @@ impl<'a> Typesys<'a> {
 
     pub fn infer_as_expr(&mut self, as_expr: &mut Box<Expr>) -> Result<Type, AnalyzerError> {
         // 先还原目标类型
-        let AstNode::As(target_type, src) = &mut as_expr.node else { unreachable!() };
-        *target_type = self.reduction_type(target_type.clone())?;
+        let AstNode::As(target_type, union_tag, src) = &mut as_expr.node else {
+            unreachable!()
+        };
 
         // 推导源表达式类型, 如果存在错误则停止后续比较, 直接返回错误
         let src_type = self.infer_expr(src, Type::default(), Type::default())?;
@@ -1012,6 +1026,26 @@ impl<'a> Typesys<'a> {
         }
 
         src.type_ = src_type.clone();
+
+        // as union tag: 处理 tagged union 的类型断言
+        if let Some(ut) = union_tag {
+            if !matches!(src.type_.kind, TypeKind::TaggedUnion(..)) {
+                return Err(AnalyzerError {
+                    start: as_expr.start,
+                    end: as_expr.end,
+                    message: "unexpected as expr, expected tagged union".to_string(),
+                });
+            }
+            self.infer_tagged_union_element(ut, src.type_.clone())?;
+
+            // 获取 element 的类型作为 target_type
+            if let AstNode::TaggedUnionElement(_, _, Some(element)) = &ut.node {
+                *target_type = element.type_.clone();
+                return Ok(element.type_.clone());
+            }
+        }
+
+        *target_type = self.reduction_type(target_type.clone())?;
 
         // anyptr 可以 as 为任意类型
         if matches!(src.type_.kind, TypeKind::Anyptr) && !Type::is_float(&target_type.kind) {
@@ -1112,7 +1146,7 @@ impl<'a> Typesys<'a> {
         // number 之间可以相互进行类型转换, 但是需要进行 literal check
         if Type::is_number(&src_type.kind) && Type::is_number(&target_type.kind) {
             if let AstNode::Literal(literal_kind, literal_value) = &mut src.node {
-                self.literal_as_check(literal_kind, literal_value, target_type.kind.clone())
+                self.literal_as_check(&mut literal_kind.clone(), &mut literal_value.clone(), target_type.kind.clone())
                     .map_err(|e| AnalyzerError {
                         start: as_expr.start,
                         end: as_expr.end,
@@ -1196,20 +1230,20 @@ impl<'a> Typesys<'a> {
             } else {
                 // 处理每个条件表达式
                 for cond_expr in case.cond_list.iter_mut() {
-                    // 对于联合类型,只能使用 is 匹配
-                    if matches!(subject_type.kind, TypeKind::Union(..)) {
-                        if !matches!(cond_expr.node, AstNode::MatchIs(..)) {
+                    // 对于联合类型和 tagged union,只能使用 is 匹配 (src=None means match-is)
+                    if matches!(subject_type.kind, TypeKind::Union(..) | TypeKind::TaggedUnion(..)) {
+                        if !matches!(cond_expr.node, AstNode::Is(_, _, None, _)) {
                             return Err(AnalyzerError {
                                 start: cond_expr.start,
                                 end: cond_expr.end,
-                                message: "match 'union type' only support 'is' assert".to_string(),
+                                message: "match 'union' only support 'is' assert".to_string(),
                             });
                         }
                     }
 
-                    // 处理 is 类型匹配
-                    if let AstNode::MatchIs(_target_type, _binding) = cond_expr.node.clone() {
-                        if !matches!(subject_type.kind, TypeKind::Union(..) | TypeKind::Interface(..)) {
+                    // 处理 is 类型匹配 (src=None means match-is)
+                    if let AstNode::Is(_target_type, union_tag, None, _binding) = &mut cond_expr.node {
+                        if !matches!(subject_type.kind, TypeKind::Union(..) | TypeKind::Interface(..) | TypeKind::TaggedUnion(..)) {
                             return Err(AnalyzerError {
                                 start: cond_expr.start,
                                 end: cond_expr.end,
@@ -1217,25 +1251,45 @@ impl<'a> Typesys<'a> {
                             });
                         }
 
-                        let cond_type = self.infer_right_expr(cond_expr, Type::default())?;
-                        debug_assert!(matches!(cond_type.kind, TypeKind::Bool));
+                        // 处理 tagged union 的 is 匹配
+                        if matches!(subject_type.kind, TypeKind::TaggedUnion(..)) {
+                            let Some(union_tag_expr) = union_tag else {
+                                return Err(AnalyzerError {
+                                    start: cond_expr.start,
+                                    end: cond_expr.end,
+                                    message: "tagged union match requires union tag".to_string(),
+                                });
+                            };
 
-                        let AstNode::MatchIs(target_type, _binding) = &cond_expr.node else {
-                            unreachable!()
-                        };
+                            // 推断 tagged union element
+                            self.infer_tagged_union_element(union_tag_expr, subject_type.clone())?;
 
-                        // 记录已匹配的类型, 最终可以判断 match 是否匹配了所有分支
-                        exhaustive_table.insert(target_type.hash().to_string(), true);
+                            // 记录 tagged name
+                            if let AstNode::TaggedUnionElement(_, tagged_name, _) = &union_tag_expr.node {
+                                exhaustive_table.insert(tagged_name.clone(), true);
+                            }
+
+                            cond_expr.type_ = Type::new(TypeKind::Bool);
+                        } else {
+                            // 处理普通 union/interface 的 is 匹配
+                            let cond_type = self.infer_right_expr(cond_expr, Type::default())?;
+                            debug_assert!(matches!(cond_type.kind, TypeKind::Bool));
+
+                            if let AstNode::Is(target_type, _, None, _) = &cond_expr.node {
+                                // 记录已匹配的类型, 最终可以判断 match 是否匹配了所有分支
+                                exhaustive_table.insert(target_type.hash().to_string(), true);
+                            }
+                        }
+                    } else if matches!(subject_type.kind, TypeKind::Enum(..)) {
+                        // enum 值匹配
+                        if let AstNode::SelectExpr(_, key) = &cond_expr.node {
+                            exhaustive_table.insert(key.clone(), true);
+                        }
+
+                        self.infer_right_expr(cond_expr, subject_type.clone())?;
                     } else {
                         // 普通值匹配,推导条件表达式类型
                         self.infer_right_expr(cond_expr, subject_type.clone())?;
-
-                        // 记录 enum 匹配的值 (infer 之后 enum select 表达式会被改写为 literal)
-                        if matches!(subject_type.kind, TypeKind::Enum(..)) {
-                            if let AstNode::Literal(_kind, value) = &cond_expr.node {
-                                exhaustive_table.insert(value.clone(), true);
-                            }
-                        }
                     }
                 }
             }
@@ -1268,17 +1322,29 @@ impl<'a> Typesys<'a> {
                         message: "match expression lacks a default case '_'".to_string(),
                     });
                 }
+            } else if let TypeKind::TaggedUnion(_, elements) = &subject_type.kind {
+                // tagged union 穷尽检查
+                for element in elements {
+                    if !exhaustive_table.contains_key(&element.tag) {
+                        return Err(AnalyzerError {
+                            start,
+                            end,
+                            message: format!(
+                                "match expression lacks a default case '_' and tagged union element lacks, for example 'is {}'",
+                                element.tag
+                            ),
+                        });
+                    }
+                }
             } else if let TypeKind::Enum(_, properties) = &subject_type.kind {
-                // enum 穷尽检查
+                // enum 穷尽检查 - 使用 name 作为 key
                 for prop in properties {
-                    if let Some(value) = &prop.value {
-                        if !exhaustive_table.contains_key(value) {
-                            return Err(AnalyzerError {
-                                start,
-                                end,
-                                message: format!("match expression lacks a default case '_' and enum value lacks, for example '{}'", prop.name),
-                            });
-                        }
+                    if !exhaustive_table.contains_key(&prop.name) {
+                        return Err(AnalyzerError {
+                            start,
+                            end,
+                            message: format!("match expression lacks a default case '_' and enum value lacks, for example '{}'", prop.name),
+                        });
                     }
                 }
             } else {
@@ -1605,7 +1671,7 @@ impl<'a> Typesys<'a> {
             SymbolKind::Fn(fndef_mutex) => {
                 {
                     // 泛型 fn 不能直接作为 ident 使用
-                    let mut fndef = fndef_mutex.lock().unwrap();
+                    let fndef = fndef_mutex.lock().unwrap();
                     if fndef.is_generics {
                         return Err(AnalyzerError {
                             start,
@@ -2096,6 +2162,122 @@ impl<'a> Typesys<'a> {
         Ok(Some((new_node, result_type)))
     }
 
+    /// 推断 tagged union element 表达式 (用于 is 模式匹配)
+    pub fn infer_tagged_union_element(&mut self, expr: &mut Box<Expr>, target_type: Type) -> Result<(), AnalyzerError> {
+        let AstNode::TaggedUnionElement(union_type, tagged_name, element) = &mut expr.node else {
+            return Err(AnalyzerError {
+                start: expr.start,
+                end: expr.end,
+                message: "expected tagged union element".to_string(),
+            });
+        };
+
+        // 如果 target_type 存在且 union_type 未设置，使用 target_type
+        if target_type.kind.is_exist() && !union_type.kind.is_exist() {
+            *union_type = target_type.clone();
+        }
+
+        // 如果 target_type 有泛型参数但 union_type 没有，使用 target_type 的参数
+        if target_type.kind.is_exist() && !target_type.args.is_empty() && union_type.kind.is_exist() && union_type.args.is_empty() {
+            if !union_type.ident.is_empty() && union_type.ident != target_type.ident {
+                return Err(AnalyzerError {
+                    start: expr.start,
+                    end: expr.end,
+                    message: format!("type inconsistency, expect={}, actual={}", target_type.ident, union_type.ident),
+                });
+            }
+            *union_type = target_type.clone();
+        }
+
+        *union_type = self.reduction_type(union_type.clone())?;
+
+        // 获取 tagged union 的元素列表
+        let TypeKind::TaggedUnion(_, elements) = &union_type.kind else {
+            return Err(AnalyzerError {
+                start: expr.start,
+                end: expr.end,
+                message: format!("expected tagged union type, got {}", union_type),
+            });
+        };
+
+        // 查找匹配的 variant
+        let found = elements.iter().find(|e| e.tag == *tagged_name);
+        let Some(found_element) = found else {
+            return Err(AnalyzerError {
+                start: expr.start,
+                end: expr.end,
+                message: format!("enum '{}' has no variant '{}'", union_type.ident, tagged_name),
+            });
+        };
+
+        // 保存 element 引用
+        *element = Some(found_element.clone());
+        expr.type_ = union_type.clone();
+
+        Ok(())
+    }
+
+    /// 推断 tagged union 构造表达式
+    pub fn infer_tagged_union_new(&mut self, expr: &mut Box<Expr>, target_type: Type) -> Result<Type, AnalyzerError> {
+        let AstNode::TaggedUnionNew(union_type, tagged_name, element, arg) = &mut expr.node else {
+            return Err(AnalyzerError {
+                start: expr.start,
+                end: expr.end,
+                message: "expected tagged union new".to_string(),
+            });
+        };
+
+        // 如果 target_type 存在且 union_type 未设置，使用 target_type
+        if target_type.kind.is_exist() && !union_type.kind.is_exist() {
+            *union_type = target_type.clone();
+        }
+
+        // 如果 target_type 有泛型参数但 union_type 没有，使用 target_type 的参数
+        if target_type.kind.is_exist() && !target_type.args.is_empty() && union_type.kind.is_exist() && union_type.args.is_empty() {
+            if !union_type.ident.is_empty() && union_type.ident != target_type.ident {
+                return Err(AnalyzerError {
+                    start: expr.start,
+                    end: expr.end,
+                    message: format!("type inconsistency, expect={}, actual={}", target_type.ident, union_type.ident),
+                });
+            }
+            *union_type = target_type.clone();
+        }
+
+        *union_type = self.reduction_type(union_type.clone())?;
+
+        // 获取 tagged union 的元素列表
+        let TypeKind::TaggedUnion(_, elements) = &union_type.kind else {
+            return Err(AnalyzerError {
+                start: expr.start,
+                end: expr.end,
+                message: format!("expected tagged union type, got {}", union_type),
+            });
+        };
+
+        // 查找匹配的 variant
+        let found = elements.iter().find(|e| e.tag == *tagged_name);
+        let Some(found_element) = found else {
+            return Err(AnalyzerError {
+                start: expr.start,
+                end: expr.end,
+                message: format!("enum '{}' has no variant '{}'", union_type.ident, tagged_name),
+            });
+        };
+
+        // 保存 element 引用
+        *element = Some(found_element.clone());
+
+        // 检查参数是否匹配
+        if let Some(arg_expr) = arg {
+            self.infer_right_expr(arg_expr, found_element.type_.clone())?;
+        }
+
+        // 返回 union 类型
+        expr.type_ = union_type.clone();
+        Ok(union_type.clone())
+    }
+
     pub fn infer_select_expr(&mut self, expr: &mut Box<Expr>) -> Result<Type, AnalyzerError> {
         let start = expr.start;
         let end = expr.end;
@@ -2266,26 +2448,43 @@ impl<'a> Typesys<'a> {
         }
 
         return match &mut expr.node {
-            AstNode::As(_, _) => self.infer_as_expr(expr),
+            AstNode::As(_, _, _) => self.infer_as_expr(expr),
             AstNode::Catch(try_expr, catch_err_mutex, catch_body) => self.infer_catch(try_expr, catch_err_mutex, catch_body),
             AstNode::Match(subject, cases) => self.infer_match(subject, cases, infer_target_type, expr.start, expr.end),
-            AstNode::MatchIs(target_type, _binding) => {
-                *target_type = self.reduction_type(target_type.clone())?;
-                return Ok(Type::new(TypeKind::Bool));
-            }
-            AstNode::Is(target_type, src, _binding) => {
-                let src_type = self.infer_right_expr(src, Type::default())?;
+            AstNode::Is(target_type, union_tag, src, _binding) => {
+                if let Some(src_expr) = src {
+                    let src_type = self.infer_right_expr(src_expr, Type::default())?;
 
-                *target_type = self.reduction_type(target_type.clone())?;
-                if !matches!(src_type.kind, TypeKind::Union(..) | TypeKind::Interface(..)) {
-                    return Err(AnalyzerError {
-                        start: expr.start,
-                        end: expr.end,
-                        message: format!("{} cannot use 'is' operator", src_type),
-                    });
+                    if !matches!(src_type.kind, TypeKind::Union(..) | TypeKind::TaggedUnion(..) | TypeKind::Interface(..)) {
+                        return Err(AnalyzerError {
+                            start: expr.start,
+                            end: expr.end,
+                            message: format!("{} cannot use 'is' operator", src_type),
+                        });
+                    }
+
+                    // 处理 tagged union 的 union_tag
+                    if let Some(ut) = union_tag {
+                        if !matches!(src_type.kind, TypeKind::TaggedUnion(..)) {
+                            return Err(AnalyzerError {
+                                start: expr.start,
+                                end: expr.end,
+                                message: "unexpected is expr".to_string(),
+                            });
+                        }
+                        self.infer_tagged_union_element(ut, src_type)?;
+                    }
+                }
+
+                // 处理 target_type (如果存在)
+                if target_type.kind.is_exist() {
+                    *target_type = self.reduction_type(target_type.clone())?;
                 }
 
                 return Ok(Type::new(TypeKind::Bool));
+            }
+            AstNode::TaggedUnionNew(..) => {
+                return self.infer_tagged_union_new(expr, infer_target_type);
             }
             AstNode::MacroSizeof(target_type) => {
                 *target_type = self.reduction_type(target_type.clone())?;
@@ -2483,7 +2682,7 @@ impl<'a> Typesys<'a> {
             end: expr.end,
             type_: interface_type.clone(),
             target_type: interface_type.clone(),
-            node: AstNode::As(interface_type.clone(), expr.clone()),
+            node: AstNode::As(interface_type.clone(), None, expr.clone()),
         }))
     }
 
@@ -2649,7 +2848,7 @@ impl<'a> Typesys<'a> {
             }
 
             // expr 改成成 union 类型
-            expr.node = AstNode::As(target_type.clone(), expr.clone());
+            expr.node = AstNode::As(target_type.clone(), None, expr.clone());
             expr.type_ = target_type.clone();
             expr.target_type = target_type.clone();
         }
@@ -3170,6 +3369,7 @@ impl<'a> Typesys<'a> {
     /**
      * 整个 infer 都是在 global scope 中进行的，泛型函数也同样只能在全局函数中生命
      */
+    #[allow(dead_code)]
     fn infer_generics_special(
         &mut self,
         target_type: Type,
@@ -3955,13 +4155,18 @@ impl<'a> Typesys<'a> {
     }
 
     pub fn type_compare(&mut self, dst: &Type, src: &Type) -> bool {
+        let mut visited: HashSet<String> = HashSet::new();
+        self.type_compare_visited(dst, src, &mut visited)
+    }
+
+    pub fn type_compare_visited(&mut self, dst: &Type, src: &Type, visited: &mut HashSet<String>) -> bool {
         let dst = dst.clone();
         if dst.err || src.err {
             return false;
         }
 
         debug_assert!(!Type::ident_is_generics_param(&dst));
-        debug_assert!(!Type::ident_is_generics_param(&src));
+        debug_assert!(!Type::ident_is_generics_param(src));
 
         // 检查类型状态
         if dst.status != ReductionStatus::Done {
@@ -3996,13 +4201,13 @@ impl<'a> Typesys<'a> {
             match &src.kind {
                 TypeKind::Null => return true,
                 TypeKind::Ptr(src_value_type) => {
-                    return self.type_compare(dst_value_type, src_value_type);
+                    return self.type_compare_visited(dst_value_type, src_value_type, visited);
                 }
                 _ => {}
             }
         }
 
-        // 即使 reduction 后，也需要通过 ident kind 进行判断, 其中 union_type 不受 type def 限制, TODO 无法区分这是 type_compare 还是 generics param handle!
+        // 即使 reduction 后，也需要通过 ident kind 进行判断, 其中 union_type 不受 type def 限制
         if dst.ident_kind == TypeIdentKind::Def && !matches!(dst.kind, TypeKind::Union(..)) {
             debug_assert!(!dst.ident.is_empty());
             if src.ident.is_empty() {
@@ -4012,8 +4217,6 @@ impl<'a> Typesys<'a> {
             if dst.ident != src.ident {
                 return false;
             }
-
-            return true;
         }
 
         if src.ident_kind == TypeIdentKind::Def && !matches!(src.kind, TypeKind::Union(..)) {
@@ -4025,8 +4228,14 @@ impl<'a> Typesys<'a> {
             if dst.ident != src.ident {
                 return false;
             }
+        }
 
-            return true;
+        // ident 递归打断
+        if dst.ident_kind == TypeIdentKind::Def {
+            if visited.contains(&dst.ident) {
+                return true;
+            }
+            visited.insert(dst.ident.clone());
         }
 
         // 如果类型不同则返回false
@@ -4040,28 +4249,45 @@ impl<'a> Typesys<'a> {
                 if *left_any {
                     return true;
                 }
-                return self.type_union_compare(&(*left_any, left_types.clone()), &(*right_any, right_types.clone()));
+                return self.type_union_compare(&(*left_any, left_types.clone()), &(*right_any, right_types.clone()), visited);
+            }
+
+            (TypeKind::TaggedUnion(_, left_elements), TypeKind::TaggedUnion(_, right_elements)) => {
+                if left_elements.len() != right_elements.len() {
+                    return false;
+                }
+                for (left_ele, right_ele) in left_elements.iter().zip(right_elements.iter()) {
+                    // 比较 tag 名称
+                    if left_ele.tag != right_ele.tag {
+                        return false;
+                    }
+                    // 比较元素类型
+                    if !self.type_compare_visited(&left_ele.type_, &right_ele.type_, visited) {
+                        return false;
+                    }
+                }
+                return true;
             }
 
             (TypeKind::Map(left_key, left_value), TypeKind::Map(right_key, right_value)) => {
-                if !self.type_compare(left_key, right_key) {
+                if !self.type_compare_visited(left_key, right_key, visited) {
                     return false;
                 }
-                if !self.type_compare(left_value, right_value) {
+                if !self.type_compare_visited(left_value, right_value, visited) {
                     return false;
                 }
 
                 return true;
             }
 
-            (TypeKind::Set(left_element), TypeKind::Set(right_element)) => self.type_compare(left_element, right_element),
+            (TypeKind::Set(left_element), TypeKind::Set(right_element)) => self.type_compare_visited(left_element, right_element, visited),
 
-            (TypeKind::Chan(left_element), TypeKind::Chan(right_element)) => self.type_compare(left_element, right_element),
+            (TypeKind::Chan(left_element), TypeKind::Chan(right_element)) => self.type_compare_visited(left_element, right_element, visited),
 
-            (TypeKind::Vec(left_element), TypeKind::Vec(right_element)) => self.type_compare(left_element, right_element),
+            (TypeKind::Vec(left_element), TypeKind::Vec(right_element)) => self.type_compare_visited(left_element, right_element, visited),
 
             (TypeKind::Arr(_, left_len, left_element), TypeKind::Arr(_, right_len, right_element)) => {
-                left_len == right_len && self.type_compare(left_element, right_element)
+                left_len == right_len && self.type_compare_visited(left_element, right_element, visited)
             }
 
             (TypeKind::Tuple(left_elements, _), TypeKind::Tuple(right_elements, _)) => {
@@ -4071,11 +4297,11 @@ impl<'a> Typesys<'a> {
                 left_elements
                     .iter()
                     .zip(right_elements.iter())
-                    .all(|(left, right)| self.type_compare(left, right))
+                    .all(|(left, right)| self.type_compare_visited(left, right, visited))
             }
 
             (TypeKind::Fn(left_fn), TypeKind::Fn(right_fn)) => {
-                if !self.type_compare(&left_fn.return_type, &right_fn.return_type)
+                if !self.type_compare_visited(&left_fn.return_type, &right_fn.return_type, visited)
                     || left_fn.param_types.len() != right_fn.param_types.len()
                     || left_fn.rest != right_fn.rest
                     || left_fn.errable != right_fn.errable
@@ -4087,7 +4313,7 @@ impl<'a> Typesys<'a> {
                     .param_types
                     .iter()
                     .zip(right_fn.param_types.iter())
-                    .all(|(left, right)| self.type_compare(left, right))
+                    .all(|(left, right)| self.type_compare_visited(left, right, visited))
             }
 
             (TypeKind::Struct(_, _, left_props), TypeKind::Struct(_, _, right_props)) => {
@@ -4097,11 +4323,11 @@ impl<'a> Typesys<'a> {
                 left_props
                     .iter()
                     .zip(right_props.iter())
-                    .all(|(left, right)| left.name == right.name && self.type_compare(&left.type_, &right.type_))
+                    .all(|(left, right)| left.name == right.name && self.type_compare_visited(&left.type_, &right.type_, visited))
             }
 
             (TypeKind::Ptr(left_value), TypeKind::Ptr(right_value)) | (TypeKind::Rawptr(left_value), TypeKind::Rawptr(right_value)) => {
-                self.type_compare(left_value, right_value)
+                self.type_compare_visited(left_value, right_value, visited)
             }
 
             // 其他基本类型直接返回true
@@ -4263,7 +4489,7 @@ impl<'a> Typesys<'a> {
             let table = self.generics_args_stack.first().unwrap();
             if let Some(generics_params) = &fndef.generics_params {
                 for param in generics_params {
-                    let arg_type = match table.get(&param.ident) {
+                    let _arg_type = match table.get(&param.ident) {
                         Some(arg_type) => arg_type,
                         None => {
                             return Err(AnalyzerError {
@@ -4531,7 +4757,7 @@ impl<'a> Typesys<'a> {
         }
     }
 
-    fn type_union_compare(&mut self, left: &(bool, Vec<Type>), right: &(bool, Vec<Type>)) -> bool {
+    fn type_union_compare(&mut self, left: &(bool, Vec<Type>), right: &(bool, Vec<Type>), visited: &mut HashSet<String>) -> bool {
         if left.0 == true {
             return true;
         }
@@ -4541,7 +4767,12 @@ impl<'a> Typesys<'a> {
         }
 
         for right_type in right.1.iter() {
-            if left.1.iter().find(|left_type| self.type_compare(left_type, right_type)).is_none() {
+            if left
+                .1
+                .iter()
+                .find(|left_type| self.type_compare_visited(left_type, right_type, visited))
+                .is_none()
+            {
                 return false;
             }
         }
@@ -4617,7 +4848,7 @@ impl<'a> Typesys<'a> {
                 continue;
             }
             let mut param_type = {
-                let mut temp_param = param.lock().unwrap();
+                let temp_param = param.lock().unwrap();
                 temp_param.type_.clone()
             };
 

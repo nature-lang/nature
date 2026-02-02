@@ -31,6 +31,10 @@ static bool union_type_contains(type_union_t *union_type, type_t sub);
 
 static void infer_ret(module_t *m, ast_ret_stmt_t *stmt);
 
+static type_t infer_tagged_union_new(module_t *m, ast_expr_t *expr, type_t target_type);
+
+static void infer_tagged_union_element(module_t *m, ast_expr_t *expr, type_t target_type);
+
 bool generics_constraints_compare(ast_generics_constraints *left, ast_generics_constraints *right) {
     if (left->any && !right->and) {
         return true;
@@ -263,7 +267,7 @@ static bool union_type_contains(type_union_t *union_type, type_t sub) {
     return false;
 }
 
-bool type_union_compare(type_union_t *dst, type_union_t *src) {
+bool type_union_compare(type_union_t *dst, type_union_t *src, table_t *visited) {
     // any 可以匹配任何类型，包括两个 any 之间相互赋值
     if (dst->any) {
         return true;
@@ -282,7 +286,7 @@ bool type_union_compare(type_union_t *dst, type_union_t *src) {
         bool type_found = false;
         for (int j = 0; j < dst->elements->length; ++j) {
             type_t *left_type = ct_list_value(dst->elements, j);
-            if (type_compare(*left_type, *right_type)) {
+            if (type_compare_visited(*left_type, *right_type, visited)) {
                 type_found = true;
                 break;
             }
@@ -476,6 +480,11 @@ bool type_compare_no_ident(type_t dst, type_t src) {
     return type_compare(dst, src);
 }
 
+bool type_compare(type_t dst, type_t src) {
+    table_t *visited = table_new();
+
+    return type_compare_visited(dst, src, visited);
+}
 
 /**
  * reduction 阶段就应该完成 cross left kind 的定位.
@@ -483,7 +492,7 @@ bool type_compare_no_ident(type_t dst, type_t src) {
  * @param src
  * @return
  */
-bool type_compare(type_t dst, type_t src) {
+bool type_compare_visited(type_t dst, type_t src, table_t *visited) {
     assert(!ident_is_generics_param(&dst));
     assert(!ident_is_generics_param(&src));
     assertf(dst.status == REDUCTION_STATUS_DONE, "type '%s' not reduction", type_format(dst));
@@ -519,7 +528,7 @@ bool type_compare(type_t dst, type_t src) {
         if (src.kind == TYPE_PTR) {
             type_t dst_ptr = dst.ptr->value_type;
             type_t src_ptr = src.ptr->value_type;
-            return type_compare(dst_ptr, src_ptr);
+            return type_compare_visited(dst_ptr, src_ptr, visited);
         }
     }
 
@@ -534,8 +543,6 @@ bool type_compare(type_t dst, type_t src) {
         if (!str_equal(dst.ident, src.ident)) {
             return false;
         }
-
-        return true;
     }
 
     if (src.ident_kind == TYPE_IDENT_DEF && src.kind != TYPE_UNION) {
@@ -546,9 +553,17 @@ bool type_compare(type_t dst, type_t src) {
         if (!str_equal(dst.ident, src.ident)) {
             return false;
         }
-
-        return true;
     }
+
+    // ident 递归打断
+    if (dst.ident_kind == TYPE_IDENT_DEF) {
+        if (table_exist(visited, dst.ident)) {
+            return true;
+        }
+
+        table_set(visited, dst.ident, (void *) true);
+    }
+
 
     if (dst.kind != src.kind) {
         return false;
@@ -562,18 +577,43 @@ bool type_compare(type_t dst, type_t src) {
             return true;
         }
 
-        return type_union_compare(left_union_decl, right_union_decl);
+        return type_union_compare(left_union_decl, right_union_decl, visited);
+    }
+
+    if (dst.kind == TYPE_TAGGED_UNION) {
+        type_tagged_union_t *left = dst.tagged_union;
+        type_tagged_union_t *right = src.tagged_union;
+
+        if (left->elements->length != right->elements->length) {
+            return false;
+        }
+        for (int i = 0; i < left->elements->length; ++i) {
+            tagged_union_element_t *left_element = ct_list_value(left->elements, i);
+            tagged_union_element_t *right_element = ct_list_value(right->elements, i);
+
+            // key 比较
+            if (!str_equal(left_element->tag, right_element->tag)) {
+                return false;
+            }
+
+            // type 比较
+            if (!type_compare_visited(left_element->type, right_element->type, visited)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     if (dst.kind == TYPE_MAP) {
         type_map_t *left_map_decl = dst.map;
         type_map_t *right_map_decl = src.map;
 
-        if (!type_compare(left_map_decl->key_type, right_map_decl->key_type)) {
+        if (!type_compare_visited(left_map_decl->key_type, right_map_decl->key_type, visited)) {
             return false;
         }
 
-        if (!type_compare(left_map_decl->value_type, right_map_decl->value_type)) {
+        if (!type_compare_visited(left_map_decl->value_type, right_map_decl->value_type, visited)) {
             return false;
         }
 
@@ -584,7 +624,7 @@ bool type_compare(type_t dst, type_t src) {
         type_set_t *left_decl = dst.set;
         type_set_t *right_decl = src.set;
 
-        if (!type_compare(left_decl->element_type, right_decl->element_type)) {
+        if (!type_compare_visited(left_decl->element_type, right_decl->element_type, visited)) {
             return false;
         }
 
@@ -594,13 +634,13 @@ bool type_compare(type_t dst, type_t src) {
     if (dst.kind == TYPE_CHAN) {
         type_chan_t *left_decl = dst.chan;
         type_chan_t *right_decl = src.chan;
-        return type_compare(left_decl->element_type, right_decl->element_type);
+        return type_compare_visited(left_decl->element_type, right_decl->element_type, visited);
     }
 
     if (dst.kind == TYPE_VEC) {
         type_vec_t *left_list_decl = dst.vec;
         type_vec_t *right_list_decl = src.vec;
-        return type_compare(left_list_decl->element_type, right_list_decl->element_type);
+        return type_compare_visited(left_list_decl->element_type, right_list_decl->element_type, visited);
     }
 
     if (dst.kind == TYPE_ARR) {
@@ -609,7 +649,7 @@ bool type_compare(type_t dst, type_t src) {
         if (left_array_decl->length != right_array_decl->length) {
             return false;
         }
-        return type_compare(left_array_decl->element_type, right_array_decl->element_type);
+        return type_compare_visited(left_array_decl->element_type, right_array_decl->element_type, visited);
     }
 
     if (dst.kind == TYPE_TUPLE) {
@@ -622,7 +662,7 @@ bool type_compare(type_t dst, type_t src) {
         for (int i = 0; i < left_tuple->elements->length; ++i) {
             type_t *left_item = ct_list_value(left_tuple->elements, i);
             type_t *right_item = ct_list_value(right_tuple->elements, i);
-            if (!type_compare(*left_item, *right_item)) {
+            if (!type_compare_visited(*left_item, *right_item, visited)) {
                 return false;
             }
         }
@@ -632,7 +672,7 @@ bool type_compare(type_t dst, type_t src) {
     if (dst.kind == TYPE_FN) {
         type_fn_t *left_type_fn = dst.fn;
         type_fn_t *right_type_fn = src.fn;
-        if (!type_compare(left_type_fn->return_type, right_type_fn->return_type)) {
+        if (!type_compare_visited(left_type_fn->return_type, right_type_fn->return_type, visited)) {
             return false;
         }
 
@@ -651,7 +691,7 @@ bool type_compare(type_t dst, type_t src) {
         for (int i = 0; i < left_type_fn->param_types->length; ++i) {
             type_t *left_formal_type = ct_list_value(left_type_fn->param_types, i);
             type_t *right_formal_type = ct_list_value(right_type_fn->param_types, i);
-            if (!type_compare(*left_formal_type, *right_formal_type)) {
+            if (!type_compare_visited(*left_formal_type, *right_formal_type, visited)) {
                 return false;
             }
         }
@@ -675,7 +715,7 @@ bool type_compare(type_t dst, type_t src) {
             }
 
             // type 比较
-            if (!type_compare(left_property->type, right_property->type)) {
+            if (!type_compare_visited(left_property->type, right_property->type, visited)) {
                 return false;
             }
         }
@@ -686,7 +726,7 @@ bool type_compare(type_t dst, type_t src) {
     if (dst.kind == TYPE_PTR || dst.kind == TYPE_RAWPTR) {
         type_t left_pointer = dst.ptr->value_type;
         type_t right_pointer = src.ptr->value_type;
-        return type_compare(left_pointer, right_pointer);
+        return type_compare_visited(left_pointer, right_pointer, visited);
     }
 
     return true;
@@ -1067,12 +1107,22 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_t
  */
 static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     ast_as_expr_t *as_expr = expr->value;
-    type_t target_type = reduction_type(m, as_expr->target_type);
-    as_expr->target_type = target_type;
-
     type_t src_type = infer_expr(m, &as_expr->src, type_kind_new(TYPE_UNKNOWN), type_kind_new(TYPE_UNKNOWN));
     INFER_ASSERTF(src_type.kind != TYPE_UNKNOWN, "unknown as source type");
     as_expr->src.type = src_type;
+
+    // as union tag
+    if (as_expr->union_tag) {
+        INFER_ASSERTF(as_expr->src.type.kind == TYPE_TAGGED_UNION, "unexpected as expr");
+        ast_tagged_union_t *tag = as_expr->union_tag->value;
+        tag->element->type = reduction_type(m, tag->element->type);
+        as_expr->target_type = tag->element->type;
+
+        return tag->element->type;
+    }
+
+    type_t target_type = reduction_type(m, as_expr->target_type);
+    as_expr->target_type = target_type;
 
     // anyptr 可以 as 为任意类型
     if (as_expr->src.type.kind == TYPE_ANYPTR && !is_float(target_type.kind)) {
@@ -1364,42 +1414,41 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
             ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, i);
 
             // union 只能使用 is 匹配类型, 而不能进行值匹配
-            if (subject_type.kind == TYPE_UNION) {
-                INFER_ASSERTF(cond_expr->assert_type == AST_EXPR_MATCH_IS,
-                              "match 'union type' only support 'is' assert");
+            if (subject_type.kind == TYPE_UNION || subject_type.kind == TYPE_TAGGED_UNION) {
+                INFER_ASSERTF(cond_expr->assert_type == AST_EXPR_IS,
+                              "match 'union' only support 'is' assert");
             }
 
-            if (cond_expr->assert_type == AST_EXPR_MATCH_IS) {
-                INFER_ASSERTF(subject_type.kind == TYPE_UNION || subject_type.kind == TYPE_INTERFACE,
+            if (cond_expr->assert_type == AST_EXPR_IS) {
+                INFER_ASSERTF(subject_type.kind == TYPE_UNION || subject_type.kind == TYPE_INTERFACE || subject_type.kind == TYPE_TAGGED_UNION,
                               "%s cannot use 'is' operator",
                               type_format(subject_type));
-                infer_right_expr(m, cond_expr, type_kind_new(TYPE_UNKNOWN));
-                assert(cond_expr->type.kind == TYPE_BOOL);
 
-                ast_match_is_expr_t *match_is_expr = cond_expr->value;
-                table_set(exhaustive_table, itoa(type_hash(match_is_expr->target_type)), cond_expr);
-            } else if (subject_type.kind == TYPE_ENUM) {
-                if (subject_type.enum_->has_payload) {
-                    INFER_ASSERTF(cond_expr->assert_type == AST_EXPR_TAGGED_ENUM_PATTERN, "match tagged enum only support tagged pattern")
-                }
+                ast_is_expr_t *match_is_expr = cond_expr->value;
 
-                // enum pattern matching (both tagged and simple)
-                if (cond_expr->assert_type == AST_EXPR_TAGGED_ENUM_PATTERN) {
-                    // tagged enum with payload: some(v)
-                    infer_right_expr(m, cond_expr, type_kind_new(TYPE_UNKNOWN));
+                // 需要关联 subject
+                if (subject_type.kind == TYPE_TAGGED_UNION) {
+                    ast_is_expr_t *is_expr = cond_expr->value;
+                    INFER_ASSERTF(is_expr->union_tag, "tagged union match is not match")
+                    assert(match_is_expr->union_tag->assert_type == AST_EXPR_TAGGED_UNION_ELEMENT);
+                    infer_tagged_union_element(m, is_expr->union_tag, subject_type);
 
-                    ast_tagged_enum_t *pattern = cond_expr->value;
-                    char *key = utoa(pattern->property->value);
-                    table_set(exhaustive_table, key, cond_expr);
-                    free(key);
+                    ast_tagged_union_t *tagged_element = match_is_expr->union_tag->value;
+                    table_set(exhaustive_table, tagged_element->tagged_name, cond_expr);
+
+                    cond_expr->type.kind = TYPE_BOOL;
                 } else {
-                    // simple enum or tagged enum without payload: none
-                    infer_right_expr(m, cond_expr, subject_type);
-                    assert(cond_expr->assert_type == AST_EXPR_LITERAL);
-
-                    ast_literal_t *literal = cond_expr->value;
-                    table_set(exhaustive_table, literal->value, cond_expr);
+                    infer_right_expr(m, cond_expr, type_kind_new(TYPE_UNKNOWN));
+                    table_set(exhaustive_table, itoa(type_hash(match_is_expr->target_type)), cond_expr);
                 }
+                assert(cond_expr->type.kind == TYPE_BOOL);
+            } else if (subject_type.kind == TYPE_ENUM) {
+                if (cond_expr->assert_type == AST_EXPR_SELECT) {
+                    ast_expr_select_t *select = cond_expr->value;
+                    table_set(exhaustive_table, select->key, cond_expr);
+                }
+
+                infer_right_expr(m, cond_expr, subject_type);
             } else {
                 infer_right_expr(m, cond_expr, subject_type);
             }
@@ -1425,19 +1474,30 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
                 break; // union completed
             }
 
+            if (subject_type.kind == TYPE_TAGGED_UNION) {
+                for (int i = 0; i < subject_type.tagged_union->elements->length; ++i) {
+                    tagged_union_element_t *element = ct_list_value(subject_type.union_->elements, i);
+                    if (!table_exist(exhaustive_table, element->tag)) {
+                        ANALYZER_ASSERTF(has_default,
+                                         "match expression lacks a default case '_' and tagged union element type lacks, for example 'is %s'",
+                                         element->tag);
+                    }
+                }
+
+                break;
+            }
+
             // enum 穷尽检查
             if (subject_type.kind == TYPE_ENUM) {
                 type_enum_t *type_enum = subject_type.enum_;
                 for (int i = 0; i < type_enum->properties->length; i++) {
                     enum_property_t *prop = ct_list_value(type_enum->properties, i);
                     // tagged enum 使用 name 作为 key，简单 enum 使用 value 作为 key
-                    char *key = utoa(prop->value);
-                    if (!table_exist(exhaustive_table, key)) {
+                    if (!table_exist(exhaustive_table, prop->name)) {
                         ANALYZER_ASSERTF(has_default,
                                          "match expression lacks a default case '_' and enum value lacks, for example '%s'",
                                          prop->name)
                     }
-                    free(key);
                 }
 
                 break; // enum completed
@@ -1487,20 +1547,26 @@ static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
     return t;
 }
 
-static type_t infer_match_is_expr(module_t *m, ast_match_is_expr_t *is_expr) {
-    is_expr->target_type = reduction_type(m, is_expr->target_type);
-    return type_kind_new(TYPE_BOOL);
-}
-
 static type_t infer_macro_default_expr(module_t *m, ast_macro_default_expr_t *expr) {
     expr->target_type = reduction_type(m, expr->target_type);
     return expr->target_type;
 }
 
 static type_t infer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
-    type_t t = infer_right_expr(m, &is_expr->src, type_kind_new(TYPE_UNKNOWN));
-    is_expr->target_type = reduction_type(m, is_expr->target_type);
-    INFER_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_INTERFACE, "%s cannot use 'is' operator", type_format(t));
+    if (is_expr->src) {
+        type_t t = infer_right_expr(m, is_expr->src, type_kind_new(TYPE_UNKNOWN));
+        INFER_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_TAGGED_UNION || t.kind == TYPE_INTERFACE,
+                      "%s cannot use 'is' operator", type_format(t));
+
+        if (is_expr->union_tag) {
+            INFER_ASSERTF(t.kind == TYPE_TAGGED_UNION, "unexpected is expr");
+            infer_tagged_union_element(m, is_expr->union_tag, t);
+        }
+    }
+
+    if (is_expr->target_type.kind > 0) {
+        is_expr->target_type = reduction_type(m, is_expr->target_type);
+    }
 
     return type_kind_new(TYPE_BOOL);
 }
@@ -2149,8 +2215,6 @@ static type_t infer_select_expr(module_t *m, ast_expr_t *expr) {
 
                 INFER_ASSERTF(found_property, "enum '%s' has no member '%s'", left_ident->literal, select->key);
 
-                assert(found_property->value);
-
                 // 将表达式改写为 literal
                 ast_literal_t *literal = NEW(ast_literal_t);
                 literal->kind = type_enum->element_type.kind;
@@ -2623,145 +2687,111 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
     return type_fn->return_type;
 }
 
+static void infer_tagged_union_element(module_t *m, ast_expr_t *expr, type_t target_type) {
+    ast_tagged_union_t *tagged_element = expr->value;
+
+    if (target_type.kind != TYPE_UNKNOWN) {
+        // 唯一需要进行特殊处理的情况
+        if (target_type.args && tagged_element->union_type.kind > 0 && !tagged_element->union_type.args) {
+            // 直接使用 taget_type 的情况
+            if (tagged_element->union_type.ident) {
+                INFER_ASSERTF(str_equal(tagged_element->union_type.ident, target_type.ident), "type inconsistency, expect=%s, actual=%s", target_type.ident,
+                              tagged_element->union_type.ident);
+            }
+
+            tagged_element->union_type = target_type;
+        }
+
+        // result<T> t = .some(1)
+        if (tagged_element->union_type.kind == 0) {
+            tagged_element->union_type = target_type; // use tagged type
+        }
+    }
+    tagged_element->union_type = reduction_type(m, tagged_element->union_type);
+
+    // 确保 enum 类型已经 reduction
+    struct type_tagged_union_t *type_union = tagged_element->union_type.tagged_union;
+
+    // 查找对应的 variant
+    tagged_union_element_t *found = NULL;
+    for (int i = 0; i < type_union->elements->length; ++i) {
+        tagged_union_element_t *element = ct_list_value(type_union->elements, i);
+        if (str_equal(element->tag, tagged_element->tagged_name)) {
+            found = element;
+            break;
+        }
+    }
+
+    INFER_ASSERTF(found != NULL, "enum '%s' has no variant '%s'",
+                  tagged_element->union_type.ident, tagged_element->tagged_name);
+
+    // 保存 property 引用
+    tagged_element->element = found;
+
+    // check arg match
+    if (tagged_element->arg) {
+        infer_right_expr(m, tagged_element->arg, found->type);
+    }
+
+    // 返回类型是 enum 类型
+    expr->type = tagged_element->union_type;
+}
+
 /**
  * 推断 tagged enum 构造表达式
  * AST 改写在 analyzer 阶段完成，这里做类型推断和验证
  */
-static type_t infer_tagged_enum_new(module_t *m, ast_expr_t *expr) {
-    ast_tagged_enum_t *tagged_new = expr->value;
+static type_t infer_tagged_union_new(module_t *m, ast_expr_t *expr, type_t target_type) {
+    ast_tagged_union_t *tagged_new = expr->value;
+
+    // target_type 和 tagged_new->union_type 如何同时存在则需要进行相等校验
+    if (target_type.kind != TYPE_UNKNOWN) {
+        // 唯一需要进行特殊处理的情况
+        if (target_type.args && tagged_new->union_type.kind > 0 && !tagged_new->union_type.args) {
+            // 直接使用 taget_type 的情况
+            if (tagged_new->union_type.ident) {
+                INFER_ASSERTF(str_equal(tagged_new->union_type.ident, target_type.ident), "type inconsistency, expect=%s, actual=%s", target_type.ident,
+                              tagged_new->union_type.ident);
+            }
+
+            tagged_new->union_type = target_type;
+        }
+
+        // result<T> t = .some(1)
+        if (tagged_new->union_type.kind == 0) {
+            tagged_new->union_type = target_type; // use tagged type
+        }
+    }
+
+    tagged_new->union_type = reduction_type(m, tagged_new->union_type);
 
     // 确保 enum 类型已经 reduction
-    type_t enum_type = reduction_type(m, tagged_new->enum_type);
-    type_enum_t *type_enum = enum_type.enum_;
-
-    // 更新 tagged_new 中的 enum_type
-    tagged_new->enum_type = enum_type;
+    struct type_tagged_union_t *type_union = tagged_new->union_type.tagged_union;
 
     // 查找对应的 variant
-    enum_property_t *found_property = NULL;
-    for (int i = 0; i < type_enum->properties->length; ++i) {
-        enum_property_t *prop = ct_list_value(type_enum->properties, i);
-        if (str_equal(prop->name, tagged_new->variant_name)) {
-            found_property = prop;
+    tagged_union_element_t *found = NULL;
+    for (int i = 0; i < type_union->elements->length; ++i) {
+        tagged_union_element_t *element = ct_list_value(type_union->elements, i);
+        if (str_equal(element->tag, tagged_new->tagged_name)) {
+            found = element;
             break;
         }
     }
 
-    INFER_ASSERTF(found_property != NULL, "enum '%s' has no variant '%s'",
-                  enum_type.ident, tagged_new->variant_name);
+    INFER_ASSERTF(found != NULL, "enum '%s' has no variant '%s'",
+                  tagged_new->union_type.ident, tagged_new->tagged_name);
 
     // 保存 property 引用
-    tagged_new->property = found_property;
+    tagged_new->element = found;
 
-    // 验证参数数量和类型
-    type_t *payload_type = found_property->payload_type;
-    if (payload_type && payload_type->kind == TYPE_TUPLE) {
-        type_tuple_t *tuple = payload_type->tuple;
-        INFER_ASSERTF(tagged_new->bindings->length == tuple->elements->length,
-                      "enum variant '%s.%s' expects %d arguments, got %d",
-                      enum_type.ident, tagged_new->variant_name,
-                      tuple->elements->length, tagged_new->bindings->length);
-
-        // 推断每个参数
-        for (int i = 0; i < tagged_new->bindings->length; ++i) {
-            ast_expr_t *arg = ct_list_value(tagged_new->bindings, i);
-            type_t *expected_type = ct_list_value(tuple->elements, i);
-            infer_right_expr(m, arg, *expected_type);
-        }
-    } else if (payload_type != NULL) {
-        // 单一类型 payload
-        INFER_ASSERTF(tagged_new->bindings->length == 1,
-                      "enum variant '%s.%s' expects 1 argument, got %d",
-                      enum_type.ident, tagged_new->variant_name, tagged_new->bindings->length);
-
-        ast_expr_t *arg = ct_list_value(tagged_new->bindings, 0);
-        infer_right_expr(m, arg, *payload_type);
+    // check arg match
+    if (tagged_new->arg) {
+        infer_right_expr(m, tagged_new->arg, found->type);
     }
 
     // 返回类型是 enum 类型
-    expr->type = enum_type;
-    return enum_type;
-}
-
-/**
- * 推断 tagged enum 模式匹配表达式
- * 用于 match 表达式中的 EnumType.Variant(v) 模式
- */
-static type_t infer_tagged_match_pattern(module_t *m, ast_expr_t *expr) {
-    ast_tagged_enum_t *pattern = expr->value;
-
-    // 确保 enum 类型已经 reduction
-    type_t enum_type = reduction_type(m, pattern->enum_type);
-    type_enum_t *type_enum = enum_type.enum_;
-
-    // 更新 pattern 中的 enum_type
-    pattern->enum_type = enum_type;
-
-    // 查找对应的 variant
-    enum_property_t *found_property = NULL;
-    for (int i = 0; i < type_enum->properties->length; ++i) {
-        enum_property_t *prop = ct_list_value(type_enum->properties, i);
-        if (str_equal(prop->name, pattern->variant_name)) {
-            found_property = prop;
-            break;
-        }
-    }
-
-    INFER_ASSERTF(found_property != NULL, "enum '%s' has no variant '%s'",
-                  enum_type.ident, pattern->variant_name);
-
-    // 保存 property 引用
-    pattern->property = found_property;
-
-    // 为绑定变量推断类型
-    if (found_property->payload_type) {
-        type_t *payload_type = found_property->payload_type;
-
-        if (payload_type->kind == TYPE_TUPLE) {
-            type_tuple_t *tuple = payload_type->tuple;
-            INFER_ASSERTF(pattern->bindings->length == tuple->elements->length,
-                          "enum variant '%s.%s' has %d payload elements, but got %d bindings",
-                          enum_type.ident, pattern->variant_name,
-                          tuple->elements->length, pattern->bindings->length);
-
-            // 为每个绑定变量设置类型（这些变量在 analyzer 阶段已注册到符号表）
-            for (int i = 0; i < pattern->bindings->length; ++i) {
-                ast_expr_t *binding_expr = ct_list_value(pattern->bindings, i);
-                char *binding_name = ((ast_ident *) binding_expr->value)->literal;
-                type_t *element_type = ct_list_value(tuple->elements, i);
-
-                // 查找绑定变量的符号并设置类型
-                symbol_t *binding_symbol = symbol_table_get(binding_name);
-                if (binding_symbol && binding_symbol->type == SYMBOL_VAR) {
-                    ast_var_decl_t *var_decl = binding_symbol->ast_value;
-                    var_decl->type = *element_type;
-                }
-            }
-        } else {
-            // 单一类型 payload
-            INFER_ASSERTF(pattern->bindings->length == 1,
-                          "enum variant '%s.%s' has single payload, but got %d bindings",
-                          enum_type.ident, pattern->variant_name, pattern->bindings->length);
-
-            ast_expr_t *binding_expr = ct_list_value(pattern->bindings, 0);
-            char *binding_name = ((ast_ident *) binding_expr->value)->literal;
-
-            symbol_t *binding_symbol = symbol_table_get(binding_name);
-            if (binding_symbol && binding_symbol->type == SYMBOL_VAR) {
-                ast_var_decl_t *var_decl = binding_symbol->ast_value;
-                var_decl->type = *payload_type;
-            }
-        }
-    } else {
-        // 无 payload 的 variant 不应该有绑定变量
-        INFER_ASSERTF(pattern->bindings == NULL,
-                      "enum variant '%s.%s' has no payload, but got bindings",
-                      enum_type.ident, pattern->variant_name);
-    }
-
-    // 返回 enum 类型
-    expr->type = enum_type;
-    return enum_type;
+    expr->type = tagged_new->union_type;
+    return tagged_new->union_type;
 }
 
 void infer_expr_fake(module_t *m, ast_expr_fake_stmt_t *stmt) {
@@ -3300,9 +3330,6 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type, type
         case AST_MATCH: {
             return infer_match(m, expr->value, target_type);
         }
-        case AST_EXPR_MATCH_IS: {
-            return infer_match_is_expr(m, expr->value);
-        }
         case AST_EXPR_IS: {
             return infer_is_expr(m, expr->value);
         }
@@ -3371,11 +3398,8 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type, type
         case AST_CALL: {
             return infer_call(m, expr->value, target_type, true);
         }
-        case AST_EXPR_TAGGED_ENUM_NEW: {
-            return infer_tagged_enum_new(m, expr);
-        }
-        case AST_EXPR_TAGGED_ENUM_PATTERN: {
-            return infer_tagged_match_pattern(m, expr);
+        case AST_EXPR_TAGGED_UNION_NEW: {
+            return infer_tagged_union_new(m, expr, target_type);
         }
         case AST_MACRO_ASYNC: {
             return infer_async(m, expr, target_type);
@@ -3934,6 +3958,7 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
     }
 
     if (typedef_stmt->type_expr.status == REDUCTION_STATUS_DOING2) {
+        // doing2 打破循环
         return t;
     }
 
@@ -3952,8 +3977,8 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
         typedef_stmt->type_expr.ident = t.ident;
     }
 
-    if (typedef_stmt->is_enum) {
-        typedef_stmt->type_expr.ident_kind = TYPE_IDENT_ENUM;
+    if (typedef_stmt->is_tagged_union) {
+        typedef_stmt->type_expr.ident_kind = TYPE_IDENT_TAGGER_UNION;
         typedef_stmt->type_expr.ident = t.ident;
     }
 
@@ -3980,6 +4005,17 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
     t.value = right_type_expr.value;
     t.in_heap = right_type_expr.in_heap;
     t.status = right_type_expr.status;
+    return t;
+}
+
+static type_t reduction_tagged_union_type(module_t *m, type_t t) {
+    type_tagged_union_t *tagged_union = t.tagged_union;
+
+    for (int i = 0; i < tagged_union->elements->length; ++i) {
+        tagged_union_element_t *temp = ct_list_value(tagged_union->elements, i);
+        temp->type = reduction_type(m, temp->type);
+    }
+
     return t;
 }
 
@@ -4088,6 +4124,11 @@ type_t reduction_type(module_t *m, type_t t) {
         ident_kind = t.ident_kind;
         args = t.args;
 
+        goto STATUS_DONE;
+    }
+
+    if (t.kind == TYPE_TAGGED_UNION) {
+        t = reduction_tagged_union_type(m, t);
         goto STATUS_DONE;
     }
 

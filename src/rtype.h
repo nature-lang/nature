@@ -108,6 +108,15 @@ static inline int64_t type_hash(type_t t) {
         return hash_string(str);
     }
 
+    if (t.kind == TYPE_TAGGED_UNION) {
+        char *str = dsprintf("tagged_union");
+        for (int i = 0; i < t.tagged_union->elements->length; ++i) {
+            tagged_union_element_t *element = ct_list_value(t.tagged_union->elements, i);
+            str = str_connect(str, dsprintf(".%s.%ld", element->tag, type_hash(element->type)));
+        }
+        return hash_string(str);
+    }
+
     if (t.kind == TYPE_INTERFACE) { // ident right
         char *str = dsprintf("interface");
         if (t.ident) {
@@ -365,6 +374,31 @@ static inline rtype_t rtype_interface(type_t t) {
 
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 1);
+
+    return rtype;
+}
+
+static inline rtype_t rtype_tagged_union(type_t t) {
+    rtype_t rtype = {
+            .heap_size = POINTER_SIZE * 2, // tag + value
+            .hash = type_hash(t),
+            .kind = TYPE_TAGGED_UNION,
+            .last_ptr = POINTER_SIZE,
+            .malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(POINTER_SIZE * 2, POINTER_SIZE)),
+            .length = t.tagged_union->elements->length,
+            .hashes_offset = -1,
+    };
+
+    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
+    if (t.tagged_union->elements->length > 0) {
+        int64_t size = sizeof(int64_t) * t.tagged_union->elements->length;
+        int64_t *hashes = mallocz(size);
+        for (int i = 0; i < t.tagged_union->elements->length; ++i) {
+            tagged_union_element_t *element = ct_list_value(t.tagged_union->elements, i);
+            hashes[i] = type_hash(element->type);
+        }
+        rtype.hashes_offset = data_put((uint8_t *) hashes, size);
+    }
 
     return rtype;
 }
@@ -718,6 +752,9 @@ static inline rtype_t reflect_type(type_t t) {
             break;
         case TYPE_UNION:
             rtype = rtype_union(t);
+            break;
+        case TYPE_TAGGED_UNION:
+            rtype = rtype_tagged_union(t);
             break;
         case TYPE_INTERFACE:
             rtype = rtype_interface(t);

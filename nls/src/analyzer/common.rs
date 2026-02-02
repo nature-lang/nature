@@ -102,6 +102,11 @@ impl Display for Type {
             return write!(f, "{}", self._type_format());
         }
 
+        if !self.args.is_empty() {
+            let args_str: String = self.args.iter().map(|arg| arg._type_format()).collect::<Vec<_>>().join(",");
+            return write!(f, "{}<{}>({})", ident, args_str, self._type_format());
+        }
+
         return write!(f, "{}({})", ident, self._type_format());
     }
 }
@@ -186,7 +191,11 @@ impl Type {
             return false;
         }
 
-        return self.ident_kind == TypeIdentKind::Def || self.ident_kind == TypeIdentKind::Interface || self.ident_kind == TypeIdentKind::Unknown;
+        return self.ident_kind == TypeIdentKind::Def
+            || self.ident_kind == TypeIdentKind::Interface
+            || self.ident_kind == TypeIdentKind::Enum
+            || self.ident_kind == TypeIdentKind::TaggedUnion
+            || self.ident_kind == TypeIdentKind::Unknown;
     }
 
     pub fn error() -> Self {
@@ -243,6 +252,7 @@ impl Type {
         matches!(
             kind,
             TypeKind::Union(..)
+                | TypeKind::TaggedUnion(..)
                 | TypeKind::String
                 | TypeKind::Vec(..)
                 | TypeKind::Map(..)
@@ -573,6 +583,13 @@ pub struct TypeEnumProperty {
     pub value: Option<String>,
 }
 
+// tagged union element
+#[derive(Debug, Clone)]
+pub struct TaggedUnionElement {
+    pub tag: String,
+    pub type_: Type,
+}
+
 #[derive(Debug, Clone)]
 pub struct TypeFn {
     pub name: String,
@@ -645,7 +662,8 @@ pub enum TypeIdentKind {
     GenericsParam,
     Builtin,   // int/float/vec/string...
     Interface, // type.impls 部分专用
-    Enum,      // enum type
+    Enum,
+    TaggedUnion, // tagged union type
 }
 
 #[derive(Debug, Clone, Display)]
@@ -749,6 +767,9 @@ pub enum TypeKind {
 
     #[strum(serialize = "union")]
     Union(bool, bool, Vec<Type>), // (any, nullable, elements)
+
+    #[strum(serialize = "tagged_union")]
+    TaggedUnion(String, Vec<TaggedUnionElement>), // (ident, elements)
 
     #[strum(serialize = "interface")]
     Interface(Vec<Type>), // elements
@@ -880,13 +901,12 @@ impl ExprOp {
 #[derive(Debug, Clone)]
 pub enum AstNode {
     None,
-    Literal(TypeKind, String),            // (kind, value)
-    Binary(ExprOp, Box<Expr>, Box<Expr>), // (op, left, right)
-    Unary(ExprOp, Box<Expr>),             // (op, operand)
-    Ident(String, NodeId),                // (ident, symbol_id)
-    As(Type, Box<Expr>),                  // (target_type, src)
-    Is(Type, Box<Expr>, Option<String>),  // (target_type, src, binding_ident)
-    MatchIs(Type, Option<String>),        // (target_type, binding_ident)
+    Literal(TypeKind, String),                                         // (kind, value)
+    Binary(ExprOp, Box<Expr>, Box<Expr>),                              // (op, left, right)
+    Unary(ExprOp, Box<Expr>),                                          // (op, operand)
+    Ident(String, NodeId),                                             // (ident, symbol_id)
+    As(Type, Option<Box<Expr>>, Box<Expr>),                            // (target_type, src)
+    Is(Type, Option<Box<Expr>>, Option<Box<Expr>>, Option<Box<Expr>>), // (target_type, union_tag, src, binding) - src=None means match-is
 
     // marco
     MacroSizeof(Type),       // (target_type)
@@ -907,15 +927,17 @@ pub enum AstNode {
     StructSelect(Box<Expr>, String, TypeStructProperty), // (instance, key, property)
     EnvAccess(u8, String, NodeId),                       // (index, unique_ident)
 
-    VecRepeatNew(Box<Expr>, Box<Expr>),                           // default_element, len
-    ArrRepeatNew(Box<Expr>, Box<Expr>),                           // default_element, len
-    VecNew(Vec<Box<Expr>>, Option<Box<Expr>>, Option<Box<Expr>>), // (elements, len, cap)
-    ArrayNew(Vec<Box<Expr>>),                                     // elements
-    MapNew(Vec<MapElement>),                                      // elements
-    SetNew(Vec<Box<Expr>>),                                       //  elements
-    TupleNew(Vec<Box<Expr>>),                                     // elements
-    TupleDestr(Vec<Box<Expr>>),                                   // elements
-    StructNew(String, Type, Vec<StructNewProperty>),              // (ident, type_, properties)
+    VecRepeatNew(Box<Expr>, Box<Expr>),                                          // default_element, len
+    ArrRepeatNew(Box<Expr>, Box<Expr>),                                          // default_element, len
+    VecNew(Vec<Box<Expr>>, Option<Box<Expr>>, Option<Box<Expr>>),                // (elements, len, cap)
+    ArrayNew(Vec<Box<Expr>>),                                                    // elements
+    MapNew(Vec<MapElement>),                                                     // elements
+    SetNew(Vec<Box<Expr>>),                                                      //  elements
+    TupleNew(Vec<Box<Expr>>),                                                    // elements
+    TupleDestr(Vec<Box<Expr>>),                                                  // elements
+    StructNew(String, Type, Vec<StructNewProperty>),                             // (ident, type_, properties)
+    TaggedUnionNew(Type, String, Option<TaggedUnionElement>, Option<Box<Expr>>), // (union_type, tagged_name, element, arg)
+    TaggedUnionElement(Type, String, Option<TaggedUnionElement>),                // (union_type, tagged_name, element) - is option.some
 
     // 未推断出具体表达式类型
     EmptyCurlyNew,
@@ -1145,6 +1167,7 @@ pub struct TypedefStmt {
     pub is_alias: bool,
     pub is_interface: bool,
     pub is_enum: bool,
+    pub is_tagged_union: bool,
     pub impl_interfaces: Vec<Type>,
     pub method_table: HashMap<String, Arc<Mutex<AstFnDef>>>, // key = ident, value = ast_fndef_t
 

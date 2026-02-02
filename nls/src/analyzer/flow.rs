@@ -1,4 +1,4 @@
-use crate::analyzer::common::{AnalyzerError, AstBody, AstCall, AstFnDef, AstNode, Expr, Stmt, TypeKind, VarDeclExpr};
+use crate::analyzer::common::{AnalyzerError, AstBody, AstFnDef, AstNode, Expr, Stmt, TypeKind};
 use crate::project::Module;
 use std::sync::{Arc, Mutex};
 
@@ -67,7 +67,7 @@ impl<'a> Flow<'a> {
             AstNode::Assign(_, right) => {
                 return self.analyze_expr(right); // need check return
             }
-            AstNode::VarTupleDestr(elements, right) => {
+            AstNode::VarTupleDestr(_elements, right) => {
                 return self.analyze_expr(right); // need check return
             }
             AstNode::VarDef(_, right) => {

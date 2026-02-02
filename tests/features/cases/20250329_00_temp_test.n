@@ -1,19 +1,16 @@
-type color = enum {
-    RED,
-    GREEN,
-    BLUE,
+type ellipse_t = struct{
+    int rx
+    int ry
 }
 
-fn color.to_string(self):string {
-    return match self {
-        color.RED -> 'red'
-        color.GREEN -> 'green'
-        color.BLUE -> 'blue'
-    }
+type shape = union{
+    int circle
+    int square
+    (int, int) rectangle
+    ellipse_t ellipse
+    void point
 }
-
 
 fn main() {
-    var c = color.GREEN
-    println(c.to_string(), color.BLUE.to_string())
+    shape o = shape.sllipse(ellipse_t{rx:-12, ry:2325})
 }

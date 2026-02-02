@@ -22,9 +22,8 @@ typedef enum {
     AST_EXPR_IDENT,
     AST_EXPR_AS,
     AST_EXPR_IS,
-    AST_EXPR_MATCH_IS,
-    AST_EXPR_TAGGED_ENUM_PATTERN, // option.some(v) in match
-    AST_EXPR_TAGGED_ENUM_NEW, // Option.some(42)
+    AST_EXPR_TAGGED_UNION_ELEMENT, // is option.some
+    AST_EXPR_TAGGED_UNION_NEW, // Option.some(42)
 
     // marco
     AST_MACRO_EXPR_SIZEOF,
@@ -190,10 +189,14 @@ typedef struct {
 
 /**
  * a as int
+ *
+ * union as option.ok
  */
 typedef struct {
     type_t target_type;
-    ast_expr_t src; // 将表达式转换成 target_type
+    ast_expr_t *union_tag;
+
+    ast_expr_t src;
 } ast_as_expr_t;
 
 /**
@@ -201,14 +204,12 @@ typedef struct {
  */
 typedef struct {
     type_t target_type;
-    ast_expr_t src;
-    char *binding_ident; // 可选的绑定变量名，NULL 表示不绑定
-} ast_is_expr_t;
 
-typedef struct {
-    type_t target_type;
-    char *binding_ident; // 可选的绑定变量名，NULL 表示不绑定
-} ast_match_is_expr_t;
+    ast_expr_t *union_tag; // xxx.xxx
+
+    ast_expr_t *src;
+    ast_expr_t *binding;
+} ast_is_expr_t;
 
 typedef struct {
     type_t target_type;
@@ -413,6 +414,7 @@ typedef struct {
 
     bool is_default; //  使用了 ident 并且 ident 是 _, 在 analyzer 阶段会被解析为 default。default 必须在最后一栏
 
+    bool insert_auto_as;
     slice_t *handle_body;
 } ast_match_case_t;
 
@@ -616,12 +618,12 @@ typedef struct {
 } ast_tuple_new_t;
 
 typedef struct {
-    type_t enum_type; // 完整的 enum 类型
-    char *variant_name; // infer 时用于定位具体的 enum
-    enum_property_t *property; // 指向 enum 中的 property
+    type_t union_type; // 完整的 enum 类型
+    char *tagged_name; // infer 时用于定位具体的 enum
+    tagged_union_element_t *element; // find element by tagged_name
 
-    list_t *bindings; // 构造参数，*ast_expr, 可能为 null
-} ast_tagged_enum_t;
+    ast_expr_t *arg;
+} ast_tagged_union_t;
 
 typedef struct {
     uint8_t index;
@@ -653,6 +655,7 @@ typedef struct {
     bool is_alias; // 是否仅作为别名
     bool is_interface; // 快速识别
     bool is_enum;
+    bool is_tagged_union;
     list_t *impl_interfaces; // type_t, typedef 可以实现多个接口, 对于 interface 来说则是自身扩展
     struct sc_map_sv method_table; // key = ident, value = ast_fndef_t
     int64_t hash;

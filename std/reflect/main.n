@@ -35,6 +35,8 @@ const ANYPTR = 25
 
 const UNION = 26
 const INTERFACE = 27
+const TAGGED_UNION = 28
+const ENUM = 29
 
 const PTR_SIZE = 8
 

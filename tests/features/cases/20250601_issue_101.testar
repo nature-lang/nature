@@ -125,4 +125,4 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:19:15: type 'main.custom_t(union)' not impl 'show_value' fn
+nature-test/main.n:19:15: type 'main.custom_t<main.my_bool>(union)' not impl 'show_value' fn

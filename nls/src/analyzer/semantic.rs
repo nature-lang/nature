@@ -603,6 +603,11 @@ impl<'a> Semantic<'a> {
                     }
                 }
             }
+            TypeKind::TaggedUnion(_ident, elements) => {
+                for element in elements.iter_mut() {
+                    self.analyze_type(&mut element.type_);
+                }
+            }
             _ => {
                 return;
             }
@@ -1051,6 +1056,47 @@ impl<'a> Semantic<'a> {
         return None;
     }
 
+    /// 尝试将 SelectExpr 改写为 TaggedUnionNew
+    /// 如果 left 是一个 tagged union 类型的 ident，则将整个表达式改写为 TaggedUnionNew
+    pub fn try_rewrite_tagged_union_new(&mut self, expr: &mut Box<Expr>) {
+        let AstNode::SelectExpr(left, key) = &expr.node else {
+            return;
+        };
+
+        // left 必须是 Ident
+        let AstNode::Ident(left_ident, _symbol_id) = &left.node else {
+            return;
+        };
+
+        // 从符号表中查找 left_ident 对应的符号
+        let symbol = self.symbol_table.find_global_symbol(left_ident);
+        let Some(symbol) = symbol else {
+            return;
+        };
+
+        // 符号必须是 Type 类型
+        let SymbolKind::Type(typedef_mutex) = &symbol.kind else {
+            return;
+        };
+
+        let is_tagged_union = {
+            let typedef = typedef_mutex.lock().unwrap();
+            typedef.is_tagged_union
+        };
+        // 必须是 tagged union 类型
+        if !is_tagged_union {
+            return;
+        }
+
+        // 创建 tagged union new 节点（类型验证在 infer 阶段完成）
+        let mut union_type = Type::ident_new(left_ident.clone(), TypeIdentKind::TaggedUnion);
+        let tagged_name = key.clone();
+        self.analyze_type(&mut union_type);
+
+        // 改写表达式类型
+        expr.node = AstNode::TaggedUnionNew(union_type, tagged_name, None, None);
+    }
+
     pub fn rewrite_select_expr(&mut self, expr: &mut Box<Expr>) {
         let AstNode::SelectExpr(left, key) = &mut expr.node else { unreachable!() };
 
@@ -1204,7 +1250,8 @@ impl<'a> Semantic<'a> {
                         case.is_default = true;
                         continue;
                     }
-                } else if let AstNode::MatchIs(t, _binding) = &mut cond.node {
+                } else if let AstNode::Is(t, _union_tag, None, _binding) = &mut cond.node {
+                    // src=None means match-is
                     self.analyze_type(t);
 
                     is_cond = true;
@@ -1221,15 +1268,16 @@ impl<'a> Semantic<'a> {
             if is_cond && subject.is_some() {
                 let Some(subject_expr) = subject else { unreachable!() };
                 let Some(cond_expr) = case.cond_list.first() else { unreachable!() };
-                let AstNode::MatchIs(target_type, binding_ident) = &cond_expr.node else {
+                let AstNode::Is(target_type, union_tag, None, binding_expr) = &cond_expr.node else {
                     unreachable!()
                 };
 
-                // 只有当 binding_ident 存在时才插入 auto as stmt
-                if let Some(binding) = binding_ident {
-                    case.handle_body
-                        .stmts
-                        .insert(0, self.auto_as_stmt(cond_expr.start, cond_expr.end, subject_expr, binding, target_type));
+                // 只有当 binding_expr 存在时才插入 auto as stmt
+                if let Some(binding) = binding_expr {
+                    case.handle_body.stmts.insert(
+                        0,
+                        self.auto_as_stmt(cond_expr.start, cond_expr.end, subject_expr, binding, target_type, union_tag),
+                    );
                 }
             }
 
@@ -1284,13 +1332,53 @@ impl<'a> Semantic<'a> {
                 self.analyze_body(catch_body);
                 self.exit_scope();
             }
-            AstNode::As(type_, src) => {
+            AstNode::As(type_, _, src) => {
                 self.analyze_type(type_);
                 self.analyze_expr(src);
             }
-            AstNode::Is(target_type, src, _binding) => {
-                self.analyze_type(target_type);
-                self.analyze_expr(src);
+            AstNode::Is(target_type, union_tag, src, _binding) => {
+                // 处理 union_tag (如果存在)
+                if let Some(ut) = union_tag {
+                    // union_tag 应该是 SelectExpr，分析后可能变成 TaggedUnionNew 或 Ident
+                    self.analyze_expr(ut);
+
+                    // 分析完成后检查 union_tag 的类型
+                    match &mut ut.node {
+                        AstNode::TaggedUnionNew(union_type, tagged_name, element, _) => {
+                            // 如果是 TaggedUnionNew，改写为 TaggedUnionElement
+                            ut.node = AstNode::TaggedUnionElement(union_type.clone(), tagged_name.clone(), element.clone());
+                        }
+                        AstNode::Ident(ident, _) => {
+                            // 如果是 Ident，将 ident 信息复制到 target_type，并清空 union_tag
+                            target_type.ident = ident.clone();
+                            target_type.kind = TypeKind::Ident;
+                            target_type.ident_kind = TypeIdentKind::Unknown;
+                            target_type.start = ut.start;
+                            target_type.end = ut.end;
+                            *union_tag = None;
+                        }
+                        _ => {
+                            errors_push(
+                                self.module,
+                                AnalyzerError {
+                                    start: ut.start,
+                                    end: ut.end,
+                                    message: "unexpected is expr".to_string(),
+                                },
+                            );
+                        }
+                    }
+                }
+
+                // 分析 target_type (如果 kind 已设置)
+                if target_type.kind.is_exist() {
+                    self.analyze_type(target_type);
+                }
+
+                // 分析 src (如果存在)
+                if let Some(s) = src {
+                    self.analyze_expr(s);
+                }
             }
             AstNode::MacroSizeof(target_type) | AstNode::MacroDefault(target_type) => {
                 self.analyze_type(target_type);
@@ -1365,6 +1453,10 @@ impl<'a> Semantic<'a> {
             AstNode::SelectExpr(..) => {
                 self.rewrite_select_expr(expr);
 
+                if matches!(expr.node, AstNode::SelectExpr(..)) {
+                    self.try_rewrite_tagged_union_new(expr);
+                }
+
                 if matches!(expr.node, AstNode::Ident(..)) {
                     self.constant_propagation(expr);
                 }
@@ -1391,9 +1483,51 @@ impl<'a> Semantic<'a> {
                 self.constant_propagation(expr);
             }
             AstNode::Match(subject, cases) => self.analyze_match(subject, cases, expr.start, expr.end),
-            AstNode::Call(call) => self.analyze_call(call),
+            AstNode::Call(call) => {
+                self.analyze_call(call);
+
+                // shape.ellipse -> shape.ellipse(arg)
+                // 如果 call.left 是 TaggedUnionNew，需要将整个表达式改写为 TaggedUnionNew
+                if let AstNode::TaggedUnionNew(union_type, tagged_name, element, _) = &call.left.node {
+                    if call.args.is_empty() {
+                        errors_push(
+                            self.module,
+                            AnalyzerError {
+                                start: expr.start,
+                                end: expr.end,
+                                message: "tagged union uses parentheses but passes no arguments".to_string(),
+                            },
+                        );
+                        return;
+                    }
+
+                    let arg = if call.args.len() == 1 {
+                        // 单个参数直接使用
+                        call.args[0].clone()
+                    } else {
+                        // 多个参数装配成 tuple
+                        let tuple_elements = call.args.clone();
+                        Box::new(Expr {
+                            start: call.args[0].start,
+                            end: call.args.last().map(|e| e.end).unwrap_or(expr.end),
+                            type_: Type::default(),
+                            target_type: Type::default(),
+                            node: AstNode::TupleNew(tuple_elements),
+                        })
+                    };
+
+                    // 改写表达式为 TaggedUnionNew
+                    expr.node = AstNode::TaggedUnionNew(union_type.clone(), tagged_name.clone(), element.clone(), Some(arg));
+                }
+            }
             AstNode::MacroAsync(async_expr) => self.analyze_async(async_expr),
             AstNode::FnDef(fndef_mutex) => self.analyze_local_fndef(fndef_mutex),
+            AstNode::TaggedUnionNew(union_type, _tagged_name, _element, arg) => {
+                self.analyze_type(union_type);
+                if let Some(arg_expr) = arg {
+                    self.analyze_expr(arg_expr);
+                }
+            }
             _ => {
                 return;
             }
@@ -1573,7 +1707,7 @@ impl<'a> Semantic<'a> {
 
     pub fn extract_is_expr(&mut self, cond: &Box<Expr>) -> Option<Box<Expr>> {
         // 支持任意表达式作为 is 表达式的源，不再限制必须是 ident
-        if let AstNode::Is(_target_type, _src, _binding) = &cond.node {
+        if let AstNode::Is(_target_type, _union_tag, _src, _binding) = &cond.node {
             return Some(cond.clone());
         }
 
@@ -1602,52 +1736,85 @@ impl<'a> Semantic<'a> {
         return None;
     }
 
-    pub fn auto_as_stmt(&mut self, start: usize, end: usize, source_expr: &Box<Expr>, binding_ident: &str, target_type: &Type) -> Box<Stmt> {
+    pub fn auto_as_stmt(
+        &mut self,
+        start: usize,
+        end: usize,
+        source_expr: &Box<Expr>,
+        binding: &Box<Expr>,
+        target_type: &Type,
+        union_tag: &Option<Box<Expr>>,
+    ) -> Box<Stmt> {
         // var binding = source as T
-        let var_decl = Arc::new(Mutex::new(VarDeclExpr {
-            ident: binding_ident.to_string(),
-            type_: target_type.clone(),
-            be_capture: false,
-            heap_ident: None,
-            symbol_start: start,
-            symbol_end: end,
-            symbol_id: 0,
-        }));
+        // var (a, b) = source as T
 
         // 克隆源表达式作为 as 表达式的源
         let src_expr = source_expr.clone();
-        let as_expr = Box::new(Expr {
-            node: AstNode::As(target_type.clone(), src_expr),
+        let target_type_clone = target_type.clone();
+
+        let as_node = AstNode::As(target_type_clone.clone(), union_tag.clone(), src_expr);
+
+        let right_expr = Box::new(Expr {
+            node: as_node,
             start,
             end,
             type_: Type::default(),
             target_type: Type::default(),
         });
 
-        // 创建最终的变量定义语句
-        Box::new(Stmt {
-            node: AstNode::VarDef(var_decl, as_expr),
-            start,
-            end,
-        })
+        // Handle different binding types
+        match &binding.node {
+            AstNode::Ident(binding_ident, _) => {
+                // Simple ident binding: var binding = source as T
+                let var_decl = Arc::new(Mutex::new(VarDeclExpr {
+                    ident: binding_ident.clone(),
+                    type_: target_type_clone, // maybe null
+                    be_capture: false,
+                    heap_ident: None,
+                    symbol_start: start,
+                    symbol_end: end,
+                    symbol_id: 0,
+                }));
+
+                Box::new(Stmt {
+                    node: AstNode::VarDef(var_decl, right_expr),
+                    start,
+                    end,
+                })
+            }
+            AstNode::TupleDestr(elements) => {
+                // Tuple destructuring binding: var (a, b) = source as T
+                Box::new(Stmt {
+                    node: AstNode::VarTupleDestr(elements.clone(), right_expr),
+                    start,
+                    end,
+                })
+            }
+            _ => {
+                // Fallback - shouldn't happen in valid code
+                panic!("auto_as_stmt: unexpected binding type")
+            }
+        }
     }
 
     pub fn analyze_if(&mut self, cond: &mut Box<Expr>, consequent: &mut AstBody, alternate: &mut AstBody) {
+        self.analyze_expr(cond);
+
         // if has is expr push T e = e as T
         if let Some(is_expr) = self.extract_is_expr(cond) {
-            let AstNode::Is(target_type, src, binding_ident) = is_expr.node else {
+            let AstNode::Is(target_type, union_tag, src, binding_expr) = is_expr.node else {
                 unreachable!()
             };
 
-            // 只有当 binding_ident 存在时才插入 auto as stmt
-            if let Some(binding) = binding_ident {
-                let ast_stmt = self.auto_as_stmt(is_expr.start, is_expr.end, &src, &binding, &target_type);
-                // insert ast_stmt to consequent first
-                consequent.stmts.insert(0, ast_stmt);
+            // 只有当 binding_expr 存在且 src 存在时才插入 auto as stmt
+            if let Some(binding) = binding_expr {
+                if let Some(src_expr) = src {
+                    let ast_stmt = self.auto_as_stmt(is_expr.start, is_expr.end, &src_expr, &binding, &target_type, &union_tag);
+                    // insert ast_stmt to consequent first
+                    consequent.stmts.insert(0, ast_stmt);
+                }
             }
         }
-
-        self.analyze_expr(cond);
 
         self.enter_scope(ScopeKind::Local, consequent.start, consequent.end);
         self.analyze_body(consequent);

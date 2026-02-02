@@ -122,8 +122,9 @@ pub enum SyntaxPrecedence {
     Factor,   // * / %
     TypeCast, // as/is
     Unary,    // - ! ~ * &
-    Call,     // foo.bar foo["bar"] foo() foo().foo.bar
-    Primary,  // 最高优先级
+    Call,
+    Select,
+    Primary, // 最高优先级
 }
 
 impl SyntaxPrecedence {
@@ -318,7 +319,7 @@ impl<'a> Syntax {
             LeftSquare => ParserRule {
                 prefix: Some(Self::parser_left_square_expr),
                 infix: Some(Self::parser_access),
-                infix_precedence: SyntaxPrecedence::Call,
+                infix_precedence: SyntaxPrecedence::Select,
             },
             LeftCurly => ParserRule {
                 prefix: Some(Self::parser_left_curly_expr),
@@ -333,7 +334,7 @@ impl<'a> Syntax {
             LeftAngle => ParserRule {
                 prefix: None,
                 infix: Some(Self::parser_type_args_expr),
-                infix_precedence: SyntaxPrecedence::Call,
+                infix_precedence: SyntaxPrecedence::Select,
             },
             MacroIdent => ParserRule {
                 prefix: Some(Self::parser_macro_call),
@@ -343,7 +344,7 @@ impl<'a> Syntax {
             Dot => ParserRule {
                 prefix: None,
                 infix: Some(Self::parser_select_expr),
-                infix_precedence: SyntaxPrecedence::Call,
+                infix_precedence: SyntaxPrecedence::Select,
             },
             Minus => ParserRule {
                 prefix: Some(Self::parser_unary),
@@ -1131,6 +1132,7 @@ impl<'a> Syntax {
 
         let mut is_interface = false;
         let mut is_enum = false;
+        let mut is_tagged_union = false;
         let mut exists = HashMap::new();
         let type_expr = if self.consume(TokenType::Struct) {
             self.must(TokenType::LeftCurly)?;
@@ -1275,6 +1277,40 @@ impl<'a> Syntax {
 
             is_enum = true;
             Type::undo_new(TypeKind::Enum(Box::new(element_type), properties))
+        } else if self.consume(TokenType::Union) {
+            // tagged_union parsing: type foo = union { type1 tag1; type2 tag2; ... }
+            self.must(TokenType::LeftCurly)?;
+
+            let mut elements: Vec<TaggedUnionElement> = Vec::new();
+
+            while !self.is(TokenType::RightCurly) {
+                let element_type = self.parser_type()?;
+                let tag_name = self.must(TokenType::Ident)?.literal.clone();
+
+                if exists.contains_key(&tag_name) {
+                    errors_push(
+                        &mut self.module,
+                        AnalyzerError {
+                            start: element_type.start,
+                            end: element_type.end,
+                            message: format!("union tag '{}' already exists", tag_name),
+                        },
+                    );
+                }
+                exists.insert(tag_name.clone(), 1);
+
+                elements.push(TaggedUnionElement {
+                    tag: tag_name,
+                    type_: element_type,
+                });
+
+                self.must_stmt_end()?;
+            }
+
+            self.must(TokenType::RightCurly)?;
+
+            is_tagged_union = true;
+            Type::undo_new(TypeKind::TaggedUnion("".to_string(), elements))
         } else {
             let mut alias_type = self.parser_single_type()?;
 
@@ -1324,6 +1360,7 @@ impl<'a> Syntax {
             is_alias: false,
             is_interface,
             is_enum,
+            is_tagged_union,
             impl_interfaces,
             method_table: HashMap::new(),
             symbol_id: 0,
@@ -1567,6 +1604,45 @@ impl<'a> Syntax {
             return Ok(expr);
         }
 
+        // fn<a,b>.some(expr) // tagged union new expression
+        if self.consume(TokenType::Dot) {
+            let union_type = self.expr_to_typedef(&left, Some(generics_args));
+            let tagged_name = self.must(TokenType::Ident)?.literal.clone();
+
+            let mut arg: Option<Box<Expr>> = None;
+            if self.consume(TokenType::LeftParen) {
+                // Parse args for tagged union
+                let mut args: Vec<Box<Expr>> = Vec::new();
+
+                if !self.is(TokenType::RightParen) {
+                    loop {
+                        let arg_expr = self.parser_expr()?;
+                        args.push(arg_expr);
+
+                        if self.is(TokenType::RightParen) {
+                            break;
+                        } else {
+                            self.must(TokenType::Comma)?;
+                        }
+                    }
+                }
+                self.must(TokenType::RightParen)?;
+
+                if args.len() > 1 {
+                    // Assemble into tuple
+                    let mut tuple_expr = self.expr_new();
+                    tuple_expr.node = AstNode::TupleNew(args);
+                    arg = Some(tuple_expr);
+                } else if args.len() == 1 {
+                    arg = args.pop();
+                }
+            }
+
+            expr.end = self.prev().unwrap().end;
+            expr.node = AstNode::TaggedUnionNew(union_type, tagged_name, None, arg);
+            return Ok(expr);
+        }
+
         let t = self.expr_to_typedef(&left, Some(generics_args));
 
         self.parser_struct_new(t)
@@ -1681,16 +1757,18 @@ impl<'a> Syntax {
         let target_type = self.parser_single_type()?;
 
         expr.start = left.start;
-        expr.node = AstNode::As(target_type, left);
+        expr.node = AstNode::As(target_type, None, left);
         expr.end = self.prev().unwrap().end;
 
         Ok(expr)
     }
 
-    fn parser_match_is_expr(&mut self) -> Result<Box<Expr>, SyntaxError> {
-        let mut expr = self.expr_new();
-        self.must(TokenType::Is)?;
+    // Helper to check if next tokens are union tag (ident.ident pattern)
+    fn is_union_tag(&self) -> bool {
+        self.is(TokenType::Ident) && self.next_is(1, TokenType::Dot) && self.next_is(2, TokenType::Ident)
+    }
 
+    fn parser_match_is_expr(&mut self) -> Result<Box<Expr>, SyntaxError> {
         // 确保在 match 表达式中使用 is
         if !self.match_cond {
             return Err(SyntaxError(
@@ -1700,38 +1778,58 @@ impl<'a> Syntax {
             ));
         }
 
-        let target_type = self.parser_single_type()?;
-
-        // 解析可选的绑定变量名
-        let binding_ident = if self.is(TokenType::Ident) {
-            let ident = self.advance();
-            Some(ident.literal.clone())
-        } else {
-            None
-        };
-
-        expr.node = AstNode::MatchIs(target_type, binding_ident);
-        expr.end = self.prev().unwrap().end;
-
-        Ok(expr)
+        // src = None means match-is
+        self.parser_is_expr_impl(None)
     }
 
+    // Wrapper for infix case in precedence table
     fn parser_is_expr(&mut self, left: Box<Expr>) -> Result<Box<Expr>, SyntaxError> {
+        self.parser_is_expr_impl(Some(left))
+    }
+
+    fn parser_is_expr_impl(&mut self, left: Option<Box<Expr>>) -> Result<Box<Expr>, SyntaxError> {
         let mut expr = self.expr_new();
+        if let Some(ref l) = left {
+            expr.start = l.start;
+        }
+
         self.must(TokenType::Is)?;
 
-        let target_type = self.parser_single_type()?;
+        // Check if it's a union tag pattern (ident.ident)
+        let (target_type, union_tag) = if self.is_union_tag() {
+            // Parse as select expression for union tag (using Call precedence which includes select .)
+            let union_tag_expr = self.parser_precedence_expr(SyntaxPrecedence::Select, TokenType::Unknown)?;
+            (Type::unknown(), Some(union_tag_expr))
+        } else {
+            let t = self.parser_single_type()?;
+            (t, None)
+        };
 
-        // 解析可选的绑定变量名
-        let binding_ident = if self.is(TokenType::Ident) {
+        // Parse optional binding (ident or tuple destructuring)
+        let binding = if self.is(TokenType::Ident) {
             let ident = self.advance();
-            Some(ident.literal.clone())
+            let ident_literal = ident.literal.clone();
+            let ident_start = ident.start;
+            let ident_end = ident.end;
+            let mut binding_expr = self.expr_new();
+            binding_expr.node = AstNode::Ident(ident_literal, 0);
+            binding_expr.start = ident_start;
+            binding_expr.end = ident_end;
+            Some(binding_expr)
+        } else if self.is(TokenType::LeftParen) {
+            // Tuple destructuring binding - wrap in TupleDestr node
+            let start = self.peek().start;
+            let destr_elements = self.parser_var_tuple_destr()?;
+            let mut destr_expr = self.expr_new();
+            destr_expr.start = start;
+            destr_expr.node = AstNode::TupleDestr(destr_elements);
+            destr_expr.end = self.prev().unwrap().end;
+            Some(destr_expr)
         } else {
             None
         };
 
-        expr.start = left.start;
-        expr.node = AstNode::Is(target_type, left, binding_ident);
+        expr.node = AstNode::Is(target_type, union_tag, left, binding);
         expr.end = self.prev().unwrap().end;
 
         Ok(expr)
@@ -2024,6 +2122,7 @@ impl<'a> Syntax {
         Ok(semicolon_count == 2)
     }
 
+    #[allow(dead_code)]
     fn is_call_generics(&mut self) -> bool {
         // 保存当前解析位置
         let current_pos = self.current;

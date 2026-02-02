@@ -165,3 +165,18 @@ fn main() {
 2.500000
 2.500000
 2.500000
+
+=== test_compare_generics
+--- main.n
+type result<T> = struct{
+	T some
+}
+
+fn main() {
+    result<int> r = result<float>{
+        some: 3.14,
+    }
+}
+
+--- output.txt
+nature-test/main.n:7:18: type inconsistency, expect=main.result<int>(struct), actual=main.result<float>(struct)

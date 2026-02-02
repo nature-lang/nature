@@ -197,10 +197,12 @@ n_union_t *union_casting(int64_t input_rtype_hash, void *value_ref) {
     return mu;
 }
 
-n_enum_union_t *enum_union_casting(int64_t id, int64_t value_rtype_hash, void *value_ref) {
-    rtype_t enum_union_rtype = GC_RTYPE(TYPE_STRUCT, 2, TYPE_GC_NOSCAN, TYPE_GC_SCAN);
-    n_enum_union_t *mu = rti_gc_malloc(sizeof(n_union_t), &enum_union_rtype);
-    mu->id = id;
+n_tagged_union_t *tagged_union_casting(int64_t tag_hash, int64_t value_rtype_hash, void *value_ref) {
+    DEBUGF("[tagged_union_casting] tag_hash=%ld, value_hash=%ld", tag_hash, value_rtype_hash);
+
+    rtype_t enum_union_rtype = GC_RTYPE(TYPE_STRUCT, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+    n_tagged_union_t *mu = rti_gc_malloc(sizeof(n_tagged_union_t), &enum_union_rtype);
+    mu->tag_hash = tag_hash;
     if (value_rtype_hash == 0) {
         return mu;
     }
@@ -211,9 +213,9 @@ n_enum_union_t *enum_union_casting(int64_t id, int64_t value_rtype_hash, void *v
 
     ASSERT_ADDR(value_ref);
 
-    TDEBUGF("[enum_union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
+    DEBUGF("[tagged_union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), kind=%s, size=%lu, fetch_value_8byte=%p",
             mu, value_ref,
-            &mu->value, rtype->stack_size, (void *) fetch_addr_value((addr_t) value_ref));
+            &mu->value, type_kind_str[rtype->kind], rtype->stack_size, (void *) fetch_addr_value((addr_t) value_ref));
 
     uint64_t stack_size = rtype->stack_size;
     if (is_stack_ref_big_type_kind(rtype->kind)) {
@@ -226,7 +228,7 @@ n_enum_union_t *enum_union_casting(int64_t id, int64_t value_rtype_hash, void *v
         memmove(&mu->value, value_ref, stack_size);
     }
 
-    TDEBUGF("[enum_union_casting] success, base: %p, id: %ld, union_i64_value: %ld", mu, mu->id,
+    DEBUGF("[tagged_union_casting] success, base: %p, id: %ld, union_i64_value: %ld", mu, mu->tag_hash,
             mu->value.i64_value);
 
     return mu;
