@@ -293,3 +293,31 @@ fn main() {
     }
     assert(a == 2525)
 }
+
+=== test_impl
+--- main.n
+type ellipse_t = struct{
+    int rx
+    int ry
+}
+
+type shape = union{
+    int circle
+    int square
+    (int, int) rectangle
+    ellipse_t ellipse
+    void point
+}
+
+fn shape.to_string():string {
+    return match self {
+        is shape.ellipse v -> 'ellipse'
+        _ -> 'hello world'
+    }
+}
+
+fn main() {
+    shape o = shape.ellipse(ellipse_t{rx:-12, ry:2352})
+    println(o.to_string())
+    assert(o.to_string() == 'ellipse')
+}

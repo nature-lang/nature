@@ -810,7 +810,7 @@ static inline bool is_stack_impl(type_kind kind) {
 
 static inline bool is_heap_impl(type_kind kind) {
     return kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_CHAN ||
-           kind == TYPE_STRING || kind == TYPE_COROUTINE_T || kind == TYPE_UNION;
+           kind == TYPE_STRING || kind == TYPE_COROUTINE_T || kind == TYPE_UNION || kind == TYPE_TAGGED_UNION;
 }
 
 static inline bool is_gc_alloc(type_kind kind) {
@@ -825,6 +825,7 @@ static inline bool is_gc_alloc(type_kind kind) {
            kind == TYPE_COROUTINE_T ||
            kind == TYPE_CHAN ||
            kind == TYPE_UNION ||
+           kind == TYPE_TAGGED_UNION ||
            kind == TYPE_INTERFACE ||
            kind == TYPE_FN;
 }
