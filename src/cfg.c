@@ -377,6 +377,11 @@ static void cfg_merge_blocks(closure_t *c) {
                 continue;
             }
 
+            // .@match_181 这样的块也不能被合并
+            if (strstr(next->name, MATCH_IDENT)) {
+                continue;
+            }
+
             // 开始合并: 将 next 的指令合并到 b
             // 1. 移除 b 的最后一条 BAL 指令
             linked_node *last = linked_last(b->operations);

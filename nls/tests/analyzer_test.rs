@@ -27,6 +27,31 @@ async fn test_project() {
     let module_ident = "nature-test.main";
     let file_path = "/Users/weiwenhao/Code/nature-test/main.n";
 
+    // 使用 None 自动从文件读取内容进行编译
+    let module_index = project.build(&file_path, &module_ident, None).await;
+    dbg!(module_index);
+
+    let mut module_db = project.module_db.lock().unwrap();
+    let m = &mut module_db[module_index];
+    println!("errors: {:?}", &m.analyzer_errors);
+    drop(module_db);
+}
+
+#[tokio::test]
+async fn test_stage() {
+    // Initialize logger with error handling
+    let _ = env_logger::builder().filter_level(log::LevelFilter::Debug).try_init();
+
+    debug!("start test");
+
+    let project_root = "/Users/weiwenhao/Code/nature-test";
+
+    let mut project = Project::new(project_root.to_string()).await;
+    project.backend_handle_queue();
+
+    let module_ident = "nature-test.main";
+    let file_path = "/Users/weiwenhao/Code/nature-test/main.n";
+
     // 定义阶段测试数据
     let test_codes = vec![
         r#"

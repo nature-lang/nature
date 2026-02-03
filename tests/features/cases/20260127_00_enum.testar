@@ -1,0 +1,237 @@
+=== test_cmp_failed
+--- main.n
+type color = enum {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+type color2 = enum {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+fn main() {
+    color2 c = color.GREEN
+    println(c)
+}
+
+--- output.txt
+nature-test/main.n:14:21: type inconsistency, expect=main.color2(i64), actual=main.color(i64)
+
+=== test_basic
+--- main.n
+type color = enum {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+type color2 = enum {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+fn main() {
+    var c = color.GREEN
+    println(c)
+}
+
+--- output.txt
+1
+
+
+=== test_cmp_failed2
+--- main.n
+type color = enum {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+type color2 = enum {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+fn main() {
+    var c = color.GREEN
+    println(c == 0x1)
+}
+
+--- output.txt
+nature-test/main.n:15:18: type inconsistency, expect=main.color(i64), actual=i64
+
+=== test_cmp
+--- main.n
+type color = enum {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+type color2 = enum {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+fn main() {
+    var c = color.GREEN
+    assert(c != color.BLUE)
+    assert(c == color.GREEN)
+    assert(c < color.BLUE)
+    assert(c >= color.RED)
+}
+
+=== test_enum_custom_type_failed
+--- main.n
+type color2 = enum:string {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+fn main() {
+    var c = color2.GREEN
+}
+
+--- output.txt
+nature-test/main.n:1:28: enum only supports integer types
+
+=== test_custom_enum
+--- main.n
+type color2 = enum:u16 {
+    RED = 12,
+    GREEN = 14,
+    BLUE,
+}
+
+fn main() {
+    var c = color2.BLUE
+    println(c)
+}
+
+--- output.txt
+15
+
+=== test_as
+--- main.n
+type color2 = enum:u16 {
+    RED = 12,
+    GREEN = 14,
+    BLUE = 14,
+}
+
+fn main() {
+    var c = color2.BLUE as u16
+    println(c)
+    assert(c == 14)
+}
+
+=== test_extend_receiver
+--- main.n
+type color = enum {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+fn color.to_string(self):string {
+    if self == color.RED {
+        return 'RED'
+    } else if self == color.GREEN {
+        return 'GREEN'
+    } else {
+        return 'BLUE'
+    }
+}
+
+fn color.to_string2():string {
+    if *self == color.RED {
+        return 'RED'
+    } else if *self == color.GREEN {
+        return 'GREEN'
+    } else {
+        return 'BLUE'
+    }
+}
+
+fn main() {
+    var c = color.GREEN
+    println(c.to_string(), color.BLUE.to_string(), color.RED.to_string2())
+}
+
+--- output.txt
+GREEN BLUE RED
+
+=== test_match
+--- main.n
+type color = enum {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+fn color.to_string(self):string {
+    return match self {
+        color.RED|color.GREEN -> 'red|green'
+        color.BLUE -> 'blue'
+    }
+}
+
+
+fn main() {
+    var c = color.GREEN
+    println(c.to_string(), color.BLUE.to_string())
+}
+
+--- output.txt
+red|green blue
+
+=== test_match2
+--- main.n
+type color = enum {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+fn color.to_string(self):string {
+    return match self {
+        color.RED -> 'red'
+        color.GREEN -> 'green'
+        color.BLUE -> 'blue'
+    }
+}
+
+
+fn main() {
+    var c = color.GREEN
+    println(c.to_string(), color.BLUE.to_string())
+}
+
+--- output.txt
+green blue
+
+=== test_match_failed
+--- main.n
+type color = enum {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+fn main() {
+    var str = match color.GREEN {
+        color.RED -> 'red'
+        color.GREEN -> 'green'
+    }
+    println(str)
+}
+
+--- output.txt
+nature-test/main.n:10:28: match expression lacks a default case '_' and enum value lacks, for example 'BLUE'

@@ -31,6 +31,10 @@ static bool union_type_contains(type_union_t *union_type, type_t sub);
 
 static void infer_ret(module_t *m, ast_ret_stmt_t *stmt);
 
+static type_t infer_tagged_union_new(module_t *m, ast_expr_t *expr, type_t target_type);
+
+static void infer_tagged_union_element(module_t *m, ast_expr_t *expr, type_t target_type);
+
 bool generics_constraints_compare(ast_generics_constraints *left, ast_generics_constraints *right) {
     if (left->any && !right->and) {
         return true;
@@ -263,7 +267,7 @@ static bool union_type_contains(type_union_t *union_type, type_t sub) {
     return false;
 }
 
-bool type_union_compare(type_union_t *dst, type_union_t *src) {
+bool type_union_compare(type_union_t *dst, type_union_t *src, table_t *visited) {
     // any 可以匹配任何类型，包括两个 any 之间相互赋值
     if (dst->any) {
         return true;
@@ -282,7 +286,7 @@ bool type_union_compare(type_union_t *dst, type_union_t *src) {
         bool type_found = false;
         for (int j = 0; j < dst->elements->length; ++j) {
             type_t *left_type = ct_list_value(dst->elements, j);
-            if (type_compare(*left_type, *right_type)) {
+            if (type_compare_visited(*left_type, *right_type, visited)) {
                 type_found = true;
                 break;
             }
@@ -476,6 +480,11 @@ bool type_compare_no_ident(type_t dst, type_t src) {
     return type_compare(dst, src);
 }
 
+bool type_compare(type_t dst, type_t src) {
+    table_t *visited = table_new();
+
+    return type_compare_visited(dst, src, visited);
+}
 
 /**
  * reduction 阶段就应该完成 cross left kind 的定位.
@@ -483,7 +492,7 @@ bool type_compare_no_ident(type_t dst, type_t src) {
  * @param src
  * @return
  */
-bool type_compare(type_t dst, type_t src) {
+bool type_compare_visited(type_t dst, type_t src, table_t *visited) {
     assert(!ident_is_generics_param(&dst));
     assert(!ident_is_generics_param(&src));
     assertf(dst.status == REDUCTION_STATUS_DONE, "type '%s' not reduction", type_format(dst));
@@ -519,7 +528,7 @@ bool type_compare(type_t dst, type_t src) {
         if (src.kind == TYPE_PTR) {
             type_t dst_ptr = dst.ptr->value_type;
             type_t src_ptr = src.ptr->value_type;
-            return type_compare(dst_ptr, src_ptr);
+            return type_compare_visited(dst_ptr, src_ptr, visited);
         }
     }
 
@@ -534,8 +543,6 @@ bool type_compare(type_t dst, type_t src) {
         if (!str_equal(dst.ident, src.ident)) {
             return false;
         }
-
-        return true;
     }
 
     if (src.ident_kind == TYPE_IDENT_DEF && src.kind != TYPE_UNION) {
@@ -546,9 +553,17 @@ bool type_compare(type_t dst, type_t src) {
         if (!str_equal(dst.ident, src.ident)) {
             return false;
         }
-
-        return true;
     }
+
+    // ident 递归打断
+    if (dst.ident_kind == TYPE_IDENT_DEF) {
+        if (table_exist(visited, dst.ident)) {
+            return true;
+        }
+
+        table_set(visited, dst.ident, (void *) true);
+    }
+
 
     if (dst.kind != src.kind) {
         return false;
@@ -562,18 +577,43 @@ bool type_compare(type_t dst, type_t src) {
             return true;
         }
 
-        return type_union_compare(left_union_decl, right_union_decl);
+        return type_union_compare(left_union_decl, right_union_decl, visited);
+    }
+
+    if (dst.kind == TYPE_TAGGED_UNION) {
+        type_tagged_union_t *left = dst.tagged_union;
+        type_tagged_union_t *right = src.tagged_union;
+
+        if (left->elements->length != right->elements->length) {
+            return false;
+        }
+        for (int i = 0; i < left->elements->length; ++i) {
+            tagged_union_element_t *left_element = ct_list_value(left->elements, i);
+            tagged_union_element_t *right_element = ct_list_value(right->elements, i);
+
+            // key 比较
+            if (!str_equal(left_element->tag, right_element->tag)) {
+                return false;
+            }
+
+            // type 比较
+            if (!type_compare_visited(left_element->type, right_element->type, visited)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     if (dst.kind == TYPE_MAP) {
         type_map_t *left_map_decl = dst.map;
         type_map_t *right_map_decl = src.map;
 
-        if (!type_compare(left_map_decl->key_type, right_map_decl->key_type)) {
+        if (!type_compare_visited(left_map_decl->key_type, right_map_decl->key_type, visited)) {
             return false;
         }
 
-        if (!type_compare(left_map_decl->value_type, right_map_decl->value_type)) {
+        if (!type_compare_visited(left_map_decl->value_type, right_map_decl->value_type, visited)) {
             return false;
         }
 
@@ -584,7 +624,7 @@ bool type_compare(type_t dst, type_t src) {
         type_set_t *left_decl = dst.set;
         type_set_t *right_decl = src.set;
 
-        if (!type_compare(left_decl->element_type, right_decl->element_type)) {
+        if (!type_compare_visited(left_decl->element_type, right_decl->element_type, visited)) {
             return false;
         }
 
@@ -594,13 +634,13 @@ bool type_compare(type_t dst, type_t src) {
     if (dst.kind == TYPE_CHAN) {
         type_chan_t *left_decl = dst.chan;
         type_chan_t *right_decl = src.chan;
-        return type_compare(left_decl->element_type, right_decl->element_type);
+        return type_compare_visited(left_decl->element_type, right_decl->element_type, visited);
     }
 
     if (dst.kind == TYPE_VEC) {
         type_vec_t *left_list_decl = dst.vec;
         type_vec_t *right_list_decl = src.vec;
-        return type_compare(left_list_decl->element_type, right_list_decl->element_type);
+        return type_compare_visited(left_list_decl->element_type, right_list_decl->element_type, visited);
     }
 
     if (dst.kind == TYPE_ARR) {
@@ -609,7 +649,7 @@ bool type_compare(type_t dst, type_t src) {
         if (left_array_decl->length != right_array_decl->length) {
             return false;
         }
-        return type_compare(left_array_decl->element_type, right_array_decl->element_type);
+        return type_compare_visited(left_array_decl->element_type, right_array_decl->element_type, visited);
     }
 
     if (dst.kind == TYPE_TUPLE) {
@@ -622,7 +662,7 @@ bool type_compare(type_t dst, type_t src) {
         for (int i = 0; i < left_tuple->elements->length; ++i) {
             type_t *left_item = ct_list_value(left_tuple->elements, i);
             type_t *right_item = ct_list_value(right_tuple->elements, i);
-            if (!type_compare(*left_item, *right_item)) {
+            if (!type_compare_visited(*left_item, *right_item, visited)) {
                 return false;
             }
         }
@@ -632,7 +672,7 @@ bool type_compare(type_t dst, type_t src) {
     if (dst.kind == TYPE_FN) {
         type_fn_t *left_type_fn = dst.fn;
         type_fn_t *right_type_fn = src.fn;
-        if (!type_compare(left_type_fn->return_type, right_type_fn->return_type)) {
+        if (!type_compare_visited(left_type_fn->return_type, right_type_fn->return_type, visited)) {
             return false;
         }
 
@@ -651,7 +691,7 @@ bool type_compare(type_t dst, type_t src) {
         for (int i = 0; i < left_type_fn->param_types->length; ++i) {
             type_t *left_formal_type = ct_list_value(left_type_fn->param_types, i);
             type_t *right_formal_type = ct_list_value(right_type_fn->param_types, i);
-            if (!type_compare(*left_formal_type, *right_formal_type)) {
+            if (!type_compare_visited(*left_formal_type, *right_formal_type, visited)) {
                 return false;
             }
         }
@@ -675,7 +715,7 @@ bool type_compare(type_t dst, type_t src) {
             }
 
             // type 比较
-            if (!type_compare(left_property->type, right_property->type)) {
+            if (!type_compare_visited(left_property->type, right_property->type, visited)) {
                 return false;
             }
         }
@@ -686,7 +726,7 @@ bool type_compare(type_t dst, type_t src) {
     if (dst.kind == TYPE_PTR || dst.kind == TYPE_RAWPTR) {
         type_t left_pointer = dst.ptr->value_type;
         type_t right_pointer = src.ptr->value_type;
-        return type_compare(left_pointer, right_pointer);
+        return type_compare_visited(left_pointer, right_pointer, visited);
     }
 
     return true;
@@ -1067,12 +1107,22 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_t
  */
 static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     ast_as_expr_t *as_expr = expr->value;
-    type_t target_type = reduction_type(m, as_expr->target_type);
-    as_expr->target_type = target_type;
-
     type_t src_type = infer_expr(m, &as_expr->src, type_kind_new(TYPE_UNKNOWN), type_kind_new(TYPE_UNKNOWN));
     INFER_ASSERTF(src_type.kind != TYPE_UNKNOWN, "unknown as source type");
     as_expr->src.type = src_type;
+
+    // as union tag
+    if (as_expr->union_tag) {
+        INFER_ASSERTF(as_expr->src.type.kind == TYPE_TAGGED_UNION, "unexpected as expr");
+        ast_tagged_union_t *tag = as_expr->union_tag->value;
+        tag->element->type = reduction_type(m, tag->element->type);
+        as_expr->target_type = tag->element->type;
+
+        return tag->element->type;
+    }
+
+    type_t target_type = reduction_type(m, as_expr->target_type);
+    as_expr->target_type = target_type;
 
     // anyptr 可以 as 为任意类型
     if (as_expr->src.type.kind == TYPE_ANYPTR && !is_float(target_type.kind)) {
@@ -1166,8 +1216,15 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
         }
     }
 
-    // interface as to ident def must can check
-    //    if (as_expr.src.type)
+    // enum origin cast
+    if (as_expr->src.type.kind == TYPE_ENUM) {
+        type_enum_t *enum_type = as_expr->src.type.value;
+
+        if (type_compare(enum_type->element_type, target_type)) {
+            return target_type;
+        }
+    }
+
 
     INFER_ASSERTF(false, "cannot casting to '%s'", type_format(target_type));
     return target_type;
@@ -1258,7 +1315,7 @@ static type_t infer_async(module_t *m, ast_expr_t *expr, type_t target_type) {
         infer_fn_decl(m, co_expr->closure_fn, type_kind_new(TYPE_UNKNOWN));
         infer_fn_decl(m, co_expr->closure_fn_void, type_kind_new(TYPE_UNKNOWN));
 
-        first_arg = (ast_expr_t){
+        first_arg = (ast_expr_t) {
                 .line = expr->line,
                 .column = expr->column,
                 .assert_type = AST_FNDEF,
@@ -1341,7 +1398,7 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
 
     stack_push(m->current_fn->ret_target_types, &target_type);
 
-    table_t *union_table = table_new(); // key is hash
+    table_t *exhaustive_table = table_new(); // key is hash for union, or value for enum
 
     bool has_default = false;
 
@@ -1357,20 +1414,41 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
             ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, i);
 
             // union 只能使用 is 匹配类型, 而不能进行值匹配
-            if (subject_type.kind == TYPE_UNION) {
-                INFER_ASSERTF(cond_expr->assert_type == AST_EXPR_MATCH_IS,
-                              "match 'union type' only support 'is' assert");
+            if (subject_type.kind == TYPE_UNION || subject_type.kind == TYPE_TAGGED_UNION) {
+                INFER_ASSERTF(cond_expr->assert_type == AST_EXPR_IS,
+                              "match 'union' only support 'is' assert");
             }
 
-            if (cond_expr->assert_type == AST_EXPR_MATCH_IS) {
-                INFER_ASSERTF(subject_type.kind == TYPE_UNION || subject_type.kind == TYPE_INTERFACE,
+            if (cond_expr->assert_type == AST_EXPR_IS) {
+                INFER_ASSERTF(subject_type.kind == TYPE_UNION || subject_type.kind == TYPE_INTERFACE || subject_type.kind == TYPE_TAGGED_UNION,
                               "%s cannot use 'is' operator",
                               type_format(subject_type));
-                infer_right_expr(m, cond_expr, type_kind_new(TYPE_UNKNOWN));
-                assert(cond_expr->type.kind == TYPE_BOOL);
 
-                ast_match_is_expr_t *match_is_expr = cond_expr->value;
-                table_set(union_table, itoa(type_hash(match_is_expr->target_type)), cond_expr);
+                ast_is_expr_t *match_is_expr = cond_expr->value;
+
+                // 需要关联 subject
+                if (subject_type.kind == TYPE_TAGGED_UNION) {
+                    ast_is_expr_t *is_expr = cond_expr->value;
+                    INFER_ASSERTF(is_expr->union_tag, "tagged union match is not match")
+                    assert(match_is_expr->union_tag->assert_type == AST_EXPR_TAGGED_UNION_ELEMENT);
+                    infer_tagged_union_element(m, is_expr->union_tag, subject_type);
+
+                    ast_tagged_union_t *tagged_element = match_is_expr->union_tag->value;
+                    table_set(exhaustive_table, tagged_element->tagged_name, cond_expr);
+
+                    cond_expr->type.kind = TYPE_BOOL;
+                } else {
+                    infer_right_expr(m, cond_expr, type_kind_new(TYPE_UNKNOWN));
+                    table_set(exhaustive_table, itoa(type_hash(match_is_expr->target_type)), cond_expr);
+                }
+                assert(cond_expr->type.kind == TYPE_BOOL);
+            } else if (subject_type.append) { // 目前只有 append enum
+                if (cond_expr->assert_type == AST_EXPR_SELECT) {
+                    ast_expr_select_t *select = cond_expr->value;
+                    table_set(exhaustive_table, select->key, cond_expr);
+                }
+
+                infer_right_expr(m, cond_expr, subject_type);
             } else {
                 infer_right_expr(m, cond_expr, subject_type);
             }
@@ -1386,7 +1464,7 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
             if (subject_type.kind == TYPE_UNION && !subject_type.union_->any) {
                 for (int i = 0; i < subject_type.union_->elements->length; i++) {
                     type_t *element_type = ct_list_value(subject_type.union_->elements, i);
-                    if (!table_exist(union_table, itoa(type_hash(*element_type)))) {
+                    if (!table_exist(exhaustive_table, itoa(type_hash(*element_type)))) {
                         ANALYZER_ASSERTF(has_default,
                                          "match expression lacks a default case '_' and union element type lacks, for example 'is %s'",
                                          type_origin_format(*element_type))
@@ -1394,6 +1472,35 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
                 }
 
                 break; // union completed
+            }
+
+            if (subject_type.kind == TYPE_TAGGED_UNION) {
+                for (int i = 0; i < subject_type.tagged_union->elements->length; ++i) {
+                    tagged_union_element_t *element = ct_list_value(subject_type.union_->elements, i);
+                    if (!table_exist(exhaustive_table, element->tag)) {
+                        ANALYZER_ASSERTF(has_default,
+                                         "match expression lacks a default case '_' and tagged union element type lacks, for example 'is %s'",
+                                         element->tag);
+                    }
+                }
+
+                break;
+            }
+
+            // enum 穷尽检查
+            if (subject_type.append) {
+                type_enum_t *type_enum = subject_type.append;
+                for (int i = 0; i < type_enum->properties->length; i++) {
+                    enum_property_t *prop = ct_list_value(type_enum->properties, i);
+                    // tagged enum 使用 name 作为 key，简单 enum 使用 value 作为 key
+                    if (!table_exist(exhaustive_table, prop->name)) {
+                        ANALYZER_ASSERTF(has_default,
+                                         "match expression lacks a default case '_' and enum value lacks, for example '%s'",
+                                         prop->name)
+                    }
+                }
+
+                break; // enum completed
             }
 
             ANALYZER_ASSERTF(has_default, "match expression lacks a default case '_'")
@@ -1440,20 +1547,26 @@ static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
     return t;
 }
 
-static type_t infer_match_is_expr(module_t *m, ast_match_is_expr_t *is_expr) {
-    is_expr->target_type = reduction_type(m, is_expr->target_type);
-    return type_kind_new(TYPE_BOOL);
-}
-
 static type_t infer_macro_default_expr(module_t *m, ast_macro_default_expr_t *expr) {
     expr->target_type = reduction_type(m, expr->target_type);
     return expr->target_type;
 }
 
 static type_t infer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
-    type_t t = infer_right_expr(m, &is_expr->src, type_kind_new(TYPE_UNKNOWN));
-    is_expr->target_type = reduction_type(m, is_expr->target_type);
-    INFER_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_INTERFACE, "%s cannot use 'is' operator", type_format(t));
+    if (is_expr->src) {
+        type_t t = infer_right_expr(m, is_expr->src, type_kind_new(TYPE_UNKNOWN));
+        INFER_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_TAGGED_UNION || t.kind == TYPE_INTERFACE,
+                      "%s cannot use 'is' operator", type_format(t));
+
+        if (is_expr->union_tag) {
+            INFER_ASSERTF(t.kind == TYPE_TAGGED_UNION, "unexpected is expr");
+            infer_tagged_union_element(m, is_expr->union_tag, t);
+        }
+    }
+
+    if (is_expr->target_type.kind > 0) {
+        is_expr->target_type = reduction_type(m, is_expr->target_type);
+    }
 
     return type_kind_new(TYPE_BOOL);
 }
@@ -2069,11 +2182,55 @@ static type_t infer_access_expr(module_t *m, ast_expr_t *expr) {
  * foo().bar
  * self.test
  * xxx.len
+ * color.RED (enum access)
  * @param select
  * @return
  */
 static type_t infer_select_expr(module_t *m, ast_expr_t *expr) {
     ast_expr_select_t *select = expr->value;
+
+    // 首先检查是否是 enum 类型访问: color.RED
+    // 此时 select->left 是一个 ident，指向一个 enum 类型
+    if (select->left.assert_type == AST_EXPR_IDENT) {
+        ast_ident *left_ident = select->left.value;
+        symbol_t *symbol = symbol_table_get(left_ident->literal);
+
+        if (symbol && symbol->type == SYMBOL_TYPE) {
+            ast_typedef_stmt_t *typedef_stmt = symbol->ast_value;
+
+            type_t extract_type = reduction_type(m, typedef_stmt->type_expr);
+
+            if (typedef_stmt->is_enum) {
+                type_enum_t *type_enum = typedef_stmt->type_expr.value;
+
+                // 查找 enum 成员（值已在 reduction_type 中计算完成）
+                enum_property_t *found_property = NULL;
+                for (int i = 0; i < type_enum->properties->length; ++i) {
+                    enum_property_t *prop = ct_list_value(type_enum->properties, i);
+                    if (str_equal(prop->name, select->key)) {
+                        found_property = prop;
+                        break;
+                    }
+                }
+
+                INFER_ASSERTF(found_property, "enum '%s' has no member '%s'", left_ident->literal, select->key);
+
+                // 将表达式改写为 literal
+                ast_literal_t *literal = NEW(ast_literal_t);
+                literal->kind = type_enum->element_type.kind;
+                literal->value = malloc(64);
+                snprintf(literal->value, 64, "%ld", found_property->value);
+
+                expr->assert_type = AST_EXPR_LITERAL;
+                expr->value = literal;
+
+                type_t result_type = extract_type;
+                result_type.ident = typedef_stmt->ident;
+                result_type.ident_kind = TYPE_IDENT_DEF;
+                return result_type;
+            }
+        }
+    }
 
     infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
 
@@ -2271,26 +2428,99 @@ static bool marking_heap_alloc(ast_expr_t *expr) {
     return false;
 }
 
+static ast_expr_t *self_arg_rewrite(module_t *m, type_fn_t *type_fn, ast_expr_t *self_arg) {
+    type_t *self_param_type = ct_list_value(type_fn->param_types, 0);
+    type_t *extract_self_type = self_param_type;
+    if (self_param_type->kind == TYPE_PTR || self_param_type->kind == TYPE_RAWPTR) {
+        extract_self_type = &self_param_type->ptr->value_type;
+    }
+
+    if (is_stack_impl(extract_self_type->kind)) {
+        if (self_param_type->kind == TYPE_PTR) {
+            INFER_ASSERTF(self_arg->type.kind != TYPE_RAWPTR,
+                          "type mismatch: method requires `%s` receiver, got `%s`", type_format(*self_param_type), type_format(self_arg->type));
+
+            if (self_arg->type.kind != TYPE_PTR) {
+                return ast_safe_load_addr(self_arg);
+            }
+
+            return self_arg;
+        } else if (self_param_type->kind == TYPE_RAWPTR) {
+            if (self_arg->type.kind == TYPE_RAWPTR || self_arg->type.kind == TYPE_PTR) {
+                return self_arg;
+            }
+
+            return ast_load_addr(self_arg); // unsafe load
+        } else {
+            // value pass
+            if (self_arg->type.kind == TYPE_RAWPTR || self_arg->type.kind == TYPE_PTR) {
+                return ast_indirect_addr(self_arg);
+            }
+
+            return self_arg;
+        }
+    }
+
+    // ptr<[T]> 类型这样的形式是不被允许的
+    INFER_ASSERTF(is_heap_impl(self_arg->type.kind),
+                  "unsupported method receiver type '%s', expected heap-allocated type",
+                  type_format(self_arg->type))
+
+    return self_arg;
+}
+
+static inline void rewrite_generics_ident(module_t *m, ast_call_t *call, type_t target_type) {
+    if (call->left.assert_type != AST_EXPR_IDENT) {
+        return;
+    }
+    ast_ident *ident = call->left.value;
+    symbol_t *s = symbol_table_get(ident->literal);
+    INFER_ASSERTF(s, "symbol '%s' not found", ident->literal);
+
+    // 可能是 local 闭包函数，此时 type 是一个 var
+    if (s->is_local) {
+        return;
+    }
+
+    // 可能是全局维度的闭包函数
+    // INFER_ASSERTF(s->type == SYMBOL_FN, "ident '%s' call non-fn", ident->literal);
+    if (s->type != SYMBOL_FN) {
+        return;
+    }
+
+    ast_fndef_t *temp_fndef = s->ast_value;
+    if (!temp_fndef->is_generics) {
+        return;
+    }
+
+    // 由于存在函数重载，所以需要进行多次匹配找到最合适的 is_tpl 函数, 如果没有重载 temp_fndef 就是 tpl_fndef
+    ast_fndef_t *special_fn = generics_special_fn(m, call, target_type, temp_fndef);
+    assert(special_fn->type.status == REDUCTION_STATUS_DONE);
+
+    // call ident 重写, 从而能够正确的从符号表中检索到 special_fn
+    ident->literal = special_fn->symbol_name;
+}
+
 // fn person_t<>.test() -> fn person_tx_test()
-static bool impl_call_rewrite(module_t *m, ast_call_t *call) {
+static type_fn_t *infer_impl_call_rewrite(module_t *m, ast_call_t *call, type_t target_type) {
     ast_expr_select_t *select = call->left.value;
 
     // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
     type_t select_left_type = infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
 
-    type_t destr_type = select_left_type;
+    type_t extract_type = select_left_type;
     if (select_left_type.kind == TYPE_PTR || select_left_type.kind == TYPE_RAWPTR) {
-        destr_type = select_left_type.ptr->value_type;
+        extract_type = select_left_type.ptr->value_type;
     }
 
     // struct key call 不需要改写，可以直接通过 struct(进行简单的解构操作) 直接定位到
-    if (destr_type.kind == TYPE_STRUCT && type_struct_property(destr_type.struct_, select->key)) {
-        return false;
+    if (extract_type.kind == TYPE_STRUCT && type_struct_property(extract_type.struct_, select->key)) {
+        return NULL;
     }
 
     // 比如 int? 转换为 union 时就不存在 ident
-    if (!destr_type.ident) {
-        return false;
+    if (!extract_type.ident) {
+        return NULL;
     }
 
     // must alloc in heap
@@ -2299,14 +2529,15 @@ static bool impl_call_rewrite(module_t *m, ast_call_t *call) {
 
 
     // call 继承 select_left_type 的 args
-    char *impl_ident = destr_type.ident;
+    char *impl_ident = extract_type.ident;
     char *impl_symbol_name = str_connect_by(impl_ident, select->key, IMPL_CONNECT_IDENT);
-    list_t *impl_args = destr_type.args;
+    list_t *impl_gen_args = extract_type.args;
 
     symbol_t *s;
+
     ast_expr_t *self_arg = &select->left;
-    if (impl_args) {
-        char *arg_hash = generics_impl_args_hash(m, impl_args);
+    if (impl_gen_args) {
+        char *arg_hash = generics_impl_args_hash(m, impl_gen_args);
 
         // 优先精确匹配，然后是通用匹配
         char *impl_symbol_name_with_hash = str_connect_by(impl_symbol_name, arg_hash, GEN_REWRITE_SEPARATOR);
@@ -2317,24 +2548,25 @@ static bool impl_call_rewrite(module_t *m, ast_call_t *call) {
             s = symbol_table_get(impl_symbol_name);
         }
 
-        INFER_ASSERTF(s, "type '%s' not impl '%s' fn", type_format(destr_type), select->key);
+        INFER_ASSERTF(s, "type '%s' not impl '%s' fn", type_format(extract_type), select->key);
     } else {
         s = symbol_table_get(impl_symbol_name);
         if (!s) {
             // ident to default kind(need args)
-            type_t builtin_type = type_copy(m, destr_type);
+            type_t builtin_type = type_copy(m, extract_type);
             builtin_type.ident = NULL;
             builtin_type.ident_kind = 0;
             builtin_type.args = NULL;
             builtin_type.status = REDUCTION_STATUS_UNDO;
             builtin_type = reduction_type(m, builtin_type);
+
             // new impl
             if (builtin_type.ident && builtin_type.ident_kind == TYPE_IDENT_BUILTIN) {
                 impl_ident = builtin_type.ident;
-                impl_args = builtin_type.args;
+                impl_gen_args = builtin_type.args;
                 impl_symbol_name = str_connect_by(impl_ident, select->key, IMPL_CONNECT_IDENT);
-                if (impl_args) {
-                    char *arg_hash = generics_impl_args_hash(m, impl_args);
+                if (impl_gen_args) {
+                    char *arg_hash = generics_impl_args_hash(m, impl_gen_args);
 
                     // 优先精确匹配，然后是通用匹配
                     char *impl_symbol_name_with_hash = str_connect_by(impl_symbol_name, arg_hash,
@@ -2346,14 +2578,14 @@ static bool impl_call_rewrite(module_t *m, ast_call_t *call) {
                         s = symbol_table_get(impl_symbol_name);
                     }
                 } else {
-                    impl_ident = destr_type.ident;
+                    impl_ident = extract_type.ident;
                     s = symbol_table_get(impl_symbol_name);
                 }
 
                 // if symbol name is builtin, change self arg type
             }
 
-            INFER_ASSERTF(s, "type '%s' not impl '%s' fn", type_format(destr_type), select->key);
+            INFER_ASSERTF(s, "type '%s' not impl '%s' fn", type_format(extract_type), select->key);
             if (select_left_type.kind == TYPE_PTR || select_left_type.kind == TYPE_RAWPTR) {
                 self_arg->type.ptr->value_type = builtin_type;
             } else {
@@ -2362,25 +2594,24 @@ static bool impl_call_rewrite(module_t *m, ast_call_t *call) {
         }
     }
 
+    // rewrite call left ident, 延迟到 call left fn type 确定后再做
     call->left = *ast_ident_expr(call->left.line, call->left.column, impl_symbol_name);
+    call->generics_args = impl_gen_args;
+    rewrite_generics_ident(m, call, target_type);
+
+    type_t left_type = infer_right_expr(m, &call->left, type_kind_new(TYPE_UNKNOWN));
+    INFER_ASSERTF(left_type.kind == TYPE_FN, "cannot call non-fn");
+    assert(left_type.fn);
 
     list_t *args = ct_list_new(sizeof(ast_expr_t));
-
-
-    // self arg 可能在栈上分配，在 call fn 中会导致栈变量读取异常，所以需要确保 self arg 在堆上分配
-    if (is_stack_impl(self_arg->type.kind)) { // 基于原始类型计算是否需要 load ptr
-        self_arg = ast_safe_load_addr(self_arg); // safe_load_addr
-    }
-
-    ct_list_push(args, self_arg);
+    ct_list_push(args, self_arg_rewrite(m, left_type.fn, self_arg));
 
     for (int i = 0; i < call->args->length; ++i) {
         ct_list_push(args, ct_list_value(call->args, i));
     }
     call->args = args;
 
-    call->generics_args = impl_args;
-    return true;
+    return left_type.fn;
 }
 
 static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_type) {
@@ -2400,6 +2631,8 @@ static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_t
             for (int i = 0; i < interface_type->elements->length; ++i) {
                 type_t *element = ct_list_value(interface_type->elements, i);
                 assert(element->kind == TYPE_FN);
+                // interface 的 element fn 不包含任何的类型信息
+                // select->key 定位到的具体函数才会包含 self 具体信息
                 if (str_equal(element->fn->fn_name, select->key)) {
                     temp = element;
                     break;
@@ -2415,50 +2648,17 @@ static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_t
     // --------------------------------------------impl type handle----------------------------------------------------------
     // fn person_t<>.test() -> fn person_tx_test()
     if (call->left.assert_type == AST_EXPR_SELECT) {
-        bool is_rewrite = impl_call_rewrite(m, call);
+        type_fn_t *type_fn = infer_impl_call_rewrite(m, call, target_type);
+        if (type_fn) {
+            return type_fn;
+        }
     }
 
+    rewrite_generics_ident(m, call, target_type);
 
     // analyzer 阶段已经对 ident 进行了 resolve/module ident with
-    // --------------------------------------------generics handle----------------------------------------------------------
-    if (call->left.assert_type == AST_EXPR_IDENT) {
-        do {
-            ast_ident *ident = call->left.value;
-            symbol_t *s = symbol_table_get(ident->literal);
-            INFER_ASSERTF(s, "symbol '%s' not found", ident->literal);
-
-            // 可能是 local 闭包函数，此时 type 是一个 var
-            if (s->is_local) {
-                break;
-            }
-
-            // 可能是全局维度的闭包函数
-            // INFER_ASSERTF(s->type == SYMBOL_FN, "ident '%s' call non-fn", ident->literal);
-            if (s->type != SYMBOL_FN) {
-                break;
-            }
-
-            ast_fndef_t *temp_fndef = s->ast_value;
-            if (!temp_fndef->is_generics) {
-                break;
-            }
-
-            // 由于存在函数重载，所以需要进行多次匹配找到最合适的 is_tpl 函数, 如果没有重载 temp_fndef 就是 tpl_fndef
-            ast_fndef_t *special_fn = generics_special_fn(m, call, target_type, temp_fndef);
-            assert(special_fn->type.status == REDUCTION_STATUS_DONE);
-
-            // call ident 重写, 从而能够正确的从符号表中检索到 special_fn
-            ident->literal = special_fn->symbol_name;
-
-            //            type_t left_type = infer_left_expr(m, &call->left);
-            //            assert(left_type.kind == TYPE_FN);
-            //            return left_type.fn;
-        } while (0);
-    }
-
     type_t left_type = infer_right_expr(m, &call->left, type_kind_new(TYPE_UNKNOWN));
     INFER_ASSERTF(left_type.kind == TYPE_FN, "cannot call non-fn");
-
     return left_type.fn;
 }
 
@@ -2471,6 +2671,7 @@ static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_t
  */
 static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool check_errable) {
     type_fn_t *type_fn = infer_call_left(m, call, target_type);
+    assert(type_fn);
     infer_call_args(m, call, type_fn);
 
     call->return_type = type_fn->return_type;
@@ -2484,6 +2685,113 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
     }
 
     return type_fn->return_type;
+}
+
+static void infer_tagged_union_element(module_t *m, ast_expr_t *expr, type_t target_type) {
+    ast_tagged_union_t *tagged_element = expr->value;
+
+    if (target_type.kind != TYPE_UNKNOWN) {
+        // 唯一需要进行特殊处理的情况
+        if (target_type.args && tagged_element->union_type.kind > 0 && !tagged_element->union_type.args) {
+            // 直接使用 taget_type 的情况
+            if (tagged_element->union_type.ident) {
+                INFER_ASSERTF(str_equal(tagged_element->union_type.ident, target_type.ident), "type inconsistency, expect=%s, actual=%s", target_type.ident,
+                              tagged_element->union_type.ident);
+            }
+
+            tagged_element->union_type = target_type;
+        }
+
+        // result<T> t = .some(1)
+        if (tagged_element->union_type.kind == 0) {
+            tagged_element->union_type = target_type; // use tagged type
+        }
+    }
+    tagged_element->union_type = reduction_type(m, tagged_element->union_type);
+
+    // 确保 enum 类型已经 reduction
+    struct type_tagged_union_t *type_union = tagged_element->union_type.tagged_union;
+
+    // 查找对应的 variant
+    tagged_union_element_t *found = NULL;
+    for (int i = 0; i < type_union->elements->length; ++i) {
+        tagged_union_element_t *element = ct_list_value(type_union->elements, i);
+        if (str_equal(element->tag, tagged_element->tagged_name)) {
+            found = element;
+            break;
+        }
+    }
+
+    INFER_ASSERTF(found != NULL, "enum '%s' has no variant '%s'",
+                  tagged_element->union_type.ident, tagged_element->tagged_name);
+
+    // 保存 property 引用
+    tagged_element->element = found;
+
+    // check arg match
+    if (tagged_element->arg) {
+        infer_right_expr(m, tagged_element->arg, found->type);
+    }
+
+    // 返回类型是 enum 类型
+    expr->type = tagged_element->union_type;
+}
+
+/**
+ * 推断 tagged enum 构造表达式
+ * AST 改写在 analyzer 阶段完成，这里做类型推断和验证
+ */
+static type_t infer_tagged_union_new(module_t *m, ast_expr_t *expr, type_t target_type) {
+    ast_tagged_union_t *tagged_new = expr->value;
+
+    // target_type 和 tagged_new->union_type 如何同时存在则需要进行相等校验
+    if (target_type.kind != TYPE_UNKNOWN) {
+        // 唯一需要进行特殊处理的情况
+        if (target_type.args && tagged_new->union_type.kind > 0 && !tagged_new->union_type.args) {
+            // 直接使用 taget_type 的情况
+            if (tagged_new->union_type.ident) {
+                INFER_ASSERTF(str_equal(tagged_new->union_type.ident, target_type.ident), "type inconsistency, expect=%s, actual=%s", target_type.ident,
+                              tagged_new->union_type.ident);
+            }
+
+            tagged_new->union_type = target_type;
+        }
+
+        // result<T> t = .some(1)
+        if (tagged_new->union_type.kind == 0) {
+            tagged_new->union_type = target_type; // use tagged type
+        }
+    }
+
+    tagged_new->union_type = reduction_type(m, tagged_new->union_type);
+
+    // 确保 enum 类型已经 reduction
+    struct type_tagged_union_t *type_union = tagged_new->union_type.tagged_union;
+
+    // 查找对应的 variant
+    tagged_union_element_t *found = NULL;
+    for (int i = 0; i < type_union->elements->length; ++i) {
+        tagged_union_element_t *element = ct_list_value(type_union->elements, i);
+        if (str_equal(element->tag, tagged_new->tagged_name)) {
+            found = element;
+            break;
+        }
+    }
+
+    INFER_ASSERTF(found != NULL, "enum '%s' has no variant '%s'",
+                  tagged_new->union_type.ident, tagged_new->tagged_name);
+
+    // 保存 property 引用
+    tagged_new->element = found;
+
+    // check arg match
+    if (tagged_new->arg) {
+        infer_right_expr(m, tagged_new->arg, found->type);
+    }
+
+    // 返回类型是 enum 类型
+    expr->type = tagged_new->union_type;
+    return tagged_new->union_type;
 }
 
 void infer_expr_fake(module_t *m, ast_expr_fake_stmt_t *stmt) {
@@ -2680,7 +2988,7 @@ static void infer_for_tradition(module_t *m, ast_for_tradition_stmt_t *stmt) {
  * @param m
  * @param stmt
  */
-static void infer_type_alias_stmt(module_t *m, ast_typedef_stmt_t *stmt) {
+static void infer_typedef_stmt(module_t *m, ast_typedef_stmt_t *stmt) {
     rewrite_typedef(m, stmt);
 }
 
@@ -2719,6 +3027,10 @@ static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
     literal->kind = literal_type.kind;
 
     type_kind target_kind = target_type.kind;
+
+    if (target_type.append) { // enum 暂时不支持 literal 自动转换
+        return literal_type;
+    }
 
     if (literal_type.kind == TYPE_STRING && target_kind == TYPE_STRING) {
         literal->kind = target_kind;
@@ -2937,7 +3249,7 @@ static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
             return infer_ret(m, stmt->value);
         }
         case AST_STMT_TYPEDEF: {
-            return infer_type_alias_stmt(m, stmt->value);
+            return infer_typedef_stmt(m, stmt->value);
         }
         default: {
             return;
@@ -3022,9 +3334,6 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type, type
         case AST_MATCH: {
             return infer_match(m, expr->value, target_type);
         }
-        case AST_EXPR_MATCH_IS: {
-            return infer_match_is_expr(m, expr->value);
-        }
         case AST_EXPR_IS: {
             return infer_is_expr(m, expr->value);
         }
@@ -3092,6 +3401,9 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type, type
         }
         case AST_CALL: {
             return infer_call(m, expr->value, target_type, true);
+        }
+        case AST_EXPR_TAGGED_UNION_NEW: {
+            return infer_tagged_union_new(m, expr, target_type);
         }
         case AST_MACRO_ASYNC: {
             return infer_async(m, expr, target_type);
@@ -3326,7 +3638,6 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         return t;
     }
 
-    // 不能随便动名字
     if (t.kind == TYPE_FN) {
         type_fn_t *fn = t.fn;
         fn->return_type = reduction_type(m, fn->return_type);
@@ -3353,6 +3664,122 @@ static type_t type_param_special(module_t *m, type_t t, table_t *arg_table) {
     // 实参可以没有 reduction
     type_t *arg_type = table_get(arg_table, t.ident);
     return reduction_type(m, *arg_type);
+}
+
+/**
+ * 为值类型接收器生成包装函数
+ * 当 self_kind == PARAM_SELF_T 时，interface 存储指针数据但方法期望值类型
+ * wrapper 接收指针参数，解引用后调用原函数
+ *
+ * 原函数: fn dog.speak(self) { ... }
+ * 生成的 wrapper: fn dog.speak_receiver_wrapper(*dog ptr) { return dog.speak(*ptr) }
+ */
+static ast_fndef_t *generate_receiver_wrapper(module_t *m, ast_fndef_t *origin_fndef, type_t impl_type) {
+    // 创建 wrapper 函数定义
+    ast_fndef_t *wrapper = ast_fndef_new(m, origin_fndef->line, origin_fndef->column);
+
+    // 设置函数名称和符号名
+    wrapper->fn_name = dsprintf("%s_receiver_wrapper", origin_fndef->fn_name);
+    wrapper->symbol_name = dsprintf("%s_receiver_wrapper", origin_fndef->symbol_name);
+    wrapper->fn_name_with_pkg = dsprintf("%s_receiver_wrapper", origin_fndef->fn_name_with_pkg);
+
+    // 复制返回类型和其他属性
+    wrapper->return_type = origin_fndef->return_type;
+    wrapper->is_errable = origin_fndef->is_errable;
+    wrapper->is_impl = true;
+    wrapper->impl_type = impl_type;
+    wrapper->self_kind = PARAM_SELF_PTR_T; // wrapper 接收指针参数
+
+    // 创建参数列表 - 第一个参数是 ptr<impl_type>
+    wrapper->params = ct_list_new(sizeof(ast_var_decl_t));
+
+    // 为 self 参数生成唯一标识符并注册到符号表
+    char *self_unique_ident = var_unique_ident(m, FN_SELF_NAME);
+    ast_var_decl_t *self_param = NEW(ast_var_decl_t);
+    self_param->ident = self_unique_ident;
+    self_param->type = type_ptrof(impl_type);
+    symbol_table_set(self_unique_ident, SYMBOL_VAR, self_param, true);
+    ct_list_push(wrapper->params, self_param);
+
+    // 复制原函数的其他参数（跳过第一个 self 参数）
+    for (int i = 1; i < origin_fndef->params->length; ++i) {
+        ast_var_decl_t *param = ct_list_value(origin_fndef->params, i);
+        ct_list_push(wrapper->params, param);
+    }
+
+    // 构建函数体：return origin_fn(*self, other_args...)
+    wrapper->body = slice_new();
+
+    // 创建解引用表达式: *self (使用唯一标识符)
+    ast_unary_expr_t *deref_expr = NEW(ast_unary_expr_t);
+    deref_expr->op = AST_OP_IA; // indirect address (dereference)
+    deref_expr->operand = (ast_expr_t) {
+            .assert_type = AST_EXPR_IDENT,
+            .value = ast_new_ident(self_unique_ident),
+            .line = origin_fndef->line,
+            .column = origin_fndef->column,
+    };
+
+    // 创建 call 表达式
+    ast_call_t *call = NEW(ast_call_t);
+    call->left = (ast_expr_t) {
+            .assert_type = AST_EXPR_IDENT,
+            .value = ast_new_ident(origin_fndef->symbol_name),
+            .line = origin_fndef->line,
+            .column = origin_fndef->column,
+    };
+    call->args = ct_list_new(sizeof(ast_expr_t));
+    call->generics_args = NULL;
+    call->spread = false;
+
+    // 第一个参数是解引用的 self
+    ast_expr_t deref_arg = {
+            .assert_type = AST_EXPR_UNARY,
+            .value = deref_expr,
+            .line = origin_fndef->line,
+            .column = origin_fndef->column,
+    };
+    ct_list_push(call->args, &deref_arg);
+
+    // 添加其他参数
+    for (int i = 1; i < origin_fndef->params->length; ++i) {
+        ast_var_decl_t *param = ct_list_value(origin_fndef->params, i);
+        ast_expr_t arg = {
+                .assert_type = AST_EXPR_IDENT,
+                .value = ast_new_ident(param->ident),
+                .line = origin_fndef->line,
+                .column = origin_fndef->column,
+        };
+        ct_list_push(call->args, &arg);
+    }
+
+    // 创建 return 语句
+    ast_return_stmt_t *ret_stmt = NEW(ast_return_stmt_t);
+    if (origin_fndef->return_type.kind != TYPE_VOID) {
+        ret_stmt->expr = NEW(ast_expr_t);
+        ret_stmt->expr->assert_type = AST_CALL;
+        ret_stmt->expr->value = call;
+        ret_stmt->expr->line = origin_fndef->line;
+        ret_stmt->expr->column = origin_fndef->column;
+    } else {
+        // void 返回类型，只调用不 return
+        ret_stmt->expr = NULL;
+    }
+
+    ast_stmt_t *stmt = NEW(ast_stmt_t);
+    if (origin_fndef->return_type.kind != TYPE_VOID) {
+        stmt->assert_type = AST_STMT_RETURN;
+        stmt->value = ret_stmt;
+    } else {
+        // void 返回类型，改为表达式语句
+        stmt->assert_type = AST_CALL;
+        stmt->value = call;
+    }
+    stmt->line = origin_fndef->line;
+    stmt->column = origin_fndef->column;
+    slice_push(wrapper->body, stmt);
+
+    return wrapper;
 }
 
 static void
@@ -3389,6 +3816,17 @@ check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast
                       typedef_ident,
                       interface_fn_type->fn_name,
                       impl_interface->ident);
+
+        // 当 self_kind == PARAM_SELF_T 时，生成 receiver_wrapper
+        // interface 存储指针数据，但方法期望值类型，需要 wrapper 来解引用
+        if (ast_fndef->self_kind == PARAM_SELF_T && ast_fndef->receiver_wrapper == NULL) {
+            ast_fndef_t *wrapper_fn = generate_receiver_wrapper(m, ast_fndef, ast_fndef->impl_type);
+            ast_fndef->receiver_wrapper = wrapper_fn;
+            symbol_table_set(wrapper_fn->symbol_name, SYMBOL_FN, wrapper_fn, false);
+            infer_fn_decl(m, wrapper_fn, type_kind_new(TYPE_UNKNOWN));
+
+            linked_push(m->temp_worklist, wrapper_fn);
+        }
 
         type_t actual_type = infer_impl_fn_decl(m, ast_fndef);
 
@@ -3438,7 +3876,7 @@ static void combination_interface(module_t *m, ast_typedef_stmt_t *typedef_stmt)
 
 /**
  * custom_type a = ...
- * custom_type 此时就是一个 type_alias
+ * custom_type 此时就是一个 typedef ident
  * @param m
  * @param t
  * @return
@@ -3524,6 +3962,7 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
     }
 
     if (typedef_stmt->type_expr.status == REDUCTION_STATUS_DOING2) {
+        // doing2 打破循环
         return t;
     }
 
@@ -3539,6 +3978,11 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
     // interface 需要通过 ident 进行区分，所以这里将 ident 赋值给 type_expr
     if (typedef_stmt->is_interface) {
         typedef_stmt->type_expr.ident_kind = TYPE_IDENT_INTERFACE;
+        typedef_stmt->type_expr.ident = t.ident;
+    }
+
+    if (typedef_stmt->is_tagged_union) {
+        typedef_stmt->type_expr.ident_kind = TYPE_IDENT_TAGGER_UNION;
         typedef_stmt->type_expr.ident = t.ident;
     }
 
@@ -3568,6 +4012,17 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
     return t;
 }
 
+static type_t reduction_tagged_union_type(module_t *m, type_t t) {
+    type_tagged_union_t *tagged_union = t.tagged_union;
+
+    for (int i = 0; i < tagged_union->elements->length; ++i) {
+        tagged_union_element_t *temp = ct_list_value(tagged_union->elements, i);
+        temp->type = reduction_type(m, temp->type);
+    }
+
+    return t;
+}
+
 static type_t reduction_union_type(module_t *m, type_t t) {
     type_union_t *type_union = t.union_;
     if (type_union->elements->length == 0) {
@@ -3582,7 +4037,48 @@ static type_t reduction_union_type(module_t *m, type_t t) {
     return t;
 }
 
-static type_t reduction_interface_type(module_t *m, type_t t) {
+static type_t reduction_enum(module_t *m, type_t t) {
+    type_enum_t *enum_type = t.enum_;
+    enum_type->element_type = reduction_type(m, enum_type->element_type);
+
+    // enum 只支持 integer 类型作为 discriminant
+    INFER_ASSERTF(is_integer(enum_type->element_type.kind),
+                  "enum only supports integer types, got '%s'", type_format(enum_type->element_type));
+
+    // 计算所有枚举成员的值并处理 payload 类型
+    int64_t auto_value = 0;
+    for (int i = 0; i < enum_type->properties->length; ++i) {
+        enum_property_t *prop = ct_list_value(enum_type->properties, i);
+
+        // 处理带 payload 的变体
+        if (prop->payload_type) {
+            *prop->payload_type = reduction_type(m, *prop->payload_type);
+            // 带 payload 的变体自动分配 discriminant 值
+            prop->value = auto_value++;
+        } else if (prop->value_expr) {
+            ast_expr_t *value_expr = prop->value_expr;
+            // 对表达式进行推断
+            infer_right_expr(m, value_expr, enum_type->element_type);
+
+            INFER_ASSERTF(value_expr->assert_type == AST_EXPR_LITERAL,
+                          "enum member '%s' value must be a integer literal", prop->name);
+
+            ast_literal_t *literal = value_expr->value;
+            INFER_ASSERTF(is_integer(literal->kind),
+                          "enum member '%s' value must be a integer literal", prop->name);
+
+            prop->value = atoll(literal->value);
+            auto_value = prop->value + 1;
+        } else {
+            // 没有显式值，使用自动递增值
+            prop->value = auto_value++;
+        }
+    }
+
+    return t;
+}
+
+static type_t reduction_interface(module_t *m, type_t t) {
     type_interface_t *type_interface = t.interface;
     if (type_interface->elements->length == 0) {
         return t;
@@ -3635,13 +4131,23 @@ type_t reduction_type(module_t *m, type_t t) {
         goto STATUS_DONE;
     }
 
+    if (t.kind == TYPE_TAGGED_UNION) {
+        t = reduction_tagged_union_type(m, t);
+        goto STATUS_DONE;
+    }
+
     if (t.kind == TYPE_UNION) {
         t = reduction_union_type(m, t);
         goto STATUS_DONE;
     }
 
     if (t.kind == TYPE_INTERFACE) {
-        t = reduction_interface_type(m, t);
+        t = reduction_interface(m, t);
+        goto STATUS_DONE;
+    }
+
+    if (t.kind == TYPE_ENUM) {
+        t = reduction_enum(m, t);
         goto STATUS_DONE;
     }
 
@@ -3668,6 +4174,12 @@ STATUS_DONE:
         t.in_heap = true;
     }
 
+    // enum 消除
+    if (t.kind == TYPE_ENUM && t.ident_kind > 0) {
+        t.append = t.enum_;
+        t.kind = t.enum_->element_type.kind;
+    }
+
     // 固定数组的大小暂时禁止超过 64KB, 如果需要超过 64 KB 可以使用 vec?
     // 如果 array 超过 64KB 则在堆上进行分配
     if (t.kind == TYPE_ARR && type_sizeof(t) > (64 * 1024)) {
@@ -3683,8 +4195,6 @@ STATUS_DONE:
     if (args) {
         t.args = args;
     }
-
-    t.kind = t.kind;
 
     struct sc_map_s64 visited;
     sc_map_init_s64(&visited, 0, 0);
@@ -3765,6 +4275,7 @@ static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef) {
     f->is_errable = fndef->is_errable;
     f->param_types = ct_list_new(sizeof(type_t));
     f->return_type = reduction_type(m, fndef->return_type);
+    f->self_kind = fndef->self_kind;
 
     // 跳过 self
     for (int i = 1; i < fndef->params->length; ++i) {
@@ -3818,32 +4329,44 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     }
 
     // 对 fndef 进行类型还原
-    type_fn_t *f = NEW(type_fn_t);
+    type_fn_t *type_fn = NEW(type_fn_t);
+    type_fn->fn_name = fndef->fn_name;
+    type_fn->is_tpl = fndef->is_tpl;
+    type_fn->is_errable = fndef->is_errable;
+    type_fn->param_types = ct_list_new(sizeof(type_t));
+    type_fn->return_type = reduction_type(m, fndef->return_type);
 
-    f->fn_name = fndef->fn_name;
-    f->is_tpl = fndef->is_tpl;
-    f->is_errable = fndef->is_errable;
-    f->param_types = ct_list_new(sizeof(type_t));
-    f->return_type = reduction_type(m, fndef->return_type);
-
-    fndef->return_type = f->return_type;
+    fndef->return_type = type_fn->return_type;
 
     for (int i = 0; i < fndef->params->length; ++i) {
         ast_var_decl_t *param = ct_list_value(fndef->params, i);
 
         param->type = reduction_type(m, param->type);
 
-        // 为什么要在这里进行 ptr of, 只有在 infer 之后才能确定 alias 的具体类型，从而进一步判断是否需要 ptrof
-        if (fndef->impl_type.kind > 0 && i == 0 && is_stack_impl(param->type.kind)) {
-            // struct to ptr
-            param->type = type_ptrof(param->type);
+        if (fndef->is_impl && i == 0) {
+            if (is_stack_impl(param->type.kind)) {
+                if (fndef->self_kind == PARAM_SELF_PTR_T) {
+                    param->type = type_ptrof(param->type);
+                } else if (fndef->self_kind == PARAM_SELF_RAWPTR_T) {
+                    param->type = type_rawptrof(param->type);
+                } else {
+                    // not need  handle
+                }
+            } else {
+                // not need handle, like vec/map/set/chan...
+                INFER_ASSERTF(fndef->self_kind == PARAM_SELF_PTR_T,
+                              "heap-allocated type '%s' has implicit pointer receiver; omit the 'self' parameter, e.g., `fn T.method()`",
+                              type_format(param->type));
+            }
+
+            type_fn->self_kind = fndef->self_kind;
         }
 
-        ct_list_push(f->param_types, &param->type);
+        ct_list_push(type_fn->param_types, &param->type);
     }
 
-    f->is_rest = fndef->rest_param;
-    type_t result = type_new(TYPE_FN, f);
+    type_fn->is_rest = fndef->rest_param;
+    type_t result = type_new(TYPE_FN, type_fn);
     result.status = REDUCTION_STATUS_DONE;
 
     if (target_type.kind != TYPE_UNKNOWN) {

@@ -1,0 +1,295 @@
+=== test_basic
+--- main.n
+type ellipse_t = struct{
+    int rx
+    int ry
+}
+
+type shape = union{
+    int circle
+    int square
+    (int, int) rectangle
+    ellipse_t ellipse
+    void point
+}
+
+fn main() {
+    shape o = shape.ellipse(ellipse_t{rx:-12, ry:2352})
+    shape o2 = shape.rectangle(1, 2)
+
+    if o is shape.ellipse v {
+        println(v.rx, v.ry)
+        assert(v.rx == -12 && v.ry == 2352)
+    }
+
+    if o2 is shape.rectangle v {
+        println(v[0], v[1])
+        assert(v[0] == 1 && v[1] == 2)
+
+        var (a, b) = v
+        println(a, b)
+        assert(a == 1 && b == 2)
+    }
+
+    shape o3 = shape.rectangle(-1, -100)
+    if o3 is shape.rectangle (a, b) {
+        println(a, b)
+        assert(a == -1 && b == -100)
+    }
+    if o3 is shape.rectangle(a, b) {
+        println(a, b)
+        assert(a == -1 && b == -100)
+    }
+}
+
+
+=== test_match_failed
+--- main.n
+type ellipse_t = struct{
+    int rx
+    int ry
+}
+
+type shape = union{
+    int circle
+    int square
+    (int, int) rectangle
+    ellipse_t ellipse
+    void point
+}
+
+fn main() {
+    shape o = shape.ellipse(ellipse_t{rx:-12, ry:2352})
+    shape o2 = shape.rectangle(1, 2)
+
+    match o {
+        is shape.ellipse v -> {
+
+        }
+    }
+
+}
+
+--- output.txt
+nature-test/main.n:18:11: match expression lacks a default case '_' and tagged union element type lacks, for example 'is circle'
+
+=== test_match_union
+--- main.n
+type ellipse_t = struct{
+    int rx
+    int ry
+}
+
+type shape = union{
+    int circle
+    int square
+    (int, int) rectangle
+    ellipse_t ellipse
+    void point
+}
+
+fn main() {
+    shape o = shape.ellipse(ellipse_t{rx:-12, ry:2352})
+    match o {
+        is shape.ellipse v -> {
+            println(v.rx, v.ry)
+            assert(v.rx == -12 && v.ry == 2352)
+        }
+        _ -> {}
+    }
+
+    shape o2 = shape.rectangle(1, 2)
+    match o2 {
+        is shape.ellipse v -> {
+            println(v.rx, v.ry)
+            assert(v.rx == -12 && v.ry == 2352)
+        }
+        is shape.rectangle (a, b) -> {
+            println(a, b)
+            assert(a == 1 && b == 2)
+        }
+        is shape.square -> { assert(false) }
+        is shape.circle -> { assert(false) }
+        is shape.point -> { assert(false) }
+    }
+}
+
+=== test_match_call
+--- main.n
+type ellipse_t = struct{
+    int rx
+    int ry
+}
+
+type shape = union{
+    int circle
+    int square
+    (int, int) rectangle
+    ellipse_t ellipse
+    void point
+}
+
+fn get_ellipse():shape {
+    println('hello world')
+    return shape.ellipse(ellipse_t{rx:-12, ry:2352})
+}
+
+fn main() {
+    match get_ellipse() {
+        is shape.point -> {
+            println('is point')
+        }
+        is shape.square v -> {
+            println('is square')
+        }
+        is shape.ellipse v -> {
+            println(v.rx, v.ry)
+            assert(v.rx == -12 && v.ry == 2352)
+        }
+        is shape.circle v -> {
+            println('is square')
+        }
+        _ -> {}
+    }
+}
+
+--- output.txt
+hello world
+-12 2352
+
+=== test_failed_generics
+--- main.n
+type result<T> = union{
+	T some
+	void none
+}
+
+fn main() {
+    result<int> r = result<float>.some(12)
+}
+
+--- output.txt
+nature-test/main.n:7:41: type inconsistency, expect=main.result<int>(tagged_union), actual=main.result<float>(tagged_union)
+
+=== test_union_failed
+--- main.n
+type result<T> = union{
+	T some
+	void none
+}
+
+type result2<T> = union{
+	T some
+	void none
+}
+
+fn main() {
+    var r = result<int>.some(123)
+    if r is result2.some v {
+        println(v)
+    }
+}
+
+--- output.txt
+nature-test/main.n:13:8: type inconsistency, expect=main.result, actual=main.result2
+
+=== test_union_failed2
+--- main.n
+type result<T> = union{
+	T some
+	void none
+}
+
+type result2<T> = union{
+	T some
+	void none
+}
+
+fn main() {
+    var r = result<int>.some(123)
+    if r is result.some v {
+        println(v)
+    }
+
+    r= result<bool>.some(true)
+    match r {
+        is result.some v -> {
+            println('is some', v)
+        }
+        is result.none -> {
+            println('is none')
+        }
+    }
+}
+
+--- output.txt
+nature-test/main.n:17:29: type inconsistency, expect=main.result<int>(tagged_union), actual=main.result<bool>(tagged_union)
+
+=== test_gen_union
+--- main.n
+type result<T> = union{
+	T some
+	void none
+}
+
+type result2<T> = union{
+	T some
+	void none
+}
+
+fn main() {
+    var r = result<int>.some(123)
+    if r is result.some v {
+        println(v)
+        assert(v == 123)
+    } else {
+        assert(false)
+    }
+
+    r = result<int>.some(352)
+    match r {
+        is result.some v -> {
+            println('is some', v)
+            assert(v == 352)
+        }
+        is result.none -> {
+            println('is none')
+            assert(false)
+        }
+    }
+
+    r = result<int>.none
+    match r {
+        is result.some v -> {
+            println('is some', v)
+            assert(false)
+        }
+        is result.none -> {
+            println('is none')
+            assert(true)
+        }
+    }
+
+    r = result.none
+    match r {
+        is result.some v -> {
+            println('is some', v)
+            assert(false)
+        }
+        is result.none -> {
+            println('is none')
+            assert(true)
+        }
+    }
+
+    r = result.some(2525)
+    var a = match r {
+        is result.some v -> v
+        is result.none -> {
+            println('is none')
+            assert(false)
+            211
+        }
+    }
+    assert(a == 2525)
+}

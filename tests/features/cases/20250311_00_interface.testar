@@ -811,17 +811,17 @@ type combination: measurable<i64>,updatable = interface{
 
 type square:combination, updatable = i64
 
-fn square.area():i64 {
-    i64 length = *self as i64
+fn square.area(self):i64 {
+    i64 length = self as i64
 	return length * length
 }
-fn square.perimeter():i64 {
-	return (*self * 4) as i64
+fn square.perimeter(self):i64 {
+	return (self * 4) as i64
 }
-fn square.update(i64 i) {
-   *self = i as square
+fn square.update(self, i64 i) {
+   self = i as square
 }
-fn square.to_str():string {
+fn square.to_str(self):string {
     return 'hello world'
 }
 
@@ -843,8 +843,8 @@ fn main():void! {
 }
 
 --- output.txt
-64 40 10
-144 40 12
+64 32 8
+144 48 12
 
 === test_interface_is
 --- main.n
@@ -864,20 +864,20 @@ type combination: measurable<i64>,updatable = interface{
 
 type square:combination, updatable = i64
 
-fn square.area():i64 {
-    i64 length = *self as i64
+fn square.area(self):i64 {
+    i64 length = self as i64
 	return length * length
 }
-fn square.perimeter():i64 {
-	return (*self * 4) as i64
+fn square.perimeter(self):i64 {
+	return (self * 4) as i64
 }
-fn square.update(i64 i) {
-   *self = i as square
+fn square.update(self, i64 i) {
+   self = i as square
 }
-fn square.to_str():string {
+fn square.to_str(self):string {
     return 'hello world'
 }
-fn square.unique() {
+fn square.unique(self) {
     println('square unique')
 }
 
@@ -927,17 +927,17 @@ type combination: measurable<i64>,updatable = interface{
 
 type square:combination, updatable = i64
 
-fn square.area():i64 {
-    i64 length = *self as i64
+fn square.area(self):i64 {
+    i64 length = self as i64
 	return length * length
 }
-fn square.perimeter():i64 {
-	return (*self * 4) as i64
+fn square.perimeter(self):i64 {
+	return (self * 4) as i64
 }
-fn square.update(i64 i) {
-   *self = i as square
+fn square.update(self, i64 i) {
+    self = i as square
 }
-fn square.to_str():string {
+fn square.to_str(self):string {
     return 'hello world'
 }
 

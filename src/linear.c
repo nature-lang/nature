@@ -200,7 +200,7 @@ linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_opera
 
     OP_PUSH(lir_op_new(LIR_OPCODE_USLT, index_target, length_target, cmp_result));
 
-    char *cmd_label_ident = label_ident_with_unique( ".index");
+    char *cmd_label_ident = label_ident_with_unique(".index");
     char *end_label_ident = str_connect(cmd_label_ident, LABEL_END_SUFFIX);
     lir_operand_t *cmp_end_label = lir_label_operand(end_label_ident, true);
 
@@ -1682,10 +1682,10 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
             type_fn = interface_fn_type->fn;
 
             // get self, 不需要进行额外的数据分配， union_casting 中已经进行了数据处理, 直接按照 anyptr 进行数据处理即可
-            lir_operand_t *self_target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            lir_operand_t *self_target_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             src = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), interface_target, 0);
-            OP_PUSH(lir_op_move(self_target, src));
-            slice_push(args, self_target);
+            OP_PUSH(lir_op_move(self_target_ptr, src));
+            slice_push(args, self_target_ptr);
 
             is_global_fn = true;
         } while (0);
@@ -2338,7 +2338,7 @@ static lir_operand_t *linear_env_access(module_t *m, ast_expr_t expr, lir_operan
         src_ptr = indirect_addr_operand(m, expr.type, src_ptr, 0);
     }
 
-    if (is_stack_impl(expr.type.kind) && expr.type.in_heap && !target) {
+    if (is_stack_type(expr.type.kind) && expr.type.in_heap && !target) {
         return src_ptr;
     }
 
@@ -2616,6 +2616,41 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
     return target;
 }
 
+/**
+ * 生成 tagged enum 变体构造的代码
+ * 实现方式：创建 payload 数据，然后用 union casting 包装
+ */
+static lir_operand_t *linear_tagged_union_new(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    ast_tagged_union_t *tagged_new = expr.value;
+
+    if (!target) {
+        target = temp_var_operand_with_alloc(m, expr.type);
+    }
+
+
+    int64_t tag_hash = hash_string(tagged_new->tagged_name);
+    lir_operand_t *payload_ptr = int_operand(0);
+    int64_t payload_type_hash = 0;
+
+    // maybe null
+    type_t payload_type = tagged_new->element->type;
+    if (payload_type.kind != TYPE_VOID) {
+        assert(tagged_new->arg);
+        lir_operand_t *payload_operand = linear_expr(m, *tagged_new->arg, NULL);
+        if (is_stack_ref_big_type(payload_type)) {
+            payload_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            OP_PUSH(lir_op_move(payload_ptr, payload_operand));
+        } else {
+            payload_ptr = lea_operand_pointer(m, payload_operand);
+        }
+
+        payload_type_hash = type_hash(payload_type);
+    }
+
+    push_rt_call(m, RT_CALL_TAGGED_UNION_CASTING, target, 3, int_operand(tag_hash), int_operand(payload_type_hash), payload_ptr);
+    return target;
+}
+
 static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     // 调用 runtime_malloc 进行内存申请，并将申请的结果返回，其中返回的类型是一个 pointer 结构
     if (!target) {
@@ -2739,31 +2774,42 @@ static lir_operand_t *linear_reflect_hash_expr(module_t *m, ast_expr_t expr, lir
 
 static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_is_expr_t *is_expr = expr.value;
-    assert(is_expr->src.type.kind == TYPE_UNION || is_expr->src.type.kind == TYPE_RAWPTR ||
-           is_expr->src.type.kind == TYPE_INTERFACE);
+    assert(is_expr->src->type.kind == TYPE_UNION ||
+           is_expr->src->type.kind == TYPE_RAWPTR ||
+           is_expr->src->type.kind == TYPE_TAGGED_UNION ||
+           is_expr->src->type.kind == TYPE_INTERFACE);
 
     if (!target) {
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-    lir_operand_t *operand = linear_expr(m, is_expr->src, NULL);
+    lir_operand_t *src_operand = linear_expr(m, *is_expr->src, NULL);
 
-    if (is_expr->src.type.kind == TYPE_RAWPTR) {
+
+    if (is_expr->src->type.kind == TYPE_RAWPTR) {
         // is target 只能只能判断是否为 null
         LINEAR_ASSERTF(is_expr->target_type.kind == TYPE_NULL,
-                       "%s is only support null, example: %s is null", type_format(is_expr->src.type),
-                       type_format(is_expr->src.type));
+                       "%s is only support null, example: %s is null", type_format(is_expr->src->type),
+                       type_format(is_expr->src->type));
 
-        OP_PUSH(lir_op_new(LIR_OPCODE_SEE, operand, int_operand(0), target));
+        OP_PUSH(lir_op_new(LIR_OPCODE_SEE, src_operand, int_operand(0), target));
         return target;
     }
 
+    if (is_expr->src->type.kind == TYPE_TAGGED_UNION) {
+        assert(is_expr->union_tag);
+        ast_tagged_union_t *tagged_union = is_expr->union_tag->value;
+        lir_operand_t *expected_hash = int_operand(hash_string(tagged_union->tagged_name));
+        lir_operand_t *actual_hash = indirect_addr_operand(m, type_kind_new(TYPE_INT64), src_operand, QWORD);
+        OP_PUSH(lir_op_new(LIR_OPCODE_SEE, expected_hash, actual_hash, target));
+        return target;
+    }
 
     uint64_t target_rtype_hash = type_hash(is_expr->target_type);
-    if (is_expr->src.type.kind == TYPE_INTERFACE) {
-        push_rt_call(m, RT_CALL_INTERFACE_IS, target, 2, operand, int_operand(target_rtype_hash));
+    if (is_expr->src->type.kind == TYPE_INTERFACE) {
+        push_rt_call(m, RT_CALL_INTERFACE_IS, target, 2, src_operand, int_operand(target_rtype_hash));
     } else {
-        push_rt_call(m, RT_CALL_UNION_IS, target, 2, operand, int_operand(target_rtype_hash));
+        push_rt_call(m, RT_CALL_UNION_IS, target, 2, src_operand, int_operand(target_rtype_hash));
     }
 
     return target;
@@ -2857,6 +2903,12 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         return target;
     }
 
+    if (as_expr->src.type.kind == TYPE_TAGGED_UNION) {
+        lir_operand_t *src = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), src_operand, 0);
+        OP_PUSH(lir_op_move(target, src));
+        return target;
+    }
+
     // interface as
     if (as_expr->src.type.kind == TYPE_INTERFACE) {
         assert(as_expr->target_type.kind != TYPE_INTERFACE);
@@ -2917,6 +2969,15 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
                 symbol_t *fn_symbol = symbol_table_get(fn_ident);
                 assert(fn_symbol);
 
+                if (ast_fndef->receiver_wrapper) {
+                    symbol_t *wrapper_fn_symbol = symbol_table_get(ast_fndef->receiver_wrapper->symbol_name);
+                    assert(wrapper_fn_symbol);
+
+                    ast_fndef = ast_fndef->receiver_wrapper;
+                    fn_ident = ast_fndef->symbol_name;
+                }
+
+                assert(ast_fndef->self_kind != PARAM_SELF_T);
                 if (ast_fndef->linkid) {
                     fn_ident = ast_fndef->linkid;
                 }
@@ -2970,6 +3031,11 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     if (is_vec_u8(as_expr->src.type) && as_expr->target_type.kind == TYPE_STRING) {
         //        OP_PUSH(lir_op_move(target, src_operand));
         push_rt_call(m, RT_CALL_VEC_TO_STRING, target, 1, src_operand);
+        return target;
+    }
+
+    if (as_expr->src.type.kind == TYPE_ENUM && is_integer(as_expr->target_type.kind)) {
+        OP_PUSH(lir_op_move(target, src_operand));
         return target;
     }
 
@@ -3055,15 +3121,9 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
                 subject_new_expr->type = match_expr->subject->type;
 
                 // 不太好改写, 毕竟一个是 a, 一个是 b, 但是也不算难改写。提取 ident 即可
-                if (cond_expr->assert_type == AST_EXPR_MATCH_IS) {
-                    ast_match_is_expr_t *cond = cond_expr->value;
-
-                    ast_is_expr_t *is_expr = NEW(ast_is_expr_t);
-                    is_expr->src = *subject_new_expr;
-                    is_expr->target_type = cond->target_type;
-
-                    cond_expr->assert_type = AST_EXPR_IS;
-                    cond_expr->value = is_expr;
+                if (cond_expr->assert_type == AST_EXPR_IS) {
+                    ast_is_expr_t *cond = cond_expr->value;
+                    cond->src = subject_new_expr;
                     assert(cond_expr->type.kind == TYPE_BOOL);
                 } else {
                     // eq expr
@@ -3085,6 +3145,29 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
         OP_PUSH(lir_op_bal(handle_end->output));
     LINEAR_HANDLE_BODY:
         OP_PUSH(handle_start);
+
+        if (match_expr->subject && match_expr->subject->assert_type == AST_CALL && match_case->insert_auto_as) {
+            assert(match_case->handle_body->count > 0);
+            ast_stmt_t *as_stmt = match_case->handle_body->take[0];
+
+            lir_var_t *subject_var = subject_operand->value;
+            ast_expr_t *new_src_expr = ast_ident_expr(as_stmt->line, as_stmt->column,
+                                                      subject_var->ident);
+            new_src_expr->type = match_expr->subject->type;
+
+            if (as_stmt->assert_type == AST_STMT_VARDEF) {
+                ast_vardef_stmt_t *vardef_stmt = as_stmt->value;
+                ast_as_expr_t *as_expr = vardef_stmt->right->value;
+                as_expr->src = *new_src_expr;
+            } else if (as_stmt->assert_type == AST_STMT_VAR_TUPLE_DESTR) {
+                ast_var_tuple_def_stmt_t *var_tuple_def_stmt = as_stmt->value;
+                ast_as_expr_t *as_expr = var_tuple_def_stmt->right.value;
+                as_expr->src = *new_src_expr;
+            } else {
+                assert(false);
+            }
+        }
+
         linear_body(m, match_case->handle_body);
         // 只要运行了 exec， 就直接结束 case 而不是继续执行。
         OP_PUSH(lir_op_bal(match_end->output));
@@ -3571,6 +3654,7 @@ linear_expr_fn expr_fn_table[] = {
         [AST_EXPR_STRUCT_NEW] = linear_struct_new,
         [AST_EXPR_STRUCT_SELECT] = linear_struct_select,
         [AST_EXPR_TUPLE_NEW] = linear_tuple_new,
+        [AST_EXPR_TAGGED_UNION_NEW] = linear_tagged_union_new,
         [AST_EXPR_TUPLE_ACCESS] = linear_tuple_access,
         [AST_EXPR_SET_NEW] = linear_set_new,
         [AST_CALL] = linear_call,

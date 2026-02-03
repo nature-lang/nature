@@ -281,7 +281,7 @@ impl LanguageServer for Backend {
                 .iter()
                 .filter_map(|token| {
                     let line = rope.try_char_to_line(token.start).ok()? as u32;
-                    let end_line = rope.try_char_to_line(token.end).ok()? as u32;
+                    let _end_line = rope.try_char_to_line(token.end).ok()? as u32;
                     let line_first = rope.try_line_to_char(line as usize).ok()? as u32;
                     let line_start = token.start as u32 - line_first;
 
@@ -464,14 +464,8 @@ impl LanguageServer for Backend {
             let mut symbol_table = project.symbol_table.lock().unwrap();
             let package_config = project.package_config.lock().unwrap().clone();
             // Create completion provider and get completion items
-            let completion_items = CompletionProvider::new(
-                &mut symbol_table,
-                module,
-                project.nature_root.clone(),
-                project.root.clone(),
-                package_config,
-            )
-            .get_completions(byte_offset, &text);
+            let completion_items = CompletionProvider::new(&mut symbol_table, module, project.nature_root.clone(), project.root.clone(), package_config)
+                .get_completions(byte_offset, &text);
 
             // 转换为LSP格式
             let lsp_items: Vec<tower_lsp::lsp_types::CompletionItem> = completion_items
@@ -512,17 +506,17 @@ impl LanguageServer for Backend {
                     } else {
                         None
                     };
-                    
+
                     tower_lsp::lsp_types::CompletionItem {
                         label: item.label,
                         kind: Some(lsp_kind),
                         detail: item.detail,
                         documentation: item.documentation.map(|doc| tower_lsp::lsp_types::Documentation::String(doc)),
                         insert_text: Some(item.insert_text),
-                        insert_text_format: if has_snippet { 
-                            Some(tower_lsp::lsp_types::InsertTextFormat::SNIPPET) 
-                        } else { 
-                            Some(tower_lsp::lsp_types::InsertTextFormat::PLAIN_TEXT) 
+                        insert_text_format: if has_snippet {
+                            Some(tower_lsp::lsp_types::InsertTextFormat::SNIPPET)
+                        } else {
+                            Some(tower_lsp::lsp_types::InsertTextFormat::PLAIN_TEXT)
                         },
                         sort_text: item.sort_text,
                         additional_text_edits: additional_edits,
@@ -734,7 +728,6 @@ impl Backend {
                     Some(Diagnostic::new_simple(Range::new(start_position, end_position), error.message))
                 })
                 .collect::<Vec<_>>()
-
         }; // MutexGuard 在这里被释放
 
         // 现在可以安全地使用 await

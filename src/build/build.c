@@ -854,6 +854,7 @@ static void build_assembler(slice_t *modules) {
 
             // 基于 symbol_name 读取引用次数, 如果没有被引用过则不做编译
             symbol_t *s = symbol_table_get_noref(c->fndef->symbol_name);
+            assert(s);
             if (s->ref_count == 0 && !str_equal(c->fndef->symbol_name, FN_MAIN_LINKID)) {
                 continue;
             }

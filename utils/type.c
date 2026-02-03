@@ -87,6 +87,10 @@ int64_t type_sizeof(type_t t) {
         return t.array->length * element_size;
     }
 
+    if (t.kind == TYPE_ENUM) {
+        return type_sizeof(t.enum_->element_type);
+    }
+
     return type_kind_sizeof(t.kind);
 }
 
@@ -133,6 +137,10 @@ int64_t type_alignof(type_t t) {
 
     if (t.kind == TYPE_ARR) {
         return type_alignof(t.array->element_type);
+    }
+
+    if (t.kind == TYPE_ENUM) {
+        return type_alignof(t.enum_->element_type);
     }
 
     return type_kind_sizeof(t.kind);
@@ -360,6 +368,10 @@ char *_type_format(type_t t) {
         return "interface";
     }
 
+    if (t.kind == TYPE_ENUM) {
+        return dsprintf("enum:%s", type_format(t.enum_->element_type));
+    }
+
     return type_kind_str[t.kind];
 }
 
@@ -373,7 +385,6 @@ char *type_format(type_t t) {
         ident = t.ident;
     }
 
-    // 特殊 t.ident 处理
     if (t.ident && (str_equal(t.ident, "int") || str_equal(t.ident, "uint") || str_equal(t.ident, "float"))) {
         ident = t.ident;
     }
@@ -384,6 +395,20 @@ char *type_format(type_t t) {
 
     if (ident_is_generics_param(&t)) {
         return ident;
+    }
+
+    if (t.args && t.args->length > 0) {
+        char *args_str = "";
+        for (int i = 0; i < t.args->length; ++i) {
+            type_t *arg = ct_list_value(t.args, i);
+            char *arg_str = type_origin_format(*arg);
+            if (i == 0) {
+                args_str = arg_str;
+            } else {
+                args_str = str_connect3(args_str, ",", arg_str);
+            }
+        }
+        return dsprintf("%s<%s>(%s)", ident, args_str, _type_format(t));
     }
 
     return dsprintf("%s(%s)", ident, _type_format(t));

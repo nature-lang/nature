@@ -53,7 +53,7 @@ void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
     rtype_t *rtype = rt_find_rtype(target_rtype_hash);
     uint64_t size = rtype->stack_size;
 
-    if (is_stack_impl(rtype->kind)) {
+    if (is_stack_type(rtype->kind)) {
         memmove(value_ref, mu->value.ptr_value, size);
     } else {
         memmove(value_ref, &mu->value, size);
@@ -133,11 +133,10 @@ n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int
 
     mu->rtype = rtype;
     uint64_t stack_size = rtype->stack_size;
-    if (is_stack_impl(rtype->kind)) {
+    if (is_stack_type(rtype->kind)) { // TODO number 可以直接存储在 value 中
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
         void *new_value = rti_gc_malloc(rtype->heap_size, rtype);
         memmove(new_value, value_ref, stack_size);
-        //        mu->value.ptr_value = new_value; // TODO write barrier
         rti_write_barrier_ptr(&mu->value.ptr_value, new_value, false);
     } else {
         // 特殊类型参数处理，为了兼容 fn method 中的 self 自动化参数, self 如果是 int/struct 等类型，会自动转换为 ptr<int>
@@ -197,6 +196,44 @@ n_union_t *union_casting(int64_t input_rtype_hash, void *value_ref) {
 
     return mu;
 }
+
+n_tagged_union_t *tagged_union_casting(int64_t tag_hash, int64_t value_rtype_hash, void *value_ref) {
+    DEBUGF("[tagged_union_casting] tag_hash=%ld, value_hash=%ld", tag_hash, value_rtype_hash);
+
+    rtype_t enum_union_rtype = GC_RTYPE(TYPE_STRUCT, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+    n_tagged_union_t *mu = rti_gc_malloc(sizeof(n_tagged_union_t), &enum_union_rtype);
+    mu->tag_hash = tag_hash;
+    if (value_rtype_hash == 0) {
+        return mu;
+    }
+
+    // - 根据 input_rtype_hash 找到对应的
+    rtype_t *rtype = rt_find_rtype(value_rtype_hash);
+    assert(rtype && "cannot find rtype by hash");
+
+    ASSERT_ADDR(value_ref);
+
+    DEBUGF("[tagged_union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), kind=%s, size=%lu, fetch_value_8byte=%p",
+            mu, value_ref,
+            &mu->value, type_kind_str[rtype->kind], rtype->stack_size, (void *) fetch_addr_value((addr_t) value_ref));
+
+    uint64_t stack_size = rtype->stack_size;
+    if (is_stack_ref_big_type_kind(rtype->kind)) {
+        // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
+        void *new_value = rti_gc_malloc(rtype->heap_size, rtype);
+        memmove(new_value, value_ref, stack_size);
+
+        rti_write_barrier_ptr(&mu->value.ptr_value, new_value, false);
+    } else {
+        memmove(&mu->value, value_ref, stack_size);
+    }
+
+    DEBUGF("[tagged_union_casting] success, base: %p, id: %ld, union_i64_value: %ld", mu, mu->tag_hash,
+            mu->value.i64_value);
+
+    return mu;
+}
+
 
 /**
  * @param iterator

@@ -56,7 +56,7 @@ pub fn align_up(n: u64, align: u64) -> u64 {
 
 pub fn errors_push(m: &mut Module, e: AnalyzerError) {
     // if m.index == 16 {
-        //  panic!("TODO analyzer error");
+    //  panic!("TODO analyzer error");
     // }
     m.analyzer_errors.push(e);
 }

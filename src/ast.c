@@ -111,6 +111,24 @@ static type_struct_t *type_struct_copy(module_t *m, type_struct_t *temp) {
     return struct_;
 }
 
+static type_tagged_union_t *type_tagged_union_copy(module_t *m, type_tagged_union_t *temp) {
+    type_tagged_union_t *tagged_union = COPY_NEW(type_tagged_union_t, temp);
+    if (temp->ident) {
+        tagged_union->ident = strdup(temp->ident);
+    }
+
+    tagged_union->elements = ct_list_new(sizeof(tagged_union_element_t));
+    for (int i = 0; i < temp->elements->length; ++i) {
+        tagged_union_element_t *temp_property = ct_list_value(temp->elements, i);
+        tagged_union_element_t *property = COPY_NEW(tagged_union_element_t, temp_property);
+        property->tag = strdup(temp_property->tag);
+        property->type = type_copy(m, temp_property->type);
+
+        ct_list_push(tagged_union->elements, property);
+    }
+    return tagged_union;
+}
+
 static type_alias_t *type_alias_copy(module_t *m, type_alias_t *temp) {
     type_alias_t *alias = COPY_NEW(type_alias_t, temp);
     alias->ident = strdup(temp->ident);
@@ -127,6 +145,26 @@ static type_ptr_t *type_pointer_copy(module_t *m, type_ptr_t *temp) {
 static type_array_t *type_array_copy(module_t *m, type_array_t *temp) {
     type_array_t *array = COPY_NEW(type_array_t, temp);
     return array;
+}
+
+static type_enum_t *type_enum_copy(module_t *m, type_enum_t *temp) {
+    type_enum_t *enum_ = COPY_NEW(type_enum_t, temp);
+    enum_->element_type = type_copy(m, temp->element_type);
+
+    list_t *properties = ct_list_new(sizeof(enum_property_t));
+    for (int i = 0; i < temp->properties->length; ++i) {
+        enum_property_t *temp_property = ct_list_value(temp->properties, i);
+        enum_property_t *property = NEW(enum_property_t);
+        property->name = strdup(temp_property->name);
+        if (temp_property->value_expr) {
+            property->value_expr = ast_expr_copy(m, temp_property->value_expr);
+        }
+
+        property->value = temp_property->value;
+        ct_list_push(properties, property);
+    }
+    enum_->properties = properties;
+    return enum_;
 }
 
 type_t type_copy(module_t *m, type_t temp) {
@@ -177,8 +215,17 @@ type_t type_copy(module_t *m, type_t temp) {
             type.union_ = type_union_copy(m, temp.union_);
             break;
         }
+        case TYPE_TAGGED_UNION: {
+            type.tagged_union = type_tagged_union_copy(m, temp.tagged_union);
+            break;
+        }
         case TYPE_INTERFACE: {
             type.interface = type_interface_copy(m, temp.interface);
+            break;
+        }
+
+        case TYPE_ENUM: {
+            type.enum_ = type_enum_copy(m, temp.enum_);
             break;
         }
         case TYPE_RAWPTR:
@@ -277,19 +324,10 @@ static ast_macro_type_eq_expr_t *ast_type_eq_expr_copy(module_t *m, ast_macro_ty
 
 static ast_is_expr_t *ast_is_expr_copy(module_t *m, ast_is_expr_t *temp) {
     ast_is_expr_t *is_expr = COPY_NEW(ast_is_expr_t, temp);
-    is_expr->src = *ast_expr_copy(m, &temp->src);
+    is_expr->src = ast_expr_copy(m, temp->src);
     is_expr->target_type = type_copy(m, temp->target_type);
-    if (temp->binding_ident) {
-        is_expr->binding_ident = strdup(temp->binding_ident);
-    }
-    return is_expr;
-}
-
-static ast_match_is_expr_t *ast_match_is_expr_copy(module_t *m, ast_match_is_expr_t *temp) {
-    ast_match_is_expr_t *is_expr = COPY_NEW(ast_match_is_expr_t, temp);
-    is_expr->target_type = type_copy(m, temp->target_type);
-    if (temp->binding_ident) {
-        is_expr->binding_ident = strdup(temp->binding_ident);
+    if (temp->binding) {
+        is_expr->binding = ast_expr_copy(m, temp->binding);
     }
     return is_expr;
 }
@@ -566,9 +604,6 @@ ast_expr_t *ast_expr_copy(module_t *m, ast_expr_t *temp) {
         case AST_EXPR_IS: {
             expr->value = ast_is_expr_copy(m, temp->value);
             break;
-        }
-        case AST_EXPR_MATCH_IS: {
-            expr->value = ast_match_is_expr_copy(m, temp->value);
         }
         case AST_CATCH: {
             expr->value = ast_catch_copy(m, temp->value);
