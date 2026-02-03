@@ -1,16 +1,16 @@
-type ellipse_t = struct{
-    int rx
-    int ry
+type color = enum {
+    RED,
+    GREEN,
+    BLUE,
 }
 
-type shape = union{
-    int circle
-    int square
-    (int, int) rectangle
-    ellipse_t ellipse
-    void point
+type color2 = enum {
+    RED,
+    GREEN,
+    BLUE,
 }
 
 fn main() {
-    shape o = shape.sllipse(ellipse_t{rx:-12, ry:2325})
+    var c = color.GREEN
+    println(c == 0x1)
 }

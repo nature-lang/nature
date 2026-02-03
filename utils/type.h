@@ -300,6 +300,7 @@ typedef struct type_t {
     int line;
     int column;
     bool in_heap; // 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
+    type_enum_t *append;
 } type_t;
 
 /**

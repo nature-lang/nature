@@ -1442,7 +1442,7 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
                     table_set(exhaustive_table, itoa(type_hash(match_is_expr->target_type)), cond_expr);
                 }
                 assert(cond_expr->type.kind == TYPE_BOOL);
-            } else if (subject_type.kind == TYPE_ENUM) {
+            } else if (subject_type.append) { // 目前只有 append enum
                 if (cond_expr->assert_type == AST_EXPR_SELECT) {
                     ast_expr_select_t *select = cond_expr->value;
                     table_set(exhaustive_table, select->key, cond_expr);
@@ -1488,8 +1488,8 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
             }
 
             // enum 穷尽检查
-            if (subject_type.kind == TYPE_ENUM) {
-                type_enum_t *type_enum = subject_type.enum_;
+            if (subject_type.append) {
+                type_enum_t *type_enum = subject_type.append;
                 for (int i = 0; i < type_enum->properties->length; i++) {
                     enum_property_t *prop = ct_list_value(type_enum->properties, i);
                     // tagged enum 使用 name 作为 key，简单 enum 使用 value 作为 key
@@ -3028,6 +3028,10 @@ static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
 
     type_kind target_kind = target_type.kind;
 
+    if (target_type.append) { // enum 暂时不支持 literal 自动转换
+        return literal_type;
+    }
+
     if (literal_type.kind == TYPE_STRING && target_kind == TYPE_STRING) {
         literal->kind = target_kind;
         return target_type;
@@ -4170,6 +4174,12 @@ STATUS_DONE:
         t.in_heap = true;
     }
 
+    // enum 消除
+    if (t.kind == TYPE_ENUM && t.ident_kind > 0) {
+        t.append = t.enum_;
+        t.kind = t.enum_->element_type.kind;
+    }
+
     // 固定数组的大小暂时禁止超过 64KB, 如果需要超过 64 KB 可以使用 vec?
     // 如果 array 超过 64KB 则在堆上进行分配
     if (t.kind == TYPE_ARR && type_sizeof(t) > (64 * 1024)) {
@@ -4185,8 +4195,6 @@ STATUS_DONE:
     if (args) {
         t.args = args;
     }
-
-    t.kind = t.kind;
 
     struct sc_map_s64 visited;
     sc_map_init_s64(&visited, 0, 0);
