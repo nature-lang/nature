@@ -246,7 +246,7 @@ fn main() {
         assert(false)
     }
 
-    r= result<int>.some(352)
+    r = result<int>.some(352)
     match r {
         is result.some v -> {
             println('is some', v)
@@ -258,7 +258,7 @@ fn main() {
         }
     }
 
-    r= result<int>.none
+    r = result<int>.none
     match r {
         is result.some v -> {
             println('is some', v)
@@ -270,7 +270,7 @@ fn main() {
         }
     }
 
-    r= result.none
+    r = result.none
     match r {
         is result.some v -> {
             println('is some', v)

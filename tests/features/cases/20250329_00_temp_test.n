@@ -1,16 +1,3 @@
-type color = enum {
-    RED,
-    GREEN,
-    BLUE,
-}
-
-type color2 = enum {
-    RED,
-    GREEN,
-    BLUE,
-}
-
 fn main() {
-    var c = color.GREEN
-    println(c == 0x1)
+    println('hello world')
 }
