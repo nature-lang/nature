@@ -5,7 +5,7 @@ type sha256_t = struct{
     utils.mbedtls_sha256_context mbed_ctx
 }
 
-fn new():ptr<sha256_t> {
+fn new():ref<sha256_t> {
     var s = new sha256_t()
     
     utils.mbedtls_sha256_init(&s.mbed_ctx)
@@ -15,7 +15,7 @@ fn new():ptr<sha256_t> {
     return s
 }
 
-fn sha256_t.update([u8] input):ptr<sha256_t> {
+fn sha256_t.update([u8] input):ref<sha256_t> {
     utils.mbedtls_sha256_update(&self.mbed_ctx, (input as string).to_cstr(), input.len())
     return self
 }

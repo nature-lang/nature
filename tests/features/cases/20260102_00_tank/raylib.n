@@ -485,8 +485,8 @@ type font_t = struct{
     i32 glyph_count    // Number of glyph characters
     i32 glyph_padding  // Padding around the glyph characters
     texture2d_t texture // Texture atlas containing the glyphs
-    rawptr<rectangle_t> recs        // Rectangles in texture for the glyphs
-    rawptr<glyph_info_t> glyphs      // Glyphs info data
+    ptr<rectangle_t> recs        // Rectangles in texture for the glyphs
+    ptr<glyph_info_t> glyphs      // Glyphs info data
 }
 
 type camera3d_t = struct{
@@ -512,30 +512,30 @@ type mesh_t = struct{
     i32 triangle_count     // Number of triangles stored (indexed or not)
     
     // Vertex attributes data
-    rawptr<f32> vertices        // Vertex position (XYZ - 3 components per vertex) (shader-location = 0)
-    rawptr<f32> texcoords       // Vertex texture coordinates (UV - 2 components per vertex) (shader-location = 1)
-    rawptr<f32> texcoords2      // Vertex texture second coordinates (UV - 2 components per vertex) (shader-location = 5)
-    rawptr<f32> normals         // Vertex normals (XYZ - 3 components per vertex) (shader-location = 2)
-    rawptr<f32> tangents        // Vertex tangents (XYZW - 4 components per vertex) (shader-location = 4)
-    rawptr<u8> colors           // Vertex colors (RGBA - 4 components per vertex) (shader-location = 3)
-    rawptr<u16> indices         // Vertex indices (in case vertex data comes indexed)
+    ptr<f32> vertices        // Vertex position (XYZ - 3 components per vertex) (shader-location = 0)
+    ptr<f32> texcoords       // Vertex texture coordinates (UV - 2 components per vertex) (shader-location = 1)
+    ptr<f32> texcoords2      // Vertex texture second coordinates (UV - 2 components per vertex) (shader-location = 5)
+    ptr<f32> normals         // Vertex normals (XYZ - 3 components per vertex) (shader-location = 2)
+    ptr<f32> tangents        // Vertex tangents (XYZW - 4 components per vertex) (shader-location = 4)
+    ptr<u8> colors           // Vertex colors (RGBA - 4 components per vertex) (shader-location = 3)
+    ptr<u16> indices         // Vertex indices (in case vertex data comes indexed)
     
     // Animation vertex data
-    rawptr<f32> anim_vertices    // Animated vertex positions (after bones transformations)
-    rawptr<f32> anim_normals     // Animated normals (after bones transformations)
-    rawptr<u8> bone_ids          // Vertex bone ids, max 255 bone ids, up to 4 bones influence by vertex (skinning)
-    rawptr<f32> bone_weights     // Vertex bone weight, up to 4 bones influence by vertex (skinning)
-    rawptr<matrix_t> bone_matrices // Bones animated transformation matrices
+    ptr<f32> anim_vertices    // Animated vertex positions (after bones transformations)
+    ptr<f32> anim_normals     // Animated normals (after bones transformations)
+    ptr<u8> bone_ids          // Vertex bone ids, max 255 bone ids, up to 4 bones influence by vertex (skinning)
+    ptr<f32> bone_weights     // Vertex bone weight, up to 4 bones influence by vertex (skinning)
+    ptr<matrix_t> bone_matrices // Bones animated transformation matrices
     i32 bone_count              // Number of bones
     
     // OpenGL identifiers
     u32 vao_id                  // OpenGL Vertex Array Object id
-    rawptr<u32> vbo_id         // OpenGL Vertex Buffer Objects id (default vertex data)
+    ptr<u32> vbo_id         // OpenGL Vertex Buffer Objects id (default vertex data)
 }
 
 type shader_t = struct{
     u32 id                     // Shader program id
-    rawptr<i32> locs          // Shader locations array (RL_MAX_SHADER_LOCATIONS)
+    ptr<i32> locs          // Shader locations array (RL_MAX_SHADER_LOCATIONS)
 }
 
 type material_map_t = struct{
@@ -546,7 +546,7 @@ type material_map_t = struct{
 
 type material_t = struct{
     shader_t shader          // Material shader
-    rawptr<material_map_t> maps  // Material maps array (MAX_MATERIAL_MAPS)
+    ptr<material_map_t> maps  // Material maps array (MAX_MATERIAL_MAPS)
     [f32;4] params       // Material generic parameters (if required)
 }
 
@@ -566,21 +566,21 @@ type model_t = struct{
     
     i32 mesh_count         // Number of meshes
     i32 material_count     // Number of materials
-    rawptr<mesh_t> meshes   // Meshes array
-    rawptr<material_t> materials  // Materials array
-    rawptr<i32> mesh_material    // Mesh material number
+    ptr<mesh_t> meshes   // Meshes array
+    ptr<material_t> materials  // Materials array
+    ptr<i32> mesh_material    // Mesh material number
     
     // Animation data
     i32 bone_count         // Number of bones
-    rawptr<bone_info_t> bones    // Bones information (skeleton)
-    rawptr<transform_t> bind_pose // Bones base transformation (pose)
+    ptr<bone_info_t> bones    // Bones information (skeleton)
+    ptr<transform_t> bind_pose // Bones base transformation (pose)
 }
 
 type model_animation_t = struct{
     i32 bone_count         // Number of bones
     i32 frame_count        // Number of animation frames
-    rawptr<bone_info_t> bones    // Bones information (skeleton)
-    rawptr<rawptr<transform_t>> frame_poses  // Poses array by frame
+    ptr<bone_info_t> bones    // Bones information (skeleton)
+    ptr<ptr<transform_t>> frame_poses  // Poses array by frame
     [i8;32] name       // Animation name
 }
 
@@ -614,8 +614,8 @@ type raudio_buffer_t = struct{}
 type raudio_processor_t = struct{}
 
 type audio_stream_t = struct{
-    rawptr<raudio_buffer_t> buffer       // Pointer to internal data used by the audio system
-    rawptr<raudio_processor_t> processor // Pointer to internal data processor, useful for audio effects
+    ptr<raudio_buffer_t> buffer       // Pointer to internal data used by the audio system
+    ptr<raudio_processor_t> processor // Pointer to internal data processor, useful for audio effects
     u32 sample_rate        // Frequency (samples per second)
     u32 sample_size        // Bit depth (bits per sample): 8, 16, 32 (24 not supported)
     u32 channels           // Number of channels (1-mono, 2-stereo, ...)
@@ -660,7 +660,7 @@ type vr_stereo_config_t = struct{
 type file_path_list_t = struct{
     u32 capacity           // Filepaths max entries
     u32 count             // Filepaths entries count
-    rawptr<rawptr<i8>> paths  // Filepaths entries
+    ptr<ptr<i8>> paths  // Filepaths entries
 }
 
 type automation_event_t = struct{
@@ -988,10 +988,10 @@ fn set_random_seed(u32 seed)
 fn get_random_value(i32 min, i32 max):i32
 
 #linkid LoadRandomSequence
-fn load_random_sequence(u32 count, i32 min, i32 max):rawptr<i32>
+fn load_random_sequence(u32 count, i32 min, i32 max):ptr<i32>
 
 #linkid UnloadRandomSequence
-fn unload_random_sequence(rawptr<i32> sequence)
+fn unload_random_sequence(ptr<i32> sequence)
 
 // Misc. functions
 #linkid TakeScreenshot
@@ -1037,16 +1037,16 @@ fn set_save_file_text_callback(anyptr callback)
 
 // Files management functions
 #linkid LoadFileData
-fn load_file_data(anyptr file_name, rawptr<i32> data_size):rawptr<u8>
+fn load_file_data(anyptr file_name, ptr<i32> data_size):ptr<u8>
 
 #linkid UnloadFileData
-fn unload_file_data(rawptr<u8> data)
+fn unload_file_data(ptr<u8> data)
 
 #linkid SaveFileData
 fn save_file_data(anyptr file_name, anyptr data, i32 data_size):bool
 
 #linkid ExportDataAsCode
-fn export_data_as_code(rawptr<u8> data, i32 data_size, anyptr file_name):bool
+fn export_data_as_code(ptr<u8> data, i32 data_size, anyptr file_name):bool
 
 #linkid LoadFileText
 fn load_file_text(anyptr file_name):anyptr
@@ -1128,25 +1128,25 @@ fn get_file_mod_time(anyptr file_name):i64
 
 // Compression/Encoding functionality
 #linkid CompressData
-fn compress_data(rawptr<u8> data, i32 data_size, rawptr<i32> comp_data_size):rawptr<u8>
+fn compress_data(ptr<u8> data, i32 data_size, ptr<i32> comp_data_size):ptr<u8>
 
 #linkid DecompressData
-fn decompress_data(rawptr<u8> comp_data, i32 comp_data_size, rawptr<i32> data_size):rawptr<u8>
+fn decompress_data(ptr<u8> comp_data, i32 comp_data_size, ptr<i32> data_size):ptr<u8>
 
 #linkid EncodeDataBase64
-fn encode_data_base64(rawptr<u8> data, i32 data_size, rawptr<i32> output_size):anyptr
+fn encode_data_base64(ptr<u8> data, i32 data_size, ptr<i32> output_size):anyptr
 
 #linkid DecodeDataBase64
-fn decode_data_base64(rawptr<u8> data, rawptr<i32> output_size):rawptr<u8>
+fn decode_data_base64(ptr<u8> data, ptr<i32> output_size):ptr<u8>
 
 #linkid ComputeCRC32
-fn compute_crc32(rawptr<u8> data, i32 data_size):u32
+fn compute_crc32(ptr<u8> data, i32 data_size):u32
 
 #linkid ComputeMD5
-fn compute_md5(rawptr<u8> data, i32 data_size):rawptr<u32>
+fn compute_md5(ptr<u8> data, i32 data_size):ptr<u32>
 
 #linkid ComputeSHA1
-fn compute_sha1(rawptr<u8> data, i32 data_size):rawptr<u32>
+fn compute_sha1(ptr<u8> data, i32 data_size):ptr<u32>
 
 // Automation events functionality
 #linkid LoadAutomationEventList
@@ -1159,7 +1159,7 @@ fn unload_automation_event_list(automation_event_list_t list)
 fn export_automation_event_list(automation_event_list_t list, anyptr file_name):bool
 
 #linkid SetAutomationEventList
-fn set_automation_event_list(rawptr<automation_event_list_t> list)
+fn set_automation_event_list(ptr<automation_event_list_t> list)
 
 #linkid SetAutomationEventBaseFrame
 fn set_automation_event_base_frame(i32 frame)
@@ -1318,10 +1318,10 @@ fn get_gesture_pinch_angle():f32
 
 // Camera System Functions
 #linkid UpdateCamera
-fn update_camera(rawptr<camera_t> camera, i32 mode)
+fn update_camera(ptr<camera_t> camera, i32 mode)
 
 #linkid UpdateCameraPro
-fn update_camera_pro(rawptr<camera_t> camera, vector3_t movement, vector3_t rotation, f32 zoom)
+fn update_camera_pro(ptr<camera_t> camera, vector3_t movement, vector3_t rotation, f32 zoom)
 
 // Basic Shapes Drawing Functions
 #linkid SetShapesTexture
@@ -1350,7 +1350,7 @@ fn draw_line_v(vector2_t start_pos, vector2_t end_pos, color_t color)
 fn draw_line_ex(vector2_t start_pos, vector2_t end_pos, f32 thick, color_t color)
 
 #linkid DrawLineStrip
-fn draw_line_strip(rawptr<vector2_t> points, i32 point_count, color_t color)
+fn draw_line_strip(ptr<vector2_t> points, i32 point_count, color_t color)
 
 #linkid DrawLineBezier
 fn draw_line_bezier(vector2_t start_pos, vector2_t end_pos, f32 thick, color_t color)
@@ -1431,10 +1431,10 @@ fn draw_triangle(vector2_t v1, vector2_t v2, vector2_t v3, color_t color)
 fn draw_triangle_lines(vector2_t v1, vector2_t v2, vector2_t v3, color_t color)
 
 #linkid DrawTriangleFan
-fn draw_triangle_fan(rawptr<vector2_t> points, i32 point_count, color_t color)
+fn draw_triangle_fan(ptr<vector2_t> points, i32 point_count, color_t color)
 
 #linkid DrawTriangleStrip
-fn draw_triangle_strip(rawptr<vector2_t> points, i32 point_count, color_t color)
+fn draw_triangle_strip(ptr<vector2_t> points, i32 point_count, color_t color)
 
 #linkid DrawPoly
 fn draw_poly(vector2_t center, i32 sides, f32 radius, f32 rotation, color_t color)
@@ -1447,19 +1447,19 @@ fn draw_poly_lines_ex(vector2_t center, i32 sides, f32 radius, f32 rotation, f32
 
 // Splines drawing functions
 #linkid DrawSplineLinear
-fn draw_spline_linear(rawptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
+fn draw_spline_linear(ptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
 
 #linkid DrawSplineBasis
-fn draw_spline_basis(rawptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
+fn draw_spline_basis(ptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
 
 #linkid DrawSplineCatmullRom
-fn draw_spline_catmull_rom(rawptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
+fn draw_spline_catmull_rom(ptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
 
 #linkid DrawSplineBezierQuadratic
-fn draw_spline_bezier_quadratic(rawptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
+fn draw_spline_bezier_quadratic(ptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
 
 #linkid DrawSplineBezierCubic
-fn draw_spline_bezier_cubic(rawptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
+fn draw_spline_bezier_cubic(ptr<vector2_t> points, i32 point_count, f32 thick, color_t color)
 
 #linkid DrawSplineSegmentLinear
 fn draw_spline_segment_linear(vector2_t p1, vector2_t p2, f32 thick, color_t color)
@@ -1518,10 +1518,10 @@ fn check_collision_point_triangle(vector2_t point, vector2_t p1, vector2_t p2, v
 fn check_collision_point_line(vector2_t point, vector2_t p1, vector2_t p2, i32 threshold):bool
 
 #linkid CheckCollisionPointPoly
-fn check_collision_point_poly(vector2_t point, rawptr<vector2_t> points, i32 point_count):bool
+fn check_collision_point_poly(vector2_t point, ptr<vector2_t> points, i32 point_count):bool
 
 #linkid CheckCollisionLines
-fn check_collision_lines(vector2_t start_pos1, vector2_t end_pos1, vector2_t start_pos2, vector2_t end_pos2, rawptr<vector2_t> collision_point):bool
+fn check_collision_lines(vector2_t start_pos1, vector2_t end_pos1, vector2_t start_pos2, vector2_t end_pos2, ptr<vector2_t> collision_point):bool
 
 #linkid GetCollisionRec
 fn get_collision_rec(rectangle_t rec1, rectangle_t rec2):rectangle_t
@@ -1534,13 +1534,13 @@ fn load_image(anyptr file_name):image_t
 fn load_image_raw(anyptr file_name, i32 width, i32 height, i32 format, i32 header_size):image_t
 
 #linkid LoadImageAnim
-fn load_image_anim(anyptr file_name, rawptr<i32> frames):image_t
+fn load_image_anim(anyptr file_name, ptr<i32> frames):image_t
 
 #linkid LoadImageAnimFromMemory
-fn load_image_anim_from_memory(anyptr file_type, rawptr<u8> file_data, i32 data_size, rawptr<i32> frames):image_t
+fn load_image_anim_from_memory(anyptr file_type, ptr<u8> file_data, i32 data_size, ptr<i32> frames):image_t
 
 #linkid LoadImageFromMemory
-fn load_image_from_memory(anyptr file_type, rawptr<u8> file_data, i32 data_size):image_t
+fn load_image_from_memory(anyptr file_type, ptr<u8> file_data, i32 data_size):image_t
 
 #linkid LoadImageFromTexture
 fn load_image_from_texture(texture2d_t texture):image_t
@@ -1558,7 +1558,7 @@ fn unload_image(image_t image)
 fn export_image(image_t image, anyptr file_name):bool
 
 #linkid ExportImageToMemory
-fn export_image_to_memory(image_t image, anyptr file_type, rawptr<i32> file_size):rawptr<u8>
+fn export_image_to_memory(image_t image, anyptr file_type, ptr<i32> file_size):ptr<u8>
 
 #linkid ExportImageAsCode
 fn export_image_as_code(image_t image, anyptr file_name):bool
@@ -1608,91 +1608,91 @@ fn image_text(anyptr text, i32 font_size, color_t color):image_t
 fn image_text_ex(font_t font, anyptr text, f32 font_size, f32 spacing, color_t tint):image_t
 
 #linkid ImageFormat
-fn image_format(rawptr<image_t> image, i32 new_format)
+fn image_format(ptr<image_t> image, i32 new_format)
 
 #linkid ImageToPOT
-fn image_to_pot(rawptr<image_t> image, color_t fill)
+fn image_to_pot(ptr<image_t> image, color_t fill)
 
 #linkid ImageCrop
-fn image_crop(rawptr<image_t> image, rectangle_t crop)
+fn image_crop(ptr<image_t> image, rectangle_t crop)
 
 #linkid ImageAlphaCrop
-fn image_alpha_crop(rawptr<image_t> image, f32 threshold)
+fn image_alpha_crop(ptr<image_t> image, f32 threshold)
 
 #linkid ImageAlphaClear
-fn image_alpha_clear(rawptr<image_t> image, color_t color, f32 threshold)
+fn image_alpha_clear(ptr<image_t> image, color_t color, f32 threshold)
 
 #linkid ImageAlphaMask
-fn image_alpha_mask(rawptr<image_t> image, image_t alpha_mask)
+fn image_alpha_mask(ptr<image_t> image, image_t alpha_mask)
 
 #linkid ImageAlphaPremultiply
-fn image_alpha_premultiply(rawptr<image_t> image)
+fn image_alpha_premultiply(ptr<image_t> image)
 
 #linkid ImageBlurGaussian
-fn image_blur_gaussian(rawptr<image_t> image, i32 blur_size)
+fn image_blur_gaussian(ptr<image_t> image, i32 blur_size)
 
 #linkid ImageKernelConvolution
-fn image_kernel_convolution(rawptr<image_t> image, rawptr<f32> kernel, i32 kernel_size)
+fn image_kernel_convolution(ptr<image_t> image, ptr<f32> kernel, i32 kernel_size)
 
 #linkid ImageResize
-fn image_resize(rawptr<image_t> image, i32 new_width, i32 new_height)
+fn image_resize(ptr<image_t> image, i32 new_width, i32 new_height)
 
 #linkid ImageResizeNN
-fn image_resize_nn(rawptr<image_t> image, i32 new_width, i32 new_height)
+fn image_resize_nn(ptr<image_t> image, i32 new_width, i32 new_height)
 
 #linkid ImageResizeCanvas
-fn image_resize_canvas(rawptr<image_t> image, i32 new_width, i32 new_height, i32 offset_x, i32 offset_y, color_t fill)
+fn image_resize_canvas(ptr<image_t> image, i32 new_width, i32 new_height, i32 offset_x, i32 offset_y, color_t fill)
 
 #linkid ImageMipmaps
-fn image_mipmaps(rawptr<image_t> image)
+fn image_mipmaps(ptr<image_t> image)
 
 #linkid ImageDither
-fn image_dither(rawptr<image_t> image, i32 r_bpp, i32 g_bpp, i32 b_bpp, i32 a_bpp)
+fn image_dither(ptr<image_t> image, i32 r_bpp, i32 g_bpp, i32 b_bpp, i32 a_bpp)
 
 #linkid ImageFlipVertical
-fn image_flip_vertical(rawptr<image_t> image)
+fn image_flip_vertical(ptr<image_t> image)
 
 #linkid ImageFlipHorizontal
-fn image_flip_horizontal(rawptr<image_t> image)
+fn image_flip_horizontal(ptr<image_t> image)
 
 #linkid ImageRotate
-fn image_rotate(rawptr<image_t> image, i32 degrees)
+fn image_rotate(ptr<image_t> image, i32 degrees)
 
 #linkid ImageRotateCW
-fn image_rotate_cw(rawptr<image_t> image)
+fn image_rotate_cw(ptr<image_t> image)
 
 #linkid ImageRotateCCW
-fn image_rotate_ccw(rawptr<image_t> image)
+fn image_rotate_ccw(ptr<image_t> image)
 
 #linkid ImageColorTint
-fn image_color_tint(rawptr<image_t> image, color_t color)
+fn image_color_tint(ptr<image_t> image, color_t color)
 
 #linkid ImageColorInvert
-fn image_color_invert(rawptr<image_t> image)
+fn image_color_invert(ptr<image_t> image)
 
 #linkid ImageColorGrayscale
-fn image_color_grayscale(rawptr<image_t> image)
+fn image_color_grayscale(ptr<image_t> image)
 
 #linkid ImageColorContrast
-fn image_color_contrast(rawptr<image_t> image, f32 contrast)
+fn image_color_contrast(ptr<image_t> image, f32 contrast)
 
 #linkid ImageColorBrightness
-fn image_color_brightness(rawptr<image_t> image, i32 brightness)
+fn image_color_brightness(ptr<image_t> image, i32 brightness)
 
 #linkid ImageColorReplace
-fn image_color_replace(rawptr<image_t> image, color_t color, color_t replace)
+fn image_color_replace(ptr<image_t> image, color_t color, color_t replace)
 
 #linkid LoadImageColors
-fn load_image_colors(image_t image):rawptr<color_t>
+fn load_image_colors(image_t image):ptr<color_t>
 
 #linkid LoadImagePalette
-fn load_image_palette(image_t image, i32 max_palette_size, rawptr<i32> color_count):rawptr<color_t>
+fn load_image_palette(image_t image, i32 max_palette_size, ptr<i32> color_count):ptr<color_t>
 
 #linkid UnloadImageColors
-fn unload_image_colors(rawptr<color_t> colors)
+fn unload_image_colors(ptr<color_t> colors)
 
 #linkid UnloadImagePalette
-fn unload_image_palette(rawptr<color_t> colors)
+fn unload_image_palette(ptr<color_t> colors)
 
 #linkid GetImageAlphaBorder
 fn get_image_alpha_border(image_t image, f32 threshold):rectangle_t
@@ -1702,71 +1702,71 @@ fn get_image_color(image_t image, i32 x, i32 y):color_t
 
 // Image drawing functions
 #linkid ImageClearBackground
-fn image_clear_background(rawptr<image_t> dst, color_t color)
+fn image_clear_background(ptr<image_t> dst, color_t color)
 
 #linkid ImageDrawPixel
-fn image_draw_pixel(rawptr<image_t> dst, i32 pos_x, i32 pos_y, color_t color)
+fn image_draw_pixel(ptr<image_t> dst, i32 pos_x, i32 pos_y, color_t color)
 
 #linkid ImageDrawPixelV
-fn image_draw_pixel_v(rawptr<image_t> dst, vector2_t position, color_t color)
+fn image_draw_pixel_v(ptr<image_t> dst, vector2_t position, color_t color)
 
 #linkid ImageDrawLine
-fn image_draw_line(rawptr<image_t> dst, i32 start_pos_x, i32 start_pos_y, i32 end_pos_x, i32 end_pos_y, color_t color)
+fn image_draw_line(ptr<image_t> dst, i32 start_pos_x, i32 start_pos_y, i32 end_pos_x, i32 end_pos_y, color_t color)
 
 #linkid ImageDrawLineV
-fn image_draw_line_v(rawptr<image_t> dst, vector2_t start, vector2_t end, color_t color)
+fn image_draw_line_v(ptr<image_t> dst, vector2_t start, vector2_t end, color_t color)
 
 #linkid ImageDrawLineEx
-fn image_draw_line_ex(rawptr<image_t> dst, vector2_t start, vector2_t end, i32 thick, color_t color)
+fn image_draw_line_ex(ptr<image_t> dst, vector2_t start, vector2_t end, i32 thick, color_t color)
 
 #linkid ImageDrawCircle
-fn image_draw_circle(rawptr<image_t> dst, i32 center_x, i32 center_y, i32 radius, color_t color)
+fn image_draw_circle(ptr<image_t> dst, i32 center_x, i32 center_y, i32 radius, color_t color)
 
 #linkid ImageDrawCircleV
-fn image_draw_circle_v(rawptr<image_t> dst, vector2_t center, i32 radius, color_t color)
+fn image_draw_circle_v(ptr<image_t> dst, vector2_t center, i32 radius, color_t color)
 
 #linkid ImageDrawCircleLines
-fn image_draw_circle_lines(rawptr<image_t> dst, i32 center_x, i32 center_y, i32 radius, color_t color)
+fn image_draw_circle_lines(ptr<image_t> dst, i32 center_x, i32 center_y, i32 radius, color_t color)
 
 #linkid ImageDrawCircleLinesV
-fn image_draw_circle_lines_v(rawptr<image_t> dst, vector2_t center, i32 radius, color_t color)
+fn image_draw_circle_lines_v(ptr<image_t> dst, vector2_t center, i32 radius, color_t color)
 
 #linkid ImageDrawRectangle
-fn image_draw_rectangle(rawptr<image_t> dst, i32 pos_x, i32 pos_y, i32 width, i32 height, color_t color)
+fn image_draw_rectangle(ptr<image_t> dst, i32 pos_x, i32 pos_y, i32 width, i32 height, color_t color)
 
 #linkid ImageDrawRectangleV
-fn image_draw_rectangle_v(rawptr<image_t> dst, vector2_t position, vector2_t size, color_t color)
+fn image_draw_rectangle_v(ptr<image_t> dst, vector2_t position, vector2_t size, color_t color)
 
 #linkid ImageDrawRectangleRec
-fn image_draw_rectangle_rec(rawptr<image_t> dst, rectangle_t rec, color_t color)
+fn image_draw_rectangle_rec(ptr<image_t> dst, rectangle_t rec, color_t color)
 
 #linkid ImageDrawRectangleLines
-fn image_draw_rectangle_lines(rawptr<image_t> dst, rectangle_t rec, i32 thick, color_t color)
+fn image_draw_rectangle_lines(ptr<image_t> dst, rectangle_t rec, i32 thick, color_t color)
 
 #linkid ImageDrawTriangle
-fn image_draw_triangle(rawptr<image_t> dst, vector2_t v1, vector2_t v2, vector2_t v3, color_t color)
+fn image_draw_triangle(ptr<image_t> dst, vector2_t v1, vector2_t v2, vector2_t v3, color_t color)
 
 #linkid ImageDrawTriangleEx
-fn image_draw_triangle_ex(rawptr<image_t> dst, vector2_t v1, vector2_t v2, vector2_t v3, color_t c1, color_t c2, color_t c3)
+fn image_draw_triangle_ex(ptr<image_t> dst, vector2_t v1, vector2_t v2, vector2_t v3, color_t c1, color_t c2, color_t c3)
 
 #linkid ImageDrawTriangleLines
-fn image_draw_triangle_lines(rawptr<image_t> dst, vector2_t v1, vector2_t v2, vector2_t v3, color_t color)
+fn image_draw_triangle_lines(ptr<image_t> dst, vector2_t v1, vector2_t v2, vector2_t v3, color_t color)
 
 #linkid ImageDrawTriangleFan
-fn image_draw_triangle_fan(rawptr<image_t> dst, rawptr<vector2_t> points, i32 point_count, color_t color)
+fn image_draw_triangle_fan(ptr<image_t> dst, ptr<vector2_t> points, i32 point_count, color_t color)
 
 #linkid ImageDrawTriangleStrip
-fn image_draw_triangle_strip(rawptr<image_t> dst, rawptr<vector2_t> points, i32 point_count, color_t color)
+fn image_draw_triangle_strip(ptr<image_t> dst, ptr<vector2_t> points, i32 point_count, color_t color)
 
 // Image drawing functions
 #linkid ImageDraw
-fn image_draw(rawptr<image_t> dst, image_t src, rectangle_t src_rec, rectangle_t dst_rec, color_t tint)
+fn image_draw(ptr<image_t> dst, image_t src, rectangle_t src_rec, rectangle_t dst_rec, color_t tint)
 
 #linkid ImageDrawText
-fn image_draw_text(rawptr<image_t> dst, anyptr text, i32 pos_x, i32 pos_y, i32 font_size, color_t color)
+fn image_draw_text(ptr<image_t> dst, anyptr text, i32 pos_x, i32 pos_y, i32 font_size, color_t color)
 
 #linkid ImageDrawTextEx
-fn image_draw_text_ex(rawptr<image_t> dst, font_t font, anyptr text, vector2_t position, f32 font_size, f32 spacing, color_t tint)
+fn image_draw_text_ex(ptr<image_t> dst, font_t font, anyptr text, vector2_t position, f32 font_size, f32 spacing, color_t tint)
 
 // Texture loading functions
 #linkid LoadTexture
@@ -1801,7 +1801,7 @@ fn update_texture_rec(texture2d_t texture, rectangle_t rec, anyptr pixels)
 
 // Texture configuration functions
 #linkid GenTextureMipmaps
-fn gen_texture_mipmaps(rawptr<texture2d_t> texture)
+fn gen_texture_mipmaps(ptr<texture2d_t> texture)
 
 #linkid SetTextureFilter
 fn set_texture_filter(texture2d_t texture, i32 filter)
@@ -1889,25 +1889,25 @@ fn get_font_default():font_t
 fn load_font(anyptr file_name):font_t
 
 #linkid LoadFontEx
-fn load_font_ex(anyptr file_name, i32 font_size, rawptr<i32> codepoints, i32 codepoint_count):font_t
+fn load_font_ex(anyptr file_name, i32 font_size, ptr<i32> codepoints, i32 codepoint_count):font_t
 
 #linkid LoadFontFromImage
 fn load_font_from_image(image_t image, color_t key, i32 first_char):font_t
 
 #linkid LoadFontFromMemory
-fn load_font_from_memory(anyptr file_type, rawptr<u8> file_data, i32 data_size, i32 font_size, rawptr<i32> codepoints, i32 codepoint_count):font_t
+fn load_font_from_memory(anyptr file_type, ptr<u8> file_data, i32 data_size, i32 font_size, ptr<i32> codepoints, i32 codepoint_count):font_t
 
 #linkid IsFontValid
 fn is_font_valid(font_t font):bool
 
 #linkid LoadFontData
-fn load_font_data(rawptr<u8> file_data, i32 data_size, i32 font_size, rawptr<i32> codepoints, i32 codepoint_count, i32 t):rawptr<glyph_info_t>
+fn load_font_data(ptr<u8> file_data, i32 data_size, i32 font_size, ptr<i32> codepoints, i32 codepoint_count, i32 t):ptr<glyph_info_t>
 
 #linkid GenImageFontAtlas
-fn gen_image_font_atlas(rawptr<glyph_info_t> glyphs, rawptr<rawptr<rectangle_t>> glyph_recs, i32 glyph_count, i32 font_size, i32 padding, i32 pack_method):image_t
+fn gen_image_font_atlas(ptr<glyph_info_t> glyphs, ptr<ptr<rectangle_t>> glyph_recs, i32 glyph_count, i32 font_size, i32 padding, i32 pack_method):image_t
 
 #linkid UnloadFontData
-fn unload_font_data(rawptr<glyph_info_t> glyphs, i32 glyph_count)
+fn unload_font_data(ptr<glyph_info_t> glyphs, i32 glyph_count)
 
 #linkid UnloadFont
 fn unload_font(font_t font)
@@ -1932,7 +1932,7 @@ fn draw_text_pro(font_t font, anyptr text, vector2_t position, vector2_t origin,
 fn draw_text_codepoint(font_t font, i32 codepoint, vector2_t position, f32 font_size, color_t tint)
 
 #linkid DrawTextCodepoints
-fn draw_text_codepoints(font_t font, rawptr<i32> codepoints, i32 codepoint_count, vector2_t position, f32 font_size, f32 spacing, color_t tint)
+fn draw_text_codepoints(font_t font, ptr<i32> codepoints, i32 codepoint_count, vector2_t position, f32 font_size, f32 spacing, color_t tint)
 
 // Text font info functions
 #linkid SetTextLineSpacing
@@ -1955,31 +1955,31 @@ fn get_glyph_atlas_rec(font_t font, i32 codepoint):rectangle_t
 
 // Text codepoints management functions
 #linkid LoadUTF8
-fn load_utf8(rawptr<i32> codepoints, i32 length):anyptr
+fn load_utf8(ptr<i32> codepoints, i32 length):anyptr
 
 #linkid UnloadUTF8
 fn unload_utf8(anyptr text)
 
 #linkid LoadCodepoints
-fn load_codepoints(anyptr text, rawptr<i32> count):rawptr<i32>
+fn load_codepoints(anyptr text, ptr<i32> count):ptr<i32>
 
 #linkid UnloadCodepoints
-fn unload_codepoints(rawptr<i32> codepoints)
+fn unload_codepoints(ptr<i32> codepoints)
 
 #linkid GetCodepointCount
 fn get_codepoint_count(anyptr text):i32
 
 #linkid GetCodepoint
-fn get_codepoint(anyptr text, rawptr<i32> codepoint_size):i32
+fn get_codepoint(anyptr text, ptr<i32> codepoint_size):i32
 
 #linkid GetCodepointNext
-fn get_codepoint_next(anyptr text, rawptr<i32> codepoint_size):i32
+fn get_codepoint_next(anyptr text, ptr<i32> codepoint_size):i32
 
 #linkid GetCodepointPrevious
-fn get_codepoint_previous(anyptr text, rawptr<i32> codepoint_size):i32
+fn get_codepoint_previous(anyptr text, ptr<i32> codepoint_size):i32
 
 #linkid CodepointToUTF8
-fn codepoint_to_utf8(i32 codepoint, rawptr<i32> utf8_size):anyptr
+fn codepoint_to_utf8(i32 codepoint, ptr<i32> utf8_size):anyptr
 
 // Text strings management functions
 #linkid TextCopy
@@ -2006,13 +2006,13 @@ fn text_replace(anyptr text, anyptr replace, anyptr by):anyptr
 fn text_insert(anyptr text, anyptr insert, i32 position):anyptr
 
 #linkid TextJoin
-fn text_join(rawptr<anyptr> text_list, i32 count, anyptr delimiter):anyptr
+fn text_join(ptr<anyptr> text_list, i32 count, anyptr delimiter):anyptr
 
 #linkid TextSplit
-fn text_split(anyptr text, i8 delimiter, rawptr<i32> count):rawptr<anyptr>
+fn text_split(anyptr text, i8 delimiter, ptr<i32> count):ptr<anyptr>
 
 #linkid TextAppend
-fn text_append(anyptr text, anyptr append, rawptr<i32> position)
+fn text_append(anyptr text, anyptr append, ptr<i32> position)
 
 #linkid TextFindIndex
 fn text_find_index(anyptr text, anyptr find):i32
@@ -2052,7 +2052,7 @@ fn draw_circle_3d(vector3_t center, f32 radius, vector3_t rotation_axis, f32 rot
 fn draw_triangle_3d(vector3_t v1, vector3_t v2, vector3_t v3, color_t color)
 
 #linkid DrawTriangleStrip3D
-fn draw_triangle_strip_3d(rawptr<vector3_t> points, i32 point_count, color_t color)
+fn draw_triangle_strip_3d(ptr<vector3_t> points, i32 point_count, color_t color)
 
 #linkid DrawCube
 fn draw_cube(vector3_t position, f32 width, f32 height, f32 length, color_t color)
@@ -2151,7 +2151,7 @@ fn draw_billboard_pro(camera_t camera, texture2d_t texture, rectangle_t source, 
 
 // Mesh management functions
 #linkid UploadMesh
-fn upload_mesh(rawptr<mesh_t> mesh, bool dynamic)
+fn upload_mesh(ptr<mesh_t> mesh, bool dynamic)
 
 #linkid UpdateMeshBuffer
 fn update_mesh_buffer(mesh_t mesh, i32 index, anyptr data, i32 data_size, i32 offset)
@@ -2163,13 +2163,13 @@ fn unload_mesh(mesh_t mesh)
 fn draw_mesh(mesh_t mesh, material_t material, matrix_t transform)
 
 #linkid DrawMeshInstanced
-fn draw_mesh_instanced(mesh_t mesh, material_t material, rawptr<matrix_t> transforms, i32 instances)
+fn draw_mesh_instanced(mesh_t mesh, material_t material, ptr<matrix_t> transforms, i32 instances)
 
 #linkid GetMeshBoundingBox
 fn get_mesh_bounding_box(mesh_t mesh):bounding_box_t
 
 #linkid GenMeshTangents
-fn gen_mesh_tangents(rawptr<mesh_t> mesh)
+fn gen_mesh_tangents(ptr<mesh_t> mesh)
 
 #linkid ExportMesh
 fn export_mesh(mesh_t mesh, anyptr file_name):bool
@@ -2213,7 +2213,7 @@ fn gen_mesh_cubicmap(image_t cubicmap, vector3_t cube_size):mesh_t
 
 // Material loading/unloading functions
 #linkid LoadMaterials
-fn load_materials(anyptr file_name, rawptr<i32> material_count):rawptr<material_t>
+fn load_materials(anyptr file_name, ptr<i32> material_count):ptr<material_t>
 
 #linkid LoadMaterialDefault
 fn load_material_default():material_t
@@ -2225,15 +2225,15 @@ fn is_material_valid(material_t material):bool
 fn unload_material(material_t material)
 
 #linkid SetMaterialTexture
-fn set_material_texture(rawptr<material_t> material, i32 map_type, texture2d_t texture)
+fn set_material_texture(ptr<material_t> material, i32 map_type, texture2d_t texture)
 
 
 #linkid SetModelMeshMaterial
-fn set_model_mesh_material(rawptr<model_t> model, i32 mesh_id, i32 material_id)
+fn set_model_mesh_material(ptr<model_t> model, i32 mesh_id, i32 material_id)
 
 // Model animations loading/unloading functions
 #linkid LoadModelAnimations
-fn load_model_animations(anyptr file_name, rawptr<i32> anim_count):rawptr<model_animation_t>
+fn load_model_animations(anyptr file_name, ptr<i32> anim_count):ptr<model_animation_t>
 
 #linkid UpdateModelAnimation
 fn update_model_animation(model_t model, model_animation_t anim, i32 frame)
@@ -2245,7 +2245,7 @@ fn update_model_animation_bones(model_t model, model_animation_t anim, i32 frame
 fn unload_model_animation(model_animation_t anim)
 
 #linkid UnloadModelAnimations
-fn unload_model_animations(rawptr<model_animation_t> animations, i32 anim_count)
+fn unload_model_animations(ptr<model_animation_t> animations, i32 anim_count)
 
 #linkid IsModelAnimationValid
 fn is_model_animation_valid(model_t model, model_animation_t anim):bool
@@ -2296,7 +2296,7 @@ fn get_master_volume():f32
 fn load_wave(anyptr file_name):wave_t
 
 #linkid LoadWaveFromMemory
-fn load_wave_from_memory(anyptr file_type, rawptr<u8> file_data, i32 data_size):wave_t
+fn load_wave_from_memory(anyptr file_type, ptr<u8> file_data, i32 data_size):wave_t
 
 #linkid IsWaveValid
 fn is_wave_valid(wave_t wave):bool
@@ -2360,24 +2360,24 @@ fn set_sound_pan(sound_t sound, f32 pan)
 fn wave_copy(wave_t wave):wave_t
 
 #linkid WaveCrop
-fn wave_crop(rawptr<wave_t> wave, i32 init_frame, i32 final_frame)
+fn wave_crop(ptr<wave_t> wave, i32 init_frame, i32 final_frame)
 
 #linkid WaveFormat
-fn wave_format(rawptr<wave_t> wave, i32 sample_rate, i32 sample_size, i32 channels)
+fn wave_format(ptr<wave_t> wave, i32 sample_rate, i32 sample_size, i32 channels)
 
 #linkid LoadWaveSamples
-fn load_wave_samples(wave_t wave):rawptr<f32>
+fn load_wave_samples(wave_t wave):ptr<f32>
 
 
 #linkid UnloadWaveSamples
-fn unload_wave_samples(rawptr<f32> samples)
+fn unload_wave_samples(ptr<f32> samples)
 
 // Music management functions
 #linkid LoadMusicStream
 fn load_music_stream(anyptr file_name):music_t
 
 #linkid LoadMusicStreamFromMemory
-fn load_music_stream_from_memory(anyptr file_type, rawptr<u8> data, i32 data_size):music_t
+fn load_music_stream_from_memory(anyptr file_type, ptr<u8> data, i32 data_size):music_t
 
 #linkid IsMusicValid
 fn is_music_valid(music_t music):bool

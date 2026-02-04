@@ -887,8 +887,8 @@ fn use_com(combination c):int {
         v.unique()
         return 1
     }
-    if c is ptr<square> v {
-        // ptr<square> v = c as ptr<square>
+    if c is ref<square> v {
+        // ref<square> v = c as ref<square>
         v.unique()
         return 2
     }
@@ -944,7 +944,7 @@ fn square.to_str(self):string {
 fn use_com(combination c):int {
     return match c {
         is square -> 10
-        is ptr<square> -> 20
+        is ref<square> -> 20
         _ -> 0
     }
 }

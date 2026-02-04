@@ -65,30 +65,8 @@ impl<'a> Semantic<'a> {
         }
 
         // raw ptr rewrite
-        if t.ident == "rawptr".to_string() {
-            // extract first args to type_
-            if t.args.len() > 0 {
-                let mut first_arg_type = t.args[0].clone();
-                self.analyze_type(&mut first_arg_type);
-                t.kind = TypeKind::Rawptr(Box::new(first_arg_type));
-            } else {
-                errors_push(
-                    self.module,
-                    AnalyzerError {
-                        start: t.start,
-                        end: t.end,
-                        message: format!("rawptr must contains one arg"),
-                    },
-                );
-            }
-
-            t.ident = "".to_string();
-            t.ident_kind = TypeIdentKind::Unknown;
-            return true;
-        }
-
-        // ptr rewrite
         if t.ident == "ptr".to_string() {
+            // extract first args to type_
             if t.args.len() > 0 {
                 let mut first_arg_type = t.args[0].clone();
                 self.analyze_type(&mut first_arg_type);
@@ -100,6 +78,28 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("ptr must contains one arg"),
+                    },
+                );
+            }
+
+            t.ident = "".to_string();
+            t.ident_kind = TypeIdentKind::Unknown;
+            return true;
+        }
+
+        // ref rewrite
+        if t.ident == "ref".to_string() {
+            if t.args.len() > 0 {
+                let mut first_arg_type = t.args[0].clone();
+                self.analyze_type(&mut first_arg_type);
+                t.kind = TypeKind::Ref(Box::new(first_arg_type));
+            } else {
+                errors_push(
+                    self.module,
+                    AnalyzerError {
+                        start: t.start,
+                        end: t.end,
+                        message: format!("ref must contains one arg"),
                     },
                 );
             }
@@ -556,10 +556,10 @@ impl<'a> Semantic<'a> {
                     self.analyze_type(element);
                 }
             }
-            TypeKind::Ptr(value_type) => {
+            TypeKind::Ref(value_type) => {
                 self.analyze_type(value_type);
             }
-            TypeKind::Rawptr(value_type) => {
+            TypeKind::Ptr(value_type) => {
                 self.analyze_type(value_type);
             }
             TypeKind::Fn(fn_type) => {

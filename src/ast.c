@@ -228,8 +228,8 @@ type_t type_copy(module_t *m, type_t temp) {
             type.enum_ = type_enum_copy(m, temp.enum_);
             break;
         }
-        case TYPE_RAWPTR:
-        case TYPE_PTR: {
+        case TYPE_PTR:
+        case TYPE_REF: {
             type.ptr = type_pointer_copy(m, temp.ptr);
             break;
         }

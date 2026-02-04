@@ -13,7 +13,7 @@ fn errort.msg():string {
 	return self.message
 }
 
-fn errorf(string format, ...[any] args):ptr<errort> {
+fn errorf(string format, ...[any] args):ref<errort> {
 	var msg = fmt.sprintf(format, ...args)
 	return new errort(message = msg)
 }

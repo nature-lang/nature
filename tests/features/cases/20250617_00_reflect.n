@@ -2,6 +2,6 @@ import reflect
 
 fn main() {
     [f32] list = [1.1, 2.2]
-    var v = list as anyptr as rawptr<reflect.vec_t>
+    var v = list as anyptr as ptr<reflect.vec_t>
     println(v.data > 0xc000000000, v.length, v.capacity, v.element_size, v.hash)
 }

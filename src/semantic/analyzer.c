@@ -266,69 +266,69 @@ static char *analyzer_resolve_typedef(module_t *m, analyzer_fndef_t *current, st
 
 /**
  * 类型的处理较为简单，不需要做将其引用的环境封闭。只需要类型为 typedef ident 时能够定位唯一名称即可
- * @param type
+ * @param t
  */
-static void analyzer_type(module_t *m, type_t *type) {
-    m->current_line = type->line;
-    m->current_column = type->column;
+static void analyzer_type(module_t *m, type_t *t) {
+    m->current_line = t->line;
+    m->current_column = t->column;
 
     // type foo = int
     // 'foo' is type_alias
     // alias 可能是一些特殊符号，首先检测是否已经定义，如果没有预定义，则使用特殊符号的含义
-    // 比如 anyptr/rawptr/ptr
-    if (type_is_ident(type) || type->ident_kind == TYPE_IDENT_INTERFACE) {
+    // 比如 anyptr/ptr/ptr
+    if (type_is_ident(t) || t->ident_kind == TYPE_IDENT_INTERFACE) {
         // foo.bar
-        if (type->import_as) {
-            ast_import_t *import = table_get(m->import_table, type->import_as);
-            ANALYZER_ASSERTF(import, "module '%s' not found", type->import_as);
+        if (t->import_as) {
+            ast_import_t *import = table_get(m->import_table, t->import_as);
+            ANALYZER_ASSERTF(import, "module '%s' not found", t->import_as);
 
-            char *unique_ident = ident_with_prefix(import->module_ident, type->ident);
+            char *unique_ident = ident_with_prefix(import->module_ident, t->ident);
 
             // 更新 ident 指向
-            type->ident = unique_ident;
+            t->ident = unique_ident;
 
-            type->import_as = NULL;
+            t->import_as = NULL;
         } else {
             // local ident 或者当前 module 下的全局 ident, import as * 中的全局 ident
-            char *unique_alias_ident = analyzer_resolve_typedef(m, m->analyzer_current, type->ident);
+            char *unique_alias_ident = analyzer_resolve_typedef(m, m->analyzer_current, t->ident);
 
             // 在没有找到类型的 alias 前提下, 判断是否是内置特殊类型, 这样可以不占用关键字
             if (!unique_alias_ident) {
-                if (analyzer_special_type_rewrite(m, type)) {
+                if (analyzer_special_type_rewrite(m, t)) {
                     return;
                 }
 
-                ANALYZER_ASSERTF(false, "type '%s' undeclared", type->ident);
+                ANALYZER_ASSERTF(false, "type '%s' undeclared", t->ident);
             }
 
-            type->ident = unique_alias_ident;
+            t->ident = unique_alias_ident;
         }
 
-        symbol_t *s = symbol_table_get(type->ident);
-        ANALYZER_ASSERTF(s, "type '%s' undeclared", type->ident);
+        symbol_t *s = symbol_table_get(t->ident);
+        ANALYZER_ASSERTF(s, "type '%s' undeclared", t->ident);
         ast_typedef_stmt_t *ast_stmt = s->ast_value;
         assert(ast_stmt);
 
-        if (type->ident_kind == TYPE_IDENT_UNKNOWN) {
+        if (t->ident_kind == TYPE_IDENT_UNKNOWN) {
             if (ast_stmt->is_alias) {
-                type->ident_kind = TYPE_IDENT_ALIAS;
+                t->ident_kind = TYPE_IDENT_ALIAS;
                 // alias 不能包含泛型参数
-                if (type->args) {
-                    ANALYZER_ASSERTF(type->args->length == 0, "alias '%s' cannot contains generics type args",
-                                     type->ident);
+                if (t->args) {
+                    ANALYZER_ASSERTF(t->args->length == 0, "alias '%s' cannot contains generics type args",
+                                     t->ident);
                 }
             } else if (ast_stmt->is_interface) {
-                type->ident_kind = TYPE_IDENT_INTERFACE;
+                t->ident_kind = TYPE_IDENT_INTERFACE;
             } else {
-                type->ident_kind = TYPE_IDENT_DEF;
+                t->ident_kind = TYPE_IDENT_DEF;
             }
         }
 
         // foo<arg1,>
-        if (type->args) {
+        if (t->args) {
             // actual param 处理
-            for (int i = 0; i < type->args->length; ++i) {
-                type_t *temp = ct_list_value(type->args, i);
+            for (int i = 0; i < t->args->length; ++i) {
+                type_t *temp = ct_list_value(t->args, i);
                 analyzer_type(m, temp);
             }
         }
@@ -336,8 +336,8 @@ static void analyzer_type(module_t *m, type_t *type) {
         return;
     }
 
-    if (type->kind == TYPE_INTERFACE) {
-        type_interface_t *u = type->interface;
+    if (t->kind == TYPE_INTERFACE) {
+        type_interface_t *u = t->interface;
         if (u->elements->length > 0) {
             for (int i = 0; i < u->elements->length; ++i) {
                 type_t *temp = ct_list_value(u->elements, i);
@@ -347,8 +347,8 @@ static void analyzer_type(module_t *m, type_t *type) {
         }
     }
 
-    if (type->kind == TYPE_UNION) {
-        type_union_t *u = type->union_;
+    if (t->kind == TYPE_UNION) {
+        type_union_t *u = t->union_;
         if (u->elements->length > 0) {
             for (int i = 0; i < u->elements->length; ++i) {
                 type_t *temp = ct_list_value(u->elements, i);
@@ -360,8 +360,8 @@ static void analyzer_type(module_t *m, type_t *type) {
         }
     }
 
-    if (type->kind == TYPE_TAGGED_UNION) {
-        type_tagged_union_t *tagged_union = type->tagged_union;
+    if (t->kind == TYPE_TAGGED_UNION) {
+        type_tagged_union_t *tagged_union = t->tagged_union;
         if (tagged_union->elements->length > 0) {
             for (int i = 0; i < tagged_union->elements->length; ++i) {
                 tagged_union_element_t *element = ct_list_value(tagged_union->elements, i);
@@ -371,33 +371,33 @@ static void analyzer_type(module_t *m, type_t *type) {
         }
     }
 
-    if (type->kind == TYPE_MAP) {
-        type_map_t *map_decl = type->map;
+    if (t->kind == TYPE_MAP) {
+        type_map_t *map_decl = t->map;
         analyzer_type(m, &map_decl->key_type);
         analyzer_type(m, &map_decl->value_type);
         return;
     }
 
-    if (type->kind == TYPE_SET) {
-        type_set_t *set = type->set;
+    if (t->kind == TYPE_SET) {
+        type_set_t *set = t->set;
         analyzer_type(m, &set->element_type);
         return;
     }
 
-    if (type->kind == TYPE_VEC) {
-        type_vec_t *list = type->vec;
+    if (t->kind == TYPE_VEC) {
+        type_vec_t *list = t->vec;
         analyzer_type(m, &list->element_type);
         return;
     }
 
-    if (type->kind == TYPE_CHAN) {
-        type_chan_t *chan = type->chan;
+    if (t->kind == TYPE_CHAN) {
+        type_chan_t *chan = t->chan;
         analyzer_type(m, &chan->element_type);
         return;
     }
 
-    if (type->kind == TYPE_ARR) {
-        type_array_t *array = type->array;
+    if (t->kind == TYPE_ARR) {
+        type_array_t *array = t->array;
         analyzer_expr(m, array->length_expr);
         ANALYZER_ASSERTF(((ast_expr_t *) array->length_expr)->assert_type == AST_EXPR_LITERAL, "array length must be declared using constants or literals");
         ast_literal_t *literal = ((ast_expr_t *) array->length_expr)->value;
@@ -410,8 +410,8 @@ static void analyzer_type(module_t *m, type_t *type) {
         return;
     }
 
-    if (type->kind == TYPE_TUPLE) {
-        type_tuple_t *tuple = type->tuple;
+    if (t->kind == TYPE_TUPLE) {
+        type_tuple_t *tuple = t->tuple;
         for (int i = 0; i < tuple->elements->length; ++i) {
             type_t *element_type = ct_list_value(tuple->elements, i);
             analyzer_type(m, element_type);
@@ -419,14 +419,14 @@ static void analyzer_type(module_t *m, type_t *type) {
         return;
     }
 
-    if (type->kind == TYPE_PTR || type->kind == TYPE_RAWPTR) {
-        type_ptr_t *pointer = type->ptr;
+    if (t->kind == TYPE_REF || t->kind == TYPE_PTR) {
+        type_ptr_t *pointer = t->ptr;
         analyzer_type(m, &pointer->value_type);
         return;
     }
 
-    if (type->kind == TYPE_FN) {
-        type_fn_t *type_fn = type->fn;
+    if (t->kind == TYPE_FN) {
+        type_fn_t *type_fn = t->fn;
         analyzer_type(m, &type_fn->return_type);
         for (int i = 0; i < type_fn->param_types->length; ++i) {
             type_t *t = ct_list_value(type_fn->param_types, i);
@@ -434,8 +434,8 @@ static void analyzer_type(module_t *m, type_t *type) {
         }
     }
 
-    if (type->kind == TYPE_STRUCT) {
-        type_struct_t *struct_decl = type->struct_;
+    if (t->kind == TYPE_STRUCT) {
+        type_struct_t *struct_decl = t->struct_;
         for (int i = 0; i < struct_decl->properties->length; ++i) {
             struct_property_t *item = ct_list_value(struct_decl->properties, i);
 
@@ -453,8 +453,8 @@ static void analyzer_type(module_t *m, type_t *type) {
         }
     }
 
-    if (type->kind == TYPE_ENUM) {
-        type_enum_t *enum_decl = type->enum_;
+    if (t->kind == TYPE_ENUM) {
+        type_enum_t *enum_decl = t->enum_;
         // 分析底层类型
         analyzer_type(m, &enum_decl->element_type);
 
@@ -469,7 +469,7 @@ static void analyzer_type(module_t *m, type_t *type) {
 }
 
 /**
- * ptr/anyptr/rawptr/all_t/fn_t 不作为关键字，如果用户没有自定义覆盖, 则转换为需要的类型
+ * ptr/anyptr/ref/all_t/fn_t 不作为关键字，如果用户没有自定义覆盖, 则转换为需要的类型
  */
 static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
     assert(type->ident_kind == TYPE_IDENT_UNKNOWN || type->ident_kind == TYPE_IDENT_INTERFACE);
@@ -487,29 +487,29 @@ static bool analyzer_special_type_rewrite(module_t *m, type_t *type) {
         return true;
     }
 
-    if (str_equal(type->ident, type_kind_str[TYPE_RAWPTR])) {
-        type->kind = TYPE_RAWPTR;
-        type->ident = NULL;
-        type->ident_kind = 0;
-
-        ANALYZER_ASSERTF(type->args && type->args->length == 1, "rawptr<...> must contains arg type");
-
-        type_t *arg_type = ct_list_value(type->args, 0);
-        analyzer_type(m, arg_type);
-
-        type_rawptr_t *rawptr = NEW(type_rawptr_t);
-        rawptr->value_type = *arg_type;
-        type->value = rawptr;
-
-        return true;
-    }
-
     if (str_equal(type->ident, type_kind_str[TYPE_PTR])) {
         type->kind = TYPE_PTR;
         type->ident = NULL;
         type->ident_kind = 0;
 
         ANALYZER_ASSERTF(type->args && type->args->length == 1, "ptr<...> must contains arg type");
+
+        type_t *arg_type = ct_list_value(type->args, 0);
+        analyzer_type(m, arg_type);
+
+        type_ptr_t *ptr = NEW(type_ptr_t);
+        ptr->value_type = *arg_type;
+        type->value = ptr;
+
+        return true;
+    }
+
+    if (str_equal(type->ident, type_kind_str[TYPE_REF])) {
+        type->kind = TYPE_REF;
+        type->ident = NULL;
+        type->ident_kind = 0;
+
+        ANALYZER_ASSERTF(type->args && type->args->length == 1, "ref<...> must contains arg type");
 
         type_t *arg_type = ct_list_value(type->args, 0);
         analyzer_type(m, arg_type);

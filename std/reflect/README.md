@@ -210,10 +210,10 @@ const PTR = 23
 
 Type constant for pointer type
 
-## const RAWPTR
+## const PTR
 
 ```
-const RAWPTR = 24
+const PTR = 24
 ```
 
 Type constant for raw pointer type
@@ -245,7 +245,7 @@ Size of pointer in bytes
 ## fn find_rtype
 
 ```
-fn find_rtype(int hash):rawptr<rtype_t>
+fn find_rtype(int hash):ptr<rtype_t>
 ```
 
 Find runtime type information by hash
@@ -414,7 +414,7 @@ Internal set structure representation
 ```
 type union_t = struct{
     anyptr value
-    rawptr<rtype_t> rtype
+    ptr<rtype_t> rtype
 }
 ```
 

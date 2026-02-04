@@ -817,8 +817,8 @@ static token_type_t scanner_ident(char *word, int length) {
                     // return scanner_rest(word, length, 2, 1, "w", TOKEN_NEW);
             }
             break;
-        case 'p':
-            return scanner_rest(word, length, 1, 2, "tr", TOKEN_PTR);
+            //        case 'p':
+            //            return scanner_rest(word, length, 1, 2, "tr", TOKEN_PTR);
         case 's': {
             // self,string,struct,sizeof,sett
             switch (word[1]) {

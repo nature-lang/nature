@@ -4,12 +4,12 @@ fn main() {
     nat = 6 as i32
     println(nat)
 
-    ptr<i32>? nat_p = null
+    ref<i32>? nat_p = null
     println(nat_p)
 
     i32 temp = 233
 
-    rawptr<i32> raw_nat = &temp
+    ptr<i32> raw_nat = &temp
 
     println(raw_nat == null, raw_nat != null)
 

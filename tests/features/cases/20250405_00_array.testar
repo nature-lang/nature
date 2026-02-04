@@ -34,7 +34,7 @@ fn main():void! {
 === test_array_failed_zero
 --- main.n
 type person_t = struct{
-    ptr<int> p
+    ref<int> p
 }
 
 fn main():void! {
@@ -47,7 +47,7 @@ nature-test/main.n:6:51: array length must be greater than 0
 === test_vec_init
 --- main.n
 type person_t = struct{
-    ptr<int> p
+    ref<int> p
 }
 
 fn main():void! {
@@ -64,7 +64,7 @@ fn main():void! {
 === test_arr_index_access
 --- main.n
 type person_t = struct{
-    ptr<int> p
+    ref<int> p
 }
 
 fn main():void! {
@@ -90,7 +90,7 @@ fn main():void! {
 === test_vec_index_access
 --- main.n
 type person_t = struct{
-    ptr<int> p
+    ref<int> p
 }
 
 fn test1() {

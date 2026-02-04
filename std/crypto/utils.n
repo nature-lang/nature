@@ -40,25 +40,25 @@ type mbedtls_md_context_t = struct{
 }
 
 #linkid mbedtls_md5_init
-fn mbedtls_md5_init(rawptr<mbedtls_md_context_t> ctx):void
+fn mbedtls_md5_init(ptr<mbedtls_md_context_t> ctx):void
 
 #linkid mbedtls_md_info_from_type
 fn mbedtls_md_info_from_type(i32 md_type):anyptr
 
 #linkid mbedtls_md_setup
-fn mbedtls_md_setup(rawptr<mbedtls_md_context_t> ctx, anyptr md_info, i32 is_hmac):i32
+fn mbedtls_md_setup(ptr<mbedtls_md_context_t> ctx, anyptr md_info, i32 is_hmac):i32
 
 #linkid mbedtls_md_starts
-fn mbedtls_md_starts(rawptr<mbedtls_md_context_t> ctx):i32
+fn mbedtls_md_starts(ptr<mbedtls_md_context_t> ctx):i32
 
 #linkid mbedtls_md_update
-fn mbedtls_md_update(rawptr<mbedtls_md_context_t> ctx, libc.cstr input, int ilen):i32
+fn mbedtls_md_update(ptr<mbedtls_md_context_t> ctx, libc.cstr input, int ilen):i32
 
 #linkid mbedtls_md_finish
-fn mbedtls_md_finish(rawptr<mbedtls_md_context_t> ctx, anyptr output):i32
+fn mbedtls_md_finish(ptr<mbedtls_md_context_t> ctx, anyptr output):i32
 
 #linkid mbedtls_md_free
-fn mbedtls_md_free(rawptr<mbedtls_md_context_t> ctx):void
+fn mbedtls_md_free(ptr<mbedtls_md_context_t> ctx):void
 
 
 
@@ -70,31 +70,31 @@ type mbedtls_sha256_context = struct{
 }
 
 #linkid mbedtls_sha256_init
-fn mbedtls_sha256_init(rawptr<mbedtls_sha256_context> ctx):void
+fn mbedtls_sha256_init(ptr<mbedtls_sha256_context> ctx):void
 
 #linkid mbedtls_sha256_starts
-fn mbedtls_sha256_starts(rawptr<mbedtls_sha256_context> ctx, i32 is224):i32
+fn mbedtls_sha256_starts(ptr<mbedtls_sha256_context> ctx, i32 is224):i32
 
 #linkid mbedtls_sha256_update
-fn mbedtls_sha256_update(rawptr<mbedtls_sha256_context> ctx, libc.cstr input, int ilen):i32
+fn mbedtls_sha256_update(ptr<mbedtls_sha256_context> ctx, libc.cstr input, int ilen):i32
 
 #linkid mbedtls_sha256_finish
-fn mbedtls_sha256_finish(rawptr<mbedtls_sha256_context> ctx, anyptr output):i32
+fn mbedtls_sha256_finish(ptr<mbedtls_sha256_context> ctx, anyptr output):i32
 
 #linkid mbedtls_sha256_free
-fn mbedtls_sha256_free(rawptr<mbedtls_sha256_context> ctx):void
+fn mbedtls_sha256_free(ptr<mbedtls_sha256_context> ctx):void
 
 #linkid mbedtls_md_init
-fn mbedtls_md_init(rawptr<mbedtls_md_context_t> ctx):void
+fn mbedtls_md_init(ptr<mbedtls_md_context_t> ctx):void
 
 #linkid mbedtls_md_hmac_starts
-fn mbedtls_md_hmac_starts(rawptr<mbedtls_md_context_t> ctx, libc.cstr key, int keylen):i32
+fn mbedtls_md_hmac_starts(ptr<mbedtls_md_context_t> ctx, libc.cstr key, int keylen):i32
 
 #linkid mbedtls_md_hmac_update
-fn mbedtls_md_hmac_update(rawptr<mbedtls_md_context_t> ctx, libc.cstr input, int ilen):i32
+fn mbedtls_md_hmac_update(ptr<mbedtls_md_context_t> ctx, libc.cstr input, int ilen):i32
 
 #linkid mbedtls_md_hmac_finish
-fn mbedtls_md_hmac_finish(rawptr<mbedtls_md_context_t> ctx, anyptr output):i32
+fn mbedtls_md_hmac_finish(ptr<mbedtls_md_context_t> ctx, anyptr output):i32
 
 // RSA types and core API
 type mbedtls_rsa_context = struct{
@@ -133,84 +133,84 @@ fn mbedtls_entropy_func(anyptr data, anyptr output, int len):i32
 fn mbedtls_ctr_drbg_random(anyptr p_rng, anyptr output, int output_len):i32
 
 #linkid mbedtls_entropy_init
-fn mbedtls_entropy_init(rawptr<mbedtls_entropy_context> ctx):void
+fn mbedtls_entropy_init(ptr<mbedtls_entropy_context> ctx):void
 
 #linkid mbedtls_ctr_drbg_init
-fn mbedtls_ctr_drbg_init(rawptr<mbedtls_ctr_drbg_context> ctx):void
+fn mbedtls_ctr_drbg_init(ptr<mbedtls_ctr_drbg_context> ctx):void
 
 #linkid mbedtls_ctr_drbg_seed
-fn mbedtls_ctr_drbg_seed(rawptr<mbedtls_ctr_drbg_context> ctx, anyptr f_entropy, anyptr p_entropy, libc.cstr custom, u32 len):i32
+fn mbedtls_ctr_drbg_seed(ptr<mbedtls_ctr_drbg_context> ctx, anyptr f_entropy, anyptr p_entropy, libc.cstr custom, u32 len):i32
 
 // Core RSA functions
 #linkid mbedtls_rsa_init
-fn mbedtls_rsa_init(rawptr<mbedtls_rsa_context> ctx):void
+fn mbedtls_rsa_init(ptr<mbedtls_rsa_context> ctx):void
 
 #linkid mbedtls_rsa_set_padding
-fn mbedtls_rsa_set_padding(rawptr<mbedtls_rsa_context> ctx, i32 padding, i32 hash_id):i32
+fn mbedtls_rsa_set_padding(ptr<mbedtls_rsa_context> ctx, i32 padding, i32 hash_id):i32
 
 #linkid mbedtls_rsa_gen_key
-fn mbedtls_rsa_gen_key(rawptr<mbedtls_rsa_context> ctx, anyptr f_rng, anyptr p_rng, u32 nbits, i32 exponent):i32
+fn mbedtls_rsa_gen_key(ptr<mbedtls_rsa_context> ctx, anyptr f_rng, anyptr p_rng, u32 nbits, i32 exponent):i32
 
 #linkid mbedtls_rsa_pkcs1_encrypt
-fn mbedtls_rsa_pkcs1_encrypt(rawptr<mbedtls_rsa_context> ctx, anyptr f_rng, anyptr p_rng, int ilen, libc.cstr input, anyptr output):i32
+fn mbedtls_rsa_pkcs1_encrypt(ptr<mbedtls_rsa_context> ctx, anyptr f_rng, anyptr p_rng, int ilen, libc.cstr input, anyptr output):i32
 
 #linkid mbedtls_rsa_rsaes_oaep_encrypt
-fn mbedtls_rsa_rsaes_oaep_encrypt(rawptr<mbedtls_rsa_context> ctx, anyptr f_rng, anyptr p_rng, libc.cstr label, int label_len, int ilen, libc.cstr input, anyptr output):i32
+fn mbedtls_rsa_rsaes_oaep_encrypt(ptr<mbedtls_rsa_context> ctx, anyptr f_rng, anyptr p_rng, libc.cstr label, int label_len, int ilen, libc.cstr input, anyptr output):i32
 
 #linkid mbedtls_rsa_pkcs1_decrypt
-fn mbedtls_rsa_pkcs1_decrypt(rawptr<mbedtls_rsa_context> ctx, anyptr f_rng, anyptr p_rng, rawptr<int> olen, libc.cstr input, anyptr output, int output_max_len):i32
+fn mbedtls_rsa_pkcs1_decrypt(ptr<mbedtls_rsa_context> ctx, anyptr f_rng, anyptr p_rng, ptr<int> olen, libc.cstr input, anyptr output, int output_max_len):i32
 
 #linkid mbedtls_rsa_rsaes_oaep_decrypt
-fn mbedtls_rsa_rsaes_oaep_decrypt(rawptr<mbedtls_rsa_context> ctx, anyptr f_rng, anyptr p_rng, libc.cstr label, int label_len, rawptr<int> olen, libc.cstr input, anyptr output, int output_max_len):i32
+fn mbedtls_rsa_rsaes_oaep_decrypt(ptr<mbedtls_rsa_context> ctx, anyptr f_rng, anyptr p_rng, libc.cstr label, int label_len, ptr<int> olen, libc.cstr input, anyptr output, int output_max_len):i32
 
 #linkid mbedtls_rsa_pkcs1_sign
-fn mbedtls_rsa_pkcs1_sign(rawptr<mbedtls_rsa_context> ctx, anyptr f_rng, anyptr p_rng, i32 md_alg, u32 hashlen, libc.cstr hash, libc.cstr sig):i32
+fn mbedtls_rsa_pkcs1_sign(ptr<mbedtls_rsa_context> ctx, anyptr f_rng, anyptr p_rng, i32 md_alg, u32 hashlen, libc.cstr hash, libc.cstr sig):i32
 
 #linkid mbedtls_rsa_pkcs1_verify
-fn mbedtls_rsa_pkcs1_verify(rawptr<mbedtls_rsa_context> ctx, i32 md_alg, u32 hashlen, libc.cstr hash, libc.cstr sig):i32
+fn mbedtls_rsa_pkcs1_verify(ptr<mbedtls_rsa_context> ctx, i32 md_alg, u32 hashlen, libc.cstr hash, libc.cstr sig):i32
 
 #linkid mbedtls_rsa_get_len
-fn mbedtls_rsa_get_len(rawptr<mbedtls_rsa_context> ctx):int
+fn mbedtls_rsa_get_len(ptr<mbedtls_rsa_context> ctx):int
 
 #linkid mbedtls_rsa_free
-fn mbedtls_rsa_free(rawptr<mbedtls_rsa_context> ctx):void
+fn mbedtls_rsa_free(ptr<mbedtls_rsa_context> ctx):void
 
 
 #linkid mbedtls_ctr_drbg_free
-fn mbedtls_ctr_drbg_free(rawptr<mbedtls_ctr_drbg_context> ctx):void
+fn mbedtls_ctr_drbg_free(ptr<mbedtls_ctr_drbg_context> ctx):void
 
 #linkid mbedtls_entropy_free
-fn mbedtls_entropy_free(rawptr<mbedtls_entropy_context> ctx):void
+fn mbedtls_entropy_free(ptr<mbedtls_entropy_context> ctx):void
 
 #linkid mbedtls_pk_init
-fn mbedtls_pk_init(rawptr<mbedtls_pk_context> ctx):void
+fn mbedtls_pk_init(ptr<mbedtls_pk_context> ctx):void
 
 #linkid mbedtls_pk_info_from_type
 fn mbedtls_pk_info_from_type(i32 pk_type):anyptr
 
 #linkid mbedtls_pk_setup
-fn mbedtls_pk_setup(rawptr<mbedtls_pk_context> ctx, anyptr info):i32
+fn mbedtls_pk_setup(ptr<mbedtls_pk_context> ctx, anyptr info):i32
 
 #linkid mbedtls_pk_rsa
-fn mbedtls_pk_rsa(mbedtls_pk_context ctx):rawptr<mbedtls_rsa_context>
+fn mbedtls_pk_rsa(mbedtls_pk_context ctx):ptr<mbedtls_rsa_context>
 
 #linkid mbedtls_rsa_copy
-fn mbedtls_rsa_copy(rawptr<mbedtls_rsa_context> dst, rawptr<mbedtls_rsa_context> src):i32
+fn mbedtls_rsa_copy(ptr<mbedtls_rsa_context> dst, ptr<mbedtls_rsa_context> src):i32
 
 #linkid mbedtls_pk_write_pubkey_pem
-fn mbedtls_pk_write_pubkey_pem(rawptr<mbedtls_pk_context> key, anyptr buf, int size):i32
+fn mbedtls_pk_write_pubkey_pem(ptr<mbedtls_pk_context> key, anyptr buf, int size):i32
 
 #linkid mbedtls_pk_parse_public_key
-fn mbedtls_pk_parse_public_key(rawptr<mbedtls_pk_context> ctx, libc.cstr key, int keylen):i32
+fn mbedtls_pk_parse_public_key(ptr<mbedtls_pk_context> ctx, libc.cstr key, int keylen):i32
 
 #linkid mbedtls_pk_parse_key
-fn mbedtls_pk_parse_key(rawptr<mbedtls_pk_context> ctx, libc.cstr key, int keylen, libc.cstr pwd, int pwdlen, anyptr f_rng, anyptr p_rng):i32
+fn mbedtls_pk_parse_key(ptr<mbedtls_pk_context> ctx, libc.cstr key, int keylen, libc.cstr pwd, int pwdlen, anyptr f_rng, anyptr p_rng):i32
 
 #linkid mbedtls_pk_write_key_pem
-fn mbedtls_pk_write_key_pem(rawptr<mbedtls_pk_context> key, anyptr buf, int size):i32
+fn mbedtls_pk_write_key_pem(ptr<mbedtls_pk_context> key, anyptr buf, int size):i32
 
 #linkid mbedtls_pk_free
-fn mbedtls_pk_free(rawptr<mbedtls_pk_context> ctx)
+fn mbedtls_pk_free(ptr<mbedtls_pk_context> ctx)
 
 fn to_hex([u8] input):string {
     var hex_chars = "0123456789abcdef"
@@ -228,59 +228,59 @@ fn to_hex([u8] input):string {
 }
 
 #linkid mbedtls_ssl_session_reset
-fn mbedtls_ssl_session_reset(rawptr<mbedtls_ssl_context> ssl):i32
+fn mbedtls_ssl_session_reset(ptr<mbedtls_ssl_context> ssl):i32
 
 #linkid mbedtls_ssl_config_init
-fn mbedtls_ssl_config_init(rawptr<mbedtls_ssl_config> ssl)
+fn mbedtls_ssl_config_init(ptr<mbedtls_ssl_config> ssl)
 
 #linkid mbedtls_ssl_init
-fn mbedtls_ssl_init(rawptr<mbedtls_ssl_context> ssl)
+fn mbedtls_ssl_init(ptr<mbedtls_ssl_context> ssl)
 
 // X.509 CRT and PK functions
 #linkid mbedtls_x509_crt_init
-fn mbedtls_x509_crt_init(rawptr<mbedtls_x509_crt> crt):void
+fn mbedtls_x509_crt_init(ptr<mbedtls_x509_crt> crt):void
 
 // SSL configuration functions
 #linkid mbedtls_ssl_conf_verify
-fn mbedtls_ssl_conf_verify(rawptr<mbedtls_ssl_config> conf, anyptr f_vrfy, anyptr p_vrfy):void
+fn mbedtls_ssl_conf_verify(ptr<mbedtls_ssl_config> conf, anyptr f_vrfy, anyptr p_vrfy):void
 
 #linkid mbedtls_ssl_conf_authmode
-fn mbedtls_ssl_conf_authmode(rawptr<mbedtls_ssl_config> conf, i32 authmode):void
+fn mbedtls_ssl_conf_authmode(ptr<mbedtls_ssl_config> conf, i32 authmode):void
 
 #linkid mbedtls_ssl_conf_ca_chain
-fn mbedtls_ssl_conf_ca_chain(rawptr<mbedtls_ssl_config> conf, rawptr<mbedtls_x509_crt> ca_chain, rawptr<mbedtls_x509_crl> ca_crl):void
+fn mbedtls_ssl_conf_ca_chain(ptr<mbedtls_ssl_config> conf, ptr<mbedtls_x509_crt> ca_chain, ptr<mbedtls_x509_crl> ca_crl):void
 
 #linkid mbedtls_ssl_conf_own_cert
-fn mbedtls_ssl_conf_own_cert(rawptr<mbedtls_ssl_config> conf, rawptr<mbedtls_x509_crt> own_cert, rawptr<mbedtls_pk_context> pk_key):i32
+fn mbedtls_ssl_conf_own_cert(ptr<mbedtls_ssl_config> conf, ptr<mbedtls_x509_crt> own_cert, ptr<mbedtls_pk_context> pk_key):i32
 
 #linkid mbedtls_ssl_conf_rng
-fn mbedtls_ssl_conf_rng(rawptr<mbedtls_ssl_config> conf, anyptr f_rng, anyptr p_rng):void
+fn mbedtls_ssl_conf_rng(ptr<mbedtls_ssl_config> conf, anyptr f_rng, anyptr p_rng):void
 
 #linkid mbedtls_ssl_conf_read_timeout
-fn mbedtls_ssl_conf_read_timeout(rawptr<mbedtls_ssl_config> conf, u32 timeout):void
+fn mbedtls_ssl_conf_read_timeout(ptr<mbedtls_ssl_config> conf, u32 timeout):void
 
 #linkid mbedtls_ssl_config_defaults
-fn mbedtls_ssl_config_defaults(rawptr<mbedtls_ssl_config> conf, i32 endpoint, i32 transport, i32 preset):i32
+fn mbedtls_ssl_config_defaults(ptr<mbedtls_ssl_config> conf, i32 endpoint, i32 transport, i32 preset):i32
 
 // SSL cookie functions
 #linkid mbedtls_ssl_cookie_init
-fn mbedtls_ssl_cookie_init(rawptr<mbedtls_ssl_cookie_ctx> ctx):void
+fn mbedtls_ssl_cookie_init(ptr<mbedtls_ssl_cookie_ctx> ctx):void
 
 #linkid mbedtls_ssl_cookie_setup
-fn mbedtls_ssl_cookie_setup(rawptr<mbedtls_ssl_cookie_ctx> ctx, anyptr f_rng, anyptr p_rng):i32
+fn mbedtls_ssl_cookie_setup(ptr<mbedtls_ssl_cookie_ctx> ctx, anyptr f_rng, anyptr p_rng):i32
 
 #linkid mbedtls_ssl_conf_dtls_cookies
-fn mbedtls_ssl_conf_dtls_cookies(rawptr<mbedtls_ssl_config> conf, anyptr f_cookie_write, anyptr f_cookie_check, anyptr p_cookie):void
+fn mbedtls_ssl_conf_dtls_cookies(ptr<mbedtls_ssl_config> conf, anyptr f_cookie_write, anyptr f_cookie_check, anyptr p_cookie):void
 
 // DTLS-SRTP functions
 #linkid dtls_srtp_x509_digest
-fn dtls_srtp_x509_digest(rawptr<mbedtls_x509_crt> crt, libc.cstr buf):void
+fn dtls_srtp_x509_digest(ptr<mbedtls_x509_crt> crt, libc.cstr buf):void
 
 #linkid mbedtls_ssl_conf_dtls_srtp_protection_profiles
-fn mbedtls_ssl_conf_dtls_srtp_protection_profiles(rawptr<mbedtls_ssl_config> conf, anyptr profiles):i32
+fn mbedtls_ssl_conf_dtls_srtp_protection_profiles(ptr<mbedtls_ssl_config> conf, anyptr profiles):i32
 
 #linkid mbedtls_ssl_conf_srtp_mki_value_supported
-fn mbedtls_ssl_conf_srtp_mki_value_supported(rawptr<mbedtls_ssl_config> conf, i32 support_mki_value):void
+fn mbedtls_ssl_conf_srtp_mki_value_supported(ptr<mbedtls_ssl_config> conf, i32 support_mki_value):void
 
 #linkid mbedtls_ssl_conf_cert_req_ca_list
-fn mbedtls_ssl_conf_cert_req_ca_list(rawptr<mbedtls_ssl_config> conf, i8 cert_req_ca_list):void
+fn mbedtls_ssl_conf_cert_req_ca_list(ptr<mbedtls_ssl_config> conf, i8 cert_req_ca_list):void

@@ -4,7 +4,7 @@ import runtime
 
 fn main() {
     libc.time_t timestamp = 1691656611
-    rawptr<libc.tm> ti = libc.gmtime(&timestamp) // switch localtime to gmtime to prevent local timezone issues when running tests
+    ptr<libc.tm> ti = libc.gmtime(&timestamp) // switch localtime to gmtime to prevent local timezone issues when running tests
 
     string tz = ti.__tm_zone.to_string()
 

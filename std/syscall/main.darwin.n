@@ -867,9 +867,9 @@ fn listen(int sockfd, int backlog):void! {
     call6(SYS_LISTEN, sockfd as anyptr, backlog as anyptr, 0, 0, 0, 0)
 }
 
-fn accept<T>(int sockfd, ptr<T> addr):int! {
+fn accept<T>(int sockfd, ref<T> addr):int! {
     var len = @sizeof(T)
-    rawptr<int> len_ptr = &len
+    ptr<int> len_ptr = &len
     int fd = call6(SYS_ACCEPT, sockfd as anyptr, addr as anyptr, len_ptr as anyptr, 0, 0, 0)
     return fd
 }

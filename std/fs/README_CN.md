@@ -5,7 +5,7 @@
 ## fn stdout
 
 ```
-fn stdout():ptr<file_t>!
+fn stdout():ref<file_t>!
 ```
 
 获取标准输出并转换为 file_t。
@@ -13,7 +13,7 @@ fn stdout():ptr<file_t>!
 ## fn stdin
 
 ```
-fn stdin():ptr<file_t>!
+fn stdin():ref<file_t>!
 ```
 
 获取标准输入并转换为 file_t。
@@ -21,7 +21,7 @@ fn stdin():ptr<file_t>!
 ## fn stderr
 
 ```
-fn stderr():ptr<file_t>!
+fn stderr():ref<file_t>!
 ```
 
 获取标准错误并转换为 file_t。
@@ -29,7 +29,7 @@ fn stderr():ptr<file_t>!
 ## fn discard
 
 ```
-fn discard():ptr<file_t>!
+fn discard():ref<file_t>!
 ```
 
 获取一个丢弃文件句柄，忽略所有写入操作。
@@ -87,7 +87,7 @@ type file_t:io.reader, io.writer, io.seeker = struct{
 ### from
 
 ```
-fn from(int fd, string name):ptr<file_t>!
+fn from(int fd, string name):ref<file_t>!
 ```
 
 从文件描述符创建 file_t 结构。
@@ -95,7 +95,7 @@ fn from(int fd, string name):ptr<file_t>!
 ### open
 
 ```
-fn open(string path, int flags, int mode):ptr<file_t>!
+fn open(string path, int flags, int mode):ref<file_t>!
 ```
 
 打开文件并返回文件句柄。

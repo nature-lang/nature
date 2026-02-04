@@ -236,11 +236,11 @@ impl Type {
             TypeKind::Fn(type_fn) => {
                 format!("fn(...):{}{}", type_fn.return_type, if type_fn.errable { "!" } else { "" })
             }
+            TypeKind::Ref(value_type) => {
+                format!("ref<{}>", value_type)
+            }
             TypeKind::Ptr(value_type) => {
                 format!("ptr<{}>", value_type)
-            }
-            TypeKind::Rawptr(value_type) => {
-                format!("rawptr<{}>", value_type)
             }
             TypeKind::Union(any, _, _) if *any => "any".to_string(),
             TypeKind::Interface(..) => "interface".to_string(),
@@ -266,7 +266,7 @@ impl Type {
     }
 
     pub fn must_assign_value(kind: &TypeKind) -> bool {
-        if matches!(kind, TypeKind::Fn(..) | TypeKind::Ptr(..) | TypeKind::Interface(..)) {
+        if matches!(kind, TypeKind::Fn(..) | TypeKind::Ref(..) | TypeKind::Interface(..)) {
             return true;
         }
 
@@ -341,8 +341,8 @@ impl Type {
                 kind,
                 TypeKind::Bool
                     | TypeKind::String
+                    | TypeKind::Ref(..)
                     | TypeKind::Ptr(..)
-                    | TypeKind::Rawptr(..)
                     | TypeKind::Anyptr
                     | TypeKind::Chan(..)
                     | TypeKind::Struct(..)
@@ -361,8 +361,8 @@ impl Type {
                 | TypeKind::Tuple(..)
                 | TypeKind::Set(..)
                 | TypeKind::Fn(..)
+                | TypeKind::Ref(..)
                 | TypeKind::Ptr(..)
-                | TypeKind::Rawptr(..)
         )
     }
 
@@ -438,9 +438,9 @@ impl Type {
         return t;
     }
 
-    pub fn ptr_of(t: Type) -> Type {
+    pub fn ref_of(t: Type) -> Type {
         assert_eq!(t.status, ReductionStatus::Done);
-        let ptr_kind = TypeKind::Ptr(Box::new(t.clone()));
+        let ptr_kind = TypeKind::Ref(Box::new(t.clone()));
         let mut ptr_type = Type::new(ptr_kind);
         ptr_type.start = t.start;
         ptr_type.end = t.end;
@@ -448,10 +448,10 @@ impl Type {
         return ptr_type;
     }
 
-    pub fn rawptr_of(t: Type) -> Type {
+    pub fn ptr_of(t: Type) -> Type {
         assert_eq!(t.status, ReductionStatus::Done);
 
-        let ptr_kind = TypeKind::Rawptr(Box::new(t.clone()));
+        let ptr_kind = TypeKind::Ptr(Box::new(t.clone()));
 
         let mut ptr_type = Type::new(ptr_kind);
         ptr_type.start = t.start;
@@ -515,13 +515,13 @@ impl Type {
                 str.hash(&mut hasher);
                 hasher.finish()
             }
-            TypeKind::Ptr(value_type) => {
+            TypeKind::Ref(value_type) => {
                 let value_hash = value_type.hash();
                 let mut hasher = DefaultHasher::new();
                 format!("{}.{}", self.kind.to_string(), value_hash).hash(&mut hasher);
                 hasher.finish()
             }
-            TypeKind::Rawptr(value_type) => {
+            TypeKind::Ptr(value_type) => {
                 let value_hash = value_type.hash();
                 let mut hasher = DefaultHasher::new();
                 format!("{}.{}", self.kind.to_string(), value_hash).hash(&mut hasher);
@@ -644,8 +644,8 @@ impl Display for ReductionStatus {
 pub enum SelfKind {
     Null = 0,    // No self parameter
     SelfT,       // self - value type
-    SelfRawptrT, // *self - raw pointer type
-    SelfPtrT,    // default for impl fn without explicit self
+    SelfPtrT, // *self - raw pointer type
+    SelfRefT,    // default for impl fn without explicit self
 }
 
 impl Default for SelfKind {
@@ -737,11 +737,11 @@ pub enum TypeKind {
     Fn(Box<TypeFn>),
 
     // 指针类型
+    #[strum(serialize = "ref")]
+    Ref(Box<Type>), // value type
+
     #[strum(serialize = "ptr")]
     Ptr(Box<Type>), // value type
-
-    #[strum(serialize = "rawptr")]
-    Rawptr(Box<Type>), // value type
 
     #[strum(serialize = "anyptr")]
     Anyptr,

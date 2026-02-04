@@ -29,8 +29,8 @@ const FN = 20
 const CHAN = 21
 const COROUTINE_T = 22
 
-const PTR = 23
-const RAWPTR = 24
+const REF = 23
+const PTR = 24
 const ANYPTR = 25
 
 const UNION = 26
@@ -54,7 +54,7 @@ type type_t = struct{
     [int] hashes
     [field_t] fields // type struct exclusive
 
-    rawptr<rtype_t> r
+    ptr<rtype_t> r
 }
 
 type rtype_struct_t = struct{
@@ -79,7 +79,7 @@ type rtype_t = struct{
 }
 
 #linkid rt_find_rtype
-fn find_rtype(int hash):rawptr<rtype_t>
+fn find_rtype(int hash):ptr<rtype_t>
 
 #linkid rt_find_data
 fn find_data(int offset):anyptr
@@ -87,7 +87,7 @@ fn find_data(int offset):anyptr
 #linkid rt_find_strtable
 fn find_strtable(int offset):libc.cstr
 
-fn typeof_hash(i64 hash):ptr<type_t>! {
+fn typeof_hash(i64 hash):ref<type_t>! {
     if hash <= 0 {
         throw errorf('hash must be greater than 0')
     }
@@ -106,7 +106,7 @@ fn typeof_hash(i64 hash):ptr<type_t>! {
 
     if r.kind == STRUCT {
         t.fields = vec_new<field_t>(field_t{}, r.length as int)
-        var temp_fields = unsafe.vec_new(find_data(r.hashes_offset) as rawptr<rtype_struct_t>, r.length as int)
+        var temp_fields = unsafe.vec_new(find_data(r.hashes_offset) as ptr<rtype_struct_t>, r.length as int)
 
         for i,field in temp_fields {
             t.fields[i] = field_t{
@@ -119,7 +119,7 @@ fn typeof_hash(i64 hash):ptr<type_t>! {
         if r.length > 0 {
             t.hashes = vec_new<int>(0, r.length as int)
 
-            var temp_hashes = unsafe.vec_new(find_data(r.hashes_offset) as rawptr<i64>, r.length as int)
+            var temp_hashes = unsafe.vec_new(find_data(r.hashes_offset) as ptr<i64>, r.length as int)
             var len = t.hashes.copy(temp_hashes)
             assert(len == t.hashes.len())
         }
@@ -128,7 +128,7 @@ fn typeof_hash(i64 hash):ptr<type_t>! {
     return t
 }
 
-fn typeof<T>(T v):ptr<type_t>! {
+fn typeof<T>(T v):ref<type_t>! {
     var hash = @reflect_hash(T)
     return typeof_hash(hash)
 }
@@ -158,8 +158,8 @@ fn type_t.to_string():string {
         FN -> 'fn'
         CHAN -> 'chan'
         COROUTINE_T -> 'coroutine_t'
+        REF -> 'ref'
         PTR -> 'ptr'
-        RAWPTR -> 'rawptr'
         ANYPTR -> 'anyptr'
         UNION -> 'union'
         _ -> 'unknown'
@@ -201,15 +201,15 @@ type set_t = struct{
 
 type union_t = struct{
     anyptr value
-    rawptr<rtype_t> rtype
+    ptr<rtype_t> rtype
 }
 
 type value_t = struct{
-    ptr<type_t> t
+    ref<type_t> t
     anyptr v
 }
 
-fn valueof<T>(T v):ptr<value_t>! {
+fn valueof<T>(T v):ref<value_t>! {
     var t = typeof<T>(v)
     if t.kind != VEC && t.kind != MAP && t.kind != SET {
         throw errorf('not value support type')
@@ -225,18 +225,18 @@ fn valueof<T>(T v):ptr<value_t>! {
 
 fn value_t.len():int {
     if self.t.kind == VEC {
-        var v = self.v as rawptr<vec_t>
+        var v = self.v as ptr<vec_t>
         return v.length as int
     }
 
 
     if self.t.kind == MAP {
-        var v = self.v as rawptr<map_t>
+        var v = self.v as ptr<map_t>
         return v.length as int
     }
 
     if self.t.kind == SET {
-        var v = self.v as rawptr<set_t>
+        var v = self.v as ptr<set_t>
         return v.length as int
     }
 

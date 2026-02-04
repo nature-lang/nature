@@ -290,15 +290,15 @@ type trans_t = struct{
     int t2
     int t3
     test_t t4
-    ptr<int> t5
+    ref<int> t5
 }
 
-fn malloc_test(rawptr<test_t> t) {
+fn malloc_test(ptr<test_t> t) {
     t.a = [0;288]
     t.b = [0;288]
 }
 
-fn trans_new():ptr<trans_t> {
+fn trans_new():ref<trans_t> {
     var v = new trans_t(t2 = 2, t3= 3, t5 = new int(10))
     malloc_test(&v.t4)
     return v

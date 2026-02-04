@@ -5,7 +5,7 @@ import io.buf
 
 fn main():void! {
     var wr = new io.buffer()
-    var bw = new buf.writer<ptr<io.buffer>>(wr)
+    var bw = new buf.writer<ref<io.buffer>>(wr)
 
     // Test available space
     println("initial available:", bw.available())
@@ -57,7 +57,7 @@ import io.buf
 
 fn main():void! {
     var wr = new io.buffer()
-    var bw = new buf.writer<ptr<io.buffer>>(wr)
+    var bw = new buf.writer<ref<io.buffer>>(wr)
 
     // Test write_byte
     bw.write_byte('H'.char())

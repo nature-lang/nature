@@ -437,7 +437,7 @@ fn listen(int sockfd, int backlog):void!
 ## fn accept
 
 ```
-fn accept<T>(int sockfd, ptr<T> addr):int!
+fn accept<T>(int sockfd, ref<T> addr):int!
 ```
 
 接受套接字上的连接

@@ -526,7 +526,7 @@ Parse suboption arguments
 ## fn rand_r
 
 ```
-fn rand_r(rawptr<u32> seed):i32
+fn rand_r(ptr<u32> seed):i32
 ```
 
 Thread-safe random number generator
@@ -686,7 +686,7 @@ Seed 48-bit random number generator
 ## fn seed48
 
 ```
-fn seed48(anyptr seed16v):rawptr<u16>
+fn seed48(anyptr seed16v):ptr<u16>
 ```
 
 Set 48-bit random number generator seed
@@ -726,7 +726,7 @@ Reallocate array with overflow checking
 ## fn getloadavg
 
 ```
-fn getloadavg(rawptr<f64> loadavg, i32 nelem):i32
+fn getloadavg(ptr<f64> loadavg, i32 nelem):i32
 ```
 
 Get system load averages
@@ -734,7 +734,7 @@ Get system load averages
 ## fn ecvt
 
 ```
-fn ecvt(f64 number, i32 ndigits, rawptr<i32> decpt, rawptr<i32> sign):cstr
+fn ecvt(f64 number, i32 ndigits, ptr<i32> decpt, ptr<i32> sign):cstr
 ```
 
 Convert floating-point to string (exponential format)
@@ -742,7 +742,7 @@ Convert floating-point to string (exponential format)
 ## fn fcvt
 
 ```
-fn fcvt(f64 number, i32 ndigits, rawptr<i32> decpt, rawptr<i32> sign):cstr
+fn fcvt(f64 number, i32 ndigits, ptr<i32> decpt, ptr<i32> sign):cstr
 ```
 
 Convert floating-point to string (fixed-point format)
@@ -862,7 +862,7 @@ Reset file position to beginning
 ## fn fgetpos
 
 ```
-fn fgetpos(fileptr stream, rawptr<fpos_t> pos):i32
+fn fgetpos(fileptr stream, ptr<fpos_t> pos):i32
 ```
 
 Get file position
@@ -870,7 +870,7 @@ Get file position
 ## fn fsetpos
 
 ```
-fn fsetpos(fileptr stream, rawptr<fpos_t> pos):i32
+fn fsetpos(fileptr stream, ptr<fpos_t> pos):i32
 ```
 
 Set file position
@@ -1022,7 +1022,7 @@ Open memory as stream
 ## fn open_memstream
 
 ```
-fn open_memstream(rawptr<cstr> bufp, rawptr<u64> sizep):fileptr
+fn open_memstream(ptr<cstr> bufp, ptr<u64> sizep):fileptr
 ```
 
 Open dynamic memory stream
@@ -1222,7 +1222,7 @@ Put string without locking
 ## fn getdelim
 
 ```
-fn getdelim(rawptr<cstr> lineptr, rawptr<u64> n, i32 delim, fileptr stream):i64
+fn getdelim(ptr<cstr> lineptr, ptr<u64> n, i32 delim, fileptr stream):i64
 ```
 
 Read delimited string from stream
@@ -1230,7 +1230,7 @@ Read delimited string from stream
 ## fn getline
 
 ```
-fn getline(rawptr<cstr> lineptr, rawptr<u64> n, fileptr stream):i64
+fn getline(ptr<cstr> lineptr, ptr<u64> n, fileptr stream):i64
 ```
 
 Read line from stream
@@ -1294,7 +1294,7 @@ Put word to stream
 ## fn fgetln
 
 ```
-fn fgetln(fileptr stream, rawptr<u64> len):cstr
+fn fgetln(fileptr stream, ptr<u64> len):cstr
 ```
 
 Get line from stream
@@ -1494,7 +1494,7 @@ Get error message string
 ## fn strtok_r
 
 ```
-fn strtok_r(cstr str, cstr delim, rawptr<cstr> saveptr):cstr
+fn strtok_r(cstr str, cstr delim, ptr<cstr> saveptr):cstr
 ```
 
 Split string into tokens (thread-safe)
@@ -1598,7 +1598,7 @@ Copy memory until character found
 ## fn strsep
 
 ```
-fn strsep(rawptr<cstr> strp, cstr delim):cstr
+fn strsep(ptr<cstr> strp, cstr delim):cstr
 ```
 
 Separate string
@@ -2246,7 +2246,7 @@ Copy sign of floating-point value (single precision)
 ## fn frexp
 
 ```
-fn frexp(f64 x, rawptr<i32> exp):f64
+fn frexp(f64 x, ptr<i32> exp):f64
 ```
 
 Break floating-point number into fraction and exponent
@@ -2254,7 +2254,7 @@ Break floating-point number into fraction and exponent
 ## fn frexpf
 
 ```
-fn frexpf(f32 x, rawptr<i32> exp):f32
+fn frexpf(f32 x, ptr<i32> exp):f32
 ```
 
 Break floating-point number into fraction and exponent (single precision)
@@ -2278,7 +2278,7 @@ Generate floating-point number from fraction and exponent (single precision)
 ## fn modf
 
 ```
-fn modf(f64 x, rawptr<f64> iptr):f64
+fn modf(f64 x, ptr<f64> iptr):f64
 ```
 
 Break into integer and fractional parts
@@ -2286,7 +2286,7 @@ Break into integer and fractional parts
 ## fn modff
 
 ```
-fn modff(f32 x, rawptr<f32> iptr):f32
+fn modff(f32 x, ptr<f32> iptr):f32
 ```
 
 Break into integer and fractional parts (single precision)
@@ -2390,7 +2390,7 @@ Compute IEEE remainder (single precision)
 ## fn remquo
 
 ```
-fn remquo(f64 x, f64 y, rawptr<i32> quo):f64
+fn remquo(f64 x, f64 y, ptr<i32> quo):f64
 ```
 
 Compute remainder and quotient
@@ -2398,7 +2398,7 @@ Compute remainder and quotient
 ## fn remquof
 
 ```
-fn remquof(f32 x, f32 y, rawptr<i32> quo):f32
+fn remquof(f32 x, f32 y, ptr<i32> quo):f32
 ```
 
 Compute remainder and quotient (single precision)
@@ -2486,7 +2486,7 @@ Convert host byte order to network byte order (16-bit)
 ## fn waitpid
 
 ```
-fn waitpid(int pid, rawptr<int> status, int options):int
+fn waitpid(int pid, ptr<int> status, int options):int
 ```
 
 Wait for process to change state
@@ -2494,7 +2494,7 @@ Wait for process to change state
 ## fn sigemptyset
 
 ```
-fn sigemptyset(ptr<sigset_t> sigset):i32
+fn sigemptyset(ref<sigset_t> sigset):i32
 ```
 
 Initialize signal set to empty
@@ -2502,7 +2502,7 @@ Initialize signal set to empty
 ## fn sigaddset
 
 ```
-fn sigaddset(ptr<sigset_t> sigset, i32 signo):i32
+fn sigaddset(ref<sigset_t> sigset, i32 signo):i32
 ```
 
 Add signal to signal set
@@ -2510,7 +2510,7 @@ Add signal to signal set
 ## fn sigfillset
 
 ```
-fn sigfillset(ptr<sigset_t> sigset):i32
+fn sigfillset(ref<sigset_t> sigset):i32
 ```
 
 Initialize signal set to full
@@ -2518,7 +2518,7 @@ Initialize signal set to full
 ## fn sigprocmask
 
 ```
-fn sigprocmask(i32 how, ptr<sigset_t> sigset, rawptr<sigset_t> oldset):i32
+fn sigprocmask(i32 how, ref<sigset_t> sigset, ptr<sigset_t> oldset):i32
 ```
 
 Examine and change blocked signals
@@ -2526,7 +2526,7 @@ Examine and change blocked signals
 ## fn signalfd
 
 ```
-fn signalfd(int fd, ptr<sigset_t> mask, i32 flags):i32
+fn signalfd(int fd, ref<sigset_t> mask, i32 flags):i32
 ```
 
 Create file descriptor for accepting signals
@@ -2645,7 +2645,7 @@ Open directory stream
 ## fn readdir
 
 ```
-fn readdir(dir_t d):rawptr<dirent_t>
+fn readdir(dir_t d):ptr<dirent_t>
 ```
 
 Read directory entry from directory stream

@@ -5,7 +5,7 @@ import fmt
 
 u64 seed = 1744996865
 
-fn random_u32(rawptr<u64> state):u32 {
+fn random_u32(ptr<u64> state):u32 {
     *state ^= *state >> 12
     *state ^= *state << 25
     *state ^= *state >> 27

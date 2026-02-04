@@ -31,7 +31,7 @@ type rsa_private_key_t = struct{
 }
 
 // Generate RSA key pair with specified key size in bits
-fn generate_key(u32 key_bits):(ptr<rsa_public_key_t>, ptr<rsa_private_key_t>)! {
+fn generate_key(u32 key_bits):(ref<rsa_public_key_t>, ref<rsa_private_key_t>)! {
     var generator = new rsa_key_generator_t()
     
     // Initialize entropy and random number generator
@@ -78,7 +78,7 @@ fn generate_key(u32 key_bits):(ptr<rsa_public_key_t>, ptr<rsa_private_key_t>)! {
 }
 
 // Create RSA public key from PEM format string
-fn public_key_from_pem([u8] pem_data):ptr<rsa_public_key_t>! {
+fn public_key_from_pem([u8] pem_data):ref<rsa_public_key_t>! {
     var public_key = new rsa_public_key_t()
     var pk = utils.mbedtls_pk_context{}
     
@@ -92,7 +92,7 @@ fn public_key_from_pem([u8] pem_data):ptr<rsa_public_key_t>! {
     
     // Initialize RSA context and copy from PK context
     utils.mbedtls_rsa_init(&public_key.rsa_ctx)
-    var pk_rsa = pk.pk_ctx as rawptr<utils.mbedtls_rsa_context>
+    var pk_rsa = pk.pk_ctx as ptr<utils.mbedtls_rsa_context>
     var copy_result = utils.mbedtls_rsa_copy(&public_key.rsa_ctx, pk_rsa)
     if copy_result != 0 {
         utils.mbedtls_rsa_free(&public_key.rsa_ctx)
@@ -107,7 +107,7 @@ fn public_key_from_pem([u8] pem_data):ptr<rsa_public_key_t>! {
 }
 
 // Create RSA private key from PEM format string
-fn private_key_from_pem([u8] pem_data, [u8] password):ptr<rsa_private_key_t>! {
+fn private_key_from_pem([u8] pem_data, [u8] password):ref<rsa_private_key_t>! {
     var private_key = new rsa_private_key_t()
     var pk = utils.mbedtls_pk_context{}
     
@@ -145,7 +145,7 @@ fn private_key_from_pem([u8] pem_data, [u8] password):ptr<rsa_private_key_t>! {
     
     // Initialize RSA context and copy from PK context
     utils.mbedtls_rsa_init(&private_key.rsa_ctx)
-    var pk_rsa = pk.pk_ctx as rawptr<utils.mbedtls_rsa_context>
+    var pk_rsa = pk.pk_ctx as ptr<utils.mbedtls_rsa_context>
     var copy_result = utils.mbedtls_rsa_copy(&private_key.rsa_ctx, pk_rsa)
     if copy_result != 0 {
         utils.mbedtls_rsa_free(&private_key.rsa_ctx)
@@ -346,7 +346,7 @@ fn rsa_public_key_t.to_pem():[u8]! {
         throw errorf('mbedtls_pk_setup failed')
     }
 
-    var pk_rsa = pk.pk_ctx as rawptr<utils.mbedtls_rsa_context>
+    var pk_rsa = pk.pk_ctx as ptr<utils.mbedtls_rsa_context>
     ret = utils.mbedtls_rsa_copy(pk_rsa, &self.rsa_ctx)
     if ret != 0 {
         utils.mbedtls_pk_free(&pk)
@@ -378,7 +378,7 @@ fn rsa_private_key_t.to_pem():[u8]! {
         throw errorf('mbedtls_pk_setup failed')
     }
 
-    var pk_rsa = pk.pk_ctx as rawptr<utils.mbedtls_rsa_context>
+    var pk_rsa = pk.pk_ctx as ptr<utils.mbedtls_rsa_context>
     ret = utils.mbedtls_rsa_copy(pk_rsa, &self.rsa_ctx)
     if ret != 0 {
         utils.mbedtls_pk_free(&pk)

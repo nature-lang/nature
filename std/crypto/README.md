@@ -92,7 +92,7 @@ HMAC context for computing hash-based message authentication codes.
 ### new
 
 ```
-fn new(int hasher_type, [u8] secret):ptr<hmac_t>
+fn new(int hasher_type, [u8] secret):ref<hmac_t>
 ```
 
 Create new HMAC context with specified hash algorithm and secret key.
@@ -100,7 +100,7 @@ Create new HMAC context with specified hash algorithm and secret key.
 ### hmac_t.update
 
 ```
-fn hmac_t.update([u8] message):ptr<hmac_t>
+fn hmac_t.update([u8] message):ref<hmac_t>
 ```
 
 Update HMAC with message data.
@@ -146,7 +146,7 @@ MD5 hash context.
 ### new
 
 ```
-fn new():ptr<md5_t>
+fn new():ref<md5_t>
 ```
 
 Create new MD5 hash context.
@@ -154,7 +154,7 @@ Create new MD5 hash context.
 ### md5_t.update
 
 ```
-fn md5_t.update([u8] input):ptr<md5_t>
+fn md5_t.update([u8] input):ref<md5_t>
 ```
 
 Update MD5 hash with input data.
@@ -200,7 +200,7 @@ SHA-256 hash context.
 ### new
 
 ```
-fn new():ptr<sha256_t>
+fn new():ref<sha256_t>
 ```
 
 Create new SHA-256 hash context.
@@ -208,7 +208,7 @@ Create new SHA-256 hash context.
 ### sha256_t.update
 
 ```
-fn sha256_t.update([u8] input):ptr<sha256_t>
+fn sha256_t.update([u8] input):ref<sha256_t>
 ```
 
 Update SHA-256 hash with input data.
@@ -328,7 +328,7 @@ const SHA3_512 = 0x13
 ## fn generate_key
 
 ```
-fn generate_key(u32 key_bits):(ptr<rsa_public_key_t>, ptr<rsa_private_key_t>)!
+fn generate_key(u32 key_bits):(ref<rsa_public_key_t>, ref<rsa_private_key_t>)!
 ```
 
 Generate RSA key pair with specified key size in bits. Returns a tuple of public key and private key.
@@ -336,7 +336,7 @@ Generate RSA key pair with specified key size in bits. Returns a tuple of public
 ## fn public_key_from_pem
 
 ```
-fn public_key_from_pem([u8] pem_data):ptr<rsa_public_key_t>!
+fn public_key_from_pem([u8] pem_data):ref<rsa_public_key_t>!
 ```
 
 Create RSA public key from PEM format data.
@@ -344,7 +344,7 @@ Create RSA public key from PEM format data.
 ## fn private_key_from_pem
 
 ```
-fn private_key_from_pem([u8] pem_data, [u8] password):ptr<rsa_private_key_t>!
+fn private_key_from_pem([u8] pem_data, [u8] password):ref<rsa_private_key_t>!
 ```
 
 Create RSA private key from PEM format data, supporting password-protected private keys.

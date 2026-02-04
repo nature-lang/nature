@@ -160,7 +160,7 @@ static void generics_constraints_check(module_t *m, ast_generics_constraints *co
             assert(expect_interface_type->kind == TYPE_INTERFACE);
 
             type_t temp_target_type = *src;
-            if (src->kind == TYPE_PTR || src->kind == TYPE_RAWPTR) {
+            if (src->kind == TYPE_REF || src->kind == TYPE_PTR) {
                 temp_target_type = src->ptr->value_type;
             }
 
@@ -463,7 +463,7 @@ bool type_generics(type_t dst, type_t src, table_t *generics_param_table) {
         return true;
     }
 
-    if (dst.kind == TYPE_PTR || dst.kind == TYPE_RAWPTR) {
+    if (dst.kind == TYPE_REF || dst.kind == TYPE_PTR) {
         type_t left_pointer = dst.ptr->value_type;
         type_t right_pointer = src.ptr->value_type;
         return type_generics(left_pointer, right_pointer, generics_param_table);
@@ -518,14 +518,14 @@ bool type_compare_visited(type_t dst, type_t src, table_t *visited) {
         return true;
     }
 
-    // rawptr<t> 可以赋值为 null 以及 ptr<t> 两种类型的值
-    // 但是不能通过 as 转换为 ptr<T> 和 null
-    if (dst.kind == TYPE_RAWPTR) {
+    // ptr<t> 可以赋值为 null 以及 ref<t> 两种类型的值
+    // 但是不能通过 as 转换为 ref<T> 和 null
+    if (dst.kind == TYPE_PTR) {
         if (src.kind == TYPE_NULL) {
             return true;
         }
 
-        if (src.kind == TYPE_PTR) {
+        if (src.kind == TYPE_REF) {
             type_t dst_ptr = dst.ptr->value_type;
             type_t src_ptr = src.ptr->value_type;
             return type_compare_visited(dst_ptr, src_ptr, visited);
@@ -723,7 +723,7 @@ bool type_compare_visited(type_t dst, type_t src, table_t *visited) {
         return true;
     }
 
-    if (dst.kind == TYPE_PTR || dst.kind == TYPE_RAWPTR) {
+    if (dst.kind == TYPE_REF || dst.kind == TYPE_PTR) {
         type_t left_pointer = dst.ptr->value_type;
         type_t right_pointer = src.ptr->value_type;
         return type_compare_visited(left_pointer, right_pointer, visited);
@@ -1149,7 +1149,7 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
     // interface 可以 as 为任意类型(前提是实现了 interface)
     if (as_expr->src.type.kind == TYPE_INTERFACE) {
         type_t temp_target_type = target_type;
-        if (target_type.kind == TYPE_PTR || target_type.kind == TYPE_RAWPTR) {
+        if (target_type.kind == TYPE_REF || target_type.kind == TYPE_PTR) {
             temp_target_type = target_type.ptr->value_type;
         }
 
@@ -1251,7 +1251,7 @@ static type_t infer_new_expr(module_t *m, ast_new_expr_t *new_expr) {
     }
 
 
-    return reduction_type(m, type_ptrof(new_expr->type));
+    return reduction_type(m, type_refof(new_expr->type));
 }
 
 
@@ -1630,12 +1630,12 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_typ
         INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
                       "cannot load address of an literal or call");
 
-        return type_rawptrof(operand_type);
+        return type_ptrof(operand_type);
     }
 
     // @ula(var)
     if (expr->op == AST_OP_UNSAFE_LA) {
-        if (expr->operand.type.kind == TYPE_PTR) {
+        if (expr->operand.type.kind == TYPE_REF) {
             return operand_type;
         }
 
@@ -1645,12 +1645,12 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_typ
         INFER_ASSERTF(operand_type.kind != TYPE_UNION, "cannot unsafe load address of an union type");
 
 
-        return type_ptrof(operand_type);
+        return type_refof(operand_type);
     }
 
     // @sla(var)
     if (expr->op == AST_OP_SAFE_LA) {
-        if (expr->operand.type.kind == TYPE_PTR) {
+        if (expr->operand.type.kind == TYPE_REF) {
             return operand_type;
         }
 
@@ -1666,12 +1666,12 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_typ
 
         marking_heap_alloc(&expr->operand);
 
-        return type_ptrof(operand_type);
+        return type_refof(operand_type);
     }
 
     // *var
     if (expr->op == AST_OP_IA) {
-        INFER_ASSERTF(operand_type.kind == TYPE_PTR || operand_type.kind == TYPE_RAWPTR,
+        INFER_ASSERTF(operand_type.kind == TYPE_REF || operand_type.kind == TYPE_PTR,
                       "cannot dereference non-pointer type '%s'", type_format(operand_type));
 
         return operand_type.ptr->value_type;
@@ -2080,7 +2080,7 @@ static type_t infer_access_expr(module_t *m, ast_expr_t *expr) {
     ast_access_t *access = expr->value;
     type_t left_type = infer_right_expr(m, &access->left, type_kind_new(TYPE_UNKNOWN));
 
-    if (left_type.kind == TYPE_PTR || left_type.kind == TYPE_RAWPTR) {
+    if (left_type.kind == TYPE_REF || left_type.kind == TYPE_PTR) {
         if (left_type.ptr->value_type.kind == TYPE_ARR) {
             left_type = left_type.ptr->value_type;
         }
@@ -2237,7 +2237,7 @@ static type_t infer_select_expr(module_t *m, ast_expr_t *expr) {
     // infer 自动解引用
     // 不能直接改写 select->instance!
     type_t left_type = select->left.type;
-    if (left_type.kind == TYPE_PTR || left_type.kind == TYPE_RAWPTR) {
+    if (left_type.kind == TYPE_REF || left_type.kind == TYPE_PTR) {
         type_t value_type = select->left.type.ptr->value_type;
         if (value_type.kind == TYPE_STRUCT) {
             left_type = value_type;
@@ -2245,7 +2245,7 @@ static type_t infer_select_expr(module_t *m, ast_expr_t *expr) {
     }
 
     // TODO 在本次版本中，尝试不进行限制 raw ptr 的 . 语法，从而达到和 c 语言一样的效果
-    //    INFER_ASSERTF(left_type.kind != TYPE_RAWPTR,
+    //    INFER_ASSERTF(left_type.kind != TYPE_PTR,
     //                  "%s cannot use select '.' operator", type_format(left_type));
 
     // ast_access to ast_struct_access
@@ -2259,7 +2259,7 @@ static type_t infer_select_expr(module_t *m, ast_expr_t *expr) {
 
         // 改写
         ast_struct_select_t *struct_select = NEW(ast_struct_select_t);
-        struct_select->instance = select->left; // 可能是 ptr<struct>/ rawptr<struct> / struct
+        struct_select->instance = select->left; // 可能是 ref<struct>/ ptr<struct> / struct
         struct_select->key = select->key;
         struct_select->property = p;
         expr->assert_type = AST_EXPR_STRUCT_SELECT;
@@ -2431,29 +2431,29 @@ static bool marking_heap_alloc(ast_expr_t *expr) {
 static ast_expr_t *self_arg_rewrite(module_t *m, type_fn_t *type_fn, ast_expr_t *self_arg) {
     type_t *self_param_type = ct_list_value(type_fn->param_types, 0);
     type_t *extract_self_type = self_param_type;
-    if (self_param_type->kind == TYPE_PTR || self_param_type->kind == TYPE_RAWPTR) {
+    if (self_param_type->kind == TYPE_REF || self_param_type->kind == TYPE_PTR) {
         extract_self_type = &self_param_type->ptr->value_type;
     }
 
     if (is_stack_impl(extract_self_type->kind)) {
-        if (self_param_type->kind == TYPE_PTR) {
-            INFER_ASSERTF(self_arg->type.kind != TYPE_RAWPTR,
+        if (self_param_type->kind == TYPE_REF) {
+            INFER_ASSERTF(self_arg->type.kind != TYPE_PTR,
                           "type mismatch: method requires `%s` receiver, got `%s`", type_format(*self_param_type), type_format(self_arg->type));
 
-            if (self_arg->type.kind != TYPE_PTR) {
+            if (self_arg->type.kind != TYPE_REF) {
                 return ast_safe_load_addr(self_arg);
             }
 
             return self_arg;
-        } else if (self_param_type->kind == TYPE_RAWPTR) {
-            if (self_arg->type.kind == TYPE_RAWPTR || self_arg->type.kind == TYPE_PTR) {
+        } else if (self_param_type->kind == TYPE_PTR) {
+            if (self_arg->type.kind == TYPE_PTR || self_arg->type.kind == TYPE_REF) {
                 return self_arg;
             }
 
             return ast_load_addr(self_arg); // unsafe load
         } else {
             // value pass
-            if (self_arg->type.kind == TYPE_RAWPTR || self_arg->type.kind == TYPE_PTR) {
+            if (self_arg->type.kind == TYPE_PTR || self_arg->type.kind == TYPE_REF) {
                 return ast_indirect_addr(self_arg);
             }
 
@@ -2461,7 +2461,7 @@ static ast_expr_t *self_arg_rewrite(module_t *m, type_fn_t *type_fn, ast_expr_t 
         }
     }
 
-    // ptr<[T]> 类型这样的形式是不被允许的
+    // ref<[T]> 类型这样的形式是不被允许的
     INFER_ASSERTF(is_heap_impl(self_arg->type.kind),
                   "unsupported method receiver type '%s', expected heap-allocated type",
                   type_format(self_arg->type))
@@ -2509,7 +2509,7 @@ static type_fn_t *infer_impl_call_rewrite(module_t *m, ast_call_t *call, type_t 
     type_t select_left_type = infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
 
     type_t extract_type = select_left_type;
-    if (select_left_type.kind == TYPE_PTR || select_left_type.kind == TYPE_RAWPTR) {
+    if (select_left_type.kind == TYPE_REF || select_left_type.kind == TYPE_PTR) {
         extract_type = select_left_type.ptr->value_type;
     }
 
@@ -2524,7 +2524,7 @@ static type_fn_t *infer_impl_call_rewrite(module_t *m, ast_call_t *call, type_t 
     }
 
     // must alloc in heap
-    INFER_ASSERTF(select_left_type.kind != TYPE_RAWPTR, "%s cannot use impl call",
+    INFER_ASSERTF(select_left_type.kind != TYPE_PTR, "%s cannot use impl call",
                   type_format(select_left_type));
 
 
@@ -2586,7 +2586,7 @@ static type_fn_t *infer_impl_call_rewrite(module_t *m, ast_call_t *call, type_t 
             }
 
             INFER_ASSERTF(s, "type '%s' not impl '%s' fn", type_format(extract_type), select->key);
-            if (select_left_type.kind == TYPE_PTR || select_left_type.kind == TYPE_RAWPTR) {
+            if (select_left_type.kind == TYPE_REF || select_left_type.kind == TYPE_PTR) {
                 self_arg->type.ptr->value_type = builtin_type;
             } else {
                 self_arg->type = builtin_type;
@@ -3440,7 +3440,7 @@ static ast_expr_t as_to_interface(module_t *m, ast_expr_t *expr, type_t interfac
 
     // auto destr ptr
     type_t src_type = expr->type;
-    if (expr->type.kind == TYPE_PTR || expr->type.kind == TYPE_RAWPTR) {
+    if (expr->type.kind == TYPE_REF || expr->type.kind == TYPE_PTR) {
         src_type = expr->type.ptr->value_type;
     }
 
@@ -3557,7 +3557,7 @@ static type_t reduction_struct(module_t *m, type_t t) {
 }
 
 static type_t reduction_complex_type(module_t *m, type_t t) {
-    if (t.kind == TYPE_PTR || t.kind == TYPE_RAWPTR) {
+    if (t.kind == TYPE_REF || t.kind == TYPE_PTR) {
         type_ptr_t *type_pointer = t.ptr;
         type_pointer->value_type = reduction_type(m, type_pointer->value_type);
         return t;
@@ -3688,16 +3688,16 @@ static ast_fndef_t *generate_receiver_wrapper(module_t *m, ast_fndef_t *origin_f
     wrapper->is_errable = origin_fndef->is_errable;
     wrapper->is_impl = true;
     wrapper->impl_type = impl_type;
-    wrapper->self_kind = PARAM_SELF_PTR_T; // wrapper 接收指针参数
+    wrapper->self_kind = PARAM_SELF_REF_T; // wrapper 接收指针参数
 
-    // 创建参数列表 - 第一个参数是 ptr<impl_type>
+    // 创建参数列表 - 第一个参数是 ref<impl_type>
     wrapper->params = ct_list_new(sizeof(ast_var_decl_t));
 
     // 为 self 参数生成唯一标识符并注册到符号表
     char *self_unique_ident = var_unique_ident(m, FN_SELF_NAME);
     ast_var_decl_t *self_param = NEW(ast_var_decl_t);
     self_param->ident = self_unique_ident;
-    self_param->type = type_ptrof(impl_type);
+    self_param->type = type_refof(impl_type);
     symbol_table_set(self_unique_ident, SYMBOL_VAR, self_param, true);
     ct_list_push(wrapper->params, self_param);
 
@@ -4345,16 +4345,16 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
 
         if (fndef->is_impl && i == 0) {
             if (is_stack_impl(param->type.kind)) {
-                if (fndef->self_kind == PARAM_SELF_PTR_T) {
+                if (fndef->self_kind == PARAM_SELF_REF_T) {
+                    param->type = type_refof(param->type);
+                } else if (fndef->self_kind == PARAM_SELF_PTR_T) {
                     param->type = type_ptrof(param->type);
-                } else if (fndef->self_kind == PARAM_SELF_RAWPTR_T) {
-                    param->type = type_rawptrof(param->type);
                 } else {
                     // not need  handle
                 }
             } else {
                 // not need handle, like vec/map/set/chan...
-                INFER_ASSERTF(fndef->self_kind == PARAM_SELF_PTR_T,
+                INFER_ASSERTF(fndef->self_kind == PARAM_SELF_REF_T,
                               "heap-allocated type '%s' has implicit pointer receiver; omit the 'self' parameter, e.g., `fn T.method()`",
                               type_format(param->type));
             }

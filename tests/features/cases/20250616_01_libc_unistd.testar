@@ -115,7 +115,7 @@ fn main():void {
     println('EGID >= 0:', egid >= 0)
     
     // 测试获取组列表
-    var groups = libc.malloc(64) as rawptr<u32>  // 最多16个组
+    var groups = libc.malloc(64) as ptr<u32>  // 最多16个组
     var ngroups = libc.getgroups(16, groups)
     
     println('getgroups result >= 0:', ngroups >= 0)

@@ -25,7 +25,7 @@ TCP networking for server and client connections
 ## fn uv_tcp_listen
 
 ```
-fn uv_tcp_listen(ptr<server_t> s):void!
+fn uv_tcp_listen(ref<server_t> s):void!
 ```
 
 Low-level TCP server listening using libuv backend
@@ -33,7 +33,7 @@ Low-level TCP server listening using libuv backend
 ## fn uv_tcp_connect
 
 ```
-fn uv_tcp_connect(ptr<conn_t> conn, string ip, int port, int timeout):void!
+fn uv_tcp_connect(ref<conn_t> conn, string ip, int port, int timeout):void!
 ```
 
 Low-level TCP connection establishment using libuv backend
@@ -41,7 +41,7 @@ Low-level TCP connection establishment using libuv backend
 ## fn uv_tcp_accept
 
 ```
-fn uv_tcp_accept(ptr<server_t> server, ptr<conn_t> conn):void!
+fn uv_tcp_accept(ref<server_t> server, ref<conn_t> conn):void!
 ```
 
 Low-level TCP connection acceptance using libuv backend
@@ -49,7 +49,7 @@ Low-level TCP connection acceptance using libuv backend
 ## fn listen
 
 ```
-fn listen(string host):ptr<server_t>!
+fn listen(string host):ref<server_t>!
 ```
 
 Create and start a TCP server listening on the specified host and port
@@ -57,7 +57,7 @@ Create and start a TCP server listening on the specified host and port
 ## fn connect
 
 ```
-fn connect(string host):ptr<conn_t>!
+fn connect(string host):ref<conn_t>!
 ```
 
 Establish a TCP connection to the specified host and port
@@ -65,7 +65,7 @@ Establish a TCP connection to the specified host and port
 ## fn connect_timeout
 
 ```
-fn connect_timeout(string host, int timeout):ptr<conn_t>!
+fn connect_timeout(string host, int timeout):ref<conn_t>!
 ```
 
 Establish a TCP connection with specified timeout
@@ -89,7 +89,7 @@ TCP server instance managing listening socket and connections
 ### server_t.accept
 
 ```
-fn server_t.accept():ptr<conn_t>!
+fn server_t.accept():ref<conn_t>!
 ```
 
 Accept incoming TCP connection and return connection object
@@ -144,7 +144,7 @@ TLS/SSL secure networking for encrypted connections
 ## fn uv_tls_connect
 
 ```
-fn uv_tls_connect(ptr<conn_t> conn, string ip, int port, int timeout):void!
+fn uv_tls_connect(ref<conn_t> conn, string ip, int port, int timeout):void!
 ```
 
 Low-level TLS connection establishment using libuv backend
@@ -152,7 +152,7 @@ Low-level TLS connection establishment using libuv backend
 ## fn connect
 
 ```
-fn connect(string host):ptr<conn_t>!
+fn connect(string host):ref<conn_t>!
 ```
 
 Establish a TLS connection to the specified host and port
@@ -160,7 +160,7 @@ Establish a TLS connection to the specified host and port
 ## fn connect_timeout
 
 ```
-fn connect_timeout(string host, int timeout):ptr<conn_t>!
+fn connect_timeout(string host, int timeout):ref<conn_t>!
 ```
 
 Establish a TLS connection with specified timeout
@@ -207,7 +207,7 @@ UDP networking for connectionless packet communication
 ## fn uv_udp_bind
 
 ```
-fn uv_udp_bind(ptr<socket_t> s):void!
+fn uv_udp_bind(ref<socket_t> s):void!
 ```
 
 Low-level UDP socket binding using libuv backend
@@ -215,7 +215,7 @@ Low-level UDP socket binding using libuv backend
 ## fn uv_udp_recvfrom
 
 ```
-fn uv_udp_recvfrom(ptr<socket_t> s, [u8] buf, rawptr<addr_t> addr):int!
+fn uv_udp_recvfrom(ref<socket_t> s, [u8] buf, ptr<addr_t> addr):int!
 ```
 
 Low-level UDP packet reception using libuv backend
@@ -223,7 +223,7 @@ Low-level UDP packet reception using libuv backend
 ## fn bind
 
 ```
-fn bind(string host):ptr<socket_t>!
+fn bind(string host):ref<socket_t>!
 ```
 
 Create and bind a UDP socket to the specified host and port
@@ -231,7 +231,7 @@ Create and bind a UDP socket to the specified host and port
 ## fn connect
 
 ```
-fn connect(string host):ptr<conn_t>!
+fn connect(string host):ref<conn_t>!
 ```
 
 Create a UDP connection to the specified host and port
@@ -288,7 +288,7 @@ Send UDP packet to specified address
 ### socket_t.connect
 
 ```
-fn socket_t.connect(string host):ptr<conn_t>!
+fn socket_t.connect(string host):ref<conn_t>!
 ```
 
 Create a connected UDP socket for communication with specific host
@@ -305,7 +305,7 @@ Close the UDP socket
 
 ```
 type conn_t:io.reader, io.writer = struct{
-    ptr<socket_t> socket
+    ref<socket_t> socket
     addr_t remote_addr
 }
 ```
@@ -391,7 +391,7 @@ Parse URL string into structured URL components
 ## fn parse_authority
 
 ```
-fn parse_authority(rawptr<url_t> result, string authority)
+fn parse_authority(ptr<url_t> result, string authority)
 ```
 
 Parse authority component of URL into hostname and port

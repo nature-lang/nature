@@ -364,18 +364,6 @@ static type_t parser_single_type(module_t *m) {
         return result;
     }
 
-    // ptr<type>
-    if (parser_consume(m, TOKEN_PTR)) {
-        parser_must(m, TOKEN_LEFT_ANGLE);
-        type_ptr_t *type_pointer = NEW(type_ptr_t);
-        type_pointer->value_type = parser_type(m);
-        parser_must(m, TOKEN_RIGHT_ANGLE);
-
-        result.kind = TYPE_PTR;
-        result.ptr = type_pointer;
-        return result;
-    }
-
     //  vec [int] a = []
     // arr [int;8] a = []
     if (parser_consume(m, TOKEN_LEFT_SQUARE)) {
@@ -1007,15 +995,15 @@ static void parser_params(module_t *m, ast_fndef_t *fndef) {
         }
     } else if (parser_consume(m, TOKEN_STAR) && parser_ident_is(m, FN_SELF_NAME)) {
         parser_advance(m);
-        // fn person_t.test(*self):rawptr<person_t> {
+        // fn person_t.test(*self):ptr<person_t> {
         PARSER_ASSERTF(fndef->is_impl, "keyword `self` can only be used in impl fn")
-        fndef->self_kind = PARAM_SELF_RAWPTR_T;
+        fndef->self_kind = PARAM_SELF_PTR_T;
         if (!parser_is(m, TOKEN_RIGHT_PAREN)) {
             parser_must(m, TOKEN_COMMA);
         }
     } else if (fndef->is_impl) {
-        // fn person_t.test():ptr<person_t> {
-        fndef->self_kind = PARAM_SELF_PTR_T;
+        // fn person_t.test():ref<person_t> {
+        fndef->self_kind = PARAM_SELF_REF_T;
     }
 
     // not formal params
@@ -1776,10 +1764,6 @@ static bool is_type_begin_stmt(module_t *m) {
     }
 
     if (parser_is(m, TOKEN_ANY)) {
-        return true;
-    }
-
-    if (parser_is(m, TOKEN_PTR)) {
         return true;
     }
 

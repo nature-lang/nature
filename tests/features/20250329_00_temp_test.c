@@ -1,7 +1,6 @@
 #include "tests/test.h"
 
 int main(void) {
-    BUILD_TEST = true;
     //    char *ldflags = "-nostdlib -static";
     //    strcpy(LDFLAGS, ldflags);
 

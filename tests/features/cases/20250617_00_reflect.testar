@@ -300,7 +300,7 @@ fn main() {
 import reflect
 
 fn main() {
-    ptr<i32> p = new i32(12)
+    ref<i32> p = new i32(12)
 
     var t = reflect.typeof(p)
     println(t.size)
@@ -313,7 +313,7 @@ fn main() {
     println(kt.hashes.len())
 
     var q = 13
-    rawptr<int> p2 = &q
+    ptr<int> p2 = &q
     t = reflect.typeof(p2)
     println(t.size)
     println(t.kind)
@@ -369,7 +369,7 @@ import reflect
 
 fn main() {
     [f32] list = [1.1, 2.2]
-    var v = list as anyptr as rawptr<reflect.vec_t>
+    var v = list as anyptr as ptr<reflect.vec_t>
     println(v.data > 0x400000000, v.length, v.capacity, v.element_size, v.hash)
 }
 

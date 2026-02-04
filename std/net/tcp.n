@@ -18,16 +18,16 @@ type conn_t:types.connable = struct{
 }
 
 #linkid rt_uv_tcp_listen
-fn uv_tcp_listen(ptr<server_t> s):void!
+fn uv_tcp_listen(ref<server_t> s):void!
 
 #linkid rt_uv_tcp_connect
-fn uv_tcp_connect(ptr<conn_t> conn, string ip, int port, int timeout):void!
+fn uv_tcp_connect(ref<conn_t> conn, string ip, int port, int timeout):void!
 
 #linkid rt_uv_tcp_server_close
 fn server_t.close()
 
 #linkid rt_uv_tcp_accept
-fn uv_tcp_accept(ptr<server_t> server, ptr<conn_t> conn):void!
+fn uv_tcp_accept(ref<server_t> server, ref<conn_t> conn):void!
 
 #linkid rt_uv_tcp_read
 fn conn_t.read([u8] buf):int!
@@ -38,7 +38,7 @@ fn conn_t.write([u8] buf):int!
 #linkid rt_uv_tcp_conn_close
 fn conn_t.close()
 
-fn server_t.accept():ptr<conn_t>! {
+fn server_t.accept():ref<conn_t>! {
     if self.closed {
         throw errorf('server closed')
     }
@@ -49,7 +49,7 @@ fn server_t.accept():ptr<conn_t>! {
 }
 
 // host like 127.0.0.1:8080 or :8080
-fn listen(string host):ptr<server_t>! {
+fn listen(string host):ref<server_t>! {
     var (ip, port) = utils.split_host(host)
 
     var s = new server_t(ip, port)
@@ -58,12 +58,12 @@ fn listen(string host):ptr<server_t>! {
     return s
 }
 
-fn connect(string host):ptr<conn_t>! {
+fn connect(string host):ref<conn_t>! {
     return connect_timeout(host, 0)
 }
 
 
-fn connect_timeout(string host, int timeout):ptr<conn_t>! {
+fn connect_timeout(string host, int timeout):ref<conn_t>! {
     var (ip, port) = utils.split_host(host)
     var conn = new conn_t()
     uv_tcp_connect(conn, ip, port, timeout)

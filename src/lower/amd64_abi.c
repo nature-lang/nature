@@ -531,7 +531,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
 
         lir_operand_t *temp_arg = lir_operand_copy(call_result);
         lir_var_t *temp_var = temp_arg->value;
-        temp_var->type = type_ptrof(temp_var->type);
+        temp_var->type = type_refof(temp_var->type);
         slice_insert(op->second->value, 0, temp_arg); // 将 call result 也填入到 args 中进行统一处理
     }
 

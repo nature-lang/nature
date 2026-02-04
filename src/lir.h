@@ -63,7 +63,7 @@
 
 #define RT_CALL_WRITE_BARRIER "write_barrier"
 
-#define RT_CALL_RAWPTR_VALID "rawptr_valid"
+#define RT_CALL_PTR_VALID "ptr_valid"
 
 #define RT_CALL_MAP_NEW "rt_map_new"
 #define RT_CALL_MAP_ACCESS "rt_map_access"
@@ -102,7 +102,7 @@
 
 #define RT_CALL_INTERFACE_ASSERT "interface_assert"
 
-#define RT_CALL_RAWPTR_ASSERT "rawptr_assert"
+#define RT_CALL_PTR_ASSERT "ptr_assert"
 
 #define RT_CALL_ITERATOR_NEXT_KEY "iterator_next_key"
 
@@ -242,13 +242,13 @@ static inline bool is_rtcall(string target) {
     return str_equal(target, RT_CALL_SET_ADD) || str_equal(target, RT_CALL_SET_DELETE) ||
            str_equal(target, RT_CALL_SET_CONTAINS) || str_equal(target, RT_CALL_SET_NEW) ||
            str_equal(target, RT_CALL_VEC_CAP) || str_equal(target, RT_CALL_WRITE_BARRIER) ||
-           str_equal(target, RT_CALL_RAWPTR_VALID) ||
+           str_equal(target, RT_CALL_PTR_VALID) ||
            str_equal(target, RT_CALL_MAP_NEW) || str_equal(target, RT_CALL_MAP_ACCESS) ||
            str_equal(target, RT_CALL_MAP_ASSIGN) || str_equal(target, RT_CALL_MAP_LENGTH) ||
            str_equal(target, RT_CALL_MAP_DELETE) || str_equal(target, RT_CALL_TUPLE_NEW) ||
            str_equal(target, RT_CALL_ANYPTR_CASTING) || str_equal(target, RT_CALL_CASTING_TO_ANYPTR) ||
            str_equal(target, RT_CALL_UNION_CASTING) || str_equal(target, RT_CALL_UNION_IS) ||
-           str_equal(target, RT_CALL_UNION_ASSERT) || str_equal(target, RT_CALL_RAWPTR_ASSERT) ||
+           str_equal(target, RT_CALL_UNION_ASSERT) || str_equal(target, RT_CALL_PTR_ASSERT) ||
            str_equal(target, RT_CALL_ITERATOR_NEXT_KEY) || str_equal(target, RT_CALL_ITERATOR_NEXT_VALUE) ||
            str_equal(target, RT_CALL_ITERATOR_TAKE_VALUE) || str_equal(target, RT_CALL_FN_NEW) ||
            str_equal(target, RT_CALL_ENV_NEW) ||
@@ -1113,7 +1113,7 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
             "only support lea var/symbol/addr, actual=%d", operand->assert_type);
 
     type_t t = lir_operand_type(operand);
-    t = type_ptrof(t);
+    t = type_refof(t);
 
     lir_operand_t *temp_ref = temp_var_operand(m, t);
     OP_PUSH(lir_op_lea(temp_ref, operand));

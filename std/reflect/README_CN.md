@@ -210,10 +210,10 @@ const PTR = 23
 
 指针类型的类型常量
 
-## const RAWPTR
+## const PTR
 
 ```
-const RAWPTR = 24
+const PTR = 24
 ```
 
 原始指针类型的类型常量
@@ -245,7 +245,7 @@ const PTR_SIZE = 8
 ## fn find_rtype
 
 ```
-fn find_rtype(int hash):rawptr<rtype_t>
+fn find_rtype(int hash):ptr<rtype_t>
 ```
 
 通过哈希值查找运行时类型信息
@@ -415,7 +415,7 @@ type set_t = struct{
 ```
 type union_t = struct{
     anyptr value
-    rawptr<rtype_t> rtype
+    ptr<rtype_t> rtype
 }
 ```
 

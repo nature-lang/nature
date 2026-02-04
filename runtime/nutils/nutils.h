@@ -61,7 +61,7 @@ void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj);
 
 void write_barrier(void *slot, void *new_obj);
 
-void rawptr_valid(void *rawptr);
+void ptr_valid(void *ptr);
 
 void rt_panic(n_string_t *msg);
 

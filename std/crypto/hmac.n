@@ -21,7 +21,7 @@ type hmac_t = struct{
     utils.mbedtls_md_context_t mbed_ctx
 }
 
-fn new(int hasher_type, [u8] secret):ptr<hmac_t> {
+fn new(int hasher_type, [u8] secret):ref<hmac_t> {
     var h = new hmac_t()
     h.hasher_type = hasher_type
     
@@ -62,7 +62,7 @@ fn new(int hasher_type, [u8] secret):ptr<hmac_t> {
     return h
 }
 
-fn hmac_t.update([u8] message):ptr<hmac_t> {
+fn hmac_t.update([u8] message):ref<hmac_t> {
     utils.mbedtls_md_hmac_update(&self.mbed_ctx, (message as string).to_cstr(), message.len())
     return self
 }

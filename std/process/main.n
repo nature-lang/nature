@@ -36,7 +36,7 @@ type command_t = struct{
     io.writer stderr
 }
 
-fn run(string name, [string] args):ptr<state_t>! {
+fn run(string name, [string] args):ref<state_t>! {
     var stdout_buffer = new io.buffer()
     var stderr_buffer = new io.buffer()
 
@@ -50,14 +50,14 @@ fn run(string name, [string] args):ptr<state_t>! {
     return new state_t(stdout, stderr, exit_code = p.exit_code, term_sig = p.term_sig)
 }
 
-fn command(string name, [string] args):ptr<command_t>! {
+fn command(string name, [string] args):ref<command_t>! {
     var cmd = new command_t(name, args, stdin = fs.discard(), stdout = fs.stdout(), stderr = fs.stderr())
 
     return cmd
 }
 
 #local
-fn command_t.spawn():ptr<process_t>! {
+fn command_t.spawn():ref<process_t>! {
     var p = self.uv_spawn(self)
 
     // Scheduling in the current thread will not cause competition
@@ -69,7 +69,7 @@ fn command_t.spawn():ptr<process_t>! {
 
 
 #linkid rt_uv_process_spawn
-fn command_t.uv_spawn(ptr<command_t> cmd):ptr<process_t>!
+fn command_t.uv_spawn(ref<command_t> cmd):ref<process_t>!
 
 #local
 fn process_t.handle_stdout():void! {

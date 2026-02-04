@@ -80,7 +80,7 @@ fn sprintf(string format, ...[any] args):string {
         any arg = args[arg_index]
 
 
-        rawptr<reflect.union_t> arg_v = *(&arg as anyptr as rawptr<rawptr<reflect.union_t>>)
+        ptr<reflect.union_t> arg_v = *(&arg as anyptr as ptr<ptr<reflect.union_t>>)
         var arg_kind = arg_v.rtype.kind
 
         arg_index += 1
@@ -346,42 +346,42 @@ fn sscanf(string str, string format, ...[any] args):int {
             }
             
             // 根据参数类型设置值
-            if arg is rawptr<int> v {
+            if arg is ptr<int> v {
                 *v = value
                 matched += 1
-            } else if arg is rawptr<i8> v {
+            } else if arg is ptr<i8> v {
                 *v = value as i8
                 matched += 1
-            } else if arg is rawptr<i16> v {
+            } else if arg is ptr<i16> v {
                 *v = value as i16
                 matched += 1
-            } else if arg is rawptr<i32> v {
+            } else if arg is ptr<i32> v {
                 *v = value as i32
                 matched += 1
-            } else if arg is rawptr<i64> v {
+            } else if arg is ptr<i64> v {
                 *v = value as i64
                 matched += 1
-            } else if arg is rawptr<uint> v {
+            } else if arg is ptr<uint> v {
                 if !negative {
                     *v = value as uint
                     matched += 1
                 }
-            } else if arg is rawptr<u8> v {
+            } else if arg is ptr<u8> v {
                 if !negative {
                     *v = value as u8
                     matched += 1
                 }
-            } else if arg is rawptr<u16> v {
+            } else if arg is ptr<u16> v {
                 if !negative {
                     *v = value as u16
                     matched += 1
                 }
-            } else if arg is rawptr<u32> v {
+            } else if arg is ptr<u32> v {
                 if !negative {
                     *v = value as u32
                     matched += 1
                 }
-            } else if arg is rawptr<u64> v {
+            } else if arg is ptr<u64> v {
                 if !negative {
                     *v = value as u64
                     matched += 1
@@ -426,34 +426,34 @@ fn sscanf(string str, string format, ...[any] args):int {
             }
             
             // 根据参数类型设置值
-            if arg is rawptr<int> v {
+            if arg is ptr<int> v {
                 *v = value as int
                 matched += 1
-            } else if arg is rawptr<i8> v {
+            } else if arg is ptr<i8> v {
                 *v = value as i8
                 matched += 1
-            } else if arg is rawptr<i16> v {
+            } else if arg is ptr<i16> v {
                 *v = value as i16
                 matched += 1
-            } else if arg is rawptr<i32> v {
+            } else if arg is ptr<i32> v {
                 *v = value as i32
                 matched += 1
-            } else if arg is rawptr<i64> v {
+            } else if arg is ptr<i64> v {
                 *v = value as i64
                 matched += 1
-            } else if arg is rawptr<uint> v {
+            } else if arg is ptr<uint> v {
                 *v = value
                 matched += 1
-            } else if arg is rawptr<u8> v {
+            } else if arg is ptr<u8> v {
                 *v = value as u8
                 matched += 1
-            } else if arg is rawptr<u16> v {
+            } else if arg is ptr<u16> v {
                 *v = value as u16
                 matched += 1
-            } else if arg is rawptr<u32> v {
+            } else if arg is ptr<u32> v {
                 *v = value as u32
                 matched += 1
-            } else if arg is rawptr<u64> v {
+            } else if arg is ptr<u64> v {
                 *v = value as u64
                 matched += 1
             }
@@ -484,34 +484,34 @@ fn sscanf(string str, string format, ...[any] args):int {
             }
             
             // 根据参数类型设置值
-            if arg is rawptr<int> v {
+            if arg is ptr<int> v {
                 *v = value as int
                 matched += 1
-            } else if arg is rawptr<i8> v {
+            } else if arg is ptr<i8> v {
                 *v = value as i8
                 matched += 1
-            } else if arg is rawptr<i16> v {
+            } else if arg is ptr<i16> v {
                 *v = value as i16
                 matched += 1
-            } else if arg is rawptr<i32> v {
+            } else if arg is ptr<i32> v {
                 *v = value as i32
                 matched += 1
-            } else if arg is rawptr<i64> v {
+            } else if arg is ptr<i64> v {
                 *v = value as i64
                 matched += 1
-            } else if arg is rawptr<uint> v {
+            } else if arg is ptr<uint> v {
                 *v = value
                 matched += 1
-            } else if arg is rawptr<u8> v {
+            } else if arg is ptr<u8> v {
                 *v = value as u8
                 matched += 1
-            } else if arg is rawptr<u16> v {
+            } else if arg is ptr<u16> v {
                 *v = value as u16
                 matched += 1
-            } else if arg is rawptr<u32> v {
+            } else if arg is ptr<u32> v {
                 *v = value as u32
                 matched += 1
-            } else if arg is rawptr<u64> v {
+            } else if arg is ptr<u64> v {
                 *v = value as u64
                 matched += 1
             }
@@ -537,7 +537,7 @@ fn sscanf(string str, string format, ...[any] args):int {
             if start < str_i {
                 string value = str.slice(start, str_i)
                 
-                if arg is rawptr<string> v {
+                if arg is ptr<string> v {
                     *v = value
                     matched += 1
                 }
@@ -554,7 +554,7 @@ fn sscanf(string str, string format, ...[any] args):int {
                     u8 value = str_sources[str_i]
                     str_i += 1
                     
-                    if arg is rawptr<u8> v {
+                    if arg is ptr<u8> v {
                         *v = value
                         matched += 1
                     }
@@ -563,7 +563,7 @@ fn sscanf(string str, string format, ...[any] args):int {
                     string value = str.slice(str_i, str_i + width)
                     str_i += width
                     
-                    if arg is rawptr<string> v {
+                    if arg is ptr<string> v {
                         *v = value
                         matched += 1
                     }
@@ -621,13 +621,13 @@ fn sscanf(string str, string format, ...[any] args):int {
             }
             
             // 根据参数类型设置值
-            if arg is rawptr<float> v {
+            if arg is ptr<float> v {
                 *v = value
                 matched += 1
-            } else if arg is rawptr<f32> v {
+            } else if arg is ptr<f32> v {
                 *v = value as f32
                 matched += 1
-            } else if arg is rawptr<f64> v {
+            } else if arg is ptr<f64> v {
                 *v = value as f64
                 matched += 1
             }

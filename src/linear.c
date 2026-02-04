@@ -593,8 +593,8 @@ static void linear_has_error(module_t *m) {
  * 避免可能的在 child fn 中产生的协程操作导致的 stack var 无法访问。当然这不是一个好的方式，并不是所有的 capture var 都会被协程
  * 引用并访问，更好的方式是分析 stack var 的使用点，判断其是否被协程引用。为了 nature 的快速完成，在当前版本中暂时不会进行此类分析。
  *
- * 原始 stmt: int a  = 12 如果 a  被闭包引用或者 impl call 使用，则 a 需要在堆上分配, 一般情况只需要改写 int a = 12 表达式为 ptr<int> a = gc_malloc, 然后
- * 赋值为 12 即可，但是 lir fn begin 指令中引用的 fn param 是 local var 其在 lower 阶段需要通过复杂的系统 ABI 改写。直接改写 fn param 为 ptr<int>
+ * 原始 stmt: int a  = 12 如果 a  被闭包引用或者 impl call 使用，则 a 需要在堆上分配, 一般情况只需要改写 int a = 12 表达式为 ref<int> a = gc_malloc, 然后
+ * 赋值为 12 即可，但是 lir fn begin 指令中引用的 fn param 是 local var 其在 lower 阶段需要通过复杂的系统 ABI 改写。直接改写 fn param 为 ref<int>
  * 造成的了后续的复杂性，所以选择了下面的实现方式
  *
  * int *t1 = gc_malloc()
@@ -630,7 +630,7 @@ static void linear_escape_rewrite(module_t *m, ast_var_decl_t *var_decl, bool fo
     }
 
 
-    type_t heap_type = type_ptrof(symbol_var->type);
+    type_t heap_type = type_refof(symbol_var->type);
     if (is_stack_ref_big_type(symbol_var->type)) {
         heap_type = symbol_var->type;
     }
@@ -873,7 +873,7 @@ static void linear_env_assign(module_t *m, ast_assign_stmt_t *stmt) {
 
     if (is_stack_alloc_type(stmt->left.type)) {
         // mov to indirect(dst_ptr)
-        lir_operand_t *dst_ptr = temp_var_operand(m, type_ptrof(stmt->right.type));
+        lir_operand_t *dst_ptr = temp_var_operand(m, type_refof(stmt->right.type));
         OP_PUSH(lir_op_move(dst_ptr, env_offset_operand)); // mov env_values[0] -> dst_ptr
 
         if (is_stack_ref_big_type(stmt->left.type)) {
@@ -918,9 +918,9 @@ static void linear_struct_assign(module_t *m, ast_assign_stmt_t *stmt) {
 
     lir_operand_t *struct_target = linear_expr(m, struct_access->instance, NULL);
     type_struct = struct_access->instance.type;
-    if (is_struct_ptr(struct_access->instance.type)) {
+    if (is_struct_ref(struct_access->instance.type)) {
         type_struct = struct_access->instance.type.ptr->value_type;
-    } else if (is_struct_rawptr(type_struct)) {
+    } else if (is_struct_ptr(type_struct)) {
         type_struct = type_struct.ptr->value_type;
     }
 
@@ -1978,20 +1978,20 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
 
     if (unary_expr->op == AST_OP_SAFE_LA) {
         assert(!target);
-        // target must ptr or anyptr or rawptr
+        // target must ptr or anyptr or ptr
         if (!target) {
             target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
         }
 
         // not need handle analyze? only move? 需要做什么？ident 已经识别出来了。直接 move 到 target 好了
-        if (is_stack_ref_big_type(unary_expr->operand.type) || unary_expr->operand.type.kind == TYPE_PTR) {
+        if (is_stack_ref_big_type(unary_expr->operand.type) || unary_expr->operand.type.kind == TYPE_REF) {
             OP_PUSH(lir_op_move(target, first));
             return target;
         }
 
         // 如果 first->assert_type 不是 LIR_OPERAND_INDIRECT_ADDR, 则可能是 call/as/literal 表达式所产生的 var, 此时直接进行堆分配
         if (first->assert_type != LIR_OPERAND_INDIRECT_ADDR) {
-            lir_operand_t *temp_operand = temp_var_operand(m, type_ptrof(unary_expr->operand.type));
+            lir_operand_t *temp_operand = temp_var_operand(m, type_refof(unary_expr->operand.type));
             int64_t rtype_hash = type_hash(unary_expr->operand.type);
             push_rt_call(m, RT_CALL_GC_MALLOC, temp_operand, 1, int_operand(rtype_hash));
             lir_operand_t *dst = indirect_addr_operand(m, unary_expr->operand.type, temp_operand, 0);
@@ -2031,7 +2031,7 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
             return target;
         }
 
-        if (unary_expr->op == AST_OP_UNSAFE_LA && unary_expr->operand.type.kind == TYPE_PTR) {
+        if (unary_expr->op == AST_OP_UNSAFE_LA && unary_expr->operand.type.kind == TYPE_REF) {
             OP_PUSH(lir_op_move(target, first));
             return target;
         }
@@ -2063,8 +2063,8 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     // first 是个 ptr
     if (unary_expr->op == AST_OP_IA) {
         // checking TODO 性能问题，暂时不启用
-        //        if (unary_expr->operand.type.kind == TYPE_RAWPTR) {
-        //            push_rt_call(m, RT_CALL_RAWPTR_VALID, NULL, 1, first);
+        //        if (unary_expr->operand.type.kind == TYPE_PTR) {
+        //            push_rt_call(m, RT_CALL_PTR_VALID, NULL, 1, first);
         //            linear_has_panic(m);
         //        }
 
@@ -2206,7 +2206,7 @@ static lir_operand_t *linear_array_access(module_t *m, ast_expr_t expr, lir_oper
 
     // 自动解构
     type_t arr_type = ast->left.type;
-    if (ast->left.type.kind == TYPE_PTR || ast->left.type.kind == TYPE_RAWPTR) {
+    if (ast->left.type.kind == TYPE_REF || ast->left.type.kind == TYPE_PTR) {
         arr_type = ast->left.type.ptr->value_type;
     }
     // item_targe 的类型是 ptr, 指向了 element_addr,
@@ -2252,7 +2252,7 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
 
     uint64_t rtype_hash = type_hash(type_array);
 
-    lir_operand_t *target_ref = temp_var_operand(m, type_ptrof(type_array));
+    lir_operand_t *target_ref = temp_var_operand(m, type_refof(type_array));
     OP_PUSH(lir_op_move(target_ref, target));
 
     int64_t offset = 0;
@@ -2293,7 +2293,7 @@ static lir_operand_t *linear_array_repeat_new(module_t *m, ast_expr_t expr, lir_
 
     uint64_t rtype_hash = type_hash(type_array);
 
-    lir_operand_t *target_ref = temp_var_operand(m, type_ptrof(type_array));
+    lir_operand_t *target_ref = temp_var_operand(m, type_refof(type_array));
     OP_PUSH(lir_op_move(target_ref, target));
 
     lir_operand_t *default_element_target = linear_expr(m, ast->default_element, NULL);
@@ -2455,12 +2455,12 @@ static lir_operand_t *linear_struct_select(module_t *m, ast_expr_t expr, lir_ope
 
     lir_operand_t *struct_target = linear_expr(m, ast->instance, NULL);
     type_t type_struct = ast->instance.type;
-    if (is_struct_ptr(type_struct)) {
+    if (is_struct_ref(type_struct)) {
         type_struct = type_struct.ptr->value_type;
-    } else if (is_struct_rawptr(type_struct)) {
+    } else if (is_struct_ptr(type_struct)) {
         type_struct = type_struct.ptr->value_type;
         // TODO inline 校验, 校验失败调用 panic
-        //        push_rt_call(m, RT_CALL_RAWPTR_VALID, NULL, 1, struct_target);
+        //        push_rt_call(m, RT_CALL_PTR_VALID, NULL, 1, struct_target);
         //        linear_has_panic(m);
     }
 
@@ -2775,7 +2775,7 @@ static lir_operand_t *linear_reflect_hash_expr(module_t *m, ast_expr_t expr, lir
 static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_is_expr_t *is_expr = expr.value;
     assert(is_expr->src->type.kind == TYPE_UNION ||
-           is_expr->src->type.kind == TYPE_RAWPTR ||
+           is_expr->src->type.kind == TYPE_PTR ||
            is_expr->src->type.kind == TYPE_TAGGED_UNION ||
            is_expr->src->type.kind == TYPE_INTERFACE);
 
@@ -2786,7 +2786,7 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
     lir_operand_t *src_operand = linear_expr(m, *is_expr->src, NULL);
 
 
-    if (is_expr->src->type.kind == TYPE_RAWPTR) {
+    if (is_expr->src->type.kind == TYPE_PTR) {
         // is target 只能只能判断是否为 null
         LINEAR_ASSERTF(is_expr->target_type.kind == TYPE_NULL,
                        "%s is only support null, example: %s is null", type_format(is_expr->src->type),
@@ -2937,7 +2937,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         type_interface_t *interface_type = as_expr->target_type.interface;
 
         type_t src_type = as_expr->src.type;
-        if (src_type.ident_kind != TYPE_IDENT_DEF && (src_type.kind == TYPE_PTR || src_type.kind == TYPE_RAWPTR)) {
+        if (src_type.ident_kind != TYPE_IDENT_DEF && (src_type.kind == TYPE_REF || src_type.kind == TYPE_PTR)) {
             src_type = src_type.ptr->value_type;
         }
 
@@ -3006,16 +3006,16 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     // nullable pointer assert
-    if (as_expr->src.type.kind == TYPE_RAWPTR) {
-        // rawptr<T> as anyptr
+    if (as_expr->src.type.kind == TYPE_PTR) {
+        // ptr<T> as anyptr
         if (as_expr->target_type.kind == TYPE_ANYPTR) {
             OP_PUSH(lir_op_move(target, src_operand));
             return target;
         }
 
-        // rawptr<T> as ptr<T>
-        assert(as_expr->target_type.kind == TYPE_PTR);
-        push_rt_call(m, RT_CALL_RAWPTR_ASSERT, target, 1, src_operand);
+        // ptr<T> as ref<T>
+        assert(as_expr->target_type.kind == TYPE_REF);
+        push_rt_call(m, RT_CALL_PTR_ASSERT, target, 1, src_operand);
         linear_has_panic(m);
         return target;
     }
@@ -3320,7 +3320,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
     // 面对像 1.tostr() 这样的表达式的时候，需要创建一个堆分配的 target, expr.type 是 int/bool 等等类型
     if (expr.type.in_heap && !target) {
         uint64_t rtype_hash = type_hash(expr.type);
-        lir_operand_t *temp_operand = temp_var_operand(m, type_ptrof(expr.type));
+        lir_operand_t *temp_operand = temp_var_operand(m, type_refof(expr.type));
         push_rt_call(m, RT_CALL_GC_MALLOC, temp_operand, 1, int_operand(rtype_hash));
 
         target = indirect_addr_operand(m, expr.type, temp_operand, 0);

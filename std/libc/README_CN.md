@@ -526,7 +526,7 @@ fn getsubopt(anyptr optionp, anyptr tokens, anyptr valuep):i32
 ## fn rand_r
 
 ```
-fn rand_r(rawptr<u32> seed):i32
+fn rand_r(ptr<u32> seed):i32
 ```
 
 线程安全的随机数生成器
@@ -686,7 +686,7 @@ fn srand48(i64 seedval):void
 ## fn seed48
 
 ```
-fn seed48(anyptr seed16v):rawptr<u16>
+fn seed48(anyptr seed16v):ptr<u16>
 ```
 
 设置48位随机数生成器种子
@@ -726,7 +726,7 @@ fn reallocarray(anyptr p, u64 nmemb, u64 size):anyptr
 ## fn getloadavg
 
 ```
-fn getloadavg(rawptr<f64> loadavg, i32 nelem):i32
+fn getloadavg(ptr<f64> loadavg, i32 nelem):i32
 ```
 
 获取系统负载平均值
@@ -734,7 +734,7 @@ fn getloadavg(rawptr<f64> loadavg, i32 nelem):i32
 ## fn ecvt
 
 ```
-fn ecvt(f64 number, i32 ndigits, rawptr<i32> decpt, rawptr<i32> sign):cstr
+fn ecvt(f64 number, i32 ndigits, ptr<i32> decpt, ptr<i32> sign):cstr
 ```
 
 将浮点数转换为字符串（指数格式）
@@ -742,7 +742,7 @@ fn ecvt(f64 number, i32 ndigits, rawptr<i32> decpt, rawptr<i32> sign):cstr
 ## fn fcvt
 
 ```
-fn fcvt(f64 number, i32 ndigits, rawptr<i32> decpt, rawptr<i32> sign):cstr
+fn fcvt(f64 number, i32 ndigits, ptr<i32> decpt, ptr<i32> sign):cstr
 ```
 
 将浮点数转换为字符串（定点格式）
@@ -862,7 +862,7 @@ fn rewind(fileptr stream):void
 ## fn fgetpos
 
 ```
-fn fgetpos(fileptr stream, rawptr<fpos_t> pos):i32
+fn fgetpos(fileptr stream, ptr<fpos_t> pos):i32
 ```
 
 获取文件位置
@@ -870,7 +870,7 @@ fn fgetpos(fileptr stream, rawptr<fpos_t> pos):i32
 ## fn fsetpos
 
 ```
-fn fsetpos(fileptr stream, rawptr<fpos_t> pos):i32
+fn fsetpos(fileptr stream, ptr<fpos_t> pos):i32
 ```
 
 设置文件位置
@@ -1022,7 +1022,7 @@ fn fmemopen(anyptr buffer, u64 size, cstr mode):fileptr
 ## fn open_memstream
 
 ```
-fn open_memstream(rawptr<cstr> bufp, rawptr<u64> sizep):fileptr
+fn open_memstream(ptr<cstr> bufp, ptr<u64> sizep):fileptr
 ```
 
 打开动态内存流
@@ -1222,7 +1222,7 @@ fn fputs_unlocked(cstr s, fileptr stream):i32
 ## fn getdelim
 
 ```
-fn getdelim(rawptr<cstr> lineptr, rawptr<u64> n, i32 delim, fileptr stream):i64
+fn getdelim(ptr<cstr> lineptr, ptr<u64> n, i32 delim, fileptr stream):i64
 ```
 
 从流读取分隔字符串
@@ -1230,7 +1230,7 @@ fn getdelim(rawptr<cstr> lineptr, rawptr<u64> n, i32 delim, fileptr stream):i64
 ## fn getline
 
 ```
-fn getline(rawptr<cstr> lineptr, rawptr<u64> n, fileptr stream):i64
+fn getline(ptr<cstr> lineptr, ptr<u64> n, fileptr stream):i64
 ```
 
 从流读取行
@@ -1294,7 +1294,7 @@ fn putw(i32 w, fileptr stream):i32
 ## fn fgetln
 
 ```
-fn fgetln(fileptr stream, rawptr<u64> len):cstr
+fn fgetln(fileptr stream, ptr<u64> len):cstr
 ```
 
 从流获取行
@@ -1494,7 +1494,7 @@ fn strerror(i32 errnum):cstr
 ## fn strtok_r
 
 ```
-fn strtok_r(cstr str, cstr delim, rawptr<cstr> saveptr):cstr
+fn strtok_r(cstr str, cstr delim, ptr<cstr> saveptr):cstr
 ```
 
 将字符串分割为标记（线程安全）
@@ -1598,7 +1598,7 @@ fn memccpy(anyptr dst, anyptr src, i32 c, u64 n):anyptr
 ## fn strsep
 
 ```
-fn strsep(rawptr<cstr> strp, cstr delim):cstr
+fn strsep(ptr<cstr> strp, cstr delim):cstr
 ```
 
 分离字符串
@@ -2182,7 +2182,7 @@ fn htons(u16 host):u16
 ## fn waitpid
 
 ```
-fn waitpid(int pid, rawptr<int> status, int options):int
+fn waitpid(int pid, ptr<int> status, int options):int
 ```
 
 等待进程状态改变
@@ -2190,7 +2190,7 @@ fn waitpid(int pid, rawptr<int> status, int options):int
 ## fn sigemptyset
 
 ```
-fn sigemptyset(ptr<sigset_t> sigset):i32
+fn sigemptyset(ref<sigset_t> sigset):i32
 ```
 
 初始化信号集为空
@@ -2198,7 +2198,7 @@ fn sigemptyset(ptr<sigset_t> sigset):i32
 ## fn sigaddset
 
 ```
-fn sigaddset(ptr<sigset_t> sigset, i32 signo):i32
+fn sigaddset(ref<sigset_t> sigset, i32 signo):i32
 ```
 
 向信号集添加信号
@@ -2206,7 +2206,7 @@ fn sigaddset(ptr<sigset_t> sigset, i32 signo):i32
 ## fn sigfillset
 
 ```
-fn sigfillset(ptr<sigset_t> sigset):i32
+fn sigfillset(ref<sigset_t> sigset):i32
 ```
 
 初始化信号集为满
@@ -2214,7 +2214,7 @@ fn sigfillset(ptr<sigset_t> sigset):i32
 ## fn sigprocmask
 
 ```
-fn sigprocmask(i32 how, ptr<sigset_t> sigset, rawptr<sigset_t> oldset):i32
+fn sigprocmask(i32 how, ref<sigset_t> sigset, ptr<sigset_t> oldset):i32
 ```
 
 检查和更改阻塞信号
@@ -2222,7 +2222,7 @@ fn sigprocmask(i32 how, ptr<sigset_t> sigset, rawptr<sigset_t> oldset):i32
 ## fn signalfd
 
 ```
-fn signalfd(int fd, ptr<sigset_t> mask, i32 flags):i32
+fn signalfd(int fd, ref<sigset_t> mask, i32 flags):i32
 ```
 
 创建用于接受信号的文件描述符
@@ -2341,7 +2341,7 @@ fn opendir(anyptr str):dir_t
 ## fn readdir
 
 ```
-fn readdir(dir_t d):rawptr<dirent_t>
+fn readdir(dir_t d):ptr<dirent_t>
 ```
 
 通过目录信息获取目录列表
