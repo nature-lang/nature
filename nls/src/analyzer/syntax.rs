@@ -145,6 +145,7 @@ pub struct Syntax {
     current: usize, // token index
 
     lambda_index: usize, // default 0
+    test_index: usize,   // default 0
 
     // parser 阶段辅助记录当前的 type_param, 当进入到 fn body 或者 struct def 时可以准确识别当前是 type param 还是 alias, 仅仅使用到 key
     // 默认是一个空 hashmap
@@ -170,6 +171,7 @@ impl<'a> Syntax {
             match_cond: false,
             match_subject: false,
             lambda_index: 0,
+            test_index: 0,
             module: m,
         }
     }
@@ -2990,6 +2992,49 @@ impl<'a> Syntax {
         false
     }
 
+    fn parser_test_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
+        let mut stmt = self.stmt_new();
+        let start = self.peek().start;
+
+        self.must(TokenType::Test)?;
+
+        let name_token = if self.is(TokenType::Ident) {
+            self.must(TokenType::Ident)?.clone()
+        } else if self.is(TokenType::StringLiteral) {
+            self.must(TokenType::StringLiteral)?.clone()
+        } else {
+            return Err(SyntaxError(
+                self.peek().start,
+                self.peek().end,
+                "test name must be ident or string literal".to_string(),
+            ));
+        };
+
+        let mut fndef = AstFnDef::default();
+        fndef.symbol_start = start;
+        fndef.is_test = true;
+        fndef.is_private = true;
+        fndef.is_errable = true;
+        fndef.test_name = name_token.literal.clone();
+
+        let name = format!("__test_{}", self.test_index);
+        self.test_index += 1;
+        fndef.symbol_name = name.clone();
+        fndef.fn_name = name;
+
+        fndef.params = Vec::new();
+        fndef.return_type = Type::new(TypeKind::Void);
+        fndef.return_type.start = name_token.start;
+        fndef.return_type.end = name_token.end;
+
+        fndef.body = self.parser_body(false)?;
+        fndef.symbol_end = self.prev().unwrap().end;
+
+        stmt.node = AstNode::FnDef(Arc::new(Mutex::new(fndef)));
+        stmt.end = self.prev().unwrap().end;
+        Ok(stmt)
+    }
+
     fn parser_fndef_stmt(&mut self, mut fndef: AstFnDef) -> Result<Box<Stmt>, SyntaxError> {
         let mut stmt = self.stmt_new();
         fndef.symbol_start = self.peek().start;
@@ -3301,6 +3346,8 @@ impl<'a> Syntax {
             self.parser_type_begin_stmt()?
         } else if self.is(TokenType::Label) {
             self.parser_label()?
+        } else if self.is(TokenType::Test) {
+            self.parser_test_stmt()?
         } else if self.is(TokenType::Fn) {
             self.parser_fndef_stmt(AstFnDef::default())?
         } else if self.is(TokenType::Import) {
@@ -3357,6 +3404,12 @@ impl<'a> Syntax {
             self.parser_type_begin_stmt()?
         } else if self.is(TokenType::LeftParen) {
             self.parser_left_paren_begin_stmt()?
+        } else if self.is(TokenType::Test) {
+            return Err(SyntaxError(
+                self.peek().start,
+                self.peek().end,
+                "test block only allowed at module scope".to_string(),
+            ));
         } else if self.is(TokenType::Throw) {
             self.parser_throw_stmt()?
         } else if self.is(TokenType::Let) {

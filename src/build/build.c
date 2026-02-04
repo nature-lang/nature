@@ -28,6 +28,7 @@
 #include "src/semantic/analyzer.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
+#include "src/build/test_runner.h"
 #include "utils/helper.h"
 #include "utils/log.h"
 
@@ -969,6 +970,10 @@ static slice_t *build_modules(toml_table_t *package_conf) {
             // 按照层级进入到 modules 中(广度优先)
             slice_push(modules, new_module);
         }
+    }
+
+    if (BUILD_TEST) {
+        test_inject_main(main_package);
     }
 
     // modules contains, 倒叙遍历处理依赖关系

@@ -14,13 +14,13 @@ fn main():void! {
     }
 
     // 基于 struct fn 和 struct list 测试一下简单的链式调用
-    type test = struct {
+    type test_t = struct {
         [i8] list
         fn(int,int):int! div
     }
 
     // 结构体实例化
-    var foo = test{
+    var foo = test_t{
         list: [1, 2, 3, 4, 5],
         div: fn(int a, int b):int! {
             if b == 0 {

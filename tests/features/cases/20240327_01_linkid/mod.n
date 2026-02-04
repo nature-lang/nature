@@ -5,7 +5,7 @@ fn foo(int a) {
     println('hello world', a)
 }
 
-fn test():int
+fn test1():int
 
 fn test2() {
     println("aa")

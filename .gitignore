@@ -33,3 +33,5 @@ tsconfig.tsbuildinfo
 
 # Examples
 example/
+
+.cache

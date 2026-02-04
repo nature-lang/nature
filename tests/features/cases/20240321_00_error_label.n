@@ -1,13 +1,13 @@
 fn boom():int {
-    var test = fn() {
-        println('in test')
+    var test1 = fn() {
+        println('in test1')
     }
 
     var test2 = fn() {
         println('in test2')
     }
 
-    test()
+    test1()
 
     if 1 > 2 {
         return 12
@@ -15,7 +15,7 @@ fn boom():int {
 
     for int i = 0; i < 10; i+=1 {
         if i % 2 == 0 {
-            test()
+            test1()
         } else {
             test2()
         }

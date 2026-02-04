@@ -1240,6 +1240,8 @@ pub struct AstFnDef {
     pub is_async: bool,
     pub is_private: bool,
     pub is_errable: bool, // 当前函数是否返回错误
+    pub is_test: bool,
+    pub test_name: String,
     pub ret_target_types: Vec<Type>,
     pub linkid: Option<String>,
     pub fn_name: String, // default empty
@@ -1288,6 +1290,8 @@ impl Default for AstFnDef {
             is_async: false,
             is_private: false,
             is_errable: false,
+            is_test: false,
+            test_name: "".to_string(),
             ret_target_types: Vec::new(),
             fn_name: "".to_string(),
             rel_path: None,

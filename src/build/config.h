@@ -2,6 +2,7 @@
 #define NATURE_BUILD_CONFIG_H
 
 #include "utils/helper.h"
+#include "utils/slice.h"
 #include <limits.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -33,6 +34,10 @@ extern char USE_LD[1024]; // 自定义链接器
 extern char LDFLAGS[1024]; // 自定义链接器参数
 
 extern bool VERBOSE; // 是否开启 verbose 模式 (--verbose)
+
+// test mode (nature test)
+extern bool BUILD_TEST;
+extern slice_t *TEST_SKIP_LIST;
 
 extern char *BUILD_ENTRY; // nature build {test/main.n} 花括号包起来的这部分
 extern char SOURCE_PATH[PATH_MAX]; // /opt/test/main.n 的绝对路径

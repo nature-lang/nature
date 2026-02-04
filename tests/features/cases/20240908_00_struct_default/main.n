@@ -25,14 +25,14 @@ fn main() {
     int a = 12
 
 
-    var test = fn():string {
+    var test1 = fn():string {
         return 'test'
     }
     type foo_t = struct{
         u8 a = a as u8
         u16 b = (12 + 25 * 3) as u16
         [u8;3] c
-        string d = test()
+        string d = test1()
     }
 
 
