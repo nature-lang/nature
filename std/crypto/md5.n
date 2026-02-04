@@ -6,7 +6,7 @@ type md5_t = struct{
     utils.mbedtls_md_context_t mbed_ctx
 }
 
-fn new():ptr<md5_t> {
+fn new():ref<md5_t> {
     var m =  new md5_t()
     utils.mbedtls_md5_init(&m.mbed_ctx)
     //     MBEDTLS_MD_MD5=0x03,       /**< The MD5 message digest. */
@@ -20,7 +20,7 @@ fn new():ptr<md5_t> {
     return m
 }
 
-fn md5_t.update([u8] input):ptr<md5_t> {
+fn md5_t.update([u8] input):ref<md5_t> {
     utils.mbedtls_md_update(&self.mbed_ctx, (input as string).to_cstr(), input.len());
 
     return self

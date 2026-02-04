@@ -18,7 +18,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:14:19: rawptr<main.person_t(struct)> cannot use impl call
+nature-test/main.n:14:19: ptr<main.person_t(struct)> cannot use impl call
 
 === test_impl_ula
 --- main.n
@@ -78,7 +78,7 @@ fn main() {
         a: 24,
     }
 
-    ptr<car_t> a = @sla(c)
+    ref<car_t> a = @sla(c)
     println(a, a.a)
     assert(runtime.in_heap(a as anyptr) && a.a == 24)
 
@@ -86,7 +86,7 @@ fn main() {
     var d = car_t{
         a: 48,
     }
-    ptr<int> b = @sla(d.a)
+    ref<int> b = @sla(d.a)
     println(b, *b)
     assert(runtime.in_heap(b as anyptr) && *b == 48)
 }
@@ -117,7 +117,7 @@ fn main() {
     }
 
     bar_t bar = [1, 3, 5, 7, 9]
-    ptr<bar_t> p = @sla(bar)
+    ref<bar_t> p = @sla(bar)
     println(bar as anyptr, p as anyptr, p[0], bar[0], p.length())
     assert(bar as anyptr == p as anyptr)
 
@@ -129,7 +129,7 @@ fn main() {
         },
     }
 
-    ptr<bar_t> a = @sla(foo.mid2.bar)
+    ref<bar_t> a = @sla(foo.mid2.bar)
     println(foo as anyptr, foo.mid2 as anyptr, foo.mid2.bar as anyptr, a)
     assert(foo as anyptr == foo.mid2 as anyptr && foo.mid2.bar as anyptr == a as anyptr)
     assert(runtime.in_heap(a as anyptr))
@@ -228,12 +228,12 @@ fn int.to_string() {
 
 fn main() {
     var a = new int(12)
-    ptr<int> ap = @ula(a)
+    ref<int> ap = @ula(a)
     println(a as anyptr, ap as anyptr)
     assert(runtime.in_heap(a as anyptr) && runtime.in_heap(ap as anyptr))
 
     var b = new f32(3.14)
-    ptr<f32> bp = @sla(b)
+    ref<f32> bp = @sla(b)
     println(b as anyptr, bp as anyptr)
     assert(runtime.in_heap(b as anyptr) && runtime.in_heap(bp as anyptr))
 }

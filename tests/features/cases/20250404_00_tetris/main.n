@@ -388,7 +388,7 @@ fn get_randompiece():void {
     }
 }
 
-fn resolve_falling_movement(rawptr<bool> detection, rawptr<bool> piece_active) {
+fn resolve_falling_movement(ptr<bool> detection, ptr<bool> piece_active) {
     // If we have completed the movement of this piece, we stop it
     if *detection {
         for i32 j = GRID_VERTICAL_SIZE - 2; j >= 0; j-=1 {
@@ -631,7 +631,7 @@ fn resolve_turn_movement():bool {
     return false
 }
 
-fn check_detection(rawptr<bool> detection) {
+fn check_detection(ptr<bool> detection) {
     for i32 j = GRID_VERTICAL_SIZE - 2; j >= 0; j-=1 {
         for i32 i = 1; i < GRID_HORIZONTAL_SIZE - 1; i+=1 {
             if (grid[i][j] == GRIDSQUARE_MOVING) && ((grid[i][j+1] == GRIDSQUARE_FULL) || (grid[i][j+1] == GRIDSQUARE_BLOCK)) {
@@ -641,7 +641,7 @@ fn check_detection(rawptr<bool> detection) {
     }
 }
 
-fn check_completion(rawptr<bool> line_to_delete) {
+fn check_completion(ptr<bool> line_to_delete) {
     i32 calculator = 0
     
     for i32 j = GRID_VERTICAL_SIZE - 2; j >= 0; j-=1 {

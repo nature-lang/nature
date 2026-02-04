@@ -774,17 +774,6 @@ impl<'a> Syntax {
             return Ok(t);
         }
 
-        // ptr<type>
-        if self.consume(TokenType::Ptr) {
-            self.must(TokenType::LeftAngle)?;
-            let value_type = self.parser_type()?;
-            self.must(TokenType::RightAngle)?;
-
-            t.kind = TypeKind::Ptr(Box::new(value_type));
-            t.end = self.prev().unwrap().end;
-            return Ok(t);
-        }
-
         // [type]
         // [type;size]
         if self.consume(TokenType::LeftSquare) {
@@ -1441,7 +1430,7 @@ impl<'a> Syntax {
             }
         } else if self.consume(TokenType::Star) && self.is(TokenType::Ident) && self.peek().literal == "self" {
             self.advance(); // skip self
-                            // fn person_t.test(*self):rawptr<person_t> {
+                            // fn person_t.test(*self):ptr<person_t> {
             if !fn_decl.is_impl {
                 return Err(SyntaxError(
                     self.prev().unwrap().start,
@@ -1449,13 +1438,13 @@ impl<'a> Syntax {
                     "keyword `self` can only be used in impl fn".to_string(),
                 ));
             }
-            fn_decl.self_kind = SelfKind::SelfRawptrT;
+            fn_decl.self_kind = SelfKind::SelfPtrT;
             if !self.is(TokenType::RightParen) {
                 self.must(TokenType::Comma)?;
             }
         } else if fn_decl.is_impl {
-            // fn person_t.test():ptr<person_t> {
-            fn_decl.self_kind = SelfKind::SelfPtrT;
+            // fn person_t.test():ref<person_t> {
+            fn_decl.self_kind = SelfKind::SelfRefT;
         }
 
         // not formal params
@@ -2159,10 +2148,6 @@ impl<'a> Syntax {
         }
 
         if self.is(TokenType::Any) {
-            return true;
-        }
-
-        if self.is(TokenType::Ptr) {
             return true;
         }
 

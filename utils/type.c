@@ -151,11 +151,11 @@ int64_t type_alignof(type_t t) {
  * @param t
  * @return
  */
-type_t type_ptrof(type_t t) {
+type_t type_refof(type_t t) {
     type_t result = {0};
     result.status = t.status;
 
-    result.kind = TYPE_PTR;
+    result.kind = TYPE_REF;
     result.ptr = NEW(type_ptr_t);
     result.ptr->value_type = t;
     //    result.ident = t.ident;
@@ -167,16 +167,13 @@ type_t type_ptrof(type_t t) {
     return result;
 }
 
-type_t type_rawptrof(type_t t) {
+type_t type_ptrof(type_t t) {
     type_t result = {0};
     result.status = t.status;
 
-    result.kind = TYPE_RAWPTR;
+    result.kind = TYPE_PTR;
     result.ptr = NEW(type_ptr_t);
     result.ptr->value_type = t;
-    //    result.ident = t.ident;
-    //    result.ident_kind = t.ident_kind;
-    //    result.args = t.args;
     result.line = t.line;
     result.column = t.column;
     result.in_heap = false;
@@ -224,7 +221,7 @@ bool type_is_pointer_heap(type_t t) {
         return true;
     }
 
-    if (t.kind == TYPE_RAWPTR || t.kind == TYPE_PTR || t.kind == TYPE_ANYPTR) {
+    if (t.kind == TYPE_PTR || t.kind == TYPE_REF || t.kind == TYPE_ANYPTR) {
         return true;
     }
 
@@ -350,12 +347,12 @@ char *_type_format(type_t t) {
         }
     }
 
-    if (t.kind == TYPE_PTR) {
-        return dsprintf("ptr<%s>", type_format(t.ptr->value_type));
+    if (t.kind == TYPE_REF) {
+        return dsprintf("ref<%s>", type_format(t.ptr->value_type));
     }
 
-    if (t.kind == TYPE_RAWPTR) {
-        return dsprintf("rawptr<%s>", type_format(t.ptr->value_type));
+    if (t.kind == TYPE_PTR) {
+        return dsprintf("ptr<%s>", type_format(t.ptr->value_type));
     }
 
     if (t.kind == TYPE_UNION) {

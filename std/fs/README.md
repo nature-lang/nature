@@ -5,7 +5,7 @@ File system operations for reading, writing, and managing files.
 ## fn stdout
 
 ```
-fn stdout():ptr<file_t>!
+fn stdout():ref<file_t>!
 ```
 
 Get the standard output and convert it to file_t.
@@ -13,7 +13,7 @@ Get the standard output and convert it to file_t.
 ## fn stdin
 
 ```
-fn stdin():ptr<file_t>!
+fn stdin():ref<file_t>!
 ```
 
 Get the standard input and convert it to file_t.
@@ -21,7 +21,7 @@ Get the standard input and convert it to file_t.
 ## fn stderr
 
 ```
-fn stderr():ptr<file_t>!
+fn stderr():ref<file_t>!
 ```
 
 Get the standard error and convert it to file_t.
@@ -29,7 +29,7 @@ Get the standard error and convert it to file_t.
 ## fn discard
 
 ```
-fn discard():ptr<file_t>!
+fn discard():ref<file_t>!
 ```
 
 Get a discard file handle that ignores all writes.
@@ -87,7 +87,7 @@ File represents an open file descriptor.
 ### from
 
 ```
-fn from(int fd, string name):ptr<file_t>!
+fn from(int fd, string name):ref<file_t>!
 ```
 
 Create a file_t structure from file descriptor.
@@ -95,7 +95,7 @@ Create a file_t structure from file descriptor.
 ### open
 
 ```
-fn open(string path, int flags, int mode):ptr<file_t>!
+fn open(string path, int flags, int mode):ref<file_t>!
 ```
 
 Open a file and return file handle.

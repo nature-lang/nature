@@ -92,7 +92,7 @@ type hmac_t = struct{
 ### new
 
 ```
-fn new(int hasher_type, [u8] secret):ptr<hmac_t>
+fn new(int hasher_type, [u8] secret):ref<hmac_t>
 ```
 
 使用指定的哈希算法和密钥创建新的 HMAC 上下文。
@@ -100,7 +100,7 @@ fn new(int hasher_type, [u8] secret):ptr<hmac_t>
 ### hmac_t.update
 
 ```
-fn hmac_t.update([u8] message):ptr<hmac_t>
+fn hmac_t.update([u8] message):ref<hmac_t>
 ```
 
 使用消息数据更新 HMAC。
@@ -146,7 +146,7 @@ MD5 哈希上下文。
 ### new
 
 ```
-fn new():ptr<md5_t>
+fn new():ref<md5_t>
 ```
 
 创建新的 MD5 哈希上下文。
@@ -154,7 +154,7 @@ fn new():ptr<md5_t>
 ### md5_t.update
 
 ```
-fn md5_t.update([u8] input):ptr<md5_t>
+fn md5_t.update([u8] input):ref<md5_t>
 ```
 
 使用输入数据更新 MD5 哈希。
@@ -200,7 +200,7 @@ SHA-256 哈希上下文。
 ### new
 
 ```
-fn new():ptr<sha256_t>
+fn new():ref<sha256_t>
 ```
 
 创建新的 SHA-256 哈希上下文。
@@ -208,7 +208,7 @@ fn new():ptr<sha256_t>
 ### sha256_t.update
 
 ```
-fn sha256_t.update([u8] input):ptr<sha256_t>
+fn sha256_t.update([u8] input):ref<sha256_t>
 ```
 
 使用输入数据更新 SHA-256 哈希。
@@ -329,7 +329,7 @@ const SHA3_512 = 0x13
 ## fn generate_key
 
 ```
-fn generate_key(u32 key_bits):(ptr<rsa_public_key_t>, ptr<rsa_private_key_t>)!
+fn generate_key(u32 key_bits):(ref<rsa_public_key_t>, ref<rsa_private_key_t>)!
 ```
 
 生成指定位数的 RSA 密钥对。返回公钥和私钥的元组。
@@ -337,7 +337,7 @@ fn generate_key(u32 key_bits):(ptr<rsa_public_key_t>, ptr<rsa_private_key_t>)!
 ## fn public_key_from_pem
 
 ```
-fn public_key_from_pem([u8] pem_data):ptr<rsa_public_key_t>!
+fn public_key_from_pem([u8] pem_data):ref<rsa_public_key_t>!
 ```
 
 从 PEM 格式数据创建 RSA 公钥。
@@ -345,7 +345,7 @@ fn public_key_from_pem([u8] pem_data):ptr<rsa_public_key_t>!
 ## fn private_key_from_pem
 
 ```
-fn private_key_from_pem([u8] pem_data, [u8] password):ptr<rsa_private_key_t>!
+fn private_key_from_pem([u8] pem_data, [u8] password):ref<rsa_private_key_t>!
 ```
 
 从 PEM 格式数据创建 RSA 私钥，支持密码保护的私钥。

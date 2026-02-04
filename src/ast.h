@@ -270,7 +270,7 @@ typedef struct {
 typedef enum {
     PARAM_SELF_NULL = 0,
     PARAM_SELF_T,
-    PARAM_SELF_RAWPTR_T,
+    PARAM_SELF_REF_T,
     PARAM_SELF_PTR_T,
 } ast_param_self_kind_t;
 
@@ -547,7 +547,7 @@ typedef struct {
 } ast_select_stmt_t;
 
 typedef struct {
-    ast_expr_t instance; // type is ptr<struct> or struct
+    ast_expr_t instance; // type is ref<struct> or struct
     string key;
     struct_property_t *property; // 冗余方便计算
 } ast_struct_select_t;
@@ -847,7 +847,7 @@ static inline ast_expr_t *ast_load_addr(ast_expr_t *target) {
     result->column = target->column;
     result->assert_type = AST_EXPR_UNARY;
     result->value = expr;
-    result->type = type_rawptrof(target->type);
+    result->type = type_ptrof(target->type);
     return result;
 }
 
@@ -858,7 +858,7 @@ static inline ast_expr_t *ast_indirect_addr(ast_expr_t *target) {
     expr->operand = *target;
     expr->op = AST_OP_IA;
 
-    assert(target->type.kind == TYPE_RAWPTR || target->type.kind == TYPE_PTR);
+    assert(target->type.kind == TYPE_PTR || target->type.kind == TYPE_REF);
 
     result->line = target->line;
     result->column = target->column;

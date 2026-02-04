@@ -53,7 +53,7 @@ const ROUTES_DELETE = 3
 ## type callback_fn
 
 ```
-type callback_fn = fn(request_t, ptr<response_t>):void!
+type callback_fn = fn(request_t, ref<response_t>):void!
 ```
 
 Function type for HTTP request handlers.
@@ -61,7 +61,7 @@ Function type for HTTP request handlers.
 ## fn server
 
 ```
-fn server():ptr<server_t>
+fn server():ref<server_t>
 ```
 
 Create a new HTTP server instance.
@@ -178,7 +178,7 @@ HTTP client for making HTTP requests.
 ## fn get
 
 ```
-fn get(string url, config_t c):ptr<response_t>!
+fn get(string url, config_t c):ref<response_t>!
 ```
 
 Make a GET request.
@@ -186,7 +186,7 @@ Make a GET request.
 ## fn post
 
 ```
-fn post(string url, string body, config_t c):ptr<response_t>!
+fn post(string url, string body, config_t c):ref<response_t>!
 ```
 
 Make a POST request.
@@ -205,7 +205,7 @@ Multipart form data builder.
 ### multipart_t.text
 
 ```
-fn multipart_t.text(string name, string value):ptr<multipart_t>
+fn multipart_t.text(string name, string value):ref<multipart_t>
 ```
 
 Add text field to multipart form.
@@ -213,7 +213,7 @@ Add text field to multipart form.
 ### multipart_t.file
 
 ```
-fn multipart_t.file(string name, string filename, string data):ptr<multipart_t>
+fn multipart_t.file(string name, string filename, string data):ref<multipart_t>
 ```
 
 Add file field to multipart form.
@@ -221,7 +221,7 @@ Add file field to multipart form.
 ### multipart_t_new
 
 ```
-fn multipart_t_new():ptr<multipart_t>
+fn multipart_t_new():ref<multipart_t>
 ```
 
 Create a new multipart form data builder.
@@ -260,7 +260,7 @@ HTTP client request.
 ### new
 
 ```
-fn new():ptr<request_t>
+fn new():ref<request_t>
 ```
 
 Create a new HTTP client request.
@@ -268,7 +268,7 @@ Create a new HTTP client request.
 ### request_t.get
 
 ```
-fn request_t.get(string url):ptr<request_t>
+fn request_t.get(string url):ref<request_t>
 ```
 
 Set request method to GET.
@@ -276,7 +276,7 @@ Set request method to GET.
 ### request_t.post
 
 ```
-fn request_t.post(string url):ptr<request_t>
+fn request_t.post(string url):ref<request_t>
 ```
 
 Set request method to POST.
@@ -284,7 +284,7 @@ Set request method to POST.
 ### request_t.put
 
 ```
-fn request_t.put(string url):ptr<request_t>
+fn request_t.put(string url):ref<request_t>
 ```
 
 Set request method to PUT.
@@ -292,7 +292,7 @@ Set request method to PUT.
 ### request_t.delete
 
 ```
-fn request_t.delete(string url):ptr<request_t>
+fn request_t.delete(string url):ref<request_t>
 ```
 
 Set request method to DELETE.
@@ -300,7 +300,7 @@ Set request method to DELETE.
 ### request_t.timeout
 
 ```
-fn request_t.timeout(int timeout):ptr<request_t>
+fn request_t.timeout(int timeout):ref<request_t>
 ```
 
 Set request timeout in milliseconds.
@@ -308,7 +308,7 @@ Set request timeout in milliseconds.
 ### request_t.header
 
 ```
-fn request_t.header(string key, string value):ptr<request_t>
+fn request_t.header(string key, string value):ref<request_t>
 ```
 
 Add request header.
@@ -316,7 +316,7 @@ Add request header.
 ### request_t.content
 
 ```
-fn request_t.content(string content):ptr<request_t>
+fn request_t.content(string content):ref<request_t>
 ```
 
 Set request body content.
@@ -324,7 +324,7 @@ Set request body content.
 ### request_t.json
 
 ```
-fn request_t.json(any b):ptr<request_t>!
+fn request_t.json(any b):ref<request_t>!
 ```
 
 Set request body as JSON.
@@ -332,7 +332,7 @@ Set request body as JSON.
 ### request_t.form
 
 ```
-fn request_t.form({string:string} data):ptr<request_t>
+fn request_t.form({string:string} data):ref<request_t>
 ```
 
 Set request body as form data.
@@ -340,7 +340,7 @@ Set request body as form data.
 ### request_t.send
 
 ```
-fn request_t.send():ptr<response_t>!
+fn request_t.send():ref<response_t>!
 ```
 
 Send the HTTP request.
@@ -358,7 +358,7 @@ type response_t = struct{
     string content_type
     string charset
     bool body_read
-    ptr<buf.reader<types.connable>> buf_conn
+    ref<buf.reader<types.connable>> buf_conn
 }
 ```
 

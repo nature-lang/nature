@@ -86,7 +86,7 @@ fn server():void! {
 
     for true {
         var c = listener.accept()
-        go fn(ptr<tcp.conn_t> conn):void! {
+        go fn(ref<tcp.conn_t> conn):void! {
             conn.read(buf) catch e {
                 conn.close()
                 return

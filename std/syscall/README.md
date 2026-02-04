@@ -437,7 +437,7 @@ Listen for connections on socket
 ## fn accept
 
 ```
-fn accept<T>(int sockfd, ptr<T> addr):int!
+fn accept<T>(int sockfd, ref<T> addr):int!
 ```
 
 Accept connection on socket

@@ -19,6 +19,6 @@ fn person_t.get_name():string {
 }
 
 fn person_t.test_self() {
-    ptr<person_t> p = self
+    ref<person_t> p = self
     println('in test_self', p.name, p.age, p.sex)
 }

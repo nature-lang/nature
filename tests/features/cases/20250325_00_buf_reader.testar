@@ -49,7 +49,7 @@ fn main():void! {
     var rd = new io.buffer()
     rd.write('hello\nworld\n' as [u8])
 
-    var br = new buf.reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ref<io.buffer>>(rd)
 
     var line = br.read_until('\n'.char())
     assert(line as string == 'hello\n')
@@ -79,7 +79,7 @@ fn main():void! {
     }
     rd.write(data)
 
-    var br = new buf.reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ref<io.buffer>>(rd)
     // until triggers fill until the entire buf is full without any successful data reading
     var line = br.read_until('\n'.char())
     println('read until buffer full', line.len())
@@ -97,7 +97,7 @@ import strings
 fn main():void! {
     var rd = new io.buffer()
     rd.write("hello world" as [u8]) // no delim
-    var br = new buf.reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ref<io.buffer>>(rd)
 
     var line = br.read_until('\n'.char())
     assert(line as string == "hello world")
@@ -121,7 +121,7 @@ fn main():void! {
     var rd = new io.buffer()
     rd.write("hello world" as [u8])
 
-    var br = new buf.reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ref<io.buffer>>(rd)
 
     var buf = vec_new<u8>(0, 5)
     br.read_exact(buf)
@@ -155,7 +155,7 @@ import strings
 fn main():void! {
     // empty buffer
     var rd = new io.buffer()
-    var br = new buf.reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ref<io.buffer>>(rd)
 
     var buf = vec_new<u8>(0, 5)
     try {
@@ -181,7 +181,7 @@ fn main():void! {
     var rd = new io.buffer()
     rd.write("abc" as [u8])
 
-    var br = new buf.reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ref<io.buffer>>(rd)
 
     var buf = vec_new<u8>(0, 5)
     try {
@@ -206,7 +206,7 @@ fn main():void! {
     var rd = new io.buffer()
     rd.write("hello" as [u8])
 
-    var br = new buf.reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ref<io.buffer>>(rd)
 
     var empty_buf = vec_cap<u8>(0)
     br.read_exact(empty_buf)
@@ -232,7 +232,7 @@ import fmt
 fn main():void! {
     var rd = new io.buffer()
     rd.write("Hello" as [u8])
-    var br = new buf.reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ref<io.buffer>>(rd)
 
     u8 b = br.read_byte()
     assert(b == 'H'.char())
@@ -269,7 +269,7 @@ import fmt
 fn main():void! {
     var rd = new io.buffer()
     rd.write("Hello\nWorld\r\nTest\rEnd" as [u8])
-    var br = new buf.reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ref<io.buffer>>(rd)
 
     // Test \n line ending
     var line = br.read_line()
@@ -311,7 +311,7 @@ import fmt
 fn main():void! {
     var rd = new io.buffer()
     rd.write("\n\n\nHello\n\n" as [u8])
-    var br = new buf.reader<ptr<io.buffer>>(rd)
+    var br = new buf.reader<ref<io.buffer>>(rd)
 
     for int i = 0; i < 6; i += 1 {
         var line = br.read_line()

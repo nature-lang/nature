@@ -5,7 +5,7 @@ Memory operations and byte order conversion utilities
 ## fn copy
 
 ```
-fn copy<T>([u8] buf, rawptr<T> dst):void!
+fn copy<T>([u8] buf, ptr<T> dst):void!
 ```
 
 Copy buffer data to the specified type's raw pointer location

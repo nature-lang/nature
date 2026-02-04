@@ -133,7 +133,7 @@ Check if the last operation was successful.
 ```
 type future_t<T> = struct{
     i64 size
-    rawptr<T> result
+    ptr<T> result
     throwable? error
     anyptr co
 }
@@ -160,7 +160,7 @@ Wait for the future to complete (void return type).
 ## fn async
 
 ```
-fn async<T>(fn():void! function, int flag):ptr<future_t<T>>
+fn async<T>(fn():void! function, int flag):ref<future_t<T>>
 ```
 
 Execute a function asynchronously and return a future.
@@ -168,7 +168,7 @@ Execute a function asynchronously and return a future.
 ## fn co_return
 
 ```
-fn co_return<T>(rawptr<T> result)
+fn co_return<T>(ptr<T> result)
 ```
 
 Return a result from a coroutine.
@@ -215,7 +215,7 @@ Union type for error handling.
 ## fn errorf
 
 ```
-fn errorf(string format, ...[any] args):ptr<errort>
+fn errorf(string format, ...[any] args):ref<errort>
 ```
 
 Create a formatted error.

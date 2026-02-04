@@ -11,7 +11,7 @@ fn serialize<T>(T object):string! {
     return serialize_value(&object as anyptr, t) as string
 }
 
-fn serialize_value(anyptr p, ptr<reflect.type_t> t):[u8]! {
+fn serialize_value(anyptr p, ref<reflect.type_t> t):[u8]! {
     return match t.kind {
         reflect.NULL -> 'null' as [u8]
         reflect.BOOL -> {
@@ -65,7 +65,7 @@ fn serialize_value(anyptr p, ptr<reflect.type_t> t):[u8]! {
         }
         reflect.UNION -> {
             var v = unsafe.ptr_to<anyptr>(p)
-            var rv = v as rawptr<reflect.union_t>
+            var rv = v as ptr<reflect.union_t>
 
             var union_t = reflect.typeof_hash(rv.rtype.hash)
 
@@ -142,7 +142,7 @@ fn serialize_string(string s):[u8] {
 }
 
 // v is a pointer pointing to a struct value (maybe greater than 8byte), and the source may be stack or heap
-fn serialize_struct(anyptr p, ptr<reflect.type_t> t):[u8]! {
+fn serialize_struct(anyptr p, ref<reflect.type_t> t):[u8]! {
     [u8] result = ['{'.char()]
 
     var len = t.fields.len()
@@ -165,9 +165,9 @@ fn serialize_struct(anyptr p, ptr<reflect.type_t> t):[u8]! {
     return result
 }
 
-fn serialize_vec(anyptr p, ptr<reflect.type_t> t):[u8]! {
+fn serialize_vec(anyptr p, ref<reflect.type_t> t):[u8]! {
     var v = unsafe.ptr_to<anyptr>(p)
-    var rv = v as rawptr<reflect.vec_t>
+    var rv = v as ptr<reflect.vec_t>
 
     var element_type = reflect.typeof_hash(t.hashes[0])
     var len = rv.length
@@ -188,9 +188,9 @@ fn serialize_vec(anyptr p, ptr<reflect.type_t> t):[u8]! {
     return result
 }
 
-fn serialize_map(anyptr p, ptr<reflect.type_t> t):[u8]! {
+fn serialize_map(anyptr p, ref<reflect.type_t> t):[u8]! {
     var v = unsafe.ptr_to<anyptr>(p)
-    var rv = v as rawptr<reflect.map_t>
+    var rv = v as ptr<reflect.map_t>
 
     var key_type = reflect.typeof_hash(rv.key_hash as int)
     var val_type = reflect.typeof_hash(rv.value_hash as int)
@@ -233,7 +233,7 @@ fn deserialize<T>(string s):T! {
     return val
 }
 
-fn deserialize_t.parser(anyptr p, ptr<reflect.type_t> t):void! {
+fn deserialize_t.parser(anyptr p, ref<reflect.type_t> t):void! {
     if p == 0 {
         throw errorf('parser p is zero')
     }
@@ -320,7 +320,7 @@ fn deserialize_t.parser(anyptr p, ptr<reflect.type_t> t):void! {
 }
 
 // p points to the stack address of struct
-fn deserialize_t.parser_struct(anyptr p, ptr<reflect.type_t> t):void! {
+fn deserialize_t.parser_struct(anyptr p, ref<reflect.type_t> t):void! {
     self.must('{')
     if self.consume('}') {
         return
@@ -354,9 +354,9 @@ fn deserialize_t.parser_struct(anyptr p, ptr<reflect.type_t> t):void! {
     }
 }
 
-fn deserialize_t.parser_vec(anyptr p, ptr<reflect.type_t> t):void! {
+fn deserialize_t.parser_vec(anyptr p, ref<reflect.type_t> t):void! {
     anyptr v = unsafe.ptr_to<anyptr>(p)
-    var rv = v as rawptr<reflect.vec_t>
+    var rv = v as ptr<reflect.vec_t>
     rv.length = 0 // Assignment from zero
     self.must('[')
     if self.consume(']') {
@@ -381,9 +381,9 @@ fn deserialize_t.parser_vec(anyptr p, ptr<reflect.type_t> t):void! {
     }
 }
 
-fn deserialize_t.parser_map(anyptr p, ptr<reflect.type_t> t):void! {
+fn deserialize_t.parser_map(anyptr p, ref<reflect.type_t> t):void! {
     anyptr v = unsafe.ptr_to<anyptr>(p)
-    var rv = v as rawptr<reflect.map_t>
+    var rv = v as ptr<reflect.map_t>
     self.must('{')
     if self.consume('}') {
         return
@@ -553,13 +553,13 @@ fn deserialize_t.parser_string():string! {
     throw errorf('unterminated string at position %d', start)
 }
 
-fn deserialize_t.parser_nullable(anyptr p, ptr<reflect.type_t> t):void! {
+fn deserialize_t.parser_nullable(anyptr p, ref<reflect.type_t> t):void! {
     if self.cursor >= self.data.len() {
         throw errorf('unexpected end of input at position %d', self.cursor)
     }
 
     anyptr v = unsafe.ptr_to<anyptr>(p)
-    var rv = v as rawptr<reflect.union_t>
+    var rv = v as ptr<reflect.union_t>
 
     var target_p = &rv.value as anyptr
 

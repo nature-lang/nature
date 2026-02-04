@@ -15,7 +15,7 @@ nature-test/main.n:7:10: recycle use type 'main.node_t'
 === test_must_default
 --- main.n
 type node_t = struct {
-    ptr<node_t> next
+    ref<node_t> next
     int id
 }
 
@@ -29,7 +29,7 @@ nature-test/main.n:7:22: struct filed 'next' must be assigned default value
 === test_linked
 --- main.n
 type node_t = struct {
-    ptr<node_t>? next
+    ref<node_t>? next
     int id
 }
 
@@ -38,9 +38,9 @@ fn main() {
     var n2 = new node_t(id = 2, next = n1)
     var n3 = new node_t(id = 3, next = n2)
 
-    ptr<node_t>? tail_option = n3
-    for tail_option is ptr<node_t> {
-        var tail = tail_option as ptr<node_t>
+    ref<node_t>? tail_option = n3
+    for tail_option is ref<node_t> {
+        var tail = tail_option as ref<node_t>
 
         println(tail.id)
         tail_option = tail.next
@@ -56,7 +56,7 @@ fn main() {
 --- main.n
 type node_t = struct {
     int id
-    rawptr<node_t> next
+    ptr<node_t> next
 }
 
 fn main() {
@@ -64,9 +64,9 @@ fn main() {
     var n2 = new node_t(id = 2, next = n1)
     var n3 = new node_t(id = 3, next = n2)
 
-    rawptr<node_t> tail_option = n3
+    ptr<node_t> tail_option = n3
     for tail_option != null {
-        var tail = tail_option as anyptr as ptr<node_t>
+        var tail = tail_option as anyptr as ref<node_t>
 
         println(tail.id)
         tail_option = tail.next
@@ -209,9 +209,9 @@ fn main() {
     node_t n = {}
 }
 
-=== test_rawptr_recycle
+=== test_ptr_recycle
 --- main.n
-type node3_t = rawptr<node_t>
+type node3_t = ptr<node_t>
 type node2_t = node3_t
 type node_t = node2_t
 
@@ -248,7 +248,7 @@ fn post(http.callback_fn callback) {
 
 
 fn main() {
-    post(fn(ptr<http.request_t> req, ptr<http.response_t> res):void! {
+    post(fn(ref<http.request_t> req, ref<http.response_t> res):void! {
         res.send('hello world')
     })
 }

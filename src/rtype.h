@@ -33,13 +33,13 @@ static inline int64_t type_hash(type_t t) {
         return hash_string(type_kind_str[t.kind]);
     }
 
-    if (t.kind == TYPE_PTR) {
-        char *str = dsprintf("ptr.%ld", type_hash(t.ptr->value_type));
+    if (t.kind == TYPE_REF) {
+        char *str = dsprintf("ref.%ld", type_hash(t.ptr->value_type));
         return hash_string(str);
     }
 
-    if (t.kind == TYPE_RAWPTR) {
-        char *str = dsprintf("rawptr.%ld", type_hash(t.ptr->value_type));
+    if (t.kind == TYPE_PTR) {
+        char *str = dsprintf("ptr.%ld", type_hash(t.ptr->value_type));
         return hash_string(str);
     }
 
@@ -154,12 +154,12 @@ static inline rtype_t rtype_origin(type_t t) {
     return rtype;
 }
 
-static inline rtype_t rtype_rawptr(type_t t) {
+static inline rtype_t rtype_ptr(type_t t) {
     rtype_t rtype = {
             .heap_size = sizeof(n_ptr_t),
             .hash = type_hash(t),
             .last_ptr = POINTER_SIZE,
-            .kind = TYPE_RAWPTR,
+            .kind = TYPE_PTR,
             .length = 1,
             .hashes_offset = data_put(NULL, sizeof(int64_t)),
             .malloc_gc_bits_offset = -1,
@@ -196,12 +196,12 @@ static inline rtype_t rtype_anyptr(type_t t) {
  * @param t
  * @return
  */
-static inline rtype_t rtype_ptr(type_t t) {
+static inline rtype_t rtype_ref(type_t t) {
     rtype_t rtype = {
             .heap_size = sizeof(n_ptr_t),
             .hash = type_hash(t),
             .last_ptr = POINTER_SIZE,
-            .kind = TYPE_PTR,
+            .kind = TYPE_REF,
             .length = 1,
             .hashes_offset = data_put(NULL, sizeof(int64_t)),
             .malloc_gc_bits_offset = -1,
@@ -717,11 +717,11 @@ static inline rtype_t reflect_type(type_t t) {
         case TYPE_STRING:
             rtype = rtype_string(t);
             break;
+        case TYPE_REF:
+            rtype = rtype_ref(t);
+            break;
         case TYPE_PTR:
             rtype = rtype_ptr(t);
-            break;
-        case TYPE_RAWPTR:
-            rtype = rtype_rawptr(t);
             break;
         case TYPE_ANYPTR:
             rtype = rtype_anyptr(t);

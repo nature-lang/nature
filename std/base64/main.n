@@ -1,10 +1,10 @@
 import libc
 
 #linkid mbedtls_base64_decode
-fn mbedtls_base64_decode(anyptr dst, int dlen, rawptr<int> olen, anyptr src, int slen):i32
+fn mbedtls_base64_decode(anyptr dst, int dlen, ptr<int> olen, anyptr src, int slen):i32
 
 #linkid mbedtls_base64_encode
-fn mbedtls_base64_encode(anyptr dst, int dlen, rawptr<int> olen, anyptr src, int slen):i32
+fn mbedtls_base64_encode(anyptr dst, int dlen, ptr<int> olen, anyptr src, int slen):i32
 
 fn encode([u8] src):[u8] {
     var max_len = ((src.len() + 2) / 3) * 4 + 1

@@ -115,7 +115,7 @@ fn parse(string url):url_t! {
     return result
 }
 
-fn parse_authority(rawptr<url_t> result, string authority) {
+fn parse_authority(ptr<url_t> result, string authority) {
     result.authority = authority
     
     var colon_pos = authority.rfind(':')

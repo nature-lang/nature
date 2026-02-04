@@ -5,7 +5,7 @@
 ## fn copy
 
 ```
-fn copy<T>([u8] buf, rawptr<T> dst):void!
+fn copy<T>([u8] buf, ptr<T> dst):void!
 ```
 
 将缓冲区数据复制到指定类型的原始指针位置

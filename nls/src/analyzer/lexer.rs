@@ -232,8 +232,6 @@ pub enum TokenType {
     Chan,
 
     // 关键字
-    #[strum(serialize = "ptr")]
-    Ptr,
     #[strum(serialize = "true")]
     True,
     #[strum(serialize = "false")]
@@ -404,8 +402,7 @@ impl Token {
             // | TokenType::Map
             // | TokenType::Tup
             // | TokenType::Set
-            | TokenType::Chan
-            | TokenType::Ptr => SemanticTokenType::TYPE,
+            | TokenType::Chan => SemanticTokenType::TYPE,
             // 所有关键字
             TokenType::If
             | TokenType::Else
@@ -572,7 +569,6 @@ impl Lexer {
             "select" => TokenType::Select,
             // "new" => TokenType::New, // new 可用于关键字
             "null" => TokenType::Null,
-            "ptr" => TokenType::Ptr,
             "return" => TokenType::Return,
             // "set" => TokenType::Set,
             "string" => TokenType::String,

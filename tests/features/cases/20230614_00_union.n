@@ -49,8 +49,8 @@ fn main() {
     print(c is [i8], c is [i16], '\n')
 
 
-    // rawptr
-    rawptr<int> a1 = null
+    // ptr
+    ptr<int> a1 = null
     int b1 = 12
     a1 = &b1
     println(a1 as anyptr == &b1 as anyptr)

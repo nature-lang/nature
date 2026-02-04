@@ -11,11 +11,11 @@ fn map_new<T,U>():map<T,U> {
 fn map<T,U>.len():int
 
 fn map<T,U>.del(T key) {
-    rawptr<T> ref = &key
+    ptr<T> ref = &key
     runtime.map_delete(self as anyptr, ref as anyptr)
 }
 
 fn map<T,U>.contains(T key):bool {
-    rawptr<T> ref = &key
+    ptr<T> ref = &key
     return runtime.map_contains(self as anyptr, ref as anyptr)
 }

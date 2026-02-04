@@ -28,15 +28,15 @@ static inline void panic_dump(coroutine_t *co, caller_t *caller, char *msg) {
     exit(EXIT_FAILURE);
 }
 
-n_ptr_t *rawptr_assert(n_rawptr_t *rawptr) {
+n_ptr_t *ptr_assert(n_ptr_t *ptr) {
 
-    if (rawptr == 0) {
-        DEBUGF("[rawptr_assert] raw pointer");
-        rti_throw("rawptr is null, cannot assert", true);
+    if (ptr == 0) {
+        DEBUGF("[ptr_assert] raw pointer");
+        rti_throw("ptr is null, cannot assert", true);
         return 0;
     }
 
-    return rawptr;
+    return ptr;
 }
 
 void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref) {
@@ -139,8 +139,8 @@ n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int
         memmove(new_value, value_ref, stack_size);
         rti_write_barrier_ptr(&mu->value.ptr_value, new_value, false);
     } else {
-        // 特殊类型参数处理，为了兼容 fn method 中的 self 自动化参数, self 如果是 int/struct 等类型，会自动转换为 ptr<int>
-        // 如果是 vec/string 等类型，self 的类型依旧是 vec/string 等，而不是 ptr<vec>/ptr<string> 这有点多余, 因为 vec/string
+        // 特殊类型参数处理，为了兼容 fn method 中的 self 自动化参数, self 如果是 int/struct 等类型，会自动转换为 ref<int>
+        // 如果是 vec/string 等类型，self 的类型依旧是 vec/string 等，而不是 ref<vec>/ref<string> 这有点多余, 因为 vec/string
         // 本来就是在堆中分配的, 传递的是一个指针, 虽然后续可以能会进行统一处理，但是目前还是需要进行特殊处理，value 中直接存放可以作为
         // fn method 传递的参数
         memmove(&mu->value, value_ref, stack_size);
@@ -585,7 +585,7 @@ char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
     TRACEF("[rtype_value_str] rtype_kind=%s, data_ref=%p, data_size=%lu", type_kind_str[rtype->kind], data_ref,
            data_size);
 
-    if (is_number(rtype->kind) || rtype->kind == TYPE_BOOL || rtype->kind == TYPE_PTR || rtype->kind == TYPE_RAWPTR ||
+    if (is_number(rtype->kind) || rtype->kind == TYPE_BOOL || rtype->kind == TYPE_REF || rtype->kind == TYPE_PTR ||
         rtype->kind == TYPE_ANYPTR || rtype->kind == TYPE_CHAN || rtype->kind == TYPE_COROUTINE_T) {
         assert(data_size <= 8 && "not support number size > 8");
         int64_t temp = 0;
@@ -655,10 +655,10 @@ void write_barrier(void *slot, void *new_obj) {
     rti_write_barrier_ptr(slot, new_obj, false);
 }
 
-void rawptr_valid(void *rawptr) {
+void ptr_valid(void *ptr) {
     // 修改状态避免抢占
-    DEBUGF("[rawptr_valid] rawptr=%p", rawptr);
-    if (rawptr <= 0) {
+    DEBUGF("[ptr_valid] ptr=%p", ptr);
+    if (ptr <= 0) {
         rti_throw("invalid memory address or nil pointer dereference", true);
     }
 }

@@ -89,10 +89,10 @@ fn read_support_format_tar(archive_t a):i32
 fn read_open_filename(archive_t a, anyptr filename, uint block_size):i32
 
 #linkid archive_read_next_header
-fn read_next_header(archive_t a, rawptr<archive_entry_t> entry_ptr):i32
+fn read_next_header(archive_t a, ptr<archive_entry_t> entry_ptr):i32
 
 #linkid archive_read_data_block
-fn read_data_block(archive_t ar, rawptr<anyptr> buf, rawptr<uint> size, rawptr<i64> offset):i32
+fn read_data_block(archive_t ar, ptr<anyptr> buf, ptr<uint> size, ptr<i64> offset):i32
 
 #linkid archive_write_data_block
 fn write_data_block(archive_t aw, anyptr buf, uint size, i64 offset):i32

@@ -133,7 +133,7 @@ fn chan<T>.is_successful():bool
 ```
 type future_t<T> = struct{
     i64 size
-    rawptr<T> result
+    ptr<T> result
     throwable? error
     anyptr co
 }
@@ -160,7 +160,7 @@ fn future_t<T:void>.await():void!
 ## fn async
 
 ```
-fn async<T>(fn():void! function, int flag):ptr<future_t<T>>
+fn async<T>(fn():void! function, int flag):ref<future_t<T>>
 ```
 
 异步执行函数并返回 future。
@@ -168,7 +168,7 @@ fn async<T>(fn():void! function, int flag):ptr<future_t<T>>
 ## fn co_return
 
 ```
-fn co_return<T>(rawptr<T> result)
+fn co_return<T>(ptr<T> result)
 ```
 
 从协程返回结果。
@@ -215,7 +215,7 @@ type errable<T> = errort|T
 ## fn errorf
 
 ```
-fn errorf(string format, ...[any] args):ptr<errort>
+fn errorf(string format, ...[any] args):ref<errort>
 ```
 
 创建格式化错误。

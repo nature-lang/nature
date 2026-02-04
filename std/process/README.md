@@ -5,7 +5,7 @@ Process management, including process creation, execution and state management
 ## fn run
 
 ```
-fn run(string name, [string] args):ptr<state_t>!
+fn run(string name, [string] args):ref<state_t>!
 ```
 
 Execute a command and wait for completion, returning the process state including stdout, stderr and exit code
@@ -13,7 +13,7 @@ Execute a command and wait for completion, returning the process state including
 ## fn command
 
 ```
-fn command(string name, [string] args):ptr<command_t>!
+fn command(string name, [string] args):ref<command_t>!
 ```
 
 Create a command object for process execution with customizable stdin, stdout and stderr
@@ -92,7 +92,7 @@ Command configuration including executable name, arguments, working directory an
 ### command_t.spawn
 
 ```
-fn command_t.spawn():ptr<process_t>!
+fn command_t.spawn():ref<process_t>!
 ```
 
 Spawn a new process from the command configuration
@@ -100,7 +100,7 @@ Spawn a new process from the command configuration
 ### command_t.uv_spawn
 
 ```
-fn command_t.uv_spawn(ptr<command_t> cmd):ptr<process_t>!
+fn command_t.uv_spawn(ref<command_t> cmd):ref<process_t>!
 ```
 
 Low-level process spawning using libuv backend

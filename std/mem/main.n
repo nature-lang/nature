@@ -1,6 +1,6 @@
 import libc
 
-fn copy<T>([u8] buf, rawptr<T> dst):void! {
+fn copy<T>([u8] buf, ptr<T> dst):void! {
     int size = @sizeof(T)
     if size == 0 {
         throw errorf('type size failed')   

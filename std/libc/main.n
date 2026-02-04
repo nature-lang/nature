@@ -9,7 +9,7 @@ fn to_cfn(anyptr closure):anyptr {
         anyptr addr
     }
 
-    var c = closure as rawptr<fn_t>
+    var c = closure as ptr<fn_t>
     return c.addr
 }
 
@@ -157,7 +157,7 @@ fn mkostemps(cstr template, i32 suffixlen, i32 flags):i32
 fn getsubopt(anyptr optionp, anyptr tokens, anyptr valuep):i32
 
 #linkid rand_r
-fn rand_r(rawptr<u32> seed):i32
+fn rand_r(ptr<u32> seed):i32
 
 #linkid realpath
 fn realpath(cstr path, cstr resolved_path):cstr
@@ -217,7 +217,7 @@ fn jrand48(anyptr xsubi):i64
 fn srand48(i64 seedval):void
 
 #linkid seed48
-fn seed48(anyptr seed16v):rawptr<u16>
+fn seed48(anyptr seed16v):ptr<u16>
 
 #linkid lcong48
 fn lcong48(anyptr param):void
@@ -232,13 +232,13 @@ fn memalign(u64 alignment, u64 size):anyptr
 fn reallocarray(anyptr p, u64 nmemb, u64 size):anyptr
 
 #linkid getloadavg
-fn getloadavg(rawptr<f64> loadavg, i32 nelem):i32
+fn getloadavg(ptr<f64> loadavg, i32 nelem):i32
 
 #linkid ecvt
-fn ecvt(f64 number, i32 ndigits, rawptr<i32> decpt, rawptr<i32> sign):cstr
+fn ecvt(f64 number, i32 ndigits, ptr<i32> decpt, ptr<i32> sign):cstr
 
 #linkid fcvt
-fn fcvt(f64 number, i32 ndigits, rawptr<i32> decpt, rawptr<i32> sign):cstr
+fn fcvt(f64 number, i32 ndigits, ptr<i32> decpt, ptr<i32> sign):cstr
 
 #linkid gcvt
 fn gcvt(f64 number, i32 ndigit, cstr buf):cstr
@@ -310,10 +310,10 @@ fn ftell(fileptr stream):i64
 fn rewind(fileptr stream):void
 
 #linkid fgetpos
-fn fgetpos(fileptr stream, rawptr<fpos_t> pos):i32
+fn fgetpos(fileptr stream, ptr<fpos_t> pos):i32
 
 #linkid fsetpos
-fn fsetpos(fileptr stream, rawptr<fpos_t> pos):i32
+fn fsetpos(fileptr stream, ptr<fpos_t> pos):i32
 
 #linkid fread
 fn fread(anyptr p, u64 size, u64 nmemb, fileptr stream):u64
@@ -375,7 +375,7 @@ fn tmpfile():fileptr
 fn fmemopen(anyptr buffer, u64 size, cstr mode):fileptr
 
 #linkid open_memstream
-fn open_memstream(rawptr<cstr> bufp, rawptr<u64> sizep):fileptr
+fn open_memstream(ptr<cstr> bufp, ptr<u64> sizep):fileptr
 
 #linkid fdopen
 fn fdopen(i32 fd, cstr mode):fileptr
@@ -453,10 +453,10 @@ fn fputs_unlocked(cstr s, fileptr stream):i32
 
 // Line-oriented I/O
 #linkid getdelim
-fn getdelim(rawptr<cstr> lineptr, rawptr<u64> n, i32 delim, fileptr stream):i64
+fn getdelim(ptr<cstr> lineptr, ptr<u64> n, i32 delim, fileptr stream):i64
 
 #linkid getline
-fn getline(rawptr<cstr> lineptr, rawptr<u64> n, fileptr stream):i64
+fn getline(ptr<cstr> lineptr, ptr<u64> n, fileptr stream):i64
 
 // Additional functions
 #linkid renameat
@@ -481,12 +481,12 @@ fn getw(fileptr stream):i32
 fn putw(i32 w, fileptr stream):i32
 
 #linkid fgetln
-fn fgetln(fileptr stream, rawptr<u64> len):cstr
+fn fgetln(fileptr stream, ptr<u64> len):cstr
 
 // Cookie I/O function types
 type cookie_read_function_t = fn(anyptr, cstr, u64):i64
 type cookie_write_function_t = fn(anyptr, cstr, u64):i64
-type cookie_seek_function_t = fn(anyptr, rawptr<i64>, i32):i32
+type cookie_seek_function_t = fn(anyptr, ptr<i64>, i32):i32
 type cookie_close_function_t = fn(anyptr):i32
 
 type cookie_io_functions_t = struct {
@@ -580,7 +580,7 @@ fn strerror(i32 errnum):cstr
 
 // POSIX extensions
 #linkid strtok_r
-fn strtok_r(cstr str, cstr delim, rawptr<cstr> saveptr):cstr
+fn strtok_r(cstr str, cstr delim, ptr<cstr> saveptr):cstr
 
 #linkid strerror_r
 fn strerror_r(i32 errnum, cstr buf, u64 buflen):i32
@@ -624,7 +624,7 @@ fn memccpy(anyptr dst, anyptr src, i32 c, u64 n):anyptr
 
 // GNU/BSD extensions
 #linkid strsep
-fn strsep(rawptr<cstr> strp, cstr delim):cstr
+fn strsep(ptr<cstr> strp, cstr delim):cstr
 
 #linkid strlcat
 fn strlcat(cstr dst, cstr src, u64 size):u64
@@ -885,10 +885,10 @@ fn copysign(f64 x, f64 y):f64
 fn copysignf(f32 x, f32 y):f32
 
 #linkid frexp
-fn frexp(f64 x, rawptr<i32> exp):f64
+fn frexp(f64 x, ptr<i32> exp):f64
 
 #linkid frexpf
-fn frexpf(f32 x, rawptr<i32> exp):f32
+fn frexpf(f32 x, ptr<i32> exp):f32
 
 #linkid ldexp
 fn ldexp(f64 x, i32 exp):f64
@@ -897,10 +897,10 @@ fn ldexp(f64 x, i32 exp):f64
 fn ldexpf(f32 x, i32 exp):f32
 
 #linkid modf
-fn modf(f64 x, rawptr<f64> iptr):f64
+fn modf(f64 x, ptr<f64> iptr):f64
 
 #linkid modff
-fn modff(f32 x, rawptr<f32> iptr):f32
+fn modff(f32 x, ptr<f32> iptr):f32
 
 #linkid scalbn
 fn scalbn(f64 x, i32 n):f64
@@ -940,10 +940,10 @@ fn remainder(f64 x, f64 y):f64
 fn remainderf(f32 x, f32 y):f32
 
 #linkid remquo
-fn remquo(f64 x, f64 y, rawptr<i32> quo):f64
+fn remquo(f64 x, f64 y, ptr<i32> quo):f64
 
 #linkid remquof
-fn remquof(f32 x, f32 y, rawptr<i32> quo):f32
+fn remquof(f32 x, f32 y, ptr<i32> quo):f32
 
 #linkid fmax
 fn fmax(f64 x, f64 y):f64
@@ -1078,16 +1078,16 @@ fn significand(f64 x):f64
 fn significandf(f32 x):f32
 
 #linkid lgamma_r
-fn lgamma_r(f64 x, rawptr<i32> signgamp):f64
+fn lgamma_r(f64 x, ptr<i32> signgamp):f64
 
 #linkid lgammaf_r
-fn lgammaf_r(f32 x, rawptr<i32> signgamp):f32
+fn lgammaf_r(f32 x, ptr<i32> signgamp):f32
 
 #linkid sincos
-fn sincos(f64 x, rawptr<f64> sin, rawptr<f64> cos):void
+fn sincos(f64 x, ptr<f64> sin, ptr<f64> cos):void
 
 #linkid sincosf
-fn sincosf(f32 x, rawptr<f32> sin, rawptr<f32> cos):void
+fn sincosf(f32 x, ptr<f32> sin, ptr<f32> cos):void
 
 #linkid exp10
 fn exp10(f64 x):f64
@@ -1158,7 +1158,7 @@ type tm = struct {
 
 // Basic time functions
 #linkid time
-fn time(rawptr<time_t> t):time_t
+fn time(ptr<time_t> t):time_t
 
 #linkid clock
 fn clock():clock_t
@@ -1167,80 +1167,80 @@ fn clock():clock_t
 fn difftime(time_t time1, time_t time0):f64
 
 #linkid mktime
-fn mktime(rawptr<tm> time_info):time_t
+fn mktime(ptr<tm> time_info):time_t
 
 // Time formatting
 #linkid strftime
-fn strftime(cstr s, u64 size, cstr format, rawptr<tm> time_info):u64
+fn strftime(cstr s, u64 size, cstr format, ptr<tm> time_info):u64
 
 #linkid strftime_l
-fn strftime_l(cstr s, u64 size, cstr format, rawptr<tm> time_info, locale_t locale):u64
+fn strftime_l(cstr s, u64 size, cstr format, ptr<tm> time_info, locale_t locale):u64
 
 // Time conversion functions
 #linkid localtime
-fn localtime(rawptr<time_t> timestamp):rawptr<tm>
+fn localtime(ptr<time_t> timestamp):ptr<tm>
 
 #linkid gmtime
-fn gmtime(rawptr<time_t> timestamp):rawptr<tm>
+fn gmtime(ptr<time_t> timestamp):ptr<tm>
 
 #linkid asctime
-fn asctime(rawptr<tm> tm):cstr
+fn asctime(ptr<tm> tm):cstr
 
 #linkid ctime
-fn ctime(rawptr<time_t> timestamp):cstr
+fn ctime(ptr<time_t> timestamp):cstr
 
 // Thread-safe versions
 #linkid localtime_r
-fn localtime_r(rawptr<time_t> timestamp, rawptr<tm> result):rawptr<tm>
+fn localtime_r(ptr<time_t> timestamp, ptr<tm> result):ptr<tm>
 
 #linkid gmtime_r
-fn gmtime_r(rawptr<time_t> timestamp, rawptr<tm> result):rawptr<tm>
+fn gmtime_r(ptr<time_t> timestamp, ptr<tm> result):ptr<tm>
 
 #linkid asctime_r
-fn asctime_r(rawptr<tm> tm, cstr buf):cstr
+fn asctime_r(ptr<tm> tm, cstr buf):cstr
 
 #linkid ctime_r
-fn ctime_r(rawptr<time_t> timestamp, cstr buf):cstr
+fn ctime_r(ptr<time_t> timestamp, cstr buf):cstr
 
 // Time parsing
 #linkid strptime
-fn strptime(cstr s, cstr format, rawptr<tm> tm):cstr
+fn strptime(cstr s, cstr format, ptr<tm> tm):cstr
 
 // High-resolution time functions
 #linkid timespec_get
-fn timespec_get(rawptr<timespec> ts, i32 base):i32
+fn timespec_get(ptr<timespec> ts, i32 base):i32
 
 #linkid nanosleep
-fn nanosleep(rawptr<timespec> req, rawptr<timespec> rem):i32
+fn nanosleep(ptr<timespec> req, ptr<timespec> rem):i32
 
 // Clock functions
 #linkid clock_getres
-fn clock_getres(clockid_t clk_id, rawptr<timespec> res):i32
+fn clock_getres(clockid_t clk_id, ptr<timespec> res):i32
 
 #linkid clock_gettime
-fn clock_gettime(clockid_t clk_id, rawptr<timespec> tp):i32
+fn clock_gettime(clockid_t clk_id, ptr<timespec> tp):i32
 
 #linkid clock_settime
-fn clock_settime(clockid_t clk_id, rawptr<timespec> tp):i32
+fn clock_settime(clockid_t clk_id, ptr<timespec> tp):i32
 
 #linkid clock_nanosleep
-fn clock_nanosleep(clockid_t clk_id, i32 flags, rawptr<timespec> req, rawptr<timespec> rem):i32
+fn clock_nanosleep(clockid_t clk_id, i32 flags, ptr<timespec> req, ptr<timespec> rem):i32
 
 #linkid clock_getcpuclockid
-fn clock_getcpuclockid(i32 pid, rawptr<clockid_t> clk_id):i32
+fn clock_getcpuclockid(i32 pid, ptr<clockid_t> clk_id):i32
 
 // Timer functions
 #linkid timer_create
-fn timer_create(clockid_t clk_id, anyptr sevp, rawptr<timer_t> timerid):i32
+fn timer_create(clockid_t clk_id, anyptr sevp, ptr<timer_t> timerid):i32
 
 #linkid timer_delete
 fn timer_delete(timer_t timerid):i32
 
 #linkid timer_settime
-fn timer_settime(timer_t timerid, i32 flags, rawptr<itimerspec> new_value, rawptr<itimerspec> old_value):i32
+fn timer_settime(timer_t timerid, i32 flags, ptr<itimerspec> new_value, ptr<itimerspec> old_value):i32
 
 #linkid timer_gettime
-fn timer_gettime(timer_t timerid, rawptr<itimerspec> curr_value):i32
+fn timer_gettime(timer_t timerid, ptr<itimerspec> curr_value):i32
 
 #linkid timer_getoverrun
 fn timer_getoverrun(timer_t timerid):i32
@@ -1251,13 +1251,13 @@ fn tzset():void
 
 // GNU/BSD extensions
 #linkid stime
-fn stime(rawptr<time_t> t):i32
+fn stime(ptr<time_t> t):i32
 
 #linkid timegm
-fn timegm(rawptr<tm> tm):time_t
+fn timegm(ptr<tm> tm):time_t
 
 #linkid getdate
-fn getdate(cstr str):rawptr<tm>
+fn getdate(cstr str):ptr<tm>
 
 // unistd.h - File operations
 #linkid pipe
@@ -1380,10 +1380,10 @@ fn pause():i32
 fn _fork():i32
 
 #linkid execve
-fn execve(cstr filename, rawptr<cstr> argv, rawptr<cstr> envp):i32
+fn execve(cstr filename, ptr<cstr> argv, ptr<cstr> envp):i32
 
 #linkid execv
-fn execv(cstr path, rawptr<cstr> argv):i32
+fn execv(cstr path, ptr<cstr> argv):i32
 
 // not support
 // #linkid execle
@@ -1393,13 +1393,13 @@ fn execv(cstr path, rawptr<cstr> argv):i32
 // fn execl(cstr path, cstr arg, ...):i32
 
 // #linkid execvp
-// fn execvp(cstr file, rawptr<cstr> argv):i32
+// fn execvp(cstr file, ptr<cstr> argv):i32
 
 // #linkid execlp
 // fn execlp(cstr file, cstr arg, ...):i32
 
 // #linkid fexecve
-// fn fexecve(i32 fd, rawptr<cstr> argv, rawptr<cstr> envp):i32
+// fn fexecve(i32 fd, ptr<cstr> argv, ptr<cstr> envp):i32
 
 // unistd.h - Process identification
 #linkid getpid
@@ -1452,7 +1452,7 @@ fn getgid():u32
 fn getegid():u32
 
 #linkid getgroups
-fn getgroups(i32 size, rawptr<u32> list):i32
+fn getgroups(i32 size, ptr<u32> list):i32
 
 #linkid setuid
 fn setuid(u32 uid):i32
@@ -1481,7 +1481,7 @@ fn ctermid(cstr s):cstr
 
 // unistd.h - Command line options
 #linkid getopt
-fn getopt(i32 argc, rawptr<cstr> argv, cstr optstring):i32
+fn getopt(i32 argc, ptr<cstr> argv, cstr optstring):i32
 
 // unistd.h - Configuration
 #linkid pathconf
@@ -1562,7 +1562,7 @@ fn getdomainname(cstr name, u64 len):i32
 fn setdomainname(cstr name, u64 len):i32
 
 #linkid setgroups
-fn setgroups(u64 size, rawptr<u32> list):i32
+fn setgroups(u64 size, ptr<u32> list):i32
 
 #linkid getpass
 fn getpass(cstr prompt):cstr
@@ -1586,7 +1586,7 @@ fn acct(cstr filename):i32
 // fn syscall(i64 number, ...):i64
 
 #linkid execvpe
-fn execvpe(cstr file, rawptr<cstr> argv, rawptr<cstr> envp):i32
+fn execvpe(cstr file, ptr<cstr> argv, ptr<cstr> envp):i32
 
 #linkid issetugid
 fn issetugid():i32
@@ -1602,10 +1602,10 @@ fn setresuid(u32 ruid, u32 euid, u32 suid):i32
 fn setresgid(u32 rgid, u32 egid, u32 sgid):i32
 
 #linkid getresuid
-fn getresuid(rawptr<u32> ruid, rawptr<u32> euid, rawptr<u32> suid):i32
+fn getresuid(ptr<u32> ruid, ptr<u32> euid, ptr<u32> suid):i32
 
 #os linux #linkid getresgid
-fn getresgid(rawptr<u32> rgid, rawptr<u32> egid, rawptr<u32> sgid):i32
+fn getresgid(ptr<u32> rgid, ptr<u32> egid, ptr<u32> sgid):i32
 
 #linkid get_current_dir_name
 fn get_current_dir_name():cstr
@@ -1620,7 +1620,7 @@ fn euidaccess(cstr pathname, i32 mode):i32
 fn eaccess(cstr pathname, i32 mode):i32
 
 #linkid copy_file_range
-fn copy_file_range(i32 fd_in, rawptr<i64> off_in, i32 fd_out, rawptr<i64> off_out, u64 len, u32 flags):i64
+fn copy_file_range(i32 fd_in, ptr<i64> off_in, i32 fd_out, ptr<i64> off_out, u64 len, u32 flags):i64
 
 #linkid gettid
 fn gettid():i32
@@ -1831,7 +1831,7 @@ fn posix_fallocate(i32 fd, off_t offset, off_t len):i32
 fn fallocate(i32 fd, i32 mode, off_t offset, off_t len):i32
 
 #linkid name_to_handle_at
-fn name_to_handle_at(i32 dirfd, cstr pathname, anyptr handle, rawptr<i32> mount_id, i32 flags):i32
+fn name_to_handle_at(i32 dirfd, cstr pathname, anyptr handle, ptr<i32> mount_id, i32 flags):i32
 
 #linkid open_by_handle_at
 fn open_by_handle_at(i32 mount_fd, anyptr handle, i32 flags):i32
@@ -1847,7 +1847,7 @@ fn sync_file_range(i32 fd, off_t offset, off_t nbytes, u32 flags):i32
 fn vmsplice(i32 fd, anyptr iov, u64 nr_segs, u32 flags):i64
 
 #linkid splice
-fn splice(i32 fd_in, rawptr<off_t> off_in, i32 fd_out, rawptr<off_t> off_out, u64 len, u32 flags):i64
+fn splice(i32 fd_in, ptr<off_t> off_in, i32 fd_out, ptr<off_t> off_out, u64 len, u32 flags):i64
 
 #linkid tee
 fn tee(i32 fd_in, i32 fd_out, u64 len, u32 flags):i64
@@ -1900,7 +1900,7 @@ int MAP_RENAME = 0x20
 
 // 通过空值 options 实现阻塞和非阻塞模式
 #linkid waitpid
-fn waitpid(int pid, rawptr<int> status, int options):int
+fn waitpid(int pid, ptr<int> status, int options):int
 
 // --- signal 相关 <sys/signalfd.h> 和 <signal.h>
 type sigset_t = struct {
@@ -1933,19 +1933,19 @@ type signalfd_siginfo_t = struct {
 }
 
 #linkid sigemptyset
-fn sigemptyset(ptr<sigset_t> sigset):i32
+fn sigemptyset(ref<sigset_t> sigset):i32
 
 #linkid sigaddset
-fn sigaddset(ptr<sigset_t> sigset, i32 signo):i32
+fn sigaddset(ref<sigset_t> sigset, i32 signo):i32
 
 #linkid sigfillset
-fn sigfillset(ptr<sigset_t> sigset):i32
+fn sigfillset(ref<sigset_t> sigset):i32
 
 #linkid sigprocmask
-fn sigprocmask(i32 how, ptr<sigset_t> sigset, rawptr<sigset_t> oldset):i32
+fn sigprocmask(i32 how, ref<sigset_t> sigset, ptr<sigset_t> oldset):i32
 
 #linkid signalfd
-fn signalfd(int fd, ptr<sigset_t> mask, i32 flags):i32
+fn signalfd(int fd, ref<sigset_t> mask, i32 flags):i32
 
 #linkid prctl
 fn prctl(int option, u64 arg2, u64 arg3, u64 arg4, u64 arg5):int

@@ -56,28 +56,28 @@ type tokenizer_t = struct{
 
 type transformer_weights = struct{
     // token embedding table
-    rawptr<f32> token_embedding_table    // (vocab_size, dim)
+    ptr<f32> token_embedding_table    // (vocab_size, dim)
 
     // weights for rmsnorms
-    rawptr<f32> rms_att_weight           // (layer, dim)
-    rawptr<f32> rms_ffn_weight           // (layer, dim)
+    ptr<f32> rms_att_weight           // (layer, dim)
+    ptr<f32> rms_ffn_weight           // (layer, dim)
 
     // weights for matmuls. note dim == n_heads * head_size
-    rawptr<f32> wq                       // (layer, dim, n_heads * head_size)
-    rawptr<f32> wk                       // (layer, dim, n_kv_heads * head_size)
-    rawptr<f32> wv                       // (layer, dim, n_kv_heads * head_size)
-    rawptr<f32> wo                       // (layer, n_heads * head_size, dim)
+    ptr<f32> wq                       // (layer, dim, n_heads * head_size)
+    ptr<f32> wk                       // (layer, dim, n_kv_heads * head_size)
+    ptr<f32> wv                       // (layer, dim, n_kv_heads * head_size)
+    ptr<f32> wo                       // (layer, n_heads * head_size, dim)
 
     // weights for ffn
-    rawptr<f32> w1                       // (layer, hidden_dim, dim)
-    rawptr<f32> w2                       // (layer, dim, hidden_dim)
-    rawptr<f32> w3                       // (layer, hidden_dim, dim)
+    ptr<f32> w1                       // (layer, hidden_dim, dim)
+    ptr<f32> w2                       // (layer, dim, hidden_dim)
+    ptr<f32> w3                       // (layer, hidden_dim, dim)
 
     // final rmsnorm
-    rawptr<f32> rms_final_weight         // (dim,)
+    ptr<f32> rms_final_weight         // (dim,)
 
     // (optional) classifier weights for the logits, on the last layer
-    rawptr<f32> wcls
+    ptr<f32> wcls
 }
 
 type run_state_t = struct{
@@ -102,11 +102,11 @@ type transformer = struct{
     transformer_weights weights
     run_state_t state
     int fd
-    ptr<f32> data
+    ref<f32> data
     uint file_size
 }
 
-fn transformer.malloc_run_state(rawptr<run_state_t> s, rawptr<config_t> cfg):void! {
+fn transformer.malloc_run_state(ptr<run_state_t> s, ptr<config_t> cfg):void! {
     i32 kv_dim = (cfg.dim * cfg.n_kv_heads) / cfg.n_heads
 
     // allocate memory for various buffers
@@ -135,37 +135,37 @@ fn transformer.memory_map_weights(anyptr weights_ptr, u8 shared_weights):void! {
     // 使用 unsigned long long 来避免大模型的整数溢出问题
     i32 n_layers = cfg.n_layers
 
-    self.weights.token_embedding_table = weights_ptr as rawptr<f32>
+    self.weights.token_embedding_table = weights_ptr as ptr<f32>
     weights_ptr += (cfg.vocab_size * cfg.dim * @sizeof(f32)) as anyptr
 
-    self.weights.rms_att_weight = weights_ptr as rawptr<f32>
+    self.weights.rms_att_weight = weights_ptr as ptr<f32>
     weights_ptr += (n_layers * cfg.dim * @sizeof(f32)) as anyptr
 
-    self.weights.wq = weights_ptr as rawptr<f32>
+    self.weights.wq = weights_ptr as ptr<f32>
     weights_ptr += (n_layers * cfg.dim * (cfg.n_heads * head_size) * @sizeof(f32)) as anyptr
 
-    self.weights.wk = weights_ptr as rawptr<f32>
+    self.weights.wk = weights_ptr as ptr<f32>
     weights_ptr += (n_layers * cfg.dim * (cfg.n_kv_heads * head_size) * @sizeof(f32)) as anyptr
 
-    self.weights.wv = weights_ptr as rawptr<f32>
+    self.weights.wv = weights_ptr as ptr<f32>
     weights_ptr += (n_layers * cfg.dim * (cfg.n_kv_heads * head_size) * @sizeof(f32)) as anyptr
 
-    self.weights.wo = weights_ptr as rawptr<f32>
+    self.weights.wo = weights_ptr as ptr<f32>
     weights_ptr += (n_layers * (cfg.n_heads * head_size) * cfg.dim * @sizeof(f32)) as anyptr
 
-    self.weights.rms_ffn_weight = weights_ptr as rawptr<f32>
+    self.weights.rms_ffn_weight = weights_ptr as ptr<f32>
     weights_ptr += (n_layers * cfg.dim * @sizeof(f32)) as anyptr
 
-    self.weights.w1 = weights_ptr as rawptr<f32>
+    self.weights.w1 = weights_ptr as ptr<f32>
     weights_ptr += (n_layers * cfg.dim * cfg.hidden_dim * @sizeof(f32)) as anyptr
 
-    self.weights.w2 = weights_ptr as rawptr<f32>
+    self.weights.w2 = weights_ptr as ptr<f32>
     weights_ptr += (n_layers * cfg.hidden_dim * cfg.dim * @sizeof(f32)) as anyptr
 
-    self.weights.w3 = weights_ptr as rawptr<f32>
+    self.weights.w3 = weights_ptr as ptr<f32>
     weights_ptr += (n_layers * cfg.dim * cfg.hidden_dim * @sizeof(f32)) as anyptr
 
-    self.weights.rms_final_weight = weights_ptr as rawptr<f32>
+    self.weights.rms_final_weight = weights_ptr as ptr<f32>
     weights_ptr += (cfg.dim * @sizeof(f32)) as anyptr
 
     // 跳过 RoPE 频率表（在非量化版本中不需要）
@@ -176,7 +176,7 @@ fn transformer.memory_map_weights(anyptr weights_ptr, u8 shared_weights):void! {
     if shared_weights > 0 {
         self.weights.wcls = self.weights.token_embedding_table
     } else {
-        self.weights.wcls = weights_ptr as rawptr<f32>
+        self.weights.wcls = weights_ptr as ptr<f32>
     }
 }
 
@@ -191,7 +191,7 @@ fn transformer.rmsnorm([f32] o, [f32] x, anyptr weight, int size) {
     ss = 1.0 / libc.sqrtf(ss)
 
     for int j = 0; j < size; j += 1 {
-        f32 w = *((weight + j as anyptr * @sizeof(f32)) as rawptr<f32>)
+        f32 w = *((weight + j as anyptr * @sizeof(f32)) as ptr<f32>)
         o[j] = w * (ss * x[j])
     }
 }
@@ -205,14 +205,14 @@ fn transformer.matmul(anyptr xout_ref, anyptr x_ref, anyptr w, int n, int d):voi
     for int i = 0; i < d; i+=1 {
         f32 val = 0.0
         for int j = 0; j < n; j+=1 {
-            f32 w_val = *((w + ((i * n + j) * 4) as anyptr) as rawptr<f32>)
-            f32 x_val = *((x_ref + (j * 4) as anyptr) as rawptr<f32>)
+            f32 w_val = *((w + ((i * n + j) * 4) as anyptr) as ptr<f32>)
+            f32 x_val = *((x_ref + (j * 4) as anyptr) as ptr<f32>)
             val += w_val * x_val
         }
 
 
         // xout[i] = val
-        *((xout_ref + (i * 4) as anyptr) as rawptr<f32>) = val
+        *((xout_ref + (i * 4) as anyptr) as ptr<f32>) = val
     }
 
     // log('[transformer.matmul] end')
@@ -240,9 +240,9 @@ fn softmax([f32] x, int size) {
 }
 
 fn transformer.forward(int token, int pos):[f32]! {
-    rawptr<config_t> p = &self.config
-    rawptr<transformer_weights> w = &self.weights
-    rawptr<run_state_t> s = &self.state
+    ptr<config_t> p = &self.config
+    ptr<transformer_weights> w = &self.weights
+    ptr<run_state_t> s = &self.state
 
     int dim = p.dim as int
     int kv_dim = ((p.dim * p.n_kv_heads) / p.n_heads) as int
@@ -419,7 +419,7 @@ fn transformer.forward(int token, int pos):[f32]! {
 }
 
 // read_checkpoint
-fn transformer_new(string path):ptr<transformer>! {
+fn transformer_new(string path):ref<transformer>! {
     var f = fs.open(path, syscall.O_RDONLY, 0)
 
     // 读取配置
@@ -448,7 +448,7 @@ fn transformer_new(string path):ptr<transformer>! {
     // 权重指针从配置结构之后开始
     anyptr weights_ptr = data as anyptr + @sizeof(config_t)
 
-    var t = new transformer(config, fd = f.fd, data = data as ptr<f32>, file_size)
+    var t = new transformer(config, fd = f.fd, data = data as ref<f32>, file_size)
 
     t.memory_map_weights(weights_ptr, shared_weights)
 
@@ -626,7 +626,7 @@ fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
     return n_tokens
 }
 
-fn tokenizer_new(string tokenizer_path, int vocab_size):ptr<tokenizer_t>! {
+fn tokenizer_new(string tokenizer_path, int vocab_size):ref<tokenizer_t>! {
     var t = new tokenizer_t(
         vocab_size = vocab_size,
         vocab = vec_cap<string>(0),
@@ -640,7 +640,7 @@ fn tokenizer_new(string tokenizer_path, int vocab_size):ptr<tokenizer_t>! {
     }
 
     var f = fs.open(tokenizer_path, syscall.O_RDONLY, 0)
-    var file_reader = new buf.reader<ptr<fs.file_t>>(rd = f)
+    var file_reader = new buf.reader<ref<fs.file_t>>(rd = f)
 
 
     var i32_buf = vec_new<u8>(0, 4)
@@ -665,7 +665,7 @@ fn tokenizer_new(string tokenizer_path, int vocab_size):ptr<tokenizer_t>! {
     return t
 }
 
-fn random_u32(rawptr<u64> state):u32 {
+fn random_u32(ptr<u64> state):u32 {
     // xorshift rng: https://en.wikipedia.org/wiki/Xorshift#xorshift.2A
     *state ^= *state >> 12
     *state ^= *state << 25
@@ -673,7 +673,7 @@ fn random_u32(rawptr<u64> state):u32 {
     return ((*state * 0x2545F4914F6CDD1D) >> 32) as u32
 }
 
-fn random_f32(rawptr<u64> state):f32 {
+fn random_f32(ptr<u64> state):f32 {
     // random float32 in [0,1)
     return (random_u32(state) >> 8) as f32 / 16777216.0
 }
@@ -791,7 +791,7 @@ fn sampler_t.sample([f32] logits):int! {
     }
 }
 
-fn sampler_new(int vocab_size, f32 temperature, f32 topp, u64 rng_seed):ptr<sampler_t>! {
+fn sampler_new(int vocab_size, f32 temperature, f32 topp, u64 rng_seed):ref<sampler_t>! {
     return new sampler_t(
         vocab_size,
         temperature,
@@ -837,7 +837,7 @@ fn print_safe(string piece) {
     print(piece)
 }
 
-fn generate(ptr<transformer> tf, ptr<tokenizer_t> t, ptr<sampler_t> s, string prompt, int steps):void! {
+fn generate(ref<transformer> tf, ref<tokenizer_t> t, ref<sampler_t> s, string prompt, int steps):void! {
     // log('[generate] start', prompt, steps)
     var prompt_tokens = vec_new<int>(0, (prompt.len() + 3) as int) // +3 for '\0', ?BOS, ?EOS
 

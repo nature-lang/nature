@@ -5,7 +5,7 @@
 ## fn run
 
 ```
-fn run(string name, [string] args):ptr<state_t>!
+fn run(string name, [string] args):ref<state_t>!
 ```
 
 执行命令并等待完成，返回包含标准输出、标准错误和退出码的进程状态
@@ -13,7 +13,7 @@ fn run(string name, [string] args):ptr<state_t>!
 ## fn command
 
 ```
-fn command(string name, [string] args):ptr<command_t>!
+fn command(string name, [string] args):ref<command_t>!
 ```
 
 创建用于进程执行的命令对象，可自定义标准输入、标准输出和标准错误
@@ -92,7 +92,7 @@ type command_t = struct{
 ### command_t.spawn
 
 ```
-fn command_t.spawn():ptr<process_t>!
+fn command_t.spawn():ref<process_t>!
 ```
 
 从命令配置生成新进程
@@ -100,7 +100,7 @@ fn command_t.spawn():ptr<process_t>!
 ### command_t.uv_spawn
 
 ```
-fn command_t.uv_spawn(ptr<command_t> cmd):ptr<process_t>!
+fn command_t.uv_spawn(ref<command_t> cmd):ref<process_t>!
 ```
 
 使用libuv后端的底层进程生成

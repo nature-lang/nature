@@ -689,7 +689,7 @@ impl<'a> Typesys<'a> {
 
         match &mut result.kind {
             // 处理指针类型
-            TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => {
+            TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) => {
                 *value_type = Box::new(self.reduction_type(*value_type.clone())?);
             }
 
@@ -1083,7 +1083,7 @@ impl<'a> Typesys<'a> {
         if let TypeKind::Interface(_) = &src_type.kind {
             // interface_type = src_type
             let temp_target_type = match &target_type.kind {
-                TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => *value_type.clone(),
+                TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) => *value_type.clone(),
                 _ => target_type.clone(),
             };
 
@@ -1572,7 +1572,7 @@ impl<'a> Typesys<'a> {
                 });
             }
 
-            return Ok(Type::rawptr_of(operand_type));
+            return Ok(Type::ptr_of(operand_type));
         }
 
         // 处理不安全取地址运算符 @unsafe_la
@@ -1602,7 +1602,7 @@ impl<'a> Typesys<'a> {
         if op == ExprOp::Ia {
             // 检查是否是指针类型
             match operand_type.kind {
-                TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => {
+                TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) => {
                     return Ok(*value_type);
                 }
                 _ => {
@@ -2001,7 +2001,7 @@ impl<'a> Typesys<'a> {
         // 推导左侧表达式的类型
         let mut left_type = self.infer_right_expr(left, Type::default())?;
         left_type = match &left_type.kind {
-            TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => {
+            TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) => {
                 if matches!(value_type.kind, TypeKind::Arr(..)) {
                     *value_type.clone()
                 } else {
@@ -2294,7 +2294,7 @@ impl<'a> Typesys<'a> {
 
         // 处理自动解引用 - 如果是指针类型且指向结构体，则获取结构体类型
         let mut deref_type = match &left_type.kind {
-            TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => {
+            TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) => {
                 if matches!(value_type.kind, TypeKind::Struct(..)) {
                     *value_type.clone()
                 } else {
@@ -2528,7 +2528,7 @@ impl<'a> Typesys<'a> {
                     }
                 }
 
-                return self.reduction_type(Type::ptr_of(type_.clone()));
+                return self.reduction_type(Type::ref_of(type_.clone()));
             }
             AstNode::Binary(op, left, right) => self.infer_binary(op.clone(), left, right, infer_target_type),
             AstNode::Unary(op, operand) => self.infer_unary(op.clone(), operand, infer_target_type),
@@ -2628,7 +2628,7 @@ impl<'a> Typesys<'a> {
 
         // 自动解引用指针类型
         let src_type = match &expr.type_.kind {
-            TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => *value_type.clone(),
+            TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) => *value_type.clone(),
             _ => expr.type_.clone(),
         };
 
@@ -3481,9 +3481,9 @@ impl<'a> Typesys<'a> {
 
     fn self_arg_rewrite(&mut self, type_fn: &TypeFn, self_arg: &mut Expr) -> Result<(), AnalyzerError> {
         let self_param_type = &type_fn.param_types[0];
-        let extract_self_type = if matches!(self_param_type.kind, TypeKind::Ptr(_) | TypeKind::Rawptr(_)) {
+        let extract_self_type = if matches!(self_param_type.kind, TypeKind::Ref(_) | TypeKind::Ptr(_)) {
             match &self_param_type.kind {
-                TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => value_type.as_ref(),
+                TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) => value_type.as_ref(),
                 _ => unreachable!(),
             }
         } else {
@@ -3491,8 +3491,8 @@ impl<'a> Typesys<'a> {
         };
 
         if extract_self_type.is_stack_impl() {
-            if matches!(self_param_type.kind, TypeKind::Ptr(_)) {
-                if matches!(self_arg.type_.kind, TypeKind::Rawptr(_)) {
+            if matches!(self_param_type.kind, TypeKind::Ref(_)) {
+                if matches!(self_arg.type_.kind, TypeKind::Ptr(_)) {
                     return Err(AnalyzerError {
                         start: self_arg.start,
                         end: self_arg.end,
@@ -3500,24 +3500,24 @@ impl<'a> Typesys<'a> {
                     });
                 }
 
-                if !matches!(self_arg.type_.kind, TypeKind::Ptr(_)) {
+                if !matches!(self_arg.type_.kind, TypeKind::Ref(_)) {
                     let mut new_arg = self_arg.clone();
                     new_arg.node = AstNode::Unary(ExprOp::SafeLa, Box::new(self_arg.clone()));
-                    new_arg.type_ = Type::ptr_of(self_arg.type_.clone());
+                    new_arg.type_ = Type::ref_of(self_arg.type_.clone());
                     new_arg.target_type = Type::default();
                     *self_arg = new_arg;
                 }
-            } else if matches!(self_param_type.kind, TypeKind::Rawptr(_)) {
-                if matches!(self_arg.type_.kind, TypeKind::Rawptr(_) | TypeKind::Ptr(_)) {
+            } else if matches!(self_param_type.kind, TypeKind::Ptr(_)) {
+                if matches!(self_arg.type_.kind, TypeKind::Ptr(_) | TypeKind::Ref(_)) {
                     return Ok(());
                 }
 
                 let mut new_arg = self_arg.clone();
                 new_arg.node = AstNode::Unary(ExprOp::La, Box::new(self_arg.clone()));
-                new_arg.type_ = Type::rawptr_of(self_arg.type_.clone());
+                new_arg.type_ = Type::ptr_of(self_arg.type_.clone());
                 *self_arg = new_arg;
             } else {
-                if matches!(self_arg.type_.kind, TypeKind::Rawptr(_) | TypeKind::Ptr(_)) {
+                if matches!(self_arg.type_.kind, TypeKind::Ptr(_) | TypeKind::Ref(_)) {
                     let mut new_arg = self_arg.clone();
                     new_arg.node = AstNode::Unary(ExprOp::Ia, Box::new(self_arg.clone()));
                     new_arg.type_ = Type::default();
@@ -3608,9 +3608,9 @@ impl<'a> Typesys<'a> {
         let select_left_type = self.infer_right_expr(select_left, Type::default())?;
 
         // 解构类型判断
-        let select_left_type = if matches!(select_left_type.kind, TypeKind::Ptr(_) | TypeKind::Rawptr(_)) {
+        let select_left_type = if matches!(select_left_type.kind, TypeKind::Ref(_) | TypeKind::Ptr(_)) {
             match &select_left_type.kind {
-                TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => *value_type.clone(),
+                TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) => *value_type.clone(),
                 _ => unreachable!(),
             }
         } else {
@@ -3659,7 +3659,7 @@ impl<'a> Typesys<'a> {
                         Ok(result) => {
                             // change self arg 类型
                             match &mut select_left.type_.kind {
-                                TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => {
+                                TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) => {
                                     *value_type = Box::new(builtin_type);
                                 }
                                 _ => {
@@ -4196,11 +4196,11 @@ impl<'a> Typesys<'a> {
             return true;
         }
 
-        // rawptr<t> 可以赋值为 null 以及 ptr<t>
-        if let TypeKind::Rawptr(dst_value_type) = &dst.kind {
+        // ptr<t> 可以赋值为 null 以及 ref<t>
+        if let TypeKind::Ptr(dst_value_type) = &dst.kind {
             match &src.kind {
                 TypeKind::Null => return true,
-                TypeKind::Ptr(src_value_type) => {
+                TypeKind::Ref(src_value_type) => {
                     return self.type_compare_visited(dst_value_type, src_value_type, visited);
                 }
                 _ => {}
@@ -4326,7 +4326,7 @@ impl<'a> Typesys<'a> {
                     .all(|(left, right)| left.name == right.name && self.type_compare_visited(&left.type_, &right.type_, visited))
             }
 
-            (TypeKind::Ptr(left_value), TypeKind::Ptr(right_value)) | (TypeKind::Rawptr(left_value), TypeKind::Rawptr(right_value)) => {
+            (TypeKind::Ref(left_value), TypeKind::Ref(right_value)) | (TypeKind::Ptr(left_value), TypeKind::Ptr(right_value)) => {
                 self.type_compare_visited(left_value, right_value, visited)
             }
 
@@ -4448,7 +4448,7 @@ impl<'a> Typesys<'a> {
                     .all(|(left, right)| left.name == right.name && self.type_generics(&left.type_, &right.type_, generics_param_table))
             }
 
-            (TypeKind::Ptr(left_value), TypeKind::Ptr(right_value)) | (TypeKind::Rawptr(left_value), TypeKind::Rawptr(right_value)) => {
+            (TypeKind::Ref(left_value), TypeKind::Ref(right_value)) | (TypeKind::Ptr(left_value), TypeKind::Ptr(right_value)) => {
                 self.type_generics(left_value, right_value, generics_param_table)
             }
 
@@ -4549,11 +4549,11 @@ impl<'a> Typesys<'a> {
             if fndef.is_impl && i == 0 {
                 if param_type.is_stack_impl() {
                     match fndef.self_kind {
+                        SelfKind::SelfRefT => {
+                            param_type = Type::ref_of(param_type);
+                        }
                         SelfKind::SelfPtrT => {
                             param_type = Type::ptr_of(param_type);
-                        }
-                        SelfKind::SelfRawptrT => {
-                            param_type = Type::rawptr_of(param_type);
                         }
                         SelfKind::SelfT | SelfKind::Null => {
                             // 值类型传递，不需要转换
@@ -4562,7 +4562,7 @@ impl<'a> Typesys<'a> {
                 } else {
                     // 堆分配类型(vec/map/set/chan等)有隐式指针接收器
                     // 不需要转换，但必须是 SelfPtrT
-                    if fndef.self_kind != SelfKind::SelfPtrT && fndef.self_kind != SelfKind::Null {
+                    if fndef.self_kind != SelfKind::SelfRefT && fndef.self_kind != SelfKind::Null {
                         // 可以在这里添加警告或错误，但暂时只是保持原样
                     }
                 }
@@ -4962,9 +4962,9 @@ impl<'a> Typesys<'a> {
         if param.constraints.2 {
             for constraint in &param.constraints.0 {
                 if let TypeKind::Interface(elements) = &constraint.kind {
-                    let temp_target_type = if matches!(src.kind, TypeKind::Ptr(_) | TypeKind::Rawptr(_)) {
+                    let temp_target_type = if matches!(src.kind, TypeKind::Ref(_) | TypeKind::Ptr(_)) {
                         match &src.kind {
-                            TypeKind::Ptr(value_type) | TypeKind::Rawptr(value_type) => *value_type.clone(),
+                            TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) => *value_type.clone(),
                             _ => {
                                 continue;
                             }

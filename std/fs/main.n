@@ -36,10 +36,10 @@ type file_t:io.reader, io.writer, io.seeker = struct{
 }
 
 #linkid rt_uv_fs_from
-fn from(int fd, string name):ptr<file_t>!
+fn from(int fd, string name):ref<file_t>!
 
 #linkid rt_uv_fs_open
-fn open(string path, int flags, int mode):ptr<file_t>!
+fn open(string path, int flags, int mode):ref<file_t>!
 
 #linkid rt_uv_fs_content
 fn file_t.content():string! {
@@ -76,18 +76,18 @@ fn file_t.close():void
 fn file_t.stat():stat_t!
 
 // io
-fn stdout():ptr<file_t>! {
+fn stdout():ref<file_t>! {
     return from(syscall.STDOUT, '/dev/stdout')
 }
 
-fn stdin():ptr<file_t>! {
+fn stdin():ref<file_t>! {
     return from(syscall.STDIN, '/dev/stdin')
 }
 
-fn stderr():ptr<file_t>! {
+fn stderr():ref<file_t>! {
     return from(syscall.STDERR, '/dev/stderr')
 }
 
-fn discard():ptr<file_t>! {
+fn discard():ref<file_t>! {
     return open('/dev/null', syscall.O_RDWR, 0)
 }

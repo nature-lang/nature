@@ -13,7 +13,7 @@ type dirent_t = struct {
 fn opendir(anyptr str):dir_t
 
 #linkid 'readdir$INODE64'
-fn readdir(dir_t d):rawptr<dirent_t>
+fn readdir(dir_t d):ptr<dirent_t>
 
 #linkid closedir
 fn closedir(dir_t d):int

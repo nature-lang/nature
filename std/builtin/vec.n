@@ -19,7 +19,7 @@ fn vec_cap<T>(int cap):vec<T> {
 }
 
 fn vec<T>.push(T v) {
-    rawptr<T> ref = &v
+    ptr<T> ref = &v
     int element_hash = @reflect_hash(T)
     return runtime.vec_push(self as anyptr, element_hash, ref as anyptr)
 }
@@ -182,7 +182,7 @@ fn vec<T>.pdqsort(int a, int b, int limit, fn(int, int):bool less) {
 }
 
 // 分区函数
-fn vec<T>.partition(int a, int b, int pivot, fn(int, int):bool less, rawptr<bool> already_partitioned):int {
+fn vec<T>.partition(int a, int b, int pivot, fn(int, int):bool less, ptr<bool> already_partitioned):int {
     self.swap(a, pivot)
     int i = a + 1
     int j = b - 1

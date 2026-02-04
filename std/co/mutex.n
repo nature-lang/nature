@@ -9,13 +9,13 @@ type mutex_t = struct {
 }
 
 #linkid rt_mutex_lock
-fn rt_mutex_lock(ptr<mutex_t> m)
+fn rt_mutex_lock(ref<mutex_t> m)
 
 #linkid rt_mutex_try_lock
-fn rt_mutex_try_lock(ptr<mutex_t> m):bool
+fn rt_mutex_try_lock(ref<mutex_t> m):bool
 
 #linkid rt_mutex_unlock
-fn rt_mutex_unlock(ptr<mutex_t> m)
+fn rt_mutex_unlock(ref<mutex_t> m)
 
 fn mutex_t.lock() {
     rt_mutex_lock(self)

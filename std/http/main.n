@@ -70,9 +70,9 @@ var MIME_JSON = 'application/json'
 var separation = '\r\n' as anyptr as [u8]
 var separation2 = '\r\n\r\n' as anyptr as [u8]
 
-type callback_fn = fn(request_t, ptr<response_t>):void!
+type callback_fn = fn(request_t, ref<response_t>):void!
 
-fn callback_notfound(request_t req, ptr<response_t> res):void! {
+fn callback_notfound(request_t req, ref<response_t> res):void! {
     res.status = 404
     res.message = 'Not Found'
     res.send('404 not found')
@@ -166,7 +166,7 @@ fn server_t.close() {
     uv.http_close(self as anyptr)
 }
 
-fn server():ptr<server_t> {
+fn server():ref<server_t> {
     var s = new server_t(addr = '0.0.0.0', handler_fn = conn_handler)
     return s
 }
@@ -192,7 +192,7 @@ type response_t = struct{
     string content_type // content type
 }
 
-fn request_new(rawptr<uv.conn_t> conn):request_t {
+fn request_new(ptr<uv.conn_t> conn):request_t {
     var req = request_t{
         method: conn.method,
         host: runtime.string_ref_new(conn.host_at, conn.host_len),
@@ -225,7 +225,7 @@ fn conn_handler():void! {
         panic('conn_handler arg is null')
         // throw errorf('conn_handler arg is null')
     }
-    var conn = arg as rawptr<uv.conn_t>
+    var conn = arg as ptr<uv.conn_t>
 
     var req = request_new(conn)
     var res = response_new()
@@ -238,7 +238,7 @@ fn conn_handler():void! {
     uv.conn_resp(conn, res.to_str())
 }
 
-fn response_new():ptr<response_t> {
+fn response_new():ref<response_t> {
     return new response_t(
         headers = {'Connection': 'close'},
         status = 200,

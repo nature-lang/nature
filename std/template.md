@@ -39,7 +39,7 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ## fn stdout
 
 ```
-fn stdout():ptr<file_t>!
+fn stdout():ref<file_t>!
 ```
 
 Get the standard output of the system and convert it to file_t
@@ -73,7 +73,7 @@ xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx,xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ### fn from
 
 ```
-fn from(int fd, string name):ptr<file_t>!
+fn from(int fd, string name):ref<file_t>!
 ```
 
 Create a file_t structure with file descriptors

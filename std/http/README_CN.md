@@ -53,7 +53,7 @@ const ROUTES_DELETE = 3
 ## type callback_fn
 
 ```
-type callback_fn = fn(request_t, ptr<response_t>):void!
+type callback_fn = fn(request_t, ref<response_t>):void!
 ```
 
 HTTP 请求处理函数类型。
@@ -61,7 +61,7 @@ HTTP 请求处理函数类型。
 ## fn server
 
 ```
-fn server():ptr<server_t>
+fn server():ref<server_t>
 ```
 
 创建新的 HTTP 服务器实例。
@@ -178,7 +178,7 @@ fn response_t.send(string msg)
 ## fn get
 
 ```
-fn get(string url, config_t c):ptr<response_t>!
+fn get(string url, config_t c):ref<response_t>!
 ```
 
 发送 GET 请求。
@@ -186,7 +186,7 @@ fn get(string url, config_t c):ptr<response_t>!
 ## fn post
 
 ```
-fn post(string url, string body, config_t c):ptr<response_t>!
+fn post(string url, string body, config_t c):ref<response_t>!
 ```
 
 发送 POST 请求。
@@ -205,7 +205,7 @@ type multipart_t = struct{
 ### multipart_t.text
 
 ```
-fn multipart_t.text(string name, string value):ptr<multipart_t>
+fn multipart_t.text(string name, string value):ref<multipart_t>
 ```
 
 向多部分表单添加文本字段。
@@ -213,7 +213,7 @@ fn multipart_t.text(string name, string value):ptr<multipart_t>
 ### multipart_t.file
 
 ```
-fn multipart_t.file(string name, string filename, string data):ptr<multipart_t>
+fn multipart_t.file(string name, string filename, string data):ref<multipart_t>
 ```
 
 向多部分表单添加文件字段。
@@ -221,7 +221,7 @@ fn multipart_t.file(string name, string filename, string data):ptr<multipart_t>
 ### multipart_t_new
 
 ```
-fn multipart_t_new():ptr<multipart_t>
+fn multipart_t_new():ref<multipart_t>
 ```
 
 创建新的多部分表单数据构建器。
@@ -260,7 +260,7 @@ HTTP 客户端请求。
 ### new
 
 ```
-fn new():ptr<request_t>
+fn new():ref<request_t>
 ```
 
 创建新的 HTTP 客户端请求。
@@ -268,7 +268,7 @@ fn new():ptr<request_t>
 ### request_t.get
 
 ```
-fn request_t.get(string url):ptr<request_t>
+fn request_t.get(string url):ref<request_t>
 ```
 
 设置请求方法为 GET。
@@ -276,7 +276,7 @@ fn request_t.get(string url):ptr<request_t>
 ### request_t.post
 
 ```
-fn request_t.post(string url):ptr<request_t>
+fn request_t.post(string url):ref<request_t>
 ```
 
 设置请求方法为 POST。
@@ -284,7 +284,7 @@ fn request_t.post(string url):ptr<request_t>
 ### request_t.put
 
 ```
-fn request_t.put(string url):ptr<request_t>
+fn request_t.put(string url):ref<request_t>
 ```
 
 设置请求方法为 PUT。
@@ -292,7 +292,7 @@ fn request_t.put(string url):ptr<request_t>
 ### request_t.delete
 
 ```
-fn request_t.delete(string url):ptr<request_t>
+fn request_t.delete(string url):ref<request_t>
 ```
 
 设置请求方法为 DELETE。
@@ -300,7 +300,7 @@ fn request_t.delete(string url):ptr<request_t>
 ### request_t.timeout
 
 ```
-fn request_t.timeout(int timeout):ptr<request_t>
+fn request_t.timeout(int timeout):ref<request_t>
 ```
 
 设置请求超时时间（毫秒）。
@@ -308,7 +308,7 @@ fn request_t.timeout(int timeout):ptr<request_t>
 ### request_t.header
 
 ```
-fn request_t.header(string key, string value):ptr<request_t>
+fn request_t.header(string key, string value):ref<request_t>
 ```
 
 添加请求头。
@@ -316,7 +316,7 @@ fn request_t.header(string key, string value):ptr<request_t>
 ### request_t.content
 
 ```
-fn request_t.content(string content):ptr<request_t>
+fn request_t.content(string content):ref<request_t>
 ```
 
 设置请求体内容。
@@ -324,7 +324,7 @@ fn request_t.content(string content):ptr<request_t>
 ### request_t.json
 
 ```
-fn request_t.json(any b):ptr<request_t>!
+fn request_t.json(any b):ref<request_t>!
 ```
 
 设置请求体为 JSON 格式。
@@ -332,7 +332,7 @@ fn request_t.json(any b):ptr<request_t>!
 ### request_t.form
 
 ```
-fn request_t.form({string:string} data):ptr<request_t>
+fn request_t.form({string:string} data):ref<request_t>
 ```
 
 设置请求体为表单数据。
@@ -340,7 +340,7 @@ fn request_t.form({string:string} data):ptr<request_t>
 ### request_t.send
 
 ```
-fn request_t.send():ptr<response_t>!
+fn request_t.send():ref<response_t>!
 ```
 
 发送 HTTP 请求。
@@ -358,7 +358,7 @@ type response_t = struct{
     string content_type
     string charset
     bool body_read
-    ptr<buf.reader<types.connable>> buf_conn
+    ref<buf.reader<types.connable>> buf_conn
 }
 ```
 

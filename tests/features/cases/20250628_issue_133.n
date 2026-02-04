@@ -22,7 +22,7 @@ fn Message.get_content(): string {
 
 fn main() {
 	//compiler error: Assertion failed: target->assert_type == LIR_OPERAND_VAR (/app/src/linear.c: linear_struct_fill_default: 403) Aborted (core dumped)
-	var pair2 = Pair<i32, ptr<Message>> {first: 1000000000, second: new Message(content = "err msg", id = -1)}
+	var pair2 = Pair<i32, ref<Message>> {first: 1000000000, second: new Message(content = "err msg", id = -1)}
 	println("First: ", pair2.first);
 	println("Second: ", pair2.second.get_content());
 }

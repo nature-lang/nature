@@ -41,8 +41,8 @@ fn listdir(string path):[string]! {
     }
 
     for true {
-        // rawptr 可以接收 null 或者具体的指针值，可以通过 *语法解构原始值
-        rawptr<dirent.dirent_t> entry = dirent.readdir(dir)
+        // ptr 可以接收 null 或者具体的指针值，可以通过 *语法解构原始值
+        ptr<dirent.dirent_t> entry = dirent.readdir(dir)
         if entry == null {
             break
         }

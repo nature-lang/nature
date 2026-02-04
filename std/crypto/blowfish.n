@@ -213,7 +213,7 @@ type cipher_t = struct {
     0xb74e6132, 0xce77e25b, 0x578fdfe3, 0x3ac372e6,
 ]
 
-fn init_cipher(rawptr<cipher_t> cipher) {
+fn init_cipher(ptr<cipher_t> cipher) {
     for int i = 0; i < 18; i += 1 {
         cipher.p[i] = initial_p[i]
     }
@@ -227,7 +227,7 @@ fn init_cipher(rawptr<cipher_t> cipher) {
 }
 
 // Get next big-endian 32-bit word
-fn get_next_word([u8] b, int len, rawptr<int> pos):u32 {
+fn get_next_word([u8] b, int len, ptr<int> pos):u32 {
     u32 w = 0
     int j = *pos
     
@@ -244,7 +244,7 @@ fn get_next_word([u8] b, int len, rawptr<int> pos):u32 {
 }
 
 // Block encryption function
-fn encrypt_block(rawptr<u32> l, rawptr<u32> r, cipher_t cipher) {
+fn encrypt_block(ptr<u32> l, ptr<u32> r, cipher_t cipher) {
     u32 xl = *l
     u32 xr = *r
     
@@ -288,7 +288,7 @@ fn encrypt_block(rawptr<u32> l, rawptr<u32> r, cipher_t cipher) {
 }
 
 // Block decryption function
-fn decrypt_block(rawptr<u32> l, rawptr<u32> r, cipher_t cipher) {
+fn decrypt_block(ptr<u32> l, ptr<u32> r, cipher_t cipher) {
     u32 xl = *l
     u32 xr = *r
     
@@ -332,7 +332,7 @@ fn decrypt_block(rawptr<u32> l, rawptr<u32> r, cipher_t cipher) {
 }
 
 // Create new Blowfish cipher instance
-fn new_cipher([u8] key, rawptr<cipher_t> cipher):int {
+fn new_cipher([u8] key, ptr<cipher_t> cipher):int {
     if key.len() < MIN_KEY_SIZE || key.len() > MAX_KEY_SIZE {
         return ERROR_INVALID_KEY_SIZE
     }
@@ -343,7 +343,7 @@ fn new_cipher([u8] key, rawptr<cipher_t> cipher):int {
 }
 
 // Create salted Blowfish cipher instance
-fn new_salted_cipher([u8] key, [u8] salt, rawptr<cipher_t> cipher):int {
+fn new_salted_cipher([u8] key, [u8] salt, ptr<cipher_t> cipher):int {
     if salt.len() == 0 {
         return new_cipher(key, cipher)
     }
@@ -396,7 +396,7 @@ fn decrypt(cipher_t cipher, [u8] dst, [u8] src) {
 }
 
 // Key expansion function
-fn expand_key([u8] key, rawptr<cipher_t> cipher) {
+fn expand_key([u8] key, ptr<cipher_t> cipher) {
     int j = 0
     
     // XOR key with P array
@@ -468,7 +468,7 @@ fn expand_key([u8] key, rawptr<cipher_t> cipher) {
 }
 
 // Salted key expansion function
-fn expand_key_with_salt([u8] key, [u8] salt, rawptr<cipher_t> cipher) {
+fn expand_key_with_salt([u8] key, [u8] salt, ptr<cipher_t> cipher) {
     int key_len = key.len()
     int salt_len = salt.len()
     int j = 0

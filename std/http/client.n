@@ -22,7 +22,7 @@ type multipart_t = struct{
     [multipart_item_t] items
 }
 
-fn multipart_t_new():ptr<multipart_t> {
+fn multipart_t_new():ref<multipart_t> {
     return new multipart_t(
         boundary = generate_boundary(),
         items = [],
@@ -34,7 +34,7 @@ fn generate_boundary():string {
     return fmt.sprintf("----formdata-boundary-%d", timestamp)
 }
 
-fn multipart_t.text(string name, string value):ptr<multipart_t> {
+fn multipart_t.text(string name, string value):ref<multipart_t> {
     var item = multipart_item_t{
         name: name,
         filename: "",
@@ -45,7 +45,7 @@ fn multipart_t.text(string name, string value):ptr<multipart_t> {
     return self
 }
 
-fn multipart_t.file(string name, string filename, string data):ptr<multipart_t> {
+fn multipart_t.file(string name, string filename, string data):ref<multipart_t> {
     var content_type = "application/octet-stream" 
 
     if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
@@ -118,83 +118,83 @@ type response_t = struct{
     string content_type // default application/json
     string charset
     bool body_read
-    ptr<buf.reader<types.connable>> buf_conn
+    ref<buf.reader<types.connable>> buf_conn
 }
 
-fn new():ptr<request_t> {
+fn new():ref<request_t> {
     return new request_t()
 }
 
-fn request_t.get(string url):ptr<request_t> {
+fn request_t.get(string url):ref<request_t> {
     self.url = url
     self.method = 'GET'
     return self
 }
 
-fn request_t.post(string url):ptr<request_t> {
+fn request_t.post(string url):ref<request_t> {
     self.url = url
     self.method = 'POST'
     return self
 }
 
-fn request_t.put(string url):ptr<request_t> {
+fn request_t.put(string url):ref<request_t> {
     self.url = url
     self.method = 'PUT'
     return self
 }
 
-fn request_t.patch(string url):ptr<request_t> {
+fn request_t.patch(string url):ref<request_t> {
     self.url = url
     self.method = 'PATCH'
     return self
 }
 
-fn request_t.delete(string url):ptr<request_t> {
+fn request_t.delete(string url):ref<request_t> {
     self.url = url
     self.method = 'DELETE'
     return self
 }
 
-fn request_t.options(string url):ptr<request_t> {
+fn request_t.options(string url):ref<request_t> {
     self.url = url
     self.method = 'OPTIONS'
     return self
 }
 
-fn request_t.head(string url):ptr<request_t> {
+fn request_t.head(string url):ref<request_t> {
     self.url = url
     self.method = 'HEAD'
     return self
 }
 
-fn request_t.timeout(int timeout):ptr<request_t> {
+fn request_t.timeout(int timeout):ref<request_t> {
     self.timeout = timeout
     return self
 }
 
-fn request_t.header(string key, string value):ptr<request_t> {
+fn request_t.header(string key, string value):ref<request_t> {
     self.headers[key] = value
     return self
 }
 
-fn request_t.content(string content):ptr<request_t> {
+fn request_t.content(string content):ref<request_t> {
     self.body = content
     return self
 }
 
-fn request_t.multipart(ptr<multipart_t> mp):ptr<request_t> {
+fn request_t.multipart(ref<multipart_t> mp):ref<request_t> {
     self.body = mp.serialize()
     self.headers['Content-Type'] = fmt.sprintf("multipart/form-data; boundary=%s", mp.boundary)
     return self
 }
 
-fn request_t.json(any b):ptr<request_t>! {
+fn request_t.json(any b):ref<request_t>! {
     self.body = json.serialize(b)
     self.headers['Content-type'] = 'application/json'
     return self
 }
 
-fn request_t.form({string:string} data):ptr<request_t> {
+fn request_t.form({string:string} data):ref<request_t> {
     var form_data = ""
     var first = true
     
@@ -256,7 +256,7 @@ fn request_t.tcp_buf():[u8]! {
     return buf
 }
 
-fn request_t.send():ptr<response_t>! {
+fn request_t.send():ref<response_t>! {
     self.u = url.parse(self.url)
     self.remote_ip = dns.lookup(self.u.hostname)[0]
     self.version = 'HTTP/1.1'
@@ -308,19 +308,19 @@ fn request_t.send():ptr<response_t>! {
     return resp
 }
 
-fn get(string url, config_t c):ptr<response_t>! {
+fn get(string url, config_t c):ref<response_t>! {
     c.method = 'GET'
     return fetch(url, c)
 }
 
-fn post(string url, string body, config_t c):ptr<response_t>! {
+fn post(string url, string body, config_t c):ref<response_t>! {
     c.method = 'POST'
     c.body = body
 
     return fetch(url, c)
 }
 
-fn fetch(string url, config_t c):ptr<response_t>! {
+fn fetch(string url, config_t c):ref<response_t>! {
     var req = new()
     req.method = c.method // TODO check
     req.url = url

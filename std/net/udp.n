@@ -22,17 +22,17 @@ type socket_t = struct{
 }
 
 type conn_t:io.reader, io.writer = struct{
-    ptr<socket_t> socket
+    ref<socket_t> socket
     addr_t remote_addr
 }
 
 #linkid rt_uv_udp_bind
-fn uv_udp_bind(ptr<socket_t> s):void!
+fn uv_udp_bind(ref<socket_t> s):void!
 
 #linkid rt_uv_udp_recvfrom
-fn uv_udp_recvfrom(ptr<socket_t> s, [u8] buf, rawptr<addr_t> addr):int!
+fn uv_udp_recvfrom(ref<socket_t> s, [u8] buf, ptr<addr_t> addr):int!
 
-fn bind(string host):ptr<socket_t>! {
+fn bind(string host):ref<socket_t>! {
     var (ip, port) = utils.split_host(host)
     var addr = addr_t{port: port, v4: utils.is_ipv4(ip)}
 
@@ -63,7 +63,7 @@ fn socket_t.recvfrom([u8] buf):(int, addr_t)! {
 }
 
 #linkid rt_uv_udp_sendto
-fn uv_sendto(ptr<socket_t> s, [u8] buf, addr_t addr):int!
+fn uv_sendto(ref<socket_t> s, [u8] buf, addr_t addr):int!
 
 fn socket_t.sendto([u8] buf, string host):int! {
     if self.closed {
@@ -82,7 +82,7 @@ fn socket_t.sendto([u8] buf, string host):int! {
     return uv_sendto(self, buf, addr)
 }
 
-fn socket_t.connect(string host):ptr<conn_t>! {
+fn socket_t.connect(string host):ref<conn_t>! {
     if self.closed {
         throw errorf('socket closed')
     }
@@ -103,7 +103,7 @@ fn socket_t.connect(string host):ptr<conn_t>! {
     return conn
 }
 
-fn connect(string host):ptr<conn_t>! {
+fn connect(string host):ref<conn_t>! {
     var s = bind('0.0.0.0:0')
     return s.connect(host)
 }

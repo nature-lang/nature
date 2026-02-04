@@ -97,7 +97,6 @@ typedef enum {
     TOKEN_CHAN,
 
     // KEYWORDS.
-    TOKEN_PTR,// ptr
     TOKEN_TRUE,
     TOKEN_FALSE,
     TOKEN_TYPE,
@@ -203,7 +202,6 @@ static string token_str[] = {
         [TOKEN_MAP] = "map",
         [TOKEN_SET] = "set",
         [TOKEN_TUP] = "tup",
-        [TOKEN_PTR] = "ptr",
         [TOKEN_TRUE] = "true",
         [TOKEN_FALSE] = "false",
         [TOKEN_TYPE] = "type",

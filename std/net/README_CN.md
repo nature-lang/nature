@@ -25,7 +25,7 @@ TCP网络，用于服务器和客户端连接
 ## fn uv_tcp_listen
 
 ```
-fn uv_tcp_listen(ptr<server_t> s):void!
+fn uv_tcp_listen(ref<server_t> s):void!
 ```
 
 使用libuv后端的底层TCP服务器监听
@@ -33,7 +33,7 @@ fn uv_tcp_listen(ptr<server_t> s):void!
 ## fn uv_tcp_connect
 
 ```
-fn uv_tcp_connect(ptr<conn_t> conn, string ip, int port, int timeout):void!
+fn uv_tcp_connect(ref<conn_t> conn, string ip, int port, int timeout):void!
 ```
 
 使用libuv后端的底层TCP连接建立
@@ -41,7 +41,7 @@ fn uv_tcp_connect(ptr<conn_t> conn, string ip, int port, int timeout):void!
 ## fn uv_tcp_accept
 
 ```
-fn uv_tcp_accept(ptr<server_t> server, ptr<conn_t> conn):void!
+fn uv_tcp_accept(ref<server_t> server, ref<conn_t> conn):void!
 ```
 
 使用libuv后端的底层TCP连接接受
@@ -49,7 +49,7 @@ fn uv_tcp_accept(ptr<server_t> server, ptr<conn_t> conn):void!
 ## fn listen
 
 ```
-fn listen(string host):ptr<server_t>!
+fn listen(string host):ref<server_t>!
 ```
 
 创建并启动在指定主机和端口上监听的TCP服务器
@@ -57,7 +57,7 @@ fn listen(string host):ptr<server_t>!
 ## fn connect
 
 ```
-fn connect(string host):ptr<conn_t>!
+fn connect(string host):ref<conn_t>!
 ```
 
 建立到指定主机和端口的TCP连接
@@ -65,7 +65,7 @@ fn connect(string host):ptr<conn_t>!
 ## fn connect_timeout
 
 ```
-fn connect_timeout(string host, int timeout):ptr<conn_t>!
+fn connect_timeout(string host, int timeout):ref<conn_t>!
 ```
 
 建立带有指定超时的TCP连接
@@ -89,7 +89,7 @@ TCP服务器实例，管理监听套接字和连接
 ### server_t.accept
 
 ```
-fn server_t.accept():ptr<conn_t>!
+fn server_t.accept():ref<conn_t>!
 ```
 
 接受传入的TCP连接并返回连接对象
@@ -144,7 +144,7 @@ TLS/SSL安全网络，用于加密连接
 ## fn uv_tls_connect
 
 ```
-fn uv_tls_connect(ptr<conn_t> conn, string ip, int port, int timeout):void!
+fn uv_tls_connect(ref<conn_t> conn, string ip, int port, int timeout):void!
 ```
 
 使用libuv后端的底层TLS连接建立
@@ -152,7 +152,7 @@ fn uv_tls_connect(ptr<conn_t> conn, string ip, int port, int timeout):void!
 ## fn connect
 
 ```
-fn connect(string host):ptr<conn_t>!
+fn connect(string host):ref<conn_t>!
 ```
 
 建立到指定主机和端口的TLS连接
@@ -160,7 +160,7 @@ fn connect(string host):ptr<conn_t>!
 ## fn connect_timeout
 
 ```
-fn connect_timeout(string host, int timeout):ptr<conn_t>!
+fn connect_timeout(string host, int timeout):ref<conn_t>!
 ```
 
 建立带有指定超时的TLS连接
@@ -207,7 +207,7 @@ UDP网络，用于无连接数据包通信
 ## fn uv_udp_bind
 
 ```
-fn uv_udp_bind(ptr<socket_t> s):void!
+fn uv_udp_bind(ref<socket_t> s):void!
 ```
 
 使用libuv后端的底层UDP套接字绑定
@@ -215,7 +215,7 @@ fn uv_udp_bind(ptr<socket_t> s):void!
 ## fn uv_udp_recvfrom
 
 ```
-fn uv_udp_recvfrom(ptr<socket_t> s, [u8] buf, rawptr<addr_t> addr):int!
+fn uv_udp_recvfrom(ref<socket_t> s, [u8] buf, ptr<addr_t> addr):int!
 ```
 
 使用libuv后端的底层UDP数据包接收
@@ -223,7 +223,7 @@ fn uv_udp_recvfrom(ptr<socket_t> s, [u8] buf, rawptr<addr_t> addr):int!
 ## fn bind
 
 ```
-fn bind(string host):ptr<socket_t>!
+fn bind(string host):ref<socket_t>!
 ```
 
 创建并绑定UDP套接字到指定主机和端口
@@ -231,7 +231,7 @@ fn bind(string host):ptr<socket_t>!
 ## fn connect
 
 ```
-fn connect(string host):ptr<conn_t>!
+fn connect(string host):ref<conn_t>!
 ```
 
 创建到指定主机和端口的UDP连接
@@ -288,7 +288,7 @@ fn socket_t.sendto([u8] buf, addr_t addr):int!
 ### socket_t.connect
 
 ```
-fn socket_t.connect(string host):ptr<conn_t>!
+fn socket_t.connect(string host):ref<conn_t>!
 ```
 
 创建连接的UDP套接字以与特定主机通信
@@ -305,7 +305,7 @@ fn socket_t.close()
 
 ```
 type conn_t:io.reader, io.writer = struct{
-    ptr<socket_t> socket
+    ref<socket_t> socket
     addr_t remote_addr
 }
 ```
@@ -391,7 +391,7 @@ fn parse(string url):url_t!
 ## fn parse_authority
 
 ```
-fn parse_authority(rawptr<url_t> result, string authority)
+fn parse_authority(ptr<url_t> result, string authority)
 ```
 
 将URL的authority组件解析为主机名和端口

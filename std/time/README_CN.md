@@ -16,7 +16,7 @@ fn unix():i64
 type time_t = struct {
     i64 sec
     i64 nsec
-    rawptr<libc.tm> tm
+    ptr<libc.tm> tm
 }
 ```
 

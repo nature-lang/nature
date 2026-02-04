@@ -9,7 +9,7 @@ type conn_t:types.connable = struct{
 }
 
 #linkid rt_uv_tls_connect
-fn uv_tls_connect(ptr<conn_t> conn, string ip, int port, int timeout):void!
+fn uv_tls_connect(ref<conn_t> conn, string ip, int port, int timeout):void!
 
 #linkid rt_uv_tls_read
 fn conn_t.read([u8] buf):int!
@@ -20,11 +20,11 @@ fn conn_t.write([u8] buf):int!
 #linkid rt_uv_tls_conn_close
 fn conn_t.close()
 
-fn connect(string host):ptr<conn_t>! {
+fn connect(string host):ref<conn_t>! {
     return connect_timeout(host, 0)
 }
 
-fn connect_timeout(string host, int timeout):ptr<conn_t>! {
+fn connect_timeout(string host, int timeout):ref<conn_t>! {
     var (ip, port) = utils.split_host(host)
     var conn = new conn_t()
     uv_tls_connect(conn, ip, port, timeout)
