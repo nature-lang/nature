@@ -924,6 +924,8 @@ ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp) {
     fndef->rel_path = temp->rel_path;
     fndef->column = temp->column;
     fndef->line = temp->line;
+    fndef->is_test = temp->is_test;
+    fndef->test_name = temp->test_name;
 
     fndef->is_generics = false;
     fndef->global_parent = NULL;

@@ -9,11 +9,11 @@ fn main() {
     }
 
 
-    test()
+    test1()
     println('nice wold')
 }
 
-fn test() {
+fn test1() {
     var b = 24
     panic('in here')
     var c = 56

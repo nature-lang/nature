@@ -973,7 +973,7 @@ fn test_t.nice():bool {
     return (self as [int]).len() > 0
 }
 
-fn use(testable? test) {
+fn use(testable? t) {
 
 }
 
@@ -1020,11 +1020,11 @@ fn test_t.nice():bool {
     return (self as [int]).len() > 0
 }
 
-fn use(testable? test) {
-    if (test is testable v) { // test = test as testable
+fn use(testable? t) {
+    if (t is testable v) {
         println('testable value is', v.nice())
     } else {
-        println('testable value is', test.nice()) // 没有 auto as, 就是 union
+        println('testable value is', t.nice()) // 没有 auto as, 就是 union
     }
 }
 
@@ -1034,7 +1034,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:15:39: no field named 'nice' found in type 'union'
+nature-test/main.n:15:36: no field named 'nice' found in type 'union'
 
 === test_interface_auto_as
 --- main.n
@@ -1048,8 +1048,8 @@ fn test_t.nice():bool {
     return self[2] == 3
 }
 
-fn use(testable? test) {
-    if (test is testable v) { // v = test as testable
+fn use(testable? t) {
+    if (t is testable v) {
         println('testable value is', v.nice())
     } else {
         println('test not testable')
@@ -1076,8 +1076,8 @@ fn test_t.nice():bool {
     return self[2] == 3
 }
 
-fn use(testable? test) {
-    if (test is testable v) { // var v = test as testable
+fn use(testable? t) {
+    if (t is testable v) {
         println('testable value is', v.nice())
     } else {
         println('test not testable')

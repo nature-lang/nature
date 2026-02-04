@@ -150,14 +150,14 @@ fn main() {
 
 === test_u32_to_f
 --- main.n
-fn test():f32 {
+fn test1():f32 {
     u32 d92 = 4294967293
     f32 d94 = d92 as f32
     return d94
 }
 
 fn main() {
-    println(test())
+    println(test1())
 }
 
 --- output.txt
@@ -165,14 +165,14 @@ fn main() {
 
 === test_u64_to_f
 --- main.n
-fn test():f64 {
+fn test1():f64 {
     u64 d92 = 9223372036854775817
     f64 d94 = d92 as f64
     return d94
 }
 
 fn main() {
-    println(test())
+    println(test1())
 }
 
 --- output.txt
@@ -180,14 +180,14 @@ fn main() {
 
 === test_f_to_u32
 --- main.n
-fn test():u32 {
+fn test1():u32 {
     f32 a1 = 4294967293.000000
     u32 a2 = a1 as u32
     return a2
 }
 
 fn main() {
-    println(test())
+    println(test1())
 }
 
 --- output.txt
@@ -196,14 +196,14 @@ fn main() {
 
 === test_f_to_u64
 --- main.n
-fn test():u64 {
+fn test1():u64 {
     f64 a1 = 9223372036854775808.000000
     u64 a2 = a1 as u64
     return a2
 }
 
 fn main() {
-    println(test())
+    println(test1())
 }
 
 --- output.txt
@@ -211,14 +211,14 @@ fn main() {
 
 === test_u_to_f
 --- main.n
-fn test():f32 {
+fn test1():f32 {
     u32 d92 = -3.1415926 as u32
     f32 a2 = d92 as f32
     return a2
 }
 
 fn main() {
-    println(test())
+    println(test1())
 }
 --- output.txt
 4294967296.000000

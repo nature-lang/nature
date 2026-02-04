@@ -93,7 +93,7 @@ type person_t = struct{
     ptr<int> p
 }
 
-fn test() {
+fn test1() {
 
 }
 
@@ -102,7 +102,7 @@ fn main():void! {
         p: new int(2),
     };10]
 
-    test()
+    test1()
     i8 a = 1
     i16 b = 2
     i32 c = 3
@@ -122,13 +122,13 @@ fn main():void! {
 --- main.n
 var list = [0;10]
 
-fn test(int a) {
+fn test1(int a) {
     println(a)
 }
 
 fn test2() {
     i16 a = 1
-    test(list[a])
+    test1(list[a])
 }
 
 fn main():void! {

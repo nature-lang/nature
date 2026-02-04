@@ -17,7 +17,7 @@ import http.client
 import json
 import http
 
-fn test(any b):string! {
+fn test1(any b):string! {
     return json.serialize(b)
 }
 
@@ -55,7 +55,7 @@ fn dump(u8 i, u8 rem) {
     println(i, rem)
 }
 
-fn test(u8 i, string fill, u8 width):string {
+fn test1(u8 i, string fill, u8 width):string {
     u8 base = 10
     [u8] result = []
     u8 rem = i % base
@@ -68,7 +68,7 @@ fn test(u8 i, string fill, u8 width):string {
 }
 
 fn main() {
-    var s = test(12, ' ', 0)
+    var s = test1(12, ' ', 0)
 
     u8 a = 12
     var b = a * 10

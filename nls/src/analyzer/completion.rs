@@ -1,5 +1,5 @@
-use crate::analyzer::symbol::{NodeId, Symbol, SymbolKind, SymbolTable};
 use crate::analyzer::common::AstFnDef;
+use crate::analyzer::symbol::{NodeId, Symbol, SymbolKind, SymbolTable};
 use crate::project::Module;
 use log::debug;
 use std::collections::HashSet;
@@ -10,8 +10,8 @@ pub struct CompletionItem {
     pub kind: CompletionItemKind,
     pub detail: Option<String>, // Type information
     pub documentation: Option<String>,
-    pub insert_text: String,       // Insert text
-    pub sort_text: Option<String>, // Sort priority
+    pub insert_text: String,                  // Insert text
+    pub sort_text: Option<String>,            // Sort priority
     pub additional_text_edits: Vec<TextEdit>, // Additional text edits (for auto-import)
 }
 
@@ -78,7 +78,7 @@ impl<'a> CompletionProvider<'a> {
                 debug!("Found type member completions for variable '{}'", var_name);
                 return completions;
             }
-            
+
             // If not a variable, try as module member access
             debug!("Detected module member access: {} and {}", var_name, member_prefix);
             return self.get_module_member_completions(&var_name, &member_prefix);
@@ -139,16 +139,27 @@ impl<'a> CompletionProvider<'a> {
             // Iterate through all symbols in imported module
             for &symbol_id in &imported_scope.symbols {
                 if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
+                    if let SymbolKind::Fn(fndef) = &symbol.kind {
+                        if fndef.lock().unwrap().is_test {
+                            continue;
+                        }
+                    }
+
                     // Extract the actual symbol name (without module path)
                     let symbol_name = extract_last_ident_part(&symbol.ident);
-                    
-                    debug!("Checking symbol: {} (extracted: {}) of kind: {:?}", symbol.ident, symbol_name, match &symbol.kind {
-                        SymbolKind::Var(_) => "Var",
-                        SymbolKind::Const(_) => "Const",
-                        SymbolKind::Fn(_) => "Fn",
-                        SymbolKind::Type(_) => "Type",
-                    });
-                    
+
+                    debug!(
+                        "Checking symbol: {} (extracted: {}) of kind: {:?}",
+                        symbol.ident,
+                        symbol_name,
+                        match &symbol.kind {
+                            SymbolKind::Var(_) => "Var",
+                            SymbolKind::Const(_) => "Const",
+                            SymbolKind::Fn(_) => "Fn",
+                            SymbolKind::Type(_) => "Type",
+                        }
+                    );
+
                     // Check prefix match against the extracted name
                     if prefix.is_empty() || symbol_name.starts_with(prefix) {
                         let completion_item = self.create_module_completion_member(symbol);
@@ -174,16 +185,16 @@ impl<'a> CompletionProvider<'a> {
 
         // 1. Find the variable in the current scope
         let var_symbol = self.find_variable_in_scope(var_name, current_scope_id)?;
-        
+
         // 2. Get the variable's type
         use crate::analyzer::common::TypeKind;
         let (var_type_kind, typedef_symbol_id) = match &var_symbol.kind {
             SymbolKind::Var(var_decl) => {
                 let var = var_decl.lock().unwrap();
                 let type_ = &var.type_;
-                
+
                 debug!("Variable '{}' has type: {:?}, symbol_id: {}", var_name, type_.kind, type_.symbol_id);
-                
+
                 (type_.kind.clone(), type_.symbol_id)
             }
             _ => {
@@ -215,12 +226,16 @@ impl<'a> CompletionProvider<'a> {
         // 4. Handle typedef reference
         if matches!(var_type_kind, TypeKind::Ident) && typedef_symbol_id != 0 {
             debug!("Looking up typedef with symbol_id: {}", typedef_symbol_id);
-            
+
             if let Some(typedef_symbol) = self.symbol_table.get_symbol_ref(typedef_symbol_id) {
                 if let SymbolKind::Type(typedef) = &typedef_symbol.kind {
                     let typedef = typedef.lock().unwrap();
-                    debug!("Found typedef: {}, type_expr.kind: {:?}, methods: {}", 
-                           typedef.ident, typedef.type_expr.kind, typedef.method_table.len());
+                    debug!(
+                        "Found typedef: {}, type_expr.kind: {:?}, methods: {}",
+                        typedef.ident,
+                        typedef.type_expr.kind,
+                        typedef.method_table.len()
+                    );
 
                     // Add struct fields from typedef
                     if let TypeKind::Struct(_, _, properties) = &typedef.type_expr.kind {
@@ -275,7 +290,7 @@ impl<'a> CompletionProvider<'a> {
 
         self.sort_and_filter_completions(&mut completions, prefix);
         debug!("Found {} type member completions", completions.len());
-        
+
         if completions.is_empty() {
             None
         } else {
@@ -297,15 +312,15 @@ impl<'a> CompletionProvider<'a> {
         }
 
         let type_symbol = type_symbol.unwrap();
-        
+
         // Extract struct fields from the type
         if let SymbolKind::Type(typedef) = &type_symbol.kind {
             let typedef = typedef.lock().unwrap();
-            
+
             use crate::analyzer::common::TypeKind;
             if let TypeKind::Struct(_, _, properties) = &typedef.type_expr.kind {
                 debug!("Found struct type with {} fields", properties.len());
-                
+
                 for prop in properties {
                     if prefix.is_empty() || prop.name.starts_with(prefix) {
                         completions.push(CompletionItem {
@@ -326,7 +341,7 @@ impl<'a> CompletionProvider<'a> {
 
         self.sort_and_filter_completions(&mut completions, prefix);
         debug!("Found {} struct field completions", completions.len());
-        
+
         completions
     }
 
@@ -419,7 +434,10 @@ impl<'a> CompletionProvider<'a> {
                         SymbolKind::Type(typedef) => {
                             let type_def = typedef.lock().unwrap();
                             let symbol_name = extract_last_ident_part(&type_def.ident);
-                            debug!("Found type symbol: '{}' (extracted: '{}', looking for '{}')", type_def.ident, symbol_name, type_name);
+                            debug!(
+                                "Found type symbol: '{}' (extracted: '{}', looking for '{}')",
+                                type_def.ident, symbol_name, type_name
+                            );
                             if symbol_name == type_name {
                                 drop(type_def);
                                 debug!("Type '{}' found in scope {}", type_name, current);
@@ -453,34 +471,34 @@ impl<'a> CompletionProvider<'a> {
     fn format_function_signature(&self, fndef: &AstFnDef) -> String {
         let mut params_str = String::new();
         let mut first = true;
-        
+
         for param in fndef.params.iter() {
             let param_locked = param.lock().unwrap();
-            
+
             // Skip 'self' parameter
             if param_locked.ident == "self" {
                 continue;
             }
-            
+
             if !first {
                 params_str.push_str(", ");
             }
             first = false;
-            
+
             // Use the ident field from Type which contains the original type name
             let type_str = if !param_locked.type_.ident.is_empty() {
                 param_locked.type_.ident.clone()
             } else {
                 param_locked.type_.to_string()
             };
-            
+
             params_str.push_str(&format!("{} {}", type_str, param_locked.ident));
         }
-        
+
         if fndef.rest_param && !params_str.is_empty() {
             params_str.push_str(", ...");
         }
-        
+
         let return_type = fndef.return_type.to_string();
         format!("fn({}): {}", params_str, return_type)
     }
@@ -590,12 +608,7 @@ impl<'a> CompletionProvider<'a> {
         debug!("Collecting module completions with prefix '{}'", prefix);
 
         // Check which modules are already imported
-        let already_imported: HashSet<String> = self
-            .module
-            .dependencies
-            .iter()
-            .map(|dep| dep.as_name.clone())
-            .collect();
+        let already_imported: HashSet<String> = self.module.dependencies.iter().map(|dep| dep.as_name.clone()).collect();
 
         // 1. Scan .n files in current directory (file-based imports)
         let module_dir = &self.module.dir;
@@ -605,9 +618,7 @@ impl<'a> CompletionProvider<'a> {
             for entry in entries {
                 if let Ok(entry) = entry {
                     let path = entry.path();
-                    if path.is_file()
-                        && path.extension().and_then(|s| s.to_str()) == Some("n")
-                    {
+                    if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("n") {
                         if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
                             // Skip current file
                             if path == std::path::Path::new(&self.module.path) {
@@ -634,10 +645,7 @@ impl<'a> CompletionProvider<'a> {
                                 label: file_stem.to_string(),
                                 kind: CompletionItemKind::Module,
                                 detail: Some(format!("{}", import_statement)),
-                                documentation: Some(format!(
-                                    "Import module from {}",
-                                    path.display()
-                                )),
+                                documentation: Some(format!("Import module from {}", path.display())),
                                 insert_text: file_stem.to_string(),
                                 sort_text: Some(format!("zzz_{}", file_stem)), // Sort to back
                                 additional_text_edits: vec![TextEdit {
@@ -654,14 +662,7 @@ impl<'a> CompletionProvider<'a> {
 
         // 2. Scan subdirectories for package-based imports (if package.toml exists)
         if let Some(ref pkg_config) = self.package_config {
-            self.scan_subdirectories_for_modules(
-                &self.project_root,
-                &pkg_config.package_data.name,
-                "",
-                prefix,
-                &already_imported,
-                completions,
-            );
+            self.scan_subdirectories_for_modules(&self.project_root, &pkg_config.package_data.name, "", prefix, &already_imported, completions);
         }
 
         // 3. Scan standard library packages
@@ -698,10 +699,7 @@ impl<'a> CompletionProvider<'a> {
                                 label: module_name.to_string(),
                                 kind: CompletionItemKind::Module,
                                 detail: Some(format!("std: {}", import_statement)),
-                                documentation: Some(format!(
-                                    "Import standard library package: {}",
-                                    module_name
-                                )),
+                                documentation: Some(format!("Import standard library package: {}", module_name)),
                                 insert_text: module_name.to_string(),
                                 sort_text: Some(format!("zzz_{}", module_name)), // Sort to back
                                 additional_text_edits: vec![TextEdit {
@@ -748,20 +746,11 @@ impl<'a> CompletionProvider<'a> {
                             };
 
                             // Recursively scan subdirectory
-                            self.scan_subdirectories_for_modules(
-                                base_dir,
-                                package_name,
-                                &new_path,
-                                prefix,
-                                already_imported,
-                                completions,
-                            );
+                            self.scan_subdirectories_for_modules(base_dir, package_name, &new_path, prefix, already_imported, completions);
                         }
                     }
                     // Check .n files in subdirectories
-                    else if path.is_file()
-                        && path.extension().and_then(|s| s.to_str()) == Some("n")
-                    {
+                    else if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("n") {
                         if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
                             // Skip if this is in the root directory (already handled by file-based imports)
                             if current_path.is_empty() {
@@ -772,12 +761,7 @@ impl<'a> CompletionProvider<'a> {
                             let module_import_path = if current_path.is_empty() {
                                 format!("{}.{}", package_name, file_stem)
                             } else {
-                                format!(
-                                    "{}.{}.{}",
-                                    package_name,
-                                    current_path.replace("/", "."),
-                                    file_stem
-                                )
+                                format!("{}.{}.{}", package_name, current_path.replace("/", "."), file_stem)
                             };
 
                             // Skip already imported modules
@@ -798,10 +782,7 @@ impl<'a> CompletionProvider<'a> {
                                 label: file_stem.to_string(),
                                 kind: CompletionItemKind::Module,
                                 detail: Some(format!("pkg: {}", import_statement)),
-                                documentation: Some(format!(
-                                    "Import module from package: {}",
-                                    module_import_path
-                                )),
+                                documentation: Some(format!("Import module from package: {}", module_import_path)),
                                 insert_text: file_stem.to_string(),
                                 sort_text: Some(format!("zzz_{}", file_stem)),
                                 additional_text_edits: vec![TextEdit {
@@ -982,12 +963,12 @@ pub fn extract_module_member_context(prefix: &str, _position: usize) -> Option<(
     if let Some(dot_pos) = prefix.rfind('.') {
         let module_name = prefix[..dot_pos].to_string();
         let member_prefix = prefix[dot_pos + 1..].to_string();
-        
+
         if !module_name.is_empty() {
             return Some((module_name, member_prefix));
         }
     }
-    
+
     None
 }
 
@@ -1001,7 +982,7 @@ pub fn extract_struct_init_context(text: &str, position: usize) -> Option<(Strin
 
     // Look backward to find the opening brace and type name
     let mut i = position;
-    
+
     // First, extract any prefix at the cursor position
     let mut field_prefix_end = position;
     while field_prefix_end > 0 {
@@ -1018,16 +999,16 @@ pub fn extract_struct_init_context(text: &str, position: usize) -> Option<(Strin
     while i > 0 {
         i -= 1;
         let ch = chars[i];
-        
+
         if ch == '{' {
             // Found opening brace, now look for the type name before it
             let mut type_end = i;
-            
+
             // Skip whitespace between type name and brace
             while type_end > 0 && chars[type_end - 1].is_whitespace() {
                 type_end -= 1;
             }
-            
+
             // Extract type name
             let mut type_start = type_end;
             while type_start > 0 {
@@ -1038,19 +1019,41 @@ pub fn extract_struct_init_context(text: &str, position: usize) -> Option<(Strin
                     break;
                 }
             }
-            
+
             if type_start < type_end {
                 let type_name: String = chars[type_start..type_end].iter().collect();
+
+                // Avoid treating test blocks as struct initializations: `test name { ... }`
+                let mut kw_end = type_start;
+                while kw_end > 0 && chars[kw_end - 1].is_whitespace() {
+                    kw_end -= 1;
+                }
+                let mut kw_start = kw_end;
+                while kw_start > 0 {
+                    let ch = chars[kw_start - 1];
+                    if ch.is_alphanumeric() || ch == '_' {
+                        kw_start -= 1;
+                    } else {
+                        break;
+                    }
+                }
+                if kw_start < kw_end {
+                    let maybe_kw: String = chars[kw_start..kw_end].iter().collect();
+                    if maybe_kw == "test" {
+                        return None;
+                    }
+                }
+
                 debug!("Detected struct init context: type='{}', field_prefix='{}'", type_name, field_prefix);
                 return Some((type_name, field_prefix));
             }
-            
+
             return None;
         } else if ch == '}' || ch == ';' {
             // We've left the struct initialization context
             return None;
         }
     }
-    
+
     None
 }

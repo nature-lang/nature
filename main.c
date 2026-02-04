@@ -1,10 +1,12 @@
 #include "cmd/root.h"
+#include "cmd/test.h"
 #include "config/config.h"
 #include "utils/helper.h"
 #include "utils/log.h"
 #include <stdio.h>
 
 #define ARGS_BUILD "build"
+#define ARGS_TEST "test"
 
 void print_help() {
     printf("Nature Programming Language Compiler %s\n\n", BUILD_VERSION);
@@ -12,10 +14,14 @@ void print_help() {
     printf("  nature [command] [flags] [arguments]\n\n");
 
     printf("Available Commands:\n");
-    printf("  build       Build a Nature source file\n\n");
+    printf("  build       Build a Nature source file\n");
+    printf("  test        Run tests in a Nature source file\n\n");
 
     printf("Build Command Usage:\n");
     printf("  nature build [flags] <source_file>\n\n");
+
+    printf("Test Command Usage:\n");
+    printf("  nature test [flags] <source_file>\n\n");
 
     printf("Build Flags:\n");
     printf("  -o <name>     Specify output filename (default: main)\n");
@@ -24,6 +30,9 @@ void print_help() {
     printf("  --ld <path>   Specify the path to the linker\n");
     printf("  --ldflags <flags> Specify linker flags\n");
     printf("  --verbose     Enable verbose mode (show debug logs and keep temp dir)\n\n");
+
+    printf("Test Flags:\n");
+    printf("  --skip <name> Skip a test by name (repeatable)\n\n");
 
     printf("Cross Compilation:\n");
     printf("  nature build --target <platform> <source_file>\n\n");
@@ -41,6 +50,9 @@ void print_help() {
     printf("  nature build --archive main.n               # Generate static library\n");
     printf("  nature build --target linux_arm64 main.n    # Cross-compile for Linux ARM64\n");
     printf("  nature build --ld /usr/bin/ld main.n  # Custom linker and flags\n\n");
+
+    printf("  nature test main.n                          # Run tests\n");
+    printf("  nature test --skip sum main.n               # Skip a specific test\n\n");
 
     printf("Global Flags:\n");
     printf("  --help, -h    Show help information\n");
@@ -75,6 +87,13 @@ int main(int argc, char *argv[]) {
         argv[1] = argv[0];
         argv += 1;
         cmd_entry(argc - 1, argv);
+        return 0;
+    }
+
+    if (str_equal(first, ARGS_TEST)) {
+        argv[1] = argv[0];
+        argv += 1;
+        cmd_test_entry(argc - 1, argv);
         return 0;
     }
 

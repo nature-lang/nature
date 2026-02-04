@@ -31,6 +31,10 @@ char LDFLAGS[1024] = "";
 
 bool VERBOSE = false; // 是否开启 verbose 模式
 
+// test mode
+bool BUILD_TEST = false;
+slice_t *TEST_SKIP_LIST = NULL;
+
 char *WORKDIR; // 执行 shell 命令所在的目录(import 搜索将会基于该目录进行文件搜索)
 char *BASE_NS; // 最后一级目录的名称，也可以自定义
 char *TEMP_DIR; // 链接临时目录

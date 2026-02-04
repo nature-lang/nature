@@ -244,7 +244,7 @@ import time
 import fmt
 import runtime
 
-fn test():int {
+fn test1():int {
     return 211
 }
 
@@ -255,7 +255,7 @@ fn int.to_str():string {
 }
 
 fn main() {
-    var t = test().to_str()
+    var t = test1().to_str()
     println(t)
 
     var t2 = 311.to_str()

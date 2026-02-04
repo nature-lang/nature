@@ -2,6 +2,7 @@
 #define NATURE_SRC_AST_H_
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "package.h"
 #include "types.h"
@@ -729,6 +730,9 @@ struct ast_fndef_t {
     bool is_async; // coroutine closure fn, default is false
     bool is_private;
 
+    bool is_test;
+    char *test_name;
+
     // catch err { 12 }
     ct_stack_t *ret_target_types;
 
@@ -799,6 +803,19 @@ static inline ast_expr_t *ast_int_expr(int line, int column, uint64_t number) {
     ast_literal_t *literal = NEW(ast_literal_t);
     literal->kind = TYPE_INT;
     literal->value = itoa(number);
+    expr->value = literal;
+    return expr;
+}
+
+static inline ast_expr_t *ast_string_expr(int line, int column, char *value) {
+    ast_expr_t *expr = NEW(ast_expr_t);
+    expr->assert_type = AST_EXPR_LITERAL;
+    expr->line = line;
+    expr->column = column;
+    ast_literal_t *literal = NEW(ast_literal_t);
+    literal->kind = TYPE_STRING;
+    literal->value = value;
+    literal->len = value ? (int64_t) strlen(value) : 0;
     expr->value = literal;
     return expr;
 }
@@ -909,6 +926,8 @@ static inline ast_fndef_t *ast_fndef_new(module_t *m, int line, int column) {
     ast_fndef_t *fndef = NEW(ast_fndef_t);
     fndef->is_async = false;
     fndef->is_private = false;
+    fndef->is_test = false;
+    fndef->test_name = NULL;
     fndef->module = m;
     fndef->rel_path = m->rel_path;
     fndef->symbol_name = NULL;

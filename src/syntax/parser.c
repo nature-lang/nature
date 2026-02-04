@@ -10,6 +10,7 @@
 #include "src/error.h"
 #include "token.h"
 #include "utils/error.h"
+#include "utils/helper.h"
 
 static ast_expr_t parser_call_expr(module_t *m, ast_expr_t left_expr);
 
@@ -26,6 +27,8 @@ static ast_expr_t parser_go_expr(module_t *m);
 static ast_expr_t parser_match_expr(module_t *m);
 
 static ast_tuple_destr_t *parser_var_tuple_destr(module_t *m);
+
+static int64_t parser_test_unique = 0;
 
 static token_t *parser_advance(module_t *m) {
     assert(m->p_cursor.current->succ != NULL && "next token_t is null");
@@ -2869,6 +2872,45 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
 }
 
 /**
+ * test "name" { ... }
+ * test ident { ... }
+ * Only allowed at module scope.
+ */
+static ast_stmt_t *parser_test_stmt(module_t *m) {
+    ast_stmt_t *result = stmt_new(m);
+    ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
+
+    parser_must(m, TOKEN_TEST);
+
+    token_t *name_token = NULL;
+    if (parser_is(m, TOKEN_IDENT)) {
+        name_token = parser_must(m, TOKEN_IDENT);
+    } else if (parser_is(m, TOKEN_LITERAL_STRING)) {
+        name_token = parser_must(m, TOKEN_LITERAL_STRING);
+    } else {
+        PARSER_ASSERTF(false, "test name must be ident or string literal");
+    }
+
+    fndef->is_test = true;
+    fndef->is_private = true;
+    fndef->is_errable = true;
+    fndef->test_name = name_token->literal;
+    fndef->symbol_name = dsprintf("__test_%ld", parser_test_unique++);
+    fndef->fn_name = fndef->symbol_name;
+    fndef->fn_name_with_pkg = ident_with_prefix(m->ident, fndef->symbol_name);
+
+    fndef->params = ct_list_new(sizeof(ast_var_decl_t));
+    fndef->return_type = type_kind_new(TYPE_VOID);
+    fndef->return_type.line = name_token->line;
+    fndef->return_type.column = name_token->column;
+    fndef->body = parser_body(m, false);
+
+    result->assert_type = AST_FNDEF;
+    result->value = fndef;
+    return result;
+}
+
+/**
  * 只能是在 module 中声明
  * @param m
  * @return
@@ -3032,6 +3074,8 @@ static ast_stmt_t *parser_local_stmt(module_t *m) {
     } else if (parser_is(m, TOKEN_MATCH)) {
         ast_expr_t expr = parser_match_expr(m);
         return stmt_expr_fake_new(m, expr);
+    } else if (parser_is(m, TOKEN_TEST)) {
+        PARSER_ASSERTF(false, "test block can only appear at global scope");
     } else if (parser_is(m, TOKEN_SELECT)) {
         return parser_select_stmt(m);
     } else if (parser_is(m, TOKEN_TRY)) {
@@ -3058,6 +3102,8 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
         return parser_label(m);
     } else if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_stmt(m, ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column));
+    } else if (parser_is(m, TOKEN_TEST)) {
+        return parser_test_stmt(m);
     } else if (parser_is(m, TOKEN_IMPORT)) {
         return parser_import_stmt(m);
     } else if (parser_is(m, TOKEN_TYPE)) {

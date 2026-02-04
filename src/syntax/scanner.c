@@ -845,6 +845,8 @@ static token_type_t scanner_ident(char *word, int length) {
         case 't': {
             // tup/throw/type/true
             switch (word[1]) {
+                case 'e': // test
+                    return scanner_rest(word, length, 2, 2, "st", TOKEN_TEST);
                 case 'h':
                     return scanner_rest(word, length, 2, 3, "row", TOKEN_THROW);
                 case 'y': // type

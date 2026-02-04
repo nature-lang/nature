@@ -1,6 +1,6 @@
 === test_resolve_data_flow_change_to_temp_in
 --- main.n
-fn test(int a) {
+fn test1(int a) {
     println(a)
 }
 
@@ -15,11 +15,11 @@ fn main():void! {
         }
 
         for int v = 0; v < rotn; v+=1 {
-           test(1)
+           test1(1)
         }
     }
 
-    test(kv_dim)
+    test1(kv_dim)
 
     go fn() {
         int a = kv_dim
@@ -80,7 +80,7 @@ fn rem(int dividend, int divisor):int! {
 	return dividend % divisor
 }
 
-fn test(int result) {
+fn test1(int result) {
 }
 
 fn test2(string msg) {
@@ -93,7 +93,7 @@ fn main():void! {
         test2(err.msg())
         1
     }
-    test(result)
+    test1(result)
 
 
     result = rem(10, 0)

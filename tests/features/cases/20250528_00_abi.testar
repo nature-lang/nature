@@ -135,8 +135,8 @@ type test_t = struct{
     int c
 }
 
-fn callee(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, test_t test):i64 {
-    return test.a + test.b + test.c
+fn callee(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, test_t t):i64 {
+    return t.a + t.b + t.c
 }
 
 fn main() {
@@ -153,8 +153,8 @@ type test_t = struct{
     i32 b
 }
 
-fn callee(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, test_t test):i32 {
-    return test.a + test.b
+fn callee(int a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, test_t t):i32 {
+    return t.a + t.b
 }
 
 fn main() {
@@ -170,8 +170,8 @@ type test_t = struct{
     int b
 }
 
-fn callee(f32 a1, f32 a2, f32 a3, f32 a4, f32 a5, f32 a6, f32 a7, test_t test):f32 {
-    return test.a + test.b as f32
+fn callee(f32 a1, f32 a2, f32 a3, f32 a4, f32 a5, f32 a6, f32 a7, test_t t):f32 {
+    return t.a + t.b as f32
 }
 
 fn main() {
@@ -187,8 +187,8 @@ type test_t = struct{
     f32 b
 }
 
-fn callee(f32 a1, f32 a2, f32 a3, f32 a4, f32 a5, f32 a6, f32 a7, f32 a8, test_t test):f32 {
-    return test.a + test.b
+fn callee(f32 a1, f32 a2, f32 a3, f32 a4, f32 a5, f32 a6, f32 a7, f32 a8, test_t t):f32 {
+    return t.a + t.b
 }
 
 fn main() {
@@ -204,8 +204,8 @@ type test_t = struct{
     f32 b
 }
 
-fn callee(f32 a1, f32 a2, f32 a3, f32 a4, f32 a5, f32 a6, test_t test):f32 {
-    return test.a + test.b
+fn callee(f32 a1, f32 a2, f32 a3, f32 a4, f32 a5, f32 a6, test_t t):f32 {
+    return t.a + t.b
 }
 
 fn main() {

@@ -225,7 +225,7 @@ type node3_t = node_t
 type node2_t = node3_t
 type node_t = node2_t
 
-fn test(node_t n) {
+fn test1(node_t n) {
 
 }
 
