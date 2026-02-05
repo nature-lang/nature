@@ -2,18 +2,6 @@
 
 #include "src/register/arch/amd64.h"
 
-lir_operand_t *amd64_select_return_reg(lir_operand_t *operand) {
-    type_kind kind = operand_type_kind(operand);
-    if (kind == TYPE_FLOAT64) {
-        return operand_new(LIR_OPERAND_REG, xmm0s64);
-    }
-    if (kind == TYPE_FLOAT32) {
-        return operand_new(LIR_OPERAND_REG, xmm0s32);
-    }
-
-    return operand_new(LIR_OPERAND_REG, reg_select(rax->index, kind));
-}
-
 linked_t *amd64_lower_return(closure_t *c, lir_op_t *op) {
     linked_t *result = linked_new();
 
@@ -24,7 +12,7 @@ linked_t *amd64_lower_return(closure_t *c, lir_op_t *op) {
     }
 
     type_t return_type = c->fndef->return_type;
-    uint64_t return_size = type_sizeof(return_type);
+    uint64_t return_size = return_type.storage_size;
 
     amd64_class_t lo = AMD64_CLASS_NO;
     amd64_class_t hi = AMD64_CLASS_NO;
@@ -53,7 +41,7 @@ linked_t *amd64_lower_return(closure_t *c, lir_op_t *op) {
         lo_kind = TYPE_FLOAT64;
     }
 
-    if (return_type.kind == TYPE_STRUCT) {
+    if (is_abi_struct_like(return_type)) {
         // return_operand 保存的是一个指针，需要 indirect 这个值，将响应的值 mov 到寄存器中
         lir_operand_t *src = indirect_addr_operand(c->module, type_kind_new(lo_kind), return_operand, 0);
         linked_push(result, lir_op_move(lo_dst_reg, src));
@@ -77,7 +65,7 @@ linked_t *amd64_lower_return(closure_t *c, lir_op_t *op) {
 
         // 由于需要直接 mov， 所以还是需要选择合适的大小
         reg_t *lo_reg = lo_dst_reg->value;
-        lo_dst_reg = operand_new(LIR_OPERAND_REG, reg_select(lo_reg->index, return_type.kind));
+        lo_dst_reg = operand_new(LIR_OPERAND_REG, reg_select(lo_reg->index, return_type.map_imm_kind));
 
         linked_push(result, lir_op_move(lo_dst_reg, return_operand));
     }
@@ -169,11 +157,11 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
             // 最右侧参数先入栈，所以最右侧参数在栈顶，合理的方式是从左往右遍历读取 source 了。
             // 结构体由于 caller 已经申请了 stack 空间，所以参数中直接使用该空间的地址即可
             // 而不需要进行重复的 copy 和 stack 空间申请, 这也导致 gc_malloc 功能无法正常使用。
-            lir_operand_t *src = lir_stack_operand(c->module, stack_param_slot, type_sizeof(param_type),
+            lir_operand_t *src = lir_stack_operand(c->module, stack_param_slot, param_type.storage_size,
                                                    param_type.kind);
 
             // stack 会被 native 成 indirect_addr [rbp+slot], 如果其中保存的是结构体，这里需要的是地址。
-            if (is_stack_ref_big_type(param_type)) {
+            if (param_type.storage_kind == STORAGE_KIND_IND) {
                 lir_operand_t *src_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_ANYPTR));
                 linked_push(result, lir_op_lea(src_ref, src));
                 linked_push(result, lir_op_move(dst_param, src_ref));
@@ -181,9 +169,9 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
                 linked_push(result, lir_op_move(dst_param, src));
             }
 
-            stack_param_slot += align_up(type_sizeof(param_type), QWORD); // 参数按照 8byte 对齐
+            stack_param_slot += align_up(param_type.storage_size, QWORD); // 参数按照 8byte 对齐
         } else {
-            if (param_type.kind == TYPE_STRUCT) {
+            if (is_abi_struct_like(param_type)) {
                 linked_push(result, lir_stack_alloc(c, param_type, dst_param));
 
                 // 从寄存器中将数据移入到低保空间
@@ -236,10 +224,10 @@ static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
                 if (lo == AMD64_CLASS_INTEGER) {
                     // 查找合适大小的 reg 进行 mov
                     reg_index = int_reg_indices[int_reg_index++];
-                    lo_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, param_type.kind));
+                    lo_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, param_type.map_imm_kind));
                 } else if (lo == AMD64_CLASS_SSE) {
                     reg_index = sse_reg_indices[sse_reg_index++];
-                    lo_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, param_type.kind));
+                    lo_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, param_type.map_imm_kind));
                 } else {
                     assert(false);
                 }
@@ -267,7 +255,7 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
         int64_t count = amd64_type_classify(return_type, &lo, &hi, 0);
 
         if (count == 0) { // count == 0 则无法通过寄存器传递返回值
-            assert(return_type.kind == TYPE_STRUCT || return_type.kind == TYPE_ARR);
+            assert(return_type.storage_kind == STORAGE_KIND_IND);
 
             // return operand 总是通过寄存器 rax 或特殊寄存器返回。
             c->return_big_operand = temp_var_operand(c->module, type_kind_new(TYPE_ANYPTR));
@@ -319,7 +307,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
         int64_t count = amd64_type_classify(arg_type, &lo, &hi, 0);
         if (count == 0) {
             // 返回 0 就是需要内存传递, 此时才需要几率栈内存！？
-            stack_offset += align_up(type_sizeof(arg_type), QWORD); // 参数按照 8byte 对齐
+            stack_offset += align_up(arg_type.storage_size, QWORD); // 参数按照 8byte 对齐
             onstack[i] = 1;
             continue;
         } else if (count == 1) {
@@ -330,7 +318,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
                 onstack[i] = 0;
                 int_reg_count++;
             } else {
-                stack_offset += align_up(type_sizeof(arg_type), QWORD); // 参数按照 8byte 对齐
+                stack_offset += align_up(arg_type.storage_size, QWORD); // 参数按照 8byte 对齐
                 onstack[i] = 1;
                 continue;
             }
@@ -344,7 +332,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
                     int_reg_count += 2;
                 } else {
                     onstack[i] = 1;
-                    stack_offset += align_up(type_sizeof(arg_type), QWORD);
+                    stack_offset += align_up(arg_type.storage_size, QWORD);
                 }
             } else {
                 if (sse_reg_count + 1 <= 8 && int_reg_count + 1 <= 6) {
@@ -353,7 +341,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
                     int_reg_count++;
                 } else {
                     onstack[i] = 1;
-                    stack_offset += align_up(type_sizeof(arg_type), QWORD);
+                    stack_offset += align_up(arg_type.storage_size, QWORD);
                 }
             }
         }
@@ -382,20 +370,20 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
 
         lir_operand_t *dst = indirect_addr_operand(c->module, arg_type, sp_operand, rsp_offset);
 
-        if (is_stack_ref_big_type(arg_type)) {
+        if (arg_type.storage_kind == STORAGE_KIND_IND) {
             assert(arg_operand->assert_type == LIR_OPERAND_VAR);
             // lea addr to temp
             lir_operand_t *dst_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_ANYPTR));
             linked_push(result, lir_op_lea(dst_ref, dst));
 
-            linked_t *temps = lir_memory_mov(c->module, type_sizeof(arg_type), dst_ref, arg_operand);
+            linked_t *temps = lir_memory_mov(c->module, arg_type.storage_size, dst_ref, arg_operand);
             linked_concat(result, temps);
         } else {
             linked_push(result, lir_op_move(dst, arg_operand));
         }
 
         // 已经在栈上为大结构体预留预留了足够的空间
-        uint64_t align_size = align_up(type_sizeof(arg_type), POINTER_SIZE);
+        uint64_t align_size = align_up(arg_type.storage_size, POINTER_SIZE);
         rsp_offset += align_size;
     }
 
@@ -418,7 +406,7 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
 
         assert(count != 0);
 
-        if (arg_type.kind == TYPE_STRUCT) {
+        if (is_abi_struct_like(arg_type)) {
             lir_operand_t *lo_temp_var;
             type_kind lo_kind;
             if (lo == AMD64_CLASS_INTEGER) {
@@ -467,11 +455,11 @@ static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
             lir_operand_t *lo_temp_var;
             if (lo == AMD64_CLASS_INTEGER) {
                 uint8_t reg_index = int_reg_indices[int_reg_index++];
-                reg_t *hint_reg = reg_select(reg_index, arg_type.kind);
+                reg_t *hint_reg = reg_select(reg_index, arg_type.map_imm_kind);
                 lo_temp_var = lower_temp_var_with_hint(c, result, arg_type, hint_reg);
             } else if (lo == AMD64_CLASS_SSE) {
                 uint8_t reg_index = sse_reg_indices[sse_reg_index++];
-                reg_t *hint_reg = reg_select(reg_index, arg_type.kind);
+                reg_t *hint_reg = reg_select(reg_index, arg_type.map_imm_kind);
                 lo_temp_var = lower_temp_var_with_hint(c, result, arg_type, hint_reg);
             } else {
                 assert(false);
@@ -512,7 +500,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     type_t call_result_type = lir_operand_type(call_result);
 
     // amd64 中，大型返回值由 caller 申请空间，并将空间指针通过 rdi 寄存器传递给 calle
-    if (is_stack_ref_big_type(call_result_type)) {
+    if (call_result_type.storage_kind == STORAGE_KIND_IND) {
         assert(call_result->assert_type == LIR_OPERAND_VAR);
 
         linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
@@ -527,7 +515,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     // 如果把整个 struct 丢进去会造成识别异常
     if (count == 0) {
         assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
-        assert(is_stack_ref_big_type(lir_operand_type(call_result)));
+        assert(lir_operand_type(call_result).storage_kind == STORAGE_KIND_IND);
 
         lir_operand_t *temp_arg = lir_operand_copy(call_result);
         lir_var_t *temp_var = temp_arg->value;
@@ -572,7 +560,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     // ~~ call_result 需要做替换，为了后续 interval 阶段能够正确收集 var def, 所以手动添加一下 def ~~ 上面的 lea 做了
     // linked_push(result, lir_op_nop(call_result));
 
-    if (call_result_type.kind == TYPE_STRUCT) {
+    if (is_abi_struct_like(call_result_type)) {
         // 无论如何，先生成 call 指令
         slice_t *output_regs = slice_new();
         slice_push(output_regs, lo_src_reg->value); // 不能延后处理，会导致 flag 设置异常！
@@ -603,7 +591,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     } else {
         assert(count == 1);
         reg_t *lo_reg = lo_src_reg->value;
-        lo_src_reg = operand_new(LIR_OPERAND_REG, reg_select(lo_reg->index, call_result_type.kind));
+        lo_src_reg = operand_new(LIR_OPERAND_REG, reg_select(lo_reg->index, call_result_type.map_imm_kind));
 
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, lo_src_reg, op->line, op->column));
 
@@ -638,7 +626,7 @@ static amd64_class_t amd64_classify_merge(amd64_class_t a, amd64_class_t b) {
 }
 
 int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint64_t offset) {
-    uint64_t size = type_sizeof(t);
+    uint64_t size = t.storage_size;
 
     if (size > 16) {
         return 0;
@@ -650,13 +638,13 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
         return 0;
     }
 
-    if (is_float(t.kind)) {
+    if (is_float(t.map_imm_kind)) {
         if (offset < 8) {
             *lo = amd64_classify_merge(*lo, AMD64_CLASS_SSE);
         } else {
             *hi = amd64_classify_merge(*hi, AMD64_CLASS_SSE);
         }
-    } else if (t.kind == TYPE_STRUCT) {
+    } else if (is_abi_struct_like(t)) {
         // 遍历 struct 的每一个属性进行分类
         type_struct_t *type_struct = t.struct_;
         offset = align_up(offset, type_struct_alignof(type_struct)); // 开始地址对齐
@@ -664,12 +652,12 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
         for (int i = 0; i < type_struct->properties->length; i++) {
             struct_property_t *p = ct_list_value(type_struct->properties, i);
             type_t element_type = p->type;
-            uint64_t element_size = type_sizeof(element_type);
+            uint64_t element_size = element_type.storage_size;
             uint64_t element_align = element_size;
-            if (p->type.kind == TYPE_STRUCT) {
+            if (is_abi_struct_like(p->type)) {
                 element_align = type_struct_alignof(p->type.struct_);
             } else if (p->type.kind == TYPE_ARR) {
-                element_align = type_sizeof(p->type.array->element_type);
+                element_align = p->type.array->element_type.storage_size;
             }
 
             // 每个元素地址对齐

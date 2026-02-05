@@ -58,7 +58,7 @@ static bool peephole_lea_fusion(closure_t *c, basic_block_t *block, slice_t *ops
 
     // 只处理整数类型
     type_t mul_type = lir_operand_type(mul_op->output);
-    if (!is_integer(mul_type.kind)) {
+    if (!is_integer(mul_type.map_imm_kind)) {
         return false;
     }
 

@@ -7,9 +7,10 @@ table_t *reg_table; // 根据 index 和 size 定位具体的寄存器
 slice_t *regs;
 reg_t *alloc_regs[UINT8_MAX];
 
-reg_t *reg_select(uint8_t index, type_kind kind) {
-    lir_flag_t alloc_type = type_kind_trans_alloc(kind);
-    uint8_t size = type_kind_sizeof(kind);
+reg_t *reg_select(uint8_t index, type_kind imm_kind) {
+    assert(is_number(imm_kind) || TYPE_ANYPTR);
+    lir_flag_t alloc_type = type_kind_trans_alloc(imm_kind);
+    uint8_t size = type_kind_sizeof(imm_kind);
 
     // arm64 平台中通用寄存器最小为 4byte, 就是 wn 中
     if (BUILD_ARCH == ARCH_ARM64 && size < DWORD) {

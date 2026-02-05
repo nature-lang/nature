@@ -204,7 +204,7 @@ static inline uint64_t rt_rtype_stack_size(int64_t rhash) {
     rtype_t *rtype = rt_find_rtype(rhash);
 
     assert(rtype && "cannot find rtype by hash");
-    return rtype->stack_size;
+    return rtype->storage_size;
 }
 
 static inline uint8_t take_sizeclass(uint8_t spanclass) {

@@ -12,6 +12,7 @@
 #include "src/binary/arch/arm64.h"
 #include "src/binary/arch/riscv64.h"
 #include "src/binary/mach/mach.h"
+#include "src/build/test_runner.h"
 #include "src/cfg.h"
 #include "src/debug/debug.h"
 #include "src/linear.h"
@@ -28,7 +29,6 @@
 #include "src/semantic/analyzer.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
-#include "src/build/test_runner.h"
 #include "utils/helper.h"
 #include "utils/log.h"
 
@@ -838,7 +838,7 @@ static void build_assembler(slice_t *modules) {
             ast_var_decl_t *var_decl = &vardef->var_decl;
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
             symbol->name = var_decl->ident;
-            symbol->size = type_sizeof(var_decl->type);
+            symbol->size = var_decl->type.storage_size;
             symbol->value = NULL;
             slice_push(m->asm_global_symbols, symbol);
         }

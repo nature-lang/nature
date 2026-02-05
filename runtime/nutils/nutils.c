@@ -51,9 +51,9 @@ void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
     }
 
     rtype_t *rtype = rt_find_rtype(target_rtype_hash);
-    uint64_t size = rtype->stack_size;
+    uint64_t size = rtype->storage_size;
 
-    if (is_stack_type(rtype->kind)) {
+    if (rtype->storage_kind != STORAGE_KIND_PTR) {
         memmove(value_ref, mu->value.ptr_value, size);
     } else {
         memmove(value_ref, &mu->value, size);
@@ -132,8 +132,9 @@ n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int
            &mu->value, rtype->stack_size, (void *) fetch_addr_value((addr_t) value_ref));
 
     mu->rtype = rtype;
-    uint64_t stack_size = rtype->stack_size;
-    if (is_stack_type(rtype->kind)) { // TODO number 可以直接存储在 value 中
+    uint64_t stack_size = rtype->storage_size;
+
+    if (rtype->storage_kind != STORAGE_KIND_PTR) { // TODO number 可以直接存储在 value 中
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
         void *new_value = rti_gc_malloc(rtype->heap_size, rtype);
         memmove(new_value, value_ref, stack_size);
@@ -176,18 +177,18 @@ n_union_t *union_casting(int64_t input_rtype_hash, void *value_ref) {
 
     DEBUGF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
            mu, value_ref,
-           &mu->value, rtype->stack_size, (void *) fetch_addr_value((addr_t) value_ref));
+           &mu->value, rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
     mu->rtype = rtype;
 
-    uint64_t stack_size = rtype->stack_size;
-    if (is_stack_ref_big_type_kind(rtype->kind)) {
+    uint64_t storage_size = rtype->storage_size;
+    if (rtype->storage_kind == STORAGE_KIND_IND) {
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
         void *new_value = rti_gc_malloc(rtype->heap_size, rtype);
-        memmove(new_value, value_ref, stack_size);
+        memmove(new_value, value_ref, storage_size);
 
         rti_write_barrier_ptr(&mu->value.ptr_value, new_value, false);
     } else {
-        memmove(&mu->value, value_ref, stack_size);
+        memmove(&mu->value, value_ref, storage_size);
     }
 
 
@@ -214,22 +215,22 @@ n_tagged_union_t *tagged_union_casting(int64_t tag_hash, int64_t value_rtype_has
     ASSERT_ADDR(value_ref);
 
     DEBUGF("[tagged_union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), kind=%s, size=%lu, fetch_value_8byte=%p",
-            mu, value_ref,
-            &mu->value, type_kind_str[rtype->kind], rtype->stack_size, (void *) fetch_addr_value((addr_t) value_ref));
+           mu, value_ref,
+           &mu->value, type_kind_str[rtype->kind], rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
 
-    uint64_t stack_size = rtype->stack_size;
-    if (is_stack_ref_big_type_kind(rtype->kind)) {
+    uint64_t storage_size = rtype->storage_size;
+    if (rtype->storage_kind == STORAGE_KIND_IND) {
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
         void *new_value = rti_gc_malloc(rtype->heap_size, rtype);
-        memmove(new_value, value_ref, stack_size);
+        memmove(new_value, value_ref, storage_size);
 
         rti_write_barrier_ptr(&mu->value.ptr_value, new_value, false);
     } else {
-        memmove(&mu->value, value_ref, stack_size);
+        memmove(&mu->value, value_ref, storage_size);
     }
 
     DEBUGF("[tagged_union_casting] success, base: %p, id: %ld, union_i64_value: %ld", mu, mu->tag_hash,
-            mu->value.i64_value);
+           mu->value.i64_value);
 
     return mu;
 }
@@ -580,7 +581,7 @@ n_vec_t *std_args() {
 char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
     assert(rtype && "rtype is null");
     assert(data_ref && "data_ref is null");
-    uint64_t data_size = rtype->stack_size;
+    uint64_t data_size = rtype->storage_size;
 
     TRACEF("[rtype_value_str] rtype_kind=%s, data_ref=%p, data_size=%lu", type_kind_str[rtype->kind], data_ref,
            data_size);
@@ -754,7 +755,7 @@ n_vec_t *unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *d
     n_vec_t *vec = rti_gc_malloc(vec_rtype.heap_size, &vec_rtype);
     vec->capacity = cap;
     vec->length = len;
-    vec->element_size = element_rtype->stack_size;
+    vec->element_size = element_rtype->storage_size;
     vec->hash = hash;
     vec->data = data_ptr;
 
@@ -768,7 +769,7 @@ n_string_t *rt_string_ref_new(void *raw_string, int64_t length) {
     str->data = raw_string; // 直接指向 raw_string, 而没有创建新的字符串
     str->length = length;
     str->capacity = length;
-    str->element_size = (&string_element_rtype)->stack_size;
+    str->element_size = (&string_element_rtype)->storage_size;
     str->hash = string_rtype.hash;
 
     DEBUGF("[rt_string_ref_new] create, str: %p", raw_string);

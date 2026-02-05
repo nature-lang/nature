@@ -1006,7 +1006,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:12:18: 'new' operator can only be used with scalar types (number/boolean/struct/array)
+nature-test/main.n:12:18: 'new' operator can only be used with scalar types
 
 === test_interface_auto_as_failed
 --- main.n

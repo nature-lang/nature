@@ -70,7 +70,7 @@ static bool arm64_is_integer_operand(lir_operand_t *operand) {
     }
 
     // bool 也被失败成 int 类型
-    return !is_float(operand_type_kind(operand));
+    return !is_float(lir_operand_type(operand).map_imm_kind);
 }
 
 static void arm64_gen_cmp(lir_op_t *op, slice_t *operations, arm64_asm_operand_t *source, arm64_asm_operand_t *dest,
@@ -116,10 +116,10 @@ static arm64_asm_operand_t *convert_operand_to_free_reg(lir_op_t *op, slice_t *o
         reg_t *reg = operand->value;
         is_int = reg->flag & FLAG(LIR_FLAG_ALLOC_INT);
     } else {
-        type_kind kind = operand_type_kind(operand);
-        if (is_float(kind)) {
+        type_t t = lir_operand_type(operand);
+        if (is_float(t.map_imm_kind)) {
             // not handle
-        } else if (is_signed(kind)) {
+        } else if (is_signed(t.map_imm_kind)) {
             is_int = true;
         } else {
             is_uint = true; // bool/uint...
@@ -203,7 +203,7 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
         lir_indirect_addr_t *indirect = operand->value;
         lir_operand_t *base = indirect->base;
         assert(base);
-        mem_size = type_kind_sizeof(indirect->type.kind);
+        mem_size = type_kind_sizeof(indirect->type.map_imm_kind);
 
         // 处理栈基址
         if (base->assert_type == LIR_OPERAND_STACK) {
@@ -289,7 +289,8 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
 
         lir_symbol_var_t *v = operand->value;
         result = ARM64_SYM(v->ident, false, 0, 0);
-        result->size = type_kind_sizeof(v->kind);
+        result->size = v->t.storage_size;
+        ;
         return result;
     }
 
@@ -540,13 +541,13 @@ static slice_t *arm64_native_mov(closure_t *c, lir_op_t *op) {
         // MEM -> REG
         if (source->size == BYTE) {
             // 检查是否为有符号类型
-            if (is_signed(operand_type_kind(op->first))) {
+            if (is_signed(lir_operand_type(op->first).map_imm_kind)) {
                 slice_push(operations, ARM64_INST(R_LDRSB, result, source)); // 有符号加载
             } else {
                 slice_push(operations, ARM64_INST(R_LDRB, result, source)); // 无符号加载
             }
         } else if (source->size == WORD) {
-            if (is_signed(operand_type_kind(op->first))) {
+            if (is_signed(lir_operand_type(op->first).map_imm_kind)) {
                 slice_push(operations, ARM64_INST(R_LDRSH, result, source)); // 有符号加载
             } else {
                 slice_push(operations, ARM64_INST(R_LDRH, result, source)); // 无符号加载

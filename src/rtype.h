@@ -139,7 +139,7 @@ static inline int64_t type_hash(type_t t) {
 
 static inline rtype_t rtype_origin(type_t t) {
     rtype_t rtype = {
-            .heap_size = type_sizeof(t), // 单位 byte
+            .heap_size = t.storage_size, // 单位 byte
             .hash = type_hash(t),
             .last_ptr = 0,
             .kind = t.kind,
@@ -289,7 +289,7 @@ static inline rtype_t rtype_chan(type_t t) {
  * @return
  */
 static inline rtype_t rtype_array(type_t t) {
-    int64_t element_size = type_sizeof(t.array->element_type);
+    int64_t element_size = t.array->element_type.storage_size;
 
     rtype_t rtype = {
             .heap_size = element_size * t.array->length,
@@ -472,7 +472,7 @@ static inline int64_t rtype_array_gc_bits(int64_t gc_bits_offset, int64_t *offse
                 bitmap_set(CTDATA(gc_bits_offset), bit_index);
             }
 
-            *offset += type_sizeof(t->element_type);
+            *offset += t->element_type.storage_size;
             last_ptr_temp_offset = *offset;
         }
 
@@ -551,7 +551,7 @@ static inline int64_t rtype_struct_gc_bits(int64_t gc_bits_offset, int64_t *offs
         struct_property_t *p = ct_list_value(t->properties, i);
 
         // 属性基础地址对齐
-        *offset = align_up(*offset, type_alignof(p->type));
+        *offset = align_up(*offset, p->type.align);
 
         int64_t last_ptr_temp_offset = 0;
         if (p->type.kind == TYPE_STRUCT) {
@@ -559,7 +559,7 @@ static inline int64_t rtype_struct_gc_bits(int64_t gc_bits_offset, int64_t *offs
         } else if (p->type.kind == TYPE_ARR) {
             last_ptr_temp_offset = rtype_array_gc_bits(gc_bits_offset, offset, p->type.array);
         } else {
-            int64_t size = type_sizeof(p->type); // 等待存储的 struct size
+            int64_t size = p->type.storage_size; // 等待存储的 struct size
             // 这里就是存储位置
             int64_t bit_index = *offset / POINTER_SIZE;
 
@@ -588,7 +588,7 @@ static inline int64_t rtype_struct_gc_bits(int64_t gc_bits_offset, int64_t *offs
  * @return
  */
 static inline rtype_t rtype_struct(type_t t) {
-    int64_t size = type_sizeof(t);
+    int64_t size = t.storage_size;
     if (size == 0) {
         rtype_t rtype = {
                 .heap_size = 1, // 空 struct 默认占用 1 一个字节, 让 gc malloc 可以编译通过
@@ -611,8 +611,8 @@ static inline rtype_t rtype_struct(type_t t) {
     int64_t offset = 0;
     for (int i = 0; i < t.struct_->properties->length; ++i) {
         struct_property_t *p = ct_list_value(t.struct_->properties, i);
-        int64_t field_align = type_alignof(p->type);
-        int64_t field_size = type_sizeof(p->type);
+        int64_t field_align = p->type.align;
+        int64_t field_size = p->type.storage_size;
         offset = align_up(offset, field_align);
 
         rtype_field_t field = {
@@ -661,8 +661,8 @@ static inline rtype_t rtype_tuple(type_t t) {
     for (int64_t i = 0; i < t.tuple->elements->length; ++i) {
         type_t *element_type = ct_list_value(t.tuple->elements, i);
 
-        int64_t element_size = type_sizeof(*element_type);
-        int element_align = type_alignof(*element_type);
+        int64_t element_size = element_type->storage_size;
+        int element_align = element_type->align;
         if (element_align > max_align) {
             max_align = element_align;
         }
@@ -766,10 +766,8 @@ static inline rtype_t reflect_type(type_t t) {
         rtype.ident_offset = strtable_put(t.ident);
     }
 
-    rtype.stack_size = rtype.heap_size;
-    if (kind_in_heap(rtype.kind)) {
-        rtype.stack_size = POINTER_SIZE;
-    }
+    rtype.storage_kind = type_storage_kind(t);
+    rtype.storage_size = type_storage_size(t);
 
     return rtype;
 }

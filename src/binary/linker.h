@@ -204,7 +204,7 @@ static inline uint64_t collect_fndef_list(void *ctx) {
 
             log_trace(
                     "[stack_vars.%s] var ident=%s, type=%s, size=%d, is_ptr=%d, bit_index=%ld, stack_slot=BP-%ld",
-                    c->linkident, var->ident, type_format(var->type), type_sizeof(var->type),
+                    c->linkident, var->ident, type_format(var->type), var->type.storage_size,
                     type_is_pointer_heap(var->type),
                     (stack_slot / POINTER_SIZE) - 1, stack_slot);
         }
@@ -240,7 +240,7 @@ static inline uint64_t collect_symdef_list(void *ctx) {
         ast_var_decl_t *var_decl = s->ast_value;
         symdef_t *symdef = &ct_symdef_list[count++];
         symdef->hash = type_hash(var_decl->type);
-        symdef->size = type_sizeof(var_decl->type);
+        symdef->size = var_decl->type.storage_size;
         if (var_decl->type.kind == TYPE_RAW_STRING) {
             symdef->size = (int64_t) s->data;
         }

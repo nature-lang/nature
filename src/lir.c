@@ -55,8 +55,8 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
     return c;
 }
 
-lir_operand_t *lir_reg_operand(uint8_t index, type_kind kind) {
-    reg_t *reg = reg_select(index, kind);
+lir_operand_t *lir_reg_operand(uint8_t index, type_t t) {
+    reg_t *reg = reg_select(index, t.map_imm_kind);
     assert(reg);
     return operand_new(LIR_OPERAND_REG, reg);
 }

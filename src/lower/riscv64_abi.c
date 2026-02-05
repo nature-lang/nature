@@ -8,19 +8,19 @@
  * fieldofs[1], fieldofs[2]: 字段偏移和类型信息
  */
 static void reg_pass_rec(type_t *type, int *rc, int *field_offset, int offset) {
-    if (type->kind == TYPE_STRUCT) {
+    if (is_abi_struct_like(*type)) {
         type_struct_t *type_struct = type->struct_;
 
         // 遍历结构体的每一个属性进行分类
         for (int i = 0; i < type_struct->properties->length; i++) {
             struct_property_t *p = ct_list_value(type_struct->properties, i);
             type_t element_type = p->type;
-            uint16_t element_size = type_sizeof(element_type);
+            uint16_t element_size = element_type.storage_size;
             uint16_t element_align = element_size;
-            if (p->type.kind == TYPE_STRUCT) {
+            if (is_abi_struct_like(p->type)) {
                 element_align = type_struct_alignof(p->type.struct_);
             } else if (p->type.kind == TYPE_ARR) {
-                element_align = type_sizeof(p->type.array->element_type);
+                element_align = p->type.array->element_type.storage_size;
             }
             offset = align_up(offset, element_align);
             reg_pass_rec(&element_type, rc, field_offset, offset);
@@ -38,7 +38,7 @@ static void reg_pass_rec(type_t *type, int *rc, int *field_offset, int offset) {
         } else {
             // 小数组处理
             type_t element_type = type->array->element_type;
-            uint8_t element_size = type_sizeof(element_type);
+            uint8_t element_size = element_type.storage_size;
             // 对数组元素进行分析
             reg_pass_rec(&element_type, rc, field_offset, offset);
 
@@ -52,7 +52,7 @@ static void reg_pass_rec(type_t *type, int *rc, int *field_offset, int offset) {
                 // rc[0] 记录了当前寄存器的数量，也就是 index, 通过 rc[rc0] 可以访问对应寄存器位置中使用浮点寄存器还是整型寄存器
                 rc[++rc[0]] = TYPE_FLOAT; // 增加整体寄存器的数量
                 // 记录数组在 struct 中的 offset
-                field_offset[rc[0]] = ((offset + element_size) << 8) | (element_type.kind & 0xFF);
+                field_offset[rc[0]] = ((offset + element_size) << 8) | (element_type.map_imm_kind & 0xFF);
             } else if (type->array->length == 2) {
                 rc[0] = -1; // 仅仅双浮点数组进行特殊优化
             }
@@ -60,10 +60,10 @@ static void reg_pass_rec(type_t *type, int *rc, int *field_offset, int offset) {
     } else if (rc[0] == 2 || rc[0] < 0) {
         // 寄存器使用超过单次的上限，无需继续分析
         rc[0] = -1;
-    } else if (rc[0] == 0 || rc[1] == TYPE_FLOAT || is_float(type->kind)) {
+    } else if (rc[0] == 0 || rc[1] == TYPE_FLOAT || is_float(type->map_imm_kind)) {
         // !rc[0] 表示寄存器数量为0, 表示当前参数可以通过寄存器传递
-        rc[++rc[0]] = is_float(type->kind) ? TYPE_FLOAT : TYPE_INT;
-        field_offset[rc[0]] = (offset << 8) | (type->kind & 0xFF);
+        rc[++rc[0]] = is_float(type->map_imm_kind) ? TYPE_FLOAT : TYPE_INT;
+        field_offset[rc[0]] = (offset << 8) | (type->map_imm_kind & 0xFF);
     } else {
         rc[0] = -1;
     }
@@ -83,8 +83,8 @@ static void reg_pass(type_t *type, int *prc, int *field_offset, int *areg) {
 
     // 二次计算
     if (back_int) {
-        uint16_t align = type_alignof(*type);
-        uint16_t size = type_sizeof(*type);
+        uint16_t align = type->align;
+        uint16_t size = type->storage_size;
         prc[0] = (size + 7) >> 3; //  计算需要的寄存器数量(寄存器大小按照 8byte 计算)
         prc[1] = prc[2] = TYPE_INT; // 使用通用 int 寄存器 进行传递
         field_offset[1] = (0 << 8) | (size <= 1 ? TYPE_INT8 : size <= 2 ? TYPE_INT16
@@ -113,8 +113,8 @@ static int64_t riscv64_pcs_aux(int64_t n, type_t *args_types, pos_item_t *args_p
     int64_t ns = 32; // 下一个栈偏移
 
     for (int i = 0; i < n; i++) {
-        uint16_t size = type_sizeof(args_types[i]);
-        uint16_t align = type_alignof(args_types[i]);
+        uint16_t size = args_types[i].storage_size;
+        uint16_t align = args_types[i].align;
 
         // 初始化 args_pos
         args_pos[i].main = -1;
@@ -244,12 +244,12 @@ static linked_t *riscv64_lower_params(closure_t *c, slice_t *param_vars) {
 
         if (main_pos < 16) {
             uint8_t reg_index = A0->index + (main_pos >> 1);
-            reg_t *reg = reg_select(reg_index, param_type.kind);
+            reg_t *reg = reg_select(reg_index, param_type.map_imm_kind);
             assert(reg);
 
             // 结构体特殊处理，如果结构体通过寄存器进行传递，则 callee params 需要为结构体申请足够的栈空间并将 dst var 指向该栈空间
             // 然后需要从寄存器中获取数据并移动到结构体中, 结构体特殊处理，需要申请栈空间
-            if (param_type.kind == TYPE_STRUCT && !(main_pos & 1)) {
+            if (is_abi_struct_like(param_type) && !(main_pos & 1)) {
                 linked_push(result, lir_stack_alloc(c, param_type, dst_param));
                 // 将数据从寄存器移动到结构体栈中
                 lir_operand_t *lo_src_reg = operand_new(LIR_OPERAND_REG, reg_select(A0->index + (main_pos >> 1), main_kind));
@@ -263,7 +263,7 @@ static linked_t *riscv64_lower_params(closure_t *c, slice_t *param_vars) {
         } else if (main_pos < 32) { // 通过浮点寄存器传递
             int64_t reg_index = FA0->index + ((main_pos - 16) >> 1);
 
-            if (param_type.kind == TYPE_STRUCT && !(main_pos & 1)) {
+            if (is_abi_struct_like(param_type) && !(main_pos & 1)) {
                 linked_push(result, lir_stack_alloc(c, param_type, dst_param));
                 // 将数据从寄存器移动到结构体栈中
                 lir_operand_t *lo_reg_operand = operand_new(LIR_OPERAND_REG, reg_select(reg_index, main_kind));
@@ -271,7 +271,7 @@ static linked_t *riscv64_lower_params(closure_t *c, slice_t *param_vars) {
                 linked_push(result, lir_op_move(dst, lo_reg_operand));
             } else {
                 // 通过浮点寄存器传递
-                lir_operand_t *src = operand_new(LIR_OPERAND_REG, reg_select(reg_index, param_type.kind));
+                lir_operand_t *src = operand_new(LIR_OPERAND_REG, reg_select(reg_index, param_type.map_imm_kind));
                 linked_push(result, lir_op_move(dst_param, src));
             }
         } else {
@@ -279,7 +279,7 @@ static linked_t *riscv64_lower_params(closure_t *c, slice_t *param_vars) {
             lir_operand_t *src = lir_stack_operand(c->module, sp_offset, type_kind_sizeof(main_kind), main_kind);
 
             // 参数通过栈传递。
-            if (param_type.kind == TYPE_STRUCT && !(main_pos & 1)) {
+            if (is_abi_struct_like(param_type) && !(main_pos & 1)) {
                 // 触发扁平化, 此时栈空间依旧由 callee 分配
                 linked_push(result, lir_stack_alloc(c, param_type, dst_param)); // 分配栈空间
                 lir_operand_t *dst = indirect_addr_operand(c->module, type_kind_new(main_kind), dst_param, 0);
@@ -293,7 +293,7 @@ static linked_t *riscv64_lower_params(closure_t *c, slice_t *param_vars) {
 
         // 特殊结构体(<16byte) 时 attach_pos 存在
         if (attach_pos >= 0) {
-            assert(param_type.kind == TYPE_STRUCT);
+            assert(is_abi_struct_like(param_type));
 
             if (attach_pos < 16) {
                 lir_operand_t *hi_src = operand_new(LIR_OPERAND_REG,
@@ -329,8 +329,8 @@ linked_t *riscv64_lower_fn_begin(closure_t *c, lir_op_t *op) {
     type_t return_type = c->fndef->return_type;
 
     if (return_type.kind != TYPE_VOID) {
-        if (return_type.kind == TYPE_ARR || type_sizeof(return_type) > 16) {
-            assert(return_type.kind == TYPE_STRUCT || return_type.kind == TYPE_ARR);
+        if (return_type.kind == TYPE_ARR || return_type.storage_size > 16) {
+            assert(return_type.storage_kind == STORAGE_KIND_IND);
 
             c->return_big_operand = temp_var_operand(c->module, type_kind_new(TYPE_ANYPTR));
 
@@ -401,7 +401,7 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
 
     // 计算参数传递需要的栈空间, +1 表示跳过 result 处理， result 在上面已经计算处理完成
     int64_t stack_offset;
-    if ((call_result_type.kind == TYPE_STRUCT && type_sizeof(call_result_type) > 16) || call_result_type.kind == TYPE_ARR) {
+    if ((is_abi_struct_like(call_result_type) && call_result_type.storage_size > 16) || call_result_type.kind == TYPE_ARR) {
         // 返回值作为大型结构体占用 a0 寄存器, 即占用一个参数位置
         stack_offset = riscv64_pcs_aux(args_count + 1, args_type, args_pos);
     } else {
@@ -423,7 +423,7 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
         if (arg_pos.main & 1) {
             // 申请临时空间存储结构体数据, callee 则不需要进行相关申请
             lir_operand_t *stack_ptr_operand = lower_temp_var_operand(c, result, arg_type);
-            linked_t *temps = lir_memory_mov(c->module, type_sizeof(arg_type), stack_ptr_operand, arg_operand);
+            linked_t *temps = lir_memory_mov(c->module, arg_type.storage_size, stack_ptr_operand, arg_operand);
             linked_concat(result, temps);
             args->take[i] = stack_ptr_operand; // 参数替换
         }
@@ -435,8 +435,8 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
         lir_operand_t *arg_operand = args->take[i];
         type_t arg_type = lir_operand_type(arg_operand);
         pos_item_t arg_pos = args_pos[i + 1];
-        uint16_t size = type_sizeof(arg_type);
-        bool is_struct_flatten = arg_type.kind == TYPE_STRUCT && !(arg_pos.main & 1);
+        uint16_t size = arg_type.storage_size;
+        bool is_struct_flatten = is_abi_struct_like(arg_type) && !(arg_pos.main & 1);
 
         type_kind main_kind = arg_pos.main_filed_offset & 0xFF;
         int64_t main_offset = arg_pos.main_filed_offset >> 8;
@@ -479,7 +479,7 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
     // 大型结构体通过指针处理时 args_pos[0].main == 1
     if (call_result && args_pos[0].main == 1) {
         assertf(call_result->assert_type == LIR_OPERAND_VAR, "call result must a var");
-        assert(is_stack_ref_big_type(call_result_type));
+        assert(call_result_type.storage_kind == STORAGE_KIND_IND);
 
         // linear call 的时候没有为 result 申请空间，此处进行空间申请
         linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
@@ -494,7 +494,7 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
     for (int i = 0; i < args->count; ++i) {
         lir_operand_t *arg_operand = args->take[i];
         type_t arg_type = lir_operand_type(arg_operand);
-        uint16_t size = type_sizeof(arg_type);
+        uint16_t size = arg_type.storage_size;
         pos_item_t arg_pos = args_pos[i + 1];
 
         // extract filed kind and offset
@@ -510,7 +510,7 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
         lir_operand_t *hi_src_operand = NULL;
 
         if (arg_pos.main < 16) { // lo 部分通过整型寄存器传递
-            if (arg_type.kind == TYPE_STRUCT && !(arg_pos.main & 1)) {
+            if (is_abi_struct_like(arg_type) && !(arg_pos.main & 1)) {
                 lo_src_operand = indirect_addr_operand(c->module, type_kind_new(main_kind), arg_operand, 0);
             }
 
@@ -521,7 +521,7 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
             linked_push(result, lir_op_call_arg_move(lo_temp_var, lo_src_operand));
             slice_push(use_vars, lo_temp_var->value);
         } else if (arg_pos.main < 32) { // 超过 32 则通过栈进行传递
-            if (arg_type.kind == TYPE_STRUCT && !(arg_pos.main & 1)) {
+            if (is_abi_struct_like(arg_type) && !(arg_pos.main & 1)) {
                 lo_src_operand = indirect_addr_operand(c->module, type_kind_new(main_kind), arg_operand, 0);
             }
             assert(main_kind > 0);
@@ -535,7 +535,7 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
         // attach 部分处理
         if (arg_pos.attach >= 0) {
             if (arg_pos.attach < 16) {
-                if (arg_type.kind == TYPE_STRUCT && !(arg_pos.attach & 1)) {
+                if (is_abi_struct_like(arg_type) && !(arg_pos.attach & 1)) {
                     hi_src_operand = indirect_addr_operand(c->module, type_kind_new(attach_kind), arg_operand, attach_offset);
                 }
 
@@ -546,7 +546,7 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
                 slice_push(use_vars, hi_temp_var->value);
             } else if (arg_pos.attach < 32) { // attach 可能通过栈传递，所以需要明确判断
                 assert(arg_pos.attach < 32 && arg_pos.attach >= 16);
-                if (arg_type.kind == TYPE_STRUCT && !(arg_pos.attach & 1)) {
+                if (is_abi_struct_like(arg_type) && !(arg_pos.attach & 1)) {
                     hi_src_operand = indirect_addr_operand(c->module, type_kind_new(attach_kind), arg_operand, attach_offset);
                 }
 
@@ -589,8 +589,8 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
     }
 
 
-    uint8_t call_result_size = type_sizeof(call_result_type);
-    if (call_result_type.kind == TYPE_STRUCT && call_result_size <= 16) {
+    uint8_t call_result_size = call_result_type.storage_size;
+    if (is_abi_struct_like(call_result_type) && call_result_size <= 16) {
         slice_t *output_regs = slice_new();
 
         // 特殊结构体处理, 由于存在扁平化处理，所以需要根据 args_pos 进行寄存器处理，寄存器选择直接通过 pos 即可
@@ -632,7 +632,7 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, new_output, op->line, op->column));
 
         // 结构体分配栈空间，放在 CALL 之后生成 LEA 指令，避免与 CALL 参数寄存器冲突
-        if (is_stack_ref_big_type(call_result_type)) {
+        if (call_result_type.storage_kind == STORAGE_KIND_IND) {
             assert(call_result->assert_type == LIR_OPERAND_VAR);
             linked_push(result, lir_stack_alloc(c, call_result_type, call_result));
         }
@@ -652,10 +652,10 @@ linked_t *riscv64_lower_call(closure_t *c, lir_op_t *op) {
         // int or float
         if (args_pos[0].main < 16) {
             // int
-            src = operand_new(LIR_OPERAND_REG, reg_select(A0->index, call_result_type.kind));
+            src = operand_new(LIR_OPERAND_REG, reg_select(A0->index, call_result_type.map_imm_kind));
         } else {
             assert(args_pos[0].main < 32);
-            src = operand_new(LIR_OPERAND_REG, reg_select(FA0->index, call_result_type.kind));
+            src = operand_new(LIR_OPERAND_REG, reg_select(FA0->index, call_result_type.map_imm_kind));
         }
 
         linked_push(result, lir_op_with_pos(LIR_OPCODE_CALL, op->first, op->second, src, op->line, op->column));
@@ -693,8 +693,8 @@ linked_t *riscv64_lower_return(closure_t *c, lir_op_t *op) {
     type_kind attach_kind = result_pos.attach_filed_offset & 0xFF;
     int64_t attach_offset = result_pos.attach_filed_offset >> 8;
 
-    uint8_t return_size = type_sizeof(return_type);
-    if (return_type.kind == TYPE_STRUCT && return_size <= 16) { // 触发扁平化处理
+    uint8_t return_size = return_type.storage_size;
+    if (is_abi_struct_like(return_type) && return_size <= 16) { // 触发扁平化处理
         lir_operand_t *lo_dst = NULL;
         lir_operand_t *hi_dst = NULL;
 
@@ -733,10 +733,10 @@ linked_t *riscv64_lower_return(closure_t *c, lir_op_t *op) {
         } else {
             // 非结构体基础类型，直接通过 a0/f0 寄存器即可
             lir_operand_t *dst;
-            if (is_float(return_type.kind)) {
-                dst = operand_new(LIR_OPERAND_REG, reg_select(FA0->index, return_type.kind));
+            if (is_float(return_type.map_imm_kind)) {
+                dst = operand_new(LIR_OPERAND_REG, reg_select(FA0->index, return_type.map_imm_kind));
             } else {
-                dst = operand_new(LIR_OPERAND_REG, reg_select(A0->index, return_type.kind));
+                dst = operand_new(LIR_OPERAND_REG, reg_select(A0->index, return_type.map_imm_kind));
             }
             linked_push(result, lir_op_move(dst, return_operand));
         }

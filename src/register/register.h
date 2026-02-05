@@ -51,7 +51,7 @@ static inline uint8_t alloc_reg_count() {
 
 char *reg_table_key(lir_flag_t alloc_type, uint8_t index, uint8_t size);
 
-reg_t *reg_select(uint8_t index, type_kind kind);
+reg_t *reg_select(uint8_t index, type_kind imm_kind);
 
 reg_t *reg_select2(uint8_t index, lir_flag_t alloc_type, uint8_t size);
 

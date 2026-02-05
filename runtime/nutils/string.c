@@ -36,7 +36,7 @@ n_string_t *string_new_with_pool(void *raw_string, int64_t length) {
     str->data = data;
     str->length = length;
     str->capacity = capacity;
-    str->element_size = (&string_element_rtype)->stack_size;
+    str->element_size = (&string_element_rtype)->storage_size;
     str->hash = string_rtype.hash;
     memmove(str->data, raw_string, length);
 
@@ -71,7 +71,7 @@ n_string_t *string_new(void *raw_string, int64_t length) {
     str->data = data;
     str->length = length;
     str->capacity = capacity;
-    str->element_size = (&string_element_rtype)->stack_size;
+    str->element_size = (&string_element_rtype)->storage_size;
     str->hash = string_rtype.hash;
     memmove(str->data, raw_string, length);
     str->data[length] = '\0';
@@ -98,7 +98,7 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     str->data = data;
     str->length = length;
     str->capacity = capacity;
-    str->element_size = (&string_element_rtype)->stack_size;
+    str->element_size = (&string_element_rtype)->storage_size;
     str->hash = string_rtype.hash;
     DEBUGF("[runtime.string_concat] success, string=%p, data=%p", str, str->data);
     return str;

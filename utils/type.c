@@ -7,7 +7,7 @@
 #include "helper.h"
 
 int64_t type_kind_sizeof(type_kind t) {
-    assert(t > 0);
+    assert(is_number(t) || t == TYPE_BOOL || t == TYPE_ANYPTR || t == TYPE_VOID);
 
     switch (t) {
         case TYPE_VOID:
@@ -26,9 +26,10 @@ int64_t type_kind_sizeof(type_kind t) {
         case TYPE_INT64:
         case TYPE_UINT64:
         case TYPE_FLOAT64:
+        case TYPE_ANYPTR:
             return QWORD;
         default:
-            return POINTER_SIZE;
+            assert(false);
     }
 }
 
@@ -74,7 +75,8 @@ int64_t type_struct_sizeof(type_struct_t *s) {
  */
 int64_t type_sizeof(type_t t) {
     if (t.kind == TYPE_IDENT) {
-        assert(false);
+        //        assert(false);
+        return POINTER_SIZE;
     }
 
     if (t.kind == TYPE_STRUCT) {
@@ -89,6 +91,14 @@ int64_t type_sizeof(type_t t) {
 
     if (t.kind == TYPE_ENUM) {
         return type_sizeof(t.enum_->element_type);
+    }
+
+    //    if (t.kind == TYPE_UNION) {
+    //        return sizeof(n_union_t);
+    //    }
+
+    if (t.storage_kind == STORAGE_KIND_PTR) {
+        return POINTER_SIZE;
     }
 
     return type_kind_sizeof(t.kind);
@@ -129,7 +139,10 @@ bool type_can_size(type_t t) {
 }
 
 int64_t type_alignof(type_t t) {
-    assert(t.kind != TYPE_IDENT);
+    if (t.kind == TYPE_IDENT) {
+        //        assert(false);
+        return POINTER_SIZE;
+    }
 
     if (t.kind == TYPE_STRUCT) {
         return type_struct_alignof(t.struct_);
@@ -140,10 +153,11 @@ int64_t type_alignof(type_t t) {
     }
 
     if (t.kind == TYPE_ENUM) {
-        return type_alignof(t.enum_->element_type);
+        assert(t.enum_->element_type.storage_size > 0);
+        return t.enum_->element_type.storage_size;
     }
 
-    return type_kind_sizeof(t.kind);
+    return t.storage_size;
 }
 
 /**
@@ -164,6 +178,10 @@ type_t type_refof(type_t t) {
     result.line = t.line;
     result.column = t.column;
     result.in_heap = false;
+    result.storage_size = POINTER_SIZE;
+    result.storage_kind = STORAGE_KIND_PTR;
+    result.map_imm_kind = TYPE_ANYPTR;
+    result.align = QWORD;
     return result;
 }
 
@@ -177,6 +195,10 @@ type_t type_ptrof(type_t t) {
     result.line = t.line;
     result.column = t.column;
     result.in_heap = false;
+    result.storage_size = POINTER_SIZE;
+    result.storage_kind = STORAGE_KIND_PTR;
+    result.map_imm_kind = TYPE_ANYPTR;
+    result.align = QWORD;
     return result;
 }
 
@@ -249,8 +271,8 @@ uint64_t type_struct_offset(type_struct_t *s, char *key) {
     for (int i = 0; i < s->properties->length; ++i) {
         struct_property_t *p = ct_list_value(s->properties, i);
 
-        int64_t field_size = type_sizeof(p->type);
-        int64_t field_align = type_alignof(p->type);
+        int64_t field_size = p->type.storage_size;
+        int64_t field_align = p->type.align;
 
         offset = align_up(offset, field_align);
         if (str_equal(p->name, key)) {
@@ -278,10 +300,10 @@ struct_property_t *type_struct_property(type_struct_t *s, char *key) {
 int64_t type_tuple_offset(type_tuple_t *t, uint64_t index) {
     uint64_t offset = 0;
     for (int i = 0; i < t->elements->length; ++i) {
-        type_t *typedecl = ct_list_value(t->elements, i);
+        type_t *element = ct_list_value(t->elements, i);
 
-        int element_size = type_sizeof(*typedecl);
-        int element_align = type_alignof(*typedecl);
+        int64_t element_size = element->storage_size;
+        int64_t element_align = element->align;
 
         offset = align_up(offset, element_align);
 
@@ -293,15 +315,6 @@ int64_t type_tuple_offset(type_tuple_t *t, uint64_t index) {
     }
 
     return 0;
-}
-
-type_kind to_gc_kind(type_kind kind) {
-    assert(kind > 0);
-    if (kind_in_heap(kind)) {
-        return TYPE_GC_SCAN;
-    }
-
-    return TYPE_GC_NOSCAN;
 }
 
 char *_type_format(type_t t) {
@@ -440,6 +453,10 @@ type_t type_kind_new(type_kind kind) {
     }
 
     result.in_heap = kind_in_heap(kind);
+    result.storage_kind = type_storage_kind(result);
+    result.storage_size = type_storage_size(result);
+    result.map_imm_kind = type_map_imm_kind(result);
+    result.align = type_alignof(result);
 
     return result;
 }
@@ -458,5 +475,10 @@ type_t type_new(type_kind kind, void *value) {
         result.ident = type_kind_str[kind];
         result.ident_kind = TYPE_IDENT_BUILTIN;
     }
+
+    result.storage_kind = type_storage_kind(result);
+    result.storage_size = type_storage_size(result);
+    result.map_imm_kind = type_map_imm_kind(result);
+    result.align = type_alignof(result);
     return result;
 }

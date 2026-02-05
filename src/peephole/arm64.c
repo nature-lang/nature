@@ -167,7 +167,7 @@ peephole_move_elimination(closure_t *c, basic_block_t *block, slice_t *ops, int 
 static bool is_float_operand(lir_operand_t *operand) {
     if (!operand) return false;
     type_t t = lir_operand_type(operand);
-    return is_float(t.kind);
+    return is_float(t.map_imm_kind);
 }
 
 /**
@@ -186,10 +186,10 @@ static bool is_float_var_const_two(lir_operand_t *operand) {
 
     // 检查浮点数 imm_value 是否为 2.0
     type_t t = lir_operand_type(operand);
-    if (t.kind == TYPE_FLOAT64) {
+    if (t.map_imm_kind == TYPE_FLOAT64) {
         return var->imm_value.f64_value == 2.0;
     }
-    if (t.kind == TYPE_FLOAT32) {
+    if (t.map_imm_kind == TYPE_FLOAT32) {
         return var->imm_value.f32_value == 2.0f;
     }
 

@@ -125,6 +125,12 @@ typedef enum {
 } type_kind;
 
 typedef enum {
+    STORAGE_KIND_IND = 1, // indirect: ptr -> stack/heap, struct/array/union
+    STORAGE_KIND_PTR, // pointer: ptr/ref/vec/map/fn...
+    STORAGE_KIND_DIR, // direct: int/float/bool
+} storage_kind_t;
+
+typedef enum {
     TYPE_IDENT_DEF = 1,
     TYPE_IDENT_ALIAS,
     TYPE_IDENT_GENERICS_PARAM,
@@ -195,13 +201,14 @@ typedef struct {
 // 所有的 type 都可以转化成该结构
 typedef struct {
     uint64_t ident_offset;
-    uint64_t heap_size; // 无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size
-    uint64_t stack_size;
+    uint64_t heap_size; // 无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size, 尤其是对于 vec/set 等
+    uint64_t storage_size;
 
     // pointer
     int64_t hash; // 做类型推断时能够快速判断出类型是否相等
     uint64_t last_ptr; // 类型对应的堆数据中最后一个包含指针的字节数
     type_kind kind; // 类型的种类
+    storage_kind_t storage_kind;
 
     // ct rtype 使用该字段
     int64_t malloc_gc_bits_offset; // NULL == -1
@@ -276,6 +283,7 @@ typedef struct type_t {
     list_t *args; // type def 和 type impl 都存在 args，此时呈共用关系
     type_ident_kind ident_kind; // TYPE_ALIAS/TYPE_PARAM/TYPE_DEF
 
+    // parser 生成的外部类型展示，rtype 同样依赖该描述，和 linear/lower/native 中的存储无关
     union {
         void *value;
         type_vec_t *vec;
@@ -293,14 +301,17 @@ typedef struct type_t {
         type_interface_t *interface;
     };
     type_kind kind;
-
     reduction_status_t status;
-
     // type_alias + args 进行 reduction 还原之前，将其参数缓存下来
     int line;
     int column;
     bool in_heap; // 当前类型对应的值是否存储在 heap 中, list/array/map/set/tuple/struct/fn/any 默认存储在堆中
-    type_enum_t *append;
+
+    // linear/lower/native 不使用上面的字段
+    storage_kind_t storage_kind;
+    type_kind map_imm_kind; // 用于判断指针大小，各种奇怪的类型等，避免直接使用 type_kind
+    int64_t storage_size;
+    int64_t align;
 } type_t;
 
 /**
@@ -628,8 +639,6 @@ type_param_t *type_param_new(char *literal);
 
 type_alias_t *type_alias_new(char *literal, char *import_module_ident);
 
-type_kind to_gc_kind(type_kind kind);
-
 char *type_format(type_t t);
 
 char *type_origin_format(type_t t);
@@ -702,20 +711,11 @@ static inline bool type_is_ident(type_t *t) {
 }
 
 static inline type_t type_ident_new(char *ident, type_ident_kind kind) {
-    type_t t = type_kind_new(TYPE_IDENT);
+    type_t t = {0};
     t.status = REDUCTION_STATUS_UNDO;
+    t.kind = TYPE_IDENT;
     t.ident = ident;
     t.ident_kind = kind;
-    t.args = NULL;
-    return t;
-}
-
-static inline type_t type_floater_t_new() {
-    type_t t = type_kind_new(TYPE_IDENT);
-    t.status = REDUCTION_STATUS_UNDO;
-    t.kind = TYPE_FLOAT;
-    t.ident = FLOATER_T_IDENT;
-    t.ident_kind = TYPE_IDENT_BUILTIN;
     t.args = NULL;
     return t;
 }
@@ -773,43 +773,79 @@ static inline bool is_integer_or_anyptr(type_kind kind) {
     return is_integer(kind) || kind == TYPE_ANYPTR;
 }
 
-
 static inline bool is_number(type_kind kind) {
     return is_float(kind) || is_integer(kind);
 }
 
-static inline bool is_scala_type(type_t t) {
-    return is_number(t.kind) || t.kind == TYPE_BOOL; // TODO test || t.kind == TYPE_ANYPTR;
+static inline storage_kind_t type_storage_kind(type_t t) {
+    if (is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_ANYPTR || t.kind == TYPE_ENUM || t.kind == TYPE_VOID) {
+        return STORAGE_KIND_DIR;
+    }
+
+    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR /* || t.kind == TYPE_UNION*/) {
+        return STORAGE_KIND_IND;
+    }
+
+    return STORAGE_KIND_PTR;
 }
 
-static inline bool is_stack_ref_big_type(type_t t) {
-    return t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
+// byte
+static inline int64_t type_storage_size(type_t t) {
+    if (is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_ANYPTR || t.kind == TYPE_VOID) {
+        return type_kind_sizeof(t.kind);
+    }
+
+    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR /*|| t.kind == TYPE_UNION*/ || t.kind == TYPE_ENUM) {
+        return type_sizeof(t);
+    }
+
+    return POINTER_SIZE;
 }
 
-static inline bool is_stack_ref_big_type_kind(type_kind kind) {
-    return kind == TYPE_STRUCT || kind == TYPE_ARR;
+static inline type_kind type_map_imm_kind(type_t t) {
+    if (is_number(t.kind)) {
+        return t.kind;
+    }
+
+    if (t.storage_kind != STORAGE_KIND_DIR) {
+        return TYPE_UINT64;
+    }
+
+    if (t.kind == TYPE_VOID || t.kind == TYPE_BOOL) {
+        return TYPE_UINT8;
+    }
+
+    if (t.kind == TYPE_ANYPTR) {
+        return TYPE_ANYPTR;
+    }
+
+    if (t.kind == TYPE_ENUM) {
+        return t.enum_->element_type.kind;
+    }
+
+    if (t.kind == TYPE_RAW_STRING) {
+        return TYPE_ANYPTR;
+    }
+
+    assert(false);
 }
 
-static inline bool is_stack_alloc_type(type_t t) {
-    return is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_STRUCT || t.kind == TYPE_ARR;
+static inline int64_t type_value_size(type_t t) {
+    if (t.storage_kind == STORAGE_KIND_DIR) {
+        return type_kind_sizeof(t.map_imm_kind);
+    }
+
+    return POINTER_SIZE;
+}
+
+// arr 需要进行特殊处理，不能作为 struct 进行传递
+static inline bool is_abi_struct_like(type_t t) {
+    return t.storage_kind == STORAGE_KIND_IND && t.kind != TYPE_ARR;
 }
 
 static inline bool is_impl_builtin_type(type_kind kind) {
     return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_CHAN ||
            kind == TYPE_STRING || kind == TYPE_COROUTINE_T;
-}
-
-static inline bool is_stack_type(type_kind kind) {
-    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_STRUCT || kind == TYPE_ARR || kind == TYPE_ENUM;
-}
-
-static inline bool is_stack_impl(type_kind kind) {
-    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_ANYPTR || kind == TYPE_ARR || kind == TYPE_STRUCT || kind == TYPE_ENUM;
-}
-
-static inline bool is_heap_impl(type_kind kind) {
-    return kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_CHAN ||
-           kind == TYPE_STRING || kind == TYPE_COROUTINE_T || kind == TYPE_UNION || kind == TYPE_TAGGED_UNION;
 }
 
 static inline bool is_gc_alloc(type_kind kind) {
@@ -870,28 +906,6 @@ static inline bool is_qword_int(type_kind kind) {
     return kind == TYPE_INT64 || kind == TYPE_UINT64 || kind == TYPE_UINT || kind == TYPE_INT;
 }
 
-/**
- * @param left
- * @param right
- * @return
- */
-static inline type_t number_type_lift(type_kind left, type_kind right) {
-    assertf(is_number(left) && is_number(right), "type lift kind must number");
-    if (left == right) {
-        return type_kind_new(left);
-    }
-
-    if (is_float(left) || is_float(right)) {
-        return type_kind_new(TYPE_FLOAT64);
-    }
-
-    if (left >= right) {
-        return type_kind_new(left);
-    }
-
-    return type_kind_new(right);
-}
-
 static inline bool integer_range_check(type_kind kind, int64_t i) {
     switch (kind) {
         case TYPE_UINT8:
@@ -927,9 +941,8 @@ static inline bool float_range_check(type_kind kind, double f) {
 }
 
 static inline type_t type_integer_t_new() {
-    type_t t = type_kind_new(TYPE_IDENT);
+    type_t t = type_kind_new(TYPE_INT64);
     t.status = REDUCTION_STATUS_DONE;
-    t.kind = TYPE_INT;
     t.ident = INTEGER_T_IDENT;
     t.ident_kind = TYPE_IDENT_BUILTIN;
     t.args = NULL;

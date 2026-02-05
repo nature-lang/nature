@@ -275,8 +275,8 @@ static bool schedule_is_float_op(lir_op_t *op) {
         return reg->flag & FLAG(LIR_FLAG_ALLOC_FLOAT);
     }
 
-    type_kind kind = operand_type_kind(op->output);
-    return is_float(kind);
+    type_t t = lir_operand_type(op->output);
+    return is_float(t.map_imm_kind);
 }
 
 /**
