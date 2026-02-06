@@ -93,9 +93,9 @@ int64_t type_sizeof(type_t t) {
         return type_sizeof(t.enum_->element_type);
     }
 
-    //    if (t.kind == TYPE_UNION) {
-    //        return sizeof(n_union_t);
-    //    }
+    if (t.kind == TYPE_UNION) {
+        return sizeof(n_union_t);
+    }
 
     if (t.storage_kind == STORAGE_KIND_PTR) {
         return POINTER_SIZE;
@@ -155,6 +155,10 @@ int64_t type_alignof(type_t t) {
     if (t.kind == TYPE_ENUM) {
         assert(t.enum_->element_type.storage_size > 0);
         return t.enum_->element_type.storage_size;
+    }
+
+    if (t.kind == TYPE_UNION) {
+        return POINTER_SIZE;
     }
 
     return t.storage_size;

@@ -671,7 +671,7 @@ int64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
  */
 static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
-    return kind == TYPE_UNION || kind == TYPE_TAGGED_UNION || kind == TYPE_STRING || kind == TYPE_VEC ||
+    return kind == TYPE_TAGGED_UNION || kind == TYPE_STRING || kind == TYPE_VEC ||
            kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_TUPLE || kind == TYPE_GC_ENV ||
            kind == TYPE_FN || kind == TYPE_COROUTINE_T || kind == TYPE_CHAN || kind == TYPE_INTERFACE;
 }
@@ -782,7 +782,7 @@ static inline storage_kind_t type_storage_kind(type_t t) {
         return STORAGE_KIND_DIR;
     }
 
-    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR /* || t.kind == TYPE_UNION*/) {
+    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION) {
         return STORAGE_KIND_IND;
     }
 
@@ -795,7 +795,7 @@ static inline int64_t type_storage_size(type_t t) {
         return type_kind_sizeof(t.kind);
     }
 
-    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR /*|| t.kind == TYPE_UNION*/ || t.kind == TYPE_ENUM) {
+    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION || t.kind == TYPE_ENUM) {
         return type_sizeof(t);
     }
 
@@ -859,7 +859,6 @@ static inline bool is_gc_alloc(type_kind kind) {
            kind == TYPE_TUPLE ||
            kind == TYPE_COROUTINE_T ||
            kind == TYPE_CHAN ||
-           kind == TYPE_UNION ||
            kind == TYPE_TAGGED_UNION ||
            kind == TYPE_INTERFACE ||
            kind == TYPE_FN;

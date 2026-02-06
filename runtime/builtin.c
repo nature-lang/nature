@@ -134,7 +134,7 @@ void print(n_vec_t *args) {
 
         // 将 p 中存储的地址赋值给 a, 此时 a 中存储的是一个堆中的地址，其结构是 memory_any_t
         // void* p 只是转换为指针类型，而不会读取其中的值，所以这里 n_union_t* 是目标值, *value 才是读取 p 中的地址
-        n_union_t *union_arg = (n_union_t *) fetch_addr_value(p);
+        n_union_t *union_arg = (n_union_t *) p;
 
         DEBUGF("[runtime.print] union arg i=%d, addr=%p, union_arg_value=%p ", i, (void *) p, union_arg);
 
@@ -156,7 +156,7 @@ void println(n_vec_t *args) {
 
         // 将 p 中存储的地址赋值给 a, 此时 a 中存储的是一个堆中的地址，其结构是 memory_any_t
         // void* p 只是转换为指针类型，而不会读取其中的值，所以这里 n_union_t* 是目标值, *value 才是读取 p 中的地址
-        n_union_t *union_arg = (n_union_t *) fetch_addr_value(p);
+        n_union_t *union_arg = (n_union_t *) p;
 
         DEBUGF("[runtime.println] union arg i=%d, addr=%p, union_arg_value=%p ", i, (void *) p, union_arg);
 

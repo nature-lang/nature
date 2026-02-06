@@ -161,7 +161,7 @@ n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int
  * @param value
  * @return
  */
-n_union_t *union_casting(int64_t input_rtype_hash, void *value_ref) {
+n_union_t union_casting(int64_t input_rtype_hash, void *value_ref) {
     // - 根据 input_rtype_hash 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
     assert(rtype && "cannot find rtype by hash");
@@ -171,29 +171,26 @@ n_union_t *union_casting(int64_t input_rtype_hash, void *value_ref) {
     TRACEF("[union_casting] input_kind=%s", type_kind_str[rtype->kind]);
 
 
-    rtype_t union_rtype = GC_RTYPE(TYPE_UNION, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
-    // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
-    n_union_t *mu = rti_gc_malloc(sizeof(n_union_t), &union_rtype);
+    n_union_t mu = {0};
 
     DEBUGF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
-           mu, value_ref,
-           &mu->value, rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
-    mu->rtype = rtype;
+           &mu, value_ref,
+           &mu.value, rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
+    mu.rtype = rtype;
 
     uint64_t storage_size = rtype->storage_size;
     if (rtype->storage_kind == STORAGE_KIND_IND) {
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
         void *new_value = rti_gc_malloc(rtype->heap_size, rtype);
         memmove(new_value, value_ref, storage_size);
-
-        rti_write_barrier_ptr(&mu->value.ptr_value, new_value, false);
+        mu.value.ptr_value = new_value;
     } else {
-        memmove(&mu->value, value_ref, storage_size);
+        memmove(&mu.value, value_ref, storage_size);
     }
 
 
-    DEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", mu, mu->rtype,
-           mu->value.i64_value);
+    DEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", &mu, mu.rtype,
+           mu.value.i64_value);
 
     return mu;
 }

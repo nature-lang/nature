@@ -290,8 +290,14 @@ static lir_operand_t *linear_default_nullable(module_t *m, type_t t, lir_operand
 
     // lea null operand var
     lir_operand_t *value_ref = lea_operand_pointer(m, null_operand);
-    push_rt_call(m, RT_CALL_UNION_CASTING, target, 2, int_operand(rtype_hash), value_ref);
-    return target;
+    lir_operand_t *call_result = temp_var_operand(m, t);
+    push_rt_call(m, RT_CALL_UNION_CASTING, call_result, 2, int_operand(rtype_hash), value_ref);
+
+    if (target) {
+        return linear_super_move(m, t, target, call_result);
+    }
+
+    return call_result;
 }
 
 static lir_operand_t *
@@ -2804,7 +2810,9 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
     if (is_expr->src->type.kind == TYPE_INTERFACE) {
         push_rt_call(m, RT_CALL_INTERFACE_IS, target, 2, src_operand, int_operand(target_rtype_hash));
     } else {
-        push_rt_call(m, RT_CALL_UNION_IS, target, 2, src_operand, int_operand(target_rtype_hash));
+        lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        OP_PUSH(lir_op_move(union_ptr, src_operand));
+        push_rt_call(m, RT_CALL_UNION_IS, target, 2, union_ptr, int_operand(target_rtype_hash));
     }
 
     return target;
@@ -2825,7 +2833,9 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     if (!target) {
-        target = temp_var_operand_with_alloc(m, expr.type);
+        if (expr.type.kind != TYPE_UNION) {
+            target = temp_var_operand_with_alloc(m, expr.type);
+        }
     }
 
     uint64_t src_rtype_hash = type_hash(as_expr->src.type);
@@ -2881,10 +2891,14 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             union_value = lea_operand_pointer(m, src_operand);
         }
 
-        type_union_t *union_type = as_expr->target_type.union_;
+        lir_operand_t *call_result = temp_var_operand(m, as_expr->target_type);
+        push_rt_call(m, RT_CALL_UNION_CASTING, call_result, 2, int_operand(src_rtype_hash), union_value);
 
-        push_rt_call(m, RT_CALL_UNION_CASTING, target, 2, int_operand(src_rtype_hash), union_value);
-        return target;
+        if (target) {
+            return linear_super_move(m, as_expr->target_type, target, call_result);
+        }
+
+        return call_result;
     }
 
     // union assert
@@ -2893,7 +2907,9 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         OP_PUSH(lir_op_nop_def(target));
         lir_operand_t *output_ref = lea_operand_pointer(m, target);
         uint64_t target_rtype_hash = type_hash(as_expr->target_type);
-        push_rt_call(m, RT_CALL_UNION_ASSERT, NULL, 3, src_operand, int_operand(target_rtype_hash), output_ref);
+        lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        OP_PUSH(lir_op_move(union_ptr, src_operand));
+        push_rt_call(m, RT_CALL_UNION_ASSERT, NULL, 3, union_ptr, int_operand(target_rtype_hash), output_ref);
         linear_has_panic(m);
         return target;
     }

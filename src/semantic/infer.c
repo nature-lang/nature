@@ -1655,15 +1655,6 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_typ
             return operand_type;
         }
 
-        //        INFER_ASSERTF(expr->operand.assert_type != AST_CALL,
-        //                      "cannot safe load address of an call expr");
-        //
-        //        INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL,
-        //                      "cannot safe load address of an literal expr");
-        //
-        //        INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_AS,
-        //                      "cannot safe load address of an as expr");
-        INFER_ASSERTF(operand_type.kind != TYPE_UNION, "cannot safe load address of an union type");
 
         marking_heap_alloc(&expr->operand);
 

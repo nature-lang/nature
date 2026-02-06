@@ -354,7 +354,7 @@ struct linkco_t {
 typedef struct n_future_t {
     int64_t size;
     void *result;
-    n_union_t *error; // 类似 result 一样可选的 error
+    n_union_t error; // 类似 result 一样可选的 error
     void *await_co;
 } n_future_t;
 
