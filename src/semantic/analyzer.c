@@ -28,6 +28,9 @@ static void analyzer_call_args(module_t *m, ast_call_t *call);
 
 static bool analyzer_local_ident(module_t *m, ast_expr_t *ident_expr);
 
+static list_t *analyzer_clone_generics_params(module_t *m, list_t *params);
+static void analyzer_fill_impl_generics(module_t *m, ast_fndef_t *fndef);
+
 char *analyzer_force_unique_ident(module_t *m) {
     if (m->ident) {
         return str_connect(m->ident, ".n.o");
@@ -271,6 +274,21 @@ static char *analyzer_resolve_typedef(module_t *m, analyzer_fndef_t *current, st
 static void analyzer_type(module_t *m, type_t *t) {
     m->current_line = t->line;
     m->current_column = t->column;
+
+    // generic param in fn body/type
+    if (t->kind == TYPE_IDENT && t->ident_kind == TYPE_IDENT_UNKNOWN) {
+        if (m->analyzer_current && m->analyzer_current->fndef &&
+            m->analyzer_current->fndef->generics_params && !t->import_as) {
+            ast_fndef_t *fndef = m->analyzer_current->fndef;
+            for (int i = 0; i < fndef->generics_params->length; ++i) {
+                ast_generics_param_t *param = ct_list_value(fndef->generics_params, i);
+                if (str_equal(param->ident, t->ident)) {
+                    t->ident_kind = TYPE_IDENT_GENERICS_PARAM;
+                    return;
+                }
+            }
+        }
+    }
 
     // type foo = int
     // 'foo' is type_alias
@@ -2321,6 +2339,9 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
                     fndef->impl_type.ident = unique_typedef_ident;
                 }
 
+                // implicit generics for impl methods on generic typedefs
+                analyzer_fill_impl_generics(m, fndef);
+
                 fndef->symbol_name = str_connect_by(fndef->impl_type.ident, symbol_name, IMPL_CONNECT_IDENT);
 
                 // register to global symbol table
@@ -2398,6 +2419,59 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         slice_push(m->ast_fndefs, fndef);
 
         analyzer_global_fndef(m, fndef);
+    }
+}
+
+static list_t *analyzer_clone_generics_params(module_t *m, list_t *params) {
+    list_t *result = ct_list_new(sizeof(ast_generics_param_t));
+    for (int i = 0; i < params->length; ++i) {
+        ast_generics_param_t *param = ct_list_value(params, i);
+        ast_generics_param_t *copy = ast_generics_param_new(0, 0, param->ident);
+        copy->constraints.any = param->constraints.any;
+        copy->constraints.and = param->constraints.and;
+        copy->constraints.or = param->constraints.or;
+
+        for (int j = 0; j < param->constraints.elements->length; ++j) {
+            type_t *constraint = ct_list_value(param->constraints.elements, j);
+            type_t temp = type_copy(m, *constraint);
+            ct_list_push(copy->constraints.elements, &temp);
+        }
+
+        ct_list_push(result, copy);
+    }
+
+    return result;
+}
+
+static void analyzer_fill_impl_generics(module_t *m, ast_fndef_t *fndef) {
+    if (!fndef->is_impl || fndef->generics_params) {
+        return;
+    }
+
+    if (fndef->impl_type.kind != TYPE_IDENT) {
+        return;
+    }
+
+    symbol_t *symbol = symbol_table_get(fndef->impl_type.ident);
+    if (!symbol || symbol->type != SYMBOL_TYPE) {
+        return;
+    }
+
+    ast_typedef_stmt_t *typedef_stmt = symbol->ast_value;
+    if (!typedef_stmt->params || typedef_stmt->params->length == 0) {
+        return;
+    }
+
+    fndef->generics_params = analyzer_clone_generics_params(m, typedef_stmt->params);
+    fndef->is_generics = true;
+
+    if (!fndef->impl_type.args) {
+        fndef->impl_type.args = ct_list_new(sizeof(type_t));
+        for (int i = 0; i < fndef->generics_params->length; ++i) {
+            ast_generics_param_t *param = ct_list_value(fndef->generics_params, i);
+            type_t arg = type_ident_new(param->ident, TYPE_IDENT_GENERICS_PARAM);
+            ct_list_push(fndef->impl_type.args, &arg);
+        }
     }
 }
 

@@ -11,7 +11,7 @@ static inline n_array_t *rti_array_new(rtype_t *element_rtype, uint64_t length) 
     assert(element_rtype->heap_size > 0 && "element_rtype size is zero");
 
     DEBUGF("[rti_array_new] ele_sz=%lu(rtype_stack_size=%lu),ele_kind=%s(n_gc=%d),len=%lu", element_rtype->heap_size,
-           element_rtype->stack_size, type_kind_str[element_rtype->kind],
+           element_rtype->storage_size, type_kind_str[element_rtype->kind],
            element_rtype->last_ptr > 0,
            length);
 

@@ -1,0 +1,79 @@
+=== test_basic
+--- main.n
+fn main() {
+    string s = 'hello world'
+
+    var l = s as [u8]
+    l[0] = 110
+    (l[1], l[2]) = (l[2], l[1])
+    println(s)
+    println(l as string)
+
+    [u8] l2 = [110, 105, 99, 101]
+
+    string s2 = s + ' one piece'
+
+    println(s2)
+
+    string s3 = s2 + ' ' + l2 as string
+    println(s3)
+
+
+    // 字符串比较操作
+    var b = 'hello world' == 'hello world'
+    println(b) // true
+    println('hello world' != 'hello world') // false
+    println('a' < 'b') // true
+    println('a' > 'b') // false
+}
+
+--- output.txt
+hello world
+nlelo world
+hello world one piece
+hello world one piece nice
+true
+false
+true
+false
+
+=== test_string_impl_failed1
+--- main.n
+fn string.hello() {
+    println('hello')
+}
+
+fn main() {
+    'n'.hello()
+}
+
+--- output.txt
+nature-test/main.n:1:3: heap-allocated builtin type 'string' requires explicit `self` receiver; use `fn string.method(self)`
+
+
+=== test_string_impl_failed2
+--- main.n
+fn string.hello(*self) {
+    println('hello')
+}
+
+fn main() {
+    'n'.hello()
+}
+
+--- output.txt
+nature-test/main.n:1:3: heap-allocated builtin type 'string' requires explicit `self` receiver; use `fn string.method(self)`
+
+=== test_string_impl
+--- main.n
+fn string.hello(self):string {
+    return self
+}
+
+fn main() {
+    var s = 'n'.hello()
+    println(s)
+}
+
+--- output.txt
+n

@@ -18,7 +18,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:14:21: type inconsistency, expect=main.color2(i64), actual=main.color(i64)
+nature-test/main.n:14:21: type inconsistency, expect=main.color2(enum:i64), actual=main.color(enum:i64)
 
 === test_basic
 --- main.n
@@ -40,7 +40,7 @@ fn main() {
 }
 
 --- output.txt
-1
+0x1
 
 
 === test_cmp_failed2
@@ -63,7 +63,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:15:18: type inconsistency, expect=main.color(i64), actual=i64
+nature-test/main.n:15:18: type inconsistency, expect=main.color(enum:i64), actual=i64
 
 === test_cmp
 --- main.n
@@ -116,7 +116,7 @@ fn main() {
 }
 
 --- output.txt
-15
+0xf
 
 === test_as
 --- main.n

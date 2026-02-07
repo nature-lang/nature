@@ -27,9 +27,9 @@ bool interface_is(n_interface_t *mu, int64_t target_rtype_hash);
  * @param value_ref
  * @return
  */
-n_union_t *union_casting(int64_t input_rtype_hash, void *value_ref);
+n_union_t union_casting(int64_t input_rtype_hash, void *value_ref);
 
-n_tagged_union_t *tagged_union_casting(int64_t id, int64_t value_rtype_hash, void *value_ref);
+n_tagged_union_t tagged_union_casting(int64_t id, int64_t value_rtype_hash, void *value_ref);
 
 n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods);
 

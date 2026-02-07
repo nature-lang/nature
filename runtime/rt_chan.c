@@ -195,7 +195,7 @@ n_chan_t *rt_chan_new(int64_t rhash, int64_t ele_rhash, int64_t buf_len) {
     assert(element_rtype && "cannot find element_rtype with hash");
 
     n_chan_t *chan = rti_gc_malloc(rtype->heap_size, rtype);
-    chan->msg_size = element_rtype->stack_size;
+    chan->msg_size = element_rtype->storage_size;
     pthread_mutex_init(&chan->lock, NULL);
 
     // ele_rhash

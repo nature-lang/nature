@@ -62,8 +62,8 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
     if (i->spilled) {
         lir_stack_t *stack = NEW(lir_stack_t);
         stack->slot = *i->stack_slot;
-        stack->size = type_kind_sizeof(var->type.kind);
-        stack->kind = var->type.kind;
+        stack->size = type_value_size(var->type);
+        stack->kind = var->type.map_imm_kind;
         operand->assert_type = LIR_OPERAND_STACK;
         operand->value = stack;
         operand->size = stack->size;
@@ -80,13 +80,13 @@ void var_replace(lir_operand_t *operand, interval_t *i) {
         assert(reg);
 
         uint8_t index = reg->index;
-        reg = reg_select(index, var->type.kind);
+        reg = reg_select(index, var->type.map_imm_kind);
 
         assert(reg);
 
         operand->assert_type = LIR_OPERAND_REG;
         operand->value = reg;
-        operand->size = type_kind_sizeof(var->type.kind); // 实际 size
+        operand->size = type_value_size(var->type); // 实际 size
         operand->ref_var = var;
     }
 }

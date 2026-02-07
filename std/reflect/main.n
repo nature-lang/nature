@@ -65,12 +65,14 @@ type rtype_struct_t = struct{
 
 type rtype_t = struct{
     u64 ident_offset
-    u64 size
-    u64 stack_size
+    u64 heap_size
+    u64 storage_size
 
     i64 hash
     u64 last_ptr
-    u32 kind // type_kind
+    u32 kind
+    u32 storage_kind
+
     i64 malloc_gc_bits_offset
     u64 gc_bits
     u8 align
@@ -95,7 +97,7 @@ fn typeof_hash(i64 hash):ref<type_t>! {
     var r = find_rtype(hash)
 
     var t = new type_t(
-        size = r.stack_size as i64,
+        size = r.storage_size as i64,
         hash = r.hash,
         kind = r.kind as int,
         align = r.align,

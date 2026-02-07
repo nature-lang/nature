@@ -84,7 +84,7 @@ static bool amd64_is_integer_operand(lir_operand_t *operand) {
         return reg->flag & FLAG(LIR_FLAG_ALLOC_INT);
     }
 
-    return is_integer_or_anyptr(operand_type_kind(operand));
+    return is_integer_or_anyptr(lir_operand_type(operand).map_imm_kind);
 }
 
 static bool asm_operand_equal(amd64_asm_operand_t *a, amd64_asm_operand_t *b) {
@@ -173,7 +173,7 @@ static amd64_asm_operand_t *lir_operand_trans_amd64(closure_t *c, lir_op_t *op, 
                     "indirect addr index must be reg for LEA fusion");
             reg_t *index_reg = indirect->index->value;
             return SIB_REG(NULL, index_reg, indirect->scale,
-                           indirect->offset, type_kind_sizeof(indirect->type.kind));
+                           indirect->offset, type_kind_sizeof(indirect->type.map_imm_kind));
         }
 
         // rbp 特殊编码
@@ -196,20 +196,20 @@ static amd64_asm_operand_t *lir_operand_trans_amd64(closure_t *c, lir_op_t *op, 
                     "indirect addr index must be reg");
             reg_t *index_reg = indirect->index->value;
             return SIB_REG(reg, index_reg, indirect->scale,
-                           indirect->offset, type_kind_sizeof(indirect->type.kind));
+                           indirect->offset, type_kind_sizeof(indirect->type.map_imm_kind));
         }
 
         // r12/rsp 特殊编码
         if (reg->index == rsp->index || reg->index == r12->index) {
             // 对于 RSP 和 R12，总是使用 SIB 编码
-            return SIB_REG(reg, NULL, 0, indirect->offset, type_kind_sizeof(indirect->type.kind));
+            return SIB_REG(reg, NULL, 0, indirect->offset, type_kind_sizeof(indirect->type.map_imm_kind));
         }
 
         // TODO rbp/ebp 等寄存器不能使用 indirect_reg, 例如: 0:  4c 8b 45 00    mov    r8,QWORD PTR [rbp+0x0]
         if (indirect->offset == 0) {
-            asm_operand = INDIRECT_REG(reg, type_kind_sizeof(indirect->type.kind));
+            asm_operand = INDIRECT_REG(reg, type_kind_sizeof(indirect->type.map_imm_kind));
         } else {
-            asm_operand = DISP_REG(reg, indirect->offset, type_kind_sizeof(indirect->type.kind));
+            asm_operand = DISP_REG(reg, indirect->offset, type_kind_sizeof(indirect->type.map_imm_kind));
         }
 
         assert(asm_operand->size > 0);
@@ -220,7 +220,7 @@ static amd64_asm_operand_t *lir_operand_trans_amd64(closure_t *c, lir_op_t *op, 
         lir_symbol_var_t *v = operand->value;
         amd64_asm_operand_t *asm_operand = AMD64_SYMBOL(v->ident, false);
         // symbol 也要有 size, 不然无法选择合适的寄存器进行 mov!
-        asm_operand->size = type_kind_sizeof(v->kind);
+        asm_operand->size = v->t.storage_size;
         return asm_operand;
     }
 
@@ -333,7 +333,7 @@ static slice_t *amd64_native_clv(closure_t *c, lir_op_t *op) {
 
     if (output->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
         lir_indirect_addr_t *temp = output->value;
-        uint64_t size = type_sizeof(temp->type);
+        uint64_t size = temp->type.storage_size;
 
         assertf(size <= QWORD, "only can clv size <= %d, actual=%d", QWORD, size);
         // amd64 目前仅支持

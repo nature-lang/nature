@@ -277,7 +277,7 @@ typedef struct {
 
 typedef enum {
     PARAM_SELF_NULL = 0,
-    PARAM_SELF_T,
+    PARAM_SELF_T, // int/float/bool/anyptr/string/vec/map/chan/
     PARAM_SELF_REF_T,
     PARAM_SELF_PTR_T,
 } ast_param_self_kind_t;

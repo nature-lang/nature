@@ -64,8 +64,7 @@ fn serialize_value(anyptr p, ref<reflect.type_t> t):[u8]! {
             return fmt.sprintf('%f', f64_val) as [u8]
         }
         reflect.UNION -> {
-            var v = unsafe.ptr_to<anyptr>(p)
-            var rv = v as ptr<reflect.union_t>
+            var rv = p as ptr<reflect.union_t>
 
             var union_t = reflect.typeof_hash(rv.rtype.hash)
 
@@ -558,8 +557,7 @@ fn deserialize_t.parser_nullable(anyptr p, ref<reflect.type_t> t):void! {
         throw errorf('unexpected end of input at position %d', self.cursor)
     }
 
-    anyptr v = unsafe.ptr_to<anyptr>(p)
-    var rv = v as ptr<reflect.union_t>
+    var rv = p as ptr<reflect.union_t>
 
     var target_p = &rv.value as anyptr
 

@@ -24,9 +24,8 @@ static linked_t *amd64_lower_neg(closure_t *c, lir_op_t *op) {
         op->output = lir_reset_operand(new_output, op->output->pos);
     }
 
-    type_kind kind = operand_type_kind(op->output);
-    assert(is_number(kind));
-    if (is_integer_or_anyptr(kind)) {
+    type_t t = lir_operand_type(op->output);
+    if (is_integer_or_anyptr(t.map_imm_kind)) {
         linked_push(list, op);
 
         if (old_output) {
@@ -77,8 +76,8 @@ static linked_t *amd64_lower_imm(closure_t *c, lir_op_t *op, linked_t *symbol_op
             if (imm->int_value > INT32_MAX || imm->int_value < INT32_MIN) {
                 if (op->code != LIR_OPCODE_MOVE || op->output->assert_type != LIR_OPERAND_VAR) {
                     // 大数值必须通过 reg 转化,
-                    type_kind kind = operand_type_kind(imm_operand);
-                    lir_operand_t *temp = temp_var_operand_with_alloc(c->module, type_kind_new(kind));
+                    type_t t = lir_operand_type(imm_operand);
+                    lir_operand_t *temp = temp_var_operand(c->module, type_kind_new(t.map_imm_kind));
 
                     linked_push(list, lir_op_move(temp, imm_operand));
                     temp = lir_reset_operand(temp, imm_operand->pos);
@@ -100,7 +99,7 @@ static bool amd64_ternary_support_imm(lir_op_t *op) {
     if (op->second->assert_type != LIR_OPERAND_IMM) {
         return false;
     }
-    if (!is_integer_or_anyptr(operand_type_kind(op->output))) {
+    if (!is_integer_or_anyptr(lir_operand_type(op->output).map_imm_kind)) {
         return false;
     }
     // ADD, SUB, AND, OR, XOR 支持 imm 作为第二操作数
@@ -137,15 +136,15 @@ static linked_t *amd64_lower_shift(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
     // second to cl/rcx
-    lir_operand_t *fit_cx_operand = lir_reg_operand(cl->index, operand_type_kind(op->second));
+    lir_operand_t *fit_cx_operand = lir_reg_operand(cl->index, lir_operand_type(op->second));
     linked_push(list, lir_op_move(fit_cx_operand, op->second));
 
-    type_kind kind = operand_type_kind(op->output);
-    lir_operand_t *temp = temp_var_operand(c->module, type_kind_new(kind));
+    type_t t = lir_operand_type(op->output);
+    lir_operand_t *temp = temp_var_operand(c->module, type_kind_new(t.map_imm_kind));
     linked_push(list, lir_op_move(temp, op->first));
 
     // 这里相当于做了一次基于寄存器的类型转换了
-    lir_operand_t *cl_operand = lir_reg_operand(cl->index, TYPE_UINT8);
+    lir_operand_t *cl_operand = lir_reg_operand(cl->index, type_kind_new(TYPE_UINT8));
     // sar/sal
     linked_push(list, lir_op_new(op->code, temp, cl_operand, temp));
     linked_push(list, lir_op_move(op->output, temp));
@@ -155,11 +154,11 @@ static linked_t *amd64_lower_shift(closure_t *c, lir_op_t *op) {
 
 static linked_t *amd64_lower_mul(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
-    type_kind output_kind = operand_type_kind(op->output);
+    type_t output_type = lir_operand_type(op->output);
 
     // byte 类型使用单操作数 mul (需要 rax)
-    if (output_kind == TYPE_UINT8 || output_kind == TYPE_INT8) {
-        lir_operand_t *ax_operand = lir_reg_operand(rax->index, output_kind);
+    if (output_type.map_imm_kind == TYPE_UINT8 || output_type.map_imm_kind == TYPE_INT8) {
+        lir_operand_t *ax_operand = lir_reg_operand(rax->index, output_type);
 
         // second cannot be imm for single-operand mul
         if (op->second->assert_type != LIR_OPERAND_VAR) {
@@ -225,7 +224,7 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
 
     linked_t *list = linked_new();
 
-    type_kind output_kind = operand_type_kind(op->output);
+    type_t output_type = lir_operand_type(op->output);
 
     // second cannot imm?
     if (op->second->assert_type != LIR_OPERAND_VAR) {
@@ -243,7 +242,7 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
     assert(op_code == LIR_OPCODE_UDIV || op_code == LIR_OPCODE_SDIV);
 
     // 根据操作数类型选择合适的寄存器处理方式
-    if (output_kind == TYPE_UINT8 || output_kind == TYPE_INT8) {
+    if (output_type.map_imm_kind == TYPE_UINT8 || output_type.map_imm_kind == TYPE_INT8) {
         // 8位除法特殊处理
         // 被除数需要在AX(16位)，商在AL，余数在AH
 
@@ -274,13 +273,13 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
 
     } else {
         // 16位及以上的除法处理（原有逻辑）
-        lir_operand_t *ax_operand = lir_reg_operand(rax->index, output_kind);
-        lir_operand_t *dx_operand = lir_reg_operand(rdx->index, output_kind);
+        lir_operand_t *ax_operand = lir_reg_operand(rax->index, output_type);
+        lir_operand_t *dx_operand = lir_reg_operand(rdx->index, output_type);
 
         // 清零高位寄存器
-        if (output_kind == TYPE_UINT16 || output_kind == TYPE_INT16) {
+        if (output_type.map_imm_kind == TYPE_UINT16 || output_type.map_imm_kind == TYPE_INT16) {
             // 16位除法：清零DX
-            linked_push(list, lir_op_new(LIR_OPCODE_CLR, NULL, NULL, lir_reg_operand(rdx->index, TYPE_UINT16)));
+            linked_push(list, lir_op_new(LIR_OPCODE_CLR, NULL, NULL, lir_reg_operand(rdx->index, type_kind_new(TYPE_UINT16))));
         } else {
             // 32位及以上：清零EDX/RDX
             linked_push(list, lir_op_new(LIR_OPCODE_CLR, NULL, NULL, dx_operand));
@@ -323,14 +322,14 @@ static linked_t *amd64_lower_safepoint(closure_t *c, lir_op_t *op) {
  * 后续由 lower_imm 转换为 var，用于 XOR 实现取反
  */
 static void amd64_prepare_neg_float(lir_op_t *op) {
-    if (op->code != LIR_OPCODE_NEG || !is_float(operand_type_kind(op->output))) {
+    if (op->code != LIR_OPCODE_NEG || !is_float(lir_operand_type(op->output).map_imm_kind)) {
         return;
     }
 
-    type_kind kind = operand_type_kind(op->output);
+    type_t t = lir_operand_type(op->output);
     lir_imm_t *neg_zero_imm = NEW(lir_imm_t);
-    neg_zero_imm->kind = kind;
-    if (kind == TYPE_FLOAT64) {
+    neg_zero_imm->kind = t.map_imm_kind;
+    if (t.map_imm_kind == TYPE_FLOAT64) {
         neg_zero_imm->f64_value = -0.0;
     } else {
         neg_zero_imm->f32_value = -0.0f;
@@ -411,7 +410,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
         }
 
         // float 不需要特别处理, 其不会特殊占用寄存器
-        if (lir_op_factor(op) && is_integer_or_anyptr(operand_type_kind(op->output))) {
+        if (lir_op_factor(op) && is_integer_or_anyptr(lir_operand_type(op->output).map_imm_kind)) {
             // inter 类型的 mul 和 div 需要转换成 amd64 单操作数兼容操作
             linked_concat(operations, amd64_lower_factor(c, op));
             continue;
@@ -454,7 +453,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
 
         if (lir_op_convert(op)) {
             if (op->code == LIR_OPCODE_UITOF) {
-                lir_operand_t *ax_operand = lir_reg_operand(rax->index, operand_type_kind(op->first));
+                lir_operand_t *ax_operand = lir_reg_operand(rax->index, lir_operand_type(op->first));
                 linked_push(operations, lir_op_move(ax_operand, op->first));
                 op->first = lir_reset_operand(ax_operand, LIR_FLAG_FIRST);
                 linked_push(operations, op);

@@ -309,7 +309,7 @@ type shape = union{
     void point
 }
 
-fn shape.to_string():string {
+fn shape.to_string(self):string {
     return match self {
         is shape.ellipse v -> 'ellipse'
         _ -> 'hello world'

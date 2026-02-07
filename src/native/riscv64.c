@@ -41,7 +41,7 @@ static bool riscv64_is_integer_operand(lir_operand_t *operand) {
     }
 
     // bool 也被当成 int 类型
-    return !is_float(operand_type_kind(operand));
+    return !is_float(lir_operand_type(operand).map_imm_kind);
 }
 
 /**
@@ -69,7 +69,7 @@ lir_operand_trans_riscv64(closure_t *c, lir_op_t *op, lir_operand_t *operand, sl
         lir_indirect_addr_t *indirect = operand->value;
         lir_operand_t *base = indirect->base;
         assert(base);
-        mem_size = type_kind_sizeof(indirect->type.kind);
+        mem_size = type_kind_sizeof(indirect->type.map_imm_kind);
 
         // 处理栈基址
         if (base->assert_type == LIR_OPERAND_STACK) {
@@ -256,19 +256,19 @@ static slice_t *riscv64_native_mov(closure_t *c, lir_op_t *op) {
         if (riscv64_is_integer_operand(op->output)) {
             if (source->size == BYTE) {
                 // 检查是否为有符号类型
-                if (is_signed(operand_type_kind(op->first))) {
+                if (is_signed(lir_operand_type(op->first).map_imm_kind)) {
                     slice_push(operations, RISCV64_INST(RV_LB, result, source)); // RISC-V的 LB 已经是符号扩展
                 } else {
                     slice_push(operations, RISCV64_INST(RV_LBU, result, source)); // 无符号加载
                 }
             } else if (source->size == WORD) {
-                if (is_signed(operand_type_kind(op->first))) {
+                if (is_signed(lir_operand_type(op->first).map_imm_kind)) {
                     slice_push(operations, RISCV64_INST(RV_LH, result, source)); // 有符号加载
                 } else {
                     slice_push(operations, RISCV64_INST(RV_LHU, result, source)); // 无符号加载
                 }
             } else if (source->size == DWORD) {
-                if (is_signed(operand_type_kind(op->first))) {
+                if (is_signed(lir_operand_type(op->first).map_imm_kind)) {
                     slice_push(operations, RISCV64_INST(RV_LW, result, source)); // 有符号加载
                 } else {
                     slice_push(operations, RISCV64_INST(RV_LWU, result, source)); // 无符号加载
@@ -860,7 +860,7 @@ static slice_t *riscv64_native_fbcc(closure_t *c, lir_op_t *op) {
             return operations;
     }
 
-    lir_op_t *scc_op = lir_op_new(scc_opcode, op->first, op->second, lir_reg_operand(T6->index, TYPE_INT));
+    lir_op_t *scc_op = lir_op_new(scc_opcode, op->first, op->second, lir_reg_operand(T6->index, type_kind_new(TYPE_INT64)));
     slice_concat(operations, riscv64_native_scc(c, scc_op));
 
 

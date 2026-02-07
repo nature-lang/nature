@@ -201,7 +201,7 @@ typedef struct {
 
 typedef struct {
     string ident;
-    type_kind kind;
+    type_t t;
 } lir_symbol_var_t; // 外部符号引用, 外部符号引用
 
 typedef struct {
@@ -231,8 +231,8 @@ static inline bool lir_op_scc(lir_op_t *op);
 
 static inline type_t lir_operand_type(lir_operand_t *operand);
 
-static inline type_kind operand_type_kind(lir_operand_t *operand) {
-    return lir_operand_type(operand).kind;
+static inline int64_t operand_type_storage_size(lir_operand_t *operand) {
+    return lir_operand_type(operand).storage_size;
 }
 
 static inline bool is_rtcall(string target) {
@@ -373,12 +373,12 @@ static inline lir_var_t *lir_var_new(module_t *m, char *ident) {
 
     ast_var_decl_t *global_var = s->ast_value;
     var->type = global_var->type;
-    var->flag |= type_kind_trans_alloc(global_var->type.kind);
+    var->flag |= type_kind_trans_alloc(global_var->type.map_imm_kind);
 
     return var;
 }
 
-lir_operand_t *lir_reg_operand(uint8_t index, type_kind kind);
+lir_operand_t *lir_reg_operand(uint8_t index, type_t t);
 
 /**
  * 创建包含多个寄存器的操作数（可变参数版本）
@@ -434,13 +434,6 @@ static inline lir_operand_t *symbol_label_operand(module_t *m, char *ident) {
     } else {
         return lir_label_operand(ident, false);
     }
-}
-
-static inline lir_operand_t *symbol_var_operand(char *ident, type_kind kind) {
-    lir_symbol_var_t *var = NEW(lir_symbol_var_t);
-    var->ident = ident;
-    var->kind = kind;
-    return operand_new(LIR_OPERAND_SYMBOL_VAR, var);
 }
 
 static inline lir_operand_t *lir_copy_label_operand(lir_operand_t *l) {
@@ -802,7 +795,7 @@ static inline type_t lir_operand_type(lir_operand_t *operand) {
 
     if (operand->assert_type == LIR_OPERAND_SYMBOL_VAR) {
         lir_symbol_var_t *s = operand->value;
-        return type_kind_new(s->kind);
+        return s->t;
     }
 
     if (operand->assert_type == LIR_OPERAND_IMM) {
@@ -894,9 +887,9 @@ static inline lir_op_t *lir_call(char *name, lir_operand_t *result, int arg_coun
 static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *dst_operand) {
     module_t *m = c->module;
     assert(dst_operand->assert_type == LIR_OPERAND_VAR);
-    assert(is_stack_ref_big_type(t));
+    assert(t.storage_kind == STORAGE_KIND_IND);
 
-    int64_t size = type_sizeof(t);
+    int64_t size = t.storage_size;
     if (size == 0) {
         size = 1; // 和 reflect_type 对应，并且分配合适的空间
     }
@@ -922,7 +915,7 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
         bitmap_grow_set(c->stack_gc_bits, bit_index_end - i, test);
     }
 
-    lir_operand_t *src_operand = lir_stack_operand(m, -c->stack_offset, size, t.kind);
+    lir_operand_t *src_operand = lir_stack_operand(m, -c->stack_offset, size, t.map_imm_kind);
     return lir_op_lea(dst_operand, src_operand);
 }
 
@@ -971,7 +964,7 @@ static inline lir_operand_t *temp_var_operand_with_alloc(module_t *m, type_t typ
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var);
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
-    if (is_stack_ref_big_type(type)) {
+    if (type.storage_kind == STORAGE_KIND_IND) {
         if (type.in_heap) {
             lir_var->type = type_kind_new(TYPE_ANYPTR);
 
@@ -994,7 +987,7 @@ static inline lir_operand_t *lower_temp_var_operand(closure_t *c, linked_t *list
     lir_operand_t *target = operand_new(LIR_OPERAND_VAR, lir_var);
 
     // 如果 type 是一个 struct, 则为 struct 申请足够的空间
-    if (is_stack_ref_big_type(type)) {
+    if (type.storage_kind == STORAGE_KIND_IND) {
         linked_push(list, lir_stack_alloc(c, type, target));
     }
 
@@ -1011,11 +1004,11 @@ static inline lir_operand_t *lower_temp_var_operand(closure_t *c, linked_t *list
  */
 static inline lir_operand_t *lower_temp_var_with_hint(closure_t *c, linked_t *list, type_t type, reg_t *hint_reg) {
     assert(type.kind > 0);
+    assert(type.storage_kind > 0);
     assert(hint_reg != NULL);
     string unique_ident = var_unique_ident(c->module, TEMP_IDENT);
 
-    // 符合类型直接按照 TYPE_ANYPTR 进行处理
-    if (!is_scala_type(type)) {
+    if (type.storage_kind != STORAGE_KIND_DIR) {
         type = type_kind_new(TYPE_ANYPTR);
     }
     symbol_table_set_var(unique_ident, type, c->module);
@@ -1053,8 +1046,9 @@ static inline lir_operand_t *indirect_addr_operand(module_t *m, type_t type, lir
     if (base->assert_type == LIR_OPERAND_SYMBOL_VAR) {
         lir_symbol_var_t *symbol_var = base->value;
         // 由于所有架构的 lower 都需要特殊处理 indirect base = symbol_var 的情况。此处对 base 进行特殊处理 (vec/tup/map) 三种情况包含 indirect 的情况
-        assertf(symbol_var->kind == TYPE_VEC || symbol_var->kind == TYPE_TUPLE || symbol_var->kind == TYPE_STRING || symbol_var->kind == TYPE_MAP,
-                "unexpected symbol var type in indirect address");
+        //        assertf(symbol_var->kind == TYPE_VEC || symbol_var->kind == TYPE_TUPLE || symbol_var->kind == TYPE_STRING || symbol_var->kind == TYPE_MAP,
+        //                "unexpected symbol var type in indirect address");
+
         lir_operand_t *temp = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
         OP_PUSH(lir_op_move(temp, base));
         base = temp;

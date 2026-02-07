@@ -69,7 +69,7 @@ extern rtype_t fn_rtype;
     uint64_t _hash = ((uint64_t) _kind << 56) | (_size << 32) | _gc_bits; \
     (rtype_t){                                                            \
             .heap_size = _size,                                           \
-            .stack_size = _stack_size,                                    \
+            .storage_size = _stack_size,                                    \
             .kind = _kind,                                                \
             .last_ptr = _last_ptr,                                        \
             .malloc_gc_bits_offset = -1,                                  \
@@ -89,7 +89,7 @@ static inline rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
     assert(element_rtype);
 
     rtype_t rtype = {
-            .heap_size = element_rtype->stack_size * length,
+            .heap_size = element_rtype->storage_size * length,
             .hash = 0, // runtime 生成的没有 hash 值，不需要进行 hash 定位
             .kind = TYPE_ARR,
             .length = length,

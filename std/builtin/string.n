@@ -1,11 +1,11 @@
 import runtime
 
 #linkid rt_string_length
-fn string.len():int
+fn string.len(self):int
 
 #linkid rt_string_ref
-fn string.ref():anyptr
+fn string.ref(self):anyptr
 
-fn string.char():u8 {
+fn string.char(self):u8 {
     return self[0]
 }

@@ -7,7 +7,7 @@ fn from(anyptr p):string! {
     return runtime.string_new(p)
 }
 
-fn string.find_char(u8 char, int after):int {
+fn string.find_char(self, u8 char, int after):int {
     int len = self.len()
     for int k = after; k < len; k += 1 {
         if self[k] == char {
@@ -18,7 +18,7 @@ fn string.find_char(u8 char, int after):int {
     return -1
 }
 
-fn string.find_after(string sub, int after):int {
+fn string.find_after(self, string sub, int after):int {
     var n = sub.len()
 
     if (n == 0) {
@@ -39,7 +39,7 @@ fn string.find_after(string sub, int after):int {
     return index as int
 }
 
-fn string.reverse():string {
+fn string.reverse(self):string {
     var result = vec_new<u8>(0, self.len())
 
     for i,c in self {
@@ -49,7 +49,7 @@ fn string.reverse():string {
     return result as string
 }
 
-fn string.rfind(string sub):int {
+fn string.rfind(self, string sub):int {
     if sub.len() == 0 {
         return -1
     }
@@ -75,7 +75,7 @@ fn string.rfind(string sub):int {
 }
 
 
-fn string.ends_with(string ends):bool {
+fn string.ends_with(self, string ends):bool {
     if ends.len() > self.len() {
         return false
     }
@@ -91,7 +91,7 @@ fn string.ends_with(string ends):bool {
     return true
 }
 
-fn string.starts_with(string starts):bool {
+fn string.starts_with(self, string starts):bool {
     if (starts.len() > self.len()) {
         return false
     }
@@ -105,11 +105,11 @@ fn string.starts_with(string starts):bool {
     return true
 }
 
-fn string.contains(string sub):bool {
+fn string.contains(self, string sub):bool {
     return self.find(sub) != -1
 }
 
-fn string.finish(string cap):string {
+fn string.finish(self, string cap):string {
     if self.ends_with(cap) {
         return self
     }
@@ -117,17 +117,17 @@ fn string.finish(string cap):string {
     return self + cap
 }
 
-fn string.find(string sub):int {
+fn string.find(self, string sub):int {
     return self.find_after(sub, 0)
 }
 
-fn string.slice(int start, int end):string {
+fn string.slice(self, int start, int end):string {
     var list = self as [u8]
     list = list[start..end]
     return list as string
 }
 
-fn string.split(string separator):[string] {
+fn string.split(self, string separator):[string] {
     [string] result = []
 
     if separator == '' {
@@ -189,7 +189,7 @@ fn join([string] list, string separator):string {
     return result as string
 }
 
-fn string.ascii():u8 {
+fn string.ascii(self):u8 {
     if self.len() == 0 {
         return 0
     }
@@ -197,7 +197,7 @@ fn string.ascii():u8 {
     return list[0]
 }
 
-fn string.ltrim([string] list):string {
+fn string.ltrim(self, [string] list):string {
     {u8} cut = {}
     for sub in list {
         cut.add(sub[0])
@@ -212,7 +212,7 @@ fn string.ltrim([string] list):string {
     return ''
 }
 
-fn string.rtrim([string] list):string {
+fn string.rtrim(self, [string] list):string {
     {u8} cut = {}
     for sub in list {
         cut.add(sub[0])
@@ -227,11 +227,11 @@ fn string.rtrim([string] list):string {
     return ''
 }
 
-fn string.trim([string] list):string {
+fn string.trim(self, [string] list):string {
     return self.ltrim(list).rtrim(list)
 }
 
-fn string.replace(string sub_old, string sub_new):string {
+fn string.replace(self, string sub_old, string sub_new):string {
     var result = ""
 
     if sub_old.len() == 0 || self.len() < sub_old.len() {
@@ -255,7 +255,7 @@ fn string.replace(string sub_old, string sub_new):string {
     return result
 }
 
-fn string.to_int():int! {
+fn string.to_int(self):int! {
     if self.len() == 0 {
         throw errorf('cannot convert empty string to int')
     }
@@ -299,7 +299,7 @@ fn string.to_int():int! {
     return result
 }
 
-fn string.to_float():float! {
+fn string.to_float(self):float! {
     if self.len() == 0 {
         throw errorf('cannot convert empty string to float')
     }
@@ -365,7 +365,7 @@ fn string.to_float():float! {
 }
 
 
-fn string.to_lower():string {
+fn string.to_lower(self):string {
     var result = vec_new<u8>(0, self.len())
     
     for i, c in self {
@@ -379,7 +379,7 @@ fn string.to_lower():string {
     return result as string
 }
 
-fn string.to_upper():string {
+fn string.to_upper(self):string {
     var result = vec_new<u8>(0, self.len())
     
     for i, c in self {

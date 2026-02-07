@@ -582,7 +582,7 @@ void interval_build(closure_t *c) {
         lir_var_t *var = c->var_defs->take[i];
         interval_t *interval = interval_new(c);
         interval->var = var;
-        interval->alloc_type = type_kind_trans_alloc(var->type.kind);
+        interval->alloc_type = type_kind_trans_alloc(var->type.map_imm_kind);
         if (var->flag & FLAG(LIR_FLAG_CONST)) {
             interval->is_const_float = true;
             assert(var->remat_ops);
@@ -1340,7 +1340,7 @@ void interval_spill_slot(closure_t *c, interval_t *i) {
 
     // struct 和 array 在 var 栈只真用 8byte 指针
     // 由于栈是从高向低增长的，所以需要先预留 size
-    uint64_t size = type_kind_sizeof(i->var->type.kind);
+    uint64_t size = type_value_size(i->var->type);
     assertf(size <= POINTER_SIZE && size > 0, "type %s size %d exception", type_format(i->var->type), size);
     uint64_t align = size;
 
@@ -1755,7 +1755,7 @@ move_one(closure_t *c, int i, slice_t *src, slice_t *src2, slice_t *dst, slice_t
                 lir_operand_t *orig_src = first_conflict ? move_op->first : move_op->second;
                 if (orig_src->assert_type == LIR_OPERAND_VAR) {
                     lir_var_t *var = orig_src->value;
-                    type_kind = var->type.kind;
+                    type_kind = var->type.map_imm_kind;
                 } else if (orig_src->assert_type == LIR_OPERAND_REG) {
                     reg_t *reg = orig_src->value;
                     if (reg->flag & FLAG(LIR_FLAG_ALLOC_FLOAT)) {
@@ -1765,7 +1765,7 @@ move_one(closure_t *c, int i, slice_t *src, slice_t *src2, slice_t *dst, slice_t
                     type_kind = TYPE_INT;
                 } else if (orig_src->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
                     lir_indirect_addr_t *addr = orig_src->value;
-                    type_kind = addr->type.kind;
+                    type_kind = addr->type.map_imm_kind;
                 }
 
                 assert(type_kind > 0);
@@ -1795,10 +1795,10 @@ move_one(closure_t *c, int i, slice_t *src, slice_t *src2, slice_t *dst, slice_t
                     size = reg->size;
                 } else {
                     type_t src_type = lir_operand_type(orig_src);
-                    if (is_float(src_type.kind)) {
+                    if (is_float(src_type.map_imm_kind)) {
                         alloc_type = LIR_FLAG_ALLOC_FLOAT;
                     }
-                    size = type_kind_sizeof(src_type.kind);
+                    size = type_value_size(src_type);
                 }
                 reg_t *tmp_reg = reg_select2(tmp_reg_index, alloc_type, size);
                 assert(tmp_reg);

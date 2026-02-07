@@ -41,12 +41,14 @@ static inline void lower_imm_symbol(closure_t *c, lir_operand_t *imm_operand, li
     }
 
     lir_symbol_var_t *symbol_var = NEW(lir_symbol_var_t);
-    symbol_var->kind = imm->kind;
+    symbol_var->t = type_kind_new(imm->kind);
     symbol_var->ident = global_symbol->name;
 
     lir_operand_t *local_var_operand = NULL;
     // float 采用共享插入方案，然后尝试通过 interval split 进行优化
     if (imm->kind == TYPE_RAW_STRING) {
+        symbol_var->t = type_kind_new(TYPE_ANYPTR);
+
         local_var_operand = temp_var_operand(c->module, type_kind_new(imm->kind));
         linked_push(list, lir_op_lea(local_var_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var)));
     } else {
@@ -67,9 +69,9 @@ static inline void lower_imm_symbol(closure_t *c, lir_operand_t *imm_operand, li
             } else {
                 // remat 模板使用固定寄存器
                 reg_t *fixed_reg = (BUILD_ARCH == ARCH_ARM64) ? x16 : T6;
-                lir_operand_t *reg_operand = lir_reg_operand(fixed_reg->index, TYPE_ANYPTR);
+                lir_operand_t *reg_operand = lir_reg_operand(fixed_reg->index, type_kind_new(TYPE_ANYPTR));
                 linked_push(var->remat_ops, lir_op_lea(reg_operand, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var)));
-                lir_operand_t *indirect_src = indirect_addr_operand(c->module, type_kind_new(imm->kind), lir_reg_operand(fixed_reg->index, TYPE_ANYPTR), 0);
+                lir_operand_t *indirect_src = indirect_addr_operand(c->module, type_kind_new(imm->kind), lir_reg_operand(fixed_reg->index, type_kind_new(TYPE_ANYPTR)), 0);
                 linked_push(var->remat_ops, lir_op_move(local_var_operand, indirect_src)); // copy 到 var 里面看起来不是这么多合理。
             }
             table_set(c->local_imm_table, key, local_var_operand);

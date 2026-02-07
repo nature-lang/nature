@@ -57,7 +57,7 @@ Create a new channel with optional buffer size.
 ### chan.send
 
 ```
-fn chan<T>.send(T msg):void!
+fn chan<T>.send(self, T msg):void!
 ```
 
 Send a message to the channel, blocks if channel is full.
@@ -65,7 +65,7 @@ Send a message to the channel, blocks if channel is full.
 ### chan.try_send
 
 ```
-fn chan<T>.try_send(T msg):bool!
+fn chan<T>.try_send(self, T msg):bool!
 ```
 
 Try to send a message to the channel without blocking.
@@ -73,7 +73,7 @@ Try to send a message to the channel without blocking.
 ### chan.on_send
 
 ```
-fn chan<T>.on_send(T msg):void
+fn chan<T>.on_send(self, T msg):void
 ```
 
 Event handler for channel send operations.
@@ -81,7 +81,7 @@ Event handler for channel send operations.
 ### chan.recv
 
 ```
-fn chan<T>.recv():T!
+fn chan<T>.recv(self):T!
 ```
 
 Receive a message from the channel, blocks if channel is empty.
@@ -89,7 +89,7 @@ Receive a message from the channel, blocks if channel is empty.
 ### chan.on_recv
 
 ```
-fn chan<T>.on_recv():T
+fn chan<T>.on_recv(self):T
 ```
 
 Event handler for channel receive operations.
@@ -97,7 +97,7 @@ Event handler for channel receive operations.
 ### chan.try_recv
 
 ```
-fn chan<T>.try_recv():(T, bool)!
+fn chan<T>.try_recv(self):(T, bool)!
 ```
 
 Try to receive a message from the channel without blocking.
@@ -105,7 +105,7 @@ Try to receive a message from the channel without blocking.
 ### chan.close
 
 ```
-fn chan<T>.close():void!
+fn chan<T>.close(self):void!
 ```
 
 Close the channel.
@@ -113,7 +113,7 @@ Close the channel.
 ### chan.is_closed
 
 ```
-fn chan<T>.is_closed():bool
+fn chan<T>.is_closed(self):bool
 ```
 
 Check if the channel is closed.
@@ -121,7 +121,7 @@ Check if the channel is closed.
 ### chan.is_successful
 
 ```
-fn chan<T>.is_successful():bool
+fn chan<T>.is_successful(self):bool
 ```
 
 Check if the last operation was successful.
@@ -144,7 +144,7 @@ Future type for asynchronous operations.
 ### future_t.await
 
 ```
-fn future_t<T>.await():T!
+fn future_t.await():T!
 ```
 
 Wait for the future to complete and return the result.
@@ -235,7 +235,7 @@ Create a new map with key type T and value type U.
 ### map.len
 
 ```
-fn map<T,U>.len():int
+fn map<T,U>.len(self):int
 ```
 
 Get the number of key-value pairs in the map.
@@ -243,7 +243,7 @@ Get the number of key-value pairs in the map.
 ### map.del
 
 ```
-fn map<T,U>.del(T key)
+fn map<T,U>.del(self, T key)
 ```
 
 Delete a key-value pair from the map.
@@ -251,7 +251,7 @@ Delete a key-value pair from the map.
 ### map.contains
 
 ```
-fn map<T,U>.contains(T key):bool
+fn map<T,U>.contains(self, T key):bool
 ```
 
 Check if the map contains the given key.
@@ -271,7 +271,7 @@ Create a new set with element type T.
 ### set.add
 
 ```
-fn set<T>.add(T key)
+fn set<T>.add(self, T key)
 ```
 
 Add an element to the set.
@@ -279,7 +279,7 @@ Add an element to the set.
 ### set.contains
 
 ```
-fn set<T>.contains(T key):bool
+fn set<T>.contains(self, T key):bool
 ```
 
 Check if the set contains the given element.
@@ -287,7 +287,7 @@ Check if the set contains the given element.
 ### set.del
 
 ```
-fn set<T>.del(T key)
+fn set<T>.del(self, T key)
 ```
 
 Remove an element from the set.
@@ -299,7 +299,7 @@ Remove an element from the set.
 ### string.len
 
 ```
-fn string.len():int
+fn string.len(self):int
 ```
 
 Get the length of the string.
@@ -307,7 +307,7 @@ Get the length of the string.
 ### string.ref
 
 ```
-fn string.ref():anyptr
+fn string.ref(self):anyptr
 ```
 
 Get a pointer to the string data.
@@ -315,7 +315,7 @@ Get a pointer to the string data.
 ### string.char
 
 ```
-fn string.char():u8
+fn string.char(self):u8
 ```
 
 Get the first character of the string.
@@ -343,7 +343,7 @@ Create a new vector with specified capacity.
 ### vec.push
 
 ```
-fn vec<T>.push(T v)
+fn vec<T>.push(self, T v)
 ```
 
 Add an element to the end of the vector.
@@ -351,7 +351,7 @@ Add an element to the end of the vector.
 ### vec.append
 
 ```
-fn vec<T>.append(vec<T> l2)
+fn vec<T>.append(self, vec<T> l2)
 ```
 
 Append another vector to this vector.
@@ -359,7 +359,7 @@ Append another vector to this vector.
 ### vec.slice
 
 ```
-fn vec<T>.slice(int start, int end):vec<T>
+fn vec<T>.slice(self, int start, int end):vec<T>
 ```
 
 Create a slice of the vector from start to end.
@@ -367,7 +367,7 @@ Create a slice of the vector from start to end.
 ### vec.concat
 
 ```
-fn vec<T>.concat(vec<T> l2):vec<T>
+fn vec<T>.concat(self, vec<T> l2):vec<T>
 ```
 
 Concatenate two vectors and return a new vector.
@@ -375,7 +375,7 @@ Concatenate two vectors and return a new vector.
 ### vec.copy
 
 ```
-fn vec<T>.copy(vec<T> src):int
+fn vec<T>.copy(self, vec<T> src):int
 ```
 
 Copy elements from source vector to this vector.
@@ -383,7 +383,7 @@ Copy elements from source vector to this vector.
 ### vec.len
 
 ```
-fn vec<T>.len():int
+fn vec<T>.len(self):int
 ```
 
 Get the number of elements in the vector.
@@ -391,7 +391,7 @@ Get the number of elements in the vector.
 ### vec.cap
 
 ```
-fn vec<T>.cap():int
+fn vec<T>.cap(self):int
 ```
 
 Get the capacity of the vector.
@@ -399,7 +399,7 @@ Get the capacity of the vector.
 ### vec.ref
 
 ```
-fn vec<T>.ref():anyptr
+fn vec<T>.ref(self):anyptr
 ```
 
 Get a pointer to the vector data.
@@ -407,7 +407,7 @@ Get a pointer to the vector data.
 ### vec.sort
 
 ```
-fn vec<T>.sort(fn(int, int):bool less)
+fn vec<T>.sort(self, fn(int, int):bool less)
 ```
 
 Sort the vector using the provided comparison function.
@@ -415,7 +415,7 @@ Sort the vector using the provided comparison function.
 ### vec.search
 
 ```
-fn vec<T>.search(fn(int):bool predicate):int
+fn vec<T>.search(self, fn(int):bool predicate):int
 ```
 
 Binary search in the vector using a predicate function.

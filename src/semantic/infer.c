@@ -1243,8 +1243,8 @@ static type_t infer_new_expr(module_t *m, ast_new_expr_t *new_expr) {
         }
     } else {
         // only scalar type can use new
-        INFER_ASSERTF(is_scala_type(new_expr->type) || new_expr->type.kind == TYPE_ARR,
-                      "'new' operator can only be used with scalar types (number/boolean/struct/array)");
+        INFER_ASSERTF(new_expr->type.storage_kind != STORAGE_KIND_PTR,
+                      "'new' operator can only be used with scalar types");
         if (new_expr->default_expr) {
             infer_right_expr(m, new_expr->default_expr, new_expr->type);
         }
@@ -1433,16 +1433,17 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
                     assert(match_is_expr->union_tag->assert_type == AST_EXPR_TAGGED_UNION_ELEMENT);
                     infer_tagged_union_element(m, is_expr->union_tag, subject_type);
 
+
+                    infer_right_expr(m, cond_expr, type_kind_new(TYPE_BOOL));
+
                     ast_tagged_union_t *tagged_element = match_is_expr->union_tag->value;
                     table_set(exhaustive_table, tagged_element->tagged_name, cond_expr);
-
-                    cond_expr->type.kind = TYPE_BOOL;
                 } else {
                     infer_right_expr(m, cond_expr, type_kind_new(TYPE_UNKNOWN));
                     table_set(exhaustive_table, itoa(type_hash(match_is_expr->target_type)), cond_expr);
                 }
                 assert(cond_expr->type.kind == TYPE_BOOL);
-            } else if (subject_type.append) { // 目前只有 append enum
+            } else if (subject_type.kind == TYPE_ENUM) {
                 if (cond_expr->assert_type == AST_EXPR_SELECT) {
                     ast_expr_select_t *select = cond_expr->value;
                     table_set(exhaustive_table, select->key, cond_expr);
@@ -1488,8 +1489,8 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
             }
 
             // enum 穷尽检查
-            if (subject_type.append) {
-                type_enum_t *type_enum = subject_type.append;
+            if (subject_type.kind == TYPE_ENUM) {
+                type_enum_t *type_enum = subject_type.enum_;
                 for (int i = 0; i < type_enum->properties->length; i++) {
                     enum_property_t *prop = ct_list_value(type_enum->properties, i);
                     // tagged enum 使用 name 作为 key，简单 enum 使用 value 作为 key
@@ -1654,15 +1655,6 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_typ
             return operand_type;
         }
 
-        //        INFER_ASSERTF(expr->operand.assert_type != AST_CALL,
-        //                      "cannot safe load address of an call expr");
-        //
-        //        INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL,
-        //                      "cannot safe load address of an literal expr");
-        //
-        //        INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_AS,
-        //                      "cannot safe load address of an as expr");
-        INFER_ASSERTF(operand_type.kind != TYPE_UNION, "cannot safe load address of an union type");
 
         marking_heap_alloc(&expr->operand);
 
@@ -1767,14 +1759,6 @@ static type_t infer_vec_repeat_new(module_t *m, ast_expr_t *expr, type_t target_
     if (target_type.kind == TYPE_ARR) {
         expr->assert_type = AST_EXPR_ARRAY_REPEAT_NEW;
 
-        // 严格限定类型为 array
-        type_t result = type_kind_new(TYPE_ARR);
-        result.status = REDUCTION_STATUS_UNDO;
-
-        result.ident = target_type.ident; // literal new ident 直接继承
-        result.ident_kind = target_type.ident_kind;
-        result.args = target_type.args;
-
 
         type_array_t *type_array = NEW(type_array_t);
 
@@ -1792,7 +1776,14 @@ static type_t infer_vec_repeat_new(module_t *m, ast_expr_t *expr, type_t target_
         INFER_ASSERTF(length > 0, "array length must be greater than 0");
 
         type_array->length = length;
-        result.array = type_array;
+
+        // 严格限定类型为 array
+        type_t result = type_new(TYPE_ARR, type_array);
+        result.status = REDUCTION_STATUS_UNDO;
+        result.ident = target_type.ident; // literal new ident 直接继承
+        result.ident_kind = target_type.ident_kind;
+        result.args = target_type.args;
+
         return reduction_type(m, result);
     }
 
@@ -1842,19 +1833,16 @@ static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type, t
         expr->assert_type = AST_EXPR_ARRAY_NEW; // 直接进行表达式类型的改写(vec_new 和 array_new 同构,所以可以这么做)
 
         // 严格限定类型为 array
-        type_t result = type_kind_new(TYPE_ARR);
-        result.status = REDUCTION_STATUS_UNDO;
+        type_array_t *type_array = NEW(type_array_t);
+        type_array->element_type = target_type.array->element_type;
+        type_array->length = target_type.array->length;
 
+        type_t result = type_new(TYPE_ARR, type_array);
+        result.status = REDUCTION_STATUS_UNDO;
         result.ident = target_type.ident; // literal new ident 直接继承
         result.ident_kind = target_type.ident_kind;
         result.args = target_type.args;
 
-        type_array_t *type_array = NEW(type_array_t);
-
-        type_array->element_type = target_type.array->element_type;
-        type_array->length = target_type.array->length;
-
-        result.array = type_array;
         if (vec_new->elements->length == 0) {
             return reduction_type(m, result);
         }
@@ -1867,13 +1855,6 @@ static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type, t
         return reduction_type(m, result);
     }
 
-    type_t result = type_kind_new(TYPE_VEC);
-    result.status = REDUCTION_STATUS_UNDO;
-    if (target_type.kind != TYPE_UNKNOWN) {
-        result.ident = target_type.ident; // literal new ident 直接继承
-        result.ident_kind = target_type.ident_kind;
-        result.args = target_type.args;
-    }
 
     type_vec_t *type_vec = NEW(type_vec_t);
 
@@ -1888,7 +1869,13 @@ static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type, t
         type_vec->element_type = literal_refer;
     }
 
-    result.vec = type_vec;
+    type_t result = type_new(TYPE_VEC, type_vec);
+    result.status = REDUCTION_STATUS_UNDO;
+    if (target_type.kind != TYPE_UNKNOWN) {
+        result.ident = target_type.ident; // literal new ident 直接继承
+        result.ident_kind = target_type.ident_kind;
+        result.args = target_type.args;
+    }
     if (vec_new->elements->length == 0) {
         INFER_ASSERTF(type_confirmed(type_vec->element_type), "vec element type not confirm");
         return reduction_type(m, result);
@@ -1937,16 +1924,6 @@ static type_t infer_empty_curly_new(module_t *m, ast_expr_t *expr, type_t target
  * @return
  */
 static type_t infer_map_new(module_t *m, ast_map_new_t *map_new, type_t target_type, type_t literal_refer) {
-    type_t result = type_kind_new(TYPE_MAP);
-    result.status = REDUCTION_STATUS_UNDO;
-
-    if (target_type.kind != TYPE_UNKNOWN) {
-        result.ident = target_type.ident; // literal new ident 直接继承
-        result.ident_kind = target_type.ident_kind;
-        result.args = target_type.args;
-    }
-
-
     type_map_t *type_map = NEW(type_map_t);
     type_map->key_type = type_kind_new(TYPE_UNKNOWN);
     type_map->value_type = type_kind_new(TYPE_UNKNOWN);
@@ -1960,7 +1937,14 @@ static type_t infer_map_new(module_t *m, ast_map_new_t *map_new, type_t target_t
         type_map->value_type = literal_refer;
     }
 
-    result.map = type_map;
+    type_t result = type_new(TYPE_MAP, type_map);
+    result.status = REDUCTION_STATUS_UNDO;
+    if (target_type.kind != TYPE_UNKNOWN) {
+        result.ident = target_type.ident; // literal new ident 直接继承
+        result.ident_kind = target_type.ident_kind;
+        result.args = target_type.args;
+    }
+
     if (map_new->elements->length == 0) {
         INFER_ASSERTF(type_confirmed(type_map->key_type), "map key type not confirm");
         INFER_ASSERTF(type_confirmed(type_map->value_type), "map value type not confirm");
@@ -1989,14 +1973,6 @@ static type_t infer_map_new(module_t *m, ast_map_new_t *map_new, type_t target_t
  * @return
  */
 static type_t infer_set_new(module_t *m, ast_set_new_t *set_new, type_t target_type) {
-    type_t result = type_kind_new(TYPE_SET);
-    result.status = REDUCTION_STATUS_UNDO;
-    if (target_type.kind != TYPE_UNKNOWN) {
-        result.ident = target_type.ident; // literal new ident 直接继承
-        result.ident_kind = target_type.ident_kind;
-        result.args = target_type.args;
-    }
-
     type_set_t *type_set = NEW(type_set_t);
     type_set->element_type = type_kind_new(TYPE_UNKNOWN);
 
@@ -2005,7 +1981,14 @@ static type_t infer_set_new(module_t *m, ast_set_new_t *set_new, type_t target_t
         type_set->element_type = target_type.set->element_type;
     }
 
-    result.set = type_set;
+    type_t result = type_new(TYPE_SET, type_set);
+    result.status = REDUCTION_STATUS_UNDO;
+    if (target_type.kind != TYPE_UNKNOWN) {
+        result.ident = target_type.ident; // literal new ident 直接继承
+        result.ident_kind = target_type.ident_kind;
+        result.args = target_type.args;
+    }
+
     if (set_new->elements->length == 0) {
         INFER_ASSERTF(type_confirmed(type_set->element_type), "set element type not confirm");
         return reduction_type(m, result);
@@ -2120,7 +2103,8 @@ static type_t infer_access_expr(module_t *m, ast_expr_t *expr) {
     type_t left_type = infer_right_expr(m, &access->left, type_kind_new(TYPE_UNKNOWN));
 
     if (left_type.kind == TYPE_REF || left_type.kind == TYPE_PTR) {
-        if (left_type.ptr->value_type.kind == TYPE_ARR) {
+        type_kind value_kind = left_type.ptr->value_type.kind;
+        if (value_kind == TYPE_ARR || value_kind == TYPE_TUPLE) {
             left_type = left_type.ptr->value_type;
         }
     }
@@ -2438,8 +2422,8 @@ static bool marking_heap_alloc(ast_expr_t *expr) {
         return true;
     }
 
-    // int/float/bool/string
-    if (expr->assert_type == AST_EXPR_LITERAL && is_stack_alloc_type(expr->type)) {
+    // int/float/bool
+    if (expr->assert_type == AST_EXPR_LITERAL && expr->type.storage_kind != STORAGE_KIND_PTR) {
         ast_literal_t *literal = expr->value;
 
         expr->type.in_heap = true;
@@ -2474,7 +2458,7 @@ static ast_expr_t *self_arg_rewrite(module_t *m, type_fn_t *type_fn, ast_expr_t 
         extract_self_type = &self_param_type->ptr->value_type;
     }
 
-    if (is_stack_impl(extract_self_type->kind)) {
+    if (extract_self_type->storage_kind != STORAGE_KIND_PTR) {
         if (self_param_type->kind == TYPE_REF) {
             INFER_ASSERTF(self_arg->type.kind != TYPE_PTR,
                           "type mismatch: method requires `%s` receiver, got `%s`", type_format(*self_param_type), type_format(self_arg->type));
@@ -2501,7 +2485,7 @@ static ast_expr_t *self_arg_rewrite(module_t *m, type_fn_t *type_fn, ast_expr_t 
     }
 
     // ref<[T]> 类型这样的形式是不被允许的
-    INFER_ASSERTF(is_heap_impl(self_arg->type.kind),
+    INFER_ASSERTF(self_arg->type.storage_kind == STORAGE_KIND_PTR,
                   "unsupported method receiver type '%s', expected heap-allocated type",
                   type_format(self_arg->type))
 
@@ -3067,10 +3051,6 @@ static type_t infer_literal(module_t *m, ast_expr_t *expr, type_t target_type) {
 
     type_kind target_kind = target_type.kind;
 
-    if (target_type.append) { // enum 暂时不支持 literal 自动转换
-        return literal_type;
-    }
-
     if (literal_type.kind == TYPE_STRING && target_kind == TYPE_STRING) {
         literal->kind = target_kind;
         return target_type;
@@ -3140,16 +3120,16 @@ static void infer_throw(module_t *m, ast_throw_stmt_t *throw_stmt) {
  * @return
  */
 static type_t infer_tuple_destr(module_t *m, ast_tuple_destr_t *destr) {
-    type_t t = type_kind_new(TYPE_TUPLE);
-    t.tuple = NEW(type_tuple_t);
-    t.tuple->elements = ct_list_new(sizeof(type_t));
+    type_tuple_t *type_tuple = NEW(type_tuple_t);
+    type_tuple->elements = ct_list_new(sizeof(type_t));
     for (int i = 0; i < destr->elements->length; ++i) {
         ast_expr_t *expr = ct_list_value(destr->elements, i);
         type_t item_type = infer_left_expr(m, expr);
-        ct_list_push(t.tuple->elements, &item_type);
+        ct_list_push(type_tuple->elements, &item_type);
     }
-
-    return t;
+    type_t t = type_new(TYPE_TUPLE, type_tuple);
+    t.status = REDUCTION_STATUS_UNDO;
+    return reduction_type(m, t);
 }
 
 /**
@@ -3200,17 +3180,18 @@ static void infer_var_tuple_def(module_t *m, ast_var_tuple_def_stmt_t *stmt) {
  * @return
  */
 static type_t infer_tuple_new(module_t *m, ast_tuple_new_t *tuple_new, type_t target_type) {
-    type_t result = type_kind_new(TYPE_TUPLE);
+
+
+    type_tuple_t *tuple_type = NEW(type_tuple_t);
+    tuple_type->elements = ct_list_new(sizeof(type_t));
+    type_t result = type_new(TYPE_TUPLE, tuple_type);
+    result.status = REDUCTION_STATUS_UNDO;
 
     if (target_type.kind != TYPE_UNKNOWN) {
         result.ident = target_type.ident; // literal new ident 直接继承
         result.ident_kind = target_type.ident_kind;
         result.args = target_type.args;
     }
-
-    type_tuple_t *tuple_type = NEW(type_tuple_t);
-    tuple_type->elements = ct_list_new(sizeof(type_t));
-    result.tuple = tuple_type;
     INFER_ASSERTF(tuple_new->elements->length > 0, "tuple elements empty");
     for (int i = 0; i < tuple_new->elements->length; ++i) {
         type_t element_target_type = type_kind_new(TYPE_UNKNOWN);
@@ -3227,7 +3208,7 @@ static type_t infer_tuple_new(module_t *m, ast_tuple_new_t *tuple_new, type_t ta
         ct_list_push(tuple_type->elements, &expr_type);
     }
 
-    return result;
+    return reduction_type(m, result);
 }
 
 static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
@@ -3861,7 +3842,7 @@ check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast
 
         // 当 self_kind == PARAM_SELF_T 时，生成 receiver_wrapper
         // interface 存储指针数据，但方法期望值类型，需要 wrapper 来解引用
-        if (ast_fndef->self_kind == PARAM_SELF_T && ast_fndef->receiver_wrapper == NULL) {
+        if (ast_fndef->self_kind == PARAM_SELF_T && ast_fndef->receiver_wrapper == NULL && typedef_stmt->type_expr.storage_kind != STORAGE_KIND_PTR) {
             ast_fndef_t *wrapper_fn = generate_receiver_wrapper(m, ast_fndef, ast_fndef->impl_type);
             ast_fndef->receiver_wrapper = wrapper_fn;
             symbol_table_set(wrapper_fn->symbol_name, SYMBOL_FN, wrapper_fn, false);
@@ -4212,19 +4193,19 @@ type_t reduction_type(module_t *m, type_t t) {
 STATUS_DONE:
     t.status = REDUCTION_STATUS_DONE;
     t.in_heap = kind_in_heap(t.kind);
-    if (in_heap == true) {
+    if (in_heap == true) { // 逃逸分析特殊处理
         t.in_heap = true;
     }
 
-    // enum 消除
-    if (t.kind == TYPE_ENUM && t.ident_kind > 0) {
-        t.append = t.enum_;
-        t.kind = t.enum_->element_type.kind;
-    }
+    t.storage_kind = type_storage_kind(t);
+    t.storage_size = type_storage_size(t);
+    t.map_imm_kind = type_map_imm_kind(t);
+    t.abi_struct = type_abi_struct(t);
+    t.align = type_alignof(t);
 
     // 固定数组的大小暂时禁止超过 64KB, 如果需要超过 64 KB 可以使用 vec?
     // 如果 array 超过 64KB 则在堆上进行分配
-    if (t.kind == TYPE_ARR && type_sizeof(t) > (64 * 1024)) {
+    if (t.kind == TYPE_ARR && t.storage_size > (64 * 1024)) {
         t.in_heap = true;
     }
 
@@ -4386,7 +4367,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
         param->type = reduction_type(m, param->type);
 
         if (fndef->is_impl && i == 0) {
-            if (is_stack_impl(param->type.kind)) {
+            if (param->type.storage_kind != STORAGE_KIND_PTR) {
                 if (fndef->self_kind == PARAM_SELF_REF_T) {
                     param->type = type_refof(param->type);
                 } else if (fndef->self_kind == PARAM_SELF_PTR_T) {
@@ -4395,10 +4376,16 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
                     // not need  handle
                 }
             } else {
-                // not need handle, like vec/map/set/chan...
-                INFER_ASSERTF(fndef->self_kind == PARAM_SELF_REF_T,
-                              "heap-allocated type '%s' has implicit pointer receiver; omit the 'self' parameter, e.g., `fn T.method()`",
-                              type_format(param->type));
+                if (is_impl_builtin_type(param->type.kind)) {
+                    INFER_ASSERTF(fndef->self_kind == PARAM_SELF_T,
+                                  "heap-allocated builtin type '%s' requires explicit `self` receiver; use `fn %s.method(self)`",
+                                  type_format(param->type), type_format(param->type));
+                } else {
+                    // not need handle, like ptr/ref/interface...
+                    INFER_ASSERTF(fndef->self_kind == PARAM_SELF_REF_T,
+                                  "omit the '&self' parameter, e.g., `fn T.method()`",
+                                  type_format(param->type));
+                }
             }
 
             type_fn->self_kind = fndef->self_kind;
