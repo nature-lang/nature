@@ -642,10 +642,10 @@ impl Display for ReductionStatus {
 // Self parameter kind for impl methods
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SelfKind {
-    Null = 0,    // No self parameter
-    SelfT,       // self - value type
+    Null = 0, // No self parameter
+    SelfT,    // self - value type
     SelfPtrT, // *self - raw pointer type
-    SelfRefT,    // default for impl fn without explicit self
+    SelfRefT, // default for impl fn without explicit self
 }
 
 impl Default for SelfKind {
@@ -903,6 +903,7 @@ pub enum AstNode {
     None,
     Literal(TypeKind, String),                                         // (kind, value)
     Binary(ExprOp, Box<Expr>, Box<Expr>),                              // (op, left, right)
+    Ternary(Box<Expr>, Box<Expr>, Box<Expr>),                          // (condition, consequent, alternate)
     Unary(ExprOp, Box<Expr>),                                          // (op, operand)
     Ident(String, NodeId),                                             // (ident, symbol_id)
     As(Type, Option<Box<Expr>>, Box<Expr>),                            // (target_type, src)

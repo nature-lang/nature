@@ -2,7 +2,7 @@ use log::{debug, trace};
 
 use crate::utils::format_global_ident;
 
-use super::common::{AstFnDef, TypedefStmt, VarDeclExpr, AstConstDef};
+use super::common::{AstConstDef, AstFnDef, TypedefStmt, VarDeclExpr};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -60,7 +60,7 @@ pub struct Symbol {
     pub ident: String,
     pub kind: SymbolKind,
     pub defined_in: NodeId, // defined in scope
-    pub is_local: bool, // 是否是 module 级别的 global symbol
+    pub is_local: bool,     // 是否是 module 级别的 global symbol
     pub pos: usize,         // 符号定义的起始
 
     // local symbol 需要一些额外信息
@@ -84,7 +84,7 @@ pub enum ScopeKind {
     // 全局作用域，每个 module scope 中的符号会进行改名并注册到全局作用域中，module 清理时需要清理对应的 global scope
     // buitin 直接注册到全局作用域中
     Global,
-    Module(String),  // 创建 module 产生的 scope, 当前 scope 中存储了当前 module 的所有符号
+    Module(String), // 创建 module 产生的 scope, 当前 scope 中存储了当前 module 的所有符号
     GlobalFn(Arc<Mutex<AstFnDef>>),
     LocalFn(Arc<Mutex<AstFnDef>>),
     Local,
@@ -92,8 +92,8 @@ pub enum ScopeKind {
 
 #[derive(Debug, Clone)]
 pub struct Scope {
-    pub parent: NodeId,              // 除了全局作用域外，每个作用域都有一个父作用域
-    pub symbols: Vec<NodeId>,                // 当前作用域中定义的符号列表
+    pub parent: NodeId,       // 除了全局作用域外，每个作用域都有一个父作用域
+    pub symbols: Vec<NodeId>, // 当前作用域中定义的符号列表
 
     pub children: Vec<NodeId>,               // 子作用域列表
     pub symbol_map: HashMap<String, NodeId>, // 符号名到符号ID的映射
@@ -108,8 +108,8 @@ pub struct Scope {
 
 #[derive(Debug, Clone)]
 pub struct SymbolTable {
-    pub scopes: Arena<Scope>,     // 所有的作用域列表, 根据 NodeId 索引
-    pub symbols: Arena<Symbol>,   // 所有的符号列表, 根据 NodeId 索引
+    pub scopes: Arena<Scope>,                   // 所有的作用域列表, 根据 NodeId 索引
+    pub symbols: Arena<Symbol>,                 // 所有的符号列表, 根据 NodeId 索引
     pub module_scopes: HashMap<String, NodeId>, // 不再创建 global scope, symbol_table 就是 global scope
     pub global_scope_id: NodeId,
 }
@@ -117,7 +117,7 @@ pub struct SymbolTable {
 impl SymbolTable {
     pub fn new() -> Self {
         // 创建 global scope
-        let mut result = Self{
+        let mut result = Self {
             scopes: Arena::new(),
             symbols: Arena::new(),
             module_scopes: HashMap::new(),
@@ -148,7 +148,7 @@ impl SymbolTable {
         let new_scope_id = self.scopes.alloc(new_scope);
 
         // 将新作用域添加到父作用域的children中, current cope 作为 parent
-        if  parent_id > 0 {
+        if parent_id > 0 {
             if let Some(parent_scope) = self.scopes.get_mut(parent_id) {
                 parent_scope.children.push(new_scope_id);
             }
@@ -177,7 +177,6 @@ impl SymbolTable {
         if moudel_ident == "" {
             return self.global_scope_id;
         }
-
 
         if let Some(_scope_id) = self.module_scopes.get(&moudel_ident) {
             panic!("module scope already exists");
@@ -212,7 +211,6 @@ impl SymbolTable {
 
         // module_scope 中的 symbol 都是 global symbol, 需要从 global scope 中清理
         for (ident, module_symbol_id) in module_symbol_map.iter() {
-
             let symbol_id_option = global_scope.symbol_map.get(ident);
             if let Some(global_symbol_id) = symbol_id_option {
                 debug_assert!(global_symbol_id != module_symbol_id);
@@ -220,7 +218,6 @@ impl SymbolTable {
                 self.symbols.remove(*global_symbol_id);
                 global_scope.symbol_map.remove(ident);
             }
-
 
             self.symbols.remove(*module_symbol_id);
         }
@@ -279,7 +276,7 @@ impl SymbolTable {
 
         if let Some(&symbol_id) = scope.symbol_map.get(&ident) {
             // 获取已存在的符号, 则读取符号内容进行修改
-            let symbol =  self.get_symbol(symbol_id).unwrap();
+            let symbol = self.get_symbol(symbol_id).unwrap();
             symbol.kind = kind;
             symbol.pos = pos;
             symbol.generics_id_map = HashMap::new();
@@ -296,7 +293,7 @@ impl SymbolTable {
         // 检查当前作用域是否已存在同名符号
         let scope = self.scopes.get_mut(scope_id).unwrap();
 
-        let is_local = !matches!(scope.kind, ScopeKind::Module(..)|ScopeKind::Global);
+        let is_local = !matches!(scope.kind, ScopeKind::Module(..) | ScopeKind::Global);
 
         if let Some(&_) = scope.symbol_map.get(&ident) {
             // 获取已存在的符号
@@ -314,7 +311,7 @@ impl SymbolTable {
         };
 
         if let SymbolKind::Fn(fn_mutex) = &symbol.kind {
-            trace!("define fn symbol {}, fn_mutex_ptr: {:?}",  &ident, Arc::as_ptr(fn_mutex));
+            trace!("define fn symbol {}, fn_mutex_ptr: {:?}", &ident, Arc::as_ptr(fn_mutex));
         }
 
         let symbol_id = self.symbols.alloc(symbol);

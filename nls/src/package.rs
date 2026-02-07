@@ -1,6 +1,5 @@
 use crate::analyzer::common::{AnalyzerError, PackageConfig};
 
-
 /**
  * 解析 toml 解析正确返回 package config, 如果解析错误则返回 AnalyzerError 错误信息
  */
@@ -17,7 +16,7 @@ pub fn parse_package(path: &str) -> Result<PackageConfig, AnalyzerError> {
                 path: path.to_string(),
                 package_data: package,
             };
-            
+
             Ok(package_config)
         }
         Err(e) => {
@@ -27,8 +26,8 @@ pub fn parse_package(path: &str) -> Result<PackageConfig, AnalyzerError> {
 
             // let diagnostic = Diagnostic::new_simple(Range::new(start_position, end_position), e.message().to_string());
             // self.client
-                // .publish_diagnostics(Url::parse(&format!("file://{}", path)).unwrap(), vec![diagnostic], None)
-                // .await;
+            // .publish_diagnostics(Url::parse(&format!("file://{}", path)).unwrap(), vec![diagnostic], None)
+            // .await;
 
             Err(AnalyzerError {
                 start: span.start,

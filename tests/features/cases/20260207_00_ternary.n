@@ -1,0 +1,90 @@
+// Test ternary conditional operator: condition ? consequent : alternate
+
+fn main() {
+    // Basic bool condition
+    var a = true ? 'yes' : 'no'
+    println(a)
+
+    var b = false ? 'yes' : 'no'
+    println(b)
+
+    // With variables
+    bool cond = true
+    var c = cond ? 1 : 2
+    println(c)
+
+    cond = false
+    var d = cond ? 1 : 2
+    println(d)
+
+    // With comparison
+    int x = 10
+    int y = 5
+    var max = x > y ? x : y
+    println(max)
+
+    var min = x < y ? x : y
+    println(min)
+
+    // Nested ternary (right associative)
+    // a ? b : c ? d : e = a ? b : (c ? d : e)
+    int score = 85
+    var grade = score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : 'D'
+    println(grade)
+
+    score = 95
+    grade = score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : 'D'
+    println(grade)
+
+    score = 65
+    grade = score >= 90 ? 'A' : score >= 80 ? 'B' : score >= 70 ? 'C' : 'D'
+    println(grade)
+
+    // Ternary with function calls
+    var result = get_true() ? 'got true' : 'got false'
+    println(result)
+
+    result = get_false() ? 'got true' : 'got false'
+    println(result)
+
+    // Pointer/nullable condition (null is falsy)
+    ptr<int> p = null
+    var msg = p ? 'not null' : 'is null'
+    println(msg)
+
+    int value = 42
+    p = &value
+    msg = p ? 'not null' : 'is null'
+    println(msg)
+
+    // Type inference with explicit annotation
+    int num = true ? 10 : 20
+    println(num)
+
+    // Short-circuit evaluation
+    // Should only call get_one(), not get_two()
+    var short_circuit = true ? get_one() : get_two()
+    println(short_circuit)
+
+    // Should only call get_two(), not get_one()
+    short_circuit = false ? get_one() : get_two()
+    println(short_circuit)
+}
+
+fn get_true():bool {
+    return true
+}
+
+fn get_false():bool {
+    return false
+}
+
+fn get_one():int {
+    println('called get_one')
+    return 1
+}
+
+fn get_two():int {
+    println('called get_two')
+    return 2
+}

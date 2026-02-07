@@ -1319,6 +1319,11 @@ impl<'a> Semantic<'a> {
 
                 self.constant_folding(expr);
             }
+            AstNode::Ternary(condition, consequent, alternate) => {
+                self.analyze_expr(condition);
+                self.analyze_expr(consequent);
+                self.analyze_expr(alternate);
+            }
             AstNode::Unary(_op, expr) => {
                 self.analyze_expr(expr);
 

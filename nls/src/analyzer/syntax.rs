@@ -110,6 +110,7 @@ pub enum SyntaxPrecedence {
     Null, // 最低优先级
     Assign,
     Catch,
+    Ternary,  // ? :
     OrOr,     // ||
     AndAnd,   // &&
     Or,       // |
@@ -449,6 +450,11 @@ impl<'a> Syntax {
                 prefix: None,
                 infix: Some(Self::parser_catch_expr),
                 infix_precedence: SyntaxPrecedence::Catch,
+            },
+            Question => ParserRule {
+                prefix: None,
+                infix: Some(Self::parser_ternary),
+                infix_precedence: SyntaxPrecedence::Ternary,
             },
             Ident => ParserRule {
                 prefix: Some(Self::parser_ident_expr),
@@ -1736,6 +1742,25 @@ impl<'a> Syntax {
         let catch_body = self.parser_body(true)?;
 
         expr.node = AstNode::Catch(left, Arc::new(Mutex::new(catch_err)), catch_body);
+        expr.end = self.prev().unwrap().end;
+
+        Ok(expr)
+    }
+
+    fn parser_ternary(&mut self, condition: Box<Expr>) -> Result<Box<Expr>, SyntaxError> {
+        let mut expr = self.expr_new();
+        expr.start = condition.start;
+        self.must(TokenType::Question)?;
+
+        // Parse consequent expression (between ? and :)
+        let consequent = self.parser_precedence_expr(SyntaxPrecedence::Ternary.next().unwrap(), TokenType::Unknown)?;
+
+        self.must(TokenType::Colon)?;
+
+        // Parse alternate expression with same precedence for right associativity
+        let alternate = self.parser_precedence_expr(SyntaxPrecedence::Ternary, TokenType::Unknown)?;
+
+        expr.node = AstNode::Ternary(condition, consequent, alternate);
         expr.end = self.prev().unwrap().end;
 
         Ok(expr)

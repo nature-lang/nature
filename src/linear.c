@@ -3637,12 +3637,60 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
     }
 }
 
+/**
+ * Ternary conditional expression: condition ? consequent : alternate
+ * With short-circuit evaluation - only the selected branch is evaluated.
+ * Supports bool, nullable (ptr) types for condition.
+ */
+static lir_operand_t *linear_ternary(module_t *m, ast_expr_t expr, lir_operand_t *target) {
+    ast_ternary_expr_t *ternary = expr.value;
+
+    if (!target) {
+        target = temp_var_operand_with_alloc(m, expr.type);
+    }
+
+    // Generate unique labels for ternary expression
+    char *tern_ident = label_ident_with_unique(TERNARY_IDENT);
+    char *else_label = str_connect(tern_ident, "_ELSE");
+    char *end_label = str_connect(tern_ident, "_END");
+
+    // Evaluate condition
+    lir_operand_t *cond_operand = linear_expr(m, ternary->condition, NULL);
+
+    // Generate branch based on condition type
+    if (ternary->condition.type.kind == TYPE_BOOL) {
+        // For bool: branch to else if false
+        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(false), cond_operand,
+                           lir_label_operand(else_label, true)));
+    } else {
+        // For ptr/anyptr: branch to else if null (compare with 0)
+        OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(0), cond_operand,
+                           lir_label_operand(else_label, true)));
+    }
+
+    // Consequent branch: evaluate 'then' expression and move to target
+    lir_operand_t *cons_result = linear_expr(m, ternary->consequent, NULL);
+    linear_super_move(m, expr.type, target, cons_result);
+    OP_PUSH(lir_op_bal(lir_label_operand(end_label, true)));
+
+    // Alternate branch: evaluate 'else' expression and move to target
+    OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, lir_label_operand(else_label, true)));
+    lir_operand_t *alt_result = linear_expr(m, ternary->alternate, NULL);
+    linear_super_move(m, expr.type, target, alt_result);
+
+    // End label
+    OP_PUSH(lir_op_new(LIR_OPCODE_LABEL, NULL, NULL, lir_label_operand(end_label, true)));
+
+    return target;
+}
+
 linear_expr_fn expr_fn_table[] = {
         [AST_EXPR_LITERAL] = linear_literal,
         [AST_EXPR_IDENT] = linear_ident,
         [AST_EXPR_ENV_ACCESS] = linear_env_access,
         [AST_EXPR_BINARY] = linear_binary,
         [AST_EXPR_UNARY] = linear_unary,
+        [AST_EXPR_TERNARY] = linear_ternary,
         [AST_EXPR_ARRAY_NEW] = linear_array_new,
         [AST_EXPR_ARRAY_REPEAT_NEW] = linear_array_repeat_new,
         [AST_EXPR_ARRAY_ACCESS] = linear_array_access,
