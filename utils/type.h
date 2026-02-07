@@ -312,6 +312,7 @@ typedef struct type_t {
     type_kind map_imm_kind; // 用于判断指针大小，各种奇怪的类型等，避免直接使用 type_kind
     int64_t storage_size;
     int64_t align;
+    list_t *abi_struct; // element is type_t
 } type_t;
 
 /**
@@ -393,8 +394,8 @@ struct type_map_t {
 typedef struct {
     type_t type;
     char *name;
-    void *right; // ast_expr, 不允许 fn def
-    int64_t align;
+    void *right; // 可选的默认右值
+    int64_t align; // align 入狱
 } struct_property_t;
 
 // 比如 type_struct_t 结构，如何能够将其传递到运行时，一旦运行时知道了该结构，编译时就不用费劲心机的在 lir
@@ -671,8 +672,8 @@ int64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
  */
 static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
-    return kind == TYPE_TAGGED_UNION || kind == TYPE_STRING || kind == TYPE_VEC ||
-           kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_TUPLE || kind == TYPE_GC_ENV ||
+    return kind == TYPE_STRING || kind == TYPE_VEC ||
+           kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_GC_ENV ||
            kind == TYPE_FN || kind == TYPE_COROUTINE_T || kind == TYPE_CHAN || kind == TYPE_INTERFACE;
 }
 
@@ -782,7 +783,7 @@ static inline storage_kind_t type_storage_kind(type_t t) {
         return STORAGE_KIND_DIR;
     }
 
-    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION) {
+    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION || t.kind == TYPE_TUPLE || t.kind == TYPE_TAGGED_UNION) {
         return STORAGE_KIND_IND;
     }
 
@@ -795,11 +796,56 @@ static inline int64_t type_storage_size(type_t t) {
         return type_kind_sizeof(t.kind);
     }
 
-    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION || t.kind == TYPE_ENUM) {
+    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION || t.kind == TYPE_TUPLE ||
+        t.kind == TYPE_TAGGED_UNION || t.kind == TYPE_ENUM) {
         return type_sizeof(t);
     }
 
     return POINTER_SIZE;
+}
+
+static inline list_t *type_abi_struct(type_t t) {
+    list_t *result = ct_list_new(sizeof(type_t));
+
+    if (t.kind == TYPE_STRUCT) {
+        assert(t.struct_ != NULL);
+        assert(t.struct_->properties != NULL);
+        for (int i = 0; i < t.struct_->properties->length; ++i) {
+            struct_property_t *p = (struct_property_t *) ct_list_value(t.struct_->properties, i);
+            ct_list_push(result, &p->type);
+        }
+        return result;
+    }
+
+    if (t.kind == TYPE_TUPLE) {
+        assert(t.tuple != NULL);
+        assert(t.tuple->elements != NULL);
+        for (int i = 0; i < t.tuple->elements->length; ++i) {
+            type_t *elem = (type_t *) ct_list_value(t.tuple->elements, i);
+            ct_list_push(result, elem);
+        }
+        return result;
+    }
+
+    // n_union_t: { value_casting value; rtype_t *rtype; }
+    if (t.kind == TYPE_UNION) {
+        type_t value_type = type_kind_new(TYPE_ANYPTR); // value_casting
+        type_t rtype_ptr = type_kind_new(TYPE_ANYPTR); // rtype_t*
+        ct_list_push(result, &value_type);
+        ct_list_push(result, &rtype_ptr);
+        return result;
+    }
+
+    // n_tagged_union_t: { value_casting value; int64_t tag_hash; }
+    if (t.kind == TYPE_TAGGED_UNION) {
+        type_t value_type = type_kind_new(TYPE_ANYPTR); // value_casting
+        type_t tag_type = type_kind_new(TYPE_INT64); // tag_hash
+        ct_list_push(result, &value_type);
+        ct_list_push(result, &tag_type);
+        return result;
+    }
+
+    return NULL;
 }
 
 static inline type_kind type_map_imm_kind(type_t t) {
@@ -856,10 +902,8 @@ static inline bool is_gc_alloc(type_kind kind) {
            kind == TYPE_STRING ||
            kind == TYPE_SET ||
            kind == TYPE_VEC ||
-           kind == TYPE_TUPLE ||
            kind == TYPE_COROUTINE_T ||
            kind == TYPE_CHAN ||
-           kind == TYPE_TAGGED_UNION ||
            kind == TYPE_INTERFACE ||
            kind == TYPE_FN;
 }

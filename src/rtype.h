@@ -9,6 +9,12 @@ static inline int64_t rtype_array_gc_bits(int64_t gc_bits_offset, int64_t *offse
 
 static int64_t rtype_struct_gc_bits(int64_t gc_bits_offset, int64_t *offset, type_struct_t *t);
 
+static inline int64_t rtype_tuple_gc_bits(int64_t gc_bits_offset, int64_t *offset, type_tuple_t *t);
+
+static inline int64_t rtype_union_gc_bits(int64_t gc_bits_offset, int64_t *offset);
+
+static inline int64_t rtype_tagged_union_gc_bits(int64_t gc_bits_offset, int64_t *offset);
+
 static inline rtype_t reflect_type(type_t t);
 
 static inline int64_t type_hash(type_t t) {
@@ -466,6 +472,12 @@ static inline int64_t rtype_array_gc_bits(int64_t gc_bits_offset, int64_t *offse
             last_ptr_temp_offset = rtype_struct_gc_bits(gc_bits_offset, offset, t->element_type.struct_);
         } else if (t->element_type.kind == TYPE_ARR) {
             last_ptr_temp_offset = rtype_array_gc_bits(gc_bits_offset, offset, t->element_type.array);
+        } else if (t->element_type.kind == TYPE_TUPLE) {
+            last_ptr_temp_offset = rtype_tuple_gc_bits(gc_bits_offset, offset, t->element_type.tuple);
+        } else if (t->element_type.kind == TYPE_UNION) {
+            last_ptr_temp_offset = rtype_union_gc_bits(gc_bits_offset, offset);
+        } else if (t->element_type.kind == TYPE_TAGGED_UNION) {
+            last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset);
         } else {
             int64_t bit_index = *offset / POINTER_SIZE;
             if (type_is_pointer_heap(t->element_type)) {
@@ -544,6 +556,32 @@ static inline void *type_recycle_check(module_t *m, type_t *t, struct sc_map_s64
     return NULL;
 }
 
+// union: { value_casting value; rtype_t *rtype; }
+// value 需要 gc 扫描 (slot 0), rtype 不需要 gc (rtype 是全局表)
+static inline int64_t rtype_union_gc_bits(int64_t gc_bits_offset, int64_t *offset) {
+    int64_t bit_index = *offset / POINTER_SIZE;
+    bitmap_set(CTDATA(gc_bits_offset), bit_index); // slot 0: value
+
+    int64_t last_ptr_offset = *offset + POINTER_SIZE;
+    *offset += POINTER_SIZE * 2; // skip both value and rtype
+
+    return last_ptr_offset;
+}
+
+// tagged_union: { value_casting value; int64_t tag_hash; }
+// value 需要 gc 扫描 (slot 0), tag_hash 不需要 gc
+static inline int64_t rtype_tagged_union_gc_bits(int64_t gc_bits_offset, int64_t *offset) {
+    int64_t bit_index = *offset / POINTER_SIZE;
+    bitmap_set(CTDATA(gc_bits_offset), bit_index); // slot 0: value
+
+    int64_t last_ptr_offset = *offset + POINTER_SIZE;
+    *offset += POINTER_SIZE * 2; // skip both value and tag_hash
+
+    return last_ptr_offset;
+}
+
+
+
 static inline int64_t rtype_struct_gc_bits(int64_t gc_bits_offset, int64_t *offset, type_struct_t *t) {
     // offset 已经按照 align 对齐过了，这里不需要重复对齐
     int64_t last_ptr_offset = 0;
@@ -558,6 +596,12 @@ static inline int64_t rtype_struct_gc_bits(int64_t gc_bits_offset, int64_t *offs
             last_ptr_temp_offset = rtype_struct_gc_bits(gc_bits_offset, offset, p->type.struct_);
         } else if (p->type.kind == TYPE_ARR) {
             last_ptr_temp_offset = rtype_array_gc_bits(gc_bits_offset, offset, p->type.array);
+        } else if (p->type.kind == TYPE_TUPLE) {
+            last_ptr_temp_offset = rtype_tuple_gc_bits(gc_bits_offset, offset, p->type.tuple);
+        } else if (p->type.kind == TYPE_UNION) {
+            last_ptr_temp_offset = rtype_union_gc_bits(gc_bits_offset, offset);
+        } else if (p->type.kind == TYPE_TAGGED_UNION) {
+            last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset);
         } else {
             int64_t size = p->type.storage_size; // 等待存储的 struct size
             // 这里就是存储位置
@@ -579,6 +623,51 @@ static inline int64_t rtype_struct_gc_bits(int64_t gc_bits_offset, int64_t *offs
     // 结构体需要整体需要对齐到 align
     *offset = align_up(*offset, type_struct_alignof(t));
 
+    return last_ptr_offset;
+}
+
+static inline int64_t rtype_tuple_gc_bits(int64_t gc_bits_offset, int64_t *offset, type_tuple_t *t) {
+    int64_t last_ptr_offset = 0;
+    int64_t max_align = 0;
+    for (int i = 0; i < t->elements->length; ++i) {
+        type_t *element = ct_list_value(t->elements, i);
+
+        int64_t element_align = element->align;
+        if (element_align > max_align) {
+            max_align = element_align;
+        }
+
+        *offset = align_up(*offset, element_align);
+
+        int64_t last_ptr_temp_offset = 0;
+        if (element->kind == TYPE_STRUCT) {
+            last_ptr_temp_offset = rtype_struct_gc_bits(gc_bits_offset, offset, element->struct_);
+        } else if (element->kind == TYPE_ARR) {
+            last_ptr_temp_offset = rtype_array_gc_bits(gc_bits_offset, offset, element->array);
+        } else if (element->kind == TYPE_TUPLE) {
+            last_ptr_temp_offset = rtype_tuple_gc_bits(gc_bits_offset, offset, element->tuple);
+        } else if (element->kind == TYPE_UNION) {
+            last_ptr_temp_offset = rtype_union_gc_bits(gc_bits_offset, offset);
+        } else if (element->kind == TYPE_TAGGED_UNION) {
+            last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset);
+        } else {
+            int64_t size = element->storage_size;
+            int64_t bit_index = *offset / POINTER_SIZE;
+
+            *offset += size;
+            bool is_ptr = type_is_pointer_heap(*element);
+            if (is_ptr) {
+                bitmap_set(CTDATA(gc_bits_offset), bit_index);
+                last_ptr_temp_offset = *offset;
+            }
+        }
+
+        if (last_ptr_temp_offset > last_ptr_offset) {
+            last_ptr_offset = last_ptr_temp_offset;
+        }
+    }
+
+    *offset = align_up(*offset, max_align);
     return last_ptr_offset;
 }
 
@@ -651,13 +740,9 @@ static inline rtype_t rtype_struct(type_t t) {
  */
 static inline rtype_t rtype_tuple(type_t t) {
     int64_t offset = 0;
-    int64_t need_gc_count = 0;
-    uint16_t need_gc_offsets[UINT16_MAX] = {0};
+    int64_t max_align = 0;
 
     int64_t hashes_offset = data_put(NULL, sizeof(int64_t) * t.tuple->elements->length);
-
-    // 记录需要 gc 的 key 的
-    int64_t max_align = 0;
     for (int64_t i = 0; i < t.tuple->elements->length; ++i) {
         type_t *element_type = ct_list_value(t.tuple->elements, i);
 
@@ -667,18 +752,10 @@ static inline rtype_t rtype_tuple(type_t t) {
             max_align = element_align;
         }
 
-        // 按 offset 对齐
         offset = align_up(offset, element_align);
-
-        // 如果存在 heap 中就是需要 gc
-        bool need_gc = type_is_pointer_heap(*element_type);
-        if (need_gc) {
-            need_gc_offsets[need_gc_count++] = offset;
-        }
+        offset += element_size;
 
         ((int64_t *) CTDATA(hashes_offset))[i] = type_hash(*element_type);
-
-        offset += element_size;
     }
     int64_t size = align_up(offset, max_align);
 
@@ -691,15 +768,8 @@ static inline rtype_t rtype_tuple(type_t t) {
             .hashes_offset = hashes_offset,
     };
 
-    if (need_gc_count > 0) {
-        // 默认 size 8byte 对齐了
-        for (int i = 0; i < need_gc_count; ++i) {
-            uint16_t gc_offset = need_gc_offsets[i];
-            bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), gc_offset / POINTER_SIZE);
-        }
-
-        rtype.last_ptr = need_gc_offsets[need_gc_count - 1] + POINTER_SIZE;
-    }
+    offset = 0;
+    rtype.last_ptr = rtype_tuple_gc_bits(rtype.malloc_gc_bits_offset, &offset, t.tuple);
 
     return rtype;
 }

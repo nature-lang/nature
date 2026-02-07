@@ -21,7 +21,7 @@ Join array of strings with separator
 ## fn string.find_char
 
 ```
-fn string.find_char(u8 char, int after):int
+fn string.find_char(self, u8 char, int after):int
 ```
 
 Find the index of character starting from after position, returns -1 if not found
@@ -29,7 +29,7 @@ Find the index of character starting from after position, returns -1 if not foun
 ## fn string.find_after
 
 ```
-fn string.find_after(string sub, int after):int
+fn string.find_after(self, string sub, int after):int
 ```
 
 Find the index of substring starting from after position, returns -1 if not found
@@ -37,7 +37,7 @@ Find the index of substring starting from after position, returns -1 if not foun
 ## fn string.reverse
 
 ```
-fn string.reverse():string
+fn string.reverse(self):string
 ```
 
 Reverse the characters in string
@@ -45,7 +45,7 @@ Reverse the characters in string
 ## fn string.rfind
 
 ```
-fn string.rfind(string sub):int
+fn string.rfind(self, string sub):int
 ```
 
 Find the index of the last occurrence of substring, returns -1 if not found
@@ -53,7 +53,7 @@ Find the index of the last occurrence of substring, returns -1 if not found
 ## fn string.ends_with
 
 ```
-fn string.ends_with(string ends):bool
+fn string.ends_with(self, string ends):bool
 ```
 
 Check if string ends with the given suffix
@@ -61,7 +61,7 @@ Check if string ends with the given suffix
 ## fn string.starts_with
 
 ```
-fn string.starts_with(string starts):bool
+fn string.starts_with(self, string starts):bool
 ```
 
 Check if string starts with the given prefix
@@ -69,7 +69,7 @@ Check if string starts with the given prefix
 ## fn string.contains
 
 ```
-fn string.contains(string sub):bool
+fn string.contains(self, string sub):bool
 ```
 
 Check if string contains the substring
@@ -77,7 +77,7 @@ Check if string contains the substring
 ## fn string.finish
 
 ```
-fn string.finish(string cap):string
+fn string.finish(self, string cap):string
 ```
 
 Ensure string ends with the given suffix, append if not present
@@ -85,7 +85,7 @@ Ensure string ends with the given suffix, append if not present
 ## fn string.find
 
 ```
-fn string.find(string sub):int
+fn string.find(self, string sub):int
 ```
 
 Find the index of the first occurrence of substring, returns -1 if not found
@@ -93,7 +93,7 @@ Find the index of the first occurrence of substring, returns -1 if not found
 ## fn string.slice
 
 ```
-fn string.slice(int start, int end):string
+fn string.slice(self, int start, int end):string
 ```
 
 Extract a substring from start to end index
@@ -101,7 +101,7 @@ Extract a substring from start to end index
 ## fn string.split
 
 ```
-fn string.split(string separator):[string]
+fn string.split(self, string separator):[string]
 ```
 
 Split string by separator and return an array of substrings
@@ -109,7 +109,7 @@ Split string by separator and return an array of substrings
 ## fn string.ascii
 
 ```
-fn string.ascii():u8
+fn string.ascii(self):u8
 ```
 
 Get the ASCII value of the first character
@@ -117,7 +117,7 @@ Get the ASCII value of the first character
 ## fn string.ltrim
 
 ```
-fn string.ltrim([string] list):string
+fn string.ltrim(self, [string] list):string
 ```
 
 Remove leading characters specified in the list
@@ -125,7 +125,7 @@ Remove leading characters specified in the list
 ## fn string.rtrim
 
 ```
-fn string.rtrim([string] list):string
+fn string.rtrim(self, [string] list):string
 ```
 
 Remove trailing characters specified in the list
@@ -133,7 +133,7 @@ Remove trailing characters specified in the list
 ## fn string.trim
 
 ```
-fn string.trim([string] list):string
+fn string.trim(self, [string] list):string
 ```
 
 Remove leading and trailing characters specified in the list
@@ -141,7 +141,7 @@ Remove leading and trailing characters specified in the list
 ## fn string.replace
 
 ```
-fn string.replace(string sub_old, string sub_new):string
+fn string.replace(self, string sub_old, string sub_new):string
 ```
 
 Replace all occurrences of old substring with new substring
@@ -149,7 +149,7 @@ Replace all occurrences of old substring with new substring
 ## fn string.to_int
 
 ```
-fn string.to_int():int!
+fn string.to_int(self):int!
 ```
 
 Convert string to integer, may throw error if invalid format
@@ -157,7 +157,7 @@ Convert string to integer, may throw error if invalid format
 ## fn string.to_float
 
 ```
-fn string.to_float():float!
+fn string.to_float(self):float!
 ```
 
 Convert string to float, may throw error if invalid format
@@ -165,7 +165,7 @@ Convert string to float, may throw error if invalid format
 ## fn string.to_lower
 
 ```
-fn string.to_lower():string
+fn string.to_lower(self):string
 ```
 
 Convert string to lowercase
@@ -173,7 +173,7 @@ Convert string to lowercase
 ## fn string.to_upper
 
 ```
-fn string.to_upper():string
+fn string.to_upper(self):string
 ```
 
 Convert string to uppercase

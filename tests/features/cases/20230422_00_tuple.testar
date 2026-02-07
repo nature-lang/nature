@@ -1,3 +1,5 @@
+=== test_basic
+--- main.n
 fn main() {
     var tuple = (1, 'hello', true)
 
@@ -23,3 +25,29 @@ fn main() {
     (foo, bar, car) = (2, 'world', d)
     print(foo, bar, car, '\n')
 }
+
+--- output.txt
+1naturetrue
+1hellotrue
+1hellotrue
+2worldfalse
+
+=== test_impl
+--- main.n
+type tu = (int, bool, float)
+
+fn tu.hello():ref<tu> {
+    println('hello')
+    return self
+}
+
+fn main() {
+    tu t = (1, false, 1.1)
+    println(t.hello()[0], t.hello()[1], t.hello()[2])
+}
+
+--- output.txt
+hello
+hello
+hello
+1 false 1.100000

@@ -16,27 +16,24 @@ static int arm64_hfa_aux(type_t type, int32_t *fsize, int num) {
         *fsize = n;
         return num + 1;
     } else if (is_abi_struct_like(type)) {
-        int is_struct = 1; // nature 中只有结构体
-
-        // 遍历 struct
-        type_struct_t *s = type.struct_;
-        assert(s != NULL);
-        assert(s->properties != NULL);
+        // 遍历 struct-like 类型的元素
+        list_t *elements = type.abi_struct;
+        assert(elements != NULL);
 
         int num0 = num;
         int64_t offset = 0;
 
-        for (int i = 0; i < s->properties->length; ++i) {
-            struct_property_t *p = ct_list_value(s->properties, i);
-            assert(p != NULL);
-            int64_t element_size = p->type.storage_size;
-            int64_t element_align = p->type.align;
+        for (int i = 0; i < elements->length; ++i) {
+            type_t *elem = (type_t *) ct_list_value(elements, i);
+            assert(elem != NULL);
+            int64_t element_size = elem->storage_size;
+            int64_t element_align = elem->align;
             offset = align_up(offset, element_align);
             if (offset != (num - num0) * *fsize) {
                 return -1;
             }
 
-            num = arm64_hfa_aux(p->type, fsize, num);
+            num = arm64_hfa_aux(*elem, fsize, num);
             if (num == -1) {
                 return -1;
             }

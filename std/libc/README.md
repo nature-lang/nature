@@ -174,7 +174,7 @@ Directory entry structure containing file information
 ## fn string.to_cstr
 
 ```
-fn string.to_cstr():cstr
+fn string.to_cstr(self):cstr
 ```
 
 Convert Nature string to C-style string

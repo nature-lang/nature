@@ -483,13 +483,14 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     // linux/darwin arm64 采用了不同的栈帧布局,所以总是基于 bp 的值从帧底 -> 帧顶遍历，然后查找 prev frame_bp
     // 上面已经找到了 prev bp 和 ret addr 的值, 可以对 ret addr 进行遍历
     while (true) {
+        if (share_stack_frame_bp < sp_value || share_stack_frame_bp > (addr_t) co->aco.share_stack->align_retptr) {
+            break;
+        }
+
         fndef_t *fn = find_fn(ret_addr, p);
         if (!fn) {
             DEBUGF("[runtime_gc.scan_stack] fn not found by ret_addr, return_addr=%p, share_stack_frame_bp=%p, bp_offset = %ld",
                    (void *) ret_addr, (void *) share_stack_frame_bp, share_stack_frame_bp - sp_value);
-            if (share_stack_frame_bp < sp_value || share_stack_frame_bp > (addr_t) co->aco.share_stack->align_retptr) {
-                break;
-            }
 
             // next and continue
             addr_t bp_offset = share_stack_frame_bp - sp_value;
@@ -503,14 +504,15 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
             continue;
         }
 
-        DEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p, fn->stack_size=%ld, bp=%p", STRTABLE(fn->name_offset),
+        DEBUGF("[runtime_gc.scan_stack] find fn_name=%s by ret_addr=%p, fn->stack_size=%ld, bp=%p",
+               STRTABLE(fn->name_offset),
                (void *) ret_addr, fn->stack_size, (void *) share_stack_frame_bp);
 
         addr_t bp_offset = share_stack_frame_bp - sp_value;
         // share_stack_frame_bp 是 fn 对应的帧的值,已经从帧中取了出来, 原来保存再 BP 寄存器中，现在保存再帧中
         DEBUGF("[runtime_gc.scan_stack] share_stack_frame_bp %p, sp value %p, offset %p",
                (void *) share_stack_frame_bp, (void *) sp_value, (void *) bp_offset)
-        assert(bp_offset < 1000000);
+        assertf(bp_offset < 10485760, "stack overflow: %ld", bp_offset); // 10M
 
         // 将 share 转换为 prev 偏移量
         addr_t frame_cursor = stack_top_ptr + bp_offset; // stack_top_ptr 指向了 sp top
@@ -523,7 +525,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         int64_t ptr_count = fn->stack_size / POINTER_SIZE;
         for (int i = 0; i < ptr_count; ++i) {
             bool is_ptr = bitmap_test(RTDATA(fn->gc_bits_offset), i);
-            DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, frame_cursor=%p, is_ptr=%d, may_value=%p", STRTABLE(fn->name_offset), i,
+            DEBUGF("[runtime_gc.scan_stack] fn_name=%s, fn_gc_bits i=%lu/%lu, frame_cursor=%p, is_ptr=%d, may_value=%p",
+                   STRTABLE(fn->name_offset), i,
                    ptr_count - 1, (void *) frame_cursor, is_ptr,
                    (void *) fetch_int_value(frame_cursor, 8));
 
@@ -588,7 +591,8 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
     }
 
     bitmap_set(span->gcmark_bits, obj_index);
-    DEBUGF("[runtime_gc.handle_gc_ptr] addr=%p, span=%p, span_base=%p, obj_index=%lu marked, test=%d, obj_size=%d, spanclass_has_ptr=%d", (void *) addr,
+    DEBUGF("[runtime_gc.handle_gc_ptr] addr=%p, span=%p, span_base=%p, obj_index=%lu marked, test=%d, obj_size=%d, spanclass_has_ptr=%d",
+           (void *) addr,
            span,
            (void *) span->base,
            obj_index, bitmap_test(span->gcmark_bits, obj_index), span->obj_size, spanclass_has_ptr(span->spanclass));

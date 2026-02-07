@@ -2064,7 +2064,8 @@ static type_t infer_access_expr(module_t *m, ast_expr_t *expr) {
     type_t left_type = infer_right_expr(m, &access->left, type_kind_new(TYPE_UNKNOWN));
 
     if (left_type.kind == TYPE_REF || left_type.kind == TYPE_PTR) {
-        if (left_type.ptr->value_type.kind == TYPE_ARR) {
+        type_kind value_kind = left_type.ptr->value_type.kind;
+        if (value_kind == TYPE_ARR || value_kind == TYPE_TUPLE) {
             left_type = left_type.ptr->value_type;
         }
     }
@@ -3799,7 +3800,7 @@ check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast
 
         // 当 self_kind == PARAM_SELF_T 时，生成 receiver_wrapper
         // interface 存储指针数据，但方法期望值类型，需要 wrapper 来解引用
-        if (ast_fndef->self_kind == PARAM_SELF_T && ast_fndef->receiver_wrapper == NULL) {
+        if (ast_fndef->self_kind == PARAM_SELF_T && ast_fndef->receiver_wrapper == NULL && typedef_stmt->type_expr.storage_kind != STORAGE_KIND_PTR) {
             ast_fndef_t *wrapper_fn = generate_receiver_wrapper(m, ast_fndef, ast_fndef->impl_type);
             ast_fndef->receiver_wrapper = wrapper_fn;
             symbol_table_set(wrapper_fn->symbol_name, SYMBOL_FN, wrapper_fn, false);
@@ -4157,6 +4158,7 @@ STATUS_DONE:
     t.storage_kind = type_storage_kind(t);
     t.storage_size = type_storage_size(t);
     t.map_imm_kind = type_map_imm_kind(t);
+    t.abi_struct = type_abi_struct(t);
     t.align = type_alignof(t);
 
     // 固定数组的大小暂时禁止超过 64KB, 如果需要超过 64 KB 可以使用 vec?
@@ -4332,10 +4334,16 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
                     // not need  handle
                 }
             } else {
-                // not need handle, like vec/map/set/chan...
-                INFER_ASSERTF(fndef->self_kind == PARAM_SELF_REF_T,
-                              "heap-allocated type '%s' has implicit pointer receiver; omit the 'self' parameter, e.g., `fn T.method()`",
-                              type_format(param->type));
+                if (is_impl_builtin_type(param->type.kind)) {
+                    INFER_ASSERTF(fndef->self_kind == PARAM_SELF_T,
+                                  "heap-allocated builtin type '%s' requires explicit `self` receiver; use `fn %s.method(self)`",
+                                  type_format(param->type), type_format(param->type));
+                } else {
+                    // not need handle, like ptr/ref/interface...
+                    INFER_ASSERTF(fndef->self_kind == PARAM_SELF_REF_T,
+                                  "omit the '&self' parameter, e.g., `fn T.method()`",
+                                  type_format(param->type));
+                }
             }
 
             type_fn->self_kind = fndef->self_kind;

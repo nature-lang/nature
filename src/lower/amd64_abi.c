@@ -645,20 +645,16 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
             *hi = amd64_classify_merge(*hi, AMD64_CLASS_SSE);
         }
     } else if (is_abi_struct_like(t)) {
-        // 遍历 struct 的每一个属性进行分类
-        type_struct_t *type_struct = t.struct_;
-        offset = align_up(offset, type_struct_alignof(type_struct)); // 开始地址对齐
+        // 遍历 struct-like 类型的元素进行分类
+        list_t *elements = t.abi_struct;
+        assert(elements != NULL);
+        offset = align_up(offset, t.align); // 开始地址对齐
 
-        for (int i = 0; i < type_struct->properties->length; i++) {
-            struct_property_t *p = ct_list_value(type_struct->properties, i);
-            type_t element_type = p->type;
+        for (int i = 0; i < elements->length; i++) {
+            type_t *elem = (type_t *) ct_list_value(elements, i);
+            type_t element_type = *elem;
             uint64_t element_size = element_type.storage_size;
-            uint64_t element_align = element_size;
-            if (is_abi_struct_like(p->type)) {
-                element_align = type_struct_alignof(p->type.struct_);
-            } else if (p->type.kind == TYPE_ARR) {
-                element_align = p->type.array->element_type.storage_size;
-            }
+            uint64_t element_align = element_type.align;
 
             // 每个元素地址对齐
             offset = align_up(offset, element_align);
@@ -671,7 +667,7 @@ int64_t amd64_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi, uint
         }
 
         // 最终 size 对齐
-        offset = align_up(offset, type_struct_alignof(type_struct));
+        offset = align_up(offset, t.align);
     } else {
         if (offset < 8) {
             *lo = amd64_classify_merge(*lo, AMD64_CLASS_INTEGER);

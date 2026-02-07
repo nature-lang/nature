@@ -1,0 +1,90 @@
+=== test_basic
+--- main.n
+type foo_t<T> = T|int
+
+fn foo_t.hello(self):string {
+    if self is int {
+        return 'hello'
+    } else {
+        return 'unknown'
+    }
+}
+
+fn foo_t<T>.world(self):string {
+    if self is float {
+        return 'world'
+    } else {
+        return 'unknown'
+    }
+}
+
+fn foo_t<T:bool>.hello(self):bool {
+    return self as bool
+}
+
+fn main():void! {
+    foo_t<float> v = 3.14
+    println(v.hello())
+    println(v.world())
+    assert(v.hello() == 'unknown')
+    assert(v.world() == 'world')
+
+    foo_t<bool> v2 = true
+    println(v2.hello())
+    assert(v2.hello() == true)
+}
+
+=== test_impl_infer
+--- main.n
+type box_t<T> = struct{
+    T value
+}
+
+fn box_t.get(self):T {
+    return self.value
+}
+
+fn box_t.set(T value) {
+    self.value = value
+}
+
+fn main():void! {
+    box_t<int> b = box_t<int>{value: 1}
+    println(b.get())
+    b.set(3)
+    println(b.get())
+
+    box_t<string> s = box_t<string>{value: 'hi'}
+    println(s.get())
+}
+
+--- output.txt
+1
+3
+hi
+
+=== test_impl_void_overload
+--- main.n
+type future_t<T> = struct{
+    int dummy
+}
+
+fn future_t.await():T {
+    return @default(T)
+}
+
+fn future_t<T:void>.await():void {
+    println('void')
+}
+
+fn main():void! {
+    future_t<int> a = future_t<int>{ dummy: 0 }
+    println(a.await())
+
+    future_t<void> b = future_t<void>{ dummy: 0 }
+    b.await()
+}
+
+--- output.txt
+0
+void

@@ -57,7 +57,7 @@ fn chan_new<T>(...[int] args):chan<T>
 ### chan.send
 
 ```
-fn chan<T>.send(T msg):void!
+fn chan<T>.send(self, T msg):void!
 ```
 
 向通道发送消息，如果通道已满则阻塞。
@@ -65,7 +65,7 @@ fn chan<T>.send(T msg):void!
 ### chan.try_send
 
 ```
-fn chan<T>.try_send(T msg):bool!
+fn chan<T>.try_send(self, T msg):bool!
 ```
 
 尝试向通道发送消息，不阻塞。
@@ -73,7 +73,7 @@ fn chan<T>.try_send(T msg):bool!
 ### chan.on_send
 
 ```
-fn chan<T>.on_send(T msg):void
+fn chan<T>.on_send(self, T msg):void
 ```
 
 通道发送操作的事件处理器。
@@ -81,7 +81,7 @@ fn chan<T>.on_send(T msg):void
 ### chan.recv
 
 ```
-fn chan<T>.recv():T!
+fn chan<T>.recv(self):T!
 ```
 
 从通道接收消息，如果通道为空则阻塞。
@@ -89,7 +89,7 @@ fn chan<T>.recv():T!
 ### chan.on_recv
 
 ```
-fn chan<T>.on_recv():T
+fn chan<T>.on_recv(self):T
 ```
 
 通道接收操作的事件处理器。
@@ -97,7 +97,7 @@ fn chan<T>.on_recv():T
 ### chan.try_recv
 
 ```
-fn chan<T>.try_recv():(T, bool)!
+fn chan<T>.try_recv(self):(T, bool)!
 ```
 
 尝试从通道接收消息，不阻塞。
@@ -105,7 +105,7 @@ fn chan<T>.try_recv():(T, bool)!
 ### chan.close
 
 ```
-fn chan<T>.close():void!
+fn chan<T>.close(self):void!
 ```
 
 关闭通道。
@@ -113,7 +113,7 @@ fn chan<T>.close():void!
 ### chan.is_closed
 
 ```
-fn chan<T>.is_closed():bool
+fn chan<T>.is_closed(self):bool
 ```
 
 检查通道是否已关闭。
@@ -121,7 +121,7 @@ fn chan<T>.is_closed():bool
 ### chan.is_successful
 
 ```
-fn chan<T>.is_successful():bool
+fn chan<T>.is_successful(self):bool
 ```
 
 检查上次操作是否成功。
@@ -144,7 +144,7 @@ type future_t<T> = struct{
 ### future_t.await
 
 ```
-fn future_t<T>.await():T!
+fn future_t.await():T!
 ```
 
 等待 future 完成并返回结果。
@@ -235,7 +235,7 @@ fn map_new<T,U>():map<T,U>
 ### map.len
 
 ```
-fn map<T,U>.len():int
+fn map<T,U>.len(self):int
 ```
 
 获取映射中键值对的数量。
@@ -243,7 +243,7 @@ fn map<T,U>.len():int
 ### map.del
 
 ```
-fn map<T,U>.del(T key)
+fn map<T,U>.del(self, T key)
 ```
 
 从映射中删除键值对。
@@ -251,7 +251,7 @@ fn map<T,U>.del(T key)
 ### map.contains
 
 ```
-fn map<T,U>.contains(T key):bool
+fn map<T,U>.contains(self, T key):bool
 ```
 
 检查映射是否包含给定键。
@@ -271,7 +271,7 @@ fn set_new<T>():set<T>
 ### set.add
 
 ```
-fn set<T>.add(T key)
+fn set<T>.add(self, T key)
 ```
 
 向集合添加元素。
@@ -279,7 +279,7 @@ fn set<T>.add(T key)
 ### set.contains
 
 ```
-fn set<T>.contains(T key):bool
+fn set<T>.contains(self, T key):bool
 ```
 
 检查集合是否包含给定元素。
@@ -287,7 +287,7 @@ fn set<T>.contains(T key):bool
 ### set.del
 
 ```
-fn set<T>.del(T key)
+fn set<T>.del(self, T key)
 ```
 
 从集合中移除元素。
@@ -299,7 +299,7 @@ fn set<T>.del(T key)
 ### string.len
 
 ```
-fn string.len():int
+fn string.len(self):int
 ```
 
 获取字符串长度。
@@ -307,7 +307,7 @@ fn string.len():int
 ### string.ref
 
 ```
-fn string.ref():anyptr
+fn string.ref(self):anyptr
 ```
 
 获取字符串数据的指针。
@@ -315,7 +315,7 @@ fn string.ref():anyptr
 ### string.char
 
 ```
-fn string.char():u8
+fn string.char(self):u8
 ```
 
 获取字符串的第一个字符。
@@ -343,7 +343,7 @@ fn vec_cap<T>(int cap):vec<T>
 ### vec.push
 
 ```
-fn vec<T>.push(T v)
+fn vec<T>.push(self, T v)
 ```
 
 向向量末尾添加元素。
@@ -351,7 +351,7 @@ fn vec<T>.push(T v)
 ### vec.append
 
 ```
-fn vec<T>.append(vec<T> l2)
+fn vec<T>.append(self, vec<T> l2)
 ```
 
 将另一个向量追加到此向量。
@@ -359,7 +359,7 @@ fn vec<T>.append(vec<T> l2)
 ### vec.slice
 
 ```
-fn vec<T>.slice(int start, int end):vec<T>
+fn vec<T>.slice(self, int start, int end):vec<T>
 ```
 
 创建从 start 到 end 的向量切片。
@@ -367,7 +367,7 @@ fn vec<T>.slice(int start, int end):vec<T>
 ### vec.concat
 
 ```
-fn vec<T>.concat(vec<T> l2):vec<T>
+fn vec<T>.concat(self, vec<T> l2):vec<T>
 ```
 
 连接两个向量并返回新向量。
@@ -375,7 +375,7 @@ fn vec<T>.concat(vec<T> l2):vec<T>
 ### vec.copy
 
 ```
-fn vec<T>.copy(vec<T> src):int
+fn vec<T>.copy(self, vec<T> src):int
 ```
 
 从源向量复制元素到此向量。
@@ -383,7 +383,7 @@ fn vec<T>.copy(vec<T> src):int
 ### vec.len
 
 ```
-fn vec<T>.len():int
+fn vec<T>.len(self):int
 ```
 
 获取向量中元素的数量。
@@ -391,7 +391,7 @@ fn vec<T>.len():int
 ### vec.cap
 
 ```
-fn vec<T>.cap():int
+fn vec<T>.cap(self):int
 ```
 
 获取向量的容量。
@@ -399,7 +399,7 @@ fn vec<T>.cap():int
 ### vec.ref
 
 ```
-fn vec<T>.ref():anyptr
+fn vec<T>.ref(self):anyptr
 ```
 
 获取向量数据的指针。
@@ -407,7 +407,7 @@ fn vec<T>.ref():anyptr
 ### vec.sort
 
 ```
-fn vec<T>.sort(fn(int, int):bool less)
+fn vec<T>.sort(self, fn(int, int):bool less)
 ```
 
 使用提供的比较函数对向量排序。
@@ -415,7 +415,7 @@ fn vec<T>.sort(fn(int, int):bool less)
 ### vec.search
 
 ```
-fn vec<T>.search(fn(int):bool predicate):int
+fn vec<T>.search(self, fn(int):bool predicate):int
 ```
 
 使用谓词函数在向量中进行二分搜索。

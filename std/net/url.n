@@ -130,7 +130,7 @@ fn parse_authority(ptr<url_t> result, string authority) {
     }
 }
 
-fn query_t.get(string key):string {
+fn query_t.get(self, string key):string {
     if !self.contains(key) {
         return ''
     }

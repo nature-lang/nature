@@ -443,8 +443,9 @@ static lir_operand_t *linear_struct_fill_default(module_t *m, type_t t, lir_oper
  * @return
  */
 static lir_operand_t *linear_default_tuple(module_t *m, type_t t, lir_operand_t *target) {
-    uint64_t rtype_hash = type_hash(t);
-    push_rt_call(m, RT_CALL_TUPLE_NEW, target, 1, int_operand(rtype_hash));
+    if (!target) {
+        target = temp_var_operand_with_alloc(m, t);
+    }
 
     int64_t offset = 0;
     for (int i = 0; i < t.tuple->elements->length; ++i) {
@@ -820,6 +821,10 @@ static void linear_tuple_assign(module_t *m, ast_assign_stmt_t *stmt) {
     ast_tuple_access_t *tuple_access = stmt->left.value;
     type_t tuple_type = tuple_access->left.type;
     lir_operand_t *tuple_target = linear_expr(m, tuple_access->left, NULL);
+
+    if (tuple_type.kind == TYPE_REF || tuple_type.kind == TYPE_PTR) {
+        tuple_type = tuple_type.ptr->value_type;
+    }
 
     uint64_t offset = type_tuple_offset(tuple_type.tuple, tuple_access->index);
     lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, tuple_target, offset);
@@ -2504,6 +2509,9 @@ static lir_operand_t *linear_tuple_access(module_t *m, ast_expr_t expr, lir_oper
     lir_operand_t *tuple_target = linear_expr(m, ast->left, NULL);
     type_t t = ast->left.type;
     uint64_t item_size = ast->element_type.storage_size;
+    if (t.kind == TYPE_REF || t.kind == TYPE_PTR) {
+        t = t.ptr->value_type;
+    }
     uint64_t offset = type_tuple_offset(t.tuple, ast->index);
 
     lir_operand_t *src = indirect_addr_operand(m, ast->element_type, tuple_target, offset);
@@ -2589,10 +2597,6 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-    // tuple new 时所有的值都必须进行初始化，所以不会出现 null 值
-    uint64_t rtype_hash = type_hash(expr.type);
-    push_rt_call(m, RT_CALL_TUPLE_NEW, target, 1, int_operand(rtype_hash));
-
     int64_t offset = 0;
     for (int i = 0; i < ast->elements->length; ++i) {
         ast_expr_t *element = ct_list_value(ast->elements, i);
@@ -2624,11 +2628,6 @@ static lir_operand_t *linear_tuple_new(module_t *m, ast_expr_t expr, lir_operand
 static lir_operand_t *linear_tagged_union_new(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_tagged_union_t *tagged_new = expr.value;
 
-    if (!target) {
-        target = temp_var_operand_with_alloc(m, expr.type);
-    }
-
-
     int64_t tag_hash = hash_string(tagged_new->tagged_name);
     lir_operand_t *payload_ptr = int_operand(0);
     int64_t payload_type_hash = 0;
@@ -2648,8 +2647,15 @@ static lir_operand_t *linear_tagged_union_new(module_t *m, ast_expr_t expr, lir_
         payload_type_hash = type_hash(payload_type);
     }
 
-    push_rt_call(m, RT_CALL_TAGGED_UNION_CASTING, target, 3, int_operand(tag_hash), int_operand(payload_type_hash), payload_ptr);
-    return target;
+    lir_operand_t *call_result = temp_var_operand(m, expr.type);
+    push_rt_call(m, RT_CALL_TAGGED_UNION_CASTING, call_result, 3, int_operand(tag_hash), int_operand(payload_type_hash),
+                 payload_ptr);
+
+    if (target) {
+        return linear_super_move(m, expr.type, target, call_result);
+    }
+
+    return call_result;
 }
 
 static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
@@ -2988,7 +2994,9 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
                     fn_ident = ast_fndef->symbol_name;
                 }
 
-                assert(ast_fndef->self_kind != PARAM_SELF_T);
+                // string self is string, self is ptr,not need receiver_wrapper
+                // assert(ast_fndef->self_kind != PARAM_SELF_T);
+
                 if (ast_fndef->linkid) {
                     fn_ident = ast_fndef->linkid;
                 }

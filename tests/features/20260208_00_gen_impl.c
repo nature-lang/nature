@@ -1,5 +1,4 @@
 #include "tests/test.h"
-#include <stdio.h>
 
 int main(void) {
     feature_testar_test(NULL);

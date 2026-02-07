@@ -174,7 +174,7 @@ type dirent_t = struct {
 ## fn string.to_cstr
 
 ```
-fn string.to_cstr():cstr
+fn string.to_cstr(self):cstr
 ```
 
 将 Nature 字符串转换为 C 风格字符串

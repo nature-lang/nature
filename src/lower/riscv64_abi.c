@@ -9,19 +9,15 @@
  */
 static void reg_pass_rec(type_t *type, int *rc, int *field_offset, int offset) {
     if (is_abi_struct_like(*type)) {
-        type_struct_t *type_struct = type->struct_;
+        // 遍历 struct-like 类型的元素进行分类
+        list_t *elements = type->abi_struct;
+        assert(elements != NULL);
 
-        // 遍历结构体的每一个属性进行分类
-        for (int i = 0; i < type_struct->properties->length; i++) {
-            struct_property_t *p = ct_list_value(type_struct->properties, i);
-            type_t element_type = p->type;
+        for (int i = 0; i < elements->length; i++) {
+            type_t *elem = (type_t *) ct_list_value(elements, i);
+            type_t element_type = *elem;
             uint16_t element_size = element_type.storage_size;
-            uint16_t element_align = element_size;
-            if (is_abi_struct_like(p->type)) {
-                element_align = type_struct_alignof(p->type.struct_);
-            } else if (p->type.kind == TYPE_ARR) {
-                element_align = p->type.array->element_type.storage_size;
-            }
+            uint16_t element_align = element_type.align;
             offset = align_up(offset, element_align);
             reg_pass_rec(&element_type, rc, field_offset, offset);
 

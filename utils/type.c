@@ -69,6 +69,36 @@ int64_t type_struct_sizeof(type_struct_t *s) {
     return size;
 }
 
+static int64_t type_tuple_sizeof(type_tuple_t *t) {
+    int64_t size = 0;
+    int64_t max_align = 0;
+    for (int i = 0; i < t->elements->length; ++i) {
+        type_t *element = ct_list_value(t->elements, i);
+        int64_t element_size = element->storage_size;
+        int64_t element_align = element->align;
+        if (element_align > max_align) {
+            max_align = element_align;
+        }
+        size = align_up(size, element_align);
+        size += element_size;
+    }
+
+    // tuple 整体按照 max_align 对齐
+    size = align_up(size, max_align);
+    return size;
+}
+
+static int64_t type_tuple_alignof(type_tuple_t *t) {
+    int64_t max_align = 0;
+    for (int i = 0; i < t->elements->length; ++i) {
+        type_t *element = ct_list_value(t->elements, i);
+        if (element->align > max_align) {
+            max_align = element->align;
+        }
+    }
+    return max_align;
+}
+
 /**
  * @param t
  * @return
@@ -84,6 +114,10 @@ int64_t type_sizeof(type_t t) {
         return size;
     }
 
+    if (t.kind == TYPE_TUPLE) {
+        return type_tuple_sizeof(t.tuple);
+    }
+
     if (t.kind == TYPE_ARR) {
         int64_t element_size = type_sizeof(t.array->element_type);
         return t.array->length * element_size;
@@ -95,6 +129,10 @@ int64_t type_sizeof(type_t t) {
 
     if (t.kind == TYPE_UNION) {
         return sizeof(n_union_t);
+    }
+
+    if (t.kind == TYPE_TAGGED_UNION) {
+        return sizeof(n_tagged_union_t);
     }
 
     if (t.storage_kind == STORAGE_KIND_PTR) {
@@ -148,6 +186,10 @@ int64_t type_alignof(type_t t) {
         return type_struct_alignof(t.struct_);
     }
 
+    if (t.kind == TYPE_TUPLE) {
+        return type_tuple_alignof(t.tuple);
+    }
+
     if (t.kind == TYPE_ARR) {
         return type_alignof(t.array->element_type);
     }
@@ -158,6 +200,10 @@ int64_t type_alignof(type_t t) {
     }
 
     if (t.kind == TYPE_UNION) {
+        return POINTER_SIZE;
+    }
+
+    if (t.kind == TYPE_TAGGED_UNION) {
         return POINTER_SIZE;
     }
 

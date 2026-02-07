@@ -969,7 +969,7 @@ type testable = interface{
 
 type test_t:testable = [int]
 
-fn test_t.nice():bool {
+fn test_t.nice(self):bool {
     return (self as [int]).len() > 0
 }
 
@@ -997,7 +997,7 @@ type testable = interface{
 
 type test_t:testable = [int]
 
-fn test_t.nice():bool {
+fn test_t.nice(self):bool {
     return (self as [int]).len() > 0
 }
 
@@ -1016,7 +1016,7 @@ type testable = interface{
 
 type test_t:testable = [int]
 
-fn test_t.nice():bool {
+fn test_t.nice(self):bool {
     return (self as [int]).len() > 0
 }
 
@@ -1044,7 +1044,7 @@ type testable = interface{
 
 type test_t:testable = [int]
 
-fn test_t.nice():bool {
+fn test_t.nice(self):bool {
     return self[2] == 3
 }
 
@@ -1072,7 +1072,7 @@ type testable = interface{
 
 type test_t:testable = [int]
 
-fn test_t.nice():bool {
+fn test_t.nice(self):bool {
     return self[2] == 3
 }
 
