@@ -81,6 +81,11 @@ impl GenericSpecialFnClone {
             AstNode::EnvAccess(index, ident, symbol_id) => AstNode::EnvAccess(*index, ident.clone(), symbol_id.clone()),
 
             AstNode::Binary(op, left, right) => AstNode::Binary(op.clone(), Box::new(self.clone_expr(left)), Box::new(self.clone_expr(right))),
+            AstNode::Ternary(condition, consequent, alternate) => AstNode::Ternary(
+                Box::new(self.clone_expr(condition)),
+                Box::new(self.clone_expr(consequent)),
+                Box::new(self.clone_expr(alternate)),
+            ),
             AstNode::Unary(op, operand) => AstNode::Unary(op.clone(), Box::new(self.clone_expr(operand))),
             AstNode::AccessExpr(left, key) => AstNode::AccessExpr(Box::new(self.clone_expr(left)), Box::new(self.clone_expr(key))),
             AstNode::VecNew(elements, len, cap) => AstNode::VecNew(
@@ -1540,6 +1545,48 @@ impl<'a> Typesys<'a> {
         }
     }
 
+    pub fn infer_ternary(
+        &mut self,
+        condition: &mut Box<Expr>,
+        consequent: &mut Box<Expr>,
+        alternate: &mut Box<Expr>,
+        infer_target_type: Type,
+    ) -> Result<Type, AnalyzerError> {
+        // Infer condition type - must be bool, ptr, or nullable type (truthy/falsy)
+        let cond_type = self.infer_right_expr(condition, Type::new(TypeKind::Bool))?;
+
+        // Check condition is valid truthy/falsy type
+        let is_valid_cond = matches!(cond_type.kind, TypeKind::Bool)
+            || matches!(cond_type.kind, TypeKind::Ptr(..))
+            || matches!(cond_type.kind, TypeKind::Anyptr)
+            || (matches!(cond_type.kind, TypeKind::Union(_, nullable, _) if nullable));
+
+        if !is_valid_cond {
+            return Err(AnalyzerError {
+                start: condition.start,
+                end: condition.end,
+                message: format!("ternary condition must be bool, pointer, or nullable type, actual '{}'", cond_type),
+            });
+        }
+
+        // Infer consequent expression with target type
+        let consequent_type = self.infer_right_expr(consequent, infer_target_type.clone())?;
+
+        // Infer alternate expression with consequent type as target
+        let alternate_type = self.infer_right_expr(alternate, consequent_type.clone())?;
+
+        // Check that branches have compatible types
+        if !self.type_compare(&consequent_type, &alternate_type) {
+            return Err(AnalyzerError {
+                start: consequent.start,
+                end: alternate.end,
+                message: format!("ternary branches must have compatible types: '{}' vs '{}'", consequent_type, alternate_type),
+            });
+        }
+
+        Ok(consequent_type)
+    }
+
     pub fn infer_unary(&mut self, op: ExprOp, operand: &mut Box<Expr>, target_type: Type) -> Result<Type, AnalyzerError> {
         // 处理逻辑非运算符
         if op == ExprOp::Not {
@@ -2531,6 +2578,7 @@ impl<'a> Typesys<'a> {
                 return self.reduction_type(Type::ref_of(type_.clone()));
             }
             AstNode::Binary(op, left, right) => self.infer_binary(op.clone(), left, right, infer_target_type),
+            AstNode::Ternary(condition, consequent, alternate) => self.infer_ternary(condition, consequent, alternate, infer_target_type),
             AstNode::Unary(op, operand) => self.infer_unary(op.clone(), operand, infer_target_type),
             AstNode::Ident(ident, symbol_id) => self.infer_ident(ident, symbol_id, expr.start, expr.end),
             AstNode::VecNew(..) => self.infer_vec_new(expr, infer_target_type, literal_refer),

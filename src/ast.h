@@ -20,6 +20,7 @@ typedef enum {
     AST_EXPR_LITERAL = 1, // 常数值 => 预计将存储在 data 段中
     AST_EXPR_BINARY,
     AST_EXPR_UNARY,
+    AST_EXPR_TERNARY, // condition ? consequent : alternate
     AST_EXPR_IDENT,
     AST_EXPR_AS,
     AST_EXPR_IS,
@@ -266,6 +267,13 @@ typedef struct {
     ast_expr_t right;
     ast_expr_t left;
 } ast_binary_expr_t;
+
+// 三元表达式 condition ? consequent : alternate
+typedef struct {
+    ast_expr_t condition;
+    ast_expr_t consequent;
+    ast_expr_t alternate;
+} ast_ternary_expr_t;
 
 typedef enum {
     PARAM_SELF_NULL = 0,

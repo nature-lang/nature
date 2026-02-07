@@ -1805,6 +1805,13 @@ static void analyzer_unary(module_t *m, ast_expr_t *expr) {
     analyzer_constant_folding(m, expr);
 }
 
+static void analyzer_ternary(module_t *m, ast_expr_t *expr) {
+    ast_ternary_expr_t *ternary_expr = expr->value;
+    analyzer_expr(m, &ternary_expr->condition);
+    analyzer_expr(m, &ternary_expr->consequent);
+    analyzer_expr(m, &ternary_expr->alternate);
+}
+
 /**
  * person {
  *     foo: bar
@@ -1985,6 +1992,9 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
         }
         case AST_EXPR_UNARY: {
             return analyzer_unary(m, expr);
+        }
+        case AST_EXPR_TERNARY: {
+            return analyzer_ternary(m, expr);
         }
         case AST_CATCH: {
             return analyzer_catch(m, expr->value);

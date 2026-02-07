@@ -1292,6 +1292,34 @@ static ast_expr_t parser_catch_expr(module_t *m, ast_expr_t left) {
     return result;
 }
 
+/**
+ * condition ? consequent : alternate
+ * Ternary conditional expression with right associativity
+ * @param m
+ * @param condition - the left expression (condition)
+ * @return
+ */
+static ast_expr_t parser_ternary(module_t *m, ast_expr_t condition) {
+    ast_expr_t result = expr_new(m);
+    parser_must(m, TOKEN_QUESTION);
+
+    ast_ternary_expr_t *ternary = NEW(ast_ternary_expr_t);
+    ternary->condition = condition;
+
+    // Parse consequent expression (the 'then' branch)
+    ternary->consequent = parser_expr(m);
+
+    parser_must(m, TOKEN_COLON);
+
+    // Parse alternate expression with PRECEDENCE_TERNARY for right associativity
+    // This ensures a ? b : c ? d : e parses as a ? b : (c ? d : e)
+    ternary->alternate = parser_precedence_expr(m, PRECEDENCE_TERNARY, 0);
+
+    result.assert_type = AST_EXPR_TERNARY;
+    result.value = ternary;
+    return result;
+}
+
 static ast_expr_t parser_as_expr(module_t *m, ast_expr_t left) {
     ast_expr_t result = expr_new(m);
     parser_must(m, TOKEN_AS);
@@ -3136,6 +3164,7 @@ static parser_rule rules[] = {
         [TOKEN_AS] = {NULL, parser_as_expr, PRECEDENCE_TYPE_CAST},
         [TOKEN_IS] = {parser_match_is_expr, parser_is_expr, PRECEDENCE_TYPE_CAST},
         [TOKEN_CATCH] = {NULL, parser_catch_expr, PRECEDENCE_CATCH},
+        [TOKEN_QUESTION] = {NULL, parser_ternary, PRECEDENCE_TERNARY},
 
         // 以 ident 开头的前缀表达式
         [TOKEN_IDENT] = {parser_ident_expr, NULL, PRECEDENCE_NULL},

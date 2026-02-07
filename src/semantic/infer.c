@@ -1681,6 +1681,45 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_typ
 }
 
 /**
+ * Infer type for ternary conditional expression: condition ? consequent : alternate
+ * Condition supports:
+ * - bool type: used directly
+ * - nullable type (T?): truthy if non-null, falsy if null
+ * - pointer type (ptr<T>): truthy if non-null, falsy if null
+ * Both branches must have compatible types.
+ *
+ * @param expr ternary expression
+ * @param target_type expected result type
+ * @return unified type of both branches
+ */
+static type_t infer_ternary(module_t *m, ast_ternary_expr_t *expr, type_t target_type) {
+    // Infer condition type - it should be bool, or a nullable/pointer type for truthy/falsy check
+    type_t cond_type = infer_right_expr(m, &expr->condition, type_kind_new(TYPE_UNKNOWN));
+
+    // Validate condition type: must be bool, or ptr (for null check), or any nullable type
+    bool valid_condition = cond_type.kind == TYPE_BOOL ||
+                           cond_type.kind == TYPE_PTR ||
+                           cond_type.kind == TYPE_ANYPTR;
+
+    INFER_ASSERTF(valid_condition,
+                  "ternary condition must be bool or nullable/pointer type, got '%s'",
+                  type_format(cond_type));
+
+    // Infer consequent with target_type hint
+    type_t cons_type = infer_right_expr(m, &expr->consequent, target_type);
+
+    // Infer alternate with consequent type as hint for type unification
+    type_t alt_type = infer_right_expr(m, &expr->alternate, cons_type);
+
+    // Both branches must have compatible types
+    INFER_ASSERTF(type_compare(cons_type, alt_type),
+                  "ternary branches must have compatible types: '%s' vs '%s'",
+                  type_format(cons_type), type_format(alt_type));
+
+    return cons_type;
+}
+
+/**
  * use ident
  * @param expr
  * @return
@@ -3357,6 +3396,9 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type, type
         }
         case AST_EXPR_UNARY: {
             return infer_unary(m, expr->value, target_type);
+        }
+        case AST_EXPR_TERNARY: {
+            return infer_ternary(m, expr->value, target_type);
         }
         case AST_EXPR_IDENT: {
             return infer_ident(m, expr->value);
