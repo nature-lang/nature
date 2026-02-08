@@ -229,7 +229,9 @@ void wait_all_gc_work_finished();
  * runtime_main 会负责调用该方法，该方法读取 cpu 的核心数，然后初始化对应数量的 share_processor
  * 每个 share_processor 可以通过 void* arg 直接找到自己的 share_processor_t 对象
  */
-void sched_init();
+void sched_init(bool use_t0);
+
+void fn_depend_init(bool use_t0);
 
 void sched_run();
 

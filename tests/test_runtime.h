@@ -20,4 +20,6 @@ caller_t rt_caller_data; // 仅需要修复一下 gc_bits 数据即可
 uint64_t rt_rtype_count;
 rtype_t rt_rtype_data;
 
+uint8_t main_is_fn;
+
 #endif //NATURE_TEST_RUNTIME_H

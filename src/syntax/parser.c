@@ -2493,7 +2493,12 @@ static ast_expr_t parser_left_curly_expr(module_t *m) {
 static ast_expr_t parser_fndef_expr(module_t *m) {
     ast_expr_t result = expr_new(m);
     ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
-    parser_must(m, TOKEN_FN);
+    if (parser_is(m, TOKEN_FX)) {
+        parser_advance(m);
+        fndef->is_fx = true;
+    } else {
+        parser_must(m, TOKEN_FN);
+    }
 
     if (parser_is(m, TOKEN_IDENT)) {
         PARSER_ASSERTF(false, "closure fn cannot have a name");
@@ -2813,7 +2818,12 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
     result->assert_type = AST_FNDEF;
     result->value = fndef;
 
-    parser_must(m, TOKEN_FN);
+    if (parser_is(m, TOKEN_FX)) {
+        parser_advance(m);
+        fndef->is_fx = true;
+    } else {
+        parser_must(m, TOKEN_FN);
+    }
 
     // 第一个绝对是 ident, 第二个如果是 . 或者 < 则说明是类型扩展
     if (parser_is_impl_fn(m)) {
@@ -3022,10 +3032,10 @@ static ast_stmt_t *parser_label(module_t *m) {
     if (parser_is(m, TOKEN_TYPE)) {
         PARSER_ASSERTF(!fndef->pending_where_params, "#where can only be applied to fn");
         return parser_typedef_stmt(m);
-    } else if (parser_is(m, TOKEN_FN)) {
+    } else if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
         return parser_fndef_stmt(m, fndef);
     } else {
-        PARSER_ASSERTF(false, "the label can only be applied to type alias or fn.");
+        PARSER_ASSERTF(false, "the label can only be applied to type alias or fn/fx.");
     }
 }
 
@@ -3177,7 +3187,7 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
         return parser_type_begin_stmt(m);
     } else if (parser_is(m, TOKEN_LABEL)) {
         return parser_label(m);
-    } else if (parser_is(m, TOKEN_FN)) {
+    } else if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
         return parser_fndef_stmt(m, ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column));
     } else if (parser_is(m, TOKEN_TEST)) {
         return parser_test_stmt(m);
@@ -3759,7 +3769,7 @@ static ast_expr_t parser_expr(module_t *m) {
     }
 
     // fn def, 也能写到括号里面呀
-    if (parser_is(m, TOKEN_FN)) {
+    if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
         return parser_fndef_expr(m);
     }
 

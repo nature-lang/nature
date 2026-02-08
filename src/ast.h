@@ -724,6 +724,7 @@ struct ast_fndef_t {
     bool is_impl; // 是否是 impl fn
     // impl fn without self receiver
     bool is_static;
+    bool is_fx; // 是否是 fx fn
 
     bool is_errable;
 
@@ -937,6 +938,7 @@ static inline ast_fndef_t *ast_fndef_new(module_t *m, int line, int column) {
     fndef->ret_target_types = stack_new();
     fndef->generics_params = NULL;
     fndef->is_impl = false;
+    fndef->is_fx = false;
     fndef->capture_exprs = ct_list_new(sizeof(ast_expr_t));
     fndef->be_capture_locals = slice_new();
 

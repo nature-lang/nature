@@ -118,6 +118,7 @@ string token_type_to_str[] = {
         // [TOKEN_ARRAY]="TOKEN_ARRAY",
         // [TOKEN_MAP]="TOKEN_MAP",
         [TOKEN_FN] = "TOKEN_FN",
+        [TOKEN_FX] = "TOKEN_FX",
         [TOKEN_IMPORT] = "TOKEN_IMPORT",
         [TOKEN_AS] = "TOKEN_AS",
         [TOKEN_RETURN] = "TOKEN_RETURN"};

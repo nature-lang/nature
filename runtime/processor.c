@@ -496,6 +496,10 @@ static void processor_wake(n_processor_t *p) {
 }
 
 void rt_coroutine_dispatch(coroutine_t *co) {
+    // 延迟初始化: 如果 fx 模式下需要协程调度，则初始化 fn 模式
+    // fn_mode_init 内部有原子锁判断，重复调用安全
+    fn_depend_init(false);
+
     DEBUGF("[runtime.rt_coroutine_dispatch] co=%p, fn=%p, share_processor_count=%d", co, co->fn, cpu_count);
 
     // 分配 coroutine 之前需要给 coroutine 确认初始颜色, 如果是新增的 coroutine，默认都是黑色
@@ -537,7 +541,7 @@ void rt_coroutine_dispatch(coroutine_t *co) {
 /**
  * 各种全局变量初始化都通过该方法
  */
-void sched_init() {
+void sched_init(bool use_t0) {
     // - 初始化 aco 需要的 tls 变量(不能再线程中 create)
     aco_init();
 
@@ -586,7 +590,7 @@ void sched_init() {
         processor_index[p->index] = p;
 
         // P0 使用主线程，提前标记为已唤醒，避免 processor_wake 错误创建线程
-        if (i == 0) {
+        if (use_t0 && i == 0) {
             p->thread_waked = true;
         }
 

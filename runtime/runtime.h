@@ -34,6 +34,12 @@ int runtime_main(int argc, char *argv[]) __asm("main");
 #endif
 #endif
 
+extern uint8_t main_is_fn;
+
+static inline bool user_main_is_fn(void) {
+    return main_is_fn != 0;
+}
+
 
 #ifdef __AMD64
 #define CALLER_RET_ADDR(_co)                                  \

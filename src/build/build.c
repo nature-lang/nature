@@ -40,6 +40,7 @@
 
 // char*, 支持 .o 或者 .a 文件后缀
 static slice_t *linker_libs;
+static uint8_t build_main_is_fn = 1;
 
 /**
  * base on ${NATURE_ROOT}/lib/${BUILD_OS}_${BUILD_ARCH} + file
@@ -164,6 +165,8 @@ static void elf_custom_links() {
     elf_put_global_symbol(ctx, F64_NEG_MASK_IDENT, &f64_mask, QWORD);
     float f32_mast = (float) (-0.0);
     elf_put_global_symbol(ctx, F32_NEG_MASK_IDENT, &f32_mast, DWORD);
+    uint8_t main_is_fn = build_main_is_fn;
+    elf_put_global_symbol(ctx, SYMBOL_MAIN_IS_FN, &main_is_fn, BYTE);
 
 
     elf_file_format(ctx);
@@ -262,6 +265,8 @@ static void mach_custom_links() {
     macho_put_global_symbol(ctx, F64_NEG_MASK_IDENT, &f64_mask, QWORD);
     float f32_mast = (float) (-0.0);
     macho_put_global_symbol(ctx, F32_NEG_MASK_IDENT, &f32_mast, DWORD);
+    uint8_t main_is_fn = build_main_is_fn;
+    macho_put_global_symbol(ctx, SYMBOL_MAIN_IS_FN, &main_is_fn, BYTE);
 
     mach_output_object(ctx);
     log_debug(" --> assembler: %s\n", custom_link_object_path());
@@ -939,8 +944,6 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
     linked_push(work_list, main_package);
 
-    table_t *import_tpl_table = table_new();
-
     while (work_list->count > 0) {
         // module_build time has perfected import
         module_t *m = linked_pop(work_list);
@@ -986,6 +989,17 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         // analyzer 前需要将 global symbol 注册完成，否则在 pre_infer 时找不到相关的符号
         analyzer(m, m->stmt_list);
     }
+
+    // 查找 main 函数
+    ast_fndef_t *main_fndef = NULL;
+    SLICE_FOR(main_package->ast_fndefs) {
+        ast_fndef_t *f = SLICE_VALUE(main_package->ast_fndefs);
+        if (str_equal(f->fn_name, FN_MAIN_NAME)) {
+            main_fndef = f;
+        }
+    }
+    assert(main_fndef);
+    build_main_is_fn = main_fndef->is_fx ? 0 : 1;
 
     return modules;
 }

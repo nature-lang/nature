@@ -129,6 +129,7 @@ typedef enum {
     TOKEN_AS,
     TOKEN_BOOM,
     TOKEN_FN,
+    TOKEN_FX,
     TOKEN_IMPORT,
     TOKEN_RETURN,
     TOKEN_GO,
@@ -235,6 +236,7 @@ static string token_str[] = {
         [TOKEN_U64] = "u64",
 
         [TOKEN_FN] = "fn",
+        [TOKEN_FX] = "fx",
         [TOKEN_RETURN] = "return",
         [TOKEN_CATCH] = "catch",
         [TOKEN_MATCH] = "match",

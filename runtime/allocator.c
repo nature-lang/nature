@@ -1296,11 +1296,14 @@ void memory_init() {
     // - 初始化 gcbits
     gcbits_areas_init();
 
-    // links 数据反序列化，此时 rt_fndef_data rt_rtype_data 等数据可以正常使用
-    DEBUGF("[memory_init] will start deserialize");
-    DEBUGF("[memory_init] fndef count = %lu", rt_fndef_count);
-    DEBUGF("[memory_init] symdef count = %lu", rt_symdef_count);
-    DEBUGF("[memory_init] rtype count = %lu", rt_rtype_count);
+    memory->mheap = mheap;
+}
+
+void runtime_deserialize_init() {
+    DEBUGF("[runtime_deserialize_init] will start deserialize");
+    DEBUGF("[runtime_deserialize_init] fndef count = %lu", rt_fndef_count);
+    DEBUGF("[runtime_deserialize_init] symdef count = %lu", rt_symdef_count);
+    DEBUGF("[runtime_deserialize_init] rtype count = %lu", rt_rtype_count);
 
     nstrtable_deserialize();
     ndata_deserialize();
@@ -1308,9 +1311,7 @@ void memory_init() {
     callers_deserialize();
     rtypes_deserialize();
     symdefs_deserialize();
-    DEBUGF("[memory_init] deserialize success");
-
-    memory->mheap = mheap;
+    DEBUGF("[runtime_deserialize_init] deserialize success");
 }
 
 mspan_t *span_of(addr_t addr) {
