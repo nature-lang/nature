@@ -36,17 +36,17 @@ type bar_t<T,U> = struct{
     U b
 }
 
-fn bar_t<T, U>.dump():T {
+fn bar_t<T, U>.dump(&self):T {
    println('bar_t any dump', self.a, self.b)
    return self.a
 }
 
-fn foo_t<T:f32, U:bool>.dump():T {
+fn foo_t<T:f32, U:bool>.dump(&self):T {
     println('f32+bool dump', self.a, self.b)
     return self.a
 }
 
-fn foo_t<T:f32|bool, U:string>.dump(U c) {
+fn foo_t<T:f32|bool, U:string>.dump(&self, U c) {
     println('void return, f32|bool+int|string dump', self.a, self.b, c)
 }
 
@@ -347,7 +347,7 @@ type test_interface = interface{
 
 type foo_t = struct{}
 
-fn foo_t.to_string():string {
+fn foo_t.to_string(&self):string {
     return 'foo_t'
 }
 
@@ -371,7 +371,7 @@ type test_interface = interface{
 
 type foo_t:test_interface = struct{}
 
-fn foo_t.to_string():string {
+fn foo_t.to_string(&self):string {
     return 'foo_t'
 }
 
@@ -394,7 +394,7 @@ type test_interface = interface{
 }
 
 type foo_t:test_interface = struct{}
-fn foo_t.to_string():string {
+fn foo_t.to_string(&self):string {
     return 'foo_t'
 }
 
@@ -417,7 +417,7 @@ type test_interface = interface{
 }
 
 type foo_t:test_interface = struct{}
-fn foo_t.to_string():string {
+fn foo_t.to_string(&self):string {
     return 'foo_t'
 }
 

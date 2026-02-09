@@ -6,7 +6,7 @@ import runtime
 import time
 
 fn server():void! {
-    var buf = vec_new<u8>(0, 1024)
+    var buf = vec<u8>.new(0, 1024)
     for int i = 0; i < 100; i += 1 {
         var socket = udp.bind('0.0.0.0:8088')
         for int i = 0; i < 1000; i += 1 {
@@ -31,7 +31,7 @@ import time
 var count = 0
 
 fn echo_server():void! {
-    var buf = vec_new<u8>(0, 1024)
+    var buf = vec<u8>.new(0, 1024)
     var socket = udp.bind('0.0.0.0:8088')
     for true {
         var (len, addr) = socket.recvfrom(buf)
@@ -44,7 +44,7 @@ fn echo_server():void! {
 fn send():void! {
     var conn = udp.connect('127.0.0.1:8088')
     conn.write('hello world!!' as [u8])
-    var buf = vec_new<u8>(0, 1024)
+    var buf = vec<u8>.new(0, 1024)
 
     var len = conn.read(buf)
     println('send success, recv msg', buf[0..len] as string)
@@ -176,7 +176,7 @@ import time
 var count = 0
 
 fn echo_server():void! {
-    var buf = vec_new<u8>(0, 1024)
+    var buf = vec<u8>.new(0, 1024)
     var socket = udp.bind('0.0.0.0:8088')
     for true {
         var (len, addr) = socket.recvfrom(buf)
@@ -189,7 +189,7 @@ fn echo_server():void! {
 fn send():void! {
     var conn = udp.connect('127.0.0.1:8088')
     conn.write('hello world!!' as [u8])
-    var buf = vec_new<u8>(0, 1024)
+    var buf = vec<u8>.new(0, 1024)
 
     var len = conn.read(buf)
     println('send success, recv msg', buf.slice(0, len) as string)

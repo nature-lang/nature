@@ -66,7 +66,7 @@ fn encode(string workdir, string tgz_path, [string] sources):void! {
     // 写入目标文件
     archive.write_open_filename(a, tgz_path.ref())
 
-    var buf = vec_new<u8>(0, 16384)
+    var buf = vec<u8>.new(0, 16384)
 
     for source in sources {
         var disk = archive.read_disk_new()

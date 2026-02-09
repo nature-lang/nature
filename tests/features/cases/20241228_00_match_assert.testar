@@ -74,11 +74,11 @@ fn newHashTable(int size): HashTable {
     return HashTable {
         size: size,
         count: 0,
-        items: vec_new<HashItem?>(null, size),
+        items: vec<HashItem?>.new(null, size),
     }
 }
 
-fn HashTable.hash(string s, int a, int m): int {
+fn HashTable.hash(&self, string s, int a, int m): int {
     var hash = 0
     for var i= 0; i < s.len(); i += 1 {
         hash += pow(a,s.len() - (i + 1)) * s[i] as int
@@ -87,13 +87,13 @@ fn HashTable.hash(string s, int a, int m): int {
     return hash
 }
 
-fn HashTable.getHash(string s, int num_bucket, int attempt): int {
+fn HashTable.getHash(&self, string s, int num_bucket, int attempt): int {
     var hash_a = self.hash(s, 99, num_bucket)
     var hash_b = self.hash(s, 66, num_bucket)
     return (hash_a + (attempt * (hash_b + 1))) % num_bucket
 }
 
-fn HashTable.insert(string key, string value) {
+fn HashTable.insert(&self, string key, string value) {
     var item = newItem(key, value)
     var idx = self.getHash(key, self.size, 0)
     println("Inserting at index: ", idx)
@@ -117,7 +117,7 @@ fn HashTable.insert(string key, string value) {
     self.count += 1
 }
 
-fn  HashTable.get(string key): string? {
+fn  HashTable.get(&self, string key): string? {
     var idx = self.getHash(key, self.size, 0)
     HashItem? item = self.items[idx]
     var i = 1

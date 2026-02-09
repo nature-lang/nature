@@ -106,29 +106,29 @@ type transformer = struct{
     uint file_size
 }
 
-fn transformer.malloc_run_state(ptr<run_state_t> s, ptr<config_t> cfg):void! {
+fn transformer.malloc_run_state(&self, ptr<run_state_t> s, ptr<config_t> cfg):void! {
     i32 kv_dim = (cfg.dim * cfg.n_kv_heads) / cfg.n_heads
 
     // allocate memory for various buffers
-    s.x = vec_new<f32>(0, cfg.dim as int)
-    s.xb = vec_new<f32>(0, cfg.dim as int)
-    s.xb2 = vec_new<f32>(0, cfg.dim as int)
-    s.hb = vec_new<f32>(0, cfg.hidden_dim as int)
-    s.hb2 = vec_new<f32>(0, cfg.hidden_dim as int)
+    s.x = vec<f32>.new(0, cfg.dim as int)
+    s.xb = vec<f32>.new(0, cfg.dim as int)
+    s.xb2 = vec<f32>.new(0, cfg.dim as int)
+    s.hb = vec<f32>.new(0, cfg.hidden_dim as int)
+    s.hb2 = vec<f32>.new(0, cfg.hidden_dim as int)
 
     // allocate memory for queries, keys, and values
-    s.q = vec_new<f32>(0, cfg.dim as int)
-    s.k = vec_new<f32>(0, kv_dim as int)
-    s.v = vec_new<f32>(0, kv_dim as int)
+    s.q = vec<f32>.new(0, cfg.dim as int)
+    s.k = vec<f32>.new(0, kv_dim as int)
+    s.v = vec<f32>.new(0, kv_dim as int)
 
-    s.att = vec_new<f32>(0, (cfg.n_heads * cfg.seq_len) as int)
-    s.logits = vec_new<f32>(0, cfg.vocab_size as int)
+    s.att = vec<f32>.new(0, (cfg.n_heads * cfg.seq_len) as int)
+    s.logits = vec<f32>.new(0, cfg.vocab_size as int)
 
-    s.key_cache = vec_new<f32>(0, (cfg.n_layers * cfg.seq_len * kv_dim) as int)
-    s.value_cache = vec_new<f32>(0, (cfg.n_layers * cfg.seq_len * kv_dim) as int)
+    s.key_cache = vec<f32>.new(0, (cfg.n_layers * cfg.seq_len * kv_dim) as int)
+    s.value_cache = vec<f32>.new(0, (cfg.n_layers * cfg.seq_len * kv_dim) as int)
 }
 
-fn transformer.memory_map_weights(anyptr weights_ptr, u8 shared_weights):void! {
+fn transformer.memory_map_weights(&self, anyptr weights_ptr, u8 shared_weights):void! {
     config_t cfg = self.config
     i32 head_size = cfg.dim / cfg.n_heads
 
@@ -180,7 +180,7 @@ fn transformer.memory_map_weights(anyptr weights_ptr, u8 shared_weights):void! {
     }
 }
 
-fn transformer.rmsnorm([f32] o, [f32] x, anyptr weight, int size) {
+fn transformer.rmsnorm(&self, [f32] o, [f32] x, anyptr weight, int size) {
     f32 ss = 0.0
     for int j = 0; j < size; j += 1 {
         ss += x[j] * x[j]
@@ -196,7 +196,7 @@ fn transformer.rmsnorm([f32] o, [f32] x, anyptr weight, int size) {
     }
 }
 
-fn transformer.matmul(anyptr xout_ref, anyptr x_ref, anyptr w, int n, int d):void! {
+fn transformer.matmul(&self, anyptr xout_ref, anyptr x_ref, anyptr w, int n, int d):void! {
     // W (d,n) @ x (n,) -> xout (d,)
     // anyptr x_ref = x.ref()
     // anyptr xout_ref = xout.ref()
@@ -239,7 +239,7 @@ fn softmax([f32] x, int size) {
     }
 }
 
-fn transformer.forward(int token, int pos):[f32]! {
+fn transformer.forward(&self, int token, int pos):[f32]! {
     ptr<config_t> p = &self.config
     ptr<transformer_weights> w = &self.weights
     ptr<run_state_t> s = &self.state
@@ -253,7 +253,7 @@ fn transformer.forward(int token, int pos):[f32]! {
     // logf('[forward] start forward all the layers, xb.len=%d', s.xb.len())
 
     // 复制 token embedding 到 x(首先为 x ref 分配足够的空间)
-    s.x = vec_new<f32>(0, dim)
+    s.x = vec<f32>.new(0, dim)
     anyptr content_row = w.token_embedding_table as anyptr + token as anyptr * dim as anyptr * @sizeof(f32)
     libc.memcpy(s.x.ref(), content_row, dim as u64 * @sizeof(f32)) // 直接进行不安全k的数据 copy
     [f32] x = s.x
@@ -424,7 +424,7 @@ fn transformer_new(string path):ref<transformer>! {
 
     // 读取配置
     var config = config_t{}
-    var config_buf = vec_new<u8>(0, @sizeof(config_t))
+    var config_buf = vec<u8>.new(0, @sizeof(config_t))
     assert(f.read(config_buf) == @sizeof(config_t))
     mem.copy(config_buf, &config)
 
@@ -463,7 +463,7 @@ fn transformer_new(string path):ref<transformer>! {
     return t
 }
 
-fn tokenizer_t.decode(int prev_token, int token):string! {
+fn tokenizer_t.decode(&self, int prev_token, int token):string! {
     string piece = self.vocab[token]
     // following BOS (1) token, sentencepiece decoder strips any leading whitespace (see PR #89)
     if prev_token == 1 && piece[0] == ' '.char() {
@@ -492,9 +492,9 @@ fn str_lookup(string str, [token_index_t] sorted_vocab, int vocab_size):int {
     return sorted_vocab[idx].id
 }
 
-fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
+fn tokenizer_t.encode(&self, string text, i8 bos, i8 eos, [int] tokens):int! {
     if self.sorted_vocab.len() == 0 {
-        self.sorted_vocab = vec_cap<token_index_t>(self.vocab_size)
+        self.sorted_vocab = vec<token_index_t>.cap_of(self.vocab_size)
         for int i = 0; i < self.vocab_size; i+=1 {
             self.sorted_vocab.push(token_index_t{
                 str: self.vocab[i],
@@ -534,7 +534,7 @@ fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
 
     // create a temporary buffer that will store merge candidates of always two consecutive tokens
     // *2 for concat, +1 for null terminator +2 for UTF8 (in case max_token_length is 1)
-    var str_buffer = vec_new<u8>(0, self.max_token_length as int * 2 + 1 + 2)
+    var str_buffer = vec<u8>.new(0, self.max_token_length as int * 2 + 1 + 2)
     int str_len = 0
 
     // Okay UTF-8 time. This will get messy. Here is the reference from Wikipedia:
@@ -629,9 +629,9 @@ fn tokenizer_t.encode(string text, i8 bos, i8 eos, [int] tokens):int! {
 fn tokenizer_new(string tokenizer_path, int vocab_size):ref<tokenizer_t>! {
     var t = new tokenizer_t(
         vocab_size = vocab_size,
-        vocab = vec_cap<string>(0),
-        vocab_scores = vec_cap<f32>(0),
-        sorted_vocab = vec_cap<token_index_t>(0),
+        vocab = vec<string>.cap_of(0),
+        vocab_scores = vec<f32>.cap_of(0),
+        sorted_vocab = vec<token_index_t>.cap_of(0),
     )
 
     for int i = 0; i < 256; i+=1 {
@@ -643,11 +643,11 @@ fn tokenizer_new(string tokenizer_path, int vocab_size):ref<tokenizer_t>! {
     var file_reader = new buf.reader<ref<fs.file_t>>(rd = f)
 
 
-    var i32_buf = vec_new<u8>(0, 4)
+    var i32_buf = vec<u8>.new(0, 4)
     file_reader.read_exact(i32_buf)
     t.max_token_length = mem.read_u32_le(i32_buf)
 
-    var f32_buf = vec_new<u8>(0, 4)
+    var f32_buf = vec<u8>.new(0, 4)
     for int i = 0; i < vocab_size; i+=1 {
         file_reader.read_exact(f32_buf)
         t.vocab_scores.push(mem.read_f32_le(f32_buf))
@@ -655,7 +655,7 @@ fn tokenizer_new(string tokenizer_path, int vocab_size):ref<tokenizer_t>! {
         file_reader.read_exact(i32_buf)
         int len = mem.read_i32_le(i32_buf) as int
 
-        var str_buf = vec_new<u8>(0, len)
+        var str_buf = vec<u8>.new(0, len)
         file_reader.read_exact(str_buf)
 
         t.vocab.push(str_buf as string)
@@ -678,7 +678,7 @@ fn random_f32(ptr<u64> state):f32 {
     return (random_u32(state) >> 8) as f32 / 16777216.0
 }
 
-fn sampler_t.sample_argmax([f32] probabilities, int n):int {
+fn sampler_t.sample_argmax(&self, [f32] probabilities, int n):int {
     // return the index that has the highest probability
     int max_i = 0
     f32 max_p = probabilities[0]
@@ -691,7 +691,7 @@ fn sampler_t.sample_argmax([f32] probabilities, int n):int {
     return max_i
 }
 
-fn sampler_t.sample_mult([f32] probabilities, int n, f32 coin):int {
+fn sampler_t.sample_mult(&self, [f32] probabilities, int n, f32 coin):int {
     // sample index from probabilities (they must sum to 1!)
     f32 cdf = 0.0
     for int i = 0; i < n; i += 1 {
@@ -704,7 +704,7 @@ fn sampler_t.sample_mult([f32] probabilities, int n, f32 coin):int {
     return n - 1 // in case of rounding errors
 }
 
-fn sampler_t.sample_topp([f32] probabilities, int n, f32 topp, vec<prob_index_t> probindex, f32 coin):int {
+fn sampler_t.sample_topp(&self, [f32] probabilities, int n, f32 topp, vec<prob_index_t> probindex, f32 coin):int {
     // top-p 采样(或称"nucleus sampling")从概率总和超过 topp 的最小 token 集合中采样
     // 这样我们就不会采样到概率非常低的 token，从而减少生成"离谱"内容的可能性
     
@@ -763,7 +763,7 @@ fn sampler_t.sample_topp([f32] probabilities, int n, f32 topp, vec<prob_index_t>
     return probindex[last_idx].index
 }
 
-fn sampler_t.sample([f32] logits):int! {
+fn sampler_t.sample(&self, [f32] logits):int! {
     int vocab_size = self.vocab_size
 
     //logf('[sample] vocab_size %d, topp %f, logits: %f, %f, %f, %f, rng_state: %d',
@@ -797,7 +797,7 @@ fn sampler_new(int vocab_size, f32 temperature, f32 topp, u64 rng_seed):ref<samp
         temperature,
         topp,
         rng_state = rng_seed,
-        probindex = vec_new<prob_index_t>(prob_index_t{}, vocab_size),
+        probindex = vec<prob_index_t>.new(prob_index_t{}, vocab_size),
     )
 }
 
@@ -839,7 +839,7 @@ fn print_safe(string piece) {
 
 fn generate(ref<transformer> tf, ref<tokenizer_t> t, ref<sampler_t> s, string prompt, int steps):void! {
     // log('[generate] start', prompt, steps)
-    var prompt_tokens = vec_new<int>(0, (prompt.len() + 3) as int) // +3 for '\0', ?BOS, ?EOS
+    var prompt_tokens = vec<int>.new(0, (prompt.len() + 3) as int) // +3 for '\0', ?BOS, ?EOS
 
     int num_prompt_tokens = t.encode(prompt, 1, 0, prompt_tokens)
     if num_prompt_tokens < 1 {

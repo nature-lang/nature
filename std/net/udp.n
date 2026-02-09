@@ -50,9 +50,9 @@ fn bind(string host):ref<socket_t>! {
 }
 
 #linkid rt_uv_udp_close
-fn socket_t.close()
+fn socket_t.close(&self)
 
-fn socket_t.recvfrom([u8] buf):(int, addr_t)! {
+fn socket_t.recvfrom(&self, [u8] buf):(int, addr_t)! {
     if self.closed {
         throw errorf('socket closed')
     }
@@ -65,7 +65,7 @@ fn socket_t.recvfrom([u8] buf):(int, addr_t)! {
 #linkid rt_uv_udp_sendto
 fn uv_sendto(ref<socket_t> s, [u8] buf, addr_t addr):int!
 
-fn socket_t.sendto([u8] buf, string host):int! {
+fn socket_t.sendto(&self, [u8] buf, string host):int! {
     if self.closed {
        throw errorf('socket closed')
     }
@@ -82,7 +82,7 @@ fn socket_t.sendto([u8] buf, string host):int! {
     return uv_sendto(self, buf, addr)
 }
 
-fn socket_t.connect(string host):ref<conn_t>! {
+fn socket_t.connect(&self, string host):ref<conn_t>! {
     if self.closed {
         throw errorf('socket closed')
     }
@@ -108,7 +108,7 @@ fn connect(string host):ref<conn_t>! {
     return s.connect(host)
 }
 
-fn conn_t.write([u8] buf):int! {
+fn conn_t.write(&self, [u8] buf):int! {
     if self.socket.closed {
         throw errorf('socket closed')
     }
@@ -116,7 +116,7 @@ fn conn_t.write([u8] buf):int! {
     return uv_sendto(self.socket, buf, self.remote_addr)
 }
 
-fn conn_t.read([u8] buf):int! {
+fn conn_t.read(&self, [u8] buf):int! {
     if self.socket.closed {
         throw errorf('socket closed')
     }
@@ -125,17 +125,17 @@ fn conn_t.read([u8] buf):int! {
 }
 
 
-fn conn_t.close() {
+fn conn_t.close(&self) {
     self.socket.close()
 }
 
-fn addr_t.ip():string {
+fn addr_t.ip(&self):string {
     i32 family = libc.AF_INET // len = 16
     if !self.v4 {
         family = libc.AF_INET6 // len = 46
     }
 
-    var data = vec_new<u8>(0, 46)
+    var data = vec<u8>.new(0, 46)
     libc.inet_ntop(family, &self.data as anyptr, data.ref(), 46)
 
     // slice and change to str
@@ -143,6 +143,6 @@ fn addr_t.ip():string {
     return data[..len] as string
 }
 
-fn addr_t.to_string():string {
+fn addr_t.to_string(&self):string {
     return fmt.sprintf('%s:%d', self.ip(), self.port)
 }

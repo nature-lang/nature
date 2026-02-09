@@ -2,7 +2,7 @@ use log::{debug, trace};
 
 use crate::utils::format_global_ident;
 
-use super::common::{AstConstDef, AstFnDef, TypedefStmt, VarDeclExpr};
+use super::common::{AstConstDef, AstFnDef, GenericsParam, Type, TypeIdentKind, TypeKind, TypedefStmt, VarDeclExpr};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -126,11 +126,107 @@ impl SymbolTable {
 
         result.global_scope_id = result.create_scope(ScopeKind::Global, 0, 0, 0);
 
+        result.register_builtin_types();
+
         result
+    }
+
+    fn register_builtin_types(&mut self) {
+        let mut builtins: Vec<(String, Vec<GenericsParam>, Type)> = Vec::new();
+
+        builtins.push(("bool".to_string(), Vec::new(), Type::new(TypeKind::Bool)));
+        builtins.push(("int".to_string(), Vec::new(), Type::new(TypeKind::Int)));
+        builtins.push(("uint".to_string(), Vec::new(), Type::new(TypeKind::Uint)));
+        builtins.push(("float".to_string(), Vec::new(), Type::new(TypeKind::Float)));
+        builtins.push(("i8".to_string(), Vec::new(), Type::new(TypeKind::Int8)));
+        builtins.push(("i16".to_string(), Vec::new(), Type::new(TypeKind::Int16)));
+        builtins.push(("i32".to_string(), Vec::new(), Type::new(TypeKind::Int32)));
+        builtins.push(("i64".to_string(), Vec::new(), Type::new(TypeKind::Int64)));
+        builtins.push(("u8".to_string(), Vec::new(), Type::new(TypeKind::Uint8)));
+        builtins.push(("u16".to_string(), Vec::new(), Type::new(TypeKind::Uint16)));
+        builtins.push(("u32".to_string(), Vec::new(), Type::new(TypeKind::Uint32)));
+        builtins.push(("u64".to_string(), Vec::new(), Type::new(TypeKind::Uint64)));
+        builtins.push(("f32".to_string(), Vec::new(), Type::new(TypeKind::Float32)));
+        builtins.push(("f64".to_string(), Vec::new(), Type::new(TypeKind::Float64)));
+        builtins.push(("string".to_string(), Vec::new(), Type::new(TypeKind::String)));
+
+        let mut vec_params = Vec::new();
+        vec_params.push(GenericsParam::new("T".to_string()));
+        builtins.push((
+            "vec".to_string(),
+            vec_params,
+            Type::new(TypeKind::Vec(Box::new(Type::ident_new("T".to_string(), TypeIdentKind::GenericsParam)))),
+        ));
+
+        let mut set_params = Vec::new();
+        set_params.push(GenericsParam::new("T".to_string()));
+        builtins.push((
+            "set".to_string(),
+            set_params,
+            Type::new(TypeKind::Set(Box::new(Type::ident_new("T".to_string(), TypeIdentKind::GenericsParam)))),
+        ));
+
+        let mut chan_params = Vec::new();
+        chan_params.push(GenericsParam::new("T".to_string()));
+        builtins.push((
+            "chan".to_string(),
+            chan_params,
+            Type::new(TypeKind::Chan(Box::new(Type::ident_new("T".to_string(), TypeIdentKind::GenericsParam)))),
+        ));
+
+        let mut map_params = Vec::new();
+        map_params.push(GenericsParam::new("T".to_string()));
+        map_params.push(GenericsParam::new("U".to_string()));
+        builtins.push((
+            "map".to_string(),
+            map_params,
+            Type::new(TypeKind::Map(
+                Box::new(Type::ident_new("T".to_string(), TypeIdentKind::GenericsParam)),
+                Box::new(Type::ident_new("U".to_string(), TypeIdentKind::GenericsParam)),
+            )),
+        ));
+
+        builtins.push((
+            "tup".to_string(),
+            Vec::new(),
+            Type::new(TypeKind::Tuple(Vec::new(), 0)),
+        ));
+
+        for (ident, params, type_expr) in builtins {
+            let typedef = TypedefStmt {
+                ident: ident.clone(),
+                params,
+                type_expr,
+                is_alias: false,
+                is_interface: false,
+                is_enum: false,
+                is_tagged_union: false,
+                impl_interfaces: Vec::new(),
+                method_table: HashMap::new(),
+                symbol_start: 0,
+                symbol_end: 0,
+                symbol_id: 0,
+            };
+
+            let typedef_mutex = Arc::new(Mutex::new(typedef));
+            if let Ok(symbol_id) = self.define_symbol_in_scope(
+                ident,
+                SymbolKind::Type(typedef_mutex.clone()),
+                0,
+                self.global_scope_id,
+            ) {
+                let mut typedef_mut = typedef_mutex.lock().unwrap();
+                typedef_mut.symbol_id = symbol_id;
+            }
+        }
     }
 
     pub fn find_scope(&self, scope_id: NodeId) -> &Scope {
         self.scopes.get(scope_id).unwrap()
+    }
+
+    pub fn get_scope(&self, scope_id: NodeId) -> Option<&Scope> {
+        self.scopes.get(scope_id)
     }
 
     // 创建新的作用域

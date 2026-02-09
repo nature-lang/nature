@@ -62,13 +62,13 @@ fn new(int hasher_type, [u8] secret):ref<hmac_t> {
     return h
 }
 
-fn hmac_t.update([u8] message):ref<hmac_t> {
+fn hmac_t.update(&self, [u8] message):ref<hmac_t> {
     utils.mbedtls_md_hmac_update(&self.mbed_ctx, (message as string).to_cstr(), message.len())
     return self
 }
 
-fn hmac_t.finish():[u8] {
-    var output = vec_new<u8>(0, self.output_size)
+fn hmac_t.finish(&self):[u8] {
+    var output = vec<u8>.new(0, self.output_size)
     utils.mbedtls_md_hmac_finish(&self.mbed_ctx, output.ref())
     
     utils.mbedtls_md_free(&self.mbed_ctx)
@@ -76,8 +76,8 @@ fn hmac_t.finish():[u8] {
     return output
 }
 
-fn hmac_t.hex():string {
-    var output = vec_new<u8>(0, self.output_size)
+fn hmac_t.hex(&self):string {
+    var output = vec<u8>.new(0, self.output_size)
     utils.mbedtls_md_hmac_finish(&self.mbed_ctx, output.ref())
     
     utils.mbedtls_md_free(&self.mbed_ctx)

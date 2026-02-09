@@ -1,6 +1,6 @@
 fn main():void! {
-    var ch1 = chan_new<int>(1)
-    var ch2 = chan_new<string>()
+    var ch1 = chan<int>.new(1)
+    var ch2 = chan<string>.new()
 
     for int i = 0; i < 2; i+=1 {
         select{

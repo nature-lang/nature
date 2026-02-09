@@ -4,7 +4,7 @@ type person_t = struct{
     string name
 }
 
-fn person_t.to_string():string {
+fn person_t.to_string(&self):string {
     return self.name
 }
 
@@ -26,7 +26,7 @@ type person_t = struct{
     string name
 }
 
-fn person_t.to_string():string {
+fn person_t.to_string(&self):string {
     return self.name
 }
 
@@ -48,7 +48,7 @@ type person_t = struct{
     string name
 }
 
-fn person_t.to_string():string {
+fn person_t.to_string(&self):string {
     return self.name
 }
 
@@ -99,7 +99,7 @@ import runtime
 
 type bar_t = [int;5]
 
-fn bar_t.length():int {
+fn bar_t.length(&self):int {
     return 5
 }
 
@@ -140,7 +140,7 @@ fn main() {
 import fmt
 import runtime
 
-fn int.to_string():string {
+fn int.to_string(&self):string {
     return fmt.sprintf('%d', *self)
 }
 
@@ -171,7 +171,7 @@ import runtime
 
 type car_t = i64
 
-fn car_t.tostr() {
+fn car_t.tostr(&self) {
     assert(*self == 10000)
     println('self is', *self)
 }
@@ -222,7 +222,7 @@ fn main() {
 --- main.n
 import runtime
 
-fn int.to_string() {
+fn int.to_string(&self) {
     println('hello', *self)
 }
 
@@ -248,7 +248,7 @@ fn test1():int {
     return 211
 }
 
-fn int.to_str():string {
+fn int.to_str(&self):string {
     println(self as anyptr)
     runtime.in_heap(self as anyptr)
     return fmt.sprintf('data -> %d', *self)

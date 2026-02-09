@@ -63,7 +63,7 @@ fn main():void! {
     cg.register(pid)
 
     // - listen sig and wait cmd
-    var sig_ch = chan_new<signal.sig_t>(1)
+    var sig_ch = chan<signal.sig_t>.new(1)
     signal.notify(sig_ch)
 
     for true {

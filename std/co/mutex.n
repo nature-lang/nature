@@ -17,14 +17,14 @@ fn rt_mutex_try_lock(ref<mutex_t> m):bool
 #linkid rt_mutex_unlock
 fn rt_mutex_unlock(ref<mutex_t> m)
 
-fn mutex_t.lock() {
+fn mutex_t.lock(&self) {
     rt_mutex_lock(self)
 }
 
-fn mutex_t.try_lock():bool {
+fn mutex_t.try_lock(&self):bool {
     return rt_mutex_try_lock(self)
 }
 
-fn mutex_t.unlock() {
+fn mutex_t.unlock(&self) {
     rt_mutex_unlock(self)
 }

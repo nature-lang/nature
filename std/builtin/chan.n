@@ -1,7 +1,7 @@
 import co
 
-// var ch = chan_new<T>()
-fn chan_new<T>(...[int] args):chan<T> {
+// var ch = chan<T>.new()
+fn chan<T>.new(...[int] args):chan<T> {
     int rhash = @reflect_hash(chan<T>)
     int ele_rhash = @reflect_hash(T)
 

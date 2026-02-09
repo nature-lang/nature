@@ -40,10 +40,10 @@ nature-test/main.n:6:2: ident 'main.foo' redeclared
 --- main.n
 type t = struct{}
 
-fn t.foo():int {
+fn t.foo(&self):int {
 }
 
-fn t.foo(i32 i) {
+fn t.foo(&self, i32 i) {
 }
 
 fn main():void! {
@@ -56,10 +56,10 @@ nature-test/main.n:6:2: ident 'main.t.foo' redeclared
 --- main.n
 type t<T> = struct{}
 
-fn t<T>.foo() {
+fn t<T>.foo(&self) {
 }
 
-fn t<T:void>.foo() {
+fn t<T:void>.foo(&self) {
 }
 
 fn main():void! {

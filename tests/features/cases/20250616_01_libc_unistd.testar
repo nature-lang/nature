@@ -372,7 +372,7 @@ fn main():void {
     
     // 测试 swab 函数（字节交换）
     [u8] src_buf = [0x12, 0x34, 0x56, 0x78]
-    [u8] dst_buf = vec_new<u8>(0, 4)
+    [u8] dst_buf = vec<u8>.new(0, 4)
 
     libc.swab(src_buf.ref(), dst_buf.ref(), 4)
     

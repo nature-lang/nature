@@ -16,7 +16,7 @@ fn status_to_str(int status):string {
         502 -> '502'
         503 -> '503'
         _ -> {
-            var buf = vec_new<u8>(0, 3)
+            var buf = vec<u8>.new(0, 3)
             buf[0] = (status / 100 + 48) as u8
             buf[1] = (status / 10 % 10 + 48) as u8
             buf[2] = (status % 10 + 48) as u8
@@ -27,7 +27,7 @@ fn status_to_str(int status):string {
 
 // unsigned
 fn utos(uint value):string {
-    var buf = vec_new<u8>(0, 20) // uint 最大数字是 20 位
+    var buf = vec<u8>.new(0, 20) // uint 最大数字是 20 位
     var idx = 19;
 
     if value == 0 {

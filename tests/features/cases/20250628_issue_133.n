@@ -3,11 +3,11 @@ type Pair<T,U> = struct {
 	U second;
 };
 
-fn Pair<T,U>.get_first(): T {
+fn Pair<T,U>.get_first(&self): T {
 	return self.first;
 }
 
-fn Pair<T,U>.get_second(): U {
+fn Pair<T,U>.get_second(&self): U {
 	return self.second;
 }
 
@@ -16,7 +16,7 @@ type Message = struct {
 	i32 id;
 };
 
-fn Message.get_content(): string {
+fn Message.get_content(&self): string {
 	return self.content;
 }
 
@@ -26,4 +26,3 @@ fn main() {
 	println("First: ", pair2.first);
 	println("Second: ", pair2.second.get_content());
 }
-

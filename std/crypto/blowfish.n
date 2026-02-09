@@ -560,11 +560,11 @@ fn main():void! {
     [u8] decrypted = [0, 0, 0, 0, 0, 0, 0, 0]
     
     var cipher = cipher_t{
-        p: vec_new<u32>(0, 18),
-        s0: vec_new<u32>(0, 256),
-        s1: vec_new<u32>(0, 256),
-        s2: vec_new<u32>(0, 256),
-        s3: vec_new<u32>(0, 256),
+        p: vec<u32>.new(0, 18),
+        s0: vec<u32>.new(0, 256),
+        s1: vec<u32>.new(0, 256),
+        s2: vec<u32>.new(0, 256),
+        s3: vec<u32>.new(0, 256),
     }
 
     print("Blowfish Encryption Test\n")
@@ -608,11 +608,11 @@ fn main():void! {
                  0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]
     
     var salted_cipher = cipher_t{
-        p: vec_new<u32>(0, 18),
-        s0: vec_new<u32>(0, 256),
-        s1: vec_new<u32>(0, 256),
-        s2: vec_new<u32>(0, 256),
-        s3: vec_new<u32>(0, 256),
+        p: vec<u32>.new(0, 18),
+        s0: vec<u32>.new(0, 256),
+        s1: vec<u32>.new(0, 256),
+        s2: vec<u32>.new(0, 256),
+        s3: vec<u32>.new(0, 256),
     } 
     result = new_salted_cipher(test_key as [u8], salt, &salted_cipher)
     if result != SUCCESS {

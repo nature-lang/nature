@@ -1,6 +1,6 @@
 import runtime
 
-fn map_new<T,U>():map<T,U> {
+fn map<T,U>.new():map<T,U> {
     int hash = @reflect_hash(map<T,U>)
     int key_hash = @reflect_hash(T)
     int value_hash = @reflect_hash(U)

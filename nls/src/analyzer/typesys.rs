@@ -7,6 +7,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
+use log::debug;
+
 use super::{
     common::{AnalyzerError, AstCall, AstNode, Expr, Stmt, Type, TypeFn, TypedefStmt, VarDeclExpr},
     symbol::{NodeId, SymbolTable},
@@ -206,7 +208,7 @@ impl GenericSpecialFnClone {
 
             AstNode::ArrayAccess(type_, left, index) => AstNode::ArrayAccess(type_.clone(), Box::new(self.clone_expr(left)), Box::new(self.clone_expr(index))),
 
-            AstNode::SelectExpr(left, key) => AstNode::SelectExpr(Box::new(self.clone_expr(left)), key.clone()),
+            AstNode::SelectExpr(left, key, type_args) => AstNode::SelectExpr(Box::new(self.clone_expr(left)), key.clone(), type_args.clone()),
             _ => expr.node.clone(),
         };
 
@@ -1287,7 +1289,7 @@ impl<'a> Typesys<'a> {
                         }
                     } else if matches!(subject_type.kind, TypeKind::Enum(..)) {
                         // enum 值匹配
-                        if let AstNode::SelectExpr(_, key) = &cond_expr.node {
+                        if let AstNode::SelectExpr(_, key, _) = &cond_expr.node {
                             exhaustive_table.insert(key.clone(), true);
                         }
 
@@ -2328,7 +2330,9 @@ impl<'a> Typesys<'a> {
     pub fn infer_select_expr(&mut self, expr: &mut Box<Expr>) -> Result<Type, AnalyzerError> {
         let start = expr.start;
         let end = expr.end;
-        let AstNode::SelectExpr(left, key) = &mut expr.node else { unreachable!() };
+        let AstNode::SelectExpr(left, key, _type_args) = &mut expr.node else {
+            unreachable!()
+        };
 
         // 首先检查是否是 enum 类型访问: Color.RED
         if let Some((new_node, enum_type)) = self.try_infer_enum_select(left, key, start, end)? {
@@ -2492,6 +2496,18 @@ impl<'a> Typesys<'a> {
     pub fn infer_expr(&mut self, expr: &mut Box<Expr>, infer_target_type: Type, literal_refer: Type) -> Result<Type, AnalyzerError> {
         if expr.type_.kind.is_exist() {
             return Ok(expr.type_.clone());
+        }
+
+        if matches!(expr.node, AstNode::SelectExpr(..)) {
+            if self.try_rewrite_tagged_union_select(expr, &infer_target_type)? {
+                return self.infer_tagged_union_new(expr, infer_target_type);
+            }
+        }
+
+        if matches!(expr.node, AstNode::Call(_)) {
+            if self.try_rewrite_tagged_union_call(expr, &infer_target_type)? {
+                return self.infer_tagged_union_new(expr, infer_target_type);
+            }
         }
 
         return match &mut expr.node {
@@ -3140,7 +3156,7 @@ impl<'a> Typesys<'a> {
     }
 
     pub fn generics_impl_args_hash(&mut self, args: &Vec<Type>) -> Result<u64, AnalyzerError> {
-        let mut hash_str = "fn".to_string();
+        let mut hash_str = "fn.".to_string();
 
         // 遍历所有泛型参数类型
         for arg in args {
@@ -3648,12 +3664,50 @@ impl<'a> Typesys<'a> {
 
     fn impl_call_rewrite(&mut self, call: &mut AstCall, target_type: Type, start: usize, end: usize) -> Result<Option<TypeFn>, AnalyzerError> {
         // 获取select表达式
-        let AstNode::SelectExpr(select_left, key) = &mut call.left.node.clone() else {
+        let AstNode::SelectExpr(select_left, key, type_args) = &mut call.left.node.clone() else {
             unreachable!()
         };
 
         // 获取left的类型(已经在之前推导过)
-        let select_left_type = self.infer_right_expr(select_left, Type::default())?;
+        let mut left_is_type = false;
+        let select_left_type = if let AstNode::Ident(_ident, symbol_id) = &select_left.node {
+            if *symbol_id == 0 {
+                self.infer_right_expr(select_left, Type::default())?
+            } else {
+                let symbol = self.symbol_table.get_symbol(*symbol_id).ok_or(AnalyzerError {
+                    start,
+                    end,
+                    message: "symbol not found".to_string(),
+                })?;
+                match &symbol.kind {
+                    SymbolKind::Type(typedef_mutex) => {
+                        let typedef = typedef_mutex.lock().unwrap();
+                        left_is_type = true;
+
+                        // 类型参数校验：对于 impl 静态方法调用，需要校验类型参数数量
+                        let expected = typedef.params.len();
+                        let actual = type_args.as_ref().map_or(0, |args| args.len());
+                        if expected != actual {
+                            return Err(AnalyzerError {
+                                start,
+                                end,
+                                message: format!("type '{}' expects {} type argument(s), but got {}", typedef.ident, expected, actual),
+                            });
+                        }
+
+                        let mut t = Type::ident_new(typedef.ident.clone(), TypeIdentKind::Def);
+                        t.symbol_id = *symbol_id;
+                        if let Some(args) = &type_args {
+                            t.args = args.clone();
+                        }
+                        t
+                    }
+                    _ => self.infer_right_expr(select_left, Type::default())?,
+                }
+            }
+        } else {
+            self.infer_right_expr(select_left, Type::default())?
+        };
 
         // 解构类型判断
         let select_left_type = if matches!(select_left_type.kind, TypeKind::Ref(_) | TypeKind::Ptr(_)) {
@@ -3677,7 +3731,23 @@ impl<'a> Typesys<'a> {
             return Ok(None);
         }
 
-        let mut impl_ident = select_left_type.ident.clone();
+        // 当 symbol_id 存在时，使用 typedef 的 local ident 进行查找
+        // 因为 impl fn 注册时使用的是 typedef 的 local ident（如 bar_t.dump），
+        // 而不是 fully qualified ident（如 nature-test.mod.bar_t.dump）
+        let mut impl_ident = if select_left_type.symbol_id != 0 {
+            if let Some(symbol) = self.symbol_table.get_symbol(select_left_type.symbol_id) {
+                if let SymbolKind::Type(typedef_mutex) = &symbol.kind {
+                    let typedef = typedef_mutex.lock().unwrap();
+                    typedef.ident.clone()
+                } else {
+                    select_left_type.ident.clone()
+                }
+            } else {
+                select_left_type.ident.clone()
+            }
+        } else {
+            select_left_type.ident.clone()
+        };
         let mut impl_args = select_left_type.args.clone();
 
         // string.len() -> string_len
@@ -3758,11 +3828,45 @@ impl<'a> Typesys<'a> {
 
         // 构建新的参数列表
         let mut new_args = Vec::new();
+        let needs_self = match &call.left.node {
+            AstNode::Ident(_, symbol_id) => {
+                if *symbol_id == 0 {
+                    return Err(AnalyzerError {
+                        start,
+                        end,
+                        message: "symbol not found".to_string(),
+                    });
+                }
+                let symbol = self.symbol_table.get_symbol(*symbol_id).ok_or(AnalyzerError {
+                    start,
+                    end,
+                    message: "symbol not found".to_string(),
+                })?;
+                match &symbol.kind {
+                    SymbolKind::Fn(fndef_mutex) => {
+                        let fndef = fndef_mutex.lock().unwrap();
+                        !fndef.is_static && fndef.self_kind != SelfKind::Null
+                    }
+                    _ => false,
+                }
+            }
+            _ => false,
+        };
 
-        // 添加self参数
-        let mut self_arg = select_left.clone(); // {'a':1}.del('a') -> map_del({'a':1}, 'a')
-        self.self_arg_rewrite(&type_fn, &mut self_arg)?;
-        new_args.push(self_arg);
+        if left_is_type && needs_self {
+            return Err(AnalyzerError {
+                start,
+                end,
+                message: format!("method '{}' requires a receiver; use a value instead of a type", key.clone()),
+            });
+        }
+
+        if needs_self {
+            // 添加self参数
+            let mut self_arg = select_left.clone(); // {'a':1}.del('a') -> map_del({'a':1}, 'a')
+            self.self_arg_rewrite(&type_fn, &mut self_arg)?;
+            new_args.push(self_arg);
+        }
 
         new_args.extend(call.args.iter().cloned());
 
@@ -3771,31 +3875,190 @@ impl<'a> Typesys<'a> {
         Ok(Some(*type_fn))
     }
 
+    fn select_left_is_type(&mut self, select_left: &Box<Expr>, type_args: &Option<Vec<Type>>, start: usize, end: usize) -> Result<Option<Type>, AnalyzerError> {
+        let AstNode::Ident(_ident, symbol_id) = &select_left.node else {
+            return Ok(None);
+        };
+
+        if *symbol_id == 0 {
+            return Ok(None);
+        }
+
+        let symbol = self.symbol_table.get_symbol(*symbol_id).ok_or(AnalyzerError {
+            start,
+            end,
+            message: "symbol not found".to_string(),
+        })?;
+
+        let SymbolKind::Type(typedef_mutex) = &symbol.kind else {
+            return Ok(None);
+        };
+
+        let typedef = typedef_mutex.lock().unwrap();
+        let mut t = Type::ident_new(typedef.ident.clone(), TypeIdentKind::Def);
+        t.symbol_id = *symbol_id;
+        if let Some(args) = type_args.as_ref() {
+            t.args = args.clone();
+        }
+
+        Ok(Some(t))
+    }
+
+    fn impl_static_symbol_exists(&mut self, select_left_type: &Type, key: &String) -> bool {
+        if select_left_type.ident.is_empty() {
+            return false;
+        }
+
+        let impl_symbol_name = format_impl_ident(select_left_type.ident.clone(), key.clone());
+        let Ok((_, symbol_id)) = self.find_impl_call_ident(impl_symbol_name, select_left_type.args.clone(), select_left_type) else {
+            return false;
+        };
+        let Some(symbol) = self.symbol_table.get_symbol(symbol_id) else {
+            return false;
+        };
+        match &symbol.kind {
+            SymbolKind::Fn(fndef_mutex) => {
+                let fndef = fndef_mutex.lock().unwrap();
+                fndef.is_static
+            }
+            _ => false,
+        }
+    }
+
+    fn try_rewrite_tagged_union_call(&mut self, expr: &mut Box<Expr>, _target_type: &Type) -> Result<bool, AnalyzerError> {
+        let AstNode::Call(call) = &mut expr.node else {
+            return Ok(false);
+        };
+
+        let AstNode::SelectExpr(select_left, key, type_args) = &mut call.left.node else {
+            return Ok(false);
+        };
+
+        let Some(select_left_type) = self.select_left_is_type(select_left, type_args, expr.start, expr.end)? else {
+            return Ok(false);
+        };
+
+        // static method priority over tagged union element
+        if self.impl_static_symbol_exists(&select_left_type, key) {
+            return Ok(false);
+        }
+
+        let symbol = self.symbol_table.get_symbol(select_left_type.symbol_id).ok_or(AnalyzerError {
+            start: expr.start,
+            end: expr.end,
+            message: "symbol not found".to_string(),
+        })?;
+        let SymbolKind::Type(typedef_mutex) = &symbol.kind else {
+            return Ok(false);
+        };
+        let typedef = typedef_mutex.lock().unwrap();
+        if !typedef.is_tagged_union {
+            return Ok(false);
+        }
+
+        let mut new_union_type = Type::ident_new(select_left_type.ident.clone(), TypeIdentKind::TaggedUnion);
+        new_union_type.symbol_id = select_left_type.symbol_id;
+        new_union_type.start = expr.start;
+        new_union_type.end = expr.end;
+        if let Some(args) = type_args.as_ref() {
+            new_union_type.args = args.clone();
+        }
+
+        let arg = if call.args.is_empty() {
+            None
+        } else if call.args.len() == 1 {
+            Some(call.args[0].clone())
+        } else {
+            Some(Box::new(Expr {
+                start: call.args[0].start,
+                end: call.args.last().map(|e| e.end).unwrap_or(expr.end),
+                type_: Type::default(),
+                target_type: Type::default(),
+                node: AstNode::TupleNew(call.args.clone()),
+            }))
+        };
+
+        expr.node = AstNode::TaggedUnionNew(new_union_type, key.clone(), None, arg);
+        Ok(true)
+    }
+
+    fn try_rewrite_tagged_union_select(&mut self, expr: &mut Box<Expr>, _target_type: &Type) -> Result<bool, AnalyzerError> {
+        let AstNode::SelectExpr(select_left, key, type_args) = &mut expr.node else {
+            return Ok(false);
+        };
+
+        let Some(select_left_type) = self.select_left_is_type(select_left, type_args, expr.start, expr.end)? else {
+            return Ok(false);
+        };
+
+        // static method priority over tagged union element
+        if self.impl_static_symbol_exists(&select_left_type, key) {
+            return Ok(false);
+        }
+
+        let symbol = self.symbol_table.get_symbol(select_left_type.symbol_id).ok_or(AnalyzerError {
+            start: expr.start,
+            end: expr.end,
+            message: "symbol not found".to_string(),
+        })?;
+        let SymbolKind::Type(typedef_mutex) = &symbol.kind else {
+            return Ok(false);
+        };
+        let typedef = typedef_mutex.lock().unwrap();
+        if !typedef.is_tagged_union {
+            return Ok(false);
+        }
+
+        let mut new_union_type = Type::ident_new(select_left_type.ident.clone(), TypeIdentKind::TaggedUnion);
+        new_union_type.symbol_id = select_left_type.symbol_id;
+        new_union_type.start = expr.start;
+        new_union_type.end = expr.end;
+        if let Some(args) = type_args.as_ref() {
+            new_union_type.args = args.clone();
+        }
+
+        expr.node = AstNode::TaggedUnionNew(new_union_type, key.clone(), None, None);
+        Ok(true)
+    }
+
     pub fn infer_call_left(&mut self, call: &mut AstCall, target_type: Type, start: usize, end: usize) -> Result<TypeKind, AnalyzerError> {
         // --------------------------------------------interface call handle----------------------------------------------------------
-        if let AstNode::SelectExpr(select_left, key) = &mut call.left.node {
-            let select_left_type = self.infer_right_expr(select_left, Type::default())?;
-
-            if let TypeKind::Interface(elements) = &select_left_type.kind {
-                // 在接口中查找对应的方法
-                for element in elements {
-                    if let TypeKind::Fn(fn_type) = &element.kind {
-                        if fn_type.name == *key {
-                            return Ok(element.kind.clone());
+        if let AstNode::SelectExpr(select_left, key, _) = &mut call.left.node {
+            let mut skip_interface = false;
+            if let AstNode::Ident(_, symbol_id) = &select_left.node {
+                if *symbol_id != 0 {
+                    if let Some(symbol) = self.symbol_table.get_symbol(*symbol_id) {
+                        if matches!(symbol.kind, SymbolKind::Type(_)) {
+                            skip_interface = true;
                         }
                     }
                 }
+            }
 
-                return Err(AnalyzerError {
-                    start,
-                    end,
-                    message: format!("interface '{}' not declare '{}' fn", select_left_type.ident, key),
-                });
+            if !skip_interface {
+                let select_left_type = self.infer_right_expr(select_left, Type::default())?;
+
+                if let TypeKind::Interface(elements) = &select_left_type.kind {
+                    // 在接口中查找对应的方法
+                    for element in elements {
+                        if let TypeKind::Fn(fn_type) = &element.kind {
+                            if fn_type.name == *key {
+                                return Ok(element.kind.clone());
+                            }
+                        }
+                    }
+
+                    return Err(AnalyzerError {
+                        start,
+                        end,
+                        message: format!("interface '{}' not declare '{}' fn", select_left_type.ident, key),
+                    });
+                }
             }
         }
 
         // --------------------------------------------impl type handle----------------------------------------------------------
-        if let AstNode::SelectExpr(_, _) = &mut call.left.node {
+        if let AstNode::SelectExpr(_, _, _) = &mut call.left.node {
             if let Some(type_fn) = self.impl_call_rewrite(call, target_type.clone(), start, end)? {
                 return Ok(TypeKind::Fn(Box::new(type_fn)));
             }
@@ -4594,7 +4857,7 @@ impl<'a> Typesys<'a> {
 
             // 为什么要在这里进行 ptr of, 只有在 infer 之后才能确定 alias 的具体类型，从而进一步判断是否需要 ptrof
             // is_impl 并且是第一个参数时，根据 self_kind 处理
-            if fndef.is_impl && i == 0 {
+            if fndef.is_impl && !fndef.is_static && fndef.self_kind != SelfKind::Null && i == 0 {
                 if param_type.is_stack_impl() {
                     match fndef.self_kind {
                         SelfKind::SelfRefT => {
@@ -4890,9 +5153,9 @@ impl<'a> Typesys<'a> {
             return_type: self.reduction_type(fndef.return_type.clone())?,
         };
 
-        // 跳过 self, self index = 1
+        // 跳过 self(仅当存在 receiver)
         for (i, param) in fndef.params.iter().enumerate() {
-            if i == 0 {
+            if !fndef.is_static && fndef.self_kind != SelfKind::Null && i == 0 {
                 continue;
             }
             let mut param_type = {
@@ -5210,11 +5473,19 @@ impl<'a> Typesys<'a> {
 
             if param.constraints.1 {
                 // 存在 any 则无法进行具体数量的组合约束
+                // 但需要先验证泛型约束是否与 typedef 兼容
+                if Type::is_ident(&impl_type) {
+                    self.infer_generics_param_constraints(impl_type, generics_params)?
+                }
                 return Ok(hash_list);
             }
 
             // and 表示这是 interface, 同样无法进行类型约束
             if param.constraints.2 {
+                // 但需要先验证泛型约束是否与 typedef 兼容
+                if Type::is_ident(&impl_type) {
+                    self.infer_generics_param_constraints(impl_type, generics_params)?
+                }
                 return Ok(hash_list);
             }
         }
@@ -5305,9 +5576,22 @@ impl<'a> Typesys<'a> {
                         if generics_args.len() == 0 {
                             // 作为泛型函数，但是没有任何泛型参数约束, 直接使用原始名称注册即可
                             // fndef.symbol_name 在 sem 阶段进行了 module ident 拼接，所以注册到符号表中的 global fn 使用了完整名称
-                            // debug!("symbol {} will register to table, params_len {}", fndef.symbol_name, fndef.params.len());
+                            debug!(
+                                "symbol {} will register to table, params_len {}, scope_id {}",
+                                fndef.symbol_name,
+                                fndef.params.len(),
+                                scope_id
+                            );
 
                             let _ = self.symbol_table.define_symbol_in_scope(
+                                fndef.symbol_name.clone(),
+                                SymbolKind::Fn(fndef_mutex.clone()),
+                                fndef.symbol_start,
+                                scope_id,
+                            );
+
+                            // 同时注册到全局符号表，以便跨模块访问
+                            let _ = self.symbol_table.define_global_symbol(
                                 fndef.symbol_name.clone(),
                                 SymbolKind::Fn(fndef_mutex.clone()),
                                 fndef.symbol_start,
@@ -5322,12 +5606,22 @@ impl<'a> Typesys<'a> {
                                 // 多个 symbol_name 会共用同一个 symbol_id, 覆盖为最后一个即可
 
                                 // 仅仅注册了 symbol hash 符号，此时 data 还是原始 fndef_mutex
-                                match self
-                                    .symbol_table
-                                    .define_symbol_in_scope(symbol_name, SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, scope_id)
-                                {
+                                match self.symbol_table.define_symbol_in_scope(
+                                    symbol_name.clone(),
+                                    SymbolKind::Fn(fndef_mutex.clone()),
+                                    fndef.symbol_start,
+                                    scope_id,
+                                ) {
                                     Ok(symbol_id) => {
                                         fndef.symbol_id = symbol_id;
+
+                                        // 同时注册到全局符号表，以便跨模块访问
+                                        let _ = self.symbol_table.define_global_symbol(
+                                            symbol_name,
+                                            SymbolKind::Fn(fndef_mutex.clone()),
+                                            fndef.symbol_start,
+                                            scope_id,
+                                        );
                                     }
                                     Err(_e) => {
                                         // 与次同时，可以进行泛型的冲突检测, 避免相同的类型约束重复声明

@@ -27,7 +27,7 @@ fn co_return<T>(ptr<T> result) {
     utils.coroutine_return(result as anyptr)
 }
 
-fn future_t.await():T! {
+fn future_t<T>.await(&self):T! {
     utils.coroutine_await(self.co)
 
     if self.error is throwable {
@@ -38,7 +38,7 @@ fn future_t.await():T! {
     return *self.result
 }
 
-fn future_t<T:void>.await():void! {
+fn future_t<T:void>.await(&self):void! {
     utils.coroutine_await(self.co)
 
     if self.error is throwable {

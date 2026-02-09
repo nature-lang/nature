@@ -120,7 +120,7 @@ fn main():void! {
 
 === test_amd64_mul_failed
 --- main.n
-var list = [0;10]
+[int;10] list = [0;10]
 
 fn test1(int a) {
     println(a)

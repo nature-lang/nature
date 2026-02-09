@@ -164,7 +164,7 @@ fn private_key_from_pem([u8] pem_data, [u8] password):ref<rsa_private_key_t>! {
 }
 
 // Encrypt data using RSA public key with OAEP padding
-fn rsa_public_key_t.encrypt_oaep(i32 hash_algo, [u8] plaintext, [u8]? label):[u8]! {
+fn rsa_public_key_t.encrypt_oaep(&self, i32 hash_algo, [u8] plaintext, [u8]? label):[u8]! {
     // Initialize entropy and random number generator for encryption
     var entropy = utils.mbedtls_entropy_context{}
     var ctr_drbg = utils.mbedtls_ctr_drbg_context{}
@@ -184,7 +184,7 @@ fn rsa_public_key_t.encrypt_oaep(i32 hash_algo, [u8] plaintext, [u8]? label):[u8
     utils.mbedtls_rsa_set_padding(&self.rsa_ctx, utils.MBEDTLS_RSA_PKCS_V21, hash_algo)
 
     var key_size = utils.mbedtls_rsa_get_len(&self.rsa_ctx)
-    var output = vec_new<u8>(0, key_size)
+    var output = vec<u8>.new(0, key_size)
 
     var label_ptr = 0 as libc.cstr
     var label_len = 0
@@ -210,7 +210,7 @@ fn rsa_public_key_t.encrypt_oaep(i32 hash_algo, [u8] plaintext, [u8]? label):[u8
 }
 
 // Decrypt data using RSA private key with OAEP padding
-fn rsa_private_key_t.decrypt_oaep(i32 hash_algo, [u8] ciphertext, [u8]? label):[u8]! {
+fn rsa_private_key_t.decrypt_oaep(&self, i32 hash_algo, [u8] ciphertext, [u8]? label):[u8]! {
     // Initialize entropy and random number generator for decryption
     var entropy = utils.mbedtls_entropy_context{}
     var ctr_drbg = utils.mbedtls_ctr_drbg_context{}
@@ -230,7 +230,7 @@ fn rsa_private_key_t.decrypt_oaep(i32 hash_algo, [u8] ciphertext, [u8]? label):[
     utils.mbedtls_rsa_set_padding(&self.rsa_ctx, utils.MBEDTLS_RSA_PKCS_V21, hash_algo)
     
     var key_size = utils.mbedtls_rsa_get_len(&self.rsa_ctx)
-    var output = vec_new<u8>(0, key_size)
+    var output = vec<u8>.new(0, key_size)
     var output_len = 0
     
     var label_ptr = null as libc.cstr
@@ -257,7 +257,7 @@ fn rsa_private_key_t.decrypt_oaep(i32 hash_algo, [u8] ciphertext, [u8]? label):[
 
 
 // Encrypt data using RSA public key with PKCS#1 v1.5 padding
-fn rsa_public_key_t.encrypt_pkcs_v15([u8] plaintext):[u8]! {
+fn rsa_public_key_t.encrypt_pkcs_v15(&self, [u8] plaintext):[u8]! {
     // Initialize entropy and random number generator for encryption
     var entropy = utils.mbedtls_entropy_context{}
     var ctr_drbg = utils.mbedtls_ctr_drbg_context{}
@@ -277,7 +277,7 @@ fn rsa_public_key_t.encrypt_pkcs_v15([u8] plaintext):[u8]! {
     utils.mbedtls_rsa_set_padding(&self.rsa_ctx, utils.MBEDTLS_RSA_PKCS_V15, SHA256)
 
     var key_size = utils.mbedtls_rsa_get_len(&self.rsa_ctx)
-    var output = vec_new<u8>(0, key_size)
+    var output = vec<u8>.new(0, key_size)
 
     var result = utils.mbedtls_rsa_pkcs1_encrypt(&self.rsa_ctx, libc.to_cfn(utils.mbedtls_ctr_drbg_random as anyptr), &ctr_drbg as anyptr,
                                                  plaintext.len(), (plaintext as string).to_cstr(),
@@ -295,7 +295,7 @@ fn rsa_public_key_t.encrypt_pkcs_v15([u8] plaintext):[u8]! {
 }
 
 // Decrypt data using RSA private key with PKCS#1 v1.5 padding
-fn rsa_private_key_t.decrypt_pkcs_v15([u8] ciphertext):[u8]! {
+fn rsa_private_key_t.decrypt_pkcs_v15(&self, [u8] ciphertext):[u8]! {
     // Initialize entropy and random number generator for decryption
     var entropy = utils.mbedtls_entropy_context{}
     var ctr_drbg = utils.mbedtls_ctr_drbg_context{}
@@ -315,7 +315,7 @@ fn rsa_private_key_t.decrypt_pkcs_v15([u8] ciphertext):[u8]! {
     utils.mbedtls_rsa_set_padding(&self.rsa_ctx, utils.MBEDTLS_RSA_PKCS_V15, SHA256)
     
     var key_size = utils.mbedtls_rsa_get_len(&self.rsa_ctx)
-    var output = vec_new<u8>(0, key_size)
+    var output = vec<u8>.new(0, key_size)
     var output_len = 0
     
     var result = utils.mbedtls_rsa_pkcs1_decrypt(&self.rsa_ctx, libc.to_cfn(utils.mbedtls_ctr_drbg_random as anyptr), &ctr_drbg as anyptr,
@@ -334,8 +334,8 @@ fn rsa_private_key_t.decrypt_pkcs_v15([u8] ciphertext):[u8]! {
 }
 
 // Export RSA public key as PEM format
-fn rsa_public_key_t.to_pem():[u8]! {
-    var pem_buff = vec_new<u8>(0, 4096)
+fn rsa_public_key_t.to_pem(&self):[u8]! {
+    var pem_buff = vec<u8>.new(0, 4096)
     var pk = utils.mbedtls_pk_context{}
 
     utils.mbedtls_pk_init(&pk)
@@ -366,8 +366,8 @@ fn rsa_public_key_t.to_pem():[u8]! {
 }
 
 // Export RSA private key as PEM format
-fn rsa_private_key_t.to_pem():[u8]! {
-    var pem_buff = vec_new<u8>(0, 4096)
+fn rsa_private_key_t.to_pem(&self):[u8]! {
+    var pem_buff = vec<u8>.new(0, 4096)
     var pk = utils.mbedtls_pk_context{}
 
     utils.mbedtls_pk_init(&pk)
@@ -398,12 +398,11 @@ fn rsa_private_key_t.to_pem():[u8]! {
 }
 
 // Clean up RSA public key resources
-fn rsa_public_key_t.free():void {
+fn rsa_public_key_t.free(&self):void {
     utils.mbedtls_rsa_free(&self.rsa_ctx)
 }
 
 // Clean up RSA private key resources
-fn rsa_private_key_t.free():void {
+fn rsa_private_key_t.free(&self):void {
     utils.mbedtls_rsa_free(&self.rsa_ctx)
 }
-

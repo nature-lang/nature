@@ -36,7 +36,7 @@ fn main() {
 --- main.n
 type tu = (int, bool, float)
 
-fn tu.hello():ref<tu> {
+fn tu.hello(&self):ref<tu> {
     println('hello')
     return self
 }

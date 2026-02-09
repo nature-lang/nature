@@ -160,6 +160,7 @@ static ast_expr_t test_method_call_expr(char *ident, char *method) {
     ast_expr_select_t *select = NEW(ast_expr_select_t);
     select->left = test_ident_literal(ident);
     select->key = method;
+    select->type_args = NULL;
 
     ast_expr_t select_expr = {0};
     select_expr.assert_type = AST_EXPR_SELECT;

@@ -522,23 +522,35 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                 if fndef.impl_type.kind.is_unknown() {
                     fndef.symbol_name = format_global_ident(m.ident.clone(), symbol_name.clone());
 
-                    match symbol_table.define_symbol_in_scope(fndef.symbol_name.clone(), SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, m.scope_id) {
-                        Ok(symbol_id) => {
-                            fndef.symbol_id = symbol_id;
+                    if fndef.generics_params.is_none() {
+                        match symbol_table.define_symbol_in_scope(
+                            fndef.symbol_name.clone(),
+                            SymbolKind::Fn(fndef_mutex.clone()),
+                            fndef.symbol_start,
+                            m.scope_id,
+                        ) {
+                            Ok(symbol_id) => {
+                                fndef.symbol_id = symbol_id;
+                            }
+                            Err(_e) => {
+                                errors_push(
+                                    m,
+                                    AnalyzerError {
+                                        start: fndef.symbol_start,
+                                        end: fndef.symbol_end,
+                                        message: format!("ident '{}' redeclared", fndef.symbol_name),
+                                    },
+                                );
+                            }
                         }
-                        Err(_e) => {
-                            errors_push(
-                                m,
-                                AnalyzerError {
-                                    start: fndef.symbol_start,
-                                    end: fndef.symbol_end,
-                                    message: format!("ident '{}' redeclared", fndef.symbol_name),
-                                },
-                            );
-                        }
-                    }
 
-                    let _ = symbol_table.define_global_symbol(fndef.symbol_name.clone(), SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, m.scope_id);
+                        let _ = symbol_table.define_global_symbol(
+                            fndef.symbol_name.clone(),
+                            SymbolKind::Fn(fndef_mutex.clone()),
+                            fndef.symbol_start,
+                            m.scope_id,
+                        );
+                    }
                 } else {
                     // dealy semantic analyze
                 }

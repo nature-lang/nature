@@ -29,6 +29,6 @@ fn area<T, U>(box<T, U> b):T {
 }
 
 // 类型扩展
-fn box<T, U>.perimeter():T {
+fn box<T, U>.perimeter(&self):T {
     return (self.width + self.length as T) * 2
 }

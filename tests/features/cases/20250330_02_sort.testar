@@ -215,7 +215,7 @@ fn random_u32(ptr<u64> state):u32 {
 fn main():void! {
     u64 seed = time.unix() as u64
     int len = 1000000
-    var list = vec_cap<u32>(len)
+    var list = vec<u32>.cap_of(len)
 
     for int i = 0; i < len; i+=1 {
         list.push(random_u32(&seed))
@@ -255,7 +255,7 @@ fn main():void! {
     u64 seed = time.unix() as u64
     int len = 1000000
     int slice_end = (len as float * 0.75) as int
-    var list = vec_cap<u32>(len)
+    var list = vec<u32>.cap_of(len)
 
     for int i = 0; i < len; i+=1 {
         list.push(random_u32(&seed))
@@ -292,7 +292,7 @@ fn random_f32(ptr<u64> state):f32 {
 fn main():void! {
     u64 seed = time.unix() as u64
     int len = 1000000
-    var list = vec_cap<f32>(len)
+    var list = vec<f32>.cap_of(len)
 
     for int i = 0; i < len; i+=1 {
         list.push(random_f32(&seed))
@@ -326,7 +326,7 @@ type prob_index_t = struct{
 fn main():void! {
     int n = 32000
 
-    var probindex = vec_new<prob_index_t>(prob_index_t{}, n)
+    var probindex = vec<prob_index_t>.new(prob_index_t{}, n)
     i64 start = time.now().ms_timestamp()
     probindex.sort(fn(int a, int b):bool {
         return probindex[a].prob > probindex[b].prob

@@ -9,7 +9,7 @@ type errort:throwable = struct{
 	bool is_panic
 }
 
-fn errort.msg():string {
+fn errort.msg(&self):string {
 	return self.message
 }
 

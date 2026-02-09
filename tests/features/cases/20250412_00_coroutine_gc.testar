@@ -47,7 +47,7 @@ fn main() {
     go test_cpu_calc()
 
     // allocate big memoory
-    var data = vec_new<i64>(0, 1024000)
+    var data = vec<i64>.new(0, 1024000)
     var start = runtime.malloc_bytes()
     println('allocate bytes:', start)
     assert(start > 8000000)
@@ -78,7 +78,7 @@ fn main() {
     go test_cpu_calc()
 
     // allocate big memoory
-    var data = vec_new<i64>(0, 1024000)
+    var data = vec<i64>.new(0, 1024000)
     var start = runtime.malloc_bytes()
     println('allocate bytes:', start)
     assert(start > 8000000)
@@ -110,16 +110,16 @@ fn test_cpu_calc() {
 }
 
 fn alloc() {
-   var data1 = vec_new<i64>(0, 10240)
-   var data2 = vec_new<i64>(0, 10240)
-   var data3 = vec_new<i64>(0, 10240)
-   var data4 = vec_new<i64>(0, 10240)
-   var data5 = vec_new<i64>(0, 10240)
-   var data6 = vec_new<i64>(0, 10240)
-   var data7 = vec_new<i64>(0, 10240)
-   var data8 = vec_new<i64>(0, 10240)
-   var data9 = vec_new<i64>(0, 10240)
-   var data10 = vec_new<i64>(0, 10240)
+   var data1 = vec<i64>.new(0, 10240)
+   var data2 = vec<i64>.new(0, 10240)
+   var data3 = vec<i64>.new(0, 10240)
+   var data4 = vec<i64>.new(0, 10240)
+   var data5 = vec<i64>.new(0, 10240)
+   var data6 = vec<i64>.new(0, 10240)
+   var data7 = vec<i64>.new(0, 10240)
+   var data8 = vec<i64>.new(0, 10240)
+   var data9 = vec<i64>.new(0, 10240)
+   var data10 = vec<i64>.new(0, 10240)
 }
 
 fn main() {
@@ -152,11 +152,11 @@ fn test_break() {
 
 fn car() {
     test_break()
-    var b = vec_new<int>(0, 1024)
+    var b = vec<int>.new(0, 1024)
     var c = 111
-    var d = vec_new<int>(0, 1024)
+    var d = vec<int>.new(0, 1024)
     var e = 222
-    var f = vec_new<float>(0, 1024)
+    var f = vec<float>.new(0, 1024)
     var before = runtime.malloc_bytes()
     println(before)
     assert(before > 50000)
@@ -168,11 +168,11 @@ fn car() {
 
 fn bar() {
     test_break()
-    var b = vec_new<int>(0, 1024)
+    var b = vec<int>.new(0, 1024)
     var c = 111
-    var d = vec_new<int>(0, 1024)
+    var d = vec<int>.new(0, 1024)
     var e = 222
-    var f = vec_new<float>(0, 1024)
+    var f = vec<float>.new(0, 1024)
     car()
     var g = b[0] + c + d[0] + e + f[0] as int
 }
@@ -191,12 +191,12 @@ fn foo() {
     var a10 = 1
     var a11 = 1
     var a12 = 1
-    var b = vec_new<int>(0, 1024)
+    var b = vec<int>.new(0, 1024)
     var c = 111
-    var d = vec_new<int>(0, 1024)
+    var d = vec<int>.new(0, 1024)
     bar()
     var e = 222
-    var f = vec_new<float>(0, 1024)
+    var f = vec<float>.new(0, 1024)
     var g = a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + b[0] + c + d[0] + e + f[0] as int
 }
 
@@ -218,11 +218,11 @@ fn test_break() {
 
 fn car() {
     test_break()
-    var b = vec_new<int>(0, 1024)
+    var b = vec<int>.new(0, 1024)
     var c = 111
-    var d = vec_new<int>(0, 1024)
+    var d = vec<int>.new(0, 1024)
     var e = 222
-    var f = vec_new<float>(0, 1024)
+    var f = vec<float>.new(0, 1024)
     var before = runtime.malloc_bytes()
     println(before)
     assert(before > 50000)
@@ -236,11 +236,11 @@ fn car() {
 
 fn bar() {
     test_break()
-    var b = vec_new<int>(0, 1024)
+    var b = vec<int>.new(0, 1024)
     var c = 111
-    var d = vec_new<int>(0, 1024)
+    var d = vec<int>.new(0, 1024)
     var e = 222
-    var f = vec_new<float>(0, 1024)
+    var f = vec<float>.new(0, 1024)
     car()
     var g = b[0] + c + d[0] + e + f[0] as int
 }
@@ -259,12 +259,12 @@ fn foo() {
     var a10 = 1
     var a11 = 1
     var a12 = 1
-    var b = vec_new<int>(0, 1024)
+    var b = vec<int>.new(0, 1024)
     var c = 111
-    var d = vec_new<int>(0, 1024)
+    var d = vec<int>.new(0, 1024)
     bar()
     var e = 222
-    var f = vec_new<float>(0, 1024)
+    var f = vec<float>.new(0, 1024)
     var g = a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + b[0] + c + d[0] + e + f[0] as int
 }
 
@@ -323,11 +323,11 @@ fn test_increase(int i):int {
 fn car() {
     println('entry car-----------')
     test_break()
-    var b = vec_new<int>(0, 1024)
+    var b = vec<int>.new(0, 1024)
     var c = 111
-    var d = vec_new<int>(0, 1024)
+    var d = vec<int>.new(0, 1024)
     var e = 222
-    var f = vec_new<float>(0, 1024)
+    var f = vec<float>.new(0, 1024)
     var before = runtime.malloc_bytes()
     println(before)
     assert(before > 50000)
@@ -342,11 +342,11 @@ fn car() {
 
 fn bar() {
     test_break()
-    var b = vec_new<int>(0, 1024)
+    var b = vec<int>.new(0, 1024)
     var c = 111
-    var d = vec_new<int>(0, 1024)
+    var d = vec<int>.new(0, 1024)
     var e = 222
-    var f = vec_new<float>(0, 1024)
+    var f = vec<float>.new(0, 1024)
     car()
     var g = b[0] + c + d[0] + e + f[0] as int
 }
@@ -365,12 +365,12 @@ fn foo() {
     var a10 = 1
     var a11 = 1
     var a12 = 1
-    var b = vec_new<int>(0, 1024)
+    var b = vec<int>.new(0, 1024)
     var c = 111
-    var d = vec_new<int>(0, 1024)
+    var d = vec<int>.new(0, 1024)
     bar()
     var e = 222
-    var f = vec_new<float>(0, 1024)
+    var f = vec<float>.new(0, 1024)
     var g = a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + b[0] + c + d[0] + e + f[0] as int
 }
 
@@ -402,11 +402,11 @@ fn test_increase(int i):int {
 fn car() {
     println('entry car-----------')
     test_break()
-    var b = vec_new<int>(0, 1024)
+    var b = vec<int>.new(0, 1024)
     var c = 111
-    var d = vec_new<int>(0, 1024)
+    var d = vec<int>.new(0, 1024)
     var e = 222
-    var f = vec_new<float>(0, 1024)
+    var f = vec<float>.new(0, 1024)
     var before = runtime.malloc_bytes()
     println(before)
     assert(before > 50000)
@@ -418,11 +418,11 @@ fn car() {
 
 fn bar() {
     test_break()
-    var b = vec_new<int>(0, 1024)
+    var b = vec<int>.new(0, 1024)
     var c = 111
-    var d = vec_new<int>(0, 1024)
+    var d = vec<int>.new(0, 1024)
     var e = 222
-    var f = vec_new<float>(0, 1024)
+    var f = vec<float>.new(0, 1024)
     car()
     var g = b[0] + c + d[0] + e + f[0] as int
 }
@@ -441,12 +441,12 @@ fn foo() {
     var a10 = 1
     var a11 = 1
     var a12 = 1
-    var b = vec_new<int>(0, 1024)
+    var b = vec<int>.new(0, 1024)
     var c = 111
-    var d = vec_new<int>(0, 1024)
+    var d = vec<int>.new(0, 1024)
     bar()
     var e = 222
-    var f = vec_new<float>(0, 1024)
+    var f = vec<float>.new(0, 1024)
     var g = a1 + a2 + a3 + a4 + a5 + a6 + a7 + a8 + a9 + a10 + a11 + a12 + b[0] + c + d[0] + e + f[0] as int
 }
 

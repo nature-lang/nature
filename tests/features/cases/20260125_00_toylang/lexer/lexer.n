@@ -22,7 +22,7 @@ fn newLexer( string input): Lexer {
     return l
 }
 
-fn Lexer.readChar() {
+fn Lexer.readChar(&self) {
     self.column += 1
     self.position = self.readPosition
 
@@ -34,7 +34,7 @@ fn Lexer.readChar() {
     }
 }
 
-fn Lexer.nextToken(): token.Token {
+fn Lexer.nextToken(&self): token.Token {
     // Implementation of tokenization logic goes here
     self.skipWhitespace()
     var tk =  match self.ch {
@@ -72,7 +72,7 @@ fn Lexer.nextToken(): token.Token {
     return tk
 }
 
-fn Lexer.skipWhitespace() {
+fn Lexer.skipWhitespace(&self) {
     for self.ch == " " || self.ch == "\t" || self.ch == "\n" || self.ch == "\r" {
         if self.ch == "\n" || self.ch == "\r" {
             self.line += 1
@@ -82,15 +82,15 @@ fn Lexer.skipWhitespace() {
     }
 }
 
-fn Lexer.isAlphabet( string ch): bool {
+fn Lexer.isAlphabet(&self, string ch): bool {
     return (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch == "_"
 }
 
-fn Lexer.isDigit( string ch): bool {
+fn Lexer.isDigit(&self, string ch): bool {
     return ch >= "0" && ch <= "9"
 }
 
-fn Lexer.identifierToken(): token.Token {
+fn Lexer.identifierToken(&self): token.Token {
     var startPos = self.position
     var startColumn = self.column
     for self.isAlphabet(self.ch) || self.isDigit(self.ch) {
@@ -101,7 +101,7 @@ fn Lexer.identifierToken(): token.Token {
     return token.newToken(kind, literal, self.line, startColumn)
 }
 
-fn Lexer.numberToken(): token.Token {
+fn Lexer.numberToken(&self): token.Token {
     var startPos = self.position
     var startColumn = self.column
     for self.isDigit(self.ch) {
