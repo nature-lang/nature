@@ -35,6 +35,14 @@ static type_t infer_tagged_union_new(module_t *m, ast_expr_t *expr, type_t targe
 
 static void infer_tagged_union_element(module_t *m, ast_expr_t *expr, type_t target_type);
 
+static bool select_left_is_type(module_t *m, ast_expr_select_t *select, type_t *out_type);
+
+static bool impl_static_symbol_exists(module_t *m, type_t select_left_type, char *method);
+
+static bool try_rewrite_tagged_union_call(module_t *m, ast_expr_t *expr, type_t target_type);
+
+static bool try_rewrite_tagged_union_select(module_t *m, ast_expr_t *expr, type_t target_type);
+
 bool generics_constraints_compare(ast_generics_constraints *left, ast_generics_constraints *right) {
     if (left->any && !right->and) {
         return true;
@@ -44,11 +52,11 @@ bool generics_constraints_compare(ast_generics_constraints *left, ast_generics_c
         return false;
     }
 
-    if (right->and && !left->and) {
+    if (right->and &&!left->and) {
         return false;
     }
 
-    if (right->or && !left->or) {
+    if (right->or &&!left->or) {
         return false;
     }
 
@@ -197,6 +205,22 @@ static void generics_constraints_check(module_t *m, ast_generics_constraints *co
     // type alias '%s' param constraint not match
     INFER_ASSERTF(union_type_contains(union_constraint->union_, *src),
                   "type '%s' does not match any of the constraints", type_format(*src));
+}
+
+static void impl_generics_constraints_check(module_t *m, ast_fndef_t *fndef, list_t *impl_gen_args) {
+    if (!fndef || !fndef->generics_params || !impl_gen_args) {
+        return;
+    }
+
+    INFER_ASSERTF(fndef->generics_params->length == impl_gen_args->length, "type '%s' param not match",
+                  fndef->impl_type.ident);
+
+    for (int i = 0; i < fndef->generics_params->length; ++i) {
+        ast_generics_param_t *param = ct_list_value(fndef->generics_params, i);
+        type_t *arg_type = ct_list_value(impl_gen_args, i);
+        type_t temp_arg = reduction_type(m, *arg_type);
+        generics_constraints_check(m, &param->constraints, &temp_arg);
+    }
 }
 
 static type_t *select_fn_param(type_fn_t *type_fn, uint8_t index, bool is_spread) {
@@ -744,7 +768,7 @@ bool type_compare_visited(type_t dst, type_t src, table_t *visited) {
 static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_t *call, type_t return_target_type) {
     assert(temp_fn->is_generics);
     if (temp_fn->impl_type.kind > 0) {
-        // 类型扩展必定存在 generics
+        // impl 必定存在 generics
         assert(call->generics_args);
     }
 
@@ -863,7 +887,7 @@ static bool literal_as_check(module_t *m, ast_literal_t *literal, type_t target_
  * @return
  */
 static char *generics_impl_args_hash(module_t *m, list_t *args) {
-    char *str = itoa(TYPE_FN);
+    char *str = "fn.";
     for (int i = 0; i < args->length; ++i) {
         type_t *arg_type = ct_list_value(args, i);
         *arg_type = reduction_type(m, *arg_type);
@@ -1796,14 +1820,25 @@ static type_t infer_vec_repeat_new(module_t *m, ast_expr_t *expr, type_t target_
     // vec new change to vec_new call
     type_vec->element_type = infer_right_expr(m, &repeat_new->default_element, type_vec->element_type);
 
+    ast_expr_select_t *select_expr = NEW(ast_expr_select_t);
+    select_expr->left = *ast_ident_expr(expr->line, expr->column, "vec");
+    select_expr->key = "new";
+    select_expr->type_args = ct_list_new(sizeof(type_t));
+    ct_list_push(select_expr->type_args, &type_vec->element_type);
+
+    ast_expr_t select_ast = {0};
+    select_ast.line = expr->line;
+    select_ast.column = expr->column;
+    select_ast.assert_type = AST_EXPR_SELECT;
+    select_ast.value = select_expr;
+
     ast_call_t *call_expr = NEW(ast_call_t);
-    call_expr->left = *ast_ident_expr(expr->line, expr->column, BUILTIN_CALL_VEC_NEW);
+    call_expr->left = select_ast;
     call_expr->args = ct_list_new(sizeof(ast_expr_t));
     ct_list_push(call_expr->args, &repeat_new->default_element);
     ct_list_push(call_expr->args, &repeat_new->length_expr);
-
-    call_expr->generics_args = ct_list_new(sizeof(type_t));
-    ct_list_push(call_expr->generics_args, &type_vec->element_type);
+    call_expr->generics_args = NULL;
+    call_expr->spread = false;
 
     expr->assert_type = AST_CALL;
     expr->value = call_expr;
@@ -2492,6 +2527,156 @@ static ast_expr_t *self_arg_rewrite(module_t *m, type_fn_t *type_fn, ast_expr_t 
     return self_arg;
 }
 
+static bool select_left_is_type(module_t *m, ast_expr_select_t *select, type_t *out_type) {
+    if (select->left.assert_type != AST_EXPR_IDENT) {
+        return false;
+    }
+    ast_ident *left_ident = select->left.value;
+    symbol_t *left_symbol = symbol_table_get(left_ident->literal);
+    if (!left_symbol || left_symbol->type != SYMBOL_TYPE) {
+        return false;
+    }
+
+    ast_typedef_stmt_t *typedef_stmt = left_symbol->ast_value;
+    *out_type = type_ident_new(typedef_stmt->ident, TYPE_IDENT_DEF);
+    if (select->type_args) {
+        out_type->args = select->type_args;
+    }
+
+    return true;
+}
+
+static char *impl_symbol_name_new(char *impl_ident, char *method) {
+    return str_connect_by(impl_ident, method, IMPL_CONNECT_IDENT);
+}
+
+static bool impl_static_symbol_exists(module_t *m, type_t select_left_type, char *method) {
+    type_t extract_type = select_left_type;
+    if (select_left_type.kind == TYPE_REF || select_left_type.kind == TYPE_PTR) {
+        extract_type = select_left_type.ptr->value_type;
+    }
+
+    if (!extract_type.ident) {
+        return false;
+    }
+
+    char *impl_symbol_name = impl_symbol_name_new(extract_type.ident, method);
+    symbol_t *s = NULL;
+
+    if (extract_type.args) {
+        char *arg_hash = generics_impl_args_hash(m, extract_type.args);
+        char *impl_symbol_name_with_hash = str_connect_by(impl_symbol_name, arg_hash, GEN_REWRITE_SEPARATOR);
+        s = symbol_table_get(impl_symbol_name_with_hash);
+        if (s && s->type == SYMBOL_FN) {
+            ast_fndef_t *fndef = s->ast_value;
+            return fndef && fndef->is_static;
+        }
+    }
+
+    s = symbol_table_get(impl_symbol_name);
+    if (!s || s->type != SYMBOL_FN) {
+        return false;
+    }
+    ast_fndef_t *fndef = s->ast_value;
+    return fndef && fndef->is_static;
+}
+
+static bool try_rewrite_tagged_union_call(module_t *m, ast_expr_t *expr, type_t target_type) {
+    (void) target_type;
+    if (expr->assert_type != AST_CALL) {
+        return false;
+    }
+
+    ast_call_t *call = expr->value;
+    if (call->left.assert_type != AST_EXPR_SELECT) {
+        return false;
+    }
+
+    ast_expr_select_t *select = call->left.value;
+    type_t select_left_type;
+    if (!select_left_is_type(m, select, &select_left_type)) {
+        return false;
+    }
+
+    // static method priority over tagged union element
+    if (impl_static_symbol_exists(m, select_left_type, select->key)) {
+        return false;
+    }
+    symbol_t *symbol = symbol_table_get(select_left_type.ident);
+    if (!symbol || symbol->type != SYMBOL_TYPE) {
+        return false;
+    }
+    ast_typedef_stmt_t *typedef_stmt = symbol->ast_value;
+    if (!typedef_stmt || !typedef_stmt->is_tagged_union) {
+        return false;
+    }
+
+    ast_tagged_union_t *tagged_new = NEW(ast_tagged_union_t);
+    tagged_new->union_type = type_ident_new(select_left_type.ident, TYPE_IDENT_TAGGER_UNION);
+    if (select_left_type.args) {
+        tagged_new->union_type.args = select_left_type.args;
+    }
+    tagged_new->tagged_name = select->key;
+    tagged_new->arg = NULL;
+
+    if (call->args->length > 0) {
+        ast_expr_t *arg = ct_list_value(call->args, 0);
+        if (call->args->length > 1) {
+            ast_expr_t *tuple_arg = NEW(ast_expr_t);
+            tuple_arg->line = arg->line;
+            tuple_arg->column = arg->column;
+            tuple_arg->assert_type = AST_EXPR_TUPLE_NEW;
+            ast_tuple_new_t *tuple_new = NEW(ast_tuple_new_t);
+            tuple_new->elements = call->args;
+            tuple_arg->value = tuple_new;
+            arg = tuple_arg;
+        }
+        tagged_new->arg = arg;
+    }
+
+    expr->assert_type = AST_EXPR_TAGGED_UNION_NEW;
+    expr->value = tagged_new;
+    return true;
+}
+
+static bool try_rewrite_tagged_union_select(module_t *m, ast_expr_t *expr, type_t target_type) {
+    (void) target_type;
+    if (expr->assert_type != AST_EXPR_SELECT) {
+        return false;
+    }
+
+    ast_expr_select_t *select = expr->value;
+    type_t select_left_type;
+    if (!select_left_is_type(m, select, &select_left_type)) {
+        return false;
+    }
+
+    // static method priority over tagged union element
+    if (impl_static_symbol_exists(m, select_left_type, select->key)) {
+        return false;
+    }
+    symbol_t *symbol = symbol_table_get(select_left_type.ident);
+    if (!symbol || symbol->type != SYMBOL_TYPE) {
+        return false;
+    }
+    ast_typedef_stmt_t *typedef_stmt = symbol->ast_value;
+    if (!typedef_stmt || !typedef_stmt->is_tagged_union) {
+        return false;
+    }
+
+    ast_tagged_union_t *tagged_new = NEW(ast_tagged_union_t);
+    tagged_new->union_type = type_ident_new(select_left_type.ident, TYPE_IDENT_TAGGER_UNION);
+    if (select_left_type.args) {
+        tagged_new->union_type.args = select_left_type.args;
+    }
+    tagged_new->tagged_name = select->key;
+    tagged_new->arg = NULL;
+
+    expr->assert_type = AST_EXPR_TAGGED_UNION_NEW;
+    expr->value = tagged_new;
+    return true;
+}
+
 static inline void rewrite_generics_ident(module_t *m, ast_call_t *call, type_t target_type) {
     if (call->left.assert_type != AST_EXPR_IDENT) {
         return;
@@ -2529,7 +2714,26 @@ static type_fn_t *infer_impl_call_rewrite(module_t *m, ast_call_t *call, type_t 
     ast_expr_select_t *select = call->left.value;
 
     // 这里已经对 left 进行了类型推导，所以后续不需要在进行类型推导了
-    type_t select_left_type = infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
+    bool left_is_type = false;
+    type_t select_left_type;
+    if (select_left_is_type(m, select, &select_left_type)) {
+        left_is_type = true;
+
+        // 类型参数校验：对于 impl 静态方法调用，需要校验类型参数数量
+        ast_ident *left_ident = select->left.value;
+        symbol_t *left_symbol = symbol_table_get(left_ident->literal);
+        if (left_symbol && left_symbol->type == SYMBOL_TYPE) {
+            ast_typedef_stmt_t *typedef_stmt = left_symbol->ast_value;
+            int64_t expected = typedef_stmt->params ? typedef_stmt->params->length : 0;
+            int64_t actual = select->type_args ? select->type_args->length : 0;
+            if (expected != actual) {
+                INFER_ASSERTF(false, "type '%s' expects %ld type argument(s), but got %ld",
+                              typedef_stmt->ident, expected, actual);
+            }
+        }
+    } else {
+        select_left_type = infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
+    }
 
     type_t extract_type = select_left_type;
     if (select_left_type.kind == TYPE_REF || select_left_type.kind == TYPE_PTR) {
@@ -2553,10 +2757,11 @@ static type_fn_t *infer_impl_call_rewrite(module_t *m, ast_call_t *call, type_t 
 
     // call 继承 select_left_type 的 args
     char *impl_ident = extract_type.ident;
-    char *impl_symbol_name = str_connect_by(impl_ident, select->key, IMPL_CONNECT_IDENT);
+    char *impl_symbol_name = impl_symbol_name_new(impl_ident, select->key);
     list_t *impl_gen_args = extract_type.args;
 
     symbol_t *s;
+    bool base_symbol_used = false;
 
     ast_expr_t *self_arg = &select->left;
     if (impl_gen_args) {
@@ -2587,7 +2792,7 @@ static type_fn_t *infer_impl_call_rewrite(module_t *m, ast_call_t *call, type_t 
             if (builtin_type.ident && builtin_type.ident_kind == TYPE_IDENT_BUILTIN) {
                 impl_ident = builtin_type.ident;
                 impl_gen_args = builtin_type.args;
-                impl_symbol_name = str_connect_by(impl_ident, select->key, IMPL_CONNECT_IDENT);
+                impl_symbol_name = impl_symbol_name_new(impl_ident, select->key);
                 if (impl_gen_args) {
                     char *arg_hash = generics_impl_args_hash(m, impl_gen_args);
 
@@ -2626,8 +2831,15 @@ static type_fn_t *infer_impl_call_rewrite(module_t *m, ast_call_t *call, type_t 
     INFER_ASSERTF(left_type.kind == TYPE_FN, "cannot call non-fn");
     assert(left_type.fn);
 
+    if (left_is_type && left_type.fn->self_kind != PARAM_SELF_NULL) {
+        INFER_ASSERTF(false, "method '%s' requires a receiver; use a value instead of a type",
+                      select->key);
+    }
+
     list_t *args = ct_list_new(sizeof(ast_expr_t));
-    ct_list_push(args, self_arg_rewrite(m, left_type.fn, self_arg));
+    if (left_type.fn->self_kind != PARAM_SELF_NULL) {
+        ct_list_push(args, self_arg_rewrite(m, left_type.fn, self_arg));
+    }
 
     for (int i = 0; i < call->args->length; ++i) {
         ct_list_push(args, ct_list_value(call->args, i));
@@ -2642,6 +2854,13 @@ static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_t
     if (call->left.assert_type == AST_EXPR_SELECT) {
         do {
             ast_expr_select_t *select = call->left.value;
+            if (select->left.assert_type == AST_EXPR_IDENT) {
+                ast_ident *left_ident = select->left.value;
+                symbol_t *left_symbol = symbol_table_get(left_ident->literal);
+                if (left_symbol && left_symbol->type == SYMBOL_TYPE) {
+                    break;
+                }
+            }
             type_t select_left_type = infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
             if (select_left_type.ident_kind != TYPE_IDENT_INTERFACE) {
                 break;
@@ -3420,9 +3639,17 @@ static type_t infer_expr(module_t *m, ast_expr_t *expr, type_t target_type, type
             return infer_access_expr(m, expr);
         }
         case AST_EXPR_SELECT: {
+            // expr may change from select to tagged_new, so it must be completed before infer_call
+            if (try_rewrite_tagged_union_select(m, expr, target_type)) {
+                return infer_tagged_union_new(m, expr, target_type);
+            }
             return infer_select_expr(m, expr);
         }
         case AST_CALL: {
+            // expr may change from call to tagged_new, so it must be completed before infer_call
+            if (try_rewrite_tagged_union_call(m, expr, target_type)) {
+                return infer_tagged_union_new(m, expr, target_type);
+            }
             return infer_call(m, expr->value, target_type, true);
         }
         case AST_EXPR_TAGGED_UNION_NEW: {
@@ -4300,8 +4527,9 @@ static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef) {
     f->return_type = reduction_type(m, fndef->return_type);
     f->self_kind = fndef->self_kind;
 
-    // 跳过 self
-    for (int i = 1; i < fndef->params->length; ++i) {
+    // 跳过 self(仅当存在 receiver)
+    int start_index = (fndef->is_static || fndef->self_kind == PARAM_SELF_NULL) ? 0 : 1;
+    for (int i = start_index; i < fndef->params->length; ++i) {
         ast_var_decl_t *param = ct_list_value(fndef->params, i);
 
         param->type = reduction_type(m, param->type);
@@ -4366,7 +4594,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
 
         param->type = reduction_type(m, param->type);
 
-        if (fndef->is_impl && i == 0) {
+        if (fndef->is_impl && !fndef->is_static && fndef->self_kind != PARAM_SELF_NULL && i == 0) {
             if (param->type.storage_kind != STORAGE_KIND_PTR) {
                 if (fndef->self_kind == PARAM_SELF_REF_T) {
                     param->type = type_refof(param->type);
@@ -4383,7 +4611,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
                 } else {
                     // not need handle, like ptr/ref/interface...
                     INFER_ASSERTF(fndef->self_kind == PARAM_SELF_REF_T,
-                                  "omit the '&self' parameter, e.g., `fn T.method()`",
+                                  "heap-allocated type '%s' requires `&self` receiver; use `fn T.method(&self)`",
                                   type_format(param->type));
                 }
             }
@@ -4607,6 +4835,7 @@ void pre_infer(module_t *m) {
         }
     }
 
+    // 这是为了完成自动推断, global ident 的自动推断，相关推断都在 fn_init 中完成。
     if (m->fn_init) {
         infer_fndef(m->fn_init->module, m->fn_init);
     }

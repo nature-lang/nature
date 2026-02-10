@@ -14,7 +14,7 @@ fn bool.show_value(self):string {
 
 type custom_t<T> = T|null
 
-fn custom_t<T:custom_i>.show_value():string {
+fn custom_t<T:custom_i>.show_value(&self):string {
     return self.show_value()
 }
 
@@ -45,7 +45,7 @@ fn bool.show_value(self):string {
 
 type custom_t<T:custom_i> = T|null
 
-fn custom_t<T:custom_i>.show_value():string {
+fn custom_t<T:custom_i>.show_value(&self):string {
     return self.show_value()
 }
 
@@ -79,7 +79,7 @@ fn my_bool.show_value(self):string {
 
 type custom_t<T:custom_i> = T|null
 
-fn custom_t<T:custom_i>.show_value():string {
+fn custom_t<T:custom_i>.show_value(&self):string {
     return self.show_value()
 }
 
@@ -111,7 +111,7 @@ fn my_bool.show_value(self):string {
 
 type custom_t<T:custom_i> = T|null
 
-fn custom_t<T:custom_i>.show_values():string {
+fn custom_t<T:custom_i>.show_values(&self):string {
     // self = union<T> // union/vec/set/map/tup/fn/chan Not converted to ptr
     return self.show_value() // type 'main.custom_t(union)' not impl 'show_value' fn
 }

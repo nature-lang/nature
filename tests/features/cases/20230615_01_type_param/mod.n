@@ -6,7 +6,7 @@ type box<T, U> = struct {
 // nullable
 type nullable<T> = T|null
 
-fn box<T, U>.area():T {
+fn box<T, U>.area(&self):T {
     return self.width * self.length as T
 }
 

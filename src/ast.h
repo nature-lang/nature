@@ -278,7 +278,7 @@ typedef struct {
 typedef enum {
     PARAM_SELF_NULL = 0,
     PARAM_SELF_T, // int/float/bool/anyptr/string/vec/map/chan/
-    PARAM_SELF_REF_T,
+    PARAM_SELF_REF_T, // &self
     PARAM_SELF_PTR_T,
 } ast_param_self_kind_t;
 
@@ -525,6 +525,8 @@ typedef struct {
 typedef struct {
     ast_expr_t left; // left is struct or package
     string key;
+    // generic args for left type: foo<T>.bar
+    list_t *type_args; // type_t
 } ast_expr_select_t;
 
 /**
@@ -723,6 +725,8 @@ struct ast_fndef_t {
     bool is_tpl; // 是否是 tpl 函数
 
     bool is_impl; // 是否是 impl fn
+    // impl fn without self receiver
+    bool is_static;
 
     bool is_errable;
 

@@ -150,7 +150,7 @@ fn color.to_string(self):string {
     }
 }
 
-fn color.to_string2():string {
+fn color.to_string2(&self):string {
     if *self == color.RED {
         return 'RED'
     } else if *self == color.GREEN {

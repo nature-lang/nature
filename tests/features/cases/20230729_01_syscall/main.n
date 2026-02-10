@@ -8,7 +8,7 @@ fn main():void! {
     // read
     var fd = syscall.open('./asserts/stat.txt', syscall.O_RDONLY, 0666)
 
-    var buf = vec_new<u8>(0, 100) // 预先申请好了空间, 便于 syscall 中将相应的值回写
+    var buf = vec<u8>.new(0, 100) // 预先申请好了空间, 便于 syscall 中将相应的值回写
     print('buf len: ', buf.len(), ', buf cap: ', buf.cap(), '\n')
 
     result = syscall.call6(syscall.SYS_READ, fd as anyptr, buf.ref(), buf.len() as anyptr, 0, 0, 0)

@@ -232,7 +232,7 @@ fn deserialize<T>(string s):T! {
     return val
 }
 
-fn deserialize_t.parser(anyptr p, ref<reflect.type_t> t):void! {
+fn deserialize_t.parser(&self, anyptr p, ref<reflect.type_t> t):void! {
     if p == 0 {
         throw errorf('parser p is zero')
     }
@@ -319,7 +319,7 @@ fn deserialize_t.parser(anyptr p, ref<reflect.type_t> t):void! {
 }
 
 // p points to the stack address of struct
-fn deserialize_t.parser_struct(anyptr p, ref<reflect.type_t> t):void! {
+fn deserialize_t.parser_struct(&self, anyptr p, ref<reflect.type_t> t):void! {
     self.must('{')
     if self.consume('}') {
         return
@@ -353,7 +353,7 @@ fn deserialize_t.parser_struct(anyptr p, ref<reflect.type_t> t):void! {
     }
 }
 
-fn deserialize_t.parser_vec(anyptr p, ref<reflect.type_t> t):void! {
+fn deserialize_t.parser_vec(&self, anyptr p, ref<reflect.type_t> t):void! {
     anyptr v = unsafe.ptr_to<anyptr>(p)
     var rv = v as ptr<reflect.vec_t>
     rv.length = 0 // Assignment from zero
@@ -380,7 +380,7 @@ fn deserialize_t.parser_vec(anyptr p, ref<reflect.type_t> t):void! {
     }
 }
 
-fn deserialize_t.parser_map(anyptr p, ref<reflect.type_t> t):void! {
+fn deserialize_t.parser_map(&self, anyptr p, ref<reflect.type_t> t):void! {
     anyptr v = unsafe.ptr_to<anyptr>(p)
     var rv = v as ptr<reflect.map_t>
     self.must('{')
@@ -406,7 +406,7 @@ fn deserialize_t.parser_map(anyptr p, ref<reflect.type_t> t):void! {
     }
 }
 
-fn deserialize_t.parser_bool():bool! {
+fn deserialize_t.parser_bool(&self):bool! {
     self.skip_whitespace()
     
     if self.cursor >= self.data.len() {
@@ -426,7 +426,7 @@ fn deserialize_t.parser_bool():bool! {
     throw errorf('expected boolean value at position %d', self.cursor)
 }
 
-fn deserialize_t.parser_number():f64! {
+fn deserialize_t.parser_number(&self):f64! {
     var start = self.cursor
     var negative = false
     var len = self.data.len()
@@ -503,7 +503,7 @@ fn deserialize_t.parser_number():f64! {
 }
 
 
-fn deserialize_t.parser_string():string! {
+fn deserialize_t.parser_string(&self):string! {
     self.must(`"`)
 
     var start = self.cursor
@@ -552,7 +552,7 @@ fn deserialize_t.parser_string():string! {
     throw errorf('unterminated string at position %d', start)
 }
 
-fn deserialize_t.parser_nullable(anyptr p, ref<reflect.type_t> t):void! {
+fn deserialize_t.parser_nullable(&self, anyptr p, ref<reflect.type_t> t):void! {
     if self.cursor >= self.data.len() {
         throw errorf('unexpected end of input at position %d', self.cursor)
     }
@@ -595,7 +595,7 @@ fn deserialize_t.parser_nullable(anyptr p, ref<reflect.type_t> t):void! {
     rv.rtype = target_type.r
 }
 
-fn deserialize_t.parser_any():any! {
+fn deserialize_t.parser_any(&self):any! {
     if self.cursor >= self.data.len() {
         throw errorf('unexpected end of input at position %d', self.cursor)
     }
@@ -635,7 +635,7 @@ fn deserialize_t.parser_any():any! {
 }
 
 
-fn deserialize_t.skip_whitespace() {
+fn deserialize_t.skip_whitespace(&self) {
     for self.cursor < self.data.len() {
         var c = self.data[self.cursor]
         if c == ' '.char() || c == '\t'.char() || c == '\n'.char() || c == '\r'.char() {
@@ -646,11 +646,11 @@ fn deserialize_t.skip_whitespace() {
     }
 }
 
-fn deserialize_t.is_digit(u8 ch):bool {
+fn deserialize_t.is_digit(&self, u8 ch):bool {
     return ch >= '0'.char() && ch <= '9'.char()
 }
 
-fn deserialize_t.consume(string s):bool {
+fn deserialize_t.consume(&self, string s):bool {
     self.skip_whitespace()
     
     var bytes = s as [u8]
@@ -670,7 +670,7 @@ fn deserialize_t.consume(string s):bool {
     return true
 }
 
-fn deserialize_t.must(string s):void! {
+fn deserialize_t.must(&self, string s):void! {
     if !self.consume(s) {
         throw errorf('expected `%s` at position %d', s, self.cursor)
     }

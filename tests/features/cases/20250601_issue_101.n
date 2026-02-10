@@ -4,7 +4,7 @@ type custom_i = interface {
 
 type my_bool:custom_i = bool
 
-fn my_bool.show_value():string {
+fn my_bool.show_value(&self):string {
     if (*self) as bool {
         return 'true'
     } else {
@@ -14,7 +14,7 @@ fn my_bool.show_value():string {
 
 type custom_t<T:custom_i> = T|null
 
-fn custom_t<T:custom_i>.show_values():string {
+fn custom_t<T:custom_i>.show_values(&self):string {
     // self = union<T> // union/vec/set/map/tup/fn/chan Not converted to ptr
     // Recursive call Until the stack is exhausted
     println('in show values')

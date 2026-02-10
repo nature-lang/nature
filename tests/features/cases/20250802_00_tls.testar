@@ -12,7 +12,7 @@ fn main() {
                        '\r\n'
 
     conn.write(http_request as [u8])
-    var resp_buf = vec_new<u8>(0, 1024)
+    var resp_buf = vec<u8>.new(0, 1024)
     int len = conn.read(resp_buf)
     conn.close()
     println(len, resp_buf.slice(0, len) as string)

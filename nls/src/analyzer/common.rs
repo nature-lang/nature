@@ -411,7 +411,14 @@ impl Type {
         Self::is_number(&self.kind)
             || matches!(
                 self.kind,
-                TypeKind::Anyptr | TypeKind::Bool | TypeKind::Struct(..) | TypeKind::Arr(..) | TypeKind::Enum(..)
+                TypeKind::Anyptr
+                    | TypeKind::Bool
+                    | TypeKind::Struct(..)
+                    | TypeKind::Arr(..)
+                    | TypeKind::Enum(..)
+                    | TypeKind::Union(..)
+                    | TypeKind::Tuple(..)
+                    | TypeKind::TaggedUnion(..)
             )
     }
 
@@ -645,7 +652,7 @@ pub enum SelfKind {
     Null = 0, // No self parameter
     SelfT,    // self - value type
     SelfPtrT, // *self - raw pointer type
-    SelfRefT, // default for impl fn without explicit self
+    SelfRefT, // &self - reference receiver
 }
 
 impl Default for SelfKind {
@@ -942,8 +949,8 @@ pub enum AstNode {
 
     // 未推断出具体表达式类型
     EmptyCurlyNew,
-    AccessExpr(Box<Expr>, Box<Expr>), // (left, key)
-    SelectExpr(Box<Expr>, String),    // (left, key)
+    AccessExpr(Box<Expr>, Box<Expr>),                 // (left, key)
+    SelectExpr(Box<Expr>, String, Option<Vec<Type>>), // (left, key, type_args)
     VarDecl(Arc<Mutex<VarDeclExpr>>),
 
     // Statements
@@ -1221,6 +1228,7 @@ pub struct AstFnDef {
     pub params: Vec<Arc<Mutex<VarDeclExpr>>>,
     pub rest_param: bool,
     pub is_impl: bool,
+    pub is_static: bool,
     pub self_kind: SelfKind,
     pub body: AstBody,
     pub closure: Option<isize>,
@@ -1266,6 +1274,7 @@ impl Default for AstFnDef {
             params: Vec::new(),
             rest_param: false,
             is_impl: false,
+            is_static: false,
             self_kind: SelfKind::Null,
             body: AstBody {
                 stmts: Vec::new(),

@@ -3,6 +3,6 @@ type square = struct {
     int width
 }
 
-fn square.area():int {
+fn square.area(&self):int {
     return self.length * self.width
 }

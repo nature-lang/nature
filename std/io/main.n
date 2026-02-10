@@ -17,18 +17,18 @@ type buffer:reader,writer = struct{
     int offset
 }
 
-fn buffer.write([u8] buf):int! {
+fn buffer.write(&self, [u8] buf):int! {
     self.buf.append(buf)
     return buf.len()
 }
 
-fn buffer.write_byte(u8 byte):int! {
+fn buffer.write_byte(&self, u8 byte):int! {
     self.buf.push(byte)
     return self.buf.len()
 }
 
 // The read buf will be discarded (by offset), only when offset >= buf reset discard
-fn buffer.read([u8] buf):int! {
+fn buffer.read(&self, [u8] buf):int! {
     if self.empty() {
         self.reset()
 
@@ -45,19 +45,19 @@ fn buffer.read([u8] buf):int! {
     return n
 }
 
-fn buffer.empty():bool {
+fn buffer.empty(&self):bool {
     return self.buf.len() <= self.offset
 }
 
-fn buffer.len():int {
+fn buffer.len(&self):int {
     return self.buf.len() - self.offset
 }
 
-fn buffer.cap():int {
+fn buffer.cap(&self):int {
     return self.buf.cap()
 }
 
-fn buffer.truncate(int n):void! {
+fn buffer.truncate(&self, int n):void! {
     if n == 0 {
         self.reset()
         return
@@ -70,12 +70,12 @@ fn buffer.truncate(int n):void! {
     self.buf = self.buf.slice(0, self.offset + n)
 }
 
-fn buffer.reset():void! {
+fn buffer.reset(&self):void! {
     self.offset = 0
     self.buf = self.buf.slice(0, 0)
 }
 
-fn buffer.read_all():[u8]! {
+fn buffer.read_all(&self):[u8]! {
     if self.empty() {
         return []
     }

@@ -7,7 +7,7 @@ type rtype_struct_t = struct{
 }
 
 fn main() {
-    var fields = vec_new<rtype_struct_t>(rtype_struct_t{}, 3)
+    var fields = vec<rtype_struct_t>.new(rtype_struct_t{}, 3)
     fields[0].name_offset = 4
     fields[0].hash = 1007465396
     fields[0].offset = 0

@@ -3,7 +3,7 @@ import time
 
 fn main():void! {
     // case 1
-    var ch_buf = chan_new<int>(5)
+    var ch_buf = chan<int>.new(5)
 
     ch_buf.send(1)
     ch_buf.send(3)
@@ -28,7 +28,7 @@ fn main():void! {
         println('handle task successful will callback, index =', ch.recv()) // 归还 ch, 让新的任务可以创建
     }
 
-    var ch_limit = chan_new<u8>(10)
+    var ch_limit = chan<u8>.new(10)
     var start = time.now().timestamp()
     for u8 i = 0; i < 100; i+=1 {
         ch_limit.send(i)

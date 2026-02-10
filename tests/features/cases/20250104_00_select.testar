@@ -1,8 +1,8 @@
 === test_basic
 --- main.n
 fn main():void! {
-    var ch1 = chan_new<int>(1)
-    var ch2 = chan_new<string>()
+    var ch1 = chan<int>.new(1)
+    var ch2 = chan<string>.new()
 
     for int i = 0; i < 2; i+=1 {
         select{
@@ -25,8 +25,8 @@ ch1 on_recv msg: 23312
 === test_default
 --- main.n
 fn main():void! {
-    var ch1 = chan_new<int>()
-    var ch2 = chan_new<string>()
+    var ch1 = chan<int>.new()
+    var ch2 = chan<string>.new()
 
     select{
         ch2.on_recv() -> msg {
@@ -53,8 +53,8 @@ fn sleep_send(chan<string> ch2):void! {
 }
 
 fn main():void! {
-    var ch1 = chan_new<int>()
-    var ch2 = chan_new<string>()
+    var ch1 = chan<int>.new()
+    var ch2 = chan<string>.new()
 
     go sleep_send(ch2)
 
@@ -73,8 +73,8 @@ ch2 on_recv msg: hello ch2
 === test_send_failed
 --- main.n
 fn main():void! {
-    var ch1 = chan_new<int>()
-    var ch2 = chan_new<string>()
+    var ch1 = chan<int>.new()
+    var ch2 = chan<string>.new()
 
     ch1.close()
 

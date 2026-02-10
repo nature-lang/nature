@@ -1,11 +1,13 @@
 === test_generics_pass_by_ident
 --- main.n
+fn gen<T>() {}
+
 fn main() {
-    var f = vec_cap
+    var f = gen
 }
 
 --- output.txt
-nature-test/main.n:2:19: generics fn `vec_cap` cannot be passed as ident
+nature-test/main.n:4:15: generics fn `gen` cannot be passed as ident
 
 
 === test_fmt_0x

@@ -42,7 +42,7 @@ fn main() {
     println(atm2_draw(100).amount)
 
     // --- list struct
-    var list = vec_cap<atm_t>(0)
+    var list = vec<atm_t>.cap_of(0)
 
     list.push(atm_t{
         amount: 100,
@@ -58,7 +58,7 @@ fn main() {
         amount: 400,
     })
 
-    var list2 = vec_cap<atm_t>(100)
+    var list2 = vec<atm_t>.cap_of(100)
 
     for item in list {
         println(item.amount)
@@ -96,7 +96,7 @@ fn main() {
         amount: 800,
     }
 
-    var list3 = vec_cap<atm_t>(200)
+    var list3 = vec<atm_t>.cap_of(200)
 
     // 进行 gc 检测 atm 捕获的情况
     runtime.gc()

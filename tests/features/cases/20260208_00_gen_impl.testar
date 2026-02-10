@@ -2,7 +2,7 @@
 --- main.n
 type foo_t<T> = T|int
 
-fn foo_t.hello(self):string {
+fn foo_t<T>.hello(self):string {
     if self is int {
         return 'hello'
     } else {
@@ -40,11 +40,11 @@ type box_t<T> = struct{
     T value
 }
 
-fn box_t.get(self):T {
+fn box_t<T>.get(self):T {
     return self.value
 }
 
-fn box_t.set(T value) {
+fn box_t<T>.set(&self, T value) {
     self.value = value
 }
 
@@ -69,11 +69,11 @@ type future_t<T> = struct{
     int dummy
 }
 
-fn future_t.await():T {
+fn future_t<T>.await(&self):T {
     return @default(T)
 }
 
-fn future_t<T:void>.await():void {
+fn future_t<T:void>.await(&self):void {
     println('void')
 }
 

@@ -40,7 +40,7 @@ fn string.find_after(self, string sub, int after):int {
 }
 
 fn string.reverse(self):string {
-    var result = vec_new<u8>(0, self.len())
+    var result = vec<u8>.new(0, self.len())
 
     for i,c in self {
         result[self.len() - 1 - i] = c
@@ -366,7 +366,7 @@ fn string.to_float(self):float! {
 
 
 fn string.to_lower(self):string {
-    var result = vec_new<u8>(0, self.len())
+    var result = vec<u8>.new(0, self.len())
     
     for i, c in self {
         if c >= 'A'.char() && c <= 'Z'.char() {
@@ -380,7 +380,7 @@ fn string.to_lower(self):string {
 }
 
 fn string.to_upper(self):string {
-    var result = vec_new<u8>(0, self.len())
+    var result = vec<u8>.new(0, self.len())
     
     for i, c in self {
         if c >= 'a'.char() && c <= 'z'.char() {

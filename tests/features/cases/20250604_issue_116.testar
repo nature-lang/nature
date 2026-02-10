@@ -116,7 +116,7 @@ type atm_t = struct {
 }
 
 fn main() {
-    [atm_t] list = vec_new(atm_t{}, 8)
+    [atm_t] list = vec<atm_t>.new(atm_t{}, 8)
 
     list[0] = atm_t{
         amount: 100,

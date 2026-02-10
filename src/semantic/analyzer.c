@@ -28,9 +28,6 @@ static void analyzer_call_args(module_t *m, ast_call_t *call);
 
 static bool analyzer_local_ident(module_t *m, ast_expr_t *ident_expr);
 
-static list_t *analyzer_clone_generics_params(module_t *m, list_t *params);
-static void analyzer_fill_impl_generics(module_t *m, ast_fndef_t *fndef);
-
 char *analyzer_force_unique_ident(module_t *m) {
     if (m->ident) {
         return str_connect(m->ident, ".n.o");
@@ -740,41 +737,6 @@ static void analyzer_throw(module_t *m, ast_throw_stmt_t *throw) {
     analyzer_expr(m, &throw->error);
 }
 
-static void try_rewrite_tagged_union_new(module_t *m, ast_expr_t *expr) {
-    ast_expr_select_t *select;
-    list_t *args = NULL;
-    assert(expr->assert_type == AST_EXPR_SELECT);
-    select = expr->value;
-
-    if (select->left.assert_type != AST_EXPR_IDENT) {
-        return;
-    }
-
-    ast_ident *left_ident = select->left.value;
-    symbol_t *symbol = symbol_table_get(left_ident->literal);
-
-    if (!symbol || symbol->type != SYMBOL_TYPE) {
-        return;
-    }
-
-    ast_typedef_stmt_t *typedef_stmt = symbol->ast_value;
-    if (!typedef_stmt->is_tagged_union) {
-        return;
-    }
-
-    // 创建 tagged enum new 节点（类型验证在 infer 阶段完成）
-    ast_tagged_union_t *tagged_new = NEW(ast_tagged_union_t);
-    tagged_new->union_type = type_ident_new(left_ident->literal, TYPE_IDENT_TAGGER_UNION);
-    tagged_new->tagged_name = select->key;
-    tagged_new->arg = NULL;
-
-    analyzer_type(m, &tagged_new->union_type);
-
-    // 改写表达式类型
-    expr->assert_type = AST_EXPR_TAGGED_UNION_NEW;
-    expr->value = tagged_new;
-}
-
 static void analyzer_match(module_t *m, ast_match_t *match) {
     // 支持任意表达式作为 subject，不再限制必须是 ident
     if (match->subject) {
@@ -1059,7 +1021,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
 
     // 类型定位，在 analyzer 阶段, alias 类型会被添加上 module 生成新 ident
     // fn vec<T>.vec_len() -> fn vec_len(vec<T> self)
-    if (fndef->impl_type.kind > 0) {
+    if (fndef->impl_type.kind > 0 && !fndef->is_static && fndef->self_kind != PARAM_SELF_NULL) {
         list_t *params = ct_list_new(sizeof(ast_var_decl_t));
         // param 中需要新增一个 impl_type_alias 的参数, 参数的名称为 self, 后续 ident 识别可以正常识别该 ident
         type_t param_type = type_copy(m, fndef->impl_type);
@@ -1150,7 +1112,25 @@ static void analyzer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
         assert(is_expr->union_tag->assert_type == AST_EXPR_SELECT);
         analyzer_expr(m, is_expr->union_tag);
 
-        if (is_expr->union_tag->assert_type != AST_EXPR_TAGGED_UNION_NEW) {
+        if (is_expr->union_tag->assert_type == AST_EXPR_TAGGED_UNION_NEW) {
+            is_expr->union_tag->assert_type = AST_EXPR_TAGGED_UNION_ELEMENT;
+        } else if (is_expr->union_tag->assert_type == AST_EXPR_SELECT) {
+            ast_expr_select_t *select = is_expr->union_tag->value;
+            ANALYZER_ASSERTF(select->left.assert_type == AST_EXPR_IDENT, "unexpected is expr");
+
+            ast_ident *ident = select->left.value;
+            ast_tagged_union_t *tagged_union = NEW(ast_tagged_union_t);
+            tagged_union->union_type = type_ident_new(ident->literal, TYPE_IDENT_TAGGER_UNION);
+            if (select->type_args) {
+                tagged_union->union_type.args = select->type_args;
+            }
+            tagged_union->tagged_name = select->key;
+            tagged_union->arg = NULL;
+            analyzer_type(m, &tagged_union->union_type);
+
+            is_expr->union_tag->assert_type = AST_EXPR_TAGGED_UNION_ELEMENT;
+            is_expr->union_tag->value = tagged_union;
+        } else {
             ANALYZER_ASSERTF(is_expr->union_tag->assert_type == AST_EXPR_IDENT,
                              "unexpected is expr");
 
@@ -1161,8 +1141,6 @@ static void analyzer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
             is_expr->target_type.line = is_expr->union_tag->line;
             is_expr->target_type.column = is_expr->union_tag->column;
             is_expr->union_tag = NULL;
-        } else {
-            is_expr->union_tag->assert_type = AST_EXPR_TAGGED_UNION_ELEMENT;
         }
     }
 
@@ -2072,7 +2050,13 @@ static void analyzer_expr(module_t *m, ast_expr_t *expr) {
             rewrite_select_expr(m, expr);
 
             if (expr->assert_type == AST_EXPR_SELECT) {
-                try_rewrite_tagged_union_new(m, expr);
+                ast_expr_select_t *select = expr->value;
+                if (select->type_args) {
+                    for (int i = 0; i < select->type_args->length; ++i) {
+                        type_t *arg = ct_list_value(select->type_args, i);
+                        analyzer_type(m, arg);
+                    }
+                }
             }
 
             // Constant Propagation, The select expression may be rewritten as an identity expression
@@ -2339,16 +2323,24 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
                     fndef->impl_type.ident = unique_typedef_ident;
                 }
 
-                // implicit generics for impl methods on generic typedefs
-                analyzer_fill_impl_generics(m, fndef);
+                // require explicit generics params for generic impl types
+                if (!fndef->generics_params) {
+                    symbol_t *type_symbol = symbol_table_get(fndef->impl_type.ident);
+                    if (type_symbol && type_symbol->type == SYMBOL_TYPE) {
+                        ast_typedef_stmt_t *typedef_stmt = type_symbol->ast_value;
+                        if (typedef_stmt->params && typedef_stmt->params->length > 0) {
+                            m->current_line = fndef->line;
+                            m->current_column = fndef->column;
+                            ANALYZER_ASSERTF(false, "impl type '%s' must specify generics params",
+                                             fndef->impl_type.ident);
+                        }
+                    }
+                }
 
                 fndef->symbol_name = str_connect_by(fndef->impl_type.ident, symbol_name, IMPL_CONNECT_IDENT);
 
-                // register to global symbol table
-                symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
-
-                // check exists
                 if (!fndef->generics_params) {
+                    symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
                     ANALYZER_ASSERTF(s, "ident '%s' redeclared", fndef->symbol_name);
                 }
             }
@@ -2419,59 +2411,6 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         slice_push(m->ast_fndefs, fndef);
 
         analyzer_global_fndef(m, fndef);
-    }
-}
-
-static list_t *analyzer_clone_generics_params(module_t *m, list_t *params) {
-    list_t *result = ct_list_new(sizeof(ast_generics_param_t));
-    for (int i = 0; i < params->length; ++i) {
-        ast_generics_param_t *param = ct_list_value(params, i);
-        ast_generics_param_t *copy = ast_generics_param_new(0, 0, param->ident);
-        copy->constraints.any = param->constraints.any;
-        copy->constraints.and = param->constraints.and;
-        copy->constraints.or = param->constraints.or;
-
-        for (int j = 0; j < param->constraints.elements->length; ++j) {
-            type_t *constraint = ct_list_value(param->constraints.elements, j);
-            type_t temp = type_copy(m, *constraint);
-            ct_list_push(copy->constraints.elements, &temp);
-        }
-
-        ct_list_push(result, copy);
-    }
-
-    return result;
-}
-
-static void analyzer_fill_impl_generics(module_t *m, ast_fndef_t *fndef) {
-    if (!fndef->is_impl || fndef->generics_params) {
-        return;
-    }
-
-    if (fndef->impl_type.kind != TYPE_IDENT) {
-        return;
-    }
-
-    symbol_t *symbol = symbol_table_get(fndef->impl_type.ident);
-    if (!symbol || symbol->type != SYMBOL_TYPE) {
-        return;
-    }
-
-    ast_typedef_stmt_t *typedef_stmt = symbol->ast_value;
-    if (!typedef_stmt->params || typedef_stmt->params->length == 0) {
-        return;
-    }
-
-    fndef->generics_params = analyzer_clone_generics_params(m, typedef_stmt->params);
-    fndef->is_generics = true;
-
-    if (!fndef->impl_type.args) {
-        fndef->impl_type.args = ct_list_new(sizeof(type_t));
-        for (int i = 0; i < fndef->generics_params->length; ++i) {
-            ast_generics_param_t *param = ct_list_value(fndef->generics_params, i);
-            type_t arg = type_ident_new(param->ident, TYPE_IDENT_GENERICS_PARAM);
-            ct_list_push(fndef->impl_type.args, &arg);
-        }
     }
 }
 

@@ -1,0 +1,36 @@
+=== test_static_basic
+--- main.n
+type person_t = struct{
+    int age
+}
+
+fn person_t.hello():int {
+    return 7
+}
+
+fn main():void! {
+    assert(person_t.hello() == 7)
+}
+
+=== test_static_vs_tagged_union
+--- main.n
+type result_t<T> = union{
+    T ok
+    int err
+}
+
+fn result_t<T>.ok(int v):int {
+    return v + 1
+}
+
+fn main():void! {
+    int x = result_t<int>.ok(1)
+    assert(x == 2)
+
+    result_t<int> y = result_t<int>.err(3)
+    if y is result_t.err v {
+        assert(v == 3)
+    } else {
+        assert(false)
+    }
+}

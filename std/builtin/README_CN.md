@@ -44,10 +44,10 @@ fn assert(bool cond)
 
 # [chan](https://github.com/nature-lang/nature/blob/master/std/builtin/chan.n)
 
-## fn chan_new
+## fn chan<T>.new
 
 ```
-fn chan_new<T>(...[int] args):chan<T>
+fn chan<T>.new(...[int] args):chan<T>
 ```
 
 创建新的通道，可选缓冲区大小。
@@ -222,10 +222,10 @@ fn errorf(string format, ...[any] args):ref<errort>
 
 # [map](https://github.com/nature-lang/nature/blob/master/std/builtin/map.n)
 
-## fn map_new
+## fn map<T,U>.new
 
 ```
-fn map_new<T,U>():map<T,U>
+fn map<T,U>.new():map<T,U>
 ```
 
 创建键类型为 T、值类型为 U 的新映射。
@@ -258,10 +258,10 @@ fn map<T,U>.contains(self, T key):bool
 
 # [set](https://github.com/nature-lang/nature/blob/master/std/builtin/set.n)
 
-## fn set_new
+## fn set<T>.new
 
 ```
-fn set_new<T>():set<T>
+fn set<T>.new():set<T>
 ```
 
 创建元素类型为 T 的新集合。
@@ -322,18 +322,18 @@ fn string.char(self):u8
 
 # [vec](https://github.com/nature-lang/nature/blob/master/std/builtin/vec.n)
 
-## fn vec_new
+## fn vec<T>.new
 
 ```
-fn vec_new<T>(T value, int len):vec<T>
+fn vec<T>.new(T value, int len):vec<T>
 ```
 
 创建具有初始值和长度的新向量。
 
-## fn vec_cap
+## fn vec<T>.cap_of
 
 ```
-fn vec_cap<T>(int cap):vec<T>
+fn vec<T>.cap_of(int cap):vec<T>
 ```
 
 创建具有指定容量的新向量。
@@ -388,7 +388,7 @@ fn vec<T>.len(self):int
 
 获取向量中元素的数量。
 
-### vec.cap
+### vec<T>.cap_of
 
 ```
 fn vec<T>.cap(self):int

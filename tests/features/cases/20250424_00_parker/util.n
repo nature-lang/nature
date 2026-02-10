@@ -37,7 +37,7 @@ fn extract_tgz(string exe_path):[u8]! {
 
     f.seek(-16, syscall.SEEK_END)
 
-    var size_buf = vec_new<u8>(0, 16)
+    var size_buf = vec<u8>.new(0, 16)
     var len = f.read(size_buf)
     if len != size_buf.len() {
         f.close()
@@ -57,7 +57,7 @@ fn extract_tgz(string exe_path):[u8]! {
     f.seek(-16 - size, syscall.SEEK_END)
 
     // read result
-    var result = vec_new<u8>(0, size)
+    var result = vec<u8>.new(0, size)
 
     len = f.read(result)
     if len != size {
@@ -71,7 +71,7 @@ fn extract_tgz(string exe_path):[u8]! {
 }
 
 fn rand_letter(int len):string {
-    var result = vec_new<u8>(0, len)
+    var result = vec<u8>.new(0, len)
     libc.srand(time.unix() as u32)
 
     for i,v in result {

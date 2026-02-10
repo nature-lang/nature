@@ -10,15 +10,15 @@ type package_t = struct{
     person_t p
 }
 
-fn person_t.set_age(int now) {
+fn person_t.set_age(&self, int now) {
     self.age = now
 }
 
-fn person_t.get_name():string {
+fn person_t.get_name(&self):string {
     return self.name
 }
 
-fn person_t.test_self() {
+fn person_t.test_self(&self) {
     ref<person_t> p = self
     println('in test_self', p.name, p.age, p.sex)
 }

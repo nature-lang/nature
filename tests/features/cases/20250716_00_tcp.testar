@@ -9,7 +9,7 @@ fn server():void! {
     for true {
         var conn = listener.accept()
         go fn():void! {
-            var buf = vec_new<u8>(0, 1024)
+            var buf = vec<u8>.new(0, 1024)
             for true {
                 var len = conn.read(buf) catch e {
                     if e.msg() != 'end of file' {
@@ -37,7 +37,7 @@ fn main() {
     co.sleep(1000)
 
     var conn = tcp.connect('127.0.0.1:8080')
-    var buf = vec_new<u8>(0, 1024)
+    var buf = vec<u8>.new(0, 1024)
     // write
     conn.write('hello world' as [u8])
     // read
@@ -80,7 +80,7 @@ import time
 
 fn server():void! {
     var listener = tcp.listen('0.0.0.0:8080')
-    var buf = vec_new<u8>(0, 1024)
+    var buf = vec<u8>.new(0, 1024)
     println('server is start')
     var response = 'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 11\r\nConnection: close\r\n\r\nhello world'
 
@@ -107,13 +107,13 @@ fn main() {
     // 等待 server 启动成功
     co.sleep(500)
 
-   var resp_buf = vec_new<u8>(0, 1024)
+   var resp_buf = vec<u8>.new(0, 1024)
 
     // client
     int start = time.now().ms_timestamp()
     int count = 1000
     int every = 10
-    var done = chan_new<bool>()
+    var done = chan<bool>.new()
     for int i = 0; i < count; i += 1 {
         go fn(int i):void! {
              for int j = 0; j < every; j += 1 {
@@ -154,7 +154,7 @@ import time
 
 fn server():void! {
     var listener = tcp.listen('0.0.0.0:8080')
-    var buf = vec_new<u8>(0, 1024)
+    var buf = vec<u8>.new(0, 1024)
     println('server is start')
     var response = 'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 11\r\nConnection: close\r\n\r\nhello world'
 
@@ -442,7 +442,7 @@ fn server():void! {
     for true {
         var conn = listener.accept()
         @async(fn():void! {
-            var buf = vec_new<u8>(0, 1024)
+            var buf = vec<u8>.new(0, 1024)
             for true {
                 var len = conn.read(buf) catch e {
                     println('conn read err:', e.msg())

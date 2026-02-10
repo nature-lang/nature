@@ -21,9 +21,9 @@ fn main() {
         println('into!')
     }
 
-    var a = vec_new<u8>(0, 102400)
+    var a = vec<u8>.new(0, 102400)
 
-    a = vec_new<u8>(0, 1)
+    a = vec<u8>.new(0, 1)
 
     if !{util.ascii('d'), util.ascii('a'), util.ascii('v')}.contains(c) || arg_index == len || 1 < 0 {
         println('into!')

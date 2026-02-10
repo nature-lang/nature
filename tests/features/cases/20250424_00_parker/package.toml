@@ -6,4 +6,4 @@ license = "MIT"
 type = "bin" # lib or bin
 
 [dependencies]
-compress = { type = "git", version = "v1.4.0", url = "github.com/weiwenhao/compress", use_links = true }
+compress = { type = "git", version = "v1.5.0", url = "github.com/weiwenhao/compress", use_links = true }

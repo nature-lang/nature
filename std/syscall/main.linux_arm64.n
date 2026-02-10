@@ -715,7 +715,7 @@ fn getppid():int! {
 }
 
 fn getcwd():string! {
-    var buf = vec_new<u8>(0, 1024) // 1024 是 path max
+    var buf = vec<u8>.new(0, 1024) // 1024 是 path max
     var len = call6(SYS_GETCWD, buf.ref(), buf.len() as anyptr, 0, 0, 0, 0)
 
     buf = buf.slice(0, len - 1) // -1 is remove '\0'

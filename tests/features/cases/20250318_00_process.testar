@@ -40,7 +40,7 @@ fn main():void! {
     n = buf.write('This is an arbitrary text written to the buffer' as [u8])
     println('write 2:', n, buf.empty(), buf.len(), buf.cap())
 
-    var read_buf = vec_new<u8>(0, 5)
+    var read_buf = vec<u8>.new(0, 5)
     n = buf.read(read_buf)
     println('read 1:', n, read_buf as string, buf.empty(), buf.len(), buf.cap())
 

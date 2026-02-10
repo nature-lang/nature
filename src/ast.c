@@ -471,6 +471,7 @@ static ast_expr_select_t *ast_select_expr_copy(module_t *m, ast_expr_select_t *t
     ast_expr_select_t *select = COPY_NEW(ast_expr_select_t, temp);
     select->left = *ast_expr_copy(m, &temp->left);
     select->key = strdup(temp->key);
+    select->type_args = temp->type_args ? ct_list_type_copy(m, temp->type_args) : NULL;
     return select;
 }
 

@@ -461,6 +461,11 @@ impl<'a> Syntax {
                 infix: None,
                 infix_precedence: SyntaxPrecedence::Null,
             },
+            Chan => ParserRule {
+                prefix: Some(Self::parser_ident_expr),
+                infix: None,
+                infix_precedence: SyntaxPrecedence::Null,
+            },
             _ => ParserRule {
                 prefix: None,
                 infix: None,
@@ -1382,7 +1387,7 @@ impl<'a> Syntax {
                 t.ident = ident.clone();
             }
             // 包选择器: pkg.foo
-            AstNode::SelectExpr(left, key) => {
+            AstNode::SelectExpr(left, key, _) => {
                 if let AstNode::Ident(left_ident, _) = &left.node {
                     t.import_as = left_ident.clone();
                     t.ident = key.clone();
@@ -1448,9 +1453,24 @@ impl<'a> Syntax {
             if !self.is(TokenType::RightParen) {
                 self.must(TokenType::Comma)?;
             }
-        } else if fn_decl.is_impl {
-            // fn person_t.test():ref<person_t> {
+        } else if self.consume(TokenType::And) && self.is(TokenType::Ident) && self.peek().literal == "self" {
+            self.advance(); // skip self
+                            // fn person_t.test(&self):ref<person_t> {
+            if !fn_decl.is_impl {
+                return Err(SyntaxError(
+                    self.prev().unwrap().start,
+                    self.prev().unwrap().end,
+                    "keyword `self` can only be used in impl fn".to_string(),
+                ));
+            }
             fn_decl.self_kind = SelfKind::SelfRefT;
+            if !self.is(TokenType::RightParen) {
+                self.must(TokenType::Comma)?;
+            }
+        } else if fn_decl.is_impl {
+            // fn person_t.test(): static fn
+            fn_decl.is_static = true;
+            fn_decl.self_kind = SelfKind::Null;
         }
 
         // not formal params
@@ -1509,7 +1529,7 @@ impl<'a> Syntax {
         // 必须是标识符或选择器表达式
         match &left.node {
             AstNode::Ident(..) => (),
-            AstNode::SelectExpr(left, _) => {
+            AstNode::SelectExpr(left, _, _) => {
                 // 选择器的左侧必须是标识符
                 if !matches!(left.node, AstNode::Ident(..)) {
                     return false;
@@ -1601,42 +1621,11 @@ impl<'a> Syntax {
             return Ok(expr);
         }
 
-        // fn<a,b>.some(expr) // tagged union new expression
+        // fn<a,b>.some(expr) / person_t<a>.hello()
         if self.consume(TokenType::Dot) {
-            let union_type = self.expr_to_typedef(&left, Some(generics_args));
             let tagged_name = self.must(TokenType::Ident)?.literal.clone();
-
-            let mut arg: Option<Box<Expr>> = None;
-            if self.consume(TokenType::LeftParen) {
-                // Parse args for tagged union
-                let mut args: Vec<Box<Expr>> = Vec::new();
-
-                if !self.is(TokenType::RightParen) {
-                    loop {
-                        let arg_expr = self.parser_expr()?;
-                        args.push(arg_expr);
-
-                        if self.is(TokenType::RightParen) {
-                            break;
-                        } else {
-                            self.must(TokenType::Comma)?;
-                        }
-                    }
-                }
-                self.must(TokenType::RightParen)?;
-
-                if args.len() > 1 {
-                    // Assemble into tuple
-                    let mut tuple_expr = self.expr_new();
-                    tuple_expr.node = AstNode::TupleNew(args);
-                    arg = Some(tuple_expr);
-                } else if args.len() == 1 {
-                    arg = args.pop();
-                }
-            }
-
             expr.end = self.prev().unwrap().end;
-            expr.node = AstNode::TaggedUnionNew(union_type, tagged_name, None, arg);
+            expr.node = AstNode::SelectExpr(left, tagged_name, Some(generics_args));
             return Ok(expr);
         }
 
@@ -1903,7 +1892,11 @@ impl<'a> Syntax {
 
     fn parser_ident_expr(&mut self) -> Result<Box<Expr>, SyntaxError> {
         let mut expr = self.expr_new();
-        let ident_token = self.must(TokenType::Ident)?;
+        let ident_token = if self.is(TokenType::Chan) {
+            self.must(TokenType::Chan)?
+        } else {
+            self.must(TokenType::Ident)?
+        };
 
         expr.node = AstNode::Ident(ident_token.literal.clone(), 0);
         expr.end = self.prev().unwrap().end;
@@ -1994,7 +1987,7 @@ impl<'a> Syntax {
 
         let property_token = self.must(TokenType::Ident)?;
         expr.start = left.start;
-        expr.node = AstNode::SelectExpr(left, property_token.literal.clone());
+        expr.node = AstNode::SelectExpr(left, property_token.literal.clone(), None);
         expr.end = self.prev().unwrap().end;
 
         Ok(expr)
@@ -3142,6 +3135,40 @@ impl<'a> Syntax {
 
                 t.end = self.prev().unwrap().end;
                 t
+            } else if (first_token.token_type == TokenType::Ident) && self.ident_is_builtin_type(first_token.clone()) {
+                if self.next_is(1, TokenType::LeftAngle) {
+                    let mut t = self.parser_single_type()?;
+                    t.ident = first_token.literal.clone();
+                    t.ident_kind = TypeIdentKind::Builtin;
+                    t.args = Vec::new();
+                    t
+                } else {
+                    self.must(TokenType::Ident)?;
+                    let mut t = Type::unknown();
+                    t.kind = match first_token.literal.as_str() {
+                        "vec" => TypeKind::Vec(Box::new(Type::unknown())),
+                        "map" => TypeKind::Map(Box::new(Type::unknown()), Box::new(Type::unknown())),
+                        "set" => TypeKind::Set(Box::new(Type::unknown())),
+                        "tup" => TypeKind::Tuple(Vec::new(), 0),
+                        _ => TypeKind::Ident,
+                    };
+                    t.ident = first_token.literal.clone();
+                    t.ident_kind = TypeIdentKind::Builtin;
+                    t.args = Vec::new();
+                    t.start = first_token.start;
+                    t.end = first_token.end;
+                    t
+                }
+            } else if first_token.token_type == TokenType::Chan && !self.next_is(1, TokenType::LeftAngle) {
+                self.must(TokenType::Chan)?;
+                let mut t = Type::unknown();
+                t.kind = TypeKind::Chan(Box::new(Type::unknown()));
+                t.ident = "chan".to_string();
+                t.ident_kind = TypeIdentKind::Builtin;
+                t.args = Vec::new();
+                t.start = first_token.start;
+                t.end = first_token.end;
+                t
             } else {
                 let mut t = self.parser_single_type()?;
                 t.ident = first_token.literal.clone();
@@ -3779,7 +3806,7 @@ impl<'a> Syntax {
             let call_expr = self.parser_expr_with_precedence()?;
 
             if let AstNode::Call(call) = &call_expr.node {
-                if let AstNode::SelectExpr(_left, key) = &call.left.node {
+                if let AstNode::SelectExpr(_left, key, _) = &call.left.node {
                     match key.as_str() {
                         "on_recv" => {
                             recv_count += 1;

@@ -3,7 +3,7 @@
 fn uv_dns_lookup(string host, [string] ips):void!
 
 fn lookup(string host):[string]! {
-    var ips = vec_new("", 0)
+    var ips = vec<string>.new("", 0)
 
     uv_dns_lookup(host, ips)
 

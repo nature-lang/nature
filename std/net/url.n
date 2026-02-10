@@ -138,7 +138,7 @@ fn query_t.get(self, string key):string {
     return self[key][0]
 }
 
-fn url_t.query():query_t {
+fn url_t.query(&self):query_t {
     query_t result = {}
     
     if self.raw_query.len() == 0 {
@@ -170,7 +170,7 @@ fn url_t.query():query_t {
     return result
 }
 
-fn url_t.request_uri():string {
+fn url_t.request_uri(&self):string {
     if self.raw_query.len() > 0 {
         return self.path + '?' + self.raw_query
     } else {
@@ -183,7 +183,7 @@ fn decode(string s):string {
         return s
     }
     
-    var result = vec_cap<u8>(s.len())
+    var result = vec<u8>.cap_of(s.len())
     var i = 0
     
     for i < s.len() {
@@ -232,7 +232,7 @@ fn encode(string s):string {
         return s
     }
     
-    var result = vec_cap<u8>(s.len() * 3) // Preallocate enough space, and at worst, each character becomes %XX
+    var result = vec<u8>.cap_of(s.len() * 3) // Preallocate enough space, and at worst, each character becomes %XX
     
     for i,ch in s  {
         if (ch >= 'A'.char() && ch <= 'Z'.char()) ||

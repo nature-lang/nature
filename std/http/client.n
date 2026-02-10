@@ -34,7 +34,7 @@ fn generate_boundary():string {
     return fmt.sprintf("----formdata-boundary-%d", timestamp)
 }
 
-fn multipart_t.text(string name, string value):ref<multipart_t> {
+fn multipart_t.text(&self, string name, string value):ref<multipart_t> {
     var item = multipart_item_t{
         name: name,
         filename: "",
@@ -45,7 +45,7 @@ fn multipart_t.text(string name, string value):ref<multipart_t> {
     return self
 }
 
-fn multipart_t.file(string name, string filename, string data):ref<multipart_t> {
+fn multipart_t.file(&self, string name, string filename, string data):ref<multipart_t> {
     var content_type = "application/octet-stream" 
 
     if filename.ends_with(".jpg") || filename.ends_with(".jpeg") {
@@ -68,7 +68,7 @@ fn multipart_t.file(string name, string filename, string data):ref<multipart_t> 
     return self
 }
 
-fn multipart_t.serialize():string {
+fn multipart_t.serialize(&self):string {
     var result = ""
     
     for item in self.items {
@@ -125,76 +125,76 @@ fn new():ref<request_t> {
     return new request_t()
 }
 
-fn request_t.get(string url):ref<request_t> {
+fn request_t.get(&self, string url):ref<request_t> {
     self.url = url
     self.method = 'GET'
     return self
 }
 
-fn request_t.post(string url):ref<request_t> {
+fn request_t.post(&self, string url):ref<request_t> {
     self.url = url
     self.method = 'POST'
     return self
 }
 
-fn request_t.put(string url):ref<request_t> {
+fn request_t.put(&self, string url):ref<request_t> {
     self.url = url
     self.method = 'PUT'
     return self
 }
 
-fn request_t.patch(string url):ref<request_t> {
+fn request_t.patch(&self, string url):ref<request_t> {
     self.url = url
     self.method = 'PATCH'
     return self
 }
 
-fn request_t.delete(string url):ref<request_t> {
+fn request_t.delete(&self, string url):ref<request_t> {
     self.url = url
     self.method = 'DELETE'
     return self
 }
 
-fn request_t.options(string url):ref<request_t> {
+fn request_t.options(&self, string url):ref<request_t> {
     self.url = url
     self.method = 'OPTIONS'
     return self
 }
 
-fn request_t.head(string url):ref<request_t> {
+fn request_t.head(&self, string url):ref<request_t> {
     self.url = url
     self.method = 'HEAD'
     return self
 }
 
-fn request_t.timeout(int timeout):ref<request_t> {
+fn request_t.timeout(&self, int timeout):ref<request_t> {
     self.timeout = timeout
     return self
 }
 
-fn request_t.header(string key, string value):ref<request_t> {
+fn request_t.header(&self, string key, string value):ref<request_t> {
     self.headers[key] = value
     return self
 }
 
-fn request_t.content(string content):ref<request_t> {
+fn request_t.content(&self, string content):ref<request_t> {
     self.body = content
     return self
 }
 
-fn request_t.multipart(ref<multipart_t> mp):ref<request_t> {
+fn request_t.multipart(&self, ref<multipart_t> mp):ref<request_t> {
     self.body = mp.serialize()
     self.headers['Content-Type'] = fmt.sprintf("multipart/form-data; boundary=%s", mp.boundary)
     return self
 }
 
-fn request_t.json(any b):ref<request_t>! {
+fn request_t.json(&self, any b):ref<request_t>! {
     self.body = json.serialize(b)
     self.headers['Content-type'] = 'application/json'
     return self
 }
 
-fn request_t.form({string:string} data):ref<request_t> {
+fn request_t.form(&self, {string:string} data):ref<request_t> {
     var form_data = ""
     var first = true
     
@@ -211,7 +211,7 @@ fn request_t.form({string:string} data):ref<request_t> {
     return self
 }
 
-fn request_t.fill_port() {
+fn request_t.fill_port(&self) {
     match {
         self.u.port > 0 -> {
             self.remote_port = self.u.port
@@ -226,14 +226,14 @@ fn request_t.fill_port() {
     }
 }
 
-fn request_t.fill_headers() {
+fn request_t.fill_headers(&self) {
     self.headers['Host'] = self.u.authority
     self.headers['User-Agent'] = 'Nature-HTTP-Client/1.0'
     self.headers['Content-Length'] = fmt.sprintf('%d', self.body.len())
 }
 
-fn request_t.tcp_buf():[u8]! {
-    var buf = vec_cap<u8>(1024)
+fn request_t.tcp_buf(&self):[u8]! {
+    var buf = vec<u8>.cap_of(1024)
 
     u8 space_char = 32
     buf.append(self.method as [u8])
@@ -256,7 +256,7 @@ fn request_t.tcp_buf():[u8]! {
     return buf
 }
 
-fn request_t.send():ref<response_t>! {
+fn request_t.send(&self):ref<response_t>! {
     self.u = url.parse(self.url)
     self.remote_ip = dns.lookup(self.u.hostname)[0]
     self.version = 'HTTP/1.1'
@@ -332,11 +332,11 @@ fn fetch(string url, config_t c):ref<response_t>! {
 }
 
 
-fn response_t.status():int {
+fn response_t.status(&self):int {
     return self.status
 }
 
-fn response_t.text():string! {
+fn response_t.text(&self):string! {
     if self.body_read {
         return self.body
     }
@@ -345,7 +345,7 @@ fn response_t.text():string! {
         return self.body
     }
 
-    var buf = vec_new<u8>(0, self.length)
+    var buf = vec<u8>.new(0, self.length)
     self.buf_conn.read_exact(buf)
     self.body = buf as string
     return self.body

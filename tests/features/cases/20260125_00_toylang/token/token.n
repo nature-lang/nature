@@ -47,7 +47,7 @@ type SourcePos = struct {
     int column // column number
 }
 
-fn SourcePos.toString(): string {
+fn SourcePos.toString(&self): string {
     return "(line: " + fmt.sprintf("%d",self.line) + ", column: " + fmt.sprintf("%d",self.column) + ")"
 }
 
@@ -68,7 +68,7 @@ fn newToken( int kind,  string literal, int line, int column): Token {
     }
 }
 
-fn Token.toString(): string {
+fn Token.toString(&self): string {
     var kind = match self.kind {
         TokenKindEof -> "TokenKindEof"
         TokenKindIdent -> "TokenKindIdent"

@@ -9,17 +9,17 @@ fn main() {
     l2.push(12)
     println(l2[0], l2[1], l2[2])
 
-    var l3 = vec_new<u8>(0, 0)
+    var l3 = vec<u8>.new(0, 0)
     l3.push(12)
     println(l3.len())
     println(l3.cap())
 
-    var l4 = vec_new<u16>(0, 1024)
+    var l4 = vec<u16>.new(0, 1024)
     l4.push(12)
     println(l4.len())
     println(l4.cap())
 
-    var l5 = vec_cap<u16>(2048)
+    var l5 = vec<u16>.cap_of(2048)
     u16 b5 = 11
     l5.push(b5 + 1)
     println(l5.len())
@@ -76,7 +76,7 @@ fn main():void! {
 --- main.n
 fn main():void! {
     var a = [1, 2, 3, 4]
-    var b = vec_new<int>(0, 0)
+    var b = vec<int>.new(0, 0)
     b.copy(a)
     println(b.len(), b[0])
 }
@@ -88,7 +88,7 @@ coroutine 'main' panic: 'index out of range [0] with length 0' at nature-test/ma
 --- main.n
 fn main():void! {
     var a = [1, 2, 3, 4]
-    var b = vec_new<int>(0, 10)
+    var b = vec<int>.new(0, 10)
     b.copy(a)
     println(b.len(), b[0], b[1], b[2], b[3], b[4], b[5])
 }

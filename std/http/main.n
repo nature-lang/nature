@@ -90,48 +90,48 @@ type server_t = struct{
     anyptr inner
 }
 
-fn server_t.acquire_response() {
+fn server_t.acquire_response(&self) {
     
 }
 
-fn server_t.get(string path, callback_fn callback) {
+fn server_t.get(&self, string path, callback_fn callback) {
     self.router_register(ROUTES_GET, path, callback)
 }
 
-fn server_t.post(string path, callback_fn callback) {
+fn server_t.post(&self, string path, callback_fn callback) {
     self.router_register(ROUTES_POST, path, callback)
 }
 
-fn server_t.put(string path, callback_fn callback) {
+fn server_t.put(&self, string path, callback_fn callback) {
     self.router_register(ROUTES_PUT, path, callback)
 }
 
-fn server_t.delete(string path, callback_fn callback) {
+fn server_t.delete(&self, string path, callback_fn callback) {
     self.router_register(ROUTES_DELETE, path, callback)
 }
 
-fn server_t.patch(string path, callback_fn callback) {
+fn server_t.patch(&self, string path, callback_fn callback) {
     self.router_register(ROUTES_PATCH, path, callback)
 }
 
-fn server_t.options(string path, callback_fn callback) {
+fn server_t.options(&self, string path, callback_fn callback) {
     self.router_register(ROUTES_OPTIONS, path, callback)
 }
 
-fn server_t.head(string path, callback_fn callback) {
+fn server_t.head(&self, string path, callback_fn callback) {
     self.router_register(ROUTES_HEAD, path, callback)
 }
 
-fn server_t.all(string path, callback_fn callback) {
+fn server_t.all(&self, string path, callback_fn callback) {
     self.router_register(ROUTES_ALL, path, callback)
 }
 
-fn server_t.router_register(int routes_type, string path, callback_fn callback) {
+fn server_t.router_register(&self, int routes_type, string path, callback_fn callback) {
     assert(routes_type <= 7 && routes_type >= 0)
     self.routers[routes_type][path] = callback
 }
 
-fn server_t.find_callback(u8 method, string path):callback_fn {
+fn server_t.find_callback(&self, u8 method, string path):callback_fn {
     int routes_type = match method {
         HTTP_GET -> ROUTES_GET
         HTTP_POST -> ROUTES_POST
@@ -157,12 +157,12 @@ fn server_t.find_callback(u8 method, string path):callback_fn {
     }
 }
 
-fn server_t.listen(int port):void! {
+fn server_t.listen(&self, int port):void! {
     self.port = port
     uv.http_listen(self as anyptr)
 }
 
-fn server_t.close() {
+fn server_t.close(&self) {
     uv.http_close(self as anyptr)
 }
 
@@ -248,14 +248,14 @@ fn response_new():ref<response_t> {
     )
 }
 
-fn response_t.send(string msg) {
+fn response_t.send(&self, string msg) {
     self.body = msg
     self.length = msg.len()
 }
 
-fn response_t.to_str():string {
+fn response_t.to_str(&self):string {
     var cap = (100 + self.body.len()) * 2
-    var buf = vec_cap<u8>(cap)
+    var buf = vec<u8>.cap_of(cap)
 
     u8 space_ascii = 32
 

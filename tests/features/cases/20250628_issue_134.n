@@ -11,17 +11,17 @@ type DisplayPair<T, U>:Display = struct {
 type Int<T>:Display = T
 type String:Display = string
 
-fn Int<T>.to_string(): string {
+fn Int<T>.to_string(&self): string {
 	//this function returns a string.
 	return fmt.sprintf("%d", *self)
 }
 
-fn String.to_string():string {
+fn String.to_string(&self):string {
 	//this function returns a string.
 	return self as string;
 }
 
-fn DisplayPair<T, U>.to_string():string {
+fn DisplayPair<T, U>.to_string(&self):string {
 	//this function returns a string.
 	return fmt.sprintf("DisplayPair(%s, %s)", self.first.to_string(), self.second.to_string());
 }

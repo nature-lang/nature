@@ -43,7 +43,7 @@ type warp_t = struct{
 }
 
 fn main():void! {
-    var probindex = vec_new<prob_index_t>(prob_index_t{}, 10)
+    var probindex = vec<prob_index_t>.new(prob_index_t{}, 10)
 
     probindex[0].index = 1
     probindex[0].prob = 3.1314
@@ -63,8 +63,8 @@ fn main():void! {
     assert(a == 2 && b == 4)
 
     [[prob_index_t];5] arrs2 = [
-        vec_new<prob_index_t>(prob_index_t{}, 10),
-        vec_new<prob_index_t>(prob_index_t{}, 10),
+        vec<prob_index_t>.new(prob_index_t{}, 10),
+        vec<prob_index_t>.new(prob_index_t{}, 10),
     ]
 
     arrs2[1][3].index = 3
@@ -73,8 +73,8 @@ fn main():void! {
     assert(arrs2[1][3].index == 3 && arrs2[1][3].prob == 520.1314)
 
     vec<[prob_index_t]> vec3 = [
-            vec_new<prob_index_t>(prob_index_t{}, 10),
-            vec_new<prob_index_t>(prob_index_t{}, 10),
+            vec<prob_index_t>.new(prob_index_t{}, 10),
+            vec<prob_index_t>.new(prob_index_t{}, 10),
     ]
 
     vec3[1][3].index = 4
@@ -294,8 +294,8 @@ type trans_t = struct{
 }
 
 fn malloc_test(ptr<test_t> t) {
-    t.a = [0;288]
-    t.b = [0;288]
+    t.a = vec<int>.new(0, 288)
+    t.b = vec<int>.new(0, 288)
 }
 
 fn trans_new():ref<trans_t> {

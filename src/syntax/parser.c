@@ -74,6 +74,41 @@ static bool ident_is_builtin_type(module_t *m, token_t *token) {
     return false;
 }
 
+static type_kind builtin_ident_to_kind(token_t *token) {
+    if (str_equal(token->literal, "vec")) {
+        return TYPE_VEC;
+    }
+    if (str_equal(token->literal, "map")) {
+        return TYPE_MAP;
+    }
+    if (str_equal(token->literal, "set")) {
+        return TYPE_SET;
+    }
+    if (str_equal(token->literal, "tup")) {
+        return TYPE_TUPLE;
+    }
+    return TYPE_IDENT;
+}
+
+static type_t builtin_impl_type_new(type_kind kind) {
+    type_t result = type_kind_new(kind);
+    if (kind == TYPE_VEC) {
+        result.vec = NEW(type_vec_t);
+        result.vec->element_type = type_kind_new(TYPE_UNKNOWN);
+    } else if (kind == TYPE_SET) {
+        result.set = NEW(type_set_t);
+        result.set->element_type = type_kind_new(TYPE_UNKNOWN);
+    } else if (kind == TYPE_MAP) {
+        result.map = NEW(type_map_t);
+        result.map->key_type = type_kind_new(TYPE_UNKNOWN);
+        result.map->value_type = type_kind_new(TYPE_UNKNOWN);
+    } else if (kind == TYPE_CHAN) {
+        result.chan = NEW(type_chan_t);
+        result.chan->element_type = type_kind_new(TYPE_UNKNOWN);
+    }
+    return result;
+}
+
 static bool parser_ident_is(module_t *m, char *expect) {
     token_t *t = m->p_cursor.current->value;
     if (t->type != TOKEN_IDENT) {
@@ -1001,9 +1036,18 @@ static void parser_params(module_t *m, ast_fndef_t *fndef) {
         if (!parser_is(m, TOKEN_RIGHT_PAREN)) {
             parser_must(m, TOKEN_COMMA);
         }
-    } else if (fndef->is_impl) {
-        // fn person_t.test():ref<person_t> {
+    } else if (parser_consume(m, TOKEN_AND) && parser_ident_is(m, FN_SELF_NAME)) {
+        parser_advance(m);
+        // fn person_t.test(&self):ref<person_t> {
+        PARSER_ASSERTF(fndef->is_impl, "keyword `self` can only be used in impl fn")
         fndef->self_kind = PARAM_SELF_REF_T;
+        if (!parser_is(m, TOKEN_RIGHT_PAREN)) {
+            parser_must(m, TOKEN_COMMA);
+        }
+    } else if (fndef->is_impl) {
+        // fn person_t.test(): static fn
+        fndef->self_kind = PARAM_SELF_NULL;
+        fndef->is_static = true;
     }
 
     // not formal params
@@ -1112,12 +1156,12 @@ static bool parser_left_angle_is_type_args(module_t *m, ast_expr_t left) {
             goto RET;
         }
 
-        if (!parser_next_is(m, 1, TOKEN_LEFT_CURLY) && !parser_next_is(m, 1, TOKEN_LEFT_PAREN)) {
+        if (!parser_next_is(m, 1, TOKEN_LEFT_CURLY) && !parser_next_is(m, 1, TOKEN_LEFT_PAREN) && !parser_next_is(m, 1, TOKEN_DOT)) {
             result = false;
             goto RET;
         }
 
-        // <...>{ or <...>(
+        // <...>{ or <...>( or <...>.
         result = true;
         goto RET;
     }
@@ -1171,32 +1215,16 @@ static ast_expr_t parser_type_args_expr(module_t *m, ast_expr_t left) {
         return result;
     }
 
-    // fn<a,b>.some(expr) // enum select
+    // nullable<a,b>.some(expr) / person_t<a>.hello()
     if (parser_consume(m, TOKEN_DOT)) {
-        ast_tagged_union_t *tagged_union = NEW(ast_tagged_union_t);
-        tagged_union->union_type = ast_expr_to_typedef_ident(m, left, generics_args);
-        tagged_union->tagged_name = parser_must(m, TOKEN_IDENT)->literal;
-        bool spread = false;
+        token_t *property_token = parser_must(m, TOKEN_IDENT);
+        ast_expr_select_t *select = NEW(ast_expr_select_t);
+        select->left = left;
+        select->key = property_token->literal;
+        select->type_args = generics_args;
 
-        if (parser_is(m, TOKEN_LEFT_PAREN)) {
-            list_t *args = parser_arg(m, &spread);
-            ast_expr_t *arg = ct_list_value(args, 0);
-            if (args->length > 1) {
-                // Assemble into tuple
-                ast_expr_t *tuple_arg = NEW(ast_expr_t);
-                tuple_arg->line = arg->line;
-                tuple_arg->column = arg->column;
-                tuple_arg->assert_type = AST_EXPR_TUPLE_NEW;
-                ast_tuple_new_t *tuple_new = NEW(ast_tuple_new_t);
-                tuple_new->elements = args;
-                tuple_arg->value = tuple_new;
-                arg = tuple_arg;
-            }
-            tagged_union->arg = arg;
-        }
-
-        result.assert_type = AST_EXPR_TAGGED_UNION_NEW;
-        result.value = tagged_union;
+        result.assert_type = AST_EXPR_SELECT;
+        result.value = select;
         return result;
     }
 
@@ -1491,7 +1519,12 @@ static bool parser_is_tuple_typedecl(module_t *m, linked_node *current) {
 static ast_expr_t parser_ident_expr(module_t *m) {
     // 这里传递一个 precedence 参数, 基于该参数判断是否
     ast_expr_t result = expr_new(m);
-    token_t *ident_token = parser_must(m, TOKEN_IDENT);
+    token_t *ident_token = NULL;
+    if (parser_is(m, TOKEN_CHAN)) {
+        ident_token = parser_advance(m);
+    } else {
+        ident_token = parser_must(m, TOKEN_IDENT);
+    }
 
     // call()  a.b a[b], a.call() other ident prefix right
     result.assert_type = AST_EXPR_IDENT;
@@ -1569,6 +1602,7 @@ static ast_expr_t parser_unknown_select(module_t *m, ast_expr_t left) {
 
     select->left = left;
     select->key = property_token->literal; // struct 的 property 不能是运行时计算的结果，必须是具体的值
+    select->type_args = NULL;
 
     result.assert_type = AST_EXPR_SELECT;
     result.value = select;
@@ -2790,6 +2824,26 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
 
                 parser_must(m, TOKEN_RIGHT_ANGLE);
             }
+        } else if (first_token->type == TOKEN_IDENT && ident_is_builtin_type(m, first_token)) {
+            // builtin ident without explicit generics
+            if (parser_next_is(m, 1, TOKEN_LEFT_ANGLE)) {
+                impl_type = parser_single_type(m);
+                impl_type.ident = type_kind_str[impl_type.kind];
+                impl_type.ident_kind = TYPE_IDENT_BUILTIN;
+                impl_type.args = NULL;
+            } else {
+                parser_must(m, TOKEN_IDENT);
+                impl_type = builtin_impl_type_new(builtin_ident_to_kind(first_token));
+                impl_type.ident = first_token->literal;
+                impl_type.ident_kind = TYPE_IDENT_BUILTIN;
+                impl_type.args = NULL;
+            }
+        } else if (first_token->type == TOKEN_CHAN && !parser_next_is(m, 1, TOKEN_LEFT_ANGLE)) {
+            parser_must(m, TOKEN_CHAN);
+            impl_type = builtin_impl_type_new(TYPE_CHAN);
+            impl_type.ident = type_kind_str[TYPE_CHAN];
+            impl_type.ident_kind = TYPE_IDENT_BUILTIN;
+            impl_type.args = NULL;
         } else {
             // first_token 是 type
             // table 就绪的情况下可以正确的解析 param
@@ -3168,6 +3222,7 @@ static parser_rule rules[] = {
 
         // 以 ident 开头的前缀表达式
         [TOKEN_IDENT] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
+        [TOKEN_CHAN] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
         [TOKEN_EOF] = {NULL, NULL, PRECEDENCE_NULL},
 };
 

@@ -25,7 +25,7 @@ fn random_string(int len):string {
 
     libc.srand(time.unix() as u32)
 
-    var result = vec_new<u8>(0, len)
+    var result = vec<u8>.new(0, len)
 
     for int i = 0; i < len; i += 1 {
         result[i] = alphanum[libc.rand() as int % alphanum_len]
@@ -35,7 +35,7 @@ fn random_string(int len):string {
 }
 
 
-fn u32.to_ipv4():string {
+fn u32.to_ipv4(&self):string {
     u8 a = ((*self >> 24) & 0xFF) as u8
     u8 b = ((*self >> 16) & 0xFF) as u8
     u8 c = ((*self >> 8) & 0xFF) as u8

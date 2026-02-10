@@ -44,10 +44,10 @@ Assert that the condition is true, panic if false.
 
 # [chan](https://github.com/nature-lang/nature/blob/master/std/builtin/chan.n)
 
-## fn chan_new
+## fn chan<T>.new
 
 ```
-fn chan_new<T>(...[int] args):chan<T>
+fn chan<T>.new(...[int] args):chan<T>
 ```
 
 Create a new channel with optional buffer size.
@@ -222,10 +222,10 @@ Create a formatted error.
 
 # [map](https://github.com/nature-lang/nature/blob/master/std/builtin/map.n)
 
-## fn map_new
+## fn map<T,U>.new
 
 ```
-fn map_new<T,U>():map<T,U>
+fn map<T,U>.new():map<T,U>
 ```
 
 Create a new map with key type T and value type U.
@@ -258,10 +258,10 @@ Check if the map contains the given key.
 
 # [set](https://github.com/nature-lang/nature/blob/master/std/builtin/set.n)
 
-## fn set_new
+## fn set<T>.new
 
 ```
-fn set_new<T>():set<T>
+fn set<T>.new():set<T>
 ```
 
 Create a new set with element type T.
@@ -322,18 +322,18 @@ Get the first character of the string.
 
 # [vec](https://github.com/nature-lang/nature/blob/master/std/builtin/vec.n)
 
-## fn vec_new
+## fn vec<T>.new
 
 ```
-fn vec_new<T>(T value, int len):vec<T>
+fn vec<T>.new(T value, int len):vec<T>
 ```
 
 Create a new vector with initial value and length.
 
-## fn vec_cap
+## fn vec<T>.cap_of
 
 ```
-fn vec_cap<T>(int cap):vec<T>
+fn vec<T>.cap_of(int cap):vec<T>
 ```
 
 Create a new vector with specified capacity.
@@ -388,7 +388,7 @@ fn vec<T>.len(self):int
 
 Get the number of elements in the vector.
 
-### vec.cap
+### vec<T>.cap_of
 
 ```
 fn vec<T>.cap(self):int

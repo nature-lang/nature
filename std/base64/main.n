@@ -8,7 +8,7 @@ fn mbedtls_base64_encode(anyptr dst, int dlen, ptr<int> olen, anyptr src, int sl
 
 fn encode([u8] src):[u8] {
     var max_len = ((src.len() + 2) / 3) * 4 + 1
-    var dst = vec_new<u8>(0, max_len)
+    var dst = vec<u8>.new(0, max_len)
     int olen = 0
 
     mbedtls_base64_encode(dst.ref(), max_len, &olen, src.ref(), src.len())
@@ -19,7 +19,7 @@ fn encode([u8] src):[u8] {
 
 fn decode([u8] src):[u8]! {
     var max_len = (src.len() * 3) / 4 + 1
-    var dst = vec_new<u8>(0, max_len)
+    var dst = vec<u8>.new(0, max_len)
     var olen = 0
 
     var ret = mbedtls_base64_decode(dst.ref(), max_len, &olen, src.ref(), src.len())

@@ -676,7 +676,28 @@ impl<'a> Semantic<'a> {
                             // resolve global ident
                             if let Some(symbol_id) = self.resolve_typedef(&mut fndef.impl_type.ident) {
                                 // ident maybe change
-                                fndef.impl_type.symbol_id = symbol_id
+                                fndef.impl_type.symbol_id = symbol_id;
+
+                                // 检查: 如果 fndef 没有泛型参数，但 typedef 有泛型参数，则报错
+                                // 例如: type person_t<T> = struct{...}
+                                // fn person_t.hello() 是错误的，应该是 fn person_t<T>.hello()
+                                if fndef.generics_params.is_none() {
+                                    if let Some(symbol) = self.symbol_table.get_symbol(symbol_id) {
+                                        if let SymbolKind::Type(typedef_mutex) = &symbol.kind {
+                                            let typedef = typedef_mutex.lock().unwrap();
+                                            if !typedef.params.is_empty() {
+                                                errors_push(
+                                                    self.module,
+                                                    AnalyzerError {
+                                                        start: fndef.symbol_start,
+                                                        end: fndef.symbol_end,
+                                                        message: format!("impl type '{}' must specify generics params", fndef.impl_type.ident),
+                                                    },
+                                                );
+                                            }
+                                        }
+                                    }
+                                }
                             } else {
                                 errors_push(
                                     self.module,
@@ -691,19 +712,20 @@ impl<'a> Semantic<'a> {
 
                         fndef.symbol_name = format_impl_ident(fndef.impl_type.ident.clone(), symbol_name);
 
-                        // register to global symbol table
-                        match self.symbol_table.define_symbol_in_scope(
-                            fndef.symbol_name.clone(),
-                            SymbolKind::Fn(fndef_mutex.clone()),
-                            fndef.symbol_start,
-                            self.module.scope_id,
-                        ) {
-                            Ok(symbol_id) => {
-                                fndef.symbol_id = symbol_id;
-                            }
-                            Err(e) => {
-                                // 因为允许泛型函数重载，所以此处会有同名 symbol 的情况，pre_infer 会进行二次处理，此处忽略相关错误
-                                if fndef.generics_params.is_none() {
+                        // 泛型 impl 函数的符号表注册延迟到 pre_infer 阶段处理
+                        // 与编译器行为保持一致
+                        if fndef.generics_params.is_none() {
+                            // register to global symbol table
+                            match self.symbol_table.define_symbol_in_scope(
+                                fndef.symbol_name.clone(),
+                                SymbolKind::Fn(fndef_mutex.clone()),
+                                fndef.symbol_start,
+                                self.module.scope_id,
+                            ) {
+                                Ok(symbol_id) => {
+                                    fndef.symbol_id = symbol_id;
+                                }
+                                Err(e) => {
                                     errors_push(
                                         self.module,
                                         AnalyzerError {
@@ -714,15 +736,15 @@ impl<'a> Semantic<'a> {
                                     );
                                 }
                             }
-                        }
 
-                        // register to global symbol
-                        let _ = self.symbol_table.define_global_symbol(
-                            fndef.symbol_name.clone(),
-                            SymbolKind::Fn(fndef_mutex.clone()),
-                            fndef.symbol_start,
-                            self.module.scope_id,
-                        );
+                            // register to global symbol
+                            let _ = self.symbol_table.define_global_symbol(
+                                fndef.symbol_name.clone(),
+                                SymbolKind::Fn(fndef_mutex.clone()),
+                                fndef.symbol_start,
+                                self.module.scope_id,
+                            );
+                        }
                     }
 
                     global_fn_stmt_list.push(fndef_mutex.clone());
@@ -942,36 +964,38 @@ impl<'a> Semantic<'a> {
             // fn vec<T>.len() -> fn vec_len(vec<T> self)
             // impl 是 type alias 时，只能是 fn person_t.len() 而不能是 fn pkg.person_t.len()
             if fndef.impl_type.kind.is_exist() {
-                // 重构 params 的位置, 新增 self param
-                let mut new_params = Vec::new();
-                let param_type = fndef.impl_type.clone();
-                let self_vardecl = VarDeclExpr {
-                    ident: String::from("self"),
-                    type_: param_type,
-                    be_capture: false,
-                    heap_ident: None,
-                    symbol_start: fndef.symbol_start,
-                    symbol_end: fndef.symbol_end,
-                    symbol_id: 0,
-                };
+                if !fndef.is_static && fndef.self_kind != SelfKind::Null {
+                    // 重构 params 的位置, 新增 self param
+                    let mut new_params = Vec::new();
+                    let param_type = fndef.impl_type.clone();
+                    let self_vardecl = VarDeclExpr {
+                        ident: String::from("self"),
+                        type_: param_type,
+                        be_capture: false,
+                        heap_ident: None,
+                        symbol_start: fndef.symbol_start,
+                        symbol_end: fndef.symbol_end,
+                        symbol_id: 0,
+                    };
 
-                new_params.push(Arc::new(Mutex::new(self_vardecl)));
-                new_params.extend(fndef.params.iter().cloned());
-                fndef.params = new_params;
+                    new_params.push(Arc::new(Mutex::new(self_vardecl)));
+                    new_params.extend(fndef.params.iter().cloned());
+                    fndef.params = new_params;
 
-                // builtin type 没有注册在符号表，不能添加 method
-                if !Type::is_impl_builtin_type(&fndef.impl_type.kind) {
-                    self.symbol_typedef_add_method(fndef.impl_type.ident.clone(), fndef.symbol_name.clone(), fndef_mutex.clone())
-                        .unwrap_or_else(|e| {
-                            errors_push(
-                                self.module,
-                                AnalyzerError {
-                                    start: fndef.symbol_start,
-                                    end: fndef.symbol_end,
-                                    message: e,
-                                },
-                            );
-                        });
+                    // builtin type 没有注册在符号表，不能添加 method
+                    if !Type::is_impl_builtin_type(&fndef.impl_type.kind) {
+                        self.symbol_typedef_add_method(fndef.impl_type.ident.clone(), fndef.symbol_name.clone(), fndef_mutex.clone())
+                            .unwrap_or_else(|e| {
+                                errors_push(
+                                    self.module,
+                                    AnalyzerError {
+                                        start: fndef.symbol_start,
+                                        end: fndef.symbol_end,
+                                        message: e,
+                                    },
+                                );
+                            });
+                    }
                 }
             }
 
@@ -1056,49 +1080,8 @@ impl<'a> Semantic<'a> {
         return None;
     }
 
-    /// 尝试将 SelectExpr 改写为 TaggedUnionNew
-    /// 如果 left 是一个 tagged union 类型的 ident，则将整个表达式改写为 TaggedUnionNew
-    pub fn try_rewrite_tagged_union_new(&mut self, expr: &mut Box<Expr>) {
-        let AstNode::SelectExpr(left, key) = &expr.node else {
-            return;
-        };
-
-        // left 必须是 Ident
-        let AstNode::Ident(left_ident, _symbol_id) = &left.node else {
-            return;
-        };
-
-        // 从符号表中查找 left_ident 对应的符号
-        let symbol = self.symbol_table.find_global_symbol(left_ident);
-        let Some(symbol) = symbol else {
-            return;
-        };
-
-        // 符号必须是 Type 类型
-        let SymbolKind::Type(typedef_mutex) = &symbol.kind else {
-            return;
-        };
-
-        let is_tagged_union = {
-            let typedef = typedef_mutex.lock().unwrap();
-            typedef.is_tagged_union
-        };
-        // 必须是 tagged union 类型
-        if !is_tagged_union {
-            return;
-        }
-
-        // 创建 tagged union new 节点（类型验证在 infer 阶段完成）
-        let mut union_type = Type::ident_new(left_ident.clone(), TypeIdentKind::TaggedUnion);
-        let tagged_name = key.clone();
-        self.analyze_type(&mut union_type);
-
-        // 改写表达式类型
-        expr.node = AstNode::TaggedUnionNew(union_type, tagged_name, None, None);
-    }
-
     pub fn rewrite_select_expr(&mut self, expr: &mut Box<Expr>) {
-        let AstNode::SelectExpr(left, key) = &mut expr.node else { unreachable!() };
+        let AstNode::SelectExpr(left, key, _) = &mut expr.node else { unreachable!() };
 
         if let AstNode::Ident(left_ident, symbol_id) = &mut left.node {
             // 尝试 find local or parent ident, 如果找到，将 symbol_id 添加到 Ident 中
@@ -1344,7 +1327,7 @@ impl<'a> Semantic<'a> {
             AstNode::Is(target_type, union_tag, src, _binding) => {
                 // 处理 union_tag (如果存在)
                 if let Some(ut) = union_tag {
-                    // union_tag 应该是 SelectExpr，分析后可能变成 TaggedUnionNew 或 Ident
+                    // union_tag 应该是 SelectExpr，分析后可能变成 TaggedUnionElement 或 Ident
                     self.analyze_expr(ut);
 
                     // 分析完成后检查 union_tag 的类型
@@ -1352,6 +1335,27 @@ impl<'a> Semantic<'a> {
                         AstNode::TaggedUnionNew(union_type, tagged_name, element, _) => {
                             // 如果是 TaggedUnionNew，改写为 TaggedUnionElement
                             ut.node = AstNode::TaggedUnionElement(union_type.clone(), tagged_name.clone(), element.clone());
+                        }
+                        AstNode::SelectExpr(left, key, type_args) => {
+                            let AstNode::Ident(ident, _symbol_id) = &left.node else {
+                                errors_push(
+                                    self.module,
+                                    AnalyzerError {
+                                        start: ut.start,
+                                        end: ut.end,
+                                        message: "unexpected is expr".to_string(),
+                                    },
+                                );
+                                return;
+                            };
+
+                            let mut union_type = Type::ident_new(ident.clone(), TypeIdentKind::TaggedUnion);
+                            if let Some(args) = type_args.as_ref() {
+                                union_type.args = args.clone();
+                            }
+                            self.analyze_type(&mut union_type);
+
+                            ut.node = AstNode::TaggedUnionElement(union_type, key.clone(), None);
                         }
                         AstNode::Ident(ident, _) => {
                             // 如果是 Ident，将 ident 信息复制到 target_type，并清空 union_tag
@@ -1457,16 +1461,17 @@ impl<'a> Semantic<'a> {
             }
             AstNode::SelectExpr(..) => {
                 self.rewrite_select_expr(expr);
-
-                if matches!(expr.node, AstNode::SelectExpr(..)) {
-                    self.try_rewrite_tagged_union_new(expr);
+                if let AstNode::SelectExpr(_, _, Some(type_args)) = &mut expr.node {
+                    for arg in type_args {
+                        self.analyze_type(arg);
+                    }
                 }
 
                 if matches!(expr.node, AstNode::Ident(..)) {
                     self.constant_propagation(expr);
                 }
 
-                if let AstNode::SelectExpr(left, _) = &mut expr.node {
+                if let AstNode::SelectExpr(left, _, _) = &mut expr.node {
                     if matches!(left.node, AstNode::Ident(..)) {
                         self.constant_propagation(left)
                     }

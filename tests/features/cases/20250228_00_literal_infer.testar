@@ -80,15 +80,15 @@ nature-test/main.n:2:22: cannot casting to '[u8]'
 === test_empty_data_new
 --- main.n
 fn main() {
-    var list = vec_new<u8>(0, 0)
+    var list = vec<u8>.new(0, 0)
     list.push(12)
     assert(list[0] == 12)
 
-    var m = map_new<u16,u32>()
+    var m = map<u16,u32>.new()
     m[12] = 24
     assert(m[12] == 24)
 
-    var s = set_new<string>()
+    var s = set<string>.new()
     s.add("hello")
     assert(s.contains("hello"))
 

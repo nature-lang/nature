@@ -12,13 +12,13 @@ type conn_t:types.connable = struct{
 fn uv_tls_connect(ref<conn_t> conn, string ip, int port, int timeout):void!
 
 #linkid rt_uv_tls_read
-fn conn_t.read([u8] buf):int!
+fn conn_t.read(&self, [u8] buf):int!
 
 #linkid rt_uv_tls_write
-fn conn_t.write([u8] buf):int!
+fn conn_t.write(&self, [u8] buf):int!
 
 #linkid rt_uv_tls_conn_close
-fn conn_t.close()
+fn conn_t.close(&self)
 
 fn connect(string host):ref<conn_t>! {
     return connect_timeout(host, 0)

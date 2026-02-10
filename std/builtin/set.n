@@ -1,6 +1,6 @@
 import runtime
 
-fn set_new<T>():set<T> {
+fn set<T>.new():set<T> {
     int hash = @reflect_hash(set<T>)
     int key_hash = @reflect_hash(T)
     return runtime.set_new(hash, key_hash) as set<T>

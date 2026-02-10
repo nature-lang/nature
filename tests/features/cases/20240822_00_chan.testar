@@ -5,7 +5,7 @@ import runtime
 
 fn main():void! {
     // case 1
-    var ch = chan_new<int>()
+    var ch = chan<int>.new()
 
     go (fn():void!{
         co.sleep(1000)
@@ -27,7 +27,7 @@ fn main():void! {
 
 
     // case 2
-    var ch_str = chan_new<string>()
+    var ch_str = chan<string>.new()
     go (fn(chan<string> ch):void!{
         co.sleep(1000)
         ch_str.send('hello channel')
@@ -39,7 +39,7 @@ fn main():void! {
     assert(str == 'hello channel')
 
     // case 3
-    var ch_queue = chan_new<f64>()
+    var ch_queue = chan<f64>.new()
     f64 sum = 0
 
    var consumer1 = fn():void! {
@@ -88,7 +88,7 @@ import time
 fn main():void! {
     i64 start = time.now().ms_timestamp()
     int count = 1000
-    var done = chan_new<bool>()
+    var done = chan<bool>.new()
     var mockfn = fn(int id):void! {
         co.sleep(1000)
 
@@ -114,7 +114,7 @@ import time
 fn main():void! {
     i64 start = time.now().ms_timestamp()
     int count = 1000
-    var done = chan_new<bool>()
+    var done = chan<bool>.new()
     for int i = 0; i < count; i+=1 {
         go fn(int id):void! {
             co.sleep(100)
@@ -142,7 +142,7 @@ fn handle(chan<int> ch) {
 }
 
 fn main() {
-    var ch = chan_new<int>()
+    var ch = chan<int>.new()
     go handle(ch)
 
     ch.send(1)
