@@ -166,8 +166,6 @@ static void uv_async_process_spawn(process_context_t *ctx, coroutine_t *co) {
 }
 
 process_context_t *rt_uv_process_spawn(command_t *cmd) {
-    assert(cmd->args.data);
-    assert(cmd->env.data);
     DEBUGF("[rt_uv_process_spawn] start")
 
 

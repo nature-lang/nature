@@ -56,7 +56,6 @@ fn command(string name, [string] args):ref<command_t>! {
     return cmd
 }
 
-#local
 fn command_t.spawn(&self):ref<process_t>! {
     var p = self.uv_spawn(self)
 
@@ -71,7 +70,6 @@ fn command_t.spawn(&self):ref<process_t>! {
 #linkid rt_uv_process_spawn
 fn command_t.uv_spawn(&self, ref<command_t> cmd):ref<process_t>!
 
-#local
 fn process_t.handle_stdout(&self):void! {
     for true {
         string buf = self.read_stdout() catch e {
@@ -82,7 +80,6 @@ fn process_t.handle_stdout(&self):void! {
     }
 }
 
-#local
 fn process_t.handle_stderr(&self):void! {
     for true {
         string buf = self.read_stderr() catch e {
