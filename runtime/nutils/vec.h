@@ -14,16 +14,18 @@
  * @param capacity
  * @return
  */
-n_vec_t *rti_vec_new(rtype_t *element_rtype, int64_t length, int64_t capacity);
+n_vec_t rti_vec_new(rtype_t *element_rtype, int64_t length, int64_t capacity);
 
-n_vec_t *rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *value_ref);
+n_vec_t rt_vec_new(int64_t hash, int64_t element_hash, int64_t length, void *value_ref);
 
 /**
  * 不进行 vec element 初始化
  */
-n_vec_t *rt_unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t length);
+n_vec_t rt_unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t length);
 
-n_vec_t *rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity);
+n_vec_t rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity);
+
+n_vec_t *rt_vec_alloc(int64_t hash, int64_t element_hash, int64_t capacity);
 
 n_anyptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index);
 
@@ -35,7 +37,7 @@ n_anyptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index);
  */
 void rti_vec_access(n_vec_t *l, uint64_t index, void *value_ref);
 
-void rti_vec_assign(n_vec_t *l, uint64_t index, void *ref);
+void rti_vec_assign(n_vec_t *l, uint64_t index, void *ref, rtype_t *element_rtype);
 
 /**
  * @param l
@@ -69,7 +71,7 @@ n_anyptr_t rt_vec_iterator(n_vec_t *l, int64_t element_hash);
  * @param end
  * @return 返回切片后的数据
  */
-n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end);
+n_vec_t rt_vec_slice(n_vec_t *l, int64_t start, int64_t end);
 
 /**
  * 合并 a 和 b 两个 vec 到一个新的 vec 中
@@ -77,7 +79,7 @@ n_vec_t *rt_vec_slice(n_vec_t *l, int64_t start, int64_t end);
  * @param b
  * @return
  */
-n_vec_t *rt_vec_concat(n_vec_t *a, n_vec_t *b, int64_t element_hash);
+n_vec_t rt_vec_concat(n_vec_t *a, n_vec_t *b, int64_t element_hash);
 
 uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t *src);
 

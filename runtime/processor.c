@@ -619,9 +619,9 @@ void rti_throw(char *msg, bool panic) {
     n_interface_t *error = n_error_new(string_new(msg, strlen(msg)), panic);
 
     co->has_error = true;
-    if (co->traces == NULL) {
-        n_vec_t *traces = rti_vec_new(&errort_trace_rtype, 0, 0);
-        rti_write_barrier_ptr(&co->traces, traces, false);
+    if (co->traces.data == NULL) {
+        n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
+        co->traces = traces;
     }
     rti_write_barrier_ptr(&co->error, error, false);
 }
@@ -629,9 +629,9 @@ void rti_throw(char *msg, bool panic) {
 void rti_co_throw(coroutine_t *co, char *msg, bool panic) {
     n_interface_t *error = n_error_new(string_new(msg, strlen(msg)), panic);
     co->has_error = true;
-    if (co->traces == NULL) {
-        n_vec_t *traces = rti_vec_new(&errort_trace_rtype, 0, 0);
-        rti_write_barrier_ptr(&co->traces, traces, false);
+    if (co->traces.data == NULL) {
+        n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
+        co->traces = traces;
     }
     rti_write_barrier_ptr(&co->error, error, false);
 }
@@ -639,33 +639,33 @@ void rti_co_throw(coroutine_t *co, char *msg, bool panic) {
 void coroutine_dump_error(coroutine_t *co) {
     DEBUGF("[runtime.coroutine_dump_error] co=%p, errort base=%p", co, co->error);
 
-    n_string_t *msg = rti_error_msg(co->error);
-    DEBUGF("[runtime.coroutine_dump_error] memory_string len: %lu, base: %p", msg->length, msg->data);
+    n_string_t msg = rti_error_msg(co->error);
+    DEBUGF("[runtime.coroutine_dump_error] memory_string len: %lu, base: %p", msg.length, msg.data);
 
-    assert(co->traces->length > 0);
+    assert(co->traces.length > 0);
 
     n_trace_t first_trace = {};
-    rti_vec_access(co->traces, 0, &first_trace);
+    rti_vec_access(&co->traces, 0, &first_trace);
     char *dump_msg;
     if (co->main) {
-        dump_msg = tlsprintf("coroutine 'main' uncaught error: '%s' at %s:%d:%d\n", (char *) rt_string_ref(msg),
-                             (char *) first_trace.path->data, first_trace.line,
+        dump_msg = tlsprintf("coroutine 'main' uncaught error: '%s' at %s:%d:%d\n", (char *) rt_string_ref(&msg),
+                             (char *) first_trace.path.data, first_trace.line,
                              first_trace.column);
     } else {
-        dump_msg = tlsprintf("coroutine %ld uncaught error: '%s' at %s:%d:%d\n", co->id, (char *) rt_string_ref(msg),
-                             (char *) first_trace.path->data, first_trace.line,
+        dump_msg = tlsprintf("coroutine %ld uncaught error: '%s' at %s:%d:%d\n", co->id, (char *) rt_string_ref(&msg),
+                             (char *) first_trace.path.data, first_trace.line,
                              first_trace.column);
     }
 
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
 
-    if (co->traces->length > 1) {
+    if (co->traces.length > 1) {
         char *temp = "stack backtrace:\n";
         VOID write(STDOUT_FILENO, temp, strlen(temp));
-        for (int i = 0; i < co->traces->length; ++i) {
+        for (int i = 0; i < co->traces.length; ++i) {
             n_trace_t trace = {};
-            rti_vec_access(co->traces, i, &trace);
-            temp = tlsprintf("%d:\t%s\n\t\tat %s:%d:%d\n", i, (char *) trace.ident->data, (char *) trace.path->data,
+            rti_vec_access(&co->traces, i, &trace);
+            temp = tlsprintf("%d:\t%s\n\t\tat %s:%d:%d\n", i, (char *) trace.ident.data, (char *) trace.path.data,
                              trace.line, trace.column);
             VOID write(STDOUT_FILENO, temp, strlen(temp));
         }

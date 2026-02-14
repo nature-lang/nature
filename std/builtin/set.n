@@ -3,20 +3,20 @@ import runtime
 fn set<T>.new():set<T> {
     int hash = @reflect_hash(set<T>)
     int key_hash = @reflect_hash(T)
-    return runtime.set_new(hash, key_hash) as set<T>
+    return runtime.set_new<T>(hash, key_hash)
 }
 
-fn set<T>.add(self, T key) {
+fn set<T>.add(*self, T key) {
    ptr<T> ref = &key
    runtime.set_add(self as anyptr, ref as anyptr)
 }
 
-fn set<T>.contains(self, T key):bool {
+fn set<T>.contains(*self, T key):bool {
    ptr<T> ref = &key
    return runtime.set_contains(self as anyptr, ref as anyptr)
 }
 
-fn set<T>.del(self, T key) {
+fn set<T>.del(*self, T key) {
     ptr<T> ref = &key
     runtime.set_delete(self as anyptr, ref as anyptr)
 }

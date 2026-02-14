@@ -7,17 +7,17 @@
 #include "runtime/processor.h"
 
 typedef struct {
-    n_string_t *stdout_text;
-    n_string_t *stderr_text; // 如何组合,输出
+    n_string_t stdout_text;
+    n_string_t stderr_text; // 如何组合,输出
     int32_t exit_code;
     int32_t exit_sig;
 } process_state_t;
 
 typedef struct {
-    n_string_t *name;
-    n_vec_t *args;
-    n_string_t *cwd;
-    n_vec_t *env;
+    n_string_t name;
+    n_vec_t args;
+    n_string_t cwd;
+    n_vec_t env;
 
     n_interface_t *io_stdin;
     n_interface_t *io_stdout;
@@ -48,7 +48,9 @@ typedef struct {
     uv_process_t req; // 程序启动成功后, pid 存储在 req 中
 } process_context_t;
 
-n_string_t *rt_uv_process_read_stdout(process_context_t *ctx);
+n_string_t rt_uv_process_read_stdout(process_context_t *ctx);
+
+n_string_t rt_uv_process_read_stderr(process_context_t *ctx);
 
 void rt_uv_process_wait(process_context_t *ctx);
 

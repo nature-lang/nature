@@ -135,6 +135,22 @@ int64_t type_sizeof(type_t t) {
         return sizeof(n_tagged_union_t);
     }
 
+    if (t.kind == TYPE_STRING) {
+        return sizeof(n_string_t);
+    }
+
+    if (t.kind == TYPE_VEC) {
+        return sizeof(n_vec_t);
+    }
+
+    if (t.kind == TYPE_MAP) {
+        return sizeof(n_map_t);
+    }
+
+    if (t.kind == TYPE_SET) {
+        return sizeof(n_set_t);
+    }
+
     if (t.storage_kind == STORAGE_KIND_PTR) {
         return POINTER_SIZE;
     }
@@ -179,6 +195,10 @@ bool type_can_size(type_t t) {
 int64_t type_alignof(type_t t) {
     if (t.kind == TYPE_IDENT) {
         //        assert(false);
+        return POINTER_SIZE;
+    }
+
+    if (t.kind == TYPE_STRING || t.kind == TYPE_VEC || t.kind == TYPE_MAP || t.kind == TYPE_SET) {
         return POINTER_SIZE;
     }
 

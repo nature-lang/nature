@@ -141,54 +141,54 @@ typedef enum {
 } type_ident_kind;
 
 static string type_kind_str[] = {
-        [TYPE_GC_ENV] = "env",
-        [TYPE_GC_ENV_VALUE] = "env_value",
-        [TYPE_GC_ENV_VALUES] = "env_values",
+    [TYPE_GC_ENV] = "env",
+    [TYPE_GC_ENV_VALUE] = "env_value",
+    [TYPE_GC_ENV_VALUES] = "env_values",
 
-        [TYPE_ARR] = "arr",
+    [TYPE_ARR] = "arr",
 
-        [TYPE_UNION] = "union",
-        [TYPE_TAGGED_UNION] = "tagged_union",
+    [TYPE_UNION] = "union",
+    [TYPE_TAGGED_UNION] = "tagged_union",
 
-        [TYPE_STRING] = "string",
-        [TYPE_RAW_STRING] = "raw_string",
-        [TYPE_BOOL] = "bool",
-        // [TYPE_FLOAT] = "float",
-        [TYPE_FLOAT32] = "f32",
-        [TYPE_FLOAT64] = "f64",
-        // [TYPE_INT] = "int",
-        // [TYPE_UINT] = "uint",
-        [TYPE_INT8] = "i8",
-        [TYPE_INT16] = "i16",
-        [TYPE_INT32] = "i32",
-        [TYPE_INT64] = "i64",
-        [TYPE_UINT8] = "u8",
-        [TYPE_UINT16] = "u16",
-        [TYPE_UINT32] = "u32",
-        [TYPE_UINT64] = "u64",
-        [TYPE_VOID] = "void",
-        [TYPE_UNKNOWN] = "unknown",
-        [TYPE_STRUCT] = "struct", // ast_struct_decl
-        [TYPE_IDENT] = "ident",
-        [TYPE_COROUTINE_T] = "coroutine_t",
-        [TYPE_CHAN] = "chan",
-        [TYPE_VEC] = "vec",
-        [TYPE_MAP] = "map",
-        [TYPE_SET] = "set",
-        [TYPE_TUPLE] = "tup",
-        [TYPE_FN] = "fn",
+    [TYPE_STRING] = "string",
+    [TYPE_RAW_STRING] = "raw_string",
+    [TYPE_BOOL] = "bool",
+    // [TYPE_FLOAT] = "float",
+    [TYPE_FLOAT32] = "f32",
+    [TYPE_FLOAT64] = "f64",
+    // [TYPE_INT] = "int",
+    // [TYPE_UINT] = "uint",
+    [TYPE_INT8] = "i8",
+    [TYPE_INT16] = "i16",
+    [TYPE_INT32] = "i32",
+    [TYPE_INT64] = "i64",
+    [TYPE_UINT8] = "u8",
+    [TYPE_UINT16] = "u16",
+    [TYPE_UINT32] = "u32",
+    [TYPE_UINT64] = "u64",
+    [TYPE_VOID] = "void",
+    [TYPE_UNKNOWN] = "unknown",
+    [TYPE_STRUCT] = "struct", // ast_struct_decl
+    [TYPE_IDENT] = "ident",
+    [TYPE_COROUTINE_T] = "coroutine_t",
+    [TYPE_CHAN] = "chan",
+    [TYPE_VEC] = "vec",
+    [TYPE_MAP] = "map",
+    [TYPE_SET] = "set",
+    [TYPE_TUPLE] = "tup",
+    [TYPE_FN] = "fn",
 
-        // 底层类型
-        [TYPE_FN_T] = "fn_t",
-        [TYPE_INTEGER_T] = "integer_t",
-        [TYPE_FLOATER_T] = "floater_t",
-        [TYPE_ALL_T] = "all_t",
+    // 底层类型
+    [TYPE_FN_T] = "fn_t",
+    [TYPE_INTEGER_T] = "integer_t",
+    [TYPE_FLOATER_T] = "floater_t",
+    [TYPE_ALL_T] = "all_t",
 
-        [TYPE_REF] = "ref", // ref<type>
-        [TYPE_PTR] = "ptr", // ptr<type>
-        [TYPE_ANYPTR] = "anyptr", // anyptr
-        [TYPE_NULL] = "null",
-        [TYPE_ENUM] = "enum",
+    [TYPE_REF] = "ref", // ref<type>
+    [TYPE_PTR] = "ptr", // ptr<type>
+    [TYPE_ANYPTR] = "anyptr", // anyptr
+    [TYPE_NULL] = "null",
+    [TYPE_ENUM] = "enum",
 };
 
 typedef struct {
@@ -201,7 +201,7 @@ typedef struct {
 // 所有的 type 都可以转化成该结构
 typedef struct {
     uint64_t ident_offset;
-    uint64_t heap_size; // 无论存储在堆中还是栈中,这里的 size 都是该类型的实际的值的 size, 尤其是对于 vec/set 等
+    uint64_t gc_heap_size; // chan 等 ptr 数据这里存储的是 header size 大小，用于 gc_malloc 正确正确分配
     uint64_t storage_size;
 
     // pointer
@@ -300,6 +300,7 @@ typedef struct type_t {
         type_union_t *union_;
         type_interface_t *interface;
     };
+
     type_kind kind;
     reduction_status_t status;
     // type_alias + args 进行 reduction 还原之前，将其参数缓存下来
@@ -433,7 +434,6 @@ typedef struct {
     char *name; // 成员名称，如 RED, GREEN, BLUE
     void *value_expr; // ast_expr, 可选的值表达式
     int64_t value;
-    type_t *payload_type; // 可选的关联数据类型，NULL 表示简单变体，TYPE_TUPLE 用于多字段
 } enum_property_t;
 
 /**
@@ -445,7 +445,6 @@ typedef struct {
 struct type_enum_t {
     type_t element_type; // 底层类型（discriminant），默认为 TYPE_INT
     list_t *properties; // enum_property_t 列表
-    bool has_payload; // true 表示存在带关联数据的变体
 };
 
 /**
@@ -581,14 +580,14 @@ typedef struct {
 } n_interface_t;
 
 typedef struct {
-    n_string_t *path;
-    n_string_t *ident;
+    n_string_t path;
+    n_string_t ident;
     n_int_t line;
     n_int_t column;
 } n_trace_t;
 
 typedef struct {
-    n_string_t *msg;
+    n_string_t msg;
     uint8_t panic;
 } n_errort;
 
@@ -672,9 +671,8 @@ int64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
  */
 static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
-    return kind == TYPE_STRING || kind == TYPE_VEC ||
-           kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_GC_ENV ||
-           kind == TYPE_FN || kind == TYPE_COROUTINE_T || kind == TYPE_CHAN || kind == TYPE_INTERFACE;
+    return kind == TYPE_GC_ENV || kind == TYPE_FN || kind == TYPE_COROUTINE_T || kind == TYPE_CHAN || kind ==
+           TYPE_INTERFACE;
 }
 
 static inline bool is_vec_u8(type_t t) {
@@ -708,7 +706,8 @@ static inline bool type_is_ident(type_t *t) {
         return false;
     }
 
-    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_INTERFACE || t->ident_kind == TYPE_IDENT_TAGGER_UNION || t->ident_kind == TYPE_IDENT_UNKNOWN;
+    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_INTERFACE || t->ident_kind ==
+           TYPE_IDENT_TAGGER_UNION || t->ident_kind == TYPE_IDENT_UNKNOWN;
 }
 
 static inline type_t type_ident_new(char *ident, type_ident_kind kind) {
@@ -779,11 +778,17 @@ static inline bool is_number(type_kind kind) {
 }
 
 static inline storage_kind_t type_storage_kind(type_t t) {
-    if (is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_ANYPTR || t.kind == TYPE_ENUM || t.kind == TYPE_VOID) {
+    if (is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_ANYPTR || t.kind == TYPE_ENUM || t.kind ==
+        TYPE_VOID) {
         return STORAGE_KIND_DIR;
     }
 
-    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION || t.kind == TYPE_TUPLE || t.kind == TYPE_TAGGED_UNION) {
+    if (t.kind == TYPE_STRING || t.kind == TYPE_VEC || t.kind == TYPE_MAP || t.kind == TYPE_SET) {
+        return STORAGE_KIND_IND;
+    }
+
+    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION || t.kind == TYPE_TUPLE || t.kind ==
+        TYPE_TAGGED_UNION) {
         return STORAGE_KIND_IND;
     }
 
@@ -794,6 +799,19 @@ static inline storage_kind_t type_storage_kind(type_t t) {
 static inline int64_t type_storage_size(type_t t) {
     if (is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_ANYPTR || t.kind == TYPE_VOID) {
         return type_kind_sizeof(t.kind);
+    }
+
+    if (t.kind == TYPE_STRING) {
+        return sizeof(n_string_t);
+    }
+    if (t.kind == TYPE_VEC) {
+        return sizeof(n_vec_t);
+    }
+    if (t.kind == TYPE_MAP) {
+        return sizeof(n_map_t);
+    }
+    if (t.kind == TYPE_SET) {
+        return sizeof(n_set_t);
     }
 
     if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION || t.kind == TYPE_TUPLE ||
@@ -845,6 +863,55 @@ static inline list_t *type_abi_struct(type_t t) {
         return result;
     }
 
+    // n_string_t / n_vec_t: { uint8_t* data; int64_t length; int64_t capacity; int64_t element_size; int64_t hash; }
+    if (t.kind == TYPE_STRING || t.kind == TYPE_VEC) {
+        type_t data_ptr = type_kind_new(TYPE_ANYPTR);
+        type_t len_type = type_kind_new(TYPE_INT64);
+        type_t cap_type = type_kind_new(TYPE_INT64);
+        type_t elem_size_type = type_kind_new(TYPE_INT64);
+        type_t hash_type = type_kind_new(TYPE_INT64);
+        ct_list_push(result, &data_ptr);
+        ct_list_push(result, &len_type);
+        ct_list_push(result, &cap_type);
+        ct_list_push(result, &elem_size_type);
+        ct_list_push(result, &hash_type);
+        return result;
+    }
+
+    // n_map_t: { uint64_t* hash_table; uint8_t* key_data; uint8_t* value_data; uint64_t key_rtype_hash; uint64_t value_rtype_hash; uint64_t length; uint64_t capacity; }
+    if (t.kind == TYPE_MAP) {
+        type_t hash_table_ptr = type_kind_new(TYPE_ANYPTR);
+        type_t key_data_ptr = type_kind_new(TYPE_ANYPTR);
+        type_t value_data_ptr = type_kind_new(TYPE_ANYPTR);
+        type_t key_hash_type = type_kind_new(TYPE_UINT64);
+        type_t value_hash_type = type_kind_new(TYPE_UINT64);
+        type_t len_type = type_kind_new(TYPE_UINT64);
+        type_t cap_type = type_kind_new(TYPE_UINT64);
+        ct_list_push(result, &hash_table_ptr);
+        ct_list_push(result, &key_data_ptr);
+        ct_list_push(result, &value_data_ptr);
+        ct_list_push(result, &key_hash_type);
+        ct_list_push(result, &value_hash_type);
+        ct_list_push(result, &len_type);
+        ct_list_push(result, &cap_type);
+        return result;
+    }
+
+    // n_set_t: { uint64_t* hash_table; uint8_t* key_data; uint64_t key_rtype_hash; uint64_t length; uint64_t capacity; }
+    if (t.kind == TYPE_SET) {
+        type_t hash_table_ptr = type_kind_new(TYPE_ANYPTR);
+        type_t key_data_ptr = type_kind_new(TYPE_ANYPTR);
+        type_t key_hash_type = type_kind_new(TYPE_UINT64);
+        type_t len_type = type_kind_new(TYPE_UINT64);
+        type_t cap_type = type_kind_new(TYPE_UINT64);
+        ct_list_push(result, &hash_table_ptr);
+        ct_list_push(result, &key_data_ptr);
+        ct_list_push(result, &key_hash_type);
+        ct_list_push(result, &len_type);
+        ct_list_push(result, &cap_type);
+        return result;
+    }
+
     return NULL;
 }
 
@@ -890,7 +957,8 @@ static inline bool is_abi_struct_like(type_t t) {
 }
 
 static inline bool is_impl_builtin_type(type_kind kind) {
-    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_CHAN ||
+    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind ==
+           TYPE_CHAN ||
            kind == TYPE_STRING || kind == TYPE_COROUTINE_T;
 }
 
@@ -898,10 +966,6 @@ static inline bool is_gc_alloc(type_kind kind) {
     return kind == TYPE_REF ||
            kind == TYPE_PTR ||
            kind == TYPE_ANYPTR ||
-           kind == TYPE_MAP ||
-           kind == TYPE_STRING ||
-           kind == TYPE_SET ||
-           kind == TYPE_VEC ||
            kind == TYPE_COROUTINE_T ||
            kind == TYPE_CHAN ||
            kind == TYPE_INTERFACE ||

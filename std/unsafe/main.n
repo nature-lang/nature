@@ -8,11 +8,11 @@ fn vec_new<T>(ptr<T> p, int len):vec<T>! {
     int hash = @reflect_hash(vec<T>)
     int ele_hash = @reflect_hash(T)
 
-    return unsafe_vec_new(hash, ele_hash, len, p as anyptr) as vec<T>
+    return unsafe_vec_new<T>(hash, ele_hash, len, p as anyptr)
 }
 
 #local #linkid unsafe_vec_new
-fn unsafe_vec_new(int hash, int ele_hash, int len, anyptr p):anyptr!
+fn unsafe_vec_new<T>(int hash, int ele_hash, int len, anyptr p):vec<T>!
 
 fn ptr_to<T>(anyptr p):T {
     return *(p as ptr<T>)

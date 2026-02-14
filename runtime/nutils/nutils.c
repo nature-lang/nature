@@ -29,7 +29,6 @@ static inline void panic_dump(coroutine_t *co, caller_t *caller, char *msg) {
 }
 
 n_ptr_t *ptr_assert(n_ptr_t *ptr) {
-
     if (ptr == 0) {
         DEBUGF("[ptr_assert] raw pointer");
         rti_throw("ptr is null, cannot assert", true);
@@ -40,7 +39,6 @@ n_ptr_t *ptr_assert(n_ptr_t *ptr) {
 }
 
 void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref) {
-
     if (mu->rtype->hash != target_rtype_hash) {
         DEBUGF("[interface_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
                type_kind_str[mu->rtype->kind],
@@ -72,7 +70,6 @@ void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
  * @param value_ref
  */
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
-
     if (mu->rtype->hash != target_rtype_hash) {
         DEBUGF("[union_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
                type_kind_str[mu->rtype->kind],
@@ -82,8 +79,12 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
         return;
     }
 
-    uint64_t size = rt_rtype_stack_size(target_rtype_hash);
-    memmove(value_ref, &mu->value, size);
+    rtype_t *rtype = rt_find_rtype(target_rtype_hash);
+    if (rtype->storage_kind == STORAGE_KIND_IND) {
+        memmove(value_ref, mu->value.ptr_value, rtype->storage_size);
+    } else {
+        memmove(value_ref, &mu->value, rtype->storage_size);
+    }
     DEBUGF(
             "[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, "
             "values_ref: %p",
@@ -105,7 +106,6 @@ bool interface_is(n_interface_t *mu, int64_t target_rtype_hash) {
  * @return
  */
 n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods) {
-
     // - 根据 input_rtype_hash 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
     assert(rtype && "cannot find rtype by hash");
@@ -127,16 +127,18 @@ n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int
         memmove(mu->methods, methods, method_count * POINTER_SIZE);
     }
 
-    DEBUGF("[interface_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
-           mu, value_ref,
-           &mu->value, rtype->stack_size, (void *) fetch_addr_value((addr_t) value_ref));
+    DEBUGF(
+            "[interface_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
+            mu, value_ref,
+            &mu->value, rtype->stack_size, (void *) fetch_addr_value((addr_t) value_ref));
 
     mu->rtype = rtype;
     uint64_t stack_size = rtype->storage_size;
 
-    if (rtype->storage_kind != STORAGE_KIND_PTR) { // TODO number 可以直接存储在 value 中
+    if (rtype->storage_kind != STORAGE_KIND_PTR) {
+        // TODO number 可以直接存储在 value 中
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
-        void *new_value = rti_gc_malloc(rtype->heap_size, rtype);
+        void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
         memmove(new_value, value_ref, stack_size);
         rti_write_barrier_ptr(&mu->value.ptr_value, new_value, false);
     } else {
@@ -179,9 +181,12 @@ n_union_t union_casting(int64_t input_rtype_hash, void *value_ref) {
     mu.rtype = rtype;
 
     uint64_t storage_size = rtype->storage_size;
+
+    // TODO union 产生了 GC? 这个问题稍后再解决。甚至现在总是会产生 GC。
+    // 甚至 return union 类型变得寸步难行。
     if (rtype->storage_kind == STORAGE_KIND_IND) {
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
-        void *new_value = rti_gc_malloc(rtype->heap_size, rtype);
+        void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
         memmove(new_value, value_ref, storage_size);
         mu.value.ptr_value = new_value;
     } else {
@@ -210,14 +215,15 @@ n_tagged_union_t tagged_union_casting(int64_t tag_hash, int64_t value_rtype_hash
 
     ASSERT_ADDR(value_ref);
 
-    DEBUGF("[tagged_union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), kind=%s, size=%lu, fetch_value_8byte=%p",
-           &mu, value_ref,
-           &mu.value, type_kind_str[rtype->kind], rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
+    DEBUGF(
+            "[tagged_union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), kind=%s, size=%lu, fetch_value_8byte=%p",
+            &mu, value_ref,
+            &mu.value, type_kind_str[rtype->kind], rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
 
     uint64_t storage_size = rtype->storage_size;
     if (rtype->storage_kind == STORAGE_KIND_IND) {
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
-        void *new_value = rti_gc_malloc(rtype->heap_size, rtype);
+        void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
         memmove(new_value, value_ref, storage_size);
 
         mu.value.ptr_value = new_value;
@@ -239,7 +245,6 @@ n_tagged_union_t tagged_union_casting(int64_t tag_hash, int64_t value_rtype_hash
  * @return
  */
 int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, void *key_ref) {
-
     DEBUGF("[runtime.iterator_next_key] iterator base=%p,rtype_hash=%lu, cursor=%ld", iterator, rtype_hash, cursor);
 
     // cursor 范围测试
@@ -288,7 +293,6 @@ int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, v
 }
 
 int64_t iterator_next_value(void *iterator, int64_t hash, int64_t cursor, void *value_ref) {
-
     DEBUGF("[runtime.iterator_next_value] iterator base=%p,rtype_hash=%lu, cursor=%lu, kind=%s", iterator, hash,
            cursor);
 
@@ -346,7 +350,6 @@ int64_t iterator_next_value(void *iterator, int64_t hash, int64_t cursor, void *
  * @param value_ref
  */
 void iterator_take_value(void *iterator, int64_t hash, int64_t cursor, void *value_ref) {
-
     DEBUGF("[runtime.iterator_take_value] iterator base=%p,rtype_hash=%lu, cursor=%lu, value_ref=%p", iterator,
            hash, cursor,
            value_ref);
@@ -395,13 +398,14 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
     assert(error->method_count == 1);
     coroutine_t *co = coroutine_get();
 
+    n_string_t err_msg = rti_error_msg(error);
     DEBUGF("[runtime.co_throw_error] co=%p, error=%p, path=%s, line=%ld, column=%ld, msg=%s", co, (void *) error, path,
            line,
-           column, (char *) rt_string_ref(rti_error_msg(error)));
+           column, (char *) rt_string_ref(&err_msg));
 
-    assert(co->traces == NULL);
-    n_vec_t *traces = rti_vec_new(&errort_trace_rtype, 0, 0);
-    rti_write_barrier_ptr(&co->traces, traces, false);
+    assert(co->traces.data == NULL);
+    n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
+    co->traces = traces;
 
     n_trace_t trace = {
             .path = string_new(path, strlen(path)),
@@ -409,7 +413,7 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
             .line = line,
             .column = column,
     };
-    rt_vec_push(co->traces, errort_trace_rtype.hash, &trace);
+    rt_vec_push(&co->traces, errort_trace_rtype.hash, &trace);
 
     rti_write_barrier_ptr(&co->error, error, false);
     co->has_error = true;
@@ -432,19 +436,19 @@ void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
 
         DEBUGF("[runtime.co_throw_error_msg] co=%p, error=%p, msg=%s", co, (void *) error, (char *) msg);
 
-        assert(co->traces == NULL);
+        assert(co->traces.data == NULL);
 
         fndef_t *caller_fn = caller->data;
 
-        n_vec_t *traces = rti_vec_new(&errort_trace_rtype, 0, 0);
-        rti_write_barrier_ptr(&co->traces, traces, false);
+        n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
+        co->traces = traces;
         n_trace_t trace = {
                 .path = string_new(STRTABLE(caller_fn->relpath_offset), strlen(STRTABLE(caller_fn->relpath_offset))),
                 .ident = string_new(STRTABLE(caller_fn->name_offset), strlen(STRTABLE(caller_fn->name_offset))),
                 .line = caller->line,
                 .column = caller->column,
         };
-        rt_vec_push(co->traces, errort_trace_rtype.hash, &trace);
+        rt_vec_push(&co->traces, errort_trace_rtype.hash, &trace);
         rti_write_barrier_ptr(&co->error, error, false);
         co->has_error = true;
     } else {
@@ -455,7 +459,6 @@ void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
 }
 
 n_interface_t *co_remove_error() {
-
     coroutine_t *co = coroutine_get();
 
     assert(co->error);
@@ -464,7 +467,7 @@ n_interface_t *co_remove_error() {
     n_interface_t *error = co->error;
 
     rti_write_barrier_ptr(&co->error, NULL, false);
-    rti_write_barrier_ptr(&co->traces, NULL, false);
+    co->traces = (n_vec_t) {0};
     return error;
 }
 
@@ -477,7 +480,7 @@ uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_i
 
     assert(line >= 0 && line < 1000000);
     assert(column >= 0 && column < 1000000);
-    assert(co->traces);
+    assert(co->traces.data);
 
     // build in panic 可以被 catch 捕获，但只能是立刻捕获，否则会全局异常退出。
     if (be_catch) {
@@ -489,7 +492,7 @@ uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_i
                 .column = column,
         };
 
-        rt_vec_push(co->traces, errort_trace_rtype.hash, &trace);
+        rt_vec_push(&co->traces, errort_trace_rtype.hash, &trace);
         return 1;
     }
 
@@ -497,14 +500,14 @@ uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_i
 
     // 在 runtime 调用 nature 代码， rti_error_msg 会让 gc scan_stack 异常，不过马上就要退出了，问题不大
     // 可以考虑增加 safepoint_lock, 避免进入 safepoint 状态
-    n_string_t *msg = rti_error_msg(co->error);
+    n_string_t msg = rti_error_msg(co->error);
 
     char *dump_msg;
     if (co->main) {
-        dump_msg = tlsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", (char *) rt_string_ref(msg),
+        dump_msg = tlsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", (char *) rt_string_ref(&msg),
                              path, line, column);
     } else {
-        dump_msg = tlsprintf("coroutine %ld panic: '%s' at %s:%d:%d\n", co->id, (char *) rt_string_ref(msg),
+        dump_msg = tlsprintf("coroutine %ld panic: '%s' at %s:%d:%d\n", co->id, (char *) rt_string_ref(&msg),
                              path, line, column);
     }
 
@@ -524,7 +527,7 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
            fn_name, line, column)
     assert(line >= 0 && line < 1000000);
     assert(column >= 0 && column < 1000000);
-    assert(co->traces);
+    assert(co->traces.data);
 
     // 存在异常时顺便添加调用栈信息, 这样 catch 错误时可以更加准确的添加相关信息
     n_trace_t trace = {
@@ -534,13 +537,12 @@ uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
             .column = column,
     };
 
-    rt_vec_push(co->traces, errort_trace_rtype.hash, &trace);
+    rt_vec_push(&co->traces, errort_trace_rtype.hash, &trace);
 
     return 1;
 }
 
 n_anyptr_t anyptr_casting(value_casting v) {
-
     return v.u64_value;
 }
 
@@ -550,20 +552,20 @@ value_casting casting_to_anyptr(void *ptr) {
     return v;
 }
 
-n_vec_t *std_args() {
+n_vec_t std_args() {
     // 初始化一个 string 类型的数组
-    n_vec_t *list = rti_vec_new(&std_arg_rtype, command_argc, command_argc);
+    n_vec_t list = rti_vec_new(&std_arg_rtype, command_argc, command_argc);
 
     // 初始化 string
     for (int i = 0; i < command_argc; ++i) {
         DEBUGF("[std_args] command_argv[%d]='%s'\n", i, command_argv[i]);
-        n_string_t *str = string_new(command_argv[i], strlen(command_argv[i]));
-        rti_vec_assign(list, i, &str);
+        n_string_t str = string_new(command_argv[i], strlen(command_argv[i]));
+        rti_vec_assign(&list, i, &str, &string_rtype);
     }
 
-    DEBUGF("[std_args] list=%p, list->data=%p, list->length=%lu, element_size=%lu", list, list->data,
-           list->length,
-           list->element_size);
+    DEBUGF("[std_args] list=%p, list->data=%p, list->length=%lu, element_size=%lu", &list, list.data,
+           list.length,
+           list.element_size);
     return list;
 }
 
@@ -591,11 +593,10 @@ char *rtype_value_to_str(rtype_t *rtype, void *data_ref) {
     }
 
     if (rtype->kind == TYPE_STRING) {
-        n_string_t *n_str = (void *) fetch_addr_value((addr_t) data_ref); // 读取栈中存储的值
+        n_string_t *n_str = (n_string_t *) data_ref;
 
         assert(n_str && n_str->length >= 0 && "fetch addr by data ref failed");
 
-        // return strdup(string_ref(n_str));
         // 进行 data copy, 避免被 free
         char *str = mallocz(n_str->length + 1);
         memmove(str, n_str->data, n_str->length);
@@ -630,7 +631,8 @@ void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj) {
     // stack 扫描完成后退化成黑色写屏障, 否则是是灰色写屏障
     coroutine_t *co = coroutine_get();
     bool is_grey = co->gc_black < memory->gc_count;
-    DEBUGF("[runtime_gc.rt_write_barrier_ptr] slot: %p, new_obj: %p, gc_barrier is true, gc_black %d", slot, new_obj, is_grey);
+    DEBUGF("[runtime_gc.rt_write_barrier_ptr] slot: %p, new_obj: %p, gc_barrier is true, gc_black %d", slot, new_obj,
+           is_grey);
 
     // 直接 mark 为黑色，当前 new_obj 的 field 不会被处理，并且该 obj 本轮 gc 不会被清理
     // 例如 global linkco cache 中的获取的新的 obj, 不是从 allocator 中申请，所以需要主动进行 mark
@@ -652,6 +654,28 @@ void write_barrier(void *slot, void *new_obj) {
     rti_write_barrier_ptr(slot, new_obj, false);
 }
 
+void rti_write_barrier_rtype(void *dst, void *src, rtype_t *rtype) {
+    memmove(dst, src, rtype->storage_size);
+
+    if (!gc_barrier_get() || rtype->last_ptr == 0) {
+        return;
+    }
+
+    uint8_t *gc_bits = RTDATA(rtype->malloc_gc_bits_offset);
+    if (rtype->malloc_gc_bits_offset == -1) {
+        gc_bits = (uint8_t *) &rtype->gc_bits;
+    }
+
+    uint64_t slot_count = align_up(rtype->storage_size, POINTER_SIZE) / POINTER_SIZE;
+    for (uint64_t i = 0; i < slot_count; ++i) {
+        if (!bitmap_test(gc_bits, i)) {
+            continue;
+        }
+        void **slot = (void **) ((uint8_t *) dst + (i * POINTER_SIZE));
+        rti_write_barrier_ptr(slot, *slot, false);
+    }
+}
+
 void ptr_valid(void *ptr) {
     // 修改状态避免抢占
     DEBUGF("[ptr_valid] ptr=%p", ptr);
@@ -661,7 +685,7 @@ void ptr_valid(void *ptr) {
 }
 
 
-void rt_panic(n_string_t *msg) {
+void rt_panic(n_string_t msg) {
     coroutine_t *co = coroutine_get();
     n_processor_t *p = processor_get();
 
@@ -669,7 +693,7 @@ void rt_panic(n_string_t *msg) {
     assert(ret_addr);
 
     caller_t *caller = sc_map_get_64v(&rt_caller_map, ret_addr);
-    panic_dump(co, caller, rt_string_ref(msg));
+    panic_dump(co, caller, rt_string_ref(&msg));
 }
 
 bool rt_in_heap(n_anyptr_t addr) {
@@ -698,37 +722,62 @@ typedef struct {
     uint8_t b[5];
 } st;
 
-n_string_t *rt_string_new(n_anyptr_t raw_string) {
+n_string_t rt_string_new(n_anyptr_t raw_string) {
     if (!raw_string) {
         rti_throw("raw string is empty", false);
-        return NULL;
+        return (n_string_t) {0};
     }
 
     char *str = (char *) raw_string;
     return string_new(str, strlen(str));
 }
 
-n_string_t *rt_strerror() {
+void rt_string_concat_out(n_string_t *out, n_string_t *a, n_string_t *b) {
+    assert(out);
+    *out = string_concat(a, b);
+}
+
+void rt_string_new_with_pool_out(n_string_t *out, void *raw_string, int64_t length) {
+    DEBUGF("[rt_string_new_with_pool_out] out %p, raw_string %s, len %ld", out, (char *) raw_string, length);
+    assert(out);
+    *out = string_new_with_pool(raw_string, length);
+}
+
+void rt_string_to_vec_out(n_vec_t *out, n_string_t *src) {
+    assert(out);
+    *out = string_to_vec(src);
+}
+
+void rt_vec_to_string_out(n_string_t *out, n_vec_t *src) {
+    assert(out);
+    *out = vec_to_string(src);
+}
+
+void rt_vec_slice_out(n_vec_t *out, n_vec_t *vec, int64_t start, int64_t end) {
+    assert(out);
+    *out = rt_vec_slice(vec, start, end);
+}
+
+n_string_t rt_strerror() {
     char *msg = strerror(errno);
-    n_string_t *s = string_new(msg, strlen(msg));
-    return s;
+    return string_new(msg, strlen(msg));
 }
 
 extern char **environ;
 
-n_vec_t *rt_get_envs() {
-    n_vec_t *list = rti_vec_new(&os_env_rtype, 0, 0);
+n_vec_t rt_get_envs() {
+    n_vec_t list = rti_vec_new(&os_env_rtype, 0, 0);
 
     char **env = environ;
 
     while (*env) {
-        n_string_t *s = string_new(*env, strlen(*env));
+        n_string_t s = string_new(*env, strlen(*env));
 
-        rt_vec_push(list, string_rtype.hash, &s);
+        rt_vec_push(&list, string_rtype.hash, &s);
         env++;
     }
 
-    DEBUGF("[libc_get_envs] list=%p, list->length=%lu", list, list->length);
+    DEBUGF("[libc_get_envs] list=%p, list->length=%lu", &list, list.length);
     return list;
 }
 
@@ -736,7 +785,18 @@ n_int_t rt_errno() {
     return errno;
 }
 
-n_vec_t *unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr) {
+n_anyptr_t rt_array_new(int64_t element_hash, int64_t length) {
+    if (length < 0) {
+        rti_throw("array_new length must be non-negative", true);
+        return 0;
+    }
+
+    rtype_t *element_rtype = rt_find_rtype(element_hash);
+    assert(element_rtype && "cannot find element_rtype_hash with hash");
+    return (n_anyptr_t) rti_array_new(element_rtype, (uint64_t) length);
+}
+
+n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr) {
     DEBUGF("[unsafe_vec_new] hash=%lu, element_hash=%lu, len=%lu, rhash, ele_rhash, length, capacity")
     assert(len > 0);
 
@@ -748,26 +808,24 @@ n_vec_t *unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *d
     // - 进行内存申请,申请回来一段内存是 memory_vec_t 大小的内存, memory_vec_* 就是限定这一片内存区域的结构体表示
     // 虽然数组也这么表示，但是数组本质上只是利用了 vec_data + 1 时会按照 sizeof(memory_vec_t) 大小的内存区域移动
     // 的技巧而已，所以这里要和数组结构做一个区分
-    n_vec_t *vec = rti_gc_malloc(vec_rtype.heap_size, &vec_rtype);
-    vec->capacity = cap;
-    vec->length = len;
-    vec->element_size = element_rtype->storage_size;
-    vec->hash = hash;
-    vec->data = data_ptr;
+    n_vec_t vec = {0};
+    vec.capacity = cap;
+    vec.length = len;
+    vec.element_size = element_rtype->storage_size;
+    vec.hash = hash;
+    vec.data = data_ptr;
 
-    DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_size=%lu", vec, vec->data, vec->element_size);
+    DEBUGF("[rt_vec_new] success, vec=%p, data=%p, element_size=%lu", &vec, vec.data, vec.element_size);
     return vec;
 }
 
 
-n_string_t *rt_string_ref_new(void *raw_string, int64_t length) {
-    n_string_t *str = rti_gc_malloc(string_rtype.heap_size, &string_ref_rtype);
-    str->data = raw_string; // 直接指向 raw_string, 而没有创建新的字符串
-    str->length = length;
-    str->capacity = length;
-    str->element_size = (&string_element_rtype)->storage_size;
-    str->hash = string_rtype.hash;
-
+n_string_t rt_string_ref_new(void *raw_string, int64_t length) {
+    if (length < 0) {
+        rti_throw("string_ref_new length must be non-negative", false);
+        return (n_string_t) {0};
+    }
+    n_string_t str = string_new(raw_string, length);
     DEBUGF("[rt_string_ref_new] create, str: %p", raw_string);
     return str;
 }
@@ -779,16 +837,5 @@ n_string_t *rt_string_ref_new(void *raw_string, int64_t length) {
  */
 void *rt_string_ref(n_string_t *n_str) {
     DEBUGF("[rt_string_ref] length=%lu, data=%p", n_str->length, n_str->data);
-
-    // 空间足够，且最后一位已经是 0， 可以直接返回
-    if (n_str->capacity > n_str->length && n_str->data[n_str->length] == '\0') {
-        return n_str->data;
-    }
-
-    // 结尾添加 '\0' 字符
-    int a = '\0';
-    rt_vec_push(n_str, string_element_rtype.hash, &a);
-    n_str->length -= 1;
-
     return n_str->data;
 }

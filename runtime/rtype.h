@@ -68,7 +68,7 @@ extern rtype_t fn_rtype;
     if (kind_in_heap(_kind)) _stack_size = POINTER_SIZE;                  \
     uint64_t _hash = ((uint64_t) _kind << 56) | (_size << 32) | _gc_bits; \
     (rtype_t){                                                            \
-            .heap_size = _size,                                           \
+            .gc_heap_size = _size,                                           \
             .storage_size = _stack_size,                                    \
             .kind = _kind,                                                \
             .last_ptr = _last_ptr,                                        \
@@ -89,7 +89,7 @@ static inline rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
     assert(element_rtype);
 
     rtype_t rtype = {
-            .heap_size = element_rtype->storage_size * length,
+            .gc_heap_size = element_rtype->storage_size * length,
             .hash = 0, // runtime 生成的没有 hash 值，不需要进行 hash 定位
             .kind = TYPE_ARR,
             .length = length,
@@ -131,14 +131,19 @@ static inline void builtin_rtype_init() {
     assert(bitmap_test((uint8_t *) &string_rtype.gc_bits, 3) == 0);
 
     // 初始化错误追踪 rtype
-    errort_trace_rtype = GC_RTYPE(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
+    errort_trace_rtype = GC_RTYPE(TYPE_STRUCT, 12,
+                                  TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
+                                  TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
+                                  TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     sc_map_put_64v(&rt_rtype_map, errort_trace_rtype.hash, &errort_trace_rtype);
 
     throwable_rtype = GC_RTYPE(TYPE_INTERFACE, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_SCAN);
     sc_map_put_64v(&rt_rtype_map, throwable_rtype.hash, &throwable_rtype);
 
     // 初始化错误 rtype
-    errort_rtype = GC_RTYPE(TYPE_STRUCT, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
+    errort_rtype = GC_RTYPE(TYPE_STRUCT, 6,
+                            TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
+                            TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     sc_map_put_64v(&rt_rtype_map, errort_rtype.hash, &errort_rtype);
 
     // 初始化环境变量 rtype

@@ -1482,7 +1482,7 @@ void *gc_malloc(uint64_t rhash) {
            bitmap_to_str(RTDATA(rtype->malloc_gc_bits_offset),
                          calc_gc_bits_size(rtype->heap_size, POINTER_SIZE)));
 
-    void *result = rti_gc_malloc(rtype->heap_size, rtype);
+    void *result = rti_gc_malloc(rtype->gc_heap_size, rtype);
     DEBUGF("[gc_malloc] size %lu, value %p", rtype->heap_size, result);
     return result;
 }

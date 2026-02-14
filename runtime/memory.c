@@ -101,8 +101,13 @@ void register_const_str_pool() {
             continue;
         }
 
-        n_string_t *str = rt_string_new(s.base);
-        sc_map_put_sv(&const_str_pool, (char *) s.base, str);
+        n_string_t str = rt_string_new(s.base);
+        n_string_t *pool_copy = malloc(sizeof(n_string_t));
+        if (pool_copy == NULL) {
+            continue;
+        }
+        *pool_copy = str;
+        sc_map_put_sv(&const_str_pool, (char *) s.base, pool_copy);
 //        TDEBUGF("[register_const_str_pool] str = %p, str %s", str, (char *) s.base);
     }
 };

@@ -1072,11 +1072,11 @@ static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
     slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
 
     if (offset > 4095) {
-        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, c->stack_offset);
+        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, offset);
         slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(sp), offset_operand));
         slice_push(operations, ARM64_INST(R_STR, ARM64_REG(fp), ARM64_INDIRECT(x16, 0, 0, OWORD)));
 
-        offset_operand = arm64_imm_operand(op, operations, c->stack_offset + 8);
+        offset_operand = arm64_imm_operand(op, operations, offset + 8);
         slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(sp), offset_operand));
         slice_push(operations, ARM64_INST(R_STR, ARM64_REG(lr), ARM64_INDIRECT(x16, 0, 0, OWORD)));
     } else if (offset > 256) {

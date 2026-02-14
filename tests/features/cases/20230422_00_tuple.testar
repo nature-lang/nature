@@ -43,11 +43,10 @@ fn tu.hello(&self):ref<tu> {
 
 fn main() {
     tu t = (1, false, 1.1)
-    println(t.hello()[0], t.hello()[1], t.hello()[2])
+    tu t2 = *t.hello()
+    println(t2[0], t2[1], t2[2])
 }
 
 --- output.txt
-hello
-hello
 hello
 1 false 1.100000

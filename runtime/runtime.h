@@ -422,7 +422,7 @@ struct coroutine_t {
 
     bool has_error;
     n_interface_t *error; // throwable
-    n_vec_t *traces; // element is n_trace_t
+    n_vec_t traces; // element is n_trace_t
 
     ATOMIC int32_t select_done;
     linkco_t *waiting; // 当前 co 等待的 linkco, 如果存在多个 linkco 时，通过 linkco.waitlink 链接

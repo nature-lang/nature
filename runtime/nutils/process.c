@@ -138,7 +138,7 @@ static void uv_async_process_spawn(process_context_t *ctx, coroutine_t *co) {
 
     uv_process_options_t options = {0};
     options.exit_cb = on_exit_cb;
-    options.file = rt_string_ref(ctx->cmd.name);
+    options.file = rt_string_ref(&ctx->cmd.name);
     options.args = ctx->args;
     options.env = ctx->envs;
 
@@ -166,8 +166,8 @@ static void uv_async_process_spawn(process_context_t *ctx, coroutine_t *co) {
 }
 
 process_context_t *rt_uv_process_spawn(command_t *cmd) {
-    assert(cmd->args);
-    assert(cmd->env);
+    assert(cmd->args.data);
+    assert(cmd->env.data);
     DEBUGF("[rt_uv_process_spawn] start")
 
 
@@ -184,27 +184,27 @@ process_context_t *rt_uv_process_spawn(command_t *cmd) {
     ctx->stderr_pipe.name = "stderr";
     ctx->stdout_pipe.name = "stdout";
 
-    int64_t arg_count = cmd->args->length + 2; // name + null
+    int64_t arg_count = cmd->args.length + 2; // name + null
     ctx->args = mallocz(sizeof(char *) * arg_count);
 
-    ctx->args[0] = rt_string_ref(cmd->name);
-    for (int i = 0; i < cmd->args->length; ++i) {
-        n_string_t *arg;
-        rti_vec_access(cmd->args, i, &arg);
-        ctx->args[i + 1] = rt_string_ref(arg);
+    ctx->args[0] = rt_string_ref(&cmd->name);
+    for (int i = 0; i < cmd->args.length; ++i) {
+        n_string_t arg = {0};
+        rti_vec_access(&cmd->args, i, &arg);
+        ctx->args[i + 1] = rt_string_ref(&arg);
     }
     ctx->args[arg_count - 1] = NULL;
 
 
-    if (cmd->env->length) {
-        ctx->envs = mallocz(sizeof(char *) * (cmd->env->length + 1)); // +1 is null
+    if (cmd->env.length) {
+        ctx->envs = mallocz(sizeof(char *) * (cmd->env.length + 1)); // +1 is null
 
-        for (int i = 0; i < cmd->env->length; ++i) {
-            n_string_t *env;
-            rti_vec_access(cmd->env, i, &env);
-            ctx->envs[i] = rt_string_ref(env);
+        for (int i = 0; i < cmd->env.length; ++i) {
+            n_string_t env = {0};
+            rti_vec_access(&cmd->env, i, &env);
+            ctx->envs[i] = rt_string_ref(&env);
         }
-        ctx->envs[cmd->env->length] = NULL;
+        ctx->envs[cmd->env.length] = NULL;
     }
 
     global_waiting_send(uv_async_process_spawn, ctx, co, 0);
@@ -243,13 +243,13 @@ static void uv_async_process_read_stdout(process_context_t *ctx) {
     uv_read_start((uv_stream_t *) &ctx->stdout_pipe.pipe, process_alloc_buffer_cb, on_read_stdout_cb);
 }
 
-n_string_t *rt_uv_process_read_stdout(process_context_t *ctx) {
+n_string_t rt_uv_process_read_stdout(process_context_t *ctx) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
 
     if (ctx->stdout_pipe.closed) {
         rti_co_throw(co, "stdout pipe closed", NULL);
-        return NULL;
+        return (n_string_t) {0};
     }
 
     ctx->stdout_pipe.pipe.data = co;
@@ -257,11 +257,11 @@ n_string_t *rt_uv_process_read_stdout(process_context_t *ctx) {
 
     if (co->has_error) {
         DEBUGF("[rt_uv_process_read_stdout] co has err, will return NULL")
-        return NULL;
+        return (n_string_t) {0};
     }
 
-    n_string_t *buf_string = rt_string_ref_new(ctx->stdout_pipe.buffer, ctx->stdout_pipe.read_buffer_count);
-    DEBUGF("[rt_uv_process_read_stdout] read buf len: %d", buf_string->length);
+    n_string_t buf_string = rt_string_ref_new(ctx->stdout_pipe.buffer, ctx->stdout_pipe.read_buffer_count);
+    DEBUGF("[rt_uv_process_read_stdout] read buf len: %d", buf_string.length);
     return buf_string;
 }
 
@@ -269,12 +269,12 @@ static void uv_async_process_read_stderr(process_context_t *ctx) {
     uv_read_start((uv_stream_t *) &ctx->stderr_pipe.pipe, process_alloc_buffer_cb, on_read_stderr_cb);
 }
 
-n_string_t *rt_uv_process_read_stderr(process_context_t *ctx) {
+n_string_t rt_uv_process_read_stderr(process_context_t *ctx) {
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
     if (ctx->stderr_pipe.closed) {
         rti_co_throw(co, "stderr pipe closed", NULL);
-        return NULL;
+        return (n_string_t) {0};
     }
 
     ctx->stderr_pipe.pipe.data = co;
@@ -282,11 +282,11 @@ n_string_t *rt_uv_process_read_stderr(process_context_t *ctx) {
 
     if (co->has_error) {
         DEBUGF("[rt_uv_process_read_stderr] co has err, will return NULL")
-        return NULL;
+        return (n_string_t) {0};
     }
 
     // 提取 buf 并返回
-    n_string_t *buf_string = rt_string_ref_new(ctx->stderr_pipe.buffer, ctx->stderr_pipe.read_buffer_count);
-    DEBUGF("[rt_uv_process_read_stderr] read buf len: %ld", buf_string->length);
+    n_string_t buf_string = rt_string_ref_new(ctx->stderr_pipe.buffer, ctx->stderr_pipe.read_buffer_count);
+    DEBUGF("[rt_uv_process_read_stderr] read buf len: %ld", buf_string.length);
     return buf_string;
 }

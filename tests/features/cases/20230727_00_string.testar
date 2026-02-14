@@ -37,19 +37,6 @@ false
 true
 false
 
-=== test_string_impl_failed2
---- main.n
-fn string.hello(*self) {
-    println('hello')
-}
-
-fn main() {
-    'n'.hello()
-}
-
---- output.txt
-nature-test/main.n:1:3: heap-allocated builtin type 'string' requires explicit `self` receiver; use `fn string.method(self)`
-
 === test_string_impl
 --- main.n
 fn string.hello(self):string {

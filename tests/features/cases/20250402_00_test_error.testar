@@ -345,4 +345,3 @@ fn main():void! {
     println(val2)
     assert(val2 == -0.096594)
 }
-

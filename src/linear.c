@@ -138,7 +138,8 @@ linear_inline_vec_element_addr_no_check(module_t *m, lir_operand_t *vec_target, 
         index_target = temp_index_target;
     }
 
-    if (vec_target->assert_type == LIR_OPERAND_SYMBOL_VAR) { // global vec copy to temp
+    if (vec_target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        // global vec copy to temp
         lir_operand_t *temp_vec_target = temp_var_operand(m, type_new(TYPE_VEC, &vec_element_type));
         OP_PUSH(lir_op_move(temp_vec_target, vec_target));
         vec_target = temp_vec_target;
@@ -181,7 +182,8 @@ linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_opera
         index_target = temp_index_target;
     }
 
-    if (vec_target->assert_type == LIR_OPERAND_SYMBOL_VAR) { // global vec copy to temp
+    if (vec_target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        // global vec copy to temp
         lir_operand_t *temp_vec_target = temp_var_operand(m, type_new(TYPE_VEC, &vec_element_type));
         OP_PUSH(lir_op_move(temp_vec_target, vec_target));
         vec_target = temp_vec_target;
@@ -278,7 +280,24 @@ static lir_operand_t *linear_super_move(module_t *m, type_t t, lir_operand_t *ds
 }
 
 static lir_operand_t *linear_default_string(module_t *m, type_t t, lir_operand_t *target) {
-    push_rt_call(m, RT_CALL_STRING_NEW, target, 2, string_operand("", 0), int_operand(0));
+    if (!target) {
+        target = temp_var_operand_with_alloc(m, t);
+    }
+
+    lir_operand_t *data_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target, offsetof(n_string_t, data));
+    lir_operand_t *len_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_string_t, length));
+    lir_operand_t *cap_dst =
+            indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_string_t, capacity));
+    lir_operand_t *elem_size_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target,
+                                                         offsetof(n_string_t, element_size));
+    lir_operand_t *hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_string_t, hash));
+
+    OP_PUSH(lir_op_move(data_dst, int_operand(0)));
+    OP_PUSH(lir_op_move(len_dst, int_operand(0)));
+    OP_PUSH(lir_op_move(cap_dst, int_operand(0)));
+    OP_PUSH(lir_op_move(elem_size_dst, int_operand(type_kind_sizeof(TYPE_UINT8))));
+    OP_PUSH(lir_op_move(hash_dst, int_operand(type_hash(t))));
+
     return target;
 }
 
@@ -306,11 +325,32 @@ linear_default_vec(module_t *m, type_t t, lir_operand_t *target) {
         target = temp_var_operand_with_alloc(m, t);
     }
 
-    lir_operand_t *rtype_hash = int_operand(type_hash(t));
-    lir_operand_t *element_index = int_operand(type_hash(t.vec->element_type));
-    lir_operand_t *cap_operand = int_operand(VEC_DEFAULT_CAPACITY); // default cap_operand
-    push_rt_call(m, RT_CALL_VEC_CAP, target, 3, rtype_hash, element_index, cap_operand);
+    lir_operand_t *data_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target, offsetof(n_vec_t, data));
+    lir_operand_t *len_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, length));
+    lir_operand_t *cap_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, capacity));
+    lir_operand_t *elem_size_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target,
+                                                         offsetof(n_vec_t, element_size));
+    lir_operand_t *hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, hash));
+
+    OP_PUSH(lir_op_move(data_dst, int_operand(0)));
+    OP_PUSH(lir_op_move(len_dst, int_operand(0)));
+    OP_PUSH(lir_op_move(cap_dst, int_operand(0)));
+    OP_PUSH(lir_op_move(elem_size_dst, int_operand(t.vec->element_type.storage_size)));
+    OP_PUSH(lir_op_move(hash_dst, int_operand(type_hash(t))));
     return target;
+}
+
+static inline lir_operand_t *linear_builtin_struct_lea_if_needed(module_t *m, lir_operand_t *opd) {
+    if (!opd) {
+        return opd;
+    }
+
+    type_t t = lir_operand_type(opd);
+    if (t.kind == TYPE_MAP || t.kind == TYPE_SET || t.kind == TYPE_STRING || t.kind == TYPE_VEC) {
+        return lea_operand_pointer(m, opd);
+    }
+
+    return opd;
 }
 
 static lir_operand_t *
@@ -318,11 +358,30 @@ linear_unsafe_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target
     if (!target) {
         target = temp_var_operand_with_alloc(m, t);
     }
+    assert(target->assert_type == LIR_OPERAND_VAR);
 
-    lir_operand_t *rtype_hash = int_operand(type_hash(t));
-    lir_operand_t *element_hash = int_operand(type_hash(t.vec->element_type));
-    lir_operand_t *len_operand = int_operand(len); // default cap_operand
-    push_rt_call(m, RT_CALL_UNSAFE_VEC_NEW, target, 3, rtype_hash, element_hash, len_operand);
+    lir_operand_t *data_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target, offsetof(n_vec_t, data));
+    lir_operand_t *len_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, length));
+    lir_operand_t *cap_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, capacity));
+    lir_operand_t *elem_size_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target,
+                                                         offsetof(n_vec_t, element_size));
+    lir_operand_t *hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, hash));
+
+    OP_PUSH(lir_op_move(len_dst, int_operand(len)));
+    OP_PUSH(lir_op_move(cap_dst, int_operand(len)));
+    OP_PUSH(lir_op_move(elem_size_dst, int_operand(t.vec->element_type.storage_size)));
+    OP_PUSH(lir_op_move(hash_dst, int_operand(type_hash(t))));
+
+    if (len == 0) {
+        OP_PUSH(lir_op_move(data_dst, int_operand(0)));
+    } else {
+        lir_operand_t *data_ptr = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
+        lir_operand_t *element_hash = int_operand(type_hash(t.vec->element_type));
+        lir_operand_t *len_operand = int_operand(len);
+        push_rt_call(m, RT_CALL_ARRAY_NEW, data_ptr, 2, element_hash, len_operand);
+        OP_PUSH(lir_op_move(data_dst, data_ptr));
+    }
+
     return target;
 }
 
@@ -364,11 +423,15 @@ static lir_operand_t *linear_default_arr(module_t *m, type_t array_type, lir_ope
     }
     uint64_t element_size = array_type.array->element_type.storage_size;
 
-    if (array_type.array->element_type.storage_kind == STORAGE_KIND_PTR) {
+    if (array_type.array->element_type.storage_kind != STORAGE_KIND_DIR) {
         for (int i = 0; i < array_type.array->length; i++) {
             // 基于 target 生成
             lir_operand_t *item_target = indirect_addr_operand(m, array_type.array->element_type, target,
                                                                i * element_size);
+
+            if (array_type.array->element_type.storage_kind == STORAGE_KIND_IND) {
+                item_target = lea_operand_pointer(m, item_target);
+            }
 
             linear_default_operand(m, array_type.array->element_type, item_target);
         }
@@ -380,27 +443,59 @@ static lir_operand_t *linear_default_arr(module_t *m, type_t array_type, lir_ope
 
 static lir_operand_t *linear_default_map(module_t *m, type_t t, lir_operand_t *target) {
     if (!target) {
-        target = temp_var_operand(m, t);
+        target = temp_var_operand_with_alloc(m, t);
     }
 
-    uint64_t rtype_hash = type_hash(t);
-    uint64_t key_hash = type_hash(t.map->key_type);
-    uint64_t value_hash = type_hash(t.map->value_type);
-    push_rt_call(m, RT_CALL_MAP_NEW, target, 3, int_operand(rtype_hash), int_operand(key_hash),
-                 int_operand(value_hash));
+    if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
+        type_t base_type = lir_operand_type(target);
+        lir_operand_t *temp = temp_var_operand(m, base_type);
+        OP_PUSH(lir_op_lea(temp, target));
+        target = temp;
+    }
+
+    lir_operand_t *hash_table_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target,
+                                                          offsetof(n_map_t, hash_table));
+    lir_operand_t *key_data_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target,
+                                                        offsetof(n_map_t, key_data));
+    lir_operand_t *value_data_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target,
+                                                          offsetof(n_map_t, value_data));
+    lir_operand_t *key_hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_UINT64), target,
+                                                        offsetof(n_map_t, key_rtype_hash));
+    lir_operand_t *value_hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_UINT64), target,
+                                                          offsetof(n_map_t, value_rtype_hash));
+    lir_operand_t *len_dst = indirect_addr_operand(m, type_kind_new(TYPE_UINT64), target, offsetof(n_map_t, length));
+    lir_operand_t *cap_dst = indirect_addr_operand(m, type_kind_new(TYPE_UINT64), target, offsetof(n_map_t, capacity));
+
+    OP_PUSH(lir_op_move(hash_table_dst, int_operand(0)));
+    OP_PUSH(lir_op_move(key_data_dst, int_operand(0)));
+    OP_PUSH(lir_op_move(value_data_dst, int_operand(0)));
+    OP_PUSH(lir_op_move(key_hash_dst, integer_operand((uint64_t) type_hash(t.map->key_type), TYPE_UINT64)));
+    OP_PUSH(lir_op_move(value_hash_dst, integer_operand((uint64_t) type_hash(t.map->value_type), TYPE_UINT64)));
+    OP_PUSH(lir_op_move(len_dst, integer_operand(0, TYPE_UINT64)));
+    OP_PUSH(lir_op_move(cap_dst, integer_operand(0, TYPE_UINT64)));
 
     return target;
 }
 
 static lir_operand_t *linear_default_set(module_t *m, type_t t, lir_operand_t *target) {
     if (!target) {
-        target = temp_var_operand(m, t);
+        target = temp_var_operand_with_alloc(m, t);
     }
 
-    uint64_t rtype_hash = type_hash(t);
-    uint64_t key_index = type_hash(t.map->key_type);
+    lir_operand_t *hash_table_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target,
+                                                          offsetof(n_set_t, hash_table));
+    lir_operand_t *key_data_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target,
+                                                        offsetof(n_set_t, key_data));
+    lir_operand_t *key_hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_UINT64), target,
+                                                        offsetof(n_set_t, key_rtype_hash));
+    lir_operand_t *len_dst = indirect_addr_operand(m, type_kind_new(TYPE_UINT64), target, offsetof(n_set_t, length));
+    lir_operand_t *cap_dst = indirect_addr_operand(m, type_kind_new(TYPE_UINT64), target, offsetof(n_set_t, capacity));
 
-    push_rt_call(m, RT_CALL_SET_NEW, target, 2, int_operand(rtype_hash), int_operand(key_index));
+    OP_PUSH(lir_op_move(hash_table_dst, int_operand(0)));
+    OP_PUSH(lir_op_move(key_data_dst, int_operand(0)));
+    OP_PUSH(lir_op_move(key_hash_dst, integer_operand((uint64_t) type_hash(t.set->element_type), TYPE_UINT64)));
+    OP_PUSH(lir_op_move(len_dst, integer_operand(0, TYPE_UINT64)));
+    OP_PUSH(lir_op_move(cap_dst, integer_operand(0, TYPE_UINT64)));
     return target;
 }
 
@@ -553,7 +648,8 @@ static void linear_has_panic(module_t *m) {
     }
 
     lir_operand_t *path_operand = string_operand(m->rel_path, strlen(m->rel_path));
-    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg, strlen(m->current_closure->fndef->fn_name_with_pkg));
+    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg,
+                                                    strlen(m->current_closure->fndef->fn_name_with_pkg));
     lir_operand_t *line_operand = int_operand(m->current_line);
     lir_operand_t *column_operand = int_operand(m->current_column);
 
@@ -581,7 +677,8 @@ static void linear_has_error(module_t *m) {
     lir_operand_t *has_error = temp_var_operand(m, type_kind_new(TYPE_BOOL));
 
     lir_operand_t *path_operand = string_operand(m->rel_path, strlen(m->rel_path));
-    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg, strlen(m->current_closure->fndef->fn_name_with_pkg));
+    lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg,
+                                                    strlen(m->current_closure->fndef->fn_name_with_pkg));
     lir_operand_t *line_operand = int_operand(m->current_line);
     lir_operand_t *column_operand = int_operand(m->current_column);
 
@@ -847,7 +944,8 @@ static lir_operand_t *linear_inline_env_values(module_t *m) {
 
     // mov [env+0] -> values
     lir_operand_t *values_operand = temp_var_operand(m, type_kind_new(TYPE_GC_ENV_VALUES));
-    OP_PUSH(lir_op_move(values_operand, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), m->current_closure->env_operand, 0)));
+    OP_PUSH(
+            lir_op_move(values_operand, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), m->current_closure->env_operand, 0)));
 
     return values_operand;
 }
@@ -870,12 +968,9 @@ static void linear_env_assign(module_t *m, ast_assign_stmt_t *stmt) {
     lir_operand_t *values_operand = linear_inline_env_values(m);
 
     // move [values+x] -> dst_ptr(dst_ptr is heap_value)
-    lir_operand_t *env_offset_operand = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), values_operand, ast->index * POINTER_SIZE);
+    lir_operand_t *env_offset_operand = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), values_operand,
+                                                              ast->index * POINTER_SIZE);
 
-
-    if (stmt->right.type.storage_kind == STORAGE_KIND_IND) {
-        assert(stmt->right.type.in_heap);
-    }
 
     if (stmt->left.type.storage_kind != STORAGE_KIND_PTR) {
         // mov to indirect(dst_ptr)
@@ -886,10 +981,9 @@ static void linear_env_assign(module_t *m, ast_assign_stmt_t *stmt) {
             linked_concat(m->current_closure->operations, lir_memory_mov(m, size, dst_ptr, src));
         } else {
             lir_operand_t *dst = indirect_addr_operand(m, stmt->left.type, dst_ptr, 0);
-            OP_PUSH(lir_op_move(dst, src));
+            OP_PUSH(lir_op_move(dst, src)); // dir
         }
     } else {
-        // vec/map...
         lir_operand_t *dst_ptr = lea_operand_pointer(m, env_offset_operand);
         push_rt_call(m, RT_CALL_WRITE_BARRIER, NULL, 2, dst_ptr, src);
     }
@@ -898,6 +992,8 @@ static void linear_env_assign(module_t *m, ast_assign_stmt_t *stmt) {
 static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
     ast_map_access_t *map_access = stmt->left.value;
     lir_operand_t *map_target = linear_expr(m, map_access->left, NULL);
+
+    map_target = linear_builtin_struct_lea_if_needed(m, map_target);
 
     lir_operand_t *key_ref = lea_operand_pointer(m, linear_expr(m, map_access->key, NULL));
 
@@ -1551,7 +1647,7 @@ static void linear_select(module_t *m, ast_select_stmt_t *select_stmt) {
                 assert(recv_target);
                 OP_PUSH(lir_op_move(dst_msg_ptr, lea_operand_pointer(m, recv_target)));
             } else {
-                OP_PUSH(lir_op_move(dst_msg_ptr, integer_operand(0, TYPE_ANYPTR)));
+                OP_PUSH(lir_op_move(dst_msg_ptr, int_operand(0)));
             }
         } else {
             casi = send_offset / (POINTER_SIZE * 2);
@@ -1786,7 +1882,8 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
         lir_operand_t *env_target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
 
         OP_PUSH(lir_op_move(env_target, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), fn_target, 0)));
-        OP_PUSH(lir_op_move(new_fn_target, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), fn_target, POINTER_SIZE)));
+        OP_PUSH(
+                lir_op_move(new_fn_target, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), fn_target, POINTER_SIZE)));
 
         fn_target = new_fn_target;
         slice_push(args, env_target);
@@ -1897,30 +1994,45 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
     if (binary_expr->left.type.kind == TYPE_STRING && binary_expr->right.type.kind == TYPE_STRING) {
         switch (opcode) {
             case LIR_OPCODE_ADD: {
-                push_rt_call(m, RT_CALL_STRING_CONCAT, target, 2, left_target, right_target);
+                lir_operand_t *out_ptr = linear_builtin_struct_lea_if_needed(m, target);
+                left_target = linear_builtin_struct_lea_if_needed(m, left_target);
+                right_target = linear_builtin_struct_lea_if_needed(m, right_target);
+                push_rt_call(m, RT_CALL_STRING_CONCAT, NULL, 3, out_ptr, left_target, right_target);
                 break;
             }
             case LIR_OPCODE_SEE: {
+                left_target = linear_builtin_struct_lea_if_needed(m, left_target);
+                right_target = linear_builtin_struct_lea_if_needed(m, right_target);
                 push_rt_call(m, RT_CALL_STRING_EE, target, 2, left_target, right_target);
                 break;
             }
             case LIR_OPCODE_SNE: {
+                left_target = linear_builtin_struct_lea_if_needed(m, left_target);
+                right_target = linear_builtin_struct_lea_if_needed(m, right_target);
                 push_rt_call(m, RT_CALL_STRING_NE, target, 2, left_target, right_target);
                 break;
             }
             case LIR_OPCODE_SGT: {
+                left_target = linear_builtin_struct_lea_if_needed(m, left_target);
+                right_target = linear_builtin_struct_lea_if_needed(m, right_target);
                 push_rt_call(m, RT_CALL_STRING_GT, target, 2, left_target, right_target);
                 break;
             }
             case LIR_OPCODE_SGE: {
+                left_target = linear_builtin_struct_lea_if_needed(m, left_target);
+                right_target = linear_builtin_struct_lea_if_needed(m, right_target);
                 push_rt_call(m, RT_CALL_STRING_GE, target, 2, left_target, right_target);
                 break;
             }
             case LIR_OPCODE_SLT: {
+                left_target = linear_builtin_struct_lea_if_needed(m, left_target);
+                right_target = linear_builtin_struct_lea_if_needed(m, right_target);
                 push_rt_call(m, RT_CALL_STRING_LT, target, 2, left_target, right_target);
                 break;
             }
             case LIR_OPCODE_SLE: {
+                left_target = linear_builtin_struct_lea_if_needed(m, left_target);
+                right_target = linear_builtin_struct_lea_if_needed(m, right_target);
                 push_rt_call(m, RT_CALL_STRING_LE, target, 2, left_target, right_target);
                 break;
             }
@@ -2104,7 +2216,9 @@ static lir_operand_t *linear_vec_slice(module_t *m, ast_expr_t expr, lir_operand
     if (target == NULL) {
         target = temp_var_operand_with_alloc(m, ast->left.type);
     }
-    push_rt_call(m, RT_CALL_VEC_SLICE, target, 3, vec_target, start_target, end_target);
+    lir_operand_t *out_ptr = linear_builtin_struct_lea_if_needed(m, target);
+    vec_target = linear_builtin_struct_lea_if_needed(m, vec_target);
+    push_rt_call(m, RT_CALL_VEC_SLICE, NULL, 4, out_ptr, vec_target, start_target, end_target);
 
     linear_has_panic(m);
 
@@ -2337,7 +2451,8 @@ static lir_operand_t *linear_env_access(module_t *m, ast_expr_t expr, lir_operan
     lir_operand_t *values_operand = linear_inline_env_values(m);
 
     // move [values+x] -> dst_ptr (values 中的值已经取了出来，丢到了 dst_ptr 里面)
-    lir_operand_t *src_ptr = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), values_operand, ast->index * POINTER_SIZE);
+    lir_operand_t *src_ptr = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), values_operand,
+                                                   ast->index * POINTER_SIZE);
 
     // envs 中总是存储的堆指针，即使是 scala 类型的数据, 所以此处需要进一步 indirect 获取对应的值，而不是 ptr value
     if (expr.type.storage_kind == STORAGE_KIND_DIR) {
@@ -2374,20 +2489,24 @@ static lir_operand_t *linear_map_access(module_t *m, ast_expr_t expr, lir_operan
 
     // linear base address left_target
     lir_operand_t *map_target = linear_expr(m, ast->left, NULL);
+    map_target = linear_builtin_struct_lea_if_needed(m, map_target);
 
     // linear key to temp var
     lir_operand_t *key_ref = lea_operand_pointer(m, linear_expr(m, ast->key, NULL));
 
     lir_operand_t *value_target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
     push_rt_call(m, RT_CALL_MAP_ACCESS, value_target, 2, map_target, key_ref);
-    if (expr.type.storage_kind != STORAGE_KIND_IND) {
-        value_target = indirect_addr_operand(m, expr.type, value_target, 0);
-    }
 
     linear_has_panic(m);
 
-    if (!target) {
-        target = temp_var_operand_with_alloc(m, expr.type);
+    if (expr.type.storage_kind != STORAGE_KIND_IND) {
+        value_target = indirect_addr_operand(m, expr.type, value_target, 0);
+    } else {
+        if (target == NULL) {
+            assert(value_target->assert_type == LIR_OPERAND_VAR);
+            lir_var_t *src_var = value_target->value;
+            src_var->type = type_copy(m, expr.type);
+        }
     }
 
     return linear_super_move(m, expr.type, target, value_target);
@@ -2404,6 +2523,7 @@ static lir_operand_t *linear_set_new(module_t *m, ast_expr_t expr, lir_operand_t
     type_t t = expr.type;
 
     target = linear_default_set(m, t, target);
+    lir_operand_t *set_ptr = linear_builtin_struct_lea_if_needed(m, target);
 
     // 默认值初始化 rt_call map_assign
     for (int i = 0; i < ast->elements->length; ++i) {
@@ -2411,7 +2531,7 @@ static lir_operand_t *linear_set_new(module_t *m, ast_expr_t expr, lir_operand_t
         ast_expr_t key_expr = element->key;
         lir_operand_t *key_target = linear_expr(m, key_expr, NULL);
         lir_operand_t *key_ref = lea_operand_pointer(m, key_target);
-        push_rt_call(m, RT_CALL_SET_ADD, NULL, 2, target, key_ref);
+        push_rt_call(m, RT_CALL_SET_ADD, NULL, 2, set_ptr, key_ref);
     }
 
     return target;
@@ -2428,6 +2548,7 @@ static lir_operand_t *linear_map_new(module_t *m, ast_expr_t expr, lir_operand_t
     type_t map_type = expr.type;
 
     target = linear_default_map(m, map_type, target);
+    lir_operand_t *map_ptr = linear_builtin_struct_lea_if_needed(m, target);
 
     // 默认值初始化 rt_call map_assign
     for (int i = 0; i < ast->elements->length; ++i) {
@@ -2436,7 +2557,7 @@ static lir_operand_t *linear_map_new(module_t *m, ast_expr_t expr, lir_operand_t
         lir_operand_t *key_ref = lea_operand_pointer(m, linear_expr(m, key_expr, NULL));
 
         lir_operand_t *value_ptr_target = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
-        push_rt_call(m, RT_CALL_MAP_ASSIGN, value_ptr_target, 2, target, key_ref);
+        push_rt_call(m, RT_CALL_MAP_ASSIGN, value_ptr_target, 2, map_ptr, key_ref);
 
         if (map_type.map->value_type.storage_kind != STORAGE_KIND_IND) {
             value_ptr_target = indirect_addr_operand(m, map_type.map->value_type, value_ptr_target, 0);
@@ -2910,14 +3031,28 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     // union assert
     if (as_expr->src.type.kind == TYPE_UNION) {
         assert(as_expr->target_type.kind != TYPE_UNION);
-        OP_PUSH(lir_op_nop_def(target));
-        lir_operand_t *output_ref = lea_operand_pointer(m, target);
-        uint64_t target_rtype_hash = type_hash(as_expr->target_type);
-        lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-        OP_PUSH(lir_op_move(union_ptr, src_operand));
-        push_rt_call(m, RT_CALL_UNION_ASSERT, NULL, 3, union_ptr, int_operand(target_rtype_hash), output_ref);
-        linear_has_panic(m);
-        return target;
+        if (as_expr->target_type.storage_kind != STORAGE_KIND_IND) {
+            // target 可能总是未 def 导致下面的取值异常, 所以最好使用临时值 assert，然后 mov 到 target
+            lir_operand_t *temp = temp_var_operand(m, as_expr->target_type);
+            OP_PUSH(lir_op_nop_def(temp));
+            lir_operand_t *output_ref = lea_operand_pointer(m, temp);
+            uint64_t target_rtype_hash = type_hash(as_expr->target_type);
+            lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            OP_PUSH(lir_op_move(union_ptr, src_operand));
+            push_rt_call(m, RT_CALL_UNION_ASSERT, NULL, 3, union_ptr, int_operand(target_rtype_hash), output_ref);
+            linear_has_panic(m);
+            OP_PUSH(lir_op_move(target, temp));
+            return target;
+        } else {
+            // indirect, like struct/vec 等总是会进行分配 def, 所以不需要特殊 def
+            lir_operand_t *output_ref = lea_operand_pointer(m, target);
+            uint64_t target_rtype_hash = type_hash(as_expr->target_type);
+            lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            OP_PUSH(lir_op_move(union_ptr, src_operand));
+            push_rt_call(m, RT_CALL_UNION_ASSERT, NULL, 3, union_ptr, int_operand(target_rtype_hash), output_ref);
+            linear_has_panic(m);
+            return target;
+        }
     }
 
     if (as_expr->src.type.kind == TYPE_TAGGED_UNION) {
@@ -3014,7 +3149,6 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             push_rt_call(m, RT_CALL_INTERFACE_CASTING, target, 4, int_operand(src_rtype_hash), interface_value,
                          int_operand(interface_type->elements->length),
                          methods_target);
-
         } else {
             push_rt_call(m, RT_CALL_INTERFACE_CASTING, target, 4, int_operand(src_rtype_hash), interface_value,
                          int_operand(0),
@@ -3042,14 +3176,18 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     // string -> list u8
     if (as_expr->src.type.kind == TYPE_STRING && is_vec_u8(as_expr->target_type)) {
         // OP_PUSH(lir_op_move(target, src_operand));
-        push_rt_call(m, RT_CALL_STRING_TO_VEC, target, 1, src_operand);
+        lir_operand_t *out_ptr = linear_builtin_struct_lea_if_needed(m, target);
+        src_operand = linear_builtin_struct_lea_if_needed(m, src_operand);
+        push_rt_call(m, RT_CALL_STRING_TO_VEC, NULL, 2, out_ptr, src_operand);
         return target;
     }
 
     // list u8 -> string
     if (is_vec_u8(as_expr->src.type) && as_expr->target_type.kind == TYPE_STRING) {
         //        OP_PUSH(lir_op_move(target, src_operand));
-        push_rt_call(m, RT_CALL_VEC_TO_STRING, target, 1, src_operand);
+        lir_operand_t *out_ptr = linear_builtin_struct_lea_if_needed(m, target);
+        src_operand = linear_builtin_struct_lea_if_needed(m, src_operand);
+        push_rt_call(m, RT_CALL_VEC_TO_STRING, NULL, 2, out_ptr, src_operand);
         return target;
     }
 
@@ -3321,13 +3459,14 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
     ast_literal_t *literal = expr.value;
     if (literal->kind == TYPE_STRING) {
         if (!target) {
-            target = temp_var_operand(m, expr.type);
+            target = temp_var_operand_with_alloc(m, expr.type);
         }
+        lir_operand_t *out_ptr = linear_builtin_struct_lea_if_needed(m, target);
 
         // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
         lir_operand_t *imm_c_string_operand = string_operand(literal->value, literal->len);
         lir_operand_t *imm_len_operand = int_operand(literal->len);
-        push_rt_call(m, RT_CALL_STRING_NEW_WITH_POOL, target, 2, imm_c_string_operand, imm_len_operand);
+        push_rt_call(m, RT_CALL_STRING_NEW_WITH_POOL, NULL, 3, out_ptr, imm_c_string_operand, imm_len_operand);
         return target;
     }
 
@@ -3420,7 +3559,8 @@ static lir_operand_t *linear_capture_expr(module_t *m, ast_expr_t *expr) {
         // 被 child fn 引用的 var 是更上一级的 var, local fn 也只能通过 env[n] 的方式引用
         ast_env_access_t *env_access = expr->value;
         lir_operand_t *values_operand = linear_inline_env_values(m);
-        lir_operand_t *env_value_ptr = indirect_addr_operand(m, expr->type, values_operand, env_access->index * POINTER_SIZE);
+        lir_operand_t *env_value_ptr = indirect_addr_operand(m, expr->type, values_operand,
+                                                             env_access->index * POINTER_SIZE);
 
         return env_value_ptr;
     } else if (expr->assert_type == AST_EXPR_IDENT) {

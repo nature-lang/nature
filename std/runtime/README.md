@@ -5,7 +5,7 @@ Runtime system utilities for memory management, garbage collection, and core dat
 ## fn vec_new
 
 ```
-fn vec_new(int hash, int element_hash, int len, anyptr value_ref):anyptr!
+fn vec_new<T>(int hash, int element_hash, int len, anyptr value_ref):vec<T>!
 ```
 
 Create a new vector with specified hash, element hash, length and initial value reference
@@ -13,7 +13,7 @@ Create a new vector with specified hash, element hash, length and initial value 
 ## fn vec_cap
 
 ```
-fn vec_cap(int hash, int element_hash, int cap):anyptr!
+fn vec_cap<T>(int hash, int element_hash, int cap):vec<T>!
 ```
 
 Create a new vector with specified capacity
@@ -37,7 +37,7 @@ Grow vector capacity to the specified size
 ## fn vec_slice
 
 ```
-fn vec_slice(anyptr list, int start, int end):anyptr!
+fn vec_slice<T>(anyptr list, int start, int end):vec<T>!
 ```
 
 Create a slice of the vector from start to end index
@@ -53,7 +53,7 @@ Append elements from list2 to list1
 ## fn vec_concat
 
 ```
-fn vec_concat(anyptr list1, anyptr list2, int element_hash):anyptr
+fn vec_concat<T>(anyptr list1, anyptr list2, int element_hash):vec<T>
 ```
 
 Concatenate two vectors and return a new vector
@@ -61,7 +61,7 @@ Concatenate two vectors and return a new vector
 ## fn set_new
 
 ```
-fn set_new(int hash, int key_hash):anyptr
+fn set_new<T>(int hash, int key_hash):set<T>
 ```
 
 Create a new set with specified hash and key hash
@@ -93,7 +93,7 @@ Remove a key from the set
 ## fn map_new
 
 ```
-fn map_new(int hash, int key_hash, int value_hash):anyptr
+fn map_new<K,V>(int hash, int key_hash, int value_hash):map<K,V>
 ```
 
 Create a new map with specified hash, key hash and value hash

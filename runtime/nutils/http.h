@@ -39,9 +39,9 @@ typedef struct {
 */
 typedef struct {
     handler_fn handler;
-    n_string_t *addr;
+    n_string_t addr;
     n_int_t port;
-    void *routers[8];
+    n_map_t routers[8]; // void* 描述是否不太对？
     inner_http_server_t *inner;
 } n_http_server_t;
 
@@ -92,7 +92,7 @@ typedef struct {
     int64_t create_time;
 } http_conn_t;
 
-void rt_uv_conn_resp(http_conn_t *conn, n_string_t *resp_data);
+void rt_uv_conn_resp(http_conn_t *conn, n_string_t resp_data);
 
 void rt_uv_http_listen(n_http_server_t *server);
 

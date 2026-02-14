@@ -38,6 +38,7 @@ typedef struct {
 
     // handshake 读写缓冲区
     uv_buf_t buf;
+    n_vec_t user_buf;
 } inner_tls_conn_t;
 
 typedef struct {
@@ -267,9 +268,9 @@ static void uv_async_tls_connect(inner_tls_conn_t *conn, struct sockaddr_in *des
     }
 }
 
-void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t *addr, n_int64_t port, n_int64_t timeout_ms) {
-    DEBUGF("[rt_uv_tls_connect] start, addr %s, port %ld, timeout_ms %ld", (char *) rt_string_ref(addr), port,
-            timeout_ms)
+void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t addr, n_int64_t port, n_int64_t timeout_ms) {
+    DEBUGF("[rt_uv_tls_connect] start, addr %s, port %ld, timeout_ms %ld", (char *) rt_string_ref(&addr), port,
+           timeout_ms)
 
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
@@ -286,7 +287,7 @@ void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t *addr, n_int64_t port, n
     DEBUGF("[rt_uv_tls_connect] malloc new conn=%p, co=%p, p_index=%d", conn, conn->co, p->index);
 
     // 初始化 TLS 上下文
-    int ret = tls_init_ssl_context(conn, addr);
+    int ret = tls_init_ssl_context(conn, &addr);
     if (ret != 0) {
         char error_buf[256];
         mbedtls_strerror(ret, error_buf, sizeof(error_buf));
@@ -297,7 +298,7 @@ void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t *addr, n_int64_t port, n
     }
 
     struct sockaddr_in *dest = malloc(sizeof(struct sockaddr_in));
-    uv_ip4_addr(rt_string_ref(addr), (int) port, dest);
+    uv_ip4_addr(rt_string_ref(&addr), (int) port, dest);
 
     global_waiting_send(uv_async_tls_connect, conn, dest, (void *) timeout_ms);
 
@@ -324,7 +325,7 @@ void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t *addr, n_int64_t port, n
     DEBUGF("[rt_uv_tls_connect] resume, TLS connect and handshake success, will return conn=%p", conn)
 }
 
-int64_t rt_uv_tls_read(n_tls_conn_t *n_conn, n_vec_t *buf) {
+int64_t rt_uv_tls_read(n_tls_conn_t *n_conn, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (n_conn->closed) {
         rti_co_throw(co, "tls conn closed", false);
@@ -337,10 +338,10 @@ int64_t rt_uv_tls_read(n_tls_conn_t *n_conn, n_vec_t *buf) {
         return 0;
     }
     conn->handle.data = conn;
-    conn->data = buf;
+    conn->user_buf = buf;
 
-    // 使用 mbedTls 读取数据, buf->data + buf->length 存储解密后的数据
-    int ret = mbedtls_ssl_read(&conn->ssl, (unsigned char *) buf->data, buf->length);
+    // 使用 mbedTls 读取数据, buf.data + buf.length 存储解密后的数据
+    int ret = mbedtls_ssl_read(&conn->ssl, (unsigned char *) buf.data, buf.length);
     if (ret < 0) {
         rti_co_throw(co, tlsprintf("TLS read failed: %s", uv_strerror(ret)), false);
         return 0;
@@ -349,7 +350,7 @@ int64_t rt_uv_tls_read(n_tls_conn_t *n_conn, n_vec_t *buf) {
     return ret;
 }
 
-int64_t rt_uv_tls_write(n_tls_conn_t *n_conn, n_vec_t *buf) {
+int64_t rt_uv_tls_write(n_tls_conn_t *n_conn, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (n_conn->closed) {
         rti_co_throw(co, "tls conn closed", false);
@@ -358,6 +359,7 @@ int64_t rt_uv_tls_write(n_tls_conn_t *n_conn, n_vec_t *buf) {
     inner_tls_conn_t *conn = n_conn->conn;
     conn->co = co;
     conn->handle.data = conn;
+    conn->user_buf = buf;
 
     if (!conn->handshake_done) {
         rti_co_throw(co, "tls handshake not completed, cannot write", false);
@@ -365,7 +367,7 @@ int64_t rt_uv_tls_write(n_tls_conn_t *n_conn, n_vec_t *buf) {
     }
 
     // 使用 mbedTLS 写入加密数据, 具体会调用的 socket 已经通过 bio 注册了
-    int ret = mbedtls_ssl_write(&conn->ssl, (const unsigned char *) buf->data, buf->length);
+    int ret = mbedtls_ssl_write(&conn->ssl, (const unsigned char *) buf.data, buf.length);
 
     return ret;
 }

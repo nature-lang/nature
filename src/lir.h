@@ -59,7 +59,8 @@
 // RT = runtime
 // CT = compile time
 #define RT_CALL_VEC_CAP "rt_vec_cap"
-#define RT_CALL_VEC_SLICE "rt_vec_slice"
+#define RT_CALL_ARRAY_NEW "rt_array_new"
+#define RT_CALL_VEC_SLICE "rt_vec_slice_out"
 #define RT_CALL_UNSAFE_VEC_NEW "rt_unsafe_vec_new"
 
 #define RT_CALL_WRITE_BARRIER "write_barrier"
@@ -118,11 +119,11 @@
 #define RT_CALL_ENV_ELEMENT_VALUE "env_element_value" // heap addr
 
 #define RT_CALL_STRING_NEW "string_new"
-#define RT_CALL_STRING_TO_VEC "string_to_vec"
-#define RT_CALL_VEC_TO_STRING "vec_to_string"
-#define RT_CALL_STRING_NEW_WITH_POOL "string_new_with_pool"
+#define RT_CALL_STRING_TO_VEC "rt_string_to_vec_out"
+#define RT_CALL_VEC_TO_STRING "rt_vec_to_string_out"
+#define RT_CALL_STRING_NEW_WITH_POOL "rt_string_new_with_pool_out"
 
-#define RT_CALL_STRING_CONCAT "string_concat"
+#define RT_CALL_STRING_CONCAT "rt_string_concat_out"
 #define RT_CALL_STRING_EE "string_ee"
 #define RT_CALL_STRING_NE "string_ne"
 #define RT_CALL_STRING_LT "string_lt"
@@ -242,7 +243,8 @@ static inline bool is_rtcall(string target) {
 
     return str_equal(target, RT_CALL_SET_ADD) || str_equal(target, RT_CALL_SET_DELETE) ||
            str_equal(target, RT_CALL_SET_CONTAINS) || str_equal(target, RT_CALL_SET_NEW) ||
-           str_equal(target, RT_CALL_VEC_CAP) || str_equal(target, RT_CALL_WRITE_BARRIER) ||
+           str_equal(target, RT_CALL_VEC_CAP) || str_equal(target, RT_CALL_ARRAY_NEW) ||
+           str_equal(target, RT_CALL_WRITE_BARRIER) ||
            str_equal(target, RT_CALL_PTR_VALID) ||
            str_equal(target, RT_CALL_MAP_NEW) || str_equal(target, RT_CALL_MAP_ACCESS) ||
            str_equal(target, RT_CALL_MAP_ASSIGN) || str_equal(target, RT_CALL_MAP_LENGTH) ||
@@ -254,7 +256,9 @@ static inline bool is_rtcall(string target) {
            str_equal(target, RT_CALL_ITERATOR_TAKE_VALUE) || str_equal(target, RT_CALL_FN_NEW) ||
            str_equal(target, RT_CALL_ENV_NEW) ||
            str_equal(target, RT_CALL_ENV_ASSIGN_REF) || str_equal(target, RT_CALL_ENV_ELEMENT_VALUE) ||
-           str_equal(target, RT_CALL_STRING_NEW) || str_equal(target, RT_CALL_STRING_CONCAT) ||
+           str_equal(target, RT_CALL_STRING_NEW) || str_equal(target, RT_CALL_STRING_NEW_WITH_POOL) ||
+           str_equal(target, RT_CALL_STRING_CONCAT) || str_equal(target, RT_CALL_STRING_TO_VEC) ||
+           str_equal(target, RT_CALL_VEC_TO_STRING) || str_equal(target, RT_CALL_VEC_SLICE) ||
            str_equal(target, RT_CALL_STRING_EE) || str_equal(target, RT_CALL_STRING_NE) ||
            str_equal(target, RT_CALL_STRING_LT) || str_equal(target, RT_CALL_STRING_LE) ||
            str_equal(target, RT_CALL_STRING_GT) || str_equal(target, RT_CALL_STRING_GE) ||
@@ -900,7 +904,7 @@ static inline lir_op_t *lir_stack_alloc(closure_t *c, type_t t, lir_operand_t *d
     c->stack_offset = align_up(c->stack_offset, POINTER_SIZE); // 按照 8byte 对齐
 
     rtype_t rtype = reflect_type(t);
-    assert(rtype.heap_size == size);
+    assert(rtype.gc_heap_size == size);
 
     // 16, 0, 1
     uint64_t bit_index_end = (c->stack_offset - 1) / POINTER_SIZE;
@@ -1108,10 +1112,16 @@ static inline lir_operand_t *lea_operand_pointer(module_t *m, lir_operand_t *ope
             "only support lea var/symbol/addr, actual=%d", operand->assert_type);
 
     type_t t = lir_operand_type(operand);
-    t = type_refof(t);
+    type_t ref_t = type_refof(t);
 
-    lir_operand_t *temp_ref = temp_var_operand(m, t);
-    OP_PUSH(lir_op_lea(temp_ref, operand));
+    lir_operand_t *temp_ref = temp_var_operand(m, ref_t);
+
+    if (t.storage_kind == STORAGE_KIND_IND && operand->assert_type == LIR_OPERAND_VAR) {
+        OP_PUSH(lir_op_move(temp_ref, operand));
+    } else {
+        OP_PUSH(lir_op_lea(temp_ref, operand));
+    }
+
     return temp_ref;
 }
 

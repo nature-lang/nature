@@ -78,14 +78,12 @@ fn callback_notfound(request_t req, ref<response_t> res):void! {
     res.send('404 not found')
 }
 
-#runtime_use n_server_t
+#runtime_use n_http_server_t
 type server_t = struct{
     fn():void! handler_fn
     string addr
     int port
     [{string:callback_fn};8] routers
-
-    [response_t] resonse_pool 
 
     anyptr inner
 }

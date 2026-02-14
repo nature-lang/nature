@@ -30,14 +30,19 @@ import json
 
 fn main() {
     any m = {}
-    var m1 = m as {string:any}
+    {string:any} m1 = m as {string:any} // as 是什么？这里是 copy 语义呀。得不到值语义。
     m1['hello'] = 'world'
     m1['nice'] = 12
     m1['foo'] = false
 
     var str = json.serialize(m)
     println(str)
+
+    m = m1
+    str = json.serialize(m)
+    println(str)
 }
 
 --- output.txt
+{}
 {"hello":"world","nice":12,"foo":false}

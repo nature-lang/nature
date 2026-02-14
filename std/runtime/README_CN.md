@@ -5,7 +5,7 @@
 ## fn vec_new
 
 ```
-fn vec_new(int hash, int element_hash, int len, anyptr value_ref):anyptr!
+fn vec_new<T>(int hash, int element_hash, int len, anyptr value_ref):vec<T>!
 ```
 
 创建一个新的向量，指定哈希值、元素哈希值、长度和初始值引用
@@ -13,7 +13,7 @@ fn vec_new(int hash, int element_hash, int len, anyptr value_ref):anyptr!
 ## fn vec_cap
 
 ```
-fn vec_cap(int hash, int element_hash, int cap):anyptr!
+fn vec_cap<T>(int hash, int element_hash, int cap):vec<T>!
 ```
 
 创建一个指定容量的新向量
@@ -37,7 +37,7 @@ fn vec_grow(anyptr list, int element_hash, int custom_capacity)
 ## fn vec_slice
 
 ```
-fn vec_slice(anyptr list, int start, int end):anyptr!
+fn vec_slice<T>(anyptr list, int start, int end):vec<T>!
 ```
 
 从开始索引到结束索引创建向量的切片
@@ -53,7 +53,7 @@ fn vec_append(anyptr list1, anyptr list2, int element_hash)
 ## fn vec_concat
 
 ```
-fn vec_concat(anyptr list1, anyptr list2, int element_hash):anyptr
+fn vec_concat<T>(anyptr list1, anyptr list2, int element_hash):vec<T>
 ```
 
 连接两个向量并返回新向量
@@ -61,7 +61,7 @@ fn vec_concat(anyptr list1, anyptr list2, int element_hash):anyptr
 ## fn set_new
 
 ```
-fn set_new(int hash, int key_hash):anyptr
+fn set_new<T>(int hash, int key_hash):set<T>
 ```
 
 创建一个新的集合，指定哈希值和键哈希值
@@ -93,7 +93,7 @@ fn set_delete(anyptr s, anyptr key)
 ## fn map_new
 
 ```
-fn map_new(int hash, int key_hash, int value_hash):anyptr
+fn map_new<K,V>(int hash, int key_hash, int value_hash):map<K,V>
 ```
 
 创建一个新的映射，指定哈希值、键哈希值和值哈希值
