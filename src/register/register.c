@@ -83,5 +83,9 @@ reg_t *covert_alloc_reg(reg_t *reg) {
         }
     }
 
+    if (BUILD_ARCH == ARCH_AMD64 && strstr(reg->name, ah->name)) {
+        return reg_find(LIR_FLAG_ALLOC_INT, rax->index, QWORD);
+    }
+
     return reg_find(LIR_FLAG_ALLOC_INT, reg->index, QWORD);
 }

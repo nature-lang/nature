@@ -256,21 +256,20 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
 
         lir_operand_t *dividend_operand = lir_regs_operand(2, al_operand->value, ah_operand->value);
 
-        // 执行8位除法，被除数在AX，除数是8位操作数
-        linked_push(list, lir_op_new(op_code, dividend_operand, op->second, al_operand));
-
         // 根据操作类型选择结果寄存器
         lir_operand_t *result_operand;
         if (op->code == LIR_OPCODE_UREM || op->code == LIR_OPCODE_SREM) {
             // 余数在 AH
-            result_operand = ah_operand; // AH寄存器
+            result_operand = ah_operand; // ah 寄存器不太能用
         } else {
             // 商在 AL
             result_operand = al_operand;
         }
 
+        // 执行8位除法，被除数在AX，除数是8位操作数
+        // output 必须是实际结果所在的寄存器，否则寄存器分配器会认为 RAX 空闲而提前覆盖
+        linked_push(list, lir_op_new(op_code, dividend_operand, op->second, result_operand));
         linked_push(list, lir_op_move(op->output, result_operand));
-
     } else {
         // 16位及以上的除法处理（原有逻辑）
         lir_operand_t *ax_operand = lir_reg_operand(rax->index, output_type);

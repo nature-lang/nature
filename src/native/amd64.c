@@ -389,7 +389,7 @@ static slice_t *amd64_native_div(closure_t *c, lir_op_t *op) {
         assertf(op->second->assert_type != LIR_OPERAND_IMM, "div op second cannot imm");
 
         reg_t *output_reg = op->output->value;
-        assertf(output_reg->index == rax->index || output_reg->index == rdx->index,
+        assertf(output_reg->index == rax->index || output_reg->index == rdx->index || output_reg->index == ah->index,
                 "div op output reg must rax/rdx");
 
         amd64_asm_operand_t *second = lir_operand_trans_amd64(c, op, op->second);

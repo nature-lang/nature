@@ -340,7 +340,7 @@ linear_default_vec(module_t *m, type_t t, lir_operand_t *target) {
     return target;
 }
 
-static inline lir_operand_t *linear_builtin_struct_lea_if_needed(module_t *m, lir_operand_t *opd) {
+static inline lir_operand_t *linear_lea_builtin_value_struct(module_t *m, lir_operand_t *opd) {
     if (!opd) {
         return opd;
     }
@@ -945,7 +945,8 @@ static lir_operand_t *linear_inline_env_values(module_t *m) {
     // mov [env+0] -> values
     lir_operand_t *values_operand = temp_var_operand(m, type_kind_new(TYPE_GC_ENV_VALUES));
     OP_PUSH(
-            lir_op_move(values_operand, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), m->current_closure->env_operand, 0)));
+            lir_op_move(values_operand,
+                        indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), m->current_closure->env_operand, 0)));
 
     return values_operand;
 }
@@ -993,7 +994,7 @@ static void linear_map_assign(module_t *m, ast_assign_stmt_t *stmt) {
     ast_map_access_t *map_access = stmt->left.value;
     lir_operand_t *map_target = linear_expr(m, map_access->left, NULL);
 
-    map_target = linear_builtin_struct_lea_if_needed(m, map_target);
+    map_target = linear_lea_builtin_value_struct(m, map_target);
 
     lir_operand_t *key_ref = lea_operand_pointer(m, linear_expr(m, map_access->key, NULL));
 
@@ -1404,6 +1405,7 @@ static void linear_for_iterator(module_t *m, ast_for_iterator_stmt_t *ast) {
         first_ref = lea_operand_pointer(m, first_target);
     }
 
+    iterator_target = linear_lea_builtin_value_struct(m, iterator_target);
     // iter 单个值的情况下(不存在 second) 的情况下， list/string/chan 使用 next_value, 其他所有情况都时需 next_key
     if (!ast->second && (ast->iterate.type.kind == TYPE_VEC || ast->iterate.type.kind == TYPE_STRING ||
                          ast->iterate.type.kind == TYPE_CHAN)) {
@@ -1883,7 +1885,8 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
 
         OP_PUSH(lir_op_move(env_target, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), fn_target, 0)));
         OP_PUSH(
-                lir_op_move(new_fn_target, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), fn_target, POINTER_SIZE)));
+                lir_op_move(new_fn_target,
+                            indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), fn_target, POINTER_SIZE)));
 
         fn_target = new_fn_target;
         slice_push(args, env_target);
@@ -1994,45 +1997,45 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
     if (binary_expr->left.type.kind == TYPE_STRING && binary_expr->right.type.kind == TYPE_STRING) {
         switch (opcode) {
             case LIR_OPCODE_ADD: {
-                lir_operand_t *out_ptr = linear_builtin_struct_lea_if_needed(m, target);
-                left_target = linear_builtin_struct_lea_if_needed(m, left_target);
-                right_target = linear_builtin_struct_lea_if_needed(m, right_target);
+                lir_operand_t *out_ptr = linear_lea_builtin_value_struct(m, target);
+                left_target = linear_lea_builtin_value_struct(m, left_target);
+                right_target = linear_lea_builtin_value_struct(m, right_target);
                 push_rt_call(m, RT_CALL_STRING_CONCAT, NULL, 3, out_ptr, left_target, right_target);
                 break;
             }
             case LIR_OPCODE_SEE: {
-                left_target = linear_builtin_struct_lea_if_needed(m, left_target);
-                right_target = linear_builtin_struct_lea_if_needed(m, right_target);
+                left_target = linear_lea_builtin_value_struct(m, left_target);
+                right_target = linear_lea_builtin_value_struct(m, right_target);
                 push_rt_call(m, RT_CALL_STRING_EE, target, 2, left_target, right_target);
                 break;
             }
             case LIR_OPCODE_SNE: {
-                left_target = linear_builtin_struct_lea_if_needed(m, left_target);
-                right_target = linear_builtin_struct_lea_if_needed(m, right_target);
+                left_target = linear_lea_builtin_value_struct(m, left_target);
+                right_target = linear_lea_builtin_value_struct(m, right_target);
                 push_rt_call(m, RT_CALL_STRING_NE, target, 2, left_target, right_target);
                 break;
             }
             case LIR_OPCODE_SGT: {
-                left_target = linear_builtin_struct_lea_if_needed(m, left_target);
-                right_target = linear_builtin_struct_lea_if_needed(m, right_target);
+                left_target = linear_lea_builtin_value_struct(m, left_target);
+                right_target = linear_lea_builtin_value_struct(m, right_target);
                 push_rt_call(m, RT_CALL_STRING_GT, target, 2, left_target, right_target);
                 break;
             }
             case LIR_OPCODE_SGE: {
-                left_target = linear_builtin_struct_lea_if_needed(m, left_target);
-                right_target = linear_builtin_struct_lea_if_needed(m, right_target);
+                left_target = linear_lea_builtin_value_struct(m, left_target);
+                right_target = linear_lea_builtin_value_struct(m, right_target);
                 push_rt_call(m, RT_CALL_STRING_GE, target, 2, left_target, right_target);
                 break;
             }
             case LIR_OPCODE_SLT: {
-                left_target = linear_builtin_struct_lea_if_needed(m, left_target);
-                right_target = linear_builtin_struct_lea_if_needed(m, right_target);
+                left_target = linear_lea_builtin_value_struct(m, left_target);
+                right_target = linear_lea_builtin_value_struct(m, right_target);
                 push_rt_call(m, RT_CALL_STRING_LT, target, 2, left_target, right_target);
                 break;
             }
             case LIR_OPCODE_SLE: {
-                left_target = linear_builtin_struct_lea_if_needed(m, left_target);
-                right_target = linear_builtin_struct_lea_if_needed(m, right_target);
+                left_target = linear_lea_builtin_value_struct(m, left_target);
+                right_target = linear_lea_builtin_value_struct(m, right_target);
                 push_rt_call(m, RT_CALL_STRING_LE, target, 2, left_target, right_target);
                 break;
             }
@@ -2216,8 +2219,8 @@ static lir_operand_t *linear_vec_slice(module_t *m, ast_expr_t expr, lir_operand
     if (target == NULL) {
         target = temp_var_operand_with_alloc(m, ast->left.type);
     }
-    lir_operand_t *out_ptr = linear_builtin_struct_lea_if_needed(m, target);
-    vec_target = linear_builtin_struct_lea_if_needed(m, vec_target);
+    lir_operand_t *out_ptr = linear_lea_builtin_value_struct(m, target);
+    vec_target = linear_lea_builtin_value_struct(m, vec_target);
     push_rt_call(m, RT_CALL_VEC_SLICE, NULL, 4, out_ptr, vec_target, start_target, end_target);
 
     linear_has_panic(m);
@@ -2489,7 +2492,7 @@ static lir_operand_t *linear_map_access(module_t *m, ast_expr_t expr, lir_operan
 
     // linear base address left_target
     lir_operand_t *map_target = linear_expr(m, ast->left, NULL);
-    map_target = linear_builtin_struct_lea_if_needed(m, map_target);
+    map_target = linear_lea_builtin_value_struct(m, map_target);
 
     // linear key to temp var
     lir_operand_t *key_ref = lea_operand_pointer(m, linear_expr(m, ast->key, NULL));
@@ -2523,7 +2526,7 @@ static lir_operand_t *linear_set_new(module_t *m, ast_expr_t expr, lir_operand_t
     type_t t = expr.type;
 
     target = linear_default_set(m, t, target);
-    lir_operand_t *set_ptr = linear_builtin_struct_lea_if_needed(m, target);
+    lir_operand_t *set_ptr = linear_lea_builtin_value_struct(m, target);
 
     // 默认值初始化 rt_call map_assign
     for (int i = 0; i < ast->elements->length; ++i) {
@@ -2548,7 +2551,7 @@ static lir_operand_t *linear_map_new(module_t *m, ast_expr_t expr, lir_operand_t
     type_t map_type = expr.type;
 
     target = linear_default_map(m, map_type, target);
-    lir_operand_t *map_ptr = linear_builtin_struct_lea_if_needed(m, target);
+    lir_operand_t *map_ptr = linear_lea_builtin_value_struct(m, target);
 
     // 默认值初始化 rt_call map_assign
     for (int i = 0; i < ast->elements->length; ++i) {
@@ -3176,8 +3179,8 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     // string -> list u8
     if (as_expr->src.type.kind == TYPE_STRING && is_vec_u8(as_expr->target_type)) {
         // OP_PUSH(lir_op_move(target, src_operand));
-        lir_operand_t *out_ptr = linear_builtin_struct_lea_if_needed(m, target);
-        src_operand = linear_builtin_struct_lea_if_needed(m, src_operand);
+        lir_operand_t *out_ptr = linear_lea_builtin_value_struct(m, target);
+        src_operand = linear_lea_builtin_value_struct(m, src_operand);
         push_rt_call(m, RT_CALL_STRING_TO_VEC, NULL, 2, out_ptr, src_operand);
         return target;
     }
@@ -3185,8 +3188,8 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     // list u8 -> string
     if (is_vec_u8(as_expr->src.type) && as_expr->target_type.kind == TYPE_STRING) {
         //        OP_PUSH(lir_op_move(target, src_operand));
-        lir_operand_t *out_ptr = linear_builtin_struct_lea_if_needed(m, target);
-        src_operand = linear_builtin_struct_lea_if_needed(m, src_operand);
+        lir_operand_t *out_ptr = linear_lea_builtin_value_struct(m, target);
+        src_operand = linear_lea_builtin_value_struct(m, src_operand);
         push_rt_call(m, RT_CALL_VEC_TO_STRING, NULL, 2, out_ptr, src_operand);
         return target;
     }
@@ -3300,7 +3303,7 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
         }
 
         OP_PUSH(lir_op_bal(handle_end->output));
-    LINEAR_HANDLE_BODY:
+        LINEAR_HANDLE_BODY:
         OP_PUSH(handle_start);
 
         if (match_expr->subject && match_expr->subject->assert_type == AST_CALL && match_case->insert_auto_as) {
@@ -3461,7 +3464,7 @@ static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t
         if (!target) {
             target = temp_var_operand_with_alloc(m, expr.type);
         }
-        lir_operand_t *out_ptr = linear_builtin_struct_lea_if_needed(m, target);
+        lir_operand_t *out_ptr = linear_lea_builtin_value_struct(m, target);
 
         // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
         lir_operand_t *imm_c_string_operand = string_operand(literal->value, literal->len);

@@ -150,7 +150,8 @@ n_vec_t rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity) {
         vec.data = rti_array_new(element_rtype, capacity);
     }
 
-    DEBUGF("[rt_vec_cap] success, vec=%p, data=%p, element_size=%lu, cap=%d", &vec, vec.data, vec.element_size, capacity);
+    DEBUGF("[rt_vec_cap] success, vec=%p, data=%p, element_size=%lu, cap=%d", &vec, vec.data, vec.element_size,
+           capacity);
     return vec;
 }
 
@@ -158,7 +159,8 @@ n_vec_t *rt_vec_alloc(int64_t hash, int64_t element_hash, int64_t capacity) {
     n_vec_t vec = rt_vec_cap(hash, element_hash, capacity);
     n_vec_t *vec_heap = rti_gc_malloc(vec_rtype.gc_heap_size, &vec_rtype);
     *vec_heap = vec;
-    DEBUGF("[rt_vec_alloc] success, vec_heap=%p, data=%p, element_size=%lu, cap=%d", vec_heap, vec_heap->data, vec_heap->element_size, capacity);
+    DEBUGF("[rt_vec_alloc] success, vec_heap=%p, data=%p, element_size=%lu, cap=%d", vec_heap, vec_heap->data,
+           vec_heap->element_size, capacity);
     return vec_heap;
 }
 
@@ -433,11 +435,11 @@ n_vec_t rti_vec_new(rtype_t *element_rtype, int64_t length, int64_t capacity) {
  * @param src 源 vec
  * @return 实际复制的元素数量（取 dst 剩余空间和src长度的最小值）
  */
-uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t *src) {
-    uint64_t copy_len = src->length < dst->length ? src->length : dst->length;
+uint64_t rt_vec_copy(n_vec_t *dst, n_vec_t src) {
+    uint64_t copy_len = src.length < dst->length ? src.length : dst->length;
 
     if (copy_len > 0) {
-        memmove(dst->data, src->data, copy_len * src->element_size);
+        memmove(dst->data, src.data, copy_len * src.element_size);
     }
 
     DEBUGF("[rt_vec_copy] copied %lu elements from %p to %p", copy_len, src, dst);
