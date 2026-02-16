@@ -556,6 +556,7 @@ static inline lir_operand_t *lir_operand_copy(lir_operand_t *operand) {
         flag_t mask = 0;
         mask |= FLAG(LIR_FLAG_ALLOC_INT);
         mask |= FLAG(LIR_FLAG_ALLOC_FLOAT);
+        mask |= FLAG(LIR_FLAG_CALLEE_SAVED);
         new_reg->flag = (reg->flag & mask);
         new_operand->value = new_reg;
         return new_operand;

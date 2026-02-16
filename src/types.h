@@ -44,6 +44,7 @@ typedef enum {
     LIR_FLAG_INDIRECT_ADDR_BASE,
     LIR_FLAG_INDIRECT_ADDR_INDEX,
     LIR_FLAG_CONST, // var 中存在的是常量
+    LIR_FLAG_CALLEE_SAVED, // 标记 callee-saved 寄存器
 } lir_flag_t;
 
 typedef enum {
@@ -585,6 +586,8 @@ typedef struct closure_t {
 
     bool exists_call;
     bool exists_sp;
+
+    slice_t *callee_saved; // 记录函数中使用的 callee-saved 寄存器 (reg_t*)
 
     ast_fndef_t *fndef;
 } closure_t;

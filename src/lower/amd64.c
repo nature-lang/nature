@@ -307,7 +307,7 @@ static linked_t *amd64_lower_factor(closure_t *c, lir_op_t *op) {
 static linked_t *amd64_lower_safepoint(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
-    lir_operand_t *result_operand = operand_new(LIR_OPERAND_REG, r15);
+    lir_operand_t *result_operand = operand_new(LIR_OPERAND_REG, r11);
 
     // 增加 label continue
     linked_push(list, lir_op_new(op->code, NULL, NULL, result_operand));

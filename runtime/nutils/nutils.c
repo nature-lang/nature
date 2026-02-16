@@ -399,9 +399,10 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
     coroutine_t *co = coroutine_get();
 
     n_string_t err_msg = rti_error_msg(error);
-    DEBUGF("[runtime.co_throw_error] co=%p, error=%p, path=%s, line=%ld, column=%ld, msg=%s", co, (void *) error, path,
-           line,
-           column, (char *) rt_string_ref(&err_msg));
+    DEBUGF("[runtime.co_throw_error] co=%p, error=%p, path=%s, fn_name=%s, line=%ld, column=%ld, msg=%s", co,
+            (void *) error, path, fn_name,
+            line,
+            column, (char *) rt_string_ref(&err_msg));
 
     assert(co->traces.data == NULL);
     n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);

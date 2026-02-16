@@ -165,6 +165,7 @@ void amd64_reg_init() {
     rcx = reg_new("rcx", 1, LIR_FLAG_ALLOC_INT, QWORD, 2);
     rdx = reg_new("rdx", 2, LIR_FLAG_ALLOC_INT, QWORD, 3);
     rbx = reg_new("rbx", 3, LIR_FLAG_ALLOC_INT, QWORD, 0);
+    rbx->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     rsp = reg_new("rsp", 4, LIR_FLAG_ALLOC_INT, QWORD, 0);
     rbp = reg_new("rbp", 5, LIR_FLAG_ALLOC_INT, QWORD, 0);
     rsi = reg_new("rsi", 6, LIR_FLAG_ALLOC_INT, QWORD, 4);
@@ -174,9 +175,13 @@ void amd64_reg_init() {
     r10 = reg_new("r10", 10, LIR_FLAG_ALLOC_INT, QWORD, 8);
     r11 = reg_new("r11", 11, LIR_FLAG_ALLOC_INT, QWORD, 9);
     r12 = reg_new("r12", 12, LIR_FLAG_ALLOC_INT, QWORD, 10);
+    r12->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r13 = reg_new("r13", 13, LIR_FLAG_ALLOC_INT, QWORD, 11);
+    r13->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r14 = reg_new("r14", 14, LIR_FLAG_ALLOC_INT, QWORD, 12);
+    r14->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r15 = reg_new("r15", 15, LIR_FLAG_ALLOC_INT, QWORD, 13);
+    r15->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
 
     eax = reg_new("eax", 0, LIR_FLAG_ALLOC_INT, DWORD, 0);
     ecx = reg_new("ecx", 1, LIR_FLAG_ALLOC_INT, DWORD, 0);

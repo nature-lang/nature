@@ -65,19 +65,29 @@ void arm64_reg_init() {
     x17 = reg_new("x17", 17, LIR_FLAG_ALLOC_INT, QWORD, 17);
     x18 = reg_new("x18", 18, LIR_FLAG_ALLOC_INT, QWORD, 0); // macos 保留
     x19 = reg_new("x19", 19, LIR_FLAG_ALLOC_INT, QWORD, 18);
+    x19->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     x20 = reg_new("x20", 20, LIR_FLAG_ALLOC_INT, QWORD, 19);
+    x20->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     x21 = reg_new("x21", 21, LIR_FLAG_ALLOC_INT, QWORD, 20);
+    x21->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     x22 = reg_new("x22", 22, LIR_FLAG_ALLOC_INT, QWORD, 21);
+    x22->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     x23 = reg_new("x23", 23, LIR_FLAG_ALLOC_INT, QWORD, 22);
+    x23->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     x24 = reg_new("x24", 24, LIR_FLAG_ALLOC_INT, QWORD, 23);
+    x24->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     x25 = reg_new("x25", 25, LIR_FLAG_ALLOC_INT, QWORD, 24);
+    x25->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     x26 = reg_new("x26", 26, LIR_FLAG_ALLOC_INT, QWORD, 25);
+    x26->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     x27 = reg_new("x27", 27, LIR_FLAG_ALLOC_INT, QWORD, 26);
+    x27->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     if (BUILD_OS == OS_DARWIN) {
         x28 = reg_new("x28", 28, LIR_FLAG_ALLOC_INT, QWORD, 0); // macos 需要额外预留一个寄存器用于寄存器并行移动
     } else {
         x28 = reg_new("x28", 28, LIR_FLAG_ALLOC_INT, QWORD, 27); // macos 需要额外预留一个寄存器用于寄存器并行移动
     }
+    x28->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     x29 = reg_new("x29", 29, 0, QWORD, 0); // FP, 不参与分配
     x30 = reg_new("x30", 30, 0, QWORD, 0); // LR, 不参与分配
     fp = x29;
@@ -135,13 +145,21 @@ void arm64_reg_init() {
     v6 = reg_new("v6", 6, LIR_FLAG_ALLOC_FLOAT, OWORD, f_index + 7);
     v7 = reg_new("v7", 7, LIR_FLAG_ALLOC_FLOAT, OWORD, f_index + 8);
     v8 = reg_new("v8", 8, LIR_FLAG_ALLOC_FLOAT, OWORD, f_index + 9);
+    v8->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     v9 = reg_new("v9", 9, LIR_FLAG_ALLOC_FLOAT, OWORD, f_index + 10);
+    v9->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     v10 = reg_new("v10", 10, LIR_FLAG_ALLOC_FLOAT, OWORD, f_index + 11);
+    v10->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     v11 = reg_new("v11", 11, LIR_FLAG_ALLOC_FLOAT, OWORD, f_index + 12);
+    v11->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     v12 = reg_new("v12", 12, LIR_FLAG_ALLOC_FLOAT, OWORD, f_index + 13);
+    v12->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     v13 = reg_new("v13", 13, LIR_FLAG_ALLOC_FLOAT, OWORD, f_index + 14);
+    v13->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     v14 = reg_new("v14", 14, LIR_FLAG_ALLOC_FLOAT, OWORD, f_index + 15);
+    v14->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     v15 = reg_new("v15", 15, LIR_FLAG_ALLOC_FLOAT, OWORD, f_index + 16);
+    v15->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     v16 = reg_new("v16", 16, LIR_FLAG_ALLOC_FLOAT, OWORD, 0); // 预留给 native 使用
     v17 = reg_new("v17", 17, LIR_FLAG_ALLOC_FLOAT, OWORD, f_index + 17);
     v18 = reg_new("v18", 18, LIR_FLAG_ALLOC_FLOAT, OWORD, f_index + 18);

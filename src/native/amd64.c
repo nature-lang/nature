@@ -1013,6 +1013,10 @@ static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
     int64_t offset = c->stack_offset;
     offset += c->call_stack_max_offset;
 
+    // callee-saved 寄存器占用的栈空间
+    int64_t callee_saved_size = c->callee_saved->count * QWORD;
+    offset += callee_saved_size;
+
     // 进行最终的对齐, linux amd64 中栈一般都是是按 16byte 对齐的
     offset = align_up(offset, AMD64_STACK_ALIGN_SIZE);
 
@@ -1021,6 +1025,12 @@ static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
     if (offset != 0) {
         // offset 范围处理
         slice_push(operations, AMD64_INST("sub", AMD64_REG(rsp), AMD64_UINT32(offset)));
+    }
+
+    // 保存 callee-saved 寄存器
+    for (int i = 0; i < c->callee_saved->count; ++i) {
+        reg_t *reg = c->callee_saved->take[i];
+        slice_push(operations, AMD64_INST("push", AMD64_REG(reg)));
     }
 
     //    c->stack_offset = offset;
@@ -1046,6 +1056,13 @@ static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
  */
 slice_t *amd64_native_return(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
+
+    // 恢复 callee-saved 寄存器 (逆序)
+    for (int i = c->callee_saved->count - 1; i >= 0; --i) {
+        reg_t *reg = c->callee_saved->take[i];
+        slice_push(operations, AMD64_INST("pop", AMD64_REG(reg)));
+    }
+
     //    slice_push(operations, AMD64_INST("mov", AMD64_REG(rsp), AMD64_REG(rbp)));
     if (c->stack_offset != 0) {
         slice_push(operations, AMD64_INST("add", AMD64_REG(rsp), AMD64_UINT32(c->stack_offset)));
@@ -1142,8 +1159,8 @@ static slice_t *amd64_native_safepoint(closure_t *c, lir_op_t *op) {
 
     //    slice_push(operations, AMD64_INST("cmp", global_safepoint_operand, AMD64_UINT32(0))); // 5.20s
 
-    slice_push(operations, AMD64_INST("mov", AMD64_REG(r15), global_safepoint_operand)); // 5.0s
-    slice_push(operations, AMD64_INST("test", AMD64_REG(r15), AMD64_REG(r15)));
+    slice_push(operations, AMD64_INST("mov", AMD64_REG(r11), global_safepoint_operand)); // 5.0s
+    slice_push(operations, AMD64_INST("test", AMD64_REG(r11), AMD64_REG(r11)));
 
     char *preempt_ident = local_sym_with_fn(c, ".preempt");
     slice_push(operations, AMD64_INST("jne", AMD64_SYMBOL(preempt_ident, true)));

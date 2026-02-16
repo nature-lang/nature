@@ -1100,6 +1100,10 @@ static slice_t *riscv64_native_fn_begin(closure_t *c, lir_op_t *op) {
     int64_t offset = c->stack_offset;
     offset += c->call_stack_max_offset;
 
+    // callee-saved 寄存器占用的栈空间
+    int64_t callee_saved_size = c->callee_saved->count * QWORD;
+    offset += callee_saved_size;
+
     // 按16字节对齐栈
     offset = align_up(offset, 16);
 
@@ -1122,6 +1126,18 @@ static slice_t *riscv64_native_fn_begin(closure_t *c, lir_op_t *op) {
         }
     }
 
+    // 保存 callee-saved 寄存器
+    for (int i = 0; i < c->callee_saved->count; ++i) {
+        reg_t *reg = c->callee_saved->take[i];
+        int64_t callee_offset = (c->callee_saved->count - 1 - i) * QWORD;
+        bool is_float = (reg->flag & FLAG(LIR_FLAG_ALLOC_FLOAT)) != 0;
+        if (is_float) {
+            slice_push(operations, RISCV64_INST(RV_FSD, RO_REG(reg), RO_INDIRECT(R_SP, callee_offset, QWORD)));
+        } else {
+            slice_push(operations, RISCV64_INST(RV_SD, RO_REG(reg), RO_INDIRECT(R_SP, callee_offset, QWORD)));
+        }
+    }
+
     // gc_bits 补 0
     if (c->call_stack_max_offset) {
         uint16_t bits_start = c->stack_offset / POINTER_SIZE;
@@ -1140,6 +1156,18 @@ static slice_t *riscv64_native_fn_begin(closure_t *c, lir_op_t *op) {
  */
 static slice_t *riscv64_native_return(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
+
+    // 恢复 callee-saved 寄存器 (逆序)
+    for (int i = c->callee_saved->count - 1; i >= 0; --i) {
+        reg_t *reg = c->callee_saved->take[i];
+        int64_t callee_offset = (c->callee_saved->count - 1 - i) * QWORD;
+        bool is_float = (reg->flag & FLAG(LIR_FLAG_ALLOC_FLOAT)) != 0;
+        if (is_float) {
+            slice_push(operations, RISCV64_INST(RV_FLD, RO_REG(reg), RO_INDIRECT(R_SP, callee_offset, QWORD)));
+        } else {
+            slice_push(operations, RISCV64_INST(RV_LD, RO_REG(reg), RO_INDIRECT(R_SP, callee_offset, QWORD)));
+        }
+    }
 
     // 恢复栈指针
     if (c->stack_offset > 0) {

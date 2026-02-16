@@ -52,6 +52,7 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->fndef = fndef;
 
     c->stack_gc_bits = bitmap_new(1024);
+    c->callee_saved = slice_new();
     return c;
 }
 
