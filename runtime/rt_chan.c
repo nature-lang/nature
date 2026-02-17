@@ -194,12 +194,15 @@ n_chan_t *rt_chan_new(int64_t rhash, int64_t ele_rhash, int64_t buf_len) {
     rtype_t *element_rtype = rt_find_rtype(ele_rhash);
     assert(element_rtype && "cannot find element_rtype with hash");
 
-    n_chan_t *chan = rti_gc_malloc(rtype->heap_size, rtype);
+    n_chan_t *chan = rti_gc_malloc(rtype->gc_heap_size, rtype);
     chan->msg_size = element_rtype->storage_size;
     pthread_mutex_init(&chan->lock, NULL);
 
     // ele_rhash
-    chan->buf = rti_vec_new(element_rtype, buf_len, buf_len);
+    n_vec_t buf = rti_vec_new(element_rtype, buf_len, buf_len);
+    n_vec_t *buf_heap = rti_gc_malloc(vec_rtype.gc_heap_size, &vec_rtype);
+    *buf_heap = buf;
+    chan->buf = buf_heap;
     return chan;
 }
 

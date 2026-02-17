@@ -1,16 +1,4 @@
-=== test_basic
---- main.n
-import http.client
-
-fn main() {
-    var resp = client.new().get('https://ifconfig.me/ip').send()
-    var body = resp.text()
-    println(body)
-    println(resp.status)
-    assert(resp.status == 200)
-}
-
-=== test_basic2
+=== test_basic_https
 --- main.n
 import http.client
 
@@ -359,3 +347,16 @@ fn main() {
     println(resp.status)
     assert(resp.status == 500)
 }
+
+=== test_basic_http
+--- main.n
+import http.client
+
+fn main() {
+    var resp = client.new().get('https://ifconfig.me/ip').send()
+    var body = resp.text()
+    println(body)
+    println(resp.status)
+    assert(resp.status == 200)
+}
+

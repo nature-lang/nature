@@ -187,13 +187,15 @@ static bool sweep_span(mcentral_t *central, mspan_t *span) {
             allocated_bytes -= span->obj_size;
             has_freed = true;
 
-            DEBUGF("[sweep_span] will sweep, span_base=%p obj_addr=%p", span->base, (void *) (span->base + i * span->obj_size));
+            DEBUGF("[sweep_span] will sweep, span_base=%p obj_addr=%p", span->base,
+                   (void *) (span->base + i * span->obj_size));
             // memset((void *) (span->base + i * span->obj_size), 0, span->obj_size);
         } else {
-            DEBUGF("[sweep_span] will sweep, span_base=%p, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
-                   span->base,
-                   (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
-                   bitmap_test(span->gcmark_bits, i));
+            DEBUGF(
+                "[sweep_span] will sweep, span_base=%p, obj_addr=%p, not calc allocated_bytes, alloc_bit=%d, gcmark_bit=%d",
+                span->base,
+                (void *) (span->base + i * span->obj_size), bitmap_test(span->alloc_bits, i),
+                bitmap_test(span->gcmark_bits, i));
         }
     }
 
@@ -330,11 +332,11 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     addr_t sp_value = (addr_t) co->aco.reg[ACO_REG_IDX_SP];
 
     DEBUGF(
-            "[runtime_gc.scan_stack] start, p_index=%d(%lu), p_status=%d, co=%p, co_status=%d, co_stack_size=%zu, save_stack=%p(%zu), "
-            "bp_value=%p, sp_value=%p, share_stack.base=%p",
-            p->index, (uint64_t) p->thread_id, p->status, co, co->status, co->aco.save_stack.valid_sz,
-            co->aco.save_stack.ptr,
-            co->aco.save_stack.sz, bp_value, sp_value, co->aco.share_stack->align_retptr);
+        "[runtime_gc.scan_stack] start, p_index=%d(%lu), p_status=%d, co=%p, co_status=%d, co_stack_size=%zu, save_stack=%p(%zu), "
+        "bp_value=%p, sp_value=%p, share_stack.base=%p",
+        p->index, (uint64_t) p->thread_id, p->status, co, co->status, co->aco.save_stack.valid_sz,
+        co->aco.save_stack.ptr,
+        co->aco.save_stack.sz, bp_value, sp_value, co->aco.share_stack->align_retptr);
 
     // save_stack 也是通过 gc 申请，即使是 gc_work 也需要标记一下
     assert(p->gc_work_finished < memory->gc_count && "gc work finished, cannot insert to gc worklist");
@@ -352,8 +354,8 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
         insert_gc_worklist(worklist, co->error);
     }
 
-    if (co->traces) {
-        insert_gc_worklist(worklist, co->traces);
+    if (co->traces.data && span_of((addr_t) co->traces.data)) {
+        insert_gc_worklist(worklist, co->traces.data);
     }
 
     if (co->flag & FLAG(CO_FLAG_RTFN)) {
@@ -408,7 +410,9 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
         if (ret_addr == assist_preempt_yield_ret_addr) {
             found_assist = true;
-            DEBUGF("[runtime_gc.scan_stack] find assist_preempt_yield_ret_addr %p, conservative treatment will be carried out", (void *) assist_preempt_yield_ret_addr);
+            DEBUGF(
+                "[runtime_gc.scan_stack] find assist_preempt_yield_ret_addr %p, conservative treatment will be carried out",
+                (void *) assist_preempt_yield_ret_addr);
             break;
         }
         // check prev value is nature fn
@@ -489,8 +493,9 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
         fndef_t *fn = find_fn(ret_addr, p);
         if (!fn) {
-            DEBUGF("[runtime_gc.scan_stack] fn not found by ret_addr, return_addr=%p, share_stack_frame_bp=%p, bp_offset = %ld",
-                   (void *) ret_addr, (void *) share_stack_frame_bp, share_stack_frame_bp - sp_value);
+            DEBUGF(
+                "[runtime_gc.scan_stack] fn not found by ret_addr, return_addr=%p, share_stack_frame_bp=%p, bp_offset = %ld",
+                (void *) ret_addr, (void *) share_stack_frame_bp, share_stack_frame_bp - sp_value);
 
             // next and continue
             addr_t bp_offset = share_stack_frame_bp - sp_value;
@@ -591,11 +596,12 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
     }
 
     bitmap_set(span->gcmark_bits, obj_index);
-    DEBUGF("[runtime_gc.handle_gc_ptr] addr=%p, span=%p, span_base=%p, obj_index=%lu marked, test=%d, obj_size=%d, spanclass_has_ptr=%d",
-           (void *) addr,
-           span,
-           (void *) span->base,
-           obj_index, bitmap_test(span->gcmark_bits, obj_index), span->obj_size, spanclass_has_ptr(span->spanclass));
+    DEBUGF(
+        "[runtime_gc.handle_gc_ptr] addr=%p, span=%p, span_base=%p, obj_index=%lu marked, test=%d, obj_size=%d, spanclass_has_ptr=%d",
+        (void *) addr,
+        span,
+        (void *) span->base,
+        obj_index, bitmap_test(span->gcmark_bits, obj_index), span->obj_size, spanclass_has_ptr(span->spanclass));
 
     mutex_unlock(&span->gcmark_locker);
 
@@ -621,9 +627,9 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
             addr_t value = fetch_addr_value(temp_addr);
 
             DEBUGF(
-                    "[handle_gc_ptr] addr is ptr,base=%p cursor=%p cursor_value=%p, obj_size=%ld, bit_index=%lu, in_heap=%d",
-                    (void *) addr,
-                    (void *) temp_addr, (void *) value, span->obj_size, bit_index, in_heap(value));
+                "[handle_gc_ptr] addr is ptr,base=%p cursor=%p cursor_value=%p, obj_size=%ld, bit_index=%lu, in_heap=%d",
+                (void *) addr,
+                (void *) temp_addr, (void *) value, span->obj_size, bit_index, in_heap(value));
 
             if (span_of(value)) {
                 // assert(span_of(heap_addr) && "heap_addr not belong active span");
@@ -640,9 +646,9 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
             }
         } else {
             DEBUGF(
-                    "[handle_gc_ptr] addr not ptr,base=%p cursor=%p cursor_value(int)=%p, obj_size=%ld, bit_index=%lu",
-                    (void *) addr,
-                    (void *) temp_addr, fetch_int_value(temp_addr, POINTER_SIZE), span->obj_size, bit_index);
+                "[handle_gc_ptr] addr not ptr,base=%p cursor=%p cursor_value(int)=%p, obj_size=%ld, bit_index=%lu",
+                (void *) addr,
+                (void *) temp_addr, fetch_int_value(temp_addr, POINTER_SIZE), span->obj_size, bit_index);
         }
     }
 }
@@ -703,10 +709,10 @@ static void gc_work() {
         current = current->succ;
 
         DEBUGF(
-                "[runtime_gc.gc_work] will scan_stack p_index=%d, co=%p, status=%d, is_main=%d, gc_black=%lu/gc_count=%lu, aco=%p",
-                share_p->index,
-                wait_co, wait_co->status, wait_co->main, wait_co->gc_black, memory->gc_count,
-                &wait_co->aco);
+            "[runtime_gc.gc_work] will scan_stack p_index=%d, co=%p, status=%d, is_main=%d, gc_black=%lu/gc_count=%lu, aco=%p",
+            share_p->index,
+            wait_co, wait_co->status, wait_co->main, wait_co->gc_black, memory->gc_count,
+            &wait_co->aco);
 
         if (wait_co->status == CO_STATUS_DEAD) {
             DEBUGF("[runtime_gc.gc_work] co=%p, main=%d, status=dead, will remove",
@@ -820,7 +826,9 @@ static void scan_pool() {
     n_processor_t *p = processor_index[0];
     n_string_t *value;
     sc_map_foreach_value(&const_str_pool, value) {
-        rt_linked_fixalloc_push(&p->gc_worklist, value);
+        if (value && span_of((addr_t) value->data)) {
+            rt_linked_fixalloc_push(&p->gc_worklist, value->data);
+        }
     }
 }
 
@@ -859,7 +867,8 @@ static void scan_global() {
                     gc_bits = (uint8_t *) &rtype->gc_bits;
                 }
 
-                if (bitmap_test(gc_bits, index)) { // need gc
+                if (bitmap_test(gc_bits, index)) {
+                    // need gc
                     addr_t addr = fetch_addr_value(current);
                     if (span_of(addr)) {
                         DEBUGF("[runtime.scan_global] name=%s, kind=%s, base=%p(%p), index=%d, addr=%p need gc",
@@ -1010,8 +1019,10 @@ void runtime_gc() {
     next_gc_bytes = heap_live + (heap_live * GC_PERCENT / 100);
 
     gc_stage = GC_STAGE_OFF;
-    DEBUGF("[runtime_gc] gc stage: GC_OFF, gc_barrier_stop, before=%ldKB, current=%ldKB, cleanup=%ldKB, alloc_total=%ldKB, remove_to_sys=%ldKB, used=%ldKB, next_gc=%ldKB",
-           before / 1024,
-           allocated_bytes / 1024,
-           (before - allocated_bytes) / 1024, allocated_total_bytes / 1024, remove_total_bytes / 1024, (allocated_total_bytes - remove_total_bytes) / 1024, next_gc_bytes / 1024);
+    DEBUGF(
+        "[runtime_gc] gc stage: GC_OFF, gc_barrier_stop, before=%ldKB, current=%ldKB, cleanup=%ldKB, alloc_total=%ldKB, remove_to_sys=%ldKB, used=%ldKB, next_gc=%ldKB",
+        before / 1024,
+        allocated_bytes / 1024,
+        (before - allocated_bytes) / 1024, allocated_total_bytes / 1024, remove_total_bytes / 1024,
+        (allocated_total_bytes - remove_total_bytes) / 1024, next_gc_bytes / 1024);
 }

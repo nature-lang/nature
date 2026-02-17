@@ -280,9 +280,7 @@ fn request_t.send(&self):ref<response_t>! {
     var resp = new response_t(buf_conn = br)
     resp.version = (br.read_until(' '.char()) as string).rtrim([' '])
     var status = (br.read_until(' '.char()) as string).rtrim([' '])
-    resp.status = status.to_int() catch e {
-        0
-    }
+    resp.status = status.to_int() catch e {0}
     resp.message = br.read_line()
     for true {
         var line = br.read_line()

@@ -1006,7 +1006,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:12:18: 'new' operator can only be used with scalar types
+nature-test/main.n:12:34: type inconsistency, expect=main.test_t([int(i64)]), actual=ref<main.test_t([int(i64)])>
 
 === test_interface_auto_as_failed
 --- main.n

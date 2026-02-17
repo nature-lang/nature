@@ -53,30 +53,41 @@ n_anyptr_t anyptr_casting(value_casting v);
 
 value_casting casting_to_anyptr(void *ptr);
 
-n_vec_t *std_args();
+n_vec_t std_args();
 
 char *rtype_value_to_str(rtype_t *rtype, void *data_ref);
 
 void rti_write_barrier_ptr(void *slot, void *new_obj, bool mark_black_new_obj);
 
+void rti_write_barrier_rtype(void *dst, void *src, rtype_t *rtype);
+
 void write_barrier(void *slot, void *new_obj);
 
 void ptr_valid(void *ptr);
 
-void rt_panic(n_string_t *msg);
+void rt_panic(n_string_t msg);
 
 void rt_assert(n_bool_t cond);
 
+// allocate array data by element rtype hash
+n_anyptr_t rt_array_new(int64_t element_hash, int64_t length);
 
-n_vec_t *unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr);
+n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr);
 
-n_string_t *rt_strerror();
+n_string_t rt_strerror();
 
-n_string_t *rt_string_ref_new(void *raw_string, int64_t length);
+n_string_t rt_string_ref_new(void *raw_string, int64_t length);
 
 void *rt_string_ref(n_string_t *n_str);
 
-n_string_t *rt_string_new(n_anyptr_t raw_string);
+n_string_t rt_string_new(n_anyptr_t raw_string);
+
+// LIR out-parameter helpers for builtin structs
+void rt_string_concat_out(n_string_t *out, n_string_t *a, n_string_t *b);
+void rt_string_new_with_pool_out(n_string_t *out, void *raw_string, int64_t length);
+void rt_string_to_vec_out(n_vec_t *out, n_string_t *src);
+void rt_vec_to_string_out(n_string_t *out, n_vec_t *src);
+void rt_vec_slice_out(n_vec_t *out, n_vec_t *vec, int64_t start, int64_t end);
 
 bool rt_in_heap(n_anyptr_t addr);
 

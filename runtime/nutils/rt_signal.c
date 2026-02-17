@@ -16,14 +16,14 @@ int64_t sig_ref[NSIG] = {0};
 
 coroutine_t *signal_loop_co = NULL;
 
-void signal_notify(n_chan_t *ch, n_vec_t *signals) {
+void signal_notify(n_chan_t *ch, n_vec_t signals) {
     pthread_mutex_lock(&signal_locker);
 
     // 判断 signal_handlers 是否有对应的 handle
     uint64_t mask = sc_map_get_64(&signal_handlers, (uint64_t) ch);
 
     // 如果 signals 为空，则监听所有信号
-    if (signals->length == 0) {
+    if (signals.length == 0) {
         for (int i = 0; i < sizeof(all_signals) / sizeof(all_signals[0]); i++) {
             int64_t sig = all_signals[i];
             if (sig < 0 || sig > NSIG - 1) {
@@ -38,9 +38,9 @@ void signal_notify(n_chan_t *ch, n_vec_t *signals) {
         }
     } else {
         // 原有逻辑：处理指定的信号
-        for (int i = 0; i < signals->length; i++) {
+        for (int i = 0; i < signals.length; i++) {
             size_t sig;
-            rti_vec_access(signals, i, &sig);
+            rti_vec_access(&signals, i, &sig);
             if (sig < 0 || sig > NSIG - 1) {
                 continue;
             }

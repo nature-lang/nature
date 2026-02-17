@@ -1,51 +1,57 @@
 #include "string.h"
 
 #include <runtime/rtype.h>
+#include <stdlib.h>
 
 #include "array.h"
 #include "vec.h"
 
 // string copy to vec
 // vec copy to string
-n_vec_t *string_to_vec(n_string_t *src) {
+n_vec_t string_to_vec(n_string_t *src) {
     return string_new(src->data, src->length);
 }
 
-n_string_t *vec_to_string(n_vec_t *vec) {
+n_string_t vec_to_string(n_vec_t *vec) {
     return string_new_with_pool(vec->data, vec->length);
 }
 
-n_string_t *string_new_with_pool(void *raw_string, int64_t length) {
-    TRACEF("[string_new] raw_string=%s, length=%lu, ptr=%p", (char *) raw_string, length, raw_string);
-
-    n_string_t *str;
+n_string_t string_new_with_pool(void *raw_string, int64_t length) {
+    DEBUGF("[string_new_with_pool] raw_string=%s, length=%lu, ptr=%p", (char *) raw_string, length, raw_string);
 
     // check const
-    str = sc_map_get_sv(&const_str_pool, (char *) raw_string);
-    if (str && str->length == length) {
-        return str;
+    n_string_t *pooled = sc_map_get_sv(&const_str_pool, (char *) raw_string);
+    if (pooled && pooled->length == length) {
+        return *pooled;
     }
-    DEBUGF("[string_new_with_pool] not match, raw %s, length %ld, map get %s", (char *) raw_string, length, str ? (char *) str->data : "-");
+    DEBUGF("[string_new_with_pool] not match, raw %s, length %ld, map get %s", (char *) raw_string, length,
+           pooled ? (char *) pooled->data : "-");
 
     // byte 数组，先手动创建一个简单类型
     int64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
 
     n_array_t *data = rti_array_new(&string_element_rtype, capacity);
 
-    str = rti_gc_malloc(string_rtype.heap_size, &string_rtype);
-    str->data = data;
-    str->length = length;
-    str->capacity = capacity;
-    str->element_size = (&string_element_rtype)->storage_size;
-    str->hash = string_rtype.hash;
-    memmove(str->data, raw_string, length);
+    n_string_t str = {0};
+    str.data = data;
+    str.length = length;
+    str.capacity = capacity;
+    str.element_size = (&string_element_rtype)->storage_size;
+    str.hash = string_rtype.hash;
+    memmove(str.data, raw_string, length);
+    str.data[length] = '\0';
 
-    DEBUGF("[string_new] success, string=%p, data=%p, len=%ld, ele_size=%ld, raw_str=%s", str, str->data, str->length,
-           str->element_size, (char *) raw_string);
+    DEBUGF("[string_new_with_pool] success, string=%p, data=%p, len=%ld, ele_size=%ld, raw_str=%s", &str, str.data,
+           str.length,
+           str.element_size, (char *) raw_string);
 
     // 小字符串入池,避免小字符串频繁分配
     if (capacity <= 8) {
-        sc_map_put_sv(&const_str_pool, (char *) raw_string, str);
+        n_string_t *pool_copy = malloc(sizeof(n_string_t));
+        if (pool_copy != NULL) {
+            *pool_copy = str;
+            sc_map_put_sv(&const_str_pool, (char *) raw_string, pool_copy);
+        }
     }
 
     return str;
@@ -57,32 +63,29 @@ n_string_t *string_new_with_pool(void *raw_string, int64_t length) {
  * @param length
  * @return
  */
-n_string_t *string_new(void *raw_string, int64_t length) {
+n_string_t string_new(void *raw_string, int64_t length) {
     TRACEF("[string_new] raw_string=%s, length=%lu, ptr=%p", (char *) raw_string, length, raw_string);
-
-    n_string_t *str;
 
     // byte 数组，先手动创建一个简单类型
     int64_t capacity = length + 1; // +1 预留 '\0' 空间 给 string_ref 时使用
 
     n_array_t *data = rti_array_new(&string_element_rtype, capacity);
 
-    str = rti_gc_malloc(string_rtype.heap_size, &string_rtype);
-    str->data = data;
-    str->length = length;
-    str->capacity = capacity;
-    str->element_size = (&string_element_rtype)->storage_size;
-    str->hash = string_rtype.hash;
-    memmove(str->data, raw_string, length);
-    str->data[length] = '\0';
+    n_string_t str = {0};
+    str.data = data;
+    str.length = length;
+    str.capacity = capacity;
+    str.element_size = (&string_element_rtype)->storage_size;
+    str.hash = string_rtype.hash;
+    memmove(str.data, raw_string, length);
+    str.data[length] = '\0';
 
-    DEBUGF("[string_new] success, string=%p, data=%p, len=%ld, ele_size=%ld, raw_str=%s", str, str->data, str->length,
-           str->element_size, (char *) raw_string);
+    DEBUGF("[string_new] success, string=%p, data=%p, len=%ld, ele_size=%ld, raw_str=%s", &str, str.data, str.length,
+           str.element_size, (char *) raw_string);
     return str;
 }
 
-n_string_t *string_concat(n_string_t *a, n_string_t *b) {
-
+n_string_t string_concat(n_string_t *a, n_string_t *b) {
     DEBUGF("[runtime.string_concat] a=%s, b=%s", a->data, b->data);
 
     int64_t length = a->length + b->length;
@@ -92,39 +95,35 @@ n_string_t *string_concat(n_string_t *a, n_string_t *b) {
     // 将 str copy 到 data 中
     memmove(data, a->data, a->length);
     memmove(data + a->length, b->data, b->length);
+    data[length] = '\0';
 
-    n_string_t *str = rti_gc_malloc(string_rtype.heap_size, &string_rtype);
-    str->length = length;
-    str->data = data;
-    str->length = length;
-    str->capacity = capacity;
-    str->element_size = (&string_element_rtype)->storage_size;
-    str->hash = string_rtype.hash;
-    DEBUGF("[runtime.string_concat] success, string=%p, data=%p", str, str->data);
+    n_string_t str = {0};
+    str.length = length;
+    str.data = data;
+    str.length = length;
+    str.capacity = capacity;
+    str.element_size = (&string_element_rtype)->storage_size;
+    str.hash = string_rtype.hash;
+    DEBUGF("[runtime.string_concat] success, string=%p, data=%p", &str, str.data);
     return str;
 }
 
 n_int_t rt_string_length(n_string_t *a) {
-
+    DEBUGF("rt_string_length %p, a.leng %ld", a, a->length);
     return (n_int_t) a->length;
 }
 
 n_bool_t string_ee(n_string_t *a, n_string_t *b) {
-
-    assert(a);
-    assert(b);
     DEBUGF("[runtime.string_ee] a=%s, b=%s, a_len=%ld, b_len=%ld", a->data, b->data, a->length, b->length);
     return a->length == b->length && memcmp(a->data, b->data, a->length) == 0;
 }
 
 n_bool_t string_ne(n_string_t *a, n_string_t *b) {
-
     DEBUGF("[runtime.string_ne] a=%s, b=%s", a->data, b->data);
     return a->length != b->length || memcmp(a->data, b->data, a->length) != 0;
 }
 
 n_bool_t string_lt(n_string_t *a, n_string_t *b) {
-
     DEBUGF("[runtime.string_lt] a=%s, b=%s\n", a->data, b->data);
     size_t min_length = a->length < b->length ? a->length : b->length;
     int cmp_result = memcmp(a->data, b->data, min_length);
@@ -132,7 +131,6 @@ n_bool_t string_lt(n_string_t *a, n_string_t *b) {
 }
 
 n_bool_t string_le(n_string_t *a, n_string_t *b) {
-
     DEBUGF("[runtime.string_le] a=%s, b=%s\n", a->data, b->data);
     size_t min_length = a->length < b->length ? a->length : b->length;
     int cmp_result = memcmp(a->data, b->data, min_length);
@@ -140,7 +138,6 @@ n_bool_t string_le(n_string_t *a, n_string_t *b) {
 }
 
 n_bool_t string_gt(n_string_t *a, n_string_t *b) {
-
     DEBUGF("[runtime.string_gt] a=%s, b=%s\n", a->data, b->data);
     size_t min_length = a->length < b->length ? a->length : b->length;
     int cmp_result = memcmp(a->data, b->data, min_length);
@@ -148,7 +145,6 @@ n_bool_t string_gt(n_string_t *a, n_string_t *b) {
 }
 
 n_bool_t string_ge(n_string_t *a, n_string_t *b) {
-
     DEBUGF("[runtime.string_ge] a=%s, b=%s\n", a->data, b->data);
     size_t min_length = a->length < b->length ? a->length : b->length;
     int cmp_result = memcmp(a->data, b->data, min_length);

@@ -40,6 +40,12 @@ const ENUM = 29
 
 const PTR_SIZE = 8
 
+type storage_kind_t = enum:u32 {
+    IND = 1,
+    PTR,
+    DIR,
+}
+
 type field_t = struct{
     string name
     int hash
@@ -50,6 +56,7 @@ type type_t = struct{
     int size
     int hash
     int kind
+    storage_kind_t storage_kind
     u8 align
     [int] hashes
     [field_t] fields // type struct exclusive
@@ -71,7 +78,7 @@ type rtype_t = struct{
     i64 hash
     u64 last_ptr
     u32 kind
-    u32 storage_kind
+    storage_kind_t storage_kind
 
     i64 malloc_gc_bits_offset
     u64 gc_bits
@@ -100,6 +107,7 @@ fn typeof_hash(i64 hash):ref<type_t>! {
         size = r.storage_size as i64,
         hash = r.hash,
         kind = r.kind as int,
+        storage_kind = r.storage_kind,
         align = r.align,
         hashes = vec<int>.new(0, 0),
         fields = vec<field_t>.new(field_t{}, 0),

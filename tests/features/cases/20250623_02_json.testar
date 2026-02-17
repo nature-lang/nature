@@ -199,3 +199,21 @@ fn main() {
 
 --- output.txt
 12.000000 123
+
+=== test_deserialize_nullable
+--- main.n
+import json
+
+fn main() {
+    string? av = 'hello'
+    var str = json.serialize(av)
+    println(str)
+
+    var raw = `"hello world"`
+    string? s = json.deserialize<string?>(raw)
+    println(s)
+}
+
+--- output.txt
+"hello"
+hello world

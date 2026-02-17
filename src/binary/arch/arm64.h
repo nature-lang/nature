@@ -318,7 +318,7 @@ elf_arm64_relocate(elf_context_t *ctx, Elf64_Rela *rel, int type, uint8_t *ptr, 
 
 
 static inline void
-arm64_rewrite_rel_symbol(arm64_asm_inst_t *operation, arm64_asm_operand_t *operand, uint64_t rel_diff) {
+arm64_rewrite_rel_symbol(arm64_asm_inst_t *operation, arm64_asm_operand_t *operand, int64_t rel_diff) {
     int addend = 0;
 
     // 如果不是符号操作数,直接返回
@@ -511,7 +511,7 @@ static inline void elf_arm64_operation_encodings(elf_context_t *ctx, module_t *m
         Elf64_Sym *sym = &((Elf64_Sym *) ctx->symtab_section->data)[sym_index];
         if (sym->st_value > 0) {
             // 内部符号，计算相对偏移
-            uint64_t rel_diff = sym->st_value - *temp->offset;
+            int64_t rel_diff = sym->st_value - *temp->offset;
             arm64_rewrite_rel_symbol(temp->operation, temp->rel_operand, rel_diff);
 
             temp->data = arm64_asm_inst_encoding(temp->operation, &temp->data_count);

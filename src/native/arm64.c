@@ -576,6 +576,13 @@ static slice_t *arm64_native_mov(closure_t *c, lir_op_t *op) {
 static slice_t *arm64_native_return(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
+    // 恢复 callee-saved 寄存器 (逆序)
+    for (int i = c->callee_saved->count - 1; i >= 0; --i) {
+        reg_t *reg = c->callee_saved->take[i];
+        int64_t callee_offset = (c->callee_saved->count - 1 - i) * QWORD;
+        slice_push(operations, ARM64_INST(R_LDR, ARM64_REG(reg), ARM64_INDIRECT(sp, callee_offset, 0, OWORD)));
+    }
+
     // 恢复栈帧
     if (c->stack_offset > 4095) {
         arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, c->stack_offset);
@@ -1064,6 +1071,10 @@ static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
     int64_t offset = c->stack_offset;
     offset += c->call_stack_max_offset;
 
+    // callee-saved 寄存器占用的栈空间
+    int64_t callee_saved_size = c->callee_saved->count * QWORD;
+    offset += callee_saved_size;
+
     // 进行最终的对齐, linux arm64 中栈一般都是是按 16byte 对齐的
     offset = align_up(offset, ARM64_STACK_ALIGN_SIZE);
 
@@ -1072,11 +1083,11 @@ static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
     slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), offset_operand));
 
     if (offset > 4095) {
-        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, c->stack_offset);
+        arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, offset);
         slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(sp), offset_operand));
         slice_push(operations, ARM64_INST(R_STR, ARM64_REG(fp), ARM64_INDIRECT(x16, 0, 0, OWORD)));
 
-        offset_operand = arm64_imm_operand(op, operations, c->stack_offset + 8);
+        offset_operand = arm64_imm_operand(op, operations, offset + 8);
         slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(sp), offset_operand));
         slice_push(operations, ARM64_INST(R_STR, ARM64_REG(lr), ARM64_INDIRECT(x16, 0, 0, OWORD)));
     } else if (offset > 256) {
@@ -1085,6 +1096,13 @@ static slice_t *arm64_native_fn_begin(closure_t *c, lir_op_t *op) {
     } else {
         // fp = x29, lr = x30
         slice_push(operations, ARM64_INST(R_STP, ARM64_REG(fp), ARM64_REG(lr), ARM64_INDIRECT(sp, offset, 0, OWORD))); // offset 限制 256
+    }
+
+    // 保存 callee-saved 寄存器
+    for (int i = 0; i < c->callee_saved->count; ++i) {
+        reg_t *reg = c->callee_saved->take[i];
+        int64_t callee_offset = (c->callee_saved->count - 1 - i) * QWORD;
+        slice_push(operations, ARM64_INST(R_STR, ARM64_REG(reg), ARM64_INDIRECT(sp, callee_offset, 0, OWORD)));
     }
 
     // 更新帧指针  dd x29, sp, #offset

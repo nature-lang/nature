@@ -149,7 +149,8 @@ static inline void async_conn_write_handle_cb(uv_async_t *handle) {
 
     int result = uv_write(&conn->write_req, (uv_stream_t *) &conn->handle, &conn->write_buf, 1, on_write_end_cb);
     if (result) {
-        DEBUGF("[async_conn_write_handle_cb] uv_write have err %s, is_closing %d", uv_strerror(result), uv_is_closing((uv_handle_t *) &conn->handle));
+        DEBUGF("[async_conn_write_handle_cb] uv_write have err %s, is_closing %d", uv_strerror(result),
+               uv_is_closing((uv_handle_t *) &conn->handle));
         if (!uv_is_closing((uv_handle_t *) &conn->handle)) {
             uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
         }
@@ -185,7 +186,8 @@ static inline void on_read_cb(uv_stream_t *handle, ssize_t nread, const uv_buf_t
         return;
     }
     conn->read_buf_len += nread;
-    if (!conn->parser_completed) { // 未完整读取
+    if (!conn->parser_completed) {
+        // 未完整读取
         DEBUGF("[on_read_cb] parser not completed yet");
         return;
     }
@@ -195,18 +197,18 @@ static inline void on_read_cb(uv_stream_t *handle, ssize_t nread, const uv_buf_t
     rt_coroutine_dispatch(conn_co);
 }
 
-void rt_uv_conn_resp(http_conn_t *conn, n_string_t *resp_data) {
+void rt_uv_conn_resp(http_conn_t *conn, n_string_t resp_data) {
     // 进行数据 copy 避免 resp_data 后续被清理掉
-    if ((resp_data->length + 1) < HTTP_BUFFER_SIZE) {
+    if ((resp_data.length + 1) < HTTP_BUFFER_SIZE) {
         conn->write_buf.base = conn->default_buf;
-        conn->write_buf.len = resp_data->length;
+        conn->write_buf.len = resp_data.length;
 
-        memmove(conn->write_buf.base, resp_data->data, resp_data->length);
+        memmove(conn->write_buf.base, resp_data.data, resp_data.length);
     } else {
         // TODO write buf base 没有进行释放
-        conn->write_buf.base = malloc(resp_data->length + 1);
-        conn->write_buf.len = resp_data->length;
-        memmove(conn->write_buf.base, resp_data->data, resp_data->length);
+        conn->write_buf.base = malloc(resp_data.length + 1);
+        conn->write_buf.len = resp_data.length;
+        memmove(conn->write_buf.base, resp_data.data, resp_data.length);
     }
 
     // 通知主线程触发 write, 当前 coroutine 直接返回，不 wait
@@ -346,11 +348,12 @@ void test_timer_dump_count_cb(uv_timer_t *timer) {
     int64_t leaked = inner->conn_count - inner->closed_count;
 
     DEBUGF("[app_metrics] conn=%ld, read_start=%ld, alloc_cb=%ld, read_cb=%ld, read_error=%ld, "
-            "resp=%ld, closed=%ld, "
-            "pending_read=%ld, pending_close=%ld, leaked=%ld",
-            inner->conn_count, inner->read_start_count, inner->read_alloc_buf_count, inner->read_cb_count, inner->read_error_count,
-            inner->resp_count, inner->closed_count,
-            pending_read, pending_close, leaked);
+           "resp=%ld, closed=%ld, "
+           "pending_read=%ld, pending_close=%ld, leaked=%ld",
+           inner->conn_count, inner->read_start_count, inner->read_alloc_buf_count, inner->read_cb_count,
+           inner->read_error_count,
+           inner->resp_count, inner->closed_count,
+           pending_read, pending_close, leaked);
 }
 
 
@@ -368,7 +371,7 @@ static void uv_async_http_listen(inner_http_server_t *inner) {
     //    timer->data = inner;
     //    uv_timer_start(timer, test_timer_dump_count_cb, 1000, 1000);
 
-    uv_ip4_addr(rt_string_ref(server->addr), server->port, &addr);
+    uv_ip4_addr(rt_string_ref(&server->addr), server->port, &addr);
     uv_tcp_bind(&inner->handle, (const struct sockaddr *) &addr, 0);
 
     int result = uv_listen((uv_stream_t *) &inner->handle, DEFAULT_BACKLOG, on_http_conn_cb);

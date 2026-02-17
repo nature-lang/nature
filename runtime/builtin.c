@@ -120,16 +120,16 @@ static void print_arg(n_union_t *arg) {
 }
 
 
-void print(n_vec_t *args) {
+void print(n_vec_t args) {
     // any_trans 将 int 转换成了堆中的一段数据，并将堆里面的其实地址返回了回去
-    // 所以 args->data 是一个堆里面的地址，其指向的堆内存区域是 [any_start_ptr1, any_start_ptr2m, ...]
-    addr_t base = (addr_t) args->data;// 把 data 中存储的值赋值给 p
-    uint64_t element_size = args->element_size;
+    // 所以 args.data 是一个堆里面的地址，其指向的堆内存区域是 [any_start_ptr1, any_start_ptr2m, ...]
+    addr_t base = (addr_t) args.data;// 把 data 中存储的值赋值给 p
+    uint64_t element_size = args.element_size;
 
-    DEBUGF("[runtime.print] args vec=%p, len=%lu, data=%p, element_size=%lu", args, args->length, (void *) base,
+    DEBUGF("[runtime.print] args len=%lu, data=%p, element_size=%lu", args.length, (void *) base,
            element_size);
 
-    for (int i = 0; i < args->length; ++i) {
+    for (int i = 0; i < args.length; ++i) {
         addr_t p = base + (i * element_size);
 
         // 将 p 中存储的地址赋值给 a, 此时 a 中存储的是一个堆中的地址，其结构是 memory_any_t
@@ -142,16 +142,16 @@ void print(n_vec_t *args) {
     }
 }
 
-void println(n_vec_t *args) {
+void println(n_vec_t args) {
     // any_trans 将 int 转换成了堆中的一段数据，并将堆里面的其实地址返回了回去
-    // 所以 args->data 是一个堆里面的地址，其指向的堆内存区域是 [any_start_ptr1, any_start_ptr2m, ...]
-    addr_t base = (addr_t) args->data;// 把 data 中存储的值赋值给 p
-    uint64_t element_size = args->element_size;
+    // 所以 args.data 是一个堆里面的地址，其指向的堆内存区域是 [any_start_ptr1, any_start_ptr2m, ...]
+    addr_t base = (addr_t) args.data;// 把 data 中存储的值赋值给 p
+    uint64_t element_size = args.element_size;
 
-    DEBUGF("[runtime.println] args vec=%p, len=%lu, data=%p, element_size=%lu", args, args->length, (void *) base,
+    DEBUGF("[runtime.println] args len=%lu, data=%p, element_size=%lu", args.length, (void *) base,
            element_size);
 
-    for (int i = 0; i < args->length; ++i) {
+    for (int i = 0; i < args.length; ++i) {
         addr_t p = base + (i * element_size);
 
         // 将 p 中存储的地址赋值给 a, 此时 a 中存储的是一个堆中的地址，其结构是 memory_any_t
@@ -162,7 +162,7 @@ void println(n_vec_t *args) {
 
         print_arg(union_arg);
 
-        if (i < (args->length - 1)) {
+        if (i < (args.length - 1)) {
             VOID write(STDOUT_FILENO, space, 1);
         }
     }

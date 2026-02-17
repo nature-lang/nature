@@ -1,7 +1,7 @@
 type cstr = anyptr
 
 #linkid rt_string_ref
-fn string.to_cstr(self):cstr
+fn string.to_cstr(*self):cstr
 
 fn to_cfn(anyptr closure):anyptr {
     type fn_t = struct{

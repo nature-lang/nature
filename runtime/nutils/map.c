@@ -20,6 +20,25 @@ static void set_data_index(n_map_t *m, uint64_t hash_index, uint64_t data_index)
     m->hash_table[hash_index] = hash_value;
 }
 
+static inline void rt_map_init_if_needed(n_map_t *m) {
+    if (m->capacity > 0 && m->hash_table && m->key_data && m->value_data) {
+        return;
+    }
+
+    assert(m->key_rtype_hash > 0);
+    assert(m->value_rtype_hash > 0);
+    rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
+    rtype_t *value_rtype = rt_find_rtype(m->value_rtype_hash);
+    assert(key_rtype && value_rtype);
+
+    m->capacity = MAP_DEFAULT_CAPACITY;
+    m->length = 0;
+    m->hash_table = rti_gc_malloc(sizeof(uint64_t) * m->capacity, NULL);
+    memset(m->hash_table, 0, sizeof(uint64_t) * m->capacity);
+    m->key_data = rti_array_new(key_rtype, m->capacity);
+    m->value_data = rti_array_new(value_rtype, m->capacity);
+}
+
 
 void map_grow(n_map_t *m) {
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
@@ -59,7 +78,7 @@ void map_grow(n_map_t *m) {
 }
 
 
-n_map_t *rt_map_new(uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhash) {
+n_map_t rt_map_new(uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhash) {
     rtype_t *map_rtype = rt_find_rtype(rtype_hash);
     rtype_t *key_rtype = rt_find_rtype(key_rhash);
     rtype_t *value_rtype = rt_find_rtype(value_rhash);
@@ -75,16 +94,27 @@ n_map_t *rt_map_new(uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhas
            type_kind_str[value_rtype->kind],
            value_rtype->heap_size);
 
-    n_map_t *map_data = rti_gc_malloc(map_rtype->heap_size, map_rtype);
-    map_data->capacity = capacity;
-    map_data->length = 0;
-    map_data->key_rtype_hash = key_rhash;
-    map_data->value_rtype_hash = value_rhash;
-    map_data->hash_table = rti_gc_malloc(sizeof(uint64_t) * capacity, NULL);
-    map_data->key_data = rti_array_new(key_rtype, capacity);
-    map_data->value_data = rti_array_new(value_rtype, capacity);
+    n_map_t map_data = {0};
+    map_data.capacity = capacity;
+    map_data.length = 0;
+    map_data.key_rtype_hash = key_rhash;
+    map_data.value_rtype_hash = value_rhash;
+    map_data.hash_table = rti_gc_malloc(sizeof(uint64_t) * capacity, NULL);
+    map_data.key_data = rti_array_new(key_rtype, capacity);
+    map_data.value_data = rti_array_new(value_rtype, capacity);
 
     return map_data;
+}
+
+n_map_t *rt_map_alloc(uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhash) {
+    rtype_t *map_rtype = rt_find_rtype(rtype_hash);
+    assertf(map_rtype, "cannot find map rtype with hash=%lu", rtype_hash);
+
+    n_map_t map_data = rt_map_new(rtype_hash, key_rhash, value_rhash);
+    n_map_t *map_heap = rti_gc_malloc(map_rtype->gc_heap_size, map_rtype);
+    *map_heap = map_data;
+    DEBUGF("[rt_map_alloc] success, map_heap=%p, len=%lu, cap=%lu", map_heap, map_heap->length, map_heap->capacity);
+    return map_heap;
 }
 
 /**
@@ -94,6 +124,16 @@ n_map_t *rt_map_new(uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhas
  * @return false 表示没有找到响应的值，也就是值不存在, true 表示相关值已经 copy 到了 value_ref 中
  */
 n_anyptr_t rt_map_access(n_map_t *m, void *key_ref) {
+    if (m->capacity == 0) {
+        rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
+        assert(key_rtype);
+        char *key_str = rtype_value_to_str(key_rtype, key_ref);
+        char *msg = tlsprintf("key '%s' not found in map", key_str);
+        rti_throw(msg, true);
+        free((void *) key_str);
+        return 0;
+    }
+
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
 
     rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
@@ -104,9 +144,9 @@ n_anyptr_t rt_map_access(n_map_t *m, void *key_ref) {
     uint64_t hash_value = m->hash_table[hash_index];
     if (hash_value_empty(hash_value) || hash_value_deleted(hash_value)) {
         DEBUGF("[runtime.rt_map_access] hash value=%lu, empty=%d, deleted=%d",
-                hash_value,
-                hash_value_empty(hash_value),
-                hash_value_deleted(hash_value));
+               hash_value,
+               hash_value_empty(hash_value),
+               hash_value_deleted(hash_value));
 
         char *msg = tlsprintf("key '%s' not found in map", key_str);
         rti_throw(msg, true);
@@ -130,6 +170,10 @@ n_anyptr_t rt_map_access(n_map_t *m, void *key_ref) {
 }
 
 n_anyptr_t rt_map_assign(n_map_t *m, void *key_ref) {
+    if (m->capacity == 0) {
+        rt_map_init_if_needed(m);
+    }
+
     if ((double) m->length + 1 > (double) m->capacity * HASH_MAX_LOAD) {
         map_grow(m);
     }
@@ -162,18 +206,14 @@ n_anyptr_t rt_map_assign(n_map_t *m, void *key_ref) {
 
     set_data_index(m, hash_index, data_index);
 
-    uint64_t key_size = rt_rtype_stack_size(m->key_rtype_hash);
+    uint64_t key_size = key_rtype->storage_size;
     uint64_t value_size = rt_rtype_stack_size(m->value_rtype_hash);
     DEBUGF("[runtime.rt_map_assign] assign success data_index=%lu, hash_value=%lu, key_size=%ld",
            data_index,
            m->hash_table[hash_index], key_size);
 
-    if (key_rtype->heap_size == POINTER_SIZE) {
-        rti_write_barrier_ptr(m->key_data + key_size * data_index, *(void **) key_ref, false);
-    } else {
-        // push to key list and value list
-        memmove(m->key_data + key_size * data_index, key_ref, key_size);
-    }
+    void *key_dst = m->key_data + key_size * data_index;
+    rti_write_barrier_rtype(key_dst, key_ref, key_rtype);
 
     return (n_anyptr_t) (m->value_data + value_size * data_index);
 }
@@ -182,8 +222,11 @@ n_anyptr_t rt_map_assign(n_map_t *m, void *key_ref) {
  * @param m
  * @param key_ref
  * @return
- */
+*/
 void rt_map_delete(n_map_t *m, void *key_ref) {
+    if (m->capacity == 0) {
+        return;
+    }
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
     uint64_t *hash_value = &m->hash_table[hash_index];
     *hash_value &= 1ULL << HASH_DELETED; // 配置删除标志即可
@@ -205,6 +248,10 @@ bool rt_map_contains(n_map_t *m, void *key_ref) {
     assert(m);
     assert(key_ref);
     assert(m->key_rtype_hash > 0);
+
+    if (m->capacity == 0) {
+        return false;
+    }
 
     DEBUGF("[runtime.rt_map_contains] key_ref=%p, key_rtype_hash=%lu, len=%lu", key_ref, m->key_rtype_hash, m->length);
 

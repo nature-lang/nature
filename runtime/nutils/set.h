@@ -9,7 +9,7 @@
 
 #define SET_DEFAULT_CAPACITY 100
 
-n_set_t *rt_set_new(uint64_t rtype_hash, uint64_t key_hash);
+n_set_t rt_set_new(uint64_t rtype_hash, uint64_t key_hash);
 
 bool rt_set_add(n_set_t *m, void *key_ref);
 

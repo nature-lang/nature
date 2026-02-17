@@ -70,8 +70,7 @@ fn serialize_value(anyptr p, ref<reflect.type_t> t):[u8]! {
 
             // get value p
             var union_p = &rv.value as anyptr
-            if union_t.kind == reflect.STRUCT || union_t.kind == reflect.ARR {
-                // struct/arr 在 union 中存储的已经是一个堆指针了，所以不需要再次进行 &取引用
+            if union_t.storage_kind == reflect.storage_kind_t.IND {
                 union_p = rv.value
             }
 
@@ -165,8 +164,7 @@ fn serialize_struct(anyptr p, ref<reflect.type_t> t):[u8]! {
 }
 
 fn serialize_vec(anyptr p, ref<reflect.type_t> t):[u8]! {
-    var v = unsafe.ptr_to<anyptr>(p)
-    var rv = v as ptr<reflect.vec_t>
+    var rv = p as ptr<reflect.vec_t>
 
     var element_type = reflect.typeof_hash(t.hashes[0])
     var len = rv.length
@@ -188,8 +186,7 @@ fn serialize_vec(anyptr p, ref<reflect.type_t> t):[u8]! {
 }
 
 fn serialize_map(anyptr p, ref<reflect.type_t> t):[u8]! {
-    var v = unsafe.ptr_to<anyptr>(p)
-    var rv = v as ptr<reflect.map_t>
+    var rv = p as ptr<reflect.map_t>
 
     var key_type = reflect.typeof_hash(rv.key_hash as int)
     var val_type = reflect.typeof_hash(rv.value_hash as int)
@@ -354,8 +351,7 @@ fn deserialize_t.parser_struct(&self, anyptr p, ref<reflect.type_t> t):void! {
 }
 
 fn deserialize_t.parser_vec(&self, anyptr p, ref<reflect.type_t> t):void! {
-    anyptr v = unsafe.ptr_to<anyptr>(p)
-    var rv = v as ptr<reflect.vec_t>
+    var rv = p as ptr<reflect.vec_t>
     rv.length = 0 // Assignment from zero
     self.must('[')
     if self.consume(']') {
@@ -365,7 +361,7 @@ fn deserialize_t.parser_vec(&self, anyptr p, ref<reflect.type_t> t):void! {
     var element_type = reflect.typeof_hash(t.hashes[0])
     for true {
         if  rv.length == rv.capacity {
-            runtime.vec_grow(v, t.hashes[0], 0)
+            runtime.vec_grow(p, t.hashes[0], 0)
         }
 
         assert(rv.length < rv.capacity)
@@ -381,8 +377,7 @@ fn deserialize_t.parser_vec(&self, anyptr p, ref<reflect.type_t> t):void! {
 }
 
 fn deserialize_t.parser_map(&self, anyptr p, ref<reflect.type_t> t):void! {
-    anyptr v = unsafe.ptr_to<anyptr>(p)
-    var rv = v as ptr<reflect.map_t>
+    var rv = p as ptr<reflect.map_t>
     self.must('{')
     if self.consume('}') {
         return
@@ -393,7 +388,7 @@ fn deserialize_t.parser_map(&self, anyptr p, ref<reflect.type_t> t):void! {
     for true {
         // parser key(type is string) 
         string key = self.parser_string()
-        var val_p = runtime.map_assign(v, &key as anyptr)
+        var val_p = runtime.map_assign(p, &key as anyptr)
         self.must(':')
         self.parser(val_p, val_type)
 
@@ -559,7 +554,6 @@ fn deserialize_t.parser_nullable(&self, anyptr p, ref<reflect.type_t> t):void! {
 
     var rv = p as ptr<reflect.union_t>
 
-    var target_p = &rv.value as anyptr
 
     // default is null
     if self.data[self.cursor] == 'n'[0] {
@@ -578,17 +572,25 @@ fn deserialize_t.parser_nullable(&self, anyptr p, ref<reflect.type_t> t):void! {
     match target_type.kind {
         reflect.VEC -> {
             var element_type = reflect.typeof_hash(target_type.hashes[0])
-            rv.value = runtime.vec_cap(hash, element_type.hash, 0)
+            rv.value = runtime.vec_alloc(hash, element_type.hash, 0)
         }
         reflect.MAP -> {
             var key_type = reflect.typeof_hash(target_type.hashes[0])
             var value_type = reflect.typeof_hash(target_type.hashes[1])
-            rv.value = runtime.map_new(hash, key_type.hash, value_type.hash)
+            rv.value = runtime.map_alloc(hash, key_type.hash, value_type.hash)
         }
         reflect.STRUCT -> {
             rv.value = runtime.gc_malloc(hash)
         }
+        reflect.STRING -> {
+            rv.value = runtime.vec_alloc(hash, @reflect_hash(u8), 0)
+        }
         _ -> {}
+    }
+
+    var target_p = &rv.value as anyptr
+    if target_type.storage_kind == reflect.storage_kind_t.IND {
+        target_p = rv.value
     }
 
     self.parser(target_p, target_type)

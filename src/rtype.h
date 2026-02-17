@@ -5,6 +5,8 @@
 #include "utils/custom_links.h"
 #include "utils/type.h"
 
+static inline int64_t rtype_builtin_gc_bits(int64_t gc_bits_offset, int64_t *offset, type_t t);
+
 static inline int64_t rtype_array_gc_bits(int64_t gc_bits_offset, int64_t *offset, type_array_t *t);
 
 static int64_t rtype_struct_gc_bits(int64_t gc_bits_offset, int64_t *offset, type_struct_t *t);
@@ -145,7 +147,7 @@ static inline int64_t type_hash(type_t t) {
 
 static inline rtype_t rtype_origin(type_t t) {
     rtype_t rtype = {
-            .heap_size = t.storage_size, // 单位 byte
+            .gc_heap_size = t.storage_size, // 单位 byte
             .hash = type_hash(t),
             .last_ptr = 0,
             .kind = t.kind,
@@ -153,8 +155,8 @@ static inline rtype_t rtype_origin(type_t t) {
             .malloc_gc_bits_offset = -1,
     };
 
-    if (rtype.heap_size > 0) {
-        rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.heap_size, POINTER_SIZE));
+    if (rtype.gc_heap_size > 0) {
+        rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.gc_heap_size, POINTER_SIZE));
     }
 
     return rtype;
@@ -162,7 +164,7 @@ static inline rtype_t rtype_origin(type_t t) {
 
 static inline rtype_t rtype_ptr(type_t t) {
     rtype_t rtype = {
-            .heap_size = sizeof(n_ptr_t),
+            .gc_heap_size = sizeof(n_ptr_t),
             .hash = type_hash(t),
             .last_ptr = POINTER_SIZE,
             .kind = TYPE_PTR,
@@ -171,7 +173,7 @@ static inline rtype_t rtype_ptr(type_t t) {
             .malloc_gc_bits_offset = -1,
     };
     // 计算 gc_bits
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.heap_size, POINTER_SIZE));
+    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.gc_heap_size, POINTER_SIZE));
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
 
     ((int64_t *) CTDATA(rtype.hashes_offset))[0] = type_hash(t.ptr->value_type);
@@ -181,7 +183,7 @@ static inline rtype_t rtype_ptr(type_t t) {
 
 static inline rtype_t rtype_anyptr(type_t t) {
     rtype_t rtype = {
-            .heap_size = sizeof(n_ptr_t),
+            .gc_heap_size = sizeof(n_ptr_t),
             .hash = type_hash(t),
             .last_ptr = POINTER_SIZE,
             .kind = TYPE_ANYPTR,
@@ -190,7 +192,7 @@ static inline rtype_t rtype_anyptr(type_t t) {
     };
 
     // 计算 gc_bits, 在当前的设计中，anyptr 同样会被 gc 追踪
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.heap_size, POINTER_SIZE));
+    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.gc_heap_size, POINTER_SIZE));
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
 
     return rtype;
@@ -204,7 +206,7 @@ static inline rtype_t rtype_anyptr(type_t t) {
  */
 static inline rtype_t rtype_ref(type_t t) {
     rtype_t rtype = {
-            .heap_size = sizeof(n_ptr_t),
+            .gc_heap_size = sizeof(n_ptr_t),
             .hash = type_hash(t),
             .last_ptr = POINTER_SIZE,
             .kind = TYPE_REF,
@@ -213,7 +215,7 @@ static inline rtype_t rtype_ref(type_t t) {
             .malloc_gc_bits_offset = -1,
     };
     // 计算 gc_bits
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.heap_size, POINTER_SIZE));
+    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.gc_heap_size, POINTER_SIZE));
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
     ((int64_t *) CTDATA(rtype.hashes_offset))[0] = type_hash(t.ptr->value_type);
     return rtype;
@@ -226,7 +228,7 @@ static inline rtype_t rtype_ref(type_t t) {
  */
 static inline rtype_t rtype_string(type_t t) {
     rtype_t rtype = {
-            .heap_size = sizeof(n_string_t),
+            .gc_heap_size = sizeof(n_string_t),
             .hash = type_hash(t),
             .last_ptr = POINTER_SIZE,
             .kind = TYPE_STRING,
@@ -234,7 +236,7 @@ static inline rtype_t rtype_string(type_t t) {
             .malloc_gc_bits_offset = -1,
     };
 
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.heap_size, POINTER_SIZE));
+    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.gc_heap_size, POINTER_SIZE));
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
 
     return rtype;
@@ -247,7 +249,7 @@ static inline rtype_t rtype_string(type_t t) {
  */
 static inline rtype_t rtype_vec(type_t t) {
     rtype_t rtype = {
-            .heap_size = sizeof(n_vec_t),
+            .gc_heap_size = sizeof(n_vec_t),
             .hash = type_hash(t),
             .last_ptr = POINTER_SIZE,
             .kind = TYPE_VEC,
@@ -257,7 +259,7 @@ static inline rtype_t rtype_vec(type_t t) {
     };
 
     // 计算 gc_bits
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.heap_size, POINTER_SIZE));
+    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.gc_heap_size, POINTER_SIZE));
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
     ((int64_t *) CTDATA(rtype.hashes_offset))[0] = type_hash(t.vec->element_type);
 
@@ -266,7 +268,7 @@ static inline rtype_t rtype_vec(type_t t) {
 
 static inline rtype_t rtype_chan(type_t t) {
     rtype_t rtype = {
-            .heap_size = sizeof(n_chan_t),
+            .gc_heap_size = sizeof(n_chan_t),
             .hash = type_hash(t),
             .last_ptr = POINTER_SIZE * 5,
             .kind = TYPE_CHAN,
@@ -276,7 +278,7 @@ static inline rtype_t rtype_chan(type_t t) {
     };
 
     // 计算 gc_bits
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.heap_size, POINTER_SIZE));
+    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.gc_heap_size, POINTER_SIZE));
 
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 1);
@@ -298,7 +300,7 @@ static inline rtype_t rtype_array(type_t t) {
     int64_t element_size = t.array->element_type.storage_size;
 
     rtype_t rtype = {
-            .heap_size = element_size * t.array->length,
+            .gc_heap_size = element_size * t.array->length,
             .hash = type_hash(t),
             .kind = TYPE_ARR,
             .length = t.array->length, // array length 特殊占用
@@ -306,7 +308,7 @@ static inline rtype_t rtype_array(type_t t) {
             .malloc_gc_bits_offset = -1,
     };
 
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.heap_size, POINTER_SIZE));
+    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.gc_heap_size, POINTER_SIZE));
 
     int64_t offset = 0;
     rtype.last_ptr = rtype_array_gc_bits(rtype.malloc_gc_bits_offset, &offset, t.array);
@@ -323,7 +325,7 @@ static inline rtype_t rtype_array(type_t t) {
  */
 static inline rtype_t rtype_map(type_t t) {
     rtype_t rtype = {
-            .heap_size = sizeof(n_map_t),
+            .gc_heap_size = sizeof(n_map_t),
             .hash = type_hash(t),
             .last_ptr = POINTER_SIZE * 3, // hash_table + key_data + value_data
             .kind = TYPE_MAP,
@@ -333,7 +335,7 @@ static inline rtype_t rtype_map(type_t t) {
     };
 
     // 计算 gc_bits
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.heap_size, POINTER_SIZE));
+    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.gc_heap_size, POINTER_SIZE));
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0); // hash_table
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 1); // key_data
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 2); // value_data
@@ -350,7 +352,7 @@ static inline rtype_t rtype_map(type_t t) {
  */
 static inline rtype_t rtype_set(type_t t) {
     rtype_t rtype = {
-            .heap_size = sizeof(n_set_t),
+            .gc_heap_size = sizeof(n_set_t),
             .hash = type_hash(t),
             .last_ptr = POINTER_SIZE * 2, // hash_table + key_data
             .kind = TYPE_SET,
@@ -359,7 +361,7 @@ static inline rtype_t rtype_set(type_t t) {
             .malloc_gc_bits_offset = -1,
     };
     // 计算 gc_bits
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.heap_size, POINTER_SIZE));
+    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.gc_heap_size, POINTER_SIZE));
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0); // hash_table
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 1); // key_data
 
@@ -370,7 +372,7 @@ static inline rtype_t rtype_set(type_t t) {
 
 static inline rtype_t rtype_interface(type_t t) {
     rtype_t rtype = {
-            .heap_size = POINTER_SIZE * 4, // element_rtype + value(并不知道 value 的类型)
+            .gc_heap_size = POINTER_SIZE * 4, // element_rtype + value(并不知道 value 的类型)
             .hash = type_hash(t),
             .kind = TYPE_INTERFACE,
             .last_ptr = POINTER_SIZE * 2,
@@ -386,7 +388,7 @@ static inline rtype_t rtype_interface(type_t t) {
 
 static inline rtype_t rtype_tagged_union(type_t t) {
     rtype_t rtype = {
-            .heap_size = POINTER_SIZE * 2, // tag + value
+            .gc_heap_size = POINTER_SIZE * 2, // tag + value
             .hash = type_hash(t),
             .kind = TYPE_TAGGED_UNION,
             .last_ptr = POINTER_SIZE,
@@ -417,7 +419,7 @@ static inline rtype_t rtype_tagged_union(type_t t) {
  */
 static inline rtype_t rtype_union(type_t t) {
     rtype_t rtype = {
-            .heap_size = POINTER_SIZE * 2, // element_rtype + value(并不知道 value 的类型)
+            .gc_heap_size = POINTER_SIZE * 2, // element_rtype + value(并不知道 value 的类型)
             .hash = type_hash(t),
             .kind = TYPE_UNION,
             .last_ptr = POINTER_SIZE,
@@ -448,7 +450,7 @@ static inline rtype_t rtype_union(type_t t) {
  */
 static inline rtype_t rtype_fn(type_t t) {
     rtype_t rtype = {
-            .heap_size = POINTER_SIZE * 2,
+            .gc_heap_size = POINTER_SIZE * 2,
             .last_ptr = POINTER_SIZE,
             .hash = type_hash(t),
             .kind = TYPE_FN,
@@ -456,7 +458,7 @@ static inline rtype_t rtype_fn(type_t t) {
             .hashes_offset = -1,
     };
 
-    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.heap_size, POINTER_SIZE));
+    rtype.malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(rtype.gc_heap_size, POINTER_SIZE));
     bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
 
     return rtype;
@@ -478,6 +480,9 @@ static inline int64_t rtype_array_gc_bits(int64_t gc_bits_offset, int64_t *offse
             last_ptr_temp_offset = rtype_union_gc_bits(gc_bits_offset, offset);
         } else if (t->element_type.kind == TYPE_TAGGED_UNION) {
             last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset);
+        } else if (t->element_type.kind == TYPE_STRING || t->element_type.kind == TYPE_VEC || t->element_type.kind == TYPE_MAP ||
+                   t->element_type.kind == TYPE_SET) {
+            last_ptr_temp_offset = rtype_builtin_gc_bits(gc_bits_offset, offset, t->element_type);
         } else {
             int64_t bit_index = *offset / POINTER_SIZE;
             if (type_is_pointer_heap(t->element_type)) {
@@ -580,6 +585,32 @@ static inline int64_t rtype_tagged_union_gc_bits(int64_t gc_bits_offset, int64_t
     return last_ptr_offset;
 }
 
+static inline int64_t rtype_builtin_gc_bits(int64_t gc_bits_offset, int64_t *offset, type_t t) {
+    int64_t ptr_slots = 0;
+    if (t.kind == TYPE_STRING || t.kind == TYPE_VEC) {
+        ptr_slots = 1;
+    } else if (t.kind == TYPE_MAP) {
+        ptr_slots = 3;
+    } else if (t.kind == TYPE_SET) {
+        ptr_slots = 2;
+    } else {
+        return 0;
+    }
+
+    int64_t bit_index = *offset / POINTER_SIZE;
+    for (int i = 0; i < ptr_slots; ++i) {
+        bitmap_set(CTDATA(gc_bits_offset), bit_index + i);
+    }
+
+    int64_t last_ptr_offset = 0;
+    if (ptr_slots > 0) {
+        last_ptr_offset = *offset + ptr_slots * POINTER_SIZE;
+    }
+
+    *offset += t.storage_size;
+    return last_ptr_offset;
+}
+
 
 
 static inline int64_t rtype_struct_gc_bits(int64_t gc_bits_offset, int64_t *offset, type_struct_t *t) {
@@ -602,6 +633,8 @@ static inline int64_t rtype_struct_gc_bits(int64_t gc_bits_offset, int64_t *offs
             last_ptr_temp_offset = rtype_union_gc_bits(gc_bits_offset, offset);
         } else if (p->type.kind == TYPE_TAGGED_UNION) {
             last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset);
+        } else if (p->type.kind == TYPE_STRING || p->type.kind == TYPE_VEC || p->type.kind == TYPE_MAP || p->type.kind == TYPE_SET) {
+            last_ptr_temp_offset = rtype_builtin_gc_bits(gc_bits_offset, offset, p->type);
         } else {
             int64_t size = p->type.storage_size; // 等待存储的 struct size
             // 这里就是存储位置
@@ -650,6 +683,8 @@ static inline int64_t rtype_tuple_gc_bits(int64_t gc_bits_offset, int64_t *offse
             last_ptr_temp_offset = rtype_union_gc_bits(gc_bits_offset, offset);
         } else if (element->kind == TYPE_TAGGED_UNION) {
             last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset);
+        } else if (element->kind == TYPE_STRING || element->kind == TYPE_VEC || element->kind == TYPE_MAP || element->kind == TYPE_SET) {
+            last_ptr_temp_offset = rtype_builtin_gc_bits(gc_bits_offset, offset, *element);
         } else {
             int64_t size = element->storage_size;
             int64_t bit_index = *offset / POINTER_SIZE;
@@ -680,7 +715,7 @@ static inline rtype_t rtype_struct(type_t t) {
     int64_t size = t.storage_size;
     if (size == 0) {
         rtype_t rtype = {
-                .heap_size = 1, // 空 struct 默认占用 1 一个字节, 让 gc malloc 可以编译通过
+                .gc_heap_size = 1, // 空 struct 默认占用 1 一个字节, 让 gc malloc 可以编译通过
                 .hash = type_hash(t),
                 .kind = TYPE_STRUCT,
                 .malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(1, POINTER_SIZE)),
@@ -721,7 +756,7 @@ static inline rtype_t rtype_struct(type_t t) {
     uint16_t last_ptr_offset = rtype_struct_gc_bits(gc_bits_offset, &offset, t.struct_);
 
     rtype_t rtype = {
-            .heap_size = size,
+            .gc_heap_size = size,
             .hash = type_hash(t),
             .kind = TYPE_STRUCT,
             .malloc_gc_bits_offset = gc_bits_offset,
@@ -760,7 +795,7 @@ static inline rtype_t rtype_tuple(type_t t) {
     int64_t size = align_up(offset, max_align);
 
     rtype_t rtype = {
-            .heap_size = size,
+            .gc_heap_size = size,
             .hash = type_hash(t),
             .kind = TYPE_TUPLE,
             .malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(size, POINTER_SIZE)),
@@ -852,7 +887,7 @@ static inline void ct_register_rtype(type_t t) {
     //    log_debug("module %s, add rtype %ld -> %s, exists %d", m->ident, hash, type_format(t), exists);
     if (!exists) {
         rtype_t rtype = reflect_type(t);
-        assert(rtype.heap_size >= 0);
+        assert(rtype.gc_heap_size >= 0);
         assert(rtype.hash == hash);
         rtype_t *mem_rtype = rtype_push(rtype);
         table_set(ct_rtype_table, itoa(rtype.hash), mem_rtype);

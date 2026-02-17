@@ -4,9 +4,9 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    assert_string_equal(raw,
-                        "null\n6\n6\n6\n7\nnull\n6\n8\n"
-                        "truefalsefalse\n1\n00\nfalsetrue\ntrue\n");
+    char* str = "null\n6\n6\n6\n7\nnull\n6\n8\n"
+                        "truefalsefalse\n1\n00\nfalsetrue\ntrue\n";
+    assert_string_equal(raw, str);
 }
 
 int main(void) {

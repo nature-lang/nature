@@ -28,7 +28,7 @@ typedef struct {
     n_udp_addr_t remote_addr;
 } n_udp_conn_t;
 
-int64_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t *buf, n_udp_addr_t *addr) {
+int64_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t *addr) {
     DEBUGF("[rt_uv_udp_recvfrom] start")
     coroutine_t *co = coroutine_get();
 
@@ -37,7 +37,7 @@ int64_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t *buf, n_udp_addr_t *addr) 
 
     while (true) {
         // 直接调用 recvfrom（非阻塞）
-        ssize_t nread = recvfrom(s->fd, buf->data, buf->length, 0,
+        ssize_t nread = recvfrom(s->fd, buf.data, buf.length, 0,
                                  (struct sockaddr *) &src_addr, &addr_len);
 
         if (nread >= 0) {
@@ -89,7 +89,7 @@ int64_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t *buf, n_udp_addr_t *addr) 
 }
 
 
-int64_t rt_uv_udp_sendto(n_udp_socket_t *s, n_vec_t *buf, n_udp_addr_t udp_addr) {
+int64_t rt_uv_udp_sendto(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t udp_addr) {
     coroutine_t *co = coroutine_get();
     DEBUGF("[rt_uv_udp_sendto] start")
     if (s->closed) {
@@ -108,7 +108,7 @@ int64_t rt_uv_udp_sendto(n_udp_socket_t *s, n_vec_t *buf, n_udp_addr_t udp_addr)
     };
 
     while (true) {
-        uv_buf_t write_buf = uv_buf_init((void *) buf->data, buf->length);
+        uv_buf_t write_buf = uv_buf_init((void *) buf.data, buf.length);
         int length = uv_udp_try_send(s->handle, &write_buf, 1, (const struct sockaddr *) &addr);
         if (length < 0) {
             DEBUGF("uv udp try send failed: %s", uv_strerror(length));

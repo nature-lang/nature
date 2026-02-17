@@ -59,6 +59,7 @@ void riscv64_reg_init() {
     r_fp = r_x8; // s0/fp: Saved register/frame pointer (Callee)
 
     r_x9 = reg_new("s1", 9, LIR_FLAG_ALLOC_INT, QWORD, 4); // s1: Saved register (Callee)
+    r_x9->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
 
     r_x10 = reg_new("a0", 10, LIR_FLAG_ALLOC_INT, QWORD, 5); // a0: Function argument/return value (Caller)
     r_x11 = reg_new("a1", 11, LIR_FLAG_ALLOC_INT, QWORD, 6); // a1: Function argument/return value (Caller)
@@ -70,15 +71,25 @@ void riscv64_reg_init() {
     r_x17 = reg_new("a7", 17, LIR_FLAG_ALLOC_INT, QWORD, 12); // a7: Function argument (Caller)
 
     r_x18 = reg_new("s2", 18, LIR_FLAG_ALLOC_INT, QWORD, 13); // s2: Saved register (Callee)
+    r_x18->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_x19 = reg_new("s3", 19, LIR_FLAG_ALLOC_INT, QWORD, 14); // s3: Saved register (Callee)
+    r_x19->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_x20 = reg_new("s4", 20, LIR_FLAG_ALLOC_INT, QWORD, 15); // s4: Saved register (Callee)
+    r_x20->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_x21 = reg_new("s5", 21, LIR_FLAG_ALLOC_INT, QWORD, 16); // s5: Saved register (Callee)
+    r_x21->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_x22 = reg_new("s6", 22, LIR_FLAG_ALLOC_INT, QWORD, 17); // s6: Saved register (Callee)
+    r_x22->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_x23 = reg_new("s7", 23, LIR_FLAG_ALLOC_INT, QWORD, 18); // s7: Saved register (Callee)
+    r_x23->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_x24 = reg_new("s8", 24, LIR_FLAG_ALLOC_INT, QWORD, 19); // s8: Saved register (Callee)
+    r_x24->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_x25 = reg_new("s9", 25, LIR_FLAG_ALLOC_INT, QWORD, 20); // s9: Saved register (Callee)
+    r_x25->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_x26 = reg_new("s10", 26, LIR_FLAG_ALLOC_INT, QWORD, 21); // s10: Saved register (Callee)
+    r_x26->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_x27 = reg_new("s11", 27, LIR_FLAG_ALLOC_INT, QWORD, 22); // s11: Saved register (Callee)
+    r_x27->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
 
     r_x28 = reg_new("t3", 28, LIR_FLAG_ALLOC_INT, QWORD, 23); // t3: Temporary (Caller)
     r_x29 = reg_new("t4", 29, LIR_FLAG_ALLOC_INT, QWORD, 24); // t4: Temporary (Caller)
@@ -136,7 +147,9 @@ void riscv64_reg_init() {
     r_f7 = reg_new("f7", 7, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 8); // ft7: FP temporary (Caller)
 
     r_f8 = reg_new("f8", 8, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 9); // fs0: FP saved register (Callee)
+    r_f8->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_f9 = reg_new("f9", 9, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 10); // fs1: FP saved register (Callee)
+    r_f9->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
 
     r_f10 = reg_new("f10", 10, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 11); // fa0: FP argument/return value (Caller)
     r_f11 = reg_new("f11", 11, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 12); // fa1: FP argument/return value (Caller)
@@ -148,15 +161,25 @@ void riscv64_reg_init() {
     r_f17 = reg_new("f17", 17, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 18); // fa7: FP argument (Caller)
 
     r_f18 = reg_new("f18", 18, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 19); // fs2: FP saved register (Callee)
+    r_f18->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_f19 = reg_new("f19", 19, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 20); // fs3: FP saved register (Callee)
+    r_f19->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_f20 = reg_new("f20", 20, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 21); // fs4: FP saved register (Callee)
+    r_f20->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_f21 = reg_new("f21", 21, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 22); // fs5: FP saved register (Callee)
+    r_f21->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_f22 = reg_new("f22", 22, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 23); // fs6: FP saved register (Callee)
+    r_f22->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_f23 = reg_new("f23", 23, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 24); // fs7: FP saved register (Callee)
+    r_f23->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_f24 = reg_new("f24", 24, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 25); // fs8: FP saved register (Callee)
+    r_f24->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_f25 = reg_new("f25", 25, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 26); // fs9: FP saved register (Callee)
+    r_f25->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_f26 = reg_new("f26", 26, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 27); // fs10: FP saved register (Callee)
+    r_f26->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_f27 = reg_new("f27", 27, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 28); // fs11: FP saved register (Callee)
+    r_f27->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
 
     r_f28 = reg_new("f28", 28, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 29); // ft8: FP temporary (Caller)
     r_f29 = reg_new("f29", 29, LIR_FLAG_ALLOC_FLOAT, QWORD, f_offset + 30); // ft9: FP temporary (Caller)

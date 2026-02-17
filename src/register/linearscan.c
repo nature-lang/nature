@@ -42,6 +42,27 @@ static void linear_posthandle(closure_t *c, slice_t *origin_blocks) {
         //            lir_op_t *op = current->value;
         //        }
     }
+
+    // 收集函数中使用的 callee-saved 寄存器
+    bool seen[UINT8_MAX];
+    memset(seen, 0, sizeof(seen));
+    for (int i = 0; i < c->blocks->count; ++i) {
+        basic_block_t *block = c->blocks->take[i];
+        linked_node *current = linked_first(block->operations);
+        while (current->value != NULL) {
+            lir_op_t *op = current->value;
+            // 提取所有 REG 操作数（包含 use 和 def）
+            slice_t *regs = extract_op_operands(op, FLAG(LIR_OPERAND_REG), FLAG(LIR_FLAG_DEF), true);
+            for (int j = 0; j < regs->count; ++j) {
+                reg_t *reg = regs->take[j];
+                if ((reg->flag & FLAG(LIR_FLAG_CALLEE_SAVED)) && reg->alloc_id > 0 && !seen[reg->alloc_id]) {
+                    seen[reg->alloc_id] = true;
+                    slice_push(c->callee_saved, reg);
+                }
+            }
+            current = current->succ;
+        }
+    }
 }
 
 /**

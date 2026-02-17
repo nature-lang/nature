@@ -2,9 +2,9 @@
 #define RUNTIME_SIGNAL_H
 
 #include "runtime/processor.h"
-#include "utils/type.h"
-#include "runtime/rt_mutex.h"
 #include "runtime/rt_chan.h"
+#include "runtime/rt_mutex.h"
+#include "utils/type.h"
 #include <signal.h>
 #include <stdatomic.h>
 #include <uv.h>
@@ -26,7 +26,7 @@ static const int64_t all_signals[] = {
         SIGTERM, // 默认行为是终止进程
 };
 
-void signal_notify(n_chan_t *ch, n_vec_t *signals);
+void signal_notify(n_chan_t *ch, n_vec_t signals);
 
 static inline bool signal_intercepted(int sig) {
     return (signal_mask & (1 << sig)) != 0;
@@ -83,13 +83,13 @@ static inline void signal_process(int64_t sig) {
     int64_t key;
     int64_t mask;
     sc_map_foreach(&signal_handlers, key, mask) {
-            n_chan_t *ch = (n_chan_t *) key;
-            if (mask & (1 << sig)) {
-                bool result = rt_chan_send(ch, &sig, true);
-                DEBUGF("[runtime.signal_process] signal %ld mask, will send to channel %p, send result = %d", sig, ch,
-                        result);
-            }
+        n_chan_t *ch = (n_chan_t *) key;
+        if (mask & (1 << sig)) {
+            bool result = rt_chan_send(ch, &sig, true);
+            DEBUGF("[runtime.signal_process] signal %ld mask, will send to channel %p, send result = %d", sig, ch,
+                   result);
         }
+    }
 }
 
 // yield wait signal 到来，然后等待 signal_handle 唤醒即可
@@ -115,9 +115,9 @@ static inline void signal_loop() {
         }
         pthread_mutex_unlock(&signal_locker);
 
-        // 等待信号事件就绪
-        YIELD:
-//        co_yield_waiting(co, NULL, NULL);
+    // 等待信号事件就绪
+    YIELD:
+        //        co_yield_waiting(co, NULL, NULL);
         rt_coroutine_sleep(50);
     }
 }
