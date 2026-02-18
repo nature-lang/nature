@@ -9,6 +9,8 @@ n_map_t rt_map_new(uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhash
 
 n_map_t *rt_map_alloc(uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhash);
 
+void rt_map_new_out(n_map_t *out, uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhash);
+
 uint64_t rt_map_length(n_map_t *l);
 
 void map_grow(n_map_t *m);

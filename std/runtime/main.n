@@ -7,6 +7,9 @@ fn vec_cap<T>(int hash, int element_hash, int cap):vec<T>!
 #linkid rt_vec_alloc
 fn vec_alloc(int hash, int element_hash, int cap):anyptr!
 
+#linkid rt_vec_new_out
+fn vec_new_out(anyptr out, int hash, int element_hash, int cap)
+
 #linkid rt_vec_push
 fn vec_push(anyptr list, int element_hash, anyptr val)
 
@@ -34,11 +37,17 @@ fn set_contains(anyptr s, anyptr key):bool
 #linkid rt_set_delete
 fn set_delete(anyptr s, anyptr key)
 
+#linkid rt_set_new_out
+fn set_new_out(anyptr out, int hash, int key_hash)
+
 #linkid rt_map_new
 fn map_new<K,V>(int hash, int key_hash, int value_hash):map<K,V>
 
 #linkid rt_map_alloc
 fn map_alloc(int hash, int key_hash, int value_hash):anyptr
+
+#linkid rt_map_new_out
+fn map_new_out(anyptr out, int hash, int key_hash, int value_hash)
 
 #linkid rt_map_delete
 fn map_delete(anyptr m, anyptr key)

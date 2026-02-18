@@ -91,16 +91,24 @@
  */
 #define RT_CALL_UNION_CASTING "union_casting"
 
+#define RT_CALL_ANY_CASTING "any_casting"
+
+#define RT_CALL_UNION_TO_ANY "union_to_any"
+
 #define RT_CALL_INTERFACE_CASTING "interface_casting"
 
 #define RT_CALL_INTERFACE_IS "interface_is"
 
 #define RT_CALL_UNION_IS "union_is"
 
+#define RT_CALL_ANY_IS "any_is"
+
 /**
  * 将 union 断言为 single 类型
  */
 #define RT_CALL_UNION_ASSERT "union_assert"
+
+#define RT_CALL_ANY_ASSERT "any_assert"
 
 #define RT_CALL_INTERFACE_ASSERT "interface_assert"
 
@@ -265,7 +273,8 @@ static inline bool is_rtcall(string target) {
            str_equal(target, RT_CALL_GC_MALLOC) ||
            str_equal(target, RT_CALL_RUNTIME_EVAL_GC) || str_equal(target, RT_CALL_COROUTINE_ASYNC2) || str_equal(target, RT_CALL_CO_THROW_ERROR) ||
            str_equal(target, RT_CALL_CO_REMOVE_ERROR) || str_equal(target, RT_CALL_CO_HAS_ERROR) ||
-           str_equal(target, RT_CALL_CO_HAS_PANIC) || str_equal(target, RT_CALL_PROCESSOR_SET_EXIT);
+           str_equal(target, RT_CALL_CO_HAS_PANIC) || str_equal(target, RT_CALL_PROCESSOR_SET_EXIT) ||
+           str_equal(target, RT_CALL_UNION_TO_ANY);
 }
 
 static inline lir_operand_t *int64_operand(uint64_t val) {

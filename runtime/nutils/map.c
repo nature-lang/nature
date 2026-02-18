@@ -117,6 +117,12 @@ n_map_t *rt_map_alloc(uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rh
     return map_heap;
 }
 
+void rt_map_new_out(n_map_t *out, uint64_t rtype_hash, uint64_t key_rhash, uint64_t value_rhash) {
+    n_map_t map_data = rt_map_new(rtype_hash, key_rhash, value_rhash);
+    *out = map_data;
+    DEBUGF("[rt_map_new_out] success, out=%p, len=%lu, cap=%lu", out, out->length, out->capacity);
+}
+
 /**
  * m["key"] = v
  * @param m

@@ -55,7 +55,7 @@ static void arm64_mov_imm(lir_op_t *op, slice_t *operations, arm64_asm_operand_t
  */
 static arm64_asm_operand_t *arm64_imm_operand(lir_op_t *op, slice_t *operations, int64_t offset) {
     arm64_asm_operand_t *offset_operand = ARM64_IMM(offset);
-    if (offset < -(1 << 12) || offset >= (1 << 12)) {
+    if (offset < -((1 << 12) - 1) || offset > ((1 << 12) - 1)) {
         arm64_asm_operand_t *free_reg = ARM64_REG(x16);
         arm64_mov_imm(op, operations, free_reg, offset);
         offset_operand = free_reg;

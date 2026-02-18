@@ -152,7 +152,7 @@ static uint32_t asm_2ri(arm64_asm_inst_t *inst) {
     uint32_t sz = opr1->reg.size == QWORD ? 1 : 0;
     int64_t imm = 0;
     if (opr3->type == ARM64_ASM_OPERAND_IMMEDIATE) {
-        if (opr3->immediate < -(1 << 12) || opr3->immediate >= (1 << 12)) {
+        if (opr3->immediate < -((1 << 12) - 1) || opr3->immediate > ((1 << 12) - 1)) {
             return 0;
         }
         imm = opr3->immediate;
@@ -214,7 +214,7 @@ static uint32_t asm_ri(arm64_asm_inst_t *inst) {
     uint32_t sz = opr1->reg.size == QWORD ? 1 : 0;
     uint32_t imm = 0;
     if (opr2->type == ARM64_ASM_OPERAND_IMMEDIATE) {
-        if (opr2->immediate < 0 || opr2->immediate >= (1 << 12))
+        if (opr2->immediate < 0 || opr2->immediate > ((1 << 12) - 1))
             return 0;
         imm = opr2->immediate;
     }

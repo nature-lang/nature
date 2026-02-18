@@ -1,3 +1,14 @@
+type color2 = enum:u16 {
+    RED = 12,
+    GREEN = 14,
+    BLUE,
+}
+
+fn dump(u16 a) {
+    println(a)
+}
+
 fn main() {
-    println('hello world')
+    var c = color2.BLUE
+    println(c)
 }

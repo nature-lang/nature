@@ -257,7 +257,7 @@ NO_OPTIMIZE static void coroutine_wrapper() {
 
     // coroutine 即将退出，避免被 gc 清理，所以将 error保存在 co->future 中?
     if (co->error && co->future) {
-        co->future->error = union_casting(throwable_rtype.hash, &co->error); // 将 co error 赋值给 co->future 避免被 gc
+        union_casting(&co->future->error, throwable_rtype.hash, &co->error); // 将 co error 赋值给 co->future 避免被 gc
     }
 
     // co->await_co 可能是随时写入的，所以需要 dead_locker 保证同步

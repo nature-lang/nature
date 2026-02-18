@@ -54,6 +54,7 @@ typedef union {
     double f64_value;
     float f32_value;
     void *ptr_value;
+    uint8_t struct_;
 } value_casting;
 
 typedef enum {
@@ -102,10 +103,11 @@ typedef enum {
     TYPE_PTR = 24, // ptr<T> // 允许为 null 的不安全指针，也可能是错乱的悬空指针，暂时无法保证其正确性
     TYPE_ANYPTR = 25, // anyptr 没有具体类型，相当于 uintptr
 
-    TYPE_UNION = 26,
-    TYPE_INTERFACE = 27,
-    TYPE_TAGGED_UNION = 28,
-    TYPE_ENUM = 29,
+    TYPE_ANY = 26, // any 类型, 与 union 分离
+    TYPE_UNION = 27,
+    TYPE_INTERFACE = 28,
+    TYPE_TAGGED_UNION = 29,
+    TYPE_ENUM = 30,
 
     TYPE_VOID, // 表示函数无返回值
     TYPE_UNKNOWN, // var a = 1, a 的类型就是 unknown
@@ -141,54 +143,55 @@ typedef enum {
 } type_ident_kind;
 
 static string type_kind_str[] = {
-    [TYPE_GC_ENV] = "env",
-    [TYPE_GC_ENV_VALUE] = "env_value",
-    [TYPE_GC_ENV_VALUES] = "env_values",
+        [TYPE_GC_ENV] = "env",
+        [TYPE_GC_ENV_VALUE] = "env_value",
+        [TYPE_GC_ENV_VALUES] = "env_values",
 
-    [TYPE_ARR] = "arr",
+        [TYPE_ARR] = "arr",
 
-    [TYPE_UNION] = "union",
-    [TYPE_TAGGED_UNION] = "tagged_union",
+        [TYPE_ANY] = "any",
+        [TYPE_UNION] = "union",
+        [TYPE_TAGGED_UNION] = "tagged_union",
 
-    [TYPE_STRING] = "string",
-    [TYPE_RAW_STRING] = "raw_string",
-    [TYPE_BOOL] = "bool",
-    // [TYPE_FLOAT] = "float",
-    [TYPE_FLOAT32] = "f32",
-    [TYPE_FLOAT64] = "f64",
-    // [TYPE_INT] = "int",
-    // [TYPE_UINT] = "uint",
-    [TYPE_INT8] = "i8",
-    [TYPE_INT16] = "i16",
-    [TYPE_INT32] = "i32",
-    [TYPE_INT64] = "i64",
-    [TYPE_UINT8] = "u8",
-    [TYPE_UINT16] = "u16",
-    [TYPE_UINT32] = "u32",
-    [TYPE_UINT64] = "u64",
-    [TYPE_VOID] = "void",
-    [TYPE_UNKNOWN] = "unknown",
-    [TYPE_STRUCT] = "struct", // ast_struct_decl
-    [TYPE_IDENT] = "ident",
-    [TYPE_COROUTINE_T] = "coroutine_t",
-    [TYPE_CHAN] = "chan",
-    [TYPE_VEC] = "vec",
-    [TYPE_MAP] = "map",
-    [TYPE_SET] = "set",
-    [TYPE_TUPLE] = "tup",
-    [TYPE_FN] = "fn",
+        [TYPE_STRING] = "string",
+        [TYPE_RAW_STRING] = "raw_string",
+        [TYPE_BOOL] = "bool",
+        // [TYPE_FLOAT] = "float",
+        [TYPE_FLOAT32] = "f32",
+        [TYPE_FLOAT64] = "f64",
+        // [TYPE_INT] = "int",
+        // [TYPE_UINT] = "uint",
+        [TYPE_INT8] = "i8",
+        [TYPE_INT16] = "i16",
+        [TYPE_INT32] = "i32",
+        [TYPE_INT64] = "i64",
+        [TYPE_UINT8] = "u8",
+        [TYPE_UINT16] = "u16",
+        [TYPE_UINT32] = "u32",
+        [TYPE_UINT64] = "u64",
+        [TYPE_VOID] = "void",
+        [TYPE_UNKNOWN] = "unknown",
+        [TYPE_STRUCT] = "struct", // ast_struct_decl
+        [TYPE_IDENT] = "ident",
+        [TYPE_COROUTINE_T] = "coroutine_t",
+        [TYPE_CHAN] = "chan",
+        [TYPE_VEC] = "vec",
+        [TYPE_MAP] = "map",
+        [TYPE_SET] = "set",
+        [TYPE_TUPLE] = "tup",
+        [TYPE_FN] = "fn",
 
-    // 底层类型
-    [TYPE_FN_T] = "fn_t",
-    [TYPE_INTEGER_T] = "integer_t",
-    [TYPE_FLOATER_T] = "floater_t",
-    [TYPE_ALL_T] = "all_t",
+        // 底层类型
+        [TYPE_FN_T] = "fn_t",
+        [TYPE_INTEGER_T] = "integer_t",
+        [TYPE_FLOATER_T] = "floater_t",
+        [TYPE_ALL_T] = "all_t",
 
-    [TYPE_REF] = "ref", // ref<type>
-    [TYPE_PTR] = "ptr", // ptr<type>
-    [TYPE_ANYPTR] = "anyptr", // anyptr
-    [TYPE_NULL] = "null",
-    [TYPE_ENUM] = "enum",
+        [TYPE_REF] = "ref", // ref<type>
+        [TYPE_PTR] = "ptr", // ptr<type>
+        [TYPE_ANYPTR] = "anyptr", // anyptr
+        [TYPE_NULL] = "null",
+        [TYPE_ENUM] = "enum",
 };
 
 typedef struct {
@@ -238,7 +241,6 @@ typedef struct type_alias_t type_alias_t;
 typedef struct type_param_t type_param_t;
 
 typedef struct {
-    bool any;
     bool nullable; // 通过 ? 声明的类型
     list_t *elements; // type_t
 } type_union_t;
@@ -561,11 +563,21 @@ typedef struct {
 
 /**
  * 不能随便调换顺序，这是 gc rtype 的顺序
+ * layout: rtype -> value
  */
 typedef struct {
-    value_casting value;
     rtype_t *rtype;
+    value_casting value;
 } n_union_t;
+
+/**
+ * 不能随便调换顺序，这是 gc rtype 的顺序
+ * layout: rtype -> value
+ */
+typedef struct {
+    rtype_t *rtype;
+    value_casting value;
+} n_any_t;
 
 typedef struct {
     value_casting value; // need gc
@@ -671,8 +683,7 @@ int64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
  */
 static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
-    return kind == TYPE_GC_ENV || kind == TYPE_FN || kind == TYPE_COROUTINE_T || kind == TYPE_CHAN || kind ==
-           TYPE_INTERFACE;
+    return kind == TYPE_GC_ENV || kind == TYPE_FN || kind == TYPE_COROUTINE_T || kind == TYPE_CHAN || kind == TYPE_INTERFACE;
 }
 
 static inline bool is_vec_u8(type_t t) {
@@ -706,8 +717,7 @@ static inline bool type_is_ident(type_t *t) {
         return false;
     }
 
-    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_INTERFACE || t->ident_kind ==
-           TYPE_IDENT_TAGGER_UNION || t->ident_kind == TYPE_IDENT_UNKNOWN;
+    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_INTERFACE || t->ident_kind == TYPE_IDENT_TAGGER_UNION || t->ident_kind == TYPE_IDENT_UNKNOWN;
 }
 
 static inline type_t type_ident_new(char *ident, type_ident_kind kind) {
@@ -761,14 +771,6 @@ static inline bool is_integer(type_kind kind) {
     return is_signed(kind) || is_unsigned(kind);
 }
 
-static inline bool is_any(type_t t) {
-    if (t.kind != TYPE_UNION) {
-        return false;
-    }
-
-    return t.union_->any;
-}
-
 static inline bool is_integer_or_anyptr(type_kind kind) {
     return is_integer(kind) || kind == TYPE_ANYPTR;
 }
@@ -778,8 +780,7 @@ static inline bool is_number(type_kind kind) {
 }
 
 static inline storage_kind_t type_storage_kind(type_t t) {
-    if (is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_ANYPTR || t.kind == TYPE_ENUM || t.kind ==
-        TYPE_VOID) {
+    if (is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_ANYPTR || t.kind == TYPE_ENUM || t.kind == TYPE_VOID) {
         return STORAGE_KIND_DIR;
     }
 
@@ -787,8 +788,7 @@ static inline storage_kind_t type_storage_kind(type_t t) {
         return STORAGE_KIND_IND;
     }
 
-    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION || t.kind == TYPE_TUPLE || t.kind ==
-        TYPE_TAGGED_UNION) {
+    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION || t.kind == TYPE_TUPLE || t.kind == TYPE_TAGGED_UNION || t.kind == TYPE_ANY) {
         return STORAGE_KIND_IND;
     }
 
@@ -812,6 +812,10 @@ static inline int64_t type_storage_size(type_t t) {
     }
     if (t.kind == TYPE_SET) {
         return sizeof(n_set_t);
+    }
+
+    if (t.kind == TYPE_ANY) {
+        return sizeof(n_any_t);
     }
 
     if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION || t.kind == TYPE_TUPLE ||
@@ -845,12 +849,35 @@ static inline list_t *type_abi_struct(type_t t) {
         return result;
     }
 
-    // n_union_t: { value_casting value; rtype_t *rtype; }
+    // n_union_t: { rtype_t *rtype; value_casting value; }
     if (t.kind == TYPE_UNION) {
-        type_t value_type = type_kind_new(TYPE_ANYPTR); // value_casting
         type_t rtype_ptr = type_kind_new(TYPE_ANYPTR); // rtype_t*
-        ct_list_push(result, &value_type);
+
+        // union 整体按值传递，选择最大的 element 作为 value_type
+        type_t select = type_kind_new(TYPE_ANYPTR); // 默认 value_casting
+        if (t.union_->elements) {
+            int64_t max_size = 0;
+            for (int i = 0; i < t.union_->elements->length; ++i) {
+                type_t *elem = (type_t *) ct_list_value(t.union_->elements, i);
+                int64_t elem_size = type_sizeof(*elem);
+                if (elem_size > max_size) {
+                    max_size = elem_size;
+                    select = *elem;
+                }
+            }
+        }
+
         ct_list_push(result, &rtype_ptr);
+        ct_list_push(result, &select);
+        return result;
+    }
+
+    // n_any_t: { rtype_t *rtype; value_casting value; }
+    if (t.kind == TYPE_ANY) {
+        type_t rtype_ptr = type_kind_new(TYPE_ANYPTR); // rtype_t*
+        type_t value_type = type_kind_new(TYPE_ANYPTR); // value_casting
+        ct_list_push(result, &rtype_ptr);
+        ct_list_push(result, &value_type);
         return result;
     }
 
@@ -957,8 +984,7 @@ static inline bool is_abi_struct_like(type_t t) {
 }
 
 static inline bool is_impl_builtin_type(type_kind kind) {
-    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind ==
-           TYPE_CHAN ||
+    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_CHAN ||
            kind == TYPE_STRING || kind == TYPE_COROUTINE_T;
 }
 
@@ -979,7 +1005,7 @@ static inline bool is_gc_alloc(type_kind kind) {
  */
 static inline bool is_origin_type(type_t t) {
     return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_ANYPTR || t.kind == TYPE_VOID ||
-           t.kind == TYPE_NULL || t.kind == TYPE_BOOL ||
+           t.kind == TYPE_NULL || t.kind == TYPE_BOOL || t.kind == TYPE_ANY ||
            t.kind == TYPE_STRING || t.kind == TYPE_FN_T || t.kind == TYPE_ALL_T;
 }
 

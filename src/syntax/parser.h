@@ -93,7 +93,7 @@ static type_kind token_to_kind[] = {
         [TOKEN_U64] = TYPE_UINT64,
         [TOKEN_STRING] = TYPE_STRING,
         [TOKEN_VAR] = TYPE_UNKNOWN,
-        [TOKEN_ANY] = TYPE_UNION,
+        [TOKEN_ANY] = TYPE_ANY,
 
         [TOKEN_CHAN] = TYPE_CHAN,
         [TOKEN_VEC] = TYPE_VEC,

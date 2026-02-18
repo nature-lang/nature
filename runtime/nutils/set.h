@@ -11,6 +11,8 @@
 
 n_set_t rt_set_new(uint64_t rtype_hash, uint64_t key_hash);
 
+void rt_set_new_out(n_set_t *out, uint64_t rtype_hash, uint64_t key_hash);
+
 bool rt_set_add(n_set_t *m, void *key_ref);
 
 bool rt_set_contains(n_set_t *m, void *key_ref);

@@ -127,8 +127,26 @@ int64_t type_sizeof(type_t t) {
         return type_sizeof(t.enum_->element_type);
     }
 
+    if (t.kind == TYPE_ANY) {
+        return sizeof(n_any_t);
+    }
+
     if (t.kind == TYPE_UNION) {
-        return sizeof(n_union_t);
+        int64_t max_size = 0;
+        if (t.union_ && t.union_->elements && t.union_->elements->length > 0) {
+            for (int i = 0; i < t.union_->elements->length; ++i) {
+                type_t *element = ct_list_value(t.union_->elements, i);
+                int64_t element_size = element->storage_size;
+                if (element_size > max_size) {
+                    max_size = element_size;
+                }
+            }
+        } else {
+            // any/empty union defaults to pointer-sized payload
+            max_size = POINTER_SIZE;
+        }
+
+        return POINTER_SIZE + align_up(max_size, POINTER_SIZE);
     }
 
     if (t.kind == TYPE_TAGGED_UNION) {
@@ -217,6 +235,10 @@ int64_t type_alignof(type_t t) {
     if (t.kind == TYPE_ENUM) {
         assert(t.enum_->element_type.storage_size > 0);
         return t.enum_->element_type.storage_size;
+    }
+
+    if (t.kind == TYPE_ANY) {
+        return POINTER_SIZE;
     }
 
     if (t.kind == TYPE_UNION) {
@@ -438,11 +460,10 @@ char *_type_format(type_t t) {
         return dsprintf("ptr<%s>", type_format(t.ptr->value_type));
     }
 
-    if (t.kind == TYPE_UNION) {
-        if (t.union_->any) {
-            return "any";
-        }
+    if (t.kind == TYPE_ANY) {
+        return "any";
     }
+
 
     if (t.kind == TYPE_INTERFACE) {
         return "interface";

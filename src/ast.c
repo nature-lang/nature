@@ -46,7 +46,6 @@ static type_interface_t *type_interface_copy(module_t *m, type_interface_t *temp
 static type_union_t *type_union_copy(module_t *m, type_union_t *temp) {
     type_union_t *union_ = COPY_NEW(type_union_t, temp);
     union_->elements = ct_list_type_copy(m, temp->elements);
-    union_->any = temp->any;
     return union_;
 }
 
