@@ -15,21 +15,29 @@ extern char **command_argv;
 
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref);
 
+void any_assert(n_any_t *mu, int64_t target_rtype_hash, void *value_ref);
+
 void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_ref);
 
 bool union_is(n_union_t *mu, int64_t target_rtype_hash);
+
+bool any_is(n_any_t *mu, int64_t target_rtype_hash);
 
 bool interface_is(n_interface_t *mu, int64_t target_rtype_hash);
 
 /**
  * input rtype index 是 value 具体的类型
+ * @param out
  * @param input_rtype_hash
  * @param value_ref
- * @return
  */
-n_union_t union_casting(int64_t input_rtype_hash, void *value_ref);
+void union_casting(n_union_t *out, int64_t input_rtype_hash, void *value_ref);
 
-n_tagged_union_t tagged_union_casting(int64_t id, int64_t value_rtype_hash, void *value_ref);
+void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref);
+
+void union_to_any(n_any_t *out, n_union_t *input);
+
+void tagged_union_casting(n_tagged_union_t *out, int64_t id, int64_t value_rtype_hash, void *value_ref);
 
 n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods);
 

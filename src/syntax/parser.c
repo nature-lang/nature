@@ -370,15 +370,7 @@ static type_t parser_single_type(module_t *m) {
 
     // any 特殊处理
     if (parser_consume(m, TOKEN_ANY)) {
-        type_t union_type = {
-                .status = REDUCTION_STATUS_DONE,
-                .kind = TYPE_UNION,
-        };
-        union_type.union_ = NEW(type_union_t);
-        union_type.union_->elements = ct_list_new(sizeof(type_t));
-        union_type.union_->any = true;
-
-        return union_type;
+        return type_kind_new(TYPE_ANY);
     }
 
     // int/float/bool/string/void/var

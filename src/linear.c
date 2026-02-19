@@ -309,14 +309,41 @@ static lir_operand_t *linear_default_nullable(module_t *m, type_t t, lir_operand
 
     // lea null operand var
     lir_operand_t *value_ref = lea_operand_pointer(m, null_operand);
-    lir_operand_t *call_result = temp_var_operand(m, t);
-    push_rt_call(m, RT_CALL_UNION_CASTING, call_result, 2, int_operand(rtype_hash), value_ref);
-
-    if (target) {
-        return linear_super_move(m, t, target, call_result);
+    if (!target) {
+        target = temp_var_operand_with_alloc(m, t);
     }
 
-    return call_result;
+    lir_operand_t *out_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    lir_operand_t *out_src = target;
+    if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        out_src = lea_operand_pointer(m, target);
+    }
+    OP_PUSH(lir_op_move(out_ptr, out_src));
+    push_rt_call(m, RT_CALL_UNION_CASTING, NULL, 3, out_ptr, int_operand(rtype_hash), value_ref);
+
+    return target;
+}
+
+static lir_operand_t *linear_default_any(module_t *m, type_t t, lir_operand_t *target) {
+    type_t null_type = type_kind_new(TYPE_NULL);
+    uint64_t rtype_hash = type_hash(null_type);
+    lir_operand_t *null_operand = temp_var_operand(m, null_type);
+    null_operand = linear_default_operand(m, null_type, null_operand);
+
+    lir_operand_t *value_ref = lea_operand_pointer(m, null_operand);
+    if (!target) {
+        target = temp_var_operand_with_alloc(m, t);
+    }
+
+    lir_operand_t *out_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    lir_operand_t *out_src = target;
+    if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        out_src = lea_operand_pointer(m, target);
+    }
+    OP_PUSH(lir_op_move(out_ptr, out_src));
+    push_rt_call(m, RT_CALL_ANY_CASTING, NULL, 3, out_ptr, int_operand(rtype_hash), value_ref);
+
+    return target;
 }
 
 static lir_operand_t *
@@ -567,7 +594,8 @@ static lir_operand_t *linear_default_tuple(module_t *m, type_t t, lir_operand_t 
 
 static inline bool has_default_operand(module_t *m, type_t t) {
     return is_clv_default_type(t) || t.kind == TYPE_STRING || t.kind == TYPE_VEC || t.kind == TYPE_ARR ||
-           t.kind == TYPE_MAP || t.kind == TYPE_SET || t.kind == TYPE_STRUCT || t.kind == TYPE_TUPLE;
+           t.kind == TYPE_MAP || t.kind == TYPE_SET || t.kind == TYPE_STRUCT || t.kind == TYPE_TUPLE ||
+           t.kind == TYPE_ANY;
 }
 
 /*
@@ -579,7 +607,11 @@ static lir_operand_t *linear_default_operand(module_t *m, type_t t, lir_operand_
         return target;
     }
 
-    if (t.kind == TYPE_UNION && (t.union_->nullable || t.union_->any)) {
+    if (t.kind == TYPE_ANY) {
+        return linear_default_any(m, t, target);
+    }
+
+    if (t.kind == TYPE_UNION && t.union_->nullable) {
         return linear_default_nullable(m, t, target);
     }
 
@@ -1771,10 +1803,10 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
             /**
              * typedef struct {
              *   value_casting value;
+             *   int64_t *methods;
              *   rtype_t *rtype;
              *   int64_t method_count;
-             *   int64_t *methods; // methods
-             * } n_union_t;
+             * } n_interface_t;
              */
             lir_operand_t *methods_target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             lir_operand_t *src = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), interface_target, POINTER_SIZE);
@@ -2771,15 +2803,20 @@ static lir_operand_t *linear_tagged_union_new(module_t *m, ast_expr_t expr, lir_
         payload_type_hash = type_hash(payload_type);
     }
 
-    lir_operand_t *call_result = temp_var_operand(m, expr.type);
-    push_rt_call(m, RT_CALL_TAGGED_UNION_CASTING, call_result, 3, int_operand(tag_hash), int_operand(payload_type_hash),
-                 payload_ptr);
-
-    if (target) {
-        return linear_super_move(m, expr.type, target, call_result);
+    if (!target) {
+        target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-    return call_result;
+    lir_operand_t *out_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    lir_operand_t *out_src = target;
+    if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        out_src = lea_operand_pointer(m, target);
+    }
+    OP_PUSH(lir_op_move(out_ptr, out_src));
+    push_rt_call(m, RT_CALL_TAGGED_UNION_CASTING, NULL, 4, out_ptr, int_operand(tag_hash),
+                 int_operand(payload_type_hash), payload_ptr);
+
+    return target;
 }
 
 static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
@@ -2908,7 +2945,8 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
     assert(is_expr->src->type.kind == TYPE_UNION ||
            is_expr->src->type.kind == TYPE_PTR ||
            is_expr->src->type.kind == TYPE_TAGGED_UNION ||
-           is_expr->src->type.kind == TYPE_INTERFACE);
+           is_expr->src->type.kind == TYPE_INTERFACE ||
+           is_expr->src->type.kind == TYPE_ANY);
 
     if (!target) {
         target = temp_var_operand_with_alloc(m, expr.type);
@@ -2931,7 +2969,7 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
         assert(is_expr->union_tag);
         ast_tagged_union_t *tagged_union = is_expr->union_tag->value;
         lir_operand_t *expected_hash = int_operand(hash_string(tagged_union->tagged_name));
-        lir_operand_t *actual_hash = indirect_addr_operand(m, type_kind_new(TYPE_INT64), src_operand, QWORD);
+        lir_operand_t *actual_hash = indirect_addr_operand(m, type_kind_new(TYPE_INT64), src_operand, 0);
         OP_PUSH(lir_op_new(LIR_OPCODE_SEE, expected_hash, actual_hash, target));
         return target;
     }
@@ -2939,6 +2977,10 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
     uint64_t target_rtype_hash = type_hash(is_expr->target_type);
     if (is_expr->src->type.kind == TYPE_INTERFACE) {
         push_rt_call(m, RT_CALL_INTERFACE_IS, target, 2, src_operand, int_operand(target_rtype_hash));
+    } else if (is_expr->src->type.kind == TYPE_ANY) {
+        lir_operand_t *any_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        OP_PUSH(lir_op_move(any_ptr, src_operand));
+        push_rt_call(m, RT_CALL_ANY_IS, target, 2, any_ptr, int_operand(target_rtype_hash));
     } else {
         lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
         OP_PUSH(lir_op_move(union_ptr, src_operand));
@@ -3010,9 +3052,55 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         return target;
     }
 
+    // single type to any type
+    if (as_expr->target_type.kind == TYPE_ANY) {
+        // union -> any: 直接调用 runtime 处理
+        if (as_expr->src.type.kind == TYPE_UNION) {
+            if (!target) {
+                target = temp_var_operand_with_alloc(m, expr.type);
+            }
+
+            lir_operand_t *out_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            lir_operand_t *out_src = target;
+            if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+                out_src = lea_operand_pointer(m, target);
+            }
+            OP_PUSH(lir_op_move(out_ptr, out_src));
+
+            lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            OP_PUSH(lir_op_move(union_ptr, src_operand));
+
+            push_rt_call(m, RT_CALL_UNION_TO_ANY, NULL, 2, out_ptr, union_ptr);
+
+            return target;
+        }
+
+        lir_operand_t *any_value;
+        if (as_expr->src.type.storage_kind == STORAGE_KIND_IND) {
+            any_value = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            OP_PUSH(lir_op_move(any_value, src_operand)); // mov pointer
+        } else {
+            any_value = lea_operand_pointer(m, src_operand);
+        }
+
+        if (!target) {
+            target = temp_var_operand_with_alloc(m, expr.type);
+        }
+
+        lir_operand_t *out_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        lir_operand_t *out_src = target;
+        if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+            out_src = lea_operand_pointer(m, target);
+        }
+        OP_PUSH(lir_op_move(out_ptr, out_src));
+        push_rt_call(m, RT_CALL_ANY_CASTING, NULL, 3, out_ptr, int_operand(src_rtype_hash), any_value);
+
+        return target;
+    }
+
     // single type to union type
     if (as_expr->target_type.kind == TYPE_UNION) {
-        assert(as_expr->src.type.kind != TYPE_UNION); // in infer casting
+        assert(as_expr->src.type.kind != TYPE_UNION && as_expr->src.type.kind != TYPE_ANY); // in infer casting
         lir_operand_t *union_value;
         if (as_expr->src.type.storage_kind == STORAGE_KIND_IND) {
             union_value = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
@@ -3021,14 +3109,46 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             union_value = lea_operand_pointer(m, src_operand);
         }
 
-        lir_operand_t *call_result = temp_var_operand(m, as_expr->target_type);
-        push_rt_call(m, RT_CALL_UNION_CASTING, call_result, 2, int_operand(src_rtype_hash), union_value);
-
-        if (target) {
-            return linear_super_move(m, as_expr->target_type, target, call_result);
+        if (!target) {
+            target = temp_var_operand_with_alloc(m, expr.type);
         }
 
-        return call_result;
+        lir_operand_t *out_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        lir_operand_t *out_src = target;
+        if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+            out_src = lea_operand_pointer(m, target);
+        }
+        OP_PUSH(lir_op_move(out_ptr, out_src));
+        push_rt_call(m, RT_CALL_UNION_CASTING, NULL, 3, out_ptr, int_operand(src_rtype_hash), union_value);
+
+        return target;
+    }
+
+    // any assert
+    if (as_expr->src.type.kind == TYPE_ANY) {
+        assert(as_expr->target_type.kind != TYPE_ANY);
+        if (as_expr->target_type.storage_kind != STORAGE_KIND_IND) {
+            // target 可能总是未 def 导致下面的取值异常, 所以最好使用临时值 assert，然后 mov 到 target
+            lir_operand_t *temp = temp_var_operand(m, as_expr->target_type);
+            OP_PUSH(lir_op_nop_def(temp));
+            lir_operand_t *output_ref = lea_operand_pointer(m, temp);
+            uint64_t target_rtype_hash = type_hash(as_expr->target_type);
+            lir_operand_t *any_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            OP_PUSH(lir_op_move(any_ptr, src_operand));
+            push_rt_call(m, RT_CALL_ANY_ASSERT, NULL, 3, any_ptr, int_operand(target_rtype_hash), output_ref);
+            linear_has_panic(m);
+            OP_PUSH(lir_op_move(target, temp));
+            return target;
+        } else {
+            // indirect, like struct/vec 等总是会进行分配 def, 所以不需要特殊 def
+            lir_operand_t *output_ref = lea_operand_pointer(m, target);
+            uint64_t target_rtype_hash = type_hash(as_expr->target_type);
+            lir_operand_t *any_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            OP_PUSH(lir_op_move(any_ptr, src_operand));
+            push_rt_call(m, RT_CALL_ANY_ASSERT, NULL, 3, any_ptr, int_operand(target_rtype_hash), output_ref);
+            linear_has_panic(m);
+            return target;
+        }
     }
 
     // union assert
@@ -3059,9 +3179,11 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     if (as_expr->src.type.kind == TYPE_TAGGED_UNION) {
-        lir_operand_t *src = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), src_operand, 0);
-        OP_PUSH(lir_op_move(target, src));
-        return target;
+        lir_operand_t *payload = indirect_addr_operand(m, as_expr->target_type, src_operand, POINTER_SIZE);
+        if (as_expr->target_type.storage_kind == STORAGE_KIND_IND) {
+            payload = lea_operand_pointer(m, payload);
+        }
+        return linear_super_move(m, as_expr->target_type, target, payload);
     }
 
     // interface as
@@ -3303,7 +3425,7 @@ static lir_operand_t *linear_match_expr(module_t *m, ast_expr_t expr, lir_operan
         }
 
         OP_PUSH(lir_op_bal(handle_end->output));
-        LINEAR_HANDLE_BODY:
+    LINEAR_HANDLE_BODY:
         OP_PUSH(handle_start);
 
         if (match_expr->subject && match_expr->subject->assert_type == AST_CALL && match_case->insert_auto_as) {

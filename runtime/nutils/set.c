@@ -118,6 +118,12 @@ n_set_t rt_set_new(uint64_t rtype_hash, uint64_t key_hash) {
     return set_data;
 }
 
+void rt_set_new_out(n_set_t *out, uint64_t rtype_hash, uint64_t key_hash) {
+    n_set_t set_data = rt_set_new(rtype_hash, key_hash);
+    *out = set_data;
+    DEBUGF("[rt_set_new_out] success, out=%p, len=%lu, cap=%lu", out, out->length, out->capacity);
+}
+
 /**
  * 如果值已经存在则返回 false
  * @param m

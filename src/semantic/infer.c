@@ -280,10 +280,6 @@ static type_t *select_generics_fn_param(ast_fndef_t *temp_fn, uint8_t index, boo
 static bool union_type_contains(type_union_t *union_type, type_t sub) {
     assert(sub.kind != TYPE_UNION);
 
-    if (union_type->any) {
-        return true;
-    }
-
     for (int i = 0; i < union_type->elements->length; ++i) {
         type_t *t = ct_list_value(union_type->elements, i);
         if (type_compare(*t, sub)) {
@@ -295,15 +291,6 @@ static bool union_type_contains(type_union_t *union_type, type_t sub) {
 }
 
 bool type_union_compare(type_union_t *dst, type_union_t *src, table_t *visited) {
-    // any 可以匹配任何类型，包括两个 any 之间相互赋值
-    if (dst->any) {
-        return true;
-    }
-
-    if (src->any && !dst->any) {
-        return false;
-    }
-
     // 创建一个标记数组，用于标记left中的类型是否已经匹配
     // 遍历right中的类型，确保每个类型都存在于left中
     for (int i = 0; i < src->elements->length; ++i) {
@@ -596,13 +583,14 @@ bool type_compare_visited(type_t dst, type_t src, table_t *visited) {
         return false;
     }
 
+    // any 可以批判任何类型，即使右值是 any 或者 union，union 需要经过特殊的 union_to_any 转换
+    if (dst.kind == TYPE_ANY) {
+        return true;
+    }
+
     if (dst.kind == TYPE_UNION) {
         type_union_t *left_union_decl = dst.union_;
         type_union_t *right_union_decl = src.union_;
-
-        if (left_union_decl->any) {
-            return true;
-        }
 
         return type_union_compare(left_union_decl, right_union_decl, visited);
     }
@@ -806,6 +794,7 @@ static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_
         if (return_target_type.kind != TYPE_UNKNOWN &&
             return_target_type.kind != TYPE_VOID &&
             return_target_type.kind != TYPE_UNION &&
+            return_target_type.kind != TYPE_ANY &&
             return_target_type.kind != TYPE_NULL) {
             type_t temp_type = type_copy(m, temp_fn->return_type);
             temp_type = reduction_type(m, temp_type);
@@ -842,6 +831,10 @@ static bool can_assign_to_interface(type_t t) {
         return false;
     }
 
+    if (t.kind == TYPE_ANY) {
+        return false;
+    }
+
     // void 在泛型约束中可以赋值给 any
     if (t.kind == TYPE_VOID || t.kind == TYPE_NULL) {
         return false;
@@ -851,11 +844,23 @@ static bool can_assign_to_interface(type_t t) {
 }
 
 static bool can_assign_to_union(type_t t) {
-    if (t.kind == TYPE_UNION) {
+    if (t.kind == TYPE_UNION || t.kind == TYPE_ANY) {
         return false;
     }
 
     // void 在泛型约束中可以赋值给 any
+    if (t.kind == TYPE_VOID) {
+        return false;
+    }
+
+    return true;
+}
+
+static bool can_assign_to_any(type_t t) {
+    if (t.kind == TYPE_ANY) {
+        return false;
+    }
+
     if (t.kind == TYPE_VOID) {
         return false;
     }
@@ -1049,7 +1054,7 @@ static bool type_confirmed(type_t t) {
  * @return
  */
 static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_type) {
-    assert(target_type.kind != TYPE_UNION);
+    assert(target_type.kind != TYPE_UNION && target_type.kind != TYPE_ANY);
 
     type_t left_target_type = type_kind_new(TYPE_UNKNOWN);
     if (ast_is_arithmetic_op(expr->op)) {
@@ -1061,7 +1066,7 @@ static type_t infer_binary(module_t *m, ast_binary_expr_t *expr, type_t target_t
     INFER_ASSERTF(left_type.kind != TYPE_UNKNOWN, "unknown binary expr left type");
 
     type_t right_target_type = type_kind_new(TYPE_UNKNOWN);
-    if (left_type.kind != TYPE_UNION) {
+    if (left_type.kind != TYPE_UNION && left_type.kind != TYPE_ANY) {
         right_target_type = left_type;
     }
     type_t right_type = infer_right_expr(m, &expr->right, right_target_type);
@@ -1158,6 +1163,12 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
 
     // 任意类型都可以 as anyptr
     if (!is_float(as_expr->src.type.kind) && target_type.kind == TYPE_ANYPTR) {
+        return target_type;
+    }
+
+    // any 可以 as 为任意类型(除了 union)
+    if (as_expr->src.type.kind == TYPE_ANY) {
+        INFER_ASSERTF(target_type.kind != TYPE_UNION, "cannot convert any type to union type");
         return target_type;
     }
 
@@ -1441,8 +1452,9 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
         for (int i = 0; i < match_case->cond_list->length; ++i) {
             ast_expr_t *cond_expr = ct_list_value(match_case->cond_list, i);
 
-            // union 只能使用 is 匹配类型, 而不能进行值匹配
-            if (subject_type.kind == TYPE_UNION || subject_type.kind == TYPE_TAGGED_UNION) {
+            // union/any 只能使用 is 匹配类型, 而不能进行值匹配
+            if (subject_type.kind == TYPE_UNION || subject_type.kind == TYPE_TAGGED_UNION || subject_type.kind ==
+                TYPE_ANY) {
                 INFER_ASSERTF(cond_expr->assert_type == AST_EXPR_IS,
                               "match 'union' only support 'is' assert");
             }
@@ -1450,7 +1462,7 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
             if (cond_expr->assert_type == AST_EXPR_IS) {
                 INFER_ASSERTF(
                     subject_type.kind == TYPE_UNION || subject_type.kind == TYPE_INTERFACE || subject_type.kind ==
-                    TYPE_TAGGED_UNION,
+                    TYPE_TAGGED_UNION || subject_type.kind == TYPE_ANY,
                     "%s cannot use 'is' operator",
                     type_format(subject_type));
 
@@ -1492,7 +1504,7 @@ static type_t infer_match(module_t *m, ast_match_t *match, type_t target_type) {
     // default check
     if (!has_default) {
         do {
-            if (subject_type.kind == TYPE_UNION && !subject_type.union_->any) {
+            if (subject_type.kind == TYPE_UNION) {
                 for (int i = 0; i < subject_type.union_->elements->length; i++) {
                     type_t *element_type = ct_list_value(subject_type.union_->elements, i);
                     if (!table_exist(exhaustive_table, itoa(type_hash(*element_type)))) {
@@ -1586,7 +1598,8 @@ static type_t infer_macro_default_expr(module_t *m, ast_macro_default_expr_t *ex
 static type_t infer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
     if (is_expr->src) {
         type_t t = infer_right_expr(m, is_expr->src, type_kind_new(TYPE_UNKNOWN));
-        INFER_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_TAGGED_UNION || t.kind == TYPE_INTERFACE,
+        INFER_ASSERTF(t.kind == TYPE_UNION || t.kind == TYPE_TAGGED_UNION || t.kind == TYPE_INTERFACE ||
+                      t.kind == TYPE_ANY,
                       "%s cannot use 'is' operator", type_format(t));
 
         if (is_expr->union_tag) {
@@ -1673,7 +1686,8 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_typ
         INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
                       "cannot unsafe load address of an literal or call expr");
 
-        INFER_ASSERTF(operand_type.kind != TYPE_UNION, "cannot unsafe load address of an union type");
+        INFER_ASSERTF(operand_type.kind != TYPE_UNION && operand_type.kind != TYPE_ANY,
+                      "cannot unsafe load address of an union type");
 
 
         return type_refof(operand_type);
@@ -1907,7 +1921,7 @@ static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type, t
         // 如果 target 强制约定了类型则直接使用 target 的类型, 否则就自己推断
         // 考虑到 list_new 可能为空的情况，所以这里默认赋值一次
         type_vec->element_type = target_type.vec->element_type;
-    } else if (is_any(literal_refer)) {
+    } else if (literal_refer.kind == TYPE_ANY) {
         type_vec->element_type = literal_refer;
     }
 
@@ -1938,7 +1952,7 @@ static type_t infer_vec_new(module_t *m, ast_expr_t *expr, type_t target_type, t
 }
 
 static type_t infer_empty_curly_new(module_t *m, ast_expr_t *expr, type_t target_type, type_t literal_refer) {
-    if (is_any(literal_refer)) {
+    if (literal_refer.kind == TYPE_ANY) {
         expr->assert_type = AST_EXPR_MAP_NEW; // string:any
         type_map_t *type_map = NEW(type_map_t);
         type_map->key_type = type_kind_new(TYPE_STRING);
@@ -1974,7 +1988,7 @@ static type_t infer_map_new(module_t *m, ast_map_new_t *map_new, type_t target_t
         // 考虑到 map 可能为空的情况，所以这里默认赋值一次, 如果为空就直接使用 target 的类型
         type_map->key_type = target_type.map->key_type;
         type_map->value_type = target_type.map->value_type;
-    } else if (is_any(literal_refer)) {
+    } else if (literal_refer.kind == TYPE_ANY) {
         type_map->key_type = type_kind_new(TYPE_STRING); // default to string?
         type_map->value_type = literal_refer;
     }
@@ -3768,8 +3782,11 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
 
     // 避免重复 reduction
     if (expr->type.kind == 0) {
-        type_t type = infer_expr(m, expr, target_type.kind != TYPE_UNION ? target_type : type_kind_new(TYPE_UNKNOWN),
-                                 is_any(target_type) ? target_type : type_kind_new(TYPE_UNKNOWN));
+        type_t type = infer_expr(m, expr,
+                                 (target_type.kind != TYPE_UNION && target_type.kind != TYPE_ANY)
+                                     ? target_type
+                                     : type_kind_new(TYPE_UNKNOWN),
+                                 target_type.kind == TYPE_ANY ? target_type : type_kind_new(TYPE_UNKNOWN));
 
         target_type = reduction_type(m, target_type);
         expr->type = reduction_type(m, type);
@@ -3796,6 +3813,10 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
 
         // first casting to interface
         *expr = as_to_interface(m, expr, *interface_type);
+    }
+
+    if (target_type.kind == TYPE_ANY && can_assign_to_any(expr->type)) {
+        *expr = ast_type_as(*expr, target_type);
     }
 
     if (target_type.kind == TYPE_UNION && can_assign_to_union(expr->type)) {

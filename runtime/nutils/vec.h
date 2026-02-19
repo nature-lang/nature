@@ -27,6 +27,8 @@ n_vec_t rt_vec_cap(int64_t hash, int64_t element_hash, int64_t capacity);
 
 n_vec_t *rt_vec_alloc(int64_t hash, int64_t element_hash, int64_t capacity);
 
+void rt_vec_new_out(n_vec_t *out, int64_t hash, int64_t element_hash, int64_t capacity);
+
 n_anyptr_t rt_vec_element_addr(n_vec_t *l, uint64_t index);
 
 /**

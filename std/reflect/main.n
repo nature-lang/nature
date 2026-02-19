@@ -33,10 +33,11 @@ const REF = 23
 const PTR = 24
 const ANYPTR = 25
 
-const UNION = 26
-const INTERFACE = 27
-const TAGGED_UNION = 28
-const ENUM = 29
+const ANY = 26
+const UNION = 27
+const INTERFACE = 28
+const TAGGED_UNION = 29
+const ENUM = 30
 
 const PTR_SIZE = 8
 
@@ -171,6 +172,7 @@ fn type_t.to_string(&self):string {
         REF -> 'ref'
         PTR -> 'ptr'
         ANYPTR -> 'anyptr'
+        ANY -> 'any'
         UNION -> 'union'
         _ -> 'unknown'
     }
@@ -210,8 +212,13 @@ type set_t = struct{
 }
 
 type union_t = struct{
-    anyptr value
     ptr<rtype_t> rtype
+    anyptr value
+}
+
+type any_t = struct{
+    ptr<rtype_t> rtype
+    anyptr value
 }
 
 type value_t = struct{

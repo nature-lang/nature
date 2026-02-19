@@ -79,7 +79,7 @@ fn sprintf(string format, ...[any] args):string {
 
         any arg = args[arg_index]
 
-        ptr<reflect.union_t> arg_v = &arg as anyptr as ptr<reflect.union_t>
+        ptr<reflect.any_t> arg_v = &arg as anyptr as ptr<reflect.any_t>
         var arg_kind = arg_v.rtype.kind
 
         arg_index += 1

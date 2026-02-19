@@ -164,6 +164,13 @@ n_vec_t *rt_vec_alloc(int64_t hash, int64_t element_hash, int64_t capacity) {
     return vec_heap;
 }
 
+void rt_vec_new_out(n_vec_t *out, int64_t hash, int64_t element_hash, int64_t capacity) {
+    n_vec_t vec = rt_vec_cap(hash, element_hash, capacity);
+    *out = vec;
+    DEBUGF("[rt_vec_new_out] success, out=%p, data=%p, element_size=%lu, cap=%d", out, out->data,
+           out->element_size, capacity);
+}
+
 /**
  * @param l
  * @param index

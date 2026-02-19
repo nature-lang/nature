@@ -11,7 +11,7 @@ static char *space = " ";
 
 // type_any_t 是 nature 中的类型，在 c 中是认不出来的
 // 这里按理来说应该填写 void*, 写 type_any_t 就是为了语义明确
-static void print_arg(n_union_t *arg) {
+static void print_arg(n_any_t *arg) {
     char sprint_buf[1024];
 
     assert(arg && "[runtime.print_arg] arg is null");
@@ -20,9 +20,11 @@ static void print_arg(n_union_t *arg) {
     DEBUGF("[runtime.print_arg] arg->rtype=%p, kind=%s, arg->value=%lu", arg->rtype, type_kind_str[arg->rtype->kind],
            arg->value.i64_value);
 
+    void *value_ptr = arg->value.ptr_value;
+
     if (arg->rtype->kind == TYPE_STRING) {
         // n_string_t 在内存视角，应该是由 2 块内存组成，一个是字符个数，一个是指向的数据结构(同样是内存视角)
-        n_string_t *s = arg->value.ptr_value;// 字符串的内存视角
+        n_string_t *s = value_ptr;// 字符串的内存视角
         assert(s && "[runtime.print_arg] string is null");
 
         DEBUGF("[runtime.print_arg] string=%p, length=%lu, data=%p, len=%lu, cap=%lu, hash=%ld, element_size=%ld",
@@ -115,7 +117,7 @@ static void print_arg(n_union_t *arg) {
     }
 
     // 其他所有类型都打印 ptr 地址
-    int n = sprintf(sprint_buf, "%p", arg->value.ptr_value);
+    int n = sprintf(sprint_buf, "%p", value_ptr);
     VOID write(STDOUT_FILENO, sprint_buf, n);
 }
 
@@ -133,12 +135,12 @@ void print(n_vec_t args) {
         addr_t p = base + (i * element_size);
 
         // 将 p 中存储的地址赋值给 a, 此时 a 中存储的是一个堆中的地址，其结构是 memory_any_t
-        // void* p 只是转换为指针类型，而不会读取其中的值，所以这里 n_union_t* 是目标值, *value 才是读取 p 中的地址
-        n_union_t *union_arg = (n_union_t *) p;
+        // void* p 只是转换为指针类型，而不会读取其中的值，所以这里 n_any_t* 是目标值, *value 才是读取 p 中的地址
+        n_any_t *any_arg = (n_any_t *) p;
 
-        DEBUGF("[runtime.print] union arg i=%d, addr=%p, union_arg_value=%p ", i, (void *) p, union_arg);
+        DEBUGF("[runtime.print] any arg i=%d, addr=%p, any_arg_value=%p ", i, (void *) p, any_arg);
 
-        print_arg(union_arg);
+        print_arg(any_arg);
     }
 }
 
@@ -155,12 +157,12 @@ void println(n_vec_t args) {
         addr_t p = base + (i * element_size);
 
         // 将 p 中存储的地址赋值给 a, 此时 a 中存储的是一个堆中的地址，其结构是 memory_any_t
-        // void* p 只是转换为指针类型，而不会读取其中的值，所以这里 n_union_t* 是目标值, *value 才是读取 p 中的地址
-        n_union_t *union_arg = (n_union_t *) p;
+        // void* p 只是转换为指针类型，而不会读取其中的值，所以这里 n_any_t* 是目标值, *value 才是读取 p 中的地址
+        n_any_t *any_arg = (n_any_t *) p;
 
-        DEBUGF("[runtime.println] union arg i=%d, addr=%p, union_arg_value=%p ", i, (void *) p, union_arg);
+        DEBUGF("[runtime.println] any arg i=%d, addr=%p, any_arg_value=%p ", i, (void *) p, any_arg);
 
-        print_arg(union_arg);
+        print_arg(any_arg);
 
         if (i < (args.length - 1)) {
             VOID write(STDOUT_FILENO, space, 1);

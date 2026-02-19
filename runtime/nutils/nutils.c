@@ -81,17 +81,43 @@ void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
 
     rtype_t *rtype = rt_find_rtype(target_rtype_hash);
     if (rtype->storage_kind == STORAGE_KIND_IND) {
-        memmove(value_ref, mu->value.ptr_value, rtype->storage_size);
+        memmove(value_ref, &mu->value.struct_, rtype->storage_size);
     } else {
         memmove(value_ref, &mu->value, rtype->storage_size);
     }
     DEBUGF(
             "[union_assert] success, union_base: %p, union_rtype_kind: %s, heap_out_size: %lu, union_i64_value: %ld, "
             "values_ref: %p",
-            mu, type_kind_str[mu->rtype->kind], size, mu->value.i64_value, value_ref);
+            mu, type_kind_str[mu->rtype->kind], rtype->storage_size, mu->value.i64_value, value_ref);
+}
+
+void any_assert(n_any_t *mu, int64_t target_rtype_hash, void *value_ref) {
+    if (mu->rtype->hash != target_rtype_hash) {
+        DEBUGF("[any_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
+               type_kind_str[mu->rtype->kind],
+               target_rtype_hash);
+
+        rti_throw("type assert failed", true);
+        return;
+    }
+
+    rtype_t *rtype = rt_find_rtype(target_rtype_hash);
+    if (rtype->storage_kind == STORAGE_KIND_IND) {
+        memmove(value_ref, mu->value.ptr_value, rtype->storage_size);
+    } else {
+        memmove(value_ref, &mu->value, rtype->storage_size);
+    }
+    DEBUGF(
+            "[any_assert] success, any_base: %p, any_rtype_kind: %s, heap_out_size: %lu, any_i64_value: %ld, "
+            "values_ref: %p",
+            mu, type_kind_str[mu->rtype->kind], rtype->storage_size, mu->value.i64_value, value_ref);
 }
 
 bool union_is(n_union_t *mu, int64_t target_rtype_hash) {
+    return mu->rtype->hash == target_rtype_hash;
+}
+
+bool any_is(n_any_t *mu, int64_t target_rtype_hash) {
     return mu->rtype->hash == target_rtype_hash;
 }
 
@@ -163,7 +189,8 @@ n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int
  * @param value
  * @return
  */
-n_union_t union_casting(int64_t input_rtype_hash, void *value_ref) {
+void union_casting(n_union_t *out, int64_t input_rtype_hash, void *value_ref) {
+    assert(out && "union_casting out is null");
     // - 根据 input_rtype_hash 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
     assert(rtype && "cannot find rtype by hash");
@@ -172,41 +199,92 @@ n_union_t union_casting(int64_t input_rtype_hash, void *value_ref) {
 
     TRACEF("[union_casting] input_kind=%s", type_kind_str[rtype->kind]);
 
-
-    n_union_t mu = {0};
-
     DEBUGF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
-           &mu, value_ref,
-           &mu.value, rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
-    mu.rtype = rtype;
+           out, value_ref,
+           &out->value, rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
+    out->rtype = rtype;
 
     uint64_t storage_size = rtype->storage_size;
+    out->value.i64_value = 0;
 
-    // TODO union 产生了 GC? 这个问题稍后再解决。甚至现在总是会产生 GC。
-    // 甚至 return union 类型变得寸步难行。
     if (rtype->storage_kind == STORAGE_KIND_IND) {
-        // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
-        void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
-        memmove(new_value, value_ref, storage_size);
-        mu.value.ptr_value = new_value;
+        memmove(&out->value.struct_, value_ref, storage_size);
     } else {
-        memmove(&mu.value, value_ref, storage_size);
+        memmove(&out->value, value_ref, storage_size);
     }
 
 
-    DEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", &mu, mu.rtype,
-           mu.value.i64_value);
-
-    return mu;
+    DEBUGF("[union_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld", out, out->rtype,
+           out->value.i64_value);
 }
 
-n_tagged_union_t tagged_union_casting(int64_t tag_hash, int64_t value_rtype_hash, void *value_ref) {
+/**
+ * any 参考旧版 union 处理 storage_ind 类型
+ * @param input_rtype_hash
+ * @param value_ref
+ * @return
+ */
+void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref) {
+    assert(out && "any_casting out is null");
+    // - 根据 input_rtype_hash 找到对应的
+    rtype_t *rtype = rt_find_rtype(input_rtype_hash);
+    assert(rtype && "cannot find rtype by hash");
+
+    ASSERT_ADDR(value_ref);
+
+    TRACEF("[any_casting] input_kind=%s", type_kind_str[rtype->kind]);
+
+    DEBUGF("[any_casting] any_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
+            out, value_ref,
+            &out->value, rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
+    out->rtype = rtype;
+
+    uint64_t storage_size = rtype->storage_size;
+    out->value.i64_value = 0;
+
+    if (rtype->storage_kind == STORAGE_KIND_IND) {
+        void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
+        memmove(new_value, value_ref, storage_size);
+        out->value.ptr_value = new_value;
+    } else {
+        memmove(&out->value, value_ref, storage_size);
+    }
+
+    DEBUGF("[any_casting] success, any_base: %p, any_rtype: %p, any_i64_value: %ld", out, out->rtype,
+           out->value.i64_value);
+}
+
+/**
+ * union -> any: 提取 union 的 rtype 和 value 传递给 any_casting
+ */
+void union_to_any(n_any_t *out, n_union_t *input) {
+    assert(out && "union_to_any out is null");
+    assert(input && "union_to_any input is null");
+    assert(input->rtype && "union_to_any input rtype is null");
+
+    rtype_t *rtype = input->rtype;
+
+    DEBUGF("[union_to_any] input rtype kind=%s, hash=%ld", type_kind_str[rtype->kind], rtype->hash);
+
+    // union value 根据 storage_kind 确定 value_ref
+    void *value_ref;
+    if (rtype->storage_kind == STORAGE_KIND_IND) {
+        value_ref = &input->value.struct_;
+    } else {
+        value_ref = &input->value;
+    }
+
+    any_casting(out, rtype->hash, value_ref);
+}
+
+void tagged_union_casting(n_tagged_union_t *out, int64_t tag_hash, int64_t value_rtype_hash, void *value_ref) {
+    assert(out && "tagged_union_casting out is null");
     DEBUGF("[tagged_union_casting] tag_hash=%ld, value_hash=%ld", tag_hash, value_rtype_hash);
 
-    n_tagged_union_t mu = {0};
-    mu.tag_hash = tag_hash;
+    out->tag_hash = tag_hash;
+    out->value.i64_value = 0;
     if (value_rtype_hash == 0) {
-        return mu;
+        return;
     }
 
     // - 根据 input_rtype_hash 找到对应的
@@ -217,24 +295,18 @@ n_tagged_union_t tagged_union_casting(int64_t tag_hash, int64_t value_rtype_hash
 
     DEBUGF(
             "[tagged_union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), kind=%s, size=%lu, fetch_value_8byte=%p",
-            &mu, value_ref,
-            &mu.value, type_kind_str[rtype->kind], rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
+            out, value_ref,
+            &out->value, type_kind_str[rtype->kind], rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
 
     uint64_t storage_size = rtype->storage_size;
     if (rtype->storage_kind == STORAGE_KIND_IND) {
-        // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
-        void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
-        memmove(new_value, value_ref, storage_size);
-
-        mu.value.ptr_value = new_value;
+        memmove(&out->value.struct_, value_ref, storage_size);
     } else {
-        memmove(&mu.value, value_ref, storage_size);
+        memmove(&out->value, value_ref, storage_size);
     }
 
-    DEBUGF("[tagged_union_casting] success, base: %p, id: %ld, union_i64_value: %ld", &mu, mu.tag_hash,
-           mu.value.i64_value);
-
-    return mu;
+    DEBUGF("[tagged_union_casting] success, base: %p, id: %ld, union_i64_value: %ld", out, out->tag_hash,
+           out->value.i64_value);
 }
 
 
@@ -400,9 +472,9 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
 
     n_string_t err_msg = rti_error_msg(error);
     DEBUGF("[runtime.co_throw_error] co=%p, error=%p, path=%s, fn_name=%s, line=%ld, column=%ld, msg=%s", co,
-            (void *) error, path, fn_name,
-            line,
-            column, (char *) rt_string_ref(&err_msg));
+           (void *) error, path, fn_name,
+           line,
+           column, (char *) rt_string_ref(&err_msg));
 
     assert(co->traces.data == NULL);
     n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
