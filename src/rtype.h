@@ -15,7 +15,7 @@ static inline int64_t rtype_tuple_gc_bits(int64_t gc_bits_offset, int64_t *offse
 
 static inline int64_t rtype_union_gc_bits(int64_t gc_bits_offset, int64_t *offset, int64_t union_size);
 
-static inline int64_t rtype_tagged_union_gc_bits(int64_t gc_bits_offset, int64_t *offset);
+static inline int64_t rtype_tagged_union_gc_bits(int64_t gc_bits_offset, int64_t *offset, int64_t tagged_union_size);
 
 static inline rtype_t reflect_type(type_t t);
 
@@ -387,17 +387,23 @@ static inline rtype_t rtype_interface(type_t t) {
 }
 
 static inline rtype_t rtype_tagged_union(type_t t) {
+    int64_t tagged_union_size = t.storage_size;
+    assert(tagged_union_size > 0);
+    int64_t slot_count = align_up(tagged_union_size, POINTER_SIZE) / POINTER_SIZE;
+
     rtype_t rtype = {
-            .gc_heap_size = POINTER_SIZE * 2, // tag + value
+            .gc_heap_size = tagged_union_size,
             .hash = type_hash(t),
             .kind = TYPE_TAGGED_UNION,
-            .last_ptr = POINTER_SIZE,
-            .malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(POINTER_SIZE * 2, POINTER_SIZE)),
+            .last_ptr = slot_count * POINTER_SIZE,
+            .malloc_gc_bits_offset = data_put(NULL, calc_gc_bits_size(tagged_union_size, POINTER_SIZE)),
             .length = t.tagged_union->elements->length,
             .hashes_offset = -1,
     };
 
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
+    for (int i = 1; i < slot_count; ++i) {
+        bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), i);
+    }
     if (t.tagged_union->elements->length > 0) {
         int64_t size = sizeof(int64_t) * t.tagged_union->elements->length;
         int64_t *hashes = mallocz(size);
@@ -508,7 +514,7 @@ static inline int64_t rtype_array_gc_bits(int64_t gc_bits_offset, int64_t *offse
         } else if (t->element_type.kind == TYPE_UNION || t->element_type.kind == TYPE_ANY) {
             last_ptr_temp_offset = rtype_union_gc_bits(gc_bits_offset, offset, t->element_type.storage_size);
         } else if (t->element_type.kind == TYPE_TAGGED_UNION) {
-            last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset);
+            last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset, t->element_type.storage_size);
         } else if (t->element_type.kind == TYPE_STRING || t->element_type.kind == TYPE_VEC || t->element_type.kind == TYPE_MAP ||
                    t->element_type.kind == TYPE_SET) {
             last_ptr_temp_offset = rtype_builtin_gc_bits(gc_bits_offset, offset, t->element_type);
@@ -609,14 +615,25 @@ static inline int64_t rtype_union_gc_bits(int64_t gc_bits_offset, int64_t *offse
     return last_ptr_offset;
 }
 
-// tagged_union: { value_casting value; int64_t tag_hash; }
-// value 需要 gc 扫描 (slot 0), tag_hash 不需要 gc
-static inline int64_t rtype_tagged_union_gc_bits(int64_t gc_bits_offset, int64_t *offset) {
-    int64_t bit_index = *offset / POINTER_SIZE;
-    bitmap_set(CTDATA(gc_bits_offset), bit_index); // slot 0: value
+// tagged_union: { int64_t tag_hash; value_casting value; }
+// tag_hash 不需要 gc，value 运行时类型不固定，保守地扫描 payload 所有槽位
+static inline int64_t rtype_tagged_union_gc_bits(int64_t gc_bits_offset, int64_t *offset, int64_t tagged_union_size) {
+    if (tagged_union_size <= 0) {
+        tagged_union_size = POINTER_SIZE * 2;
+    }
 
-    int64_t last_ptr_offset = *offset + POINTER_SIZE;
-    *offset += POINTER_SIZE * 2; // skip both value and tag_hash
+    int64_t slot_count = align_up(tagged_union_size, POINTER_SIZE) / POINTER_SIZE;
+    int64_t bit_index = *offset / POINTER_SIZE;
+    for (int i = 1; i < slot_count; ++i) {
+        bitmap_set(CTDATA(gc_bits_offset), bit_index + i);
+    }
+
+    int64_t last_ptr_offset = 0;
+    if (slot_count > 1) {
+        last_ptr_offset = *offset + slot_count * POINTER_SIZE;
+    }
+
+    *offset += tagged_union_size;
 
     return last_ptr_offset;
 }
@@ -667,7 +684,7 @@ static inline int64_t rtype_struct_gc_bits(int64_t gc_bits_offset, int64_t *offs
         } else if (p->type.kind == TYPE_UNION || p->type.kind == TYPE_ANY) {
             last_ptr_temp_offset = rtype_union_gc_bits(gc_bits_offset, offset, p->type.storage_size);
         } else if (p->type.kind == TYPE_TAGGED_UNION) {
-            last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset);
+            last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset, p->type.storage_size);
         } else if (p->type.kind == TYPE_STRING || p->type.kind == TYPE_VEC || p->type.kind == TYPE_MAP || p->type.kind == TYPE_SET) {
             last_ptr_temp_offset = rtype_builtin_gc_bits(gc_bits_offset, offset, p->type);
         } else {
@@ -717,7 +734,7 @@ static inline int64_t rtype_tuple_gc_bits(int64_t gc_bits_offset, int64_t *offse
         } else if (element->kind == TYPE_UNION || element->kind == TYPE_ANY) {
             last_ptr_temp_offset = rtype_union_gc_bits(gc_bits_offset, offset, element->storage_size);
         } else if (element->kind == TYPE_TAGGED_UNION) {
-            last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset);
+            last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset, element->storage_size);
         } else if (element->kind == TYPE_STRING || element->kind == TYPE_VEC || element->kind == TYPE_MAP || element->kind == TYPE_SET) {
             last_ptr_temp_offset = rtype_builtin_gc_bits(gc_bits_offset, offset, *element);
         } else {

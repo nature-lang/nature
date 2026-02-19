@@ -37,7 +37,7 @@ void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref);
 
 void union_to_any(n_any_t *out, n_union_t *input);
 
-n_tagged_union_t tagged_union_casting(int64_t id, int64_t value_rtype_hash, void *value_ref);
+void tagged_union_casting(n_tagged_union_t *out, int64_t id, int64_t value_rtype_hash, void *value_ref);
 
 n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods);
 

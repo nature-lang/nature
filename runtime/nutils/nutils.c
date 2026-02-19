@@ -277,13 +277,14 @@ void union_to_any(n_any_t *out, n_union_t *input) {
     any_casting(out, rtype->hash, value_ref);
 }
 
-n_tagged_union_t tagged_union_casting(int64_t tag_hash, int64_t value_rtype_hash, void *value_ref) {
+void tagged_union_casting(n_tagged_union_t *out, int64_t tag_hash, int64_t value_rtype_hash, void *value_ref) {
+    assert(out && "tagged_union_casting out is null");
     DEBUGF("[tagged_union_casting] tag_hash=%ld, value_hash=%ld", tag_hash, value_rtype_hash);
 
-    n_tagged_union_t mu = {0};
-    mu.tag_hash = tag_hash;
+    out->tag_hash = tag_hash;
+    out->value.i64_value = 0;
     if (value_rtype_hash == 0) {
-        return mu;
+        return;
     }
 
     // - 根据 input_rtype_hash 找到对应的
@@ -294,24 +295,18 @@ n_tagged_union_t tagged_union_casting(int64_t tag_hash, int64_t value_rtype_hash
 
     DEBUGF(
             "[tagged_union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), kind=%s, size=%lu, fetch_value_8byte=%p",
-            &mu, value_ref,
-            &mu.value, type_kind_str[rtype->kind], rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
+            out, value_ref,
+            &out->value, type_kind_str[rtype->kind], rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
 
     uint64_t storage_size = rtype->storage_size;
     if (rtype->storage_kind == STORAGE_KIND_IND) {
-        // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
-        void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
-        memmove(new_value, value_ref, storage_size);
-
-        mu.value.ptr_value = new_value;
+        memmove(&out->value.struct_, value_ref, storage_size);
     } else {
-        memmove(&mu.value, value_ref, storage_size);
+        memmove(&out->value, value_ref, storage_size);
     }
 
-    DEBUGF("[tagged_union_casting] success, base: %p, id: %ld, union_i64_value: %ld", &mu, mu.tag_hash,
-           mu.value.i64_value);
-
-    return mu;
+    DEBUGF("[tagged_union_casting] success, base: %p, id: %ld, union_i64_value: %ld", out, out->tag_hash,
+           out->value.i64_value);
 }
 
 

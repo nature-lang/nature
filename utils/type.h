@@ -580,8 +580,8 @@ typedef struct {
 } n_any_t;
 
 typedef struct {
-    value_casting value; // need gc
     int64_t tag_hash;
+    value_casting value;
 } n_tagged_union_t;
 
 typedef struct {
@@ -881,12 +881,24 @@ static inline list_t *type_abi_struct(type_t t) {
         return result;
     }
 
-    // n_tagged_union_t: { value_casting value; int64_t tag_hash; }
+    // n_tagged_union_t: { int64_t tag_hash; value_casting value; }
     if (t.kind == TYPE_TAGGED_UNION) {
-        type_t value_type = type_kind_new(TYPE_ANYPTR); // value_casting
         type_t tag_type = type_kind_new(TYPE_INT64); // tag_hash
-        ct_list_push(result, &value_type);
+        type_t value_type = type_kind_new(TYPE_ANYPTR); // 默认 value_casting
+        if (t.tagged_union && t.tagged_union->elements) {
+            int64_t max_size = 0;
+            for (int i = 0; i < t.tagged_union->elements->length; ++i) {
+                tagged_union_element_t *element = ct_list_value(t.tagged_union->elements, i);
+                int64_t elem_size = type_sizeof(element->type);
+                if (elem_size > max_size) {
+                    max_size = elem_size;
+                    value_type = element->type;
+                }
+            }
+        }
+
         ct_list_push(result, &tag_type);
+        ct_list_push(result, &value_type);
         return result;
     }
 

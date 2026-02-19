@@ -2803,15 +2803,20 @@ static lir_operand_t *linear_tagged_union_new(module_t *m, ast_expr_t expr, lir_
         payload_type_hash = type_hash(payload_type);
     }
 
-    lir_operand_t *call_result = temp_var_operand(m, expr.type);
-    push_rt_call(m, RT_CALL_TAGGED_UNION_CASTING, call_result, 3, int_operand(tag_hash), int_operand(payload_type_hash),
-                 payload_ptr);
-
-    if (target) {
-        return linear_super_move(m, expr.type, target, call_result);
+    if (!target) {
+        target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-    return call_result;
+    lir_operand_t *out_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    lir_operand_t *out_src = target;
+    if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+        out_src = lea_operand_pointer(m, target);
+    }
+    OP_PUSH(lir_op_move(out_ptr, out_src));
+    push_rt_call(m, RT_CALL_TAGGED_UNION_CASTING, NULL, 4, out_ptr, int_operand(tag_hash),
+                 int_operand(payload_type_hash), payload_ptr);
+
+    return target;
 }
 
 static lir_operand_t *linear_new_expr(module_t *m, ast_expr_t expr, lir_operand_t *target) {
@@ -2964,7 +2969,7 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
         assert(is_expr->union_tag);
         ast_tagged_union_t *tagged_union = is_expr->union_tag->value;
         lir_operand_t *expected_hash = int_operand(hash_string(tagged_union->tagged_name));
-        lir_operand_t *actual_hash = indirect_addr_operand(m, type_kind_new(TYPE_INT64), src_operand, QWORD);
+        lir_operand_t *actual_hash = indirect_addr_operand(m, type_kind_new(TYPE_INT64), src_operand, 0);
         OP_PUSH(lir_op_new(LIR_OPCODE_SEE, expected_hash, actual_hash, target));
         return target;
     }
@@ -3174,9 +3179,11 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     if (as_expr->src.type.kind == TYPE_TAGGED_UNION) {
-        lir_operand_t *src = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), src_operand, 0);
-        OP_PUSH(lir_op_move(target, src));
-        return target;
+        lir_operand_t *payload = indirect_addr_operand(m, as_expr->target_type, src_operand, POINTER_SIZE);
+        if (as_expr->target_type.storage_kind == STORAGE_KIND_IND) {
+            payload = lea_operand_pointer(m, payload);
+        }
+        return linear_super_move(m, as_expr->target_type, target, payload);
     }
 
     // interface as

@@ -150,7 +150,22 @@ int64_t type_sizeof(type_t t) {
     }
 
     if (t.kind == TYPE_TAGGED_UNION) {
-        return sizeof(n_tagged_union_t);
+        int64_t max_size = 0;
+        if (t.tagged_union && t.tagged_union->elements && t.tagged_union->elements->length > 0) {
+            for (int i = 0; i < t.tagged_union->elements->length; ++i) {
+                tagged_union_element_t *element = ct_list_value(t.tagged_union->elements, i);
+                int64_t element_size = element->type.storage_size;
+                if (element_size > max_size) {
+                    max_size = element_size;
+                }
+            }
+        }
+
+        if (max_size <= 0) {
+            max_size = POINTER_SIZE;
+        }
+
+        return POINTER_SIZE + align_up(max_size, POINTER_SIZE);
     }
 
     if (t.kind == TYPE_STRING) {
