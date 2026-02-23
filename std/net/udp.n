@@ -129,7 +129,7 @@ fn conn_t.close(&self) {
     self.socket.close()
 }
 
-fn addr_t.ip(&self):string {
+fn addr_t.ip(*self):string {
     i32 family = libc.AF_INET // len = 16
     if !self.v4 {
         family = libc.AF_INET6 // len = 46
@@ -143,6 +143,6 @@ fn addr_t.ip(&self):string {
     return data[..len] as string
 }
 
-fn addr_t.to_string(&self):string {
+fn addr_t.to_string(*self):string {
     return fmt.sprintf('%s:%d', self.ip(), self.port)
 }

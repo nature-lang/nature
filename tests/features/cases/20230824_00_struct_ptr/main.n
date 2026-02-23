@@ -7,8 +7,15 @@ fn main() {
         gender: 1,
     }
 
-    println(p.gender, p.from, @sla(p).get_name())
-    @ula(p).set_age(24)
+    ref<person_t> p_ref = new person_t()
+    p_ref.name = p.name
+    p_ref.from = p.from
+    p_ref.gender = p.gender
+    p_ref.age = p.age
+
+    println(p.gender, p.from, p_ref.get_name())
+    p_ref.set_age(24)
+    p.age = p_ref.age
     println(p.age)
 
     // --- ptr test

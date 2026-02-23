@@ -420,15 +420,15 @@ type test_t = struct{
     int foo
 }
 
-fn test_t.set(&self, int a) {
+fn test_t.set(*self, int a) {
     self.foo = a
 }
 
-fn test_t.map(&self) {
+fn test_t.map(*self) {
     self.foo = 24
 }
 
-fn test_t.vec(&self) {
+fn test_t.vec(*self) {
     println('hello world')
 }
 

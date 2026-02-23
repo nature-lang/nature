@@ -131,6 +131,10 @@ int64_t type_sizeof(type_t t) {
         return sizeof(n_any_t);
     }
 
+    if (t.kind == TYPE_INTERFACE) {
+        return sizeof(n_interface_t);
+    }
+
     if (t.kind == TYPE_UNION) {
         int64_t max_size = 0;
         if (t.union_ && t.union_->elements && t.union_->elements->length > 0) {
@@ -253,6 +257,10 @@ int64_t type_alignof(type_t t) {
     }
 
     if (t.kind == TYPE_ANY) {
+        return POINTER_SIZE;
+    }
+
+    if (t.kind == TYPE_INTERFACE) {
         return POINTER_SIZE;
     }
 

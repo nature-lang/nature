@@ -40,6 +40,8 @@ static list_t *ct_list_type_copy(module_t *m, list_t *temp_list) {
 static type_interface_t *type_interface_copy(module_t *m, type_interface_t *temp) {
     type_interface_t *interface = COPY_NEW(type_interface_t, temp);
     interface->elements = ct_list_type_copy(m, temp->elements);
+    interface->alloc_types = ct_list_type_copy(m, temp->alloc_types);
+    interface->deny_types = ct_list_type_copy(m, temp->deny_types);
     return interface;
 }
 
@@ -929,6 +931,7 @@ ast_fndef_t *ast_fndef_copy(module_t *m, ast_fndef_t *temp) {
 
     fndef->is_generics = false;
     fndef->global_parent = NULL;
+    fndef->pending_where_params = NULL;
 
     if (fndef->is_local) {
         assert(ast_copy_global);

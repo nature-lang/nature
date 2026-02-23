@@ -64,7 +64,7 @@ typedef enum {
     // LITERALS.
     TOKEN_IDENT,
     TOKEN_POUND,      // #
-    TOKEN_MACRO_IDENT,// @sizeof/@sla
+    TOKEN_MACRO_IDENT,// @sizeof/@default/@async
     TOKEN_LABEL,      // #linkid
     TOKEN_LITERAL_STRING,
     TOKEN_LITERAL_FLOAT,

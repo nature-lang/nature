@@ -1,4 +1,5 @@
 #include "infer.h"
+#include "generics.h"
 
 #include <string.h>
 
@@ -8,8 +9,6 @@
 
 static void
 check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast_typedef_stmt_t *typedef_stmt);
-
-static bool marking_heap_alloc(ast_expr_t *expr);
 
 static type_t reduction_type_ident(module_t *m, type_t t);
 
@@ -44,20 +43,12 @@ static bool try_rewrite_tagged_union_call(module_t *m, ast_expr_t *expr, type_t 
 static bool try_rewrite_tagged_union_select(module_t *m, ast_expr_t *expr, type_t target_type);
 
 bool generics_constraints_compare(ast_generics_constraints *left, ast_generics_constraints *right) {
-    if (left->any && !right->and) {
+    if (left->elements->length == 0) {
         return true;
     }
 
-    if (right->any && !left->any) {
-        return false;
-    }
-
-    if (right->and && !left->and) {
-        return false;
-    }
-
-    if (right->or && !left->or) {
-        return false;
+    if (right->elements->length == 0) {
+        return true;
     }
 
     // 创建一个标记数组，用于标记left中的类型是否已经匹配
@@ -118,96 +109,93 @@ static bool check_impl_interface_contains(module_t *m, ast_typedef_stmt_t *stmt,
     return false;
 }
 
+static bool interface_alloc_types_contains(module_t *m, type_interface_t *interface_type, type_t src) {
+    if (!interface_type || !interface_type->alloc_types || interface_type->alloc_types->length == 0) {
+        return false;
+    }
+
+    type_t target = src;
+    if (target.kind == TYPE_REF || target.kind == TYPE_PTR) {
+        target = target.ptr->value_type;
+    }
+    target = reduction_type(m, target);
+
+    for (int i = 0; i < interface_type->alloc_types->length; ++i) {
+        type_t *alloc_type = ct_list_value(interface_type->alloc_types, i);
+        type_t reduced_alloc = reduction_type(m, *alloc_type);
+        if (type_compare(reduced_alloc, target)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static void generics_constraints_check(module_t *m, ast_generics_constraints *constraints, type_t *src) {
     // 对 constraints 进行类型还原
     for (int j = 0; j < constraints->elements->length; ++j) {
         type_t *constraint = ct_list_value(constraints->elements, j);
         *constraint = reduction_type(m, *constraint);
-
-        if (constraints->elements->length == 1) {
-            if (constraint->kind == TYPE_INTERFACE) {
-                constraints->and = true;
-            } else if (constraint->kind != TYPE_UNION) {
-                // or 表示单个类型约束？那 union 呢？怎么 check, 怎么约束？
-                constraints->or = true;
-            }
-        }
-
-        if (constraints->and) {
-            // must interface
-            INFER_ASSERTF(constraint->kind == TYPE_INTERFACE, "only type 'interface' can be combination with '&'");
-        } else if (constraints->or) {
-            // cannot interface and union
-            INFER_ASSERTF(constraint->kind != TYPE_UNION, "cannot use type 'union' combination")
-            INFER_ASSERTF(constraint->kind != TYPE_INTERFACE, "cannot use type 'interface' combination")
-        }
+        INFER_ASSERTF(constraint->kind == TYPE_INTERFACE,
+                      "generic constraints only support interface '&' constraints");
     }
 
-    if (constraints->any) {
+    if (constraints->elements->length == 0) {
         return;
     }
 
-    // check src
-    if (constraints->or) {
-        for (int i = 0; i < constraints->elements->length; ++i) {
-            type_t *t = ct_list_value(constraints->elements, i);
-            if (type_compare(*t, *src)) {
-                return; // 验证成功
-            }
+    for (int i = 0; i < constraints->elements->length; ++i) {
+        type_t *expect_interface_type = ct_list_value(constraints->elements, i);
+        assert(expect_interface_type->ident_kind == TYPE_IDENT_INTERFACE);
+        assert(expect_interface_type->kind == TYPE_INTERFACE);
+
+        type_t temp_target_type = *src;
+        if (src->kind == TYPE_REF || src->kind == TYPE_PTR) {
+            temp_target_type = src->ptr->value_type;
         }
 
-        // type alias '%s' param constraint not match
-        INFER_ASSERTF(false, "type '%s' does not match any of the constraints", type_format(*src));
-        return;
-    }
-
-    // check interface
-    if (constraints->and) {
-        for (int i = 0; i < constraints->elements->length; ++i) {
-            type_t *expect_interface_type = ct_list_value(constraints->elements, i);
-            assert(expect_interface_type->ident_kind == TYPE_IDENT_INTERFACE);
-            assert(expect_interface_type->kind == TYPE_INTERFACE);
-
-            type_t temp_target_type = *src;
-            if (src->kind == TYPE_REF || src->kind == TYPE_PTR) {
-                temp_target_type = src->ptr->value_type;
-            }
-
-            assert(temp_target_type.ident);
-
-            symbol_t *s = symbol_table_get(temp_target_type.ident);
-            if (!s) {
-                // maybe builtin type
-                if (expect_interface_type->interface->elements->length > 0) {
-                    INFER_ASSERTF(false, "type '%s' not impl '%s' interface", temp_target_type.ident,
-                                  expect_interface_type->ident);
-                }
-
-                // empty interface
-                continue;
-            }
-
-
-            assert(s && s->type == SYMBOL_TYPE);
-            ast_typedef_stmt_t *typedef_stmt = s->ast_value;
-            bool found = check_impl_interface_contains(m, typedef_stmt, expect_interface_type);
-            // 禁止鸭子类型
-            INFER_ASSERTF(found, "type '%s' not impl '%s' interface", temp_target_type.ident,
-                          expect_interface_type->ident);
-            check_typedef_impl(m, expect_interface_type, temp_target_type.ident, typedef_stmt);
+        if (generics_constraint_deny_type(m, *expect_interface_type, temp_target_type)) {
+            char *interface_name = expect_interface_type->ident
+                                       ? expect_interface_type->ident
+                                       : type_format(*expect_interface_type);
+            INFER_ASSERTF(false, "type '%s' denied by '%s' interface", type_format(temp_target_type),
+                          interface_name);
         }
 
-        return;
+        // expect_interface_type 包含 deny_types 且未命中 deny 时，约束通过
+        if (expect_interface_type->interface->deny_types &&
+            expect_interface_type->interface->deny_types->length > 0) {
+            continue;
+        }
+
+        if (interface_alloc_types_contains(m, expect_interface_type->interface, temp_target_type)) {
+            continue;
+        }
+
+
+        assert(temp_target_type.ident);
+
+        symbol_t *s = symbol_table_get(temp_target_type.ident);
+        if (!s) {
+            // maybe builtin type
+            if (expect_interface_type->interface->elements->length > 0) {
+                INFER_ASSERTF(false, "type '%s' not impl '%s' interface", temp_target_type.ident,
+                              expect_interface_type->ident);
+            }
+
+            // empty interface
+            continue;
+        }
+
+
+        assert(s && s->type == SYMBOL_TYPE);
+        ast_typedef_stmt_t *typedef_stmt = s->ast_value;
+        bool found = check_impl_interface_contains(m, typedef_stmt, expect_interface_type);
+        // 禁止鸭子类型
+        INFER_ASSERTF(found, "type '%s' not impl '%s' interface", temp_target_type.ident,
+                      expect_interface_type->ident);
+        check_typedef_impl(m, expect_interface_type, temp_target_type.ident, typedef_stmt);
     }
-
-    // union check
-    assert(constraints->elements->length == 1);
-    type_t *union_constraint = ct_list_value(constraints->elements, 0);
-    assert(union_constraint->kind == TYPE_UNION);
-
-    // type alias '%s' param constraint not match
-    INFER_ASSERTF(union_type_contains(union_constraint->union_, *src),
-                  "type '%s' does not match any of the constraints", type_format(*src));
 }
 
 static void impl_generics_constraints_check(module_t *m, ast_fndef_t *fndef, list_t *impl_gen_args) {
@@ -758,18 +746,30 @@ bool type_compare_visited(type_t dst, type_t src, table_t *visited) {
  */
 static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_t *call, type_t return_target_type) {
     assert(temp_fn->is_generics);
-    if (temp_fn->impl_type.kind > 0) {
-        // impl 必定存在 generics
-        assert(call->generics_args);
-    }
 
     // 进行参数解析，可以顺便使用 type_compare 了！
     table_t *args_table = table_new();
-    // call-generics_args 为 null 说明 caller 没有传递泛型 args, 此时需要根据调用参数进行自动泛型推导
-    if (call->generics_args == NULL) {
+    int explicit_args_len = call->generics_args ? call->generics_args->length : 0;
+    INFER_ASSERTF(explicit_args_len <= temp_fn->generics_params->length, "too many generics args");
+
+    // 先按顺序灌入显式泛型参数，剩余参数再自动推导（支持 impl 类型参数前缀 + 方法参数推导）
+    for (int i = 0; i < explicit_args_len; i++) {
+        type_t *arg_type = ct_list_value(call->generics_args, i);
+        *arg_type = reduction_type(m, *arg_type);
+        ast_generics_param_t *param = ct_list_value(temp_fn->generics_params, i);
+        table_set(args_table, param->ident, arg_type);
+    }
+
+    if (explicit_args_len < temp_fn->generics_params->length) {
         // 避免脏数据污染 is_tpl 导致后续的 copy 异常
         ct_stack_t *stash_stack = m->infer_type_args_stack;
         m->infer_type_args_stack = NULL;
+
+        int formal_param_offset = 0;
+        // impl 方法调用在 generics 特化阶段尚未注入 self 参数
+        if (temp_fn->is_impl && !temp_fn->is_static && temp_fn->self_kind != PARAM_SELF_NULL) {
+            formal_param_offset = 1;
+        }
 
         for (int i = 0; i < call->args->length; i++) {
             bool is_spread = call->spread && (i == call->args->length - 1);
@@ -778,7 +778,7 @@ static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_
             type_t arg_type = infer_right_expr(m, arg, type_kind_new(TYPE_UNKNOWN));
 
             // 形参 type reduction
-            type_t *formal_type = select_generics_fn_param(temp_fn, i, is_spread);
+            type_t *formal_type = select_generics_fn_param(temp_fn, i + formal_param_offset, is_spread);
             INFER_ASSERTF(formal_type, "too many arguments");
 
             // copy 出来专用于 infer, 避免对 is_tpl 造成污染(is_tpl.status = done, 会导致后续的 copy 异常)
@@ -803,24 +803,16 @@ static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_
             INFER_ASSERTF(generics, "cannot generics type from %s", type_format(temp_type));
         }
 
-        // 判断泛型参数是否全部推断完成
-        for (int i = 0; i < temp_fn->generics_params->length; i++) {
-            ast_generics_param_t *param = ct_list_value(temp_fn->generics_params, i);
-            INFER_ASSERTF(table_exist(args_table, param->ident), "cannot infer generics param '%s'",
-                          param->ident);
-
-            type_t *arg_type = table_get(args_table, param->ident);
-            generics_constraints_check(m, &param->constraints, arg_type);
-        }
         m->infer_type_args_stack = stash_stack;
-    } else {
-        // 按顺序生成 param
-        for (int i = 0; i < call->generics_args->length; i++) {
-            type_t *arg_type = ct_list_value(call->generics_args, i);
-            *arg_type = reduction_type(m, *arg_type);
-            ast_generics_param_t *param = ct_list_value(temp_fn->generics_params, i);
-            table_set(args_table, param->ident, arg_type);
-        }
+    }
+
+    // 判断泛型参数是否全部推断完成，并做约束校验
+    for (int i = 0; i < temp_fn->generics_params->length; i++) {
+        ast_generics_param_t *param = ct_list_value(temp_fn->generics_params, i);
+        INFER_ASSERTF(table_exist(args_table, param->ident), "cannot infer generics param '%s'", param->ident);
+
+        type_t *arg_type = table_get(args_table, param->ident);
+        generics_constraints_check(m, &param->constraints, arg_type);
     }
 
     return args_table;
@@ -912,7 +904,7 @@ static char *generics_args_hash(module_t *m, list_t *generics_params, table_t *a
     for (int i = 0; i < generics_params->length; ++i) {
         ast_generics_param_t *param = ct_list_value(generics_params, i);
         type_t *t = table_get(arg_table, param->ident);
-        assert(t);
+        INFER_ASSERTF(t, "cannot infer generics param '%s'", param->ident);
         str = str_connect(str, itoa(type_hash(*t)));
     }
 
@@ -1653,6 +1645,8 @@ static type_t infer_type_eq_expr(module_t *m, ast_expr_t *expr) {
  * @return
  */
 static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_type) {
+    INFER_ASSERTF(target_type.kind != TYPE_VOID, "operator cannot use void as target type");
+
     if (expr->op == AST_OP_NOT) {
         // bool 支持各种类型的 implicit type convert
         return infer_right_expr(m, &expr->operand, type_kind_new(TYPE_BOOL));
@@ -1675,34 +1669,6 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_typ
                       "cannot load address of an literal or call");
 
         return type_ptrof(operand_type);
-    }
-
-    // @ula(var)
-    if (expr->op == AST_OP_UNSAFE_LA) {
-        if (expr->operand.type.kind == TYPE_REF) {
-            return operand_type;
-        }
-
-        INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
-                      "cannot unsafe load address of an literal or call expr");
-
-        INFER_ASSERTF(operand_type.kind != TYPE_UNION && operand_type.kind != TYPE_ANY,
-                      "cannot unsafe load address of an union type");
-
-
-        return type_refof(operand_type);
-    }
-
-    // @sla(var)
-    if (expr->op == AST_OP_SAFE_LA) {
-        if (expr->operand.type.kind == TYPE_REF) {
-            return operand_type;
-        }
-
-
-        marking_heap_alloc(&expr->operand);
-
-        return type_refof(operand_type);
     }
 
     // *var
@@ -2446,131 +2412,35 @@ static ast_fndef_t *generics_special_fn(module_t *m, ast_call_t *call, type_t ta
     return special_fn;
 }
 
-static bool marking_heap_alloc(ast_expr_t *expr) {
-    if (expr->assert_type == AST_EXPR_IDENT) {
-        ast_ident *ident = expr->value;
-        symbol_t *s = symbol_table_get(ident->literal);
-        assert(s->type == SYMBOL_VAR);
-        ast_var_decl_t *var = s->ast_value;
-        var->type.in_heap = true;
-        expr->type.in_heap = true;
-        return true;
-    }
-
-    if (expr->assert_type == AST_EXPR_STRUCT_NEW) {
-        ast_struct_new_t *ast = expr->value;
-        expr->type.in_heap = true;
-        ast->type.in_heap = true;
-        return true;
-    }
-
-    if (expr->assert_type == AST_EXPR_VEC_NEW ||
-        expr->assert_type == AST_EXPR_VEC_REPEAT_NEW ||
-        expr->assert_type == AST_EXPR_MAP_NEW ||
-        expr->assert_type == AST_EXPR_SET_NEW ||
-        expr->assert_type == AST_EXPR_TUPLE_NEW) {
-        ast_array_new_t *ast = expr->value;
-        expr->type.in_heap = true;
-
-        return true;
-    }
-
-
-    if (expr->assert_type == AST_CALL) {
-        expr->type.in_heap = true;
-        return true;
-    }
-
-    // int/float/bool
-    if (expr->assert_type == AST_EXPR_LITERAL && expr->type.storage_kind != STORAGE_KIND_PTR) {
-        ast_literal_t *literal = expr->value;
-
-        expr->type.in_heap = true;
-        return true;
-    }
-
-    if (expr->assert_type == AST_EXPR_ARRAY_ACCESS) {
-        ast_array_access_t *ast = expr->value;
-        return marking_heap_alloc(&ast->left); // auto marking
-    }
-
-    if (expr->assert_type == AST_EXPR_VEC_ACCESS) {
-        ast_vec_access_t *ast = expr->value;
-        return marking_heap_alloc(&ast->left); // auto marking
-    }
-
-    if (expr->assert_type == AST_EXPR_MAP_ACCESS) {
-        ast_map_access_t *ast = expr->value;
-        return marking_heap_alloc(&ast->left); // auto marking
-    }
-
-    if (expr->assert_type == AST_EXPR_TUPLE_ACCESS) {
-        ast_tuple_access_t *ast = expr->value;
-        return marking_heap_alloc(&ast->left); // auto marking
-    }
-
-    if (expr->assert_type == AST_EXPR_STRUCT_SELECT) {
-        ast_struct_select_t *ast = expr->value;
-        return marking_heap_alloc(&ast->instance); // auto marking
-    }
-
-    // ([1, 3, 5] as foo_t).len()
-    if (expr->assert_type == AST_EXPR_AS) {
-        ast_as_expr_t *ast = expr->value;
-        ast->target_type.in_heap = true;
-        expr->type.in_heap = true;
-        return marking_heap_alloc(&ast->src);
-    }
-
-    // builtin value types should escape to heap under @sla to avoid stack lifetime issues
-    if (expr->type.kind == TYPE_STRING || expr->type.kind == TYPE_VEC || expr->type.kind == TYPE_MAP ||
-        expr->type.kind == TYPE_SET || expr->type.kind == TYPE_TUPLE) {
-        expr->type.in_heap = true;
-        return true;
-    }
-
-    // left 无需进行堆分配，可能是 vec_access/map_access 这种 left 已经在指针分配的类型
-    return false;
-}
-
 static ast_expr_t *self_arg_rewrite(module_t *m, type_fn_t *type_fn, ast_expr_t *self_arg) {
+    (void) m;
     type_t *self_param_type = ct_list_value(type_fn->param_types, 0);
-    type_t *extract_self_type = self_param_type;
-    if (self_param_type->kind == TYPE_REF || self_param_type->kind == TYPE_PTR) {
-        extract_self_type = &self_param_type->ptr->value_type;
-    }
 
-    if (extract_self_type->storage_kind != STORAGE_KIND_PTR) {
-        if (self_param_type->kind == TYPE_REF) {
-            INFER_ASSERTF(self_arg->type.kind != TYPE_PTR,
-                          "type mismatch: method requires `%s` receiver, got `%s`", type_format(*self_param_type),
-                          type_format(self_arg->type));
+    if (self_param_type->kind == TYPE_REF) {
+        INFER_ASSERTF(self_arg->type.kind != TYPE_PTR,
+                      "type mismatch: method requires `%s` receiver, got `%s`", type_format(*self_param_type),
+                      type_format(self_arg->type));
 
-            if (self_arg->type.kind != TYPE_REF) {
-                return ast_safe_load_addr(self_arg);
-            }
-
-            return self_arg;
-        } else if (self_param_type->kind == TYPE_PTR) {
-            if (self_arg->type.kind == TYPE_PTR || self_arg->type.kind == TYPE_REF) {
-                return self_arg;
-            }
-
-            return ast_load_addr(self_arg); // unsafe load
-        } else {
-            // value pass
-            if (self_arg->type.kind == TYPE_PTR || self_arg->type.kind == TYPE_REF) {
-                return ast_indirect_addr(self_arg);
-            }
-
+        if (self_arg->type.kind == TYPE_REF || self_arg->type.storage_kind == STORAGE_KIND_PTR) {
             return self_arg;
         }
+
+        INFER_ASSERTF(false, "type mismatch: method requires `%s` receiver, got `%s`",
+                      type_format(*self_param_type), type_format(self_arg->type));
     }
 
-    // ref<[T]> 类型这样的形式是不被允许的
-    INFER_ASSERTF(self_arg->type.storage_kind == STORAGE_KIND_PTR,
-                  "unsupported method receiver type '%s', expected heap-allocated type",
-                  type_format(self_arg->type))
+    if (self_param_type->kind == TYPE_PTR) {
+        if (self_arg->type.kind == TYPE_PTR || self_arg->type.kind == TYPE_REF) {
+            return self_arg;
+        }
+
+        return ast_load_addr(self_arg);
+    }
+
+    // value pass
+    if (self_arg->type.kind == TYPE_PTR || self_arg->type.kind == TYPE_REF) {
+        return ast_indirect_addr(self_arg);
+    }
 
     return self_arg;
 }
@@ -2744,13 +2614,13 @@ static inline void rewrite_generics_ident(module_t *m, ast_call_t *call, type_t 
         return;
     }
 
-    ast_fndef_t *temp_fndef = s->ast_value;
-    if (!temp_fndef->is_generics) {
+    ast_fndef_t *temp_fn = s->ast_value;
+    if (!temp_fn->is_generics) {
         return;
     }
 
     // 由于存在函数重载，所以需要进行多次匹配找到最合适的 is_tpl 函数, 如果没有重载 temp_fndef 就是 tpl_fndef
-    ast_fndef_t *special_fn = generics_special_fn(m, call, target_type, temp_fndef);
+    ast_fndef_t *special_fn = generics_special_fn(m, call, target_type, temp_fn);
     assert(special_fn->type.status == REDUCTION_STATUS_DONE);
 
     // call ident 重写, 从而能够正确的从符号表中检索到 special_fn
@@ -2779,6 +2649,8 @@ static type_fn_t *infer_impl_call_rewrite(module_t *m, ast_call_t *call, type_t 
                               typedef_stmt->ident, expected, actual);
             }
         }
+
+        select_left_type = reduction_type(m, select_left_type);
     } else {
         select_left_type = infer_right_expr(m, &select->left, type_kind_new(TYPE_UNKNOWN));
     }
@@ -2807,72 +2679,63 @@ static type_fn_t *infer_impl_call_rewrite(module_t *m, ast_call_t *call, type_t 
     char *impl_ident = extract_type.ident;
     char *impl_symbol_name = impl_symbol_name_new(impl_ident, select->key);
     list_t *impl_gen_args = extract_type.args;
-
     symbol_t *s;
-    bool base_symbol_used = false;
-
     ast_expr_t *self_arg = &select->left;
-    if (impl_gen_args) {
-        char *arg_hash = generics_impl_args_hash(m, impl_gen_args);
 
-        // 优先精确匹配，然后是通用匹配
-        char *impl_symbol_name_with_hash = str_connect_by(impl_symbol_name, arg_hash, GEN_REWRITE_SEPARATOR);
-        s = symbol_table_get(impl_symbol_name_with_hash);
-        if (s) {
-            impl_symbol_name = impl_symbol_name_with_hash;
-        } else {
-            s = symbol_table_get(impl_symbol_name);
-        }
-
-        INFER_ASSERTF(s, "type '%s' not impl '%s' fn", type_format(extract_type), select->key);
-    } else {
-        s = symbol_table_get(impl_symbol_name);
-        if (!s) {
+    s = symbol_table_get(impl_symbol_name);
+    if (!s) {
+        if (extract_type.kind != TYPE_IDENT) {
             // ident to default kind(need args)
             type_t builtin_type = type_copy(m, extract_type);
             builtin_type.ident = NULL;
             builtin_type.ident_kind = 0;
             builtin_type.args = NULL;
             builtin_type.status = REDUCTION_STATUS_UNDO;
-            builtin_type = reduction_type(m, builtin_type);
 
-            // new impl
+            // 继承原始类型实现, 比如 type custom_vec = vec,  可以使用 vec.push vec.append 等
+            builtin_type = reduction_type(m, builtin_type);
             if (builtin_type.ident && builtin_type.ident_kind == TYPE_IDENT_BUILTIN) {
                 impl_ident = builtin_type.ident;
                 impl_gen_args = builtin_type.args;
                 impl_symbol_name = impl_symbol_name_new(impl_ident, select->key);
-                if (impl_gen_args) {
-                    char *arg_hash = generics_impl_args_hash(m, impl_gen_args);
-
-                    // 优先精确匹配，然后是通用匹配
-                    char *impl_symbol_name_with_hash = str_connect_by(impl_symbol_name, arg_hash,
-                                                                      GEN_REWRITE_SEPARATOR);
-                    s = symbol_table_get(impl_symbol_name_with_hash);
-                    if (s) {
-                        impl_symbol_name = impl_symbol_name_with_hash;
-                    } else {
-                        s = symbol_table_get(impl_symbol_name);
-                    }
-                } else {
-                    impl_ident = extract_type.ident;
-                    s = symbol_table_get(impl_symbol_name);
-                }
-
-                // if symbol name is builtin, change self arg type
+                s = symbol_table_get(impl_symbol_name);
             }
 
-            INFER_ASSERTF(s, "type '%s' not impl '%s' fn", type_format(extract_type), select->key);
-            if (select_left_type.kind == TYPE_REF || select_left_type.kind == TYPE_PTR) {
-                self_arg->type.ptr->value_type = builtin_type;
-            } else {
-                self_arg->type = builtin_type;
+            if (s) {
+                // 调整原始 extract_type 为 builtin type
+                if (select_left_type.kind == TYPE_REF || select_left_type.kind == TYPE_PTR) {
+                    self_arg->type.ptr->value_type = builtin_type;
+                } else {
+                    self_arg->type = builtin_type;
+                }
             }
         }
+
+        INFER_ASSERTF(s, "type '%s' not impl '%s' fn", type_format(extract_type), select->key);
     }
 
     // rewrite call left ident, 延迟到 call left fn type 确定后再做
     call->left = *ast_ident_expr(call->left.line, call->left.column, impl_symbol_name);
-    call->generics_args = impl_gen_args;
+
+    // impl type 的泛型参数位于前缀，后接 call 显式传入的方法泛型参数（如果有）
+    list_t *explicit_generics_args = NULL;
+    if (impl_gen_args || call->generics_args) {
+        explicit_generics_args = ct_list_new(sizeof(type_t));
+    }
+    if (impl_gen_args) {
+        for (int i = 0; i < impl_gen_args->length; ++i) {
+            type_t *arg = ct_list_value(impl_gen_args, i);
+            ct_list_push(explicit_generics_args, arg);
+        }
+    }
+    if (call->generics_args) {
+        for (int i = 0; i < call->generics_args->length; ++i) {
+            type_t *arg = ct_list_value(call->generics_args, i);
+            ct_list_push(explicit_generics_args, arg);
+        }
+    }
+    call->generics_args = explicit_generics_args;
+
     rewrite_generics_ident(m, call, target_type);
 
     type_t left_type = infer_right_expr(m, &call->left, type_kind_new(TYPE_UNKNOWN));
@@ -3913,10 +3776,6 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     if (t.kind == TYPE_MAP) {
         t.map->key_type = reduction_type(m, t.map->key_type);
         t.map->value_type = reduction_type(m, t.map->value_type);
-
-        INFER_ASSERTF(is_map_set_key_type(t.map->key_type.kind),
-                      "type '%s' not support as map key", type_format(t.map->key_type));
-
         t.ident_kind = TYPE_IDENT_BUILTIN;
         t.ident = type_kind_str[TYPE_MAP];
         t.args = ct_list_new(sizeof(type_t));
@@ -3929,9 +3788,6 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
 
     if (t.kind == TYPE_SET) {
         t.set->element_type = reduction_type(m, t.set->element_type);
-        INFER_ASSERTF(is_map_set_key_type(t.set->element_type.kind),
-                      "type '%s' not support as set element", type_format(t.set->element_type));
-
         t.ident_kind = TYPE_IDENT_BUILTIN;
         t.ident = type_kind_str[TYPE_SET];
         t.args = ct_list_new(sizeof(type_t));
@@ -4184,6 +4040,50 @@ static void combination_interface(module_t *m, ast_typedef_stmt_t *typedef_stmt)
             sc_map_put_sv(&exists, temp->fn->fn_name, temp);
             ct_list_push(origin_interface->elements, temp);
         }
+
+        if (impl_interface->interface->alloc_types && impl_interface->interface->alloc_types->length > 0) {
+            if (!origin_interface->alloc_types) {
+                origin_interface->alloc_types = ct_list_new(sizeof(type_t));
+            }
+
+            for (int j = 0; j < impl_interface->interface->alloc_types->length; ++j) {
+                type_t *temp = ct_list_value(impl_interface->interface->alloc_types, j);
+                bool exists_type = false;
+                for (int k = 0; k < origin_interface->alloc_types->length; ++k) {
+                    type_t *origin_alloc = ct_list_value(origin_interface->alloc_types, k);
+                    if (type_compare(*origin_alloc, *temp)) {
+                        exists_type = true;
+                        break;
+                    }
+                }
+
+                if (!exists_type) {
+                    ct_list_push(origin_interface->alloc_types, temp);
+                }
+            }
+        }
+
+        if (impl_interface->interface->deny_types && impl_interface->interface->deny_types->length > 0) {
+            if (!origin_interface->deny_types) {
+                origin_interface->deny_types = ct_list_new(sizeof(type_t));
+            }
+
+            for (int j = 0; j < impl_interface->interface->deny_types->length; ++j) {
+                type_t *temp = ct_list_value(impl_interface->interface->deny_types, j);
+                bool exists_type = false;
+                for (int k = 0; k < origin_interface->deny_types->length; ++k) {
+                    type_t *origin_deny = ct_list_value(origin_interface->deny_types, k);
+                    if (type_compare(*origin_deny, *temp)) {
+                        exists_type = true;
+                        break;
+                    }
+                }
+
+                if (!exists_type) {
+                    ct_list_push(origin_interface->deny_types, temp);
+                }
+            }
+        }
     }
 }
 
@@ -4393,13 +4293,25 @@ static type_t reduction_enum(module_t *m, type_t t) {
 
 static type_t reduction_interface(module_t *m, type_t t) {
     type_interface_t *type_interface = t.interface;
-    if (type_interface->elements->length == 0) {
-        return t;
-    }
+    generics_interface_fill_builtin_alloc_types(t);
 
     for (int i = 0; i < type_interface->elements->length; ++i) {
         type_t *temp = ct_list_value(type_interface->elements, i);
         *temp = reduction_type(m, *temp);
+    }
+
+    if (type_interface->alloc_types && type_interface->alloc_types->length > 0) {
+        for (int i = 0; i < type_interface->alloc_types->length; ++i) {
+            type_t *alloc_type = ct_list_value(type_interface->alloc_types, i);
+            *alloc_type = reduction_type(m, *alloc_type);
+        }
+    }
+
+    if (type_interface->deny_types && type_interface->deny_types->length > 0) {
+        for (int i = 0; i < type_interface->deny_types->length; ++i) {
+            type_t *deny_type = ct_list_value(type_interface->deny_types, i);
+            *deny_type = reduction_type(m, *deny_type);
+        }
     }
 
     return t;
@@ -4525,58 +4437,6 @@ STATUS_DONE:
     return t;
 }
 
-static void infer_generics_param_constraints(module_t *m, type_t *impl_type, list_t *generics_params) {
-    // 定位 type_alias
-    assert(impl_type->kind == TYPE_IDENT);
-    assert(impl_type->ident_kind == TYPE_IDENT_DEF);
-
-    char *impl_ident = impl_type->ident;
-    symbol_t *symbol = symbol_table_get(impl_ident);
-
-    INFER_ASSERTF(symbol, "type '%s' not found", impl_ident);
-    INFER_ASSERTF(symbol->type == SYMBOL_TYPE, "'%s' not type", symbol->ident);
-    ast_typedef_stmt_t *ast_stmt = symbol->ast_value;
-    list_t *params = ast_stmt->params;
-
-    INFER_ASSERTF(params && params->length == generics_params->length, "type '%s' param not match", impl_ident);
-    if (generics_params->length == 0) {
-        return;
-    }
-
-    // generics_params 定义的约束应该包含在 impl_type 定义的 params 中
-    for (int i = 0; i < params->length; ++i) {
-        ast_generics_param_t *type_generics_param = ct_list_value(params, i);
-
-        for (int j = 0; j < type_generics_param->constraints.elements->length; ++j) {
-            type_t *constraint = ct_list_value(type_generics_param->constraints.elements, j);
-            *constraint = reduction_type(m, *constraint);
-
-            if (type_generics_param->constraints.elements->length == 1) {
-                if (constraint->kind == TYPE_INTERFACE) {
-                    type_generics_param->constraints.and = true;
-                } else if (constraint->kind != TYPE_UNION) {
-                    // or 表示单个类型约束？那 union 呢？怎么 check, 怎么约束？
-                    type_generics_param->constraints.or = true;
-                }
-            }
-
-            if (type_generics_param->constraints.and) {
-                // must interface
-                INFER_ASSERTF(constraint->kind == TYPE_INTERFACE, "only type 'interface' can be combination with '&'");
-            } else if (type_generics_param->constraints.or) {
-                INFER_ASSERTF(constraint->kind != TYPE_UNION, "cannot use type 'union' combination")
-                INFER_ASSERTF(constraint->kind != TYPE_INTERFACE, "cannot use type 'interface' combination")
-            }
-        }
-
-        ast_generics_param_t *impl_generics_param = ct_list_value(generics_params, i);
-
-        bool compare = generics_constraints_compare(&type_generics_param->constraints,
-                                                    &impl_generics_param->constraints);
-        INFER_ASSERTF(compare, "type '%s' param constraint mismatch", impl_ident);
-    }
-}
-
 /**
  * 为了能够和 impl 中声明的 fn 进行 compare, 需要将 fn 将 self 参数暂时去除, 并且不改变 fndef 中的 ident/return_type/type 等
  */
@@ -4629,11 +4489,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
         return fndef->type;
     }
 
-    if (fndef->is_generics) {
-        if (!m->infer_type_args_stack) {
-            INFER_ASSERTF(false, "cannot infer generics fn `%s`", fndef->fn_name);
-        }
-
+    if (fndef->is_generics && m->infer_type_args_stack) {
         table_t *args_table = stack_top(m->infer_type_args_stack);
         assert(args_table);
 
@@ -4650,19 +4506,21 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     type_fn->is_tpl = fndef->is_tpl;
     type_fn->is_errable = fndef->is_errable;
     type_fn->param_types = ct_list_new(sizeof(type_t));
+    fndef->return_type.status = REDUCTION_STATUS_UNDO;
     type_fn->return_type = reduction_type(m, fndef->return_type);
 
     fndef->return_type = type_fn->return_type;
 
     for (int i = 0; i < fndef->params->length; ++i) {
         ast_var_decl_t *param = ct_list_value(fndef->params, i);
-
+        param->type.status = REDUCTION_STATUS_UNDO;
         param->type = reduction_type(m, param->type);
 
         if (fndef->is_impl && !fndef->is_static && fndef->self_kind != PARAM_SELF_NULL && i == 0) {
             if (param->type.storage_kind != STORAGE_KIND_PTR) {
+                // DIR/IND
                 if (fndef->self_kind == PARAM_SELF_REF_T) {
-                    param->type = type_refof(param->type);
+                    param->type = type_refof(param->type); // TODO cannot refof
                 } else if (fndef->self_kind == PARAM_SELF_PTR_T) {
                     param->type = type_ptrof(param->type);
                 } else {
@@ -4717,8 +4575,6 @@ static void infer_fndef(module_t *m, ast_fndef_t *fn) {
     m->current_line = fn->line;
     m->current_column = fn->column;
 
-    type_t t = fn->type;
-
     // rewrite_formals ident
     for (int i = 0; i < fn->params->length; ++i) {
         ast_var_decl_t *var_decl = ct_list_value(fn->params, i);
@@ -4731,7 +4587,7 @@ static void infer_fndef(module_t *m, ast_fndef_t *fn) {
         INFER_ASSERTF(symbol->type == SYMBOL_VAR, "symbol type not expected");
 
         ast_var_decl_t *var_decl = symbol->ast_value;
-        var_decl->type = t;
+        var_decl->type = fn->type;
     }
 
     // env 表达式类型还原
@@ -4757,99 +4613,6 @@ static void infer_fndef(module_t *m, ast_fndef_t *fn) {
 }
 
 /**
- * union type 才能进行 product
- */
-void cartesian_product(list_t *generics_params, int depth, type_t **temp_product, slice_t *result) {
-    if (depth == generics_params->length) {
-        // 从新申请空间， copy 到 result 中
-        table_t *arg_table = table_new();
-        for (int i = 0; i < generics_params->length; ++i) {
-            ast_generics_param_t *param = ct_list_value(generics_params, i);
-            // 直接引用到了 constraints 中
-            table_set(arg_table, param->ident, temp_product[i]);
-        }
-
-        slice_push(result, arg_table);
-    } else {
-        ast_generics_param_t *param = ct_list_value(generics_params, depth);
-        for (int i = 0; i < param->constraints.elements->length; ++i) {
-            type_t *type = ct_list_value(param->constraints.elements, i);
-            assert(type->status == REDUCTION_STATUS_DONE);
-            temp_product[depth] = type;
-            cartesian_product(generics_params, depth + 1, temp_product, result);
-        }
-    }
-}
-
-/**
- * 排列组合计算 hash
- * @param generics_params
- * @return
- */
-static slice_t *generics_constraints_valid_product(module_t *m, type_t *impl_type, list_t *generics_params) {
-    slice_t *hash_list = slice_new();
-
-    // 要么全部是 any， 要么不能全部是 any, 避免复杂的匹配情况
-    for (int i = 0; i < generics_params->length; ++i) {
-        ast_generics_param_t *param = ct_list_value(generics_params, i);
-        for (int j = 0; j < param->constraints.elements->length; ++j) {
-            type_t *temp = ct_list_value(param->constraints.elements, j);
-            *temp = reduction_type(m, *temp);
-
-            if (param->constraints.elements->length == 1) {
-                if (temp->kind == TYPE_INTERFACE) {
-                    param->constraints.and = true;
-                } else if (temp->kind != TYPE_UNION) {
-                    // or 表示单个类型约束？那 union 呢？怎么 check, 怎么约束？
-                    param->constraints.or = true;
-                }
-            }
-
-
-            if (param->constraints.and) {
-                // must interface
-                INFER_ASSERTF(temp->ident_kind == TYPE_IDENT_INTERFACE,
-                              "only type 'interface' can be combination with '&'");
-            } else if (param->constraints.or) {
-                // cannot interface and union
-                INFER_ASSERTF(temp->kind != TYPE_UNION, "cannot use type 'union' combination")
-                INFER_ASSERTF(temp->kind != TYPE_INTERFACE, "cannot use type 'interface' combination")
-            }
-        }
-
-        // Only 'or' can constraints product
-        if (param->constraints.any || param->constraints.and) {
-            if (type_is_ident(impl_type)) {
-                // type ident 才会存在 args
-                infer_generics_param_constraints(m, impl_type, generics_params);
-            }
-
-            return hash_list; // 存在 any 则无法进行具体数量的组合约束
-        }
-    }
-
-    if (type_is_ident(impl_type)) {
-        // type ident 才会存在 args
-        infer_generics_param_constraints(m, impl_type, generics_params);
-    }
-
-
-    slice_t *combinations = slice_new();
-    // 对 param 的 param->constraints 进行笛卡尔积计算, 也就是全量的排列组合, 比如 fn person_t<T:int|float, U:string> 的类型排列组合有  int+string 和 float+string 种可能
-    void *current_product = mallocz(sizeof(void *) * generics_params->length);
-    cartesian_product(generics_params, 0, current_product, combinations);
-
-    SLICE_FOR(combinations) {
-        table_t *arg_table = SLICE_VALUE(combinations);
-        char *arg_hash = generics_args_hash(m, generics_params, arg_table);
-        slice_push(hash_list, arg_hash);
-    }
-
-    return hash_list;
-}
-
-
-/**
  * 对左右的 fn def 中的 param 进行初步还原，这样 call gen fn 时才能正确的匹配类型
  * @param m
  */
@@ -4866,40 +4629,15 @@ void pre_infer(module_t *m) {
         m->current_line = fndef->line;
         m->current_column = fndef->column;
 
-        if (!fndef->is_generics) {
-            // fndef 可能是，依旧不影响进行 reduction, type_param 跳过即可
-            infer_fn_decl(m, fndef, type_kind_new(TYPE_UNKNOWN));
-
-            // infer child
-            for (int j = 0; j < fndef->local_children->count; ++j) {
-                infer_fn_decl(m, fndef->local_children->take[j], type_kind_new(TYPE_UNKNOWN));
-            }
-
+        if (fndef->is_generics) {
             continue;
         }
 
-        // generics 的 generic_param+limit
-        assert(fndef->generics_params);
-
-        // 对泛型约束进行排列组合进行生成 ast_fndef 并注册到符号表中 但不进行具体函数生成, 因为 all_t 可以生成无数类型的函数，
-        // 仅仅通过 call 匹配出具体类型时才进行具体的函数类型生成, 所以仅仅是注册到符号表时的 key 有所不同
-        // 如果泛型类型为 any， 则返回的 generics_args 为 null
-        slice_t *generics_args = generics_constraints_valid_product(m, &fndef->impl_type, fndef->generics_params);
-
-        if (generics_args->count == 0) {
-            // 基础名称覆盖注册
-            symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
-        } else {
-            // 基于类型约束进行泛型展开
-            SLICE_FOR(generics_args) {
-                char *arg_hash = SLICE_VALUE(generics_args);
-
-                // 重新进行符号表注册, 不需要修改 fn->symbol_name, 此处只是用来协助匹配
-                char *symbol_name = fndef->symbol_name;
-                symbol_name = str_connect_by(symbol_name, arg_hash, GEN_REWRITE_SEPARATOR);
-                symbol_t *s = symbol_table_set(symbol_name, SYMBOL_FN, fndef, false);
-                ANALYZER_ASSERTF(s, "generics fn '%s' param constraint redeclared", fndef->fn_name);
-            }
+        // fndef 可能是，依旧不影响进行 reduction, type_param 跳过即可
+        infer_fn_decl(m, fndef, type_kind_new(TYPE_UNKNOWN));
+        // infer child
+        for (int j = 0; j < fndef->local_children->count; ++j) {
+            infer_fn_decl(m, fndef->local_children->take[j], type_kind_new(TYPE_UNKNOWN));
         }
     }
 
@@ -4916,10 +4654,6 @@ void infer(module_t *m) {
     m->current_line = 0;
     m->current_column = 0;
 
-    /**
-     * gen fn 作为模版函数, 存在类型 T 等泛型，不能直接进入到 infer_worklist 中进行 infer
-     * 当 call 时，gen fn  指定了具体类型，此时可以基于 is_tpl fn 生成 special fn，此时 special fn 可以推送到 fn->module->temp_worklist
-     */
     linked_t *infer_worklist = m->temp_worklist;
 
     // infer_worklist

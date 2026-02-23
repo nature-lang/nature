@@ -1,5 +1,6 @@
 use crate::analyzer::common::{AnalyzerError, AstFnDef, AstNode, ImportStmt, PackageConfig, Stmt};
 use crate::analyzer::flow::Flow;
+use crate::analyzer::generics::Generics;
 use crate::analyzer::lexer::{Lexer, Token};
 use crate::analyzer::semantic::Semantic;
 use crate::analyzer::symbol::{NodeId, SymbolTable};
@@ -385,6 +386,13 @@ impl Project {
             let m = &mut module_db[index];
             m.all_fndefs = Vec::new();
             Semantic::new(m, &mut symbol_table).analyze();
+        }
+
+        for index in module_indexes.clone() {
+            let mut module_db = self.module_db.lock().unwrap();
+            let symbol_table = self.symbol_table.lock().unwrap();
+            let m = &mut module_db[index];
+            Generics::new(m, &symbol_table).analyze();
         }
 
         // all pre infer

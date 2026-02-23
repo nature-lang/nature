@@ -17,7 +17,7 @@ fn main() {
         throw errorf('in closure err')
     }(), co.SAME)
 
-    fut.await() catch err {
+    fut.await_void() catch err {
         println('fut.await catch err: ' + err.msg())
     }
 

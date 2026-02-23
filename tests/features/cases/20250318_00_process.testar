@@ -33,7 +33,7 @@ process exited 0 0 hello world
 import io
 
 fn main():void! {
-    var buf = io.buffer{}
+    var buf = io.buffer.new()
     var n = buf.write('hello world' as [u8])
     println('write 1:', n, buf.empty(), buf.len(), buf.cap())
 

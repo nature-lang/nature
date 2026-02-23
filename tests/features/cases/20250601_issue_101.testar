@@ -14,7 +14,8 @@ fn bool.show_value(self):string {
 
 type custom_t<T> = T|null
 
-fn custom_t<T:custom_i>.show_value(&self):string {
+#where T:custom_i
+fn custom_t<T>.show_value(&self):string {
     return self.show_value()
 }
 
@@ -27,7 +28,8 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:15:2: type 'main.custom_t' param constraint mismatch
+nature-test/main.n:25:13: type 'bool' not impl 'main.custom_i' interface
+
 
 === test_deny_duck_interface
 --- main.n
@@ -43,9 +45,10 @@ fn bool.show_value(self):string {
     }
 }
 
-type custom_t<T:custom_i> = T|null
+type custom_t<T> = T|null
 
-fn custom_t<T:custom_i>.show_value(&self):string {
+#where T:custom_i
+fn custom_t<T>.show_value(&self):string {
     return self.show_value()
 }
 
@@ -58,7 +61,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:23:12: type 'bool' not impl 'main.custom_i' interface
+nature-test/main.n:25:13: type 'bool' not impl 'main.custom_i' interface
 
 
 === test_my_bool_interface
@@ -77,9 +80,10 @@ fn my_bool.show_value(self):string {
     }
 }
 
-type custom_t<T:custom_i> = T|null
+type custom_t<T> = T|null
 
-fn custom_t<T:custom_i>.show_value(&self):string {
+#where T:custom_i
+fn custom_t<T>.show_value(&self):string {
     return self.show_value()
 }
 
@@ -109,9 +113,10 @@ fn my_bool.show_value(self):string {
     }
 }
 
-type custom_t<T:custom_i> = T|null
+type custom_t<T> = T|null
 
-fn custom_t<T:custom_i>.show_values(&self):string {
+#where T:custom_i
+fn custom_t<T>.show_values(self):string {
     // self = union<T> // union/vec/set/map/tup/fn/chan Not converted to ptr
     return self.show_value() // type 'main.custom_t(union)' not impl 'show_value' fn
 }
@@ -125,4 +130,4 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:19:15: type 'main.custom_t<main.my_bool>(union)' not impl 'show_value' fn
+nature-test/main.n:20:15: type 'main.custom_t<main.my_bool>(union)' not impl 'show_value' fn
