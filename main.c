@@ -1,4 +1,5 @@
 #include "cmd/root.h"
+#include "cmd/self_update.h"
 #include "cmd/test.h"
 #include "config/config.h"
 #include "utils/helper.h"
@@ -6,6 +7,7 @@
 #include <stdio.h>
 
 #define ARGS_BUILD "build"
+#define ARGS_SELF_UPDATE "self-update"
 #define ARGS_TEST "test"
 
 void print_help() {
@@ -15,6 +17,7 @@ void print_help() {
 
     printf("Available Commands:\n");
     printf("  build       Build a Nature source file\n");
+    printf("  self-update Update Nature installation\n");
     printf("  test        Run tests in a Nature source file\n\n");
 
     printf("Build Command Usage:\n");
@@ -22,6 +25,9 @@ void print_help() {
 
     printf("Test Command Usage:\n");
     printf("  nature test [flags] <source_file>\n\n");
+
+    printf("Self-Update Command Usage:\n");
+    printf("  nature self-update [--check] [--yes] [--force]\n\n");
 
     printf("Build Flags:\n");
     printf("  -o <name>     Specify output filename (default: main)\n");
@@ -33,6 +39,11 @@ void print_help() {
 
     printf("Test Flags:\n");
     printf("  --skip <name> Skip a test by name (repeatable)\n\n");
+
+    printf("Self-Update Flags:\n");
+    printf("  --check      Check latest version without installing\n");
+    printf("  --yes        Skip confirmation prompt\n");
+    printf("  --force      Reinstall even when already up to date\n\n");
 
     printf("Cross Compilation:\n");
     printf("  nature build --target <platform> <source_file>\n\n");
@@ -53,6 +64,9 @@ void print_help() {
 
     printf("  nature test main.n                          # Run tests\n");
     printf("  nature test --skip sum main.n               # Skip a specific test\n\n");
+    printf("  nature self-update --check                  # Check latest version\n");
+    printf("  nature self-update --yes                    # Update without prompt\n");
+    printf("  nature self-update --force --yes            # Reinstall latest version\n\n");
 
     printf("Global Flags:\n");
     printf("  --help, -h    Show help information\n");
@@ -94,6 +108,13 @@ int main(int argc, char *argv[]) {
         argv[1] = argv[0];
         argv += 1;
         cmd_test_entry(argc - 1, argv);
+        return 0;
+    }
+
+    if (str_equal(first, ARGS_SELF_UPDATE)) {
+        argv[1] = argv[0];
+        argv += 1;
+        cmd_self_update_entry(argc - 1, argv);
         return 0;
     }
 
