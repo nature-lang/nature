@@ -128,30 +128,30 @@ typedef enum {
 } ast_expr_op_t;
 
 static string ast_expr_op_str[] = {
-        [AST_OP_ADD] = "+",
-        [AST_OP_SUB] = "-",
-        [AST_OP_MUL] = "*",
-        [AST_OP_DIV] = "/",
-        [AST_OP_REM] = "%",
+    [AST_OP_ADD] = "+",
+    [AST_OP_SUB] = "-",
+    [AST_OP_MUL] = "*",
+    [AST_OP_DIV] = "/",
+    [AST_OP_REM] = "%",
 
-        [AST_OP_AND] = "&",
-        [AST_OP_OR] = "|",
-        [AST_OP_XOR] = "^",
-        [AST_OP_BNOT] = "~",
-        [AST_OP_LSHIFT] = "<<",
-        [AST_OP_RSHIFT] = ">>",
+    [AST_OP_AND] = "&",
+    [AST_OP_OR] = "|",
+    [AST_OP_XOR] = "^",
+    [AST_OP_BNOT] = "~",
+    [AST_OP_LSHIFT] = "<<",
+    [AST_OP_RSHIFT] = ">>",
 
-        [AST_OP_LT] = "<",
-        [AST_OP_LE] = "<=",
-        [AST_OP_GT] = ">", // >
-        [AST_OP_GE] = ">=", // >=
-        [AST_OP_EE] = "==", // ==
-        [AST_OP_NE] = "!=", // !=
-        [AST_OP_OR_OR] = "||",
-        [AST_OP_AND_AND] = "&&",
+    [AST_OP_LT] = "<",
+    [AST_OP_LE] = "<=",
+    [AST_OP_GT] = ">", // >
+    [AST_OP_GE] = ">=", // >=
+    [AST_OP_EE] = "==", // ==
+    [AST_OP_NE] = "!=", // !=
+    [AST_OP_OR_OR] = "||",
+    [AST_OP_AND_AND] = "&&",
 
-        [AST_OP_NOT] = "!", // unary !right
-        [AST_OP_NEG] = "-", // unary -right
+    [AST_OP_NOT] = "!", // unary !right
+    [AST_OP_NEG] = "-", // unary -right
 };
 
 struct ast_stmt_t {
@@ -643,9 +643,6 @@ typedef struct {
 
 typedef struct {
     list_t *elements;
-    bool any;
-    bool and;
-    bool or ;
 } ast_generics_constraints;
 
 typedef struct {
@@ -679,6 +676,7 @@ struct ast_fndef_t {
     // 闭包处理中的的 var name, 可能为 null
     // 其通过 jit 封装了一份完整的执行环境，并将环境通过 last param 传递给 symbol name 对应的函数 body 部分
     char *jit_closure_name;
+
     type_t return_type;
     list_t *params; // ast_var_decl_t*
     bool rest_param;
@@ -732,6 +730,8 @@ struct ast_fndef_t {
 
     // tpl fn 可以自定义 #linkid 宏, 用来自定义链接符号名称
     char *linkid;
+    // parser 暂存 #where 约束，进入 parser_fndef_stmt 后会并入 generics_params
+    list_t *pending_where_params; // ast_generics_param_t
 
     // 当 self_kind == PARAM_SELF_T 时，interface 存储指针数据但方法期望值类型
     // receiver_wrapper 用于接收指针参数，解引用后调用原函数
@@ -792,9 +792,6 @@ static inline ast_generics_param_t *ast_generics_param_new(int line, int column,
     param->ident = ident;
 
     param->constraints.elements = ct_list_new(sizeof(type_t));
-    param->constraints.any = true;
-    param->constraints.and = false;
-    param->constraints.or = false;
     return param;
 }
 
@@ -944,6 +941,7 @@ static inline ast_fndef_t *ast_fndef_new(module_t *m, int line, int column) {
     fndef->rel_path = m->rel_path;
     fndef->symbol_name = NULL;
     fndef->linkid = NULL;
+    fndef->pending_where_params = NULL;
     fndef->jit_closure_name = NULL;
     fndef->line = line;
     fndef->column = column;

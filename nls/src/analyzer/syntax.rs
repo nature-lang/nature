@@ -521,6 +521,148 @@ impl<'a> Syntax {
         ));
     }
 
+    fn find_generics_param(params: &Vec<GenericsParam>, ident: &str) -> Option<usize> {
+        params.iter().position(|param| param.ident == ident)
+    }
+
+    fn push_generics_param(&mut self, params: &mut Vec<GenericsParam>, ident_token: &Token) -> Result<(), SyntaxError> {
+        if Self::find_generics_param(params, &ident_token.literal).is_some() {
+            return Err(SyntaxError(
+                ident_token.start,
+                ident_token.end,
+                format!("generics param '{}' redeclared", ident_token.literal),
+            ));
+        }
+
+        params.push(GenericsParam::new(ident_token.literal.clone()));
+        self.type_params_table.insert(ident_token.literal.clone(), ident_token.literal.clone());
+        Ok(())
+    }
+
+    fn parser_parse_generics_decl(&mut self, params: &mut Vec<GenericsParam>) -> Result<(), SyntaxError> {
+        loop {
+            let ident = self.must(TokenType::Ident)?.clone();
+            self.push_generics_param(params, &ident)?;
+
+            if self.consume(TokenType::Colon) {
+                return Err(SyntaxError(
+                    self.peek().start,
+                    self.peek().end,
+                    "generic constraints must be declared with '#where'".to_string(),
+                ));
+            }
+
+            if !self.consume(TokenType::Comma) {
+                break;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn parser_parse_where_constraints(&mut self) -> Result<Vec<GenericsParam>, SyntaxError> {
+        let mut where_params = Vec::new();
+
+        if self.is(TokenType::StmtEof) {
+            return Err(SyntaxError(
+                self.peek().start,
+                self.peek().end,
+                "#where must declare at least one generic constraint".to_string(),
+            ));
+        }
+
+        while !self.is(TokenType::StmtEof) && !self.is(TokenType::Eof) && !self.is(TokenType::Fn) {
+            let ident = self.must(TokenType::Ident)?.clone();
+            let mut param = GenericsParam::new(ident.literal.clone());
+            self.must(TokenType::Colon)?;
+
+            loop {
+                let item = self.parser_single_type()?;
+                param.constraints.push(item);
+
+                if !self.consume(TokenType::And) {
+                    break;
+                }
+            }
+
+            if self.is(TokenType::Or) {
+                return Err(SyntaxError(
+                    self.peek().start,
+                    self.peek().end,
+                    "generic constraints only support '&' with interface constraints".to_string(),
+                ));
+            }
+
+            if param.constraints.is_empty() {
+                return Err(SyntaxError(ident.start, ident.end, "generic constraint cannot be empty".to_string()));
+            }
+
+            if Self::find_generics_param(&where_params, &ident.literal).is_some() {
+                return Err(SyntaxError(
+                    ident.start,
+                    ident.end,
+                    format!("generic param '{}' constraint redeclared", ident.literal),
+                ));
+            }
+            where_params.push(param);
+
+            if !self.consume(TokenType::Comma) {
+                break;
+            }
+
+            // #where 支持最后一个约束后保留逗号
+            if self.is(TokenType::StmtEof) || self.is(TokenType::Eof) || self.is(TokenType::Fn) {
+                break;
+            }
+        }
+
+        if where_params.is_empty() {
+            return Err(SyntaxError(
+                self.peek().start,
+                self.peek().end,
+                "#where must declare at least one generic constraint".to_string(),
+            ));
+        }
+
+        Ok(where_params)
+    }
+
+    fn parser_apply_where_constraints(&mut self, fndef: &mut AstFnDef) -> Result<(), SyntaxError> {
+        let Some(where_params) = fndef.pending_where_params.take() else {
+            return Ok(());
+        };
+
+        let Some(generics_params) = fndef.generics_params.as_mut() else {
+            return Err(SyntaxError(
+                fndef.symbol_start,
+                fndef.symbol_end,
+                "#where can only be used with generic fn".to_string(),
+            ));
+        };
+
+        if generics_params.is_empty() {
+            return Err(SyntaxError(
+                fndef.symbol_start,
+                fndef.symbol_end,
+                "#where can only be used with generic fn".to_string(),
+            ));
+        }
+
+        for where_param in where_params {
+            let Some(index) = Self::find_generics_param(generics_params, &where_param.ident) else {
+                return Err(SyntaxError(
+                    fndef.symbol_start,
+                    fndef.symbol_end,
+                    format!("generic param '{}' not found", where_param.ident),
+                ));
+            };
+
+            generics_params[index].constraints = where_param.constraints;
+        }
+
+        Ok(())
+    }
+
     fn is_basic_type(&self) -> bool {
         matches!(
             self.peek().token_type,
@@ -1069,43 +1211,8 @@ impl<'a> Syntax {
                 return Err(SyntaxError(self.peek().start, self.peek().end, "type alias params cannot be empty".to_string()));
             }
 
-            // 临时保存当前的 type_params_table, 协助 parser 解析
             self.type_params_table = HashMap::new();
-
-            loop {
-                let ident = self.must(TokenType::Ident)?.literal.clone();
-                let mut param: GenericsParam = GenericsParam::new(ident.clone());
-
-                // 可选的泛型类型约束 <T:t1|t2, U:t1&t2>
-                if self.consume(TokenType::Colon) {
-                    let mut t = self.parser_single_type()?;
-                    param.constraints.0.push(t);
-
-                    if self.is(TokenType::Or) {
-                        param.constraints.3 = true;
-                        while self.consume(TokenType::Or) {
-                            t = self.parser_single_type()?;
-                            param.constraints.0.push(t);
-                        }
-                    } else if self.is(TokenType::And) {
-                        param.constraints.2 = true;
-                        while self.consume(TokenType::And) {
-                            t = self.parser_single_type()?;
-                            param.constraints.0.push(t);
-                        }
-                    }
-
-                    param.constraints.1 = false;
-                }
-
-                typedef_params.push(param);
-
-                self.type_params_table.insert(ident.clone(), ident.clone());
-
-                if !self.consume(TokenType::Comma) {
-                    break;
-                }
-            }
+            self.parser_parse_generics_decl(&mut typedef_params)?;
 
             self.must(TokenType::RightAngle)?;
         }
@@ -3044,56 +3151,21 @@ impl<'a> Syntax {
         self.must(TokenType::Fn)?;
 
         // 检查是否是类型实现函数
-        let is_impl_type = if self.is_impl_fn() {
+        if self.is_impl_fn() {
             let temp_current = self.current; // 回退位置
             fndef.is_impl = true;
 
             let first_token = self.safe_advance()?.clone();
+            let mut impl_generics_params = Vec::new();
 
-            // 处理泛型参数
+            // impl type 的泛型参数需要先行收集，供后续 self/签名解析
             if self.consume(TokenType::LeftAngle) {
                 self.type_params_table = HashMap::new();
-                fndef.generics_params = Some(Vec::new());
-
-                loop {
-                    let ident = self.must(TokenType::Ident)?.clone();
-
-                    let mut param = GenericsParam::new(ident.literal.clone());
-
-                    // 处理泛型约束 <T:t1|t2, U:t1|t2>
-                    if self.consume(TokenType::Colon) {
-                        let mut t = self.parser_single_type()?;
-                        param.constraints.0.push(t);
-
-                        if self.is(TokenType::Or) {
-                            param.constraints.3 = true;
-                            while self.consume(TokenType::Or) {
-                                t = self.parser_single_type()?;
-                                param.constraints.0.push(t);
-                            }
-                        } else if self.is(TokenType::And) {
-                            param.constraints.2 = true;
-                            while self.consume(TokenType::And) {
-                                t = self.parser_single_type()?;
-                                param.constraints.0.push(t);
-                            }
-                        }
-
-                        param.constraints.1 = false;
-                    }
-
-                    if let Some(params) = &mut fndef.generics_params {
-                        params.push(param);
-                    }
-
-                    self.type_params_table.insert(ident.literal.clone(), ident.literal.clone());
-
-                    if !self.consume(TokenType::Comma) {
-                        break;
-                    }
-                }
-
+                self.parser_parse_generics_decl(&mut impl_generics_params)?;
                 self.must(TokenType::RightAngle)?;
+            }
+            if !impl_generics_params.is_empty() {
+                fndef.generics_params = Some(impl_generics_params.clone());
             }
 
             self.current = temp_current;
@@ -3105,22 +3177,25 @@ impl<'a> Syntax {
                 t.ident_kind = TypeIdentKind::Def;
                 t.start = first_token.start;
 
-                if fndef.generics_params.is_some() {
+                if !impl_generics_params.is_empty() {
                     self.must(TokenType::LeftAngle)?;
                     let mut args = Vec::new();
 
                     loop {
                         let param_type = self.parser_single_type()?;
-                        debug_assert!(param_type.ident_kind == TypeIdentKind::GenericsParam);
-
+                        if param_type.ident_kind != TypeIdentKind::GenericsParam {
+                            return Err(SyntaxError(
+                                self.peek().start,
+                                self.peek().end,
+                                "impl generics args must be generic params".to_string(),
+                            ));
+                        }
                         if self.consume(TokenType::Colon) {
-                            loop {
-                                self.parser_single_type()?;
-
-                                if !self.consume(TokenType::Or) {
-                                    break;
-                                }
-                            }
+                            return Err(SyntaxError(
+                                self.peek().start,
+                                self.peek().end,
+                                "generic constraints must be declared with '#where'".to_string(),
+                            ));
                         }
 
                         args.push(param_type);
@@ -3140,7 +3215,6 @@ impl<'a> Syntax {
                     let mut t = self.parser_single_type()?;
                     t.ident = first_token.literal.clone();
                     t.ident_kind = TypeIdentKind::Builtin;
-                    t.args = Vec::new();
                     t
                 } else {
                     self.must(TokenType::Ident)?;
@@ -3188,11 +3262,7 @@ impl<'a> Syntax {
 
             fndef.impl_type = impl_type;
             self.must(TokenType::Dot)?;
-
-            true
-        } else {
-            false
-        };
+        }
 
         // 处理函数名
         self.set_current_token_type(SemanticTokenType::FUNCTION);
@@ -3201,50 +3271,17 @@ impl<'a> Syntax {
         fndef.symbol_name = ident.literal.clone();
         fndef.fn_name = ident.literal.clone();
 
-        // 处理非类型参数的泛型参数
-        if !is_impl_type && self.consume(TokenType::LeftAngle) {
-            self.type_params_table = HashMap::new();
-            fndef.generics_params = Some(Vec::new());
-
-            loop {
-                let ident = self.must(TokenType::Ident)?.literal.clone();
-                let mut param = GenericsParam::new(ident.clone());
-
-                // 处理泛型约束 <T:t1|t2, U:t1|t2>
-                if self.consume(TokenType::Colon) {
-                    let mut t = self.parser_single_type()?;
-                    param.constraints.0.push(t);
-
-                    if self.is(TokenType::Or) {
-                        param.constraints.3 = true;
-                        while self.consume(TokenType::Or) {
-                            t = self.parser_single_type()?;
-                            param.constraints.0.push(t);
-                        }
-                    } else if self.is(TokenType::And) {
-                        param.constraints.2 = true;
-                        while self.consume(TokenType::And) {
-                            t = self.parser_single_type()?;
-                            param.constraints.0.push(t);
-                        }
-                    }
-
-                    param.constraints.1 = false;
-                }
-
-                if let Some(params) = &mut fndef.generics_params {
-                    params.push(param);
-                }
-
-                self.type_params_table.insert(ident.clone(), ident.clone());
-
-                if !self.consume(TokenType::Comma) {
-                    break;
-                }
+        // impl type 泛型 + fn 泛型统一放入 fndef.generics_params
+        if self.consume(TokenType::LeftAngle) {
+            if fndef.generics_params.is_none() {
+                fndef.generics_params = Some(Vec::new());
+                self.type_params_table = HashMap::new();
             }
-
+            self.parser_parse_generics_decl(fndef.generics_params.as_mut().unwrap())?;
             self.must(TokenType::RightAngle)?;
         }
+
+        self.parser_apply_where_constraints(&mut fndef)?;
 
         self.parser_fn_params(&mut fndef)?;
 
@@ -3265,6 +3302,7 @@ impl<'a> Syntax {
         if self.is_stmt_eof() {
             fndef.is_tpl = true;
             fndef.symbol_end = self.prev().unwrap().end;
+            self.type_params_table = HashMap::new();
             stmt.node = AstNode::FnDef(Arc::new(Mutex::new(fndef)));
             stmt.end = self.prev().unwrap().end;
             return Ok(stmt);
@@ -3297,17 +3335,39 @@ impl<'a> Syntax {
                 }
             } else if token.literal == "local" {
                 fndef.is_private = true;
+            } else if token.literal == "where" {
+                if fndef.pending_where_params.is_some() {
+                    return Err(SyntaxError(token.start, token.end, "#where redeclared".to_string()));
+                }
+                fndef.pending_where_params = Some(self.parser_parse_where_constraints()?);
             } else if token.literal == "runtime_use" {
                 self.must(TokenType::Ident)?;
             } else {
-                // TODO 不认识的 label 进行 advance 直到下一个 label 开始
-                return Err(SyntaxError(token.start, token.end, format!("unknown fn label '{}'", token.literal)));
+                // skip unknown label payload
+                let _ = self.consume(TokenType::Ident);
+                let _ = self.consume(TokenType::StringLiteral);
             }
         }
 
-        self.must(TokenType::StmtEof)?;
+        if !self.consume(TokenType::StmtEof) {
+            // #where 允许最后一个约束后保留逗号，scanner 不会自动插入 StmtEof
+            if fndef.pending_where_params.is_none() {
+                return Err(SyntaxError(
+                    self.peek().start,
+                    self.peek().end,
+                    format!("expected '{}' found '{}'", TokenType::StmtEof, self.peek().literal),
+                ));
+            }
+        }
+
+        if fndef.pending_where_params.is_some() && !self.is(TokenType::Fn) {
+            return Err(SyntaxError(self.peek().start, self.peek().end, "#where can only be applied to fn".to_string()));
+        }
 
         if self.is(TokenType::Type) {
+            if fndef.pending_where_params.is_some() {
+                return Err(SyntaxError(self.peek().start, self.peek().end, "#where can only be applied to fn".to_string()));
+            }
             self.parser_typedef_stmt()
         } else if self.is(TokenType::Fn) {
             self.parser_fndef_stmt(fndef)

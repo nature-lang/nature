@@ -678,23 +678,19 @@ impl<'a> Semantic<'a> {
                                 // ident maybe change
                                 fndef.impl_type.symbol_id = symbol_id;
 
-                                // 检查: 如果 fndef 没有泛型参数，但 typedef 有泛型参数，则报错
-                                // 例如: type person_t<T> = struct{...}
-                                // fn person_t.hello() 是错误的，应该是 fn person_t<T>.hello()
-                                if fndef.generics_params.is_none() {
-                                    if let Some(symbol) = self.symbol_table.get_symbol(symbol_id) {
-                                        if let SymbolKind::Type(typedef_mutex) = &symbol.kind {
-                                            let typedef = typedef_mutex.lock().unwrap();
-                                            if !typedef.params.is_empty() {
-                                                errors_push(
-                                                    self.module,
-                                                    AnalyzerError {
-                                                        start: fndef.symbol_start,
-                                                        end: fndef.symbol_end,
-                                                        message: format!("impl type '{}' must specify generics params", fndef.impl_type.ident),
-                                                    },
-                                                );
-                                            }
+                                // 自定义泛型 impl type 必须显式给出类型参数（仅检查 impl_type.args）
+                                if let Some(symbol) = self.symbol_table.get_symbol(symbol_id) {
+                                    if let SymbolKind::Type(typedef_mutex) = &symbol.kind {
+                                        let typedef = typedef_mutex.lock().unwrap();
+                                        if !typedef.params.is_empty() && fndef.impl_type.args.len() != typedef.params.len() {
+                                            errors_push(
+                                                self.module,
+                                                AnalyzerError {
+                                                    start: fndef.symbol_start,
+                                                    end: fndef.symbol_end,
+                                                    message: format!("impl type '{}' must specify generics params", fndef.impl_type.ident),
+                                                },
+                                            );
                                         }
                                     }
                                 }
@@ -712,46 +708,42 @@ impl<'a> Semantic<'a> {
 
                         fndef.symbol_name = format_impl_ident(fndef.impl_type.ident.clone(), symbol_name);
 
-                        // 泛型 impl 函数的符号表注册延迟到 pre_infer 阶段处理
-                        // 与编译器行为保持一致
-                        if fndef.generics_params.is_none() {
-                            // register to global symbol table
-                            match self.symbol_table.define_symbol_in_scope(
-                                fndef.symbol_name.clone(),
-                                SymbolKind::Fn(fndef_mutex.clone()),
-                                fndef.symbol_start,
-                                self.module.scope_id,
-                            ) {
-                                Ok(symbol_id) => {
-                                    fndef.symbol_id = symbol_id;
-                                }
-                                Err(e) => {
-                                    errors_push(
-                                        self.module,
-                                        AnalyzerError {
-                                            start: fndef.symbol_start,
-                                            end: fndef.symbol_end,
-                                            message: e,
-                                        },
-                                    );
-                                }
+                        // register to global symbol table
+                        match self.symbol_table.define_symbol_in_scope(
+                            fndef.symbol_name.clone(),
+                            SymbolKind::Fn(fndef_mutex.clone()),
+                            fndef.symbol_start,
+                            self.module.scope_id,
+                        ) {
+                            Ok(symbol_id) => {
+                                fndef.symbol_id = symbol_id;
                             }
-
-                            // register to global symbol
-                            let _ = self.symbol_table.define_global_symbol(
-                                fndef.symbol_name.clone(),
-                                SymbolKind::Fn(fndef_mutex.clone()),
-                                fndef.symbol_start,
-                                self.module.scope_id,
-                            );
+                            Err(e) => {
+                                errors_push(
+                                    self.module,
+                                    AnalyzerError {
+                                        start: fndef.symbol_start,
+                                        end: fndef.symbol_end,
+                                        message: e,
+                                    },
+                                );
+                            }
                         }
+
+                        // register to global symbol
+                        let _ = self.symbol_table.define_global_symbol(
+                            fndef.symbol_name.clone(),
+                            SymbolKind::Fn(fndef_mutex.clone()),
+                            fndef.symbol_start,
+                            self.module.scope_id,
+                        );
                     }
 
                     global_fn_stmt_list.push(fndef_mutex.clone());
 
                     if let Some(generics_params) = &mut fndef.generics_params {
                         for generics_param in generics_params {
-                            for constraint in &mut generics_param.constraints.0 {
+                            for constraint in &mut generics_param.constraints {
                                 self.analyze_type(constraint);
                             }
                         }
@@ -788,7 +780,7 @@ impl<'a> Semantic<'a> {
                         if typedef.params.len() > 0 {
                             for param in typedef.params.iter_mut() {
                                 // 遍历所有 constraints 类型 进行 analyze
-                                for constraint in &mut param.constraints.0 {
+                                for constraint in &mut param.constraints {
                                     // TODO constraint 不能是自身
                                     self.analyze_type(constraint);
                                 }

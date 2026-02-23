@@ -27,6 +27,7 @@
 #include "src/register/linearscan.h"
 #include "src/schedule.h"
 #include "src/semantic/analyzer.h"
+#include "src/semantic/generics.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
 #include "utils/helper.h"
@@ -1109,6 +1110,14 @@ static void cleanup_temp_dir() {
 }
 
 static void build_compiler(slice_t *modules) {
+    // generics pass
+    // module 基于广度 import 进入，倒叙遍历解决依赖问题
+    for (int i = modules->count - 1; i >= 0; --i) {
+        module_t *m = modules->take[i];
+        generics(m);
+    }
+
+    // pre infer pass
     // 优先处理 builtin_module
     for (int i = modules->count - 1; i >= 0; --i) {
         module_t *m = modules->take[i];

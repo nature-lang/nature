@@ -1,0 +1,111 @@
+=== test_basic
+--- main.n
+type box_t<T> = struct{
+    T value
+}
+
+fn box_t<T>.get(self):T {
+    return self.value
+}
+
+fn main() {
+    var b = box_t<int>{value:42}
+    assert(b.get() == 42)
+}
+
+=== test_method_generics_infer
+--- main.n
+type box_t<T> = struct{
+    T value
+}
+
+fn box_t<T>.inc<U>(self, U v):T {
+    println(v)
+    return self.value
+}
+
+fn main() {
+    var b = box_t<int>{value:42}
+    assert(b.inc(1) == 42)
+}
+
+=== test_method_generics_missing_arg_failed
+--- main.n
+type box_t<T> = struct{
+    T value
+}
+
+fn box_t<T>.inc<U>(self, U v):T {
+    println(v)
+    return self.value
+}
+
+fn main() {
+    var b = box_t<int>{value:42}
+    b.inc()
+}
+
+--- output.txt
+nature-test/main.n:12:5: cannot infer generics param 'U'
+
+=== test_method_failed
+--- main.n
+type box_t<T> = struct{
+    T value
+}
+
+fn box_t<T>.inc<T>(self, T v):T {
+    println(v)
+    return self.value
+}
+
+fn main() {
+    // var b = box_t<int>{value:42}
+    // assert(b.get() == 42)
+}
+
+--- output.txt
+nature-test/main.n:5:18: generics param 'T' redeclared
+
+=== test_method_infer_failed
+--- main.n
+type box_t<T> = struct{
+    T value
+}
+
+fn box_t<T>.inc<U>(self, U v):T {
+    println(v)
+    return self.value
+}
+
+fn main() {
+    var b = box_t<int>{value:42}
+    b.inc()
+}
+
+--- output.txt
+nature-test/main.n:12:5: cannot infer generics param 'U'
+
+=== test_method_gen
+--- main.n
+type box_t<T> = struct{
+    T value
+}
+
+fn box_t<T>.inc<U>(self, U v):T {
+    println(v)
+    return self.value
+}
+
+fn main() {
+    var b = box_t<int>{value:42}
+    assert(b.inc(true) == 42)
+    assert(b.inc(12 as u16) == 42)
+    assert(b.inc(false) == 42)
+}
+
+--- output.txt
+true
+12
+false
+

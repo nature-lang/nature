@@ -416,8 +416,13 @@ impl Type {
                     | TypeKind::Struct(..)
                     | TypeKind::Arr(..)
                     | TypeKind::Enum(..)
-                    | TypeKind::Union(..)
                     | TypeKind::Tuple(..)
+                    | TypeKind::Vec(..)
+                    | TypeKind::String
+                    | TypeKind::Set(..)
+                    | TypeKind::Map(..)
+                    | TypeKind::Tuple(..)
+                    | TypeKind::Union(..)
                     | TypeKind::TaggedUnion(..)
             )
     }
@@ -1155,14 +1160,14 @@ impl Default for ImportStmt {
 #[derive(Debug, Clone)]
 pub struct GenericsParam {
     pub ident: String,
-    pub constraints: (Vec<Type>, bool, bool, bool), // (elements, any, and, or)
+    pub constraints: Vec<Type>, // interface constraints, default AND
 }
 
 impl GenericsParam {
     pub fn new(ident: String) -> Self {
         Self {
             ident,
-            constraints: (Vec::new(), true, false, false),
+            constraints: Vec::new(),
         }
     }
 }
@@ -1253,6 +1258,7 @@ pub struct AstFnDef {
     pub test_name: String,
     pub ret_target_types: Vec<Type>,
     pub linkid: Option<String>,
+    pub pending_where_params: Option<Vec<GenericsParam>>,
     pub fn_name: String, // default empty
     pub rel_path: Option<String>,
 
@@ -1296,6 +1302,7 @@ impl Default for AstFnDef {
             is_local: false,
             is_tpl: false,
             linkid: None,
+            pending_where_params: None,
             is_generics: false,
             is_async: false,
             is_private: false,

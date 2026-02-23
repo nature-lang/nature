@@ -22,6 +22,11 @@
 #define FN_T_IDENT "fn_t"
 #define INTEGER_T_IDENT "integer_t"
 #define FLOATER_T_IDENT "floater_t"
+#define EQUATABLE_IDENT "equatable"
+#define COMPARABLE_IDENT "comparable"
+#define ADDABLE_IDENT "addable"
+#define NUMERIC_IDENT "numeric"
+#define NONVOID_IDENT "nonvoid"
 
 #define ASSIST_PREEMPT_YIELD_IDENT "assist_preempt_yield"
 #define TLS_YIELD_SAFEPOINT_IDENT "tls_yield_safepoint"
@@ -247,6 +252,8 @@ typedef struct {
 
 typedef struct {
     list_t *elements; // type_t
+    list_t *alloc_types; // type_t, builtin constraint backdoor for generics
+    list_t *deny_types; // type_t, builtin constraint deny-list for generics
 } type_interface_t;
 
 typedef struct type_string_t type_string_t; // 类型不完全声明

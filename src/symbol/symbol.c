@@ -63,6 +63,7 @@ static ast_typedef_stmt_t *builtin_typedef_vec(char *ident) {
     stmt->params = builtin_params_1(TYPE_PARAM_T);
 
     type_t t = type_kind_new(TYPE_VEC);
+    t.status = REDUCTION_STATUS_UNDO;
     t.vec = NEW(type_vec_t);
     t.vec->element_type = type_ident_new(TYPE_PARAM_T, TYPE_IDENT_GENERICS_PARAM);
     stmt->type_expr = t;
@@ -74,6 +75,7 @@ static ast_typedef_stmt_t *builtin_typedef_set(char *ident) {
     stmt->params = builtin_params_1(TYPE_PARAM_T);
 
     type_t t = type_kind_new(TYPE_SET);
+    t.status = REDUCTION_STATUS_UNDO;
     t.set = NEW(type_set_t);
     t.set->element_type = type_ident_new(TYPE_PARAM_T, TYPE_IDENT_GENERICS_PARAM);
     stmt->type_expr = t;
@@ -85,6 +87,7 @@ static ast_typedef_stmt_t *builtin_typedef_chan(char *ident) {
     stmt->params = builtin_params_1(TYPE_PARAM_T);
 
     type_t t = type_kind_new(TYPE_CHAN);
+    t.status = REDUCTION_STATUS_UNDO;
     t.chan = NEW(type_chan_t);
     t.chan->element_type = type_ident_new(TYPE_PARAM_T, TYPE_IDENT_GENERICS_PARAM);
     stmt->type_expr = t;
@@ -96,6 +99,7 @@ static ast_typedef_stmt_t *builtin_typedef_map(char *ident) {
     stmt->params = builtin_params_2(TYPE_PARAM_T, TYPE_PARAM_U);
 
     type_t t = type_kind_new(TYPE_MAP);
+    t.status = REDUCTION_STATUS_UNDO;
     t.map = NEW(type_map_t);
     t.map->key_type = type_ident_new(TYPE_PARAM_T, TYPE_IDENT_GENERICS_PARAM);
     t.map->value_type = type_ident_new(TYPE_PARAM_U, TYPE_IDENT_GENERICS_PARAM);

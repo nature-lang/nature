@@ -26,6 +26,7 @@
 #define MACRO_LINKID "linkid"
 #define MACRO_LOCAL "local"
 #define MACRO_RUNTIME_USE "runtime_use"
+#define MACRO_WHERE "where"
 
 #define MACRO_SIZEOF "sizeof"
 #define MACRO_REFLECT_HASH "reflect_hash"

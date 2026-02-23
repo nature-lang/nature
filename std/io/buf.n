@@ -1,6 +1,6 @@
 import io
 
-type reader<T:io.reader>:io.reader = struct{
+type reader<T>:io.reader = struct{
     T rd
     [u8] buf = vec<u8>.new(0, 4096)
     int r
@@ -8,11 +8,13 @@ type reader<T:io.reader>:io.reader = struct{
     bool eof
 }
 
-fn reader<T:io.reader>.size(&self):int {
+#where T:io.reader
+fn reader<T>.size(&self):int {
     return self.buf.len()
 }
 
-fn reader<T:io.reader>.reset(&self, T rd) {
+#where T:io.reader
+fn reader<T>.reset(&self, T rd) {
     self.rd = rd
     if self.buf.len() == 0 {
         self.buf = vec<u8>.new(0, 4096)
@@ -22,8 +24,8 @@ fn reader<T:io.reader>.reset(&self, T rd) {
     self.eof = false
 }
 
-#local
-fn reader<T:io.reader>.fill(&self):void! {
+#local #where T:io.reader
+fn reader<T>.fill(&self):void! {
     if self.r > 0 {
         // Copy unread data to the buffer start position
         self.buf.copy(self.buf.slice(self.r, self.w))
@@ -59,7 +61,8 @@ fn reader<T:io.reader>.fill(&self):void! {
     throw errorf('no progress')
 }
 
-fn reader<T:io.reader>.read(&self, [u8] buf):int! {
+#where T:io.reader
+fn reader<T>.read(&self, [u8] buf):int! {
     if buf.len() == 0 {
         if self.buffered() > 0 {
             return 0
@@ -98,11 +101,13 @@ fn reader<T:io.reader>.read(&self, [u8] buf):int! {
     return n
 }
 
-fn reader<T:io.reader>.buffered(&self):int {
+#where T:io.reader
+fn reader<T>.buffered(&self):int {
     return self.w - self.r
 }
 
-fn reader<T:io.reader>.read_until(&self, u8 delim):[u8] {
+#where T:io.reader
+fn reader<T>.read_until(&self, u8 delim):[u8] {
     [u8] result = vec<u8>.new(0, 0)
     var has_error = false
 
@@ -146,7 +151,8 @@ fn reader<T:io.reader>.read_until(&self, u8 delim):[u8] {
     return result
 }
 
-fn reader<T:io.reader>.read_exact(&self, [u8] buf):void! {
+#where T:io.reader
+fn reader<T>.read_exact(&self, [u8] buf):void! {
     int total = 0
     for total < buf.len() {
         int n = self.read(buf.slice(total, buf.len()))
@@ -154,7 +160,8 @@ fn reader<T:io.reader>.read_exact(&self, [u8] buf):void! {
     }
 }
 
-fn reader<T:io.reader>.read_byte(&self):u8! {
+#where T:io.reader
+fn reader<T>.read_byte(&self):u8! {
     if self.r == self.w {
         self.fill()
     }
@@ -164,7 +171,8 @@ fn reader<T:io.reader>.read_byte(&self):u8! {
     return b
 }
 
-fn reader<T:io.reader>.read_line(&self):string! {
+#where T:io.reader
+fn reader<T>.read_line(&self):string! {
     if self.eof {
         throw errorf('EOF')
     }
@@ -182,18 +190,20 @@ fn reader<T:io.reader>.read_line(&self):string! {
     return bytes as string
 }
 
-type writer<T:io.writer>:io.writer = struct{
+type writer<T>:io.writer = struct{
     T wr
     [u8] buf = vec<u8>.new(0, 4096)
     int n
     bool err
 }
 
-fn writer<T:io.writer>.size(&self):int {
+#where T:io.writer
+fn writer<T>.size(&self):int {
     return self.buf.len()
 }
 
-fn writer<T:io.writer>.reset(&self, T wr) {
+#where T:io.writer
+fn writer<T>.reset(&self, T wr) {
     self.wr = wr
     if self.buf.len() == 0 {
         self.buf = vec<u8>.new(0, 4096)
@@ -202,16 +212,18 @@ fn writer<T:io.writer>.reset(&self, T wr) {
     self.err = false
 }
 
-fn writer<T:io.writer>.available(&self):int {
+#where T:io.writer
+fn writer<T>.available(&self):int {
     return self.buf.len() - self.n
 }
 
-fn writer<T:io.writer>.buffered(&self):int {
+#where T:io.writer
+fn writer<T>.buffered(&self):int {
     return self.n
 }
 
-#local
-fn writer<T:io.writer>.flush(&self):void! {
+#local #where T:io.writer
+fn writer<T>.flush(&self):void! {
     if self.err {
         throw errorf('previous write error')
     }
@@ -238,7 +250,8 @@ fn writer<T:io.writer>.flush(&self):void! {
     self.n = 0
 }
 
-fn writer<T:io.writer>.write(&self, [u8] buf):int! {
+#where T:io.writer
+fn writer<T>.write(&self, [u8] buf):int! {
     if self.err {
         throw errorf('previous write error')
     }
@@ -285,7 +298,8 @@ fn writer<T:io.writer>.write(&self, [u8] buf):int! {
     return total_written
 }
 
-fn writer<T:io.writer>.write_byte(&self, u8 b):void! {
+#where T:io.writer
+fn writer<T>.write_byte(&self, u8 b):void! {
     if self.err {
         throw errorf('previous write error')
     }
