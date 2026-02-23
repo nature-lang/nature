@@ -115,18 +115,18 @@ static inline int apply_self_update(char *install_root, char *asset_url, bool au
     char *prefix = need_sudo ? "sudo " : "";
     char *script = dsprintf(
             "set -e; "
-            "TMPDIR=$(mktemp -d); "
-            "trap 'rm -rf \"$TMPDIR\"' EXIT; "
-            "ASSET=\"$TMPDIR/nature-update.tar.gz\"; "
+            "UPDATE_TMP_DIR=$(mktemp -d); "
+            "trap 'rm -rf \"$UPDATE_TMP_DIR\"' EXIT; "
+            "ASSET=\"$UPDATE_TMP_DIR/nature-update.tar.gz\"; "
             "curl -fL '%s' -o \"$ASSET\"; "
-            "mkdir -p \"$TMPDIR/extracted\"; "
-            "tar -xzf \"$ASSET\" -C \"$TMPDIR/extracted\"; "
-            "if [ ! -x \"$TMPDIR/extracted/%s/bin/nature\" ]; then "
+            "mkdir -p \"$UPDATE_TMP_DIR/extracted\"; "
+            "tar -xzf \"$ASSET\" -C \"$UPDATE_TMP_DIR/extracted\"; "
+            "if [ ! -x \"$UPDATE_TMP_DIR/extracted/%s/bin/nature\" ]; then "
             "  echo 'invalid release asset layout'; exit 1; "
             "fi; "
             "%smkdir -p '%s'; "
             "if [ -d '%s' ]; then %srm -rf '%s'; %smv '%s' '%s'; fi; "
-            "%smv \"$TMPDIR/extracted/%s\" '%s'",
+            "%smv \"$UPDATE_TMP_DIR/extracted/%s\" '%s'",
             asset_url,
             target_name,
             prefix,
@@ -141,13 +141,11 @@ static inline int apply_self_update(char *install_root, char *asset_url, bool au
             target_name,
             install_root);
 
-    char *command = dsprintf("/bin/sh -c \"%s\"", script);
-    int status = system(command);
+            int status = system(script);
 
     free(parent_dir);
     free(backup_path);
     free(script);
-    free(command);
 
     if (status != 0) {
         printf("Update failed. Existing installation is kept at %s (or backup at %s).\n", install_root, install_root);
@@ -159,19 +157,21 @@ static inline int apply_self_update(char *install_root, char *asset_url, bool au
 }
 
 static inline void print_self_update_usage() {
-    printf("Usage: nature self-update [--check] [--yes]\n");
+    printf("Usage: nature self-update [--check] [--yes] [--force]\n");
 }
 
 void cmd_self_update_entry(int argc, char **argv) {
     struct option long_options[] = {
             {"check", no_argument, NULL, 1},
             {"yes", no_argument, NULL, 2},
+            {"force", no_argument, NULL, 3},
             {NULL, 0, NULL, 0}};
 
     int option_index = 0;
     int c;
     bool check_only = false;
     bool auto_yes = false;
+    bool force_update = false;
 
     while ((c = getopt_long(argc, argv, "", long_options, &option_index)) != -1) {
         switch (c) {
@@ -181,6 +181,10 @@ void cmd_self_update_entry(int argc, char **argv) {
             }
             case 2: {
                 auto_yes = true;
+                break;
+            }
+            case 3: {
+                force_update = true;
                 break;
             }
             default: {
@@ -205,16 +209,25 @@ void cmd_self_update_entry(int argc, char **argv) {
 
     printf("Current version: %s\n", BUILD_VERSION);
     printf("Latest version:  %s\n", latest_tag);
-    if (str_equal(BUILD_VERSION, latest_tag)) {
+    bool up_to_date = str_equal(BUILD_VERSION, latest_tag);
+    if (up_to_date && !force_update) {
         printf("Nature is up to date.\n");
         free(latest_tag);
         return;
     }
 
     if (check_only) {
-        printf("Update available.\n");
+        if (up_to_date) {
+            printf("Nature is up to date.\n");
+        } else {
+            printf("Update available.\n");
+        }
         free(latest_tag);
         return;
+    }
+
+    if (up_to_date && force_update) {
+        printf("Force update enabled, reinstalling latest version.\n");
     }
 
     char *os = host_os_string();
