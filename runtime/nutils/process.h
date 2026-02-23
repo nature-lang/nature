@@ -19,9 +19,9 @@ typedef struct {
     n_string_t cwd;
     n_vec_t env;
 
-    n_interface_t *io_stdin;
-    n_interface_t *io_stdout;
-    n_interface_t *io_stderr;
+    n_interface_t io_stdin;
+    n_interface_t io_stdout;
+    n_interface_t io_stderr;
 } command_t;
 
 typedef struct {

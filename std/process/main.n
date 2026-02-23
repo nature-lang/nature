@@ -31,9 +31,9 @@ type command_t = struct{
     string cwd
     [string] env
 
-    io.reader stdin
-    io.writer stdout
-    io.writer stderr
+    io.reader stdin // interface
+    io.writer stdout // interface
+    io.writer stderr // interface
 }
 
 fn run(string name, [string] args):ref<state_t>! {

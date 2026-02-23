@@ -250,13 +250,13 @@ NO_OPTIMIZE static void coroutine_wrapper() {
 
 
     DEBUGF(
-            "[runtime.coroutine_wrapper] user fn completed, p_index=%d co=%p, main=%d, rt_fn=%d,err=%p",
+            "[runtime.coroutine_wrapper] user fn completed, p_index=%d co=%p, main=%d, rt_fn=%d,has_error=%d",
             p->index, co,
-            co->main, co->flag & FLAG(CO_FLAG_RTFN), co->error);
+            co->main, co->flag & FLAG(CO_FLAG_RTFN), co->has_error);
 
 
     // coroutine 即将退出，避免被 gc 清理，所以将 error保存在 co->future 中?
-    if (co->error && co->future) {
+    if (co->has_error && co->future) {
         union_casting(&co->future->error, throwable_rtype.hash, &co->error); // 将 co error 赋值给 co->future 避免被 gc
     }
 
@@ -616,30 +616,30 @@ coroutine_t *coroutine_get() {
 void rti_throw(char *msg, bool panic) {
     DEBUGF("[runtime.rti_throw] msg=%s", msg);
     coroutine_t *co = coroutine_get();
-    n_interface_t *error = n_error_new(string_new(msg, strlen(msg)), panic);
+    n_interface_t error = n_error_new(string_new(msg, strlen(msg)), panic);
 
     co->has_error = true;
     if (co->traces.data == NULL) {
         n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
         co->traces = traces;
     }
-    rti_write_barrier_ptr(&co->error, error, false);
+    rti_write_barrier_rtype(&co->error, &error, &throwable_rtype);
 }
 
 void rti_co_throw(coroutine_t *co, char *msg, bool panic) {
-    n_interface_t *error = n_error_new(string_new(msg, strlen(msg)), panic);
+    n_interface_t error = n_error_new(string_new(msg, strlen(msg)), panic);
     co->has_error = true;
     if (co->traces.data == NULL) {
         n_vec_t traces = rti_vec_new(&errort_trace_rtype, 0, 0);
         co->traces = traces;
     }
-    rti_write_barrier_ptr(&co->error, error, false);
+    rti_write_barrier_rtype(&co->error, &error, &throwable_rtype);
 }
 
 void coroutine_dump_error(coroutine_t *co) {
-    DEBUGF("[runtime.coroutine_dump_error] co=%p, errort base=%p", co, co->error);
+    DEBUGF("[runtime.coroutine_dump_error] co=%p, errort base=%p", co, &co->error);
 
-    n_string_t msg = rti_error_msg(co->error);
+    n_string_t msg = rti_error_msg(&co->error);
     DEBUGF("[runtime.coroutine_dump_error] memory_string len: %lu, base: %p", msg.length, msg.data);
 
     assert(co->traces.length > 0);
@@ -726,6 +726,10 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu, void *arg)
     co->status = CO_STATUS_RUNNABLE;
     co->p = NULL;
     co->next = NULL;
+    co->has_error = false;
+    co->error = (n_interface_t){0};
+    co->traces = (n_vec_t){0};
+    co->await_co = NULL;
     co->aco.inited = 0; // 标记为为初始化
 
     return co;

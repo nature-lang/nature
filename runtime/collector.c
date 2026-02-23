@@ -350,8 +350,14 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
     }
 
 
-    if (co->error) {
-        insert_gc_worklist(worklist, co->error);
+    if (co->has_error) {
+        if (co->error.value.ptr_value && span_of((addr_t) co->error.value.ptr_value)) {
+            insert_gc_worklist(worklist, co->error.value.ptr_value);
+        }
+
+        if (co->error.methods && span_of((addr_t) co->error.methods)) {
+            insert_gc_worklist(worklist, co->error.methods);
+        }
     }
 
     if (co->traces.data && span_of((addr_t) co->traces.data)) {

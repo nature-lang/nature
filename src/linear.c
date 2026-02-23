@@ -2930,7 +2930,9 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
     uint64_t target_rtype_hash = type_hash(is_expr->target_type);
     if (is_expr->src->type.kind == TYPE_INTERFACE) {
-        push_rt_call(m, RT_CALL_INTERFACE_IS, target, 2, src_operand, int_operand(target_rtype_hash));
+        lir_operand_t *interface_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        OP_PUSH(lir_op_move(interface_ptr, src_operand));
+        push_rt_call(m, RT_CALL_INTERFACE_IS, target, 2, interface_ptr, int_operand(target_rtype_hash));
     } else if (is_expr->src->type.kind == TYPE_ANY) {
         lir_operand_t *any_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
         OP_PUSH(lir_op_move(any_ptr, src_operand));
@@ -3151,7 +3153,9 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         uint64_t target_rtype_hash = type_hash(as_expr->target_type);
-        push_rt_call(m, RT_CALL_INTERFACE_ASSERT, NULL, 3, src_operand, int_operand(target_rtype_hash), output_ref);
+        lir_operand_t *interface_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        OP_PUSH(lir_op_move(interface_ptr, src_operand));
+        push_rt_call(m, RT_CALL_INTERFACE_ASSERT, NULL, 3, interface_ptr, int_operand(target_rtype_hash), output_ref);
         linear_has_panic(m);
         return target;
     }
@@ -3166,6 +3170,12 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         type_interface_t *interface_type = as_expr->target_type.interface;
+        lir_operand_t *out_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        lir_operand_t *out_src = target;
+        if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+            out_src = lea_operand_pointer(m, target);
+        }
+        OP_PUSH(lir_op_move(out_ptr, out_src));
 
         type_t src_type = as_expr->src.type;
         if (src_type.ident_kind != TYPE_IDENT_DEF && (src_type.kind == TYPE_REF || src_type.kind == TYPE_PTR)) {
@@ -3225,11 +3235,11 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
                 OP_PUSH(lir_op_lea(item_target, fn_label));
             }
 
-            push_rt_call(m, RT_CALL_INTERFACE_CASTING, target, 4, int_operand(src_rtype_hash), interface_value,
+            push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 5, out_ptr, int_operand(src_rtype_hash), interface_value,
                          int_operand(interface_type->elements->length),
                          methods_target);
         } else {
-            push_rt_call(m, RT_CALL_INTERFACE_CASTING, target, 4, int_operand(src_rtype_hash), interface_value,
+            push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 5, out_ptr, int_operand(src_rtype_hash), interface_value,
                          int_operand(0),
                          int_operand(0));
         }
@@ -3754,6 +3764,8 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     // msg to errort
     assert(str_equal(stmt->error.type.ident, THROWABLE_IDENT));
     lir_operand_t *error_operand = linear_expr(m, stmt->error, NULL);
+    lir_operand_t *error_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_move(error_ptr, error_operand));
 
     lir_operand_t *path_operand = string_operand(m->rel_path, strlen(m->rel_path));
     assert(m->current_closure->fndef->fn_name_with_pkg);
@@ -3763,7 +3775,7 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     lir_operand_t *column_operand = int_operand(m->current_column);
 
     // attach errort to processor
-    push_rt_call(m, RT_CALL_CO_THROW_ERROR, NULL, 5, error_operand, path_operand, fn_name_operand,
+    push_rt_call(m, RT_CALL_CO_THROW_ERROR, NULL, 5, error_ptr, path_operand, fn_name_operand,
                  line_operand,
                  column_operand);
 

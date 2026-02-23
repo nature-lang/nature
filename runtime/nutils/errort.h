@@ -26,7 +26,7 @@ static inline n_string_t rti_error_msg(n_interface_t *error) {
  * @param has
  * @return
  */
-static inline n_interface_t *n_error_new(n_string_t msg, uint8_t panic) {
+static inline n_interface_t n_error_new(n_string_t msg, uint8_t panic) {
     n_errort *errort = rti_gc_malloc(errort_rtype.gc_heap_size, &errort_rtype);
     errort->msg = msg;
     errort->panic = panic;
@@ -34,7 +34,8 @@ static inline n_interface_t *n_error_new(n_string_t msg, uint8_t panic) {
 
     // interface casting, error to interface union
     int64_t methods[1] = {(int64_t) errort_msg};
-    n_interface_t *result = interface_casting(errort_rtype.hash, errort, 1, methods);
+    n_interface_t result = {0};
+    interface_casting(&result, errort_rtype.hash, errort, 1, methods);
 
     return result;
 }

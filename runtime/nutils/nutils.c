@@ -126,61 +126,60 @@ bool interface_is(n_interface_t *mu, int64_t target_rtype_hash) {
 }
 
 /**
- * union 参考 env 中的 upvalue 处理超过 8byte 的数据
+ * interface 参考 any 处理 storage_ind 类型
+ * @param out
  * @param input_rtype_hash
- * @param value
- * @return
+ * @param value_ref
+ * @param method_count
+ * @param methods
  */
-n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods) {
+void interface_casting(n_interface_t *out, uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods) {
+    assert(out && "interface_casting out is null");
     // - 根据 input_rtype_hash 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
     assert(rtype && "cannot find rtype by hash");
 
     ASSERT_ADDR(value_ref);
 
-    TRACEF("[union_casting] input_kind=%s", type_kind_str[rtype->kind]);
-
-
-    rtype_t interface_rtype = GC_RTYPE(TYPE_INTERFACE, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
-
-    // any_t 在 element_rtype list 中是可以预注册的，因为其 gc_bits 不会变来变去的，都是恒定不变的！
-    n_interface_t *mu = rti_gc_malloc(sizeof(n_interface_t), &interface_rtype);
+    TRACEF("[interface_casting] input_kind=%s", type_kind_str[rtype->kind]);
 
     if (method_count > 0) {
-        mu->method_count = method_count;
-        mu->methods = (int64_t *) rti_array_new(&uint64_rtype, method_count);
+        out->method_count = method_count;
+        out->methods = (int64_t *) rti_array_new(&uint64_rtype, method_count);
         // 进行数据 copy TODO write barrier
-        memmove(mu->methods, methods, method_count * POINTER_SIZE);
+        memmove(out->methods, methods, method_count * POINTER_SIZE);
+    } else {
+        out->method_count = 0;
+        out->methods = NULL;
     }
 
     DEBUGF(
         "[interface_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
-        mu, value_ref,
-        &mu->value, rtype->stack_size, (void *) fetch_addr_value((addr_t) value_ref));
+        out, value_ref,
+        &out->value, rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));
 
-    mu->rtype = rtype;
+    out->rtype = rtype;
     uint64_t stack_size = rtype->storage_size;
+    out->value.i64_value = 0;
 
     if (rtype->storage_kind != STORAGE_KIND_PTR) {
         // TODO number 可以直接存储在 value 中
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
         void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
         memmove(new_value, value_ref, stack_size);
-        rti_write_barrier_ptr(&mu->value.ptr_value, new_value, false);
+        out->value.ptr_value = new_value;
     } else {
         // 特殊类型参数处理，为了兼容 fn method 中的 self 自动化参数, self 如果是 int/struct 等类型，会自动转换为 ref<int>
         // 如果是 vec/string 等类型，self 的类型依旧是 vec/string 等，而不是 ref<vec>/ref<string> 这有点多余, 因为 vec/string
         // 本来就是在堆中分配的, 传递的是一个指针, 虽然后续可以能会进行统一处理，但是目前还是需要进行特殊处理，value 中直接存放可以作为
         // fn method 传递的参数
-        memmove(&mu->value, value_ref, stack_size);
+        memmove(&out->value, value_ref, stack_size);
     }
 
     DEBUGF("[interface_casting] success, union_base: %p, union_rtype: %p, union_i64_value: %ld, union_ptr_value: %p",
-           mu,
-           mu->rtype,
-           mu->value.i64_value, mu->value.ptr_value);
-
-    return mu;
+           out,
+           out->rtype,
+           out->value.i64_value, out->value.ptr_value);
 }
 
 /**
@@ -488,7 +487,7 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
     };
     rt_vec_push(&co->traces, errort_trace_rtype.hash, &trace);
 
-    rti_write_barrier_ptr(&co->error, error, false);
+    rti_write_barrier_rtype(&co->error, error, &throwable_rtype);
     co->has_error = true;
 }
 
@@ -504,10 +503,10 @@ void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
     char *msg = tlsprintf("index out of range [%d] with length %d", index, len);
 
     if (be_catch) {
-        n_interface_t *error = n_error_new(string_new(msg, strlen(msg)), true);
-        assert(error->method_count == 1);
+        n_interface_t error = n_error_new(string_new(msg, strlen(msg)), true);
+        assert(error.method_count == 1);
 
-        DEBUGF("[runtime.co_throw_error_msg] co=%p, error=%p, msg=%s", co, (void *) error, (char *) msg);
+        DEBUGF("[runtime.co_throw_error_msg] co=%p, error=%p, msg=%s", co, (void *) &error, (char *) msg);
 
         assert(co->traces.data == NULL);
 
@@ -522,7 +521,7 @@ void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
             .column = caller->column,
         };
         rt_vec_push(&co->traces, errort_trace_rtype.hash, &trace);
-        rti_write_barrier_ptr(&co->error, error, false);
+        rti_write_barrier_rtype(&co->error, &error, &throwable_rtype);
         co->has_error = true;
     } else {
         char *copy_msg = strdup(msg);
@@ -531,15 +530,16 @@ void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
     }
 }
 
-n_interface_t *co_remove_error() {
+n_interface_t co_remove_error() {
     coroutine_t *co = coroutine_get();
 
-    assert(co->error);
+    assert(co->has_error);
     co->has_error = false;
 
-    n_interface_t *error = co->error;
+    n_interface_t error = co->error;
 
-    rti_write_barrier_ptr(&co->error, NULL, false);
+    n_interface_t empty = {0};
+    rti_write_barrier_rtype(&co->error, &empty, &throwable_rtype);
     co->traces = (n_vec_t){0};
     return error;
 }
@@ -569,11 +569,11 @@ uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_i
         return 1;
     }
 
-    assert(co->error);
+    assert(co->has_error);
 
     // 在 runtime 调用 nature 代码， rti_error_msg 会让 gc scan_stack 异常，不过马上就要退出了，问题不大
     // 可以考虑增加 safepoint_lock, 避免进入 safepoint 状态
-    n_string_t msg = rti_error_msg(co->error);
+    n_string_t msg = rti_error_msg(&co->error);
 
     char *dump_msg;
     if (co->main) {

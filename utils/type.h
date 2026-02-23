@@ -690,7 +690,7 @@ int64_t type_tuple_offset(type_tuple_t *t, uint64_t index);
  */
 static inline bool kind_in_heap(type_kind kind) {
     assert(kind > 0);
-    return kind == TYPE_GC_ENV || kind == TYPE_FN || kind == TYPE_COROUTINE_T || kind == TYPE_CHAN || kind == TYPE_INTERFACE;
+    return kind == TYPE_GC_ENV || kind == TYPE_FN || kind == TYPE_COROUTINE_T || kind == TYPE_CHAN;
 }
 
 static inline bool is_vec_u8(type_t t) {
@@ -795,7 +795,8 @@ static inline storage_kind_t type_storage_kind(type_t t) {
         return STORAGE_KIND_IND;
     }
 
-    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION || t.kind == TYPE_TUPLE || t.kind == TYPE_TAGGED_UNION || t.kind == TYPE_ANY) {
+    if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION || t.kind == TYPE_TUPLE ||
+        t.kind == TYPE_TAGGED_UNION || t.kind == TYPE_ANY || t.kind == TYPE_INTERFACE) {
         return STORAGE_KIND_IND;
     }
 
@@ -823,6 +824,10 @@ static inline int64_t type_storage_size(type_t t) {
 
     if (t.kind == TYPE_ANY) {
         return sizeof(n_any_t);
+    }
+
+    if (t.kind == TYPE_INTERFACE) {
+        return sizeof(n_interface_t);
     }
 
     if (t.kind == TYPE_STRUCT || t.kind == TYPE_ARR || t.kind == TYPE_UNION || t.kind == TYPE_TUPLE ||
@@ -885,6 +890,19 @@ static inline list_t *type_abi_struct(type_t t) {
         type_t value_type = type_kind_new(TYPE_ANYPTR); // value_casting
         ct_list_push(result, &rtype_ptr);
         ct_list_push(result, &value_type);
+        return result;
+    }
+
+    // n_interface_t: { value_casting value; int64_t *methods; rtype_t *rtype; int64_t method_count; }
+    if (t.kind == TYPE_INTERFACE) {
+        type_t value_type = type_kind_new(TYPE_ANYPTR); // value_casting
+        type_t methods_type = type_kind_new(TYPE_ANYPTR); // int64_t*
+        type_t rtype_type = type_kind_new(TYPE_ANYPTR); // rtype_t*
+        type_t count_type = type_kind_new(TYPE_INT64); // method_count
+        ct_list_push(result, &value_type);
+        ct_list_push(result, &methods_type);
+        ct_list_push(result, &rtype_type);
+        ct_list_push(result, &count_type);
         return result;
     }
 
@@ -1013,7 +1031,6 @@ static inline bool is_gc_alloc(type_kind kind) {
            kind == TYPE_ANYPTR ||
            kind == TYPE_COROUTINE_T ||
            kind == TYPE_CHAN ||
-           kind == TYPE_INTERFACE ||
            kind == TYPE_FN;
 }
 

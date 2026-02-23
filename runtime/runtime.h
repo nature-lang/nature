@@ -421,7 +421,7 @@ struct coroutine_t {
     //    uint64_t scan_ret_addr;
 
     bool has_error;
-    n_interface_t *error; // throwable
+    n_interface_t error; // throwable
     n_vec_t traces; // element is n_trace_t
 
     ATOMIC int32_t select_done;
