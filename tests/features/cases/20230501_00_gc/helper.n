@@ -1,5 +1,10 @@
-[u8] list = [5, 4, 3, 2, 1]
+[u8] list = []
 
-string haha = 'hello world'
+string haha = ''
 
 u8 test = 24
+
+fn init() {
+    list = [5, 4, 3, 2, 1]
+    haha = 'hello world'
+}

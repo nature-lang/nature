@@ -47,15 +47,15 @@ type AcceptRange = struct {
     AcceptRange{ lo: 0x90, hi: 0xbf },
     AcceptRange{ lo: 0x80, hi: 0x8f }]
 
-u8 xx = 0xF1 // invalid: size 1
-u8 _as= 0xF0 // ASCII: size 1
-u8 s1 = 0x02 // accept 0, size 2
-u8 s2 = 0x13 // accept 1, size 3
-u8 s3 = 0x03 // accept 0, size 3
-u8 s4 = 0x23 // accept 2, size 3
-u8 s5 = 0x34 // accept 3, size 4
-u8 s6 = 0x04 // accept 0, size 4
-u8 s7 = 0x44 // accept 4, size 4
+const xx = 0xF1 // invalid: size 1
+const _as= 0xF0 // ASCII: size 1
+const s1 = 0x02 // accept 0, size 2
+const s2 = 0x13 // accept 1, size 3
+const s3 = 0x03 // accept 0, size 3
+const s4 = 0x23 // accept 2, size 3
+const s5 = 0x34 // accept 3, size 4
+const s6 = 0x04 // accept 0, size 4
+const s7 = 0x44 // accept 4, size 4
 
 [u8;256] accept_sizes = [
   //     1    2    3    4    5   6    7    8    9    A    B    C    D    E    F

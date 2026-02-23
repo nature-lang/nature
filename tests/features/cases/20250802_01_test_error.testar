@@ -129,9 +129,14 @@ fn main():void! {
 import time
 import syscall
 
-var seed = time.now().timestamp()
+int seed = 0
+
+fn init() {
+    seed = time.now().timestamp()
+}
 
 fn main():void! {
+    init()
     assert(seed > 0)
     println(seed)
 }

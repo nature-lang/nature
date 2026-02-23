@@ -7,9 +7,7 @@ import parker.util
 import compress.tgz
 import fs
 
-
-var version = '0.1.0'
-
+const version = '0.1.0'
 
 fn main():void! {
     if util.arg_version() {

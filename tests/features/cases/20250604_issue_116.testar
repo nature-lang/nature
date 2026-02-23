@@ -34,7 +34,7 @@ type color_t = struct{
     u8 a
 }
 
-[color_t] colors = [
+[color_t;3] colors = [
     color_t{r: 186, g: 207, b: 139, a: 255},
     color_t{r: 186, g: 207, b: 139, a: 255},
     color_t{r: 186, g: 207, b: 139, a: 255},
@@ -263,7 +263,11 @@ type tank_t = struct {
     i32 health
 }
 
-var player = {'a': vector2_t{x:890, y:860}, 'b': vector2_t{x:-100, y:-1}}
+{string:vector2_t} player = {}
+
+fn init() {
+    player = {'a': vector2_t{x:890, y:860}, 'b': vector2_t{x:-100, y:-1}}
+}
 
 fn fire_bullet(vector2_t position, direction_t direction, bool is_player) {
     dump(position.x)
@@ -278,6 +282,7 @@ fn test1() {
 }
 
 fn main() {
+    init()
     test1()
 }
 

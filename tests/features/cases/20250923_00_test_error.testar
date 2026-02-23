@@ -42,7 +42,7 @@ nature-test/main.n:1:3: fn main.pi_test missing return
 import libc
 import path
 
-string procs_system = 'cgroup.procs'
+const procs_system = 'cgroup.procs'
 
 fn dump(string s) {
     println(s)

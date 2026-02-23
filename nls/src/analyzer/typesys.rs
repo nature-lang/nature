@@ -3729,10 +3729,7 @@ impl<'a> Typesys<'a> {
         // register_global_symbol 中进行类 impl_foramt
         let mut impl_symbol_name = format_impl_ident(impl_ident.clone(), key.clone());
 
-        let (final_symbol_name, symbol_id) = match self
-            .symbol_table
-            .find_symbol_id(&impl_symbol_name, self.symbol_table.global_scope_id)
-        {
+        let (final_symbol_name, symbol_id) = match self.symbol_table.find_symbol_id(&impl_symbol_name, self.symbol_table.global_scope_id) {
             Some(symbol_id) => (impl_symbol_name.clone(), symbol_id),
             None => {
                 if extract_type.kind != TypeKind::Ident {
@@ -3750,10 +3747,7 @@ impl<'a> Typesys<'a> {
                         impl_args = builtin_type.args.clone();
                         impl_symbol_name = format_impl_ident(impl_ident.clone(), key.clone());
 
-                        match self
-                            .symbol_table
-                            .find_symbol_id(&impl_symbol_name, self.symbol_table.global_scope_id)
-                        {
+                        match self.symbol_table.find_symbol_id(&impl_symbol_name, self.symbol_table.global_scope_id) {
                             Some(symbol_id) => {
                                 // change self arg 类型
                                 match &mut select_left.type_.kind {
@@ -4901,26 +4895,6 @@ impl<'a> Typesys<'a> {
         Ok(result)
     }
 
-    fn infer_global_vardef(&mut self, var_decl_mutex: &Arc<Mutex<VarDeclExpr>>, right_expr: &mut Box<Expr>) -> Result<(), AnalyzerError> {
-        let mut var_decl = var_decl_mutex.lock().unwrap();
-        var_decl.type_ = self.reduction_type(var_decl.type_.clone())?;
-
-        let right_expr_type = self.infer_right_expr(right_expr, var_decl.type_.clone())?;
-
-        if var_decl.type_.kind.is_unknown() {
-            if !self.type_confirm(&right_expr_type) {
-                return Err(AnalyzerError {
-                    message: format!("global var {} type infer failed, right expr cannot confirm", var_decl.ident),
-                    start: right_expr.start,
-                    end: right_expr.end,
-                });
-            }
-            var_decl.type_ = right_expr_type;
-        }
-
-        Ok(())
-    }
-
     // 新增一个方法来处理模块内的操作
     // fn current_fn_module<F, R>(&mut self, f: F) -> R
     // where
@@ -5338,17 +5312,6 @@ impl<'a> Typesys<'a> {
     }
 
     pub fn pre_infer(&mut self) -> Vec<AnalyzerError> {
-        //  - Global variables also contain type information, which needs to be restored and derived
-        let mut vardefs = std::mem::take(&mut self.module.global_vardefs);
-        for node in &mut vardefs {
-            let AstNode::VarDef(var_decl_mutex, right_expr) = node else { unreachable!() };
-
-            if let Err(e) = self.infer_global_vardef(var_decl_mutex, right_expr) {
-                self.errors_push(e.start, e.end, e.message);
-            }
-        }
-        self.module.global_vardefs = vardefs;
-
         // 遍历 module 下的所有的 fndef, 包含 global fn 和 local fn
         let global_fndefs = self.module.global_fndefs.clone();
         for fndef_mutex in global_fndefs {

@@ -2,6 +2,7 @@ pub mod common;
 pub mod completion;
 pub mod flow;
 pub mod generics;
+pub mod global_eval;
 pub mod lexer; // 声明子模块
 pub mod semantic;
 pub mod symbol;
@@ -523,12 +524,7 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                 if fndef.impl_type.kind.is_unknown() {
                     fndef.symbol_name = format_global_ident(m.ident.clone(), symbol_name.clone());
 
-                    match symbol_table.define_symbol_in_scope(
-                        fndef.symbol_name.clone(),
-                        SymbolKind::Fn(fndef_mutex.clone()),
-                        fndef.symbol_start,
-                        m.scope_id,
-                    ) {
+                    match symbol_table.define_symbol_in_scope(fndef.symbol_name.clone(), SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, m.scope_id) {
                         Ok(symbol_id) => {
                             fndef.symbol_id = symbol_id;
                         }

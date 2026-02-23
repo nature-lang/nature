@@ -658,6 +658,7 @@ static ast_var_decl_t *ast_var_decl_copy(module_t *m, ast_var_decl_t *temp) {
 static ast_vardef_stmt_t *ast_vardef_copy(module_t *m, ast_vardef_stmt_t *temp) {
     ast_vardef_stmt_t *vardef = COPY_NEW(ast_vardef_stmt_t, temp);
     vardef->var_decl = *ast_var_decl_copy(m, &temp->var_decl);
+    vardef->global_data = NULL;
     if (temp->right) {
         vardef->right = ast_expr_copy(m, temp->right);
     }

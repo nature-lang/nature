@@ -1,6 +1,8 @@
 import 'mod.n'
 
 fn main() {
+    mod.init()
+
     println(mod.a, mod.b)
 
     mod.call()

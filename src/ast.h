@@ -326,6 +326,7 @@ typedef struct {
 typedef struct {
     ast_var_decl_t var_decl; // 左值
     ast_expr_t *right; // 右值
+    uint8_t *global_data; // global_eval pass 生成的编译期初始化数据
 } ast_vardef_stmt_t;
 
 typedef struct {

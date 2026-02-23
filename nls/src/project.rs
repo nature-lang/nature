@@ -1,6 +1,7 @@
 use crate::analyzer::common::{AnalyzerError, AstFnDef, AstNode, ImportStmt, PackageConfig, Stmt};
 use crate::analyzer::flow::Flow;
 use crate::analyzer::generics::Generics;
+use crate::analyzer::global_eval::GlobalEval;
 use crate::analyzer::lexer::{Lexer, Token};
 use crate::analyzer::semantic::Semantic;
 use crate::analyzer::symbol::{NodeId, SymbolTable};
@@ -401,6 +402,14 @@ impl Project {
             let mut symbol_table = self.symbol_table.lock().unwrap();
             let m = &mut module_db[index];
             let errors = Typesys::new(&mut symbol_table, m).pre_infer();
+            m.analyzer_errors.extend(errors);
+        }
+
+        for index in module_indexes.clone() {
+            let mut module_db = self.module_db.lock().unwrap();
+            let mut symbol_table = self.symbol_table.lock().unwrap();
+            let m = &mut module_db[index];
+            let errors = GlobalEval::new(m, &mut symbol_table).analyze();
             m.analyzer_errors.extend(errors);
         }
 

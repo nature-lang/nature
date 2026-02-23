@@ -1,7 +1,9 @@
 import 'helper.n'
 import runtime
 
-fn main() { 
+fn main() {
+    helper.init()
+
     // 栈干扰
     i8 a = 25
     i16 a1 = 256

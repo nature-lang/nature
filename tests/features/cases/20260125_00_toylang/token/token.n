@@ -115,15 +115,19 @@ fn Token.toString(*self): string {
     return "Token(kind: " + fmt.sprintf("%s",kind) + ", literal: " + fmt.sprintf("%s",self.literal) + ", pos: " + self.pos.toString() + ")"
 }
 
-var keywords = {
-    "if": TokenKindIf,
-    "else": TokenKindElse,
-    "return": TokenKindReturn,
-    "fn": TokenKindFunc,
-    "let": TokenKindLet,
-    "true": TokenKindTrue,
-    "false": TokenKindFalse,
-    "for": TokenKindFor,
+{string:int} keywords = {}
+
+fn init() {
+   keywords = {
+       "if": TokenKindIf,
+       "else": TokenKindElse,
+       "return": TokenKindReturn,
+       "fn": TokenKindFunc,
+       "let": TokenKindLet,
+       "true": TokenKindTrue,
+       "false": TokenKindFalse,
+       "for": TokenKindFor,
+   }
 }
 
 fn lookupKeyword(string ident): int {
