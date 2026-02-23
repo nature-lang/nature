@@ -3676,35 +3676,6 @@ static ast_expr_t parser_macro_async_expr(module_t *m) {
     return result;
 }
 
-static ast_expr_t parser_macro_ula_expr(module_t *m) {
-    ast_expr_t result = expr_new(m);
-    ast_unary_expr_t *ula_expr = NEW(ast_unary_expr_t);
-
-    parser_must(m, TOKEN_LEFT_PAREN);
-    ula_expr->operand = parser_expr(m);
-    parser_must(m, TOKEN_RIGHT_PAREN);
-
-    ula_expr->op = AST_OP_UNSAFE_LA;
-    result.assert_type = AST_EXPR_UNARY;
-    result.value = ula_expr;
-    return result;
-}
-
-static ast_expr_t parser_macro_sla_expr(module_t *m) {
-    ast_expr_t result = expr_new(m);
-    ast_unary_expr_t *ula_expr = NEW(ast_unary_expr_t);
-
-    parser_must(m, TOKEN_LEFT_PAREN);
-    ula_expr->operand = parser_expr(m);
-    parser_must(m, TOKEN_RIGHT_PAREN);
-
-    ula_expr->op = AST_OP_SAFE_LA;
-    result.assert_type = AST_EXPR_UNARY;
-    result.value = ula_expr;
-    return result;
-}
-
-
 /**
 * 宏就解析成对应的 expr 好了，然后正常走 analyzer/infer/linear
 * @param m
@@ -3728,14 +3699,6 @@ static ast_expr_t parser_macro_call(module_t *m) {
 
     if (str_equal(token->literal, MACRO_ASYNC)) {
         return parser_macro_async_expr(m);
-    }
-
-    if (str_equal(token->literal, MACRO_ULA)) {
-        return parser_macro_ula_expr(m);
-    }
-
-    if (str_equal(token->literal, MACRO_SLA)) {
-        return parser_macro_sla_expr(m);
     }
 
     PARSER_ASSERTF(false, "macro '%s' not defined", token->literal);

@@ -1,38 +1,3 @@
-import co
-
-fn div(i32 dividend, i32 divisor):i32! {
-    co.sleep(500)
-    if (divisor == 0) {
-        throw errorf('divisor cannot be 0')
-    }
-
-    return dividend / divisor
-}
-
 fn main() {
-    // 1.
-    var fut = @async(fn():void! {
-        println('in closure fn')
-        co.sleep(1000)
-        throw errorf('in closure err')
-    }(), co.SAME)
-
-    fut.await_void() catch err {
-        println('fut.await catch err: ' + err.msg())
-    }
-
-    // 2.
-    var fut2 = go div(10, 0)
-    var result = fut2.await() catch err {
-        println('dive catch err: ' + err.msg())
-        10
-    }
-    println('div result', result)
-
-
-    // 3.
-    go div(10, 0)
-
-    co.sleep(1000)
-    println('main done')
+    println('hello world')
 }

@@ -1,11 +1,14 @@
 import co.types
 
-// 存放在了标准库的 mutex_t 中
-type mutex_t = struct {
+type mutex_t = struct{
     i64 state
     i64 sema
     i64 waiter_count
     var waiters = types.linkco_list_t{}
+}
+
+fn mutex_t.new():ref<mutex_t> {
+    return new mutex_t()
 }
 
 #linkid rt_mutex_lock

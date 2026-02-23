@@ -2129,62 +2129,16 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     }
 
 
-    if (unary_expr->op == AST_OP_SAFE_LA) {
-        assert(!target);
-        // target must ptr or anyptr or ptr
-        if (!target) {
-            target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-        }
-
-        // not need handle analyze? only move? 需要做什么？ident 已经识别出来了。直接 move 到 target 好了
-        if (unary_expr->operand.type.storage_kind == STORAGE_KIND_IND || unary_expr->operand.type.kind == TYPE_REF) {
-            OP_PUSH(lir_op_move(target, first));
-            return target;
-        }
-
-        // 如果 first->assert_type 不是 LIR_OPERAND_INDIRECT_ADDR, 则可能是 call/as/literal 表达式所产生的 var, 此时直接进行堆分配
-        if (first->assert_type != LIR_OPERAND_INDIRECT_ADDR) {
-            lir_operand_t *temp_operand = temp_var_operand(m, type_refof(unary_expr->operand.type));
-            int64_t rtype_hash = type_hash(unary_expr->operand.type);
-            push_rt_call(m, RT_CALL_GC_MALLOC, temp_operand, 1, int_operand(rtype_hash));
-            lir_operand_t *dst = indirect_addr_operand(m, unary_expr->operand.type, temp_operand, 0);
-            OP_PUSH(lir_op_move(dst, first));
-
-            return temp_operand;
-        }
-
-
-        lir_operand_t *src_operand;
-        if (first->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-            lir_indirect_addr_t *indirect_addr = first->value;
-            if (indirect_addr->offset == 0) {
-                // indirect addr base 就是指针本身
-                src_operand = indirect_addr->base;
-            } else {
-                src_operand = lea_operand_pointer(m, first);
-            }
-        } else {
-            src_operand = lea_operand_pointer(m, first);
-        }
-
-        return linear_super_move(m, type_kind_new(TYPE_ANYPTR), target, src_operand);
-    }
-
     // neg source -> target
     if (!target) {
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-    // &var, 指针引用可能会造成内存逃逸，所以需要特殊处理 TODO 当前版本不存在隐式的逃逸处理，需要显式的调用 sla 才会触发逃逸处理。
-    if (unary_expr->op == AST_OP_LA || unary_expr->op == AST_OP_UNSAFE_LA) {
+    // &var
+    if (unary_expr->op == AST_OP_LA) {
         // 如果是 stack_type, 则直接移动到 target 即可，src 中存放的已经是一个栈指针了，没有必要再 lea 了
         if (unary_expr->operand.type.storage_kind == STORAGE_KIND_IND) {
             // 必须 move target，这同时也是一个类型转换的过程
-            OP_PUSH(lir_op_move(target, first));
-            return target;
-        }
-
-        if (unary_expr->op == AST_OP_UNSAFE_LA && unary_expr->operand.type.kind == TYPE_REF) {
             OP_PUSH(lir_op_move(target, first));
             return target;
         }

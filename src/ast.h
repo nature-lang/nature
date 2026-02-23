@@ -105,8 +105,6 @@ typedef enum {
     AST_OP_NEG, // unary number -right
     AST_OP_BNOT, // unary binary ~right, right must int
     AST_OP_LA, // &var = load addr var
-    AST_OP_SAFE_LA, // @sla(var) safe load addr
-    AST_OP_UNSAFE_LA, // @ula(var) unsafe load addr
     AST_OP_IA, // indirect addr  *q
 
     // 位运算
@@ -874,17 +872,6 @@ static inline ast_expr_t *ast_indirect_addr(ast_expr_t *target) {
     result->assert_type = AST_EXPR_UNARY;
     result->value = expr;
     result->type = target->type.ptr->value_type;
-    return result;
-}
-
-static inline ast_expr_t *ast_safe_load_addr(ast_expr_t *target) {
-    ast_expr_t *result = ast_load_addr(target);
-    ast_unary_expr_t *expr = result->value;
-    expr->op = AST_OP_SAFE_LA;
-    result->type.kind = 0;
-    result->type.status = 0;
-    result->target_type.kind = 0;
-    result->target_type.status = 0;
     return result;
 }
 

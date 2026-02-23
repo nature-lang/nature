@@ -13,12 +13,12 @@ type DisplayPair<T>:Display = struct{
 
 type Int<T>:Display = T
 
-fn Int<T>.to_string(&self):string {
+fn Int<T>.to_string(*self):string {
 	// this function returns a string.
 	return fmt.sprintf("%d", *self)
 }
 
-fn DisplayPair<T>.to_string(&self):string {
+fn DisplayPair<T>.to_string(*self):string {
 	//this function returns a string.
 	return fmt.sprintf("DisplayPair(%s, %s)", self.first.to_string(), self.second.to_string());
 }
@@ -46,7 +46,7 @@ type DisplayPair<T, U>:Display = struct {
 type Int<T>:Display = T
 type String:Display = string
 
-fn Int<T>.to_string(&self):string {
+fn Int<T>.to_string(*self):string {
 	//this function returns a string.
 	return fmt.sprintf("%d", *self)
 }
@@ -56,7 +56,7 @@ fn String.to_string(self):string {
 	return self as string;
 }
 
-fn DisplayPair<T, U>.to_string(&self):string {
+fn DisplayPair<T, U>.to_string(*self):string {
 	//this function returns a string.
 	return fmt.sprintf("DisplayPair(%s, %s)", self.first.to_string(), self.second.to_string());
 }
@@ -80,7 +80,7 @@ type DisplayPair = struct{
 	i32 second
 }
 
-fn i32.to_string(&self):string {
+fn i32.to_string(*self):string {
     // println(self, *self)
     runtime.in_heap(self as anyptr)
 	return fmt.sprintf("%d", *self)

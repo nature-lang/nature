@@ -206,7 +206,6 @@ impl GenericSpecialFnClone {
 
             AstNode::MacroSizeof(target_type) => AstNode::MacroSizeof(target_type.clone()),
             AstNode::MacroDefault(target_type) => AstNode::MacroDefault(target_type.clone()),
-            AstNode::MacroUla(src) => AstNode::MacroUla(Box::new(self.clone_expr(src))),
             AstNode::MacroReflectHash(type_) => AstNode::MacroReflectHash(type_.clone()),
             AstNode::MacroTypeEq(left, right) => AstNode::MacroTypeEq(left.clone(), right.clone()),
 
@@ -1636,29 +1635,6 @@ impl<'a> Typesys<'a> {
             return Ok(Type::ptr_of(operand_type));
         }
 
-        // 处理不安全取地址运算符 @unsafe_la
-        if op == ExprOp::UnsafeLa {
-            // 检查是否是字面量或函数调用
-            if matches!(operand.node, AstNode::Literal(..) | AstNode::Call(..)) {
-                return Err(AnalyzerError {
-                    start: operand.start,
-                    end: operand.end,
-                    message: "cannot safe load address of an literal or call".to_string(),
-                });
-            }
-
-            // 检查是否是联合类型
-            if matches!(operand_type.kind, TypeKind::Union(..)) {
-                return Err(AnalyzerError {
-                    start: operand.start,
-                    end: operand.end,
-                    message: "cannot safe load address of an union type".to_string(),
-                });
-            }
-
-            return Ok(Type::ptr_of(operand_type));
-        }
-
         // 处理解引用运算符 *
         if op == ExprOp::Ia {
             // 检查是否是指针类型
@@ -2578,10 +2554,6 @@ impl<'a> Typesys<'a> {
             AstNode::MacroReflectHash(target_type) => {
                 *target_type = self.reduction_type(target_type.clone())?;
                 Ok(Type::new(TypeKind::Int))
-            }
-            AstNode::MacroUla(src) => {
-                let src_type = self.infer_right_expr(src, Type::default())?;
-                return Ok(Type::ptr_of(src_type));
             }
             AstNode::New(type_, properties, expr_option) => {
                 *type_ = self.reduction_type(type_.clone())?;
@@ -3578,57 +3550,43 @@ impl<'a> Typesys<'a> {
 
     fn self_arg_rewrite(&mut self, type_fn: &TypeFn, self_arg: &mut Expr) -> Result<(), AnalyzerError> {
         let self_param_type = &type_fn.param_types[0];
-        let extract_self_type = if matches!(self_param_type.kind, TypeKind::Ref(_) | TypeKind::Ptr(_)) {
-            match &self_param_type.kind {
-                TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) => value_type.as_ref(),
-                _ => unreachable!(),
-            }
-        } else {
-            self_param_type
-        };
-
-        if extract_self_type.is_stack_impl() {
-            if matches!(self_param_type.kind, TypeKind::Ref(_)) {
-                if matches!(self_arg.type_.kind, TypeKind::Ptr(_)) {
-                    return Err(AnalyzerError {
-                        start: self_arg.start,
-                        end: self_arg.end,
-                        message: format!("type mismatch: method requires '{}' receiver, got '{}'", self_param_type, self_arg.type_),
-                    });
-                }
-
-                if !matches!(self_arg.type_.kind, TypeKind::Ref(_)) {
-                    let mut new_arg = self_arg.clone();
-                    new_arg.node = AstNode::Unary(ExprOp::SafeLa, Box::new(self_arg.clone()));
-                    new_arg.type_ = Type::ref_of(self_arg.type_.clone());
-                    new_arg.target_type = Type::default();
-                    *self_arg = new_arg;
-                }
-            } else if matches!(self_param_type.kind, TypeKind::Ptr(_)) {
-                if matches!(self_arg.type_.kind, TypeKind::Ptr(_) | TypeKind::Ref(_)) {
-                    return Ok(());
-                }
-
-                let mut new_arg = self_arg.clone();
-                new_arg.node = AstNode::Unary(ExprOp::La, Box::new(self_arg.clone()));
-                new_arg.type_ = Type::ptr_of(self_arg.type_.clone());
-                *self_arg = new_arg;
-            } else {
-                if matches!(self_arg.type_.kind, TypeKind::Ptr(_) | TypeKind::Ref(_)) {
-                    let mut new_arg = self_arg.clone();
-                    new_arg.node = AstNode::Unary(ExprOp::Ia, Box::new(self_arg.clone()));
-                    new_arg.type_ = Type::default();
-                    *self_arg = new_arg;
-                }
-            }
-        } else {
-            if !self_arg.type_.is_heap_impl() {
+        if matches!(self_param_type.kind, TypeKind::Ref(_)) {
+            if matches!(self_arg.type_.kind, TypeKind::Ptr(_)) {
                 return Err(AnalyzerError {
                     start: self_arg.start,
                     end: self_arg.end,
-                    message: format!("unsupported method receiver type '{}', expected heap-allocated type", self_arg.type_),
+                    message: format!("type mismatch: method requires '{}' receiver, got '{}'", self_param_type, self_arg.type_),
                 });
             }
+
+            if matches!(self_arg.type_.kind, TypeKind::Ref(_)) || self_arg.type_.is_heap_impl() {
+                return Ok(());
+            }
+
+            return Err(AnalyzerError {
+                start: self_arg.start,
+                end: self_arg.end,
+                message: format!("type mismatch: method requires '{}' receiver, got '{}'", self_param_type, self_arg.type_),
+            });
+        }
+
+        if matches!(self_param_type.kind, TypeKind::Ptr(_)) {
+            if matches!(self_arg.type_.kind, TypeKind::Ptr(_) | TypeKind::Ref(_)) {
+                return Ok(());
+            }
+
+            let mut new_arg = self_arg.clone();
+            new_arg.node = AstNode::Unary(ExprOp::La, Box::new(self_arg.clone()));
+            new_arg.type_ = Type::ptr_of(self_arg.type_.clone());
+            *self_arg = new_arg;
+            return Ok(());
+        }
+
+        if matches!(self_arg.type_.kind, TypeKind::Ptr(_) | TypeKind::Ref(_)) {
+            let mut new_arg = self_arg.clone();
+            new_arg.node = AstNode::Unary(ExprOp::Ia, Box::new(self_arg.clone()));
+            new_arg.type_ = Type::default();
+            *self_arg = new_arg;
         }
 
         Ok(())

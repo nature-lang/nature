@@ -21,7 +21,7 @@ fn main() {
     println("post result_no_lock completed", result_no_lock, time.unix() - start)
     assert(result_no_lock < 1000000)
 
-    var mu = m.mutex_t{}
+    var mu = m.mutex_t.new()
     int result_lock = 0
 
     var sum_lock = fn() {

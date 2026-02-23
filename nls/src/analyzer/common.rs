@@ -845,11 +845,6 @@ pub enum ExprOp {
     Bnot,
     #[strum(to_string = "&")]
     La,
-    #[strum(to_string = "&?")]
-    SafeLa,
-    #[strum(to_string = "&!")]
-    UnsafeLa,
-
     #[strum(to_string = "*")]
     Ia,
 
@@ -923,7 +918,6 @@ pub enum AstNode {
 
     // marco
     MacroSizeof(Type),       // (target_type)
-    MacroUla(Box<Expr>),     // (src)
     MacroReflectHash(Type),  // (target_type)
     MacroTypeEq(Type, Type), // (left_type, right_type)
     MacroAsync(MacroAsyncExpr),

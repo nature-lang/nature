@@ -57,28 +57,28 @@ type HashItem = struct {
     string value
 }
 
-fn newItem(string key , string value ): HashItem {
+fn newItem(string key, string value ):HashItem {
     return HashItem {
         key: key,
         value: value,
     }
 }
 
-type HashTable = struct {
+type HashTable = struct{
     int size
     int count
     [HashItem?] items
 }
 
-fn newHashTable(int size): HashTable {
-    return HashTable {
-        size: size,
-        count: 0,
-        items: vec<HashItem?>.new(null, size),
-    }
+fn newHashTable(int size):ref<HashTable> {
+    return new HashTable(
+        size = size,
+        count = 0,
+        items = vec<HashItem?>.new(null, size),
+    )
 }
 
-fn HashTable.hash(&self, string s, int a, int m): int {
+fn HashTable.hash(&self, string s, int a, int m):int {
     var hash = 0
     for var i= 0; i < s.len(); i += 1 {
         hash += pow(a,s.len() - (i + 1)) * s[i] as int

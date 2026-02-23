@@ -1,4 +1,26 @@
-=== test_impl_failed2
+=== test_impl_failed_struct_receiver
+--- main.n
+type person_t = struct{
+    string name
+}
+
+fn person_t.to_string(&self):string {
+    return self.name
+}
+
+fn main() {
+    var p = person_t{
+        name: 'xiaoming',
+    }
+
+    var result = p.to_string()
+    println(result)
+}
+
+--- output.txt
+nature-test/main.n:14:19: type mismatch: method requires `ref<main.person_t(struct)>` receiver, got `main.person_t(struct)`
+
+=== test_impl_failed_ptr_receiver
 --- main.n
 type person_t = struct{
     string name
@@ -20,7 +42,7 @@ fn main() {
 --- output.txt
 nature-test/main.n:14:22: type mismatch: method requires `ref<main.person_t(struct)>` receiver, got `ptr<main.person_t(struct)>`
 
-=== test_impl_ula
+=== test_impl_ref_receiver
 --- main.n
 type person_t = struct{
     string name
@@ -31,237 +53,28 @@ fn person_t.to_string(&self):string {
 }
 
 fn main() {
-    var p = person_t{
-        name: 'xiaoming',
-    }
+    ref<person_t> p = new person_t()
+    p.name = 'xiaoming'
 
-    var result = @ula(p).to_string()
+    var result = p.to_string()
     println(result)
 }
 
 --- output.txt
 xiaoming
 
-=== test_impl_sla
---- main.n
-type person_t = struct{
-    string name
-}
-
-fn person_t.to_string(&self):string {
-    return self.name
-}
-
-fn main() {
-    var p = person_t{
-        name: 'xiaoming',
-    }
-
-    var result = @sla(p).to_string()
-    println(result)
-}
-
---- output.txt
-xiaoming
-
-
-=== test_sla_struct
---- main.n
-import runtime
-
-type car_t = struct{
-    int a
-}
-
-fn main() {
-    var c = car_t{
-        a: 24,
-    }
-
-    ref<car_t> a = @sla(c)
-    println(a, a.a)
-    assert(runtime.in_heap(a as anyptr) && a.a == 24)
-
-
-    var d = car_t{
-        a: 48,
-    }
-    ref<int> b = @sla(d.a)
-    println(b, *b)
-    assert(runtime.in_heap(b as anyptr) && *b == 48)
-}
-
-
-=== test_sla_struct2
+=== test_impl_scalar_ref_receiver
 --- main.n
 import fmt
-import runtime
-
-type bar_t = [int;5]
-
-fn bar_t.length(&self):int {
-    return 5
-}
-
-type car_t = i64
-
-fn main() {
-    type tmp_t = struct{
-        i8 t1
-        bar_t bar
-        i8 t2
-    }
-
-    type foo_t = struct{
-        tmp_t mid2
-    }
-
-    bar_t bar = [1, 3, 5, 7, 9]
-    ref<bar_t> p = @sla(bar)
-    println(bar as anyptr, p as anyptr, p[0], bar[0], p.length())
-    assert(bar as anyptr == p as anyptr)
-
-    var foo = foo_t{
-        mid2: tmp_t{
-            t1: 2,
-            t2: 3,
-            bar: [],
-        },
-    }
-
-    ref<bar_t> a = @sla(foo.mid2.bar)
-    println(foo as anyptr, foo.mid2 as anyptr, foo.mid2.bar as anyptr, a)
-    assert(foo as anyptr == foo.mid2 as anyptr && foo.mid2.bar as anyptr == a as anyptr)
-    assert(runtime.in_heap(a as anyptr))
-}
-
-=== test_sla_scalar
---- main.n
-import fmt
-import runtime
 
 fn int.to_string(&self):string {
     return fmt.sprintf('%d', *self)
 }
 
 fn main() {
-    var a = new int(12)
-    var str = a.to_string()
-    println(str)
-    assert(str == '12')
-
-    int b = -1
-    str = @ula(b).to_string()
-    println(str, &b)
-    assert(str == '-1')
-
-    int c = -1000
-    str = @sla(c).to_string()
-    println(str, &c)
-    assert(str == '-1000' && runtime.in_heap(&c as anyptr))
-
-    var cp = @sla(c)
-    assert(runtime.in_heap(cp as anyptr))
+    var p = new int(12)
+    println(p.to_string())
 }
 
-=== test_sla_scalar2
---- main.n
-import fmt
-import runtime
-
-type car_t = i64
-
-fn car_t.tostr(&self) {
-    assert(*self == 10000)
-    println('self is', *self)
-}
-
-fn main() {
-    (fn(car_t local_var) {
-        println(local_var, &local_var)
-    })(10000)
-
-    (fn(car_t local_var) {
-        println(local_var, &local_var)
-        var lp = @sla(local_var)
-        println(lp as anyptr)
-
-        assert(runtime.in_heap(&local_var as anyptr))
-        assert(runtime.in_heap(lp as anyptr))
-
-        @sla(local_var).tostr()
-        var b = local_var + 11
-        assert(b == 10011)
-        println(local_var + 12, b)
-    })(10000)
-}
-
-=== test_sla_closure
---- main.n
-import runtime
-
-fn main() {
-    int c1 = 12
-    [int;3] c2 = [1, 2, 3]
-
-    var test2 = fn() {
-        var cp = @sla(c1) // c1 will change to env access?
-        println(cp as anyptr, c2 as anyptr, &c1 as anyptr, c2[0], c2[1], c2[2])
-        assert(runtime.in_heap(cp as anyptr))
-        assert(runtime.in_heap(c2 as anyptr))
-        assert(runtime.in_heap(&c1 as anyptr))
-        assert(c2[0] == 1)
-        assert(c2[1] == 2)
-        assert(c2[2] == 3)
-    }
-
-    test2()
-}
-
-=== test_sla_reenter
---- main.n
-import runtime
-
-fn int.to_string(&self) {
-    println('hello', *self)
-}
-
-fn main() {
-    var a = new int(12)
-    ref<int> ap = @ula(a)
-    println(a as anyptr, ap as anyptr)
-    assert(runtime.in_heap(a as anyptr) && runtime.in_heap(ap as anyptr))
-
-    var b = new f32(3.14)
-    ref<f32> bp = @sla(b)
-    println(b as anyptr, bp as anyptr)
-    assert(runtime.in_heap(b as anyptr) && runtime.in_heap(bp as anyptr))
-}
-
-=== test_auto_sla
---- main.n
-import time
-import fmt
-import runtime
-
-fn test1():int {
-    return 211
-}
-
-fn int.to_str(&self):string {
-    println(self as anyptr)
-    runtime.in_heap(self as anyptr)
-    return fmt.sprintf('data -> %d', *self)
-}
-
-fn main() {
-    var t = test1().to_str()
-    println(t)
-
-    var t2 = 311.to_str()
-    println(t2)
-
-    i8 t3 = -2
-    var t4 = (t3 as int).to_str()
-    println(t4)
-}
+--- output.txt
+12

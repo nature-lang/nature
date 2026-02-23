@@ -4046,18 +4046,6 @@ impl<'a> Syntax {
         Ok(expr)
     }
 
-    fn parser_macro_ula_expr(&mut self) -> Result<Box<Expr>, SyntaxError> {
-        let mut expr = self.expr_new();
-        self.must(TokenType::LeftParen)?;
-
-        let src = self.parser_expr()?;
-        self.must(TokenType::RightParen)?;
-
-        expr.node = AstNode::MacroUla(src);
-        expr.end = self.prev().unwrap().end;
-        Ok(expr)
-    }
-
     fn parser_macro_call(&mut self) -> Result<Box<Expr>, SyntaxError> {
         let token = self.must(TokenType::MacroIdent)?;
 
@@ -4067,7 +4055,6 @@ impl<'a> Syntax {
             "reflect_hash" => self.parser_macro_reflect_hash(),
             "default" => self.parser_macro_default_expr(),
             "async" => self.parser_macro_async_expr(),
-            "unsafe_load" => self.parser_macro_ula_expr(),
             _ => Err(SyntaxError(token.start, token.end, format!("macro '{}' not defined", token.literal))),
         }
     }

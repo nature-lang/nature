@@ -31,8 +31,6 @@
 #define MACRO_SIZEOF "sizeof"
 #define MACRO_REFLECT_HASH "reflect_hash"
 #define MACRO_ASYNC "async"
-#define MACRO_ULA "ula"
-#define MACRO_SLA "sla"
 #define MACRO_DEFAULT "default"
 
 /**

@@ -1384,9 +1384,6 @@ impl<'a> Semantic<'a> {
             AstNode::MacroSizeof(target_type) | AstNode::MacroDefault(target_type) => {
                 self.analyze_type(target_type);
             }
-            AstNode::MacroUla(src) => {
-                self.analyze_expr(src);
-            }
             AstNode::MacroReflectHash(target_type) => {
                 self.analyze_type(target_type);
             }

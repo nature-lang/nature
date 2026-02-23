@@ -4,10 +4,10 @@ import io
 import io.buf
 
 fn main():void! {
-    var rd = io.buffer{}
+    var rd = io.buffer.new()
     rd.write('hello world' as [u8])
 
-    var br = new buf.reader<io.buffer>(rd)
+    var br = new buf.reader<ref<io.buffer>>(rd)
 
     var buf = vec<u8>.new(0, 5)
     var n = br.read(buf)
@@ -23,8 +23,8 @@ import io
 import io.buf
 
 fn main():void! {
-    var rd = io.buffer{}
-    var br = new buf.reader<io.buffer>(rd)
+    var rd = io.buffer.new()
+    var br = new buf.reader<ref<io.buffer>>(rd)
 
     var buf = vec<u8>.new(0, 5)
     try {
@@ -72,7 +72,7 @@ import strings
 
 fn main():void! {
     // use buffer to simulate file
-    var rd = new io.buffer()
+    var rd = io.buffer.new()
     var data = vec<u8>.new(0, 4096 + 100)
     for int i = 0; i < data.len(); i += 1 {
        data[i] = 'a'.char()
@@ -95,7 +95,7 @@ import io.buf
 import strings
 
 fn main():void! {
-    var rd = new io.buffer()
+    var rd = io.buffer.new()
     rd.write("hello world" as [u8]) // no delim
     var br = new buf.reader<ref<io.buffer>>(rd)
 

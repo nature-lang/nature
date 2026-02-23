@@ -138,7 +138,7 @@ fn query_t.get(self, string key):string {
     return self[key][0]
 }
 
-fn url_t.query(&self):query_t {
+fn url_t.query(*self):query_t {
     query_t result = {}
     
     if self.raw_query.len() == 0 {
@@ -170,7 +170,7 @@ fn url_t.query(&self):query_t {
     return result
 }
 
-fn url_t.request_uri(&self):string {
+fn url_t.request_uri(*self):string {
     if self.raw_query.len() > 0 {
         return self.path + '?' + self.raw_query
     } else {

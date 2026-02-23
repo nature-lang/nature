@@ -417,7 +417,7 @@ fn box_t<T>.get(self):T {
     return self.value
 }
 
-fn box_t<T>.set(&self, T value) {
+fn box_t<T>.set(*self, T value) {
     self.value = value
 }
 

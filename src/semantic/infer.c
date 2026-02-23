@@ -10,8 +10,6 @@
 static void
 check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast_typedef_stmt_t *typedef_stmt);
 
-static bool marking_heap_alloc(ast_expr_t *expr);
-
 static type_t reduction_type_ident(module_t *m, type_t t);
 
 static type_t type_param_special(module_t *m, type_t t, table_t *arg_table);
@@ -1673,34 +1671,6 @@ static type_t infer_unary(module_t *m, ast_unary_expr_t *expr, type_t target_typ
         return type_ptrof(operand_type);
     }
 
-    // @ula(var)
-    if (expr->op == AST_OP_UNSAFE_LA) {
-        if (expr->operand.type.kind == TYPE_REF) {
-            return operand_type;
-        }
-
-        INFER_ASSERTF(expr->operand.assert_type != AST_EXPR_LITERAL && expr->operand.assert_type != AST_CALL,
-                      "cannot unsafe load address of an literal or call expr");
-
-        INFER_ASSERTF(operand_type.kind != TYPE_UNION && operand_type.kind != TYPE_ANY,
-                      "cannot unsafe load address of an union type");
-
-
-        return type_refof(operand_type);
-    }
-
-    // @sla(var)
-    if (expr->op == AST_OP_SAFE_LA) {
-        if (expr->operand.type.kind == TYPE_REF) {
-            return operand_type;
-        }
-
-
-        marking_heap_alloc(&expr->operand);
-
-        return type_refof(operand_type);
-    }
-
     // *var
     if (expr->op == AST_OP_IA) {
         INFER_ASSERTF(operand_type.kind == TYPE_REF || operand_type.kind == TYPE_PTR,
@@ -2442,131 +2412,35 @@ static ast_fndef_t *generics_special_fn(module_t *m, ast_call_t *call, type_t ta
     return special_fn;
 }
 
-static bool marking_heap_alloc(ast_expr_t *expr) {
-    if (expr->assert_type == AST_EXPR_IDENT) {
-        ast_ident *ident = expr->value;
-        symbol_t *s = symbol_table_get(ident->literal);
-        assert(s->type == SYMBOL_VAR);
-        ast_var_decl_t *var = s->ast_value;
-        var->type.in_heap = true;
-        expr->type.in_heap = true;
-        return true;
-    }
-
-    if (expr->assert_type == AST_EXPR_STRUCT_NEW) {
-        ast_struct_new_t *ast = expr->value;
-        expr->type.in_heap = true;
-        ast->type.in_heap = true;
-        return true;
-    }
-
-    if (expr->assert_type == AST_EXPR_VEC_NEW ||
-        expr->assert_type == AST_EXPR_VEC_REPEAT_NEW ||
-        expr->assert_type == AST_EXPR_MAP_NEW ||
-        expr->assert_type == AST_EXPR_SET_NEW ||
-        expr->assert_type == AST_EXPR_TUPLE_NEW) {
-        ast_array_new_t *ast = expr->value;
-        expr->type.in_heap = true;
-
-        return true;
-    }
-
-
-    if (expr->assert_type == AST_CALL) {
-        expr->type.in_heap = true;
-        return true;
-    }
-
-    // int/float/bool
-    if (expr->assert_type == AST_EXPR_LITERAL && expr->type.storage_kind != STORAGE_KIND_PTR) {
-        ast_literal_t *literal = expr->value;
-
-        expr->type.in_heap = true;
-        return true;
-    }
-
-    if (expr->assert_type == AST_EXPR_ARRAY_ACCESS) {
-        ast_array_access_t *ast = expr->value;
-        return marking_heap_alloc(&ast->left); // auto marking
-    }
-
-    if (expr->assert_type == AST_EXPR_VEC_ACCESS) {
-        ast_vec_access_t *ast = expr->value;
-        return marking_heap_alloc(&ast->left); // auto marking
-    }
-
-    if (expr->assert_type == AST_EXPR_MAP_ACCESS) {
-        ast_map_access_t *ast = expr->value;
-        return marking_heap_alloc(&ast->left); // auto marking
-    }
-
-    if (expr->assert_type == AST_EXPR_TUPLE_ACCESS) {
-        ast_tuple_access_t *ast = expr->value;
-        return marking_heap_alloc(&ast->left); // auto marking
-    }
-
-    if (expr->assert_type == AST_EXPR_STRUCT_SELECT) {
-        ast_struct_select_t *ast = expr->value;
-        return marking_heap_alloc(&ast->instance); // auto marking
-    }
-
-    // ([1, 3, 5] as foo_t).len()
-    if (expr->assert_type == AST_EXPR_AS) {
-        ast_as_expr_t *ast = expr->value;
-        ast->target_type.in_heap = true;
-        expr->type.in_heap = true;
-        return marking_heap_alloc(&ast->src);
-    }
-
-    // builtin value types should escape to heap under @sla to avoid stack lifetime issues
-    if (expr->type.kind == TYPE_STRING || expr->type.kind == TYPE_VEC || expr->type.kind == TYPE_MAP ||
-        expr->type.kind == TYPE_SET || expr->type.kind == TYPE_TUPLE) {
-        expr->type.in_heap = true;
-        return true;
-    }
-
-    // left 无需进行堆分配，可能是 vec_access/map_access 这种 left 已经在指针分配的类型
-    return false;
-}
-
 static ast_expr_t *self_arg_rewrite(module_t *m, type_fn_t *type_fn, ast_expr_t *self_arg) {
+    (void) m;
     type_t *self_param_type = ct_list_value(type_fn->param_types, 0);
-    type_t *extract_self_type = self_param_type;
-    if (self_param_type->kind == TYPE_REF || self_param_type->kind == TYPE_PTR) {
-        extract_self_type = &self_param_type->ptr->value_type;
-    }
 
-    if (extract_self_type->storage_kind != STORAGE_KIND_PTR) {
-        if (self_param_type->kind == TYPE_REF) {
-            INFER_ASSERTF(self_arg->type.kind != TYPE_PTR,
-                          "type mismatch: method requires `%s` receiver, got `%s`", type_format(*self_param_type),
-                          type_format(self_arg->type));
+    if (self_param_type->kind == TYPE_REF) {
+        INFER_ASSERTF(self_arg->type.kind != TYPE_PTR,
+                      "type mismatch: method requires `%s` receiver, got `%s`", type_format(*self_param_type),
+                      type_format(self_arg->type));
 
-            if (self_arg->type.kind != TYPE_REF) {
-                return ast_safe_load_addr(self_arg);
-            }
-
-            return self_arg;
-        } else if (self_param_type->kind == TYPE_PTR) {
-            if (self_arg->type.kind == TYPE_PTR || self_arg->type.kind == TYPE_REF) {
-                return self_arg;
-            }
-
-            return ast_load_addr(self_arg); // unsafe load
-        } else {
-            // value pass
-            if (self_arg->type.kind == TYPE_PTR || self_arg->type.kind == TYPE_REF) {
-                return ast_indirect_addr(self_arg);
-            }
-
+        if (self_arg->type.kind == TYPE_REF || self_arg->type.storage_kind == STORAGE_KIND_PTR) {
             return self_arg;
         }
+
+        INFER_ASSERTF(false, "type mismatch: method requires `%s` receiver, got `%s`",
+                      type_format(*self_param_type), type_format(self_arg->type));
     }
 
-    // ref<[T]> 类型这样的形式是不被允许的
-    INFER_ASSERTF(self_arg->type.storage_kind == STORAGE_KIND_PTR,
-                  "unsupported method receiver type '%s', expected heap-allocated type",
-                  type_format(self_arg->type))
+    if (self_param_type->kind == TYPE_PTR) {
+        if (self_arg->type.kind == TYPE_PTR || self_arg->type.kind == TYPE_REF) {
+            return self_arg;
+        }
+
+        return ast_load_addr(self_arg);
+    }
+
+    // value pass
+    if (self_arg->type.kind == TYPE_PTR || self_arg->type.kind == TYPE_REF) {
+        return ast_indirect_addr(self_arg);
+    }
 
     return self_arg;
 }

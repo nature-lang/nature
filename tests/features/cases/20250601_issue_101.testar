@@ -116,7 +116,7 @@ fn my_bool.show_value(self):string {
 type custom_t<T> = T|null
 
 #where T:custom_i
-fn custom_t<T>.show_values(&self):string {
+fn custom_t<T>.show_values(self):string {
     // self = union<T> // union/vec/set/map/tup/fn/chan Not converted to ptr
     return self.show_value() // type 'main.custom_t(union)' not impl 'show_value' fn
 }

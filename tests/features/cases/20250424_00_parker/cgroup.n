@@ -20,7 +20,7 @@ type cgroup_t = struct {
     string procs_path
 }
 
-fn cgroup_t.register(&self, int pid):void! {
+fn cgroup_t.register(*self, int pid):void! {
     var pid_str = fmt.sprintf('%d\n', pid)
 
     logf("[cgroup_t.register] pid %d, procs_path %s", pid, self.procs_path)
@@ -34,7 +34,7 @@ fn cgroup_t.register(&self, int pid):void! {
     f.close()
 }
 
-fn cgroup_t.clear(&self):void! {
+fn cgroup_t.clear(*self):void! {
     logf('s.procs_path is "%s"', self.procs_path)
 
     var f = fs.open(self.procs_path, syscall.O_RDONLY, 0) catch e {

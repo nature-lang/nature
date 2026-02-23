@@ -17,6 +17,10 @@ type buffer:reader,writer = struct{
     int offset
 }
 
+fn buffer.new():ref<buffer> {
+    return new buffer()
+}
+
 fn buffer.write(&self, [u8] buf):int! {
     self.buf.append(buf)
     return buf.len()
