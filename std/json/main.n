@@ -560,10 +560,6 @@ fn deserialize_t.parser_nullable(&self, anyptr p, ref<reflect.type_t> t):void! {
 
     var rv = p as ptr<reflect.union_t>
 
-    // TODO 如果转换为 union，并且还需要足够的空间的 union? 并且能够被 gc mark。
-    // 当前的
-
-
     // default is null
     if self.data[self.cursor] == 'n'[0] {
         self.must('null')
@@ -587,9 +583,6 @@ fn deserialize_t.parser_nullable(&self, anyptr p, ref<reflect.type_t> t):void! {
             var key_type = reflect.typeof_hash(target_type.hashes[0])
             var value_type = reflect.typeof_hash(target_type.hashes[1])
             runtime.map_new_out(&rv.value as anyptr, hash, key_type.hash, value_type.hash)
-        }
-        reflect.STRUCT -> {
-            rv.value = runtime.gc_malloc(hash)
         }
         reflect.STRING -> {
             runtime.vec_new_out(&rv.value as anyptr, hash, @reflect_hash(u8), 0)
