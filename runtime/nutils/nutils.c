@@ -72,8 +72,8 @@ void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
     if (mu->rtype->hash != target_rtype_hash) {
         DEBUGF("[union_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
-               type_kind_str[mu->rtype->kind],
-               target_rtype_hash);
+                type_kind_str[mu->rtype->kind],
+                target_rtype_hash);
 
         rti_throw("type assert failed", true);
         return;
@@ -196,8 +196,8 @@ void union_casting(n_union_t *out, int64_t input_rtype_hash, void *value_ref) {
 
     ASSERT_ADDR(value_ref);
 
-    TRACEF("[union_casting] input_kind=%s", type_kind_str[rtype->kind]);
-
+    DEBUGF("[union_casting] hash=%ld input_kind=%d", input_rtype_hash, rtype->kind);
+    assert(rtype->kind < 1000);
     DEBUGF("[union_casting] union_base: %p, memmove value_ref(%p) -> any->value(%p), size=%lu, fetch_value_8byte=%p",
            out, value_ref,
            &out->value, rtype->storage_size, (void *) fetch_addr_value((addr_t) value_ref));

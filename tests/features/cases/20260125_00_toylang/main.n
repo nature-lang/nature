@@ -1,6 +1,9 @@
 import "token/token.n"
 import "lexer/lexer.n"
+
 fn main() {
+    token.init()
+
     // var tk = token.newToken(token.TokenKindLet, "let", 1, 1)
     // println(tk.toString())
     // println(token.lookupKeyword("name"))

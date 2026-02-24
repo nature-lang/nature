@@ -9,9 +9,9 @@ import fs
 
 u8 version1 = 1
 u8 version2 = 2
-string v1_default_system = 'freezer'
-string procs_system = 'cgroup.procs'
-string parker_dir = 'parker'
+const v1_default_system = 'freezer'
+const procs_system = 'cgroup.procs'
+const parker_dir = 'parker'
 
 type cgroup_t = struct {
     string id

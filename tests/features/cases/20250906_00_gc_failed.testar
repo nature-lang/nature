@@ -50,11 +50,15 @@ type jwt_config_t = struct {
 }
 
 // Global JWT configuration
-var jwt_config = jwt_config_t{
-    secret_key: "emoji-api.helloworld202509052341",
-    default_expiry: JWT_DEFAULT_EXPIRY,
-    issuer: JWT_ISSUER,
-    algorithm: JWT_ALGORITHM,
+var jwt_config = jwt_config_t{}
+
+fn init() {
+   jwt_config = jwt_config_t{
+       secret_key: "emoji-api.helloworld202509052341",
+       default_expiry: JWT_DEFAULT_EXPIRY,
+       issuer: JWT_ISSUER,
+       algorithm: JWT_ALGORITHM,
+   }
 }
 
 // Initialize JWT configuration
@@ -276,6 +280,7 @@ fn create_signature(string data, string secret):[u8] {
 }
 
 fn main():void! {
+    init()
     // init_jwt("emoji-api.helloworld202509052341", 7200, "emoji")
     for int i = 0; i < 10; i += 1 {
         runtime.gc()
@@ -305,16 +310,24 @@ type jwt_config_t = struct {
 }
 
 // Global JWT configuration
-var jwt_config = jwt_config_t{
-    secret_key: "emoji-api.helloworld202509052341",
-    default_expiry: 86400,
-    issuer: 'emoji',
-    algorithm: 'HS250',
+var jwt_config = jwt_config_t{}
+
+[string;10] global_arr = []
+
+string hello = ''
+
+fn init() {
+    jwt_config = jwt_config_t{
+        secret_key: "emoji-api.helloworld202509052341",
+        default_expiry: 86400,
+        issuer: 'emoji',
+        algorithm: 'HS250',
+    }
+
+    global_arr = ['1', 'ab', 'code1', 'code2', 'foo3', 'foo4', 'foo5', 'foo6', 'bar7', 'bar8']
+
+    hello = 'world'
 }
-
-[string;10] global_arr = ['1', 'ab', 'code1', 'code2', 'foo3', 'foo4', 'foo5', 'foo6', 'bar7', 'bar8']
-
-string hello = 'world'
 
 fn main():void! {
     for int i = 0; i < 10; i += 1 {

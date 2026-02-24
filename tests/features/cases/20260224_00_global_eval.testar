@@ -1,0 +1,180 @@
+=== test_global_struct_assign
+--- main.n
+type point_t = struct{
+    int x
+    int y
+}
+
+point_t p = point_t{
+    x: 7,
+    y: 9,
+}
+
+fn main() {
+    println(p.x, p.y)
+}
+
+--- output.txt
+7 9
+
+=== test_global_default_vec_map_set_string
+--- main.n
+vec<int> gv = []
+map<string,int> gm = {}
+set<int> gs = {}
+string gs0 = ''
+
+fn main() {
+    println(gv.len(), gm.len(), gs0.len())
+
+    gv.push(7)
+    gm['k'] = 9
+    gs.add(3)
+
+    println(gv[0], gm['k'], gs.contains(3))
+}
+
+--- output.txt
+0 0 0
+7 9 true
+
+=== test_global_cycle_failed
+--- main.n
+int a = b
+int b = a
+
+fn main() {}
+
+--- output.txt
+nature-test/main.n:1:10: global initializer cannot reference global var 'main.b'
+
+=== test_global_vec_with_values_failed
+--- main.n
+vec<int> bad = [1]
+
+fn main() {}
+
+--- output.txt
+nature-test/main.n:1:17: global vec initializer must be empty
+
+=== test_global_cycle_three_files_failed
+--- main.n
+import 'a.n'
+
+fn main() {}
+
+--- a.n
+import 'b.n'.{b}
+
+int a = b
+
+--- b.n
+import 'c.n'.{c}
+
+int b = c
+
+--- c.n
+import 'a.n'.{a}
+
+int c = a
+
+--- output.txt
+nature-test/c.n:3:9: global initializer cannot reference global var 'nature-test.a.a'
+
+=== test_global_auto_infer
+--- main.n
+type user_t = struct{
+    int age
+    bool vip
+}
+
+var g_i = 42
+var g_f = 3.5
+var g_b = true
+var g_s = ''
+var g_u8 = 255 as u8
+var g_user = user_t{
+    age: 18,
+    vip: false,
+}
+
+fn take_u8(u8 v):u8 {
+    return v
+}
+
+fn main() {
+    u8 got = take_u8(g_u8)
+    println(g_i + 1, g_f + 0.5, g_b, g_s.len(), got, g_user.age, g_user.vip)
+}
+
+--- output.txt
+43 4.000000 true 0 255 18 false
+
+=== test_global_auto_infer_float_as_int
+--- main.n
+var e1 = 2.15 as int
+
+fn main() {
+    println(e1)
+}
+
+--- output.txt
+2
+
+=== test_global_array_layout_init
+--- main.n
+type point_t = struct{
+    int x
+    int y
+}
+
+[int;6] nums = [1, 2, 3]
+[point_t;3] points = [point_t{
+    x: 1,
+    y: 2,
+}]
+
+fn main() {
+    println(nums[0], nums[1], nums[2], nums[3], nums[4], nums[5])
+    println(points[0].x, points[0].y, points[1].x, points[1].y, points[2].x, points[2].y)
+}
+
+--- output.txt
+1 2 3 0 0 0
+1 2 0 0 0 0
+
+=== test_global_array_repeat_init
+--- main.n
+[int;10] list = [0;10]
+
+fn main() {
+    println(list[0], list[9])
+}
+
+--- output.txt
+0 0
+
+=== test_global_reflect_hash_null
+--- main.n
+var null_hash = @reflect_hash(null)
+
+fn main() {
+    println(null_hash == @reflect_hash(null))
+}
+
+--- output.txt
+true
+
+=== test_global_import_syscall_const[os=darwin]
+--- main.n
+import syscall
+
+var seed = syscall.SYS_GETPPID
+
+fn main():void! {
+    assert(seed == syscall.SYS_GETPPID)
+    println(seed)
+}
+
+--- output.txt
+39

@@ -62,13 +62,13 @@ int ROUTES_OPTIONS = 5
 int ROUTES_HEAD = 6
 int ROUTES_ALL = 7
 
-var HTTP_VERSION = 'HTTP/1.1'
-var HTTP_MSG_OK = 'OK'
+const HTTP_VERSION = 'HTTP/1.1'
+const HTTP_MSG_OK = 'OK'
 
-var MIME_TEXT = 'text/plain'
-var MIME_JSON = 'application/json'
-var separation = '\r\n' as anyptr as [u8]
-var separation2 = '\r\n\r\n' as anyptr as [u8]
+const MIME_TEXT = 'text/plain'
+const MIME_JSON = 'application/json'
+const separation = '\r\n'
+const separation2 = '\r\n\r\n'
 
 type callback_fn = fn(request_t, ref<response_t>):void!
 
@@ -262,25 +262,25 @@ fn response_t.to_str(&self):string {
     buf.append(utils.status_to_str(self.status) as anyptr as [u8])
     buf.push(space_ascii)
     buf.append(self.message as anyptr as [u8])
-    buf.append(separation)
+    buf.append(separation as [u8])
 
     var header_len = self.headers.len()
     for k, v in self.headers {
         buf.append(k as anyptr as anyptr as [u8])
         buf.append(': ' as anyptr as anyptr as [u8])
         buf.append(v as anyptr as anyptr as [u8])
-        buf.append(separation)
+        buf.append(separation as [u8])
     }
 
     buf.append('Content-Length: ' as anyptr as [u8])
     buf.append(utils.utos(self.length as uint) as anyptr as [u8])
-    buf.append(separation)
+    buf.append(separation as [u8])
 
     buf.append('Content-Type: ' as anyptr as [u8])
     buf.append(self.content_type as anyptr as [u8])
     buf.append('; charset=utf-8' as anyptr as [u8])
 
-    buf.append(separation2)
+    buf.append(separation2 as [u8])
     buf.append(self.body as anyptr as [u8])
 
     return buf as anyptr as string

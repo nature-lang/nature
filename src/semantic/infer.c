@@ -3698,6 +3698,14 @@ static type_t infer_right_expr(module_t *m, ast_expr_t *expr, type_t target_type
     return expr->type;
 }
 
+type_t infer_global_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
+    ast_fndef_t *saved_fn = m->current_fn;
+    m->current_fn = NULL;
+    type_t result = infer_right_expr(m, expr, target_type);
+    m->current_fn = saved_fn;
+    return result;
+}
+
 static type_t reduction_struct(module_t *m, type_t t) {
     INFER_ASSERTF(t.kind == TYPE_STRUCT, "type kind=%s unexpect", type_format(t));
 
@@ -4639,11 +4647,6 @@ void pre_infer(module_t *m) {
         for (int j = 0; j < fndef->local_children->count; ++j) {
             infer_fn_decl(m, fndef->local_children->take[j], type_kind_new(TYPE_UNKNOWN));
         }
-    }
-
-    // 这是为了完成自动推断, global ident 的自动推断，相关推断都在 fn_init 中完成。
-    if (m->fn_init) {
-        infer_fndef(m->fn_init->module, m->fn_init);
     }
 
     // - TODO 遍历 all typedefs 进行处理, 包括 reduction + rtype push.

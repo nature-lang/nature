@@ -1175,7 +1175,10 @@ static void analyzer_is_expr(module_t *m, ast_is_expr_t *is_expr) {
  * @return
  */
 static void analyzer_local_fndef(module_t *m, ast_fndef_t *fndef) {
-    assert(m->analyzer_global);
+    ANALYZER_ASSERTF(m->analyzer_global, "closure fn cannot appear in global initializer");
+    if (!m->analyzer_global) {
+        return;
+    }
     slice_push(m->analyzer_global->local_children, fndef);
     fndef->global_parent = m->analyzer_global;
     fndef->is_local = true;
@@ -2224,8 +2227,6 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
  * @param stmt_list
  */
 static void analyzer_module(module_t *m, slice_t *stmt_list) {
-    // var_decl blocks
-    slice_t *global_assign_list = slice_new(); // 存放 stmt
     slice_t *fn_list = slice_new();
     slice_t *typedef_list = slice_new();
 
@@ -2243,32 +2244,17 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
         if (stmt->assert_type == AST_STMT_VARDEF) {
             ast_vardef_stmt_t *vardef = stmt->value;
             ast_var_decl_t *var_decl = &vardef->var_decl;
+
+            assert(vardef->right);
+            analyzer_expr(m, vardef->right);
             analyzer_type(m, &var_decl->type);
+
             slice_push(m->global_vardef, vardef);
 
             symbol_t *s = symbol_table_get(var_decl->ident);
             assert(s && str_equal(s->ident, var_decl->ident));
             slice_push(m->global_symbols, s);
 
-            // 将 vardef 转换成 assign stmt，然后导入到 fn init 中进行初始化
-            ast_stmt_t *assign_stmt = NEW(ast_stmt_t);
-            ast_assign_stmt_t *assign = NEW(ast_assign_stmt_t);
-            assign->left = (ast_expr_t){
-                .line = stmt->line,
-                .column = stmt->column,
-                .assert_type = AST_EXPR_IDENT,
-                .value = ast_new_ident(var_decl->ident),
-            };
-            assign->var_decl = &vardef->var_decl;
-            assign->right = *vardef->right;
-            assign_stmt->line = stmt->line;
-            assign_stmt->column = stmt->column;
-            assign_stmt->assert_type = AST_STMT_GLOBAL_ASSIGN;
-            assign_stmt->value = assign;
-            slice_push(global_assign_list, assign_stmt);
-
-            // 清空 global stmt 的 var right
-            vardef->right = NULL;
             continue;
         }
 
@@ -2370,46 +2356,7 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
 
     m->ast_typedefs = typedef_list;
 
-    // 添加 module init 函数
-    // 对于 main 模块，总是创建 .main.init（即使没有全局变量）
-    // 对于其他模块，只有当存在全局变量赋值时才创建
-    if (global_assign_list->count > 0 || m->type == MODULE_TYPE_MAIN) {
-        ast_fndef_t *fn_init = ast_fndef_new(m, 0, 0);
-        // .module.ident . init 加点避免和用户代码冲突
-        fn_init->symbol_name = str_connect(".", ident_with_prefix(m->ident, FN_INIT_NAME));
-        fn_init->fn_name = fn_init->symbol_name;
-        fn_init->fn_name_with_pkg = ident_with_prefix(m->ident, fn_init->symbol_name);
-        fn_init->return_type = type_kind_new(TYPE_VOID);
-        fn_init->params = ct_list_new(sizeof(ast_var_decl_t));
-        fn_init->body = global_assign_list;
-        fn_init->is_errable = true;
-        m->fn_init = fn_init;
-
-        // 将 module init 函数添加到全局符号中
-        symbol_t *s = symbol_table_set(fn_init->symbol_name, SYMBOL_FN, fn_init, false);
-        ANALYZER_ASSERTF(s, "fn '%s' redeclared", fn_init->symbol_name);
-        slice_push(m->global_symbols, s);
-        slice_push(fn_list, fn_init);
-
-        // 添加调用指令(后续会将这条指令插入到 main.main 或 .main.init 中)
-        ast_stmt_t *call_stmt = NEW(ast_stmt_t);
-        ast_call_t *call = NEW(ast_call_t);
-        call->left = (ast_expr_t){
-            .assert_type = AST_EXPR_IDENT,
-            .value = ast_new_ident(s->ident), // module.init
-            .line = 1,
-            .column = 0,
-        };
-        call->args = ct_list_new(sizeof(ast_expr_t));
-        call_stmt->assert_type = AST_CALL;
-        call_stmt->value = call;
-        call_stmt->line = 1;
-        call_stmt->column = 0;
-        m->call_init_stmt = call_stmt;
-    }
-
-    // 此时所有对符号都已经主要到了全局变量表中，vardef 的右值则注册到了 fn.init 中，下面对 fndef body
-    // 进行符号定位与改写
+    // 全局符号收集完成后，开始对 fndef body 进行符号定位与改写
     for (int i = 0; i < fn_list->count; ++i) {
         ast_fndef_t *fndef = fn_list->take[i];
 

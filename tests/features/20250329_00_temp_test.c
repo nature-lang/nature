@@ -11,6 +11,7 @@ int main(void) {
     //    setenv("ENTRY_FILE", "main.n", 1);
 
     feature_test_build();
+    sleep(1);
     exec_imm_param();
     //    feature_testar_test(NULL);
 }
