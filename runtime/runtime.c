@@ -65,7 +65,8 @@ int runtime_main(int argc, char *argv[]) {
         fn_depend_init(true);
 
         // - 提取 main 进行 coroutine 创建调度
-        coroutine_t *main_co = rt_coroutine_new((void *) user_main, FLAG(CO_FLAG_MAIN) | FLAG(CO_FLAG_DIRECT), NULL, NULL);
+        coroutine_t *main_co = rt_coroutine_new((void *) user_main, FLAG(CO_FLAG_MAIN) | FLAG(CO_FLAG_DIRECT), NULL,
+                                                NULL);
         rt_coroutine_dispatch(main_co);
         RDEBUGF("[runtime_main] main_co dispatch success");
 

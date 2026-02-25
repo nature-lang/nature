@@ -301,6 +301,29 @@ static lir_operand_t *linear_default_string(module_t *m, type_t t, lir_operand_t
     return target;
 }
 
+static lir_operand_t *linear_string(module_t *m, type_t t, lir_operand_t *raw_string, int64_t length, lir_operand_t *target) {
+    if (!target) {
+        target = temp_var_operand_with_alloc(m, t);
+    }
+
+    lir_operand_t *data_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target, offsetof(n_string_t, data));
+    lir_operand_t *len_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_string_t, length));
+    lir_operand_t *cap_dst =
+            indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_string_t, capacity));
+    lir_operand_t *elem_size_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target,
+                                                         offsetof(n_string_t, element_size));
+    lir_operand_t *hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_string_t, hash));
+
+    // string 是不可变对象，literal 可以直接引用 .data 段 raw_string
+    OP_PUSH(lir_op_move(data_dst, raw_string));
+    OP_PUSH(lir_op_move(len_dst, int_operand(length)));
+    OP_PUSH(lir_op_move(cap_dst, int_operand(length + 1)));
+    OP_PUSH(lir_op_move(elem_size_dst, int_operand(type_kind_sizeof(TYPE_UINT8))));
+    OP_PUSH(lir_op_move(hash_dst, int_operand(type_hash(t))));
+
+    return target;
+}
+
 static lir_operand_t *linear_default_nullable(module_t *m, type_t t, lir_operand_t *target) {
     type_t null_type = type_kind_new(TYPE_NULL);
     uint64_t rtype_hash = type_hash(null_type);
@@ -341,7 +364,8 @@ static lir_operand_t *linear_default_any(module_t *m, type_t t, lir_operand_t *t
         out_src = lea_operand_pointer(m, target);
     }
     OP_PUSH(lir_op_move(out_ptr, out_src));
-    push_rt_call(m, RT_CALL_ANY_CASTING, NULL, 3, out_ptr, int_operand(rtype_hash), value_ref);
+    bool is_fx = m->current_closure && m->current_closure->is_fx;
+    push_rt_call(m, RT_CALL_ANY_CASTING, NULL, 4, out_ptr, int_operand(rtype_hash), value_ref, bool_operand(is_fx));
 
     return target;
 }
@@ -403,9 +427,50 @@ linear_unsafe_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target
         OP_PUSH(lir_op_move(data_dst, int_operand(0)));
     } else {
         lir_operand_t *data_ptr = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
-        lir_operand_t *element_hash = int_operand(type_hash(t.vec->element_type));
-        lir_operand_t *len_operand = int_operand(len);
-        push_rt_call(m, RT_CALL_ARRAY_NEW, data_ptr, 2, element_hash, len_operand);
+        assert(m->current_closure);
+        if (m->current_closure->is_fx) {
+            uint64_t data_size = len * t.vec->element_type.storage_size;
+            push_rt_call(m, RT_CALL_FX_MALLOC, data_ptr, 1, int_operand(data_size));
+        } else {
+            lir_operand_t *element_hash = int_operand(type_hash(t.vec->element_type));
+            lir_operand_t *len_operand = int_operand(len);
+            push_rt_call(m, RT_CALL_ARRAY_NEW, data_ptr, 2, element_hash, len_operand);
+        }
+        OP_PUSH(lir_op_move(data_dst, data_ptr));
+    }
+
+    return target;
+}
+
+static lir_operand_t *
+linear_stack_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target) {
+    if (!target) {
+        target = temp_var_operand_with_alloc(m, t);
+    }
+    assert(target->assert_type == LIR_OPERAND_VAR);
+
+    lir_operand_t *data_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target, offsetof(n_vec_t, data));
+    lir_operand_t *len_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, length));
+    lir_operand_t *cap_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, capacity));
+    lir_operand_t *elem_size_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target,
+                                                         offsetof(n_vec_t, element_size));
+    lir_operand_t *hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, hash));
+
+    OP_PUSH(lir_op_move(len_dst, int_operand(len)));
+    OP_PUSH(lir_op_move(cap_dst, int_operand(len)));
+    OP_PUSH(lir_op_move(elem_size_dst, int_operand(t.vec->element_type.storage_size)));
+    OP_PUSH(lir_op_move(hash_dst, int_operand(type_hash(t))));
+
+    if (len == 0) {
+        OP_PUSH(lir_op_move(data_dst, int_operand(0)));
+    } else {
+        type_array_t *data_array = NEW(type_array_t);
+        data_array->length = len;
+        data_array->element_type = t.vec->element_type;
+        type_t data_array_type = type_new(TYPE_ARR, data_array);
+
+        lir_operand_t *data_target = temp_var_operand_with_alloc(m, data_array_type);
+        lir_operand_t *data_ptr = lea_operand_pointer(m, data_target);
         OP_PUSH(lir_op_move(data_dst, data_ptr));
     }
 
@@ -1863,7 +1928,10 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
 
             // actual 剩余的所有参数进行 linear_expr 之后 都需要用一个数组收集起来，并写入到 target_operand 中
             int len = call->args->length - i; // 5, 1
-            lir_operand_t *rest_vec_target = linear_unsafe_vec_new(m, *rest_list_type, len, NULL);
+            bool is_fx = m->current_closure && m->current_closure->is_fx;
+            lir_operand_t *rest_vec_target = is_fx
+                                             ? linear_stack_vec_new(m, *rest_list_type, len, NULL)
+                                             : linear_unsafe_vec_new(m, *rest_list_type, len, NULL);
             type_t vec_element_type = rest_list_type->vec->element_type;
 
             int index = 0;
@@ -3026,7 +3094,8 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             OP_PUSH(lir_op_move(union_ptr, src_operand));
 
-            push_rt_call(m, RT_CALL_UNION_TO_ANY, NULL, 2, out_ptr, union_ptr);
+            bool is_fx = m->current_closure && m->current_closure->is_fx;
+            push_rt_call(m, RT_CALL_UNION_TO_ANY, NULL, 3, out_ptr, union_ptr, bool_operand(is_fx));
 
             return target;
         }
@@ -3049,7 +3118,9 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             out_src = lea_operand_pointer(m, target);
         }
         OP_PUSH(lir_op_move(out_ptr, out_src));
-        push_rt_call(m, RT_CALL_ANY_CASTING, NULL, 3, out_ptr, int_operand(src_rtype_hash), any_value);
+        bool is_fx = m->current_closure && m->current_closure->is_fx;
+        push_rt_call(m, RT_CALL_ANY_CASTING, NULL, 4, out_ptr, int_operand(src_rtype_hash), any_value,
+                     bool_operand(is_fx));
 
         return target;
     }
@@ -3547,16 +3618,8 @@ static void linear_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
 static lir_operand_t *linear_literal(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_literal_t *literal = expr.value;
     if (literal->kind == TYPE_STRING) {
-        if (!target) {
-            target = temp_var_operand_with_alloc(m, expr.type);
-        }
-        lir_operand_t *out_ptr = linear_lea_builtin_value_struct(m, target);
-
-        // 转换成 nature string 对象(基于 string_new), 转换的结果赋值给 target
         lir_operand_t *imm_c_string_operand = string_operand(literal->value, literal->len);
-        lir_operand_t *imm_len_operand = int_operand(literal->len);
-        push_rt_call(m, RT_CALL_STRING_NEW_WITH_POOL, NULL, 3, out_ptr, imm_c_string_operand, imm_len_operand);
-        return target;
+        return linear_string(m, expr.type, imm_c_string_operand, literal->len, target);
     }
 
     if (literal->kind == TYPE_NULL) {
@@ -4034,7 +4097,9 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
 
     OP_PUSH(lir_op_output(LIR_OPCODE_FN_BEGIN, operand_new(LIR_OPERAND_PARAMS, params)));
 
-    OP_PUSH(lir_op_safepoint());
+    if (!fndef->is_fx) {
+        OP_PUSH(lir_op_safepoint());
+    }
 
     // 参数 escape rewrite
     for (int i = 0; i < fndef->params->length; ++i) {

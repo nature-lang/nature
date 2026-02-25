@@ -4130,6 +4130,25 @@ impl<'a> Typesys<'a> {
         self.infer_call_args(call, *type_fn.clone());
         call.return_type = type_fn.return_type.clone();
 
+        {
+            let current_fn = self.current_fn_mutex.lock().unwrap();
+            if current_fn.is_fx && !type_fn.fx {
+                return Err(AnalyzerError {
+                    start,
+                    end,
+                    message: format!(
+                        "calling fn `{}` from fx `{}` is not allowed.",
+                        if type_fn.name.is_empty() {
+                            "lambda".to_string()
+                        } else {
+                            type_fn.name.clone()
+                        },
+                        current_fn.fn_name
+                    ),
+                });
+            }
+        }
+
         if type_fn.errable && check_errable {
             // 当前 fn 必须允许 is_errable 或者当前位于 be_caught 中
             let current_fn = self.current_fn_mutex.lock().unwrap();
@@ -4667,6 +4686,7 @@ impl<'a> Typesys<'a> {
                     || left_fn.param_types.len() != right_fn.param_types.len()
                     || left_fn.rest != right_fn.rest
                     || left_fn.errable != right_fn.errable
+                    || left_fn.fx != right_fn.fx
                 {
                     return false;
                 }
@@ -4789,6 +4809,7 @@ impl<'a> Typesys<'a> {
                     || left_fn.param_types.len() != right_fn.param_types.len()
                     || left_fn.rest != right_fn.rest
                     || left_fn.errable != right_fn.errable
+                    || left_fn.fx != right_fn.fx
                 {
                     return false;
                 }
@@ -4945,6 +4966,7 @@ impl<'a> Typesys<'a> {
             tpl: fndef.is_tpl,
             errable: fndef.is_errable,
             rest: fndef.rest_param,
+            fx: fndef.is_fx,
             param_types,
         })));
 
@@ -5139,6 +5161,7 @@ impl<'a> Typesys<'a> {
             tpl: fndef.is_tpl,
             errable: fndef.is_errable,
             rest: fndef.rest_param,
+            fx: fndef.is_fx,
             param_types: Vec::new(),
             return_type: self.reduction_type(fndef.return_type.clone())?,
         };

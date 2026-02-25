@@ -59,7 +59,7 @@ NO_OPTIMIZE void co_preempt_yield() {
 
     // 首次 preempt yield, 记录 ret_addr, 用于后续的 scan_stack 识别
     if (assist_preempt_yield_ret_addr == 0) {
-        assist_preempt_yield_ret_addr = CALLER_RET_ADDR(co);
+        assist_preempt_yield_ret_addr = CALLER_RET_ADDR();
     }
 
     n_processor_t *p = processor_get();

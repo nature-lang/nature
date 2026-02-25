@@ -724,7 +724,7 @@ struct ast_fndef_t {
     bool is_impl; // 是否是 impl fn
     // impl fn without self receiver
     bool is_static;
-    bool is_fx; // 是否是 fx fn
+    bool is_fx; // 是否是 fx mode
 
     bool is_errable;
 

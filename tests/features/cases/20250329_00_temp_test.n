@@ -1,8 +1,16 @@
-fn vec<T>.temp(*self):int {
-    return self.len() // self 的类型推断出现了严重的问题？这可能源于？
+import libc
+
+// 等等，这里产生了内槽分配？虽然是显示的，但是还是不够优雅！甚至无法释放。
+fx div(i32 dividend, i32 divisor):i32! {
+    if (divisor == 0) {
+        var err =  libc.malloc(@sizeof(errort)) as ptr<errort>
+        err.message = 'divisor cannot zero'
+        throw err // err to interface
+    }
+
+    return dividend / divisor
 }
 
-fn main() {
-    [int] a = [1, 2, 3]
-    a.temp()
+fx main() {
+    div(12, 0)
 }

@@ -467,6 +467,7 @@ struct type_fn_t {
     list_t *param_types; // type_t
     bool is_rest;
     bool is_errable;
+    bool is_fx;
     bool is_tpl;
     int self_kind;
 };

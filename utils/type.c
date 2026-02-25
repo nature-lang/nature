@@ -465,10 +465,11 @@ char *_type_format(type_t t) {
 
     if (t.kind == TYPE_FN) {
         if (t.fn) {
+            char *fn_prefix = t.fn->is_fx ? "fx" : "fn";
             if (t.fn->is_errable) {
-                return dsprintf("fn(...):%s!", type_format(t.fn->return_type));
+                return dsprintf("%s(...):%s!", fn_prefix, type_format(t.fn->return_type));
             } else {
-                return dsprintf("fn(...):%s", type_format(t.fn->return_type));
+                return dsprintf("%s(...):%s", fn_prefix, type_format(t.fn->return_type));
             }
         } else {
             return "fn";

@@ -128,7 +128,7 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' panic: 'index out of range [8] with length 4' at nature-test/main.n:3:18
+panic: 'index out of range [8] with length 4' at nature-test/main.n:3:18
 
 === test_vec_assign_error
 --- main.n
@@ -138,7 +138,7 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' panic: 'index out of range [8] with length 4' at nature-test/main.n:3:16
+panic: 'index out of range [8] with length 4' at nature-test/main.n:3:16
 
 === test_catch_vec_assign
 --- main.n

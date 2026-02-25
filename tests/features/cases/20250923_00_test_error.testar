@@ -182,3 +182,27 @@ fn main() {
 
 --- output.txt
 nature-test/main.n:7:18: type inconsistency, expect=main.result<int>(struct), actual=main.result<float>(struct)
+
+=== test_fn_fx_type_mismatch
+--- main.n
+fn normal() {}
+
+fn main() {
+    fx() cb = normal
+}
+
+--- output.txt
+nature-test/main.n:4:20: type inconsistency, expect=fx(...):void, actual=fn(...):void
+
+=== test_fx_cannot_call_fn
+--- main.n
+fn normal() {}
+
+fx worker() {
+    normal()
+}
+
+fn main() {}
+
+--- output.txt
+nature-test/main.n:4:10: calling fn `normal` from fx `worker` is not allowed.

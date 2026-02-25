@@ -34,7 +34,7 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' panic: 'invalid character in string literal at position 6' at nature-test/main.n:6:15
+panic: 'invalid character in string literal at position 6' at nature-test/main.n:6:15
 
 
 === test_json_escape_failed2
@@ -51,7 +51,7 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' panic: 'invalid escape sequence at position 7' at nature-test/main.n:6:15
+panic: 'invalid escape sequence at position 7' at nature-test/main.n:6:15
 
 === test_json_escape
 --- main.n

@@ -215,7 +215,7 @@ fn main() {
 
 --- output.txt
 send success, recv msg hello world!!
-coroutine 'main' panic: 'socket closed' at nature-test/main.n:29:15
+panic: 'socket closed' at nature-test/main.n:29:15
 
 === test_dns
 --- main.n
@@ -250,7 +250,7 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' panic: 'unknown node or service' at nature-test/main.n:7:15
+panic: 'unknown node or service' at nature-test/main.n:7:15
 
 === test_sendto_speed
 --- main.n

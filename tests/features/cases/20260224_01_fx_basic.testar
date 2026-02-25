@@ -1,0 +1,18 @@
+=== test_fx_basic
+--- main.n
+fx main() {
+    var sum = 1 + 1
+    println(sum)
+    assert(sum == 2)
+}
+
+
+=== test_const_string
+--- main.n
+fx main() {
+    var str = 'hello world'
+    println(str)
+}
+
+--- output.txt
+hello world

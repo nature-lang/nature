@@ -235,7 +235,8 @@ impl Type {
                 "tup<...>".to_string()
             }
             TypeKind::Fn(type_fn) => {
-                format!("fn(...):{}{}", type_fn.return_type, if type_fn.errable { "!" } else { "" })
+                let fn_prefix = if type_fn.fx { "fx" } else { "fn" };
+                format!("{}(...):{}{}", fn_prefix, type_fn.return_type, if type_fn.errable { "!" } else { "" })
             }
             TypeKind::Ref(value_type) => {
                 format!("ref<{}>", value_type)
@@ -520,7 +521,7 @@ impl Type {
             }
             TypeKind::Fn(type_fn) => {
                 let mut hasher = DefaultHasher::new();
-                let mut str = self.kind.to_string();
+                let mut str = if type_fn.fx { "fx".to_string() } else { self.kind.to_string() };
                 str = format!("{}.{}", str, type_fn.return_type.hash());
                 for param_type in &type_fn.param_types {
                     str = format!("{}_{}", str, param_type.hash());
@@ -610,6 +611,7 @@ pub struct TypeFn {
     pub param_types: Vec<Type>,
     pub errable: bool,
     pub rest: bool,
+    pub fx: bool,
     pub tpl: bool,
 }
 
@@ -1244,6 +1246,7 @@ pub struct AstFnDef {
     pub is_generics: bool,
     pub is_async: bool,
     pub is_private: bool,
+    pub is_fx: bool,
     pub is_errable: bool, // 当前函数是否返回错误
     pub is_test: bool,
     pub test_name: String,
@@ -1297,6 +1300,7 @@ impl Default for AstFnDef {
             is_generics: false,
             is_async: false,
             is_private: false,
+            is_fx: false,
             is_errable: false,
             is_test: false,
             test_name: "".to_string(),

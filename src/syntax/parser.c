@@ -275,7 +275,8 @@ static list_t *parser_parse_where_constraints(module_t *m) {
     list_t *where_params = ct_list_new(sizeof(ast_generics_param_t));
     PARSER_ASSERTF(!parser_is(m, TOKEN_STMT_EOF), "#where must declare at least one generic constraint");
 
-    while (!parser_is(m, TOKEN_STMT_EOF) && !parser_is(m, TOKEN_EOF) && !parser_is(m, TOKEN_FN)) {
+    while (!parser_is(m, TOKEN_STMT_EOF) && !parser_is(m, TOKEN_EOF) &&
+           !parser_is(m, TOKEN_FN) && !parser_is(m, TOKEN_FX)) {
         token_t *ident = parser_must(m, TOKEN_IDENT);
         ast_generics_param_t *param = ast_generics_param_new(ident->line, ident->column, ident->literal);
         parser_must(m, TOKEN_COLON);
@@ -296,7 +297,8 @@ static list_t *parser_parse_where_constraints(module_t *m) {
         }
 
         // 允许 #where 最后一个约束后保留逗号
-        if (parser_is(m, TOKEN_STMT_EOF) || parser_is(m, TOKEN_EOF) || parser_is(m, TOKEN_FN)) {
+        if (parser_is(m, TOKEN_STMT_EOF) || parser_is(m, TOKEN_EOF) ||
+            parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
             break;
         }
     }
@@ -362,8 +364,9 @@ static slice_t *parser_body(module_t *m, bool last_to_ret) {
     return stmt_list;
 }
 
-static inline type_fn_t *parser_type_fn(module_t *m) {
+static inline type_fn_t *parser_type_fn(module_t *m, bool is_fx) {
     type_fn_t *type_fn = NEW(type_fn_t);
+    type_fn->is_fx = is_fx;
     type_fn->param_types = ct_list_new(sizeof(type_t));
     parser_must(m, TOKEN_LEFT_PAREN);
 
@@ -657,9 +660,14 @@ static type_t parser_single_type(module_t *m) {
         return result;
     }
 
-    // fn(int, int):int!
-    if (parser_consume(m, TOKEN_FN)) {
-        type_fn_t *type_fn = parser_type_fn(m);
+    // fn(int, int):int! / fx(int, int):int!
+    if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
+        bool is_fx = parser_consume(m, TOKEN_FX);
+        if (!is_fx) {
+            parser_must(m, TOKEN_FN);
+        }
+
+        type_fn_t *type_fn = parser_type_fn(m, is_fx);
         result.kind = TYPE_FN;
         result.fn = type_fn;
         return result;
@@ -862,7 +870,7 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
             // ident
             char *fn_name = parser_must(m, TOKEN_IDENT)->literal;
 
-            type_fn_t *type_fn = parser_type_fn(m);
+            type_fn_t *type_fn = parser_type_fn(m, false);
             type_fn->fn_name = fn_name;
 
             if (sc_map_get_s64(&exists, fn_name)) {
@@ -1872,7 +1880,7 @@ RET:
  * {x} a = xxx
  * [x] a = xxx
  * (x, x, x) a = xxx
- * fn(x):x a = xxx // 区分 fn a(x): x {}
+ * fn(x):x a = xxx / fx(x):x a = xxx // 区分 fn a(x): x {}
  * custom_x a = xxx # 连续两个 ident 判定就能判定出来
  * @return
  */
@@ -1896,7 +1904,8 @@ static bool is_type_begin_stmt(module_t *m) {
     }
 
     // fndef type (stmt 维度禁止了匿名 fndef, 所以这里一定是 fndef type)
-    if (parser_is(m, TOKEN_FN) && parser_next_is(m, 1, TOKEN_LEFT_PAREN)) {
+    if ((parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) &&
+        parser_next_is(m, 1, TOKEN_LEFT_PAREN)) {
         return true;
     }
 
@@ -3026,11 +3035,11 @@ static ast_stmt_t *parser_label(module_t *m) {
     }
 
     if (fndef->pending_where_params) {
-        PARSER_ASSERTF(parser_is(m, TOKEN_FN), "#where can only be applied to fn");
+        PARSER_ASSERTF(parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX), "#where can only be applied to fn/fx");
     }
 
     if (parser_is(m, TOKEN_TYPE)) {
-        PARSER_ASSERTF(!fndef->pending_where_params, "#where can only be applied to fn");
+        PARSER_ASSERTF(!fndef->pending_where_params, "#where can only be applied to fn/fx");
         return parser_typedef_stmt(m);
     } else if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
         return parser_fndef_stmt(m, fndef);

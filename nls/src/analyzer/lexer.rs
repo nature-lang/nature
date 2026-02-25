@@ -292,6 +292,8 @@ pub enum TokenType {
     As,
     #[strum(serialize = "fn")]
     Fn,
+    #[strum(serialize = "fx")]
+    Fx,
     #[strum(serialize = "import")]
     Import,
 
@@ -417,6 +419,7 @@ impl Token {
             | TokenType::Const
             | TokenType::Test
             | TokenType::Fn
+            | TokenType::Fx
             | TokenType::Import
             | TokenType::True
             | TokenType::False
@@ -556,6 +559,7 @@ impl Lexer {
             "false" => TokenType::False,
             "float" => TokenType::Float,
             "fn" => TokenType::Fn,
+            "fx" => TokenType::Fx,
             "for" => TokenType::For,
             "go" => TokenType::Go,
             "if" => TokenType::If,

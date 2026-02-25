@@ -500,7 +500,8 @@ impl<'a> CompletionProvider<'a> {
         }
 
         let return_type = fndef.return_type.to_string();
-        format!("fn({}): {}", params_str, return_type)
+        let fn_prefix = if fndef.is_fx { "fx" } else { "fn" };
+        format!("{}({}): {}", fn_prefix, params_str, return_type)
     }
 
     /// Find innermost scope containing the position starting from module scope

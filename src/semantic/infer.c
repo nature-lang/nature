@@ -432,6 +432,10 @@ bool type_generics(type_t dst, type_t src, table_t *generics_param_table) {
             return false;
         }
 
+        if (left_type_fn->is_fx != right_type_fn->is_fx) {
+            return false;
+        }
+
         for (int i = 0; i < left_type_fn->param_types->length; ++i) {
             type_t *left_formal_type = ct_list_value(left_type_fn->param_types, i);
             type_t *right_formal_type = ct_list_value(right_type_fn->param_types, i);
@@ -707,6 +711,10 @@ bool type_compare_visited(type_t dst, type_t src, table_t *visited) {
         }
 
         if (left_type_fn->is_errable != right_type_fn->is_errable) {
+            return false;
+        }
+
+        if (left_type_fn->is_fx != right_type_fn->is_fx) {
             return false;
         }
 
@@ -2848,6 +2856,11 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
 
     call->return_type = type_fn->return_type;
 
+    if (m->current_fn && m->current_fn->is_fx && !type_fn->is_fx) {
+        INFER_ASSERTF(false, "calling fn `%s` from fx `%s` is not allowed.",
+                      type_fn->fn_name ? type_fn->fn_name : "lambda", m->current_fn->fn_name);
+    }
+
     // catch 语句中可以包含多条 call 语句, 都统一处理了
     if (type_fn->is_errable && check_errable) {
         INFER_ASSERTF(m->current_fn->is_errable || m->be_caught > 0,
@@ -4496,6 +4509,7 @@ static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef) {
     f->fn_name = fndef->fn_name;
     f->is_tpl = fndef->is_tpl;
     f->is_errable = fndef->is_errable;
+    f->is_fx = fndef->is_fx;
     f->param_types = ct_list_new(sizeof(type_t));
     f->return_type = reduction_type(m, fndef->return_type);
     f->self_kind = fndef->self_kind;
@@ -4553,6 +4567,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     type_fn->fn_name = fndef->fn_name;
     type_fn->is_tpl = fndef->is_tpl;
     type_fn->is_errable = fndef->is_errable;
+    type_fn->is_fx = fndef->is_fx;
     type_fn->param_types = ct_list_new(sizeof(type_t));
     fndef->return_type.status = REDUCTION_STATUS_UNDO;
     type_fn->return_type = reduction_type(m, fndef->return_type);

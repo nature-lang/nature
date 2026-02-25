@@ -1,5 +1,8 @@
 #include "nutils.h"
 
+#include <stdlib.h>
+#include <string.h>
+
 #include "array.h"
 #include "errort.h"
 #include "runtime/memory.h"
@@ -12,17 +15,12 @@
 int command_argc;
 char **command_argv;
 
-static inline void panic_dump(coroutine_t *co, caller_t *caller, char *msg) {
+static inline void panic_dump(caller_t *caller, char *msg) {
     // pre_rtcall_hook 中已经记录了 ret addr
-    char *dump_msg;
     uint64_t relpath_offset = ((fndef_t *) caller->data)->relpath_offset;
-    if (co->main) {
-        dump_msg = tlsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", msg,
-                             STRTABLE(relpath_offset), caller->line, caller->column);
-    } else {
-        dump_msg = tlsprintf("coroutine '%ld' panic: '%s' at %s:%d:%d\n", co->id, msg,
-                             STRTABLE(relpath_offset), caller->line, caller->column);
-    }
+    char* dump_msg = tlsprintf("panic: '%s' at %s:%d:%d\n", msg,
+                         STRTABLE(relpath_offset), caller->line, caller->column);
+
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
     // panic msg
     exit(EXIT_FAILURE);
@@ -72,8 +70,8 @@ void interface_assert(n_interface_t *mu, int64_t target_rtype_hash, void *value_
 void union_assert(n_union_t *mu, int64_t target_rtype_hash, void *value_ref) {
     if (mu->rtype->hash != target_rtype_hash) {
         DEBUGF("[union_assert] type assert failed, mu->rtype->kind: %s, target_rtype_hash: %ld",
-                type_kind_str[mu->rtype->kind],
-                target_rtype_hash);
+               type_kind_str[mu->rtype->kind],
+               target_rtype_hash);
 
         rti_throw("type assert failed", true);
         return;
@@ -133,7 +131,8 @@ bool interface_is(n_interface_t *mu, int64_t target_rtype_hash) {
  * @param method_count
  * @param methods
  */
-void interface_casting(n_interface_t *out, uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods) {
+void interface_casting(n_interface_t *out, uint64_t input_rtype_hash, void *value_ref, int64_t method_count,
+                       int64_t *methods) {
     assert(out && "interface_casting out is null");
     // - 根据 input_rtype_hash 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
@@ -145,7 +144,7 @@ void interface_casting(n_interface_t *out, uint64_t input_rtype_hash, void *valu
 
     if (method_count > 0) {
         out->method_count = method_count;
-        out->methods = (int64_t *) rti_array_new(&uint64_rtype, method_count);
+        out->methods = (int64_t *) rti_array_new(&uint64_rtype, method_count); // TODO
         // 进行数据 copy TODO write barrier
         memmove(out->methods, methods, method_count * POINTER_SIZE);
     } else {
@@ -223,7 +222,7 @@ void union_casting(n_union_t *out, int64_t input_rtype_hash, void *value_ref) {
  * @param value_ref
  * @return
  */
-void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref) {
+void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref, n_bool_t is_fx) {
     assert(out && "any_casting out is null");
     // - 根据 input_rtype_hash 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
@@ -242,9 +241,14 @@ void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref) {
     out->value.i64_value = 0;
 
     if (rtype->storage_kind == STORAGE_KIND_IND) {
-        void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
-        memmove(new_value, value_ref, storage_size);
-        out->value.ptr_value = new_value;
+        if (is_fx) {
+            // fx 模式下不进行 gc_malloc，直接引用原始地址。
+            out->value.ptr_value = value_ref;
+        } else {
+            void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
+            memmove(new_value, value_ref, storage_size);
+            out->value.ptr_value = new_value;
+        }
     } else {
         memmove(&out->value, value_ref, storage_size);
     }
@@ -256,7 +260,7 @@ void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref) {
 /**
  * union -> any: 提取 union 的 rtype 和 value 传递给 any_casting
  */
-void union_to_any(n_any_t *out, n_union_t *input) {
+void union_to_any(n_any_t *out, n_union_t *input, n_bool_t is_fx) {
     assert(out && "union_to_any out is null");
     assert(input && "union_to_any input is null");
     assert(input->rtype && "union_to_any input rtype is null");
@@ -273,7 +277,7 @@ void union_to_any(n_any_t *out, n_union_t *input) {
         value_ref = &input->value;
     }
 
-    any_casting(out, rtype->hash, value_ref);
+    any_casting(out, rtype->hash, value_ref, is_fx);
 }
 
 void tagged_union_casting(n_tagged_union_t *out, int64_t tag_hash, int64_t value_rtype_hash, void *value_ref) {
@@ -493,7 +497,7 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
 
 void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
     coroutine_t *co = coroutine_get();
-    addr_t ret_addr = CALLER_RET_ADDR(co);
+    addr_t ret_addr = CALLER_RET_ADDR();
 
     assert(ret_addr);
 
@@ -525,7 +529,7 @@ void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
         co->has_error = true;
     } else {
         char *copy_msg = strdup(msg);
-        panic_dump(co, caller, copy_msg);
+        panic_dump(caller, copy_msg);
         free(copy_msg);
     }
 }
@@ -575,14 +579,8 @@ uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_i
     // 可以考虑增加 safepoint_lock, 避免进入 safepoint 状态
     n_string_t msg = rti_error_msg(&co->error);
 
-    char *dump_msg;
-    if (co->main) {
-        dump_msg = tlsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", (char *) rt_string_ref(&msg),
+    char *dump_msg = tlsprintf("panic: '%s' at %s:%d:%d\n", (char *) rt_string_ref(&msg),
                              path, line, column);
-    } else {
-        dump_msg = tlsprintf("coroutine %ld panic: '%s' at %s:%d:%d\n", co->id, (char *) rt_string_ref(&msg),
-                             path, line, column);
-    }
 
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
     // panic msg
@@ -756,14 +754,11 @@ void ptr_valid(void *ptr) {
 
 
 void rt_panic(n_string_t msg) {
-    coroutine_t *co = coroutine_get();
-    n_processor_t *p = processor_get();
-
-    addr_t ret_addr = CALLER_RET_ADDR(co);
+    addr_t ret_addr = CALLER_RET_ADDR();
     assert(ret_addr);
 
     caller_t *caller = sc_map_get_64v(&rt_caller_map, ret_addr);
-    panic_dump(co, caller, rt_string_ref(&msg));
+    panic_dump(caller, rt_string_ref(&msg));
 }
 
 bool rt_in_heap(n_anyptr_t addr) {
@@ -772,19 +767,18 @@ bool rt_in_heap(n_anyptr_t addr) {
 
 
 void rt_assert(n_bool_t cond) {
-    coroutine_t *co = coroutine_get();
     if (cond) {
         return;
     }
 
     // panic
     // 更新 ret addr 到 co 中
-    addr_t ret_addr = CALLER_RET_ADDR(co);
+    addr_t ret_addr = CALLER_RET_ADDR();
     assert(ret_addr);
 
     caller_t *caller = sc_map_get_64v(&rt_caller_map, ret_addr);
     assert(caller);
-    panic_dump(co, caller, "assertion failed");
+    panic_dump(caller, "assertion failed");
 }
 
 typedef struct {
@@ -805,12 +799,6 @@ n_string_t rt_string_new(n_anyptr_t raw_string) {
 void rt_string_concat_out(n_string_t *out, n_string_t *a, n_string_t *b) {
     assert(out);
     *out = string_concat(a, b);
-}
-
-void rt_string_new_with_pool_out(n_string_t *out, void *raw_string, int64_t length) {
-    DEBUGF("[rt_string_new_with_pool_out] out %p, raw_string %s, len %ld", out, (char *) raw_string, length);
-    assert(out);
-    *out = string_new_with_pool(raw_string, length);
 }
 
 void rt_string_to_vec_out(n_vec_t *out, n_string_t *src) {
@@ -864,6 +852,27 @@ n_anyptr_t rt_array_new(int64_t element_hash, int64_t length) {
     rtype_t *element_rtype = rt_find_rtype(element_hash);
     assert(element_rtype && "cannot find element_rtype_hash with hash");
     return (n_anyptr_t) rti_array_new(element_rtype, (uint64_t) length);
+}
+
+n_anyptr_t fx_malloc(int64_t size) {
+    if (size < 0) {
+        rti_throw("fx_malloc size must be non-negative", true);
+        return 0;
+    }
+
+    if (size == 0) {
+        return 0;
+    }
+
+    void *ptr = malloc((size_t) size);
+    if (!ptr) {
+        rti_throw("fx_malloc out of memory", true);
+        return 0;
+    }
+    TDEBUGF("[fx_malloc] ptr is %p", ptr);
+
+    memset(ptr, 0, (size_t) size);
+    return (n_anyptr_t) ptr;
 }
 
 n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr) {
