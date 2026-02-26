@@ -2971,6 +2971,7 @@ static ast_stmt_t *parser_test_stmt(module_t *m) {
  */
 static ast_stmt_t *parser_label(module_t *m) {
     ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
+    bool is_private = false;
 
     do {
         token_t *token = parser_must(m, TOKEN_LABEL);
@@ -2983,6 +2984,7 @@ static ast_stmt_t *parser_label(module_t *m) {
                 fndef->linkid = literal->literal;
             }
         } else if (str_equal(token->literal, MACRO_LOCAL)) {
+            is_private = true;
             fndef->is_private = true;
         } else if (str_equal(token->literal, MACRO_WHERE)) {
             PARSER_ASSERTF(!fndef->pending_where_params, "#where redeclared");
@@ -3010,11 +3012,39 @@ static ast_stmt_t *parser_label(module_t *m) {
 
     if (parser_is(m, TOKEN_TYPE)) {
         PARSER_ASSERTF(!fndef->pending_where_params, "#where can only be applied to fn");
-        return parser_typedef_stmt(m);
+        ast_stmt_t *result = parser_typedef_stmt(m);
+        ast_typedef_stmt_t *typedef_stmt = result->value;
+        typedef_stmt->is_private = is_private;
+        return result;
     } else if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_stmt(m, fndef);
+    } else if (parser_is(m, TOKEN_CONST)) {
+        PARSER_ASSERTF(!fndef->pending_where_params, "#where can only be applied to fn");
+        PARSER_ASSERTF(!fndef->linkid, "#linkid can only be applied to fn");
+        ast_stmt_t *result = parser_constdef_stmt(m);
+        ast_constdef_stmt_t *constdef = result->value;
+        constdef->is_private = is_private;
+        return result;
+    } else if (parser_is(m, TOKEN_VAR)) {
+        PARSER_ASSERTF(!fndef->pending_where_params, "#where can only be applied to fn");
+        PARSER_ASSERTF(!fndef->linkid, "#linkid can only be applied to fn");
+        ast_stmt_t *result = parser_var_begin_stmt(m);
+        if (result->assert_type == AST_STMT_VARDEF) {
+            ast_vardef_stmt_t *vardef = result->value;
+            vardef->is_private = is_private;
+        }
+        return result;
+    } else if (is_type_begin_stmt(m)) {
+        PARSER_ASSERTF(!fndef->pending_where_params, "#where can only be applied to fn");
+        PARSER_ASSERTF(!fndef->linkid, "#linkid can only be applied to fn");
+        ast_stmt_t *result = parser_type_begin_stmt(m);
+        if (result->assert_type == AST_STMT_VARDEF) {
+            ast_vardef_stmt_t *vardef = result->value;
+            vardef->is_private = is_private;
+        }
+        return result;
     } else {
-        PARSER_ASSERTF(false, "the label can only be applied to type alias or fn.");
+        PARSER_ASSERTF(false, "the label can only be applied to type, fn, const, or var");
     }
 }
 

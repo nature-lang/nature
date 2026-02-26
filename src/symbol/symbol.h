@@ -63,6 +63,7 @@ typedef enum {
 typedef struct {
     string ident; // 符号唯一标识
     bool is_local; // 对应 elf 符号中的 global/local, 表示能否被外部链接链接到
+    bool is_private; // #local 标记，表示不能被其他模块导入
     symbol_type_t type;
     void *ast_value; // ast_typedef_stmt/ast_var_decl/ast_fndef_t/closure_t/ast_constdef_stmt_t
     int64_t ref_count; // 引用计数

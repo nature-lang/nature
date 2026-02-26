@@ -1,0 +1,33 @@
+// Module with #local const and var declarations
+
+// Public symbols
+int PUBLIC_VAR = 100
+const PUBLIC_CONST = "hello"
+
+fn public_fn():int {
+    // can use private symbols within the same module
+    return PRIVATE_VAR + internal_helper()
+}
+
+// Private symbols - should not be importable
+#local
+const PRIVATE_CONST = "secret"
+
+#local
+var PRIVATE_VAR = 42
+
+#local
+fn internal_helper():int {
+    return PRIVATE_VAR
+}
+
+#local
+type private_point = struct {
+    int x
+    int y
+}
+
+fn use_private_type():int {
+    var p = private_point{x: 1, y: 2}
+    return p.x + p.y
+}

@@ -314,6 +314,7 @@ typedef struct {
     type_t type;
     ast_expr_t *right;
     bool processing;
+    bool is_private;
 } ast_constdef_stmt_t;
 
 typedef struct {
@@ -327,6 +328,7 @@ typedef struct {
     ast_var_decl_t var_decl; // 左值
     ast_expr_t *right; // 右值
     uint8_t *global_data; // global_eval pass 生成的编译期初始化数据
+    bool is_private;
 } ast_vardef_stmt_t;
 
 typedef struct {
@@ -666,6 +668,7 @@ typedef struct {
     list_t *impl_interfaces; // type_t, typedef 可以实现多个接口, 对于 interface 来说则是自身扩展
     struct sc_map_sv method_table; // key = ident, value = ast_fndef_t
     int64_t hash;
+    bool is_private;
 } ast_typedef_stmt_t;
 
 // 这里包含 body, 所以属于 def
