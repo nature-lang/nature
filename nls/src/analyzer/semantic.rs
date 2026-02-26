@@ -653,8 +653,6 @@ impl<'a> Semantic<'a> {
 
         let mut global_fn_stmt_list = Vec::<Arc<Mutex<AstFnDef>>>::new();
 
-        let mut var_assign_list = Vec::<Box<Stmt>>::new();
-
         let mut stmts = Vec::<Box<Stmt>>::new();
 
         let mut global_vardefs = Vec::new();
@@ -678,23 +676,19 @@ impl<'a> Semantic<'a> {
                                 // ident maybe change
                                 fndef.impl_type.symbol_id = symbol_id;
 
-                                // 检查: 如果 fndef 没有泛型参数，但 typedef 有泛型参数，则报错
-                                // 例如: type person_t<T> = struct{...}
-                                // fn person_t.hello() 是错误的，应该是 fn person_t<T>.hello()
-                                if fndef.generics_params.is_none() {
-                                    if let Some(symbol) = self.symbol_table.get_symbol(symbol_id) {
-                                        if let SymbolKind::Type(typedef_mutex) = &symbol.kind {
-                                            let typedef = typedef_mutex.lock().unwrap();
-                                            if !typedef.params.is_empty() {
-                                                errors_push(
-                                                    self.module,
-                                                    AnalyzerError {
-                                                        start: fndef.symbol_start,
-                                                        end: fndef.symbol_end,
-                                                        message: format!("impl type '{}' must specify generics params", fndef.impl_type.ident),
-                                                    },
-                                                );
-                                            }
+                                // 自定义泛型 impl type 必须显式给出类型参数（仅检查 impl_type.args）
+                                if let Some(symbol) = self.symbol_table.get_symbol(symbol_id) {
+                                    if let SymbolKind::Type(typedef_mutex) = &symbol.kind {
+                                        let typedef = typedef_mutex.lock().unwrap();
+                                        if !typedef.params.is_empty() && fndef.impl_type.args.len() != typedef.params.len() {
+                                            errors_push(
+                                                self.module,
+                                                AnalyzerError {
+                                                    start: fndef.symbol_start,
+                                                    end: fndef.symbol_end,
+                                                    message: format!("impl type '{}' must specify generics params", fndef.impl_type.ident),
+                                                },
+                                            );
                                         }
                                     }
                                 }
@@ -712,46 +706,42 @@ impl<'a> Semantic<'a> {
 
                         fndef.symbol_name = format_impl_ident(fndef.impl_type.ident.clone(), symbol_name);
 
-                        // 泛型 impl 函数的符号表注册延迟到 pre_infer 阶段处理
-                        // 与编译器行为保持一致
-                        if fndef.generics_params.is_none() {
-                            // register to global symbol table
-                            match self.symbol_table.define_symbol_in_scope(
-                                fndef.symbol_name.clone(),
-                                SymbolKind::Fn(fndef_mutex.clone()),
-                                fndef.symbol_start,
-                                self.module.scope_id,
-                            ) {
-                                Ok(symbol_id) => {
-                                    fndef.symbol_id = symbol_id;
-                                }
-                                Err(e) => {
-                                    errors_push(
-                                        self.module,
-                                        AnalyzerError {
-                                            start: fndef.symbol_start,
-                                            end: fndef.symbol_end,
-                                            message: e,
-                                        },
-                                    );
-                                }
+                        // register to global symbol table
+                        match self.symbol_table.define_symbol_in_scope(
+                            fndef.symbol_name.clone(),
+                            SymbolKind::Fn(fndef_mutex.clone()),
+                            fndef.symbol_start,
+                            self.module.scope_id,
+                        ) {
+                            Ok(symbol_id) => {
+                                fndef.symbol_id = symbol_id;
                             }
-
-                            // register to global symbol
-                            let _ = self.symbol_table.define_global_symbol(
-                                fndef.symbol_name.clone(),
-                                SymbolKind::Fn(fndef_mutex.clone()),
-                                fndef.symbol_start,
-                                self.module.scope_id,
-                            );
+                            Err(e) => {
+                                errors_push(
+                                    self.module,
+                                    AnalyzerError {
+                                        start: fndef.symbol_start,
+                                        end: fndef.symbol_end,
+                                        message: e,
+                                    },
+                                );
+                            }
                         }
+
+                        // register to global symbol
+                        let _ = self.symbol_table.define_global_symbol(
+                            fndef.symbol_name.clone(),
+                            SymbolKind::Fn(fndef_mutex.clone()),
+                            fndef.symbol_start,
+                            self.module.scope_id,
+                        );
                     }
 
                     global_fn_stmt_list.push(fndef_mutex.clone());
 
                     if let Some(generics_params) = &mut fndef.generics_params {
                         for generics_param in generics_params {
-                            for constraint in &mut generics_param.constraints.0 {
+                            for constraint in &mut generics_param.constraints {
                                 self.analyze_type(constraint);
                             }
                         }
@@ -763,21 +753,6 @@ impl<'a> Semantic<'a> {
 
                     // push to global_vardef
                     global_vardefs.push(AstNode::VarDef(var_decl_mutex.clone(), right_expr.clone()));
-
-                    // 将 vardef 转换成 assign 导入到 package init 中进行初始化
-                    let assign_left = Box::new(Expr::ident(
-                        var_decl.symbol_start,
-                        var_decl.symbol_end,
-                        var_decl.ident.clone(),
-                        var_decl.symbol_id,
-                    ));
-
-                    let assign_stmt = Box::new(Stmt {
-                        node: AstNode::Assign(assign_left, right_expr.clone()),
-                        start: right_expr.start,
-                        end: right_expr.end,
-                    });
-                    var_assign_list.push(assign_stmt);
                 }
 
                 AstNode::Typedef(type_alias_mutex) => {
@@ -788,7 +763,7 @@ impl<'a> Semantic<'a> {
                         if typedef.params.len() > 0 {
                             for param in typedef.params.iter_mut() {
                                 // 遍历所有 constraints 类型 进行 analyze
-                                for constraint in &mut param.constraints.0 {
+                                for constraint in &mut param.constraints {
                                     // TODO constraint 不能是自身
                                     self.analyze_type(constraint);
                                 }
@@ -839,34 +814,18 @@ impl<'a> Semantic<'a> {
             stmts.push(stmt);
         }
 
-        // 封装 fn init
-        if !var_assign_list.is_empty() {
-            // 创建init函数定义
-            let mut fn_init = AstFnDef::default();
-            fn_init.symbol_name = format_global_ident(self.module.ident.clone(), "init".to_string());
-            fn_init.fn_name = fn_init.symbol_name.clone();
-            fn_init.return_type = Type::new(TypeKind::Void);
-            fn_init.body = AstBody {
-                stmts: var_assign_list,
-                start: 0,
-                end: 0,
-            };
-
-            global_fn_stmt_list.push(Arc::new(Mutex::new(fn_init)));
-        }
-
         // 对 fn stmt list 进行 analyzer 处理。
         for fndef_mutex in &global_fn_stmt_list {
             self.module.all_fndefs.push(fndef_mutex.clone());
             self.analyze_global_fn(fndef_mutex.clone());
         }
 
-        // global vardefs 的 right 没有和 assign stmt 关联，而是使用了 clone, 所以此处需要单独对又值进行 analyze handle
+        // global vardef 的右值不在函数体里，需要独立做 analyze
         for node in &mut global_vardefs {
             match node {
                 AstNode::VarDef(_, right_expr) => {
                     if let AstNode::FnDef(_) = &right_expr.node {
-                        // fn def 会自动 arc 引用传递, 所以不需要进行单独的 analyze handle, 只有在 fn init 中进行 analyzer 即可注册相关符号，然后再 infer 阶段进行 global var 自动 check
+                        // fn def 会自动 arc 引用传递，这里无需重复处理
                     } else {
                         self.analyze_expr(right_expr);
                     }
@@ -1411,9 +1370,6 @@ impl<'a> Semantic<'a> {
             }
             AstNode::MacroSizeof(target_type) | AstNode::MacroDefault(target_type) => {
                 self.analyze_type(target_type);
-            }
-            AstNode::MacroUla(src) => {
-                self.analyze_expr(src);
             }
             AstNode::MacroReflectHash(target_type) => {
                 self.analyze_type(target_type);

@@ -9,7 +9,7 @@ import libc
 import fs
 import strings
 
-string charset = 'abcdefghijklmnopqrstuvwxyz0123456789'
+const charset = 'abcdefghijklmnopqrstuvwxyz0123456789'
 
 fn arg_version():bool {
     var args = os.args()

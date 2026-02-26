@@ -27,6 +27,8 @@
 #include "src/register/linearscan.h"
 #include "src/schedule.h"
 #include "src/semantic/analyzer.h"
+#include "src/semantic/global_eval.h"
+#include "src/semantic/generics.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
 #include "utils/helper.h"
@@ -839,7 +841,7 @@ static void build_assembler(slice_t *modules) {
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
             symbol->name = var_decl->ident;
             symbol->size = var_decl->type.storage_size;
-            symbol->value = NULL;
+            symbol->value = vardef->global_data;
             slice_push(m->asm_global_symbols, symbol);
         }
 
@@ -985,53 +987,6 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         analyzer(m, m->stmt_list);
     }
 
-    // register all module init to .main.init, then main.main calls .main.init
-    assert(main_package->ast_fndefs->count > 0);
-
-    // .main.init 已经在 analyzer.c 中创建
-    ast_fndef_t *main_init_fn = main_package->fn_init;
-    assert(main_init_fn);
-
-    // 查找 main 函数
-    ast_fndef_t *main_fndef = NULL;
-    SLICE_FOR(main_package->ast_fndefs) {
-        ast_fndef_t *f = SLICE_VALUE(main_package->ast_fndefs);
-        if (str_equal(f->fn_name, FN_MAIN_NAME)) {
-            main_fndef = f;
-        }
-    }
-    assert(main_fndef);
-
-    // 构建新的 .main.init body
-    // 1. 从后往前插入所有其他模块的 call_init_stmt
-    slice_t *init_body = slice_new();
-    for (int i = modules->count - 1; i >= 0; --i) {
-        module_t *m = modules->take[i];
-        // 跳过 main 模块自己的 call_init_stmt，因为其内容会直接放在 .main.init 中
-        if (m == main_package) {
-            continue;
-        }
-        if (m->call_init_stmt) {
-            slice_push(init_body, m->call_init_stmt);
-        }
-    }
-
-    // 2. 添加 .main.init 原有的表达式 (main 模块的全局变量初始化)
-    if (main_init_fn->body) {
-        slice_concat(init_body, main_init_fn->body);
-    }
-    main_init_fn->body = init_body;
-
-    // 3. 在 main.main 开头插入 call .main.init (复用 analyzer.c 中创建的 call_init_stmt)
-    assert(main_package->call_init_stmt);
-
-    slice_t *main_body = slice_new();
-    slice_push(main_body, main_package->call_init_stmt);
-    if (main_fndef->body) {
-        slice_concat(main_body, main_fndef->body);
-    }
-    main_fndef->body = main_body;
-
     return modules;
 }
 
@@ -1109,6 +1064,14 @@ static void cleanup_temp_dir() {
 }
 
 static void build_compiler(slice_t *modules) {
+    // generics pass
+    // module 基于广度 import 进入，倒叙遍历解决依赖问题
+    for (int i = modules->count - 1; i >= 0; --i) {
+        module_t *m = modules->take[i];
+        generics(m);
+    }
+
+    // pre infer pass
     // 优先处理 builtin_module
     for (int i = modules->count - 1; i >= 0; --i) {
         module_t *m = modules->take[i];
@@ -1124,6 +1087,13 @@ static void build_compiler(slice_t *modules) {
             continue;
         }
         pre_infer(m);
+    }
+
+    // global eval pass
+    // 对全局变量做编译期求值与内存布局初始化
+    for (int i = modules->count - 1; i >= 0; --i) {
+        module_t *m = modules->take[i];
+        global_eval(m);
     }
 
     // infer + compiler

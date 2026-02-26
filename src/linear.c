@@ -2129,62 +2129,16 @@ static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *
     }
 
 
-    if (unary_expr->op == AST_OP_SAFE_LA) {
-        assert(!target);
-        // target must ptr or anyptr or ptr
-        if (!target) {
-            target = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-        }
-
-        // not need handle analyze? only move? 需要做什么？ident 已经识别出来了。直接 move 到 target 好了
-        if (unary_expr->operand.type.storage_kind == STORAGE_KIND_IND || unary_expr->operand.type.kind == TYPE_REF) {
-            OP_PUSH(lir_op_move(target, first));
-            return target;
-        }
-
-        // 如果 first->assert_type 不是 LIR_OPERAND_INDIRECT_ADDR, 则可能是 call/as/literal 表达式所产生的 var, 此时直接进行堆分配
-        if (first->assert_type != LIR_OPERAND_INDIRECT_ADDR) {
-            lir_operand_t *temp_operand = temp_var_operand(m, type_refof(unary_expr->operand.type));
-            int64_t rtype_hash = type_hash(unary_expr->operand.type);
-            push_rt_call(m, RT_CALL_GC_MALLOC, temp_operand, 1, int_operand(rtype_hash));
-            lir_operand_t *dst = indirect_addr_operand(m, unary_expr->operand.type, temp_operand, 0);
-            OP_PUSH(lir_op_move(dst, first));
-
-            return temp_operand;
-        }
-
-
-        lir_operand_t *src_operand;
-        if (first->assert_type == LIR_OPERAND_INDIRECT_ADDR) {
-            lir_indirect_addr_t *indirect_addr = first->value;
-            if (indirect_addr->offset == 0) {
-                // indirect addr base 就是指针本身
-                src_operand = indirect_addr->base;
-            } else {
-                src_operand = lea_operand_pointer(m, first);
-            }
-        } else {
-            src_operand = lea_operand_pointer(m, first);
-        }
-
-        return linear_super_move(m, type_kind_new(TYPE_ANYPTR), target, src_operand);
-    }
-
     // neg source -> target
     if (!target) {
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
-    // &var, 指针引用可能会造成内存逃逸，所以需要特殊处理 TODO 当前版本不存在隐式的逃逸处理，需要显式的调用 sla 才会触发逃逸处理。
-    if (unary_expr->op == AST_OP_LA || unary_expr->op == AST_OP_UNSAFE_LA) {
+    // &var
+    if (unary_expr->op == AST_OP_LA) {
         // 如果是 stack_type, 则直接移动到 target 即可，src 中存放的已经是一个栈指针了，没有必要再 lea 了
         if (unary_expr->operand.type.storage_kind == STORAGE_KIND_IND) {
             // 必须 move target，这同时也是一个类型转换的过程
-            OP_PUSH(lir_op_move(target, first));
-            return target;
-        }
-
-        if (unary_expr->op == AST_OP_UNSAFE_LA && unary_expr->operand.type.kind == TYPE_REF) {
             OP_PUSH(lir_op_move(target, first));
             return target;
         }
@@ -2976,7 +2930,9 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
     uint64_t target_rtype_hash = type_hash(is_expr->target_type);
     if (is_expr->src->type.kind == TYPE_INTERFACE) {
-        push_rt_call(m, RT_CALL_INTERFACE_IS, target, 2, src_operand, int_operand(target_rtype_hash));
+        lir_operand_t *interface_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        OP_PUSH(lir_op_move(interface_ptr, src_operand));
+        push_rt_call(m, RT_CALL_INTERFACE_IS, target, 2, interface_ptr, int_operand(target_rtype_hash));
     } else if (is_expr->src->type.kind == TYPE_ANY) {
         lir_operand_t *any_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
         OP_PUSH(lir_op_move(any_ptr, src_operand));
@@ -3197,7 +3153,9 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         uint64_t target_rtype_hash = type_hash(as_expr->target_type);
-        push_rt_call(m, RT_CALL_INTERFACE_ASSERT, NULL, 3, src_operand, int_operand(target_rtype_hash), output_ref);
+        lir_operand_t *interface_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        OP_PUSH(lir_op_move(interface_ptr, src_operand));
+        push_rt_call(m, RT_CALL_INTERFACE_ASSERT, NULL, 3, interface_ptr, int_operand(target_rtype_hash), output_ref);
         linear_has_panic(m);
         return target;
     }
@@ -3212,6 +3170,12 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
         }
 
         type_interface_t *interface_type = as_expr->target_type.interface;
+        lir_operand_t *out_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        lir_operand_t *out_src = target;
+        if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+            out_src = lea_operand_pointer(m, target);
+        }
+        OP_PUSH(lir_op_move(out_ptr, out_src));
 
         type_t src_type = as_expr->src.type;
         if (src_type.ident_kind != TYPE_IDENT_DEF && (src_type.kind == TYPE_REF || src_type.kind == TYPE_PTR)) {
@@ -3271,11 +3235,11 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
                 OP_PUSH(lir_op_lea(item_target, fn_label));
             }
 
-            push_rt_call(m, RT_CALL_INTERFACE_CASTING, target, 4, int_operand(src_rtype_hash), interface_value,
+            push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 5, out_ptr, int_operand(src_rtype_hash), interface_value,
                          int_operand(interface_type->elements->length),
                          methods_target);
         } else {
-            push_rt_call(m, RT_CALL_INTERFACE_CASTING, target, 4, int_operand(src_rtype_hash), interface_value,
+            push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 5, out_ptr, int_operand(src_rtype_hash), interface_value,
                          int_operand(0),
                          int_operand(0));
         }
@@ -3800,6 +3764,8 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     // msg to errort
     assert(str_equal(stmt->error.type.ident, THROWABLE_IDENT));
     lir_operand_t *error_operand = linear_expr(m, stmt->error, NULL);
+    lir_operand_t *error_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_move(error_ptr, error_operand));
 
     lir_operand_t *path_operand = string_operand(m->rel_path, strlen(m->rel_path));
     assert(m->current_closure->fndef->fn_name_with_pkg);
@@ -3809,7 +3775,7 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     lir_operand_t *column_operand = int_operand(m->current_column);
 
     // attach errort to processor
-    push_rt_call(m, RT_CALL_CO_THROW_ERROR, NULL, 5, error_operand, path_operand, fn_name_operand,
+    push_rt_call(m, RT_CALL_CO_THROW_ERROR, NULL, 5, error_ptr, path_operand, fn_name_operand,
                  line_operand,
                  column_operand);
 

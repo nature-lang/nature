@@ -1,4 +1,4 @@
-name = "test"
+name = "temp"
 version = "0.4.0"
 authors = ["weiwenhao <wwhacker@qq.com>"]
 license = "MIT"
@@ -7,4 +7,3 @@ type = "lib"
 [links]
 
 [dependencies]
-db = { type = "git", version = "v0.5.0", url = "github.com/weiwenhao/dbdriver" }

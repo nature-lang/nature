@@ -228,6 +228,102 @@ static bool parser_must_stmt_end(module_t *m) {
     return false;
 }
 
+static ast_generics_param_t *parser_find_generics_param(list_t *params, char *ident) {
+    if (!params) {
+        return NULL;
+    }
+    for (int i = 0; i < params->length; ++i) {
+        ast_generics_param_t *param = ct_list_value(params, i);
+        if (str_equal(param->ident, ident)) {
+            return param;
+        }
+    }
+    return NULL;
+}
+
+static void parser_push_generics_param(module_t *m, list_t **params, token_t *ident_token) {
+    PARSER_ASSERTF(ident_token->type == TOKEN_IDENT, "expected '%s' found '%s'", token_str[TOKEN_IDENT],
+                   ident_token->literal);
+
+    if (!*params) {
+        *params = ct_list_new(sizeof(ast_generics_param_t));
+    }
+
+    PARSER_ASSERTF(!parser_find_generics_param(*params, ident_token->literal),
+                   "generics param '%s' redeclared", ident_token->literal);
+
+    ast_generics_param_t *param = ast_generics_param_new(ident_token->line, ident_token->column, ident_token->literal);
+    ct_list_push(*params, param);
+
+    if (!m->parser_type_params_table) {
+        m->parser_type_params_table = table_new();
+    }
+    table_set(m->parser_type_params_table, ident_token->literal, ident_token->literal);
+}
+
+static void parser_parse_generics_decl(module_t *m, list_t **params) {
+    do {
+        token_t *ident = parser_must(m, TOKEN_IDENT);
+        parser_push_generics_param(m, params, ident);
+
+        PARSER_ASSERTF(!parser_consume(m, TOKEN_COLON),
+                       "generic constraints must be declared with '#where'");
+    } while (parser_consume(m, TOKEN_COMMA));
+}
+
+static list_t *parser_parse_where_constraints(module_t *m) {
+    list_t *where_params = ct_list_new(sizeof(ast_generics_param_t));
+    PARSER_ASSERTF(!parser_is(m, TOKEN_STMT_EOF), "#where must declare at least one generic constraint");
+
+    while (!parser_is(m, TOKEN_STMT_EOF) && !parser_is(m, TOKEN_EOF) && !parser_is(m, TOKEN_FN)) {
+        token_t *ident = parser_must(m, TOKEN_IDENT);
+        ast_generics_param_t *param = ast_generics_param_new(ident->line, ident->column, ident->literal);
+        parser_must(m, TOKEN_COLON);
+
+        do {
+            type_t item = parser_single_type(m);
+            ct_list_push(param->constraints.elements, &item);
+        } while (parser_consume(m, TOKEN_AND));
+
+        PARSER_ASSERTF(!parser_is(m, TOKEN_OR), "generic constraints only support '&' with interface constraints");
+        PARSER_ASSERTF(param->constraints.elements->length > 0, "generic constraint cannot be empty");
+        PARSER_ASSERTF(!parser_find_generics_param(where_params, ident->literal),
+                       "generic param '%s' constraint redeclared", ident->literal);
+        ct_list_push(where_params, param);
+
+        if (!parser_consume(m, TOKEN_COMMA)) {
+            break;
+        }
+
+        // 允许 #where 最后一个约束后保留逗号
+        if (parser_is(m, TOKEN_STMT_EOF) || parser_is(m, TOKEN_EOF) || parser_is(m, TOKEN_FN)) {
+            break;
+        }
+    }
+
+    PARSER_ASSERTF(where_params->length > 0, "#where must declare at least one generic constraint");
+    return where_params;
+}
+
+static void parser_apply_where_constraints(module_t *m, ast_fndef_t *fndef) {
+    if (!fndef->pending_where_params) {
+        return;
+    }
+
+    list_t *where_params = fndef->pending_where_params;
+    fndef->pending_where_params = NULL;
+
+    PARSER_ASSERTF(fndef->generics_params && fndef->generics_params->length > 0,
+                   "#where can only be used with generic fn");
+
+    for (int i = 0; i < where_params->length; ++i) {
+        ast_generics_param_t *where_param = ct_list_value(where_params, i);
+        ast_generics_param_t *target = parser_find_generics_param(fndef->generics_params, where_param->ident);
+        PARSER_ASSERTF(target, "generic param '%s' not found", where_param->ident);
+        target->constraints = where_param->constraints;
+    }
+}
+
 static bool parser_is_const_type(module_t *m) {
     return parser_is(m, TOKEN_INT) ||
            parser_is(m, TOKEN_I8) || parser_is(m, TOKEN_I16) || parser_is(m, TOKEN_I32) || parser_is(m, TOKEN_I64) ||
@@ -634,41 +730,7 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
     if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
         PARSER_ASSERTF(!parser_is(m, TOKEN_RIGHT_ANGLE), "type alias params cannot empty");
 
-        typedef_stmt->params = ct_list_new(sizeof(ast_generics_param_t));
-
-        // 将泛型参数放在 module 全局表中用于辅助 parser
-        m->parser_type_params_table = table_new();
-
-        do {
-            token_t *ident = parser_advance(m);
-            ast_generics_param_t *temp = ast_generics_param_new(ident->line, ident->column, ident->literal);
-
-            // 可选的泛型约束 <T:t1|t2, U:t1&t2>
-            if (parser_consume(m, TOKEN_COLON)) {
-                type_t t = parser_single_type(m);
-                ct_list_push(temp->constraints.elements, &t);
-
-                if (parser_is(m, TOKEN_OR)) {
-                    temp->constraints.or = true;
-                    while (parser_consume(m, TOKEN_OR)) {
-                        t = parser_single_type(m);
-                        ct_list_push(temp->constraints.elements, &t);
-                    }
-                } else if (parser_is(m, TOKEN_AND)) {
-                    temp->constraints.and = true;
-                    while (parser_consume(m, TOKEN_AND)) {
-                        t = parser_single_type(m);
-                        ct_list_push(temp->constraints.elements, &t);
-                    }
-                }
-
-                // 只要包含类型约束， any 就是 false
-                temp->constraints.any = false;
-            }
-
-            ct_list_push(typedef_stmt->params, temp);
-            table_set(m->parser_type_params_table, ident->literal, ident->literal);
-        } while (parser_consume(m, TOKEN_COMMA));
+        parser_parse_generics_decl(m, &typedef_stmt->params);
 
         parser_must(m, TOKEN_RIGHT_ANGLE);
     }
@@ -788,6 +850,8 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
     if (parser_consume(m, TOKEN_INTERFACE)) {
         type_interface_t *type_interface = NEW(type_interface_t);
         type_interface->elements = ct_list_new(sizeof(type_t));
+        type_interface->alloc_types = NULL;
+        type_interface->deny_types = NULL;
         parser_must(m, TOKEN_LEFT_CURLY);
 
         struct sc_map_s64 exists = {0};
@@ -2746,46 +2810,14 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
         linked_node *temp_current = m->p_cursor.current; // 回溯点
 
         token_t *first_token = parser_advance(m);
+        list_t *impl_generics_params = NULL;
 
-        // 记录泛型参数，用于 parser type 时可以正确解析
+        // impl type 的泛型参数需要先行收集，供后续 self/签名解析时识别
         if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
-            m->parser_type_params_table = table_new();
-            fndef->generics_params = ct_list_new(sizeof(ast_generics_param_t));
-            do {
-                token_t *ident = parser_advance(m);
-
-                // 默认是 union any
-                ast_generics_param_t *temp = ast_generics_param_new(ident->line, ident->column, ident->literal);
-
-                // 可选的泛型约束 <T:t1|t2, U:t1&t2>
-                if (parser_consume(m, TOKEN_COLON)) {
-                    type_t t = parser_single_type(m);
-                    ct_list_push(temp->constraints.elements, &t);
-
-                    if (parser_is(m, TOKEN_OR)) {
-                        temp->constraints.or = true;
-                        while (parser_consume(m, TOKEN_OR)) {
-                            t = parser_single_type(m);
-                            ct_list_push(temp->constraints.elements, &t);
-                        }
-                    } else if (parser_is(m, TOKEN_AND)) {
-                        temp->constraints.and = true;
-                        while (parser_consume(m, TOKEN_AND)) {
-                            t = parser_single_type(m);
-                            ct_list_push(temp->constraints.elements, &t);
-                        }
-                    }
-
-                    // 只要包含类型约束， any 就是 false
-                    temp->constraints.any = false;
-                }
-
-                ct_list_push(fndef->generics_params, temp);
-                table_set(m->parser_type_params_table, ident->literal, ident->literal);
-            } while (parser_consume(m, TOKEN_COMMA));
-
+            parser_parse_generics_decl(m, &impl_generics_params);
             parser_must(m, TOKEN_RIGHT_ANGLE);
         }
+        fndef->generics_params = impl_generics_params;
 
         m->p_cursor.current = temp_current; // 已经发生了回溯，所以 first_token 等都不占用 token
 
@@ -2796,20 +2828,16 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
             impl_type.ident = parser_must(m, TOKEN_IDENT)->literal;
             impl_type.ident_kind = TYPE_IDENT_DEF;
 
-            if (fndef->generics_params) {
+            if (impl_generics_params) {
                 // parser sign type
                 parser_must(m, TOKEN_LEFT_ANGLE);
                 impl_type.args = ct_list_new(sizeof(type_t));
                 do {
                     type_t param_type = parser_single_type(m);
-                    assert(param_type.ident_kind == TYPE_IDENT_GENERICS_PARAM);
-
-                    // 排除参数约束
-                    if (parser_consume(m, TOKEN_COLON)) {
-                        do {
-                            parser_single_type(m);
-                        } while (parser_consume(m, TOKEN_OR));
-                    }
+                    PARSER_ASSERTF(param_type.ident_kind == TYPE_IDENT_GENERICS_PARAM,
+                                   "impl generics args must be generic params");
+                    PARSER_ASSERTF(!parser_consume(m, TOKEN_COLON),
+                                   "generic constraints must be declared with '#where'");
 
                     ct_list_push(impl_type.args, &param_type);
                 } while (parser_consume(m, TOKEN_COMMA));
@@ -2822,7 +2850,6 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
                 impl_type = parser_single_type(m);
                 impl_type.ident = type_kind_str[impl_type.kind];
                 impl_type.ident_kind = TYPE_IDENT_BUILTIN;
-                impl_type.args = NULL;
             } else {
                 parser_must(m, TOKEN_IDENT);
                 impl_type = builtin_impl_type_new(builtin_ident_to_kind(first_token));
@@ -2861,51 +2888,19 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
     fndef->fn_name = token_ident->literal;
     fndef->fn_name_with_pkg = ident_with_prefix(m->ident, token_ident->literal);
 
-    if (!fndef->is_impl && parser_consume(m, TOKEN_LEFT_ANGLE)) {
-        m->parser_type_params_table = table_new();
-        fndef->generics_params = ct_list_new(sizeof(ast_generics_param_t));
-        do {
-            token_t *ident = parser_advance(m);
-            ast_generics_param_t *temp = ast_generics_param_new(ident->line, ident->column, ident->literal);
-
-            // 可选的泛型约束 <T:t1|t2, U:t1&t2>
-            if (parser_consume(m, TOKEN_COLON)) {
-                type_t t = parser_single_type(m);
-                ct_list_push(temp->constraints.elements, &t);
-
-                if (parser_is(m, TOKEN_OR)) {
-                    temp->constraints.or = true;
-                    while (parser_consume(m, TOKEN_OR)) {
-                        t = parser_single_type(m);
-                        ct_list_push(temp->constraints.elements, &t);
-                    }
-                } else if (parser_is(m, TOKEN_AND)) {
-                    temp->constraints.and = true;
-                    while (parser_consume(m, TOKEN_AND)) {
-                        t = parser_single_type(m);
-                        ct_list_push(temp->constraints.elements, &t);
-                    }
-                }
-
-                // 只要包含类型约束， any 就是 false
-                temp->constraints.any = false;
-            }
-
-
-            ct_list_push(fndef->generics_params, temp);
-            table_set(m->parser_type_params_table, ident->literal, ident->literal);
-        } while (parser_consume(m, TOKEN_COMMA));
-
+    // impl type 泛型 + fn 泛型统一放入 fndef->generics_params
+    if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
+        parser_parse_generics_decl(m, &fndef->generics_params);
         parser_must(m, TOKEN_RIGHT_ANGLE);
     }
+
+    parser_apply_where_constraints(m, fndef);
 
     parser_params(m, fndef);
 
     // 可选返回参数
-    bool has_return_type = false;
     if (parser_consume(m, TOKEN_COLON)) {
         fndef->return_type = parser_type(m);
-        has_return_type = true;
     } else {
         fndef->return_type = type_kind_new(TYPE_VOID);
         fndef->return_type.line = parser_peek(m)->line;
@@ -2919,6 +2914,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
 
     if (parser_is_stmt_eof(m)) {
         fndef->is_tpl = true;
+        m->parser_type_params_table = NULL;
         return result;
     }
 
@@ -2988,6 +2984,9 @@ static ast_stmt_t *parser_label(module_t *m) {
             }
         } else if (str_equal(token->literal, MACRO_LOCAL)) {
             fndef->is_private = true;
+        } else if (str_equal(token->literal, MACRO_WHERE)) {
+            PARSER_ASSERTF(!fndef->pending_where_params, "#where redeclared");
+            fndef->pending_where_params = parser_parse_where_constraints(m);
         } else if (str_equal(token->literal, MACRO_RUNTIME_USE)) {
             parser_must(m, TOKEN_IDENT);
         } else {
@@ -2999,9 +2998,18 @@ static ast_stmt_t *parser_label(module_t *m) {
         }
     } while (parser_is(m, TOKEN_LABEL));
 
-    parser_must(m, TOKEN_STMT_EOF);
+    if (!parser_consume(m, TOKEN_STMT_EOF)) {
+        // #where 允许最后一个约束后保留逗号，scanner 不会自动插入 TOKEN_STMT_EOF
+        PARSER_ASSERTF(fndef->pending_where_params, "expected '%s' found '%s'", token_str[TOKEN_STMT_EOF],
+                       parser_peek(m)->literal);
+    }
+
+    if (fndef->pending_where_params) {
+        PARSER_ASSERTF(parser_is(m, TOKEN_FN), "#where can only be applied to fn");
+    }
 
     if (parser_is(m, TOKEN_TYPE)) {
+        PARSER_ASSERTF(!fndef->pending_where_params, "#where can only be applied to fn");
         return parser_typedef_stmt(m);
     } else if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_stmt(m, fndef);
@@ -3668,35 +3676,6 @@ static ast_expr_t parser_macro_async_expr(module_t *m) {
     return result;
 }
 
-static ast_expr_t parser_macro_ula_expr(module_t *m) {
-    ast_expr_t result = expr_new(m);
-    ast_unary_expr_t *ula_expr = NEW(ast_unary_expr_t);
-
-    parser_must(m, TOKEN_LEFT_PAREN);
-    ula_expr->operand = parser_expr(m);
-    parser_must(m, TOKEN_RIGHT_PAREN);
-
-    ula_expr->op = AST_OP_UNSAFE_LA;
-    result.assert_type = AST_EXPR_UNARY;
-    result.value = ula_expr;
-    return result;
-}
-
-static ast_expr_t parser_macro_sla_expr(module_t *m) {
-    ast_expr_t result = expr_new(m);
-    ast_unary_expr_t *ula_expr = NEW(ast_unary_expr_t);
-
-    parser_must(m, TOKEN_LEFT_PAREN);
-    ula_expr->operand = parser_expr(m);
-    parser_must(m, TOKEN_RIGHT_PAREN);
-
-    ula_expr->op = AST_OP_SAFE_LA;
-    result.assert_type = AST_EXPR_UNARY;
-    result.value = ula_expr;
-    return result;
-}
-
-
 /**
 * 宏就解析成对应的 expr 好了，然后正常走 analyzer/infer/linear
 * @param m
@@ -3720,14 +3699,6 @@ static ast_expr_t parser_macro_call(module_t *m) {
 
     if (str_equal(token->literal, MACRO_ASYNC)) {
         return parser_macro_async_expr(m);
-    }
-
-    if (str_equal(token->literal, MACRO_ULA)) {
-        return parser_macro_ula_expr(m);
-    }
-
-    if (str_equal(token->literal, MACRO_SLA)) {
-        return parser_macro_sla_expr(m);
     }
 
     PARSER_ASSERTF(false, "macro '%s' not defined", token->literal);

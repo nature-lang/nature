@@ -125,7 +125,7 @@ fs_context_t *rt_uv_fs_open(n_string_t path, int64_t flags, int64_t mode) {
 
     global_waiting_send(uv_async_fs_open, ctx, rt_string_ref(&path), 0);
     if (co->has_error) {
-        n_string_t msg = rti_error_msg(co->error);
+        n_string_t msg = rti_error_msg(&co->error);
         DEBUGF("[fs_open] open file failed: %s", (char *) rt_string_ref(&msg));
         return NULL;
     } else {
@@ -165,7 +165,7 @@ n_int_t rt_uv_fs_read_at(fs_context_t *ctx, n_vec_t buf, int offset) {
     global_waiting_send(uv_async_fs_read_at, ctx, (void *) offset, 0);
 
     if (co->has_error) {
-        n_string_t msg = rti_error_msg(co->error);
+        n_string_t msg = rti_error_msg(&co->error);
         DEBUGF("[rt_uv_fs_read] read file failed: %s", (char *) rt_string_ref(&msg));
         return 0;
     } else {
@@ -200,7 +200,7 @@ n_int_t rt_uv_fs_write_at(fs_context_t *ctx, n_vec_t buf, int offset) {
     global_waiting_send(uv_async_fs_write_at, ctx, &buf, (void *) (int64_t) offset);
 
     if (co->has_error) {
-        n_string_t msg = rti_error_msg(co->error);
+        n_string_t msg = rti_error_msg(&co->error);
         DEBUGF("[fs_write_at] write file failed: %s", (char *) rt_string_ref(&msg));
     } else {
         DEBUGF("[fs_write_at] write file success");
@@ -288,7 +288,7 @@ uv_stat_t rt_uv_fs_stat(fs_context_t *ctx) {
     global_waiting_send(uv_async_fs_stat, ctx, co, 0);
 
     if (co->has_error) {
-        n_string_t msg = rti_error_msg(co->error);
+        n_string_t msg = rti_error_msg(&co->error);
         DEBUGF("[rt_uv_fs_stat] stat file failed: %s", (char *) rt_string_ref(&msg));
     } else {
         DEBUGF("[rt_uv_fs_stat] stat file success");

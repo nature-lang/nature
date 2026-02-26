@@ -47,7 +47,7 @@ type SourcePos = struct {
     int column // column number
 }
 
-fn SourcePos.toString(&self): string {
+fn SourcePos.toString(*self): string {
     return "(line: " + fmt.sprintf("%d",self.line) + ", column: " + fmt.sprintf("%d",self.column) + ")"
 }
 
@@ -68,7 +68,7 @@ fn newToken( int kind,  string literal, int line, int column): Token {
     }
 }
 
-fn Token.toString(&self): string {
+fn Token.toString(*self): string {
     var kind = match self.kind {
         TokenKindEof -> "TokenKindEof"
         TokenKindIdent -> "TokenKindIdent"
@@ -115,15 +115,19 @@ fn Token.toString(&self): string {
     return "Token(kind: " + fmt.sprintf("%s",kind) + ", literal: " + fmt.sprintf("%s",self.literal) + ", pos: " + self.pos.toString() + ")"
 }
 
-var keywords = {
-    "if": TokenKindIf,
-    "else": TokenKindElse,
-    "return": TokenKindReturn,
-    "fn": TokenKindFunc,
-    "let": TokenKindLet,
-    "true": TokenKindTrue,
-    "false": TokenKindFalse,
-    "for": TokenKindFor,
+{string:int} keywords = {}
+
+fn init() {
+   keywords = {
+       "if": TokenKindIf,
+       "else": TokenKindElse,
+       "return": TokenKindReturn,
+       "fn": TokenKindFunc,
+       "let": TokenKindLet,
+       "true": TokenKindTrue,
+       "false": TokenKindFalse,
+       "for": TokenKindFor,
+   }
 }
 
 fn lookupKeyword(string ident): int {

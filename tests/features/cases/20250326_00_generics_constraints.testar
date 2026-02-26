@@ -1,434 +1,437 @@
 === test_basic
 --- main.n
-import 'mod.n'
-
-fn main() {
-    var f = mod.bar_t<int, f32>{
-        a = 233,
-        b = 333.444,
-    }
-    int a = @ula(f).dump()
-
-    var f2 = mod.foo_t<f32, bool>{
-        a = 233.333,
-        b = true,
-    }
-    var a2 = @ula(f2).dump()
-
-
-    var f3 = mod.foo_t<bool, string>{
-        a = true,
-        b = 'hello',
-    }
-    f3.dump('world')
-}
-
---- mod.n
-// 类型约束一致性检查
-type foo_t<T:f32|bool|int, U:bool|string|f32|[i32]> = struct{
-    T a
-    U b
-    float c
-}
-
-type bar_t<T,U> = struct{
-    T a
-    U b
-}
-
-fn bar_t<T, U>.dump(&self):T {
-   println('bar_t any dump', self.a, self.b)
-   return self.a
-}
-
-fn foo_t<T:f32, U:bool>.dump(&self):T {
-    println('f32+bool dump', self.a, self.b)
-    return self.a
-}
-
-fn foo_t<T:f32|bool, U:string>.dump(&self, U c) {
-    println('void return, f32|bool+int|string dump', self.a, self.b, c)
-}
-
---- output.txt
-bar_t any dump 233 333.444000
-f32+bool dump 233.332993 true
-void return, f32|bool+int|string dump true hello world
-
-
-
-=== test_constraints_failed1
---- main.n
-fn test<T:int>(T param) {
-    println(param)
+fn foo<T>(T a) {
+    var b = a
+    println(b)
 }
 
 fn main() {
-    test('hello')
-}
-
-
---- output.txt
-nature-test/main.n:6:14: type 'string' does not match any of the constraints
-
-=== test_constraints_failed2
---- main.n
-fn test<T:int|bool|float>(T param) {
-    println(param)
-}
-
-fn main() {
-    test('hello')
-}
-
-
---- output.txt
-nature-test/main.n:6:14: type 'string' does not match any of the constraints
-
-=== test_constraints_failed3
---- main.n
-type test_union = int|bool|float
-
-fn test<T:test_union>(T param) {
-    println(param)
-}
-
-fn main() {
-    test('hello')
+    foo(1.1)
+    foo(1)
+    foo(true)
 }
 
 --- output.txt
-nature-test/main.n:8:14: type 'string' does not match any of the constraints
-
-
-
-=== test_constraints_succ1
---- main.n
-fn test<T:int>(T param) {
-    println(param)
-}
-
-fn main() {
-    test(12)
-}
-
-
---- output.txt
-12
-
-=== test_constraints_succ2
---- main.n
-fn test<T:int|bool|float>(T param) {
-    println(param)
-}
-
-fn main() {
-    test(true)
-}
-
-
---- output.txt
+1.100000
+1
 true
 
-=== test_constraints_succ3
+=== test_basic_failed
 --- main.n
-type test_union = int|bool|float
-
-fn test<T:test_union>(T param) {
-    println(param)
+fn foo<T>(T a) {
+    var b = a
+    println(b)
 }
 
 fn main() {
-    test(3.14)
+    foo(1.1)
+    foo(1)
+    foo<int>(true)
 }
 
 --- output.txt
-3.140000
+nature-test/main.n:9:17: type inconsistency, expect=i64, actual=bool
 
-=== test_constraints_failed4
+
+=== test_impl_check_failed
 --- main.n
-type test_union = int|bool|float
-type test_union2 = int|string
-
-fn test<T:test_union|test_union2>(T param) {
-    println(param)
+fn foo<T>(T a) {
+    var b = a.hello()
+    println(b)
 }
 
 fn main() {
-    test(3.14)
 }
 
 --- output.txt
-nature-test/main.n:4:2: cannot use type 'union' combination
+nature-test/main.n:2:20: generic param 'T' has no constraint declaring fn 'hello'
 
-=== test_constraints_failed5
+=== test_impl_check_failed2
 --- main.n
-type test_union = int|bool|float
-type test_union2 = int|string
+type helloable = interface{}
 
-fn test<T:test_union&test_union2>(T param) {
-    println(param)
+#where T:helloable
+fn foo<T>(T a) {
+    var b = a.hello()
+    println(b)
 }
 
 fn main() {
-    test(3.14)
 }
 
 --- output.txt
-nature-test/main.n:4:2: only type 'interface' can be combination with '&'
+nature-test/main.n:5:20: generic param 'T' has no constraint declaring fn 'hello'
 
 
 
-=== test_constraints_failed6
+=== test_impl_check
 --- main.n
-type test_interface = interface{}
-type test_interface2 = interface{}
+type helloable = interface{
+    fn hello()
+}
 
-fn test<T:test_interface|test_interface2>(T param) {
-    println(param)
+#where T:helloable
+fn foo<T>(T a) {
+    var b = a.hello()
+    println(b)
 }
 
 fn main() {
-    test(3.14)
+}
+
+
+=== test_opr_failed
+--- main.n
+fn foo<T>(T a) {
+    var c = a * 2
+    println(c)
+}
+
+fn main() {
 }
 
 --- output.txt
-nature-test/main.n:4:2: cannot use type 'interface' combination
+nature-test/main.n:2:17: generic param 'T' cannot use operator '*' without 'numeric' constraint
 
-
-
-=== test_type_param_failed1
+=== test_opr_failed2
 --- main.n
-type test<T:int> = struct{
-    T foo
+fn foo<T>(T a) {
+    var c = a + 2
+    println(c)
 }
 
 fn main() {
-    var t = test<string>{
-        foo = 'hello',
+}
+
+--- output.txt
+nature-test/main.n:2:17: generic param 'T' cannot use operator '+' without 'addable' constraint
+
+=== test_opr_basic
+--- main.n
+#where T:addable
+fn foo<T>(T a) {
+    var c = a + 2
+    println(c)
+}
+
+fn main() {
+}
+
+=== test_opr_basic2
+--- main.n
+#where T:numeric
+fn foo<T>(T a) {
+    var c = a + 2
+    println(c)
+}
+
+fn main() {
+}
+
+=== test_bool_condition_failed
+--- main.n
+fn foo<T>(T v) {
+    if v {
+        println("ok")
     }
-    println(t.foo)
-}
-
-
---- output.txt
-nature-test/main.n:6:25: type 'string' does not match any of the constraints
-
-
-=== test_type_param_failed2
---- main.n
-type test<T:int> = struct{
-    T foo
 }
 
 fn main() {
-    var t = test{
-        foo = 'hello',
+}
+
+--- output.txt
+nature-test/main.n:2:8: generic param 'T' cannot be used as bool value
+
+=== test_boolike_interface_as_bool
+--- main.n
+type boolike = interface{
+    fn as_bool():bool
+}
+
+type flag_t:boolike = struct{
+    bool value
+}
+
+fn flag_t.as_bool(self):bool {
+    return self.value
+}
+
+#where T:boolike
+fn foo<T>(T v):bool {
+    if v.as_bool() {
+        return true
     }
-    println(t.foo)
-}
-
---- output.txt
-nature-test/main.n:6:17: typedef 'main.test' need param
-
-=== test_type_param_failed3
---- main.n
-type test<T:int> = struct{
-    T foo
+    return false
 }
 
 fn main() {
-    var t = test<int>{
-        foo = 'hello',
+    assert(foo(flag_t{value:true}))
+    assert(!foo(flag_t{value:false}))
+}
+
+
+=== test_comparable_builtin_int
+--- main.n
+#where T:comparable
+fn max<T>(T a, T b):T {
+    if a > b {
+        return a
     }
-    println(t.foo)
-}
-
---- output.txt
-nature-test/main.n:7:19: type inconsistency, expect=int(i64), actual=string
-
-=== test_type_param_succ1
---- main.n
-type test<T:int> = struct{
-    T foo
+    return b
 }
 
 fn main() {
-    var t = test<int>{
-        foo = 12,
+    assert(max(3, 1) == 3)
+}
+
+=== test_addable_builtin_int
+--- main.n
+#where T:addable
+fn plus<T>(T a, T b):T {
+    return a + b
+}
+
+fn main() {
+    assert(plus(1, 2) == 3)
+}
+
+=== test_numeric_unary_binary
+--- main.n
+#where T:numeric
+fn invert<T>(T a):T {
+    return ~a
+}
+
+#where T:numeric
+fn gt<T>(T a, T b):bool {
+    return a > b
+}
+
+fn main() {
+    assert(invert(1) == -2)
+    assert(gt(3, 2))
+}
+
+=== test_missing_addable_constraint
+--- main.n
+#where T:comparable
+fn plus<T>(T a, T b):T {
+    return a + b
+}
+
+fn main() {
+}
+
+--- output.txt
+nature-test/main.n:3:16: generic param 'T' cannot use operator '+' without 'addable' constraint
+
+
+=== test_multi_constraints
+--- main.n
+type Test1able = interface{
+    fn test1()
+}
+
+type Test2able = interface{
+    fn test2()
+}
+
+#where T:Test1able&Test2able
+fn call_all<T>(T a) {
+    a.test1()
+    a.test2()
+}
+
+fn main() {
+}
+
+
+=== test_multi_params_constraints
+--- main.n
+type Test1able = interface{
+    fn test1()
+}
+
+type Test2able = interface{
+    fn test2()
+}
+
+type Testuable = interface{
+    fn testu()
+}
+
+#where T:Test1able&Test2able,U:Testuable
+fn call_all<T,U>(T a, U b) {
+    a.test1()
+    a.test2()
+    b.testu()
+}
+
+fn main() {
+}
+
+
+=== test_multi_params_constraints_call_assert
+--- main.n
+type Test1able = interface{
+    fn test1():int
+}
+
+type Test2able = interface{
+    fn test2():int
+}
+
+type Testuable = interface{
+    fn testu():int
+}
+
+type both_t:Test1able,Test2able = struct{}
+
+fn both_t.test1(self):int {
+    return 11
+}
+
+fn both_t.test2(self):int {
+    return 22
+}
+
+type user_t:Testuable = struct{}
+
+fn user_t.testu(self):int {
+    return 33
+}
+
+#where T:Test1able&Test2able,U:Testuable
+fn call_all<T,U>(T a, U b):int {
+    return a.test1() + a.test2() + b.testu()
+}
+
+fn main() {
+    int v = call_all(both_t{}, user_t{})
+    assert(v == 66)
+}
+
+
+=== test_multi_params_constraints_call_failed_missing_method
+--- main.n
+type Test1able = interface{
+    fn test1():int
+}
+
+type Test2able = interface{
+    fn test2():int
+}
+
+type Testuable = interface{
+    fn testu():int
+}
+
+type both_t:Test1able,Test2able = struct{}
+
+fn both_t.test1(self):int {
+    return 11
+}
+
+fn both_t.test2(self):int {
+    return 22
+}
+
+type bad_u = struct{}
+
+#where T:Test1able&Test2able,U:Testuable
+fn call_all<T,U>(T a, U b):int {
+    return a.test1() + a.test2() + b.testu()
+}
+
+fn main() {
+    int v = call_all(both_t{}, bad_u{})
+    assert(v == 66)
+}
+
+--- output.txt
+nature-test/main.n:31:37: type 'main.bad_u' not impl 'main.Testuable' interface
+
+
+=== test_nonvoid_basic
+--- main.n
+#where T:nonvoid
+fn id<T>(T v):T {
+    return v
+}
+
+fn main() {
+    assert(id(1) == 1)
+}
+
+
+=== test_nonvoid_failed_void_arg
+--- main.n
+#where T:nonvoid
+fn run<T>() {
+    println('ok')
+}
+
+fn main() {
+    run<void>()
+}
+
+--- output.txt
+nature-test/main.n:7:8: type 'void' denied by 'nonvoid' interface
+
+
+=== test_basic
+--- main.n
+type foo_t<T> = T|int
+
+fn foo_t<T>.hello(self):string {
+    if self is int {
+        return 'hello'
+    } else {
+        return 'unknown'
     }
-    println(t.foo)
 }
 
---- output.txt
-12
-
-
-
-=== test_type_param_failed4
---- main.n
-type test_union = int|bool|float
-
-type test<T:test_union> = struct{
-    T foo
-}
-
-fn main() {
-    var t = test<u8>{
-        foo = 12,
+fn foo_t<T>.world(self):string {
+    if self is float {
+        return 'world'
+    } else {
+        return 'unknown'
     }
-    println(t.foo)
 }
 
---- output.txt
-nature-test/main.n:8:21: type 'u8' does not match any of the constraints
+fn main():void! {
+    foo_t<float> v = 3.14
+    println(v.hello())
+    println(v.world())
+    assert(v.hello() == 'unknown')
+    assert(v.world() == 'world')
+}
 
-=== test_type_param_succ2
+=== test_impl_infer
 --- main.n
-type test_union = int|bool|float
-
-type test<T:test_union> = struct{
-    T foo
+type box_t<T> = struct{
+    T value
 }
 
-fn main() {
-    var t = test<i64>{
-        foo = 12,
-    }
-    println(t.foo)
+fn box_t<T>.get(self):T {
+    return self.value
 }
 
---- output.txt
-12
-
-
-
-=== test_constraints_interface1
---- main.n
-type test_interface = interface{}
-type test_interface2 = interface{}
-
-fn test<T:test_interface&test_interface2>(T param) {
-    println(param)
+fn box_t<T>.set(*self, T value) {
+    self.value = value
 }
 
-fn main() {
-    test(3.14)
+fn main():void! {
+    box_t<int> b = box_t<int>{value: 1}
+    println(b.get())
+    b.set(3)
+    println(b.get())
+
+    box_t<string> s = box_t<string>{value: 'hi'}
+    println(s.get())
 }
 
 --- output.txt
-3.140000
-
-
-=== test_constraints_interface_failed1
---- main.n
-type test_interface = interface{
-    fn to_string():string
-}
-
-type test_emtpy = interface{}
-
-fn test<T:test_interface&test_emtpy>(T param) {
-    println(param)
-}
-
-fn main() {
-    test(3.14)
-}
-
---- output.txt
-nature-test/main.n:12:13: type 'f64' not impl 'main.test_interface' interface
-
-=== test_constraints_interface_failed2
---- main.n
-type test_interface = interface{
-    fn to_string():string
-}
-
-type foo_t = struct{}
-
-fn foo_t.to_string(&self):string {
-    return 'foo_t'
-}
-
-fn test<T:test_interface>(T param) {
-    println(param.to_string())
-}
-
-fn main() {
-    var f = foo_t{}
-    test(f)
-}
-
---- output.txt
-nature-test/main.n:17:10: type 'main.foo_t' not impl 'main.test_interface' interface
-
-=== test_constraints_interface_succ1
---- main.n
-type test_interface = interface{
-    fn to_string():string
-}
-
-type foo_t:test_interface = struct{}
-
-fn foo_t.to_string(&self):string {
-    return 'foo_t'
-}
-
-fn test1<T:test_interface>(T param) {
-    println(@sla(param).to_string())
-}
-
-fn main() {
-    var f = foo_t{}
-    test1(f)
-}
-
---- output.txt
-foo_t
-
-=== test_type_param_interface_failed1
---- main.n
-type test_interface = interface{
-    fn to_string():string
-}
-
-type foo_t:test_interface = struct{}
-fn foo_t.to_string(&self):string {
-    return 'foo_t'
-}
-
-type bar_t<T:test_interface> = struct{
-    T a
-}
-
-fn main() {
-    var b = bar_t<int>{}
-    println(@sla(b.a).to_string())
-}
-
---- output.txt
-nature-test/main.n:15:23: type 'int' not impl 'main.test_interface' interface
-
-=== test_constraints_interface_succ2
---- main.n
-type test_interface = interface{
-    fn to_string():string
-}
-
-type foo_t:test_interface = struct{}
-fn foo_t.to_string(&self):string {
-    return 'foo_t'
-}
-
-type bar_t<T:test_interface> = struct{
-    T a
-}
-
-fn main() {
-    var b = bar_t<foo_t>{}
-    println(b.a.to_string())
-}
-
---- output.txt
-foo_t
+1
+3
+hi

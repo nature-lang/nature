@@ -39,7 +39,7 @@ void union_to_any(n_any_t *out, n_union_t *input);
 
 void tagged_union_casting(n_tagged_union_t *out, int64_t id, int64_t value_rtype_hash, void *value_ref);
 
-n_interface_t *interface_casting(uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods);
+void interface_casting(n_interface_t *out, uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods);
 
 int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, void *key_ref);
 
@@ -51,7 +51,7 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
 
 void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch);
 
-n_interface_t *co_remove_error();
+n_interface_t co_remove_error();
 
 uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
 

@@ -24,7 +24,8 @@ const NINE_CHAR = 57 // '9'
 const ALPHABET = "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
 // Magic cipher data - big-endian bytes of "OrpheanBeholderScryDoubt"
-[u8] MAGIC_CIPHER_DATA = [
+const MAGIC_CIPHER_COUNT = 24
+[u8;MAGIC_CIPHER_COUNT] MAGIC_CIPHER_DATA = [
     0x4f, 0x72, 0x70, 0x68,
     0x65, 0x61, 0x6e, 0x42,
     0x65, 0x68, 0x6f, 0x6c,
@@ -203,8 +204,8 @@ fn expensive_blowfish_setup([u8] key, u32 cost, [u8] salt):blowfish.cipher_t! {
 // bcrypt core function
 fn bcrypt([u8] password, int cost, [u8] salt):[u8]! {
     [u8] cipher_data = []
-    for i, v in MAGIC_CIPHER_DATA {
-        cipher_data.push(v)
+    for int i = 0; i < MAGIC_CIPHER_COUNT; i+= 1 {
+        cipher_data.push(MAGIC_CIPHER_DATA[i])
     }
     
     blowfish.cipher_t c = expensive_blowfish_setup(password, cost as u32, salt)

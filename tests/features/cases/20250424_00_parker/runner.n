@@ -9,7 +9,7 @@ import os.signal
 import co
 import fs
 
-var version = '0.2.0'
+const version = '0.2.0'
 
 fn main():void! {
     if util.arg_verbose() {

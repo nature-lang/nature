@@ -108,7 +108,7 @@ void register_const_str_pool() {
         }
         *pool_copy = str;
         sc_map_put_sv(&const_str_pool, (char *) s.base, pool_copy);
-//        TDEBUGF("[register_const_str_pool] str = %p, str %s", str, (char *) s.base);
+        //        TDEBUGF("[register_const_str_pool] str = %p, str %s", str, (char *) s.base);
     }
 };
 

@@ -137,7 +137,7 @@ static inline void builtin_rtype_init() {
                                   TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     sc_map_put_64v(&rt_rtype_map, errort_trace_rtype.hash, &errort_trace_rtype);
 
-    throwable_rtype = GC_RTYPE(TYPE_INTERFACE, 4, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_SCAN);
+    throwable_rtype = GC_RTYPE(TYPE_INTERFACE, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     sc_map_put_64v(&rt_rtype_map, throwable_rtype.hash, &throwable_rtype);
 
     // 初始化错误 rtype

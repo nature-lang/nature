@@ -36,14 +36,14 @@ fn main() {
 --- main.n
 type tu = (int, bool, float)
 
-fn tu.hello(&self):ref<tu> {
+fn tu.hello(self):tu {
     println('hello')
     return self
 }
 
 fn main() {
     tu t = (1, false, 1.1)
-    tu t2 = *t.hello()
+    tu t2 = t.hello()
     println(t2[0], t2[1], t2[2])
 }
 

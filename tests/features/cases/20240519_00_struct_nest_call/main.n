@@ -23,8 +23,14 @@ fn main() {
     // (&p).set_age(25) // err: ptr<person_t(struct)> cannot use impl call, must ref<...>
     // package.p.set_age(25) // err: person_t(struct) cannot use impl call, must ref<...>
 
-    // usafe load address
-    @ula(package.p).set_age(25)
+    ref<other.person_t> package_ref = new other.person_t(
+        name = package.p.name,
+        age = package.p.age,
+        sex = package.p.sex,
+        hello = package.p.hello,
+    )
+    package_ref.set_age(25)
+    package.p = *package_ref
 
     println((&p).age)
     println(p.age)

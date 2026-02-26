@@ -105,8 +105,6 @@ typedef enum {
     AST_OP_NEG, // unary number -right
     AST_OP_BNOT, // unary binary ~right, right must int
     AST_OP_LA, // &var = load addr var
-    AST_OP_SAFE_LA, // @sla(var) safe load addr
-    AST_OP_UNSAFE_LA, // @ula(var) unsafe load addr
     AST_OP_IA, // indirect addr  *q
 
     // 位运算
@@ -128,30 +126,30 @@ typedef enum {
 } ast_expr_op_t;
 
 static string ast_expr_op_str[] = {
-        [AST_OP_ADD] = "+",
-        [AST_OP_SUB] = "-",
-        [AST_OP_MUL] = "*",
-        [AST_OP_DIV] = "/",
-        [AST_OP_REM] = "%",
+    [AST_OP_ADD] = "+",
+    [AST_OP_SUB] = "-",
+    [AST_OP_MUL] = "*",
+    [AST_OP_DIV] = "/",
+    [AST_OP_REM] = "%",
 
-        [AST_OP_AND] = "&",
-        [AST_OP_OR] = "|",
-        [AST_OP_XOR] = "^",
-        [AST_OP_BNOT] = "~",
-        [AST_OP_LSHIFT] = "<<",
-        [AST_OP_RSHIFT] = ">>",
+    [AST_OP_AND] = "&",
+    [AST_OP_OR] = "|",
+    [AST_OP_XOR] = "^",
+    [AST_OP_BNOT] = "~",
+    [AST_OP_LSHIFT] = "<<",
+    [AST_OP_RSHIFT] = ">>",
 
-        [AST_OP_LT] = "<",
-        [AST_OP_LE] = "<=",
-        [AST_OP_GT] = ">", // >
-        [AST_OP_GE] = ">=", // >=
-        [AST_OP_EE] = "==", // ==
-        [AST_OP_NE] = "!=", // !=
-        [AST_OP_OR_OR] = "||",
-        [AST_OP_AND_AND] = "&&",
+    [AST_OP_LT] = "<",
+    [AST_OP_LE] = "<=",
+    [AST_OP_GT] = ">", // >
+    [AST_OP_GE] = ">=", // >=
+    [AST_OP_EE] = "==", // ==
+    [AST_OP_NE] = "!=", // !=
+    [AST_OP_OR_OR] = "||",
+    [AST_OP_AND_AND] = "&&",
 
-        [AST_OP_NOT] = "!", // unary !right
-        [AST_OP_NEG] = "-", // unary -right
+    [AST_OP_NOT] = "!", // unary !right
+    [AST_OP_NEG] = "-", // unary -right
 };
 
 struct ast_stmt_t {
@@ -328,6 +326,7 @@ typedef struct {
 typedef struct {
     ast_var_decl_t var_decl; // 左值
     ast_expr_t *right; // 右值
+    uint8_t *global_data; // global_eval pass 生成的编译期初始化数据
 } ast_vardef_stmt_t;
 
 typedef struct {
@@ -643,9 +642,6 @@ typedef struct {
 
 typedef struct {
     list_t *elements;
-    bool any;
-    bool and;
-    bool or ;
 } ast_generics_constraints;
 
 typedef struct {
@@ -679,6 +675,7 @@ struct ast_fndef_t {
     // 闭包处理中的的 var name, 可能为 null
     // 其通过 jit 封装了一份完整的执行环境，并将环境通过 last param 传递给 symbol name 对应的函数 body 部分
     char *jit_closure_name;
+
     type_t return_type;
     list_t *params; // ast_var_decl_t*
     bool rest_param;
@@ -732,6 +729,8 @@ struct ast_fndef_t {
 
     // tpl fn 可以自定义 #linkid 宏, 用来自定义链接符号名称
     char *linkid;
+    // parser 暂存 #where 约束，进入 parser_fndef_stmt 后会并入 generics_params
+    list_t *pending_where_params; // ast_generics_param_t
 
     // 当 self_kind == PARAM_SELF_T 时，interface 存储指针数据但方法期望值类型
     // receiver_wrapper 用于接收指针参数，解引用后调用原函数
@@ -792,9 +791,6 @@ static inline ast_generics_param_t *ast_generics_param_new(int line, int column,
     param->ident = ident;
 
     param->constraints.elements = ct_list_new(sizeof(type_t));
-    param->constraints.any = true;
-    param->constraints.and = false;
-    param->constraints.or = false;
     return param;
 }
 
@@ -880,17 +876,6 @@ static inline ast_expr_t *ast_indirect_addr(ast_expr_t *target) {
     return result;
 }
 
-static inline ast_expr_t *ast_safe_load_addr(ast_expr_t *target) {
-    ast_expr_t *result = ast_load_addr(target);
-    ast_unary_expr_t *expr = result->value;
-    expr->op = AST_OP_SAFE_LA;
-    result->type.kind = 0;
-    result->type.status = 0;
-    result->target_type.kind = 0;
-    result->target_type.status = 0;
-    return result;
-}
-
 /**
  * 已经 infer 过了
  * @param expr
@@ -944,6 +929,7 @@ static inline ast_fndef_t *ast_fndef_new(module_t *m, int line, int column) {
     fndef->rel_path = m->rel_path;
     fndef->symbol_name = NULL;
     fndef->linkid = NULL;
+    fndef->pending_where_params = NULL;
     fndef->jit_closure_name = NULL;
     fndef->line = line;
     fndef->column = column;

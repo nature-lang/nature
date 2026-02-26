@@ -9,9 +9,10 @@ fn sort([int] list) {
     }
 }
 
-var list = [2, 8, 4, 2, 3]
+[int] list = []
 
 fn main() {
+    list = [2, 8, 4, 2, 3]
     sort(list)
 
     for v in list {

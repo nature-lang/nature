@@ -186,11 +186,7 @@ impl SymbolTable {
             )),
         ));
 
-        builtins.push((
-            "tup".to_string(),
-            Vec::new(),
-            Type::new(TypeKind::Tuple(Vec::new(), 0)),
-        ));
+        builtins.push(("tup".to_string(), Vec::new(), Type::new(TypeKind::Tuple(Vec::new(), 0))));
 
         for (ident, params, type_expr) in builtins {
             let typedef = TypedefStmt {
@@ -209,12 +205,7 @@ impl SymbolTable {
             };
 
             let typedef_mutex = Arc::new(Mutex::new(typedef));
-            if let Ok(symbol_id) = self.define_symbol_in_scope(
-                ident,
-                SymbolKind::Type(typedef_mutex.clone()),
-                0,
-                self.global_scope_id,
-            ) {
+            if let Ok(symbol_id) = self.define_symbol_in_scope(ident, SymbolKind::Type(typedef_mutex.clone()), 0, self.global_scope_id) {
                 let mut typedef_mut = typedef_mutex.lock().unwrap();
                 typedef_mut.symbol_id = symbol_id;
             }

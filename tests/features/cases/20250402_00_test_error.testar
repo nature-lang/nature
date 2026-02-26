@@ -171,9 +171,10 @@ catch vec error: index out of range [8] with length 4
 
 === test_global_vec
 --- main.n
-var list = [1, 2, 3, 4]
+[int] list = []
 
 fn main():void! {
+    list = [1, 2, 3, 4]
     println(list[3])
     list[2] = list[3] * 2
     println(list[2])
@@ -227,9 +228,11 @@ fn main():void! {
 
 === test_vec_index
 --- main.n
-var arr1 = [1, 2, 3, 4]
+[int] arr1 = []
 
 fn main():void! {
+    arr1 = [1, 2, 3, 4]
+
     i32 idx = 2
     arr1[idx] = arr1[idx] *2
     println(arr1[idx])

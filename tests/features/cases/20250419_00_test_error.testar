@@ -50,7 +50,7 @@ type type_t = struct{
     int v
 }
 
-fn type_t.to_string(&self) {
+fn type_t.to_string(*self) {
     println(self.size)
 }
 

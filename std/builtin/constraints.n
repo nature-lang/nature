@@ -1,0 +1,9 @@
+type equatable = interface{}
+
+type comparable = interface{}
+
+type addable = interface{}
+
+type numeric:addable,comparable,equatable = interface{}
+
+type nonvoid = interface{}

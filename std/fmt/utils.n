@@ -19,11 +19,13 @@ fn reverse<T>([T] list) {
     }
 }
 
+#where T:numeric
 fn utos<T>(anyptr v):string {
     return utos_with<T>(v, '0', 0 as u8)
 }
 
 // 十六进制转换函数（小写）
+#where T:numeric
 fn utos_hex_with<T>(anyptr v, string fill, u8 width):string {
     var i = unsafe.ptr_to<T>(&v as anyptr)
 
@@ -68,11 +70,13 @@ fn utos_hex_with<T>(anyptr v, string fill, u8 width):string {
     return result as string
 }
 
+#where T:numeric
 fn utos_hex<T>(anyptr v):string {
     return utos_hex_with<T>(v, '0', 0 as u8)
 }
 
 // 十六进制转换函数（大写）
+#where T:numeric
 fn utos_hex_upper_with<T>(anyptr v, string fill, u8 width):string {
     var i = unsafe.ptr_to<T>(&v as anyptr)
 
@@ -117,10 +121,12 @@ fn utos_hex_upper_with<T>(anyptr v, string fill, u8 width):string {
     return result as string
 }
 
+#where T:numeric
 fn utos_hex_upper<T>(anyptr v):string {
     return utos_hex_upper_with<T>(v, '0', 0 as u8)
 }
 
+#where T:numeric
 fn utos_with<T>(anyptr v, string fill, u8 width):string {
     var i = unsafe.ptr_to<T>(&v as anyptr)
 
@@ -161,10 +167,12 @@ fn utos_with<T>(anyptr v, string fill, u8 width):string {
     return result as string
 }
 
+#where T:numeric
 fn itos<T>(anyptr v):string {
     return itos_with<T>(v, '0', 0 as u8)
 }
 
+#where T:numeric
 fn itos_with<T>(anyptr v, string fill, u8 width):string {
     var i = unsafe.ptr_to<T>(&v as anyptr)
 
@@ -232,10 +240,12 @@ fn itos_with<T>(anyptr v, string fill, u8 width):string {
     return result as string
 }
 
+#where T:numeric
 fn ftos<T>(anyptr v):string {
     return ftos_with<T>(v, '0', 0 as u8, 6 as u8)
 }
 
+#where T:numeric
 fn ftos_with<T>(anyptr v, string fill, u8 width, u8 precision):string {
     var f = unsafe.ptr_to<T>(&v as anyptr)
 
