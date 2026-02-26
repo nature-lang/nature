@@ -1534,6 +1534,17 @@ static void rewrite_select_expr(module_t *m, ast_expr_t *expr) {
             return;
         }
 
+        // Check selective imports: import math.{Color} then Color.RED
+        ast_import_select_t *select_ref = table_get(m->selective_import_table, ident->literal);
+        if (select_ref != NULL) {
+            char *global_ident = ident_with_prefix(select_ref->module_ident, select_ref->original_ident);
+            symbol_t *sym = symbol_table_get(global_ident);
+            if (sym) {
+                ident->literal = global_ident;
+                return;
+            }
+        }
+
         // import ident
         ast_import_t *import = table_get(m->import_table, ident->literal);
         if (import) {

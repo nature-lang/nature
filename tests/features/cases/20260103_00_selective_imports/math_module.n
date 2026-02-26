@@ -29,6 +29,12 @@ type Point = struct {
     int y
 }
 
+type Color = enum {
+    RED,
+    GREEN,
+    BLUE,
+}
+
 fn log(string msg) {
     println('math_module:', msg)
 }

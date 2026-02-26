@@ -1100,6 +1100,26 @@ impl<'a> Semantic<'a> {
                 return;
             }
 
+            // Check selective imports: import colors.{Color} then Color.RED
+            for import in &self.imports {
+                if !import.is_selective {
+                    continue;
+                }
+                let Some(ref items) = import.select_items else { continue };
+                for item in items {
+                    let local_name = item.alias.as_ref().unwrap_or(&item.ident);
+                    if local_name != left_ident.as_str() {
+                        continue;
+                    }
+                    let global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
+                    if let Some(id) = self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id) {
+                        *left_ident = global_ident;
+                        *symbol_id = id;
+                        return;
+                    }
+                }
+            }
+
             // import package ident
             let import_stmt = self.imports.iter().find(|i| i.as_name == *left_ident);
             if let Some(import_stmt) = import_stmt {
