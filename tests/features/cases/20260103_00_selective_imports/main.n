@@ -1,5 +1,10 @@
 // Test selective imports with various scenarios
-import 'math_module.n'.{sqrt, pow, PI as pi}
+import 'math_module.n'.{
+    sqrt,
+    pow,
+    PI as pi,
+}
+
 import 'math_module.n'.{add}
 import 'math_module.n'.{Point}
 import 'utils.n' as utils

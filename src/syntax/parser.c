@@ -2308,6 +2308,14 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
 
         // Parse remaining items
         while (parser_consume(m, TOKEN_COMMA)) {
+            // Skip auto-inserted statement terminator after comma (multi-line imports)
+            parser_consume(m, TOKEN_STMT_EOF);
+
+            // Support trailing comma: if next token is }, stop parsing items
+            if (parser_is(m, TOKEN_RIGHT_CURLY)) {
+                break;
+            }
+
             token = parser_must(m, TOKEN_IDENT);
             item = NEW(ast_import_select_item_t);
             item->ident = token->literal;
@@ -2320,6 +2328,8 @@ static ast_stmt_t *parser_import_stmt(module_t *m) {
             slice_push(stmt->select_items, item);
         }
 
+        // Skip auto-inserted statement terminator before closing brace (multi-line imports)
+        parser_consume(m, TOKEN_STMT_EOF);
         parser_must(m, TOKEN_RIGHT_CURLY);
     } else if (parser_consume(m, TOKEN_AS)) {
         // Existing 'as' logic for non-selective imports
