@@ -37,7 +37,7 @@ static inline int64_t type_hash(type_t t) {
         return hash_string(str);
     }
 
-    if (is_origin_type(t)) {
+    if (is_origin_kind(t.kind)) {
         return hash_string(type_kind_str[t.kind]);
     }
 
