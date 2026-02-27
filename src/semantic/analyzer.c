@@ -1455,10 +1455,6 @@ static bool analyzer_as_star_or_builtin_ident(module_t *m, ast_ident *ident) {
             char *temp = ident_with_prefix(import->module_ident, ident->literal);
             symbol_t *sym = symbol_table_get(temp);
             if (sym) {
-                // Check if symbol is private (#local)
-                if (symbol_is_private(sym)) {
-                    ANALYZER_ASSERTF(false, "cannot access private symbol '%s'", ident->literal);
-                }
                 ident->literal = temp;
                 return true;
             }
@@ -1507,11 +1503,6 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
         symbol_t *sym = symbol_table_get(global_ident);
         if (!sym) {
             ANALYZER_ASSERTF(false, "symbol '%s' not found in module", select_ref->original_ident);
-        }
-
-        // Check if symbol is private (#local)
-        if (symbol_is_private(sym)) {
-            ANALYZER_ASSERTF(false, "cannot import private symbol '%s'", select_ref->original_ident);
         }
 
         ident->literal = global_ident;
@@ -1566,11 +1557,6 @@ static void rewrite_select_expr(module_t *m, ast_expr_t *expr) {
             symbol_t *sym = symbol_table_get(unique_ident);
             if (!sym) {
                 ANALYZER_ASSERTF(false, "identifier '%s' undeclared \n", unique_ident);
-            }
-
-            // Check if symbol is private (#local)
-            if (symbol_is_private(sym)) {
-                ANALYZER_ASSERTF(false, "cannot access private symbol '%s'", select->key);
             }
 
             expr->assert_type = AST_EXPR_IDENT;

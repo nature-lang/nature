@@ -141,7 +141,6 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
             var_decl->ident = ident_with_prefix(m->ident, var_decl->ident);
             symbol_t *s = symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, false);
             ANALYZER_ASSERTF(s, "ident '%s' redeclared", var_decl->ident);
-            s->is_private = vardef->is_private;
             continue;
         }
 
@@ -150,7 +149,6 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
             const_def->ident = ident_with_prefix(m->ident, const_def->ident);
             symbol_t *s = symbol_table_set(const_def->ident, SYMBOL_CONST, const_def, false);
             ANALYZER_ASSERTF(s, "ident '%s' redeclared", const_def->ident);
-            s->is_private = const_def->is_private;
             continue;
         }
 
@@ -159,7 +157,6 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
             typedef_stmt->ident = ident_with_prefix(m->ident, typedef_stmt->ident);
             symbol_t *s = symbol_table_set(typedef_stmt->ident, SYMBOL_TYPE, typedef_stmt, false);
             ANALYZER_ASSERTF(s, "ident '%s' redeclared", typedef_stmt->ident);
-            s->is_private = typedef_stmt->is_private;
             continue;
         }
 
@@ -170,7 +167,6 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
                 fndef->symbol_name = ident_with_prefix(m->ident, fndef->symbol_name); // 全局函数改名
                 symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
                 ANALYZER_ASSERTF(s, "ident '%s' redeclared", fndef->symbol_name);
-                s->is_private = fndef->is_private;
             } else {
                 // Delay to analyzer module and then process it...
             }

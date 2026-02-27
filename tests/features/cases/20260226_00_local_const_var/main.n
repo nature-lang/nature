@@ -1,9 +1,0 @@
-import 'private_module.n' as mymod
-
-fn main() {
-    // Access public symbols
-    println('PUBLIC_VAR:', mymod.PUBLIC_VAR)
-    println('PUBLIC_CONST:', mymod.PUBLIC_CONST)
-    println('public_fn:', mymod.public_fn())
-    println('use_private_type:', mymod.use_private_type())
-}
