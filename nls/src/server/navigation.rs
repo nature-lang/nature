@@ -42,24 +42,29 @@ impl Backend {
         let symbol_table = project.symbol_table.lock().ok()?;
         let current_scope_id = find_innermost_scope(&symbol_table, module.scope_id, char_offset);
 
-        // Try normal resolution first
-        if let Some(result) = resolve_definition_location(&symbol_table, module, &word, current_scope_id, &module_db) {
-            return Some(result);
-        }
-
-        // If normal resolution failed, check if this is a method call: receiver.method
-        // Look for a dot before the word
+        // Check if this is a method/field access: receiver.method
+        // If there's a dot before the word, prioritize method resolution so that
+        // e.g. `myApp.start()` resolves to `fn app.start()` instead of an unrelated
+        // symbol named `start`.
         if word_start > 0 {
             let ch_before = rope.char(word_start - 1);
             if ch_before == '.' && word_start >= 2 {
                 // Extract the receiver name before the dot
                 if let Some((receiver, _, _)) = extract_word_at_offset_rope(rope, word_start - 2) {
                     debug!("goto_definition: detected method call {}.{}", receiver, word);
-                    return resolve_method_definition(
+                    if let Some(result) = resolve_method_definition(
                         &symbol_table, module, &receiver, &word, current_scope_id, &module_db,
-                    );
+                    ) {
+                        return Some(result);
+                    }
+                    // Method resolution failed — fall through to normal resolution
                 }
             }
+        }
+
+        // Normal resolution (local, global, import, selective import)
+        if let Some(result) = resolve_definition_location(&symbol_table, module, &word, current_scope_id, &module_db) {
+            return Some(result);
         }
 
         None
@@ -311,6 +316,31 @@ fn resolve_definition_location(
     None
 }
 
+/// Extract the (symbol_id, ident) from an inner type of a Ref/Ptr wrapper.
+/// Handles resolved inner types (with symbol_id or ident) as well as
+/// `TypeKind::Struct` where the ident lives inside the kind variant.
+fn extract_inner_type_info(
+    inner: &crate::analyzer::common::Type,
+    outer: &crate::analyzer::common::Type,
+) -> (crate::analyzer::symbol::NodeId, String) {
+    use crate::analyzer::common::TypeKind;
+
+    if inner.symbol_id != 0 {
+        (inner.symbol_id, inner.ident.clone())
+    } else if !inner.ident.is_empty() {
+        (0, inner.ident.clone())
+    } else {
+        // Inner ident is empty — try to extract from inner kind (e.g., Struct)
+        match &inner.kind {
+            TypeKind::Struct(struct_ident, _, _) => {
+                debug!("extract_inner_type_info: extracted struct ident from inner kind: '{}'", struct_ident);
+                (inner.symbol_id, struct_ident.clone())
+            }
+            _ => (outer.symbol_id, outer.ident.clone()),
+        }
+    }
+}
+
 /// Resolve the definition location for a method call like `receiver.method()`.
 /// Finds the receiver variable, determines its type, and looks up the method definition.
 fn resolve_method_definition(
@@ -350,24 +380,20 @@ fn resolve_method_definition(
 
             debug!("resolve_method_definition: var type kind={:?}, ident='{}', symbol_id={}", type_.kind, type_.ident, type_.symbol_id);
 
-            // Unwrap Ref/Ptr to get the inner type
+            // Unwrap Ref/Ptr to get the inner type.
+            // Two representations exist:
+            //   1. Fully reduced: TypeKind::Ref(inner) / TypeKind::Ptr(inner)
+            //   2. Unreduced:     TypeKind::Ident with ident="ref"/"ptr" and args=[inner_type]
             let (sym_id, ident) = match &type_.kind {
                 TypeKind::Ref(inner) | TypeKind::Ptr(inner) => {
                     debug!("resolve_method_definition: inner kind={:?}, ident='{}', symbol_id={}", inner.kind, inner.ident, inner.symbol_id);
-                    if inner.symbol_id != 0 {
-                        (inner.symbol_id, inner.ident.clone())
-                    } else if !inner.ident.is_empty() {
-                        (0 as crate::analyzer::symbol::NodeId, inner.ident.clone())
-                    } else {
-                        // Inner ident is empty — try to extract from inner kind (e.g., Struct)
-                        match &inner.kind {
-                            TypeKind::Struct(struct_ident, _, _) => {
-                                debug!("resolve_method_definition: extracted struct ident from inner kind: '{}'", struct_ident);
-                                (inner.symbol_id, struct_ident.clone())
-                            }
-                            _ => (type_.symbol_id, type_.ident.clone()),
-                        }
-                    }
+                    extract_inner_type_info(inner, type_)
+                }
+                TypeKind::Ident if (type_.ident == "ref" || type_.ident == "ptr") && !type_.args.is_empty() => {
+                    // Unreduced ref<T>/ptr<T>: the inner type is in args[0]
+                    let inner = &type_.args[0];
+                    debug!("resolve_method_definition: unreduced {}<> — inner kind={:?}, ident='{}', symbol_id={}", type_.ident, inner.kind, inner.ident, inner.symbol_id);
+                    extract_inner_type_info(inner, type_)
                 }
                 _ => (type_.symbol_id, type_.ident.clone()),
             };

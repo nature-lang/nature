@@ -46,7 +46,21 @@ impl Backend {
         let symbol_table = project.symbol_table.lock().ok()?;
         let current_scope_id = find_innermost_scope(&symbol_table, module.scope_id, char_offset);
 
-        let hover_content = resolve_hover_content(&symbol_table, module, &word, current_scope_id, &module_db);
+        // Check if this is a method/field access: receiver.method
+        // Prioritize method hover so that e.g. `myApp.start()` shows the method
+        // signature rather than an unrelated symbol named `start`.
+        let hover_content = if word_start > 0 && rope.char(word_start - 1) == '.' && word_start >= 2 {
+            if let Some((receiver, _, _)) = extract_word_at_offset_rope(rope, word_start - 2) {
+                debug!("Hover: detected method call {}.{}", receiver, word);
+                resolve_method_hover_content(
+                    &symbol_table, module, &receiver, &word, current_scope_id, &module_db,
+                ).or_else(|| resolve_hover_content(&symbol_table, module, &word, current_scope_id, &module_db))
+            } else {
+                resolve_hover_content(&symbol_table, module, &word, current_scope_id, &module_db)
+            }
+        } else {
+            resolve_hover_content(&symbol_table, module, &word, current_scope_id, &module_db)
+        };
 
         hover_content.map(|content| {
             let start_pos = offset_to_position(word_start, rope).unwrap_or(position);
@@ -134,6 +148,221 @@ fn resolve_hover_content(
 
     // 5. Builtin type keyword
     get_builtin_type_hover(word)
+}
+
+/// Resolve hover content for a method call like `receiver.method()`.
+/// Looks up the receiver variable, determines its type (unwrapping ref/ptr),
+/// and finds the method in the type's method_table or as a global impl function.
+fn resolve_method_hover_content(
+    symbol_table: &crate::analyzer::symbol::SymbolTable,
+    module: &crate::project::Module,
+    receiver_name: &str,
+    method_name: &str,
+    current_scope_id: crate::analyzer::symbol::NodeId,
+    module_db: &[crate::project::Module],
+) -> Option<String> {
+    use crate::analyzer::common::TypeKind;
+    use crate::analyzer::symbol::SymbolKind;
+
+    debug!("resolve_method_hover: receiver='{}', method='{}'", receiver_name, method_name);
+
+    let get_source_for_symbol = |symbol: &crate::analyzer::symbol::Symbol| -> String {
+        if let Some(def_module) = find_module_for_scope(symbol_table, symbol.defined_in, module_db, module) {
+            def_module.source.clone()
+        } else {
+            module.source.clone()
+        }
+    };
+
+    // 1. Find the receiver variable
+    let receiver_symbol_id = symbol_table.lookup_symbol(receiver_name, current_scope_id)?;
+    let receiver_symbol = symbol_table.get_symbol_ref(receiver_symbol_id)?;
+
+    // 2. Unwrap the receiver's type to find the underlying struct/type
+    let (mut type_symbol_id, mut type_ident) = match &receiver_symbol.kind {
+        SymbolKind::Var(var_decl) => {
+            let var = var_decl.lock().unwrap();
+            let type_ = &var.type_;
+
+            let extract = |inner: &crate::analyzer::common::Type, outer: &crate::analyzer::common::Type| -> (usize, String) {
+                if inner.symbol_id != 0 {
+                    (inner.symbol_id, inner.ident.clone())
+                } else if !inner.ident.is_empty() {
+                    (0, inner.ident.clone())
+                } else {
+                    match &inner.kind {
+                        TypeKind::Struct(struct_ident, _, _) if !struct_ident.is_empty() => {
+                            (inner.symbol_id, struct_ident.clone())
+                        }
+                        _ => (outer.symbol_id, outer.ident.clone()),
+                    }
+                }
+            };
+
+            match &type_.kind {
+                TypeKind::Ref(inner) | TypeKind::Ptr(inner) => extract(inner, type_),
+                TypeKind::Ident if (type_.ident == "ref" || type_.ident == "ptr") && !type_.args.is_empty() => {
+                    extract(&type_.args[0], type_)
+                }
+                _ => (type_.symbol_id, type_.ident.clone()),
+            }
+        }
+        _ => return None,
+    };
+
+    // 2b. Fallback: resolve type_symbol_id by name
+    if type_symbol_id == 0 && !type_ident.is_empty() && type_ident != "ref" && type_ident != "ptr" {
+        let short_name = if let Some(dot_pos) = type_ident.rfind('.') {
+            type_ident[dot_pos + 1..].to_string()
+        } else {
+            type_ident.clone()
+        };
+
+        if let Some(sym_id) = symbol_table.find_module_symbol_id(&module.ident, &short_name) {
+            type_symbol_id = sym_id;
+        }
+
+        if type_symbol_id == 0 {
+            for import in &module.dependencies {
+                if let Some(sym_id) = symbol_table.find_module_symbol_id(&import.module_ident, &short_name) {
+                    type_symbol_id = sym_id;
+                    type_ident = short_name.clone();
+                    break;
+                }
+            }
+        }
+
+        if type_symbol_id == 0 {
+            if let Some(sym_id) = symbol_table.find_symbol_id(&type_ident, symbol_table.global_scope_id) {
+                type_symbol_id = sym_id;
+            }
+        }
+    }
+
+    debug!("resolve_method_hover: type_symbol_id={}, type_ident='{}'", type_symbol_id, type_ident);
+
+    // 3. Look up the method on the type
+    if type_symbol_id != 0 {
+        if let Some(type_symbol) = symbol_table.get_symbol_ref(type_symbol_id) {
+            if let SymbolKind::Type(typedef_mutex) = &type_symbol.kind {
+                let typedef = typedef_mutex.lock().unwrap();
+                // Direct method_table lookup — gives us hover for the method
+                if let Some(method) = typedef.method_table.get(method_name) {
+                    let fndef = method.lock().unwrap();
+                    let display_name = method_name;
+                    let hover = format_fn_hover(&fndef, display_name);
+                    drop(fndef);
+                    drop(typedef);
+
+                    // Try to find the impl function symbol for doc comments
+                    let type_short_name = crate::analyzer::completion::extract_last_ident_part_pub(&type_symbol.ident);
+                    let method_suffix = format!("{}.{}", type_short_name, method_name);
+                    let mut doc_source = None;
+                    let mut def_offset = 0usize;
+
+                    // Search global scope for the method function
+                    let global_scope = symbol_table.find_scope(symbol_table.global_scope_id);
+                    for (key, &sym_id) in &global_scope.symbol_map {
+                        if key.ends_with(&method_suffix) {
+                            if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
+                                doc_source = Some(get_source_for_symbol(sym));
+                                def_offset = sym.pos;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Also check module scope
+                    if doc_source.is_none() {
+                        let module_scope = symbol_table.find_scope(module.scope_id);
+                        for (key, &sym_id) in &module_scope.symbol_map {
+                            if key.ends_with(&method_suffix) {
+                                if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
+                                    doc_source = Some(get_source_for_symbol(sym));
+                                    def_offset = sym.pos;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    let mut result = hover;
+                    if let Some(source) = doc_source {
+                        if def_offset > 0 {
+                            if let Some(doc) = extract_doc_comment(&source, def_offset) {
+                                result.push_str("\n\n---\n\n");
+                                result.push_str(&doc);
+                            }
+                        }
+                    }
+                    return Some(result);
+                }
+            }
+        }
+
+        // Fallback: search for the method as a standalone impl function
+        let search_scope = |scope: &crate::analyzer::symbol::Scope| -> Option<String> {
+            for (_, &sym_id) in &scope.symbol_map {
+                if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
+                    if let SymbolKind::Fn(fn_mutex) = &sym.kind {
+                        let fndef = fn_mutex.lock().unwrap();
+                        if fndef.impl_type.symbol_id == type_symbol_id && fndef.fn_name == method_name {
+                            drop(fndef);
+                            let source = get_source_for_symbol(sym);
+                            return Some(format_symbol_hover(sym, &source));
+                        }
+                    }
+                }
+            }
+            None
+        };
+
+        let global_scope = symbol_table.find_scope(symbol_table.global_scope_id);
+        if let Some(result) = search_scope(global_scope) {
+            return Some(result);
+        }
+
+        let module_scope = symbol_table.find_scope(module.scope_id);
+        if let Some(result) = search_scope(module_scope) {
+            return Some(result);
+        }
+    }
+
+    // 4. Name-based fallback (when type_symbol_id is 0 but we have an ident)
+    if !type_ident.is_empty() && type_ident != "ref" && type_ident != "ptr" {
+        let short_name = if let Some(dot_pos) = type_ident.rfind('.') {
+            &type_ident[dot_pos + 1..]
+        } else {
+            &type_ident
+        };
+
+        let method_suffix = format!("{}.{}", short_name, method_name);
+        let global_scope = symbol_table.find_scope(symbol_table.global_scope_id);
+        for (key, &sym_id) in &global_scope.symbol_map {
+            if key.ends_with(&method_suffix) {
+                if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
+                    let source = get_source_for_symbol(sym);
+                    return Some(format_symbol_hover(sym, &source));
+                }
+            }
+        }
+
+        for import in &module.dependencies {
+            if let Some(&scope_id) = symbol_table.module_scopes.get(&import.module_ident) {
+                let scope = symbol_table.find_scope(scope_id);
+                for (key, &sym_id) in &scope.symbol_map {
+                    if key.ends_with(&method_suffix) {
+                        if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
+                            let source = get_source_for_symbol(sym);
+                            return Some(format_symbol_hover(sym, &source));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
 }
 
 /// Format hover content for a resolved symbol.
