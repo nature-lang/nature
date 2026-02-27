@@ -4626,26 +4626,29 @@ impl<'a> Typesys<'a> {
         }
 
         // 即使 reduction 后，也需要通过 ident kind 进行判断, 其中 union_type 不受 type def 限制
+        // Type aliases (ident_kind == Alias) are structurally typed — skip nominal ident check.
+        // Also skip when either side has an empty ident (inferred types from expressions may lack ident info).
         if dst.ident_kind == TypeIdentKind::Def && !matches!(dst.kind, TypeKind::Union(..)) {
             debug_assert!(!dst.ident.is_empty());
-            if src.ident.is_empty() {
-                return false;
-            }
-
-            if dst.ident != src.ident {
-                return false;
+            if src.ident_kind != TypeIdentKind::Alias && !src.ident.is_empty() {
+                if dst.ident != src.ident {
+                    return false;
+                }
             }
         }
 
         if src.ident_kind == TypeIdentKind::Def && !matches!(src.kind, TypeKind::Union(..)) {
             debug_assert!(!src.ident.is_empty());
-            if dst.ident.is_empty() {
-                return false;
+            if dst.ident_kind != TypeIdentKind::Alias && !dst.ident.is_empty() {
+                if dst.ident != src.ident {
+                    return false;
+                }
             }
+        }
 
-            if dst.ident != src.ident {
-                return false;
-            }
+        // Aliases are structurally typed — skip nominal comparison entirely
+        if dst.ident_kind == TypeIdentKind::Alias || src.ident_kind == TypeIdentKind::Alias {
+            // Fall through to structural kind comparison below
         }
 
         // ident 递归打断

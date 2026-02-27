@@ -408,7 +408,9 @@ pub fn analyze_import(
     }
 
     // calc import as, 如果不存在 import as, 则使用 ast_package 的最后一个元素作为 import as
-    if import.as_name.is_empty() {
+    // For selective imports, leave as_name empty — the symbols are imported directly,
+    // not via a module alias, so the module should not shadow local variables in completion.
+    if import.as_name.is_empty() && !import.is_selective {
         import.as_name = import.ast_package.as_ref().unwrap().last().unwrap().clone();
     }
 

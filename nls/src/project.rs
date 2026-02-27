@@ -14,6 +14,7 @@ use log::debug;
 use ropey::Rope;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 pub const DEFAULT_NATURE_ROOT: &str = "/usr/local/nature";
@@ -124,6 +125,9 @@ pub struct Project {
     pub package_config: Arc<Mutex<Option<PackageConfig>>>, // 当前 project 如果包含 package.toml, 则可以解析出 package_config 等信息，import 需要借助该信息进行解析
     pub symbol_table: Arc<Mutex<SymbolTable>>,
     pub workspace_index: Arc<Mutex<WorkspaceIndex>>,
+    /// True while a build is in progress.  Read-only handlers should return
+    /// cached / empty results instead of reading partially-analyzed data.
+    pub is_building: Arc<AtomicBool>,
 }
 
 impl Project {
@@ -171,6 +175,7 @@ impl Project {
             package_config,
             symbol_table: Arc::new(Mutex::new(SymbolTable::new())),
             workspace_index: Arc::new(Mutex::new(WorkspaceIndex::new())),
+            is_building: Arc::new(AtomicBool::new(false)),
         };
 
         // Scan workspace for symbol index (lightweight, no full analysis)
@@ -261,6 +266,13 @@ impl Project {
     }
 
     pub async fn build(&mut self, main_path: &str, module_ident: &str, content_option: Option<String>) -> usize {
+        self.is_building.store(true, Ordering::SeqCst);
+        let result = self.build_inner(main_path, module_ident, content_option).await;
+        self.is_building.store(false, Ordering::SeqCst);
+        result
+    }
+
+    async fn build_inner(&mut self, main_path: &str, module_ident: &str, content_option: Option<String>) -> usize {
         // 所有未编译的 import 模块, 都需要进行关联处理
         let mut worklist: Vec<ImportStmt> = Vec::new();
         let mut handled: HashSet<String> = HashSet::new();
