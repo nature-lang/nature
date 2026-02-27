@@ -2577,8 +2577,18 @@ impl<'a> Syntax {
                 if !self.consume(TokenType::Comma) {
                     break;
                 }
+
+                // Skip auto-inserted statement terminator after comma (multi-line imports)
+                self.consume(TokenType::StmtEof);
+
+                // Support trailing comma: if next token is }, stop parsing items
+                if self.is(TokenType::RightCurly) {
+                    break;
+                }
             }
 
+            // Skip auto-inserted statement terminator before closing brace (multi-line imports)
+            self.consume(TokenType::StmtEof);
             self.must(TokenType::RightCurly)?;
             import_end = self.prev().unwrap().end;
             (true, Some(items))
