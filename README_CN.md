@@ -18,13 +18,13 @@
 - 基于 libuv 实现的高性能 IO
 - 纯 C 实现的高性能 runtime 和编译器
 - 内置数据结构 vec/string/map/set/tup 和常用标准库实现
-- test 作为一等公民，直接在源码文件中编写测试块
+- test 是一等公民，直接在源码文件中编写测试
 - 集中式包管理系统 npkg
 - 编辑器 lsp 支持
   
 ## 概况
 
-nature 编程语言已经达到早期可用版本，核心语法功能以添加完成。待完成的关键特性有 unsafe 运行模式，LLM 编码适配，C target 适配，WASM3.0 target 适配。
+nature 编程语言已经达到早期可用版本，核心语法已添加完成。待完成的关键特性有 unsafe 运行模式，LLM 编码适配，C target 适配，WASM3.0 target 适配。
 
 当前版本编译目标架构包含 linux_amd64、linux_arm64、linux_riscv64、darwin_amd64、darwin_arm64。
 

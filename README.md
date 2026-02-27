@@ -17,7 +17,7 @@ A general-purpose system programming language and compiler, designed to build hi
 - High-performance IO based on libuv implementation
 - High-performance runtime and compiler based on pure C implementation
 - Built-in data structures vec/string/map/set/tup and common standard library implementations
-- Test as a first-class citizen, write test blocks directly in source files
+- Test as a first-class citizen, write test directly in source files
 - Centralized package management system npkg
 - Editor LSP support
   
