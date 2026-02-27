@@ -547,6 +547,7 @@ impl<'a> Typesys<'a> {
                         start,
                         end,
                         message: format!("typedef '{}' args mismatch", t.ident),
+                        is_warning: false,
                     });
                 }
 
@@ -650,7 +651,7 @@ impl<'a> Typesys<'a> {
 
                         for impl_interface in &generic_typedef.impl_interfaces {
                             self.check_typedef_impl(impl_interface, t.ident.clone(), &generic_typedef)
-                                .map_err(|e| AnalyzerError { start, end, message: e })?;
+                                .map_err(|e| AnalyzerError { start, end, message: e, is_warning: false })?;
                         }
                     }
                 }
@@ -740,7 +741,7 @@ impl<'a> Typesys<'a> {
                         if reduction_ident_depth_entered {
                             Self::reduction_ident_depth_leave(visited, &t.ident);
                         }
-                        return Err(AnalyzerError { start, end, message: e });
+                        return Err(AnalyzerError { start, end, message: e, is_warning: false });
                     }
                 }
             }
@@ -4712,7 +4713,6 @@ impl<'a> Typesys<'a> {
             if !self.type_compare_ident_args_visited(&dst.args, &src.args, visited) {
                 return false;
             }
-        }
 
             return true;
         }
