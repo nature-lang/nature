@@ -1,5 +1,8 @@
 //! Semantic token providers (full and range).
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
 use log::debug;
 use tower_lsp::lsp_types::*;
 
@@ -9,21 +12,45 @@ use super::Backend;
 
 impl Backend {
     pub(crate) async fn handle_semantic_tokens_full(&self, params: SemanticTokensParams) -> Option<SemanticTokensResult> {
-        let file_path = params.text_document.uri.path();
+        let file_path = params.text_document.uri.path().to_string();
         debug!("semantic_token_full");
 
         let project = self.get_file_project(&file_path)?;
 
         let module_index = {
             let module_handled = project.module_handled.lock().ok()?;
-            module_handled.get(file_path)?.clone()
+            module_handled.get(file_path.as_str())?.clone()
         };
 
         let module_db = project.module_db.lock().ok()?;
         let m = module_db.get(module_index)?;
 
-        let im_complete_tokens = m.sem_token_db.clone();
+        let im_complete_tokens = &m.sem_token_db;
+
+        // Compute a hash of the token database to detect changes
+        let mut hasher = DefaultHasher::new();
+        im_complete_tokens.len().hash(&mut hasher);
+        for token in im_complete_tokens.iter() {
+            token.start.hash(&mut hasher);
+            token.end.hash(&mut hasher);
+            token.length.hash(&mut hasher);
+            (token.semantic_token_type.clone() as u32).hash(&mut hasher);
+        }
+        let token_hash = hasher.finish();
+
+        // Check cache
+        if let Some(cached) = self.semantic_token_cache.get(&file_path) {
+            if cached.0 == token_hash {
+                debug!("semantic_token_full: returning cached result ({} tokens)", cached.1.len());
+                return Some(SemanticTokensResult::Tokens(SemanticTokens {
+                    result_id: None,
+                    data: cached.1.clone(),
+                }));
+            }
+        }
+
         let rope = m.rope.clone();
+        let im_complete_tokens = im_complete_tokens.clone();
 
         let mut pre_line = 0;
         let mut pre_line_start = 0;
@@ -56,6 +83,9 @@ impl Backend {
                 ret
             })
             .collect::<Vec<_>>();
+
+        // Cache the result
+        self.semantic_token_cache.insert(file_path, (token_hash, semantic_tokens.clone()));
 
         Some(SemanticTokensResult::Tokens(SemanticTokens {
             result_id: None,

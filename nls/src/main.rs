@@ -15,6 +15,7 @@ async fn main() {
         debounce_versions: DashMap::new(),
         documents: DashMap::new(),
         config: DashMap::new(),
+        semantic_token_cache: DashMap::new(),
     })
     .finish();
 

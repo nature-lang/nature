@@ -35,6 +35,9 @@ pub struct Backend {
     pub documents: DashMap<String, Rope>,
     /// User / workspace configuration settings.
     pub config: DashMap<String, serde_json::Value>,
+    /// Cached semantic tokens per file: (token_count_hash, cached_result).
+    /// Avoids recomputing when the sem_token_db hasn't changed.
+    pub semantic_token_cache: DashMap<String, (u64, Vec<SemanticToken>)>,
 }
 
 /// Internal helper carrying document info between `did_*` handlers and `on_change`.

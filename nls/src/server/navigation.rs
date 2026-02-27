@@ -35,14 +35,34 @@ impl Backend {
         let line_char = rope.try_line_to_char(position.line as usize).ok()?;
         let char_offset = line_char + position.character as usize;
 
-        let (word, _, _) = extract_word_at_offset_rope(rope, char_offset)?;
+        let (word, word_start, _) = extract_word_at_offset_rope(rope, char_offset)?;
 
         debug!("goto_definition at offset {}, word: '{}'", char_offset, word);
 
         let symbol_table = project.symbol_table.lock().ok()?;
         let current_scope_id = find_innermost_scope(&symbol_table, module.scope_id, char_offset);
 
-        resolve_definition_location(&symbol_table, module, &word, current_scope_id, &module_db)
+        // Try normal resolution first
+        if let Some(result) = resolve_definition_location(&symbol_table, module, &word, current_scope_id, &module_db) {
+            return Some(result);
+        }
+
+        // If normal resolution failed, check if this is a method call: receiver.method
+        // Look for a dot before the word
+        if word_start > 0 {
+            let ch_before = rope.char(word_start - 1);
+            if ch_before == '.' && word_start >= 2 {
+                // Extract the receiver name before the dot
+                if let Some((receiver, _, _)) = extract_word_at_offset_rope(rope, word_start - 2) {
+                    debug!("goto_definition: detected method call {}.{}", receiver, word);
+                    return resolve_method_definition(
+                        &symbol_table, module, &receiver, &word, current_scope_id, &module_db,
+                    );
+                }
+            }
+        }
+
+        None
     }
 
     pub(crate) async fn handle_references(&self, params: ReferenceParams) -> Option<Vec<Location>> {
@@ -281,6 +301,229 @@ fn resolve_definition_location(
                         let imported_global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
                         if let Some(symbol) = symbol_table.find_global_symbol(&imported_global_ident) {
                             return symbol_to_location(symbol);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Resolve the definition location for a method call like `receiver.method()`.
+/// Finds the receiver variable, determines its type, and looks up the method definition.
+fn resolve_method_definition(
+    symbol_table: &crate::analyzer::symbol::SymbolTable,
+    module: &crate::project::Module,
+    receiver_name: &str,
+    method_name: &str,
+    current_scope_id: crate::analyzer::symbol::NodeId,
+    module_db: &[crate::project::Module],
+) -> Option<GotoDefinitionResponse> {
+    use crate::analyzer::common::TypeKind;
+    use crate::analyzer::symbol::SymbolKind;
+
+    debug!("resolve_method_definition: receiver='{}', method='{}'", receiver_name, method_name);
+
+    let symbol_to_location = |symbol: &crate::analyzer::symbol::Symbol| -> Option<GotoDefinitionResponse> {
+        let (def_start, def_end) = get_symbol_span(symbol);
+        if def_start == 0 && def_end == 0 {
+            return None;
+        }
+        let def_module = find_module_for_scope(symbol_table, symbol.defined_in, module_db, module)?;
+        let start_pos = offset_to_position(def_start, &def_module.rope)?;
+        let end_pos = offset_to_position(def_end, &def_module.rope)?;
+        let uri = Url::from_file_path(&def_module.path).ok()?;
+        Some(GotoDefinitionResponse::Scalar(Location::new(uri, Range::new(start_pos, end_pos))))
+    };
+
+    // 1. Find the receiver variable
+    let receiver_symbol_id = symbol_table.lookup_symbol(receiver_name, current_scope_id)?;
+    let receiver_symbol = symbol_table.get_symbol_ref(receiver_symbol_id)?;
+
+    // 2. Get the receiver's type — unwrap Ref/Ptr and try to resolve symbol_id
+    let (mut type_symbol_id, mut _type_ident) = match &receiver_symbol.kind {
+        SymbolKind::Var(var_decl) => {
+            let var = var_decl.lock().unwrap();
+            let type_ = &var.type_;
+
+            debug!("resolve_method_definition: var type kind={:?}, ident='{}', symbol_id={}", type_.kind, type_.ident, type_.symbol_id);
+
+            // Unwrap Ref/Ptr to get the inner type
+            let (sym_id, ident) = match &type_.kind {
+                TypeKind::Ref(inner) | TypeKind::Ptr(inner) => {
+                    debug!("resolve_method_definition: inner kind={:?}, ident='{}', symbol_id={}", inner.kind, inner.ident, inner.symbol_id);
+                    if inner.symbol_id != 0 {
+                        (inner.symbol_id, inner.ident.clone())
+                    } else if !inner.ident.is_empty() {
+                        (0 as crate::analyzer::symbol::NodeId, inner.ident.clone())
+                    } else {
+                        // Inner ident is empty — try to extract from inner kind (e.g., Struct)
+                        match &inner.kind {
+                            TypeKind::Struct(struct_ident, _, _) => {
+                                debug!("resolve_method_definition: extracted struct ident from inner kind: '{}'", struct_ident);
+                                (inner.symbol_id, struct_ident.clone())
+                            }
+                            _ => (type_.symbol_id, type_.ident.clone()),
+                        }
+                    }
+                }
+                _ => (type_.symbol_id, type_.ident.clone()),
+            };
+            (sym_id, ident)
+        }
+        _ => return None,
+    };
+
+    // 2b. Fallback: if type_symbol_id is still 0, try resolving by type name
+    if type_symbol_id == 0 && !_type_ident.is_empty() && _type_ident != "ref" && _type_ident != "ptr" {
+        debug!("resolve_method_definition: trying to resolve type by name: '{}'", _type_ident);
+        // Try module-qualified lookup
+        let short_name = if let Some(dot_pos) = _type_ident.rfind('.') {
+            _type_ident[dot_pos + 1..].to_string()
+        } else {
+            _type_ident.clone()
+        };
+
+        // Try in module scope
+        if let Some(sym_id) = symbol_table.find_module_symbol_id(&module.ident, &short_name) {
+            type_symbol_id = sym_id;
+            debug!("resolve_method_definition: resolved '{}' to symbol_id {} via module scope", short_name, sym_id);
+        }
+
+        // Try in imported module scopes
+        if type_symbol_id == 0 {
+            for import in &module.dependencies {
+                if let Some(sym_id) = symbol_table.find_module_symbol_id(&import.module_ident, &short_name) {
+                    type_symbol_id = sym_id;
+                    _type_ident = short_name.clone();
+                    debug!("resolve_method_definition: resolved '{}' to symbol_id {} via import '{}'", short_name, sym_id, import.module_ident);
+                    break;
+                }
+            }
+        }
+
+        // Try in global scope
+        if type_symbol_id == 0 {
+            if let Some(sym_id) = symbol_table.find_symbol_id(&_type_ident, symbol_table.global_scope_id) {
+                type_symbol_id = sym_id;
+                debug!("resolve_method_definition: resolved '{}' to symbol_id {} via global scope", _type_ident, sym_id);
+            }
+        }
+    }
+
+    debug!("resolve_method_definition: type_symbol_id={}, type_ident='{}'", type_symbol_id, _type_ident);
+
+    // 3. Look up the method on the type
+    if type_symbol_id != 0 {
+        // Check typedef's method_table first
+        if let Some(type_symbol) = symbol_table.get_symbol_ref(type_symbol_id) {
+            if let SymbolKind::Type(typedef_mutex) = &type_symbol.kind {
+                let typedef = typedef_mutex.lock().unwrap();
+                if let Some(method) = typedef.method_table.get(method_name) {
+                    let fndef = method.lock().unwrap();
+                    if fndef.symbol_start > 0 {
+                        // Create a temporary symbol to find the location
+                        drop(fndef);
+                        drop(typedef);
+                        // Search for the method as a global function: type_name.method_name
+                        let type_short_name = crate::analyzer::completion::extract_last_ident_part_pub(&type_symbol.ident);
+                        let method_ident = format!("{}.{}", type_short_name, method_name);
+
+                        // Search through all modules for the method function
+                        let global_scope = symbol_table.find_scope(symbol_table.global_scope_id);
+                        for (key, &sym_id) in &global_scope.symbol_map {
+                            if key.ends_with(&method_ident) {
+                                if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
+                                    if let SymbolKind::Fn(fn_mutex) = &sym.kind {
+                                        let fndef = fn_mutex.lock().unwrap();
+                                        if fndef.impl_type.symbol_id == type_symbol_id {
+                                            drop(fndef);
+                                            return symbol_to_location(sym);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Also search module scope
+                        let module_scope = symbol_table.find_scope(module.scope_id);
+                        for (key, &sym_id) in &module_scope.symbol_map {
+                            if key.ends_with(&method_ident) {
+                                if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
+                                    if let SymbolKind::Fn(fn_mutex) = &sym.kind {
+                                        let fndef = fn_mutex.lock().unwrap();
+                                        if fndef.impl_type.symbol_id == type_symbol_id {
+                                            drop(fndef);
+                                            return symbol_to_location(sym);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fallback: Search for any global function with impl_type matching this type
+        let global_scope = symbol_table.find_scope(symbol_table.global_scope_id);
+        for (_, &sym_id) in &global_scope.symbol_map {
+            if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
+                if let SymbolKind::Fn(fn_mutex) = &sym.kind {
+                    let fndef = fn_mutex.lock().unwrap();
+                    if fndef.impl_type.symbol_id == type_symbol_id && fndef.fn_name == method_name {
+                        drop(fndef);
+                        return symbol_to_location(sym);
+                    }
+                }
+            }
+        }
+
+        // Also check module scope
+        let module_scope = symbol_table.find_scope(module.scope_id);
+        for (_, &sym_id) in &module_scope.symbol_map {
+            if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
+                if let SymbolKind::Fn(fn_mutex) = &sym.kind {
+                    let fndef = fn_mutex.lock().unwrap();
+                    if fndef.impl_type.symbol_id == type_symbol_id && fndef.fn_name == method_name {
+                        drop(fndef);
+                        return symbol_to_location(sym);
+                    }
+                }
+            }
+        }
+    }
+
+    // 4. If type_symbol_id is still 0 but we have a type_ident, try resolving by name
+    //    (skip generic wrapper names like "ref" and "ptr")
+    if !_type_ident.is_empty() && _type_ident != "ref" && _type_ident != "ptr" {
+        let short_name = if let Some(dot_pos) = _type_ident.rfind('.') {
+            &_type_ident[dot_pos + 1..]
+        } else {
+            &_type_ident
+        };
+
+        // Search for method functions named like: *.short_name.method_name
+        let method_suffix = format!("{}.{}", short_name, method_name);
+        let global_scope = symbol_table.find_scope(symbol_table.global_scope_id);
+        for (key, &sym_id) in &global_scope.symbol_map {
+            if key.ends_with(&method_suffix) {
+                if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
+                    return symbol_to_location(sym);
+                }
+            }
+        }
+
+        // Also try in imported module scopes
+        for import in &module.dependencies {
+            if let Some(&scope_id) = symbol_table.module_scopes.get(&import.module_ident) {
+                let scope = symbol_table.find_scope(scope_id);
+                for (key, &sym_id) in &scope.symbol_map {
+                    if key.ends_with(&method_suffix) {
+                        if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
+                            return symbol_to_location(sym);
                         }
                     }
                 }

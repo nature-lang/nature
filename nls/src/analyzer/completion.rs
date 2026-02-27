@@ -115,6 +115,12 @@ impl<'a> CompletionProvider<'a> {
         let mut completions = Vec::new();
         self.collect_variable_completions(current_scope_id, &prefix, &mut completions, position);
 
+        // 2b. Collect functions/types defined in the current module scope
+        self.collect_module_scope_fn_completions(&prefix, &mut completions);
+
+        // 2c. Collect symbols from selective imports (import module.{symbol1, symbol2})
+        self.collect_selective_import_symbol_completions(&prefix, &mut completions);
+
         // 3. Collect already-imported modules (show at top)
         self.collect_imported_module_completions(&prefix, &mut completions);
 
@@ -886,6 +892,162 @@ impl<'a> CompletionProvider<'a> {
         }
     }
 
+    /// Collect functions and types defined at the module scope level.
+    /// These are not in scope.symbols (only in global_scope.symbol_map),
+    /// so collect_variable_completions misses them.
+    fn collect_module_scope_fn_completions(&self, prefix: &str, completions: &mut Vec<CompletionItem>) {
+        let module_scope = self.symbol_table.find_scope(self.module.scope_id);
+        let existing_labels: HashSet<String> = completions.iter().map(|c| c.label.clone()).collect();
+
+        // Check both symbols vec and symbol_map in the module scope
+        let mut check_symbol = |symbol_id: NodeId| {
+            let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) else { return };
+            let symbol_name = extract_last_ident_part(&symbol.ident);
+
+            if !prefix.is_empty() && !symbol_name.starts_with(prefix) {
+                return;
+            }
+            if existing_labels.contains(&symbol_name) {
+                return;
+            }
+
+            match &symbol.kind {
+                SymbolKind::Fn(fndef_mutex) => {
+                    let fndef = fndef_mutex.lock().unwrap();
+                    // Skip test functions and impl methods
+                    if fndef.is_test || fndef.impl_type.kind.is_exist() {
+                        return;
+                    }
+                    let signature = self.format_function_signature(&fndef);
+                    let insert_text = if self.has_parameters(&fndef) {
+                        format!("{}($0)", fndef.fn_name)
+                    } else {
+                        format!("{}()", fndef.fn_name)
+                    };
+                    completions.push(CompletionItem {
+                        label: fndef.fn_name.clone(),
+                        kind: CompletionItemKind::Function,
+                        detail: Some(format!("fn: {}", signature)),
+                        documentation: None,
+                        insert_text,
+                        sort_text: Some(format!("{:08}", fndef.symbol_start)),
+                        additional_text_edits: Vec::new(),
+                    });
+                }
+                SymbolKind::Type(typedef_mutex) => {
+                    let typedef = typedef_mutex.lock().unwrap();
+                    completions.push(CompletionItem {
+                        label: symbol_name.clone(),
+                        kind: CompletionItemKind::Struct,
+                        detail: Some(format!("type: {}", typedef.ident)),
+                        documentation: None,
+                        insert_text: symbol_name,
+                        sort_text: Some(format!("{:08}", typedef.symbol_start)),
+                        additional_text_edits: Vec::new(),
+                    });
+                }
+                _ => {}
+            }
+        };
+
+        for &symbol_id in &module_scope.symbols {
+            check_symbol(symbol_id);
+        }
+        for (_, &symbol_id) in &module_scope.symbol_map {
+            check_symbol(symbol_id);
+        }
+    }
+
+    /// Collect symbols from selective imports as direct completions.
+    /// When the user has `import forest.app.configuration.{configuration}`, the symbol
+    /// `configuration` should appear as a completion in function bodies.
+    fn collect_selective_import_symbol_completions(&self, prefix: &str, completions: &mut Vec<CompletionItem>) {
+        let existing_labels: HashSet<String> = completions.iter().map(|c| c.label.clone()).collect();
+
+        for import in &self.module.dependencies {
+            if !import.is_selective {
+                continue;
+            }
+            let Some(ref items) = import.select_items else { continue };
+
+            // Find the imported module's scope to look up symbols
+            let imported_scope_id = self.symbol_table.module_scopes.get(&import.module_ident);
+
+            for item in items {
+                let local_name = item.alias.as_ref().unwrap_or(&item.ident);
+
+                // Check prefix match
+                if !prefix.is_empty() && !local_name.starts_with(prefix) {
+                    continue;
+                }
+
+                // Skip if already provided by another completion source
+                if existing_labels.contains(local_name) {
+                    continue;
+                }
+
+                // Try to find the symbol in the imported module's scope
+                let global_ident = crate::utils::format_global_ident(import.module_ident.clone(), item.ident.clone());
+                let symbol = self.symbol_table.find_global_symbol(&global_ident)
+                    .or_else(|| {
+                        // Fallback: search in module scope
+                        if let Some(&scope_id) = imported_scope_id {
+                            self.symbol_table.find_symbol(&global_ident, scope_id)
+                                .or_else(|| self.symbol_table.find_symbol(&item.ident, scope_id))
+                        } else {
+                            None
+                        }
+                    });
+
+                let (kind, detail, insert_text) = if let Some(symbol) = symbol {
+                    match &symbol.kind {
+                        SymbolKind::Fn(fndef_mutex) => {
+                            let fndef = fndef_mutex.lock().unwrap();
+                            let sig = self.format_function_signature(&fndef);
+                            let ins = if self.has_parameters(&fndef) {
+                                format!("{}($0)", local_name)
+                            } else {
+                                format!("{}()", local_name)
+                            };
+                            (CompletionItemKind::Function, format!("fn: {}", sig), ins)
+                        }
+                        SymbolKind::Type(typedef_mutex) => {
+                            let typedef = typedef_mutex.lock().unwrap();
+                            (CompletionItemKind::Struct, format!("type: {}", typedef.ident), local_name.clone())
+                        }
+                        SymbolKind::Var(var_mutex) => {
+                            let var = var_mutex.lock().unwrap();
+                            (CompletionItemKind::Variable, format!("var: {}", var.type_), local_name.clone())
+                        }
+                        SymbolKind::Const(const_mutex) => {
+                            let const_def = const_mutex.lock().unwrap();
+                            (CompletionItemKind::Constant, format!("const: {}", const_def.type_), local_name.clone())
+                        }
+                    }
+                } else {
+                    // Symbol not found in symbol table; still offer it as a basic completion
+                    (CompletionItemKind::Variable, format!("from {}", import.module_ident), local_name.clone())
+                };
+
+                let module_display = if let Some(ref pkg) = import.ast_package {
+                    pkg.join(".")
+                } else {
+                    import.module_ident.clone()
+                };
+
+                completions.push(CompletionItem {
+                    label: local_name.clone(),
+                    kind,
+                    detail: Some(detail),
+                    documentation: Some(format!("imported from {}", module_display)),
+                    insert_text,
+                    sort_text: Some(format!("aab_{}", local_name)), // High priority (after already-imported modules)
+                    additional_text_edits: Vec::new(),
+                });
+            }
+        }
+    }
+
     /// Collect already-imported modules as completions (show at top)
     fn collect_imported_module_completions(&self, prefix: &str, completions: &mut Vec<CompletionItem>) {
         debug!("Collecting imported module completions with prefix '{}'", prefix);
@@ -1266,6 +1428,7 @@ impl<'a> CompletionProvider<'a> {
                 });
             } else if let Some(sel_import) = existing_selective {
                 // Case 2: Module already has a selective import -> extend the {..} list
+                // Always disambiguate with source path so user knows where this comes from
                 let label = if needs_disambiguation {
                     format!("{} ({})", indexed_symbol.name, file_stem)
                 } else {
@@ -1287,7 +1450,7 @@ impl<'a> CompletionProvider<'a> {
                 completions.push(CompletionItem {
                     label,
                     kind,
-                    detail: Some(format!("{} (add to existing import)", kind_label)),
+                    detail: Some(format!("{} (add to import {})", kind_label, import_info.import_base)),
                     documentation: Some(format!("from {} ({})", file_stem, indexed_symbol.file_path)),
                     insert_text: direct_insert,
                     sort_text: Some(format!("zzy_{}", indexed_symbol.name)),
@@ -1573,6 +1736,11 @@ fn extract_last_ident_part(ident: &str) -> String {
     } else {
         ident.to_string()
     }
+}
+
+/// Public version of extract_last_ident_part for use by other modules.
+pub fn extract_last_ident_part_pub(ident: &str) -> String {
+    extract_last_ident_part(ident)
 }
 
 /// Detect if in module member access context, returns (module_name, member_prefix)
