@@ -8,7 +8,7 @@ static void test_basic() {
     printf("%s", raw);
 
     // Should print output from selective imports
-    assert_string_equal(raw, "sqrt(16) = 4.000000\npow(2, 3) = 8.000000\nadd(5, 7) = 12\npi = 3.141593\nPoint: 10 , 20\nMAX_SIZE: 100\nutils.MIN_SIZE: 10\nformat_string: hello\n");
+    assert_string_equal(raw, "sqrt(16) = 4.000000\npow(2, 3) = 8.000000\nadd(5, 7) = 12\npi = 3.141593\nPoint: 10 , 20\nColor.GREEN: 1\nMAX_SIZE: 100\nutils.MIN_SIZE: 10\nformat_string: hello\n");
 }
 
 int main(void) {

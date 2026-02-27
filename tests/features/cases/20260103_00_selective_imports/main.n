@@ -7,6 +7,7 @@ import 'math_module.n'.{
 
 import 'math_module.n'.{add}
 import 'math_module.n'.{Point}
+import 'math_module.n'.{Color}
 import 'utils.n' as utils
 import 'utils.n'.{MAX_SIZE}
 
@@ -25,6 +26,10 @@ fn main() {
     // Test selective import of types
     var p = Point{x: 10, y: 20}
     println('Point:', p.x, ',', p.y)
+    
+    // Test selective import of enum types
+    var col = Color.GREEN
+    println('Color.GREEN:', col as int)
     
     // Test mixed imports (full module + selective)
     println('MAX_SIZE:', MAX_SIZE)
