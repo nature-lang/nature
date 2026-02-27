@@ -7,6 +7,7 @@ use crate::analyzer::semantic::Semantic;
 use crate::analyzer::symbol::{NodeId, SymbolTable};
 use crate::analyzer::syntax::Syntax;
 use crate::analyzer::typesys::Typesys;
+use crate::analyzer::workspace_index::WorkspaceIndex;
 use crate::analyzer::{analyze_imports, register_global_symbol};
 use crate::package::parse_package;
 use log::debug;
@@ -122,6 +123,7 @@ pub struct Project {
     pub queue: Arc<Mutex<Vec<QueueItem>>>,
     pub package_config: Arc<Mutex<Option<PackageConfig>>>, // 当前 project 如果包含 package.toml, 则可以解析出 package_config 等信息，import 需要借助该信息进行解析
     pub symbol_table: Arc<Mutex<SymbolTable>>,
+    pub workspace_index: Arc<Mutex<WorkspaceIndex>>,
 }
 
 impl Project {
@@ -161,14 +163,21 @@ impl Project {
         };
 
         let mut project = Self {
-            nature_root,
-            root: project_root,
+            nature_root: nature_root.clone(),
+            root: project_root.clone(),
             module_db: Arc::new(Mutex::new(Vec::new())),
             module_handled: Arc::new(Mutex::new(HashMap::new())),
             queue: Arc::new(Mutex::new(Vec::new())),
             package_config,
             symbol_table: Arc::new(Mutex::new(SymbolTable::new())),
+            workspace_index: Arc::new(Mutex::new(WorkspaceIndex::new())),
         };
+
+        // Scan workspace for symbol index (lightweight, no full analysis)
+        {
+            let mut index = project.workspace_index.lock().unwrap();
+            index.scan_workspace(&project_root, &nature_root);
+        }
 
         // handle builtin list
         for file_path in builtin_list {
@@ -358,6 +367,7 @@ impl Project {
                     //         start: import.start,
                     //         end: import.end,
                     //         message: format!("circular import"),
+                    //         is_warning: false,
                     //     },
                     // );
 
@@ -448,6 +458,15 @@ impl Project {
                 path: refer,
                 notify: Some(main_path.to_string()), // 当引用模块编译完成后，通知主模块重新编译(主模块必定已经注册完成，包含完整的 module 信息)
             });
+        }
+
+        // Incrementally re-index the file that was just built
+        {
+            let mut index = self.workspace_index.lock().unwrap();
+            // Force re-index by removing old entry and re-scanning
+            index.remove_file_symbols(main_path);
+            index.index_file(main_path, &self.root);
+            debug!("WorkspaceIndex: re-indexed file '{}'", main_path);
         }
 
         return main_index;

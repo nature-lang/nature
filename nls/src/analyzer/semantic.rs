@@ -56,7 +56,8 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("anyptr cannot contains arg"),
-                    },
+                        is_warning: false,
+                                            },
                 );
                 t.err = true;
             }
@@ -78,7 +79,8 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("ptr must contains one arg"),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
 
@@ -100,7 +102,8 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("ref must contains one arg"),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
 
@@ -121,7 +124,8 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("all_type cannot contains arg"),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
             return true;
@@ -139,7 +143,8 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("fn_t cannot contains arg"),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
             return true;
@@ -157,7 +162,8 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("fn_t cannot contains arg"),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
             return true;
@@ -175,7 +181,8 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("fn_t cannot contains arg"),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
             return true;
@@ -344,7 +351,8 @@ impl<'a> Semantic<'a> {
                     start: expr.start,
                     end: expr.end,
                     message: "const initialization cycle detected".to_string(),
-                },
+                    is_warning: false,
+                                    },
             );
             return;
         }
@@ -366,7 +374,8 @@ impl<'a> Semantic<'a> {
                     start: expr.start,
                     end: expr.end,
                     message: "const cannot be initialized with non-literal value".to_string(),
-                },
+                    is_warning: false,
+                                    },
             );
             return;
         };
@@ -388,7 +397,8 @@ impl<'a> Semantic<'a> {
                             start: t.start,
                             end: t.end,
                             message: format!("import '{}' undeclared", t.import_as),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                     t.err = true;
                     return;
@@ -408,7 +418,8 @@ impl<'a> Semantic<'a> {
                             start: t.start,
                             end: t.end,
                             message: format!("type '{}' undeclared in {} module", t.ident, import_stmt.module_ident),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                     t.err = true;
                     return;
@@ -429,7 +440,8 @@ impl<'a> Semantic<'a> {
                             start: t.start,
                             end: t.end,
                             message: format!("type '{}' undeclared", t.ident),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                     t.err = true;
                     return;
@@ -444,7 +456,8 @@ impl<'a> Semantic<'a> {
                             start: t.start,
                             end: t.end,
                             message: format!("'{}' not a type", t.ident),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                     t.err = true;
                     return;
@@ -465,7 +478,8 @@ impl<'a> Semantic<'a> {
                                     start: t.start,
                                     end: t.end,
                                     message: format!("alias '{}' cannot contains generics type args", t.ident),
-                                },
+                                    is_warning: false,
+                                                                    },
                             );
                             return;
                         }
@@ -524,7 +538,8 @@ impl<'a> Semantic<'a> {
                                     start: t.start,
                                     end: t.end,
                                     message: "array length must be constans or integer literal".to_string(),
-                                },
+                                    is_warning: false,
+                                                                    },
                             );
                         }
                     } else {
@@ -534,7 +549,8 @@ impl<'a> Semantic<'a> {
                                 start: t.start,
                                 end: t.end,
                                 message: "array length must be constans or integer literal".to_string(),
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 } else {
@@ -545,7 +561,8 @@ impl<'a> Semantic<'a> {
                             start: t.start,
                             end: t.end,
                             message: "array length must be constans or integer literal".to_string(),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
 
@@ -585,7 +602,8 @@ impl<'a> Semantic<'a> {
                                     start: value.start,
                                     end: value.end,
                                     message: format!("struct field default value cannot be a fn def, use fn def ident instead"),
-                                },
+                                    is_warning: false,
+                                                                    },
                             );
                             t.err = true;
                         }
@@ -638,7 +656,8 @@ impl<'a> Semantic<'a> {
                         start: import.start,
                         end: import.end,
                         message: format!("symbol '{}' not found in module '{}'", item.ident, import.module_ident),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
         }
@@ -687,7 +706,8 @@ impl<'a> Semantic<'a> {
                                                     start: fndef.symbol_start,
                                                     end: fndef.symbol_end,
                                                     message: format!("impl type '{}' must specify generics params", fndef.impl_type.ident),
-                                                },
+                                                    is_warning: false,
+                                                                                                    },
                                             );
                                         }
                                     }
@@ -699,7 +719,8 @@ impl<'a> Semantic<'a> {
                                         start: fndef.symbol_start,
                                         end: fndef.symbol_end,
                                         message: format!("type '{}' undeclared", fndef.impl_type.symbol_id),
-                                    },
+                                        is_warning: false,
+                                                                            },
                                 );
                             }
                         }
@@ -723,7 +744,8 @@ impl<'a> Semantic<'a> {
                                         start: fndef.symbol_start,
                                         end: fndef.symbol_end,
                                         message: e,
-                                    },
+                                        is_warning: false,
+                                                                            },
                                 );
                             }
                         }
@@ -801,7 +823,8 @@ impl<'a> Semantic<'a> {
                                 start: constdef.symbol_start,
                                 end: constdef.symbol_end,
                                 message: format!("const cannot be initialized"),
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 }
@@ -951,7 +974,8 @@ impl<'a> Semantic<'a> {
                                         start: fndef.symbol_start,
                                         end: fndef.symbol_end,
                                         message: e,
-                                    },
+                                        is_warning: false,
+                                                                            },
                                 );
                             });
                     }
@@ -982,7 +1006,8 @@ impl<'a> Semantic<'a> {
                                 start: param.symbol_start,
                                 end: param.symbol_end,
                                 message: e,
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 }
@@ -1079,7 +1104,8 @@ impl<'a> Semantic<'a> {
                             start: expr.start,
                             end: expr.end,
                             message: format!("identifier '{}' undeclared in '{}' module", key, left_ident),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                     return;
                 }
@@ -1098,7 +1124,8 @@ impl<'a> Semantic<'a> {
                     start: expr.start,
                     end: expr.end,
                     message: format!("identifier '{}.{}' undeclared", left_ident, key),
-                },
+                    is_warning: false,
+                                    },
             );
 
             return;
@@ -1174,7 +1201,8 @@ impl<'a> Semantic<'a> {
                                     start: cond.start,
                                     end: cond.end,
                                     message: "default case '_' conflict in a 'match' expression".to_string(),
-                                },
+                                    is_warning: false,
+                                                                    },
                             );
                         }
 
@@ -1185,7 +1213,8 @@ impl<'a> Semantic<'a> {
                                     start: cond.start,
                                     end: cond.end,
                                     message: "default case '_' must be the last one in a 'match' expression".to_string(),
-                                },
+                                    is_warning: false,
+                                                                    },
                             );
                         }
 
@@ -1303,7 +1332,8 @@ impl<'a> Semantic<'a> {
                                         start: ut.start,
                                         end: ut.end,
                                         message: "unexpected is expr".to_string(),
-                                    },
+                                        is_warning: false,
+                                                                            },
                                 );
                                 return;
                             };
@@ -1332,7 +1362,8 @@ impl<'a> Semantic<'a> {
                                     start: ut.start,
                                     end: ut.end,
                                     message: "unexpected is expr".to_string(),
-                                },
+                                    is_warning: false,
+                                                                    },
                             );
                         }
                     }
@@ -1441,7 +1472,8 @@ impl<'a> Semantic<'a> {
                             start: expr.start,
                             end: expr.end,
                             message: format!("identifier '{}' undeclared", ident),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
 
@@ -1462,7 +1494,8 @@ impl<'a> Semantic<'a> {
                                 start: expr.start,
                                 end: expr.end,
                                 message: "tagged union uses parentheses but passes no arguments".to_string(),
-                            },
+                                is_warning: false,
+                                                            },
                         );
                         return;
                     }
@@ -1522,7 +1555,8 @@ impl<'a> Semantic<'a> {
                         start: item.start,
                         end: item.end,
                         message: "var tuple destr expr type exception".to_string(),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
         }
@@ -1571,7 +1605,8 @@ impl<'a> Semantic<'a> {
                     start: fndef.symbol_start,
                     end: fndef.symbol_end,
                     message: "closure fn cannot be generics or impl type alias".to_string(),
-                },
+                    is_warning: false,
+                                    },
             );
         }
 
@@ -1583,7 +1618,8 @@ impl<'a> Semantic<'a> {
                     start: fndef.symbol_start,
                     end: fndef.symbol_end,
                     message: "closure fn cannot have #linkid label".to_string(),
-                },
+                    is_warning: false,
+                                    },
             );
         }
 
@@ -1594,7 +1630,8 @@ impl<'a> Semantic<'a> {
                     start: fndef.symbol_start,
                     end: fndef.symbol_end,
                     message: "closure fn cannot be template".to_string(),
-                },
+                    is_warning: false,
+                                    },
             );
         }
 
@@ -1624,7 +1661,8 @@ impl<'a> Semantic<'a> {
                             start: param.symbol_start,
                             end: param.symbol_end,
                             message: e,
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
             }
@@ -1665,7 +1703,8 @@ impl<'a> Semantic<'a> {
                         start: fndef.symbol_start,
                         end: fndef.symbol_end,
                         message: e,
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
         }
@@ -1691,7 +1730,8 @@ impl<'a> Semantic<'a> {
                             start: cond.start,
                             end: cond.end,
                             message: "condition expr cannot contains multiple is expr".to_string(),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
 
@@ -1814,7 +1854,8 @@ impl<'a> Semantic<'a> {
                         start: constdef.symbol_start,
                         end: constdef.symbol_end,
                         message: e,
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
         }
@@ -1884,7 +1925,8 @@ impl<'a> Semantic<'a> {
                                 start: case.handle_body.start,
                                 end: case.handle_body.end,
                                 message: "default case must be the last case".to_string(),
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 }
@@ -1935,7 +1977,8 @@ impl<'a> Semantic<'a> {
                             start: typedef.symbol_start,
                             end: typedef.symbol_end,
                             message: "local type alias cannot have params".to_string(),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
 
@@ -1947,7 +1990,8 @@ impl<'a> Semantic<'a> {
                             start: typedef.symbol_start,
                             end: typedef.symbol_end,
                             message: "local typedef cannot with impls".to_string(),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
 
@@ -1969,7 +2013,8 @@ impl<'a> Semantic<'a> {
                                 start: typedef.symbol_start,
                                 end: typedef.symbol_end,
                                 message: e,
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 }
@@ -2002,7 +2047,8 @@ impl<'a> Semantic<'a> {
                         start: var_decl.symbol_start,
                         end: var_decl.symbol_end,
                         message: e,
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
         }

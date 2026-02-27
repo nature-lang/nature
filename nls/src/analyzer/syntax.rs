@@ -702,7 +702,8 @@ impl<'a> Syntax {
                             start: e.0,
                             end: e.1,
                             message: e.2,
-                        },
+                            is_warning: false,
+                                                    },
                     );
 
                     // 查找到下一个同步点
@@ -748,7 +749,8 @@ impl<'a> Syntax {
                             start: e.0,
                             end: e.1,
                             message: e.2,
-                        },
+                            is_warning: false,
+                                                    },
                     );
 
                     let found = self.synchronize(1);
@@ -1258,7 +1260,8 @@ impl<'a> Syntax {
                             start: field_type.start,
                             end: field_type.end,
                             message: format!("struct field '{}' already exists", field_name),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
                 exists.insert(field_name.clone(), 1);
@@ -1315,7 +1318,8 @@ impl<'a> Syntax {
                             start: fn_name_token.start,
                             end: fn_name_token.end,
                             message: format!("interface method '{}' already exists", fn_name),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
                 exists.insert(fn_name.clone(), 1);
@@ -1345,7 +1349,8 @@ impl<'a> Syntax {
                         start: element_type.start,
                         end: element_type.end,
                         message: format!("enum only supports integer types"),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
 
@@ -1365,7 +1370,8 @@ impl<'a> Syntax {
                             start: name_token.start,
                             end: name_token.end,
                             message: format!("enum member '{}' already exists", name),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
                 exists.insert(name.clone(), 1);
@@ -1403,7 +1409,8 @@ impl<'a> Syntax {
                             start: element_type.start,
                             end: element_type.end,
                             message: format!("union tag '{}' already exists", tag_name),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
                 exists.insert(tag_name.clone(), 1);
@@ -2566,13 +2573,17 @@ impl<'a> Syntax {
             loop {
                 let ident_token = self.must(TokenType::Ident)?;
                 let ident = ident_token.literal.clone();
+                let item_start = ident_token.start;
+                let mut item_end = ident_token.end;
                 let alias = if self.consume(TokenType::As) {
-                    Some(self.must(TokenType::Ident)?.literal.clone())
+                    let alias_token = self.must(TokenType::Ident)?;
+                    item_end = alias_token.end;
+                    Some(alias_token.literal.clone())
                 } else {
                     None
                 };
 
-                items.push(ImportSelectItem { ident, alias });
+                items.push(ImportSelectItem { ident, alias, start: item_start, end: item_end });
 
                 if !self.consume(TokenType::Comma) {
                     break;

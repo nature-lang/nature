@@ -106,6 +106,7 @@ impl LanguageServer for Backend {
                 definition_provider: Some(OneOf::Left(true)),
                 references_provider: Some(OneOf::Left(true)),
                 rename_provider: Some(OneOf::Left(true)),
+                hover_provider: Some(HoverProviderCapability::Simple(true)),
                 ..ServerCapabilities::default()
             },
         })
@@ -432,6 +433,58 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
+    async fn hover(&self, params: HoverParams) -> Result<Option<Hover>> {
+        let uri = params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+
+        let hover = || -> Option<Hover> {
+            let file_path = uri.path();
+            let project = self.get_file_project(file_path)?;
+
+            let module_index = {
+                let module_handled = project.module_handled.lock().unwrap();
+                module_handled.get(file_path)?.clone()
+            };
+
+            let module_db = project.module_db.lock().unwrap();
+            let module = &module_db[module_index];
+
+            // Convert LSP position to char offset
+            let rope = &module.rope;
+            let line_char = rope.try_line_to_char(position.line as usize).ok()?;
+            let char_offset = line_char + position.character as usize;
+
+            // Find the word (identifier) at the cursor position
+            let text = rope.to_string();
+            let (word, word_start, word_end) = extract_word_at_offset(&text, char_offset)?;
+
+            debug!("Hover at offset {}, word: '{}'", char_offset, word);
+
+            let symbol_table = project.symbol_table.lock().unwrap();
+
+            // Find the innermost scope at this position
+            let current_scope_id = find_innermost_scope(&symbol_table, module.scope_id, char_offset);
+
+            // Try to resolve the word to a symbol
+            let hover_content = resolve_hover_content(&symbol_table, module, &word, current_scope_id);
+
+            hover_content.map(|content| {
+                let start_pos = offset_to_position(word_start, rope).unwrap_or(position);
+                let end_pos = offset_to_position(word_end, rope).unwrap_or(position);
+
+                Hover {
+                    contents: HoverContents::Markup(MarkupContent {
+                        kind: MarkupKind::Markdown,
+                        value: content,
+                    }),
+                    range: Some(Range::new(start_pos, end_pos)),
+                }
+            })
+        }();
+
+        Ok(hover)
+    }
+
     async fn completion(&self, params: CompletionParams) -> Result<Option<CompletionResponse>> {
         dbg!("completion requested");
 
@@ -463,8 +516,10 @@ impl LanguageServer for Backend {
             // Get symbol table and package config
             let mut symbol_table = project.symbol_table.lock().unwrap();
             let package_config = project.package_config.lock().unwrap().clone();
+            let workspace_index = project.workspace_index.lock().unwrap();
             // Create completion provider and get completion items
             let completion_items = CompletionProvider::new(&mut symbol_table, module, project.nature_root.clone(), project.root.clone(), package_config)
+                .with_workspace_index(&workspace_index)
                 .get_completions(byte_offset, &text);
 
             // 转换为LSP格式
@@ -733,6 +788,452 @@ impl Backend {
         // 现在可以安全地使用 await
         self.client.publish_diagnostics(params.uri.clone(), diagnostics, params.version).await;
     }
+}
+
+/// Extract the word (identifier) at a given char offset in the source text.
+/// Returns (word, start_offset, end_offset) or None if not on an identifier.
+fn extract_word_at_offset(text: &str, offset: usize) -> Option<(String, usize, usize)> {
+    let chars: Vec<char> = text.chars().collect();
+    if offset > chars.len() {
+        return None;
+    }
+
+    // Find the start of the word
+    let mut start = offset;
+    while start > 0 && is_ident_char(chars[start - 1]) {
+        start -= 1;
+    }
+
+    // Find the end of the word
+    let mut end = offset;
+    while end < chars.len() && is_ident_char(chars[end]) {
+        end += 1;
+    }
+
+    if start == end {
+        return None;
+    }
+
+    let word: String = chars[start..end].iter().collect();
+    Some((word, start, end))
+}
+
+fn is_ident_char(c: char) -> bool {
+    c.is_alphanumeric() || c == '_'
+}
+
+/// Find the innermost scope containing the given position.
+fn find_innermost_scope(
+    symbol_table: &nls::analyzer::symbol::SymbolTable,
+    scope_id: nls::analyzer::symbol::NodeId,
+    position: usize,
+) -> nls::analyzer::symbol::NodeId {
+    let scope = symbol_table.find_scope(scope_id);
+
+    if position >= scope.range.0 && (position < scope.range.1 || scope.range.1 == 0) {
+        for &child_id in &scope.children {
+            let child_scope = symbol_table.find_scope(child_id);
+            if position >= child_scope.range.0 && position < child_scope.range.1 {
+                return find_innermost_scope(symbol_table, child_id, position);
+            }
+        }
+        return scope_id;
+    }
+
+    scope_id
+}
+
+/// Resolve hover content for a given word at a position.
+fn resolve_hover_content(
+    symbol_table: &nls::analyzer::symbol::SymbolTable,
+    module: &nls::project::Module,
+    word: &str,
+    current_scope_id: nls::analyzer::symbol::NodeId,
+) -> Option<String> {
+    use nls::utils::format_global_ident;
+
+    // 1. Try local symbol lookup (walks up through parent scopes)
+    if let Some(symbol_id) = symbol_table.lookup_symbol(word, current_scope_id) {
+        if let Some(symbol) = symbol_table.get_symbol_ref(symbol_id) {
+            return Some(format_symbol_hover(symbol));
+        }
+    }
+
+    // 2. Try module-qualified global symbol (current module)
+    let global_ident = format_global_ident(module.ident.clone(), word.to_string());
+    if let Some(symbol) = symbol_table.find_global_symbol(&global_ident) {
+        return Some(format_symbol_hover(symbol));
+    }
+
+    // 3. Try imported module symbols - check if word matches an import's as_name
+    for import in &module.dependencies {
+        if import.as_name == word {
+            let mut content = String::new();
+            content.push_str("```nature\n");
+            if let Some(ref file) = import.file {
+                content.push_str(&format!("import '{}'\n", file));
+            } else if let Some(ref package) = import.ast_package {
+                content.push_str(&format!("import {}\n", package.join(".")));
+            }
+            content.push_str("```\n");
+            content.push_str(&format!("Module `{}`", word));
+            return Some(content);
+        }
+    }
+
+    // 4. Try imported symbols (selective imports: import { foo } from 'bar')
+    for import in &module.dependencies {
+        if import.is_selective {
+            if let Some(ref items) = import.select_items {
+                for item in items {
+                    let effective_name = item.alias.as_deref().unwrap_or(&item.ident);
+                    if effective_name == word {
+                        let imported_global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
+                        if let Some(symbol) = symbol_table.find_global_symbol(&imported_global_ident) {
+                            return Some(format_symbol_hover(symbol));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 5. Try as a builtin type keyword
+    get_builtin_type_hover(word)
+}
+
+/// Format hover content for a resolved symbol.
+fn format_symbol_hover(symbol: &nls::analyzer::symbol::Symbol) -> String {
+    use nls::analyzer::symbol::SymbolKind;
+
+    let display_name = if let Some(dot_pos) = symbol.ident.rfind('.') {
+        &symbol.ident[dot_pos + 1..]
+    } else {
+        &symbol.ident
+    };
+
+    match &symbol.kind {
+        SymbolKind::Var(var_decl) => {
+            let var = var_decl.lock().unwrap();
+            let type_str = format_type_display(&var.type_);
+            format!("```nature\nvar {}: {}\n```", display_name, type_str)
+        }
+        SymbolKind::Const(const_def) => {
+            let c = const_def.lock().unwrap();
+            let type_str = format_type_display(&c.type_);
+            format!("```nature\nconst {}: {}\n```", display_name, type_str)
+        }
+        SymbolKind::Fn(fndef_mutex) => {
+            let fndef = fndef_mutex.lock().unwrap();
+            format_fn_hover(&fndef, display_name)
+        }
+        SymbolKind::Type(typedef_mutex) => {
+            let typedef = typedef_mutex.lock().unwrap();
+            format_typedef_hover(&typedef, display_name)
+        }
+    }
+}
+
+/// Format a function definition for hover display.
+fn format_fn_hover(fndef: &nls::analyzer::common::AstFnDef, display_name: &str) -> String {
+    use nls::analyzer::common::SelfKind;
+
+    let mut content = String::from("```nature\nfn ");
+
+    // Show impl type if it's a method
+    if fndef.is_impl {
+        let impl_name = if !fndef.impl_type.ident.is_empty() {
+            if let Some(dot_pos) = fndef.impl_type.ident.rfind('.') {
+                fndef.impl_type.ident[dot_pos + 1..].to_string()
+            } else {
+                fndef.impl_type.ident.clone()
+            }
+        } else {
+            "?".to_string()
+        };
+        content.push_str(&format!("{}.", impl_name));
+    }
+
+    content.push_str(display_name);
+
+    // Generics params
+    if let Some(ref generics_params) = fndef.generics_params {
+        if !generics_params.is_empty() {
+            let params_str: Vec<String> = generics_params.iter().map(|p| {
+                if p.constraints.is_empty() {
+                    p.ident.clone()
+                } else {
+                    let constraints: Vec<String> = p.constraints.iter().map(|c| format_type_display(c)).collect();
+                    format!("{}: {}", p.ident, constraints.join(" + "))
+                }
+            }).collect();
+            content.push_str(&format!("<{}>", params_str.join(", ")));
+        }
+    }
+
+    content.push('(');
+
+    let mut first = true;
+    for param in &fndef.params {
+        let param = param.lock().unwrap();
+        if !first {
+            content.push_str(", ");
+        }
+        first = false;
+
+        if param.ident == "self" {
+            match fndef.self_kind {
+                SelfKind::SelfRefT => content.push_str("&self"),
+                SelfKind::SelfPtrT => content.push_str("*self"),
+                _ => content.push_str("self"),
+            }
+        } else {
+            let type_str = format_type_display(&param.type_);
+            content.push_str(&format!("{}: {}", param.ident, type_str));
+        }
+    }
+
+    if fndef.rest_param {
+        if !first {
+            content.push_str(", ");
+        }
+        content.push_str("...");
+    }
+
+    content.push(')');
+
+    // Return type
+    let ret_type_str = format_type_display(&fndef.return_type);
+    if ret_type_str != "void" {
+        content.push_str(&format!(": {}", ret_type_str));
+    }
+    if fndef.is_errable {
+        content.push('!');
+    }
+
+    content.push_str("\n```");
+    content
+}
+
+/// Format a type definition for hover display.
+fn format_typedef_hover(
+    typedef: &nls::analyzer::common::TypedefStmt,
+    display_name: &str,
+) -> String {
+    use nls::analyzer::common::{SelfKind, TypeKind};
+
+    let mut content = String::from("```nature\ntype ");
+    content.push_str(display_name);
+
+    // Generics params
+    if !typedef.params.is_empty() {
+        let params_str: Vec<String> = typedef.params.iter().map(|p| p.ident.clone()).collect();
+        content.push_str(&format!("<{}>", params_str.join(", ")));
+    }
+
+    content.push_str(" = ");
+
+    match &typedef.type_expr.kind {
+        TypeKind::Struct(_, _, properties) => {
+            content.push_str("struct {\n");
+            for prop in properties {
+                let type_str = format_type_display(&prop.type_);
+                content.push_str(&format!("    {}: {}\n", prop.name, type_str));
+            }
+            content.push('}');
+        }
+        TypeKind::Interface(elements) => {
+            content.push_str("interface {\n");
+            for elem in elements {
+                if let TypeKind::Fn(fn_type) = &elem.kind {
+                    let ret_str = format_type_display(&fn_type.return_type);
+                    let params_str: Vec<String> = fn_type.param_types.iter().map(|p| format_type_display(p)).collect();
+                    content.push_str(&format!("    fn {}({}): {}\n", fn_type.name, params_str.join(", "), ret_str));
+                }
+            }
+            content.push('}');
+        }
+        TypeKind::Enum(base_type, variants) => {
+            content.push_str("enum {");
+            content.push_str(&format!(" // base: {}\n", format_type_display(base_type)));
+            for variant in variants {
+                if let Some(ref val) = variant.value {
+                    content.push_str(&format!("    {} = {}\n", variant.name, val));
+                } else {
+                    content.push_str(&format!("    {}\n", variant.name));
+                }
+            }
+            content.push('}');
+        }
+        TypeKind::TaggedUnion(_, elements) => {
+            content.push_str("union {\n");
+            for elem in elements {
+                let type_str = format_type_display(&elem.type_);
+                content.push_str(&format!("    {} = {}\n", elem.tag, type_str));
+            }
+            content.push('}');
+        }
+        _ => {
+            content.push_str(&format_type_display(&typedef.type_expr));
+        }
+    }
+
+    content.push_str("\n```");
+
+    // Show methods if any
+    if !typedef.method_table.is_empty() {
+        content.push_str("\n\n**Methods:**\n```nature\n");
+        let mut methods: Vec<_> = typedef.method_table.iter().collect();
+        methods.sort_by_key(|(name, _)| (*name).clone());
+        for (name, method) in methods {
+            let fndef = method.lock().unwrap();
+            let mut sig = String::from("fn ");
+
+            // self parameter
+            let mut first = true;
+            let mut params_str = String::new();
+            for param in &fndef.params {
+                let param = param.lock().unwrap();
+                if !first {
+                    params_str.push_str(", ");
+                }
+                first = false;
+                if param.ident == "self" {
+                    match fndef.self_kind {
+                        SelfKind::SelfRefT => params_str.push_str("&self"),
+                        SelfKind::SelfPtrT => params_str.push_str("*self"),
+                        _ => params_str.push_str("self"),
+                    }
+                } else {
+                    params_str.push_str(&format!("{}: {}", param.ident, format_type_display(&param.type_)));
+                }
+            }
+
+            sig.push_str(&format!("{}({})", name, params_str));
+            let ret = format_type_display(&fndef.return_type);
+            if ret != "void" {
+                sig.push_str(&format!(": {}", ret));
+            }
+            if fndef.is_errable {
+                sig.push('!');
+            }
+            content.push_str(&sig);
+            content.push('\n');
+        }
+        content.push_str("```");
+    }
+
+    content
+}
+
+/// Format a Type for display in hover.
+fn format_type_display(t: &nls::analyzer::common::Type) -> String {
+    use nls::analyzer::common::{TypeIdentKind, TypeKind};
+
+    // If the type has a meaningful ident, prefer that
+    if !t.ident.is_empty() && t.ident_kind != TypeIdentKind::Unknown {
+        let base = if let Some(dot_pos) = t.ident.rfind('.') {
+            t.ident[dot_pos + 1..].to_string()
+        } else {
+            t.ident.clone()
+        };
+
+        if !t.args.is_empty() {
+            let args_str: Vec<String> = t.args.iter().map(|a| format_type_display(a)).collect();
+            return format!("{}<{}>", base, args_str.join(", "));
+        }
+        return base;
+    }
+
+    match &t.kind {
+        TypeKind::Void => "void".to_string(),
+        TypeKind::Bool => "bool".to_string(),
+        TypeKind::Int => "int".to_string(),
+        TypeKind::Uint => "uint".to_string(),
+        TypeKind::Float => "float".to_string(),
+        TypeKind::Int8 => "i8".to_string(),
+        TypeKind::Uint8 => "u8".to_string(),
+        TypeKind::Int16 => "i16".to_string(),
+        TypeKind::Uint16 => "u16".to_string(),
+        TypeKind::Int32 => "i32".to_string(),
+        TypeKind::Uint32 => "u32".to_string(),
+        TypeKind::Int64 => "i64".to_string(),
+        TypeKind::Uint64 => "u64".to_string(),
+        TypeKind::Float32 => "f32".to_string(),
+        TypeKind::Float64 => "f64".to_string(),
+        TypeKind::String => "string".to_string(),
+        TypeKind::Null => "null".to_string(),
+        TypeKind::Anyptr => "anyptr".to_string(),
+        TypeKind::CoroutineT => "coroutine_t".to_string(),
+        TypeKind::Vec(elem) => format!("[{}]", format_type_display(elem)),
+        TypeKind::Arr(_, len, elem) => format!("[{};{}]", format_type_display(elem), len),
+        TypeKind::Map(key, val) => format!("map<{}, {}>", format_type_display(key), format_type_display(val)),
+        TypeKind::Set(elem) => format!("set<{}>", format_type_display(elem)),
+        TypeKind::Chan(elem) => format!("chan<{}>", format_type_display(elem)),
+        TypeKind::Tuple(elems, _) => {
+            let parts: Vec<String> = elems.iter().map(|e| format_type_display(e)).collect();
+            format!("({})", parts.join(", "))
+        }
+        TypeKind::Fn(fn_type) => {
+            let params: Vec<String> = fn_type.param_types.iter().map(|p| format_type_display(p)).collect();
+            let ret = format_type_display(&fn_type.return_type);
+            let err = if fn_type.errable { "!" } else { "" };
+            format!("fn({}): {}{}", params.join(", "), ret, err)
+        }
+        TypeKind::Ref(inner) => format!("ref<{}>", format_type_display(inner)),
+        TypeKind::Ptr(inner) => format!("ptr<{}>", format_type_display(inner)),
+        TypeKind::Struct(ident, _, _) if !ident.is_empty() => {
+            if let Some(dot_pos) = ident.rfind('.') {
+                ident[dot_pos + 1..].to_string()
+            } else {
+                ident.clone()
+            }
+        }
+        TypeKind::Struct(_, _, props) => {
+            let parts: Vec<String> = props.iter().map(|p| format!("{}: {}", p.name, format_type_display(&p.type_))).collect();
+            format!("struct {{{}}}", parts.join(", "))
+        }
+        TypeKind::Union(any, nullable, elems) => {
+            if *any { return "any".to_string(); }
+            let parts: Vec<String> = elems.iter().map(|e| format_type_display(e)).collect();
+            let mut result = parts.join("|");
+            if *nullable { result.push_str("|null"); }
+            result
+        }
+        TypeKind::TaggedUnion(ident, _) if !ident.is_empty() => ident.clone(),
+        TypeKind::Enum(_, _) => "enum".to_string(),
+        TypeKind::Interface(_) => "interface".to_string(),
+        TypeKind::Ident => {
+            if !t.ident.is_empty() { t.ident.clone() } else { "unknown".to_string() }
+        }
+        _ => t.kind.to_string(),
+    }
+}
+
+/// Return hover content for builtin type keywords.
+fn get_builtin_type_hover(word: &str) -> Option<String> {
+    let desc = match word {
+        "bool" => "Boolean type (`true` or `false`)",
+        "int" => "Platform-native signed integer (i64)",
+        "uint" => "Platform-native unsigned integer (u64)",
+        "float" => "Platform-native float (f64)",
+        "i8" => "8-bit signed integer",
+        "i16" => "16-bit signed integer",
+        "i32" => "32-bit signed integer",
+        "i64" => "64-bit signed integer",
+        "u8" => "8-bit unsigned integer",
+        "u16" => "16-bit unsigned integer",
+        "u32" => "32-bit unsigned integer",
+        "u64" => "64-bit unsigned integer",
+        "f32" => "32-bit floating point",
+        "f64" => "64-bit floating point",
+        "string" => "UTF-8 string type",
+        "void" => "Void type (no value)",
+        "any" => "Any type (union of all types)",
+        "anyptr" => "Untyped raw pointer",
+        _ => return None,
+    };
+    Some(format!("```nature\ntype {}\n```\n{}", word, desc))
 }
 
 #[tokio::main]

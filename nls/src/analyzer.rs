@@ -8,6 +8,7 @@ pub mod semantic;
 pub mod symbol;
 pub mod syntax;
 pub mod typesys;
+pub mod workspace_index;
 
 use std::path::Path;
 
@@ -131,7 +132,8 @@ fn analyze_import_dep(package_config: &PackageConfig, _m: &mut Module, import: &
                 start: import.start,
                 end: import.end,
                 message: format!("{} not found", package_ident),
-            });
+                is_warning: false,
+                            });
         }
     };
 
@@ -142,7 +144,8 @@ fn analyze_import_dep(package_config: &PackageConfig, _m: &mut Module, import: &
             start: import.start,
             end: import.end,
             message: format!("{} not found", package_conf_path.display()),
-        });
+            is_warning: false,
+                    });
     }
 
     match parse_package(package_conf_path.to_str().unwrap()) {
@@ -158,7 +161,8 @@ fn analyze_import_dep(package_config: &PackageConfig, _m: &mut Module, import: &
                 start: import.start,
                 end: import.end,
                 message: format!("import failed: {} {}", package_conf_path.display(), e.message),
-            })
+                is_warning: false,
+                            })
         }
     }
 }
@@ -178,7 +182,8 @@ fn analyze_import_std(_m: &mut Module, import: &mut ImportStmt) -> Result<(), An
             start: import.start,
             end: import.end,
             message: format!("{} not found", package_conf_path.display()),
-        });
+            is_warning: false,
+                    });
     }
 
     match parse_package(package_conf_path.to_str().unwrap()) {
@@ -194,7 +199,8 @@ fn analyze_import_std(_m: &mut Module, import: &mut ImportStmt) -> Result<(), An
                 start: import.start,
                 end: import.end,
                 message: format!("import package failed: {} parse err {}", package_conf_path.display(), e.message),
-            });
+                is_warning: false,
+                            });
         }
     }
 }
@@ -289,7 +295,8 @@ pub fn analyze_import(
                 start: import.start,
                 end: import.end,
                 message: format!("import file cannot start with . or /"),
-            });
+                is_warning: false,
+                            });
         }
 
         import.full_path = Path::new(&m.dir).join(file).to_string_lossy().into_owned();
@@ -298,7 +305,8 @@ pub fn analyze_import(
                 start: import.start,
                 end: import.end,
                 message: format!("import file suffix must .n"),
-            });
+                is_warning: false,
+                            });
         }
 
         // check file exist
@@ -307,7 +315,8 @@ pub fn analyze_import(
                 start: import.start,
                 end: import.end,
                 message: format!("import file {} not found", file.clone()),
-            });
+                is_warning: false,
+                            });
         }
 
         // 如果 import as empty, 则使用 import 的 file  的文件名称去除后缀作为 import as
@@ -346,7 +355,8 @@ pub fn analyze_import(
                 start: import.start,
                 end: import.end,
                 message: format!("package '{}' not found", package_ident),
-            });
+                is_warning: false,
+                            });
         }
     } else {
         if is_std_package(&package_ident) {
@@ -357,7 +367,8 @@ pub fn analyze_import(
                 start: import.start,
                 end: import.end,
                 message: format!("package '{}' not found", package_ident),
-            });
+                is_warning: false,
+                            });
         }
     }
 
@@ -372,7 +383,8 @@ pub fn analyze_import(
                     start: import.start,
                     end: import.end,
                     message: format!("cannot import '{}': file not found", import.full_path.clone()),
-                });
+                    is_warning: false,
+                                    });
             }
 
             // check file is n file
@@ -381,7 +393,8 @@ pub fn analyze_import(
                     start: import.start,
                     end: import.end,
                     message: format!("import file suffix must .n"),
-                });
+                    is_warning: false,
+                                    });
             }
         }
         Err(e) => {
@@ -389,7 +402,8 @@ pub fn analyze_import(
                 start: import.start,
                 end: import.end,
                 message: e,
-            });
+                is_warning: false,
+                            });
         }
     }
 
@@ -456,7 +470,8 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                                 start: var_decl.symbol_start,
                                 end: var_decl.symbol_end,
                                 message: e,
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 }
@@ -489,10 +504,19 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                                 start: constdef.symbol_start,
                                 end: constdef.symbol_end,
                                 message: e,
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 }
+
+                // Register in global symbol table (needed for selective imports)
+                let _ = symbol_table.define_global_symbol(
+                    constdef.ident.clone(),
+                    SymbolKind::Const(constdef_mutex.clone()),
+                    constdef.symbol_start,
+                    m.scope_id,
+                );
             }
             AstNode::Typedef(typedef_mutex) => {
                 let mut typedef = typedef_mutex.lock().unwrap();
@@ -510,7 +534,8 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                                 start: typedef.symbol_start,
                                 end: typedef.symbol_end,
                                 message: e,
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 }
@@ -535,7 +560,8 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                                     start: fndef.symbol_start,
                                     end: fndef.symbol_end,
                                     message: format!("ident '{}' redeclared", fndef.symbol_name),
-                                },
+                                    is_warning: false,
+                                                                    },
                             );
                         }
                     }

@@ -1,5 +1,6 @@
-use crate::analyzer::common::AstFnDef;
+use crate::analyzer::common::{AstFnDef, ImportStmt};
 use crate::analyzer::symbol::{NodeId, Symbol, SymbolKind, SymbolTable};
+use crate::analyzer::workspace_index::{IndexedSymbolKind, WorkspaceIndex};
 use crate::project::Module;
 use log::debug;
 use std::collections::HashSet;
@@ -38,6 +39,7 @@ pub struct CompletionProvider<'a> {
     nature_root: String,
     project_root: String,
     package_config: Option<crate::analyzer::common::PackageConfig>,
+    workspace_index: Option<&'a WorkspaceIndex>,
 }
 
 impl<'a> CompletionProvider<'a> {
@@ -54,7 +56,13 @@ impl<'a> CompletionProvider<'a> {
             nature_root,
             project_root,
             package_config,
+            workspace_index: None,
         }
+    }
+
+    pub fn with_workspace_index(mut self, index: &'a WorkspaceIndex) -> Self {
+        self.workspace_index = Some(index);
+        self
     }
 
     /// Main auto-completion entry function
@@ -106,7 +114,10 @@ impl<'a> CompletionProvider<'a> {
         // 4. Collect available modules (for auto-import)
         self.collect_module_completions(&prefix, &mut completions);
 
-        // 5. Sort and filter
+        // 5. Collect cross-file symbol completions (workspace index)
+        self.collect_workspace_symbol_completions(&prefix, &mut completions);
+
+        // 6. Sort and filter
         self.sort_and_filter_completions(&mut completions, &prefix);
 
         debug!("Found {} completions", completions.len());
@@ -390,6 +401,7 @@ impl<'a> CompletionProvider<'a> {
             let scope = self.symbol_table.find_scope(current);
             debug!("Checking scope {} with {} symbols", current, scope.symbols.len());
 
+            // Check symbols Vec
             for &symbol_id in &scope.symbols {
                 if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
                     match &symbol.kind {
@@ -399,6 +411,23 @@ impl<'a> CompletionProvider<'a> {
                             if var.ident == var_name {
                                 drop(var);
                                 debug!("Variable '{}' found in scope {}", var_name, current);
+                                return Some(symbol);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            // Also check symbol_map (global symbols from imported modules are only stored here)
+            for (&ref _key, &symbol_id) in &scope.symbol_map {
+                if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
+                    match &symbol.kind {
+                        SymbolKind::Var(var_decl) => {
+                            let var = var_decl.lock().unwrap();
+                            let symbol_name = extract_last_ident_part(&var.ident);
+                            if symbol_name == var_name {
+                                drop(var);
                                 return Some(symbol);
                             }
                         }
@@ -428,6 +457,7 @@ impl<'a> CompletionProvider<'a> {
             let scope = self.symbol_table.find_scope(current);
             debug!("Checking scope {} with {} symbols", current, scope.symbols.len());
 
+            // Check symbols Vec
             for &symbol_id in &scope.symbols {
                 if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
                     match &symbol.kind {
@@ -441,6 +471,24 @@ impl<'a> CompletionProvider<'a> {
                             if symbol_name == type_name {
                                 drop(type_def);
                                 debug!("Type '{}' found in scope {}", type_name, current);
+                                return Some(symbol);
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+
+            // Also check symbol_map (global symbols from imported modules are only stored here)
+            for (&ref _key, &symbol_id) in &scope.symbol_map {
+                if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
+                    match &symbol.kind {
+                        SymbolKind::Type(typedef) => {
+                            let type_def = typedef.lock().unwrap();
+                            let symbol_name = extract_last_ident_part(&type_def.ident);
+                            if symbol_name == type_name {
+                                drop(type_def);
+                                debug!("Type '{}' found in symbol_map of scope {}", type_name, current);
                                 return Some(symbol);
                             }
                         }
@@ -796,6 +844,250 @@ impl<'a> CompletionProvider<'a> {
                 }
             }
         }
+    }
+
+    /// Collect cross-file symbol completions from the workspace index.
+    /// This enables typing e.g. "MyControll" and getting "MyController" from another file,
+    /// with a selective auto-import so the symbol can be used directly.
+    fn collect_workspace_symbol_completions(&self, prefix: &str, completions: &mut Vec<CompletionItem>) {
+        let workspace_index = match &self.workspace_index {
+            Some(idx) => idx,
+            None => return,
+        };
+
+        if prefix.is_empty() || prefix.len() < 2 {
+            return; // Need at least 2 chars to avoid flooding with results
+        }
+
+        debug!("Collecting workspace symbol completions with prefix '{}'", prefix);
+
+        // Build a set of non-selectively imported module as_names
+        let non_selective_imported: HashSet<String> = self.module.dependencies
+            .iter()
+            .filter(|dep| !dep.is_selective)
+            .map(|dep| dep.as_name.clone())
+            .collect();
+
+        // Build a map of selectively imported modules: full_path -> &ImportStmt
+        let selective_imports_by_path: std::collections::HashMap<&str, &ImportStmt> = self.module.dependencies
+            .iter()
+            .filter(|dep| dep.is_selective)
+            .map(|dep| (dep.full_path.as_str(), dep as &ImportStmt))
+            .collect();
+
+        // Check which symbols are already selectively imported (by their visible name)
+        let selectively_imported: HashSet<String> = self.module.dependencies
+            .iter()
+            .filter(|dep| dep.is_selective)
+            .flat_map(|dep| {
+                dep.select_items.iter()
+                    .flat_map(|items| items.iter())
+                    .map(|item| item.alias.clone().unwrap_or_else(|| item.ident.clone()))
+            })
+            .collect();
+
+        // Collect symbol names already provided by local/module completions to avoid duplication
+        let existing_labels: HashSet<String> = completions.iter().map(|c| c.label.clone()).collect();
+
+        let package_name = self.package_config.as_ref().map(|c| c.package_data.name.as_str());
+
+        let matching_symbols = workspace_index.find_symbols_by_prefix(prefix);
+
+        // First pass: count how many distinct files provide each symbol name
+        let mut name_sources: std::collections::HashMap<String, Vec<usize>> = std::collections::HashMap::new();
+        for (i, sym) in matching_symbols.iter().enumerate() {
+            name_sources.entry(sym.name.clone()).or_default().push(i);
+        }
+
+        for indexed_symbol in &matching_symbols {
+            // Skip if this symbol is from the current file
+            if indexed_symbol.file_path == self.module.path {
+                continue;
+            }
+
+            // Skip if already selectively imported (already usable directly)
+            if selectively_imported.contains(&indexed_symbol.name) {
+                continue;
+            }
+
+            // Compute how to import the module containing this symbol
+            let import_info = match workspace_index.compute_import_info(
+                &indexed_symbol.file_path,
+                &self.module.dir,
+                &self.module.path,
+                &self.project_root,
+                &self.nature_root,
+                package_name,
+            ) {
+                Some(info) => info,
+                None => continue,
+            };
+
+            // Determine import state:
+            // 1. Non-selective import exists for this module -> qualified access
+            // 2. Selective import exists for same file -> extend the {..} list
+            // 3. Not imported at all -> new selective import line
+            let has_non_selective = non_selective_imported.contains(&import_info.module_as_name);
+            let existing_selective = selective_imports_by_path.get(indexed_symbol.file_path.as_str());
+
+            let kind = match indexed_symbol.kind {
+                IndexedSymbolKind::Type => CompletionItemKind::Struct,
+                IndexedSymbolKind::Function => CompletionItemKind::Function,
+                IndexedSymbolKind::Variable => CompletionItemKind::Variable,
+                IndexedSymbolKind::Constant => CompletionItemKind::Constant,
+            };
+
+            let kind_label = match indexed_symbol.kind {
+                IndexedSymbolKind::Type => "type",
+                IndexedSymbolKind::Function => "fn",
+                IndexedSymbolKind::Variable => "var",
+                IndexedSymbolKind::Constant => "const",
+            };
+
+            let file_stem = std::path::Path::new(&indexed_symbol.file_path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_string();
+
+            // Check if multiple files provide a symbol with this name
+            let has_duplicates = name_sources.get(&indexed_symbol.name)
+                .map(|sources| sources.len() > 1)
+                .unwrap_or(false);
+
+            // Also check if a local symbol already exists with this name
+            let conflicts_with_existing = existing_labels.contains(&indexed_symbol.name);
+            let needs_disambiguation = has_duplicates || conflicts_with_existing;
+
+            // Add () for functions, {} for structs (snippet syntax for direct use)
+            let direct_insert = match indexed_symbol.kind {
+                IndexedSymbolKind::Function => format!("{}($0)", indexed_symbol.name),
+                IndexedSymbolKind::Type => format!("{}{{$0}}", indexed_symbol.name),
+                _ => indexed_symbol.name.clone(),
+            };
+
+            if has_non_selective {
+                // Case 1: Module already imported non-selectively -> use qualified access
+                let label = if needs_disambiguation {
+                    format!("{} ({})", indexed_symbol.name, import_info.module_as_name)
+                } else {
+                    indexed_symbol.name.clone()
+                };
+
+                let qualified_insert = match indexed_symbol.kind {
+                    IndexedSymbolKind::Function => format!("{}.{}($0)", import_info.module_as_name, indexed_symbol.name),
+                    IndexedSymbolKind::Type => format!("{}.{}{{$0}}", import_info.module_as_name, indexed_symbol.name),
+                    _ => format!("{}.{}", import_info.module_as_name, indexed_symbol.name),
+                };
+
+                completions.push(CompletionItem {
+                    label,
+                    kind,
+                    detail: Some(format!("{} (from {})", kind_label, import_info.module_as_name)),
+                    documentation: Some(format!("from {} ({})", file_stem, indexed_symbol.file_path)),
+                    insert_text: qualified_insert,
+                    sort_text: Some(format!("zzy_{}", indexed_symbol.name)),
+                    additional_text_edits: Vec::new(),
+                });
+            } else if let Some(sel_import) = existing_selective {
+                // Case 2: Module already has a selective import -> extend the {..} list
+                let label = if needs_disambiguation {
+                    format!("{} ({})", indexed_symbol.name, file_stem)
+                } else {
+                    indexed_symbol.name.clone()
+                };
+
+                let additional_text_edits = if let Some(edit) = self.find_selective_import_insert_point(sel_import, &indexed_symbol.name) {
+                    vec![edit]
+                } else {
+                    // Fallback: add a new selective import line
+                    let selective_import = format!("{}.{{{}}}\n", import_info.import_base, indexed_symbol.name);
+                    vec![TextEdit {
+                        line: 0,
+                        character: 0,
+                        new_text: selective_import,
+                    }]
+                };
+
+                completions.push(CompletionItem {
+                    label,
+                    kind,
+                    detail: Some(format!("{} (add to existing import)", kind_label)),
+                    documentation: Some(format!("from {} ({})", file_stem, indexed_symbol.file_path)),
+                    insert_text: direct_insert,
+                    sort_text: Some(format!("zzy_{}", indexed_symbol.name)),
+                    additional_text_edits,
+                });
+            } else {
+                // Case 3: Module not imported at all -> new selective import line
+                let selective_import = format!("{}.{{{}}}\n", import_info.import_base, indexed_symbol.name);
+
+                let label = if needs_disambiguation {
+                    format!("{} ({})", indexed_symbol.name, file_stem)
+                } else {
+                    indexed_symbol.name.clone()
+                };
+
+                completions.push(CompletionItem {
+                    label,
+                    kind,
+                    detail: Some(format!("{} (auto import: {})", kind_label, selective_import.trim())),
+                    documentation: Some(format!("from {} ({})", file_stem, indexed_symbol.file_path)),
+                    insert_text: direct_insert,
+                    sort_text: Some(format!("zzy_{}", indexed_symbol.name)),
+                    additional_text_edits: vec![TextEdit {
+                        line: 0,
+                        character: 0,
+                        new_text: selective_import,
+                    }],
+                });
+            }
+        }
+
+        debug!("Added workspace symbol completions, total now: {}", completions.len());
+    }
+
+    /// Find the insert point to add a new symbol to an existing selective import.
+    /// Returns a TextEdit that inserts ", symbolName" before the closing '}' of the import.
+    fn find_selective_import_insert_point(
+        &self,
+        import_stmt: &ImportStmt,
+        symbol_name: &str,
+    ) -> Option<TextEdit> {
+        // start/end are char offsets (from the lexer which works on Vec<char>).
+        // Use the module's rope to convert char offsets to line/col positions.
+        let rope = &self.module.rope;
+        let end = import_stmt.end;
+        let start = import_stmt.start;
+
+        if end == 0 || end > rope.len_chars() {
+            return None;
+        }
+
+        // Search backward from end to find '}' character
+        let mut brace_char_idx = None;
+        let mut pos = end;
+        while pos > start {
+            pos -= 1;
+            let ch = rope.char(pos);
+            if ch == '}' {
+                brace_char_idx = Some(pos);
+                break;
+            }
+        }
+
+        let brace_char_idx = brace_char_idx?;
+
+        // Convert char offset to line/character using the rope
+        let line = rope.char_to_line(brace_char_idx);
+        let line_start_char = rope.line_to_char(line);
+        let character = brace_char_idx - line_start_char;
+
+        Some(TextEdit {
+            line,
+            character,
+            new_text: format!(", {}", symbol_name),
+        })
     }
 
     /// Create completion item
