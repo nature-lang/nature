@@ -64,9 +64,7 @@ typedef union {
 
 typedef enum {
     REDUCTION_STATUS_UNDO = 1,
-    REDUCTION_STATUS_DOING = 2,
-    REDUCTION_STATUS_DOING2 = 3,
-    REDUCTION_STATUS_DONE = 4
+    REDUCTION_STATUS_DONE = 2
 } reduction_status_t;
 
 typedef enum {
@@ -1039,10 +1037,10 @@ static inline bool is_gc_alloc(type_kind kind) {
  * @param t
  * @return
  */
-static inline bool is_origin_type(type_t t) {
-    return is_integer(t.kind) || is_float(t.kind) || t.kind == TYPE_ANYPTR || t.kind == TYPE_VOID ||
-           t.kind == TYPE_NULL || t.kind == TYPE_BOOL || t.kind == TYPE_ANY ||
-           t.kind == TYPE_STRING || t.kind == TYPE_FN_T || t.kind == TYPE_ALL_T;
+static inline bool is_origin_kind(type_kind kind) {
+    return is_integer(kind) || is_float(kind) || kind == TYPE_ANYPTR || kind == TYPE_VOID ||
+           kind == TYPE_NULL || kind == TYPE_BOOL || kind == TYPE_ANY ||
+           kind == TYPE_STRING || kind == TYPE_FN_T || kind == TYPE_ALL_T;
 }
 
 static inline bool is_clv_default_type(type_t t) {

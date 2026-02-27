@@ -417,9 +417,6 @@ impl<'a> Typesys<'a> {
         if ident_kind != TypeIdentKind::Unknown {
             result.ident_kind = ident_kind;
             result.ident = ident;
-        }
-
-        if args.len() > 0 {
             result.args = args;
         }
 
@@ -428,11 +425,11 @@ impl<'a> Typesys<'a> {
 
         // recycle_check
         let mut visited = HashSet::new();
-        let found = self.type_recycle_check(&t, &mut visited);
+        let found = self.type_recycle_check(&result, &mut visited);
         if found.is_some() {
             return Err(AnalyzerError {
-                start: t.start,
-                end: t.end,
+                start: result.start,
+                end: result.end,
                 message: format!("recycle use type '{}'", found.unwrap()),
                 is_warning: false,
                             });
@@ -441,7 +438,16 @@ impl<'a> Typesys<'a> {
         return Ok(result);
     }
 
-    fn combination_interface(&mut self, typedef_stmt: &mut TypedefStmt) -> Result<(), AnalyzerError> {
+    fn reduction_ident_depth_leave(visited: &mut HashMap<String, usize>, ident: &str) {
+        let depth_now = visited.get(ident).copied().unwrap_or(0);
+        if depth_now <= 1 {
+            visited.remove(ident);
+        } else {
+            visited.insert(ident.to_string(), depth_now - 1);
+        }
+    }
+
+    fn combination_interface(&mut self, typedef_stmt: &mut TypedefStmt, visited: &mut HashMap<String, usize>) -> Result<(), AnalyzerError> {
         // 确保类型表达式已完成归约且是接口类型
         debug_assert!(typedef_stmt.type_expr.status == ReductionStatus::Done);
 
@@ -468,7 +474,7 @@ impl<'a> Typesys<'a> {
         // 合并实现的接口
         for impl_interface in &mut typedef_stmt.impl_interfaces {
             // 归约接口类型
-            *impl_interface = match self.reduction_type(impl_interface.clone()) {
+            *impl_interface = match self.reduction_type_visited(impl_interface.clone(), visited) {
                 Ok(r) => r,
                 Err(_) => continue,
             };
@@ -501,7 +507,7 @@ impl<'a> Typesys<'a> {
         Ok(())
     }
 
-    fn reduction_type_ident(&mut self, mut t: Type) -> Result<Type, AnalyzerError> {
+    fn reduction_type_ident(&mut self, mut t: Type, visited: &mut HashMap<String, usize>) -> Result<Type, AnalyzerError> {
         let start = t.start;
         let end = t.end;
 
@@ -533,14 +539,51 @@ impl<'a> Typesys<'a> {
                             });
         };
 
+        {
+            let typedef = typedef_mutex.lock().unwrap();
+            if typedef.params.is_empty() {
+                if !t.args.is_empty() {
+                    return Err(AnalyzerError {
+                        start,
+                        end,
+                        message: format!("typedef '{}' args mismatch", t.ident),
+                    });
+                }
+
+                // 非泛型 alias 已经 reduction 完成，直接复用
+                if typedef.type_expr.status == ReductionStatus::Done {
+                    t.kind = typedef.type_expr.kind.clone();
+                    t.status = typedef.type_expr.status;
+                    return Ok(t);
+                }
+            }
+        }
+
+        // 通过 ident 记录 reduction 路径深度，允许深度 2，第三层中断
+        let mut reduction_ident_depth_entered = false;
+        if !t.ident.is_empty() {
+            let reduction_depth = visited.get(&t.ident).copied().unwrap_or(0) + 1;
+            visited.insert(t.ident.clone(), reduction_depth);
+            reduction_ident_depth_entered = true;
+
+            if reduction_depth >= 3 {
+                Self::reduction_ident_depth_leave(visited, &t.ident);
+                return Ok(t);
+            }
+        }
+
         let mut typedef = typedef_mutex.lock().unwrap();
-        // let typedef_start = typedef.symbol_start;
-        // let typedef_end = typedef.symbol_end;
 
         // 处理泛型参数
-        if typedef.params.len() > 0 {
-            // 检查是否提供了泛型参数
+        if !typedef.params.is_empty() {
+            let mut generic_typedef = typedef.clone();
+            drop(typedef);
+
             if t.args.is_empty() {
+                if reduction_ident_depth_entered {
+                    Self::reduction_ident_depth_leave(visited, &t.ident);
+                }
+
                 return Err(AnalyzerError {
                     start,
                     end,
@@ -548,8 +591,12 @@ impl<'a> Typesys<'a> {
                     is_warning: false,
                                     });
             }
-            // 检查参数数量是否匹配
-            if t.args.len() != typedef.params.len() {
+
+            if t.args.len() != generic_typedef.params.len() {
+                if reduction_ident_depth_entered {
+                    Self::reduction_ident_depth_leave(visited, &t.ident);
+                }
+
                 return Err(AnalyzerError {
                     start,
                     end,
@@ -558,17 +605,25 @@ impl<'a> Typesys<'a> {
                                     });
             }
 
-            // 创建参数表并压入栈
             let mut args_table = HashMap::new();
             let mut impl_args = Vec::new();
-            for (i, undo_arg) in t.args.iter_mut().enumerate() {
-                // 先进行类型归约
-                let arg = self.reduction_type(undo_arg.clone())?;
+            for (i, undo_arg) in t.args.iter().enumerate() {
+                let arg = match self.reduction_type_visited(undo_arg.clone(), visited) {
+                    Ok(arg) => arg,
+                    Err(e) => {
+                        if reduction_ident_depth_entered {
+                            Self::reduction_ident_depth_leave(visited, &t.ident);
+                        }
+                        return Err(e);
+                    }
+                };
 
-                let param = &mut typedef.params[i];
-
-                // 检查泛型约束
+                let param = &mut generic_typedef.params[i];
                 if let Err(e) = self.generics_constrains_check(param, &arg) {
+                    if reduction_ident_depth_entered {
+                        Self::reduction_ident_depth_leave(visited, &t.ident);
+                    }
+
                     return Err(AnalyzerError {
                         start,
                         end,
@@ -578,100 +633,78 @@ impl<'a> Typesys<'a> {
                 }
 
                 impl_args.push(arg.clone());
-                args_table.insert(param.ident.clone(), arg.clone());
+                args_table.insert(param.ident.clone(), arg);
             }
 
-            // 压入参数表用于后续处理
             self.generics_args_stack.push(args_table);
+            let reduction_result: Result<Type, AnalyzerError> = (|| {
+                if !generic_typedef.impl_interfaces.is_empty() {
+                    if generic_typedef.is_interface {
+                        debug_assert!(generic_typedef.type_expr.status == ReductionStatus::Done);
+                        debug_assert!(matches!(generic_typedef.type_expr.kind, TypeKind::Interface(..)));
+                        self.combination_interface(&mut generic_typedef, visited)?;
+                    } else {
+                        for impl_interface in &mut generic_typedef.impl_interfaces {
+                            *impl_interface = self.reduction_type_visited(impl_interface.clone(), visited)?;
+                        }
 
-            // 处理接口实现
-            if typedef.impl_interfaces.len() > 0 {
-                if typedef.is_interface {
-                    debug_assert!(typedef.type_expr.status == ReductionStatus::Done);
-                    debug_assert!(matches!(typedef.type_expr.kind, TypeKind::Interface(..)));
-                    self.combination_interface(&mut typedef)?
-                } else {
-                    for impl_interface in &mut typedef.impl_interfaces {
-                        *impl_interface = self.reduction_type(impl_interface.clone())?;
-                    }
-
-                    for impl_interface in &typedef.impl_interfaces {
-                        self.check_typedef_impl(impl_interface, t.ident.clone(), &typedef)
-                            .map_err(|e| AnalyzerError { start, end, message: e, is_warning: false })?;
+                        for impl_interface in &generic_typedef.impl_interfaces {
+                            self.check_typedef_impl(impl_interface, t.ident.clone(), &generic_typedef)
+                                .map_err(|e| AnalyzerError { start, end, message: e })?;
+                        }
                     }
                 }
-            }
 
-            // 处理右值表达式
-            let mut right_type = typedef.type_expr.clone();
-
-            right_type = self.reduction_type(right_type)?;
-
-            // 弹出参数表
+                let right_type = self.reduction_type_visited(generic_typedef.type_expr.clone(), visited)?;
+                Ok(right_type)
+            })();
             self.generics_args_stack.pop();
+
+            let right_type = match reduction_result {
+                Ok(right_type) => right_type,
+                Err(e) => {
+                    if reduction_ident_depth_entered {
+                        Self::reduction_ident_depth_leave(visited, &t.ident);
+                    }
+                    return Err(e);
+                }
+            };
+
+            {
+                let mut typedef = typedef_mutex.lock().unwrap();
+                typedef.impl_interfaces = generic_typedef.impl_interfaces.clone();
+            }
 
             t.args = impl_args;
             t.kind = right_type.kind;
             t.status = right_type.status;
-            return Ok(t);
-        } else {
-            // params == 0
-            if !t.args.is_empty() {
-                return Err(AnalyzerError {
-                    start,
-                    end,
-                    message: format!("typedef '{}' args mismatch", t.ident),
-                    is_warning: false,
-                                    });
+
+            if reduction_ident_depth_entered {
+                Self::reduction_ident_depth_leave(visited, &t.ident);
             }
-        }
-
-        // 检查右值是否已完成归约
-        if typedef.type_expr.status == ReductionStatus::Done {
-            t.kind = typedef.type_expr.kind.clone();
-            t.status = typedef.type_expr.status;
             return Ok(t);
         }
 
-        // 处理循环引用
-        if typedef.type_expr.status == ReductionStatus::Doing2 {
-            return Ok(t);
-        }
-
-        // 标记正在处理,避免循环引用
-        if typedef.type_expr.status == ReductionStatus::Doing {
-            typedef.type_expr.status = ReductionStatus::Doing2;
-        } else {
-            typedef.type_expr.status = ReductionStatus::Doing;
-        }
-
-        // 处理接口
+        // interface 需要通过 ident 区分
         if typedef.is_interface {
             typedef.type_expr.ident_kind = TypeIdentKind::Interface;
             typedef.type_expr.ident = t.ident.clone();
         }
 
-        // 处理 enum
         if typedef.is_enum {
             typedef.type_expr.ident_kind = TypeIdentKind::Enum;
             typedef.type_expr.ident = t.ident.clone();
         }
 
         let type_expr = typedef.type_expr.clone();
-
-        // 在递归调用前释放锁，避免死锁
         drop(typedef);
 
-        // 归约类型表达式递归处理, 避免 typedef_mutex 锁定
-        let type_expr = match self.reduction_type(type_expr) {
+        let type_expr = match self.reduction_type_visited(type_expr, visited) {
             Ok(type_expr) => type_expr,
             Err(e) => {
-                // change typedef status to undo
-                let mut typedef = typedef_mutex.lock().unwrap();
-                if typedef.type_expr.status == ReductionStatus::Doing {
-                    typedef.type_expr.status = ReductionStatus::Undo;
+                if reduction_ident_depth_entered {
+                    Self::reduction_ident_depth_leave(visited, &t.ident);
                 }
-
                 return Err(e);
             }
         };
@@ -679,30 +712,50 @@ impl<'a> Typesys<'a> {
         let mut typedef = typedef_mutex.lock().unwrap();
         typedef.type_expr = type_expr;
 
-        // 处理接口实现
-        if typedef.impl_interfaces.len() > 0 {
+        if !typedef.impl_interfaces.is_empty() {
             if typedef.is_interface {
                 debug_assert!(typedef.type_expr.status == ReductionStatus::Done);
                 debug_assert!(matches!(typedef.type_expr.kind, TypeKind::Interface(..)));
-                self.combination_interface(&mut typedef)?
+                if let Err(e) = self.combination_interface(&mut typedef, visited) {
+                    if reduction_ident_depth_entered {
+                        Self::reduction_ident_depth_leave(visited, &t.ident);
+                    }
+                    return Err(e);
+                }
             } else {
                 for impl_interface in &mut typedef.impl_interfaces {
-                    *impl_interface = self.reduction_type(impl_interface.clone())?;
+                    *impl_interface = match self.reduction_type_visited(impl_interface.clone(), visited) {
+                        Ok(impl_interface) => impl_interface,
+                        Err(e) => {
+                            if reduction_ident_depth_entered {
+                                Self::reduction_ident_depth_leave(visited, &t.ident);
+                            }
+                            return Err(e);
+                        }
+                    };
                 }
 
                 for impl_interface in &typedef.impl_interfaces {
-                    self.check_typedef_impl(impl_interface, t.ident.clone(), &typedef)
-                        .map_err(|e| AnalyzerError { start, end, message: e, is_warning: false })?;
+                    if let Err(e) = self.check_typedef_impl(impl_interface, t.ident.clone(), &typedef) {
+                        if reduction_ident_depth_entered {
+                            Self::reduction_ident_depth_leave(visited, &t.ident);
+                        }
+                        return Err(AnalyzerError { start, end, message: e });
+                    }
                 }
             }
         }
 
         t.kind = typedef.type_expr.kind.clone();
         t.status = typedef.type_expr.status;
+
+        if reduction_ident_depth_entered {
+            Self::reduction_ident_depth_leave(visited, &t.ident);
+        }
         Ok(t)
     }
 
-    fn reduction_complex_type(&mut self, t: Type) -> Result<Type, AnalyzerError> {
+    fn reduction_complex_type(&mut self, t: Type, visited: &mut HashMap<String, usize>) -> Result<Type, AnalyzerError> {
         let mut result = t.clone();
 
         let kind_str = result.kind.to_string();
@@ -710,17 +763,17 @@ impl<'a> Typesys<'a> {
         match &mut result.kind {
             // 处理指针类型
             TypeKind::Ref(value_type) | TypeKind::Ptr(value_type) => {
-                *value_type = Box::new(self.reduction_type(*value_type.clone())?);
+                *value_type = Box::new(self.reduction_type_visited(*value_type.clone(), visited)?);
             }
 
             // 处理数组类型
             TypeKind::Arr(_, _, element_type) => {
-                *element_type = Box::new(self.reduction_type(*element_type.clone())?);
+                *element_type = Box::new(self.reduction_type_visited(*element_type.clone(), visited)?);
             }
 
             // 处理通道类型
             TypeKind::Chan(element_type) => {
-                *element_type = Box::new(self.reduction_type(*element_type.clone())?);
+                *element_type = Box::new(self.reduction_type_visited(*element_type.clone(), visited)?);
 
                 result.ident_kind = TypeIdentKind::Builtin;
                 result.ident = kind_str;
@@ -729,7 +782,7 @@ impl<'a> Typesys<'a> {
 
             // 处理向量类型
             TypeKind::Vec(element_type) => {
-                *element_type = Box::new(self.reduction_type(*element_type.clone())?);
+                *element_type = Box::new(self.reduction_type_visited(*element_type.clone(), visited)?);
 
                 result.ident_kind = TypeIdentKind::Builtin;
                 result.ident = kind_str;
@@ -738,8 +791,8 @@ impl<'a> Typesys<'a> {
 
             // 处理映射类型
             TypeKind::Map(key_type, value_type) => {
-                *key_type = Box::new(self.reduction_type(*key_type.clone())?);
-                *value_type = Box::new(self.reduction_type(*value_type.clone())?);
+                *key_type = Box::new(self.reduction_type_visited(*key_type.clone(), visited)?);
+                *value_type = Box::new(self.reduction_type_visited(*value_type.clone(), visited)?);
 
                 // 检查键类型是否合法
                 if !Type::is_map_key_type(&key_type.kind) {
@@ -758,7 +811,7 @@ impl<'a> Typesys<'a> {
 
             // 处理集合类型
             TypeKind::Set(element_type) => {
-                *element_type = Box::new(self.reduction_type(*element_type.clone())?);
+                *element_type = Box::new(self.reduction_type_visited(*element_type.clone(), visited)?);
 
                 // 检查元素类型是否合法
                 if !Type::is_map_key_type(&element_type.kind) {
@@ -787,14 +840,14 @@ impl<'a> Typesys<'a> {
                 }
 
                 for element_type in elements.iter_mut() {
-                    *element_type = self.reduction_type(element_type.clone())?;
+                    *element_type = self.reduction_type_visited(element_type.clone(), visited)?;
                 }
             }
             TypeKind::Fn(type_fn) => {
-                type_fn.return_type = self.reduction_type(type_fn.return_type.clone())?;
+                type_fn.return_type = self.reduction_type_visited(type_fn.return_type.clone(), visited)?;
 
                 for formal_type in type_fn.param_types.iter_mut() {
-                    *formal_type = self.reduction_type(formal_type.clone())?;
+                    *formal_type = self.reduction_type_visited(formal_type.clone(), visited)?;
                 }
             }
 
@@ -802,7 +855,7 @@ impl<'a> Typesys<'a> {
             TypeKind::Struct(_ident, _align, properties) => {
                 for property in properties.iter_mut() {
                     if !property.type_.kind.is_unknown() {
-                        property.type_ = self.reduction_type(property.type_.clone())?;
+                        property.type_ = self.reduction_type_visited(property.type_.clone(), visited)?;
                     }
 
                     if let Some(right_value) = &mut property.value {
@@ -850,15 +903,20 @@ impl<'a> Typesys<'a> {
         Ok(result)
     }
 
-    pub fn type_param_special(&mut self, t: Type, arg_table: HashMap<String, Type>) -> Type {
+    pub fn type_param_special(&mut self, t: Type, arg_table: HashMap<String, Type>, visited: &mut HashMap<String, usize>) -> Type {
         debug_assert!(t.kind == TypeKind::Ident);
         debug_assert!(t.ident_kind == TypeIdentKind::GenericsParam);
 
         let arg_type = arg_table.get(&t.ident).unwrap();
-        return self.reduction_type(arg_type.clone()).unwrap();
+        return self.reduction_type_visited(arg_type.clone(), visited).unwrap();
     }
 
-    pub fn reduction_type(&mut self, mut t: Type) -> Result<Type, AnalyzerError> {
+    pub fn reduction_type(&mut self, t: Type) -> Result<Type, AnalyzerError> {
+        let mut visited = HashMap::new();
+        self.reduction_type_visited(t, &mut visited)
+    }
+
+    fn reduction_type_visited(&mut self, mut t: Type, visited: &mut HashMap<String, usize>) -> Result<Type, AnalyzerError> {
         let ident = t.ident.clone();
         let ident_kind = t.ident_kind.clone();
         let args = t.args.clone();
@@ -881,7 +939,7 @@ impl<'a> Typesys<'a> {
         }
 
         if Type::is_ident(&t) {
-            t = self.reduction_type_ident(t)?;
+            t = self.reduction_type_ident(t, visited)?;
             // 如果原来存在 t.args 则其经过了 reduction
             return self.finalize_type(t.clone(), ident, ident_kind, t.args);
         }
@@ -892,7 +950,7 @@ impl<'a> Typesys<'a> {
             }
 
             let arg_table = self.generics_args_stack.last().unwrap();
-            let result = self.type_param_special(t, arg_table.clone());
+            let result = self.type_param_special(t, arg_table.clone(), visited);
 
             return self.finalize_type(result.clone(), result.ident.clone(), result.ident_kind, result.args);
         }
@@ -904,28 +962,28 @@ impl<'a> Typesys<'a> {
                 }
 
                 for element in elements {
-                    *element = self.reduction_type(element.clone())?;
+                    *element = self.reduction_type_visited(element.clone(), visited)?;
                 }
 
                 return self.finalize_type(t, ident, ident_kind, args);
             }
             TypeKind::Interface(elements) => {
                 for element in elements {
-                    *element = self.reduction_type(element.clone())?;
+                    *element = self.reduction_type_visited(element.clone(), visited)?;
                 }
 
                 return self.finalize_type(t, ident, ident_kind, args);
             }
             TypeKind::TaggedUnion(_, elements) => {
                 for element in elements {
-                    element.type_ = self.reduction_type(element.type_.clone())?;
+                    element.type_ = self.reduction_type_visited(element.type_.clone(), visited)?;
                 }
 
                 return self.finalize_type(t, ident, ident_kind, args);
             }
             TypeKind::Enum(element_type, properties) => {
                 // reduction element type
-                *element_type = Box::new(self.reduction_type(*element_type.clone())?);
+                *element_type = Box::new(self.reduction_type_visited(*element_type.clone(), visited)?);
 
                 // enum 只支持 integer 类型
                 if !Type::is_integer(&element_type.kind) {
@@ -980,7 +1038,7 @@ impl<'a> Typesys<'a> {
                 }
 
                 if Type::is_complex_type(&t.kind) {
-                    let result = self.reduction_complex_type(t)?;
+                    let result = self.reduction_complex_type(t, visited)?;
                     return self.finalize_type(result, ident, ident_kind, args);
                 }
 
@@ -4577,6 +4635,20 @@ impl<'a> Typesys<'a> {
         self.type_compare_visited(dst, src, &mut visited)
     }
 
+    fn type_compare_ident_args_visited(&mut self, dst_args: &Vec<Type>, src_args: &Vec<Type>, visited: &mut HashSet<String>) -> bool {
+        if dst_args.len() != src_args.len() {
+            return false;
+        }
+
+        for (dst_arg, src_arg) in dst_args.iter().zip(src_args.iter()) {
+            if !self.type_compare_visited(dst_arg, src_arg, visited) {
+                return false;
+            }
+        }
+
+        true
+    }
+
     pub fn type_compare_visited(&mut self, dst: &Type, src: &Type, visited: &mut HashSet<String>) -> bool {
         let dst = dst.clone();
         if dst.err || src.err {
@@ -4625,30 +4697,24 @@ impl<'a> Typesys<'a> {
             }
         }
 
-        // 即使 reduction 后，也需要通过 ident kind 进行判断, 其中 union_type 不受 type def 限制
-        // Type aliases (ident_kind == Alias) are structurally typed — skip nominal ident check.
-        // Also skip when either side has an empty ident (inferred types from expressions may lack ident info).
-        if dst.ident_kind == TypeIdentKind::Def && !matches!(dst.kind, TypeKind::Union(..)) {
-            debug_assert!(!dst.ident.is_empty());
-            if src.ident_kind != TypeIdentKind::Alias && !src.ident.is_empty() {
-                if dst.ident != src.ident {
-                    return false;
-                }
+        // TYPE_IDENT_DEF 采用名义类型比较：ident + args
+        let dst_nominal = dst.ident_kind == TypeIdentKind::Def && !matches!(dst.kind, TypeKind::Union(..));
+        let src_nominal = src.ident_kind == TypeIdentKind::Def && !matches!(src.kind, TypeKind::Union(..));
+        if dst_nominal || src_nominal {
+            if dst.ident.is_empty() || src.ident.is_empty() {
+                return false;
+            }
+
+            if dst.ident != src.ident {
+                return false;
+            }
+
+            if !self.type_compare_ident_args_visited(&dst.args, &src.args, visited) {
+                return false;
             }
         }
 
-        if src.ident_kind == TypeIdentKind::Def && !matches!(src.kind, TypeKind::Union(..)) {
-            debug_assert!(!src.ident.is_empty());
-            if dst.ident_kind != TypeIdentKind::Alias && !dst.ident.is_empty() {
-                if dst.ident != src.ident {
-                    return false;
-                }
-            }
-        }
-
-        // Aliases are structurally typed — skip nominal comparison entirely
-        if dst.ident_kind == TypeIdentKind::Alias || src.ident_kind == TypeIdentKind::Alias {
-            // Fall through to structural kind comparison below
+            return true;
         }
 
         // ident 递归打断

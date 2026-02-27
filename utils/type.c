@@ -553,17 +553,17 @@ char *type_origin_format(type_t t) {
 
 type_t type_kind_new(type_kind kind) {
     type_t result = {
-            .status = REDUCTION_STATUS_DONE,
-            .kind = kind,
-            .value = 0,
-            .ident = NULL,
-            .ident_kind = 0,
+        .status = REDUCTION_STATUS_DONE,
+        .kind = kind,
+        .value = 0,
+        .ident = NULL,
+        .ident_kind = 0,
     };
 
-    // 不能直接填充 ident, 比如 vec ident 必须要有 args, 但是此时无法计算 args
-    if (is_impl_builtin_type(kind)) {
+    if (is_origin_kind(kind)) {
         result.ident = type_kind_str[kind];
         result.ident_kind = TYPE_IDENT_BUILTIN;
+        result.args = NULL;
     }
 
     result.in_heap = kind_in_heap(kind);
@@ -577,17 +577,18 @@ type_t type_kind_new(type_kind kind) {
 
 type_t type_new(type_kind kind, void *value) {
     type_t result = {
-            .kind = kind,
-            .value = value,
-            .in_heap = kind_in_heap(kind),
-            .status = REDUCTION_STATUS_DONE,
-            .ident = NULL,
-            .ident_kind = 0,
+        .kind = kind,
+        .value = value,
+        .in_heap = kind_in_heap(kind),
+        .status = REDUCTION_STATUS_DONE,
+        .ident = NULL,
+        .ident_kind = 0,
     };
 
-    if (is_impl_builtin_type(kind)) {
+    if (is_origin_kind(kind)) {
         result.ident = type_kind_str[kind];
         result.ident_kind = TYPE_IDENT_BUILTIN;
+        result.args = NULL;
     }
 
     result.storage_kind = type_storage_kind(result);

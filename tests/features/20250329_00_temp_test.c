@@ -7,8 +7,8 @@ int main(void) {
     //    char *useld = "ld";
     //    strcpy(USE_LD, useld);
 
-    //    chdir("/Users/weiwenhao/Code/emoji-api");
-    //    setenv("ENTRY_FILE", "main.n", 1);
+    // chdir("/Users/weiwenhao/Code/emoji-api");
+    // setenv("ENTRY_FILE", "main.n", 1);
 
     feature_test_build();
     sleep(1);

@@ -2614,13 +2614,20 @@ impl<'a> Syntax {
                 if !self.consume(TokenType::Comma) {
                     break;
                 }
+
+                // Skip auto-inserted statement terminator after comma (multi-line imports)
+                self.consume(TokenType::StmtEof);
+
+                // Support trailing comma: if next token is }, stop parsing items
+                if self.is(TokenType::RightCurly) {
+                    break;
+                }
             }
 
-            // Tolerate missing closing brace during typing
-            if self.is(TokenType::RightCurly) {
-                self.must(TokenType::RightCurly)?;
-                import_end = self.prev().unwrap().end;
-            }
+            // Skip auto-inserted statement terminator before closing brace (multi-line imports)
+            self.consume(TokenType::StmtEof);
+            self.must(TokenType::RightCurly)?;
+            import_end = self.prev().unwrap().end;
             (true, Some(items))
         } else {
             (false, None)
@@ -3252,10 +3259,7 @@ impl<'a> Syntax {
                 t
             } else if (first_token.token_type == TokenType::Ident) && self.ident_is_builtin_type(first_token.clone()) {
                 if self.next_is(1, TokenType::LeftAngle) {
-                    let mut t = self.parser_single_type()?;
-                    t.ident = first_token.literal.clone();
-                    t.ident_kind = TypeIdentKind::Builtin;
-                    t
+                    self.parser_single_type()?
                 } else {
                     self.must(TokenType::Ident)?;
                     let mut t = Type::unknown();
@@ -3266,9 +3270,6 @@ impl<'a> Syntax {
                         "tup" => TypeKind::Tuple(Vec::new(), 0),
                         _ => TypeKind::Ident,
                     };
-                    t.ident = first_token.literal.clone();
-                    t.ident_kind = TypeIdentKind::Builtin;
-                    t.args = Vec::new();
                     t.start = first_token.start;
                     t.end = first_token.end;
                     t
@@ -3277,9 +3278,6 @@ impl<'a> Syntax {
                 self.must(TokenType::Chan)?;
                 let mut t = Type::unknown();
                 t.kind = TypeKind::Chan(Box::new(Type::unknown()));
-                t.ident = "chan".to_string();
-                t.ident_kind = TypeIdentKind::Builtin;
-                t.args = Vec::new();
                 t.start = first_token.start;
                 t.end = first_token.end;
                 t

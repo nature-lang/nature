@@ -736,12 +736,19 @@ impl<'a> Semantic<'a> {
                     let symbol_name = fndef.symbol_name.clone();
 
                     if fndef.impl_type.kind.is_exist() {
+                        let mut impl_type_ident = fndef.impl_type.ident.clone();
+
+                        if Type::is_impl_builtin_type(&fndef.impl_type.kind) {
+                            impl_type_ident = fndef.impl_type.kind.to_string();
+                        }
+
                         // 非 builtin type 则进行 resolve type 查找
                         if !Type::is_impl_builtin_type(&fndef.impl_type.kind) {
                             // resolve global ident
                             if let Some(symbol_id) = self.resolve_typedef(&mut fndef.impl_type.ident) {
                                 // ident maybe change
                                 fndef.impl_type.symbol_id = symbol_id;
+                                impl_type_ident = fndef.impl_type.ident.clone();
 
                                 // 自定义泛型 impl type 必须显式给出类型参数（仅检查 impl_type.args）
                                 if let Some(symbol) = self.symbol_table.get_symbol(symbol_id) {
@@ -773,7 +780,7 @@ impl<'a> Semantic<'a> {
                             }
                         }
 
-                        fndef.symbol_name = format_impl_ident(fndef.impl_type.ident.clone(), symbol_name);
+                        fndef.symbol_name = format_impl_ident(impl_type_ident, symbol_name);
 
                         // register to global symbol table
                         match self.symbol_table.define_symbol_in_scope(
@@ -1146,6 +1153,26 @@ impl<'a> Semantic<'a> {
 
                 debug!("rewrite_select_expr -> analyze_ident find, symbol_id {}, new ident {}", id, left_ident);
                 return;
+            }
+
+            // Check selective imports: import colors.{Color} then Color.RED
+            for import in &self.imports {
+                if !import.is_selective {
+                    continue;
+                }
+                let Some(ref items) = import.select_items else { continue };
+                for item in items {
+                    let local_name = item.alias.as_ref().unwrap_or(&item.ident);
+                    if local_name != left_ident.as_str() {
+                        continue;
+                    }
+                    let global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
+                    if let Some(id) = self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id) {
+                        *left_ident = global_ident;
+                        *symbol_id = id;
+                        return;
+                    }
+                }
             }
 
             // import package ident
