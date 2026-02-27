@@ -129,9 +129,10 @@ impl Type {
             err: false,
         };
 
-        if Self::is_impl_builtin_type(&kind) {
+        if Self::is_origin_type(&kind) {
             t.ident = kind.to_string();
             t.ident_kind = TypeIdentKind::Builtin;
+            t.args = Vec::new();
         }
 
         return t;
@@ -635,17 +636,13 @@ pub struct TypeFn {
 #[repr(u8)]
 pub enum ReductionStatus {
     Undo = 1,
-    Doing = 2,
-    Doing2 = 3,
-    Done = 4,
+    Done = 2,
 }
 
 impl Display for ReductionStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ReductionStatus::Undo => write!(f, "undo"),
-            ReductionStatus::Doing => write!(f, "doing"),
-            ReductionStatus::Doing2 => write!(f, "doing2"),
             ReductionStatus::Done => write!(f, "done"),
         }
     }

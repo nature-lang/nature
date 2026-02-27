@@ -2342,7 +2342,12 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
                     }
                 }
 
-                fndef->symbol_name = str_connect_by(fndef->impl_type.ident, symbol_name, IMPL_CONNECT_IDENT);
+                char *impl_type_ident = fndef->impl_type.ident;
+                if (is_impl_builtin_type(fndef->impl_type.kind)) {
+                    impl_type_ident = type_kind_str[fndef->impl_type.kind];
+                }
+
+                fndef->symbol_name = str_connect_by(impl_type_ident, symbol_name, IMPL_CONNECT_IDENT);
 
                 symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
                 ANALYZER_ASSERTF(s, "ident '%s' redeclared", fndef->symbol_name);

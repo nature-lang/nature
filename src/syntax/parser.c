@@ -1000,9 +1000,10 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
     if (parser_consume(m, TOKEN_OR)) {
         // union
         type_t union_type = {
-                .status = REDUCTION_STATUS_UNDO,
-                .kind = TYPE_UNION,
-                .union_ = NEW(type_union_t)};
+            .status = REDUCTION_STATUS_UNDO,
+            .kind = TYPE_UNION,
+            .union_ = NEW(type_union_t)
+        };
         union_type.union_->elements = ct_list_new(sizeof(type_t));
         ct_list_push(union_type.union_->elements, &t);
 
@@ -2858,21 +2859,21 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
             // builtin ident without explicit generics
             if (parser_next_is(m, 1, TOKEN_LEFT_ANGLE)) {
                 impl_type = parser_single_type(m);
-                impl_type.ident = type_kind_str[impl_type.kind];
-                impl_type.ident_kind = TYPE_IDENT_BUILTIN;
+                // impl_type.ident = type_kind_str[impl_type.kind];
+                // impl_type.ident_kind = TYPE_IDENT_BUILTIN;
             } else {
                 parser_must(m, TOKEN_IDENT);
                 impl_type = builtin_impl_type_new(builtin_ident_to_kind(first_token));
-                impl_type.ident = first_token->literal;
-                impl_type.ident_kind = TYPE_IDENT_BUILTIN;
-                impl_type.args = NULL;
+                // impl_type.ident = first_token->literal;
+                // impl_type.ident_kind = TYPE_IDENT_BUILTIN;
+                // impl_type.args = NULL;
             }
         } else if (first_token->type == TOKEN_CHAN && !parser_next_is(m, 1, TOKEN_LEFT_ANGLE)) {
             parser_must(m, TOKEN_CHAN);
             impl_type = builtin_impl_type_new(TYPE_CHAN);
-            impl_type.ident = type_kind_str[TYPE_CHAN];
-            impl_type.ident_kind = TYPE_IDENT_BUILTIN;
-            impl_type.args = NULL;
+            // impl_type.ident = type_kind_str[TYPE_CHAN];
+            // impl_type.ident_kind = TYPE_IDENT_BUILTIN;
+            // impl_type.args = NULL;
         } else {
             // first_token 是 type
             // table 就绪的情况下可以正确的解析 param

@@ -10,9 +10,11 @@
 static void
 check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast_typedef_stmt_t *typedef_stmt);
 
-static type_t reduction_type_ident(module_t *m, type_t t);
+static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *visited);
 
-static type_t type_param_special(module_t *m, type_t t, table_t *arg_table);
+static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *visited);
+
+static type_t type_param_special(module_t *m, type_t t, table_t *arg_table, struct sc_map_s64 *visited);
 
 static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_type);
 
@@ -488,6 +490,26 @@ bool type_compare(type_t dst, type_t src) {
     return type_compare_visited(dst, src, visited);
 }
 
+static bool type_compare_ident_args_visited(list_t *dst_args, list_t *src_args, table_t *visited) {
+    int dst_len = dst_args ? dst_args->length : 0;
+    int src_len = src_args ? src_args->length : 0;
+
+    // NULL 与空列表视为等价
+    if (dst_len != src_len) {
+        return false;
+    }
+
+    for (int i = 0; i < dst_len; ++i) {
+        type_t *dst_arg = ct_list_value(dst_args, i);
+        type_t *src_arg = ct_list_value(src_args, i);
+        if (!type_compare_visited(*dst_arg, *src_arg, visited)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 /**
  * reduction 阶段就应该完成 cross left kind 的定位.
  * @param dst
@@ -535,26 +557,23 @@ bool type_compare_visited(type_t dst, type_t src, table_t *visited) {
     }
 
 
-    // 即使 reduction 后，也需要通过 ident kind 进行判断, 其中 union_type 不受 type def 限制
-    if (dst.ident_kind == TYPE_IDENT_DEF && dst.kind != TYPE_UNION) {
-        assert(dst.ident != NULL);
-        if (src.ident == NULL) {
+    // TYPE_IDENT_DEF 采用名义类型比较：ident + args
+    bool dst_nominal = (dst.ident_kind == TYPE_IDENT_DEF && dst.kind != TYPE_UNION);
+    bool src_nominal = (src.ident_kind == TYPE_IDENT_DEF && src.kind != TYPE_UNION);
+    if (dst_nominal || src_nominal) {
+        if (dst.ident == NULL || src.ident == NULL) {
             return false;
         }
 
         if (!str_equal(dst.ident, src.ident)) {
             return false;
         }
-    }
 
-    if (src.ident_kind == TYPE_IDENT_DEF && src.kind != TYPE_UNION) {
-        assert(src.ident != NULL);
-        if (dst.ident == NULL) {
+        if (!type_compare_ident_args_visited(dst.args, src.args, visited)) {
             return false;
         }
-        if (!str_equal(dst.ident, src.ident)) {
-            return false;
-        }
+
+        return true;
     }
 
     // ident 递归打断
@@ -3706,7 +3725,7 @@ type_t infer_global_expr(module_t *m, ast_expr_t *expr, type_t target_type) {
     return result;
 }
 
-static type_t reduction_struct(module_t *m, type_t t) {
+static type_t reduction_struct(module_t *m, type_t t, struct sc_map_s64 *visited) {
     INFER_ASSERTF(t.kind == TYPE_STRUCT, "type kind=%s unexpect", type_format(t));
 
     type_struct_t *s = t.struct_;
@@ -3715,7 +3734,7 @@ static type_t reduction_struct(module_t *m, type_t t) {
         struct_property_t *p = ct_list_value(s->properties, i);
 
         if (p->type.kind != TYPE_UNKNOWN) {
-            p->type = reduction_type(m, p->type);
+            p->type = reduction_type_visited(m, p->type, visited);
         }
 
         if (p->right) {
@@ -3739,16 +3758,16 @@ static type_t reduction_struct(module_t *m, type_t t) {
     return t;
 }
 
-static type_t reduction_complex_type(module_t *m, type_t t) {
+static type_t reduction_complex_type(module_t *m, type_t t, struct sc_map_s64 *visited) {
     if (t.kind == TYPE_REF || t.kind == TYPE_PTR) {
         type_ptr_t *type_pointer = t.ptr;
-        type_pointer->value_type = reduction_type(m, type_pointer->value_type);
+        type_pointer->value_type = reduction_type_visited(m, type_pointer->value_type, visited);
         return t;
     }
 
     if (t.kind == TYPE_ARR) {
         type_array_t *type_array = t.array;
-        type_array->element_type = reduction_type(m, type_array->element_type);
+        type_array->element_type = reduction_type_visited(m, type_array->element_type, visited);
 
         // not impl
 
@@ -3757,7 +3776,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
 
     if (t.kind == TYPE_CHAN) {
         type_chan_t *type_chan = t.chan;
-        type_chan->element_type = reduction_type(m, type_chan->element_type);
+        type_chan->element_type = reduction_type_visited(m, type_chan->element_type, visited);
 
 
         t.ident_kind = TYPE_IDENT_BUILTIN;
@@ -3770,7 +3789,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
 
     if (t.kind == TYPE_VEC) {
         type_vec_t *type_vec = t.vec;
-        type_vec->element_type = reduction_type(m, type_vec->element_type);
+        type_vec->element_type = reduction_type_visited(m, type_vec->element_type, visited);
 
         // vec.len 都是 impl fn 实现，但是如果是 type my_vec = [int] 这样的实现，impl_ident 应该使用默认的 ident。
         t.ident_kind = TYPE_IDENT_BUILTIN;
@@ -3782,8 +3801,8 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     }
 
     if (t.kind == TYPE_MAP) {
-        t.map->key_type = reduction_type(m, t.map->key_type);
-        t.map->value_type = reduction_type(m, t.map->value_type);
+        t.map->key_type = reduction_type_visited(m, t.map->key_type, visited);
+        t.map->value_type = reduction_type_visited(m, t.map->value_type, visited);
         t.ident_kind = TYPE_IDENT_BUILTIN;
         t.ident = type_kind_str[TYPE_MAP];
         t.args = ct_list_new(sizeof(type_t));
@@ -3795,7 +3814,7 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
     }
 
     if (t.kind == TYPE_SET) {
-        t.set->element_type = reduction_type(m, t.set->element_type);
+        t.set->element_type = reduction_type_visited(m, t.set->element_type, visited);
         t.ident_kind = TYPE_IDENT_BUILTIN;
         t.ident = type_kind_str[TYPE_SET];
         t.args = ct_list_new(sizeof(type_t));
@@ -3809,37 +3828,37 @@ static type_t reduction_complex_type(module_t *m, type_t t) {
         INFER_ASSERTF(tuple->elements->length > 0, "tuple element empty");
         for (int i = 0; i < tuple->elements->length; ++i) {
             type_t *element = ct_list_value(tuple->elements, i);
-            *element = reduction_type(m, *element);
+            *element = reduction_type_visited(m, *element, visited);
         }
         return t;
     }
 
     if (t.kind == TYPE_FN) {
         type_fn_t *fn = t.fn;
-        fn->return_type = reduction_type(m, fn->return_type);
+        fn->return_type = reduction_type_visited(m, fn->return_type, visited);
         for (int i = 0; i < fn->param_types->length; ++i) {
             type_t *formal_type = ct_list_value(fn->param_types, i);
-            *formal_type = reduction_type(m, *formal_type);
+            *formal_type = reduction_type_visited(m, *formal_type, visited);
         }
 
         return t;
     }
 
     if (t.kind == TYPE_STRUCT) {
-        return reduction_struct(m, t);
+        return reduction_struct(m, t, visited);
     }
 
     INFER_ASSERTF(false, "unknown type=%s", type_format(t));
     exit(1);
 }
 
-static type_t type_param_special(module_t *m, type_t t, table_t *arg_table) {
+static type_t type_param_special(module_t *m, type_t t, table_t *arg_table, struct sc_map_s64 *visited) {
     assert(t.kind == TYPE_IDENT);
     assert(t.ident_kind == TYPE_IDENT_GENERICS_PARAM);
 
     // 实参可以没有 reduction
     type_t *arg_type = table_get(arg_table, t.ident);
-    return reduction_type(m, *arg_type);
+    return reduction_type_visited(m, *arg_type, visited);
 }
 
 /**
@@ -4015,7 +4034,7 @@ check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast
     }
 }
 
-static void combination_interface(module_t *m, ast_typedef_stmt_t *typedef_stmt) {
+static void combination_interface(module_t *m, ast_typedef_stmt_t *typedef_stmt, struct sc_map_s64 *visited) {
     assert(typedef_stmt->type_expr.status == REDUCTION_STATUS_DONE);
     assert(typedef_stmt->type_expr.kind == TYPE_INTERFACE);
     type_interface_t *origin_interface = typedef_stmt->type_expr.interface;
@@ -4031,7 +4050,7 @@ static void combination_interface(module_t *m, ast_typedef_stmt_t *typedef_stmt)
     // combination
     for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
         type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
-        *impl_interface = reduction_type(m, *impl_interface);
+        *impl_interface = reduction_type_visited(m, *impl_interface, visited);
         assert(impl_interface->kind == TYPE_INTERFACE);
         for (int j = 0; j < impl_interface->interface->elements->length; ++j) {
             type_t *temp = ct_list_value(impl_interface->interface->elements, j);
@@ -4102,13 +4121,53 @@ static void combination_interface(module_t *m, ast_typedef_stmt_t *typedef_stmt)
  * @param t
  * @return
  */
-static type_t reduction_type_ident(module_t *m, type_t t) {
+static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *visited) {
+#define REDUCTION_IDENT_LEAVE_DEPTH()                                                                  \
+    do {                                                                                               \
+        if (reduction_ident_depth_entered && t.ident) {                                               \
+            uint64_t depth_now = sc_map_get_s64(visited, t.ident);                                     \
+            if (depth_now <= 1) {                                                                      \
+                sc_map_del_s64(visited, t.ident);                                                       \
+            } else {                                                                                   \
+                sc_map_put_s64(visited, t.ident, depth_now - 1);                                       \
+            }                                                                                          \
+        }                                                                                              \
+    } while (0)
+
     symbol_t *symbol = symbol_table_get(t.ident);
     INFER_ASSERTF(symbol, "typedef '%s' not found", t.ident);
     INFER_ASSERTF(symbol->type == SYMBOL_TYPE, "'%s' is not a type", symbol->ident);
 
     // 此时的 symbol 可能是其他 module 中声明的符号
     ast_typedef_stmt_t *typedef_stmt = symbol->ast_value;
+
+    if (!typedef_stmt->params) {
+        INFER_ASSERTF(t.args == NULL, "typedef '%s' args mismatch", t.ident);
+
+        // 检查右值是否 reduce 完成
+        if (typedef_stmt->type_expr.status == REDUCTION_STATUS_DONE) {
+            type_t temp = type_copy(m, typedef_stmt->type_expr);
+            t.kind = temp.kind;
+            t.value = temp.value;
+            t.in_heap = temp.in_heap;
+            t.status = temp.status;
+            return t;
+        }
+    }
+
+    // 通过 ident 记录当前 reduction 路径深度: depth=1/2 继续, depth=3 中断
+    bool reduction_ident_depth_entered = false;
+    if (t.ident) {
+        uint64_t reduction_depth = sc_map_get_s64(visited, t.ident) + 1;
+        sc_map_put_s64(visited, t.ident, reduction_depth);
+        reduction_ident_depth_entered = true;
+
+        if (reduction_depth >= 3) {
+            // depth=3 中断返回前需要 -1
+            REDUCTION_IDENT_LEAVE_DEPTH();
+            return t;
+        }
+    }
 
     // 判断是否包含 args, 如果包含 args 则需要每一次 reduction 都进行处理
     // 此时的 type alias 相当于重新定义了一个新的类型，并进行了 type_copy, 所以不会存在 reduction 冲突问题, 可以直接返回
@@ -4121,7 +4180,7 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
         table_t *args_table = table_new();
         for (int i = 0; i < t.args->length; ++i) {
             type_t *arg = ct_list_value(t.args, i);
-            *arg = reduction_type(m, *arg);
+            *arg = reduction_type_visited(m, *arg, visited);
 
             ast_generics_param_t *param = ct_list_value(typedef_stmt->params, i);
 
@@ -4139,11 +4198,11 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
             if (typedef_stmt->is_interface) {
                 assert(typedef_stmt->type_expr.status == REDUCTION_STATUS_DONE);
                 assert(typedef_stmt->type_expr.kind == TYPE_INTERFACE);
-                combination_interface(m, typedef_stmt);
+                combination_interface(m, typedef_stmt, visited);
             } else {
                 for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
                     type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
-                    *impl_interface = reduction_type(m, *impl_interface);
+                    *impl_interface = reduction_type_visited(m, *impl_interface, visited);
                     check_typedef_impl(m, impl_interface, t.ident, typedef_stmt);
                 }
             }
@@ -4155,7 +4214,7 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
         // reduction 部分的 struct 的 right expr 如果是 struct，也只会进行到 infer_fn_decl 而不会处理 fn body 部分
         // 所以 fn body 部分还是包含 type_param, 如果此时将 type_param_table 置空，会导致后续 infer_fndef 时解析 param 异常
         // 更加正确的做法应该是将 type_param_table 赋值给相应的 ast_fndef
-        right_type_expr = reduction_type(m, right_type_expr);
+        right_type_expr = reduction_type_visited(m, right_type_expr, visited);
 
         if (m->infer_type_args_stack) {
             stack_pop(m->infer_type_args_stack);
@@ -4165,36 +4224,9 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
         t.value = right_type_expr.value;
         t.in_heap = right_type_expr.in_heap;
         t.status = right_type_expr.status;
-        return t;
-    } else {
-        INFER_ASSERTF(t.args == NULL, "typedef '%s' args mismatch",
-                      t.ident);
-    }
-
-
-    // 检查右值是否 reduce 完成
-    if (typedef_stmt->type_expr.status == REDUCTION_STATUS_DONE) {
-        type_t temp = type_copy(m, typedef_stmt->type_expr);
-        t.kind = temp.kind;
-        t.value = temp.value;
-        t.in_heap = temp.in_heap;
-        t.status = temp.status;
+        REDUCTION_IDENT_LEAVE_DEPTH();
         return t;
     }
-
-    if (typedef_stmt->type_expr.status == REDUCTION_STATUS_DOING2) {
-        // doing2 打破循环
-        return t;
-    }
-
-    // 当前 ident 对应的 type 正在 reduction, 出现这种情况可能的原因是嵌套使用了 ident
-    if (typedef_stmt->type_expr.status == REDUCTION_STATUS_DOING) {
-        typedef_stmt->type_expr.status = REDUCTION_STATUS_DOING2;
-    } else {
-        // 打上正在进行的标记,避免进入死循环
-        typedef_stmt->type_expr.status = REDUCTION_STATUS_DOING;
-    }
-
 
     // interface 需要通过 ident 进行区分，所以这里将 ident 赋值给 type_expr
     if (typedef_stmt->is_interface) {
@@ -4207,44 +4239,46 @@ static type_t reduction_type_ident(module_t *m, type_t t) {
         typedef_stmt->type_expr.ident = t.ident;
     }
 
-    typedef_stmt->type_expr = reduction_type(m, typedef_stmt->type_expr);
+    typedef_stmt->type_expr = reduction_type_visited(m, typedef_stmt->type_expr, visited);
 
     // check impl
     if (typedef_stmt->impl_interfaces) {
         if (typedef_stmt->is_interface) {
             assert(typedef_stmt->type_expr.status == REDUCTION_STATUS_DONE);
             assert(typedef_stmt->type_expr.kind == TYPE_INTERFACE);
-            combination_interface(m, typedef_stmt);
+            combination_interface(m, typedef_stmt, visited);
         } else {
             for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
                 type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
-                *impl_interface = reduction_type(m, *impl_interface);
+                *impl_interface = reduction_type_visited(m, *impl_interface, visited);
                 check_typedef_impl(m, impl_interface, t.ident, typedef_stmt);
             }
         }
     }
 
-    // reduction_type 已经返回，现在这里可以直接修改为 done, 或者在外部的 reduction_type 中配置为 done
     type_t right_type_expr = type_copy(m, typedef_stmt->type_expr);
     t.kind = right_type_expr.kind;
     t.value = right_type_expr.value;
     t.in_heap = right_type_expr.in_heap;
     t.status = right_type_expr.status;
+    REDUCTION_IDENT_LEAVE_DEPTH();
     return t;
+
+#undef REDUCTION_IDENT_LEAVE_DEPTH
 }
 
-static type_t reduction_tagged_union_type(module_t *m, type_t t) {
+static type_t reduction_tagged_union_type(module_t *m, type_t t, struct sc_map_s64 *visited) {
     type_tagged_union_t *tagged_union = t.tagged_union;
 
     for (int i = 0; i < tagged_union->elements->length; ++i) {
         tagged_union_element_t *temp = ct_list_value(tagged_union->elements, i);
-        temp->type = reduction_type(m, temp->type);
+        temp->type = reduction_type_visited(m, temp->type, visited);
     }
 
     return t;
 }
 
-static type_t reduction_union_type(module_t *m, type_t t) {
+static type_t reduction_union_type(module_t *m, type_t t, struct sc_map_s64 *visited) {
     type_union_t *type_union = t.union_;
     if (type_union->elements->length == 0) {
         return t;
@@ -4252,15 +4286,15 @@ static type_t reduction_union_type(module_t *m, type_t t) {
 
     for (int i = 0; i < t.union_->elements->length; ++i) {
         type_t *temp = ct_list_value(t.union_->elements, i);
-        *temp = reduction_type(m, *temp);
+        *temp = reduction_type_visited(m, *temp, visited);
     }
 
     return t;
 }
 
-static type_t reduction_enum(module_t *m, type_t t) {
+static type_t reduction_enum(module_t *m, type_t t, struct sc_map_s64 *visited) {
     type_enum_t *enum_type = t.enum_;
-    enum_type->element_type = reduction_type(m, enum_type->element_type);
+    enum_type->element_type = reduction_type_visited(m, enum_type->element_type, visited);
 
     // enum 只支持 integer 类型作为 discriminant
     INFER_ASSERTF(is_integer(enum_type->element_type.kind),
@@ -4299,26 +4333,26 @@ static type_t reduction_enum(module_t *m, type_t t) {
     return t;
 }
 
-static type_t reduction_interface(module_t *m, type_t t) {
+static type_t reduction_interface(module_t *m, type_t t, struct sc_map_s64 *visited) {
     type_interface_t *type_interface = t.interface;
     generics_interface_fill_builtin_alloc_types(t);
 
     for (int i = 0; i < type_interface->elements->length; ++i) {
         type_t *temp = ct_list_value(type_interface->elements, i);
-        *temp = reduction_type(m, *temp);
+        *temp = reduction_type_visited(m, *temp, visited);
     }
 
     if (type_interface->alloc_types && type_interface->alloc_types->length > 0) {
         for (int i = 0; i < type_interface->alloc_types->length; ++i) {
             type_t *alloc_type = ct_list_value(type_interface->alloc_types, i);
-            *alloc_type = reduction_type(m, *alloc_type);
+            *alloc_type = reduction_type_visited(m, *alloc_type, visited);
         }
     }
 
     if (type_interface->deny_types && type_interface->deny_types->length > 0) {
         for (int i = 0; i < type_interface->deny_types->length; ++i) {
             type_t *deny_type = ct_list_value(type_interface->deny_types, i);
-            *deny_type = reduction_type(m, *deny_type);
+            *deny_type = reduction_type_visited(m, *deny_type, visited);
         }
     }
 
@@ -4326,6 +4360,14 @@ static type_t reduction_interface(module_t *m, type_t t) {
 }
 
 type_t reduction_type(module_t *m, type_t t) {
+    struct sc_map_s64 visited;
+    sc_map_init_s64(&visited, 0, 0);
+    t = reduction_type_visited(m, t, &visited);
+    sc_map_term_s64(&visited);
+    return t;
+}
+
+static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *visited) {
     assert(t.kind > 0);
 
     char *ident = t.ident;
@@ -4343,7 +4385,7 @@ type_t reduction_type(module_t *m, type_t t) {
     }
 
     if (type_is_ident(&t)) {
-        t = reduction_type_ident(m, t);
+        t = reduction_type_ident(m, t, visited);
         goto STATUS_DONE;
     }
 
@@ -4355,7 +4397,7 @@ type_t reduction_type(module_t *m, type_t t) {
 
         table_t *arg_table = stack_top(m->infer_type_args_stack);
         assert(arg_table);
-        t = type_param_special(m, t, arg_table);
+        t = type_param_special(m, t, arg_table, visited);
 
         ident = t.ident;
         ident_kind = t.ident_kind;
@@ -4365,27 +4407,27 @@ type_t reduction_type(module_t *m, type_t t) {
     }
 
     if (t.kind == TYPE_TAGGED_UNION) {
-        t = reduction_tagged_union_type(m, t);
+        t = reduction_tagged_union_type(m, t, visited);
         goto STATUS_DONE;
     }
 
     if (t.kind == TYPE_UNION) {
-        t = reduction_union_type(m, t);
+        t = reduction_union_type(m, t, visited);
         goto STATUS_DONE;
     }
 
     if (t.kind == TYPE_INTERFACE) {
-        t = reduction_interface(m, t);
+        t = reduction_interface(m, t, visited);
         goto STATUS_DONE;
     }
 
     if (t.kind == TYPE_ENUM) {
-        t = reduction_enum(m, t);
+        t = reduction_enum(m, t, visited);
         goto STATUS_DONE;
     }
 
     // 只有 typedef ident 才有中间状态的说法
-    if (is_origin_type(t)) {
+    if (is_origin_kind(t.kind)) {
         t.status = REDUCTION_STATUS_DONE;
         t.ident = type_kind_str[t.kind];
         t.ident_kind = TYPE_IDENT_BUILTIN;
@@ -4395,7 +4437,7 @@ type_t reduction_type(module_t *m, type_t t) {
 
     // infer complex type
     if (is_complex_type(t)) {
-        t = reduction_complex_type(m, t);
+        t = reduction_complex_type(m, t, visited);
         goto STATUS_DONE;
     }
 
@@ -4424,15 +4466,13 @@ STATUS_DONE:
     if (ident_kind > 0) {
         t.ident_kind = ident_kind;
         t.ident = ident;
+        t.args = args; // args 与 ident 绑定
     }
 
-    if (args) {
-        t.args = args;
-    }
-
-    struct sc_map_s64 visited;
-    sc_map_init_s64(&visited, 0, 0);
-    void *found = type_recycle_check(m, &t, &visited);
+    struct sc_map_s64 recycle_visited;
+    sc_map_init_s64(&recycle_visited, 0, 0);
+    void *found = type_recycle_check(m, &t, &recycle_visited);
+    sc_map_term_s64(&recycle_visited);
     if (found) {
         INFER_ASSERTF(false, "recycle use type '%s'", (char *) found);
     }

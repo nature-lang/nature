@@ -7,24 +7,23 @@ A general-purpose system programming language and compiler, designed to build hi
 - Lightweight, concise, and consistent syntax design, easy to master and get started quickly
 - Strong type system, static analysis and compilation, memory safety, exception handling, making it easy to write secure and reliable software
 - Built-in concurrency primitives: go/future/channel/select
+- Comprehensive type system supporting generics, enum, tagged union, interface, nullable(?), errable(!)
 - Compiles directly to machine code for the target platform, does not rely on LLVM, and supports cross-compilation.
 - Simple deployment, efficient compilation, static linking based on musl libc with good cross-platform characteristics
-- Comprehensive type system supporting generics, union types, interfaces, nullable(?), errable(!)
+- High-performance C FFI implementation with zero-overhead calls to C standard library functions
 - High-performance GC implementation with very short STW (Stop The World)
 - High-performance memory allocator implementation, referencing tcmalloc
 - High-performance shared-stack coroutine implementation, capable of millions of coroutine switches per second
 - High-performance IO based on libuv implementation
 - High-performance runtime and compiler based on pure C implementation
-- Built-in data structures vec/map/set/tup and common standard library implementations
-- Function calls follow system ABI, built-in libc, c std functions are called without performance loss.
+- Built-in data structures vec/string/map/set/tup and common standard library implementations
+- Test as a first-class citizen, write test blocks directly in source files
 - Centralized package management system npkg
 - Editor LSP support
   
 ## Overview
 
-The nature programming language has reached an early usable version, with a basically stable syntax API that will not change significantly before version 1.0. Future versions will add some necessary and commonly used syntax features such as enum, ternary operators, struct labels, etc.
-
-Key features to be completed include controllable memory allocator, LLM coding adaptation, DSL test framework, GUI adaptation, and WASM3.0 adaptation.
+The nature programming language has reached an early usable version, and its core syntax features are now in place. Key features still to be completed include unsafe runtime mode, LLM coding adaptation, C target adaptation, and WASM3.0 target adaptation.
 
 The current version supports compilation for the following target architectures: linux_amd64, linux_arm64, linux_riscv64, darwin_amd64, darwin_arm64. 
 

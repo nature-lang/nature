@@ -3222,10 +3222,7 @@ impl<'a> Syntax {
                 t
             } else if (first_token.token_type == TokenType::Ident) && self.ident_is_builtin_type(first_token.clone()) {
                 if self.next_is(1, TokenType::LeftAngle) {
-                    let mut t = self.parser_single_type()?;
-                    t.ident = first_token.literal.clone();
-                    t.ident_kind = TypeIdentKind::Builtin;
-                    t
+                    self.parser_single_type()?
                 } else {
                     self.must(TokenType::Ident)?;
                     let mut t = Type::unknown();
@@ -3236,9 +3233,6 @@ impl<'a> Syntax {
                         "tup" => TypeKind::Tuple(Vec::new(), 0),
                         _ => TypeKind::Ident,
                     };
-                    t.ident = first_token.literal.clone();
-                    t.ident_kind = TypeIdentKind::Builtin;
-                    t.args = Vec::new();
                     t.start = first_token.start;
                     t.end = first_token.end;
                     t
@@ -3247,9 +3241,6 @@ impl<'a> Syntax {
                 self.must(TokenType::Chan)?;
                 let mut t = Type::unknown();
                 t.kind = TypeKind::Chan(Box::new(Type::unknown()));
-                t.ident = "chan".to_string();
-                t.ident_kind = TypeIdentKind::Builtin;
-                t.args = Vec::new();
                 t.start = first_token.start;
                 t.end = first_token.end;
                 t

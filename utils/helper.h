@@ -247,6 +247,13 @@ static inline char *utoa(uint64_t n) {
 }
 
 static inline bool str_equal(char *a, char *b) {
+    if (a == NULL && b != NULL) {
+        return false;
+    }
+    if (b == NULL && a != NULL) {
+        return false;
+    }
+
     return strcmp(a, b) == 0;
 }
 
