@@ -1435,17 +1435,6 @@ static bool analyzer_local_ident(module_t *m, ast_expr_t *expr) {
     return false;
 }
 
-/**
- * Check if a symbol is marked as private (#local).
- * Returns true if the symbol is private and should not be importable.
- */
-static bool symbol_is_private(symbol_t *sym) {
-    if (!sym) {
-        return false;
-    }
-    return sym->is_private;
-}
-
 static bool analyzer_as_star_or_builtin_ident(module_t *m, ast_ident *ident) {
     // - import xxx as * 产生的全局符号
     for (int i = 0; i < m->imports->count; ++i) {
@@ -1453,8 +1442,7 @@ static bool analyzer_as_star_or_builtin_ident(module_t *m, ast_ident *ident) {
 
         if (str_equal(import->as, "*")) {
             char *temp = ident_with_prefix(import->module_ident, ident->literal);
-            symbol_t *sym = symbol_table_get(temp);
-            if (sym) {
+            if (symbol_table_get(temp)) {
                 ident->literal = temp;
                 return true;
             }
@@ -1503,6 +1491,14 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
         symbol_t *sym = symbol_table_get(global_ident);
         if (!sym) {
             ANALYZER_ASSERTF(false, "symbol '%s' not found in module", select_ref->original_ident);
+        }
+
+         // Check if symbol is private (only for functions)
+        if (sym->type == SYMBOL_FN) {
+            ast_fndef_t *fndef = sym->ast_value;
+            if (fndef->is_private) {
+                ANALYZER_ASSERTF(false, "cannot import private function '%s'", select_ref->original_ident);
+            }
         }
 
         ident->literal = global_ident;
@@ -1554,8 +1550,7 @@ static void rewrite_select_expr(module_t *m, ast_expr_t *expr) {
             char *unique_ident = ident_with_prefix(import->module_ident, select->key);
 
             // 检测 import ident 是否存在
-            symbol_t *sym = symbol_table_get(unique_ident);
-            if (!sym) {
+            if (!symbol_table_get(unique_ident)) {
                 ANALYZER_ASSERTF(false, "identifier '%s' undeclared \n", unique_ident);
             }
 
