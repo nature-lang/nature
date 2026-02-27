@@ -1493,7 +1493,7 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
             ANALYZER_ASSERTF(false, "symbol '%s' not found in module", select_ref->original_ident);
         }
 
-         // Check if symbol is private (only for functions)
+        // Check if symbol is private (only for functions)
         if (sym->type == SYMBOL_FN) {
             ast_fndef_t *fndef = sym->ast_value;
             if (fndef->is_private) {
