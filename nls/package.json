@@ -46,6 +46,13 @@
         ]
       }
     ],
+    "grammars": [
+      {
+        "language": "n",
+        "scopeName": "source.n",
+        "path": "./syntaxes/n.tmLanguage.json"
+      }
+    ],
     "configuration": {
       "type": "object",
       "title": "nls",
