@@ -1,9 +1,35 @@
-.idea/
-/target
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# Dependencies
 node_modules
-out/
-.pnpm-debug.log
-*.ast 
+.pnp
+.pnp.js
+.yarn
+
+# Local env files
+.env
+**.local
+
+# Build Outputs
+target/
+build/
 dist/
+out/
+*.tsbuildinfo
+
+# IDE/editor
+.idea/
+.vscode/
+.history/
+
+# Package manager/debug logs
+.pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# VS Code extension package
 *.vsix
-.history
+
+# Project artifacts
+*.ast
