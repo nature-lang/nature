@@ -1473,6 +1473,7 @@ impl<'a> Syntax {
             impl_interfaces,
             method_table: HashMap::new(),
             symbol_id: 0,
+            is_private: false,
         })));
         stmt.end = self.prev().unwrap().end;
 
@@ -1524,6 +1525,7 @@ impl<'a> Syntax {
             be_capture: false,
             heap_ident: None,
             symbol_id: 0,
+            is_private: false,
         })))
     }
 
@@ -1833,6 +1835,7 @@ impl<'a> Syntax {
             be_capture: false,
             heap_ident: None,
             symbol_id: 0,
+            is_private: false,
         };
 
         let catch_body = self.parser_body(true)?;
@@ -2360,6 +2363,7 @@ impl<'a> Syntax {
                 be_capture: false,
                 symbol_id: 0,
                 heap_ident: None,
+                is_private: false,
             };
 
             let second = if self.consume(TokenType::Comma) {
@@ -2372,6 +2376,7 @@ impl<'a> Syntax {
                     be_capture: false,
                     heap_ident: None,
                     symbol_id: 0,
+                    is_private: false,
                 })))
             } else {
                 None
@@ -2936,6 +2941,7 @@ impl<'a> Syntax {
                     be_capture: false,
                     heap_ident: None,
                     symbol_id: 0,
+                    is_private: false,
                 })));
                 expr.end = self.prev().unwrap().end;
                 expr
@@ -2981,6 +2987,7 @@ impl<'a> Syntax {
                 be_capture: false,
                 heap_ident: None,
                 symbol_id: 0,
+                is_private: false,
             })),
             self.parser_expr()?,
         );
@@ -3014,6 +3021,7 @@ impl<'a> Syntax {
                 be_capture: false,
                 heap_ident: None,
                 symbol_id: 0,
+                is_private: false,
             })),
             self.parser_expr()?,
         );
@@ -3037,6 +3045,7 @@ impl<'a> Syntax {
             symbol_start: const_ident.start,
             symbol_end: const_ident.end,
             symbol_id: 0,
+            is_private: false,
         })));
 
         Ok(stmt)
@@ -3322,6 +3331,7 @@ impl<'a> Syntax {
 
     fn parser_label(&mut self) -> Result<Box<Stmt>, SyntaxError> {
         let mut fndef = AstFnDef::default();
+        let mut is_private = false;
 
         while self.is(TokenType::Label) {
             let token = self.must(TokenType::Label)?;
@@ -3335,6 +3345,7 @@ impl<'a> Syntax {
                     fndef.linkid = Some(literal.literal.clone());
                 }
             } else if token.literal == "local" {
+                is_private = true;
                 fndef.is_private = true;
             } else if token.literal == "where" {
                 if fndef.pending_where_params.is_some() {
@@ -3369,14 +3380,44 @@ impl<'a> Syntax {
             if fndef.pending_where_params.is_some() {
                 return Err(SyntaxError(self.peek().start, self.peek().end, "#where can only be applied to fn".to_string()));
             }
-            self.parser_typedef_stmt()
+            let result = self.parser_typedef_stmt()?;
+            if is_private {
+                if let AstNode::Typedef(ref typedef) = result.node {
+                    typedef.lock().unwrap().is_private = true;
+                }
+            }
+            Ok(result)
         } else if self.is(TokenType::Fn) {
             self.parser_fndef_stmt(fndef)
+        } else if self.is(TokenType::Const) {
+            let result = self.parser_constdef_stmt()?;
+            if is_private {
+                if let AstNode::ConstDef(ref constdef) = result.node {
+                    constdef.lock().unwrap().is_private = true;
+                }
+            }
+            Ok(result)
+        } else if self.is(TokenType::Var) {
+            let result = self.parser_var_begin_stmt()?;
+            if is_private {
+                if let AstNode::VarDef(ref var_decl, _) = result.node {
+                    var_decl.lock().unwrap().is_private = true;
+                }
+            }
+            Ok(result)
+        } else if self.is_type_begin_stmt() {
+            let result = self.parser_type_begin_stmt()?;
+            if is_private {
+                if let AstNode::VarDef(ref var_decl, _) = result.node {
+                    var_decl.lock().unwrap().is_private = true;
+                }
+            }
+            Ok(result)
         } else {
             Err(SyntaxError(
                 self.peek().start,
                 self.peek().end,
-                format!("the label can only be used in type alias or fn"),
+                format!("the label can only be applied to type, fn, const, or var"),
             ))
         }
     }
@@ -3732,6 +3773,7 @@ impl<'a> Syntax {
                 be_capture: false,
                 heap_ident: None,
                 symbol_id: 0,
+                is_private: false,
             })),
             call_expr.clone(),
         );
@@ -3808,6 +3850,7 @@ impl<'a> Syntax {
             be_capture: false,
             heap_ident: None,
             symbol_id: 0,
+            is_private: false,
         }));
 
         let catch_body = self.parser_body(false)?;
@@ -3906,6 +3949,7 @@ impl<'a> Syntax {
                     be_capture: false,
                     heap_ident: None,
                     symbol_id: 0,
+                    is_private: false,
                 })));
             }
 

@@ -199,6 +199,7 @@ impl SymbolTable {
                 is_tagged_union: false,
                 impl_interfaces: Vec::new(),
                 method_table: HashMap::new(),
+                is_private: false,
                 symbol_start: 0,
                 symbol_end: 0,
                 symbol_id: 0,
