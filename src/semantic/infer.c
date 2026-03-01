@@ -1,5 +1,6 @@
 #include "infer.h"
 #include "generics.h"
+#include "interface.h"
 
 #include <string.h>
 
@@ -7,14 +8,9 @@
 #include "src/debug/debug.h"
 #include "src/error.h"
 
-static void
-check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast_typedef_stmt_t *typedef_stmt);
-
 static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *visited);
 
 static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *visited);
-
-static type_t type_param_special(module_t *m, type_t t, table_t *arg_table, struct sc_map_s64 *visited);
 
 static type_fn_t *infer_call_left(module_t *m, ast_call_t *call, type_t target_type);
 
@@ -43,6 +39,8 @@ static bool impl_static_symbol_exists(module_t *m, type_t select_left_type, char
 static bool try_rewrite_tagged_union_call(module_t *m, ast_expr_t *expr, type_t target_type);
 
 static bool try_rewrite_tagged_union_select(module_t *m, ast_expr_t *expr, type_t target_type);
+
+static ast_fndef_t *generate_receiver_wrapper(module_t *m, ast_fndef_t *origin_fndef, type_t impl_type);
 
 bool generics_constraints_compare(ast_generics_constraints *left, ast_generics_constraints *right) {
     if (left->elements->length == 0) {
@@ -76,41 +74,6 @@ bool generics_constraints_compare(ast_generics_constraints *left, ast_generics_c
     return true;
 }
 
-/**
- * 递归查找 stmt 中是否包含 target_interface
- */
-static bool check_impl_interface_contains(module_t *m, ast_typedef_stmt_t *stmt, type_t *find_target_interface) {
-    if (!stmt->impl_interfaces) {
-        return false;
-    }
-
-    for (int i = 0; i < stmt->impl_interfaces->length; ++i) {
-        type_t *impl_interface = ct_list_value(stmt->impl_interfaces, i);
-        if (str_equal(impl_interface->ident, find_target_interface->ident)) {
-            return true;
-        }
-
-        symbol_t *s = symbol_table_get(impl_interface->ident);
-        if (!s) {
-            continue;
-        }
-
-        assert(s && s->type == SYMBOL_TYPE);
-        ast_typedef_stmt_t *typedef_stmt = s->ast_value;
-        if (typedef_stmt->impl_interfaces == NULL) {
-            continue;
-        }
-
-        if (check_impl_interface_contains(m, typedef_stmt, find_target_interface)) {
-            return true;
-        }
-
-        // continue
-    }
-
-    return false;
-}
-
 static bool interface_alloc_types_contains(module_t *m, type_interface_t *interface_type, type_t src) {
     if (!interface_type || !interface_type->alloc_types || interface_type->alloc_types->length == 0) {
         return false;
@@ -134,16 +97,16 @@ static bool interface_alloc_types_contains(module_t *m, type_interface_t *interf
 }
 
 static void generics_constraints_check(module_t *m, ast_generics_constraints *constraints, type_t *src) {
+    if (constraints->elements->length == 0) {
+        return;
+    }
+
     // 对 constraints 进行类型还原
     for (int j = 0; j < constraints->elements->length; ++j) {
         type_t *constraint = ct_list_value(constraints->elements, j);
         *constraint = reduction_type(m, *constraint);
         INFER_ASSERTF(constraint->kind == TYPE_INTERFACE,
                       "generic constraints only support interface '&' constraints");
-    }
-
-    if (constraints->elements->length == 0) {
-        return;
     }
 
     for (int i = 0; i < constraints->elements->length; ++i) {
@@ -176,7 +139,6 @@ static void generics_constraints_check(module_t *m, ast_generics_constraints *co
 
 
         assert(temp_target_type.ident);
-
         symbol_t *s = symbol_table_get(temp_target_type.ident);
         if (!s) {
             // maybe builtin type
@@ -196,23 +158,6 @@ static void generics_constraints_check(module_t *m, ast_generics_constraints *co
         // 禁止鸭子类型
         INFER_ASSERTF(found, "type '%s' not impl '%s' interface", temp_target_type.ident,
                       expect_interface_type->ident);
-        check_typedef_impl(m, expect_interface_type, temp_target_type.ident, typedef_stmt);
-    }
-}
-
-static void impl_generics_constraints_check(module_t *m, ast_fndef_t *fndef, list_t *impl_gen_args) {
-    if (!fndef || !fndef->generics_params || !impl_gen_args) {
-        return;
-    }
-
-    INFER_ASSERTF(fndef->generics_params->length == impl_gen_args->length, "type '%s' param not match",
-                  fndef->impl_type.ident);
-
-    for (int i = 0; i < fndef->generics_params->length; ++i) {
-        ast_generics_param_t *param = ct_list_value(fndef->generics_params, i);
-        type_t *arg_type = ct_list_value(impl_gen_args, i);
-        type_t temp_arg = reduction_type(m, *arg_type);
-        generics_constraints_check(m, &param->constraints, &temp_arg);
     }
 }
 
@@ -521,8 +466,6 @@ static bool type_compare_ident_args_visited(list_t *dst_args, list_t *src_args, 
  * @return
  */
 bool type_compare_visited(type_t dst, type_t src, table_t *visited) {
-    assert(!ident_is_generics_param(&dst));
-    assert(!ident_is_generics_param(&src));
     assertf(dst.status == REDUCTION_STATUS_DONE, "type '%s' not reduction", type_format(dst));
     assertf(src.status == REDUCTION_STATUS_DONE, "type '%s' not reduction", type_format(src));
     assertf(dst.kind != TYPE_UNKNOWN && src.kind != TYPE_UNKNOWN, "type unknown cannot infer");
@@ -592,6 +535,14 @@ bool type_compare_visited(type_t dst, type_t src, table_t *visited) {
 
     if (dst.kind != src.kind) {
         return false;
+    }
+
+    if (ident_is_generics_param(&dst)) {
+        if (!ident_is_generics_param(&src)) {
+            return false;
+        }
+
+        return str_equal(dst.ident, src.ident);
     }
 
     // any 可以批判任何类型，即使右值是 any 或者 union，union 需要经过特殊的 union_to_any 转换
@@ -839,6 +790,8 @@ static table_t *generics_args_table(module_t *m, ast_fndef_t *temp_fn, ast_call_
         INFER_ASSERTF(table_exist(args_table, param->ident), "cannot infer generics param '%s'", param->ident);
 
         type_t *arg_type = table_get(args_table, param->ident);
+
+        // TODO 这里只需要判断 contains
         generics_constraints_check(m, &param->constraints, arg_type);
     }
 
@@ -1222,7 +1175,6 @@ static type_t infer_as_expr(module_t *m, ast_expr_t *expr) {
         bool found = check_impl_interface_contains(m, typedef_stmt, &src_type);
         // 禁止鸭子类型
         INFER_ASSERTF(found, "type '%s' not impl '%s' interface", src_type.ident, src_type.ident);
-        check_typedef_impl(m, &src_type, temp_target_type.ident, typedef_stmt);
 
         return target_type;
     }
@@ -3193,6 +3145,10 @@ static void infer_return(module_t *m, ast_return_stmt_t *stmt) {
     }
 }
 
+static void infer_defer(module_t *m, ast_defer_stmt_t *stmt) {
+    infer_body(m, stmt->body);
+}
+
 static void infer_ret(module_t *m, ast_ret_stmt_t *stmt) {
     type_t *target_type = stack_top(m->current_fn->ret_target_types);
     assert(target_type);
@@ -3428,6 +3384,9 @@ static void infer_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_STMT_RETURN: {
             return infer_return(m, stmt->value);
         }
+        case AST_STMT_DEFER: {
+            return infer_defer(m, stmt->value);
+        }
         case AST_STMT_RET: {
             return infer_ret(m, stmt->value);
         }
@@ -3655,9 +3614,36 @@ static ast_expr_t as_to_interface(module_t *m, ast_expr_t *expr, type_t interfac
     // check actual_type impl 是否包含 target_type.ident
     bool found = check_impl_interface_contains(m, typedef_stmt, &interface_type);
     // 禁止鸭子类型
-    INFER_ASSERTF(found, "type '%s' not impl '%s' interface", src_type.ident, interface_type.ident);
+    INFER_ASSERTF(found, "type '%s' not impl '%s' interface", type_format(src_type), type_format(interface_type));
 
-    check_typedef_impl(m, &interface_type, src_type.ident, typedef_stmt);
+    // ensure receiver_wrapper for value receiver impl methods
+    // interface stores pointer data, value receiver methods need wrapper to dereference self
+    for (int i = 0; i < interface_type.interface->elements->length; ++i) {
+        type_t *expect_type = ct_list_value(interface_type.interface->elements, i);
+        assert(expect_type->kind == TYPE_FN);
+        type_fn_t *interface_fn_type = expect_type->fn;
+        assert(interface_fn_type && interface_fn_type->fn_name);
+        char *fn_ident = str_connect_by(src_type.ident, interface_fn_type->fn_name, IMPL_CONNECT_IDENT);
+        ast_fndef_t *impl_method = sc_map_get_sv(&typedef_stmt->method_table, fn_ident);
+        assert(impl_method);
+        if (impl_method->receiver_wrapper) {
+            continue;
+        }
+
+        if (impl_method->self_kind == PARAM_SELF_T && typedef_stmt->type_expr.storage_kind != STORAGE_KIND_PTR) {
+            ast_fndef_t *wrapper_fn = generate_receiver_wrapper(m, impl_method, impl_method->impl_type);
+            impl_method->receiver_wrapper = wrapper_fn;
+
+            symbol_t *wrapper_symbol = symbol_table_set(wrapper_fn->symbol_name, SYMBOL_FN, wrapper_fn, false);
+            INFER_ASSERTF(wrapper_symbol, "ident '%s' redeclared", wrapper_fn->symbol_name);
+
+            infer_fn_decl(m, wrapper_fn, type_kind_new(TYPE_UNKNOWN));
+            if (m->temp_worklist == NULL) {
+                m->temp_worklist = linked_new();
+            }
+            linked_push(m->temp_worklist, wrapper_fn);
+        }
+    }
 
     // auto as to interface, expr as interface_union, will handle in linear
     return ast_type_as(*expr, interface_type);
@@ -3865,15 +3851,6 @@ static type_t reduction_complex_type(module_t *m, type_t t, struct sc_map_s64 *v
     exit(1);
 }
 
-static type_t type_param_special(module_t *m, type_t t, table_t *arg_table, struct sc_map_s64 *visited) {
-    assert(t.kind == TYPE_IDENT);
-    assert(t.ident_kind == TYPE_IDENT_GENERICS_PARAM);
-
-    // 实参可以没有 reduction
-    type_t *arg_type = table_get(arg_table, t.ident);
-    return reduction_type_visited(m, *arg_type, visited);
-}
-
 /**
  * 为值类型接收器生成包装函数
  * 当 self_kind == PARAM_SELF_T 时，interface 存储指针数据但方法期望值类型
@@ -3990,151 +3967,6 @@ static ast_fndef_t *generate_receiver_wrapper(module_t *m, ast_fndef_t *origin_f
     return wrapper;
 }
 
-static void
-check_typedef_impl(module_t *m, type_t *impl_interface, char *typedef_ident, ast_typedef_stmt_t *typedef_stmt) {
-    assert(impl_interface->ident_kind == TYPE_IDENT_INTERFACE);
-    assert(impl_interface->status == REDUCTION_STATUS_DONE);
-    assert(impl_interface->kind == TYPE_INTERFACE);
-    type_interface_t *interface_type = impl_interface->interface;
-    if (typedef_stmt->is_interface) {
-        for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
-            type_t *actual_impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
-            if (str_equal(actual_impl_interface->ident, impl_interface->ident)) {
-                return;
-            }
-        }
-        INFER_ASSERTF(false, "interface '%s' impl not contains '%s'", typedef_stmt->ident, impl_interface->ident);
-    }
-
-    // check impl
-    for (int j = 0; j < interface_type->elements->length; ++j) {
-        type_t *expect_type = ct_list_value(interface_type->elements, j);
-        assert(expect_type->status == REDUCTION_STATUS_DONE);
-        assert(expect_type->kind == TYPE_FN);
-        type_fn_t *interface_fn_type = expect_type->fn;
-        assert(interface_fn_type->fn_name);
-
-        // find fn from symbol table
-        char *fn_ident = str_connect_by(typedef_ident, interface_fn_type->fn_name, IMPL_CONNECT_IDENT);
-
-        // find ast_fn by teypdef_stmt.sc_map
-        ast_fndef_t *ast_fndef = sc_map_get_sv(&typedef_stmt->method_table, fn_ident);
-
-        INFER_ASSERTF(ast_fndef, "type '%s' not impl fn '%s' for interface '%s'",
-                      typedef_ident,
-                      interface_fn_type->fn_name,
-                      impl_interface->ident);
-
-        // 当 self_kind == PARAM_SELF_T 时，生成 receiver_wrapper
-        // interface 存储指针数据，但方法期望值类型，需要 wrapper 来解引用
-        if (ast_fndef->self_kind == PARAM_SELF_T && ast_fndef->receiver_wrapper == NULL && typedef_stmt->type_expr.
-            storage_kind != STORAGE_KIND_PTR) {
-            ast_fndef_t *wrapper_fn = generate_receiver_wrapper(m, ast_fndef, ast_fndef->impl_type);
-            ast_fndef->receiver_wrapper = wrapper_fn;
-            symbol_table_set(wrapper_fn->symbol_name, SYMBOL_FN, wrapper_fn, false);
-            infer_fn_decl(m, wrapper_fn, type_kind_new(TYPE_UNKNOWN));
-
-            linked_push(m->temp_worklist, wrapper_fn);
-        }
-
-        type_t actual_type = infer_impl_fn_decl(m, ast_fndef);
-
-        // actual_type 由于进行了 rewrite, 所以 param 包含了 self, 而 expect type 没有进行这样的处理。
-        // compare
-        INFER_ASSERTF(type_compare(*expect_type, actual_type),
-                      "the fn '%s' of type '%s' mismatch interface '%s'", ast_fndef->fn_name, typedef_ident,
-                      impl_interface->ident);
-    }
-}
-
-static void combination_interface(module_t *m, ast_typedef_stmt_t *typedef_stmt, struct sc_map_s64 *visited) {
-    assert(typedef_stmt->type_expr.status == REDUCTION_STATUS_DONE);
-    assert(typedef_stmt->type_expr.kind == TYPE_INTERFACE);
-    type_interface_t *origin_interface = typedef_stmt->type_expr.interface;
-    struct sc_map_sv exists = {0};
-    sc_map_init_sv(&exists, 0, 0); // value is type_fn_t
-
-    for (int i = 0; i < origin_interface->elements->length; ++i) {
-        type_t *temp = ct_list_value(origin_interface->elements, i);
-        assert(temp->kind == TYPE_FN);
-        sc_map_put_sv(&exists, temp->fn->fn_name, temp);
-    }
-
-    // combination
-    for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
-        type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
-        *impl_interface = reduction_type_visited(m, *impl_interface, visited);
-        assert(impl_interface->kind == TYPE_INTERFACE);
-        for (int j = 0; j < impl_interface->interface->elements->length; ++j) {
-            type_t *temp = ct_list_value(impl_interface->interface->elements, j);
-            // check exists
-            type_t *exist_type = sc_map_get_sv(&exists, temp->fn->fn_name);
-            if (exist_type) {
-                // compare
-                INFER_ASSERTF(type_compare(*exist_type, *temp), "duplicate method '%s'",
-                              temp->fn->fn_name);
-
-                continue;
-            }
-
-            sc_map_put_sv(&exists, temp->fn->fn_name, temp);
-            ct_list_push(origin_interface->elements, temp);
-        }
-
-        if (impl_interface->interface->alloc_types && impl_interface->interface->alloc_types->length > 0) {
-            if (!origin_interface->alloc_types) {
-                origin_interface->alloc_types = ct_list_new(sizeof(type_t));
-            }
-
-            for (int j = 0; j < impl_interface->interface->alloc_types->length; ++j) {
-                type_t *temp = ct_list_value(impl_interface->interface->alloc_types, j);
-                bool exists_type = false;
-                for (int k = 0; k < origin_interface->alloc_types->length; ++k) {
-                    type_t *origin_alloc = ct_list_value(origin_interface->alloc_types, k);
-                    if (type_compare(*origin_alloc, *temp)) {
-                        exists_type = true;
-                        break;
-                    }
-                }
-
-                if (!exists_type) {
-                    ct_list_push(origin_interface->alloc_types, temp);
-                }
-            }
-        }
-
-        if (impl_interface->interface->deny_types && impl_interface->interface->deny_types->length > 0) {
-            if (!origin_interface->deny_types) {
-                origin_interface->deny_types = ct_list_new(sizeof(type_t));
-            }
-
-            for (int j = 0; j < impl_interface->interface->deny_types->length; ++j) {
-                type_t *temp = ct_list_value(impl_interface->interface->deny_types, j);
-                bool exists_type = false;
-                for (int k = 0; k < origin_interface->deny_types->length; ++k) {
-                    type_t *origin_deny = ct_list_value(origin_interface->deny_types, k);
-                    if (type_compare(*origin_deny, *temp)) {
-                        exists_type = true;
-                        break;
-                    }
-                }
-
-                if (!exists_type) {
-                    ct_list_push(origin_interface->deny_types, temp);
-                }
-            }
-        }
-    }
-}
-
-/**
- * custom_type a = ...
- * custom_type 此时就是一个 typedef ident
- * @param m
- * @param t
- * @return
- */
-static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *visited) {
 #define REDUCTION_IDENT_LEAVE_DEPTH()                                                                  \
     do {                                                                                               \
         if (reduction_ident_depth_entered && t.ident) {                                               \
@@ -4147,6 +3979,14 @@ static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *vis
         }                                                                                              \
     } while (0)
 
+/**
+ * custom_type a = ...
+ * custom_type 此时就是一个 typedef ident
+ * @param m
+ * @param t
+ * @return
+ */
+static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *visited) {
     symbol_t *symbol = symbol_table_get(t.ident);
     INFER_ASSERTF(symbol, "typedef '%s' not found", t.ident);
     INFER_ASSERTF(symbol->type == SYMBOL_TYPE, "'%s' is not a type", symbol->ident);
@@ -4156,7 +3996,6 @@ static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *vis
 
     if (!typedef_stmt->params) {
         INFER_ASSERTF(t.args == NULL, "typedef '%s' args mismatch", t.ident);
-
         // 检查右值是否 reduce 完成
         if (typedef_stmt->type_expr.status == REDUCTION_STATUS_DONE) {
             type_t temp = type_copy(m, typedef_stmt->type_expr);
@@ -4197,28 +4036,14 @@ static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *vis
 
             ast_generics_param_t *param = ct_list_value(typedef_stmt->params, i);
 
-            generics_constraints_check(m, &param->constraints, arg);
+            // 类型参数不再进行任何约束, 所有的约束都在 fn 中完成
+            // generics_constraints_check(m, &param->constraints, arg);
             table_set(args_table, param->ident, arg);
         }
 
         // 此时只是使用 module 作为一个 context 使用，实际上 type_alias_stmt->params 和 当前 module 并不是同一个文件中的
         if (m->infer_type_args_stack) {
             stack_push(m->infer_type_args_stack, args_table);
-        }
-
-        // 进行 impl 校验， 如果存在泛型，还需要进行泛型展开
-        if (typedef_stmt->impl_interfaces) {
-            if (typedef_stmt->is_interface) {
-                assert(typedef_stmt->type_expr.status == REDUCTION_STATUS_DONE);
-                assert(typedef_stmt->type_expr.kind == TYPE_INTERFACE);
-                combination_interface(m, typedef_stmt, visited);
-            } else {
-                for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
-                    type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
-                    *impl_interface = reduction_type_visited(m, *impl_interface, visited);
-                    check_typedef_impl(m, impl_interface, t.ident, typedef_stmt);
-                }
-            }
         }
 
         // 对右值进行 copy, 因为泛型会对 type_expr 进行多次展开, 所以需要进行 copy
@@ -4254,21 +4079,6 @@ static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *vis
 
     typedef_stmt->type_expr = reduction_type_visited(m, typedef_stmt->type_expr, visited);
 
-    // check impl
-    if (typedef_stmt->impl_interfaces) {
-        if (typedef_stmt->is_interface) {
-            assert(typedef_stmt->type_expr.status == REDUCTION_STATUS_DONE);
-            assert(typedef_stmt->type_expr.kind == TYPE_INTERFACE);
-            combination_interface(m, typedef_stmt, visited);
-        } else {
-            for (int i = 0; i < typedef_stmt->impl_interfaces->length; ++i) {
-                type_t *impl_interface = ct_list_value(typedef_stmt->impl_interfaces, i);
-                *impl_interface = reduction_type_visited(m, *impl_interface, visited);
-                check_typedef_impl(m, impl_interface, t.ident, typedef_stmt);
-            }
-        }
-    }
-
     type_t right_type_expr = type_copy(m, typedef_stmt->type_expr);
     t.kind = right_type_expr.kind;
     t.value = right_type_expr.value;
@@ -4276,8 +4086,6 @@ static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *vis
     t.status = right_type_expr.status;
     REDUCTION_IDENT_LEAVE_DEPTH();
     return t;
-
-#undef REDUCTION_IDENT_LEAVE_DEPTH
 }
 
 static type_t reduction_tagged_union_type(module_t *m, type_t t, struct sc_map_s64 *visited) {
@@ -4409,9 +4217,18 @@ static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *v
         }
 
         table_t *arg_table = stack_top(m->infer_type_args_stack);
-        assert(arg_table);
-        t = type_param_special(m, t, arg_table, visited);
 
+        if (!arg_table) {
+            goto STATUS_DONE;;
+        }
+
+        type_t *arg_type = table_get(arg_table, t.ident);
+        if (!arg_type) {
+            goto STATUS_DONE;;
+        }
+
+        assert(arg_table);
+        t = reduction_type_visited(m, *arg_type, visited);
         ident = t.ident;
         ident_kind = t.ident_kind;
         args = t.args;

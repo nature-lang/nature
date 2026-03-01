@@ -16,3 +16,83 @@ fx main() {
 
 --- output.txt
 hello world
+
+=== test_allocator
+--- main.n
+import allocator as ac
+
+type foo_t = struct{
+    string a
+    float c
+}
+
+fx main() {
+    ptr<foo_t> f = ac.new(foo_t{a: 'hello', c: 1.1})
+    println(f.a, f.c)
+
+    ptr<bool> b = ac.new(true)
+    println(*b)
+    ac.free(b)
+    println(*b)
+}
+
+
+--- output.txt
+hello 1.100000
+true
+false
+
+
+=== test_arena_alloc
+--- main.n
+import allocator.arena
+
+type foo_t = struct{
+    string a // 48
+    float c // 8
+}
+
+fx main() {
+    var ar = arena.init(4096)
+    println(ar.current.used)
+
+    ptr<foo_t> f = ar.new(foo_t{a: 'hello', c: 1.1})
+    println(f.a, f.c)
+
+    ptr<bool> b = ar.new(true)
+    println(*b)
+
+    println(ar.current.used)
+    ar.destroy()
+}
+
+--- output.txt
+0
+hello 1.100000
+true
+57
+
+=== test_defer_alloc
+--- main.n
+import allocator.arena
+
+type foo_t = struct{
+    string a
+    float c
+}
+
+fx main() {
+    var ar = arena.init(4096)
+    defer ar.deinit()
+
+    ptr<bool> b = ar.new(true)
+    var f = ar.new(foo_t{a: 'hello', c: 1.1})
+    println(f.a, f.c)
+
+
+    println(ar.current.used)
+}
+
+--- output.txt
+hello 1.100000
+64

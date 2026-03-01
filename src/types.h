@@ -195,6 +195,9 @@ struct module_t {
     bool parser_match_cond;
     bool parser_match_subject; // 是否包含 subject
 
+    // analyzer defer 语义检查，>0 表示当前位于 defer block 内
+    int64_t in_defer_block_depth;
+
 
     /**
      * analyzer 时判断 expr 是否存在 fndef
@@ -548,6 +551,7 @@ typedef struct closure_t {
     ct_stack_t *break_labels; // 用于 for break lir_operand*
     ct_stack_t *ret_targets; // default type_unknown
     ct_stack_t *ret_labels; // default type_unknown
+    ct_stack_t *defer_scopes; // linear_defer_scope_t*
 
     // lir_operand_t, 大返回值引导
     void *return_big_operand;

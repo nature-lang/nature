@@ -1,0 +1,159 @@
+import allocator.types.{allocatable}
+import libc
+
+int ALIGN = 8 // default alignment (8 bytes, suitable for most types)
+
+// arena block, each block is a contiguous chunk of memory
+type block_t = struct{
+    ptr<block_t> next  // next block in linked list
+    int capacity       // total capacity of this block (bytes)
+    int used           // bytes already used
+}
+
+type arena_t:allocatable = struct{
+    ptr<block_t> head    // first block in linked list
+    ptr<block_t> current // current active block for allocation
+    int block_size       // default capacity for new blocks
+    anyptr last_alloc    // pointer to the last allocation (for tail-free optimization)
+    int last_alloc_size  // size of the last allocation
+}
+
+// align offset up to the nearest multiple of ALIGN
+fx align_up(int offset):int {
+    return (offset + ALIGN - 1) & ~(ALIGN - 1)
+}
+
+// allocate a new block with the given capacity
+fx block_new(int capacity):ptr<block_t> {
+    // allocate memory for block header + data area
+    int total = @sizeof(block_t) + capacity
+    ptr<block_t> b = libc.malloc(total as u64) as ptr<block_t>
+    if b == null {
+        panic('arena: block_new malloc failed')
+    }
+
+    b.next = null
+    b.capacity = capacity
+    b.used = 0
+    return b
+}
+
+// get the data area start address of a block
+fx block_data(ptr<block_t> b):anyptr {
+    // data starts right after the block_t header
+    return b as anyptr + @sizeof(block_t)
+}
+
+// try to allocate size bytes from a block with alignment, returns null on failure
+fx block_alloc(ptr<block_t> b, int size):anyptr {
+    // align the current used offset
+    int aligned_used = align_up(b.used)
+
+    if aligned_used + size > b.capacity {
+        return null
+    }
+
+    anyptr p = (block_data(b) as int + aligned_used) as anyptr
+    b.used = aligned_used + size
+    return p
+}
+
+fx init(int capacity):ptr<arena_t> {
+    ptr<arena_t> a = libc.malloc(@sizeof(arena_t)) as ptr<arena_t>
+    if a == null {
+        panic('arena: init malloc failed')
+    }
+
+    // ensure minimum block size
+    int block_size = capacity
+    if block_size <= 0 {
+        block_size = 4096
+    }
+
+    var first_block = block_new(block_size)
+    a.head = first_block
+    a.current = first_block
+    a.block_size = block_size
+    a.last_alloc = null
+    a.last_alloc_size = 0
+
+    return a
+}
+
+fx arena_t.deinit(*self) {
+    // walk the linked list and free all blocks
+    var b = self.head
+    for b != null {
+        var next = b.next
+        libc.free(b as anyptr)
+        b = next
+    }
+
+    // free the arena struct itself
+    libc.free(self as anyptr)
+}
+
+fx arena_t.new<T>(*self, T value):ptr<T> {
+    int size = @sizeof(T)
+    if size <= 0 {
+        panic('arena: new invalid type size')
+    }
+
+    // try to allocate from current block (with alignment)
+    anyptr p = block_alloc(self.current, size)
+
+    // if current block is full, allocate a new block
+    if p == null {
+        // new block must be at least large enough for this allocation
+        int new_cap = self.block_size
+        if size > new_cap {
+            new_cap = size
+        }
+
+        var new_block = block_new(new_cap)
+        self.current.next = new_block
+        self.current = new_block
+        p = block_alloc(new_block, size)
+        if p == null {
+            panic('arena: new alloc failed after expanding')
+        }
+    }
+
+    // record last allocation for tail-free optimization
+    self.last_alloc = p
+    self.last_alloc_size = size
+
+    // copy value into the allocated memory
+    libc.memmove(p, &value as anyptr, size as u64)
+    return p as ptr<T>
+}
+
+fx arena_t.free<T>(*self, ptr<T> p) {
+    // tail-free optimization: if freeing the most recent allocation,
+    // rewind the current block's used pointer
+    if p as anyptr == self.last_alloc {
+        self.current.used -= self.last_alloc_size
+        self.last_alloc = null
+        self.last_alloc_size = 0
+    }
+    // otherwise no-op — arena does not support freeing arbitrary allocations
+}
+
+fx arena_t.reset(*self) {
+    // free all blocks except the first one to release excess memory
+    var b = self.head.next
+    for b != null {
+        var next = b.next
+        libc.free(b as anyptr)
+        b = next
+    }
+
+    // keep only the first block and reset it
+    self.head.next = null
+    self.head.used = 0
+    self.current = self.head
+
+    // clear tail-free state
+    self.last_alloc = null
+    self.last_alloc_size = 0
+}

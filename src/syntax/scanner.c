@@ -752,6 +752,12 @@ static token_type_t scanner_ident(char *word, int length) {
                     return scanner_rest(word, length, 2, 2, "an", TOKEN_CHAN);
             }
             break;
+        case 'd':
+            switch (word[1]) {
+                case 'e':
+                    return scanner_rest(word, length, 2, 3, "fer", TOKEN_DEFER);
+            }
+            break;
         case 'e':
             switch (word[1]) {
                 case 'l':

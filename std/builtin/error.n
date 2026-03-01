@@ -4,6 +4,13 @@ type throwable = interface{
 	fn msg():string
 }
 
+type trace_t = struct{
+    string path
+    string ident
+    int line
+    int column
+}
+
 type errort:throwable = struct{
 	string message
 	bool is_panic

@@ -1,0 +1,39 @@
+import libc
+import allocator.types.{allocatable}
+
+type heap_t:allocatable = int
+
+heap_t heap = 0
+
+fx heap_t.new<T>(self, T value):ptr<T> {
+    int size = @sizeof(T)
+    if size <= 0 {
+        panic('allocator.new invalid type size')
+    }
+
+    ptr<T> p = libc.malloc(size as u64) as ptr<T>
+    if p == null {
+        panic('allocator.new malloc failed')
+    }
+
+    libc.memmove(p as anyptr, &value as anyptr, size as u64)
+    return p
+}
+
+fx heap_t.free<T>(self, ptr<T> p) {
+    if p == null {
+        return
+    }
+
+    libc.free(p as anyptr)
+    libc.memset(p as anyptr, 0, @sizeof(T))
+}
+
+
+fx new<T>(T value):ptr<T> {
+    return heap.new(value)
+}
+
+fx free<T>(ptr<T> p) {
+    return heap.free(p)
+}

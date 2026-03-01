@@ -5,7 +5,7 @@
 #include "utils/helper.h"
 
 static void rti_vec_grow(n_vec_t *vec, rtype_t *element_rtype, int custom_capacity) {
-
+    void *old_data = vec->data;
 
     if (custom_capacity) {
         vec->capacity = custom_capacity;
@@ -17,7 +17,14 @@ static void rti_vec_grow(n_vec_t *vec, rtype_t *element_rtype, int custom_capaci
 
     assertf(element_rtype, "cannot find element_rtype with hash");
 
-    n_array_t *new_data = rti_array_new(element_rtype, vec->capacity);
+    n_array_t *new_data = NULL;
+    if (vec->manual_alloc) {
+        uint64_t data_size = vec->capacity * vec->element_size;
+        new_data = malloc(data_size);
+        assertf(new_data != NULL, "vec grow malloc failed, data_size=%lu", data_size);
+    } else {
+        new_data = rti_array_new(element_rtype, vec->capacity);
+    }
 
     DEBUGF("[rt_vec_grow] old_vec=%p, len=%lu, cap=%lu, new_vec=%p, element_size=%lu", vec, vec->length, vec->capacity,
            new_data,
@@ -29,6 +36,10 @@ static void rti_vec_grow(n_vec_t *vec, rtype_t *element_rtype, int custom_capaci
 
     // vec->data = new_data; new_data 是 gc_malloc 新申请的已经进行了 write_barrier 处理
     rti_write_barrier_ptr(&vec->data, new_data, false);
+
+    if (vec->manual_alloc && old_data) {
+        free(old_data);
+    }
 }
 
 /**

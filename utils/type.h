@@ -146,55 +146,55 @@ typedef enum {
 } type_ident_kind;
 
 static string type_kind_str[] = {
-        [TYPE_GC_ENV] = "env",
-        [TYPE_GC_ENV_VALUE] = "env_value",
-        [TYPE_GC_ENV_VALUES] = "env_values",
+    [TYPE_GC_ENV] = "env",
+    [TYPE_GC_ENV_VALUE] = "env_value",
+    [TYPE_GC_ENV_VALUES] = "env_values",
 
-        [TYPE_ARR] = "arr",
+    [TYPE_ARR] = "arr",
 
-        [TYPE_ANY] = "any",
-        [TYPE_UNION] = "union",
-        [TYPE_TAGGED_UNION] = "tagged_union",
+    [TYPE_ANY] = "any",
+    [TYPE_UNION] = "union",
+    [TYPE_TAGGED_UNION] = "tagged_union",
 
-        [TYPE_STRING] = "string",
-        [TYPE_RAW_STRING] = "raw_string",
-        [TYPE_BOOL] = "bool",
-        // [TYPE_FLOAT] = "float",
-        [TYPE_FLOAT32] = "f32",
-        [TYPE_FLOAT64] = "f64",
-        // [TYPE_INT] = "int",
-        // [TYPE_UINT] = "uint",
-        [TYPE_INT8] = "i8",
-        [TYPE_INT16] = "i16",
-        [TYPE_INT32] = "i32",
-        [TYPE_INT64] = "i64",
-        [TYPE_UINT8] = "u8",
-        [TYPE_UINT16] = "u16",
-        [TYPE_UINT32] = "u32",
-        [TYPE_UINT64] = "u64",
-        [TYPE_VOID] = "void",
-        [TYPE_UNKNOWN] = "unknown",
-        [TYPE_STRUCT] = "struct", // ast_struct_decl
-        [TYPE_IDENT] = "ident",
-        [TYPE_COROUTINE_T] = "coroutine_t",
-        [TYPE_CHAN] = "chan",
-        [TYPE_VEC] = "vec",
-        [TYPE_MAP] = "map",
-        [TYPE_SET] = "set",
-        [TYPE_TUPLE] = "tup",
-        [TYPE_FN] = "fn",
+    [TYPE_STRING] = "string",
+    [TYPE_RAW_STRING] = "raw_string",
+    [TYPE_BOOL] = "bool",
+    // [TYPE_FLOAT] = "float",
+    [TYPE_FLOAT32] = "f32",
+    [TYPE_FLOAT64] = "f64",
+    // [TYPE_INT] = "int",
+    // [TYPE_UINT] = "uint",
+    [TYPE_INT8] = "i8",
+    [TYPE_INT16] = "i16",
+    [TYPE_INT32] = "i32",
+    [TYPE_INT64] = "i64",
+    [TYPE_UINT8] = "u8",
+    [TYPE_UINT16] = "u16",
+    [TYPE_UINT32] = "u32",
+    [TYPE_UINT64] = "u64",
+    [TYPE_VOID] = "void",
+    [TYPE_UNKNOWN] = "unknown",
+    [TYPE_STRUCT] = "struct", // ast_struct_decl
+    [TYPE_IDENT] = "ident",
+    [TYPE_COROUTINE_T] = "coroutine_t",
+    [TYPE_CHAN] = "chan",
+    [TYPE_VEC] = "vec",
+    [TYPE_MAP] = "map",
+    [TYPE_SET] = "set",
+    [TYPE_TUPLE] = "tup",
+    [TYPE_FN] = "fn",
 
-        // 底层类型
-        [TYPE_FN_T] = "fn_t",
-        [TYPE_INTEGER_T] = "integer_t",
-        [TYPE_FLOATER_T] = "floater_t",
-        [TYPE_ALL_T] = "all_t",
+    // 底层类型
+    [TYPE_FN_T] = "fn_t",
+    [TYPE_INTEGER_T] = "integer_t",
+    [TYPE_FLOATER_T] = "floater_t",
+    [TYPE_ALL_T] = "all_t",
 
-        [TYPE_REF] = "ref", // ref<type>
-        [TYPE_PTR] = "ptr", // ptr<type>
-        [TYPE_ANYPTR] = "anyptr", // anyptr
-        [TYPE_NULL] = "null",
-        [TYPE_ENUM] = "enum",
+    [TYPE_REF] = "ref", // ref<type>
+    [TYPE_PTR] = "ptr", // ptr<type>
+    [TYPE_ANYPTR] = "anyptr", // anyptr
+    [TYPE_NULL] = "null",
+    [TYPE_ENUM] = "enum",
 };
 
 typedef struct {
@@ -476,13 +476,13 @@ struct type_fn_t {
 
 // 类型对应的数据在内存中的存储形式 --- start
 // 部分类型的数据(复合类型)只能在堆内存中存储
-
 typedef struct {
     uint8_t *data;
     int64_t length; // 实际占用的位置的大小
     int64_t capacity; // 预先申请的容量大小
     int64_t element_size;
     int64_t hash;
+    bool manual_alloc; // true 表示 data 由 malloc 分配（grow 时需要 free 旧 data）
 } n_vec_t, n_string_t;
 
 // 通过 gc malloc 申请
@@ -723,7 +723,8 @@ static inline bool type_is_ident(type_t *t) {
         return false;
     }
 
-    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_INTERFACE || t->ident_kind == TYPE_IDENT_TAGGER_UNION || t->ident_kind == TYPE_IDENT_UNKNOWN;
+    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_INTERFACE || t->ident_kind ==
+           TYPE_IDENT_TAGGER_UNION || t->ident_kind == TYPE_IDENT_UNKNOWN;
 }
 
 static inline type_t type_ident_new(char *ident, type_ident_kind kind) {
@@ -786,7 +787,8 @@ static inline bool is_number(type_kind kind) {
 }
 
 static inline storage_kind_t type_storage_kind(type_t t) {
-    if (is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_ANYPTR || t.kind == TYPE_ENUM || t.kind == TYPE_VOID) {
+    if (is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_ANYPTR || t.kind == TYPE_ENUM || t.kind ==
+        TYPE_VOID) {
         return STORAGE_KIND_DIR;
     }
 
@@ -933,11 +935,13 @@ static inline list_t *type_abi_struct(type_t t) {
         type_t cap_type = type_kind_new(TYPE_INT64);
         type_t elem_size_type = type_kind_new(TYPE_INT64);
         type_t hash_type = type_kind_new(TYPE_INT64);
+        type_t manual_alloc_type = type_kind_new(TYPE_BOOL);
         ct_list_push(result, &data_ptr);
         ct_list_push(result, &len_type);
         ct_list_push(result, &cap_type);
         ct_list_push(result, &elem_size_type);
         ct_list_push(result, &hash_type);
+        ct_list_push(result, &manual_alloc_type);
         return result;
     }
 
@@ -1020,7 +1024,8 @@ static inline bool is_abi_struct_like(type_t t) {
 }
 
 static inline bool is_impl_builtin_type(type_kind kind) {
-    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_CHAN ||
+    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind ==
+           TYPE_CHAN ||
            kind == TYPE_STRING || kind == TYPE_COROUTINE_T;
 }
 

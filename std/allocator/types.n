@@ -1,0 +1,4 @@
+type allocatable = interface{
+    fx new<T>(T):ptr<T>
+    fx free<T>(ptr<T>)
+}

@@ -26,6 +26,7 @@ string ast_type_to_str[] = {
         [AST_STMT_GLOBAL_ASSIGN] = "AST_STMT_GLOBAL_ASSIGN",
         [AST_STMT_RETURN] = "AST_STMT_RETURN",
         [AST_STMT_IF] = "AST_STMT_IF",
+        [AST_STMT_DEFER] = "AST_STMT_DEFER",
         [AST_STMT_FOR_ITERATOR] = "AST_STMT_FOR_ITERATOR",
         [AST_FNDEF] = "AST_FUNCTION_DECL",
         [AST_CALL] = "AST_CALL",
@@ -121,7 +122,8 @@ string token_type_to_str[] = {
         [TOKEN_FX] = "TOKEN_FX",
         [TOKEN_IMPORT] = "TOKEN_IMPORT",
         [TOKEN_AS] = "TOKEN_AS",
-        [TOKEN_RETURN] = "TOKEN_RETURN"};
+        [TOKEN_RETURN] = "TOKEN_RETURN",
+        [TOKEN_DEFER] = "TOKEN_DEFER"};
 
 string lir_opcode_to_string[] = {
         [LIR_OPCODE_ADD] = "ADD  ",

@@ -77,6 +77,7 @@ typedef enum {
     AST_STMT_IF,
     AST_STMT_THROW,
     AST_STMT_LET,
+    AST_STMT_DEFER,
     AST_STMT_FOR_ITERATOR,
     AST_STMT_FOR_COND,
     AST_STMT_FOR_TRADITION,
@@ -456,6 +457,10 @@ typedef struct {
 typedef struct {
     ast_expr_t *expr;
 } ast_return_stmt_t;
+
+typedef struct {
+    slice_t *body; // ast_stmt
+} ast_defer_stmt_t;
 
 // Selective import item: {sqrt, pow, Pi as pi}
 typedef struct {

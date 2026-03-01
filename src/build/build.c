@@ -29,6 +29,7 @@
 #include "src/semantic/analyzer.h"
 #include "src/semantic/global_eval.h"
 #include "src/semantic/generics.h"
+#include "src/semantic/interface.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
 #include "utils/helper.h"
@@ -1083,6 +1084,13 @@ static void build_compiler(slice_t *modules) {
     for (int i = modules->count - 1; i >= 0; --i) {
         module_t *m = modules->take[i];
         generics(m);
+    }
+
+    // interface pass
+    // 在 generics 之后，先校验 type impl interface 约束
+    for (int i = modules->count - 1; i >= 0; --i) {
+        module_t *m = modules->take[i];
+        interface(m);
     }
 
     // pre infer pass

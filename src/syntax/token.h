@@ -132,6 +132,7 @@ typedef enum {
     TOKEN_FX,
     TOKEN_IMPORT,
     TOKEN_RETURN,
+    TOKEN_DEFER,
     TOKEN_GO,
     TOKEN_STMT_EOF, // ;
     TOKEN_EOF,// TOKEN_EOF 一定要在最后一个，否则会索引溢出
@@ -238,6 +239,7 @@ static string token_str[] = {
         [TOKEN_FN] = "fn",
         [TOKEN_FX] = "fx",
         [TOKEN_RETURN] = "return",
+        [TOKEN_DEFER] = "defer",
         [TOKEN_CATCH] = "catch",
         [TOKEN_MATCH] = "match",
         [TOKEN_SELECT] = "select",

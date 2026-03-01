@@ -6,7 +6,8 @@ static uint8_t calc_sizeclass(uint64_t size) {
     // 快速路径：精确判断常见大小
     if (size == 1) return 1; // class 1: 8 bytes
     if (size == 2) return 2; // class 2: 16 bytes, small structs (e.g. n_interface_t)
-    if (size == 40) return 5; // class 5: 48 bytes, n_string_t/n_vec_t
+    if (size == 40) return 5; // class 5: 48 bytes, n_string_t
+    if (size == 48) return 5; // class 5: 48 bytes, n_vec_t
     if (size == 56) return 6; // class 6: 64 bytes, n_map_t
     if (size == 128) return 10; // class 10: 128 bytes, map default space
 

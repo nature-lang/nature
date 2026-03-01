@@ -50,6 +50,127 @@ lir_opcode_t ast_op_to_if_alert[] = {
         [AST_OP_NE] = LIR_OPCODE_BEE,
 };
 
+typedef struct {
+    slice_t *defer_stmts; // ast_defer_stmt_t*
+    uint16_t continue_depth;
+    uint16_t break_depth;
+    uint16_t ret_depth;
+    uint16_t catch_depth;
+} linear_defer_scope_t;
+
+typedef enum {
+    LINEAR_UNWIND_MODE_ALL = 1,
+    LINEAR_UNWIND_MODE_BREAK,
+    LINEAR_UNWIND_MODE_CONTINUE,
+    LINEAR_UNWIND_MODE_RET,
+    LINEAR_UNWIND_MODE_CATCH,
+} linear_unwind_mode_t;
+
+static linear_defer_scope_t *linear_defer_scope_new(module_t *m) {
+    linear_defer_scope_t *scope = NEW(linear_defer_scope_t);
+    scope->defer_stmts = slice_new();
+    scope->continue_depth = m->current_closure->continue_labels->count;
+    scope->break_depth = m->current_closure->break_labels->count;
+    scope->ret_depth = m->current_closure->ret_labels->count;
+    scope->catch_depth = m->current_closure->catch_error_labels->count;
+    return scope;
+}
+
+static void linear_emit_defer_stmt(module_t *m, ast_defer_stmt_t *defer_stmt);
+
+static void linear_emit_scope_defer_stmts(module_t *m, linear_defer_scope_t *scope) {
+    for (int i = scope->defer_stmts->count - 1; i >= 0; --i) {
+        ast_defer_stmt_t *defer_stmt = scope->defer_stmts->take[i];
+        linear_emit_defer_stmt(m, defer_stmt);
+    }
+}
+
+static void linear_defer_scope_enter(module_t *m) {
+    linear_defer_scope_t *scope = linear_defer_scope_new(m);
+    stack_push(m->current_closure->defer_scopes, scope);
+}
+
+static void linear_defer_scope_leave(module_t *m) {
+    linear_defer_scope_t *scope = stack_pop(m->current_closure->defer_scopes);
+    if (!scope) {
+        return;
+    }
+    linear_emit_scope_defer_stmts(m, scope);
+}
+
+static void linear_defer_register(module_t *m, ast_defer_stmt_t *defer_stmt) {
+    linear_defer_scope_t *scope = stack_top(m->current_closure->defer_scopes);
+    LINEAR_ASSERTF(scope, "defer must be in a lexical scope");
+    slice_push(scope->defer_stmts, defer_stmt);
+}
+
+static void linear_emit_defer_stmt(module_t *m, ast_defer_stmt_t *defer_stmt) {
+    linear_body(m, defer_stmt->body);
+}
+
+static bool linear_scope_need_unwind(linear_defer_scope_t *scope, linear_unwind_mode_t mode, uint16_t depth) {
+    switch (mode) {
+        case LINEAR_UNWIND_MODE_ALL: {
+            return true;
+        }
+        case LINEAR_UNWIND_MODE_BREAK: {
+            return scope->break_depth >= depth;
+        }
+        case LINEAR_UNWIND_MODE_CONTINUE: {
+            return scope->continue_depth >= depth;
+        }
+        case LINEAR_UNWIND_MODE_RET: {
+            return scope->ret_depth >= depth;
+        }
+        case LINEAR_UNWIND_MODE_CATCH: {
+            return scope->catch_depth >= depth;
+        }
+        default: {
+            return false;
+        }
+    }
+}
+
+static void linear_unwind_scopes(module_t *m, linear_unwind_mode_t mode, uint16_t depth) {
+    ct_stack_t *defer_scopes = m->current_closure->defer_scopes;
+    if (stack_empty(defer_scopes)) {
+        return;
+    }
+
+    for (stack_node *node = defer_scopes->top->next; node != NULL; node = node->next) {
+        linear_defer_scope_t *scope = node->value;
+        if (!linear_scope_need_unwind(scope, mode, depth)) {
+            continue;
+        }
+        linear_emit_scope_defer_stmts(m, scope);
+    }
+}
+
+static void linear_unwind_all(module_t *m) {
+    linear_unwind_scopes(m, LINEAR_UNWIND_MODE_ALL, 0);
+}
+
+static void linear_unwind_to_break_depth(module_t *m, uint16_t depth) {
+    linear_unwind_scopes(m, LINEAR_UNWIND_MODE_BREAK, depth);
+}
+
+static void linear_unwind_to_continue_depth(module_t *m, uint16_t depth) {
+    linear_unwind_scopes(m, LINEAR_UNWIND_MODE_CONTINUE, depth);
+}
+
+static void linear_unwind_to_ret_depth(module_t *m, uint16_t depth) {
+    linear_unwind_scopes(m, LINEAR_UNWIND_MODE_RET, depth);
+}
+
+static void linear_unwind_to_catch_depth(module_t *m, uint16_t depth) {
+    linear_unwind_scopes(m, LINEAR_UNWIND_MODE_CATCH, depth);
+}
+
+static void linear_bal_error(module_t *m, char *error_target_label, uint16_t catch_depth) {
+    linear_unwind_to_catch_depth(m, catch_depth);
+    OP_PUSH(lir_op_bal(lir_label_operand(error_target_label, true)));
+}
+
 static lir_operand_t *
 linear_inline_arr_element_addr_not_check(module_t *m, lir_operand_t *arr_target, lir_operand_t *index_target,
                                          type_t arr_type) {
@@ -102,15 +223,15 @@ linear_inline_arr_element_addr(module_t *m, lir_operand_t *arr_target, lir_opera
 
     // TODO 共用 index out error handle label, 也就是有错误直接 goto 到这个地方，而不需要生成成百上千个
     char *error_label_ident = m->current_closure->error_label;
-    bool be_catch = false;
-    if (!stack_empty(m->current_closure->catch_error_labels)) {
+    uint16_t catch_depth = m->current_closure->catch_error_labels->count;
+    bool be_catch = catch_depth > 0;
+    if (be_catch) {
         error_label_ident = stack_top(m->current_closure->catch_error_labels);
-        be_catch = true;
     }
 
     push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target, bool_operand(be_catch));
     // bal catch or end label
-    OP_PUSH(lir_op_bal(lir_label_operand(error_label_ident, true)));
+    linear_bal_error(m, error_label_ident, catch_depth);
     OP_PUSH(lir_op_label(end_label_ident, true));
 
     int64_t element_size = arr_type.array->element_type.storage_size;
@@ -207,15 +328,15 @@ linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_opera
     OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), cmp_result, cmp_end_label));
 
     char *error_label_ident = m->current_closure->error_label;
-    bool be_catch = false;
-    if (!stack_empty(m->current_closure->catch_error_labels)) {
+    uint16_t catch_depth = m->current_closure->catch_error_labels->count;
+    bool be_catch = catch_depth > 0;
+    if (be_catch) {
         error_label_ident = stack_top(m->current_closure->catch_error_labels);
-        be_catch = true;
     }
 
     push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target, bool_operand(be_catch));
     // bal catch or end label
-    OP_PUSH(lir_op_bal(lir_label_operand(error_label_ident, true)));
+    linear_bal_error(m, error_label_ident, catch_depth);
     OP_PUSH(lir_op_label(end_label_ident, true));
 
     int64_t element_size = vec_element_type.storage_size;
@@ -382,12 +503,15 @@ linear_default_vec(module_t *m, type_t t, lir_operand_t *target) {
     lir_operand_t *elem_size_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target,
                                                          offsetof(n_vec_t, element_size));
     lir_operand_t *hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, hash));
+    lir_operand_t *manual_alloc_dst = indirect_addr_operand(m, type_kind_new(TYPE_BOOL), target,
+                                                            offsetof(n_vec_t, manual_alloc));
 
     OP_PUSH(lir_op_move(data_dst, int_operand(0)));
     OP_PUSH(lir_op_move(len_dst, int_operand(0)));
     OP_PUSH(lir_op_move(cap_dst, int_operand(0)));
     OP_PUSH(lir_op_move(elem_size_dst, int_operand(t.vec->element_type.storage_size)));
     OP_PUSH(lir_op_move(hash_dst, int_operand(type_hash(t))));
+    OP_PUSH(lir_op_move(manual_alloc_dst, bool_operand(false)));
     return target;
 }
 
@@ -417,11 +541,15 @@ linear_unsafe_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target
     lir_operand_t *elem_size_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target,
                                                          offsetof(n_vec_t, element_size));
     lir_operand_t *hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, hash));
+    lir_operand_t *manual_alloc_dst = indirect_addr_operand(m, type_kind_new(TYPE_BOOL), target,
+                                                            offsetof(n_vec_t, manual_alloc));
+    bool manual_alloc = m->current_closure && m->current_closure->is_fx;
 
     OP_PUSH(lir_op_move(len_dst, int_operand(len)));
     OP_PUSH(lir_op_move(cap_dst, int_operand(len)));
     OP_PUSH(lir_op_move(elem_size_dst, int_operand(t.vec->element_type.storage_size)));
     OP_PUSH(lir_op_move(hash_dst, int_operand(type_hash(t))));
+    OP_PUSH(lir_op_move(manual_alloc_dst, bool_operand(manual_alloc)));
 
     if (len == 0) {
         OP_PUSH(lir_op_move(data_dst, int_operand(0)));
@@ -455,11 +583,14 @@ linear_stack_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target)
     lir_operand_t *elem_size_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target,
                                                          offsetof(n_vec_t, element_size));
     lir_operand_t *hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, hash));
+    lir_operand_t *manual_alloc_dst = indirect_addr_operand(m, type_kind_new(TYPE_BOOL), target,
+                                                            offsetof(n_vec_t, manual_alloc));
 
     OP_PUSH(lir_op_move(len_dst, int_operand(len)));
     OP_PUSH(lir_op_move(cap_dst, int_operand(len)));
     OP_PUSH(lir_op_move(elem_size_dst, int_operand(t.vec->element_type.storage_size)));
     OP_PUSH(lir_op_move(hash_dst, int_operand(type_hash(t))));
+    OP_PUSH(lir_op_move(manual_alloc_dst, bool_operand(false)));
 
     if (len == 0) {
         OP_PUSH(lir_op_move(data_dst, int_operand(0)));
@@ -738,10 +869,10 @@ static void linear_has_panic(module_t *m) {
     assertf(m->current_column < 1000000, "column '%d' exception", m->current_line);
 
     // panic 必须被立刻 catch, 判断当前表达式是否被 catch, 如果被 catch, 则走正常的 error 流程, 也就是有错误跳转到 catch label
-    bool be_catch = false;
-    if (!stack_empty(m->current_closure->catch_error_labels)) {
+    uint16_t catch_depth = m->current_closure->catch_error_labels->count;
+    bool be_catch = catch_depth > 0;
+    if (be_catch) {
         error_target_label = stack_top(m->current_closure->catch_error_labels);
-        be_catch = true;
     }
 
     lir_operand_t *path_operand = string_operand(m->rel_path, strlen(m->rel_path));
@@ -757,7 +888,14 @@ static void linear_has_panic(module_t *m) {
                  line_operand,
                  column_operand);
 
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), has_error, lir_label_operand(error_target_label, true)));
+    char *panic_ident = label_ident_with_unique(".panic");
+    char *panic_end_ident = str_connect(panic_ident, LABEL_END_SUFFIX);
+
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), has_error, lir_label_operand(panic_ident, true)));
+    OP_PUSH(lir_op_bal(lir_label_operand(panic_end_ident, true)));
+    OP_PUSH(lir_op_label(panic_ident, true));
+    linear_bal_error(m, error_target_label, catch_depth);
+    OP_PUSH(lir_op_label(panic_end_ident, true));
 }
 
 
@@ -767,7 +905,8 @@ static void linear_has_error(module_t *m) {
     assertf(m->current_column < 1000000, "column '%d' exception", m->current_line);
 
     // 存在 catch error
-    if (!stack_empty(m->current_closure->catch_error_labels)) {
+    uint16_t catch_depth = m->current_closure->catch_error_labels->count;
+    if (catch_depth > 0) {
         error_target_label = stack_top(m->current_closure->catch_error_labels);
     }
 
@@ -782,7 +921,14 @@ static void linear_has_error(module_t *m) {
     // 不可抢占，也不 yield，所以不需要添加任何勾子。
     push_rt_call(m, RT_CALL_CO_HAS_ERROR, has_error, 4, path_operand, fn_name_operand, line_operand,
                  column_operand);
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), has_error, lir_label_operand(error_target_label, true)));
+
+    char *error_ident = label_ident_with_unique(".error");
+    char *error_end_ident = str_connect(error_ident, LABEL_END_SUFFIX);
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, bool_operand(true), has_error, lir_label_operand(error_ident, true)));
+    OP_PUSH(lir_op_bal(lir_label_operand(error_end_ident, true)));
+    OP_PUSH(lir_op_label(error_ident, true));
+    linear_bal_error(m, error_target_label, catch_depth);
+    OP_PUSH(lir_op_label(error_end_ident, true));
 }
 
 /**
@@ -1612,18 +1758,23 @@ static void linear_for_tradition(module_t *m, ast_for_tradition_stmt_t *ast) {
 
 static void linear_continue(module_t *m) {
     LINEAR_ASSERTF(m->current_closure->continue_labels->count > 0, "continue must use in for stmt")
+    uint16_t continue_depth = m->current_closure->continue_labels->count;
     lir_operand_t *label = stack_top(m->current_closure->continue_labels);
+    linear_unwind_to_continue_depth(m, continue_depth);
     OP_PUSH(lir_op_bal(label));
 }
 
 static void linear_break(module_t *m) {
     LINEAR_ASSERTF(m->current_closure->break_labels->count > 0, "break must use in for stmt body");
+    uint16_t break_depth = m->current_closure->break_labels->count;
     lir_operand_t *label = stack_top(m->current_closure->break_labels);
+    linear_unwind_to_break_depth(m, break_depth);
     OP_PUSH(lir_op_bal(label));
 }
 
 static void linear_ret(module_t *m, ast_ret_stmt_t *stmt) {
     LINEAR_ASSERTF(m->current_closure->ret_labels->count > 0, "ret must use in match body");
+    uint16_t ret_depth = m->current_closure->ret_labels->count;
     lir_operand_t *label = stack_top(m->current_closure->ret_labels);
 
     // stmt->expr type maybe void, like println()
@@ -1632,22 +1783,19 @@ static void linear_ret(module_t *m, ast_ret_stmt_t *stmt) {
         linear_expr(m, stmt->expr, target);
     }
 
+    linear_unwind_to_ret_depth(m, ret_depth);
     OP_PUSH(lir_op_new(LIR_OPCODE_RET, NULL, NULL, label));
     OP_PUSH(lir_op_bal(label));
 }
 
 static void linear_return(module_t *m, ast_return_stmt_t *ast) {
+    lir_operand_t* src = NULL;
     if (ast->expr != NULL) {
-        lir_operand_t *src = linear_expr(m, *ast->expr, NULL);
-        // return void_expr() 时, m->linear_current->return_operand 是 null
-        //        if (m->current_closure->return_operand) {
-        //            linear_super_move(m, ast->expr->type, m->current_closure->return_operand, src);
-        //        }
-
-        // 保留用来做 return check
-        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, src, NULL, NULL));
+        src = linear_expr(m, *ast->expr, NULL);
     }
 
+    linear_unwind_all(m);
+    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, src, NULL, NULL));
     OP_PUSH(lir_op_bal(lir_label_operand(m->current_closure->end_label, false)));
 }
 
@@ -3842,6 +3990,8 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
                  line_operand,
                  column_operand);
 
+    linear_unwind_all(m);
+
     // 插入 return 标识(用来做 return check 的，check 完会清除的)
     OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL));
 
@@ -3935,6 +4085,10 @@ static void linear_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_STMT_RETURN: {
             return linear_return(m, stmt->value);
+        }
+        case AST_STMT_DEFER: {
+            linear_defer_register(m, stmt->value);
+            return;
         }
         case AST_STMT_THROW: {
             return linear_throw(m, stmt->value);
@@ -4044,6 +4198,8 @@ static lir_operand_t *linear_expr(module_t *m, ast_expr_t expr, lir_operand_t *t
 }
 
 static void linear_body(module_t *m, slice_t *body) {
+    linear_defer_scope_enter(m);
+
     for (int i = 0; i < body->count; ++i) {
         ast_stmt_t *stmt = body->take[i];
 #ifdef DEBUG_linear
@@ -4051,6 +4207,8 @@ static void linear_body(module_t *m, slice_t *body) {
 #endif
         linear_stmt(m, stmt);
     }
+
+    linear_defer_scope_leave(m);
 }
 
 /**

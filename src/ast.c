@@ -862,6 +862,13 @@ static ast_stmt_t *ast_stmt_copy(module_t *m, ast_stmt_t *temp) {
             stmt->value = ast_return_copy(m, temp->value);
             break;
         }
+        case AST_STMT_DEFER: {
+            ast_defer_stmt_t *temp_stmt = temp->value;
+            ast_defer_stmt_t *defer_stmt = COPY_NEW(ast_defer_stmt_t, temp_stmt);
+            defer_stmt->body = ast_body_copy(m, temp_stmt->body);
+            stmt->value = defer_stmt;
+            break;
+        }
         case AST_CALL: {
             stmt->value = ast_call_copy(m, temp->value);
             break;

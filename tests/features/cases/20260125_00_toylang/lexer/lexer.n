@@ -1,15 +1,15 @@
 import toylang.token.token
 
 type Lexer = struct {
+    int line         // current line number
+    int column       // current column number
     string input      // source code input
     int position     // current position in input (points to current char)
     int readPosition // current reading position in input (after current char)
     string ch          // current char under examination
-    int line         // current line number
-    int column       // current column number
 }
 
-fn newLexer( string input): Lexer {
+fn newLexer(string input): Lexer {
     var l = Lexer {
         input: input,
         position: 0,

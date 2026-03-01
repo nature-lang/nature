@@ -206,3 +206,25 @@ fn main() {}
 
 --- output.txt
 nature-test/main.n:4:10: calling fn `normal` from fx `worker` is not allowed.
+
+=== test_custom_direct_type_interface
+--- main.n
+import libc
+
+type allocatable = interface{
+    fn new()
+}
+
+type heap_t:allocatable = int
+
+fx heap_t.new(int v) {
+    println(v)
+}
+
+fn main() {
+    heap_t h = 0
+    h.new(1)
+}
+
+--- output.txt
+nature-test/main.n:7:23: type 'main.heap_t' not impl fn 'new' for interface 'main.allocatable'

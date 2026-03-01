@@ -612,6 +612,11 @@ static void generics_stmt(module_t *m, ast_stmt_t *stmt) {
             generics_expr(m, &throw_stmt->error);
             break;
         }
+        case AST_STMT_DEFER: {
+            ast_defer_stmt_t *defer_stmt = stmt->value;
+            generics_body(m, defer_stmt->body);
+            break;
+        }
         case AST_CATCH: {
             ast_catch_t *catch_stmt = stmt->value;
             generics_expr(m, &catch_stmt->try_expr);

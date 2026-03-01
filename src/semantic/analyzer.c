@@ -1043,8 +1043,7 @@ static void analyzer_global_fndef(module_t *m, ast_fndef_t *fndef) {
         }
         fndef->params = params;
 
-        // builtin type 没有注册在符号表, 所以也不能添加 type impl method
-        if (!is_impl_builtin_type(fndef->impl_type.kind)) {
+        if (!is_impl_builtin_type(fndef->impl_type.kind) && fndef->self_kind != PARAM_SELF_NULL) {
             symbol_typedef_add_method(fndef->impl_type.ident, fndef->symbol_name, fndef);
         }
     }
@@ -1948,6 +1947,14 @@ static void analyzer_return(module_t *m, ast_return_stmt_t *stmt) {
     }
 }
 
+static void analyzer_defer(module_t *m, ast_defer_stmt_t *stmt) {
+    m->in_defer_block_depth++;
+    analyzer_begin_scope(m);
+    analyzer_body(m, stmt->body);
+    analyzer_end_scope(m);
+    m->in_defer_block_depth--;
+}
+
 // type foo = int
 static void analyzer_typedef_stmt(module_t *m, ast_typedef_stmt_t *stmt) {
     // local type alias 不允许携带 param
@@ -2169,6 +2176,16 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
     m->current_line = stmt->line;
     m->current_column = stmt->column;
 
+    if (m->in_defer_block_depth > 0) {
+        if (stmt->assert_type == AST_STMT_RETURN ||
+            stmt->assert_type == AST_STMT_BREAK ||
+            stmt->assert_type == AST_STMT_CONTINUE ||
+            stmt->assert_type == AST_STMT_THROW ||
+            stmt->assert_type == AST_STMT_RET) {
+            ANALYZER_ASSERTF(false, "return/break/continue/throw/ret are not allowed inside defer block");
+        }
+    }
+
     switch (stmt->assert_type) {
         case AST_STMT_RET:
         case AST_STMT_EXPR_FAKE: {
@@ -2222,6 +2239,9 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_STMT_RETURN: {
             return analyzer_return(m, stmt->value);
+        }
+        case AST_STMT_DEFER: {
+            return analyzer_defer(m, stmt->value);
         }
         case AST_STMT_TYPEDEF: {
             return analyzer_typedef_stmt(m, stmt->value);

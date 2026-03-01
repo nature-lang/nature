@@ -105,19 +105,19 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
             for (int j = 0; j < ast_import->select_items->count; ++j) {
                 ast_import_select_item_t *item = ast_import->select_items->take[j];
                 char *local_name = item->alias ? item->alias : item->ident;
-                
+
                 // Check for redeclaration
-                if (table_exist(m->selective_import_table, local_name) || 
+                if (table_exist(m->selective_import_table, local_name) ||
                     table_exist(m->import_table, local_name)) {
                     ANALYZER_ASSERTF(false, "import item '%s' conflicts with existing import", local_name);
                 }
-                
+
                 // Create selective import reference
                 ast_import_select_t *select_ref = NEW(ast_import_select_t);
                 select_ref->module_ident = ast_import->module_ident;
                 select_ref->original_ident = item->ident;
                 select_ref->import = ast_import;
-                
+
                 table_set(m->selective_import_table, local_name, select_ref);
             }
         } else if (ast_import->as && strlen(ast_import->as) > 0) {
