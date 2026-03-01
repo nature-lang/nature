@@ -34,7 +34,8 @@ impl<'a> Flow<'a> {
                 start: fndef.symbol_end,
                 end: fndef.symbol_end,
                 message: "missing return".to_string(),
-            });
+                is_warning: false,
+                            });
         }
     }
 
@@ -117,7 +118,8 @@ impl<'a> Flow<'a> {
                         end: expr.end,
                         start: expr.end,
                         message: "missing ret".to_string(),
-                    });
+                        is_warning: false,
+                                            });
                 }
 
                 // has ret 属于当前 match, 离开当前 match 后，ret 作废

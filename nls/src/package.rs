@@ -8,7 +8,8 @@ pub fn parse_package(path: &str) -> Result<PackageConfig, AnalyzerError> {
         start: 0,
         end: 0,
         message: e.to_string(),
-    })?;
+        is_warning: false,
+            })?;
 
     match toml::from_str(&content) {
         Ok(package) => {
@@ -33,7 +34,8 @@ pub fn parse_package(path: &str) -> Result<PackageConfig, AnalyzerError> {
                 start: span.start,
                 end: span.end,
                 message: e.message().to_string(),
-            })
+                is_warning: false,
+                            })
         }
     }
 }

@@ -1,9 +1,11 @@
 use log::debug;
+use tower_lsp::lsp_types::SemanticTokenType;
 
 use crate::project::Module;
 use crate::utils::{errors_push, format_global_ident, format_impl_ident};
 
 use super::common::*;
+use super::lexer::semantic_token_type_index;
 use super::symbol::{NodeId, ScopeKind, SymbolKind, SymbolTable};
 use std::sync::{Arc, Mutex};
 
@@ -56,7 +58,8 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("anyptr cannot contains arg"),
-                    },
+                        is_warning: false,
+                                            },
                 );
                 t.err = true;
             }
@@ -78,7 +81,8 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("ptr must contains one arg"),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
 
@@ -100,7 +104,8 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("ref must contains one arg"),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
 
@@ -121,7 +126,8 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("all_type cannot contains arg"),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
             return true;
@@ -139,7 +145,8 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("fn_t cannot contains arg"),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
             return true;
@@ -157,7 +164,8 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("fn_t cannot contains arg"),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
             return true;
@@ -175,7 +183,8 @@ impl<'a> Semantic<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("fn_t cannot contains arg"),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
             return true;
@@ -344,7 +353,8 @@ impl<'a> Semantic<'a> {
                     start: expr.start,
                     end: expr.end,
                     message: "const initialization cycle detected".to_string(),
-                },
+                    is_warning: false,
+                                    },
             );
             return;
         }
@@ -366,7 +376,8 @@ impl<'a> Semantic<'a> {
                     start: expr.start,
                     end: expr.end,
                     message: "const cannot be initialized with non-literal value".to_string(),
-                },
+                    is_warning: false,
+                                    },
             );
             return;
         };
@@ -388,7 +399,8 @@ impl<'a> Semantic<'a> {
                             start: t.start,
                             end: t.end,
                             message: format!("import '{}' undeclared", t.import_as),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                     t.err = true;
                     return;
@@ -408,7 +420,8 @@ impl<'a> Semantic<'a> {
                             start: t.start,
                             end: t.end,
                             message: format!("type '{}' undeclared in {} module", t.ident, import_stmt.module_ident),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                     t.err = true;
                     return;
@@ -429,7 +442,8 @@ impl<'a> Semantic<'a> {
                             start: t.start,
                             end: t.end,
                             message: format!("type '{}' undeclared", t.ident),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                     t.err = true;
                     return;
@@ -444,7 +458,8 @@ impl<'a> Semantic<'a> {
                             start: t.start,
                             end: t.end,
                             message: format!("'{}' not a type", t.ident),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                     t.err = true;
                     return;
@@ -465,7 +480,8 @@ impl<'a> Semantic<'a> {
                                     start: t.start,
                                     end: t.end,
                                     message: format!("alias '{}' cannot contains generics type args", t.ident),
-                                },
+                                    is_warning: false,
+                                                                    },
                             );
                             return;
                         }
@@ -524,7 +540,8 @@ impl<'a> Semantic<'a> {
                                     start: t.start,
                                     end: t.end,
                                     message: "array length must be constans or integer literal".to_string(),
-                                },
+                                    is_warning: false,
+                                                                    },
                             );
                         }
                     } else {
@@ -534,7 +551,8 @@ impl<'a> Semantic<'a> {
                                 start: t.start,
                                 end: t.end,
                                 message: "array length must be constans or integer literal".to_string(),
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 } else {
@@ -545,7 +563,8 @@ impl<'a> Semantic<'a> {
                             start: t.start,
                             end: t.end,
                             message: "array length must be constans or integer literal".to_string(),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
 
@@ -585,7 +604,8 @@ impl<'a> Semantic<'a> {
                                     start: value.start,
                                     end: value.end,
                                     message: format!("struct field default value cannot be a fn def, use fn def ident instead"),
-                                },
+                                    is_warning: false,
+                                                                    },
                             );
                             t.err = true;
                         }
@@ -615,10 +635,16 @@ impl<'a> Semantic<'a> {
     }
 
     /**
-     * 验证选择性导入的符号是否存在于目标模块中
+     * 验证选择性导入的符号是否存在于目标模块中，
+     * 并根据符号类型设置正确的语义 token 颜色。
      * 例如: import co.mutex.{mutex_t} 时验证 mutex_t 是否真实存在
      */
     fn validate_selective_imports(&mut self) {
+        // Collect token updates first to avoid borrow conflicts
+        let mut token_updates: Vec<(usize, usize, usize)> = Vec::new(); // (start, end, sem_idx)
+        let mut alias_updates: Vec<(usize, usize, usize)> = Vec::new(); // (item_start, item_end, sem_idx)
+        let mut errors: Vec<(usize, usize, String, String)> = Vec::new();
+
         for import in &self.imports {
             if !import.is_selective {
                 continue;
@@ -628,19 +654,60 @@ impl<'a> Semantic<'a> {
 
             for item in items {
                 let global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
-                if self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id).is_some() {
+                if let Some(symbol_id) = self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id) {
+                    // Classify the import symbol's semantic token based on what it actually is
+                    if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
+                        let sem_type = match &symbol.kind {
+                            SymbolKind::Fn(_) => SemanticTokenType::FUNCTION,
+                            SymbolKind::Type(_) => SemanticTokenType::TYPE,
+                            SymbolKind::Const(_) => SemanticTokenType::MACRO,
+                            SymbolKind::Var(_) => SemanticTokenType::VARIABLE,
+                        };
+                        let sem_idx = semantic_token_type_index(sem_type);
+                        token_updates.push((item.start, item.end, sem_idx));
+
+                        if item.alias.is_some() {
+                            alias_updates.push((item.start, item.end, sem_idx));
+                        }
+                    }
                     continue;
                 }
 
-                errors_push(
-                    self.module,
-                    AnalyzerError {
-                        start: import.start,
-                        end: import.end,
-                        message: format!("symbol '{}' not found in module '{}'", item.ident, import.module_ident),
-                    },
-                );
+                errors.push((import.start, import.end, item.ident.clone(), import.module_ident.clone()));
             }
+        }
+
+        // Apply semantic token updates
+        for (start, end, sem_idx) in token_updates {
+            for token in self.module.sem_token_db.iter_mut() {
+                if token.start == start && token.end == end {
+                    token.semantic_token_type = sem_idx;
+                    break;
+                }
+            }
+        }
+
+        // Apply alias token updates (alias token is after the original ident within the item range)
+        for (item_start, item_end, sem_idx) in alias_updates {
+            for token in self.module.sem_token_db.iter_mut() {
+                if token.start > item_start && token.end == item_end {
+                    token.semantic_token_type = sem_idx;
+                    break;
+                }
+            }
+        }
+
+        // Report errors
+        for (start, end, ident, module_ident) in errors {
+            errors_push(
+                self.module,
+                AnalyzerError {
+                    start,
+                    end,
+                    message: format!("symbol '{}' not found in module '{}'", ident, module_ident),
+                    is_warning: false,
+                },
+            );
         }
     }
 
@@ -694,7 +761,8 @@ impl<'a> Semantic<'a> {
                                                     start: fndef.symbol_start,
                                                     end: fndef.symbol_end,
                                                     message: format!("impl type '{}' must specify generics params", fndef.impl_type.ident),
-                                                },
+                                                    is_warning: false,
+                                                                                                    },
                                             );
                                         }
                                     }
@@ -706,7 +774,8 @@ impl<'a> Semantic<'a> {
                                         start: fndef.symbol_start,
                                         end: fndef.symbol_end,
                                         message: format!("type '{}' undeclared", fndef.impl_type.symbol_id),
-                                    },
+                                        is_warning: false,
+                                                                            },
                                 );
                             }
                         }
@@ -730,7 +799,8 @@ impl<'a> Semantic<'a> {
                                         start: fndef.symbol_start,
                                         end: fndef.symbol_end,
                                         message: e,
-                                    },
+                                        is_warning: false,
+                                                                            },
                                 );
                             }
                         }
@@ -808,7 +878,8 @@ impl<'a> Semantic<'a> {
                                 start: constdef.symbol_start,
                                 end: constdef.symbol_end,
                                 message: format!("const cannot be initialized"),
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 }
@@ -959,7 +1030,8 @@ impl<'a> Semantic<'a> {
                                         start: fndef.symbol_start,
                                         end: fndef.symbol_end,
                                         message: e,
-                                    },
+                                        is_warning: false,
+                                                                            },
                                 );
                             });
                     }
@@ -990,7 +1062,8 @@ impl<'a> Semantic<'a> {
                                 start: param.symbol_start,
                                 end: param.symbol_end,
                                 message: e,
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 }
@@ -1050,6 +1123,22 @@ impl<'a> Semantic<'a> {
     pub fn rewrite_select_expr(&mut self, expr: &mut Box<Expr>) {
         let AstNode::SelectExpr(left, key, _) = &mut expr.node else { unreachable!() };
 
+        // Empty key means incomplete parse recovery (user is typing "x."), 
+        // resolve the left side but skip key-dependent analysis and error messages
+        if key.is_empty() {
+            if let AstNode::Ident(left_ident, symbol_id) = &mut left.node {
+                if let Some(id) = self.symbol_table.lookup_symbol(left_ident, self.current_scope_id) {
+                    *symbol_id = id;
+                } else if let Some(id) = self.symbol_table.find_module_symbol_id(&self.module.ident, left_ident) {
+                    *symbol_id = id;
+                    *left_ident = format_global_ident(self.module.ident.clone(), left_ident.to_string().clone());
+                }
+            } else {
+                self.analyze_expr(left);
+            }
+            return;
+        }
+
         if let AstNode::Ident(left_ident, symbol_id) = &mut left.node {
             // 尝试 find local or parent ident, 如果找到，将 symbol_id 添加到 Ident 中
             // symbol 可能是 parent local, 也可能是 parent fn，此时则发生闭包函数引用, 需要将 ident 改写成 env access
@@ -1107,7 +1196,8 @@ impl<'a> Semantic<'a> {
                             start: expr.start,
                             end: expr.end,
                             message: format!("identifier '{}' undeclared in '{}' module", key, left_ident),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                     return;
                 }
@@ -1126,7 +1216,8 @@ impl<'a> Semantic<'a> {
                     start: expr.start,
                     end: expr.end,
                     message: format!("identifier '{}.{}' undeclared", left_ident, key),
-                },
+                    is_warning: false,
+                                    },
             );
 
             return;
@@ -1202,7 +1293,8 @@ impl<'a> Semantic<'a> {
                                     start: cond.start,
                                     end: cond.end,
                                     message: "default case '_' conflict in a 'match' expression".to_string(),
-                                },
+                                    is_warning: false,
+                                                                    },
                             );
                         }
 
@@ -1213,7 +1305,8 @@ impl<'a> Semantic<'a> {
                                     start: cond.start,
                                     end: cond.end,
                                     message: "default case '_' must be the last one in a 'match' expression".to_string(),
-                                },
+                                    is_warning: false,
+                                                                    },
                             );
                         }
 
@@ -1331,7 +1424,8 @@ impl<'a> Semantic<'a> {
                                         start: ut.start,
                                         end: ut.end,
                                         message: "unexpected is expr".to_string(),
-                                    },
+                                        is_warning: false,
+                                                                            },
                                 );
                                 return;
                             };
@@ -1360,7 +1454,8 @@ impl<'a> Semantic<'a> {
                                     start: ut.start,
                                     end: ut.end,
                                     message: "unexpected is expr".to_string(),
-                                },
+                                    is_warning: false,
+                                                                    },
                             );
                         }
                     }
@@ -1469,7 +1564,8 @@ impl<'a> Semantic<'a> {
                             start: expr.start,
                             end: expr.end,
                             message: format!("identifier '{}' undeclared", ident),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
 
@@ -1490,7 +1586,8 @@ impl<'a> Semantic<'a> {
                                 start: expr.start,
                                 end: expr.end,
                                 message: "tagged union uses parentheses but passes no arguments".to_string(),
-                            },
+                                is_warning: false,
+                                                            },
                         );
                         return;
                     }
@@ -1550,7 +1647,8 @@ impl<'a> Semantic<'a> {
                         start: item.start,
                         end: item.end,
                         message: "var tuple destr expr type exception".to_string(),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
         }
@@ -1599,7 +1697,8 @@ impl<'a> Semantic<'a> {
                     start: fndef.symbol_start,
                     end: fndef.symbol_end,
                     message: "closure fn cannot be generics or impl type alias".to_string(),
-                },
+                    is_warning: false,
+                                    },
             );
         }
 
@@ -1611,7 +1710,8 @@ impl<'a> Semantic<'a> {
                     start: fndef.symbol_start,
                     end: fndef.symbol_end,
                     message: "closure fn cannot have #linkid label".to_string(),
-                },
+                    is_warning: false,
+                                    },
             );
         }
 
@@ -1622,7 +1722,8 @@ impl<'a> Semantic<'a> {
                     start: fndef.symbol_start,
                     end: fndef.symbol_end,
                     message: "closure fn cannot be template".to_string(),
-                },
+                    is_warning: false,
+                                    },
             );
         }
 
@@ -1652,7 +1753,8 @@ impl<'a> Semantic<'a> {
                             start: param.symbol_start,
                             end: param.symbol_end,
                             message: e,
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
             }
@@ -1693,7 +1795,8 @@ impl<'a> Semantic<'a> {
                         start: fndef.symbol_start,
                         end: fndef.symbol_end,
                         message: e,
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
         }
@@ -1719,7 +1822,8 @@ impl<'a> Semantic<'a> {
                             start: cond.start,
                             end: cond.end,
                             message: "condition expr cannot contains multiple is expr".to_string(),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
 
@@ -1843,7 +1947,8 @@ impl<'a> Semantic<'a> {
                         start: constdef.symbol_start,
                         end: constdef.symbol_end,
                         message: e,
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
         }
@@ -1859,6 +1964,9 @@ impl<'a> Semantic<'a> {
             AstNode::VarDef(var_decl_mutex, expr) => {
                 self.analyze_expr(expr);
                 self.analyze_var_decl(var_decl_mutex);
+
+                // Type inference: if var type is unknown, try to infer from right-hand expression
+                self.infer_var_type_from_expr(var_decl_mutex, expr);
             }
             AstNode::ConstDef(constdef_mutex) => {
                 self.analyze_constdef(constdef_mutex.clone());
@@ -1913,7 +2021,8 @@ impl<'a> Semantic<'a> {
                                 start: case.handle_body.start,
                                 end: case.handle_body.end,
                                 message: "default case must be the last case".to_string(),
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 }
@@ -1964,7 +2073,8 @@ impl<'a> Semantic<'a> {
                             start: typedef.symbol_start,
                             end: typedef.symbol_end,
                             message: "local type alias cannot have params".to_string(),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
 
@@ -1976,7 +2086,8 @@ impl<'a> Semantic<'a> {
                             start: typedef.symbol_start,
                             end: typedef.symbol_end,
                             message: "local typedef cannot with impls".to_string(),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
 
@@ -1998,7 +2109,8 @@ impl<'a> Semantic<'a> {
                                 start: typedef.symbol_start,
                                 end: typedef.symbol_end,
                                 message: e,
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 }
@@ -2006,6 +2118,141 @@ impl<'a> Semantic<'a> {
             _ => {
                 return;
             }
+        }
+    }
+
+    /// Infer variable type from right-hand expression when type is unknown.
+    /// Handles function calls by looking up the called function's return type.
+    fn infer_var_type_from_expr(&mut self, var_decl_mutex: &Arc<Mutex<VarDeclExpr>>, expr: &Box<Expr>) {
+        let needs_inference = {
+            let var_decl = var_decl_mutex.lock().unwrap();
+            var_decl.type_.kind.is_unknown()
+        };
+
+        if !needs_inference {
+            return;
+        }
+
+        // Try to infer type from the expression
+        if let Some(mut inferred_type) = self.infer_type_from_expr(expr) {
+            // Resolve unresolved type idents (e.g., return type "testing" that hasn't been analyzed yet)
+            self.resolve_inferred_type(&mut inferred_type);
+
+            debug!("Inferred type for variable: {:?}, symbol_id: {}", inferred_type.kind, inferred_type.symbol_id);
+            let mut var_decl = var_decl_mutex.lock().unwrap();
+            var_decl.type_ = inferred_type;
+        }
+    }
+
+    /// Resolve an unresolved type ident in an inferred type.
+    /// Handles direct Ident types and types wrapped in Ref/Ptr.
+    fn resolve_inferred_type(&mut self, t: &mut Type) {
+        use crate::analyzer::common::TypeKind;
+
+        match &mut t.kind {
+            TypeKind::Ident => {
+                if t.symbol_id == 0 && !t.ident.is_empty() {
+                    if let Some(symbol_id) = self.resolve_typedef(&mut t.ident) {
+                        t.symbol_id = symbol_id;
+                        if t.ident_kind == TypeIdentKind::Unknown {
+                            t.ident_kind = TypeIdentKind::Def;
+                        }
+                    }
+                }
+            }
+            TypeKind::Ref(inner) | TypeKind::Ptr(inner) => {
+                self.resolve_inferred_type(inner);
+                // Propagate the resolved symbol_id to the outer type for completion lookup
+                if t.symbol_id == 0 && inner.symbol_id != 0 {
+                    t.symbol_id = inner.symbol_id;
+                    t.ident = inner.ident.clone();
+                    if t.ident_kind == TypeIdentKind::Unknown {
+                        t.ident_kind = inner.ident_kind.clone();
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Try to infer a Type from an expression node.
+    fn infer_type_from_expr(&self, expr: &Box<Expr>) -> Option<Type> {
+        match &expr.node {
+            AstNode::Call(call) => {
+                // Look up the function being called to get its return type
+                self.infer_type_from_call(call)
+            }
+            AstNode::New(type_, _, _) | AstNode::StructNew(_, type_, _) => {
+                // new Type{} or Type{} — the type is the type being constructed
+                Some(type_.clone())
+            }
+            AstNode::Ident(_, symbol_id) => {
+                // Variable reference — look up the variable's type
+                if *symbol_id != 0 {
+                    if let Some(symbol) = self.symbol_table.get_symbol_ref(*symbol_id) {
+                        match &symbol.kind {
+                            SymbolKind::Var(var) => {
+                                let var = var.lock().unwrap();
+                                if !var.type_.kind.is_unknown() {
+                                    return Some(var.type_.clone());
+                                }
+                            }
+                            SymbolKind::Const(c) => {
+                                let c = c.lock().unwrap();
+                                if !c.type_.kind.is_unknown() {
+                                    return Some(c.type_.clone());
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
+    /// Infer type from a function call by looking up the function's return type.
+    fn infer_type_from_call(&self, call: &AstCall) -> Option<Type> {
+        // The called function is typically an Ident or a SelectExpr (module.fn_name)
+        match &call.left.node {
+            AstNode::Ident(_, symbol_id) => {
+                if *symbol_id != 0 {
+                    if let Some(symbol) = self.symbol_table.get_symbol_ref(*symbol_id) {
+                        if let SymbolKind::Fn(fndef) = &symbol.kind {
+                            let fndef = fndef.lock().unwrap();
+                            if !fndef.return_type.kind.is_unknown() {
+                                return Some(fndef.return_type.clone());
+                            }
+                        }
+                    }
+                }
+                None
+            }
+            AstNode::SelectExpr(left, key, _) => {
+                // module.fn_name() — look up the function in the module's scope
+                if let AstNode::Ident(module_name, _) = &left.node {
+                    // Find the module import
+                    if let Some(import) = self.imports.iter().find(|i| i.as_name == *module_name) {
+                        let global_ident = format_global_ident(import.module_ident.clone(), key.clone());
+                        if let Some(symbol_id) = self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id) {
+                            if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
+                                if let SymbolKind::Fn(fndef) = &symbol.kind {
+                                    let fndef = fndef.lock().unwrap();
+                                    if !fndef.return_type.kind.is_unknown() {
+                                        return Some(fndef.return_type.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                None
+            }
+            // StructSelect: instance.method() — look up the method's return type
+            AstNode::StructSelect(_, _, _) => None,
+            _ => None,
         }
     }
 
@@ -2031,7 +2278,8 @@ impl<'a> Semantic<'a> {
                         start: var_decl.symbol_start,
                         end: var_decl.symbol_end,
                         message: e,
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
         }

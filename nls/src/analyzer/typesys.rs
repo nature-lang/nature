@@ -431,7 +431,8 @@ impl<'a> Typesys<'a> {
                 start: result.start,
                 end: result.end,
                 message: format!("recycle use type '{}'", found.unwrap()),
-            });
+                is_warning: false,
+                            });
         }
 
         return Ok(result);
@@ -456,7 +457,8 @@ impl<'a> Typesys<'a> {
                 start: typedef_stmt.symbol_start,
                 end: typedef_stmt.symbol_end,
                 message: "typedef type is not interface".to_string(),
-            });
+                is_warning: false,
+                            });
         };
 
         // 创建一个 HashMap 用于跟踪已存在的方法
@@ -488,7 +490,8 @@ impl<'a> Typesys<'a> {
                                     start: element.start,
                                     end: element.end,
                                     message: format!("duplicate method '{}'", type_fn.name),
-                                });
+                                    is_warning: false,
+                                                                    });
                             }
                             continue;
                         }
@@ -514,7 +517,8 @@ impl<'a> Typesys<'a> {
                 start: 0,
                 end: 0,
                 message: format!("typedef '{}' symbol_id not found", t.ident),
-            });
+                is_warning: false,
+                            });
         }
 
         // 获取符号定义
@@ -522,7 +526,8 @@ impl<'a> Typesys<'a> {
             start,
             end,
             message: format!("typedef '{}' not found", t.ident),
-        })?;
+            is_warning: false,
+                    })?;
 
         // 检查符号类型
         let SymbolKind::Type(typedef_mutex) = symbol.kind.clone() else {
@@ -530,7 +535,8 @@ impl<'a> Typesys<'a> {
                 start,
                 end,
                 message: format!("'{}' is not a type", symbol.ident),
-            });
+                is_warning: false,
+                            });
         };
 
         {
@@ -541,6 +547,7 @@ impl<'a> Typesys<'a> {
                         start,
                         end,
                         message: format!("typedef '{}' args mismatch", t.ident),
+                        is_warning: false,
                     });
                 }
 
@@ -582,7 +589,8 @@ impl<'a> Typesys<'a> {
                     start,
                     end,
                     message: format!("typedef '{}' need params", t.ident),
-                });
+                    is_warning: false,
+                                    });
             }
 
             if t.args.len() != generic_typedef.params.len() {
@@ -594,7 +602,8 @@ impl<'a> Typesys<'a> {
                     start,
                     end,
                     message: format!("typedef '{}' params mismatch", t.ident),
-                });
+                    is_warning: false,
+                                    });
             }
 
             let mut args_table = HashMap::new();
@@ -620,7 +629,8 @@ impl<'a> Typesys<'a> {
                         start,
                         end,
                         message: format!("generics constraint check failed: {}", e),
-                    });
+                        is_warning: false,
+                                            });
                 }
 
                 impl_args.push(arg.clone());
@@ -641,7 +651,7 @@ impl<'a> Typesys<'a> {
 
                         for impl_interface in &generic_typedef.impl_interfaces {
                             self.check_typedef_impl(impl_interface, t.ident.clone(), &generic_typedef)
-                                .map_err(|e| AnalyzerError { start, end, message: e })?;
+                                .map_err(|e| AnalyzerError { start, end, message: e, is_warning: false })?;
                         }
                     }
                 }
@@ -731,7 +741,7 @@ impl<'a> Typesys<'a> {
                         if reduction_ident_depth_entered {
                             Self::reduction_ident_depth_leave(visited, &t.ident);
                         }
-                        return Err(AnalyzerError { start, end, message: e });
+                        return Err(AnalyzerError { start, end, message: e, is_warning: false });
                     }
                 }
             }
@@ -791,7 +801,8 @@ impl<'a> Typesys<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("type '{}' not support as map key", key_type),
-                    });
+                        is_warning: false,
+                                            });
                 }
 
                 result.ident_kind = TypeIdentKind::Builtin;
@@ -809,7 +820,8 @@ impl<'a> Typesys<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("type '{}' not support as set element", element_type),
-                    });
+                        is_warning: false,
+                                            });
                 }
 
                 result.ident_kind = TypeIdentKind::Builtin;
@@ -824,7 +836,8 @@ impl<'a> Typesys<'a> {
                         start: t.start,
                         end: t.end,
                         message: "tuple element empty".to_string(),
-                    });
+                        is_warning: false,
+                                            });
                 }
 
                 for element_type in elements.iter_mut() {
@@ -883,7 +896,8 @@ impl<'a> Typesys<'a> {
                     start: 0,
                     end: 0,
                     message: "unknown type".to_string(),
-                })
+                    is_warning: false,
+                                    })
             }
         }
 
@@ -913,7 +927,8 @@ impl<'a> Typesys<'a> {
                 start: 0,
                 end: 0,
                 message: format!("type {} already has error", t),
-            });
+                is_warning: false,
+                            });
         }
 
         if t.kind.is_unknown() {
@@ -977,7 +992,8 @@ impl<'a> Typesys<'a> {
                         start: t.start,
                         end: t.end,
                         message: format!("enum only supports integer types, got '{}'", element_type),
-                    });
+                        is_warning: false,
+                                            });
                 }
 
                 // 计算所有枚举成员的值
@@ -998,7 +1014,8 @@ impl<'a> Typesys<'a> {
                                 start: t.start,
                                 end: t.end,
                                 message: format!("enum member '{}' value must be a literal", prop.name),
-                            });
+                                is_warning: false,
+                                                            });
                         }
                     } else {
                         // 没有显式值，使用自动递增值
@@ -1030,7 +1047,8 @@ impl<'a> Typesys<'a> {
                     start: 0,
                     end: 0,
                     message: "unknown type".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
         }
     }
@@ -1091,7 +1109,8 @@ impl<'a> Typesys<'a> {
                 start: 0,
                 end: 0,
                 message: "unknown as source type".to_string(),
-            });
+                is_warning: false,
+                            });
         }
 
         src.type_ = src_type.clone();
@@ -1103,7 +1122,8 @@ impl<'a> Typesys<'a> {
                     start: as_expr.start,
                     end: as_expr.end,
                     message: "unexpected as expr, expected tagged union".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
             self.infer_tagged_union_element(ut, src.type_.clone())?;
 
@@ -1134,7 +1154,8 @@ impl<'a> Typesys<'a> {
                     start: as_expr.start,
                     end: as_expr.end,
                     message: "union to union type is not supported".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
 
             if !self.union_type_contains(&(*any, elements.clone()), &target_type) {
@@ -1142,7 +1163,8 @@ impl<'a> Typesys<'a> {
                     start: as_expr.start,
                     end: as_expr.end,
                     message: format!("type {} not contains in union type", target_type),
-                });
+                    is_warning: false,
+                                    });
             }
 
             return Ok(target_type.clone());
@@ -1161,7 +1183,8 @@ impl<'a> Typesys<'a> {
                     start: as_expr.start,
                     end: as_expr.end,
                     message: format!("type {} not impl interface", src_type),
-                });
+                    is_warning: false,
+                                    });
             }
 
             // get symbol from symbol table
@@ -1172,7 +1195,8 @@ impl<'a> Typesys<'a> {
                         start: 0,
                         end: 0,
                         message: format!("type '{}' not found", temp_target_type.ident),
-                    });
+                        is_warning: false,
+                                            });
                 }
             };
 
@@ -1186,7 +1210,8 @@ impl<'a> Typesys<'a> {
                         start: as_expr.start,
                         end: as_expr.end,
                         message: format!("type '{}' not impl '{}' interface", temp_target_type.ident, src_type),
-                    });
+                        is_warning: false,
+                                            });
                 }
 
                 self.check_typedef_impl(&src_type, temp_target_type.ident.clone(), &typedef)
@@ -1194,7 +1219,8 @@ impl<'a> Typesys<'a> {
                         start: as_expr.start,
                         end: as_expr.end,
                         message: e,
-                    })?;
+                        is_warning: false,
+                                            })?;
             } else {
                 unreachable!();
             }
@@ -1220,7 +1246,8 @@ impl<'a> Typesys<'a> {
                         start: as_expr.start,
                         end: as_expr.end,
                         message: e,
-                    })?;
+                        is_warning: false,
+                                            })?;
             }
 
             return Ok(target_type.clone());
@@ -1257,7 +1284,8 @@ impl<'a> Typesys<'a> {
             start: as_expr.start,
             end: as_expr.end,
             message: format!("cannot casting to '{}'", target_type),
-        });
+            is_warning: false,
+                    });
     }
 
     pub fn infer_match(
@@ -1281,7 +1309,8 @@ impl<'a> Typesys<'a> {
                     start: subject_expr.start,
                     end: subject_expr.end,
                     message: "match subject type not confirm".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
         }
 
@@ -1306,7 +1335,8 @@ impl<'a> Typesys<'a> {
                                 start: cond_expr.start,
                                 end: cond_expr.end,
                                 message: "match 'union' only support 'is' assert".to_string(),
-                            });
+                                is_warning: false,
+                                                            });
                         }
                     }
 
@@ -1317,7 +1347,8 @@ impl<'a> Typesys<'a> {
                                 start: cond_expr.start,
                                 end: cond_expr.end,
                                 message: format!("{} cannot use 'is' operator", subject_type),
-                            });
+                                is_warning: false,
+                                                            });
                         }
 
                         // 处理 tagged union 的 is 匹配
@@ -1327,7 +1358,8 @@ impl<'a> Typesys<'a> {
                                     start: cond_expr.start,
                                     end: cond_expr.end,
                                     message: "tagged union match requires union tag".to_string(),
-                                });
+                                    is_warning: false,
+                                                                    });
                             };
 
                             // 推断 tagged union element
@@ -1381,7 +1413,8 @@ impl<'a> Typesys<'a> {
                                     "match expression lacks a default case '_' and union element type lacks, for example 'is {}'",
                                     element_type
                                 ),
-                            });
+                                is_warning: false,
+                                                            });
                         }
                     }
                 } else {
@@ -1389,7 +1422,8 @@ impl<'a> Typesys<'a> {
                         start,
                         end,
                         message: "match expression lacks a default case '_'".to_string(),
-                    });
+                        is_warning: false,
+                                            });
                 }
             } else if let TypeKind::TaggedUnion(_, elements) = &subject_type.kind {
                 // tagged union 穷尽检查
@@ -1402,7 +1436,8 @@ impl<'a> Typesys<'a> {
                                 "match expression lacks a default case '_' and tagged union element lacks, for example 'is {}'",
                                 element.tag
                             ),
-                        });
+                            is_warning: false,
+                                                    });
                     }
                 }
             } else if let TypeKind::Enum(_, properties) = &subject_type.kind {
@@ -1413,7 +1448,8 @@ impl<'a> Typesys<'a> {
                             start,
                             end,
                             message: format!("match expression lacks a default case '_' and enum value lacks, for example '{}'", prop.name),
-                        });
+                            is_warning: false,
+                                                    });
                     }
                 }
             } else {
@@ -1421,7 +1457,8 @@ impl<'a> Typesys<'a> {
                     start,
                     end,
                     message: "match expression lacks a default case '_'".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
         }
 
@@ -1446,7 +1483,8 @@ impl<'a> Typesys<'a> {
                 start: property.start,
                 end: property.end,
                 message: format!("not found property '{}'", property.key),
-            })?;
+                is_warning: false,
+                            })?;
 
             exists.insert(property.key.clone(), true);
 
@@ -1493,7 +1531,8 @@ impl<'a> Typesys<'a> {
                     start: start,
                     end: end,
                     message: format!("struct field '{}' must be assigned default value", type_prop.name),
-                });
+                    is_warning: false,
+                                    });
             }
         }
 
@@ -1516,7 +1555,8 @@ impl<'a> Typesys<'a> {
                 start: 0,
                 end: 0,
                 message: "unknown binary expr left type".to_string(),
-            });
+                is_warning: false,
+                            });
         }
 
         let right_target_type = if let TypeKind::Union(..) = left_type.kind.clone() {
@@ -1534,7 +1574,8 @@ impl<'a> Typesys<'a> {
                 start: left.start,
                 end: right.end,
                 message: format!("binary type inconsistency: left is '{}', right is '{}'", left_type, right_type),
-            });
+                is_warning: false,
+                            });
         }
 
         // 处理数值类型运算
@@ -1548,7 +1589,8 @@ impl<'a> Typesys<'a> {
                         "binary operator '{}' only support number operand, actual '{} {} {}'",
                         op, left_type, op, right_type
                     ),
-                });
+                    is_warning: false,
+                                    });
             }
         }
 
@@ -1563,7 +1605,8 @@ impl<'a> Typesys<'a> {
                         "binary operator '{}' only support string operand, actual '{} {} {}'",
                         op, left_type, op, right_type
                     ),
-                });
+                    is_warning: false,
+                                    });
             }
         }
 
@@ -1576,7 +1619,8 @@ impl<'a> Typesys<'a> {
                         "binary operator '{}' only support bool operand, actual '{} {} {}'",
                         op, left_type, op, right_type
                     ),
-                });
+                    is_warning: false,
+                                    });
             }
         }
 
@@ -1588,7 +1632,8 @@ impl<'a> Typesys<'a> {
                     start: left.start,
                     end: right.end,
                     message: format!("binary operator '{}' only integer operand", op),
-                });
+                    is_warning: false,
+                                    });
             }
         }
 
@@ -1605,7 +1650,8 @@ impl<'a> Typesys<'a> {
                 start: 0,
                 end: 0,
                 message: format!("unknown operator '{}'", op),
-            })
+                is_warning: false,
+                            })
         }
     }
 
@@ -1630,7 +1676,8 @@ impl<'a> Typesys<'a> {
                 start: condition.start,
                 end: condition.end,
                 message: format!("ternary condition must be bool, pointer, or nullable type, actual '{}'", cond_type),
-            });
+                is_warning: false,
+                            });
         }
 
         // Infer consequent expression with target type
@@ -1645,7 +1692,8 @@ impl<'a> Typesys<'a> {
                 start: consequent.start,
                 end: alternate.end,
                 message: format!("ternary branches must have compatible types: '{}' vs '{}'", consequent_type, alternate_type),
-            });
+                is_warning: false,
+                            });
         }
 
         Ok(consequent_type)
@@ -1657,7 +1705,8 @@ impl<'a> Typesys<'a> {
                 start: operand.start,
                 end: operand.end,
                 message: format!("unary operator '{}' cannot use void as target type", op),
-            });
+                is_warning: false,
+                            });
         }
 
         // 处理逻辑非运算符
@@ -1677,7 +1726,8 @@ impl<'a> Typesys<'a> {
                 start: operand.start,
                 end: operand.end,
                 message: format!("neg(-) must use in number, actual '{}'", operand_type),
-            });
+                is_warning: false,
+                            });
         }
 
         // 处理取地址运算符 &
@@ -1688,7 +1738,8 @@ impl<'a> Typesys<'a> {
                     start: operand.start,
                     end: operand.end,
                     message: "cannot load address of an literal or call".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
 
             return Ok(Type::ptr_of(operand_type));
@@ -1706,7 +1757,8 @@ impl<'a> Typesys<'a> {
                         start: operand.start,
                         end: operand.end,
                         message: format!("cannot dereference non-pointer type '{}'", operand_type),
-                    });
+                        is_warning: false,
+                                            });
                 }
             }
         }
@@ -1721,7 +1773,8 @@ impl<'a> Typesys<'a> {
                 start: 0,
                 end: 0,
                 message: format!("ident '{}' symbol_id is none", ident),
-            });
+                is_warning: false,
+                            });
         };
 
         let symbol = self.symbol_table.get_symbol(*symbol_id).unwrap();
@@ -1743,7 +1796,8 @@ impl<'a> Typesys<'a> {
                         start: 0,
                         end: 0,
                         message: format!("generics symbol rewrite failed, new ident '{}' not found", new_ident),
-                    });
+                        is_warning: false,
+                                            });
                 }
             }
         }
@@ -1758,7 +1812,8 @@ impl<'a> Typesys<'a> {
                         start: 0,
                         end: 0,
                         message: "unknown type".to_string(),
-                    });
+                        is_warning: false,
+                                            });
                 }
                 debug_assert!(var_decl.type_.kind.is_exist());
 
@@ -1773,7 +1828,8 @@ impl<'a> Typesys<'a> {
                             start,
                             end,
                             message: format!("generic fn `{}` cannot be passed as ident", fndef.fn_name),
-                        });
+                            is_warning: false,
+                                                    });
                     }
                 }
 
@@ -1784,7 +1840,8 @@ impl<'a> Typesys<'a> {
                     start: start,
                     end: end,
                     message: "symbol of 'type' cannot be used as an identity".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
         }
     }
@@ -1835,7 +1892,8 @@ impl<'a> Typesys<'a> {
                     start: expr.start,
                     end: expr.end,
                     message: "vec element type not confirm".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
             let mut result = Type::undo_new(TypeKind::Vec(Box::new(element_type)));
             if infer_target_type.kind.is_exist() {
@@ -1897,14 +1955,16 @@ impl<'a> Typesys<'a> {
                     start,
                     end,
                     message: "map key type not confirm".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
             if !self.type_confirm(&value_type) {
                 return Err(AnalyzerError {
                     start,
                     end,
                     message: "map value type not confirm".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
             return self.reduction_type(Type::undo_new(TypeKind::Map(Box::new(key_type), Box::new(value_type))));
         }
@@ -1953,7 +2013,8 @@ impl<'a> Typesys<'a> {
                     start,
                     end,
                     message: "empty set element type not confirm".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
             return self.reduction_type(Type::undo_new(TypeKind::Set(Box::new(element_type))));
         }
@@ -1988,7 +2049,8 @@ impl<'a> Typesys<'a> {
                 start,
                 end,
                 message: "tuple elements empty".to_string(),
-            });
+                is_warning: false,
+                            });
         }
 
         // 收集所有元素的类型
@@ -2009,7 +2071,8 @@ impl<'a> Typesys<'a> {
                     start,
                     end,
                     message: "tuple element type cannot be confirmed".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
 
             element_types.push(expr_type);
@@ -2049,19 +2112,22 @@ impl<'a> Typesys<'a> {
                         start: length_expr.start,
                         end: length_expr.end,
                         message: "array length must be integer literal".to_string(),
-                    });
+                        is_warning: false,
+                                            });
                 }
                 value.parse::<i64>().map_err(|_| AnalyzerError {
                     start: length_expr.start,
                     end: length_expr.end,
                     message: "invalid array length".to_string(),
-                })?
+                    is_warning: false,
+                                    })?
             } else {
                 return Err(AnalyzerError {
                     start: length_expr.start,
                     end: length_expr.end,
                     message: "array length must be constant".to_string(),
-                });
+                    is_warning: false,
+                                    });
             };
 
             // 检查长度是否大于0
@@ -2070,7 +2136,8 @@ impl<'a> Typesys<'a> {
                     start: length_expr.start,
                     end: length_expr.end,
                     message: "array length must be greater than 0".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
 
             let result = Type::undo_new(TypeKind::Arr(Box::new(Expr::default()), length as u64, element_type.clone()));
@@ -2158,7 +2225,8 @@ impl<'a> Typesys<'a> {
                         start: key.start,
                         end: key.end,
                         message: "tuple index must be integer literal".to_string(),
-                    });
+                        is_warning: false,
+                                            });
                 }
                 value.parse::<u64>().unwrap_or(u64::MAX)
             } else {
@@ -2166,7 +2234,8 @@ impl<'a> Typesys<'a> {
                     start: key.start,
                     end: key.end,
                     message: "tuple index must be immediate value".to_string(),
-                });
+                    is_warning: false,
+                                    });
             };
 
             // 检查索引是否越界
@@ -2175,7 +2244,8 @@ impl<'a> Typesys<'a> {
                     start: key.start,
                     end: key.end,
                     message: format!("tuple index {} out of range", index),
-                });
+                    is_warning: false,
+                                    });
             }
 
             let element_type = elements[index as usize].clone();
@@ -2191,7 +2261,8 @@ impl<'a> Typesys<'a> {
             start: expr.start,
             end: expr.end,
             message: format!("access only support map/vec/string/array/tuple, cannot '{}'", left_type),
-        })
+            is_warning: false,
+                    })
     }
 
     /// 尝试推断 enum 成员访问表达式 (如 Color.RED)
@@ -2237,7 +2308,8 @@ impl<'a> Typesys<'a> {
                 start,
                 end,
                 message: format!("enum '{}' has no member '{}'", left_ident, key),
-            });
+                is_warning: false,
+                            });
         };
 
         let Some(value) = &prop.value else {
@@ -2245,7 +2317,8 @@ impl<'a> Typesys<'a> {
                 start,
                 end,
                 message: format!("enum '{}' member '{}' has no value", left_ident, key),
-            });
+                is_warning: false,
+                            });
         };
 
         // 返回需要改写的节点和类型
@@ -2265,7 +2338,8 @@ impl<'a> Typesys<'a> {
                 start: expr.start,
                 end: expr.end,
                 message: "expected tagged union element".to_string(),
-            });
+                is_warning: false,
+                            });
         };
 
         // 如果 target_type 存在且 union_type 未设置，使用 target_type
@@ -2280,7 +2354,8 @@ impl<'a> Typesys<'a> {
                     start: expr.start,
                     end: expr.end,
                     message: format!("type inconsistency, expect={}, actual={}", target_type.ident, union_type.ident),
-                });
+                    is_warning: false,
+                                    });
             }
             *union_type = target_type.clone();
         }
@@ -2293,7 +2368,8 @@ impl<'a> Typesys<'a> {
                 start: expr.start,
                 end: expr.end,
                 message: format!("expected tagged union type, got {}", union_type),
-            });
+                is_warning: false,
+                            });
         };
 
         // 查找匹配的 variant
@@ -2303,7 +2379,8 @@ impl<'a> Typesys<'a> {
                 start: expr.start,
                 end: expr.end,
                 message: format!("enum '{}' has no variant '{}'", union_type.ident, tagged_name),
-            });
+                is_warning: false,
+                            });
         };
 
         // 保存 element 引用
@@ -2320,7 +2397,8 @@ impl<'a> Typesys<'a> {
                 start: expr.start,
                 end: expr.end,
                 message: "expected tagged union new".to_string(),
-            });
+                is_warning: false,
+                            });
         };
 
         // 如果 target_type 存在且 union_type 未设置，使用 target_type
@@ -2335,7 +2413,8 @@ impl<'a> Typesys<'a> {
                     start: expr.start,
                     end: expr.end,
                     message: format!("type inconsistency, expect={}, actual={}", target_type.ident, union_type.ident),
-                });
+                    is_warning: false,
+                                    });
             }
             *union_type = target_type.clone();
         }
@@ -2348,7 +2427,8 @@ impl<'a> Typesys<'a> {
                 start: expr.start,
                 end: expr.end,
                 message: format!("expected tagged union type, got {}", union_type),
-            });
+                is_warning: false,
+                            });
         };
 
         // 查找匹配的 variant
@@ -2358,7 +2438,8 @@ impl<'a> Typesys<'a> {
                 start: expr.start,
                 end: expr.end,
                 message: format!("enum '{}' has no variant '{}'", union_type.ident, tagged_name),
-            });
+                is_warning: false,
+                            });
         };
 
         // 保存 element 引用
@@ -2430,7 +2511,8 @@ impl<'a> Typesys<'a> {
                     start: expr.start,
                     end: expr.end,
                     message: format!("type struct '{}' no field '{}'", deref_type.ident, key),
-                });
+                    is_warning: false,
+                                    });
             }
         }
 
@@ -2439,7 +2521,8 @@ impl<'a> Typesys<'a> {
             start: expr.start,
             end: expr.end,
             message: format!("no field named '{}' found in type '{}'", key, left_type),
-        })
+            is_warning: false,
+                    })
     }
 
     pub fn infer_async(&mut self, expr: &mut Box<Expr>) -> Result<Type, AnalyzerError> {
@@ -2477,7 +2560,8 @@ impl<'a> Typesys<'a> {
                 start: expr.start,
                 end: expr.end,
                 message: "async expression must call a fn".to_string(),
-            });
+                is_warning: false,
+                            });
         }
 
         // 构造异步调用
@@ -2570,7 +2654,8 @@ impl<'a> Typesys<'a> {
                             start: expr.start,
                             end: expr.end,
                             message: format!("{} cannot use 'is' operator", src_type),
-                        });
+                            is_warning: false,
+                                                    });
                     }
 
                     // 处理 tagged union 的 union_tag
@@ -2580,7 +2665,8 @@ impl<'a> Typesys<'a> {
                                 start: expr.start,
                                 end: expr.end,
                                 message: "unexpected is expr".to_string(),
-                            });
+                                is_warning: false,
+                                                            });
                         }
                         self.infer_tagged_union_element(ut, src_type)?;
                     }
@@ -2626,7 +2712,8 @@ impl<'a> Typesys<'a> {
                             start: expr.start,
                             end: expr.end,
                             message: "'new' operator can only be used with scalar types (number/boolean/struct/array)".to_string(),
-                        });
+                            is_warning: false,
+                                                    });
                     }
 
                     if let Some(expr) = expr_option {
@@ -2671,7 +2758,8 @@ impl<'a> Typesys<'a> {
                             start: expr.start,
                             end: expr.end,
                             message: format!("empty curly new cannot ref type {}", infer_target_type),
-                        });
+                            is_warning: false,
+                                                    });
                     }
                 }
 
@@ -2690,7 +2778,8 @@ impl<'a> Typesys<'a> {
                         start: expr.start,
                         end: expr.end,
                         message: format!("cannot use 'new' operator on non-struct type {}", type_),
-                    });
+                        is_warning: false,
+                                            });
                 }
 
                 return Ok(type_.clone());
@@ -2709,7 +2798,8 @@ impl<'a> Typesys<'a> {
                     start: 0,
                     end: 0,
                     message: "unknown operand".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
         };
     }
@@ -2745,7 +2835,8 @@ impl<'a> Typesys<'a> {
                 start: expr.start,
                 end: expr.end,
                 message: format!("type '{}' cannot casting to interface '{}'", src_type, interface_type.ident),
-            });
+                is_warning: false,
+                            });
         }
 
         if src_type.symbol_id == 0 {
@@ -2753,7 +2844,8 @@ impl<'a> Typesys<'a> {
                 start: 0,
                 end: 0,
                 message: "src type symbol id is zero".to_string(),
-            });
+                is_warning: false,
+                            });
         }
 
         // 获取类型定义
@@ -2772,7 +2864,8 @@ impl<'a> Typesys<'a> {
                 start: expr.start,
                 end: expr.end,
                 message: format!("type '{}' not impl '{}' interface", src_type.ident, interface_type.ident),
-            });
+                is_warning: false,
+                            });
         }
 
         // 检查接口实现的完整性
@@ -2781,7 +2874,8 @@ impl<'a> Typesys<'a> {
                 start: expr.start,
                 end: expr.end,
                 message: e,
-            })?;
+                is_warning: false,
+                            })?;
 
         // 创建类型转换表达式
         Ok(Box::new(Expr {
@@ -2839,7 +2933,8 @@ impl<'a> Typesys<'a> {
                 start: expr.start,
                 end: expr.end,
                 message: e.to_string(),
-            })?;
+                is_warning: false,
+                            })?;
 
             if is_negative {
                 i = -i;
@@ -2854,7 +2949,8 @@ impl<'a> Typesys<'a> {
                 start: expr.start,
                 end: expr.end,
                 message: format!("literal {} out of range for type '{}'", literal_value, infer_target_type),
-            });
+                is_warning: false,
+                            });
         }
 
         return Ok(literal_type);
@@ -2951,7 +3047,8 @@ impl<'a> Typesys<'a> {
                     start: expr.start,
                     end: expr.end,
                     message: format!("union type not contains '{}'", expr.type_),
-                });
+                    is_warning: false,
+                                    });
             }
 
             // expr 改成成 union 类型
@@ -2966,7 +3063,8 @@ impl<'a> Typesys<'a> {
                 start: expr.start,
                 end: expr.end,
                 message: format!("type inconsistency: expect '{}', actual '{}'", target_type, expr.type_),
-            });
+                is_warning: false,
+                            });
         }
 
         Ok(expr.type_.clone())
@@ -3010,7 +3108,8 @@ impl<'a> Typesys<'a> {
                         start: expr.start,
                         end: expr.end,
                         message: "unary operand cannot used in left".to_string(),
-                    });
+                        is_warning: false,
+                                            });
                 }
             }
 
@@ -3018,7 +3117,8 @@ impl<'a> Typesys<'a> {
                 start: expr.start,
                 end: expr.end,
                 message: "operand cannot be used as left value".to_string(),
-            }),
+                is_warning: false,
+                            }),
         };
 
         return match type_result {
@@ -3052,7 +3152,8 @@ impl<'a> Typesys<'a> {
                     start: var_decl.symbol_start,
                     end: var_decl.symbol_end,
                     message: "cannot assign to void".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
         }
 
@@ -3068,7 +3169,8 @@ impl<'a> Typesys<'a> {
                 start: right_expr.start,
                 end: right_expr.end,
                 message: "cannot assign void to var".to_string(),
-            });
+                is_warning: false,
+                            });
         }
 
         if matches!(var_decl.type_.kind, TypeKind::Unknown) {
@@ -3078,7 +3180,8 @@ impl<'a> Typesys<'a> {
                     start: right_expr.start,
                     end: right_expr.end,
                     message: "stmt right type not confirmed".to_string(),
-                });
+                    is_warning: false,
+                                    });
             }
 
             // 使用右值类型作为变量类型
@@ -3100,7 +3203,8 @@ impl<'a> Typesys<'a> {
                 start,
                 end,
                 message: format!("tuple length mismatch, expect {}, got {}", type_elements.len(), elements.len()),
-            });
+                is_warning: false,
+                            });
         }
 
         // 遍历按顺序对比类型,并且顺便 rewrite
@@ -3123,7 +3227,8 @@ impl<'a> Typesys<'a> {
                             start: 0,
                             end: 0,
                             message: "var symbol id is zero, cannot infer".to_string(),
-                        });
+                            is_warning: false,
+                                                    });
                     }
 
                     var_decl.type_ = target_type.clone();
@@ -3615,7 +3720,8 @@ impl<'a> Typesys<'a> {
                     start: self_arg.start,
                     end: self_arg.end,
                     message: format!("type mismatch: method requires '{}' receiver, got '{}'", self_param_type, self_arg.type_),
-                });
+                    is_warning: false,
+                                    });
             }
 
             if matches!(self_arg.type_.kind, TypeKind::Ref(_)) || self_arg.type_.is_heap_impl() {
@@ -3626,7 +3732,8 @@ impl<'a> Typesys<'a> {
                 start: self_arg.start,
                 end: self_arg.end,
                 message: format!("type mismatch: method requires '{}' receiver, got '{}'", self_param_type, self_arg.type_),
-            });
+                is_warning: false,
+                            });
         }
 
         if matches!(self_param_type.kind, TypeKind::Ptr(_)) {
@@ -3666,7 +3773,8 @@ impl<'a> Typesys<'a> {
                 start,
                 end,
                 message: format!("symbol '{}' not found", ident),
-            });
+                is_warning: false,
+                            });
         }
 
         let symbol = self.symbol_table.get_symbol(*symbol_id).unwrap();
@@ -3701,7 +3809,7 @@ impl<'a> Typesys<'a> {
                 temp_fndef_mutex,
                 module_scope_id,
             )
-            .map_err(|e| AnalyzerError { start, end, message: e })?;
+            .map_err(|e| AnalyzerError { start, end, message: e, is_warning: false })?;
 
         let special_fn = special_fn.lock().unwrap();
 
@@ -3734,7 +3842,8 @@ impl<'a> Typesys<'a> {
                             start,
                             end,
                             message: format!("type '{}' expects {} type argument(s), but got {}", typedef.ident, expected, actual),
-                        });
+                            is_warning: false,
+                                                    });
                     }
                 }
             }
@@ -3824,7 +3933,8 @@ impl<'a> Typesys<'a> {
                                     start,
                                     end,
                                     message: format!("type '{}' no impl fn '{}'", extract_type, key),
-                                });
+                                    is_warning: false,
+                                                                    });
                             }
                         }
                     } else {
@@ -3832,14 +3942,16 @@ impl<'a> Typesys<'a> {
                             start,
                             end,
                             message: format!("type '{}' no impl fn '{}'", extract_type, key),
-                        });
+                            is_warning: false,
+                                                    });
                     }
                 } else {
                     return Err(AnalyzerError {
                         start,
                         end,
                         message: format!("type '{}' no impl fn '{}'", extract_type, key),
-                    });
+                        is_warning: false,
+                                            });
                 }
             }
         };
@@ -3867,7 +3979,8 @@ impl<'a> Typesys<'a> {
                 start,
                 end,
                 message: "cannot call non-fn".to_string(),
-            });
+                is_warning: false,
+                            });
         };
 
         let needs_self = match &call.left.node {
@@ -3877,14 +3990,16 @@ impl<'a> Typesys<'a> {
                         start,
                         end,
                         message: "symbol not found".to_string(),
-                    });
+                        is_warning: false,
+                                            });
                 }
 
                 let symbol = self.symbol_table.get_symbol(*symbol_id).ok_or(AnalyzerError {
                     start,
                     end,
                     message: "symbol not found".to_string(),
-                })?;
+                    is_warning: false,
+                                    })?;
                 match &symbol.kind {
                     SymbolKind::Fn(fndef_mutex) => {
                         let fndef = fndef_mutex.lock().unwrap();
@@ -3900,7 +4015,8 @@ impl<'a> Typesys<'a> {
                 start,
                 end,
                 message: format!("method '{}' requires a receiver; use a value instead of a type", key),
-            });
+                is_warning: false,
+                            });
         }
 
         // 构建新的参数列表
@@ -3929,7 +4045,8 @@ impl<'a> Typesys<'a> {
             start,
             end,
             message: "symbol not found".to_string(),
-        })?;
+            is_warning: false,
+                    })?;
 
         let SymbolKind::Type(typedef_mutex) = &symbol.kind else {
             return Ok(None);
@@ -3988,7 +4105,8 @@ impl<'a> Typesys<'a> {
             start: expr.start,
             end: expr.end,
             message: "symbol not found".to_string(),
-        })?;
+            is_warning: false,
+                    })?;
         let SymbolKind::Type(typedef_mutex) = &symbol.kind else {
             return Ok(false);
         };
@@ -4041,7 +4159,8 @@ impl<'a> Typesys<'a> {
             start: expr.start,
             end: expr.end,
             message: "symbol not found".to_string(),
-        })?;
+            is_warning: false,
+                    })?;
         let SymbolKind::Type(typedef_mutex) = &symbol.kind else {
             return Ok(false);
         };
@@ -4093,7 +4212,8 @@ impl<'a> Typesys<'a> {
                         start,
                         end,
                         message: format!("interface '{}' not declare '{}' fn", select_left_type.ident, key),
-                    });
+                        is_warning: false,
+                                            });
                 }
             }
         }
@@ -4117,7 +4237,8 @@ impl<'a> Typesys<'a> {
                 start,
                 end,
                 message: "cannot call non-fn".to_string(),
-            });
+                is_warning: false,
+                            });
         }
 
         Ok(left_type.kind)
@@ -4142,7 +4263,8 @@ impl<'a> Typesys<'a> {
                         if type_fn.name.is_empty() { "lambda".to_string() } else { type_fn.name },
                         current_fn.fn_name
                     ),
-                });
+                    is_warning: false,
+                                    });
             }
         }
 
@@ -4271,7 +4393,8 @@ impl<'a> Typesys<'a> {
                         start: right.start,
                         end: right.end,
                         message: format!("cannot assign {} to tuple", right_type),
-                    });
+                        is_warning: false,
+                                            });
                 }
 
                 self.infer_var_tuple_destr(elements, right_type, stmt.start, stmt.end)?;
@@ -4283,7 +4406,8 @@ impl<'a> Typesys<'a> {
                             start: left.start,
                             end: left.end,
                             message: format!("cannot assign to void"),
-                        });
+                            is_warning: false,
+                                                    });
                     }
 
                     self.infer_right_expr(right, left_type)?;
@@ -4358,7 +4482,8 @@ impl<'a> Typesys<'a> {
                         message: "break or continue must in for body".to_string(),
                         start: stmt.start,
                         end: stmt.end,
-                    });
+                        is_warning: false,
+                                            });
                 }
             }
             AstNode::ForTradition(init, condition, update, body) => {
@@ -4844,7 +4969,8 @@ impl<'a> Typesys<'a> {
                     start: 0,
                     end: 0,
                     message: format!("cannot infer generics fn `{}`", fndef.fn_name),
-                });
+                    is_warning: false,
+                                    });
             }
 
             // arg table 必须存在，且已经推导
@@ -4858,7 +4984,8 @@ impl<'a> Typesys<'a> {
                                 start: 0,
                                 end: 0,
                                 message: format!("cannot infer generics fn {}", fndef.fn_name),
-                            })
+                                is_warning: false,
+                                                            })
                         }
                     };
                 }
@@ -4903,7 +5030,8 @@ impl<'a> Typesys<'a> {
                     start: 0,
                     end: 0,
                     message: format!("cannot reduction param {}", param_type),
-                });
+                    is_warning: false,
+                                    });
             }
 
             // 为什么要在这里进行 ptr of, 只有在 infer 之后才能确定 alias 的具体类型，从而进一步判断是否需要 ptrof
@@ -5053,7 +5181,8 @@ impl<'a> Typesys<'a> {
                 message: format!("variable declaration cannot use type {}", var_decl.type_),
                 start: var_decl.symbol_start,
                 end: var_decl.symbol_end,
-            });
+                is_warning: false,
+                            });
         }
 
         Ok(())
@@ -5131,7 +5260,8 @@ impl<'a> Typesys<'a> {
                 start: 0,
                 end: 0,
                 message: "cannot infer function without interface".to_string(),
-            });
+                is_warning: false,
+                            });
         }
 
         let mut type_fn = TypeFn {
@@ -5415,7 +5545,7 @@ impl<'a> Typesys<'a> {
             return;
         }
 
-        errors_push(self.module, AnalyzerError { start, end, message });
+        errors_push(self.module, AnalyzerError { start, end, message, is_warning: false });
     }
 
     pub fn infer(&mut self) -> Vec<AnalyzerError> {

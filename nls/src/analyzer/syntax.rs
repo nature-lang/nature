@@ -185,6 +185,15 @@ impl<'a> Syntax {
         self.token_db[self.token_indexes[self.current]].semantic_token_type = semantic_token_type_index(token_type);
     }
 
+    /// Set the semantic token type for the previously consumed token (current - 1).
+    #[allow(dead_code)]
+    fn set_prev_token_type(&mut self, token_type: SemanticTokenType) {
+        if self.current == 0 {
+            return;
+        }
+        self.token_db[self.token_indexes[self.current - 1]].semantic_token_type = semantic_token_type_index(token_type);
+    }
+
     fn advance(&mut self) -> &Token {
         debug_assert!(self.current + 1 < self.token_indexes.len(), "Syntax::advance: current index out of range");
 
@@ -702,7 +711,8 @@ impl<'a> Syntax {
                             start: e.0,
                             end: e.1,
                             message: e.2,
-                        },
+                            is_warning: false,
+                                                    },
                     );
 
                     // 查找到下一个同步点
@@ -748,7 +758,8 @@ impl<'a> Syntax {
                             start: e.0,
                             end: e.1,
                             message: e.2,
-                        },
+                            is_warning: false,
+                                                    },
                     );
 
                     let found = self.synchronize(1);
@@ -1258,7 +1269,8 @@ impl<'a> Syntax {
                             start: field_type.start,
                             end: field_type.end,
                             message: format!("struct field '{}' already exists", field_name),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
                 exists.insert(field_name.clone(), 1);
@@ -1315,7 +1327,8 @@ impl<'a> Syntax {
                             start: fn_name_token.start,
                             end: fn_name_token.end,
                             message: format!("interface method '{}' already exists", fn_name),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
                 exists.insert(fn_name.clone(), 1);
@@ -1345,7 +1358,8 @@ impl<'a> Syntax {
                         start: element_type.start,
                         end: element_type.end,
                         message: format!("enum only supports integer types"),
-                    },
+                        is_warning: false,
+                                            },
                 );
             }
 
@@ -1365,7 +1379,8 @@ impl<'a> Syntax {
                             start: name_token.start,
                             end: name_token.end,
                             message: format!("enum member '{}' already exists", name),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
                 exists.insert(name.clone(), 1);
@@ -1403,7 +1418,8 @@ impl<'a> Syntax {
                             start: element_type.start,
                             end: element_type.end,
                             message: format!("union tag '{}' already exists", tag_name),
-                        },
+                            is_warning: false,
+                                                    },
                     );
                 }
                 exists.insert(tag_name.clone(), 1);
@@ -2095,6 +2111,15 @@ impl<'a> Syntax {
 
         self.must(TokenType::Dot)?;
 
+        // Error recovery: if the next token isn't an ident (e.g., user is mid-typing "x."),
+        // create a partial SelectExpr with empty key so the rest of the file still parses.
+        if !self.is(TokenType::Ident) {
+            expr.start = left.start;
+            expr.end = self.prev().unwrap().end;
+            expr.node = AstNode::SelectExpr(left, String::new(), None);
+            return Ok(expr);
+        }
+
         let property_token = self.must(TokenType::Ident)?;
         expr.start = left.start;
         expr.node = AstNode::SelectExpr(left, property_token.literal.clone(), None);
@@ -2533,7 +2558,7 @@ impl<'a> Syntax {
                     break;
                 }
 
-                let ident = self.must(TokenType::Ident)?;
+                let ident = self.must(TokenType::Ident)?.clone();
 
                 // Check for space after dot: ident should start right after dot ends
                 if ident.start != dot_token.end {
@@ -2546,7 +2571,7 @@ impl<'a> Syntax {
 
                 package.push(ident.literal.clone());
                 import_end = ident.end;
-                prev_token = ident.clone();
+                prev_token = ident;
             }
             (None, Some(package))
         } else {
@@ -2569,15 +2594,27 @@ impl<'a> Syntax {
             let mut items = Vec::new();
 
             loop {
+                // Tolerate incomplete input: if next token is not an ident, stop gracefully
+                if !self.is(TokenType::Ident) {
+                    break;
+                }
                 let ident_token = self.must(TokenType::Ident)?;
                 let ident = ident_token.literal.clone();
+                let item_start = ident_token.start;
+                let mut item_end = ident_token.end;
                 let alias = if self.consume(TokenType::As) {
-                    Some(self.must(TokenType::Ident)?.literal.clone())
+                    if self.is(TokenType::Ident) {
+                        let alias_token = self.must(TokenType::Ident)?;
+                        item_end = alias_token.end;
+                        Some(alias_token.literal.clone())
+                    } else {
+                        None // incomplete alias, tolerate it
+                    }
                 } else {
                     None
                 };
 
-                items.push(ImportSelectItem { ident, alias });
+                items.push(ImportSelectItem { ident, alias, start: item_start, end: item_end });
 
                 if !self.consume(TokenType::Comma) {
                     break;

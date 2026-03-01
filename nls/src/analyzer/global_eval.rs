@@ -79,7 +79,8 @@ impl<'a> GlobalEval<'a> {
                 start: symbol_start,
                 end: symbol_end,
                 message: "cannot assign to void".to_string(),
-            });
+                is_warning: false,
+                            });
         }
 
         let right_type = typesys.infer_right_expr(right_expr, var_type.clone())?;
@@ -88,7 +89,8 @@ impl<'a> GlobalEval<'a> {
                 start: right_expr.start,
                 end: right_expr.end,
                 message: "cannot assign void to global var".to_string(),
-            });
+                is_warning: false,
+                            });
         }
 
         if var_type.kind.is_unknown() {
@@ -97,7 +99,8 @@ impl<'a> GlobalEval<'a> {
                     start: right_expr.start,
                     end: right_expr.end,
                     message: format!("global var {} type infer failed, right expr cannot confirm", var_ident),
-                });
+                    is_warning: false,
+                                    });
             }
             var_type = right_type;
         }
@@ -108,7 +111,8 @@ impl<'a> GlobalEval<'a> {
                 start: right_expr.start,
                 end: right_expr.end,
                 message: "global type not confirmed".to_string(),
-            });
+                is_warning: false,
+                            });
         }
 
         {
@@ -418,6 +422,7 @@ impl<'a> GlobalEval<'a> {
             start: expr.start,
             end: expr.end,
             message,
+            is_warning: false,
         }
     }
 }
