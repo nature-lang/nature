@@ -187,7 +187,7 @@ fn main() {
 
 --- output.txt
 server is start
-coroutine '1' panic: 'conn closed' at nature-test/main.n:17:15
+panic: 'conn closed' at nature-test/main.n:17:15
 
 === test_url_parser
 --- main.n

@@ -178,10 +178,6 @@ fn type_t.to_string(&self):string {
     }
 }
 
-
-
-
-
 // ----------------------------------------------- value of ------------------------------------------------------------
 type vec_t = struct{
     anyptr data
@@ -189,6 +185,7 @@ type vec_t = struct{
     i64 capacity
     i64 element_size
     i64 hash
+    anyptr allocator
 }
 
 type string_t = vec_t

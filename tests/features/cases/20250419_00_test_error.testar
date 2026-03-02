@@ -146,4 +146,4 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' panic: 'slice [0:6] out of vec with length 3' at nature-test/main.n:3:12
+panic: 'slice [0:6] out of vec with length 3' at nature-test/main.n:3:12

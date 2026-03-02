@@ -16,6 +16,7 @@ pub struct Semantic<'a> {
     imports: Vec<ImportStmt>,
     current_local_fn_list: Vec<Arc<Mutex<AstFnDef>>>,
     current_scope_id: NodeId,
+    in_defer_block_depth: usize,
 }
 
 impl<'a> Semantic<'a> {
@@ -28,6 +29,7 @@ impl<'a> Semantic<'a> {
             current_scope_id: m.scope_id, // m.scope_id 是 global scope id
             module: m,
             current_local_fn_list: Vec::new(),
+            in_defer_block_depth: 0,
         }
     }
 
@@ -1849,6 +1851,23 @@ impl<'a> Semantic<'a> {
         }
     }
     pub fn analyze_stmt(&mut self, stmt: &mut Box<Stmt>) {
+        if self.in_defer_block_depth > 0 {
+            if matches!(
+                &stmt.node,
+                AstNode::Return(_) | AstNode::Break | AstNode::Continue | AstNode::Throw(_) | AstNode::Ret(_)
+            ) {
+                errors_push(
+                    self.module,
+                    AnalyzerError {
+                        start: stmt.start,
+                        end: stmt.end,
+                        message: "return/break/continue/throw/ret are not allowed inside defer block".to_string(),
+                    },
+                );
+                return;
+            }
+        }
+
         match &mut stmt.node {
             AstNode::Fake(expr) | AstNode::Ret(expr) => {
                 self.analyze_expr(expr);
@@ -1953,6 +1972,13 @@ impl<'a> Semantic<'a> {
                 if let Some(expr) = expr {
                     self.analyze_expr(expr);
                 }
+            }
+            AstNode::Defer(body) => {
+                self.in_defer_block_depth += 1;
+                self.enter_scope(ScopeKind::Local, stmt.start, stmt.end);
+                self.analyze_body(body);
+                self.exit_scope();
+                self.in_defer_block_depth -= 1;
             }
             AstNode::Typedef(type_alias_mutex) => {
                 let mut typedef = type_alias_mutex.lock().unwrap();

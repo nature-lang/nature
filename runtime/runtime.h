@@ -34,16 +34,22 @@ int runtime_main(int argc, char *argv[]) __asm("main");
 #endif
 #endif
 
+extern uint8_t main_is_fn;
+
+static inline bool user_main_is_fn(void) {
+    return main_is_fn != 0;
+}
+
 
 #ifdef __AMD64
-#define CALLER_RET_ADDR(_co)                                  \
+#define CALLER_RET_ADDR()                                  \
     ({                                                        \
         uint64_t _rbp_value;                                  \
         __asm__ volatile("mov %%rbp, %0" : "=r"(_rbp_value)); \
         fetch_addr_value(_rbp_value + POINTER_SIZE);          \
     });
 #elif defined(__ARM64)
-#define CALLER_RET_ADDR(_co)                                          \
+#define CALLER_RET_ADDR()                                          \
     ({                                                                \
         addr_t _fp_value;                                             \
         __asm__ volatile("mov %0, x29" : "=r"(_fp_value));            \
@@ -51,7 +57,7 @@ int runtime_main(int argc, char *argv[]) __asm("main");
         _value;                                                       \
     });
 #elif defined(__RISCV64)
-#define CALLER_RET_ADDR(_co)                                          \
+#define CALLER_RET_ADDR()                                          \
     ({                                                                \
         addr_t _fp_value;                                             \
         __asm__ volatile("mv %0, s0" : "=r"(_fp_value));              \

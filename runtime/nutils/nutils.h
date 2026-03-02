@@ -33,9 +33,9 @@ bool interface_is(n_interface_t *mu, int64_t target_rtype_hash);
  */
 void union_casting(n_union_t *out, int64_t input_rtype_hash, void *value_ref);
 
-void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref);
+void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref, n_bool_t is_fx);
 
-void union_to_any(n_any_t *out, n_union_t *input);
+void union_to_any(n_any_t *out, n_union_t *input, n_bool_t is_fx);
 
 void tagged_union_casting(n_tagged_union_t *out, int64_t id, int64_t value_rtype_hash, void *value_ref);
 
@@ -79,6 +79,7 @@ void rt_assert(n_bool_t cond);
 
 // allocate array data by element rtype hash
 n_anyptr_t rt_array_new(int64_t element_hash, int64_t length);
+n_anyptr_t fx_malloc(int64_t size);
 
 n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr);
 
@@ -92,7 +93,6 @@ n_string_t rt_string_new(n_anyptr_t raw_string);
 
 // LIR out-parameter helpers for builtin structs
 void rt_string_concat_out(n_string_t *out, n_string_t *a, n_string_t *b);
-void rt_string_new_with_pool_out(n_string_t *out, void *raw_string, int64_t length);
 void rt_string_to_vec_out(n_vec_t *out, n_string_t *src);
 void rt_vec_to_string_out(n_string_t *out, n_vec_t *src);
 void rt_vec_slice_out(n_vec_t *out, n_vec_t *vec, int64_t start, int64_t end);

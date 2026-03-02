@@ -160,6 +160,8 @@ static inline uint64_t fetch_int_value(addr_t addr, uint64_t size) {
 
 void memory_init();
 
+void runtime_deserialize_init();
+
 /**
  * 基于 mmap
  * @param hint_addr

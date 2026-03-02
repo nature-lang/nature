@@ -55,6 +55,7 @@ typedef struct {
 
 #define SYMBOL_RTYPE_COUNT "rt_rtype_count"
 #define SYMBOL_RTYPE_DATA "rt_rtype_data"
+#define SYMBOL_MAIN_IS_FN "main_is_fn"
 
 
 extern addr_t rt_fn_main_base;

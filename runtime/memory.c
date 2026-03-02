@@ -16,7 +16,7 @@ struct sc_map_sv const_str_pool;
 uint8_t gc_stage; // gc 阶段
 mutex_t gc_stage_locker;
 
-memory_t *memory;
+memory_t *memory = NULL;
 
 void callers_deserialize() {
     sc_map_init_64v(&rt_caller_map, rt_caller_count * 2, 0);

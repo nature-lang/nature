@@ -28,7 +28,26 @@ static ast_expr_t parser_match_expr(module_t *m);
 
 static ast_tuple_destr_t *parser_var_tuple_destr(module_t *m);
 
+static ast_stmt_t *parser_defer_stmt(module_t *m);
+
 static int64_t parser_test_unique = 0;
+
+static table_t *parser_clone_type_params_table(table_t *source) {
+    table_t *target = table_new();
+    if (!source || source->count == 0) {
+        return target;
+    }
+
+    for (int i = 0; i < source->capacity; ++i) {
+        table_entry *entry = &source->entries[i];
+        if (!entry->key) {
+            continue;
+        }
+        table_set(target, entry->key, entry->value);
+    }
+
+    return target;
+}
 
 static token_t *parser_advance(module_t *m) {
     assert(m->p_cursor.current->succ != NULL && "next token_t is null");
@@ -68,7 +87,8 @@ static bool parser_is(module_t *m, token_type_t expect) {
 }
 
 static bool ident_is_builtin_type(module_t *m, token_t *token) {
-    if (str_equal(token->literal, "vec") || str_equal(token->literal, "map") || str_equal(token->literal, "set") || str_equal(token->literal, "tup")) {
+    if (str_equal(token->literal, "vec") || str_equal(token->literal, "map") || str_equal(token->literal, "set") ||
+        str_equal(token->literal, "tup")) {
         return true;
     }
     return false;
@@ -203,8 +223,8 @@ static ast_expr_t *expr_new_ptr(module_t *m) {
 
 static ast_expr_t expr_new(module_t *m) {
     ast_expr_t result = {
-            .line = parser_peek(m)->line,
-            .column = parser_peek(m)->column,
+        .line = parser_peek(m)->line,
+        .column = parser_peek(m)->column,
     };
     return result;
 }
@@ -275,7 +295,8 @@ static list_t *parser_parse_where_constraints(module_t *m) {
     list_t *where_params = ct_list_new(sizeof(ast_generics_param_t));
     PARSER_ASSERTF(!parser_is(m, TOKEN_STMT_EOF), "#where must declare at least one generic constraint");
 
-    while (!parser_is(m, TOKEN_STMT_EOF) && !parser_is(m, TOKEN_EOF) && !parser_is(m, TOKEN_FN)) {
+    while (!parser_is(m, TOKEN_STMT_EOF) && !parser_is(m, TOKEN_EOF) &&
+           !parser_is(m, TOKEN_FN) && !parser_is(m, TOKEN_FX)) {
         token_t *ident = parser_must(m, TOKEN_IDENT);
         ast_generics_param_t *param = ast_generics_param_new(ident->line, ident->column, ident->literal);
         parser_must(m, TOKEN_COLON);
@@ -296,7 +317,8 @@ static list_t *parser_parse_where_constraints(module_t *m) {
         }
 
         // 允许 #where 最后一个约束后保留逗号
-        if (parser_is(m, TOKEN_STMT_EOF) || parser_is(m, TOKEN_EOF) || parser_is(m, TOKEN_FN)) {
+        if (parser_is(m, TOKEN_STMT_EOF) || parser_is(m, TOKEN_EOF) ||
+            parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
             break;
         }
     }
@@ -362,8 +384,9 @@ static slice_t *parser_body(module_t *m, bool last_to_ret) {
     return stmt_list;
 }
 
-static inline type_fn_t *parser_type_fn(module_t *m) {
+static inline type_fn_t *parser_type_fn(module_t *m, bool is_fx) {
     type_fn_t *type_fn = NEW(type_fn_t);
+    type_fn->is_fx = is_fx;
     type_fn->param_types = ct_list_new(sizeof(type_t));
     parser_must(m, TOKEN_LEFT_PAREN);
 
@@ -384,7 +407,8 @@ static inline type_fn_t *parser_type_fn(module_t *m) {
             }
 
             if (type_fn->is_rest) {
-                PARSER_ASSERTF(parser_is(m, TOKEN_RIGHT_PAREN), "can only use '...' as the final argument in the fn parameters");
+                PARSER_ASSERTF(parser_is(m, TOKEN_RIGHT_PAREN),
+                               "can only use '...' as the final argument in the fn parameters");
             }
         } while (parser_consume(m, TOKEN_COMMA));
 
@@ -429,8 +453,8 @@ static type_t parser_type(module_t *m) {
     // T?, T? 后面不在允许直接携带 |
     if (parser_consume(m, TOKEN_QUESTION)) {
         type_t union_type = {
-                .status = REDUCTION_STATUS_UNDO,
-                .kind = TYPE_UNION,
+            .status = REDUCTION_STATUS_UNDO,
+            .kind = TYPE_UNION,
         };
         union_type.union_ = NEW(type_union_t);
         union_type.union_->elements = ct_list_new(sizeof(type_t));
@@ -456,12 +480,12 @@ static type_t parser_type(module_t *m) {
  */
 static type_t parser_single_type(module_t *m) {
     type_t result = {
-            .status = REDUCTION_STATUS_UNDO,
-            .line = parser_peek(m)->line,
-            .column = parser_peek(m)->column,
-            .ident = NULL,
-            .ident_kind = 0,
-            .args = NULL,
+        .status = REDUCTION_STATUS_UNDO,
+        .line = parser_peek(m)->line,
+        .column = parser_peek(m)->column,
+        .ident = NULL,
+        .ident_kind = 0,
+        .args = NULL,
     };
 
     // any 特殊处理
@@ -657,9 +681,14 @@ static type_t parser_single_type(module_t *m) {
         return result;
     }
 
-    // fn(int, int):int!
-    if (parser_consume(m, TOKEN_FN)) {
-        type_fn_t *type_fn = parser_type_fn(m);
+    // fn(int, int):int! / fx(int, int):int!
+    if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
+        bool is_fx = parser_consume(m, TOKEN_FX);
+        if (!is_fx) {
+            parser_must(m, TOKEN_FN);
+        }
+
+        type_fn_t *type_fn = parser_type_fn(m, is_fx);
         result.kind = TYPE_FN;
         result.fn = type_fn;
         return result;
@@ -787,12 +816,12 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
         }
 
         type_t t = {
-                .status = REDUCTION_STATUS_UNDO,
-                .line = parser_peek(m)->line,
-                .column = parser_peek(m)->column,
-                .ident = NULL,
-                .args = NULL,
-                .ident_kind = 0,
+            .status = REDUCTION_STATUS_UNDO,
+            .line = parser_peek(m)->line,
+            .column = parser_peek(m)->column,
+            .ident = NULL,
+            .args = NULL,
+            .ident_kind = 0,
         };
         t.kind = TYPE_STRUCT;
         t.struct_ = type_struct;
@@ -832,12 +861,12 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
         }
 
         type_t t = {
-                .status = REDUCTION_STATUS_UNDO,
-                .line = parser_peek(m)->line,
-                .column = parser_peek(m)->column,
-                .ident = NULL,
-                .args = NULL,
-                .ident_kind = 0,
+            .status = REDUCTION_STATUS_UNDO,
+            .line = parser_peek(m)->line,
+            .column = parser_peek(m)->column,
+            .ident = NULL,
+            .args = NULL,
+            .ident_kind = 0,
         };
         t.kind = TYPE_TAGGED_UNION;
         t.tagged_union = tagged_union;
@@ -858,12 +887,36 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
         sc_map_init_s64(&exists, 0, 0); // value is type_fn_t
 
         while (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
-            parser_must(m, TOKEN_FN);
+            INFER_ASSERTF(parser_is(m, TOKEN_FX) || parser_is(m, TOKEN_FN), "interface only supports fn and fx");
+            bool is_fx = parser_consume(m, TOKEN_FX);
+            if (!is_fx) {
+                parser_must(m, TOKEN_FN);
+            }
+
             // ident
             char *fn_name = parser_must(m, TOKEN_IDENT)->literal;
 
-            type_fn_t *type_fn = parser_type_fn(m);
+            list_t *method_generics_params = NULL;
+            table_t *origin_type_params_table = m->parser_type_params_table;
+            table_t *method_type_params_table = NULL;
+            if (parser_consume(m, TOKEN_LEFT_ANGLE)) {
+                method_type_params_table = parser_clone_type_params_table(origin_type_params_table);
+                m->parser_type_params_table = method_type_params_table;
+                parser_parse_generics_decl(m, &method_generics_params);
+                parser_must(m, TOKEN_RIGHT_ANGLE);
+            }
+
+            type_fn_t *type_fn = parser_type_fn(m, false);
             type_fn->fn_name = fn_name;
+            type_fn->is_fx = is_fx;
+            if (method_generics_params && method_generics_params->length > 0) {
+                type_fn->is_tpl = true;
+            }
+
+            if (method_type_params_table) {
+                table_free(method_type_params_table);
+                m->parser_type_params_table = origin_type_params_table;
+            }
 
             if (sc_map_get_s64(&exists, fn_name)) {
                 PARSER_ASSERTF(false, "interface method '%s' exists", fn_name);
@@ -872,14 +925,14 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
             sc_map_put_s64(&exists, fn_name, 1);
 
             type_t interface_item = {
-                    .status = REDUCTION_STATUS_UNDO,
-                    .line = parser_peek(m)->line,
-                    .column = parser_peek(m)->column,
-                    .ident = NULL,
-                    .ident_kind = 0,
-                    .args = NULL,
-                    .kind = TYPE_FN,
-                    .fn = type_fn,
+                .status = REDUCTION_STATUS_UNDO,
+                .line = parser_peek(m)->line,
+                .column = parser_peek(m)->column,
+                .ident = NULL,
+                .ident_kind = 0,
+                .args = NULL,
+                .kind = TYPE_FN,
+                .fn = type_fn,
             };
 
             ct_list_push(type_interface->elements, &interface_item);
@@ -887,14 +940,14 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
         }
 
         type_t t = {
-                .status = REDUCTION_STATUS_UNDO,
-                .line = parser_peek(m)->line,
-                .column = parser_peek(m)->column,
-                .ident = NULL,
-                .ident_kind = 0,
-                .args = NULL,
-                .kind = TYPE_INTERFACE,
-                .interface = type_interface,
+            .status = REDUCTION_STATUS_UNDO,
+            .line = parser_peek(m)->line,
+            .column = parser_peek(m)->column,
+            .ident = NULL,
+            .ident_kind = 0,
+            .args = NULL,
+            .kind = TYPE_INTERFACE,
+            .interface = type_interface,
         };
 
         typedef_stmt->type_expr = t;
@@ -955,12 +1008,12 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
         parser_must(m, TOKEN_RIGHT_CURLY);
 
         type_t t = {
-                .status = REDUCTION_STATUS_UNDO,
-                .line = parser_peek(m)->line,
-                .column = parser_peek(m)->column,
-                .ident = NULL,
-                .args = NULL,
-                .ident_kind = 0,
+            .status = REDUCTION_STATUS_UNDO,
+            .line = parser_peek(m)->line,
+            .column = parser_peek(m)->column,
+            .ident = NULL,
+            .args = NULL,
+            .ident_kind = 0,
         };
         t.kind = TYPE_ENUM;
         t.enum_ = type_enum;
@@ -976,8 +1029,8 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
 
     if (parser_consume(m, TOKEN_QUESTION)) {
         type_t union_type = {
-                .status = REDUCTION_STATUS_UNDO,
-                .kind = TYPE_UNION,
+            .status = REDUCTION_STATUS_UNDO,
+            .kind = TYPE_UNION,
         };
         union_type.union_ = NEW(type_union_t);
         union_type.union_->elements = ct_list_new(sizeof(type_t));
@@ -1032,13 +1085,13 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m) {
  */
 static type_t ast_expr_to_typedef_ident(module_t *m, ast_expr_t left, list_t *generics_args) {
     type_t t = {
-            .status = REDUCTION_STATUS_UNDO,
-            .line = parser_peek(m)->line,
-            .column = parser_peek(m)->column,
-            .ident = NULL,
-            .ident_kind = TYPE_IDENT_DEF,
-            .kind = TYPE_IDENT,
-            .args = NULL,
+        .status = REDUCTION_STATUS_UNDO,
+        .line = parser_peek(m)->line,
+        .column = parser_peek(m)->column,
+        .ident = NULL,
+        .ident_kind = TYPE_IDENT_DEF,
+        .kind = TYPE_IDENT,
+        .args = NULL,
     };
 
     // 重新整理一下左值，整理成 typedef_t
@@ -1122,7 +1175,8 @@ static void parser_params(module_t *m, ast_fndef_t *fndef) {
         ct_list_push(fndef->params, ref);
 
         if (fndef->rest_param) {
-            PARSER_ASSERTF(parser_is(m, TOKEN_RIGHT_PAREN), "can only use '...' as the final argument in the fn parsms");
+            PARSER_ASSERTF(parser_is(m, TOKEN_RIGHT_PAREN),
+                           "can only use '...' as the final argument in the fn parsms");
         }
     } while (parser_consume(m, TOKEN_COMMA));
 
@@ -1213,7 +1267,8 @@ static bool parser_left_angle_is_type_args(module_t *m, ast_expr_t left) {
             goto RET;
         }
 
-        if (!parser_next_is(m, 1, TOKEN_LEFT_CURLY) && !parser_next_is(m, 1, TOKEN_LEFT_PAREN) && !parser_next_is(m, 1, TOKEN_DOT)) {
+        if (!parser_next_is(m, 1, TOKEN_LEFT_CURLY) && !parser_next_is(m, 1, TOKEN_LEFT_PAREN) && !parser_next_is(
+                m, 1, TOKEN_DOT)) {
             result = false;
             goto RET;
         }
@@ -1600,7 +1655,8 @@ static ast_expr_t parser_access(module_t *m, ast_expr_t left) {
     ast_expr_t result = expr_new(m);
 
     parser_must(m, TOKEN_LEFT_SQUARE);
-    if (parser_consume(m, TOKEN_RANGE)) { // list[..expr] | list[..]
+    if (parser_consume(m, TOKEN_RANGE)) {
+        // list[..expr] | list[..]
         ast_vec_slice_t *slice = mallocz(sizeof(ast_vec_slice_t));
         slice->left = left;
         slice->start = *ast_int_expr(result.line, result.column, 0);
@@ -1617,7 +1673,8 @@ static ast_expr_t parser_access(module_t *m, ast_expr_t left) {
     }
 
     ast_expr_t first = parser_expr(m);
-    if (parser_consume(m, TOKEN_RANGE)) { // list[expr..expr] | list[expr..]
+    if (parser_consume(m, TOKEN_RANGE)) {
+        // list[expr..expr] | list[expr..]
         ast_vec_slice_t *slice = mallocz(sizeof(ast_vec_slice_t));
         slice->left = left;
         slice->start = first;
@@ -1872,7 +1929,7 @@ RET:
  * {x} a = xxx
  * [x] a = xxx
  * (x, x, x) a = xxx
- * fn(x):x a = xxx // 区分 fn a(x): x {}
+ * fn(x):x a = xxx / fx(x):x a = xxx // 区分 fn a(x): x {}
  * custom_x a = xxx # 连续两个 ident 判定就能判定出来
  * @return
  */
@@ -1896,7 +1953,8 @@ static bool is_type_begin_stmt(module_t *m) {
     }
 
     // fndef type (stmt 维度禁止了匿名 fndef, 所以这里一定是 fndef type)
-    if (parser_is(m, TOKEN_FN) && parser_next_is(m, 1, TOKEN_LEFT_PAREN)) {
+    if ((parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) &&
+        parser_next_is(m, 1, TOKEN_LEFT_PAREN)) {
         return true;
     }
 
@@ -1982,7 +2040,17 @@ static ast_stmt_t *parser_for_stmt(module_t *m) {
         }
 
         parser_must(m, TOKEN_IN);
-        for_iterator_stmt->iterate = parser_precedence_expr(m, PRECEDENCE_TYPE_CAST, 0);
+
+        ast_expr_t in_expr = parser_precedence_expr(m, PRECEDENCE_TYPE_CAST, TOKEN_RANGE);
+        if (parser_consume(m, TOKEN_RANGE)) {
+            PARSER_ASSERTF(for_iterator_stmt->second == NULL, "for range only supports one iterator variable");
+
+            for_iterator_stmt->is_range = true;
+            for_iterator_stmt->range_start = in_expr;
+            for_iterator_stmt->range_end = parser_precedence_expr(m, PRECEDENCE_TYPE_CAST, 0);
+        } else {
+            for_iterator_stmt->iterate = in_expr;
+        }
 
         for_iterator_stmt->body = parser_body(m, false);
 
@@ -2220,6 +2288,25 @@ static ast_stmt_t *parser_return_stmt(module_t *m) {
     return result;
 }
 
+static ast_stmt_t *parser_defer_stmt(module_t *m) {
+    ast_stmt_t *result = stmt_new(m);
+    parser_must(m, TOKEN_DEFER);
+
+    ast_defer_stmt_t *stmt = NEW(ast_defer_stmt_t);
+    if (parser_is(m, TOKEN_LEFT_CURLY)) {
+        stmt->body = parser_body(m, false);
+    } else {
+        PARSER_ASSERTF(!parser_is_stmt_eof(m) && !parser_is(m, TOKEN_RIGHT_CURLY),
+                       "defer must have statement body");
+        stmt->body = slice_new();
+        slice_push(stmt->body, parser_local_stmt(m));
+    }
+
+    result->assert_type = AST_STMT_DEFER;
+    result->value = stmt;
+    return result;
+}
+
 static ast_stmt_t *parser_import_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     parser_advance(m);
@@ -2424,7 +2511,8 @@ static ast_expr_t parser_left_curly_expr(module_t *m) {
     }
 
     ast_expr_t key_expr = parser_expr(m);
-    if (parser_consume(m, TOKEN_COLON)) { // k:v
+    if (parser_consume(m, TOKEN_COLON)) {
+        // k:v
         // map
         ast_map_new_t *map_new = NEW(ast_map_new_t);
         map_new->elements = ct_list_new(sizeof(ast_map_element_t));
@@ -2493,7 +2581,12 @@ static ast_expr_t parser_left_curly_expr(module_t *m) {
 static ast_expr_t parser_fndef_expr(module_t *m) {
     ast_expr_t result = expr_new(m);
     ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
-    parser_must(m, TOKEN_FN);
+    if (parser_is(m, TOKEN_FX)) {
+        parser_advance(m);
+        fndef->is_fx = true;
+    } else {
+        parser_must(m, TOKEN_FN);
+    }
 
     if (parser_is(m, TOKEN_IDENT)) {
         PARSER_ASSERTF(false, "closure fn cannot have a name");
@@ -2507,7 +2600,6 @@ static ast_expr_t parser_fndef_expr(module_t *m) {
 
     if (parser_consume(m, TOKEN_COLON)) {
         fndef->return_type = parser_type(m);
-
     } else {
         fndef->return_type = type_kind_new(TYPE_VOID);
         fndef->return_type.line = parser_peek(m)->line;
@@ -2572,7 +2664,6 @@ static ast_expr_t parser_new_expr(module_t *m) {
                 }
             }
         } else {
-
             new_expr->default_expr = expr_new_ptr(m);
             *new_expr->default_expr = parser_expr(m);
 
@@ -2581,8 +2672,9 @@ static ast_expr_t parser_new_expr(module_t *m) {
                 new_expr->properties = ct_list_new(sizeof(struct_property_t));
                 ast_ident *ident = new_expr->default_expr->value;
                 struct_property_t item = {
-                        .name = strdup(ident->literal),
-                        .right = ast_ident_expr(parser_peek(m)->line, parser_peek(m)->column, strdup(ident->literal))};
+                    .name = strdup(ident->literal),
+                    .right = ast_ident_expr(parser_peek(m)->line, parser_peek(m)->column, strdup(ident->literal))
+                };
                 ct_list_push(new_expr->properties, &item);
             }
         }
@@ -2813,7 +2905,12 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
     result->assert_type = AST_FNDEF;
     result->value = fndef;
 
-    parser_must(m, TOKEN_FN);
+    if (parser_is(m, TOKEN_FX)) {
+        parser_advance(m);
+        fndef->is_fx = true;
+    } else {
+        parser_must(m, TOKEN_FN);
+    }
 
     // 第一个绝对是 ident, 第二个如果是 . 或者 < 则说明是类型扩展
     if (parser_is_impl_fn(m)) {
@@ -2887,7 +2984,8 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
 
 
         // 类型检测
-        PARSER_ASSERTF(is_impl_builtin_type(impl_type.kind) || impl_type.kind == TYPE_IDENT, "type '%s' cannot impl fn", type_kind_str[impl_type.kind]);
+        PARSER_ASSERTF(is_impl_builtin_type(impl_type.kind) || impl_type.kind == TYPE_IDENT, "type '%s' cannot impl fn",
+                       type_kind_str[impl_type.kind]);
 
         fndef->impl_type = impl_type;
 
@@ -3016,16 +3114,16 @@ static ast_stmt_t *parser_label(module_t *m) {
     }
 
     if (fndef->pending_where_params) {
-        PARSER_ASSERTF(parser_is(m, TOKEN_FN), "#where can only be applied to fn");
+        PARSER_ASSERTF(parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX), "#where can only be applied to fn/fx");
     }
 
     if (parser_is(m, TOKEN_TYPE)) {
-        PARSER_ASSERTF(!fndef->pending_where_params, "#where can only be applied to fn");
+        PARSER_ASSERTF(!fndef->pending_where_params, "#where can only be applied to fn/fx");
         return parser_typedef_stmt(m);
-    } else if (parser_is(m, TOKEN_FN)) {
+    } else if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
         return parser_fndef_stmt(m, fndef);
     } else {
-        PARSER_ASSERTF(false, "the label can only be applied to type alias or fn.");
+        PARSER_ASSERTF(false, "the label can only be applied to type alias or fn/fx.");
     }
 }
 
@@ -3137,6 +3235,8 @@ static ast_stmt_t *parser_local_stmt(module_t *m) {
         return parser_for_stmt(m);
     } else if (parser_is(m, TOKEN_RETURN)) {
         return parser_return_stmt(m);
+    } else if (parser_is(m, TOKEN_DEFER)) {
+        return parser_defer_stmt(m);
     } else if (parser_is(m, TOKEN_IMPORT)) {
         return parser_import_stmt(m);
     } else if (parser_is(m, TOKEN_TYPE)) {
@@ -3177,7 +3277,7 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
         return parser_type_begin_stmt(m);
     } else if (parser_is(m, TOKEN_LABEL)) {
         return parser_label(m);
-    } else if (parser_is(m, TOKEN_FN)) {
+    } else if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
         return parser_fndef_stmt(m, ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column));
     } else if (parser_is(m, TOKEN_TEST)) {
         return parser_test_stmt(m);
@@ -3191,50 +3291,50 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
 }
 
 static parser_rule rules[] = {
-        [TOKEN_LEFT_PAREN] = {parser_left_paren_expr, parser_call_expr, PRECEDENCE_CALL},
-        [TOKEN_LEFT_SQUARE] = {parser_left_square_expr, parser_access, PRECEDENCE_SELECT},
-        [TOKEN_LEFT_CURLY] = {parser_left_curly_expr, NULL, PRECEDENCE_NULL},
-        [TOKEN_LESS_THAN] = {NULL, parser_binary, PRECEDENCE_COMPARE},
-        [TOKEN_LEFT_ANGLE] = {NULL, parser_type_args_expr, PRECEDENCE_SELECT},
-        [TOKEN_MACRO_IDENT] = {parser_macro_call, NULL, PRECEDENCE_NULL},
-        [TOKEN_DOT] = {NULL, parser_unknown_select, PRECEDENCE_SELECT},
-        [TOKEN_MINUS] = {parser_unary, parser_binary, PRECEDENCE_TERM},
-        [TOKEN_PLUS] = {NULL, parser_binary, PRECEDENCE_TERM},
-        [TOKEN_NOT] = {parser_unary, NULL, PRECEDENCE_UNARY},
-        [TOKEN_TILDE] = {parser_unary, NULL, PRECEDENCE_UNARY},
-        [TOKEN_AND] = {parser_unary, parser_binary, PRECEDENCE_AND},
-        [TOKEN_OR] = {NULL, parser_binary, PRECEDENCE_OR},
-        [TOKEN_XOR] = {NULL, parser_binary, PRECEDENCE_XOR},
-        [TOKEN_LEFT_SHIFT] = {NULL, parser_binary, PRECEDENCE_SHIFT},
-        [TOKEN_PERSON] = {NULL, parser_binary, PRECEDENCE_FACTOR},
-        [TOKEN_STAR] = {parser_unary, parser_binary, PRECEDENCE_FACTOR},
-        [TOKEN_SLASH] = {NULL, parser_binary, PRECEDENCE_FACTOR},
-        [TOKEN_OR_OR] = {NULL, parser_binary, PRECEDENCE_OR_OR},
-        [TOKEN_AND_AND] = {NULL, parser_binary, PRECEDENCE_AND_AND},
-        [TOKEN_NOT_EQUAL] = {NULL, parser_binary, PRECEDENCE_CMP_EQUAL},
-        [TOKEN_EQUAL_EQUAL] = {NULL, parser_binary, PRECEDENCE_CMP_EQUAL},
+    [TOKEN_LEFT_PAREN] = {parser_left_paren_expr, parser_call_expr, PRECEDENCE_CALL},
+    [TOKEN_LEFT_SQUARE] = {parser_left_square_expr, parser_access, PRECEDENCE_SELECT},
+    [TOKEN_LEFT_CURLY] = {parser_left_curly_expr, NULL, PRECEDENCE_NULL},
+    [TOKEN_LESS_THAN] = {NULL, parser_binary, PRECEDENCE_COMPARE},
+    [TOKEN_LEFT_ANGLE] = {NULL, parser_type_args_expr, PRECEDENCE_SELECT},
+    [TOKEN_MACRO_IDENT] = {parser_macro_call, NULL, PRECEDENCE_NULL},
+    [TOKEN_DOT] = {NULL, parser_unknown_select, PRECEDENCE_SELECT},
+    [TOKEN_MINUS] = {parser_unary, parser_binary, PRECEDENCE_TERM},
+    [TOKEN_PLUS] = {NULL, parser_binary, PRECEDENCE_TERM},
+    [TOKEN_NOT] = {parser_unary, NULL, PRECEDENCE_UNARY},
+    [TOKEN_TILDE] = {parser_unary, NULL, PRECEDENCE_UNARY},
+    [TOKEN_AND] = {parser_unary, parser_binary, PRECEDENCE_AND},
+    [TOKEN_OR] = {NULL, parser_binary, PRECEDENCE_OR},
+    [TOKEN_XOR] = {NULL, parser_binary, PRECEDENCE_XOR},
+    [TOKEN_LEFT_SHIFT] = {NULL, parser_binary, PRECEDENCE_SHIFT},
+    [TOKEN_PERSON] = {NULL, parser_binary, PRECEDENCE_FACTOR},
+    [TOKEN_STAR] = {parser_unary, parser_binary, PRECEDENCE_FACTOR},
+    [TOKEN_SLASH] = {NULL, parser_binary, PRECEDENCE_FACTOR},
+    [TOKEN_OR_OR] = {NULL, parser_binary, PRECEDENCE_OR_OR},
+    [TOKEN_AND_AND] = {NULL, parser_binary, PRECEDENCE_AND_AND},
+    [TOKEN_NOT_EQUAL] = {NULL, parser_binary, PRECEDENCE_CMP_EQUAL},
+    [TOKEN_EQUAL_EQUAL] = {NULL, parser_binary, PRECEDENCE_CMP_EQUAL},
 
-        [TOKEN_RIGHT_SHIFT] = {NULL, parser_binary, PRECEDENCE_SHIFT},
-        [TOKEN_RIGHT_ANGLE] = {NULL, parser_binary, PRECEDENCE_COMPARE},
+    [TOKEN_RIGHT_SHIFT] = {NULL, parser_binary, PRECEDENCE_SHIFT},
+    [TOKEN_RIGHT_ANGLE] = {NULL, parser_binary, PRECEDENCE_COMPARE},
 
-        [TOKEN_GREATER_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
-        [TOKEN_LESS_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
-        [TOKEN_LITERAL_STRING] = {parser_literal, NULL, PRECEDENCE_NULL},
-        [TOKEN_LITERAL_INT] = {parser_literal, NULL, PRECEDENCE_NULL},
-        [TOKEN_LITERAL_FLOAT] = {parser_literal, NULL, PRECEDENCE_NULL},
-        [TOKEN_TRUE] = {parser_literal, NULL, PRECEDENCE_NULL},
-        [TOKEN_FALSE] = {parser_literal, NULL, PRECEDENCE_NULL},
-        [TOKEN_NULL] = {parser_literal, NULL, PRECEDENCE_NULL},
+    [TOKEN_GREATER_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
+    [TOKEN_LESS_EQUAL] = {NULL, parser_binary, PRECEDENCE_COMPARE},
+    [TOKEN_LITERAL_STRING] = {parser_literal, NULL, PRECEDENCE_NULL},
+    [TOKEN_LITERAL_INT] = {parser_literal, NULL, PRECEDENCE_NULL},
+    [TOKEN_LITERAL_FLOAT] = {parser_literal, NULL, PRECEDENCE_NULL},
+    [TOKEN_TRUE] = {parser_literal, NULL, PRECEDENCE_NULL},
+    [TOKEN_FALSE] = {parser_literal, NULL, PRECEDENCE_NULL},
+    [TOKEN_NULL] = {parser_literal, NULL, PRECEDENCE_NULL},
 
-        [TOKEN_AS] = {NULL, parser_as_expr, PRECEDENCE_TYPE_CAST},
-        [TOKEN_IS] = {parser_match_is_expr, parser_is_expr, PRECEDENCE_TYPE_CAST},
-        [TOKEN_CATCH] = {NULL, parser_catch_expr, PRECEDENCE_CATCH},
-        [TOKEN_QUESTION] = {NULL, parser_ternary, PRECEDENCE_TERNARY},
+    [TOKEN_AS] = {NULL, parser_as_expr, PRECEDENCE_TYPE_CAST},
+    [TOKEN_IS] = {parser_match_is_expr, parser_is_expr, PRECEDENCE_TYPE_CAST},
+    [TOKEN_CATCH] = {NULL, parser_catch_expr, PRECEDENCE_CATCH},
+    [TOKEN_QUESTION] = {NULL, parser_ternary, PRECEDENCE_TERNARY},
 
-        // 以 ident 开头的前缀表达式
-        [TOKEN_IDENT] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
-        [TOKEN_CHAN] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
-        [TOKEN_EOF] = {NULL, NULL, PRECEDENCE_NULL},
+    // 以 ident 开头的前缀表达式
+    [TOKEN_IDENT] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
+    [TOKEN_CHAN] = {parser_ident_expr, NULL, PRECEDENCE_NULL},
+    [TOKEN_EOF] = {NULL, NULL, PRECEDENCE_NULL},
 };
 
 /**
@@ -3759,7 +3859,7 @@ static ast_expr_t parser_expr(module_t *m) {
     }
 
     // fn def, 也能写到括号里面呀
-    if (parser_is(m, TOKEN_FN)) {
+    if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
         return parser_fndef_expr(m);
     }
 

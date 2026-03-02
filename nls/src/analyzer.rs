@@ -3,6 +3,7 @@ pub mod completion;
 pub mod flow;
 pub mod generics;
 pub mod global_eval;
+pub mod interface;
 pub mod lexer; // 声明子模块
 pub mod semantic;
 pub mod symbol;

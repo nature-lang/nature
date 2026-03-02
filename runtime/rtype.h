@@ -17,7 +17,7 @@ extern rtype_t string_element_rtype;
 // 添加 hash table gc_rtype(TYPE_UINT64, 0);
 extern rtype_t uint64_rtype;
 
-// 添加 hash table  (GC_RTYPE(TYPE_STRING, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);)
+// 添加 hash table  (GC_RTYPE(TYPE_STRING, 6, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);)
 extern rtype_t string_rtype;
 
 // 默认会被 rtypes_deserialize 覆盖为 compile 中的值
@@ -42,7 +42,7 @@ extern rtype_t std_arg_rtype;
 // GC_RTYPE(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
 extern rtype_t os_env_rtype;
 
-// GC_RTYPE(TYPE_VEC, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN)
+// GC_RTYPE(TYPE_VEC, 6, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN)
 extern rtype_t vec_rtype;
 
 extern rtype_t fn_rtype;
@@ -89,12 +89,12 @@ static inline rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
     assert(element_rtype);
 
     rtype_t rtype = {
-            .gc_heap_size = element_rtype->storage_size * length,
-            .hash = 0, // runtime 生成的没有 hash 值，不需要进行 hash 定位
-            .kind = TYPE_ARR,
-            .length = length,
-            .malloc_gc_bits_offset = -1,
-            .hashes_offset = -1,
+        .gc_heap_size = element_rtype->storage_size * length,
+        .hash = 0, // runtime 生成的没有 hash 值，不需要进行 hash 定位
+        .kind = TYPE_ARR,
+        .length = length,
+        .malloc_gc_bits_offset = -1,
+        .hashes_offset = -1,
     };
 
     rtype.last_ptr = element_rtype->last_ptr > 0; // 根据 0 和 1 在 heap_arena_bits_set 进行特殊处理
@@ -116,12 +116,12 @@ static inline void builtin_rtype_init() {
     sc_map_put_64v(&rt_rtype_map, uint64_rtype.hash, &uint64_rtype);
 
     // 初始化字符串 rtype
-    string_rtype = GC_RTYPE(TYPE_STRING, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
-                            TYPE_GC_NOSCAN);
+    string_rtype = GC_RTYPE(TYPE_STRING, 6, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
+                            TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     sc_map_put_64v(&rt_rtype_map, string_rtype.hash, &string_rtype);
 
-    string_ref_rtype = GC_RTYPE(TYPE_STRING, 5, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
-                                TYPE_GC_NOSCAN);
+    string_ref_rtype = GC_RTYPE(TYPE_STRING, 6, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
+                                TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     sc_map_put_64v(&rt_rtype_map, string_rtype.hash, &string_rtype);
 
     // 测试 gc_bits
@@ -131,9 +131,11 @@ static inline void builtin_rtype_init() {
     assert(bitmap_test((uint8_t *) &string_rtype.gc_bits, 3) == 0);
 
     // 初始化错误追踪 rtype
-    errort_trace_rtype = GC_RTYPE(TYPE_STRUCT, 12,
+    errort_trace_rtype = GC_RTYPE(TYPE_STRUCT, 14,
                                   TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
+                                  TYPE_GC_NOSCAN,
                                   TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
+                                  TYPE_GC_NOSCAN,
                                   TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
     sc_map_put_64v(&rt_rtype_map, errort_trace_rtype.hash, &errort_trace_rtype);
 
@@ -161,7 +163,8 @@ static inline void builtin_rtype_init() {
     os_env_rtype = GC_RTYPE(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
 
     // 初始化向量 rtype
-    vec_rtype = GC_RTYPE(TYPE_VEC, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);
+    vec_rtype = GC_RTYPE(TYPE_VEC, 6, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
+                         TYPE_GC_NOSCAN);
 
     // 初始化函数 rtype
     fn_rtype = GC_RTYPE(TYPE_FN, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);

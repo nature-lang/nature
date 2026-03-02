@@ -1,0 +1,192 @@
+=== test_lifo_same_scope
+--- main.n
+fn main() {
+    defer {
+        println('a')
+    }
+    defer {
+        println('b')
+    }
+}
+
+--- output.txt
+b
+a
+
+=== test_stmt_body
+--- main.n
+fn main() {
+    defer println('hello world')
+    println('hello after')
+}
+
+--- output.txt
+hello after
+hello world
+
+=== test_nested_scope_order
+--- main.n
+fn dump(int n) {
+    println(n)
+}
+
+fn main() {
+    dump(0)
+    defer {
+        dump(2)
+    }
+
+    if true {
+        defer {
+            dump(3)
+        }
+        dump(4)
+    }
+
+    dump(1)
+}
+
+--- output.txt
+0
+4
+3
+1
+2
+
+=== test_return_unwind
+--- main.n
+fn dump(int n) {
+    println(n)
+}
+
+fn calc():int {
+    dump(0)
+    defer {
+        dump(2)
+    }
+
+    if true {
+        defer {
+            dump(3)
+        }
+        return 7
+    }
+
+    dump(1)
+
+    return 0
+}
+
+fn main() {
+    dump(calc())
+}
+
+--- output.txt
+0
+3
+2
+7
+
+=== test_continue_unwind
+--- main.n
+fn main() {
+    for i32 i = 0; i < 2; i += 1 {
+        if i == 0 {
+            defer {
+                println('c0')
+            }
+            continue
+        }
+
+        defer {
+            println('c1')
+        }
+        continue
+    }
+}
+
+--- output.txt
+c0
+c1
+
+=== test_break_unwind
+--- main.n
+fn main() {
+    for i32 i = 0; i < 3; i += 1 {
+        defer {
+            println('before_break')
+        }
+        break
+        defer {
+            println('after_break')
+        }
+    }
+    println('done')
+}
+
+--- output.txt
+before_break
+done
+
+=== test_throw_unwind
+--- main.n
+fn boom():void! {
+    defer {
+        println('cleanup')
+    }
+    throw errorf('x')
+}
+
+fn main() {
+    try {
+        boom()
+    } catch e {
+        println('caught', e.msg())
+    }
+}
+
+--- output.txt
+cleanup
+caught x
+
+=== test_runtime_error_unwind
+--- main.n
+fn main() {
+    try {
+        defer {
+            println('cleanup')
+        }
+        [int] list = []
+        var b = list[1]
+    } catch e {
+        println('caught')
+    }
+}
+
+--- output.txt
+cleanup
+caught
+
+=== test_defer_eval_time_like_zig
+--- main.n
+fn main() {
+    int a = 1
+    defer {
+        println(a)
+    }
+    a = 2
+}
+
+--- output.txt
+2
+
+=== test_invalid_control_in_defer
+--- main.n
+fn main() {
+    defer {
+        return
+    }
+}
+
+--- output.txt
+nature-test/main.n:3:14: return/break/continue/throw/ret are not allowed inside defer block
