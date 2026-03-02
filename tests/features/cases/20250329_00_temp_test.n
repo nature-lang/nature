@@ -1,8 +1,3 @@
-fn vec<T>.temp(*self):int {
-    return self.len() // self 的类型推断出现了严重的问题？这可能源于？
-}
-
 fn main() {
-    [int] a = [1, 2, 3]
-    a.temp()
+    println('hello world')
 }

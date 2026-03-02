@@ -66,6 +66,7 @@ pub struct Type {
     pub status: ReductionStatus,
     pub start: usize, // 类型定义开始位置
     pub end: usize,   // 类型定义结束位置
+    pub storage_kind: StorageKind,
     pub in_heap: bool,
     pub err: bool,
 }
@@ -82,6 +83,7 @@ impl Default for Type {
             ident_kind: TypeIdentKind::Unknown,
             start: 0,
             end: 0,
+            storage_kind: StorageKind::Ptr,
             in_heap: false,
             err: false,
         }
@@ -125,6 +127,7 @@ impl Type {
             status: ReductionStatus::Done,
             start: 0,
             end: 0,
+            storage_kind: Self::storage_kind(&kind),
             in_heap: Self::kind_in_heap(&kind),
             err: false,
         };
@@ -149,6 +152,7 @@ impl Type {
             status: ReductionStatus::Undo,
             start: 0,
             end: 0,
+            storage_kind: StorageKind::Ptr,
             in_heap: false,
             err: false,
         }
@@ -165,6 +169,7 @@ impl Type {
             status: ReductionStatus::Undo,
             start: 0,
             end: 0,
+            storage_kind: Self::storage_kind(&kind),
             in_heap: Self::kind_in_heap(&kind),
             err: false,
         }
@@ -235,7 +240,8 @@ impl Type {
                 "tup<...>".to_string()
             }
             TypeKind::Fn(type_fn) => {
-                format!("fn(...):{}{}", type_fn.return_type, if type_fn.errable { "!" } else { "" })
+                let fn_prefix = if type_fn.fx { "fx" } else { "fn" };
+                format!("{}(...):{}{}", fn_prefix, type_fn.return_type, if type_fn.errable { "!" } else { "" })
             }
             TypeKind::Ref(value_type) => {
                 format!("ref<{}>", value_type)
@@ -318,6 +324,30 @@ impl Type {
 
     pub fn is_number(kind: &TypeKind) -> bool {
         Self::is_integer(kind) || Self::is_float(kind)
+    }
+
+    pub fn storage_kind(kind: &TypeKind) -> StorageKind {
+        if Self::is_number(kind) || matches!(kind, TypeKind::Bool | TypeKind::Anyptr | TypeKind::Enum(..) | TypeKind::Void) {
+            return StorageKind::Dir;
+        }
+
+        if matches!(
+            kind,
+            TypeKind::String
+                | TypeKind::Vec(..)
+                | TypeKind::Map(..)
+                | TypeKind::Set(..)
+                | TypeKind::Struct(..)
+                | TypeKind::Arr(..)
+                | TypeKind::Union(..)
+                | TypeKind::Tuple(..)
+                | TypeKind::TaggedUnion(..)
+                | TypeKind::Interface(..)
+        ) {
+            return StorageKind::Ind;
+        }
+
+        return StorageKind::Ptr;
     }
 
     pub fn is_any(kind: &TypeKind) -> bool {
@@ -422,7 +452,6 @@ impl Type {
                     | TypeKind::String
                     | TypeKind::Set(..)
                     | TypeKind::Map(..)
-                    | TypeKind::Tuple(..)
                     | TypeKind::Union(..)
                     | TypeKind::TaggedUnion(..)
             )
@@ -446,6 +475,7 @@ impl Type {
     pub fn integer_t_new() -> Type {
         let mut t = Type::new(TypeKind::Ident);
         t.kind = Self::cross_kind_trans(&TypeKind::Int);
+        t.storage_kind = Self::storage_kind(&t.kind);
         t.ident = TypeKind::IntegerT.to_string();
         t.ident_kind = TypeIdentKind::Builtin;
         return t;
@@ -457,6 +487,7 @@ impl Type {
         let mut ptr_type = Type::new(ptr_kind);
         ptr_type.start = t.start;
         ptr_type.end = t.end;
+        ptr_type.storage_kind = StorageKind::Ptr;
         ptr_type.in_heap = false;
         return ptr_type;
     }
@@ -469,6 +500,7 @@ impl Type {
         let mut ptr_type = Type::new(ptr_kind);
         ptr_type.start = t.start;
         ptr_type.end = t.end;
+        ptr_type.storage_kind = StorageKind::Ptr;
         ptr_type.in_heap = false;
         return ptr_type;
     }
@@ -520,7 +552,7 @@ impl Type {
             }
             TypeKind::Fn(type_fn) => {
                 let mut hasher = DefaultHasher::new();
-                let mut str = self.kind.to_string();
+                let mut str = if type_fn.fx { "fx".to_string() } else { self.kind.to_string() };
                 str = format!("{}.{}", str, type_fn.return_type.hash());
                 for param_type in &type_fn.param_types {
                     str = format!("{}_{}", str, param_type.hash());
@@ -610,6 +642,7 @@ pub struct TypeFn {
     pub param_types: Vec<Type>,
     pub errable: bool,
     pub rest: bool,
+    pub fx: bool,
     pub tpl: bool,
 }
 
@@ -673,6 +706,13 @@ pub enum TypeIdentKind {
     Interface, // type.impls 部分专用
     Enum,
     TaggedUnion, // tagged union type
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StorageKind {
+    Dir,
+    Ind,
+    Ptr,
 }
 
 #[derive(Debug, Clone, Display)]
@@ -959,6 +999,7 @@ pub enum AstNode {
     VarTupleDestr(Vec<Box<Expr>>, Box<Expr>), // (elements, right)
     Assign(Box<Expr>, Box<Expr>),             // (left, right)
     Return(Option<Box<Expr>>),                // (expr)
+    Defer(AstBody),                           // body
     If(Box<Expr>, AstBody, AstBody),          // (condition, consequent, alternate)
     Throw(Box<Expr>),
     TryCatch(AstBody, Arc<Mutex<VarDeclExpr>>, AstBody), // (try_body, catch_err, catch_body)
@@ -1068,6 +1109,7 @@ pub struct AstCall {
     pub generics_args: Vec<Type>,
     pub args: Vec<Box<Expr>>,
     pub spread: bool,
+    pub inject_self_arg: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1247,6 +1289,7 @@ pub struct AstFnDef {
     pub is_generics: bool,
     pub is_async: bool,
     pub is_private: bool,
+    pub is_fx: bool,
     pub is_errable: bool, // 当前函数是否返回错误
     pub is_test: bool,
     pub test_name: String,
@@ -1300,6 +1343,7 @@ impl Default for AstFnDef {
             is_generics: false,
             is_async: false,
             is_private: false,
+            is_fx: false,
             is_errable: false,
             is_test: false,
             test_name: "".to_string(),

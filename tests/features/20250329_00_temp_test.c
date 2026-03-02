@@ -9,6 +9,7 @@ int main(void) {
 
     // chdir("/Users/weiwenhao/Code/emoji-api");
     // setenv("ENTRY_FILE", "main.n", 1);
+    VERBOSE = true;
 
     feature_test_build();
     sleep(1);

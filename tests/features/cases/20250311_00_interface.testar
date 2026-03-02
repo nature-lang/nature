@@ -51,7 +51,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:12:2: the fn 'perimeter' of type 'main.rectangle' mismatch interface 'main.measurable'
+nature-test/main.n:15:2: the fn 'perimeter' of type 'main.rectangle' mismatch interface 'main.measurable'
 
 === test_mismatch_interface2
 --- main.n
@@ -81,7 +81,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:23:17: the fn 'area' of type 'main.rectangle' mismatch interface 'main.measurable'
+nature-test/main.n:23:17: type 'main.rectangle(struct)' not impl 'main.measurable<i64>(interface)' interface
 
 === test_basic
 --- main.n
@@ -279,9 +279,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:33:22: the fn 'perimeter' of type 'main.rectangle' mismatch interface 'main.measurable'
-
-
+nature-test/main.n:33:22: type 'main.rectangle(struct)' not impl 'main.measurable<f64>(interface)' interface
 
 
 === test_typedef_arg_mismatch
@@ -539,8 +537,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:14:2: type 'main.rectangle' not impl fn 'update' for interface 'main.updatable'
-
+nature-test/main.n:10:41: type 'main.rectangle' not impl fn 'update' for interface 'main.updatable'
 
 
 === test_combination_impl_failed2
@@ -678,7 +675,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:15:2: duplicate method 'area'
+nature-test/main.n:11:43: duplicate method 'area'
 
 === test_duck_type_deny
 --- main.n
@@ -723,7 +720,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:38:13: type 'main.rectangle' not impl 'main.combination' interface
+nature-test/main.n:38:13: type 'main.rectangle(struct)' not impl 'main.combination(interface)' interface
 
 === test_combination
 --- main.n

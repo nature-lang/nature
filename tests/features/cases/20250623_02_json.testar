@@ -34,7 +34,7 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' panic: 'expected boolean value at position 0' at nature-test/main.n:6:15
+panic: 'expected boolean value at position 0' at nature-test/main.n:6:15
 
 === test_deserialize_u8_string
 --- main.n
@@ -128,7 +128,7 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' panic: 'expected `"` at position 27' at nature-test/main.n:14:15
+panic: 'expected `"` at position 27' at nature-test/main.n:14:15
 
 === test_deserialize_struct
 --- main.n
@@ -166,7 +166,7 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' panic: 'type assert failed' at nature-test/main.n:9:27
+panic: 'type assert failed' at nature-test/main.n:9:27
 
 === test_deserialize_any_failed2
 --- main.n
@@ -182,7 +182,7 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' panic: 'type assert failed' at nature-test/main.n:9:18
+panic: 'type assert failed' at nature-test/main.n:9:18
 
 === test_deserialize_any
 --- main.n

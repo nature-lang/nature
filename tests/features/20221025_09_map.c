@@ -8,7 +8,7 @@ static void test_basic() {
                 "3\n"
                 "2\n"
                 "110\n"
-                "coroutine 'main' panic: 'key 'b' not found in map' at cases/20221025_09_map.n:24:15\n";
+                "panic: 'key 'b' not found in map' at cases/20221025_09_map.n:24:15\n";
     assert_string_equal(raw, str);
 }
 

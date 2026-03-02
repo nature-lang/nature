@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use super::common::{
-    AnalyzerError, AstBody, AstCall, AstFnDef, AstNode, Expr, ExprOp, GenericsParam, MacroArg, MatchCase, SelectCase, Stmt, Type, TypeIdentKind, TypeKind,
+    AnalyzerError, AstBody, AstCall, AstFnDef, AstNode, Expr, ExprOp, GenericsParam, MacroArg, MatchCase, SelectCase, Stmt, Type, TypeFn, TypeIdentKind,
+    TypeKind,
 };
 use super::symbol::{SymbolKind, SymbolTable};
 use crate::project::Module;
@@ -102,29 +103,29 @@ impl<'a> Generics<'a> {
         false
     }
 
-    fn interface_declares_method(&self, interface_type: &Type, method_name: &str, visited: &mut HashSet<String>) -> bool {
+    fn interface_declares_method(&self, interface_type: &Type, method_name: &str, visited: &mut HashSet<String>) -> Option<Box<TypeFn>> {
         if let TypeKind::Interface(elements) = &interface_type.kind {
             for element in elements {
                 if let TypeKind::Fn(type_fn) = &element.kind {
                     if type_fn.name == method_name {
-                        return true;
+                        return Some(type_fn.clone());
                     }
                 }
             }
         }
 
         if interface_type.ident.is_empty() {
-            return false;
+            return None;
         }
         if !visited.insert(interface_type.ident.clone()) {
-            return false;
+            return None;
         }
 
         let Some(symbol) = self.symbol_table.find_global_symbol(&interface_type.ident) else {
-            return false;
+            return None;
         };
         let SymbolKind::Type(typedef_mutex) = &symbol.kind else {
-            return false;
+            return None;
         };
         let typedef_stmt = typedef_mutex.lock().unwrap();
 
@@ -132,28 +133,28 @@ impl<'a> Generics<'a> {
             for element in elements {
                 if let TypeKind::Fn(type_fn) = &element.kind {
                     if type_fn.name == method_name {
-                        return true;
+                        return Some(type_fn.clone());
                     }
                 }
             }
         }
 
         for impl_interface in &typedef_stmt.impl_interfaces {
-            if self.interface_declares_method(impl_interface, method_name, visited) {
-                return true;
+            if let Some(method) = self.interface_declares_method(impl_interface, method_name, visited) {
+                return Some(method);
             }
         }
 
-        false
+        None
     }
 
-    fn constraint_has_method(&self, param: &GenericsParam, method_name: &str) -> bool {
+    fn constraint_has_method(&self, param: &GenericsParam, method_name: &str) -> Option<Box<TypeFn>> {
         for constraint in &param.constraints {
-            if self.interface_declares_method(constraint, method_name, &mut HashSet::new()) {
-                return true;
+            if let Some(method) = self.interface_declares_method(constraint, method_name, &mut HashSet::new()) {
+                return Some(method);
             }
         }
-        false
+        None
     }
 
     fn check_bool_operand(&mut self, fndef: &AstFnDef, expr: &Expr) {
@@ -269,11 +270,24 @@ impl<'a> Generics<'a> {
             return;
         }
 
-        if !self.constraint_has_method(param, key) {
+        let Some(found_method) = self.constraint_has_method(param, key) else {
             self.push_error(
                 call.left.start,
                 call.left.end,
                 format!("generic param '{}' has no constraint declaring fn '{}'", generic_param_ident, key),
+            );
+            return;
+        };
+
+        if !found_method.tpl && !call.generics_args.is_empty() {
+            self.push_error(
+                call.left.start,
+                call.left.end,
+                format!(
+                    "method '{}' has no generic parameters, but {} generic args provided",
+                    key,
+                    call.generics_args.len()
+                ),
             );
         }
     }
@@ -449,6 +463,7 @@ impl<'a> Generics<'a> {
             }
             AstNode::Ret(expr) => self.check_expr(fndef, expr),
             AstNode::Throw(error_expr) => self.check_expr(fndef, error_expr),
+            AstNode::Defer(body) => self.check_body(fndef, body),
             AstNode::Catch(try_expr, _, catch_body) => {
                 self.check_expr(fndef, try_expr);
                 self.check_body(fndef, catch_body);

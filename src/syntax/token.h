@@ -22,7 +22,7 @@ typedef enum {
     TOKEN_MINUS,      // -
     TOKEN_PLUS,       // +
     TOKEN_ELLIPSIS,   // ...
-    TOKEN_RANGE,   // ...
+    TOKEN_RANGE,   // ..
     TOKEN_COLON,      // :
     TOKEN_SEMICOLON,  // ;
     TOKEN_SLASH,      // /
@@ -129,8 +129,10 @@ typedef enum {
     TOKEN_AS,
     TOKEN_BOOM,
     TOKEN_FN,
+    TOKEN_FX,
     TOKEN_IMPORT,
     TOKEN_RETURN,
+    TOKEN_DEFER,
     TOKEN_GO,
     TOKEN_STMT_EOF, // ;
     TOKEN_EOF,// TOKEN_EOF 一定要在最后一个，否则会索引溢出
@@ -235,7 +237,9 @@ static string token_str[] = {
         [TOKEN_U64] = "u64",
 
         [TOKEN_FN] = "fn",
+        [TOKEN_FX] = "fx",
         [TOKEN_RETURN] = "return",
+        [TOKEN_DEFER] = "defer",
         [TOKEN_CATCH] = "catch",
         [TOKEN_MATCH] = "match",
         [TOKEN_SELECT] = "select",

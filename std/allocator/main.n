@@ -1,0 +1,51 @@
+import libc
+import allocator.types.{allocatable}
+
+type heap_t:allocatable = int
+
+heap_t heap = 0
+
+// allocatable interface impl: allocate `size` bytes from the heap
+fx heap_t.alloc(*self, int size):anyptr {
+    var p = libc.malloc(size as u64)
+    if p == null {
+       panic('allocator.alloc failed')
+    }
+
+    libc.memset(p as anyptr, 0, size as u64)
+    return p
+}
+
+// allocatable interface impl: deallocate memory at `p`
+fx heap_t.dealloc(*self, anyptr p) {
+    if p == null {
+        return
+    }
+
+    libc.free(p)
+}
+
+// convenience generic helper: allocate and initialize a value of type T
+fx heap_t.new<T>(*self, T value):ptr<T> {
+    int size = @sizeof(T)
+    if size <= 0 {
+        panic('allocator.new invalid type size')
+    }
+
+    ptr<T> p = self.alloc(size) as ptr<T>
+    libc.memmove(p as anyptr, &value as anyptr, size as u64)
+    return p
+}
+
+// convenience generic helper: free a typed pointer
+fx heap_t.free<T>(*self, ptr<T> p) {
+    self.dealloc(p as anyptr)
+}
+
+fx new<T>(T value):ptr<T> {
+    return heap.new(value)
+}
+
+fx free<T>(ptr<T> p) {
+    return heap.free(p)
+}

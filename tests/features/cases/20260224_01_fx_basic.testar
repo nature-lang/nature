@@ -1,0 +1,117 @@
+=== test_fx_basic
+--- main.n
+fx main() {
+    var sum = 1 + 1
+    println(sum)
+    assert(sum == 2)
+}
+
+=== test_const_string
+--- main.n
+fx main() {
+    var str = 'hello world'
+    println(str)
+}
+
+--- output.txt
+hello world
+
+=== test_allocator
+--- main.n
+import allocator as ac
+
+type foo_t = struct{
+    string a
+    float c
+}
+
+fx main() {
+    ptr<foo_t> f = ac.new(foo_t{a: 'hello', c: 1.1})
+    println(f.a, f.c)
+
+    ptr<bool> b = ac.new(true)
+    println(*b)
+    ac.free(b)
+}
+
+
+--- output.txt
+hello 1.100000
+true
+
+
+=== test_arena_alloc
+--- main.n
+import allocator.arena
+
+type foo_t = struct{
+    string a // 48
+    float c // 8
+}
+
+fx main() {
+    var ar = arena.init(4096)
+    println(ar.current.used)
+
+    ptr<foo_t> f = ar.new(foo_t{a: 'hello', c: 1.1})
+    println(f.a, f.c)
+
+    ptr<bool> b = ar.new(true)
+    println(*b)
+
+    println(ar.current.used)
+    ar.deinit()
+}
+
+--- output.txt
+0
+hello 1.100000
+true
+57
+
+=== test_defer_alloc
+--- main.n
+import allocator.arena
+
+type foo_t = struct{
+    string a
+    float c
+}
+
+fx main() {
+    var ar = arena.init(4096)
+    defer ar.deinit()
+
+    ptr<bool> b = ar.new(true)
+    var f = ar.new(foo_t{a: 'hello', c: 1.1})
+    println(f.a, f.c)
+
+
+    println(ar.current.used)
+}
+
+--- output.txt
+hello 1.100000
+64
+
+
+=== test_vec_basic
+--- main.n
+import allocator as ac
+
+fn main() {
+    var list = vec<u8>.alloc(ac.heap, 200 as u8, 10)
+    defer list.deinit()
+
+    println(list[0], list[9])
+    list[0] = 12
+    list[9] = 15
+    println(list[0], list[9])
+    list.push(100)
+    println(list[10])
+}
+
+--- output.txt
+200 200
+12 15
+100

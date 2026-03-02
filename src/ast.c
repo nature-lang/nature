@@ -760,7 +760,12 @@ static ast_for_cond_stmt_t *ast_for_cond_copy(module_t *m, ast_for_cond_stmt_t *
 
 static ast_for_iterator_stmt_t *ast_for_iterator_copy(module_t *m, ast_for_iterator_stmt_t *temp) {
     ast_for_iterator_stmt_t *stmt = COPY_NEW(ast_for_iterator_stmt_t, temp);
-    stmt->iterate = *ast_expr_copy(m, &temp->iterate);
+    if (temp->is_range) {
+        stmt->range_start = *ast_expr_copy(m, &temp->range_start);
+        stmt->range_end = *ast_expr_copy(m, &temp->range_end);
+    } else {
+        stmt->iterate = *ast_expr_copy(m, &temp->iterate);
+    }
     stmt->first = *ast_var_decl_copy(m, &temp->first);
     stmt->second = temp->second ? ast_var_decl_copy(m, temp->second) : NULL;
     stmt->body = ast_body_copy(m, temp->body);
@@ -860,6 +865,13 @@ static ast_stmt_t *ast_stmt_copy(module_t *m, ast_stmt_t *temp) {
         }
         case AST_STMT_RETURN: {
             stmt->value = ast_return_copy(m, temp->value);
+            break;
+        }
+        case AST_STMT_DEFER: {
+            ast_defer_stmt_t *temp_stmt = temp->value;
+            ast_defer_stmt_t *defer_stmt = COPY_NEW(ast_defer_stmt_t, temp_stmt);
+            defer_stmt->body = ast_body_copy(m, temp_stmt->body);
+            stmt->value = defer_stmt;
             break;
         }
         case AST_CALL: {

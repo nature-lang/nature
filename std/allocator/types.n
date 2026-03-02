@@ -1,0 +1,4 @@
+type allocatable = interface{
+    fx alloc(int size):anyptr
+    fx dealloc(anyptr p):void
+}

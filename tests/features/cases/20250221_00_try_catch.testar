@@ -53,7 +53,7 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' panic: 'index out of range [12] with length 0' at nature-test/main.n:4:19
+panic: 'index out of range [12] with length 0' at nature-test/main.n:4:19
 
 === test_nested
 --- main.n

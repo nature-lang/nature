@@ -4,48 +4,48 @@
 #include <assert.h>
 
 static char *asm_setcc_integer_trans[] = {
-        [LIR_OPCODE_SLT] = "setl",
-        [LIR_OPCODE_USLT] = "setb",
-        [LIR_OPCODE_SLE] = "setle",
-        [LIR_OPCODE_USLE] = "setbe",
-        [LIR_OPCODE_SGT] = "setg",
-        [LIR_OPCODE_USGT] = "seta",
-        [LIR_OPCODE_SGE] = "setge",
-        [LIR_OPCODE_USGE] = "setae",
-        [LIR_OPCODE_SEE] = "sete",
-        [LIR_OPCODE_SNE] = "setne",
+    [LIR_OPCODE_SLT] = "setl",
+    [LIR_OPCODE_USLT] = "setb",
+    [LIR_OPCODE_SLE] = "setle",
+    [LIR_OPCODE_USLE] = "setbe",
+    [LIR_OPCODE_SGT] = "setg",
+    [LIR_OPCODE_USGT] = "seta",
+    [LIR_OPCODE_SGE] = "setge",
+    [LIR_OPCODE_USGE] = "setae",
+    [LIR_OPCODE_SEE] = "sete",
+    [LIR_OPCODE_SNE] = "setne",
 };
 
 static char *asm_setcc_float_trans[] = {
-        [LIR_OPCODE_SLT] = "setb",
-        [LIR_OPCODE_SLE] = "setbe",
-        [LIR_OPCODE_SGT] = "seta",
-        [LIR_OPCODE_SGE] = "setae",
-        [LIR_OPCODE_SEE] = "sete",
-        [LIR_OPCODE_SNE] = "setne",
+    [LIR_OPCODE_SLT] = "setb",
+    [LIR_OPCODE_SLE] = "setbe",
+    [LIR_OPCODE_SGT] = "seta",
+    [LIR_OPCODE_SGE] = "setae",
+    [LIR_OPCODE_SEE] = "sete",
+    [LIR_OPCODE_SNE] = "setne",
 };
 
 
 static char *asm_bcc_integer_trans[] = {
-        [LIR_OPCODE_BLT] = "jl",
-        [LIR_OPCODE_BLE] = "jle",
-        [LIR_OPCODE_BGT] = "jg",
-        [LIR_OPCODE_BGE] = "jge",
-        [LIR_OPCODE_BULT] = "jb",
-        [LIR_OPCODE_BULE] = "jbe",
-        [LIR_OPCODE_BUGT] = "ja",
-        [LIR_OPCODE_BUGE] = "jae",
-        [LIR_OPCODE_BEE] = "je",
-        [LIR_OPCODE_BNE] = "jne",
+    [LIR_OPCODE_BLT] = "jl",
+    [LIR_OPCODE_BLE] = "jle",
+    [LIR_OPCODE_BGT] = "jg",
+    [LIR_OPCODE_BGE] = "jge",
+    [LIR_OPCODE_BULT] = "jb",
+    [LIR_OPCODE_BULE] = "jbe",
+    [LIR_OPCODE_BUGT] = "ja",
+    [LIR_OPCODE_BUGE] = "jae",
+    [LIR_OPCODE_BEE] = "je",
+    [LIR_OPCODE_BNE] = "jne",
 };
 
 static char *asm_bcc_float_trans[] = {
-        [LIR_OPCODE_BLT] = "jb",
-        [LIR_OPCODE_BLE] = "jbe",
-        [LIR_OPCODE_BGT] = "ja",
-        [LIR_OPCODE_BGE] = "jae",
-        [LIR_OPCODE_BEE] = "je",
-        [LIR_OPCODE_BNE] = "jne",
+    [LIR_OPCODE_BLT] = "jb",
+    [LIR_OPCODE_BLE] = "jbe",
+    [LIR_OPCODE_BGT] = "ja",
+    [LIR_OPCODE_BGE] = "jae",
+    [LIR_OPCODE_BEE] = "je",
+    [LIR_OPCODE_BNE] = "jne",
 };
 
 static slice_t *amd64_native_block(closure_t *c, basic_block_t *block);
@@ -305,8 +305,8 @@ static slice_t *amd64_native_bal(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_clv(closure_t *c, lir_op_t *op) {
     lir_operand_t *output = op->output;
     assert(output->assert_type == LIR_OPERAND_REG ||
-           output->assert_type == LIR_OPERAND_STACK ||
-           output->assert_type == LIR_OPERAND_INDIRECT_ADDR);
+        output->assert_type == LIR_OPERAND_STACK ||
+        output->assert_type == LIR_OPERAND_INDIRECT_ADDR);
     assert(output);
 
     slice_t *operations = slice_new();
@@ -1079,14 +1079,17 @@ static slice_t *amd64_native_fn_end(closure_t *c, lir_op_t *op) {
         operations = amd64_native_return(c, op);
     }
 
-    // assist preempt label
-    char *preempt_ident = local_sym_with_fn(c, ".preempt");
-    slice_push(operations, AMD64_INST("label", AMD64_SYMBOL(preempt_ident, true)));
-    slice_push(operations, AMD64_INST("call", AMD64_SYMBOL(ASSIST_PREEMPT_YIELD_IDENT, false)));
+    if (!c->fndef->is_fx) {
+        // assist preempt label
+        char *preempt_ident = local_sym_with_fn(c, ".preempt");
+        slice_push(operations, AMD64_INST("label", AMD64_SYMBOL(preempt_ident, true)));
+        slice_push(operations, AMD64_INST("call", AMD64_SYMBOL(ASSIST_PREEMPT_YIELD_IDENT, false)));
 
 
-    char *safepoint_ident = local_sym_with_fn(c, ".sp.end");
-    slice_push(operations, AMD64_INST("jmp", AMD64_SYMBOL(safepoint_ident, true)));
+        char *safepoint_ident = local_sym_with_fn(c, ".sp.end");
+        slice_push(operations, AMD64_INST("jmp", AMD64_SYMBOL(safepoint_ident, true)));
+    }
+
 
     return operations;
 }
@@ -1178,75 +1181,75 @@ static slice_t *amd64_native_safepoint(closure_t *c, lir_op_t *op) {
 
 
 amd64_native_fn amd64_native_table[] = {
-        [LIR_OPCODE_CLR] = amd64_native_clr,
-        [LIR_OPCODE_CLV] = amd64_native_clv,
-        [LIR_OPCODE_NOP] = amd64_native_nop,
-        [LIR_OPCODE_CALL] = amd64_native_call,
-        [LIR_OPCODE_RT_CALL] = amd64_native_call,
-        [LIR_OPCODE_LABEL] = amd64_native_label,
-        [LIR_OPCODE_PUSH] = amd64_native_push,
-        [LIR_OPCODE_RETURN] = amd64_native_return,
-        [LIR_OPCODE_RET] = amd64_native_nop,
-        [LIR_OPCODE_BEE] = amd64_native_bcc,
-        [LIR_OPCODE_BNE] = amd64_native_bcc,
-        [LIR_OPCODE_BLT] = amd64_native_bcc,
-        [LIR_OPCODE_BLE] = amd64_native_bcc,
-        [LIR_OPCODE_BGT] = amd64_native_bcc,
-        [LIR_OPCODE_BGE] = amd64_native_bcc,
-        [LIR_OPCODE_BULT] = amd64_native_bcc,
-        [LIR_OPCODE_BULE] = amd64_native_bcc,
-        [LIR_OPCODE_BUGT] = amd64_native_bcc,
-        [LIR_OPCODE_BUGE] = amd64_native_bcc,
-        [LIR_OPCODE_BAL] = amd64_native_bal,
+    [LIR_OPCODE_CLR] = amd64_native_clr,
+    [LIR_OPCODE_CLV] = amd64_native_clv,
+    [LIR_OPCODE_NOP] = amd64_native_nop,
+    [LIR_OPCODE_CALL] = amd64_native_call,
+    [LIR_OPCODE_RT_CALL] = amd64_native_call,
+    [LIR_OPCODE_LABEL] = amd64_native_label,
+    [LIR_OPCODE_PUSH] = amd64_native_push,
+    [LIR_OPCODE_RETURN] = amd64_native_return,
+    [LIR_OPCODE_RET] = amd64_native_nop,
+    [LIR_OPCODE_BEE] = amd64_native_bcc,
+    [LIR_OPCODE_BNE] = amd64_native_bcc,
+    [LIR_OPCODE_BLT] = amd64_native_bcc,
+    [LIR_OPCODE_BLE] = amd64_native_bcc,
+    [LIR_OPCODE_BGT] = amd64_native_bcc,
+    [LIR_OPCODE_BGE] = amd64_native_bcc,
+    [LIR_OPCODE_BULT] = amd64_native_bcc,
+    [LIR_OPCODE_BULE] = amd64_native_bcc,
+    [LIR_OPCODE_BUGT] = amd64_native_bcc,
+    [LIR_OPCODE_BUGE] = amd64_native_bcc,
+    [LIR_OPCODE_BAL] = amd64_native_bal,
 
-        // 类型扩展
-        [LIR_OPCODE_UEXT] = amd64_native_zext,
-        [LIR_OPCODE_SEXT] = amd64_native_sext,
-        [LIR_OPCODE_TRUNC] = amd64_native_trunc,
-        [LIR_OPCODE_FTRUNC] = amd64_native_ftrunc,
-        [LIR_OPCODE_FEXT] = amd64_native_fext,
-        [LIR_OPCODE_FTOSI] = amd64_native_ftosi,
-        [LIR_OPCODE_FTOUI] = amd64_native_ftoui,
-        [LIR_OPCODE_SITOF] = amd64_native_sitof,
-        [LIR_OPCODE_UITOF] = amd64_native_uitof,
+    // 类型扩展
+    [LIR_OPCODE_UEXT] = amd64_native_zext,
+    [LIR_OPCODE_SEXT] = amd64_native_sext,
+    [LIR_OPCODE_TRUNC] = amd64_native_trunc,
+    [LIR_OPCODE_FTRUNC] = amd64_native_ftrunc,
+    [LIR_OPCODE_FEXT] = amd64_native_fext,
+    [LIR_OPCODE_FTOSI] = amd64_native_ftosi,
+    [LIR_OPCODE_FTOUI] = amd64_native_ftoui,
+    [LIR_OPCODE_SITOF] = amd64_native_sitof,
+    [LIR_OPCODE_UITOF] = amd64_native_uitof,
 
-        [LIR_OPCODE_SAFEPOINT] = amd64_native_safepoint,
+    [LIR_OPCODE_SAFEPOINT] = amd64_native_safepoint,
 
-        // 一元运算符
-        [LIR_OPCODE_NEG] = amd64_native_neg,
+    // 一元运算符
+    [LIR_OPCODE_NEG] = amd64_native_neg,
 
-        // 位运算
-        [LIR_OPCODE_XOR] = amd64_native_xor,
-        [LIR_OPCODE_NOT] = amd64_native_not,
-        [LIR_OPCODE_OR] = amd64_native_or,
-        [LIR_OPCODE_AND] = amd64_native_and,
-        [LIR_OPCODE_USHR] = amd64_native_shift,
-        [LIR_OPCODE_SSHR] = amd64_native_shift,
-        [LIR_OPCODE_USHL] = amd64_native_shift,
+    // 位运算
+    [LIR_OPCODE_XOR] = amd64_native_xor,
+    [LIR_OPCODE_NOT] = amd64_native_not,
+    [LIR_OPCODE_OR] = amd64_native_or,
+    [LIR_OPCODE_AND] = amd64_native_and,
+    [LIR_OPCODE_USHR] = amd64_native_shift,
+    [LIR_OPCODE_SSHR] = amd64_native_shift,
+    [LIR_OPCODE_USHL] = amd64_native_shift,
 
-        // 算数运算
-        [LIR_OPCODE_ADD] = amd64_native_add,
-        [LIR_OPCODE_SUB] = amd64_native_sub,
-        [LIR_OPCODE_UDIV] = amd64_native_div,
-        [LIR_OPCODE_SDIV] = amd64_native_div,
-        [LIR_OPCODE_MUL] = amd64_native_mul,
-        // 逻辑相关运算符
-        [LIR_OPCODE_SGT] = amd64_native_scc,
-        [LIR_OPCODE_SGE] = amd64_native_scc,
-        [LIR_OPCODE_SLT] = amd64_native_scc,
-        [LIR_OPCODE_SLE] = amd64_native_scc,
-        [LIR_OPCODE_SEE] = amd64_native_scc,
-        [LIR_OPCODE_SNE] = amd64_native_scc,
+    // 算数运算
+    [LIR_OPCODE_ADD] = amd64_native_add,
+    [LIR_OPCODE_SUB] = amd64_native_sub,
+    [LIR_OPCODE_UDIV] = amd64_native_div,
+    [LIR_OPCODE_SDIV] = amd64_native_div,
+    [LIR_OPCODE_MUL] = amd64_native_mul,
+    // 逻辑相关运算符
+    [LIR_OPCODE_SGT] = amd64_native_scc,
+    [LIR_OPCODE_SGE] = amd64_native_scc,
+    [LIR_OPCODE_SLT] = amd64_native_scc,
+    [LIR_OPCODE_SLE] = amd64_native_scc,
+    [LIR_OPCODE_SEE] = amd64_native_scc,
+    [LIR_OPCODE_SNE] = amd64_native_scc,
 
-        [LIR_OPCODE_USLT] = amd64_native_scc,
-        [LIR_OPCODE_USLE] = amd64_native_scc,
-        [LIR_OPCODE_USGT] = amd64_native_scc,
-        [LIR_OPCODE_USGE] = amd64_native_scc,
+    [LIR_OPCODE_USLT] = amd64_native_scc,
+    [LIR_OPCODE_USLE] = amd64_native_scc,
+    [LIR_OPCODE_USGT] = amd64_native_scc,
+    [LIR_OPCODE_USGE] = amd64_native_scc,
 
-        [LIR_OPCODE_MOVE] = amd64_native_mov,
-        [LIR_OPCODE_LEA] = amd64_native_lea,
-        [LIR_OPCODE_FN_BEGIN] = amd64_native_fn_begin,
-        [LIR_OPCODE_FN_END] = amd64_native_fn_end,
+    [LIR_OPCODE_MOVE] = amd64_native_mov,
+    [LIR_OPCODE_LEA] = amd64_native_lea,
+    [LIR_OPCODE_FN_BEGIN] = amd64_native_fn_begin,
+    [LIR_OPCODE_FN_END] = amd64_native_fn_end,
 };
 
 slice_t *amd64_native_op(closure_t *c, lir_op_t *op) {

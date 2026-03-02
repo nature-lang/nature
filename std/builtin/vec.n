@@ -1,12 +1,49 @@
 import runtime
+import allocator.types.{allocatable}
+import allocator as ac
+import reflect.{vec_t}
+import libc
 
-fn vec<T>.new(T value, int len):vec<T> {
+const VEC_DEFAULT_CAPACITY = 8
+
+fn vec<T>.new(T default_value, int len):vec<T> {
     int hash = @reflect_hash(vec<T>)
     int element_hash = @reflect_hash(T)
-    return runtime.vec_new<T>(hash, element_hash, len, &value as anyptr) catch e {
+    return runtime.vec_new<T>(hash, element_hash, len, &default_value as anyptr) catch e {
         panic(e.msg())
         []
     }
+}
+
+fx vec<T>.alloc(allocatable a, T default_value, int len):vec<T> {
+    if len < 0 {
+        panic('len must be greater than 0')
+    }
+
+    int cap = len
+
+    var ap = ac.new<allocatable>(a)
+
+    var temp = vec_t{
+        data: 0,
+        length: len,
+        capacity: cap,
+        element_size: @sizeof(T),
+        hash: @reflect_hash(T),
+        allocator: ap as anyptr,
+    }
+
+    if len == 0 {
+        return temp as anyptr as vec<T>
+    }
+
+    temp.data = a.alloc(len * @sizeof(T))
+    var result = temp as anyptr as vec<T>
+    for i in 0..len {
+        result[i] = default_value
+    }
+
+    return result
 }
 
 fn vec<T>.cap_of(int cap):vec<T> {
@@ -18,10 +55,55 @@ fn vec<T>.cap_of(int cap):vec<T> {
     }
 }
 
-fn vec<T>.push(*self, T v) {
-    ptr<T> ref = &v
-    int element_hash = @reflect_hash(T)
-    return runtime.vec_push(self as anyptr, element_hash, ref as anyptr)
+fx vec<T>.grow(*self) {
+    ptr<vec_t> rv = self as anyptr as ptr<vec_t>
+    assert(rv.allocator > 0)
+
+    if rv.capacity > 0 {
+        rv.capacity *= 2
+    } else {
+        rv.capacity = VEC_DEFAULT_CAPACITY
+    }
+
+    anyptr old_data = rv.data
+    allocatable a = *(rv.allocator as ptr<allocatable>)
+    rv.data = a.alloc(rv.capacity * @sizeof(T))
+
+    if rv.length > 0 {
+        libc.memmove(rv.data, old_data, rv.length as u64 * @sizeof(T))
+    }
+    a.dealloc(old_data)
+}
+
+fx vec<T>.push(*self, T v) {
+    ptr<vec_t> rv = self as anyptr as ptr<vec_t>
+    if rv.allocator == 0 {
+        ptr<T> ref = &v
+        int element_hash = @reflect_hash(T)
+        return runtime.vec_push(self as anyptr, element_hash, ref as anyptr)
+    }
+
+    if rv.length == rv.capacity {
+        self.grow()
+    }
+
+    // check index and assign
+    var index = rv.length
+    rv.length += 1
+    var offset = (@sizeof(T) * index) as anyptr
+    anyptr p = rv.data + offset
+    libc.memmove(p, &v as anyptr, @sizeof(T))
+}
+
+fx vec<T>.deinit(*self) {
+    ptr<vec_t> rv = self as anyptr as ptr<vec_t>
+    if rv.allocator == 0 {
+        return
+    }
+
+    allocatable a = *(rv.allocator as ptr<allocatable>)
+    a.dealloc(rv.allocator)
+    a.dealloc(rv.data)
 }
 
 fn vec<T>.append(*self, vec<T> l2) {
@@ -44,11 +126,15 @@ fn vec<T>.concat(*self, vec<T> l2):vec<T> {
 #linkid rt_vec_copy
 fn vec<T>.copy(*self, vec<T> src):int
 
-#linkid rt_vec_length
-fn vec<T>.len(*self):int
+fx vec<T>.len(*self):int {
+    var rv = self as anyptr as ptr<vec_t>
+    return rv.length
+}
 
-#linkid rt_vec_capacity
-fn vec<T>.cap(*self):int
+fx vec<T>.cap(*self):int {
+    var rv = self as anyptr as ptr<vec_t>
+    return rv.capacity
+}
 
 #linkid rt_vec_ref
 fn vec<T>.ref(*self):anyptr

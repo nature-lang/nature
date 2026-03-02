@@ -2,6 +2,7 @@ use crate::analyzer::common::{AnalyzerError, AstFnDef, AstNode, ImportStmt, Pack
 use crate::analyzer::flow::Flow;
 use crate::analyzer::generics::Generics;
 use crate::analyzer::global_eval::GlobalEval;
+use crate::analyzer::interface::Interface;
 use crate::analyzer::lexer::{Lexer, Token};
 use crate::analyzer::semantic::Semantic;
 use crate::analyzer::symbol::{NodeId, SymbolTable};
@@ -394,6 +395,16 @@ impl Project {
             let symbol_table = self.symbol_table.lock().unwrap();
             let m = &mut module_db[index];
             Generics::new(m, &symbol_table).analyze();
+        }
+
+        // interface pass
+        // keep compiler order: after generics, validate typedef impl interfaces early
+        for index in module_indexes.clone() {
+            let mut module_db = self.module_db.lock().unwrap();
+            let mut symbol_table = self.symbol_table.lock().unwrap();
+            let m = &mut module_db[index];
+            let errors = Interface::new(m, &mut symbol_table).analyze();
+            m.analyzer_errors.extend(errors);
         }
 
         // all pre infer

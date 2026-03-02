@@ -292,11 +292,15 @@ pub enum TokenType {
     As,
     #[strum(serialize = "fn")]
     Fn,
+    #[strum(serialize = "fx")]
+    Fx,
     #[strum(serialize = "import")]
     Import,
 
     #[strum(serialize = "return")]
     Return,
+    #[strum(serialize = "defer")]
+    Defer,
 
     #[strum(serialize = "interface")]
     Interface,
@@ -412,11 +416,13 @@ impl Token {
             | TokenType::Break
             | TokenType::Continue
             | TokenType::Return
+            | TokenType::Defer
             | TokenType::Let
             | TokenType::Var
             | TokenType::Const
             | TokenType::Test
             | TokenType::Fn
+            | TokenType::Fx
             | TokenType::Import
             | TokenType::True
             | TokenType::False
@@ -556,6 +562,7 @@ impl Lexer {
             "false" => TokenType::False,
             "float" => TokenType::Float,
             "fn" => TokenType::Fn,
+            "fx" => TokenType::Fx,
             "for" => TokenType::For,
             "go" => TokenType::Go,
             "if" => TokenType::If,
@@ -570,6 +577,7 @@ impl Lexer {
             // "new" => TokenType::New, // new 可用于关键字
             "null" => TokenType::Null,
             "return" => TokenType::Return,
+            "defer" => TokenType::Defer,
             // "set" => TokenType::Set,
             "string" => TokenType::String,
             "struct" => TokenType::Struct,

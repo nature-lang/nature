@@ -1,21 +1,13 @@
-// type fn_t = anyptr
-
-// type all_t = anyptr
-
-// type integer_t = int
-
-// type floater_t = float
-
 type nullable<T> = T?
 
 #linkid print
-fn print(...[any] args)
+fx print(...[any] args)
 
 #linkid println
-fn println(...[any] args)
+fx println(...[any] args)
 
 #linkid rt_panic
-fn panic(string msg)
+fx panic(string msg)
 
 #linkid rt_assert
-fn assert(bool cond)
+fx assert(bool cond)

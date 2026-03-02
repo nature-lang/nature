@@ -27,7 +27,7 @@ fn main() {
 }
 
 --- output.txt
-56
+64
 3387576668
 19
 0
@@ -38,7 +38,7 @@ a 3332055654 0
 b 3365180733 8
 1 3365180733 2 0
 c 398550328 16
-40 398550328 13 0
+48 398550328 13 0
 
 === test_nesting
 --- main.n
@@ -68,7 +68,7 @@ fn main() {
 
     var clothing_fields = t.fields[2]
     var clothing_type = reflect.typeof_hash(clothing_fields.hash)
-    assert(clothing_type.size == 80)
+    assert(clothing_type.size == 96)
     assert(clothing_type.kind == reflect.STRUCT)
 
     for field in clothing_type.fields {
@@ -79,15 +79,15 @@ fn main() {
 }
 
 --- output.txt
-136
+160
 3387576668
 19
 0
 4
 398550328
-40 398550328 13 0
+48 398550328 13 0
 398550328
-40 398550328 13 0
+48 398550328 13 0
 
 
 === test_basic_type
@@ -140,7 +140,7 @@ fn main() {
 1
 2
 0
-40
+48
 13
 0
 
@@ -163,7 +163,7 @@ fn main() {
 }
 
 --- output.txt
-40
+48
 14
 1
 4
@@ -226,10 +226,10 @@ fn main() {
 56
 16
 2
-40
+48
 13
 0
-40
+48
 14
 1
 
@@ -259,7 +259,7 @@ fn main() {
 40
 17
 1
-40
+48
 13
 0
 
@@ -282,7 +282,7 @@ fn main() {
 }
 
 --- output.txt
-152
+168
 18
 9
 8 3332055654 9 0
@@ -291,8 +291,8 @@ fn main() {
 1 3365180733 2 0
 1 3365180733 2 0
 1 3365180733 2 0
-40 398550328 13 0
-40 3931237662 14 1
+48 398550328 13 0
+48 3931237662 14 1
 40 718442705 17 1
 
 === test_reflect_ptr
