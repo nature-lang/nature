@@ -1,3 +1,9 @@
+//! Project state: module database, symbol table, and multi-phase build pipeline.
+//!
+//! A [`Project`] represents a single workspace root.  It owns the full
+//! compilation state: all parsed modules, the cross-module symbol table, and
+//! the workspace-wide symbol index.
+
 use crate::analyzer::common::{AnalyzerError, AstFnDef, AstNode, ImportStmt, PackageConfig, Stmt};
 use crate::analyzer::flow::Flow;
 use crate::analyzer::generics::Generics;
@@ -10,49 +16,67 @@ use crate::analyzer::typesys::Typesys;
 use crate::analyzer::workspace_index::WorkspaceIndex;
 use crate::analyzer::{analyze_imports, register_global_symbol};
 use crate::package::parse_package;
-use log::debug;
+use log::{debug, error};
 use ropey::Rope;
 use std::collections::{HashMap, HashSet};
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
+/// Default path to the Nature standard library root.
 pub const DEFAULT_NATURE_ROOT: &str = "/usr/local/nature";
-// pub const DEFAULT_NATURE_ROOT: &str = "/Users/weiwenhao/Code/nature";
 
-// 单个文件称为 module, package 通常是包含 package.toml 的多级目录
+// ─── Module ─────────────────────────────────────────────────────────────────────
+
+/// A single compiled `.n` source file.
 #[derive(Debug, Clone)]
 pub struct Module {
     pub index: usize,
     pub ident: String,
-    pub source: String, //  源码内容
+    /// Full source text.
+    pub source: String,
     pub rope: Rope,
-    pub path: String, // 文件 路径
-    pub dir: String,  //  文件 所在目录
+    /// Absolute file path.
+    pub path: String,
+    /// Parent directory.
+    pub dir: String,
+    /// Lexer tokens.
     pub token_db: Vec<Token>,
     pub token_indexes: Vec<usize>,
+    /// Semantic (resolved) tokens for semantic-token requests.
     pub sem_token_db: Vec<Token>,
+    /// Top-level statements (AST).
     pub stmts: Vec<Box<Stmt>>,
     pub global_vardefs: Vec<AstNode>,
     pub global_fndefs: Vec<Arc<Mutex<AstFnDef>>>,
-    pub all_fndefs: Vec<Arc<Mutex<AstFnDef>>>, // 包含 global 和 local fn def
+    /// All function definitions (global + local).
+    pub all_fndefs: Vec<Arc<Mutex<AstFnDef>>>,
+    /// Errors collected during analysis.
     pub analyzer_errors: Vec<AnalyzerError>,
-
-    pub scope_id: NodeId, // 当前 module 对应的 scope
-
-    pub references: Vec<usize>,        // 哪些模块依赖于当前模块
-    pub dependencies: Vec<ImportStmt>, // 当前模块依赖 哪些模块
+    /// Scope id for this module in the symbol table.
+    pub scope_id: NodeId,
+    /// Modules that depend on this one (reverse deps).
+    pub references: Vec<usize>,
+    /// Modules this one imports (forward deps).
+    pub dependencies: Vec<ImportStmt>,
 }
 
 impl Module {
-    pub fn new(ident: String, source: String, path: String, index: usize, scope_id: NodeId) -> Self {
-        // 计算 module ident, 和 analyze_import 中的 import.module_ident 需要采取相同的策略
+    pub fn new(
+        ident: String,
+        source: String,
+        path: String,
+        index: usize,
+        scope_id: NodeId,
+    ) -> Self {
+        let dir = Path::new(&path)
+            .parent()
+            .and_then(|p| p.to_str())
+            .unwrap_or("")
+            .to_string();
+        let rope = Rope::from_str(&source);
 
-        let dir = Path::new(&path).parent().and_then(|p| p.to_str()).unwrap_or("").to_string();
-
-        let rope = ropey::Rope::from_str(&source);
-
-        // create module scope
         Self {
             index,
             ident,
@@ -74,13 +98,11 @@ impl Module {
         }
     }
 
+    /// Check if the on-disk source differs from the cached source.
     pub fn need_rebuild(&self) -> bool {
-        // 读取文件最新内容
-        if let Ok(content) = std::fs::read_to_string(&self.path) {
-            // 如果内容发生变化，需要重新构建
-            return content != self.source;
-        }
-        false
+        std::fs::read_to_string(&self.path)
+            .map(|content| content != self.source)
+            .unwrap_or(false)
     }
 }
 
@@ -89,10 +111,10 @@ impl Default for Module {
         Self {
             scope_id: 0,
             index: 0,
-            ident: "".to_string(),
-            source: "".to_string(),
-            path: "".to_string(),
-            dir: "".to_string(),
+            ident: String::new(),
+            source: String::new(),
+            path: String::new(),
+            dir: String::new(),
             references: Vec::new(),
             dependencies: Vec::new(),
             token_db: Vec::new(),
@@ -108,62 +130,72 @@ impl Default for Module {
     }
 }
 
+// ─── Queue ──────────────────────────────────────────────────────────────────────
+
+/// An item in the rebuild queue.
 #[derive(Debug, Clone)]
 pub struct QueueItem {
     pub path: String,
-    pub notify: Option<String>, //  编译完成后需要通知的 module
+    /// If set, the module at this path should be notified after build completes.
+    pub notify: Option<String>,
 }
 
+// ─── Project ────────────────────────────────────────────────────────────────────
+
+/// Owns the full analysis state for a workspace root.
 #[derive(Debug, Clone)]
 pub struct Project {
+    /// Path to the Nature standard library.
     pub nature_root: String,
+    /// Workspace root path.
     pub root: String,
-    pub module_db: Arc<Mutex<Vec<Module>>>,                 // key = uri, 记录所有已经编译的 module
-    pub module_handled: Arc<Mutex<HashMap<String, usize>>>, // key = path, 记录所有已经编译的 module, usize 指向 module db
-    // queue 中的每一个 module 都可以视为 main.n 来编译，主要是由于用户打开文件 A import B or C 产生的 B 和 C 注册到 queue 中进行处理
+    /// All compiled modules.
+    pub module_db: Arc<Mutex<Vec<Module>>>,
+    /// path → index into `module_db`.
+    pub module_handled: Arc<Mutex<HashMap<String, usize>>>,
+    /// Async rebuild queue for dependent modules.
     pub queue: Arc<Mutex<Vec<QueueItem>>>,
-    pub package_config: Arc<Mutex<Option<PackageConfig>>>, // 当前 project 如果包含 package.toml, 则可以解析出 package_config 等信息，import 需要借助该信息进行解析
+    /// Parsed `package.toml`, if present.
+    pub package_config: Arc<Mutex<Option<PackageConfig>>>,
+    /// Cross-module symbol table.
     pub symbol_table: Arc<Mutex<SymbolTable>>,
+    /// Lightweight workspace-wide symbol index (for workspace/symbol search).
     pub workspace_index: Arc<Mutex<WorkspaceIndex>>,
-    /// True while a build is in progress.  Read-only handlers should return
-    /// cached / empty results instead of reading partially-analyzed data.
+    /// Guard: true while a build is in progress.
     pub is_building: Arc<AtomicBool>,
 }
 
 impl Project {
+    /// Create a new project for the given workspace root.
+    ///
+    /// Loads builtin modules from `$NATURE_ROOT/std/builtin/` and parses
+    /// `package.toml` if present.
     pub async fn new(project_root: String) -> Self {
-        // 1. check nature root by env
-        let nature_root = std::env::var("NATURE_ROOT").unwrap_or(DEFAULT_NATURE_ROOT.to_string());
+        let nature_root =
+            std::env::var("NATURE_ROOT").unwrap_or_else(|_| DEFAULT_NATURE_ROOT.to_string());
 
+        // Collect builtin .n files.
         let mut builtin_list: Vec<String> = Vec::new();
-
-        // 3. builtin package load by nature root std
-        let std_dir = Path::new(&nature_root).join("std");
-        let std_builtin_dir = std_dir.join("builtin");
-
-        // 加载 builtin 中的所有文件(.n 结尾)
-        let dirs = std::fs::read_dir(std_builtin_dir).unwrap();
-        for dir in dirs {
-            let dir_path = dir.unwrap().path();
-            if !dir_path.is_file() {
-                continue;
+        let std_builtin_dir = Path::new(&nature_root).join("std").join("builtin");
+        if let Ok(entries) = std::fs::read_dir(&std_builtin_dir) {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_file() && p.extension().map_or(false, |ext| ext == "n") {
+                    if let Some(s) = p.to_str() {
+                        builtin_list.push(s.to_string());
+                    }
+                }
             }
-
-            let file_name = dir_path.file_name().unwrap().to_str().unwrap();
-            if !file_name.ends_with(".n") {
-                continue;
-            }
-
-            // 将 完整文件路径加入到 await_queue 中,  进行异步解析
-            let file_path = dir_path.to_str().unwrap();
-
-            builtin_list.push(file_path.to_string());
         }
 
-        let package_path = Path::new(&project_root).join("package.toml").to_str().unwrap().to_string();
+        // Parse package.toml.
+        let package_path = Path::new(&project_root)
+            .join("package.toml")
+            .to_string_lossy()
+            .to_string();
         let package_config = match parse_package(&package_path) {
-            Ok(package_config) => Arc::new(Mutex::new(Some(package_config))),
-            Err(_e) => Arc::new(Mutex::new(None)),
+            Ok(cfg) => Arc::new(Mutex::new(Some(cfg))),
+            Err(_) => Arc::new(Mutex::new(None)),
         };
 
         let mut project = Self {
@@ -178,351 +210,352 @@ impl Project {
             is_building: Arc::new(AtomicBool::new(false)),
         };
 
-        // Scan workspace for symbol index (lightweight, no full analysis)
+        // Initial workspace scan.
         {
             let mut index = project.workspace_index.lock().unwrap();
             index.scan_workspace(&project_root, &nature_root);
         }
 
-        // handle builtin list
-        for file_path in builtin_list {
-            project.build(&file_path, "", None).await;
+        // Build builtins.
+        for path in builtin_list {
+            project.build(&path, "", None).await;
         }
 
-        return project;
+        project
     }
 
-    pub fn backend_handle_queue(&self) {
-        let mut self_clone = self.clone();
+    /// Spawn a background task that continuously drains the rebuild queue.
+    pub fn start_queue_worker(&self) {
+        let mut clone = self.clone();
         tokio::spawn(async move {
-            self_clone.handle_queue().await;
+            clone.run_queue().await;
         });
     }
 
-    pub async fn need_build(&self, item: &QueueItem) -> bool {
-        let module_handled = self.module_handled.lock().unwrap();
-        let index_option = module_handled.get(&item.path);
-        if let Some(index) = index_option {
-            let module_db = self.module_db.lock().unwrap();
-            let m = &module_db[*index];
-            return m.need_rebuild();
-        } else {
-            return true;
-        }
-    }
-
-    pub async fn handle_queue(&mut self) {
+    async fn run_queue(&mut self) {
         loop {
-            // 尝试从 await_queue 中获取一个 file, 当前语句结束之后，await_queue 会自动解锁
-            let item_option = self.queue.lock().unwrap().pop();
-            if item_option.is_none() {
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                continue;
+            let item = self.queue.lock().unwrap().pop();
+            match item {
+                Some(item) => {
+                    if self.needs_build(&item) {
+                        self.build(&item.path, "", None).await;
+                    }
+                }
+                None => {
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                }
             }
-
-            let item = item_option.unwrap();
-
-            if !self.need_build(&item).await {
-                continue;
-            }
-
-            // build
-            self.build(&item.path, "", None).await;
         }
     }
 
-    /**
-     * 当前 module 更新后，需要更新所有依赖了当前 module 的 module
-     */
+    fn needs_build(&self, item: &QueueItem) -> bool {
+        let handled = self.module_handled.lock().unwrap();
+        if let Some(&idx) = handled.get(&item.path) {
+            let db = self.module_db.lock().unwrap();
+            db[idx].need_rebuild()
+        } else {
+            true
+        }
+    }
+
+    /// Collect all modules that transitively depend on `index`.
     pub fn all_references(&self, index: usize) -> Vec<String> {
-        let mut handled: HashSet<usize> = HashSet::new();
-        let mut result: Vec<String> = Vec::new();
+        let mut handled = HashSet::new();
+        let mut result = Vec::new();
+        let mut worklist = vec![index];
 
-        let mut worklist: Vec<usize> = Vec::new();
-        worklist.push(index);
-
-        while let Some(current_index) = worklist.pop() {
-            // 如果已经处理过该模块，则跳过
-            if handled.contains(&current_index) {
+        while let Some(current) = worklist.pop() {
+            if !handled.insert(current) {
                 continue;
             }
-            // 标记该模块已处理
-            handled.insert(current_index);
-
-            let module_db = self.module_db.lock().unwrap();
-            let current_module = &module_db[current_index];
-
-            // 遍历所有引用当前模块的模块
-            for &ref_index in &current_module.references {
-                let ref_module = &module_db[ref_index];
-                result.push(ref_module.path.clone());
-
-                // 将引用模块加入工作列表，以便递归查找
-                worklist.push(ref_index);
+            let db = self.module_db.lock().unwrap();
+            if let Some(m) = db.get(current) {
+                for &ref_idx in &m.references {
+                    if let Some(ref_m) = db.get(ref_idx) {
+                        result.push(ref_m.path.clone());
+                        worklist.push(ref_idx);
+                    }
+                }
             }
         }
 
         result
     }
 
-    pub async fn build(&mut self, main_path: &str, module_ident: &str, content_option: Option<String>) -> usize {
+    // ── Build pipeline ──────────────────────────────────────────────────
+
+    /// Run the full build pipeline for a module and its transitive imports.
+    pub async fn build(
+        &mut self,
+        main_path: &str,
+        module_ident: &str,
+        content: Option<String>,
+    ) -> usize {
         self.is_building.store(true, Ordering::SeqCst);
-        let result = self.build_inner(main_path, module_ident, content_option).await;
+        let result = self.build_inner(main_path, module_ident, content).await;
         self.is_building.store(false, Ordering::SeqCst);
         result
     }
 
-    async fn build_inner(&mut self, main_path: &str, module_ident: &str, content_option: Option<String>) -> usize {
-        // 所有未编译的 import 模块, 都需要进行关联处理
+    async fn build_inner(
+        &mut self,
+        main_path: &str,
+        module_ident: &str,
+        content: Option<String>,
+    ) -> usize {
         let mut worklist: Vec<ImportStmt> = Vec::new();
         let mut handled: HashSet<String> = HashSet::new();
-        let mut module_indexes = Vec::new();
+        let mut module_indexes: Vec<usize> = Vec::new();
 
-        // 创建一个简单的 import 语句作为起始点
+        // Seed with the main module.
         let mut main_import = ImportStmt::default();
         main_import.full_path = main_path.to_string();
         main_import.module_ident = module_ident.to_string();
-
         worklist.push(main_import);
         handled.insert(main_path.to_string());
 
-        debug!("{} handle work list", main_path);
+        // ── Phase 1: Lex + Parse + collect imports ──────────────────────
+        debug!("{} processing worklist", main_path);
         while let Some(import_stmt) = worklist.pop() {
-            let module_handled = self.module_handled.lock().unwrap();
-            let index_option = module_handled.get(&import_stmt.full_path).copied();
-            drop(module_handled);
+            let index = {
+                let module_handled = self.module_handled.lock().unwrap();
+                let existing = module_handled.get(&import_stmt.full_path).copied();
+                drop(module_handled);
 
-            let index: usize = if let Some(i) = index_option {
-                // 如果 import module 已经存在 module 则不需要进行重复编译, main path module 则进行强制更新
-                if import_stmt.full_path == main_path {
-                    // 需要更新现有模块的内容(也就是当前文件)
-                    if let Some(ref content) = content_option {
-                        let mut module_db = self.module_db.lock().unwrap();
-                        let m = &mut module_db[i];
-                        m.source = content.clone();
-                        m.rope = ropey::Rope::from_str(&m.source);
+                if let Some(i) = existing {
+                    if import_stmt.full_path == main_path {
+                        // Update content of the main module.
+                        if let Some(ref c) = content {
+                            let mut db = self.module_db.lock().unwrap();
+                            let m = &mut db[i];
+                            m.source = c.clone();
+                            m.rope = Rope::from_str(&m.source);
+                        }
+                        i
+                    } else {
+                        continue; // already compiled
                     }
-                    i.clone()
                 } else {
-                    continue;
+                    // New module — read from disk.
+                    let Ok(file_content) = std::fs::read_to_string(&import_stmt.full_path) else {
+                        continue;
+                    };
+
+                    let mut mh = self.module_handled.lock().unwrap();
+                    let mut db = self.module_db.lock().unwrap();
+                    let idx = db.len();
+                    let scope_id = self
+                        .symbol_table
+                        .lock()
+                        .unwrap()
+                        .create_module_scope(import_stmt.module_ident.clone());
+                    db.push(Module::new(
+                        import_stmt.module_ident,
+                        file_content,
+                        import_stmt.full_path.clone(),
+                        idx,
+                        scope_id,
+                    ));
+                    mh.insert(import_stmt.full_path, idx);
+                    idx
                 }
-            } else {
-                let content_option = std::fs::read_to_string(import_stmt.full_path.clone());
-                if content_option.is_err() {
-                    continue;
-                }
-                let content = content_option.unwrap();
-
-                // push to module_db get index lock
-                let mut module_handled = self.module_handled.lock().unwrap();
-                let mut module_db = self.module_db.lock().unwrap();
-                let index = module_db.len();
-
-                // create module scope
-                let scope_id = self.symbol_table.lock().unwrap().create_module_scope(import_stmt.module_ident.clone());
-
-                let temp = Module::new(import_stmt.module_ident, content, import_stmt.full_path.to_string(), index, scope_id);
-                module_db.push(temp);
-
-                // set module_handled
-                module_handled.insert(import_stmt.full_path, index);
-                // unlock
-
-                index
             };
 
-            let mut module_db = self.module_db.lock().unwrap();
-            let m = &mut module_db[index];
+            let mut db = self.module_db.lock().unwrap();
+            let m = &mut db[index];
 
             debug!(
-                "build, m.index {}, m.path {}, module_dir {}, project root {}",
+                "build module #{} path={} dir={} root={}",
                 m.index, m.path, m.dir, self.root
             );
 
-            // clean module symbol table
-            self.symbol_table.lock().unwrap().clean_module_scope(m.ident.clone());
+            // Clean scope for re-analysis.
+            self.symbol_table
+                .lock()
+                .unwrap()
+                .clean_module_scope(m.ident.clone());
 
-            // - lexer
+            // Lex.
             let (token_db, token_indexes, lexer_errors) = Lexer::new(m.source.clone()).scan();
             m.token_db = token_db.clone();
             m.token_indexes = token_indexes.clone();
-            m.analyzer_errors = lexer_errors; // 清空 error 从 analyzer 起重新计算
+            m.analyzer_errors = lexer_errors;
 
-            // - parser
-            let (mut stmts, sem_token_db, syntax_errors) = Syntax::new(m.clone(), token_db, token_indexes).parser();
-            m.sem_token_db = sem_token_db.clone();
-            // m.stmts = stmts;
+            // Parse.
+            let (mut stmts, sem_token_db, syntax_errors) =
+                Syntax::new(m.clone(), token_db, token_indexes).parser();
+            m.sem_token_db = sem_token_db;
             m.analyzer_errors.extend(syntax_errors);
 
-            // collection all relation module
             module_indexes.push(index);
 
-            // analyzer global ast to symbol table
-            let mut symbol_table = self.symbol_table.lock().unwrap();
-            register_global_symbol(m, &mut symbol_table, &stmts);
-            drop(symbol_table);
+            // Register global symbols.
+            let mut st = self.symbol_table.lock().unwrap();
+            register_global_symbol(m, &mut st, &stmts);
+            drop(st);
 
-            // analyzer imports to worklist
+            // Resolve imports.
             let imports = analyze_imports(self.root.clone(), &self.package_config, m, &mut stmts);
             m.stmts = stmts;
 
             let mut filter_imports: Vec<ImportStmt> = Vec::new();
-
-            // import to worklist
             for import in imports {
-                // handle 重复进入表示 build module 发生了循环引用, 发送错误并跳过该 import 处理。
-                if handled.contains(&import.full_path) {
-                    // TODO 暂时不做处理
-                    // errors_push(
-                    //     m,
-                    //     AnalyzerError {
-                    //         start: import.start,
-                    //         end: import.end,
-                    //         message: format!("circular import"),
-                    //         is_warning: false,
-                    //     },
-                    // );
-
-                    debug!("circular import, will handle {}", import.full_path);
-                    // continue;
-                }
-
                 if import.full_path == main_path {
                     continue;
                 }
-
                 filter_imports.push(import.clone());
-                worklist.push(import.clone());
-                handled.insert(import.full_path.clone());
+                if !handled.contains(&import.full_path) {
+                    worklist.push(import.clone());
+                    handled.insert(import.full_path.clone());
+                }
             }
-            drop(module_db);
+            drop(db);
 
-            // to module dep, and call diff (add and remove)
-            self.update_module_dep(index, filter_imports);
+            self.update_module_deps(index, filter_imports);
         }
 
-        debug!("{} will semantic handle, module_indexes: {:?}", main_path, &module_indexes);
+        // ── Phase 2: Semantic analysis passes ───────────────────────────
+        debug!(
+            "{} semantic passes, modules: {:?}",
+            main_path, module_indexes
+        );
 
-        for index in module_indexes.clone() {
-            let mut module_db = self.module_db.lock().unwrap();
-            let mut symbol_table = self.symbol_table.lock().unwrap();
-            let m = &mut module_db[index];
+        for &idx in &module_indexes {
+            let mut db = self.module_db.lock().unwrap();
+            let mut st = self.symbol_table.lock().unwrap();
+            let m = &mut db[idx];
             m.all_fndefs = Vec::new();
-            Semantic::new(m, &mut symbol_table).analyze();
+            if let Err(e) = catch_unwind(AssertUnwindSafe(|| {
+                Semantic::new(m, &mut st).analyze();
+            })) {
+                error!("panic in semantic pass for module #{}: {:?}", idx, e);
+            }
         }
 
-        for index in module_indexes.clone() {
-            let mut module_db = self.module_db.lock().unwrap();
-            let symbol_table = self.symbol_table.lock().unwrap();
-            let m = &mut module_db[index];
-            Generics::new(m, &symbol_table).analyze();
+        for &idx in &module_indexes {
+            let mut db = self.module_db.lock().unwrap();
+            let st = self.symbol_table.lock().unwrap();
+            let m = &mut db[idx];
+            if let Err(e) = catch_unwind(AssertUnwindSafe(|| {
+                Generics::new(m, &st).analyze();
+            })) {
+                error!("panic in generics pass for module #{}: {:?}", idx, e);
+            }
         }
 
-        // all pre infer
-        for index in module_indexes.clone() {
-            let mut module_db = self.module_db.lock().unwrap();
-            let mut symbol_table = self.symbol_table.lock().unwrap();
-            let m = &mut module_db[index];
-            let errors = Typesys::new(&mut symbol_table, m).pre_infer();
-            m.analyzer_errors.extend(errors);
+        for &idx in &module_indexes {
+            let mut db = self.module_db.lock().unwrap();
+            let mut st = self.symbol_table.lock().unwrap();
+            let m = &mut db[idx];
+            match catch_unwind(AssertUnwindSafe(|| {
+                Typesys::new(&mut st, m).pre_infer()
+            })) {
+                Ok(errors) => m.analyzer_errors.extend(errors),
+                Err(e) => error!("panic in typesys pre_infer for module #{}: {:?}", idx, e),
+            }
         }
 
-        for index in module_indexes.clone() {
-            let mut module_db = self.module_db.lock().unwrap();
-            let mut symbol_table = self.symbol_table.lock().unwrap();
-            let m = &mut module_db[index];
-            let errors = GlobalEval::new(m, &mut symbol_table).analyze();
-            m.analyzer_errors.extend(errors);
+        for &idx in &module_indexes {
+            let mut db = self.module_db.lock().unwrap();
+            let mut st = self.symbol_table.lock().unwrap();
+            let m = &mut db[idx];
+            match catch_unwind(AssertUnwindSafe(|| {
+                GlobalEval::new(m, &mut st).analyze()
+            })) {
+                Ok(errors) => m.analyzer_errors.extend(errors),
+                Err(e) => error!("panic in global_eval for module #{}: {:?}", idx, e),
+            }
         }
 
-        for index in module_indexes.clone() {
-            let mut module_db = self.module_db.lock().unwrap();
-            let mut symbol_table = self.symbol_table.lock().unwrap();
-            let m = &mut module_db[index];
-            let mut errors = Typesys::new(&mut symbol_table, m).infer();
-            m.analyzer_errors.extend(errors);
-
-            // check returns
-            errors = Flow::new(m).analyze();
-            m.analyzer_errors.extend(errors);
+        for &idx in &module_indexes {
+            let mut db = self.module_db.lock().unwrap();
+            let mut st = self.symbol_table.lock().unwrap();
+            let m = &mut db[idx];
+            match catch_unwind(AssertUnwindSafe(|| {
+                let errors = Typesys::new(&mut st, m).infer();
+                let flow_errors = Flow::new(m).analyze();
+                (errors, flow_errors)
+            })) {
+                Ok((errors, flow_errors)) => {
+                    m.analyzer_errors.extend(errors);
+                    m.analyzer_errors.extend(flow_errors);
+                }
+                Err(e) => error!("panic in typesys infer/flow for module #{}: {:?}", idx, e),
+            }
         }
 
-        // handle all refers
-        let module_handled = self.module_handled.lock().unwrap();
-        let index_option = module_handled.get(main_path);
-        let main_index = match index_option {
-            Some(i) => i.clone(),
-            None => {
-                return 0;
+        // ── Phase 3: Queue dependent rebuilds ───────────────────────────
+        let main_index = {
+            let mh = self.module_handled.lock().unwrap();
+            match mh.get(main_path).copied() {
+                Some(i) => i,
+                None => return 0,
             }
         };
 
         let refers = self.all_references(main_index);
-
-        // refers push to queue
         for refer in refers {
-            debug!("{} handle to queue, refer {}", main_path, refer);
             if refer == main_path {
                 continue;
             }
-
+            debug!("{} queuing dependent: {}", main_path, refer);
             self.queue.lock().unwrap().push(QueueItem {
                 path: refer,
-                notify: Some(main_path.to_string()), // 当引用模块编译完成后，通知主模块重新编译(主模块必定已经注册完成，包含完整的 module 信息)
+                notify: Some(main_path.to_string()),
             });
         }
 
-        // Incrementally re-index the file that was just built
+        // Re-index the built file.
         {
-            let mut index = self.workspace_index.lock().unwrap();
-            // Force re-index by removing old entry and re-scanning
-            index.remove_file_symbols(main_path);
-            index.index_file(main_path, &self.root);
-            debug!("WorkspaceIndex: re-indexed file '{}'", main_path);
+            let mut ws = self.workspace_index.lock().unwrap();
+            ws.remove_file_symbols(main_path);
+            ws.index_file(main_path, &self.root);
+            debug!("workspace index: re-indexed {}", main_path);
         }
 
-        return main_index;
+        main_index
     }
 
-    /**
-     * 更新 module 的依赖, 尤其是反向依赖的 references 更新
-     */
-    pub fn update_module_dep(&mut self, module_index: usize, imports: Vec<ImportStmt>) {
-        // 当前模块依赖这些目标模块，这些目标模块的 refers 需要进行相应的更新
-        let mut dependency_indices = Vec::new();
-        {
-            let module_handled = self.module_handled.lock().unwrap();
-            for import in &imports {
-                if let Some(&index) = module_handled.get(&import.full_path) {
-                    dependency_indices.push(index);
-                }
+    /// Update forward/reverse dependency links for a module.
+    fn update_module_deps(&mut self, module_index: usize, imports: Vec<ImportStmt>) {
+        let dep_indices: Vec<usize> = {
+            let mh = self.module_handled.lock().unwrap();
+            imports
+                .iter()
+                .filter_map(|imp| mh.get(&imp.full_path).copied())
+                .collect()
+        };
+
+        let mut db = self.module_db.lock().unwrap();
+
+        // Remove stale reverse references.
+        let old_deps: HashSet<String> = db[module_index]
+            .dependencies
+            .iter()
+            .map(|d| d.full_path.clone())
+            .collect();
+        let new_deps: HashSet<String> = imports.iter().map(|d| d.full_path.clone()).collect();
+
+        for removed in old_deps.difference(&new_deps) {
+            if let Some(&dep_idx) = dep_indices
+                .iter()
+                .find(|&&i| db[i].path == *removed)
+            {
+                db[dep_idx].references.retain(|&x| x != module_index);
             }
         }
-        // 然后处理 module_db
-        let mut module_db = self.module_db.lock().unwrap();
-        let m = &mut module_db[module_index];
 
-        // 将当前的依赖转换为 HashSet
-        let old_deps: HashSet<String> = m.dependencies.iter().map(|dep| dep.full_path.clone()).collect();
-        let new_deps: HashSet<String> = imports.iter().map(|dep| dep.full_path.clone()).collect();
+        // Update forward deps.
+        db[module_index].dependencies = imports.clone();
 
-        // old deps 存在，但是 new deps 中删除的数据
-        for removed_dep in old_deps.difference(&new_deps) {
-            if let Some(dep_index) = dependency_indices.iter().find(|&&i| module_db[i].path == *removed_dep) {
-                let dep_module = &mut module_db[*dep_index];
-                dep_module.references.retain(|&x| x != module_index);
-            }
-        }
-
-        // 更新当前模块的依赖列表
-        module_db[module_index].dependencies = imports.clone();
-
-        // 添加反向引用关系
-        for import in imports {
-            if let Some(dep_index) = dependency_indices.iter().find(|&&i| module_db[i].path == import.full_path) {
-                let dep_module = &mut module_db[*dep_index];
-                if !dep_module.references.contains(&module_index) {
-                    dep_module.references.push(module_index);
+        // Add reverse references.
+        for import in &imports {
+            if let Some(&dep_idx) = dep_indices
+                .iter()
+                .find(|&&i| db[i].path == import.full_path)
+            {
+                if !db[dep_idx].references.contains(&module_index) {
+                    db[dep_idx].references.push(module_index);
                 }
             }
         }

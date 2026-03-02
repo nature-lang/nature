@@ -194,6 +194,33 @@ impl<'a> Syntax {
         self.token_db[self.token_indexes[self.current - 1]].semantic_token_type = semantic_token_type_index(token_type);
     }
 
+    /// Set the semantic token type for a token found by its char-offset position.
+    fn set_token_type_at_pos(&mut self, pos: usize, token_type: SemanticTokenType) {
+        let idx = semantic_token_type_index(token_type);
+        for token in self.token_db.iter_mut() {
+            if token.start == pos && token.token_type == TokenType::Ident {
+                token.semantic_token_type = idx;
+                return;
+            }
+        }
+    }
+
+    /// Reset semantic token types after speculative parsing (e.g. is_type_begin_stmt).
+    /// Speculative calls to parser_type() mark Ident tokens as TYPE/KEYWORD as a
+    /// side effect. This undoes those changes and restores the parser position so
+    /// the actual parse can re-set them correctly.
+    fn reset_speculative_tokens(&mut self, saved_pos: usize) {
+        let end_pos = self.current;
+        self.current = saved_pos;
+        let var_idx = semantic_token_type_index(SemanticTokenType::VARIABLE);
+        for i in saved_pos..end_pos.min(self.token_indexes.len()) {
+            let token_idx = self.token_indexes[i];
+            if self.token_db[token_idx].token_type == TokenType::Ident {
+                self.token_db[token_idx].semantic_token_type = var_idx;
+            }
+        }
+    }
+
     fn advance(&mut self) -> &Token {
         debug_assert!(self.current + 1 < self.token_indexes.len(), "Syntax::advance: current index out of range");
 
@@ -960,6 +987,7 @@ impl<'a> Syntax {
         let token = self.peek();
         // vec<type>
         if token.literal == "vec" {
+            self.set_current_token_type(SemanticTokenType::KEYWORD);
             self.must(TokenType::Ident)?;
             self.must(TokenType::LeftAngle)?;
             let element_type = self.parser_type()?;
@@ -972,6 +1000,7 @@ impl<'a> Syntax {
 
         // map<type,type>
         if token.literal == "map" {
+            self.set_current_token_type(SemanticTokenType::KEYWORD);
             self.must(TokenType::Ident)?;
             self.must(TokenType::LeftAngle)?;
             let key_type = self.parser_type()?;
@@ -986,6 +1015,7 @@ impl<'a> Syntax {
 
         // set<type>
         if token.literal == "set" {
+            self.set_current_token_type(SemanticTokenType::KEYWORD);
             self.must(TokenType::Ident)?;
             self.must(TokenType::LeftAngle)?;
             let element_type = self.parser_type()?;
@@ -998,6 +1028,7 @@ impl<'a> Syntax {
 
         // tup<type, type, ...>
         if token.literal == "tup" {
+            self.set_current_token_type(SemanticTokenType::KEYWORD);
             self.must(TokenType::Ident)?;
             self.must(TokenType::LeftAngle)?;
             let mut elements = Vec::new();
@@ -1125,7 +1156,13 @@ impl<'a> Syntax {
 
         // ident foo = 12
         if self.is(TokenType::Ident) {
-            self.set_current_token_type(SemanticTokenType::TYPE);
+            // Mark as TYPE by default; override to KEYWORD for context-sensitive keywords.
+            let is_type_keyword = matches!(self.peek().literal.as_str(), "ptr" | "ref");
+            if is_type_keyword {
+                self.set_current_token_type(SemanticTokenType::KEYWORD);
+            } else {
+                self.set_current_token_type(SemanticTokenType::TYPE);
+            }
             let first = self.must(TokenType::Ident)?.clone();
 
             // ------------- handle param
@@ -1667,13 +1704,13 @@ impl<'a> Syntax {
         // 尝试解析第一个类型
         if let Err(_) = self.parser_type() {
             // 类型解析存在错误
-            self.current = current_pos;
+            self.reset_speculative_tokens(current_pos);
             return false;
         }
 
         // 检查是否直接以 > 结束 (大多数情况)
         if self.is(TokenType::RightAngle) {
-            self.current = current_pos;
+            self.reset_speculative_tokens(current_pos);
             return true;
         }
 
@@ -1681,7 +1718,7 @@ impl<'a> Syntax {
             // 处理多个类型参数的情况
             loop {
                 if let Err(_) = self.parser_type() {
-                    self.current = current_pos;
+                    self.reset_speculative_tokens(current_pos);
                     return false;
                 }
 
@@ -1691,21 +1728,21 @@ impl<'a> Syntax {
             }
 
             if !self.is(TokenType::RightAngle) {
-                self.current = current_pos;
+                self.reset_speculative_tokens(current_pos);
                 return false;
             }
 
             // type args 后面不能紧跟 { 或 (, 这两者通常是 generics params
             if !self.next_is(1, TokenType::LeftCurly) && !self.next_is(1, TokenType::LeftParen) {
-                self.current = current_pos;
+                self.reset_speculative_tokens(current_pos);
                 return false;
             }
 
-            self.current = current_pos;
+            self.reset_speculative_tokens(current_pos);
             return true;
         }
 
-        self.current = current_pos;
+        self.reset_speculative_tokens(current_pos);
         return false;
     }
 
@@ -2117,6 +2154,11 @@ impl<'a> Syntax {
             return Ok(expr);
         }
 
+        // Mark the property token as PROPERTY by default.
+        // If this select_expr is the target of a call (e.g. `obj.method()`),
+        // parser_call_expr will override this to FUNCTION later.
+        self.set_current_token_type(SemanticTokenType::PROPERTY);
+
         let property_token = self.must(TokenType::Ident)?;
         expr.start = left.start;
         expr.node = AstNode::SelectExpr(left, property_token.literal.clone(), None);
@@ -2170,6 +2212,26 @@ impl<'a> Syntax {
     fn parser_call_expr(&mut self, left: Box<Expr>) -> Result<Box<Expr>, SyntaxError> {
         let mut expr = self.expr_new();
         expr.start = left.start;
+
+        // Mark the call target identifier as FUNCTION for semantic highlighting.
+        match &left.node {
+            AstNode::Ident(_, _) => {
+                // Simple call: `create(...)` → mark `create` as FUNCTION
+                self.set_token_type_at_pos(left.start, SemanticTokenType::FUNCTION);
+            }
+            AstNode::SelectExpr(_, key, _) if !key.is_empty() => {
+                // Method call: `obj.method(...)` → find the key token and mark it FUNCTION.
+                // The key token is the last Ident in the SelectExpr (ends at left.end).
+                let idx = semantic_token_type_index(SemanticTokenType::FUNCTION);
+                for token in self.token_db.iter_mut().rev() {
+                    if token.end == left.end && token.token_type == TokenType::Ident {
+                        token.semantic_token_type = idx;
+                        break;
+                    }
+                }
+            }
+            _ => {}
+        }
 
         let mut call = AstCall {
             return_type: Type::unknown(),
@@ -2285,8 +2347,8 @@ impl<'a> Syntax {
             }
         }
 
-        // 恢复解析位置
-        self.current = current_pos;
+        // Undo speculative semantic token changes and restore position
+        self.reset_speculative_tokens(current_pos);
 
         result
     }
@@ -2346,7 +2408,9 @@ impl<'a> Syntax {
             _ => {}
         }
 
-        self.current = current_pos;
+        // Undo speculative semantic token changes and restore position
+        self.reset_speculative_tokens(current_pos);
+
         result
     }
 
@@ -2854,6 +2918,7 @@ impl<'a> Syntax {
     */
     fn parser_new_expr(&mut self) -> Result<Box<Expr>, SyntaxError> {
         let mut expr = self.expr_new();
+        self.set_current_token_type(SemanticTokenType::KEYWORD);
         self.must(TokenType::Ident)?; // ident = new
 
         let t = self.parser_type()?;

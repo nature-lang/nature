@@ -1,556 +1,746 @@
-//! Go-to-definition, find references, prepare rename, rename, and shared scope/symbol helpers.
+//! Navigation request handlers: go-to-definition, find-all-references,
+//! go-to-type-definition, and go-to-implementation.
 
-use log::debug;
 use tower_lsp::lsp_types::*;
 
-use crate::utils::{extract_word_at_offset_rope, is_ident_char, offset_to_position};
+use crate::analyzer::common::Type;
+use crate::analyzer::symbol::{NodeId, Scope, ScopeKind, Symbol, SymbolKind, SymbolTable};
+use crate::project::{Module, Project};
+use crate::utils::{
+    extract_word_at_offset_rope, format_global_ident, is_ident_char, offset_to_position,
+    position_to_char_offset,
+};
 
 use super::Backend;
 
-impl Backend {
-    pub(crate) async fn handle_goto_definition(&self, params: GotoDefinitionParams) -> Option<GotoDefinitionResponse> {
-        let uri = params.text_document_position_params.text_document.uri;
-        let position = params.text_document_position_params.position;
+// ─── Handler wiring ─────────────────────────────────────────────────────────────
 
+impl Backend {
+    pub(crate) async fn handle_goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Option<GotoDefinitionResponse> {
+        let uri = &params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
         let file_path = uri.path();
+
+        let project = self.get_file_project(file_path)?;
+        let location = find_definition(&project, file_path, position)?;
+
+        Some(GotoDefinitionResponse::Scalar(location))
+    }
+
+    pub(crate) async fn handle_references(
+        &self,
+        params: ReferenceParams,
+    ) -> Option<Vec<Location>> {
+        let uri = &params.text_document_position.text_document.uri;
+        let position = params.text_document_position.position;
+        let file_path = uri.path();
+
         let project = self.get_file_project(file_path)?;
 
-        if project.is_building.load(std::sync::atomic::Ordering::SeqCst) {
-            return None;
+        find_references(&project, file_path, position, params.context.include_declaration)
+    }
+
+    pub(crate) async fn handle_goto_type_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Option<GotoDefinitionResponse> {
+        let uri = &params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+        let file_path = uri.path();
+
+        let project = self.get_file_project(file_path)?;
+        let location = find_type_definition(&project, file_path, position)?;
+
+        Some(GotoDefinitionResponse::Scalar(location))
+    }
+
+    pub(crate) async fn handle_goto_implementation(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Option<GotoDefinitionResponse> {
+        let uri = &params.text_document_position_params.text_document.uri;
+        let position = params.text_document_position_params.position;
+        let file_path = uri.path();
+
+        let project = self.get_file_project(file_path)?;
+        let locations = find_implementations(&project, file_path, position)?;
+
+        if locations.len() == 1 {
+            Some(GotoDefinitionResponse::Scalar(locations.into_iter().next().unwrap()))
+        } else {
+            Some(GotoDefinitionResponse::Array(locations))
+        }
+    }
+}
+
+// ─── Go to definition ───────────────────────────────────────────────────────────
+
+/// Resolve the definition location for the symbol under the cursor.
+fn find_definition(project: &Project, file_path: &str, position: Position) -> Option<Location> {
+    let cursor = resolve_cursor(project, file_path, position)?;
+    let symbol = resolve_symbol(project, &cursor)?;
+
+    symbol_to_location(project, &symbol)
+}
+
+// ─── Find all references ────────────────────────────────────────────────────────
+
+/// Collect every location that references the same symbol as the one under the cursor.
+fn find_references(
+    project: &Project,
+    file_path: &str,
+    position: Position,
+    include_declaration: bool,
+) -> Option<Vec<Location>> {
+    let cursor = resolve_cursor(project, file_path, position)?;
+    let target = resolve_symbol(project, &cursor)?;
+    let def_offset = symbol_def_range(&target.kind);
+
+    let db = project.module_db.lock().ok()?;
+    let st = project.symbol_table.lock().ok()?;
+
+    let mut locations: Vec<Location> = Vec::new();
+
+    for module in db.iter() {
+        let uri = match Url::from_file_path(&module.path) {
+            Ok(u) => u,
+            Err(_) => continue,
+        };
+
+        collect_references_in_module(
+            &st,
+            module,
+            &target,
+            def_offset,
+            include_declaration,
+            &uri,
+            &mut locations,
+        );
+    }
+
+    if locations.is_empty() {
+        return None;
+    }
+
+    Some(locations)
+}
+
+/// Scan a single module's `token_db` for tokens that resolve to the same symbol.
+fn collect_references_in_module(
+    st: &SymbolTable,
+    module: &Module,
+    target: &ResolvedSymbol,
+    def_offset: (usize, usize),
+    include_declaration: bool,
+    uri: &Url,
+    locations: &mut Vec<Location>,
+) {
+    let raw_name = target.raw_name();
+
+    for token in &module.token_db {
+        if token.literal != raw_name {
+            continue;
         }
 
-        let module_index = {
-            let module_handled = project.module_handled.lock().ok()?;
-            module_handled.get(file_path)?.clone()
-        };
-
-        let module_db = project.module_db.lock().ok()?;
-        let module = module_db.get(module_index)?;
-
-        let live_doc = self.documents.get(file_path);
-        let rope = match &live_doc {
-            Some(r) => r.value(),
-            None => &module.rope,
-        };
-        let line_char = rope.try_line_to_char(position.line as usize).ok()?;
-        let char_offset = line_char + position.character as usize;
-
-        let (word, word_start, _) = extract_word_at_offset_rope(rope, char_offset)?;
-
-        debug!("goto_definition at offset {}, word: '{}'", char_offset, word);
-
-        let symbol_table = project.symbol_table.lock().ok()?;
-        let current_scope_id = find_innermost_scope(&symbol_table, module.scope_id, char_offset);
-
-        // Check if this is a method/field access: receiver.method
-        // If there's a dot before the word, prioritize method resolution so that
-        // e.g. `myApp.start()` resolves to `fn app.start()` instead of an unrelated
-        // symbol named `start`.
-        if word_start > 0 {
-            let ch_before = rope.char(word_start - 1);
-            if ch_before == '.' && word_start >= 2 {
-                // Extract the receiver name before the dot
-                if let Some((receiver, _, _)) = extract_word_at_offset_rope(rope, word_start - 2) {
-                    debug!("goto_definition: detected method call {}.{}", receiver, word);
-                    if let Some(result) = resolve_method_definition(
-                        &symbol_table, module, &receiver, &word, current_scope_id, &module_db,
-                    ) {
-                        return Some(result);
-                    }
-                    // Method resolution failed — fall through to normal resolution
-                }
+        // Skip the declaration site unless requested.
+        if !include_declaration && module.path == target.module_path {
+            if token.start == def_offset.0 {
+                continue;
             }
         }
 
-        // Normal resolution (local, global, import, selective import)
-        if let Some(result) = resolve_definition_location(&symbol_table, module, &word, current_scope_id, &module_db) {
-            return Some(result);
+        let scope_id = find_scope_at_offset(st, module.scope_id, token.start);
+        if !token_resolves_to_same_symbol(st, &token.literal, scope_id, module, target) {
+            continue;
         }
 
-        None
+        let Some(start) = offset_to_position(token.start, &module.rope) else {
+            continue;
+        };
+        let Some(end) = offset_to_position(token.end, &module.rope) else {
+            continue;
+        };
+
+        locations.push(Location {
+            uri: uri.clone(),
+            range: Range { start, end },
+        });
+    }
+}
+
+/// Check whether `ident` in `scope_id` resolves to the same symbol as `target`.
+fn token_resolves_to_same_symbol(
+    st: &SymbolTable,
+    ident: &str,
+    scope_id: NodeId,
+    module: &Module,
+    target: &ResolvedSymbol,
+) -> bool {
+    // Local/scoped lookup.
+    if let Some(id) = st.lookup_symbol(ident, scope_id) {
+        return id == target.symbol_id;
     }
 
-    pub(crate) async fn handle_references(&self, params: ReferenceParams) -> Option<Vec<Location>> {
-        let uri = params.text_document_position.text_document.uri;
-        let position = params.text_document_position.position;
-
-        let file_path = uri.path();
-        let project = self.get_file_project(file_path)?;
-
-        if project.is_building.load(std::sync::atomic::Ordering::SeqCst) {
-            return None;
-        }
-
-        let module_index = {
-            let module_handled = project.module_handled.lock().ok()?;
-            module_handled.get(file_path)?.clone()
-        };
-
-        let module_db = project.module_db.lock().ok()?;
-        let module = module_db.get(module_index)?;
-
-        let live_doc = self.documents.get(file_path);
-        let rope = match &live_doc {
-            Some(r) => r.value(),
-            None => &module.rope,
-        };
-        let line_char = rope.try_line_to_char(position.line as usize).ok()?;
-        let char_offset = line_char + position.character as usize;
-
-        let (word, _, _) = extract_word_at_offset_rope(rope, char_offset)?;
-
-        debug!("find_references at offset {}, word: '{}'", char_offset, word);
-
-        let symbol_table = project.symbol_table.lock().ok()?;
-        let current_scope_id = find_innermost_scope(&symbol_table, module.scope_id, char_offset);
-
-        let target_symbol_id = resolve_target_symbol_id(&symbol_table, module, &word, current_scope_id)?;
-
-        let mut results = Vec::new();
-        for m in module_db.iter() {
-            let m_text = m.rope.to_string();
-            collect_references_in_text(
-                &m_text, &word, &m.rope, &m.path,
-                &symbol_table, m.scope_id, target_symbol_id,
-                &mut results,
-            );
-        }
-
-        if results.is_empty() { None } else { Some(results) }
+    // Module-qualified lookup.
+    if let Some(id) = st.find_module_symbol_id(&module.ident, ident) {
+        return id == target.symbol_id;
     }
 
-    pub(crate) async fn handle_prepare_rename(&self, params: TextDocumentPositionParams) -> Option<PrepareRenameResponse> {
-        let uri = params.text_document.uri;
-        let position = params.position;
-
-        let file_path = uri.path();
-        let project = self.get_file_project(file_path)?;
-
-        let module_index = {
-            let module_handled = project.module_handled.lock().ok()?;
-            module_handled.get(file_path)?.clone()
+    // Selective imports.
+    for import in &module.dependencies {
+        if !import.is_selective {
+            continue;
+        }
+        let Some(ref items) = import.select_items else {
+            continue;
         };
-
-        let module_db = project.module_db.lock().ok()?;
-        let module = module_db.get(module_index)?;
-
-        let live_doc = self.documents.get(file_path);
-        let rope = match &live_doc {
-            Some(r) => r.value(),
-            None => &module.rope,
-        };
-        let line_char = rope.try_line_to_char(position.line as usize).ok()?;
-        let char_offset = line_char + position.character as usize;
-
-        let (word, word_start, word_end) = extract_word_at_offset_rope(rope, char_offset)?;
-
-        let symbol_table = project.symbol_table.lock().ok()?;
-        let current_scope_id = find_innermost_scope(&symbol_table, module.scope_id, char_offset);
-
-        let _target_id = resolve_target_symbol_id(&symbol_table, module, &word, current_scope_id)?;
-
-        let start_pos = offset_to_position(word_start, rope)?;
-        let end_pos = offset_to_position(word_end, rope)?;
-
-        Some(PrepareRenameResponse::Range(Range::new(start_pos, end_pos)))
+        for item in items {
+            let local_name = item.alias.as_deref().unwrap_or(&item.ident);
+            if local_name != ident {
+                continue;
+            }
+            let global = format_global_ident(import.module_ident.clone(), item.ident.clone());
+            if let Some(id) = st.find_symbol_id(&global, st.global_scope_id) {
+                return id == target.symbol_id;
+            }
+        }
     }
 
-    pub(crate) async fn handle_rename(&self, params: RenameParams) -> Option<WorkspaceEdit> {
-        let uri = params.text_document_position.text_document.uri;
-        let position = params.text_document_position.position;
-        let new_name = params.new_name;
+    // Wildcard imports.
+    for import in &module.dependencies {
+        if import.as_name != "*" {
+            continue;
+        }
+        if let Some(id) = st.find_module_symbol_id(&import.module_ident, ident) {
+            return id == target.symbol_id;
+        }
+    }
 
-        let file_path = uri.path();
-        let project = self.get_file_project(file_path)?;
+    false
+}
 
-        let module_index = {
-            let module_handled = project.module_handled.lock().ok()?;
-            module_handled.get(file_path)?.clone()
+// ─── Go to type definition ──────────────────────────────────────────────────────
+
+/// Navigate from a variable/constant to the definition of its type.
+///
+/// For example, if the cursor is on `x` where `var x: MyStruct = ...`, this
+/// navigates to the `type MyStruct = struct { ... }` definition.
+fn find_type_definition(
+    project: &Project,
+    file_path: &str,
+    position: Position,
+) -> Option<Location> {
+    let cursor = resolve_cursor(project, file_path, position)?;
+    let symbol = resolve_symbol(project, &cursor)?;
+
+    // Extract the type from the symbol.
+    let type_ = extract_symbol_type(&symbol.kind)?;
+
+    // Look up the type's definition via its symbol_id.
+    type_to_location(project, &type_)
+}
+
+/// Extract the `Type` associated with a symbol (variable's type, function's
+/// return type, constant's type).
+fn extract_symbol_type(kind: &SymbolKind) -> Option<Type> {
+    match kind {
+        SymbolKind::Var(v) => {
+            let v = v.lock().unwrap();
+            Some(v.type_.clone())
+        }
+        SymbolKind::Const(c) => {
+            let c = c.lock().unwrap();
+            Some(c.type_.clone())
+        }
+        SymbolKind::Fn(f) => {
+            let f = f.lock().unwrap();
+            Some(f.return_type.clone())
+        }
+        // If the cursor is already on a type, go to it directly.
+        SymbolKind::Type(t) => {
+            let t = t.lock().unwrap();
+            // For aliases, navigate to the aliased type.
+            if t.is_alias {
+                Some(t.type_expr.clone())
+            } else {
+                None // already at the type itself
+            }
+        }
+    }
+}
+
+/// Convert a `Type` to a `Location` by looking up its `symbol_id` in the
+/// symbol table to find the `TypedefStmt` definition site.
+fn type_to_location(project: &Project, type_: &Type) -> Option<Location> {
+    // Only user-defined types have navigable definitions.
+    if type_.symbol_id == 0 {
+        return None;
+    }
+
+    let st = project.symbol_table.lock().ok()?;
+    let symbol = st.get_symbol_ref(type_.symbol_id)?;
+
+    // Must be a Type symbol.
+    let SymbolKind::Type(typedef_mutex) = &symbol.kind else {
+        return None;
+    };
+
+    let typedef = typedef_mutex.lock().unwrap();
+    let def_start = typedef.symbol_start;
+    let def_end = typedef.symbol_end;
+    drop(typedef);
+
+    let module_path = module_path_for_scope(&st, project, symbol.defined_in)?;
+    drop(st);
+
+    let db = project.module_db.lock().ok()?;
+    let module = db.iter().find(|m| m.path == module_path)?;
+
+    let start = offset_to_position(def_start, &module.rope)?;
+    let end = offset_to_position(def_end, &module.rope)?;
+    let uri = Url::from_file_path(&module.path).ok()?;
+
+    Some(Location {
+        uri,
+        range: Range { start, end },
+    })
+}
+
+// ─── Go to implementation ───────────────────────────────────────────────────────
+
+/// Find all types that implement a given interface.
+///
+/// When the cursor is on an interface type, this collects all `type X = struct { ... }`
+/// definitions that have `impl InterfaceName` in their `impl_interfaces` list.
+fn find_implementations(
+    project: &Project,
+    file_path: &str,
+    position: Position,
+) -> Option<Vec<Location>> {
+    let cursor = resolve_cursor(project, file_path, position)?;
+    let symbol = resolve_symbol(project, &cursor)?;
+
+    // Must be a type symbol, ideally an interface.
+    let SymbolKind::Type(typedef_mutex) = &symbol.kind else {
+        return None;
+    };
+
+    let typedef = typedef_mutex.lock().unwrap();
+    let target_ident = typedef.ident.clone();
+    let is_interface = typedef.is_interface;
+    drop(typedef);
+
+    if !is_interface {
+        return None;
+    }
+
+    let st = project.symbol_table.lock().ok()?;
+    let db = project.module_db.lock().ok()?;
+    let mut locations: Vec<Location> = Vec::new();
+
+    // Scan all symbols for types that implement this interface.
+    for module in db.iter() {
+        let Some(scope) = st.get_scope(module.scope_id) else {
+            continue;
         };
 
-        let module_db = project.module_db.lock().ok()?;
-        let module = module_db.get(module_index)?;
+        for &sym_id in &scope.symbols {
+            let Some(sym) = st.get_symbol_ref(sym_id) else {
+                continue;
+            };
 
-        let live_doc = self.documents.get(file_path);
-        let rope = match &live_doc {
-            Some(r) => r.value(),
-            None => &module.rope,
-        };
-        let line_char = rope.try_line_to_char(position.line as usize).ok()?;
-        let char_offset = line_char + position.character as usize;
+            let SymbolKind::Type(td_mutex) = &sym.kind else {
+                continue;
+            };
 
-        let (word, _, _) = extract_word_at_offset_rope(rope, char_offset)?;
+            let td = td_mutex.lock().unwrap();
 
-        debug!("rename '{}' -> '{}' at offset {}", word, new_name, char_offset);
+            // Check if this type implements the target interface.
+            let implements = td.impl_interfaces.iter().any(|iface| {
+                iface.ident == target_ident || iface.symbol_id == symbol.symbol_id
+            });
 
-        let symbol_table = project.symbol_table.lock().ok()?;
-        let current_scope_id = find_innermost_scope(&symbol_table, module.scope_id, char_offset);
+            if !implements {
+                continue;
+            }
 
-        let target_symbol_id = resolve_target_symbol_id(&symbol_table, module, &word, current_scope_id)?;
+            let Some(start) = offset_to_position(td.symbol_start, &module.rope) else {
+                continue;
+            };
+            let Some(end) = offset_to_position(td.symbol_end, &module.rope) else {
+                continue;
+            };
+            let Ok(uri) = Url::from_file_path(&module.path) else {
+                continue;
+            };
 
-        let mut all_locations: Vec<Location> = Vec::new();
-        for m in module_db.iter() {
-            let m_text = m.rope.to_string();
-            collect_references_in_text(
-                &m_text, &word, &m.rope, &m.path,
-                &symbol_table, m.scope_id, target_symbol_id,
-                &mut all_locations,
-            );
-        }
-
-        if all_locations.is_empty() {
-            return None;
-        }
-
-        let mut changes: std::collections::HashMap<Url, Vec<TextEdit>> = std::collections::HashMap::new();
-        for loc in all_locations {
-            changes.entry(loc.uri).or_default().push(TextEdit {
-                range: loc.range,
-                new_text: new_name.clone(),
+            locations.push(Location {
+                uri,
+                range: Range { start, end },
             });
         }
-
-        Some(WorkspaceEdit {
-            changes: Some(changes),
-            document_changes: None,
-            change_annotations: None,
-        })
     }
+
+    if locations.is_empty() {
+        return None;
+    }
+
+    Some(locations)
 }
 
-// ─── Shared helpers ─────────────────────────────────────────────────────────────
+// ─── Cursor resolution ──────────────────────────────────────────────────────────
 
-/// Find the innermost scope containing the given position.
-pub(crate) fn find_innermost_scope(
-    symbol_table: &crate::analyzer::symbol::SymbolTable,
-    scope_id: crate::analyzer::symbol::NodeId,
-    position: usize,
-) -> crate::analyzer::symbol::NodeId {
-    let scope = symbol_table.find_scope(scope_id);
-
-    if position >= scope.range.0 && (position < scope.range.1 || scope.range.1 == 0) {
-        for &child_id in &scope.children {
-            let child_scope = symbol_table.find_scope(child_id);
-            if position >= child_scope.range.0 && position < child_scope.range.1 {
-                return find_innermost_scope(symbol_table, child_id, position);
-            }
-        }
-        return scope_id;
-    }
-
-    scope_id
+/// Intermediate: identifies the word and scope under the cursor.
+pub(crate) struct CursorContext {
+    pub(crate) word: String,
+    /// If the cursor is on the right side of a dot (e.g. `bootstrap.app`),
+    /// this holds the left-side identifier (`"bootstrap"`).
+    pub(crate) prefix: Option<String>,
+    pub(crate) char_offset: usize,
+    pub(crate) module_ident: String,
+    pub(crate) module_path: String,
+    pub(crate) scope_id: NodeId,
+    pub(crate) dependencies: Vec<crate::analyzer::common::ImportStmt>,
 }
 
-/// Resolve the definition location for a symbol at the cursor position.
-fn resolve_definition_location(
-    symbol_table: &crate::analyzer::symbol::SymbolTable,
-    module: &crate::project::Module,
-    word: &str,
-    current_scope_id: crate::analyzer::symbol::NodeId,
-    module_db: &[crate::project::Module],
-) -> Option<GotoDefinitionResponse> {
-    use crate::utils::format_global_ident;
+/// Convert an LSP position into a `CursorContext` (word + scope).
+pub(crate) fn resolve_cursor(
+    project: &Project,
+    file_path: &str,
+    position: Position,
+) -> Option<CursorContext> {
+    let mh = project.module_handled.lock().ok()?;
+    let &idx = mh.get(file_path)?;
+    drop(mh);
 
-    let symbol_to_location = |symbol: &crate::analyzer::symbol::Symbol| -> Option<GotoDefinitionResponse> {
-        let (def_start, def_end) = get_symbol_span(symbol);
-        if def_start == 0 && def_end == 0 {
-            return None;
+    let db = project.module_db.lock().ok()?;
+    let module = db.get(idx)?;
+
+    let char_offset = position_to_char_offset(position, &module.rope)?;
+    let (word, word_start, _) = extract_word_at_offset_rope(&module.rope, char_offset)?;
+
+    // Check for a dot-prefix: if there's a `.` immediately before the word,
+    // extract the identifier to the left of the dot.
+    let prefix = if word_start >= 2 && module.rope.char(word_start - 1) == '.' {
+        // Walk left from the dot to find the prefix identifier.
+        let dot_pos = word_start - 1;
+        let mut prefix_start = dot_pos;
+        while prefix_start > 0 && is_ident_char(module.rope.char(prefix_start - 1)) {
+            prefix_start -= 1;
         }
-
-        let def_module = find_module_for_scope(symbol_table, symbol.defined_in, module_db, module)?;
-        let def_rope = &def_module.rope;
-
-        let start_pos = offset_to_position(def_start, def_rope)?;
-        let end_pos = offset_to_position(def_end, def_rope)?;
-        let uri = Url::from_file_path(&def_module.path).ok()?;
-
-        Some(GotoDefinitionResponse::Scalar(Location::new(
-            uri,
-            Range::new(start_pos, end_pos),
-        )))
-    };
-
-    // 1. Local symbol lookup
-    if let Some(symbol_id) = symbol_table.lookup_symbol(word, current_scope_id) {
-        if let Some(symbol) = symbol_table.get_symbol_ref(symbol_id) {
-            return symbol_to_location(symbol);
+        if prefix_start < dot_pos {
+            let prefix_word: String = module.rope.slice(prefix_start..dot_pos).chars().collect();
+            Some(prefix_word)
+        } else {
+            None
         }
-    }
-
-    // 2. Module-qualified global symbol
-    let global_ident = format_global_ident(module.ident.clone(), word.to_string());
-    if let Some(symbol) = symbol_table.find_global_symbol(&global_ident) {
-        return symbol_to_location(symbol);
-    }
-
-    // 3. Imported module — jump to the imported file
-    for import in &module.dependencies {
-        if import.as_name == word {
-            if !import.full_path.is_empty() {
-                let uri = Url::from_file_path(&import.full_path).ok()?;
-                return Some(GotoDefinitionResponse::Scalar(Location::new(
-                    uri,
-                    Range::new(Position::new(0, 0), Position::new(0, 0)),
-                )));
-            }
-        }
-    }
-
-    // 4. Selective imports
-    for import in &module.dependencies {
-        if import.is_selective {
-            if let Some(ref items) = import.select_items {
-                for item in items {
-                    let effective_name = item.alias.as_deref().unwrap_or(&item.ident);
-                    if effective_name == word {
-                        let imported_global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
-                        if let Some(symbol) = symbol_table.find_global_symbol(&imported_global_ident) {
-                            return symbol_to_location(symbol);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    None
-}
-
-/// Extract the (symbol_id, ident) from an inner type of a Ref/Ptr wrapper.
-/// Handles resolved inner types (with symbol_id or ident) as well as
-/// `TypeKind::Struct` where the ident lives inside the kind variant.
-fn extract_inner_type_info(
-    inner: &crate::analyzer::common::Type,
-    outer: &crate::analyzer::common::Type,
-) -> (crate::analyzer::symbol::NodeId, String) {
-    use crate::analyzer::common::TypeKind;
-
-    if inner.symbol_id != 0 {
-        (inner.symbol_id, inner.ident.clone())
-    } else if !inner.ident.is_empty() {
-        (0, inner.ident.clone())
     } else {
-        // Inner ident is empty — try to extract from inner kind (e.g., Struct)
-        match &inner.kind {
-            TypeKind::Struct(struct_ident, _, _) => {
-                debug!("extract_inner_type_info: extracted struct ident from inner kind: '{}'", struct_ident);
-                (inner.symbol_id, struct_ident.clone())
-            }
-            _ => (outer.symbol_id, outer.ident.clone()),
-        }
+        None
+    };
+
+    let st = project.symbol_table.lock().ok()?;
+    let scope_id = find_scope_at_offset(&st, module.scope_id, char_offset);
+
+    Some(CursorContext {
+        word,
+        prefix,
+        char_offset,
+        module_ident: module.ident.clone(),
+        module_path: module.path.clone(),
+        scope_id,
+        dependencies: module.dependencies.clone(),
+    })
+}
+
+// ─── Symbol resolution ──────────────────────────────────────────────────────────
+
+/// A fully resolved symbol: its id, kind, owning module path, and position.
+pub(crate) struct ResolvedSymbol {
+    pub(crate) symbol_id: NodeId,
+    pub(crate) kind: SymbolKind,
+    /// The global ident (may include module prefix).
+    pub(crate) ident: String,
+    /// Absolute path of the module that defines this symbol.
+    pub(crate) module_path: String,
+}
+
+impl ResolvedSymbol {
+    /// The raw (unprefixed) name for token matching.
+    pub(crate) fn raw_name(&self) -> &str {
+        self.ident.rsplit('.').next().unwrap_or(&self.ident)
     }
 }
 
-/// Resolve the definition location for a method call like `receiver.method()`.
-/// Finds the receiver variable, determines its type, and looks up the method definition.
-fn resolve_method_definition(
-    symbol_table: &crate::analyzer::symbol::SymbolTable,
-    module: &crate::project::Module,
-    receiver_name: &str,
-    method_name: &str,
-    current_scope_id: crate::analyzer::symbol::NodeId,
-    module_db: &[crate::project::Module],
-) -> Option<GotoDefinitionResponse> {
-    use crate::analyzer::common::TypeKind;
-    use crate::analyzer::symbol::SymbolKind;
+/// Resolve a cursor context into a `ResolvedSymbol`.
+///
+/// Follows the same resolution order as the semantic pass:
+///   local scopes → same-module global → selective imports → wildcard imports → builtins.
+pub(crate) fn resolve_symbol(project: &Project, ctx: &CursorContext) -> Option<ResolvedSymbol> {
+    let st = project.symbol_table.lock().ok()?;
 
-    debug!("resolve_method_definition: receiver='{}', method='{}'", receiver_name, method_name);
+    // 1. Local / parent-scope walk.
+    if let Some(id) = st.lookup_symbol(&ctx.word, ctx.scope_id) {
+        return resolved_from_id(&st, project, id, &ctx.word);
+    }
 
-    let symbol_to_location = |symbol: &crate::analyzer::symbol::Symbol| -> Option<GotoDefinitionResponse> {
-        let (def_start, def_end) = get_symbol_span(symbol);
-        if def_start == 0 && def_end == 0 {
-            return None;
+    // 2. Same-module global (symbols are stored as "module_ident.name").
+    if let Some(id) = st.find_module_symbol_id(&ctx.module_ident, &ctx.word) {
+        let global = format_global_ident(ctx.module_ident.clone(), ctx.word.clone());
+        return resolved_from_id(&st, project, id, &global);
+    }
+
+    // 3. Selective imports.
+    for import in &ctx.dependencies {
+        if !import.is_selective {
+            continue;
         }
-        let def_module = find_module_for_scope(symbol_table, symbol.defined_in, module_db, module)?;
-        let start_pos = offset_to_position(def_start, &def_module.rope)?;
-        let end_pos = offset_to_position(def_end, &def_module.rope)?;
-        let uri = Url::from_file_path(&def_module.path).ok()?;
-        Some(GotoDefinitionResponse::Scalar(Location::new(uri, Range::new(start_pos, end_pos))))
-    };
-
-    // 1. Find the receiver variable
-    let receiver_symbol_id = symbol_table.lookup_symbol(receiver_name, current_scope_id)?;
-    let receiver_symbol = symbol_table.get_symbol_ref(receiver_symbol_id)?;
-
-    // 2. Get the receiver's type — unwrap Ref/Ptr and try to resolve symbol_id
-    let (mut type_symbol_id, mut _type_ident) = match &receiver_symbol.kind {
-        SymbolKind::Var(var_decl) => {
-            let var = var_decl.lock().unwrap();
-            let type_ = &var.type_;
-
-            debug!("resolve_method_definition: var type kind={:?}, ident='{}', symbol_id={}", type_.kind, type_.ident, type_.symbol_id);
-
-            // Unwrap Ref/Ptr to get the inner type.
-            // Two representations exist:
-            //   1. Fully reduced: TypeKind::Ref(inner) / TypeKind::Ptr(inner)
-            //   2. Unreduced:     TypeKind::Ident with ident="ref"/"ptr" and args=[inner_type]
-            let (sym_id, ident) = match &type_.kind {
-                TypeKind::Ref(inner) | TypeKind::Ptr(inner) => {
-                    debug!("resolve_method_definition: inner kind={:?}, ident='{}', symbol_id={}", inner.kind, inner.ident, inner.symbol_id);
-                    extract_inner_type_info(inner, type_)
-                }
-                TypeKind::Ident if (type_.ident == "ref" || type_.ident == "ptr") && !type_.args.is_empty() => {
-                    // Unreduced ref<T>/ptr<T>: the inner type is in args[0]
-                    let inner = &type_.args[0];
-                    debug!("resolve_method_definition: unreduced {}<> — inner kind={:?}, ident='{}', symbol_id={}", type_.ident, inner.kind, inner.ident, inner.symbol_id);
-                    extract_inner_type_info(inner, type_)
-                }
-                _ => (type_.symbol_id, type_.ident.clone()),
-            };
-            (sym_id, ident)
-        }
-        _ => return None,
-    };
-
-    // 2b. Fallback: if type_symbol_id is still 0, try resolving by type name
-    if type_symbol_id == 0 && !_type_ident.is_empty() && _type_ident != "ref" && _type_ident != "ptr" {
-        debug!("resolve_method_definition: trying to resolve type by name: '{}'", _type_ident);
-        // Try module-qualified lookup
-        let short_name = if let Some(dot_pos) = _type_ident.rfind('.') {
-            _type_ident[dot_pos + 1..].to_string()
-        } else {
-            _type_ident.clone()
+        let Some(ref items) = import.select_items else {
+            continue;
         };
-
-        // Try in module scope
-        if let Some(sym_id) = symbol_table.find_module_symbol_id(&module.ident, &short_name) {
-            type_symbol_id = sym_id;
-            debug!("resolve_method_definition: resolved '{}' to symbol_id {} via module scope", short_name, sym_id);
-        }
-
-        // Try in imported module scopes
-        if type_symbol_id == 0 {
-            for import in &module.dependencies {
-                if let Some(sym_id) = symbol_table.find_module_symbol_id(&import.module_ident, &short_name) {
-                    type_symbol_id = sym_id;
-                    _type_ident = short_name.clone();
-                    debug!("resolve_method_definition: resolved '{}' to symbol_id {} via import '{}'", short_name, sym_id, import.module_ident);
-                    break;
-                }
+        for item in items {
+            let local_name = item.alias.as_deref().unwrap_or(&item.ident);
+            if local_name != ctx.word {
+                continue;
             }
-        }
-
-        // Try in global scope
-        if type_symbol_id == 0 {
-            if let Some(sym_id) = symbol_table.find_symbol_id(&_type_ident, symbol_table.global_scope_id) {
-                type_symbol_id = sym_id;
-                debug!("resolve_method_definition: resolved '{}' to symbol_id {} via global scope", _type_ident, sym_id);
+            let global = format_global_ident(import.module_ident.clone(), item.ident.clone());
+            if let Some(id) = st.find_symbol_id(&global, st.global_scope_id) {
+                return resolved_from_id(&st, project, id, &global);
             }
         }
     }
 
-    debug!("resolve_method_definition: type_symbol_id={}, type_ident='{}'", type_symbol_id, _type_ident);
+    // 4. Wildcard imports.
+    for import in &ctx.dependencies {
+        if import.as_name != "*" {
+            continue;
+        }
+        if let Some(id) = st.find_module_symbol_id(&import.module_ident, &ctx.word) {
+            let global = format_global_ident(import.module_ident.clone(), ctx.word.clone());
+            return resolved_from_id(&st, project, id, &global);
+        }
+    }
 
-    // 3. Look up the method on the type
-    if type_symbol_id != 0 {
-        // Check typedef's method_table first
-        if let Some(type_symbol) = symbol_table.get_symbol_ref(type_symbol_id) {
-            if let SymbolKind::Type(typedef_mutex) = &type_symbol.kind {
-                let typedef = typedef_mutex.lock().unwrap();
-                if let Some(method) = typedef.method_table.get(method_name) {
-                    let fndef = method.lock().unwrap();
-                    if fndef.symbol_start > 0 {
-                        // Create a temporary symbol to find the location
-                        drop(fndef);
-                        drop(typedef);
-                        // Search for the method as a global function: type_name.method_name
-                        let type_short_name = crate::analyzer::completion::extract_last_ident_part_pub(&type_symbol.ident);
-                        let method_ident = format!("{}.{}", type_short_name, method_name);
+    // 5. Builtins (global scope, no prefix).
+    if let Some(id) = st.find_symbol_id(&ctx.word, st.global_scope_id) {
+        return resolved_from_id(&st, project, id, &ctx.word);
+    }
 
-                        // Search through all modules for the method function
-                        let global_scope = symbol_table.find_scope(symbol_table.global_scope_id);
-                        for (key, &sym_id) in &global_scope.symbol_map {
-                            if key.ends_with(&method_ident) {
-                                if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
-                                    if let SymbolKind::Fn(fn_mutex) = &sym.kind {
-                                        let fndef = fn_mutex.lock().unwrap();
-                                        if fndef.impl_type.symbol_id == type_symbol_id {
-                                            drop(fndef);
-                                            return symbol_to_location(sym);
-                                        }
-                                    }
-                                }
-                            }
-                        }
+    // 6. Dotted access: prefix.word (e.g. bootstrap.app or myVar.field).
+    if let Some(ref prefix) = ctx.prefix {
+        log::info!("resolve_symbol step 6: prefix={:?}, word={}", prefix, ctx.word);
 
-                        // Also search module scope
-                        let module_scope = symbol_table.find_scope(module.scope_id);
-                        for (key, &sym_id) in &module_scope.symbol_map {
-                            if key.ends_with(&method_ident) {
-                                if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
-                                    if let SymbolKind::Fn(fn_mutex) = &sym.kind {
-                                        let fndef = fn_mutex.lock().unwrap();
-                                        if fndef.impl_type.symbol_id == type_symbol_id {
-                                            drop(fndef);
-                                            return symbol_to_location(sym);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+        // 6a. Module member access: prefix is an import as_name.
+        for import in &ctx.dependencies {
+            if import.as_name == *prefix {
+                let global = format_global_ident(import.module_ident.clone(), ctx.word.clone());
+                log::info!("step 6a: trying import global={}", global);
+                if let Some(id) = st.find_symbol_id(&global, st.global_scope_id) {
+                    return resolved_from_id(&st, project, id, &global);
                 }
             }
         }
 
-        // Fallback: Search for any global function with impl_type matching this type
-        let global_scope = symbol_table.find_scope(symbol_table.global_scope_id);
-        for (_, &sym_id) in &global_scope.symbol_map {
-            if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
-                if let SymbolKind::Fn(fn_mutex) = &sym.kind {
-                    let fndef = fn_mutex.lock().unwrap();
-                    if fndef.impl_type.symbol_id == type_symbol_id && fndef.fn_name == method_name {
-                        drop(fndef);
-                        return symbol_to_location(sym);
-                    }
+        // 6b. Method/field access: prefix is a variable/const — resolve its type.
+        if let Some(prefix_symbol) = resolve_prefix_symbol(&st, ctx, prefix) {
+            log::info!("step 6b: prefix_symbol kind={:?}", std::mem::discriminant(&prefix_symbol.kind));
+            let prefix_type = extract_type_from_kind(&prefix_symbol.kind);
+            if let Some(ref prefix_type) = prefix_type {
+                log::info!("step 6b: prefix_type kind={}, ident={}, symbol_id={}", prefix_type.kind, prefix_type.ident, prefix_type.symbol_id);
+                // Look up the typedef to find methods or struct fields.
+                if let Some(result) = resolve_member_on_type(&st, project, &prefix_type, &ctx.word) {
+                    return Some(result);
                 }
+                log::info!("step 6b: resolve_member_on_type returned None");
+            } else {
+                log::info!("step 6b: prefix_type is None");
             }
+        } else {
+            log::info!("step 6b: resolve_prefix_symbol returned None for prefix={}", prefix);
         }
+    }
 
-        // Also check module scope
-        let module_scope = symbol_table.find_scope(module.scope_id);
-        for (_, &sym_id) in &module_scope.symbol_map {
-            if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
-                if let SymbolKind::Fn(fn_mutex) = &sym.kind {
-                    let fndef = fn_mutex.lock().unwrap();
-                    if fndef.impl_type.symbol_id == type_symbol_id && fndef.fn_name == method_name {
-                        drop(fndef);
-                        return symbol_to_location(sym);
+    None
+}
+
+/// Build a `ResolvedSymbol` from a symbol id.
+fn resolved_from_id(
+    st: &SymbolTable,
+    project: &Project,
+    symbol_id: NodeId,
+    ident: &str,
+) -> Option<ResolvedSymbol> {
+    let symbol = st.get_symbol_ref(symbol_id)?;
+    let module_path = module_path_for_scope(st, project, symbol.defined_in)?;
+
+    Some(ResolvedSymbol {
+        symbol_id,
+        kind: symbol.kind.clone(),
+        ident: ident.to_string(),
+        module_path,
+    })
+}
+
+// ─── Dotted access helpers ──────────────────────────────────────────────────────
+
+/// Resolve the prefix identifier (left of the dot) to a symbol, using the same
+/// lookup chain as `resolve_symbol` but for a single word.
+fn resolve_prefix_symbol<'a>(
+    st: &'a SymbolTable,
+    ctx: &CursorContext,
+    prefix: &str,
+) -> Option<Symbol> {
+    // Local scope walk.
+    if let Some(id) = st.lookup_symbol(prefix, ctx.scope_id) {
+        return st.get_symbol_ref(id).cloned();
+    }
+    // Same-module global.
+    if let Some(id) = st.find_module_symbol_id(&ctx.module_ident, prefix) {
+        return st.get_symbol_ref(id).cloned();
+    }
+    // Selective imports.
+    for import in &ctx.dependencies {
+        if !import.is_selective {
+            continue;
+        }
+        if let Some(ref items) = import.select_items {
+            for item in items {
+                let local_name = item.alias.as_deref().unwrap_or(&item.ident);
+                if local_name == prefix {
+                    let global = format_global_ident(import.module_ident.clone(), item.ident.clone());
+                    if let Some(id) = st.find_symbol_id(&global, st.global_scope_id) {
+                        return st.get_symbol_ref(id).cloned();
                     }
                 }
             }
         }
     }
+    // Wildcard imports.
+    for import in &ctx.dependencies {
+        if import.as_name != "*" {
+            continue;
+        }
+        if let Some(id) = st.find_module_symbol_id(&import.module_ident, prefix) {
+            return st.get_symbol_ref(id).cloned();
+        }
+    }
+    // Builtins.
+    if let Some(sym) = st.find_global_symbol(prefix) {
+        return Some(sym.clone());
+    }
+    None
+}
 
-    // 4. If type_symbol_id is still 0 but we have a type_ident, try resolving by name
-    //    (skip generic wrapper names like "ref" and "ptr")
-    if !_type_ident.is_empty() && _type_ident != "ref" && _type_ident != "ptr" {
-        let short_name = if let Some(dot_pos) = _type_ident.rfind('.') {
-            &_type_ident[dot_pos + 1..]
+/// Extract the type from a symbol kind (Var → type_, Const → type_, Fn → return_type).
+fn extract_type_from_kind(kind: &SymbolKind) -> Option<Type> {
+    match kind {
+        SymbolKind::Var(v) => Some(v.lock().unwrap().type_.clone()),
+        SymbolKind::Const(c) => Some(c.lock().unwrap().type_.clone()),
+        SymbolKind::Fn(f) => Some(f.lock().unwrap().return_type.clone()),
+        SymbolKind::Type(_) => None,
+    }
+}
+
+/// Resolve a member (method or struct field) on a given type.
+fn resolve_member_on_type(
+    st: &SymbolTable,
+    project: &Project,
+    owner_type: &Type,
+    member: &str,
+) -> Option<ResolvedSymbol> {
+    // Dereference pointer/ref types to get the underlying type.
+    let base_type = match &owner_type.kind {
+        crate::analyzer::common::TypeKind::Ptr(inner)
+        | crate::analyzer::common::TypeKind::Ref(inner) => inner.as_ref(),
+        _ => owner_type,
+    };
+
+    // Find the typedef by symbol_id or ident.
+    log::info!("resolve_member_on_type: member={}, base_type.kind={}, base_type.ident={}, base_type.symbol_id={}", member, base_type.kind, base_type.ident, base_type.symbol_id);
+    let typedef_symbol = if base_type.symbol_id > 0 {
+        log::info!("resolve_member_on_type: looking up by symbol_id={}", base_type.symbol_id);
+        st.get_symbol_ref(base_type.symbol_id)
+    } else if !base_type.ident.is_empty() {
+        // Try direct lookup (module-qualified ident).
+        let sym = st.find_global_symbol(&base_type.ident);
+        log::info!("resolve_member_on_type: find_global_symbol({}) = {}", base_type.ident, sym.is_some());
+        if sym.is_some() {
+            sym
         } else {
-            &_type_ident
-        };
-
-        // Search for method functions named like: *.short_name.method_name
-        let method_suffix = format!("{}.{}", short_name, method_name);
-        let global_scope = symbol_table.find_scope(symbol_table.global_scope_id);
-        for (key, &sym_id) in &global_scope.symbol_map {
-            if key.ends_with(&method_suffix) {
-                if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
-                    return symbol_to_location(sym);
+            // Fallback: search all global symbols for a matching suffix.
+            let scope = st.get_scope(st.global_scope_id)?;
+            let result = scope.symbol_map.iter()
+                .find(|(k, _)| {
+                    k.rsplit('.').next() == Some(&base_type.ident)
+                })
+                .and_then(|(_, &id)| st.get_symbol_ref(id));
+            log::info!("resolve_member_on_type: suffix fallback = {}", result.is_some());
+            result
+        }
+    } else {
+        // Type has no ident and no symbol_id — check for inline struct.
+        if let crate::analyzer::common::TypeKind::Struct(_, _, ref props) = base_type.kind {
+            for prop in props {
+                if prop.name == member {
+                    let var = crate::analyzer::common::VarDeclExpr {
+                        ident: prop.name.clone(),
+                        symbol_id: 0,
+                        symbol_start: prop.start,
+                        symbol_end: prop.end,
+                        type_: prop.type_.clone(),
+                        be_capture: false,
+                        heap_ident: None,
+                    };
+                    return Some(ResolvedSymbol {
+                        symbol_id: 0,
+                        kind: SymbolKind::Var(std::sync::Arc::new(std::sync::Mutex::new(var))),
+                        ident: prop.name.clone(),
+                        module_path: String::new(),
+                    });
                 }
             }
         }
+        None
+    };
 
-        // Also try in imported module scopes
-        for import in &module.dependencies {
-            if let Some(&scope_id) = symbol_table.module_scopes.get(&import.module_ident) {
-                let scope = symbol_table.find_scope(scope_id);
-                for (key, &sym_id) in &scope.symbol_map {
-                    if key.ends_with(&method_suffix) {
-                        if let Some(sym) = symbol_table.get_symbol_ref(sym_id) {
-                            return symbol_to_location(sym);
-                        }
+    if let Some(sym) = typedef_symbol {
+        if let SymbolKind::Type(typedef_mutex) = &sym.kind {
+            let typedef = typedef_mutex.lock().unwrap();
+
+            // Check method_table first.
+            if let Some(fndef) = typedef.method_table.get(member) {
+                let module_path = module_path_for_scope(st, project, sym.defined_in)?;
+                return Some(ResolvedSymbol {
+                    symbol_id: 0, // method is in method_table, not symbol table
+                    kind: SymbolKind::Fn(fndef.clone()),
+                    ident: member.to_string(),
+                    module_path,
+                });
+            }
+
+            // Check struct fields.
+            if let crate::analyzer::common::TypeKind::Struct(_, _, ref props) = typedef.type_expr.kind {
+                for prop in props {
+                    if prop.name == member {
+                        let module_path = module_path_for_scope(st, project, sym.defined_in)?;
+                        // Represent struct field as a Var for hover display.
+                        let var = crate::analyzer::common::VarDeclExpr {
+                            ident: prop.name.clone(),
+                            symbol_id: 0,
+                            symbol_start: prop.start,
+                            symbol_end: prop.end,
+                            type_: prop.type_.clone(),
+                            be_capture: false,
+                            heap_ident: None,
+                        };
+                        return Some(ResolvedSymbol {
+                            symbol_id: 0,
+                            kind: SymbolKind::Var(std::sync::Arc::new(std::sync::Mutex::new(var))),
+                            ident: prop.name.clone(),
+                            module_path,
+                        });
                     }
                 }
             }
@@ -560,163 +750,179 @@ fn resolve_method_definition(
     None
 }
 
-/// Get the (start, end) byte offsets of a symbol's definition.
-fn get_symbol_span(symbol: &crate::analyzer::symbol::Symbol) -> (usize, usize) {
-    use crate::analyzer::symbol::SymbolKind;
+// ─── Scope helpers ──────────────────────────────────────────────────────────────
 
-    match &symbol.kind {
-        SymbolKind::Var(var_decl) => {
-            let var = var_decl.lock().unwrap();
-            (var.symbol_start, var.symbol_end)
+/// Find the deepest scope that contains `offset`.
+fn find_scope_at_offset(st: &SymbolTable, root: NodeId, offset: usize) -> NodeId {
+    let mut best = root;
+    let mut stack = vec![root];
+
+    while let Some(id) = stack.pop() {
+        let Some(scope) = st.get_scope(id) else {
+            continue;
+        };
+
+        if id != root && !scope_contains(scope, offset) {
+            continue;
         }
-        SymbolKind::Fn(fndef_mutex) => {
-            let fndef = fndef_mutex.lock().unwrap();
-            (fndef.symbol_start, fndef.symbol_end)
-        }
-        SymbolKind::Type(typedef_mutex) => {
-            let typedef = typedef_mutex.lock().unwrap();
-            (typedef.symbol_start, typedef.symbol_end)
-        }
-        SymbolKind::Const(constdef_mutex) => {
-            let constdef = constdef_mutex.lock().unwrap();
-            (constdef.symbol_start, constdef.symbol_end)
-        }
+
+        best = id;
+        stack.extend_from_slice(&scope.children);
     }
+
+    best
 }
 
-/// Find the module that contains a given scope_id.
-pub(crate) fn find_module_for_scope<'a>(
-    symbol_table: &'a crate::analyzer::symbol::SymbolTable,
-    scope_id: crate::analyzer::symbol::NodeId,
-    module_db: &'a [crate::project::Module],
-    current_module: &'a crate::project::Module,
-) -> Option<&'a crate::project::Module> {
+/// Whether a scope's range covers `offset`.
+fn scope_contains(scope: &Scope, offset: usize) -> bool {
+    let (start, end) = scope.range;
+    if start == 0 && end == 0 {
+        return true; // unbounded (module-level)
+    }
+    offset >= start && offset < end
+}
+
+/// Walk from `scope_id` up to the Module scope and return the module's file path.
+fn module_path_for_scope(st: &SymbolTable, project: &Project, scope_id: NodeId) -> Option<String> {
+    let module_ident = module_ident_for_scope(st, scope_id)?;
+
+    let db = project.module_db.lock().ok()?;
+    db.iter()
+        .find(|m| m.ident == module_ident)
+        .map(|m| m.path.clone())
+}
+
+/// Walk up from a scope to find the owning module ident.
+fn module_ident_for_scope(st: &SymbolTable, scope_id: NodeId) -> Option<String> {
     let mut current = scope_id;
     while current > 0 {
-        let scope = symbol_table.get_scope(current)?;
-
-        if let crate::analyzer::symbol::ScopeKind::Module(ref module_ident) = scope.kind {
-            for m in module_db {
-                if m.ident == *module_ident {
-                    return Some(m);
-                }
+        let scope = st.get_scope(current)?;
+        match &scope.kind {
+            ScopeKind::Module(ident) => return Some(ident.clone()),
+            ScopeKind::Global => {
+                // Symbol defined in the global scope (builtin).
+                // Map it to whichever module — builtins are synthetic;
+                // returning None means "no navigable source".
+                return None;
             }
-        }
-
-        if let crate::analyzer::symbol::ScopeKind::Global = scope.kind {
-            return Some(current_module);
-        }
-
-        current = scope.parent;
-    }
-
-    Some(current_module)
-}
-
-/// Resolve the target symbol id for a word at the given scope.
-pub(crate) fn resolve_target_symbol_id(
-    symbol_table: &crate::analyzer::symbol::SymbolTable,
-    module: &crate::project::Module,
-    word: &str,
-    current_scope_id: crate::analyzer::symbol::NodeId,
-) -> Option<crate::analyzer::symbol::NodeId> {
-    use crate::utils::format_global_ident;
-
-    // 1. Local symbol lookup
-    if let Some(symbol_id) = symbol_table.lookup_symbol(word, current_scope_id) {
-        return Some(symbol_id);
-    }
-
-    // 2. Module-qualified global symbol
-    let global_ident = format_global_ident(module.ident.clone(), word.to_string());
-    if let Some(symbol) = symbol_table.find_global_symbol(&global_ident) {
-        let global_scope = symbol_table.find_scope(symbol_table.global_scope_id);
-        if let Some(&id) = global_scope.symbol_map.get(&global_ident) {
-            return Some(id);
-        }
-        match &symbol.kind {
-            crate::analyzer::symbol::SymbolKind::Fn(f) => {
-                let fndef = f.lock().ok()?;
-                if fndef.symbol_id > 0 { return Some(fndef.symbol_id); }
-            }
-            crate::analyzer::symbol::SymbolKind::Type(t) => {
-                let td = t.lock().ok()?;
-                if td.symbol_id > 0 { return Some(td.symbol_id); }
-            }
-            crate::analyzer::symbol::SymbolKind::Var(v) => {
-                let var = v.lock().ok()?;
-                if var.symbol_id > 0 { return Some(var.symbol_id); }
-            }
-            crate::analyzer::symbol::SymbolKind::Const(c) => {
-                let cd = c.lock().ok()?;
-                if cd.symbol_id > 0 { return Some(cd.symbol_id); }
-            }
+            _ => current = scope.parent,
         }
     }
-
-    // 3. Selective imports
-    for import in &module.dependencies {
-        if import.is_selective {
-            if let Some(ref items) = import.select_items {
-                for item in items {
-                    let effective_name = item.alias.as_deref().unwrap_or(&item.ident);
-                    if effective_name == word {
-                        let imported_global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
-                        let global_scope = symbol_table.find_scope(symbol_table.global_scope_id);
-                        if let Some(&id) = global_scope.symbol_map.get(&imported_global_ident) {
-                            return Some(id);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     None
 }
 
-/// Collect all references to a target symbol in a given text/module.
-pub(crate) fn collect_references_in_text(
-    text: &str,
-    word: &str,
-    rope: &ropey::Rope,
-    file_path: &str,
-    symbol_table: &crate::analyzer::symbol::SymbolTable,
-    module_scope_id: crate::analyzer::symbol::NodeId,
-    target_symbol_id: crate::analyzer::symbol::NodeId,
-    results: &mut Vec<Location>,
-) {
-    let uri = match Url::from_file_path(file_path) {
-        Ok(u) => u,
-        Err(_) => return,
-    };
+// ─── Location helpers ───────────────────────────────────────────────────────────
 
-    let chars: Vec<char> = text.chars().collect();
-    let word_len = word.len();
-
-    let mut i = 0;
-    while i + word_len <= chars.len() {
-        if chars[i] == word.chars().next().unwrap_or('\0') {
-            let candidate: String = chars[i..i + word_len].iter().collect();
-            if candidate == word {
-                let before_ok = i == 0 || !is_ident_char(chars[i - 1]);
-                let after_ok = i + word_len >= chars.len() || !is_ident_char(chars[i + word_len]);
-
-                if before_ok && after_ok {
-                    let scope_id = find_innermost_scope(symbol_table, module_scope_id, i);
-                    if let Some(found_id) = symbol_table.lookup_symbol(word, scope_id) {
-                        if found_id == target_symbol_id {
-                            if let (Some(start), Some(end)) = (
-                                offset_to_position(i, rope),
-                                offset_to_position(i + word_len, rope),
-                            ) {
-                                results.push(Location::new(uri.clone(), Range::new(start, end)));
-                            }
-                        }
-                    }
-                }
-            }
+/// Get the char-offset range `(start, end)` of a symbol's definition site.
+fn symbol_def_range(kind: &SymbolKind) -> (usize, usize) {
+    match kind {
+        SymbolKind::Var(v) => {
+            let v = v.lock().unwrap();
+            (v.symbol_start, v.symbol_end)
         }
-        i += 1;
+        SymbolKind::Fn(f) => {
+            let f = f.lock().unwrap();
+            (f.symbol_start, f.symbol_end)
+        }
+        SymbolKind::Type(t) => {
+            let t = t.lock().unwrap();
+            (t.symbol_start, t.symbol_end)
+        }
+        SymbolKind::Const(c) => {
+            let c = c.lock().unwrap();
+            (c.symbol_start, c.symbol_end)
+        }
+    }
+}
+
+/// Convert a resolved symbol into an LSP `Location`.
+fn symbol_to_location(project: &Project, symbol: &ResolvedSymbol) -> Option<Location> {
+    let (def_start, def_end) = symbol_def_range(&symbol.kind);
+
+    let db = project.module_db.lock().ok()?;
+    let module = db.iter().find(|m| m.path == symbol.module_path)?;
+
+    let start = offset_to_position(def_start, &module.rope)?;
+    let end = offset_to_position(def_end, &module.rope)?;
+    let uri = Url::from_file_path(&module.path).ok()?;
+
+    Some(Location {
+        uri,
+        range: Range { start, end },
+    })
+}
+
+// ─── Tests ──────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::analyzer::symbol::{Scope, ScopeKind, SymbolTable};
+
+    #[test]
+    fn scope_contains_unbounded() {
+        let scope = Scope {
+            parent: 0,
+            symbols: vec![],
+            children: vec![],
+            symbol_map: Default::default(),
+            range: (0, 0),
+            kind: ScopeKind::Global,
+            frees: Default::default(),
+        };
+        assert!(scope_contains(&scope, 0));
+        assert!(scope_contains(&scope, 999));
+    }
+
+    #[test]
+    fn scope_contains_bounded() {
+        let scope = Scope {
+            parent: 0,
+            symbols: vec![],
+            children: vec![],
+            symbol_map: Default::default(),
+            range: (10, 50),
+            kind: ScopeKind::Local,
+            frees: Default::default(),
+        };
+        assert!(!scope_contains(&scope, 9));
+        assert!(scope_contains(&scope, 10));
+        assert!(scope_contains(&scope, 49));
+        assert!(!scope_contains(&scope, 50));
+    }
+
+    #[test]
+    fn find_scope_picks_deepest() {
+        let mut st = SymbolTable::new();
+
+        // Create a module scope (root).
+        let module_id = st.create_scope(ScopeKind::Module("test".into()), st.global_scope_id, 0, 0);
+        // Create a child scope at [10, 50).
+        let _child = st.create_scope(ScopeKind::Local, module_id, 10, 50);
+        // Create a nested child at [20, 40).
+        let nested = st.create_scope(ScopeKind::Local, _child, 20, 40);
+
+        assert_eq!(find_scope_at_offset(&st, module_id, 5), module_id);
+        assert_eq!(find_scope_at_offset(&st, module_id, 15), _child);
+        assert_eq!(find_scope_at_offset(&st, module_id, 25), nested);
+        assert_eq!(find_scope_at_offset(&st, module_id, 45), _child);
+        assert_eq!(find_scope_at_offset(&st, module_id, 55), module_id);
+    }
+
+    #[test]
+    fn symbol_def_range_var() {
+        use crate::analyzer::common::VarDeclExpr;
+        use std::sync::{Arc, Mutex};
+
+        let var = Arc::new(Mutex::new(VarDeclExpr {
+            ident: "x".into(),
+            symbol_id: 0,
+            symbol_start: 10,
+            symbol_end: 11,
+            type_: crate::analyzer::common::Type::default(),
+            be_capture: false,
+            heap_ident: None,
+        }));
+        assert_eq!(symbol_def_range(&SymbolKind::Var(var)), (10, 11));
     }
 }

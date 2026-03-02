@@ -104,34 +104,49 @@ impl<'a> CompletionProvider<'a> {
 
         // 1. Find current scope based on position
         let current_scope_id = self.find_innermost_scope(self.module.scope_id, position);
-        debug!("Found scope_id {} by positon {}", current_scope_id, position);
+        debug!("Found scope_id {} by positon {}, module.scope_id={}", current_scope_id, position, self.module.scope_id);
 
         // cannot auto-import in global module scope
         if current_scope_id == self.module.scope_id {
+            debug!("cursor is at module scope, returning empty");
             return Vec::new();
         }
+
+        let has_prefix = !prefix.is_empty();
+        debug!("prefix='{}', has_prefix={}", prefix, has_prefix);
 
         // 2. Collect all visible variable symbols
         let mut completions = Vec::new();
         self.collect_variable_completions(current_scope_id, &prefix, &mut completions, position);
+        debug!("after collect_variable_completions: {} items", completions.len());
 
-        // 2b. Collect functions/types defined in the current module scope
+        // 2b. Collect functions/types defined at the current module scope
         self.collect_module_scope_fn_completions(&prefix, &mut completions);
+        debug!("after collect_module_scope_fn_completions: {} items, labels: {:?}",
+            completions.len(),
+            completions.iter().map(|c| c.label.clone()).collect::<Vec<_>>()
+        );
 
         // 2c. Collect symbols from selective imports (import module.{symbol1, symbol2})
         self.collect_selective_import_symbol_completions(&prefix, &mut completions);
 
-        // 3. Collect already-imported modules (show at top)
+        // 3. Collect already-imported modules — always shown (they're in
+        //    scope and useful even on an empty-prefix Cmd+Enter trigger).
         self.collect_imported_module_completions(&prefix, &mut completions);
 
-        // 4. Collect available modules (for auto-import)
+        // 4. Collect available modules (for auto-import) — always shown,
+        //    matching gopls which lists std packages on empty prefix.
         self.collect_module_completions(&prefix, &mut completions);
 
-        // 5. Collect cross-file symbol completions (workspace index)
-        self.collect_workspace_symbol_completions(&prefix, &mut completions);
+        // The remaining sources (workspace symbols, keywords) are only
+        // useful when the user has started typing.
+        if has_prefix {
+            // 5. Collect cross-file symbol completions (workspace index)
+            self.collect_workspace_symbol_completions(&prefix, &mut completions);
 
-        // 6. Collect keyword completions
-        self.collect_keyword_completions(&prefix, &mut completions);
+            // 6. Collect keyword completions
+            self.collect_keyword_completions(&prefix, &mut completions);
+        }
 
         // 7. Sort and filter
         self.sort_and_filter_completions(&mut completions, &prefix);
@@ -267,7 +282,11 @@ impl<'a> CompletionProvider<'a> {
 
         let import_stmt = deps.iter().find(|&dep| dep.as_name == imported_as_name);
         if import_stmt.is_none() {
-            return completions;
+            // Module not imported — try to offer workspace-indexed symbols
+            // from a matching module with an auto-import text edit, so the
+            // user can type `fmt.` and see `sprintf`, `printf`, etc. even
+            // before adding `import fmt`.
+            return self.get_unimported_module_member_completions(imported_as_name, prefix);
         }
 
         let imported_module_ident = import_stmt.unwrap().module_ident.clone();
@@ -318,6 +337,101 @@ impl<'a> CompletionProvider<'a> {
         self.sort_and_filter_completions(&mut completions, prefix);
 
         debug!("Found {} module member completions", completions.len());
+        completions
+    }
+
+    /// Provide dot-completions for a module that hasn't been imported yet.
+    ///
+    /// When the user types `fmt.` but doesn't have `import fmt`, we look up
+    /// the module in the workspace index and offer its symbols with an
+    /// auto-import text edit that inserts `import fmt\n` at the top of the file.
+    fn get_unimported_module_member_completions(&self, module_name: &str, prefix: &str) -> Vec<CompletionItem> {
+        debug!("Trying unimported module member completions for '{}'", module_name);
+
+        let workspace_index = match &self.workspace_index {
+            Some(idx) => idx,
+            None => return Vec::new(),
+        };
+
+        // Find the module directory.  We check:
+        //  1. std library:  $NATURE_ROOT/std/<module_name>/
+        //  2. local file:   <module_dir>/<module_name>.n
+        //  3. package sub-dir: <project_root>/<module_name>/
+        let std_module_dir = {
+            let mut p = std::path::PathBuf::from(&self.nature_root);
+            p.push("std");
+            p.push(module_name);
+            p
+        };
+        let local_file = {
+            let mut p = std::path::PathBuf::from(&self.module.dir);
+            p.push(format!("{}.n", module_name));
+            p
+        };
+
+        // Determine the import statement and which file paths belong to
+        // this module.
+        let (import_statement, match_paths): (String, Vec<String>) = if std_module_dir.is_dir() {
+            // Standard library package — collect all .n files under std/<name>/
+            let mut paths = Vec::new();
+            if let Ok(entries) = std::fs::read_dir(&std_module_dir) {
+                for entry in entries.flatten() {
+                    let p = entry.path();
+                    if p.is_file() && p.extension().map_or(false, |e| e == "n") {
+                        if let Some(s) = p.to_str() {
+                            paths.push(s.to_string());
+                        }
+                    }
+                }
+            }
+            (format!("import {}\n", module_name), paths)
+        } else if local_file.is_file() {
+            let path_str = local_file.to_str().unwrap_or("").to_string();
+            let file_name = format!("{}.n", module_name);
+            (format!("import '{}'\n", file_name), vec![path_str])
+        } else {
+            return Vec::new();
+        };
+
+        let match_set: HashSet<&str> = match_paths.iter().map(|s| s.as_str()).collect();
+
+        // Gather all indexed symbols whose file_path belongs to this module.
+        let mut completions = Vec::new();
+
+        for (name, indexed_list) in &workspace_index.symbols {
+            for indexed in indexed_list {
+                if !match_set.contains(indexed.file_path.as_str()) {
+                    continue;
+                }
+                if !prefix.is_empty() && !name.starts_with(prefix) {
+                    continue;
+                }
+
+                let kind = match indexed.kind {
+                    IndexedSymbolKind::Function => CompletionItemKind::Function,
+                    IndexedSymbolKind::Type => CompletionItemKind::Struct,
+                    IndexedSymbolKind::Variable => CompletionItemKind::Variable,
+                    IndexedSymbolKind::Constant => CompletionItemKind::Constant,
+                };
+
+                completions.push(CompletionItem {
+                    label: name.clone(),
+                    kind,
+                    detail: Some(format!("{} (auto-import)", module_name)),
+                    documentation: None,
+                    insert_text: name.clone(),
+                    sort_text: Some(format!("aaa_{}", name)),
+                    additional_text_edits: vec![TextEdit {
+                        line: 0,
+                        character: 0,
+                        new_text: import_statement.clone(),
+                    }],
+                });
+            }
+        }
+
+        self.sort_and_filter_completions(&mut completions, prefix);
+        debug!("Found {} unimported module member completions for '{}'", completions.len(), module_name);
         completions
     }
 
@@ -895,12 +1009,18 @@ impl<'a> CompletionProvider<'a> {
     /// Collect functions and types defined at the module scope level.
     /// These are not in scope.symbols (only in global_scope.symbol_map),
     /// so collect_variable_completions misses them.
+    ///
+    /// Also scans the **global scope** where builtin functions (println,
+    /// print, panic, assert, …) are registered.  Builtins use
+    /// `module_ident = ""` which maps to the global scope.
     fn collect_module_scope_fn_completions(&self, prefix: &str, completions: &mut Vec<CompletionItem>) {
-        let module_scope = self.symbol_table.find_scope(self.module.scope_id);
+        let module_scope_id = self.module.scope_id;
+        let global_scope_id = self.symbol_table.global_scope_id;
+
         let existing_labels: HashSet<String> = completions.iter().map(|c| c.label.clone()).collect();
 
-        // Check both symbols vec and symbol_map in the module scope
-        let mut check_symbol = |symbol_id: NodeId| {
+        // Closure that inspects one symbol and maybe pushes a completion.
+        let mut check_symbol = |symbol_id: NodeId, is_builtin: bool| {
             let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) else { return };
             let symbol_name = extract_last_ident_part(&symbol.ident);
 
@@ -924,10 +1044,15 @@ impl<'a> CompletionProvider<'a> {
                     } else {
                         format!("{}()", fndef.fn_name)
                     };
+                    let detail = if is_builtin {
+                        format!("fn: {} (builtin)", signature)
+                    } else {
+                        format!("fn: {}", signature)
+                    };
                     completions.push(CompletionItem {
                         label: fndef.fn_name.clone(),
                         kind: CompletionItemKind::Function,
-                        detail: Some(format!("fn: {}", signature)),
+                        detail: Some(detail),
                         documentation: None,
                         insert_text,
                         sort_text: Some(format!("{:08}", fndef.symbol_start)),
@@ -935,6 +1060,10 @@ impl<'a> CompletionProvider<'a> {
                     });
                 }
                 SymbolKind::Type(typedef_mutex) => {
+                    // Skip builtin types when prefix is empty — too noisy
+                    if is_builtin && prefix.is_empty() {
+                        return;
+                    }
                     let typedef = typedef_mutex.lock().unwrap();
                     completions.push(CompletionItem {
                         label: symbol_name.clone(),
@@ -950,11 +1079,43 @@ impl<'a> CompletionProvider<'a> {
             }
         };
 
+        // 1. Current module scope
+        let module_scope = self.symbol_table.find_scope(module_scope_id);
         for &symbol_id in &module_scope.symbols {
-            check_symbol(symbol_id);
+            check_symbol(symbol_id, false);
         }
-        for (_, &symbol_id) in &module_scope.symbol_map {
-            check_symbol(symbol_id);
+        let module_symbol_map: Vec<NodeId> = module_scope.symbol_map.values().copied().collect();
+        for symbol_id in module_symbol_map {
+            check_symbol(symbol_id, false);
+        }
+
+        // 2. Global scope (builtins — println, print, panic, assert, …)
+        //    Only include builtins when the user has typed a prefix; with an
+        //    empty prefix we limit noise to local-scope items only.
+        debug!(
+            "global_scope_id={}, module_scope_id={}, prefix='{}', will_scan_global={}",
+            global_scope_id,
+            module_scope_id,
+            prefix,
+            global_scope_id != module_scope_id && !prefix.is_empty()
+        );
+        if global_scope_id != module_scope_id && !prefix.is_empty() {
+            let global_scope = self.symbol_table.find_scope(global_scope_id);
+            debug!(
+                "global scope: {} symbols, {} symbol_map entries",
+                global_scope.symbols.len(),
+                global_scope.symbol_map.len()
+            );
+            for &symbol_id in &global_scope.symbols {
+                if let Some(sym) = self.symbol_table.get_symbol_ref(symbol_id) {
+                    debug!("  global symbol: id={}, ident='{}', kind={:?}", symbol_id, sym.ident, std::mem::discriminant(&sym.kind));
+                }
+                check_symbol(symbol_id, true);
+            }
+            let global_symbol_map: Vec<NodeId> = global_scope.symbol_map.values().copied().collect();
+            for symbol_id in global_symbol_map {
+                check_symbol(symbol_id, true);
+            }
         }
     }
 
@@ -1336,9 +1497,24 @@ impl<'a> CompletionProvider<'a> {
             name_sources.entry(sym.name.clone()).or_default().push(i);
         }
 
+        // Build the builtin directory path so we can skip symbols that are
+        // always in scope (e.g. println, print, …).
+        let builtin_dir = {
+            let mut p = std::path::PathBuf::from(&self.nature_root);
+            p.push("std");
+            p.push("builtin");
+            p
+        };
+
         for indexed_symbol in &matching_symbols {
             // Skip if this symbol is from the current file
             if indexed_symbol.file_path == self.module.path {
+                continue;
+            }
+
+            // Skip builtin symbols — they are already provided by
+            // collect_module_scope_fn_completions via the global scope.
+            if std::path::Path::new(&indexed_symbol.file_path).starts_with(&builtin_dir) {
                 continue;
             }
 

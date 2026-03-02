@@ -635,6 +635,57 @@ impl<'a> Semantic<'a> {
     }
 
     /**
+     * Update the semantic token type for an identifier based on its resolved symbol kind.
+     * This ensures function references get FUNCTION coloring, types get TYPE, etc.
+     */
+    fn update_ident_token_type(&mut self, start: usize, end: usize, symbol_id: NodeId) {
+        if symbol_id == 0 {
+            return;
+        }
+        let sem_type = if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
+            match &symbol.kind {
+                SymbolKind::Fn(_) => SemanticTokenType::FUNCTION,
+                SymbolKind::Type(_) => SemanticTokenType::TYPE,
+                SymbolKind::Const(_) => SemanticTokenType::MACRO,
+                SymbolKind::Var(_) => SemanticTokenType::VARIABLE,
+            }
+        } else {
+            return;
+        };
+        let sem_idx = semantic_token_type_index(sem_type);
+        for token in self.module.sem_token_db.iter_mut() {
+            if token.start == start && token.end == end {
+                token.semantic_token_type = sem_idx;
+                break;
+            }
+        }
+    }
+
+    /// Update the semantic token type for a token found by its end position (for select expr keys).
+    fn update_ident_token_by_end(&mut self, end: usize, symbol_id: NodeId) {
+        if symbol_id == 0 {
+            return;
+        }
+        let sem_type = if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
+            match &symbol.kind {
+                SymbolKind::Fn(_) => SemanticTokenType::FUNCTION,
+                SymbolKind::Type(_) => SemanticTokenType::TYPE,
+                SymbolKind::Const(_) => SemanticTokenType::MACRO,
+                SymbolKind::Var(_) => SemanticTokenType::PROPERTY,
+            }
+        } else {
+            return;
+        };
+        let sem_idx = semantic_token_type_index(sem_type);
+        for token in self.module.sem_token_db.iter_mut().rev() {
+            if token.end == end && token.token_type == super::lexer::TokenType::Ident {
+                token.semantic_token_type = sem_idx;
+                break;
+            }
+        }
+    }
+
+    /**
      * 验证选择性导入的符号是否存在于目标模块中，
      * 并根据符号类型设置正确的语义 token 颜色。
      * 例如: import co.mutex.{mutex_t} 时验证 mutex_t 是否真实存在
@@ -996,6 +1047,12 @@ impl<'a> Semantic<'a> {
             }
 
             self.analyze_type(&mut fndef.return_type);
+            // Resolve impl_type so its ident becomes module-qualified (e.g. "module.Dog")
+            // and symbol_id is set. This is required for symbol_typedef_add_method to
+            // locate the typedef in the global scope.
+            if fndef.impl_type.kind.is_exist() {
+                self.analyze_type(&mut fndef.impl_type);
+            }
 
             // 如果 impl type 是 type alias, 则从符号表中获取当前的 type alias 的全称进行更新
             // fn vec<T>.len() -> fn vec_len(vec<T> self)
@@ -1143,6 +1200,8 @@ impl<'a> Semantic<'a> {
             // symbol 可能是 parent local, 也可能是 parent fn，此时则发生闭包函数引用, 需要将 ident 改写成 env access
             if let Some(id) = self.symbol_table.lookup_symbol(left_ident, self.current_scope_id) {
                 *symbol_id = id;
+                // Update the left ident token type based on what it actually is
+                self.update_ident_token_type(left.start, left.end, id);
                 return;
             }
 
@@ -1176,17 +1235,25 @@ impl<'a> Semantic<'a> {
             }
 
             // import package ident
-            let import_stmt = self.imports.iter().find(|i| i.as_name == *left_ident);
-            if let Some(import_stmt) = import_stmt {
-                // debug!("import as name {}, module_ident {}, key {key}", import_stmt.as_name, import_stmt.module_ident);
+            let import_module_ident = self.imports.iter()
+                .find(|i| i.as_name == *left_ident)
+                .map(|i| i.module_ident.clone());
+            if let Some(module_ident) = import_module_ident {
+                if let Some(id) = self.symbol_table.find_module_symbol_id(&module_ident, key) {
+                    // Mark the import prefix as NAMESPACE and the key token by its resolved kind
+                    let left_ns_idx = semantic_token_type_index(SemanticTokenType::NAMESPACE);
+                    for token in self.module.sem_token_db.iter_mut() {
+                        if token.start == left.start && token.end == left.end {
+                            token.semantic_token_type = left_ns_idx;
+                            break;
+                        }
+                    }
+                    // Update key token type based on the resolved symbol
+                    let expr_end = expr.end;
+                    self.update_ident_token_by_end(expr_end, id);
 
-                // select left 以及找到了，但是还是改不了？ infer 阶段能快速定位就好了。现在的关键是，找到了又怎么样, 又能做什么，也改写不了什么。只能是？
-                // 只能是添加一个 symbol_id? 但是符号本身也没有意义了？如果直接改成 ident + symbol_id 呢？还是改，只是改成了更为奇怪的存在。
-                if let Some(id) = self.symbol_table.find_module_symbol_id(&import_stmt.module_ident, key) {
-                    // debug!("find symbol id {} by module_ident {}, key {key}", id, import_stmt.module_ident);
-
-                    // 将整个 expr 直接改写成 global ident, 这也是 analyze_select_expr 的核心目录
-                    expr.node = AstNode::Ident(format_global_ident(import_stmt.module_ident.clone(), key.clone()), id);
+                    // 将整个 expr 直接改写成 global ident
+                    expr.node = AstNode::Ident(format_global_ident(module_ident.clone(), key.clone()), id);
                     return;
                 } else {
                     errors_push(
@@ -1566,6 +1633,9 @@ impl<'a> Semantic<'a> {
                             is_warning: false,
                                                     },
                     );
+                } else {
+                    // Update semantic token type based on the resolved symbol kind
+                    self.update_ident_token_type(expr.start, expr.end, *symbol_id);
                 }
 
                 // propagation

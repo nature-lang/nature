@@ -4656,8 +4656,13 @@ impl<'a> Typesys<'a> {
             return false;
         }
 
-        debug_assert!(!Type::ident_is_generics_param(&dst));
-        debug_assert!(!Type::ident_is_generics_param(src));
+        // Unresolved generics params can leak through when the generics pass
+        // hasn't fully specialised a type (e.g. Chan<T> before instantiation).
+        // Returning false ("types are incomparable") is safe and avoids
+        // crashing the language server.
+        if Type::ident_is_generics_param(&dst) || Type::ident_is_generics_param(src) {
+            return false;
+        }
 
         // 检查类型状态
         if dst.status != ReductionStatus::Done {

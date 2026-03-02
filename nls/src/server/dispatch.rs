@@ -1,10 +1,9 @@
-//! Document lifecycle: open, change, save, close, configuration, watched files.
+//! Document lifecycle handlers: open, change, save, close, config, watched files.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
 use log::debug;
-use ropey::Rope;
 use tower_lsp::lsp_types::*;
 
 use crate::analyzer::module_unique_ident;
@@ -12,89 +11,81 @@ use crate::package::parse_package;
 use crate::project::Project;
 use crate::utils::offset_to_position;
 
-use super::{Backend, TextDocumentItem};
+use super::Backend;
+
+/// Internal helper carrying document info for [`Backend::on_change`].
+pub(crate) struct TextDocumentItem<'a> {
+    pub uri: Url,
+    pub text: &'a str,
+    pub version: Option<i32>,
+}
 
 impl Backend {
+    // ── Lifecycle handlers ──────────────────────────────────────────────
+
     pub(crate) async fn handle_did_open(&self, params: DidOpenTextDocumentParams) {
-        debug!("file opened {}", params.text_document.uri);
+        debug!("file opened: {}", params.text_document.uri);
 
         let file_path = params.text_document.uri.path();
         let file_dir = std::path::Path::new(file_path).parent();
 
+        // Ensure a project exists for this file.
         if let Some(dir) = file_dir {
-            let (project_root, log_message) = if let Some(package_dir) = self.find_package_dir(dir) {
-                (package_dir.to_string_lossy().to_string(), "Found new project at")
+            let (project_root, log_msg) = if let Some(pkg_dir) = self.find_package_dir(dir) {
+                (pkg_dir.to_string_lossy().to_string(), "found project at")
             } else {
-                (dir.to_string_lossy().to_string(), "Creating new project using file directory as root:")
+                (
+                    dir.to_string_lossy().to_string(),
+                    "creating project from file directory:",
+                )
             };
 
             if !self.projects.contains_key(&project_root) {
-                debug!("{} {}", log_message, project_root);
+                debug!("{} {}", log_msg, project_root);
                 let project = Project::new(project_root.clone()).await;
-                project.backend_handle_queue();
-                debug!("project new success root: {}", project_root);
+                project.start_queue_worker();
+                debug!("project created: {}", project_root);
                 self.projects.insert(project_root, project);
             }
         }
 
-        let file_path = params.text_document.uri.path().to_string();
-        self.documents
-            .insert(file_path, Rope::from_str(&params.text_document.text));
+        // Track the document in our store.
+        self.documents.open(
+            &params.text_document.uri,
+            &params.text_document.text,
+            params.text_document.version,
+            params.text_document.language_id.clone(),
+        );
 
         self.on_change(TextDocumentItem {
             uri: params.text_document.uri,
             text: &params.text_document.text,
             version: Some(params.text_document.version),
         })
-        .await
+        .await;
+
+        let _ = self.client.semantic_tokens_refresh().await;
     }
 
     pub(crate) async fn handle_did_change(&self, params: DidChangeTextDocumentParams) {
-        let file_path = params.text_document.uri.path().to_string();
-
-        // Apply incremental edits atomically: hold the DashMap entry lock for
-        // the entire read-modify-write cycle.  Without this, concurrent
-        // did_change handlers (tower-lsp spawns them in parallel) can interleave
-        // and lose edits, causing the server's rope to diverge from the editor.
-        let full_text = {
-            let mut entry = self
-                .documents
-                .entry(file_path.clone())
-                .or_insert_with(|| Rope::from_str(""));
-
-            for change in &params.content_changes {
-                if let Some(range) = change.range {
-                    let start_line = range.start.line as usize;
-                    let start_char = range.start.character as usize;
-                    let end_line = range.end.line as usize;
-                    let end_char = range.end.character as usize;
-
-                    let start_idx = entry
-                        .try_line_to_char(start_line)
-                        .map(|lc| lc + start_char)
-                        .unwrap_or(0);
-                    let end_idx = entry
-                        .try_line_to_char(end_line)
-                        .map(|lc| lc + end_char)
-                        .unwrap_or(entry.len_chars());
-
-                    let start_idx = start_idx.min(entry.len_chars());
-                    let end_idx = end_idx.min(entry.len_chars());
-
-                    if start_idx < end_idx {
-                        entry.remove(start_idx..end_idx);
-                    }
-                    if !change.text.is_empty() {
-                        entry.insert(start_idx, &change.text);
-                    }
-                } else {
-                    *entry = Rope::from_str(&change.text);
-                }
+        // Apply incremental edits and get the resulting full text.
+        let full_text = match self.documents.apply_changes(
+            &params.text_document.uri,
+            params.text_document.version,
+            &params.content_changes,
+        ) {
+            Some(text) => text,
+            None => {
+                debug!(
+                    "did_change for unknown document: {}",
+                    params.text_document.uri
+                );
+                return;
             }
-
-            entry.to_string()
         };
 
+        // Debounce: only trigger on_change for the latest version.
+        let file_path = params.text_document.uri.path().to_string();
         let counter = self
             .debounce_versions
             .entry(file_path)
@@ -106,7 +97,10 @@ impl Backend {
         tokio::time::sleep(std::time::Duration::from_millis(delay)).await;
 
         if counter.load(Ordering::SeqCst) != my_version {
-            debug!("debounce: skipping stale change (version {} superseded)", my_version);
+            debug!(
+                "debounce: skipping stale change (version {} superseded)",
+                my_version
+            );
             return;
         }
 
@@ -115,29 +109,33 @@ impl Backend {
             uri: params.text_document.uri,
             version: Some(params.text_document.version),
         })
-        .await
+        .await;
+
+        let _ = self.client.semantic_tokens_refresh().await;
     }
 
     pub(crate) async fn handle_did_save(&self, params: DidSaveTextDocumentParams) {
         if let Some(text) = params.text {
-            let item = TextDocumentItem {
+            self.on_change(TextDocumentItem {
                 uri: params.text_document.uri,
                 text: &text,
                 version: None,
-            };
-            self.on_change(item).await;
-            _ = self.client.semantic_tokens_refresh().await;
+            })
+            .await;
+            let _ = self.client.semantic_tokens_refresh().await;
         }
-        debug!("file saved!");
+        debug!("file saved");
     }
 
     pub(crate) async fn handle_did_close(&self, params: DidCloseTextDocumentParams) {
-        let file_path = params.text_document.uri.path().to_string();
-        self.documents.remove(&file_path);
-        debug!("file closed: {}", file_path);
+        self.documents.close(&params.text_document.uri);
+        debug!("file closed: {}", params.text_document.uri);
     }
 
-    pub(crate) async fn handle_did_change_configuration(&self, params: DidChangeConfigurationParams) {
+    pub(crate) async fn handle_did_change_configuration(
+        &self,
+        params: DidChangeConfigurationParams,
+    ) {
         debug!("configuration changed: {:?}", params.settings);
 
         let nature_section = params
@@ -149,11 +147,12 @@ impl Backend {
 
         self.apply_config(&nature_section);
 
+        // Also pull fresh config from the client.
         if let Ok(response) = self
             .client
             .configuration(vec![ConfigurationItem {
                 scope_uri: None,
-                section: Some("nature".to_string()),
+                section: Some("nature".into()),
             }])
             .await
         {
@@ -163,105 +162,99 @@ impl Backend {
         }
     }
 
-    pub(crate) async fn handle_did_change_watched_files(&self, params: DidChangeWatchedFilesParams) {
-        debug!("watched files changed!");
+    pub(crate) async fn handle_did_change_watched_files(
+        &self,
+        params: DidChangeWatchedFilesParams,
+    ) {
+        debug!("watched files changed");
 
-        for param in params.changes {
-            let file_path = param.uri.path();
+        for change in params.changes {
+            let file_path = change.uri.path();
 
+            // .n file created/deleted → re-scan workspace index.
             if file_path.ends_with(".n") {
-                if let Some(project) = self.get_file_project(&file_path) {
-                    if let Ok(mut workspace_index) = project.workspace_index.lock() {
-                        workspace_index.scan_workspace(&project.root, &project.nature_root);
+                if let Some(project) = self.get_file_project(file_path) {
+                    if let Ok(mut ws_index) = project.workspace_index.lock() {
+                        ws_index.scan_workspace(&project.root, &project.nature_root);
                         debug!("workspace re-indexed after .n file change: {}", file_path);
                     }
                 }
                 continue;
             }
 
+            // package.toml changes → re-parse package config.
             if !file_path.ends_with("package.toml") {
-                debug!("Ignoring non-package.toml watched file: {}", file_path);
                 continue;
             }
 
-            let Some(project) = self.get_file_project(&file_path) else {
-                debug!("No project found for watched file: {}", file_path);
+            let Some(project) = self.get_file_project(file_path) else {
+                debug!("no project for watched file: {}", file_path);
                 continue;
             };
 
-            match parse_package(&file_path) {
-                Ok(package_conf) => {
-                    {
-                        let mut package_option = project.package_config.lock().unwrap();
-                        *package_option = Some(package_conf);
-                    }
-                    self.client.publish_diagnostics(param.uri.clone(), vec![], None).await;
+            match parse_package(file_path) {
+                Ok(pkg) => {
+                    *project.package_config.lock().unwrap() = Some(pkg);
+                    self.client
+                        .publish_diagnostics(change.uri.clone(), vec![], None)
+                        .await;
                 }
                 Err(e) => {
-                    if let Ok(content) = std::fs::read_to_string(&file_path) {
+                    if let Ok(content) = std::fs::read_to_string(file_path) {
                         let rope = ropey::Rope::from_str(&content);
-                        let start_position = offset_to_position(e.start, &rope).unwrap_or(Position::new(0, 0));
-                        let end_position = offset_to_position(e.end, &rope).unwrap_or(Position::new(0, 0));
-
-                        let diagnostic = Diagnostic::new_simple(
-                            Range::new(start_position, end_position),
-                            format!("parser package.toml failed: {}", e.message),
+                        let start = offset_to_position(e.start, &rope)
+                            .unwrap_or(Position::new(0, 0));
+                        let end =
+                            offset_to_position(e.end, &rope).unwrap_or(Position::new(0, 0));
+                        let diag = Diagnostic::new_simple(
+                            Range::new(start, end),
+                            format!("package.toml parse error: {}", e.message),
                         );
-                        self.client.publish_diagnostics(param.uri.clone(), vec![diagnostic], None).await;
+                        self.client
+                            .publish_diagnostics(change.uri.clone(), vec![diag], None)
+                            .await;
                     }
                 }
             }
         }
-
-        debug!("watched files updated");
     }
 
-    pub(crate) async fn handle_execute_command(&self, _: ExecuteCommandParams) -> Option<serde_json::Value> {
-        debug!("command executed!");
+    // ── Core rebuild trigger ────────────────────────────────────────────
 
-        match self.client.apply_edit(WorkspaceEdit::default()).await {
-            Ok(res) if res.applied => self.client.log_message(MessageType::INFO, "applied").await,
-            Ok(_) => self.client.log_message(MessageType::INFO, "rejected").await,
-            Err(err) => self.client.log_message(MessageType::ERROR, err).await,
-        }
-
-        None
-    }
-
-    // ── Internal helpers ────────────────────────────────────────────────
-
-    pub(crate) async fn on_change<'a>(&self, params: TextDocumentItem<'a>) {
+    /// Called after every meaningful document change. Runs the analysis
+    /// pipeline and publishes diagnostics.
+    pub(crate) async fn on_change(&self, params: TextDocumentItem<'_>) {
         debug!("on_change: {}", params.uri);
 
         let file_path = params.uri.path();
-        let Some(mut project) = self.get_file_project(&file_path) else {
-            debug!("No project found for file: {}, skipping on_change", file_path);
+        let Some(mut project) = self.get_file_project(file_path) else {
+            debug!("no project for file: {}, skipping", file_path);
             return;
         };
 
         if file_path.ends_with("package.toml") {
-            debug!("Skipping package.toml in on_change");
+            debug!("skipping package.toml in on_change");
             return;
         }
 
-        let module_ident = module_unique_ident(&project.root, &file_path);
-        debug!("will build, module ident: {}", module_ident);
+        let module_ident = module_unique_ident(&project.root, file_path);
+        debug!("building module: {}", module_ident);
 
-        let module_index = project.build(&file_path, &module_ident, Some(params.text.to_string())).await;
-        debug!("build success");
+        let module_index = project
+            .build(file_path, &module_ident, Some(params.text.to_string()))
+            .await;
+        debug!("build complete");
 
+        // Collect diagnostics for the changed module and its dependents.
         let all_diagnostics = {
             let module_db = project.module_db.lock().unwrap();
             let mut result: Vec<(String, Vec<Diagnostic>)> = Vec::new();
 
             if let Some(m) = module_db.get(module_index) {
-                let diags = Self::build_diagnostics(m);
-                result.push((m.path.clone(), diags));
-
-                for &ref_index in &m.references {
-                    if let Some(dep_m) = module_db.get(ref_index) {
-                        let dep_diags = Self::build_diagnostics(dep_m);
-                        result.push((dep_m.path.clone(), dep_diags));
+                result.push((m.path.clone(), Self::build_diagnostics(m)));
+                for &ref_idx in &m.references {
+                    if let Some(dep) = module_db.get(ref_idx) {
+                        result.push((dep.path.clone(), Self::build_diagnostics(dep)));
                     }
                 }
             }
@@ -269,39 +262,42 @@ impl Backend {
             result
         };
 
+        // Publish diagnostics.
         for (path, diagnostics) in all_diagnostics {
             if path == file_path {
-                self.client.publish_diagnostics(params.uri.clone(), diagnostics, params.version).await;
+                self.client
+                    .publish_diagnostics(params.uri.clone(), diagnostics, params.version)
+                    .await;
             } else if let Ok(uri) = Url::from_file_path(&path) {
-                self.client.publish_diagnostics(uri, diagnostics, None).await;
+                self.client
+                    .publish_diagnostics(uri, diagnostics, None)
+                    .await;
             }
         }
     }
 
-    /// Build LSP diagnostics from a module's analyzer errors.
-    pub(crate) fn build_diagnostics(m: &crate::project::Module) -> Vec<Diagnostic> {
-        let mut seen_positions = std::collections::HashSet::new();
+    /// Convert a module's analyzer errors into LSP diagnostics.
+    /// Also detects unused imports and adds HINT-level diagnostics for them.
+    pub fn build_diagnostics(m: &crate::project::Module) -> Vec<Diagnostic> {
+        let mut seen = std::collections::HashSet::new();
 
-        m.analyzer_errors
+        let mut diagnostics: Vec<Diagnostic> = m.analyzer_errors
             .iter()
-            .filter(|error| error.end > 0)
-            .filter(|error| {
-                let position_key = (error.start, error.end);
-                seen_positions.insert(position_key)
-            })
-            .filter_map(|error| {
-                let start_position = offset_to_position(error.start, &m.rope)?;
-                let end_position = offset_to_position(error.end, &m.rope)?;
-                let severity = if error.is_warning {
+            .filter(|e| e.end > 0)
+            .filter(|e| seen.insert((e.start, e.end)))
+            .filter_map(|e| {
+                let start = offset_to_position(e.start, &m.rope)?;
+                let end = offset_to_position(e.end, &m.rope)?;
+                let severity = if e.is_warning {
                     DiagnosticSeverity::HINT
                 } else {
                     DiagnosticSeverity::ERROR
                 };
                 Some(Diagnostic {
-                    range: Range::new(start_position, end_position),
+                    range: Range::new(start, end),
                     severity: Some(severity),
-                    message: error.message.clone(),
-                    tags: if error.is_warning {
+                    message: e.message.clone(),
+                    tags: if e.is_warning {
                         Some(vec![DiagnosticTag::UNNECESSARY])
                     } else {
                         None
@@ -309,6 +305,114 @@ impl Backend {
                     ..Default::default()
                 })
             })
-            .collect()
+            .collect();
+
+        // ── Unused import diagnostics ───────────────────────────────────
+        for dep in &m.dependencies {
+            if dep.as_name == "*" {
+                continue;
+            }
+            if dep.as_name.is_empty() && !dep.is_selective {
+                continue;
+            }
+            if dep.start == 0 && dep.end == 0 {
+                continue;
+            }
+
+            let is_used = if dep.is_selective {
+                if let Some(items) = &dep.select_items {
+                    items.iter().any(|item| {
+                        let name = item.alias.as_deref().unwrap_or(&item.ident);
+                        is_identifier_used_in_source(&m.source, name, dep.start, dep.end)
+                    })
+                } else {
+                    true
+                }
+            } else {
+                is_identifier_used_in_source(&m.source, &dep.as_name, dep.start, dep.end)
+            };
+
+            if is_used {
+                continue;
+            }
+
+            // Build a human-readable label for the import.
+            let import_label = if dep.is_selective {
+                if let Some(items) = &dep.select_items {
+                    let names: Vec<&str> = items
+                        .iter()
+                        .map(|i| i.alias.as_deref().unwrap_or(i.ident.as_str()))
+                        .collect();
+                    format!("{}.{{{}}}", dep.module_ident, names.join(", "))
+                } else {
+                    dep.module_ident.clone()
+                }
+            } else {
+                dep.as_name.clone()
+            };
+
+            let start = match offset_to_position(dep.start, &m.rope) {
+                Some(p) => p,
+                None => continue,
+            };
+            let end = match offset_to_position(dep.end, &m.rope) {
+                Some(p) => p,
+                None => continue,
+            };
+
+            diagnostics.push(Diagnostic {
+                range: Range::new(start, end),
+                severity: Some(DiagnosticSeverity::HINT),
+                message: format!("'{}' is imported but never used", import_label),
+                tags: Some(vec![DiagnosticTag::UNNECESSARY]),
+                source: Some("nls".into()),
+                ..Default::default()
+            });
+        }
+
+        diagnostics
     }
+}
+
+/// Check whether `name` appears as an identifier in `source`, ignoring the
+/// region between `skip_start..skip_end` (the import statement itself).
+fn is_identifier_used_in_source(source: &str, name: &str, skip_start: usize, skip_end: usize) -> bool {
+    if name.is_empty() {
+        return true;
+    }
+
+    let bytes = source.as_bytes();
+    let name_len = name.len();
+
+    let mut pos = 0;
+    while pos + name_len <= bytes.len() {
+        if let Some(found) = source[pos..].find(name) {
+            let abs_pos = pos + found;
+
+            // Skip if inside the import statement range
+            if abs_pos >= skip_start && abs_pos < skip_end {
+                pos = abs_pos + name_len;
+                continue;
+            }
+
+            // Check word boundaries
+            let before_ok = abs_pos == 0 || !is_ident_char(bytes[abs_pos - 1]);
+            let after_ok = abs_pos + name_len >= bytes.len()
+                || !is_ident_char(bytes[abs_pos + name_len]);
+
+            if before_ok && after_ok {
+                return true;
+            }
+
+            pos = abs_pos + name_len;
+        } else {
+            break;
+        }
+    }
+
+    false
+}
+
+fn is_ident_char(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
 }

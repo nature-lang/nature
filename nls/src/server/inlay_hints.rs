@@ -1,328 +1,432 @@
-//! Inlay hints: type annotations and parameter names.
+//! Inlay hints: type annotations for variable declarations and parameter
+//! labels at call sites.
 
 use tower_lsp::lsp_types::*;
 
-use crate::utils::offset_to_position;
+use crate::analyzer::common::{AstCall, AstNode, Expr, Stmt, TypeKind};
+use crate::analyzer::symbol::SymbolKind;
+use crate::project::{Module, Project};
+use crate::server::config::{cfg_bool, CFG_INLAY_TYPE_HINTS, CFG_INLAY_PARAM_HINTS};
+use crate::utils::{offset_to_position, position_to_char_offset};
 
-use super::config::{cfg_bool, CFG_INLAY_HINTS_ENABLED, CFG_INLAY_PARAM_HINTS, CFG_INLAY_TYPE_HINTS};
-use super::hover::format_type_display;
 use super::Backend;
 
+// ─── Handler wiring ─────────────────────────────────────────────────────────────
+
 impl Backend {
-    pub(crate) async fn handle_inlay_hint(&self, params: InlayHintParams) -> Option<Vec<InlayHint>> {
-        let uri = params.text_document.uri;
-        let range = params.range;
+    pub(crate) async fn handle_inlay_hint(
+        &self,
+        params: InlayHintParams,
+    ) -> Option<Vec<InlayHint>> {
+        let type_hints = cfg_bool(&self.config, CFG_INLAY_TYPE_HINTS, false);
+        let param_hints = cfg_bool(&self.config, CFG_INLAY_PARAM_HINTS, false);
 
-        if !cfg_bool(&self.config, CFG_INLAY_HINTS_ENABLED, true) {
-            return None;
+        // Nothing to do if both kinds are disabled.
+        if !type_hints && !param_hints {
+            return Some(vec![]);
         }
 
-        let show_type_hints = cfg_bool(&self.config, CFG_INLAY_TYPE_HINTS, true);
-        let show_param_hints = cfg_bool(&self.config, CFG_INLAY_PARAM_HINTS, false);
-
-        let file_path = uri.path();
+        let file_path = params.text_document.uri.path();
         let project = self.get_file_project(file_path)?;
-
-        // Skip while a build is in progress to avoid reading partial data.
-        if project.is_building.load(std::sync::atomic::Ordering::SeqCst) {
-            return None;
-        }
-
-        let module_index = {
-            let module_handled = project.module_handled.lock().ok()?;
-            *module_handled.get(file_path)?
-        };
-
-        let module_db = project.module_db.lock().ok()?;
-        let module = module_db.get(module_index)?;
-
-        let live_doc = self.documents.get(file_path);
-        let rope = match &live_doc {
-            Some(r) => r.value(),
-            None => &module.rope,
-        };
-
-        let mut hints = Vec::new();
-
-        if show_type_hints {
-            for fndef in &module.all_fndefs {
-                // Skip individual fndefs whose lock is contended (e.g. during a
-                // concurrent build) instead of aborting the entire handler.
-                if let Ok(fndef) = fndef.lock() {
-                    collect_var_type_hints(&fndef.body.stmts, rope, &range, &mut hints);
-                }
-            }
-            collect_var_type_hints_from_stmts(&module.stmts, rope, &range, &mut hints);
-        }
-
-        if show_param_hints {
-            let symbol_table = project.symbol_table.lock().ok()?;
-            collect_param_hints_from_stmts(&module.stmts, rope, &range, &mut hints, &symbol_table);
-            for fndef in &module.all_fndefs {
-                if let Ok(fndef) = fndef.lock() {
-                    collect_param_hints(&fndef.body.stmts, rope, &range, &mut hints, &symbol_table);
-                }
-            }
-        }
-
-        let hints = if hints.is_empty() { None } else { Some(hints) };
-        hints
+        build_inlay_hints(&project, file_path, params.range, type_hints, param_hints)
     }
 }
 
-// ─── Inlay hint helpers ─────────────────────────────────────────────────────────
+// ─── Hint collection ────────────────────────────────────────────────────────────
 
-/// Collect type hints for `var` declarations whose type was inferred.
-fn collect_var_type_hints(
-    stmts: &[Box<crate::analyzer::common::Stmt>],
-    rope: &ropey::Rope,
-    visible_range: &Range,
+/// Build inlay hints for the visible `range` in the given file.
+fn build_inlay_hints(
+    project: &Project,
+    file_path: &str,
+    range: Range,
+    type_hints: bool,
+    param_hints: bool,
+) -> Option<Vec<InlayHint>> {
+    let mh = project.module_handled.lock().ok()?;
+    let &idx = mh.get(file_path)?;
+    drop(mh);
+
+    let db = project.module_db.lock().ok()?;
+    let module = db.get(idx)?;
+
+    let range_start = position_to_char_offset(range.start, &module.rope)?;
+    let range_end = position_to_char_offset(range.end, &module.rope)?;
+
+    let mut hints = Vec::new();
+
+    let opts = HintOpts { type_hints, param_hints };
+
+    // Walk top-level statements.
+    collect_hints_from_stmts(&module.stmts, module, project, range_start, range_end, &opts, &mut hints);
+
+    // Walk all function bodies.
+    for fndef_mutex in &module.all_fndefs {
+        let fndef = fndef_mutex.lock().unwrap();
+        collect_hints_from_stmts(
+            &fndef.body.stmts,
+            module,
+            project,
+            range_start,
+            range_end,
+            &opts,
+            &mut hints,
+        );
+    }
+
+    Some(hints)
+}
+
+/// Which hint kinds are enabled.
+struct HintOpts {
+    type_hints: bool,
+    param_hints: bool,
+}
+
+/// Collect inlay hints from a list of statements.
+fn collect_hints_from_stmts(
+    stmts: &[Box<Stmt>],
+    module: &Module,
+    project: &Project,
+    range_start: usize,
+    range_end: usize,
+    opts: &HintOpts,
     hints: &mut Vec<InlayHint>,
 ) {
-    use crate::analyzer::common::AstNode;
-
     for stmt in stmts {
+        // Quick range check: skip statements entirely outside the visible range.
+        if stmt.end < range_start || stmt.start > range_end {
+            continue;
+        }
+
         match &stmt.node {
-            AstNode::VarDef(var_decl, _) => {
-                if let Ok(vd) = var_decl.lock() {
-                    if vd.type_.start == 0 && vd.type_.end == 0 && !vd.type_.kind.is_unknown() {
-                        if let Some(pos) = offset_to_position(vd.symbol_end, rope) {
-                            if pos.line >= visible_range.start.line && pos.line <= visible_range.end.line {
-                                let type_str = format_type_display(&vd.type_);
-                                if type_str != "unknown" && type_str != "void" {
-                                    hints.push(InlayHint {
-                                        position: pos,
-                                        label: InlayHintLabel::String(format!(": {}", type_str)),
-                                        kind: Some(InlayHintKind::TYPE),
-                                        text_edits: None,
-                                        tooltip: None,
-                                        padding_left: Some(false),
-                                        padding_right: Some(true),
-                                        data: None,
-                                    });
-                                }
-                            }
-                        }
-                    }
+            // ── Type hints for variable declarations ─────────────────
+            AstNode::VarDef(var_mutex, _right) if opts.type_hints => {
+                let var = var_mutex.lock().unwrap();
+                if let Some(hint) = make_type_hint(&var.type_, var.symbol_end, &module.rope) {
+                    hints.push(hint);
                 }
             }
+
+            // ── Recursively check if/for/etc. bodies ─────────────────
             AstNode::If(_, consequent, alternate) => {
-                collect_var_type_hints(&consequent.stmts, rope, visible_range, hints);
-                collect_var_type_hints(&alternate.stmts, rope, visible_range, hints);
-            }
-            AstNode::ForCond(_, body) => {
-                collect_var_type_hints(&body.stmts, rope, visible_range, hints);
+                collect_hints_from_stmts(&consequent.stmts, module, project, range_start, range_end, opts, hints);
+                collect_hints_from_stmts(&alternate.stmts, module, project, range_start, range_end, opts, hints);
             }
             AstNode::ForIterator(_, _, _, body) => {
-                collect_var_type_hints(&body.stmts, rope, visible_range, hints);
+                collect_hints_from_stmts(&body.stmts, module, project, range_start, range_end, opts, hints);
             }
-            AstNode::ForTradition(_, _, _, body) => {
-                collect_var_type_hints(&body.stmts, rope, visible_range, hints);
-            }
-            AstNode::TryCatch(try_body, _, catch_body) => {
-                collect_var_type_hints(&try_body.stmts, rope, visible_range, hints);
-                collect_var_type_hints(&catch_body.stmts, rope, visible_range, hints);
+            AstNode::ForCond(_, body) => {
+                collect_hints_from_stmts(&body.stmts, module, project, range_start, range_end, opts, hints);
             }
             _ => {}
         }
-    }
-}
 
-/// Collect type hints from top-level statements.
-fn collect_var_type_hints_from_stmts(
-    stmts: &[Box<crate::analyzer::common::Stmt>],
-    rope: &ropey::Rope,
-    visible_range: &Range,
-    hints: &mut Vec<InlayHint>,
-) {
-    collect_var_type_hints(stmts, rope, visible_range, hints);
-}
-
-/// Collect parameter-name hints at call sites inside statements.
-fn collect_param_hints_from_stmts(
-    stmts: &[Box<crate::analyzer::common::Stmt>],
-    rope: &ropey::Rope,
-    visible_range: &Range,
-    hints: &mut Vec<InlayHint>,
-    symbol_table: &crate::analyzer::symbol::SymbolTable,
-) {
-    collect_param_hints(stmts, rope, visible_range, hints, symbol_table);
-}
-
-/// Walk statements looking for `Call` nodes and emit parameter-name hints.
-fn collect_param_hints(
-    stmts: &[Box<crate::analyzer::common::Stmt>],
-    rope: &ropey::Rope,
-    visible_range: &Range,
-    hints: &mut Vec<InlayHint>,
-    symbol_table: &crate::analyzer::symbol::SymbolTable,
-) {
-    use crate::analyzer::common::AstNode;
-
-    for stmt in stmts {
-        collect_param_hints_from_node(&stmt.node, rope, visible_range, hints, symbol_table);
-
-        match &stmt.node {
-            AstNode::If(_, consequent, alternate) => {
-                collect_param_hints(&consequent.stmts, rope, visible_range, hints, symbol_table);
-                collect_param_hints(&alternate.stmts, rope, visible_range, hints, symbol_table);
-            }
-            AstNode::ForCond(_, body) => {
-                collect_param_hints(&body.stmts, rope, visible_range, hints, symbol_table);
-            }
-            AstNode::ForIterator(_, _, _, body) => {
-                collect_param_hints(&body.stmts, rope, visible_range, hints, symbol_table);
-            }
-            AstNode::ForTradition(_, _, _, body) => {
-                collect_param_hints(&body.stmts, rope, visible_range, hints, symbol_table);
-            }
-            AstNode::TryCatch(try_body, _, catch_body) => {
-                collect_param_hints(&try_body.stmts, rope, visible_range, hints, symbol_table);
-                collect_param_hints(&catch_body.stmts, rope, visible_range, hints, symbol_table);
-            }
-            _ => {}
+        // ── Parameter hints at call sites ────────────────────────────
+        if opts.param_hints {
+            collect_call_hints_from_expr_in_node(&stmt.node, module, project, range_start, range_end, hints);
         }
     }
 }
 
-/// Try to extract parameter-name hints from a single AST node.
-fn collect_param_hints_from_node(
-    node: &crate::analyzer::common::AstNode,
-    rope: &ropey::Rope,
-    visible_range: &Range,
+/// Walk an AST node looking for `Call` expressions to generate parameter hints.
+fn collect_call_hints_from_expr_in_node(
+    node: &AstNode,
+    module: &Module,
+    project: &Project,
+    range_start: usize,
+    range_end: usize,
     hints: &mut Vec<InlayHint>,
-    symbol_table: &crate::analyzer::symbol::SymbolTable,
 ) {
-    use crate::analyzer::common::AstNode;
-
     match node {
         AstNode::Call(call) => {
-            emit_call_param_hints(call, rope, visible_range, hints, symbol_table);
-        }
-        AstNode::VarDef(_, expr) => {
-            if let AstNode::Call(call) = &expr.node {
-                emit_call_param_hints(call, rope, visible_range, hints, symbol_table);
+            collect_param_hints(call, module, project, hints);
+            // Recurse into arguments (they may contain nested calls).
+            for arg in &call.args {
+                collect_call_hints_from_expr(arg, module, project, range_start, range_end, hints);
             }
+            // Recurse into the callee expression.
+            collect_call_hints_from_expr(&call.left, module, project, range_start, range_end, hints);
         }
-        AstNode::Assign(_, expr) => {
-            if let AstNode::Call(call) = &expr.node {
-                emit_call_param_hints(call, rope, visible_range, hints, symbol_table);
-            }
+        AstNode::VarDef(_, right) => {
+            collect_call_hints_from_expr(right, module, project, range_start, range_end, hints);
         }
-        AstNode::Ret(expr) | AstNode::Throw(expr) => {
-            if let AstNode::Call(call) = &expr.node {
-                emit_call_param_hints(call, rope, visible_range, hints, symbol_table);
-            }
+        AstNode::Assign(left, right) => {
+            collect_call_hints_from_expr(left, module, project, range_start, range_end, hints);
+            collect_call_hints_from_expr(right, module, project, range_start, range_end, hints);
+        }
+        AstNode::Return(Some(expr)) => {
+            collect_call_hints_from_expr(expr, module, project, range_start, range_end, hints);
+        }
+        AstNode::Ret(expr) => {
+            collect_call_hints_from_expr(expr, module, project, range_start, range_end, hints);
+        }
+        AstNode::Fake(expr) => {
+            collect_call_hints_from_expr(expr, module, project, range_start, range_end, hints);
         }
         _ => {}
     }
 }
 
-/// Emit parameter-name hints for a specific function call.
-fn emit_call_param_hints(
-    call: &crate::analyzer::common::AstCall,
-    rope: &ropey::Rope,
-    visible_range: &Range,
+/// Walk an expression tree looking for `Call` nodes.
+fn collect_call_hints_from_expr(
+    expr: &Expr,
+    module: &Module,
+    project: &Project,
+    range_start: usize,
+    range_end: usize,
     hints: &mut Vec<InlayHint>,
-    symbol_table: &crate::analyzer::symbol::SymbolTable,
 ) {
-    use crate::analyzer::common::AstNode;
-
-    let param_names: Vec<String> = match &call.left.node {
-        AstNode::Ident(_, symbol_id) if *symbol_id > 0 => {
-            resolve_fn_param_names(*symbol_id, symbol_table)
-        }
-        AstNode::SelectExpr(left, key, _) => {
-            // Try to resolve the impl function through the symbol table.
-            // Build the impl ident: "{type_ident}.{method_name}"
-            let base_type = match &left.type_.kind {
-                crate::analyzer::common::TypeKind::Ref(v) | crate::analyzer::common::TypeKind::Ptr(v) => v.as_ref(),
-                _ => &left.type_,
-            };
-            if !base_type.ident.is_empty() {
-                let impl_ident = format!("{}.{}", base_type.ident, key);
-                if let Some(symbol_id) = symbol_table.find_symbol_id(&impl_ident, symbol_table.global_scope_id) {
-                    // Skip "self" since SelectExpr calls don't include it in args
-                    let mut names = resolve_fn_param_names(symbol_id, symbol_table);
-                    if names.first().map_or(false, |n| n == "self") {
-                        names.remove(0);
-                    }
-                    names
-                } else {
-                    return; // cannot resolve param names
-                }
-            } else {
-                return; // no type ident, cannot resolve
-            }
-        }
-        _ => return,
-    };
-
-    if param_names.is_empty() {
+    if expr.end < range_start || expr.start > range_end {
         return;
     }
+    collect_call_hints_from_expr_in_node(&expr.node, module, project, range_start, range_end, hints);
+}
 
-    for (i, arg) in call.args.iter().enumerate() {
-        if i >= param_names.len() {
-            break;
-        }
+// ─── Type hints ─────────────────────────────────────────────────────────────────
 
-        let param_name = &param_names[i];
-        if param_name.is_empty() || param_name == "self" {
-            continue;
-        }
+/// Create a type-annotation inlay hint placed after the variable name
+/// (right after `symbol_end`).
+fn make_type_hint(
+    type_: &crate::analyzer::common::Type,
+    symbol_end: usize,
+    rope: &ropey::Rope,
+) -> Option<InlayHint> {
+    // Don't show hints for unknown / void types.
+    if matches!(type_.kind, TypeKind::Unknown | TypeKind::Void) {
+        return None;
+    }
 
-        if let AstNode::Ident(arg_name, _) = &arg.node {
-            if arg_name == param_name {
-                continue;
-            }
-        }
+    let position = offset_to_position(symbol_end, rope)?;
+    let label = format!(": {}", type_display(type_));
 
-        if call.args.len() == 1 {
-            if let AstNode::Literal(_, _) = &arg.node {
-                continue;
-            }
-        }
+    Some(InlayHint {
+        position,
+        label: InlayHintLabel::String(label),
+        kind: Some(InlayHintKind::TYPE),
+        text_edits: None,
+        tooltip: None,
+        padding_left: None,
+        padding_right: None,
+        data: None,
+    })
+}
 
-        if let Some(pos) = offset_to_position(arg.start, rope) {
-            if pos.line >= visible_range.start.line && pos.line <= visible_range.end.line {
-                hints.push(InlayHint {
-                    position: pos,
-                    label: InlayHintLabel::String(format!("{}:", param_name)),
-                    kind: Some(InlayHintKind::PARAMETER),
-                    text_edits: None,
-                    tooltip: None,
-                    padding_left: Some(false),
-                    padding_right: Some(true),
-                    data: None,
-                });
-            }
-        }
+/// Prefer the type's `ident` for display (e.g., `MyStruct` instead of `struct {...}`).
+fn type_display(t: &crate::analyzer::common::Type) -> String {
+    if !t.ident.is_empty() {
+        t.ident.clone()
+    } else {
+        t.to_string()
     }
 }
 
-/// Resolve parameter names for a function given its symbol ID.
-fn resolve_fn_param_names(
-    symbol_id: crate::analyzer::symbol::NodeId,
-    symbol_table: &crate::analyzer::symbol::SymbolTable,
-) -> Vec<String> {
-    use crate::analyzer::symbol::SymbolKind;
+// ─── Parameter hints ────────────────────────────────────────────────────────────
 
-    let symbol = match symbol_table.get_symbol_ref(symbol_id) {
-        Some(s) => s,
-        None => return Vec::new(),
+/// Generate parameter-name hints for a function call's arguments.
+fn collect_param_hints(
+    call: &AstCall,
+    module: &Module,
+    project: &Project,
+    hints: &mut Vec<InlayHint>,
+) {
+    // Resolve the callee to its function definition to get param names.
+    let param_names = resolve_call_param_names(call, project);
+    let param_names = match param_names {
+        Some(names) if !names.is_empty() => names,
+        _ => return,
     };
 
-    let fndef = match &symbol.kind {
-        SymbolKind::Fn(fndef) => fndef.clone(),
-        _ => return Vec::new(),
-    };
+    for (i, arg) in call.args.iter().enumerate() {
+        let Some(name) = param_names.get(i) else {
+            break;
+        };
 
-    if let Ok(fd) = fndef.lock() {
-        return fd.params.iter().filter_map(|p| {
-            p.lock().ok().map(|vd| vd.ident.clone())
-        }).collect();
+        // Skip if the argument already looks like the parameter name
+        // (e.g., passing `name` to a param called `name`).
+        if arg_matches_param(arg, name) {
+            continue;
+        }
+
+        let Some(position) = offset_to_position(arg.start, &module.rope) else {
+            continue;
+        };
+
+        hints.push(InlayHint {
+            position,
+            label: InlayHintLabel::String(format!("{}:", name)),
+            kind: Some(InlayHintKind::PARAMETER),
+            text_edits: None,
+            tooltip: None,
+            padding_left: None,
+            padding_right: Some(true),
+            data: None,
+        });
+    }
+}
+
+/// Extract parameter names from the function being called.
+///
+/// Resolution strategy:
+///   1. If `left` is an `Ident(_, symbol_id)`, look up the symbol directly.
+///   2. If the left expression's type is `Fn(TypeFn)`, we only have types, not
+///      names — return `None` (no parameter hints for indirect calls).
+fn resolve_call_param_names(call: &AstCall, project: &Project) -> Option<Vec<String>> {
+    // Direct call via ident: `foo(a, b)`
+    if let AstNode::Ident(_, symbol_id) = &call.left.node {
+        return param_names_from_symbol(*symbol_id, project);
     }
 
-    Vec::new()
+    // Method call via select: `obj.method(a, b)` — StructSelect carries the
+    // property type which may be a function.  Fall back to the left expr type.
+    if let AstNode::StructSelect(_, _, prop) = &call.left.node {
+        if let TypeKind::Fn(ref fn_type) = prop.type_.kind {
+            // TypeFn only has types, not names. Try to find the fndef via name.
+            return param_names_from_fn_name(&fn_type.name, project);
+        }
+    }
+
+    None
+}
+
+/// Look up a symbol by id and extract param names if it's a function.
+fn param_names_from_symbol(symbol_id: usize, project: &Project) -> Option<Vec<String>> {
+    let st = project.symbol_table.lock().ok()?;
+    let symbol = st.get_symbol_ref(symbol_id)?;
+
+    match &symbol.kind {
+        SymbolKind::Fn(fndef_mutex) => {
+            let fndef = fndef_mutex.lock().unwrap();
+            Some(extract_param_names(&fndef))
+        }
+        _ => None,
+    }
+}
+
+/// Try to find a function by name in all modules' global fndefs.
+fn param_names_from_fn_name(name: &str, project: &Project) -> Option<Vec<String>> {
+    if name.is_empty() {
+        return None;
+    }
+    let db = project.module_db.lock().ok()?;
+    for module in db.iter() {
+        for fndef_mutex in &module.all_fndefs {
+            let fndef = fndef_mutex.lock().unwrap();
+            if fndef.fn_name == name || fndef.symbol_name == name {
+                return Some(extract_param_names(&fndef));
+            }
+        }
+    }
+    None
+}
+
+/// Extract non-self parameter names from a function definition.
+fn extract_param_names(fndef: &crate::analyzer::common::AstFnDef) -> Vec<String> {
+    fndef
+        .params
+        .iter()
+        .filter_map(|p| {
+            let p = p.lock().unwrap();
+            if p.ident == "self" {
+                None
+            } else {
+                Some(p.ident.clone())
+            }
+        })
+        .collect()
+}
+
+/// Check whether an argument expression is just an ident matching the param name.
+fn arg_matches_param(arg: &Expr, param_name: &str) -> bool {
+    if let AstNode::Ident(name, _) = &arg.node {
+        name == param_name
+    } else {
+        false
+    }
+}
+
+// ─── Tests ──────────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::analyzer::common::{Type, VarDeclExpr};
+    use ropey::Rope;
+
+    #[test]
+    fn type_hint_for_i64() {
+        let t = Type::new(TypeKind::Int64);
+        let rope = Rope::from_str("var x = 42");
+        // symbol_end = 5 (after "var x")
+        let hint = make_type_hint(&t, 5, &rope).expect("should produce hint");
+        match &hint.label {
+            InlayHintLabel::String(s) => assert!(s.contains("i64"), "got: {}", s),
+            _ => panic!("expected string label"),
+        }
+        assert_eq!(hint.kind, Some(InlayHintKind::TYPE));
+    }
+
+    #[test]
+    fn no_type_hint_for_unknown() {
+        let t = Type::new(TypeKind::Unknown);
+        let rope = Rope::from_str("var x = ???");
+        assert!(make_type_hint(&t, 5, &rope).is_none());
+    }
+
+    #[test]
+    fn no_type_hint_for_void() {
+        let t = Type::new(TypeKind::Void);
+        let rope = Rope::from_str("var x = noop()");
+        assert!(make_type_hint(&t, 5, &rope).is_none());
+    }
+
+    #[test]
+    fn type_display_prefers_ident() {
+        let mut t = Type::new(TypeKind::Struct("MyStruct".into(), 0, vec![]));
+        t.ident = "MyStruct".into();
+        assert_eq!(type_display(&t), "MyStruct");
+    }
+
+    #[test]
+    fn arg_matches_param_ident() {
+        let expr = Expr {
+            start: 0,
+            end: 3,
+            type_: Type::default(),
+            target_type: Type::default(),
+            node: AstNode::Ident("foo".into(), 0),
+        };
+        assert!(arg_matches_param(&expr, "foo"));
+        assert!(!arg_matches_param(&expr, "bar"));
+    }
+
+    #[test]
+    fn extract_param_names_skips_self() {
+        use crate::analyzer::common::AstFnDef;
+        use std::sync::{Arc, Mutex};
+
+        let self_param = Arc::new(Mutex::new(VarDeclExpr {
+            ident: "self".into(),
+            symbol_id: 0,
+            symbol_start: 0,
+            symbol_end: 0,
+            type_: Type::default(),
+            be_capture: false,
+            heap_ident: None,
+        }));
+        let x_param = Arc::new(Mutex::new(VarDeclExpr {
+            ident: "x".into(),
+            symbol_id: 0,
+            symbol_start: 0,
+            symbol_end: 0,
+            type_: Type::new(TypeKind::Int64),
+            be_capture: false,
+            heap_ident: None,
+        }));
+        let fndef = AstFnDef {
+            params: vec![self_param, x_param],
+            ..AstFnDef::default()
+        };
+        let names = extract_param_names(&fndef);
+        assert_eq!(names, vec!["x"]);
+    }
 }

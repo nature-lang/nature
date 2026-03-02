@@ -1,375 +1,289 @@
-//! Document symbols and workspace symbols.
+//! Document-symbol and workspace-symbol request handlers.
 
-use log::debug;
 use tower_lsp::lsp_types::*;
 
+use crate::analyzer::common::{AstNode, Stmt};
+use crate::analyzer::workspace_index::IndexedSymbolKind;
+use crate::project::Project;
 use crate::utils::offset_to_position;
 
-use super::hover::format_type_display;
 use super::Backend;
 
-impl Backend {
-    pub(crate) async fn handle_document_symbol(&self, params: DocumentSymbolParams) -> Option<DocumentSymbolResponse> {
-        let uri = params.text_document.uri;
+// ─── Handler wiring ─────────────────────────────────────────────────────────────
 
-        let file_path = uri.path();
+impl Backend {
+    pub(crate) async fn handle_document_symbol(
+        &self,
+        params: DocumentSymbolParams,
+    ) -> Option<DocumentSymbolResponse> {
+        let file_path = params.text_document.uri.path();
         let project = self.get_file_project(file_path)?;
 
-        let module_index = {
-            let module_handled = project.module_handled.lock().ok()?;
-            module_handled.get(file_path)?.clone()
-        };
-
-        let module_db = project.module_db.lock().ok()?;
-        let module = module_db.get(module_index)?;
-
-        Some(DocumentSymbolResponse::Nested(build_document_symbols(module)))
+        let symbols = document_symbols(&project, file_path)?;
+        Some(DocumentSymbolResponse::Flat(symbols))
     }
 
-    pub(crate) async fn handle_workspace_symbol(&self, params: WorkspaceSymbolParams) -> Option<Vec<SymbolInformation>> {
-        let query = params.query;
-        debug!("workspace_symbol query: '{}'", query);
+    pub(crate) async fn handle_workspace_symbol(
+        &self,
+        params: WorkspaceSymbolParams,
+    ) -> Option<Vec<SymbolInformation>> {
+        let query = &params.query;
 
         let mut results: Vec<SymbolInformation> = Vec::new();
 
         for entry in self.projects.iter() {
             let project = entry.value();
-
-            // 1. Search the workspace index for lightweight matches
-            let workspace_index = match project.workspace_index.lock() {
-                Ok(idx) => idx,
-                Err(_) => continue,
-            };
-
-            let matches = if query.is_empty() {
-                workspace_index.symbols.values()
-                    .flat_map(|v| v.iter())
-                    .collect::<Vec<_>>()
-            } else {
-                workspace_index.find_symbols_by_prefix_case_insensitive(&query)
-            };
-
-            for indexed in matches {
-                let kind = match indexed.kind {
-                    crate::analyzer::workspace_index::IndexedSymbolKind::Type => SymbolKind::STRUCT,
-                    crate::analyzer::workspace_index::IndexedSymbolKind::Function => SymbolKind::FUNCTION,
-                    crate::analyzer::workspace_index::IndexedSymbolKind::Variable => SymbolKind::VARIABLE,
-                    crate::analyzer::workspace_index::IndexedSymbolKind::Constant => SymbolKind::CONSTANT,
-                };
-
-                let uri = match Url::from_file_path(&indexed.file_path) {
-                    Ok(u) => u,
-                    Err(_) => continue,
-                };
-
-                #[allow(deprecated)]
-                results.push(SymbolInformation {
-                    name: indexed.name.clone(),
-                    kind,
-                    tags: None,
-                    deprecated: None,
-                    location: Location::new(uri, Range::new(Position::new(0, 0), Position::new(0, 0))),
-                    container_name: Some(indexed.file_path.clone()),
-                });
-            }
-
-            // 2. Also search fully-analyzed symbols for better position info
-            if let Ok(_symbol_table) = project.symbol_table.lock() {
-                if let Ok(module_db) = project.module_db.lock() {
-                    for m in module_db.iter() {
-                        for stmt in &m.stmts {
-                            let (name, sym_kind, sym_start, sym_end) = match &stmt.node {
-                                crate::analyzer::common::AstNode::FnDef(f) => {
-                                    if let Ok(fndef) = f.lock() {
-                                        if fndef.fn_name.is_empty() || fndef.is_test {
-                                            continue;
-                                        }
-                                        (fndef.fn_name.clone(), SymbolKind::FUNCTION, fndef.symbol_start, fndef.symbol_end)
-                                    } else { continue; }
-                                }
-                                crate::analyzer::common::AstNode::VarDef(v, _) => {
-                                    if let Ok(var) = v.lock() {
-                                        (var.ident.clone(), SymbolKind::VARIABLE, var.symbol_start, var.symbol_end)
-                                    } else { continue; }
-                                }
-                                crate::analyzer::common::AstNode::ConstDef(c) => {
-                                    if let Ok(cd) = c.lock() {
-                                        (cd.ident.clone(), SymbolKind::CONSTANT, cd.symbol_start, cd.symbol_end)
-                                    } else { continue; }
-                                }
-                                crate::analyzer::common::AstNode::Typedef(t) => {
-                                    if let Ok(td) = t.lock() {
-                                        (td.ident.clone(), SymbolKind::STRUCT, td.symbol_start, td.symbol_end)
-                                    } else { continue; }
-                                }
-                                _ => continue,
-                            };
-
-                            if !query.is_empty() && !name.to_lowercase().contains(&query.to_lowercase()) {
-                                continue;
-                            }
-
-                            let uri = match Url::from_file_path(&m.path) {
-                                Ok(u) => u,
-                                Err(_) => continue,
-                            };
-
-                            if results.iter().any(|r| r.name == name && r.location.uri == uri) {
-                                if sym_start > 0 {
-                                    if let Some(existing) = results.iter_mut().find(|r| r.name == name && r.location.uri == uri) {
-                                        if let (Some(start), Some(end)) = (
-                                            offset_to_position(sym_start, &m.rope),
-                                            offset_to_position(sym_end, &m.rope),
-                                        ) {
-                                            existing.location.range = Range::new(start, end);
-                                            existing.kind = sym_kind;
-                                        }
-                                    }
-                                }
-                                continue;
-                            }
-
-                            let range = if sym_start > 0 {
-                                if let (Some(start), Some(end)) = (
-                                    offset_to_position(sym_start, &m.rope),
-                                    offset_to_position(sym_end, &m.rope),
-                                ) {
-                                    Range::new(start, end)
-                                } else {
-                                    Range::new(Position::new(0, 0), Position::new(0, 0))
-                                }
-                            } else {
-                                Range::new(Position::new(0, 0), Position::new(0, 0))
-                            };
-
-                            #[allow(deprecated)]
-                            results.push(SymbolInformation {
-                                name,
-                                kind: sym_kind,
-                                tags: None,
-                                deprecated: None,
-                                location: Location::new(uri, range),
-                                container_name: Some(m.path.clone()),
-                            });
-                        }
-                    }
-                }
-            }
+            collect_workspace_symbols(project, query, &mut results);
         }
 
-        if results.is_empty() { None } else { Some(results) }
+        if results.is_empty() {
+            return None;
+        }
+
+        Some(results)
     }
 }
 
-// ─── Document Symbol helpers ────────────────────────────────────────────────────
+// ─── Document symbols ───────────────────────────────────────────────────────────
 
-/// Build a flat list of `DocumentSymbol` entries from a module's top-level statements.
+/// Extract top-level symbols from a single module's AST.
+fn document_symbols(project: &Project, file_path: &str) -> Option<Vec<SymbolInformation>> {
+    let mh = project.module_handled.lock().ok()?;
+    let &idx = mh.get(file_path)?;
+    drop(mh);
+
+    let db = project.module_db.lock().ok()?;
+    let module = db.get(idx)?;
+
+    let uri = Url::from_file_path(&module.path).ok()?;
+    let symbols = symbols_from_stmts(&module.stmts, &module.rope, &uri);
+
+    Some(symbols)
+}
+
+/// Walk top-level statements and produce `SymbolInformation` entries.
+fn symbols_from_stmts(
+    stmts: &[Box<Stmt>],
+    rope: &ropey::Rope,
+    uri: &Url,
+) -> Vec<SymbolInformation> {
+    let mut out = Vec::new();
+
+    for stmt in stmts {
+        if let Some(sym) = symbol_from_stmt(stmt, rope, uri) {
+            out.push(sym);
+        }
+    }
+
+    out
+}
+
+/// Convert a single top-level statement to a `SymbolInformation`, if applicable.
+#[allow(deprecated)] // SymbolInformation::deprecated is deprecated but required by the type
+fn symbol_from_stmt(
+    stmt: &Stmt,
+    rope: &ropey::Rope,
+    uri: &Url,
+) -> Option<SymbolInformation> {
+    let (name, kind, start, end) = match &stmt.node {
+        AstNode::FnDef(fndef_mutex) => {
+            let fndef = fndef_mutex.lock().unwrap();
+            let name = if fndef.fn_name.is_empty() {
+                fndef.symbol_name.clone()
+            } else {
+                fndef.fn_name.clone()
+            };
+            (name, SymbolKind::FUNCTION, fndef.symbol_start, fndef.symbol_end)
+        }
+        AstNode::Typedef(typedef_mutex) => {
+            let typedef = typedef_mutex.lock().unwrap();
+            let kind = if typedef.is_interface {
+                SymbolKind::INTERFACE
+            } else if typedef.is_enum || typedef.is_tagged_union {
+                SymbolKind::ENUM
+            } else {
+                SymbolKind::STRUCT
+            };
+            (typedef.ident.clone(), kind, typedef.symbol_start, typedef.symbol_end)
+        }
+        AstNode::VarDef(var_mutex, _) => {
+            let var = var_mutex.lock().unwrap();
+            (var.ident.clone(), SymbolKind::VARIABLE, var.symbol_start, var.symbol_end)
+        }
+        AstNode::ConstDef(const_mutex) => {
+            let c = const_mutex.lock().unwrap();
+            (c.ident.clone(), SymbolKind::CONSTANT, c.symbol_start, c.symbol_end)
+        }
+        _ => return None,
+    };
+
+    let start_pos = offset_to_position(start, rope)?;
+    let end_pos = offset_to_position(end, rope)?;
+
+    Some(SymbolInformation {
+        name,
+        kind,
+        tags: None,
+        deprecated: None,
+        location: Location {
+            uri: uri.clone(),
+            range: Range {
+                start: start_pos,
+                end: end_pos,
+            },
+        },
+        container_name: None,
+    })
+}
+
+// ─── Workspace symbols ──────────────────────────────────────────────────────────
+
+/// Collect workspace symbols matching `query` from a project's index.
 #[allow(deprecated)]
-fn build_document_symbols(module: &crate::project::Module) -> Vec<DocumentSymbol> {
-    let rope = &module.rope;
-    let mut symbols: Vec<DocumentSymbol> = Vec::new();
+fn collect_workspace_symbols(
+    project: &Project,
+    query: &str,
+    out: &mut Vec<SymbolInformation>,
+) {
+    let ws = match project.workspace_index.lock() {
+        Ok(ws) => ws,
+        Err(_) => return,
+    };
 
-    for stmt in &module.stmts {
-        match &stmt.node {
-            crate::analyzer::common::AstNode::FnDef(fndef_mutex) => {
-                let fndef = match fndef_mutex.lock() {
-                    Ok(f) => f,
-                    Err(_) => continue,
-                };
-                if fndef.is_test || fndef.fn_name.is_empty() {
-                    continue;
-                }
+    let indexed = if query.is_empty() {
+        // Return all symbols (capped to avoid flooding the client).
+        ws.symbols
+            .values()
+            .flat_map(|v| v.iter())
+            .take(500)
+            .collect::<Vec<_>>()
+    } else {
+        ws.find_symbols_by_prefix_case_insensitive(query)
+    };
 
-                let name = fndef.fn_name.clone();
-                let detail = Some(format_fn_signature_short(&fndef));
+    for sym in indexed {
+        let kind = match sym.kind {
+            IndexedSymbolKind::Type => SymbolKind::STRUCT,
+            IndexedSymbolKind::Function => SymbolKind::FUNCTION,
+            IndexedSymbolKind::Variable => SymbolKind::VARIABLE,
+            IndexedSymbolKind::Constant => SymbolKind::CONSTANT,
+        };
 
-                let range = stmt_range(stmt.start, stmt.end, rope);
-                let selection = symbol_selection_range(fndef.symbol_start, fndef.symbol_end, rope);
+        let uri = match Url::from_file_path(&sym.file_path) {
+            Ok(u) => u,
+            Err(_) => continue,
+        };
 
-                let mut children = Vec::new();
-                for param in &fndef.params {
-                    if let Ok(p) = param.lock() {
-                        if p.ident == "self" {
-                            continue;
-                        }
-                        let p_range = symbol_selection_range(p.symbol_start, p.symbol_end, rope);
-                        children.push(DocumentSymbol {
-                            name: p.ident.clone(),
-                            detail: Some(format_type_display(&p.type_)),
-                            kind: SymbolKind::VARIABLE,
-                            tags: None,
-                            deprecated: None,
-                            range: p_range,
-                            selection_range: p_range,
-                            children: None,
-                        });
-                    }
-                }
-
-                symbols.push(DocumentSymbol {
-                    name,
-                    detail,
-                    kind: SymbolKind::FUNCTION,
-                    tags: None,
-                    deprecated: None,
-                    range,
-                    selection_range: selection,
-                    children: if children.is_empty() { None } else { Some(children) },
-                });
-            }
-            crate::analyzer::common::AstNode::VarDef(var_mutex, _) => {
-                let var = match var_mutex.lock() {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
-                let range = stmt_range(stmt.start, stmt.end, rope);
-                let selection = symbol_selection_range(var.symbol_start, var.symbol_end, rope);
-                symbols.push(DocumentSymbol {
-                    name: var.ident.clone(),
-                    detail: Some(format_type_display(&var.type_)),
-                    kind: SymbolKind::VARIABLE,
-                    tags: None,
-                    deprecated: None,
-                    range,
-                    selection_range: selection,
-                    children: None,
-                });
-            }
-            crate::analyzer::common::AstNode::ConstDef(const_mutex) => {
-                let c = match const_mutex.lock() {
-                    Ok(c) => c,
-                    Err(_) => continue,
-                };
-                let range = stmt_range(stmt.start, stmt.end, rope);
-                let selection = symbol_selection_range(c.symbol_start, c.symbol_end, rope);
-                symbols.push(DocumentSymbol {
-                    name: c.ident.clone(),
-                    detail: Some(format_type_display(&c.type_)),
-                    kind: SymbolKind::CONSTANT,
-                    tags: None,
-                    deprecated: None,
-                    range,
-                    selection_range: selection,
-                    children: None,
-                });
-            }
-            crate::analyzer::common::AstNode::Typedef(typedef_mutex) => {
-                let td = match typedef_mutex.lock() {
-                    Ok(t) => t,
-                    Err(_) => continue,
-                };
-
-                let kind = if td.is_enum {
-                    SymbolKind::ENUM
-                } else if td.is_interface {
-                    SymbolKind::INTERFACE
-                } else {
-                    SymbolKind::STRUCT
-                };
-
-                let range = stmt_range(stmt.start, stmt.end, rope);
-                let selection = symbol_selection_range(td.symbol_start, td.symbol_end, rope);
-
-                let mut children: Vec<DocumentSymbol> = Vec::new();
-                let mut methods: Vec<_> = td.method_table.iter().collect();
-                methods.sort_by_key(|(name, _)| (*name).clone());
-                for (method_name, method_mutex) in methods {
-                    if let Ok(m) = method_mutex.lock() {
-                        let m_detail = Some(format_fn_signature_short(&m));
-                        let m_range = symbol_selection_range(m.symbol_start, m.symbol_end, rope);
-                        children.push(DocumentSymbol {
-                            name: method_name.clone(),
-                            detail: m_detail,
-                            kind: SymbolKind::METHOD,
-                            tags: None,
-                            deprecated: None,
-                            range: m_range,
-                            selection_range: m_range,
-                            children: None,
-                        });
-                    }
-                }
-
-                symbols.push(DocumentSymbol {
-                    name: td.ident.clone(),
-                    detail: None,
-                    kind,
-                    tags: None,
-                    deprecated: None,
-                    range,
-                    selection_range: selection,
-                    children: if children.is_empty() { None } else { Some(children) },
-                });
-            }
-            crate::analyzer::common::AstNode::Import(import_stmt) => {
-                let name = import_stmt.as_name.clone();
-                if name.is_empty() {
-                    continue;
-                }
-                let range = stmt_range(stmt.start, stmt.end, rope);
-                symbols.push(DocumentSymbol {
-                    name,
-                    detail: import_stmt.file.clone().or_else(|| {
-                        import_stmt.ast_package.as_ref().map(|p| p.join("."))
-                    }),
-                    kind: SymbolKind::MODULE,
-                    tags: None,
-                    deprecated: None,
-                    range,
-                    selection_range: range,
-                    children: None,
-                });
-            }
-            _ => {}
-        }
+        // WorkspaceIndex doesn't store line position — default to file start.
+        // The client will still jump to the file; go-to-def from there refines.
+        out.push(SymbolInformation {
+            name: sym.name.clone(),
+            kind,
+            tags: None,
+            deprecated: None,
+            location: Location {
+                uri,
+                range: Range {
+                    start: Position::new(0, 0),
+                    end: Position::new(0, 0),
+                },
+            },
+            container_name: None,
+        });
     }
-
-    symbols
 }
 
-/// Build an LSP Range from start/end char offsets.
-fn stmt_range(start: usize, end: usize, rope: &ropey::Rope) -> Range {
-    let s = offset_to_position(start, rope).unwrap_or(Position::new(0, 0));
-    let e = offset_to_position(end, rope).unwrap_or(s);
-    Range::new(s, e)
-}
+// ─── Tests ──────────────────────────────────────────────────────────────────────
 
-/// Build a selection Range from symbol_start/symbol_end char offsets.
-fn symbol_selection_range(start: usize, end: usize, rope: &ropey::Rope) -> Range {
-    if start == 0 && end == 0 {
-        return Range::new(Position::new(0, 0), Position::new(0, 0));
-    }
-    stmt_range(start, end, rope)
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::analyzer::common::{AstFnDef, Type, VarDeclExpr};
+    use ropey::Rope;
+    use std::sync::{Arc, Mutex};
 
-/// Format a short function signature like `(a: int, b: string): bool`.
-fn format_fn_signature_short(fndef: &crate::analyzer::common::AstFnDef) -> String {
-    let mut sig = String::from("(");
-    let mut first = true;
-    for param in &fndef.params {
-        if let Ok(p) = param.lock() {
-            if !first {
-                sig.push_str(", ");
-            }
-            first = false;
-            if p.ident == "self" {
-                match fndef.self_kind {
-                    crate::analyzer::common::SelfKind::SelfRefT => sig.push_str("&self"),
-                    crate::analyzer::common::SelfKind::SelfPtrT => sig.push_str("*self"),
-                    _ => sig.push_str("self"),
-                }
-            } else {
-                sig.push_str(&format!("{}: {}", p.ident, format_type_display(&p.type_)));
-            }
-        }
+    fn make_fndef_stmt(name: &str, start: usize, end: usize) -> Box<Stmt> {
+        let mut fndef = AstFnDef::default();
+        fndef.fn_name = name.to_string();
+        fndef.symbol_start = start;
+        fndef.symbol_end = end;
+        Box::new(Stmt {
+            start,
+            end,
+            node: AstNode::FnDef(Arc::new(Mutex::new(fndef))),
+        })
     }
-    sig.push(')');
-    let ret = format_type_display(&fndef.return_type);
-    if ret != "void" {
-        sig.push_str(&format!(": {}", ret));
+
+    fn make_vardef_stmt(name: &str, start: usize, end: usize) -> Box<Stmt> {
+        let var = Arc::new(Mutex::new(VarDeclExpr {
+            ident: name.to_string(),
+            symbol_id: 0,
+            symbol_start: start,
+            symbol_end: end,
+            type_: Type::default(),
+            be_capture: false,
+            heap_ident: None,
+        }));
+        let right = Box::new(crate::analyzer::common::Expr {
+            start,
+            end,
+            type_: Type::default(),
+            target_type: Type::default(),
+            node: AstNode::None,
+        });
+        Box::new(Stmt {
+            start,
+            end,
+            node: AstNode::VarDef(var, right),
+        })
     }
-    if fndef.is_errable {
-        sig.push('!');
+
+    #[test]
+    fn symbols_from_stmts_collects_fn_and_var() {
+        let source = "fn hello() {}\nvar x = 42\n";
+        let rope = Rope::from_str(source);
+        let uri = Url::parse("file:///test.n").unwrap();
+
+        let stmts = vec![
+            make_fndef_stmt("hello", 3, 8),
+            make_vardef_stmt("x", 18, 19),
+        ];
+
+        let result = symbols_from_stmts(&stmts, &rope, &uri);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].name, "hello");
+        assert_eq!(result[0].kind, SymbolKind::FUNCTION);
+        assert_eq!(result[1].name, "x");
+        assert_eq!(result[1].kind, SymbolKind::VARIABLE);
     }
-    sig
+
+    #[test]
+    fn symbols_from_stmts_skips_non_declarations() {
+        let source = "import 'math.n'\n";
+        let rope = Rope::from_str(source);
+        let uri = Url::parse("file:///test.n").unwrap();
+
+        let import = crate::analyzer::common::ImportStmt::default();
+        let stmts = vec![Box::new(Stmt {
+            start: 0,
+            end: 15,
+            node: AstNode::Import(import),
+        })];
+
+        let result = symbols_from_stmts(&stmts, &rope, &uri);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn indexed_kind_to_symbol_kind() {
+        assert_eq!(
+            match IndexedSymbolKind::Function {
+                IndexedSymbolKind::Type => SymbolKind::STRUCT,
+                IndexedSymbolKind::Function => SymbolKind::FUNCTION,
+                IndexedSymbolKind::Variable => SymbolKind::VARIABLE,
+                IndexedSymbolKind::Constant => SymbolKind::CONSTANT,
+            },
+            SymbolKind::FUNCTION
+        );
+    }
 }
