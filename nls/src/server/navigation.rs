@@ -146,7 +146,7 @@ fn collect_references_in_module(
         }
 
         // Skip the declaration site unless requested.
-        if !include_declaration && module.path == target.module_path {
+        if !include_declaration && module.ident == target.module_ident {
             if token.start == def_offset.0 {
                 continue;
             }
@@ -293,11 +293,11 @@ fn type_to_location(project: &Project, type_: &Type) -> Option<Location> {
     let def_end = typedef.symbol_end;
     drop(typedef);
 
-    let module_path = module_path_for_scope(&st, project, symbol.defined_in)?;
+    let module_ident = module_ident_for_scope(&st, symbol.defined_in)?;
     drop(st);
 
     let db = project.module_db.lock().ok()?;
-    let module = db.iter().find(|m| m.path == module_path)?;
+    let module = db.iter().find(|m| m.ident == module_ident)?;
 
     let start = offset_to_position(def_start, &module.rope)?;
     let end = offset_to_position(def_end, &module.rope)?;
@@ -337,8 +337,8 @@ fn find_implementations(
         return None;
     }
 
-    let st = project.symbol_table.lock().ok()?;
     let db = project.module_db.lock().ok()?;
+    let st = project.symbol_table.lock().ok()?;
     let mut locations: Vec<Location> = Vec::new();
 
     // Scan all symbols for types that implement this interface.
@@ -457,20 +457,31 @@ pub(crate) fn resolve_cursor(
 
 // ─── Symbol resolution ──────────────────────────────────────────────────────────
 
-/// A fully resolved symbol: its id, kind, owning module path, and position.
+/// A fully resolved symbol: its id, kind, owning module ident, and position.
 pub(crate) struct ResolvedSymbol {
     pub(crate) symbol_id: NodeId,
     pub(crate) kind: SymbolKind,
     /// The global ident (may include module prefix).
     pub(crate) ident: String,
-    /// Absolute path of the module that defines this symbol.
-    pub(crate) module_path: String,
+    /// Module ident of the module that defines this symbol.
+    /// Stored instead of module_path to avoid locking module_db while
+    /// symbol_table is held (which would invert the canonical lock order).
+    pub(crate) module_ident: String,
 }
 
 impl ResolvedSymbol {
     /// The raw (unprefixed) name for token matching.
     pub(crate) fn raw_name(&self) -> &str {
         self.ident.rsplit('.').next().unwrap_or(&self.ident)
+    }
+
+    /// Lazily resolve the module file path from `module_ident`.
+    /// Locks `module_db` — call only when `symbol_table` is NOT held.
+    pub(crate) fn module_path(&self, project: &Project) -> Option<String> {
+        let db = project.module_db.lock().ok()?;
+        db.iter()
+            .find(|m| m.ident == self.module_ident)
+            .map(|m| m.path.clone())
     }
 }
 
@@ -483,13 +494,13 @@ pub(crate) fn resolve_symbol(project: &Project, ctx: &CursorContext) -> Option<R
 
     // 1. Local / parent-scope walk.
     if let Some(id) = st.lookup_symbol(&ctx.word, ctx.scope_id) {
-        return resolved_from_id(&st, project, id, &ctx.word);
+        return resolved_from_id(&st, id, &ctx.word);
     }
 
     // 2. Same-module global (symbols are stored as "module_ident.name").
     if let Some(id) = st.find_module_symbol_id(&ctx.module_ident, &ctx.word) {
         let global = format_global_ident(ctx.module_ident.clone(), ctx.word.clone());
-        return resolved_from_id(&st, project, id, &global);
+        return resolved_from_id(&st, id, &global);
     }
 
     // 3. Selective imports.
@@ -507,7 +518,7 @@ pub(crate) fn resolve_symbol(project: &Project, ctx: &CursorContext) -> Option<R
             }
             let global = format_global_ident(import.module_ident.clone(), item.ident.clone());
             if let Some(id) = st.find_symbol_id(&global, st.global_scope_id) {
-                return resolved_from_id(&st, project, id, &global);
+                return resolved_from_id(&st, id, &global);
             }
         }
     }
@@ -519,46 +530,46 @@ pub(crate) fn resolve_symbol(project: &Project, ctx: &CursorContext) -> Option<R
         }
         if let Some(id) = st.find_module_symbol_id(&import.module_ident, &ctx.word) {
             let global = format_global_ident(import.module_ident.clone(), ctx.word.clone());
-            return resolved_from_id(&st, project, id, &global);
+            return resolved_from_id(&st, id, &global);
         }
     }
 
     // 5. Builtins (global scope, no prefix).
     if let Some(id) = st.find_symbol_id(&ctx.word, st.global_scope_id) {
-        return resolved_from_id(&st, project, id, &ctx.word);
+        return resolved_from_id(&st, id, &ctx.word);
     }
 
     // 6. Dotted access: prefix.word (e.g. bootstrap.app or myVar.field).
     if let Some(ref prefix) = ctx.prefix {
-        log::info!("resolve_symbol step 6: prefix={:?}, word={}", prefix, ctx.word);
+        log::debug!("resolve_symbol step 6: prefix={:?}, word={}", prefix, ctx.word);
 
         // 6a. Module member access: prefix is an import as_name.
         for import in &ctx.dependencies {
             if import.as_name == *prefix {
                 let global = format_global_ident(import.module_ident.clone(), ctx.word.clone());
-                log::info!("step 6a: trying import global={}", global);
+                log::debug!("step 6a: trying import global={}", global);
                 if let Some(id) = st.find_symbol_id(&global, st.global_scope_id) {
-                    return resolved_from_id(&st, project, id, &global);
+                    return resolved_from_id(&st, id, &global);
                 }
             }
         }
 
         // 6b. Method/field access: prefix is a variable/const — resolve its type.
         if let Some(prefix_symbol) = resolve_prefix_symbol(&st, ctx, prefix) {
-            log::info!("step 6b: prefix_symbol kind={:?}", std::mem::discriminant(&prefix_symbol.kind));
+            log::debug!("step 6b: prefix_symbol kind={:?}", std::mem::discriminant(&prefix_symbol.kind));
             let prefix_type = extract_type_from_kind(&prefix_symbol.kind);
             if let Some(ref prefix_type) = prefix_type {
-                log::info!("step 6b: prefix_type kind={}, ident={}, symbol_id={}", prefix_type.kind, prefix_type.ident, prefix_type.symbol_id);
+                log::debug!("step 6b: prefix_type kind={}, ident={}, symbol_id={}", prefix_type.kind, prefix_type.ident, prefix_type.symbol_id);
                 // Look up the typedef to find methods or struct fields.
-                if let Some(result) = resolve_member_on_type(&st, project, &prefix_type, &ctx.word) {
+                if let Some(result) = resolve_member_on_type(&st, &prefix_type, &ctx.word) {
                     return Some(result);
                 }
-                log::info!("step 6b: resolve_member_on_type returned None");
+                log::debug!("step 6b: resolve_member_on_type returned None");
             } else {
-                log::info!("step 6b: prefix_type is None");
+                log::debug!("step 6b: prefix_type is None");
             }
         } else {
-            log::info!("step 6b: resolve_prefix_symbol returned None for prefix={}", prefix);
+            log::debug!("step 6b: resolve_prefix_symbol returned None for prefix={}", prefix);
         }
     }
 
@@ -566,20 +577,23 @@ pub(crate) fn resolve_symbol(project: &Project, ctx: &CursorContext) -> Option<R
 }
 
 /// Build a `ResolvedSymbol` from a symbol id.
+///
+/// Only uses `st` (no `module_db` lock), so it is safe to call while
+/// `symbol_table` is held.
 fn resolved_from_id(
     st: &SymbolTable,
-    project: &Project,
     symbol_id: NodeId,
     ident: &str,
 ) -> Option<ResolvedSymbol> {
     let symbol = st.get_symbol_ref(symbol_id)?;
-    let module_path = module_path_for_scope(st, project, symbol.defined_in)?;
+    let module_ident = module_ident_for_scope(st, symbol.defined_in)
+        .unwrap_or_default();
 
     Some(ResolvedSymbol {
         symbol_id,
         kind: symbol.kind.clone(),
         ident: ident.to_string(),
-        module_path,
+        module_ident,
     })
 }
 
@@ -646,7 +660,6 @@ fn extract_type_from_kind(kind: &SymbolKind) -> Option<Type> {
 /// Resolve a member (method or struct field) on a given type.
 fn resolve_member_on_type(
     st: &SymbolTable,
-    project: &Project,
     owner_type: &Type,
     member: &str,
 ) -> Option<ResolvedSymbol> {
@@ -654,30 +667,43 @@ fn resolve_member_on_type(
     let base_type = match &owner_type.kind {
         crate::analyzer::common::TypeKind::Ptr(inner)
         | crate::analyzer::common::TypeKind::Ref(inner) => inner.as_ref(),
+        // Handle unreduced ref<T>/ptr<T> stored as TypeKind::Ident with args.
+        crate::analyzer::common::TypeKind::Ident
+            if (owner_type.ident == "ref" || owner_type.ident == "ptr")
+                && !owner_type.args.is_empty() =>
+        {
+            &owner_type.args[0]
+        }
         _ => owner_type,
     };
 
     // Find the typedef by symbol_id or ident.
-    log::info!("resolve_member_on_type: member={}, base_type.kind={}, base_type.ident={}, base_type.symbol_id={}", member, base_type.kind, base_type.ident, base_type.symbol_id);
-    let typedef_symbol = if base_type.symbol_id > 0 {
-        log::info!("resolve_member_on_type: looking up by symbol_id={}", base_type.symbol_id);
-        st.get_symbol_ref(base_type.symbol_id)
+    log::debug!("resolve_member_on_type: member={}, base_type.kind={}, base_type.ident={}, base_type.symbol_id={}", member, base_type.kind, base_type.ident, base_type.symbol_id);
+    let (typedef_symbol, typedef_symbol_id) = if base_type.symbol_id > 0 {
+        log::debug!("resolve_member_on_type: looking up by symbol_id={}", base_type.symbol_id);
+        (st.get_symbol_ref(base_type.symbol_id), base_type.symbol_id)
     } else if !base_type.ident.is_empty() {
         // Try direct lookup (module-qualified ident).
         let sym = st.find_global_symbol(&base_type.ident);
-        log::info!("resolve_member_on_type: find_global_symbol({}) = {}", base_type.ident, sym.is_some());
+        log::debug!("resolve_member_on_type: find_global_symbol({}) = {}", base_type.ident, sym.is_some());
         if sym.is_some() {
-            sym
+            // Look up the symbol_id from the global scope
+            let scope = st.get_scope(st.global_scope_id);
+            let sid = scope.and_then(|s| s.symbol_map.get(&base_type.ident).copied()).unwrap_or(0);
+            (sym, sid)
         } else {
             // Fallback: search all global symbols for a matching suffix.
             let scope = st.get_scope(st.global_scope_id)?;
-            let result = scope.symbol_map.iter()
+            let found = scope.symbol_map.iter()
                 .find(|(k, _)| {
                     k.rsplit('.').next() == Some(&base_type.ident)
-                })
-                .and_then(|(_, &id)| st.get_symbol_ref(id));
-            log::info!("resolve_member_on_type: suffix fallback = {}", result.is_some());
-            result
+                });
+            if let Some((_, &id)) = found {
+                (st.get_symbol_ref(id), id)
+            } else {
+                log::debug!("resolve_member_on_type: suffix fallback = false");
+                (None, 0)
+            }
         }
     } else {
         // Type has no ident and no symbol_id — check for inline struct.
@@ -697,26 +723,34 @@ fn resolve_member_on_type(
                         symbol_id: 0,
                         kind: SymbolKind::Var(std::sync::Arc::new(std::sync::Mutex::new(var))),
                         ident: prop.name.clone(),
-                        module_path: String::new(),
+                        module_ident: String::new(),
                     });
                 }
             }
         }
-        None
+        (None, 0)
     };
 
     if let Some(sym) = typedef_symbol {
         if let SymbolKind::Type(typedef_mutex) = &sym.kind {
             let typedef = typedef_mutex.lock().unwrap();
+            let owner_module_ident = module_ident_for_scope(st, sym.defined_in)
+                .unwrap_or_default();
 
-            // Check method_table first.
-            if let Some(fndef) = typedef.method_table.get(member) {
-                let module_path = module_path_for_scope(st, project, sym.defined_in)?;
+            // Check method_table: try exact key first, then suffix match.
+            // Keys may be fully-qualified (e.g. "module.Type.method") while
+            // `member` is just the short name ("method").
+            let method_fndef = typedef.method_table.get(member).cloned().or_else(|| {
+                typedef.method_table.iter()
+                    .find(|(k, _)| k.rsplit('.').next() == Some(member))
+                    .map(|(_, v)| v.clone())
+            });
+            if let Some(fndef) = method_fndef {
                 return Some(ResolvedSymbol {
                     symbol_id: 0, // method is in method_table, not symbol table
-                    kind: SymbolKind::Fn(fndef.clone()),
+                    kind: SymbolKind::Fn(fndef),
                     ident: member.to_string(),
-                    module_path,
+                    module_ident: owner_module_ident,
                 });
             }
 
@@ -724,7 +758,6 @@ fn resolve_member_on_type(
             if let crate::analyzer::common::TypeKind::Struct(_, _, ref props) = typedef.type_expr.kind {
                 for prop in props {
                     if prop.name == member {
-                        let module_path = module_path_for_scope(st, project, sym.defined_in)?;
                         // Represent struct field as a Var for hover display.
                         let var = crate::analyzer::common::VarDeclExpr {
                             ident: prop.name.clone(),
@@ -739,7 +772,44 @@ fn resolve_member_on_type(
                             symbol_id: 0,
                             kind: SymbolKind::Var(std::sync::Arc::new(std::sync::Mutex::new(var))),
                             ident: prop.name.clone(),
-                            module_path,
+                            module_ident: owner_module_ident,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: scan global scope for impl method symbols.
+    // Method functions are registered as separate symbols with
+    // `fndef.impl_type.symbol_id` matching the typedef. Cross-module
+    // re-resolution may produce a different symbol_id, so also match
+    // by ident (full or short name).
+    let type_ident = &base_type.ident;
+    let type_short_name = type_ident.rsplit('.').next().unwrap_or(type_ident);
+
+    if let Some(scope) = st.get_scope(st.global_scope_id) {
+        for (_, &sym_id) in &scope.symbol_map {
+            if let Some(sym) = st.get_symbol_ref(sym_id) {
+                if let SymbolKind::Fn(fndef_mutex) = &sym.kind {
+                    let fndef = fndef_mutex.lock().unwrap();
+                    if fndef.fn_name != member {
+                        continue;
+                    }
+                    // Match by symbol_id or by ident (full or suffix).
+                    let id_match = typedef_symbol_id > 0
+                        && fndef.impl_type.symbol_id == typedef_symbol_id;
+                    let ident_match = !fndef.impl_type.ident.is_empty()
+                        && (fndef.impl_type.ident == *type_ident
+                            || fndef.impl_type.ident.rsplit('.').next() == Some(type_short_name));
+                    if id_match || ident_match {
+                        let owner_module_ident = module_ident_for_scope(st, sym.defined_in)
+                            .unwrap_or_default();
+                        return Some(ResolvedSymbol {
+                            symbol_id: sym_id,
+                            kind: SymbolKind::Fn(fndef_mutex.clone()),
+                            ident: member.to_string(),
+                            module_ident: owner_module_ident,
                         });
                     }
                 }
@@ -780,16 +850,6 @@ fn scope_contains(scope: &Scope, offset: usize) -> bool {
         return true; // unbounded (module-level)
     }
     offset >= start && offset < end
-}
-
-/// Walk from `scope_id` up to the Module scope and return the module's file path.
-fn module_path_for_scope(st: &SymbolTable, project: &Project, scope_id: NodeId) -> Option<String> {
-    let module_ident = module_ident_for_scope(st, scope_id)?;
-
-    let db = project.module_db.lock().ok()?;
-    db.iter()
-        .find(|m| m.ident == module_ident)
-        .map(|m| m.path.clone())
 }
 
 /// Walk up from a scope to find the owning module ident.
@@ -840,7 +900,7 @@ fn symbol_to_location(project: &Project, symbol: &ResolvedSymbol) -> Option<Loca
     let (def_start, def_end) = symbol_def_range(&symbol.kind);
 
     let db = project.module_db.lock().ok()?;
-    let module = db.iter().find(|m| m.path == symbol.module_path)?;
+    let module = db.iter().find(|m| m.ident == symbol.module_ident)?;
 
     let start = offset_to_position(def_start, &module.rope)?;
     let end = offset_to_position(def_end, &module.rope)?;

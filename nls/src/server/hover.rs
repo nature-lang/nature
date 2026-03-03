@@ -41,7 +41,11 @@ fn build_hover(project: &Project, file_path: &str, position: Position) -> Option
         SymbolKind::Var(_) | SymbolKind::Const(_) => symbol.ident.contains('.'),
     };
     let doc_comment = if is_global {
-        extract_doc_comment_for_symbol(project, &symbol.module_path, &symbol.kind)
+        if let Some(module_path) = symbol.module_path(project) {
+            extract_doc_comment_for_symbol(project, &module_path, &symbol.kind)
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -194,6 +198,19 @@ fn format_type_body(kind: &TypeKind) -> String {
 /// Return a user-friendly type display name, preferring `ident` over the kind string.
 /// Strips module-qualified prefixes (e.g. "forest example main.MyFn" → "MyFn").
 fn type_display_name(t: &crate::analyzer::common::Type) -> String {
+    use crate::analyzer::common::TypeKind;
+
+    // For Ref/Ptr types, display as ref<inner>/ptr<inner> using the inner type's name.
+    match &t.kind {
+        TypeKind::Ref(inner) => {
+            return format!("ref<{}>", type_display_name(inner));
+        }
+        TypeKind::Ptr(inner) => {
+            return format!("ptr<{}>", type_display_name(inner));
+        }
+        _ => {}
+    }
+
     if !t.ident.is_empty() {
         // Strip module prefix: take everything after the last '.'
         return t.ident.rsplit('.').next().unwrap_or(&t.ident).to_string();

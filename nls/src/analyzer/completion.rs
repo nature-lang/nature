@@ -80,7 +80,12 @@ impl<'a> CompletionProvider<'a> {
         if let Some((type_name, field_prefix)) = extract_struct_init_context(text, position) {
             debug!("Detected struct initialization context: type='{}', field_prefix='{}'", type_name, field_prefix);
             let current_scope_id = self.find_innermost_scope(self.module.scope_id, position);
-            return self.get_struct_field_completions(&type_name, &field_prefix, current_scope_id);
+            let struct_completions = self.get_struct_field_completions(&type_name, &field_prefix, current_scope_id);
+            if !struct_completions.is_empty() {
+                return struct_completions;
+            }
+            // Fall through to try other completion types when the detected
+            // "struct init" context doesn't actually resolve to any fields.
         }
 
         let prefix = extract_prefix_at_position(text, position);
@@ -2068,7 +2073,29 @@ pub fn extract_struct_init_context(text: &str, position: usize) -> Option<(Strin
             if type_start < type_end {
                 let type_name: String = chars[type_start..type_end].iter().collect();
 
-                // Avoid treating test blocks as struct initializations: `test name { ... }`
+                // Reject block keywords used as the "type name"
+                // (e.g. `if cond {`, `for x in list {`, `else {`, `match val {`)
+                let block_keywords = ["if", "else", "for", "match", "while", "catch"];
+                if block_keywords.contains(&type_name.as_str()) {
+                    return None;
+                }
+
+                // Check the character immediately before the type name
+                // (after skipping whitespace). A `:` means this is a return-type
+                // annotation (`fn foo(): string {`), not a struct init.
+                // A `)` means `fn foo() {` — also not a struct init.
+                let mut before = type_start;
+                while before > 0 && chars[before - 1].is_whitespace() {
+                    before -= 1;
+                }
+                if before > 0 {
+                    let prev_char = chars[before - 1];
+                    if prev_char == ':' || prev_char == ')' {
+                        return None;
+                    }
+                }
+
+                // Avoid treating test/fn blocks as struct initializations
                 let mut kw_end = type_start;
                 while kw_end > 0 && chars[kw_end - 1].is_whitespace() {
                     kw_end -= 1;
@@ -2084,7 +2111,7 @@ pub fn extract_struct_init_context(text: &str, position: usize) -> Option<(Strin
                 }
                 if kw_start < kw_end {
                     let maybe_kw: String = chars[kw_start..kw_end].iter().collect();
-                    if maybe_kw == "test" {
+                    if maybe_kw == "test" || maybe_kw == "fn" {
                         return None;
                     }
                 }

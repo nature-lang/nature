@@ -2217,6 +2217,30 @@ impl<'a> Semantic<'a> {
     fn resolve_inferred_type(&mut self, t: &mut Type) {
         use crate::analyzer::common::TypeKind;
 
+        // Handle unreduced ref<T>/ptr<T> stored as TypeKind::Ident with args.
+        // Convert them to proper TypeKind::Ref/Ptr before resolving.
+        if t.kind == TypeKind::Ident
+            && !t.args.is_empty()
+            && (t.ident == "ref" || t.ident == "ptr")
+        {
+            let mut inner = t.args.remove(0);
+            self.resolve_inferred_type(&mut inner);
+            if t.ident == "ref" {
+                t.kind = TypeKind::Ref(Box::new(inner.clone()));
+            } else {
+                t.kind = TypeKind::Ptr(Box::new(inner.clone()));
+            }
+            // Propagate symbol_id from inner for completion/hover lookup
+            if t.symbol_id == 0 && inner.symbol_id != 0 {
+                t.symbol_id = inner.symbol_id;
+                t.ident = inner.ident.clone();
+                if t.ident_kind == TypeIdentKind::Unknown {
+                    t.ident_kind = inner.ident_kind.clone();
+                }
+            }
+            return;
+        }
+
         match &mut t.kind {
             TypeKind::Ident => {
                 if t.symbol_id == 0 && !t.ident.is_empty() {
@@ -2224,6 +2248,32 @@ impl<'a> Semantic<'a> {
                         t.symbol_id = symbol_id;
                         if t.ident_kind == TypeIdentKind::Unknown {
                             t.ident_kind = TypeIdentKind::Def;
+                        }
+                    } else {
+                        // Fallback: try direct global lookup (ident may already be
+                        // fully qualified from a cross-module return type).
+                        if let Some(symbol_id) = self.symbol_table.find_symbol_id(&t.ident, self.symbol_table.global_scope_id) {
+                            t.symbol_id = symbol_id;
+                            if t.ident_kind == TypeIdentKind::Unknown {
+                                t.ident_kind = TypeIdentKind::Def;
+                            }
+                        } else {
+                            // Last resort: suffix match against all global symbols.
+                            let scope = self.symbol_table.find_scope(self.symbol_table.global_scope_id);
+                            for (name, &sym_id) in &scope.symbol_map {
+                                if name.rsplit('.').next() == Some(&t.ident) {
+                                    if let Some(sym) = self.symbol_table.get_symbol_ref(sym_id) {
+                                        if matches!(sym.kind, SymbolKind::Type(_)) {
+                                            t.symbol_id = sym_id;
+                                            t.ident = name.clone();
+                                            if t.ident_kind == TypeIdentKind::Unknown {
+                                                t.ident_kind = TypeIdentKind::Def;
+                                            }
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
