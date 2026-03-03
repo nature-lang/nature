@@ -19,7 +19,6 @@ out/
 
 # IDE/editor
 .idea/
-.vscode/
 .history/
 
 # Package manager/debug logs
