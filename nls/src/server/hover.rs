@@ -442,4 +442,50 @@ mod tests {
         assert_eq!(strip_comment_marker("/* single */"), "single");
         assert_eq!(strip_comment_marker(" * middle"), "middle");
     }
+
+    #[test]
+    fn type_display_simple_ident() {
+        let t = crate::analyzer::common::Type {
+            ident: "forest.example.main.MyStruct".into(),
+            ..Default::default()
+        };
+        assert_eq!(super::type_display_name(&t), "MyStruct");
+    }
+
+    #[test]
+    fn type_display_ref_wrapping() {
+        use crate::analyzer::common::{Type, TypeKind};
+        let inner = Type {
+            ident: "forest.app.configuration.app".into(),
+            kind: TypeKind::Ident,
+            ..Default::default()
+        };
+        let t = Type {
+            kind: TypeKind::Ref(Box::new(inner)),
+            ..Default::default()
+        };
+        assert_eq!(super::type_display_name(&t), "ref<app>");
+    }
+
+    #[test]
+    fn type_display_ptr_wrapping() {
+        use crate::analyzer::common::{Type, TypeKind};
+        let inner = Type {
+            ident: "module.MyType".into(),
+            kind: TypeKind::Ident,
+            ..Default::default()
+        };
+        let t = Type {
+            kind: TypeKind::Ptr(Box::new(inner)),
+            ..Default::default()
+        };
+        assert_eq!(super::type_display_name(&t), "ptr<MyType>");
+    }
+
+    #[test]
+    fn type_display_plain_builtin() {
+        let t = crate::analyzer::common::Type::new(crate::analyzer::common::TypeKind::Int);
+        // Int maps to "i64" internally
+        assert_eq!(super::type_display_name(&t), "i64");
+    }
 }
