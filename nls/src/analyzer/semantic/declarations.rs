@@ -46,6 +46,7 @@ impl<'a> Semantic<'a> {
                         symbol_start: fndef.symbol_start,
                         symbol_end: fndef.symbol_end,
                         symbol_id: 0,
+                        is_private: false,
                     };
 
                     new_params.push(Arc::new(Mutex::new(self_vardecl)));

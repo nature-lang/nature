@@ -862,6 +862,7 @@ impl<'a> Semantic<'a> {
                     symbol_start: start,
                     symbol_end: end,
                     symbol_id: 0,
+                    is_private: false,
                 }));
 
                 Box::new(Stmt {

@@ -718,6 +718,7 @@ fn resolve_member_on_type(
                         type_: prop.type_.clone(),
                         be_capture: false,
                         heap_ident: None,
+                        is_private: false,
                     };
                     return Some(ResolvedSymbol {
                         symbol_id: 0,
@@ -767,6 +768,7 @@ fn resolve_member_on_type(
                             type_: prop.type_.clone(),
                             be_capture: false,
                             heap_ident: None,
+                            is_private: false,
                         };
                         return Some(ResolvedSymbol {
                             symbol_id: 0,

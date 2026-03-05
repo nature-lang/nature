@@ -1055,6 +1055,7 @@ pub struct VarDeclExpr {
     pub type_: Type,
     pub be_capture: bool,
     pub heap_ident: Option<String>,
+    pub is_private: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1066,6 +1067,7 @@ pub struct AstConstDef {
     pub symbol_id: NodeId,
     pub symbol_start: usize,
     pub symbol_end: usize,
+    pub is_private: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1185,6 +1187,7 @@ pub struct TypedefStmt {
     pub is_tagged_union: bool,
     pub impl_interfaces: Vec<Type>,
     pub method_table: HashMap<String, Arc<Mutex<AstFnDef>>>, // key = ident, value = ast_fndef_t
+    pub is_private: bool,
 
     pub symbol_start: usize,
     pub symbol_end: usize,
