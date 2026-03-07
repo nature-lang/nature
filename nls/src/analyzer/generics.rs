@@ -37,7 +37,7 @@ impl<'a> Generics<'a> {
     }
 
     fn push_error(&mut self, start: usize, end: usize, message: String) {
-        errors_push(self.module, AnalyzerError { start, end, message });
+        errors_push(self.module, AnalyzerError { start, end, message, is_warning: false });
     }
 
     fn find_generics_param<'b>(&self, fndef: &'b AstFnDef, ident: &str) -> Option<&'b GenericsParam> {

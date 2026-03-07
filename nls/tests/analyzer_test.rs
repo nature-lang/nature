@@ -1,6 +1,21 @@
 use log::debug;
+use nls::analyzer::module_unique_ident;
 use nls::project::Project;
 use ropey::Rope;
+use std::fs;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Create a unique temp directory for a test case.
+fn temp_project(name: &str) -> PathBuf {
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!("nls_analyzer_test_{}_{}", name, nanos));
+    fs::create_dir_all(&dir).unwrap();
+    dir
+}
 
 #[test]
 fn test_rope() {
@@ -14,45 +29,43 @@ fn test_rope() {
 
 #[tokio::test]
 async fn test_project() {
-    // Initialize logger with error handling
     let _ = env_logger::builder().filter_level(log::LevelFilter::Debug).try_init();
-
     debug!("start test");
 
-    let project_root = "/Users/weiwenhao/Code/nature-test";
+    let root = temp_project("test_project");
+    let file = root.join("main.n");
+    let code = "fn main() {}\n";
+    fs::write(&file, code).unwrap();
 
-    let mut project = Project::new(project_root.to_string()).await;
-    project.backend_handle_queue();
+    let mut project = Project::new(root.to_string_lossy().to_string()).await;
+    project.start_queue_worker();
 
-    let module_ident = "nature-test.main";
-    let file_path = "/Users/weiwenhao/Code/nature-test/main.n";
-
-    // 使用 None 自动从文件读取内容进行编译
-    let module_index = project.build(&file_path, &module_ident, None).await;
+    let module_ident = module_unique_ident(&project.root, &file.to_string_lossy());
+    let module_index = project
+        .build(&file.to_string_lossy(), &module_ident, Some(code.to_string()))
+        .await;
     dbg!(module_index);
 
-    let mut module_db = project.module_db.lock().unwrap();
-    let m = &mut module_db[module_index];
+    let module_db = project.module_db.lock().unwrap();
+    let m = &module_db[module_index];
     println!("errors: {:?}", &m.analyzer_errors);
-    drop(module_db);
+    assert!(m.analyzer_errors.is_empty(), "empty main should have no errors");
 }
 
 #[tokio::test]
 async fn test_stage() {
-    // Initialize logger with error handling
     let _ = env_logger::builder().filter_level(log::LevelFilter::Debug).try_init();
-
     debug!("start test");
 
-    let project_root = "/Users/weiwenhao/Code/nature-test";
+    let root = temp_project("test_stage");
+    let file = root.join("main.n");
 
-    let mut project = Project::new(project_root.to_string()).await;
-    project.backend_handle_queue();
+    let mut project = Project::new(root.to_string_lossy().to_string()).await;
+    project.start_queue_worker();
 
-    let module_ident = "nature-test.main";
-    let file_path = "/Users/weiwenhao/Code/nature-test/main.n";
+    let module_ident = module_unique_ident(&project.root, &file.to_string_lossy());
 
-    // 定义阶段测试数据
+    // Stage test data — each phase is built sequentially.
     let test_codes = vec![
         r#"
 type addr1_t = struct{
@@ -76,20 +89,20 @@ fn main() {
         "#,
     ];
 
-    // 将 first phase 写入到 file path 中。
-    std::fs::write(&file_path, test_codes[0].as_bytes()).expect("Failed to write first phase to file");
+    // Write the first phase to disk so the build can read it.
+    fs::write(&file, test_codes[0].as_bytes()).expect("Failed to write first phase to file");
 
-    // 循环执行各个阶段的测试
     for (index, code) in test_codes.iter().enumerate() {
         let phase_name = format!("Phase {}", index + 1);
-        println!("{} build:", phase_name);
+        println!("{phase_name} build:");
 
-        let module_index = project.build(&file_path, &module_ident, Some(code.to_string())).await;
+        let module_index = project
+            .build(&file.to_string_lossy(), &module_ident, Some(code.to_string()))
+            .await;
         dbg!(module_index);
 
-        let mut module_db = project.module_db.lock().unwrap();
-        let m = &mut module_db[module_index];
-        println!("{} errors: {:?}", phase_name, &m.analyzer_errors);
-        drop(module_db);
+        let module_db = project.module_db.lock().unwrap();
+        let m = &module_db[module_index];
+        println!("{phase_name} errors: {:?}", &m.analyzer_errors);
     }
 }

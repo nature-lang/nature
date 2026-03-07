@@ -53,6 +53,16 @@ pub struct AnalyzerError {
     pub start: usize,
     pub end: usize,
     pub message: String,
+    pub is_warning: bool, // If true, rendered as hint with faded/unnecessary styling
+}
+
+impl AnalyzerError {
+    pub fn new(start: usize, end: usize, message: String) -> Self {
+        Self { start, end, message, is_warning: false }
+    }
+    pub fn warning(start: usize, end: usize, message: String) -> Self {
+        Self { start, end, message, is_warning: true }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -422,7 +432,6 @@ impl Type {
                     | TypeKind::String
                     | TypeKind::Set(..)
                     | TypeKind::Map(..)
-                    | TypeKind::Tuple(..)
                     | TypeKind::Union(..)
                     | TypeKind::TaggedUnion(..)
             )
@@ -1111,6 +1120,8 @@ pub struct TupleDestrExpr {
 pub struct ImportSelectItem {
     pub ident: String,
     pub alias: Option<String>,
+    pub start: usize,
+    pub end: usize,
 }
 
 #[derive(Debug, Clone)]

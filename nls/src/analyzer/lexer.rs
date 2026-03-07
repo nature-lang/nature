@@ -642,7 +642,8 @@ impl Lexer {
                                         start: self.offset,
                                         end: self.guard,
                                         message: String::from("Unterminated comment"),
-                                    });
+                                        is_warning: false,
+                                                                            });
                                     return; // 直接返回，避免 advance 溢出
                                 }
 
@@ -700,7 +701,8 @@ impl Lexer {
                 start: self.offset,
                 end: self.guard,
                 message: String::from("floating-point numbers cannot end with '.'"),
-            });
+                is_warning: false,
+                            });
             return false;
         }
 
@@ -718,7 +720,8 @@ impl Lexer {
                 start: self.offset,
                 end: self.guard,
                 message: String::from("floating-point number contains multiple '.'"),
-            });
+                is_warning: false,
+                            });
             return false;
         }
 
@@ -1019,7 +1022,8 @@ impl Lexer {
                     start: self.offset,
                     end: self.guard,
                     message: String::from("Unexpected character"),
-                });
+                    is_warning: false,
+                                    });
                 TokenType::Unknown
             }
         }
@@ -1042,7 +1046,8 @@ impl Lexer {
                 start: self.offset,
                 end: self.guard,
                 message: String::from("string not terminated"),
-            });
+                is_warning: false,
+                            });
             return result;
         }
 
@@ -1066,7 +1071,8 @@ impl Lexer {
                         start: self.offset,
                         end: self.guard,
                         message: String::from("string not terminated"),
-                    });
+                        is_warning: false,
+                                            });
                     return result; // 返回已经解析的字符串
                 }
             }
@@ -1094,7 +1100,8 @@ impl Lexer {
                                 start: self.offset,
                                 end: self.guard + 1,
                                 message: String::from("incomplete hex escape sequence"),
-                            });
+                                is_warning: false,
+                                                            });
                             guard_char
                         } else {
                             let hex_chars: String = self.source[self.guard + 1..self.guard + 3].iter().collect();
@@ -1110,7 +1117,8 @@ impl Lexer {
                                             start: self.offset,
                                             end: self.guard + 3,
                                             message: format!("invalid hex escape sequence \\x{}", hex_chars),
-                                        });
+                                            is_warning: false,
+                                                                                    });
                                         guard_char
                                     }
                                 }
@@ -1119,7 +1127,8 @@ impl Lexer {
                                     start: self.offset,
                                     end: self.guard + 3,
                                     message: format!("invalid hex escape sequence \\x{}", hex_chars),
-                                });
+                                    is_warning: false,
+                                                                    });
                                 guard_char
                             }
                         }
@@ -1129,7 +1138,8 @@ impl Lexer {
                             start: self.offset,
                             end: self.guard + 1,
                             message: format!("unknown escape char '{}'", guard_char),
-                        });
+                            is_warning: false,
+                                                    });
                         guard_char
                     }
                 };
@@ -1144,7 +1154,8 @@ impl Lexer {
                     start: self.offset,
                     end: self.guard,
                     message: String::from("string not terminated"),
-                });
+                    is_warning: false,
+                                    });
                 return result;
             }
         }

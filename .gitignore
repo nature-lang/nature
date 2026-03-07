@@ -9,7 +9,6 @@ release/
 tmp/
 
 # IDE and editor files
-.vscode
 .idea
 
 # OS-specific files
