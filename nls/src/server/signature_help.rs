@@ -353,6 +353,7 @@ mod tests {
             type_: Type::new(TypeKind::Int64),
             be_capture: false,
             heap_ident: None,
+            is_private: false,
         }));
         let param_b = Arc::new(Mutex::new(VarDeclExpr {
             ident: "b".into(),
@@ -362,6 +363,7 @@ mod tests {
             type_: Type::new(TypeKind::String),
             be_capture: false,
             heap_ident: None,
+            is_private: false,
         }));
 
         let fndef = AstFnDef {
@@ -390,6 +392,7 @@ mod tests {
             type_: Type::default(),
             be_capture: false,
             heap_ident: None,
+            is_private: false,
         }));
         let x_param = Arc::new(Mutex::new(VarDeclExpr {
             ident: "x".into(),
@@ -399,6 +402,7 @@ mod tests {
             type_: Type::new(TypeKind::Int64),
             be_capture: false,
             heap_ident: None,
+            is_private: false,
         }));
 
         let fndef = AstFnDef {

@@ -62,6 +62,79 @@ compile and execute
 > nature build main.n && ./main   
 hello nature 
 ```   
+
+## Formatting
+
+Nature ships with one canonical formatter style. The formatter is convention-over-configuration: there are no style profiles or user-tunable formatting rules.
+
+The same formatter core is exposed through both the CLI and the language server:
+
+- `nature fmt` is the user-facing toolchain command
+- `nls fmt` is the underlying formatter command used by the language server and wrapper
+- editor formatting uses the same canonical output through LSP `textDocument/formatting`
+
+### CLI usage
+
+Print formatted output to stdout:
+
+```sh
+nature fmt < path/to/file.n
+nls fmt < path/to/file.n
+
+nature fmt path/to/file.n
+nls fmt path/to/file.n
+```
+
+Directories are supported and are walked recursively for `.n` files:
+
+```sh
+nature fmt src/
+nls fmt src/
+```
+
+Write formatted output back to the file in place:
+
+```sh
+nature fmt -w path/to/file.n
+nls fmt --write path/to/file.n
+```
+
+Check whether files are already formatted. This exits with status `1` if any file would change:
+
+```sh
+nature fmt --check path/to/file.n
+nls fmt --check path/to/file.n
+```
+
+Show a unified diff instead of rewriting files. This also exits with status `1` if any file would change:
+
+```sh
+nature fmt --diff path/to/file.n
+nls fmt --diff path/to/file.n
+```
+
+List files whose formatting differs from the canonical style:
+
+```sh
+nature fmt -l src/
+nls fmt -l src/
+```
+
+Report all lexer errors instead of only the first one:
+
+```sh
+nature fmt -e path/to/file.n
+nls fmt -e path/to/file.n
+```
+
+Notes:
+
+- default mode prints formatted output to stdout and does not modify files
+- if no path is provided, the formatter reads from stdin
+- directory inputs are walked recursively and only `.n` files are formatted
+- `--write` cannot be combined with `--check` or `--diff`
+- formatting invalid syntax is not supported; formatter errors are reported instead of producing best-effort output
+- formatter output is intended to be stable and idempotent
   
 ## Documentation  
   

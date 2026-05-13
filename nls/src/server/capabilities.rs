@@ -96,7 +96,8 @@ pub fn build_server_capabilities() -> ServerCapabilities {
                 resolve_provider: None,
             },
         )),
-
+        // ── Formatting (Tier 6) ────────────────────────────────────────────────
+        document_formatting_provider: Some(OneOf::Left(true)),
         // ── Features not yet enabled ────────────────────────────────────
         // rename_provider: None,
 
