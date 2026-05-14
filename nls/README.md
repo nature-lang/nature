@@ -7,6 +7,7 @@ LSP server and VSCode client for the [Nature](https://github.com/nature-lang/nat
 - Code completion (type members, imports, selective imports, auto-import, keywords)
 - Hover (symbol info, doc comments, type display for ref/ptr wrappers)
 - Go-to definition & find references
+- Document formatting via `textDocument/formatting`
 - Semantic highlighting
 - Signature help
 - Inlay hints (parameter names, inferred types)
@@ -97,6 +98,63 @@ cargo build --release
 ```
 
 The binary is output to `target/{debug,release}/nls`.
+
+## Formatting
+
+NLS exposes the Nature formatter in two ways:
+
+- LSP document formatting for editors
+- a CLI subcommand: `nls fmt`
+
+The formatter is canonical and not configurable. It uses the same core for both editor formatting and CLI formatting.
+
+```bash
+# Read from stdin and print formatted output to stdout
+cargo run -- fmt < path/to/file.n
+
+# Print formatted output to stdout
+cargo run -- fmt path/to/file.n
+
+# Recursively walk a directory and format .n files
+cargo run -- fmt src/
+
+# Rewrite files in place
+cargo run -- fmt --write path/to/file.n
+
+# Fail if any file would be reformatted
+cargo run -- fmt --check path/to/file.n
+
+# Show a unified diff for files that would change
+cargo run -- fmt --diff path/to/file.n
+
+# List files whose formatting differs from the canonical style
+cargo run -- fmt -l src/
+
+# Report all lexer errors instead of only the first one
+cargo run -- fmt -e path/to/file.n
+```
+
+Notes:
+
+- default mode writes formatted output to stdout
+- if no path is provided, the formatter reads from stdin
+- directory inputs are walked recursively and only `.n` files are formatted
+- `--write` cannot be combined with `--check` or `--diff`
+- the formatter returns an error for invalid syntax rather than attempting best-effort formatting
+
+### VS Code format on save
+
+NLS already advertises full-document formatting through LSP, so format on save works in VS Code when it is enabled in editor settings.
+
+```json
+{
+	"[n]": {
+		"editor.formatOnSave": true
+	}
+}
+```
+
+If you have multiple formatters registered for `.n` files, also set the default formatter explicitly.
 
 ## Testing
 

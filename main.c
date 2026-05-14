@@ -1,3 +1,4 @@
+#include "cmd/fmt.h"
 #include "cmd/root.h"
 #include "cmd/self_update.h"
 #include "cmd/test.h"
@@ -7,6 +8,7 @@
 #include <stdio.h>
 
 #define ARGS_BUILD "build"
+#define ARGS_FMT "fmt"
 #define ARGS_SELF_UPDATE "self-update"
 #define ARGS_TEST "test"
 
@@ -17,6 +19,7 @@ void print_help() {
 
     printf("Available Commands:\n");
     printf("  build       Build a Nature source file\n");
+    printf("  fmt         Format one or more Nature source files\n");
     printf("  self-update Update Nature installation\n");
     printf("  test        Run tests in a Nature source file\n\n");
 
@@ -39,6 +42,12 @@ void print_help() {
 
     printf("Test Flags:\n");
     printf("  --skip <name> Skip a test by name (repeatable)\n\n");
+    printf("Fmt Flags:\n");
+    printf("  -w, --write  Format files in place\n");
+    printf("  --check      Exit with status 1 if any file would be reformatted\n");
+    printf("  --diff, -d   Print a unified diff for files that would be reformatted\n");
+    printf("  -l, --list   List files whose formatting differs from the canonical style\n");
+    printf("  -e, --errors Report all lexer errors instead of just the first one\n\n");
 
     printf("Self-Update Flags:\n");
     printf("  --check      Check latest version without installing\n");
@@ -64,6 +73,13 @@ void print_help() {
 
     printf("  nature test main.n                          # Run tests\n");
     printf("  nature test --skip sum main.n               # Skip a specific test\n\n");
+    printf("  nature fmt                                  # Read from stdin and write formatted output\n");
+    printf("  nature fmt src/                             # Recursively format .n files under a directory\n");
+    printf("  nature fmt main.n                           # Print formatted output\n");
+    printf("  nature fmt --check main.n                   # Check formatting without writing\n");
+    printf("  nature fmt --diff main.n                    # Show the formatting diff\n");
+    printf("  nature fmt -l src/                          # List files that are not canonically formatted\n");
+    printf("  nature fmt -w main.n                        # Rewrite the file in place\n\n");
     printf("  nature self-update --check                  # Check latest version\n");
     printf("  nature self-update --yes                    # Update without prompt\n");
     printf("  nature self-update --force --yes            # Reinstall latest version\n\n");
@@ -101,6 +117,13 @@ int main(int argc, char *argv[]) {
         argv[1] = argv[0];
         argv += 1;
         cmd_entry(argc - 1, argv);
+        return 0;
+    }
+
+    if (str_equal(first, ARGS_FMT)) {
+        argv[1] = argv[0];
+        argv += 1;
+        cmd_fmt_entry(argc - 1, argv);
         return 0;
     }
 

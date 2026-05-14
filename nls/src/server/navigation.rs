@@ -984,6 +984,7 @@ mod tests {
             type_: crate::analyzer::common::Type::default(),
             be_capture: false,
             heap_ident: None,
+            is_private: false,
         }));
         assert_eq!(symbol_def_range(&SymbolKind::Var(var)), (10, 11));
     }

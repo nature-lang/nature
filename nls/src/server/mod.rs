@@ -8,6 +8,7 @@ pub mod code_actions;
 pub mod completion;
 pub mod config;
 pub mod dispatch;
+pub mod formatting;
 pub mod hover;
 pub mod inlay_hints;
 pub mod navigation;
@@ -205,7 +206,12 @@ impl LanguageServer for Backend {
     ) -> Result<Option<CodeActionResponse>> {
         Ok(self.handle_code_action(params).await)
     }
-
+    async fn formatting(
+        &self,
+        params: DocumentFormattingParams,
+    ) -> Result<Option<Vec<TextEdit>>> {
+        Ok(self.handle_formatting(params).await)
+    }
     // ── Semantic tokens ─────────────────────────────────────────────
 
     async fn semantic_tokens_full(

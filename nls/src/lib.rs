@@ -10,6 +10,7 @@
 
 pub mod analyzer;
 pub mod document;
+pub mod formatter;
 pub mod package;
 pub mod project;
 pub mod server;
