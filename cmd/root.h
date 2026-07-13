@@ -97,12 +97,14 @@ void cmd_entry(int argc, char **argv) {
             }
             case 2: {
                 // 处理 --ld 参数
-                strcpy(USE_LD, optarg);
+                assertf(strlen(optarg) < sizeof(USE_LD), "--ld value is too long");
+                snprintf(USE_LD, sizeof(USE_LD), "%s", optarg);
                 break;
             }
             case 3: {
                 // 处理 --ldflags 参数
-                strcpy(LDFLAGS, optarg);
+                assertf(strlen(optarg) < sizeof(LDFLAGS), "--ldflags value is too long");
+                snprintf(LDFLAGS, sizeof(LDFLAGS), "%s", optarg);
                 break;
             }
             case 4: {

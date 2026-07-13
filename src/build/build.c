@@ -15,6 +15,7 @@
 #include "src/build/test_runner.h"
 #include "src/cfg.h"
 #include "src/debug/debug.h"
+#include "src/ldd/ldd.h"
 #include "src/linear.h"
 #include "src/lower/amd64.h"
 #include "src/lower/arm64.h"
@@ -487,7 +488,7 @@ static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
     bool has_lc = strstr(ldflags, "-lc") != NULL;
 
     // 将 modules 中的 obj output_file 添加到文件 objects.txt 中, 用来作为 ld 的参数
-    const char *objects_file = path_join(TEMP_DIR, "objects.txt");
+    char *objects_file = path_join(TEMP_DIR, "objects.txt");
     FILE *obj_list = fopen(objects_file, "w");
     if (!obj_list) {
         assertf(false, "unable to create objects list file: %s", objects_file);
@@ -583,24 +584,29 @@ static char *find_syslibroot() {
         return NULL;
     }
 
+#ifndef __DARWIN
+    return NULL;
+#else
     // 尝试使用 xcrun 命令获取 SDK 路径
     FILE *fp = popen("xcrun --show-sdk-path 2>/dev/null", "r");
     if (fp) {
         char path[PATH_MAX] = {0};
+        char *result = NULL;
         if (fgets(path, PATH_MAX, fp) != NULL) {
             // 移除末尾的换行符
             size_t len = strlen(path);
             if (len > 0 && path[len - 1] == '\n') {
                 path[len - 1] = '\0';
             }
-            pclose(fp);
-
             // 检查路径是否存在
             if (strlen(path) > 0 && dir_exists(path)) {
-                return strdup(path);
+                result = strdup(path);
             }
         }
         pclose(fp);
+        if (result) {
+            return result;
+        }
     }
 
     // 尝试常见的默认位置
@@ -617,6 +623,7 @@ static char *find_syslibroot() {
 
     // 如果找不到，返回 NULL
     return NULL;
+#endif
 }
 
 // 新增函数：获取 macOS SDK 版本
@@ -625,6 +632,9 @@ static char *get_macos_sdk_version() {
         return NULL;
     }
 
+#ifndef __DARWIN
+    return NULL;
+#else
     // 尝试使用 xcrun 命令获取 SDK 版本
     FILE *fp = popen("xcrun --sdk macosx --show-sdk-version 2>/dev/null", "r");
     if (!fp) {
@@ -652,10 +662,12 @@ static char *get_macos_sdk_version() {
     }
 
     if (!result_dup_str) {
-        log_warn("Warning: Could not determine a valid SDK version via xcrun. Raw output from xcrun: '%s'. Using default SDK version.");
+        log_warn("Warning: Could not determine a valid SDK version via xcrun. Raw output from xcrun: '%s'. Using default SDK version.",
+                 version_str);
     }
 
     return result_dup_str; // 可能返回 NULL
+#endif
 }
 
 /**
@@ -771,6 +783,71 @@ static void custom_ld_mach_exe(slice_t *modules, char *use_ld, char *ldflags) {
     log_debug("build output --> %s", BUILD_OUTPUT);
 }
 
+static void ldd_diagnostic(void *context, ldd_diag_level_t level, const char *message) {
+    (void) context;
+    if (level == LDD_DIAG_ERROR) {
+        log_error("[ldd] %s", message);
+    } else if (level == LDD_DIAG_WARNING) {
+        log_warn("[ldd] %s", message);
+    } else {
+        log_debug("[ldd] %s", message);
+    }
+}
+
+static void ldd_mach_exe(slice_t *modules, char *ldflags) {
+    assertf(BUILD_ARCH == ARCH_ARM64, "internal Darwin linker currently supports arm64 only");
+    ldd_options_t options;
+    ldd_options_init(&options);
+    options.output_path = BUILD_OUTPUT;
+    options.entry_symbol = LD_ENTRY;
+    options.diagnostic = ldd_diagnostic;
+    options.min_os_version = ldd_macos_version(11, 0, 0);
+
+    char *sysroot = find_syslibroot();
+    char *sdk_version = get_macos_sdk_version();
+    options.sysroot = sysroot;
+    char nature_library_path[PATH_MAX];
+    int nature_library_length = snprintf(nature_library_path, sizeof(nature_library_path), "%s/lib/%s_%s",
+                                         NATURE_ROOT, os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
+    assertf(nature_library_length >= 0 && (size_t) nature_library_length < sizeof(nature_library_path),
+            "Nature library search path is too long");
+    assertf(ldd_add_library_path(&options, nature_library_path) == LDD_OK,
+            "cannot add Nature library search path '%s'", nature_library_path);
+    if (sdk_version) {
+        unsigned major = 0, minor = 0, patch = 0;
+        sscanf(sdk_version, "%u.%u.%u", &major, &minor, &patch);
+        options.sdk_version = ldd_macos_version(major, minor, patch);
+    }
+    for (int i = 0; i < modules->count; i++) {
+        module_t *module = modules->take[i];
+        if (module->object_file) {
+            assertf(ldd_add_input(&options, module->object_file) == LDD_OK,
+                    "cannot add object '%s' to internal Darwin linker", module->object_file);
+        }
+    }
+    assertf(ldd_add_input(&options, custom_link_object_path()) == LDD_OK,
+            "cannot add custom metadata object to internal Darwin linker");
+    for (int i = 0; i < linker_libs->count; i++) {
+        char *path = linker_libs->take[i];
+        assertf(ldd_add_input(&options, path) == LDD_OK,
+                "cannot add package link '%s' to internal Darwin linker", path);
+    }
+    assertf(ldd_add_input(&options, lib_file_path(LIB_RUNTIME_FILE)) == LDD_OK,
+            "cannot add Darwin runtime to internal linker");
+    assertf(ldd_add_input(&options, lib_file_path(LIBUV_FILE)) == LDD_OK,
+            "cannot add Darwin libuv to internal linker");
+    int parse_result = ldd_parse_flags(&options, ldflags ? ldflags : "");
+    assertf(parse_result == LDD_OK, "unsupported Darwin linker flags (error %d)", parse_result);
+    int result = ldd_link(&options);
+    assertf(result == LDD_OK, "internal Darwin linker failed (error %d)", result);
+    assertf(file_exists(BUILD_OUTPUT), "internal Darwin linker did not create '%s'", BUILD_OUTPUT);
+    log_debug("internal linker output --> %s", BUILD_OUTPUT);
+    log_debug("build output --> %s", BUILD_OUTPUT);
+    ldd_options_deinit(&options);
+    free(sysroot);
+    free(sdk_version);
+}
+
 static void build_init(char *build_entry) {
     env_init();
     config_init();
@@ -787,11 +864,6 @@ static void build_init(char *build_entry) {
     char temp_path[PATH_MAX] = "";
     if (realpath(build_entry, temp_path) == NULL) {
         assertf(false, "entry file='%s' not found", build_entry);
-    }
-
-    // darwin 默认使用 ld 链接
-    if (BUILD_OS == OS_DARWIN && strlen(USE_LD) == 0) {
-        strcpy(USE_LD, "ld");
     }
 
     // copy
@@ -1240,8 +1312,13 @@ void build(char *build_entry, bool is_archive) {
             custom_ld_mach_exe(modules, USE_LD, LDFLAGS);
         }
     } else {
-        assertf(BUILD_OS == OS_LINUX, "The cross-platform elf linker can only be used if the target is linux.");
-        linker_elf_exe(modules);
+        if (BUILD_OS == OS_DARWIN) {
+            ldd_mach_exe(modules, LDFLAGS);
+        } else {
+            assertf(BUILD_OS == OS_LINUX,
+                    "The cross-platform elf linker can only be used if the target is linux.");
+            linker_elf_exe(modules);
+        }
     }
 
     // Cleanup TEMP_DIR after successful build

@@ -180,12 +180,6 @@ static inline void env_init() {
         assertf(false, "riscv64 unsupported darwin platform");
     }
 
-    // darwin 不支持跨平台编译, 必须在当前平台编译
-#ifndef __DARWIN
-    assertf(BUILD_OS != OS_DARWIN, "darwin does not support cross-compilation, please compile on the darwin platform");
-#endif
-
-
     char *root = getenv("NATURE_ROOT");
     if (root != NULL) {
         NATURE_ROOT = root;

@@ -329,10 +329,10 @@ static void on_http_conn_cb(uv_stream_t *server, int status) {
 }
 
 static inline void on_server_close_cb(uv_handle_t *handle) {
-    n_http_server_t *conn = handle->data;
-    coroutine_t *listen_co = conn->inner->listen_co;
+    inner_http_server_t *inner = CONTAINER_OF(handle, inner_http_server_t, handle);
+    coroutine_t *listen_co = inner->listen_co;
 
-    free_conn(conn->inner);
+    free_conn(inner);
     co_ready(listen_co);
 }
 
