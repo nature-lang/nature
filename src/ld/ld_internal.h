@@ -1,7 +1,7 @@
-#ifndef NATURE_LDD_INTERNAL_H
-#define NATURE_LDD_INTERNAL_H
+#ifndef NATURE_LD_INTERNAL_H
+#define NATURE_LD_INTERNAL_H
 
-#include "ldd.h"
+#include "ld.h"
 #include "macho_format.h"
 
 #include "utils/uthash.h"
@@ -10,55 +10,55 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define LDD_IMAGE_BASE 0x100000000ULL
-#define LDD_DEFAULT_DYLIB_VERSION 0x00010000U
+#define LD_IMAGE_BASE 0x100000000ULL
+#define LD_DEFAULT_DYLIB_VERSION 0x00010000U
 
-typedef struct ldd_context ldd_context_t;
-typedef struct ldd_object ldd_object_t;
-typedef struct ldd_output_section ldd_output_section_t;
-typedef struct ldd_symbol ldd_symbol_t;
-typedef struct ldd_relocation ldd_relocation_t;
+typedef struct ld_context ld_context_t;
+typedef struct ld_object ld_object_t;
+typedef struct ld_output_section ld_output_section_t;
+typedef struct ld_symbol ld_symbol_t;
+typedef struct ld_relocation ld_relocation_t;
 
-typedef struct ldd_string_set_entry {
+typedef struct ld_string_set_entry {
     UT_hash_handle hh;
-} ldd_string_set_entry_t;
+} ld_string_set_entry_t;
 
 typedef struct {
     uint8_t *bytes;
     size_t size;
     char *path;
-} ldd_file_t;
+} ld_file_t;
 
 typedef struct {
-    ldd_section_64_t header;
+    ld_section_64_t header;
     const uint8_t *data;
     const uint8_t *relocations;
-    ldd_object_t *object;
-    ldd_output_section_t *output;
+    ld_object_t *object;
+    ld_output_section_t *output;
     uint64_t output_offset;
     bool ignored;
-} ldd_input_section_t;
+} ld_input_section_t;
 
 typedef struct {
-    ldd_nlist_64_t entry;
+    ld_nlist_64_t entry;
     const char *name;
     /* N_INDR stores the target symbol's string-table offset in n_value. */
     const char *alias_name;
-    ldd_object_t *object;
+    ld_object_t *object;
     uint32_t index;
-} ldd_input_symbol_t;
+} ld_input_symbol_t;
 
-typedef struct ldd_relocation {
+typedef struct ld_relocation {
     uint32_t address;
     uint32_t symbolnum;
     uint8_t pcrel;
     uint8_t length;
     uint8_t external;
     uint8_t type;
-} ldd_relocation_t;
+} ld_relocation_t;
 
-struct ldd_object {
-    ldd_file_t *file;
+struct ld_object {
+    ld_file_t *file;
     const uint8_t *bytes;
     size_t size;
     char *member_name;
@@ -66,9 +66,9 @@ struct ldd_object {
     bool selected;
     uint32_t ncmds;
     uint32_t flags;
-    ldd_input_section_t *sections;
+    ld_input_section_t *sections;
     size_t section_count;
-    ldd_input_symbol_t *symbols;
+    ld_input_symbol_t *symbols;
     size_t symbol_count;
     const char *strtab;
     uint32_t strtab_size;
@@ -80,58 +80,58 @@ struct ldd_object {
 };
 
 typedef enum {
-    LDD_SYMBOL_UNDEFINED,
-    LDD_SYMBOL_DEFINED,
-    LDD_SYMBOL_ABSOLUTE,
-    LDD_SYMBOL_COMMON,
-    LDD_SYMBOL_IMPORT,
-} ldd_symbol_kind_t;
+    LD_SYMBOL_UNDEFINED,
+    LD_SYMBOL_DEFINED,
+    LD_SYMBOL_ABSOLUTE,
+    LD_SYMBOL_COMMON,
+    LD_SYMBOL_IMPORT,
+} ld_symbol_kind_t;
 
 /* Mach-O's ld64 exposes these names as synthetic symbols.  They are kept
    separate from ordinary absolute symbols until section layout has finished,
    because their value depends on the final image addresses. */
 typedef enum {
-    LDD_BOUNDARY_NONE = 0,
-    LDD_BOUNDARY_SECTION_START,
-    LDD_BOUNDARY_SECTION_END,
-    LDD_BOUNDARY_SEGMENT_START,
-    LDD_BOUNDARY_SEGMENT_END,
-} ldd_boundary_kind_t;
+    LD_BOUNDARY_NONE = 0,
+    LD_BOUNDARY_SECTION_START,
+    LD_BOUNDARY_SECTION_END,
+    LD_BOUNDARY_SEGMENT_START,
+    LD_BOUNDARY_SEGMENT_END,
+} ld_boundary_kind_t;
 
-struct ldd_symbol {
+struct ld_symbol {
     char *name;
-    ldd_symbol_kind_t kind;
-    ldd_object_t *object;
-    ldd_input_symbol_t *input;
+    ld_symbol_kind_t kind;
+    ld_object_t *object;
+    ld_input_symbol_t *input;
     uint64_t value;
     uint64_t size;
     uint32_t align;
     bool weak;
     bool weak_ref;
     bool alias;
-    ldd_symbol_t *alias_target;
+    ld_symbol_t *alias_target;
     bool dynamic;
     uint32_t got_index;
     uint32_t stub_index;
     uint32_t symtab_index;
     uint32_t dylib_ordinal;
     bool objc_selector_stub;
-    ldd_symbol_t *objc_dispatch;
+    ld_symbol_t *objc_dispatch;
     uint32_t objc_selector_index;
     uint32_t objc_stub_index;
     uint64_t objc_methname_offset;
     uint64_t objc_selref_offset;
-    ldd_boundary_kind_t boundary_kind;
+    ld_boundary_kind_t boundary_kind;
     bool linker_defined;
     bool execute_header;
     char boundary_segment[17];
     char boundary_section[17];
-    ldd_output_section_t *output;
+    ld_output_section_t *output;
     uint64_t output_offset;
     UT_hash_handle hh;
 };
 
-struct ldd_output_section {
+struct ld_output_section {
     char segname[17];
     char sectname[17];
     uint32_t flags;
@@ -150,16 +150,16 @@ struct ldd_output_section {
 };
 
 typedef struct {
-    ldd_object_t **items;
+    ld_object_t **items;
     size_t count;
     size_t capacity;
-} ldd_object_list_t;
+} ld_object_list_t;
 
 typedef struct {
-    ldd_file_t **items;
+    ld_file_t **items;
     size_t count;
     size_t capacity;
-} ldd_file_list_t;
+} ld_file_list_t;
 
 typedef struct {
     char *path;
@@ -169,84 +169,84 @@ typedef struct {
     char **exports;
     size_t export_count;
     size_t export_capacity;
-    ldd_string_set_entry_t *export_set;
+    ld_string_set_entry_t *export_set;
     char **weak_exports;
     size_t weak_export_count;
     size_t weak_export_capacity;
-    ldd_string_set_entry_t *weak_export_set;
+    ld_string_set_entry_t *weak_export_set;
     char **reexports;
     size_t reexport_count;
     size_t reexport_capacity;
-    ldd_string_set_entry_t *reexport_set;
+    ld_string_set_entry_t *reexport_set;
     size_t reexport_owner;
     bool weak;
     bool reexport_only;
     bool has_reexport_owner;
     bool reexports_scanned;
-} ldd_dylib_input_t;
+} ld_dylib_input_t;
 
 typedef struct {
-    ldd_dylib_input_t *items;
+    ld_dylib_input_t *items;
     size_t count;
     size_t capacity;
-} ldd_dylib_list_t;
+} ld_dylib_list_t;
 
 typedef struct {
-    ldd_output_section_t **items;
+    ld_output_section_t **items;
     size_t count;
     size_t capacity;
-} ldd_output_list_t;
+} ld_output_list_t;
 
 typedef struct {
-    ldd_symbol_t **items;
+    ld_symbol_t **items;
     size_t count;
     size_t capacity;
-} ldd_symbol_list_t;
+} ld_symbol_list_t;
 
 typedef struct {
     uint32_t segment;
     uint64_t offset;
-} ldd_fixup_t;
+} ld_fixup_t;
 
 typedef struct {
-    ldd_fixup_t *items;
+    ld_fixup_t *items;
     size_t count;
     size_t capacity;
-} ldd_fixup_list_t;
+} ld_fixup_list_t;
 
 typedef struct {
-    ldd_symbol_t *symbol;
+    ld_symbol_t *symbol;
     uint32_t segment;
     uint64_t offset;
     int64_t addend;
     bool weak;
     bool weak_definition;
-} ldd_bind_t;
+} ld_bind_t;
 
 typedef struct {
-    ldd_bind_t *items;
+    ld_bind_t *items;
     size_t count;
     size_t capacity;
-} ldd_bind_list_t;
+} ld_bind_list_t;
 
 typedef struct {
-    ldd_object_t *object;
+    ld_object_t *object;
     uint32_t section_index;
     uint32_t relocation_index;
     uint64_t output_offset;
     int64_t addend;
-} ldd_branch_thunk_t;
+} ld_branch_thunk_t;
 
 typedef struct {
-    ldd_branch_thunk_t *items;
+    ld_branch_thunk_t *items;
     size_t count;
     size_t capacity;
-} ldd_branch_thunk_list_t;
+} ld_branch_thunk_list_t;
 
 typedef struct {
-    ldd_object_t *object;
-    ldd_relocation_t start_relocation;
-    ldd_relocation_t lsda_relocation;
+    ld_object_t *object;
+    ld_relocation_t start_relocation;
+    ld_relocation_t lsda_relocation;
     uint64_t start_addend;
     uint64_t lsda_addend;
     uint32_t length;
@@ -256,17 +256,17 @@ typedef struct {
     uint8_t personality_index;
     bool has_start_relocation;
     bool has_lsda_relocation;
-} ldd_unwind_record_t;
+} ld_unwind_record_t;
 
 typedef struct {
-    ldd_unwind_record_t *records;
+    ld_unwind_record_t *records;
     size_t count;
     size_t capacity;
-    ldd_symbol_t *personalities[3];
+    ld_symbol_t *personalities[3];
     size_t personality_count;
     size_t lsda_count;
-    ldd_output_section_t *output;
-} ldd_unwind_state_t;
+    ld_output_section_t *output;
+} ld_unwind_state_t;
 
 typedef struct {
     char name[17];
@@ -277,27 +277,27 @@ typedef struct {
     int32_t maxprot;
     int32_t initprot;
     uint32_t command_index;
-} ldd_segment_layout_t;
+} ld_segment_layout_t;
 
-struct ldd_context {
-    const ldd_options_t *options;
-    ldd_file_list_t files;
-    ldd_dylib_list_t dylibs;
-    ldd_object_list_t objects;
-    ldd_output_list_t outputs;
-    ldd_symbol_list_t dynamic_symbols;
-    ldd_fixup_list_t rebases;
-    ldd_bind_list_t binds;
-    ldd_branch_thunk_list_t branch_thunks;
-    ldd_unwind_state_t unwind;
-    ldd_symbol_t *symbols;
-    ldd_output_section_t *got;
-    ldd_output_section_t *stubs;
-    ldd_output_section_t *objc_stubs;
-    ldd_output_section_t *objc_methname;
-    ldd_output_section_t *objc_selrefs;
-    ldd_output_section_t *branch_islands;
-    ldd_output_section_t *common;
+struct ld_context {
+    const ld_options_t *options;
+    ld_file_list_t files;
+    ld_dylib_list_t dylibs;
+    ld_object_list_t objects;
+    ld_output_list_t outputs;
+    ld_symbol_list_t dynamic_symbols;
+    ld_fixup_list_t rebases;
+    ld_bind_list_t binds;
+    ld_branch_thunk_list_t branch_thunks;
+    ld_unwind_state_t unwind;
+    ld_symbol_t *symbols;
+    ld_output_section_t *got;
+    ld_output_section_t *stubs;
+    ld_output_section_t *objc_stubs;
+    ld_output_section_t *objc_methname;
+    ld_output_section_t *objc_selrefs;
+    ld_output_section_t *branch_islands;
+    ld_output_section_t *common;
     uint32_t got_count;
     uint32_t stub_count;
     uint32_t objc_stub_count;
@@ -306,7 +306,7 @@ struct ldd_context {
     uint64_t entry_address;
     uint64_t entry_fileoff;
     char entry_name[1024];
-    ldd_segment_layout_t segments[5];
+    ld_segment_layout_t segments[5];
     size_t segment_count;
     uint64_t header_size;
     uint64_t linkedit_fileoff;
@@ -314,15 +314,15 @@ struct ldd_context {
     int error;
 };
 
-void *ldd_realloc_array(void *old, size_t old_count, size_t new_count, size_t element_size);
-void ldd_string_set_deinit(ldd_string_set_entry_t **set);
-int ldd_fail(ldd_context_t *ctx, int code, const char *format, ...);
+void *ld_realloc_array(void *old, size_t old_count, size_t new_count, size_t element_size);
+void ld_string_set_deinit(ld_string_set_entry_t **set);
+int ld_fail(ld_context_t *ctx, int code, const char *format, ...);
 
-int ldd_parse_input_file(ldd_context_t *ctx, const char *path);
-int ldd_resolve_requested_libraries(ldd_context_t *ctx);
-int ldd_resolve_reexport_libraries(ldd_context_t *ctx);
-int ldd_link_macho(ldd_context_t *ctx);
-int ldd_unwind_prepare(ldd_context_t *ctx);
-int ldd_unwind_emit(ldd_context_t *ctx);
+int ld_parse_input_file(ld_context_t *ctx, const char *path);
+int ld_resolve_requested_libraries(ld_context_t *ctx);
+int ld_resolve_reexport_libraries(ld_context_t *ctx);
+int ld_link_macho(ld_context_t *ctx);
+int ld_unwind_prepare(ld_context_t *ctx);
+int ld_unwind_emit(ld_context_t *ctx);
 
 #endif

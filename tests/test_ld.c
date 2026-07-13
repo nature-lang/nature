@@ -1,6 +1,6 @@
-#include "src/ldd/ldd.h"
-#include "src/ldd/ldd_internal.h"
-#include "src/ldd/sha256.h"
+#include "src/ld/ld.h"
+#include "src/ld/ld_internal.h"
+#include "src/ld/sha256.h"
 
 #include <assert.h>
 #include <fcntl.h>
@@ -16,7 +16,7 @@ typedef struct {
     char message[4096];
 } diagnostic_capture_t;
 
-static void capture_diagnostic(void *context, ldd_diag_level_t level, const char *message) {
+static void capture_diagnostic(void *context, ld_diag_level_t level, const char *message) {
     (void) level;
     diagnostic_capture_t *capture = context;
     capture->count++;
@@ -38,20 +38,20 @@ static void write_named_fixture(const char *path, const void *bytes, size_t size
 }
 
 static void expect_invalid_input(const char *path, int expected, const char *message_fragment) {
-    static const char *output = "/tmp/nature-ldd-invalid-output";
+    static const char *output = "/tmp/nature-ld-invalid-output";
     unlink(output);
     diagnostic_capture_t capture = {0};
-    ldd_options_t options;
-    ldd_options_init(&options);
+    ld_options_t options;
+    ld_options_init(&options);
     options.output_path = output;
     options.diagnostic = capture_diagnostic;
     options.diagnostic_context = &capture;
-    assert(ldd_add_input(&options, path) == LDD_OK);
-    assert(ldd_link(&options) == expected);
+    assert(ld_add_input(&options, path) == LD_OK);
+    assert(ld_link(&options) == expected);
     assert(capture.count > 0);
     assert(strstr(capture.message, message_fragment) != NULL);
     assert(access(output, F_OK) != 0);
-    ldd_options_deinit(&options);
+    ld_options_deinit(&options);
 }
 
 static bool dylib_has_symbol(char *const *symbols, size_t count, const char *name) {
@@ -61,23 +61,23 @@ static bool dylib_has_symbol(char *const *symbols, size_t count, const char *nam
     return false;
 }
 
-static void parsed_context_deinit(ldd_context_t *ctx) {
+static void parsed_context_deinit(ld_context_t *ctx) {
     for (size_t i = 0; i < ctx->files.count; i++) {
         free(ctx->files.items[i]->bytes);
         free(ctx->files.items[i]->path);
         free(ctx->files.items[i]);
     }
     for (size_t i = 0; i < ctx->dylibs.count; i++) {
-        ldd_dylib_input_t *dylib = &ctx->dylibs.items[i];
+        ld_dylib_input_t *dylib = &ctx->dylibs.items[i];
         free(dylib->path);
         free(dylib->install_name);
-        ldd_string_set_deinit(&dylib->export_set);
+        ld_string_set_deinit(&dylib->export_set);
         for (size_t j = 0; j < dylib->export_count; j++) free(dylib->exports[j]);
         free(dylib->exports);
-        ldd_string_set_deinit(&dylib->weak_export_set);
+        ld_string_set_deinit(&dylib->weak_export_set);
         for (size_t j = 0; j < dylib->weak_export_count; j++) free(dylib->weak_exports[j]);
         free(dylib->weak_exports);
-        ldd_string_set_deinit(&dylib->reexport_set);
+        ld_string_set_deinit(&dylib->reexport_set);
         for (size_t j = 0; j < dylib->reexport_count; j++) free(dylib->reexports[j]);
         free(dylib->reexports);
     }
@@ -104,16 +104,16 @@ static void test_tbd_objc_exports(void) {
             "  - targets: [ x86_64-macos ]\n"
             "    objc-classes: [ NSWrongArchitecture ]\n"
             "...\n";
-    char v4_path[] = "/tmp/nature-ldd-tbd-v4-XXXXXX";
+    char v4_path[] = "/tmp/nature-ld-tbd-v4-XXXXXX";
     write_fixture(v4_path, tbd_v4, sizeof(tbd_v4) - 1U);
 
-    ldd_options_t options;
-    ldd_options_init(&options);
-    ldd_context_t ctx = {0};
+    ld_options_t options;
+    ld_options_init(&options);
+    ld_context_t ctx = {0};
     ctx.options = &options;
-    assert(ldd_parse_input_file(&ctx, v4_path) == LDD_OK);
+    assert(ld_parse_input_file(&ctx, v4_path) == LD_OK);
     assert(ctx.dylibs.count == 1U);
-    const ldd_dylib_input_t *dylib = &ctx.dylibs.items[0];
+    const ld_dylib_input_t *dylib = &ctx.dylibs.items[0];
     assert(dylib_has_symbol(dylib->exports, dylib->export_count,
                             "_OBJC_CLASS_$_NSApplication"));
     assert(dylib_has_symbol(dylib->exports, dylib->export_count,
@@ -151,11 +151,11 @@ static void test_tbd_objc_exports(void) {
             "  - archs: [ x86_64 ]\n"
             "    weak-objc-ivars: [ WrongArchitecture._value ]\n"
             "...\n";
-    char v3_path[] = "/tmp/nature-ldd-tbd-v3-XXXXXX";
+    char v3_path[] = "/tmp/nature-ld-tbd-v3-XXXXXX";
     write_fixture(v3_path, tbd_v3, sizeof(tbd_v3) - 1U);
     memset(&ctx, 0, sizeof(ctx));
     ctx.options = &options;
-    assert(ldd_parse_input_file(&ctx, v3_path) == LDD_OK);
+    assert(ld_parse_input_file(&ctx, v3_path) == LD_OK);
     assert(ctx.dylibs.count == 1U);
     dylib = &ctx.dylibs.items[0];
     assert(dylib_has_symbol(dylib->exports, dylib->export_count,
@@ -167,78 +167,78 @@ static void test_tbd_objc_exports(void) {
     assert(!dylib_has_symbol(dylib->weak_exports, dylib->weak_export_count,
                              "_OBJC_IVAR_$_WrongArchitecture._value"));
     parsed_context_deinit(&ctx);
-    ldd_options_deinit(&options);
+    ld_options_deinit(&options);
     unlink(v3_path);
 }
 
 static void test_binary_dylib_reexport(void) {
     static const char install_name[] = "/usr/lib/libParent.dylib";
     static const char reexport_name[] = "/usr/lib/libChild.dylib";
-    uint32_t id_size = (uint32_t) ((sizeof(ldd_dylib_command_t) + sizeof(install_name) + 7U) & ~7U);
+    uint32_t id_size = (uint32_t) ((sizeof(ld_dylib_command_t) + sizeof(install_name) + 7U) & ~7U);
     uint32_t reexport_size =
-            (uint32_t) ((sizeof(ldd_dylib_command_t) + sizeof(reexport_name) + 7U) & ~7U);
-    size_t file_size = sizeof(ldd_mach_header_64_t) + id_size + reexport_size;
+            (uint32_t) ((sizeof(ld_dylib_command_t) + sizeof(reexport_name) + 7U) & ~7U);
+    size_t file_size = sizeof(ld_mach_header_64_t) + id_size + reexport_size;
     uint8_t *bytes = calloc(1, file_size);
     assert(bytes != NULL);
 
-    ldd_mach_header_64_t header = {0};
-    header.magic = LDD_MH_MAGIC_64;
-    header.cputype = LDD_CPU_TYPE_ARM64;
-    header.cpusubtype = LDD_CPU_SUBTYPE_ARM64_ALL;
-    header.filetype = LDD_MH_DYLIB;
+    ld_mach_header_64_t header = {0};
+    header.magic = LD_MH_MAGIC_64;
+    header.cputype = LD_CPU_TYPE_ARM64;
+    header.cpusubtype = LD_CPU_SUBTYPE_ARM64_ALL;
+    header.filetype = LD_MH_DYLIB;
     header.ncmds = 2;
     header.sizeofcmds = id_size + reexport_size;
     memcpy(bytes, &header, sizeof(header));
 
-    ldd_dylib_command_t id = {0};
-    id.cmd = LDD_LC_ID_DYLIB;
+    ld_dylib_command_t id = {0};
+    id.cmd = LD_LC_ID_DYLIB;
     id.cmdsize = id_size;
     id.name_offset = sizeof(id);
-    id.current_version = ldd_macos_version(7, 8, 9);
-    id.compatibility_version = ldd_macos_version(2, 3, 4);
+    id.current_version = ld_macos_version(7, 8, 9);
+    id.compatibility_version = ld_macos_version(2, 3, 4);
     size_t offset = sizeof(header);
     memcpy(bytes + offset, &id, sizeof(id));
     memcpy(bytes + offset + sizeof(id), install_name, sizeof(install_name));
 
-    ldd_dylib_command_t reexport = {0};
-    reexport.cmd = LDD_LC_REEXPORT_DYLIB;
+    ld_dylib_command_t reexport = {0};
+    reexport.cmd = LD_LC_REEXPORT_DYLIB;
     reexport.cmdsize = reexport_size;
     reexport.name_offset = sizeof(reexport);
     offset += id_size;
     memcpy(bytes + offset, &reexport, sizeof(reexport));
     memcpy(bytes + offset + sizeof(reexport), reexport_name, sizeof(reexport_name));
 
-    char path[] = "/tmp/nature-ldd-reexport-dylib-XXXXXX";
+    char path[] = "/tmp/nature-ld-reexport-dylib-XXXXXX";
     write_fixture(path, bytes, file_size);
-    ldd_options_t options;
-    ldd_options_init(&options);
-    ldd_context_t ctx = {0};
+    ld_options_t options;
+    ld_options_init(&options);
+    ld_context_t ctx = {0};
     ctx.options = &options;
-    assert(ldd_parse_input_file(&ctx, path) == LDD_OK);
+    assert(ld_parse_input_file(&ctx, path) == LD_OK);
     assert(ctx.dylibs.count == 1U);
     assert(strcmp(ctx.dylibs.items[0].install_name, install_name) == 0);
-    assert(ctx.dylibs.items[0].current_version == ldd_macos_version(7, 8, 9));
-    assert(ctx.dylibs.items[0].compatibility_version == ldd_macos_version(2, 3, 4));
+    assert(ctx.dylibs.items[0].current_version == ld_macos_version(7, 8, 9));
+    assert(ctx.dylibs.items[0].compatibility_version == ld_macos_version(2, 3, 4));
     assert(ctx.dylibs.items[0].reexport_count == 1U);
     assert(strcmp(ctx.dylibs.items[0].reexports[0], reexport_name) == 0);
     parsed_context_deinit(&ctx);
-    ldd_options_deinit(&options);
+    ld_options_deinit(&options);
     unlink(path);
 
     /* MH_NO_REEXPORTED_DYLIBS makes LC_REEXPORT_DYLIB metadata inert.  Keep
        the command in the fixture to ensure the parser checks the header flag
        instead of blindly recording every reexport command. */
-    ((ldd_mach_header_64_t *) bytes)->flags = LDD_MH_NO_REEXPORTED_DYLIBS;
-    char no_reexport_path[] = "/tmp/nature-ldd-no-reexport-dylib-XXXXXX";
+    ((ld_mach_header_64_t *) bytes)->flags = LD_MH_NO_REEXPORTED_DYLIBS;
+    char no_reexport_path[] = "/tmp/nature-ld-no-reexport-dylib-XXXXXX";
     write_fixture(no_reexport_path, bytes, file_size);
-    ldd_options_init(&options);
+    ld_options_init(&options);
     memset(&ctx, 0, sizeof(ctx));
     ctx.options = &options;
-    assert(ldd_parse_input_file(&ctx, no_reexport_path) == LDD_OK);
+    assert(ld_parse_input_file(&ctx, no_reexport_path) == LD_OK);
     assert(ctx.dylibs.count == 1U);
     assert(ctx.dylibs.items[0].reexport_count == 0U);
     parsed_context_deinit(&ctx);
-    ldd_options_deinit(&options);
+    ld_options_deinit(&options);
     unlink(no_reexport_path);
     free(bytes);
 }
@@ -266,7 +266,7 @@ static void test_framework_path_reexport(void) {
             "    symbols: [ _child ]\n"
             "...\n";
 
-    char root[] = "/tmp/nature-ldd-framework-reexport-XXXXXX";
+    char root[] = "/tmp/nature-ld-framework-reexport-XXXXXX";
     assert(mkdtemp(root) != NULL);
     char system[PATH_MAX], library[PATH_MAX], frameworks[PATH_MAX];
     char parent_dir[PATH_MAX], child_dir[PATH_MAX], parent_path[PATH_MAX], child_path[PATH_MAX];
@@ -291,27 +291,27 @@ static void test_framework_path_reexport(void) {
     write_named_fixture(parent_path, parent_tbd, sizeof(parent_tbd) - 1U);
     write_named_fixture(child_path, child_tbd, sizeof(child_tbd) - 1U);
 
-    ldd_options_t options;
-    ldd_options_init(&options);
+    ld_options_t options;
+    ld_options_init(&options);
     char flags[PATH_MAX + 32U];
     assert(snprintf(flags, sizeof(flags), "-F '%s' -framework Parent", frameworks) > 0);
-    assert(ldd_parse_flags(&options, flags) == LDD_OK);
-    ldd_context_t ctx = {0};
+    assert(ld_parse_flags(&options, flags) == LD_OK);
+    ld_context_t ctx = {0};
     ctx.options = &options;
-    assert(ldd_resolve_requested_libraries(&ctx) == LDD_OK);
+    assert(ld_resolve_requested_libraries(&ctx) == LD_OK);
     assert(ctx.dylibs.count == 1U);
 
-    ldd_symbol_t unresolved = {.name = strdup("_child"), .kind = LDD_SYMBOL_UNDEFINED};
+    ld_symbol_t unresolved = {.name = strdup("_child"), .kind = LD_SYMBOL_UNDEFINED};
     assert(unresolved.name != NULL);
     HASH_ADD_KEYPTR(hh, ctx.symbols, unresolved.name, strlen(unresolved.name), &unresolved);
-    assert(ldd_resolve_reexport_libraries(&ctx) == LDD_OK);
+    assert(ld_resolve_reexport_libraries(&ctx) == LD_OK);
     assert(ctx.dylibs.count == 2U);
     assert(dylib_has_symbol(ctx.dylibs.items[0].exports, ctx.dylibs.items[0].export_count, "_child"));
     HASH_DEL(ctx.symbols, &unresolved);
     free(unresolved.name);
 
     parsed_context_deinit(&ctx);
-    ldd_options_deinit(&options);
+    ld_options_deinit(&options);
     assert(unlink(child_path) == 0);
     assert(unlink(parent_path) == 0);
     assert(rmdir(child_version_a) == 0);
@@ -334,24 +334,24 @@ static void test_sdk_appkit_objc_exports(void) {
         return;
     }
 
-    ldd_options_t options;
-    ldd_options_init(&options);
-    ldd_context_t ctx = {0};
+    ld_options_t options;
+    ld_options_init(&options);
+    ld_context_t ctx = {0};
     ctx.options = &options;
-    assert(ldd_parse_input_file(&ctx, appkit_path) == LDD_OK);
+    assert(ld_parse_input_file(&ctx, appkit_path) == LD_OK);
     assert(ctx.dylibs.count == 1U);
-    const ldd_dylib_input_t *appkit = &ctx.dylibs.items[0];
+    const ld_dylib_input_t *appkit = &ctx.dylibs.items[0];
     assert(dylib_has_symbol(appkit->exports, appkit->export_count,
                             "_OBJC_CLASS_$_NSApplication"));
     assert(dylib_has_symbol(appkit->exports, appkit->export_count,
                             "_OBJC_METACLASS_$_NSApplication"));
     parsed_context_deinit(&ctx);
-    ldd_options_deinit(&options);
+    ld_options_deinit(&options);
 }
 
 static void test_compact_unwind_regular_page(void) {
-    uint8_t compact_data[2U * sizeof(ldd_compact_unwind_entry_t)] = {0};
-    ldd_compact_unwind_entry_t entries_in[2] = {
+    uint8_t compact_data[2U * sizeof(ld_compact_unwind_entry_t)] = {0};
+    ld_compact_unwind_entry_t entries_in[2] = {
             {.range_length = 0x20U, .compact_encoding = 0x02000000U},
             {.range_start = 0x20U,
              .range_length = 0x10U,
@@ -364,16 +364,16 @@ static void test_compact_unwind_regular_page(void) {
     uint32_t relocation_word = 1U | (3U << 25U);
     memcpy(relocations, &relocation_address, sizeof(relocation_address));
     memcpy(relocations + 4U, &relocation_word, sizeof(relocation_word));
-    relocation_address = sizeof(ldd_compact_unwind_entry_t);
+    relocation_address = sizeof(ld_compact_unwind_entry_t);
     memcpy(relocations + 8U, &relocation_address, sizeof(relocation_address));
     memcpy(relocations + 12U, &relocation_word, sizeof(relocation_word));
 
-    ldd_output_section_t text_output = {0};
+    ld_output_section_t text_output = {0};
     memcpy(text_output.segname, "__TEXT", sizeof("__TEXT"));
     memcpy(text_output.sectname, "__text", sizeof("__text"));
-    text_output.addr = LDD_IMAGE_BASE + 0x1000U;
+    text_output.addr = LD_IMAGE_BASE + 0x1000U;
 
-    ldd_input_section_t sections[2] = {0};
+    ld_input_section_t sections[2] = {0};
     memcpy(sections[0].header.segname, "__TEXT", sizeof("__TEXT"));
     memcpy(sections[0].header.sectname, "__text", sizeof("__text"));
     sections[0].output = &text_output;
@@ -384,8 +384,8 @@ static void test_compact_unwind_regular_page(void) {
     sections[1].data = compact_data;
     sections[1].relocations = relocations;
 
-    ldd_file_t file = {.path = "/tmp/ldd-unwind-unit.o"};
-    ldd_object_t object = {
+    ld_file_t file = {.path = "/tmp/ld-unwind-unit.o"};
+    ld_object_t object = {
             .file = &file,
             .selected = true,
             .sections = sections,
@@ -393,40 +393,40 @@ static void test_compact_unwind_regular_page(void) {
     };
     sections[0].object = &object;
     sections[1].object = &object;
-    ldd_object_t *objects[] = {&object};
-    ldd_options_t options;
-    ldd_options_init(&options);
-    ldd_context_t ctx = {0};
+    ld_object_t *objects[] = {&object};
+    ld_options_t options;
+    ld_options_init(&options);
+    ld_context_t ctx = {0};
     ctx.options = &options;
     ctx.objects.items = objects;
     ctx.objects.count = 1;
 
-    assert(ldd_unwind_prepare(&ctx) == LDD_OK);
+    assert(ld_unwind_prepare(&ctx) == LD_OK);
     assert(ctx.unwind.count == 2);
     assert(ctx.unwind.output != NULL);
     assert(strcmp(ctx.unwind.output->sectname, "__unwind_info") == 0);
-    assert(ldd_unwind_emit(&ctx) == LDD_OK);
+    assert(ld_unwind_emit(&ctx) == LD_OK);
 
-    ldd_unwind_info_header_t header;
+    ld_unwind_info_header_t header;
     memcpy(&header, ctx.unwind.output->data, sizeof(header));
-    assert(header.version == LDD_UNWIND_SECTION_VERSION);
+    assert(header.version == LD_UNWIND_SECTION_VERSION);
     assert(header.common_encodings_count == 0);
     assert(header.personalities_count == 0);
     assert(header.index_count == 2);
 
-    ldd_unwind_info_index_entry_t index[2];
+    ld_unwind_info_index_entry_t index[2];
     memcpy(index, ctx.unwind.output->data + header.index_offset, sizeof(index));
     assert(index[0].function_offset == 0x1000U);
     assert(index[1].function_offset == 0x1030U);
     assert(index[1].second_level_page_offset == 0);
 
-    ldd_unwind_info_regular_page_header_t page;
+    ld_unwind_info_regular_page_header_t page;
     memcpy(&page, ctx.unwind.output->data + index[0].second_level_page_offset,
            sizeof(page));
-    assert(page.kind == LDD_UNWIND_SECOND_LEVEL_REGULAR);
+    assert(page.kind == LD_UNWIND_SECOND_LEVEL_REGULAR);
     assert(page.entry_page_offset == sizeof(page));
     assert(page.entry_count == 2);
-    ldd_unwind_info_regular_entry_t entries_out[2];
+    ld_unwind_info_regular_entry_t entries_out[2];
     memcpy(entries_out,
            ctx.unwind.output->data + index[0].second_level_page_offset +
                    page.entry_page_offset,
@@ -440,45 +440,45 @@ static void test_compact_unwind_regular_page(void) {
     free(ctx.unwind.output);
     free(ctx.outputs.items);
     free(ctx.unwind.records);
-    ldd_options_deinit(&options);
+    ld_options_deinit(&options);
 }
 
 static void test_arm64_branch_island(void) {
     static const char strings[] = "\0_main\0_far\0";
-    const uint64_t far_address = LDD_IMAGE_BASE + 0x10000000ULL;
-    size_t segment_size = sizeof(ldd_segment_command_64_t) + sizeof(ldd_section_64_t);
-    size_t commands_size = segment_size + sizeof(ldd_symtab_command_t);
-    size_t text_offset = sizeof(ldd_mach_header_64_t) + commands_size;
+    const uint64_t far_address = LD_IMAGE_BASE + 0x10000000ULL;
+    size_t segment_size = sizeof(ld_segment_command_64_t) + sizeof(ld_section_64_t);
+    size_t commands_size = segment_size + sizeof(ld_symtab_command_t);
+    size_t text_offset = sizeof(ld_mach_header_64_t) + commands_size;
     size_t relocation_offset = text_offset + sizeof(uint32_t);
     size_t symbol_offset = relocation_offset + 4U * sizeof(uint32_t);
-    size_t strings_offset = symbol_offset + 2U * sizeof(ldd_nlist_64_t);
+    size_t strings_offset = symbol_offset + 2U * sizeof(ld_nlist_64_t);
     size_t object_size = strings_offset + sizeof(strings);
     uint8_t *object = calloc(1, object_size);
     assert(object != NULL);
 
-    ldd_mach_header_64_t header = {0};
-    header.magic = LDD_MH_MAGIC_64;
-    header.cputype = LDD_CPU_TYPE_ARM64;
-    header.cpusubtype = LDD_CPU_SUBTYPE_ARM64_ALL;
-    header.filetype = LDD_MH_OBJECT;
+    ld_mach_header_64_t header = {0};
+    header.magic = LD_MH_MAGIC_64;
+    header.cputype = LD_CPU_TYPE_ARM64;
+    header.cpusubtype = LD_CPU_SUBTYPE_ARM64_ALL;
+    header.filetype = LD_MH_OBJECT;
     header.ncmds = 2U;
     header.sizeofcmds = (uint32_t) commands_size;
     memcpy(object, &header, sizeof(header));
 
-    ldd_segment_command_64_t segment = {0};
-    segment.cmd = LDD_LC_SEGMENT_64;
+    ld_segment_command_64_t segment = {0};
+    segment.cmd = LD_LC_SEGMENT_64;
     segment.cmdsize = (uint32_t) segment_size;
     memcpy(segment.segname, "__TEXT", sizeof("__TEXT") - 1U);
     segment.vmsize = sizeof(uint32_t);
     segment.fileoff = text_offset;
     segment.filesize = sizeof(uint32_t);
-    segment.maxprot = LDD_VM_PROT_READ | LDD_VM_PROT_EXECUTE;
-    segment.initprot = LDD_VM_PROT_READ | LDD_VM_PROT_EXECUTE;
+    segment.maxprot = LD_VM_PROT_READ | LD_VM_PROT_EXECUTE;
+    segment.initprot = LD_VM_PROT_READ | LD_VM_PROT_EXECUTE;
     segment.nsects = 1U;
     size_t cursor = sizeof(header);
     memcpy(object + cursor, &segment, sizeof(segment));
 
-    ldd_section_64_t section = {0};
+    ld_section_64_t section = {0};
     memcpy(section.sectname, "__text", sizeof("__text") - 1U);
     memcpy(section.segname, "__TEXT", sizeof("__TEXT") - 1U);
     section.size = sizeof(uint32_t);
@@ -486,11 +486,11 @@ static void test_arm64_branch_island(void) {
     section.align = 2U;
     section.reloff = (uint32_t) relocation_offset;
     section.nreloc = 2U;
-    section.flags = LDD_S_ATTR_PURE_INSTRUCTIONS | LDD_S_ATTR_SOME_INSTRUCTIONS;
+    section.flags = LD_S_ATTR_PURE_INSTRUCTIONS | LD_S_ATTR_SOME_INSTRUCTIONS;
     memcpy(object + cursor + sizeof(segment), &section, sizeof(section));
 
-    ldd_symtab_command_t symtab = {0};
-    symtab.cmd = LDD_LC_SYMTAB;
+    ld_symtab_command_t symtab = {0};
+    symtab.cmd = LD_LC_SYMTAB;
     symtab.cmdsize = sizeof(symtab);
     symtab.symoff = (uint32_t) symbol_offset;
     symtab.nsyms = 2U;
@@ -503,33 +503,33 @@ static void test_arm64_branch_island(void) {
     memcpy(object + text_offset, &branch, sizeof(branch));
     uint32_t relocation[4] = {
             0U,
-            4U | (LDD_ARM64_RELOC_ADDEND << 28U),
+            4U | (LD_ARM64_RELOC_ADDEND << 28U),
             0U,
             1U | (1U << 24U) | (2U << 25U) | (1U << 27U) |
-                    (LDD_ARM64_RELOC_BRANCH26 << 28U),
+                    (LD_ARM64_RELOC_BRANCH26 << 28U),
     };
     memcpy(object + relocation_offset, relocation, sizeof(relocation));
-    ldd_nlist_64_t symbols[2] = {
-            {.n_strx = 1U, .n_type = LDD_N_SECT | LDD_N_EXT, .n_sect = 1U, .n_value = 0U},
-            {.n_strx = 7U, .n_type = LDD_N_ABS | LDD_N_EXT, .n_value = far_address},
+    ld_nlist_64_t symbols[2] = {
+            {.n_strx = 1U, .n_type = LD_N_SECT | LD_N_EXT, .n_sect = 1U, .n_value = 0U},
+            {.n_strx = 7U, .n_type = LD_N_ABS | LD_N_EXT, .n_value = far_address},
     };
     memcpy(object + symbol_offset, symbols, sizeof(symbols));
     memcpy(object + strings_offset, strings, sizeof(strings));
 
-    char object_path[] = "/tmp/nature-ldd-branch-object-XXXXXX";
+    char object_path[] = "/tmp/nature-ld-branch-object-XXXXXX";
     write_fixture(object_path, object, object_size);
-    char output_path[] = "/tmp/nature-ldd-branch-output-XXXXXX";
+    char output_path[] = "/tmp/nature-ld-branch-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);
     unlink(output_path);
-    ldd_options_t options;
-    ldd_options_init(&options);
+    ld_options_t options;
+    ld_options_init(&options);
     options.output_path = output_path;
     options.adhoc_codesign = false;
-    assert(ldd_add_input(&options, object_path) == LDD_OK);
-    assert(ldd_link(&options) == LDD_OK);
-    ldd_options_deinit(&options);
+    assert(ld_add_input(&options, object_path) == LD_OK);
+    assert(ld_link(&options) == LD_OK);
+    ld_options_deinit(&options);
 
     int fd = open(output_path, O_RDONLY);
     assert(fd >= 0);
@@ -539,21 +539,21 @@ static void test_arm64_branch_island(void) {
     assert(image != NULL);
     assert(read(fd, image, (size_t) st.st_size) == st.st_size);
     assert(close(fd) == 0);
-    const ldd_mach_header_64_t *output_header = (const ldd_mach_header_64_t *) image;
-    assert(output_header->magic == LDD_MH_MAGIC_64);
-    const ldd_section_64_t *text = NULL;
-    const ldd_section_64_t *islands = NULL;
+    const ld_mach_header_64_t *output_header = (const ld_mach_header_64_t *) image;
+    assert(output_header->magic == LD_MH_MAGIC_64);
+    const ld_section_64_t *text = NULL;
+    const ld_section_64_t *islands = NULL;
     cursor = sizeof(*output_header);
     for (uint32_t command_index = 0; command_index < output_header->ncmds; command_index++) {
-        assert(cursor + sizeof(ldd_load_command_t) <= (size_t) st.st_size);
-        const ldd_load_command_t *command = (const ldd_load_command_t *) (image + cursor);
+        assert(cursor + sizeof(ld_load_command_t) <= (size_t) st.st_size);
+        const ld_load_command_t *command = (const ld_load_command_t *) (image + cursor);
         assert(command->cmdsize >= sizeof(*command) &&
                cursor + command->cmdsize <= (size_t) st.st_size);
-        if (command->cmd == LDD_LC_SEGMENT_64) {
-            const ldd_segment_command_64_t *output_segment =
-                    (const ldd_segment_command_64_t *) command;
-            const ldd_section_64_t *sections =
-                    (const ldd_section_64_t *) (output_segment + 1);
+        if (command->cmd == LD_LC_SEGMENT_64) {
+            const ld_segment_command_64_t *output_segment =
+                    (const ld_segment_command_64_t *) command;
+            const ld_section_64_t *sections =
+                    (const ld_section_64_t *) (output_segment + 1);
             for (uint32_t section_index = 0; section_index < output_segment->nsects;
                  section_index++) {
                 if (strncmp(sections[section_index].sectname, "__text", 16) == 0) {
@@ -592,29 +592,29 @@ static void test_arm64_branch_island(void) {
     /* POINTER_TO_GOT has no absolute 64-bit encoding on arm64.  A malformed
        object must fail during relocation validation before an output file is
        created, instead of silently treating the field as an image pointer. */
-    ldd_section_64_t *input_section =
-            (ldd_section_64_t *) (object + sizeof(ldd_mach_header_64_t) + sizeof(ldd_segment_command_64_t));
+    ld_section_64_t *input_section =
+            (ld_section_64_t *) (object + sizeof(ld_mach_header_64_t) + sizeof(ld_segment_command_64_t));
     input_section->nreloc = 1U;
     uint32_t invalid_pointer_relocation[2] = {
             0U,
-            1U | (2U << 25U) | (1U << 27U) | (LDD_ARM64_RELOC_POINTER_TO_GOT << 28U),
+            1U | (2U << 25U) | (1U << 27U) | (LD_ARM64_RELOC_POINTER_TO_GOT << 28U),
     };
     memcpy(object + relocation_offset, invalid_pointer_relocation,
            sizeof(invalid_pointer_relocation));
-    char invalid_object_path[] = "/tmp/nature-ldd-pointer-object-XXXXXX";
+    char invalid_object_path[] = "/tmp/nature-ld-pointer-object-XXXXXX";
     write_fixture(invalid_object_path, object, object_size);
-    char invalid_output_path[] = "/tmp/nature-ldd-pointer-output-XXXXXX";
+    char invalid_output_path[] = "/tmp/nature-ld-pointer-output-XXXXXX";
     int invalid_output_fd = mkstemp(invalid_output_path);
     assert(invalid_output_fd >= 0);
     assert(close(invalid_output_fd) == 0);
     unlink(invalid_output_path);
-    ldd_options_init(&options);
+    ld_options_init(&options);
     options.output_path = invalid_output_path;
     options.adhoc_codesign = false;
-    assert(ldd_add_input(&options, invalid_object_path) == LDD_OK);
-    assert(ldd_link(&options) == LDD_RELOCATION_ERROR);
+    assert(ld_add_input(&options, invalid_object_path) == LD_OK);
+    assert(ld_link(&options) == LD_RELOCATION_ERROR);
     assert(access(invalid_output_path, F_OK) != 0);
-    ldd_options_deinit(&options);
+    ld_options_deinit(&options);
     unlink(invalid_object_path);
     free(object);
     unlink(object_path);
@@ -623,48 +623,48 @@ static void test_arm64_branch_island(void) {
 
 static void test_indirect_symbol_alias(void) {
     static const char strings[] = "\0_main\0_alias\0";
-    size_t segment_size = sizeof(ldd_segment_command_64_t) + sizeof(ldd_section_64_t);
-    size_t commands_size = segment_size + sizeof(ldd_symtab_command_t);
-    size_t text_offset = sizeof(ldd_mach_header_64_t) + commands_size;
+    size_t segment_size = sizeof(ld_segment_command_64_t) + sizeof(ld_section_64_t);
+    size_t commands_size = segment_size + sizeof(ld_symtab_command_t);
+    size_t text_offset = sizeof(ld_mach_header_64_t) + commands_size;
     size_t symbol_offset = text_offset + sizeof(uint32_t);
-    size_t strings_offset = symbol_offset + 2U * sizeof(ldd_nlist_64_t);
+    size_t strings_offset = symbol_offset + 2U * sizeof(ld_nlist_64_t);
     size_t object_size = strings_offset + sizeof(strings);
     uint8_t *object = calloc(1, object_size);
     assert(object != NULL);
 
-    ldd_mach_header_64_t header = {0};
-    header.magic = LDD_MH_MAGIC_64;
-    header.cputype = LDD_CPU_TYPE_ARM64;
-    header.cpusubtype = LDD_CPU_SUBTYPE_ARM64_ALL;
-    header.filetype = LDD_MH_OBJECT;
+    ld_mach_header_64_t header = {0};
+    header.magic = LD_MH_MAGIC_64;
+    header.cputype = LD_CPU_TYPE_ARM64;
+    header.cpusubtype = LD_CPU_SUBTYPE_ARM64_ALL;
+    header.filetype = LD_MH_OBJECT;
     header.ncmds = 2U;
     header.sizeofcmds = (uint32_t) commands_size;
     memcpy(object, &header, sizeof(header));
 
-    ldd_segment_command_64_t segment = {0};
-    segment.cmd = LDD_LC_SEGMENT_64;
+    ld_segment_command_64_t segment = {0};
+    segment.cmd = LD_LC_SEGMENT_64;
     segment.cmdsize = (uint32_t) segment_size;
     memcpy(segment.segname, "__TEXT", sizeof("__TEXT") - 1U);
     segment.vmsize = sizeof(uint32_t);
     segment.fileoff = text_offset;
     segment.filesize = sizeof(uint32_t);
-    segment.maxprot = LDD_VM_PROT_READ | LDD_VM_PROT_EXECUTE;
-    segment.initprot = LDD_VM_PROT_READ | LDD_VM_PROT_EXECUTE;
+    segment.maxprot = LD_VM_PROT_READ | LD_VM_PROT_EXECUTE;
+    segment.initprot = LD_VM_PROT_READ | LD_VM_PROT_EXECUTE;
     segment.nsects = 1U;
     size_t cursor = sizeof(header);
     memcpy(object + cursor, &segment, sizeof(segment));
 
-    ldd_section_64_t section = {0};
+    ld_section_64_t section = {0};
     memcpy(section.sectname, "__text", sizeof("__text") - 1U);
     memcpy(section.segname, "__TEXT", sizeof("__TEXT") - 1U);
     section.size = sizeof(uint32_t);
     section.offset = (uint32_t) text_offset;
     section.align = 2U;
-    section.flags = LDD_S_ATTR_PURE_INSTRUCTIONS | LDD_S_ATTR_SOME_INSTRUCTIONS;
+    section.flags = LD_S_ATTR_PURE_INSTRUCTIONS | LD_S_ATTR_SOME_INSTRUCTIONS;
     memcpy(object + cursor + sizeof(segment), &section, sizeof(section));
 
-    ldd_symtab_command_t symtab = {0};
-    symtab.cmd = LDD_LC_SYMTAB;
+    ld_symtab_command_t symtab = {0};
+    symtab.cmd = LD_LC_SYMTAB;
     symtab.cmdsize = sizeof(symtab);
     symtab.symoff = (uint32_t) symbol_offset;
     symtab.nsyms = 2U;
@@ -675,29 +675,29 @@ static void test_indirect_symbol_alias(void) {
 
     uint32_t ret = 0xd65f03c0U;
     memcpy(object + text_offset, &ret, sizeof(ret));
-    ldd_nlist_64_t symbols[2] = {
-            {.n_strx = 1U, .n_type = LDD_N_SECT | LDD_N_EXT, .n_sect = 1U},
-            {.n_strx = 7U, .n_type = LDD_N_INDR | LDD_N_EXT, .n_value = 1U},
+    ld_nlist_64_t symbols[2] = {
+            {.n_strx = 1U, .n_type = LD_N_SECT | LD_N_EXT, .n_sect = 1U},
+            {.n_strx = 7U, .n_type = LD_N_INDR | LD_N_EXT, .n_value = 1U},
     };
     memcpy(object + symbol_offset, symbols, sizeof(symbols));
     memcpy(object + strings_offset, strings, sizeof(strings));
 
-    char object_path[] = "/tmp/nature-ldd-alias-object-XXXXXX";
+    char object_path[] = "/tmp/nature-ld-alias-object-XXXXXX";
     write_fixture(object_path, object, object_size);
     free(object);
-    char output_path[] = "/tmp/nature-ldd-alias-output-XXXXXX";
+    char output_path[] = "/tmp/nature-ld-alias-output-XXXXXX";
     int output_fd = mkstemp(output_path);
     assert(output_fd >= 0);
     assert(close(output_fd) == 0);
     unlink(output_path);
-    ldd_options_t options;
-    ldd_options_init(&options);
+    ld_options_t options;
+    ld_options_init(&options);
     options.output_path = output_path;
     options.entry_symbol = "alias";
     options.adhoc_codesign = false;
-    assert(ldd_add_input(&options, object_path) == LDD_OK);
-    assert(ldd_link(&options) == LDD_OK);
-    ldd_options_deinit(&options);
+    assert(ld_add_input(&options, object_path) == LD_OK);
+    assert(ld_link(&options) == LD_OK);
+    ld_options_deinit(&options);
 
     int fd = open(output_path, O_RDONLY);
     assert(fd >= 0);
@@ -708,38 +708,38 @@ static void test_indirect_symbol_alias(void) {
     assert(read(fd, image, (size_t) st.st_size) == st.st_size);
     assert(close(fd) == 0);
 
-    const ldd_mach_header_64_t *output_header = (const ldd_mach_header_64_t *) image;
-    const ldd_section_64_t *text = NULL;
-    const ldd_entry_point_command_t *entry = NULL;
-    const ldd_symtab_command_t *output_symtab = NULL;
+    const ld_mach_header_64_t *output_header = (const ld_mach_header_64_t *) image;
+    const ld_section_64_t *text = NULL;
+    const ld_entry_point_command_t *entry = NULL;
+    const ld_symtab_command_t *output_symtab = NULL;
     cursor = sizeof(*output_header);
     for (uint32_t command_index = 0; command_index < output_header->ncmds; command_index++) {
-        const ldd_load_command_t *command = (const ldd_load_command_t *) (image + cursor);
+        const ld_load_command_t *command = (const ld_load_command_t *) (image + cursor);
         assert(command->cmdsize >= sizeof(*command) &&
                cursor + command->cmdsize <= (size_t) st.st_size);
-        if (command->cmd == LDD_LC_SEGMENT_64) {
-            const ldd_segment_command_64_t *output_segment =
-                    (const ldd_segment_command_64_t *) command;
-            const ldd_section_64_t *sections =
-                    (const ldd_section_64_t *) (output_segment + 1);
+        if (command->cmd == LD_LC_SEGMENT_64) {
+            const ld_segment_command_64_t *output_segment =
+                    (const ld_segment_command_64_t *) command;
+            const ld_section_64_t *sections =
+                    (const ld_section_64_t *) (output_segment + 1);
             for (uint32_t i = 0; i < output_segment->nsects; i++) {
                 if (strncmp(sections[i].sectname, "__text", 16) == 0) text = &sections[i];
             }
-        } else if (command->cmd == LDD_LC_MAIN) {
-            entry = (const ldd_entry_point_command_t *) command;
-        } else if (command->cmd == LDD_LC_SYMTAB) {
-            output_symtab = (const ldd_symtab_command_t *) command;
+        } else if (command->cmd == LD_LC_MAIN) {
+            entry = (const ld_entry_point_command_t *) command;
+        } else if (command->cmd == LD_LC_SYMTAB) {
+            output_symtab = (const ld_symtab_command_t *) command;
         }
         cursor += command->cmdsize;
     }
     assert(text != NULL && entry != NULL && output_symtab != NULL);
     assert(entry->entryoff == text->offset);
     assert(output_symtab->symoff +
-                   (uint64_t) output_symtab->nsyms * sizeof(ldd_nlist_64_t) <=
+                   (uint64_t) output_symtab->nsyms * sizeof(ld_nlist_64_t) <=
            (uint64_t) st.st_size);
     assert(output_symtab->stroff + output_symtab->strsize <= (uint64_t) st.st_size);
-    const ldd_nlist_64_t *output_symbols =
-            (const ldd_nlist_64_t *) (image + output_symtab->symoff);
+    const ld_nlist_64_t *output_symbols =
+            (const ld_nlist_64_t *) (image + output_symtab->symoff);
     const char *output_strings = (const char *) image + output_symtab->stroff;
     uint64_t main_value = 0, alias_value = 0;
     for (uint32_t i = 0; i < output_symtab->nsyms; i++) {
@@ -757,8 +757,8 @@ static void test_indirect_symbol_alias(void) {
 }
 
 int main(void) {
-    ldd_options_init(NULL);
-    ldd_options_deinit(NULL);
+    ld_options_init(NULL);
+    ld_options_deinit(NULL);
     test_compact_unwind_regular_page();
     test_arm64_branch_island();
     test_indirect_symbol_alias();
@@ -799,7 +799,7 @@ int main(void) {
             0xad,
     };
     uint8_t digest[32];
-    ldd_sha256("abc", 3, digest);
+    ld_sha256("abc", 3, digest);
     assert(memcmp(digest, expected_sha256, sizeof(digest)) == 0);
     static const uint8_t expected_empty_sha256[] = {
             0xe3,
@@ -835,18 +835,18 @@ int main(void) {
             0xb8,
             0x55,
     };
-    ldd_sha256("", 0, digest);
+    ld_sha256("", 0, digest);
     assert(memcmp(digest, expected_empty_sha256, sizeof(digest)) == 0);
 
     test_tbd_objc_exports();
     test_sdk_appkit_objc_exports();
 
-    ldd_options_t options;
-    ldd_options_init(&options);
+    ld_options_t options;
+    ld_options_init(&options);
 
-    assert(ldd_parse_flags(&options,
+    assert(ld_parse_flags(&options,
                            "-framework Cocoa -F '/Library/Frameworks' -L\"/tmp/lib dir\" "
-                           "-lz /tmp/input.o") == LDD_OK);
+                           "-lz /tmp/input.o") == LD_OK);
     assert(options.frameworks.count == 1);
     assert(strcmp(options.frameworks.items[0], "Cocoa") == 0);
     assert(options.framework_paths.count == 1);
@@ -858,7 +858,7 @@ int main(void) {
     assert(options.inputs.count == 1);
     assert(strcmp(options.inputs.items[0], "/tmp/input.o") == 0);
 
-    assert(ldd_parse_flags(&options, "-F /tmp/Framework\\ dir -L'/tmp/lib'\" suffix\" -l System") == LDD_OK);
+    assert(ld_parse_flags(&options, "-F /tmp/Framework\\ dir -L'/tmp/lib'\" suffix\" -l System") == LD_OK);
     assert(options.framework_paths.count == 2);
     assert(strcmp(options.framework_paths.items[1], "/tmp/Framework dir") == 0);
     assert(options.library_paths.count == 2);
@@ -866,7 +866,7 @@ int main(void) {
     assert(options.libraries.count == 2);
     assert(strcmp(options.libraries.items[1], "System") == 0);
 
-    assert(ldd_parse_flags(&options, "-L '/tmp/a\\b' -L\"/tmp/c\\q\"") == LDD_OK);
+    assert(ld_parse_flags(&options, "-L '/tmp/a\\b' -L\"/tmp/c\\q\"") == LD_OK);
     assert(options.library_paths.count == 4);
     assert(strcmp(options.library_paths.items[2], "/tmp/a\\b") == 0);
     assert(strcmp(options.library_paths.items[3], "/tmp/c\\q") == 0);
@@ -874,52 +874,52 @@ int main(void) {
     diagnostic_capture_t capture = {0};
     options.diagnostic = capture_diagnostic;
     options.diagnostic_context = &capture;
-    assert(ldd_parse_flags(&options, "-unknown") == LDD_UNSUPPORTED);
+    assert(ld_parse_flags(&options, "-unknown") == LD_UNSUPPORTED);
     assert(capture.count == 1);
     assert(strstr(capture.message, "-unknown") != NULL);
-    assert(ldd_parse_flags(&options, "-framework") == LDD_INVALID_ARGUMENT);
+    assert(ld_parse_flags(&options, "-framework") == LD_INVALID_ARGUMENT);
     assert(strstr(capture.message, "requires") != NULL);
-    assert(ldd_parse_flags(&options, "'unterminated") == LDD_INVALID_ARGUMENT);
+    assert(ld_parse_flags(&options, "'unterminated") == LD_INVALID_ARGUMENT);
     assert(strstr(capture.message, "malformed") != NULL);
-    assert(ldd_parse_flags(&options, "/tmp/trailing\\") == LDD_INVALID_ARGUMENT);
-    assert(ldd_parse_flags(&options, "''") == LDD_INVALID_ARGUMENT);
+    assert(ld_parse_flags(&options, "/tmp/trailing\\") == LD_INVALID_ARGUMENT);
+    assert(ld_parse_flags(&options, "''") == LD_INVALID_ARGUMENT);
 
     static const uint8_t truncated_macho[] = {0xcf, 0xfa, 0xed, 0xfe};
-    char macho_path[] = "/tmp/nature-ldd-macho-XXXXXX";
+    char macho_path[] = "/tmp/nature-ld-macho-XXXXXX";
     write_fixture(macho_path, truncated_macho, sizeof(truncated_macho));
-    expect_invalid_input(macho_path, LDD_INVALID_INPUT, "truncated");
+    expect_invalid_input(macho_path, LD_INVALID_INPUT, "truncated");
     unlink(macho_path);
 
-    size_t aligned_segment_size = sizeof(ldd_segment_command_64_t) +
-                                  sizeof(ldd_section_64_t);
-    size_t aligned_object_size = sizeof(ldd_mach_header_64_t) +
+    size_t aligned_segment_size = sizeof(ld_segment_command_64_t) +
+                                  sizeof(ld_section_64_t);
+    size_t aligned_object_size = sizeof(ld_mach_header_64_t) +
                                  aligned_segment_size;
     uint8_t *aligned_object = calloc(1, aligned_object_size);
     assert(aligned_object != NULL);
-    ldd_mach_header_64_t aligned_header = {0};
-    aligned_header.magic = LDD_MH_MAGIC_64;
-    aligned_header.cputype = LDD_CPU_TYPE_ARM64;
-    aligned_header.cpusubtype = LDD_CPU_SUBTYPE_ARM64_ALL;
-    aligned_header.filetype = LDD_MH_OBJECT;
+    ld_mach_header_64_t aligned_header = {0};
+    aligned_header.magic = LD_MH_MAGIC_64;
+    aligned_header.cputype = LD_CPU_TYPE_ARM64;
+    aligned_header.cpusubtype = LD_CPU_SUBTYPE_ARM64_ALL;
+    aligned_header.filetype = LD_MH_OBJECT;
     aligned_header.ncmds = 1U;
     aligned_header.sizeofcmds = (uint32_t) aligned_segment_size;
     memcpy(aligned_object, &aligned_header, sizeof(aligned_header));
-    ldd_segment_command_64_t aligned_segment = {0};
-    aligned_segment.cmd = LDD_LC_SEGMENT_64;
+    ld_segment_command_64_t aligned_segment = {0};
+    aligned_segment.cmd = LD_LC_SEGMENT_64;
     aligned_segment.cmdsize = (uint32_t) aligned_segment_size;
     aligned_segment.nsects = 1U;
     memcpy(aligned_object + sizeof(aligned_header), &aligned_segment,
            sizeof(aligned_segment));
-    ldd_section_64_t over_aligned_section = {0};
+    ld_section_64_t over_aligned_section = {0};
     memcpy(over_aligned_section.segname, "__DATA", sizeof("__DATA") - 1U);
     memcpy(over_aligned_section.sectname, "__data", sizeof("__data") - 1U);
     over_aligned_section.align = 21U;
     memcpy(aligned_object + sizeof(aligned_header) + sizeof(aligned_segment),
            &over_aligned_section, sizeof(over_aligned_section));
-    char aligned_object_path[] = "/tmp/nature-ldd-align-XXXXXX";
+    char aligned_object_path[] = "/tmp/nature-ld-align-XXXXXX";
     write_fixture(aligned_object_path, aligned_object, aligned_object_size);
     free(aligned_object);
-    expect_invalid_input(aligned_object_path, LDD_UNSUPPORTED,
+    expect_invalid_input(aligned_object_path, LD_UNSUPPORTED,
                          "alignment exponent 21");
     unlink(aligned_object_path);
 
@@ -928,9 +928,9 @@ int main(void) {
     memcpy(malformed_archive, "!<arch>\n", 8);
     memcpy(malformed_archive + 8 + 48, "abc       ", 10);
     memcpy(malformed_archive + 8 + 58, "`\n", 2);
-    char archive_path[] = "/tmp/nature-ldd-archive-XXXXXX";
+    char archive_path[] = "/tmp/nature-ld-archive-XXXXXX";
     write_fixture(archive_path, malformed_archive, sizeof(malformed_archive));
-    expect_invalid_input(archive_path, LDD_INVALID_INPUT, "member size");
+    expect_invalid_input(archive_path, LD_INVALID_INPUT, "member size");
     unlink(archive_path);
 
     uint8_t missing_archive_padding[8 + 60 + 1];
@@ -940,9 +940,9 @@ int main(void) {
     missing_archive_padding[8 + 48] = '1';
     memcpy(missing_archive_padding + 8 + 58, "`\n", 2);
     missing_archive_padding[8 + 60] = 0;
-    char missing_padding_path[] = "/tmp/nature-ldd-archive-padding-XXXXXX";
+    char missing_padding_path[] = "/tmp/nature-ld-archive-padding-XXXXXX";
     write_fixture(missing_padding_path, missing_archive_padding, sizeof(missing_archive_padding));
-    expect_invalid_input(missing_padding_path, LDD_INVALID_INPUT, "alignment padding");
+    expect_invalid_input(missing_padding_path, LD_INVALID_INPUT, "alignment padding");
     unlink(missing_padding_path);
 
     const char *long_member = "very_long_archive_member.o";
@@ -962,9 +962,9 @@ int main(void) {
     memcpy(long_archive + 8 + 58, "`\n", 2);
     memcpy(long_archive + 8 + 60, long_member, long_member_size);
     memcpy(long_archive + 8 + 60 + long_member_size, truncated_macho, sizeof(truncated_macho));
-    char long_archive_path[] = "/tmp/nature-ldd-long-archive-XXXXXX";
+    char long_archive_path[] = "/tmp/nature-ld-long-archive-XXXXXX";
     write_fixture(long_archive_path, long_archive, 8 + 60 + long_payload_size);
-    expect_invalid_input(long_archive_path, LDD_INVALID_INPUT, long_member);
+    expect_invalid_input(long_archive_path, LD_INVALID_INPUT, long_member);
     unlink(long_archive_path);
 
     static const uint8_t wrong_arch_fat[] = {
@@ -997,15 +997,15 @@ int main(void) {
             0x00,
             0x00,
     };
-    char fat_path[] = "/tmp/nature-ldd-fat-XXXXXX";
+    char fat_path[] = "/tmp/nature-ld-fat-XXXXXX";
     write_fixture(fat_path, wrong_arch_fat, sizeof(wrong_arch_fat));
-    expect_invalid_input(fat_path, LDD_UNSUPPORTED, "no arm64 slice");
+    expect_invalid_input(fat_path, LD_UNSUPPORTED, "no arm64 slice");
     unlink(fat_path);
 
-    options.output_path = "/tmp/unsupported-ldd-output";
-    options.os = LDD_OS_LINUX;
-    assert(ldd_link(&options) == LDD_UNSUPPORTED);
+    options.output_path = "/tmp/unsupported-ld-output";
+    options.os = LD_OS_LINUX;
+    assert(ld_link(&options) == LD_UNSUPPORTED);
 
-    ldd_options_deinit(&options);
+    ld_options_deinit(&options);
     return 0;
 }

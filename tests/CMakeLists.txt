@@ -32,9 +32,9 @@ add_executable(test_bitmap test_bitmap.c)
 target_link_libraries(test_bitmap nature_common_test m)
 add_test(test_bitmap test_bitmap)
 
-add_executable(test_ldd test_ldd.c)
-target_link_libraries(test_ldd nature_common_test m)
-add_test(test_ldd test_ldd)
+add_executable(test_ld test_ld.c)
+target_link_libraries(test_ld nature_common_test m)
+add_test(test_ld test_ld)
 
 # ---------------------------------- cases 测试 ------------------------------------------
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)

@@ -84,7 +84,7 @@ static void store_be32(uint8_t *p, uint32_t value) {
     p[3] = (uint8_t) value;
 }
 
-static void transform(ldd_sha256_t *ctx, const uint8_t block[64]) {
+static void transform(ld_sha256_t *ctx, const uint8_t block[64]) {
     uint32_t w[64];
     for (unsigned i = 0; i < 16; i++) {
         w[i] = load_be32(block + i * 4U);
@@ -123,7 +123,7 @@ static void transform(ldd_sha256_t *ctx, const uint8_t block[64]) {
     ctx->state[7] += h;
 }
 
-void ldd_sha256_init(ldd_sha256_t *ctx) {
+void ld_sha256_init(ld_sha256_t *ctx) {
     static const uint32_t initial[8] = {
             0x6a09e667,
             0xbb67ae85,
@@ -139,7 +139,7 @@ void ldd_sha256_init(ldd_sha256_t *ctx) {
     ctx->block_len = 0;
 }
 
-void ldd_sha256_update(ldd_sha256_t *ctx, const void *data, size_t size) {
+void ld_sha256_update(ld_sha256_t *ctx, const void *data, size_t size) {
     const uint8_t *bytes = data;
     ctx->bit_count += (uint64_t) size * 8U;
     while (size > 0) {
@@ -158,24 +158,24 @@ void ldd_sha256_update(ldd_sha256_t *ctx, const void *data, size_t size) {
     }
 }
 
-void ldd_sha256_final(ldd_sha256_t *ctx, uint8_t digest[32]) {
+void ld_sha256_final(ld_sha256_t *ctx, uint8_t digest[32]) {
     uint64_t bit_count = ctx->bit_count;
     uint8_t padding[128] = {0x80};
     size_t padding_len = ctx->block_len < 56U ? 56U - ctx->block_len : 120U - ctx->block_len;
-    ldd_sha256_update(ctx, padding, padding_len);
+    ld_sha256_update(ctx, padding, padding_len);
     uint8_t length[8];
     for (unsigned i = 0; i < 8; i++) {
         length[7U - i] = (uint8_t) (bit_count >> (i * 8U));
     }
-    ldd_sha256_update(ctx, length, sizeof(length));
+    ld_sha256_update(ctx, length, sizeof(length));
     for (unsigned i = 0; i < 8; i++) {
         store_be32(digest + i * 4U, ctx->state[i]);
     }
 }
 
-void ldd_sha256(const void *data, size_t size, uint8_t digest[32]) {
-    ldd_sha256_t ctx;
-    ldd_sha256_init(&ctx);
-    ldd_sha256_update(&ctx, data, size);
-    ldd_sha256_final(&ctx, digest);
+void ld_sha256(const void *data, size_t size, uint8_t digest[32]) {
+    ld_sha256_t ctx;
+    ld_sha256_init(&ctx);
+    ld_sha256_update(&ctx, data, size);
+    ld_sha256_final(&ctx, digest);
 }

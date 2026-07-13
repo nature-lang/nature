@@ -15,7 +15,7 @@
 #include "src/build/test_runner.h"
 #include "src/cfg.h"
 #include "src/debug/debug.h"
-#include "src/ldd/ldd.h"
+#include "src/ld/ld.h"
 #include "src/linear.h"
 #include "src/lower/amd64.h"
 #include "src/lower/arm64.h"
@@ -783,25 +783,25 @@ static void custom_ld_mach_exe(slice_t *modules, char *use_ld, char *ldflags) {
     log_debug("build output --> %s", BUILD_OUTPUT);
 }
 
-static void ldd_diagnostic(void *context, ldd_diag_level_t level, const char *message) {
+static void ld_diagnostic(void *context, ld_diag_level_t level, const char *message) {
     (void) context;
-    if (level == LDD_DIAG_ERROR) {
-        log_error("[ldd] %s", message);
-    } else if (level == LDD_DIAG_WARNING) {
-        log_warn("[ldd] %s", message);
+    if (level == LD_DIAG_ERROR) {
+        log_error("[ld] %s", message);
+    } else if (level == LD_DIAG_WARNING) {
+        log_warn("[ld] %s", message);
     } else {
-        log_debug("[ldd] %s", message);
+        log_debug("[ld] %s", message);
     }
 }
 
-static void ldd_mach_exe(slice_t *modules, char *ldflags) {
+static void ld_mach_exe(slice_t *modules, char *ldflags) {
     assertf(BUILD_ARCH == ARCH_ARM64, "internal Darwin linker currently supports arm64 only");
-    ldd_options_t options;
-    ldd_options_init(&options);
+    ld_options_t options;
+    ld_options_init(&options);
     options.output_path = BUILD_OUTPUT;
     options.entry_symbol = LD_ENTRY;
-    options.diagnostic = ldd_diagnostic;
-    options.min_os_version = ldd_macos_version(11, 0, 0);
+    options.diagnostic = ld_diagnostic;
+    options.min_os_version = ld_macos_version(11, 0, 0);
 
     char *sysroot = find_syslibroot();
     char *sdk_version = get_macos_sdk_version();
@@ -811,39 +811,39 @@ static void ldd_mach_exe(slice_t *modules, char *ldflags) {
                                          NATURE_ROOT, os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
     assertf(nature_library_length >= 0 && (size_t) nature_library_length < sizeof(nature_library_path),
             "Nature library search path is too long");
-    assertf(ldd_add_library_path(&options, nature_library_path) == LDD_OK,
+    assertf(ld_add_library_path(&options, nature_library_path) == LD_OK,
             "cannot add Nature library search path '%s'", nature_library_path);
     if (sdk_version) {
         unsigned major = 0, minor = 0, patch = 0;
         sscanf(sdk_version, "%u.%u.%u", &major, &minor, &patch);
-        options.sdk_version = ldd_macos_version(major, minor, patch);
+        options.sdk_version = ld_macos_version(major, minor, patch);
     }
     for (int i = 0; i < modules->count; i++) {
         module_t *module = modules->take[i];
         if (module->object_file) {
-            assertf(ldd_add_input(&options, module->object_file) == LDD_OK,
+            assertf(ld_add_input(&options, module->object_file) == LD_OK,
                     "cannot add object '%s' to internal Darwin linker", module->object_file);
         }
     }
-    assertf(ldd_add_input(&options, custom_link_object_path()) == LDD_OK,
+    assertf(ld_add_input(&options, custom_link_object_path()) == LD_OK,
             "cannot add custom metadata object to internal Darwin linker");
     for (int i = 0; i < linker_libs->count; i++) {
         char *path = linker_libs->take[i];
-        assertf(ldd_add_input(&options, path) == LDD_OK,
+        assertf(ld_add_input(&options, path) == LD_OK,
                 "cannot add package link '%s' to internal Darwin linker", path);
     }
-    assertf(ldd_add_input(&options, lib_file_path(LIB_RUNTIME_FILE)) == LDD_OK,
+    assertf(ld_add_input(&options, lib_file_path(LIB_RUNTIME_FILE)) == LD_OK,
             "cannot add Darwin runtime to internal linker");
-    assertf(ldd_add_input(&options, lib_file_path(LIBUV_FILE)) == LDD_OK,
+    assertf(ld_add_input(&options, lib_file_path(LIBUV_FILE)) == LD_OK,
             "cannot add Darwin libuv to internal linker");
-    int parse_result = ldd_parse_flags(&options, ldflags ? ldflags : "");
-    assertf(parse_result == LDD_OK, "unsupported Darwin linker flags (error %d)", parse_result);
-    int result = ldd_link(&options);
-    assertf(result == LDD_OK, "internal Darwin linker failed (error %d)", result);
+    int parse_result = ld_parse_flags(&options, ldflags ? ldflags : "");
+    assertf(parse_result == LD_OK, "unsupported Darwin linker flags (error %d)", parse_result);
+    int result = ld_link(&options);
+    assertf(result == LD_OK, "internal Darwin linker failed (error %d)", result);
     assertf(file_exists(BUILD_OUTPUT), "internal Darwin linker did not create '%s'", BUILD_OUTPUT);
     log_debug("internal linker output --> %s", BUILD_OUTPUT);
     log_debug("build output --> %s", BUILD_OUTPUT);
-    ldd_options_deinit(&options);
+    ld_options_deinit(&options);
     free(sysroot);
     free(sdk_version);
 }
@@ -1313,7 +1313,7 @@ void build(char *build_entry, bool is_archive) {
         }
     } else {
         if (BUILD_OS == OS_DARWIN) {
-            ldd_mach_exe(modules, LDFLAGS);
+            ld_mach_exe(modules, LDFLAGS);
         } else {
             assertf(BUILD_OS == OS_LINUX,
                     "The cross-platform elf linker can only be used if the target is linux.");
