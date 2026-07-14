@@ -32,13 +32,52 @@ add_executable(test_bitmap test_bitmap.c)
 target_link_libraries(test_bitmap nature_common_test m)
 add_test(test_bitmap test_bitmap)
 
-add_executable(test_ld test_ld.c)
+add_executable(test_ld
+    test_ld.c
+    test_ld_elf_common.c
+    test_ld_elf_unit.c
+    test_ld_elf_input.c
+    test_ld_elf_archive.c
+    test_ld_elf_script.c
+    test_ld_elf_crt.c
+    test_ld_elf_basic.c
+    test_ld_elf_layout.c
+    test_ld_elf_linker_defined.c
+    test_ld_elf_link_order.c
+    test_ld_elf_reloc.c
+    test_ld_elf_reloc_aarch64.c
+    test_ld_elf_reloc_x86_64.c
+    test_ld_elf_reloc_x86_64_tls.c
+    test_ld_elf_reloc_riscv64.c
+    test_ld_elf_aarch64_got.c
+    test_ld_elf_riscv_uleb.c
+    test_ld_elf_rel_input.c
+    test_ld_elf_relax.c
+    test_ld_elf_unwind.c
+    test_ld_elf_ifunc.c
+    test_ld_elf_property.c
+    test_ld_elf_property_notes.c
+    test_ld_elf_relro.c
+    test_ld_elf_debug.c
+    test_ld_elf_debug_link.c
+    test_ld_elf_debug_merge.c
+    test_ld_elf_dynamic.c
+    test_ld_elf_pie.c
+    test_ld_elf_zlib.c
+    test_ld_macho_common.c
+    test_ld_macho_unit.c
+    test_ld_macho_input.c
+    test_ld_macho_dylib.c
+    test_ld_macho_codegen.c
+    test_ld_macho.c
+    test_ld_elf.c)
 target_link_libraries(test_ld nature_common_test m)
 add_test(test_ld test_ld)
 
 # ---------------------------------- cases 测试 ------------------------------------------
-file(MAKE_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/tmp)
-message("[test cases]make temp dir ${CMAKE_CURRENT_SOURCE_DIR}/tmp success")
+set(TEST_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/tmp)
+file(MAKE_DIRECTORY ${TEST_OUTPUT_DIR})
+message("[test cases]make temp dir ${TEST_OUTPUT_DIR} success")
 
 # 读取 features 目录下的所有 .c 文件
 file(GLOB TEST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/features/*.c)
@@ -53,10 +92,14 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
 
     # 查找对应的测试用例文件或目录
     set(CASE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}")
+    set(TESTAR_FILE "")
 
     # 判断是文件夹还是文件来设置工作目录和入口文件
     # testar 和 n 文件可以同时存在，在 main 中选择自己需要的测试方式
-    if (IS_DIRECTORY ${CASE_PATH})
+    # A stale/empty directory with the same name as a single-file fixture
+    # must not shadow <test-name>.n.  Treat a case as directory-backed only
+    # when its actual entry point exists.
+    if (EXISTS "${CASE_PATH}/main.n")
         set(WORK_DIR ${CASE_PATH})
         set(TESTAR_FILE "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}.testar")
         set(ENTRY_FILE main.n)
@@ -76,7 +119,7 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
     set_property(TEST ${TEST_NAME} PROPERTY TIMEOUT 120)
     set_property(TEST ${TEST_NAME}
             PROPERTY
-            ENVIRONMENT "BUILD_OS=$ENV{BUILD_OS};BUILD_ARCH=$ENV{BUILD_ARCH};NPKG_PATH=${PACKAGE_BINARY_PATH};BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp;ENTRY_FILE=${ENTRY_FILE};TESTAR_FILE=${TESTAR_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};PATH=/usr/local/nature/bin:$ENV{PATH};")
+            ENVIRONMENT "BUILD_OS=$ENV{BUILD_OS};BUILD_ARCH=$ENV{BUILD_ARCH};NPKG_PATH=${PACKAGE_BINARY_PATH};BUILD_OUTPUT_DIR=${TEST_OUTPUT_DIR};ENTRY_FILE=${ENTRY_FILE};TESTAR_FILE=${TESTAR_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};PATH=/usr/local/nature/bin:$ENV{PATH};")
 
     message("[test cases] register test ${TEST_NAME} success, work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}, testar_file=${TESTAR_FILE}")
 endforeach ()
@@ -105,10 +148,10 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
 
     message("[test_runtime_debug] work_dir: ${WORK_DIR}, entry: ${ENTRY}")
 
-    set(LIBMAIN_STATIC ${CMAKE_CURRENT_SOURCE_DIR}/tmp/libmain.a)
+    set(LIBMAIN_STATIC ${TEST_OUTPUT_DIR}/libmain.a)
     add_custom_target(generate_libmain ALL
             COMMAND ${CMAKE_COMMAND} -E remove -f ${LIBMAIN_STATIC}
-            COMMAND env BUILD_OUTPUT_DIR=${CMAKE_CURRENT_SOURCE_DIR}/tmp NATURE_ROOT=${PROJECT_SOURCE_DIR} $<TARGET_FILE:nature> build --archive ${ENTRY}
+            COMMAND env BUILD_OUTPUT_DIR=${TEST_OUTPUT_DIR} NATURE_ROOT=${PROJECT_SOURCE_DIR} $<TARGET_FILE:nature> build --archive ${ENTRY}
             WORKING_DIRECTORY ${WORK_DIR}
             DEPENDS nature
             BYPRODUCTS ${LIBMAIN_STATIC}

@@ -103,6 +103,7 @@ void ld_options_init(ld_options_t *options) {
     options->entry_symbol = "runtime_main";
     options->min_os_version = ld_macos_version(11, 0, 0);
     options->sdk_version = ld_macos_version(14, 0, 0);
+    options->debug_mode = LD_DEBUG_NONE;
     options->pie = true;
     options->adhoc_codesign = true;
     options->diagnostic = ld_default_diagnostic;
@@ -189,7 +190,7 @@ static int ld_parse_flag_token(ld_options_t *options, const char *token, const c
 }
 
 static int ld_shell_token(const char *flags, size_t length, size_t *position,
-                           char *token, size_t token_size, bool *present) {
+                          char *token, size_t token_size, bool *present) {
     size_t pos = *position;
     while (pos < length && isspace((unsigned char) flags[pos])) pos++;
     if (pos == length) {
@@ -250,7 +251,7 @@ int ld_parse_flags(ld_options_t *options, const char *flags) {
         bool present = false;
         int result = ld_shell_token(flags, length, &position, token, sizeof(token), &present);
         if (result != LD_OK) {
-            return ld_report_option_error(options, result, "malformed Darwin linker flags near byte %zu", position);
+            return ld_report_option_error(options, result, "malformed linker flags near byte %zu", position);
         }
         if (!present) break;
         char next[4096];
@@ -264,17 +265,17 @@ int ld_parse_flags(ld_options_t *options, const char *flags) {
             }
             if (!next_present || !next[0]) {
                 return ld_report_option_error(options, LD_INVALID_ARGUMENT,
-                                               "linker flag '%s' requires a non-empty argument", token);
+                                              "linker flag '%s' requires a non-empty argument", token);
             }
             next_ptr = next;
         }
         bool consumed = false;
         result = ld_parse_flag_token(options, token, next_ptr, &consumed);
         if (result == LD_UNSUPPORTED) {
-            return ld_report_option_error(options, result, "unsupported Darwin linker flag '%s'", token);
+            return ld_report_option_error(options, result, "unsupported linker flag '%s'", token);
         }
         if (result != LD_OK) {
-            return ld_report_option_error(options, result, "cannot process Darwin linker token '%s'", token);
+            return ld_report_option_error(options, result, "cannot process linker token '%s'", token);
         }
     }
     return LD_OK;
@@ -338,11 +339,21 @@ int ld_link(const ld_options_t *options) {
     if (!options) {
         return LD_INVALID_ARGUMENT;
     }
+    if (options->debug_mode != LD_DEBUG_NONE &&
+        options->debug_mode != LD_DEBUG_DWARF) {
+        return ld_report_option_error(
+                options, LD_INVALID_ARGUMENT,
+                "invalid linker debug mode value %d",
+                (int) options->debug_mode);
+    }
     if (!options->output_path || !*options->output_path) {
         return ld_report_option_error(options, LD_INVALID_ARGUMENT, "linker output path is empty");
     }
     if (options->inputs.count == 0) {
         return ld_report_option_error(options, LD_INVALID_ARGUMENT, "no linker input files were provided");
+    }
+    if (options->os == LD_OS_LINUX) {
+        return ld_link_elf(options);
     }
     if (options->os != LD_OS_DARWIN || options->arch != LD_ARCH_ARM64) {
         if (options->diagnostic) {

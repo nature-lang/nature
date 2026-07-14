@@ -322,6 +322,7 @@ int ld_parse_input_file(ld_context_t *ctx, const char *path);
 int ld_resolve_requested_libraries(ld_context_t *ctx);
 int ld_resolve_reexport_libraries(ld_context_t *ctx);
 int ld_link_macho(ld_context_t *ctx);
+int ld_link_elf(const ld_options_t *options);
 int ld_unwind_prepare(ld_context_t *ctx);
 int ld_unwind_emit(ld_context_t *ctx);
 

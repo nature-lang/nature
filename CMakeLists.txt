@@ -72,7 +72,9 @@ if (CMAKE_BUILD_TYPE MATCHES Debug)
     message("cmake type is debug")
 endif()
 
-configure_file("${PROJECT_SOURCE_DIR}/config/config.h.in" "${PROJECT_SOURCE_DIR}/config/config.h")
+file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/config")
+configure_file("${PROJECT_SOURCE_DIR}/config/config.h.in"
+        "${PROJECT_BINARY_DIR}/config/config.h")
 
 aux_source_directory(${PROJECT_SOURCE_DIR}/cmd CMD)
 file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/src/*.c)
@@ -81,6 +83,7 @@ aux_source_directory(${PROJECT_SOURCE_DIR}/utils/yaml UTILS)
 aux_source_directory(${PROJECT_SOURCE_DIR}/utils/llhttp UTILS)
 
 # include 搜索路径, 有了这个就不需要在 add_executable 中声明 .h 文件了
+include_directories(BEFORE ${PROJECT_BINARY_DIR})
 include_directories(./include)
 include_directories(.)
 
@@ -163,4 +166,3 @@ install(FILES VERSION DESTINATION nature/)
 
 
 include(cmake/cpack.cmake)
-

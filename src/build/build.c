@@ -28,8 +28,8 @@
 #include "src/register/linearscan.h"
 #include "src/schedule.h"
 #include "src/semantic/analyzer.h"
-#include "src/semantic/global_eval.h"
 #include "src/semantic/generics.h"
+#include "src/semantic/global_eval.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
 #include "utils/helper.h"
@@ -386,60 +386,68 @@ static void assembler_module(module_t *m) {
  * modules modules
  * @param modules
  */
-static void linker_elf_exe(slice_t *modules) {
-    // 检测是否生成
-    int fd;
-    char *temp_output = path_join(TEMP_DIR, LINKER_OUTPUT);
-    elf_context_t *ctx = elf_context_new(temp_output, OUTPUT_EXE);
+static void ld_elf_exe(slice_t *modules, char *ldflags) {
+    ld_options_t options;
+    ld_options_init(&options);
+    options.os = LD_OS_LINUX;
+    options.output_path = BUILD_OUTPUT;
+    options.entry_symbol = "_start";
+    options.pie = false;
+    options.adhoc_codesign = false;
 
-    for (int i = 0; i < modules->count; ++i) {
-        module_t *m = modules->take[i];
-
-        log_debug("load module object file: %s, %s", m->rel_path, m->object_file);
-        fd = check_open(m->object_file, O_RDONLY | O_BINARY);
-        load_object_file(ctx, fd, 0); // 加载并解析目标文件
+    if (BUILD_ARCH == ARCH_ARM64) {
+        options.arch = LD_ARCH_ARM64;
+    } else if (BUILD_ARCH == ARCH_AMD64) {
+        options.arch = LD_ARCH_AMD64;
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        options.arch = LD_ARCH_RISCV64;
+    } else {
+        assertf(false, "unsupported Linux ELF target architecture");
     }
 
-    // 将相关符号都加入来
-    slice_push(linker_libs, custom_link_object_path());
-    slice_push(linker_libs, lib_file_path(LIB_START_FILE));
-
-    // 固定使用 elf 格式的 libruntime.a 和 libuv.a, 只在 output 时才会转换成 macho 格式的文件
-    slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
-    slice_push(linker_libs, lib_file_path(LIBUV_FILE));
-    slice_push(linker_libs, lib_file_path(LIBC_FILE));
-    slice_push(linker_libs, lib_file_path(LIBGCC_FILE));
-
-    for (int i = 0; i < linker_libs->count; ++i) {
+    assertf(ld_add_input(&options, lib_file_path(LIB_START_FILE)) == LD_OK,
+            "cannot add Linux ELF startup object");
+    for (int i = 0; i < modules->count; i++) {
+        module_t *module = modules->take[i];
+        assertf(ld_add_input(&options, module->object_file) == LD_OK,
+                "cannot add Linux ELF module object '%s'", module->object_file);
+    }
+    assertf(ld_add_input(&options, custom_link_object_path()) == LD_OK,
+            "cannot add Linux ELF metadata object");
+    for (int i = 0; i < linker_libs->count; i++) {
         char *path = linker_libs->take[i];
-        fd = check_open(path, O_RDONLY | O_BINARY);
-
-        if (ends_with(path, ".o")) {
-            load_object_file(ctx, fd, 0);
-            continue;
-        }
-
-        if (ends_with(path, ".a")) {
-            load_archive(ctx, fd);
-            continue;
-        }
-
-        assertf(false, "cannot linker file '%s'", path);
+        assertf(ld_add_input(&options, path) == LD_OK,
+                "cannot add Linux package link '%s'", path);
     }
+    assertf(ld_add_input(&options, lib_file_path(LIB_RUNTIME_FILE)) == LD_OK,
+            "cannot add Linux runtime archive");
+    assertf(ld_add_input(&options, lib_file_path(LIBUV_FILE)) == LD_OK,
+            "cannot add Linux libuv archive");
+    assertf(ld_add_input(&options, lib_file_path(LIBC_FILE)) == LD_OK,
+            "cannot add Linux libc archive");
+    assertf(ld_add_input(&options, lib_file_path(LIBGCC_FILE)) == LD_OK,
+            "cannot add Linux libgcc archive");
 
-    // - core
-    elf_exe_file_format(ctx);
+    char library_dir[PATH_MAX];
+    int library_dir_length = snprintf(
+            library_dir, sizeof(library_dir), "%s/lib/%s_%s", NATURE_ROOT,
+            os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
+    assertf(library_dir_length > 0 &&
+                    (size_t) library_dir_length < sizeof(library_dir),
+            "Nature library directory path is too long");
+    assertf(ld_add_library_path(&options, library_dir) == LD_OK,
+            "cannot add Nature Linux library search path");
 
-    // - core
-    elf_output(ctx);
-    if (!file_exists(temp_output)) {
-        assertf(false, "[linker] linker failed");
-    }
-
-    remove(BUILD_OUTPUT);
-    copy(BUILD_OUTPUT, temp_output, 0755);
-    log_debug("linker output--> %s\n", temp_output);
-    log_debug("build output--> %s\n", BUILD_OUTPUT);
+    int parse_result = ld_parse_flags(&options, ldflags ? ldflags : "");
+    assertf(parse_result == LD_OK,
+            "unsupported Linux linker flags (error %d)", parse_result);
+    int result = ld_link(&options);
+    assertf(result == LD_OK, "internal Linux ELF linker failed (error %d)",
+            result);
+    assertf(file_exists(BUILD_OUTPUT),
+            "internal Linux ELF linker did not create '%s'", BUILD_OUTPUT);
+    log_debug("internal ELF linker output --> %s", BUILD_OUTPUT);
+    ld_options_deinit(&options);
 }
 
 static int command_exists(const char *cmd) {
@@ -1317,7 +1325,7 @@ void build(char *build_entry, bool is_archive) {
         } else {
             assertf(BUILD_OS == OS_LINUX,
                     "The cross-platform elf linker can only be used if the target is linux.");
-            linker_elf_exe(modules);
+            ld_elf_exe(modules, LDFLAGS);
         }
     }
 

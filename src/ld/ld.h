@@ -23,6 +23,11 @@ typedef enum {
     LD_DIAG_ERROR,
 } ld_diag_level_t;
 
+typedef enum {
+    LD_DEBUG_NONE = 0,
+    LD_DEBUG_DWARF,
+} ld_debug_mode_t;
+
 typedef void (*ld_diagnostic_fn)(void *context, ld_diag_level_t level, const char *message);
 
 typedef struct {
@@ -39,6 +44,7 @@ typedef struct {
     const char *sysroot;
     uint32_t min_os_version;
     uint32_t sdk_version;
+    ld_debug_mode_t debug_mode;
     bool pie;
     bool adhoc_codesign;
 
