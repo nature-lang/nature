@@ -181,11 +181,12 @@ static void test_resolver_output_path(char path[]) {
 }
 
 static void test_resolver_link(const char *const *inputs, size_t input_count,
-                               const char *output_path) {
+                               const char *output_path, bool objc_load) {
     ld_options_t options;
     ld_options_init(&options);
     options.output_path = output_path;
     options.adhoc_codesign = false;
+    options.objc_load = objc_load;
     for (size_t i = 0; i < input_count; i++) {
         assert(ld_add_input(&options, inputs[i]) == LD_OK);
     }
@@ -338,7 +339,7 @@ static void test_entry_symbol_from_archive(void) {
             test_resolver_make_definition_fixture("_main"));
     test_resolver_output_path(output_path);
     const char *inputs[] = {archive_path};
-    test_resolver_link(inputs, 1U, output_path);
+    test_resolver_link(inputs, 1U, output_path, false);
 
     test_resolver_output_t output = test_resolver_read_output(output_path);
     const ld_nlist_64_t *entry =
@@ -380,7 +381,7 @@ static void test_weak_object_vs_strong_dylib(void) {
                               false);
     test_resolver_output_path(output_path);
     const char *inputs[] = {main_path, weak_path, dylib_path};
-    test_resolver_link(inputs, 3U, output_path);
+    test_resolver_link(inputs, 3U, output_path, false);
 
     test_resolver_output_t output = test_resolver_read_output(output_path);
     const ld_nlist_64_t *pick = test_resolver_find_symbol(&output, "_pick");
@@ -408,7 +409,7 @@ static void test_common_vs_strong_dylib(void) {
                               false);
     test_resolver_output_path(output_path);
     const char *inputs[] = {main_path, common_path, dylib_path};
-    test_resolver_link(inputs, 3U, output_path);
+    test_resolver_link(inputs, 3U, output_path, false);
 
     test_resolver_output_t output = test_resolver_read_output(output_path);
     const ld_nlist_64_t *pick = test_resolver_find_symbol(&output, "_pick");
@@ -440,7 +441,7 @@ static void test_archive_vs_dylib_input_order(bool archive_first) {
     const char *dylib_first_inputs[] = {main_path, dylib_path, archive_path};
     test_resolver_link(archive_first ? archive_first_inputs
                                      : dylib_first_inputs,
-                       3U, output_path);
+                       3U, output_path, false);
 
     test_resolver_output_t output = test_resolver_read_output(output_path);
     const ld_nlist_64_t *pick = test_resolver_find_symbol(&output, "_pick");
@@ -474,7 +475,7 @@ static void test_two_dylib_providers_case(bool first_weak, bool second_weak,
                               second_weak);
     test_resolver_output_path(output_path);
     const char *inputs[] = {main_path, first_path, second_path};
-    test_resolver_link(inputs, 3U, output_path);
+    test_resolver_link(inputs, 3U, output_path, false);
 
     test_resolver_output_t output = test_resolver_read_output(output_path);
     const ld_nlist_64_t *pick = test_resolver_find_symbol(&output, "_pick");
@@ -560,7 +561,7 @@ static void test_common_max_size_and_alignment(void) {
     test_resolver_make_common(second_path, "_common", 8U, 5U);
     test_resolver_output_path(output_path);
     const char *inputs[] = {first_path, second_path};
-    test_resolver_link(inputs, 2U, output_path);
+    test_resolver_link(inputs, 2U, output_path, false);
 
     test_resolver_output_t output = test_resolver_read_output(output_path);
     const ld_nlist_64_t *common =
@@ -577,7 +578,7 @@ static void test_common_max_size_and_alignment(void) {
     unlink(output_path);
 }
 
-static void test_objc_category_archive_extraction(void) {
+static void test_objc_category_archive_extraction_requires_option(void) {
     char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
     char archive_path[] = "/tmp/nature-ld-resolver-objc-archive-XXXXXX";
     char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
@@ -597,9 +598,17 @@ static void test_objc_category_archive_extraction(void) {
     test_resolver_write_archive(archive_path, "category.o", category);
     test_resolver_output_path(output_path);
     const char *inputs[] = {main_path, archive_path};
-    test_resolver_link(inputs, 2U, output_path);
+    test_resolver_link(inputs, 2U, output_path, false);
 
     test_resolver_output_t output = test_resolver_read_output(output_path);
+    assert(output.objc_catlist == NULL);
+    assert(test_resolver_find_symbol(&output, "_objc_category_marker") ==
+           NULL);
+    test_resolver_free_output(&output);
+
+    test_resolver_link(inputs, 2U, output_path, true);
+
+    output = test_resolver_read_output(output_path);
     assert(output.objc_catlist != NULL);
     assert(output.objc_catlist->size == sizeof(category_pointer));
     const ld_nlist_64_t *marker_output =
@@ -621,5 +630,5 @@ void test_ld_macho_resolver(void) {
     test_two_dylib_providers();
     test_duplicate_direct_strong();
     test_common_max_size_and_alignment();
-    test_objc_category_archive_extraction();
+    test_objc_category_archive_extraction_requires_option();
 }

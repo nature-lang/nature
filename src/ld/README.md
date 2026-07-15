@@ -23,8 +23,9 @@ the input path and, when available, archive member and symbol context.
 
 The implementation is split by responsibility:
 
-- `ld.c` owns the public options API, flag parsing, context lifetime, and
-  target-backend dispatch.
+- `ld.c` owns the public options API, flag parsing, context lifetime,
+  target-backend dispatch, and atomic executable output shared by Mach-O and
+  ELF.
 - `ld_input.c` owns checked file reading and thin/fat Mach-O, BSD archive,
   dylib, and `MH_OBJECT` parsing plus library/framework discovery.
 - `ld_macho_dylib_paths.c` resolves binary-dylib reexports through `-F`,
@@ -38,7 +39,7 @@ The implementation is split by responsibility:
   dyld bindings use the terminal target symbol, while imported aliases are
   omitted from the duplicate undefined-symbol table entry.
 - `ld_macho.c` owns symbol resolution, section layout, arm64 relocations,
-  dyld/linkedit generation, code signing, and final output.
+  dyld/linkedit generation, and code signing.
 - `ld_unwind.c` validates `__LD,__compact_unwind` records and builds the
   final two-level `__TEXT,__unwind_info` table.
 - `ld_internal.h` contains shared private state and is not part of the public
@@ -84,7 +85,7 @@ The implementation is split by responsibility:
 - `ld_elf.c` owns ELF symbol precedence, fixed-point archive extraction,
   COMDAT selection, static section/segment layout, linker-defined symbols,
   GOT/TLS allocation, unwind-record compaction, deterministic section-header
-  and section-name tables, and atomic `ET_EXEC`/static-PIE `ET_DYN` output.
+  and section-name tables, and `ET_EXEC`/static-PIE `ET_DYN` image generation.
 - `ld_elf_reloc.c` owns architecture-specific ELF relocation scanning,
   range checking, and instruction patching.
 - `ld_elf_rel.c` decodes standard 16-byte `Elf64_Rel` records and recovers
@@ -111,6 +112,10 @@ The implementation is split by responsibility:
 The build driver adds Nature's platform library directory to the `-l` search
 paths before parsing user `--ldflags`, so package libraries can be selected by
 name as well as by direct archive path.
+
+Mach-O archives are lazy by default. Passing `-ObjC` through `--ldflags`
+additionally extracts archive members that define Objective-C classes or
+categories, or contain Swift metadata, matching the opt-in behavior of ld64.
 
 The Darwin backend currently emits arm64 `MH_EXECUTE`. The ELF backend emits
 little-endian static ELF64 for Linux x86_64, aarch64, and riscv64: `pie=false`

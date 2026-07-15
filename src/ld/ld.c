@@ -1,11 +1,15 @@
 #include "ld_internal.h"
 #include "ld_macho_symbols.h"
+#include "ld_output.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 void *ld_realloc_array(void *old, size_t old_count, size_t new_count, size_t element_size) {
     if (element_size == 0 || new_count > SIZE_MAX / element_size) {
@@ -94,6 +98,93 @@ static int ld_report_option_error(const ld_options_t *options, int code, const c
     return code;
 }
 
+int ld_write_output_atomic(const ld_options_t *options, const uint8_t *image,
+                           size_t size) {
+    if (!options || !options->output_path || !*options->output_path ||
+        (!image && size != 0U)) {
+        return ld_report_option_error(options, LD_INVALID_ARGUMENT,
+                                      "invalid output image");
+    }
+
+    static const char temporary_suffix[] = ".tmp.XXXXXX";
+    const char *output = options->output_path;
+    size_t output_length = strlen(output);
+    if (output_length > SIZE_MAX - sizeof(temporary_suffix)) {
+        return ld_report_option_error(options, LD_OUTPUT_ERROR,
+                                      "output path is too long");
+    }
+    size_t temporary_size = output_length + sizeof(temporary_suffix);
+    char *temporary = malloc(temporary_size);
+    if (!temporary) {
+        return ld_report_option_error(
+                options, LD_IO_ERROR,
+                "out of memory creating temporary output path");
+    }
+    snprintf(temporary, temporary_size, "%s%s", output, temporary_suffix);
+
+    int fd = mkstemp(temporary);
+    if (fd < 0) {
+        int saved = errno;
+        free(temporary);
+        return ld_report_option_error(
+                options, LD_OUTPUT_ERROR,
+                "cannot create temporary output for '%s': %s", output,
+                strerror(saved));
+    }
+
+    int status = LD_OK;
+    size_t written = 0U;
+    while (written < size) {
+        ssize_t count = write(fd, image + written, size - written);
+        if (count < 0 && errno == EINTR) {
+            continue;
+        }
+        if (count <= 0) {
+            int saved = errno;
+            if (count == 0) {
+                status = ld_report_option_error(
+                        options, LD_OUTPUT_ERROR,
+                        "cannot write output '%s': short write", output);
+            } else {
+                status = ld_report_option_error(
+                        options, LD_OUTPUT_ERROR,
+                        "cannot write output '%s': %s", output,
+                        strerror(saved));
+            }
+            break;
+        }
+        written += (size_t) count;
+    }
+    if (status == LD_OK && fchmod(fd, 0755) != 0) {
+        int saved = errno;
+        status = ld_report_option_error(options, LD_OUTPUT_ERROR,
+                                        "cannot chmod output '%s': %s", output,
+                                        strerror(saved));
+    }
+    if (status == LD_OK && fsync(fd) != 0) {
+        int saved = errno;
+        status = ld_report_option_error(options, LD_OUTPUT_ERROR,
+                                        "cannot flush output '%s': %s", output,
+                                        strerror(saved));
+    }
+    if (close(fd) != 0 && status == LD_OK) {
+        int saved = errno;
+        status = ld_report_option_error(options, LD_OUTPUT_ERROR,
+                                        "cannot close output '%s': %s", output,
+                                        strerror(saved));
+    }
+    if (status == LD_OK && rename(temporary, output) != 0) {
+        int saved = errno;
+        status = ld_report_option_error(options, LD_OUTPUT_ERROR,
+                                        "cannot replace output '%s': %s", output,
+                                        strerror(saved));
+    }
+    if (status != LD_OK) {
+        unlink(temporary);
+    }
+    free(temporary);
+    return status;
+}
 
 static void ld_default_diagnostic(void *context, ld_diag_level_t level, const char *message) {
     (void) context;
@@ -173,6 +264,13 @@ int ld_add_rpath(ld_options_t *options, const char *path) {
 
 static int ld_parse_flag_token(ld_options_t *options, const char *token, const char *next, bool *consumed) {
     *consumed = false;
+    if (strcmp(token, "-ObjC") == 0) {
+        if (options->os != LD_OS_DARWIN) {
+            return LD_UNSUPPORTED;
+        }
+        options->objc_load = true;
+        return LD_OK;
+    }
     if (strcmp(token, "-framework") == 0) {
         if (!next || !*next) {
             return LD_INVALID_ARGUMENT;

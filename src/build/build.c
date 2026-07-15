@@ -682,7 +682,8 @@ static char *get_macos_sdk_version() {
  * ld -w -arch arm64 -dynamic -platform_version macos 11.7.1 14.0 -e _runtime_main -o a.out ${ldflags} libruntime.a libuv.a libSystem.tbd  @objects.txt
  * ld -w -arch x86_64 -dynamic -platform_version macos 11.7.1 14.0 -e _runtime_main -o a.out libruntime.a libuv.a libSystem.tbd @objects.txt
  */
-static void custom_ld_mach_exe(slice_t *modules, char *use_ld, char *ldflags) {
+static void custom_ld_mach_exe(slice_t *modules, const char *use_ld,
+                               char *ldflags) {
     assert(strlen(use_ld) > 0);
 
     // 检测当前设备是否安装了 ld 命令
@@ -1321,7 +1322,19 @@ void build(char *build_entry, bool is_archive) {
         }
     } else {
         if (BUILD_OS == OS_DARWIN) {
-            ld_mach_exe(modules, LDFLAGS);
+            if (BUILD_ARCH == ARCH_ARM64) {
+                ld_mach_exe(modules, LDFLAGS);
+            } else {
+                assertf(BUILD_ARCH == ARCH_AMD64,
+                        "unsupported Darwin target architecture");
+#ifdef __DARWIN
+                custom_ld_mach_exe(modules, "ld", LDFLAGS);
+#else
+                assertf(false,
+                        "Darwin amd64 linking requires an external Mach-O "
+                        "linker; specify one with --ld");
+#endif
+            }
         } else {
             assertf(BUILD_OS == OS_LINUX,
                     "The cross-platform elf linker can only be used if the target is linux.");

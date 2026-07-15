@@ -11,18 +11,16 @@
 #include "ld_elf_riscv_uleb.h"
 #include "ld_elf_symtab.h"
 #include "ld_elf_thunk.h"
+#include "ld_output.h"
 
 #include "utils/uthash.h"
 
-#include <errno.h>
-#include <fcntl.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <unistd.h>
 
 /*
  * The phase ordering follows Elf.flushInner, Object.resolveSymbols, and
@@ -6294,66 +6292,6 @@ static uint64_t ld_elf_output_entry_size(
     }
 }
 
-static int ld_elf_write_all(int fd, const uint8_t *bytes, size_t size) {
-    size_t offset = 0U;
-    while (offset < size) {
-        ssize_t count = write(fd, bytes + offset, size - offset);
-        if (count < 0 && errno == EINTR) continue;
-        if (count <= 0) return -1;
-        offset += (size_t) count;
-    }
-    return 0;
-}
-
-static int ld_elf_atomic_output(ld_elf_backend_t *backend,
-                                const uint8_t *image, size_t image_size) {
-    const char *output = backend->ctx->options->output_path;
-    size_t output_length = strlen(output);
-    if (output_length > SIZE_MAX - 64U) {
-        return ld_elf_fail(backend->ctx, LD_OUTPUT_ERROR,
-                           "ELF output path is too long");
-    }
-    char *temporary = malloc(output_length + 64U);
-    if (!temporary) {
-        return ld_elf_fail(backend->ctx, LD_IO_ERROR,
-                           "out of memory creating ELF temporary path");
-    }
-    int fd = -1;
-    for (unsigned attempt = 0; attempt < 100U; attempt++) {
-        snprintf(temporary, output_length + 64U, "%s.tmp.%ld.%u",
-                 output, (long) getpid(), attempt);
-        fd = open(temporary, O_WRONLY | O_CREAT | O_EXCL, 0600);
-        if (fd >= 0 || errno != EEXIST) break;
-    }
-    if (fd < 0) {
-        int saved = errno;
-        free(temporary);
-        return ld_elf_fail(backend->ctx, LD_OUTPUT_ERROR,
-                           "cannot create ELF temporary output for '%s': %s",
-                           output, strerror(saved));
-    }
-    int status = LD_OK;
-    if (ld_elf_write_all(fd, image, image_size) != 0 || fsync(fd) != 0 ||
-        fchmod(fd, 0755) != 0) {
-        status = ld_elf_fail(backend->ctx, LD_OUTPUT_ERROR,
-                             "cannot write ELF output '%s': %s",
-                             output, strerror(errno));
-    }
-    if (close(fd) != 0 && status == LD_OK) {
-        status = ld_elf_fail(backend->ctx, LD_OUTPUT_ERROR,
-                             "cannot close ELF output '%s': %s",
-                             output, strerror(errno));
-    }
-    if (status == LD_OK && rename(temporary, output) != 0) {
-        status = ld_elf_fail(backend->ctx, LD_OUTPUT_ERROR,
-                             "cannot replace ELF output '%s': %s",
-                             output, strerror(errno));
-    }
-    if (status != LD_OK) unlink(temporary);
-    free(temporary);
-    return status;
-}
-
 static uint16_t ld_elf_machine_for_arch(ld_arch_t arch) {
     switch (arch) {
         case LD_ARCH_ARM64:
@@ -7304,7 +7242,10 @@ static int ld_elf_emit_image(ld_elf_backend_t *backend, uint64_t entry) {
             shstrtab_name, LD_ELF_SHT_STRTAB, 0U, 0U, shstrtab_offset,
             shstrtab_size, 0U, 0U, 1U, 0U);
 
-    status = ld_elf_atomic_output(backend, image, image_size);
+    status = ld_write_output_atomic(backend->ctx->options, image, image_size);
+    if (status != LD_OK) {
+        backend->ctx->error = status;
+    }
 
 cleanup:
     free(image);

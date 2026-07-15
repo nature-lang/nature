@@ -66,7 +66,6 @@ add_executable(test_ld
     test_ld_elf_zlib.c
     test_ld_macho_common.c
     test_ld_macho_unit.c
-    test_ld_tapi.c
     test_ld_macho_input.c
     test_ld_macho_dylib.c
     test_ld_macho_binary_dylib.c

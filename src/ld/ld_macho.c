@@ -1,16 +1,13 @@
 #include "ld_internal.h"
 #include "ld_macho_symbols.h"
 #include "ld_macho_synthetic.h"
+#include "ld_output.h"
 #include "sha256.h"
 
-#include <errno.h>
-#include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <unistd.h>
 
 #define LD_PAGE_SIZE 0x4000ULL
 #define LD_CODE_PAGE_SIZE 0x1000ULL
@@ -624,7 +621,7 @@ static int ld_resolve_archives(ld_context_t *ctx) {
             ld_object_t *object = ctx->objects.items[i];
             if (!object->archive_member || object->selected ||
                 (!ld_object_defines_unresolved(ctx, object) &&
-                 !ld_object_has_objc(object))) {
+                 !(ctx->options->objc_load && ld_object_has_objc(object)))) {
                 continue;
             }
             object->selected = true;
@@ -3497,62 +3494,6 @@ static int ld_write_code_signature(uint8_t *signature, const uint8_t *code, uint
     return LD_OK;
 }
 
-
-static int ld_write_output_file(ld_context_t *ctx, const uint8_t *image, size_t size) {
-    size_t path_length = strlen(ctx->options->output_path);
-    if (path_length > SIZE_MAX - 16U) {
-        return ld_fail(ctx, LD_OUTPUT_ERROR, "output path is too long");
-    }
-    char *temporary_path = malloc(path_length + 16U);
-    if (!temporary_path) {
-        return ld_fail(ctx, LD_IO_ERROR, "out of memory creating temporary output path");
-    }
-    snprintf(temporary_path, path_length + 16U, "%s.tmp.XXXXXX", ctx->options->output_path);
-    int fd = mkstemp(temporary_path);
-    if (fd < 0) {
-        int saved = errno;
-        free(temporary_path);
-        return ld_fail(ctx, LD_OUTPUT_ERROR, "cannot create temporary output for '%s': %s",
-                       ctx->options->output_path, strerror(saved));
-    }
-    size_t written = 0;
-    while (written < size) {
-        ssize_t result = write(fd, image + written, size - written);
-        if (result <= 0) {
-            int saved = errno;
-            close(fd);
-            unlink(temporary_path);
-            free(temporary_path);
-            return ld_fail(ctx, LD_OUTPUT_ERROR, "cannot write '%s': %s", ctx->options->output_path,
-                           result == 0 ? "short write" : strerror(saved));
-        }
-        written += (size_t) result;
-    }
-    if (fchmod(fd, 0755) != 0) {
-        int saved = errno;
-        close(fd);
-        unlink(temporary_path);
-        free(temporary_path);
-        return ld_fail(ctx, LD_OUTPUT_ERROR, "cannot chmod '%s': %s", ctx->options->output_path, strerror(saved));
-    }
-    if (fsync(fd) != 0) {
-        int saved = errno;
-        close(fd);
-        unlink(temporary_path);
-        free(temporary_path);
-        return ld_fail(ctx, LD_OUTPUT_ERROR, "cannot flush '%s': %s", ctx->options->output_path, strerror(saved));
-    }
-    close(fd);
-    if (rename(temporary_path, ctx->options->output_path) != 0) {
-        int saved = errno;
-        unlink(temporary_path);
-        free(temporary_path);
-        return ld_fail(ctx, LD_OUTPUT_ERROR, "cannot replace '%s': %s", ctx->options->output_path, strerror(saved));
-    }
-    free(temporary_path);
-    return LD_OK;
-}
-
 static bool ld_is_objc_selector_stub_name(const char *name) {
     return name && strncmp(name, "_objc_msgSend$", 14) == 0 && name[14] != '\0';
 }
@@ -3599,6 +3540,12 @@ static int ld_emit_image(ld_context_t *ctx) {
     ld_linkedit_t linkedit;
     memset(&linkedit, 0, sizeof(linkedit));
     uint8_t *image = NULL;
+    const char *signature_identifier = strrchr(ctx->options->output_path, '/');
+    if (signature_identifier && signature_identifier[1]) {
+        signature_identifier++;
+    } else {
+        signature_identifier = ctx->options->output_path;
+    }
     int result = ld_make_rebase_stream(ctx, &linkedit.rebase);
     if (result != LD_OK) goto cleanup;
     result = ld_make_bind_stream(ctx, &linkedit.bind);
@@ -3725,7 +3672,8 @@ static int ld_emit_image(ld_context_t *ctx) {
     uint64_t signature_offset = ld_align_up(cursor, 16);
     size_t signature_size = 0;
     if (ctx->options->adhoc_codesign &&
-        !ld_code_signature_size(signature_offset, strlen("a.out"), &signature_size)) {
+        !ld_code_signature_size(signature_offset, strlen(signature_identifier),
+                                &signature_size)) {
         result = ld_fail(ctx, LD_OUTPUT_ERROR, "code signature is too large");
         goto cleanup;
     }
@@ -3810,13 +3758,17 @@ static int ld_emit_image(ld_context_t *ctx) {
     if (ctx->options->adhoc_codesign) {
         ld_segment_layout_t *text_segment = ld_find_segment(ctx, "__TEXT");
         result = ld_write_code_signature(image + signature_offset, image, signature_offset,
-                                         text_segment->filesize, "a.out", signature_size);
+                                         text_segment->filesize,
+                                         signature_identifier, signature_size);
         if (result != LD_OK) {
             result = ld_fail(ctx, LD_OUTPUT_ERROR, "cannot create ad-hoc code signature");
             goto cleanup;
         }
     }
-    result = ld_write_output_file(ctx, image, (size_t) total_size);
+    result = ld_write_output_atomic(ctx->options, image, (size_t) total_size);
+    if (result != LD_OK) {
+        ctx->error = result;
+    }
 cleanup:
     free(image);
     ld_linkedit_deinit(&linkedit);

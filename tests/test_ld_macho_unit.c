@@ -84,6 +84,7 @@ void test_ld_macho_unit(void) {
     assert(memcmp(digest, expected_empty_sha256, sizeof(digest)) == 0);
     ld_options_t options;
     ld_options_init(&options);
+    assert(!options.objc_load);
 
     assert(ld_parse_flags(&options,
                            "-framework Cocoa -F '/Library/Frameworks' -L\"/tmp/lib dir\" "
@@ -106,6 +107,9 @@ void test_ld_macho_unit(void) {
     assert(strcmp(options.library_paths.items[1], "/tmp/lib suffix") == 0);
     assert(options.libraries.count == 2);
     assert(strcmp(options.libraries.items[1], "System") == 0);
+
+    assert(ld_parse_flags(&options, "-ObjC") == LD_OK);
+    assert(options.objc_load);
 
     assert(ld_parse_flags(&options, "-L '/tmp/a\\b' -L\"/tmp/c\\q\"") == LD_OK);
     assert(options.library_paths.count == 4);

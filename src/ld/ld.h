@@ -47,6 +47,8 @@ typedef struct {
     ld_debug_mode_t debug_mode;
     bool pie;
     bool adhoc_codesign;
+    /* Match ld64's -ObjC archive-member extraction policy. */
+    bool objc_load;
 
     ld_string_list_t inputs;
     ld_string_list_t library_paths;
