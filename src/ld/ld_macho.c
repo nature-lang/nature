@@ -2517,23 +2517,11 @@ static int ld_define_special(ld_context_t *ctx, const char *name,
 }
 
 static int ld_require_symbol(ld_context_t *ctx, const char *name) {
-    if (ld_symbol_find(ctx, name)) return LD_OK;
-    ld_symbol_t *symbol = calloc(1, sizeof(*symbol));
-    if (!symbol) return ld_fail(ctx, LD_IO_ERROR, "out of memory requiring '%s'", name);
-    symbol->name = strdup(name);
-    symbol->kind = LD_SYMBOL_UNDEFINED;
-    symbol->visibility = LD_VISIBILITY_LOCAL;
-    symbol->got_index = UINT32_MAX;
-    symbol->tlv_ptr_index = UINT32_MAX;
-    symbol->stub_index = UINT32_MAX;
-    symbol->objc_stub_index = UINT32_MAX;
-    symbol->symtab_index = UINT32_MAX;
-    if (!symbol->name) {
-        free(symbol);
-        return ld_fail(ctx, LD_IO_ERROR, "out of memory requiring '%s'", name);
-    }
-    HASH_ADD_KEYPTR(hh, ctx->symbols, symbol->name, strlen(symbol->name), symbol);
-    return LD_OK;
+    ld_symbol_t *symbol = ld_symbol_get_or_create(ctx, name);
+    if (symbol) return LD_OK;
+    return ctx->error ? ctx->error
+                      : ld_fail(ctx, LD_IO_ERROR,
+                                "out of memory requiring '%s'", name);
 }
 
 static int ld_symbol_name_compare(const void *left, const void *right) {

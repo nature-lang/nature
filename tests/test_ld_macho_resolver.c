@@ -330,6 +330,25 @@ static test_resolver_fixture_t test_resolver_make_definition_fixture(
             &symbol, 1U, strings, (uint32_t) (length + 1U));
 }
 
+static void test_entry_symbol_from_archive(void) {
+    char archive_path[] = "/tmp/nature-ld-resolver-entry-archive-XXXXXX";
+    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    test_resolver_write_archive(
+            archive_path, "entry.o",
+            test_resolver_make_definition_fixture("_main"));
+    test_resolver_output_path(output_path);
+    const char *inputs[] = {archive_path};
+    test_resolver_link(inputs, 1U, output_path);
+
+    test_resolver_output_t output = test_resolver_read_output(output_path);
+    const ld_nlist_64_t *entry =
+            test_resolver_find_symbol(&output, "_main");
+    assert(entry != NULL && (entry->n_type & LD_N_TYPE) == LD_N_SECT);
+    test_resolver_free_output(&output);
+    unlink(archive_path);
+    unlink(output_path);
+}
+
 static void test_resolver_make_common(char path[], const char *name,
                                       uint64_t size,
                                       uint32_t alignment_log2) {
@@ -594,6 +613,7 @@ static void test_objc_category_archive_extraction(void) {
 }
 
 void test_ld_macho_resolver(void) {
+    test_entry_symbol_from_archive();
     test_weak_object_vs_strong_dylib();
     test_common_vs_strong_dylib();
     test_archive_vs_dylib_input_order(true);
