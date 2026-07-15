@@ -146,6 +146,18 @@ static void test_basic() {
 
     inst = AMD64_INST("cvtsd2ss", AMD64_REG(xmm1s32), AMD64_REG(xmm2s64));
     TEST_EQ(*inst, 0xF2, 0x0F, 0x5A, 0xCA);
+
+    // x86-64 has no movzx r64, r/m32. A 32-bit mov implicitly clears the
+    // destination register's upper 32 bits.
+    inst = AMD64_INST("movzx", AMD64_REG(rax), AMD64_REG(eax));
+    TEST_EQ(*inst, 0x8B, 0xC0);
+
+    // Preserve REX.R/REX.B when the pseudo zero-extension uses high regs.
+    inst = AMD64_INST("movzx", AMD64_REG(r9), AMD64_REG(r10d));
+    TEST_EQ(*inst, 0x45, 0x8B, 0xCA);
+
+    inst = AMD64_INST("movzx", AMD64_REG(r9), INDIRECT_REG(r10, DWORD));
+    TEST_EQ(*inst, 0x45, 0x8B, 0x0A);
 }
 
 

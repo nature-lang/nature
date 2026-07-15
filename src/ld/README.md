@@ -12,6 +12,11 @@ not copied or required here. The wire definitions in `macho_format.h` and
 `elf_format.h` are deliberately self-contained so every backend can be
 compiled and used on non-native hosts.
 
+Mach-O TBD target matching also follows Zig commit
+`13b1050d4c898d472d424f9067d990df12eff3fb` (PR #31673): a Darwin AArch64
+link accepts both `arm64-macos` and Xcode 26.4's consolidated
+`arm64e-macos` symbol entries without changing the output Mach-O subtype.
+
 The public entry points are declared in `ld.h`.  Callers own the options
 object and must call `ld_options_deinit` after linking.  Diagnostics include
 the input path and, when available, archive member and symbol context.
@@ -21,7 +26,14 @@ The implementation is split by responsibility:
 - `ld.c` owns the public options API, flag parsing, context lifetime, and
   target-backend dispatch.
 - `ld_input.c` owns checked file reading and thin/fat Mach-O, BSD archive,
-  TBD, dylib, and `MH_OBJECT` parsing plus library/framework discovery.
+  dylib, and `MH_OBJECT` parsing plus library/framework discovery.
+- `ld_macho_dylib_paths.c` resolves binary-dylib reexports through `-F`,
+  `-L`, sysroots, dylib `LC_RPATH` entries, and linker `-rpath` entries.  It
+  expands `@rpath`, `@loader_path`, and `@executable_path`, records every
+  checked candidate for diagnostics, and keeps dependency cycles bounded.
+- `ld_tapi.c` uses the bundled YAML implementation to parse TAPI v3/v4
+  text-based stubs structurally, including multi-document target filtering,
+  re-exports, Objective-C names, and weak/absolute/TLV symbol metadata.
 - Mach-O `N_INDR` aliases are resolved after archive extraction; relocations and
   dyld bindings use the terminal target symbol, while imported aliases are
   omitted from the duplicate undefined-symbol table entry.

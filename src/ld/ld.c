@@ -1,4 +1,5 @@
 #include "ld_internal.h"
+#include "ld_macho_symbols.h"
 
 #include <ctype.h>
 #include <stdarg.h>
@@ -48,6 +49,13 @@ static int ld_string_push(ld_string_list_t *list, const char *value) {
     }
     list->count++;
     return LD_OK;
+}
+
+static int ld_string_push_unique(ld_string_list_t *list, const char *value) {
+    for (size_t i = 0; i < list->count; i++) {
+        if (strcmp(list->items[i], value) == 0) return LD_OK;
+    }
+    return ld_string_push(list, value);
 }
 
 static void ld_string_free(ld_string_list_t *list) {
@@ -116,6 +124,7 @@ void ld_options_deinit(ld_options_t *options) {
     ld_string_free(&options->inputs);
     ld_string_free(&options->library_paths);
     ld_string_free(&options->framework_paths);
+    ld_string_free(&options->rpaths);
     ld_string_free(&options->libraries);
     ld_string_free(&options->frameworks);
 }
@@ -146,6 +155,22 @@ int ld_add_library_path(ld_options_t *options, const char *path) {
                    : ld_report_option_error(options, result, "cannot record library search path '%s'", path);
 }
 
+int ld_add_rpath(ld_options_t *options, const char *path) {
+    if (!options) {
+        return LD_INVALID_ARGUMENT;
+    }
+    if (!path || !*path) {
+        return ld_report_option_error(options, LD_INVALID_ARGUMENT,
+                                      "runtime search path is empty");
+    }
+    int result = ld_string_push_unique(&options->rpaths, path);
+    return result == LD_OK
+                   ? LD_OK
+                   : ld_report_option_error(
+                             options, result,
+                             "cannot record runtime search path '%s'", path);
+}
+
 static int ld_parse_flag_token(ld_options_t *options, const char *token, const char *next, bool *consumed) {
     *consumed = false;
     if (strcmp(token, "-framework") == 0) {
@@ -154,6 +179,13 @@ static int ld_parse_flag_token(ld_options_t *options, const char *token, const c
         }
         *consumed = true;
         return ld_string_push(&options->frameworks, next);
+    }
+    if (strcmp(token, "-rpath") == 0) {
+        if (!next || !*next) {
+            return LD_INVALID_ARGUMENT;
+        }
+        *consumed = true;
+        return ld_string_push_unique(&options->rpaths, next);
     }
     if (strcmp(token, "-F") == 0 || strcmp(token, "-L") == 0 || strcmp(token, "-l") == 0) {
         if (!next || !*next) {
@@ -257,7 +289,8 @@ int ld_parse_flags(ld_options_t *options, const char *flags) {
         char next[4096];
         const char *next_ptr = NULL;
         if (strcmp(token, "-framework") == 0 || strcmp(token, "-F") == 0 ||
-            strcmp(token, "-L") == 0 || strcmp(token, "-l") == 0) {
+            strcmp(token, "-L") == 0 || strcmp(token, "-l") == 0 ||
+            strcmp(token, "-rpath") == 0) {
             bool next_present = false;
             result = ld_shell_token(flags, length, &position, next, sizeof(next), &next_present);
             if (result != LD_OK) {
@@ -319,6 +352,12 @@ static void ld_context_deinit(ld_context_t *ctx) {
             free(dylib->reexports[j]);
         }
         free(dylib->reexports);
+        ld_string_set_deinit(&dylib->rpath_set);
+        for (size_t j = 0; j < dylib->rpath_count; j++) {
+            free(dylib->rpaths[j]);
+        }
+        free(dylib->rpaths);
+        ld_macho_dylib_symbols_deinit(dylib);
     }
     for (size_t i = 0; i < ctx->outputs.count; i++) {
         free(ctx->outputs.items[i]->data);
@@ -329,6 +368,8 @@ static void ld_context_deinit(ld_context_t *ctx) {
     free(ctx->dylibs.items);
     free(ctx->outputs.items);
     free(ctx->dynamic_symbols.items);
+    free(ctx->got_refs.items);
+    free(ctx->tlv_ptr_refs.items);
     free(ctx->rebases.items);
     free(ctx->binds.items);
     free(ctx->branch_thunks.items);

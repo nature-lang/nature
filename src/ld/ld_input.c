@@ -1,4 +1,8 @@
 #include "ld_internal.h"
+#include "ld_macho_dylib_paths.h"
+#include "ld_macho_platform.h"
+#include "ld_macho_symbols.h"
+#include "ld_tapi.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -39,8 +43,8 @@ static int ld_file_push(ld_file_list_t *list, ld_file_t *file) {
 }
 
 static int ld_string_array_push(char ***items, size_t *count, size_t *capacity,
-                                 ld_string_set_entry_t **set,
-                                 const char *value, size_t length, size_t max_length) {
+                                ld_string_set_entry_t **set,
+                                const char *value, size_t length, size_t max_length) {
     if (!value || length == 0 || length > max_length || length == SIZE_MAX) {
         return LD_INVALID_INPUT;
     }
@@ -74,14 +78,23 @@ static int ld_string_array_push(char ***items, size_t *count, size_t *capacity,
 }
 
 static int ld_dylib_export_push_raw(ld_dylib_input_t *dylib, const char *name, size_t length) {
-    return ld_string_array_push(&dylib->exports, &dylib->export_count, &dylib->export_capacity,
-                                 &dylib->export_set, name, length, 4096U);
+    int result = ld_string_array_push(&dylib->exports, &dylib->export_count,
+                                      &dylib->export_capacity,
+                                      &dylib->export_set, name, length, 4096U);
+    if (result != LD_OK) return result;
+    return ld_macho_dylib_record_symbol(NULL, dylib, name, length, NULL, 0,
+                                        false, false, false, false);
 }
 
 static int ld_dylib_weak_export_push_raw(ld_dylib_input_t *dylib, const char *name, size_t length) {
-    return ld_string_array_push(&dylib->weak_exports, &dylib->weak_export_count,
-                                 &dylib->weak_export_capacity, &dylib->weak_export_set,
-                                 name, length, 4096U);
+    int result = ld_string_array_push(&dylib->weak_exports,
+                                      &dylib->weak_export_count,
+                                      &dylib->weak_export_capacity,
+                                      &dylib->weak_export_set, name, length,
+                                      4096U);
+    if (result != LD_OK) return result;
+    return ld_macho_dylib_record_symbol(NULL, dylib, name, length, NULL, 0,
+                                        true, false, false, false);
 }
 
 /* TAPI keeps compatibility/version directives in the same symbol arrays as
@@ -132,12 +145,19 @@ static int ld_dylib_weak_export_push(ld_dylib_input_t *dylib, const char *name, 
 
 static int ld_dylib_reexport_push(ld_dylib_input_t *dylib, const char *name, size_t length) {
     return ld_string_array_push(&dylib->reexports, &dylib->reexport_count,
-                                 &dylib->reexport_capacity, &dylib->reexport_set,
-                                 name, length, PATH_MAX - 1U);
+                                &dylib->reexport_capacity, &dylib->reexport_set,
+                                name, length, PATH_MAX - 1U);
+}
+
+static int ld_dylib_rpath_push(ld_dylib_input_t *dylib, const char *path,
+                               size_t length) {
+    return ld_string_array_push(&dylib->rpaths, &dylib->rpath_count,
+                                &dylib->rpath_capacity, &dylib->rpath_set,
+                                path, length, PATH_MAX - 1U);
 }
 
 static int ld_dylib_push(ld_context_t *ctx, const char *path, const char *install_name,
-                          ld_dylib_input_t **result) {
+                         ld_dylib_input_t **result) {
     for (size_t i = 0; i < ctx->dylibs.count; i++) {
         if (strcmp(ctx->dylibs.items[i].path, path) == 0) {
             if (result) *result = &ctx->dylibs.items[i];
@@ -157,6 +177,13 @@ static int ld_dylib_push(ld_context_t *ctx, const char *path, const char *instal
     memset(dylib, 0, sizeof(*dylib));
     dylib->current_version = LD_DEFAULT_DYLIB_VERSION;
     dylib->compatibility_version = LD_DEFAULT_DYLIB_VERSION;
+    dylib->input_priority = SIZE_MAX;
+    for (size_t i = 0; i < ctx->files.count; i++) {
+        if (strcmp(ctx->files.items[i]->path, path) == 0) {
+            dylib->input_priority = ctx->files.items[i]->input_priority;
+            break;
+        }
+    }
     dylib->path = strdup(path);
     dylib->install_name = strdup(install_name && *install_name ? install_name : path);
     if (!dylib->path || !dylib->install_name) {
@@ -242,6 +269,7 @@ static int ld_read_file(ld_context_t *ctx, const char *path, ld_file_t **result)
     }
     file->bytes = bytes;
     file->size = size;
+    file->input_priority = ctx->files.count;
     file->path = strdup(path);
     if (!file->path || ld_file_push(&ctx->files, file) != LD_OK) {
         free(file->path);
@@ -265,7 +293,7 @@ static bool ld_section_is_debug(const ld_section_64_t *section) {
 }
 
 static int ld_parse_object(ld_context_t *ctx, ld_file_t *file, const uint8_t *bytes, size_t size,
-                            const char *member_name, bool archive_member, ld_object_t **result) {
+                           const char *member_name, bool archive_member, ld_object_t **result) {
     char input_name[PATH_MAX];
     if (member_name) {
         snprintf(input_name, sizeof(input_name), "%s(%s)", file->path, member_name);
@@ -277,7 +305,10 @@ static int ld_parse_object(ld_context_t *ctx, ld_file_t *file, const uint8_t *by
     }
     ld_mach_header_64_t header;
     memcpy(&header, bytes, sizeof(header));
-    if (header.magic != LD_MH_MAGIC_64 || header.filetype != LD_MH_OBJECT || header.cputype != LD_CPU_TYPE_ARM64) {
+    uint32_t cpu_subtype = (uint32_t) header.cpusubtype & ~LD_CPU_SUBTYPE_MASK;
+    if (header.magic != LD_MH_MAGIC_64 || header.filetype != LD_MH_OBJECT ||
+        header.cputype != LD_CPU_TYPE_ARM64 ||
+        cpu_subtype != LD_CPU_SUBTYPE_ARM64_ALL) {
         return ld_fail(ctx, LD_UNSUPPORTED, "unsupported Mach-O object '%s'", input_name);
     }
     if (header.ncmds > 4096 || header.sizeofcmds > size - sizeof(header)) {
@@ -303,6 +334,7 @@ static int ld_parse_object(ld_context_t *ctx, ld_file_t *file, const uint8_t *by
     size_t command_offset = sizeof(header);
     ld_symtab_command_t symtab = {0};
     bool have_symtab = false;
+    ld_macho_platform_info_t platform = {0};
     for (uint32_t command_index = 0; command_index < header.ncmds; command_index++) {
         if (command_offset > size || sizeof(ld_load_command_t) > size - command_offset) {
             free(object->member_name);
@@ -318,6 +350,16 @@ static int ld_parse_object(ld_context_t *ctx, ld_file_t *file, const uint8_t *by
             free(object->member_name);
             free(object);
             return ld_fail(ctx, LD_INVALID_INPUT, "invalid load command size in '%s'", input_name);
+        }
+        bool platform_command = false;
+        int platform_result = ld_macho_platform_parse_command(
+                ctx, input_name, bytes + command_offset, command.cmdsize,
+                &platform, &platform_command);
+        if (platform_result != LD_OK) {
+            free(object->member_name);
+            free(object->sections);
+            free(object);
+            return platform_result;
         }
         if (command.cmd == LD_LC_SEGMENT_64) {
             if (command.cmdsize < sizeof(ld_segment_command_64_t)) {
@@ -364,8 +406,8 @@ static int ld_parse_object(ld_context_t *ctx, ld_file_t *file, const uint8_t *by
                     free(object->sections);
                     free(object);
                     return ld_fail(ctx, LD_UNSUPPORTED,
-                                    "section alignment exponent %u is unsupported in '%s'",
-                                    alignment, input_name);
+                                   "section alignment exponent %u is unsupported in '%s'",
+                                   alignment, input_name);
                 }
                 if ((section->header.flags & LD_SECTION_TYPE) != LD_S_ZEROFILL &&
                     (section->header.flags & LD_SECTION_TYPE) != LD_S_GB_ZEROFILL &&
@@ -453,6 +495,7 @@ static int ld_parse_object(ld_context_t *ctx, ld_file_t *file, const uint8_t *by
         object->symbols[i].entry = source_symbol;
         object->symbols[i].object = object;
         object->symbols[i].index = i;
+        object->symbols[i].output_symtab_index = UINT32_MAX;
         uint8_t symbol_type = source_symbol.n_type & LD_N_TYPE;
         if (symbol_type == LD_N_SECT &&
             (source_symbol.n_sect == 0 || source_symbol.n_sect > object->section_count)) {
@@ -491,7 +534,7 @@ static int ld_parse_object(ld_context_t *ctx, ld_file_t *file, const uint8_t *by
                 free(object->sections);
                 free(object);
                 return ld_fail(ctx, LD_INVALID_INPUT,
-                                "indirect symbol target is outside string table in '%s'", input_name);
+                               "indirect symbol target is outside string table in '%s'", input_name);
             }
             const char *alias_name = object->strtab + source_symbol.n_value;
             size_t max = symtab.strsize - (size_t) source_symbol.n_value;
@@ -502,7 +545,7 @@ static int ld_parse_object(ld_context_t *ctx, ld_file_t *file, const uint8_t *by
                 free(object->sections);
                 free(object);
                 return ld_fail(ctx, LD_INVALID_INPUT,
-                                "indirect symbol target has invalid name in '%s'", input_name);
+                               "indirect symbol target has invalid name in '%s'", input_name);
             }
             object->symbols[i].alias_name = alias_name;
         }
@@ -553,438 +596,56 @@ static bool ld_archive_decimal(const uint8_t *value, size_t size, uint64_t *resu
     return true;
 }
 
-static bool ld_span_contains(const char *start, size_t length, const char *needle) {
-    size_t needle_length = strlen(needle);
-    if (needle_length == 0 || needle_length > length) {
-        return false;
+static int ld_parse_tbd(ld_context_t *ctx, ld_file_t *file,
+                        const uint8_t *bytes, size_t size) {
+    ld_tapi_stub_t stub;
+    ld_tapi_error_t error;
+    int result = ld_tapi_parse(bytes, size, &stub, &error);
+    if (result != LD_OK) {
+        return ld_fail(ctx, result,
+                       "cannot parse text-based stub '%s' at %zu:%zu: %s",
+                       file->path, error.line, error.column,
+                       error.message[0] ? error.message : "invalid TAPI document");
     }
-    for (size_t i = 0; i <= length - needle_length; i++) {
-        if (memcmp(start + i, needle, needle_length) == 0) {
-            return true;
-        }
-    }
-    return false;
-}
 
-static const char *ld_span_find(const char *start, size_t length, const char *needle) {
-    size_t needle_length = strlen(needle);
-    if (needle_length == 0 || needle_length > length) {
-        return NULL;
-    }
-    for (size_t i = 0; i <= length - needle_length; i++) {
-        if (memcmp(start + i, needle, needle_length) == 0) {
-            return start + i;
-        }
-    }
-    return NULL;
-}
-
-static const char *ld_tbd_key_find(const char *start, size_t length, const char *key) {
-    const char *match = start;
-    size_t key_length = strlen(key);
-    while ((match = ld_span_find(match, length - (size_t) (match - start), key)) != NULL) {
-        size_t position = (size_t) (match - start);
-        if ((position == 0 || isspace((unsigned char) start[position - 1U])) &&
-            !(position > 0 && start[position - 1U] == '-')) {
-            return match;
-        }
-        match += key_length;
-        if ((size_t) (match - start) >= length) break;
-    }
-    return NULL;
-}
-
-static char *ld_tbd_scalar(const char *value, const char *line_end) {
-    while (value < line_end && isspace((unsigned char) *value)) value++;
-    while (line_end > value && isspace((unsigned char) line_end[-1])) line_end--;
-    if (value == line_end) {
-        return NULL;
-    }
-    char quote = 0;
-    if (*value == '\'' || *value == '"') {
-        quote = *value++;
-        if (line_end > value && line_end[-1] == quote) line_end--;
-    }
-    (void) quote;
-    return ld_strndup0(value, (size_t) (line_end - value));
-}
-
-static bool ld_tbd_version(const char *value, const char *line_end, uint32_t *version) {
-    char *scalar = ld_tbd_scalar(value, line_end);
-    if (!scalar) return false;
-
-    uint32_t components[3] = {0};
-    const char *cursor = scalar;
-    bool valid = true;
-    for (size_t component = 0; component < 3U; component++) {
-        if (!isdigit((unsigned char) *cursor)) {
-            valid = false;
-            break;
-        }
-        uint32_t limit = component == 0 ? UINT16_MAX : UINT8_MAX;
-        uint32_t parsed = 0;
-        do {
-            uint32_t digit = (uint32_t) (*cursor - '0');
-            if (parsed > (limit - digit) / 10U) {
-                valid = false;
-                break;
-            }
-            parsed = parsed * 10U + digit;
-            cursor++;
-        } while (isdigit((unsigned char) *cursor));
-        if (!valid) break;
-        components[component] = parsed;
-        if (*cursor == '\0') break;
-        if (*cursor != '.' || component == 2U) {
-            valid = false;
-            break;
-        }
-        cursor++;
-    }
-    if (valid && *cursor == '\0') {
-        *version = (components[0] << 16U) | (components[1] << 8U) | components[2];
-    } else {
-        valid = false;
-    }
-    free(scalar);
-    return valid;
-}
-
-static int ld_tbd_parse_version_key(const char *line_start, const char *line_end,
-                                     const char *key, uint32_t *version) {
-    const char *match = ld_tbd_key_find(line_start, (size_t) (line_end - line_start), key);
-    if (!match || match >= line_end) return LD_OK;
-    const char *value = match + strlen(key);
-    return ld_tbd_version(value, line_end, version) ? LD_OK : LD_INVALID_INPUT;
-}
-
-static int ld_tbd_parse_symbol_list(ld_dylib_input_t *dylib, const char *start, const char *end) {
-    const char *cursor = start;
-    while (cursor < end) {
-        while (cursor < end && (isspace((unsigned char) *cursor) || *cursor == ',' || *cursor == '[' ||
-                                *cursor == ']')) {
-            cursor++;
-        }
-        if (cursor == end) break;
-        char quote = 0;
-        if (*cursor == '\'' || *cursor == '"') {
-            quote = *cursor++;
-        }
-        const char *name = cursor;
-        if (quote) {
-            while (cursor < end && *cursor != quote) cursor++;
-        } else {
-            while (cursor < end && *cursor != ',' && *cursor != ']' && !isspace((unsigned char) *cursor)) cursor++;
-        }
-        size_t length = (size_t) (cursor - name);
-        if (length) {
-            int result = ld_dylib_export_push(dylib, name, length);
-            if (result != LD_OK) return result;
-        }
-        if (quote && cursor < end) cursor++;
-    }
-    return LD_OK;
-}
-
-static int ld_tbd_parse_string_key(ld_dylib_input_t *dylib, const char *line_start,
-                                    const char *line_end, const char *document_end,
-                                    const char *key, bool weak, bool reexport) {
-    const char *match = ld_tbd_key_find(line_start, (size_t) (line_end - line_start), key);
-    if (!match || match >= line_end) return LD_OK;
-    const char *list_start = memchr(match, '[', (size_t) (line_end - match));
-    if (!list_start) return LD_OK;
-    const char *list_end = memchr(list_start, ']', (size_t) (document_end - list_start));
-    if (!list_end) return LD_INVALID_INPUT;
-    const char *cursor = list_start + 1U;
-    while (cursor < list_end) {
-        while (cursor < list_end && (isspace((unsigned char) *cursor) || *cursor == ',')) cursor++;
-        if (cursor >= list_end) break;
-        char quote = 0;
-        if (*cursor == '\'' || *cursor == '"') quote = *cursor++;
-        const char *value = cursor;
-        if (quote) {
-            while (cursor < list_end && *cursor != quote) cursor++;
-        } else {
-            while (cursor < list_end && *cursor != ',' && !isspace((unsigned char) *cursor)) cursor++;
-        }
-        size_t length = (size_t) (cursor - value);
-        if (length) {
-            int result = reexport ? ld_dylib_reexport_push(dylib, value, length)
-                         : weak   ? ld_dylib_weak_export_push(dylib, value, length)
-                                  : ld_dylib_export_push(dylib, value, length);
-            if (result != LD_OK) return result;
-        }
-        if (quote && cursor < list_end) cursor++;
-    }
-    return LD_OK;
-}
-
-typedef enum {
-    LD_TBD_OBJC_CLASS,
-    LD_TBD_OBJC_EH_TYPE,
-    LD_TBD_OBJC_IVAR,
-} ld_tbd_objc_kind_t;
-
-static int ld_tbd_push_objc_symbol(ld_dylib_input_t *dylib, const char *prefix,
-                                    const char *name, size_t name_length, bool weak) {
-    size_t prefix_length = strlen(prefix);
-    if (name_length > 4096U - prefix_length) return LD_INVALID_INPUT;
-    size_t symbol_length = prefix_length + name_length;
-    char *symbol = malloc(symbol_length + 1U);
-    if (!symbol) return LD_IO_ERROR;
-    memcpy(symbol, prefix, prefix_length);
-    memcpy(symbol + prefix_length, name, name_length);
-    symbol[symbol_length] = '\0';
-    int result = weak ? ld_dylib_weak_export_push(dylib, symbol, symbol_length)
-                      : ld_dylib_export_push(dylib, symbol, symbol_length);
-    free(symbol);
-    return result;
-}
-
-static int ld_tbd_push_objc_export(ld_dylib_input_t *dylib, ld_tbd_objc_kind_t kind,
-                                    const char *name, size_t name_length, bool weak) {
-    if (kind == LD_TBD_OBJC_CLASS) {
-        int result = ld_tbd_push_objc_symbol(dylib, "_OBJC_CLASS_$_", name, name_length, weak);
-        if (result != LD_OK) return result;
-        return ld_tbd_push_objc_symbol(dylib, "_OBJC_METACLASS_$_", name, name_length, weak);
-    }
-    const char *prefix = kind == LD_TBD_OBJC_EH_TYPE ? "_OBJC_EHTYPE_$_" : "_OBJC_IVAR_$_";
-    return ld_tbd_push_objc_symbol(dylib, prefix, name, name_length, weak);
-}
-
-static int ld_tbd_parse_objc_key(ld_dylib_input_t *dylib, const char *line_start,
-                                  const char *line_end, const char *document_end,
-                                  const char *key, ld_tbd_objc_kind_t kind, bool weak) {
-    const char *match = ld_tbd_key_find(line_start, (size_t) (line_end - line_start), key);
-    if (!match || match >= line_end) return LD_OK;
-    const char *list_start = memchr(match, '[', (size_t) (line_end - match));
-    if (!list_start) return LD_INVALID_INPUT;
-    const char *list_end = memchr(list_start, ']', (size_t) (document_end - list_start));
-    if (!list_end) return LD_INVALID_INPUT;
-
-    const char *cursor = list_start + 1U;
-    while (cursor < list_end) {
-        while (cursor < list_end && (isspace((unsigned char) *cursor) || *cursor == ',')) cursor++;
-        if (cursor == list_end) break;
-        char quote = 0;
-        if (*cursor == '\'' || *cursor == '"') quote = *cursor++;
-        const char *name = cursor;
-        if (quote) {
-            while (cursor < list_end && *cursor != quote) cursor++;
-            if (cursor == list_end) return LD_INVALID_INPUT;
-        } else {
-            while (cursor < list_end && *cursor != ',' && !isspace((unsigned char) *cursor)) cursor++;
-        }
-        size_t name_length = (size_t) (cursor - name);
-        if (name_length) {
-            int result = ld_tbd_push_objc_export(dylib, kind, name, name_length, weak);
-            if (result != LD_OK) return result;
-        }
-        if (quote) cursor++;
-    }
-    return LD_OK;
-}
-
-static void ld_dylib_input_deinit(ld_dylib_input_t *dylib) {
-    free(dylib->path);
-    free(dylib->install_name);
-    ld_string_set_deinit(&dylib->export_set);
-    for (size_t i = 0; i < dylib->export_count; i++) free(dylib->exports[i]);
-    free(dylib->exports);
-    ld_string_set_deinit(&dylib->weak_export_set);
-    for (size_t i = 0; i < dylib->weak_export_count; i++) free(dylib->weak_exports[i]);
-    free(dylib->weak_exports);
-    ld_string_set_deinit(&dylib->reexport_set);
-    for (size_t i = 0; i < dylib->reexport_count; i++) free(dylib->reexports[i]);
-    free(dylib->reexports);
-    memset(dylib, 0, sizeof(*dylib));
-}
-
-static int ld_parse_tbd(ld_context_t *ctx, ld_file_t *file, const uint8_t *bytes, size_t size) {
-    if (size == 0 || memchr(bytes, '\0', size)) {
-        return ld_fail(ctx, LD_INVALID_INPUT, "invalid text-based stub '%s'", file->path);
-    }
-    const char *text = (const char *) bytes;
-    const char *end = text + size;
-    if (!ld_span_contains(text, size < 512U ? size : 512U, "tapi-tbd") &&
-        !ld_span_contains(text, size < 512U ? size : 512U, "tbd-version:")) {
-        return ld_fail(ctx, LD_INVALID_INPUT, "invalid text-based stub '%s'", file->path);
-    }
-    ld_dylib_input_t parsed = {0};
-    parsed.current_version = LD_DEFAULT_DYLIB_VERSION;
-    parsed.compatibility_version = LD_DEFAULT_DYLIB_VERSION;
-    parsed.path = strdup(file->path);
-    bool arm64_target = true;
-    bool have_target_key = false;
-    bool in_reexport_libraries = false;
-    bool primary_document = true;
-    bool saw_document_start = false;
-    const char *cursor = text;
-    while (cursor < end) {
-        const char *line_end = memchr(cursor, '\n', (size_t) (end - cursor));
-        if (!line_end) line_end = end;
-        const char *trimmed = cursor;
-        while (trimmed < line_end && isspace((unsigned char) *trimmed)) trimmed++;
-        if (ld_span_find(trimmed, (size_t) (line_end - trimmed), "---") == trimmed) {
-            if (saw_document_start || parsed.install_name) {
-                primary_document = false;
-            } else {
-                saw_document_start = true;
-            }
-            arm64_target = true;
-            have_target_key = false;
-            in_reexport_libraries = false;
-        }
-        if (ld_span_find(trimmed, (size_t) (line_end - trimmed), "reexported-libraries:") == trimmed) {
-            in_reexport_libraries = true;
-        } else if (ld_span_find(trimmed, (size_t) (line_end - trimmed), "exports:") == trimmed ||
-                   ld_span_find(trimmed, (size_t) (line_end - trimmed), "reexports:") == trimmed ||
-                   ld_span_find(trimmed, (size_t) (line_end - trimmed), "re-exports:") == trimmed) {
-            in_reexport_libraries = false;
-        }
-        const char *targets = ld_tbd_key_find(trimmed, (size_t) (line_end - trimmed), "targets:");
-        if (targets && targets < line_end) {
-            const char *list_end = memchr(targets, ']', (size_t) (end - targets));
-            if (!list_end) {
-                ld_dylib_input_deinit(&parsed);
-                return ld_fail(ctx, LD_INVALID_INPUT, "unterminated targets list in '%s'", file->path);
-            }
-            arm64_target = ld_span_contains(targets, (size_t) (list_end - targets), "arm64-macos");
-            have_target_key = true;
-        }
-        const char *archs = ld_tbd_key_find(trimmed, (size_t) (line_end - trimmed), "archs:");
-        if (archs && archs < line_end) {
-            const char *list_end = memchr(archs, ']', (size_t) (end - archs));
-            if (!list_end) {
-                ld_dylib_input_deinit(&parsed);
-                return ld_fail(ctx, LD_INVALID_INPUT, "unterminated arch list in '%s'", file->path);
-            }
-            arm64_target = ld_span_contains(archs, (size_t) (list_end - archs), "arm64");
-            have_target_key = true;
-        }
-        const char *platform = ld_tbd_key_find(trimmed, (size_t) (line_end - trimmed), "platform:");
-        if (platform && platform < line_end && have_target_key &&
-            !ld_span_contains(platform, (size_t) (line_end - platform), "macos")) {
-            arm64_target = false;
-        }
-        static const char install_key[] = "install-name:";
-        const char *install = ld_span_find(trimmed, (size_t) (line_end - trimmed), install_key);
-        if (!parsed.install_name && install && install < line_end) {
-            parsed.install_name = ld_tbd_scalar(install + sizeof(install_key) - 1U, line_end);
-            if (!parsed.install_name) {
-                ld_dylib_input_deinit(&parsed);
-                return ld_fail(ctx, LD_INVALID_INPUT, "invalid install-name in '%s'", file->path);
-            }
-        }
-        if (primary_document) {
-            int version_result = ld_tbd_parse_version_key(trimmed, line_end, "current-version:",
-                                                           &parsed.current_version);
-            if (version_result == LD_OK) {
-                version_result = ld_tbd_parse_version_key(trimmed, line_end, "compatibility-version:",
-                                                           &parsed.compatibility_version);
-            }
-            if (version_result != LD_OK) {
-                ld_dylib_input_deinit(&parsed);
-                return ld_fail(ctx, LD_INVALID_INPUT, "invalid dylib version in '%s'", file->path);
-            }
-        }
-        const char *symbols = ld_tbd_key_find(trimmed, (size_t) (line_end - trimmed), "symbols:");
-        if (arm64_target && symbols && symbols < line_end) {
-            const char *list_start = memchr(symbols, '[', (size_t) (end - symbols));
-            if (!list_start) {
-                ld_dylib_input_deinit(&parsed);
-                return ld_fail(ctx, LD_INVALID_INPUT, "invalid symbols list in '%s'", file->path);
-            }
-            const char *list_end = memchr(list_start, ']', (size_t) (end - list_start));
-            if (!list_end) {
-                ld_dylib_input_deinit(&parsed);
-                return ld_fail(ctx, LD_INVALID_INPUT, "unterminated symbols list in '%s'", file->path);
-            }
-            int result = ld_tbd_parse_symbol_list(&parsed, list_start + 1, list_end);
-            if (result != LD_OK) {
-                ld_dylib_input_deinit(&parsed);
-                return ld_fail(ctx, result, "cannot parse symbols in '%s'", file->path);
-            }
-        }
-        if (arm64_target) {
-            int weak_result = ld_tbd_parse_string_key(&parsed, trimmed, line_end, end,
-                                                       "weak-symbols:", true, false);
-            if (weak_result == LD_INVALID_INPUT) {
-                ld_dylib_input_deinit(&parsed);
-                return ld_fail(ctx, LD_INVALID_INPUT, "invalid weak-symbols list in '%s'", file->path);
-            }
-            if (weak_result != LD_OK) {
-                ld_dylib_input_deinit(&parsed);
-                return ld_fail(ctx, weak_result, "cannot parse weak symbols in '%s'", file->path);
-            }
-            static const struct {
-                const char *key;
-                ld_tbd_objc_kind_t kind;
-                bool weak;
-            } objc_keys[] = {
-                    {"objc-classes:", LD_TBD_OBJC_CLASS, false},
-                    {"weak-objc-classes:", LD_TBD_OBJC_CLASS, true},
-                    {"objc-eh-types:", LD_TBD_OBJC_EH_TYPE, false},
-                    {"objc-ivars:", LD_TBD_OBJC_IVAR, false},
-                    {"weak-objc-ivars:", LD_TBD_OBJC_IVAR, true},
-            };
-            for (size_t i = 0; i < sizeof(objc_keys) / sizeof(objc_keys[0]); i++) {
-                int objc_result = ld_tbd_parse_objc_key(&parsed, trimmed, line_end, end,
-                                                         objc_keys[i].key, objc_keys[i].kind,
-                                                         objc_keys[i].weak);
-                if (objc_result != LD_OK) {
-                    ld_dylib_input_deinit(&parsed);
-                    return ld_fail(ctx, objc_result, "cannot parse %s list in '%s'",
-                                    objc_keys[i].key, file->path);
-                }
-            }
-            int reexport_result = LD_OK;
-            if (in_reexport_libraries) {
-                reexport_result = ld_tbd_parse_string_key(&parsed, trimmed, line_end, end,
-                                                           "libraries:", false, true);
-            }
-            if (ld_span_find(trimmed, (size_t) (line_end - trimmed), "reexported-libraries:") == trimmed) {
-                reexport_result = ld_tbd_parse_string_key(&parsed, trimmed, line_end, end,
-                                                           "reexported-libraries:", false, true);
-            }
-            if (reexport_result == LD_INVALID_INPUT) {
-                ld_dylib_input_deinit(&parsed);
-                return ld_fail(ctx, LD_INVALID_INPUT, "invalid reexported-libraries list in '%s'", file->path);
-            }
-            if (reexport_result != LD_OK) {
-                ld_dylib_input_deinit(&parsed);
-                return ld_fail(ctx, reexport_result, "cannot parse reexported libraries in '%s'", file->path);
-            }
-        }
-        cursor = line_end < end ? line_end + 1 : end;
-    }
-    if (!parsed.path || !parsed.install_name) {
-        ld_dylib_input_deinit(&parsed);
-        return ld_fail(ctx, LD_INVALID_INPUT, "text-based stub '%s' has no install-name", file->path);
-    }
     ld_dylib_input_t *dylib = NULL;
-    int result = ld_dylib_push(ctx, parsed.path, parsed.install_name, &dylib);
+    result = ld_dylib_push(ctx, file->path, stub.install_name, &dylib);
     if (result == LD_OK) {
-        dylib->current_version = parsed.current_version;
-        dylib->compatibility_version = parsed.compatibility_version;
-        for (size_t i = 0; i < parsed.export_count; i++) {
-            result = ld_dylib_export_push(dylib, parsed.exports[i], strlen(parsed.exports[i]));
+        dylib->current_version = stub.current_version;
+        dylib->compatibility_version = stub.compatibility_version;
+        for (size_t i = 0; i < stub.symbol_count; i++) {
+            const ld_tapi_symbol_t *symbol = &stub.symbols[i];
+            result = symbol->weak
+                             ? ld_dylib_weak_export_push(
+                                       dylib, symbol->name, strlen(symbol->name))
+                             : ld_dylib_export_push(
+                                       dylib, symbol->name, strlen(symbol->name));
+            if (result == LD_OK) {
+                result = ld_macho_dylib_record_symbol(
+                        ctx, dylib, symbol->name, strlen(symbol->name),
+                        symbol->imported_name,
+                        symbol->imported_name
+                                ? strlen(symbol->imported_name)
+                                : 0U,
+                        symbol->weak,
+                        symbol->kind == LD_TAPI_SYMBOL_ABSOLUTE,
+                        symbol->kind == LD_TAPI_SYMBOL_TLV,
+                        symbol->reexport);
+            }
             if (result != LD_OK) break;
         }
-        for (size_t i = 0; result == LD_OK && i < parsed.weak_export_count; i++) {
-            result = ld_dylib_weak_export_push(dylib, parsed.weak_exports[i], strlen(parsed.weak_exports[i]));
-        }
-        for (size_t i = 0; result == LD_OK && i < parsed.reexport_count; i++) {
-            result = ld_dylib_reexport_push(dylib, parsed.reexports[i], strlen(parsed.reexports[i]));
+        for (size_t i = 0; result == LD_OK && i < stub.reexport_count; i++) {
+            result = ld_dylib_reexport_push(
+                    dylib, stub.reexports[i], strlen(stub.reexports[i]));
         }
     }
-    ld_dylib_input_deinit(&parsed);
-    if (result != LD_OK) {
-        return ld_fail(ctx, result, "cannot record text-based stub '%s'", file->path);
+    ld_tapi_stub_deinit(&stub);
+    if (result != LD_OK && ctx->error == LD_OK) {
+        return ld_fail(ctx, result, "cannot record text-based stub '%s'",
+                       file->path);
     }
-    return LD_OK;
+    return result;
 }
-
 static bool ld_export_read_uleb(const uint8_t *data, size_t size, size_t *offset, uint64_t *value) {
     uint64_t result = 0;
     for (unsigned shift = 0; shift < 64U && *offset < size; shift += 7U) {
@@ -1000,13 +661,17 @@ static bool ld_export_read_uleb(const uint8_t *data, size_t size, size_t *offset
 }
 
 static int ld_parse_export_node(ld_context_t *ctx, const char *path, ld_dylib_input_t *dylib,
-                                 const uint8_t *data, size_t size, uint64_t node_offset,
-                                 char *name, size_t name_length, uint8_t *visited, unsigned depth) {
+                                const uint8_t *data, size_t size, uint64_t node_offset,
+                                char *name, size_t name_length, uint8_t *recursion_stack,
+                                unsigned depth) {
     if (node_offset >= size || name_length >= 4096U || depth > 256U) {
         return ld_fail(ctx, LD_INVALID_INPUT, "invalid export trie in '%s'", path);
     }
-    if (visited[node_offset]) return LD_OK;
-    visited[node_offset] = 1;
+    if (recursion_stack[node_offset]) {
+        return ld_fail(ctx, LD_INVALID_INPUT,
+                       "export trie cycle in '%s'", path);
+    }
+    recursion_stack[node_offset] = 1;
     size_t offset = (size_t) node_offset;
     uint64_t terminal_size;
     if (!ld_export_read_uleb(data, size, &offset, &terminal_size) || terminal_size > size - offset) {
@@ -1015,6 +680,8 @@ static int ld_parse_export_node(ld_context_t *ctx, const char *path, ld_dylib_in
     size_t terminal_end = offset + (size_t) terminal_size;
     if (terminal_size && name_length) {
         uint64_t flags;
+        const char *import_name = NULL;
+        size_t import_name_length = 0;
         if (!ld_export_read_uleb(data, terminal_end, &offset, &flags)) {
             return ld_fail(ctx, LD_INVALID_INPUT, "invalid export trie flags in '%s'", path);
         }
@@ -1025,7 +692,9 @@ static int ld_parse_export_node(ld_context_t *ctx, const char *path, ld_dylib_in
                 return ld_fail(ctx, LD_INVALID_INPUT, "invalid export trie reexport in '%s'", path);
             }
             (void) ordinal;
-            offset += strlen((const char *) data + offset) + 1U;
+            import_name = (const char *) data + offset;
+            import_name_length = strlen(import_name);
+            offset += import_name_length + 1U;
         } else if (flags & LD_EXPORT_SYMBOL_FLAGS_STUB_AND_RESOLVER) {
             uint64_t address, resolver;
             if (!ld_export_read_uleb(data, terminal_end, &offset, &address) ||
@@ -1038,13 +707,39 @@ static int ld_parse_export_node(ld_context_t *ctx, const char *path, ld_dylib_in
                 return ld_fail(ctx, LD_INVALID_INPUT, "invalid export trie address in '%s'", path);
             }
         }
+        const char *export_name = name;
+        size_t export_name_length = name_length;
+        if ((flags & LD_EXPORT_SYMBOL_FLAGS_REEXPORT) != 0 &&
+            import_name_length != 0) {
+            /* Match Zig's binary-dylib parser: a renamed reexport is
+               registered under the imported name, while an empty imported
+               name falls back to the trie prefix. */
+            export_name = import_name;
+            export_name_length = import_name_length;
+        }
         int result = (flags & LD_EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION)
-                             ? ld_dylib_weak_export_push(dylib, name, name_length)
-                             : ld_dylib_export_push(dylib, name, name_length);
+                             ? ld_dylib_weak_export_push(
+                                       dylib, export_name,
+                                       export_name_length)
+                             : ld_dylib_export_push(
+                                       dylib, export_name,
+                                       export_name_length);
         if (result != LD_OK) return ld_fail(ctx, result, "cannot record dylib export from '%s'", path);
+        uint64_t kind = flags & LD_EXPORT_SYMBOL_FLAGS_KIND_MASK;
+        result = ld_macho_dylib_record_symbol(
+                ctx, dylib, export_name, export_name_length, import_name,
+                import_name_length,
+                (flags & LD_EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION) != 0,
+                kind == LD_EXPORT_SYMBOL_FLAGS_KIND_ABSOLUTE,
+                kind == LD_EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL,
+                (flags & LD_EXPORT_SYMBOL_FLAGS_REEXPORT) != 0);
+        if (result != LD_OK) return result;
     }
     offset = terminal_end;
-    if (offset >= size) return LD_OK;
+    if (offset >= size) {
+        return ld_fail(ctx, LD_INVALID_INPUT,
+                       "truncated export trie node in '%s'", path);
+    }
     uint8_t child_count = data[offset++];
     for (uint8_t child = 0; child < child_count; child++) {
         const char *edge = (const char *) data + offset;
@@ -1061,9 +756,11 @@ static int ld_parse_export_node(ld_context_t *ctx, const char *path, ld_dylib_in
         memcpy(name + name_length, edge, edge_length);
         name[name_length + edge_length] = '\0';
         int result = ld_parse_export_node(ctx, path, dylib, data, size, child_offset, name,
-                                           name_length + edge_length, visited, depth + 1U);
+                                          name_length + edge_length,
+                                          recursion_stack, depth + 1U);
         if (result != LD_OK) return result;
     }
+    recursion_stack[node_offset] = 0;
     return LD_OK;
 }
 
@@ -1073,8 +770,10 @@ static int ld_parse_dylib(ld_context_t *ctx, ld_file_t *file, const uint8_t *byt
     }
     ld_mach_header_64_t header;
     memcpy(&header, bytes, sizeof(header));
+    uint32_t cpu_subtype = (uint32_t) header.cpusubtype & ~LD_CPU_SUBTYPE_MASK;
     if (header.magic != LD_MH_MAGIC_64 || header.filetype != LD_MH_DYLIB ||
-        header.cputype != LD_CPU_TYPE_ARM64) {
+        header.cputype != LD_CPU_TYPE_ARM64 ||
+        cpu_subtype != LD_CPU_SUBTYPE_ARM64_ALL) {
         return ld_fail(ctx, LD_UNSUPPORTED, "unsupported dylib '%s'", file->path);
     }
     if (header.ncmds > 4096U || header.sizeofcmds > size - sizeof(header)) {
@@ -1082,11 +781,14 @@ static int ld_parse_dylib(ld_context_t *ctx, ld_file_t *file, const uint8_t *byt
     }
     ld_symtab_command_t symtab = {0};
     bool have_symtab = false;
+    ld_dysymtab_command_t dysymtab = {0};
+    bool have_dysymtab = false;
     const uint8_t *export_trie = NULL;
     size_t export_trie_size = 0;
     char *install_name = NULL;
     uint32_t current_version = LD_DEFAULT_DYLIB_VERSION;
     uint32_t compatibility_version = LD_DEFAULT_DYLIB_VERSION;
+    ld_macho_platform_info_t platform = {0};
     size_t command_offset = sizeof(header);
     for (uint32_t i = 0; i < header.ncmds; i++) {
         if (!ld_range_ok(size, command_offset, sizeof(ld_load_command_t))) {
@@ -1100,6 +802,14 @@ static int ld_parse_dylib(ld_context_t *ctx, ld_file_t *file, const uint8_t *byt
             command.cmdsize > header.sizeofcmds - consumed || !ld_range_ok(size, command_offset, command.cmdsize)) {
             free(install_name);
             return ld_fail(ctx, LD_INVALID_INPUT, "invalid dylib load command in '%s'", file->path);
+        }
+        bool platform_command = false;
+        int platform_result = ld_macho_platform_parse_command(
+                ctx, file->path, bytes + command_offset, command.cmdsize,
+                &platform, &platform_command);
+        if (platform_result != LD_OK) {
+            free(install_name);
+            return platform_result;
         }
         if (command.cmd == LD_LC_ID_DYLIB) {
             if (command.cmdsize < sizeof(ld_dylib_command_t)) {
@@ -1133,6 +843,15 @@ static int ld_parse_dylib(ld_context_t *ctx, ld_file_t *file, const uint8_t *byt
             }
             memcpy(&symtab, bytes + command_offset, sizeof(symtab));
             have_symtab = true;
+        } else if (command.cmd == LD_LC_DYSYMTAB) {
+            if (command.cmdsize < sizeof(ld_dysymtab_command_t)) {
+                free(install_name);
+                return ld_fail(ctx, LD_INVALID_INPUT,
+                               "invalid dylib dynamic symbol table in '%s'",
+                               file->path);
+            }
+            memcpy(&dysymtab, bytes + command_offset, sizeof(dysymtab));
+            have_dysymtab = true;
         } else if (command.cmd == LD_LC_DYLD_EXPORTS_TRIE || command.cmd == LD_LC_DYLD_INFO_ONLY) {
             if (command.cmd == LD_LC_DYLD_EXPORTS_TRIE) {
                 if (command.cmdsize < sizeof(ld_linkedit_data_command_t)) {
@@ -1166,8 +885,13 @@ static int ld_parse_dylib(ld_context_t *ctx, ld_file_t *file, const uint8_t *byt
         }
         command_offset += command.cmdsize;
     }
+    if (!install_name || !*install_name) {
+        free(install_name);
+        return ld_fail(ctx, LD_INVALID_INPUT,
+                       "dylib '%s' is missing LC_ID_DYLIB", file->path);
+    }
     ld_dylib_input_t *dylib = NULL;
-    int result = ld_dylib_push(ctx, file->path, install_name ? install_name : file->path, &dylib);
+    int result = ld_dylib_push(ctx, file->path, install_name, &dylib);
     free(install_name);
     if (result != LD_OK) return result;
     dylib->current_version = current_version;
@@ -1181,46 +905,87 @@ static int ld_parse_dylib(ld_context_t *ctx, ld_file_t *file, const uint8_t *byt
            those commands in that mode; treating them as dependencies here
            would make an otherwise valid dylib contribute symbols it does not
            actually re-export. */
-        if (command.cmd == LD_LC_REEXPORT_DYLIB &&
-            (header.flags & LD_MH_NO_REEXPORTED_DYLIBS) == 0) {
+        if (command.cmd == LD_LC_RPATH) {
+            if (command.cmdsize < sizeof(ld_rpath_command_t)) {
+                return ld_fail(ctx, LD_INVALID_INPUT,
+                               "invalid LC_RPATH in '%s'", file->path);
+            }
+            ld_rpath_command_t rpath;
+            memcpy(&rpath, bytes + command_offset, sizeof(rpath));
+            if (rpath.path_offset < sizeof(rpath) ||
+                rpath.path_offset >= command.cmdsize) {
+                return ld_fail(ctx, LD_INVALID_INPUT,
+                               "invalid LC_RPATH string offset in '%s'",
+                               file->path);
+            }
+            const char *path =
+                    (const char *) bytes + command_offset + rpath.path_offset;
+            size_t available = command.cmdsize - rpath.path_offset;
+            const char *terminator = memchr(path, '\0', available);
+            if (!terminator || terminator == path) {
+                return ld_fail(ctx, LD_INVALID_INPUT,
+                               "unterminated or empty LC_RPATH in '%s'",
+                               file->path);
+            }
+            result = ld_dylib_rpath_push(
+                    dylib, path, (size_t) (terminator - path));
+            if (result != LD_OK) {
+                return ld_fail(ctx, result,
+                               "cannot record LC_RPATH from '%s'",
+                               file->path);
+            }
+        } else if (command.cmd == LD_LC_REEXPORT_DYLIB &&
+                   (header.flags & LD_MH_NO_REEXPORTED_DYLIBS) == 0) {
             if (command.cmdsize < sizeof(ld_dylib_command_t)) {
                 return ld_fail(ctx, LD_INVALID_INPUT,
-                                "invalid LC_REEXPORT_DYLIB in '%s'", file->path);
+                               "invalid LC_REEXPORT_DYLIB in '%s'", file->path);
             }
             ld_dylib_command_t reexport;
             memcpy(&reexport, bytes + command_offset, sizeof(reexport));
             if (reexport.name_offset >= command.cmdsize) {
                 return ld_fail(ctx, LD_INVALID_INPUT,
-                                "invalid reexport install-name in '%s'", file->path);
+                               "invalid reexport install-name in '%s'", file->path);
             }
             const char *name = (const char *) bytes + command_offset + reexport.name_offset;
             size_t available = command.cmdsize - reexport.name_offset;
             const char *terminator = memchr(name, '\0', available);
             if (!terminator || terminator == name) {
                 return ld_fail(ctx, LD_INVALID_INPUT,
-                                "unterminated reexport install-name in '%s'", file->path);
+                               "unterminated reexport install-name in '%s'", file->path);
             }
             result = ld_dylib_reexport_push(dylib, name, (size_t) (terminator - name));
             if (result != LD_OK) {
                 return ld_fail(ctx, result,
-                                "cannot record dylib reexport from '%s'", file->path);
+                               "cannot record dylib reexport from '%s'", file->path);
             }
         }
         command_offset += command.cmdsize;
     }
-    if (have_symtab) {
+    /* The export trie is authoritative.  A full LC_SYMTAB also contains
+       private and undefined entries and must never be unioned with it.  Old
+       dylibs without a trie fall back to the externally-defined range from
+       LC_DYSYMTAB, matching Zig's binary-dylib parser behavior. */
+    if (!export_trie && have_symtab) {
+        if (!have_dysymtab || dysymtab.iextdefsym > symtab.nsyms ||
+            dysymtab.nextdefsym > symtab.nsyms - dysymtab.iextdefsym) {
+            return ld_fail(ctx, LD_INVALID_INPUT,
+                           "dylib '%s' has no export trie and an invalid LC_DYSYMTAB external-definition range",
+                           file->path);
+        }
         uint64_t symbol_bytes = (uint64_t) symtab.nsyms * sizeof(ld_nlist_64_t);
         if (!ld_range_ok(size, symtab.symoff, symbol_bytes) || !ld_range_ok(size, symtab.stroff, symtab.strsize)) {
             return ld_fail(ctx, LD_INVALID_INPUT, "dylib symbol table outside '%s'", file->path);
         }
         const char *strings = (const char *) bytes + symtab.stroff;
-        for (uint32_t i = 0; i < symtab.nsyms; i++) {
+        uint32_t external_end = dysymtab.iextdefsym + dysymtab.nextdefsym;
+        for (uint32_t i = dysymtab.iextdefsym; i < external_end; i++) {
             ld_nlist_64_t symbol;
             memcpy(&symbol, bytes + symtab.symoff + (size_t) i * sizeof(symbol),
                    sizeof(symbol));
             uint8_t type = symbol.n_type;
             uint8_t base_type = type & LD_N_TYPE;
             if ((type & LD_N_STAB) != 0 || (type & LD_N_EXT) == 0 ||
+                (type & LD_N_PEXT) != 0 ||
                 (base_type != LD_N_SECT && base_type != LD_N_ABS && base_type != LD_N_INDR) ||
                 symbol.n_strx >= symtab.strsize) continue;
             const char *name = strings + symbol.n_strx;
@@ -1234,18 +999,20 @@ static int ld_parse_dylib(ld_context_t *ctx, ld_file_t *file, const uint8_t *byt
         }
     }
     if (export_trie && export_trie_size) {
-        uint8_t *visited = calloc(export_trie_size, 1);
-        if (!visited) return ld_fail(ctx, LD_IO_ERROR, "out of memory reading export trie '%s'", file->path);
+        uint8_t *recursion_stack = calloc(export_trie_size, 1);
+        if (!recursion_stack) return ld_fail(ctx, LD_IO_ERROR, "out of memory reading export trie '%s'", file->path);
         char name[4096] = {0};
-        result = ld_parse_export_node(ctx, file->path, dylib, export_trie, export_trie_size, 0, name, 0, visited, 0);
-        free(visited);
+        result = ld_parse_export_node(ctx, file->path, dylib, export_trie,
+                                      export_trie_size, 0, name, 0,
+                                      recursion_stack, 0);
+        free(recursion_stack);
         if (result != LD_OK) return result;
     }
     return LD_OK;
 }
 
 static int ld_parse_blob(ld_context_t *ctx, ld_file_t *file, const uint8_t *bytes, size_t size,
-                          const char *member_name, bool archive_member);
+                         const char *member_name, bool archive_member);
 
 static int ld_parse_archive(ld_context_t *ctx, ld_file_t *file, const uint8_t *bytes, size_t size) {
     static const uint8_t magic[] = "!<arch>\n";
@@ -1329,8 +1096,8 @@ static int ld_parse_archive(ld_context_t *ctx, ld_file_t *file, const uint8_t *b
         if (offset & 1U) {
             if (offset >= size || bytes[offset] != '\n') {
                 return ld_fail(ctx, LD_INVALID_INPUT,
-                                "archive member is missing its alignment padding in '%s'",
-                                file->path);
+                               "archive member is missing its alignment padding in '%s'",
+                               file->path);
             }
             offset++;
         }
@@ -1339,7 +1106,7 @@ static int ld_parse_archive(ld_context_t *ctx, ld_file_t *file, const uint8_t *b
 }
 
 static int ld_parse_fat(ld_context_t *ctx, ld_file_t *file, const uint8_t *bytes, size_t size,
-                         const char *member_name, bool archive_member) {
+                        const char *member_name, bool archive_member) {
     if (size < 8) {
         return ld_fail(ctx, LD_INVALID_INPUT, "truncated fat binary '%s'", file->path);
     }
@@ -1351,7 +1118,9 @@ static int ld_parse_fat(ld_context_t *ctx, ld_file_t *file, const uint8_t *bytes
         return ld_fail(ctx, LD_INVALID_INPUT, "invalid fat header '%s'", file->path);
     }
     uint64_t selected_offset = 0, selected_size = 0;
-    int selected_subtype_rank = INT_MAX;
+    bool found_arm64e = false;
+    bool found_arm64_unknown = false;
+    bool found_arm64 = false;
     for (uint32_t i = 0; i < count; i++) {
         const uint8_t *entry = bytes + 8U + (size_t) i * entry_size;
         int32_t cputype = (int32_t) ld_read_be32(entry);
@@ -1362,23 +1131,35 @@ static int ld_parse_fat(ld_context_t *ctx, ld_file_t *file, const uint8_t *bytes
             if (!ld_range_ok(size, offset, slice_size)) {
                 return ld_fail(ctx, LD_INVALID_INPUT, "fat arm64 slice outside '%s'", file->path);
             }
-            int subtype_rank = cpusubtype == LD_CPU_SUBTYPE_ARM64_ALL ? 0 : cpusubtype == LD_CPU_SUBTYPE_ARM64E ? 1
-                                                                                                                  : 2;
-            if (subtype_rank < selected_subtype_rank) {
-                selected_subtype_rank = subtype_rank;
+            uint32_t base_subtype = (uint32_t) cpusubtype & ~LD_CPU_SUBTYPE_MASK;
+            if (base_subtype == LD_CPU_SUBTYPE_ARM64_ALL && !found_arm64) {
+                found_arm64 = true;
                 selected_offset = offset;
                 selected_size = slice_size;
+            } else if (base_subtype == LD_CPU_SUBTYPE_ARM64E) {
+                found_arm64e = true;
+            } else {
+                found_arm64_unknown = true;
             }
         }
     }
-    if (selected_subtype_rank != INT_MAX) {
+    if (found_arm64) {
         return ld_parse_blob(ctx, file, bytes + selected_offset, (size_t) selected_size, member_name, archive_member);
+    }
+    if (found_arm64e) {
+        return ld_fail(ctx, LD_UNSUPPORTED,
+                       "fat binary '%s' contains only an arm64e slice; arm64e Mach-O input is not supported",
+                       file->path);
+    }
+    if (found_arm64_unknown) {
+        return ld_fail(ctx, LD_UNSUPPORTED,
+                       "fat binary '%s' has no generic arm64 slice", file->path);
     }
     return ld_fail(ctx, LD_UNSUPPORTED, "fat binary '%s' has no arm64 slice", file->path);
 }
 
 static int ld_parse_blob(ld_context_t *ctx, ld_file_t *file, const uint8_t *bytes, size_t size,
-                          const char *member_name, bool archive_member) {
+                         const char *member_name, bool archive_member) {
     if (size >= 4 && ld_read_be32(bytes) == LD_FAT_MAGIC) {
         return ld_parse_fat(ctx, file, bytes, size, member_name, archive_member);
     }
@@ -1403,7 +1184,7 @@ static int ld_parse_blob(ld_context_t *ctx, ld_file_t *file, const uint8_t *byte
         return ld_parse_tbd(ctx, file, bytes, size);
     }
     return ld_fail(ctx, LD_UNSUPPORTED, "unsupported input '%s'%s%s", file->path,
-                    member_name ? " member " : "", member_name ? member_name : "");
+                   member_name ? " member " : "", member_name ? member_name : "");
 }
 
 int ld_parse_input_file(ld_context_t *ctx, const char *path) {
@@ -1416,7 +1197,7 @@ int ld_parse_input_file(ld_context_t *ctx, const char *path) {
 }
 
 static int ld_try_library_candidate(ld_context_t *ctx, const char *directory, const char *name,
-                                     const char *extension, bool *found) {
+                                    const char *extension, bool *found) {
     char path[PATH_MAX];
     int length = snprintf(path, sizeof(path), "%s/lib%s%s", directory, name, extension);
     if (length < 0 || (size_t) length >= sizeof(path)) {
@@ -1462,85 +1243,6 @@ static int ld_try_framework_directory(ld_context_t *ctx, const char *directory, 
     return LD_OK;
 }
 
-static bool ld_reexport_try_candidate(const char *candidate, char path[PATH_MAX]) {
-    size_t path_length = strlen(candidate);
-    if (path_length >= PATH_MAX) return false;
-    memcpy(path, candidate, path_length + 1U);
-    if (access(path, R_OK) == 0) return true;
-
-    static const char dylib_suffix[] = ".dylib";
-    if (path_length >= sizeof(dylib_suffix) - 1U &&
-        strcmp(path + path_length - (sizeof(dylib_suffix) - 1U), dylib_suffix) == 0) {
-        path_length -= sizeof(dylib_suffix) - 1U;
-        if (path_length + sizeof(".tbd") > PATH_MAX) return false;
-        memcpy(path + path_length, ".tbd", sizeof(".tbd"));
-    } else {
-        if (path_length + sizeof(".tbd") > PATH_MAX) return false;
-        memcpy(path + path_length, ".tbd", sizeof(".tbd"));
-    }
-    return access(path, R_OK) == 0;
-}
-
-static bool ld_reexport_join(const char *prefix, size_t prefix_length, const char *suffix,
-                              char path[PATH_MAX]) {
-    size_t suffix_length = strlen(suffix);
-    if (prefix_length > PATH_MAX - 1U || suffix_length > PATH_MAX - 1U - prefix_length) {
-        return false;
-    }
-    char candidate[PATH_MAX];
-    memcpy(candidate, prefix, prefix_length);
-    memcpy(candidate + prefix_length, suffix, suffix_length + 1U);
-    return ld_reexport_try_candidate(candidate, path);
-}
-
-static bool ld_reexport_search_directory(const char *directory, const char *root_marker,
-                                          const char *install_name, char path[PATH_MAX]) {
-    if (!directory || !*directory) return false;
-    size_t directory_length = strlen(directory);
-    while (directory_length > 1U && directory[directory_length - 1U] == '/') directory_length--;
-    size_t marker_length = strlen(root_marker);
-
-    /* SDK-style -F/-L paths identify the sysroot even when the caller cannot
-       set one directly, which is the normal Linux-to-Darwin cross-link case. */
-    if (directory_length >= marker_length &&
-        memcmp(directory + directory_length - marker_length, root_marker, marker_length) == 0) {
-        size_t root_length = directory_length - marker_length;
-        if (ld_reexport_join(directory, root_length, install_name, path)) return true;
-    }
-
-    if (strncmp(install_name, root_marker, marker_length) != 0 ||
-        (install_name[marker_length] != '/' && install_name[marker_length] != '\0')) {
-        return false;
-    }
-    return ld_reexport_join(directory, directory_length, install_name + marker_length, path);
-}
-
-static bool ld_reexport_file_path(const ld_context_t *ctx, const char *install_name,
-                                   char path[PATH_MAX]) {
-    const char *sysroot = ctx->options->sysroot && *ctx->options->sysroot ? ctx->options->sysroot : "";
-    if (*sysroot) {
-        if (ld_reexport_join(sysroot, strlen(sysroot), install_name, path)) return true;
-    } else if (ld_reexport_try_candidate(install_name, path)) {
-        return true;
-    }
-
-    static const char framework_root[] = "/System/Library/Frameworks";
-    for (size_t i = 0; i < ctx->options->framework_paths.count; i++) {
-        if (ld_reexport_search_directory(ctx->options->framework_paths.items[i], framework_root,
-                                          install_name, path)) {
-            return true;
-        }
-    }
-    static const char library_root[] = "/usr/lib";
-    for (size_t i = 0; i < ctx->options->library_paths.count; i++) {
-        if (ld_reexport_search_directory(ctx->options->library_paths.items[i], library_root,
-                                          install_name, path)) {
-            return true;
-        }
-    }
-    return false;
-}
-
 static bool ld_dylib_exports_unresolved(const ld_context_t *ctx, const char *name) {
     for (size_t i = 0; i < ctx->dylibs.count; i++) {
         const ld_dylib_input_t *dylib = &ctx->dylibs.items[i];
@@ -1554,66 +1256,196 @@ static bool ld_dylib_exports_unresolved(const ld_context_t *ctx, const char *nam
     return false;
 }
 
-static bool ld_has_unresolved_reexport_symbol(const ld_context_t *ctx) {
+static const char *ld_unresolved_reexport_symbol(const ld_context_t *ctx) {
     for (const ld_symbol_t *symbol = ctx->symbols; symbol; symbol = symbol->hh.next) {
-        if (symbol->kind == LD_SYMBOL_UNDEFINED && symbol->name &&
+        if (symbol->kind == LD_SYMBOL_UNDEFINED && !symbol->weak_ref &&
+            symbol->name &&
             !ld_dylib_exports_unresolved(ctx, symbol->name)) {
-            return true;
+            return symbol->name;
         }
     }
-    return false;
+    return NULL;
+}
+
+static size_t ld_find_dylib_dependency(const ld_context_t *ctx,
+                                       const char *install_name,
+                                       const char *path) {
+    for (size_t i = 0; i < ctx->dylibs.count; i++) {
+        if (strcmp(ctx->dylibs.items[i].path, path) == 0 ||
+            strcmp(ctx->dylibs.items[i].install_name, install_name) == 0) {
+            return i;
+        }
+    }
+    return SIZE_MAX;
+}
+
+static void ld_checked_paths_description(
+        const ld_macho_checked_paths_t *checked, char *description,
+        size_t description_size) {
+    if (!description_size) return;
+    description[0] = '\0';
+    size_t used = 0;
+    for (size_t i = 0; i < checked->count && used + 1U < description_size;
+         i++) {
+        int written = snprintf(description + used, description_size - used,
+                               "%s'%s'", i ? ", " : "", checked->items[i]);
+        if (written < 0) break;
+        if ((size_t) written >= description_size - used) {
+            used = description_size - 1U;
+            break;
+        }
+        used += (size_t) written;
+    }
+}
+
+static int ld_merge_reexport_dylib(ld_context_t *ctx, size_t owner_index,
+                                   size_t child_index) {
+    ld_dylib_input_t *owner = &ctx->dylibs.items[owner_index];
+    ld_dylib_input_t *child = &ctx->dylibs.items[child_index];
+    int result;
+    for (size_t i = 0; i < child->export_count; i++) {
+        result = ld_dylib_export_push(owner, child->exports[i],
+                                      strlen(child->exports[i]));
+        if (result != LD_OK) {
+            return ld_fail(ctx, result, "cannot merge dylib reexports");
+        }
+    }
+    for (size_t i = 0; i < child->weak_export_count; i++) {
+        result = ld_dylib_weak_export_push(owner, child->weak_exports[i],
+                                           strlen(child->weak_exports[i]));
+        if (result != LD_OK) {
+            return ld_fail(ctx, result, "cannot merge weak dylib reexports");
+        }
+    }
+    for (size_t i = 0; i < child->symbol_count; i++) {
+        const ld_dylib_symbol_t *candidate = &child->symbols[i];
+        result = ld_macho_dylib_record_symbol(
+                ctx, owner, candidate->name, strlen(candidate->name),
+                candidate->import_name,
+                candidate->import_name ? strlen(candidate->import_name) : 0U,
+                candidate->weak, candidate->absolute, candidate->tlv, true);
+        if (result != LD_OK) {
+            return ld_fail(ctx, result,
+                           "cannot merge dylib reexport metadata");
+        }
+    }
+    for (size_t i = 0; i < child->rpath_count; i++) {
+        result = ld_dylib_rpath_push(owner, child->rpaths[i],
+                                     strlen(child->rpaths[i]));
+        if (result != LD_OK) {
+            return ld_fail(ctx, result, "cannot merge dylib rpaths");
+        }
+    }
+    return LD_OK;
 }
 
 int ld_resolve_reexport_libraries(ld_context_t *ctx) {
-    for (size_t dylib_index = 0; dylib_index < ctx->dylibs.count; dylib_index++) {
-        if (!ld_has_unresolved_reexport_symbol(ctx)) return LD_OK;
+    bool have_missing = false;
+    char missing_install_name[PATH_MAX] = {0};
+    char missing_parent[PATH_MAX] = {0};
+    char missing_checked[3072] = {0};
+
+    for (size_t dylib_index = 0; dylib_index < ctx->dylibs.count;
+         dylib_index++) {
+        if (!ld_unresolved_reexport_symbol(ctx)) return LD_OK;
         if (ctx->dylibs.items[dylib_index].reexports_scanned) continue;
         ctx->dylibs.items[dylib_index].reexports_scanned = true;
-        size_t reexport_count = ctx->dylibs.items[dylib_index].reexport_count;
-        for (size_t reexport_index = 0; reexport_index < reexport_count; reexport_index++) {
-            char *install_name = strdup(ctx->dylibs.items[dylib_index].reexports[reexport_index]);
-            if (!install_name) return ld_fail(ctx, LD_IO_ERROR, "out of memory resolving dylib reexports");
-            char path[PATH_MAX];
-            if (!ld_reexport_file_path(ctx, install_name, path)) {
-                free(install_name);
-                continue;
+        size_t reexport_count =
+                ctx->dylibs.items[dylib_index].reexport_count;
+        for (size_t reexport_index = 0; reexport_index < reexport_count;
+             reexport_index++) {
+            char *install_name = strdup(
+                    ctx->dylibs.items[dylib_index]
+                            .reexports[reexport_index]);
+            if (!install_name) {
+                return ld_fail(ctx, LD_IO_ERROR,
+                               "out of memory resolving dylib reexports");
             }
-            size_t previous_count = ctx->dylibs.count;
-            int result = ld_parse_input_file(ctx, path);
+            ld_macho_checked_paths_t checked = {0};
+            char path[PATH_MAX];
+            bool found = false;
+            int result = ld_macho_resolve_reexport_path(
+                    ctx, &ctx->dylibs.items[dylib_index], install_name, path,
+                    &found, &checked);
             if (result != LD_OK) {
+                ld_macho_checked_paths_deinit(&checked);
+                result = ld_fail(
+                        ctx, result,
+                        "cannot resolve reexport dependency '%s' of '%s'",
+                        install_name, ctx->dylibs.items[dylib_index].path);
                 free(install_name);
                 return result;
             }
-            ld_dylib_input_t *child = NULL;
-            size_t child_index = SIZE_MAX;
-            for (size_t i = 0; i < ctx->dylibs.count; i++) {
-                if (strcmp(ctx->dylibs.items[i].install_name, install_name) == 0 ||
-                    strcmp(ctx->dylibs.items[i].path, path) == 0) {
-                    child = &ctx->dylibs.items[i];
-                    child_index = i;
-                    if (i >= previous_count) {
-                        const ld_dylib_input_t *parent = &ctx->dylibs.items[dylib_index];
-                        child->reexport_only = true;
-                        child->has_reexport_owner = true;
-                        child->reexport_owner = parent->has_reexport_owner
-                                                        ? parent->reexport_owner
-                                                        : dylib_index;
-                    }
-                    break;
+            if (!found) {
+                if (!have_missing) {
+                    have_missing = true;
+                    snprintf(missing_install_name,
+                             sizeof(missing_install_name), "%s",
+                             install_name);
+                    snprintf(missing_parent, sizeof(missing_parent), "%s",
+                             ctx->dylibs.items[dylib_index].path);
+                    ld_checked_paths_description(
+                            &checked, missing_checked,
+                            sizeof(missing_checked));
                 }
+                ld_macho_checked_paths_deinit(&checked);
+                free(install_name);
+                continue;
+            }
+            ld_macho_checked_paths_deinit(&checked);
+
+            size_t previous_count = ctx->dylibs.count;
+            size_t child_index =
+                    ld_find_dylib_dependency(ctx, install_name, path);
+            if (child_index == SIZE_MAX) {
+                result = ld_parse_input_file(ctx, path);
+                if (result != LD_OK) {
+                    free(install_name);
+                    return result;
+                }
+                child_index =
+                        ld_find_dylib_dependency(ctx, install_name, path);
+            }
+            if (child_index == SIZE_MAX) {
+                result = ld_fail(
+                        ctx, LD_INVALID_INPUT,
+                        "reexport dependency '%s' of '%s' did not produce a dylib input",
+                        install_name, ctx->dylibs.items[dylib_index].path);
+                free(install_name);
+                return result;
+            }
+
+            size_t owner_index =
+                    ctx->dylibs.items[dylib_index].has_reexport_owner
+                            ? ctx->dylibs.items[dylib_index].reexport_owner
+                            : dylib_index;
+            if (owner_index >= ctx->dylibs.count) {
+                result = ld_fail(ctx, LD_INVALID_INPUT,
+                                 "invalid reexport owner while resolving '%s'",
+                                 install_name);
+                free(install_name);
+                return result;
+            }
+            if (child_index >= previous_count) {
+                ld_dylib_input_t *child = &ctx->dylibs.items[child_index];
+                child->reexport_only = true;
+                child->has_reexport_owner = true;
+                child->reexport_owner = owner_index;
             }
             free(install_name);
-            if (!child || child_index == dylib_index) continue;
-            ld_dylib_input_t *parent = &ctx->dylibs.items[dylib_index];
-            for (size_t i = 0; i < child->export_count; i++) {
-                result = ld_dylib_export_push(parent, child->exports[i], strlen(child->exports[i]));
-                if (result != LD_OK) return ld_fail(ctx, result, "cannot merge dylib reexports");
-            }
-            for (size_t i = 0; i < child->weak_export_count; i++) {
-                result = ld_dylib_weak_export_push(parent, child->weak_exports[i], strlen(child->weak_exports[i]));
-                if (result != LD_OK) return ld_fail(ctx, result, "cannot merge weak dylib reexports");
-            }
+            if (child_index == dylib_index) continue;
+            result = ld_merge_reexport_dylib(ctx, owner_index, child_index);
+            if (result != LD_OK) return result;
         }
+    }
+
+    const char *unresolved = ld_unresolved_reexport_symbol(ctx);
+    if (unresolved && have_missing) {
+        return ld_fail(
+                ctx, LD_IO_ERROR,
+                "unable to resolve reexport dependency '%s' of '%s' while resolving undefined symbol '%s'; checked paths: %s",
+                missing_install_name, missing_parent, unresolved,
+                missing_checked[0] ? missing_checked : "(none)");
     }
     return LD_OK;
 }

@@ -1,4 +1,6 @@
 #include "ld_internal.h"
+#include "ld_macho_symbols.h"
+#include "ld_macho_synthetic.h"
 #include "sha256.h"
 
 #include <errno.h>
@@ -40,14 +42,15 @@ static void ld_copy_input_name(char destination[17], const char source[16]) {
 static uint64_t ld_symbol_address(const ld_symbol_t *symbol);
 static uint64_t ld_local_symbol_address(const ld_input_symbol_t *input);
 static ld_symbol_t *ld_relocation_symbol(ld_context_t *ctx, ld_object_t *object,
-                                           const ld_relocation_t *relocation);
+                                         const ld_relocation_t *relocation);
 static uint64_t ld_relocation_target(ld_context_t *ctx, ld_object_t *object,
-                                      const ld_relocation_t *relocation);
+                                     const ld_relocation_t *relocation);
 static int ld_symbol_name_compare(const void *left, const void *right);
 static bool ld_relocation_accepts_addend(uint8_t type);
 static int ld_prepare_boundary_symbols(ld_context_t *ctx);
 static int ld_resolve_boundary_symbols(ld_context_t *ctx);
 static int ld_resolve_aliases(ld_context_t *ctx);
+static int ld_register_dylib_symbols(ld_context_t *ctx);
 static bool ld_is_branch26(uint32_t instruction);
 static int64_t ld_branch26_implicit_addend(uint32_t instruction);
 static bool ld_is_adrp(uint32_t instruction);
@@ -353,23 +356,29 @@ static ld_symbol_t *ld_symbol_find(ld_context_t *ctx, const char *name) {
     return symbol;
 }
 
-static int ld_definition_rank(ld_symbol_kind_t kind, bool weak) {
-    switch (kind) {
-        case LD_SYMBOL_DEFINED:
-        case LD_SYMBOL_ABSOLUTE:
-            return weak ? 3 : 4;
-        case LD_SYMBOL_COMMON:
-            return weak ? 1 : 2;
-        case LD_SYMBOL_UNDEFINED:
-        case LD_SYMBOL_IMPORT:
-        default:
-            return 0;
-    }
+static ld_macho_symbol_rank_t ld_symbol_current_rank(
+        const ld_symbol_t *symbol) {
+    return (ld_macho_symbol_rank_t) {
+            .class_value = symbol ? symbol->resolver_class
+                                  : LD_MACHO_RANK_UNCLAIMED,
+            .input_priority = symbol ? symbol->resolver_priority : SIZE_MAX,
+            .order = symbol ? symbol->resolver_order : SIZE_MAX,
+    };
 }
 
-static bool ld_definition_better(ld_symbol_kind_t new_kind, bool new_weak,
-                                  ld_symbol_kind_t old_kind, bool old_weak) {
-    return ld_definition_rank(new_kind, new_weak) > ld_definition_rank(old_kind, old_weak);
+static void ld_symbol_set_rank(ld_symbol_t *symbol,
+                               ld_macho_symbol_rank_t rank) {
+    symbol->resolver_class = rank.class_value;
+    symbol->resolver_priority = rank.input_priority;
+    symbol->resolver_order = rank.order;
+}
+
+static size_t ld_object_order(const ld_context_t *ctx,
+                              const ld_object_t *object) {
+    for (size_t i = 0; i < ctx->objects.count; i++) {
+        if (ctx->objects.items[i] == object) return i;
+    }
+    return SIZE_MAX;
 }
 
 static ld_symbol_t *ld_symbol_get_or_create(ld_context_t *ctx, const char *name) {
@@ -392,9 +401,16 @@ static ld_symbol_t *ld_symbol_get_or_create(ld_context_t *ctx, const char *name)
         return NULL;
     }
     symbol->kind = LD_SYMBOL_UNDEFINED;
+    symbol->visibility = LD_VISIBILITY_LOCAL;
+    symbol->resolver_class = LD_MACHO_RANK_UNCLAIMED;
+    symbol->resolver_priority = SIZE_MAX;
+    symbol->resolver_order = SIZE_MAX;
+    symbol->dylib_index = SIZE_MAX;
     symbol->got_index = UINT32_MAX;
+    symbol->tlv_ptr_index = UINT32_MAX;
     symbol->stub_index = UINT32_MAX;
     symbol->objc_stub_index = UINT32_MAX;
+    symbol->symtab_index = UINT32_MAX;
     symbol->dylib_ordinal = 1;
     HASH_ADD_KEYPTR(hh, ctx->symbols, symbol->name, strlen(symbol->name), symbol);
     return symbol;
@@ -415,9 +431,17 @@ static int ld_register_input_symbol(ld_context_t *ctx, ld_object_t *object, ld_i
     if (!symbol) {
         return ctx->error ? ctx->error : LD_IO_ERROR;
     }
+    symbol->referenced_dynamically |=
+            (input->entry.n_desc & LD_N_REFERENCED_DYNAMICALLY) != 0;
+    ld_symbol_visibility_t input_visibility = ld_macho_nlist_visibility(
+            input->entry.n_type, input->entry.n_desc);
+    /* Zig materializes tentative definitions into global __common symbols. */
+    if (common) input_visibility = LD_VISIBILITY_GLOBAL;
+    symbol->visibility = ld_macho_merge_visibility(symbol->visibility,
+                                                   input_visibility);
     if (!definition) {
         if (symbol->kind == LD_SYMBOL_UNDEFINED) {
-            symbol->weak_ref = symbol->object ? symbol->weak_ref && weak_ref : weak_ref;
+            symbol->weak_ref = symbol->object ? symbol->weak_ref || weak_ref : weak_ref;
             symbol->object = object;
             symbol->input = input;
         }
@@ -433,10 +457,17 @@ static int ld_register_input_symbol(ld_context_t *ctx, ld_object_t *object, ld_i
             return ctx->error ? ctx->error : LD_IO_ERROR;
         }
     }
+    ld_macho_symbol_rank_t candidate_rank =
+            ld_macho_object_symbol_rank(object, input,
+                                        ld_object_order(ctx, object));
     if (common && symbol->kind == LD_SYMBOL_COMMON) {
         uint32_t alignment = (input->entry.n_desc >> 8U) & 0xfU;
+        bool candidate_better = ld_macho_symbol_rank_better(
+                candidate_rank, ld_symbol_current_rank(symbol));
         if (input->entry.n_value > symbol->size) {
             symbol->size = input->entry.n_value;
+        }
+        if (candidate_better) {
             symbol->object = object;
             symbol->input = input;
         }
@@ -445,6 +476,7 @@ static int ld_register_input_symbol(ld_context_t *ctx, ld_object_t *object, ld_i
            definition is weak.  This keeps the result independent of archive
            member/input order. */
         symbol->weak = symbol->weak && weak;
+        if (candidate_better) ld_symbol_set_rank(symbol, candidate_rank);
         return LD_OK;
     }
     if (symbol->kind == LD_SYMBOL_DEFINED || symbol->kind == LD_SYMBOL_ABSOLUTE || symbol->alias) {
@@ -454,19 +486,17 @@ static int ld_register_input_symbol(ld_context_t *ctx, ld_object_t *object, ld_i
             const char *new_path = object && object->file ? object->file->path : "<linker>";
             const char *new_member = object && object->member_name ? object->member_name : NULL;
             return ld_fail(ctx, LD_SYMBOL_ERROR,
-                            "duplicate symbol definition: %s (previously in '%s'%s%s, again in '%s'%s%s)", name,
-                            old_path, old_member ? " member " : "", old_member ? old_member : "", new_path,
-                            new_member ? " member " : "", new_member ? new_member : "");
-        }
-        if (!ld_definition_better(common              ? LD_SYMBOL_COMMON
-                                   : type == LD_N_ABS ? LD_SYMBOL_ABSOLUTE
-                                                       : LD_SYMBOL_DEFINED,
-                                   weak, symbol->kind, symbol->weak)) {
-            return LD_OK;
+                           "duplicate symbol definition: %s (previously in '%s'%s%s, again in '%s'%s%s)", name,
+                           old_path, old_member ? " member " : "", old_member ? old_member : "", new_path,
+                           new_member ? " member " : "", new_member ? new_member : "");
         }
     }
+    if (!ld_macho_symbol_rank_better(candidate_rank,
+                                     ld_symbol_current_rank(symbol))) {
+        return LD_OK;
+    }
     symbol->kind = common ? LD_SYMBOL_COMMON : type == LD_N_ABS ? LD_SYMBOL_ABSOLUTE
-                                                                  : LD_SYMBOL_DEFINED;
+                                                                : LD_SYMBOL_DEFINED;
     symbol->object = object;
     symbol->input = input;
     symbol->value = input->entry.n_value;
@@ -476,6 +506,18 @@ static int ld_register_input_symbol(ld_context_t *ctx, ld_object_t *object, ld_i
     symbol->weak_ref = weak_ref;
     symbol->alias = alias;
     symbol->alias_target = alias_target;
+    symbol->dynamic = false;
+    symbol->dylib_weak_definition = false;
+    symbol->dylib_index = SIZE_MAX;
+    ld_symbol_set_rank(symbol, candidate_rank);
+    symbol->tlv = false;
+    if (type == LD_N_SECT && input->entry.n_sect != 0 &&
+        input->entry.n_sect <= object->section_count) {
+        uint32_t section_type =
+                object->sections[input->entry.n_sect - 1U].header.flags &
+                LD_SECTION_TYPE;
+        symbol->tlv = section_type == LD_S_THREAD_LOCAL_VARIABLES;
+    }
     return LD_OK;
 }
 
@@ -520,7 +562,12 @@ static int ld_resolve_aliases(ld_context_t *ctx) {
            that was emitted as weak (or weaken a strong alias). */
         symbol->weak = alias_weak;
         symbol->weak_ref = target->weak_ref;
+        symbol->referenced_dynamically |= target->referenced_dynamically;
         symbol->dynamic = target->dynamic;
+        symbol->tlv = target->tlv;
+        symbol->dylib_absolute = target->dylib_absolute;
+        symbol->dylib_weak_definition = target->dylib_weak_definition;
+        symbol->dylib_index = target->dylib_index;
         symbol->dylib_ordinal = target->dylib_ordinal;
         symbol->output = target->output;
         symbol->output_offset = target->output_offset;
@@ -535,19 +582,32 @@ static bool ld_object_defines_unresolved(ld_context_t *ctx, ld_object_t *object)
             continue;
         }
         ld_symbol_t *symbol = ld_symbol_find(ctx, input->name);
-        if (!symbol || symbol->kind == LD_SYMBOL_UNDEFINED || symbol->kind == LD_SYMBOL_IMPORT) {
-            if (symbol) return true;
-            continue;
+        if (!symbol) continue;
+        ld_macho_symbol_rank_t candidate = ld_macho_object_symbol_rank(
+                object, input, ld_object_order(ctx, object));
+        if (ld_macho_symbol_rank_better(candidate,
+                                        ld_symbol_current_rank(symbol))) {
+            return true;
         }
-        ld_symbol_kind_t new_kind = ld_symbol_is_common(input)
-                                             ? LD_SYMBOL_COMMON
-                                             : ((input->entry.n_type & LD_N_TYPE) == LD_N_ABS
-                                                        ? LD_SYMBOL_ABSOLUTE
-                                                        : LD_SYMBOL_DEFINED);
-        bool new_weak = (input->entry.n_desc & LD_N_WEAK_DEF) != 0;
-        if (ld_definition_better(new_kind, new_weak, symbol->kind, symbol->weak) ||
-            (new_kind == LD_SYMBOL_COMMON && symbol->kind == LD_SYMBOL_COMMON &&
-             input->entry.n_value > symbol->size)) {
+    }
+    return false;
+}
+
+static bool ld_object_has_objc(const ld_object_t *object) {
+    for (size_t i = 0; i < object->symbol_count; i++) {
+        const char *name = object->symbols[i].name;
+        if (name && strncmp(name, "_OBJC_CLASS_$_", 14U) == 0) {
+            return true;
+        }
+    }
+    for (size_t i = 0; i < object->section_count; i++) {
+        const ld_section_64_t *section = &object->sections[i].header;
+        if (strncmp(section->segname, "__DATA", 16U) == 0 &&
+            strncmp(section->sectname, "__objc_catlist", 16U) == 0) {
+            return true;
+        }
+        if (strncmp(section->segname, "__TEXT", 16U) == 0 &&
+            strncmp(section->sectname, "__swift", 16U) == 0) {
             return true;
         }
     }
@@ -557,10 +617,14 @@ static bool ld_object_defines_unresolved(ld_context_t *ctx, ld_object_t *object)
 static int ld_resolve_archives(ld_context_t *ctx) {
     bool changed;
     do {
+        int dylib_result = ld_register_dylib_symbols(ctx);
+        if (dylib_result != LD_OK) return dylib_result;
         changed = false;
         for (size_t i = 0; i < ctx->objects.count; i++) {
             ld_object_t *object = ctx->objects.items[i];
-            if (!object->archive_member || object->selected || !ld_object_defines_unresolved(ctx, object)) {
+            if (!object->archive_member || object->selected ||
+                (!ld_object_defines_unresolved(ctx, object) &&
+                 !ld_object_has_objc(object))) {
                 continue;
             }
             object->selected = true;
@@ -681,7 +745,7 @@ static int ld_prepare_boundary_symbols(ld_context_t *ctx) {
 }
 
 static ld_output_section_t *ld_get_output(ld_context_t *ctx, const char *segname, const char *sectname,
-                                            uint32_t flags, uint32_t align, bool zerofill) {
+                                          uint32_t flags, uint32_t align, bool zerofill) {
     ld_output_section_t *section = ld_find_output(ctx, segname, sectname);
     if (section) {
         if (section->zerofill != zerofill || (section->flags & LD_SECTION_TYPE) != (flags & LD_SECTION_TYPE)) {
@@ -771,14 +835,14 @@ static int ld_collect_sections(ld_context_t *ctx) {
             if (strcmp(segname, "__TEXT") != 0 && strcmp(segname, "__DATA_CONST") != 0 &&
                 strcmp(segname, "__DATA") != 0) {
                 return ld_fail(ctx, LD_UNSUPPORTED, "unsupported input segment '%s' section '%s' in '%s'%s%s",
-                                segname, sectname, object->file->path, object->member_name ? " member " : "",
-                                object->member_name ? object->member_name : "");
+                               segname, sectname, object->file->path, object->member_name ? " member " : "",
+                               object->member_name ? object->member_name : "");
             }
             uint32_t type = input->header.flags & LD_SECTION_TYPE;
             bool zerofill = type == LD_S_ZEROFILL || type == LD_S_GB_ZEROFILL ||
                             type == LD_S_THREAD_LOCAL_ZEROFILL;
             ld_output_section_t *output = ld_get_output(ctx, segname, sectname, input->header.flags,
-                                                          ld_section_alignment(&input->header), zerofill);
+                                                        ld_section_alignment(&input->header), zerofill);
             if (!output) {
                 return ctx->error ? ctx->error : ld_fail(ctx, LD_IO_ERROR, "out of memory creating section %s,%s", segname, sectname);
             }
@@ -799,6 +863,28 @@ static int ld_collect_sections(ld_context_t *ctx) {
                 memcpy(output->data + input->output_offset, input->data, (size_t) input->header.size);
             }
         }
+    }
+    /* Zig's internal object materializes ___dso_handle at the start of the
+       writable __DATA,__data section. Keep the symbol addressable even for a
+       link with no user data sections so local GOT references have a real
+       symbol-table target. */
+    ld_symbol_t *dso_handle = ld_symbol_find(ctx, "___dso_handle");
+    if (dso_handle && dso_handle->linker_defined) {
+        ld_output_section_t *data = ld_find_output(ctx, "__DATA", "__data");
+        if (!data) {
+            data = ld_get_output(ctx, "__DATA", "__data", LD_S_REGULAR, 3,
+                                 false);
+        }
+        if (!data) {
+            return ctx->error ? ctx->error
+                              : ld_fail(ctx, LD_IO_ERROR,
+                                        "out of memory creating __DATA,__data");
+        }
+        dso_handle->kind = LD_SYMBOL_DEFINED;
+        dso_handle->value = 0;
+        dso_handle->output = data;
+        dso_handle->output_offset = 0;
+        dso_handle->visibility = LD_VISIBILITY_LOCAL;
     }
     for (ld_symbol_t *symbol = ctx->symbols; symbol; symbol = symbol->hh.next) {
         if (symbol->kind != LD_SYMBOL_DEFINED || !symbol->input || !symbol->object || symbol->input->entry.n_sect == 0 ||
@@ -857,6 +943,26 @@ static ld_symbol_t *ld_symbol_for_input(ld_context_t *ctx, ld_object_t *object, 
     return symbol;
 }
 
+static bool ld_macho_ref_for_relocation(ld_context_t *ctx, ld_object_t *object,
+                                        const ld_relocation_t *relocation,
+                                        ld_macho_ref_t *ref) {
+    memset(ref, 0, sizeof(*ref));
+    if (!relocation->external || relocation->symbolnum >= object->symbol_count) {
+        return false;
+    }
+    ld_symbol_t *global =
+            ld_symbol_for_input(ctx, object, relocation->symbolnum);
+    if (global) {
+        *ref = ld_macho_global_ref(global);
+        return true;
+    }
+    ld_input_symbol_t *input = &object->symbols[relocation->symbolnum];
+    uint8_t type = input->entry.n_type & LD_N_TYPE;
+    if (type != LD_N_SECT && type != LD_N_ABS) return false;
+    *ref = ld_macho_local_ref(object, relocation->symbolnum);
+    return true;
+}
+
 static int ld_make_synthetic_sections(ld_context_t *ctx) {
     if (ctx->got_count) {
         ctx->got = ld_get_output(ctx, "__DATA_CONST", "__got", LD_S_NON_LAZY_SYMBOL_POINTERS, 3, false);
@@ -866,6 +972,20 @@ static int ld_make_synthetic_sections(ld_context_t *ctx) {
         ctx->got->size = (uint64_t) ctx->got_count * 8U;
         if (ld_output_reserve(ctx->got, ctx->got->size) != LD_OK) {
             return ld_fail(ctx, LD_IO_ERROR, "out of memory creating GOT");
+        }
+    }
+    if (ctx->tlv_ptr_count) {
+        ctx->tlv_ptrs = ld_get_output(
+                ctx, "__DATA", "__thread_ptrs",
+                LD_S_THREAD_LOCAL_VARIABLE_POINTERS, 3, false);
+        if (!ctx->tlv_ptrs) {
+            return ld_fail(ctx, LD_IO_ERROR,
+                           "out of memory creating TLV pointer section");
+        }
+        ctx->tlv_ptrs->size = (uint64_t) ctx->tlv_ptr_count * 8U;
+        if (ld_output_reserve(ctx->tlv_ptrs, ctx->tlv_ptrs->size) != LD_OK) {
+            return ld_fail(ctx, LD_IO_ERROR,
+                           "out of memory creating TLV pointer section");
         }
     }
     if (ctx->stub_count) {
@@ -893,7 +1013,7 @@ static int ld_make_synthetic_sections(ld_context_t *ctx) {
         ctx->objc_methname = ld_get_output(ctx, "__TEXT", "__objc_methname", LD_S_CSTRING_LITERALS, 0, false);
         ctx->objc_selrefs = ld_get_output(ctx, "__DATA", "__objc_selrefs", 0x10000005U, 3, false);
         ctx->objc_stubs = ld_get_output(ctx, "__TEXT", "__objc_stubs",
-                                         LD_S_ATTR_PURE_INSTRUCTIONS | LD_S_ATTR_SOME_INSTRUCTIONS, 5, false);
+                                        LD_S_ATTR_PURE_INSTRUCTIONS | LD_S_ATTR_SOME_INSTRUCTIONS, 5, false);
         if (!ctx->objc_methname || !ctx->objc_selrefs || !ctx->objc_stubs) {
             free(objc_symbols.items);
             return ld_fail(ctx, LD_IO_ERROR, "out of memory creating Objective-C selector sections");
@@ -973,11 +1093,11 @@ static int ld_scan_relocations(ld_context_t *ctx) {
                 }
                 if (relocation.type > LD_ARM64_RELOC_ADDEND) {
                     return ld_fail(ctx, LD_RELOCATION_ERROR, "unsupported ARM64 relocation type %u in '%s'",
-                                    relocation.type, object->file->path);
+                                   relocation.type, object->file->path);
                 }
                 if (relocation.address >= section->header.size) {
                     return ld_fail(ctx, LD_RELOCATION_ERROR, "relocation outside %.*s,%.*s in '%s'",
-                                    16, section->header.segname, 16, section->header.sectname, object->file->path);
+                                   16, section->header.segname, 16, section->header.sectname, object->file->path);
                 }
                 uint64_t relocation_width = 1ULL << relocation.length;
                 uint64_t access_width = (relocation.type == LD_ARM64_RELOC_UNSIGNED ||
@@ -1028,7 +1148,7 @@ static int ld_scan_relocations(ld_context_t *ctx) {
                 }
                 if (!section->output->data || access_width > section->header.size - relocation.address) {
                     return ld_fail(ctx, LD_RELOCATION_ERROR, "relocation exceeds %.*s,%.*s in '%s'",
-                                    16, section->header.segname, 16, section->header.sectname, object->file->path);
+                                   16, section->header.segname, 16, section->header.sectname, object->file->path);
                 }
                 if (relocation.type != LD_ARM64_RELOC_UNSIGNED &&
                     relocation.type != LD_ARM64_RELOC_SUBTRACTOR &&
@@ -1039,10 +1159,10 @@ static int ld_scan_relocations(ld_context_t *ctx) {
                         valid_instruction = ld_is_branch26(instruction);
                         if (valid_instruction && ld_branch26_implicit_addend(instruction) != 0) {
                             return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                            "ARM64 BRANCH26 at offset 0x%x has an embedded addend; use ARM64_RELOC_ADDEND in '%s'%s%s",
-                                            relocation.address, object->file->path,
-                                            object->member_name ? " member " : "",
-                                            object->member_name ? object->member_name : "");
+                                           "ARM64 BRANCH26 at offset 0x%x has an embedded addend; use ARM64_RELOC_ADDEND in '%s'%s%s",
+                                           relocation.address, object->file->path,
+                                           object->member_name ? " member " : "",
+                                           object->member_name ? object->member_name : "");
                         }
                     } else if (relocation.type == LD_ARM64_RELOC_PAGE21 ||
                                relocation.type == LD_ARM64_RELOC_GOT_LOAD_PAGE21 ||
@@ -1056,11 +1176,15 @@ static int ld_scan_relocations(ld_context_t *ctx) {
                     }
                     if (!valid_instruction) {
                         return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                        "invalid ARM64 instruction for relocation type %u in '%s'",
-                                        relocation.type, object->file->path);
+                                       "invalid ARM64 instruction for relocation type %u in '%s'",
+                                       relocation.type, object->file->path);
                     }
                 }
                 ld_symbol_t *symbol = relocation.external ? ld_symbol_for_input(ctx, object, relocation.symbolnum) : NULL;
+                ld_macho_ref_t ref = {0};
+                bool has_ref = relocation.external &&
+                               ld_macho_ref_for_relocation(ctx, object,
+                                                           &relocation, &ref);
                 if (relocation.external && !symbol) {
                     if (relocation.symbolnum >= object->symbol_count) {
                         return ld_fail(ctx, LD_RELOCATION_ERROR, "relocation symbol index is outside '%s'", object->file->path);
@@ -1070,46 +1194,80 @@ static int ld_scan_relocations(ld_context_t *ctx) {
                     if (input_type == LD_N_UNDF && (input_symbol->entry.n_desc & LD_N_WEAK_REF) == 0) {
                         const char *name = input_symbol->name;
                         return ld_fail(ctx, LD_SYMBOL_ERROR, "relocation references unknown symbol '%s'",
-                                        name ? name : "<unnamed>");
+                                       name ? name : "<unnamed>");
                     }
                 }
                 if (!relocation.external && (relocation.symbolnum == 0 || relocation.symbolnum > object->section_count)) {
                     return ld_fail(ctx, LD_RELOCATION_ERROR, "relocation section index is outside '%s'", object->file->path);
                 }
-                if (!symbol) {
-                    continue;
-                }
-                if (symbol->objc_selector_stub) {
+                if (symbol && symbol->objc_selector_stub) {
                     if (relocation.type != LD_ARM64_RELOC_BRANCH26) {
                         return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                        "Objective-C selector stub '%s' has a non-branch relocation in '%s'",
-                                        symbol->name, object->file->path);
+                                       "Objective-C selector stub '%s' has a non-branch relocation in '%s'",
+                                       symbol->name, object->file->path);
                     }
                     if (!symbol->objc_dispatch) {
                         return ld_fail(ctx, LD_SYMBOL_ERROR, "Objective-C selector stub '%s' has no objc_msgSend target",
-                                        symbol->name);
+                                       symbol->name);
                     }
                     if (symbol->objc_dispatch->got_index == UINT32_MAX) {
-                        symbol->objc_dispatch->got_index = ctx->got_count++;
+                        uint32_t got_index;
+                        if (ld_macho_got_add(
+                                    ctx,
+                                    ld_macho_global_ref(symbol->objc_dispatch),
+                                    &got_index) != LD_OK) {
+                            return ctx->error;
+                        }
                     }
                     continue;
                 }
                 if (relocation.type == LD_ARM64_RELOC_GOT_LOAD_PAGE21 ||
                     relocation.type == LD_ARM64_RELOC_GOT_LOAD_PAGEOFF12 ||
-                    relocation.type == LD_ARM64_RELOC_POINTER_TO_GOT ||
-                    relocation.type == LD_ARM64_RELOC_TLVP_LOAD_PAGE21 ||
-                    relocation.type == LD_ARM64_RELOC_TLVP_LOAD_PAGEOFF12) {
-                    if (symbol->got_index == UINT32_MAX) {
-                        symbol->got_index = ctx->got_count++;
+                    relocation.type == LD_ARM64_RELOC_POINTER_TO_GOT) {
+                    if (!has_ref) {
+                        return ld_fail(
+                                ctx, LD_RELOCATION_ERROR,
+                                "ARM64 GOT relocation has no valid target at offset 0x%x in '%s'",
+                                relocation.address, object->file->path);
+                    }
+                    uint32_t got_index;
+                    if (ld_macho_got_add(ctx, ref, &got_index) != LD_OK) {
+                        return ctx->error;
                     }
                 }
-                if (symbol->kind == LD_SYMBOL_IMPORT) {
+                if (relocation.type == LD_ARM64_RELOC_TLVP_LOAD_PAGE21 ||
+                    relocation.type == LD_ARM64_RELOC_TLVP_LOAD_PAGEOFF12) {
+                    if (!has_ref || !ld_macho_ref_is_tlv(&ref)) {
+                        return ld_fail(
+                                ctx, LD_RELOCATION_ERROR,
+                                "illegal thread-local variable reference to regular symbol '%s' at offset 0x%x in '%s'",
+                                has_ref ? ld_macho_ref_name(&ref) : "<unknown>",
+                                relocation.address, object->file->path);
+                    }
+                    bool needs_pointer =
+                            ref.global &&
+                            (ref.global->kind == LD_SYMBOL_IMPORT ||
+                             ld_macho_symbol_is_exported_weak(ref.global));
+                    if (needs_pointer) {
+                        uint32_t tlv_ptr_index;
+                        if (ld_macho_tlv_ptr_add(ctx, ref,
+                                                 &tlv_ptr_index) != LD_OK) {
+                            return ctx->error;
+                        }
+                    }
+                }
+                if (ld_macho_symbol_needs_stub(symbol)) {
                     if (relocation.type == LD_ARM64_RELOC_BRANCH26) {
                         if (symbol->stub_index == UINT32_MAX) {
                             symbol->stub_index = ctx->stub_count++;
                         }
                         if (symbol->got_index == UINT32_MAX) {
-                            symbol->got_index = ctx->got_count++;
+                            uint32_t got_index;
+                            if (ld_macho_got_add(
+                                        ctx, ld_macho_global_ref(symbol),
+                                        &got_index) != LD_OK) {
+                                return ctx->error;
+                            }
                         }
                     }
                 }
@@ -1217,7 +1375,7 @@ static bool ld_builtin_dylib_path(const ld_context_t *ctx, size_t index, char *p
 }
 
 static bool ld_dylib_install_name_is_builtin(const ld_context_t *ctx, const char *install_name,
-                                              size_t *builtin_index) {
+                                             size_t *builtin_index) {
     size_t count = ld_builtin_dylib_count(ctx);
     for (size_t i = 0; i < count; i++) {
         char path[LD_MAX_PATH];
@@ -1285,6 +1443,59 @@ static uint32_t ld_dylib_ordinal(const ld_context_t *ctx, size_t input_index) {
     return (uint32_t) ordinal;
 }
 
+static int ld_register_dylib_symbols(ld_context_t *ctx) {
+    for (size_t dylib_index = 0; dylib_index < ctx->dylibs.count;
+         dylib_index++) {
+        ld_dylib_input_t *dylib = &ctx->dylibs.items[dylib_index];
+        /* Reexport-only children contribute through their owning umbrella,
+           which preserves the parent's input priority and two-level ordinal. */
+        if (dylib->reexport_only) continue;
+        for (size_t export_index = 0; export_index < dylib->symbol_count;
+             export_index++) {
+            const ld_dylib_symbol_t *candidate =
+                    &dylib->symbols[export_index];
+            ld_symbol_t *symbol = ld_symbol_find(ctx, candidate->name);
+            if (!symbol) {
+                /* Keep unreferenced SDK exports out of the output symbol
+                   table.  They remain available in dylib->symbols for later
+                   archive fixed-point iterations. */
+                continue;
+            }
+            ld_macho_symbol_rank_t candidate_rank =
+                    ld_macho_dylib_symbol_rank(dylib, candidate,
+                                               dylib_index);
+            if (!ld_macho_symbol_rank_better(
+                        candidate_rank, ld_symbol_current_rank(symbol))) {
+                continue;
+            }
+            size_t provider = dylib_index;
+            if (dylib->has_reexport_owner &&
+                dylib->reexport_owner < ctx->dylibs.count) {
+                provider = dylib->reexport_owner;
+            }
+            symbol->kind = LD_SYMBOL_IMPORT;
+            symbol->dynamic = true;
+            symbol->weak = candidate->weak;
+            symbol->dylib_weak_definition = candidate->weak;
+            symbol->dylib_absolute = candidate->absolute;
+            symbol->tlv = candidate->tlv;
+            symbol->dylib_index = provider;
+            symbol->dylib_ordinal = ld_dylib_ordinal(ctx, provider);
+            symbol->visibility = ld_macho_merge_visibility(
+                    symbol->visibility, LD_VISIBILITY_GLOBAL);
+            symbol->alias = false;
+            symbol->alias_target = NULL;
+            symbol->output = NULL;
+            symbol->output_offset = 0;
+            symbol->value = 0;
+            symbol->size = 0;
+            symbol->align = 0;
+            ld_symbol_set_rank(symbol, candidate_rank);
+        }
+    }
+    return LD_OK;
+}
+
 static uint64_t ld_load_commands_size(const ld_context_t *ctx) {
     uint64_t size = sizeof(ld_mach_header_64_t);
     size += sizeof(ld_segment_command_64_t); /* __PAGEZERO */
@@ -1308,6 +1519,10 @@ static uint64_t ld_load_commands_size(const ld_context_t *ctx) {
         size_t path_size = strlen(path) + 1U;
         size += (sizeof(ld_dylib_command_t) + path_size + 7U) & ~7U;
     }
+    for (size_t i = 0; i < ctx->options->rpaths.count; i++) {
+        size_t path_size = strlen(ctx->options->rpaths.items[i]) + 1U;
+        size += (sizeof(ld_rpath_command_t) + path_size + 7U) & ~7U;
+    }
     size += sizeof(ld_linkedit_data_command_t); /* function starts */
     size += sizeof(ld_linkedit_data_command_t); /* data in code */
     if (ctx->options->adhoc_codesign) size += sizeof(ld_linkedit_data_command_t);
@@ -1315,7 +1530,7 @@ static uint64_t ld_load_commands_size(const ld_context_t *ctx) {
 }
 
 static int ld_layout_align(ld_context_t *ctx, uint64_t value, uint64_t alignment,
-                            uint64_t *result, const char *what) {
+                           uint64_t *result, const char *what) {
     if (!ld_align_up_checked(value, alignment, result)) {
         return ld_fail(ctx, LD_OUTPUT_ERROR, "%s alignment overflows", what);
     }
@@ -1323,7 +1538,7 @@ static int ld_layout_align(ld_context_t *ctx, uint64_t value, uint64_t alignment
 }
 
 static int ld_layout_add(ld_context_t *ctx, uint64_t left, uint64_t right,
-                          uint64_t *result, const char *what) {
+                         uint64_t *result, const char *what) {
     if (right > UINT64_MAX - left) {
         return ld_fail(ctx, LD_OUTPUT_ERROR, "%s size overflows", what);
     }
@@ -1411,7 +1626,7 @@ static int ld_layout_sections(ld_context_t *ctx) {
             ld_output_section_t *section = ctx->outputs.items[i];
             if (strcmp(section->segname, segment->name) != 0) continue;
             if (ld_layout_align(ctx, segment_memory_end, 1ULL << section->align,
-                                 &segment_memory_end, "section virtual address") != LD_OK) {
+                                &segment_memory_end, "section virtual address") != LD_OK) {
                 return ctx->error;
             }
             section->addr = segment_memory_end;
@@ -1422,29 +1637,29 @@ static int ld_layout_sections(ld_context_t *ctx) {
                 section->file_size = 0;
             } else {
                 if (ld_layout_align(ctx, segment_file_end, 1ULL << section->align,
-                                     &segment_file_end, "section file offset") != LD_OK) {
+                                    &segment_file_end, "section file offset") != LD_OK) {
                     return ctx->error;
                 }
                 section->fileoff = segment_file_end;
                 section->file_size = section->size;
                 if (ld_layout_add(ctx, segment_file_end, section->size,
-                                   &segment_file_end, "segment file size") != LD_OK) {
+                                  &segment_file_end, "segment file size") != LD_OK) {
                     return ctx->error;
                 }
             }
             if (ld_layout_add(ctx, segment_memory_end, section->size,
-                               &segment_memory_end, "segment virtual size") != LD_OK) {
+                              &segment_memory_end, "segment virtual size") != LD_OK) {
                 return ctx->error;
             }
         }
         if (ld_layout_align(ctx, segment_file_end - segment->fileoff, LD_PAGE_SIZE,
-                             &segment->filesize, "segment file size") != LD_OK ||
+                            &segment->filesize, "segment file size") != LD_OK ||
             ld_layout_align(ctx, segment_memory_end - segment->vmaddr, LD_PAGE_SIZE,
-                             &segment->vmsize, "segment virtual size") != LD_OK ||
+                            &segment->vmsize, "segment virtual size") != LD_OK ||
             ld_layout_add(ctx, segment->fileoff, segment->filesize,
-                           &file_cursor, "segment file end") != LD_OK ||
+                          &file_cursor, "segment file end") != LD_OK ||
             ld_layout_add(ctx, segment->vmaddr, segment->vmsize,
-                           &memory_cursor, "segment virtual end") != LD_OK) {
+                          &memory_cursor, "segment virtual end") != LD_OK) {
             return ctx->error;
         }
     }
@@ -1498,15 +1713,15 @@ static int ld_resolve_boundary_symbols(ld_context_t *ctx) {
                 }
                 if (!segment || !symbol->boundary_segment[0]) {
                     return ld_fail(ctx, LD_SYMBOL_ERROR,
-                                    "linker-defined symbol '%s' references unknown segment '%s'",
-                                    symbol->name, symbol->boundary_segment[0] ? symbol->boundary_segment : "<empty>");
+                                   "linker-defined symbol '%s' references unknown segment '%s'",
+                                   symbol->name, symbol->boundary_segment[0] ? symbol->boundary_segment : "<empty>");
                 }
                 if (symbol->boundary_kind == LD_BOUNDARY_SEGMENT_START) {
                     value = segment->vmaddr;
                 } else if (segment->vmaddr > UINT64_MAX - segment->vmsize) {
                     return ld_fail(ctx, LD_SYMBOL_ERROR,
-                                    "linker-defined symbol '%s' segment '%s' address overflows",
-                                    symbol->name, symbol->boundary_segment);
+                                   "linker-defined symbol '%s' segment '%s' address overflows",
+                                   symbol->name, symbol->boundary_segment);
                 } else {
                     value = segment->vmaddr + segment->vmsize;
                 }
@@ -1532,21 +1747,21 @@ static int ld_resolve_boundary_symbols(ld_context_t *ctx) {
                     }
                     if (!section) {
                         section = ld_find_output(ctx, ld_canonical_segment(symbol->boundary_segment),
-                                                  symbol->boundary_section);
+                                                 symbol->boundary_section);
                     }
                 }
                 if (!section) {
                     return ld_fail(ctx, LD_SYMBOL_ERROR,
-                                    "linker-defined symbol '%s' references unknown section '%s,%s'",
-                                    symbol->name, symbol->boundary_segment[0] ? symbol->boundary_segment : "<empty>",
-                                    symbol->boundary_section[0] ? symbol->boundary_section : "<empty>");
+                                   "linker-defined symbol '%s' references unknown section '%s,%s'",
+                                   symbol->name, symbol->boundary_segment[0] ? symbol->boundary_segment : "<empty>",
+                                   symbol->boundary_section[0] ? symbol->boundary_section : "<empty>");
                 }
                 if (symbol->boundary_kind == LD_BOUNDARY_SECTION_START) {
                     value = section->addr;
                 } else if (section->addr > UINT64_MAX - section->size) {
                     return ld_fail(ctx, LD_SYMBOL_ERROR,
-                                    "linker-defined symbol '%s' section '%s,%s' address overflows",
-                                    symbol->name, symbol->boundary_segment, symbol->boundary_section);
+                                   "linker-defined symbol '%s' section '%s,%s' address overflows",
+                                   symbol->name, symbol->boundary_segment, symbol->boundary_section);
                 } else {
                     value = section->addr + section->size;
                 }
@@ -1567,11 +1782,12 @@ static int64_t ld_sign_extend(uint64_t value, unsigned bits) {
 }
 
 static bool ld_relocation_accepts_addend(uint8_t type) {
-    /* Clang emits an explicit ADDEND pair for arm64 source expressions with a
-       non-zero constant, including BRANCH26.  The page and pageoff forms are
-       the most common, but rejecting a branch pair makes otherwise valid
-       `bl _symbol+N` objects unusable. */
-    return type == LD_ARM64_RELOC_BRANCH26 || type == LD_ARM64_RELOC_PAGE21 ||
+    /* Keep the accepted pair set identical to Zig's arm64 Mach-O object
+       parser at commit 738d2be9: ADDEND is only valid before PAGE21 or
+       PAGEOFF12.  In particular, a branch target constant belongs in the
+       symbol/addend expression selected by the producer, not in an
+       ADDEND+BRANCH26 pair. */
+    return type == LD_ARM64_RELOC_PAGE21 ||
            type == LD_ARM64_RELOC_PAGEOFF12;
 }
 
@@ -1617,7 +1833,7 @@ static bool ld_add_signed_u64(uint64_t value, int64_t addend, uint64_t *result) 
    type so malformed objects cannot silently wrap before the requested field
    width is checked. */
 static bool ld_relocation_value(uint64_t target, int64_t raw_addend, int64_t explicit_addend,
-                                 uint8_t length, uint64_t *result) {
+                                uint8_t length, uint64_t *result) {
     if (target > (uint64_t) INT64_MAX || (length != 2U && length != 3U)) {
         return false;
     }
@@ -1632,8 +1848,8 @@ static bool ld_relocation_value(uint64_t target, int64_t raw_addend, int64_t exp
 }
 
 static bool ld_relocation_difference(uint64_t minuend, uint64_t subtrahend,
-                                      int64_t raw_addend, int64_t explicit_addend,
-                                      uint8_t length, uint64_t *result) {
+                                     int64_t raw_addend, int64_t explicit_addend,
+                                     uint8_t length, uint64_t *result) {
     if (minuend > (uint64_t) INT64_MAX || subtrahend > (uint64_t) INT64_MAX ||
         (length != 2U && length != 3U)) {
         return false;
@@ -1725,7 +1941,7 @@ static int ld_add_rebase(ld_context_t *ctx, uint64_t address) {
     uint64_t offset;
     if (ld_segment_offset(ctx, address, &segment, &offset) != LD_OK) {
         return ld_fail(ctx, LD_RELOCATION_ERROR, "rebase address 0x%llx is outside an output segment",
-                        (unsigned long long) address);
+                       (unsigned long long) address);
     }
     int result = ld_fixup_push(&ctx->rebases, segment, offset);
     return result == LD_OK ? LD_OK : ld_fail(ctx, LD_IO_ERROR, "out of memory recording rebase fixup");
@@ -1736,42 +1952,42 @@ static int ld_add_bind(ld_context_t *ctx, ld_symbol_t *symbol, uint64_t address,
     uint64_t offset;
     if (ld_segment_offset(ctx, address, &segment, &offset) != LD_OK) {
         return ld_fail(ctx, LD_RELOCATION_ERROR, "bind address 0x%llx is outside an output segment",
-                        (unsigned long long) address);
+                       (unsigned long long) address);
     }
     int result = ld_bind_push(&ctx->binds,
-                               (ld_bind_t) {
-                                       .symbol = symbol,
-                                       .segment = segment,
-                                       .offset = offset,
-                                       .addend = addend,
-                                       .weak = symbol->weak_ref,
-                                       .weak_definition = false,
-                               });
+                              (ld_bind_t) {
+                                      .symbol = symbol,
+                                      .segment = segment,
+                                      .offset = offset,
+                                      .addend = addend,
+                                      .weak = symbol->weak_ref,
+                                      .weak_definition = false,
+                              });
     return result == LD_OK ? LD_OK : ld_fail(ctx, LD_IO_ERROR, "out of memory recording bind fixup");
 }
 
 static int ld_add_weak_bind(ld_context_t *ctx, ld_symbol_t *symbol,
-                             uint64_t address, int64_t addend) {
+                            uint64_t address, int64_t addend) {
     uint32_t segment;
     uint64_t offset;
     if (ld_segment_offset(ctx, address, &segment, &offset) != LD_OK) {
         return ld_fail(ctx, LD_RELOCATION_ERROR,
-                        "weak bind address 0x%llx is outside an output segment",
-                        (unsigned long long) address);
+                       "weak bind address 0x%llx is outside an output segment",
+                       (unsigned long long) address);
     }
     int result = ld_bind_push(&ctx->binds,
-                               (ld_bind_t) {
-                                       .symbol = symbol,
-                                       .segment = segment,
-                                       .offset = offset,
-                                       .addend = addend,
-                                       .weak = false,
-                                       .weak_definition = true,
-                               });
+                              (ld_bind_t) {
+                                      .symbol = symbol,
+                                      .segment = segment,
+                                      .offset = offset,
+                                      .addend = addend,
+                                      .weak = false,
+                                      .weak_definition = true,
+                              });
     return result == LD_OK
                    ? LD_OK
                    : ld_fail(ctx, LD_IO_ERROR,
-                              "out of memory recording weak bind fixup");
+                             "out of memory recording weak bind fixup");
 }
 
 static uint64_t ld_tlv_template_base(const ld_context_t *ctx) {
@@ -1790,13 +2006,28 @@ static int ld_write_stub_data(ld_context_t *ctx) {
     if (!ctx->stubs) {
         return LD_OK;
     }
-    for (size_t i = 0; i < ctx->dynamic_symbols.count; i++) {
-        ld_symbol_t *symbol = ctx->dynamic_symbols.items[i];
+    for (ld_symbol_t *symbol = ctx->symbols; symbol;
+         symbol = symbol->hh.next) {
         if (symbol->stub_index == UINT32_MAX) continue;
         uint8_t *stub = ctx->stubs->data + (size_t) symbol->stub_index * 12U;
         uint64_t stub_address = ctx->stubs->addr + (uint64_t) symbol->stub_index * 12U;
         uint64_t got_address = ctx->got->addr + (uint64_t) symbol->got_index * 8U;
-        uint32_t adrp = ld_patch_adrp(0x90000210U, (int64_t) ((got_address & ~0xfffULL) - (stub_address & ~0xfffULL)));
+        if (got_address > (uint64_t) INT64_MAX ||
+            stub_address > (uint64_t) INT64_MAX ||
+            (got_address & 7U) != 0) {
+            return ld_fail(ctx, LD_RELOCATION_ERROR,
+                           "stub target for '%s' is not representable",
+                           symbol->name);
+        }
+        int64_t page_delta =
+                (int64_t) (got_address & ~0xfffULL) -
+                (int64_t) (stub_address & ~0xfffULL);
+        if (page_delta < -(1LL << 32) || page_delta >= (1LL << 32)) {
+            return ld_fail(ctx, LD_RELOCATION_ERROR,
+                           "stub target for '%s' is outside the ARM64 ADRP range",
+                           symbol->name);
+        }
+        uint32_t adrp = ld_patch_adrp(0x90000210U, page_delta);
         uint32_t ldr = 0xf9400210U;
         ldr |= ((uint32_t) ((got_address & 0xfffU) >> 3U) & 0xfffU) << 10U;
         uint32_t br = 0xd61f0200U;
@@ -1856,8 +2087,8 @@ static int ld_write_objc_stub_data(ld_context_t *ctx) {
 }
 
 static ld_branch_thunk_t *ld_find_branch_thunk(ld_context_t *ctx, ld_object_t *object,
-                                                 uint32_t section_index,
-                                                 uint32_t relocation_index) {
+                                               uint32_t section_index,
+                                               uint32_t relocation_index) {
     for (size_t i = 0; i < ctx->branch_thunks.count; i++) {
         ld_branch_thunk_t *thunk = &ctx->branch_thunks.items[i];
         if (thunk->object == object && thunk->section_index == section_index &&
@@ -1903,7 +2134,7 @@ static int ld_apply_relocations(ld_context_t *ctx) {
                 }
                 if (relocation.type > LD_ARM64_RELOC_ADDEND) {
                     return ld_fail(ctx, LD_RELOCATION_ERROR, "unsupported ARM64 relocation type %u in '%s'",
-                                    relocation.type, object->file->path);
+                                   relocation.type, object->file->path);
                 }
                 if (relocation.address >= section->header.size) {
                     return ld_fail(ctx, LD_RELOCATION_ERROR, "relocation outside input section in '%s'", object->file->path);
@@ -1924,18 +2155,36 @@ static int ld_apply_relocations(ld_context_t *ctx) {
                 uint8_t *location = section->output->data + section->output_offset + relocation.address;
                 uint64_t place = section->output->addr + section->output_offset + relocation.address;
                 ld_symbol_t *symbol = ld_relocation_symbol(ctx, object, &relocation);
+                ld_macho_ref_t ref = {0};
+                bool has_ref = relocation.external &&
+                               ld_macho_ref_for_relocation(ctx, object,
+                                                           &relocation, &ref);
+                bool tlvp_uses_pointer = false;
                 uint64_t target = 0;
-                if (symbol && symbol->got_index != UINT32_MAX &&
+                if (has_ref &&
                     (relocation.type == LD_ARM64_RELOC_GOT_LOAD_PAGE21 ||
                      relocation.type == LD_ARM64_RELOC_GOT_LOAD_PAGEOFF12 ||
-                     relocation.type == LD_ARM64_RELOC_POINTER_TO_GOT ||
-                     relocation.type == LD_ARM64_RELOC_TLVP_LOAD_PAGE21 ||
-                     relocation.type == LD_ARM64_RELOC_TLVP_LOAD_PAGEOFF12)) {
-                    target = ctx->got->addr + (uint64_t) symbol->got_index * 8U;
-                } else if (symbol && symbol->kind == LD_SYMBOL_IMPORT) {
-                    if (relocation.type == LD_ARM64_RELOC_BRANCH26) {
-                        target = ctx->stubs->addr + (uint64_t) symbol->stub_index * 12U;
-                    }
+                     relocation.type == LD_ARM64_RELOC_POINTER_TO_GOT) &&
+                    ld_macho_got_address(ctx, &ref, &target)) {
+                    /* The synthetic reference list retains local nlist
+                       identity, so clang's local GOT references reach a real
+                       slot instead of leaving an LDR pointed at the object. */
+                } else if (has_ref &&
+                           (relocation.type ==
+                                    LD_ARM64_RELOC_TLVP_LOAD_PAGE21 ||
+                            relocation.type ==
+                                    LD_ARM64_RELOC_TLVP_LOAD_PAGEOFF12) &&
+                           ld_macho_tlv_ptr_address(ctx, &ref, &target)) {
+                    tlvp_uses_pointer = true;
+                } else if (ld_macho_symbol_needs_stub(symbol) &&
+                           relocation.type == LD_ARM64_RELOC_BRANCH26) {
+                    /* Imports and exported weak definitions are called
+                       through a stub.  Other references to an exported weak
+                       definition still use the definition's address as the
+                       initial value and are subsequently recorded in the
+                       weak-bind stream. */
+                    target = ctx->stubs->addr +
+                             (uint64_t) symbol->stub_index * 12U;
                 } else {
                     target = ld_relocation_target(ctx, object, &relocation);
                 }
@@ -1965,10 +2214,10 @@ static int ld_apply_relocations(ld_context_t *ctx) {
                                                     : (int64_t) (int32_t) ld_read_u32(location);
                     uint64_t value;
                     if (!ld_relocation_difference(minuend, subtrahend, raw_addend, addend,
-                                                   relocation.length, &value)) {
+                                                  relocation.length, &value)) {
                         return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                        "ARM64 subtractor relocation overflows %u-byte field in '%s'",
-                                        (unsigned) width, object->file->path);
+                                       "ARM64 subtractor relocation overflows %u-byte field in '%s'",
+                                       (unsigned) width, object->file->path);
                     }
                     if (width == 8) {
                         ld_write_u64(location, value);
@@ -1981,16 +2230,40 @@ static int ld_apply_relocations(ld_context_t *ctx) {
                 }
                 if (relocation.type == LD_ARM64_RELOC_UNSIGNED) {
                     uint64_t raw_value = width == 8 ? ld_read_u64(location) : width == 4 ? ld_read_u32(location)
-                                                                                          : 0;
+                                                                                         : 0;
                     int64_t raw_addend = width == 8 ? (int64_t) raw_value : (int64_t) (int32_t) raw_value;
                     if (width != 8 && width != 4) return ld_fail(ctx, LD_RELOCATION_ERROR, "unsupported unsigned relocation width");
-                    if (symbol && symbol->kind == LD_SYMBOL_IMPORT) {
+                    if (symbol && symbol->kind == LD_SYMBOL_IMPORT &&
+                        width == 8U) {
                         int64_t bind_addend;
                         if (!ld_add_i64_checked(raw_addend, addend, &bind_addend)) {
                             return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                            "ARM64 unsigned relocation addend overflows in '%s'", object->file->path);
+                                           "ARM64 unsigned relocation addend overflows in '%s'", object->file->path);
                         }
                         if (ld_add_bind(ctx, symbol, place, bind_addend) != LD_OK) return ctx->error;
+                        if (symbol->dylib_weak_definition &&
+                            ld_add_weak_bind(ctx, symbol, place,
+                                             bind_addend) != LD_OK) {
+                            return ctx->error;
+                        }
+                    } else if (symbol && symbol->kind == LD_SYMBOL_IMPORT) {
+                        /* Classic dyld BIND_TYPE_POINTER always writes a
+                           pointer-sized (8-byte) value.  Emitting it for a
+                           4-byte UNSIGNED relocation would overwrite the
+                           following four bytes at runtime.  Zig resolves the
+                           32-bit form at link time and only collects
+                           pointer-width UNSIGNED relocations for dyld bind. */
+                        uint64_t value;
+                        if (!ld_relocation_value(0, raw_addend, addend,
+                                                 relocation.length,
+                                                 &value)) {
+                            return ld_fail(
+                                    ctx, LD_RELOCATION_ERROR,
+                                    "ARM64 imported unsigned relocation overflows %u-byte field in '%s'",
+                                    (unsigned) width,
+                                    object->file->path);
+                        }
+                        ld_write_u32(location, (uint32_t) value);
                     } else if ((section->header.flags & LD_SECTION_TYPE) == LD_S_THREAD_LOCAL_VARIABLES &&
                                (relocation.address % 24U) == 16U) {
                         uint64_t tlv_base = ld_tlv_template_base(ctx);
@@ -1999,10 +2272,10 @@ static int ld_apply_relocations(ld_context_t *ctx) {
                         }
                         uint64_t value;
                         if (!ld_relocation_value(target - tlv_base, raw_addend, addend,
-                                                  relocation.length, &value)) {
+                                                 relocation.length, &value)) {
                             return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                            "ARM64 TLV initializer relocation overflows %u-byte field in '%s'",
-                                            (unsigned) width, object->file->path);
+                                           "ARM64 TLV initializer relocation overflows %u-byte field in '%s'",
+                                           (unsigned) width, object->file->path);
                         }
                         if (width == 8) ld_write_u64(location, value);
                         else
@@ -2011,19 +2284,20 @@ static int ld_apply_relocations(ld_context_t *ctx) {
                         uint64_t value;
                         if (!ld_relocation_value(target, raw_addend, addend, relocation.length, &value)) {
                             return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                            "ARM64 unsigned relocation overflows %u-byte field in '%s'",
-                                            (unsigned) width, object->file->path);
+                                           "ARM64 unsigned relocation overflows %u-byte field in '%s'",
+                                           (unsigned) width, object->file->path);
                         }
                         if (width == 8) ld_write_u64(location, value);
                         else
                             ld_write_u32(location, (uint32_t) value);
                         if (width == 8 && ld_add_rebase(ctx, place) != LD_OK) return ctx->error;
-                        if (width == 8 && symbol && symbol->weak) {
+                        if (width == 8 &&
+                            ld_macho_symbol_is_exported_weak(symbol)) {
                             int64_t weak_addend;
                             if (!ld_add_i64_checked(raw_addend, addend, &weak_addend)) {
                                 return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                                "ARM64 weak bind addend overflows in '%s'",
-                                                object->file->path);
+                                               "ARM64 weak bind addend overflows in '%s'",
+                                               object->file->path);
                             }
                             if (ld_add_weak_bind(ctx, symbol, place, weak_addend) != LD_OK) {
                                 return ctx->error;
@@ -2042,8 +2316,8 @@ static int ld_apply_relocations(ld_context_t *ctx) {
                             adjusted_target = ctx->branch_islands->addr + thunk->output_offset;
                         } else if (!ld_add_signed_u64(target, addend, &adjusted_target)) {
                             return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                            "ARM64 branch relocation addend overflow in '%s'",
-                                            object->file->path);
+                                           "ARM64 branch relocation addend overflow in '%s'",
+                                           object->file->path);
                         }
                         if (
                                 adjusted_target > (uint64_t) INT64_MAX || place > (uint64_t) INT64_MAX) {
@@ -2076,7 +2350,31 @@ static int ld_apply_relocations(ld_context_t *ctx) {
                             return ld_fail(ctx, LD_RELOCATION_ERROR, "ARM64 pageoff relocation addend overflow in '%s'", object->file->path);
                         }
                         uint32_t patched;
-                        if (!ld_patch_pageoff(instruction, adjusted_target & 0xfffULL, &patched)) {
+                        if (relocation.type ==
+                            LD_ARM64_RELOC_TLVP_LOAD_PAGEOFF12) {
+                            uint32_t destination = instruction & 0x1fU;
+                            uint32_t base = (instruction >> 5U) & 0x1fU;
+                            uint64_t offset = adjusted_target & 0xfffULL;
+                            if (tlvp_uses_pointer) {
+                                if ((offset & 7U) != 0 ||
+                                    (offset >> 3U) > 0xfffU) {
+                                    return ld_fail(
+                                            ctx, LD_RELOCATION_ERROR,
+                                            "ARM64 TLV pointer pageoff relocation is misaligned or out of range in '%s'",
+                                            object->file->path);
+                                }
+                                patched = 0xf9400000U | destination |
+                                          (base << 5U) |
+                                          ((uint32_t) (offset >> 3U) << 10U);
+                            } else {
+                                patched = 0x91000000U | destination |
+                                          (base << 5U) |
+                                          ((uint32_t) offset << 10U);
+                            }
+                        } else if (!ld_patch_pageoff(
+                                           instruction,
+                                           adjusted_target & 0xfffULL,
+                                           &patched)) {
                             return ld_fail(ctx, LD_RELOCATION_ERROR, "ARM64 pageoff relocation is misaligned or out of range in '%s'", object->file->path);
                         }
                         ld_write_u32(location, patched);
@@ -2124,15 +2422,50 @@ static int ld_apply_relocations(ld_context_t *ctx) {
     }
     if (ld_write_stub_data(ctx) != LD_OK) return ctx->error;
     if (ld_write_objc_stub_data(ctx) != LD_OK) return ctx->error;
-    for (ld_symbol_t *symbol = ctx->symbols; symbol; symbol = symbol->hh.next) {
-        if (symbol->got_index == UINT32_MAX) continue;
-        uint64_t got_address = ctx->got->addr + (uint64_t) symbol->got_index * 8U;
-        if (symbol->kind == LD_SYMBOL_IMPORT) {
-            if (ld_add_bind(ctx, symbol, got_address, 0) != LD_OK) return ctx->error;
+    for (size_t i = 0; i < ctx->got_refs.count; i++) {
+        ld_macho_ref_t *ref = &ctx->got_refs.items[i];
+        ld_symbol_t *global = ref->global;
+        uint64_t got_address =
+                ctx->got->addr + (uint64_t) i * sizeof(uint64_t);
+        if (global && global->kind == LD_SYMBOL_IMPORT) {
+            if (ld_add_bind(ctx, global, got_address, 0) != LD_OK) {
+                return ctx->error;
+            }
+            if (global->dylib_weak_definition &&
+                ld_add_weak_bind(ctx, global, got_address, 0) != LD_OK) {
+                return ctx->error;
+            }
         } else {
-            ld_write_u64(ctx->got->data + (size_t) symbol->got_index * 8U, ld_symbol_address(symbol));
+            ld_write_u64(ctx->got->data + i * sizeof(uint64_t),
+                         ld_macho_ref_address(ref));
             if (ld_add_rebase(ctx, got_address) != LD_OK) return ctx->error;
-            if (symbol->weak && ld_add_weak_bind(ctx, symbol, got_address, 0) != LD_OK) {
+            if (ld_macho_symbol_is_exported_weak(global) &&
+                ld_add_weak_bind(ctx, global, got_address, 0) != LD_OK) {
+                return ctx->error;
+            }
+        }
+    }
+    for (size_t i = 0; i < ctx->tlv_ptr_refs.count; i++) {
+        ld_macho_ref_t *ref = &ctx->tlv_ptr_refs.items[i];
+        ld_symbol_t *global = ref->global;
+        uint64_t pointer_address =
+                ctx->tlv_ptrs->addr + (uint64_t) i * sizeof(uint64_t);
+        if (global && global->kind == LD_SYMBOL_IMPORT) {
+            if (ld_add_bind(ctx, global, pointer_address, 0) != LD_OK) {
+                return ctx->error;
+            }
+            if (global->dylib_weak_definition &&
+                ld_add_weak_bind(ctx, global, pointer_address, 0) != LD_OK) {
+                return ctx->error;
+            }
+        } else {
+            ld_write_u64(ctx->tlv_ptrs->data + i * sizeof(uint64_t),
+                         ld_macho_ref_address(ref));
+            if (ld_add_rebase(ctx, pointer_address) != LD_OK) {
+                return ctx->error;
+            }
+            if (ld_macho_symbol_is_exported_weak(global) &&
+                ld_add_weak_bind(ctx, global, pointer_address, 0) != LD_OK) {
                 return ctx->error;
             }
         }
@@ -2141,11 +2474,13 @@ static int ld_apply_relocations(ld_context_t *ctx) {
 }
 
 static int ld_define_special(ld_context_t *ctx, const char *name,
-                              bool execute_header, bool hidden) {
+                             bool execute_header, bool hidden) {
     ld_symbol_t *existing = ld_symbol_find(ctx, name);
     if (existing && existing->kind != LD_SYMBOL_UNDEFINED && existing->kind != LD_SYMBOL_IMPORT) {
         existing->execute_header = execute_header;
         existing->linker_defined = hidden;
+        existing->visibility = hidden ? LD_VISIBILITY_HIDDEN
+                                      : LD_VISIBILITY_GLOBAL;
         return LD_OK;
     }
     if (existing) {
@@ -2155,6 +2490,8 @@ static int ld_define_special(ld_context_t *ctx, const char *name,
         existing->weak = false;
         existing->execute_header = execute_header;
         existing->linker_defined = hidden;
+        existing->visibility = hidden ? LD_VISIBILITY_HIDDEN
+                                      : LD_VISIBILITY_GLOBAL;
         return LD_OK;
     }
     ld_symbol_t *symbol = calloc(1, sizeof(*symbol));
@@ -2163,10 +2500,14 @@ static int ld_define_special(ld_context_t *ctx, const char *name,
     symbol->kind = LD_SYMBOL_ABSOLUTE;
     symbol->value = LD_IMAGE_BASE;
     symbol->got_index = UINT32_MAX;
+    symbol->tlv_ptr_index = UINT32_MAX;
     symbol->stub_index = UINT32_MAX;
     symbol->objc_stub_index = UINT32_MAX;
+    symbol->symtab_index = UINT32_MAX;
     symbol->execute_header = execute_header;
     symbol->linker_defined = hidden;
+    symbol->visibility = hidden ? LD_VISIBILITY_HIDDEN
+                                : LD_VISIBILITY_GLOBAL;
     if (!symbol->name) {
         free(symbol);
         return ld_fail(ctx, LD_IO_ERROR, "out of memory defining '%s'", name);
@@ -2181,9 +2522,12 @@ static int ld_require_symbol(ld_context_t *ctx, const char *name) {
     if (!symbol) return ld_fail(ctx, LD_IO_ERROR, "out of memory requiring '%s'", name);
     symbol->name = strdup(name);
     symbol->kind = LD_SYMBOL_UNDEFINED;
+    symbol->visibility = LD_VISIBILITY_LOCAL;
     symbol->got_index = UINT32_MAX;
+    symbol->tlv_ptr_index = UINT32_MAX;
     symbol->stub_index = UINT32_MAX;
     symbol->objc_stub_index = UINT32_MAX;
+    symbol->symtab_index = UINT32_MAX;
     if (!symbol->name) {
         free(symbol);
         return ld_fail(ctx, LD_IO_ERROR, "out of memory requiring '%s'", name);
@@ -2199,7 +2543,7 @@ static int ld_symbol_name_compare(const void *left, const void *right) {
 }
 
 static void ld_export_symbol_payload(const ld_symbol_t *symbol,
-                                      uint64_t *flags, uint64_t *address) {
+                                     uint64_t *flags, uint64_t *address) {
     *flags = symbol->weak ? LD_EXPORT_SYMBOL_FLAGS_WEAK_DEFINITION : 0U;
     if (symbol->execute_header) {
         *flags |= LD_EXPORT_SYMBOL_FLAGS_KIND_REGULAR;
@@ -2212,8 +2556,10 @@ static void ld_export_symbol_payload(const ld_symbol_t *symbol,
         return;
     }
     uint32_t section_type = symbol->output ? symbol->output->flags & LD_SECTION_TYPE : LD_S_REGULAR;
-    if (section_type == LD_S_THREAD_LOCAL_REGULAR ||
-        section_type == LD_S_THREAD_LOCAL_ZEROFILL) {
+    /* The exported TLS symbol names the three-word TLV descriptor, not the
+       template bytes.  Zig derives the same flag from
+       S_THREAD_LOCAL_VARIABLES. */
+    if (section_type == LD_S_THREAD_LOCAL_VARIABLES) {
         *flags |= LD_EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL;
     } else {
         *flags |= LD_EXPORT_SYMBOL_FLAGS_KIND_REGULAR;
@@ -2240,10 +2586,7 @@ static int ld_make_export_trie(ld_context_t *ctx, ld_bytes_t *stream) {
     ld_bytes_init(stream);
     ld_symbol_list_t symbols = {0};
     for (ld_symbol_t *symbol = ctx->symbols; symbol; symbol = symbol->hh.next) {
-        bool regular = (symbol->kind == LD_SYMBOL_DEFINED || symbol->kind == LD_SYMBOL_COMMON) &&
-                       symbol->output;
-        bool absolute = symbol->kind == LD_SYMBOL_ABSOLUTE && !symbol->linker_defined;
-        if ((regular || absolute || symbol->execute_header) && !symbol->objc_selector_stub) {
+        if (ld_macho_symbol_is_exported(symbol)) {
             if (ld_symbol_push(&symbols, symbol) != LD_OK) {
                 free(symbols.items);
                 return ld_fail(ctx, LD_IO_ERROR, "out of memory collecting exported symbols");
@@ -2480,17 +2823,19 @@ static int ld_make_bind_stream(ld_context_t *ctx, ld_bytes_t *stream) {
            reserved for locations that point at weak definitions. */
         if (bind->weak_definition) continue;
         if (bind->segment > 15U) return ld_fail(ctx, LD_OUTPUT_ERROR, "too many Mach-O segments for bind stream");
-        uint32_t ordinal = bind->symbol->dylib_ordinal ? bind->symbol->dylib_ordinal : 1U;
+        uint32_t ordinal = bind->symbol->dylib_ordinal;
         const char *bind_name = strncmp(bind->symbol->name, "_objc_msgSend$", 14) == 0
                                         ? "_objc_msgSend"
                                         : bind->symbol->name;
-        if ((ordinal <= 15U
+        if ((ordinal == 0U
+                     ? ld_bytes_u8(stream, LD_BIND_OPCODE_SET_DYLIB_SPECIAL_IMM)
+             : ordinal <= 15U
                      ? ld_bytes_u8(stream, LD_BIND_OPCODE_SET_DYLIB_ORDINAL_IMM | (uint8_t) ordinal)
                      : (ld_bytes_u8(stream, LD_BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB) == LD_OK
                                 ? ld_bytes_uleb(stream, ordinal)
                                 : LD_IO_ERROR)) != LD_OK ||
             ld_bytes_u8(stream, LD_BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM |
-                                         (bind->weak ? LD_BIND_SYMBOL_FLAGS_WEAK_IMPORT : 0U)) != LD_OK ||
+                                        (bind->weak ? LD_BIND_SYMBOL_FLAGS_WEAK_IMPORT : 0U)) != LD_OK ||
             ld_bytes_put(stream, bind_name, strlen(bind_name) + 1U) != LD_OK ||
             ld_bytes_u8(stream, LD_BIND_OPCODE_SET_TYPE_IMM | LD_BIND_TYPE_POINTER) != LD_OK ||
             ld_bytes_u8(stream, LD_BIND_OPCODE_SET_SEGMENT_AND_OFFSET_ULEB | (uint8_t) bind->segment) != LD_OK ||
@@ -2595,7 +2940,7 @@ static void ld_linkedit_deinit(ld_linkedit_t *linkedit) {
 }
 
 static bool ld_output_local_symbol(const ld_input_symbol_t *input,
-                                    const ld_output_section_t **output_section) {
+                                   const ld_output_section_t **output_section) {
     if (!input || !input->name || !*input->name || !input->object ||
         (input->entry.n_type & (LD_N_STAB | LD_N_EXT)) != 0) {
         return false;
@@ -2618,10 +2963,62 @@ static bool ld_output_local_symbol(const ld_input_symbol_t *input,
     return true;
 }
 
+static void ld_assign_linker_symbol_output(ld_context_t *ctx,
+                                           ld_symbol_t *symbol) {
+    if (!ctx || !symbol || !symbol->linker_defined ||
+        symbol->boundary_kind == LD_BOUNDARY_NONE) {
+        return;
+    }
+    const char *segment_name = symbol->boundary_segment;
+    const char *canonical = ld_canonical_segment(segment_name);
+    ld_output_section_t *section = NULL;
+    if (symbol->boundary_kind == LD_BOUNDARY_SECTION_START ||
+        symbol->boundary_kind == LD_BOUNDARY_SECTION_END) {
+        section = ld_find_output(ctx, segment_name, symbol->boundary_section);
+        if (!section && canonical != segment_name) {
+            section = ld_find_output(ctx, canonical, symbol->boundary_section);
+        }
+        if (!section) return;
+        symbol->output = section;
+        symbol->output_offset = symbol->boundary_kind == LD_BOUNDARY_SECTION_END
+                                        ? section->size
+                                        : 0;
+        return;
+    }
+    if (strcmp(segment_name, "__PAGEZERO") == 0) return;
+    uint64_t best_address = symbol->boundary_kind == LD_BOUNDARY_SEGMENT_START
+                                    ? UINT64_MAX
+                                    : 0;
+    ld_output_section_t *best = NULL;
+    for (size_t i = 0; i < ctx->outputs.count; i++) {
+        ld_output_section_t *candidate = ctx->outputs.items[i];
+        if (strcmp(candidate->segname, segment_name) != 0 &&
+            strcmp(candidate->segname, canonical) != 0) {
+            continue;
+        }
+        if (symbol->boundary_kind == LD_BOUNDARY_SEGMENT_START) {
+            if (candidate->addr < best_address) {
+                best_address = candidate->addr;
+                best = candidate;
+            }
+        } else if (!best || candidate->addr + candidate->size >
+                                    best->addr + best->size) {
+            best = candidate;
+        }
+    }
+    if (best) {
+        symbol->output = best;
+        symbol->output_offset = symbol->value >= best->addr
+                                        ? symbol->value - best->addr
+                                        : 0;
+    }
+}
+
 static int ld_make_symbol_tables(ld_context_t *ctx, ld_linkedit_t *linkedit) {
     ld_bytes_init(&linkedit->symtab);
     ld_bytes_init(&linkedit->strtab);
     ld_bytes_init(&linkedit->indirect);
+    ld_symbol_list_t local_definitions = {0};
     ld_symbol_list_t defined = {0};
     ld_symbol_list_t imports = {0};
     size_t local_count = 0;
@@ -2647,21 +3044,28 @@ static int ld_make_symbol_tables(ld_context_t *ctx, ld_linkedit_t *linkedit) {
         }
     }
     for (ld_symbol_t *symbol = ctx->symbols; symbol; symbol = symbol->hh.next) {
-        /* Boundary symbols are linker implementation details.  ld64 uses
-           them to fix relocations but does not expose their synthetic names
-           in the final external symbol table. */
-        if (symbol->linker_defined) {
-            continue;
-        }
+        /* Linker-defined boundary and runtime symbols are local output
+           symbols in Zig's internal object. They must remain available to
+           debuggers and to indirect-symbol references, but never become
+           exports because their visibility is non-global. */
+        ld_assign_linker_symbol_output(ctx, symbol);
         if (symbol->kind == LD_SYMBOL_DEFINED || symbol->kind == LD_SYMBOL_ABSOLUTE ||
             symbol->kind == LD_SYMBOL_COMMON) {
-            if (ld_symbol_push(&defined, symbol) != LD_OK) goto oom;
+            ld_symbol_list_t *list =
+                    symbol->visibility == LD_VISIBILITY_GLOBAL
+                            ? &defined
+                            : &local_definitions;
+            if (ld_symbol_push(list, symbol) != LD_OK) goto oom;
         } else if (symbol->kind == LD_SYMBOL_IMPORT && !symbol->alias) {
             if (ld_symbol_push(&imports, symbol) != LD_OK) goto oom;
         }
     }
+    if (local_definitions.count > UINT32_MAX - local_count) goto too_many;
+    local_count += local_definitions.count;
     if (defined.count > UINT32_MAX - local_count ||
         imports.count > UINT32_MAX - local_count - defined.count) goto too_many;
+    qsort(local_definitions.items, local_definitions.count,
+          sizeof(local_definitions.items[0]), ld_symbol_name_compare);
     qsort(defined.items, defined.count, sizeof(defined.items[0]), ld_symbol_name_compare);
     qsort(imports.items, imports.count, sizeof(imports.items[0]), ld_symbol_name_compare);
 
@@ -2678,10 +3082,44 @@ static int ld_make_symbol_tables(ld_context_t *ctx, ld_linkedit_t *linkedit) {
             ld_nlist_64_t entry = {0};
             entry.n_strx = string_offset;
             entry.n_type = input->entry.n_type & LD_N_TYPE;
-            entry.n_desc = input->entry.n_desc;
+            /* Zig rebuilds local output nlists and clears input-only
+               reference/weak metadata. */
+            entry.n_desc = 0;
             entry.n_value = ld_local_symbol_address(input);
             if (output) entry.n_sect = (uint8_t) output->section_index;
+            input->output_symtab_index =
+                    (uint32_t) (linkedit->symtab.size /
+                                sizeof(ld_nlist_64_t));
             if (ld_bytes_put(&linkedit->symtab, &entry, sizeof(entry)) != LD_OK) goto oom;
+        }
+    }
+
+    /* Private-external winners resolve across input objects but belong to
+       Mach-O's local symbol range.  Zig emits them without N_EXT and retains
+       N_PEXT so nm/dyld do not classify them as exports. */
+    for (size_t i = 0; i < local_definitions.count; i++) {
+        ld_symbol_t *symbol = local_definitions.items[i];
+        if (linkedit->strtab.size > UINT32_MAX) goto too_large;
+        symbol->symtab_index = (uint32_t) (linkedit->symtab.size /
+                                           sizeof(ld_nlist_64_t));
+        uint32_t string_offset = (uint32_t) linkedit->strtab.size;
+        if (ld_bytes_put(&linkedit->strtab, symbol->name,
+                         strlen(symbol->name) + 1U) != LD_OK) {
+            goto oom;
+        }
+        ld_nlist_64_t entry = {.n_strx = string_offset};
+        if (symbol->kind == LD_SYMBOL_ABSOLUTE || !symbol->output) {
+            entry.n_type = LD_N_ABS;
+        } else {
+            entry.n_type = LD_N_SECT;
+            entry.n_sect = (uint8_t) symbol->output->section_index;
+        }
+        if (symbol->visibility == LD_VISIBILITY_HIDDEN) {
+            entry.n_type |= LD_N_PEXT;
+        }
+        entry.n_value = ld_symbol_address(symbol);
+        if (ld_bytes_put(&linkedit->symtab, &entry, sizeof(entry)) != LD_OK) {
+            goto oom;
         }
     }
 
@@ -2689,7 +3127,8 @@ static int ld_make_symbol_tables(ld_context_t *ctx, ld_linkedit_t *linkedit) {
         ld_symbol_list_t *list = group == 0 ? &defined : &imports;
         for (size_t i = 0; i < list->count; i++) {
             ld_symbol_t *symbol = list->items[i];
-            symbol->symtab_index = (uint32_t) (local_count + (group == 0 ? 0 : defined.count) + i);
+            symbol->symtab_index = (uint32_t) (linkedit->symtab.size /
+                                               sizeof(ld_nlist_64_t));
             if (linkedit->strtab.size > UINT32_MAX) goto too_large;
             uint32_t string_offset = (uint32_t) linkedit->strtab.size;
             if (ld_bytes_put(&linkedit->strtab, symbol->name, strlen(symbol->name) + 1U) != LD_OK) goto oom;
@@ -2712,10 +3151,16 @@ static int ld_make_symbol_tables(ld_context_t *ctx, ld_linkedit_t *linkedit) {
                 }
                 entry.n_value = ld_symbol_address(symbol);
                 if (symbol->weak) entry.n_desc |= LD_N_WEAK_DEF;
+                if (symbol->referenced_dynamically) {
+                    entry.n_desc |= LD_N_REFERENCED_DYNAMICALLY;
+                }
             } else {
                 entry.n_type = LD_N_UNDF | LD_N_EXT;
-                entry.n_desc = (uint16_t) ((symbol->dylib_ordinal ? symbol->dylib_ordinal : 1U) << 8U);
+                entry.n_desc = (uint16_t) (symbol->dylib_ordinal << 8U);
                 if (symbol->weak_ref) entry.n_desc |= LD_N_WEAK_REF;
+                if (symbol->dylib_weak_definition) {
+                    entry.n_desc |= LD_N_REF_TO_WEAK;
+                }
             }
             if (ld_bytes_put(&linkedit->symtab, &entry, sizeof(entry)) != LD_OK) goto oom;
         }
@@ -2724,62 +3169,81 @@ static int ld_make_symbol_tables(ld_context_t *ctx, ld_linkedit_t *linkedit) {
         ld_output_section_t *section = ctx->outputs.items[i];
         if (section == ctx->got) {
             section->flags = (section->flags & ~LD_SECTION_TYPE) | LD_S_NON_LAZY_SYMBOL_POINTERS;
-            for (uint32_t slot = 0; slot < ctx->got_count; slot++) {
-                for (ld_symbol_t *symbol = ctx->symbols; symbol; symbol = symbol->hh.next) {
-                    if (symbol->got_index == slot) {
-                        uint32_t value = symbol->kind == LD_SYMBOL_IMPORT ? symbol->symtab_index : 0x80000000U;
-                        if (ld_bytes_put(&linkedit->indirect, &value, sizeof(value)) != LD_OK) goto oom;
-                        break;
-                    }
+            section->reserved1 =
+                    (uint32_t) (linkedit->indirect.size / sizeof(uint32_t));
+            for (size_t slot = 0; slot < ctx->got_refs.count; slot++) {
+                uint32_t value;
+                if (!ld_macho_ref_symtab_index(&ctx->got_refs.items[slot],
+                                               &value)) {
+                    value = 0x80000000U;
+                }
+                if (ld_bytes_put(&linkedit->indirect, &value,
+                                 sizeof(value)) != LD_OK) {
+                    goto oom;
                 }
             }
-            section->reserved1 = 0;
         } else if (section == ctx->stubs) {
             section->flags = (section->flags & ~LD_SECTION_TYPE) | LD_S_SYMBOL_STUBS;
             section->reserved1 = (uint32_t) (linkedit->indirect.size / 4U);
             section->reserved2 = 12;
             for (size_t stub = 0; stub < ctx->stub_count; stub++) {
-                for (size_t j = 0; j < imports.count; j++) {
-                    if (imports.items[j]->stub_index == stub) {
-                        uint32_t value = imports.items[j]->symtab_index;
+                bool found = false;
+                for (ld_symbol_t *symbol = ctx->symbols; symbol;
+                     symbol = symbol->hh.next) {
+                    if (symbol->stub_index == stub) {
+                        uint32_t value = symbol->symtab_index;
                         if (ld_bytes_put(&linkedit->indirect, &value, sizeof(value)) != LD_OK) goto oom;
+                        found = true;
                         break;
                     }
                 }
+                if (!found) goto invalid_stub;
             }
         }
     }
     linkedit->nlocalsym = (uint32_t) local_count;
     linkedit->nextdefsym = (uint32_t) defined.count;
     linkedit->iundefsym = (uint32_t) (local_count + defined.count);
+    free(local_definitions.items);
     free(defined.items);
     free(imports.items);
     return LD_OK;
 
 too_many:
+    free(local_definitions.items);
     free(defined.items);
     free(imports.items);
     return ld_fail(ctx, LD_OUTPUT_ERROR, "too many symbols for Mach-O symbol table");
 
 too_large:
+    free(local_definitions.items);
     free(defined.items);
     free(imports.items);
     return ld_fail(ctx, LD_OUTPUT_ERROR, "Mach-O string table exceeds 32-bit offsets");
 
 invalid_header:
+    free(local_definitions.items);
     free(defined.items);
     free(imports.items);
     return ld_fail(ctx, LD_OUTPUT_ERROR,
-                    "cannot place __mh_execute_header without an output __TEXT section");
+                   "cannot place __mh_execute_header without an output __TEXT section");
+
+invalid_stub:
+    free(local_definitions.items);
+    free(defined.items);
+    free(imports.items);
+    return ld_fail(ctx, LD_OUTPUT_ERROR,
+                   "Mach-O stub has no output symbol table entry");
 
 oom:
+    free(local_definitions.items);
     free(defined.items);
     free(imports.items);
     return ld_fail(ctx, LD_IO_ERROR, "out of memory creating Mach-O symbol tables");
 }
 
 static size_t ld_write_segment_command(ld_context_t *ctx, uint8_t *image, size_t position,
-                                        const ld_segment_layout_t *segment, bool pagezero) {
+                                       const ld_segment_layout_t *segment, bool pagezero) {
     uint32_t nsects = pagezero ? 0 : (uint32_t) ld_output_count_for_segment(ctx, segment->name);
     uint32_t cmdsize = (uint32_t) (sizeof(ld_segment_command_64_t) + nsects * sizeof(ld_section_64_t));
     ld_segment_command_64_t command = {0};
@@ -2820,7 +3284,7 @@ static size_t ld_write_segment_command(ld_context_t *ctx, uint8_t *image, size_t
 }
 
 static size_t ld_write_dylib_command(uint8_t *image, size_t position, const char *path,
-                                      uint32_t current_version, uint32_t compatibility_version) {
+                                     uint32_t current_version, uint32_t compatibility_version) {
     size_t path_size = strlen(path) + 1U;
     uint32_t command_size = (uint32_t) ((sizeof(ld_dylib_command_t) + path_size + 7U) & ~7U);
     ld_dylib_command_t command = {0};
@@ -2835,8 +3299,23 @@ static size_t ld_write_dylib_command(uint8_t *image, size_t position, const char
     return position + command_size;
 }
 
+static size_t ld_write_rpath_command(uint8_t *image, size_t position,
+                                     const char *path) {
+    size_t path_size = strlen(path) + 1U;
+    uint32_t command_size = (uint32_t) ((sizeof(ld_rpath_command_t) +
+                                         path_size + 7U) &
+                                        ~7U);
+    ld_rpath_command_t command = {0};
+    command.cmd = LD_LC_RPATH;
+    command.cmdsize = command_size;
+    command.path_offset = sizeof(command);
+    memcpy(image + position, &command, sizeof(command));
+    memcpy(image + position + sizeof(command), path, path_size);
+    return position + command_size;
+}
+
 static size_t ld_write_load_commands(ld_context_t *ctx, uint8_t *image, const ld_linkedit_t *linkedit,
-                                      uint32_t code_signature_offset, uint32_t code_signature_size) {
+                                     uint32_t code_signature_offset, uint32_t code_signature_size) {
     size_t position = sizeof(ld_mach_header_64_t);
     position = ld_write_segment_command(ctx, image, position, NULL, true);
     for (size_t i = 0; i < ctx->segment_count; i++) {
@@ -2928,6 +3407,10 @@ static size_t ld_write_load_commands(ld_context_t *ctx, uint8_t *image, const ld
         uint32_t compatibility_version = metadata ? metadata->compatibility_version : LD_DEFAULT_DYLIB_VERSION;
         position = ld_write_dylib_command(image, position, path, current_version, compatibility_version);
     }
+    for (size_t i = 0; i < ctx->options->rpaths.count; i++) {
+        position = ld_write_rpath_command(
+                image, position, ctx->options->rpaths.items[i]);
+    }
 
     ld_linkedit_data_command_t function_starts = {0};
     function_starts.cmd = LD_LC_FUNCTION_STARTS;
@@ -2980,7 +3463,7 @@ static bool ld_code_signature_size(uint64_t code_limit, size_t identifier_size, 
 }
 
 static int ld_write_code_signature(uint8_t *signature, const uint8_t *code, uint64_t code_limit,
-                                    uint64_t exec_segment_size, const char *identifier, size_t output_size) {
+                                   uint64_t exec_segment_size, const char *identifier, size_t output_size) {
     size_t identifier_size = strlen(identifier);
     size_t signature_size = 0;
     if (!ld_code_signature_size(code_limit, identifier_size, &signature_size) || signature_size > output_size) {
@@ -3042,7 +3525,7 @@ static int ld_write_output_file(ld_context_t *ctx, const uint8_t *image, size_t 
         int saved = errno;
         free(temporary_path);
         return ld_fail(ctx, LD_OUTPUT_ERROR, "cannot create temporary output for '%s': %s",
-                        ctx->options->output_path, strerror(saved));
+                       ctx->options->output_path, strerror(saved));
     }
     size_t written = 0;
     while (written < size) {
@@ -3053,7 +3536,7 @@ static int ld_write_output_file(ld_context_t *ctx, const uint8_t *image, size_t 
             unlink(temporary_path);
             free(temporary_path);
             return ld_fail(ctx, LD_OUTPUT_ERROR, "cannot write '%s': %s", ctx->options->output_path,
-                            result == 0 ? "short write" : strerror(saved));
+                           result == 0 ? "short write" : strerror(saved));
         }
         written += (size_t) result;
     }
@@ -3098,12 +3581,17 @@ static int ld_prepare_objc_selector_symbols(ld_context_t *ctx) {
         symbol->kind = LD_SYMBOL_DEFINED;
         symbol->dynamic = false;
         symbol->weak = false;
+        symbol->visibility = LD_VISIBILITY_HIDDEN;
         found = true;
     }
     if (!found) {
         return LD_OK;
     }
     int result = ld_require_symbol(ctx, "_objc_msgSend");
+    if (result != LD_OK) {
+        return result;
+    }
+    result = ld_register_dylib_symbols(ctx);
     if (result != LD_OK) {
         return result;
     }
@@ -3117,23 +3605,6 @@ static int ld_prepare_objc_selector_symbols(ld_context_t *ctx) {
         }
     }
     return LD_OK;
-}
-
-static bool ld_dylib_exports_symbol(const ld_dylib_input_t *dylib, const char *name) {
-    for (size_t i = 0; i < dylib->export_count; i++) {
-        if (strcmp(dylib->exports[i], name) == 0) return true;
-    }
-    for (size_t i = 0; i < dylib->weak_export_count; i++) {
-        if (strcmp(dylib->weak_exports[i], name) == 0) return true;
-    }
-    return false;
-}
-
-static bool ld_any_dylib_exports_symbol(const ld_context_t *ctx, const char *name) {
-    for (size_t i = 0; i < ctx->dylibs.count; i++) {
-        if (ld_dylib_exports_symbol(&ctx->dylibs.items[i], name)) return true;
-    }
-    return false;
 }
 
 static int ld_emit_image(ld_context_t *ctx) {
@@ -3315,20 +3786,19 @@ static int ld_emit_image(ld_context_t *ctx) {
     header.cpusubtype = LD_CPU_SUBTYPE_ARM64_ALL;
     header.filetype = LD_MH_EXECUTE;
     header.ncmds = (uint32_t) (ctx->segment_count + 11U + ld_dylib_count(ctx) +
+                               ctx->options->rpaths.count +
                                (ctx->options->adhoc_codesign ? 1U : 0U));
     header.sizeofcmds = (uint32_t) (ctx->header_size - sizeof(header));
     header.flags = LD_MH_NOUNDEFS | LD_MH_DYLDLINK | LD_MH_TWOLEVEL;
     if (ctx->options->pie) header.flags |= LD_MH_PIE;
     for (ld_symbol_t *symbol = ctx->symbols; symbol; symbol = symbol->hh.next) {
-        if (symbol->weak && (symbol->kind == LD_SYMBOL_DEFINED || symbol->kind == LD_SYMBOL_COMMON)) {
-            header.flags |= LD_MH_WEAK_DEFINES;
-        }
-        if (symbol->weak_ref && symbol->kind == LD_SYMBOL_IMPORT) {
-            header.flags |= LD_MH_BINDS_TO_WEAK;
+        if (ld_macho_symbol_is_exported_weak(symbol)) {
+            header.flags |= LD_MH_WEAK_DEFINES | LD_MH_BINDS_TO_WEAK;
         }
     }
     for (size_t i = 0; i < ctx->binds.count; i++) {
-        if (ctx->binds.items[i].weak_definition) {
+        if (ctx->binds.items[i].weak_definition ||
+            ctx->binds.items[i].symbol->dylib_weak_definition) {
             header.flags |= LD_MH_BINDS_TO_WEAK;
             break;
         }
@@ -3346,13 +3816,13 @@ static int ld_emit_image(ld_context_t *ctx) {
     size_t command_end = ld_write_load_commands(ctx, image, &linkedit, (uint32_t) signature_offset, (uint32_t) signature_size);
     if (command_end != ctx->header_size) {
         result = ld_fail(ctx, LD_OUTPUT_ERROR, "internal load command size mismatch (%zu != %llu)", command_end,
-                          (unsigned long long) ctx->header_size);
+                         (unsigned long long) ctx->header_size);
         goto cleanup;
     }
     if (ctx->options->adhoc_codesign) {
         ld_segment_layout_t *text_segment = ld_find_segment(ctx, "__TEXT");
         result = ld_write_code_signature(image + signature_offset, image, signature_offset,
-                                          text_segment->filesize, "a.out", signature_size);
+                                         text_segment->filesize, "a.out", signature_size);
         if (result != LD_OK) {
             result = ld_fail(ctx, LD_OUTPUT_ERROR, "cannot create ad-hoc code signature");
             goto cleanup;
@@ -3370,43 +3840,28 @@ static int ld_finalize_symbols(ld_context_t *ctx) {
     if (objc_result != LD_OK) {
         return objc_result;
     }
-    /* Framework flags are explicit requests.  Keep libSystem as ordinal 1 and
-       route the Darwin framework symbol families to their corresponding
-       two-level namespace ordinal. */
-    for (ld_symbol_t *symbol = ctx->symbols; symbol; symbol = symbol->hh.next) {
-        if (symbol->objc_selector_stub) {
-            continue;
-        }
-        if (symbol->kind != LD_SYMBOL_UNDEFINED && symbol->kind != LD_SYMBOL_IMPORT) {
-            continue;
-        }
-        const char *name = symbol->name ? symbol->name : "";
-        for (size_t i = 0; i < ctx->dylibs.count; i++) {
-            if (ld_dylib_exports_symbol(&ctx->dylibs.items[i], name)) {
-                size_t provider = i;
-                if (ctx->dylibs.items[i].reexport_only &&
-                    ctx->dylibs.items[i].has_reexport_owner &&
-                    ctx->dylibs.items[i].reexport_owner < ctx->dylibs.count) {
-                    provider = ctx->dylibs.items[i].reexport_owner;
-                }
-                symbol->dylib_ordinal = ld_dylib_ordinal(ctx, provider);
-                break;
-            }
-        }
+    int dylib_result = ld_register_dylib_symbols(ctx);
+    if (dylib_result != LD_OK) {
+        return dylib_result;
     }
     for (ld_symbol_t *symbol = ctx->symbols; symbol; symbol = symbol->hh.next) {
         if (symbol->objc_selector_stub || symbol->alias) {
             continue;
         }
         if (symbol->kind == LD_SYMBOL_UNDEFINED) {
-            if (!symbol->weak_ref && !ld_any_dylib_exports_symbol(ctx, symbol->name)) {
+            if (!symbol->weak_ref) {
                 return ld_fail(ctx, LD_SYMBOL_ERROR, "undefined symbol '%s' referenced by '%s'%s%s",
-                                symbol->name, symbol->object ? symbol->object->file->path : "<linker>",
-                                symbol->object && symbol->object->member_name ? " member " : "",
-                                symbol->object && symbol->object->member_name ? symbol->object->member_name : "");
+                               symbol->name, symbol->object ? symbol->object->file->path : "<linker>",
+                               symbol->object && symbol->object->member_name ? " member " : "",
+                               symbol->object && symbol->object->member_name ? symbol->object->member_name : "");
             }
             symbol->kind = LD_SYMBOL_IMPORT;
             symbol->dynamic = true;
+            symbol->dylib_index = SIZE_MAX;
+            /* Zig encodes an unresolved weak import against the main
+               executable (BIND_SPECIAL_DYLIB_SELF), not libSystem. */
+            symbol->dylib_ordinal = 0;
+            symbol->visibility = LD_VISIBILITY_GLOBAL;
         }
     }
     int alias_result = ld_resolve_aliases(ctx);
@@ -3485,9 +3940,9 @@ static uint64_t ld_relocation_target(ld_context_t *ctx, ld_object_t *object, con
 }
 
 static uint64_t ld_branch_target(ld_context_t *ctx, ld_object_t *object,
-                                  const ld_relocation_t *relocation) {
+                                 const ld_relocation_t *relocation) {
     ld_symbol_t *symbol = ld_relocation_symbol(ctx, object, relocation);
-    if (symbol && symbol->kind == LD_SYMBOL_IMPORT) {
+    if (ld_macho_symbol_needs_stub(symbol)) {
         if (!ctx->stubs || symbol->stub_index == UINT32_MAX) return 0;
         return ctx->stubs->addr + (uint64_t) symbol->stub_index * 12U;
     }
@@ -3530,7 +3985,7 @@ static int ld_scan_branch_thunks(ld_context_t *ctx, bool *added) {
                 if (relocation.type == LD_ARM64_RELOC_ADDEND) {
                     if (relocation_index + 1U >= section->header.nreloc) {
                         return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                        "unpaired ARM64 addend relocation in '%s'", object->file->path);
+                                       "unpaired ARM64 addend relocation in '%s'", object->file->path);
                     }
                     const uint8_t *next_raw = section->relocations +
                                               (size_t) (relocation_index + 1U) * 8U;
@@ -3539,7 +3994,7 @@ static int ld_scan_branch_thunks(ld_context_t *ctx, bool *added) {
                     if (ld_read_u32(next_raw) != relocation.address ||
                         !ld_relocation_accepts_addend(next_type) || has_pending_addend) {
                         return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                        "invalid ARM64 addend pair in '%s'", object->file->path);
+                                       "invalid ARM64 addend pair in '%s'", object->file->path);
                     }
                     pending_addend = ld_sign_extend(relocation.symbolnum, 24U);
                     has_pending_addend = true;
@@ -3561,10 +4016,10 @@ static int ld_scan_branch_thunks(ld_context_t *ctx, bool *added) {
                     int64_t island_delta;
                     if (!ld_branch26_delta(island, place, &island_delta)) {
                         return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                        "ARM64 branch island is out of range at offset 0x%x in '%s'%s%s",
-                                        relocation.address, object->file->path,
-                                        object->member_name ? " member " : "",
-                                        object->member_name ? object->member_name : "");
+                                       "ARM64 branch island is out of range at offset 0x%x in '%s'%s%s",
+                                       relocation.address, object->file->path,
+                                       object->member_name ? " member " : "",
+                                       object->member_name ? object->member_name : "");
                     }
                     continue;
                 }
@@ -3573,14 +4028,14 @@ static int ld_scan_branch_thunks(ld_context_t *ctx, bool *added) {
                 uint64_t adjusted_target;
                 if (!ld_add_signed_u64(target, branch_addend, &adjusted_target)) {
                     return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                    "ARM64 branch relocation addend overflow in '%s'", object->file->path);
+                                   "ARM64 branch relocation addend overflow in '%s'", object->file->path);
                 }
                 int64_t direct_delta;
                 if (ld_branch26_delta(adjusted_target, place, &direct_delta)) continue;
                 if ((adjusted_target & 3U) != 0 || adjusted_target > (uint64_t) INT64_MAX) {
                     return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                    "ARM64 branch target is invalid at offset 0x%x in '%s'",
-                                    relocation.address, object->file->path);
+                                   "ARM64 branch target is invalid at offset 0x%x in '%s'",
+                                   relocation.address, object->file->path);
                 }
                 if (!ctx->branch_islands) {
                     ctx->branch_islands = ld_get_output(
@@ -3590,7 +4045,7 @@ static int ld_scan_branch_thunks(ld_context_t *ctx, bool *added) {
                     if (!ctx->branch_islands) {
                         return ctx->error ? ctx->error
                                           : ld_fail(ctx, LD_IO_ERROR,
-                                                     "out of memory creating branch islands");
+                                                    "out of memory creating branch islands");
                     }
                 }
                 ld_branch_thunk_t thunk = {
@@ -3632,19 +4087,19 @@ static int ld_write_branch_thunks(ld_context_t *ctx) {
         uint64_t target = ld_branch_target(ctx, thunk->object, &relocation);
         if (!ld_add_signed_u64(target, thunk->addend, &target)) {
             return ld_fail(ctx, LD_RELOCATION_ERROR,
-                            "ARM64 branch island addend overflows in '%s'", thunk->object->file->path);
+                           "ARM64 branch island addend overflows in '%s'", thunk->object->file->path);
         }
         uint64_t island = ctx->branch_islands->addr + thunk->output_offset;
         if ((target & 3U) != 0 || target > (uint64_t) INT64_MAX || island > (uint64_t) INT64_MAX) {
             return ld_fail(ctx, LD_RELOCATION_ERROR,
-                            "ARM64 branch island target is invalid in '%s'", thunk->object->file->path);
+                           "ARM64 branch island target is invalid in '%s'", thunk->object->file->path);
         }
         int64_t page_delta = (int64_t) (target & ~0xfffULL) -
                              (int64_t) (island & ~0xfffULL);
         if (page_delta < -(1LL << 32) || page_delta >= (1LL << 32)) {
             return ld_fail(ctx, LD_RELOCATION_ERROR,
-                            "ARM64 branch island target is outside ADRP range in '%s'",
-                            thunk->object->file->path);
+                           "ARM64 branch island target is outside ADRP range in '%s'",
+                           thunk->object->file->path);
         }
         uint8_t *code = ctx->branch_islands->data + thunk->output_offset;
         uint32_t adrp = ld_patch_adrp(0x90000010U, page_delta);
@@ -3697,6 +4152,14 @@ int ld_link_macho(ld_context_t *ctx) {
         return result;
     }
     result = ld_resolve_reexport_libraries(ctx);
+    if (result != LD_OK) {
+        return result;
+    }
+    result = ld_resolve_archives(ctx);
+    if (result != LD_OK) {
+        return result;
+    }
+    result = ld_resolve_aliases(ctx);
     if (result != LD_OK) {
         return result;
     }

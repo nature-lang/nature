@@ -66,13 +66,26 @@ add_executable(test_ld
     test_ld_elf_zlib.c
     test_ld_macho_common.c
     test_ld_macho_unit.c
+    test_ld_tapi.c
     test_ld_macho_input.c
     test_ld_macho_dylib.c
+    test_ld_macho_binary_dylib.c
+    test_ld_macho_platform.c
+    test_ld_macho_symbols.c
+    test_ld_macho_resolver.c
+    test_ld_macho_reloc.c
     test_ld_macho_codegen.c
+    test_ld_macho_unwind.c
+    test_ld_macho_synthetic.c
     test_ld_macho.c
     test_ld_elf.c)
 target_link_libraries(test_ld nature_common_test m)
 add_test(test_ld test_ld)
+
+add_executable(test_ld_tapi test_ld_tapi.c)
+target_compile_definitions(test_ld_tapi PRIVATE TEST_LD_TAPI_STANDALONE)
+target_link_libraries(test_ld_tapi nature_common_test m)
+add_test(test_ld_tapi test_ld_tapi)
 
 # ---------------------------------- cases 测试 ------------------------------------------
 set(TEST_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/tmp)

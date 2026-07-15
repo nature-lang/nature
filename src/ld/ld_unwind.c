@@ -1,4 +1,6 @@
 #include "ld_internal.h"
+#include "ld_macho_eh_frame.h"
+#include "ld_macho_synthetic.h"
 
 #include <limits.h>
 #include <stdlib.h>
@@ -9,7 +11,7 @@
    official regular second-level representation; compressed pages are an
    equivalent size optimization and can be added without changing this API. */
 #define LD_UNWIND_PAGE_SIZE 0x1000U
-#define LD_UNWIND_REGULAR_PAGE_ENTRIES                                       \
+#define LD_UNWIND_REGULAR_PAGE_ENTRIES                                      \
     ((LD_UNWIND_PAGE_SIZE - sizeof(ld_unwind_info_regular_page_header_t)) / \
      sizeof(ld_unwind_info_regular_entry_t))
 
@@ -74,7 +76,7 @@ static int ld_unwind_output_push(ld_context_t *ctx, ld_output_section_t *section
 }
 
 static ld_symbol_t *ld_unwind_symbol(ld_context_t *ctx, ld_object_t *object,
-                                       uint32_t symbol_index) {
+                                     uint32_t symbol_index) {
     if (symbol_index >= object->symbol_count) {
         return NULL;
     }
@@ -87,61 +89,132 @@ static ld_symbol_t *ld_unwind_symbol(ld_context_t *ctx, ld_object_t *object,
     return symbol;
 }
 
-static int ld_unwind_add_personality(ld_context_t *ctx, ld_unwind_record_t *record,
-                                      const ld_relocation_t *relocation) {
-    ld_object_t *object = record->object;
-    if (!relocation->external) {
-        return ld_fail(ctx, LD_UNSUPPORTED,
-                        "unsupported compact unwind personality relocation in '%s'%s%s",
-                        object->file->path, object->member_name ? " member " : "",
-                        object->member_name ? object->member_name : "");
+static bool ld_unwind_ref_for_symbol(ld_context_t *ctx, ld_object_t *object,
+                                     uint32_t symbol_index,
+                                     ld_macho_ref_t *ref) {
+    if (symbol_index >= object->symbol_count) return false;
+    ld_input_symbol_t *input = &object->symbols[symbol_index];
+    if ((input->entry.n_type & LD_N_EXT) != 0) {
+        ld_symbol_t *global = ld_unwind_symbol(ctx, object, symbol_index);
+        if (global) {
+            *ref = ld_macho_global_ref(global);
+            return true;
+        }
     }
-    ld_symbol_t *symbol = ld_unwind_symbol(ctx, object, relocation->symbolnum);
-    if (!symbol) {
-        const char *name = relocation->symbolnum < object->symbol_count
-                                   ? object->symbols[relocation->symbolnum].name
-                                   : NULL;
+    uint8_t type = input->entry.n_type & LD_N_TYPE;
+    if (type == LD_N_SECT || type == LD_N_ABS) {
+        *ref = ld_macho_local_ref(object, symbol_index);
+        return true;
+    }
+    return false;
+}
+
+static bool ld_unwind_ref_at_input_address(ld_context_t *ctx,
+                                           ld_object_t *object,
+                                           uint64_t address,
+                                           ld_macho_ref_t *ref) {
+    /* Zig's local compact-unwind personality path looks up the nlist whose
+       input value equals the raw personality field.  Prefer an external
+       candidate (which preserves coalescing/import semantics), then accept a
+       true local definition through Nature's shared Mach-O reference model. */
+    for (unsigned pass = 0; pass < 2U; pass++) {
+        for (size_t index = 0; index < object->symbol_count; index++) {
+            ld_input_symbol_t *input = &object->symbols[index];
+            if ((input->entry.n_type & LD_N_STAB) != 0 ||
+                input->entry.n_value != address) {
+                continue;
+            }
+            uint8_t type = input->entry.n_type & LD_N_TYPE;
+            if (type != LD_N_SECT && type != LD_N_ABS) continue;
+            bool external = (input->entry.n_type & LD_N_EXT) != 0;
+            if ((pass == 0U) != external) continue;
+            if (ld_unwind_ref_for_symbol(ctx, object, (uint32_t) index,
+                                         ref)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static int ld_unwind_add_personality_ref(ld_context_t *ctx,
+                                         ld_unwind_record_t *record,
+                                         ld_macho_ref_t ref) {
+    if (!ld_macho_ref_is_valid(&ref)) {
         return ld_fail(ctx, LD_SYMBOL_ERROR,
-                        "compact unwind personality references unknown symbol '%s' in '%s'%s%s",
-                        name ? name : "<invalid>", object->file->path,
-                        object->member_name ? " member " : "",
-                        object->member_name ? object->member_name : "");
+                       "compact unwind personality has an invalid symbol reference in '%s'%s%s",
+                       record->object->file->path,
+                       record->object->member_name ? " member " : "",
+                       record->object->member_name
+                               ? record->object->member_name
+                               : "");
     }
 
     size_t personality_index = 0;
     while (personality_index < ctx->unwind.personality_count &&
-           ctx->unwind.personalities[personality_index] != symbol) {
+           !ld_macho_ref_equal(
+                   &ctx->unwind.personalities[personality_index], &ref)) {
         personality_index++;
     }
     if (personality_index == ctx->unwind.personality_count) {
         if (personality_index >= sizeof(ctx->unwind.personalities) /
                                          sizeof(ctx->unwind.personalities[0])) {
             return ld_fail(ctx, LD_UNSUPPORTED,
-                            "more than three compact unwind personalities are required by '%s'%s%s",
-                            object->file->path, object->member_name ? " member " : "",
-                            object->member_name ? object->member_name : "");
+                           "more than three compact unwind personalities are required by '%s'%s%s",
+                           record->object->file->path,
+                           record->object->member_name ? " member " : "",
+                           record->object->member_name
+                                   ? record->object->member_name
+                                   : "");
         }
-        ctx->unwind.personalities[ctx->unwind.personality_count++] = symbol;
+        ctx->unwind.personalities[ctx->unwind.personality_count++] = ref;
     }
-    if (symbol->got_index == UINT32_MAX) {
-        if (ctx->got_count == UINT32_MAX) {
-            return ld_fail(ctx, LD_OUTPUT_ERROR, "too many GOT entries for unwind personalities");
-        }
-        symbol->got_index = ctx->got_count++;
+    uint32_t got_index;
+    int result = ld_macho_got_add(ctx, ref, &got_index);
+    if (result != LD_OK) {
+        return result;
     }
     record->personality_index = (uint8_t) (personality_index + 1U);
     return LD_OK;
 }
 
+static int ld_unwind_add_personality(ld_context_t *ctx,
+                                     ld_unwind_record_t *record,
+                                     const ld_relocation_t *relocation,
+                                     uint64_t raw_value) {
+    ld_object_t *object = record->object;
+    ld_macho_ref_t ref = {0};
+    bool found = relocation->external
+                         ? ld_unwind_ref_for_symbol(
+                                   ctx, object, relocation->symbolnum, &ref)
+                         : ld_unwind_ref_at_input_address(
+                                   ctx, object, raw_value, &ref);
+    if (!found) {
+        const char *name =
+                relocation->external &&
+                                relocation->symbolnum < object->symbol_count
+                        ? object->symbols[relocation->symbolnum].name
+                        : NULL;
+        return ld_fail(
+                ctx, LD_SYMBOL_ERROR,
+                "compact unwind personality references unknown symbol '%s' at input address 0x%llx in '%s'%s%s",
+                name ? name : "<local>", (unsigned long long) raw_value,
+                object->file->path,
+                object->member_name ? " member " : "",
+                object->member_name ? object->member_name : "");
+    }
+    return ld_unwind_add_personality_ref(ctx, record, ref);
+}
+
 static int ld_unwind_decode_relocation(ld_context_t *ctx, ld_object_t *object,
-                                        const uint8_t *raw, ld_relocation_t *relocation) {
+                                       const uint8_t *raw, ld_relocation_t *relocation) {
     uint32_t address = ld_unwind_read_u32(raw);
     uint32_t word = ld_unwind_read_u32(raw + 4U);
     if ((address & 0x80000000U) != 0) {
         return ld_fail(ctx, LD_RELOCATION_ERROR,
-                        "scattered compact unwind relocation in '%s'%s%s is unsupported",
-                        object->file->path, object->member_name ? " member " : "",
-                        object->member_name ? object->member_name : "");
+                       "scattered compact unwind relocation in '%s'%s%s is unsupported",
+                       object->file->path, object->member_name ? " member " : "",
+                       object->member_name ? object->member_name : "");
     }
     relocation->address = address;
     relocation->symbolnum = word & 0x00ffffffU;
@@ -152,30 +225,30 @@ static int ld_unwind_decode_relocation(ld_context_t *ctx, ld_object_t *object,
     if (relocation->type != LD_ARM64_RELOC_UNSIGNED || relocation->length != 3U ||
         relocation->pcrel) {
         return ld_fail(ctx, LD_RELOCATION_ERROR,
-                        "invalid compact unwind relocation at offset 0x%x in '%s'%s%s",
-                        relocation->address, object->file->path,
-                        object->member_name ? " member " : "",
-                        object->member_name ? object->member_name : "");
+                       "invalid compact unwind relocation at offset 0x%x in '%s'%s%s",
+                       relocation->address, object->file->path,
+                       object->member_name ? " member " : "",
+                       object->member_name ? object->member_name : "");
     }
     return LD_OK;
 }
 
 static int ld_unwind_collect_section(ld_context_t *ctx, ld_object_t *object,
-                                      const ld_input_section_t *section) {
+                                     const ld_input_section_t *section) {
     if (section->header.size % sizeof(ld_compact_unwind_entry_t) != 0 ||
         (section->header.size && !section->data) ||
         (section->header.nreloc && !section->relocations)) {
         return ld_fail(ctx, LD_INVALID_INPUT,
-                        "malformed __LD,__compact_unwind section in '%s'%s%s",
-                        object->file->path, object->member_name ? " member " : "",
-                        object->member_name ? object->member_name : "");
+                       "malformed __LD,__compact_unwind section in '%s'%s%s",
+                       object->file->path, object->member_name ? " member " : "",
+                       object->member_name ? object->member_name : "");
     }
     uint64_t input_count = section->header.size / sizeof(ld_compact_unwind_entry_t);
     if (input_count > SIZE_MAX - ctx->unwind.count) {
         return ld_fail(ctx, LD_INVALID_INPUT,
-                        "too many compact unwind records in '%s'%s%s", object->file->path,
-                        object->member_name ? " member " : "",
-                        object->member_name ? object->member_name : "");
+                       "too many compact unwind records in '%s'%s%s", object->file->path,
+                       object->member_name ? " member " : "",
+                       object->member_name ? object->member_name : "");
     }
     size_t first_record = ctx->unwind.count;
     for (uint64_t i = 0; i < input_count; i++) {
@@ -186,13 +259,6 @@ static int ld_unwind_collect_section(ld_context_t *ctx, ld_object_t *object,
         record.length = ld_unwind_read_u32(raw + 8U);
         record.encoding = ld_unwind_read_u32(raw + 12U);
         record.lsda_addend = ld_unwind_read_u64(raw + 24U);
-        if (ld_unwind_read_u64(raw + 16U) != 0) {
-            return ld_fail(ctx, LD_INVALID_INPUT,
-                            "unrelocated compact unwind personality at record %llu in '%s'%s%s",
-                            (unsigned long long) i, object->file->path,
-                            object->member_name ? " member " : "",
-                            object->member_name ? object->member_name : "");
-        }
         int result = ld_unwind_record_push(ctx, &record);
         if (result != LD_OK) {
             return result;
@@ -208,10 +274,10 @@ static int ld_unwind_collect_section(ld_context_t *ctx, ld_object_t *object,
         }
         if (relocation.address >= section->header.size) {
             return ld_fail(ctx, LD_RELOCATION_ERROR,
-                            "compact unwind relocation offset 0x%x is outside '%s'%s%s",
-                            relocation.address, object->file->path,
-                            object->member_name ? " member " : "",
-                            object->member_name ? object->member_name : "");
+                           "compact unwind relocation offset 0x%x is outside '%s'%s%s",
+                           relocation.address, object->file->path,
+                           object->member_name ? " member " : "",
+                           object->member_name ? object->member_name : "");
         }
         size_t record_index = first_record +
                               relocation.address / sizeof(ld_compact_unwind_entry_t);
@@ -220,41 +286,51 @@ static int ld_unwind_collect_section(ld_context_t *ctx, ld_object_t *object,
         if (field_offset == 0U) {
             if (record->has_start_relocation) {
                 return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                "duplicate compact unwind function relocation at offset 0x%x in '%s'%s%s",
-                                relocation.address, object->file->path,
-                                object->member_name ? " member " : "",
-                                object->member_name ? object->member_name : "");
+                               "duplicate compact unwind function relocation at offset 0x%x in '%s'%s%s",
+                               relocation.address, object->file->path,
+                               object->member_name ? " member " : "",
+                               object->member_name ? object->member_name : "");
             }
             record->start_relocation = relocation;
             record->has_start_relocation = true;
         } else if (field_offset == 16U) {
             if (record->personality_index != 0) {
                 return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                "duplicate compact unwind personality relocation at offset 0x%x in '%s'%s%s",
-                                relocation.address, object->file->path,
-                                object->member_name ? " member " : "",
-                                object->member_name ? object->member_name : "");
+                               "duplicate compact unwind personality relocation at offset 0x%x in '%s'%s%s",
+                               relocation.address, object->file->path,
+                               object->member_name ? " member " : "",
+                               object->member_name ? object->member_name : "");
             }
-            result = ld_unwind_add_personality(ctx, record, &relocation);
+            const uint8_t *record_raw =
+                    section->data +
+                    (record_index - first_record) *
+                            sizeof(ld_compact_unwind_entry_t);
+            /* For a local personality relocation this raw field is the
+               input nlist address used to identify the personality.  Apple
+               clang does not require it to be zero. */
+            uint64_t personality_addend =
+                    ld_unwind_read_u64(record_raw + 16U);
+            result = ld_unwind_add_personality(
+                    ctx, record, &relocation, personality_addend);
             if (result != LD_OK) {
                 return result;
             }
         } else if (field_offset == 24U) {
             if (record->has_lsda_relocation) {
                 return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                "duplicate compact unwind LSDA relocation at offset 0x%x in '%s'%s%s",
-                                relocation.address, object->file->path,
-                                object->member_name ? " member " : "",
-                                object->member_name ? object->member_name : "");
+                               "duplicate compact unwind LSDA relocation at offset 0x%x in '%s'%s%s",
+                               relocation.address, object->file->path,
+                               object->member_name ? " member " : "",
+                               object->member_name ? object->member_name : "");
             }
             record->lsda_relocation = relocation;
             record->has_lsda_relocation = true;
         } else {
             return ld_fail(ctx, LD_RELOCATION_ERROR,
-                            "compact unwind relocation at invalid field offset 0x%x in '%s'%s%s",
-                            relocation.address, object->file->path,
-                            object->member_name ? " member " : "",
-                            object->member_name ? object->member_name : "");
+                           "compact unwind relocation at invalid field offset 0x%x in '%s'%s%s",
+                           relocation.address, object->file->path,
+                           object->member_name ? " member " : "",
+                           object->member_name ? object->member_name : "");
         }
     }
 
@@ -262,33 +338,530 @@ static int ld_unwind_collect_section(ld_context_t *ctx, ld_object_t *object,
         ld_unwind_record_t *record = &ctx->unwind.records[i];
         if (!record->has_start_relocation || record->length == 0) {
             return ld_fail(ctx, LD_INVALID_INPUT,
-                            "compact unwind record %zu has no function relocation or an empty range in '%s'%s%s",
-                            i - first_record, object->file->path,
-                            object->member_name ? " member " : "",
-                            object->member_name ? object->member_name : "");
+                           "compact unwind record %zu has no function relocation or an empty range in '%s'%s%s",
+                           i - first_record, object->file->path,
+                           object->member_name ? " member " : "",
+                           object->member_name ? object->member_name : "");
         }
-        record->encoding &= ~LD_UNWIND_PERSONALITY_MASK;
-        record->encoding |= (uint32_t) record->personality_index << 28U;
-        if (record->has_lsda_relocation || record->lsda_addend != 0) {
-            record->encoding |= LD_UNWIND_HAS_LSDA;
-            ctx->unwind.lsda_count++;
-        } else if ((record->encoding & LD_UNWIND_HAS_LSDA) != 0) {
-            return ld_fail(ctx, LD_INVALID_INPUT,
-                            "compact unwind record %zu has the LSDA flag but no LSDA in '%s'%s%s",
-                            i - first_record, object->file->path,
-                            object->member_name ? " member " : "",
-                            object->member_name ? object->member_name : "");
+        /* Personality bits, LSDA consistency, and DWARF FDE hints are
+           finalized after __eh_frame/compact-unwind superposition. */
+    }
+    return LD_OK;
+}
+
+typedef struct {
+    ld_object_t *object;
+    uint32_t section_index;
+    uint64_t address;
+    uint64_t size;
+    size_t compact_index;
+    size_t fde_index;
+} ld_unwind_function_t;
+
+typedef struct {
+    ld_unwind_function_t *items;
+    size_t count;
+    size_t capacity;
+} ld_unwind_function_list_t;
+
+static bool ld_unwind_section_is_code(const ld_input_section_t *section) {
+    return section && section->output && section->header.size != 0 &&
+           (section->header.flags &
+            (LD_S_ATTR_PURE_INSTRUCTIONS | LD_S_ATTR_SOME_INSTRUCTIONS)) !=
+                   0;
+}
+
+static bool ld_unwind_address_in_section(const ld_input_section_t *section,
+                                         uint64_t address) {
+    return section->header.size != 0 && address >= section->header.addr &&
+           address - section->header.addr < section->header.size;
+}
+
+static bool ld_unwind_find_code_section(const ld_object_t *object,
+                                        uint64_t address,
+                                        uint32_t *section_index) {
+    for (size_t index = 0; index < object->section_count; index++) {
+        const ld_input_section_t *section = &object->sections[index];
+        if (ld_unwind_section_is_code(section) &&
+            ld_unwind_address_in_section(section, address)) {
+            *section_index = (uint32_t) index;
+            return true;
         }
-        if ((record->encoding & LD_UNWIND_ARM64_MODE_MASK) ==
-            LD_UNWIND_ARM64_MODE_DWARF) {
-            /* An object-relative FDE hint is not valid after __eh_frame
-               sections are merged.  Zero is a legal hint and asks the
-               unwinder to scan from the first CFI record, as Zig does when
-               an exact output offset cannot be represented. */
-            record->encoding &= ~0x00ffffffU;
+    }
+    return false;
+}
+
+static ld_unwind_function_t *ld_unwind_function_find(
+        ld_unwind_function_list_t *list, ld_object_t *object,
+        uint64_t address) {
+    for (size_t index = 0; index < list->count; index++) {
+        ld_unwind_function_t *function = &list->items[index];
+        if (function->object == object && function->address == address) {
+            return function;
+        }
+    }
+    return NULL;
+}
+
+static int ld_unwind_function_get_or_add(
+        ld_context_t *ctx, ld_unwind_function_list_t *list,
+        ld_object_t *object, uint32_t section_index, uint64_t address,
+        ld_unwind_function_t **result) {
+    ld_unwind_function_t *existing =
+            ld_unwind_function_find(list, object, address);
+    if (existing) {
+        if (existing->section_index != section_index) {
+            return ld_fail(
+                    ctx, LD_INVALID_INPUT,
+                    "function input address 0x%llx is ambiguous between Mach-O sections in '%s'%s%s",
+                    (unsigned long long) address, object->file->path,
+                    object->member_name ? " member " : "",
+                    object->member_name ? object->member_name : "");
+        }
+        *result = existing;
+        return LD_OK;
+    }
+    if (list->count == list->capacity) {
+        size_t next = list->capacity ? list->capacity * 2U : 64U;
+        if (next < list->capacity) {
+            return ld_fail(ctx, LD_OUTPUT_ERROR,
+                           "too many Mach-O code symbols for unwind info");
+        }
+        ld_unwind_function_t *items = ld_realloc_array(
+                list->items, list->capacity, next, sizeof(*items));
+        if (!items) {
+            return ld_fail(ctx, LD_IO_ERROR,
+                           "out of memory collecting Mach-O functions for unwind info");
+        }
+        list->items = items;
+        list->capacity = next;
+    }
+    ld_unwind_function_t function = {
+            .object = object,
+            .section_index = section_index,
+            .address = address,
+            .compact_index = SIZE_MAX,
+            .fde_index = SIZE_MAX,
+    };
+    list->items[list->count] = function;
+    *result = &list->items[list->count++];
+    return LD_OK;
+}
+
+static int ld_unwind_record_input_address(ld_context_t *ctx,
+                                          const ld_unwind_record_t *record,
+                                          uint64_t *address,
+                                          uint32_t *section_index) {
+    const ld_relocation_t *relocation = &record->start_relocation;
+    ld_object_t *object = record->object;
+    if (!relocation->external) {
+        if (relocation->symbolnum == 0 ||
+            relocation->symbolnum > object->section_count) {
+            return ld_fail(ctx, LD_RELOCATION_ERROR,
+                           "compact unwind function relocation has invalid section %u in '%s'%s%s",
+                           relocation->symbolnum, object->file->path,
+                           object->member_name ? " member " : "",
+                           object->member_name ? object->member_name : "");
+        }
+        *section_index = relocation->symbolnum - 1U;
+        *address = record->start_addend;
+    } else {
+        if (relocation->symbolnum >= object->symbol_count) {
+            return ld_fail(ctx, LD_RELOCATION_ERROR,
+                           "compact unwind function relocation has invalid symbol %u in '%s'%s%s",
+                           relocation->symbolnum, object->file->path,
+                           object->member_name ? " member " : "",
+                           object->member_name ? object->member_name : "");
+        }
+        const ld_input_symbol_t *input =
+                &object->symbols[relocation->symbolnum];
+        if ((input->entry.n_type & LD_N_TYPE) != LD_N_SECT ||
+            input->entry.n_sect == 0 ||
+            input->entry.n_sect > object->section_count ||
+            record->start_addend > UINT64_MAX - input->entry.n_value) {
+            return ld_fail(ctx, LD_RELOCATION_ERROR,
+                           "compact unwind function references invalid symbol '%s' in '%s'%s%s",
+                           input->name ? input->name : "<unnamed>",
+                           object->file->path,
+                           object->member_name ? " member " : "",
+                           object->member_name ? object->member_name : "");
+        }
+        *section_index = input->entry.n_sect - 1U;
+        *address = input->entry.n_value + record->start_addend;
+    }
+    const ld_input_section_t *section = &object->sections[*section_index];
+    if (!ld_unwind_section_is_code(section) ||
+        !ld_unwind_address_in_section(section, *address)) {
+        return ld_fail(
+                ctx, LD_INVALID_INPUT,
+                "compact unwind function address 0x%llx is outside a code section in '%s'%s%s",
+                (unsigned long long) *address, object->file->path,
+                object->member_name ? " member " : "",
+                object->member_name ? object->member_name : "");
+    }
+    if (record->length >
+        section->header.size - (*address - section->header.addr)) {
+        return ld_fail(
+                ctx, LD_INVALID_INPUT,
+                "compact unwind function range [0x%llx, +0x%x) exceeds its code section in '%s'%s%s",
+                (unsigned long long) *address, record->length,
+                object->file->path,
+                object->member_name ? " member " : "",
+                object->member_name ? object->member_name : "");
+    }
+    return LD_OK;
+}
+
+static int ld_unwind_collect_functions(ld_context_t *ctx,
+                                       ld_unwind_function_list_t *functions) {
+    for (size_t object_index = 0; object_index < ctx->objects.count;
+         object_index++) {
+        ld_object_t *object = ctx->objects.items[object_index];
+        if (!object->selected) continue;
+        for (size_t symbol_index = 0; symbol_index < object->symbol_count;
+             symbol_index++) {
+            const ld_input_symbol_t *symbol = &object->symbols[symbol_index];
+            if ((symbol->entry.n_type & LD_N_STAB) != 0 ||
+                (symbol->entry.n_type & LD_N_TYPE) != LD_N_SECT ||
+                symbol->entry.n_sect == 0 ||
+                symbol->entry.n_sect > object->section_count) {
+                continue;
+            }
+            uint32_t section_index = symbol->entry.n_sect - 1U;
+            const ld_input_section_t *section =
+                    &object->sections[section_index];
+            if (!ld_unwind_section_is_code(section) ||
+                !ld_unwind_address_in_section(section,
+                                              symbol->entry.n_value)) {
+                continue;
+            }
+            ld_unwind_function_t *function;
+            int status = ld_unwind_function_get_or_add(
+                    ctx, functions, object, section_index,
+                    symbol->entry.n_value, &function);
+            if (status != LD_OK) return status;
         }
     }
     return LD_OK;
+}
+
+static void ld_unwind_infer_function_sizes(
+        ld_unwind_function_list_t *functions) {
+    for (size_t index = 0; index < functions->count; index++) {
+        ld_unwind_function_t *function = &functions->items[index];
+        uint64_t end = function->object->sections[function->section_index]
+                               .header.addr +
+                       function->object->sections[function->section_index]
+                               .header.size;
+        for (size_t next_index = 0; next_index < functions->count;
+             next_index++) {
+            const ld_unwind_function_t *next = &functions->items[next_index];
+            if (next->object == function->object &&
+                next->section_index == function->section_index &&
+                next->address > function->address && next->address < end) {
+                end = next->address;
+            }
+        }
+        function->size = end > function->address
+                                 ? end - function->address
+                                 : 0;
+    }
+}
+
+static int ld_unwind_set_local_target(ld_context_t *ctx,
+                                      ld_unwind_record_t *record,
+                                      uint64_t address,
+                                      ld_relocation_t *relocation,
+                                      uint64_t *addend) {
+    uint32_t section_index;
+    if (!ld_unwind_find_code_section(record->object, address,
+                                     &section_index)) {
+        /* LSDA normally resides in a non-code section, so broaden the search
+           after the fast code lookup used by function targets. */
+        bool found = false;
+        for (size_t index = 0; index < record->object->section_count;
+             index++) {
+            const ld_input_section_t *section =
+                    &record->object->sections[index];
+            if (section->output &&
+                ld_unwind_address_in_section(section, address)) {
+                section_index = (uint32_t) index;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            return ld_fail(
+                    ctx, LD_RELOCATION_ERROR,
+                    "unwind target input address 0x%llx is outside all sections in '%s'%s%s",
+                    (unsigned long long) address,
+                    record->object->file->path,
+                    record->object->member_name ? " member " : "",
+                    record->object->member_name
+                            ? record->object->member_name
+                            : "");
+        }
+    }
+    *relocation = (ld_relocation_t) {
+            .symbolnum = section_index + 1U,
+            .length = 3U,
+            .type = LD_ARM64_RELOC_UNSIGNED,
+    };
+    *addend = address;
+    return LD_OK;
+}
+
+static int ld_unwind_attach_fde(ld_context_t *ctx,
+                                ld_unwind_record_t *record,
+                                const ld_macho_fde_t *fde) {
+    uint32_t hint = fde->output_offset <= 0x00ffffffU
+                            ? (uint32_t) fde->output_offset
+                            : 0U;
+    record->encoding &= ~0x00ffffffU;
+    record->encoding |= hint;
+    if (fde->has_personality) {
+        ld_macho_ref_t ref;
+        if (!ld_unwind_ref_for_symbol(ctx, fde->object,
+                                      fde->personality_symbol_index, &ref)) {
+            const ld_input_symbol_t *input =
+                    fde->personality_symbol_index < fde->object->symbol_count
+                            ? &fde->object
+                                       ->symbols[fde->personality_symbol_index]
+                            : NULL;
+            return ld_fail(
+                    ctx, LD_SYMBOL_ERROR,
+                    "__eh_frame personality references unresolved symbol '%s' in '%s'%s%s",
+                    input && input->name ? input->name : "<invalid>",
+                    fde->object->file->path,
+                    fde->object->member_name ? " member " : "",
+                    fde->object->member_name ? fde->object->member_name : "");
+        }
+        if (record->personality_index != 0) {
+            size_t index = record->personality_index - 1U;
+            if (index >= ctx->unwind.personality_count ||
+                !ld_macho_ref_equal(&ctx->unwind.personalities[index],
+                                    &ref)) {
+                return ld_fail(
+                        ctx, LD_INVALID_INPUT,
+                        "compact unwind and __eh_frame disagree on the personality for function 0x%llx in '%s'%s%s",
+                        (unsigned long long) fde->function_address,
+                        fde->object->file->path,
+                        fde->object->member_name ? " member " : "",
+                        fde->object->member_name
+                                ? fde->object->member_name
+                                : "");
+            }
+        } else {
+            int status = ld_unwind_add_personality_ref(ctx, record, ref);
+            if (status != LD_OK) return status;
+        }
+    }
+    if (fde->has_lsda) {
+        /* For a DWARF compact-unwind record the FDE is authoritative.  This
+           mirrors Zig's UnwindInfo.generate path and avoids retaining stale
+           compact-unwind LSDA metadata when both representations are present. */
+        int status = ld_unwind_set_local_target(
+                ctx, record, fde->lsda_address, &record->lsda_relocation,
+                &record->lsda_addend);
+        if (status != LD_OK) return status;
+        record->has_lsda_relocation = true;
+    }
+    return LD_OK;
+}
+
+static int ld_unwind_superimpose(ld_context_t *ctx,
+                                 const ld_macho_fde_list_t *fdes) {
+    ld_unwind_function_list_t functions = {0};
+    int status = ld_unwind_collect_functions(ctx, &functions);
+    if (status != LD_OK) goto done;
+
+    for (size_t index = 0; index < ctx->unwind.count; index++) {
+        ld_unwind_record_t *record = &ctx->unwind.records[index];
+        uint64_t address;
+        uint32_t section_index;
+        status = ld_unwind_record_input_address(
+                ctx, record, &address, &section_index);
+        if (status != LD_OK) goto done;
+        ld_unwind_function_t *function;
+        status = ld_unwind_function_get_or_add(
+                ctx, &functions, record->object, section_index, address,
+                &function);
+        if (status != LD_OK) goto done;
+        if (function->compact_index != SIZE_MAX) {
+            status = ld_fail(
+                    ctx, LD_INVALID_INPUT,
+                    "duplicate compact unwind function input address 0x%llx in '%s'%s%s",
+                    (unsigned long long) address,
+                    record->object->file->path,
+                    record->object->member_name ? " member " : "",
+                    record->object->member_name
+                            ? record->object->member_name
+                            : "");
+            goto done;
+        }
+        function->compact_index = index;
+        if (function->size == 0) function->size = record->length;
+        if ((record->encoding & LD_UNWIND_ARM64_MODE_MASK) ==
+            LD_UNWIND_ARM64_MODE_DWARF) {
+            record->encoding &= ~0x00ffffffU;
+        }
+    }
+
+    for (size_t index = 0; index < fdes->count; index++) {
+        const ld_macho_fde_t *fde = &fdes->items[index];
+        uint32_t section_index;
+        if (!ld_unwind_find_code_section(fde->object,
+                                         fde->function_address,
+                                         &section_index)) {
+            status = ld_fail(
+                    ctx, LD_INVALID_INPUT,
+                    "__eh_frame FDE function address 0x%llx is outside a code section in '%s'%s%s",
+                    (unsigned long long) fde->function_address,
+                    fde->object->file->path,
+                    fde->object->member_name ? " member " : "",
+                    fde->object->member_name
+                            ? fde->object->member_name
+                            : "");
+            goto done;
+        }
+        const ld_input_section_t *code_section =
+                &fde->object->sections[section_index];
+        if (fde->function_size >
+            code_section->header.size -
+                    (fde->function_address - code_section->header.addr)) {
+            status = ld_fail(
+                    ctx, LD_INVALID_INPUT,
+                    "__eh_frame FDE range [0x%llx, +0x%llx) exceeds its code section in '%s'%s%s",
+                    (unsigned long long) fde->function_address,
+                    (unsigned long long) fde->function_size,
+                    fde->object->file->path,
+                    fde->object->member_name ? " member " : "",
+                    fde->object->member_name ? fde->object->member_name : "");
+            goto done;
+        }
+        ld_unwind_function_t *function;
+        status = ld_unwind_function_get_or_add(
+                ctx, &functions, fde->object, section_index,
+                fde->function_address, &function);
+        if (status != LD_OK) goto done;
+        if (function->fde_index != SIZE_MAX) {
+            status = ld_fail(
+                    ctx, LD_INVALID_INPUT,
+                    "duplicate __eh_frame FDE for function input address 0x%llx in '%s'%s%s",
+                    (unsigned long long) fde->function_address,
+                    fde->object->file->path,
+                    fde->object->member_name ? " member " : "",
+                    fde->object->member_name
+                            ? fde->object->member_name
+                            : "");
+            goto done;
+        }
+        function->fde_index = index;
+        if (function->size == 0) function->size = fde->function_size;
+    }
+
+    ld_unwind_infer_function_sizes(&functions);
+    for (size_t index = 0; index < functions.count; index++) {
+        ld_unwind_function_t *function = &functions.items[index];
+        if (function->compact_index != SIZE_MAX) {
+            ld_unwind_record_t *record =
+                    &ctx->unwind.records[function->compact_index];
+            if (function->fde_index != SIZE_MAX &&
+                (record->encoding & LD_UNWIND_ARM64_MODE_MASK) ==
+                        LD_UNWIND_ARM64_MODE_DWARF) {
+                status = ld_unwind_attach_fde(
+                        ctx, record, &fdes->items[function->fde_index]);
+                if (status != LD_OK) goto done;
+            }
+            continue;
+        }
+        if (function->size == 0 || function->size > UINT32_MAX) {
+            status = ld_fail(
+                    ctx, LD_OUTPUT_ERROR,
+                    "cannot represent unwind range for function input address 0x%llx in '%s'%s%s",
+                    (unsigned long long) function->address,
+                    function->object->file->path,
+                    function->object->member_name ? " member " : "",
+                    function->object->member_name
+                            ? function->object->member_name
+                            : "");
+            goto done;
+        }
+        ld_unwind_record_t record = {
+                .object = function->object,
+                .start_relocation =
+                        {
+                                .symbolnum = function->section_index + 1U,
+                                .length = 3U,
+                                .type = LD_ARM64_RELOC_UNSIGNED,
+                        },
+                .start_addend = function->address,
+                .length = (uint32_t) function->size,
+                .has_start_relocation = true,
+        };
+        if (function->fde_index != SIZE_MAX) {
+            record.length =
+                    fdes->items[function->fde_index].function_size <=
+                                    UINT32_MAX
+                            ? (uint32_t) fdes->items[function->fde_index]
+                                      .function_size
+                            : 0U;
+            if (record.length == 0) {
+                status = ld_fail(
+                        ctx, LD_OUTPUT_ERROR,
+                        "cannot represent __eh_frame FDE range for function input address 0x%llx in '%s'%s%s",
+                        (unsigned long long) function->address,
+                        function->object->file->path,
+                        function->object->member_name ? " member " : "",
+                        function->object->member_name
+                                ? function->object->member_name
+                                : "");
+                goto done;
+            }
+            record.encoding = LD_UNWIND_ARM64_MODE_DWARF;
+            status = ld_unwind_attach_fde(
+                    ctx, &record, &fdes->items[function->fde_index]);
+            if (status != LD_OK) goto done;
+        }
+        status = ld_unwind_record_push(ctx, &record);
+        if (status != LD_OK) goto done;
+    }
+
+    ctx->unwind.lsda_count = 0;
+    for (size_t index = 0; index < ctx->unwind.count; index++) {
+        ld_unwind_record_t *record = &ctx->unwind.records[index];
+        record->encoding &= ~LD_UNWIND_PERSONALITY_MASK;
+        record->encoding |= (uint32_t) record->personality_index << 28U;
+        if (record->has_lsda_relocation || record->lsda_addend != 0) {
+            if (!record->has_lsda_relocation) {
+                status = ld_fail(
+                        ctx, LD_INVALID_INPUT,
+                        "unwind LSDA has no relocation in '%s'%s%s",
+                        record->object->file->path,
+                        record->object->member_name ? " member " : "",
+                        record->object->member_name
+                                ? record->object->member_name
+                                : "");
+                goto done;
+            }
+            record->encoding |= LD_UNWIND_HAS_LSDA;
+            ctx->unwind.lsda_count++;
+        } else if ((record->encoding & LD_UNWIND_HAS_LSDA) != 0) {
+            status = ld_fail(
+                    ctx, LD_INVALID_INPUT,
+                    "unwind record has the LSDA flag but no matching LSDA in '%s'%s%s",
+                    record->object->file->path,
+                    record->object->member_name ? " member " : "",
+                    record->object->member_name
+                            ? record->object->member_name
+                            : "");
+            goto done;
+        }
+    }
+
+done:
+    free(functions.items);
+    return status;
 }
 
 int ld_unwind_prepare(ld_context_t *ctx) {
@@ -309,6 +882,12 @@ int ld_unwind_prepare(ld_context_t *ctx) {
             }
         }
     }
+    ld_macho_fde_list_t fdes = {0};
+    int result = ld_macho_eh_frame_collect(ctx, &fdes);
+    if (result == LD_OK) result = ld_unwind_superimpose(ctx, &fdes);
+    ld_macho_eh_frame_deinit(&fdes);
+    if (result != LD_OK) return result;
+
     if (ctx->unwind.count == 0) {
         return LD_OK;
     }
@@ -384,36 +963,43 @@ static bool ld_unwind_add_u64(uint64_t left, uint64_t right, uint64_t *result) {
 }
 
 static int ld_unwind_relocation_target(ld_context_t *ctx, ld_unwind_record_t *record,
-                                        const ld_relocation_t *relocation, uint64_t addend,
-                                        uint64_t *target) {
+                                       const ld_relocation_t *relocation, uint64_t addend,
+                                       uint64_t *target) {
     ld_object_t *object = record->object;
     uint64_t base = 0;
     if (!relocation->external) {
         if (relocation->symbolnum == 0 || relocation->symbolnum > object->section_count) {
             return ld_fail(ctx, LD_RELOCATION_ERROR,
-                            "compact unwind relocation has invalid section %u in '%s'%s%s",
-                            relocation->symbolnum, object->file->path,
-                            object->member_name ? " member " : "",
-                            object->member_name ? object->member_name : "");
+                           "compact unwind relocation has invalid section %u in '%s'%s%s",
+                           relocation->symbolnum, object->file->path,
+                           object->member_name ? " member " : "",
+                           object->member_name ? object->member_name : "");
         }
         const ld_input_section_t *section = &object->sections[relocation->symbolnum - 1U];
         if (!section->output) {
             return ld_fail(ctx, LD_RELOCATION_ERROR,
-                            "compact unwind relocation targets discarded section %u in '%s'%s%s",
-                            relocation->symbolnum, object->file->path,
-                            object->member_name ? " member " : "",
-                            object->member_name ? object->member_name : "");
+                           "compact unwind relocation targets discarded section %u in '%s'%s%s",
+                           relocation->symbolnum, object->file->path,
+                           object->member_name ? " member " : "",
+                           object->member_name ? object->member_name : "");
         }
         if (!ld_unwind_add_u64(section->output->addr, section->output_offset, &base)) {
             goto overflow;
         }
+        /* Local Mach-O UNSIGNED relocations store an input VM address in the
+           field.  Convert it to an offset within the referenced input
+           section before applying the final output base.  This matters for
+           code/data sections whose MH_OBJECT address is nonzero. */
+        if (addend >= section->header.addr) {
+            addend -= section->header.addr;
+        }
     } else {
         if (relocation->symbolnum >= object->symbol_count) {
             return ld_fail(ctx, LD_RELOCATION_ERROR,
-                            "compact unwind relocation has invalid symbol %u in '%s'%s%s",
-                            relocation->symbolnum, object->file->path,
-                            object->member_name ? " member " : "",
-                            object->member_name ? object->member_name : "");
+                           "compact unwind relocation has invalid symbol %u in '%s'%s%s",
+                           relocation->symbolnum, object->file->path,
+                           object->member_name ? " member " : "",
+                           object->member_name ? object->member_name : "");
         }
         const ld_input_symbol_t *input = &object->symbols[relocation->symbolnum];
         uint8_t type = input->entry.n_type & LD_N_TYPE;
@@ -422,10 +1008,10 @@ static int ld_unwind_relocation_target(ld_context_t *ctx, ld_unwind_record_t *re
             const ld_input_section_t *section = &object->sections[input->entry.n_sect - 1U];
             if (!section->output) {
                 return ld_fail(ctx, LD_RELOCATION_ERROR,
-                                "compact unwind relocation targets discarded symbol '%s' in '%s'%s%s",
-                                input->name ? input->name : "<unnamed>", object->file->path,
-                                object->member_name ? " member " : "",
-                                object->member_name ? object->member_name : "");
+                               "compact unwind relocation targets discarded symbol '%s' in '%s'%s%s",
+                               input->name ? input->name : "<unnamed>", object->file->path,
+                               object->member_name ? " member " : "",
+                               object->member_name ? object->member_name : "");
             }
             uint64_t relative = input->entry.n_value >= section->header.addr
                                         ? input->entry.n_value - section->header.addr
@@ -441,10 +1027,10 @@ static int ld_unwind_relocation_target(ld_context_t *ctx, ld_unwind_record_t *re
             if (!symbol || symbol->kind == LD_SYMBOL_IMPORT ||
                 symbol->kind == LD_SYMBOL_UNDEFINED) {
                 return ld_fail(ctx, LD_SYMBOL_ERROR,
-                                "compact unwind relocation references unresolved symbol '%s' in '%s'%s%s",
-                                input->name ? input->name : "<unnamed>", object->file->path,
-                                object->member_name ? " member " : "",
-                                object->member_name ? object->member_name : "");
+                               "compact unwind relocation references unresolved symbol '%s' in '%s'%s%s",
+                               input->name ? input->name : "<unnamed>", object->file->path,
+                               object->member_name ? " member " : "",
+                               object->member_name ? object->member_name : "");
             }
             base = ld_unwind_symbol_address(symbol);
         }
@@ -456,9 +1042,9 @@ static int ld_unwind_relocation_target(ld_context_t *ctx, ld_unwind_record_t *re
 
 overflow:
     return ld_fail(ctx, LD_RELOCATION_ERROR,
-                    "compact unwind relocation overflows in '%s'%s%s", object->file->path,
-                    object->member_name ? " member " : "",
-                    object->member_name ? object->member_name : "");
+                   "compact unwind relocation overflows in '%s'%s%s", object->file->path,
+                   object->member_name ? " member " : "",
+                   object->member_name ? object->member_name : "");
 }
 
 static int ld_unwind_record_compare(const void *left, const void *right) {
@@ -480,33 +1066,33 @@ int ld_unwind_emit(ld_context_t *ctx) {
         ld_unwind_record_t *record = &state->records[i];
         uint64_t address;
         int result = ld_unwind_relocation_target(ctx, record, &record->start_relocation,
-                                                  record->start_addend, &address);
+                                                 record->start_addend, &address);
         if (result != LD_OK) {
             return result;
         }
         if (address < LD_IMAGE_BASE || address - LD_IMAGE_BASE > UINT32_MAX) {
             return ld_fail(ctx, LD_OUTPUT_ERROR,
-                            "compact unwind function address 0x%llx is outside the 32-bit __TEXT range",
-                            (unsigned long long) address);
+                           "compact unwind function address 0x%llx is outside the 32-bit __TEXT range",
+                           (unsigned long long) address);
         }
         record->function_offset = (uint32_t) (address - LD_IMAGE_BASE);
         if (record->has_lsda_relocation || record->lsda_addend != 0) {
             if (!record->has_lsda_relocation) {
                 return ld_fail(ctx, LD_INVALID_INPUT,
-                                "compact unwind LSDA has no relocation in '%s'%s%s",
-                                record->object->file->path,
-                                record->object->member_name ? " member " : "",
-                                record->object->member_name ? record->object->member_name : "");
+                               "compact unwind LSDA has no relocation in '%s'%s%s",
+                               record->object->file->path,
+                               record->object->member_name ? " member " : "",
+                               record->object->member_name ? record->object->member_name : "");
             }
             result = ld_unwind_relocation_target(ctx, record, &record->lsda_relocation,
-                                                  record->lsda_addend, &address);
+                                                 record->lsda_addend, &address);
             if (result != LD_OK) {
                 return result;
             }
             if (address < LD_IMAGE_BASE || address - LD_IMAGE_BASE > UINT32_MAX) {
                 return ld_fail(ctx, LD_OUTPUT_ERROR,
-                                "compact unwind LSDA address 0x%llx is outside the 32-bit image range",
-                                (unsigned long long) address);
+                               "compact unwind LSDA address 0x%llx is outside the 32-bit image range",
+                               (unsigned long long) address);
             }
             record->lsda_offset = (uint32_t) (address - LD_IMAGE_BASE);
         }
@@ -516,13 +1102,13 @@ int ld_unwind_emit(ld_context_t *ctx) {
     for (size_t i = 1; i < state->count; i++) {
         if (state->records[i - 1U].function_offset == state->records[i].function_offset) {
             return ld_fail(ctx, LD_INVALID_INPUT,
-                            "duplicate compact unwind function offset 0x%x in '%s'%s%s",
-                            state->records[i].function_offset,
-                            state->records[i].object->file->path,
-                            state->records[i].object->member_name ? " member " : "",
-                            state->records[i].object->member_name
-                                    ? state->records[i].object->member_name
-                                    : "");
+                           "duplicate compact unwind function offset 0x%x in '%s'%s%s",
+                           state->records[i].function_offset,
+                           state->records[i].object->file->path,
+                           state->records[i].object->member_name ? " member " : "",
+                           state->records[i].object->member_name
+                                   ? state->records[i].object->member_name
+                                   : "");
         }
     }
 
@@ -551,18 +1137,19 @@ int ld_unwind_emit(ld_context_t *ctx) {
     memcpy(output, &header, sizeof(header));
 
     for (size_t i = 0; i < state->personality_count; i++) {
-        ld_symbol_t *symbol = state->personalities[i];
-        if (!ctx->got || symbol->got_index == UINT32_MAX) {
+        const ld_macho_ref_t *ref = &state->personalities[i];
+        uint64_t address;
+        if (!ld_macho_got_address(ctx, ref, &address)) {
             return ld_fail(ctx, LD_OUTPUT_ERROR,
-                            "missing GOT entry for compact unwind personality '%s'", symbol->name);
+                           "missing GOT entry for compact unwind personality '%s'",
+                           ld_macho_ref_name(ref));
         }
-        uint64_t address = ctx->got->addr + (uint64_t) symbol->got_index * 8U;
         if (address < LD_IMAGE_BASE || address - LD_IMAGE_BASE > UINT32_MAX) {
             return ld_fail(ctx, LD_OUTPUT_ERROR,
-                            "compact unwind personality GOT address is outside the 32-bit image range");
+                           "compact unwind personality GOT address is outside the 32-bit image range");
         }
         ld_unwind_write_u32(output + personalities_offset + i * sizeof(uint32_t),
-                             (uint32_t) (address - LD_IMAGE_BASE));
+                            (uint32_t) (address - LD_IMAGE_BASE));
     }
 
     size_t lsda_written = 0;
@@ -610,10 +1197,10 @@ int ld_unwind_emit(ld_context_t *ctx) {
     const ld_unwind_record_t *last = &state->records[state->count - 1U];
     if (last->length > UINT32_MAX - last->function_offset) {
         return ld_fail(ctx, LD_OUTPUT_ERROR,
-                        "compact unwind sentinel offset overflows for '%s'%s%s",
-                        last->object->file->path,
-                        last->object->member_name ? " member " : "",
-                        last->object->member_name ? last->object->member_name : "");
+                       "compact unwind sentinel offset overflows for '%s'%s%s",
+                       last->object->file->path,
+                       last->object->member_name ? " member " : "",
+                       last->object->member_name ? last->object->member_name : "");
     }
     ld_unwind_info_index_entry_t sentinel = {
             .function_offset = last->function_offset + last->length,

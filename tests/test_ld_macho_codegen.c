@@ -35,6 +35,9 @@ static void test_compact_unwind_regular_page(void) {
     ld_input_section_t sections[2] = {0};
     memcpy(sections[0].header.segname, "__TEXT", sizeof("__TEXT"));
     memcpy(sections[0].header.sectname, "__text", sizeof("__text"));
+    sections[0].header.size = 0x30U;
+    sections[0].header.flags =
+            LD_S_ATTR_PURE_INSTRUCTIONS | LD_S_ATTR_SOME_INSTRUCTIONS;
     sections[0].output = &text_output;
     memcpy(sections[1].header.segname, "__LD", sizeof("__LD"));
     memcpy(sections[1].header.sectname, "__compact_unwind", 16U);
@@ -104,7 +107,7 @@ static void test_compact_unwind_regular_page(void) {
 
 static void test_arm64_branch_island(void) {
     static const char strings[] = "\0_main\0_far\0";
-    const uint64_t far_address = LD_IMAGE_BASE + 0x10000000ULL;
+    const uint64_t far_address = LD_IMAGE_BASE + 0x10000004ULL;
     size_t segment_size = sizeof(ld_segment_command_64_t) + sizeof(ld_section_64_t);
     size_t commands_size = segment_size + sizeof(ld_symtab_command_t);
     size_t text_offset = sizeof(ld_mach_header_64_t) + commands_size;
@@ -144,7 +147,7 @@ static void test_arm64_branch_island(void) {
     section.offset = (uint32_t) text_offset;
     section.align = 2U;
     section.reloff = (uint32_t) relocation_offset;
-    section.nreloc = 2U;
+    section.nreloc = 1U;
     section.flags = LD_S_ATTR_PURE_INSTRUCTIONS | LD_S_ATTR_SOME_INSTRUCTIONS;
     memcpy(object + cursor + sizeof(segment), &section, sizeof(section));
 
@@ -160,9 +163,7 @@ static void test_arm64_branch_island(void) {
 
     uint32_t branch = 0x94000000U;
     memcpy(object + text_offset, &branch, sizeof(branch));
-    uint32_t relocation[4] = {
-            0U,
-            4U | (LD_ARM64_RELOC_ADDEND << 28U),
+    uint32_t relocation[2] = {
             0U,
             1U | (1U << 24U) | (2U << 25U) | (1U << 27U) |
                     (LD_ARM64_RELOC_BRANCH26 << 28U),
@@ -245,7 +246,7 @@ static void test_arm64_branch_island(void) {
     uint64_t thunk_target = (uint64_t) ((int64_t) (islands->addr & ~0xfffULL) +
                                         adrp_immediate * 0x1000LL) +
                             ((add >> 10U) & 0xfffU);
-    assert(thunk_target == far_address + 4U);
+    assert(thunk_target == far_address);
     free(image);
 
     /* POINTER_TO_GOT has no absolute 64-bit encoding on arm64.  A malformed
@@ -275,6 +276,37 @@ static void test_arm64_branch_island(void) {
     assert(access(invalid_output_path, F_OK) != 0);
     ld_options_deinit(&options);
     unlink(invalid_object_path);
+
+    /* Zig's arm64 Mach-O parser only accepts ADDEND before PAGE21 and
+       PAGEOFF12.  ADDEND+BRANCH26 must be rejected rather than becoming a
+       Nature-only relocation dialect. */
+    input_section->nreloc = 2U;
+    uint32_t invalid_branch_addend[4] = {
+            0U,
+            4U | (LD_ARM64_RELOC_ADDEND << 28U),
+            0U,
+            1U | (1U << 24U) | (2U << 25U) | (1U << 27U) |
+                    (LD_ARM64_RELOC_BRANCH26 << 28U),
+    };
+    memcpy(object + relocation_offset, invalid_branch_addend,
+           sizeof(invalid_branch_addend));
+    char invalid_addend_path[] =
+            "/tmp/nature-ld-branch-addend-object-XXXXXX";
+    test_ld_write_fixture(invalid_addend_path, object, object_size);
+    char invalid_addend_output[] =
+            "/tmp/nature-ld-branch-addend-output-XXXXXX";
+    int invalid_addend_fd = mkstemp(invalid_addend_output);
+    assert(invalid_addend_fd >= 0);
+    assert(close(invalid_addend_fd) == 0);
+    unlink(invalid_addend_output);
+    ld_options_init(&options);
+    options.output_path = invalid_addend_output;
+    options.adhoc_codesign = false;
+    assert(ld_add_input(&options, invalid_addend_path) == LD_OK);
+    assert(ld_link(&options) == LD_RELOCATION_ERROR);
+    assert(access(invalid_addend_output, F_OK) != 0);
+    ld_options_deinit(&options);
+    unlink(invalid_addend_path);
     free(object);
     unlink(object_path);
     unlink(output_path);

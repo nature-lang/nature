@@ -1,4 +1,5 @@
 #include "test_ld_macho_common.h"
+#include "src/ld/ld_macho_symbols.h"
 
 #include <assert.h>
 #include <fcntl.h>
@@ -57,6 +58,13 @@ bool test_ld_dylib_has_symbol(char *const *symbols, size_t count,
 }
 
 void test_ld_parsed_context_deinit(ld_context_t *ctx) {
+    for (size_t i = 0; i < ctx->objects.count; i++) {
+        ld_object_t *object = ctx->objects.items[i];
+        free(object->member_name);
+        free(object->sections);
+        free(object->symbols);
+        free(object);
+    }
     for (size_t i = 0; i < ctx->files.count; i++) {
         free(ctx->files.items[i]->bytes);
         free(ctx->files.items[i]->path);
@@ -81,7 +89,14 @@ void test_ld_parsed_context_deinit(ld_context_t *ctx) {
             free(dylib->reexports[j]);
         }
         free(dylib->reexports);
+        ld_string_set_deinit(&dylib->rpath_set);
+        for (size_t j = 0; j < dylib->rpath_count; j++) {
+            free(dylib->rpaths[j]);
+        }
+        free(dylib->rpaths);
+        ld_macho_dylib_symbols_deinit(dylib);
     }
     free(ctx->files.items);
     free(ctx->dylibs.items);
+    free(ctx->objects.items);
 }

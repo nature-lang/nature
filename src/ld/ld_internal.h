@@ -19,6 +19,22 @@ typedef struct ld_output_section ld_output_section_t;
 typedef struct ld_symbol ld_symbol_t;
 typedef struct ld_relocation ld_relocation_t;
 
+/* A Mach-O relocation can name either a resolved global symbol or a local
+   nlist entry owned by one input object.  Synthetic sections must preserve
+   that distinction: reducing a local reference to a global name loses valid
+   GOT/TLVP targets emitted by clang. */
+typedef struct {
+    ld_symbol_t *global;
+    ld_object_t *object;
+    uint32_t input_index;
+} ld_macho_ref_t;
+
+typedef struct {
+    ld_macho_ref_t *items;
+    size_t count;
+    size_t capacity;
+} ld_macho_ref_list_t;
+
 typedef struct ld_string_set_entry {
     UT_hash_handle hh;
 } ld_string_set_entry_t;
@@ -27,6 +43,7 @@ typedef struct {
     uint8_t *bytes;
     size_t size;
     char *path;
+    size_t input_priority;
 } ld_file_t;
 
 typedef struct {
@@ -46,6 +63,7 @@ typedef struct {
     const char *alias_name;
     ld_object_t *object;
     uint32_t index;
+    uint32_t output_symtab_index;
 } ld_input_symbol_t;
 
 typedef struct ld_relocation {
@@ -87,6 +105,12 @@ typedef enum {
     LD_SYMBOL_IMPORT,
 } ld_symbol_kind_t;
 
+typedef enum {
+    LD_VISIBILITY_GLOBAL = 0,
+    LD_VISIBILITY_HIDDEN,
+    LD_VISIBILITY_LOCAL,
+} ld_symbol_visibility_t;
+
 /* Mach-O's ld64 exposes these names as synthetic symbols.  They are kept
    separate from ordinary absolute symbols until section layout has finished,
    because their value depends on the final image addresses. */
@@ -111,7 +135,17 @@ struct ld_symbol {
     bool alias;
     ld_symbol_t *alias_target;
     bool dynamic;
+    bool referenced_dynamically;
+    bool tlv;
+    bool dylib_absolute;
+    bool dylib_weak_definition;
+    ld_symbol_visibility_t visibility;
+    uint32_t resolver_class;
+    size_t resolver_priority;
+    size_t resolver_order;
+    size_t dylib_index;
     uint32_t got_index;
+    uint32_t tlv_ptr_index;
     uint32_t stub_index;
     uint32_t symtab_index;
     uint32_t dylib_ordinal;
@@ -162,8 +196,18 @@ typedef struct {
 } ld_file_list_t;
 
 typedef struct {
+    char *name;
+    char *import_name;
+    bool weak;
+    bool absolute;
+    bool tlv;
+    bool reexport;
+} ld_dylib_symbol_t;
+
+typedef struct {
     char *path;
     char *install_name;
+    size_t input_priority;
     uint32_t current_version;
     uint32_t compatibility_version;
     char **exports;
@@ -178,6 +222,13 @@ typedef struct {
     size_t reexport_count;
     size_t reexport_capacity;
     ld_string_set_entry_t *reexport_set;
+    char **rpaths;
+    size_t rpath_count;
+    size_t rpath_capacity;
+    ld_string_set_entry_t *rpath_set;
+    ld_dylib_symbol_t *symbols;
+    size_t symbol_count;
+    size_t symbol_capacity;
     size_t reexport_owner;
     bool weak;
     bool reexport_only;
@@ -262,7 +313,7 @@ typedef struct {
     ld_unwind_record_t *records;
     size_t count;
     size_t capacity;
-    ld_symbol_t *personalities[3];
+    ld_macho_ref_t personalities[3];
     size_t personality_count;
     size_t lsda_count;
     ld_output_section_t *output;
@@ -292,13 +343,17 @@ struct ld_context {
     ld_unwind_state_t unwind;
     ld_symbol_t *symbols;
     ld_output_section_t *got;
+    ld_output_section_t *tlv_ptrs;
     ld_output_section_t *stubs;
     ld_output_section_t *objc_stubs;
     ld_output_section_t *objc_methname;
     ld_output_section_t *objc_selrefs;
     ld_output_section_t *branch_islands;
     ld_output_section_t *common;
+    ld_macho_ref_list_t got_refs;
+    ld_macho_ref_list_t tlv_ptr_refs;
     uint32_t got_count;
+    uint32_t tlv_ptr_count;
     uint32_t stub_count;
     uint32_t objc_stub_count;
     uint32_t min_version;

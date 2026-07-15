@@ -51,6 +51,7 @@ typedef struct {
     ld_string_list_t inputs;
     ld_string_list_t library_paths;
     ld_string_list_t framework_paths;
+    ld_string_list_t rpaths;
     ld_string_list_t libraries;
     ld_string_list_t frameworks;
 
@@ -73,6 +74,7 @@ void ld_options_init(ld_options_t *options);
 void ld_options_deinit(ld_options_t *options);
 int ld_add_input(ld_options_t *options, const char *path);
 int ld_add_library_path(ld_options_t *options, const char *path);
+int ld_add_rpath(ld_options_t *options, const char *path);
 int ld_parse_flags(ld_options_t *options, const char *flags);
 int ld_link(const ld_options_t *options);
 

@@ -38,27 +38,27 @@ static void test_tbd_objc_exports(void) {
     assert(ctx.dylibs.count == 1U);
     const ld_dylib_input_t *dylib = &ctx.dylibs.items[0];
     assert(test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
-                            "_OBJC_CLASS_$_NSApplication"));
+                                    "_OBJC_CLASS_$_NSApplication"));
     assert(test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
-                            "_OBJC_METACLASS_$_NSApplication"));
+                                    "_OBJC_METACLASS_$_NSApplication"));
     assert(test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
-                            "_OBJC_CLASS_$_NSQuotedClass"));
+                                    "_OBJC_CLASS_$_NSQuotedClass"));
     assert(test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
-                            "_OBJC_EHTYPE_$_NSException"));
+                                    "_OBJC_EHTYPE_$_NSException"));
     assert(test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
-                            "_OBJC_IVAR_$_NSApplication._delegate"));
+                                    "_OBJC_IVAR_$_NSApplication._delegate"));
     assert(test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
-                            "_AddedForCompatibility"));
+                                    "_AddedForCompatibility"));
     assert(!test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
-                             "_HiddenCompatibility"));
+                                     "_HiddenCompatibility"));
     assert(!test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
-                             "_OBJC_CLASS_$_NSWrongArchitecture"));
+                                     "_OBJC_CLASS_$_NSWrongArchitecture"));
     assert(test_ld_dylib_has_symbol(dylib->weak_exports, dylib->weak_export_count,
-                            "_OBJC_CLASS_$_NSWeakClass"));
+                                    "_OBJC_CLASS_$_NSWeakClass"));
     assert(test_ld_dylib_has_symbol(dylib->weak_exports, dylib->weak_export_count,
-                            "_OBJC_METACLASS_$_NSWeakClass"));
+                                    "_OBJC_METACLASS_$_NSWeakClass"));
     assert(test_ld_dylib_has_symbol(dylib->weak_exports, dylib->weak_export_count,
-                            "_OBJC_IVAR_$_NSWeakClass._value"));
+                                    "_OBJC_IVAR_$_NSWeakClass._value"));
     test_ld_parsed_context_deinit(&ctx);
     unlink(v4_path);
 
@@ -82,16 +82,88 @@ static void test_tbd_objc_exports(void) {
     assert(ctx.dylibs.count == 1U);
     dylib = &ctx.dylibs.items[0];
     assert(test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
-                            "_OBJC_CLASS_$_LegacyClass"));
+                                    "_OBJC_CLASS_$_LegacyClass"));
     assert(test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
-                            "_OBJC_METACLASS_$_LegacyClass"));
+                                    "_OBJC_METACLASS_$_LegacyClass"));
     assert(test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
-                            "_OBJC_EHTYPE_$_LegacyException"));
+                                    "_OBJC_EHTYPE_$_LegacyException"));
     assert(!test_ld_dylib_has_symbol(dylib->weak_exports, dylib->weak_export_count,
-                             "_OBJC_IVAR_$_WrongArchitecture._value"));
+                                     "_OBJC_IVAR_$_WrongArchitecture._value"));
     test_ld_parsed_context_deinit(&ctx);
     ld_options_deinit(&options);
     unlink(v3_path);
+}
+
+static void test_tbd_arm64e_targets(void) {
+    /* Xcode 26.4 started publishing ordinary AArch64 libSystem symbols only
+       under arm64e-macos.  This mirrors the shape that exposed Zig issue
+       #31658 and verifies exports and library/symbol reexports together. */
+    static const char tbd[] =
+            "--- !tapi-tbd\n"
+            "tbd-version: 4\n"
+            "targets: [ arm64e-macos, x86_64-macos ]\n"
+            "install-name: '/usr/lib/libSystem.B.dylib'\n"
+            "reexported-libraries:\n"
+            "  - targets: [ 'arm64e-macos' ]\n"
+            "    libraries: [ '/usr/lib/system/libsystem_c.dylib' ]\n"
+            "  - targets: [ x86_64-macos ]\n"
+            "    libraries: [ '/usr/lib/system/libsystem_wrong.dylib' ]\n"
+            "exports:\n"
+            "  - targets: [ arm64-macos ]\n"
+            "    symbols: [ _legacy_arm64_export ]\n"
+            "  - targets: [ arm64e-macos ]\n"
+            "    symbols: [ _arm64e_export ]\n"
+            "  - targets: [ x86_64-macos, arm64e-maccatalyst, not-arm64-macosx,\n"
+            "               not-arm64e-macos, arm64e-macos-simulator ]\n"
+            "    symbols: [ _wrong_target_export ]\n"
+            "  - targets: [ arm64-macosx ]\n"
+            "    symbols: [ _legacy_macosx_export ]\n"
+            "--- !tapi-tbd\n"
+            "tbd-version: 4\n"
+            "targets: [ arm64e-macos, x86_64-macos ]\n"
+            "install-name: '/usr/lib/system/libsystem_c.dylib'\n"
+            "reexports:\n"
+            "  - targets: [ x86_64-macos,\n"
+            "               arm64e-macos ]\n"
+            "    symbols: [ _strstr ]\n"
+            "...\n";
+    char path[] = "/tmp/nature-ld-tbd-arm64e-XXXXXX";
+    test_ld_write_fixture(path, tbd, sizeof(tbd) - 1U);
+
+    ld_options_t options;
+    ld_options_init(&options);
+    ld_context_t ctx = {0};
+    ctx.options = &options;
+    assert(ld_parse_input_file(&ctx, path) == LD_OK);
+    assert(ctx.dylibs.count == 1U);
+    const ld_dylib_input_t *dylib = &ctx.dylibs.items[0];
+    assert(test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
+                                    "_legacy_arm64_export"));
+    assert(test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
+                                    "_arm64e_export"));
+    assert(test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
+                                    "_legacy_macosx_export"));
+    assert(test_ld_dylib_has_symbol(dylib->exports, dylib->export_count, "_strstr"));
+    assert(!test_ld_dylib_has_symbol(dylib->exports, dylib->export_count,
+                                     "_wrong_target_export"));
+    assert(dylib->reexport_count == 1U);
+    assert(strcmp(dylib->reexports[0], "/usr/lib/system/libsystem_c.dylib") == 0);
+
+    test_ld_parsed_context_deinit(&ctx);
+    ld_options_deinit(&options);
+    unlink(path);
+
+    static const char malformed_tbd[] =
+            "--- !tapi-tbd\n"
+            "tbd-version: 4\n"
+            "targets: [ 'arm64e-macos ]\n"
+            "install-name: '/usr/lib/libMalformed.dylib'\n"
+            "...\n";
+    char malformed_path[] = "/tmp/nature-ld-tbd-arm64e-malformed-XXXXXX";
+    test_ld_write_fixture(malformed_path, malformed_tbd, sizeof(malformed_tbd) - 1U);
+    test_ld_expect_invalid_input(malformed_path, LD_INVALID_INPUT,
+                                 "cannot parse text-based stub");
+    unlink(malformed_path);
 }
 
 static void test_binary_dylib_reexport(void) {
@@ -265,15 +337,16 @@ static void test_sdk_appkit_objc_exports(void) {
     assert(ctx.dylibs.count == 1U);
     const ld_dylib_input_t *appkit = &ctx.dylibs.items[0];
     assert(test_ld_dylib_has_symbol(appkit->exports, appkit->export_count,
-                            "_OBJC_CLASS_$_NSApplication"));
+                                    "_OBJC_CLASS_$_NSApplication"));
     assert(test_ld_dylib_has_symbol(appkit->exports, appkit->export_count,
-                            "_OBJC_METACLASS_$_NSApplication"));
+                                    "_OBJC_METACLASS_$_NSApplication"));
     test_ld_parsed_context_deinit(&ctx);
     ld_options_deinit(&options);
 }
 
 void test_ld_macho_dylib(void) {
     test_tbd_objc_exports();
+    test_tbd_arm64e_targets();
     test_binary_dylib_reexport();
     test_framework_path_reexport();
     test_sdk_appkit_objc_exports();

@@ -8,6 +8,7 @@
 #define LD_FAT_MAGIC_64 0xcafebabfU
 #define LD_CPU_ARCH_ABI64 0x01000000
 #define LD_CPU_TYPE_ARM64 (LD_CPU_ARCH_ABI64 | 12)
+#define LD_CPU_SUBTYPE_MASK 0xff000000U
 #define LD_CPU_SUBTYPE_ARM64_ALL 0
 #define LD_CPU_SUBTYPE_ARM64E 2
 
@@ -30,8 +31,13 @@
 #define LD_LC_LOAD_DYLIB 0xcU
 #define LD_LC_ID_DYLIB 0xdU
 #define LD_LC_LOAD_DYLINKER 0xeU
+#define LD_LC_RPATH (0x1cU | LD_LC_REQ_DYLD)
 #define LD_LC_UUID 0x1bU
 #define LD_LC_CODE_SIGNATURE 0x1dU
+#define LD_LC_VERSION_MIN_MACOSX 0x24U
+#define LD_LC_VERSION_MIN_IPHONEOS 0x25U
+#define LD_LC_VERSION_MIN_TVOS 0x2fU
+#define LD_LC_VERSION_MIN_WATCHOS 0x30U
 #define LD_LC_REEXPORT_DYLIB (0x1fU | LD_LC_REQ_DYLD)
 #define LD_LC_DYLD_INFO_ONLY (0x22U | LD_LC_REQ_DYLD)
 #define LD_LC_FUNCTION_STARTS 0x26U
@@ -42,6 +48,17 @@
 #define LD_LC_DYLD_EXPORTS_TRIE (0x33U | LD_LC_REQ_DYLD)
 
 #define LD_PLATFORM_MACOS 1U
+#define LD_PLATFORM_IOS 2U
+#define LD_PLATFORM_TVOS 3U
+#define LD_PLATFORM_WATCHOS 4U
+#define LD_PLATFORM_BRIDGEOS 5U
+#define LD_PLATFORM_MACCATALYST 6U
+#define LD_PLATFORM_IOSSIMULATOR 7U
+#define LD_PLATFORM_TVOSSIMULATOR 8U
+#define LD_PLATFORM_WATCHOSSIMULATOR 9U
+#define LD_PLATFORM_DRIVERKIT 10U
+#define LD_PLATFORM_VISIONOS 11U
+#define LD_PLATFORM_VISIONOSSIMULATOR 12U
 #define LD_VM_PROT_READ 1
 #define LD_VM_PROT_WRITE 2
 #define LD_VM_PROT_EXECUTE 4
@@ -78,6 +95,7 @@
 #define LD_N_REFERENCED_DYNAMICALLY 0x0010U
 #define LD_N_WEAK_REF 0x0040U
 #define LD_N_WEAK_DEF 0x0080U
+#define LD_N_REF_TO_WEAK 0x0080U
 
 #define LD_EXPORT_SYMBOL_FLAGS_KIND_REGULAR 0x00U
 #define LD_EXPORT_SYMBOL_FLAGS_KIND_THREAD_LOCAL 0x01U
@@ -114,6 +132,7 @@
 #define LD_BIND_OPCODE_DONE 0x00U
 #define LD_BIND_OPCODE_SET_DYLIB_ORDINAL_IMM 0x10U
 #define LD_BIND_OPCODE_SET_DYLIB_ORDINAL_ULEB 0x20U
+#define LD_BIND_OPCODE_SET_DYLIB_SPECIAL_IMM 0x30U
 #define LD_BIND_OPCODE_SET_SYMBOL_TRAILING_FLAGS_IMM 0x40U
 #define LD_BIND_OPCODE_SET_TYPE_IMM 0x50U
 #define LD_BIND_OPCODE_SET_ADDEND_SLEB 0x60U
@@ -299,6 +318,21 @@ typedef struct {
     uint32_t cmd, cmdsize;
     uint32_t platform, minos, sdk, ntools;
 } ld_build_version_command_t;
+
+typedef struct {
+    uint32_t tool;
+    uint32_t version;
+} ld_build_tool_version_t;
+
+typedef struct {
+    uint32_t cmd, cmdsize;
+    uint32_t version, sdk;
+} ld_version_min_command_t;
+
+typedef struct {
+    uint32_t cmd, cmdsize;
+    uint32_t path_offset;
+} ld_rpath_command_t;
 
 typedef struct {
     uint32_t cmd, cmdsize;
