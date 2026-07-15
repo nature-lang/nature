@@ -15,6 +15,7 @@
 #include "src/build/test_runner.h"
 #include "src/cfg.h"
 #include "src/debug/debug.h"
+#include "src/ld/ld.h"
 #include "src/linear.h"
 #include "src/lower/amd64.h"
 #include "src/lower/arm64.h"
@@ -27,8 +28,8 @@
 #include "src/register/linearscan.h"
 #include "src/schedule.h"
 #include "src/semantic/analyzer.h"
-#include "src/semantic/global_eval.h"
 #include "src/semantic/generics.h"
+#include "src/semantic/global_eval.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
 #include "utils/helper.h"
@@ -385,60 +386,68 @@ static void assembler_module(module_t *m) {
  * modules modules
  * @param modules
  */
-static void linker_elf_exe(slice_t *modules) {
-    // 检测是否生成
-    int fd;
-    char *temp_output = path_join(TEMP_DIR, LINKER_OUTPUT);
-    elf_context_t *ctx = elf_context_new(temp_output, OUTPUT_EXE);
+static void ld_elf_exe(slice_t *modules, char *ldflags) {
+    ld_options_t options;
+    ld_options_init(&options);
+    options.os = LD_OS_LINUX;
+    options.output_path = BUILD_OUTPUT;
+    options.entry_symbol = "_start";
+    options.pie = false;
+    options.adhoc_codesign = false;
 
-    for (int i = 0; i < modules->count; ++i) {
-        module_t *m = modules->take[i];
-
-        log_debug("load module object file: %s, %s", m->rel_path, m->object_file);
-        fd = check_open(m->object_file, O_RDONLY | O_BINARY);
-        load_object_file(ctx, fd, 0); // 加载并解析目标文件
+    if (BUILD_ARCH == ARCH_ARM64) {
+        options.arch = LD_ARCH_ARM64;
+    } else if (BUILD_ARCH == ARCH_AMD64) {
+        options.arch = LD_ARCH_AMD64;
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        options.arch = LD_ARCH_RISCV64;
+    } else {
+        assertf(false, "unsupported Linux ELF target architecture");
     }
 
-    // 将相关符号都加入来
-    slice_push(linker_libs, custom_link_object_path());
-    slice_push(linker_libs, lib_file_path(LIB_START_FILE));
-
-    // 固定使用 elf 格式的 libruntime.a 和 libuv.a, 只在 output 时才会转换成 macho 格式的文件
-    slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
-    slice_push(linker_libs, lib_file_path(LIBUV_FILE));
-    slice_push(linker_libs, lib_file_path(LIBC_FILE));
-    slice_push(linker_libs, lib_file_path(LIBGCC_FILE));
-
-    for (int i = 0; i < linker_libs->count; ++i) {
+    assertf(ld_add_input(&options, lib_file_path(LIB_START_FILE)) == LD_OK,
+            "cannot add Linux ELF startup object");
+    for (int i = 0; i < modules->count; i++) {
+        module_t *module = modules->take[i];
+        assertf(ld_add_input(&options, module->object_file) == LD_OK,
+                "cannot add Linux ELF module object '%s'", module->object_file);
+    }
+    assertf(ld_add_input(&options, custom_link_object_path()) == LD_OK,
+            "cannot add Linux ELF metadata object");
+    for (int i = 0; i < linker_libs->count; i++) {
         char *path = linker_libs->take[i];
-        fd = check_open(path, O_RDONLY | O_BINARY);
-
-        if (ends_with(path, ".o")) {
-            load_object_file(ctx, fd, 0);
-            continue;
-        }
-
-        if (ends_with(path, ".a")) {
-            load_archive(ctx, fd);
-            continue;
-        }
-
-        assertf(false, "cannot linker file '%s'", path);
+        assertf(ld_add_input(&options, path) == LD_OK,
+                "cannot add Linux package link '%s'", path);
     }
+    assertf(ld_add_input(&options, lib_file_path(LIB_RUNTIME_FILE)) == LD_OK,
+            "cannot add Linux runtime archive");
+    assertf(ld_add_input(&options, lib_file_path(LIBUV_FILE)) == LD_OK,
+            "cannot add Linux libuv archive");
+    assertf(ld_add_input(&options, lib_file_path(LIBC_FILE)) == LD_OK,
+            "cannot add Linux libc archive");
+    assertf(ld_add_input(&options, lib_file_path(LIBGCC_FILE)) == LD_OK,
+            "cannot add Linux libgcc archive");
 
-    // - core
-    elf_exe_file_format(ctx);
+    char library_dir[PATH_MAX];
+    int library_dir_length = snprintf(
+            library_dir, sizeof(library_dir), "%s/lib/%s_%s", NATURE_ROOT,
+            os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
+    assertf(library_dir_length > 0 &&
+                    (size_t) library_dir_length < sizeof(library_dir),
+            "Nature library directory path is too long");
+    assertf(ld_add_library_path(&options, library_dir) == LD_OK,
+            "cannot add Nature Linux library search path");
 
-    // - core
-    elf_output(ctx);
-    if (!file_exists(temp_output)) {
-        assertf(false, "[linker] linker failed");
-    }
-
-    remove(BUILD_OUTPUT);
-    copy(BUILD_OUTPUT, temp_output, 0755);
-    log_debug("linker output--> %s\n", temp_output);
-    log_debug("build output--> %s\n", BUILD_OUTPUT);
+    int parse_result = ld_parse_flags(&options, ldflags ? ldflags : "");
+    assertf(parse_result == LD_OK,
+            "unsupported Linux linker flags (error %d)", parse_result);
+    int result = ld_link(&options);
+    assertf(result == LD_OK, "internal Linux ELF linker failed (error %d)",
+            result);
+    assertf(file_exists(BUILD_OUTPUT),
+            "internal Linux ELF linker did not create '%s'", BUILD_OUTPUT);
+    log_debug("internal ELF linker output --> %s", BUILD_OUTPUT);
+    ld_options_deinit(&options);
 }
 
 static int command_exists(const char *cmd) {
@@ -487,7 +496,7 @@ static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
     bool has_lc = strstr(ldflags, "-lc") != NULL;
 
     // 将 modules 中的 obj output_file 添加到文件 objects.txt 中, 用来作为 ld 的参数
-    const char *objects_file = path_join(TEMP_DIR, "objects.txt");
+    char *objects_file = path_join(TEMP_DIR, "objects.txt");
     FILE *obj_list = fopen(objects_file, "w");
     if (!obj_list) {
         assertf(false, "unable to create objects list file: %s", objects_file);
@@ -583,24 +592,29 @@ static char *find_syslibroot() {
         return NULL;
     }
 
+#ifndef __DARWIN
+    return NULL;
+#else
     // 尝试使用 xcrun 命令获取 SDK 路径
     FILE *fp = popen("xcrun --show-sdk-path 2>/dev/null", "r");
     if (fp) {
         char path[PATH_MAX] = {0};
+        char *result = NULL;
         if (fgets(path, PATH_MAX, fp) != NULL) {
             // 移除末尾的换行符
             size_t len = strlen(path);
             if (len > 0 && path[len - 1] == '\n') {
                 path[len - 1] = '\0';
             }
-            pclose(fp);
-
             // 检查路径是否存在
             if (strlen(path) > 0 && dir_exists(path)) {
-                return strdup(path);
+                result = strdup(path);
             }
         }
         pclose(fp);
+        if (result) {
+            return result;
+        }
     }
 
     // 尝试常见的默认位置
@@ -617,6 +631,7 @@ static char *find_syslibroot() {
 
     // 如果找不到，返回 NULL
     return NULL;
+#endif
 }
 
 // 新增函数：获取 macOS SDK 版本
@@ -625,6 +640,9 @@ static char *get_macos_sdk_version() {
         return NULL;
     }
 
+#ifndef __DARWIN
+    return NULL;
+#else
     // 尝试使用 xcrun 命令获取 SDK 版本
     FILE *fp = popen("xcrun --sdk macosx --show-sdk-version 2>/dev/null", "r");
     if (!fp) {
@@ -652,17 +670,20 @@ static char *get_macos_sdk_version() {
     }
 
     if (!result_dup_str) {
-        log_warn("Warning: Could not determine a valid SDK version via xcrun. Raw output from xcrun: '%s'. Using default SDK version.");
+        log_warn("Warning: Could not determine a valid SDK version via xcrun. Raw output from xcrun: '%s'. Using default SDK version.",
+                 version_str);
     }
 
     return result_dup_str; // 可能返回 NULL
+#endif
 }
 
 /**
  * ld -w -arch arm64 -dynamic -platform_version macos 11.7.1 14.0 -e _runtime_main -o a.out ${ldflags} libruntime.a libuv.a libSystem.tbd  @objects.txt
  * ld -w -arch x86_64 -dynamic -platform_version macos 11.7.1 14.0 -e _runtime_main -o a.out libruntime.a libuv.a libSystem.tbd @objects.txt
  */
-static void custom_ld_mach_exe(slice_t *modules, char *use_ld, char *ldflags) {
+static void custom_ld_mach_exe(slice_t *modules, const char *use_ld,
+                               char *ldflags) {
     assert(strlen(use_ld) > 0);
 
     // 检测当前设备是否安装了 ld 命令
@@ -771,6 +792,71 @@ static void custom_ld_mach_exe(slice_t *modules, char *use_ld, char *ldflags) {
     log_debug("build output --> %s", BUILD_OUTPUT);
 }
 
+static void ld_diagnostic(void *context, ld_diag_level_t level, const char *message) {
+    (void) context;
+    if (level == LD_DIAG_ERROR) {
+        log_error("[ld] %s", message);
+    } else if (level == LD_DIAG_WARNING) {
+        log_warn("[ld] %s", message);
+    } else {
+        log_debug("[ld] %s", message);
+    }
+}
+
+static void ld_mach_exe(slice_t *modules, char *ldflags) {
+    assertf(BUILD_ARCH == ARCH_ARM64, "internal Darwin linker currently supports arm64 only");
+    ld_options_t options;
+    ld_options_init(&options);
+    options.output_path = BUILD_OUTPUT;
+    options.entry_symbol = LD_ENTRY;
+    options.diagnostic = ld_diagnostic;
+    options.min_os_version = ld_macos_version(11, 0, 0);
+
+    char *sysroot = find_syslibroot();
+    char *sdk_version = get_macos_sdk_version();
+    options.sysroot = sysroot;
+    char nature_library_path[PATH_MAX];
+    int nature_library_length = snprintf(nature_library_path, sizeof(nature_library_path), "%s/lib/%s_%s",
+                                         NATURE_ROOT, os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
+    assertf(nature_library_length >= 0 && (size_t) nature_library_length < sizeof(nature_library_path),
+            "Nature library search path is too long");
+    assertf(ld_add_library_path(&options, nature_library_path) == LD_OK,
+            "cannot add Nature library search path '%s'", nature_library_path);
+    if (sdk_version) {
+        unsigned major = 0, minor = 0, patch = 0;
+        sscanf(sdk_version, "%u.%u.%u", &major, &minor, &patch);
+        options.sdk_version = ld_macos_version(major, minor, patch);
+    }
+    for (int i = 0; i < modules->count; i++) {
+        module_t *module = modules->take[i];
+        if (module->object_file) {
+            assertf(ld_add_input(&options, module->object_file) == LD_OK,
+                    "cannot add object '%s' to internal Darwin linker", module->object_file);
+        }
+    }
+    assertf(ld_add_input(&options, custom_link_object_path()) == LD_OK,
+            "cannot add custom metadata object to internal Darwin linker");
+    for (int i = 0; i < linker_libs->count; i++) {
+        char *path = linker_libs->take[i];
+        assertf(ld_add_input(&options, path) == LD_OK,
+                "cannot add package link '%s' to internal Darwin linker", path);
+    }
+    assertf(ld_add_input(&options, lib_file_path(LIB_RUNTIME_FILE)) == LD_OK,
+            "cannot add Darwin runtime to internal linker");
+    assertf(ld_add_input(&options, lib_file_path(LIBUV_FILE)) == LD_OK,
+            "cannot add Darwin libuv to internal linker");
+    int parse_result = ld_parse_flags(&options, ldflags ? ldflags : "");
+    assertf(parse_result == LD_OK, "unsupported Darwin linker flags (error %d)", parse_result);
+    int result = ld_link(&options);
+    assertf(result == LD_OK, "internal Darwin linker failed (error %d)", result);
+    assertf(file_exists(BUILD_OUTPUT), "internal Darwin linker did not create '%s'", BUILD_OUTPUT);
+    log_debug("internal linker output --> %s", BUILD_OUTPUT);
+    log_debug("build output --> %s", BUILD_OUTPUT);
+    ld_options_deinit(&options);
+    free(sysroot);
+    free(sdk_version);
+}
+
 static void build_init(char *build_entry) {
     env_init();
     config_init();
@@ -787,11 +873,6 @@ static void build_init(char *build_entry) {
     char temp_path[PATH_MAX] = "";
     if (realpath(build_entry, temp_path) == NULL) {
         assertf(false, "entry file='%s' not found", build_entry);
-    }
-
-    // darwin 默认使用 ld 链接
-    if (BUILD_OS == OS_DARWIN && strlen(USE_LD) == 0) {
-        strcpy(USE_LD, "ld");
     }
 
     // copy
@@ -1240,8 +1321,25 @@ void build(char *build_entry, bool is_archive) {
             custom_ld_mach_exe(modules, USE_LD, LDFLAGS);
         }
     } else {
-        assertf(BUILD_OS == OS_LINUX, "The cross-platform elf linker can only be used if the target is linux.");
-        linker_elf_exe(modules);
+        if (BUILD_OS == OS_DARWIN) {
+            if (BUILD_ARCH == ARCH_ARM64) {
+                ld_mach_exe(modules, LDFLAGS);
+            } else {
+                assertf(BUILD_ARCH == ARCH_AMD64,
+                        "unsupported Darwin target architecture");
+#ifdef __DARWIN
+                custom_ld_mach_exe(modules, "ld", LDFLAGS);
+#else
+                assertf(false,
+                        "Darwin amd64 linking requires an external Mach-O "
+                        "linker; specify one with --ld");
+#endif
+            }
+        } else {
+            assertf(BUILD_OS == OS_LINUX,
+                    "The cross-platform elf linker can only be used if the target is linux.");
+            ld_elf_exe(modules, LDFLAGS);
+        }
     }
 
     // Cleanup TEMP_DIR after successful build

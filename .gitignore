@@ -7,6 +7,7 @@
 bin
 release/
 tmp/
+temps/
 
 # IDE and editor files
 .idea

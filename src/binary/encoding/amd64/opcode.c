@@ -493,8 +493,14 @@ amd64_opcode_inst_t movzx_r32_rm16 = {"movzx", "movzx", 0, {0x0F, 0xB7}, {OPCODE
 
 amd64_opcode_inst_t movzx_r64_rm16 = {"movzx", "movzx", 0, {0x0F, 0xB7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}};
 
-// mov rm -> reg
-amd64_opcode_inst_t movzx_r64_rm32 = {"movzx", "mov", 0, {0x63}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
+/*
+ * x86-64 has no MOVZX r64, r/m32 encoding.  A 32-bit MOV clears the upper
+ * half of its destination register, so encode this pseudo operation as
+ * MOV r32, r/m32 (8B /r) while keeping the logical destination operand at
+ * 64 bits for the following instruction.  Opcode 63 is MOVSXD and would
+ * preserve the source's signed interpretation instead of zero-extending it.
+ */
+amd64_opcode_inst_t movzx_r64_rm32 = {"movzx", "mov", 0, {0x8B}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
 
 
 // opcode end ------------------------------------------------------------------------------------------------------
