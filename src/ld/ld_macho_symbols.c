@@ -105,14 +105,13 @@ bool ld_macho_symbol_rank_better(ld_macho_symbol_rank_t candidate,
 }
 
 const ld_dylib_symbol_t *ld_macho_dylib_find_symbol(
-        const ld_dylib_input_t *dylib, const char *name) {
-    if (!dylib || !name) return NULL;
-    for (size_t i = 0; i < dylib->symbol_count; i++) {
-        if (strcmp(dylib->symbols[i].name, name) == 0) {
-            return &dylib->symbols[i];
-        }
+        ld_dylib_input_t *dylib, const char *name) {
+    if (!dylib || !name || !dylib->symbol_index.mem) return NULL;
+    uint64_t index = sc_map_get_s64(&dylib->symbol_index, name);
+    if (!sc_map_found(&dylib->symbol_index) || index >= dylib->symbol_count) {
+        return NULL;
     }
-    return NULL;
+    return &dylib->symbols[index];
 }
 
 static char *ld_macho_symbol_strndup(const char *value, size_t length) {
@@ -134,12 +133,23 @@ int ld_macho_dylib_record_symbol(ld_context_t *ctx,
         return ld_fail(ctx, LD_INVALID_INPUT,
                        "invalid dynamic-library export name");
     }
-    for (size_t i = 0; i < dylib->symbol_count; i++) {
-        ld_dylib_symbol_t *existing = &dylib->symbols[i];
-        if (strlen(existing->name) != name_length ||
-            memcmp(existing->name, name, name_length) != 0) {
-            continue;
+    if (!dylib->symbol_index.mem &&
+        !sc_map_init_s64(&dylib->symbol_index, 0, 0)) {
+        return ld_fail(ctx, LD_IO_ERROR,
+                       "out of memory recording dynamic-library export");
+    }
+
+    char lookup_name[4097];
+    memcpy(lookup_name, name, name_length);
+    lookup_name[name_length] = '\0';
+    uint64_t existing_index =
+            sc_map_get_s64(&dylib->symbol_index, lookup_name);
+    if (sc_map_found(&dylib->symbol_index)) {
+        if (existing_index >= dylib->symbol_count) {
+            return ld_fail(ctx, LD_INVALID_INPUT,
+                           "invalid dynamic-library symbol index");
         }
+        ld_dylib_symbol_t *existing = &dylib->symbols[existing_index];
         if (!weak && existing->weak) {
             existing->weak = false;
             existing->absolute = absolute;
@@ -195,12 +205,24 @@ int ld_macho_dylib_record_symbol(ld_context_t *ctx,
     symbol->absolute = absolute;
     symbol->tlv = tlv;
     symbol->reexport = reexport;
+    sc_map_put_s64(&dylib->symbol_index, symbol->name,
+                   (uint64_t) dylib->symbol_count);
+    if (sc_map_oom(&dylib->symbol_index)) {
+        free(symbol->name);
+        free(symbol->import_name);
+        memset(symbol, 0, sizeof(*symbol));
+        return ld_fail(ctx, LD_IO_ERROR,
+                       "out of memory indexing dynamic-library export");
+    }
     dylib->symbol_count++;
     return LD_OK;
 }
 
 void ld_macho_dylib_symbols_deinit(ld_dylib_input_t *dylib) {
     if (!dylib) return;
+    if (dylib->symbol_index.mem) {
+        sc_map_term_s64(&dylib->symbol_index);
+    }
     for (size_t i = 0; i < dylib->symbol_count; i++) {
         free(dylib->symbols[i].name);
         free(dylib->symbols[i].import_name);

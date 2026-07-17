@@ -75,8 +75,7 @@ module_t *module_build(ast_import_t *import, char *source_path, module_type_t ty
     assertf(file_exists(source_path), "source file=%s not found", source_path);
 
     m->source = file_read(source_path);
-    char *temp = strrchr(source_path, '/');
-    m->source_dir = rtrim(source_path, temp);
+    m->source_dir = path_dir(source_path);
     m->type = type;
 
     // scanner

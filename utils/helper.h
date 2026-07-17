@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <inttypes.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -11,7 +12,70 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef __WINDOWS
+#include <direct.h>
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+// Nature uses WORD and DWORD as instruction-width constants. A translation
+// unit can include utils/type.h before this header, so hide those macros while
+// the Windows SDK declares its WORD/DWORD typedefs. The SDK headers are loaded
+// here as a complete libuv dependency set; their include guards then make a
+// later uv/win.h include safe after the Nature constants are restored.
+#ifdef WORD
+#define NATURE_HELPER_RESTORE_WORD
+#undef WORD
+#endif
+#ifdef DWORD
+#define NATURE_HELPER_RESTORE_DWORD
+#undef DWORD
+#endif
+
+// winnt.h declares TOKEN_TYPE, which collides with Nature's token enum.
+#define TOKEN_TYPE NATURE_WINDOWS_TOKEN_TYPE
+
+// Winsock must precede windows.h.
+#include <winsock2.h>
+#include <mswsock.h>
+#include <ws2tcpip.h>
+#include <windows.h>
+#include <userenv.h>
+#include <iphlpapi.h>
+
+#undef TOKEN_TYPE
+
+#ifdef NATURE_HELPER_RESTORE_WORD
+#define WORD 2
+#undef NATURE_HELPER_RESTORE_WORD
+#endif
+#ifdef NATURE_HELPER_RESTORE_DWORD
+#define DWORD 4
+#undef NATURE_HELPER_RESTORE_DWORD
+#endif
+#ifdef VOID
+#undef VOID
+#endif
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+#ifdef BTYPE
+#undef BTYPE
+#endif
+// rpc.h defines `interface` as a C preprocessor keyword compatibility shim,
+// which collides with Nature's type_t.interface field.
+#ifdef interface
+#undef interface
+#endif
+#else
 #include <sys/mman.h>
+#endif
 #include <sys/stat.h>
 #include <unistd.h>
 #include <dirent.h>
@@ -19,6 +83,12 @@
 #include "assertf.h"
 #include "errno.h"
 #include "log.h"
+
+#ifdef __WINDOWS
+// MinGW declares the non-standard three-argument CRT itoa. Keep Nature's
+// allocation-returning helper source-compatible under a distinct C symbol.
+#define itoa nature_itoa
+#endif
 
 #define LAMBDA(return_type, body) \
     ({ return_type __fn__ body __fn__; })
@@ -29,6 +99,63 @@
 
 #define string char *
 #define STRING_EOF '\0'
+
+#ifdef __WINDOWS
+static inline char *nature_realpath(const char *path, char *resolved_path) {
+    char *result = _fullpath(resolved_path, path, PATH_MAX);
+    if (!result) {
+        return NULL;
+    }
+    for (char *cursor = resolved_path; *cursor; ++cursor) {
+        if (*cursor == '\\') {
+            *cursor = '/';
+        }
+    }
+    return result;
+}
+
+static inline char *nature_mkdtemp(char *path_template) {
+    static volatile LONG sequence = 0;
+    static const char alphabet[] = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+    if (!path_template) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    size_t length = strlen(path_template);
+    if (length < 6 || strcmp(path_template + length - 6, "XXXXXX") != 0) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    char *suffix = path_template + length - 6;
+    for (uint32_t attempt = 0; attempt < 256; ++attempt) {
+        uint64_t value = GetTickCount64() ^
+                         ((uint64_t) GetCurrentProcessId() << 32) ^
+                         (uint32_t) InterlockedIncrement(&sequence) ^
+                         ((uint64_t) attempt * UINT64_C(0x9e3779b97f4a7c15));
+        for (size_t i = 0; i < 6; ++i) {
+            suffix[i] = alphabet[value % (sizeof(alphabet) - 1)];
+            value = value / (sizeof(alphabet) - 1) + UINT64_C(0x9e3779b9);
+        }
+
+        if (_mkdir(path_template) == 0) {
+            return path_template;
+        }
+        if (errno != EEXIST) {
+            return NULL;
+        }
+    }
+
+    memcpy(suffix, "XXXXXX", 6);
+    errno = EEXIST;
+    return NULL;
+}
+
+#define realpath nature_realpath
+#define mkdtemp nature_mkdtemp
+#endif
 
 #define VOID (void) !
 
@@ -227,21 +354,21 @@ static inline char *tlsprintf(char *format, ...) {
 
 static inline char *itoa(int64_t n) {
     // 计算长度
-    int length = snprintf(NULL, 0, "%ld", n);
+    int length = snprintf(NULL, 0, "%" PRId64, n);
 
     // 初始化 buf
     char *str = malloc(length + 1);
 
     // 转换
-    snprintf(str, length + 1, "%ld", n);
+    snprintf(str, length + 1, "%" PRId64, n);
 
     return str;
 }
 
 static inline char *utoa(uint64_t n) {
-    int length = snprintf(NULL, 0, "%lu", n);
+    int length = snprintf(NULL, 0, "%" PRIu64, n);
     char *str = mallocz(length + 1);
-    snprintf(str, length + 1, "%lu", n);
+    snprintf(str, length + 1, "%" PRIu64, n);
 
     return str;
 }
@@ -372,6 +499,10 @@ static inline char *path_dir(char *path) {
     char *result = strdup(path);
 
     char *ptr = strrchr(result, '/'); // 查找最后一个斜杠
+    char *backslash = strrchr(result, '\\');
+    if (backslash && (!ptr || backslash > ptr)) {
+        ptr = backslash;
+    }
     if (ptr == NULL) {
         return result;
     }
@@ -382,6 +513,10 @@ static inline char *path_dir(char *path) {
 
 static inline char *file_name(char *path) {
     char *ptr = strrchr(path, '/');
+    char *backslash = strrchr(path, '\\');
+    if (backslash && (!ptr || backslash > ptr)) {
+        ptr = backslash;
+    }
     if (ptr == NULL) {
         return path; // path 本身就是 file name
     }
@@ -457,6 +592,9 @@ static inline char *get_workdir() {
     int size = 256;
     char *buf = mallocz(size);
     VOID getcwd(buf, size);
+#ifdef __WINDOWS
+    str_replace_char(buf, '\\', '/');
+#endif
     return buf;
 }
 
@@ -467,7 +605,11 @@ static inline void *copy(char *dst, char *src, int mode) {
     dst_fd = fopen(dst, "wb");
     assert(dst_fd && "open dst file failed");
 
+#ifdef __WINDOWS
+    _chmod(dst, mode);
+#else
     fchmod(fileno(dst_fd), mode);
+#endif
 
     char buf[1024] = {0};
     while (!feof(src_fd)) {
@@ -577,29 +719,54 @@ static inline char *str_replace(char *str, char *old, char *new) {
 }
 
 static inline void *sys_memory_reserve(void *hint, uint64_t size) {
+#ifdef __WINDOWS
+    // Supplying an address to VirtualAlloc requests that exact reservation.
+    // Unlike mmap's hint semantics, an occupied range returns NULL; callers
+    // deliberately advance to their next arena hint in that case.
+    return VirtualAlloc(hint, (SIZE_T) size, MEM_RESERVE, PAGE_NOACCESS);
+#else
     void *ptr = mmap(hint, size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
 
     assertf(ptr, "runtime mmap failed: %s", strerror(errno));
     return ptr;
+#endif
 }
 
 static inline void *sys_memory_map(void *hint, uint64_t size) {
+#ifdef __WINDOWS
+    void *ptr = VirtualAlloc(hint, (SIZE_T) size, MEM_COMMIT, PAGE_READWRITE);
+    assertf(ptr == hint, "runtime VirtualAlloc commit failed: %lu", (unsigned long) GetLastError());
+    return ptr;
+#else
     void *ptr = mmap(hint, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, -1, 0);
     assertf(ptr != MAP_FAILED, "runtime mmap failed: %s", strerror(errno));
     assertf(ptr, "runtime mmap failed: %s", strerror(errno));
 
     return ptr;
+#endif
 }
 
 static inline void *sys_memory_alloc(uint64_t size) {
+#ifdef __WINDOWS
+    void *ptr = VirtualAlloc(NULL, (SIZE_T) size, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    assertf(ptr, "runtime VirtualAlloc failed: %lu", (unsigned long) GetLastError());
+    return ptr;
+#else
     void *ptr;
     ptr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     assertf(ptr, "runtime mmap failed: %s", strerror(errno));
     return ptr;
+#endif
 }
 
 static inline void *mallocz_big(size_t size) {
+#ifdef __WINDOWS
+    SYSTEM_INFO system_info;
+    GetSystemInfo(&system_info);
+    int64_t page_size = (int64_t) system_info.dwPageSize;
+#else
     int64_t page_size = sysconf(_SC_PAGESIZE);
+#endif
     //    int page_size = getpagesize();
     size = align_up(size, page_size);
     void *ptr = sys_memory_alloc(size);
@@ -607,21 +774,33 @@ static inline void *mallocz_big(size_t size) {
 }
 
 static inline void sys_memory_unmap(void *base, uint64_t size) {
+#ifdef __WINDOWS
+    (void) size;
+    if (base != NULL) {
+        bool released = VirtualFree(base, 0, MEM_RELEASE) != 0;
+        assertf(released, "runtime VirtualFree release failed: %lu", (unsigned long) GetLastError());
+    }
+#else
     munmap(base, size);
+#endif
 }
 
 #ifdef __LINUX
 static inline void sys_memory_unused(void *addr, uint64_t size) {
     madvise(addr, size, MADV_DONTNEED);
 }
-#elif __DARWIN
+#elif defined(__DARWIN)
 static inline void sys_memory_unused(void *addr, uint64_t size) {
     // On Darwin, use MADV_FREE which is similar to MADV_DONTNEED
     if (madvise(addr, size, MADV_FREE_REUSABLE) == -1) {
         assertf(false, "madvise failed: ", strerror(errno));
     }
 }
-
+#elif defined(__WINDOWS)
+static inline void sys_memory_unused(void *addr, uint64_t size) {
+    bool decommitted = VirtualFree(addr, (SIZE_T) size, MEM_DECOMMIT) != 0;
+    assertf(decommitted, "runtime VirtualFree decommit failed: %lu", (unsigned long) GetLastError());
+}
 #else
 #error "not support arch"
 #endif
@@ -632,13 +811,18 @@ static inline void sys_memory_used(void *addr, uint64_t size) {
     void *ptr = mmap(addr, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS, -1, 0);
     assertf(ptr, "runtime: out of memory");
 }
-#elif __DARWIN
+#elif defined(__DARWIN)
 static inline void sys_memory_used(void *addr, uint64_t size) {
     // On Darwin, use MADV_FREE which is similar to MADV_DONTNEED
     if (madvise(addr, size, MADV_FREE_REUSE) == -1) {
         assertf(false, "madvise failed: ", strerror(errno));
     }
     memset(addr, 0, size);
+}
+#elif defined(__WINDOWS)
+static inline void sys_memory_used(void *addr, uint64_t size) {
+    void *ptr = VirtualAlloc(addr, (SIZE_T) size, MEM_COMMIT, PAGE_READWRITE);
+    assertf(ptr == addr, "runtime VirtualAlloc recommit failed: %lu", (unsigned long) GetLastError());
 }
 #else
 #error "not support arch"
@@ -659,12 +843,22 @@ static inline int64_t *take_numbers(char *str, uint64_t count) {
 }
 
 static inline char *homedir() {
+#ifdef __WINDOWS
+    char *profile = getenv("USERPROFILE");
+    if (profile && profile[0]) {
+        return profile;
+    }
+#endif
     return getenv("HOME");
 }
 
 static inline char *fullpath(char *rel) {
     char *path = (char *) mallocz(PATH_MAX * sizeof(char));
+#ifdef __WINDOWS
+    if (!_fullpath(path, rel, PATH_MAX)) {
+#else
     if (!realpath(rel, path)) {
+#endif
         return NULL;
     }
 

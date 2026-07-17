@@ -189,6 +189,7 @@ static type_t analyzer_type_fn(ast_fndef_t *fndef) {
         ct_list_push(f->param_types, &var->type);
     }
     f->is_rest = fndef->rest_param;
+    f->is_c_variadic = fndef->c_variadic;
     f->is_errable = fndef->is_errable;
     type_t result = type_new(TYPE_FN, f);
     result.status = REDUCTION_STATUS_UNDO;

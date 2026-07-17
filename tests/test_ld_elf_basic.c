@@ -311,7 +311,7 @@ static void test_elf_minimal_link(void) {
     mode_t image_mode;
     uint8_t *image = read_test_fixture(output_path, &image_size, &image_mode);
     assert(image_size >= LD_ELF64_EHDR_SIZE + 4U * LD_ELF64_PHDR_SIZE);
-    assert((image_mode & 0777U) == 0755U);
+    test_elf_assert_executable_mode(image_mode);
     assert(image[0] == LD_ELF_MAGIC_0 && image[1] == LD_ELF_MAGIC_1 &&
            image[2] == LD_ELF_MAGIC_2 && image[3] == LD_ELF_MAGIC_3);
     assert(image[LD_ELF_EI_CLASS] == LD_ELF_CLASS_64);
@@ -574,7 +574,7 @@ static void test_elf_riscv_minimal_link(void) {
     mode_t image_mode;
     uint8_t *image = read_test_fixture(output_path, &image_size, &image_mode);
     assert(image_size >= LD_ELF64_EHDR_SIZE + 4U * LD_ELF64_PHDR_SIZE);
-    assert((image_mode & 0777U) == 0755U);
+    test_elf_assert_executable_mode(image_mode);
     assert(test_elf_read_u16(image + 16U) == LD_ELF_ET_EXEC);
     assert(test_elf_read_u16(image + 18U) == LD_ELF_EM_RISCV);
     assert(test_elf_read_u32(image + 48U) == 0x5U);

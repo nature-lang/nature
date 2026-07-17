@@ -1,7 +1,7 @@
 #ifndef NATURE_PROCESSOR_H
 #define NATURE_PROCESSOR_H
 
-#include <include/uv.h>
+#include "runtime/uv_compat.h"
 #include <stdint.h>
 
 #include "linkco.h"
@@ -69,7 +69,12 @@ extern int64_t coroutine_count;
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
 
-extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint; // gc 全局 safepoint 标识，通常配合 stw 使用
+#ifdef __WINDOWS
+extern _Thread_local int64_t tls_yield_safepoint;
+#else
+extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint;
+#endif
+// gc 全局 safepoint 标识，通常配合 stw 使用
 
 typedef struct {
     uint64_t value; // 8 bytes

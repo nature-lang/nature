@@ -191,7 +191,7 @@ static void test_arm64_branch_island(void) {
     assert(ld_link(&options) == LD_OK);
     ld_options_deinit(&options);
 
-    int fd = open(output_path, O_RDONLY);
+    int fd = open(output_path, O_RDONLY | O_BINARY);
     assert(fd >= 0);
     struct stat st;
     assert(fstat(fd, &st) == 0 && st.st_size > 0);
@@ -390,7 +390,7 @@ static void test_indirect_symbol_alias(void) {
     assert(ld_link(&options) == LD_OK);
     ld_options_deinit(&options);
 
-    int fd = open(output_path, O_RDONLY);
+    int fd = open(output_path, O_RDONLY | O_BINARY);
     assert(fd >= 0);
     struct stat st;
     assert(fstat(fd, &st) == 0 && st.st_size > 0);

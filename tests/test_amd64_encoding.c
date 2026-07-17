@@ -84,6 +84,30 @@ static void test_basic() {
     inst = AMD64_INST("mov", AMD64_REG(rax), AMD64_SEG_OFFSET("gs", 0x25));
     TEST_EQ(*inst, 0x65, 0x48, 0x8B, 0x04, 0x25, 0x25, 0x00, 0x00, 0x00);
 
+    /* Windows x64 implicit TLS access sequence used by the COFF adapter. */
+    inst = AMD64_INST("mov", SIB_REG(rsp, NULL, 0, 64, QWORD),
+                      AMD64_REG(rbx));
+    TEST_EQ(*inst, 0x48, 0x89, 0x5C, 0x24, 0x40);
+
+    inst = AMD64_INST("mov", AMD64_REG(rbx),
+                      AMD64_SEG_OFFSET("gs", 0x58));
+    TEST_EQ(*inst, 0x65, 0x48, 0x8B, 0x1C, 0x25, 0x58, 0x00, 0x00, 0x00);
+
+    amd64_asm_operand_t *tls_index_operand = RIP_RELATIVE(0);
+    tls_index_operand->size = DWORD;
+    inst = AMD64_INST("mov", AMD64_REG(r11d), tls_index_operand);
+    TEST_EQ(*inst, 0x44, 0x8B, 0x1D, 0x00, 0x00, 0x00, 0x00);
+
+    inst = AMD64_INST("mov", AMD64_REG(r11),
+                      SIB_REG(rbx, r11, 8, 0, QWORD));
+    TEST_EQ(*inst, 0x4E, 0x8B, 0x1C, 0xDB);
+
+    inst = AMD64_INST("add", AMD64_REG(r11), AMD64_UINT32(0));
+    TEST_EQ(*inst, 0x49, 0x81, 0xC3, 0x00, 0x00, 0x00, 0x00);
+
+    inst = AMD64_INST("mov", AMD64_REG(rax), INDIRECT_REG(r11, QWORD));
+    TEST_EQ(*inst, 0x49, 0x8B, 0x03);
+
     inst = AMD64_INST("mov", INDIRECT_REG(r13, DWORD), AMD64_UINT32(0));
     TEST_EQ(*inst, 0x41, 0xC7, 0x45, 0x00, 0x00, 0x00, 0x00, 0x00);
 
@@ -158,6 +182,16 @@ static void test_basic() {
 
     inst = AMD64_INST("movzx", AMD64_REG(r9), INDIRECT_REG(r10, DWORD));
     TEST_EQ(*inst, 0x45, 0x8B, 0x0A);
+
+    inst = AMD64_INST("movxmm128", SIB_REG(rsp, NULL, 0, 32, QWORD),
+                      AMD64_REG(xmm1s64));
+    TEST_EQ(*inst, 0x0F, 0x11, 0x4C, 0x24, 0x20);
+
+    // A compiler build reinitializes the opcode tree for every feature case.
+    amd64_opcode_init();
+    inst = AMD64_INST("movxmm128", AMD64_REG(xmm1s64),
+                      SIB_REG(rsp, NULL, 0, 32, QWORD));
+    TEST_EQ(*inst, 0x0F, 0x10, 0x4C, 0x24, 0x20);
 }
 
 

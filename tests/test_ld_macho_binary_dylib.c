@@ -1,4 +1,5 @@
 #include "test_ld_macho_common.h"
+#include "test_fs.h"
 
 #include <assert.h>
 #include <fcntl.h>
@@ -541,7 +542,7 @@ static void test_output_writes_rpath_load_command(void) {
     assert(ld_link(&options) == LD_OK);
     ld_options_deinit(&options);
 
-    int fd = open(output_path, O_RDONLY);
+    int fd = open(output_path, O_RDONLY | O_BINARY);
     assert(fd >= 0);
     struct stat st;
     assert(fstat(fd, &st) == 0 && st.st_size > 0);
@@ -590,7 +591,7 @@ static void test_binary_dylib_rpath_resolution(void) {
     assert(mkdtemp(root) != NULL);
     char search[PATH_MAX], parent[PATH_MAX], child[PATH_MAX], output[PATH_MAX];
     assert(snprintf(search, sizeof(search), "%s/reexports", root) > 0);
-    assert(mkdir(search, 0700) == 0);
+    assert(test_make_directory(search) == 0);
     assert(snprintf(parent, sizeof(parent), "%s/Parent.dylib", root) > 0);
     assert(snprintf(child, sizeof(child), "%s/libChild.dylib", search) > 0);
     assert(snprintf(output, sizeof(output), "%s/main", root) > 0);
@@ -620,8 +621,8 @@ static void test_binary_dylib_executable_path_resolution(void) {
     char parent[PATH_MAX], child[PATH_MAX], output[PATH_MAX];
     assert(snprintf(libraries, sizeof(libraries), "%s/libraries", root) > 0);
     assert(snprintf(executable, sizeof(executable), "%s/bin", root) > 0);
-    assert(mkdir(libraries, 0700) == 0);
-    assert(mkdir(executable, 0700) == 0);
+    assert(test_make_directory(libraries) == 0);
+    assert(test_make_directory(executable) == 0);
     assert(snprintf(parent, sizeof(parent), "%s/Parent.dylib", libraries) > 0);
     assert(snprintf(child, sizeof(child), "%s/libChild.dylib", executable) > 0);
     assert(snprintf(output, sizeof(output), "%s/main", executable) > 0);
@@ -638,7 +639,7 @@ static void test_linker_rpath_resolution(void) {
     assert(mkdtemp(root) != NULL);
     char search[PATH_MAX], parent[PATH_MAX], child[PATH_MAX], output[PATH_MAX];
     assert(snprintf(search, sizeof(search), "%s/search", root) > 0);
-    assert(mkdir(search, 0700) == 0);
+    assert(test_make_directory(search) == 0);
     assert(snprintf(parent, sizeof(parent), "%s/Parent.dylib", root) > 0);
     assert(snprintf(child, sizeof(child), "%s/libChild.dylib", search) > 0);
     assert(snprintf(output, sizeof(output), "%s/main", root) > 0);
@@ -656,9 +657,9 @@ static void test_sdk_library_path_resolves_nested_install_name(void) {
     assert(snprintf(usr, sizeof(usr), "%s/usr", root) > 0);
     assert(snprintf(library, sizeof(library), "%s/lib", usr) > 0);
     assert(snprintf(system, sizeof(system), "%s/system", library) > 0);
-    assert(mkdir(usr, 0700) == 0);
-    assert(mkdir(library, 0700) == 0);
-    assert(mkdir(system, 0700) == 0);
+    assert(test_make_directory(usr) == 0);
+    assert(test_make_directory(library) == 0);
+    assert(test_make_directory(system) == 0);
     assert(snprintf(parent, sizeof(parent), "%s/Parent.dylib", root) > 0);
     assert(snprintf(child, sizeof(child), "%s/libChild.dylib", system) > 0);
     assert(snprintf(output, sizeof(output), "%s/main", root) > 0);

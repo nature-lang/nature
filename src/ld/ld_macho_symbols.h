@@ -41,7 +41,7 @@ bool ld_macho_symbol_rank_better(ld_macho_symbol_rank_t candidate,
                                  ld_macho_symbol_rank_t current);
 
 const ld_dylib_symbol_t *ld_macho_dylib_find_symbol(
-        const ld_dylib_input_t *dylib, const char *name);
+        ld_dylib_input_t *dylib, const char *name);
 int ld_macho_dylib_record_symbol(ld_context_t *ctx,
                                  ld_dylib_input_t *dylib,
                                  const char *name, size_t name_length,

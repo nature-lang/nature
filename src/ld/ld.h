@@ -40,6 +40,7 @@ typedef struct {
     ld_os_t os;
     ld_arch_t arch;
     const char *output_path;
+    const char *map_path;
     const char *entry_symbol;
     const char *sysroot;
     uint32_t min_os_version;

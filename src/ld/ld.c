@@ -1,15 +1,21 @@
 #include "ld_internal.h"
+#include "ld_coff.h"
 #include "ld_macho_symbols.h"
 #include "ld_output.h"
 
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#ifdef __WINDOWS
+#include <io.h>
+#include <windows.h>
+#endif
 
 void *ld_realloc_array(void *old, size_t old_count, size_t new_count, size_t element_size) {
     if (element_size == 0 || new_count > SIZE_MAX / element_size) {
@@ -98,16 +104,15 @@ static int ld_report_option_error(const ld_options_t *options, int code, const c
     return code;
 }
 
-int ld_write_output_atomic(const ld_options_t *options, const uint8_t *image,
-                           size_t size) {
-    if (!options || !options->output_path || !*options->output_path ||
-        (!image && size != 0U)) {
+int ld_write_file_atomic(const ld_options_t *options, const char *path,
+                         const uint8_t *data, size_t size, bool executable) {
+    if (!options || !path || !*path || (!data && size != 0U)) {
         return ld_report_option_error(options, LD_INVALID_ARGUMENT,
-                                      "invalid output image");
+                                      "invalid output file");
     }
 
     static const char temporary_suffix[] = ".tmp.XXXXXX";
-    const char *output = options->output_path;
+    const char *output = path;
     size_t output_length = strlen(output);
     if (output_length > SIZE_MAX - sizeof(temporary_suffix)) {
         return ld_report_option_error(options, LD_OUTPUT_ERROR,
@@ -131,11 +136,23 @@ int ld_write_output_atomic(const ld_options_t *options, const uint8_t *image,
                 "cannot create temporary output for '%s': %s", output,
                 strerror(saved));
     }
+#ifdef __WINDOWS
+    if (_setmode(fd, _O_BINARY) == -1) {
+        int saved = errno;
+        close(fd);
+        unlink(temporary);
+        free(temporary);
+        return ld_report_option_error(
+                options, LD_OUTPUT_ERROR,
+                "cannot set binary mode for output '%s': %s", output,
+                strerror(saved));
+    }
+#endif
 
     int status = LD_OK;
     size_t written = 0U;
     while (written < size) {
-        ssize_t count = write(fd, image + written, size - written);
+        ssize_t count = write(fd, data + written, size - written);
         if (count < 0 && errno == EINTR) {
             continue;
         }
@@ -155,13 +172,22 @@ int ld_write_output_atomic(const ld_options_t *options, const uint8_t *image,
         }
         written += (size_t) count;
     }
-    if (status == LD_OK && fchmod(fd, 0755) != 0) {
+#ifndef __WINDOWS
+    mode_t mode = executable ? 0755 : 0644;
+    if (status == LD_OK && fchmod(fd, mode) != 0) {
         int saved = errno;
         status = ld_report_option_error(options, LD_OUTPUT_ERROR,
                                         "cannot chmod output '%s': %s", output,
                                         strerror(saved));
     }
+#else
+    (void) executable;
+#endif
+#ifdef __WINDOWS
+    if (status == LD_OK && _commit(fd) != 0) {
+#else
     if (status == LD_OK && fsync(fd) != 0) {
+#endif
         int saved = errno;
         status = ld_report_option_error(options, LD_OUTPUT_ERROR,
                                         "cannot flush output '%s': %s", output,
@@ -173,17 +199,35 @@ int ld_write_output_atomic(const ld_options_t *options, const uint8_t *image,
                                         "cannot close output '%s': %s", output,
                                         strerror(saved));
     }
+#ifdef __WINDOWS
+    if (status == LD_OK &&
+        !MoveFileExA(temporary, output,
+                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DWORD saved = GetLastError();
+        status = ld_report_option_error(
+                options, LD_OUTPUT_ERROR,
+                "cannot replace output '%s': Windows error %lu", output,
+                (unsigned long) saved);
+    }
+#else
     if (status == LD_OK && rename(temporary, output) != 0) {
         int saved = errno;
         status = ld_report_option_error(options, LD_OUTPUT_ERROR,
                                         "cannot replace output '%s': %s", output,
                                         strerror(saved));
     }
+#endif
     if (status != LD_OK) {
         unlink(temporary);
     }
     free(temporary);
     return status;
+}
+
+int ld_write_output_atomic(const ld_options_t *options, const uint8_t *image,
+                           size_t size) {
+    return ld_write_file_atomic(options, options ? options->output_path : NULL,
+                                image, size, true);
 }
 
 static void ld_default_diagnostic(void *context, ld_diag_level_t level, const char *message) {
@@ -493,6 +537,14 @@ int ld_link(const ld_options_t *options) {
     }
     if (options->os == LD_OS_LINUX) {
         return ld_link_elf(options);
+    }
+    if (options->os == LD_OS_WINDOWS) {
+        if (options->arch == LD_ARCH_AMD64) {
+            return ld_link_coff(options);
+        }
+        return ld_report_option_error(
+                options, LD_UNSUPPORTED,
+                "the COFF linker currently supports windows/amd64 only");
     }
     if (options->os != LD_OS_DARWIN || options->arch != LD_ARCH_ARM64) {
         if (options->diagnostic) {

@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -125,7 +126,7 @@ static void test_link_symbol_object(const char *object_path,
 
 static test_symbol_output_t test_read_symbol_output(const char *path) {
     test_symbol_output_t output = {0};
-    int fd = open(path, O_RDONLY);
+    int fd = open(path, O_RDONLY | O_BINARY);
     assert(fd >= 0);
     struct stat st;
     assert(fstat(fd, &st) == 0 && st.st_size > 0);
@@ -549,6 +550,42 @@ static void test_dylib_export_metadata(void) {
     ld_macho_dylib_symbols_deinit(&dylib);
 }
 
+static void test_dylib_export_symbol_index(void) {
+    enum { symbol_count = 8192 };
+    ld_context_t ctx = {0};
+    ld_dylib_input_t dylib = {0};
+    char name[32];
+
+    for (size_t i = 0; i < symbol_count; i++) {
+        int length = snprintf(name, sizeof(name), "_export_%05zu", i);
+        assert(length > 0 && (size_t) length < sizeof(name));
+        assert(ld_macho_dylib_record_symbol(
+                       &ctx, &dylib, name, (size_t) length, NULL, 0U,
+                       true, false, false, false) == LD_OK);
+    }
+
+    assert(sc_map_size_s64(&dylib.symbol_index) == symbol_count);
+    const ld_dylib_symbol_t *first =
+            ld_macho_dylib_find_symbol(&dylib, "_export_00000");
+    const ld_dylib_symbol_t *last =
+            ld_macho_dylib_find_symbol(&dylib, "_export_08191");
+    assert(first == &dylib.symbols[0]);
+    assert(last == &dylib.symbols[symbol_count - 1U]);
+    assert(ld_macho_dylib_find_symbol(&dylib, "_missing") == NULL);
+
+    assert(ld_macho_dylib_record_symbol(
+                   &ctx, &dylib, "_export_00000", 13U, "_renamed", 8U,
+                   false, true, false, true) == LD_OK);
+    first = ld_macho_dylib_find_symbol(&dylib, "_export_00000");
+    assert(first == &dylib.symbols[0]);
+    assert(!first->weak && first->absolute && first->reexport);
+    assert(strcmp(first->import_name, "_renamed") == 0);
+    assert(dylib.symbol_count == symbol_count);
+    assert(sc_map_size_s64(&dylib.symbol_index) == symbol_count);
+
+    ld_macho_dylib_symbols_deinit(&dylib);
+}
+
 void test_ld_macho_symbols(void) {
     test_zig_symbol_rank_order();
     test_visibility_semantics();
@@ -556,4 +593,5 @@ void test_ld_macho_symbols(void) {
     test_exported_weak_branch_stub();
     test_unresolved_weak_import_uses_self_ordinal();
     test_dylib_export_metadata();
+    test_dylib_export_symbol_index();
 }

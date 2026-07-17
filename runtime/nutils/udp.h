@@ -2,7 +2,7 @@
 #define NATURE_RUNTIME_NUTILS_UDP_H_
 
 #include "runtime/processor.h"
-#include <uv.h>
+#include "runtime/uv_compat.h"
 
 #define UDP_BUFFER_SIZE 65536 * 2
 
@@ -19,7 +19,7 @@ typedef struct {
     coroutine_t *co;
 
     bool closed; // close flag
-    int fd;
+    uv_os_sock_t fd;
 } n_udp_socket_t;
 
 
@@ -33,12 +33,21 @@ int64_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t *addr) {
     coroutine_t *co = coroutine_get();
 
     struct sockaddr_storage src_addr;
+#ifdef __WINDOWS
+    int addr_len = sizeof(src_addr);
+#else
     socklen_t addr_len = sizeof(src_addr);
+#endif
 
     while (true) {
         // 直接调用 recvfrom（非阻塞）
+#ifdef __WINDOWS
+        int nread = recvfrom((SOCKET) s->fd, (char *) buf.data, (int) buf.length, 0,
+                             (struct sockaddr *) &src_addr, &addr_len);
+#else
         ssize_t nread = recvfrom(s->fd, buf.data, buf.length, 0,
                                  (struct sockaddr *) &src_addr, &addr_len);
+#endif
 
         if (nread >= 0) {
             struct sockaddr *caddr = (struct sockaddr *) &src_addr;
@@ -68,6 +77,20 @@ int64_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t *addr) {
         }
 
         // 处理错误
+#ifdef __WINDOWS
+        int socket_error = WSAGetLastError();
+        if (socket_error == WSAEINTR) {
+            continue;
+        }
+
+        if (socket_error == WSAEWOULDBLOCK) {
+            DEBUGF("[rt_uv_udp_recvfrom] WSAEWOULDBLOCK, coroutine yield");
+            continue;
+        }
+
+        rti_co_throw(co, tlsprintf("udp recv failed: %s", uv_strerror(uv_translate_sys_error(socket_error))), false);
+        return 0;
+#else
         if (errno == EINTR) {
             continue; // 被信号中断，重试
         }
@@ -85,6 +108,7 @@ int64_t rt_uv_udp_recvfrom(n_udp_socket_t *s, n_vec_t buf, n_udp_addr_t *addr) {
         // 其他错误
         rti_co_throw(co, tlsprintf("udp recv failed: %s", strerror(errno)), false);
         return 0;
+#endif
     }
 }
 
@@ -169,9 +193,18 @@ static void uv_async_udp_bind(n_udp_socket_t *s) {
         rti_co_throw(s->co, tlsprintf("udp bind failed: %s", uv_strerror(result)), false);
     }
 
-    uv_fileno((uv_handle_t *) s->handle, &s->fd);
+    uv_os_fd_t os_fd;
+    int fileno_result = uv_fileno((uv_handle_t *) s->handle, &os_fd);
+    if (fileno_result < 0) {
+        rti_co_throw(s->co, tlsprintf("udp fileno failed: %s", uv_strerror(fileno_result)), false);
+        co_ready(s->co);
+        return;
+    }
+    s->fd = (uv_os_sock_t) (uintptr_t) os_fd;
+#ifndef __WINDOWS
     int flags = fcntl(s->fd, F_GETFL, 0);
     fcntl(s->fd, F_SETFL, flags | O_NONBLOCK);
+#endif
 
     co_ready(s->co);
 }

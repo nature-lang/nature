@@ -18,7 +18,14 @@ func dstDir(url, version string) string {
 }
 
 func gitPull(url, version, dst string) error {
-	url = fmt.Sprintf("https://%s", url)
+	return gitPullURL(fmt.Sprintf("https://%s", url), version, dst)
+}
+
+func gitPullURL(url, version, dst string) error {
+	referenceName := plumbing.ReferenceName(version)
+	if !referenceName.IsBranch() && !referenceName.IsTag() {
+		referenceName = plumbing.NewTagReferenceName(version)
+	}
 
 	// 清空 dst 目录
 	err := os.RemoveAll(dst)
@@ -29,7 +36,7 @@ func gitPull(url, version, dst string) error {
 	_, err = git.PlainClone(dst, false, &git.CloneOptions{
 		URL:           url,
 		Progress:      os.Stdout,
-		ReferenceName: plumbing.ReferenceName(version),
+		ReferenceName: referenceName,
 	})
 	if err != nil {
 		return fmt.Errorf("git clone repo=%v, tag version=%v err=%v", url, version, err)

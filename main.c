@@ -1,3 +1,4 @@
+#include "cmd/coff_capability.h"
 #include "cmd/fmt.h"
 #include "cmd/root.h"
 #include "cmd/self_update.h"
@@ -11,6 +12,7 @@
 #define ARGS_FMT "fmt"
 #define ARGS_SELF_UPDATE "self-update"
 #define ARGS_TEST "test"
+#define ARGS_COFF_CAPABILITIES "coff-capabilities"
 
 void print_help() {
     printf("Nature Programming Language Compiler %s\n\n", BUILD_VERSION);
@@ -21,7 +23,8 @@ void print_help() {
     printf("  build       Build a Nature source file\n");
     printf("  fmt         Format one or more Nature source files\n");
     printf("  self-update Update Nature installation\n");
-    printf("  test        Run tests in a Nature source file\n\n");
+    printf("  test        Run tests in a Nature source file\n");
+    printf("  coff-capabilities Scan a Windows sysroot manifest\n\n");
 
     printf("Build Command Usage:\n");
     printf("  nature build [flags] <source_file>\n\n");
@@ -31,6 +34,9 @@ void print_help() {
 
     printf("Self-Update Command Usage:\n");
     printf("  nature self-update [--check] [--yes] [--force]\n\n");
+
+    printf("COFF Capability Command Usage:\n");
+    printf("  nature coff-capabilities [-o manifest.json] <windows-sysroot>\n\n");
 
     printf("Build Flags:\n");
     printf("  -o <name>     Specify output filename (default: main)\n");
@@ -62,13 +68,15 @@ void print_help() {
     printf("    - linux_arm64    Linux on ARM 64-bit architecture\n");
     printf("    - linux_riscv64  Linux on RISCV 64-bit architecture\n");
     printf("    - darwin_amd64   macOS on x86-64 architecture\n");
-    printf("    - darwin_arm64   macOS on ARM 64-bit architecture (Apple Silicon)\n\n");
+    printf("    - darwin_arm64   macOS on ARM 64-bit architecture (Apple Silicon)\n");
+    printf("    - windows_amd64  Windows on x86-64 architecture\n\n");
 
     printf("Examples:\n");
     printf("  nature build main.n                         # Basic build\n");
     printf("  nature build -o test main.n                 # Custom output name\n");
     printf("  nature build --archive main.n               # Generate static library\n");
     printf("  nature build --target linux_arm64 main.n    # Cross-compile for Linux ARM64\n");
+    printf("  nature build --target windows_amd64 main.n  # Cross-compile for Windows x64\n");
     printf("  nature build --ld /usr/bin/ld main.n  # Custom linker and flags\n\n");
 
     printf("  nature test main.n                          # Run tests\n");
@@ -118,6 +126,10 @@ int main(int argc, char *argv[]) {
         argv += 1;
         cmd_entry(argc - 1, argv);
         return 0;
+    }
+
+    if (str_equal(first, ARGS_COFF_CAPABILITIES)) {
+        return cmd_coff_capabilities(argc - 1, argv + 1);
     }
 
     if (str_equal(first, ARGS_FMT)) {

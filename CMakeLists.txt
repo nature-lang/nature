@@ -90,19 +90,45 @@ include_directories(.)
 add_executable(nature main.c ${SRC} ${CMD} ${UTILS})
 target_link_libraries(nature m) # 链接数学计算库
 
-# custom golang build package npkg (optional)
-set(PACKAGE_BINARY_NAME npkg)
-set(PACKAGE_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME})
+find_program(NATURE_SH_EXECUTABLE NAMES sh)
+if(NATURE_SH_EXECUTABLE)
+    add_custom_target(verify_windows_sysroot
+            COMMAND ${CMAKE_COMMAND} -E env
+                    NATURE_BIN=$<TARGET_FILE:nature>
+                    WINDOWS_VERIFY_TMPDIR=${CMAKE_CURRENT_BINARY_DIR}
+                    ${NATURE_SH_EXECUTABLE}
+                    ${PROJECT_SOURCE_DIR}/tools/windows_sysroot/verify.sh
+            DEPENDS nature
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+            COMMENT "verify windows_amd64 sysroot release contract")
+else()
+    message(STATUS
+            "sh not found; the optional verify_windows_sysroot target is unavailable")
+endif()
 
-find_program(GOBIN go
-        PATHS /usr/local/go/bin /opt/go/bin
-        DOC "Go compiler"
-)
+# custom golang build package npkg (optional)
+set(PACKAGE_TARGET_NAME npkg)
+set(PACKAGE_BINARY_NAME "npkg${CMAKE_EXECUTABLE_SUFFIX}")
+set(PACKAGE_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME})
+option(NATURE_BUILD_NPKG "Build the npkg package manager" ON)
+
+if(NATURE_BUILD_NPKG)
+    find_program(GOBIN go
+            PATHS /usr/local/go/bin /opt/go/bin
+            DOC "Go compiler"
+    )
+else()
+    set(GOBIN "")
+endif()
 
 if(GOBIN)
     message(STATUS "GOBIN found: ${GOBIN}")
-    add_custom_target(${PACKAGE_BINARY_NAME} ALL
-            COMMAND CGO_ENABLED=0 GOOS=${CMAKE_SYSTEM_NAME} GOARCH=${CMAKE_SYSTEM_PROCESSOR} ${GOBIN} build -o ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} ${PROJECT_SOURCE_DIR}/package/main.go
+    add_custom_target(${PACKAGE_TARGET_NAME} ALL
+            COMMAND ${CMAKE_COMMAND} -E env
+                    CGO_ENABLED=0
+                    GOOS=${CMAKE_SYSTEM_NAME}
+                    GOARCH=${CMAKE_SYSTEM_PROCESSOR}
+                    ${GOBIN} build -o ${PACKAGE_BINARY_PATH} ${PROJECT_SOURCE_DIR}/package/main.go
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/package
             COMMENT "package manager npkg"
     )
@@ -115,27 +141,37 @@ endif()
 # custom rust build package nls (optional)
 #CARGO_TARGET_DIR=/custom/path cargo build --release
 # 查找 cargo 命令，类似 gobin 的方式
-find_program(CARGOBIN cargo
-        PATHS $ENV{HOME}/.cargo/bin /usr/local/bin /opt/cargo/bin
-        DOC "Cargo compiler"
-)
+option(NATURE_BUILD_NLS "Build the nls language server" ON)
+if(NATURE_BUILD_NLS)
+    find_program(CARGOBIN cargo
+            PATHS $ENV{HOME}/.cargo/bin /usr/local/bin /opt/cargo/bin
+            DOC "Cargo compiler"
+    )
+else()
+    set(CARGOBIN "")
+endif()
 
 if(CARGOBIN AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/nls")
     message(STATUS "CARGOBIN found: ${CARGOBIN}")
     message(STATUS "nls directory exists, proceeding with build")
     
-    set(LSP_BINARY_NAME nls)
+    set(LSP_TARGET_NAME nls)
+    set(LSP_BINARY_NAME "nls${CMAKE_EXECUTABLE_SUFFIX}")
     if(DEFINED RUST_TARGET)
-        add_custom_target(${LSP_BINARY_NAME} ALL
-                COMMAND CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR} ${CARGOBIN} build --release --target ${RUST_TARGET}
+        add_custom_target(${LSP_TARGET_NAME} ALL
+                COMMAND ${CMAKE_COMMAND} -E env
+                        CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                        ${CARGOBIN} build --release --target ${RUST_TARGET}
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/nls
                 COMMENT "nature language server nls"
         )
 
         set(LSP_BINARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/${RUST_TARGET}/release/${LSP_BINARY_NAME})
     else()
-        add_custom_target(${LSP_BINARY_NAME} ALL
-                COMMAND CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR} ${CARGOBIN} build --release
+        add_custom_target(${LSP_TARGET_NAME} ALL
+                COMMAND ${CMAKE_COMMAND} -E env
+                        CARGO_TARGET_DIR=${CMAKE_CURRENT_BINARY_DIR}
+                        ${CARGOBIN} build --release
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/nls
                 COMMENT "nature language server nls"
         )
@@ -156,8 +192,12 @@ add_subdirectory(runtime EXCLUDE_FROM_ALL)
 
 #--------------------------------- install ---------------------------------
 install(TARGETS nature DESTINATION nature/bin)
-install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} DESTINATION nature/bin)
-install(PROGRAMS ${LSP_BINARY_PATH} DESTINATION nature/bin)
+if(BUILD_NPKG)
+    install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${PACKAGE_BINARY_NAME} DESTINATION nature/bin)
+endif()
+if(BUILD_NLS)
+    install(PROGRAMS ${LSP_BINARY_PATH} DESTINATION nature/bin)
+endif()
 install(DIRECTORY lib/ DESTINATION nature/lib)
 install(DIRECTORY std/ DESTINATION nature/std)
 install(FILES LICENSE-MIT DESTINATION nature/)

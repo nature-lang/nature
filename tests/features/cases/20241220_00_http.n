@@ -1,5 +1,6 @@
-import http
 import co
+import http
+import http.client
 
 fn main():void! {
     var app = http.server()
@@ -9,9 +10,18 @@ fn main():void! {
     })
 
     app.get('/close', fn(http.request_t req, ref<http.response_t> res):void! {
+        res.send('closed')
         app.close()
     })
 
-    app.listen(8888)
-    println('server is closed')
+    go fn():void! {
+        app.listen(8888)
+        println('server is closed')
+    }()
+
+    co.sleep(500)
+    var response = client.new().get('http://127.0.0.1:8888/').send()
+    println(response.text())
+    client.new().get('http://127.0.0.1:8888/close').send()
+    co.sleep(500)
 }

@@ -9,7 +9,7 @@ A general-purpose system programming language and compiler, designed to build hi
 - Built-in concurrency primitives: go/future/channel/select
 - Comprehensive type system supporting generics, enum, tagged union, interface, nullable(?), errable(!)
 - Compiles directly to machine code for the target platform, does not rely on LLVM, and supports cross-compilation.
-- Simple deployment, efficient compilation, static linking based on musl libc with good cross-platform characteristics
+- Simple deployment and efficient compilation with bundled target sysroots and statically linked third-party runtimes
 - High-performance C FFI implementation with zero-overhead calls to C standard library functions
 - High-performance GC implementation with very short STW (Stop The World)
 - High-performance memory allocator implementation, referencing tcmalloc
@@ -25,7 +25,7 @@ A general-purpose system programming language and compiler, designed to build hi
 
 The nature programming language has reached an early usable version, and its core syntax features are now in place. Key features still to be completed include unsafe runtime mode, LLM coding adaptation, C target adaptation, and WASM3.0 target adaptation.
 
-The current version supports compilation for the following target architectures: linux_amd64, linux_arm64, linux_riscv64, darwin_amd64, darwin_arm64. 
+The current version supports compilation for the following targets: linux_amd64, linux_arm64, linux_riscv64, darwin_amd64, darwin_arm64, and windows_amd64.
 
 Nature includes a set of test cases and standard libraries to test the usability of basic functionality and syntax, includes a set of small to medium-sized projects to test overall usability, but has not yet been tested in large-scale projects.
   
@@ -62,6 +62,16 @@ compile and execute
 > nature build main.n && ./main   
 hello nature 
 ```   
+
+Cross-compile a Windows x64 console executable from a supported host:
+
+```sh
+nature build --target windows_amd64 main.n
+```
+
+This produces `main.exe` using Nature's built-in COFF/PE linker and bundled
+Windows sysroot. Clang, LLD, MSVC, the Windows SDK, MinGW, and Zig are not
+required on the final-user build path.
 
 ## Formatting
 
@@ -173,7 +183,12 @@ Nature focuses on memory safety in its syntax design, has comprehensive type sys
 
 Nature natively supports concurrency primitive go+select+channel, which has excellent concurrency performance in highly concurrent IO applications. Performance will be further improved when the official version is released.
 
-Nature has a completely self-developed compiler, assembler, and linker (which will later transition to zig ld), making Nature more flexible and controllable. The source code is simple without complex third-party dependencies, making it easy to participate in contributions and perform highly customized optimizations according to language and technology development.
+Nature has a self-developed compiler, assembler, and built-in ELF, Mach-O, and
+COFF/PE linkers, making Nature more flexible and controllable without requiring
+LLVM or a host linker on the ordinary build path. The source code is simple
+without complex third-party dependencies, making it easy to participate in
+contributions and perform highly customized optimizations according to language
+and technology development.
 
 Benefiting from simple syntax design, automated memory management, compile-time static analysis and other features, it brings extremely low coding burden, making the Nature programming language very suitable for AI coding and programming beginners.
 

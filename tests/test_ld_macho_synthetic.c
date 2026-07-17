@@ -146,7 +146,7 @@ static void test_make_macho_object(
 
 static test_macho_output_t test_read_macho_output(const char *path) {
     test_macho_output_t output = {0};
-    int fd = open(path, O_RDONLY);
+    int fd = open(path, O_RDONLY | O_BINARY);
     assert(fd >= 0);
     struct stat st;
     assert(fstat(fd, &st) == 0 && st.st_size > 0);

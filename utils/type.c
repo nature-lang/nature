@@ -366,8 +366,23 @@ bool type_is_pointer_heap(type_t t) {
 }
 
 rtype_t *rtype_push(rtype_t rtype) {
+    rtype_t normalized;
+    memset(&normalized, 0, sizeof(normalized));
+    normalized.ident_offset = rtype.ident_offset;
+    normalized.gc_heap_size = rtype.gc_heap_size;
+    normalized.storage_size = rtype.storage_size;
+    normalized.hash = rtype.hash;
+    normalized.last_ptr = rtype.last_ptr;
+    normalized.kind = rtype.kind;
+    normalized.storage_kind = rtype.storage_kind;
+    normalized.malloc_gc_bits_offset = rtype.malloc_gc_bits_offset;
+    normalized.gc_bits = rtype.gc_bits;
+    normalized.align = rtype.align;
+    normalized.length = rtype.length;
+    normalized.hashes_offset = rtype.hashes_offset;
+
     uint64_t index = ct_rtype_list->length;
-    ct_list_push(ct_rtype_list, &rtype);
+    ct_list_push(ct_rtype_list, &normalized);
 
     ct_rtype_size += sizeof(rtype_t);
     ct_rtype_count += 1;

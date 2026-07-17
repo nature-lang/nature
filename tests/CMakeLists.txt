@@ -9,6 +9,7 @@ if (CMAKE_SYSTEM_NAME STREQUAL "darwin")
 else ()
     set(LIBC_STATIC "${CMAKE_SOURCE_DIR}/lib/${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}/libc.a")
 endif ()
+
 message("LIBC_STATIC: ${LIBC_STATIC}")
 
 # 创建静态库，避免重复编译
@@ -31,6 +32,10 @@ add_test(test_riscv64_encoding test_riscv64_encoding)
 add_executable(test_bitmap test_bitmap.c)
 target_link_libraries(test_bitmap nature_common_test m)
 add_test(test_bitmap test_bitmap)
+
+add_executable(test_scanner_numbers test_scanner_numbers.c)
+target_link_libraries(test_scanner_numbers nature_common_test m)
+add_test(test_scanner_numbers test_scanner_numbers)
 
 add_executable(test_ld
     test_ld.c
@@ -81,6 +86,103 @@ add_executable(test_ld
 target_link_libraries(test_ld nature_common_test m)
 add_test(test_ld test_ld)
 
+add_executable(test_ld_coff_basic test_ld_coff_basic.c)
+target_link_libraries(test_ld_coff_basic nature_common_test m)
+add_test(test_ld_coff_basic test_ld_coff_basic)
+
+add_executable(test_ld_coff_failifmismatch test_ld_coff_failifmismatch.c)
+target_link_libraries(test_ld_coff_failifmismatch nature_common_test m)
+add_test(test_ld_coff_failifmismatch test_ld_coff_failifmismatch)
+
+add_executable(test_ld_coff_input_hardening test_ld_coff_input_hardening.c)
+target_link_libraries(test_ld_coff_input_hardening nature_common_test m)
+add_test(test_ld_coff_input_hardening test_ld_coff_input_hardening)
+
+add_executable(test_ld_coff_comdat test_ld_coff_comdat.c)
+target_link_libraries(test_ld_coff_comdat nature_common_test m)
+add_test(test_ld_coff_comdat test_ld_coff_comdat)
+
+add_executable(test_ld_coff_import_directories
+        test_ld_coff_import_directories.c)
+target_link_libraries(test_ld_coff_import_directories nature_common_test m)
+add_test(test_ld_coff_import_directories test_ld_coff_import_directories)
+
+add_executable(test_ld_coff_nodefaultlib test_ld_coff_nodefaultlib.c)
+target_link_libraries(test_ld_coff_nodefaultlib nature_common_test m)
+add_test(test_ld_coff_nodefaultlib test_ld_coff_nodefaultlib)
+
+add_executable(test_ld_coff_sysroot test_ld_coff_sysroot.c)
+target_compile_definitions(test_ld_coff_sysroot PRIVATE
+        NATURE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_ld_coff_sysroot nature_common_test m)
+add_test(test_ld_coff_sysroot test_ld_coff_sysroot)
+
+add_executable(test_ld_coff_crt test_ld_coff_crt.c)
+target_compile_definitions(test_ld_coff_crt PRIVATE
+        NATURE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_ld_coff_crt nature_common_test m)
+add_test(test_ld_coff_crt test_ld_coff_crt)
+
+add_executable(test_ld_coff_capability ../src/ld/ld_coff_capability_test.c)
+target_compile_definitions(test_ld_coff_capability PRIVATE
+        LD_COFF_CAPABILITY_TEST_MAIN)
+target_link_libraries(test_ld_coff_capability nature_common_test m)
+add_test(test_ld_coff_capability test_ld_coff_capability)
+
+add_executable(test_coff_capability_path test_coff_capability_path.c)
+target_link_libraries(test_coff_capability_path nature_common_test m)
+add_test(test_coff_capability_path test_coff_capability_path)
+
+add_executable(test_coff_writer ../src/binary/coff/coff_writer_test.c)
+target_compile_definitions(test_coff_writer PRIVATE COFF_WRITER_TEST_MAIN)
+target_link_libraries(test_coff_writer nature_common_test m)
+add_test(test_coff_writer test_coff_writer)
+
+add_executable(test_coff_amd64 ../src/binary/coff/coff_amd64_test.c)
+target_compile_definitions(test_coff_amd64 PRIVATE COFF_AMD64_TEST_MAIN)
+target_link_libraries(test_coff_amd64 nature_common_test m)
+add_test(test_coff_amd64 test_coff_amd64)
+
+add_executable(test_coff_amd64_tls_layout test_coff_amd64_tls_layout.c)
+target_compile_definitions(test_coff_amd64_tls_layout PRIVATE
+        NATURE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_coff_amd64_tls_layout nature_common_test m)
+add_test(test_coff_amd64_tls_layout test_coff_amd64_tls_layout)
+
+add_executable(test_windows_linker_helpers test_windows_linker_helpers.c)
+target_link_libraries(test_windows_linker_helpers nature_common_test m)
+add_test(test_windows_linker_helpers test_windows_linker_helpers)
+
+if (WIN32)
+    set(WINDOWS_C_ABI_FIXTURE_DIR
+            "${CMAKE_CURRENT_BINARY_DIR}/windows_c_nature_abi")
+    file(MAKE_DIRECTORY "${WINDOWS_C_ABI_FIXTURE_DIR}")
+    configure_file(windows/abi_fixture/main.n
+            "${WINDOWS_C_ABI_FIXTURE_DIR}/main.n" COPYONLY)
+    configure_file(windows/abi_fixture/package.toml
+            "${WINDOWS_C_ABI_FIXTURE_DIR}/package.toml" COPYONLY)
+    set(WINDOWS_C_ABI_OBJECT
+            "${WINDOWS_C_ABI_FIXTURE_DIR}/abi_fixture.obj")
+    add_custom_command(
+            OUTPUT "${WINDOWS_C_ABI_OBJECT}"
+            COMMAND "${CMAKE_C_COMPILER}" -std=gnu11 -O2 -fno-lto
+                    -fno-sanitize=all -funwind-tables -c
+                    "${CMAKE_CURRENT_SOURCE_DIR}/windows/abi_fixture/abi_fixture.c"
+                    -o "${WINDOWS_C_ABI_OBJECT}"
+            DEPENDS windows/abi_fixture/abi_fixture.c
+            VERBATIM)
+    add_custom_target(windows_c_nature_abi_fixture ALL
+            DEPENDS "${WINDOWS_C_ABI_OBJECT}")
+    add_test(NAME test_windows_c_nature_abi
+            COMMAND "${CMAKE_COMMAND}"
+                    "-DNATURE_BIN=$<TARGET_FILE:nature>"
+                    "-DNATURE_ROOT=${PROJECT_SOURCE_DIR}"
+                    "-DFIXTURE_DIR=${WINDOWS_C_ABI_FIXTURE_DIR}"
+                    "-DOUTPUT_EXE=${WINDOWS_C_ABI_FIXTURE_DIR}/abi.exe"
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/windows/run_c_nature_abi.cmake")
+    set_property(TEST test_windows_c_nature_abi PROPERTY TIMEOUT 120)
+endif ()
+
 add_executable(test_ld_tapi test_ld_tapi.c)
 target_compile_definitions(test_ld_tapi PRIVATE TEST_LD_TAPI_STANDALONE)
 target_link_libraries(test_ld_tapi nature_common_test m)
@@ -93,10 +195,41 @@ message("[test cases]make temp dir ${TEST_OUTPUT_DIR} success")
 
 # 读取 features 目录下的所有 .c 文件
 file(GLOB TEST_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/features/*.c)
+
+set(WINDOWS_FEATURE_SKIP "")
+if (WIN32)
+    get_filename_component(WINDOWS_HOST_TOOLCHAIN_BIN
+            "${CMAKE_C_COMPILER}" DIRECTORY)
+    set(WINDOWS_FEATURE_POLICY
+            "${CMAKE_CURRENT_SOURCE_DIR}/windows/feature-eligibility-policy.tsv")
+    file(STRINGS "${WINDOWS_FEATURE_POLICY}" WINDOWS_FEATURE_POLICY_LINES)
+    foreach (POLICY_LINE IN LISTS WINDOWS_FEATURE_POLICY_LINES)
+        if (POLICY_LINE STREQUAL "" OR POLICY_LINE MATCHES "^#")
+            continue()
+        endif ()
+        string(REPLACE "\t" ";" POLICY_FIELDS "${POLICY_LINE}")
+        list(LENGTH POLICY_FIELDS POLICY_FIELD_COUNT)
+        if (NOT POLICY_FIELD_COUNT EQUAL 3)
+            message(FATAL_ERROR
+                    "invalid Windows feature policy line: ${POLICY_LINE}")
+        endif ()
+        list(GET POLICY_FIELDS 0 POLICY_TEST_NAME)
+        list(GET POLICY_FIELDS 1 POLICY_STATE)
+        if (POLICY_STATE STREQUAL "skip")
+            list(APPEND WINDOWS_FEATURE_SKIP "${POLICY_TEST_NAME}")
+        endif ()
+    endforeach ()
+endif ()
+
 foreach (TEST_SOURCE ${TEST_SOURCES})
     # 获取不带扩展名的文件名作为测试标识
     get_filename_component(TEST_NAME ${TEST_SOURCE} NAME_WE)
     message("[test cases] find test source ${TEST_SOURCE}")
+
+    if (WIN32 AND TEST_NAME IN_LIST WINDOWS_FEATURE_SKIP)
+        message("[test cases] skip Windows-ineligible test ${TEST_NAME}")
+        continue()
+    endif ()
 
     # 生成测试可执行文件 - 只链接静态库，不重复编译源文件
     add_executable(${TEST_NAME} ${TEST_SOURCE})
@@ -111,7 +244,13 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
     # A stale/empty directory with the same name as a single-file fixture
     # must not shadow <test-name>.n.  Treat a case as directory-backed only
     # when its actual entry point exists.
-    if (EXISTS "${CASE_PATH}/main.n")
+    set(PLATFORM_ENTRY_FILE
+            "main.${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}.n")
+    if (EXISTS "${CASE_PATH}/${PLATFORM_ENTRY_FILE}")
+        set(WORK_DIR ${CASE_PATH})
+        set(TESTAR_FILE "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}.testar")
+        set(ENTRY_FILE "${PLATFORM_ENTRY_FILE}")
+    elseif (EXISTS "${CASE_PATH}/main.n")
         set(WORK_DIR ${CASE_PATH})
         set(TESTAR_FILE "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}.testar")
         set(ENTRY_FILE main.n)
@@ -128,10 +267,32 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
     # 添加测试
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME} WORKING_DIRECTORY ${WORK_DIR})
 
-    set_property(TEST ${TEST_NAME} PROPERTY TIMEOUT 120)
-    set_property(TEST ${TEST_NAME}
-            PROPERTY
-            ENVIRONMENT "BUILD_OS=$ENV{BUILD_OS};BUILD_ARCH=$ENV{BUILD_ARCH};NPKG_PATH=${PACKAGE_BINARY_PATH};BUILD_OUTPUT_DIR=${TEST_OUTPUT_DIR};ENTRY_FILE=${ENTRY_FILE};TESTAR_FILE=${TESTAR_FILE};NATURE_ROOT=${PROJECT_SOURCE_DIR};PATH=/usr/local/nature/bin:$ENV{PATH};")
+    if (TEST_NAME STREQUAL "20250802_02_http")
+        # This fixture runs 2,100 concurrent upload requests in its stress case.
+        set_property(TEST ${TEST_NAME} PROPERTY TIMEOUT 300)
+    else ()
+        set_property(TEST ${TEST_NAME} PROPERTY TIMEOUT 120)
+    endif ()
+
+    set(FEATURE_TEST_ENVIRONMENT
+            "BUILD_OS=$ENV{BUILD_OS}"
+            "BUILD_ARCH=$ENV{BUILD_ARCH}"
+            "NPKG_PATH=${PACKAGE_BINARY_PATH}"
+            "BUILD_OUTPUT_DIR=${TEST_OUTPUT_DIR}"
+            "ENTRY_FILE=${ENTRY_FILE}"
+            "TESTAR_FILE=${TESTAR_FILE}"
+            "NATURE_ROOT=${PROJECT_SOURCE_DIR}")
+    if (WIN32)
+        # Keep the inherited Windows PATH intact and ensure MinGW host runtime
+        # DLLs used by the C test harness can be found by the Windows loader.
+        set_property(TEST ${TEST_NAME} PROPERTY ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:${WINDOWS_HOST_TOOLCHAIN_BIN}")
+    else ()
+        list(APPEND FEATURE_TEST_ENVIRONMENT
+                "PATH=/usr/local/nature/bin:$ENV{PATH}")
+    endif ()
+    set_property(TEST ${TEST_NAME} PROPERTY ENVIRONMENT
+            "${FEATURE_TEST_ENVIRONMENT}")
 
     message("[test cases] register test ${TEST_NAME} success, work_dir=${WORK_DIR}, entry_file=${ENTRY_FILE}, testar_file=${TESTAR_FILE}")
 endforeach ()
@@ -190,3 +351,7 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
 
     message("[test_runtime_debug] register test_runtime_debug case ${TEST_IDENT} success, work_dir=${WORK_DIR}, entry_file=${ENTRY}")
 endif ()
+
+add_executable(test_amd64_windows_abi test_amd64_windows_abi.c)
+target_link_libraries(test_amd64_windows_abi nature_common_test m)
+add_test(test_amd64_windows_abi test_amd64_windows_abi)

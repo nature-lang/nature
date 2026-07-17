@@ -1,11 +1,4 @@
 #include "tests/test.h"
-#include <stdio.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
-#include <arpa/inet.h>
 
 static void test_basic() {
     slice_t *args = slice_new();
@@ -20,7 +13,6 @@ static void test_basic() {
                 "--hualaka\n"
                 "nice\n";
 
-    str = str_connect_by(BUILD_OUTPUT, str, "\n");
     assert_string_equal(raw, str);
 }
 

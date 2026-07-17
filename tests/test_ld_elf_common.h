@@ -3,10 +3,15 @@
 
 #include "src/ld/ld.h"
 
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
+
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
 
 typedef struct {
     unsigned count;
@@ -39,6 +44,7 @@ void test_elf_write_section(uint8_t *bytes, uint32_t name, uint32_t type,
                             uint64_t entry_size);
 uint8_t *read_test_fixture(const char *path, size_t *result_size,
                            mode_t *result_mode);
+void test_elf_assert_executable_mode(mode_t mode);
 uint32_t read_test_elf_entry_word(const char *path);
 bool test_elf_file_contains_u32(const char *path, uint32_t value);
 int link_test_elf_inputs(const char *output_path,

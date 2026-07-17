@@ -15,6 +15,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
 /*
  * The checked-reader and lazy archive flow follow the structure of Zig's
  * Object.parseCommon, Object.initAtoms section-group parsing, and Archive.parse
@@ -224,7 +228,7 @@ static int ld_elf_read_file(ld_elf_context_t *ctx, const char *path,
                             const char *diagnostic_name,
                             ld_elf_file_t **result) {
     *result = NULL;
-    int fd = open(path, O_RDONLY);
+    int fd = open(path, O_RDONLY | O_BINARY);
     if (fd < 0) {
         return ld_elf_fail(ctx, LD_IO_ERROR, "cannot open ELF input '%s': %s",
                            diagnostic_name, strerror(errno));

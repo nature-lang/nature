@@ -1,4 +1,5 @@
 #include "amd64.h"
+#include "src/binary/encoding/amd64/opcode.h"
 #include "src/debug/debug.h"
 #include "src/register/arch/amd64.h"
 #include <assert.h>
@@ -1007,7 +1008,309 @@ static slice_t *amd64_native_label(closure_t *c, lir_op_t *op) {
  * @param op
  * @return
  */
+static bool amd64_reg_is_float(reg_t *reg) {
+    return (reg->flag & FLAG(LIR_FLAG_ALLOC_FLOAT)) != 0;
+}
+
+static bool amd64_windows_gp_is_nonvolatile(uint8_t index) {
+    return index == rsi->index || index == rdi->index ||
+           (index >= r12->index && index <= r15->index);
+}
+
+/*
+ * linear_posthandle historically discovers callee-saved registers by looking
+ * for DEF/USE bits on physical-register operands. Variables acquire their
+ * physical registers after those bits were attached, so allocator-selected
+ * registers can be absent from c->callee_saved. That is observable on Win64
+ * as soon as ordinary register pressure selects RSI/RDI/R12-R15 or XMM6-14.
+ *
+ * Rebuild the Windows save set from the final post-allocation LIR instead of
+ * relying on those stale operand flags. This scan is deliberately Windows-only
+ * so the existing SysV frame layout remains unchanged.
+ */
+static void amd64_windows_collect_callee_saved(closure_t *c) {
+    bool gp_seen[16] = {false};
+    bool xmm_seen[16] = {false};
+    slice_t *saved = slice_new();
+
+    for (int i = 0; i < c->blocks->count; ++i) {
+        basic_block_t *block = c->blocks->take[i];
+        linked_node *current = linked_first(block->operations);
+        while (current->value != NULL) {
+            lir_op_t *op = current->value;
+            slice_t *operands = extract_all_operands(op, FLAG(LIR_OPERAND_REG));
+            for (int j = 0; j < operands->count; ++j) {
+                lir_operand_t *operand = operands->take[j];
+                reg_t *reg = operand->value;
+                assert(reg->index < 16);
+
+                if (amd64_reg_is_float(reg)) {
+                    if (reg->index >= xmm6->index && reg->index <= xmm14->index &&
+                        !xmm_seen[reg->index]) {
+                        xmm_seen[reg->index] = true;
+                        slice_push(saved, reg_select(reg->index, TYPE_FLOAT64));
+                    }
+                } else if (amd64_windows_gp_is_nonvolatile(reg->index) &&
+                           !gp_seen[reg->index]) {
+                    gp_seen[reg->index] = true;
+                    slice_push(saved, reg_select(reg->index, TYPE_UINT64));
+                }
+            }
+            slice_free(operands);
+            current = current->succ;
+        }
+    }
+
+    slice_free(c->callee_saved);
+    c->callee_saved = saved;
+}
+
+static reg_t *amd64_windows_saved_reg(reg_t *reg) {
+    if (amd64_reg_is_float(reg)) {
+        return reg_select(reg->index, TYPE_FLOAT64);
+    }
+    return reg_select(reg->index, TYPE_UINT64);
+}
+
+static int64_t amd64_windows_xmm15_save_offset(closure_t *c) {
+    return align_up(c->call_stack_max_offset + QWORD, OWORD);
+}
+
+static int64_t amd64_windows_discovered_save_offset(closure_t *c, int target_index) {
+    int64_t offset = amd64_windows_xmm15_save_offset(c) + OWORD;
+    for (int i = 0; i < c->callee_saved->count; ++i) {
+        reg_t *reg = c->callee_saved->take[i];
+        if (amd64_reg_is_float(reg)) {
+            offset = align_up(offset, OWORD);
+        }
+        if (i == target_index) {
+            return offset;
+        }
+        offset += amd64_reg_is_float(reg) ? OWORD : QWORD;
+    }
+    return offset;
+}
+
+static int64_t amd64_windows_save_end(closure_t *c) {
+    if (c->callee_saved->count == 0) {
+        return amd64_windows_xmm15_save_offset(c) + OWORD;
+    }
+    int last = c->callee_saved->count - 1;
+    reg_t *reg = c->callee_saved->take[last];
+    return amd64_windows_discovered_save_offset(c, last) +
+           (amd64_reg_is_float(reg) ? OWORD : QWORD);
+}
+
+static int64_t amd64_windows_tls_scratch_offset(closure_t *c) {
+    return amd64_windows_save_end(c);
+}
+
+static void amd64_windows_plan_u16(uint8_t *dst, uint16_t value) {
+    dst[0] = (uint8_t) value;
+    dst[1] = (uint8_t) (value >> 8);
+}
+
+static void amd64_windows_plan_u32(uint8_t *dst, uint32_t value) {
+    dst[0] = (uint8_t) value;
+    dst[1] = (uint8_t) (value >> 8);
+    dst[2] = (uint8_t) (value >> 16);
+    dst[3] = (uint8_t) (value >> 24);
+}
+
+static void amd64_windows_plan_entry(amd64_windows_unwind_plan_action_t *entry,
+                                     uint8_t kind, uint8_t reg, uint16_t flags,
+                                     uint32_t stack_offset) {
+    entry->kind = kind;
+    entry->reg = reg;
+    amd64_windows_plan_u16(entry->flags_le, flags);
+    amd64_windows_plan_u32(entry->stack_offset_or_allocation_size_le, stack_offset);
+}
+
+/**
+ * Publish an abstract unwind plan as a compiler-private COFF data symbol.
+ * The Windows object writer consumes symbols named
+ * `__nature_unwind_plan$<function>` and emits the corresponding associative
+ * .xdata/.pdata records instead of copying the plan into ordinary .data.
+ *
+ * Wire format (little endian), version 1:
+ *   0  char[4] "NWU1"
+ *   4  u16 header_size (=20)
+ *   6  u16 action_count
+ *   8  u32 frame_size
+ *  12  u32 outgoing_call_area_size
+ *  16  u8  frame_register (RBP=5)
+ *  17  u8  flags (bit 0: allocation uses __chkstk)
+ *  18  u16 reserved
+ *  20  action[action_count]
+ *
+ * Each eight-byte action is {u8 kind, u8 register, u16 flags,
+ * u32 stack_offset_or_allocation_size}. Code offsets are deliberately filled
+ * by the COFF writer after instruction encoding; this plan supplies the
+ * semantic operations and fixed stack offsets which cannot be reconstructed
+ * reliably from bytes alone.
+ */
+static void amd64_windows_emit_unwind_plan(closure_t *c, uint32_t frame_size) {
+    assertf(c->callee_saved->count <= UINT16_MAX - 5,
+            "too many windows unwind actions: %d", c->callee_saved->count);
+    assertf(c->call_stack_max_offset >= 0 &&
+                    (uint64_t) c->call_stack_max_offset <= UINT32_MAX,
+            "windows outgoing call area is too large: %ld", c->call_stack_max_offset);
+    uint16_t action_count = (uint16_t) (5 + c->callee_saved->count);
+    size_t plan_size = AMD64_WINDOWS_UNWIND_PLAN_HEADER_SIZE +
+                       (size_t) action_count * AMD64_WINDOWS_UNWIND_PLAN_ACTION_SIZE;
+    uint8_t *plan = mallocz(plan_size);
+    amd64_windows_unwind_plan_header_t *header =
+            (amd64_windows_unwind_plan_header_t *) plan;
+    memcpy(header->magic, AMD64_WINDOWS_UNWIND_PLAN_MAGIC,
+           AMD64_WINDOWS_UNWIND_PLAN_MAGIC_SIZE);
+    amd64_windows_plan_u16(header->header_size_le,
+                           AMD64_WINDOWS_UNWIND_PLAN_HEADER_SIZE);
+    amd64_windows_plan_u16(header->action_count_le, action_count);
+    amd64_windows_plan_u32(header->frame_size_le, frame_size);
+    amd64_windows_plan_u32(header->outgoing_call_area_size_le,
+                           (uint32_t) c->call_stack_max_offset);
+    header->frame_register = rbp->index;
+    header->flags = frame_size >= 4096 ? AMD64_WINDOWS_UNWIND_PLAN_FLAG_CHKSTK : 0;
+
+    amd64_windows_unwind_plan_action_t *entry =
+            (amd64_windows_unwind_plan_action_t *) (plan + AMD64_WINDOWS_UNWIND_PLAN_HEADER_SIZE);
+    amd64_windows_plan_entry(entry, AMD64_WINDOWS_UNWIND_PUSH_NONVOL, rbp->index, 0, 0);
+    ++entry;
+    amd64_windows_plan_entry(entry, AMD64_WINDOWS_UNWIND_ALLOC, 0,
+                             frame_size >= 4096
+                                     ? AMD64_WINDOWS_UNWIND_ACTION_FLAG_CHKSTK
+                                     : 0,
+                             frame_size);
+    ++entry;
+    amd64_windows_plan_entry(entry, AMD64_WINDOWS_UNWIND_SET_FPREG, rbp->index, 0,
+                             frame_size);
+    ++entry;
+    amd64_windows_plan_entry(entry, AMD64_WINDOWS_UNWIND_SAVE_NONVOL, rbx->index, 0,
+                             (uint32_t) c->call_stack_max_offset);
+    ++entry;
+    amd64_windows_plan_entry(entry, AMD64_WINDOWS_UNWIND_SAVE_XMM128, xmm15->index, 0,
+                             (uint32_t) amd64_windows_xmm15_save_offset(c));
+    ++entry;
+
+    for (int i = 0; i < c->callee_saved->count; ++i) {
+        reg_t *reg = c->callee_saved->take[i];
+        uint8_t kind = amd64_reg_is_float(reg) ? AMD64_WINDOWS_UNWIND_SAVE_XMM128
+                                               : AMD64_WINDOWS_UNWIND_SAVE_NONVOL;
+        amd64_windows_plan_entry(entry, kind, reg->index, 0,
+                                 (uint32_t) amd64_windows_discovered_save_offset(c, i));
+        ++entry;
+    }
+
+    asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
+    symbol->name = dsprintf(AMD64_WINDOWS_UNWIND_PLAN_PREFIX "%s", c->linkident);
+    symbol->size = plan_size;
+    symbol->value = plan;
+    slice_push(c->asm_symbols, symbol);
+}
+
+static slice_t *amd64_windows_native_fn_begin(closure_t *c, lir_op_t *op) {
+    slice_t *operations = slice_new();
+
+    int64_t local_size = c->stack_offset;
+    if (c->call_stack_max_offset < 32) {
+        // Every emitted function contains the safepoint slow-path call, so it
+        // needs a home area even if the source function is otherwise a leaf.
+        c->call_stack_max_offset = 32;
+    }
+
+    // RBX and XMM15 are reserved compiler scratch registers. They do not have
+    // allocator ids and therefore cannot appear in c->callee_saved, but both
+    // are nonvolatile in the Microsoft ABI and are preserved conservatively.
+    /* The COFF adapter expands a Windows TLS memory operand into the implicit
+       TLS lookup sequence. It uses two fixed spill slots to preserve the
+       selected scratch registers without changing RSP in the function body,
+       which keeps the normal Windows unwind recipe valid at every PC. */
+    int64_t frame_size = align_up(
+            local_size + amd64_windows_tls_scratch_offset(c) + 2 * QWORD,
+            AMD64_STACK_ALIGN_SIZE);
+    assertf(frame_size >= 0 && (uint64_t) frame_size <= UINT32_MAX,
+            "windows x64 stack frame is too large: %ld", frame_size);
+
+    // This deliberately uses one contiguous, fixed-size prologue. A PE
+    // backend can describe PUSH_NONVOL(RBP), ALLOC_*, SET_FPREG and the fixed
+    // register-save offsets directly in UNWIND_INFO. Keep any future prologue
+    // changes synchronized with the .xdata emitter.
+    slice_push(operations, AMD64_INST("push", AMD64_REG(rbp)));
+    if (frame_size >= 4096) {
+        // __chkstk is a compiler-runtime helper with a special prologue ABI:
+        // RAX carries the allocation size and the helper probes each guard
+        // page without changing RSP. It is intentionally called before the
+        // final allocation and does not require a normal shadow area.
+        slice_push(operations, AMD64_INST("mov", AMD64_REG(rax), AMD64_UINT64(frame_size)));
+        slice_push(operations, AMD64_INST("call", AMD64_SYMBOL("__chkstk", false)));
+        slice_push(operations, AMD64_INST("sub", AMD64_REG(rsp), AMD64_REG(rax)));
+    } else if (frame_size != 0) {
+        slice_push(operations, AMD64_INST("sub", AMD64_REG(rsp), AMD64_UINT32(frame_size)));
+    }
+    slice_push(operations,
+               AMD64_INST("lea", AMD64_REG(rbp),
+                          SIB_REG(rsp, NULL, 0, frame_size, QWORD)));
+
+    int64_t save_offset = c->call_stack_max_offset;
+    slice_push(operations,
+               AMD64_INST("mov", SIB_REG(rsp, NULL, 0, save_offset, QWORD), AMD64_REG(rbx)));
+
+    save_offset = amd64_windows_xmm15_save_offset(c);
+    slice_push(operations,
+               AMD64_INST("movxmm128", SIB_REG(rsp, NULL, 0, save_offset, QWORD),
+                          AMD64_REG(xmm15s64)));
+
+    for (int i = 0; i < c->callee_saved->count; ++i) {
+        reg_t *reg = amd64_windows_saved_reg(c->callee_saved->take[i]);
+        save_offset = amd64_windows_discovered_save_offset(c, i);
+        if (amd64_reg_is_float(reg)) {
+            slice_push(operations,
+                       AMD64_INST("movxmm128", SIB_REG(rsp, NULL, 0, save_offset, QWORD),
+                                  AMD64_REG(reg)));
+        } else {
+            slice_push(operations,
+                       AMD64_INST("mov", SIB_REG(rsp, NULL, 0, save_offset, QWORD), AMD64_REG(reg)));
+        }
+    }
+
+    // GC metadata describes local stack slots from RBP downwards. Explicitly
+    // grow zero bits for outgoing arguments, non-pointer saves, and padding.
+    uint64_t bits_start = (uint64_t) local_size / POINTER_SIZE;
+    uint64_t bits_end = (uint64_t) frame_size / POINTER_SIZE;
+    for (uint64_t i = bits_start; i < bits_end; ++i) {
+        bitmap_grow_set(c->stack_gc_bits, i, 0);
+    }
+
+    // A nested call may reuse a nonvolatile register that contains one of its
+    // caller's live heap pointers. In that case the only remaining copy is the
+    // ABI save slot in this frame, so conservatively include GP save slots in
+    // the frame's GC bitmap. Runtime span validation rejects scalar values.
+    uint64_t rbx_bit =
+            ((uint64_t) frame_size - (uint64_t) c->call_stack_max_offset) /
+                    POINTER_SIZE -
+            1;
+    bitmap_grow_set(c->stack_gc_bits, rbx_bit, 1);
+    for (int i = 0; i < c->callee_saved->count; ++i) {
+        reg_t *reg = c->callee_saved->take[i];
+        if (amd64_reg_is_float(reg)) {
+            continue;
+        }
+        uint64_t save_offset =
+                (uint64_t) amd64_windows_discovered_save_offset(c, i);
+        uint64_t bit = ((uint64_t) frame_size - save_offset) / POINTER_SIZE - 1;
+        bitmap_grow_set(c->stack_gc_bits, bit, 1);
+    }
+
+    amd64_windows_emit_unwind_plan(c, (uint32_t) frame_size);
+    c->stack_offset = frame_size;
+    return operations;
+}
+
 static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
+    if (BUILD_OS == OS_WINDOWS) {
+        return amd64_windows_native_fn_begin(c, op);
+    }
+
     slice_t *operations = slice_new();
 
     int64_t offset = c->stack_offset;
@@ -1029,7 +1332,12 @@ static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
 
     // 保存 callee-saved 寄存器
     for (int i = 0; i < c->callee_saved->count; ++i) {
-        reg_t *reg = c->callee_saved->take[i];
+        // Width-specific aliases can be collected after register allocation;
+        // PUSH always operates on the canonical 64-bit nonvolatile register.
+        reg_t *saved = c->callee_saved->take[i];
+        assertf(!amd64_reg_is_float(saved),
+                "SysV AMD64 does not preserve scalar XMM registers");
+        reg_t *reg = reg_select(saved->index, TYPE_UINT64);
         slice_push(operations, AMD64_INST("push", AMD64_REG(reg)));
     }
 
@@ -1057,9 +1365,42 @@ static slice_t *amd64_native_fn_begin(closure_t *c, lir_op_t *op) {
 slice_t *amd64_native_return(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
+    if (BUILD_OS == OS_WINDOWS) {
+        for (int i = c->callee_saved->count - 1; i >= 0; --i) {
+            int64_t save_offset = amd64_windows_discovered_save_offset(c, i);
+            reg_t *reg = amd64_windows_saved_reg(c->callee_saved->take[i]);
+            if (amd64_reg_is_float(reg)) {
+                slice_push(operations,
+                           AMD64_INST("movxmm128", AMD64_REG(reg),
+                                      SIB_REG(rsp, NULL, 0, save_offset, QWORD)));
+            } else {
+                slice_push(operations,
+                           AMD64_INST("mov", AMD64_REG(reg),
+                                      SIB_REG(rsp, NULL, 0, save_offset, QWORD)));
+            }
+        }
+
+        slice_push(operations,
+                   AMD64_INST("movxmm128", AMD64_REG(xmm15s64),
+                              SIB_REG(rsp, NULL, 0, amd64_windows_xmm15_save_offset(c), QWORD)));
+        slice_push(operations,
+                   AMD64_INST("mov", AMD64_REG(rbx),
+                              SIB_REG(rsp, NULL, 0, c->call_stack_max_offset, QWORD)));
+
+        if (c->stack_offset != 0) {
+            slice_push(operations, AMD64_INST("add", AMD64_REG(rsp), AMD64_UINT32(c->stack_offset)));
+        }
+        slice_push(operations, AMD64_INST("pop", AMD64_REG(rbp)));
+        slice_push(operations, AMD64_INST("ret"));
+        return operations;
+    }
+
     // 恢复 callee-saved 寄存器 (逆序)
     for (int i = c->callee_saved->count - 1; i >= 0; --i) {
-        reg_t *reg = c->callee_saved->take[i];
+        reg_t *saved = c->callee_saved->take[i];
+        assertf(!amd64_reg_is_float(saved),
+                "SysV AMD64 does not preserve scalar XMM registers");
+        reg_t *reg = reg_select(saved->index, TYPE_UINT64);
         slice_push(operations, AMD64_INST("pop", AMD64_REG(reg)));
     }
 
@@ -1268,6 +1609,10 @@ static slice_t *amd64_native_block(closure_t *c, basic_block_t *block) {
 
 void amd64_native(closure_t *c) {
     assert(c->module);
+
+    if (BUILD_OS == OS_WINDOWS) {
+        amd64_windows_collect_callee_saved(c);
+    }
 
     // 遍历 block
     for (int i = 0; i < c->blocks->count; ++i) {

@@ -1,0 +1,6 @@
+name = "windows_c_nature_abi"
+version = "0.1.0"
+type = "bin"
+
+[links]
+abi_fixture = { windows_amd64 = "abi_fixture.obj" }

@@ -1,0 +1,17 @@
+#linkid timegm
+fn timegm(anyptr value):i64
+
+#linkid atol
+fn atol(anyptr value):i64
+
+#linkid strtol
+fn strtol(anyptr value, anyptr endptr, i32 base):i64
+
+#linkid strtoul
+fn strtoul(anyptr value, anyptr endptr, i32 base):u64
+
+#linkid localtime
+fn localtime(anyptr timestamp):anyptr
+
+#linkid gmtime
+fn gmtime(anyptr timestamp):anyptr

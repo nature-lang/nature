@@ -1,5 +1,7 @@
 #include "parser.h"
 
+#include <inttypes.h>
+
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -372,6 +374,10 @@ static inline type_fn_t *parser_type_fn(module_t *m) {
         // 包含参数类型
         do {
             if (parser_consume(m, TOKEN_ELLIPSIS)) {
+                if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
+                    type_fn->is_c_variadic = true;
+                    goto PARAMS_DONE;
+                }
                 type_fn->is_rest = true;
             }
 
@@ -390,6 +396,8 @@ static inline type_fn_t *parser_type_fn(module_t *m) {
 
         parser_must(m, TOKEN_RIGHT_PAREN);
     }
+
+PARAMS_DONE:
 
 
     PARSER_ASSERTF(name_param_count == 0 || name_param_count == type_fn->param_types->length,
@@ -1114,6 +1122,10 @@ static void parser_params(module_t *m, ast_fndef_t *fndef) {
 
     do {
         if (parser_consume(m, TOKEN_ELLIPSIS)) {
+            if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
+                fndef->c_variadic = true;
+                return;
+            }
             fndef->rest_param = true;
         }
 
@@ -2929,6 +2941,9 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
         return result;
     }
 
+    PARSER_ASSERTF(!fndef->c_variadic,
+                   "C variadic functions can only be external declarations");
+
     fndef->body = parser_body(m, false);
 
     m->parser_type_params_table = NULL;
@@ -2960,7 +2975,8 @@ static ast_stmt_t *parser_test_stmt(module_t *m) {
     fndef->is_private = true;
     fndef->is_errable = true;
     fndef->test_name = name_token->literal;
-    fndef->symbol_name = dsprintf("__test_%ld", parser_test_unique++);
+    fndef->symbol_name =
+            dsprintf("__test_%" PRId64, parser_test_unique++);
     fndef->fn_name = fndef->symbol_name;
     fndef->fn_name_with_pkg = ident_with_prefix(m->ident, fndef->symbol_name);
 

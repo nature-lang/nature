@@ -31,6 +31,8 @@ use symbol::SymbolTable;
 const TARGET_OS: &str = "linux";
 #[cfg(target_os = "macos")]
 const TARGET_OS: &str = "darwin";
+#[cfg(target_os = "windows")]
+const TARGET_OS: &str = "windows";
 
 #[cfg(target_arch = "x86_64")]
 const TARGET_ARCH: &str = "amd64";

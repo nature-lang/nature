@@ -2,8 +2,10 @@
 #include "runtime/processor.h"
 #include "runtime/rt_mutex.h"
 #include "runtime/runtime.h"
+#ifndef __WINDOWS
 #include <strings.h>
 #include <sys/socket.h>
+#endif
 
 // SOMAXCONN 在 sys/socket.h 中定义
 #ifdef __LINUX

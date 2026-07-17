@@ -1,3 +1,5 @@
+import libc.cross
+
 type cstr = anyptr
 
 #linkid rt_string_ref
@@ -23,8 +25,9 @@ fn cstr.to_string(self):string
 #linkid atoi
 fn atoi(cstr str):i32
 
-#linkid atol
-fn atol(cstr str):i64
+fn atol(cstr str):i64 {
+    return cross.atol(str as anyptr)
+}
 
 #linkid atof
 fn atof(cstr str):f64
@@ -35,11 +38,13 @@ fn strtof(cstr str, anyptr endptr):f32
 #linkid strtod
 fn strtod(cstr str, anyptr endptr):f64
 
-#linkid strtol
-fn strtol(cstr str, anyptr endptr, i32 base):i64
+fn strtol(cstr str, anyptr endptr, i32 base):i64 {
+    return cross.strtol(str as anyptr, endptr, base)
+}
 
-#linkid strtoul
-fn strtoul(cstr str, anyptr endptr, i32 base):u64
+fn strtoul(cstr str, anyptr endptr, i32 base):u64 {
+    return cross.strtoul(str as anyptr, endptr, base)
+}
 
 #linkid rand
 fn rand():i32
@@ -89,8 +94,12 @@ fn system(cstr command):i32
 #linkid abs
 fn abs(i32 x):i32
 
-#linkid labs
-fn labs(i64 x):i64
+fn labs(i64 x):i64 {
+    if x < 0 {
+        return -x
+    }
+    return x
+}
 
 type div_t = struct {
     i32 quot
@@ -105,8 +114,12 @@ type ldiv_t = struct {
 #linkid div
 fn div(i32 numer, i32 denom):div_t
 
-#linkid ldiv
-fn ldiv(i64 numer, i64 denom):ldiv_t
+fn ldiv(i64 numer, i64 denom):ldiv_t {
+    return ldiv_t {
+        quot: numer / denom,
+        rem: numer % denom,
+    }
+}
 
 #linkid mblen
 fn mblen(cstr s, u64 n):i32
@@ -1177,11 +1190,13 @@ fn strftime(cstr s, u64 size, cstr format, ptr<tm> time_info):u64
 fn strftime_l(cstr s, u64 size, cstr format, ptr<tm> time_info, locale_t locale):u64
 
 // Time conversion functions
-#linkid localtime
-fn localtime(ptr<time_t> timestamp):ptr<tm>
+fn localtime(ptr<time_t> timestamp):ptr<tm> {
+    return cross.localtime(timestamp as anyptr) as ptr<tm>
+}
 
-#linkid gmtime
-fn gmtime(ptr<time_t> timestamp):ptr<tm>
+fn gmtime(ptr<time_t> timestamp):ptr<tm> {
+    return cross.gmtime(timestamp as anyptr) as ptr<tm>
+}
 
 #linkid asctime
 fn asctime(ptr<tm> tm):cstr
@@ -1253,8 +1268,9 @@ fn tzset():void
 #linkid stime
 fn stime(ptr<time_t> t):i32
 
-#linkid timegm
-fn timegm(ptr<tm> tm):time_t
+fn timegm(ptr<tm> value):time_t {
+    return cross.timegm(value as anyptr) as time_t
+}
 
 #linkid getdate
 fn getdate(cstr str):ptr<tm>

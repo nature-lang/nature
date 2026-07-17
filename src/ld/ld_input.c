@@ -14,6 +14,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
 static int ld_object_push(ld_object_list_t *list, ld_object_t *object) {
     if (list->count == list->capacity) {
         size_t next = list->capacity ? list->capacity * 2U : 32U;
@@ -175,6 +179,11 @@ static int ld_dylib_push(ld_context_t *ctx, const char *path, const char *instal
     }
     ld_dylib_input_t *dylib = &ctx->dylibs.items[ctx->dylibs.count++];
     memset(dylib, 0, sizeof(*dylib));
+    if (!sc_map_init_s64(&dylib->symbol_index, 0, 0)) {
+        ctx->dylibs.count--;
+        return ld_fail(ctx, LD_IO_ERROR,
+                       "out of memory recording dynamic library '%s'", path);
+    }
     dylib->current_version = LD_DEFAULT_DYLIB_VERSION;
     dylib->compatibility_version = LD_DEFAULT_DYLIB_VERSION;
     dylib->input_priority = SIZE_MAX;
@@ -189,6 +198,7 @@ static int ld_dylib_push(ld_context_t *ctx, const char *path, const char *instal
     if (!dylib->path || !dylib->install_name) {
         free(dylib->path);
         free(dylib->install_name);
+        sc_map_term_s64(&dylib->symbol_index);
         memset(dylib, 0, sizeof(*dylib));
         ctx->dylibs.count--;
         return ld_fail(ctx, LD_IO_ERROR, "out of memory recording dynamic library '%s'", path);
@@ -230,7 +240,7 @@ static char *ld_strndup0(const char *value, size_t size) {
 
 
 static int ld_read_file(ld_context_t *ctx, const char *path, ld_file_t **result) {
-    int fd = open(path, O_RDONLY);
+    int fd = open(path, O_RDONLY | O_BINARY);
     if (fd < 0) {
         return ld_fail(ctx, LD_IO_ERROR, "cannot open '%s': %s", path, strerror(errno));
     }
@@ -1243,20 +1253,15 @@ static int ld_try_framework_directory(ld_context_t *ctx, const char *directory, 
     return LD_OK;
 }
 
-static bool ld_dylib_exports_unresolved(const ld_context_t *ctx, const char *name) {
+static bool ld_dylib_exports_unresolved(ld_context_t *ctx, const char *name) {
     for (size_t i = 0; i < ctx->dylibs.count; i++) {
-        const ld_dylib_input_t *dylib = &ctx->dylibs.items[i];
-        for (size_t j = 0; j < dylib->export_count; j++) {
-            if (strcmp(dylib->exports[j], name) == 0) return true;
-        }
-        for (size_t j = 0; j < dylib->weak_export_count; j++) {
-            if (strcmp(dylib->weak_exports[j], name) == 0) return true;
-        }
+        ld_dylib_input_t *dylib = &ctx->dylibs.items[i];
+        if (ld_macho_dylib_find_symbol(dylib, name)) return true;
     }
     return false;
 }
 
-static const char *ld_unresolved_reexport_symbol(const ld_context_t *ctx) {
+static const char *ld_unresolved_reexport_symbol(ld_context_t *ctx) {
     for (const ld_symbol_t *symbol = ctx->symbols; symbol; symbol = symbol->hh.next) {
         if (symbol->kind == LD_SYMBOL_UNDEFINED && !symbol->weak_ref &&
             symbol->name &&

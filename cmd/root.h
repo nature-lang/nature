@@ -34,9 +34,11 @@ void cmd_entry(int argc, char **argv) {
         switch (c) {
             case 'o': {
                 char *o_arg = optarg;
+                BUILD_OUTPUT_EXPLICIT = true;
 
                 // 如果包含路径分隔符，则解析目录和文件名
-                if (strchr(o_arg, '/') != NULL) {
+                if (strchr(o_arg, '/') != NULL ||
+                    strchr(o_arg, '\\') != NULL) {
                     // 解析出目录路径
                     char *output_dir = path_dir(o_arg);
                     if (strlen(output_dir) > 0) {
@@ -83,9 +85,13 @@ void cmd_entry(int argc, char **argv) {
                 } else if (str_equal(target, "darwin_arm64")) {
                     BUILD_OS = OS_DARWIN;
                     BUILD_ARCH = ARCH_ARM64;
+                } else if (str_equal(target, "windows_amd64")) {
+                    BUILD_OS = OS_WINDOWS;
+                    BUILD_ARCH = ARCH_AMD64;
                 } else {
                     printf("Invalid target: %s\n", target);
-                    printf("Available targets: linux_amd64, linux_arm64, darwin_amd64, darwin_arm64\n");
+                    printf("Available targets: linux_amd64, linux_arm64, linux_riscv64, "
+                           "darwin_amd64, darwin_arm64, windows_amd64\n");
                     exit(EXIT_FAILURE);
                 }
                 break;

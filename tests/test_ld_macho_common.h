@@ -4,8 +4,13 @@
 #include "src/ld/ld.h"
 #include "src/ld/ld_internal.h"
 
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stddef.h>
+
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
 
 typedef struct {
     unsigned count;

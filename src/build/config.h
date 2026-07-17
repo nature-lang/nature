@@ -11,6 +11,7 @@
 typedef enum {
     OS_LINUX = 1,
     OS_DARWIN,
+    OS_WINDOWS,
     ARCH_AMD64,
     ARCH_ARM64,
     ARCH_RISCV64,
@@ -23,6 +24,7 @@ extern build_param_t BUILD_ARCH;
 extern char *NATURE_ROOT; // linux/darwin/freebsd default root
 
 extern char BUILD_OUTPUT_NAME[PATH_MAX]; // main
+extern bool BUILD_OUTPUT_EXPLICIT; // true when -o/--output was provided
 extern char BUILD_OUTPUT_DIR[PATH_MAX]; // default is work_dir test 使用，指定编译路径输出文件
 extern char BUILD_OUTPUT[PATH_MAX]; // default = BUILD_OUTPUT_DIR/BUILD_OUTPUT_NAME
 
@@ -61,13 +63,21 @@ extern char SOURCE_PATH[PATH_MAX]; // /opt/test/main.n 的绝对路径
 
 static inline char *temp_dir() {
     char *tmp_dir;
-    // Try to read from TMPDIR environment variable first
+    // Try to read the platform's conventional temporary directory first.
+#ifdef __WINDOWS
+    char *env_tmpdir = getenv("TEMP");
+    if (env_tmpdir == NULL || strlen(env_tmpdir) == 0) {
+        env_tmpdir = getenv("TMP");
+    }
+#else
     char *env_tmpdir = getenv("TMPDIR");
+#endif
     char temp[1024]; // Increase buffer size to accommodate possible long paths
 
     if (env_tmpdir != NULL && strlen(env_tmpdir) > 0) {
-        // Use temporary directory from environment variable
-        snprintf(temp, sizeof(temp), "%snature-build.XXXXXX", env_tmpdir);
+        size_t length = strlen(env_tmpdir);
+        bool has_separator = env_tmpdir[length - 1] == '/' || env_tmpdir[length - 1] == '\\';
+        snprintf(temp, sizeof(temp), "%s%snature-build.XXXXXX", env_tmpdir, has_separator ? "" : "/");
     } else {
         // Fall back to BUILD_TMP_DIR
         strcpy(temp, BUILD_TMP_DIR);
@@ -86,6 +96,10 @@ static inline char *parser_base_ns(char *dir) {
     char *result = dir;
     // 取最后一节
     char *trim_path = strrchr(dir, '/');
+    char *backslash = strrchr(dir, '\\');
+    if (backslash && (!trim_path || backslash > trim_path)) {
+        trim_path = backslash;
+    }
     if (trim_path != NULL) {
         result = trim_path + 1;
     }
@@ -100,6 +114,9 @@ static inline char *os_to_string(uint8_t os) {
 
     if (os == OS_DARWIN) {
         return "darwin";
+    }
+    if (os == OS_WINDOWS) {
+        return "windows";
     }
     return NULL;
 }
@@ -123,6 +140,9 @@ static inline uint8_t os_to_uint8(char *os) {
     }
     if (str_equal(os, "darwin")) {
         return OS_DARWIN;
+    }
+    if (str_equal(os, "windows")) {
+        return OS_WINDOWS;
     }
     return 0;
 }
@@ -151,6 +171,11 @@ static inline void config_init() {
         strcpy(BUILD_OUTPUT_DIR, WORKDIR);
     }
 
+    if (BUILD_OS == OS_WINDOWS && !BUILD_OUTPUT_EXPLICIT &&
+        str_equal(BUILD_OUTPUT_NAME, "main")) {
+        strcpy(BUILD_OUTPUT_NAME, "main.exe");
+    }
+
     strcpy(BUILD_OUTPUT, path_join(BUILD_OUTPUT_DIR, BUILD_OUTPUT_NAME));
     assertf(!dir_exists(BUILD_OUTPUT), "build output='%s' cannnot be a directory", BUILD_OUTPUT);
 }
@@ -166,8 +191,8 @@ static inline void env_init() {
         BUILD_ARCH = arch_to_uint8(arch);
     }
 
-    if (BUILD_OS != OS_LINUX && BUILD_OS != OS_DARWIN) {
-        assertf(false, "only support compiles to os linux/darwin");
+    if (BUILD_OS != OS_LINUX && BUILD_OS != OS_DARWIN && BUILD_OS != OS_WINDOWS) {
+        assertf(false, "only support compiles to os linux/darwin/windows");
     }
 
     if (BUILD_ARCH != ARCH_AMD64 && BUILD_ARCH != ARCH_ARM64 && BUILD_ARCH != ARCH_RISCV64) {
@@ -178,6 +203,10 @@ static inline void env_init() {
     // ARCH_RISCV64 不支持 darwin 平台
     if (BUILD_ARCH == ARCH_RISCV64 && BUILD_OS == OS_DARWIN) {
         assertf(false, "riscv64 unsupported darwin platform");
+    }
+
+    if (BUILD_OS == OS_WINDOWS && BUILD_ARCH != ARCH_AMD64) {
+        assertf(false, "only windows_amd64 is supported");
     }
 
     char *root = getenv("NATURE_ROOT");

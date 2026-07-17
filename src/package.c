@@ -23,14 +23,19 @@ bool is_std_package(char *package) {
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_type == DT_DIR) {
-            if (!str_equal(entry->d_name, ".") &&
-                !str_equal(entry->d_name, "..") &&
-                !str_equal(entry->d_name, "builtin") &&
-                !str_equal(entry->d_name, "temps")) {
-                char *dirname = strdup(entry->d_name);
-                table_set(std_package_table, dirname, (void *) 1);
-            }
+        if (str_equal(entry->d_name, ".") ||
+            str_equal(entry->d_name, "..") ||
+            str_equal(entry->d_name, "builtin") ||
+            str_equal(entry->d_name, "temps")) {
+            continue;
+        }
+
+        char *full_path = path_join(std_dir, entry->d_name);
+        bool is_directory = dir_exists(full_path);
+        free(full_path);
+        if (is_directory) {
+            char *dirname = strdup(entry->d_name);
+            table_set(std_package_table, dirname, (void *) 1);
         }
     }
 

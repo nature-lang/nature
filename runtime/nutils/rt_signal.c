@@ -12,7 +12,7 @@ pthread_mutex_t signal_locker = PTHREAD_MUTEX_INITIALIZER;
 
 struct sc_map_64 signal_handlers = {0};
 
-int64_t sig_ref[NSIG] = {0};
+int64_t sig_ref[RT_SIGNAL_COUNT] = {0};
 
 coroutine_t *signal_loop_co = NULL;
 
@@ -26,7 +26,7 @@ void signal_notify(n_chan_t *ch, n_vec_t signals) {
     if (signals.length == 0) {
         for (int i = 0; i < sizeof(all_signals) / sizeof(all_signals[0]); i++) {
             int64_t sig = all_signals[i];
-            if (sig < 0 || sig > NSIG - 1) {
+            if (sig < 0 || sig > RT_SIGNAL_COUNT - 1) {
                 continue;
             }
 
@@ -41,7 +41,7 @@ void signal_notify(n_chan_t *ch, n_vec_t signals) {
         for (int i = 0; i < signals.length; i++) {
             size_t sig;
             rti_vec_access(&signals, i, &sig);
-            if (sig < 0 || sig > NSIG - 1) {
+            if (sig < 0 || sig > RT_SIGNAL_COUNT - 1) {
                 continue;
             }
 

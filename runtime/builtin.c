@@ -1,6 +1,7 @@
 #include "builtin.h"
 
 #include <assert.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <unistd.h>
 
@@ -113,6 +114,12 @@ static void print_arg(n_any_t *arg) {
     if (arg->rtype->kind == TYPE_NULL) {
         char *raw = "null";
         VOID write(STDOUT_FILENO, raw, strlen(raw));
+        return;
+    }
+
+    if (arg->rtype->kind == TYPE_ENUM) {
+        int n = sprintf(sprint_buf, "0x%" PRIx64, arg->value.u64_value);
+        VOID write(STDOUT_FILENO, sprint_buf, n);
         return;
     }
 

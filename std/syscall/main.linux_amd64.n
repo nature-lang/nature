@@ -77,6 +77,10 @@ int STDIN = 0
 int STDOUT = 1
 int STDERR = 2
 
+fn null_device():string {
+    return '/dev/null'
+}
+
 int CLOCK_REALTIME = 0
 int CLOCK_MONOTONIC = 1
 int CLOCK_PROCESS_CPUTIME_ID = 2

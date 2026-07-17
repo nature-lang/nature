@@ -115,12 +115,12 @@ fn main() {
 
 === test_module_init
 --- main.n
-import syscall
+import libc
 
-var seed = syscall.SYS_GETPPID
+var seed = libc.SEEK_SET
 
 fn main():void! {
-    assert(seed == syscall.SYS_GETPPID)
+    assert(seed == libc.SEEK_SET)
     println(seed)
 }
 

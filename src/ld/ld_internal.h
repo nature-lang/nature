@@ -4,6 +4,7 @@
 #include "ld.h"
 #include "macho_format.h"
 
+#include "utils/sc_map.h"
 #include "utils/uthash.h"
 
 #include <stdbool.h>
@@ -229,6 +230,8 @@ typedef struct {
     ld_dylib_symbol_t *symbols;
     size_t symbol_count;
     size_t symbol_capacity;
+    /* Names are separately allocated and stable; indices survive symbols realloc. */
+    struct sc_map_s64 symbol_index;
     size_t reexport_owner;
     bool weak;
     bool reexport_only;
