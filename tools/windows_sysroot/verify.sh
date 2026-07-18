@@ -85,13 +85,25 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 archive_dir=$temp_dir/archive
+blocked_tools=$temp_dir/blocked-tools
 mkdir -p "$archive_dir"
+mkdir -p "$blocked_tools"
 cat >"$archive_dir/main.n" <<'EOF'
 fn main() {}
 EOF
+cat >"$blocked_tools/ar" <<'EOF'
+#!/bin/sh
+exit 91
+EOF
+chmod +x "$blocked_tools/ar"
+cat >"$blocked_tools/ar.cmd" <<'EOF'
+@echo off
+exit /b 91
+EOF
 (
     cd "$archive_dir"
-    PATH= NATURE_ROOT="$ROOT_DIR" "$NATURE_BIN" build \
+    PATH="$blocked_tools:$PATH" PATHEXT='.CMD;.BAT;.COM;.EXE' \
+        NATURE_ROOT="$ROOT_DIR" "$NATURE_BIN" build \
         --target windows_amd64 --archive main.n
 )
 if [ ! -s "$archive_dir/libmain.a" ] ||
