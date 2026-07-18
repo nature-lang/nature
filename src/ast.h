@@ -679,6 +679,7 @@ struct ast_fndef_t {
     type_t return_type;
     list_t *params; // ast_var_decl_t*
     bool rest_param;
+    bool c_variadic;
     slice_t *body; // ast_stmt* 函数体
     void *closure; // closure 数据冗余
 

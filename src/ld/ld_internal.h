@@ -4,6 +4,7 @@
 #include "ld.h"
 #include "macho_format.h"
 
+#include "utils/sc_map.h"
 #include "utils/uthash.h"
 
 #include <stdbool.h>
@@ -229,6 +230,8 @@ typedef struct {
     ld_dylib_symbol_t *symbols;
     size_t symbol_count;
     size_t symbol_capacity;
+    /* Names are separately allocated and stable; indices survive symbols realloc. */
+    struct sc_map_s64 symbol_index;
     size_t reexport_owner;
     bool weak;
     bool reexport_only;
@@ -375,6 +378,7 @@ int ld_fail(ld_context_t *ctx, int code, const char *format, ...);
 
 int ld_parse_input_file(ld_context_t *ctx, const char *path);
 int ld_resolve_requested_libraries(ld_context_t *ctx);
+int ld_resolve_ordered_inputs(ld_context_t *ctx);
 int ld_resolve_reexport_libraries(ld_context_t *ctx);
 int ld_link_macho(ld_context_t *ctx);
 int ld_link_elf(const ld_options_t *options);

@@ -1,6 +1,8 @@
 #ifndef NATURE_SRC_RTYPE_H_
 #define NATURE_SRC_RTYPE_H_
 
+#include <inttypes.h>
+
 #include "src/symbol/symbol.h"
 #include "utils/custom_links.h"
 #include "utils/type.h"
@@ -31,7 +33,7 @@ static inline int64_t type_hash(type_t t) {
         char *str = t.ident;
         for (int i = 0; i < t.args->length; ++i) {
             type_t *arg = ct_list_value(t.args, i);
-            str = dsprintf("%s.%ld", str, type_hash(*arg));
+            str = dsprintf("%s.%" PRId64, str, type_hash(*arg));
         }
 
         return hash_string(str);
@@ -42,37 +44,40 @@ static inline int64_t type_hash(type_t t) {
     }
 
     if (t.kind == TYPE_REF) {
-        char *str = dsprintf("ref.%ld", type_hash(t.ptr->value_type));
+        char *str = dsprintf("ref.%" PRId64, type_hash(t.ptr->value_type));
         return hash_string(str);
     }
 
     if (t.kind == TYPE_PTR) {
-        char *str = dsprintf("ptr.%ld", type_hash(t.ptr->value_type));
+        char *str = dsprintf("ptr.%" PRId64, type_hash(t.ptr->value_type));
         return hash_string(str);
     }
 
     if (t.kind == TYPE_VEC) {
-        char *str = dsprintf("vec.%ld", type_hash(t.vec->element_type));
+        char *str = dsprintf("vec.%" PRId64, type_hash(t.vec->element_type));
         return hash_string(str);
     }
 
     if (t.kind == TYPE_CHAN) {
-        char *str = dsprintf("chan.%ld", type_hash(t.chan->element_type));
+        char *str = dsprintf("chan.%" PRId64, type_hash(t.chan->element_type));
         return hash_string(str);
     }
 
     if (t.kind == TYPE_ARR) {
-        char *str = dsprintf("arr.%ld_%ld", t.array->length, type_hash(t.array->element_type));
+        char *str = dsprintf("arr.%" PRId64 "_%" PRId64, t.array->length,
+                             type_hash(t.array->element_type));
         return hash_string(str);
     }
 
     if (t.kind == TYPE_MAP) {
-        char *str = dsprintf("map.%ld_%ld", type_hash(t.map->key_type), type_hash(t.map->value_type));
+        char *str = dsprintf("map.%" PRId64 "_%" PRId64,
+                             type_hash(t.map->key_type),
+                             type_hash(t.map->value_type));
         return hash_string(str);
     }
 
     if (t.kind == TYPE_SET) {
-        char *str = dsprintf("set.%ld", type_hash(t.set->element_type));
+        char *str = dsprintf("set.%" PRId64, type_hash(t.set->element_type));
         return hash_string(str);
     }
 
@@ -80,7 +85,8 @@ static inline int64_t type_hash(type_t t) {
         char *str = dsprintf("tuple");
         for (int i = 0; i < t.tuple->elements->length; ++i) {
             type_t *element_type = ct_list_value(t.tuple->elements, i);
-            str = str_connect(str, dsprintf(".%ld", type_hash(*element_type)));
+            str = str_connect(
+                    str, dsprintf(".%" PRId64, type_hash(*element_type)));
         }
         return hash_string(str);
     }
@@ -92,17 +98,20 @@ static inline int64_t type_hash(type_t t) {
         } else {
             for (int i = 0; i < t.struct_->properties->length; ++i) {
                 struct_property_t *p = ct_list_value(t.struct_->properties, i);
-                str = str_connect(str, dsprintf("%s.%ld", p->name, type_hash(p->type)));
+                str = str_connect(
+                        str, dsprintf("%s.%" PRId64, p->name,
+                                      type_hash(p->type)));
             }
         }
         return hash_string(str);
     }
 
     if (t.kind == TYPE_FN) {
-        char *str = dsprintf("fn.%ld", type_hash(t.fn->return_type));
+        char *str = dsprintf("fn.%" PRId64, type_hash(t.fn->return_type));
         for (int i = 0; i < t.fn->param_types->length; ++i) {
             type_t *param_type = ct_list_value(t.fn->param_types, i);
-            str = str_connect(str, dsprintf(".%ld", type_hash(*param_type)));
+            str = str_connect(
+                    str, dsprintf(".%" PRId64, type_hash(*param_type)));
         }
         return hash_string(str);
     }
@@ -111,7 +120,8 @@ static inline int64_t type_hash(type_t t) {
         char *str = dsprintf("union");
         for (int i = 0; i < t.union_->elements->length; ++i) {
             type_t *element_type = ct_list_value(t.union_->elements, i);
-            str = str_connect(str, dsprintf(".%ld", type_hash(*element_type)));
+            str = str_connect(
+                    str, dsprintf(".%" PRId64, type_hash(*element_type)));
         }
         return hash_string(str);
     }
@@ -120,7 +130,9 @@ static inline int64_t type_hash(type_t t) {
         char *str = dsprintf("tagged_union");
         for (int i = 0; i < t.tagged_union->elements->length; ++i) {
             tagged_union_element_t *element = ct_list_value(t.tagged_union->elements, i);
-            str = str_connect(str, dsprintf(".%s.%ld", element->tag, type_hash(element->type)));
+            str = str_connect(
+                    str, dsprintf(".%s.%" PRId64, element->tag,
+                                  type_hash(element->type)));
         }
         return hash_string(str);
     }

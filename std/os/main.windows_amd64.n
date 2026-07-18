@@ -1,0 +1,116 @@
+import path
+import syscall
+import libc
+import runtime
+
+type signal = u8
+
+#local #linkid rt_windows_find_first_utf8
+fn windows_find_first(anyptr pattern, anyptr name, u64 capacity): anyptr
+
+#local #linkid rt_windows_find_next_utf8
+fn windows_find_next(anyptr handle, anyptr name, u64 capacity): i32
+
+#local #linkid rt_windows_find_close_utf8
+fn windows_find_close(anyptr handle): i32
+
+#local #linkid GetLastError
+fn windows_last_error(): u32
+
+fn args():[string] {
+    return libc.std_args()
+}
+
+fn exe():string! {
+    var buf = vec<u8>.new(0, 32768)
+    var len = syscall.readlink('/proc/self/exe', buf)
+    return buf.slice(0, len) as string
+}
+
+fn dirs_sort([string] dirs) {
+    var n = dirs.len()
+    for int i = 0; i < n - 1; i += 1 {
+        for int j = 0; j < n - i - 1; j += 1 {
+            if dirs[j] > dirs[j + 1] {
+                (dirs[j], dirs[j + 1]) = (dirs[j + 1], dirs[j])
+            }
+        }
+    }
+}
+
+fn listdir(string dir_path):[string]! {
+    [string] result = []
+    string pattern = dir_path
+    if pattern == '' {
+        pattern = '.'
+    }
+    pattern = path.join(pattern, '*')
+
+    var name_buf = vec<u8>.new(0, 32768)
+    anyptr handle = windows_find_first(pattern.ref(), name_buf.ref(), name_buf.len() as u64)
+    if handle == 0 {
+        throw errorf('FindFirstFileW failed with Windows error %d', windows_last_error())
+    }
+
+    for true {
+        var name = runtime.string_new(name_buf.ref())
+        if name != '.' && name != '..' && name != '' {
+            result.push(name)
+        }
+
+        i32 next = windows_find_next(handle, name_buf.ref(), name_buf.len() as u64)
+        if next < 0 {
+            u32 code = windows_last_error()
+            windows_find_close(handle)
+            throw errorf('FindNextFileW failed with Windows error %d', code)
+        }
+        if next == 0 {
+            break
+        }
+    }
+
+    if windows_find_close(handle) == 0 {
+        throw errorf('FindClose failed with Windows error %d', windows_last_error())
+    }
+    dirs_sort(result)
+    return result
+}
+
+fn mkdirs(string dir, u32 mode):void! {
+    if dir == '' {
+        throw errorf('dir is empty')
+    }
+    if path.exists(dir) {
+        return
+    }
+
+    var parent_dir = path.dir(dir)
+    if parent_dir != dir && parent_dir != '.' {
+        mkdirs(parent_dir, mode)
+    }
+    syscall.mkdir(dir, mode)
+}
+
+fn remove(string full_path):void! {
+    if !path.exists(full_path) {
+        return
+    }
+    syscall.unlink(full_path)
+}
+
+fn rmdir(string dir, bool recursive):void! {
+    if !recursive {
+        return syscall.rmdir(dir)
+    }
+
+    var entries = listdir(dir)
+    for item in entries {
+        var fullpath = path.join(dir, item)
+        if path.isdir(fullpath) {
+            rmdir(fullpath, true)
+        } else {
+            remove(fullpath) catch err {}
+        }
+    }
+    syscall.rmdir(dir)
+}

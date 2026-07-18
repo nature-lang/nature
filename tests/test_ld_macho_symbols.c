@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <fcntl.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -24,6 +25,12 @@ typedef struct {
 static uint32_t test_symbol_branch_relocation(uint32_t symbol) {
     return symbol | (1U << 24U) | (2U << 25U) | (1U << 27U) |
            (LD_ARM64_RELOC_BRANCH26 << 28U);
+}
+
+static uint32_t test_symbol_page_relocation(uint32_t symbol, bool pcrel,
+                                            uint32_t type) {
+    return symbol | ((uint32_t) pcrel << 24U) | (2U << 25U) |
+           (1U << 27U) | (type << 28U);
 }
 
 static void test_make_symbol_object(char path[], const uint32_t *text,
@@ -123,9 +130,41 @@ static void test_link_symbol_object(const char *object_path,
     ld_options_deinit(&options);
 }
 
+static void test_link_symbol_object_and_dylib(const char *object_path,
+                                              const char *dylib_path,
+                                              const char *output_path) {
+    unlink(output_path);
+    ld_options_t options;
+    ld_options_init(&options);
+    options.output_path = output_path;
+    options.adhoc_codesign = false;
+    assert(ld_add_input(&options, object_path) == LD_OK);
+    assert(ld_add_input(&options, dylib_path) == LD_OK);
+    assert(ld_link(&options) == LD_OK);
+    ld_options_deinit(&options);
+}
+
+static void test_write_symbol_dylib(char path[], const char *install_name,
+                                    const char *symbol) {
+    char tbd[1024];
+    int length = snprintf(
+            tbd, sizeof(tbd),
+            "--- !tapi-tbd\n"
+            "tbd-version: 4\n"
+            "targets: [ arm64-macos ]\n"
+            "install-name: '%s'\n"
+            "exports:\n"
+            "  - targets: [ arm64-macos ]\n"
+            "    symbols: [ %s ]\n"
+            "...\n",
+            install_name, symbol);
+    assert(length > 0 && (size_t) length < sizeof(tbd));
+    test_ld_write_fixture(path, tbd, (size_t) length);
+}
+
 static test_symbol_output_t test_read_symbol_output(const char *path) {
     test_symbol_output_t output = {0};
-    int fd = open(path, O_RDONLY);
+    int fd = open(path, O_RDONLY | O_BINARY);
     assert(fd >= 0);
     struct stat st;
     assert(fstat(fd, &st) == 0 && st.st_size > 0);
@@ -279,7 +318,7 @@ static uint64_t test_branch_target(const test_symbol_output_t *output,
                        immediate * 4LL);
 }
 
-static void test_zig_symbol_rank_order(void) {
+static void test_darwin_symbol_rank_order(void) {
     ld_file_t direct_file = {.input_priority = 8U};
     ld_file_t archive_file = {.input_priority = 3U};
     ld_object_t direct = {.file = &direct_file};
@@ -308,11 +347,11 @@ static void test_zig_symbol_rank_order(void) {
     ld_macho_symbol_rank_t archive_common =
             ld_macho_object_symbol_rank(&archive, &common, 0U);
 
-    assert(ld_macho_symbol_rank_better(direct_strong, archive_strong));
-    assert(ld_macho_symbol_rank_better(archive_strong, direct_weak));
-    assert(ld_macho_symbol_rank_better(direct_weak, archive_weak));
-    assert(ld_macho_symbol_rank_better(archive_weak, direct_common));
-    assert(ld_macho_symbol_rank_better(direct_common, archive_common));
+    assert(ld_macho_symbol_rank_better(direct_strong, direct_weak));
+    assert(ld_macho_symbol_rank_better(direct_weak, direct_common));
+    assert(ld_macho_symbol_rank_better(direct_common, archive_strong));
+    assert(archive_strong.class_value == archive_weak.class_value);
+    assert(archive_weak.class_value == archive_common.class_value);
 
     ld_dylib_input_t dylib = {.input_priority = 2U};
     ld_dylib_symbol_t dylib_export = {0};
@@ -322,6 +361,14 @@ static void test_zig_symbol_rank_order(void) {
     dylib.input_priority = 9U;
     dylib_strong = ld_macho_dylib_symbol_rank(&dylib, &dylib_export, 0U);
     assert(ld_macho_symbol_rank_better(archive_strong, dylib_strong));
+
+    archive.selected = true;
+    ld_macho_symbol_rank_t selected_weak =
+            ld_macho_object_symbol_rank(&archive, &weak, 0U);
+    ld_macho_symbol_rank_t selected_common =
+            ld_macho_object_symbol_rank(&archive, &common, 0U);
+    assert(ld_macho_symbol_rank_better(selected_weak, dylib_strong));
+    assert(ld_macho_symbol_rank_better(selected_common, dylib_strong));
 }
 
 static void test_visibility_semantics(void) {
@@ -407,6 +454,61 @@ static void test_private_external_symbol_output(void) {
 
     free(output.bytes);
     unlink(object_path);
+    unlink(output_path);
+}
+
+static void test_private_weak_page_relocation_beats_strong_dylib(void) {
+    static const uint32_t text[] = {
+            0x90000000U, /* adrp x0, _hidden_weak@PAGE */
+            0x91000000U, /* add  x0, x0, _hidden_weak@PAGEOFF */
+            0xd65f03c0U,
+    };
+    uint32_t relocations[] = {
+            4U,
+            test_symbol_page_relocation(
+                    1U, false, LD_ARM64_RELOC_PAGEOFF12),
+            0U,
+            test_symbol_page_relocation(1U, true,
+                                        LD_ARM64_RELOC_PAGE21),
+    };
+    static const char strings[] = "\0_main\0_hidden_weak\0";
+    ld_nlist_64_t symbols[] = {
+            {.n_strx = 1U,
+             .n_type = LD_N_SECT | LD_N_EXT,
+             .n_sect = 1U,
+             .n_value = 0U},
+            {.n_strx = 7U,
+             .n_type = LD_N_SECT | LD_N_EXT | LD_N_PEXT,
+             .n_sect = 1U,
+             .n_desc = LD_N_WEAK_DEF,
+             .n_value = 8U},
+    };
+    char object_path[] = "/tmp/nature-ld-private-weak-page-XXXXXX";
+    test_make_symbol_object(object_path, text, sizeof(text), relocations,
+                            2U, symbols, 2U, strings, sizeof(strings));
+    char dylib_path[] = "/tmp/nature-ld-private-weak-tbd-XXXXXX";
+    test_write_symbol_dylib(dylib_path,
+                            "/usr/lib/libPrivateWeakFixture.dylib",
+                            "_hidden_weak");
+    char output_path[] = "/tmp/nature-ld-private-weak-output-XXXXXX";
+    int output_fd = mkstemp(output_path);
+    assert(output_fd >= 0);
+    assert(close(output_fd) == 0);
+
+    test_link_symbol_object_and_dylib(object_path, dylib_path, output_path);
+
+    test_symbol_output_t output = test_read_symbol_output(output_path);
+    const ld_nlist_64_t *hidden =
+            test_find_output_symbol(&output, "_hidden_weak", NULL);
+    assert(hidden != NULL && (hidden->n_type & LD_N_TYPE) == LD_N_SECT);
+    assert((hidden->n_type & LD_N_EXT) == 0U);
+    assert((hidden->n_type & LD_N_PEXT) != 0U);
+    assert(output.text != NULL && hidden->n_value == output.text->addr + 8U);
+    assert(output.stubs == NULL && output.got == NULL);
+
+    free(output.bytes);
+    unlink(object_path);
+    unlink(dylib_path);
     unlink(output_path);
 }
 
@@ -549,11 +651,49 @@ static void test_dylib_export_metadata(void) {
     ld_macho_dylib_symbols_deinit(&dylib);
 }
 
+static void test_dylib_export_symbol_index(void) {
+    enum { symbol_count = 8192 };
+    ld_context_t ctx = {0};
+    ld_dylib_input_t dylib = {0};
+    char name[32];
+
+    for (size_t i = 0; i < symbol_count; i++) {
+        int length = snprintf(name, sizeof(name), "_export_%05zu", i);
+        assert(length > 0 && (size_t) length < sizeof(name));
+        assert(ld_macho_dylib_record_symbol(
+                       &ctx, &dylib, name, (size_t) length, NULL, 0U,
+                       true, false, false, false) == LD_OK);
+    }
+
+    assert(sc_map_size_s64(&dylib.symbol_index) == symbol_count);
+    const ld_dylib_symbol_t *first =
+            ld_macho_dylib_find_symbol(&dylib, "_export_00000");
+    const ld_dylib_symbol_t *last =
+            ld_macho_dylib_find_symbol(&dylib, "_export_08191");
+    assert(first == &dylib.symbols[0]);
+    assert(last == &dylib.symbols[symbol_count - 1U]);
+    assert(ld_macho_dylib_find_symbol(&dylib, "_missing") == NULL);
+
+    assert(ld_macho_dylib_record_symbol(
+                   &ctx, &dylib, "_export_00000", 13U, "_renamed", 8U,
+                   false, true, false, true) == LD_OK);
+    first = ld_macho_dylib_find_symbol(&dylib, "_export_00000");
+    assert(first == &dylib.symbols[0]);
+    assert(!first->weak && first->absolute && first->reexport);
+    assert(strcmp(first->import_name, "_renamed") == 0);
+    assert(dylib.symbol_count == symbol_count);
+    assert(sc_map_size_s64(&dylib.symbol_index) == symbol_count);
+
+    ld_macho_dylib_symbols_deinit(&dylib);
+}
+
 void test_ld_macho_symbols(void) {
-    test_zig_symbol_rank_order();
+    test_darwin_symbol_rank_order();
     test_visibility_semantics();
     test_private_external_symbol_output();
+    test_private_weak_page_relocation_beats_strong_dylib();
     test_exported_weak_branch_stub();
     test_unresolved_weak_import_uses_self_ordinal();
     test_dylib_export_metadata();
+    test_dylib_export_symbol_index();
 }

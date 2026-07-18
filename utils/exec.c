@@ -1,5 +1,216 @@
 #include "exec.h"
 
+#ifdef __WINDOWS
+
+#include <direct.h>
+#include <errno.h>
+#include <io.h>
+#include <process.h>
+
+#include "helper.h"
+
+static char **windows_exec_argv(char *file, slice_t *list) {
+    size_t count = list->count + 2;
+    char **argv = mallocz(sizeof(char *) * count);
+    argv[0] = file;
+    for (int i = 0; i < list->count; ++i) {
+        argv[i + 1] = list->take[i];
+    }
+    argv[count - 1] = NULL;
+    return argv;
+}
+
+static int32_t windows_spawn_wait(char *file, char **argv, int32_t *pid) {
+    intptr_t raw_handle =
+            _spawnvp(_P_NOWAIT, file, (const char *const *) argv);
+    if (raw_handle == -1) {
+        if (pid) *pid = -1;
+        return -1;
+    }
+
+    HANDLE process = (HANDLE) raw_handle;
+    if (pid) *pid = (int32_t) GetProcessId(process);
+
+    DWORD exit_code = UINT32_MAX;
+    if (WaitForSingleObject(process, INFINITE) != WAIT_OBJECT_0 ||
+        !GetExitCodeProcess(process, &exit_code)) {
+        exit_code = UINT32_MAX;
+    }
+    CloseHandle(process);
+    return (int32_t) exit_code;
+}
+
+void exec_process(char *work_dir, char *file, slice_t *list) {
+    char **argv = windows_exec_argv(file, list);
+    char *previous_dir = NULL;
+
+    if (work_dir) {
+        previous_dir = _getcwd(NULL, 0);
+        if (_chdir(work_dir) != 0) {
+            free(previous_dir);
+            free(argv);
+            return;
+        }
+    }
+
+    (void) _spawnvp(_P_WAIT, file, (const char *const *) argv);
+
+    if (previous_dir) {
+        (void) _chdir(previous_dir);
+        free(previous_dir);
+    }
+    free(argv);
+}
+
+int exec_imm(char *work_dir, char *file, slice_t *list) {
+    char **argv = windows_exec_argv(file, list);
+    if (work_dir && _chdir(work_dir) != 0) {
+        free(argv);
+        return -1;
+    }
+
+    int result = _execvp(file, (const char *const *) argv);
+    free(argv);
+    return result;
+}
+
+char *exec(char *work_dir, char *file, slice_t *list, int32_t *pid, int32_t *status) {
+    char **argv = windows_exec_argv(file, list);
+    char *previous_dir = NULL;
+    FILE *capture = tmpfile();
+    if (!capture) {
+        free(argv);
+        if (pid) {
+            *pid = -1;
+        }
+        if (status) {
+            *status = -1;
+        }
+        return NULL;
+    }
+
+    if (work_dir) {
+        previous_dir = _getcwd(NULL, 0);
+        if (_chdir(work_dir) != 0) {
+            free(previous_dir);
+            free(argv);
+            fclose(capture);
+            if (pid) {
+                *pid = -1;
+            }
+            if (status) {
+                *status = -1;
+            }
+            return NULL;
+        }
+    }
+
+    fflush(stdout);
+    int stdout_fd = _fileno(stdout);
+    int saved_stdout = _dup(stdout_fd);
+    if (saved_stdout < 0 || _dup2(_fileno(capture), stdout_fd) != 0) {
+        if (saved_stdout >= 0) {
+            _close(saved_stdout);
+        }
+        if (previous_dir) {
+            (void) _chdir(previous_dir);
+            free(previous_dir);
+        }
+        free(argv);
+        fclose(capture);
+        if (pid) {
+            *pid = -1;
+        }
+        if (status) {
+            *status = -1;
+        }
+        return NULL;
+    }
+
+    int32_t child_status = windows_spawn_wait(file, argv, pid);
+    fflush(stdout);
+    (void) _dup2(saved_stdout, stdout_fd);
+    _close(saved_stdout);
+
+    if (previous_dir) {
+        (void) _chdir(previous_dir);
+        free(previous_dir);
+    }
+    free(argv);
+
+    if (status) {
+        *status = child_status;
+    }
+
+    if (fseek(capture, 0, SEEK_END) != 0) {
+        fclose(capture);
+        return NULL;
+    }
+    long length = ftell(capture);
+    if (length < 0 || fseek(capture, 0, SEEK_SET) != 0) {
+        fclose(capture);
+        return NULL;
+    }
+
+    char *result = mallocz((size_t) length + 1);
+    size_t read_size = fread(result, 1, (size_t) length, capture);
+    size_t write_index = 0;
+    for (size_t read_index = 0; read_index < read_size; ++read_index) {
+        if (result[read_index] == '\r' && read_index + 1U < read_size &&
+            result[read_index + 1U] == '\n') {
+            continue;
+        }
+        result[write_index++] = result[read_index];
+    }
+    result[write_index] = '\0';
+    fclose(capture);
+    return result;
+}
+
+char *command_output(const char *work_dir, const char *command) {
+    char *previous_dir = NULL;
+    if (work_dir) {
+        previous_dir = _getcwd(NULL, 0);
+        if (_chdir(work_dir) != 0) {
+            free(previous_dir);
+            return NULL;
+        }
+    }
+
+    FILE *pipe = _popen(command, "r");
+    if (!pipe) {
+        if (previous_dir) {
+            (void) _chdir(previous_dir);
+            free(previous_dir);
+        }
+        return NULL;
+    }
+
+    size_t size = 0;
+    size_t capacity = 128;
+    char *result = mallocz(capacity);
+    char buffer[128];
+    while (fgets(buffer, sizeof(buffer), pipe) != NULL) {
+        size_t len = strlen(buffer);
+        while (size + len >= capacity) {
+            capacity *= 2;
+        }
+        result = reallocator(result, capacity);
+        memcpy(result + size, buffer, len);
+        size += len;
+        result[size] = '\0';
+    }
+
+    (void) _pclose(pipe);
+    if (previous_dir) {
+        (void) _chdir(previous_dir);
+        free(previous_dir);
+    }
+    return result;
+}
+
+#else
+
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -160,3 +371,5 @@ char *command_output(const char *work_dir, const char *command) {
 
     return result;
 }
+
+#endif

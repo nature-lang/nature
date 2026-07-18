@@ -8,6 +8,22 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef _WIN32
+#include <io.h>
+#endif
+
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
+static void test_ld_set_binary_mode(int fd) {
+#ifdef _WIN32
+    assert(_setmode(fd, _O_BINARY) != -1);
+#else
+    (void) fd;
+#endif
+}
+
 void test_ld_capture_diagnostic(void *context, ld_diag_level_t level,
                                 const char *message) {
     (void) level;
@@ -19,13 +35,14 @@ void test_ld_capture_diagnostic(void *context, ld_diag_level_t level,
 void test_ld_write_fixture(char path[], const void *bytes, size_t size) {
     int fd = mkstemp(path);
     assert(fd >= 0);
+    test_ld_set_binary_mode(fd);
     assert(write(fd, bytes, size) == (ssize_t) size);
     assert(close(fd) == 0);
 }
 
 void test_ld_write_named_fixture(const char *path, const void *bytes,
                                  size_t size) {
-    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0600);
     assert(fd >= 0);
     assert(write(fd, bytes, size) == (ssize_t) size);
     assert(close(fd) == 0);

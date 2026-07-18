@@ -99,6 +99,13 @@ void test_ld_macho_unit(void) {
     assert(strcmp(options.libraries.items[0], "z") == 0);
     assert(options.inputs.count == 1);
     assert(strcmp(options.inputs.items[0], "/tmp/input.o") == 0);
+    assert(options.link_inputs.count == 3U);
+    assert(options.link_inputs.items[0].kind == LD_LINK_INPUT_FRAMEWORK);
+    assert(strcmp(options.link_inputs.items[0].value, "Cocoa") == 0);
+    assert(options.link_inputs.items[1].kind == LD_LINK_INPUT_LIBRARY);
+    assert(strcmp(options.link_inputs.items[1].value, "z") == 0);
+    assert(options.link_inputs.items[2].kind == LD_LINK_INPUT_FILE);
+    assert(strcmp(options.link_inputs.items[2].value, "/tmp/input.o") == 0);
 
     assert(ld_parse_flags(&options, "-F /tmp/Framework\\ dir -L'/tmp/lib'\" suffix\" -l System") == LD_OK);
     assert(options.framework_paths.count == 2);
@@ -107,6 +114,22 @@ void test_ld_macho_unit(void) {
     assert(strcmp(options.library_paths.items[1], "/tmp/lib suffix") == 0);
     assert(options.libraries.count == 2);
     assert(strcmp(options.libraries.items[1], "System") == 0);
+
+    assert(ld_parse_flags(
+                   &options,
+                   "-weak_framework Metal -weak-l objc -weak-lc++ "
+                   "-weak_library /tmp/liboptional.dylib") == LD_OK);
+    assert(options.link_inputs.count == 8U);
+    assert(options.link_inputs.items[4].kind ==
+           LD_LINK_INPUT_WEAK_FRAMEWORK);
+    assert(strcmp(options.link_inputs.items[4].value, "Metal") == 0);
+    assert(options.link_inputs.items[5].kind == LD_LINK_INPUT_WEAK_LIBRARY);
+    assert(strcmp(options.link_inputs.items[5].value, "objc") == 0);
+    assert(options.link_inputs.items[6].kind == LD_LINK_INPUT_WEAK_LIBRARY);
+    assert(strcmp(options.link_inputs.items[6].value, "c++") == 0);
+    assert(options.link_inputs.items[7].kind == LD_LINK_INPUT_WEAK_FILE);
+    assert(strcmp(options.link_inputs.items[7].value,
+                  "/tmp/liboptional.dylib") == 0);
 
     assert(ld_parse_flags(&options, "-ObjC") == LD_OK);
     assert(options.objc_load);

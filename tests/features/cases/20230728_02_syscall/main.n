@@ -10,26 +10,26 @@ fn main():void! {
 
     // 读取目录进行检查
     var st = syscall.stat(path)
-    print('st.mode: ', st.mode, '\n')
+    print('mkdir directory: ', syscall.stat_is_dir(st.mode), '\n')
 
     // 修改目录名称 test_rename
     syscall.rename(path, path2)
     println('rename success')
 
     var st2 = syscall.stat(path2)
-    print('st2.mode: ', st2.mode, '\n')
+    print('rename directory: ', syscall.stat_is_dir(st2.mode), '\n')
 
     // chmod 为 0744
     syscall.chmod(path2, 0744)
 
     st2 = syscall.stat(path2)
-    print('st2.mode: ', st2.mode, '\n')
+    print('chmod directory: ', syscall.stat_is_dir(st2.mode), '\n')
 
     // rmdir
     syscall.rmdir(path2)
     println('rmdir success')
     var _ = syscall.stat(path2) catch err {
-        print('stat err: ', err.msg(), '\n')
+        println('missing stat failed')
         syscall.stat_t{}
     }
 

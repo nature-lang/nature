@@ -1,0 +1,53 @@
+import libc
+
+type pair32_t = struct {
+    i32 a
+    i32 b
+}
+
+type pair64_t = struct {
+    i64 a
+    i64 b
+}
+
+#linkid c_mixed_slots
+fn c_mixed_slots(i64 a, f64 b, i64 c, f64 d, i64 e, f64 f, i64 g, f64 h):i64
+
+#linkid c_variadic_mixed
+fn c_variadic_mixed(i32 count, ...):i64
+
+#linkid c_pair32
+fn c_pair32(pair32_t value):i64
+
+#linkid c_pair64
+fn c_pair64(pair64_t value):i64
+
+#linkid c_make_pair64
+fn c_make_pair64(i64 a, i64 b):pair64_t
+
+#linkid c_call_nature
+fn c_call_nature(anyptr callback):i64
+
+#linkid c_check_xmm_nonvolatile
+fn c_check_xmm_nonvolatile(anyptr callback):i64
+
+fn nature_mixed_callback(i64 a, f64 b, i64 c, f64 d, i64 e, f64 f, i64 g, f64 h):i64 {
+    return a + b as i64 + c + d as i64 + e + f as i64 + g + h as i64
+}
+
+fn main() {
+    assert(c_mixed_slots(1, 2.0, 3, 4.0, 5, 6.0, 7, 8.0) == 36)
+    assert(c_variadic_mixed(6, 1.0, 2 as i64, 3.0, 4 as i64, 5.0, 6 as i64) == 21)
+
+    var small = pair32_t{a: 12, b: 34}
+    assert(c_pair32(small) == 12034)
+
+    var large = pair64_t{a: 56, b: 78}
+    assert(c_pair64(large) == 56078)
+    var returned = c_make_pair64(91, 23)
+    assert(returned.a == 91 && returned.b == 23)
+
+    var callback = libc.to_cfn(nature_mixed_callback as anyptr)
+    assert(c_call_nature(callback) == 36)
+    assert(c_check_xmm_nonvolatile(callback) == 36)
+}

@@ -81,6 +81,30 @@ static void test_basic() {
                     "this is other\n"
                     "hello local in cross linux amd64\n";
         }
+    } else if (BUILD_OS == OS_WINDOWS) {
+        str = "util.sum(1, 2) = 3\n"
+              "this is other\n"
+              "this is pool\n"
+              "this is seed\n"
+              "rand.dump() -> 12\n"
+              "this is seed\n"
+              "this is other\n"
+              "this is pool\n"
+              "this is seed\n"
+              "this is pool\n"
+              "hello world syscall\n"
+              "this is other\n"
+              "this is pool\n"
+              "this is seed\n"
+              "this is other\n"
+              "this is pool\n"
+              "this is seed\n"
+              "this is pool\n"
+              "hello world syscall\n"
+              "hello os\n"
+              "local.get_count() -> 555\n"
+              "this is other\n"
+              "hello local\n";
     }
 
 

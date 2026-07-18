@@ -1,4 +1,5 @@
 #include "test_ld_elf_common.h"
+#include "test_fs.h"
 
 #include "src/ld/elf_format.h"
 #include "src/ld/ld_elf_archive.h"
@@ -37,7 +38,7 @@ static void test_thin_archive_append(uint8_t *archive, size_t capacity,
 
 static void write_exact_fixture(const char *path, const void *bytes,
                                 size_t size) {
-    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
+    int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0600);
     assert(fd >= 0);
     size_t offset = 0U;
     while (offset < size) {
@@ -55,7 +56,7 @@ static void make_fixture_directory(char path[]) {
     assert(fd >= 0);
     assert(close(fd) == 0);
     assert(unlink(path) == 0);
-    assert(mkdir(path, 0700) == 0);
+    assert(test_make_directory(path) == 0);
 }
 
 static void test_elf_archive_wire_decoder(void) {
@@ -192,7 +193,7 @@ static void test_elf_thin_archive_link(void) {
     int length = snprintf(object_directory, sizeof(object_directory),
                           "%s/objects", directory);
     assert(length > 0 && (size_t) length < sizeof(object_directory));
-    assert(mkdir(object_directory, 0700) == 0);
+    assert(test_make_directory(object_directory) == 0);
 
     static const char member_name[] =
             "objects/provider_with_a_name_longer_than_fifteen.o";

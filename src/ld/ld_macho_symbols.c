@@ -3,9 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Symbol ranking is translated from Zig MachO/file.zig getSymbolRank at
-   commit 738d2be9d6b6ef3ff3559130c05159ef53336224.  C keeps the rank fields
-   separate so very large input counts cannot collide with strength bits. */
+/* Darwin keeps definitions from loaded object files ahead of dylib exports,
+   even when the object definition is weak or tentative.  An unselected
+   archive member is still lazy: it competes with a strong dylib by input
+   order, and a weak dylib causes it to be extracted.  This matches ld64 and
+   LLD Mach-O SymbolTable semantics.  C keeps rank fields separate so very
+   large input counts cannot collide with strength bits. */
 
 ld_symbol_visibility_t ld_macho_nlist_visibility(uint8_t n_type,
                                                  uint16_t n_desc) {
@@ -56,21 +59,23 @@ bool ld_macho_symbol_needs_stub(const ld_symbol_t *symbol) {
 ld_macho_symbol_rank_t ld_macho_object_symbol_rank(
         const ld_object_t *object, const ld_input_symbol_t *symbol,
         size_t order) {
-    bool archive = object && object->archive_member;
+    bool archive = object && object->archive_member && !object->selected;
     bool weak = symbol && (symbol->entry.n_desc & LD_N_WEAK_DEF) != 0;
     bool tentative = symbol &&
                      (symbol->entry.n_type & LD_N_TYPE) == LD_N_UNDF &&
                      symbol->entry.n_value != 0;
     uint32_t class_value;
-    if (tentative) {
-        class_value = archive ? LD_MACHO_RANK_ARCHIVE_TENTATIVE
-                              : LD_MACHO_RANK_DIRECT_TENTATIVE;
+    if (archive) {
+        /* Archive indexes do not encode definition strength.  Treat every
+           lazy definition like a strong dylib candidate until its member is
+           selected, then rerank the real object symbol below. */
+        class_value = LD_MACHO_RANK_ARCHIVE_OR_DYLIB_STRONG;
+    } else if (tentative) {
+        class_value = LD_MACHO_RANK_DIRECT_TENTATIVE;
     } else if (weak) {
-        class_value = archive ? LD_MACHO_RANK_ARCHIVE_OR_DYLIB_WEAK
-                              : LD_MACHO_RANK_DIRECT_WEAK;
+        class_value = LD_MACHO_RANK_DIRECT_WEAK;
     } else {
-        class_value = archive ? LD_MACHO_RANK_ARCHIVE_OR_DYLIB_STRONG
-                              : LD_MACHO_RANK_DIRECT_STRONG;
+        class_value = LD_MACHO_RANK_DIRECT_STRONG;
     }
     return (ld_macho_symbol_rank_t) {
             .class_value = class_value,
@@ -105,14 +110,13 @@ bool ld_macho_symbol_rank_better(ld_macho_symbol_rank_t candidate,
 }
 
 const ld_dylib_symbol_t *ld_macho_dylib_find_symbol(
-        const ld_dylib_input_t *dylib, const char *name) {
-    if (!dylib || !name) return NULL;
-    for (size_t i = 0; i < dylib->symbol_count; i++) {
-        if (strcmp(dylib->symbols[i].name, name) == 0) {
-            return &dylib->symbols[i];
-        }
+        ld_dylib_input_t *dylib, const char *name) {
+    if (!dylib || !name || !dylib->symbol_index.mem) return NULL;
+    uint64_t index = sc_map_get_s64(&dylib->symbol_index, name);
+    if (!sc_map_found(&dylib->symbol_index) || index >= dylib->symbol_count) {
+        return NULL;
     }
-    return NULL;
+    return &dylib->symbols[index];
 }
 
 static char *ld_macho_symbol_strndup(const char *value, size_t length) {
@@ -134,12 +138,23 @@ int ld_macho_dylib_record_symbol(ld_context_t *ctx,
         return ld_fail(ctx, LD_INVALID_INPUT,
                        "invalid dynamic-library export name");
     }
-    for (size_t i = 0; i < dylib->symbol_count; i++) {
-        ld_dylib_symbol_t *existing = &dylib->symbols[i];
-        if (strlen(existing->name) != name_length ||
-            memcmp(existing->name, name, name_length) != 0) {
-            continue;
+    if (!dylib->symbol_index.mem &&
+        !sc_map_init_s64(&dylib->symbol_index, 0, 0)) {
+        return ld_fail(ctx, LD_IO_ERROR,
+                       "out of memory recording dynamic-library export");
+    }
+
+    char lookup_name[4097];
+    memcpy(lookup_name, name, name_length);
+    lookup_name[name_length] = '\0';
+    uint64_t existing_index =
+            sc_map_get_s64(&dylib->symbol_index, lookup_name);
+    if (sc_map_found(&dylib->symbol_index)) {
+        if (existing_index >= dylib->symbol_count) {
+            return ld_fail(ctx, LD_INVALID_INPUT,
+                           "invalid dynamic-library symbol index");
         }
+        ld_dylib_symbol_t *existing = &dylib->symbols[existing_index];
         if (!weak && existing->weak) {
             existing->weak = false;
             existing->absolute = absolute;
@@ -195,12 +210,24 @@ int ld_macho_dylib_record_symbol(ld_context_t *ctx,
     symbol->absolute = absolute;
     symbol->tlv = tlv;
     symbol->reexport = reexport;
+    sc_map_put_s64(&dylib->symbol_index, symbol->name,
+                   (uint64_t) dylib->symbol_count);
+    if (sc_map_oom(&dylib->symbol_index)) {
+        free(symbol->name);
+        free(symbol->import_name);
+        memset(symbol, 0, sizeof(*symbol));
+        return ld_fail(ctx, LD_IO_ERROR,
+                       "out of memory indexing dynamic-library export");
+    }
     dylib->symbol_count++;
     return LD_OK;
 }
 
 void ld_macho_dylib_symbols_deinit(ld_dylib_input_t *dylib) {
     if (!dylib) return;
+    if (dylib->symbol_index.mem) {
+        sc_map_term_s64(&dylib->symbol_index);
+    }
     for (size_t i = 0; i < dylib->symbol_count; i++) {
         free(dylib->symbols[i].name);
         free(dylib->symbols[i].import_name);

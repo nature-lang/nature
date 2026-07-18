@@ -264,9 +264,11 @@ static page_summary_t merge_summarize(uint8_t level, page_summary_t next_summari
     }
 
     // 找 start - 优化：提前终止
-    uint16_t start = 0;
+    // A level-1 summary spans 262,144 pages.  Keep these accumulators at
+    // least 32 bits wide; uint16_t wraps a fully-free level-1 summary to 0.
+    uint32_t start = 0;
     for (int i = 0; i < PAGE_SUMMARY_MERGE_COUNT; ++i) {
-        uint16_t s_start = next_summaries[i].start;
+        uint32_t s_start = next_summaries[i].start;
         start += s_start;
         // 如果不等于 max_pages_count，直接跳出
         if (s_start != max_pages_count) {
@@ -275,9 +277,9 @@ static page_summary_t merge_summarize(uint8_t level, page_summary_t next_summari
     }
 
     // 找 end - 优化：提前终止，从后向前遍历
-    uint16_t end = 0;
+    uint32_t end = 0;
     for (int i = PAGE_SUMMARY_MERGE_COUNT - 1; i >= 0; --i) {
-        uint16_t s_end = next_summaries[i].end;
+        uint32_t s_end = next_summaries[i].end;
         end += s_end;
         // 如果不等于 max_pages_count，直接跳出
         if (s_end != max_pages_count) {
@@ -803,7 +805,13 @@ static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
 
         // - 经过上面的 grow 再次从 page_alloc 中拉取合适大小的 pages_count 并组成 span
         base = page_alloc_find(pages_count, true);
-        assert(base > 0 && "out of memory: page alloc failed");
+        if (base == 0) {
+            // Do not continue with a zero span base in release builds.  The
+            // zero address is outside the arena address space and would turn
+            // into an unsigned arena-index underflow in mheap_set_spans().
+            fprintf(stderr, "runtime: out of memory: page allocation failed\n");
+            abort();
+        }
     }
 
     // - 新增的 span 需要在 arena 中建立 page -> span 的关联关系

@@ -1,4 +1,4 @@
-=== test_gc_closure
+=== test_gc_closure[exclude_os=windows]
 --- main.n
 import net.udp
 import co
@@ -52,6 +52,7 @@ fn send():void! {
 }
 
 fn main() {
+    assert(@sizeof(udp.socket_t) == 64)
     go echo_server()
     co.sleep(500) // wait server start
 
@@ -217,7 +218,7 @@ fn main() {
 send success, recv msg hello world!!
 coroutine 'main' panic: 'socket closed' at nature-test/main.n:29:15
 
-=== test_dns
+=== test_dns[exclude_os=windows]
 --- main.n
 import co
 import runtime
@@ -232,7 +233,7 @@ fn main() {
     }
 }
 
-=== test_dns_failed
+=== test_dns_failed[exclude_os=windows]
 --- main.n
 import co
 import runtime
@@ -252,7 +253,7 @@ fn main() {
 --- output.txt
 coroutine 'main' panic: 'unknown node or service' at nature-test/main.n:7:15
 
-=== test_sendto_speed
+=== test_sendto_speed[exclude_os=windows]
 --- main.n
 import net.udp
 import co

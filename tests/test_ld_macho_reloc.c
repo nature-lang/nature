@@ -142,7 +142,7 @@ static void test_imported_unsigned32_is_not_pointer_bind(void) {
     assert(ld_link(&options) == LD_OK);
     ld_options_deinit(&options);
 
-    int fd = open(output_path, O_RDONLY);
+    int fd = open(output_path, O_RDONLY | O_BINARY);
     assert(fd >= 0);
     struct stat st;
     assert(fstat(fd, &st) == 0 && st.st_size > 0);
@@ -333,7 +333,7 @@ static void test_exported_weak_pointer_keeps_local_initial_value(void) {
     assert(ld_link(&options) == LD_OK);
     ld_options_deinit(&options);
 
-    int fd = open(output_path, O_RDONLY);
+    int fd = open(output_path, O_RDONLY | O_BINARY);
     assert(fd >= 0);
     struct stat st;
     assert(fstat(fd, &st) == 0 && st.st_size > 0);

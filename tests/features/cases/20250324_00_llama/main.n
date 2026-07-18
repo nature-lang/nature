@@ -102,7 +102,7 @@ type transformer = struct{
     transformer_weights weights
     run_state_t state
     int fd
-    ref<f32> data
+    [u8] data
     uint file_size
 }
 
@@ -441,14 +441,15 @@ fn transformer_new(string path):ref<transformer>! {
     var st = f.stat()
     u64 file_size = st.size
 
-    // 内存映射整个文件
-    anyptr data = libc.mmap(0, file_size as int, libc.PROT_READ, libc.MAP_PRIVATE, f.fd, 0)
-    assert(data > 0)
+    // Keep the checkpoint in managed memory so the fixture works on targets
+    // without POSIX mmap, including Windows.
+    var data = vec<u8>.new(0, file_size as int)
+    assert(f.read_at(data, 0) == file_size as int)
 
     // 权重指针从配置结构之后开始
-    anyptr weights_ptr = data as anyptr + @sizeof(config_t)
+    anyptr weights_ptr = data.ref() + @sizeof(config_t) as anyptr
 
-    var t = new transformer(config, fd = f.fd, data = data as ref<f32>, file_size)
+    var t = new transformer(config, fd = f.fd, data = data, file_size)
 
     t.memory_map_weights(weights_ptr, shared_weights)
 
@@ -814,8 +815,7 @@ fn error_usage():void! {
     str += '  -m <string> mode: generate|chat, default: generate\n'
     str += '  -y <string> (optional) system prompt in chat mode\n'
 
-    print(str)
-    syscall.exit(1)
+    throw errorf(str)
 }
 
 fn print_safe(string piece) {

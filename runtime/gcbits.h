@@ -17,7 +17,7 @@ typedef struct {
 } gc_bits_header_t;
 
 typedef struct gc_bits_arena_t {
-#ifdef __DARWIN
+#if defined(__DARWIN) || defined(__WINDOWS)
     _Atomic uintptr_t free_index; // 指向 bits 下一个可用
 #else
     uintptr_t free_index; // 指向 bits 下一个可用

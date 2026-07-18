@@ -12,16 +12,198 @@
 int command_argc;
 char **command_argv;
 
+#ifdef __WINDOWS
+#pragma push_macro("DWORD")
+#ifdef DWORD
+#undef DWORD
+#endif
+
+__declspec(dllimport) unsigned short __stdcall RtlCaptureStackBackTrace(
+        unsigned long frames_to_skip, unsigned long frames_to_capture,
+        void **backtrace, unsigned long *backtrace_hash);
+
+static void rt_windows_write_crash_line(const char *line) {
+    HANDLE error = GetStdHandle(STD_ERROR_HANDLE);
+    if (error == NULL || error == INVALID_HANDLE_VALUE) return;
+    DWORD written = 0;
+    (void) WriteFile(error, line, (DWORD) strlen(line), &written, NULL);
+}
+
+static fndef_t *rt_windows_find_crash_fn(DWORD64 pc) {
+    if (!rt_fndef_ptr || !rt_strtable_ptr) return NULL;
+    for (uint64_t i = 0; i < rt_fndef_count; ++i) {
+        fndef_t *fn = &rt_fndef_ptr[i];
+        if (fn->base <= pc && pc < fn->base + fn->size) return fn;
+    }
+    return NULL;
+}
+
+static void rt_windows_write_crash_frame(unsigned frame_index, DWORD64 pc) {
+    char line[512];
+    DWORD64 image_base = (DWORD64) (uintptr_t) GetModuleHandleW(NULL);
+    DWORD64 rva = pc >= image_base ? pc - image_base : pc;
+    fndef_t *fn = rt_windows_find_crash_fn(pc);
+    if (fn) {
+        snprintf(line, sizeof(line),
+                 "  #%u %s+0x%llx [0x%llx, image+0x%llx]\n",
+                 frame_index, STRTABLE(fn->name_offset),
+                 (unsigned long long) (pc - fn->base),
+                 (unsigned long long) pc, (unsigned long long) rva);
+    } else {
+        snprintf(line, sizeof(line),
+                 "  #%u <native> [0x%llx, image+0x%llx]\n", frame_index,
+                 (unsigned long long) pc, (unsigned long long) rva);
+    }
+    rt_windows_write_crash_line(line);
+}
+
+static LONG rt_windows_reporting_exception = 0;
+
+static void rt_windows_report_exception(EXCEPTION_POINTERS *exception) {
+    if (!exception || !exception->ExceptionRecord ||
+        !exception->ContextRecord ||
+        InterlockedCompareExchange(&rt_windows_reporting_exception, 1, 0) !=
+                0)
+        return;
+
+    EXCEPTION_RECORD *record = exception->ExceptionRecord;
+    CONTEXT context = *exception->ContextRecord;
+    char line[512];
+    snprintf(line, sizeof(line),
+             "nature: unhandled Windows exception 0x%08lx at 0x%llx\n",
+             (unsigned long) record->ExceptionCode,
+             (unsigned long long) (uintptr_t) record->ExceptionAddress);
+    rt_windows_write_crash_line(line);
+
+    if (record->ExceptionCode == EXCEPTION_ACCESS_VIOLATION &&
+        record->NumberParameters >= 2) {
+        const char *operation = "read";
+        if (record->ExceptionInformation[0] == 1) operation = "write";
+        if (record->ExceptionInformation[0] == 8) operation = "execute";
+        snprintf(line, sizeof(line), "nature: invalid %s at 0x%llx\n",
+                 operation,
+                 (unsigned long long) record->ExceptionInformation[1]);
+        rt_windows_write_crash_line(line);
+    }
+
+#ifdef __x86_64__
+    snprintf(line, sizeof(line),
+             "nature: rip=0x%llx rsp=0x%llx rbp=0x%llx\n",
+             (unsigned long long) context.Rip,
+             (unsigned long long) context.Rsp,
+             (unsigned long long) context.Rbp);
+    rt_windows_write_crash_line(line);
+    rt_windows_write_crash_line("nature: stack backtrace:\n");
+
+    HANDLE process = GetCurrentProcess();
+    for (unsigned i = 0; i < 64 && context.Rip != 0; ++i) {
+        DWORD64 pc = context.Rip;
+        DWORD64 rsp = context.Rsp;
+        rt_windows_write_crash_frame(i, pc);
+
+        DWORD64 image_base = 0;
+        PRUNTIME_FUNCTION function =
+                RtlLookupFunctionEntry(pc, &image_base, NULL);
+        if (function) {
+            PVOID handler_data = NULL;
+            DWORD64 establisher_frame = 0;
+            RtlVirtualUnwind(UNW_FLAG_NHANDLER, image_base, pc, function,
+                             &context, &handler_data, &establisher_frame,
+                             NULL);
+        } else {
+            DWORD64 return_address = 0;
+            SIZE_T bytes_read = 0;
+            if (!ReadProcessMemory(process, (const void *) (uintptr_t) rsp,
+                                   &return_address, sizeof(return_address),
+                                   &bytes_read) ||
+                bytes_read != sizeof(return_address)) {
+                break;
+            }
+            context.Rip = return_address;
+            context.Rsp = rsp + sizeof(return_address);
+        }
+        if ((context.Rip == pc && context.Rsp == rsp) || context.Rsp < rsp)
+            break;
+    }
+#endif
+}
+
+static LONG WINAPI
+rt_windows_unhandled_exception_filter(EXCEPTION_POINTERS *exception) {
+    rt_windows_report_exception(exception);
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
+void rt_install_windows_exception_handler(void) {
+    SetUnhandledExceptionFilter(rt_windows_unhandled_exception_filter);
+}
+
+#pragma pop_macro("DWORD")
+#endif
+
+void rt_dump_stack_backtrace(void) {
+#ifdef __WINDOWS
+    enum { MAX_BACKTRACE_FRAMES = 64 };
+    void *frames[MAX_BACKTRACE_FRAMES] = {0};
+    unsigned short frame_count = RtlCaptureStackBackTrace(
+            1, MAX_BACKTRACE_FRAMES, frames, NULL);
+    if (frame_count == 0) return;
+
+    char *line = "stack backtrace:\n";
+    VOID write(STDOUT_FILENO, line, strlen(line));
+    n_processor_t *processor = processor_get();
+    for (unsigned short i = 0; i < frame_count; ++i) {
+        addr_t pc = (addr_t) frames[i];
+        fndef_t *fn = processor ? find_fn(pc, processor) : NULL;
+        if (fn) {
+            line = tlsprintf(
+                    "%u:\t%s+0x%llx [0x%llx]\n\t\tat %s:%llu:%llu\n",
+                    (unsigned) i, STRTABLE(fn->name_offset),
+                    (unsigned long long) (pc - fn->base),
+                    (unsigned long long) pc, STRTABLE(fn->relpath_offset),
+                    (unsigned long long) fn->line,
+                    (unsigned long long) fn->column);
+        } else {
+            line = tlsprintf("%u:\t<native> [0x%llx]\n", (unsigned) i,
+                             (unsigned long long) pc);
+        }
+        VOID write(STDOUT_FILENO, line, strlen(line));
+    }
+#endif
+}
+
+static caller_t *caller_from_return_address(addr_t ret_addr) {
+    caller_t *caller = sc_map_get_64v(&rt_caller_map, ret_addr);
+    if (caller) return caller;
+    if (!rt_caller_ptr) return NULL;
+
+    for (uint64_t i = 0; i < rt_caller_count; ++i) {
+        if (rt_caller_ptr[i].offset == ret_addr) return &rt_caller_ptr[i];
+    }
+    return NULL;
+}
+
 static inline void panic_dump(coroutine_t *co, caller_t *caller, char *msg) {
     // pre_rtcall_hook 中已经记录了 ret addr
     char *dump_msg;
-    uint64_t relpath_offset = ((fndef_t *) caller->data)->relpath_offset;
+    const char *path = "<unknown>";
+    uint64_t line = 0;
+    uint64_t column = 0;
+    if (caller && caller->data) {
+        path = STRTABLE(((fndef_t *) caller->data)->relpath_offset);
+        line = caller->line;
+        column = caller->column;
+    }
     if (co->main) {
-        dump_msg = tlsprintf("coroutine 'main' panic: '%s' at %s:%d:%d\n", msg,
-                             STRTABLE(relpath_offset), caller->line, caller->column);
+        dump_msg = tlsprintf(
+                "coroutine 'main' panic: '%s' at %s:%llu:%llu\n", msg,
+                path, (unsigned long long) line,
+                (unsigned long long) column);
     } else {
-        dump_msg = tlsprintf("coroutine '%ld' panic: '%s' at %s:%d:%d\n", co->id, msg,
-                             STRTABLE(relpath_offset), caller->line, caller->column);
+        dump_msg = tlsprintf(
+                "coroutine '%ld' panic: '%s' at %s:%llu:%llu\n", co->id,
+                msg, path, (unsigned long long) line,
+                (unsigned long long) column);
     }
     VOID write(STDOUT_FILENO, dump_msg, strlen(dump_msg));
     // panic msg
@@ -497,7 +679,7 @@ void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
 
     assert(ret_addr);
 
-    caller_t *caller = sc_map_get_64v(&rt_caller_map, ret_addr);
+    caller_t *caller = caller_from_return_address(ret_addr);
     assert(caller);
 
     char *msg = tlsprintf("index out of range [%d] with length %d", index, len);
@@ -762,7 +944,7 @@ void rt_panic(n_string_t msg) {
     addr_t ret_addr = CALLER_RET_ADDR(co);
     assert(ret_addr);
 
-    caller_t *caller = sc_map_get_64v(&rt_caller_map, ret_addr);
+    caller_t *caller = caller_from_return_address(ret_addr);
     panic_dump(co, caller, rt_string_ref(&msg));
 }
 
@@ -782,7 +964,7 @@ void rt_assert(n_bool_t cond) {
     addr_t ret_addr = CALLER_RET_ADDR(co);
     assert(ret_addr);
 
-    caller_t *caller = sc_map_get_64v(&rt_caller_map, ret_addr);
+    caller_t *caller = caller_from_return_address(ret_addr);
     assert(caller);
     panic_dump(co, caller, "assertion failed");
 }
@@ -833,7 +1015,9 @@ n_string_t rt_strerror() {
     return string_new(msg, strlen(msg));
 }
 
+#ifndef __WINDOWS
 extern char **environ;
+#endif
 
 n_vec_t rt_get_envs() {
     n_vec_t list = rti_vec_new(&os_env_rtype, 0, 0);

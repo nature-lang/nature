@@ -1,7 +1,7 @@
 #ifndef NATURE_PROCESS_H
 #define NATURE_PROCESS_H
 
-#include <uv.h>
+#include "runtime/uv_compat.h"
 #include "vec.h"
 #include "utils/helper.h"
 #include "runtime/processor.h"

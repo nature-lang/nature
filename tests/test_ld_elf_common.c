@@ -11,6 +11,18 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifdef _WIN32
+#include <io.h>
+#endif
+
+static void test_elf_set_binary_mode(int fd) {
+#ifdef _WIN32
+    assert(_setmode(fd, _O_BINARY) != -1);
+#else
+    (void) fd;
+#endif
+}
+
 uint64_t test_elf_add_signed_u32(uint64_t base, uint32_t encoded) {
     if (encoded <= INT32_MAX) return base + encoded;
     uint64_t magnitude = (uint64_t) UINT32_MAX - encoded + 1U;
@@ -28,6 +40,7 @@ void capture_diagnostic(void *context, ld_diag_level_t level, const char *messag
 void write_fixture(char path[], const void *bytes, size_t size) {
     int fd = mkstemp(path);
     assert(fd >= 0);
+    test_elf_set_binary_mode(fd);
     assert(write(fd, bytes, size) == (ssize_t) size);
     assert(close(fd) == 0);
 }
@@ -162,7 +175,7 @@ void test_elf_write_section(uint8_t *bytes, uint32_t name,
 
 uint8_t *read_test_fixture(const char *path, size_t *result_size,
                            mode_t *result_mode) {
-    int fd = open(path, O_RDONLY);
+    int fd = open(path, O_RDONLY | O_BINARY);
     assert(fd >= 0);
     struct stat status;
     assert(fstat(fd, &status) == 0 && status.st_size >= 0);
@@ -179,6 +192,14 @@ uint8_t *read_test_fixture(const char *path, size_t *result_size,
     *result_size = size;
     if (result_mode) *result_mode = status.st_mode;
     return bytes;
+}
+
+void test_elf_assert_executable_mode(mode_t mode) {
+#ifdef __WINDOWS
+    (void) mode;
+#else
+    assert((mode & 0777U) == 0755U);
+#endif
 }
 
 uint32_t read_test_elf_entry_word(const char *path) {

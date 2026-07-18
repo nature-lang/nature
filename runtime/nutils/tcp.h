@@ -2,7 +2,7 @@
 #define NATURE_RUNTIME_NUTILS_TCP_H_
 
 #include "runtime/processor.h"
-#include <uv.h>
+#include "runtime/uv_compat.h"
 
 #define DEFAULT_BACKLOG 4096
 

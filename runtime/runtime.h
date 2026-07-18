@@ -1,7 +1,8 @@
 #ifndef NATURE_RUNTIME_RUNTIME_H
 #define NATURE_RUNTIME_RUNTIME_H
 
-#include <include/uv.h>
+#include "utils/helper.h"
+#include "runtime/uv_compat.h"
 #include <pthread.h>
 
 #include "aco/aco.h"
@@ -29,13 +30,19 @@
 #ifndef HAS_TEST_MAIN
 #ifdef __DARWIN
 int runtime_main(int argc, char *argv[]) __asm("_main");
+#elif defined(__WINDOWS)
+// Keep the scheduler entry visible by its own COFF name. The MinGW CRT calls
+// the ordinary `main` wrapper provided by runtime.c.
+int runtime_main(int argc, char *argv[]);
 #else
 int runtime_main(int argc, char *argv[]) __asm("main");
 #endif
 #endif
 
 
-#ifdef __AMD64
+#if defined(__AMD64) && defined(__WINDOWS)
+#define CALLER_RET_ADDR(_co) ((addr_t) __builtin_return_address(0))
+#elif defined(__AMD64)
 #define CALLER_RET_ADDR(_co)                                  \
     ({                                                        \
         uint64_t _rbp_value;                                  \
@@ -159,7 +166,13 @@ typedef void (*env_fn_t)(void *envs);
 typedef struct {
     addr_t stack_base; // 虚拟起始地址(按照内存申请的节奏来，这里依旧是低地址位置)
     uint64_t stack_size; // 栈空间
+#ifdef __WINDOWS
+    // Windows phase one uses cooperative safepoints. POSIX ucontext-based
+    // asynchronous context rewriting is intentionally unavailable.
+    void *ctx;
+#else
     ucontext_t ctx;
+#endif
 } mmode_t;
 
 typedef struct mspan_t {
@@ -443,7 +456,9 @@ struct n_processor_t {
     aco_t main_aco; // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
     aco_share_stack_t share_stack; // processor 中的所有的 stack 都使用该共享栈
 
+#ifndef __WINDOWS
     struct sigaction sig;
+#endif
     uv_timer_t timer; // 辅助协程调度的定时器
     //    uint64_t need_stw; // 外部声明, 内部判断 是否需要 stw
     uint64_t in_stw; // 外部判断是否已经 stw

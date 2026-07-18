@@ -14,6 +14,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
 static int ld_object_push(ld_object_list_t *list, ld_object_t *object) {
     if (list->count == list->capacity) {
         size_t next = list->capacity ? list->capacity * 2U : 32U;
@@ -175,6 +179,11 @@ static int ld_dylib_push(ld_context_t *ctx, const char *path, const char *instal
     }
     ld_dylib_input_t *dylib = &ctx->dylibs.items[ctx->dylibs.count++];
     memset(dylib, 0, sizeof(*dylib));
+    if (!sc_map_init_s64(&dylib->symbol_index, 0, 0)) {
+        ctx->dylibs.count--;
+        return ld_fail(ctx, LD_IO_ERROR,
+                       "out of memory recording dynamic library '%s'", path);
+    }
     dylib->current_version = LD_DEFAULT_DYLIB_VERSION;
     dylib->compatibility_version = LD_DEFAULT_DYLIB_VERSION;
     dylib->input_priority = SIZE_MAX;
@@ -189,6 +198,7 @@ static int ld_dylib_push(ld_context_t *ctx, const char *path, const char *instal
     if (!dylib->path || !dylib->install_name) {
         free(dylib->path);
         free(dylib->install_name);
+        sc_map_term_s64(&dylib->symbol_index);
         memset(dylib, 0, sizeof(*dylib));
         ctx->dylibs.count--;
         return ld_fail(ctx, LD_IO_ERROR, "out of memory recording dynamic library '%s'", path);
@@ -230,7 +240,7 @@ static char *ld_strndup0(const char *value, size_t size) {
 
 
 static int ld_read_file(ld_context_t *ctx, const char *path, ld_file_t **result) {
-    int fd = open(path, O_RDONLY);
+    int fd = open(path, O_RDONLY | O_BINARY);
     if (fd < 0) {
         return ld_fail(ctx, LD_IO_ERROR, "cannot open '%s': %s", path, strerror(errno));
     }
@@ -1243,20 +1253,15 @@ static int ld_try_framework_directory(ld_context_t *ctx, const char *directory, 
     return LD_OK;
 }
 
-static bool ld_dylib_exports_unresolved(const ld_context_t *ctx, const char *name) {
+static bool ld_dylib_exports_unresolved(ld_context_t *ctx, const char *name) {
     for (size_t i = 0; i < ctx->dylibs.count; i++) {
-        const ld_dylib_input_t *dylib = &ctx->dylibs.items[i];
-        for (size_t j = 0; j < dylib->export_count; j++) {
-            if (strcmp(dylib->exports[j], name) == 0) return true;
-        }
-        for (size_t j = 0; j < dylib->weak_export_count; j++) {
-            if (strcmp(dylib->weak_exports[j], name) == 0) return true;
-        }
+        ld_dylib_input_t *dylib = &ctx->dylibs.items[i];
+        if (ld_macho_dylib_find_symbol(dylib, name)) return true;
     }
     return false;
 }
 
-static const char *ld_unresolved_reexport_symbol(const ld_context_t *ctx) {
+static const char *ld_unresolved_reexport_symbol(ld_context_t *ctx) {
     for (const ld_symbol_t *symbol = ctx->symbols; symbol; symbol = symbol->hh.next) {
         if (symbol->kind == LD_SYMBOL_UNDEFINED && !symbol->weak_ref &&
             symbol->name &&
@@ -1450,83 +1455,202 @@ int ld_resolve_reexport_libraries(ld_context_t *ctx) {
     return LD_OK;
 }
 
-int ld_resolve_requested_libraries(ld_context_t *ctx) {
+static int ld_resolve_named_library(ld_context_t *ctx, const char *name,
+                                    bool *found) {
+    *found = false;
+    int result = LD_OK;
+    for (size_t i = 0; i < ctx->options->library_paths.count && !*found; i++) {
+        result = ld_try_library_directory(
+                ctx, ctx->options->library_paths.items[i], name, found);
+        if (result != LD_OK) return result;
+    }
+    if (!*found && ctx->options->sysroot && *ctx->options->sysroot) {
+        char directory[PATH_MAX];
+        int length = snprintf(directory, sizeof(directory), "%s/usr/lib",
+                              ctx->options->sysroot);
+        if (length < 0 || (size_t) length >= sizeof(directory)) {
+            return ld_fail(ctx, LD_INVALID_ARGUMENT,
+                           "sysroot path is too long");
+        }
+        result = ld_try_library_directory(ctx, directory, name, found);
+        if (result != LD_OK) return result;
+    }
+    if (!*found && (!ctx->options->sysroot || !*ctx->options->sysroot)) {
+        result = ld_try_library_directory(ctx, "/usr/lib", name, found);
+    }
+    return result;
+}
+
+static int ld_resolve_named_framework(ld_context_t *ctx, const char *name,
+                                      bool *found) {
+    *found = false;
+    int result = LD_OK;
+    for (size_t i = 0; i < ctx->options->framework_paths.count && !*found;
+         i++) {
+        result = ld_try_framework_directory(
+                ctx, ctx->options->framework_paths.items[i], name, found);
+        if (result != LD_OK) return result;
+    }
+    if (!*found && ctx->options->sysroot && *ctx->options->sysroot) {
+        char directory[PATH_MAX];
+        int length = snprintf(directory, sizeof(directory),
+                              "%s/System/Library/Frameworks",
+                              ctx->options->sysroot);
+        if (length < 0 || (size_t) length >= sizeof(directory)) {
+            return ld_fail(ctx, LD_INVALID_ARGUMENT,
+                           "sysroot path is too long");
+        }
+        result = ld_try_framework_directory(ctx, directory, name, found);
+        if (result != LD_OK) return result;
+    }
+    if (!*found && (!ctx->options->sysroot || !*ctx->options->sysroot)) {
+        result = ld_try_framework_directory(
+                ctx, "/System/Library/Frameworks", name, found);
+    }
+    return result;
+}
+
+static bool ld_has_system_dylib(const ld_context_t *ctx) {
+    for (size_t i = 0; i < ctx->dylibs.count; i++) {
+        if (strcmp(ctx->dylibs.items[i].install_name,
+                   "/usr/lib/libSystem.B.dylib") == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static int ld_resolve_implicit_system(ld_context_t *ctx) {
     /* libSystem is implicit for every Darwin executable.  Recording its TBD
        when an SDK is available gives symbol resolution and two-level ordinals
        the same view as ld64 while keeping the load command synthesized later. */
-    bool system_recorded = false;
-    for (size_t i = 0; i < ctx->dylibs.count; i++) {
-        if (strcmp(ctx->dylibs.items[i].install_name, "/usr/lib/libSystem.B.dylib") == 0) {
-            system_recorded = true;
-            break;
-        }
-    }
+    bool system_recorded = ld_has_system_dylib(ctx);
     char implicit_system[PATH_MAX];
-    const char *system_root = ctx->options->sysroot && *ctx->options->sysroot ? ctx->options->sysroot : "";
-    int system_length = snprintf(implicit_system, sizeof(implicit_system), "%s%s/usr/lib/libSystem.tbd",
-                                 system_root, *system_root ? "/" : "");
-    if (!system_recorded && system_length >= 0 && (size_t) system_length < sizeof(implicit_system) &&
+    const char *system_root =
+            ctx->options->sysroot && *ctx->options->sysroot
+                    ? ctx->options->sysroot
+                    : "";
+    int system_length = snprintf(
+            implicit_system, sizeof(implicit_system),
+            "%s%s/usr/lib/libSystem.tbd", system_root,
+            *system_root ? "/" : "");
+    if (!system_recorded && system_length >= 0 &&
+        (size_t) system_length < sizeof(implicit_system) &&
         access(implicit_system, R_OK) == 0) {
         int result = ld_parse_input_file(ctx, implicit_system);
         if (result != LD_OK) return result;
         system_recorded = true;
     }
-    for (size_t i = 0; !system_recorded && i < ctx->options->library_paths.count; i++) {
+    for (size_t i = 0;
+         !system_recorded && i < ctx->options->library_paths.count; i++) {
         bool found = false;
-        int result = ld_try_library_directory(ctx, ctx->options->library_paths.items[i], "System", &found);
+        int result = ld_try_library_directory(
+                ctx, ctx->options->library_paths.items[i], "System", &found);
         if (result != LD_OK) return result;
         system_recorded = found;
     }
-    for (size_t library_index = 0; library_index < ctx->options->libraries.count; library_index++) {
+    return LD_OK;
+}
+
+static void ld_mark_new_dylibs(ld_context_t *ctx, size_t first, bool weak) {
+    for (size_t i = first; i < ctx->dylibs.count; i++) {
+        ld_dylib_input_t *candidate = &ctx->dylibs.items[i];
+        bool effective_weak = weak;
+        for (size_t j = 0; j < first; j++) {
+            ld_dylib_input_t *previous = &ctx->dylibs.items[j];
+            if (strcmp(previous->install_name, candidate->install_name) != 0)
+                continue;
+            if (!weak || !previous->weak) {
+                previous->weak = false;
+                effective_weak = false;
+            }
+        }
+        candidate->weak = effective_weak;
+        if (!weak) {
+            for (size_t j = 0; j < i; j++) {
+                if (strcmp(ctx->dylibs.items[j].install_name,
+                           candidate->install_name) == 0) {
+                    ctx->dylibs.items[j].weak = false;
+                }
+            }
+        }
+    }
+}
+
+int ld_resolve_ordered_inputs(ld_context_t *ctx) {
+    if (!ctx || !ctx->options) return LD_INVALID_ARGUMENT;
+    for (size_t i = 0; i < ctx->options->link_inputs.count; i++) {
+        const ld_link_input_t *input = &ctx->options->link_inputs.items[i];
+        size_t first_dylib = ctx->dylibs.count;
+        bool found = false;
+        bool weak = input->kind == LD_LINK_INPUT_WEAK_FILE ||
+                    input->kind == LD_LINK_INPUT_WEAK_LIBRARY ||
+                    input->kind == LD_LINK_INPUT_WEAK_FRAMEWORK;
+        int result;
+        switch (input->kind) {
+            case LD_LINK_INPUT_FILE:
+            case LD_LINK_INPUT_WEAK_FILE:
+                result = ld_parse_input_file(ctx, input->value);
+                break;
+            case LD_LINK_INPUT_LIBRARY:
+            case LD_LINK_INPUT_WEAK_LIBRARY:
+                result = ld_resolve_named_library(ctx, input->value, &found);
+                if (result == LD_OK && !found) {
+                    result = ld_fail(
+                            ctx, LD_IO_ERROR,
+                            "library '-l%s' was not found in the configured search paths",
+                            input->value);
+                }
+                break;
+            case LD_LINK_INPUT_FRAMEWORK:
+            case LD_LINK_INPUT_WEAK_FRAMEWORK:
+                result = ld_resolve_named_framework(ctx, input->value, &found);
+                if (result == LD_OK && !found) {
+                    result = ld_fail(
+                            ctx, LD_IO_ERROR,
+                            "framework '%s' was not found in the configured search paths",
+                            input->value);
+                }
+                break;
+            default:
+                return ld_fail(ctx, LD_INVALID_ARGUMENT,
+                               "invalid ordered Darwin linker input");
+        }
+        if (result != LD_OK) return result;
+        ld_mark_new_dylibs(ctx, first_dylib, weak);
+    }
+    return ld_resolve_implicit_system(ctx);
+}
+
+int ld_resolve_requested_libraries(ld_context_t *ctx) {
+    int status = ld_resolve_implicit_system(ctx);
+    if (status != LD_OK) return status;
+    for (size_t library_index = 0;
+         library_index < ctx->options->libraries.count; library_index++) {
         const char *name = ctx->options->libraries.items[library_index];
         if (strcmp(name, "System") == 0) continue;
         bool found = false;
-        int result = LD_OK;
-        for (size_t i = 0; i < ctx->options->library_paths.count && !found; i++) {
-            result = ld_try_library_directory(ctx, ctx->options->library_paths.items[i], name, &found);
-            if (result != LD_OK) return result;
-        }
-        if (!found && ctx->options->sysroot && *ctx->options->sysroot) {
-            char directory[PATH_MAX];
-            int length = snprintf(directory, sizeof(directory), "%s/usr/lib", ctx->options->sysroot);
-            if (length < 0 || (size_t) length >= sizeof(directory)) {
-                return ld_fail(ctx, LD_INVALID_ARGUMENT, "sysroot path is too long");
-            }
-            result = ld_try_library_directory(ctx, directory, name, &found);
-            if (result != LD_OK) return result;
-        }
-        if (!found && (!ctx->options->sysroot || !*ctx->options->sysroot)) {
-            result = ld_try_library_directory(ctx, "/usr/lib", name, &found);
-            if (result != LD_OK) return result;
-        }
+        int result = ld_resolve_named_library(ctx, name, &found);
+        if (result != LD_OK) return result;
         if (!found) {
-            return ld_fail(ctx, LD_IO_ERROR, "library '-l%s' was not found in the configured search paths", name);
+            return ld_fail(
+                    ctx, LD_IO_ERROR,
+                    "library '-l%s' was not found in the configured search paths",
+                    name);
         }
     }
-
-    for (size_t framework_index = 0; framework_index < ctx->options->frameworks.count; framework_index++) {
+    for (size_t framework_index = 0;
+         framework_index < ctx->options->frameworks.count;
+         framework_index++) {
         const char *name = ctx->options->frameworks.items[framework_index];
         bool found = false;
-        int result = LD_OK;
-        for (size_t i = 0; i < ctx->options->framework_paths.count && !found; i++) {
-            result = ld_try_framework_directory(ctx, ctx->options->framework_paths.items[i], name, &found);
-            if (result != LD_OK) return result;
-        }
-        if (!found && ctx->options->sysroot && *ctx->options->sysroot) {
-            char directory[PATH_MAX];
-            int length = snprintf(directory, sizeof(directory), "%s/System/Library/Frameworks", ctx->options->sysroot);
-            if (length < 0 || (size_t) length >= sizeof(directory)) {
-                return ld_fail(ctx, LD_INVALID_ARGUMENT, "sysroot path is too long");
-            }
-            result = ld_try_framework_directory(ctx, directory, name, &found);
-            if (result != LD_OK) return result;
-        }
-        if (!found && (!ctx->options->sysroot || !*ctx->options->sysroot)) {
-            result = ld_try_framework_directory(ctx, "/System/Library/Frameworks", name, &found);
-            if (result != LD_OK) return result;
-        }
+        int result = ld_resolve_named_framework(ctx, name, &found);
+        if (result != LD_OK) return result;
         if (!found) {
-            return ld_fail(ctx, LD_IO_ERROR, "framework '%s' was not found in the configured search paths", name);
+            return ld_fail(
+                    ctx, LD_IO_ERROR,
+                    "framework '%s' was not found in the configured search paths",
+                    name);
         }
     }
     return LD_OK;

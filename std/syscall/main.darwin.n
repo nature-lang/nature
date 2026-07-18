@@ -25,6 +25,10 @@ int STDIN = 0
 int STDOUT = 1
 int STDERR = 2
 
+fn null_device():string {
+    return '/dev/null'
+}
+
 // Darwin系统调用编号
 const SYS_SYSCALL = 0
 const SYS_EXIT = 1

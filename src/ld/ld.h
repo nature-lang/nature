@@ -36,10 +36,31 @@ typedef struct {
     size_t capacity;
 } ld_string_list_t;
 
+typedef enum {
+    LD_LINK_INPUT_FILE = 0,
+    LD_LINK_INPUT_LIBRARY,
+    LD_LINK_INPUT_FRAMEWORK,
+    LD_LINK_INPUT_WEAK_FILE,
+    LD_LINK_INPUT_WEAK_LIBRARY,
+    LD_LINK_INPUT_WEAK_FRAMEWORK,
+} ld_link_input_kind_t;
+
+typedef struct {
+    ld_link_input_kind_t kind;
+    char *value;
+} ld_link_input_t;
+
+typedef struct {
+    ld_link_input_t *items;
+    size_t count;
+    size_t capacity;
+} ld_link_input_list_t;
+
 typedef struct {
     ld_os_t os;
     ld_arch_t arch;
     const char *output_path;
+    const char *map_path;
     const char *entry_symbol;
     const char *sysroot;
     uint32_t min_os_version;
@@ -56,6 +77,10 @@ typedef struct {
     ld_string_list_t rpaths;
     ld_string_list_t libraries;
     ld_string_list_t frameworks;
+    /* Darwin consumes this list in command-line order.  The legacy typed
+       lists above remain the public search/compatibility view used by the ELF
+       and COFF backends. */
+    ld_link_input_list_t link_inputs;
 
     ld_diagnostic_fn diagnostic;
     void *diagnostic_context;

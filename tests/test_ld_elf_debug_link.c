@@ -673,7 +673,7 @@ static void test_debug_link_none_relocation_on_empty_section(void) {
                image[3] == LD_ELF_MAGIC_3);
         assert(test_elf_read_u16(image + 16U) == LD_ELF_ET_EXEC);
         assert(test_elf_read_u16(image + 18U) == cases[i].machine);
-        assert((image_mode & 0777) == 0755);
+        test_elf_assert_executable_mode(image_mode);
         assert(image_size != sizeof(sentinel) ||
                memcmp(image, sentinel, sizeof(sentinel)) != 0);
 

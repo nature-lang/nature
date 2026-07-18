@@ -89,5 +89,5 @@ fn stderr():ref<file_t>! {
 }
 
 fn discard():ref<file_t>! {
-    return open('/dev/null', syscall.O_RDWR, 0)
+    return open(syscall.null_device(), syscall.O_RDWR, 0)
 }

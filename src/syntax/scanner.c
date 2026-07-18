@@ -1,5 +1,6 @@
 #include "scanner.h"
 
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -445,15 +446,16 @@ static bool scanner_need_stmt_end(module_t *m, token_t *prev_token, token_t *nex
     }
 }
 
-static long scanner_number_convert(module_t *m, char *word, int base) {
+static char *scanner_number_convert(module_t *m, char *word, int base) {
     char *endptr;
-    long decimal = strtol(word, &endptr, base);
-    if (*endptr != '\0') {
+    errno = 0;
+    uint64_t decimal = strtoull(word, &endptr, base);
+    if (*endptr != '\0' || errno == ERANGE) {
         dump_errorf(m, CT_STAGE_SCANNER, m->s_cursor.line, m->s_cursor.column - strlen(word),
                     "Invalid number `%s`", word);
     }
 
-    return decimal;
+    return utoa(decimal);
 }
 
 static char *scanner_hex_number_advance(module_t *m) {
@@ -561,19 +563,15 @@ token_t *scanner_item(module_t *m, linked_node *prev_node) {
     // 首个字符是 0 ~ 9 则判定为数字
     if (scanner_is_number(m, *m->s_cursor.current)) {
         char *word = NULL;
-        long decimal;
 
         // 0 开头的数字特殊处理
         if (*m->s_cursor.guard == '0') {
             if (m->s_cursor.guard[1] == 'x') {
-                decimal = scanner_number_convert(m, scanner_hex_number_advance(m), 16);
-                word = itoa(decimal);
+                word = scanner_number_convert(m, scanner_hex_number_advance(m), 16);
             } else if (m->s_cursor.guard[1] == 'o') {
-                decimal = scanner_number_convert(m, scanner_oct_number_advance(m), 8);
-                word = itoa(decimal);
+                word = scanner_number_convert(m, scanner_oct_number_advance(m), 8);
             } else if (m->s_cursor.guard[1] == 'b') {
-                decimal = scanner_number_convert(m, scanner_bin_number_advance(m), 2);
-                word = itoa(decimal);
+                word = scanner_number_convert(m, scanner_bin_number_advance(m), 2);
             } else {
                 word = scanner_number_advance(m); // 1, 1.12, 0.233
             }

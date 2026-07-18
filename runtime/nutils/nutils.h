@@ -75,6 +75,12 @@ void ptr_valid(void *ptr);
 
 void rt_panic(n_string_t msg);
 
+void rt_dump_stack_backtrace(void);
+
+#ifdef __WINDOWS
+void rt_install_windows_exception_handler(void);
+#endif
+
 void rt_assert(n_bool_t cond);
 
 // allocate array data by element rtype hash

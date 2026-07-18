@@ -12,6 +12,31 @@ not copied or required here. The wire definitions in `macho_format.h` and
 `elf_format.h` are deliberately self-contained so every backend can be
 compiled and used on non-native hosts.
 
+The translation is behavioral rather than a mechanical preservation of every
+Zig rank value.  In particular, that Zig revision ranks a strong dylib export
+ahead of a weak definition in an already-loaded object.  `zig cc -lc++` avoids
+the practical conflict by linking Zig's bundled static libc++, whereas Nature
+links the Darwin SDK's dynamic libc++ for ordinary C++ package inputs.  Nature
+therefore follows ld64/LLD `Defined` and `CommonSymbol` semantics at this
+boundary: a loaded object definition (strong, weak, or tentative) wins over a
+dylib export, while an unselected archive member remains lazy.  This is needed
+for direct ARM64 PAGE/PAGEOFF relocations emitted by libc++ headers and is
+covered by a private-weak C++ regression fixture rather than by a symbol-name
+exception.
+
+Darwin link inputs retain their command-line order across direct paths, `-l`,
+and `-framework`; this order is used by archive/dylib resolution instead of
+regrouping inputs by spelling.  The first occurrence of each loaded dylib also
+determines its `LC_LOAD_*` command position and two-level namespace ordinal;
+repeated framework or dylib spellings do not create duplicate commands.
+`-weak_library`, `-weak-l`, and
+`-weak_framework` produce weak dylib inputs, weak-reference nlists, and
+`LC_LOAD_WEAK_DYLIB`.  Tentative definitions are materialized as non-weak
+`__DATA,__common` symbols as in Zig, including inputs that carry weak nlist
+bits.  Zero-sized input sections remain present and addressable, and Mach-O
+load commands may span multiple target pages up to the format's 32-bit
+`sizeofcmds` limit.
+
 Mach-O TBD target matching also follows Zig commit
 `13b1050d4c898d472d424f9067d990df12eff3fb` (PR #31673): a Darwin AArch64
 link accepts both `arm64-macos` and Xcode 26.4's consolidated
@@ -308,3 +333,8 @@ interleaved islands for `__text` larger than the BRANCH26 range remain
 reserved. Imported function stubs currently use eager GOT binding, so the
 full lazy `__stub_helper`/`__la_symbol_ptr` path is also reserved. The current
 Nature Darwin test corpus does not require interleaved islands or lazy binding.
+Zig's literal-pool deduplication, section/atom dead stripping, dylib output,
+relocatable Mach-O output, dSYM/STABS production, and x86_64 Mach-O backend are
+also outside Nature's current arm64 executable contract.  Literal sections are
+linked correctly but are not coalesced, so this difference affects output size
+and pointer coalescing rather than relocation correctness.

@@ -21,6 +21,8 @@ mockdir.tar.gz
 
 # Library files
 libruntime.a
+!lib/windows_amd64/libruntime.a
+/libmain.a
 
 # Upload markers
 .clion.source.upload.marker
@@ -35,3 +37,7 @@ tsconfig.tsbuildinfo
 example/
 
 .cache
+
+# Python caches
+__pycache__/
+*.py[cod]

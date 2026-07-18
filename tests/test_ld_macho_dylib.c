@@ -1,4 +1,5 @@
 #include "test_ld_macho_common.h"
+#include "test_fs.h"
 
 #include <assert.h>
 #include <limits.h>
@@ -270,17 +271,17 @@ static void test_framework_path_reexport(void) {
     assert(snprintf(frameworks, sizeof(frameworks), "%s/Frameworks", library) > 0);
     assert(snprintf(parent_dir, sizeof(parent_dir), "%s/Parent.framework", frameworks) > 0);
     assert(snprintf(child_dir, sizeof(child_dir), "%s/Child.framework", frameworks) > 0);
-    assert(mkdir(system, 0700) == 0);
-    assert(mkdir(library, 0700) == 0);
-    assert(mkdir(frameworks, 0700) == 0);
-    assert(mkdir(parent_dir, 0700) == 0);
-    assert(mkdir(child_dir, 0700) == 0);
+    assert(test_make_directory(system) == 0);
+    assert(test_make_directory(library) == 0);
+    assert(test_make_directory(frameworks) == 0);
+    assert(test_make_directory(parent_dir) == 0);
+    assert(test_make_directory(child_dir) == 0);
     char child_versions[PATH_MAX];
     assert(snprintf(child_versions, sizeof(child_versions), "%s/Versions", child_dir) > 0);
-    assert(mkdir(child_versions, 0700) == 0);
+    assert(test_make_directory(child_versions) == 0);
     char child_version_a[PATH_MAX];
     assert(snprintf(child_version_a, sizeof(child_version_a), "%s/A", child_versions) > 0);
-    assert(mkdir(child_version_a, 0700) == 0);
+    assert(test_make_directory(child_version_a) == 0);
     assert(snprintf(parent_path, sizeof(parent_path), "%s/Parent.tbd", parent_dir) > 0);
     assert(snprintf(child_path, sizeof(child_path), "%s/Child.tbd", child_version_a) > 0);
     test_ld_write_named_fixture(parent_path, parent_tbd, sizeof(parent_tbd) - 1U);

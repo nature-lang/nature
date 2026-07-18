@@ -11,7 +11,7 @@
 #include "mbedtls/ssl_cache.h"
 #include "mbedtls/x509_crt.h"
 #include "runtime/processor.h"
-#include <uv.h>
+#include "runtime/uv_compat.h"
 
 #define TLS_BUFFER_SIZE 4096
 

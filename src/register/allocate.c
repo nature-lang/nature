@@ -359,7 +359,8 @@ void allocate_walk(closure_t *c) {
         }
         // interval 使用时间过短，无法分配寄存器
         use_pos_t *first_not = first_use_pos(a->current, ALLOC_KIND_STACK);
-        if (first_use->kind != ALLOC_KIND_MUST && first_not && first_not - first_use < ALLOC_USE_MIN) {
+        if (first_use->kind != ALLOC_KIND_MUST && first_not &&
+            first_not->value - first_use->value < ALLOC_USE_MIN) {
             spill_interval(c, a, a->current, 0);
             linked_push(a->handled, a->current);
             continue;
@@ -413,7 +414,13 @@ void sort_to_unhandled(linked_t *unhandled, interval_t *to) {
     }
 
     linked_node *current = linked_first(unhandled);
-    while (current->value != NULL && ((interval_t *) current->value)->first_range->from < to->first_range->from) {
+    while (current->value != NULL) {
+        interval_t *existing = current->value;
+        if (existing->first_range->from > to->first_range->from ||
+            (existing->first_range->from == to->first_range->from &&
+             existing->index < to->index)) {
+            break;
+        }
         current = current->succ;
     }
     //  to < current, 将 to 插入到 current 前面

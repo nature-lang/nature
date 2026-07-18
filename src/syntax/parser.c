@@ -1,5 +1,7 @@
 #include "parser.h"
 
+#include <inttypes.h>
+
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -29,6 +31,10 @@ static ast_expr_t parser_match_expr(module_t *m);
 static ast_tuple_destr_t *parser_var_tuple_destr(module_t *m);
 
 static int64_t parser_test_unique = 0;
+
+static bool parser_c_variadic_supported(void) {
+    return BUILD_OS == OS_WINDOWS && BUILD_ARCH == ARCH_AMD64;
+}
 
 static token_t *parser_advance(module_t *m) {
     assert(m->p_cursor.current->succ != NULL && "next token_t is null");
@@ -372,6 +378,14 @@ static inline type_fn_t *parser_type_fn(module_t *m) {
         // 包含参数类型
         do {
             if (parser_consume(m, TOKEN_ELLIPSIS)) {
+                if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
+                    PARSER_ASSERTF(
+                            parser_c_variadic_supported(),
+                            "C variadic calls are currently supported only "
+                            "for windows_amd64");
+                    type_fn->is_c_variadic = true;
+                    goto PARAMS_DONE;
+                }
                 type_fn->is_rest = true;
             }
 
@@ -390,6 +404,8 @@ static inline type_fn_t *parser_type_fn(module_t *m) {
 
         parser_must(m, TOKEN_RIGHT_PAREN);
     }
+
+PARAMS_DONE:
 
 
     PARSER_ASSERTF(name_param_count == 0 || name_param_count == type_fn->param_types->length,
@@ -1114,6 +1130,14 @@ static void parser_params(module_t *m, ast_fndef_t *fndef) {
 
     do {
         if (parser_consume(m, TOKEN_ELLIPSIS)) {
+            if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
+                PARSER_ASSERTF(
+                        parser_c_variadic_supported(),
+                        "C variadic calls are currently supported only for "
+                        "windows_amd64");
+                fndef->c_variadic = true;
+                return;
+            }
             fndef->rest_param = true;
         }
 
@@ -2929,6 +2953,9 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
         return result;
     }
 
+    PARSER_ASSERTF(!fndef->c_variadic,
+                   "C variadic functions can only be external declarations");
+
     fndef->body = parser_body(m, false);
 
     m->parser_type_params_table = NULL;
@@ -2960,7 +2987,8 @@ static ast_stmt_t *parser_test_stmt(module_t *m) {
     fndef->is_private = true;
     fndef->is_errable = true;
     fndef->test_name = name_token->literal;
-    fndef->symbol_name = dsprintf("__test_%ld", parser_test_unique++);
+    fndef->symbol_name =
+            dsprintf("__test_%" PRId64, parser_test_unique++);
     fndef->fn_name = fndef->symbol_name;
     fndef->fn_name_with_pkg = ident_with_prefix(m->ident, fndef->symbol_name);
 

@@ -16,6 +16,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
 
 add_compile_definitions(RUNTIME)
+add_compile_definitions(LLHTTP_STATIC_LIB)
 message("add compile def RUNTIME")
 
 # 启用汇编支持

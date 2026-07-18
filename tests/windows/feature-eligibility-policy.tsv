@@ -1,0 +1,13 @@
+# test<TAB>state<TAB>reason
+20230728_00_fork_exec	skip	requires fork, exec, and Unix absolute paths
+20230729_00_syscall	skip	requires fork, wait, signals, and Unix executables
+20230729_01_syscall	skip	uses raw Unix syscall numbers
+20230730_00_net	skip	requires a case-specific local TCP client harness
+20241230_00_signal	skip	requires POSIX signals and a case-specific process harness
+20250404_00_tetris	skip	requires an interactive raylib window
+20250405_02_compress	skip	requires package synchronization and archive fixtures
+20250424_00_parker	skip	requires external runner and packaging resources
+20250616_01_libc_unistd	skip	asserts POSIX unistd APIs
+20250616_02_libc_fcntl	skip	all scenarios are explicitly linux-only
+20260102_00_tank	skip	requires an interactive raylib window
+20260118_00_mix_stack	skip	ships ELF or Mach-O fixture objects, not AMD64 COFF

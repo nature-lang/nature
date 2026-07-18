@@ -4,11 +4,19 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#ifdef __WINDOWS
+#include <direct.h>
+#endif
 
 static bool ld_path_has_prefix(const char *path, const char *prefix) {
     size_t length = strlen(prefix);
     if (strncmp(path, prefix, length) != 0) return false;
-    return path[length] == '\0' || path[length] == '/';
+    return path[length] == '\0' || path[length] == '/' ||
+           path[length] == '\\';
+}
+
+static bool ld_path_is_separator(char value) {
+    return value == '/' || value == '\\';
 }
 
 static int ld_checked_path_push(ld_macho_checked_paths_t *paths,
@@ -43,8 +51,9 @@ static int ld_path_join(const char *directory, const char *suffix,
     if (!directory || !*directory || !suffix) return LD_INVALID_ARGUMENT;
     size_t directory_length = strlen(directory);
     size_t suffix_offset = 0;
-    bool directory_has_slash = directory[directory_length - 1U] == '/';
-    bool suffix_has_slash = suffix[0] == '/';
+    bool directory_has_slash =
+            ld_path_is_separator(directory[directory_length - 1U]);
+    bool suffix_has_slash = ld_path_is_separator(suffix[0]);
     if (directory_has_slash && suffix_has_slash) suffix_offset = 1U;
     bool need_slash = !directory_has_slash && !suffix_has_slash && *suffix;
     size_t suffix_length = strlen(suffix + suffix_offset);
@@ -66,10 +75,10 @@ static int ld_path_dirname(const char *path, char output[PATH_MAX]) {
     if (!path || !*path) return LD_INVALID_ARGUMENT;
     size_t length = strlen(path);
     if (length >= PATH_MAX) return LD_INVALID_INPUT;
-    while (length > 1U && path[length - 1U] == '/') length--;
+    while (length > 1U && ld_path_is_separator(path[length - 1U])) length--;
     const char *slash = NULL;
     for (size_t i = length; i > 0; i--) {
-        if (path[i - 1U] == '/') {
+        if (ld_path_is_separator(path[i - 1U])) {
             slash = path + i - 1U;
             break;
         }
@@ -86,8 +95,10 @@ static int ld_path_dirname(const char *path, char output[PATH_MAX]) {
 }
 
 static int ld_path_stem(const char *path, char stem[PATH_MAX]) {
-    const char *basename = strrchr(path, '/');
-    basename = basename ? basename + 1U : path;
+    const char *basename = path;
+    for (const char *cursor = path; *cursor; ++cursor) {
+        if (ld_path_is_separator(*cursor)) basename = cursor + 1U;
+    }
     if (!*basename) return LD_INVALID_INPUT;
     const char *dot = strrchr(basename, '.');
     size_t length = dot && dot != basename ? (size_t) (dot - basename)
@@ -105,7 +116,17 @@ static int ld_record_and_access(ld_macho_checked_paths_t *checked,
     if (result != LD_OK) return result;
     if (access(candidate, R_OK) != 0) return LD_OK;
     char canonical[PATH_MAX];
+#ifdef __WINDOWS
+    const char *value = candidate;
+    if (_fullpath(canonical, candidate, PATH_MAX)) {
+        for (char *cursor = canonical; *cursor; ++cursor) {
+            if (*cursor == '\\') *cursor = '/';
+        }
+        value = canonical;
+    }
+#else
     const char *value = realpath(candidate, canonical) ? canonical : candidate;
+#endif
     size_t length = strlen(value);
     if (length >= PATH_MAX) return LD_INVALID_INPUT;
     memcpy(resolved, value, length + 1U);
@@ -121,8 +142,10 @@ static int ld_try_path_variants(ld_macho_checked_paths_t *checked,
     size_t length = strlen(path);
     if (length >= sizeof(base)) return LD_INVALID_INPUT;
     memcpy(base, path, length + 1U);
-    const char *slash = strrchr(base, '/');
-    char *basename = slash ? (char *) slash + 1U : base;
+    char *basename = base;
+    for (char *cursor = base; *cursor; ++cursor) {
+        if (ld_path_is_separator(*cursor)) basename = cursor + 1U;
+    }
     char *dot = strrchr(basename, '.');
     if (dot && dot != basename) *dot = '\0';
 
@@ -183,7 +206,7 @@ static int ld_try_sdk_search_root(ld_macho_checked_paths_t *checked,
     if (!directory || !*directory) return LD_OK;
     size_t directory_length = strlen(directory);
     while (directory_length > 1U &&
-           directory[directory_length - 1U] == '/') {
+           ld_path_is_separator(directory[directory_length - 1U])) {
         directory_length--;
     }
     size_t marker_length = strlen(root_marker);

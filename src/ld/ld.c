@@ -1,15 +1,21 @@
 #include "ld_internal.h"
+#include "ld_coff.h"
 #include "ld_macho_symbols.h"
 #include "ld_output.h"
 
 #include <ctype.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#ifdef __WINDOWS
+#include <io.h>
+#include <windows.h>
+#endif
 
 void *ld_realloc_array(void *old, size_t old_count, size_t new_count, size_t element_size) {
     if (element_size == 0 || new_count > SIZE_MAX / element_size) {
@@ -70,6 +76,51 @@ static void ld_string_free(ld_string_list_t *list) {
     memset(list, 0, sizeof(*list));
 }
 
+static void ld_string_pop(ld_string_list_t *list) {
+    if (!list || list->count == 0U) return;
+    free(list->items[--list->count]);
+    list->items[list->count] = NULL;
+}
+
+static int ld_link_input_push(ld_link_input_list_t *list,
+                              ld_link_input_kind_t kind, const char *value) {
+    if (!list || !value) return LD_INVALID_ARGUMENT;
+    if (list->count == list->capacity) {
+        if (list->capacity > SIZE_MAX / 2U) return LD_IO_ERROR;
+        size_t next = list->capacity ? list->capacity * 2U : 16U;
+        ld_link_input_t *items = ld_realloc_array(
+                list->items, list->capacity, next, sizeof(*items));
+        if (!items) return LD_IO_ERROR;
+        list->items = items;
+        list->capacity = next;
+    }
+    char *copy = strdup(value);
+    if (!copy) return LD_IO_ERROR;
+    list->items[list->count++] = (ld_link_input_t) {
+            .kind = kind,
+            .value = copy,
+    };
+    return LD_OK;
+}
+
+static int ld_named_link_input_push(ld_options_t *options,
+                                    ld_string_list_t *typed_list,
+                                    ld_link_input_kind_t kind,
+                                    const char *value) {
+    int result = ld_string_push(typed_list, value);
+    if (result != LD_OK) return result;
+    result = ld_link_input_push(&options->link_inputs, kind, value);
+    if (result != LD_OK) ld_string_pop(typed_list);
+    return result;
+}
+
+static void ld_link_inputs_free(ld_link_input_list_t *list) {
+    if (!list) return;
+    for (size_t i = 0; i < list->count; i++) free(list->items[i].value);
+    free(list->items);
+    memset(list, 0, sizeof(*list));
+}
+
 
 int ld_fail(ld_context_t *ctx, int code, const char *format, ...) {
     if (ctx) {
@@ -98,16 +149,15 @@ static int ld_report_option_error(const ld_options_t *options, int code, const c
     return code;
 }
 
-int ld_write_output_atomic(const ld_options_t *options, const uint8_t *image,
-                           size_t size) {
-    if (!options || !options->output_path || !*options->output_path ||
-        (!image && size != 0U)) {
+int ld_write_file_atomic(const ld_options_t *options, const char *path,
+                         const uint8_t *data, size_t size, bool executable) {
+    if (!options || !path || !*path || (!data && size != 0U)) {
         return ld_report_option_error(options, LD_INVALID_ARGUMENT,
-                                      "invalid output image");
+                                      "invalid output file");
     }
 
     static const char temporary_suffix[] = ".tmp.XXXXXX";
-    const char *output = options->output_path;
+    const char *output = path;
     size_t output_length = strlen(output);
     if (output_length > SIZE_MAX - sizeof(temporary_suffix)) {
         return ld_report_option_error(options, LD_OUTPUT_ERROR,
@@ -131,11 +181,23 @@ int ld_write_output_atomic(const ld_options_t *options, const uint8_t *image,
                 "cannot create temporary output for '%s': %s", output,
                 strerror(saved));
     }
+#ifdef __WINDOWS
+    if (_setmode(fd, _O_BINARY) == -1) {
+        int saved = errno;
+        close(fd);
+        unlink(temporary);
+        free(temporary);
+        return ld_report_option_error(
+                options, LD_OUTPUT_ERROR,
+                "cannot set binary mode for output '%s': %s", output,
+                strerror(saved));
+    }
+#endif
 
     int status = LD_OK;
     size_t written = 0U;
     while (written < size) {
-        ssize_t count = write(fd, image + written, size - written);
+        ssize_t count = write(fd, data + written, size - written);
         if (count < 0 && errno == EINTR) {
             continue;
         }
@@ -155,13 +217,22 @@ int ld_write_output_atomic(const ld_options_t *options, const uint8_t *image,
         }
         written += (size_t) count;
     }
-    if (status == LD_OK && fchmod(fd, 0755) != 0) {
+#ifndef __WINDOWS
+    mode_t mode = executable ? 0755 : 0644;
+    if (status == LD_OK && fchmod(fd, mode) != 0) {
         int saved = errno;
         status = ld_report_option_error(options, LD_OUTPUT_ERROR,
                                         "cannot chmod output '%s': %s", output,
                                         strerror(saved));
     }
+#else
+    (void) executable;
+#endif
+#ifdef __WINDOWS
+    if (status == LD_OK && _commit(fd) != 0) {
+#else
     if (status == LD_OK && fsync(fd) != 0) {
+#endif
         int saved = errno;
         status = ld_report_option_error(options, LD_OUTPUT_ERROR,
                                         "cannot flush output '%s': %s", output,
@@ -173,17 +244,35 @@ int ld_write_output_atomic(const ld_options_t *options, const uint8_t *image,
                                         "cannot close output '%s': %s", output,
                                         strerror(saved));
     }
+#ifdef __WINDOWS
+    if (status == LD_OK &&
+        !MoveFileExA(temporary, output,
+                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        DWORD saved = GetLastError();
+        status = ld_report_option_error(
+                options, LD_OUTPUT_ERROR,
+                "cannot replace output '%s': Windows error %lu", output,
+                (unsigned long) saved);
+    }
+#else
     if (status == LD_OK && rename(temporary, output) != 0) {
         int saved = errno;
         status = ld_report_option_error(options, LD_OUTPUT_ERROR,
                                         "cannot replace output '%s': %s", output,
                                         strerror(saved));
     }
+#endif
     if (status != LD_OK) {
         unlink(temporary);
     }
     free(temporary);
     return status;
+}
+
+int ld_write_output_atomic(const ld_options_t *options, const uint8_t *image,
+                           size_t size) {
+    return ld_write_file_atomic(options, options ? options->output_path : NULL,
+                                image, size, true);
 }
 
 static void ld_default_diagnostic(void *context, ld_diag_level_t level, const char *message) {
@@ -218,6 +307,7 @@ void ld_options_deinit(ld_options_t *options) {
     ld_string_free(&options->rpaths);
     ld_string_free(&options->libraries);
     ld_string_free(&options->frameworks);
+    ld_link_inputs_free(&options->link_inputs);
 }
 
 int ld_add_input(ld_options_t *options, const char *path) {
@@ -228,6 +318,11 @@ int ld_add_input(ld_options_t *options, const char *path) {
         return ld_report_option_error(options, LD_INVALID_ARGUMENT, "linker input path is empty");
     }
     int result = ld_string_push(&options->inputs, path);
+    if (result == LD_OK) {
+        result = ld_link_input_push(&options->link_inputs,
+                                    LD_LINK_INPUT_FILE, path);
+        if (result != LD_OK) ld_string_pop(&options->inputs);
+    }
     return result == LD_OK
                    ? LD_OK
                    : ld_report_option_error(options, result, "cannot record linker input '%s'", path);
@@ -276,7 +371,29 @@ static int ld_parse_flag_token(ld_options_t *options, const char *token, const c
             return LD_INVALID_ARGUMENT;
         }
         *consumed = true;
-        return ld_string_push(&options->frameworks, next);
+        return ld_named_link_input_push(options, &options->frameworks,
+                                        LD_LINK_INPUT_FRAMEWORK, next);
+    }
+    if (strcmp(token, "-weak_framework") == 0) {
+        if (options->os != LD_OS_DARWIN) return LD_UNSUPPORTED;
+        if (!next || !*next) return LD_INVALID_ARGUMENT;
+        *consumed = true;
+        return ld_link_input_push(&options->link_inputs,
+                                  LD_LINK_INPUT_WEAK_FRAMEWORK, next);
+    }
+    if (strcmp(token, "-weak_library") == 0) {
+        if (options->os != LD_OS_DARWIN) return LD_UNSUPPORTED;
+        if (!next || !*next) return LD_INVALID_ARGUMENT;
+        *consumed = true;
+        return ld_link_input_push(&options->link_inputs,
+                                  LD_LINK_INPUT_WEAK_FILE, next);
+    }
+    if (strcmp(token, "-weak-l") == 0) {
+        if (options->os != LD_OS_DARWIN) return LD_UNSUPPORTED;
+        if (!next || !*next) return LD_INVALID_ARGUMENT;
+        *consumed = true;
+        return ld_link_input_push(&options->link_inputs,
+                                  LD_LINK_INPUT_WEAK_LIBRARY, next);
     }
     if (strcmp(token, "-rpath") == 0) {
         if (!next || !*next) {
@@ -296,10 +413,12 @@ static int ld_parse_flag_token(ld_options_t *options, const char *token, const c
         if (token[1] == 'L') {
             return ld_string_push(&options->library_paths, next);
         }
-        return ld_string_push(&options->libraries, next);
+        return ld_named_link_input_push(options, &options->libraries,
+                                        LD_LINK_INPUT_LIBRARY, next);
     }
     if (strncmp(token, "-framework", 10) == 0 && token[10]) {
-        return ld_string_push(&options->frameworks, token + 10);
+        return ld_named_link_input_push(options, &options->frameworks,
+                                        LD_LINK_INPUT_FRAMEWORK, token + 10);
     }
     if (token[0] == '-' && token[1] == 'F' && token[2]) {
         return ld_string_push(&options->framework_paths, token + 2);
@@ -308,7 +427,13 @@ static int ld_parse_flag_token(ld_options_t *options, const char *token, const c
         return ld_string_push(&options->library_paths, token + 2);
     }
     if (token[0] == '-' && token[1] == 'l' && token[2]) {
-        return ld_string_push(&options->libraries, token + 2);
+        return ld_named_link_input_push(options, &options->libraries,
+                                        LD_LINK_INPUT_LIBRARY, token + 2);
+    }
+    if (strncmp(token, "-weak-l", 7U) == 0 && token[7]) {
+        if (options->os != LD_OS_DARWIN) return LD_UNSUPPORTED;
+        return ld_link_input_push(&options->link_inputs,
+                                  LD_LINK_INPUT_WEAK_LIBRARY, token + 7);
     }
     if (token[0] == '-' && token[1] == '-') {
         return LD_UNSUPPORTED;
@@ -386,7 +511,10 @@ int ld_parse_flags(ld_options_t *options, const char *flags) {
         if (!present) break;
         char next[4096];
         const char *next_ptr = NULL;
-        if (strcmp(token, "-framework") == 0 || strcmp(token, "-F") == 0 ||
+        if (strcmp(token, "-framework") == 0 ||
+            strcmp(token, "-weak_framework") == 0 ||
+            strcmp(token, "-weak_library") == 0 ||
+            strcmp(token, "-weak-l") == 0 || strcmp(token, "-F") == 0 ||
             strcmp(token, "-L") == 0 || strcmp(token, "-l") == 0 ||
             strcmp(token, "-rpath") == 0) {
             bool next_present = false;
@@ -494,6 +622,14 @@ int ld_link(const ld_options_t *options) {
     if (options->os == LD_OS_LINUX) {
         return ld_link_elf(options);
     }
+    if (options->os == LD_OS_WINDOWS) {
+        if (options->arch == LD_ARCH_AMD64) {
+            return ld_link_coff(options);
+        }
+        return ld_report_option_error(
+                options, LD_UNSUPPORTED,
+                "the COFF linker currently supports windows/amd64 only");
+    }
     if (options->os != LD_OS_DARWIN || options->arch != LD_ARCH_ARM64) {
         if (options->diagnostic) {
             options->diagnostic(options->diagnostic_context, LD_DIAG_ERROR,
@@ -509,13 +645,15 @@ int ld_link(const ld_options_t *options) {
     ctx.sdk_version = options->sdk_version ? options->sdk_version : ld_macos_version(14, 0, 0);
 
     int result = LD_OK;
-    for (size_t i = 0; i < options->inputs.count; i++) {
-        result = ld_parse_input_file(&ctx, options->inputs.items[i]);
-        if (result != LD_OK) {
-            goto done;
+    if (options->link_inputs.count != 0U) {
+        result = ld_resolve_ordered_inputs(&ctx);
+    } else {
+        for (size_t i = 0; i < options->inputs.count; i++) {
+            result = ld_parse_input_file(&ctx, options->inputs.items[i]);
+            if (result != LD_OK) goto done;
         }
+        result = ld_resolve_requested_libraries(&ctx);
     }
-    result = ld_resolve_requested_libraries(&ctx);
     if (result != LD_OK) {
         goto done;
     }

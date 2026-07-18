@@ -1,6 +1,5 @@
 #include "src/binary/linker.h"
 
-#include <ar.h>
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>

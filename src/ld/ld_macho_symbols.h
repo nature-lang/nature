@@ -9,12 +9,11 @@
 
 enum {
     LD_MACHO_RANK_DIRECT_STRONG = 0,
-    LD_MACHO_RANK_ARCHIVE_OR_DYLIB_STRONG = 1,
-    LD_MACHO_RANK_DIRECT_WEAK = 2,
-    LD_MACHO_RANK_ARCHIVE_OR_DYLIB_WEAK = 3,
-    LD_MACHO_RANK_DIRECT_TENTATIVE = 4,
-    LD_MACHO_RANK_ARCHIVE_TENTATIVE = 5,
-    LD_MACHO_RANK_UNCLAIMED = 6,
+    LD_MACHO_RANK_DIRECT_WEAK = 1,
+    LD_MACHO_RANK_DIRECT_TENTATIVE = 2,
+    LD_MACHO_RANK_ARCHIVE_OR_DYLIB_STRONG = 3,
+    LD_MACHO_RANK_ARCHIVE_OR_DYLIB_WEAK = 4,
+    LD_MACHO_RANK_UNCLAIMED = 5,
 };
 
 typedef struct {
@@ -41,7 +40,7 @@ bool ld_macho_symbol_rank_better(ld_macho_symbol_rank_t candidate,
                                  ld_macho_symbol_rank_t current);
 
 const ld_dylib_symbol_t *ld_macho_dylib_find_symbol(
-        const ld_dylib_input_t *dylib, const char *name);
+        ld_dylib_input_t *dylib, const char *name);
 int ld_macho_dylib_record_symbol(ld_context_t *ctx,
                                  ld_dylib_input_t *dylib,
                                  const char *name, size_t name_length,

@@ -2,9 +2,12 @@
 
 .text
 .globl acosw
-#if defined(__DARWIN)
+#if defined(__DARWIN) || defined(__WINDOWS)
 #else
 .type  acosw, @function
+#endif
+#if defined(__WINDOWS) && defined(__AMD64)
+.seh_proc acosw
 #endif
 
 #if !defined(__ARM64) && !defined(__RISCV64)
@@ -13,6 +16,81 @@
 
 acosw:
 #ifdef __AMD64
+#ifdef __WINDOWS
+/*
+    Microsoft x64 context (byte offsets in aco_t.reg):
+      rbx rbp rdi rsi r12 r13 r14 r15 rip rsp fpucw/mxcsr
+      00  08  10  18  20  28  30  38  40  48  50/54
+      xmm6..xmm15 at 0x60..0xf0 (16 bytes each)
+      TEB StackBase/StackLimit at 0x100/0x108
+
+    rcx = from_co, rdx = to_co. XMM6-XMM15 are ABI-nonvolatile on
+    Windows and must move with the coroutine context.
+*/
+    .seh_endprologue
+    mov     r8, QWORD PTR [rsp]
+    lea     r9, [rsp+0x8]
+    mov     QWORD PTR [rcx+0x00], rbx
+    mov     QWORD PTR [rcx+0x08], rbp
+    mov     QWORD PTR [rcx+0x10], rdi
+    mov     QWORD PTR [rcx+0x18], rsi
+    mov     QWORD PTR [rcx+0x20], r12
+    mov     QWORD PTR [rcx+0x28], r13
+    mov     QWORD PTR [rcx+0x30], r14
+    mov     QWORD PTR [rcx+0x38], r15
+    mov     QWORD PTR [rcx+0x40], r8
+    mov     QWORD PTR [rcx+0x48], r9
+#ifndef ACO_CONFIG_SHARE_FPU_MXCSR_ENV
+    fnstcw  WORD PTR  [rcx+0x50]
+    stmxcsr DWORD PTR [rcx+0x54]
+#endif
+    movups  XMMWORD PTR [rcx+0x60], xmm6
+    movups  XMMWORD PTR [rcx+0x70], xmm7
+    movups  XMMWORD PTR [rcx+0x80], xmm8
+    movups  XMMWORD PTR [rcx+0x90], xmm9
+    movups  XMMWORD PTR [rcx+0xa0], xmm10
+    movups  XMMWORD PTR [rcx+0xb0], xmm11
+    movups  XMMWORD PTR [rcx+0xc0], xmm12
+    movups  XMMWORD PTR [rcx+0xd0], xmm13
+    movups  XMMWORD PTR [rcx+0xe0], xmm14
+    movups  XMMWORD PTR [rcx+0xf0], xmm15
+    mov     r10, QWORD PTR gs:[0x08]
+    mov     QWORD PTR [rcx+0x100], r10
+    mov     r10, QWORD PTR gs:[0x10]
+    mov     QWORD PTR [rcx+0x108], r10
+
+    mov     rbx, QWORD PTR [rdx+0x00]
+    mov     rbp, QWORD PTR [rdx+0x08]
+    mov     rdi, QWORD PTR [rdx+0x10]
+    mov     rsi, QWORD PTR [rdx+0x18]
+    mov     r12, QWORD PTR [rdx+0x20]
+    mov     r13, QWORD PTR [rdx+0x28]
+    mov     r14, QWORD PTR [rdx+0x30]
+    mov     r15, QWORD PTR [rdx+0x38]
+    mov     rax, QWORD PTR [rdx+0x40]
+    mov     r8, QWORD PTR [rdx+0x48]
+#ifndef ACO_CONFIG_SHARE_FPU_MXCSR_ENV
+    fldcw   WORD PTR  [rdx+0x50]
+    ldmxcsr DWORD PTR [rdx+0x54]
+#endif
+    movups  xmm6, XMMWORD PTR [rdx+0x60]
+    movups  xmm7, XMMWORD PTR [rdx+0x70]
+    movups  xmm8, XMMWORD PTR [rdx+0x80]
+    movups  xmm9, XMMWORD PTR [rdx+0x90]
+    movups  xmm10, XMMWORD PTR [rdx+0xa0]
+    movups  xmm11, XMMWORD PTR [rdx+0xb0]
+    movups  xmm12, XMMWORD PTR [rdx+0xc0]
+    movups  xmm13, XMMWORD PTR [rdx+0xd0]
+    movups  xmm14, XMMWORD PTR [rdx+0xe0]
+    movups  xmm15, XMMWORD PTR [rdx+0xf0]
+    mov     r10, QWORD PTR [rdx+0x100]
+    mov     QWORD PTR gs:[0x08], r10
+    mov     r10, QWORD PTR [rdx+0x108]
+    mov     QWORD PTR gs:[0x10], r10
+    mov     rsp, r8
+    jmp     rax
+    .seh_endproc
+#else
 /*
     0x00                  -->                  0xff
     r12 r13 r14 r15 rip rsp rbx rbp fpucw16 mxcsr32
@@ -47,6 +125,7 @@ acosw:
 #endif
     mov     rsp,rcx
     jmp     rax
+#endif
 
 #elif defined(__ARM64)
  /*
@@ -155,10 +234,101 @@ acosw:
 _assist_preempt_yield:
 #else
 .globl assist_preempt_yield
+#if defined(__WINDOWS) && defined(__AMD64)
+.seh_proc assist_preempt_yield
+#endif
+#if !defined(__WINDOWS)
 .type  assist_preempt_yield, @function
+#endif
 assist_preempt_yield:
 #endif
 #ifdef __AMD64
+#ifdef __WINDOWS
+    push rbp
+    .seh_pushreg rbp
+    mov rbp, rsp
+    // Home area (32), saved register area (368), RFLAGS (8), padding (8).
+    sub rsp, 416
+    .seh_stackalloc 416
+    .seh_endprologue
+
+    // Preserve r11 before using it as scratch to capture RFLAGS.
+    mov QWORD PTR [rsp + 104], r11
+    pushfq
+    pop r11
+    mov QWORD PTR [rsp + 400], r11
+    mov QWORD PTR [rsp + 32], rax
+    mov QWORD PTR [rsp + 40], rcx
+    mov QWORD PTR [rsp + 48], rdx
+    mov QWORD PTR [rsp + 56], rbx
+    mov QWORD PTR [rsp + 64], rsi
+    mov QWORD PTR [rsp + 72], rdi
+    mov QWORD PTR [rsp + 80], r8
+    mov QWORD PTR [rsp + 88], r9
+    mov QWORD PTR [rsp + 96], r10
+    mov QWORD PTR [rsp + 112], r12
+    mov QWORD PTR [rsp + 120], r13
+    mov QWORD PTR [rsp + 128], r14
+    mov QWORD PTR [rsp + 136], r15
+
+    movups XMMWORD PTR [rsp + 144], xmm0
+    movups XMMWORD PTR [rsp + 160], xmm1
+    movups XMMWORD PTR [rsp + 176], xmm2
+    movups XMMWORD PTR [rsp + 192], xmm3
+    movups XMMWORD PTR [rsp + 208], xmm4
+    movups XMMWORD PTR [rsp + 224], xmm5
+    movups XMMWORD PTR [rsp + 240], xmm6
+    movups XMMWORD PTR [rsp + 256], xmm7
+    movups XMMWORD PTR [rsp + 272], xmm8
+    movups XMMWORD PTR [rsp + 288], xmm9
+    movups XMMWORD PTR [rsp + 304], xmm10
+    movups XMMWORD PTR [rsp + 320], xmm11
+    movups XMMWORD PTR [rsp + 336], xmm12
+    movups XMMWORD PTR [rsp + 352], xmm13
+    movups XMMWORD PTR [rsp + 368], xmm14
+    movups XMMWORD PTR [rsp + 384], xmm15
+
+    call SYM(co_preempt_yield)
+
+    movups xmm15, XMMWORD PTR [rsp + 384]
+    movups xmm14, XMMWORD PTR [rsp + 368]
+    movups xmm13, XMMWORD PTR [rsp + 352]
+    movups xmm12, XMMWORD PTR [rsp + 336]
+    movups xmm11, XMMWORD PTR [rsp + 320]
+    movups xmm10, XMMWORD PTR [rsp + 304]
+    movups xmm9, XMMWORD PTR [rsp + 288]
+    movups xmm8, XMMWORD PTR [rsp + 272]
+    movups xmm7, XMMWORD PTR [rsp + 256]
+    movups xmm6, XMMWORD PTR [rsp + 240]
+    movups xmm5, XMMWORD PTR [rsp + 224]
+    movups xmm4, XMMWORD PTR [rsp + 208]
+    movups xmm3, XMMWORD PTR [rsp + 192]
+    movups xmm2, XMMWORD PTR [rsp + 176]
+    movups xmm1, XMMWORD PTR [rsp + 160]
+    movups xmm0, XMMWORD PTR [rsp + 144]
+    mov r11, QWORD PTR [rsp + 400]
+    push r11
+    popfq
+    mov r15, QWORD PTR [rsp + 136]
+    mov r14, QWORD PTR [rsp + 128]
+    mov r13, QWORD PTR [rsp + 120]
+    mov r12, QWORD PTR [rsp + 112]
+    mov r11, QWORD PTR [rsp + 104]
+    mov r10, QWORD PTR [rsp + 96]
+    mov r9, QWORD PTR [rsp + 88]
+    mov r8, QWORD PTR [rsp + 80]
+    mov rdi, QWORD PTR [rsp + 72]
+    mov rsi, QWORD PTR [rsp + 64]
+    mov rbx, QWORD PTR [rsp + 56]
+    mov rdx, QWORD PTR [rsp + 48]
+    mov rcx, QWORD PTR [rsp + 40]
+    mov rax, QWORD PTR [rsp + 32]
+
+    add rsp, 416
+    pop rbp
+    ret
+    .seh_endproc
+#else
     push rbp
     mov rbp, rsp
     pushfq
@@ -243,6 +413,7 @@ assist_preempt_yield:
     pop rbp // 从栈顶弹出一个值到rbp寄存器中, 与之前的 push rbp dvyk
 
     ret
+#endif
 
 #elif defined(__ARM64)
     // 保存所有通用寄存器
@@ -494,9 +665,12 @@ assist_preempt_yield:
 
 
 .globl aco_save_reg
-#if defined(__DARWIN)
+#if defined(__DARWIN) || defined(__WINDOWS)
 #else
 .type  aco_save_reg, @function
+#endif
+#if defined(__WINDOWS) && defined(__AMD64)
+.seh_proc aco_save_reg
 #endif
 
 #if !defined(__ARM64) && !defined(__RISCV64)
@@ -506,6 +680,37 @@ assist_preempt_yield:
 aco_save_reg:
 
 #ifdef __AMD64
+#ifdef __WINDOWS
+    .seh_endprologue
+    mov     r8, QWORD PTR [rsp]
+    lea     r9, [rsp+0x8]
+    mov     QWORD PTR [rcx+0x00], rbx
+    mov     QWORD PTR [rcx+0x08], rbp
+    mov     QWORD PTR [rcx+0x10], rdi
+    mov     QWORD PTR [rcx+0x18], rsi
+    mov     QWORD PTR [rcx+0x20], r12
+    mov     QWORD PTR [rcx+0x28], r13
+    mov     QWORD PTR [rcx+0x30], r14
+    mov     QWORD PTR [rcx+0x38], r15
+    mov     QWORD PTR [rcx+0x40], r8
+    mov     QWORD PTR [rcx+0x48], r9
+#ifndef ACO_CONFIG_SHARE_FPU_MXCSR_ENV
+    fnstcw  WORD PTR  [rcx+0x50]
+    stmxcsr DWORD PTR [rcx+0x54]
+#endif
+    movups  XMMWORD PTR [rcx+0x60], xmm6
+    movups  XMMWORD PTR [rcx+0x70], xmm7
+    movups  XMMWORD PTR [rcx+0x80], xmm8
+    movups  XMMWORD PTR [rcx+0x90], xmm9
+    movups  XMMWORD PTR [rcx+0xa0], xmm10
+    movups  XMMWORD PTR [rcx+0xb0], xmm11
+    movups  XMMWORD PTR [rcx+0xc0], xmm12
+    movups  XMMWORD PTR [rcx+0xd0], xmm13
+    movups  XMMWORD PTR [rcx+0xe0], xmm14
+    movups  XMMWORD PTR [rcx+0xf0], xmm15
+    ret
+    .seh_endproc
+#else
     mov     rdx,QWORD PTR [rsp]      // retaddr
     lea     rcx,[rsp+0x8]            // rsp
     mov     QWORD PTR [rdi+0x0], r12
@@ -521,6 +726,7 @@ aco_save_reg:
     stmxcsr DWORD PTR [rdi+0x44]
 #endif
     ret
+#endif
 
 #elif defined(__ARM64)
     // x0 包含目标地址
@@ -563,9 +769,12 @@ aco_save_reg:
 
 
 .globl aco_save_fpucw_mxcsr
-#if defined(__DARWIN)
+#if defined(__DARWIN) || defined(__WINDOWS)
 #else
 .type  aco_save_fpucw_mxcsr, @function
+#endif
+#if defined(__WINDOWS) && defined(__AMD64)
+.seh_proc aco_save_fpucw_mxcsr
 #endif
 #if !defined(__ARM64) && !defined(__RISCV64)
 .intel_syntax noprefix
@@ -573,9 +782,17 @@ aco_save_reg:
 
 aco_save_fpucw_mxcsr:
 #ifdef __AMD64
+#ifdef __WINDOWS
+    .seh_endprologue
+    fnstcw  WORD PTR  [rcx]
+    stmxcsr DWORD PTR [rcx+0x4]
+    ret
+    .seh_endproc
+#else
     fnstcw  WORD PTR  [rdi]
     stmxcsr DWORD PTR [rdi+0x4]
     ret
+#endif
 #elif __ARM64
     mrs x1, fpcr
     str x1, [x0]
@@ -597,9 +814,12 @@ aco_save_fpucw_mxcsr:
 #endif
 
 .globl aco_funcp_protector_asm
-#if defined(__DARWIN)
+#if defined(__DARWIN) || defined(__WINDOWS)
 #else
 .type  aco_funcp_protector_asm, @function
+#endif
+#if defined(__WINDOWS) && defined(__AMD64)
+.seh_proc aco_funcp_protector_asm
 #endif
 
 #if !defined(__ARM64) && !defined(__RISCV64)
@@ -608,10 +828,24 @@ aco_save_fpucw_mxcsr:
 
 aco_funcp_protector_asm:
 #if defined(__AMD64)
+#ifdef __WINDOWS
+    // RET from the coroutine leaves RSP 16-byte aligned. Keep the mandatory
+    // home area live for both nested Microsoft x64 calls.
+    sub     rsp, 32
+    .seh_stackalloc 32
+    .seh_endprologue
+    call    SYM(aco_funcp_protector)
+    call    SYM(abort)
+    add     rsp, 32
+#else
     and     rsp,0xfffffffffffffff0
     call    SYM(aco_funcp_protector)
     call    SYM(abort)
+#endif
     ret
+#if defined(__WINDOWS) && defined(__AMD64)
+    .seh_endproc
+#endif
 #elif defined(__ARM64)
     mov     x9, sp
     and     x9, x9, #0xfffffffffffffff0
@@ -638,4 +872,30 @@ aco_funcp_protector_asm:
     ret
 #else
     #error "platform not support"
+#endif
+
+#if defined(__WINDOWS) && defined(__AMD64)
+/*
+ * Microsoft x64 stack probe. RAX carries and retains the allocation size.
+ * The generated prologue adjusts RSP only after this helper returns.
+ */
+.globl __chkstk
+__chkstk:
+    push rcx
+    push rax
+    cmp rax, 0x1000
+    lea rcx, [rsp+24]
+    jb .Lchkstk_tail
+.Lchkstk_loop:
+    sub rcx, 0x1000
+    test QWORD PTR [rcx], rcx
+    sub rax, 0x1000
+    cmp rax, 0x1000
+    ja .Lchkstk_loop
+.Lchkstk_tail:
+    sub rcx, rax
+    test QWORD PTR [rcx], rcx
+    pop rax
+    pop rcx
+    ret
 #endif

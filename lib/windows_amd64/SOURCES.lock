@@ -1,0 +1,48 @@
+# Nature windows_amd64 sysroot source lock
+# This file is input to release sysroot production. Generated binary hashes
+# are recorded separately in SHA256SUMS.
+
+target=x86_64-w64-windows-gnu
+minimum_windows=10.0
+lto=disabled
+sanitizers=disabled
+archive_mode=deterministic
+archive_members=normalized-relative-names
+release_debug_info=disabled,-g0
+debug_debug_info=dwarf,-gdwarf
+producer=tools/windows_sysroot/build.sh
+producer.variants=release,debug
+
+zig.version=0.14.1
+zig.commit=738d2be9d6b6ef3ff3559130c05159ef53336224
+zig.role=locked clang driver, compiler-rt, MinGW-w64 CRT and import-library producer
+
+llvm_project.reference_commit=c58ba1cf51d2886994da7e667a05c1bfe4f4396b
+llvm_project.role=development-only LLD COFF semantic oracle; never built or shipped
+
+libuv.version=1.52.1
+libuv.source=libuv-v1.52.1.tar.gz
+libuv.sha256=66d511b9e6e334c0e62279eb234fbfb2b3110b1479c09b95b44c7afca8cff9e7
+libuv.windows_headers=include/uv/win.h,include/uv/tree.h
+libuv.win_h.sha256=9ad5dd7d5d4d51981f40edfc65a53ab94e91f6a2e73f2bf897e0e697fd9e8233
+libuv.tree_h.sha256=34393c74082c71ddd5bd9ec4afe30ef03df7fa7bb64be5a50ae070cdfebb5c43
+
+mbedtls.version=3.6.4
+mbedtls.source=runtime/mbedtls and include/mbedtls in the Nature source tree
+
+nature_runtime.source=runtime/,utils/
+nature_runtime.toolchain=cmake/windows-amd64-toolchain.cmake
+nature_runtime.flags=-fno-lto,-fno-sanitize=all,-funwind-tables,LLHTTP_STATIC_LIB
+nature_runtime.aco_unwind=win64-seh-pdata-xdata
+nature_runtime.windows_time=Win10 GetSystemTimePreciseAsFileTime and QueryPerformanceCounter compatibility
+nature_runtime.windows_libc=UCRT tm/environment adapters, UTF-8 filesystem adapter, BCryptGenRandom entropy
+nature_runtime.windows_gc=Microsoft x64 nonvolatile register roots, bounded frame walking, and conservative saved-stack fallback
+nature_runtime.windows_crash=unhandled exception context with PE unwind stack diagnostics
+
+sysroot.layout.mingw=libmingw32.lib includes the required MinGW-w64 CRT and mingwex objects
+sysroot.layout.mbedtls=mbedTLS is included in libruntime.a unless optional split archives are present
+sysroot.variant.release=optimized runtime compiled with -g0; no CodeView or DWARF is emitted
+sysroot.variant.debug=debug runtime compiled with -gdwarf; DWARF input sections may be retained by the COFF linker
+
+ucrtbase.source=zig.libc.mingw.lib-common/ucrtbase.def.in
+api-ms-win-crt-private-l1-1-0.source=zig.libc.mingw.lib-common/api-ms-win-crt-private-l1-1-0.def.in
