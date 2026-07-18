@@ -396,6 +396,18 @@ fn main() {
 --- output.txt
 nature-test/main.n:2:39: fn with both named and unnamed formal parameters
 
+=== test_c_variadic_target[exclude_os=windows]
+--- main.n
+#linkid c_variadic
+fn c_variadic(i32 fixed, ...):i32
+
+fn main() {
+    c_variadic(1, 2)
+}
+
+--- output.txt
+nature-test/main.n:2:30: C variadic calls are currently supported only for windows_amd64
+
 === test_union_failed
 --- main.n
 type uniona = int|f32

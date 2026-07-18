@@ -18,7 +18,7 @@ type socket_t = struct{
     anyptr handle
     anyptr co
     bool closed
-    i32 fd
+    uint fd
 }
 
 type conn_t:io.reader, io.writer = struct{

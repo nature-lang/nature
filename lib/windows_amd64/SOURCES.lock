@@ -37,7 +37,7 @@ nature_runtime.aco_unwind=win64-seh-pdata-xdata
 nature_runtime.windows_time=Win10 GetSystemTimePreciseAsFileTime and QueryPerformanceCounter compatibility
 nature_runtime.windows_libc=UCRT tm/environment adapters, UTF-8 filesystem adapter, BCryptGenRandom entropy
 nature_runtime.windows_gc=Microsoft x64 nonvolatile register roots, bounded frame walking, and conservative saved-stack fallback
-nature_runtime.windows_crash=vectored and unhandled exception context with PE unwind stack diagnostics
+nature_runtime.windows_crash=unhandled exception context with PE unwind stack diagnostics
 
 sysroot.layout.mingw=libmingw32.lib includes the required MinGW-w64 CRT and mingwex objects
 sysroot.layout.mbedtls=mbedTLS is included in libruntime.a unless optional split archives are present

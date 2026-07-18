@@ -153,6 +153,10 @@ add_executable(test_windows_linker_helpers test_windows_linker_helpers.c)
 target_link_libraries(test_windows_linker_helpers nature_common_test m)
 add_test(test_windows_linker_helpers test_windows_linker_helpers)
 
+add_executable(test_archive_writer test_archive_writer.c)
+target_link_libraries(test_archive_writer nature_common_test m)
+add_test(test_archive_writer test_archive_writer)
+
 if (WIN32)
     set(WINDOWS_C_ABI_FIXTURE_DIR
             "${CMAKE_CURRENT_BINARY_DIR}/windows_c_nature_abi")

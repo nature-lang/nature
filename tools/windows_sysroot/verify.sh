@@ -84,6 +84,23 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
+archive_dir=$temp_dir/archive
+mkdir -p "$archive_dir"
+cat >"$archive_dir/main.n" <<'EOF'
+fn main() {}
+EOF
+(
+    cd "$archive_dir"
+    PATH= NATURE_ROOT="$ROOT_DIR" "$NATURE_BIN" build \
+        --target windows_amd64 --archive main.n
+)
+if [ ! -s "$archive_dir/libmain.a" ] ||
+   [ "$(dd if="$archive_dir/libmain.a" bs=8 count=1 2>/dev/null)" != \
+     '!<arch>' ]; then
+    echo "windows sysroot: internal archive writer verification failed" >&2
+    exit 1
+fi
+
 (
     cd "$SYSROOT"
     LC_ALL=C find . -type f ! -name SHA256SUMS -print |

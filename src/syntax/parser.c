@@ -32,6 +32,10 @@ static ast_tuple_destr_t *parser_var_tuple_destr(module_t *m);
 
 static int64_t parser_test_unique = 0;
 
+static bool parser_c_variadic_supported(void) {
+    return BUILD_OS == OS_WINDOWS && BUILD_ARCH == ARCH_AMD64;
+}
+
 static token_t *parser_advance(module_t *m) {
     assert(m->p_cursor.current->succ != NULL && "next token_t is null");
     token_t *t = m->p_cursor.current->value;
@@ -375,6 +379,10 @@ static inline type_fn_t *parser_type_fn(module_t *m) {
         do {
             if (parser_consume(m, TOKEN_ELLIPSIS)) {
                 if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
+                    PARSER_ASSERTF(
+                            parser_c_variadic_supported(),
+                            "C variadic calls are currently supported only "
+                            "for windows_amd64");
                     type_fn->is_c_variadic = true;
                     goto PARAMS_DONE;
                 }
@@ -1123,6 +1131,10 @@ static void parser_params(module_t *m, ast_fndef_t *fndef) {
     do {
         if (parser_consume(m, TOKEN_ELLIPSIS)) {
             if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
+                PARSER_ASSERTF(
+                        parser_c_variadic_supported(),
+                        "C variadic calls are currently supported only for "
+                        "windows_amd64");
                 fndef->c_variadic = true;
                 return;
             }

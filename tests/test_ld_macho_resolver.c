@@ -1,4 +1,5 @@
 #include "test_ld_macho_common.h"
+#include "test_fs.h"
 
 #include <assert.h>
 #include <fcntl.h>
@@ -174,6 +175,25 @@ static void test_resolver_write_dylib(char path[], const char *install_name,
             install_name, weak ? "weak-symbols" : "symbols", symbol);
     assert(length > 0 && (size_t) length < sizeof(tbd));
     test_ld_write_fixture(path, tbd, (size_t) length);
+}
+
+static void test_resolver_write_named_dylib(
+        const char *path, const char *install_name, const char *symbol,
+        bool weak) {
+    char tbd[1024];
+    int length = snprintf(
+            tbd, sizeof(tbd),
+            "--- !tapi-tbd\n"
+            "tbd-version: 4\n"
+            "targets: [ arm64-macos ]\n"
+            "install-name: '%s'\n"
+            "exports:\n"
+            "  - targets: [ arm64-macos ]\n"
+            "    %s: [ %s ]\n"
+            "...\n",
+            install_name, weak ? "weak-symbols" : "symbols", symbol);
+    assert(length > 0 && (size_t) length < sizeof(tbd));
+    test_ld_write_named_fixture(path, tbd, (size_t) length);
 }
 
 static void test_resolver_output_path(char path[]) {
@@ -869,7 +889,7 @@ static void test_dylib_load_commands_follow_input_order(void) {
     int length = snprintf(framework_dir, sizeof(framework_dir),
                           "%s/ResolverAfter.framework", root);
     assert(length > 0 && (size_t) length < sizeof(framework_dir));
-    assert(mkdir(framework_dir, 0700) == 0);
+    assert(test_make_directory(framework_dir) == 0);
     length = snprintf(framework_path, sizeof(framework_path),
                       "%s/ResolverAfter.tbd", framework_dir);
     assert(length > 0 && (size_t) length < sizeof(framework_path));
@@ -884,8 +904,8 @@ static void test_dylib_load_commands_follow_input_order(void) {
     test_resolver_make_main(main_path, "_before");
     test_resolver_write_dylib(dylib_path, direct_install_name, "_before",
                               false);
-    test_resolver_write_dylib(framework_path, framework_install_name,
-                              "_after", false);
+    test_resolver_write_named_dylib(framework_path, framework_install_name,
+                                    "_after", false);
     test_resolver_output_path(output_path);
 
     ld_options_t options;

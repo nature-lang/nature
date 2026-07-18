@@ -128,16 +128,6 @@ static void rt_windows_report_exception(EXCEPTION_POINTERS *exception) {
 #endif
 }
 
-static LONG CALLBACK
-rt_windows_vectored_exception_handler(EXCEPTION_POINTERS *exception) {
-    if (exception && exception->ExceptionRecord &&
-        exception->ExceptionRecord->ExceptionCode ==
-                EXCEPTION_ACCESS_VIOLATION) {
-        rt_windows_report_exception(exception);
-    }
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-
 static LONG WINAPI
 rt_windows_unhandled_exception_filter(EXCEPTION_POINTERS *exception) {
     rt_windows_report_exception(exception);
@@ -145,8 +135,6 @@ rt_windows_unhandled_exception_filter(EXCEPTION_POINTERS *exception) {
 }
 
 void rt_install_windows_exception_handler(void) {
-    (void) AddVectoredExceptionHandler(
-            1, rt_windows_vectored_exception_handler);
     SetUnhandledExceptionFilter(rt_windows_unhandled_exception_filter);
 }
 

@@ -15,6 +15,7 @@
 #include "src/binary/coff/coff_amd64.h"
 #include "src/binary/coff/coff_writer.h"
 #include "src/binary/mach/mach.h"
+#include "src/build/archive.h"
 #include "src/build/test_runner.h"
 #include "src/build/windows_linker.h"
 #include "src/cfg.h"
@@ -1581,28 +1582,41 @@ static void build_compiler(slice_t *modules) {
  * 构建成 libmain.a 文件
  */
 static void build_archive(slice_t *modules) {
-    char *cmd = mallocz(10240 * sizeof(char));
-    strcpy(cmd, "ar -rcs ");
     char *output = path_join(TEMP_DIR, "libmain.a");
-    strcat(cmd, output);
-
-    for (int i = 0; i < modules->count; ++i) {
-        module_t *m = modules->take[i];
-        char *obj_file = m->object_file;
-        if (obj_file == NULL) {
-            continue;
+    if (BUILD_OS == OS_WINDOWS) {
+        const char **members = calloc((size_t) modules->count + 1U,
+                                      sizeof(*members));
+        assertf(members, "allocating Windows archive member list failed");
+        size_t member_count = 0;
+        for (int i = 0; i < modules->count; ++i) {
+            module_t *m = modules->take[i];
+            if (m->object_file) members[member_count++] = m->object_file;
         }
-
-        // 将每个模块的object文件添加到命令中
+        members[member_count++] = custom_link_object_path();
+        char error[1024];
+        bool success = build_archive_write(output, members, member_count,
+                                           error, sizeof(error));
+        free(members);
+        assertf(success, "Compiling Windows static library failed: %s",
+                error);
+    } else {
+        char *cmd = mallocz(10240 * sizeof(char));
+        strcpy(cmd, "ar -rcs ");
+        strcat(cmd, output);
+        for (int i = 0; i < modules->count; ++i) {
+            module_t *m = modules->take[i];
+            if (!m->object_file) continue;
+            strcat(cmd, " ");
+            strcat(cmd, m->object_file);
+        }
         strcat(cmd, " ");
-        strcat(cmd, obj_file);
-    }
-    strcat(cmd, " ");
-    strcat(cmd, custom_link_object_path());
-
-    int result = system(cmd);
-    if (result != 0) {
-        assertf(false, "Compiling static library failed. ar command error: %d", result);
+        strcat(cmd, custom_link_object_path());
+        int result = system(cmd);
+        if (result != 0)
+            assertf(false,
+                    "Compiling static library failed. ar command error: %d",
+                    result);
+        free(cmd);
     }
 
     strcpy(BUILD_OUTPUT, path_join(BUILD_OUTPUT_DIR, "libmain.a"));

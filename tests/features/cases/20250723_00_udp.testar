@@ -52,6 +52,7 @@ fn send():void! {
 }
 
 fn main() {
+    assert(@sizeof(udp.socket_t) == 64)
     go echo_server()
     co.sleep(500) // wait server start
 
