@@ -172,6 +172,86 @@ static void build_associative_family(const char *path, const char *leader,
     coff_object_destroy(object);
 }
 
+static void build_mingw_implicit_seh_family(const char *path,
+                                            const char *leader,
+                                            uint32_t marker) {
+    coff_object_t *object = coff_object_create(path);
+    assert(object);
+    coff_section_t *text = NULL;
+    coff_section_t *pdata = NULL;
+    coff_section_t *xdata = NULL;
+    const uint32_t read_only = LD_COFF_SCN_CNT_INITIALIZED_DATA |
+                               LD_COFF_SCN_MEM_READ;
+    assert(coff_object_add_section(
+                   object, ".text$implicit",
+                   LD_COFF_SCN_CNT_CODE | LD_COFF_SCN_MEM_EXECUTE |
+                           LD_COFF_SCN_MEM_READ,
+                   16U, &text) == COFF_WRITER_OK);
+    assert(coff_object_add_section(object, ".pdata$implicit", read_only, 4U,
+                                   &pdata) == COFF_WRITER_OK);
+    assert(coff_object_add_section(object, ".xdata$implicit", read_only, 4U,
+                                   &xdata) == COFF_WRITER_OK);
+
+    static const uint8_t code[] = {0xc3};
+    assert(coff_section_append(text, code, sizeof(code), 1U, NULL) ==
+           COFF_WRITER_OK);
+    assert(coff_section_append_zeros(pdata, 12U, 4U, NULL) ==
+           COFF_WRITER_OK);
+    assert(coff_section_append(xdata, &marker, sizeof(marker), 4U, NULL) ==
+           COFF_WRITER_OK);
+
+    uint32_t leader_index = COFF_SYMBOL_INDEX_NONE;
+    uint32_t text_section_index = COFF_SYMBOL_INDEX_NONE;
+    uint32_t pdata_section_index = COFF_SYMBOL_INDEX_NONE;
+    uint32_t xdata_section_index = COFF_SYMBOL_INDEX_NONE;
+    uint32_t text_end = COFF_SYMBOL_INDEX_NONE;
+    assert(coff_object_mark_comdat(
+                   object, text, LD_COFF_COMDAT_ANY, NULL, leader, 0U,
+                   &text_section_index, &leader_index) == COFF_WRITER_OK);
+    assert(coff_object_define_symbol(
+                   object, "implicit_end", text, sizeof(code), 0U,
+                   LD_COFF_STORAGE_CLASS_STATIC, &text_end) ==
+           COFF_WRITER_OK);
+    assert(coff_object_mark_comdat(
+                   object, pdata, LD_COFF_COMDAT_ASSOCIATIVE, text, NULL,
+                   0U, &pdata_section_index, NULL) == COFF_WRITER_OK);
+    assert(coff_object_mark_comdat(
+                   object, xdata, LD_COFF_COMDAT_ASSOCIATIVE, text, NULL,
+                   0U, &xdata_section_index, NULL) == COFF_WRITER_OK);
+    assert(coff_section_add_relocation_with_addend(
+                   pdata, 0U, text_section_index,
+                   LD_COFF_REL_AMD64_ADDR32NB, 0) == COFF_WRITER_OK);
+    assert(coff_section_add_relocation_with_addend(
+                   pdata, 4U, text_end, LD_COFF_REL_AMD64_ADDR32NB, 0) ==
+           COFF_WRITER_OK);
+    assert(coff_section_add_relocation_with_addend(
+                   pdata, 8U, xdata_section_index,
+                   LD_COFF_REL_AMD64_ADDR32NB, 0) == COFF_WRITER_OK);
+
+    uint8_t *bytes = NULL;
+    size_t size = 0U;
+    assert(coff_object_serialize(object, &bytes, &size) == COFF_WRITER_OK);
+    ld_coff_view_t view = {bytes, size};
+    uint32_t symbol_table = 0U;
+    assert(ld_coff_read_u32(view, 8U, &symbol_table));
+    const uint32_t section_symbols[] = {pdata_section_index,
+                                        xdata_section_index};
+    const uint16_t section_numbers[] = {2U, 3U};
+    for (size_t i = 0U; i < 2U; i++) {
+        uint64_t aux = (uint64_t) symbol_table +
+                       ((uint64_t) section_symbols[i] + 1U) *
+                               LD_COFF_SYMBOL_SIZE;
+        assert(ld_coff_write_u16(bytes, size, aux + 12U,
+                                 section_numbers[i]));
+        assert(ld_coff_range_ok(view, aux + 14U, 1U));
+        bytes[aux + 14U] = LD_COFF_COMDAT_ANY;
+    }
+    (void) text_section_index;
+    write_all(path, bytes, size);
+    free(bytes);
+    coff_object_destroy(object);
+}
+
 static void context_init(ld_coff_context_t *context, ld_options_t *options,
                          diagnostic_capture_t *capture,
                          const char *entry_symbol) {
@@ -394,6 +474,44 @@ static void test_associative_unwind_and_debug(const char *directory) {
     ld_coff_context_deinit(&context);
 }
 
+static void test_mingw_implicit_seh_association(const char *directory) {
+    char first[1024], second[1024];
+    snprintf(first, sizeof(first), "%s/implicit-first.obj", directory);
+    snprintf(second, sizeof(second), "%s/implicit-second.obj", directory);
+    build_mingw_implicit_seh_family(first, "implicit_key",
+                                    UINT32_C(0x11111111));
+    build_mingw_implicit_seh_family(second, "implicit_key",
+                                    UINT32_C(0x22222222));
+
+    diagnostic_capture_t capture = {{0}};
+    ld_options_t options;
+    ld_coff_context_t context;
+    context_init(&context, &options, &capture, "implicit_key");
+    assert(ld_coff_load_input(&context, first) == LD_OK);
+    assert(ld_coff_load_input(&context, second) == LD_OK);
+    assert(context.objects[1]->sections[0].discarded);
+
+    uint8_t *image = NULL;
+    size_t image_size = 0U;
+    assert(ld_coff_build_image(&context, &image, &image_size) == LD_OK);
+    assert(image && image_size != 0U);
+    assert(!context.objects[0]->sections[1].discarded);
+    assert(!context.objects[0]->sections[2].discarded);
+    assert(context.objects[1]->sections[1].discarded);
+    assert(context.objects[1]->sections[2].discarded);
+
+    ld_coff_output_section_t *pdata = output_section(&context, ".pdata");
+    ld_coff_output_section_t *xdata = output_section(&context, ".xdata");
+    assert(pdata && pdata->input_count == 1U);
+    assert(xdata && xdata->input_count == 1U);
+    uint32_t xdata_marker = 0U;
+    memcpy(&xdata_marker, xdata->data, sizeof(xdata_marker));
+    assert(xdata_marker == UINT32_C(0x11111111));
+
+    free(image);
+    ld_coff_context_deinit(&context);
+}
+
 static void test_largest(const char *directory) {
     char first[1024], second[1024];
     snprintf(first, sizeof(first), "%s/largest-first.obj", directory);
@@ -449,6 +567,7 @@ int main(void) {
     test_exact_match(directory);
     test_associative(directory);
     test_associative_unwind_and_debug(directory);
+    test_mingw_implicit_seh_association(directory);
     test_largest(directory);
     test_newest(directory);
     return 0;

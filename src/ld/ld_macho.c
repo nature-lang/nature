@@ -469,10 +469,12 @@ static int ld_register_input_symbol(ld_context_t *ctx, ld_object_t *object, ld_i
             symbol->input = input;
         }
         if (alignment > symbol->align) symbol->align = alignment;
-        /* A common symbol is weak only when every contributing tentative
-           definition is weak.  This keeps the result independent of archive
-           member/input order. */
-        symbol->weak = symbol->weak && weak;
+        /* Zig converts every prevailing tentative definition into an
+           ordinary global __common symbol and clears both weak bits.  The
+           weak-definition spelling on an N_UNDF common must therefore never
+           leak into the executable symbol table or Mach-O header flags. */
+        symbol->weak = false;
+        symbol->weak_ref = false;
         if (candidate_better) ld_symbol_set_rank(symbol, candidate_rank);
         return LD_OK;
     }
@@ -499,8 +501,8 @@ static int ld_register_input_symbol(ld_context_t *ctx, ld_object_t *object, ld_i
     symbol->value = input->entry.n_value;
     symbol->size = common ? input->entry.n_value : 0;
     symbol->align = (input->entry.n_desc >> 8U) & 0xfU;
-    symbol->weak = weak;
-    symbol->weak_ref = weak_ref;
+    symbol->weak = common ? false : weak;
+    symbol->weak_ref = common ? false : weak_ref;
     symbol->alias = alias;
     symbol->alias_target = alias_target;
     symbol->dynamic = false;
@@ -824,7 +826,7 @@ static int ld_collect_sections(ld_context_t *ctx) {
         }
         for (size_t section_index = 0; section_index < object->section_count; section_index++) {
             ld_input_section_t *input = &object->sections[section_index];
-            if (input->ignored || input->header.size == 0) {
+            if (input->ignored) {
                 continue;
             }
             char segname[17], sectname[17];
@@ -857,7 +859,10 @@ static int ld_collect_sections(ld_context_t *ctx) {
                 if (ld_output_reserve(output, output->size) != LD_OK) {
                     return ld_fail(ctx, LD_IO_ERROR, "out of memory merging section %s,%s", segname, sectname);
                 }
-                memcpy(output->data + input->output_offset, input->data, (size_t) input->header.size);
+                if (input->header.size != 0U) {
+                    memcpy(output->data + input->output_offset, input->data,
+                           (size_t) input->header.size);
+                }
             }
         }
     }
@@ -1343,59 +1348,31 @@ static size_t ld_output_count_for_segment(const ld_context_t *ctx, const char *n
     return count;
 }
 
-static size_t ld_builtin_dylib_count(const ld_context_t *ctx) {
-    return 1U + ctx->options->frameworks.count;
+static bool ld_dylib_is_system(const ld_dylib_input_t *dylib) {
+    return dylib &&
+           strcmp(dylib->install_name, "/usr/lib/libSystem.B.dylib") == 0;
 }
 
-static bool ld_builtin_dylib_path(const ld_context_t *ctx, size_t index, char *path, size_t path_size) {
-    if (index == 0) {
-        return snprintf(path, path_size, "/usr/lib/libSystem.B.dylib") > 0;
-    }
-    size_t framework_index = index - 1U;
-    if (framework_index < ctx->options->frameworks.count) {
-        const char *name = ctx->options->frameworks.items[framework_index];
-        char marker[LD_MAX_PATH];
-        int marker_length = snprintf(marker, sizeof(marker), "/%s.framework/", name);
-        if (marker_length < 0 || (size_t) marker_length >= sizeof(marker)) return false;
-        for (size_t i = 0; i < ctx->dylibs.count; i++) {
-            const ld_dylib_input_t *dylib = &ctx->dylibs.items[i];
-            if (!dylib->reexport_only && strstr(dylib->install_name, marker)) {
-                int result = snprintf(path, path_size, "%s", dylib->install_name);
-                return result >= 0 && (size_t) result < path_size;
-            }
-        }
-        int result = snprintf(path, path_size,
-                              "/System/Library/Frameworks/%s.framework/Versions/A/%s", name, name);
-        return result >= 0 && (size_t) result < path_size;
-    }
-    return false;
-}
-
-static bool ld_dylib_install_name_is_builtin(const ld_context_t *ctx, const char *install_name,
-                                             size_t *builtin_index) {
-    size_t count = ld_builtin_dylib_count(ctx);
-    for (size_t i = 0; i < count; i++) {
-        char path[LD_MAX_PATH];
-        if (ld_builtin_dylib_path(ctx, i, path, sizeof(path)) && strcmp(path, install_name) == 0) {
-            if (builtin_index) *builtin_index = i;
+static bool ld_dylib_is_duplicate_extra(const ld_context_t *ctx, size_t index) {
+    if (ctx->dylibs.items[index].reexport_only) return true;
+    const char *install_name = ctx->dylibs.items[index].install_name;
+    if (ld_dylib_is_system(&ctx->dylibs.items[index])) return true;
+    for (size_t i = 0; i < index; i++) {
+        if (!ctx->dylibs.items[i].reexport_only &&
+            strcmp(ctx->dylibs.items[i].install_name, install_name) == 0) {
             return true;
         }
     }
     return false;
 }
 
-static bool ld_dylib_is_duplicate_extra(const ld_context_t *ctx, size_t index) {
-    if (ctx->dylibs.items[index].reexport_only) return true;
-    const char *install_name = ctx->dylibs.items[index].install_name;
-    if (ld_dylib_install_name_is_builtin(ctx, install_name, NULL)) return true;
-    for (size_t i = 0; i < index; i++) {
-        if (strcmp(ctx->dylibs.items[i].install_name, install_name) == 0) return true;
-    }
-    return false;
-}
-
 static size_t ld_dylib_count(const ld_context_t *ctx) {
-    size_t count = ld_builtin_dylib_count(ctx);
+    /* libSystem is implicit and always occupies ordinal one.  Every other
+       load command follows the first occurrence in the parsed dylib list.
+       In particular, do not hoist frameworks ahead of direct dylib inputs:
+       Zig assigns ordinals by walking MachO.dylibs, and the nlist ordinal
+       must describe the command order written to the final image. */
+    size_t count = 1U;
     for (size_t i = 0; i < ctx->dylibs.count; i++) {
         if (!ld_dylib_is_duplicate_extra(ctx, i)) count++;
     }
@@ -1403,9 +1380,11 @@ static size_t ld_dylib_count(const ld_context_t *ctx) {
 }
 
 static bool ld_dylib_path(const ld_context_t *ctx, size_t index, char *path, size_t path_size) {
-    size_t builtin_count = ld_builtin_dylib_count(ctx);
-    if (index < builtin_count) return ld_builtin_dylib_path(ctx, index, path, path_size);
-    size_t extra_index = index - builtin_count;
+    if (index == 0U) {
+        int result = snprintf(path, path_size, "/usr/lib/libSystem.B.dylib");
+        return result >= 0 && (size_t) result < path_size;
+    }
+    size_t extra_index = index - 1U;
     for (size_t i = 0; i < ctx->dylibs.count; i++) {
         if (ld_dylib_is_duplicate_extra(ctx, i)) continue;
         if (extra_index-- == 0) {
@@ -1426,18 +1405,19 @@ static const ld_dylib_input_t *ld_dylib_metadata(const ld_context_t *ctx, const 
 }
 
 static uint32_t ld_dylib_ordinal(const ld_context_t *ctx, size_t input_index) {
-    size_t builtin_index;
-    if (ld_dylib_install_name_is_builtin(ctx, ctx->dylibs.items[input_index].install_name, &builtin_index)) {
-        return (uint32_t) builtin_index + 1U;
-    }
-    size_t ordinal = ld_builtin_dylib_count(ctx) + 1U;
-    for (size_t i = 0; i < input_index; i++) {
-        if (!ld_dylib_is_duplicate_extra(ctx, i)) ordinal++;
-        if (strcmp(ctx->dylibs.items[i].install_name, ctx->dylibs.items[input_index].install_name) == 0) {
-            return (uint32_t) (ordinal - 1U);
+    const ld_dylib_input_t *target = &ctx->dylibs.items[input_index];
+    if (ld_dylib_is_system(target)) return 1U;
+    uint32_t ordinal = 2U;
+    for (size_t i = 0; i < ctx->dylibs.count; i++) {
+        if (ld_dylib_is_duplicate_extra(ctx, i)) continue;
+        if (strcmp(ctx->dylibs.items[i].install_name,
+                   target->install_name) == 0) {
+            return ordinal;
         }
+        if (ordinal == UINT32_MAX) return UINT32_MAX;
+        ordinal++;
     }
-    return (uint32_t) ordinal;
+    return UINT32_MAX;
 }
 
 static int ld_register_dylib_symbols(ld_context_t *ctx) {
@@ -1473,6 +1453,10 @@ static int ld_register_dylib_symbols(ld_context_t *ctx) {
             symbol->kind = LD_SYMBOL_IMPORT;
             symbol->dynamic = true;
             symbol->weak = candidate->weak;
+            /* Zig's Symbol.weakRef treats every symbol from a weakly-loaded
+               dylib as a weak reference, independently of the input nlist's
+               N_WEAK_REF bit. */
+            symbol->weak_ref = symbol->weak_ref || dylib->weak;
             symbol->dylib_weak_definition = candidate->weak;
             symbol->dylib_absolute = candidate->absolute;
             symbol->tlv = candidate->tlv;
@@ -1573,8 +1557,10 @@ static int ld_layout_sections(ld_context_t *ctx) {
     ctx->segments[ctx->segment_count].initprot = LD_VM_PROT_READ;
     ctx->segment_count++;
     ctx->header_size = ld_load_commands_size(ctx);
-    if (ctx->header_size >= LD_PAGE_SIZE) {
-        return ld_fail(ctx, LD_UNSUPPORTED, "Mach-O load commands exceed the first page");
+    if (ctx->header_size < sizeof(ld_mach_header_64_t) ||
+        ctx->header_size - sizeof(ld_mach_header_64_t) > UINT32_MAX) {
+        return ld_fail(ctx, LD_OUTPUT_ERROR,
+                       "Mach-O load commands exceed the 32-bit header limit");
     }
 
     ld_segment_layout_t *text = ld_find_segment(ctx, "__TEXT");
@@ -3268,12 +3254,14 @@ static size_t ld_write_segment_command(ld_context_t *ctx, uint8_t *image, size_t
     return position;
 }
 
-static size_t ld_write_dylib_command(uint8_t *image, size_t position, const char *path,
-                                     uint32_t current_version, uint32_t compatibility_version) {
+static size_t ld_write_dylib_command(uint8_t *image, size_t position,
+                                     const char *path, uint32_t current_version,
+                                     uint32_t compatibility_version,
+                                     bool weak) {
     size_t path_size = strlen(path) + 1U;
     uint32_t command_size = (uint32_t) ((sizeof(ld_dylib_command_t) + path_size + 7U) & ~7U);
     ld_dylib_command_t command = {0};
-    command.cmd = LD_LC_LOAD_DYLIB;
+    command.cmd = weak ? LD_LC_LOAD_WEAK_DYLIB : LD_LC_LOAD_DYLIB;
     command.cmdsize = command_size;
     command.name_offset = sizeof(command);
     command.timestamp = 2;
@@ -3390,7 +3378,9 @@ static size_t ld_write_load_commands(ld_context_t *ctx, uint8_t *image, const ld
         const ld_dylib_input_t *metadata = ld_dylib_metadata(ctx, path);
         uint32_t current_version = metadata ? metadata->current_version : LD_DEFAULT_DYLIB_VERSION;
         uint32_t compatibility_version = metadata ? metadata->compatibility_version : LD_DEFAULT_DYLIB_VERSION;
-        position = ld_write_dylib_command(image, position, path, current_version, compatibility_version);
+        position = ld_write_dylib_command(
+                image, position, path, current_version,
+                compatibility_version, metadata && metadata->weak);
     }
     for (size_t i = 0; i < ctx->options->rpaths.count; i++) {
         position = ld_write_rpath_command(
@@ -3725,7 +3715,8 @@ static int ld_emit_image(ld_context_t *ctx) {
                                ctx->options->rpaths.count +
                                (ctx->options->adhoc_codesign ? 1U : 0U));
     header.sizeofcmds = (uint32_t) (ctx->header_size - sizeof(header));
-    header.flags = LD_MH_NOUNDEFS | LD_MH_DYLDLINK | LD_MH_TWOLEVEL;
+    header.flags = LD_MH_NOUNDEFS | LD_MH_DYLDLINK | LD_MH_TWOLEVEL |
+                   LD_MH_NO_REEXPORTED_DYLIBS;
     if (ctx->options->pie) header.flags |= LD_MH_PIE;
     for (ld_symbol_t *symbol = ctx->symbols; symbol; symbol = symbol->hh.next) {
         if (ld_macho_symbol_is_exported_weak(symbol)) {

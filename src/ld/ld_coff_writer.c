@@ -287,14 +287,21 @@ static int ld_coff_prepare_imports(ld_coff_context_t *ctx) {
         if (!iat_global || !public_global)
             return ld_coff_fail(ctx, LD_SYMBOL_ERROR,
                                 "internal import symbol is missing");
-        iat_global->section = addresses;
-        iat_global->value = import->iat_offset;
+        if (iat_global->import == import &&
+            iat_global->kind == LD_COFF_GLOBAL_IMPORT_IAT) {
+            iat_global->section = addresses;
+            iat_global->value = import->iat_offset;
+        }
         if (import->type == LD_COFF_IMPORT_CODE) {
             import->thunk_offset = thunk_offset;
-            public_global->section = thunks;
-            public_global->value = thunk_offset;
+            if (public_global->import == import &&
+                public_global->kind == LD_COFF_GLOBAL_IMPORT_THUNK) {
+                public_global->section = thunks;
+                public_global->value = thunk_offset;
+            }
             thunk_offset += 6U;
-        } else {
+        } else if (public_global->import == import &&
+                   public_global->kind == LD_COFF_GLOBAL_IMPORT_IAT) {
             public_global->section = addresses;
             public_global->value = import->iat_offset;
         }
@@ -318,6 +325,12 @@ static int ld_coff_prepare_imports(ld_coff_context_t *ctx) {
     return LD_OK;
 }
 
+static bool ld_coff_writer_section_is_comdat(
+        const ld_coff_section_t *section) {
+    return section &&
+           (section->characteristics & LD_COFF_SCN_LNK_COMDAT) != 0U;
+}
+
 static void ld_coff_discard_associative(ld_coff_context_t *ctx) {
     bool changed;
     do {
@@ -334,6 +347,49 @@ static void ld_coff_discard_associative(ld_coff_context_t *ctx) {
                 uint32_t parent = section->associative_section;
                 if (parent == 0U || parent > object->section_count ||
                     object->sections[parent - 1U].discarded) {
+                    section->discarded = true;
+                    changed = true;
+                }
+            }
+
+            /* Clang/GCC MinGW objects commonly encode .pdata$<func>,
+               .xdata$<func>, and .eh_frame$<func> as leaderless ANY
+               COMDATs rather than standard ASSOCIATIVE COMDATs.  LLD's
+               maybeAssociateSEHForMingw() attaches such a contribution to
+               the prevailing executable COMDAT with the same `$` suffix;
+               if this object lost that code COMDAT, the unwind contribution
+               must be discarded as well. */
+            for (size_t j = 0; j < object->section_count; j++) {
+                ld_coff_section_t *section = &object->sections[j];
+                if (section->discarded || section->comdat_key ||
+                    !ld_coff_writer_section_is_comdat(section) ||
+                    section->comdat_selection ==
+                            LD_COFF_COMDAT_ASSOCIATIVE)
+                    continue;
+                const char *suffix = NULL;
+                if (strncmp(section->name, ".pdata$", 7U) == 0)
+                    suffix = section->name + 7U;
+                else if (strncmp(section->name, ".xdata$", 7U) == 0)
+                    suffix = section->name + 7U;
+                else if (strncmp(section->name, ".eh_frame$", 10U) == 0)
+                    suffix = section->name + 10U;
+                if (!suffix || !*suffix) continue;
+
+                bool prevailing_parent = false;
+                for (size_t k = 0; k < object->section_count; k++) {
+                    ld_coff_section_t *parent = &object->sections[k];
+                    if (parent->discarded ||
+                        !ld_coff_writer_section_is_comdat(parent) ||
+                        (parent->characteristics &
+                         LD_COFF_SCN_MEM_EXECUTE) == 0U)
+                        continue;
+                    const char *dollar = strchr(parent->name, '$');
+                    if (dollar && strcmp(dollar + 1U, suffix) == 0) {
+                        prevailing_parent = true;
+                        break;
+                    }
+                }
+                if (!prevailing_parent) {
                     section->discarded = true;
                     changed = true;
                 }
@@ -1612,8 +1668,7 @@ int ld_coff_write_map(ld_coff_context_t *ctx) {
     for (size_t i = 0; status == LD_OK && i < ctx->output_count; i++) {
         const ld_coff_output_section_t *output = ctx->outputs[i];
         status = ld_coff_text_append(
-                ctx, &buffer, "0x%016" PRIx64 " 0x%08" PRIx32
-                              " 0x%08" PRIx32 " %s\n",
+                ctx, &buffer, "0x%016" PRIx64 " 0x%08" PRIx32 " 0x%08" PRIx32 " %s\n",
                 ctx->image_base + output->rva, output->rva,
                 output->virtual_size, output->name);
     }
@@ -1625,8 +1680,7 @@ int ld_coff_write_map(ld_coff_context_t *ctx) {
     for (size_t i = 0; status == LD_OK && i < symbol_count; i++) {
         const ld_coff_map_symbol_t *symbol = &symbols[i];
         status = ld_coff_text_append(
-                ctx, &buffer, "0x%016" PRIx64 " 0x%08" PRIx32
-                              " %-8s %s %s\n",
+                ctx, &buffer, "0x%016" PRIx64 " 0x%08" PRIx32 " %-8s %s %s\n",
                 symbol->va, symbol->rva, symbol->output->name,
                 symbol->global->name,
                 ld_coff_map_source(symbol->global));

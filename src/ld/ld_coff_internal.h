@@ -119,6 +119,10 @@ struct ld_coff_global {
     uint32_t common_alignment;
     char *fallback_name;
     uint32_t fallback_characteristics;
+    /* Object that introduced an IMAGE_SYM_CLASS_WEAK_EXTERNAL fallback.
+       LLD lets an already-registered lazy provider override that weak
+       external, but ignores providers from archives encountered later. */
+    ld_coff_object_t *fallback_object;
     ld_coff_object_t **lazy_objects;
     size_t lazy_count;
     size_t lazy_capacity;

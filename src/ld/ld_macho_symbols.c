@@ -3,9 +3,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* Symbol ranking is translated from Zig MachO/file.zig getSymbolRank at
-   commit 738d2be9d6b6ef3ff3559130c05159ef53336224.  C keeps the rank fields
-   separate so very large input counts cannot collide with strength bits. */
+/* Darwin keeps definitions from loaded object files ahead of dylib exports,
+   even when the object definition is weak or tentative.  An unselected
+   archive member is still lazy: it competes with a strong dylib by input
+   order, and a weak dylib causes it to be extracted.  This matches ld64 and
+   LLD Mach-O SymbolTable semantics.  C keeps rank fields separate so very
+   large input counts cannot collide with strength bits. */
 
 ld_symbol_visibility_t ld_macho_nlist_visibility(uint8_t n_type,
                                                  uint16_t n_desc) {
@@ -56,21 +59,23 @@ bool ld_macho_symbol_needs_stub(const ld_symbol_t *symbol) {
 ld_macho_symbol_rank_t ld_macho_object_symbol_rank(
         const ld_object_t *object, const ld_input_symbol_t *symbol,
         size_t order) {
-    bool archive = object && object->archive_member;
+    bool archive = object && object->archive_member && !object->selected;
     bool weak = symbol && (symbol->entry.n_desc & LD_N_WEAK_DEF) != 0;
     bool tentative = symbol &&
                      (symbol->entry.n_type & LD_N_TYPE) == LD_N_UNDF &&
                      symbol->entry.n_value != 0;
     uint32_t class_value;
-    if (tentative) {
-        class_value = archive ? LD_MACHO_RANK_ARCHIVE_TENTATIVE
-                              : LD_MACHO_RANK_DIRECT_TENTATIVE;
+    if (archive) {
+        /* Archive indexes do not encode definition strength.  Treat every
+           lazy definition like a strong dylib candidate until its member is
+           selected, then rerank the real object symbol below. */
+        class_value = LD_MACHO_RANK_ARCHIVE_OR_DYLIB_STRONG;
+    } else if (tentative) {
+        class_value = LD_MACHO_RANK_DIRECT_TENTATIVE;
     } else if (weak) {
-        class_value = archive ? LD_MACHO_RANK_ARCHIVE_OR_DYLIB_WEAK
-                              : LD_MACHO_RANK_DIRECT_WEAK;
+        class_value = LD_MACHO_RANK_DIRECT_WEAK;
     } else {
-        class_value = archive ? LD_MACHO_RANK_ARCHIVE_OR_DYLIB_STRONG
-                              : LD_MACHO_RANK_DIRECT_STRONG;
+        class_value = LD_MACHO_RANK_DIRECT_STRONG;
     }
     return (ld_macho_symbol_rank_t) {
             .class_value = class_value,

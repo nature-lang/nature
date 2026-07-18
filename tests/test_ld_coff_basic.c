@@ -198,6 +198,99 @@ static uint8_t *build_import_object(size_t *size) {
     return bytes;
 }
 
+static uint8_t *build_regular_import_override_object(size_t *size) {
+    coff_object_t *object = coff_object_create_amd64("regular-override.c");
+    assert(object);
+    coff_section_t *text = coff_object_text(object);
+    assert(text);
+    static const uint8_t code[] = {0xc3U, 0xc3U};
+    assert(coff_section_append(text, code, sizeof(code), 1U, NULL) ==
+           COFF_WRITER_OK);
+    assert(coff_object_define_symbol(
+                   object, "entry", text, 0U, COFF_SYMBOL_TYPE_FUNCTION,
+                   LD_COFF_STORAGE_CLASS_EXTERNAL, NULL) == COFF_WRITER_OK);
+    assert(coff_object_define_symbol(
+                   object, "ExitProcess", text, 1U,
+                   COFF_SYMBOL_TYPE_FUNCTION, LD_COFF_STORAGE_CLASS_EXTERNAL,
+                   NULL) == COFF_WRITER_OK);
+    uint8_t *bytes = NULL;
+    assert(coff_object_serialize(object, &bytes, size) == COFF_WRITER_OK);
+    coff_object_destroy(object);
+    return bytes;
+}
+
+static uint8_t *build_common_import_override_object(size_t *size) {
+    coff_object_t *object = coff_object_create_amd64("common-override.c");
+    assert(object);
+    coff_section_t *text = coff_object_text(object);
+    assert(text);
+    static const uint8_t code[] = {0xc3U};
+    assert(coff_section_append(text, code, sizeof(code), 1U, NULL) ==
+           COFF_WRITER_OK);
+    assert(coff_object_define_symbol(
+                   object, "entry", text, 0U, COFF_SYMBOL_TYPE_FUNCTION,
+                   LD_COFF_STORAGE_CLASS_EXTERNAL, NULL) == COFF_WRITER_OK);
+    coff_symbol_desc_t common = {
+            .name = "ExitProcess",
+            .value = 64U,
+            .section_number = LD_COFF_SYM_UNDEFINED,
+            .storage_class = LD_COFF_STORAGE_CLASS_EXTERNAL,
+    };
+    assert(coff_object_add_symbol(object, &common, NULL) == COFF_WRITER_OK);
+    uint8_t *bytes = NULL;
+    assert(coff_object_serialize(object, &bytes, size) == COFF_WRITER_OK);
+    coff_object_destroy(object);
+    return bytes;
+}
+
+static uint8_t *build_common_only_object(uint32_t common_size, size_t *size) {
+    coff_object_t *object = coff_object_create_amd64("smaller-common.c");
+    assert(object);
+    coff_symbol_desc_t common = {
+            .name = "ExitProcess",
+            .value = common_size,
+            .section_number = LD_COFF_SYM_UNDEFINED,
+            .storage_class = LD_COFF_STORAGE_CLASS_EXTERNAL,
+    };
+    assert(coff_object_add_symbol(object, &common, NULL) == COFF_WRITER_OK);
+    uint8_t *bytes = NULL;
+    assert(coff_object_serialize(object, &bytes, size) == COFF_WRITER_OK);
+    coff_object_destroy(object);
+    return bytes;
+}
+
+static uint8_t *build_weak_external_object(bool defines_entry,
+                                           const char *source_name,
+                                           size_t *size) {
+    coff_object_t *object = coff_object_create_amd64(source_name);
+    assert(object);
+    coff_section_t *text = coff_object_text(object);
+    assert(text);
+    static const uint8_t code[] = {0xc3U, 0xc3U};
+    assert(coff_section_append(text, code, sizeof(code), 1U, NULL) ==
+           COFF_WRITER_OK);
+    if (defines_entry) {
+        assert(coff_object_define_symbol(
+                       object, "entry", text, 0U,
+                       COFF_SYMBOL_TYPE_FUNCTION,
+                       LD_COFF_STORAGE_CLASS_EXTERNAL, NULL) ==
+               COFF_WRITER_OK);
+    }
+    uint32_t fallback = COFF_SYMBOL_INDEX_NONE;
+    assert(coff_object_define_symbol(
+                   object, ".weak.foo.default", text, 1U,
+                   COFF_SYMBOL_TYPE_FUNCTION,
+                   LD_COFF_STORAGE_CLASS_EXTERNAL, &fallback) ==
+           COFF_WRITER_OK);
+    assert(coff_object_add_weak_external(
+                   object, "foo", fallback, LD_COFF_WEAK_SEARCH_ALIAS,
+                   NULL) == COFF_WRITER_OK);
+    uint8_t *bytes = NULL;
+    assert(coff_object_serialize(object, &bytes, size) == COFF_WRITER_OK);
+    coff_object_destroy(object);
+    return bytes;
+}
+
 static uint8_t *build_comdat_object(uint32_t marker, size_t *size) {
     coff_object_t *object = coff_object_create("comdat-fixture.c");
     assert(object);
@@ -402,9 +495,12 @@ static uint8_t *build_relocation_matrix_object(size_t *size) {
                                        LD_COFF_REL_AMD64_ADDR32NB) ==
            COFF_WRITER_OK);
     static const uint16_t rel32_types[] = {
-            LD_COFF_REL_AMD64_REL32,   LD_COFF_REL_AMD64_REL32_1,
-            LD_COFF_REL_AMD64_REL32_2, LD_COFF_REL_AMD64_REL32_3,
-            LD_COFF_REL_AMD64_REL32_4, LD_COFF_REL_AMD64_REL32_5,
+            LD_COFF_REL_AMD64_REL32,
+            LD_COFF_REL_AMD64_REL32_1,
+            LD_COFF_REL_AMD64_REL32_2,
+            LD_COFF_REL_AMD64_REL32_3,
+            LD_COFF_REL_AMD64_REL32_4,
+            LD_COFF_REL_AMD64_REL32_5,
     };
     for (size_t i = 0U; i < sizeof(rel32_types) / sizeof(*rel32_types); i++)
         assert(coff_section_add_relocation(data, 16U + (uint32_t) i * 4U,
@@ -666,6 +762,137 @@ static void test_base_relocation(const char *directory) {
     assert((dll_flags & LD_PE_DLL_DYNAMIC_BASE) != 0U);
     assert((dll_flags & LD_PE_DLL_HIGH_ENTROPY_VA) != 0U);
     free(image);
+}
+
+static void test_object_definitions_override_earlier_import(
+        const char *directory) {
+    char import[512], object[512], smaller[512], output[512], map[512];
+    snprintf(import, sizeof(import), "%s/override-kernel32.obj", directory);
+    snprintf(object, sizeof(object), "%s/regular-override.obj", directory);
+    snprintf(output, sizeof(output), "%s/regular-override.exe", directory);
+    snprintf(map, sizeof(map), "%s/regular-override.map", directory);
+
+    size_t import_size, object_size;
+    uint8_t *import_bytes = build_import_object(&import_size);
+    uint8_t *object_bytes =
+            build_regular_import_override_object(&object_size);
+    write_all(import, import_bytes, import_size);
+    write_all(object, object_bytes, object_size);
+    free(import_bytes);
+    free(object_bytes);
+
+    char *inputs[] = {import, object};
+    diagnostic_capture_t capture = {{0}};
+    ld_options_t options = {0};
+    options.os = LD_OS_WINDOWS;
+    options.arch = LD_ARCH_AMD64;
+    options.output_path = output;
+    options.map_path = map;
+    options.entry_symbol = "entry";
+    options.pie = true;
+    options.inputs.items = inputs;
+    options.inputs.count = 2U;
+    options.inputs.capacity = 2U;
+    options.diagnostic = diagnostic;
+    options.diagnostic_context = &capture;
+    assert(ld_link(&options) == LD_OK);
+
+    size_t image_size;
+    uint8_t *image = read_all(output, &image_size);
+    ld_coff_view_t view = {image, image_size};
+    uint32_t entry_rva = read32(view, pe_optional_offset(view) + 16U);
+    free(image);
+
+    size_t map_size;
+    uint8_t *map_bytes = read_all(map, &map_size);
+    (void) map_size;
+    const char *line = strstr((const char *) map_bytes,
+                              " ExitProcess regular-override.obj");
+    assert(line != NULL);
+    while (line > (const char *) map_bytes && line[-1] != '\n') line--;
+    unsigned long long symbol_va = 0U;
+    unsigned symbol_rva = 0U;
+    assert(sscanf(line, "0x%llx 0x%x", &symbol_va, &symbol_rva) == 2);
+    assert(symbol_va == LD_PE_IMAGE_BASE64 + symbol_rva);
+    assert(symbol_rva == entry_rva + 1U);
+    free(map_bytes);
+
+    snprintf(object, sizeof(object), "%s/common-override.obj", directory);
+    snprintf(output, sizeof(output), "%s/common-override.exe", directory);
+    snprintf(map, sizeof(map), "%s/common-override.map", directory);
+    snprintf(smaller, sizeof(smaller), "%s/smaller-common.obj", directory);
+    object_bytes = build_common_import_override_object(&object_size);
+    write_all(object, object_bytes, object_size);
+    free(object_bytes);
+    size_t smaller_size;
+    uint8_t *smaller_bytes =
+            build_common_only_object(16U, &smaller_size);
+    write_all(smaller, smaller_bytes, smaller_size);
+    free(smaller_bytes);
+    inputs[1] = object;
+    char *common_inputs[] = {import, object, smaller};
+    options.inputs.items = common_inputs;
+    options.inputs.count = 3U;
+    options.inputs.capacity = 3U;
+    options.output_path = output;
+    options.map_path = map;
+    capture.message[0] = '\0';
+    assert(ld_link(&options) == LD_OK);
+
+    map_bytes = read_all(map, &map_size);
+    const char *common_line = strstr((const char *) map_bytes,
+                                     " ExitProcess common-override.obj");
+    assert(common_line != NULL);
+    while (common_line > (const char *) map_bytes && common_line[-1] != '\n')
+        common_line--;
+    char section_name[16] = {0};
+    assert(sscanf(common_line, "0x%*llx 0x%*x %15s", section_name) == 1);
+    assert(strcmp(section_name, ".bss") == 0);
+    free(map_bytes);
+}
+
+static void test_later_archive_does_not_override_weak_external(
+        const char *directory) {
+    char direct[512], archive[512], output[512], map[512];
+    snprintf(direct, sizeof(direct), "%s/weak-direct.obj", directory);
+    snprintf(archive, sizeof(archive), "%s/weak-later.lib", directory);
+    snprintf(output, sizeof(output), "%s/weak-later.exe", directory);
+    snprintf(map, sizeof(map), "%s/weak-later.map", directory);
+
+    size_t direct_size, member_size;
+    uint8_t *direct_bytes = build_weak_external_object(
+            true, "weak-direct.c", &direct_size);
+    uint8_t *member_bytes = build_weak_external_object(
+            false, "weak-later.c", &member_size);
+    write_all(direct, direct_bytes, direct_size);
+    write_archive_member(archive, "weak-later.obj", member_bytes,
+                         member_size);
+    free(direct_bytes);
+    free(member_bytes);
+
+    char *inputs[] = {direct, archive};
+    diagnostic_capture_t capture = {{0}};
+    ld_options_t options = {0};
+    options.os = LD_OS_WINDOWS;
+    options.arch = LD_ARCH_AMD64;
+    options.output_path = output;
+    options.map_path = map;
+    options.entry_symbol = "entry";
+    options.pie = true;
+    options.inputs.items = inputs;
+    options.inputs.count = 2U;
+    options.inputs.capacity = 2U;
+    options.diagnostic = diagnostic;
+    options.diagnostic_context = &capture;
+    assert(ld_link(&options) == LD_OK);
+
+    size_t map_size;
+    uint8_t *map_bytes = read_all(map, &map_size);
+    (void) map_size;
+    assert(strstr((const char *) map_bytes,
+                  ".weak.foo.default weak-direct.obj"));
+    assert(!strstr((const char *) map_bytes, "weak-later.obj"));
+    free(map_bytes);
 }
 
 static void test_long_debug_section_names(const char *directory) {
@@ -968,6 +1195,8 @@ int main(void) {
     test_atomic_output_replace(directory);
     test_minimal_import_and_determinism(directory);
     test_base_relocation(directory);
+    test_object_definitions_override_earlier_import(directory);
+    test_later_archive_does_not_override_weak_external(directory);
     test_long_debug_section_names(directory);
     test_legacy_ctor_and_stable_subsection_order(directory);
     test_relocation_apply_matrix(directory);

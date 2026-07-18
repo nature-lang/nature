@@ -406,9 +406,7 @@ static int ld_coff_define_regular(ld_coff_context_t *ctx,
     if (!global) return ld_coff_fail(ctx, LD_IO_ERROR, "out of memory");
     symbol->global = global;
     if (symbol->section && symbol->section->discarded) return LD_OK;
-    if (global->kind == LD_COFF_GLOBAL_DEFINED ||
-        global->kind == LD_COFF_GLOBAL_IMPORT_IAT ||
-        global->kind == LD_COFF_GLOBAL_IMPORT_THUNK) {
+    if (global->kind == LD_COFF_GLOBAL_DEFINED) {
         bool candidate_wins = false;
         int status = ld_coff_choose_comdat(ctx, global, symbol->section,
                                            &candidate_wins);
@@ -430,28 +428,35 @@ static int ld_coff_define_regular(ld_coff_context_t *ctx,
     global->object = symbol->section ? symbol->section->object : NULL;
     global->symbol = symbol;
     global->section = symbol->section;
+    global->import = NULL;
     global->value = symbol->value;
     return LD_OK;
 }
 
 static int ld_coff_define_common(ld_coff_context_t *ctx,
+                                 ld_coff_object_t *object,
                                  ld_coff_symbol_t *symbol) {
     ld_coff_global_t *global = ld_coff_get_global(ctx, symbol->name, true);
     if (!global) return ld_coff_fail(ctx, LD_IO_ERROR, "out of memory");
     symbol->global = global;
-    if (global->kind == LD_COFF_GLOBAL_DEFINED ||
-        global->kind == LD_COFF_GLOBAL_ABSOLUTE ||
-        global->kind == LD_COFF_GLOBAL_IMPORT_IAT ||
-        global->kind == LD_COFF_GLOBAL_IMPORT_THUNK)
+    if (global->kind == LD_COFF_GLOBAL_DEFINED) return LD_OK;
+    /* LLD's addCommon replaces every non-DefinedCOFF symbol (including an
+       import or absolute symbol), but among common definitions it retains
+       the first unless a later input requests strictly more storage. */
+    if (global->kind == LD_COFF_GLOBAL_COMMON &&
+        symbol->value <= global->common_size) {
         return LD_OK;
+    }
     global->kind = LD_COFF_GLOBAL_COMMON;
-    if (symbol->value > global->common_size)
-        global->common_size = symbol->value;
+    global->common_size = symbol->value;
     uint64_t alignment = 1U;
     while (alignment < global->common_size && alignment < 32U)
         alignment <<= 1U;
     global->common_alignment = (uint32_t) alignment;
+    global->object = object;
     global->symbol = symbol;
+    global->section = NULL;
+    global->import = NULL;
     return LD_OK;
 }
 
@@ -574,7 +579,7 @@ int ld_coff_select_object(ld_coff_context_t *ctx, ld_coff_object_t *object) {
             status = ld_coff_define_absolute(ctx, symbol);
         } else if (symbol->section_number == LD_COFF_SYM_UNDEFINED &&
                    symbol->value != 0U) {
-            status = ld_coff_define_common(ctx, symbol);
+            status = ld_coff_define_common(ctx, object, symbol);
         } else if (symbol->section_number == LD_COFF_SYM_UNDEFINED) {
             ld_coff_global_t *global =
                     ld_coff_get_global(ctx, symbol->name, true);
@@ -594,6 +599,7 @@ int ld_coff_select_object(ld_coff_context_t *ctx, ld_coff_object_t *object) {
                                             "out of memory");
                     global->fallback_characteristics =
                             symbol->weak_characteristics;
+                    global->fallback_object = object;
                 }
             }
         }
@@ -653,10 +659,21 @@ int ld_coff_resolve_archives(ld_coff_context_t *ctx) {
                     continue;
                 ld_coff_object_t *provider = NULL;
                 for (size_t j = 0; j < global->lazy_count; j++) {
-                    if (!global->lazy_objects[j]->selected) {
-                        provider = global->lazy_objects[j];
-                        break;
+                    ld_coff_object_t *candidate = global->lazy_objects[j];
+                    if (candidate->selected) continue;
+                    /* COFF weak externals are added with overrideLazy=false.
+                       An earlier lazy symbol is therefore forced, while a
+                       lazy archive registered after the weak alias is
+                       ignored.  Nature parses archives up front, so recover
+                       LLD's incremental input semantics using stable object
+                       input order at extraction time. */
+                    if (global->fallback_object &&
+                        candidate->input_order >
+                                global->fallback_object->input_order) {
+                        continue;
                     }
+                    provider = candidate;
+                    break;
                 }
                 if (provider) {
                     status = ld_coff_select_object(ctx, provider);

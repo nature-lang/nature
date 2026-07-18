@@ -11,11 +11,10 @@
 
 /*
  * End-to-end symbol resolver fixtures.  The expected precedence follows
- * MachO/file.zig getSymbolRank from Zig commit
- * 738d2be9d6b6ef3ff3559130c05159ef53336224:
+ * Darwin ld64 and LLVM LLD Mach-O SymbolTable semantics:
  *
- *   direct strong, archive/dylib strong, direct weak,
- *   archive/dylib weak, direct tentative, archive tentative.
+ *   loaded object strong, loaded object weak, loaded object tentative,
+ *   lazy archive/strong dylib, weak dylib.
  *
  * These tests intentionally inspect the final Mach-O rather than only the
  * rank helper.  That covers archive extraction, dylib ordinals, tentative
@@ -31,7 +30,9 @@ typedef struct {
     uint8_t *bytes;
     size_t size;
     const ld_mach_header_64_t *header;
+    const ld_section_64_t *text;
     const ld_section_64_t *common;
+    const ld_section_64_t *empty;
     const ld_section_64_t *objc_catlist;
     const ld_symtab_command_t *symtab;
 } test_resolver_output_t;
@@ -104,7 +105,9 @@ static test_resolver_fixture_t test_resolver_make_object(
     build.sdk = 14U << 16U;
     memcpy(object + cursor, &build, sizeof(build));
 
-    memcpy(object + section_offset, section_data, section_size);
+    if (section_size != 0U) {
+        memcpy(object + section_offset, section_data, section_size);
+    }
     memcpy(object + symbol_offset, symbols,
            (size_t) symbol_count * sizeof(*symbols));
     memcpy(object + strings_offset, strings, strings_size);
@@ -231,8 +234,14 @@ static test_resolver_output_t test_resolver_read_output(const char *path) {
             const ld_section_64_t *sections =
                     (const ld_section_64_t *) (segment + 1);
             for (uint32_t j = 0; j < segment->nsects; j++) {
-                if (strncmp(sections[j].sectname, "__common", 16U) == 0) {
+                if (strncmp(sections[j].sectname, "__text", 16U) == 0) {
+                    output.text = &sections[j];
+                } else if (strncmp(sections[j].sectname, "__common", 16U) ==
+                           0) {
                     output.common = &sections[j];
+                } else if (strncmp(sections[j].sectname, "__empty", 16U) ==
+                           0) {
+                    output.empty = &sections[j];
                 } else if (strncmp(sections[j].sectname, "__objc_catlist",
                                    16U) == 0) {
                     output.objc_catlist = &sections[j];
@@ -352,7 +361,7 @@ static void test_entry_symbol_from_archive(void) {
 
 static void test_resolver_make_common(char path[], const char *name,
                                       uint64_t size,
-                                      uint32_t alignment_log2) {
+                                      uint32_t alignment_log2, bool weak) {
     char strings[128] = {0};
     size_t length = strlen(name) + 1U;
     assert(length + 1U <= sizeof(strings));
@@ -361,7 +370,8 @@ static void test_resolver_make_common(char path[], const char *name,
     ld_nlist_64_t symbol = {
             .n_strx = 1U,
             .n_type = LD_N_UNDF | LD_N_EXT,
-            .n_desc = (uint16_t) (alignment_log2 << 8U),
+            .n_desc = (uint16_t) ((alignment_log2 << 8U) |
+                                  (weak ? LD_N_WEAK_DEF | LD_N_WEAK_REF : 0U)),
             .n_value = size,
     };
     test_resolver_write_object(
@@ -386,10 +396,10 @@ static void test_weak_object_vs_strong_dylib(void) {
     test_resolver_output_t output = test_resolver_read_output(output_path);
     const ld_nlist_64_t *pick = test_resolver_find_symbol(&output, "_pick");
     assert(pick != NULL);
-    assert((pick->n_type & LD_N_TYPE) == LD_N_UNDF);
+    assert((pick->n_type & LD_N_TYPE) == LD_N_SECT);
     assert((pick->n_type & LD_N_EXT) != 0);
-    assert((pick->n_desc >> 8U) == 2U);
-    assert((output.header->flags & LD_MH_WEAK_DEFINES) == 0);
+    assert((pick->n_desc & LD_N_WEAK_DEF) != 0U);
+    assert((output.header->flags & LD_MH_WEAK_DEFINES) != 0);
     test_resolver_free_output(&output);
     unlink(main_path);
     unlink(weak_path);
@@ -403,7 +413,7 @@ static void test_common_vs_strong_dylib(void) {
     char dylib_path[] = "/tmp/nature-ld-resolver-common-tbd-XXXXXX";
     char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
     test_resolver_make_main(main_path, "_pick");
-    test_resolver_make_common(common_path, "_pick", 64U, 6U);
+    test_resolver_make_common(common_path, "_pick", 64U, 6U, false);
     test_resolver_write_dylib(dylib_path,
                               "/usr/lib/libResolverCommon.dylib", "_pick",
                               false);
@@ -413,9 +423,8 @@ static void test_common_vs_strong_dylib(void) {
 
     test_resolver_output_t output = test_resolver_read_output(output_path);
     const ld_nlist_64_t *pick = test_resolver_find_symbol(&output, "_pick");
-    assert(pick != NULL && (pick->n_type & LD_N_TYPE) == LD_N_UNDF);
-    assert((pick->n_desc >> 8U) == 2U);
-    assert(output.common == NULL);
+    assert(pick != NULL && (pick->n_type & LD_N_TYPE) == LD_N_SECT);
+    assert(output.common != NULL && output.common->size == 64U);
     test_resolver_free_output(&output);
     unlink(main_path);
     unlink(common_path);
@@ -558,7 +567,7 @@ static void test_common_max_size_and_alignment(void) {
                     (uint32_t) sizeof(first_strings)));
     /* The later common contributes the larger alignment but a smaller size;
        both maxima must survive independently. */
-    test_resolver_make_common(second_path, "_common", 8U, 5U);
+    test_resolver_make_common(second_path, "_common", 8U, 5U, false);
     test_resolver_output_path(output_path);
     const char *inputs[] = {first_path, second_path};
     test_resolver_link(inputs, 2U, output_path, false);
@@ -621,6 +630,340 @@ static void test_objc_category_archive_extraction_requires_option(void) {
     unlink(output_path);
 }
 
+static void test_weak_common_is_materialized_as_strong(void) {
+    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
+    char common_path[] = "/tmp/nature-ld-resolver-weak-common-XXXXXX";
+    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    test_resolver_make_main(main_path, NULL);
+    test_resolver_make_common(common_path, "_weak_common", 16U, 4U, true);
+    test_resolver_output_path(output_path);
+    const char *inputs[] = {main_path, common_path};
+    test_resolver_link(inputs, 2U, output_path, false);
+
+    test_resolver_output_t output = test_resolver_read_output(output_path);
+    const ld_nlist_64_t *common =
+            test_resolver_find_symbol(&output, "_weak_common");
+    assert(common != NULL && (common->n_type & LD_N_TYPE) == LD_N_SECT);
+    assert((common->n_desc & (LD_N_WEAK_DEF | LD_N_WEAK_REF)) == 0U);
+    assert((output.header->flags &
+            (LD_MH_WEAK_DEFINES | LD_MH_BINDS_TO_WEAK)) == 0U);
+    test_resolver_free_output(&output);
+    unlink(main_path);
+    unlink(common_path);
+    unlink(output_path);
+}
+
+static void test_zero_sized_section_keeps_symbol(void) {
+    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
+    char empty_path[] = "/tmp/nature-ld-resolver-empty-XXXXXX";
+    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    test_resolver_make_main(main_path, NULL);
+
+    static const char strings[] = "\0_empty_symbol\0";
+    ld_nlist_64_t symbol = {
+            .n_strx = 1U,
+            .n_type = LD_N_SECT | LD_N_EXT,
+            .n_sect = 1U,
+    };
+    test_resolver_write_object(
+            empty_path,
+            test_resolver_make_object("__DATA", "__empty", LD_S_REGULAR, 3U,
+                                      NULL, 0U, &symbol, 1U, strings,
+                                      (uint32_t) sizeof(strings)));
+    test_resolver_output_path(output_path);
+    const char *inputs[] = {main_path, empty_path};
+    test_resolver_link(inputs, 2U, output_path, false);
+
+    test_resolver_output_t output = test_resolver_read_output(output_path);
+    const ld_nlist_64_t *empty =
+            test_resolver_find_symbol(&output, "_empty_symbol");
+    assert(output.empty != NULL && output.empty->size == 0U);
+    assert(empty != NULL && (empty->n_type & LD_N_TYPE) == LD_N_SECT);
+    assert(empty->n_sect != 0U && empty->n_value == output.empty->addr);
+    assert((output.header->flags & LD_MH_NO_REEXPORTED_DYLIBS) != 0U);
+    test_resolver_free_output(&output);
+    unlink(main_path);
+    unlink(empty_path);
+    unlink(output_path);
+}
+
+static void test_load_commands_can_span_multiple_pages(void) {
+    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
+    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    test_resolver_make_main(main_path, NULL);
+    test_resolver_output_path(output_path);
+
+    ld_options_t options;
+    ld_options_init(&options);
+    options.output_path = output_path;
+    options.adhoc_codesign = false;
+    assert(ld_add_input(&options, main_path) == LD_OK);
+    for (size_t i = 0; i < 400U; i++) {
+        char rpath[96];
+        int length = snprintf(rpath, sizeof(rpath),
+                              "@loader_path/nature-header-page-%03zu", i);
+        assert(length > 0 && (size_t) length < sizeof(rpath));
+        assert(ld_add_rpath(&options, rpath) == LD_OK);
+    }
+    assert(ld_link(&options) == LD_OK);
+    ld_options_deinit(&options);
+
+    test_resolver_output_t output = test_resolver_read_output(output_path);
+    uint64_t commands_end = sizeof(*output.header) + output.header->sizeofcmds;
+    assert(commands_end > 0x4000U);
+    assert(output.text != NULL && output.text->offset >= commands_end);
+    test_resolver_free_output(&output);
+    unlink(main_path);
+    unlink(output_path);
+}
+
+static void test_resolver_write_named_archive(
+        const char *path, const char *member_name,
+        test_resolver_fixture_t fixture) {
+    size_t padding = fixture.size & 1U;
+    size_t archive_size = 8U + 60U + fixture.size + padding;
+    uint8_t *archive = malloc(archive_size);
+    assert(archive != NULL);
+    memcpy(archive, "!<arch>\n", 8U);
+    memset(archive + 8U, ' ', 60U);
+    size_t name_length = strlen(member_name);
+    assert(name_length < 15U);
+    memcpy(archive + 8U, member_name, name_length);
+    archive[8U + name_length] = '/';
+    char size_field[32];
+    int size_length = snprintf(size_field, sizeof(size_field), "%zu",
+                               fixture.size);
+    assert(size_length > 0 && size_length <= 10);
+    memcpy(archive + 8U + 48U, size_field, (size_t) size_length);
+    memcpy(archive + 8U + 58U, "`\n", 2U);
+    memcpy(archive + 8U + 60U, fixture.bytes, fixture.size);
+    if (padding) archive[archive_size - 1U] = '\n';
+    test_ld_write_named_fixture(path, archive, archive_size);
+    free(archive);
+    free(fixture.bytes);
+}
+
+static void test_ordered_library_and_direct_dylib_inputs(void) {
+    char directory[] = "/tmp/nature-ld-resolver-order-XXXXXX";
+    assert(mkdtemp(directory) != NULL);
+    char archive_path[512];
+    int length = snprintf(archive_path, sizeof(archive_path),
+                          "%s/libresolver.a", directory);
+    assert(length > 0 && (size_t) length < sizeof(archive_path));
+    test_resolver_write_named_archive(
+            archive_path, "winner.o",
+            test_resolver_make_definition_fixture("_pick"));
+
+    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
+    char dylib_path[] = "/tmp/nature-ld-resolver-order-tbd-XXXXXX";
+    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    test_resolver_make_main(main_path, "_pick");
+    test_resolver_write_dylib(dylib_path,
+                              "/usr/lib/libResolverOrder.dylib", "_pick",
+                              false);
+    test_resolver_output_path(output_path);
+
+    ld_options_t options;
+    ld_options_init(&options);
+    options.output_path = output_path;
+    options.adhoc_codesign = false;
+    assert(ld_add_input(&options, main_path) == LD_OK);
+    assert(ld_add_library_path(&options, directory) == LD_OK);
+    char flags[1024];
+    length = snprintf(flags, sizeof(flags), "-lresolver '%s'", dylib_path);
+    assert(length > 0 && (size_t) length < sizeof(flags));
+    assert(ld_parse_flags(&options, flags) == LD_OK);
+    assert(ld_link(&options) == LD_OK);
+    ld_options_deinit(&options);
+
+    test_resolver_output_t output = test_resolver_read_output(output_path);
+    const ld_nlist_64_t *pick = test_resolver_find_symbol(&output, "_pick");
+    assert(pick != NULL && (pick->n_type & LD_N_TYPE) == LD_N_SECT);
+    test_resolver_free_output(&output);
+
+    ld_options_init(&options);
+    options.output_path = output_path;
+    options.adhoc_codesign = false;
+    assert(ld_add_input(&options, main_path) == LD_OK);
+    assert(ld_add_library_path(&options, directory) == LD_OK);
+    length = snprintf(flags, sizeof(flags), "'%s' -lresolver", dylib_path);
+    assert(length > 0 && (size_t) length < sizeof(flags));
+    assert(ld_parse_flags(&options, flags) == LD_OK);
+    assert(ld_link(&options) == LD_OK);
+    ld_options_deinit(&options);
+
+    output = test_resolver_read_output(output_path);
+    pick = test_resolver_find_symbol(&output, "_pick");
+    assert(pick != NULL && (pick->n_type & LD_N_TYPE) == LD_N_UNDF);
+    test_resolver_free_output(&output);
+
+    unlink(main_path);
+    unlink(dylib_path);
+    unlink(output_path);
+    unlink(archive_path);
+    assert(rmdir(directory) == 0);
+}
+
+static bool test_resolver_has_dylib_command(
+        const test_resolver_output_t *output, uint32_t expected_command,
+        const char *expected_name) {
+    size_t cursor = sizeof(*output->header);
+    for (uint32_t i = 0; i < output->header->ncmds; i++) {
+        assert(cursor <= output->size &&
+               sizeof(ld_load_command_t) <= output->size - cursor);
+        const ld_load_command_t *command =
+                (const ld_load_command_t *) (output->bytes + cursor);
+        assert(command->cmdsize >= sizeof(*command) &&
+               command->cmdsize <= output->size - cursor);
+        if (command->cmd == expected_command) {
+            assert(command->cmdsize >= sizeof(ld_dylib_command_t));
+            const ld_dylib_command_t *dylib =
+                    (const ld_dylib_command_t *) command;
+            assert(dylib->name_offset < command->cmdsize);
+            const char *name = (const char *) command + dylib->name_offset;
+            assert(memchr(name, '\0', command->cmdsize - dylib->name_offset) !=
+                   NULL);
+            if (strcmp(name, expected_name) == 0) return true;
+        }
+        cursor += command->cmdsize;
+    }
+    return false;
+}
+
+static void test_resolver_expect_dylib_commands(
+        const test_resolver_output_t *output, const uint32_t *commands,
+        const char *const *names, size_t expected_count) {
+    size_t cursor = sizeof(*output->header);
+    size_t found = 0U;
+    for (uint32_t i = 0; i < output->header->ncmds; i++) {
+        assert(cursor <= output->size &&
+               sizeof(ld_load_command_t) <= output->size - cursor);
+        const ld_load_command_t *command =
+                (const ld_load_command_t *) (output->bytes + cursor);
+        assert(command->cmdsize >= sizeof(*command) &&
+               command->cmdsize <= output->size - cursor);
+        if (command->cmd == LD_LC_LOAD_DYLIB ||
+            command->cmd == LD_LC_LOAD_WEAK_DYLIB) {
+            assert(found < expected_count);
+            assert(command->cmd == commands[found]);
+            assert(command->cmdsize >= sizeof(ld_dylib_command_t));
+            const ld_dylib_command_t *dylib =
+                    (const ld_dylib_command_t *) command;
+            assert(dylib->name_offset < command->cmdsize);
+            const char *name = (const char *) command + dylib->name_offset;
+            assert(memchr(name, '\0',
+                          command->cmdsize - dylib->name_offset) != NULL);
+            assert(strcmp(name, names[found]) == 0);
+            found++;
+        }
+        cursor += command->cmdsize;
+    }
+    assert(found == expected_count);
+}
+
+static void test_dylib_load_commands_follow_input_order(void) {
+    char root[] = "/tmp/nature-ld-resolver-framework-XXXXXX";
+    assert(mkdtemp(root) != NULL);
+    char framework_dir[512];
+    char framework_path[512];
+    int length = snprintf(framework_dir, sizeof(framework_dir),
+                          "%s/ResolverAfter.framework", root);
+    assert(length > 0 && (size_t) length < sizeof(framework_dir));
+    assert(mkdir(framework_dir, 0700) == 0);
+    length = snprintf(framework_path, sizeof(framework_path),
+                      "%s/ResolverAfter.tbd", framework_dir);
+    assert(length > 0 && (size_t) length < sizeof(framework_path));
+
+    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
+    char dylib_path[] = "/tmp/nature-ld-resolver-before-tbd-XXXXXX";
+    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    static const char direct_install_name[] =
+            "/usr/lib/libResolverBefore.dylib";
+    static const char framework_install_name[] =
+            "/System/Library/Frameworks/ResolverAfter.framework/Versions/A/ResolverAfter";
+    test_resolver_make_main(main_path, "_before");
+    test_resolver_write_dylib(dylib_path, direct_install_name, "_before",
+                              false);
+    test_resolver_write_dylib(framework_path, framework_install_name,
+                              "_after", false);
+    test_resolver_output_path(output_path);
+
+    ld_options_t options;
+    ld_options_init(&options);
+    options.output_path = output_path;
+    options.adhoc_codesign = false;
+    assert(ld_add_input(&options, main_path) == LD_OK);
+    char flags[2048];
+    length = snprintf(flags, sizeof(flags),
+                      "'%s' -F '%s' -framework ResolverAfter "
+                      "-framework ResolverAfter",
+                      dylib_path, root);
+    assert(length > 0 && (size_t) length < sizeof(flags));
+    assert(ld_parse_flags(&options, flags) == LD_OK);
+    assert(ld_link(&options) == LD_OK);
+    ld_options_deinit(&options);
+
+    test_resolver_output_t output = test_resolver_read_output(output_path);
+    static const uint32_t commands[] = {
+            LD_LC_LOAD_DYLIB,
+            LD_LC_LOAD_DYLIB,
+            LD_LC_LOAD_DYLIB,
+    };
+    static const char *const names[] = {
+            "/usr/lib/libSystem.B.dylib",
+            direct_install_name,
+            framework_install_name,
+    };
+    test_resolver_expect_dylib_commands(
+            &output, commands, names, sizeof(names) / sizeof(names[0]));
+    const ld_nlist_64_t *before =
+            test_resolver_find_symbol(&output, "_before");
+    assert(before != NULL && (before->n_desc >> 8U) == 2U);
+    test_resolver_free_output(&output);
+
+    assert(unlink(output_path) == 0);
+    assert(unlink(dylib_path) == 0);
+    assert(unlink(main_path) == 0);
+    assert(unlink(framework_path) == 0);
+    assert(rmdir(framework_dir) == 0);
+    assert(rmdir(root) == 0);
+}
+
+static void test_weak_library_emits_weak_load_and_reference(void) {
+    char main_path[] = "/tmp/nature-ld-resolver-main-XXXXXX";
+    char dylib_path[] = "/tmp/nature-ld-resolver-weak-load-tbd-XXXXXX";
+    char output_path[] = "/tmp/nature-ld-resolver-output-XXXXXX";
+    static const char install_name[] = "/usr/lib/libResolverOptional.dylib";
+    test_resolver_make_main(main_path, "_optional");
+    test_resolver_write_dylib(dylib_path, install_name, "_optional", false);
+    test_resolver_output_path(output_path);
+
+    ld_options_t options;
+    ld_options_init(&options);
+    options.output_path = output_path;
+    options.adhoc_codesign = false;
+    assert(ld_add_input(&options, main_path) == LD_OK);
+    char flags[1024];
+    int length = snprintf(flags, sizeof(flags), "-weak_library '%s'",
+                          dylib_path);
+    assert(length > 0 && (size_t) length < sizeof(flags));
+    assert(ld_parse_flags(&options, flags) == LD_OK);
+    assert(ld_link(&options) == LD_OK);
+    ld_options_deinit(&options);
+
+    test_resolver_output_t output = test_resolver_read_output(output_path);
+    const ld_nlist_64_t *optional =
+            test_resolver_find_symbol(&output, "_optional");
+    assert(optional != NULL &&
+           (optional->n_desc & LD_N_WEAK_REF) != 0U);
+    assert(test_resolver_has_dylib_command(
+            &output, LD_LC_LOAD_WEAK_DYLIB, install_name));
+    test_resolver_free_output(&output);
+    unlink(main_path);
+    unlink(dylib_path);
+    unlink(output_path);
+}
+
 void test_ld_macho_resolver(void) {
     test_entry_symbol_from_archive();
     test_weak_object_vs_strong_dylib();
@@ -631,4 +974,10 @@ void test_ld_macho_resolver(void) {
     test_duplicate_direct_strong();
     test_common_max_size_and_alignment();
     test_objc_category_archive_extraction_requires_option();
+    test_weak_common_is_materialized_as_strong();
+    test_zero_sized_section_keeps_symbol();
+    test_load_commands_can_span_multiple_pages();
+    test_ordered_library_and_direct_dylib_inputs();
+    test_dylib_load_commands_follow_input_order();
+    test_weak_library_emits_weak_load_and_reference();
 }

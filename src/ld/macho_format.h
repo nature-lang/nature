@@ -29,6 +29,7 @@
 #define LD_LC_SYMTAB 0x2U
 #define LD_LC_DYSYMTAB 0xbU
 #define LD_LC_LOAD_DYLIB 0xcU
+#define LD_LC_LOAD_WEAK_DYLIB (0x18U | LD_LC_REQ_DYLD)
 #define LD_LC_ID_DYLIB 0xdU
 #define LD_LC_LOAD_DYLINKER 0xeU
 #define LD_LC_RPATH (0x1cU | LD_LC_REQ_DYLD)
