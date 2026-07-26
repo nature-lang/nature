@@ -590,7 +590,8 @@ impl<'a> Semantic<'a> {
             let mut stmt = self.stmts[i].clone();
 
             match &mut stmt.node {
-                AstNode::Import(..) => continue,
+                // like import, a mod declaration takes no part in top-level declaration collection
+                AstNode::Mod(..) | AstNode::Import(..) => continue,
                 AstNode::FnDef(fndef_mutex) => {
                     let mut fndef = fndef_mutex.lock().unwrap();
                     let symbol_name = fndef.symbol_name.clone();

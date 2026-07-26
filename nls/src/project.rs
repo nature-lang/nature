@@ -14,7 +14,8 @@ use crate::analyzer::symbol::{NodeId, SymbolTable};
 use crate::analyzer::syntax::Syntax;
 use crate::analyzer::typesys::Typesys;
 use crate::analyzer::workspace_index::WorkspaceIndex;
-use crate::analyzer::{analyze_imports, register_global_symbol};
+use crate::analyzer::{analyze_imports, analyze_mod_decl, module_unique_ident, register_global_symbol};
+use crate::module_index::{package_unit_invalidate, package_unit_load};
 use crate::package::parse_package;
 use log::{debug, error};
 use ropey::Rope;
@@ -282,6 +283,46 @@ impl Project {
         result
     }
 
+    // ── Module identity ─────────────────────────────────────────────────
+
+    /// (package_dir, package_name) of the current package
+    fn package_identity(&self) -> Option<(String, String)> {
+        let conf = self.package_config.lock().unwrap();
+        let p = conf.as_ref()?;
+        let package_dir = Path::new(&p.path)
+            .parent()
+            .and_then(|d| d.to_str())
+            .unwrap_or("")
+            .to_string();
+        Some((package_dir, p.package_data.name.clone()))
+    }
+
+    /// Compute the ModuleId of the module owning a source file, falling back to path derivation in single-file mode
+    pub fn module_ident_of(&self, file_path: &str) -> String {
+        if let Some((package_dir, package_name)) = self.package_identity() {
+            if file_path.starts_with(&package_dir) {
+                let pu = package_unit_load(&package_dir, &package_name);
+                if let Some(unit) = pu.find_source(file_path) {
+                    return unit.module_ident.clone();
+                }
+            }
+        }
+
+        module_unique_ident(&self.root, file_path)
+    }
+
+    /// The other source parts of the module containing a source file
+    pub fn module_sibling_sources(&self, file_path: &str) -> Vec<String> {
+        let Some((package_dir, package_name)) = self.package_identity() else {
+            return Vec::new();
+        };
+        if !file_path.starts_with(&package_dir) {
+            return Vec::new();
+        }
+
+        package_unit_load(&package_dir, &package_name).sibling_sources(file_path)
+    }
+
     // ── Build pipeline ──────────────────────────────────────────────────
 
     /// Run the full build pipeline for a module and its transitive imports.
@@ -291,6 +332,10 @@ impl Project {
         module_ident: &str,
         content: Option<String>,
     ) -> usize {
+        // the module layout can change with the files, so invalidate the index cache before rebuilding
+        package_unit_invalidate(main_path);
+
+        // an empty module_ident keeps the module's existing identity (builtins use the global scope, queue rebuilds reuse the old identity)
         self.is_building.store(true, Ordering::SeqCst);
         let result = self.build_inner(main_path, module_ident, content).await;
         self.is_building.store(false, Ordering::SeqCst);
@@ -306,6 +351,8 @@ impl Project {
         let mut worklist: Vec<ImportStmt> = Vec::new();
         let mut handled: HashSet<String> = HashSet::new();
         let mut module_indexes: Vec<usize> = Vec::new();
+        // a module scope is shared by all source parts, so clean it only once per build round
+        let mut cleaned_scopes: HashSet<String> = HashSet::new();
 
         // Seed with the main module.
         let mut main_import = ImportStmt::default();
@@ -314,27 +361,81 @@ impl Project {
         worklist.push(main_import);
         handled.insert(main_path.to_string());
 
+        // if the edited file is a source part of a directory module, the module's other parts must be re-analyzed too:
+        // the shared module scope is cleaned once, so every part has to re-register its top-level declarations
+        let mut force_rebuild: HashSet<String> = HashSet::new();
+        force_rebuild.insert(main_path.to_string());
+
+        let siblings = self.module_sibling_sources(main_path);
+        // queue rebuilds pass an empty module_ident, so fill in the identity shared by the source parts
+        let sibling_ident = if module_ident.is_empty() && !siblings.is_empty() {
+            self.module_ident_of(main_path)
+        } else {
+            module_ident.to_string()
+        };
+
+        for sibling in siblings {
+            force_rebuild.insert(sibling.clone());
+            if handled.contains(&sibling) {
+                continue;
+            }
+            let mut sibling_import = ImportStmt::default();
+            sibling_import.full_path = sibling.clone();
+            sibling_import.module_ident = sibling_ident.clone();
+            worklist.push(sibling_import);
+            handled.insert(sibling);
+        }
+
         // ── Phase 1: Lex + Parse + collect imports ──────────────────────
         debug!("{} processing worklist", main_path);
         while let Some(import_stmt) = worklist.pop() {
+            // every source part of a directory module enters the worklist together
+            for sibling in import_stmt.module_sources.iter() {
+                if handled.contains(sibling) {
+                    continue;
+                }
+                let mut sibling_import = import_stmt.clone();
+                sibling_import.full_path = sibling.clone();
+                sibling_import.module_sources = Vec::new();
+                worklist.push(sibling_import);
+                handled.insert(sibling.clone());
+            }
+
             let index = {
                 let module_handled = self.module_handled.lock().unwrap();
                 let existing = module_handled.get(&import_stmt.full_path).copied();
                 drop(module_handled);
 
                 if let Some(i) = existing {
+                    if !force_rebuild.contains(&import_stmt.full_path) {
+                        continue; // already compiled
+                    }
+
+                    let mut db = self.module_db.lock().unwrap();
+                    let m = &mut db[i];
+
                     if import_stmt.full_path == main_path {
                         // Update content of the main module.
                         if let Some(ref c) = content {
-                            let mut db = self.module_db.lock().unwrap();
-                            let m = &mut db[i];
                             m.source = c.clone();
                             m.rope = Rope::from_str(&m.source);
                         }
-                        i
-                    } else {
-                        continue; // already compiled
+                    } else if let Ok(file_content) = std::fs::read_to_string(&import_stmt.full_path) {
+                        m.source = file_content;
+                        m.rope = Rope::from_str(&m.source);
                     }
+
+                    // editing a mod declaration flips a file between file module and source part, so its identity must follow
+                    if !import_stmt.module_ident.is_empty() && m.ident != import_stmt.module_ident {
+                        m.ident = import_stmt.module_ident.clone();
+                        m.scope_id = self
+                            .symbol_table
+                            .lock()
+                            .unwrap()
+                            .create_module_scope(import_stmt.module_ident.clone());
+                    }
+
+                    i
                 } else {
                     // New module — read from disk.
                     let Ok(file_content) = std::fs::read_to_string(&import_stmt.full_path) else {
@@ -369,11 +470,13 @@ impl Project {
                 m.index, m.path, m.dir, self.root
             );
 
-            // Clean scope for re-analysis.
-            self.symbol_table
-                .lock()
-                .unwrap()
-                .clean_module_scope(m.ident.clone());
+            // Clean scope for re-analysis. Parts of one module share a scope, so clean it only once.
+            if cleaned_scopes.insert(m.ident.clone()) {
+                self.symbol_table
+                    .lock()
+                    .unwrap()
+                    .clean_module_scope(m.ident.clone());
+            }
 
             // Lex.
             let (token_db, token_indexes, lexer_errors) = Lexer::new(m.source.clone()).scan();
@@ -388,6 +491,9 @@ impl Project {
             m.analyzer_errors.extend(syntax_errors);
 
             module_indexes.push(index);
+
+            // validate the leading mod declaration
+            analyze_mod_decl(&self.package_config, m, &stmts);
 
             // Register global symbols.
             let mut st = self.symbol_table.lock().unwrap();

@@ -728,6 +728,25 @@ impl<'a> Syntax {
 
         let mut stmt_list = Vec::new();
 
+        // a mod declaration must be the first statement of the file
+        if self.is_mod_decl() {
+            match self.parser_mod_stmt().and_then(|stmt| {
+                self.must_stmt_end()?;
+                Ok(stmt)
+            }) {
+                Ok(stmt) => stmt_list.push(stmt),
+                Err(e) => errors_push(
+                    &mut self.module,
+                    AnalyzerError {
+                        start: e.0,
+                        end: e.1,
+                        message: e.2,
+                        is_warning: false,
+                    },
+                ),
+            }
+        }
+
         while !self.is(TokenType::Eof) {
             match self.parser_global_stmt() {
                 Ok(stmt) => stmt_list.push(stmt),
@@ -2584,6 +2603,33 @@ impl<'a> Syntax {
         Ok(stmt)
     }
 
+    /// mod is a contextual keyword, only treated as a module declaration when it leads the file as `mod <ident>`,
+    /// anywhere else mod stays a normal identifier (e.g. the default alias produced by import 'mod.n')
+    fn is_mod_decl(&self) -> bool {
+        if !self.is(TokenType::Ident) || self.peek().literal != MOD_DECL_IDENT {
+            return false;
+        }
+
+        // a newline inserts StmtEof, so a next token of Ident means both sit in the same statement
+        self.next_is(1, TokenType::Ident)
+    }
+
+    fn parser_mod_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
+        let mut stmt = self.stmt_new();
+        self.must(TokenType::Ident)?; // mod
+
+        let token = self.must(TokenType::Ident)?.clone();
+
+        stmt.end = token.end;
+        stmt.node = AstNode::Mod(ModStmt {
+            ident: token.literal.clone(),
+            start: stmt.start,
+            end: token.end,
+        });
+
+        Ok(stmt)
+    }
+
     fn parser_import_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
         let mut stmt = self.stmt_new();
         self.must(TokenType::Import)?;
@@ -2721,6 +2767,7 @@ impl<'a> Syntax {
             select_items,
             module_type: 0,
             full_path: String::new(),
+            module_sources: Vec::new(),
             package_conf: None,
             package_dir: String::new(),
             use_links: false,
@@ -3581,6 +3628,15 @@ impl<'a> Syntax {
     }
 
     fn parser_global_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
+        // mod may only lead the file (already handled at the parser entry), reaching here means an illegal position
+        if self.is_mod_decl() {
+            return Err(SyntaxError(
+                self.peek().start,
+                self.peek().end,
+                "'mod' declaration must be the first statement of the file".to_string(),
+            ));
+        }
+
         let stmt = if self.is(TokenType::Var) {
             self.parser_var_begin_stmt()?
         } else if self.is_type_begin_stmt() {

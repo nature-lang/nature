@@ -12,6 +12,10 @@ pub mod workspace_index;
 
 use std::path::Path;
 
+use crate::module_index::{
+    import_module_path, module_ident_join, module_parent_path, module_source_rel_path, package_unit_load,
+    PackageUnit,
+};
 use crate::package::parse_package;
 use crate::project::{Module, DEFAULT_NATURE_ROOT};
 use crate::utils::{errors_push, format_global_ident};
@@ -207,60 +211,15 @@ fn analyze_import_std(_m: &mut Module, import: &mut ImportStmt) -> Result<(), An
     }
 }
 
-fn package_import_fullpath(package_conf: &PackageConfig, package_dir: &str, ast_import_package: &Vec<String>) -> Result<String, String> {
-    assert!(!ast_import_package.is_empty());
-
-    // 获取入口文件名，默认为 main
-    let entry = package_conf.package_data.entry.as_deref().unwrap_or("main");
-
-    assert!(!entry.ends_with(".n"), "entry cannot end with .n, entry '{}'", entry);
-
-    // 构建基础路径
-    let mut prefix = PathBuf::from(package_dir);
-    for package_part in ast_import_package.iter().skip(1) {
-        prefix.push(package_part);
-    }
-
-    let mut entry_count = 0;
-    loop {
-        if entry_count == 1 {
-            if prefix.is_dir() {
-                prefix.push(entry);
-            }
-        }
-        entry_count += 1;
-
-        // 检查 os_arch 特定文件
-        let os = env::var("BUILD_OS").unwrap_or(TARGET_OS.to_string());
-        let arch = env::var("BUILD_ARCH").unwrap_or(TARGET_ARCH.to_string());
-        let os_arch = format!("{}_{}", os, arch);
-
-        let os_arch_path = prefix.with_extension(format!("{}.n", os_arch));
-        if os_arch_path.exists() {
-            return Ok(os_arch_path.to_str().unwrap().to_string());
-        }
-
-        // 检查 os 特定文件
-        let os_path = prefix.with_extension(format!("{}.n", os));
-        if os_path.exists() {
-            return Ok(os_path.to_str().unwrap().to_string());
-        }
-
-        // 检查标准文件
-        let normal_path = prefix.with_extension("n");
-        if normal_path.exists() {
-            return Ok(normal_path.to_str().unwrap().to_string());
-        }
-
-        if entry_count >= 2 {
-            break;
-        }
-    }
-
-    return Err(format!("cannot find module from '{}'", prefix.to_str().unwrap()));
+pub fn target_os() -> &'static str {
+    TARGET_OS
 }
 
-// 在文件中添加这个新函数
+pub fn target_arch() -> &'static str {
+    TARGET_ARCH
+}
+
+/// Compute the module ident from the path in single-file compatibility mode (no package.toml)
 pub fn module_unique_ident(root: &str, full_path: &str) -> String {
     // 获取 package_dir 的父目录
     let temp_dir = Path::new(root).parent().and_then(|p| p.to_str()).unwrap_or("");
@@ -330,8 +289,56 @@ pub fn analyze_import(
                 .to_string();
         }
 
-        import.package_dir = project_root.clone();
-        import.module_ident = module_unique_ident(&project_root, &import.full_path);
+        let package_config_option = package_config_mutex.lock().unwrap();
+        let current_package = package_config_option.as_ref().cloned();
+        drop(package_config_option);
+
+        // single-file compatibility mode without a package.toml keeps resolving by path
+        let Some(p) = current_package else {
+            import.package_dir = project_root.clone();
+            import.module_ident = module_unique_ident(&project_root, &import.full_path);
+            return Ok(());
+        };
+
+        let package_dir = Path::new(&p.path).parent().unwrap_or(Path::new("")).to_str().unwrap_or("").to_string();
+        let pu = package_unit_load(&package_dir, &p.package_data.name);
+
+        // a quoted import may only point at a standalone file of the current package that has no mod declaration
+        let Some(unit) = pu.find_source(&import.full_path) else {
+            return Err(AnalyzerError {
+                start: import.start,
+                end: import.end,
+                message: format!("cannot import '{}': not found in package '{}'", file, p.package_data.name),
+                is_warning: false,
+            });
+        };
+
+        if unit.is_dir_module {
+            return Err(AnalyzerError {
+                start: import.start,
+                end: import.end,
+                message: format!(
+                    "cannot import '{}': it is part of module {}, use 'import {}'",
+                    file, unit.module_ident, unit.module_ident
+                ),
+                is_warning: false,
+            });
+        }
+
+        if unit.module_ident == m.ident {
+            return Err(AnalyzerError {
+                start: import.start,
+                end: import.end,
+                message: format!("cannot import '{}': module {} cannot import itself", file, m.ident),
+                is_warning: false,
+            });
+        }
+
+        import.package_conf = Some(p);
+        import.package_dir = package_dir;
+        import.module_ident = unit.module_ident.clone();
+        import.full_path = unit.sources[0].clone();
+        import.module_sources = unit.sources.clone();
 
         return Ok(());
     }
@@ -342,12 +349,14 @@ pub fn analyze_import(
     // 如果存在 package_config, 说明项目存在 package.toml, import 就存在 package.toml 中的 main > dep package > std package
     // 如果不存在 package package_config 则只能是 std package
     let package_config_option = package_config_mutex.lock().unwrap();
+    let current_package = package_config_option.as_ref().cloned();
+    drop(package_config_option);
 
-    if let Some(p) = package_config_option.as_ref() {
+    if let Some(p) = current_package {
         if is_current_package(&p, &package_ident) {
             // set import belong package_conf
-            import.package_conf = Some(p.clone());
             import.package_dir = Path::new(&p.path).parent().unwrap_or(Path::new("")).to_str().unwrap_or("").to_string();
+            import.package_conf = Some(p);
         } else if is_dep_package(&p, &package_ident) {
             analyze_import_dep(&p, m, import)?;
         } else if is_std_package(&package_ident) {
@@ -374,39 +383,49 @@ pub fn analyze_import(
         }
     }
 
-    // calc full path
-    match package_import_fullpath(import.package_conf.as_ref().unwrap(), &import.package_dir, import.ast_package.as_ref().unwrap()) {
-        Ok(full_path) => {
-            import.full_path = full_path;
+    // imports resolve purely by logical module name, no more guessing at main.n/<entry>.n file layouts
+    // a dependencies key is only a local alias, package identity always comes from package.toml.name
+    let package_name = import.package_conf.as_ref().unwrap().package_data.name.clone();
+    let pu = package_unit_load(&import.package_dir, &package_name);
 
-            // check full_path exists
-            if !Path::new(&import.full_path).exists() {
+    let module_path = import_module_path(import.ast_package.as_ref().unwrap());
+    let Some(unit) = pu.find_module(&module_path) else {
+        let full_ident = module_ident_join(&package_name, &module_path);
+        let parent = module_parent_path(&module_path);
+
+        let last_segment = module_path.rsplit('.').next().unwrap_or(&module_path);
+
+        // when it points at a source part, offer an actionable suggestion
+        if let Some(parent_unit) = pu.find_module(&parent) {
+            if parent_unit.is_dir_module && PackageUnit::unit_has_source_named(parent_unit, last_segment) {
                 return Err(AnalyzerError {
                     start: import.start,
                     end: import.end,
-                    message: format!("cannot import '{}': file not found", import.full_path.clone()),
+                    message: format!(
+                        "'{}' is not a module, it is part of {}, use 'import {}'",
+                        full_ident, parent_unit.module_ident, parent_unit.module_ident
+                    ),
                     is_warning: false,
-                                    });
+                });
             }
+        }
 
-            // check file is n file
-            if !import.full_path.ends_with(".n") {
-                return Err(AnalyzerError {
-                    start: import.start,
-                    end: import.end,
-                    message: format!("import file suffix must .n"),
-                    is_warning: false,
-                                    });
-            }
-        }
-        Err(e) => {
-            return Err(AnalyzerError {
-                start: import.start,
-                end: import.end,
-                message: e,
-                is_warning: false,
-                            });
-        }
+        return Err(AnalyzerError {
+            start: import.start,
+            end: import.end,
+            message: format!("cannot import '{}': module not found", full_ident),
+            is_warning: false,
+        });
+    };
+
+    // a source part cannot import the module it belongs to
+    if unit.module_ident == m.ident {
+        return Err(AnalyzerError {
+            start: import.start,
+            end: import.end,
+            message: format!("module {} cannot import itself", m.ident),
+            is_warning: false,
+        });
     }
 
     // calc import as, 如果不存在 import as, 则使用 ast_package 的最后一个元素作为 import as
@@ -416,9 +435,57 @@ pub fn analyze_import(
         import.as_name = import.ast_package.as_ref().unwrap().last().unwrap().clone();
     }
 
-    // calc moudle unique ident, 符号注册到符号表中需要采取同样的策略生成名称
-    import.module_ident = module_unique_ident(&import.package_dir, &import.full_path);
+    import.module_ident = unit.module_ident.clone();
+    import.full_path = unit.sources[0].clone();
+    import.module_sources = unit.sources.clone();
     return Ok(());
+}
+
+/// Validate a leading mod declaration: the root must equal package.toml.name, a normal subdirectory the directory basename
+pub fn analyze_mod_decl(package_config: &Arc<Mutex<Option<PackageConfig>>>, m: &mut Module, stmts: &Vec<Box<Stmt>>) {
+    let Some(stmt) = stmts.first() else {
+        return;
+    };
+    let AstNode::Mod(mod_stmt) = &stmt.node else {
+        return;
+    };
+
+    let package_config_option = package_config.lock().unwrap();
+    let current_package = package_config_option.as_ref().cloned();
+    drop(package_config_option);
+
+    let Some(p) = current_package else {
+        m.analyzer_errors.push(AnalyzerError::new(
+            mod_stmt.start,
+            mod_stmt.end,
+            "cannot use 'mod' without package.toml".to_string(),
+        ));
+        return;
+    };
+
+    let package_dir = Path::new(&p.path).parent().unwrap_or(Path::new("")).to_str().unwrap_or("").to_string();
+    let rel_dir = module_source_rel_path(&package_dir, &m.dir);
+
+    let expect = if rel_dir.is_empty() {
+        p.package_data.name.clone()
+    } else {
+        rel_dir.rsplit('/').next().unwrap_or(&rel_dir).to_string()
+    };
+
+    if mod_stmt.ident == expect {
+        return;
+    }
+
+    let message = if rel_dir.is_empty() {
+        format!(
+            "'mod {}' does not match package name '{}', use 'mod {}'",
+            mod_stmt.ident, expect, expect
+        )
+    } else {
+        format!("'mod {}' does not match directory '{}', use 'mod {}'", mod_stmt.ident, expect, expect)
+    };
+
+    m.analyzer_errors.push(AnalyzerError::new(mod_stmt.start, mod_stmt.end, message));
 }
 
 pub fn analyze_imports(

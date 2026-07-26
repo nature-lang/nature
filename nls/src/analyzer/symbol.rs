@@ -266,9 +266,9 @@ impl SymbolTable {
             return self.global_scope_id;
         }
 
-        if let Some(_scope_id) = self.module_scopes.get(&moudel_ident) {
-            panic!("module scope already exists");
-            // return *scope_id;
+        // a module may consist of several source parts, all sharing one module scope
+        if let Some(scope_id) = self.module_scopes.get(&moudel_ident) {
+            return *scope_id;
         }
 
         let scope_id = self.create_scope(ScopeKind::Module(moudel_ident.clone()), self.global_scope_id, 0, 0);

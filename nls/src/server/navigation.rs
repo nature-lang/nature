@@ -294,10 +294,11 @@ fn type_to_location(project: &Project, type_: &Type) -> Option<Location> {
     drop(typedef);
 
     let module_ident = module_ident_for_scope(&st, symbol.defined_in)?;
+    let def_name = symbol.ident.rsplit('.').next().unwrap_or(&symbol.ident).to_string();
     drop(st);
 
     let db = project.module_db.lock().ok()?;
-    let module = db.iter().find(|m| m.ident == module_ident)?;
+    let module = find_module_part(&db, &module_ident, def_start, &def_name)?;
 
     let start = offset_to_position(def_start, &module.rope)?;
     let end = offset_to_position(def_end, &module.rope)?;
@@ -467,6 +468,8 @@ pub(crate) struct ResolvedSymbol {
     /// Stored instead of module_path to avoid locking module_db while
     /// symbol_table is held (which would invert the canonical lock order).
     pub(crate) module_ident: String,
+    /// Byte offset of the declaration within its own source part, used to locate the declaring file among the parts
+    pub(crate) pos: usize,
 }
 
 impl ResolvedSymbol {
@@ -477,11 +480,10 @@ impl ResolvedSymbol {
 
     /// Lazily resolve the module file path from `module_ident`.
     /// Locks `module_db` — call only when `symbol_table` is NOT held.
+    /// A directory module has several source parts, this returns the one declaring the symbol.
     pub(crate) fn module_path(&self, project: &Project) -> Option<String> {
         let db = project.module_db.lock().ok()?;
-        db.iter()
-            .find(|m| m.ident == self.module_ident)
-            .map(|m| m.path.clone())
+        find_module_part(&db, &self.module_ident, self.pos, self.raw_name()).map(|m| m.path.clone())
     }
 }
 
@@ -594,6 +596,7 @@ fn resolved_from_id(
         kind: symbol.kind.clone(),
         ident: ident.to_string(),
         module_ident,
+        pos: symbol.pos,
     })
 }
 
@@ -725,6 +728,7 @@ fn resolve_member_on_type(
                         kind: SymbolKind::Var(std::sync::Arc::new(std::sync::Mutex::new(var))),
                         ident: prop.name.clone(),
                         module_ident: String::new(),
+                        pos: prop.start,
                     });
                 }
             }
@@ -747,11 +751,13 @@ fn resolve_member_on_type(
                     .map(|(_, v)| v.clone())
             });
             if let Some(fndef) = method_fndef {
+                let pos = fndef.lock().unwrap().symbol_start;
                 return Some(ResolvedSymbol {
                     symbol_id: 0, // method is in method_table, not symbol table
                     kind: SymbolKind::Fn(fndef),
                     ident: member.to_string(),
                     module_ident: owner_module_ident,
+                    pos,
                 });
             }
 
@@ -775,6 +781,7 @@ fn resolve_member_on_type(
                             kind: SymbolKind::Var(std::sync::Arc::new(std::sync::Mutex::new(var))),
                             ident: prop.name.clone(),
                             module_ident: owner_module_ident,
+                            pos: prop.start,
                         });
                     }
                 }
@@ -812,6 +819,7 @@ fn resolve_member_on_type(
                             kind: SymbolKind::Fn(fndef_mutex.clone()),
                             ident: member.to_string(),
                             module_ident: owner_module_ident,
+                            pos: sym.pos,
                         });
                     }
                 }
@@ -855,6 +863,39 @@ fn scope_contains(scope: &Scope, offset: usize) -> bool {
 }
 
 /// Walk up from a scope to find the owning module ident.
+/// A module may consist of several source parts sharing one module ident and module scope.
+/// A symbol's start/end are byte offsets within one part, so the part actually declaring it must be picked out.
+pub(crate) fn find_module_part<'a>(
+    db: &'a [Module],
+    module_ident: &str,
+    def_start: usize,
+    name: &str,
+) -> Option<&'a Module> {
+    let mut parts = db.iter().filter(|m| m.ident == module_ident);
+
+    let first = parts.next()?;
+    let rest: Vec<&Module> = parts.collect();
+    if rest.is_empty() {
+        return Some(first);
+    }
+
+    let matches = |m: &Module| -> bool {
+        let end = def_start + name.len();
+        m.source.len() >= end && &m.source[def_start..end] == name
+    };
+
+    if matches(first) {
+        return Some(first);
+    }
+    for m in rest {
+        if matches(m) {
+            return Some(m);
+        }
+    }
+
+    Some(first)
+}
+
 fn module_ident_for_scope(st: &SymbolTable, scope_id: NodeId) -> Option<String> {
     let mut current = scope_id;
     while current > 0 {
