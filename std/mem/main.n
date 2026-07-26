@@ -1,3 +1,5 @@
+mod mem
+
 import libc
 
 fn copy<T>([u8] buf, ptr<T> dst):void! {

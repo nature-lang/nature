@@ -60,6 +60,10 @@ static inline char *var_unique_ident(module_t *m, char *ident) {
 
 module_t *module_build(ast_import_t *import, char *source_path, module_type_t type);
 
+module_t *module_build_sources(ast_import_t *import, slice_t *source_paths, module_type_t type);
+
+void module_set_current_source(module_t *m, source_file_t *sf);
+
 /**
  * 从 base_ns 开始，去掉结尾的 .n 部分
  * @param full_path

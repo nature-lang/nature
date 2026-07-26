@@ -6,5 +6,6 @@ description = "Your package description"
 license = "MIT"
 type = "lib" # lib or bin
 
+# path is resolved against the directory where npkg sync runs
 [dependencies]
-rand = {  type = "git", version = "v1.0.1", url = "jihulab.com/nature-lang/rand" }
+rand = { type = "local", version = "v1.0.1", path = "./mock/rand" }

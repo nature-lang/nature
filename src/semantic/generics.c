@@ -672,6 +672,10 @@ void generics(module_t *m) {
     for (int i = 0; i < m->ast_fndefs->count; ++i) {
         ast_fndef_t *fndef = m->ast_fndefs->take[i];
         assert(!fndef->is_local);
+        // a module may consist of several source parts, so error paths follow the file declaring this fn
+        if (fndef->rel_path) {
+            fndef->module->rel_path = fndef->rel_path;
+        }
         generics_fn(fndef->module, fndef);
     }
 }

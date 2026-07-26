@@ -1,0 +1,10 @@
+# The package name deliberately differs from the physical directory name (20260726_00_module_layout);
+# `mod` in the root must match the name here, independent of the physical directory name
+name = "modtest"
+version = "1.0.0"
+authors = ["nature"]
+description = "multi-file directory modules v1"
+license = "MIT"
+type = "bin"
+
+[dependencies]

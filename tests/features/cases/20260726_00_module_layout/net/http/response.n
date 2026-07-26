@@ -1,0 +1,7 @@
+mod http
+
+const PROTO = 'http/1.1'
+
+fn response():string {
+    return 'resp'
+}

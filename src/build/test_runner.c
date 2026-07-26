@@ -179,8 +179,15 @@ static slice_t *test_collect_main_tests(module_t *main_package, int *total, int 
     if (skipped) {
         *skipped = 0;
     }
-    for (int i = 0; i < main_package->stmt_list->count; ++i) {
-        ast_stmt_t *stmt = main_package->stmt_list->take[i];
+    // tests are shared by the whole module, so every source part has to be walked
+    slice_t *stmt_list = slice_new();
+    for (int i = 0; i < main_package->sources->count; ++i) {
+        source_file_t *sf = main_package->sources->take[i];
+        slice_concat(stmt_list, sf->stmt_list);
+    }
+
+    for (int i = 0; i < stmt_list->count; ++i) {
+        ast_stmt_t *stmt = stmt_list->take[i];
         if (stmt->assert_type != AST_FNDEF) {
             continue;
         }
@@ -296,14 +303,21 @@ static slice_t *test_runner_body(slice_t *tests, int total, int skipped) {
 }
 
 static ast_fndef_t *test_find_main(module_t *main_package) {
-    for (int i = 0; i < main_package->stmt_list->count; ++i) {
-        ast_stmt_t *stmt = main_package->stmt_list->take[i];
-        if (stmt->assert_type != AST_FNDEF) {
-            continue;
-        }
-        ast_fndef_t *fndef = stmt->value;
-        if (str_equal(fndef->fn_name, FN_MAIN_NAME)) {
-            return fndef;
+    for (int i = 0; i < main_package->sources->count; ++i) {
+        source_file_t *sf = main_package->sources->take[i];
+
+        for (int j = 0; j < sf->stmt_list->count; ++j) {
+            ast_stmt_t *stmt = sf->stmt_list->take[j];
+            if (stmt->assert_type != AST_FNDEF) {
+                continue;
+            }
+            ast_fndef_t *fndef = stmt->value;
+            if (fndef->impl_type.kind > 0) {
+                continue;
+            }
+            if (str_equal(fndef->fn_name, FN_MAIN_NAME)) {
+                return fndef;
+            }
         }
     }
     return NULL;
@@ -340,5 +354,8 @@ void test_inject_main(module_t *main_package) {
     stmt->column = 0;
     stmt->assert_type = AST_FNDEF;
     stmt->value = fndef;
-    slice_push(main_package->stmt_list, stmt);
+
+    // injected into the first source part, the analyzer will then analyze it with that file's import scope
+    source_file_t *primary = main_package->sources->take[0];
+    slice_push(primary->stmt_list, stmt);
 }

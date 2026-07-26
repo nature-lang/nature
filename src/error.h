@@ -51,6 +51,12 @@ extern char test_error_msg[2048];
 
 void push_errorf(module_t *m, ct_stage stage, int line, int column, char *format, ...);
 
+/**
+ * A user-visible error raised without module context (package scan / module index build)
+ * Uses the same output format as dump_errors_exit and terminates the compilation
+ */
+void dump_global_errorf(char *rel_path, int line, int column, char *format, ...);
+
 void dump_errorf(module_t *m, ct_stage stage, int line, int column, char *format, ...);
 
 /**

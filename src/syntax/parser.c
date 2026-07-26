@@ -2244,6 +2244,43 @@ static ast_stmt_t *parser_return_stmt(module_t *m) {
     return result;
 }
 
+/**
+ * mod is a contextual keyword, only treated as a module declaration when it leads the file as `mod <ident>`,
+ * anywhere else mod stays a normal identifier (e.g. the default alias produced by import 'mod.n')
+ */
+static bool parser_is_mod_decl(module_t *m) {
+    if (!parser_ident_is(m, MOD_DECL_IDENT)) {
+        return false;
+    }
+
+    linked_node *next = parser_next(m, 1);
+    if (!next) {
+        return false;
+    }
+
+    token_t *current = parser_peek(m);
+    token_t *next_token = next->value;
+
+    // mod must be followed by an ident on the same line, otherwise it is not a module declaration
+    return next_token->type == TOKEN_IDENT && next_token->line == current->line;
+}
+
+/**
+ * mod <ident>
+ */
+static ast_stmt_t *parser_mod_stmt(module_t *m) {
+    ast_stmt_t *result = stmt_new(m);
+    parser_advance(m); // mod
+
+    ast_mod_stmt_t *stmt = NEW(ast_mod_stmt_t);
+    token_t *token = parser_must(m, TOKEN_IDENT);
+    stmt->ident = token->literal;
+
+    result->assert_type = AST_STMT_MOD;
+    result->value = stmt;
+    return result;
+}
+
 static ast_stmt_t *parser_import_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     parser_advance(m);
@@ -3196,6 +3233,11 @@ static ast_stmt_t *parser_local_stmt(module_t *m) {
 }
 
 static ast_stmt_t *parser_global_stmt(module_t *m) {
+    // mod may only lead the file (already handled at the parser entry), reaching here means an illegal position
+    if (parser_is_mod_decl(m)) {
+        PARSER_ASSERTF(false, "'mod' declaration must be the first statement of the file");
+    }
+
     // module parser 只包含着几种简单语句
     if (parser_is(m, TOKEN_VAR)) {
         return parser_var_begin_stmt(m);
@@ -3804,6 +3846,12 @@ slice_t *parser(module_t *m, linked_t *token_list) {
     slice_t *block_stmt = slice_new();
 
     ast_type_t stmt_type = -1;
+
+    // a mod declaration must be the first statement of the file
+    if (parser_is_mod_decl(m)) {
+        slice_push(block_stmt, parser_mod_stmt(m));
+        parser_must_stmt_end(m);
+    }
 
     while (!parser_is(m, TOKEN_EOF)) {
 #ifdef DEBUG_PARSER

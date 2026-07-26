@@ -1,0 +1,6 @@
+mod nomain
+
+// the target module has no main
+fn only():string {
+    return 'only'
+}

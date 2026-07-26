@@ -20,11 +20,13 @@
 #include "src/build/windows_linker.h"
 #include "src/cfg.h"
 #include "src/debug/debug.h"
+#include "src/error.h"
 #include "src/ld/ld.h"
 #include "src/linear.h"
 #include "src/lower/amd64.h"
 #include "src/lower/arm64.h"
 #include "src/lower/riscv64.h"
+#include "src/module_index.h"
 #include "src/native/amd64.h"
 #include "src/native/arm64.h"
 #include "src/native/riscv64.h"
@@ -1207,6 +1209,7 @@ static void build_init(char *build_entry) {
     config_init();
     symbol_init();
     reg_init();
+    package_unit_reset();
     global_var_unique_count = 0;
 
     if (BUILD_ARCH == ARCH_AMD64) {
@@ -1285,7 +1288,10 @@ static void build_assembler(slice_t *modules) {
             // 基于 symbol_name 读取引用次数, 如果没有被引用过则不做编译
             symbol_t *s = symbol_table_get_noref(c->fndef->symbol_name);
             assert(s);
-            if (s->ref_count == 0 && !str_equal(c->fndef->symbol_name, FN_MAIN_LINKID)) {
+            // the program entry has no caller, its link symbol is pinned by linkid
+            bool is_entry = str_equal(c->fndef->symbol_name, FN_MAIN_LINKID) ||
+                            (c->fndef->linkid && str_equal(c->fndef->linkid, FN_MAIN_LINKID));
+            if (s->ref_count == 0 && !is_entry) {
                 continue;
             }
 
@@ -1356,6 +1362,43 @@ static slice_t *build_modules(toml_table_t *package_conf) {
             .module_ident = PACKAGE_MAIN_IDENT,
     };
 
+    // the source path given on the command line is first mapped to a logical source slot, then to its owning module
+    slice_t *main_sources = slice_new();
+    if (package_conf) {
+        package_unit_t *pu = package_unit_load(WORKDIR, package_conf);
+
+        if (!package_unit_slot_exists(pu, SOURCE_PATH)) {
+            dump_global_errorf(BUILD_ENTRY, 1, 1, "build entry '%s' is not part of package '%s'", BUILD_ENTRY,
+                               pu->package_name);
+        }
+
+        char *active = package_unit_slot_active(pu, SOURCE_PATH);
+        if (!active) {
+            dump_global_errorf(BUILD_ENTRY, 1, 1, "build entry '%s' is not active for target %s_%s", BUILD_ENTRY,
+                               os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
+        }
+
+        // a plain path selects the active file by the normal target priority;
+        // an explicitly given target-suffixed file must be active for the current target
+        bool explicit_variant = !str_equal(SOURCE_PATH, module_source_slot_key(SOURCE_PATH));
+        if (explicit_variant && !str_equal(active, SOURCE_PATH)) {
+            dump_global_errorf(BUILD_ENTRY, 1, 1,
+                               "build entry '%s' is not active for target %s_%s, active source is '%s'",
+                               BUILD_ENTRY, os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH),
+                               module_source_rel_path(pu->package_dir, active));
+        }
+
+        module_unit_t *unit = package_unit_find_source(pu, SOURCE_PATH);
+        assertf(unit, "build entry '%s' does not belong to any module", BUILD_ENTRY);
+
+        main_import.module_unit = unit;
+        main_import.module_ident = unit->module_ident;
+        slice_concat(main_sources, unit->sources);
+    } else {
+        // single-file builds without a package.toml stay supported
+        slice_push(main_sources, (void *) SOURCE_PATH);
+    }
+
     // main [links] 自动注册
     slice_t *links = package_links(main_import.package_dir, main_import.package_conf);
     if (links && links->count > 0) {
@@ -1368,20 +1411,22 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     table_t *links_handled = table_new();
     table_set(links_handled, main_import.package_dir, (void *) 1);
 
-    module_t *main_package = module_build(&main_import, SOURCE_PATH, MODULE_TYPE_MAIN);
+    module_t *main_package = module_build_sources(&main_import, main_sources, MODULE_TYPE_MAIN);
     slice_push(modules, main_package);
+    table_set(module_table, main_package->ident, main_package);
 
     linked_push(work_list, main_package);
-
-    table_t *import_tpl_table = table_new();
 
     while (work_list->count > 0) {
         // module_build time has perfected import
         module_t *m = linked_pop(work_list);
 
-        for (int j = 0; j < m->imports->count; ++j) {
-            ast_import_t *import = m->imports->take[j];
-            if (table_exist(module_table, import->full_path)) {
+        // a module's dependencies are the union of all its parts' imports
+        for (int j = 0; j < m->module_imports->count; ++j) {
+            ast_import_t *import = m->module_imports->take[j];
+
+            // one ModuleId is built exactly once, no matter how many import paths reach it
+            if (table_exist(module_table, import->module_ident)) {
                 continue;
             }
 
@@ -1398,10 +1443,17 @@ static slice_t *build_modules(toml_table_t *package_conf) {
             }
 
             // new module dep all imports handled
-            module_t *new_module = module_build(import, import->full_path, import->module_type);
+            slice_t *import_sources = slice_new();
+            if (import->module_unit) {
+                slice_concat(import_sources, import->module_unit->sources);
+            } else {
+                slice_push(import_sources, import->full_path);
+            }
+
+            module_t *new_module = module_build_sources(import, import_sources, import->module_type);
 
             linked_push(work_list, new_module);
-            table_set(module_table, import->full_path, new_module);
+            table_set(module_table, import->module_ident, new_module);
 
             // 按照层级进入到 modules 中(广度优先)
             slice_push(modules, new_module);
@@ -1418,7 +1470,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
         // analyzer => ast_fndefs(global)
         // analyzer 前需要将 global symbol 注册完成，否则在 pre_infer 时找不到相关的符号
-        analyzer(m, m->stmt_list);
+        analyzer(m);
     }
 
     return modules;

@@ -1,3 +1,5 @@
+mod fmt
+
 import fmt.utils as *
 import strings
 import reflect

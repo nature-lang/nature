@@ -1,0 +1,5 @@
+mod cmd
+
+fn serve():string {
+    return 'serving'
+}

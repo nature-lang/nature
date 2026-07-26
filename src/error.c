@@ -44,6 +44,26 @@ void dump_errorf(module_t *m, ct_stage stage, int line, int column, char *format
     dump_errors_exit(m);
 }
 
+void dump_global_errorf(char *rel_path, int line, int column, char *format, ...) {
+    char msg[1024];
+
+    va_list args;
+    va_start(args, format);
+    vsnprintf(msg, sizeof(msg), format, args);
+    va_end(args);
+
+#ifdef TEST_MODE
+    COMPILER_THROW("%s:%d:%d: %s\n", rel_path, line, column, msg);
+#endif
+
+#ifdef ASSERT_ERROR
+    assertf(false, "%s:%d:%d: %s\n", rel_path, line, column, msg);
+#else
+    fprintf(stderr, "%s:%d:%d: %s\n", rel_path, line, column, msg);
+    exit(EXIT_FAILURE);
+#endif
+}
+
 void dump_errors_exit(module_t *m) {
     if (m->errors->count == 0) {
         return;

@@ -1,3 +1,5 @@
+mod co
+
 // var SOLO = 1 << 1
 var SAME = 1 << 2
 

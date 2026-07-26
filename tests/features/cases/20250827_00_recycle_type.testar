@@ -254,5 +254,5 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:11:11: type inconsistency, expect=http.main.callback_fn(fn(...):void!), actual=fn(...):void!
+nature-test/main.n:11:11: type inconsistency, expect=http.callback_fn(fn(...):void!), actual=fn(...):void!
 

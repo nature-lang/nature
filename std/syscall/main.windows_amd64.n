@@ -1,3 +1,5 @@
+mod syscall
+
 import libc
 import runtime
 // UCRT open flags. Files opened through this package default to binary mode so

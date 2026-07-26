@@ -1,0 +1,10 @@
+mod lib
+
+// a main in a dependency module is not an entry candidate
+fn main() {
+    println('should never be selected')
+}
+
+fn helper():string {
+    return 'helper'
+}

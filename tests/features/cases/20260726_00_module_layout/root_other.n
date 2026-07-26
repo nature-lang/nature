@@ -1,0 +1,12 @@
+mod modtest
+
+const ROOT_TAG = 'modtest'
+
+fn root_other_name():string {
+    // cross-part reference to a top-level declaration in root_part.n
+    return root_suffix()
+}
+
+fn root_suffix():string {
+    return 'other'
+}

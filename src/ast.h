@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "module_index.h"
 #include "package.h"
 #include "types.h"
 #include "utils/assertf.h"
@@ -66,6 +67,7 @@ typedef enum {
     AST_STMT_EXPR_FAKE,
     AST_STMT_BREAK,
     AST_STMT_CONTINUE,
+    AST_STMT_MOD,
     AST_STMT_IMPORT,
     AST_STMT_VARDEF,
     AST_STMT_CONSTDEF,
@@ -457,6 +459,11 @@ typedef struct {
     ast_expr_t *expr;
 } ast_return_stmt_t;
 
+// mod <ident>, only valid at the head of a file, marks this file as a source part of its directory module
+typedef struct {
+    char *ident;
+} ast_mod_stmt_t;
+
 // Selective import item: {sqrt, pow, Pi as pi}
 typedef struct {
     char *ident; // symbol name to import
@@ -483,7 +490,8 @@ typedef struct {
     char *package_dir; // 这也是 import module 的 workdir
     bool use_links;
 
-    char *module_ident; // 在符号表中的名称前缀,基于 full_path 计算出来当 unique ident, 如果是 main 则默认添加 main.n
+    char *module_ident; // symbol table name prefix, determined by the ModuleId
+    struct module_unit_t *module_unit; // the resolved ModuleUnit, NULL in single-file compatibility mode
 } ast_import_t;
 
 // Tracks a selective import reference for symbol resolution

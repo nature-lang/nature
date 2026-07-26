@@ -1,0 +1,439 @@
+// Every case shares one file set (package.toml/main.n/mods/a.n/mods/b.n) and rewrites all of them,
+// otherwise a bad mod declaration left by a previous case would affect later cases during the package scan.
+// Cases needing extra files (mods/c*.n, mods.n) are all placed last.
+
+=== test_mod_name_mismatch_subdir
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+fn main() {
+}
+
+--- mods/a.n
+mod wrong
+
+fn a() {}
+
+--- mods/b.n
+fn b() {}
+
+--- output.txt
+nature-test/mods/a.n:1:1: 'mod wrong' does not match directory 'mods', use 'mod mods'
+
+=== test_mod_name_mismatch_root
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+mod wrong
+
+fn main() {
+}
+
+--- mods/a.n
+fn a() {}
+
+--- mods/b.n
+fn b() {}
+
+--- output.txt
+nature-test/main.n:1:1: 'mod wrong' does not match package name 'modtest', use 'mod modtest'
+
+=== test_mod_invalid_ident
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+fn main() {
+}
+
+--- mods/a.n
+mod 1bad
+
+fn a() {}
+
+--- mods/b.n
+fn b() {}
+
+--- output.txt
+nature-test/mods/a.n:1:1: 'mod 1bad' is not a valid identifier
+
+=== test_mod_without_package_name_match_is_case_sensitive
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+fn main() {
+}
+
+--- mods/a.n
+mod Mods
+
+fn a() {}
+
+--- mods/b.n
+fn b() {}
+
+--- output.txt
+nature-test/mods/a.n:1:1: 'mod Mods' does not match directory 'mods', use 'mod mods'
+
+=== test_import_source_part
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+import modtest.mods.a
+
+fn main() {
+    println(a.a())
+}
+
+--- mods/a.n
+mod mods
+
+fn a():int {
+    return 1
+}
+
+--- mods/b.n
+mod mods
+
+fn b():int {
+    return 2
+}
+
+--- output.txt
+nature-test/main.n:1:7: 'modtest.mods.a' is not a module, it is part of modtest.mods, use 'import modtest.mods'
+
+=== test_import_module_not_found
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+import modtest.nope
+
+fn main() {
+}
+
+--- mods/a.n
+fn a() {}
+
+--- mods/b.n
+fn b() {}
+
+--- output.txt
+nature-test/main.n:1:7: cannot import 'modtest.nope': module not found
+
+=== test_import_root_module_missing
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+import modtest
+
+fn main() {
+}
+
+--- mods/a.n
+fn a() {}
+
+--- mods/b.n
+fn b() {}
+
+--- output.txt
+nature-test/main.n:1:7: cannot import 'modtest': module not found
+
+=== test_import_intermediate_dir_is_not_a_module
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+import modtest.mods
+
+fn main() {
+}
+
+--- mods/a.n
+fn a() {}
+
+--- mods/b.n
+fn b() {}
+
+--- output.txt
+nature-test/main.n:1:7: cannot import 'modtest.mods': module not found
+
+=== test_source_part_self_import
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+import modtest.mods
+
+fn main() {
+    println(mods.a())
+}
+
+--- mods/a.n
+mod mods
+
+import modtest.mods
+
+fn a():int {
+    return 1
+}
+
+--- mods/b.n
+mod mods
+
+fn b():int {
+    return 2
+}
+
+--- output.txt
+nature-test/mods/a.n:3:6: module modtest.mods cannot import itself
+
+=== test_quoted_import_source_part
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+import 'mods/a.n'
+
+fn main() {
+    println(a.a())
+}
+
+--- mods/a.n
+mod mods
+
+fn a():int {
+    return 1
+}
+
+--- mods/b.n
+mod mods
+
+fn b():int {
+    return 2
+}
+
+--- output.txt
+nature-test/main.n:1:7: cannot import 'mods/a.n': it is part of module modtest.mods, use 'import modtest.mods'
+
+=== test_cross_part_redeclare
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+import modtest.mods
+
+fn main() {
+    println(mods.dup())
+}
+
+--- mods/a.n
+mod mods
+
+fn dup():int {
+    return 1
+}
+
+--- mods/b.n
+mod mods
+
+fn dup():int {
+    return 2
+}
+
+--- output.txt
+nature-test/mods/b.n:3:2: ident 'modtest.mods.dup' redeclared
+
+=== test_mod_not_at_head
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+import modtest.mods.a
+
+fn main() {
+    println(a.a())
+}
+
+--- mods/a.n
+import fmt
+mod mods
+
+fn a():string {
+    return fmt.sprintf('a')
+}
+
+--- mods/b.n
+fn b() {}
+
+--- output.txt
+nature-test/mods/a.n:2:3: 'mod' declaration must be the first statement of the file
+
+=== test_error_path_points_at_declaring_part
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+import modtest.mods
+
+fn main() {
+    println(mods.broken())
+}
+
+--- mods/a.n
+mod mods
+
+fn broken():int {
+    string s = 'x'
+    return s
+}
+
+--- mods/b.n
+mod mods
+
+fn b():int {
+    return 2
+}
+
+--- output.txt
+nature-test/mods/a.n:5:12: type inconsistency, expect=int(i64), actual=string
+
+=== test_target_variant_membership_mismatch
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+fn main() {
+}
+
+--- mods/a.n
+fn a() {}
+
+--- mods/b.n
+fn b() {}
+
+--- mods/c.n
+fn c() {}
+
+--- mods/c.darwin.n
+mod mods
+
+fn c() {}
+
+--- mods/c.linux.n
+mod mods
+
+fn c() {}
+
+--- mods/c.windows.n
+mod mods
+
+fn c() {}
+
+--- output.txt
+nature-test/mods/c.n:1:1: target variants of 'c' must belong to the same module, but nature-test/mods/c.darwin.n declares 'mod mods' and nature-test/mods/c.n declares no mod
+
+=== test_package_entry_field_rejected
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+entry = "main"
+
+--- main.n
+fn main() {
+}
+
+--- mods/a.n
+fn a() {}
+
+--- mods/b.n
+fn b() {}
+
+--- mods/c.n
+fn c() {}
+
+--- mods/c.darwin.n
+fn c_darwin() {}
+
+--- mods/c.linux.n
+fn c_linux() {}
+
+--- mods/c.windows.n
+fn c_windows() {}
+
+--- output.txt
+nature-test/package.toml:1:1: package.toml field 'entry' is not supported, remove it and pass the source path to 'nature build'
+
+=== test_file_and_directory_module_collision
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+import modtest.mods
+
+fn main() {
+}
+
+--- mods.n
+fn boom() {}
+
+--- mods/a.n
+mod mods
+
+fn a() {}
+
+--- mods/b.n
+mod mods
+
+fn b() {}
+
+--- mods/c.n
+fn c() {}
+
+--- mods/c.darwin.n
+fn c_darwin() {}
+
+--- mods/c.linux.n
+fn c_linux() {}
+
+--- mods/c.windows.n
+fn c_windows() {}
+
+--- output.txt
+nature-test/mods/a.n:1:1: module modtest.mods is defined by two layouts: nature-test/mods.n (standalone file module) and nature-test/mods/a.n (part of directory module)

@@ -1,0 +1,8 @@
+// a file in the package root, mod must equal package.toml.name
+mod modtest
+
+import fmt
+
+fn root_name():string {
+    return fmt.sprintf('root:%s', ROOT_TAG)
+}

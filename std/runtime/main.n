@@ -1,3 +1,5 @@
+mod runtime
+
 #linkid rt_vec_new
 fn vec_new<T>(int hash, int element_hash, int len, anyptr value_ref):vec<T>!
 

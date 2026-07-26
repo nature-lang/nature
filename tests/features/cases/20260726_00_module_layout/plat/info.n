@@ -1,0 +1,5 @@
+mod plat
+
+fn name():string {
+    return 'modtest.plat'
+}

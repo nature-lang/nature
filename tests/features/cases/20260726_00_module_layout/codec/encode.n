@@ -1,0 +1,17 @@
+mod codec
+
+import fmt
+
+fn encode(int v):string {
+    // cross-file forward reference: scale is defined in decode.n
+    return fmt.sprintf('enc-%d', v * scale())
+}
+
+fn encode_all(int v):string {
+    return encode(v) + '|' + decode_tag()
+}
+
+fn version_tag():string {
+    // shared_count is declared in decode.n, top-level declarations are shared by the whole module
+    return fmt.sprintf('v%d', shared_count)
+}

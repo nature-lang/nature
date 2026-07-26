@@ -1,0 +1,4 @@
+// no mod, so main.n is just the standalone module buildtarget.main
+fn main() {
+    println('entry:buildtarget.main')
+}

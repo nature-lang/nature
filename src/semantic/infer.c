@@ -4673,6 +4673,11 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
  * @param fn
  */
 static void infer_fndef(module_t *m, ast_fndef_t *fn) {
+    // a module may consist of several source parts, so error paths follow the file declaring this fn
+    if (fn->rel_path) {
+        m->rel_path = fn->rel_path;
+    }
+
     assert(m);
     assert(fn->type.kind == TYPE_FN && fn->type.status == REDUCTION_STATUS_DONE);
     m->current_fn = fn;

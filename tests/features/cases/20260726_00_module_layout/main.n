@@ -1,0 +1,43 @@
+// main.n has no special status, without mod it is just the standalone module modtest.main
+import modtest
+import modtest.codec
+import modtest.codec.helper
+import modtest.standalone
+import modtest.fmtx
+import modtest.fmtx.utils
+import modtest.net.http
+import modtest.same
+import modtest.plat
+import modtest.codec.{encode_all}
+
+fn main() {
+    // the root module consists of two source parts, root_part.n and root_other.n
+    println(modtest.root_name(), modtest.root_other_name())
+
+    // directory module: cross-file calls and forward references
+    println(codec.encode(3), codec.decode(9))
+
+    // a directory module and a standalone file module mixed in one directory
+    println(helper.tag())
+
+    // a selective import pointing at a directory module's top-level declaration
+    println(encode_all(2))
+
+    // parent and child modules coexist, an intermediate directory does not define the parent automatically
+    println(fmtx.name(), utils.name())
+
+    // nested directory module
+    println(http.request(), http.response())
+
+    // same/same.n plus mod same is still just modtest.same
+    println(same.name())
+
+    // target variants belong to the same module, the suffix never enters the ModuleId
+    println(plat.name(), plat.target())
+
+    // a module is built exactly once, no matter how many import paths reach it
+    println(standalone.codec_encode(5))
+
+    // a top-level global shared across files
+    println(codec.version_tag(), codec.shared_count)
+}

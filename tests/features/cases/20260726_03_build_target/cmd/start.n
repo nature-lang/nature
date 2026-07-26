@@ -1,0 +1,6 @@
+mod cmd
+
+// main may live in any source part of the target module
+fn main() {
+    println('entry:buildtarget.cmd', serve(), plat())
+}
