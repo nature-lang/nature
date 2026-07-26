@@ -571,14 +571,8 @@ package_unit_t *package_unit_load(char *package_dir, toml_table_t *package_conf)
     toml_datum_t name = toml_string_in(package_conf, "name");
     assertf(name.ok, "package.toml in '%s' must have a 'name' field", package_dir);
 
-    // package.toml.entry has been removed, there is no replacement field
-    toml_datum_t entry = toml_string_in(package_conf, "entry");
-    if (entry.ok) {
-        char *conf_path = module_source_diag_path(package_dir, path_join(strdup(package_dir), PACKAGE_TOML));
-        dump_global_errorf(conf_path, 1, 1,
-                           "package.toml field 'entry' is not supported, remove it and pass the source path to 'nature build'");
-    }
-
+    // package.toml.entry has been removed, a leftover field is ignored rather than rejected,
+    // so a dependency carrying it stays usable through its submodules
     pu = NEW(package_unit_t);
     pu->package_dir = package_dir;
     pu->package_name = name.u.s;

@@ -366,38 +366,6 @@ fn c() {}
 --- output.txt
 nature-test/mods/c.n:1:1: target variants of 'c' must belong to the same module, but nature-test/mods/c.darwin.n declares 'mod mods' and nature-test/mods/c.n declares no mod
 
-=== test_package_entry_field_rejected
---- package.toml
-name = "modtest"
-version = "1.0.0"
-type = "bin"
-entry = "main"
-
---- main.n
-fn main() {
-}
-
---- mods/a.n
-fn a() {}
-
---- mods/b.n
-fn b() {}
-
---- mods/c.n
-fn c() {}
-
---- mods/c.darwin.n
-fn c_darwin() {}
-
---- mods/c.linux.n
-fn c_linux() {}
-
---- mods/c.windows.n
-fn c_windows() {}
-
---- output.txt
-nature-test/package.toml:1:1: package.toml field 'entry' is not supported, remove it and pass the source path to 'nature build'
-
 === test_file_and_directory_module_collision
 --- package.toml
 name = "modtest"
