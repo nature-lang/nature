@@ -5,9 +5,22 @@
  * module, builds that whole module plus its transitive dependencies, and looks for the single
  * valid main in the target module only
  */
-static void build_entry(char *entry, char *output_name) {
+/**
+ * config_init only rewrites the default output name "main" to "main.exe", so a custom name
+ * keeps whatever it is given. On Windows a PE binary without the .exe extension cannot be
+ * executed, so the suffix has to be supplied here.
+ */
+static void set_build_output(char *output_name) {
     strcpy(BUILD_OUTPUT_DIR, getenv("BUILD_OUTPUT_DIR"));
+#ifdef __WINDOWS
+    snprintf(BUILD_OUTPUT_NAME, sizeof(BUILD_OUTPUT_NAME), "%s.exe", output_name);
+#else
     strcpy(BUILD_OUTPUT_NAME, output_name);
+#endif
+}
+
+static void build_entry(char *entry, char *output_name) {
+    set_build_output(output_name);
 
     COMPILER_TRY {
         build(entry, false);
@@ -29,8 +42,7 @@ static void assert_entry_output(char *entry, char *output_name, char *expect) {
  * Expect the build to fail with exactly the given error message
  */
 static void assert_entry_error(char *entry, char *output_name, char *expect) {
-    strcpy(BUILD_OUTPUT_DIR, getenv("BUILD_OUTPUT_DIR"));
-    strcpy(BUILD_OUTPUT_NAME, output_name);
+    set_build_output(output_name);
 
     COMPILER_TRY {
         build(entry, false);
