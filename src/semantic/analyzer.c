@@ -114,12 +114,17 @@ static char *analyzer_import_module_path(slice_t *ast_package) {
     return result;
 }
 
+static char *analyzer_import_key(ast_import_t *import) {
+    return import->module_key ? import->module_key : import->module_ident;
+}
+
 /**
  * Bind an import to the ModuleUnit looked up from the module index
  */
 static void analyzer_import_bind_unit(module_t *m, ast_import_t *import, module_unit_t *unit) {
     import->module_unit = unit;
     import->module_ident = unit->module_ident;
+    import->module_key = unit->module_key;
     import->full_path = unit->sources->take[0];
     import->module_type = MODULE_TYPE_COMMON;
 }
@@ -165,6 +170,7 @@ void analyzer_import(module_t *m, ast_import_t *import) {
         // single-file builds without a package.toml keep resolving by path
         if (!m->package_conf) {
             import->module_ident = module_unique_ident(import);
+            import->module_key = import->module_ident;
             return;
         }
 
@@ -177,8 +183,9 @@ void analyzer_import(module_t *m, ast_import_t *import) {
                          "cannot import '%s': it is part of module %s, use 'import %s'",
                          import->file, unit->module_ident, unit->module_ident);
 
-        ANALYZER_ASSERTF(!str_equal(unit->module_ident, m->ident),
-                         "cannot import '%s': module %s cannot import itself", import->file, m->ident);
+        ANALYZER_ASSERTF(!str_equal(unit->module_key, m->ident),
+                         "cannot import '%s': module %s cannot import itself", import->file,
+                         m->display_ident ? m->display_ident : m->ident);
 
         analyzer_import_bind_unit(m, import, unit);
         return;
@@ -234,7 +241,8 @@ void analyzer_import(module_t *m, ast_import_t *import) {
     }
 
     // a source part cannot import the module it belongs to
-    ANALYZER_ASSERTF(!str_equal(unit->module_ident, m->ident), "module %s cannot import itself", m->ident);
+    ANALYZER_ASSERTF(!str_equal(unit->module_key, m->ident), "module %s cannot import itself",
+                     m->display_ident ? m->display_ident : m->ident);
 
     if (!import->as || strlen(import->as) == 0) {
         import->as = import->ast_package->take[import->ast_package->count - 1];
@@ -297,7 +305,7 @@ static char *analyzer_resolve_typedef(module_t *m, analyzer_fndef_t *current, st
             ast_import_t *import = m->imports->take[i];
 
             if (str_equal(import->as, "*")) {
-                char *temp = ident_with_prefix(import->module_ident, ident);
+                char *temp = ident_with_prefix(analyzer_import_key(import), ident);
                 if (symbol_table_get(temp)) {
                     return temp;
                 }
@@ -363,7 +371,7 @@ static void analyzer_type(module_t *m, type_t *t) {
             ast_import_t *import = table_get(m->import_table, t->import_as);
             ANALYZER_ASSERTF(import, "module '%s' not found", t->import_as);
 
-            char *unique_ident = ident_with_prefix(import->module_ident, t->ident);
+            char *unique_ident = ident_with_prefix(analyzer_import_key(import), t->ident);
 
             // 更新 ident 指向
             t->ident = unique_ident;
@@ -1506,7 +1514,7 @@ static bool analyzer_as_star_or_builtin_ident(module_t *m, ast_ident *ident) {
         ast_import_t *import = m->imports->take[i];
 
         if (str_equal(import->as, "*")) {
-            char *temp = ident_with_prefix(import->module_ident, ident->literal);
+            char *temp = ident_with_prefix(analyzer_import_key(import), ident->literal);
             if (symbol_table_get(temp)) {
                 ident->literal = temp;
                 return true;
@@ -1623,7 +1631,7 @@ static void rewrite_select_expr(module_t *m, ast_expr_t *expr) {
         if (import) {
             // 这里直接将 module.select 改成了全局唯一名称，彻底消灭了select ！
             // (不需要检测 import package 是否存在，这在 linker 中会做的)
-            char *unique_ident = ident_with_prefix(import->module_ident, select->key);
+            char *unique_ident = ident_with_prefix(analyzer_import_key(import), select->key);
 
             // 检测 import ident 是否存在
             if (!symbol_table_get(unique_ident)) {
@@ -2472,13 +2480,15 @@ static void analyzer_main(module_t *m) {
         if (main_fn) {
             m->current_line = fn->line;
             m->current_column = fn->column;
-            ANALYZER_ASSERTF(false, "module %s declares multiple 'main' functions", m->ident);
+            ANALYZER_ASSERTF(false, "module %s declares multiple 'main' functions",
+                             m->display_ident ? m->display_ident : m->ident);
         }
 
         main_fn = fn;
     }
 
-    ANALYZER_ASSERTF(main_fn, "fn 'main' is undeclared in module %s", m->ident);
+    ANALYZER_ASSERTF(main_fn, "fn 'main' is undeclared in module %s",
+                     m->display_ident ? m->display_ident : m->ident);
 
     // func main must have no arguments and no return values
     ANALYZER_ASSERTF(main_fn->params->length == 0,

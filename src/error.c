@@ -1,4 +1,5 @@
 #include "error.h"
+#include "module_index.h"
 #include <stdarg.h>
 
 jmp_buf test_compiler_jmp_buf = {0};
@@ -12,6 +13,9 @@ void push_errorf(module_t *m, ct_stage stage, int line, int column, char *format
     va_start(args, format);
     vsprintf(error->msg, format, args);
     va_end(args);
+
+    char *display = module_keys_display(error->msg);
+    snprintf(error->msg, sizeof(error->msg), "%s", display);
 
     error->stage = stage;
     error->column = column;
@@ -27,6 +31,9 @@ void dump_errorf(module_t *m, ct_stage stage, int line, int column, char *format
     va_start(args, format);
     vsprintf(error->msg, format, args);
     va_end(args);
+
+    char *display = module_keys_display(error->msg);
+    snprintf(error->msg, sizeof(error->msg), "%s", display);
 
 
     error->stage = stage;

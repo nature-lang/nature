@@ -4735,6 +4735,9 @@ void pre_infer(module_t *m) {
         ast_fndef_t *fndef = m->ast_fndefs->take[i];
         assert(!fndef->is_local);
 
+        if (fndef->rel_path) {
+            m->rel_path = fndef->rel_path;
+        }
         m->current_line = fndef->line;
         m->current_column = fndef->column;
 

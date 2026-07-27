@@ -329,6 +329,7 @@ typedef struct {
     ast_var_decl_t var_decl; // 左值
     ast_expr_t *right; // 右值
     uint8_t *global_data; // global_eval pass 生成的编译期初始化数据
+    char *rel_path; // declaring source file for multi-file module diagnostics
 } ast_vardef_stmt_t;
 
 typedef struct {
@@ -490,7 +491,8 @@ typedef struct {
     char *package_dir; // 这也是 import module 的 workdir
     bool use_links;
 
-    char *module_ident; // symbol table name prefix, determined by the ModuleId
+    char *module_ident; // user-facing logical module name
+    char *module_key; // package-instance-qualified symbol table prefix
     struct module_unit_t *module_unit; // the resolved ModuleUnit, NULL in single-file compatibility mode
 } ast_import_t;
 

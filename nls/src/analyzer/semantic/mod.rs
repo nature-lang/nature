@@ -228,7 +228,7 @@ impl<'a> Semantic<'a> {
                         AnalyzerError {
                             start: t.start,
                             end: t.end,
-                            message: format!("type '{}' undeclared in {} module", t.ident, import_stmt.module_ident),
+                            message: format!("type '{}' undeclared in {} module", t.ident, import_stmt.display_module()),
                             is_warning: false,
                         },
                     );
@@ -533,7 +533,7 @@ impl<'a> Semantic<'a> {
                     continue;
                 }
 
-                errors.push((import.start, import.end, item.ident.clone(), import.module_ident.clone()));
+                errors.push((import.start, import.end, item.ident.clone(), import.display_module().to_string()));
             }
         }
 
@@ -648,10 +648,11 @@ impl<'a> Semantic<'a> {
                             fndef.symbol_name.clone(),
                             SymbolKind::Fn(fndef_mutex.clone()),
                             fndef.symbol_start,
-                            self.module.scope_id,
+                            self.module.module_scope_id,
                         ) {
                             Ok(symbol_id) => {
                                 fndef.symbol_id = symbol_id;
+                                self.symbol_table.set_symbol_source_path(symbol_id, &self.module.path);
                             }
                             Err(e) => {
                                 errors_push(
@@ -667,12 +668,14 @@ impl<'a> Semantic<'a> {
                         }
 
                         // register to global symbol
-                        let _ = self.symbol_table.define_global_symbol(
+                        if let Ok(symbol_id) = self.symbol_table.define_global_symbol(
                             fndef.symbol_name.clone(),
                             SymbolKind::Fn(fndef_mutex.clone()),
                             fndef.symbol_start,
-                            self.module.scope_id,
-                        );
+                            self.module.module_scope_id,
+                        ) {
+                            self.symbol_table.set_symbol_source_path(symbol_id, &self.module.path);
+                        }
                     }
 
                     global_fn_stmt_list.push(fndef_mutex.clone());

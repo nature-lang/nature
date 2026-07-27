@@ -14,7 +14,8 @@
  */
 typedef struct module_unit_t {
     char *module_path; // "" | "utils" | "net.http"
-    char *module_ident; // <package_name>[.<module_path>], symbol table prefix
+    char *module_ident; // <package_name>[.<module_path>], user-facing logical name
+    char *module_key; // package-instance-qualified symbol table prefix
     char *mod_ident; // expected leading mod, NULL only for standalone and single-file modules
     char *canonical_path; // same-named source of a directory module
     bool is_dir_module; // true means the module is named by its directory
@@ -82,5 +83,10 @@ bool module_unit_has_source_named(module_unit_t *unit, char *name);
  * Render module_path in import form: "" -> P, "net.http" -> P.net.http
  */
 char *module_ident_join(char *package_name, char *module_path);
+
+char *module_key_join(char *package_dir, char *module_path);
+
+/** Replace internal package-qualified keys in a diagnostic with logical module names. */
+char *module_keys_display(char *message);
 
 #endif // NATURE_MODULE_INDEX_H

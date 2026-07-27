@@ -157,6 +157,10 @@ add_executable(test_archive_writer test_archive_writer.c)
 target_link_libraries(test_archive_writer nature_common_test m)
 add_test(test_archive_writer test_archive_writer)
 
+add_executable(test_module_index test_module_index.c)
+target_link_libraries(test_module_index nature_common_test m)
+add_test(test_module_index test_module_index)
+
 if (WIN32)
     set(WINDOWS_C_ABI_FIXTURE_DIR
             "${CMAKE_CURRENT_BINARY_DIR}/windows_c_nature_abi")

@@ -1,0 +1,5 @@
+mod shared
+
+fn value():string {
+    return 'left'
+}

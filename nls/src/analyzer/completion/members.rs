@@ -219,7 +219,7 @@ impl<'a> CompletionProvider<'a> {
         }
 
         // Also check module scope (impl methods are registered there too)
-        let module_scope = self.symbol_table.find_scope(self.module.scope_id);
+        let module_scope = self.symbol_table.find_scope(self.module.module_scope_id);
         for &symbol_id in &module_scope.symbols {
             self.check_impl_method(symbol_id, typedef_symbol_id, prefix, completions);
         }
@@ -434,7 +434,7 @@ impl<'a> CompletionProvider<'a> {
     /// Tries multiple lookup strategies: direct, module-qualified, and global search.
     fn resolve_type_name_to_symbol_id(&self, type_name: &str) -> NodeId {
         // 1. Try exact match in the module scope's symbol_map
-        let module_scope = self.symbol_table.find_scope(self.module.scope_id);
+        let module_scope = self.symbol_table.find_scope(self.module.module_scope_id);
         if let Some(&symbol_id) = module_scope.symbol_map.get(type_name) {
             return symbol_id;
         }
@@ -514,7 +514,7 @@ impl<'a> CompletionProvider<'a> {
     /// print, panic, assert, …) are registered.  Builtins use
     /// `module_ident = ""` which maps to the global scope.
     pub(crate) fn collect_module_scope_fn_completions(&self, prefix: &str, completions: &mut Vec<CompletionItem>) {
-        let module_scope_id = self.module.scope_id;
+        let module_scope_id = self.module.module_scope_id;
         let global_scope_id = self.symbol_table.global_scope_id;
 
         let existing_labels: HashSet<String> = completions.iter().map(|c| c.label.clone()).collect();

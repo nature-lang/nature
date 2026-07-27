@@ -351,6 +351,65 @@ fn b():int {
 --- output.txt
 nature-test/mods/a.n:5:12: type inconsistency, expect=int(i64), actual=string
 
+=== test_global_error_path_points_at_declaring_part
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+import modtest.mods
+
+fn main() {
+}
+
+--- mods/a.n
+mod mods
+
+[int] bad = [1]
+
+--- mods/mods.n
+mod mods
+
+fn later():int {
+    return 2
+}
+
+--- output.txt
+nature-test/mods/a.n:3:13: global vec initializer must be empty
+
+=== test_pre_infer_error_path_points_at_declaring_part
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+import modtest.mods
+
+fn main() {
+}
+
+--- mods/a.n
+mod mods
+
+type node3_t = node_t
+type node2_t = node3_t
+type node_t = node2_t
+
+fn broken(node_t value) {
+}
+
+--- mods/mods.n
+mod mods
+
+fn later():int {
+    return 2
+}
+
+--- output.txt
+nature-test/mods/a.n:7:2: recycle use type 'modtest.mods.node_t'
+
 === test_target_variant_membership_mismatch
 --- package.toml
 name = "modtest"

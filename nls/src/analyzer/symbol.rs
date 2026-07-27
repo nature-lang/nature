@@ -62,6 +62,7 @@ pub struct Symbol {
     pub defined_in: NodeId, // defined in scope
     pub is_local: bool,     // 是否是 module 级别的 global symbol
     pub pos: usize,         // 符号定义的起始
+    pub source_path: Option<String>,
 
     // local symbol 需要一些额外信息
     pub is_capture: bool, // 如果变量被捕获，则需要分配到堆中，避免作用域问题
@@ -85,6 +86,7 @@ pub enum ScopeKind {
     // buitin 直接注册到全局作用域中
     Global,
     Module(String), // 创建 module 产生的 scope, 当前 scope 中存储了当前 module 的所有符号
+    Source(String), // one physical source part below a shared module scope
     GlobalFn(Arc<Mutex<AstFnDef>>),
     LocalFn(Arc<Mutex<AstFnDef>>),
     Local,
@@ -276,12 +278,40 @@ impl SymbolTable {
         scope_id
     }
 
+    pub fn create_source_scope(&mut self, module_ident: &str, source_path: &str) -> NodeId {
+        if module_ident.is_empty() {
+            return self.global_scope_id;
+        }
+        let module_scope = self.create_module_scope(module_ident.to_string());
+        self.create_scope(ScopeKind::Source(source_path.to_string()), module_scope, 0, 0)
+    }
+
+    fn source_path_for_scope(&self, scope_id: NodeId) -> Option<String> {
+        let mut current = scope_id;
+        while current > 0 {
+            let scope = self.scopes.get(current)?;
+            if let ScopeKind::Source(path) = &scope.kind {
+                return Some(path.clone());
+            }
+            current = scope.parent;
+        }
+        None
+    }
+
+    pub fn set_symbol_source_path(&mut self, symbol_id: NodeId, source_path: &str) {
+        if let Some(symbol) = self.symbols.get_mut(symbol_id) {
+            symbol.source_path = Some(source_path.to_string());
+        }
+    }
+
     pub fn clean_module_scope(&mut self, module_ident: String) {
         if module_ident == "" {
             return;
         }
 
-        let module_scope_id = self.module_scopes.get(&module_ident).unwrap();
+        let Some(module_scope_id) = self.module_scopes.get(&module_ident) else {
+            return;
+        };
         let module_scope = self.scopes.get_mut(*module_scope_id).unwrap();
         let module_symbol_map = module_scope.symbol_map.clone();
 
@@ -328,6 +358,7 @@ impl SymbolTable {
 
     pub fn define_global_symbol(&mut self, global_ident: String, kind: SymbolKind, pos: usize, defined_in: NodeId) -> Result<NodeId, String> {
         debug_assert!(global_ident != "");
+        let source_path = self.source_path_for_scope(defined_in);
 
         // 注册到 global scope
         let global_scope = self.scopes.get_mut(self.global_scope_id).unwrap();
@@ -343,6 +374,7 @@ impl SymbolTable {
             defined_in, // global ident 的 defined_in 指向 module scope id
             is_local: false,
             pos,
+            source_path,
             is_capture: false,
             generics_id_map: HashMap::new(),
         };
@@ -378,6 +410,8 @@ impl SymbolTable {
     pub fn define_symbol_in_scope(&mut self, ident: String, kind: SymbolKind, pos: usize, scope_id: NodeId) -> Result<NodeId, String> {
         debug_assert!(ident != "");
 
+        let source_path = self.source_path_for_scope(scope_id);
+
         // 检查当前作用域是否已存在同名符号
         let scope = self.scopes.get_mut(scope_id).unwrap();
 
@@ -394,6 +428,7 @@ impl SymbolTable {
             defined_in: scope_id,
             is_local,
             pos,
+            source_path,
             is_capture: false,
             generics_id_map: HashMap::new(),
         };

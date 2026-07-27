@@ -2772,6 +2772,7 @@ impl<'a> Syntax {
             package_dir: String::new(),
             use_links: false,
             module_ident: String::new(),
+            module_name: String::new(),
             start: stmt.start,
             end: import_end,
         });

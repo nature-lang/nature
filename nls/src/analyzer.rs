@@ -297,6 +297,7 @@ pub fn analyze_import(
         let Some(p) = current_package else {
             import.package_dir = project_root.clone();
             import.module_ident = module_unique_ident(&project_root, &import.full_path);
+            import.module_name = import.module_ident.clone();
             return Ok(());
         };
 
@@ -325,18 +326,19 @@ pub fn analyze_import(
             });
         }
 
-        if unit.module_ident == m.ident {
+        if unit.module_key == m.ident {
             return Err(AnalyzerError {
                 start: import.start,
                 end: import.end,
-                message: format!("cannot import '{}': module {} cannot import itself", file, m.ident),
+                message: format!("cannot import '{}': module {} cannot import itself", file, m.display_ident),
                 is_warning: false,
             });
         }
 
         import.package_conf = Some(p);
         import.package_dir = package_dir;
-        import.module_ident = unit.module_ident.clone();
+        import.module_ident = unit.module_key.clone();
+        import.module_name = unit.module_ident.clone();
         import.full_path = unit.sources[0].clone();
         import.module_sources = unit.sources.clone();
 
@@ -419,11 +421,11 @@ pub fn analyze_import(
     };
 
     // a source part cannot import the module it belongs to
-    if unit.module_ident == m.ident {
+    if unit.module_key == m.ident {
         return Err(AnalyzerError {
             start: import.start,
             end: import.end,
-            message: format!("module {} cannot import itself", m.ident),
+            message: format!("module {} cannot import itself", m.display_ident),
             is_warning: false,
         });
     }
@@ -435,14 +437,15 @@ pub fn analyze_import(
         import.as_name = import.ast_package.as_ref().unwrap().last().unwrap().clone();
     }
 
-    import.module_ident = unit.module_ident.clone();
+    import.module_ident = unit.module_key.clone();
+    import.module_name = unit.module_ident.clone();
     import.full_path = unit.sources[0].clone();
     import.module_sources = unit.sources.clone();
     return Ok(());
 }
 
 /// Validate a leading mod declaration: the root must equal package.toml.name, a normal subdirectory the directory basename
-pub fn analyze_mod_decl(package_config: &Arc<Mutex<Option<PackageConfig>>>, m: &mut Module, stmts: &Vec<Box<Stmt>>) {
+pub fn analyze_mod_decl(m: &mut Module, stmts: &Vec<Box<Stmt>>) {
     let Some(stmt) = stmts.first() else {
         return;
     };
@@ -450,11 +453,7 @@ pub fn analyze_mod_decl(package_config: &Arc<Mutex<Option<PackageConfig>>>, m: &
         return;
     };
 
-    let package_config_option = package_config.lock().unwrap();
-    let current_package = package_config_option.as_ref().cloned();
-    drop(package_config_option);
-
-    let Some(p) = current_package else {
+    let Some(p) = m.package_conf.clone() else {
         m.analyzer_errors.push(AnalyzerError::new(
             mod_stmt.start,
             mod_stmt.end,
@@ -463,7 +462,7 @@ pub fn analyze_mod_decl(package_config: &Arc<Mutex<Option<PackageConfig>>>, m: &
         return;
     };
 
-    let package_dir = Path::new(&p.path).parent().unwrap_or(Path::new("")).to_str().unwrap_or("").to_string();
+    let package_dir = m.package_dir.clone();
     let rel_dir = module_source_rel_path(&package_dir, &m.dir);
 
     let expect = if rel_dir.is_empty() {
@@ -529,10 +528,11 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                     var_decl.ident.clone(),
                     SymbolKind::Var(var_decl_mutex.clone()),
                     var_decl.symbol_start,
-                    m.scope_id,
+                    m.module_scope_id,
                 ) {
                     Ok(symbol_id) => {
                         var_decl.symbol_id = symbol_id;
+                        symbol_table.set_symbol_source_path(symbol_id, &m.path);
                     }
                     Err(e) => {
                         errors_push(
@@ -548,12 +548,14 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                 }
 
                 // 注册到全局符号表
-                let _ = symbol_table.define_global_symbol(
+                if let Ok(symbol_id) = symbol_table.define_global_symbol(
                     var_decl.ident.clone(),
                     SymbolKind::Var(var_decl_mutex.clone()),
                     var_decl.symbol_start,
-                    m.scope_id,
-                );
+                    m.module_scope_id,
+                ) {
+                    symbol_table.set_symbol_source_path(symbol_id, &m.path);
+                }
             }
             AstNode::ConstDef(constdef_mutex) => {
                 let mut constdef = constdef_mutex.lock().unwrap();
@@ -563,10 +565,11 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                     constdef.ident.clone(),
                     SymbolKind::Const(constdef_mutex.clone()),
                     constdef.symbol_start,
-                    m.scope_id,
+                    m.module_scope_id,
                 ) {
                     Ok(symbol_id) => {
                         constdef.symbol_id = symbol_id;
+                        symbol_table.set_symbol_source_path(symbol_id, &m.path);
                     }
                     Err(e) => {
                         errors_push(
@@ -582,20 +585,23 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                 }
 
                 // Register in global symbol table (needed for selective imports)
-                let _ = symbol_table.define_global_symbol(
+                if let Ok(symbol_id) = symbol_table.define_global_symbol(
                     constdef.ident.clone(),
                     SymbolKind::Const(constdef_mutex.clone()),
                     constdef.symbol_start,
-                    m.scope_id,
-                );
+                    m.module_scope_id,
+                ) {
+                    symbol_table.set_symbol_source_path(symbol_id, &m.path);
+                }
             }
             AstNode::Typedef(typedef_mutex) => {
                 let mut typedef = typedef_mutex.lock().unwrap();
                 typedef.ident = format_global_ident(m.ident.clone(), typedef.ident.clone());
 
-                match symbol_table.define_symbol_in_scope(typedef.ident.clone(), SymbolKind::Type(typedef_mutex.clone()), typedef.symbol_start, m.scope_id) {
+                match symbol_table.define_symbol_in_scope(typedef.ident.clone(), SymbolKind::Type(typedef_mutex.clone()), typedef.symbol_start, m.module_scope_id) {
                     Ok(symbol_id) => {
                         typedef.symbol_id = symbol_id;
+                        symbol_table.set_symbol_source_path(symbol_id, &m.path);
                     }
                     Err(e) => {
                         debug!("define module typedef {} failed: {}, in scope {}", typedef.ident, e, m.scope_id);
@@ -611,7 +617,9 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                     }
                 }
 
-                let _ = symbol_table.define_global_symbol(typedef.ident.clone(), SymbolKind::Type(typedef_mutex.clone()), typedef.symbol_start, m.scope_id);
+                if let Ok(symbol_id) = symbol_table.define_global_symbol(typedef.ident.clone(), SymbolKind::Type(typedef_mutex.clone()), typedef.symbol_start, m.module_scope_id) {
+                    symbol_table.set_symbol_source_path(symbol_id, &m.path);
+                }
             }
             AstNode::FnDef(fndef_mutex) => {
                 let mut fndef = fndef_mutex.lock().unwrap();
@@ -620,9 +628,10 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                 if fndef.impl_type.kind.is_unknown() {
                     fndef.symbol_name = format_global_ident(m.ident.clone(), symbol_name.clone());
 
-                    match symbol_table.define_symbol_in_scope(fndef.symbol_name.clone(), SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, m.scope_id) {
+                    match symbol_table.define_symbol_in_scope(fndef.symbol_name.clone(), SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, m.module_scope_id) {
                         Ok(symbol_id) => {
                             fndef.symbol_id = symbol_id;
+                            symbol_table.set_symbol_source_path(symbol_id, &m.path);
                         }
                         Err(_e) => {
                             errors_push(
@@ -637,7 +646,9 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                         }
                     }
 
-                    let _ = symbol_table.define_global_symbol(fndef.symbol_name.clone(), SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, m.scope_id);
+                    if let Ok(symbol_id) = symbol_table.define_global_symbol(fndef.symbol_name.clone(), SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, m.module_scope_id) {
+                        symbol_table.set_symbol_source_path(symbol_id, &m.path);
+                    }
                 } else {
                     // dealy semantic analyze
                 }

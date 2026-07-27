@@ -5,6 +5,8 @@ import rand.utils.seed
 import syscall
 import os
 import local
+import left
+import right
 import package.src.user
 
 fn main() {
@@ -16,4 +18,5 @@ fn main() {
     os.dump()
     print('local.get_count() -> ', local.get_count(), '\n')
     local.dump()
+    print('same-name deps: ', left.value(), '/', right.value(), '\n')
 }

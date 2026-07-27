@@ -295,10 +295,14 @@ fn type_to_location(project: &Project, type_: &Type) -> Option<Location> {
 
     let module_ident = module_ident_for_scope(&st, symbol.defined_in)?;
     let def_name = symbol.ident.rsplit('.').next().unwrap_or(&symbol.ident).to_string();
+    let source_path = symbol.source_path.clone();
     drop(st);
 
     let db = project.module_db.lock().ok()?;
-    let module = find_module_part(&db, &module_ident, def_start, &def_name)?;
+    let module = source_path
+        .as_deref()
+        .and_then(|path| db.iter().find(|module| module.path == path))
+        .or_else(|| find_module_part(&db, &module_ident, def_start, &def_name))?;
 
     let start = offset_to_position(def_start, &module.rope)?;
     let end = offset_to_position(def_end, &module.rope)?;
@@ -341,14 +345,18 @@ fn find_implementations(
     let db = project.module_db.lock().ok()?;
     let st = project.symbol_table.lock().ok()?;
     let mut locations: Vec<Location> = Vec::new();
+    let mut seen_symbols = std::collections::HashSet::new();
 
     // Scan all symbols for types that implement this interface.
     for module in db.iter() {
-        let Some(scope) = st.get_scope(module.scope_id) else {
+        let Some(scope) = st.get_scope(module.module_scope_id) else {
             continue;
         };
 
         for &sym_id in &scope.symbols {
+            if !seen_symbols.insert(sym_id) {
+                continue;
+            }
             let Some(sym) = st.get_symbol_ref(sym_id) else {
                 continue;
             };
@@ -368,13 +376,18 @@ fn find_implementations(
                 continue;
             }
 
-            let Some(start) = offset_to_position(td.symbol_start, &module.rope) else {
+            let source_module = sym
+                .source_path
+                .as_deref()
+                .and_then(|path| db.iter().find(|candidate| candidate.path == path))
+                .unwrap_or(module);
+            let Some(start) = offset_to_position(td.symbol_start, &source_module.rope) else {
                 continue;
             };
-            let Some(end) = offset_to_position(td.symbol_end, &module.rope) else {
+            let Some(end) = offset_to_position(td.symbol_end, &source_module.rope) else {
                 continue;
             };
-            let Ok(uri) = Url::from_file_path(&module.path) else {
+            let Ok(uri) = Url::from_file_path(&source_module.path) else {
                 continue;
             };
 
@@ -470,6 +483,7 @@ pub(crate) struct ResolvedSymbol {
     pub(crate) module_ident: String,
     /// Byte offset of the declaration within its own source part, used to locate the declaring file among the parts
     pub(crate) pos: usize,
+    pub(crate) source_path: Option<String>,
 }
 
 impl ResolvedSymbol {
@@ -482,6 +496,9 @@ impl ResolvedSymbol {
     /// Locks `module_db` — call only when `symbol_table` is NOT held.
     /// A directory module has several source parts, this returns the one declaring the symbol.
     pub(crate) fn module_path(&self, project: &Project) -> Option<String> {
+        if let Some(path) = &self.source_path {
+            return Some(path.clone());
+        }
         let db = project.module_db.lock().ok()?;
         find_module_part(&db, &self.module_ident, self.pos, self.raw_name()).map(|m| m.path.clone())
     }
@@ -597,6 +614,7 @@ fn resolved_from_id(
         ident: ident.to_string(),
         module_ident,
         pos: symbol.pos,
+        source_path: symbol.source_path.clone(),
     })
 }
 
@@ -729,6 +747,7 @@ fn resolve_member_on_type(
                         ident: prop.name.clone(),
                         module_ident: String::new(),
                         pos: prop.start,
+                        source_path: None,
                     });
                 }
             }
@@ -758,6 +777,7 @@ fn resolve_member_on_type(
                     ident: member.to_string(),
                     module_ident: owner_module_ident,
                     pos,
+                    source_path: sym.source_path.clone(),
                 });
             }
 
@@ -782,6 +802,7 @@ fn resolve_member_on_type(
                             ident: prop.name.clone(),
                             module_ident: owner_module_ident,
                             pos: prop.start,
+                            source_path: sym.source_path.clone(),
                         });
                     }
                 }
@@ -820,6 +841,7 @@ fn resolve_member_on_type(
                             ident: member.to_string(),
                             module_ident: owner_module_ident,
                             pos: sym.pos,
+                            source_path: sym.source_path.clone(),
                         });
                     }
                 }
@@ -943,7 +965,11 @@ fn symbol_to_location(project: &Project, symbol: &ResolvedSymbol) -> Option<Loca
     let (def_start, def_end) = symbol_def_range(&symbol.kind);
 
     let db = project.module_db.lock().ok()?;
-    let module = db.iter().find(|m| m.ident == symbol.module_ident)?;
+    let module = symbol
+        .source_path
+        .as_deref()
+        .and_then(|path| db.iter().find(|module| module.path == path))
+        .or_else(|| find_module_part(&db, &symbol.module_ident, def_start, symbol.raw_name()))?;
 
     let start = offset_to_position(def_start, &module.rope)?;
     let end = offset_to_position(def_end, &module.rope)?;
@@ -961,6 +987,9 @@ fn symbol_to_location(project: &Project, symbol: &ResolvedSymbol) -> Option<Loca
 mod tests {
     use super::*;
     use crate::analyzer::symbol::{Scope, ScopeKind, SymbolTable};
+    use crate::module_index::package_unit_reset;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn scope_contains_unbounded() {
@@ -1028,5 +1057,44 @@ mod tests {
             is_private: false,
         }));
         assert_eq!(symbol_def_range(&SymbolKind::Var(var)), (10, 11));
+    }
+
+    #[tokio::test]
+    async fn goto_definition_selects_the_declaring_source_part() {
+        package_unit_reset();
+        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!("nls_navigation_parts_{nanos}"));
+        fs::create_dir_all(root.join("codec")).unwrap();
+        fs::write(root.join("package.toml"), "name = \"app\"\nversion = \"1.0.0\"\ntype = \"bin\"\n").unwrap();
+        fs::write(root.join("codec/codec.n"), "mod codec\n\nfn scale():int {\n    return 2\n}\n").unwrap();
+        fs::write(root.join("codec/encode.n"), "mod codec\n\nfn encode():int {\n    return scale()\n}\n").unwrap();
+        let main_source = "import app.codec\n\nfn main() {\n    int value = codec.encode()\n}\n";
+        let main_path = root.join("main.n").to_string_lossy().to_string();
+        fs::write(&main_path, main_source).unwrap();
+
+        let mut project = Project::new(root.to_string_lossy().to_string()).await;
+        let key = project.module_ident_of(&main_path);
+        project.build(&main_path, &key, Some(main_source.to_string())).await;
+
+        let main_module = {
+            let handled = project.module_handled.lock().unwrap();
+            let index = handled[&main_path];
+            project.module_db.lock().unwrap()[index].clone()
+        };
+        let encode_offset = main_source.rfind("encode").unwrap();
+        let position = offset_to_position(encode_offset, &main_module.rope).unwrap();
+        let location = find_definition(&project, &main_path, position).expect("encode definition");
+        assert_eq!(location.uri.to_file_path().unwrap(), root.join("codec/encode.n"));
+
+        let encode_path = root.join("codec/encode.n").to_string_lossy().to_string();
+        let encode_module = {
+            let handled = project.module_handled.lock().unwrap();
+            let index = handled[&encode_path];
+            project.module_db.lock().unwrap()[index].clone()
+        };
+        let scale_offset = encode_module.source.rfind("scale").unwrap();
+        let position = offset_to_position(scale_offset, &encode_module.rope).unwrap();
+        let location = find_definition(&project, &encode_path, position).expect("scale definition");
+        assert_eq!(location.uri.to_file_path().unwrap(), root.join("codec/codec.n"));
     }
 }

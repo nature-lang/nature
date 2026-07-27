@@ -61,6 +61,42 @@ fn module_path_helpers() {
 }
 
 #[test]
+fn package_instances_have_distinct_internal_keys() {
+    package_unit_reset();
+    let left = temp_package("same_name_left");
+    let right = temp_package("same_name_right");
+    for root in [&left, &right] {
+        write(root, "package.toml", "name = \"shared\"\n");
+        write(root, "shared.n", "mod shared\n");
+    }
+
+    let left_unit = package_unit_load(left.to_str().unwrap(), "shared");
+    let right_unit = package_unit_load(right.to_str().unwrap(), "shared");
+    let left_root = left_unit.find_module("").unwrap();
+    let right_root = right_unit.find_module("").unwrap();
+
+    assert_eq!(left_root.module_ident, right_root.module_ident);
+    assert_ne!(left_root.module_key, right_root.module_key);
+}
+
+#[cfg(unix)]
+#[test]
+fn directory_symlink_cycle_is_scanned_once() {
+    use std::os::unix::fs::symlink;
+
+    package_unit_reset();
+    let root = temp_package("symlink_cycle");
+    write(&root, "package.toml", "name = \"app\"\n");
+    write(&root, "app.n", "mod app\n");
+    write(&root, "sub/sub.n", "fn value():int { return 1 }\n");
+    symlink(".", root.join("sub/loop")).unwrap();
+
+    let unit = package_unit_load(root.to_str().unwrap(), "app");
+    assert!(unit.errors.is_empty(), "errors: {:?}", unit.errors);
+    assert_eq!(unit.modules.len(), 2);
+}
+
+#[test]
 fn directory_module_merges_source_parts() {
     package_unit_reset();
     let root = temp_package("dir_module");

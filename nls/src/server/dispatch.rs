@@ -349,9 +349,9 @@ impl Backend {
                         .iter()
                         .map(|i| i.alias.as_deref().unwrap_or(i.ident.as_str()))
                         .collect();
-                    format!("{}.{{{}}}", dep.module_ident, names.join(", "))
+                    format!("{}.{{{}}}", dep.display_module(), names.join(", "))
                 } else {
-                    dep.module_ident.clone()
+                    dep.display_module().to_string()
                 }
             } else {
                 dep.as_name.clone()

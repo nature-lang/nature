@@ -11,3 +11,5 @@ rand = { type = "local", version = "v1.0.1", path = "./mock/rand" }
 syscall = { type = "local", version = "v1.0.1", path = "./mock/syscall" }
 os = { type = "local", version = "v1.0.1", path = "./mock/os" }
 local = { type = "local", version = "v1.0.0", path = "./mock/local" }
+left = { type = "local", version = "v1.0.0", path = "./mock/left" }
+right = { type = "local", version = "v1.0.0", path = "./mock/right" }

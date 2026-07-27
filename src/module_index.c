@@ -1,6 +1,7 @@
 #include "module_index.h"
 
 #include <dirent.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -15,6 +16,7 @@
  * package_dir -> package_unit_t*
  */
 static table_t *package_unit_table = NULL;
+static table_t *module_display_table = NULL;
 
 typedef enum {
     SOURCE_VARIANT_PLAIN = 0,
@@ -48,6 +50,45 @@ char *module_ident_join(char *package_name, char *module_path) {
     }
 
     return str_connect_by(package_name, module_path, ".");
+}
+
+static uint64_t package_path_hash(char *path) {
+    uint64_t hash = UINT64_C(1469598103934665603);
+    for (unsigned char *p = (unsigned char *) path; *p; ++p) {
+        hash ^= *p;
+        hash *= UINT64_C(1099511628211);
+    }
+    return hash;
+}
+
+char *module_key_join(char *package_dir, char *module_path) {
+    char canonical[PATH_MAX] = "";
+    char *identity = realpath(package_dir, canonical) ? canonical : package_dir;
+    char *package_key = dsprintf("__pkg_%016" PRIx64, package_path_hash(identity));
+    return module_ident_join(package_key, module_path);
+}
+
+static void module_key_register(char *key, char *display) {
+    if (!module_display_table) {
+        module_display_table = table_new();
+    }
+    table_set(module_display_table, key, display);
+}
+
+char *module_keys_display(char *message) {
+    char *result = strdup(message);
+    if (!module_display_table) {
+        return result;
+    }
+
+    for (int i = 0; i < module_display_table->capacity; ++i) {
+        table_entry *entry = &module_display_table->entries[i];
+        if (!entry->key) {
+            continue;
+        }
+        result = str_replace(result, entry->key, entry->value);
+    }
+    return result;
 }
 
 char *module_source_rel_path(char *package_dir, char *source_path) {
@@ -283,7 +324,15 @@ static int scan_slot_compare(const void *a, const void *b) {
  * Recursively scan the package directory, collecting every .n file into logical source slots
  * stops at a nested package.toml, since a nested package owns a separate PackageInstanceId
  */
-static void package_scan_dir(package_unit_t *pu, table_t *slot_table, slice_t *slots, char *dir, char *rel_dir) {
+static void package_scan_dir(package_unit_t *pu, table_t *slot_table, slice_t *slots, table_t *visited_dirs,
+                             char *dir, char *rel_dir) {
+    char canonical[PATH_MAX] = "";
+    char *identity = realpath(dir, canonical) ? canonical : dir;
+    if (table_exist(visited_dirs, identity)) {
+        return;
+    }
+    table_set(visited_dirs, strdup(identity), (void *) 1);
+
     DIR *d = opendir(dir);
     if (!d) {
         return;
@@ -322,7 +371,7 @@ static void package_scan_dir(package_unit_t *pu, table_t *slot_table, slice_t *s
             }
 
             char *child_rel = strlen(rel_dir) == 0 ? strdup(name) : path_join(strdup(rel_dir), name);
-            package_scan_dir(pu, slot_table, slots, full_path, child_rel);
+            package_scan_dir(pu, slot_table, slots, visited_dirs, full_path, child_rel);
             continue;
         }
 
@@ -466,9 +515,10 @@ static char *module_unit_layout_desc(package_unit_t *pu, module_unit_t *unit) {
 
 static void package_unit_build(package_unit_t *pu) {
     table_t *slot_table = table_new();
+    table_t *visited_dirs = table_new();
     slice_t *slots = slice_new();
 
-    package_scan_dir(pu, slot_table, slots, pu->package_dir, "");
+    package_scan_dir(pu, slot_table, slots, visited_dirs, pu->package_dir, "");
 
     // slots are processed in slot key order so the result is independent of directory enumeration order
     qsort(slots->take, (size_t) slots->count, sizeof(slots->take[0]), scan_slot_compare);
@@ -512,6 +562,8 @@ static void package_unit_build(package_unit_t *pu) {
                 module_unit_t *conflict = NEW(module_unit_t);
                 conflict->module_path = module_path;
                 conflict->module_ident = module_ident_join(pu->package_name, module_path);
+                conflict->module_key = module_key_join(pu->package_dir, module_path);
+                module_key_register(conflict->module_key, conflict->module_ident);
                 conflict->mod_ident = active->mod_ident;
                 conflict->canonical_path = is_dir_entry ? active->path : NULL;
                 conflict->is_dir_module = is_dir_module;
@@ -537,6 +589,8 @@ static void package_unit_build(package_unit_t *pu) {
         unit = NEW(module_unit_t);
         unit->module_path = module_path;
         unit->module_ident = module_ident_join(pu->package_name, module_path);
+        unit->module_key = module_key_join(pu->package_dir, module_path);
+        module_key_register(unit->module_key, unit->module_ident);
         unit->mod_ident = active->mod_ident;
         unit->canonical_path = is_dir_entry ? active->path : NULL;
         unit->is_dir_module = is_dir_module;
@@ -582,6 +636,7 @@ static void package_unit_build(package_unit_t *pu) {
 
 void package_unit_reset() {
     package_unit_table = NULL;
+    module_display_table = NULL;
 }
 
 package_unit_t *package_unit_load(char *package_dir, toml_table_t *package_conf) {

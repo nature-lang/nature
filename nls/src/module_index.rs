@@ -34,6 +34,8 @@ pub struct ModuleUnit {
     pub module_path: String,
     /// Symbol table prefix: <package_name>[.<module_path>]
     pub module_ident: String,
+    /// Internal symbol/scope prefix, qualified by the concrete package directory
+    pub module_key: String,
     /// true when the module is named by its directory
     pub is_dir_module: bool,
     /// Absolute paths of the active source parts, sorted in path byte order
@@ -87,6 +89,18 @@ pub fn module_ident_join(package_name: &str, module_path: &str) -> String {
     } else {
         format!("{}.{}", package_name, module_path)
     }
+}
+
+pub fn module_key_join(package_dir: &str, module_path: &str) -> String {
+    let identity = std::fs::canonicalize(package_dir)
+        .ok()
+        .and_then(|path| path.to_str().map(str::to_string))
+        .unwrap_or_else(|| package_dir.to_string());
+    let hash = identity
+        .as_bytes()
+        .iter()
+        .fold(1469598103934665603u64, |hash, byte| (hash ^ u64::from(*byte)).wrapping_mul(1099511628211));
+    module_ident_join(&format!("__pkg_{hash:016x}"), module_path)
 }
 
 pub fn module_source_rel_path(package_dir: &str, source_path: &str) -> String {
@@ -214,7 +228,15 @@ struct ScanSlot {
     variants: Vec<ScanVariant>,
 }
 
-fn scan_dir(dir: &Path, rel_dir: &str, slots: &mut HashMap<String, ScanSlot>) {
+fn scan_dir(dir: &Path, rel_dir: &str, slots: &mut HashMap<String, ScanSlot>, visited: &mut HashSet<String>, overlay: Option<(&str, &str)>) {
+    let identity = std::fs::canonicalize(dir)
+        .ok()
+        .and_then(|path| path.to_str().map(str::to_string))
+        .unwrap_or_else(|| dir.to_string_lossy().to_string());
+    if !visited.insert(identity) {
+        return;
+    }
+
     let Ok(entries) = std::fs::read_dir(dir) else {
         return;
     };
@@ -236,7 +258,7 @@ fn scan_dir(dir: &Path, rel_dir: &str, slots: &mut HashMap<String, ScanSlot>) {
             }
 
             let child_rel = if rel_dir.is_empty() { name.clone() } else { format!("{}/{}", rel_dir, name) };
-            scan_dir(&full_path, &child_rel, slots);
+            scan_dir(&full_path, &child_rel, slots, visited, overlay);
             continue;
         }
 
@@ -247,7 +269,10 @@ fn scan_dir(dir: &Path, rel_dir: &str, slots: &mut HashMap<String, ScanSlot>) {
         let (base, kind, os, arch) = parse_variant(&name);
         let slot_key = format!("{}/{}.n", dir.to_str().unwrap_or(""), base);
         let path = full_path.to_str().unwrap_or("").to_string();
-        let mod_ident = read_mod_decl_from_file(&path);
+        let mod_ident = match overlay {
+            Some((overlay_path, source)) if overlay_path == path => read_mod_decl(source),
+            _ => read_mod_decl_from_file(&path),
+        };
 
         slots
             .entry(slot_key.clone())
@@ -311,7 +336,7 @@ fn layout_desc(package_dir: &str, unit: &ModuleUnit) -> String {
     )
 }
 
-fn build_package_unit(package_dir: &str, package_name: &str) -> PackageUnit {
+fn build_package_unit(package_dir: &str, package_name: &str, overlay: Option<(&str, &str)>) -> PackageUnit {
     let mut pu = PackageUnit {
         package_dir: package_dir.to_string(),
         package_name: package_name.to_string(),
@@ -322,7 +347,7 @@ fn build_package_unit(package_dir: &str, package_name: &str) -> PackageUnit {
     };
 
     let mut slot_table: HashMap<String, ScanSlot> = HashMap::new();
-    scan_dir(Path::new(package_dir), "", &mut slot_table);
+    scan_dir(Path::new(package_dir), "", &mut slot_table, &mut HashSet::new(), overlay);
 
     // directory enumeration order must not affect the result
     let mut slots: Vec<ScanSlot> = slot_table.into_values().collect();
@@ -422,6 +447,7 @@ fn build_package_unit(package_dir: &str, package_name: &str) -> PackageUnit {
             let conflict = ModuleUnit {
                 module_path: module_path.clone(),
                 module_ident: module_ident_join(package_name, &module_path),
+                module_key: module_key_join(package_dir, &module_path),
                 is_dir_module,
                 sources: vec![active.path.clone()],
             };
@@ -444,6 +470,7 @@ fn build_package_unit(package_dir: &str, package_name: &str) -> PackageUnit {
             module_path.clone(),
             ModuleUnit {
                 module_ident: module_ident_join(package_name, &module_path),
+                module_key: module_key_join(package_dir, &module_path),
                 module_path,
                 is_dir_module,
                 sources: vec![active.path.clone()],
@@ -494,9 +521,14 @@ pub fn package_unit_load(package_dir: &str, package_name: &str) -> PackageUnit {
         return pu.clone();
     }
 
-    let pu = build_package_unit(package_dir, package_name);
+    let pu = build_package_unit(package_dir, package_name, None);
     cache.insert(package_dir.to_string(), pu.clone());
     pu
+}
+
+/// Build an uncached package index with one in-memory source overlay.
+pub fn package_unit_with_overlay(package_dir: &str, package_name: &str, source_path: &str, source: &str) -> PackageUnit {
+    build_package_unit(package_dir, package_name, Some((source_path, source)))
 }
 
 /// The index must be rebuilt when a source file inside the package changes

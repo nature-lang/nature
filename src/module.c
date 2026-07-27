@@ -142,7 +142,7 @@ static void module_source_imports(module_t *m, source_file_t *sf) {
 
                 // Create selective import reference
                 ast_import_select_t *select_ref = NEW(ast_import_select_t);
-                select_ref->module_ident = ast_import->module_ident;
+                select_ref->module_ident = ast_import->module_key ? ast_import->module_key : ast_import->module_ident;
                 select_ref->original_ident = item->ident;
                 select_ref->import = ast_import;
 
@@ -177,6 +177,7 @@ static void module_source_register_symbols(module_t *m, source_file_t *sf) {
 
         if (stmt->assert_type == AST_STMT_VARDEF) {
             ast_vardef_stmt_t *vardef = stmt->value;
+            vardef->rel_path = sf->rel_path;
             ast_var_decl_t *var_decl = &vardef->var_decl;
             var_decl->ident = ident_with_prefix(m->ident, var_decl->ident);
             symbol_t *s = symbol_table_set(var_decl->ident, SYMBOL_VAR, var_decl, false);
@@ -231,9 +232,10 @@ module_t *module_build_sources(ast_import_t *import, slice_t *source_paths, modu
     if (import) {
         m->package_dir = import->package_dir;
         m->package_conf = import->package_conf;
-        m->ident = import->module_ident;
+        m->ident = import->module_key ? import->module_key : import->module_ident;
+        m->display_ident = import->module_ident;
         m->mod_ident = import->module_unit ? import->module_unit->mod_ident : NULL;
-        m->label_prefix = import->module_ident;
+        m->label_prefix = m->ident;
     }
 
     m->errors = slice_new();

@@ -1360,6 +1360,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
             .package_dir = WORKDIR,
             .package_conf = package_conf,
             .module_ident = PACKAGE_MAIN_IDENT,
+            .module_key = PACKAGE_MAIN_IDENT,
     };
 
     // the source path given on the command line is first mapped to a logical source slot, then to its owning module
@@ -1393,6 +1394,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
         main_import.module_unit = unit;
         main_import.module_ident = unit->module_ident;
+        main_import.module_key = unit->module_key;
         slice_concat(main_sources, unit->sources);
     } else {
         // single-file builds without a package.toml stay supported
@@ -1426,7 +1428,8 @@ static slice_t *build_modules(toml_table_t *package_conf) {
             ast_import_t *import = m->module_imports->take[j];
 
             // one ModuleId is built exactly once, no matter how many import paths reach it
-            if (table_exist(module_table, import->module_ident)) {
+            char *module_key = import->module_key ? import->module_key : import->module_ident;
+            if (table_exist(module_table, module_key)) {
                 continue;
             }
 
@@ -1453,7 +1456,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
             module_t *new_module = module_build_sources(import, import_sources, import->module_type);
 
             linked_push(work_list, new_module);
-            table_set(module_table, import->module_ident, new_module);
+            table_set(module_table, module_key, new_module);
 
             // 按照层级进入到 modules 中(广度优先)
             slice_push(modules, new_module);

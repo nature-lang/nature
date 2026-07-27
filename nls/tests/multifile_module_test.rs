@@ -3,8 +3,12 @@
 //! - imports/aliases only take effect in the file declaring them
 //! - a mod declaration is validated against package.toml.name / the directory basename
 
+use nls::analyzer::analyze_mod_decl;
+use nls::analyzer::lexer::Lexer;
+use nls::analyzer::syntax::Syntax;
 use nls::module_index::package_unit_reset;
-use nls::project::Project;
+use nls::package::parse_package;
+use nls::project::{Module, Project};
 use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -73,9 +77,10 @@ async fn cross_part_declarations_are_shared() {
 
     // the two parts share one module ident and scope
     let db = project.module_db.lock().unwrap();
-    let parts: Vec<&nls::project::Module> = db.iter().filter(|m| m.ident == "app.codec").collect();
+    let parts: Vec<&nls::project::Module> = db.iter().filter(|m| m.display_ident == "app.codec").collect();
     assert_eq!(parts.len(), 2, "expect 2 source parts, got {}", parts.len());
-    assert_eq!(parts[0].scope_id, parts[1].scope_id);
+    assert_eq!(parts[0].module_scope_id, parts[1].module_scope_id);
+    assert_ne!(parts[0].scope_id, parts[1].scope_id);
 }
 
 #[tokio::test]
@@ -191,8 +196,61 @@ async fn module_ident_uses_package_name_not_directory_name() {
 
     let project = Project::new(root.to_string_lossy().to_string()).await;
 
-    assert_eq!(project.module_ident_of(&main_path), "renamed.main");
+    assert_eq!(project.module_name_of(&main_path), "renamed.main");
 
     let root_part = root.join("renamed.n").to_string_lossy().to_string();
-    assert_eq!(project.module_ident_of(&root_part), "renamed");
+    assert_eq!(project.module_name_of(&root_part), "renamed");
+    assert_ne!(project.module_ident_of(&main_path), project.module_ident_of(&root_part));
+}
+
+#[tokio::test]
+async fn unsaved_mod_edit_reassigns_source_and_rebuilds_siblings() {
+    package_unit_reset();
+    let root = temp_project("unsaved_mod");
+
+    write(&root, "package.toml", "name = \"app\"\nversion = \"1.0.0\"\ntype = \"bin\"\n");
+    let canonical = write(&root, "codec/codec.n", "mod codec\n\nfn base():int {\n    return 1\n}\n");
+    let extra = write(&root, "codec/extra.n", "fn extra():int {\n    return 2\n}\n");
+
+    let mut project = Project::new(root.to_string_lossy().to_string()).await;
+    let standalone_key = project.module_ident_of(&extra);
+    project.build(&extra, &standalone_key, Some(fs::read_to_string(&extra).unwrap())).await;
+
+    let unsaved = "mod codec\n\nfn extra():int {\n    return base() + 1\n}\n".to_string();
+    let index = project.build(&extra, &standalone_key, Some(unsaved)).await;
+
+    let db = project.module_db.lock().unwrap();
+    let edited = &db[index];
+    let canonical = db.iter().find(|module| module.path == canonical).unwrap();
+    assert_eq!(edited.display_ident, "app.codec");
+    assert_eq!(edited.ident, canonical.ident);
+    assert_eq!(edited.module_scope_id, canonical.module_scope_id);
+    assert_ne!(edited.scope_id, canonical.scope_id);
+    assert!(edited.analyzer_errors.is_empty(), "errors: {:?}", edited.analyzer_errors);
+
+    // The file on disk still has no mod; the reassignment came from the didChange overlay.
+    assert!(!fs::read_to_string(&extra).unwrap().starts_with("mod "));
+}
+
+#[test]
+fn dependency_root_mod_uses_dependency_manifest_not_cache_directory() {
+    package_unit_reset();
+    let root = temp_project("dependency_owner");
+    let dependency = root.join("shared@v1.2.3");
+    fs::create_dir_all(&dependency).unwrap();
+    let package_path = write(&dependency, "package.toml", "name = \"shared\"\nversion = \"1.2.3\"\ntype = \"lib\"\n");
+    let source_path = write(&dependency, "shared.n", "mod shared\n\nfn value():int { return 1 }\n");
+    let source = fs::read_to_string(&source_path).unwrap();
+
+    let (tokens, indexes, lexer_errors) = Lexer::new(source.clone()).scan();
+    assert!(lexer_errors.is_empty());
+    let mut module = Module::new("internal-key".to_string(), source, source_path, 0, 0);
+    module.display_ident = "shared".to_string();
+    module.package_dir = dependency.to_string_lossy().to_string();
+    module.package_conf = Some(parse_package(&package_path).unwrap());
+    let (stmts, _, syntax_errors) = Syntax::new(module.clone(), tokens, indexes).parser();
+    assert!(syntax_errors.is_empty());
+
+    analyze_mod_decl(&mut module, &stmts);
+    assert!(module.analyzer_errors.is_empty(), "errors: {:?}", module.analyzer_errors);
 }

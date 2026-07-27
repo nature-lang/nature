@@ -184,7 +184,8 @@ struct module_t {
     char *source; // content of the file being processed
     char *source_path; // full path of the file being processed
     char *source_dir; // directory of the file being processed, without xxx.n
-    char *ident; // 符号表中都使用这个前缀, 由 ModuleId 决定
+    char *ident; // internal symbol table prefix, qualified by the package instance
+    char *display_ident; // user-facing logical module name
     char *mod_ident; // declaration shared by all source parts, NULL when it may be omitted
     char *label_prefix;
     char *rel_path; // 从 root 计算出来的相对路径
