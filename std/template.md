@@ -1,5 +1,5 @@
 
-# [import fs](https://github.com/nature-lang/nature/blob/master/std/fs/main.n)
+# [import fs](https://github.com/nature-lang/nature/blob/master/std/fs/fs.n)
 
 File system, including opening and writing of files
 
@@ -111,4 +111,3 @@ fn xxx(xx xx):xx
 ```
 
 xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-

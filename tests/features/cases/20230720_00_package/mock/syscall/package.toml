@@ -1,0 +1,12 @@
+# basics
+name = "syscall"
+version = "v1.0.1"
+authors = ["Alice <a@example.com>", "Bob <b@example.com>"]
+description = "Your package description"
+license = "MIT"
+type = "lib" # lib or bin
+
+# a dependency key is only a local alias, package identity comes from package.toml.name
+# path is resolved against the directory where npkg sync runs
+[dependencies]
+myrand = { type = "local", version = "v1.0.1", path = "./mock/rand" }

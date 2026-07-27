@@ -1,4 +1,4 @@
-# import [runtime](https://github.com/nature-lang/nature/blob/master/std/runtime/main.n)
+# import [runtime](https://github.com/nature-lang/nature/blob/master/std/runtime/runtime.n)
 
 运行时系统工具库，提供内存管理、垃圾回收和核心数据结构功能
 

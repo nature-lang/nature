@@ -5,8 +5,11 @@ description = "Your package description"
 license = "MIT"
 type = "bin" # lib or bin
 
+# these mock packages are maintained with the fixture, their root modules are exposed by `mod <package-name>`
 [dependencies]
-rand = { type = "git", version = "v1.0.1", url = "jihulab.com/nature-lang/rand" }
-syscall = { type = "git", version = "v1.0.1", url = "jihulab.com/nature-lang/syscall" }
-os = { type = "git", version = "v1.0.1", url = "jihulab.com/nature-lang/os" }
+rand = { type = "local", version = "v1.0.1", path = "./mock/rand" }
+syscall = { type = "local", version = "v1.0.1", path = "./mock/syscall" }
+os = { type = "local", version = "v1.0.1", path = "./mock/os" }
 local = { type = "local", version = "v1.0.0", path = "./mock/local" }
+left = { type = "local", version = "v1.0.0", path = "./mock/left" }
+right = { type = "local", version = "v1.0.0", path = "./mock/right" }

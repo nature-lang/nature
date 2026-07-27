@@ -1,0 +1,10 @@
+# basics
+name = "rand"
+version = "v1.0.1"
+authors = ["Alice <a@example.com>", "Bob <b@example.com>"]
+description = "Your package description"
+license = "MIT"
+type = "lib" # lib or bin
+
+# the root module is exposed by `mod rand` in rand.n, no longer relying on an entry field
+# no dependencies

@@ -6,7 +6,7 @@ use std::sync::Arc;
 use log::debug;
 use tower_lsp::lsp_types::*;
 
-use crate::analyzer::module_unique_ident;
+use crate::module_index::{package_unit_invalidate, package_unit_reset};
 use crate::package::parse_package;
 use crate::project::Project;
 use crate::utils::offset_to_position;
@@ -173,6 +173,9 @@ impl Backend {
 
             // .n file created/deleted → re-scan workspace index.
             if file_path.ends_with(".n") {
+                // adding or removing a file changes the module layout (and file/directory module conflicts)
+                package_unit_invalidate(file_path);
+
                 if let Some(project) = self.get_file_project(file_path) {
                     if let Ok(mut ws_index) = project.workspace_index.lock() {
                         ws_index.scan_workspace(&project.root, &project.nature_root);
@@ -186,6 +189,9 @@ impl Backend {
             if !file_path.ends_with("package.toml") {
                 continue;
             }
+
+            // a package name change affects every ModuleId
+            package_unit_reset();
 
             let Some(project) = self.get_file_project(file_path) else {
                 debug!("no project for watched file: {}", file_path);
@@ -237,7 +243,7 @@ impl Backend {
             return;
         }
 
-        let module_ident = module_unique_ident(&project.root, file_path);
+        let module_ident = project.module_ident_of(file_path);
         debug!("building module: {}", module_ident);
 
         let module_index = project
@@ -343,9 +349,9 @@ impl Backend {
                         .iter()
                         .map(|i| i.alias.as_deref().unwrap_or(i.ident.as_str()))
                         .collect();
-                    format!("{}.{{{}}}", dep.module_ident, names.join(", "))
+                    format!("{}.{{{}}}", dep.display_module(), names.join(", "))
                 } else {
-                    dep.module_ident.clone()
+                    dep.display_module().to_string()
                 }
             } else {
                 dep.as_name.clone()

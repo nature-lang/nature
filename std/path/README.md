@@ -1,4 +1,4 @@
-# import [path](https://github.com/nature-lang/nature/blob/master/std/path/main.n)
+# import [path](https://github.com/nature-lang/nature/blob/master/std/path/path.n)
 
 Path manipulation utilities for file system paths
 

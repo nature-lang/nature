@@ -1,4 +1,4 @@
-# import [fmt](https://github.com/nature-lang/nature/tree/master/std/fmt/main.n)
+# import [fmt](https://github.com/nature-lang/nature/tree/master/std/fmt/fmt.n)
 
 String formatting and parsing library for formatted input and output operations.
 

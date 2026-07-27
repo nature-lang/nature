@@ -1,0 +1,4 @@
+// a file without mod in the same directory stays the standalone module modtest.codec.helper
+fn tag():string {
+    return 'codec.helper'
+}

@@ -1,0 +1,12 @@
+# basics
+name = "os"
+version = "v1.0.1"
+authors = ["Alice <a@example.com>", "Bob <b@example.com>"]
+description = "Your package description"
+license = "MIT"
+type = "lib" # lib or bin
+
+# path is resolved against the directory where npkg sync runs
+[dependencies]
+rand = { type = "local", version = "v1.0.1", path = "./mock/rand" }
+syscall = { type = "local", version = "v1.0.1", path = "./mock/syscall" }

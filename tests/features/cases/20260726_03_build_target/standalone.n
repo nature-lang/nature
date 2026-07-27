@@ -1,0 +1,7 @@
+// the standalone file module buildtarget.standalone; building it explicitly does not pull in
+// other mod-less files from the same directory
+import buildtarget.lib
+
+fn main() {
+    println('entry:buildtarget.standalone', lib.helper())
+}

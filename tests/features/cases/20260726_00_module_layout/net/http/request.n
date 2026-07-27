@@ -1,0 +1,5 @@
+mod /* part of http */ http
+
+fn request():string {
+    return 'req:' + PROTO
+}

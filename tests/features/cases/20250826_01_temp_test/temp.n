@@ -1,0 +1,5 @@
+mod temp
+
+fn main() {
+    println('hello world')
+}

@@ -157,12 +157,16 @@ add_executable(test_archive_writer test_archive_writer.c)
 target_link_libraries(test_archive_writer nature_common_test m)
 add_test(test_archive_writer test_archive_writer)
 
+add_executable(test_module_index test_module_index.c)
+target_link_libraries(test_module_index nature_common_test m)
+add_test(test_module_index test_module_index)
+
 if (WIN32)
     set(WINDOWS_C_ABI_FIXTURE_DIR
             "${CMAKE_CURRENT_BINARY_DIR}/windows_c_nature_abi")
     file(MAKE_DIRECTORY "${WINDOWS_C_ABI_FIXTURE_DIR}")
-    configure_file(windows/abi_fixture/main.n
-            "${WINDOWS_C_ABI_FIXTURE_DIR}/main.n" COPYONLY)
+    configure_file(windows/abi_fixture/windows_c_nature_abi.n
+            "${WINDOWS_C_ABI_FIXTURE_DIR}/windows_c_nature_abi.n" COPYONLY)
     configure_file(windows/abi_fixture/package.toml
             "${WINDOWS_C_ABI_FIXTURE_DIR}/package.toml" COPYONLY)
     set(WINDOWS_C_ABI_OBJECT
@@ -248,9 +252,27 @@ foreach (TEST_SOURCE ${TEST_SOURCES})
     # A stale/empty directory with the same name as a single-file fixture
     # must not shadow <test-name>.n.  Treat a case as directory-backed only
     # when its actual entry point exists.
-    set(PLATFORM_ENTRY_FILE
-            "main.${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}.n")
-    if (EXISTS "${CASE_PATH}/${PLATFORM_ENTRY_FILE}")
+    set(PACKAGE_ENTRY_FILE "")
+    set(PACKAGE_PLATFORM_ENTRY_FILE "")
+    if (EXISTS "${CASE_PATH}/package.toml")
+        file(STRINGS "${CASE_PATH}/package.toml" PACKAGE_NAME_LINE
+                REGEX "^name[ \t]*=" LIMIT_COUNT 1)
+        string(REGEX MATCH "\"([^\"]+)\"" _ "${PACKAGE_NAME_LINE}")
+        set(PACKAGE_ENTRY_FILE "${CMAKE_MATCH_1}.n")
+        set(PACKAGE_PLATFORM_ENTRY_FILE
+                "${CMAKE_MATCH_1}.${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}.n")
+    endif ()
+
+    set(PLATFORM_ENTRY_FILE "main.${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}.n")
+    if (PACKAGE_PLATFORM_ENTRY_FILE AND EXISTS "${CASE_PATH}/${PACKAGE_PLATFORM_ENTRY_FILE}")
+        set(WORK_DIR ${CASE_PATH})
+        set(TESTAR_FILE "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}.testar")
+        set(ENTRY_FILE "${PACKAGE_PLATFORM_ENTRY_FILE}")
+    elseif (PACKAGE_ENTRY_FILE AND EXISTS "${CASE_PATH}/${PACKAGE_ENTRY_FILE}")
+        set(WORK_DIR ${CASE_PATH})
+        set(TESTAR_FILE "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}.testar")
+        set(ENTRY_FILE "${PACKAGE_ENTRY_FILE}")
+    elseif (EXISTS "${CASE_PATH}/${PLATFORM_ENTRY_FILE}")
         set(WORK_DIR ${CASE_PATH})
         set(TESTAR_FILE "${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_NAME}.testar")
         set(ENTRY_FILE "${PLATFORM_ENTRY_FILE}")
@@ -318,6 +340,12 @@ if (DEFINED ENV{RUNTIME_DEBUG_CASE})
     if (IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_IDENT})
         set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features/cases/${TEST_IDENT})
         set(ENTRY main.n)
+        if (EXISTS "${WORK_DIR}/package.toml")
+            file(STRINGS "${WORK_DIR}/package.toml" PACKAGE_NAME_LINE
+                    REGEX "^name[ \t]*=" LIMIT_COUNT 1)
+            string(REGEX MATCH "\"([^\"]+)\"" _ "${PACKAGE_NAME_LINE}")
+            set(ENTRY "${CMAKE_MATCH_1}.n")
+        endif ()
     else ()
         set(WORK_DIR ${CMAKE_CURRENT_SOURCE_DIR}/features/cases)
         set(ENTRY "${TEST_IDENT}.n")

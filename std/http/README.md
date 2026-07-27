@@ -1,4 +1,4 @@
-# import [http](https://github.com/nature-lang/nature/tree/master/std/http/main.n)
+# import [http](https://github.com/nature-lang/nature/tree/master/std/http/http.n)
 
 HTTP server and client library for building web applications and making HTTP requests.
 

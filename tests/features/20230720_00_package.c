@@ -30,7 +30,8 @@ static void test_basic() {
                 "hello os\n"
                 "local.get_count() -> 333\n"
                 "this is other\n"
-                "hello local in cross darwin\n";
+                "hello local in cross darwin\n"
+                "same-name deps: left/right\n";
     } else if (BUILD_OS == OS_LINUX) {
         if (BUILD_ARCH == ARCH_ARM64 || BUILD_ARCH == ARCH_RISCV64) {
             str = "util.sum(1, 2) = 3\n"
@@ -55,7 +56,8 @@ static void test_basic() {
                     "hello os\n"
                     "local.get_count() -> 444\n"
                     "this is other\n"
-                    "hello local in cross linux\n";
+                    "hello local in cross linux\n"
+                    "same-name deps: left/right\n";
         } else {
             str = "util.sum(1, 2) = 3\n"
                     "this is other\n"
@@ -79,7 +81,8 @@ static void test_basic() {
                     "hello os\n"
                     "local.get_count() -> 444\n"
                     "this is other\n"
-                    "hello local in cross linux amd64\n";
+                    "hello local in cross linux amd64\n"
+                    "same-name deps: left/right\n";
         }
     } else if (BUILD_OS == OS_WINDOWS) {
         str = "util.sum(1, 2) = 3\n"
@@ -104,7 +107,8 @@ static void test_basic() {
               "hello os\n"
               "local.get_count() -> 555\n"
               "this is other\n"
-              "hello local\n";
+              "hello local\n"
+              "same-name deps: left/right\n";
     }
 
 

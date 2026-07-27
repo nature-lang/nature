@@ -1,4 +1,4 @@
-# import [os](https://github.com/nature-lang/nature/blob/master/std/os/main.n)
+# import [os](https://github.com/nature-lang/nature/blob/master/std/os/os.n)
 
 Operating system interface providing file system operations and process utilities
 

@@ -679,7 +679,8 @@ static void linear_has_panic(module_t *m) {
         be_catch = true;
     }
 
-    lir_operand_t *path_operand = string_operand(m->rel_path, strlen(m->rel_path));
+    char *error_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
+    lir_operand_t *path_operand = string_operand(error_path, strlen(error_path));
     lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg,
                                                     strlen(m->current_closure->fndef->fn_name_with_pkg));
     lir_operand_t *line_operand = int_operand(m->current_line);
@@ -708,7 +709,8 @@ static void linear_has_error(module_t *m) {
 
     lir_operand_t *has_error = temp_var_operand(m, type_kind_new(TYPE_BOOL));
 
-    lir_operand_t *path_operand = string_operand(m->rel_path, strlen(m->rel_path));
+    char *error_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
+    lir_operand_t *path_operand = string_operand(error_path, strlen(error_path));
     lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg,
                                                     strlen(m->current_closure->fndef->fn_name_with_pkg));
     lir_operand_t *line_operand = int_operand(m->current_line);
@@ -3788,7 +3790,8 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     lir_operand_t *error_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
     OP_PUSH(lir_op_move(error_ptr, error_operand));
 
-    lir_operand_t *path_operand = string_operand(m->rel_path, strlen(m->rel_path));
+    char *error_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
+    lir_operand_t *path_operand = string_operand(error_path, strlen(error_path));
     assert(m->current_closure->fndef->fn_name_with_pkg);
     lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg,
                                                     strlen(m->current_closure->fndef->fn_name_with_pkg));
@@ -4018,6 +4021,11 @@ static void linear_body(module_t *m, slice_t *body) {
  * @return
  */
 static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
+    // a module may consist of several source parts, so error paths follow the file declaring this fn
+    if (fndef->rel_path) {
+        m->rel_path = fndef->rel_path;
+    }
+
     // 创建 closure, 并写入到 m module 中
     closure_t *c = lir_closure_new(fndef);
     // 互相关联关系

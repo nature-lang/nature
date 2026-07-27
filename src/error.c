@@ -1,4 +1,5 @@
 #include "error.h"
+#include "module_index.h"
 #include <stdarg.h>
 
 jmp_buf test_compiler_jmp_buf = {0};
@@ -12,6 +13,9 @@ void push_errorf(module_t *m, ct_stage stage, int line, int column, char *format
     va_start(args, format);
     vsprintf(error->msg, format, args);
     va_end(args);
+
+    char *display = module_keys_display(error->msg);
+    snprintf(error->msg, sizeof(error->msg), "%s", display);
 
     error->stage = stage;
     error->column = column;
@@ -28,6 +32,9 @@ void dump_errorf(module_t *m, ct_stage stage, int line, int column, char *format
     vsprintf(error->msg, format, args);
     va_end(args);
 
+    char *display = module_keys_display(error->msg);
+    snprintf(error->msg, sizeof(error->msg), "%s", display);
+
 
     error->stage = stage;
     error->column = column;
@@ -42,6 +49,26 @@ void dump_errorf(module_t *m, ct_stage stage, int line, int column, char *format
     // 直接打印错误并退出，暂未实现错误恢复机制
     slice_push(m->errors, error);
     dump_errors_exit(m);
+}
+
+void dump_global_errorf(char *rel_path, int line, int column, char *format, ...) {
+    char msg[1024];
+
+    va_list args;
+    va_start(args, format);
+    vsnprintf(msg, sizeof(msg), format, args);
+    va_end(args);
+
+#ifdef TEST_MODE
+    COMPILER_THROW("%s:%d:%d: %s\n", rel_path, line, column, msg);
+#endif
+
+#ifdef ASSERT_ERROR
+    assertf(false, "%s:%d:%d: %s\n", rel_path, line, column, msg);
+#else
+    fprintf(stderr, "%s:%d:%d: %s\n", rel_path, line, column, msg);
+    exit(EXIT_FAILURE);
+#endif
 }
 
 void dump_errors_exit(module_t *m) {

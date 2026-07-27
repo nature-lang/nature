@@ -1,4 +1,4 @@
-import toylang.token.token
+import toylang.token
 
 type Lexer = struct {
     string input      // source code input

@@ -1,0 +1,8 @@
+// no mod, so it stays the standalone file module modtest.standalone
+import modtest.codec
+import 'fmtx.n'
+
+fn codec_encode(int v):string {
+    // codec was already imported by main.n, it is not built again here
+    return codec.encode(v) + '/' + fmtx.name()
+}

@@ -1,0 +1,12 @@
+mod rand
+
+import 'other.n'
+import rand.utils.seed
+import rand.utils.pool
+
+fn dump():int {
+    other.dump()
+    pool.dump()
+    seed.dump()
+    return 12
+}

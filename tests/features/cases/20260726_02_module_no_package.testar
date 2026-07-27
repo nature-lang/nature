@@ -1,0 +1,28 @@
+// No case in this testar may contain a package.toml:
+// without a manifest there is no package name to validate against and no discovery boundary for directory modules
+
+=== test_mod_without_package_toml
+--- main.n
+mod something
+
+fn main() {
+}
+
+--- output.txt
+nature-test/main.n:1:4: cannot use 'mod' without package.toml
+
+=== test_single_file_build_still_works
+--- main.n
+import 'helper.n'
+
+fn main() {
+    println(helper.tag())
+}
+
+--- helper.n
+fn tag():string {
+    return 'helper'
+}
+
+--- output.txt
+helper

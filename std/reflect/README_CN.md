@@ -1,4 +1,4 @@
-# import [reflect](https://github.com/nature-lang/nature/blob/master/std/reflect/main.n)
+# import [reflect](https://github.com/nature-lang/nature/blob/master/std/reflect/reflect.n)
 
 运行时反射工具库，提供类型内省和值操作功能
 

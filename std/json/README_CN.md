@@ -1,4 +1,4 @@
-# import [json](https://github.com/nature-lang/nature/tree/master/std/json/main.n)
+# import [json](https://github.com/nature-lang/nature/tree/master/std/json/json.n)
 
 JSON 序列化和反序列化库，用于在对象和 JSON 字符串之间进行转换。
 

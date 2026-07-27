@@ -15,8 +15,6 @@ bool is_std_package(char *package);
 
 char *package_import_temp_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *ast_import_package);
 
-char *package_import_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *ast_import_package);
-
 static inline char *ast_import_package_tostr(slice_t *ast_import_package) {
     char *result = ast_import_package->take[0];
     for (int i = 1; i < ast_import_package->count; ++i) {

@@ -354,13 +354,13 @@ impl<'a> CompletionProvider<'a> {
                     }
                 } else {
                     // Symbol not found in symbol table; still offer it as a basic completion
-                    (CompletionItemKind::Variable, format!("from {}", import.module_ident), local_name.clone())
+                    (CompletionItemKind::Variable, format!("from {}", import.display_module()), local_name.clone())
                 };
 
                 let module_display = if let Some(ref pkg) = import.ast_package {
                     pkg.join(".")
                 } else {
-                    import.module_ident.clone()
+                    import.display_module().to_string()
                 };
 
                 completions.push(CompletionItem {
