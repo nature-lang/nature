@@ -1,5 +1,7 @@
-// main.n has no special status, without mod it is just the standalone module modtest.main
-import modtest
+// a file in the package root, mod must equal package.toml.name
+mod modtest
+
+import fmt
 import modtest.codec
 import modtest.codec.helper
 import modtest.standalone
@@ -10,9 +12,13 @@ import modtest.same
 import modtest.plat
 import modtest.codec.{encode_all}
 
+fn root_name():string {
+    return fmt.sprintf('root:%s', ROOT_TAG)
+}
+
 fn main() {
-    // the root module consists of two source parts, root_part.n and root_other.n
-    println(modtest.root_name(), modtest.root_other_name())
+    // the root module consists of two source parts, modtest.n and root_other.n
+    println(root_name(), root_other_name())
 
     // directory module: cross-file calls and forward references
     println(codec.encode(3), codec.decode(9))
@@ -29,7 +35,7 @@ fn main() {
     // nested directory module
     println(http.request(), http.response())
 
-    // same/same.n plus mod same is still just modtest.same
+    // a same-named single-file directory module may omit mod
     println(same.name())
 
     // target variants belong to the same module, the suffix never enters the ModuleId

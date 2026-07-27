@@ -1,0 +1,5 @@
+mod buildtarget
+
+fn main() {
+    println('entry:buildtarget')
+}

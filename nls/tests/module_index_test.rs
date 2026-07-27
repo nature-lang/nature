@@ -67,15 +67,15 @@ fn directory_module_merges_source_parts() {
 
     write(&root, "package.toml", "name = \"app\"\n");
     write(&root, "main.n", "fn main() {}\n");
-    write(&root, "root_part.n", "mod app\n\nfn root() {}\n");
+    write(&root, "app.n", "mod app\n\nfn root() {}\n");
     write(&root, "codec/encode.n", "mod codec\n\nfn encode() {}\n");
-    write(&root, "codec/decode.n", "mod codec\n\nfn decode() {}\n");
+    write(&root, "codec/codec.n", "mod codec\n\nfn decode() {}\n");
     write(&root, "codec/helper.n", "fn helper() {}\n");
 
     let pu = package_unit_load(root.to_str().unwrap(), "app");
     assert!(pu.errors.is_empty(), "unexpected errors: {:?}", pu.errors);
 
-    // mod app in the root -> the root module
+    // app.n anchors the package-root module
     let root_module = pu.find_module("").expect("root module");
     assert_eq!(root_module.module_ident, "app");
     assert!(root_module.is_dir_module);
@@ -84,7 +84,7 @@ fn directory_module_merges_source_parts() {
     // main.n has no mod, so it stays the standalone module app.main
     assert_eq!(pu.find_module("main").expect("app.main").module_ident, "app.main");
 
-    // the directory module consists of two source parts
+    // codec/codec.n anchors a two-part directory module
     let codec = pu.find_module("codec").expect("app.codec");
     assert_eq!(codec.module_ident, "app.codec");
     assert!(codec.is_dir_module);
@@ -120,6 +120,7 @@ fn file_and_directory_module_collision_is_reported() {
 
     write(&root, "package.toml", "name = \"app\"\n");
     write(&root, "fmt.n", "fn name() {}\n");
+    write(&root, "fmt/fmt.n", "mod fmt\n");
     write(&root, "fmt/print.n", "mod fmt\n\nfn print() {}\n");
 
     let pu = package_unit_load(root.to_str().unwrap(), "app");
@@ -165,7 +166,7 @@ fn nested_package_stops_the_scan() {
     write(&root, "main.n", "fn main() {}\n");
     write(&root, "vendor/package.toml", "name = \"deep\"\n");
     // if vendor/ were scanned as a normal subdirectory, `mod deep` would error for not matching the directory name
-    write(&root, "vendor/inner.n", "mod deep\n");
+    write(&root, "vendor/deep.n", "mod deep\n");
 
     let pu = package_unit_load(root.to_str().unwrap(), "app");
     assert!(pu.errors.is_empty(), "unexpected errors: {:?}", pu.errors);
@@ -178,7 +179,7 @@ fn target_variants_share_one_slot() {
     let root = temp_package("variants");
 
     write(&root, "package.toml", "name = \"app\"\n");
-    write(&root, "plat/info.n", "mod plat\n");
+    write(&root, "plat/plat.n", "mod plat\n");
     write(&root, "plat/target.n", "mod plat\n");
     write(&root, "plat/target.linux.n", "mod plat\n");
     write(&root, "plat/target.darwin.n", "mod plat\n");
@@ -198,6 +199,7 @@ fn target_variants_must_agree_on_membership() {
     let root = temp_package("variant_mismatch");
 
     write(&root, "package.toml", "name = \"app\"\n");
+    write(&root, "plat/plat.n", "mod plat\n");
     write(&root, "plat/target.n", "fn target() {}\n");
     write(&root, "plat/target.linux.n", "mod plat\n");
     write(&root, "plat/target.darwin.n", "mod plat\n");
@@ -207,6 +209,44 @@ fn target_variants_must_agree_on_membership() {
     assert!(!pu.errors.is_empty());
     assert!(
         pu.errors.iter().any(|e| e.message.contains("must belong to the same module")),
+        "errors: {:?}",
+        pu.errors
+    );
+}
+
+#[test]
+fn only_single_file_directory_module_may_omit_mod() {
+    package_unit_reset();
+    let root = temp_package("single_file");
+
+    write(&root, "package.toml", "name = \"app\"\n");
+    write(&root, "single/single.n", "fn value() {}\n");
+
+    let pu = package_unit_load(root.to_str().unwrap(), "app");
+    assert!(pu.errors.is_empty(), "unexpected errors: {:?}", pu.errors);
+    assert_eq!(pu.find_module("single").expect("app.single").module_ident, "app.single");
+
+    package_unit_reset();
+    write(&root, "single/part.n", "mod single\n");
+    let pu = package_unit_load(root.to_str().unwrap(), "app");
+    assert!(
+        pu.errors.iter().any(|error| error.message.contains("requires 'mod single'")),
+        "errors: {:?}",
+        pu.errors
+    );
+}
+
+#[test]
+fn directory_module_requires_same_named_entry() {
+    package_unit_reset();
+    let root = temp_package("missing_entry");
+
+    write(&root, "package.toml", "name = \"app\"\n");
+    write(&root, "codec/encode.n", "mod codec\n");
+
+    let pu = package_unit_load(root.to_str().unwrap(), "app");
+    assert!(
+        pu.errors.iter().any(|error| error.message.contains("must have entry 'codec.n'")),
         "errors: {:?}",
         pu.errors
     );

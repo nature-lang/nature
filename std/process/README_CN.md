@@ -1,4 +1,4 @@
-# import [process](https://github.com/nature-lang/nature/blob/master/std/process/main.n)
+# import [process](https://github.com/nature-lang/nature/blob/master/std/process/process.n)
 
 进程管理，包括进程创建、执行和状态管理
 

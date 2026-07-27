@@ -163,7 +163,6 @@ typedef struct {
     char *dir; // directory containing the file
     char *rel_path; // path relative to the package (or root), used in diagnostics and for stable sorting
     char *source; // 文件内容
-    char *mod_ident; // the mod declaration, NULL when absent
 
     linked_t *token_list;
     slice_t *stmt_list;
@@ -186,6 +185,7 @@ struct module_t {
     char *source_path; // full path of the file being processed
     char *source_dir; // directory of the file being processed, without xxx.n
     char *ident; // 符号表中都使用这个前缀, 由 ModuleId 决定
+    char *mod_ident; // declaration shared by all source parts, NULL when it may be omitted
     char *label_prefix;
     char *rel_path; // 从 root 计算出来的相对路径
 

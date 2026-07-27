@@ -7,8 +7,4 @@ description = "multi-file directory modules v1"
 license = "MIT"
 type = "bin"
 
-# `entry` was removed; a leftover field must be ignored, not rejected. The whole module matrix
-# below still has to resolve, which is what the expected output of this case asserts.
-entry = "main"
-
 [dependencies]

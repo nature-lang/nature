@@ -56,7 +56,7 @@ async fn cross_part_declarations_are_shared() {
     // avoid builtins (println and friends) so the test does not depend on NATURE_ROOT
     write(&root, "package.toml", "name = \"app\"\nversion = \"1.0.0\"\ntype = \"bin\"\n");
     write(&root, "codec/encode.n", "mod codec\n\nfn encode(int v):int {\n    return v * scale()\n}\n");
-    write(&root, "codec/decode.n", "mod codec\n\nfn scale():int {\n    return 2\n}\n");
+    write(&root, "codec/codec.n", "mod codec\n\nfn scale():int {\n    return 2\n}\n");
     write(&root, "main.n", "import app.codec\n\nfn main() {\n    int v = codec.encode(3)\n}\n");
 
     let (project, idx) = build(&root, "main.n").await;
@@ -89,7 +89,7 @@ async fn import_alias_does_not_leak_between_parts() {
         "codec/encode.n",
         "mod codec\n\nimport fmt\n\nfn encode():string {\n    return fmt.sprintf('a')\n}\n",
     );
-    let decode_path = write(&root, "codec/decode.n", "mod codec\n\nfn decode():string {\n    return fmt.sprintf('b')\n}\n");
+    let decode_path = write(&root, "codec/codec.n", "mod codec\n\nfn decode():string {\n    return fmt.sprintf('b')\n}\n");
     write(&root, "main.n", "import app.codec\n\nfn main() {\n    println(codec.decode())\n}\n");
 
     let (project, _) = build(&root, "main.n").await;
@@ -146,7 +146,7 @@ async fn importing_a_source_part_is_rejected() {
 
     write(&root, "package.toml", "name = \"app\"\nversion = \"1.0.0\"\ntype = \"bin\"\n");
     write(&root, "codec/encode.n", "mod codec\n\nfn encode():int {\n    return 1\n}\n");
-    write(&root, "codec/decode.n", "mod codec\n\nfn decode():int {\n    return 2\n}\n");
+    write(&root, "codec/codec.n", "mod codec\n\nfn decode():int {\n    return 2\n}\n");
     write(&root, "main.n", "import app.codec.encode\n\nfn main() {\n}\n");
 
     let (project, idx) = build(&root, "main.n").await;
@@ -160,6 +160,26 @@ async fn importing_a_source_part_is_rejected() {
 }
 
 #[tokio::test]
+async fn directory_layout_error_is_reported_on_canonical_source() {
+    package_unit_reset();
+    let root = temp_project("layout_error");
+
+    write(&root, "package.toml", "name = \"app\"\nversion = \"1.0.0\"\ntype = \"bin\"\n");
+    let canonical = write(&root, "codec/codec.n", "fn decode():int {\n    return 2\n}\n");
+    write(&root, "codec/encode.n", "mod codec\n\nfn encode():int {\n    return decode()\n}\n");
+    write(&root, "main.n", "import app.codec\n\nfn main() {\n}\n");
+
+    let (project, _) = build(&root, "main.n").await;
+    assert!(
+        errors_of_path(&project, &canonical)
+            .iter()
+            .any(|message| message.contains("requires 'mod codec'")),
+        "errors: {:?}",
+        errors_of_path(&project, &canonical)
+    );
+}
+
+#[tokio::test]
 async fn module_ident_uses_package_name_not_directory_name() {
     package_unit_reset();
     // the physical directory name differs from the package name
@@ -167,12 +187,12 @@ async fn module_ident_uses_package_name_not_directory_name() {
 
     write(&root, "package.toml", "name = \"renamed\"\nversion = \"1.0.0\"\ntype = \"bin\"\n");
     let main_path = write(&root, "main.n", "fn main() {\n}\n");
-    write(&root, "root_part.n", "mod renamed\n\nfn root():int {\n    return 1\n}\n");
+    write(&root, "renamed.n", "mod renamed\n\nfn root():int {\n    return 1\n}\n");
 
     let project = Project::new(root.to_string_lossy().to_string()).await;
 
     assert_eq!(project.module_ident_of(&main_path), "renamed.main");
 
-    let root_part = root.join("root_part.n").to_string_lossy().to_string();
+    let root_part = root.join("renamed.n").to_string_lossy().to_string();
     assert_eq!(project.module_ident_of(&root_part), "renamed");
 }

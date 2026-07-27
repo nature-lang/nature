@@ -1,4 +1,4 @@
-// Every case shares one file set (package.toml/main.n/mods/a.n/mods/b.n) and rewrites all of them,
+// Every case shares one file set (package.toml/main.n/mods/a.n/mods/mods.n) and rewrites all of them,
 // otherwise a bad mod declaration left by a previous case would affect later cases during the package scan.
 // Cases needing extra files (mods/c*.n, mods.n) are all placed last.
 
@@ -17,7 +17,9 @@ mod wrong
 
 fn a() {}
 
---- mods/b.n
+--- mods/mods.n
+mod mods
+
 fn b() {}
 
 --- output.txt
@@ -38,7 +40,9 @@ fn main() {
 --- mods/a.n
 fn a() {}
 
---- mods/b.n
+--- mods/mods.n
+mod mods
+
 fn b() {}
 
 --- output.txt
@@ -59,7 +63,9 @@ mod 1bad
 
 fn a() {}
 
---- mods/b.n
+--- mods/mods.n
+mod mods
+
 fn b() {}
 
 --- output.txt
@@ -80,7 +86,9 @@ mod Mods
 
 fn a() {}
 
---- mods/b.n
+--- mods/mods.n
+mod mods
+
 fn b() {}
 
 --- output.txt
@@ -106,7 +114,7 @@ fn a():int {
     return 1
 }
 
---- mods/b.n
+--- mods/mods.n
 mod mods
 
 fn b():int {
@@ -131,7 +139,9 @@ fn main() {
 --- mods/a.n
 fn a() {}
 
---- mods/b.n
+--- mods/mods.n
+mod mods
+
 fn b() {}
 
 --- output.txt
@@ -152,7 +162,9 @@ fn main() {
 --- mods/a.n
 fn a() {}
 
---- mods/b.n
+--- mods/mods.n
+mod mods
+
 fn b() {}
 
 --- output.txt
@@ -165,7 +177,7 @@ version = "1.0.0"
 type = "bin"
 
 --- main.n
-import modtest.mods
+import modtest.plain
 
 fn main() {
 }
@@ -173,11 +185,19 @@ fn main() {
 --- mods/a.n
 fn a() {}
 
---- mods/b.n
+--- mods/mods.n
+mod mods
+
+fn b() {}
+
+--- plain/a.n
+fn a() {}
+
+--- plain/b.n
 fn b() {}
 
 --- output.txt
-nature-test/main.n:1:7: cannot import 'modtest.mods': module not found
+nature-test/main.n:1:7: cannot import 'modtest.plain': module not found
 
 === test_source_part_self_import
 --- package.toml
@@ -201,7 +221,7 @@ fn a():int {
     return 1
 }
 
---- mods/b.n
+--- mods/mods.n
 mod mods
 
 fn b():int {
@@ -231,7 +251,7 @@ fn a():int {
     return 1
 }
 
---- mods/b.n
+--- mods/mods.n
 mod mods
 
 fn b():int {
@@ -261,7 +281,7 @@ fn dup():int {
     return 1
 }
 
---- mods/b.n
+--- mods/mods.n
 mod mods
 
 fn dup():int {
@@ -269,7 +289,7 @@ fn dup():int {
 }
 
 --- output.txt
-nature-test/mods/b.n:3:2: ident 'modtest.mods.dup' redeclared
+nature-test/mods/mods.n:3:2: ident 'modtest.mods.dup' redeclared
 
 === test_mod_not_at_head
 --- package.toml
@@ -292,7 +312,9 @@ fn a():string {
     return fmt.sprintf('a')
 }
 
---- mods/b.n
+--- mods/mods.n
+mod mods
+
 fn b() {}
 
 --- output.txt
@@ -319,7 +341,7 @@ fn broken():int {
     return s
 }
 
---- mods/b.n
+--- mods/mods.n
 mod mods
 
 fn b():int {
@@ -342,7 +364,9 @@ fn main() {
 --- mods/a.n
 fn a() {}
 
---- mods/b.n
+--- mods/mods.n
+mod mods
+
 fn b() {}
 
 --- mods/c.n
@@ -386,7 +410,7 @@ mod mods
 
 fn a() {}
 
---- mods/b.n
+--- mods/mods.n
 mod mods
 
 fn b() {}
@@ -405,3 +429,113 @@ fn c_windows() {}
 
 --- output.txt
 nature-test/mods/a.n:1:1: module modtest.mods is defined by two layouts: nature-test/mods.n (standalone file module) and nature-test/mods/a.n (part of directory module)
+
+=== test_directory_module_requires_same_named_entry
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+fn main() {
+}
+
+--- modtest.n
+mod modtest
+
+--- mods.n
+mod modtest
+
+--- mods/a.n
+mod mods
+
+fn a() {}
+
+--- mods/mods.n
+mod mods
+
+fn b() {}
+
+--- layout/part.n
+mod layout
+
+fn part() {}
+
+--- output.txt
+nature-test/layout/part.n:1:1: directory module modtest.layout must have entry 'layout.n' declaring 'mod layout'
+
+=== test_only_single_file_module_may_omit_mod
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+fn main() {
+}
+
+--- modtest.n
+mod modtest
+
+--- mods.n
+mod modtest
+
+--- mods/a.n
+mod mods
+
+fn a() {}
+
+--- mods/mods.n
+mod mods
+
+fn b() {}
+
+--- layout/part.n
+mod layout
+
+fn part() {}
+
+--- layout/layout.n
+fn layout() {}
+
+--- output.txt
+nature-test/layout/layout.n:1:1: module modtest.layout requires 'mod layout' in 'layout.n'
+
+=== test_package_module_entry_requires_mod
+--- package.toml
+name = "modtest"
+version = "1.0.0"
+type = "bin"
+
+--- main.n
+fn main() {
+}
+
+--- modtest.n
+fn root() {}
+
+--- mods.n
+mod modtest
+
+--- mods/a.n
+mod mods
+
+fn a() {}
+
+--- mods/mods.n
+mod mods
+
+fn b() {}
+
+--- layout/part.n
+mod layout
+
+fn part() {}
+
+--- layout/layout.n
+mod layout
+
+fn layout() {}
+
+--- output.txt
+nature-test/modtest.n:1:1: module modtest requires 'mod modtest' in 'modtest.n'

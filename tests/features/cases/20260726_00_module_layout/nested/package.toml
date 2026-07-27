@@ -1,5 +1,5 @@
 # A nested package owns a separate PackageInstanceId, so the outer package's scan must stop here.
-# If nested/ were scanned as a normal subdirectory of modtest, `mod deep` in inner.n would error
+# If nested/ were scanned as a normal subdirectory of modtest, `mod deep` in deep.n would error
 # for not matching the directory name nested, so this fixture compiling proves the boundary holds.
 name = "deep"
 version = "1.0.0"

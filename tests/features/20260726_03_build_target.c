@@ -58,12 +58,12 @@ int main(void) {
     char *nature_root = getenv("NATURE_ROOT");
     assert_true(nature_root != NULL);
 
-    // main.n in the root has no mod, so the target is the standalone file module buildtarget.main
-    assert_entry_output("main.n", "target_main", "entry:buildtarget.main\n");
+    // the package-root target is named after package.toml and carries mod
+    assert_entry_output("buildtarget.n", "target_main", "entry:buildtarget\n");
 
     // the target is the whole of buildtarget.cmd, with main defined in cmd/start.n;
     // a plain path selects plat.<os>.n by the normal target priority
-    assert_entry_output("cmd/server.n", "target_cmd_server", "entry:buildtarget.cmd serving variant\n");
+    assert_entry_output("cmd/cmd.n", "target_cmd_server", "entry:buildtarget.cmd serving variant\n");
     assert_entry_output("cmd/start.n", "target_cmd_start", "entry:buildtarget.cmd serving variant\n");
 
     // explicitly passing the variant active for the current target points at the same module
@@ -83,12 +83,12 @@ int main(void) {
     assert_entry_output("standalone.n", "target_standalone", "entry:buildtarget.standalone helper\n");
 
     // when that same buildtarget.lib is the explicit build target, its own main becomes the entry
-    assert_entry_output("lib/helper.n", "target_lib", "should never be selected\n");
+    assert_entry_output("lib/lib.n", "target_lib", "should never be selected\n");
 
     // a target module without a valid main must error
     // diagnostics use the real physical path while the module ident comes from package.toml.name
-    assert_entry_error("nomain/only.n", "target_nomain",
-                       "20260726_03_build_target/nomain/only.n:5:15: fn 'main' is undeclared in module "
+    assert_entry_error("nomain/nomain.n", "target_nomain",
+                       "20260726_03_build_target/nomain/nomain.n:5:15: fn 'main' is undeclared in module "
                        "buildtarget.nomain\n");
 
     return 0;

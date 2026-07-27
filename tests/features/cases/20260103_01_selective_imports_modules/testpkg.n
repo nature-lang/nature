@@ -1,3 +1,5 @@
+mod testpkg
+
 // Test selective imports with package/module style
 import testpkg.lib.math.{add, square, MATH_CONSTANT}
 import testpkg.utils.types.{Point, createPoint}

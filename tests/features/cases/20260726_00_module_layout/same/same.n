@@ -1,5 +1,4 @@
-// a directory and file sharing a name gets no special rule, the result is still modtest.same
-mod same
+// A same-named source is a single-file directory module, so it may omit mod.
 
 fn name():string {
     return 'modtest.same'

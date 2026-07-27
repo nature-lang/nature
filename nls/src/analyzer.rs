@@ -383,7 +383,7 @@ pub fn analyze_import(
         }
     }
 
-    // imports resolve purely by logical module name, no more guessing at main.n/<entry>.n file layouts
+    // imports resolve purely by logical module name
     // a dependencies key is only a local alias, package identity always comes from package.toml.name
     let package_name = import.package_conf.as_ref().unwrap().package_data.name.clone();
     let pu = package_unit_load(&import.package_dir, &package_name);

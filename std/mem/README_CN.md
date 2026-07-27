@@ -1,4 +1,4 @@
-# import [mem](https://github.com/nature-lang/nature/tree/master/std/mem/main.n)
+# import [mem](https://github.com/nature-lang/nature/tree/master/std/mem/mem.n)
 
 内存操作和字节序转换工具库
 

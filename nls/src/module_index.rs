@@ -3,12 +3,14 @@
 //! Applies the same rules as `src/module_index.c`:
 //! - a `.n` file without `mod` is a standalone file module
 //! - a leading `mod X` makes the file join its directory's directory module
+//! - `<directory>/<directory>.n` is the canonical directory-module entry
+//! - only a single-file nested directory module may omit `mod`
 //! - `mod` in the package root must equal `package.toml.name`, in a normal subdirectory the directory basename
 //! - all variants of one logical source slot (target suffix stripped) must belong to the same module
 //! - the scan stops at a nested package.toml
 
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::sync::Mutex;
 
 use lazy_static::lazy_static;
@@ -32,7 +34,7 @@ pub struct ModuleUnit {
     pub module_path: String,
     /// Symbol table prefix: <package_name>[.<module_path>]
     pub module_ident: String,
-    /// true when aggregated from mod declarations
+    /// true when the module is named by its directory
     pub is_dir_module: bool,
     /// Absolute paths of the active source parts, sorted in path byte order
     pub sources: Vec<String>,
@@ -76,12 +78,7 @@ fn build_arch() -> String {
 }
 
 fn ident_is_valid(ident: &str) -> bool {
-    let mut chars = ident.chars();
-    match chars.next() {
-        Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
-        _ => return false,
-    }
-    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+    ident.as_bytes().first().map_or(false, |c| c.is_ascii_alphabetic() || *c == b'_')
 }
 
 pub fn module_ident_join(package_name: &str, module_path: &str) -> String {
@@ -161,7 +158,7 @@ pub fn read_mod_decl(source: &str) -> Option<String> {
     }
 }
 
-pub fn read_mod_decl_from_file(path: &str) -> Option<String> {
+fn read_mod_decl_from_file(path: &str) -> Option<String> {
     let source = std::fs::read_to_string(path).ok()?;
     read_mod_decl(&source)
 }
@@ -271,8 +268,8 @@ fn scan_dir(dir: &Path, rel_dir: &str, slots: &mut HashMap<String, ScanSlot>) {
     }
 }
 
-fn select_variant(slot: &ScanSlot, os: &str, arch: &str) -> Option<ScanVariant> {
-    let mut result: Option<ScanVariant> = None;
+fn select_variant<'a>(slot: &'a ScanSlot, os: &str, arch: &str) -> Option<&'a ScanVariant> {
+    let mut result: Option<&ScanVariant> = None;
 
     for variant in &slot.variants {
         match variant.kind {
@@ -282,11 +279,19 @@ fn select_variant(slot: &ScanSlot, os: &str, arch: &str) -> Option<ScanVariant> 
         }
 
         if result.as_ref().map_or(true, |current| variant.kind > current.kind) {
-            result = Some(variant.clone());
+            result = Some(variant);
         }
     }
 
     result
+}
+
+fn is_dir_entry(slot: &ScanSlot, package_name: &str) -> bool {
+    if slot.rel_dir.is_empty() {
+        slot.base == package_name
+    } else {
+        slot.base == slot.rel_dir.rsplit('/').next().unwrap_or(&slot.rel_dir)
+    }
 }
 
 fn layout_desc(package_dir: &str, unit: &ModuleUnit) -> String {
@@ -325,8 +330,12 @@ fn build_package_unit(package_dir: &str, package_name: &str) -> PackageUnit {
 
     let os = build_os();
     let arch = build_arch();
+    let mut dir_entries: HashMap<String, &ScanVariant> = HashMap::new();
+    let mut conflicted_modules = HashSet::new();
 
     for slot in &slots {
+        let mut slot_valid = true;
+
         // an inactive variant's mod header still has to be checked
         for variant in &slot.variants {
             let Some(mod_ident) = &variant.mod_ident else {
@@ -339,6 +348,7 @@ fn build_package_unit(package_dir: &str, package_name: &str) -> PackageUnit {
                     rel_path,
                     message: format!("'mod {}' is not a valid identifier", mod_ident),
                 });
+                slot_valid = false;
                 continue;
             }
 
@@ -348,6 +358,7 @@ fn build_package_unit(package_dir: &str, package_name: &str) -> PackageUnit {
                         rel_path,
                         message: format!("'mod {}' does not match package name '{}', use 'mod {}'", mod_ident, package_name, package_name),
                     });
+                    slot_valid = false;
                 }
                 continue;
             }
@@ -358,6 +369,7 @@ fn build_package_unit(package_dir: &str, package_name: &str) -> PackageUnit {
                     rel_path,
                     message: format!("'mod {}' does not match directory '{}', use 'mod {}'", mod_ident, dir_name, dir_name),
                 });
+                slot_valid = false;
             }
         }
 
@@ -369,8 +381,14 @@ fn build_package_unit(package_dir: &str, package_name: &str) -> PackageUnit {
                         rel_path: module_source_rel_path(package_dir, &variant.path),
                         message: format!("target variants of '{}' must belong to the same module", slot.base),
                     });
+                    slot_valid = false;
                 }
             }
+        }
+
+        // Do not derive more layout diagnostics from an already invalid declaration.
+        if !slot_valid {
+            continue;
         }
 
         let Some(active) = select_variant(slot, &os, &arch) else {
@@ -379,13 +397,18 @@ fn build_package_unit(package_dir: &str, package_name: &str) -> PackageUnit {
 
         pu.slot_active.insert(slot.slot_key.clone(), active.path.clone());
 
-        let (module_path, is_dir_module) = if active.mod_ident.is_some() {
+        let dir_entry = is_dir_entry(slot, package_name);
+        let (module_path, is_dir_module) = if active.mod_ident.is_some() || dir_entry {
             (slot.rel_dir.replace('/', "."), true)
         } else if slot.rel_dir.is_empty() {
             (slot.base.clone(), false)
         } else {
             (format!("{}.{}", slot.rel_dir.replace('/', "."), slot.base), false)
         };
+
+        if is_dir_module && dir_entry {
+            dir_entries.insert(module_path.clone(), active);
+        }
 
         pu.slots.insert(slot.slot_key.clone(), module_path.clone());
 
@@ -403,15 +426,17 @@ fn build_package_unit(package_dir: &str, package_name: &str) -> PackageUnit {
                 sources: vec![active.path.clone()],
             };
             let existing_desc = layout_desc(package_dir, existing);
-            pu.errors.push(ModuleIndexError {
-                rel_path: module_source_rel_path(package_dir, &active.path),
-                message: format!(
-                    "module {} is defined by two layouts: {} and {}",
-                    conflict.module_ident,
-                    existing_desc,
-                    layout_desc(package_dir, &conflict)
-                ),
-            });
+            if conflicted_modules.insert(module_path) {
+                pu.errors.push(ModuleIndexError {
+                    rel_path: module_source_rel_path(package_dir, &active.path),
+                    message: format!(
+                        "module {} is defined by two layouts: {} and {}",
+                        conflict.module_ident,
+                        existing_desc,
+                        layout_desc(package_dir, &conflict)
+                    ),
+                });
+            }
             continue;
         }
 
@@ -424,6 +449,35 @@ fn build_package_unit(package_dir: &str, package_name: &str) -> PackageUnit {
                 sources: vec![active.path.clone()],
             },
         );
+    }
+
+    for unit in pu.modules.values() {
+        if !unit.is_dir_module {
+            continue;
+        }
+
+        let expected = if unit.module_path.is_empty() {
+            package_name
+        } else {
+            unit.module_path.rsplit('.').next().unwrap_or(&unit.module_path)
+        };
+        let Some(entry) = dir_entries.get(&unit.module_path) else {
+            pu.errors.push(ModuleIndexError {
+                rel_path: unit.sources.first().map(|path| module_source_rel_path(package_dir, path)).unwrap_or_default(),
+                message: format!(
+                    "directory module {} must have entry '{}.n' declaring 'mod {}'",
+                    unit.module_ident, expected, expected
+                ),
+            });
+            continue;
+        };
+
+        if (unit.module_path.is_empty() || unit.sources.len() > 1) && entry.mod_ident.is_none() {
+            pu.errors.push(ModuleIndexError {
+                rel_path: module_source_rel_path(package_dir, &entry.path),
+                message: format!("module {} requires 'mod {}' in '{}.n'", unit.module_ident, expected, expected),
+            });
+        }
     }
 
     for unit in pu.modules.values_mut() {
@@ -469,7 +523,12 @@ impl PackageUnit {
     /// Whether unit contains a source part whose basename is <name>.n
     pub fn unit_has_source_named(unit: &ModuleUnit, name: &str) -> bool {
         let expect = format!("{}.n", name);
-        unit.sources.iter().any(|s| Path::new(s).file_name().and_then(|f| f.to_str()) == Some(expect.as_str()))
+        unit.sources.iter().any(|source| {
+            source_slot_key(source)
+                .and_then(|slot| Path::new(&slot).file_name()?.to_str().map(str::to_string))
+                .as_deref()
+                == Some(expect.as_str())
+        })
     }
 
     pub fn slot_active(&self, source_path: &str) -> Option<&String> {
@@ -500,8 +559,4 @@ pub fn module_parent_path(module_path: &str) -> String {
         Some(i) => module_path[..i].to_string(),
         None => String::new(),
     }
-}
-
-pub fn package_conf_path(package_dir: &str) -> PathBuf {
-    Path::new(package_dir).join(PACKAGE_TOML)
 }

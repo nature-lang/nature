@@ -1,5 +1,7 @@
-import "token/token.n"
-import "lexer/lexer.n"
+mod toylang
+
+import toylang.token
+import toylang.lexer
 
 fn main() {
     token.init()
@@ -16,6 +18,4 @@ fn main() {
         }
     }
 }
-
-
 

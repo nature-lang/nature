@@ -15,7 +15,7 @@ use crate::analyzer::syntax::Syntax;
 use crate::analyzer::typesys::Typesys;
 use crate::analyzer::workspace_index::WorkspaceIndex;
 use crate::analyzer::{analyze_imports, analyze_mod_decl, module_unique_ident, register_global_symbol};
-use crate::module_index::{package_unit_invalidate, package_unit_load};
+use crate::module_index::{module_source_rel_path, package_unit_invalidate, package_unit_load};
 use crate::package::parse_package;
 use log::{debug, error};
 use ropey::Rope;
@@ -494,6 +494,22 @@ impl Project {
 
             // validate the leading mod declaration
             analyze_mod_decl(&self.package_config, m, &stmts);
+
+            // Attach package-layout errors to the physical source that declares them.
+            if let Some((package_dir, package_name)) = self.package_identity() {
+                let rel_path = module_source_rel_path(&package_dir, &m.path);
+                let pu = package_unit_load(&package_dir, &package_name);
+                for error in pu.errors.iter().filter(|error| error.rel_path == rel_path) {
+                    if !m.analyzer_errors.iter().any(|existing| existing.message == error.message) {
+                        m.analyzer_errors.push(AnalyzerError {
+                            start: 0,
+                            end: m.source.len().min(1),
+                            message: error.message.clone(),
+                            is_warning: false,
+                        });
+                    }
+                }
+            }
 
             // Register global symbols.
             let mut st = self.symbol_table.lock().unwrap();

@@ -1,3 +1,5 @@
+mod tank
+
 import tank.raylib as ray
 import fmt
 import time

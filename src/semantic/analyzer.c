@@ -208,7 +208,7 @@ void analyzer_import(module_t *m, ast_import_t *import) {
         }
     }
 
-    // imports resolve purely by logical module name, no more guessing at main.n/<entry>.n file layouts
+    // imports resolve purely by logical module name
     // note that a dependencies key is only a local alias, package identity always comes from package.toml.name
     package_unit_t *pu = package_unit_load(import->package_dir, import->package_conf);
 

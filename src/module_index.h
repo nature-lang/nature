@@ -9,22 +9,15 @@
 #define MOD_DECL_IDENT "mod"
 
 /**
- * Variant kind within one logical source slot, priority OS_ARCH > OS > PLAIN
- */
-typedef enum {
-    SOURCE_VARIANT_PLAIN = 0,
-    SOURCE_VARIANT_OS,
-    SOURCE_VARIANT_OS_ARCH,
-} source_variant_kind_t;
-
-/**
  * ModuleUnit: one logical module, made up of one or more source parts
  * an empty module_path means the package root module
  */
 typedef struct module_unit_t {
     char *module_path; // "" | "utils" | "net.http"
     char *module_ident; // <package_name>[.<module_path>], symbol table prefix
-    bool is_dir_module; // true means it was aggregated from mod declarations
+    char *mod_ident; // expected leading mod, NULL only for standalone and single-file modules
+    char *canonical_path; // same-named source of a directory module
+    bool is_dir_module; // true means the module is named by its directory
     slice_t *sources; // char*, absolute paths of active sources, sorted by in-package relative path (UTF-8 byte order)
     char *package_dir;
     toml_table_t *package_conf;
@@ -84,16 +77,6 @@ char *module_source_rel_path(char *package_dir, char *source_path);
  * Whether unit contains a source part whose basename is <name>.n
  */
 bool module_unit_has_source_named(module_unit_t *unit, char *name);
-
-/**
- * The path used in diagnostics, consistent with module_t.rel_path (includes the package directory name)
- */
-char *module_source_diag_path(char *package_dir, char *source_path);
-
-/**
- * Read the leading mod declaration of a source file, NULL when absent
- */
-char *module_source_read_mod(char *source_path);
 
 /**
  * Render module_path in import form: "" -> P, "net.http" -> P.net.http

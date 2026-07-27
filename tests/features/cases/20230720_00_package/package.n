@@ -1,3 +1,5 @@
+mod package
+
 import rand
 import rand.utils.seed
 import syscall

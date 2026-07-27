@@ -1,3 +1,5 @@
+mod compress
+
 import compress.tgz
 
 fn main():void! {

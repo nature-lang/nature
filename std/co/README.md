@@ -1,4 +1,4 @@
-# import [co](https://github.com/nature-lang/nature/tree/master/std/co/main.n)
+# import [co](https://github.com/nature-lang/nature/tree/master/std/co/co.n)
 
 Coroutine library for concurrent programming and cooperative multitasking.
 

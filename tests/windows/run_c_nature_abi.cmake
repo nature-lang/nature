@@ -6,7 +6,7 @@ endif ()
 execute_process(
         COMMAND "${CMAKE_COMMAND}" -E env "NATURE_ROOT=${NATURE_ROOT}"
                 "${NATURE_BIN}" build --target windows_amd64
-                -o "${OUTPUT_EXE}" main.n
+                -o "${OUTPUT_EXE}" windows_c_nature_abi.n
         WORKING_DIRECTORY "${FIXTURE_DIR}"
         RESULT_VARIABLE BUILD_RESULT
         OUTPUT_VARIABLE BUILD_STDOUT

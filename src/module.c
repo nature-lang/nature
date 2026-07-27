@@ -65,7 +65,6 @@ static source_file_t *module_source_new(module_t *m, char *source_path) {
     sf->dir = path_dir(source_path);
     sf->rel_path = module_source_rel(m, source_path);
     sf->source = file_read(source_path);
-    sf->mod_ident = NULL;
     sf->imports = slice_new();
     sf->import_table = table_new();
     sf->selective_import_table = table_new();
@@ -101,7 +100,7 @@ static void module_source_parse(module_t *m, source_file_t *sf) {
     ANALYZER_ASSERTF(m->package_conf, "cannot use 'mod' without package.toml");
 
     // the package scan already read the mod header, the two must agree
-    ANALYZER_ASSERTF(sf->mod_ident && str_equal(sf->mod_ident, mod_stmt->ident),
+    ANALYZER_ASSERTF(m->mod_ident && str_equal(m->mod_ident, mod_stmt->ident),
                      "'mod %s' declaration is not at the head of the file", mod_stmt->ident);
 
     // the mod declaration itself takes no part in declaration collection
@@ -233,6 +232,7 @@ module_t *module_build_sources(ast_import_t *import, slice_t *source_paths, modu
         m->package_dir = import->package_dir;
         m->package_conf = import->package_conf;
         m->ident = import->module_ident;
+        m->mod_ident = import->module_unit ? import->module_unit->mod_ident : NULL;
         m->label_prefix = import->module_ident;
     }
 
@@ -273,14 +273,6 @@ module_t *module_build_sources(ast_import_t *import, slice_t *source_paths, modu
         m->label_prefix = str_replace(temp, ".n", "");
     }
     assert(m->label_prefix);
-
-    // the module index already determined each source part's mod declaration
-    if (import && import->module_unit) {
-        for (int i = 0; i < m->sources->count; ++i) {
-            source_file_t *sf = m->sources->take[i];
-            sf->mod_ident = import->module_unit->is_dir_module ? module_source_read_mod(sf->path) : NULL;
-        }
-    }
 
     module_set_current_source(m, primary);
 

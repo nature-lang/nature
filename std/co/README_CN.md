@@ -1,4 +1,4 @@
-# import [co](https://github.com/nature-lang/nature/tree/master/std/co/main.n)
+# import [co](https://github.com/nature-lang/nature/tree/master/std/co/co.n)
 
 协程库，用于并发编程和协作式多任务处理。
 

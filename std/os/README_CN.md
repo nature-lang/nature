@@ -1,4 +1,4 @@
-# import [os](https://github.com/nature-lang/nature/blob/master/std/os/main.n)
+# import [os](https://github.com/nature-lang/nature/blob/master/std/os/os.n)
 
 操作系统接口，提供文件系统操作和进程工具
 

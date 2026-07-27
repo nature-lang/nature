@@ -16,6 +16,12 @@
  */
 static table_t *package_unit_table = NULL;
 
+typedef enum {
+    SOURCE_VARIANT_PLAIN = 0,
+    SOURCE_VARIANT_OS,
+    SOURCE_VARIANT_OS_ARCH,
+} source_variant_kind_t;
+
 typedef struct {
     char *path; // absolute path
     source_variant_kind_t kind;
@@ -32,25 +38,8 @@ typedef struct {
 } scan_slot_t;
 
 static bool ident_is_valid(char *ident) {
-    if (!ident || strlen(ident) == 0) {
-        return false;
-    }
-
-    for (size_t i = 0; i < strlen(ident); ++i) {
-        char c = ident[i];
-        bool alpha = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_';
-        bool number = c >= '0' && c <= '9';
-
-        if (i == 0 && !alpha) {
-            return false;
-        }
-
-        if (!alpha && !number) {
-            return false;
-        }
-    }
-
-    return true;
+    char first = ident ? ident[0] : '\0';
+    return (first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z') || first == '_';
 }
 
 char *module_ident_join(char *package_name, char *module_path) {
@@ -72,19 +61,23 @@ bool module_unit_has_source_named(module_unit_t *unit, char *name) {
     char *expect = str_connect(name, ".n");
 
     for (int i = 0; i < unit->sources->count; ++i) {
-        char *source_path = unit->sources->take[i];
-        char *basename = strrchr(source_path, '/');
-        basename = basename ? basename + 1 : source_path;
+        char *slot_key = module_source_slot_key(unit->sources->take[i]);
+        char *basename = strrchr(slot_key, '/');
+        basename = basename ? basename + 1 : slot_key;
 
         if (str_equal(basename, expect)) {
+            free(slot_key);
+            free(expect);
             return true;
         }
+        free(slot_key);
     }
 
+    free(expect);
     return false;
 }
 
-char *module_source_diag_path(char *package_dir, char *source_path) {
+static char *module_source_diag_path(char *package_dir, char *source_path) {
     // package dir maybe eqs /root
     char *parent = path_dir(package_dir);
     if (str_equal(parent, "") || str_equal(parent, "/")) {
@@ -103,16 +96,18 @@ char *module_source_diag_path(char *package_dir, char *source_path) {
  * Read the leading mod declaration of a source file. Skips the UTF-8 BOM, blank lines and comments.
  * mod and the identifier after it must sit on the same line, matching parser_is_mod_decl in the parser.
  */
-char *module_source_read_mod(char *source_path) {
+static char *module_source_read_mod(char *source_path) {
     char *source = file_read(source_path);
     if (!source) {
         return NULL;
     }
 
     char *p = source;
+    char *result = NULL;
 
     // UTF-8 BOM
-    if ((unsigned char) p[0] == 0xEF && (unsigned char) p[1] == 0xBB && (unsigned char) p[2] == 0xBF) {
+    if (strlen(p) >= 3 && (unsigned char) p[0] == 0xEF && (unsigned char) p[1] == 0xBB &&
+        (unsigned char) p[2] == 0xBF) {
         p += 3;
     }
 
@@ -148,14 +143,14 @@ char *module_source_read_mod(char *source_path) {
     }
 
     if (strncmp(p, MOD_DECL_IDENT, strlen(MOD_DECL_IDENT)) != 0) {
-        return NULL;
+        goto done;
     }
 
     char *cursor = p + strlen(MOD_DECL_IDENT);
 
     // mod must be followed by a space or tab, otherwise this is just an identifier starting with mod
     if (*cursor != ' ' && *cursor != '\t') {
-        return NULL;
+        goto done;
     }
 
     // skip spaces and inline block comments; the scanner drops comments, so this must behave the same
@@ -168,13 +163,13 @@ char *module_source_read_mod(char *source_path) {
         if (cursor[0] == '/' && cursor[1] == '*') {
             char *end = strstr(cursor + 2, "*/");
             if (!end) {
-                return NULL;
+                goto done;
             }
 
             // a block comment spanning lines puts mod and ident on different lines, so this is not a module declaration
             for (char *scan = cursor; scan < end; ++scan) {
                 if (*scan == '\n') {
-                    return NULL;
+                    goto done;
                 }
             }
 
@@ -192,14 +187,16 @@ char *module_source_read_mod(char *source_path) {
     }
 
     if (cursor == ident_start) {
-        return NULL;
+        goto done;
     }
 
     size_t length = (size_t) (cursor - ident_start);
-    char *ident = mallocz(length + 1);
-    memcpy(ident, ident_start, length);
+    result = mallocz(length + 1);
+    memcpy(result, ident_start, length);
 
-    return ident;
+done:
+    free(source);
+    return result;
 }
 
 /**
@@ -280,12 +277,6 @@ static int scan_slot_compare(const void *a, const void *b) {
     scan_slot_t *left = *(scan_slot_t **) a;
     scan_slot_t *right = *(scan_slot_t **) b;
     return strcmp(left->slot_key, right->slot_key);
-}
-
-static int scan_unit_compare(const void *a, const void *b) {
-    module_unit_t *left = *(module_unit_t **) a;
-    module_unit_t *right = *(module_unit_t **) b;
-    return strcmp(left->module_path, right->module_path);
 }
 
 /**
@@ -458,6 +449,16 @@ static scan_variant_t *package_select_variant(scan_slot_t *slot) {
     return result;
 }
 
+static bool package_slot_is_dir_entry(package_unit_t *pu, scan_slot_t *slot) {
+    if (strlen(slot->rel_dir) == 0) {
+        return str_equal(slot->base, pu->package_name);
+    }
+
+    char *dir_name = strrchr(slot->rel_dir, '/');
+    dir_name = dir_name ? dir_name + 1 : slot->rel_dir;
+    return str_equal(slot->base, dir_name);
+}
+
 static char *module_unit_layout_desc(package_unit_t *pu, module_unit_t *unit) {
     char *first = unit->sources->count > 0 ? module_source_diag_path(pu->package_dir, unit->sources->take[0]) : "?";
     return dsprintf("%s (%s)", first, unit->is_dir_module ? "part of directory module" : "standalone file module");
@@ -491,9 +492,10 @@ static void package_unit_build(package_unit_t *pu) {
 
         table_set(pu->slot_active, slot->slot_key, active->path);
 
+        bool is_dir_entry = package_slot_is_dir_entry(pu, slot);
         char *module_path;
         bool is_dir_module;
-        if (active->mod_ident) {
+        if (active->mod_ident || is_dir_entry) {
             module_path = str_replace(strdup(slot->rel_dir), "/", ".");
             is_dir_module = true;
         } else {
@@ -510,6 +512,8 @@ static void package_unit_build(package_unit_t *pu) {
                 module_unit_t *conflict = NEW(module_unit_t);
                 conflict->module_path = module_path;
                 conflict->module_ident = module_ident_join(pu->package_name, module_path);
+                conflict->mod_ident = active->mod_ident;
+                conflict->canonical_path = is_dir_entry ? active->path : NULL;
                 conflict->is_dir_module = is_dir_module;
                 conflict->sources = slice_new();
                 slice_push(conflict->sources, active->path);
@@ -522,6 +526,10 @@ static void package_unit_build(package_unit_t *pu) {
             }
 
             slice_push(unit->sources, active->path);
+            if (is_dir_entry) {
+                unit->canonical_path = active->path;
+                unit->mod_ident = active->mod_ident;
+            }
             table_set(pu->slot_index, slot->slot_key, unit);
             continue;
         }
@@ -529,6 +537,8 @@ static void package_unit_build(package_unit_t *pu) {
         unit = NEW(module_unit_t);
         unit->module_path = module_path;
         unit->module_ident = module_ident_join(pu->package_name, module_path);
+        unit->mod_ident = active->mod_ident;
+        unit->canonical_path = is_dir_entry ? active->path : NULL;
         unit->is_dir_module = is_dir_module;
         unit->sources = slice_new();
         unit->package_dir = pu->package_dir;
@@ -540,14 +550,34 @@ static void package_unit_build(package_unit_t *pu) {
         slice_push(pu->units, unit);
     }
 
-    // source parts within a module are sorted by in-package relative path in UTF-8 byte order
+    // A directory-named module is anchored by <directory>/<directory>.n. Only that single-file
+    // form may omit mod; a package-root module and every multi-file directory module require it.
     for (int i = 0; i < pu->units->count; ++i) {
         module_unit_t *unit = pu->units->take[i];
+        if (unit->is_dir_module) {
+            char *last_dot = strrchr(unit->module_path, '.');
+            char *expected = strlen(unit->module_path) == 0 ? pu->package_name
+                             : last_dot                     ? last_dot + 1
+                                                            : unit->module_path;
+
+            if (!unit->canonical_path) {
+                char *rel_path = module_source_diag_path(pu->package_dir, unit->sources->take[0]);
+                dump_global_errorf(rel_path, 1, 1,
+                                   "directory module %s must have entry '%s.n' declaring 'mod %s'",
+                                   unit->module_ident, expected, expected);
+            }
+
+            if ((strlen(unit->module_path) == 0 || unit->sources->count > 1) && !unit->mod_ident) {
+                char *rel_path = module_source_diag_path(pu->package_dir, unit->canonical_path);
+                dump_global_errorf(rel_path, 1, 1, "module %s requires 'mod %s' in '%s.n'",
+                                   unit->module_ident, expected, expected);
+            }
+        }
+
+        // source parts within a module are sorted by in-package relative path in UTF-8 byte order
         qsort(unit->sources->take, (size_t) unit->sources->count, sizeof(unit->sources->take[0]),
               scan_source_compare);
     }
-
-    qsort(pu->units->take, (size_t) pu->units->count, sizeof(pu->units->take[0]), scan_unit_compare);
 }
 
 void package_unit_reset() {
@@ -571,8 +601,6 @@ package_unit_t *package_unit_load(char *package_dir, toml_table_t *package_conf)
     toml_datum_t name = toml_string_in(package_conf, "name");
     assertf(name.ok, "package.toml in '%s' must have a 'name' field", package_dir);
 
-    // package.toml.entry has been removed, a leftover field is ignored rather than rejected,
-    // so a dependency carrying it stays usable through its submodules
     pu = NEW(package_unit_t);
     pu->package_dir = package_dir;
     pu->package_name = name.u.s;
