@@ -215,11 +215,10 @@ static inline void env_init() {
     if (root != NULL && strlen(root) > 0) {
         NATURE_ROOT = root;
     } else {
-        char *detected_root = nature_root_from_running_executable();
-        if (detected_root != NULL) {
-            NATURE_ROOT = detected_root;
-        }
+        NATURE_ROOT = nature_root_from_running_executable();
     }
+    assertf(NATURE_ROOT != NULL,
+            "cannot find NATURE_ROOT; set NATURE_ROOT or use a complete nature installation");
 
     char *build_output_dir = getenv("BUILD_OUTPUT_DIR");
     if (build_output_dir != NULL && strlen(BUILD_OUTPUT_DIR) == 0) {

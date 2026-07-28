@@ -1,5 +1,4 @@
 #include "config.h"
-#include "config/config.h"
 #ifdef __DARWIN
 #include <mach-o/dyld.h>
 #endif
@@ -25,7 +24,7 @@ build_param_t BUILD_ARCH = ARCH_RISCV64;
 build_param_t BUILD_ARCH = 0;
 #endif
 
-char *NATURE_ROOT = NATURE_DEFAULT_ROOT;
+char *NATURE_ROOT = NULL;
 char *NATURE_PATH = "~/.nature";
 char BUILD_OUTPUT_NAME[PATH_MAX] = "main";
 bool BUILD_OUTPUT_EXPLICIT = false;
