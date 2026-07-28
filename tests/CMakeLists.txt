@@ -153,6 +153,12 @@ add_executable(test_windows_linker_helpers test_windows_linker_helpers.c)
 target_link_libraries(test_windows_linker_helpers nature_common_test m)
 add_test(test_windows_linker_helpers test_windows_linker_helpers)
 
+add_executable(test_nature_root test_nature_root.c)
+target_compile_definitions(test_nature_root PRIVATE
+        NATURE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+target_link_libraries(test_nature_root nature_common_test m)
+add_test(test_nature_root test_nature_root)
+
 add_executable(test_archive_writer test_archive_writer.c)
 target_link_libraries(test_archive_writer nature_common_test m)
 add_test(test_archive_writer test_archive_writer)
