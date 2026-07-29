@@ -62,27 +62,8 @@ static inline bool can_write_to_path(char *path) {
     return access(path, W_OK) == 0;
 }
 
-static inline char *detect_install_root(char *argv0) {
-    char resolved[PATH_MAX] = {0};
-    if (argv0 && realpath(argv0, resolved) != NULL) {
-        char *exe_path = strdup(resolved);
-        char *bin_dir = path_dir(exe_path);
-        char *root_dir = path_dir(bin_dir);
-
-        char *nature_bin = path_join(strdup(root_dir), "bin/nature");
-        bool valid_layout = ends_with(bin_dir, "/bin") && file_exists(nature_bin);
-        free(nature_bin);
-
-        if (valid_layout) {
-            free(exe_path);
-            return root_dir;
-        }
-
-        free(exe_path);
-        free(root_dir);
-    }
-
-    return strdup(NATURE_ROOT);
+static inline char *detect_install_root() {
+    return nature_root_from_running_executable();
 }
 
 static inline bool prompt_confirm_update() {
@@ -253,7 +234,13 @@ void cmd_self_update_entry(int argc, char **argv) {
         return;
     }
 
-    char *install_root = detect_install_root(argv[0]);
+    char *install_root = detect_install_root();
+    if (!install_root) {
+        printf("Failed to determine install root from the running Nature executable.\n");
+        free(latest_tag);
+        free(asset_url);
+        return;
+    }
     printf("Install root:     %s\n", install_root);
     printf("Release asset:    %s\n", asset_url);
 

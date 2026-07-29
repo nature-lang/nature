@@ -21,7 +21,9 @@ typedef enum {
 extern build_param_t BUILD_OS;
 extern build_param_t BUILD_ARCH;
 
-extern char *NATURE_ROOT; // linux/darwin/freebsd default root
+extern char *NATURE_ROOT;
+char *nature_root_from_executable_path(const char *executable_path);
+char *nature_root_from_running_executable();
 
 extern char BUILD_OUTPUT_NAME[PATH_MAX]; // main
 extern bool BUILD_OUTPUT_EXPLICIT; // true when -o/--output was provided
@@ -210,9 +212,13 @@ static inline void env_init() {
     }
 
     char *root = getenv("NATURE_ROOT");
-    if (root != NULL) {
+    if (root != NULL && strlen(root) > 0) {
         NATURE_ROOT = root;
+    } else {
+        NATURE_ROOT = nature_root_from_running_executable();
     }
+    assertf(NATURE_ROOT != NULL,
+            "cannot find NATURE_ROOT; set NATURE_ROOT or use a complete nature installation");
 
     char *build_output_dir = getenv("BUILD_OUTPUT_DIR");
     if (build_output_dir != NULL && strlen(BUILD_OUTPUT_DIR) == 0) {
