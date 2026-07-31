@@ -1,6 +1,6 @@
 .{
     .name = .nature,
-    .version = "0.7.3-dev",
+    .version = "0.7.4-dev",
     .fingerprint = 0xb1d882a702a4ad85, // Changing this has security and trust implications.
     // Tracks the earliest Zig version that the package considers to be a
     // supported use case.
