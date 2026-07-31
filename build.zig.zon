@@ -1,11 +1,10 @@
 .{
     .name = .nature,
-    .version = "0.5.0",
+    .version = "0.7.3-dev",
     .fingerprint = 0xb1d882a702a4ad85, // Changing this has security and trust implications.
     // Tracks the earliest Zig version that the package considers to be a
     // supported use case.
-    .minimum_zig_version = "0.14.0",
-    .dependencies = .{},
+    .minimum_zig_version = "0.17.0-dev.1422+e863bf3be",
     .paths = .{
         "build.zig",
         "build.zig.zon",

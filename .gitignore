@@ -29,6 +29,8 @@ libruntime.a
 
 # Cache directories
 .zig-cache/*
+zig-out/*
+zig-pkg/*
 
 # Build artifacts
 tsconfig.tsbuildinfo
