@@ -23,15 +23,18 @@ pub fn build(b: *std.Build) !void {
         .include_path = "config/config.h",
     }, .{
         .BUILD_VERSION = blk: {
-            const file = try std.Io.Dir.cwd().openFile(io, "./VERSION", .{});
-            defer file.close(io);
             var file_buffer: [7]u8 = undefined;
-            const n = try file.readPositionalAll(io, &file_buffer, 0);
+            const version = try std.Io.Dir.cwd().readFile(io, "VERSION", &file_buffer);
 
-            break :blk file_buffer[0..n];
+            break :blk try std.mem.Allocator.dupeSentinel(std.heap.page_allocator, u8, version[0..], 0);
         },
-        // TODO zig std time already update,build_time need afresh realize.
-        .BUILD_TIME = 0,
+        .BUILD_TIME = blk: {
+            const start = std.Io.Clock.real.now(io);
+            const elapsed = start.untilNow(io, .cpu_thread);
+
+            const s = try timestampToDate(@as(usize, @intCast(elapsed.toMilliseconds() * -1)), 8);
+            break :blk s;
+        },
         .BUILD_TYPE = if (optimize == .Debug) "debug" else "release",
     });
 
@@ -134,4 +137,86 @@ fn setCMacros(compile: *std.Build.Step.Compile, target: std.Build.ResolvedTarget
         },
         else => {},
     }
+}
+
+// use LLM AI, but manual review
+fn timestampToDate(timestamp: usize, tz_offset: usize) ![:0]u8 {
+    var time: usize = timestamp;
+    // Handle milliseconds
+    if (timestamp > 1000000000000) {
+        time = @divFloor(timestamp, 1000);
+    }
+
+    // time zone offset
+    time += tz_offset * 3600;
+
+    // 1. total days and remaining seconds
+    var total_days: usize = @divFloor(time, 86400);
+    var remaining_seconds: usize = time % 86400;
+
+    // 2. year
+    var year: usize = 1970;
+    while (true) {
+        const days_this_year: usize = if (isLeap(year)) 366 else 365;
+        if (total_days < days_this_year) break;
+        total_days -= days_this_year;
+        year += 1;
+    }
+
+    // 3. month
+    var month: usize = 1;
+    while (true) {
+        const dim = daysInMonth(year, month);
+        if (total_days < dim) break;
+        total_days -= dim;
+        month += 1;
+    }
+
+    const day = total_days + 1;
+
+    // 4. hour/minute/second
+    const hour: usize = @divFloor(remaining_seconds, 3600);
+    remaining_seconds %= 3600;
+    const minute: usize = @divFloor(remaining_seconds, 60);
+    const second = remaining_seconds % 60;
+
+    const date = try std.mem.Allocator.printSentinel(std.heap.page_allocator, "{}-{}-{} {}:{}:{}", .{
+        year,
+        month,
+        day,
+        hour,
+        minute,
+        second,
+    }, 0);
+
+    return date;
+}
+
+fn isLeap(year: usize) bool {
+    return (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0);
+}
+
+fn daysInMonth(year: usize, month: usize) usize {
+    const bm: []const u8 = &.{ 1, 3, 5, 7, 8, 10, 12 };
+
+    for (bm) |b| {
+        if (b == month) {
+            return 31;
+        }
+    }
+
+    const sm: []const u8 = &.{ 4, 6, 9, 11 };
+
+    for (sm) |s| {
+        if (s == month) {
+            return 30;
+        }
+    }
+
+    if (month == 2 and isLeap(year)) {
+        return 29;
+    } else {
+        return 28;
+    }
+    return 0;
 }
