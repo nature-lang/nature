@@ -2,7 +2,7 @@ import syscall
 
 fn main():void! {
     var fd = syscall.open('asserts/notfound.txt', syscall.O_RDONLY, 0666) catch err {
-        print('open asserts/notfound.txt failed: ', err.msg(), '\n')
+        println('open missing file failed')
         -1
     }
 

@@ -16,7 +16,7 @@ static inline void lower_imm_symbol(closure_t *c, lir_operand_t *imm_operand, li
 
     asm_global_symbol_t *global_symbol = table_get(c->module->global_symbol_table, key);
     if (!global_symbol) {
-        char *unique_name = var_unique_ident(c->module, "g");
+        char *unique_name = label_ident_with_prefix(c->module, "g");
         global_symbol = NEW(asm_global_symbol_t);
         assert(global_symbol);
         global_symbol->name = unique_name;

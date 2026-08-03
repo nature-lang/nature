@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <stdatomic.h>
 #include <stdbool.h>
-#include <uv.h>
+#include "runtime/uv_compat.h"
 
 atomic_flag lock_taken = ATOMIC_FLAG_INIT;
 

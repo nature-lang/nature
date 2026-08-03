@@ -1,18 +1,12 @@
 #include "tests/test.h"
 
+static void test_basic(void) {
+    int status = -1;
+    char *output = exec_output_status(&status);
+    assert_int_equal(status, 0);
+    assert_string_equal(output, "hello world\n");
+}
+
 int main(void) {
-    //    char *ldflags = "-nostdlib -static";
-    //    strcpy(LDFLAGS, ldflags);
-
-    //    char *useld = "ld";
-    //    strcpy(USE_LD, useld);
-
-    // chdir("/Users/weiwenhao/Code/emoji-api");
-    // setenv("ENTRY_FILE", "main.n", 1);
-    VERBOSE = true;
-
-    feature_test_build();
-    sleep(1);
-    exec_imm_param();
-    //    feature_testar_test(NULL);
+    TEST_BASIC
 }

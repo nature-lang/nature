@@ -1,4 +1,4 @@
-# import [base64](https://github.com/nature-lang/nature/tree/master/std/base64/main.n)
+# import [base64](https://github.com/nature-lang/nature/tree/master/std/base64/base64.n)
 
 Base64 encoding and decoding library using mbedTLS.
 

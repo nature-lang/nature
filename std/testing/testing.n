@@ -1,0 +1,7 @@
+mod testing
+
+fn assert(bool cond):void! {
+    if !cond {
+        throw errorf("assertion failed")
+    }
+}

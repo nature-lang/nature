@@ -7,7 +7,13 @@
 #include "utils/type.h"
 #include <signal.h>
 #include <stdatomic.h>
-#include <uv.h>
+#include "runtime/uv_compat.h"
+
+#ifdef __WINDOWS
+#define RT_SIGNAL_COUNT 64
+#else
+#define RT_SIGNAL_COUNT NSIG
+#endif
 
 extern ATOMIC int64_t signal_recv;
 extern int64_t signal_mask;
@@ -16,8 +22,13 @@ extern struct sc_map_64 signal_handlers;
 
 extern coroutine_t *signal_loop_co;
 
-extern int64_t sig_ref[NSIG];
+extern int64_t sig_ref[RT_SIGNAL_COUNT];
 
+#ifdef __WINDOWS
+// Windows phase one deliberately exposes only the portable console signals.
+// Delivery is not installed through POSIX sigaction/ucontext machinery.
+static const int64_t all_signals[] = {SIGINT, SIGTERM};
+#else
 static const int64_t all_signals[] = {
         SIGHUP, // 默认行为是终止进程
         SIGINT, // 默认行为是终止进程
@@ -25,6 +36,7 @@ static const int64_t all_signals[] = {
         SIGUSR2,
         SIGTERM, // 默认行为是终止进程
 };
+#endif
 
 void signal_notify(n_chan_t *ch, n_vec_t signals);
 
@@ -51,7 +63,11 @@ static inline void signal_handle(int sig) {
 
     pthread_mutex_unlock(&signal_locker);
 
+#ifdef __WINDOWS
+    if (sig == SIGINT || sig == SIGTERM) {
+#else
     if (sig == SIGHUP || sig == SIGINT || sig == SIGTERM) {
+#endif
         // 触发信号默认行为
         // signal(sig, SIG_DFL);
         // raise(sig);
@@ -64,6 +80,7 @@ static inline void signal_init() {
 
     sc_map_init_64(&signal_handlers, 0, 0);
 
+#ifndef __WINDOWS
     struct sigaction act;
     memset(&act, 0, sizeof act);
     sigemptyset(&act.sa_mask);
@@ -76,6 +93,7 @@ static inline void signal_init() {
             DEBUGF("[runtime.signal_init] cannot install signal %ld handler: %s.\n", all_signals[i], strerror(errno));
         }
     }
+#endif
 }
 
 static inline void signal_process(int64_t sig) {

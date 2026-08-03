@@ -1,0 +1,5 @@
+mod plat
+
+fn target():string {
+    return 'variant'
+}

@@ -1,4 +1,4 @@
-# import [libc](https://github.com/nature-lang/nature/tree/master/std/libc/main.n)
+# import [libc](https://github.com/nature-lang/nature/tree/master/std/libc/libc.n)
 
 C standard library bindings for memory management, string operations, system functions, and more
 

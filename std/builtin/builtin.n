@@ -1,13 +1,13 @@
 type nullable<T> = T?
 
 #linkid print
-fx print(...[any] args)
+fn print(...[any] args)
 
 #linkid println
-fx println(...[any] args)
+fn println(...[any] args)
 
 #linkid rt_panic
-fx panic(string msg)
+fn panic(string msg)
 
 #linkid rt_assert
-fx assert(bool cond)
+fn assert(bool cond)

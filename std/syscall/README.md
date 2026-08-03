@@ -1,4 +1,4 @@
-# [import syscall](https://github.com/nature-lang/nature/blob/master/std/syscall/main.n)
+# [import syscall](https://github.com/nature-lang/nature/blob/master/std/syscall/syscall.n)
 
 System call interface, providing low-level access to operating system services including file operations, process management, networking, and more.
 

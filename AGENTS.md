@@ -25,6 +25,8 @@
 
 ## Testing Guidelines
 - Build runtime + main tree before `ctest`; link errors like `_global_safepoint` usually mean rerun the runtime build.
+- `ctest` only runs existing test binaries; it does not compile changed sources. Before every test run, rebuild the affected target. Compiler/linker changes must also rebuild and relink the C test harness (for example, `cmake --build build --target <test-name> -- -j8`), and stale `build*` artifacts must not be treated as evidence for the current source revision.
+- When reusing a build directory during compiler/linker diagnosis, verify that the relevant binary and object-file timestamps are newer than the changed sources before trusting a passing result.
 - New tests: harness in `tests/features/` plus cases in `tests/features/cases/<name>/`; rerun `cmake ..` in `build/`, then `ctest -R <name>`.
 - Manual spot checks: `cd tests/features/cases/<dir> && ../../build/nature build main.n && ./main`.
 - CI (`.github/workflows/test.yml`) builds on Linux/macOS and runs `ctest`; keep additions deterministic and low-output.

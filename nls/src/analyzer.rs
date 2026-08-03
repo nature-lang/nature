@@ -9,9 +9,14 @@ pub mod semantic;
 pub mod symbol;
 pub mod syntax;
 pub mod typesys;
+pub mod workspace_index;
 
 use std::path::Path;
 
+use crate::module_index::{
+    import_module_path, module_ident_join, module_parent_path, module_source_rel_path, package_unit_load,
+    PackageUnit,
+};
 use crate::package::parse_package;
 use crate::project::{Module, DEFAULT_NATURE_ROOT};
 use crate::utils::{errors_push, format_global_ident};
@@ -31,6 +36,8 @@ use symbol::SymbolTable;
 const TARGET_OS: &str = "linux";
 #[cfg(target_os = "macos")]
 const TARGET_OS: &str = "darwin";
+#[cfg(target_os = "windows")]
+const TARGET_OS: &str = "windows";
 
 #[cfg(target_arch = "x86_64")]
 const TARGET_ARCH: &str = "amd64";
@@ -132,7 +139,8 @@ fn analyze_import_dep(package_config: &PackageConfig, _m: &mut Module, import: &
                 start: import.start,
                 end: import.end,
                 message: format!("{} not found", package_ident),
-            });
+                is_warning: false,
+                            });
         }
     };
 
@@ -143,7 +151,8 @@ fn analyze_import_dep(package_config: &PackageConfig, _m: &mut Module, import: &
             start: import.start,
             end: import.end,
             message: format!("{} not found", package_conf_path.display()),
-        });
+            is_warning: false,
+                    });
     }
 
     match parse_package(package_conf_path.to_str().unwrap()) {
@@ -159,7 +168,8 @@ fn analyze_import_dep(package_config: &PackageConfig, _m: &mut Module, import: &
                 start: import.start,
                 end: import.end,
                 message: format!("import failed: {} {}", package_conf_path.display(), e.message),
-            })
+                is_warning: false,
+                            })
         }
     }
 }
@@ -179,7 +189,8 @@ fn analyze_import_std(_m: &mut Module, import: &mut ImportStmt) -> Result<(), An
             start: import.start,
             end: import.end,
             message: format!("{} not found", package_conf_path.display()),
-        });
+            is_warning: false,
+                    });
     }
 
     match parse_package(package_conf_path.to_str().unwrap()) {
@@ -195,65 +206,21 @@ fn analyze_import_std(_m: &mut Module, import: &mut ImportStmt) -> Result<(), An
                 start: import.start,
                 end: import.end,
                 message: format!("import package failed: {} parse err {}", package_conf_path.display(), e.message),
-            });
+                is_warning: false,
+                            });
         }
     }
 }
 
-fn package_import_fullpath(package_conf: &PackageConfig, package_dir: &str, ast_import_package: &Vec<String>) -> Result<String, String> {
-    assert!(!ast_import_package.is_empty());
-
-    // 获取入口文件名，默认为 main
-    let entry = package_conf.package_data.entry.as_deref().unwrap_or("main");
-
-    assert!(!entry.ends_with(".n"), "entry cannot end with .n, entry '{}'", entry);
-
-    // 构建基础路径
-    let mut prefix = PathBuf::from(package_dir);
-    for package_part in ast_import_package.iter().skip(1) {
-        prefix.push(package_part);
-    }
-
-    let mut entry_count = 0;
-    loop {
-        if entry_count == 1 {
-            if prefix.is_dir() {
-                prefix.push(entry);
-            }
-        }
-        entry_count += 1;
-
-        // 检查 os_arch 特定文件
-        let os = env::var("BUILD_OS").unwrap_or(TARGET_OS.to_string());
-        let arch = env::var("BUILD_ARCH").unwrap_or(TARGET_ARCH.to_string());
-        let os_arch = format!("{}_{}", os, arch);
-
-        let os_arch_path = prefix.with_extension(format!("{}.n", os_arch));
-        if os_arch_path.exists() {
-            return Ok(os_arch_path.to_str().unwrap().to_string());
-        }
-
-        // 检查 os 特定文件
-        let os_path = prefix.with_extension(format!("{}.n", os));
-        if os_path.exists() {
-            return Ok(os_path.to_str().unwrap().to_string());
-        }
-
-        // 检查标准文件
-        let normal_path = prefix.with_extension("n");
-        if normal_path.exists() {
-            return Ok(normal_path.to_str().unwrap().to_string());
-        }
-
-        if entry_count >= 2 {
-            break;
-        }
-    }
-
-    return Err(format!("cannot find module from '{}'", prefix.to_str().unwrap()));
+pub fn target_os() -> &'static str {
+    TARGET_OS
 }
 
-// 在文件中添加这个新函数
+pub fn target_arch() -> &'static str {
+    TARGET_ARCH
+}
+
+/// Compute the module ident from the path in single-file compatibility mode (no package.toml)
 pub fn module_unique_ident(root: &str, full_path: &str) -> String {
     // 获取 package_dir 的父目录
     let temp_dir = Path::new(root).parent().and_then(|p| p.to_str()).unwrap_or("");
@@ -290,7 +257,8 @@ pub fn analyze_import(
                 start: import.start,
                 end: import.end,
                 message: format!("import file cannot start with . or /"),
-            });
+                is_warning: false,
+                            });
         }
 
         import.full_path = Path::new(&m.dir).join(file).to_string_lossy().into_owned();
@@ -299,7 +267,8 @@ pub fn analyze_import(
                 start: import.start,
                 end: import.end,
                 message: format!("import file suffix must .n"),
-            });
+                is_warning: false,
+                            });
         }
 
         // check file exist
@@ -308,7 +277,8 @@ pub fn analyze_import(
                 start: import.start,
                 end: import.end,
                 message: format!("import file {} not found", file.clone()),
-            });
+                is_warning: false,
+                            });
         }
 
         // 如果 import as empty, 则使用 import 的 file  的文件名称去除后缀作为 import as
@@ -320,8 +290,58 @@ pub fn analyze_import(
                 .to_string();
         }
 
-        import.package_dir = project_root.clone();
-        import.module_ident = module_unique_ident(&project_root, &import.full_path);
+        let package_config_option = package_config_mutex.lock().unwrap();
+        let current_package = package_config_option.as_ref().cloned();
+        drop(package_config_option);
+
+        // single-file compatibility mode without a package.toml keeps resolving by path
+        let Some(p) = current_package else {
+            import.package_dir = project_root.clone();
+            import.module_ident = module_unique_ident(&project_root, &import.full_path);
+            import.module_name = import.module_ident.clone();
+            return Ok(());
+        };
+
+        let package_dir = Path::new(&p.path).parent().unwrap_or(Path::new("")).to_str().unwrap_or("").to_string();
+        let pu = package_unit_load(&package_dir, &p.package_data.name);
+
+        // a quoted import may only point at a standalone file of the current package that has no mod declaration
+        let Some(unit) = pu.find_source(&import.full_path) else {
+            return Err(AnalyzerError {
+                start: import.start,
+                end: import.end,
+                message: format!("cannot import '{}': not found in package '{}'", file, p.package_data.name),
+                is_warning: false,
+            });
+        };
+
+        if unit.is_dir_module {
+            return Err(AnalyzerError {
+                start: import.start,
+                end: import.end,
+                message: format!(
+                    "cannot import '{}': it is part of module {}, use 'import {}'",
+                    file, unit.module_ident, unit.module_ident
+                ),
+                is_warning: false,
+            });
+        }
+
+        if unit.module_key == m.ident {
+            return Err(AnalyzerError {
+                start: import.start,
+                end: import.end,
+                message: format!("cannot import '{}': module {} cannot import itself", file, m.display_ident),
+                is_warning: false,
+            });
+        }
+
+        import.package_conf = Some(p);
+        import.package_dir = package_dir;
+        import.module_ident = unit.module_key.clone();
+        import.module_name = unit.module_ident.clone();
+        import.full_path = unit.sources[0].clone();
+        import.module_sources = unit.sources.clone();
 
         return Ok(());
     }
@@ -332,12 +352,14 @@ pub fn analyze_import(
     // 如果存在 package_config, 说明项目存在 package.toml, import 就存在 package.toml 中的 main > dep package > std package
     // 如果不存在 package package_config 则只能是 std package
     let package_config_option = package_config_mutex.lock().unwrap();
+    let current_package = package_config_option.as_ref().cloned();
+    drop(package_config_option);
 
-    if let Some(p) = package_config_option.as_ref() {
+    if let Some(p) = current_package {
         if is_current_package(&p, &package_ident) {
             // set import belong package_conf
-            import.package_conf = Some(p.clone());
             import.package_dir = Path::new(&p.path).parent().unwrap_or(Path::new("")).to_str().unwrap_or("").to_string();
+            import.package_conf = Some(p);
         } else if is_dep_package(&p, &package_ident) {
             analyze_import_dep(&p, m, import)?;
         } else if is_std_package(&package_ident) {
@@ -347,7 +369,8 @@ pub fn analyze_import(
                 start: import.start,
                 end: import.end,
                 message: format!("package '{}' not found", package_ident),
-            });
+                is_warning: false,
+                            });
         }
     } else {
         if is_std_package(&package_ident) {
@@ -358,50 +381,111 @@ pub fn analyze_import(
                 start: import.start,
                 end: import.end,
                 message: format!("package '{}' not found", package_ident),
-            });
+                is_warning: false,
+                            });
         }
     }
 
-    // calc full path
-    match package_import_fullpath(import.package_conf.as_ref().unwrap(), &import.package_dir, import.ast_package.as_ref().unwrap()) {
-        Ok(full_path) => {
-            import.full_path = full_path;
+    // imports resolve purely by logical module name
+    // a dependencies key is only a local alias, package identity always comes from package.toml.name
+    let package_name = import.package_conf.as_ref().unwrap().package_data.name.clone();
+    let pu = package_unit_load(&import.package_dir, &package_name);
 
-            // check full_path exists
-            if !Path::new(&import.full_path).exists() {
+    let module_path = import_module_path(import.ast_package.as_ref().unwrap());
+    let Some(unit) = pu.find_module(&module_path) else {
+        let full_ident = module_ident_join(&package_name, &module_path);
+        let parent = module_parent_path(&module_path);
+
+        let last_segment = module_path.rsplit('.').next().unwrap_or(&module_path);
+
+        // when it points at a source part, offer an actionable suggestion
+        if let Some(parent_unit) = pu.find_module(&parent) {
+            if parent_unit.is_dir_module && PackageUnit::unit_has_source_named(parent_unit, last_segment) {
                 return Err(AnalyzerError {
                     start: import.start,
                     end: import.end,
-                    message: format!("cannot import '{}': file not found", import.full_path.clone()),
+                    message: format!(
+                        "'{}' is not a module, it is part of {}, use 'import {}'",
+                        full_ident, parent_unit.module_ident, parent_unit.module_ident
+                    ),
+                    is_warning: false,
                 });
             }
+        }
 
-            // check file is n file
-            if !import.full_path.ends_with(".n") {
-                return Err(AnalyzerError {
-                    start: import.start,
-                    end: import.end,
-                    message: format!("import file suffix must .n"),
-                });
-            }
-        }
-        Err(e) => {
-            return Err(AnalyzerError {
-                start: import.start,
-                end: import.end,
-                message: e,
-            });
-        }
+        return Err(AnalyzerError {
+            start: import.start,
+            end: import.end,
+            message: format!("cannot import '{}': module not found", full_ident),
+            is_warning: false,
+        });
+    };
+
+    // a source part cannot import the module it belongs to
+    if unit.module_key == m.ident {
+        return Err(AnalyzerError {
+            start: import.start,
+            end: import.end,
+            message: format!("module {} cannot import itself", m.display_ident),
+            is_warning: false,
+        });
     }
 
     // calc import as, 如果不存在 import as, 则使用 ast_package 的最后一个元素作为 import as
-    if import.as_name.is_empty() {
+    // For selective imports, leave as_name empty — the symbols are imported directly,
+    // not via a module alias, so the module should not shadow local variables in completion.
+    if import.as_name.is_empty() && !import.is_selective {
         import.as_name = import.ast_package.as_ref().unwrap().last().unwrap().clone();
     }
 
-    // calc moudle unique ident, 符号注册到符号表中需要采取同样的策略生成名称
-    import.module_ident = module_unique_ident(&import.package_dir, &import.full_path);
+    import.module_ident = unit.module_key.clone();
+    import.module_name = unit.module_ident.clone();
+    import.full_path = unit.sources[0].clone();
+    import.module_sources = unit.sources.clone();
     return Ok(());
+}
+
+/// Validate a leading mod declaration: the root must equal package.toml.name, a normal subdirectory the directory basename
+pub fn analyze_mod_decl(m: &mut Module, stmts: &Vec<Box<Stmt>>) {
+    let Some(stmt) = stmts.first() else {
+        return;
+    };
+    let AstNode::Mod(mod_stmt) = &stmt.node else {
+        return;
+    };
+
+    let Some(p) = m.package_conf.clone() else {
+        m.analyzer_errors.push(AnalyzerError::new(
+            mod_stmt.start,
+            mod_stmt.end,
+            "cannot use 'mod' without package.toml".to_string(),
+        ));
+        return;
+    };
+
+    let package_dir = m.package_dir.clone();
+    let rel_dir = module_source_rel_path(&package_dir, &m.dir);
+
+    let expect = if rel_dir.is_empty() {
+        p.package_data.name.clone()
+    } else {
+        rel_dir.rsplit('/').next().unwrap_or(&rel_dir).to_string()
+    };
+
+    if mod_stmt.ident == expect {
+        return;
+    }
+
+    let message = if rel_dir.is_empty() {
+        format!(
+            "'mod {}' does not match package name '{}', use 'mod {}'",
+            mod_stmt.ident, expect, expect
+        )
+    } else {
+        format!("'mod {}' does not match directory '{}', use 'mod {}'", mod_stmt.ident, expect, expect)
+    };
+
+    m.analyzer_errors.push(AnalyzerError::new(mod_stmt.start, mod_stmt.end, message));
 }
 
 pub fn analyze_imports(
@@ -445,10 +529,11 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                     var_decl.ident.clone(),
                     SymbolKind::Var(var_decl_mutex.clone()),
                     var_decl.symbol_start,
-                    m.scope_id,
+                    m.module_scope_id,
                 ) {
                     Ok(symbol_id) => {
                         var_decl.symbol_id = symbol_id;
+                        symbol_table.set_symbol_source_path(symbol_id, &m.path);
                     }
                     Err(e) => {
                         errors_push(
@@ -457,18 +542,21 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                                 start: var_decl.symbol_start,
                                 end: var_decl.symbol_end,
                                 message: e,
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 }
 
                 // 注册到全局符号表
-                let _ = symbol_table.define_global_symbol(
+                if let Ok(symbol_id) = symbol_table.define_global_symbol(
                     var_decl.ident.clone(),
                     SymbolKind::Var(var_decl_mutex.clone()),
                     var_decl.symbol_start,
-                    m.scope_id,
-                );
+                    m.module_scope_id,
+                ) {
+                    symbol_table.set_symbol_source_path(symbol_id, &m.path);
+                }
             }
             AstNode::ConstDef(constdef_mutex) => {
                 let mut constdef = constdef_mutex.lock().unwrap();
@@ -478,10 +566,11 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                     constdef.ident.clone(),
                     SymbolKind::Const(constdef_mutex.clone()),
                     constdef.symbol_start,
-                    m.scope_id,
+                    m.module_scope_id,
                 ) {
                     Ok(symbol_id) => {
                         constdef.symbol_id = symbol_id;
+                        symbol_table.set_symbol_source_path(symbol_id, &m.path);
                     }
                     Err(e) => {
                         errors_push(
@@ -490,18 +579,30 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                                 start: constdef.symbol_start,
                                 end: constdef.symbol_end,
                                 message: e,
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
+                }
+
+                // Register in global symbol table (needed for selective imports)
+                if let Ok(symbol_id) = symbol_table.define_global_symbol(
+                    constdef.ident.clone(),
+                    SymbolKind::Const(constdef_mutex.clone()),
+                    constdef.symbol_start,
+                    m.module_scope_id,
+                ) {
+                    symbol_table.set_symbol_source_path(symbol_id, &m.path);
                 }
             }
             AstNode::Typedef(typedef_mutex) => {
                 let mut typedef = typedef_mutex.lock().unwrap();
                 typedef.ident = format_global_ident(m.ident.clone(), typedef.ident.clone());
 
-                match symbol_table.define_symbol_in_scope(typedef.ident.clone(), SymbolKind::Type(typedef_mutex.clone()), typedef.symbol_start, m.scope_id) {
+                match symbol_table.define_symbol_in_scope(typedef.ident.clone(), SymbolKind::Type(typedef_mutex.clone()), typedef.symbol_start, m.module_scope_id) {
                     Ok(symbol_id) => {
                         typedef.symbol_id = symbol_id;
+                        symbol_table.set_symbol_source_path(symbol_id, &m.path);
                     }
                     Err(e) => {
                         debug!("define module typedef {} failed: {}, in scope {}", typedef.ident, e, m.scope_id);
@@ -511,12 +612,15 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                                 start: typedef.symbol_start,
                                 end: typedef.symbol_end,
                                 message: e,
-                            },
+                                is_warning: false,
+                                                            },
                         );
                     }
                 }
 
-                let _ = symbol_table.define_global_symbol(typedef.ident.clone(), SymbolKind::Type(typedef_mutex.clone()), typedef.symbol_start, m.scope_id);
+                if let Ok(symbol_id) = symbol_table.define_global_symbol(typedef.ident.clone(), SymbolKind::Type(typedef_mutex.clone()), typedef.symbol_start, m.module_scope_id) {
+                    symbol_table.set_symbol_source_path(symbol_id, &m.path);
+                }
             }
             AstNode::FnDef(fndef_mutex) => {
                 let mut fndef = fndef_mutex.lock().unwrap();
@@ -525,9 +629,10 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                 if fndef.impl_type.kind.is_unknown() {
                     fndef.symbol_name = format_global_ident(m.ident.clone(), symbol_name.clone());
 
-                    match symbol_table.define_symbol_in_scope(fndef.symbol_name.clone(), SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, m.scope_id) {
+                    match symbol_table.define_symbol_in_scope(fndef.symbol_name.clone(), SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, m.module_scope_id) {
                         Ok(symbol_id) => {
                             fndef.symbol_id = symbol_id;
+                            symbol_table.set_symbol_source_path(symbol_id, &m.path);
                         }
                         Err(_e) => {
                             errors_push(
@@ -536,12 +641,15 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                                     start: fndef.symbol_start,
                                     end: fndef.symbol_end,
                                     message: format!("ident '{}' redeclared", fndef.symbol_name),
-                                },
+                                    is_warning: false,
+                                                                    },
                             );
                         }
                     }
 
-                    let _ = symbol_table.define_global_symbol(fndef.symbol_name.clone(), SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, m.scope_id);
+                    if let Ok(symbol_id) = symbol_table.define_global_symbol(fndef.symbol_name.clone(), SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, m.module_scope_id) {
+                        symbol_table.set_symbol_source_path(symbol_id, &m.path);
+                    }
                 } else {
                     // dealy semantic analyze
                 }

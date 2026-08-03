@@ -40,7 +40,7 @@ fn generate_key(u32 key_bits):(ref<rsa_public_key_t>, ref<rsa_private_key_t>)! {
     
     // Seed the random number generator
     var seed = fmt.sprintf('%d', time.now().ms_timestamp())
-    var seed_result = utils.mbedtls_ctr_drbg_seed(&generator.ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &generator.entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&generator.ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &generator.entropy as anyptr, seed.to_cstr(), seed.len() as u64)
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&generator.ctr_drbg)
         utils.mbedtls_entropy_free(&generator.entropy)
@@ -128,7 +128,7 @@ fn private_key_from_pem([u8] pem_data, [u8] password):ref<rsa_private_key_t>! {
     utils.mbedtls_ctr_drbg_init(&ctr_drbg)
     
     var seed = fmt.sprintf('%d', time.now().ms_timestamp())
-    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u64)
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
@@ -173,7 +173,7 @@ fn rsa_public_key_t.encrypt_oaep(&self, i32 hash_algo, [u8] plaintext, [u8]? lab
     utils.mbedtls_ctr_drbg_init(&ctr_drbg)
 
     var seed = fmt.sprintf('%d', time.now().ms_timestamp())
-    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u64)
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
@@ -219,7 +219,7 @@ fn rsa_private_key_t.decrypt_oaep(&self, i32 hash_algo, [u8] ciphertext, [u8]? l
     utils.mbedtls_ctr_drbg_init(&ctr_drbg)
     
     var seed = fmt.sprintf('%d', time.now().ms_timestamp())
-    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u64)
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
@@ -266,7 +266,7 @@ fn rsa_public_key_t.encrypt_pkcs_v15(&self, [u8] plaintext):[u8]! {
     utils.mbedtls_ctr_drbg_init(&ctr_drbg)
 
     var seed = fmt.sprintf('%d', time.now().ms_timestamp())
-    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u64)
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)
@@ -304,7 +304,7 @@ fn rsa_private_key_t.decrypt_pkcs_v15(&self, [u8] ciphertext):[u8]! {
     utils.mbedtls_ctr_drbg_init(&ctr_drbg)
     
     var seed = fmt.sprintf('%d', time.now().ms_timestamp())
-    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u32)
+    var seed_result = utils.mbedtls_ctr_drbg_seed(&ctr_drbg, libc.to_cfn(utils.mbedtls_entropy_func as anyptr), &entropy as anyptr, seed.to_cstr(), seed.len() as u64)
     if seed_result != 0 {
         utils.mbedtls_ctr_drbg_free(&ctr_drbg)
         utils.mbedtls_entropy_free(&entropy)

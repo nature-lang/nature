@@ -1,0 +1,10 @@
+import os
+import path
+
+fn main():void! {
+    var list = os.listdir('mock')
+    println('list len:', list.len())
+    println(path.exists('./mock'), path.exists('./mock/stat.txt'), path.exists('notfound.txt'))
+    println(path.base('C:/test/hello'))
+    println(path.dir('C:/test/hello'))
+}

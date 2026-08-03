@@ -3,7 +3,7 @@
 
 #include "runtime/processor.h"
 #include "utils/helper.h"
-#include "uv.h"
+#include "runtime/uv_compat.h"
 
 #define BUFFER_SIZE 4096
 

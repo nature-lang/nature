@@ -8,7 +8,7 @@ use super::{
 use crate::{project::Module, utils::format_impl_ident};
 
 fn push_error(errors: &mut Vec<AnalyzerError>, start: usize, end: usize, message: String) {
-    errors.push(AnalyzerError { start, end, message });
+    errors.push(AnalyzerError::new(start, end, message));
 }
 
 fn interface_equal(typesys: &mut Typesys, left: &Type, right: &Type) -> bool {
@@ -64,11 +64,11 @@ pub(crate) fn check_impl_interface_contains(typesys: &mut Typesys, typedef_stmt:
 
 fn combination_interface(typesys: &mut Typesys, typedef_stmt: &mut TypedefStmt) -> Result<(), AnalyzerError> {
     let TypeKind::Interface(origin_elements) = &mut typedef_stmt.type_expr.kind else {
-        return Err(AnalyzerError {
-            start: typedef_stmt.symbol_start,
-            end: typedef_stmt.symbol_end,
-            message: "typedef type is not interface".to_string(),
-        });
+        return Err(AnalyzerError::new(
+            typedef_stmt.symbol_start,
+            typedef_stmt.symbol_end,
+            "typedef type is not interface".to_string(),
+        ));
     };
 
     let mut exists = HashMap::new();
@@ -82,11 +82,11 @@ fn combination_interface(typesys: &mut Typesys, typedef_stmt: &mut TypedefStmt) 
         *impl_interface = typesys.reduction_type(impl_interface.clone())?;
 
         if !matches!(impl_interface.kind, TypeKind::Interface(..)) {
-            return Err(AnalyzerError {
-                start: impl_interface.start,
-                end: impl_interface.end,
-                message: format!("interface '{}' impl target '{}' is not interface", typedef_stmt.ident, impl_interface.ident),
-            });
+            return Err(AnalyzerError::new(
+                impl_interface.start,
+                impl_interface.end,
+                format!("interface '{}' impl target '{}' is not interface", typedef_stmt.ident, impl_interface.ident),
+            ));
         }
 
         let TypeKind::Interface(elements) = &impl_interface.kind else {
@@ -95,20 +95,16 @@ fn combination_interface(typesys: &mut Typesys, typedef_stmt: &mut TypedefStmt) 
 
         for element in elements {
             let TypeKind::Fn(type_fn) = &element.kind else {
-                return Err(AnalyzerError {
-                    start: element.start,
-                    end: element.end,
-                    message: format!("interface '{}' contains non-fn method", typedef_stmt.ident),
-                });
+                return Err(AnalyzerError::new(
+                    element.start,
+                    element.end,
+                    format!("interface '{}' contains non-fn method", typedef_stmt.ident),
+                ));
             };
 
             if let Some(exist_type) = exists.get(&type_fn.name) {
                 if !typesys.type_compare(element, exist_type) {
-                    return Err(AnalyzerError {
-                        start: element.start,
-                        end: element.end,
-                        message: format!("duplicate method '{}'", type_fn.name),
-                    });
+                    return Err(AnalyzerError::new(element.start, element.end, format!("duplicate method '{}'", type_fn.name)));
                 }
                 continue;
             }
@@ -123,11 +119,11 @@ fn combination_interface(typesys: &mut Typesys, typedef_stmt: &mut TypedefStmt) 
 
 fn interface_extract_fn_type(typesys: &mut Typesys, fndef: &AstFnDef) -> Result<Type, AnalyzerError> {
     if fndef.impl_type.kind.is_unknown() {
-        return Err(AnalyzerError {
-            start: fndef.symbol_start,
-            end: fndef.symbol_end,
-            message: "cannot infer function without interface".to_string(),
-        });
+        return Err(AnalyzerError::new(
+            fndef.symbol_start,
+            fndef.symbol_end,
+            "cannot infer function without interface".to_string(),
+        ));
     }
 
     let mut type_fn = TypeFn {

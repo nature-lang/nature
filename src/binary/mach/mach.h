@@ -174,7 +174,12 @@ static inline int64_t mach_put_sym(mach_symtab_lc *lc, struct nlist_64 *sym, cha
         sprintf(prefixed_name, "_%s", name);
 
 
-        name_offset = mach_put_str(lc->str_table, string_view_create(prefixed_name, strlen(prefixed_name)));
+        string_view_t name_view = {
+                .data = prefixed_name,
+                .size = strlen(prefixed_name),
+        };
+        name_offset = mach_put_str(lc->str_table, &name_view);
+        free(prefixed_name);
     }
 
     memcpy(new_sym, sym, sizeof(struct nlist_64));
@@ -610,7 +615,11 @@ static inline mach_context_t *mach_context_new(char *output) {
     ctx->symtab_command = NEW(mach_symtab_lc);
     ctx->symtab_command->symbols = NEW(mach_section_t); // 只使用到了 data 段
     ctx->symtab_command->str_table = NEW(mach_section_t);
-    mach_put_str(ctx->symtab_command->str_table, string_view_create("", 0));
+    string_view_t empty_name = {
+            .data = "",
+            .size = 0,
+    };
+    mach_put_str(ctx->symtab_command->str_table, &empty_name);
 
 
     ctx->symtab_command->sc.cmd = LC_SYMTAB;

@@ -1,0 +1,9 @@
+*.sh text eol=lf
+
+lib/windows_amd64/SHA256SUMS text eol=lf
+lib/windows_amd64/SOURCES.lock text eol=lf
+lib/windows_amd64/CAPABILITIES.json text eol=lf
+lib/windows_amd64/LICENSES/** text eol=lf
+
+tests/features/cases/20230725_00_syscall/asserts/open.txt text eol=lf
+tests/features/cases/20230811_00_template/mock/input.txt text eol=lf

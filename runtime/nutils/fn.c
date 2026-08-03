@@ -4,8 +4,10 @@
 #include "runtime/rtype.h"
 #include "runtime/runtime.h"
 #include <errno.h>
+#ifndef __WINDOWS
 #include <sys/mman.h>
 #include <unistd.h>
+#endif
 
 #ifdef __DARWIN
 #include <libkern/OSCacheControl.h> // 这是需要的头文件

@@ -224,6 +224,13 @@ static void aco_share_stack_init_from_thread(aco_share_stack_t *p) {
     pthread_getattr_np(pthread_self(), &attr);
     pthread_attr_getstack(&attr, &stack_addr, &stack_size);
     pthread_attr_destroy(&attr);
+#elif defined(__WINDOWS)
+    ULONG_PTR stack_low = 0;
+    ULONG_PTR stack_high = 0;
+    GetCurrentThreadStackLimits(&stack_low, &stack_high);
+    assert(stack_high > stack_low);
+    stack_addr = (void *) stack_low;
+    stack_size = (size_t) (stack_high - stack_low);
 #elif defined(__DARWIN)
     // On macOS, use pthread_get_stackaddr_np and pthread_get_stacksize_np
     stack_addr = pthread_get_stackaddr_np(pthread_self());
@@ -277,8 +284,15 @@ static void aco_share_stack_init_from_thread(aco_share_stack_t *p) {
     p->sz = stack_size - reserved_sz;
     
     // Calculate aligned pointers based on coroutine stack top (not system stack top)
+#ifdef __WINDOWS
+    // A coroutine entry is reached by JMP with a synthetic return address.
+    // Leave the caller-owned 32-byte home area above it, entirely inside the
+    // stack reservation, and preserve the ABI's entry RSP % 16 == 8 rule.
+    uintptr_t u_p = (co_stack_top - 32) & ~(uintptr_t) 15;
+#else
     uintptr_t u_p = co_stack_top - (sizeof(void*) << 1);
     u_p = (u_p >> 4) << 4;  // 16-byte alignment
+#endif
     p->align_highptr = (void*)u_p;
 
 #if defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64))
@@ -289,8 +303,12 @@ static void aco_share_stack_init_from_thread(aco_share_stack_t *p) {
 #endif
 
     *((void**)(p->align_retptr)) = (void*)(aco_funcp_protector_asm);
-    
+
+#ifdef __WINDOWS
+    p->align_limit = u_p - ((uintptr_t) p->ptr + 16);
+#else
     p->align_limit = p->sz - 16 - (sizeof(void*) << 1);
+#endif
 #else
 #error "platform no support yet"
 #endif
@@ -311,10 +329,19 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
     pthread_mutex_init(&p->owner_lock, NULL);
 #endif
 
-    // When sz == 0, use system stack (thread's native stack)
+    // On Unix, sz == 0 keeps the historical behavior of borrowing the lower
+    // half of the thread's native stack. Windows thread stacks are only
+    // committed near the current RSP and grow through a guard page, so writing
+    // a synthetic coroutine frame into the middle of the reserved range would
+    // fault. Give Windows processors a separately reserved/committed shared
+    // stack instead.
     if (sz == 0) {
+#ifdef __WINDOWS
+        sz = 4U * 1024U * 1024U;
+#else
         aco_share_stack_init_from_thread(p);
         return NULL;
+#endif
     }
     if (sz < 4096) {
         sz = 4096;
@@ -325,7 +352,13 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
 
     // although gcc's Built-in Functions to Perform Arithmetic with
     // Overflow Checking is better, but it would require gcc >= 5.0
+#ifdef __WINDOWS
+    SYSTEM_INFO system_info;
+    GetSystemInfo(&system_info);
+    long pgsz = (long) system_info.dwPageSize;
+#else
     long pgsz = sysconf(_SC_PAGESIZE);
+#endif
     // pgsz must be > 0 && a power of two
     assert(pgsz > 0 && (((pgsz - 1) & pgsz) == 0));
     u_pgsz = (size_t) ((unsigned long) pgsz);
@@ -351,15 +384,35 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
     }
 
     pthread_mutex_lock(&share_stack_lock);
+#ifdef __WINDOWS
+    // Windows reserves and commits stack backing explicitly. The address hint
+    // is best-effort; unlike Unix mmap, VirtualAlloc returns NULL rather than
+    // silently choosing a different address when the requested range is busy.
+    p->real_ptr = sys_memory_reserve((void *) share_stack_base, sz);
+    if (p->real_ptr == NULL) {
+        p->real_ptr = sys_memory_reserve(NULL, sz);
+    }
+    assert(p->real_ptr != NULL);
+    sys_memory_map(p->real_ptr, sz);
+#else
     p->real_ptr = mmap((void *) share_stack_base, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+#endif
     DEBUGF("[aco_share_stack_init] share_stack real_ptr=%p", p->real_ptr);
     //    share_stack_base += (uint64_t) 64 * 1024 * 1024 * 1024;
     share_stack_base += sz;
     pthread_mutex_unlock(&share_stack_lock);
 
+#ifndef __WINDOWS
     assert(p->real_ptr != MAP_FAILED);
+#endif
     p->guard_page_enabled = 1;
+#ifdef __WINDOWS
+    ULONG old_protection = 0;
+    bool protected = VirtualProtect(p->real_ptr, u_pgsz, PAGE_READONLY, &old_protection) != 0;
+    assertf(protected, "VirtualProtect coroutine guard failed: %lu", (unsigned long) GetLastError());
+#else
     mprotect(p->real_ptr, u_pgsz, PROT_READ);
+#endif
     // assert(0 == mprotect(p->real_ptr, u_pgsz, PROT_READ));
 
     p->ptr = (void *) (((uintptr_t) p->real_ptr) + u_pgsz);
@@ -369,8 +422,13 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
 
     p->owner = NULL;
 #if defined(__x86_64__) || defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64))
+#ifdef __WINDOWS
+    uintptr_t stack_high = (uintptr_t) p->ptr + p->sz;
+    uintptr_t u_p = (stack_high - 32) & ~(uintptr_t) 15;
+#else
     uintptr_t u_p = (uintptr_t) (p->sz - (sizeof(void *) << 1) + (uintptr_t) p->ptr);
     u_p = (u_p >> 4) << 4;
+#endif
     p->align_highptr = (void *) u_p;
 
 #if defined(__aarch64__) || (defined(__riscv) && (__riscv_xlen == 64))
@@ -382,7 +440,11 @@ void *aco_share_stack_init(aco_share_stack_t *p, size_t sz) {
 
     *((void **) (p->align_retptr)) = (void *) (aco_funcp_protector_asm);
     assert(p->sz > (16 + (sizeof(void *) << 1) + sizeof(void *)));
+#ifdef __WINDOWS
+    p->align_limit = u_p - ((uintptr_t) p->ptr + 16);
+#else
     p->align_limit = p->sz - 16 - (sizeof(void *) << 1);
+#endif
 #else
 #error "platform no support yet"
 #endif
@@ -394,7 +456,11 @@ void aco_share_stack_destroy(aco_share_stack_t *sstk) {
     // Only call munmap if this is not a system stack
     // real_ptr == NULL indicates system stack
     if (sstk->real_ptr != NULL) {
+#ifdef __WINDOWS
+        sys_memory_unmap(sstk->real_ptr, sstk->real_sz);
+#else
         munmap(sstk->real_ptr, sstk->real_sz);
+#endif
         sstk->real_ptr = NULL;
     }
     sstk->ptr = NULL;
@@ -415,6 +481,11 @@ void aco_create_init(aco_t *aco, aco_t *main_co, aco_share_stack_t *share_stack,
         aco->reg[ACO_REG_IDX_RETADDR] = (void *) fp;
         aco->reg[ACO_REG_IDX_SP] = aco->share_stack->align_retptr;
         aco->reg[ACO_REG_IDX_FPU] = uv_key_get(&aco_gtls_fpucw_mxcsr);
+#ifdef __WINDOWS
+        aco->reg[ACO_REG_IDX_STACK_BASE] =
+                (void *) ((uintptr_t) aco->share_stack->real_ptr + aco->share_stack->real_sz);
+        aco->reg[ACO_REG_IDX_STACK_LIMIT] = aco->share_stack->ptr;
+#endif
 
 #elif defined(__aarch64__)
         aco->reg[ACO_REG_IDX_RETADDR] = (void *) fp;

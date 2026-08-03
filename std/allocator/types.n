@@ -1,4 +1,4 @@
 type allocatable = interface{
-    fx alloc(int size):anyptr
-    fx dealloc(anyptr p):void
+    fn alloc(int size):anyptr
+    fn dealloc(anyptr p):void
 }

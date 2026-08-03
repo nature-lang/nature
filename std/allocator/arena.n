@@ -19,12 +19,12 @@ type arena_t:allocatable = struct{
 }
 
 // align offset up to the nearest multiple of ALIGN
-fx align_up(int offset):int {
+fn align_up(int offset):int {
     return (offset + ALIGN - 1) & ~(ALIGN - 1)
 }
 
 // allocate a new block with the given capacity
-fx block_new(int capacity):ptr<block_t> {
+fn block_new(int capacity):ptr<block_t> {
     // allocate memory for block header + data area
     int total = @sizeof(block_t) + capacity
     ptr<block_t> b = libc.malloc(total as u64) as ptr<block_t>
@@ -39,13 +39,13 @@ fx block_new(int capacity):ptr<block_t> {
 }
 
 // get the data area start address of a block
-fx block_data(ptr<block_t> b):anyptr {
+fn block_data(ptr<block_t> b):anyptr {
     // data starts right after the block_t header
     return b as anyptr + @sizeof(block_t)
 }
 
 // try to allocate size bytes from a block with alignment, returns null on failure
-fx block_alloc(ptr<block_t> b, int size):anyptr {
+fn block_alloc(ptr<block_t> b, int size):anyptr {
     // align the current used offset
     int aligned_used = align_up(b.used)
 
@@ -58,7 +58,7 @@ fx block_alloc(ptr<block_t> b, int size):anyptr {
     return p
 }
 
-fx init(int capacity):ptr<arena_t> {
+fn init(int capacity):ptr<arena_t> {
     ptr<arena_t> a = libc.malloc(@sizeof(arena_t)) as ptr<arena_t>
     if a == null {
         panic('arena: init malloc failed')
@@ -80,7 +80,7 @@ fx init(int capacity):ptr<arena_t> {
     return a
 }
 
-fx arena_t.deinit(*self) {
+fn arena_t.deinit(*self) {
     // walk the linked list and free all blocks
     var b = self.head
     for b != null {
@@ -94,7 +94,7 @@ fx arena_t.deinit(*self) {
 }
 
 // allocatable interface impl: allocate `size` bytes from the arena
-fx arena_t.alloc(*self, int size):anyptr {
+fn arena_t.alloc(*self, int size):anyptr {
     if size <= 0 {
         panic('arena: alloc invalid size')
     }
@@ -128,7 +128,7 @@ fx arena_t.alloc(*self, int size):anyptr {
 
 // allocatable interface impl: deallocate memory at `p`
 // arena only supports tail-free optimization
-fx arena_t.dealloc(*self, anyptr p) {
+fn arena_t.dealloc(*self, anyptr p) {
     // tail-free optimization: if freeing the most recent allocation,
     // rewind the current block's used pointer
     if p == self.last_alloc {
@@ -140,7 +140,7 @@ fx arena_t.dealloc(*self, anyptr p) {
 }
 
 // convenience generic helper: allocate and initialize a value of type T
-fx arena_t.new<T>(*self, T value):ptr<T> {
+fn arena_t.new<T>(*self, T value):ptr<T> {
     int size = @sizeof(T)
     if size <= 0 {
         panic('arena: new invalid type size')
@@ -154,11 +154,11 @@ fx arena_t.new<T>(*self, T value):ptr<T> {
 }
 
 // convenience generic helper: free a typed pointer
-fx arena_t.free<T>(*self, ptr<T> p) {
+fn arena_t.free<T>(*self, ptr<T> p) {
     self.dealloc(p as anyptr)
 }
 
-fx arena_t.reset(*self) {
+fn arena_t.reset(*self) {
     // free all blocks except the first one to release excess memory
     var b = self.head.next
     for b != null {

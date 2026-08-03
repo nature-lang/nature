@@ -115,12 +115,12 @@ fn main() {
 
 === test_module_init
 --- main.n
-import syscall
+import libc
 
-var seed = syscall.SYS_GETPPID
+var seed = libc.SEEK_SET
 
 fn main():void! {
-    assert(seed == syscall.SYS_GETPPID)
+    assert(seed == libc.SEEK_SET)
     println(seed)
 }
 
@@ -395,6 +395,18 @@ fn main() {
 
 --- output.txt
 nature-test/main.n:2:39: fn with both named and unnamed formal parameters
+
+=== test_c_variadic_target[exclude_os=windows]
+--- main.n
+#linkid c_variadic
+fn c_variadic(i32 fixed, ...):i32
+
+fn main() {
+    c_variadic(1, 2)
+}
+
+--- output.txt
+nature-test/main.n:2:30: C variadic calls are currently supported only for windows_amd64
 
 === test_union_failed
 --- main.n

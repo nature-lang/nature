@@ -160,6 +160,24 @@ reg_t *zmm13;
 reg_t *zmm14;
 reg_t *zmm15;
 
+static void amd64_mark_gp_callee_saved(reg_t *canonical, reg_t *dword, reg_t *word, reg_t *byte) {
+    reg_t *aliases[] = {canonical, dword, word, byte};
+    for (int i = 0; i < 4; ++i) {
+        aliases[i]->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
+        // Alias registers are not inserted into alloc_regs, but post-allocation
+        // callee-save discovery needs the canonical allocation id for deduping.
+        aliases[i]->alloc_id = canonical->alloc_id;
+    }
+}
+
+static void amd64_mark_xmm_callee_saved(reg_t *canonical, reg_t *scalar32, reg_t *scalar64) {
+    reg_t *aliases[] = {canonical, scalar32, scalar64};
+    for (int i = 0; i < 3; ++i) {
+        aliases[i]->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
+        aliases[i]->alloc_id = canonical->alloc_id;
+    }
+}
+
 void amd64_reg_init() {
     rax = reg_new("rax", 0, LIR_FLAG_ALLOC_INT, QWORD, 1);
     rcx = reg_new("rcx", 1, LIR_FLAG_ALLOC_INT, QWORD, 2);
@@ -326,4 +344,32 @@ void amd64_reg_init() {
     zmm13 = reg_new("zmm13", 13, LIR_FLAG_ALLOC_FLOAT, ZWORD, 0);
     zmm14 = reg_new("zmm14", 14, LIR_FLAG_ALLOC_FLOAT, ZWORD, 0);
     zmm15 = reg_new("zmm15", 15, LIR_FLAG_ALLOC_FLOAT, ZWORD, 0);
+
+    // The allocator works with canonical QWORD/OWORD registers but replaces
+    // operands with width-specific aliases.  Propagate the canonical id and
+    // nonvolatile flag so the prologue generator can still discover a used
+    // nonvolatile register after replacement.
+    amd64_mark_gp_callee_saved(r12, r12d, r12w, r12b);
+    amd64_mark_gp_callee_saved(r13, r13d, r13w, r13b);
+    amd64_mark_gp_callee_saved(r14, r14d, r14w, r14b);
+    amd64_mark_gp_callee_saved(r15, r15d, r15w, r15b);
+
+    if (BUILD_OS == OS_WINDOWS) {
+        // Microsoft x64 additionally makes RSI/RDI and XMM6-XMM15
+        // nonvolatile. XMM15 and RBX are compiler scratch registers rather
+        // than allocatable registers; the Windows frame emitter preserves
+        // them conservatively whenever it builds a frame.
+        amd64_mark_gp_callee_saved(rsi, esi, si, sil);
+        amd64_mark_gp_callee_saved(rdi, edi, di, dil);
+
+        amd64_mark_xmm_callee_saved(xmm6, xmm6s32, xmm6s64);
+        amd64_mark_xmm_callee_saved(xmm7, xmm7s32, xmm7s64);
+        amd64_mark_xmm_callee_saved(xmm8, xmm8s32, xmm8s64);
+        amd64_mark_xmm_callee_saved(xmm9, xmm9s32, xmm9s64);
+        amd64_mark_xmm_callee_saved(xmm10, xmm10s32, xmm10s64);
+        amd64_mark_xmm_callee_saved(xmm11, xmm11s32, xmm11s64);
+        amd64_mark_xmm_callee_saved(xmm12, xmm12s32, xmm12s64);
+        amd64_mark_xmm_callee_saved(xmm13, xmm13s32, xmm13s64);
+        amd64_mark_xmm_callee_saved(xmm14, xmm14s32, xmm14s64);
+    }
 }

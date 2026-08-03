@@ -448,6 +448,25 @@ amd64_opcode_inst_t movaps_xmm1_xmm2_f32 = {"mov", "movaps", 0, {0x0F, 0x28}, {O
 amd64_opcode_inst_t movaps_xmm2_xmm1 = {"mov", "movaps", 0, {0x0F, 0x29}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG}}};
 amd64_opcode_inst_t movaps_xmm2_xmm1_f32 = {"mov", "movaps", 0, {0x0F, 0x29}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM2S32, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_XMM1S32, ENCODING_TYPE_MODRM_REG}}};
 
+// Win64 unwind preservation needs full-width XMM6-XMM15 loads and stores.
+// Keep these under a distinct mnemonic so scalar mov selection is unchanged.
+static amd64_opcode_inst_t movxmm128_load = {
+        "movxmm128",
+        "movups",
+        0,
+        {0x0F, 0x10},
+        {OPCODE_EXT_SLASHR},
+        {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG},
+         {OPERAND_TYPE_M, ENCODING_TYPE_MODRM_RM}}};
+static amd64_opcode_inst_t movxmm128_store = {
+        "movxmm128",
+        "movups",
+        0,
+        {0x0F, 0x11},
+        {OPCODE_EXT_SLASHR},
+        {{OPERAND_TYPE_M, ENCODING_TYPE_MODRM_RM},
+         {OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG}}};
+
 amd64_opcode_inst_t movsd_xmm1_xmm2 = {"mov", "movsd", 0xF2, {0x0F, 0x10}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_RM}}};
 amd64_opcode_inst_t movsd_xmm1_m64 = {"mov", "movsd", 0xF2, {0x0F, 0x10}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1S64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_M64, ENCODING_TYPE_MODRM_RM}}};
 amd64_opcode_inst_t movsd_xmm1m64_xmm2 = {"mov", "movsd", 0x0F2, {0x0F, 0x11}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_XMM1M64, ENCODING_TYPE_MODRM_RM}, {OPERAND_TYPE_XMM2S64, ENCODING_TYPE_MODRM_REG}}};
@@ -493,8 +512,14 @@ amd64_opcode_inst_t movzx_r32_rm16 = {"movzx", "movzx", 0, {0x0F, 0xB7}, {OPCODE
 
 amd64_opcode_inst_t movzx_r64_rm16 = {"movzx", "movzx", 0, {0x0F, 0xB7}, {OPCODE_EXT_REX_W, OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM16, ENCODING_TYPE_MODRM_RM}}};
 
-// mov rm -> reg
-amd64_opcode_inst_t movzx_r64_rm32 = {"movzx", "mov", 0, {0x63}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
+/*
+ * x86-64 has no MOVZX r64, r/m32 encoding.  A 32-bit MOV clears the upper
+ * half of its destination register, so encode this pseudo operation as
+ * MOV r32, r/m32 (8B /r) while keeping the logical destination operand at
+ * 64 bits for the following instruction.  Opcode 63 is MOVSXD and would
+ * preserve the source's signed interpretation instead of zero-extending it.
+ */
+amd64_opcode_inst_t movzx_r64_rm32 = {"movzx", "mov", 0, {0x8B}, {OPCODE_EXT_SLASHR}, {{OPERAND_TYPE_R64, ENCODING_TYPE_MODRM_REG}, {OPERAND_TYPE_RM32, ENCODING_TYPE_MODRM_RM}}};
 
 
 // opcode end ------------------------------------------------------------------------------------------------------
@@ -815,6 +840,8 @@ void amd64_opcode_init() {
     opcode_tree_build(&movaps_xmm1_xmm2_f32);
     opcode_tree_build(&movaps_xmm2_xmm1);
     opcode_tree_build(&movaps_xmm2_xmm1_f32);
+    opcode_tree_build(&movxmm128_load);
+    opcode_tree_build(&movxmm128_store);
 
     opcode_tree_build(&movsd_xmm1_m64); // 内存到 xmm
     opcode_tree_build(&movsd_xmm1_xmm2); // 内存到 xmm

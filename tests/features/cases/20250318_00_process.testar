@@ -2,9 +2,16 @@
 --- main.n
 import process
 import io
+import os
 
 fn main():void! {
-    var cmd = process.command('echo', ['hello world'])
+    var args = os.args()
+    if args.len() > 1 && args[1] == 'child' {
+        println('hello world')
+        return
+    }
+
+    var cmd = process.command(args[0], ['child'])
     var p = cmd.spawn()
     p.wait()
     println('process exited')
@@ -18,9 +25,16 @@ process exited
 --- main.n
 import process
 import io
+import os
 
 fn main():void! {
-    var state = process.run('echo', ['hello world'])
+    var args = os.args()
+    if args.len() > 1 && args[1] == 'child' {
+        println('hello world')
+        return
+    }
+
+    var state = process.run(args[0], ['child'])
     println('process exited', state.exit_code, state.term_sig, state.stdout, state.stderr)
 }
 
@@ -59,9 +73,17 @@ read 2:  worldThis is an arbitrary text written to the buffer true 0 0
 --- main.n
 import io
 import process
+import os
+import co
 
 fn main():void! {
-    var state = process.run('sleep', ['3'])
+    var args = os.args()
+    if args.len() > 1 && args[1] == 'child' {
+        co.sleep(100)
+        return
+    }
+
+    var state = process.run(args[0], ['child'])
     println('process exited', state.exit_code, state.term_sig, state.stdout, state.stderr)
 }
 --- output.txt

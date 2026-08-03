@@ -1,6 +1,6 @@
-=== test_fx_basic
+=== test_basic
 --- main.n
-fx main() {
+fn main() {
     var sum = 1 + 1
     println(sum)
     assert(sum == 2)
@@ -8,7 +8,7 @@ fx main() {
 
 === test_const_string
 --- main.n
-fx main() {
+fn main() {
     var str = 'hello world'
     println(str)
 }
@@ -25,7 +25,7 @@ type foo_t = struct{
     float c
 }
 
-fx main() {
+fn main() {
     ptr<foo_t> f = ac.new(foo_t{a: 'hello', c: 1.1})
     println(f.a, f.c)
 
@@ -49,7 +49,7 @@ type foo_t = struct{
     float c // 8
 }
 
-fx main() {
+fn main() {
     var ar = arena.init(4096)
     println(ar.current.used)
 
@@ -78,7 +78,7 @@ type foo_t = struct{
     float c
 }
 
-fx main() {
+fn main() {
     var ar = arena.init(4096)
     defer ar.deinit()
 

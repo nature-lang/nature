@@ -3,7 +3,7 @@
 
 #include "fixalloc.h"
 #include "utils/mutex.h"
-#include <uv.h>
+#include "runtime/uv_compat.h"
 
 #define RT_LINKED_FOR(_list) for (rt_linked_node_t *_node = _list.front; _node != _list.rear; _node = _node->succ)
 #define RT_LINKED_VALUE() (_node->value)

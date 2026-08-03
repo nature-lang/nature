@@ -1,4 +1,4 @@
-# import [io](https://github.com/nature-lang/nature/tree/master/std/io/main.n)
+# import [io](https://github.com/nature-lang/nature/tree/master/std/io/io.n)
 
 Input/output interfaces and buffer implementation for reading and writing data.
 

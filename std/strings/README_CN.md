@@ -1,4 +1,4 @@
-# import [strings](https://github.com/nature-lang/nature/blob/master/std/strings/main.n)
+# import [strings](https://github.com/nature-lang/nature/blob/master/std/strings/strings.n)
 
 字符串操作工具库，提供常用的字符串处理功能
 

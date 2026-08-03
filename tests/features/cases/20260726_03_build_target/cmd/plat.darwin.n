@@ -1,0 +1,5 @@
+mod cmd
+
+fn plat():string {
+    return 'variant'
+}

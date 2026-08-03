@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "src/error.h"
+#include "src/module_index.h"
 #include "utils/helper.h"
 
 static void analyzer_var_decl(module_t *m, ast_var_decl_t *var_decl, bool redeclare_check);
@@ -99,6 +100,36 @@ static void analyzer_body(module_t *m, slice_t *body) {
 }
 
 /**
+ * Join ast_package[1..] into a module path, the root module yields ""
+ */
+static char *analyzer_import_module_path(slice_t *ast_package) {
+    char *result = "";
+    for (int i = 1; i < ast_package->count; ++i) {
+        if (strlen(result) == 0) {
+            result = ast_package->take[i];
+        } else {
+            result = str_connect_by(result, ast_package->take[i], ".");
+        }
+    }
+    return result;
+}
+
+static char *analyzer_import_key(ast_import_t *import) {
+    return import->module_key ? import->module_key : import->module_ident;
+}
+
+/**
+ * Bind an import to the ModuleUnit looked up from the module index
+ */
+static void analyzer_import_bind_unit(module_t *m, ast_import_t *import, module_unit_t *unit) {
+    import->module_unit = unit;
+    import->module_ident = unit->module_ident;
+    import->module_key = unit->module_key;
+    import->full_path = unit->sources->take[0];
+    import->module_type = MODULE_TYPE_COMMON;
+}
+
+/**
  * 目前必须以 .n 结尾
  * @param importer_dir
  * @param import
@@ -134,14 +165,34 @@ void analyzer_import(module_t *m, ast_import_t *import) {
 
         import->package_conf = m->package_conf;
         import->package_dir = m->package_dir;
-        import->module_ident = module_unique_ident(import);
         import->module_type = MODULE_TYPE_COMMON;
+
+        // single-file builds without a package.toml keep resolving by path
+        if (!m->package_conf) {
+            import->module_ident = module_unique_ident(import);
+            import->module_key = import->module_ident;
+            return;
+        }
+
+        // a quoted import may only point at a standalone file of the current package that has no mod declaration
+        package_unit_t *pu = package_unit_load(m->package_dir, m->package_conf);
+        module_unit_t *unit = package_unit_find_source(pu, import->full_path);
+        ANALYZER_ASSERTF(unit, "cannot import '%s': not found in package '%s'", import->file, pu->package_name);
+
+        ANALYZER_ASSERTF(!unit->is_dir_module,
+                         "cannot import '%s': it is part of module %s, use 'import %s'",
+                         import->file, unit->module_ident, unit->module_ident);
+
+        ANALYZER_ASSERTF(!str_equal(unit->module_key, m->ident),
+                         "cannot import '%s': module %s cannot import itself", import->file,
+                         m->display_ident ? m->display_ident : m->ident);
+
+        analyzer_import_bind_unit(m, import, unit);
         return;
     }
 
     ANALYZER_ASSERTF(import->ast_package->count > 0, "import exception");
     char *package = import->ast_package->take[0];
-    char *module = import->ast_package->take[import->ast_package->count - 1];
 
     // - import module
     if (!m->package_conf && is_std_package(package)) {
@@ -164,19 +215,40 @@ void analyzer_import(module_t *m, ast_import_t *import) {
         }
     }
 
-    // import foo.bar => foo is package.name, so import workdir/bar.n
-    import->full_path = package_import_fullpath(import->package_conf, import->package_dir, import->ast_package);
-    ANALYZER_ASSERTF(file_exists(import->full_path), "cannot import package '%s': not found",
-                     ast_import_package_tostr(import->ast_package));
-    ANALYZER_ASSERTF(ends_with(import->full_path, ".n"), "import file suffix must .n");
+    // imports resolve purely by logical module name
+    // note that a dependencies key is only a local alias, package identity always comes from package.toml.name
+    package_unit_t *pu = package_unit_load(import->package_dir, import->package_conf);
+
+    char *module_path = analyzer_import_module_path(import->ast_package);
+    module_unit_t *unit = package_unit_find_module(pu, module_path);
+
+    if (!unit) {
+        char *full_ident = module_ident_join(pu->package_name, module_path);
+
+        // when it points at a source part, offer an actionable suggestion
+        char *last_dot = strrchr(module_path, '.');
+        char *parent = last_dot ? str_replace(strdup(module_path), last_dot, "") : "";
+        char *last_segment = last_dot ? last_dot + 1 : module_path;
+
+        module_unit_t *parent_unit = package_unit_find_module(pu, parent);
+        if (parent_unit && parent_unit->is_dir_module &&
+            module_unit_has_source_named(parent_unit, last_segment)) {
+            ANALYZER_ASSERTF(false, "'%s' is not a module, it is part of %s, use 'import %s'", full_ident,
+                             parent_unit->module_ident, parent_unit->module_ident);
+        }
+
+        ANALYZER_ASSERTF(false, "cannot import '%s': module not found", full_ident);
+    }
+
+    // a source part cannot import the module it belongs to
+    ANALYZER_ASSERTF(!str_equal(unit->module_key, m->ident), "module %s cannot import itself",
+                     m->display_ident ? m->display_ident : m->ident);
 
     if (!import->as || strlen(import->as) == 0) {
         import->as = import->ast_package->take[import->ast_package->count - 1];
     }
 
-    import->module_type = MODULE_TYPE_COMMON;
-    // package 模式下的 ident 应该基于 package module?
-    import->module_ident = module_unique_ident(import);
+    analyzer_import_bind_unit(m, import, unit);
 }
 
 static type_t analyzer_type_fn(ast_fndef_t *fndef) {
@@ -189,6 +261,7 @@ static type_t analyzer_type_fn(ast_fndef_t *fndef) {
         ct_list_push(f->param_types, &var->type);
     }
     f->is_rest = fndef->rest_param;
+    f->is_c_variadic = fndef->c_variadic;
     f->is_errable = fndef->is_errable;
     f->is_fx = fndef->is_fx;
     type_t result = type_new(TYPE_FN, f);
@@ -233,7 +306,7 @@ static char *analyzer_resolve_typedef(module_t *m, analyzer_fndef_t *current, st
             ast_import_t *import = m->imports->take[i];
 
             if (str_equal(import->as, "*")) {
-                char *temp = ident_with_prefix(import->module_ident, ident);
+                char *temp = ident_with_prefix(analyzer_import_key(import), ident);
                 if (symbol_table_get(temp)) {
                     return temp;
                 }
@@ -299,7 +372,7 @@ static void analyzer_type(module_t *m, type_t *t) {
             ast_import_t *import = table_get(m->import_table, t->import_as);
             ANALYZER_ASSERTF(import, "module '%s' not found", t->import_as);
 
-            char *unique_ident = ident_with_prefix(import->module_ident, t->ident);
+            char *unique_ident = ident_with_prefix(analyzer_import_key(import), t->ident);
 
             // 更新 ident 指向
             t->ident = unique_ident;
@@ -1441,7 +1514,7 @@ static bool analyzer_as_star_or_builtin_ident(module_t *m, ast_ident *ident) {
         ast_import_t *import = m->imports->take[i];
 
         if (str_equal(import->as, "*")) {
-            char *temp = ident_with_prefix(import->module_ident, ident->literal);
+            char *temp = ident_with_prefix(analyzer_import_key(import), ident->literal);
             if (symbol_table_get(temp)) {
                 ident->literal = temp;
                 return true;
@@ -1558,7 +1631,7 @@ static void rewrite_select_expr(module_t *m, ast_expr_t *expr) {
         if (import) {
             // 这里直接将 module.select 改成了全局唯一名称，彻底消灭了select ！
             // (不需要检测 import package 是否存在，这在 linker 中会做的)
-            char *unique_ident = ident_with_prefix(import->module_ident, select->key);
+            char *unique_ident = ident_with_prefix(analyzer_import_key(import), select->key);
 
             // 检测 import ident 是否存在
             if (!symbol_table_get(unique_ident)) {
@@ -2260,13 +2333,13 @@ static void analyzer_stmt(module_t *m, ast_stmt_t *stmt) {
 /**
  * 模块中的函数都是全局函数，将会在全局函数维度支持泛型函数与函数重载，由于在 analyzer 阶段还在收集所有的符号
  * 所以无法确定全局的 unique ident，因此将会用一个链表结构，将所有的在当前作用域下的同名的函数都 append 进去
+ *
+ * Handles the top-level declarations of a single source part only, fndef bodies are deferred
+ * until every part's declarations have been collected
  * @param m
  * @param stmt_list
  */
-static void analyzer_module(module_t *m, slice_t *stmt_list) {
-    slice_t *fn_list = slice_new();
-    slice_t *typedef_list = slice_new();
-
+static void analyzer_module_decls(module_t *m, slice_t *stmt_list, slice_t *fn_list, slice_t *typedef_list) {
     // 跳过 import 语句开始计算, 不直接使用 analyzer stmt, 因为 module 中不需要这么多表达式
     for (int i = 0; i < stmt_list->count; ++i) {
         ast_stmt_t *stmt = stmt_list->take[i];
@@ -2395,10 +2468,13 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
 
         ANALYZER_ASSERTF(false, "non-declaration statement outside fn body")
     }
+}
 
-    m->ast_typedefs = typedef_list;
-
-    // 全局符号收集完成后，开始对 fndef body 进行符号定位与改写
+/**
+ * 全局符号收集完成后，开始对 fndef body 进行符号定位与改写
+ * A body is analyzed with the import scope of the file declaring it
+ */
+static void analyzer_module_bodies(module_t *m, slice_t *fn_list) {
     for (int i = 0; i < fn_list->count; ++i) {
         ast_fndef_t *fndef = fn_list->take[i];
 
@@ -2409,18 +2485,36 @@ static void analyzer_module(module_t *m, slice_t *stmt_list) {
     }
 }
 
+/**
+ * main is looked up in the target module only, a same-named main in a dependency is not an entry candidate
+ * Several valid mains after aggregation must also be an error
+ */
 static void analyzer_main(module_t *m) {
     ast_fndef_t *main_fn = NULL;
-    // must have main fn
+
     SLICE_FOR(m->ast_fndefs) {
         ast_fndef_t *fn = SLICE_VALUE(m->ast_fndefs);
-        if (!fn->is_local && str_equal(fn->fn_name, FN_MAIN_NAME)) {
-            main_fn = fn;
-            break;
+        if (fn->is_local || !str_equal(fn->fn_name, FN_MAIN_NAME)) {
+            continue;
         }
+
+        // impl methods are not entry candidates
+        if (fn->impl_type.kind > 0) {
+            continue;
+        }
+
+        if (main_fn) {
+            m->current_line = fn->line;
+            m->current_column = fn->column;
+            ANALYZER_ASSERTF(false, "module %s declares multiple 'main' functions",
+                             m->display_ident ? m->display_ident : m->ident);
+        }
+
+        main_fn = fn;
     }
 
-    ANALYZER_ASSERTF(main_fn, "fn 'main' is undeclared in the main package");
+    ANALYZER_ASSERTF(main_fn, "fn 'main' is undeclared in module %s",
+                     m->display_ident ? m->display_ident : m->ident);
 
     // func main must have no arguments and no return values
     ANALYZER_ASSERTF(main_fn->params->length == 0,
@@ -2431,13 +2525,33 @@ static void analyzer_main(module_t *m) {
 
     // main fn add define errorable
     main_fn->is_errable = true;
+
+    // the entry symbol name is pinned by the runtime, decoupled from the module ident
+    main_fn->linkid = FN_MAIN_LINKID;
 }
 
-void analyzer(module_t *m, slice_t *stmt_list) {
+void analyzer(module_t *m) {
     m->current_line = 0;
     m->current_column = 0;
 
-    analyzer_module(m, stmt_list);
+    slice_t *typedef_list = slice_new();
+
+    // 1. collect every part's top-level declarations first, otherwise cross-file forward references
+    //    would depend on file enumeration order
+    for (int i = 0; i < m->sources->count; ++i) {
+        source_file_t *sf = m->sources->take[i];
+        module_set_current_source(m, sf);
+        analyzer_module_decls(m, sf->stmt_list, sf->fn_list, typedef_list);
+    }
+
+    m->ast_typedefs = typedef_list;
+
+    // 2. then analyze function bodies, each with its own file's import scope
+    for (int i = 0; i < m->sources->count; ++i) {
+        source_file_t *sf = m->sources->take[i];
+        module_set_current_source(m, sf);
+        analyzer_module_bodies(m, sf->fn_list);
+    }
 
     if (m->type == MODULE_TYPE_MAIN) {
         analyzer_main(m);

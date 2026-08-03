@@ -15,15 +15,18 @@
 #ifndef ACO_H
 #define ACO_H
 
-#include <include/uv.h>
+#include "runtime/uv_compat.h"
 #include <limits.h>
+#include <stddef.h>
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef __WINDOWS
 #include <sys/mman.h>
+#endif
 #include <time.h>
 #include <unistd.h>
 
@@ -40,6 +43,19 @@
 #define ACO_REG_IDX_SP 1
 #define ACO_REG_IDX_BP 2
 #define ACO_REG_IDX_FPU 6
+#elif defined(__x86_64__) && defined(__WINDOWS)
+// Microsoft x64 context layout. Indices are eight-byte slots; XMM6 starts at
+// slot 12 and XMM6-XMM15 consume two slots each through slot 31.
+#define ACO_REG_IDX_BP 1
+#define ACO_REG_IDX_RETADDR 8
+#define ACO_REG_IDX_SP 9
+#define ACO_REG_IDX_FPU 10
+#define ACO_REG_IDX_XMM6 12
+#define ACO_REG_IDX_GP_NONVOL_FIRST 0
+#define ACO_REG_IDX_GP_NONVOL_LAST 7
+#define ACO_REG_IDX_STACK_BASE 32
+#define ACO_REG_IDX_STACK_LIMIT 33
+#define ACO_AMD64_WINDOWS_REG_SLOTS 34
 #elif __x86_64__
 #define ACO_REG_IDX_RETADDR 4
 #define ACO_REG_IDX_SP 5
@@ -101,7 +117,11 @@ typedef void (*aco_cofuncp_t)(void);
 
 struct aco_s {
 #ifdef __AMD64
+#ifdef __WINDOWS
+    void *reg[ACO_AMD64_WINDOWS_REG_SLOTS];
+#else
     void *reg[9]; // amd64 使用
+#endif
 #elif defined(__ARM64)
     void *reg[16];
 #elif defined(__RISCV64)
@@ -123,6 +143,17 @@ struct aco_s {
 
     uint8_t default_save_stack[SAVE_STACK_DEFAULT_SIZE];
 };
+
+#if defined(__AMD64) && defined(__WINDOWS)
+_Static_assert(offsetof(aco_t, reg) + ACO_REG_IDX_RETADDR * sizeof(void *) == 0x40,
+               "Win64 aco return-address offset must match acosw.S");
+_Static_assert(offsetof(aco_t, reg) + ACO_REG_IDX_SP * sizeof(void *) == 0x48,
+               "Win64 aco stack-pointer offset must match acosw.S");
+_Static_assert(offsetof(aco_t, reg) + ACO_REG_IDX_STACK_BASE * sizeof(void *) == 0x100,
+               "Win64 aco StackBase offset must match acosw.S");
+_Static_assert(offsetof(aco_t, reg) + ACO_REG_IDX_STACK_LIMIT * sizeof(void *) == 0x108,
+               "Win64 aco StackLimit offset must match acosw.S");
+#endif
 
 #define aco_likely(x) (__builtin_expect(!!(x), 1))
 

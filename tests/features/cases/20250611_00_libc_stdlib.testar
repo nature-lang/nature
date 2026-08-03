@@ -296,7 +296,7 @@ hello world
 import libc
 
 fn main():void {
-    var result = libc.system('echo "Hello from system call"'.to_cstr())
+    var result = libc.system('echo Hello from system call'.to_cstr())
     println('system() exit code:', result)
 }
 

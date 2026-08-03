@@ -3,7 +3,7 @@ import os
 fn main() {
     var args = os.args()
 
-    for arg in args {
-        println(arg)
+    for int i = 1; i < args.len(); i += 1 {
+        println(args[i])
     }
 }

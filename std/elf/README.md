@@ -1,4 +1,4 @@
-# import [elf](https://github.com/nature-lang/nature/tree/master/std/elf/main.n)
+# import [elf](https://github.com/nature-lang/nature/tree/master/std/elf/elf.n)
 
 ELF (Executable and Linkable Format) file parsing library for reading binary file information.
 

@@ -15,7 +15,7 @@ fn vec<T>.new(T default_value, int len):vec<T> {
     }
 }
 
-fx vec<T>.alloc(allocatable a, T default_value, int len):vec<T> {
+fn vec<T>.alloc(allocatable a, T default_value, int len):vec<T> {
     if len < 0 {
         panic('len must be greater than 0')
     }
@@ -55,7 +55,7 @@ fn vec<T>.cap_of(int cap):vec<T> {
     }
 }
 
-fx vec<T>.grow(*self) {
+fn vec<T>.grow(*self) {
     ptr<vec_t> rv = self as anyptr as ptr<vec_t>
     assert(rv.allocator > 0)
 
@@ -75,7 +75,7 @@ fx vec<T>.grow(*self) {
     a.dealloc(old_data)
 }
 
-fx vec<T>.push(*self, T v) {
+fn vec<T>.push(*self, T v) {
     ptr<vec_t> rv = self as anyptr as ptr<vec_t>
     if rv.allocator == 0 {
         ptr<T> ref = &v
@@ -95,7 +95,7 @@ fx vec<T>.push(*self, T v) {
     libc.memmove(p, &v as anyptr, @sizeof(T))
 }
 
-fx vec<T>.deinit(*self) {
+fn vec<T>.deinit(*self) {
     ptr<vec_t> rv = self as anyptr as ptr<vec_t>
     if rv.allocator == 0 {
         return
@@ -126,12 +126,12 @@ fn vec<T>.concat(*self, vec<T> l2):vec<T> {
 #linkid rt_vec_copy
 fn vec<T>.copy(*self, vec<T> src):int
 
-fx vec<T>.len(*self):int {
+fn vec<T>.len(*self):int {
     var rv = self as anyptr as ptr<vec_t>
     return rv.length
 }
 
-fx vec<T>.cap(*self):int {
+fn vec<T>.cap(*self):int {
     var rv = self as anyptr as ptr<vec_t>
     return rv.capacity
 }

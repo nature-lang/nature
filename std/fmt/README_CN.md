@@ -1,4 +1,4 @@
-# import [fmt](https://github.com/nature-lang/nature/tree/master/std/fmt/main.n)
+# import [fmt](https://github.com/nature-lang/nature/tree/master/std/fmt/fmt.n)
 
 字符串格式化和解析库，用于格式化输入输出操作。
 

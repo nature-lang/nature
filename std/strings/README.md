@@ -1,4 +1,4 @@
-# import [strings](https://github.com/nature-lang/nature/blob/master/std/strings/main.n)
+# import [strings](https://github.com/nature-lang/nature/blob/master/std/strings/strings.n)
 
 String manipulation utilities for common string operations
 

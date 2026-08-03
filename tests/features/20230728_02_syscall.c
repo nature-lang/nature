@@ -6,12 +6,12 @@
 static void test_basic() {
     char *raw = exec_output();
 
-    char *str = "st.mode: 16877\n"
+    char *str = "mkdir directory: true\n"
                 "rename success\n"
-                "st2.mode: 16877\n"
-                "st2.mode: 16868\n"
+                "rename directory: true\n"
+                "chmod directory: true\n"
                 "rmdir success\n"
-                "stat err: No such file or directory\n"
+                "missing stat failed\n"
                 "getpid success\n"
                 "getppid success\n"
                 "getcwd success\n";

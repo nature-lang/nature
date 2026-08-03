@@ -4,6 +4,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -11,14 +12,21 @@
 #include "src/binary/arch/amd64.h"
 #include "src/binary/arch/arm64.h"
 #include "src/binary/arch/riscv64.h"
+#include "src/binary/coff/coff_amd64.h"
+#include "src/binary/coff/coff_writer.h"
 #include "src/binary/mach/mach.h"
+#include "src/build/archive.h"
 #include "src/build/test_runner.h"
+#include "src/build/windows_linker.h"
 #include "src/cfg.h"
 #include "src/debug/debug.h"
+#include "src/error.h"
+#include "src/ld/ld.h"
 #include "src/linear.h"
 #include "src/lower/amd64.h"
 #include "src/lower/arm64.h"
 #include "src/lower/riscv64.h"
+#include "src/module_index.h"
 #include "src/native/amd64.h"
 #include "src/native/arm64.h"
 #include "src/native/riscv64.h"
@@ -27,8 +35,8 @@
 #include "src/register/linearscan.h"
 #include "src/schedule.h"
 #include "src/semantic/analyzer.h"
-#include "src/semantic/global_eval.h"
 #include "src/semantic/generics.h"
+#include "src/semantic/global_eval.h"
 #include "src/semantic/interface.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
@@ -42,6 +50,15 @@
 // char*, 支持 .o 或者 .a 文件后缀
 static slice_t *linker_libs;
 static uint8_t build_main_is_fn = 1;
+
+static void ld_diagnostic(void *context, ld_diag_level_t level,
+                          const char *message);
+
+static int build_path_compare(const void *left, const void *right) {
+    const char *left_path = *(const char *const *) left;
+    const char *right_path = *(const char *const *) right;
+    return strcmp(left_path, right_path);
+}
 
 /**
  * base on ${NATURE_ROOT}/lib/${BUILD_OS}_${BUILD_ARCH} + file
@@ -57,7 +74,9 @@ static char *lib_file_path(char *file) {
 }
 
 static char *custom_link_object_path() {
-    char *output = path_join(TEMP_DIR, "custom_links.n.o");
+    char *output = path_join(
+            TEMP_DIR,
+            BUILD_OS == OS_WINDOWS ? "custom_links.n.obj" : "custom_links.n.o");
     return output;
 }
 
@@ -273,6 +292,191 @@ static void mach_custom_links() {
     log_debug(" --> assembler: %s\n", custom_link_object_path());
 }
 
+static void coff_require(coff_object_t *object,
+                         coff_writer_status_t status,
+                         const char *operation) {
+    assertf(status == COFF_WRITER_OK,
+            "COFF metadata %s failed: %s (%s)", operation,
+            coff_writer_status_string(status),
+            object && coff_object_last_error(object)
+                    ? coff_object_last_error(object)
+                    : "no detail");
+}
+
+static coff_section_t *coff_metadata_section(coff_object_t *object,
+                                             const char *name,
+                                             bool read_only) {
+    coff_section_t *section = NULL;
+    uint32_t characteristics =
+            LD_COFF_SCN_CNT_INITIALIZED_DATA | LD_COFF_SCN_MEM_READ;
+    if (!read_only) characteristics |= LD_COFF_SCN_MEM_WRITE;
+    coff_require(object,
+                 coff_object_add_section(object, name, characteristics, 8U,
+                                         &section),
+                 name);
+    return section;
+}
+
+static uint32_t coff_put_metadata(coff_object_t *object,
+                                  coff_section_t *section,
+                                  const char *name, const void *data,
+                                  uint64_t size) {
+    assertf(size <= UINT32_MAX,
+            "COFF metadata symbol '%s' exceeds 4 GiB", name);
+    /* Keep a resolvable section contribution even when the logical table is
+       empty.  Its separately emitted count remains zero, so the byte is never
+       observed by the runtime. */
+    uint8_t empty = 0U;
+    size_t stored_size = size != 0U ? (size_t) size : 1U;
+    uint32_t offset = 0U;
+    coff_require(object,
+                 coff_section_append(section, size != 0U ? data : &empty,
+                                     stored_size, 8U, &offset),
+                 name);
+    coff_require(object,
+                 coff_object_define_symbol(
+                         object, name, section, offset, 0U,
+                         LD_COFF_STORAGE_CLASS_EXTERNAL, NULL),
+                 name);
+    return offset;
+}
+
+static void coff_add_addr64_relocation(coff_object_t *object,
+                                       coff_section_t *section,
+                                       uint32_t offset,
+                                       const char *target,
+                                       uint16_t target_type) {
+    uint32_t symbol_index = 0U;
+    coff_require(object,
+                 coff_object_get_or_add_symbol_reference(
+                         object, target, true, target_type, &symbol_index),
+                 target);
+    coff_require(object,
+                 coff_section_add_relocation_with_addend(
+                         section, offset, symbol_index,
+                         LD_COFF_REL_AMD64_ADDR64, 0),
+                 target);
+}
+
+static void coff_relocate_fndefs(coff_object_t *object,
+                                 coff_section_t *section,
+                                 uint32_t section_offset) {
+    uint64_t index = 0U;
+    SLICE_FOR(symbol_fn_list) {
+        symbol_t *symbol = SLICE_VALUE(symbol_fn_list);
+        ast_fndef_t *fn = symbol->ast_value;
+        closure_t *closure = fn->closure;
+        if (!closure || closure->text_count == 0U) continue;
+        uint64_t relocation = (uint64_t) section_offset +
+                              index * sizeof(fndef_t) +
+                              offsetof(fndef_t, base);
+        assertf(relocation <= UINT32_MAX,
+                "COFF fndef relocation offset overflows");
+        coff_add_addr64_relocation(object, section, (uint32_t) relocation,
+                                   closure->linkident,
+                                   COFF_SYMBOL_TYPE_FUNCTION);
+        index++;
+    }
+    assertf(index == ct_fndef_count,
+            "COFF fndef relocation count mismatch: %lu != %lu", index,
+            ct_fndef_count);
+}
+
+static void coff_relocate_symdefs(coff_object_t *object,
+                                  coff_section_t *section,
+                                  uint32_t section_offset) {
+    uint64_t index = 0U;
+    SLICE_FOR(symbol_var_list) {
+        symbol_t *symbol = SLICE_VALUE(symbol_var_list);
+        if (symbol->is_local) continue;
+        ast_var_decl_t *var_decl = symbol->ast_value;
+        uint64_t relocation = (uint64_t) section_offset +
+                              index * sizeof(symdef_t) +
+                              offsetof(symdef_t, base);
+        assertf(relocation <= UINT32_MAX,
+                "COFF symdef relocation offset overflows");
+        coff_add_addr64_relocation(object, section, (uint32_t) relocation,
+                                   var_decl->ident, 0U);
+        index++;
+    }
+    assertf(index == ct_symdef_count,
+            "COFF symdef relocation count mismatch: %lu != %lu", index,
+            ct_symdef_count);
+}
+
+static void coff_custom_links() {
+    assertf(BUILD_OS == OS_WINDOWS && BUILD_ARCH == ARCH_AMD64,
+            "COFF metadata is only available for windows_amd64");
+    coff_object_t *object = coff_object_create_amd64("custom_links.n");
+    assertf(object, "cannot create Windows COFF metadata object");
+
+    /* `$` suffixes preserve the Nature table grouping/order while allowing
+       the PE writer to merge the contributions into ordinary .data/.rdata. */
+    coff_section_t *rtype =
+            coff_metadata_section(object, ".data$rtype", false);
+    coff_section_t *caller =
+            coff_metadata_section(object, ".data$caller", false);
+    coff_section_t *fndef =
+            coff_metadata_section(object, ".data$fndef", false);
+    coff_section_t *symdef =
+            coff_metadata_section(object, ".data$symdef", false);
+    coff_section_t *ndata =
+            coff_metadata_section(object, ".data$ndata", false);
+    coff_section_t *nstrtable =
+            coff_metadata_section(object, ".rdata$nstrtable", true);
+    coff_section_t *globals = coff_object_data(object);
+    assertf(globals, "COFF metadata object has no .data section");
+
+    ct_rtype_data = rtypes_serialize();
+    coff_put_metadata(object, rtype, SYMBOL_RTYPE_DATA, ct_rtype_data,
+                      ct_rtype_size);
+    coff_put_metadata(object, globals, SYMBOL_RTYPE_COUNT, &ct_rtype_count,
+                      sizeof(ct_rtype_count));
+
+    ct_fndef_size = collect_fndef_list(object);
+    ct_fndef_data = fndefs_serialize();
+    uint32_t fndef_offset = coff_put_metadata(
+            object, fndef, SYMBOL_FNDEF_DATA, ct_fndef_data, ct_fndef_size);
+    coff_relocate_fndefs(object, fndef, fndef_offset);
+    coff_put_metadata(object, globals, SYMBOL_FNDEF_COUNT, &ct_fndef_count,
+                      sizeof(ct_fndef_count));
+
+    ct_caller_data = callers_serialize();
+    uint64_t caller_size =
+            (uint64_t) ct_caller_list->length * sizeof(caller_t);
+    coff_put_metadata(object, caller, SYMBOL_CALLER_DATA, ct_caller_data,
+                      caller_size);
+    uint64_t caller_count = (uint64_t) ct_caller_list->length;
+    coff_put_metadata(object, globals, SYMBOL_CALLER_COUNT, &caller_count,
+                      sizeof(caller_count));
+
+    ct_symdef_size = collect_symdef_list(object);
+    ct_symdef_data = symdefs_serialize();
+    uint32_t symdef_offset = coff_put_metadata(
+            object, symdef, SYMBOL_SYMDEF_DATA, ct_symdef_data,
+            ct_symdef_size);
+    coff_relocate_symdefs(object, symdef, symdef_offset);
+    coff_put_metadata(object, globals, SYMBOL_SYMDEF_COUNT, &ct_symdef_count,
+                      sizeof(ct_symdef_count));
+
+    coff_put_metadata(object, ndata, SYMBOL_DATA, ct_data, ct_data_len);
+    coff_put_metadata(object, nstrtable, SYMBOL_STRTABLE_DATA,
+                      ct_strtable_data, ct_strtable_len);
+
+    double f64_mask = -0.0;
+    float f32_mask = (float) -0.0;
+    coff_put_metadata(object, globals, F64_NEG_MASK_IDENT, &f64_mask,
+                      sizeof(f64_mask));
+    coff_put_metadata(object, globals, F32_NEG_MASK_IDENT, &f32_mask,
+                      sizeof(f32_mask));
+
+    coff_require(object,
+                 coff_object_write_file(object, custom_link_object_path()),
+                 "write custom_links.n.obj");
+    coff_object_destroy(object);
+    log_debug(" --> assembler: %s\n", custom_link_object_path());
+}
+
 static void assembler_custom_links() {
     if (BUILD_OS == OS_LINUX) {
         return elf_custom_links();
@@ -280,6 +484,10 @@ static void assembler_custom_links() {
 
     if (BUILD_OS == OS_DARWIN) {
         return mach_custom_links();
+    }
+
+    if (BUILD_OS == OS_WINDOWS) {
+        return coff_custom_links();
     }
 }
 
@@ -377,6 +585,25 @@ static void mach_assembler_module(module_t *m) {
     m->object_file = output;
 }
 
+static void coff_assembler_module_windows(module_t *m) {
+    assertf(BUILD_OS == OS_WINDOWS && BUILD_ARCH == ARCH_AMD64,
+            "COFF assembler is only available for windows_amd64");
+    char *object_file_name = analyzer_force_unique_ident(m);
+    str_replace_char(object_file_name, '/', '.');
+    char *object_with_suffix = str_connect(object_file_name, ".obj");
+    char *output = path_join(TEMP_DIR, object_with_suffix);
+    char error[1024] = {0};
+    coff_writer_status_t status =
+            coff_assembler_module(m, output, error, sizeof(error));
+    assertf(status == COFF_WRITER_OK,
+            "cannot assemble Windows COFF module '%s': %s (%s)",
+            m->source_path, coff_writer_status_string(status),
+            error[0] ? error : "no detail");
+    assertf(m->object_file && file_exists(m->object_file),
+            "Windows COFF assembler did not create '%s'", output);
+    log_debug(" --> assembler: %s\n", output);
+}
+
 static void assembler_module(module_t *m) {
     if (BUILD_OS == OS_LINUX) {
         return elf_assembler_module(m);
@@ -385,107 +612,220 @@ static void assembler_module(module_t *m) {
     if (BUILD_OS == OS_DARWIN) {
         return mach_assembler_module(m);
     }
+
+    if (BUILD_OS == OS_WINDOWS) {
+        return coff_assembler_module_windows(m);
+    }
+
+    assertf(false, "unsupported object format for target %s_%s",
+            os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
 }
 
 /**
  * modules modules
  * @param modules
  */
-static void linker_elf_exe(slice_t *modules) {
-    // 检测是否生成
-    int fd;
-    char *temp_output = path_join(TEMP_DIR, LINKER_OUTPUT);
-    elf_context_t *ctx = elf_context_new(temp_output, OUTPUT_EXE);
+static void ld_elf_exe(slice_t *modules, char *ldflags) {
+    ld_options_t options;
+    ld_options_init(&options);
+    options.os = LD_OS_LINUX;
+    options.output_path = BUILD_OUTPUT;
+    options.entry_symbol = "_start";
+    options.pie = false;
+    options.adhoc_codesign = false;
 
-    for (int i = 0; i < modules->count; ++i) {
-        module_t *m = modules->take[i];
-
-        log_debug("load module object file: %s, %s", m->rel_path, m->object_file);
-        fd = check_open(m->object_file, O_RDONLY | O_BINARY);
-        load_object_file(ctx, fd, 0); // 加载并解析目标文件
+    if (BUILD_ARCH == ARCH_ARM64) {
+        options.arch = LD_ARCH_ARM64;
+    } else if (BUILD_ARCH == ARCH_AMD64) {
+        options.arch = LD_ARCH_AMD64;
+    } else if (BUILD_ARCH == ARCH_RISCV64) {
+        options.arch = LD_ARCH_RISCV64;
+    } else {
+        assertf(false, "unsupported Linux ELF target architecture");
     }
 
-    // 将相关符号都加入来
-    slice_push(linker_libs, custom_link_object_path());
-    slice_push(linker_libs, lib_file_path(LIB_START_FILE));
-
-    // 固定使用 elf 格式的 libruntime.a 和 libuv.a, 只在 output 时才会转换成 macho 格式的文件
-    slice_push(linker_libs, lib_file_path(LIB_RUNTIME_FILE));
-    slice_push(linker_libs, lib_file_path(LIBUV_FILE));
-    slice_push(linker_libs, lib_file_path(LIBC_FILE));
-    slice_push(linker_libs, lib_file_path(LIBGCC_FILE));
-
-    for (int i = 0; i < linker_libs->count; ++i) {
+    assertf(ld_add_input(&options, lib_file_path(LIB_START_FILE)) == LD_OK,
+            "cannot add Linux ELF startup object");
+    for (int i = 0; i < modules->count; i++) {
+        module_t *module = modules->take[i];
+        assertf(ld_add_input(&options, module->object_file) == LD_OK,
+                "cannot add Linux ELF module object '%s'", module->object_file);
+    }
+    assertf(ld_add_input(&options, custom_link_object_path()) == LD_OK,
+            "cannot add Linux ELF metadata object");
+    for (int i = 0; i < linker_libs->count; i++) {
         char *path = linker_libs->take[i];
-        fd = check_open(path, O_RDONLY | O_BINARY);
-
-        if (ends_with(path, ".o")) {
-            load_object_file(ctx, fd, 0);
-            continue;
-        }
-
-        if (ends_with(path, ".a")) {
-            load_archive(ctx, fd);
-            continue;
-        }
-
-        assertf(false, "cannot linker file '%s'", path);
+        assertf(ld_add_input(&options, path) == LD_OK,
+                "cannot add Linux package link '%s'", path);
     }
+    assertf(ld_add_input(&options, lib_file_path(LIB_RUNTIME_FILE)) == LD_OK,
+            "cannot add Linux runtime archive");
+    assertf(ld_add_input(&options, lib_file_path(LIBUV_FILE)) == LD_OK,
+            "cannot add Linux libuv archive");
+    assertf(ld_add_input(&options, lib_file_path(LIBC_FILE)) == LD_OK,
+            "cannot add Linux libc archive");
+    assertf(ld_add_input(&options, lib_file_path(LIBGCC_FILE)) == LD_OK,
+            "cannot add Linux libgcc archive");
 
-    // - core
-    elf_exe_file_format(ctx);
+    char library_dir[PATH_MAX];
+    int library_dir_length = snprintf(
+            library_dir, sizeof(library_dir), "%s/lib/%s_%s", NATURE_ROOT,
+            os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
+    assertf(library_dir_length > 0 &&
+                    (size_t) library_dir_length < sizeof(library_dir),
+            "Nature library directory path is too long");
+    assertf(ld_add_library_path(&options, library_dir) == LD_OK,
+            "cannot add Nature Linux library search path");
 
-    // - core
-    elf_output(ctx);
-    if (!file_exists(temp_output)) {
-        assertf(false, "[linker] linker failed");
-    }
-
-    remove(BUILD_OUTPUT);
-    copy(BUILD_OUTPUT, temp_output, 0755);
-    log_debug("linker output--> %s\n", temp_output);
-    log_debug("build output--> %s\n", BUILD_OUTPUT);
+    int parse_result = ld_parse_flags(&options, ldflags ? ldflags : "");
+    assertf(parse_result == LD_OK,
+            "unsupported Linux linker flags (error %d)", parse_result);
+    int result = ld_link(&options);
+    assertf(result == LD_OK, "internal Linux ELF linker failed (error %d)",
+            result);
+    assertf(file_exists(BUILD_OUTPUT),
+            "internal Linux ELF linker did not create '%s'", BUILD_OUTPUT);
+    log_debug("internal ELF linker output --> %s", BUILD_OUTPUT);
+    ld_options_deinit(&options);
 }
 
-static int command_exists(const char *cmd) {
-    // 首先检查绝对路径
-    if (file_exists((char *) cmd)) {
-        return 1;
-    }
-
-    char *path = getenv("PATH");
-    if (path == NULL) {
-        return 0; // PATH 环境变量不存在
-    }
-
-    char *path_copy = strdup(path);
-    char *dir = strtok(path_copy, ":");
-    struct stat st;
-    int exists = 0;
-
-    while (dir != NULL) {
-        char full_path[8211];
-        snprintf(full_path, sizeof(full_path), "%s/%s", dir, cmd);
-
-        if (stat(full_path, &st) == 0) {
-            if (S_ISREG(st.st_mode) && (st.st_mode & S_IXUSR)) {
-                exists = 1;
-                break;
-            }
+static void ld_windows_add_sysroot_input(ld_options_t *options,
+                                         const char *file,
+                                         bool required) {
+    char *path = lib_file_path((char *) file);
+    if (!file_exists(path)) {
+        if (required) {
+            dump_global_errorf(
+                    BUILD_ENTRY, 1, 1,
+                    "windows_amd64 sysroot is incomplete: required file '%s' "
+                    "is missing (expected '%s')",
+                    file, path);
         }
+        return;
+    }
+    int result = ld_add_input(options, path);
+    if (result != LD_OK) {
+        dump_global_errorf(BUILD_ENTRY, 1, 1,
+                           "cannot add Windows sysroot input '%s' (error %d)",
+                           path, result);
+    }
+}
 
-        dir = strtok(NULL, ":");
+static void ld_windows_exe(slice_t *modules, char *ldflags) {
+    assertf(BUILD_OS == OS_WINDOWS && BUILD_ARCH == ARCH_AMD64,
+            "internal COFF linker only supports windows_amd64");
+
+    ld_options_t options;
+    ld_options_init(&options);
+    options.os = LD_OS_WINDOWS;
+    options.arch = LD_ARCH_AMD64;
+    options.output_path = BUILD_OUTPUT;
+    options.entry_symbol = "mainCRTStartup";
+    options.pie = true;
+    /* The COFF backend can retain DWARF from external objects, but Nature's
+       compiler does not emit it yet.  Ordinary release builds therefore do
+       not carry sysroot debug sections. */
+    options.debug_mode = LD_DEBUG_NONE;
+    options.diagnostic = ld_diagnostic;
+
+    char map_path[PATH_MAX];
+    size_t output_length = strlen(BUILD_OUTPUT);
+    if (output_length >= 4U &&
+        strcmp(BUILD_OUTPUT + output_length - 4U, ".exe") == 0) {
+        assertf(output_length - 4U + sizeof(".map") <= sizeof(map_path),
+                "Windows map path is too long");
+        memcpy(map_path, BUILD_OUTPUT, output_length - 4U);
+        memcpy(map_path + output_length - 4U, ".map", sizeof(".map"));
+    } else {
+        int map_length = snprintf(map_path, sizeof(map_path), "%s.map",
+                                  BUILD_OUTPUT);
+        assertf(map_length > 0 && (size_t) map_length < sizeof(map_path),
+                "Windows map path is too long");
+    }
+    options.map_path = map_path;
+
+    char library_dir[PATH_MAX];
+    int library_dir_length = snprintf(
+            library_dir, sizeof(library_dir), "%s/lib/windows_amd64",
+            NATURE_ROOT);
+    assertf(library_dir_length > 0 &&
+                    (size_t) library_dir_length < sizeof(library_dir),
+            "Nature windows_amd64 sysroot path is too long");
+    options.sysroot = library_dir;
+    int add_result = ld_add_library_path(&options, library_dir);
+    if (add_result != LD_OK) {
+        dump_global_errorf(
+                BUILD_ENTRY, 1, 1,
+                "cannot add Windows sysroot search path '%s' (error %d)",
+                library_dir, add_result);
     }
 
-    free(path_copy);
-    return exists;
+    /* The order is part of the controlled sysroot contract.  CRT startup is
+       direct, user objects precede runtime archives, and import libraries are
+       lazy providers at the end. */
+    ld_windows_add_sysroot_input(&options, "crt2.obj", true);
+    for (int i = 0; i < modules->count; i++) {
+        module_t *module = modules->take[i];
+        if (!module->object_file) continue;
+        add_result = ld_add_input(&options, module->object_file);
+        if (add_result != LD_OK) {
+            dump_global_errorf(
+                    BUILD_ENTRY, 1, 1,
+                    "cannot add Windows module object '%s' (error %d)",
+                    module->object_file, add_result);
+        }
+    }
+    add_result = ld_add_input(&options, custom_link_object_path());
+    if (add_result != LD_OK) {
+        dump_global_errorf(BUILD_ENTRY, 1, 1,
+                           "cannot add Windows Nature metadata object "
+                           "(error %d)",
+                           add_result);
+    }
+    for (int i = 0; i < linker_libs->count; i++) {
+        char *path = linker_libs->take[i];
+        add_result = ld_add_input(&options, path);
+        if (add_result != LD_OK) {
+            dump_global_errorf(
+                    BUILD_ENTRY, 1, 1,
+                    "cannot add Windows package link '%s' (error %d)", path,
+                    add_result);
+        }
+    }
+
+    size_t sysroot_library_count;
+    const windows_sysroot_library_t *sysroot_libraries =
+            windows_sysroot_libraries(&sysroot_library_count);
+    for (size_t i = 0; i < sysroot_library_count; i++)
+        ld_windows_add_sysroot_input(&options, sysroot_libraries[i].name,
+                                    sysroot_libraries[i].required);
+
+    int parse_result = ld_parse_flags(&options, ldflags ? ldflags : "");
+    if (parse_result != LD_OK) {
+        dump_global_errorf(BUILD_ENTRY, 1, 1,
+                           "unsupported Windows linker flags (error %d)",
+                           parse_result);
+    }
+    int result = ld_link(&options);
+    if (result != LD_OK) {
+        dump_global_errorf(BUILD_ENTRY, 1, 1,
+                           "internal Windows COFF linker failed (error %d)",
+                           result);
+    }
+    if (!file_exists(BUILD_OUTPUT)) {
+        dump_global_errorf(BUILD_ENTRY, 1, 1,
+                           "internal Windows COFF linker did not create '%s'",
+                           BUILD_OUTPUT);
+    }
+    log_debug("internal COFF linker output --> %s", BUILD_OUTPUT);
+    ld_options_deinit(&options);
 }
 
 static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
     assert(strlen(use_ld) > 0);
 
     // 检测当前设备是否安装了 ld 命令
-    if (!command_exists(use_ld)) {
+    if (!build_command_exists(use_ld)) {
         assertf(false, "'%s' command not found. Please ensure it is installed and in your PATH.", use_ld);
     }
 
@@ -493,7 +833,7 @@ static void custom_ld_elf_exe(slice_t *modules, char *use_ld, char *ldflags) {
     bool has_lc = strstr(ldflags, "-lc") != NULL;
 
     // 将 modules 中的 obj output_file 添加到文件 objects.txt 中, 用来作为 ld 的参数
-    const char *objects_file = path_join(TEMP_DIR, "objects.txt");
+    char *objects_file = path_join(TEMP_DIR, "objects.txt");
     FILE *obj_list = fopen(objects_file, "w");
     if (!obj_list) {
         assertf(false, "unable to create objects list file: %s", objects_file);
@@ -589,24 +929,29 @@ static char *find_syslibroot() {
         return NULL;
     }
 
+#ifndef __DARWIN
+    return NULL;
+#else
     // 尝试使用 xcrun 命令获取 SDK 路径
     FILE *fp = popen("xcrun --show-sdk-path 2>/dev/null", "r");
     if (fp) {
         char path[PATH_MAX] = {0};
+        char *result = NULL;
         if (fgets(path, PATH_MAX, fp) != NULL) {
             // 移除末尾的换行符
             size_t len = strlen(path);
             if (len > 0 && path[len - 1] == '\n') {
                 path[len - 1] = '\0';
             }
-            pclose(fp);
-
             // 检查路径是否存在
             if (strlen(path) > 0 && dir_exists(path)) {
-                return strdup(path);
+                result = strdup(path);
             }
         }
         pclose(fp);
+        if (result) {
+            return result;
+        }
     }
 
     // 尝试常见的默认位置
@@ -623,6 +968,7 @@ static char *find_syslibroot() {
 
     // 如果找不到，返回 NULL
     return NULL;
+#endif
 }
 
 // 新增函数：获取 macOS SDK 版本
@@ -631,6 +977,9 @@ static char *get_macos_sdk_version() {
         return NULL;
     }
 
+#ifndef __DARWIN
+    return NULL;
+#else
     // 尝试使用 xcrun 命令获取 SDK 版本
     FILE *fp = popen("xcrun --sdk macosx --show-sdk-version 2>/dev/null", "r");
     if (!fp) {
@@ -658,21 +1007,24 @@ static char *get_macos_sdk_version() {
     }
 
     if (!result_dup_str) {
-        log_warn("Warning: Could not determine a valid SDK version via xcrun. Raw output from xcrun: '%s'. Using default SDK version.");
+        log_warn("Warning: Could not determine a valid SDK version via xcrun. Raw output from xcrun: '%s'. Using default SDK version.",
+                 version_str);
     }
 
     return result_dup_str; // 可能返回 NULL
+#endif
 }
 
 /**
  * ld -w -arch arm64 -dynamic -platform_version macos 11.7.1 14.0 -e _runtime_main -o a.out ${ldflags} libruntime.a libuv.a libSystem.tbd  @objects.txt
  * ld -w -arch x86_64 -dynamic -platform_version macos 11.7.1 14.0 -e _runtime_main -o a.out libruntime.a libuv.a libSystem.tbd @objects.txt
  */
-static void custom_ld_mach_exe(slice_t *modules, char *use_ld, char *ldflags) {
+static void custom_ld_mach_exe(slice_t *modules, const char *use_ld,
+                               char *ldflags) {
     assert(strlen(use_ld) > 0);
 
     // 检测当前设备是否安装了 ld 命令
-    if (!command_exists(use_ld)) {
+    if (!build_command_exists(use_ld)) {
         assertf(false, "'%s' command not found. Please ensure it is installed and in your PATH.", use_ld);
     }
 
@@ -777,11 +1129,129 @@ static void custom_ld_mach_exe(slice_t *modules, char *use_ld, char *ldflags) {
     log_debug("build output --> %s", BUILD_OUTPUT);
 }
 
+static void custom_ld_windows_exe(slice_t *modules, const char *use_ld,
+                                  char *ldflags) {
+    assertf(BUILD_OS == OS_WINDOWS && BUILD_ARCH == ARCH_AMD64,
+            "external COFF fallback only supports windows_amd64");
+    assertf(use_ld && *use_ld, "Windows external linker is empty");
+    assertf(build_command_exists(use_ld),
+            "'%s' command not found. Please ensure it is installed and in "
+            "your PATH.",
+            use_ld);
+
+    char *response_path = path_join(TEMP_DIR, "windows-link.rsp");
+    FILE *response = fopen(response_path, "w");
+    assertf(response, "unable to create Windows linker response file: %s",
+            response_path);
+    fprintf(response,
+            "/nologo\n/subsystem:console\n/entry:mainCRTStartup\n"
+            "/out:\"%s\"\n/libpath:\"%s/lib/windows_amd64\"\n",
+            BUILD_OUTPUT, NATURE_ROOT);
+    if (ldflags && *ldflags) fprintf(response, "%s\n", ldflags);
+    fprintf(response, "\"%s\"\n", lib_file_path("crt2.obj"));
+    for (int i = 0; i < modules->count; i++) {
+        module_t *module = modules->take[i];
+        if (module->object_file)
+            fprintf(response, "\"%s\"\n", module->object_file);
+    }
+    fprintf(response, "\"%s\"\n", custom_link_object_path());
+    for (int i = 0; i < linker_libs->count; i++)
+        fprintf(response, "\"%s\"\n", (char *) linker_libs->take[i]);
+    char sysroot[PATH_MAX];
+    int sysroot_length = snprintf(sysroot, sizeof(sysroot),
+                                  "%s/lib/windows_amd64", NATURE_ROOT);
+    assertf(sysroot_length > 0 && (size_t) sysroot_length < sizeof(sysroot),
+            "Nature windows_amd64 sysroot path is too long");
+    assertf(windows_linker_write_default_libraries(response, sysroot),
+            "cannot write Windows linker response file '%s'", response_path);
+    assertf(fclose(response) == 0,
+            "cannot finish Windows linker response file '%s'",
+            response_path);
+
+    char command[PATH_MAX * 2U + 16U];
+    int length = snprintf(command, sizeof(command), "\"%s\" @\"%s\"",
+                          use_ld, response_path);
+    assertf(length > 0 && (size_t) length < sizeof(command),
+            "Windows external linker command is too long");
+    log_debug("%s", command);
+    int result = system(command);
+    assertf(result == 0, "Windows external linking failed: %d", result);
+    assertf(file_exists(BUILD_OUTPUT),
+            "Windows external linker did not create '%s'", BUILD_OUTPUT);
+}
+
+static void ld_diagnostic(void *context, ld_diag_level_t level, const char *message) {
+    (void) context;
+    if (level == LD_DIAG_ERROR) {
+        log_error("[ld] %s", message);
+    } else if (level == LD_DIAG_WARNING) {
+        log_warn("[ld] %s", message);
+    } else {
+        log_debug("[ld] %s", message);
+    }
+}
+
+static void ld_mach_exe(slice_t *modules, char *ldflags) {
+    assertf(BUILD_ARCH == ARCH_ARM64, "internal Darwin linker currently supports arm64 only");
+    ld_options_t options;
+    ld_options_init(&options);
+    options.output_path = BUILD_OUTPUT;
+    options.entry_symbol = LD_ENTRY;
+    options.diagnostic = ld_diagnostic;
+    options.min_os_version = ld_macos_version(11, 0, 0);
+
+    char *sysroot = find_syslibroot();
+    char *sdk_version = get_macos_sdk_version();
+    options.sysroot = sysroot;
+    char nature_library_path[PATH_MAX];
+    int nature_library_length = snprintf(nature_library_path, sizeof(nature_library_path), "%s/lib/%s_%s",
+                                         NATURE_ROOT, os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
+    assertf(nature_library_length >= 0 && (size_t) nature_library_length < sizeof(nature_library_path),
+            "Nature library search path is too long");
+    assertf(ld_add_library_path(&options, nature_library_path) == LD_OK,
+            "cannot add Nature library search path '%s'", nature_library_path);
+    if (sdk_version) {
+        unsigned major = 0, minor = 0, patch = 0;
+        sscanf(sdk_version, "%u.%u.%u", &major, &minor, &patch);
+        options.sdk_version = ld_macos_version(major, minor, patch);
+    }
+    for (int i = 0; i < modules->count; i++) {
+        module_t *module = modules->take[i];
+        if (module->object_file) {
+            assertf(ld_add_input(&options, module->object_file) == LD_OK,
+                    "cannot add object '%s' to internal Darwin linker", module->object_file);
+        }
+    }
+    assertf(ld_add_input(&options, custom_link_object_path()) == LD_OK,
+            "cannot add custom metadata object to internal Darwin linker");
+    for (int i = 0; i < linker_libs->count; i++) {
+        char *path = linker_libs->take[i];
+        assertf(ld_add_input(&options, path) == LD_OK,
+                "cannot add package link '%s' to internal Darwin linker", path);
+    }
+    assertf(ld_add_input(&options, lib_file_path(LIB_RUNTIME_FILE)) == LD_OK,
+            "cannot add Darwin runtime to internal linker");
+    assertf(ld_add_input(&options, lib_file_path(LIBUV_FILE)) == LD_OK,
+            "cannot add Darwin libuv to internal linker");
+    int parse_result = ld_parse_flags(&options, ldflags ? ldflags : "");
+    assertf(parse_result == LD_OK, "unsupported Darwin linker flags (error %d)", parse_result);
+    int result = ld_link(&options);
+    assertf(result == LD_OK, "internal Darwin linker failed (error %d)", result);
+    assertf(file_exists(BUILD_OUTPUT), "internal Darwin linker did not create '%s'", BUILD_OUTPUT);
+    log_debug("internal linker output --> %s", BUILD_OUTPUT);
+    log_debug("build output --> %s", BUILD_OUTPUT);
+    ld_options_deinit(&options);
+    free(sysroot);
+    free(sdk_version);
+}
+
 static void build_init(char *build_entry) {
     env_init();
     config_init();
     symbol_init();
     reg_init();
+    package_unit_reset();
+    global_var_unique_count = 0;
 
     if (BUILD_ARCH == ARCH_AMD64) {
         amd64_opcode_init();
@@ -793,11 +1263,6 @@ static void build_init(char *build_entry) {
     char temp_path[PATH_MAX] = "";
     if (realpath(build_entry, temp_path) == NULL) {
         assertf(false, "entry file='%s' not found", build_entry);
-    }
-
-    // darwin 默认使用 ld 链接
-    if (BUILD_OS == OS_DARWIN && strlen(USE_LD) == 0) {
-        strcpy(USE_LD, "ld");
     }
 
     // copy
@@ -864,7 +1329,10 @@ static void build_assembler(slice_t *modules) {
             // 基于 symbol_name 读取引用次数, 如果没有被引用过则不做编译
             symbol_t *s = symbol_table_get_noref(c->fndef->symbol_name);
             assert(s);
-            if (s->ref_count == 0 && !str_equal(c->fndef->symbol_name, FN_MAIN_LINKID)) {
+            // the program entry has no caller, its link symbol is pinned by linkid
+            bool is_entry = str_equal(c->fndef->symbol_name, FN_MAIN_LINKID) ||
+                            (c->fndef->linkid && str_equal(c->fndef->linkid, FN_MAIN_LINKID));
+            if (s->ref_count == 0 && !is_entry) {
                 continue;
             }
 
@@ -897,19 +1365,26 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     assertf(dir, "cannot found builtin dir %s", builtin_dir);
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        // 读取该目录下的所有文件(一级目录)
-        if (entry->d_type == DT_REG) {
-            char *filename = strdup(entry->d_name);
+        char *filename = strdup(entry->d_name);
+        if (!ends_with(filename, ".n")) {
+            free(filename);
+            continue;
+        }
 
-            // filename 必须以 .n 结尾
-            if (!ends_with(filename, ".n")) {
-                continue;
-            }
+        char *full_path = path_join(builtin_dir, filename);
+        free(filename);
 
-            char *full_path = path_join(builtin_dir, filename);
+        struct stat info;
+        if (stat(full_path, &info) == 0 && S_ISREG(info.st_mode)) {
             slice_push(builtin_modules, full_path);
+        } else {
+            free(full_path);
         }
     }
+    closedir(dir);
+
+    qsort(builtin_modules->take, (size_t) builtin_modules->count,
+          sizeof(builtin_modules->take[0]), build_path_compare);
 
     // builtin module build
     linked_t *work_list = linked_new();
@@ -926,7 +1401,46 @@ static slice_t *build_modules(toml_table_t *package_conf) {
             .package_dir = WORKDIR,
             .package_conf = package_conf,
             .module_ident = PACKAGE_MAIN_IDENT,
+            .module_key = PACKAGE_MAIN_IDENT,
     };
+
+    // the source path given on the command line is first mapped to a logical source slot, then to its owning module
+    slice_t *main_sources = slice_new();
+    if (package_conf) {
+        package_unit_t *pu = package_unit_load(WORKDIR, package_conf);
+
+        if (!package_unit_slot_exists(pu, SOURCE_PATH)) {
+            dump_global_errorf(BUILD_ENTRY, 1, 1, "build entry '%s' is not part of package '%s'", BUILD_ENTRY,
+                               pu->package_name);
+        }
+
+        char *active = package_unit_slot_active(pu, SOURCE_PATH);
+        if (!active) {
+            dump_global_errorf(BUILD_ENTRY, 1, 1, "build entry '%s' is not active for target %s_%s", BUILD_ENTRY,
+                               os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH));
+        }
+
+        // a plain path selects the active file by the normal target priority;
+        // an explicitly given target-suffixed file must be active for the current target
+        bool explicit_variant = !str_equal(SOURCE_PATH, module_source_slot_key(SOURCE_PATH));
+        if (explicit_variant && !str_equal(active, SOURCE_PATH)) {
+            dump_global_errorf(BUILD_ENTRY, 1, 1,
+                               "build entry '%s' is not active for target %s_%s, active source is '%s'",
+                               BUILD_ENTRY, os_to_string(BUILD_OS), arch_to_string(BUILD_ARCH),
+                               module_source_rel_path(pu->package_dir, active));
+        }
+
+        module_unit_t *unit = package_unit_find_source(pu, SOURCE_PATH);
+        assertf(unit, "build entry '%s' does not belong to any module", BUILD_ENTRY);
+
+        main_import.module_unit = unit;
+        main_import.module_ident = unit->module_ident;
+        main_import.module_key = unit->module_key;
+        slice_concat(main_sources, unit->sources);
+    } else {
+        // single-file builds without a package.toml stay supported
+        slice_push(main_sources, (void *) SOURCE_PATH);
+    }
 
     // main [links] 自动注册
     slice_t *links = package_links(main_import.package_dir, main_import.package_conf);
@@ -940,8 +1454,9 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     table_t *links_handled = table_new();
     table_set(links_handled, main_import.package_dir, (void *) 1);
 
-    module_t *main_package = module_build(&main_import, SOURCE_PATH, MODULE_TYPE_MAIN);
+    module_t *main_package = module_build_sources(&main_import, main_sources, MODULE_TYPE_MAIN);
     slice_push(modules, main_package);
+    table_set(module_table, main_package->ident, main_package);
 
     linked_push(work_list, main_package);
 
@@ -949,9 +1464,13 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         // module_build time has perfected import
         module_t *m = linked_pop(work_list);
 
-        for (int j = 0; j < m->imports->count; ++j) {
-            ast_import_t *import = m->imports->take[j];
-            if (table_exist(module_table, import->full_path)) {
+        // a module's dependencies are the union of all its parts' imports
+        for (int j = 0; j < m->module_imports->count; ++j) {
+            ast_import_t *import = m->module_imports->take[j];
+
+            // one ModuleId is built exactly once, no matter how many import paths reach it
+            char *module_key = import->module_key ? import->module_key : import->module_ident;
+            if (table_exist(module_table, module_key)) {
                 continue;
             }
 
@@ -968,10 +1487,17 @@ static slice_t *build_modules(toml_table_t *package_conf) {
             }
 
             // new module dep all imports handled
-            module_t *new_module = module_build(import, import->full_path, import->module_type);
+            slice_t *import_sources = slice_new();
+            if (import->module_unit) {
+                slice_concat(import_sources, import->module_unit->sources);
+            } else {
+                slice_push(import_sources, import->full_path);
+            }
+
+            module_t *new_module = module_build_sources(import, import_sources, import->module_type);
 
             linked_push(work_list, new_module);
-            table_set(module_table, import->full_path, new_module);
+            table_set(module_table, module_key, new_module);
 
             // 按照层级进入到 modules 中(广度优先)
             slice_push(modules, new_module);
@@ -988,7 +1514,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
 
         // analyzer => ast_fndefs(global)
         // analyzer 前需要将 global symbol 注册完成，否则在 pre_infer 时找不到相关的符号
-        analyzer(m, m->stmt_list);
+        analyzer(m);
     }
 
     // 查找 main 函数
@@ -1169,28 +1695,41 @@ static void build_compiler(slice_t *modules) {
  * 构建成 libmain.a 文件
  */
 static void build_archive(slice_t *modules) {
-    char *cmd = mallocz(10240 * sizeof(char));
-    strcpy(cmd, "ar -rcs ");
     char *output = path_join(TEMP_DIR, "libmain.a");
-    strcat(cmd, output);
-
-    for (int i = 0; i < modules->count; ++i) {
-        module_t *m = modules->take[i];
-        char *obj_file = m->object_file;
-        if (obj_file == NULL) {
-            continue;
+    if (BUILD_OS == OS_WINDOWS) {
+        const char **members = calloc((size_t) modules->count + 1U,
+                                      sizeof(*members));
+        assertf(members, "allocating Windows archive member list failed");
+        size_t member_count = 0;
+        for (int i = 0; i < modules->count; ++i) {
+            module_t *m = modules->take[i];
+            if (m->object_file) members[member_count++] = m->object_file;
         }
-
-        // 将每个模块的object文件添加到命令中
+        members[member_count++] = custom_link_object_path();
+        char error[1024];
+        bool success = build_archive_write(output, members, member_count,
+                                           error, sizeof(error));
+        free(members);
+        assertf(success, "Compiling Windows static library failed: %s",
+                error);
+    } else {
+        char *cmd = mallocz(10240 * sizeof(char));
+        strcpy(cmd, "ar -rcs ");
+        strcat(cmd, output);
+        for (int i = 0; i < modules->count; ++i) {
+            module_t *m = modules->take[i];
+            if (!m->object_file) continue;
+            strcat(cmd, " ");
+            strcat(cmd, m->object_file);
+        }
         strcat(cmd, " ");
-        strcat(cmd, obj_file);
-    }
-    strcat(cmd, " ");
-    strcat(cmd, custom_link_object_path());
-
-    int result = system(cmd);
-    if (result != 0) {
-        assertf(false, "Compiling static library failed. ar command error: %d", result);
+        strcat(cmd, custom_link_object_path());
+        int result = system(cmd);
+        if (result != 0)
+            assertf(false,
+                    "Compiling static library failed. ar command error: %d",
+                    result);
+        free(cmd);
     }
 
     strcpy(BUILD_OUTPUT, path_join(BUILD_OUTPUT_DIR, "libmain.a"));
@@ -1256,13 +1795,35 @@ void build(char *build_entry, bool is_archive) {
     if (strlen(USE_LD) > 0) {
         if (BUILD_OS == OS_LINUX) {
             custom_ld_elf_exe(modules, USE_LD, LDFLAGS);
-        } else {
-            assert(BUILD_OS == OS_DARWIN);
+        } else if (BUILD_OS == OS_DARWIN) {
             custom_ld_mach_exe(modules, USE_LD, LDFLAGS);
+        } else {
+            assertf(BUILD_OS == OS_WINDOWS,
+                    "unsupported external linker target");
+            custom_ld_windows_exe(modules, USE_LD, LDFLAGS);
         }
     } else {
-        assertf(BUILD_OS == OS_LINUX, "The cross-platform elf linker can only be used if the target is linux.");
-        linker_elf_exe(modules);
+        if (BUILD_OS == OS_DARWIN) {
+            if (BUILD_ARCH == ARCH_ARM64) {
+                ld_mach_exe(modules, LDFLAGS);
+            } else {
+                assertf(BUILD_ARCH == ARCH_AMD64,
+                        "unsupported Darwin target architecture");
+#ifdef __DARWIN
+                custom_ld_mach_exe(modules, "ld", LDFLAGS);
+#else
+                assertf(false,
+                        "Darwin amd64 linking requires an external Mach-O "
+                        "linker; specify one with --ld");
+#endif
+            }
+        } else if (BUILD_OS == OS_LINUX) {
+            ld_elf_exe(modules, LDFLAGS);
+        } else {
+            assertf(BUILD_OS == OS_WINDOWS,
+                    "unsupported internal linker target");
+            ld_windows_exe(modules, LDFLAGS);
+        }
     }
 
     // Cleanup TEMP_DIR after successful build

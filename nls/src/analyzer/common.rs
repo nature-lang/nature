@@ -31,7 +31,6 @@ pub struct Dependency {
 pub struct PackageData {
     pub name: String,
     pub version: String,
-    pub entry: Option<String>, // custom entry point, default main
     pub authors: Option<Vec<String>>,
     pub description: Option<String>,
     pub license: Option<String>,
@@ -53,6 +52,16 @@ pub struct AnalyzerError {
     pub start: usize,
     pub end: usize,
     pub message: String,
+    pub is_warning: bool, // If true, rendered as hint with faded/unnecessary styling
+}
+
+impl AnalyzerError {
+    pub fn new(start: usize, end: usize, message: String) -> Self {
+        Self { start, end, message, is_warning: false }
+    }
+    pub fn warning(start: usize, end: usize, message: String) -> Self {
+        Self { start, end, message, is_warning: true }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -995,6 +1004,7 @@ pub enum AstNode {
     Break, // (expr)
     Continue,
     Ret(Box<Expr>),
+    Mod(ModStmt),                             // mod <ident>, only valid at the head of a file
     Import(ImportStmt),                       // 比较复杂直接保留
     VarTupleDestr(Vec<Box<Expr>>, Box<Expr>), // (elements, right)
     Assign(Box<Expr>, Box<Expr>),             // (left, right)
@@ -1153,6 +1163,18 @@ pub struct TupleDestrExpr {
 pub struct ImportSelectItem {
     pub ident: String,
     pub alias: Option<String>,
+    pub start: usize,
+    pub end: usize,
+}
+
+/// mod is a contextual keyword, only a file-leading `mod <ident>` is a module declaration
+pub const MOD_DECL_IDENT: &str = "mod";
+
+#[derive(Debug, Clone)]
+pub struct ModStmt {
+    pub ident: String,
+    pub start: usize,
+    pub end: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -1163,8 +1185,11 @@ pub struct ImportStmt {
     pub is_selective: bool,                          // NEW: true if using {item1, item2} syntax
     pub select_items: Option<Vec<ImportSelectItem>>, // NEW: selective import items
     pub module_type: u8,
-    pub module_ident: String, //  基于 full path 计算的 unique ident, 如果是 main.n 则 包含 main
+    pub module_ident: String, // internal package-instance-qualified module key
+    pub module_name: String, // user-facing logical module name
     pub full_path: String,
+    /// Every source part of the target module, empty in single-file compatibility mode
+    pub module_sources: Vec<String>,
     pub package_conf: Option<PackageConfig>, // import package 时总是依赖该配置
     pub package_dir: String,
     pub use_links: bool,
@@ -1182,12 +1207,24 @@ impl Default for ImportStmt {
             select_items: None,
             module_type: 0,
             full_path: String::new(),
+            module_sources: Vec::new(),
             package_conf: None,
             package_dir: String::new(),
             use_links: false,
             module_ident: String::new(),
+            module_name: String::new(),
             start: 0,
             end: 0,
+        }
+    }
+}
+
+impl ImportStmt {
+    pub fn display_module(&self) -> &str {
+        if self.module_name.is_empty() {
+            &self.module_ident
+        } else {
+            &self.module_name
         }
     }
 }

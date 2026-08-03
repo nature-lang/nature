@@ -7,9 +7,9 @@
 bin
 release/
 tmp/
+temps/
 
 # IDE and editor files
-.vscode
 .idea
 
 # OS-specific files
@@ -21,12 +21,16 @@ mockdir.tar.gz
 
 # Library files
 libruntime.a
+!lib/windows_amd64/libruntime.a
+/libmain.a
 
 # Upload markers
 .clion.source.upload.marker
 
 # Cache directories
 .zig-cache/*
+zig-out/*
+zig-pkg/*
 
 # Build artifacts
 tsconfig.tsbuildinfo
@@ -35,3 +39,7 @@ tsconfig.tsbuildinfo
 example/
 
 .cache
+
+# Python caches
+__pycache__/
+*.py[cod]

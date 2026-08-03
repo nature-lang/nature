@@ -1,0 +1,3 @@
+fn dump_sub() {
+    println('this is seed sub')
+}

@@ -1,4 +1,4 @@
-# import [http](https://github.com/nature-lang/nature/tree/master/std/http/main.n)
+# import [http](https://github.com/nature-lang/nature/tree/master/std/http/http.n)
 
 HTTP 服务器和客户端库，用于构建 Web 应用程序和发送 HTTP 请求。
 

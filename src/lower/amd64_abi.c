@@ -2,6 +2,81 @@
 
 #include "src/register/arch/amd64.h"
 
+#define WINDOWS_AMD64_REGISTER_SLOTS 4
+#define WINDOWS_AMD64_SHADOW_SPACE 32
+
+static bool amd64_windows_abi(void) {
+    return BUILD_OS == OS_WINDOWS;
+}
+
+static type_kind amd64_windows_uint_kind(uint64_t size) {
+    switch (size) {
+        case BYTE:
+            return TYPE_UINT8;
+        case WORD:
+            return TYPE_UINT16;
+        case DWORD:
+            return TYPE_UINT32;
+        case QWORD:
+            return TYPE_UINT64;
+        default:
+            assertf(false, "windows x64 cannot pass a %lu-byte aggregate in a register", size);
+            return TYPE_UINT64;
+    }
+}
+
+static reg_t *amd64_windows_int_arg_reg(uint8_t slot, type_kind kind) {
+    static const uint8_t indices[WINDOWS_AMD64_REGISTER_SLOTS] = {1, 2, 8, 9}; // rcx, rdx, r8, r9
+    assert(slot < WINDOWS_AMD64_REGISTER_SLOTS);
+    return reg_select(indices[slot], kind);
+}
+
+static reg_t *amd64_windows_sse_arg_reg(uint8_t slot, type_kind kind) {
+    static const uint8_t indices[WINDOWS_AMD64_REGISTER_SLOTS] = {0, 1, 2, 3}; // xmm0 .. xmm3
+    assert(slot < WINDOWS_AMD64_REGISTER_SLOTS);
+    return reg_select(indices[slot], kind);
+}
+
+/**
+ * Microsoft x64 uses four ordinal argument slots.  Integer and floating-point
+ * arguments do not have independent register cursors: slot N selects either
+ * RCX/RDX/R8/R9 or XMM0..XMM3.  Aggregates of exactly 1, 2, 4, or 8 bytes are
+ * represented as an integer of the same width; every other aggregate is passed
+ * by reference to caller-owned storage.
+ *
+ * Nature does not expose native SIMD vector types yet.  When those are added,
+ * __m128/HVA classification must be handled before the generic aggregate rule.
+ */
+static int64_t amd64_windows_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi) {
+    *lo = AMD64_CLASS_NO;
+    *hi = AMD64_CLASS_NO;
+
+    if (t.kind == TYPE_ARR) {
+        return 0;
+    }
+
+    if (is_abi_struct_like(t)) {
+        if (t.storage_size == BYTE || t.storage_size == WORD || t.storage_size == DWORD ||
+            t.storage_size == QWORD) {
+            *lo = AMD64_CLASS_INTEGER;
+            return 1;
+        }
+        return 0;
+    }
+
+    *lo = is_float(t.map_imm_kind) ? AMD64_CLASS_SSE : AMD64_CLASS_INTEGER;
+    return 1;
+}
+
+int64_t amd64_abi_type_classify(type_t t, amd64_class_t *lo, amd64_class_t *hi,
+                                uint64_t offset) {
+    if (amd64_windows_abi()) {
+        return amd64_windows_type_classify(t, lo, hi);
+    }
+
+    return amd64_type_classify(t, lo, hi, offset);
+}
+
 linked_t *amd64_lower_return(closure_t *c, lir_op_t *op) {
     linked_t *result = linked_new();
 
@@ -16,7 +91,7 @@ linked_t *amd64_lower_return(closure_t *c, lir_op_t *op) {
 
     amd64_class_t lo = AMD64_CLASS_NO;
     amd64_class_t hi = AMD64_CLASS_NO;
-    int64_t count = amd64_type_classify(return_type, &lo, &hi, 0);
+    int64_t count = amd64_abi_type_classify(return_type, &lo, &hi, 0);
 
     if (count == 0) {
         // 通过寄存器进行传递，此时 c->return_operand 中存储了目标空间(可能是 caller 申请的内存空间，在 fn_begin 中将该空间的指针传递给了 c->return_operand)
@@ -34,8 +109,10 @@ linked_t *amd64_lower_return(closure_t *c, lir_op_t *op) {
     lir_operand_t *lo_dst_reg = NULL;
     type_kind lo_kind;
     if (lo == AMD64_CLASS_INTEGER) {
-        lo_dst_reg = operand_new(LIR_OPERAND_REG, rax);
-        lo_kind = TYPE_UINT64;
+        lo_kind = amd64_windows_abi() && is_abi_struct_like(return_type)
+                          ? amd64_windows_uint_kind(return_size)
+                          : TYPE_UINT64;
+        lo_dst_reg = operand_new(LIR_OPERAND_REG, reg_select(rax->index, lo_kind));
     } else {
         lo_dst_reg = operand_new(LIR_OPERAND_REG, xmm0s64);
         lo_kind = TYPE_FLOAT64;
@@ -83,7 +160,86 @@ END:
  * @param formals
  * @return
  */
+static linked_t *amd64_windows_lower_params(closure_t *c, slice_t *param_vars) {
+    linked_t *result = linked_new();
+
+    // After CALL and PUSH RBP, [rbp+8] is the return address, [rbp+16]
+    // starts the caller-provided home area, and the fifth argument is at
+    // [rbp+48].  The first four home slots are not incoming stack arguments.
+    int64_t stack_param_slot = 16 + WINDOWS_AMD64_SHADOW_SPACE;
+
+    for (int i = 0; i < param_vars->count; ++i) {
+        lir_var_t *var = param_vars->take[i];
+        type_t param_type = var->type;
+        lir_operand_t *dst_param = operand_new(LIR_OPERAND_VAR, var);
+
+        amd64_class_t lo = AMD64_CLASS_NO;
+        amd64_class_t hi = AMD64_CLASS_NO;
+        int64_t count = amd64_windows_type_classify(param_type, &lo, &hi);
+        bool in_register = i < WINDOWS_AMD64_REGISTER_SLOTS;
+
+        if (count == 0) {
+            // Large aggregates and arrays arrive as a pointer to the caller's
+            // by-value copy.  Keeping that pointer in the formal matches
+            // Nature's STORAGE_KIND_IND representation.
+            lir_operand_t *src;
+            if (in_register) {
+                src = operand_new(LIR_OPERAND_REG,
+                                  amd64_windows_int_arg_reg((uint8_t) i, TYPE_ANYPTR));
+            } else {
+                src = lir_stack_operand(c->module, stack_param_slot, QWORD, TYPE_ANYPTR);
+                stack_param_slot += QWORD;
+            }
+            linked_push(result, lir_op_move(dst_param, src));
+            continue;
+        }
+
+        if (is_abi_struct_like(param_type)) {
+            // A 1/2/4/8-byte aggregate is carried in a GPR (or an 8-byte
+            // stack slot) but remains addressable in Nature, so materialize
+            // it into local storage on entry.
+            type_kind word_kind = amd64_windows_uint_kind(param_type.storage_size);
+            linked_push(result, lir_stack_alloc(c, param_type, dst_param));
+
+            lir_operand_t *src;
+            if (in_register) {
+                src = operand_new(LIR_OPERAND_REG,
+                                  amd64_windows_int_arg_reg((uint8_t) i, word_kind));
+            } else {
+                src = lir_stack_operand(c->module, stack_param_slot, param_type.storage_size, word_kind);
+                stack_param_slot += QWORD;
+            }
+
+            lir_operand_t *dst = indirect_addr_operand(c->module, type_kind_new(word_kind), dst_param, 0);
+            linked_push(result, lir_op_move(dst, src));
+            continue;
+        }
+
+        assert(count == 1);
+        assertf(param_type.kind != TYPE_ARR, "array type must be pointer type");
+
+        lir_operand_t *src;
+        if (in_register) {
+            reg_t *reg = lo == AMD64_CLASS_SSE
+                                 ? amd64_windows_sse_arg_reg((uint8_t) i, param_type.map_imm_kind)
+                                 : amd64_windows_int_arg_reg((uint8_t) i, param_type.map_imm_kind);
+            src = operand_new(LIR_OPERAND_REG, reg);
+        } else {
+            src = lir_stack_operand(c->module, stack_param_slot, param_type.storage_size,
+                                    param_type.map_imm_kind);
+            stack_param_slot += QWORD;
+        }
+        linked_push(result, lir_op_move(dst_param, src));
+    }
+
+    return result;
+}
+
 static linked_t *amd64_lower_params(closure_t *c, slice_t *param_vars) {
+    if (amd64_windows_abi()) {
+        return amd64_windows_lower_params(c, param_vars);
+    }
+
     linked_t *result = linked_new();
 
     amd64_class_t lo = AMD64_CLASS_NO;
@@ -252,7 +408,7 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
 
     if (return_type.kind != TYPE_VOID) {
         // 为了 ssa 将 return var 添加到了 params 中，现在 从 params 中移除, 使用 nop 或者 其他方式保证 def 完整
-        int64_t count = amd64_type_classify(return_type, &lo, &hi, 0);
+        int64_t count = amd64_abi_type_classify(return_type, &lo, &hi, 0);
 
         if (count == 0) { // count == 0 则无法通过寄存器传递返回值
             assert(return_type.storage_kind == STORAGE_KIND_IND);
@@ -281,7 +437,161 @@ linked_t *amd64_lower_fn_begin(closure_t *c, lir_op_t *op) {
  * @param op
  * @return
  */
+static linked_t *amd64_windows_lower_args(closure_t *c, lir_op_t *op) {
+    slice_t *args = op->second->value;
+    linked_t *result = linked_new();
+    slice_t *use_regs = slice_new();
+    lir_operand_t *rsp_operand = operand_new(LIR_OPERAND_REG, rsp);
+
+    lir_operand_t **passed_args = mallocz(sizeof(lir_operand_t *) * (args->count + 1));
+    uint64_t *copy_offsets = mallocz(sizeof(uint64_t) * (args->count + 1));
+
+    uint64_t stack_arg_count = args->count > WINDOWS_AMD64_REGISTER_SLOTS
+                                       ? (uint64_t) args->count - WINDOWS_AMD64_REGISTER_SLOTS
+                                       : 0;
+    uint64_t copy_cursor = WINDOWS_AMD64_SHADOW_SPACE + stack_arg_count * QWORD;
+
+    // Reserve caller-owned copies after the home area and stack arguments.
+    // Indirect aggregate arguments are 16-byte aligned so this layout is also
+    // suitable for a future native SIMD aggregate implementation.
+    for (int i = 0; i < args->count; ++i) {
+        lir_operand_t *arg = args->take[i];
+        type_t arg_type = lir_operand_type(arg);
+        amd64_class_t lo = AMD64_CLASS_NO;
+        amd64_class_t hi = AMD64_CLASS_NO;
+        int64_t count = amd64_windows_type_classify(arg_type, &lo, &hi);
+        if (count != 0) {
+            continue;
+        }
+
+        copy_cursor = align_up(copy_cursor, 16);
+        copy_offsets[i] = copy_cursor;
+        copy_cursor += align_up(max(arg_type.storage_size, (uint64_t) BYTE), 16);
+    }
+
+    uint64_t outgoing_size = align_up(copy_cursor, AMD64_STACK_ALIGN_SIZE);
+    if (outgoing_size < WINDOWS_AMD64_SHADOW_SPACE) {
+        outgoing_size = WINDOWS_AMD64_SHADOW_SPACE;
+    }
+    if (outgoing_size > (uint64_t) c->call_stack_max_offset) {
+        c->call_stack_max_offset = (int64_t) outgoing_size;
+    }
+
+    // Materialize by-value aggregate copies before assigning any fixed
+    // argument register.  This prevents the copy loop from clobbering an
+    // already prepared RCX/RDX/R8/R9 or XMM0..XMM3 value.
+    for (int i = 0; i < args->count; ++i) {
+        lir_operand_t *arg = args->take[i];
+        type_t arg_type = lir_operand_type(arg);
+        amd64_class_t lo = AMD64_CLASS_NO;
+        amd64_class_t hi = AMD64_CLASS_NO;
+        int64_t count = amd64_windows_type_classify(arg_type, &lo, &hi);
+
+        if (count != 0) {
+            passed_args[i] = arg;
+            continue;
+        }
+
+        assertf(arg_type.storage_kind == STORAGE_KIND_IND,
+                "windows x64 indirect ABI argument must use indirect storage");
+        lir_operand_t *copy = indirect_addr_operand(c->module, arg_type, rsp_operand, copy_offsets[i]);
+        lir_operand_t *copy_ref = lower_temp_var_operand(c, result, type_kind_new(TYPE_ANYPTR));
+        linked_push(result, lir_op_lea(copy_ref, copy));
+        linked_concat(result, lir_memory_mov(c->module, arg_type.storage_size, copy_ref, arg));
+        passed_args[i] = copy_ref;
+    }
+
+    // Stack arguments occupy one eight-byte slot each and begin immediately
+    // after the mandatory 32-byte home area.
+    for (int i = WINDOWS_AMD64_REGISTER_SLOTS; i < args->count; ++i) {
+        lir_operand_t *arg = args->take[i];
+        type_t arg_type = lir_operand_type(arg);
+        amd64_class_t lo = AMD64_CLASS_NO;
+        amd64_class_t hi = AMD64_CLASS_NO;
+        int64_t count = amd64_windows_type_classify(arg_type, &lo, &hi);
+        uint64_t rsp_offset = WINDOWS_AMD64_SHADOW_SPACE +
+                              ((uint64_t) i - WINDOWS_AMD64_REGISTER_SLOTS) * QWORD;
+
+        if (count == 0) {
+            lir_operand_t *dst = indirect_addr_operand(c->module, type_kind_new(TYPE_ANYPTR), rsp_operand,
+                                                       rsp_offset);
+            linked_push(result, lir_op_move(dst, passed_args[i]));
+            continue;
+        }
+
+        if (is_abi_struct_like(arg_type)) {
+            type_kind word_kind = amd64_windows_uint_kind(arg_type.storage_size);
+            lir_operand_t *word = lower_temp_var_operand(c, result, type_kind_new(word_kind));
+            lir_operand_t *src = indirect_addr_operand(c->module, type_kind_new(word_kind), arg, 0);
+            lir_operand_t *dst = indirect_addr_operand(c->module, type_kind_new(word_kind), rsp_operand,
+                                                       rsp_offset);
+            linked_push(result, lir_op_move(word, src));
+            linked_push(result, lir_op_move(dst, word));
+            continue;
+        }
+
+        lir_operand_t *dst = indirect_addr_operand(c->module, arg_type, rsp_operand, rsp_offset);
+        linked_push(result, lir_op_move(dst, arg));
+    }
+
+    // The first four argument positions share an ordinal slot. A floating
+    // argument in slot 2 uses XMM2; it does not consume an independent SSE
+    // cursor. Mirror every register floating argument into the matching GPR as
+    // required for unprototyped/C-vararg calls. The duplicate is harmless for
+    // prototyped calls and lets the current LIR represent both cases without
+    // losing call-signature metadata before ABI lowering.
+    for (int i = 0; i < args->count && i < WINDOWS_AMD64_REGISTER_SLOTS; ++i) {
+        lir_operand_t *arg = args->take[i];
+        type_t arg_type = lir_operand_type(arg);
+        amd64_class_t lo = AMD64_CLASS_NO;
+        amd64_class_t hi = AMD64_CLASS_NO;
+        int64_t count = amd64_windows_type_classify(arg_type, &lo, &hi);
+
+        lir_operand_t *temp;
+        if (count == 0) {
+            reg_t *hint = amd64_windows_int_arg_reg((uint8_t) i, TYPE_ANYPTR);
+            temp = lower_temp_var_with_hint(c, result, type_kind_new(TYPE_ANYPTR), hint);
+            linked_push(result, lir_op_call_arg_move(temp, passed_args[i]));
+        } else if (is_abi_struct_like(arg_type)) {
+            type_kind word_kind = amd64_windows_uint_kind(arg_type.storage_size);
+            reg_t *hint = amd64_windows_int_arg_reg((uint8_t) i, word_kind);
+            temp = lower_temp_var_with_hint(c, result, type_kind_new(word_kind), hint);
+            lir_operand_t *src = indirect_addr_operand(c->module, type_kind_new(word_kind), arg, 0);
+            linked_push(result, lir_op_call_arg_move(temp, src));
+        } else {
+            reg_t *hint = lo == AMD64_CLASS_SSE
+                                  ? amd64_windows_sse_arg_reg((uint8_t) i, arg_type.map_imm_kind)
+                                  : amd64_windows_int_arg_reg((uint8_t) i, arg_type.map_imm_kind);
+            temp = lower_temp_var_with_hint(c, result, arg_type, hint);
+            linked_push(result, lir_op_call_arg_move(temp, arg));
+
+            if (lo == AMD64_CLASS_SSE) {
+                type_kind mirror_kind = arg_type.storage_size == DWORD ? TYPE_UINT32 : TYPE_UINT64;
+                lir_operand_t *home = indirect_addr_operand(c->module, arg_type, rsp_operand,
+                                                            (uint64_t) i * QWORD);
+                linked_push(result, lir_op_move(home, arg));
+
+                lir_operand_t *mirror_src = indirect_addr_operand(c->module, type_kind_new(mirror_kind),
+                                                                  rsp_operand, (uint64_t) i * QWORD);
+                reg_t *mirror_hint = amd64_windows_int_arg_reg((uint8_t) i, mirror_kind);
+                lir_operand_t *mirror = lower_temp_var_with_hint(c, result, type_kind_new(mirror_kind),
+                                                                 mirror_hint);
+                linked_push(result, lir_op_call_arg_move(mirror, mirror_src));
+                slice_push(use_regs, mirror->value);
+            }
+        }
+        slice_push(use_regs, temp->value);
+    }
+
+    op->second = lir_reset_operand(operand_new(LIR_OPERAND_VARS, use_regs), LIR_FLAG_SECOND);
+    return result;
+}
+
 static linked_t *amd64_lower_args(closure_t *c, lir_op_t *op) {
+    if (amd64_windows_abi()) {
+        return amd64_windows_lower_args(c, op);
+    }
+
     slice_t *args = op->second->value; // exprs
 
     // 进行 op 替换(重新set flag 即可)
@@ -508,7 +818,7 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
 
     amd64_class_t lo = AMD64_CLASS_NO;
     amd64_class_t hi = AMD64_CLASS_NO;
-    int64_t count = amd64_type_classify(call_result_type, &lo, &hi, 0);
+    int64_t count = amd64_abi_type_classify(call_result_type, &lo, &hi, 0);
 
     // call result to args
     // count == 0 标识参数通过栈进行传递，但是需要注意的是此时传递并的是一个指针，而不是整个 struct
@@ -550,8 +860,10 @@ linked_t *amd64_lower_call(closure_t *c, lir_op_t *op) {
     lir_operand_t *lo_src_reg;
     type_kind lo_kind;
     if (lo == AMD64_CLASS_INTEGER) {
-        lo_src_reg = operand_new(LIR_OPERAND_REG, rax);
-        lo_kind = TYPE_UINT64;
+        lo_kind = amd64_windows_abi() && is_abi_struct_like(call_result_type)
+                          ? amd64_windows_uint_kind(call_result_type.storage_size)
+                          : TYPE_UINT64;
+        lo_src_reg = operand_new(LIR_OPERAND_REG, reg_select(rax->index, lo_kind));
     } else {
         lo_src_reg = operand_new(LIR_OPERAND_REG, xmm0s64);
         lo_kind = TYPE_FLOAT64;

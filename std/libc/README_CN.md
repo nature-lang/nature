@@ -1,4 +1,4 @@
-# import [libc](https://github.com/nature-lang/nature/tree/master/std/libc/main.n)
+# import [libc](https://github.com/nature-lang/nature/tree/master/std/libc/libc.n)
 
 C 标准库绑定，提供内存管理、字符串操作、系统函数等功能
 

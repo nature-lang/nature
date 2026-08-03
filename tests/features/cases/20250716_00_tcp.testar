@@ -55,7 +55,7 @@ fn main() {
 read buf 1: hello world
 read buf 2: hello nature
 
-=== test_connect_timeout
+=== test_connect_timeout[exclude_os=windows]
 --- main.n
 import net.tcp
 import co
@@ -71,7 +71,7 @@ fn main() {
 coroutine 'main' uncaught error: 'connection timeout' at nature-test/main.n:6:22
 
 
-=== test_cross_goroutine
+=== test_cross_goroutine[exclude_os=windows]
 --- main.n
 import net.tcp
 import co
@@ -406,7 +406,7 @@ fn test_error_cases():void! {
     println("✓ Error cases test passed")
 }
 
-=== test_conn_interface
+=== test_conn_interface[exclude_os=windows]
 --- main.n
 import io
 import io.buf
@@ -471,7 +471,7 @@ fn main() {
     println('write success')
 }
 
-=== test_timeout2
+=== test_timeout2[exclude_os=windows]
 --- main.n
 import co
 import net.tls

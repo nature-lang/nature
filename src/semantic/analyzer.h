@@ -13,7 +13,7 @@
  * @param t
  * @param stmt_list
  */
-void analyzer(module_t *m, slice_t *stmt_list);
+void analyzer(module_t *m);
 
 void analyzer_import(module_t *m, ast_import_t *import);
 

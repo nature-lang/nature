@@ -4,7 +4,9 @@
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdlib.h>
+#ifndef __WINDOWS
 #include <ucontext.h>
+#endif
 
 #include "aco/aco.h"
 #include "rtype.h"

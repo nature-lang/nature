@@ -1,4 +1,4 @@
-# import [elf](https://github.com/nature-lang/nature/tree/master/std/elf/main.n)
+# import [elf](https://github.com/nature-lang/nature/tree/master/std/elf/elf.n)
 
 ELF (可执行与可链接格式) 文件解析库，用于读取二进制文件信息。
 

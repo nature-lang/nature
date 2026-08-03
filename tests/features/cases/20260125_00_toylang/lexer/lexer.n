@@ -1,4 +1,4 @@
-import toylang.token.token
+import toylang.token
 
 type Lexer = struct {
     int line         // current line number

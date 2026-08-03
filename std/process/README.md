@@ -1,4 +1,4 @@
-# import [process](https://github.com/nature-lang/nature/blob/master/std/process/main.n)
+# import [process](https://github.com/nature-lang/nature/blob/master/std/process/process.n)
 
 Process management, including process creation, execution and state management
 

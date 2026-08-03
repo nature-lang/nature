@@ -1,4 +1,4 @@
-# import [base64](https://github.com/nature-lang/nature/tree/master/std/base64/main.n)
+# import [base64](https://github.com/nature-lang/nature/tree/master/std/base64/base64.n)
 
 使用 mbedTLS 的 Base64 编码和解码库。
 

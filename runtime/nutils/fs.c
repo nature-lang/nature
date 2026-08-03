@@ -1,6 +1,47 @@
 #include "fs.h"
 #include <errno.h>
+#ifdef __WINDOWS
+#include "windows_utf8.h"
+#include <io.h>
+#else
 #include <unistd.h> // for read()/write() fallback
+#endif
+
+#ifdef __WINDOWS
+static ssize_t windows_pwrite(int fd, const void *buf, size_t len, int64_t offset) {
+    if (offset < 0) {
+        return _write(fd, buf, (unsigned int) len);
+    }
+
+    __int64 original_offset = _lseeki64(fd, 0, SEEK_CUR);
+    if (original_offset < 0 || _lseeki64(fd, offset, SEEK_SET) < 0) {
+        return -1;
+    }
+
+    int result = _write(fd, buf, (unsigned int) len);
+    int saved_errno = errno;
+    (void) _lseeki64(fd, original_offset, SEEK_SET);
+    errno = saved_errno;
+    return result;
+}
+
+static ssize_t windows_pread(int fd, void *buf, size_t len, int64_t offset) {
+    if (offset < 0) {
+        return _read(fd, buf, (unsigned int) len);
+    }
+
+    __int64 original_offset = _lseeki64(fd, 0, SEEK_CUR);
+    if (original_offset < 0 || _lseeki64(fd, offset, SEEK_SET) < 0) {
+        return -1;
+    }
+
+    int result = _read(fd, buf, (unsigned int) len);
+    int saved_errno = errno;
+    (void) _lseeki64(fd, original_offset, SEEK_SET);
+    errno = saved_errno;
+    return result;
+}
+#endif
 
 static void on_write_cb(uv_fs_t *req) {
     fs_context_t *ctx = CONTAINER_OF(req, fs_context_t, req);
@@ -10,7 +51,11 @@ static void on_write_cb(uv_fs_t *req) {
     if (req->result < 0) {
         // vboxsf/NFS/9p 等文件系统不支持 pwritev，fallback 到 pwrite()
         if (req->result == UV_ENOTSUP) {
+#ifdef __WINDOWS
+            ssize_t n = windows_pwrite(ctx->fd, ctx->buf.base, ctx->buf.len, ctx->offset);
+#else
             ssize_t n = pwrite(ctx->fd, ctx->buf.base, ctx->buf.len, ctx->offset);
+#endif
             if (n >= 0) {
                 DEBUGF("[on_write_cb] pwritev not supported, fallback to pwrite(), bytes: %zd", n);
                 ctx->data_len = n;
@@ -62,7 +107,11 @@ static void on_read_cb(uv_fs_t *req) {
     if (req->result < 0) {
         // vboxsf/NFS/9p 等文件系统不支持 preadv，fallback 到 pread()
         if (req->result == UV_ENOTSUP) {
+#ifdef __WINDOWS
+            ssize_t n = windows_pread(ctx->fd, ctx->data, ctx->data_cap, ctx->offset);
+#else
             ssize_t n = pread(ctx->fd, ctx->data, ctx->data_cap, ctx->offset);
+#endif
             if (n >= 0) {
                 DEBUGF("[on_read_cb] preadv not supported, fallback to pread(), bytes: %zd", n);
                 ctx->data_len = n;
@@ -107,11 +156,22 @@ fs_context_t *rt_uv_fs_from(n_int_t fd, n_string_t name) {
 }
 
 static void uv_async_fs_open(fs_context_t *ctx, char *path) {
-    int result = uv_fs_open(&global_loop, &ctx->req, path, (int) ctx->flags, (int) ctx->mode, on_open_cb);
+#ifdef __WINDOWS
+    int fd = rt_windows_open_utf8(path, (int) ctx->flags, (int) ctx->mode);
+    if (fd < 0) {
+        rti_co_throw(ctx->req.data, strerror(errno), false);
+    } else {
+        ctx->fd = fd;
+    }
+    co_ready(ctx->req.data);
+#else
+    int result = uv_fs_open(&global_loop, &ctx->req, path, (int) ctx->flags,
+                            (int) ctx->mode, on_open_cb);
     if (result) {
         rti_co_throw(ctx->req.data, (char *) uv_strerror(result), false);
         co_ready(ctx->req.data);
     }
+#endif
 }
 
 fs_context_t *rt_uv_fs_open(n_string_t path, int64_t flags, int64_t mode) {

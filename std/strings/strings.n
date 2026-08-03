@@ -1,0 +1,396 @@
+mod strings
+
+import syscall
+import libc
+import runtime
+
+// 基于 c 字符串创建一个 nature 字符串 
+fn from(anyptr p):string! {
+    return runtime.string_new(p)
+}
+
+fn string.find_char(self, u8 char, int after):int {
+    int len = self.len()
+    for int k = after; k < len; k += 1 {
+        if self[k] == char {
+            return k
+        }
+    }
+
+    return -1
+}
+
+fn string.find_after(self, string sub, int after):int {
+    var n = sub.len()
+
+    if (n == 0) {
+        return -1
+    }
+
+    if (n == 1) {
+        return self.find_char(sub[0], after)
+    }
+
+    anyptr base = self.ref()
+    var temp = libc.strstr((base as uint + after as uint) as libc.cstr, sub.to_cstr())
+    if temp == 0 {
+        return -1
+    }
+
+    uint index = temp as uint - base as uint
+    return index as int
+}
+
+fn string.reverse(self):string {
+    var result = vec<u8>.new(0, self.len())
+
+    for i,c in self {
+        result[self.len() - 1 - i] = c
+    }
+
+    return result as string
+}
+
+fn string.rfind(self, string sub):int {
+    if sub.len() == 0 {
+        return -1
+    }
+    
+    if sub.len() > self.len() {
+        return -1
+    }
+    
+    for int i = self.len() - sub.len(); i >= 0; i -= 1 {
+        var found = true
+        for int j = 0; j < sub.len(); j += 1 {
+            if self[i + j] != sub[j] {
+                found = false
+                break
+            }
+        }
+        if found {
+            return i
+        }
+    }
+    
+    return -1
+}
+
+
+fn string.ends_with(self, string ends):bool {
+    if ends.len() > self.len() {
+        return false
+    }
+
+    var start = self.len() - ends.len()
+
+    for i, c in ends {
+        if self[start+i] != c {
+            return false
+        }
+    }
+
+    return true
+}
+
+fn string.starts_with(self, string starts):bool {
+    if (starts.len() > self.len()) {
+        return false
+    }
+
+    for i, c in starts {
+        if self[i] != c {
+            return false
+        }
+    }
+
+    return true
+}
+
+fn string.contains(self, string sub):bool {
+    return self.find(sub) != -1
+}
+
+fn string.finish(self, string cap):string {
+    if self.ends_with(cap) {
+        return self
+    }
+
+    return self + cap
+}
+
+fn string.find(self, string sub):int {
+    return self.find_after(sub, 0)
+}
+
+fn string.slice(self, int start, int end):string {
+    var list = self as [u8]
+    list = list[start..end]
+    return list as string
+}
+
+fn string.split(self, string separator):[string] {
+    [string] result = []
+
+    if separator == '' {
+        for v in self {
+            var temp = [v]
+            result.push(temp as string)
+        }
+
+        return result
+    }
+
+    if self == '' {
+        return result
+    }
+
+    if self.len() <= separator.len() {
+        return result
+    }
+
+    var i = 0
+    for i < self.len() {
+        var found = self.find_after(separator, i)
+        if found == -1 {
+            result.push(self.slice(i, self.len()))
+            break
+        }
+
+        var part = self.slice(i, found)
+        result.push(part)
+
+        i = found + separator.len()
+    }
+
+    return result
+}
+
+fn join([string] list, string separator):string {
+    [u8] result = []
+
+    if list.len() == 0 {
+        return ''
+    }
+
+    var i = 0
+    for i < list.len() {
+        for v in list[i] {
+            result.push(v)
+        }
+
+        if i < list.len() - 1 {
+            for v in separator {
+                result.push(v)
+            }
+        }
+
+        i = i + 1
+    }
+
+    return result as string
+}
+
+fn string.ascii(self):u8 {
+    if self.len() == 0 {
+        return 0
+    }
+    var list = self as [u8]
+    return list[0]
+}
+
+fn string.ltrim(self, [string] list):string {
+    {u8} cut = {}
+    for sub in list {
+        cut.add(sub[0])
+    }
+
+    for i, c in self {
+        if !cut.contains(c) {
+            return self.slice(i, self.len())
+        }
+    }
+
+    return ''
+}
+
+fn string.rtrim(self, [string] list):string {
+    {u8} cut = {}
+    for sub in list {
+        cut.add(sub[0])
+    }
+
+    for int i = self.len() - 1; i >= 0; i -= 1 {
+        if !cut.contains(self[i]) {
+            return self.slice(0, i + 1)
+        }
+    }
+
+    return ''
+}
+
+fn string.trim(self, [string] list):string {
+    return self.ltrim(list).rtrim(list)
+}
+
+fn string.replace(self, string sub_old, string sub_new):string {
+    var result = ""
+
+    if sub_old.len() == 0 || self.len() < sub_old.len() {
+        return self
+    }
+
+    var i = 0
+    for i < self.len() {
+        var found = self.find_after(sub_old, i)
+
+        if found == -1 {
+            result += self.slice(i, self.len())
+            break
+        }
+
+        result += self.slice(i, found)
+        result += sub_new
+        i = found + sub_old.len()
+    }
+
+    return result
+}
+
+fn string.to_int(self):int! {
+    if self.len() == 0 {
+        throw errorf('cannot convert empty string to int')
+    }
+
+    var result = 0
+    var start = 0
+    var negative = false
+
+    if self[0] == '-'.char() {
+        negative = true
+        start = 1
+        if self.len() == 1 {
+            throw errorf("invalid number format")
+        }
+    }
+
+    for int i = start; i < self.len(); i += 1 {
+        if self[i] != ' '.char() {
+            start = i
+            break
+        }
+    }
+
+    for int i = start; i < self.len(); i += 1 {
+        var c = self[i]
+        if c < '0'.char() || c > '9'.char() {
+            throw errorf("invalid character in number")
+        }
+
+        if result > 0x7FFFFFFF / 10 {
+            throw errorf("number too large")
+        }
+
+        result = result * 10 + (c - '0'.char()) as int
+    }
+
+    if negative {
+        result = -result
+    }
+
+    return result
+}
+
+fn string.to_float(self):float! {
+    if self.len() == 0 {
+        throw errorf('cannot convert empty string to float')
+    }
+
+    var result = 0.0
+    var start = 0
+    var negative = false
+
+    if self[0] == '-'.char() {
+        negative = true
+        start = 1
+        if self.len() == 1 {
+            throw errorf("invalid number format")
+        }
+    }
+
+    // 跳过前导空格
+    for int i = start; i < self.len(); i += 1 {
+        if self[i] != ' '.char() {
+            start = i
+            break
+        }
+    }
+
+    var decimal_point = -1
+    for int i = start; i < self.len(); i += 1 {
+        var c = self[i]
+        if c == '.'.char() {
+            if decimal_point != -1 {
+                throw errorf("invalid float format: multiple decimal points")
+            }
+            decimal_point = i
+            continue
+        }
+        
+        if c < '0'.char() || c > '9'.char() {
+            throw errorf("invalid character in float")
+        }
+
+        if decimal_point == -1 {
+            // 处理整数部分
+            result = result * 10.0 + (c - '0'.char()) as float
+        } else {
+            // 处理小数部分
+            var decimal_place = i - decimal_point
+            var decimal_value = (c - '0'.char()) as float
+            var multiplier = 0.1
+            
+            // 计算正确的小数位乘数
+            for int j = 1; j < decimal_place; j += 1 {
+                multiplier = multiplier * 0.1
+            }
+            
+            result = result + decimal_value * multiplier
+        }
+    }
+
+    if negative {
+        result = -result
+    }
+
+    return result
+}
+
+
+fn string.to_lower(self):string {
+    var result = vec<u8>.new(0, self.len())
+    
+    for i, c in self {
+        if c >= 'A'.char() && c <= 'Z'.char() {
+            result[i] = c + ('a'.char() - 'A'.char())
+        } else {
+            result[i] = c
+        }
+    }
+    
+    return result as string
+}
+
+fn string.to_upper(self):string {
+    var result = vec<u8>.new(0, self.len())
+    
+    for i, c in self {
+        if c >= 'a'.char() && c <= 'z'.char() {
+            result[i] = c - ('a'.char() - 'A'.char())
+        } else {
+            result[i] = c
+        }
+    }
+    
+    return result as string
+}

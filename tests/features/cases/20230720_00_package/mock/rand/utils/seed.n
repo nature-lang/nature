@@ -1,0 +1,3 @@
+fn dump() {
+    println('this is seed')
+}

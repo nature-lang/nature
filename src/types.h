@@ -153,17 +153,47 @@ typedef struct {
 } ct_error_t;
 
 /**
- * 可以理解为文件维度数据
+ * SourceFile: one physical source file
+ * owns scanning, parsing, source positions and the file's own imports
+ * a module may consist of several SourceFiles (a directory module); imports/aliases only take
+ * effect in the file declaring them
+ */
+typedef struct {
+    char *path; // full file path
+    char *dir; // directory containing the file
+    char *rel_path; // path relative to the package (or root), used in diagnostics and for stable sorting
+    char *source; // 文件内容
+
+    linked_t *token_list;
+    slice_t *stmt_list;
+
+    // file-local import scope
+    slice_t *imports; // ast_import_t
+    table_t *import_table; // import as -> ast_import_t
+    table_t *selective_import_table; // ast_import_select_t
+
+    slice_t *fn_list; // top-level fndefs in this file, bodies analyzed after declaration collection
+} source_file_t;
+
+/**
+ * 可以理解为 module(ModuleUnit) 维度数据
  * path 基于 import 编译， import 能提供完整的 full_path 以及 module_name
  * Target district
  */
 struct module_t {
-    char *source; // 文件内容
-    char *source_path; // 文件完整路径(外面丢进来的)
-    char *source_dir; // 文件所在目录,去掉 xxx.n
-    char *ident; // 符号表中都使用这个前缀 /code/nature/foo/bar.n => unique_name: nature/foo/bar
+    char *source; // content of the file being processed
+    char *source_path; // full path of the file being processed
+    char *source_dir; // directory of the file being processed, without xxx.n
+    char *ident; // internal symbol table prefix, qualified by the package instance
+    char *display_ident; // user-facing logical module name
+    char *mod_ident; // declaration shared by all source parts, NULL when it may be omitted
     char *label_prefix;
     char *rel_path; // 从 root 计算出来的相对路径
+
+    // a module consists of one or more source parts
+    slice_t *sources; // source_file_t*
+    source_file_t *current_source; // the source part currently being processed
+    slice_t *module_imports; // union of every part's imports, used to build the dependency graph
 
     // 用于 analyzer ident 时需要将 ident 改为 package.module 中的真实符号
     char *package_dir;

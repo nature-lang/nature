@@ -4,9 +4,14 @@ on:
     branches:
       - master
   pull_request:
+  workflow_dispatch:
 
 env:
   BUILD_TYPE: Release
+
+concurrency:
+  group: test-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -15,12 +20,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-            - target: linux-arm64
-              runs-on: ubuntu-24.04-arm
-            - target: linux-amd64
-              runs-on: ubuntu-latest
-            - target: darwin-arm64
-              runs-on: macos-latest
+          - target: linux-arm64
+            runs-on: ubuntu-24.04-arm
+          - target: linux-amd64
+            runs-on: ubuntu-latest
+          - target: darwin-arm64
+            runs-on: macos-latest
     runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Checkout
@@ -33,6 +38,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: stable
+          cache-dependency-path: package/go.sum
 
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
@@ -40,6 +46,7 @@ jobs:
           workspaces: nls
           prefix-key: nls
           cache-on-failure: true
+
       - name: Setup Rust for nls
         uses: dtolnay/rust-toolchain@master
         with:
@@ -54,8 +61,7 @@ jobs:
         with:
           append-timestamp: false
           key: ${{ matrix.target }}
-      
-      # 添加模型文件缓存步骤
+
       - name: Cache LLaMA model files
         uses: actions/cache@v4
         with:
@@ -63,8 +69,7 @@ jobs:
           key: llama-model-stories15M-${{ hashFiles('tests/features/cases/20250324_00_llama/README.md') }}
           restore-keys: |
             llama-model-stories15M-
-      
-      # 添加模型文件下载步骤
+
       - name: Download LLaMA model file
         run: |
           cd tests/features/cases/20250324_00_llama
@@ -74,16 +79,16 @@ jobs:
           else
             echo "Model file stories15M.bin already exists (from cache)"
           fi
-      
+
       - name: Set job parallelism
         id: parallelism
         run: |
           if [[ "${{ runner.os }}" == "Linux" ]]; then
-            echo "j_flag=$(nproc)" >> $GITHUB_OUTPUT
+            echo "j_flag=$(nproc)" >> "$GITHUB_OUTPUT"
           elif [[ "${{ runner.os }}" == "macOS" ]]; then
-            echo "j_flag=$(sysctl -n hw.ncpu)" >> $GITHUB_OUTPUT
+            echo "j_flag=$(sysctl -n hw.ncpu)" >> "$GITHUB_OUTPUT"
           else
-            echo "j_flag=2" >> $GITHUB_OUTPUT
+            echo "j_flag=2" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build Runtime
@@ -119,3 +124,91 @@ jobs:
         with:
           test-dir: build-release/tests
           args: -E "20250424_00_parker${{ matrix.runs-on == 'macos-15-large' && '|20240822_00_chan' || '' }}" --timeout 80
+
+  test-windows:
+    name: Test (windows-amd64)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: true
+
+      - name: Setup Go for package
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: package/go.sum
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: nls
+          prefix-key: nls
+          cache-on-failure: true
+
+      - name: Setup Rust for nls
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Setup MSYS2 for Windows
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          path-type: inherit
+          update: true
+          install: >-
+            git
+            mingw-w64-ucrt-x86_64-binutils
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-python
+
+      - name: Cache LLaMA model files
+        uses: actions/cache@v4
+        with:
+          path: tests/features/cases/20250324_00_llama/stories15M.bin
+          key: llama-model-stories15M-${{ hashFiles('tests/features/cases/20250324_00_llama/README.md') }}
+          restore-keys: |
+            llama-model-stories15M-
+
+      - name: Download LLaMA model file
+        run: |
+          cd tests/features/cases/20250324_00_llama
+          if [ ! -f "stories15M.bin" ]; then
+            curl --fail --location --retry 3 \
+              --output stories15M.bin \
+              https://huggingface.co/karpathy/tinyllamas/resolve/main/stories15M.bin
+          fi
+
+      - name: Set job parallelism
+        id: parallelism
+        run: echo "j_flag=2" >> "$GITHUB_OUTPUT"
+
+      - name: Build Project
+        run: |
+          cmake -S . -B build-release -G Ninja \
+            -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+            -DCMAKE_SYSTEM_PROCESSOR=amd64
+          cmake --build build-release \
+            --parallel "${{ steps.parallelism.outputs.j_flag }}"
+
+      - name: Verify Windows sysroot
+        run: |
+          root="$(cygpath -m "$PWD")"
+          NATURE_BIN="$root/build-release/nature.exe" \
+            WINDOWS_VERIFY_TMPDIR="$root/build-release" \
+            ./tools/windows_sysroot/verify.sh
+
+      - name: Test
+        run: |
+          drive="$(pwd -W | cut -c1 | tr '[:upper:]' '[:lower:]')"
+          mkdir -p "/${drive}/tmp"
+          ctest --test-dir build-release/tests --output-on-failure --timeout 120

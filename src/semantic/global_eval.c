@@ -551,6 +551,9 @@ static void global_eval_write_expr(module_t *m, type_t target_type, ast_expr_t *
 void global_eval(module_t *m) {
     for (int i = 0; i < m->global_vardef->count; ++i) {
         ast_vardef_stmt_t *vardef = m->global_vardef->take[i];
+        if (vardef->rel_path) {
+            m->rel_path = vardef->rel_path;
+        }
         ast_var_decl_t *var_decl = &vardef->var_decl;
 
         INFER_ASSERTF(vardef->right != NULL, "global var '%s' must have initializer", var_decl->ident);

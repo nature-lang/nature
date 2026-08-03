@@ -1,16 +1,13 @@
 #include "tests/test.h"
-#include <stdio.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <sys/wait.h>
-#include <arpa/inet.h>
 
 static void test_basic() {
     char *raw = exec_output();
-//    printf("%s", raw);
-//    return;
+#ifdef __WINDOWS
+    char *str = "list len: 4\n"
+                "true true false\n"
+                "hello\n"
+                "C:/test\n";
+#else
     char *str = "/test/hello/world/nice.tar.gz\n"
                 "/test/hello/world/nice.tar.gz\n"
                 "/test/hello/world/nice.tar.gz\n"
@@ -45,9 +42,10 @@ static void test_basic() {
                 "/\n"
                 "/\n"
                 "!test str!hello";
+#endif
     assert_string_equal(raw, str);
 }
 
 int main(void) {
-    TEST_WITH_PACKAGE
+    TEST_BASIC
 }

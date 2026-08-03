@@ -875,7 +875,8 @@ static void linear_has_panic(module_t *m) {
         error_target_label = stack_top(m->current_closure->catch_error_labels);
     }
 
-    lir_operand_t *path_operand = string_operand(m->rel_path, strlen(m->rel_path));
+    char *error_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
+    lir_operand_t *path_operand = string_operand(error_path, strlen(error_path));
     lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg,
                                                     strlen(m->current_closure->fndef->fn_name_with_pkg));
     lir_operand_t *line_operand = int_operand(m->current_line);
@@ -912,7 +913,8 @@ static void linear_has_error(module_t *m) {
 
     lir_operand_t *has_error = temp_var_operand(m, type_kind_new(TYPE_BOOL));
 
-    lir_operand_t *path_operand = string_operand(m->rel_path, strlen(m->rel_path));
+    char *error_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
+    lir_operand_t *path_operand = string_operand(error_path, strlen(error_path));
     lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg,
                                                     strlen(m->current_closure->fndef->fn_name_with_pkg));
     lir_operand_t *line_operand = int_operand(m->current_line);
@@ -2124,6 +2126,22 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
         slice_push(args, actual_operand);
     }
 
+    if (type_fn->is_c_variadic) {
+        for (int i = type_fn->param_types->length; i < call->args->length;
+             ++i) {
+            ast_expr_t *actual_expr = ct_list_value(call->args, i);
+            lir_operand_t *actual_operand =
+                    linear_expr(m, *actual_expr, NULL);
+            if (actual_operand->assert_type != LIR_OPERAND_VAR) {
+                lir_operand_t *temp =
+                        temp_var_operand(m, actual_expr->type);
+                OP_PUSH(lir_op_move(temp, actual_operand));
+                actual_operand = temp;
+            }
+            slice_push(args, actual_operand);
+        }
+    }
+
 
     // 如果 base target 是 global fn symbol
     if (!is_global_fn) {
@@ -3187,7 +3205,12 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     uint64_t src_size = as_expr->src.type.storage_size;
 
     // 数值类型转换
-    if (is_integer(as_expr->target_type.kind) && is_integer(as_expr->src.type.kind)) {
+    if (is_integer(as_expr->target_type.kind) &&
+        as_expr->src.type.kind == TYPE_BOOL) {
+        OP_PUSH(lir_op_uext(target, src_operand));
+        return target;
+    } else if (is_integer(as_expr->target_type.kind) &&
+               is_integer(as_expr->src.type.kind)) {
         if (target_size > src_size) {
             if (is_unsigned(as_expr->src.type.kind)) {
                 OP_PUSH(lir_op_uext(target, src_operand));
@@ -3978,7 +4001,8 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
     lir_operand_t *error_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
     OP_PUSH(lir_op_move(error_ptr, error_operand));
 
-    lir_operand_t *path_operand = string_operand(m->rel_path, strlen(m->rel_path));
+    char *error_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
+    lir_operand_t *path_operand = string_operand(error_path, strlen(error_path));
     assert(m->current_closure->fndef->fn_name_with_pkg);
     lir_operand_t *fn_name_operand = string_operand(m->current_closure->fndef->fn_name_with_pkg,
                                                     strlen(m->current_closure->fndef->fn_name_with_pkg));
@@ -4219,6 +4243,11 @@ static void linear_body(module_t *m, slice_t *body) {
  * @return
  */
 static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
+    // a module may consist of several source parts, so error paths follow the file declaring this fn
+    if (fndef->rel_path) {
+        m->rel_path = fndef->rel_path;
+    }
+
     // 创建 closure, 并写入到 m module 中
     closure_t *c = lir_closure_new(fndef);
     // 互相关联关系

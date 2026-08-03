@@ -231,7 +231,7 @@ fn main() {
     assert(resp.status == 200 && msg.status == 'success' && msg.message == 'register successful')
 }
 
-=== test_upload[repeat=20]
+=== test_upload[exclude_os=windows,repeat=20]
 --- main.n
 import http.client
 import json
@@ -359,4 +359,3 @@ fn main() {
     println(resp.status)
     assert(resp.status == 200)
 }
-

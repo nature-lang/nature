@@ -1,4 +1,4 @@
-# import [runtime](https://github.com/nature-lang/nature/blob/master/std/runtime/main.n)
+# import [runtime](https://github.com/nature-lang/nature/blob/master/std/runtime/runtime.n)
 
 Runtime system utilities for memory management, garbage collection, and core data structures
 

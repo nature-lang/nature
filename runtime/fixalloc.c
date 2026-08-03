@@ -2,7 +2,7 @@
 
 #include <assert.h>
 #include <string.h>
-#include <uv.h>
+#include "runtime/uv_compat.h"
 
 #include "utils/helper.h"
 

@@ -30,7 +30,7 @@
         "extensions": [
           ".n"
         ],
-        "configuration": "./language-configuration.json",
+        "configuration": "./syntaxes/language-configuration.json",
         "icon": {
           "dark": "./assets/nature-lang-icon-alternative-1.svg",
           "light": "./assets/nature-lang-icon-alternative-1.svg"
@@ -44,6 +44,13 @@
         "filenames": [
           "package.toml"
         ]
+      }
+    ],
+    "grammars": [
+      {
+        "language": "n",
+        "scopeName": "source.n",
+        "path": "./syntaxes/n.tmLanguage.json"
       }
     ],
     "configuration": {

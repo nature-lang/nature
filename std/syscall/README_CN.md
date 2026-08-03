@@ -1,4 +1,4 @@
-# [import syscall](https://github.com/nature-lang/nature/blob/master/std/syscall/main.n)
+# [import syscall](https://github.com/nature-lang/nature/blob/master/std/syscall/syscall.n)
 
 系统调用接口，提供对操作系统服务的底层访问，包括文件操作、进程管理、网络等功能。
 

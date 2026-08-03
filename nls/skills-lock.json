@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "skills": {
+    "coding-guidelines": {
+      "source": "ZhangHanDong/rust-skills",
+      "sourceType": "github",
+      "computedHash": "0742312a0de5eb6bd84e093c1815b1db98126130b92713ea5fc2cf902338aa3b"
+    },
+    "m01-ownership": {
+      "source": "ZhangHanDong/rust-skills",
+      "sourceType": "github",
+      "computedHash": "69f57ede558e32e703e468ef5328f5bcc6610adff9d99b49984a5b3507d31b5b"
+    },
+    "m02-resource": {
+      "source": "ZhangHanDong/rust-skills",
+      "sourceType": "github",
+      "computedHash": "b79e4a7702adb7c7622dfab7818dd81710352d448d285885946652e5dc73fd5b"
+    },
+    "m03-mutability": {
+      "source": "ZhangHanDong/rust-skills",
+      "sourceType": "github",
+      "computedHash": "78eb8bc5e8b9bbeb5a59375b74b773c8fe824bb1644fa0fb77e99a1255a272ab"
+    },
+    "m04-zero-cost": {
+      "source": "ZhangHanDong/rust-skills",
+      "sourceType": "github",
+      "computedHash": "8bc6733618b217b608fe5011f4c74b7ceb8c0765ba60702e30fa8fa4824584f2"
+    },
+    "m05-type-driven": {
+      "source": "ZhangHanDong/rust-skills",
+      "sourceType": "github",
+      "computedHash": "06a52b0f35951cd01e21b2906917061f3994ece6b8c6b055dca65bbe14820283"
+    },
+    "m06-error-handling": {
+      "source": "ZhangHanDong/rust-skills",
+      "sourceType": "github",
+      "computedHash": "e6639bd5913e63bd8315f7b36f5dd22a029cae2404135a75ac24c0627a93e4e5"
+    },
+    "m11-ecosystem": {
+      "source": "ZhangHanDong/rust-skills",
+      "sourceType": "github",
+      "computedHash": "7ac5dd7206c339379d0aafe304a473a2e54465374be269ffc97d9e615325fc69"
+    },
+    "rust-call-graph": {
+      "source": "ZhangHanDong/rust-skills",
+      "sourceType": "github",
+      "computedHash": "0999fbe783c81b87ba1dc1347758bd87b5880dca0d66c69be53bbac133a4c888"
+    },
+    "rust-code-navigator": {
+      "source": "ZhangHanDong/rust-skills",
+      "sourceType": "github",
+      "computedHash": "c5c5b9521be30a3b5a3d6fa122bf9df809af3b28760e06fa317d6afab5bb3939"
+    }
+  }
+}

@@ -1,5 +1,7 @@
 #include "parser.h"
 
+#include <inttypes.h>
+
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -47,6 +49,10 @@ static table_t *parser_clone_type_params_table(table_t *source) {
     }
 
     return target;
+}
+
+static bool parser_c_variadic_supported(void) {
+    return BUILD_OS == OS_WINDOWS && BUILD_ARCH == ARCH_AMD64;
 }
 
 static token_t *parser_advance(module_t *m) {
@@ -395,6 +401,14 @@ static inline type_fn_t *parser_type_fn(module_t *m, bool is_fx) {
         // 包含参数类型
         do {
             if (parser_consume(m, TOKEN_ELLIPSIS)) {
+                if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
+                    PARSER_ASSERTF(
+                            parser_c_variadic_supported(),
+                            "C variadic calls are currently supported only "
+                            "for windows_amd64");
+                    type_fn->is_c_variadic = true;
+                    goto PARAMS_DONE;
+                }
                 type_fn->is_rest = true;
             }
 
@@ -414,6 +428,8 @@ static inline type_fn_t *parser_type_fn(module_t *m, bool is_fx) {
 
         parser_must(m, TOKEN_RIGHT_PAREN);
     }
+
+PARAMS_DONE:
 
 
     PARSER_ASSERTF(name_param_count == 0 || name_param_count == type_fn->param_types->length,
@@ -1167,6 +1183,14 @@ static void parser_params(module_t *m, ast_fndef_t *fndef) {
 
     do {
         if (parser_consume(m, TOKEN_ELLIPSIS)) {
+            if (parser_consume(m, TOKEN_RIGHT_PAREN)) {
+                PARSER_ASSERTF(
+                        parser_c_variadic_supported(),
+                        "C variadic calls are currently supported only for "
+                        "windows_amd64");
+                fndef->c_variadic = true;
+                return;
+            }
             fndef->rest_param = true;
         }
 
@@ -2307,6 +2331,43 @@ static ast_stmt_t *parser_defer_stmt(module_t *m) {
     return result;
 }
 
+/**
+ * mod is a contextual keyword, only treated as a module declaration when it leads the file as `mod <ident>`,
+ * anywhere else mod stays a normal identifier (e.g. the default alias produced by import 'mod.n')
+ */
+static bool parser_is_mod_decl(module_t *m) {
+    if (!parser_ident_is(m, MOD_DECL_IDENT)) {
+        return false;
+    }
+
+    linked_node *next = parser_next(m, 1);
+    if (!next) {
+        return false;
+    }
+
+    token_t *current = parser_peek(m);
+    token_t *next_token = next->value;
+
+    // mod must be followed by an ident on the same line, otherwise it is not a module declaration
+    return next_token->type == TOKEN_IDENT && next_token->line == current->line;
+}
+
+/**
+ * mod <ident>
+ */
+static ast_stmt_t *parser_mod_stmt(module_t *m) {
+    ast_stmt_t *result = stmt_new(m);
+    parser_advance(m); // mod
+
+    ast_mod_stmt_t *stmt = NEW(ast_mod_stmt_t);
+    token_t *token = parser_must(m, TOKEN_IDENT);
+    stmt->ident = token->literal;
+
+    result->assert_type = AST_STMT_MOD;
+    result->value = stmt;
+    return result;
+}
+
 static ast_stmt_t *parser_import_stmt(module_t *m) {
     ast_stmt_t *result = stmt_new(m);
     parser_advance(m);
@@ -3027,6 +3088,9 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
         return result;
     }
 
+    PARSER_ASSERTF(!fndef->c_variadic,
+                   "C variadic functions can only be external declarations");
+
     fndef->body = parser_body(m, false);
 
     m->parser_type_params_table = NULL;
@@ -3058,7 +3122,8 @@ static ast_stmt_t *parser_test_stmt(module_t *m) {
     fndef->is_private = true;
     fndef->is_errable = true;
     fndef->test_name = name_token->literal;
-    fndef->symbol_name = dsprintf("__test_%ld", parser_test_unique++);
+    fndef->symbol_name =
+            dsprintf("__test_%" PRId64, parser_test_unique++);
     fndef->fn_name = fndef->symbol_name;
     fndef->fn_name_with_pkg = ident_with_prefix(m->ident, fndef->symbol_name);
 
@@ -3268,6 +3333,11 @@ static ast_stmt_t *parser_local_stmt(module_t *m) {
 }
 
 static ast_stmt_t *parser_global_stmt(module_t *m) {
+    // mod may only lead the file (already handled at the parser entry), reaching here means an illegal position
+    if (parser_is_mod_decl(m)) {
+        PARSER_ASSERTF(false, "'mod' declaration must be the first statement of the file");
+    }
+
     // module parser 只包含着几种简单语句
     if (parser_is(m, TOKEN_VAR)) {
         return parser_var_begin_stmt(m);
@@ -3876,6 +3946,12 @@ slice_t *parser(module_t *m, linked_t *token_list) {
     slice_t *block_stmt = slice_new();
 
     ast_type_t stmt_type = -1;
+
+    // a mod declaration must be the first statement of the file
+    if (parser_is_mod_decl(m)) {
+        slice_push(block_stmt, parser_mod_stmt(m));
+        parser_must_stmt_end(m);
+    }
 
     while (!parser_is(m, TOKEN_EOF)) {
 #ifdef DEBUG_PARSER

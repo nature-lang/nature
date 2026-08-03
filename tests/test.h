@@ -12,14 +12,23 @@
 #include "src/error.h"
 #include "utils/exec.h"
 
+#ifdef __WINDOWS
+// CTest enforces the process timeout on Windows; the CRT has no alarm().
+static inline unsigned int nature_test_alarm(unsigned int seconds) {
+    (void) seconds;
+    return 0;
+}
+#define alarm nature_test_alarm
+#endif
+
 #ifdef __LINUX
 #define ATOMIC
 #else
 #define ATOMIC _Atomic
 #endif
 
-#define LOGF(format, ...)                                                                                                  \
-    fprintf(stdout, format "\n",  ##__VA_ARGS__); \
+#define LOGF(format, ...)                        \
+    fprintf(stdout, format "\n", ##__VA_ARGS__); \
     fflush(stdout);
 
 #define assert_string_equal(_actual, _expect) (assertf(str_equal(_actual, _expect), "%s", _actual))
@@ -27,6 +36,83 @@
 #define assert_true(_expr) (assertf(_expr, "not true"))
 
 #define PACKAGE_SYNC_COMMAND " sync -v"
+
+static inline int feature_test_mkdir(const char *path) {
+#ifdef __WINDOWS
+    return _mkdir(path);
+#else
+    return mkdir(path, 0700);
+#endif
+}
+
+static inline int feature_test_mkdir_p(const char *path) {
+    if (dir_exists((char *) path)) {
+        return 0;
+    }
+
+    char *copy = strdup(path);
+    for (char *cursor = copy + 1; *cursor; ++cursor) {
+        if (*cursor != '/' && *cursor != '\\') {
+            continue;
+        }
+        char separator = *cursor;
+        *cursor = '\0';
+        bool drive_root = strlen(copy) == 2 && copy[1] == ':';
+        if (!drive_root && !dir_exists(copy) && feature_test_mkdir(copy) != 0 && errno != EEXIST) {
+            free(copy);
+            return -1;
+        }
+        *cursor = separator;
+    }
+
+    int result = 0;
+    if (!dir_exists(copy) && feature_test_mkdir(copy) != 0 && errno != EEXIST) {
+        result = -1;
+    }
+    free(copy);
+    return result;
+}
+
+static inline char *feature_test_temp_dir() {
+#ifdef __WINDOWS
+    char *root = getenv("TEMP");
+    if (!root || !root[0]) {
+        root = getenv("TMP");
+    }
+    if (!root || !root[0]) {
+        root = ".";
+    }
+#else
+    char *root = getenv("TMPDIR");
+    if (!root || !root[0]) {
+        root = "/tmp";
+    }
+#endif
+    size_t root_length = strlen(root);
+    bool has_separator = root_length > 0 &&
+                         (root[root_length - 1] == '/' || root[root_length - 1] == '\\');
+    char *parent = dsprintf("%s%snature-test-run.XXXXXX", root,
+                            has_separator ? "" : "/");
+    assertf(mkdtemp(parent) != NULL, "cannot create test directory from %s",
+            parent);
+    char *result = path_join(parent, "nature-test");
+    assertf(feature_test_mkdir(result) == 0,
+            "cannot create test case directory %s", result);
+    free(parent);
+    return result;
+}
+
+static inline void feature_test_normalize_crlf(char *text) {
+    size_t read_index = 0;
+    size_t write_index = 0;
+    while (text[read_index]) {
+        if (text[read_index] == '\r' && text[read_index + 1] == '\n') {
+            read_index++;
+        }
+        text[write_index++] = text[read_index++];
+    }
+    text[write_index] = '\0';
+}
 
 static inline void exec_no_output(slice_t *args) {
     exec_process(WORKDIR, BUILD_OUTPUT, args);
@@ -38,19 +124,27 @@ static inline int exec_imm_param() {
 
 static inline char *exec_output_status(int *status) {
     assert(status);
-    return exec(WORKDIR, BUILD_OUTPUT, slice_new(), NULL, status);
+    char *output = exec(WORKDIR, BUILD_OUTPUT, slice_new(), NULL, status);
+    feature_test_normalize_crlf(output);
+    return output;
 }
 
 static inline char *exec_output() {
-    return exec(WORKDIR, BUILD_OUTPUT, slice_new(), NULL, NULL);
+    char *output = exec(WORKDIR, BUILD_OUTPUT, slice_new(), NULL, NULL);
+    feature_test_normalize_crlf(output);
+    return output;
 }
 
 static inline char *exec_output_with_pid(int32_t *pid) {
-    return exec(WORKDIR, BUILD_OUTPUT, slice_new(), pid, NULL);
+    char *output = exec(WORKDIR, BUILD_OUTPUT, slice_new(), pid, NULL);
+    feature_test_normalize_crlf(output);
+    return output;
 }
 
 static inline char *exec_with_args(slice_t *args) {
-    return exec(WORKDIR, BUILD_OUTPUT, args, NULL, NULL);
+    char *output = exec(WORKDIR, BUILD_OUTPUT, args, NULL, NULL);
+    feature_test_normalize_crlf(output);
+    return output;
 }
 
 static inline int feature_test_build() {
@@ -67,7 +161,8 @@ static inline int feature_test_build() {
         LOGF("build start\n");
         build(entry, false);
         LOGF("build success\n");
-    } else {
+    }
+    else {
         assertf(false, "%s", (char *) test_error_msg);
         exit(1);
     }
@@ -83,6 +178,7 @@ typedef struct {
 
 typedef struct {
     char *os; // 操作系统限制 (linux, darwin, windows)
+    char *exclude_os; // 不运行该 case 的操作系统
     char *arch; // CPU架构限制 (amd64, arm64, riscv64)
     int timeout; // 超时时间（秒），0表示无限制
     int repeat; // 重复次数
@@ -132,6 +228,9 @@ static inline testar_case_file_t *parse_file(char *content, size_t *offset) {
         return NULL;
     }
     size_t name_len = name_end - start;
+    if (name_len > 0 && start[name_len - 1] == '\r') {
+        name_len--;
+    }
     file->name = malloc(name_len + 1);
     strncpy(file->name, start, name_len);
     file->name[name_len] = '\0';
@@ -209,11 +308,12 @@ static inline testar_case_file_t *parse_file(char *content, size_t *offset) {
 
 /**
  * 解析测试用例属性
- * 格式: test_name[os=linux,timeout=10]
+ * 格式: test_name[os=linux,exclude_os=windows,timeout=10]
  */
 static inline testar_case_attrs_t *parse_test_attrs(char *name_with_attrs, char **pure_name) {
     testar_case_attrs_t *attrs = malloc(sizeof(testar_case_attrs_t));
     attrs->os = NULL;
+    attrs->exclude_os = NULL;
     attrs->arch = NULL;
     attrs->timeout = 0;
     attrs->repeat = 0; // 默认只执行一次
@@ -262,6 +362,8 @@ static inline testar_case_attrs_t *parse_test_attrs(char *name_with_attrs, char 
 
             if (strcmp(key, "os") == 0) {
                 attrs->os = strdup(value);
+            } else if (strcmp(key, "exclude_os") == 0) {
+                attrs->exclude_os = strdup(value);
             } else if (strcmp(key, "arch") == 0) {
                 attrs->arch = strdup(value);
             } else if (strcmp(key, "timeout") == 0) {
@@ -293,6 +395,10 @@ static inline bool is_os_match(const char *required_os) {
 #else
     return false; // 未知系统
 #endif
+}
+
+static inline bool is_os_excluded(const char *excluded_os) {
+    return excluded_os && is_os_match(excluded_os);
 }
 
 /**
@@ -334,6 +440,9 @@ static inline slice_t *testar_decompress(char *content) {
         char *name_start = content + offset + 4; // 跳过 "=== "
         char *name_end = strchr(name_start, '\n');
         size_t name_len = name_end - name_start;
+        if (name_len > 0 && name_start[name_len - 1] == '\r') {
+            name_len--;
+        }
         char *name_with_attrs = malloc(name_len + 1);
         strncpy(name_with_attrs, name_start, name_len);
         name_with_attrs[name_len] = '\0';
@@ -404,15 +513,10 @@ static inline void feature_testar_test(char *custom_target) {
 
     // TEST_EXEC_IMM
     char *content = file_read(testar_file);
+    feature_test_normalize_crlf(content);
     slice_t *cases = testar_decompress(content);
 
-    // 选定测试目录 /tmp/nature_test
-    char *test_dir = "/tmp/nature-test";
-
-    // 创建测试目录
-    if (!dir_exists(test_dir)) {
-        system("mkdir -p /tmp/nature-test");
-    }
+    char *test_dir = feature_test_temp_dir();
 
     // 设置工作目录为测试目录
     if (chdir(test_dir) != 0) {
@@ -433,6 +537,12 @@ static inline void feature_testar_test(char *custom_target) {
             continue;
         }
 
+        if (is_os_excluded(test_case->attrs->exclude_os)) {
+            printf("test case skipped=== %s (os excluded: %s)\n",
+                   test_case->name, test_case->attrs->exclude_os);
+            continue;
+        }
+
         // 检查CPU架构限制
         if (!is_arch_match(test_case->attrs->arch)) {
             printf("test case skipped=== %s (arch mismatch: required %s)\n",
@@ -442,7 +552,8 @@ static inline void feature_testar_test(char *custom_target) {
 
         printf("test case start=== %s", test_case->name);
         // 收集所有需要显示的属性
-        bool has_attrs = test_case->attrs->os || test_case->attrs->arch || test_case->attrs->timeout > 0 ||
+        bool has_attrs = test_case->attrs->os || test_case->attrs->exclude_os ||
+                         test_case->attrs->arch || test_case->attrs->timeout > 0 ||
                          test_case->attrs->repeat > 0;
         if (has_attrs) {
             printf(" [");
@@ -450,6 +561,12 @@ static inline void feature_testar_test(char *custom_target) {
 
             if (test_case->attrs->os) {
                 printf("os=%s", test_case->attrs->os);
+                first = false;
+            }
+
+            if (test_case->attrs->exclude_os) {
+                if (!first) printf(",");
+                printf("exclude_os=%s", test_case->attrs->exclude_os);
                 first = false;
             }
 
@@ -496,12 +613,13 @@ static inline void feature_testar_test(char *custom_target) {
 
             char *dir = path_dir(full_path);
             if (!dir_exists(dir)) {
-                system(str_connect("mkdir -p ", dir));
+                assertf(feature_test_mkdir_p(dir) == 0,
+                        "cannot create test directory %s", dir);
             }
             free(dir);
 
             // 写入文件内容
-            FILE *fp = fopen(full_path, "w");
+            FILE *fp = fopen(full_path, "wb");
             assert(fp);
             fwrite(file->content, 1, file->length, fp);
             fclose(fp);
@@ -540,13 +658,16 @@ static inline void feature_testar_test(char *custom_target) {
                     int32_t status = 0;
                     char *output = exec_output_status(&status);
                     if (status != 0) {
-                        assertf(false, "%s status code %d failed: %s", test_case->name, status, output);
+                        assertf(false, "%s status code %d (0x%08x) failed: %s",
+                                test_case->name, status, (uint32_t) status,
+                                output);
                     } else {
                         LOGF("%s", output);
                     }
                 }
             }
-        } else {
+        }
+        else {
             // 编译错误处理
             if (output_file) {
                 assertf(str_equal(test_error_msg, (char *) output_file->content), "in %s\nexpect: %s\nactual: %s",

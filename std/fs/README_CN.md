@@ -1,4 +1,4 @@
-# import [fs](https://github.com/nature-lang/nature/tree/master/std/fs/main.n)
+# import [fs](https://github.com/nature-lang/nature/tree/master/std/fs/fs.n)
 
 文件系统操作，用于读取、写入和管理文件。
 

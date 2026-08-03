@@ -372,6 +372,10 @@ bool type_generics(type_t dst, type_t src, table_t *generics_param_table) {
             return false;
         }
 
+        if (left_type_fn->is_c_variadic != right_type_fn->is_c_variadic) {
+            return false;
+        }
+
         if (left_type_fn->is_errable != right_type_fn->is_errable) {
             return false;
         }
@@ -657,6 +661,10 @@ bool type_compare_visited(type_t dst, type_t src, table_t *visited) {
         }
 
         if (left_type_fn->is_rest != right_type_fn->is_rest) {
+            return false;
+        }
+
+        if (left_type_fn->is_c_variadic != right_type_fn->is_c_variadic) {
             return false;
         }
 
@@ -2298,11 +2306,18 @@ static type_t infer_select_expr(module_t *m, ast_expr_t *expr) {
 
 static void infer_call_args(module_t *m, ast_call_t *call, type_fn_t *target_type_fn) {
     // 由于支持 fndef is_rest 语言，所以实参的数量大于等于形参的数量
-    if (!target_type_fn->is_rest && call->args->length > target_type_fn->param_types->length) {
+    if (!target_type_fn->is_rest && !target_type_fn->is_c_variadic &&
+        call->args->length > target_type_fn->param_types->length) {
         INFER_ASSERTF(false, "too many args");
     }
-    if (!target_type_fn->is_rest && call->args->length < target_type_fn->param_types->length) {
+    if (!target_type_fn->is_rest &&
+        call->args->length < target_type_fn->param_types->length) {
         INFER_ASSERTF(false, "not enough args");
+    }
+
+    if (call->spread && target_type_fn->is_c_variadic) {
+        INFER_ASSERTF(false,
+                      "spread operator '...' is not supported for C variadic functions")
     }
 
     if (call->spread && target_type_fn->is_rest) {
@@ -2313,10 +2328,49 @@ static void infer_call_args(module_t *m, ast_call_t *call, type_fn_t *target_typ
     for (int i = 0; i < call->args->length; ++i) {
         bool is_spread = call->spread && (i == call->args->length - 1);
 
+        ast_expr_t *arg = ct_list_value(call->args, i);
+        if (target_type_fn->is_c_variadic &&
+            i >= target_type_fn->param_types->length) {
+            if (arg->assert_type == AST_EXPR_LITERAL) {
+                ast_literal_t *literal = arg->value;
+                if (literal->kind == TYPE_INT) {
+                    infer_right_expr(m, arg, type_kind_new(TYPE_INT32));
+                    continue;
+                }
+                if (literal->kind == TYPE_FLOAT) {
+                    infer_right_expr(m, arg, type_kind_new(TYPE_FLOAT64));
+                    continue;
+                }
+            }
+
+            type_t actual = infer_right_expr(m, arg, type_kind_new(TYPE_UNKNOWN));
+            type_t promoted = actual;
+            switch (actual.kind) {
+                case TYPE_BOOL:
+                case TYPE_INT8:
+                case TYPE_UINT8:
+                case TYPE_INT16:
+                case TYPE_UINT16:
+                    promoted = type_kind_new(TYPE_INT32);
+                    break;
+                case TYPE_FLOAT32:
+                    promoted = type_kind_new(TYPE_FLOAT64);
+                    break;
+                case TYPE_ENUM:
+                    promoted = actual.enum_->element_type;
+                    if (promoted.storage_size < DWORD)
+                        promoted = type_kind_new(TYPE_INT32);
+                    break;
+                default:
+                    break;
+            }
+            if (!type_compare(actual, promoted))
+                *arg = ast_type_as(*arg, promoted);
+            continue;
+        }
+
         // first param from formal
         type_t *formal_type = select_fn_param(target_type_fn, i, is_spread);
-
-        ast_expr_t *arg = ct_list_value(call->args, i);
 
         infer_right_expr(m, arg, *formal_type);
     }
@@ -4236,6 +4290,7 @@ static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef) {
     }
 
     f->is_rest = fndef->rest_param;
+    f->is_c_variadic = fndef->c_variadic;
     type_t result = type_new(TYPE_FN, f);
     result.status = REDUCTION_STATUS_DONE;
 
@@ -4321,6 +4376,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     }
 
     type_fn->is_rest = fndef->rest_param;
+    type_fn->is_c_variadic = fndef->c_variadic;
     type_t result = type_new(TYPE_FN, type_fn);
     result.status = REDUCTION_STATUS_DONE;
 
@@ -4344,6 +4400,11 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
  * @param fn
  */
 static void infer_fndef(module_t *m, ast_fndef_t *fn) {
+    // a module may consist of several source parts, so error paths follow the file declaring this fn
+    if (fn->rel_path) {
+        m->rel_path = fn->rel_path;
+    }
+
     assert(m);
     assert(fn->type.kind == TYPE_FN && fn->type.status == REDUCTION_STATUS_DONE);
     m->current_fn = fn;
@@ -4401,6 +4462,9 @@ void pre_infer(module_t *m) {
         ast_fndef_t *fndef = m->ast_fndefs->take[i];
         assert(!fndef->is_local);
 
+        if (fndef->rel_path) {
+            m->rel_path = fndef->rel_path;
+        }
         m->current_line = fndef->line;
         m->current_column = fndef->column;
 

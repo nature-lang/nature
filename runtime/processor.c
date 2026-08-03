@@ -1,12 +1,20 @@
 #include "processor.h"
 
 #include <stdatomic.h>
+#ifndef __WINDOWS
 #include <ucontext.h>
+#endif
 
 #include "nutils/errort.h"
 #include "nutils/rt_signal.h"
 #include "runtime.h"
 #include "runtime/nutils/http.h"
+
+#if defined(__DARWIN) || defined(__WINDOWS)
+#define PROCESSOR_IDLE_SLEEP_US 1000
+#else
+#define PROCESSOR_IDLE_SLEEP_US 1
+#endif
 
 int cpu_count;
 
@@ -24,11 +32,15 @@ bool main_coroutine_exited = false;
 
 rt_linked_fixalloc_t global_gc_worklist;
 
-uv_key_t tls_processor_key = 0;
-uv_key_t tls_coroutine_key = 0;
+uv_key_t tls_processor_key = {0};
+uv_key_t tls_coroutine_key = {0};
 
 
+#ifdef __WINDOWS
+_Thread_local int64_t tls_yield_safepoint = false;
+#else
 _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint = false;
+#endif
 
 __attribute__((aligned(128))) aligned_page_t global_safepoint = {0};
 
@@ -97,6 +109,7 @@ NO_OPTIMIZE void co_preempt_yield() {
  * @param info
  * @param ucontext
  */
+#ifndef __WINDOWS
 NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *ucontext) {
     DEBUGF("[thread_handle_sig] unexpect sig %d", sig);
 
@@ -221,6 +234,7 @@ NO_OPTIMIZE static void thread_handle_sig(int sig, siginfo_t *info, void *uconte
 #error "platform no support yet"
 #endif
 }
+#endif
 
 NO_OPTIMIZE static void coroutine_wrapper() {
     coroutine_t *co = aco_get_arg();
@@ -439,9 +453,11 @@ static void processor_run(void *raw) {
         }
 
         int64_t handle_limit = 61;
-        while (p->runnable_list.count > 0 && handle_limit > 0) {
+        while (handle_limit > 0) {
             coroutine_t *co = rt_linked_fixalloc_pop(&p->runnable_list);
-            assert(co);
+            if (co == NULL) {
+                break;
+            }
 
             RDEBUGF("[runtime.processor_run] will handle coroutine, p_index=%d, co=%p, status=%d", p->index, co,
                     co->status);
@@ -457,12 +473,11 @@ static void processor_run(void *raw) {
             }
         }
 
-        if (p->runnable_list.count == 0) {
+        if (rt_linked_fixalloc_empty(&p->runnable_list)) {
             // 阻塞运行
             global_loop_run(1);
         } else {
             global_loop_run(0);
-            DEBUGF("runnable_list.count = %ld", p->runnable_list.count);
         }
     }
 
@@ -754,7 +769,9 @@ n_processor_t *processor_new(int index) {
     mutex_init(&p->thread_locker, false);
     p->status = P_STATUS_INIT;
     p->thread_waked = false;
+#ifndef __WINDOWS
     p->sig.sa_flags = 0;
+#endif
     p->thread_id = 0;
     p->coroutine = NULL;
     p->co_started_at = 0;
@@ -956,6 +973,10 @@ void co_migrate(aco_t *aco, aco_share_stack_t *new_st) {
                                          ((addr_t) old_st->align_retptr - (addr_t) aco->reg[ACO_REG_IDX_BP]));
     aco->reg[ACO_REG_IDX_SP] = (void *) ((addr_t) new_st->align_retptr -
                                          ((addr_t) old_st->align_retptr - (addr_t) aco->reg[ACO_REG_IDX_SP]));
+#if defined(__AMD64) && defined(__WINDOWS)
+    aco->reg[ACO_REG_IDX_STACK_BASE] = (void *) ((addr_t) new_st->real_ptr + new_st->real_sz);
+    aco->reg[ACO_REG_IDX_STACK_LIMIT] = new_st->ptr;
+#endif
 
     // 更新 co share_stack 指向
     aco->share_stack = new_st;
@@ -1052,7 +1073,7 @@ void global_loop_run(int loop_timeout_ms) {
 
     if (!atomic_compare_exchange_weak_explicit(&global.loop_owner, &expected, 1, memory_order_acquire, memory_order_relaxed)) {
         if (loop_timeout_ms > 0) {
-            usleep(1);
+            usleep(PROCESSOR_IDLE_SLEEP_US);
         }
         return; // 继续处理
     }

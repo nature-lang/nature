@@ -1,4 +1,4 @@
-# import [io](https://github.com/nature-lang/nature/tree/master/std/io/main.n)
+# import [io](https://github.com/nature-lang/nature/tree/master/std/io/io.n)
 
 输入/输出接口和缓冲区实现，用于读取和写入数据。
 

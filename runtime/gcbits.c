@@ -1,7 +1,7 @@
 #include "gcbits.h"
 
 #include <stdatomic.h>
-#include "uv.h"
+#include "runtime/uv_compat.h"
 #include "utils/helper.h"
 
 gc_bits_arenas_t gc_bits_arenas;

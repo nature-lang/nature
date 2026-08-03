@@ -1,7 +1,7 @@
 #ifndef NATURE_RUNTIME_NUTILS_DNS_H_
 #define NATURE_RUNTIME_NUTILS_DNS_H_
 #include "runtime/processor.h"
-#include <uv.h>
+#include "runtime/uv_compat.h"
 
 typedef struct {
     n_string_t host;

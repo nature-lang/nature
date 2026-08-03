@@ -1,0 +1,23 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "extensionHost",
+            "request": "launch",
+            "name": "Launch NLS Extension",
+            "runtimeExecutable": "${execPath}",
+            "args": [
+                "--extensionDevelopmentPath=${workspaceFolder}"
+            ],
+            "outFiles": [
+                "${workspaceFolder}/dist/**/*.js"
+            ],
+            "env": {
+                "SERVER_PATH": "${workspaceFolder}/target/debug/nls",
+                "RUST_LOG": "debug",
+                "RUST_BACKTRACE": "1"
+            },
+            "preLaunchTask": "build-nls"
+        }
+    ]
+}

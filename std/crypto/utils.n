@@ -139,7 +139,7 @@ fn mbedtls_entropy_init(ptr<mbedtls_entropy_context> ctx):void
 fn mbedtls_ctr_drbg_init(ptr<mbedtls_ctr_drbg_context> ctx):void
 
 #linkid mbedtls_ctr_drbg_seed
-fn mbedtls_ctr_drbg_seed(ptr<mbedtls_ctr_drbg_context> ctx, anyptr f_entropy, anyptr p_entropy, libc.cstr custom, u32 len):i32
+fn mbedtls_ctr_drbg_seed(ptr<mbedtls_ctr_drbg_context> ctx, anyptr f_entropy, anyptr p_entropy, libc.cstr custom, u64 len):i32
 
 // Core RSA functions
 #linkid mbedtls_rsa_init

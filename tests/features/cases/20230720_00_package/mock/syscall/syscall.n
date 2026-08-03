@@ -1,0 +1,10 @@
+mod syscall
+
+import myrand
+import myrand.utils.pool
+
+fn dump() {
+    myrand.dump()
+    pool.dump()
+    println('hello world syscall')
+}

@@ -34,7 +34,8 @@ impl<'a> Flow<'a> {
                 start: fndef.symbol_end,
                 end: fndef.symbol_end,
                 message: "missing return".to_string(),
-            });
+                is_warning: false,
+                            });
         }
     }
 
@@ -91,6 +92,11 @@ impl<'a> Flow<'a> {
                 (then_has_return && else_has_return, then_has_ret || else_has_ret)
             }
             AstNode::Fake(expr) => self.analyze_expr(expr),
+            AstNode::Defer(body) => {
+                // defer body cannot return/ret out of the enclosing fn, but its own stmts still need checking
+                self.analyze_body(body);
+                (false, false)
+            }
 
             _ => (false, false),
         }
@@ -117,7 +123,8 @@ impl<'a> Flow<'a> {
                         end: expr.end,
                         start: expr.end,
                         message: "missing ret".to_string(),
-                    });
+                        is_warning: false,
+                                            });
                 }
 
                 // has ret 属于当前 match, 离开当前 match 后，ret 作废

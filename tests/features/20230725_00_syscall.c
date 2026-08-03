@@ -7,7 +7,7 @@ static void test_basic() {
     char *raw = exec_output();
 
     char *str =
-            "open asserts/notfound.txt failed: No such file or directory\n"
+            "open missing file failed\n"
             "open asserts/open.txt successful\n"
             "actual read len: 20\n"
             "buf as string: hello world\n"

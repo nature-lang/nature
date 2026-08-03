@@ -23,14 +23,19 @@ bool is_std_package(char *package) {
 
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_type == DT_DIR) {
-            if (!str_equal(entry->d_name, ".") &&
-                !str_equal(entry->d_name, "..") &&
-                !str_equal(entry->d_name, "builtin") &&
-                !str_equal(entry->d_name, "temps")) {
-                char *dirname = strdup(entry->d_name);
-                table_set(std_package_table, dirname, (void *) 1);
-            }
+        if (str_equal(entry->d_name, ".") ||
+            str_equal(entry->d_name, "..") ||
+            str_equal(entry->d_name, "builtin") ||
+            str_equal(entry->d_name, "temps")) {
+            continue;
+        }
+
+        char *full_path = path_join(std_dir, entry->d_name);
+        bool is_directory = dir_exists(full_path);
+        free(full_path);
+        if (is_directory) {
+            char *dirname = strdup(entry->d_name);
+            table_set(std_package_table, dirname, (void *) 1);
         }
     }
 
@@ -70,72 +75,6 @@ char *package_import_temp_fullpath(toml_table_t *package_conf, char *package_dir
     path = path_join(package_dir, path);
 
     return path;
-}
-
-/**
- *
- * import foo.bar => foo is package.name, so import workdir/bar.n
- * import foo => import foo.foo => import workdir/foo.n
- * @param package_dir
- * @param ast_import_package  foo.bar.car 每一段都是一个字符串,放在了 import packages 中
- * @return
- */
-char *package_import_fullpath(toml_table_t *package_conf, char *package_dir, slice_t *ast_import_package) {
-    assert(package_dir);
-    assert(ast_import_package);
-    assert(ast_import_package->count > 0);
-
-    // 当 import 一个文件夹时，默认 import 其中的 main.n 文件。
-    char *entry = "main";
-    // 可以自定义 entry
-    toml_datum_t datum = toml_string_in(package_conf, "entry");
-    if (datum.ok) {
-        entry = datum.u.s;
-    }
-    assertf(!ends_with(entry, ".n"), "entry cannot end with .n, entry '%s'", entry);
-
-    char *prefix = package_dir;
-    for (int i = 1; i < ast_import_package->count; ++i) {
-        prefix = path_join(prefix, ast_import_package->take[i]);
-    }
-
-    int entry_count = 0;
-    do {
-        if (entry_count == 1) {
-            if (dir_exists(prefix)) {
-                // 拼接文件后缀
-                prefix = path_join(prefix, entry);
-            }
-        }
-
-        entry_count += 1;
-
-        // os + arch 文件
-        char *os = os_to_string(BUILD_OS);
-        char *arch = arch_to_string(BUILD_ARCH);
-        char *os_arch = str_connect_by(os, arch, "_");
-
-        char *os_arch_full_path = str_connect_by(prefix, os_arch, ".");
-        os_arch_full_path = str_connect(os_arch_full_path, ".n");
-        if (file_exists(os_arch_full_path)) {
-            return os_arch_full_path;
-        }
-
-        // os 文件
-        char *os_full_path = str_connect_by(prefix, os, ".");
-        os_full_path = str_connect(os_full_path, ".n");
-        if (file_exists(os_full_path)) {
-            return os_full_path;
-        }
-
-        // 不带其他后缀的标准文件
-        char *full_path = str_connect(prefix, ".n");
-        if (file_exists(full_path)) {
-            return full_path;
-        }
-    } while (entry_count < 2);
-
-    return NULL;
 }
 
 slice_t *package_links(char *package_dir, toml_table_t *package_conf) {
