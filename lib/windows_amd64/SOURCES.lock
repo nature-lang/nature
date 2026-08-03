@@ -1,6 +1,5 @@
 # Nature windows_amd64 sysroot source lock
-# This file is input to release sysroot production. Generated binary hashes
-# are recorded separately in SHA256SUMS.
+# This file is input to release sysroot production.
 
 target=x86_64-w64-windows-gnu
 minimum_windows=10.0

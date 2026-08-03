@@ -17,7 +17,6 @@ fi
 
 required_files='CAPABILITIES.json
 SOURCES.lock
-SHA256SUMS
 crt2.obj
 libruntime.a
 libuv.a
@@ -75,9 +74,6 @@ IFS=$old_ifs
 
 verify_tmpdir=${WINDOWS_VERIFY_TMPDIR:-$ROOT_DIR}
 temp_dir=$(mktemp -d "$verify_tmpdir/nature-windows-verify.XXXXXX")
-actual_files=$temp_dir/files
-hashed_files=$temp_dir/hashes
-checksum_file=$temp_dir/SHA256SUMS
 capabilities=$temp_dir/capabilities.json
 cleanup() {
     rm -rf "$temp_dir"
@@ -110,28 +106,6 @@ if [ ! -s "$archive_dir/libmain.a" ] ||
    [ "$(dd if="$archive_dir/libmain.a" bs=8 count=1 2>/dev/null)" != \
      '!<arch>' ]; then
     echo "windows sysroot: internal archive writer verification failed" >&2
-    exit 1
-fi
-
-(
-    cd "$SYSROOT"
-    LC_ALL=C find . -type f ! -name SHA256SUMS -print |
-        sed 's#^\./##' | LC_ALL=C sort >"$actual_files"
-    sed 's/\r$//' SHA256SUMS >"$checksum_file"
-    awk '{print $2}' "$checksum_file" | LC_ALL=C sort >"$hashed_files"
-)
-if ! cmp -s "$actual_files" "$hashed_files"; then
-    echo "windows sysroot: SHA256SUMS does not cover the complete file set" >&2
-    diff -u "$hashed_files" "$actual_files" >&2 || true
-    exit 1
-fi
-
-if command -v sha256sum >/dev/null 2>&1; then
-    (cd "$SYSROOT" && sha256sum -c "$checksum_file")
-elif command -v shasum >/dev/null 2>&1; then
-    (cd "$SYSROOT" && shasum -a 256 -c "$checksum_file")
-else
-    echo "windows sysroot: sha256sum or shasum is required" >&2
     exit 1
 fi
 

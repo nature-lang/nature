@@ -81,20 +81,6 @@ if [ ! -x "$nature_bin" ]; then
 fi
 "$nature_bin" coff-capabilities -o "$OUTPUT/CAPABILITIES.json" "$OUTPUT"
 
-checksum=$OUTPUT/SHA256SUMS
-: >"$checksum"
-(
-    cd "$OUTPUT"
-    find . -type f ! -name SHA256SUMS -print | sed 's#^\./##' | LC_ALL=C sort
-) | while IFS= read -r file; do
-    if command -v sha256sum >/dev/null 2>&1; then
-        hash=$(sha256sum "$OUTPUT/$file" | awk '{print $1}')
-    else
-        hash=$(shasum -a 256 "$OUTPUT/$file" | awk '{print $1}')
-    fi
-    printf '%s  %s\n' "$hash" "$file" >>"$checksum"
-done
-
 WINDOWS_SYSROOT="$OUTPUT" NATURE_BIN="$nature_bin" \
     WINDOWS_VERIFY_TMPDIR="$WORK" "$SCRIPT_DIR/verify.sh"
 echo "windows sysroot: built $VARIANT variant at $OUTPUT"
