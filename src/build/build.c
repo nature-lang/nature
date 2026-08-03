@@ -469,6 +469,9 @@ static void coff_custom_links() {
                       sizeof(f64_mask));
     coff_put_metadata(object, globals, F32_NEG_MASK_IDENT, &f32_mask,
                       sizeof(f32_mask));
+    uint8_t main_is_fn = build_main_is_fn;
+    coff_put_metadata(object, globals, SYMBOL_MAIN_IS_FN, &main_is_fn,
+                      sizeof(main_is_fn));
 
     coff_require(object,
                  coff_object_write_file(object, custom_link_object_path()),
