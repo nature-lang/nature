@@ -89,12 +89,19 @@ static inline void on_conn_close_cb(uv_handle_t *handle) {
            conn, &conn->handle, conn->async_write_handle);
 
     // 需要先关闭 async 才能释放内存
-    if (uv_is_active((uv_handle_t *) &conn->async_write_handle)) {
+    if (!uv_is_closing((uv_handle_t *) &conn->async_write_handle)) {
         uv_close((uv_handle_t *) &conn->async_write_handle, on_async_conn_close_cb);
-    } else {
-        assert(false);
-        DEBUGF("[on_conn_close_cb] close failed, async_write_handle not active")
     }
+}
+
+static inline void http_conn_close(http_conn_t *conn) {
+    uv_handle_t *handle = (uv_handle_t *) &conn->handle;
+    if (uv_is_closing(handle)) {
+        return;
+    }
+
+    uv_read_stop((uv_stream_t *) &conn->handle);
+    uv_close(handle, on_conn_close_cb);
 }
 
 /**
@@ -110,7 +117,7 @@ static inline void on_write_end_cb(uv_write_t *write_req, int status) {
 
     http_conn_t *conn = CONTAINER_OF(write_req, http_conn_t, write_req);
 
-    uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
+    http_conn_close(conn);
 }
 
 /**
@@ -153,9 +160,7 @@ static inline void async_conn_write_handle_cb(uv_async_t *handle) {
     if (result) {
         DEBUGF("[async_conn_write_handle_cb] uv_write have err %s, is_closing %d", uv_strerror(result),
                uv_is_closing((uv_handle_t *) &conn->handle));
-        if (!uv_is_closing((uv_handle_t *) &conn->handle)) {
-            uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
-        }
+        http_conn_close(conn);
     }
 }
 
@@ -176,7 +181,7 @@ static inline void on_read_cb(uv_stream_t *handle, ssize_t nread, const uv_buf_t
             DEBUGF("[on_read_cb] uv_read failed: %s", uv_strerror(nread));
         }
 
-        uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
+        http_conn_close(conn);
         return;
     }
 
@@ -184,7 +189,7 @@ static inline void on_read_cb(uv_stream_t *handle, ssize_t nread, const uv_buf_t
     if (err != HPE_OK) {
         DEBUGF("[on_read_cb] llhttp_execute failed: %s", llhttp_errno_name(err));
         // 解析错误
-        uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
+        http_conn_close(conn);
         return;
     }
     conn->read_buf_len += nread;
@@ -193,6 +198,8 @@ static inline void on_read_cb(uv_stream_t *handle, ssize_t nread, const uv_buf_t
         DEBUGF("[on_read_cb] parser not completed yet");
         return;
     }
+
+    uv_read_stop(handle);
 
     conn->n_server->inner->coroutine_count += 1;
     coroutine_t *conn_co = rt_coroutine_new(conn->n_server->handler, 0, NULL, conn);
@@ -310,7 +317,7 @@ static void on_http_conn_cb(uv_stream_t *server, int status) {
     int result = uv_accept(server, (uv_stream_t *) &conn->handle);
     if (result) {
         DEBUGF("[on_http_conn_cb] uv_accept failed: %s", uv_strerror(result));
-        uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
+        http_conn_close(conn);
         return;
     }
 
@@ -320,7 +327,7 @@ static void on_http_conn_cb(uv_stream_t *server, int status) {
     result = uv_read_start((uv_stream_t *) &conn->handle, http_alloc_buffer_cb, on_read_cb);
     if (result) {
         DEBUGF("[on_http_conn_cb] uv_read_start failed: %s", uv_strerror(result));
-        uv_close((uv_handle_t *) &conn->handle, on_conn_close_cb);
+        http_conn_close(conn);
         return;
     }
     inner->read_start_count += 1; // 记录成功启动读取的连接

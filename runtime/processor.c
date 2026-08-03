@@ -10,6 +10,12 @@
 #include "runtime.h"
 #include "runtime/nutils/http.h"
 
+#if defined(__DARWIN) || defined(__WINDOWS)
+#define PROCESSOR_IDLE_SLEEP_US 1000
+#else
+#define PROCESSOR_IDLE_SLEEP_US 1
+#endif
+
 int cpu_count;
 
 n_processor_t *processor_index[1024] = {0};
@@ -1068,7 +1074,7 @@ void global_loop_run(int loop_timeout_ms) {
     n_processor_t *processor = processor_get();
     if (processor != NULL && processor->index != 0) {
         if (loop_timeout_ms > 0) {
-            usleep(1000);
+            usleep(PROCESSOR_IDLE_SLEEP_US);
         }
         return;
     }
@@ -1078,7 +1084,7 @@ void global_loop_run(int loop_timeout_ms) {
 
     if (!atomic_compare_exchange_weak_explicit(&global.loop_owner, &expected, 1, memory_order_acquire, memory_order_relaxed)) {
         if (loop_timeout_ms > 0) {
-            usleep(1);
+            usleep(PROCESSOR_IDLE_SLEEP_US);
         }
         return; // 继续处理
     }
