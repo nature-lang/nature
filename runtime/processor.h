@@ -100,7 +100,11 @@ typedef enum {
     CO_FLAG_DIRECT = 5, // 直接调用 fn, 而不需要通过 n_fn_t 进行提取
 } co_flag_t;
 
-#ifdef __LINUX
+#if defined(__clang__)
+// Zig cc uses Clang for every target.  Clang does not implement GCC's
+// optimize(0) attribute; optnone is the portable spelling for Clang.
+#define NO_OPTIMIZE __attribute__((optnone))
+#elif defined(__LINUX)
 #define NO_OPTIMIZE __attribute__((optimize(0)))
 #else
 #define NO_OPTIMIZE __attribute__((optnone))

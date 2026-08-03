@@ -688,14 +688,21 @@ static void ld_windows_add_sysroot_input(ld_options_t *options,
                                          bool required) {
     char *path = lib_file_path((char *) file);
     if (!file_exists(path)) {
-        assertf(!required,
-                "windows_amd64 sysroot is incomplete: required file '%s' "
-                "is missing (expected '%s')",
-                file, path);
+        if (required) {
+            dump_global_errorf(
+                    BUILD_ENTRY, 1, 1,
+                    "windows_amd64 sysroot is incomplete: required file '%s' "
+                    "is missing (expected '%s')",
+                    file, path);
+        }
         return;
     }
-    assertf(ld_add_input(options, path) == LD_OK,
-            "cannot add Windows sysroot input '%s'", path);
+    int result = ld_add_input(options, path);
+    if (result != LD_OK) {
+        dump_global_errorf(BUILD_ENTRY, 1, 1,
+                           "cannot add Windows sysroot input '%s' (error %d)",
+                           path, result);
+    }
 }
 
 static void ld_windows_exe(slice_t *modules, char *ldflags) {
@@ -739,8 +746,13 @@ static void ld_windows_exe(slice_t *modules, char *ldflags) {
                     (size_t) library_dir_length < sizeof(library_dir),
             "Nature windows_amd64 sysroot path is too long");
     options.sysroot = library_dir;
-    assertf(ld_add_library_path(&options, library_dir) == LD_OK,
-            "cannot add Windows sysroot search path '%s'", library_dir);
+    int add_result = ld_add_library_path(&options, library_dir);
+    if (add_result != LD_OK) {
+        dump_global_errorf(
+                BUILD_ENTRY, 1, 1,
+                "cannot add Windows sysroot search path '%s' (error %d)",
+                library_dir, add_result);
+    }
 
     /* The order is part of the controlled sysroot contract.  CRT startup is
        direct, user objects precede runtime archives, and import libraries are
@@ -749,16 +761,30 @@ static void ld_windows_exe(slice_t *modules, char *ldflags) {
     for (int i = 0; i < modules->count; i++) {
         module_t *module = modules->take[i];
         if (!module->object_file) continue;
-        assertf(ld_add_input(&options, module->object_file) == LD_OK,
-                "cannot add Windows module object '%s'",
-                module->object_file);
+        add_result = ld_add_input(&options, module->object_file);
+        if (add_result != LD_OK) {
+            dump_global_errorf(
+                    BUILD_ENTRY, 1, 1,
+                    "cannot add Windows module object '%s' (error %d)",
+                    module->object_file, add_result);
+        }
     }
-    assertf(ld_add_input(&options, custom_link_object_path()) == LD_OK,
-            "cannot add Windows Nature metadata object");
+    add_result = ld_add_input(&options, custom_link_object_path());
+    if (add_result != LD_OK) {
+        dump_global_errorf(BUILD_ENTRY, 1, 1,
+                           "cannot add Windows Nature metadata object "
+                           "(error %d)",
+                           add_result);
+    }
     for (int i = 0; i < linker_libs->count; i++) {
         char *path = linker_libs->take[i];
-        assertf(ld_add_input(&options, path) == LD_OK,
-                "cannot add Windows package link '%s'", path);
+        add_result = ld_add_input(&options, path);
+        if (add_result != LD_OK) {
+            dump_global_errorf(
+                    BUILD_ENTRY, 1, 1,
+                    "cannot add Windows package link '%s' (error %d)", path,
+                    add_result);
+        }
     }
 
     size_t sysroot_library_count;
@@ -769,13 +795,22 @@ static void ld_windows_exe(slice_t *modules, char *ldflags) {
                                     sysroot_libraries[i].required);
 
     int parse_result = ld_parse_flags(&options, ldflags ? ldflags : "");
-    assertf(parse_result == LD_OK,
-            "unsupported Windows linker flags (error %d)", parse_result);
+    if (parse_result != LD_OK) {
+        dump_global_errorf(BUILD_ENTRY, 1, 1,
+                           "unsupported Windows linker flags (error %d)",
+                           parse_result);
+    }
     int result = ld_link(&options);
-    assertf(result == LD_OK,
-            "internal Windows COFF linker failed (error %d)", result);
-    assertf(file_exists(BUILD_OUTPUT),
-            "internal Windows COFF linker did not create '%s'", BUILD_OUTPUT);
+    if (result != LD_OK) {
+        dump_global_errorf(BUILD_ENTRY, 1, 1,
+                           "internal Windows COFF linker failed (error %d)",
+                           result);
+    }
+    if (!file_exists(BUILD_OUTPUT)) {
+        dump_global_errorf(BUILD_ENTRY, 1, 1,
+                           "internal Windows COFF linker did not create '%s'",
+                           BUILD_OUTPUT);
+    }
     log_debug("internal COFF linker output --> %s", BUILD_OUTPUT);
     ld_options_deinit(&options);
 }

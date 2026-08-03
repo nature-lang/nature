@@ -1065,21 +1065,6 @@ static void global_loop_timeout_cb(uv_timer_t *timer) {
  */
 
 void global_loop_run(int loop_timeout_ms) {
-#ifdef __WINDOWS
-    // A libuv loop is bound to the thread that drives it. Serializing uv_run
-    // calls is not sufficient if ownership migrates between Windows
-    // processor threads, because IOCP and async wakeups retain per-loop thread
-    // state. P0 owns the global loop; worker processors only consume their
-    // runnable queues and periodically yield while idle.
-    n_processor_t *processor = processor_get();
-    if (processor != NULL && processor->index != 0) {
-        if (loop_timeout_ms > 0) {
-            usleep(PROCESSOR_IDLE_SLEEP_US);
-        }
-        return;
-    }
-#endif
-
     int32_t expected = 0;
 
     if (!atomic_compare_exchange_weak_explicit(&global.loop_owner, &expected, 1, memory_order_acquire, memory_order_relaxed)) {
