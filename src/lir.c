@@ -26,6 +26,7 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->ret_labels = stack_new();
     c->continue_labels = stack_new();
     c->break_labels = stack_new();
+    c->defer_scopes = stack_new();
 
     c->ssa_globals = slice_new();
     c->ssa_globals_table = table_new();
@@ -49,6 +50,7 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->interval_count = alloc_reg_count() + 1;
 
     fndef->closure = c;
+    c->is_fx = fndef->is_fx;
     c->fndef = fndef;
 
     c->stack_gc_bits = bitmap_new(1024);

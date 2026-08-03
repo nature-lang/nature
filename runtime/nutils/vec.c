@@ -5,7 +5,7 @@
 #include "utils/helper.h"
 
 static void rti_vec_grow(n_vec_t *vec, rtype_t *element_rtype, int custom_capacity) {
-
+    void *old_data = vec->data;
 
     if (custom_capacity) {
         vec->capacity = custom_capacity;

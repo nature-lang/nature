@@ -18,7 +18,7 @@ fn main() {
 }
 
 --- output.txt
-coroutine 'main' panic: 'slice [0:6] out of vec with length 5' at nature-test/main.n:3:24
+panic: 'slice [0:6] out of vec with length 5' at nature-test/main.n:3:24
 
 
 === test_slice_2

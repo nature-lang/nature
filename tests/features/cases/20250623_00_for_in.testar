@@ -26,3 +26,20 @@ fn main() {
 0 4 1007465396 0
 1 29 923577301 8
 2 0 0 0
+
+=== test_for_in_range
+--- main.n
+fn main() {
+    u32 len = 5
+
+    for i in 0..len {
+        println(i)
+    }
+}
+
+--- output.txt
+0
+1
+2
+3
+4

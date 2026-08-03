@@ -1,11 +1,3 @@
-// type fn_t = anyptr
-
-// type all_t = anyptr
-
-// type integer_t = int
-
-// type floater_t = float
-
 type nullable<T> = T?
 
 #linkid print

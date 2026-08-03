@@ -57,7 +57,7 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' panic: 'index out of range [11] with length 10' at nature-test/main.n:3:21
+panic: 'index out of range [11] with length 10' at nature-test/main.n:3:21
 
 === test_catch_panic
 --- main.n

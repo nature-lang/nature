@@ -92,6 +92,11 @@ impl<'a> Flow<'a> {
                 (then_has_return && else_has_return, then_has_ret || else_has_ret)
             }
             AstNode::Fake(expr) => self.analyze_expr(expr),
+            AstNode::Defer(body) => {
+                // defer body cannot return/ret out of the enclosing fn, but its own stmts still need checking
+                self.analyze_body(body);
+                (false, false)
+            }
 
             _ => (false, false),
         }

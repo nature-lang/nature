@@ -8,6 +8,7 @@ use crate::analyzer::common::{AnalyzerError, AstFnDef, AstNode, ImportStmt, Pack
 use crate::analyzer::flow::Flow;
 use crate::analyzer::generics::Generics;
 use crate::analyzer::global_eval::GlobalEval;
+use crate::analyzer::interface::Interface;
 use crate::analyzer::lexer::{Lexer, Token};
 use crate::analyzer::semantic::Semantic;
 use crate::analyzer::symbol::{NodeId, SymbolTable};
@@ -640,6 +641,20 @@ impl Project {
                 Generics::new(m, &st).analyze();
             })) {
                 error!("panic in generics pass for module #{}: {:?}", idx, e);
+            }
+        }
+
+        // interface pass
+        // keep compiler order: after generics, validate typedef impl interfaces early
+        for &idx in &module_indexes {
+            let mut db = self.module_db.lock().unwrap();
+            let mut st = self.symbol_table.lock().unwrap();
+            let m = &mut db[idx];
+            match catch_unwind(AssertUnwindSafe(|| {
+                Interface::new(m, &mut st).analyze()
+            })) {
+                Ok(errors) => m.analyzer_errors.extend(errors),
+                Err(e) => error!("panic in interface pass for module #{}: {:?}", idx, e),
             }
         }
 

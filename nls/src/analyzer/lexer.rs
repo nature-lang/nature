@@ -292,11 +292,15 @@ pub enum TokenType {
     As,
     #[strum(serialize = "fn")]
     Fn,
+    #[strum(serialize = "fx")]
+    Fx,
     #[strum(serialize = "import")]
     Import,
 
     #[strum(serialize = "return")]
     Return,
+    #[strum(serialize = "defer")]
+    Defer,
 
     #[strum(serialize = "interface")]
     Interface,
@@ -412,6 +416,7 @@ impl Token {
             | TokenType::Break
             | TokenType::Continue
             | TokenType::Return
+            | TokenType::Defer
             | TokenType::Let
             | TokenType::Var
             | TokenType::Const
@@ -555,6 +560,8 @@ impl Lexer {
             "else" => TokenType::Else,
             "false" => TokenType::False,
             "float" => TokenType::Float,
+            // "fx" is deliberately absent: fx mode is not exposed yet, so fx stays a plain ident
+            // until the mode is redesigned. The TokenType::Fx parser paths remain, just unreachable.
             "fn" => TokenType::Fn,
             "for" => TokenType::For,
             "go" => TokenType::Go,
@@ -570,6 +577,7 @@ impl Lexer {
             // "new" => TokenType::New, // new 可用于关键字
             "null" => TokenType::Null,
             "return" => TokenType::Return,
+            "defer" => TokenType::Defer,
             // "set" => TokenType::Set,
             "string" => TokenType::String,
             "struct" => TokenType::Struct,

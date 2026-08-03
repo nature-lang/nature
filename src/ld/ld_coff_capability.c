@@ -329,6 +329,7 @@ static bool ld_coff_capability_external_contract(const char *name) {
             "rt_rtype_data",  "rt_rtype_count", "rt_fndef_data",
             "rt_fndef_count", "rt_caller_data", "rt_caller_count",
             "rt_symdef_data", "rt_symdef_count", "rt_strtable_data",
+            "main_is_fn",
     };
     for (size_t i = 0U; i < sizeof(external) / sizeof(*external); i++)
         if (strcmp(name, external[i]) == 0) return true;

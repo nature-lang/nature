@@ -11,7 +11,7 @@ rtype_t string_element_rtype = {0};
 // 添加 hash table gc_rtype(TYPE_UINT64, 0);
 rtype_t uint64_rtype = {0};
 
-// 添加 hash table  (GC_RTYPE(TYPE_STRING, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);)
+// 添加 hash table  (GC_RTYPE(TYPE_STRING, 6, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);)
 rtype_t string_rtype = {0};
 
 rtype_t string_ref_rtype = {0};
@@ -36,7 +36,7 @@ rtype_t std_arg_rtype = {0};
 // GC_RTYPE(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
 rtype_t os_env_rtype = {0};
 
-// GC_RTYPE(TYPE_VEC, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN)
+// GC_RTYPE(TYPE_VEC, 6, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN)
 rtype_t vec_rtype = {0};
 
 //   GC_RTYPE(TYPE_GC_FN, 12, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,

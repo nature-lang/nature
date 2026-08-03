@@ -101,7 +101,8 @@ fn format_fn_hover(fndef: &AstFnDef) -> String {
     let params = format_params(fndef);
     let ret = type_display_name(&fndef.return_type);
 
-    let mut sig = format!("fn {}({}): {}", name, params, ret);
+    let fn_prefix = if fndef.is_fx { "fx" } else { "fn" };
+    let mut sig = format!("{} {}({}): {}", fn_prefix, name, params, ret);
 
     if fndef.is_errable {
         sig.push('!');

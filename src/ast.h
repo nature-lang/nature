@@ -79,6 +79,7 @@ typedef enum {
     AST_STMT_IF,
     AST_STMT_THROW,
     AST_STMT_LET,
+    AST_STMT_DEFER,
     AST_STMT_FOR_ITERATOR,
     AST_STMT_FOR_COND,
     AST_STMT_FOR_TRADITION,
@@ -239,6 +240,7 @@ typedef struct {
 
     list_t *args; // *ast_expr
     bool spread;
+    bool inject_self_arg;
 } ast_call_t;
 
 typedef struct {
@@ -451,6 +453,12 @@ typedef struct {
  */
 typedef struct {
     ast_expr_t iterate; // list, foo.list, bar[0]
+
+    // for i in start..end {}
+    bool is_range;
+    ast_expr_t range_start;
+    ast_expr_t range_end;
+
     ast_var_decl_t first; // 类型推导, type 可能是 int 或者 string
     ast_var_decl_t *second; // value 可选，可能为 null
     slice_t *body;
@@ -459,6 +467,10 @@ typedef struct {
 typedef struct {
     ast_expr_t *expr;
 } ast_return_stmt_t;
+
+typedef struct {
+    slice_t *body; // ast_stmt
+} ast_defer_stmt_t;
 
 // mod <ident>, only valid at the head of a file, marks this file as a source part of its directory module
 typedef struct {
@@ -735,6 +747,7 @@ struct ast_fndef_t {
     bool is_impl; // 是否是 impl fn
     // impl fn without self receiver
     bool is_static;
+    bool is_fx; // 是否是 fx mode
 
     bool is_errable;
 
@@ -745,7 +758,7 @@ struct ast_fndef_t {
 
     // 当 self_kind == PARAM_SELF_T 时，interface 存储指针数据但方法期望值类型
     // receiver_wrapper 用于接收指针参数，解引用后调用原函数
-    struct ast_fndef_t *receiver_wrapper;
+    char *receiver_wrapper_ident;
 
     bool is_generics; // 是否是泛型
 
@@ -948,6 +961,7 @@ static inline ast_fndef_t *ast_fndef_new(module_t *m, int line, int column) {
     fndef->ret_target_types = stack_new();
     fndef->generics_params = NULL;
     fndef->is_impl = false;
+    fndef->is_fx = false;
     fndef->capture_exprs = ct_list_new(sizeof(ast_expr_t));
     fndef->be_capture_locals = slice_new();
 

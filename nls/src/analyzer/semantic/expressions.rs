@@ -945,6 +945,23 @@ impl<'a> Semantic<'a> {
     }
 
     pub fn analyze_stmt(&mut self, stmt: &mut Box<Stmt>) {
+        if self.in_defer_block_depth > 0 {
+            if matches!(
+                &stmt.node,
+                AstNode::Return(_) | AstNode::Break | AstNode::Continue | AstNode::Throw(_) | AstNode::Ret(_)
+            ) {
+                errors_push(
+                    self.module,
+                    AnalyzerError::new(
+                        stmt.start,
+                        stmt.end,
+                        "return/break/continue/throw/ret are not allowed inside defer block".to_string(),
+                    ),
+                );
+                return;
+            }
+        }
+
         match &mut stmt.node {
             AstNode::Fake(expr) | AstNode::Ret(expr) => {
                 self.analyze_expr(expr);
@@ -1053,6 +1070,13 @@ impl<'a> Semantic<'a> {
                 if let Some(expr) = expr {
                     self.analyze_expr(expr);
                 }
+            }
+            AstNode::Defer(body) => {
+                self.in_defer_block_depth += 1;
+                self.enter_scope(ScopeKind::Local, stmt.start, stmt.end);
+                self.analyze_body(body);
+                self.exit_scope();
+                self.in_defer_block_depth -= 1;
             }
             AstNode::Typedef(type_alias_mutex) => {
                 let mut typedef = type_alias_mutex.lock().unwrap();

@@ -37,6 +37,7 @@
 #include "src/semantic/analyzer.h"
 #include "src/semantic/generics.h"
 #include "src/semantic/global_eval.h"
+#include "src/semantic/interface.h"
 #include "src/semantic/infer.h"
 #include "src/ssa.h"
 #include "utils/helper.h"
@@ -48,6 +49,7 @@
 
 // char*, 支持 .o 或者 .a 文件后缀
 static slice_t *linker_libs;
+static uint8_t build_main_is_fn = 1;
 
 static void ld_diagnostic(void *context, ld_diag_level_t level,
                           const char *message);
@@ -183,6 +185,8 @@ static void elf_custom_links() {
     elf_put_global_symbol(ctx, F64_NEG_MASK_IDENT, &f64_mask, QWORD);
     float f32_mast = (float) (-0.0);
     elf_put_global_symbol(ctx, F32_NEG_MASK_IDENT, &f32_mast, DWORD);
+    uint8_t main_is_fn = build_main_is_fn;
+    elf_put_global_symbol(ctx, SYMBOL_MAIN_IS_FN, &main_is_fn, BYTE);
 
 
     elf_file_format(ctx);
@@ -281,6 +285,8 @@ static void mach_custom_links() {
     macho_put_global_symbol(ctx, F64_NEG_MASK_IDENT, &f64_mask, QWORD);
     float f32_mast = (float) (-0.0);
     macho_put_global_symbol(ctx, F32_NEG_MASK_IDENT, &f32_mast, DWORD);
+    uint8_t main_is_fn = build_main_is_fn;
+    macho_put_global_symbol(ctx, SYMBOL_MAIN_IS_FN, &main_is_fn, BYTE);
 
     mach_output_object(ctx);
     log_debug(" --> assembler: %s\n", custom_link_object_path());
@@ -463,6 +469,9 @@ static void coff_custom_links() {
                       sizeof(f64_mask));
     coff_put_metadata(object, globals, F32_NEG_MASK_IDENT, &f32_mask,
                       sizeof(f32_mask));
+    uint8_t main_is_fn = build_main_is_fn;
+    coff_put_metadata(object, globals, SYMBOL_MAIN_IS_FN, &main_is_fn,
+                      sizeof(main_is_fn));
 
     coff_require(object,
                  coff_object_write_file(object, custom_link_object_path()),
@@ -1511,6 +1520,17 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         analyzer(m);
     }
 
+    // 查找 main 函数
+    ast_fndef_t *main_fndef = NULL;
+    SLICE_FOR(main_package->ast_fndefs) {
+        ast_fndef_t *f = SLICE_VALUE(main_package->ast_fndefs);
+        if (str_equal(f->fn_name, FN_MAIN_NAME)) {
+            main_fndef = f;
+        }
+    }
+    assert(main_fndef);
+    build_main_is_fn = main_fndef->is_fx ? 0 : 1;
+
     return modules;
 }
 
@@ -1595,6 +1615,13 @@ static void build_compiler(slice_t *modules) {
         generics(m);
     }
 
+    // interface pass
+    // 在 generics 之后，先校验 type impl interface 约束
+    for (int i = modules->count - 1; i >= 0; --i) {
+        module_t *m = modules->take[i];
+        interface(m);
+    }
+
     // pre infer pass
     // 优先处理 builtin_module
     for (int i = modules->count - 1; i >= 0; --i) {
@@ -1618,14 +1645,13 @@ static void build_compiler(slice_t *modules) {
     for (int i = modules->count - 1; i >= 0; --i) {
         module_t *m = modules->take[i];
         global_eval(m);
+
+        infer(m);
     }
 
     // infer + compiler
     for (int i = 0; i < modules->count; ++i) {
         module_t *m = modules->take[i];
-
-        // 类型推断
-        infer(m);
 
         // 编译为 lir
         linear(m);

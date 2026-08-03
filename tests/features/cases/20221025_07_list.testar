@@ -82,7 +82,7 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' panic: 'index out of range [0] with length 0' at nature-test/main.n:5:24
+panic: 'index out of range [0] with length 0' at nature-test/main.n:5:24
 
 === test_copy
 --- main.n
@@ -105,7 +105,7 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' panic: 'index out of range [-1] with length 4' at nature-test/main.n:3:18
+panic: 'index out of range [-1] with length 4' at nature-test/main.n:3:18
 
 
 
@@ -118,7 +118,7 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' panic: 'index out of range [100123111] with length 4' at nature-test/main.n:3:26
+panic: 'index out of range [100123111] with length 4' at nature-test/main.n:3:26
 
 
 === test_in_range1
@@ -179,4 +179,4 @@ fn main():void! {
 }
 
 --- output.txt
-coroutine 'main' panic: 'index out of range [-2] with length 8' at nature-test/main.n:5:10
+panic: 'index out of range [-2] with length 8' at nature-test/main.n:5:10

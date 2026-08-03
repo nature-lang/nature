@@ -20,6 +20,7 @@ pub struct Semantic<'a> {
     pub(crate) imports: Vec<ImportStmt>,
     pub(crate) current_local_fn_list: Vec<Arc<Mutex<AstFnDef>>>,
     pub(crate) current_scope_id: NodeId,
+    pub(crate) in_defer_block_depth: usize,
 }
 
 impl<'a> Semantic<'a> {
@@ -32,6 +33,7 @@ impl<'a> Semantic<'a> {
             current_scope_id: m.scope_id, // m.scope_id 是 global scope id
             module: m,
             current_local_fn_list: Vec::new(),
+            in_defer_block_depth: 0,
         }
     }
 

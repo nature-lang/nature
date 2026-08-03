@@ -126,7 +126,6 @@
 #define RT_CALL_ENV_ASSIGN_REF "env_assign_ref" // 实际代码位置对 env 的访问
 #define RT_CALL_ENV_ELEMENT_VALUE "env_element_value" // heap addr
 
-#define RT_CALL_STRING_NEW "string_new"
 #define RT_CALL_STRING_TO_VEC "rt_string_to_vec_out"
 #define RT_CALL_VEC_TO_STRING "rt_vec_to_string_out"
 #define RT_CALL_STRING_NEW_WITH_POOL "rt_string_new_with_pool_out"
@@ -142,6 +141,7 @@
 #define RT_CALL_STRING_REF "rt_string_ref" // 默认引用传递
 
 #define RT_CALL_GC_MALLOC "gc_malloc"
+#define RT_CALL_FX_MALLOC "fx_malloc"
 
 #define RT_CALL_RUNTIME_EVAL_GC "runtime_eval_gc"
 
@@ -264,13 +264,12 @@ static inline bool is_rtcall(string target) {
            str_equal(target, RT_CALL_ITERATOR_TAKE_VALUE) || str_equal(target, RT_CALL_FN_NEW) ||
            str_equal(target, RT_CALL_ENV_NEW) ||
            str_equal(target, RT_CALL_ENV_ASSIGN_REF) || str_equal(target, RT_CALL_ENV_ELEMENT_VALUE) ||
-           str_equal(target, RT_CALL_STRING_NEW) || str_equal(target, RT_CALL_STRING_NEW_WITH_POOL) ||
            str_equal(target, RT_CALL_STRING_CONCAT) || str_equal(target, RT_CALL_STRING_TO_VEC) ||
            str_equal(target, RT_CALL_VEC_TO_STRING) || str_equal(target, RT_CALL_VEC_SLICE) ||
            str_equal(target, RT_CALL_STRING_EE) || str_equal(target, RT_CALL_STRING_NE) ||
            str_equal(target, RT_CALL_STRING_LT) || str_equal(target, RT_CALL_STRING_LE) ||
            str_equal(target, RT_CALL_STRING_GT) || str_equal(target, RT_CALL_STRING_GE) ||
-           str_equal(target, RT_CALL_GC_MALLOC) ||
+           str_equal(target, RT_CALL_GC_MALLOC) || str_equal(target, RT_CALL_FX_MALLOC) ||
            str_equal(target, RT_CALL_RUNTIME_EVAL_GC) || str_equal(target, RT_CALL_COROUTINE_ASYNC2) || str_equal(target, RT_CALL_CO_THROW_ERROR) ||
            str_equal(target, RT_CALL_CO_REMOVE_ERROR) || str_equal(target, RT_CALL_CO_HAS_ERROR) ||
            str_equal(target, RT_CALL_CO_HAS_PANIC) || str_equal(target, RT_CALL_PROCESSOR_SET_EXIT) ||

@@ -560,7 +560,7 @@
             "patterns": [
                 {
                     "name": "keyword.control.n",
-                    "match": "\\b(if|else|for|in|break|continue|return|match|select)\\b"
+                    "match": "\\b(if|else|for|in|break|continue|return|defer|match|select)\\b"
                 },
                 {
                     "name": "keyword.control.n",

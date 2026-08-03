@@ -118,6 +118,13 @@ fn collect_hints_from_stmts(
             AstNode::ForCond(_, body) => {
                 collect_hints_from_stmts(&body.stmts, module, project, range_start, range_end, opts, hints);
             }
+            // `for i in a..b` desugars to ForTradition, so its body needs the same treatment
+            AstNode::ForTradition(_, _, _, body) => {
+                collect_hints_from_stmts(&body.stmts, module, project, range_start, range_end, opts, hints);
+            }
+            AstNode::Defer(body) => {
+                collect_hints_from_stmts(&body.stmts, module, project, range_start, range_end, opts, hints);
+            }
             _ => {}
         }
 

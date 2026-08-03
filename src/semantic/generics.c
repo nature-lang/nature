@@ -217,9 +217,9 @@ static bool constraint_has_interface(module_t *m, ast_generics_param_t *param, c
 /**
  * 检查约束接口中是否声明了指定的方法名
  */
-static bool constraint_has_method(module_t *m, ast_generics_param_t *param, char *method_name) {
+static type_fn_t *constraint_find_method(module_t *m, ast_generics_param_t *param, char *method_name) {
     if (!param || param->constraints.elements->length == 0) {
-        return false;
+        return NULL;
     }
 
     for (int i = 0; i < param->constraints.elements->length; i++) {
@@ -234,12 +234,12 @@ static bool constraint_has_method(module_t *m, ast_generics_param_t *param, char
             type_t *element = ct_list_value(interface_type->elements, j);
             if (element->kind == TYPE_FN && element->fn && element->fn->fn_name &&
                 str_equal(element->fn->fn_name, method_name)) {
-                return true;
+                return element->fn;
             }
         }
     }
 
-    return false;
+    return NULL;
 }
 
 static ast_generics_param_t *expr_generics_param(module_t *m, ast_expr_t *expr) {
@@ -455,9 +455,19 @@ static void generics_call(module_t *m, ast_call_t *call) {
     }
 
     // 检查约束接口中是否声明了该方法
-    bool found = constraint_has_method(m, param, select->key);
-    GENERIC_ASSERTF(found, "generic param '%s' has no constraint declaring fn '%s'",
+    type_fn_t *found_method = constraint_find_method(m, param, select->key);
+    GENERIC_ASSERTF(found_method, "generic param '%s' has no constraint declaring fn '%s'",
                     generic_param_ident, select->key);
+
+    // 检查泛型参数数量是否匹配
+    if (found_method) {
+        int call_generics_count = call->generics_args ? call->generics_args->length : 0;
+        bool method_is_generic = found_method->is_tpl;
+        if (!method_is_generic && call_generics_count > 0) {
+            GENERIC_ASSERTF(false, "method '%s' has no generic parameters, but %d generic args provided",
+                            select->key, call_generics_count);
+        }
+    }
 }
 
 /**
@@ -582,7 +592,12 @@ static void generics_stmt(module_t *m, ast_stmt_t *stmt) {
         }
         case AST_STMT_FOR_ITERATOR: {
             ast_for_iterator_stmt_t *for_iter = stmt->value;
-            generics_expr(m, &for_iter->iterate);
+            if (for_iter->is_range) {
+                generics_expr(m, &for_iter->range_start);
+                generics_expr(m, &for_iter->range_end);
+            } else {
+                generics_expr(m, &for_iter->iterate);
+            }
             generics_body(m, for_iter->body);
             break;
         }
@@ -610,6 +625,11 @@ static void generics_stmt(module_t *m, ast_stmt_t *stmt) {
         case AST_STMT_THROW: {
             ast_throw_stmt_t *throw_stmt = stmt->value;
             generics_expr(m, &throw_stmt->error);
+            break;
+        }
+        case AST_STMT_DEFER: {
+            ast_defer_stmt_t *defer_stmt = stmt->value;
+            generics_body(m, defer_stmt->body);
             break;
         }
         case AST_CATCH: {

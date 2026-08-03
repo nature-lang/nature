@@ -148,6 +148,12 @@ fn find_call_in_node<'a>(node: &'a AstNode, offset: usize) -> Option<CallContext
             find_call_in_expr(cond, offset)
                 .or_else(|| find_call_in_stmts(&body.stmts, offset))
         }
+        // `for i in a..b` desugars to ForTradition, so its body needs the same treatment
+        AstNode::ForTradition(init, cond, update, body) => find_call_in_node(&init.node, offset)
+            .or_else(|| find_call_in_expr(cond, offset))
+            .or_else(|| find_call_in_node(&update.node, offset))
+            .or_else(|| find_call_in_stmts(&body.stmts, offset)),
+        AstNode::Defer(body) => find_call_in_stmts(&body.stmts, offset),
         _ => None,
     }
 }
@@ -264,7 +270,8 @@ fn build_signature_information(
     }
 
     let ret = &fndef.return_type;
-    let mut label = format!("fn {}({}): {}", display_name, param_parts.join(", "), ret);
+    let fn_prefix = if fndef.is_fx { "fx" } else { "fn" };
+    let mut label = format!("{} {}({}): {}", fn_prefix, display_name, param_parts.join(", "), ret);
     if fndef.is_errable {
         label.push('!');
     }
@@ -287,7 +294,8 @@ fn format_signature_from_type(
         .iter()
         .map(|t| type_display(t))
         .collect();
-    let mut sig = format!("fn {}({}): {}", name, params.join(", "), fn_type.return_type);
+    let fn_prefix = if fn_type.fx { "fx" } else { "fn" };
+    let mut sig = format!("{} {}({}): {}", fn_prefix, name, params.join(", "), fn_type.return_type);
     if fn_type.errable {
         sig.push('!');
     }
@@ -426,6 +434,7 @@ mod tests {
             generics_args: vec![],
             args: vec![],
             spread: false,
+            inject_self_arg: false,
         };
         assert_eq!(compute_active_parameter(&call, 10), 0);
     }
@@ -448,6 +457,7 @@ mod tests {
             generics_args: vec![],
             args: vec![arg0, arg1],
             spread: false,
+            inject_self_arg: false,
         };
 
         // Cursor before first arg.

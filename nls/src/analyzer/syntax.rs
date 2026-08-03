@@ -607,7 +607,7 @@ impl<'a> Syntax {
             ));
         }
 
-        while !self.is(TokenType::StmtEof) && !self.is(TokenType::Eof) && !self.is(TokenType::Fn) {
+        while !self.is(TokenType::StmtEof) && !self.is(TokenType::Eof) && !self.is(TokenType::Fn) && !self.is(TokenType::Fx) {
             let ident = self.must(TokenType::Ident)?.clone();
             let mut param = GenericsParam::new(ident.literal.clone());
             self.must(TokenType::Colon)?;
@@ -647,7 +647,7 @@ impl<'a> Syntax {
             }
 
             // #where 支持最后一个约束后保留逗号
-            if self.is(TokenType::StmtEof) || self.is(TokenType::Eof) || self.is(TokenType::Fn) {
+            if self.is(TokenType::StmtEof) || self.is(TokenType::Eof) || self.is(TokenType::Fn) || self.is(TokenType::Fx) {
                 break;
             }
         }
@@ -841,7 +841,11 @@ impl<'a> Syntax {
                 _ if brace_level == current_brace_level => {
                     // brace_level = 0 时只识别全局级别的语句
                     if brace_level == 0 {
-                        if matches!(token, TokenType::Fn | TokenType::Var | TokenType::Import | TokenType::Type | TokenType::Const) || self.is_basic_type() {
+                        if matches!(
+                            token,
+                            TokenType::Fn | TokenType::Fx | TokenType::Var | TokenType::Import | TokenType::Type | TokenType::Const
+                        ) || self.is_basic_type()
+                        {
                             return true;
                         }
                     } else {
@@ -850,6 +854,7 @@ impl<'a> Syntax {
                             token,
                             TokenType::Var
                                 | TokenType::Return
+                                | TokenType::Defer
                                 | TokenType::If
                                 | TokenType::For
                                 | TokenType::Match
@@ -887,7 +892,7 @@ impl<'a> Syntax {
         }
     }
 
-    fn parser_type_fn(&mut self) -> Result<TypeKind, SyntaxError> {
+    fn parser_type_fn(&mut self, is_fx: bool) -> Result<TypeKind, SyntaxError> {
         let mut param_types = Vec::new();
 
         self.must(TokenType::LeftParen)?;
@@ -948,9 +953,10 @@ impl<'a> Syntax {
             name: "".to_string(),
             param_types,
             return_type,
-            rest: false,
+            rest: is_rest,
             tpl: false,
             errable: is_errable,
+            fx: is_fx,
         })))
     }
 
@@ -1165,9 +1171,13 @@ impl<'a> Syntax {
             return Ok(t);
         }
 
-        // fn(Type, Type, ...):T!
-        if self.consume(TokenType::Fn) {
-            let type_fn_kind = self.parser_type_fn()?;
+        // fn(Type, Type, ...):T! / fx(Type, Type, ...):T!
+        if self.is(TokenType::Fn) || self.is(TokenType::Fx) {
+            let is_fx = self.consume(TokenType::Fx);
+            if !is_fx {
+                self.must(TokenType::Fn)?;
+            }
+            let type_fn_kind = self.parser_type_fn(is_fx)?;
             t.kind = type_fn_kind;
             t.end = self.prev().unwrap().end;
             return Ok(t);
@@ -1368,13 +1378,34 @@ impl<'a> Syntax {
             self.must(TokenType::LeftCurly)?;
 
             while !self.consume(TokenType::RightCurly) {
-                let fn_start = self.must(TokenType::Fn)?.clone();
+                if !self.is(TokenType::Fn) && !self.is(TokenType::Fx) {
+                    return Err(SyntaxError(self.peek().start, self.peek().end, "interface only supports fn and fx".to_string()));
+                }
+
+                let is_fx = self.consume(TokenType::Fx);
+                if !is_fx {
+                    self.must(TokenType::Fn)?;
+                }
+                let fn_start = self.prev().unwrap().clone();
                 let fn_name_token = self.must(TokenType::Ident)?.clone();
                 let fn_name = fn_name_token.literal.clone();
-                let mut type_fn_kind = self.parser_type_fn()?;
+
+                let origin_type_params_table = self.type_params_table.clone();
+                let mut method_generics_params = Vec::new();
+                if self.consume(TokenType::LeftAngle) {
+                    self.type_params_table = origin_type_params_table.clone();
+                    self.parser_parse_generics_decl(&mut method_generics_params)?;
+                    self.must(TokenType::RightAngle)?;
+                }
+
+                let mut type_fn_kind = self.parser_type_fn(is_fx)?;
                 if let TypeKind::Fn(fn_kind) = &mut type_fn_kind {
                     fn_kind.name = fn_name.clone();
+                    if !method_generics_params.is_empty() {
+                        fn_kind.tpl = true;
+                    }
                 }
+                self.type_params_table = origin_type_params_table;
 
                 if exists.contains_key(&fn_name) {
                     errors_push(
@@ -1794,6 +1825,7 @@ impl<'a> Syntax {
                 generics_args,
                 args: Vec::new(),
                 spread: false,
+                inject_self_arg: false,
             };
 
             call.args = self.parser_call_args(&mut call)?;
@@ -2261,6 +2293,7 @@ impl<'a> Syntax {
             args: Vec::new(),
             generics_args: Vec::new(),
             spread: false,
+            inject_self_arg: false,
         };
 
         call.args = self.parser_call_args(&mut call)?;
@@ -2396,7 +2429,7 @@ impl<'a> Syntax {
         }
 
         // fndef type (stmt 维度禁止了匿名 fndef, 所以这里一定是 fndef type)
-        if self.is(TokenType::Fn) && self.next_is(1, TokenType::LeftParen) {
+        if (self.is(TokenType::Fn) || self.is(TokenType::Fx)) && self.next_is(1, TokenType::LeftParen) {
             return true;
         }
 
@@ -2436,6 +2469,57 @@ impl<'a> Syntax {
         result
     }
 
+    fn parser_for_range_rewrite(&self, first: VarDeclExpr, range_start: Box<Expr>, range_end: Box<Expr>, body: AstBody) -> Box<Stmt> {
+        let first_ident = first.ident.clone();
+        let start = range_start.start;
+        let end = body.end;
+
+        let init = Box::new(Stmt {
+            start: range_start.start,
+            end: range_start.end,
+            node: AstNode::VarDef(Arc::new(Mutex::new(first)), range_start),
+        });
+
+        let cond = Box::new(Expr {
+            start,
+            end: range_end.end,
+            type_: Type::default(),
+            target_type: Type::default(),
+            node: AstNode::Binary(ExprOp::Lt, Box::new(Expr::ident(start, start, first_ident.clone(), 0)), range_end),
+        });
+
+        let update = Box::new(Stmt {
+            start,
+            end: start,
+            node: AstNode::Assign(
+                Box::new(Expr::ident(start, start, first_ident.clone(), 0)),
+                Box::new(Expr {
+                    start,
+                    end: start,
+                    type_: Type::default(),
+                    target_type: Type::default(),
+                    node: AstNode::Binary(
+                        ExprOp::Add,
+                        Box::new(Expr::ident(start, start, first_ident, 0)),
+                        Box::new(Expr {
+                            start,
+                            end: start,
+                            type_: Type::default(),
+                            target_type: Type::default(),
+                            node: AstNode::Literal(TypeKind::Int, "1".to_string()),
+                        }),
+                    ),
+                }),
+            ),
+        });
+
+        Box::new(Stmt {
+            start,
+            end,
+            node: AstNode::ForTradition(init, cond, update, body),
+        })
+    }
+
     fn parser_for_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
         self.must(TokenType::For)?;
 
@@ -2461,6 +2545,7 @@ impl<'a> Syntax {
         }
 
         // for k,v in map {}
+        // for i in start..end {}
         if self.is(TokenType::Ident) && (self.next_is(1, TokenType::Comma) || self.next_is(1, TokenType::In)) {
             let first_ident = self.must(TokenType::Ident)?;
             let first = VarDeclExpr {
@@ -2491,10 +2576,23 @@ impl<'a> Syntax {
             };
 
             self.must(TokenType::In)?;
-            let iterate = self.parser_precedence_expr(SyntaxPrecedence::TypeCast, TokenType::Unknown)?;
+            let in_expr = self.parser_precedence_expr(SyntaxPrecedence::TypeCast, TokenType::Range)?;
+            if self.consume(TokenType::Range) {
+                if second.is_some() {
+                    return Err(SyntaxError(
+                        self.peek().start,
+                        self.peek().end,
+                        "for range only supports one iterator variable".to_string(),
+                    ));
+                }
+                let range_end = self.parser_precedence_expr(SyntaxPrecedence::TypeCast, TokenType::Unknown)?;
+                let body = self.parser_body(false)?;
+                return Ok(self.parser_for_range_rewrite(first, in_expr, range_end, body));
+            }
+
             let body = self.parser_body(false)?;
 
-            stmt.node = AstNode::ForIterator(iterate, Arc::new(Mutex::new(first)), second, body);
+            stmt.node = AstNode::ForIterator(in_expr, Arc::new(Mutex::new(first)), second, body);
 
             return Ok(stmt);
         }
@@ -2600,6 +2698,32 @@ impl<'a> Syntax {
 
         stmt.node = AstNode::Return(expr);
         stmt.end = self.prev().unwrap().end;
+        Ok(stmt)
+    }
+
+    fn parser_defer_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
+        let mut stmt = self.stmt_new();
+        self.must(TokenType::Defer)?;
+
+        let body = if self.is(TokenType::LeftCurly) {
+            self.parser_body(false)?
+        } else {
+            if self.is_stmt_eof() || self.is(TokenType::RightCurly) {
+                return Err(SyntaxError(self.peek().start, self.peek().end, "defer must have statement body".to_string()));
+            }
+
+            let defer_stmt = self.parser_local_stmt_core(false)?;
+            let start = defer_stmt.start;
+            let end = defer_stmt.end;
+            AstBody {
+                stmts: vec![defer_stmt],
+                start,
+                end,
+            }
+        };
+
+        stmt.end = body.end;
+        stmt.node = AstNode::Defer(body);
         Ok(stmt)
     }
 
@@ -2909,9 +3033,13 @@ impl<'a> Syntax {
         let start = self.peek().start;
         let end = self.peek().end;
 
-        self.must(TokenType::Fn)?;
+        let is_fx = self.consume(TokenType::Fx);
+        if !is_fx {
+            self.must(TokenType::Fn)?;
+        }
 
         let mut fndef = AstFnDef::default();
+        fndef.is_fx = is_fx;
         fndef.symbol_start = start;
         fndef.symbol_end = end;
 
@@ -2951,6 +3079,7 @@ impl<'a> Syntax {
                 args: Vec::new(),
                 generics_args: Vec::new(),
                 spread: false,
+                inject_self_arg: false,
             };
             call.args = self.parser_call_args(&mut call)?;
 
@@ -3317,7 +3446,11 @@ impl<'a> Syntax {
     fn parser_fndef_stmt(&mut self, mut fndef: AstFnDef) -> Result<Box<Stmt>, SyntaxError> {
         let mut stmt = self.stmt_new();
         fndef.symbol_start = self.peek().start;
-        self.must(TokenType::Fn)?;
+        if self.consume(TokenType::Fx) {
+            fndef.is_fx = true;
+        } else {
+            self.must(TokenType::Fn)?;
+        }
 
         // 检查是否是类型实现函数
         if self.is_impl_fn() {
@@ -3522,13 +3655,21 @@ impl<'a> Syntax {
             }
         }
 
-        if fndef.pending_where_params.is_some() && !self.is(TokenType::Fn) {
-            return Err(SyntaxError(self.peek().start, self.peek().end, "#where can only be applied to fn".to_string()));
+        if fndef.pending_where_params.is_some() && !self.is(TokenType::Fn) && !self.is(TokenType::Fx) {
+            return Err(SyntaxError(
+                self.peek().start,
+                self.peek().end,
+                "#where can only be applied to fn/fx".to_string(),
+            ));
         }
 
         if self.is(TokenType::Type) {
             if fndef.pending_where_params.is_some() {
-                return Err(SyntaxError(self.peek().start, self.peek().end, "#where can only be applied to fn".to_string()));
+                return Err(SyntaxError(
+                    self.peek().start,
+                    self.peek().end,
+                    "#where can only be applied to fn/fx".to_string(),
+                ));
             }
             let result = self.parser_typedef_stmt()?;
             if is_private {
@@ -3537,7 +3678,7 @@ impl<'a> Syntax {
                 }
             }
             Ok(result)
-        } else if self.is(TokenType::Fn) {
+        } else if self.is(TokenType::Fn) || self.is(TokenType::Fx) {
             self.parser_fndef_stmt(fndef)
         } else if self.is(TokenType::Const) {
             let result = self.parser_constdef_stmt()?;
@@ -3567,7 +3708,7 @@ impl<'a> Syntax {
             Err(SyntaxError(
                 self.peek().start,
                 self.peek().end,
-                format!("the label can only be applied to type, fn, const, or var"),
+                format!("the label can only be applied to type, fn, fx, const, or var"),
             ))
         }
     }
@@ -3646,7 +3787,7 @@ impl<'a> Syntax {
             self.parser_label()?
         } else if self.is(TokenType::Test) {
             self.parser_test_stmt()?
-        } else if self.is(TokenType::Fn) {
+        } else if self.is(TokenType::Fn) || self.is(TokenType::Fx) {
             self.parser_fndef_stmt(AstFnDef::default())?
         } else if self.is(TokenType::Import) {
             self.parser_import_stmt()?
@@ -3695,7 +3836,7 @@ impl<'a> Syntax {
         Ok(stmt)
     }
 
-    fn parser_local_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
+    fn parser_local_stmt_core(&mut self, consume_stmt_end: bool) -> Result<Box<Stmt>, SyntaxError> {
         let stmt = if self.is(TokenType::Var) {
             self.parser_var_begin_stmt()?
         } else if self.is_type_begin_stmt() {
@@ -3720,6 +3861,8 @@ impl<'a> Syntax {
             self.parser_for_stmt()?
         } else if self.is(TokenType::Return) {
             self.parser_return_stmt()?
+        } else if self.is(TokenType::Defer) {
+            self.parser_defer_stmt()?
         } else if self.is(TokenType::Import) {
             self.parser_import_stmt()?
         } else if self.is(TokenType::Type) {
@@ -3747,9 +3890,15 @@ impl<'a> Syntax {
             self.parser_expr_begin_stmt()?
         };
 
-        self.must_stmt_end()?;
+        if consume_stmt_end {
+            self.must_stmt_end()?;
+        }
 
         Ok(stmt)
+    }
+
+    fn parser_local_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
+        self.parser_local_stmt_core(true)
     }
 
     fn parser_precedence_expr(&mut self, precedence: SyntaxPrecedence, exclude: TokenType) -> Result<Box<Expr>, SyntaxError> {
@@ -3949,6 +4098,7 @@ impl<'a> Syntax {
             })],
             generics_args: Vec::new(),
             spread: false,
+            inject_self_arg: false,
         };
         call_stmt.node = AstNode::Call(call);
         let end = self.prev().unwrap().end;
@@ -4303,7 +4453,7 @@ impl<'a> Syntax {
             self.parser_go_expr()
         } else if self.is(TokenType::Match) {
             self.parser_match_expr()
-        } else if self.is(TokenType::Fn) {
+        } else if self.is(TokenType::Fn) || self.is(TokenType::Fx) {
             self.parser_fndef_expr()
         } else if self.parser_is_new() {
             self.parser_new_expr()

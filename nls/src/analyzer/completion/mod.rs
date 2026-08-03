@@ -212,7 +212,8 @@ impl<'a> CompletionProvider<'a> {
         }
 
         let return_type = fndef.return_type.to_string();
-        format!("fn({}): {}", params_str, return_type)
+        let fn_prefix = if fndef.is_fx { "fx" } else { "fn" };
+        format!("{}({}): {}", fn_prefix, params_str, return_type)
     }
 
     /// Find innermost scope containing the position starting from module scope
@@ -330,6 +331,7 @@ impl<'a> CompletionProvider<'a> {
             ("var", "var $0", "Variable declaration"),
             ("let", "let $0", "Let binding (error unwrap)"),
             ("return", "return $0", "Return statement"),
+            ("defer", "defer $0", "Defer statement"),
             ("import", "import $0", "Import module"),
             ("type", "type $0 = ", "Type definition"),
             ("match", "match $0 {\n\t\n}", "Match expression"),

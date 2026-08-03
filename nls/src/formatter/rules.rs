@@ -380,6 +380,7 @@ impl<'a> Formatter<'a> {
             | TokenType::Break
             | TokenType::Continue
             | TokenType::Return
+            | TokenType::Defer
             | TokenType::Let
             | TokenType::Var
             | TokenType::Const

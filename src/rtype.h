@@ -107,7 +107,7 @@ static inline int64_t type_hash(type_t t) {
     }
 
     if (t.kind == TYPE_FN) {
-        char *str = dsprintf("fn.%" PRId64, type_hash(t.fn->return_type));
+        char *str = dsprintf("%s.%" PRId64, t.fn->is_fx ? "fx" : "fn", type_hash(t.fn->return_type));
         for (int i = 0; i < t.fn->param_types->length; ++i) {
             type_t *param_type = ct_list_value(t.fn->param_types, i);
             str = str_connect(
