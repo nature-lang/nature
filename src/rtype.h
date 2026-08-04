@@ -528,7 +528,7 @@ static inline int64_t rtype_array_gc_bits(int64_t gc_bits_offset, int64_t *offse
         } else if (t->element_type.kind == TYPE_TAGGED_UNION) {
             last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset, t->element_type.storage_size);
         } else if (t->element_type.kind == TYPE_STRING || t->element_type.kind == TYPE_VEC || t->element_type.kind == TYPE_MAP ||
-                   t->element_type.kind == TYPE_SET) {
+                   t->element_type.kind == TYPE_SET || t->element_type.kind == TYPE_INTERFACE) {
             last_ptr_temp_offset = rtype_builtin_gc_bits(gc_bits_offset, offset, t->element_type);
         } else {
             int64_t bit_index = *offset / POINTER_SIZE;
@@ -656,7 +656,7 @@ static inline int64_t rtype_builtin_gc_bits(int64_t gc_bits_offset, int64_t *off
         ptr_slots = 1;
     } else if (t.kind == TYPE_MAP) {
         ptr_slots = 3;
-    } else if (t.kind == TYPE_SET) {
+    } else if (t.kind == TYPE_SET || t.kind == TYPE_INTERFACE) {
         ptr_slots = 2;
     } else {
         return 0;
@@ -697,7 +697,8 @@ static inline int64_t rtype_struct_gc_bits(int64_t gc_bits_offset, int64_t *offs
             last_ptr_temp_offset = rtype_union_gc_bits(gc_bits_offset, offset, p->type.storage_size);
         } else if (p->type.kind == TYPE_TAGGED_UNION) {
             last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset, p->type.storage_size);
-        } else if (p->type.kind == TYPE_STRING || p->type.kind == TYPE_VEC || p->type.kind == TYPE_MAP || p->type.kind == TYPE_SET) {
+        } else if (p->type.kind == TYPE_STRING || p->type.kind == TYPE_VEC || p->type.kind == TYPE_MAP ||
+                   p->type.kind == TYPE_SET || p->type.kind == TYPE_INTERFACE) {
             last_ptr_temp_offset = rtype_builtin_gc_bits(gc_bits_offset, offset, p->type);
         } else {
             int64_t size = p->type.storage_size; // 等待存储的 struct size
@@ -747,7 +748,8 @@ static inline int64_t rtype_tuple_gc_bits(int64_t gc_bits_offset, int64_t *offse
             last_ptr_temp_offset = rtype_union_gc_bits(gc_bits_offset, offset, element->storage_size);
         } else if (element->kind == TYPE_TAGGED_UNION) {
             last_ptr_temp_offset = rtype_tagged_union_gc_bits(gc_bits_offset, offset, element->storage_size);
-        } else if (element->kind == TYPE_STRING || element->kind == TYPE_VEC || element->kind == TYPE_MAP || element->kind == TYPE_SET) {
+        } else if (element->kind == TYPE_STRING || element->kind == TYPE_VEC || element->kind == TYPE_MAP ||
+                   element->kind == TYPE_SET || element->kind == TYPE_INTERFACE) {
             last_ptr_temp_offset = rtype_builtin_gc_bits(gc_bits_offset, offset, *element);
         } else {
             int64_t size = element->storage_size;

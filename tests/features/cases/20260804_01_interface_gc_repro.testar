@@ -1,0 +1,45 @@
+=== test_struct_interface_gc
+--- main.n
+import runtime
+import co
+
+type readable_t = interface{
+    fn read([u8] dst):int!
+}
+
+type source_t:readable_t = struct{
+    int value
+}
+
+fn source_t.read(&self, [u8] dst):int! {
+    if dst.len() > 0 {
+        dst[0] = self.value as u8
+    }
+    return self.value
+}
+
+type holder_t = struct{
+    readable_t source
+}
+
+fn make_holder():ref<holder_t> {
+    readable_t source = new source_t(value = 42)
+    return new holder_t(source = source)
+}
+
+fn main() {
+    var holder = make_holder()
+    runtime.gc()
+    co.sleep(1000)
+
+    [[int]] replacements = []
+    for int i = 0; i < 4096; i += 1 {
+        replacements.push(vec<int>.new(i, 1))
+    }
+
+    [u8] dst = vec<u8>.new(0, 1)
+    println(holder.source.read(dst))
+}
+
+--- output.txt
+42
