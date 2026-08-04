@@ -204,7 +204,7 @@ jobs:
           test "$(zig version)" = 0.14.1
           cmake -S runtime -B build-runtime -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_TOOLCHAIN_FILE=cmake/windows-amd64-toolchain.cmake \
+            -DCMAKE_TOOLCHAIN_FILE="$(cygpath -m "$PWD/cmake/windows-amd64-toolchain.cmake")" \
             -DCMAKE_SYSTEM_PROCESSOR=amd64
           cmake --build build-runtime \
             --target runtime \
