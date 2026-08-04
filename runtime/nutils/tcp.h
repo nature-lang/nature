@@ -41,6 +41,7 @@ typedef struct {
 
     freenode_t *freelist;
     int count;
+    int accept_waiters;
 } inner_server_t;
 
 typedef struct {
@@ -152,7 +153,12 @@ static inline void on_conn_close_timer_cb(uv_handle_t *handle) {
 
 static inline void on_tcp_close_cb(uv_handle_t *handle) {
     inner_server_t *inner = handle->data;
-    free(inner);
+    // Keep the listener state alive until every blocked accept has observed
+    // the close callback and released its waiter reference.
+    handle->data = NULL;
+    if (inner->accept_waiters == 0) {
+        free_conn(inner);
+    }
 }
 
 static inline void on_tcp_read_cb(uv_stream_t *client_handle, ssize_t nread, const uv_buf_t *buf) {
@@ -355,10 +361,27 @@ void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
     coroutine_t *co = coroutine_get();
     DEBUGF("[rt_uv_tcp_accept] accept start, co=%p", co)
 
+    if (server->closed) {
+        rti_co_throw(co, "server closed", false);
+        return;
+    }
     inner_server_t *inner_server = server->inner;
+    inner_server->accept_waiters += 1;
     inner_conn_t *conn = NULL;
 
     while (true) {
+        if (server->closed) {
+            if (inner_server->handle.data != NULL) {
+                rt_coroutine_sleep(1);
+                continue;
+            }
+            inner_server->accept_waiters -= 1;
+            if (inner_server->accept_waiters == 0) {
+                free_conn(inner_server);
+            }
+            rti_co_throw(co, "server closed", false);
+            return;
+        }
         if (inner_server->accept_head == NULL) {
             rt_coroutine_sleep(1);
             continue;
@@ -375,6 +398,7 @@ void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
         pthread_mutex_unlock(&inner_server->accept_locker);
 
         conn->handle.data = conn;
+        inner_server->accept_waiters -= 1;
         break;
     }
 
@@ -480,8 +504,6 @@ void rt_uv_tcp_server_close(n_tcp_server_t *server) {
     }
 
     server->closed = true;
-    free_conn(server->inner);
-
     global_async_send(uv_async_server_close, server, NULL, NULL);
 }
 
