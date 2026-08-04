@@ -1,0 +1,45 @@
+=== test_close_wakes_blocked_receiver_and_sender
+--- main.n
+import co
+
+type wait_state_t = struct{
+    bool done
+    string error
+}
+
+fn receive(chan<int> input, ref<wait_state_t> state) {
+    input.recv() catch e {
+        state.error = e.msg()
+        0
+    }
+    state.done = true
+}
+
+fn send(chan<int> output, ref<wait_state_t> state) {
+    output.send(1) catch e {
+        state.error = e.msg()
+    }
+    state.done = true
+}
+
+fn main() {
+    var receive_channel = chan<int>.new()
+    var receive_state = new wait_state_t()
+    go receive(receive_channel, receive_state)
+    co.sleep(20)
+    receive_channel.close()
+    for !receive_state.done {
+        co.sleep(1)
+    }
+    assert(receive_state.error == 'recv on closed channel')
+
+    var send_channel = chan<int>.new()
+    var send_state = new wait_state_t()
+    go send(send_channel, send_state)
+    co.sleep(20)
+    send_channel.close()
+    for !send_state.done {
+        co.sleep(1)
+    }
+    assert(send_state.error == 'send on closed channel')
+}

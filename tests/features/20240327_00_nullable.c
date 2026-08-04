@@ -7,7 +7,9 @@
 
 static void test_basic() {
     char *raw = exec_output();
-    char *str = "null\n"
+    char *str = "false\n"
+                "true\n"
+                "null\n"
                 "6\n"
                 "null\n"
                 "false true\n"

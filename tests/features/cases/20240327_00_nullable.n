@@ -1,4 +1,9 @@
+ref<i32>? global_nat_p = null
+
 fn main() {
+    println(global_nat_p is ref<i32>)
+    println(global_nat_p is null)
+
     i32? nat = null
     println(nat)
     nat = 6 as i32

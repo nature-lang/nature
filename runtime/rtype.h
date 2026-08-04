@@ -8,6 +8,8 @@
 
 extern struct sc_map_64v rt_rtype_map;
 
+extern rtype_t *rt_null_rtype;
+
 // GC_RTYPE(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
 extern rtype_t linkco_rtype; // rtype 预生成
 
