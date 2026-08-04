@@ -16,11 +16,19 @@ set(CMAKE_ASM_COMPILER_ARG1 "cc -target x86_64-windows-gnu")
 
 # CMake expects AR and RANLIB to be standalone executables, whereas Zig
 # exposes them as subcommands. Tiny checked-in adapters keep the generated
-# archive rules conventional and deterministic.
-set(CMAKE_AR "${CMAKE_CURRENT_LIST_DIR}/zig-ar.sh"
-        CACHE FILEPATH "Zig deterministic archiver adapter" FORCE)
-set(CMAKE_RANLIB "${CMAKE_CURRENT_LIST_DIR}/zig-ranlib.sh"
-        CACHE FILEPATH "Zig deterministic ranlib adapter" FORCE)
+# archive rules conventional and deterministic. Native Windows generators
+# need cmd wrappers; Unix hosts use the shell wrappers.
+if (CMAKE_HOST_WIN32)
+    set(CMAKE_AR "${CMAKE_CURRENT_LIST_DIR}/zig-ar.cmd"
+            CACHE FILEPATH "Zig deterministic archiver adapter" FORCE)
+    set(CMAKE_RANLIB "${CMAKE_CURRENT_LIST_DIR}/zig-ranlib.cmd"
+            CACHE FILEPATH "Zig deterministic ranlib adapter" FORCE)
+else ()
+    set(CMAKE_AR "${CMAKE_CURRENT_LIST_DIR}/zig-ar.sh"
+            CACHE FILEPATH "Zig deterministic archiver adapter" FORCE)
+    set(CMAKE_RANLIB "${CMAKE_CURRENT_LIST_DIR}/zig-ranlib.sh"
+            CACHE FILEPATH "Zig deterministic ranlib adapter" FORCE)
+endif ()
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(NATURE_WINDOWS_DEBUG_FLAGS "-fdebug-compilation-dir=.")
