@@ -286,10 +286,11 @@ bool rt_chan_send(n_chan_t *chan, void *msg_ptr, bool try) {
 
     co->waiting = NULL;
     co->data = NULL;
+    bool success = linkco->success;
     rti_release_linkco(linkco);
 
     // 已经 send 完成，也可能是 chan closed
-    if (!linkco->success) {
+    if (!success) {
         rti_throw("send on closed channel", false);
         return false;
     }
@@ -388,7 +389,13 @@ bool rt_chan_recv(n_chan_t *chan, void *msg_ptr, bool try) {
     co->waiting = NULL;
     co->data = NULL;
     linkco->chan = NULL;
+    bool success = linkco->success;
     rti_release_linkco(linkco);
+
+    if (!success) {
+        rti_throw("recv on closed channel", false);
+        return false;
+    }
 
     // 数据已经收到，直接返回即可, coroutine_resume 后会将上面的 yield_lock 进行解锁
     DEBUGF("[rt_chan_recv] co wakeup, will return, msg(int)=%ld",
@@ -397,13 +404,27 @@ bool rt_chan_recv(n_chan_t *chan, void *msg_ptr, bool try) {
 }
 
 void rt_chan_close(n_chan_t *chan) {
+    pthread_mutex_lock(&chan->lock);
     if (chan->closed) {
+        pthread_mutex_unlock(&chan->lock);
         rti_throw("chan already closed", false);
         return;
     }
 
-    pthread_mutex_lock(&chan->lock);
     chan->closed = true;
+    chan->successful = false;
+
+    linkco_t *linkco = NULL;
+    while ((linkco = waitq_pop(&chan->recvq)) != NULL) {
+        linkco->success = false;
+        linkco->co->data = linkco;
+        co_ready(linkco->co);
+    }
+    while ((linkco = waitq_pop(&chan->sendq)) != NULL) {
+        linkco->success = false;
+        linkco->co->data = linkco;
+        co_ready(linkco->co);
+    }
     pthread_mutex_unlock(&chan->lock);
 }
 

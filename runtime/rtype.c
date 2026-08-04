@@ -1,6 +1,7 @@
 #include "rtype.h"
 
 struct sc_map_64v rt_rtype_map;
+rtype_t *rt_null_rtype = NULL;
 
 // GC_RTYPE(TYPE_STRUCT, 4, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
 rtype_t linkco_rtype = {0}; // rtype 预生成

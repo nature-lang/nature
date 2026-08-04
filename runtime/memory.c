@@ -67,6 +67,10 @@ void rtypes_deserialize() {
     // element_hashs
     for (int i = 0; i < rt_rtype_count; ++i) {
         rtype_t *r = &rt_rtype_ptr[i];
+        if (r->kind == TYPE_NULL) {
+            rt_null_rtype = r;
+        }
+
         //  常用 rtype 注册覆盖
         if (r->kind == TYPE_UINT8) {
             string_element_rtype = *r;
@@ -118,6 +122,13 @@ void symdefs_deserialize() {
     for (int i = 0; i < rt_symdef_count; ++i) {
         symdef_t s = rt_symdef_ptr[i];
         rtype_t *rtype = rt_find_rtype(s.hash);
+
+        if (rtype && rtype->kind == TYPE_UNION && rt_null_rtype && s.size >= sizeof(n_union_t)) {
+            n_union_t *global = (n_union_t *) (uintptr_t) s.base;
+            if (global->rtype == NULL) {
+                global->rtype = rt_null_rtype;
+            }
+        }
 
         DEBUGF("[runtime.symdefs_deserialize] name=%s, .data_base=%p, size=%ld, hash=%d",
                STRTABLE(s.name_offset), (void *) s.base,
