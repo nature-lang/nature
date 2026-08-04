@@ -51,12 +51,14 @@ cmake -S "$ROOT_DIR/runtime" -B "$runtime_build" \
     -DCMAKE_TOOLCHAIN_FILE="$ROOT_DIR/cmake/windows-amd64-toolchain.cmake" \
     -DCMAKE_BUILD_TYPE="$cmake_type"
 cmake --build "$runtime_build" --target runtime --parallel "${JOBS:-4}"
-runtime_archive=$WORK/lib/windows_amd64/libruntime.a
+runtime_archive=$ROOT_DIR/lib/windows_amd64/libruntime.a
 if [ ! -f "$runtime_archive" ]; then
     echo "windows sysroot: current runtime build did not produce $runtime_archive" >&2
     exit 1
 fi
-cp "$runtime_archive" "$OUTPUT/libruntime.a"
+if [ "$runtime_archive" != "$OUTPUT/libruntime.a" ]; then
+    cp "$runtime_archive" "$OUTPUT/libruntime.a"
+fi
 
 for archive in "$OUTPUT"/*.a "$OUTPUT"/*.lib; do
     [ -f "$archive" ] || continue
