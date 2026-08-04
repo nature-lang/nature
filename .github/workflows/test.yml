@@ -171,6 +171,11 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-python
 
+      - name: Setup Zig for Windows runtime
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.14.1
+
       - name: Cache LLaMA model files
         uses: actions/cache@v4
         with:
@@ -191,6 +196,20 @@ jobs:
       - name: Set job parallelism
         id: parallelism
         run: echo "j_flag=2" >> "$GITHUB_OUTPUT"
+
+      - name: Build Runtime
+        run: |
+          export ZIG_GLOBAL_CACHE_DIR="$PWD/build-zig-global-cache"
+          export ZIG_LOCAL_CACHE_DIR="$PWD/build-zig-local-cache"
+          test "$(zig version)" = 0.14.1
+          cmake -S runtime -B build-runtime -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_TOOLCHAIN_FILE="$(cygpath -m "$PWD/cmake/windows-amd64-toolchain.cmake")" \
+            -DCMAKE_SYSTEM_PROCESSOR=amd64
+          cmake --build build-runtime \
+            --target runtime \
+            --parallel "${{ steps.parallelism.outputs.j_flag }}"
+          test -s lib/windows_amd64/libruntime.a
 
       - name: Build Project
         run: |

@@ -22,7 +22,7 @@ message("add compile def RUNTIME")
 # 启用汇编支持
 ENABLE_LANGUAGE(ASM)
 
-set(LIB_OUTPUT_PREFIX ../lib)
+set(LIB_OUTPUT_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/../lib")
 
 # release 时的编译优化等级
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
