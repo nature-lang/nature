@@ -1,0 +1,47 @@
+=== test_accept_wakes_when_server_closes
+--- main.n
+import net.tcp
+import co
+
+type state_t = struct{
+    bool done
+    string error
+}
+
+fn wait_accept(ref<tcp.server_t> server, ref<state_t> state) {
+    var accepted = server.accept() catch e {
+        state.error = e.msg()
+        state.done = true
+        return
+    }
+    accepted.close()
+    state.done = true
+}
+
+fn main() {
+    var server = tcp.listen('127.0.0.1:18995')
+    var state_a = new state_t()
+    var state_b = new state_t()
+    go wait_accept(server, state_a)
+    go wait_accept(server, state_b)
+    co.sleep(20)
+    server.close()
+    for !state_a.done || !state_b.done {
+        co.sleep(1)
+    }
+    assert(state_a.error == 'server closed')
+    assert(state_b.error == 'server closed')
+}
+
+=== test_close_without_accept
+--- main.n
+import net.tcp
+import co
+
+fn main() {
+    var first = tcp.listen('127.0.0.1:18996')
+    first.close()
+    co.sleep(20)
+    var second = tcp.listen('127.0.0.1:18996')
+    second.close()
+}
