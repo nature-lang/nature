@@ -458,7 +458,7 @@ fn main():void! {
 }
 
 --- output.txt
-nature-test/main.n:35:18: struct filed 'm' must be assigned default value
+nature-test/main.n:35:18: struct field 'm' must be assigned default value
 
 
 

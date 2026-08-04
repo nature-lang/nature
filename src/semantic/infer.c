@@ -2057,7 +2057,7 @@ static list_t *infer_struct_properties(module_t *m, type_struct_t *type_struct, 
 
         // check can default value
         if (must_assign_value(property->type)) {
-            INFER_ASSERTF(false, "struct filed '%s' must be assigned default value", property->name,
+            INFER_ASSERTF(false, "struct field '%s' must be assigned default value", property->name,
                           type_origin_format(property->type));
         }
     }

@@ -24,7 +24,7 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.n:7:22: struct filed 'next' must be assigned default value
+nature-test/main.n:7:22: struct field 'next' must be assigned default value
 
 === test_linked
 --- main.n
@@ -255,4 +255,3 @@ fn main() {
 
 --- output.txt
 nature-test/main.n:11:11: type inconsistency, expect=http.callback_fn(fn(...):void!), actual=fn(...):void!
-
