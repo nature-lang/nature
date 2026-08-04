@@ -28,6 +28,7 @@ fn main():void! {
     // path.dir
     println(path.dir('/test/hello'))
     println(path.dir('/test/hello/'))
+    println(path.dir('/'))
     println(path.dir('/test'))
     println(path.dir('test'))
     println(path.dir(''))

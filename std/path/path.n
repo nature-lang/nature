@@ -37,6 +37,10 @@ fn dir(string path):string {
      return '.'
   }
 
+  if path == '/' {
+     return '/'
+  }
+
   var last = path[path.len() - 1]
 
   if last == ascii('/') {
