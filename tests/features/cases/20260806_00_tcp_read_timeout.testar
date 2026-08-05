@@ -1,0 +1,72 @@
+=== test_tcp_read_timeout
+--- main.n
+import net.tcp
+import co
+
+fn serve():void! {
+    var server = tcp.listen('127.0.0.1:18995')
+    var conn = server.accept()
+    co.sleep(300)
+    conn.close()
+    server.close()
+}
+
+fn main() {
+    go serve()
+    co.sleep(100)
+    var conn = tcp.connect('127.0.0.1:18995')
+    conn.set_read_timeout(50)
+    var scratch = vec<u8>.new(0, 16)
+    bool timed_out = false
+    conn.read(scratch) catch e {
+        timed_out = e.msg() == 'tcp read timeout'
+        0
+    }
+    conn.close()
+    assert(timed_out)
+}
+
+=== test_close_cancels_pending_read
+--- main.n
+import net.tcp
+import co
+
+type read_state_t = struct{
+    bool started
+    bool done
+    string error
+}
+
+fn serve():void! {
+    var server = tcp.listen('127.0.0.1:18996')
+    var conn = server.accept()
+    co.sleep(200)
+    conn.close()
+    server.close()
+}
+
+fn read_pending(ref<tcp.conn_t> conn, ref<read_state_t> state) {
+    state.started = true
+    var scratch = vec<u8>.new(0, 16)
+    conn.read(scratch) catch e {
+        state.error = e.msg()
+        0
+    }
+    state.done = true
+}
+
+fn main() {
+    go serve()
+    co.sleep(100)
+    var conn = tcp.connect('127.0.0.1:18996')
+    var state = new read_state_t()
+    go read_pending(conn, state)
+    for !state.started {
+        co.sleep(1)
+    }
+    conn.close()
+    for !state.done {
+        co.sleep(1)
+    }
+    assert(state.error == 'conn closed')
+}
