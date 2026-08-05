@@ -6,11 +6,8 @@ minimum_windows=10.0
 lto=disabled
 sanitizers=disabled
 archive_mode=deterministic
-archive_members=normalized-relative-names
 release_debug_info=disabled,-g0
 debug_debug_info=dwarf,-gdwarf
-producer=tools/windows_sysroot/build.sh
-producer.variants=release,debug
 
 zig.version=0.14.1
 zig.commit=738d2be9d6b6ef3ff3559130c05159ef53336224
