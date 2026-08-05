@@ -25,6 +25,10 @@ fn conn_t.set_read_timeout(&self, int timeout_ms) {
     self.read_timeout_ms = timeout_ms
 }
 
+fn conn_t.read_timeout(&self):int {
+    return self.read_timeout_ms
+}
+
 fn connect(string host):ref<conn_t>! {
     return connect_timeout(host, 0)
 }

@@ -18,23 +18,19 @@
 // TLS 连接内部结构
 typedef struct {
     coroutine_t *co;
-    coroutine_t *read_co;
     int64_t read_len;
     void *data;
     bool timeout; // 是否触发了 timeout
     bool handshake_done;
     bool read_timeout;
-    bool read_timer_initialized;
     bool read_waiting;
     bool read_started;
-    int connect_status;
     int64_t read_timeout_ms;
 
     uv_tcp_t handle; // 基础 tcp 链接
     uv_write_t write_req;
     uv_connect_t conn_req;
     uv_timer_t timer;
-    uv_timer_t read_timer;
     int ref_count;
 
     // mbedTLS 相关
@@ -86,12 +82,6 @@ static inline void on_tls_timer_close_cb(uv_handle_t *handle) {
     tls_release_conn(conn);
 }
 
-static inline void on_tls_read_timer_close_cb(uv_handle_t *handle) {
-    inner_tls_conn_t *conn = CONTAINER_OF(handle, inner_tls_conn_t, read_timer);
-    tls_release_conn(conn);
-}
-
-
 static inline void on_tls_close_cb(uv_handle_t *handle) {
     inner_tls_conn_t *conn = CONTAINER_OF(handle, inner_tls_conn_t, handle);
     DEBUGF("[on_tls_close_cb] start, ref_count = %d", conn->ref_count);
@@ -112,8 +102,8 @@ static inline void on_tls_read_cb(uv_stream_t *client_handle, ssize_t nread, con
     }
     conn->read_len = nread;
 
-    if (conn->read_timer_initialized && uv_is_active((uv_handle_t *) &conn->read_timer)) {
-        uv_timer_stop(&conn->read_timer);
+    if (uv_is_active((uv_handle_t *) &conn->timer)) {
+        uv_timer_stop(&conn->timer);
     }
 
     // 停止持续的 uv_read_start 等待用户下次调用
@@ -121,13 +111,13 @@ static inline void on_tls_read_cb(uv_stream_t *client_handle, ssize_t nread, con
     conn->read_waiting = false;
     conn->read_started = false;
 
-    // 唤醒 connect co
-    DEBUGF("[on_tls_read_cb] will ready co %p", conn->read_co);
-    co_ready(conn->read_co);
+    // 唤醒 read co
+    DEBUGF("[on_tls_read_cb] will ready co %p", conn->co);
+    co_ready(conn->co);
 }
 
 static inline void on_tls_read_timeout_cb(uv_timer_t *timer) {
-    inner_tls_conn_t *conn = CONTAINER_OF(timer, inner_tls_conn_t, read_timer);
+    inner_tls_conn_t *conn = CONTAINER_OF(timer, inner_tls_conn_t, timer);
     if (!conn->read_waiting) {
         return;
     }
@@ -137,7 +127,7 @@ static inline void on_tls_read_timeout_cb(uv_timer_t *timer) {
     conn->read_len = UV_ETIMEDOUT;
     conn->read_waiting = false;
     conn->read_started = false;
-    co_ready(conn->read_co);
+    co_ready(conn->co);
 }
 
 static inline void on_tls_write_end_cb(uv_write_t *write_req, int status) {
@@ -183,7 +173,7 @@ static void uv_async_tls_read(inner_tls_conn_t *conn) {
     if (uv_is_closing((uv_handle_t *) &conn->handle)) {
         conn->read_len = UV_ECANCELED;
         conn->read_waiting = false;
-        co_ready(conn->read_co);
+        co_ready(conn->co);
         return;
     }
     conn->read_started = true;
@@ -192,16 +182,11 @@ static void uv_async_tls_read(inner_tls_conn_t *conn) {
         conn->read_len = result;
         conn->read_waiting = false;
         conn->read_started = false;
-        co_ready(conn->read_co);
+        co_ready(conn->co);
         return;
     }
-    if (conn->read_timeout_ms > 0) {
-        if (!conn->read_timer_initialized) {
-            conn->ref_count += 1;
-            uv_timer_init(&global_loop, &conn->read_timer);
-            conn->read_timer_initialized = true;
-        }
-        uv_timer_start(&conn->read_timer, on_tls_read_timeout_cb, conn->read_timeout_ms, 0);
+    if (conn->read_timeout_ms > 0 && !uv_is_closing((uv_handle_t *) &conn->timer)) {
+        uv_timer_start(&conn->timer, on_tls_read_timeout_cb, conn->read_timeout_ms, 0);
     }
 }
 /**
@@ -211,7 +196,7 @@ static int mbedtls_recv_cb(void *ctx, unsigned char *buf, size_t len) {
     inner_tls_conn_t *conn = (inner_tls_conn_t *) ctx;
     conn->buf.base = (char *) buf;
     conn->buf.len = len;
-    conn->read_co = coroutine_get();
+    conn->co = coroutine_get();
     conn->read_waiting = true;
     conn->read_started = false;
 
@@ -283,7 +268,6 @@ static void tls_cleanup_ssl_context(inner_tls_conn_t *conn) {
 static inline void on_tls_connect_cb(uv_connect_t *conn_req, int status) {
     DEBUGF("[on_tls_connect_cb] start")
     inner_tls_conn_t *conn = CONTAINER_OF(conn_req, inner_tls_conn_t, conn_req);
-    conn->connect_status = status;
 
     if (conn->timeout) {
         DEBUGF("[on_tls_connect_cb] connection timeout, not need handle anything")
@@ -292,7 +276,6 @@ static inline void on_tls_connect_cb(uv_connect_t *conn_req, int status) {
 
     if (uv_is_active((uv_handle_t *) &conn->timer)) {
         uv_timer_stop(&conn->timer);
-        uv_close((uv_handle_t *) &conn->timer, on_tls_timer_close_cb);
     }
 
     if (status < 0) {
@@ -310,7 +293,6 @@ static inline void on_tls_timeout_cb(uv_timer_t *handle) {
     DEBUGF("[on_tls_timeout_cb] timeout set")
     inner_tls_conn_t *conn = CONTAINER_OF(handle, inner_tls_conn_t, timer);
     conn->timeout = true;
-    conn->connect_status = UV_ETIMEDOUT;
 
     uv_timer_stop(handle);
     uv_close((uv_handle_t *) handle, on_tls_timer_close_cb);
@@ -324,14 +306,12 @@ static inline void on_tls_timeout_cb(uv_timer_t *handle) {
 
 static void uv_async_tls_connect(inner_tls_conn_t *conn, struct sockaddr_in *dest, n_int64_t timeout_ms) {
     uv_tcp_init(&global_loop, &conn->handle);
+    uv_timer_init(&global_loop, &conn->timer);
 
     uv_tcp_connect(&conn->conn_req, &conn->handle, (const struct sockaddr *) dest, on_tls_connect_cb);
 
     free(dest);
     if (timeout_ms > 0) {
-        conn->ref_count += 1;
-
-        uv_timer_init(&global_loop, &conn->timer);
         uv_timer_start(&conn->timer, on_tls_timeout_cb, timeout_ms, 0);
     }
 }
@@ -347,12 +327,12 @@ void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t addr, n_int64_t port, n_
     conn->timeout = false;
     conn->data = NULL;
     conn->handshake_done = false;
-    conn->connect_status = 0;
     conn->read_len = 0;
-    // One reference belongs to the TCP handle and one keeps the connection
-    // alive while this coroutine is suspended in connect/handshake. Close
-    // callbacks may run before the coroutine is scheduled again.
-    conn->ref_count = 2;
+    // One reference belongs to the TCP handle, one belongs to the shared
+    // timer, and one keeps the connection alive while this coroutine is
+    // suspended in connect/handshake. Close callbacks may run before the
+    // coroutine is scheduled again.
+    conn->ref_count = 3;
     n_conn->conn = conn;
     conn->co = co;
 
@@ -386,7 +366,7 @@ void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t addr, n_int64_t port, n_
 
     global_waiting_send(uv_async_tls_connect, conn, dest, (void *) timeout_ms);
 
-    if (conn->timeout || conn->connect_status < 0) {
+    if (conn->timeout || uv_is_closing((uv_handle_t *) &conn->handle)) {
         n_conn->closed = true;
         tls_release_conn(conn);
         return;
@@ -442,7 +422,6 @@ int64_t rt_uv_tls_read(n_tls_conn_t *n_conn, n_vec_t buf) {
     int ret = mbedtls_ssl_read(&conn->ssl, (unsigned char *) buf.data, buf.length);
     bool read_timeout = conn->read_timeout;
     bool closed = n_conn->closed;
-    conn->read_co = NULL;
     tls_release_conn(conn);
     if (closed) {
         rti_co_throw(co, "tls conn closed", false);
@@ -490,15 +469,15 @@ static void uv_async_conn_close(inner_tls_conn_t *conn) {
             uv_read_stop((uv_stream_t *) &conn->handle);
             conn->read_waiting = false;
             conn->read_started = false;
-            co_ready(conn->read_co);
+            co_ready(conn->co);
         }
     }
     if (!uv_is_closing((uv_handle_t *) &conn->handle)) {
         uv_close((uv_handle_t *) &conn->handle, on_tls_close_cb);
     }
-    if (conn->read_timer_initialized && !uv_is_closing((uv_handle_t *) &conn->read_timer)) {
-        uv_timer_stop(&conn->read_timer);
-        uv_close((uv_handle_t *) &conn->read_timer, on_tls_read_timer_close_cb);
+    if (!uv_is_closing((uv_handle_t *) &conn->timer)) {
+        uv_timer_stop(&conn->timer);
+        uv_close((uv_handle_t *) &conn->timer, on_tls_timer_close_cb);
     }
 }
 

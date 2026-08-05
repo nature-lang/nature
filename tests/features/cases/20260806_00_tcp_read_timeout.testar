@@ -16,6 +16,7 @@ fn main() {
     co.sleep(100)
     var conn = tcp.connect('127.0.0.1:18995')
     conn.set_read_timeout(50)
+    assert(conn.read_timeout() == 50)
     var scratch = vec<u8>.new(0, 16)
     bool timed_out = false
     conn.read(scratch) catch e {

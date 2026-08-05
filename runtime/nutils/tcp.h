@@ -20,8 +20,6 @@ typedef struct {
     void *data;
     void *server;
     bool timeout; // 是否触发了 timeout
-    bool read_timeout;
-    bool read_timer_initialized;
     bool read_waiting;
     bool read_started;
     int64_t read_timeout_ms;
@@ -29,7 +27,6 @@ typedef struct {
     uv_write_t write_req;
     uv_connect_t conn_req;
     uv_timer_t timer;
-    uv_timer_t read_timer;
     int ref_count;
     n_vec_t buf;
 } inner_conn_t;
@@ -146,11 +143,6 @@ static inline void on_conn_close_timer_cb(uv_handle_t *handle) {
     conn_release(conn);
 }
 
-static inline void on_conn_close_read_timer_cb(uv_handle_t *handle) {
-    inner_conn_t *conn = CONTAINER_OF(handle, inner_conn_t, read_timer);
-    conn_release(conn);
-}
-
 static inline void on_tcp_close_cb(uv_handle_t *handle) {
     inner_server_t *inner = handle->data;
     // Keep the listener state alive until every blocked accept has observed
@@ -178,8 +170,8 @@ static inline void on_tcp_read_cb(uv_stream_t *client_handle, ssize_t nread, con
     // read data to buf? and set len, 数据已经在 buf 里面了， nread 是读取的数量。
     conn->read_len = nread;
 
-    if (conn->read_timer_initialized && uv_is_active((uv_handle_t *) &conn->read_timer)) {
-        uv_timer_stop(&conn->read_timer);
+    if (uv_is_active((uv_handle_t *) &conn->timer)) {
+        uv_timer_stop(&conn->timer);
     }
 
     // 停止持续的 uv_read_start 等待用户下次调用
@@ -187,22 +179,17 @@ static inline void on_tcp_read_cb(uv_stream_t *client_handle, ssize_t nread, con
     conn->read_waiting = false;
     conn->read_started = false;
 
-    // 唤醒 connect co
-    //    if (conn->server == NULL) {
-    //        TDEBUGF("[on_tcp_read_cb] will ready co %p, conn %p", conn->co, conn);
-    //    }
     co_ready(conn->read_co);
 }
 
 static inline void on_tcp_read_timeout_cb(uv_timer_t *timer) {
-    inner_conn_t *conn = CONTAINER_OF(timer, inner_conn_t, read_timer);
+    inner_conn_t *conn = CONTAINER_OF(timer, inner_conn_t, timer);
     if (!conn->read_waiting) {
         return;
     }
 
     uv_timer_stop(timer);
     uv_read_stop((uv_stream_t *) &conn->handle);
-    conn->read_timeout = true;
     conn->read_len = UV_ETIMEDOUT;
     conn->read_waiting = false;
     conn->read_started = false;
@@ -248,13 +235,8 @@ void uv_async_tcp_read(inner_conn_t *conn) {
         co_ready(conn->read_co);
         return;
     }
-    if (conn->read_timeout_ms > 0) {
-        if (!conn->read_timer_initialized) {
-            conn->ref_count += 1;
-            uv_timer_init(&global_loop, &conn->read_timer);
-            conn->read_timer_initialized = true;
-        }
-        uv_timer_start(&conn->read_timer, on_tcp_read_timeout_cb, conn->read_timeout_ms, 0);
+    if (conn->read_timeout_ms > 0 && !uv_is_closing((uv_handle_t *) &conn->timer)) {
+        uv_timer_start(&conn->timer, on_tcp_read_timeout_cb, conn->read_timeout_ms, 0);
     }
 }
 
@@ -270,7 +252,6 @@ int64_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t buf) {
     conn->read_co = co;
     conn->read_waiting = true;
     conn->read_started = false;
-    conn->read_timeout = false;
     conn->read_timeout_ms = n_conn->read_timeout_ms;
     conn->ref_count += 1;
 
@@ -281,17 +262,15 @@ int64_t rt_uv_tcp_read(n_tcp_conn_t *n_conn, n_vec_t buf) {
     DEBUGF("[rt_uv_tcp_read] co=%p resume completed, read len: %ld", co, conn->read_len);
 
     int64_t read_len = conn->read_len;
-    bool read_timeout = conn->read_timeout;
     bool closed = n_conn->closed;
     conn->read_co = NULL;
-    conn->read_timeout_ms = 0;
     conn_release(conn);
 
     if (closed) {
         rti_co_throw(co, "conn closed", false);
         return 0;
     }
-    if (read_timeout) {
+    if (read_len == UV_ETIMEDOUT) {
         rti_co_throw(co, "tcp read timeout", false);
         return 0;
     }
@@ -349,7 +328,6 @@ static inline void on_tcp_connect_cb(uv_connect_t *conn_req, int status) {
 
     if (uv_is_active((uv_handle_t *) &conn->timer)) {
         uv_timer_stop(&conn->timer);
-        uv_close((uv_handle_t *) &conn->timer, on_conn_close_timer_cb);
     }
 
     if (status < 0) {
@@ -376,14 +354,13 @@ static inline void on_tcp_timeout_cb(uv_timer_t *handle) {
 static void uv_async_tcp_connect(inner_conn_t *conn, struct sockaddr_in *dest, n_int64_t timeout_ms) {
     DEBUGF("[uv_async_tcp_connect] start, timeout_ms=%ld, dest=%p", timeout_ms, dest)
     uv_tcp_init(&global_loop, &conn->handle);
+    uv_timer_init(&global_loop, &conn->timer);
 
     uv_tcp_connect(&conn->conn_req, &conn->handle, (const struct sockaddr *) dest, on_tcp_connect_cb);
 
     free(dest);
 
     if (timeout_ms > 0) {
-        conn->ref_count += 1;
-        uv_timer_init(&global_loop, &conn->timer);
         uv_timer_start(&conn->timer, on_tcp_timeout_cb, timeout_ms, 0); // repeat == 0
     }
 }
@@ -399,7 +376,9 @@ void rt_uv_tcp_connect(n_tcp_conn_t *n_conn, n_string_t ip, n_int64_t port, n_in
     inner_conn_t *conn = mallocz(sizeof(inner_conn_t));
     conn->timeout = false;
     conn->data = NULL;
-    conn->ref_count = 1;
+    // One reference belongs to the TCP handle and one keeps the shared timer
+    // alive for both connect and read timeouts. Close callbacks release them.
+    conn->ref_count = 2;
     n_conn->conn = conn;
     conn->co = co;
 
@@ -468,7 +447,7 @@ void rt_uv_tcp_accept(n_tcp_server_t *server, n_tcp_conn_t *n_conn) {
         break;
     }
 
-    conn->ref_count = 1;
+    conn->ref_count = 2;
     n_conn->conn = conn;
     // accept success, can read
     DEBUGF("[rt_uv_tcp_accept] accept success, inner_conn=%p, co=%p", conn, co);
@@ -487,6 +466,7 @@ void on_tcp_conn_cb(uv_stream_t *handle, int status) {
     conn->server = inner_server;
 
     uv_tcp_init(handle->loop, &conn->handle);
+    uv_timer_init(handle->loop, &conn->timer);
 
     int result = uv_accept((uv_stream_t *) &inner_server->handle, (uv_stream_t *) &conn->handle);
     if (result < 0) {
@@ -586,9 +566,9 @@ void uv_async_conn_close(inner_conn_t *conn) {
     if (!uv_is_closing((uv_handle_t *) &conn->handle)) {
         uv_close((uv_handle_t *) &conn->handle, on_conn_close_handle_cb);
     }
-    if (conn->read_timer_initialized && !uv_is_closing((uv_handle_t *) &conn->read_timer)) {
-        uv_timer_stop(&conn->read_timer);
-        uv_close((uv_handle_t *) &conn->read_timer, on_conn_close_read_timer_cb);
+    if (!uv_is_closing((uv_handle_t *) &conn->timer)) {
+        uv_timer_stop(&conn->timer);
+        uv_close((uv_handle_t *) &conn->timer, on_conn_close_timer_cb);
     }
 }
 
