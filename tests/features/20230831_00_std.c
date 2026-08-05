@@ -26,6 +26,7 @@ static void test_basic() {
                 "/test\n"
                 "/test/hello\n"
                 "/\n"
+                "/\n"
                 ".\n"
                 ".\n"
                 "true\n"
