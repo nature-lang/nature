@@ -144,7 +144,7 @@ fn reader<T>.read_until(&self, u8 delim):[u8]! {
         // fill may read to the end of the file to generate an eof error
         // fill will make 100 attempts until the data is filled successfully, otherwise it will throw no progress
         self.fill() catch e {
-            if e.msg() == 'EOF' || e.msg() == 'end of file' {
+            if e.msg() == 'EOF' || e.msg() == 'end of file' || e.msg() == 'no progress' {
                 has_error = true
             } else {
                 throw e
