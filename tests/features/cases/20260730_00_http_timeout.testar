@@ -1,0 +1,109 @@
+=== test_stream_read_timeout
+--- main.n
+import http.client
+import net.tcp
+import co
+
+fn serve():void! {
+    var server = tcp.listen('127.0.0.1:18992')
+    var conn = server.accept()
+    var request = vec<u8>.new(0, 4096)
+    conn.read(request)
+    conn.write(('HTTP/1.1 200 OK\r\n' +
+                'Content-Length: 5\r\n' +
+                'Content-Type: text/plain\r\n' +
+                '\r\n') as [u8])
+    co.sleep(200)
+    conn.close()
+    server.close()
+}
+
+fn main() {
+    go serve()
+    co.sleep(100)
+    var resp = client.new().timeout(50).get('http://127.0.0.1:18992/slow').send()
+    var scratch = vec<u8>.new(0, 16)
+    bool timed_out = false
+    resp.read(scratch) catch e {
+        timed_out = e.msg() == 'HTTP response read timeout'
+        0
+    }
+    resp.close()
+    assert(timed_out)
+}
+
+=== test_response_header_timeout
+--- main.n
+import http.client
+import net.tcp
+import co
+
+fn serve():void! {
+    var server = tcp.listen('127.0.0.1:18993')
+    var conn = server.accept()
+    var request = vec<u8>.new(0, 4096)
+    conn.read(request)
+    co.sleep(200)
+    conn.close()
+    server.close()
+}
+
+fn request_head():void! {
+    var response = client.new().timeout(50).get('http://127.0.0.1:18993/slow').send()
+    response.close()
+}
+
+fn main() {
+    go serve()
+    co.sleep(100)
+    bool timed_out = false
+    request_head() catch e {
+        timed_out = e.msg() == 'HTTP response read timeout'
+    }
+    assert(timed_out)
+}
+
+=== test_cross_coroutine_close_pending_read
+--- main.n
+import net.tcp
+import co
+
+type read_state_t = struct{
+    bool started
+    bool done
+    string error
+}
+
+fn serve():void! {
+    var server = tcp.listen('127.0.0.1:18994')
+    var conn = server.accept()
+    co.sleep(200)
+    conn.close()
+    server.close()
+}
+
+fn read_pending(ref<tcp.conn_t> conn, ref<read_state_t> state) {
+    state.started = true
+    var scratch = vec<u8>.new(0, 16)
+    conn.read(scratch) catch e {
+        state.error = e.msg()
+        0
+    }
+    state.done = true
+}
+
+fn main() {
+    go serve()
+    co.sleep(100)
+    var conn = tcp.connect('127.0.0.1:18994')
+    var state = new read_state_t()
+    go read_pending(conn, state)
+    for !state.started {
+        co.sleep(1)
+    }
+    conn.close()
+    for !state.done {
+        co.sleep(1)
+    }
+    assert(state.error == 'conn closed')
+}

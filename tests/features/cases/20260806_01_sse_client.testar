@@ -116,3 +116,58 @@ fn main():void! {
 
 --- output.txt
 chunked body ok
+
+=== test_chunked_stream
+--- main.n
+import http.client
+import net.tcp
+import co
+
+fn serve():void! {
+    var server = tcp.listen('127.0.0.1:18991')
+    var conn = server.accept()
+    var request = vec<u8>.new(0, 4096)
+    conn.read(request)
+
+    conn.write(('HTTP/1.1 200 OK\r\n' +
+                'Transfer-Encoding: chunked\r\n' +
+                'Content-Type: text/event-stream\r\n' +
+                'X-Origin: https://example.test/a:b\r\n' +
+                '\r\n') as [u8])
+    conn.write('5;part=one\r\nhello\r\n' as [u8])
+    co.sleep(10)
+    conn.write('6\r\n world\r\n' as [u8])
+    conn.write('0\r\nX-Trailer: done\r\n\r\n' as [u8])
+    co.sleep(10)
+    conn.close()
+    server.close()
+}
+
+fn main() {
+    go serve()
+    co.sleep(100)
+
+    var resp = client.new().timeout(5000).get('http://127.0.0.1:18991/events').send()
+    var result = vec<u8>.cap_of(32)
+    var scratch = vec<u8>.new(0, 3)
+    bool eof = false
+    for !eof {
+        var n = resp.read(scratch) catch e {
+            assert(e.msg() == 'EOF')
+            eof = true
+            0
+        }
+        if eof {
+            break
+        }
+        result.append(scratch.slice(0, n))
+    }
+
+    assert(result as string == 'hello world')
+    assert(resp.header('x-origin') == 'https://example.test/a:b')
+    resp.close()
+    println('chunked stream ok')
+}
+
+--- output.txt
+chunked stream ok
