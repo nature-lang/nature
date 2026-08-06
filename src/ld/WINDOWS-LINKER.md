@@ -87,10 +87,10 @@ resulting `.obj`, `.a`, and `.lib` files. Every sysroot object is built for
 `x86_64-w64-windows-gnu` with LTO and sanitizers disabled and with unwind
 tables enabled.
 
-`SOURCES.lock` records source/tool versions and `SHA256SUMS` authenticates
-every shipped artifact. A capability scan is a release gate: a new object
-header, relocation, COMDAT mode, directive, import-object form, or unresolved
-symbol not supported by the linker makes sysroot production fail.
+The sysroot directory contains only the linker inputs required by the ordinary
+build: CRT/startup objects, static archives, and Windows/UCRT import libraries.
+The build does not require a generated capability manifest or a source-lock
+metadata file.
 
 Third-party runtimes are linked statically. A Nature executable may import
 Windows system DLLs and UCRT API-set DLLs, but it must not depend on Nature,

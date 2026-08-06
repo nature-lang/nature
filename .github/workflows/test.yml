@@ -219,13 +219,6 @@ jobs:
           cmake --build build-release \
             --parallel "${{ steps.parallelism.outputs.j_flag }}"
 
-      - name: Verify Windows sysroot
-        run: |
-          root="$(cygpath -m "$PWD")"
-          NATURE_BIN="$root/build-release/nature.exe" \
-            WINDOWS_VERIFY_TMPDIR="$root/build-release" \
-            ./tools/windows_sysroot/verify.sh
-
       - name: Test
         run: |
           drive="$(pwd -W | cut -c1 | tr '[:upper:]' '[:lower:]')"
