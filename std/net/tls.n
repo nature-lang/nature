@@ -6,6 +6,7 @@ import net.types
 type conn_t:types.connable = struct{
     anyptr conn
     bool closed
+    int read_timeout_ms
 }
 
 #linkid rt_uv_tls_connect
@@ -19,6 +20,14 @@ fn conn_t.write(&self, [u8] buf):int!
 
 #linkid rt_uv_tls_conn_close
 fn conn_t.close(&self)
+
+fn conn_t.set_read_timeout(&self, int timeout_ms) {
+    self.read_timeout_ms = timeout_ms
+}
+
+fn conn_t.read_timeout(&self):int {
+    return self.read_timeout_ms
+}
 
 fn connect(string host):ref<conn_t>! {
     return connect_timeout(host, 0)

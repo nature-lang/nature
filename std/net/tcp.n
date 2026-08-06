@@ -15,6 +15,7 @@ type server_t = struct{
 type conn_t:types.connable = struct{
     anyptr conn
     bool closed
+    int read_timeout_ms
 }
 
 #linkid rt_uv_tcp_listen
@@ -37,6 +38,14 @@ fn conn_t.write(&self, [u8] buf):int!
 
 #linkid rt_uv_tcp_conn_close
 fn conn_t.close(&self)
+
+fn conn_t.set_read_timeout(&self, int timeout_ms) {
+    self.read_timeout_ms = timeout_ms
+}
+
+fn conn_t.read_timeout(&self):int {
+    return self.read_timeout_ms
+}
 
 fn server_t.accept(&self):ref<conn_t>! {
     if self.closed {
