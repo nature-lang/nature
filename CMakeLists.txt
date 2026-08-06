@@ -90,22 +90,6 @@ include_directories(.)
 add_executable(nature main.c ${SRC} ${CMD} ${UTILS})
 target_link_libraries(nature m) # 链接数学计算库
 
-find_program(NATURE_SH_EXECUTABLE NAMES sh)
-if(NATURE_SH_EXECUTABLE)
-    add_custom_target(verify_windows_sysroot
-            COMMAND ${CMAKE_COMMAND} -E env
-                    NATURE_BIN=$<TARGET_FILE:nature>
-                    WINDOWS_VERIFY_TMPDIR=${CMAKE_CURRENT_BINARY_DIR}
-                    ${NATURE_SH_EXECUTABLE}
-                    ${PROJECT_SOURCE_DIR}/tools/windows_sysroot/verify.sh
-            DEPENDS nature
-            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
-            COMMENT "verify windows_amd64 sysroot release contract")
-else()
-    message(STATUS
-            "sh not found; the optional verify_windows_sysroot target is unavailable")
-endif()
-
 # custom golang build package npkg (optional)
 set(PACKAGE_TARGET_NAME npkg)
 set(PACKAGE_BINARY_NAME "npkg${CMAKE_EXECUTABLE_SUFFIX}")

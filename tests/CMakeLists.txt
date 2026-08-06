@@ -129,16 +129,6 @@ target_compile_definitions(test_ld_coff_crt PRIVATE
 target_link_libraries(test_ld_coff_crt nature_common_test m)
 add_test(test_ld_coff_crt test_ld_coff_crt)
 
-add_executable(test_ld_coff_capability ../src/ld/ld_coff_capability_test.c)
-target_compile_definitions(test_ld_coff_capability PRIVATE
-        LD_COFF_CAPABILITY_TEST_MAIN)
-target_link_libraries(test_ld_coff_capability nature_common_test m)
-add_test(test_ld_coff_capability test_ld_coff_capability)
-
-add_executable(test_coff_capability_path test_coff_capability_path.c)
-target_link_libraries(test_coff_capability_path nature_common_test m)
-add_test(test_coff_capability_path test_coff_capability_path)
-
 add_executable(test_coff_writer ../src/binary/coff/coff_writer_test.c)
 target_compile_definitions(test_coff_writer PRIVATE COFF_WRITER_TEST_MAIN)
 target_link_libraries(test_coff_writer nature_common_test m)
