@@ -169,6 +169,13 @@ static type_enum_t *type_enum_copy(module_t *m, type_enum_t *temp) {
 }
 
 type_t type_copy(module_t *m, type_t temp) {
+    // Reduced types are immutable compiler values. Sharing their finalized
+    // type graph avoids recursively duplicating large named structs for every
+    // function signature and LIR temporary that references them.
+    if (temp.status == REDUCTION_STATUS_DONE) {
+        return temp;
+    }
+
     type_t type = temp;
     if (temp.ident) {
         type.ident = strdup(temp.ident);

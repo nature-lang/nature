@@ -447,26 +447,40 @@ int64_t type_tuple_offset(type_tuple_t *t, uint64_t index) {
     return 0;
 }
 
+static char *_type_format_visited(type_t t, struct sc_map_s64 *visited);
+static char *type_format_visited(type_t t, struct sc_map_s64 *visited);
+
 char *_type_format(type_t t) {
+    struct sc_map_s64 visited;
+    sc_map_init_s64(&visited, 0, 0);
+    char *result = _type_format_visited(t, &visited);
+    sc_map_term_s64(&visited);
+    return result;
+}
+
+static char *_type_format_visited(type_t t, struct sc_map_s64 *visited) {
+    if (t.ident) {
+        // 递归类型(如 {int:node_t} 形式的 map)格式化时防止无限递归, 参照 type_recycle_check
+        if (sc_map_get_s64(visited, t.ident)) {
+            return dsprintf("%s(...)", t.ident);
+        }
+        sc_map_put_s64(visited, t.ident, 1);
+    }
+
+    char *result = NULL;
     if (t.kind == TYPE_VEC) {
         // []
-        return dsprintf("[%s]", type_format(t.vec->element_type));
-    }
-    if (t.kind == TYPE_CHAN) {
-        return dsprintf("chan<%s>", type_format(t.chan->element_type));
-    }
-    if (t.kind == TYPE_ARR) {
-        return dsprintf("[%s;%d]", type_format(t.array->element_type), t.array->length);
-    }
-    if (t.kind == TYPE_MAP) {
-        return dsprintf("map<%s,%s>", type_format(t.map->key_type), _type_format(t.map->value_type));
-    }
-
-    if (t.kind == TYPE_SET) {
-        return dsprintf("set<%s>", type_format(t.set->element_type));
-    }
-
-    if (t.kind == TYPE_TUPLE) {
+        result = dsprintf("[%s]", type_format_visited(t.vec->element_type, visited));
+    } else if (t.kind == TYPE_CHAN) {
+        result = dsprintf("chan<%s>", type_format_visited(t.chan->element_type, visited));
+    } else if (t.kind == TYPE_ARR) {
+        result = dsprintf("[%s;%d]", type_format_visited(t.array->element_type, visited), t.array->length);
+    } else if (t.kind == TYPE_MAP) {
+        result = dsprintf("map<%s,%s>", type_format_visited(t.map->key_type, visited),
+                          _type_format_visited(t.map->value_type, visited));
+    } else if (t.kind == TYPE_SET) {
+        result = dsprintf("set<%s>", type_format_visited(t.set->element_type, visited));
+    } else if (t.kind == TYPE_TUPLE) {
         // while
         //        char *str = "tup<";
         //        list_t *elements = t.tuple->elements; // type_t
@@ -475,44 +489,36 @@ char *_type_format(type_t t) {
         //            char *item_str = _type_format(*item);
         //            str = str_connect_by(str, item_str, ",");
         //        }
-        return dsprintf("tup<...>");
-    }
-
-    if (t.kind == TYPE_FN) {
+        result = dsprintf("tup<...>");
+    } else if (t.kind == TYPE_FN) {
         if (t.fn) {
             char *fn_prefix = t.fn->is_fx ? "fx" : "fn";
             if (t.fn->is_errable) {
-                return dsprintf("%s(...):%s!", fn_prefix, type_format(t.fn->return_type));
+                result = dsprintf("%s(...):%s!", fn_prefix, type_format_visited(t.fn->return_type, visited));
             } else {
-                return dsprintf("%s(...):%s", fn_prefix, type_format(t.fn->return_type));
+                result = dsprintf("%s(...):%s", fn_prefix, type_format_visited(t.fn->return_type, visited));
             }
         } else {
-            return "fn";
+            result = "fn";
         }
+    } else if (t.kind == TYPE_REF) {
+        result = dsprintf("ref<%s>", type_format_visited(t.ptr->value_type, visited));
+    } else if (t.kind == TYPE_PTR) {
+        result = dsprintf("ptr<%s>", type_format_visited(t.ptr->value_type, visited));
+    } else if (t.kind == TYPE_ANY) {
+        result = "any";
+    } else if (t.kind == TYPE_INTERFACE) {
+        result = "interface";
+    } else if (t.kind == TYPE_ENUM) {
+        result = dsprintf("enum:%s", type_format_visited(t.enum_->element_type, visited));
+    } else {
+        result = type_kind_str[t.kind];
     }
 
-    if (t.kind == TYPE_REF) {
-        return dsprintf("ref<%s>", type_format(t.ptr->value_type));
+    if (t.ident) {
+        sc_map_del_s64(visited, t.ident);
     }
-
-    if (t.kind == TYPE_PTR) {
-        return dsprintf("ptr<%s>", type_format(t.ptr->value_type));
-    }
-
-    if (t.kind == TYPE_ANY) {
-        return "any";
-    }
-
-
-    if (t.kind == TYPE_INTERFACE) {
-        return "interface";
-    }
-
-    if (t.kind == TYPE_ENUM) {
-        return dsprintf("enum:%s", type_format(t.enum_->element_type));
-    }
-
-    return type_kind_str[t.kind];
+    return result;
 }
 
 /**
@@ -520,6 +526,14 @@ char *_type_format(type_t t) {
  * @return
  */
 char *type_format(type_t t) {
+    struct sc_map_s64 visited;
+    sc_map_init_s64(&visited, 0, 0);
+    char *result = type_format_visited(t, &visited);
+    sc_map_term_s64(&visited);
+    return result;
+}
+
+static char *type_format_visited(type_t t, struct sc_map_s64 *visited) {
     char *ident = NULL;
     if (t.ident_kind != TYPE_IDENT_BUILTIN) {
         ident = t.ident;
@@ -530,7 +544,7 @@ char *type_format(type_t t) {
     }
 
     if (ident == NULL) {
-        return _type_format(t);
+        return _type_format_visited(t, visited);
     }
 
     if (ident_is_generics_param(&t)) {
@@ -548,10 +562,10 @@ char *type_format(type_t t) {
                 args_str = str_connect3(args_str, ",", arg_str);
             }
         }
-        return dsprintf("%s<%s>(%s)", ident, args_str, _type_format(t));
+        return dsprintf("%s<%s>(%s)", ident, args_str, _type_format_visited(t, visited));
     }
 
-    return dsprintf("%s(%s)", ident, _type_format(t));
+    return dsprintf("%s(%s)", ident, _type_format_visited(t, visited));
 }
 
 char *type_origin_format(type_t t) {
