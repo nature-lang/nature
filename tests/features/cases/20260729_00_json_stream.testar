@@ -11,7 +11,33 @@ fn main() {
     assert(value.get('cjk').as_string() == '你好')
 }
 
-=== test_invalid_unicode_and_numbers
+=== test_unpaired_surrogates_and_bad_utf8_replaced
+--- main.n
+import json
+
+fn main() {
+    // Go replaces unpaired surrogates with U+FFFD instead of erroring
+    var lone_high = json.parse(`"\uD83D"`)
+    assert(lone_high.as_string() == '�')
+    var lone_low = json.parse(`"\uDE00"`)
+    assert(lone_low.as_string() == '�')
+    var high_ascii = json.parse(`"\uD83D\u0041"`)
+    assert(high_ascii.as_string() == '�A')
+
+    // Go replaces invalid raw UTF-8 with U+FFFD instead of erroring
+    var invalid = [0xC0 as u8, 0x80 as u8] as string
+    var raw = json.parse('"' + invalid + '"')
+    assert(raw.as_string() == '��')
+
+    // Go replaces invalid UTF-8 with escaped \ufffd during marshal, no error
+    var encoded = json.serialize(invalid) catch e {
+        assert(false)
+        ''
+    }
+    assert(encoded == `"\ufffd\ufffd"`)
+}
+
+=== test_invalid_and_strict_numbers
 --- main.n
 import json
 
@@ -23,9 +49,6 @@ fn rejects(string source):bool {
 }
 
 fn main() {
-    assert(rejects(`"\uD83D"`))
-    assert(rejects(`"\uDE00"`))
-    assert(rejects(`"\uD83D\u0041"`))
     assert(rejects(`"\x"`))
     assert(rejects('"line\nbreak"'))
     assert(rejects('01'))
@@ -59,30 +82,9 @@ import json
 
 fn main() {
     bool rejected = false
-    var value = json.parse_with_limits('[[0]]', 1, 100) catch e {
+    var value = json.parse_with_limits('[[0]]', 1) catch e {
         rejected = true
         json.null_value()
-    }
-    assert(rejected)
-
-    rejected = false
-    value = json.parse_with_limits('[]', 10, 1) catch e {
-        rejected = true
-        json.null_value()
-    }
-    assert(rejected)
-}
-
-=== test_invalid_utf8_serialize
---- main.n
-import json
-
-fn main() {
-    var invalid = [0xC0 as u8, 0x80 as u8] as string
-    bool rejected = false
-    var encoded = json.serialize(invalid) catch e {
-        rejected = true
-        ''
     }
     assert(rejected)
 }
