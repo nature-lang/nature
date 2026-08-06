@@ -1,0 +1,88 @@
+=== test_unicode_and_surrogate_pairs
+--- main.n
+import json
+
+fn main() {
+    var decoded = json.deserialize<string>(`"A\u4F60\u597D \uD83D\uDE00"`)
+    assert(decoded == 'A你好 😀')
+
+    var value = json.parse(`{"emoji":"\uD83D\uDE00","cjk":"\u4F60\u597D"}`)
+    assert(value.get('emoji').as_string() == '😀')
+    assert(value.get('cjk').as_string() == '你好')
+}
+
+=== test_invalid_unicode_and_numbers
+--- main.n
+import json
+
+fn rejects(string source):bool {
+    var value = json.parse(source) catch e {
+        return true
+    }
+    return false
+}
+
+fn main() {
+    assert(rejects(`"\uD83D"`))
+    assert(rejects(`"\uDE00"`))
+    assert(rejects(`"\uD83D\u0041"`))
+    assert(rejects(`"\x"`))
+    assert(rejects('"line\nbreak"'))
+    assert(rejects('01'))
+    assert(rejects('1.'))
+    assert(rejects('1e'))
+    assert(rejects('+1'))
+    assert(rejects('true false'))
+}
+
+=== test_lossless_dynamic
+--- main.n
+import json
+
+fn main() {
+    var value = json.parse('{"big":9007199254740993,"emoji":"\\uD83D\\uDE00","items":[true,null]}')
+    assert(value.get('big').as_number() == '9007199254740993')
+    assert(value.get('emoji').as_string() == '😀')
+    var items = value.get('items')
+    assert(items.at(0).as_bool())
+    assert(items.at(1).is_null())
+
+    var encoded = value.stringify()
+    var reparsed = json.parse(encoded)
+    assert(reparsed.get('big').as_number() == '9007199254740993')
+    assert(reparsed.get('emoji').as_string() == '😀')
+}
+
+=== test_limits
+--- main.n
+import json
+
+fn main() {
+    bool rejected = false
+    var value = json.parse_with_limits('[[0]]', 1, 100) catch e {
+        rejected = true
+        json.null_value()
+    }
+    assert(rejected)
+
+    rejected = false
+    value = json.parse_with_limits('[]', 10, 1) catch e {
+        rejected = true
+        json.null_value()
+    }
+    assert(rejected)
+}
+
+=== test_invalid_utf8_serialize
+--- main.n
+import json
+
+fn main() {
+    var invalid = [0xC0 as u8, 0x80 as u8] as string
+    bool rejected = false
+    var encoded = json.serialize(invalid) catch e {
+        rejected = true
+        ''
+    }
+    assert(rejected)
+}
