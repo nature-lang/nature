@@ -7,6 +7,12 @@ import runtime
 
 var null_hash = @reflect_hash(null) 
 
+// number 是无损数字类型（等价 Go 的 json.Number）：JSON 数字以原始文本保留，
+// 不经 f64 转换，避免大整数/长 ID 精度丢失
+type number = string
+
+var number_hash = @reflect_hash(number)
+
 const DEFAULT_MAX_DEPTH = 256
 
 // Convert object to json string
@@ -78,10 +84,13 @@ fn serialize_value(anyptr p, ref<reflect.type_t> t):[u8]! {
 
             var any_type = reflect.typeof_hash(rv.rtype.hash)
 
-            // get value p
+            // json.number 按原始数字文本输出，不加引号
             var any_p = &rv.value as anyptr
             if any_type.storage_kind == reflect.storage_kind_t.IND {
                 any_p = rv.value
+            }
+            if rv.rtype.hash == number_hash {
+                return unsafe.ptr_to<string>(any_p) as [u8]
             }
 
             return serialize_value(any_p, any_type)
@@ -891,55 +900,14 @@ fn hex4_peek([u8] data, int cursor):int {
     return value
 }
 
-const VALUE_NULL = 0
-const VALUE_BOOL = 1
-const VALUE_NUMBER = 2
-const VALUE_STRING = 3
-const VALUE_ARRAY = 4
-const VALUE_OBJECT = 5
-
-// value_t is the lossless dynamic JSON representation. Numbers retain their
-// original token instead of being coerced through f64, which is required for
-// large IDs and exact tool arguments.
-type value_t = struct{
-    u8 kind
-    bool boolean
-    string number
-    string text
-    [ref<value_t>] array
-    {string:ref<value_t>} object
+// parse 将 JSON 文本解析为动态值（等价 Go 的 Unmarshal + UseNumber）：
+// 对象 -> {string:any}，数组 -> [any]，字符串 -> string，
+// 布尔 -> bool，null -> null，数字 -> number（无损原始文本）
+fn parse(string source):any! {
+    return parse_with_depth(source, DEFAULT_MAX_DEPTH)
 }
 
-fn null_value():value_t {
-    return value_t{kind: VALUE_NULL}
-}
-
-fn bool_value(bool value):value_t {
-    return value_t{kind: VALUE_BOOL, boolean: value}
-}
-
-fn number_value(string value):value_t! {
-    validate_number_token(value)
-    return value_t{kind: VALUE_NUMBER, number: value}
-}
-
-fn string_value(string value):value_t {
-    return value_t{kind: VALUE_STRING, text: value}
-}
-
-fn array_value([ref<value_t>] value):value_t {
-    return value_t{kind: VALUE_ARRAY, array: value}
-}
-
-fn object_value({string:ref<value_t>} value):value_t {
-    return value_t{kind: VALUE_OBJECT, object: value}
-}
-
-fn parse(string source):value_t! {
-    return parse_with_limits(source, DEFAULT_MAX_DEPTH)
-}
-
-fn parse_with_limits(string source, int max_depth):value_t! {
+fn parse_with_depth(string source, int max_depth):any! {
     if max_depth <= 0 {
         throw errorf('JSON max depth must be positive')
     }
@@ -956,74 +924,7 @@ fn parse_with_limits(string source, int max_depth):value_t! {
     return value
 }
 
-fn stringify(value_t value):string! {
-    return stringify_value(box_value(value)) as string
-}
-
-fn value_t.stringify(*self):string! {
-    return stringify(*self)
-}
-
-fn value_t.get(*self, string key):ref<value_t>! {
-    if self.kind != VALUE_OBJECT {
-        throw errorf('JSON value is not an object')
-    }
-    if !self.object.contains(key) {
-        throw errorf('JSON object has no key `%s`', key)
-    }
-    return self.object[key]
-}
-
-fn value_t.as_string(*self):string! {
-    if self.kind != VALUE_STRING {
-        throw errorf('JSON value is not a string')
-    }
-    return self.text
-}
-
-fn value_t.as_bool(*self):bool! {
-    if self.kind != VALUE_BOOL {
-        throw errorf('JSON value is not a boolean')
-    }
-    return self.boolean
-}
-
-fn value_t.as_number(*self):string! {
-    if self.kind != VALUE_NUMBER {
-        throw errorf('JSON value is not a number')
-    }
-    return self.number
-}
-
-fn value_t.as_array(*self):[ref<value_t>]! {
-    if self.kind != VALUE_ARRAY {
-        throw errorf('JSON value is not an array')
-    }
-    return self.array
-}
-
-fn value_t.as_object(*self):{string:ref<value_t>}! {
-    if self.kind != VALUE_OBJECT {
-        throw errorf('JSON value is not an object')
-    }
-    return self.object
-}
-
-fn value_t.at(*self, int index):ref<value_t>! {
-    if self.kind != VALUE_ARRAY {
-        throw errorf('JSON value is not an array')
-    }
-    if index < 0 || index >= self.array.len() {
-        throw errorf('JSON array index out of range: %d', index)
-    }
-    return self.array[index]
-}
-
-fn value_t.is_null(*self):bool {
-    return self.kind == VALUE_NULL
-}
-
-fn deserialize_t.parser_value(&self):value_t! {
+fn deserialize_t.parser_value(&self):any! {
     self.skip_whitespace()
     if self.cursor >= self.data.len() {
         throw errorf('unexpected end of input at position %d', self.cursor)
@@ -1033,13 +934,13 @@ fn deserialize_t.parser_value(&self):value_t! {
     match c {
         'n'.char() -> {
             self.must('null')
-            return null_value()
+            return null
         }
         't'.char()|'f'.char() -> {
-            return bool_value(self.parser_bool())
+            return self.parser_bool()
         }
         '"'.char() -> {
-            return string_value(self.parser_string())
+            return self.parser_string()
         }
         '['.char() -> {
             return self.parser_value_array()
@@ -1048,51 +949,51 @@ fn deserialize_t.parser_value(&self):value_t! {
             return self.parser_value_object()
         }
         _ -> {
-            return number_value(self.parser_number_token())
+            return self.parser_number_token() as number
         }
     }
 }
 
-fn deserialize_t.parser_value_array(&self):value_t! {
+fn deserialize_t.parser_value_array(&self):[any]! {
     self.enter_container()
     self.must('[')
-    [ref<value_t>] values = []
+    [any] values = []
     if self.consume(']') {
         self.leave_container()
-        return array_value(values)
+        return values
     }
 
     for true {
-        values.push(box_value(self.parser_value()))
+        values.push(self.parser_value())
         if self.consume(']') {
             break
         }
         self.must(',')
     }
     self.leave_container()
-    return array_value(values)
+    return values
 }
 
-fn deserialize_t.parser_value_object(&self):value_t! {
+fn deserialize_t.parser_value_object(&self):{string:any}! {
     self.enter_container()
     self.must('{')
-    {string:ref<value_t>} values = {}
+    {string:any} values = {}
     if self.consume('}') {
         self.leave_container()
-        return object_value(values)
+        return values
     }
 
     for true {
         var key = self.parser_string()
         self.must(':')
-        values[key] = box_value(self.parser_value())
+        values[key] = self.parser_value()
         if self.consume('}') {
             break
         }
         self.must(',')
     }
     self.leave_container()
-    return object_value(values)
+    return values
 }
 
 fn deserialize_t.parser_number_token(&self):string! {
@@ -1148,70 +1049,6 @@ fn deserialize_t.parser_number_token(&self):string! {
     return self.data.slice(start, self.cursor) as string
 }
 
-fn stringify_value(ref<value_t> value):[u8]! {
-    match value.kind {
-        VALUE_NULL -> {
-            return 'null' as [u8]
-        }
-        VALUE_BOOL -> {
-            if value.boolean {
-                return 'true' as [u8]
-            }
-            return 'false' as [u8]
-        }
-        VALUE_NUMBER -> {
-            validate_number_token(value.number)
-            return value.number as [u8]
-        }
-        VALUE_STRING -> {
-            return serialize_string(value.text)
-        }
-        VALUE_ARRAY -> {
-            [u8] result = ['['.char()]
-            for i, item in value.array {
-                result.append(stringify_value(item))
-                if i < value.array.len() - 1 {
-                    result.push(','.char())
-                }
-            }
-            result.push(']'.char())
-            return result
-        }
-        VALUE_OBJECT -> {
-            [u8] result = ['{'.char()]
-            int index = 0
-            for key, item in value.object {
-                result.append(serialize_string(key))
-                result.push(':'.char())
-                result.append(stringify_value(item))
-                if index < value.object.len() - 1 {
-                    result.push(','.char())
-                }
-                index += 1
-            }
-            result.push('}'.char())
-            return result
-        }
-        _ -> {
-            throw errorf('invalid JSON value kind %d', value.kind)
-        }
-    }
-}
-
-fn box_value(value_t value):ref<value_t> {
-    var boxed = new value_t()
-    *boxed = value
-    return boxed
-}
-
-fn validate_number_token(string source):void! {
-    var parser = new deserialize_t(data = source as [u8], max_depth = 1)
-    parser.parser_number_token()
-    if parser.cursor != parser.data.len() {
-        throw errorf('invalid JSON number at position %d', parser.cursor)
-    }
-}
-
 // stream_parser_t incrementally frames one JSON value across arbitrary input
 // chunks. Once framing is complete, value() performs the strict semantic parse.
 type stream_parser_t = struct{
@@ -1224,23 +1061,15 @@ type stream_parser_t = struct{
     bool escaped
     bool scalar
     bool complete
-    bool finished
 }
 
 fn stream_parser():ref<stream_parser_t> {
-    return stream_parser_with_limits(DEFAULT_MAX_DEPTH)
-}
-
-fn stream_parser_with_limits(int max_depth):ref<stream_parser_t> {
-    return new stream_parser_t(max_depth = max_depth)
+    return new stream_parser_t(max_depth = DEFAULT_MAX_DEPTH)
 }
 
 // Returns true as soon as a complete root value has been framed. Additional
 // non-whitespace bytes are rejected, so one parser always represents one value.
 fn stream_parser_t.feed(&self, [u8] chunk):bool! {
-    if self.finished {
-        throw errorf('JSON stream parser is finished')
-    }
     self.data.append(chunk)
 
     for self.scan_cursor < self.data.len() {
@@ -1326,33 +1155,11 @@ fn stream_parser_t.feed(&self, [u8] chunk):bool! {
     return self.complete
 }
 
-fn stream_parser_t.value(&self):value_t! {
+fn stream_parser_t.value(&self):any! {
     if !self.complete {
         throw errorf('JSON value is incomplete')
     }
-    return parse_with_limits(self.data as string, self.max_depth)
-}
-
-fn stream_parser_t.finish(&self):value_t! {
-    if self.finished {
-        throw errorf('JSON stream parser is already finished')
-    }
-    self.finished = true
-    var value = parse_with_limits(self.data as string, self.max_depth)
-    self.complete = true
-    return value
-}
-
-fn stream_parser_t.reset(&self) {
-    self.data = []
-    self.containers = []
-    self.scan_cursor = 0
-    self.started = false
-    self.in_string = false
-    self.escaped = false
-    self.scalar = false
-    self.complete = false
-    self.finished = false
+    return parse_with_depth(self.data as string, self.max_depth)
 }
 
 fn json_space(u8 c):bool {

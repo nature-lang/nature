@@ -6,9 +6,9 @@ fn main() {
     var decoded = json.deserialize<string>(`"A\u4F60\u597D \uD83D\uDE00"`)
     assert(decoded == 'A你好 😀')
 
-    var value = json.parse(`{"emoji":"\uD83D\uDE00","cjk":"\u4F60\u597D"}`)
-    assert(value.get('emoji').as_string() == '😀')
-    assert(value.get('cjk').as_string() == '你好')
+    var value = json.parse(`{"emoji":"\uD83D\uDE00","cjk":"\u4F60\u597D"}`) as {string:any}
+    assert(value['emoji'] as string == '😀')
+    assert(value['cjk'] as string == '你好')
 }
 
 === test_unpaired_surrogates_and_bad_utf8_replaced
@@ -17,17 +17,17 @@ import json
 
 fn main() {
     // Go replaces unpaired surrogates with U+FFFD instead of erroring
-    var lone_high = json.parse(`"\uD83D"`)
-    assert(lone_high.as_string() == '�')
-    var lone_low = json.parse(`"\uDE00"`)
-    assert(lone_low.as_string() == '�')
-    var high_ascii = json.parse(`"\uD83D\u0041"`)
-    assert(high_ascii.as_string() == '�A')
+    var lone_high = json.parse(`"\uD83D"`) as string
+    assert(lone_high == '�')
+    var lone_low = json.parse(`"\uDE00"`) as string
+    assert(lone_low == '�')
+    var high_ascii = json.parse(`"\uD83D\u0041"`) as string
+    assert(high_ascii == '�A')
 
     // Go replaces invalid raw UTF-8 with U+FFFD instead of erroring
     var invalid = [0xC0 as u8, 0x80 as u8] as string
-    var raw = json.parse('"' + invalid + '"')
-    assert(raw.as_string() == '��')
+    var raw = json.parse('"' + invalid + '"') as string
+    assert(raw == '��')
 
     // Go replaces invalid UTF-8 with escaped \ufffd during marshal, no error
     var encoded = json.serialize(invalid) catch e {
@@ -63,28 +63,42 @@ fn main() {
 import json
 
 fn main() {
-    var value = json.parse('{"big":9007199254740993,"emoji":"\\uD83D\\uDE00","items":[true,null]}')
-    assert(value.get('big').as_number() == '9007199254740993')
-    assert(value.get('emoji').as_string() == '😀')
-    var items = value.get('items')
-    assert(items.at(0).as_bool())
-    assert(items.at(1).is_null())
+    // 无损数字: 9007199254740993 超出 f64 精度，number 保留原始文本
+    var value = json.parse('{"big":9007199254740993,"emoji":"\\uD83D\\uDE00","items":[true,null]}') as {string:any}
+    assert(value['big'] as json.number == '9007199254740993' as json.number)
+    assert(value['emoji'] as string == '😀')
+    var items = value['items'] as [any]
+    assert(items[0] as bool)
+    assert(json.serialize(items[1]) == 'null')
 
-    var encoded = value.stringify()
-    var reparsed = json.parse(encoded)
-    assert(reparsed.get('big').as_number() == '9007199254740993')
-    assert(reparsed.get('emoji').as_string() == '😀')
+    // round-trip: serialize 后重新 parse 仍无损
+    var encoded = json.serialize(value)
+    var reparsed = json.parse(encoded) as {string:any}
+    assert(reparsed['big'] as json.number == '9007199254740993' as json.number)
+    assert(reparsed['emoji'] as string == '😀')
 }
 
 === test_limits
 --- main.n
 import json
 
-fn main() {
-    bool rejected = false
-    var value = json.parse_with_limits('[[0]]', 1) catch e {
-        rejected = true
-        json.null_value()
+fn rejects(string source):bool {
+    var value = json.parse(source) catch e {
+        return true
     }
-    assert(rejected)
+    return false
+}
+
+fn main() {
+    // 嵌套深度超过 256 时拒绝（Go 同样有硬编码深度限制）
+    string deep = ''
+    for int i = 0; i < 300; i += 1 {
+        deep += '['
+    }
+    deep += '0'
+    for int i = 0; i < 300; i += 1 {
+        deep += ']'
+    }
+
+    assert(rejects(deep))
 }
