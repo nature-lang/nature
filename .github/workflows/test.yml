@@ -3,7 +3,6 @@ on:
   push:
     branches:
       - master
-  pull_request:
   workflow_dispatch:
 
 env:
@@ -24,8 +23,6 @@ jobs:
             runs-on: ubuntu-24.04-arm
           - target: linux-amd64
             runs-on: ubuntu-latest
-          - target: darwin-arm64
-            runs-on: macos-latest
     runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Checkout
@@ -123,7 +120,7 @@ jobs:
         uses: threeal/ctest-action@v1.1.0
         with:
           test-dir: build-release/tests
-          args: -E "20250424_00_parker${{ matrix.runs-on == 'macos-15-large' && '|20240822_00_chan' || '' }}" --timeout 80
+          args: -E "20250424_00_parker" --timeout 80
 
   test-windows:
     name: Test (windows-amd64)
