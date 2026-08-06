@@ -118,6 +118,7 @@ type response_t = struct{
     string content_type // default application/json
     string charset
     bool body_read
+    bool chunked // Transfer-Encoding: chunked
     ref<buf.reader<types.connable>> buf_conn
 }
 
@@ -300,7 +301,19 @@ fn request_t.send(&self):ref<response_t>! {
             if key == 'Content-Length' {
                 resp.length = value.to_int()
             }
+
+            if key == 'Transfer-Encoding' && value.contains('chunked') {
+                resp.chunked = true
+            }
         }
+    }
+
+    // chunked response bodies are decoded transparently by chunked_reader_t,
+    // so callers see a plain byte stream without framing or trailers
+    // (line reads via read_line work for SSE and other streaming cases)
+    if resp.chunked {
+        var creader = chunked_reader_t.new(br)
+        resp.buf_conn = new buf.reader<types.connable>(rd = creader)
     }
 
     return resp
@@ -339,7 +352,24 @@ fn response_t.text(&self):string! {
         return self.body
     }
     self.body_read = true
-    if self.length == 0 {
+    if self.length == 0 && !self.chunked {
+        return self.body
+    }
+
+    if self.chunked {
+        // no Content-Length, read until EOF
+        var buf = vec<u8>.new(0, 4096)
+        bool eof = false
+        for !eof {
+            var n = self.buf_conn.read(buf) catch e {
+                eof = true
+                0
+            }
+            if eof {
+                break
+            }
+            self.body += buf.slice(0, n) as string
+        }
         return self.body
     }
 
@@ -347,4 +377,129 @@ fn response_t.text(&self):string! {
     self.buf_conn.read_exact(buf)
     self.body = buf as string
     return self.body
+}
+
+// chunked response body decoder: restores a chunked transfer into a plain
+// byte stream, hiding the chunk size line / data / trailing CRLF / trailers.
+// State machine: 0=read chunk size line, 1=read chunk data, 2=consume trailing CRLF, 3=read trailers, 4=done
+type chunked_reader_t:types.connable = struct{
+    ref<buf.reader<types.connable>> br
+    [u8] staging = vec<u8>.new(0, 4096)
+    int s_r
+    int s_w
+    int state
+    int remaining
+}
+
+fn chunked_reader_t.new(ref<buf.reader<types.connable>> br):ref<chunked_reader_t> {
+    return new chunked_reader_t(br = br)
+}
+
+#local
+fn chunked_reader_t.hex_to_int(&self, string s):int {
+    var result = 0
+    for int i = 0; i < s.len(); i += 1 {
+        var c = s[i]
+        result *= 16
+        if c >= '0'.char() && c <= '9'.char() {
+            result += (c - '0'.char()) as int
+        } else if c >= 'a'.char() && c <= 'f'.char() {
+            result += (c - 'a'.char()) as int + 10
+        } else if c >= 'A'.char() && c <= 'F'.char() {
+            result += (c - 'A'.char()) as int + 10
+        }
+    }
+    return result
+}
+
+#local
+fn chunked_reader_t.fill_staging(&self):void! {
+    for true {
+        if self.state == 0 {
+            var line = self.br.read_line()
+            // may carry a chunk-ext: 1a;name=value
+            var semi = line.find(';')
+            if semi > 0 {
+                line = line.slice(0, semi)
+            }
+            self.remaining = self.hex_to_int(line.trim([' ', '\t']))
+            if self.remaining == 0 {
+                self.state = 3
+            } else {
+                self.state = 1
+            }
+            continue
+        }
+
+        if self.state == 1 {
+            var want = self.remaining
+            if want > self.staging.len() {
+                want = self.staging.len()
+            }
+            var n = self.br.read(self.staging.slice(0, want))
+            self.s_w = n
+            self.s_r = 0
+            self.remaining -= n
+            if self.remaining == 0 {
+                self.state = 2
+            }
+            return
+        }
+
+        if self.state == 2 {
+            // consume the trailing CRLF
+            self.br.read_line()
+            self.state = 0
+            continue
+        }
+
+        if self.state == 3 {
+            // trailers: read until an empty line
+            for true {
+                var line = self.br.read_line()
+                if line == '' {
+                    break
+                }
+            }
+            self.state = 4
+            continue
+        }
+
+        throw errorf('EOF')
+    }
+}
+
+fn chunked_reader_t.read(&self, [u8] dst):int! {
+    if dst.len() == 0 {
+        if self.s_r < self.s_w {
+            return 0
+        }
+        throw errorf('EOF')
+    }
+
+    if self.s_r == self.s_w {
+        self.s_r = 0
+        self.s_w = 0
+        self.fill_staging()
+    }
+
+    var n = dst.copy(self.staging.slice(self.s_r, self.s_w))
+    self.s_r += n
+    return n
+}
+
+fn chunked_reader_t.write(&self, [u8] buf):int! {
+    return self.br.rd.write(buf)
+}
+
+fn chunked_reader_t.close(&self) {
+    self.br.rd.close()
+}
+
+fn chunked_reader_t.set_read_timeout(&self, int timeout_ms) {
+    self.br.rd.set_read_timeout(timeout_ms)
+}
+
+fn chunked_reader_t.read_timeout(&self):int {
+    return self.br.rd.read_timeout()
 }
