@@ -1,0 +1,173 @@
+=== test_sse_stream
+--- main.n
+import net.tcp
+import co
+import fmt
+import http.client
+
+fn serve():void! {
+    var server = tcp.listen('127.0.0.1:18997')
+    var conn = server.accept()
+
+    conn.write(('HTTP/1.1 200 OK\r\n' +
+                'Content-Type: text/event-stream\r\n' +
+                'Transfer-Encoding: chunked\r\n' +
+                '\r\n') as [u8])
+
+    // event 1: single data line, sent as two TCP packets to simulate real streaming
+    var ev1 = 'data: hello\r\n\r\n'
+    conn.write(fmt.sprintf('%x\r\n', ev1.len()) as [u8])
+    conn.write(ev1.slice(0, 6) as [u8])
+    co.sleep(50)
+    conn.write(ev1.slice(6, ev1.len()) as [u8])
+    conn.write('\r\n' as [u8])
+
+    // event 2: multi-line data, should join as line1\nline2, with a chunk-ext
+    var ev2 = 'data: line1\ndata: line2\n\n'
+    conn.write(fmt.sprintf('%x;part=two\r\n', ev2.len()) as [u8])
+    conn.write(ev2 as [u8])
+    conn.write('\r\n' as [u8])
+
+    // terminal chunk
+    conn.write('0\r\n\r\n' as [u8])
+    co.sleep(100)
+    conn.close()
+    server.close()
+}
+
+fn main():void! {
+    go serve()
+    co.sleep(200)
+
+    var resp = client.new().get('http://127.0.0.1:18997/').send()
+    assert(resp.chunked)
+
+    // no SSE-specific API: read the body line by line and parse data: fields
+    string data = ''
+    int count = 0
+    for true {
+        var line = resp.buf_conn.read_line() catch e {
+            break
+        }
+        if line == '' {
+            if data != '' {
+                println('event', count, ':', data)
+                count += 1
+                data = ''
+            }
+        } else if line.starts_with('data:') {
+            if data != '' {
+                data += '\n'
+            }
+            data += line.slice(5, line.len()).trim([' '])
+        }
+    }
+    println('events:', count)
+}
+
+--- output.txt
+event 0 : hello
+event 1 : line1
+line2
+events: 2
+
+=== test_text_chunked
+--- main.n
+import net.tcp
+import co
+import fmt
+import http.client
+
+fn serve():void! {
+    var server = tcp.listen('127.0.0.1:18998')
+    var conn = server.accept()
+
+    conn.write(('HTTP/1.1 200 OK\r\n' +
+                'Content-Type: text/plain\r\n' +
+                'Transfer-Encoding: chunked\r\n' +
+                '\r\n') as [u8])
+
+    var c1 = 'hello'
+    conn.write(fmt.sprintf('%x\r\n', c1.len()) as [u8])
+    conn.write(c1 as [u8])
+    conn.write('\r\n' as [u8])
+
+    var c2 = ' world'
+    conn.write(fmt.sprintf('%x\r\n', c2.len()) as [u8])
+    conn.write(c2 as [u8])
+    conn.write('\r\n' as [u8])
+
+    // terminal chunk + trailers
+    conn.write('0\r\nX-Trailer: done\r\n\r\n' as [u8])
+    co.sleep(100)
+    conn.close()
+    server.close()
+}
+
+fn main():void! {
+    go serve()
+    co.sleep(200)
+
+    var resp = client.new().get('http://127.0.0.1:18998/').send()
+    assert(resp.chunked)
+    assert(resp.text() == 'hello world')
+    println('chunked body ok')
+}
+
+--- output.txt
+chunked body ok
+
+=== test_chunked_stream
+--- main.n
+import http.client
+import net.tcp
+import co
+
+fn serve():void! {
+    var server = tcp.listen('127.0.0.1:18991')
+    var conn = server.accept()
+    var request = vec<u8>.new(0, 4096)
+    conn.read(request)
+
+    conn.write(('HTTP/1.1 200 OK\r\n' +
+                'Transfer-Encoding: chunked\r\n' +
+                'Content-Type: text/event-stream\r\n' +
+                'X-Origin: https://example.test/a:b\r\n' +
+                '\r\n') as [u8])
+    conn.write('5;part=one\r\nhello\r\n' as [u8])
+    co.sleep(10)
+    conn.write('6\r\n world\r\n' as [u8])
+    conn.write('0\r\nX-Trailer: done\r\n\r\n' as [u8])
+    co.sleep(10)
+    conn.close()
+    server.close()
+}
+
+fn main() {
+    go serve()
+    co.sleep(100)
+
+    var resp = client.new().timeout(5000).get('http://127.0.0.1:18991/events').send()
+    var result = vec<u8>.cap_of(32)
+    var scratch = vec<u8>.new(0, 3)
+    bool eof = false
+    for !eof {
+        var n = resp.read(scratch) catch e {
+            assert(e.msg() == 'EOF')
+            eof = true
+            0
+        }
+        if eof {
+            break
+        }
+        result.append(scratch.slice(0, n))
+    }
+
+    assert(result as string == 'hello world')
+    assert(resp.header('x-origin') == 'https://example.test/a:b')
+    resp.close()
+    println('chunked stream ok')
+}
+
+--- output.txt
+chunked stream ok

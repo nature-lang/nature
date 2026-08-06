@@ -92,7 +92,7 @@ fn multipart_t.serialize(&self):string {
 type request_t = struct{
     string method
     {string:string} headers
-    int timeout
+    int timeout_ms
     string body
     string url
     url.url_t u
@@ -118,6 +118,7 @@ type response_t = struct{
     string content_type // default application/json
     string charset
     bool body_read
+    bool chunked // Transfer-Encoding: chunked
     ref<buf.reader<types.connable>> buf_conn
 }
 
@@ -168,7 +169,7 @@ fn request_t.head(&self, string url):ref<request_t> {
 }
 
 fn request_t.timeout(&self, int timeout):ref<request_t> {
-    self.timeout = timeout
+    self.timeout_ms = timeout
     return self
 }
 
@@ -256,6 +257,19 @@ fn request_t.tcp_buf(&self):[u8]! {
     return buf
 }
 
+#local
+fn read_until_space(ref<buf.reader<types.connable>> br):string! {
+    var bytes = vec<u8>.new(0, 32)
+    for true {
+        var b = br.read_byte()
+        if b == ' '.char() {
+            break
+        }
+        bytes.push(b)
+    }
+    return bytes as string
+}
+
 fn request_t.send(&self):ref<response_t>! {
     self.u = url.parse(self.url)
     self.remote_ip = dns.lookup(self.u.hostname)[0]
@@ -265,12 +279,13 @@ fn request_t.send(&self):ref<response_t>! {
 
     types.connable? temp_conn = null
     if self.u.scheme == 'https' {
-        temp_conn = tls.connect_timeout(fmt.sprintf('%s:%d', self.remote_ip, self.remote_port), self.timeout)
+        temp_conn = tls.connect_timeout(fmt.sprintf('%s:%d', self.remote_ip, self.remote_port), self.timeout_ms)
     } else {
-        temp_conn = tcp.connect_timeout(fmt.sprintf('%s:%d', self.remote_ip, self.remote_port), self.timeout)
+        temp_conn = tcp.connect_timeout(fmt.sprintf('%s:%d', self.remote_ip, self.remote_port), self.timeout_ms)
     }
 
     var conn = temp_conn as types.connable
+    conn.set_read_timeout(self.timeout_ms)
     var buf = self.tcp_buf()
     conn.write(buf)
 
@@ -278,29 +293,48 @@ fn request_t.send(&self):ref<response_t>! {
     var br = new buf.reader<types.connable>(rd = conn)
 
     var resp = new response_t(buf_conn = br)
-    resp.version = (br.read_until(' '.char()) as string).rtrim([' '])
-    var status = (br.read_until(' '.char()) as string).rtrim([' '])
-    resp.status = status.to_int() catch e {0}
-    resp.message = br.read_line()
-    for true {
-        var line = br.read_line()
+    try {
+        resp.version = read_until_space(br).rtrim([' '])
+        var status = read_until_space(br).rtrim([' '])
+        resp.status = status.to_int() catch e {0}
+        resp.message = br.read_line()
+        for true {
+            var line = br.read_line()
 
-        // if empty line, break
-        if line == '' {
-            break
-        }
+            // if empty line, break
+            if line == '' {
+                break
+            }
 
-        // parser header(trim)
-        var pair = line.split(':')
-        if pair.len() == 2 {
-            var key = pair[0].trim([' '])
-            var value = pair[1].trim([' '])
-            resp.headers[key] = value
+            // parser header: split on the first ':' only, values may contain ':'
+            var colon = line.find(':')
+            if colon > 0 {
+                var key = line.slice(0, colon).trim([' '])
+                var value = line.slice(colon + 1, line.len()).trim([' '])
+                resp.headers[key] = value
 
-            if key == 'Content-Length' {
-                resp.length = value.to_int()
+                if key == 'Content-Length' {
+                    resp.length = value.to_int()
+                }
+
+                if key == 'Transfer-Encoding' && value.contains('chunked') {
+                    resp.chunked = true
+                }
             }
         }
+    } catch e {
+        if e.msg() == 'tcp read timeout' {
+            throw errorf('HTTP response read timeout')
+        }
+        throw e
+    }
+
+    // chunked response bodies are decoded transparently by chunked_reader_t,
+    // so callers see a plain byte stream without framing or trailers
+    // (line reads via read_line work for SSE and other streaming cases)
+    if resp.chunked {
+        var creader = chunked_reader_t.new(br)
+        resp.buf_conn = new buf.reader<types.connable>(rd = creader)
     }
 
     return resp
@@ -323,7 +357,7 @@ fn fetch(string url, config_t c):ref<response_t>! {
     req.method = c.method // TODO check
     req.url = url
     req.headers = c.headers
-    req.timeout = c.timeout
+    req.timeout_ms = c.timeout
     req.body = c.body
     
     return req.send()
@@ -334,12 +368,58 @@ fn response_t.status(&self):int {
     return self.status
 }
 
+// 读取响应体的一段字节到 buf, 返回实际读取的字节数,
+// 响应体读取完毕时抛出 EOF。超时错误统一为 'HTTP response read timeout'
+fn response_t.read(&self, [u8] buf):int! {
+    try {
+        return self.buf_conn.read(buf)
+    } catch e {
+        if e.msg() == 'tcp read timeout' {
+            throw errorf('HTTP response read timeout')
+        }
+        throw e
+    }
+}
+
+// 大小写不敏感的响应头查找, 不存在时返回空串
+fn response_t.header(&self, string key):string {
+    var lower = key.to_lower()
+    for k, v in self.headers {
+        if k.to_lower() == lower {
+            return v
+        }
+    }
+    return ''
+}
+
+// 显式关闭底层连接
+fn response_t.close(&self) {
+    self.buf_conn.rd.close()
+}
+
 fn response_t.text(&self):string! {
     if self.body_read {
         return self.body
     }
     self.body_read = true
-    if self.length == 0 {
+    if self.length == 0 && !self.chunked {
+        return self.body
+    }
+
+    if self.chunked {
+        // no Content-Length, read until EOF
+        var buf = vec<u8>.new(0, 4096)
+        bool eof = false
+        for !eof {
+            var n = self.buf_conn.read(buf) catch e {
+                eof = true
+                0
+            }
+            if eof {
+                break
+            }
+            self.body += buf.slice(0, n) as string
+        }
         return self.body
     }
 
@@ -347,4 +427,129 @@ fn response_t.text(&self):string! {
     self.buf_conn.read_exact(buf)
     self.body = buf as string
     return self.body
+}
+
+// chunked response body decoder: restores a chunked transfer into a plain
+// byte stream, hiding the chunk size line / data / trailing CRLF / trailers.
+// State machine: 0=read chunk size line, 1=read chunk data, 2=consume trailing CRLF, 3=read trailers, 4=done
+type chunked_reader_t:types.connable = struct{
+    ref<buf.reader<types.connable>> br
+    [u8] staging = vec<u8>.new(0, 4096)
+    int s_r
+    int s_w
+    int state
+    int remaining
+}
+
+fn chunked_reader_t.new(ref<buf.reader<types.connable>> br):ref<chunked_reader_t> {
+    return new chunked_reader_t(br = br)
+}
+
+#local
+fn chunked_reader_t.hex_to_int(&self, string s):int {
+    var result = 0
+    for int i = 0; i < s.len(); i += 1 {
+        var c = s[i]
+        result *= 16
+        if c >= '0'.char() && c <= '9'.char() {
+            result += (c - '0'.char()) as int
+        } else if c >= 'a'.char() && c <= 'f'.char() {
+            result += (c - 'a'.char()) as int + 10
+        } else if c >= 'A'.char() && c <= 'F'.char() {
+            result += (c - 'A'.char()) as int + 10
+        }
+    }
+    return result
+}
+
+#local
+fn chunked_reader_t.fill_staging(&self):void! {
+    for true {
+        if self.state == 0 {
+            var line = self.br.read_line()
+            // may carry a chunk-ext: 1a;name=value
+            var semi = line.find(';')
+            if semi > 0 {
+                line = line.slice(0, semi)
+            }
+            self.remaining = self.hex_to_int(line.trim([' ', '\t']))
+            if self.remaining == 0 {
+                self.state = 3
+            } else {
+                self.state = 1
+            }
+            continue
+        }
+
+        if self.state == 1 {
+            var want = self.remaining
+            if want > self.staging.len() {
+                want = self.staging.len()
+            }
+            var n = self.br.read(self.staging.slice(0, want))
+            self.s_w = n
+            self.s_r = 0
+            self.remaining -= n
+            if self.remaining == 0 {
+                self.state = 2
+            }
+            return
+        }
+
+        if self.state == 2 {
+            // consume the trailing CRLF
+            self.br.read_line()
+            self.state = 0
+            continue
+        }
+
+        if self.state == 3 {
+            // trailers: read until an empty line
+            for true {
+                var line = self.br.read_line()
+                if line == '' {
+                    break
+                }
+            }
+            self.state = 4
+            continue
+        }
+
+        throw errorf('EOF')
+    }
+}
+
+fn chunked_reader_t.read(&self, [u8] dst):int! {
+    if dst.len() == 0 {
+        if self.s_r < self.s_w {
+            return 0
+        }
+        throw errorf('EOF')
+    }
+
+    if self.s_r == self.s_w {
+        self.s_r = 0
+        self.s_w = 0
+        self.fill_staging()
+    }
+
+    var n = dst.copy(self.staging.slice(self.s_r, self.s_w))
+    self.s_r += n
+    return n
+}
+
+fn chunked_reader_t.write(&self, [u8] buf):int! {
+    return self.br.rd.write(buf)
+}
+
+fn chunked_reader_t.close(&self) {
+    self.br.rd.close()
+}
+
+fn chunked_reader_t.set_read_timeout(&self, int timeout_ms) {
+    self.br.rd.set_read_timeout(timeout_ms)
+}
+
+fn chunked_reader_t.read_timeout(&self):int {
+    return self.br.rd.read_timeout()
 }
