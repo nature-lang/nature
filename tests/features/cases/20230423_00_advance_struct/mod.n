@@ -1,8 +1,8 @@
-type square = struct {
+pub type square = struct {
     int length
     int width
 }
 
-fn square.area(self):int {
+pub fn square.area(self):int {
     return self.length * self.width
 }

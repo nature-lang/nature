@@ -1,0 +1,10 @@
+import 'mod.n' as math
+
+fn main() {
+    var p = math.pub_pair_t{x: 3, y: 4}
+    println(math.pub_add(1, 2))
+    println(math.PUB_CONST)
+    println(p.sum())
+    math.pub_counter += 1
+    println(math.pub_counter)
+}

@@ -1,13 +1,13 @@
 import co.types
 
-type mutex_t = struct{
+pub type mutex_t = struct{
     i64 state
     i64 sema
     i64 waiter_count
     var waiters = types.linkco_list_t{}
 }
 
-fn mutex_t.new():ref<mutex_t> {
+pub fn mutex_t.new():ref<mutex_t> {
     return new mutex_t()
 }
 
@@ -20,7 +20,7 @@ fn rt_mutex_try_lock(ref<mutex_t> m):bool
 #linkid rt_mutex_unlock
 fn rt_mutex_unlock(ref<mutex_t> m)
 
-fn mutex_t.lock(&self) {
+pub fn mutex_t.lock(&self) {
     rt_mutex_lock(self)
 }
 
@@ -28,6 +28,6 @@ fn mutex_t.try_lock(&self):bool {
     return rt_mutex_try_lock(self)
 }
 
-fn mutex_t.unlock(&self) {
+pub fn mutex_t.unlock(&self) {
     rt_mutex_unlock(self)
 }

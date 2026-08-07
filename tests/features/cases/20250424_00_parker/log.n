@@ -3,7 +3,7 @@ import syscall
 import time
 import fmt
 
-bool verbose = false
+pub bool verbose = false
 
 fn set_verbose() {
     verbose = true

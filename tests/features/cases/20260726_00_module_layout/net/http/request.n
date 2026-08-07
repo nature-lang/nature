@@ -1,5 +1,5 @@
 mod /* part of http */ http
 
-fn request():string {
+pub fn request():string {
     return 'req:' + PROTO
 }

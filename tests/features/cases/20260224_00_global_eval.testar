@@ -66,20 +66,20 @@ fn main() {}
 --- a.n
 import 'b.n'.{b}
 
-int a = b
+pub int a = b
 
 --- b.n
 import 'c.n'.{c}
 
-int b = c
+pub int b = c
 
 --- c.n
 import 'a.n'.{a}
 
-int c = a
+pub int c = a
 
 --- output.txt
-nature-test/c.n:3:9: global initializer cannot reference global var 'nature-test.a.a'
+nature-test/c.n:3:13: global initializer cannot reference global var 'nature-test.a.a'
 
 === test_global_auto_infer
 --- main.n

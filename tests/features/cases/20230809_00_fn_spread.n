@@ -1,4 +1,4 @@
-fn sum(int a, ...[int] list):int {
+pub fn sum(int a, ...[int] list):int {
     int t = 0
     for v in list {
         t += v

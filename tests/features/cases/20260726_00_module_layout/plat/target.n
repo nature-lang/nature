@@ -1,5 +1,5 @@
 mod plat
 
-fn target():string {
+pub fn target():string {
     return 'plain'
 }

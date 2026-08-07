@@ -1,0 +1,5 @@
+import 'mod.n' as math
+
+fn main() {
+    println(math.private_fn())
+}

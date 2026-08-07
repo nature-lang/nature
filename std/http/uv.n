@@ -7,7 +7,7 @@ type header_t = struct{
     int value_len
 }
 
-type conn_t = struct{
+pub type conn_t = struct{
     ref<http.server_t> server
     anyptr read_buf
     anyptr url_at
@@ -30,17 +30,17 @@ type conn_t = struct{
     // ... other field not use
 }
 
-#linkid rt_uv_http_listen
+pub #linkid rt_uv_http_listen
 fn http_listen(anyptr server):void!
 
-#linkid rt_uv_read
+pub #linkid rt_uv_read
 fn read(anyptr client):string!
 
-#linkid rt_uv_write
+pub #linkid rt_uv_write
 fn write(anyptr client, string data):void!
 
-#linkid rt_uv_conn_resp
+pub #linkid rt_uv_conn_resp
 fn conn_resp(ptr<conn_t> ctx, string data)
 
-#linkid rt_uv_http_close
+pub #linkid rt_uv_http_close
 fn http_close(anyptr server)

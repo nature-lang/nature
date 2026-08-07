@@ -1,28 +1,28 @@
 import fmt
 
 // token kind
-const TokenKindEof = 0 // end of file
+pub const TokenKindEof = 0 // end of file
 const TokenKindIdent = 1 // identifier
-const TokenKindNumber = 2 // number literal
+pub const TokenKindNumber = 2 // number literal
 const TokenKindString = 3 // string literal
-const TokenKindPlus = 4 // +
-const TokenKindMinus = 5 // -
-const TokenKindAsterisk = 6 // *
-const TokenKindSlash = 7 // /
-const TokenKindPercent = 8 // %
-const TokenKindAssign = 9 // =
+pub const TokenKindPlus = 4 // +
+pub const TokenKindMinus = 5 // -
+pub const TokenKindAsterisk = 6 // *
+pub const TokenKindSlash = 7 // /
+pub const TokenKindPercent = 8 // %
+pub const TokenKindAssign = 9 // =
 const TokenKindEqual = 10 // ==
 const TokenKindNotEqual = 11 // !=
-const TokenKindLess = 12 // <
+pub const TokenKindLess = 12 // <
 const TokenKindLessEqual = 13 // <=
 const TokenKindGreater = 14 // >
 const TokenKindGreaterEqual = 15 // >=
-const TokenKindSemicolon = 16 // ;
-const TokenKindComma = 17 // ,
-const TokenKindLParen = 18 // (
-const TokenKindRParen = 19 // )
-const TokenKindLBrace = 20 // {
-const TokenKindRBrace = 21 // }
+pub const TokenKindSemicolon = 16 // ;
+pub const TokenKindComma = 17 // ,
+pub const TokenKindLParen = 18 // (
+pub const TokenKindRParen = 19 // )
+pub const TokenKindLBrace = 20 // {
+pub const TokenKindRBrace = 21 // }
 const TokenKindIf = 22 // if
 const TokenKindElse = 23 // else
 const TokenKindReturn = 24 // return
@@ -40,7 +40,7 @@ const TokenKindRBracket = 35 // ]
 const TokenKindColon = 36 // :
 const TokenKindDot = 37 // .
 const TokenKindPipe = 38 // |
-const TokenKindUnknown = 39 // unknown
+pub const TokenKindUnknown = 39 // unknown
 
 type SourcePos = struct {
     int line // line number
@@ -51,13 +51,13 @@ fn SourcePos.toString(*self): string {
     return "(line: " + fmt.sprintf("%d",self.line) + ", column: " + fmt.sprintf("%d",self.column) + ")"
 }
 
-type Token = struct {
+pub type Token = struct {
     int kind        // token kind
     string literal  // token literal
     SourcePos pos      // position in source
 }
 
-fn newToken( int kind,  string literal, int line, int column): Token {
+pub fn newToken( int kind,  string literal, int line, int column): Token {
     return Token{
         kind: kind,
         literal: literal,
@@ -68,7 +68,7 @@ fn newToken( int kind,  string literal, int line, int column): Token {
     }
 }
 
-fn Token.toString(*self): string {
+pub fn Token.toString(*self): string {
     var kind = match self.kind {
         TokenKindEof -> "TokenKindEof"
         TokenKindIdent -> "TokenKindIdent"
@@ -117,7 +117,7 @@ fn Token.toString(*self): string {
 
 {string:int} keywords = {}
 
-fn init() {
+pub fn init() {
    keywords = {
        "if": TokenKindIf,
        "else": TokenKindElse,
@@ -130,7 +130,7 @@ fn init() {
    }
 }
 
-fn lookupKeyword(string ident): int {
+pub fn lookupKeyword(string ident): int {
     // return keywords[ident] or { TokenKindIdent }
     var kind = keywords[ident] catch e { 
         return TokenKindIdent 

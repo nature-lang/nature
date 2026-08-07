@@ -5,7 +5,7 @@ import allocator.types.{allocatable}
 
 type heap_t:allocatable = int
 
-heap_t heap = 0
+pub heap_t heap = 0
 
 // allocatable interface impl: allocate `size` bytes from the heap
 fn heap_t.alloc(*self, int size):anyptr {
@@ -44,10 +44,10 @@ fn heap_t.free<T>(*self, ptr<T> p) {
     self.dealloc(p as anyptr)
 }
 
-fn new<T>(T value):ptr<T> {
+pub fn new<T>(T value):ptr<T> {
     return heap.new(value)
 }
 
-fn free<T>(ptr<T> p) {
+pub fn free<T>(ptr<T> p) {
     return heap.free(p)
 }

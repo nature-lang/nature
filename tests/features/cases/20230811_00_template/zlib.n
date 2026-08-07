@@ -1,8 +1,8 @@
-#linkid gzopen
+pub #linkid gzopen
 fn gzopen(anyptr fname, anyptr mode):anyptr
 
-#linkid gzwrite
+pub #linkid gzwrite
 fn gzwrite(anyptr outfile, anyptr buf, int len):int
 
-#linkid gzclose
+pub #linkid gzclose
 fn gzclose(anyptr outfile):int

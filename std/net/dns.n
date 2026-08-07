@@ -2,7 +2,7 @@
 #linkid rt_uv_dns_lookup
 fn uv_dns_lookup(string host):[string]!
 
-fn lookup(string host):[string]! {
+pub fn lookup(string host):[string]! {
     var ips = uv_dns_lookup(host)
 
     return ips

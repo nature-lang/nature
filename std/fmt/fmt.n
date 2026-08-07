@@ -4,7 +4,7 @@ import fmt.utils as *
 import strings
 import reflect
 
-fn sprintf(string format, ...[any] args):string {
+pub fn sprintf(string format, ...[any] args):string {
     var end = format.len()
     var result = vec<u8>.new(0, 0)
 
@@ -225,12 +225,12 @@ fn sprintf(string format, ...[any] args):string {
     return result as string
 }
 
-fn printf(string format, ...[any] args) {
+pub fn printf(string format, ...[any] args) {
     var str = sprintf(format, ...args)
     print(str)
 }
 
-fn sscanf(string str, string format, ...[any] args):int {
+pub fn sscanf(string str, string format, ...[any] args):int {
     var str_len = str.len()
     var format_len = format.len()
     

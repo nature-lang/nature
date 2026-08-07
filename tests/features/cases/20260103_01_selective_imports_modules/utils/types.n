@@ -1,15 +1,15 @@
 // Types module
-type Point = struct {
+pub type Point = struct {
     int x
     int y
 }
 
-type Color = struct {
+pub type Color = struct {
     int r
     int g
     int b
 }
 
-fn createPoint(int x, int y):Point {
+pub fn createPoint(int x, int y):Point {
     return Point{x: x, y: y}
 }

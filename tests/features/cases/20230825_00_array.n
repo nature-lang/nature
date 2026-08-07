@@ -3,7 +3,7 @@ type sub_t = struct {
     i64 b
 }
 
-type person_t = struct {
+pub type person_t = struct {
     [i32;8] foo
     bool bar
     sub_t car

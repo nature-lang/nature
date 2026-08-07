@@ -4,17 +4,17 @@ import syscall
 import strings
 import libc
 
-type time_t = struct {
+pub type time_t = struct {
     i64 sec
     i64 nsec
     ptr<libc.tm> tm
 }
 
-fn time_t.timestamp(self):i64 {
+pub fn time_t.timestamp(self):i64 {
     return self.sec
 }
 
-fn time_t.ms_timestamp(self):i64 {
+pub fn time_t.ms_timestamp(self):i64 {
     return self.sec * 1000 + self.nsec / 1000000
 }
 
@@ -22,7 +22,7 @@ fn time_t.ns_timestamp(self):i64 {
     return self.sec * 1000000000 + self.nsec
 }
 
-fn time_t.datetime(self):string {
+pub fn time_t.datetime(self):string {
     var buf = vec<u8>.new(0, 100)// 必须预留足够大的空间,才能正常引用
 
    var len = libc.strftime(buf.ref() as libc.cstr, buf.len() as u64, '%Y-%m-%d %H:%M:%S'.to_cstr(), self.tm)
@@ -32,7 +32,7 @@ fn time_t.datetime(self):string {
 }
 
 // 将 time_t 使用当前时间进行初始化
-fn now():time_t {
+pub fn now():time_t {
     var sys_time = syscall.gettime() catch err {
         return time_t{}
     }
@@ -46,6 +46,6 @@ fn now():time_t {
     return t
 }
 
-fn unix():i64 {
+pub fn unix():i64 {
     return now().timestamp()
 }

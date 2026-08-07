@@ -336,7 +336,7 @@ fn main() {
 --- mods/a.n
 mod mods
 
-fn broken():int {
+pub fn broken():int {
     string s = 'x'
     return s
 }

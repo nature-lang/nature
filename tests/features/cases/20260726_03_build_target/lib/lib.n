@@ -5,6 +5,6 @@ fn main() {
     println('should never be selected')
 }
 
-fn helper():string {
+pub fn helper():string {
     return 'helper'
 }

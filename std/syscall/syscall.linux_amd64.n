@@ -3,7 +3,7 @@ mod syscall
 import libc
 import runtime
 
-u32 MS_ACTIVE = 0x40000000
+pub u32 MS_ACTIVE = 0x40000000
 u32 MS_ASYNC = 0x1
 u32 MS_BIND = 0x1000
 u32 MS_DIRSYNC = 0x80
@@ -62,28 +62,28 @@ int CLONE_NEWPID = 0x20000000
 int CLONE_NEWNET = 0x40000000
 int CLONE_IO = 0x80000000
 
-int O_RDONLY = 0x0  // 只读模式
-int O_WRONLY = 0x1  // 只写模式
-int O_RDWR   = 0x2  // 读写模式
+pub int O_RDONLY = 0x0  // 只读模式
+pub int O_WRONLY = 0x1  // 只写模式
+pub int O_RDWR   = 0x2  // 读写模式
 
-int O_APPEND = 0x8  // 追加写入
-int O_CREAT = 0x40 // 如果文件不存在则创建文件
-int O_EXCL   = 0x80 // 与 O_CREAT 一起使用，文件必须不存在
-int O_TRUNC  = 0x200 // 打开文件时清空文件内容
+pub int O_APPEND = 0x8  // 追加写入
+pub int O_CREAT = 0x40 // 如果文件不存在则创建文件
+pub int O_EXCL   = 0x80 // 与 O_CREAT 一起使用，文件必须不存在
+pub int O_TRUNC  = 0x200 // 打开文件时清空文件内容
 
-int SEEK_SET = 0  // 移动到文件开头
-int SEEK_CUR = 1 // 保持不变
-int SEEK_END = 2 // 移动到文件末尾
+pub int SEEK_SET = 0  // 移动到文件开头
+pub int SEEK_CUR = 1 // 保持不变
+pub int SEEK_END = 2 // 移动到文件末尾
 
-int STDIN = 0
-int STDOUT = 1
-int STDERR = 2
+pub int STDIN = 0
+pub int STDOUT = 1
+pub int STDERR = 2
 
-fn null_device():string {
+pub fn null_device():string {
     return '/dev/null'
 }
 
-int CLOCK_REALTIME = 0
+pub int CLOCK_REALTIME = 0
 int CLOCK_MONOTONIC = 1
 int CLOCK_PROCESS_CPUTIME_ID = 2
 int CLOCK_THREAD_CPUTIME_ID = 3
@@ -96,309 +96,309 @@ int CLOCK_BOOTTIME_ALARM = 9
 int CLOCK_TAI = 11
 
 // 系统调用编码
-const SYS_READ = 0
-const SYS_WRITE = 1
-const SYS_OPEN = 2
-const SYS_CLOSE = 3
-const SYS_STAT = 4
-const SYS_FSTAT = 5
-const SYS_LSTAT = 6
-const SYS_POLL = 7
-const SYS_LSEEK = 8
-const SYS_MMAP = 9
-const SYS_MPROTECT = 10
-const SYS_MUNMAP = 11
-const SYS_BRK = 12
-const SYS_RT_SIGACTION = 13
-const SYS_RT_SIGPROCMASK = 14
-const SYS_RT_SIGRETURN = 15
-const SYS_IOCTL = 16
-const SYS_PREAD64 = 17
-const SYS_PWRITE64 = 18
-const SYS_READV = 19
-const SYS_WRITEV = 20
-const SYS_ACCESS = 21
-const SYS_PIPE = 22
-const SYS_SELECT = 23
-const SYS_SCHED_YIELD = 24
-const SYS_MREMAP = 25
-const SYS_MSYNC = 26
-const SYS_MINCORE = 27
-const SYS_MADVISE = 28
-const SYS_SHMGET = 29
-const SYS_SHMAT = 30
-const SYS_SHMCTL = 31
-const SYS_DUP = 32
-const SYS_DUP2 = 33
-const SYS_PAUSE = 34
-const SYS_NANOSLEEP = 35
-const SYS_GETITIMER = 36
-const SYS_ALARM = 37
-const SYS_SETITIMER = 38
-const SYS_GETPID = 39
-const SYS_SENDFILE = 40
-const SYS_SOCKET = 41
-const SYS_CONNECT = 42
-const SYS_ACCEPT = 43
-const SYS_SENDTO = 44
-const SYS_RECVFROM = 45
-const SYS_SENDMSG = 46
-const SYS_RECVMSG = 47
-const SYS_SHUTDOWN = 48
-const SYS_BIND = 49
-const SYS_LISTEN = 50
-const SYS_GETSOCKNAME = 51
-const SYS_GETPEERNAME = 52
-const SYS_SOCKETPAIR = 53
-const SYS_SETSOCKOPT = 54
-const SYS_GETSOCKOPT = 55
-const SYS_CLONE = 56
-const SYS_FORK = 57
-const SYS_VFORK = 58
-const SYS_EXECVE = 59
-const SYS_EXIT = 60
-const SYS_WAIT4 = 61
-const SYS_KILL = 62
-const SYS_UNAME = 63
-const SYS_SEMGET = 64
-const SYS_SEMOP = 65
-const SYS_SEMCTL = 66
-const SYS_SHMDT = 67
-const SYS_MSGGET = 68
-const SYS_MSGSND = 69
-const SYS_MSGRCV = 70
-const SYS_MSGCTL = 71
-const SYS_FCNTL = 72
-const SYS_FLOCK = 73
-const SYS_FSYNC = 74
-const SYS_FDATASYNC = 75
-const SYS_TRUNCATE = 76
-const SYS_FTRUNCATE = 77
-const SYS_GETDENTS = 78
-const SYS_GETCWD = 79
-const SYS_CHDIR = 80
-const SYS_FCHDIR = 81
-const SYS_RENAME = 82
-const SYS_MKDIR = 83
-const SYS_RMDIR = 84
-const SYS_CREAT = 85
-const SYS_LINK = 86
-const SYS_UNLINK = 87
-const SYS_SYMLINK = 88
-const SYS_READLINK = 89
-const SYS_CHMOD = 90
-const SYS_FCHMOD = 91
-const SYS_CHOWN = 92
-const SYS_FCHOWN = 93
-const SYS_LCHOWN = 94
-const SYS_UMASK = 95
-const SYS_GETTIMEOFDAY = 96
-const SYS_GETRLIMIT = 97
-const SYS_GETRUSAGE = 98
-const SYS_SYSINFO = 99
-const SYS_TIMES = 100
-const SYS_PTRACE = 101
-const SYS_GETUID = 102
-const SYS_SYSLOG = 103
-const SYS_GETGID = 104
-const SYS_SETUID = 105
-const SYS_SETGID = 106
-const SYS_GETEUID = 107
-const SYS_GETEGID = 108
-const SYS_SETPGID = 109
-const SYS_GETPPID = 110
-const SYS_GETPGRP = 111
-const SYS_SETSID = 112
-const SYS_SETREUID = 113
-const SYS_SETREGID = 114
-const SYS_GETGROUPS = 115
-const SYS_SETGROUPS = 116
-const SYS_SETRESUID = 117
-const SYS_GETRESUID = 118
-const SYS_SETRESGID = 119
-const SYS_GETRESGID = 120
-const SYS_GETPGID = 121
-const SYS_SETFSUID = 122
-const SYS_SETFSGID = 123
-const SYS_GETSID = 124
-const SYS_CAPGET = 125
-const SYS_CAPSET = 126
-const SYS_RT_SIGPENDING = 127
-const SYS_RT_SIGTIMEDWAIT = 128
-const SYS_RT_SIGQUEUEINFO = 129
-const SYS_RT_SIGSUSPEND = 130
-const SYS_SIGALTSTACK = 131
-const SYS_UTIME = 132
-const SYS_MKNOD = 133
-const SYS_USELIB = 134
-const SYS_PERSONALITY = 135
-const SYS_USTAT = 136
-const SYS_STATFS = 137
-const SYS_FSTATFS = 138
-const SYS_SYSFS = 139
-const SYS_GETPRIORITY = 140
-const SYS_SETPRIORITY = 141
-const SYS_SCHED_SETPARAM = 142
-const SYS_SCHED_GETPARAM = 143
-const SYS_SCHED_SETSCHEDULER = 144
-const SYS_SCHED_GETSCHEDULER = 145
-const SYS_SCHED_GET_PRIORITY_MAX = 146
-const SYS_SCHED_GET_PRIORITY_MIN = 147
-const SYS_SCHED_RR_GET_INTERVAL = 148
-const SYS_MLOCK = 149
-const SYS_MUNLOCK = 150
-const SYS_MLOCKALL = 151
-const SYS_MUNLOCKALL = 152
-const SYS_VHANGUP = 153
-const SYS_MODIFY_LDT = 154
-const SYS_PIVOT_ROOT = 155
-const SYS__SYSCTL = 156
-const SYS_PRCTL = 157
-const SYS_ARCH_PRCTL = 158
-const SYS_ADJTIMEX = 159
-const SYS_SETRLIMIT = 160
-const SYS_CHROOT = 161
-const SYS_SYNC = 162
-const SYS_ACCT = 163
-const SYS_SETTIMEOFDAY = 164
-const SYS_MOUNT = 165
-const SYS_UMOUNT2 = 166
-const SYS_SWAPON = 167
-const SYS_SWAPOFF = 168
-const SYS_REBOOT = 169
-const SYS_SETHOSTNAME = 170
-const SYS_SETDOMAINNAME = 171
-const SYS_IOPL = 172
-const SYS_IOPERM = 173
-const SYS_CREATE_MODULE = 174
-const SYS_INIT_MODULE = 175
-const SYS_DELETE_MODULE = 176
-const SYS_GET_KERNEL_SYMS = 177
-const SYS_QUERY_MODULE = 178
-const SYS_QUOTACTL = 179
-const SYS_NFSSERVCTL = 180
-const SYS_GETPMSG = 181
-const SYS_PUTPMSG = 182
-const SYS_AFS_SYSCALL = 183
-const SYS_TUXCALL = 184
-const SYS_SECURITY = 185
-const SYS_GETTID = 186
-const SYS_READAHEAD = 187
-const SYS_SETXATTR = 188
-const SYS_LSETXATTR = 189
-const SYS_FSETXATTR = 190
-const SYS_GETXATTR = 191
-const SYS_LGETXATTR = 192
-const SYS_FGETXATTR = 193
-const SYS_LISTXATTR = 194
-const SYS_LLISTXATTR = 195
-const SYS_FLISTXATTR = 196
-const SYS_REMOVEXATTR = 197
-const SYS_LREMOVEXATTR = 198
-const SYS_FREMOVEXATTR = 199
-const SYS_TKILL = 200
-const SYS_TIME = 201
-const SYS_FUTEX = 202
-const SYS_SCHED_SETAFFINITY = 203
-const SYS_SCHED_GETAFFINITY = 204
-const SYS_SET_THREAD_AREA = 205
-const SYS_IO_SETUP = 206
-const SYS_IO_DESTROY = 207
-const SYS_IO_GETEVENTS = 208
-const SYS_IO_SUBMIT = 209
-const SYS_IO_CANCEL = 210
-const SYS_GET_THREAD_AREA = 211
-const SYS_LOOKUP_DCOOKIE = 212
-const SYS_EPOLL_CREATE = 213
-const SYS_EPOLL_CTL_OLD = 214
-const SYS_EPOLL_WAIT_OLD = 215
-const SYS_REMAP_FILE_PAGES = 216
-const SYS_GETDENTS64 = 217
-const SYS_SET_TID_ADDRESS = 218
-const SYS_RESTART_SYSCALL = 219
-const SYS_SEMTIMEDOP = 220
-const SYS_FADVISE64 = 221
-const SYS_TIMER_CREATE = 222
-const SYS_TIMER_SETTIME = 223
-const SYS_TIMER_GETTIME = 224
-const SYS_TIMER_GETOVERRUN = 225
-const SYS_TIMER_DELETE = 226
-const SYS_CLOCK_SETTIME = 227
-const SYS_CLOCK_GETTIME = 228
-const SYS_CLOCK_GETRES = 229
-const SYS_CLOCK_NANOSLEEP = 230
-const SYS_EXIT_GROUP = 231
-const SYS_EPOLL_WAIT = 232
-const SYS_EPOLL_CTL = 233
-const SYS_TGKILL = 234
-const SYS_UTIMES = 235
-const SYS_VSERVER = 236
-const SYS_MBIND = 237
-const SYS_SET_MEMPOLICY = 238
-const SYS_GET_MEMPOLICY = 239
-const SYS_MQ_OPEN = 240
-const SYS_MQ_UNLINK = 241
-const SYS_MQ_TIMEDSEND = 242
-const SYS_MQ_TIMEDRECEIVE = 243
-const SYS_MQ_NOTIFY = 244
-const SYS_MQ_GETSETATTR = 245
-const SYS_KEXEC_LOAD = 246
-const SYS_WAITID = 247
-const SYS_ADD_KEY = 248
-const SYS_REQUEST_KEY = 249
-const SYS_KEYCTL = 250
-const SYS_IOPRIO_SET = 251
-const SYS_IOPRIO_GET = 252
-const SYS_INOTIFY_INIT = 253
-const SYS_INOTIFY_ADD_WATCH = 254
-const SYS_INOTIFY_RM_WATCH = 255
-const SYS_MIGRATE_PAGES = 256
-const SYS_OPENAT = 257
-const SYS_MKDIRAT = 258
-const SYS_MKNODAT = 259
-const SYS_FCHOWNAT = 260
-const SYS_FUTIMESAT = 261
-const SYS_NEWFSTATAT = 262
-const SYS_UNLINKAT = 263
-const SYS_RENAMEAT = 264
-const SYS_LINKAT = 265
-const SYS_SYMLINKAT = 266
-const SYS_READLINKAT = 267
-const SYS_FCHMODAT = 268
-const SYS_FACCESSAT = 269
-const SYS_PSELECT6 = 270
-const SYS_PPOLL = 271
-const SYS_UNSHARE = 272
-const SYS_SET_ROBUST_LIST = 273
-const SYS_GET_ROBUST_LIST = 274
-const SYS_SPLICE = 275
-const SYS_TEE = 276
-const SYS_SYNC_FILE_RANGE = 277
-const SYS_VMSPLICE = 278
-const SYS_MOVE_PAGES = 279
-const SYS_UTIMENSAT = 280
-const SYS_EPOLL_PWAIT = 281
-const SYS_SIGNALFD = 282
-const SYS_TIMERFD_CREATE = 283
-const SYS_EVENTFD = 284
-const SYS_FALLOCATE = 285
-const SYS_TIMERFD_SETTIME = 286
-const SYS_TIMERFD_GETTIME = 287
-const SYS_ACCEPT4 = 288
-const SYS_SIGNALFD4 = 289
-const SYS_EVENTFD2 = 290
-const SYS_EPOLL_CREATE1 = 291
-const SYS_DUP3 = 292
-const SYS_PIPE2 = 293
-const SYS_INOTIFY_INIT1 = 294
-const SYS_PREADV = 295
-const SYS_PWRITEV = 296
-const SYS_RT_TGSIGQUEUEINFO = 297
-const SYS_PERF_EVENT_OPEN = 298
-const SYS_RECVMMSG = 299
-const SYS_FANOTIFY_INIT = 300
-const SYS_FANOTIFY_MARK = 301
-const SYS_PRLIMIT64 = 302
+pub const SYS_READ = 0
+pub const SYS_WRITE = 1
+pub const SYS_OPEN = 2
+pub const SYS_CLOSE = 3
+pub const SYS_STAT = 4
+pub const SYS_FSTAT = 5
+pub const SYS_LSTAT = 6
+pub const SYS_POLL = 7
+pub const SYS_LSEEK = 8
+pub const SYS_MMAP = 9
+pub const SYS_MPROTECT = 10
+pub const SYS_MUNMAP = 11
+pub const SYS_BRK = 12
+pub const SYS_RT_SIGACTION = 13
+pub const SYS_RT_SIGPROCMASK = 14
+pub const SYS_RT_SIGRETURN = 15
+pub const SYS_IOCTL = 16
+pub const SYS_PREAD64 = 17
+pub const SYS_PWRITE64 = 18
+pub const SYS_READV = 19
+pub const SYS_WRITEV = 20
+pub const SYS_ACCESS = 21
+pub const SYS_PIPE = 22
+pub const SYS_SELECT = 23
+pub const SYS_SCHED_YIELD = 24
+pub const SYS_MREMAP = 25
+pub const SYS_MSYNC = 26
+pub const SYS_MINCORE = 27
+pub const SYS_MADVISE = 28
+pub const SYS_SHMGET = 29
+pub const SYS_SHMAT = 30
+pub const SYS_SHMCTL = 31
+pub const SYS_DUP = 32
+pub const SYS_DUP2 = 33
+pub const SYS_PAUSE = 34
+pub const SYS_NANOSLEEP = 35
+pub const SYS_GETITIMER = 36
+pub const SYS_ALARM = 37
+pub const SYS_SETITIMER = 38
+pub const SYS_GETPID = 39
+pub const SYS_SENDFILE = 40
+pub const SYS_SOCKET = 41
+pub const SYS_CONNECT = 42
+pub const SYS_ACCEPT = 43
+pub const SYS_SENDTO = 44
+pub const SYS_RECVFROM = 45
+pub const SYS_SENDMSG = 46
+pub const SYS_RECVMSG = 47
+pub const SYS_SHUTDOWN = 48
+pub const SYS_BIND = 49
+pub const SYS_LISTEN = 50
+pub const SYS_GETSOCKNAME = 51
+pub const SYS_GETPEERNAME = 52
+pub const SYS_SOCKETPAIR = 53
+pub const SYS_SETSOCKOPT = 54
+pub const SYS_GETSOCKOPT = 55
+pub const SYS_CLONE = 56
+pub const SYS_FORK = 57
+pub const SYS_VFORK = 58
+pub const SYS_EXECVE = 59
+pub const SYS_EXIT = 60
+pub const SYS_WAIT4 = 61
+pub const SYS_KILL = 62
+pub const SYS_UNAME = 63
+pub const SYS_SEMGET = 64
+pub const SYS_SEMOP = 65
+pub const SYS_SEMCTL = 66
+pub const SYS_SHMDT = 67
+pub const SYS_MSGGET = 68
+pub const SYS_MSGSND = 69
+pub const SYS_MSGRCV = 70
+pub const SYS_MSGCTL = 71
+pub const SYS_FCNTL = 72
+pub const SYS_FLOCK = 73
+pub const SYS_FSYNC = 74
+pub const SYS_FDATASYNC = 75
+pub const SYS_TRUNCATE = 76
+pub const SYS_FTRUNCATE = 77
+pub const SYS_GETDENTS = 78
+pub const SYS_GETCWD = 79
+pub const SYS_CHDIR = 80
+pub const SYS_FCHDIR = 81
+pub const SYS_RENAME = 82
+pub const SYS_MKDIR = 83
+pub const SYS_RMDIR = 84
+pub const SYS_CREAT = 85
+pub const SYS_LINK = 86
+pub const SYS_UNLINK = 87
+pub const SYS_SYMLINK = 88
+pub const SYS_READLINK = 89
+pub const SYS_CHMOD = 90
+pub const SYS_FCHMOD = 91
+pub const SYS_CHOWN = 92
+pub const SYS_FCHOWN = 93
+pub const SYS_LCHOWN = 94
+pub const SYS_UMASK = 95
+pub const SYS_GETTIMEOFDAY = 96
+pub const SYS_GETRLIMIT = 97
+pub const SYS_GETRUSAGE = 98
+pub const SYS_SYSINFO = 99
+pub const SYS_TIMES = 100
+pub const SYS_PTRACE = 101
+pub const SYS_GETUID = 102
+pub const SYS_SYSLOG = 103
+pub const SYS_GETGID = 104
+pub const SYS_SETUID = 105
+pub const SYS_SETGID = 106
+pub const SYS_GETEUID = 107
+pub const SYS_GETEGID = 108
+pub const SYS_SETPGID = 109
+pub const SYS_GETPPID = 110
+pub const SYS_GETPGRP = 111
+pub const SYS_SETSID = 112
+pub const SYS_SETREUID = 113
+pub const SYS_SETREGID = 114
+pub const SYS_GETGROUPS = 115
+pub const SYS_SETGROUPS = 116
+pub const SYS_SETRESUID = 117
+pub const SYS_GETRESUID = 118
+pub const SYS_SETRESGID = 119
+pub const SYS_GETRESGID = 120
+pub const SYS_GETPGID = 121
+pub const SYS_SETFSUID = 122
+pub const SYS_SETFSGID = 123
+pub const SYS_GETSID = 124
+pub const SYS_CAPGET = 125
+pub const SYS_CAPSET = 126
+pub const SYS_RT_SIGPENDING = 127
+pub const SYS_RT_SIGTIMEDWAIT = 128
+pub const SYS_RT_SIGQUEUEINFO = 129
+pub const SYS_RT_SIGSUSPEND = 130
+pub const SYS_SIGALTSTACK = 131
+pub const SYS_UTIME = 132
+pub const SYS_MKNOD = 133
+pub const SYS_USELIB = 134
+pub const SYS_PERSONALITY = 135
+pub const SYS_USTAT = 136
+pub const SYS_STATFS = 137
+pub const SYS_FSTATFS = 138
+pub const SYS_SYSFS = 139
+pub const SYS_GETPRIORITY = 140
+pub const SYS_SETPRIORITY = 141
+pub const SYS_SCHED_SETPARAM = 142
+pub const SYS_SCHED_GETPARAM = 143
+pub const SYS_SCHED_SETSCHEDULER = 144
+pub const SYS_SCHED_GETSCHEDULER = 145
+pub const SYS_SCHED_GET_PRIORITY_MAX = 146
+pub const SYS_SCHED_GET_PRIORITY_MIN = 147
+pub const SYS_SCHED_RR_GET_INTERVAL = 148
+pub const SYS_MLOCK = 149
+pub const SYS_MUNLOCK = 150
+pub const SYS_MLOCKALL = 151
+pub const SYS_MUNLOCKALL = 152
+pub const SYS_VHANGUP = 153
+pub const SYS_MODIFY_LDT = 154
+pub const SYS_PIVOT_ROOT = 155
+pub const SYS__SYSCTL = 156
+pub const SYS_PRCTL = 157
+pub const SYS_ARCH_PRCTL = 158
+pub const SYS_ADJTIMEX = 159
+pub const SYS_SETRLIMIT = 160
+pub const SYS_CHROOT = 161
+pub const SYS_SYNC = 162
+pub const SYS_ACCT = 163
+pub const SYS_SETTIMEOFDAY = 164
+pub const SYS_MOUNT = 165
+pub const SYS_UMOUNT2 = 166
+pub const SYS_SWAPON = 167
+pub const SYS_SWAPOFF = 168
+pub const SYS_REBOOT = 169
+pub const SYS_SETHOSTNAME = 170
+pub const SYS_SETDOMAINNAME = 171
+pub const SYS_IOPL = 172
+pub const SYS_IOPERM = 173
+pub const SYS_CREATE_MODULE = 174
+pub const SYS_INIT_MODULE = 175
+pub const SYS_DELETE_MODULE = 176
+pub const SYS_GET_KERNEL_SYMS = 177
+pub const SYS_QUERY_MODULE = 178
+pub const SYS_QUOTACTL = 179
+pub const SYS_NFSSERVCTL = 180
+pub const SYS_GETPMSG = 181
+pub const SYS_PUTPMSG = 182
+pub const SYS_AFS_SYSCALL = 183
+pub const SYS_TUXCALL = 184
+pub const SYS_SECURITY = 185
+pub const SYS_GETTID = 186
+pub const SYS_READAHEAD = 187
+pub const SYS_SETXATTR = 188
+pub const SYS_LSETXATTR = 189
+pub const SYS_FSETXATTR = 190
+pub const SYS_GETXATTR = 191
+pub const SYS_LGETXATTR = 192
+pub const SYS_FGETXATTR = 193
+pub const SYS_LISTXATTR = 194
+pub const SYS_LLISTXATTR = 195
+pub const SYS_FLISTXATTR = 196
+pub const SYS_REMOVEXATTR = 197
+pub const SYS_LREMOVEXATTR = 198
+pub const SYS_FREMOVEXATTR = 199
+pub const SYS_TKILL = 200
+pub const SYS_TIME = 201
+pub const SYS_FUTEX = 202
+pub const SYS_SCHED_SETAFFINITY = 203
+pub const SYS_SCHED_GETAFFINITY = 204
+pub const SYS_SET_THREAD_AREA = 205
+pub const SYS_IO_SETUP = 206
+pub const SYS_IO_DESTROY = 207
+pub const SYS_IO_GETEVENTS = 208
+pub const SYS_IO_SUBMIT = 209
+pub const SYS_IO_CANCEL = 210
+pub const SYS_GET_THREAD_AREA = 211
+pub const SYS_LOOKUP_DCOOKIE = 212
+pub const SYS_EPOLL_CREATE = 213
+pub const SYS_EPOLL_CTL_OLD = 214
+pub const SYS_EPOLL_WAIT_OLD = 215
+pub const SYS_REMAP_FILE_PAGES = 216
+pub const SYS_GETDENTS64 = 217
+pub const SYS_SET_TID_ADDRESS = 218
+pub const SYS_RESTART_SYSCALL = 219
+pub const SYS_SEMTIMEDOP = 220
+pub const SYS_FADVISE64 = 221
+pub const SYS_TIMER_CREATE = 222
+pub const SYS_TIMER_SETTIME = 223
+pub const SYS_TIMER_GETTIME = 224
+pub const SYS_TIMER_GETOVERRUN = 225
+pub const SYS_TIMER_DELETE = 226
+pub const SYS_CLOCK_SETTIME = 227
+pub const SYS_CLOCK_GETTIME = 228
+pub const SYS_CLOCK_GETRES = 229
+pub const SYS_CLOCK_NANOSLEEP = 230
+pub const SYS_EXIT_GROUP = 231
+pub const SYS_EPOLL_WAIT = 232
+pub const SYS_EPOLL_CTL = 233
+pub const SYS_TGKILL = 234
+pub const SYS_UTIMES = 235
+pub const SYS_VSERVER = 236
+pub const SYS_MBIND = 237
+pub const SYS_SET_MEMPOLICY = 238
+pub const SYS_GET_MEMPOLICY = 239
+pub const SYS_MQ_OPEN = 240
+pub const SYS_MQ_UNLINK = 241
+pub const SYS_MQ_TIMEDSEND = 242
+pub const SYS_MQ_TIMEDRECEIVE = 243
+pub const SYS_MQ_NOTIFY = 244
+pub const SYS_MQ_GETSETATTR = 245
+pub const SYS_KEXEC_LOAD = 246
+pub const SYS_WAITID = 247
+pub const SYS_ADD_KEY = 248
+pub const SYS_REQUEST_KEY = 249
+pub const SYS_KEYCTL = 250
+pub const SYS_IOPRIO_SET = 251
+pub const SYS_IOPRIO_GET = 252
+pub const SYS_INOTIFY_INIT = 253
+pub const SYS_INOTIFY_ADD_WATCH = 254
+pub const SYS_INOTIFY_RM_WATCH = 255
+pub const SYS_MIGRATE_PAGES = 256
+pub const SYS_OPENAT = 257
+pub const SYS_MKDIRAT = 258
+pub const SYS_MKNODAT = 259
+pub const SYS_FCHOWNAT = 260
+pub const SYS_FUTIMESAT = 261
+pub const SYS_NEWFSTATAT = 262
+pub const SYS_UNLINKAT = 263
+pub const SYS_RENAMEAT = 264
+pub const SYS_LINKAT = 265
+pub const SYS_SYMLINKAT = 266
+pub const SYS_READLINKAT = 267
+pub const SYS_FCHMODAT = 268
+pub const SYS_FACCESSAT = 269
+pub const SYS_PSELECT6 = 270
+pub const SYS_PPOLL = 271
+pub const SYS_UNSHARE = 272
+pub const SYS_SET_ROBUST_LIST = 273
+pub const SYS_GET_ROBUST_LIST = 274
+pub const SYS_SPLICE = 275
+pub const SYS_TEE = 276
+pub const SYS_SYNC_FILE_RANGE = 277
+pub const SYS_VMSPLICE = 278
+pub const SYS_MOVE_PAGES = 279
+pub const SYS_UTIMENSAT = 280
+pub const SYS_EPOLL_PWAIT = 281
+pub const SYS_SIGNALFD = 282
+pub const SYS_TIMERFD_CREATE = 283
+pub const SYS_EVENTFD = 284
+pub const SYS_FALLOCATE = 285
+pub const SYS_TIMERFD_SETTIME = 286
+pub const SYS_TIMERFD_GETTIME = 287
+pub const SYS_ACCEPT4 = 288
+pub const SYS_SIGNALFD4 = 289
+pub const SYS_EVENTFD2 = 290
+pub const SYS_EPOLL_CREATE1 = 291
+pub const SYS_DUP3 = 292
+pub const SYS_PIPE2 = 293
+pub const SYS_INOTIFY_INIT1 = 294
+pub const SYS_PREADV = 295
+pub const SYS_PWRITEV = 296
+pub const SYS_RT_TGSIGQUEUEINFO = 297
+pub const SYS_PERF_EVENT_OPEN = 298
+pub const SYS_RECVMMSG = 299
+pub const SYS_FANOTIFY_INIT = 300
+pub const SYS_FANOTIFY_MARK = 301
+pub const SYS_PRLIMIT64 = 302
 
 // sigkill 相关信号
 int SIGABRT = 0x6
@@ -410,10 +410,10 @@ int SIGCONT = 0x12
 int SIGFPE = 0x8
 int SIGHUP = 0x1
 int SIGILL = 0x4
-int SIGINT = 0x2
+pub int SIGINT = 0x2
 int SIGIO = 0x1d
 int SIGIOT = 0x6
-int SIGKILL = 0x9
+pub int SIGKILL = 0x9
 int SIGPIPE = 0xd
 int SIGPOLL = 0x1d
 int SIGPROF = 0x1b
@@ -423,15 +423,15 @@ int SIGSEGV = 0xb
 int SIGSTKFLT = 0x10
 int SIGSTOP = 0x13
 int SIGSYS = 0x1f
-int SIGTERM = 0xf
+pub int SIGTERM = 0xf
 int SIGTRAP = 0x5
 int SIGTSTP = 0x14
 int SIGTTIN = 0x15
 int SIGTTOU = 0x16
 int SIGUNUSED = 0x1f
 int SIGURG = 0x17
-int SIGUSR1 = 0xa
-int SIGUSR2 = 0xc
+pub int SIGUSR1 = 0xa
+pub int SIGUSR2 = 0xc
 int SIGVTALRM = 0x1a
 int SIGWINCH = 0x1c
 int SIGXCPU = 0x18
@@ -452,8 +452,8 @@ int AF_DECnet = 0xc
 int AF_ECONET = 0x13
 int AF_FILE = 0x1
 int AF_IEEE802154 = 0x24
-int AF_INET = 0x2
-int AF_INET6 = 0xa
+pub int AF_INET = 0x2
+pub int AF_INET6 = 0xa
 int AF_IPX = 0x4
 int AF_IRDA = 0x17
 int AF_ISDN = 0x22
@@ -546,10 +546,10 @@ int SOCK_PACKET = 0xa
 int SOCK_RAW = 0x3
 int SOCK_RDM = 0x4
 int SOCK_SEQPACKET = 0x5
-int SOCK_STREAM = 0x1
+pub int SOCK_STREAM = 0x1
 
 
-#linkid syscall_call6
+pub #linkid syscall_call6
 fn call6(int number, anyptr a1, anyptr a2, anyptr a3, anyptr a4, anyptr a5, anyptr a6):int!
 
 #linkid syscall_getcwd
@@ -561,41 +561,41 @@ fn getenv(anyptr key):anyptr
 #linkid setenv
 fn setenv(anyptr key, anyptr value, i32 overwrite):i32
 
-fn open(string filename, int flags, u32 perm):int! {
+pub fn open(string filename, int flags, u32 perm):int! {
     return call6(SYS_OPEN, filename.ref(), flags as anyptr, perm as anyptr, 0, 0, 0)
 }
 
-fn read(int fd, anyptr buf, int len):int! {
+pub fn read(int fd, anyptr buf, int len):int! {
     return call6(SYS_READ, fd as anyptr, buf, len as anyptr, 0, 0, 0)
 }
 
-fn readlink(string file, [u8] buf):int! {
+pub fn readlink(string file, [u8] buf):int! {
     return call6(SYS_READLINK, file.ref(), buf.ref(), buf.len() as anyptr, 0, 0, 0)
 }
 
-fn write(int fd, anyptr buf, int len):int! {
+pub fn write(int fd, anyptr buf, int len):int! {
     return call6(SYS_WRITE, fd as anyptr, buf, len as anyptr, 0, 0, 0)
 }
 
-fn close(int fd):void! {
+pub fn close(int fd):void! {
     call6(SYS_CLOSE, fd as anyptr, 0, 0, 0, 0, 0)
 }
 
-fn unlink(string path):void! {
+pub fn unlink(string path):void! {
     call6(SYS_UNLINK, path.ref(), 0, 0, 0, 0, 0)
 }
 
-fn seek(int fd, int offset, int whence):int! {
+pub fn seek(int fd, int offset, int whence):int! {
     return call6(SYS_LSEEK, fd as anyptr, offset as anyptr, whence as anyptr, 0, 0, 0)
 }
 
-fn fork():int! {
+pub fn fork():int! {
     return call6(SYS_FORK, 0, 0, 0, 0, 0, 0)
 }
 
 // path is full path
 // argv[0] = /proc/:pid/comm
-#linkid syscall_exec
+pub #linkid syscall_exec
 fn exec(string path, [string] argv, [string] envp):void!
 
 type timespec_t = struct {
@@ -603,7 +603,7 @@ type timespec_t = struct {
     i64 nsec
 }
 
-type stat_t = struct {
+pub type stat_t = struct {
     u64 dev
     u64 ino
     u64 nlink
@@ -636,7 +636,7 @@ fn stat_is_blk(u32 mode):bool {
 fn stat_is_chr(u32 mode):bool {
     return (mode & S_IFMT) == S_IFCHR
 }
-fn stat_is_dir(u32 mode):bool {
+pub fn stat_is_dir(u32 mode):bool {
     return (mode & S_IFMT) == S_IFDIR
 }
 
@@ -644,7 +644,7 @@ fn stat_is_fifo(u32 mode):bool {
     return (mode & S_IFMT) == S_IFIFO
 }
 
-fn stat_is_reg(u32 mode):bool {
+pub fn stat_is_reg(u32 mode):bool {
     return (mode & S_IFMT) == S_IFREG
 }
 fn stat_is_lnk(u32 mode):bool {
@@ -653,7 +653,7 @@ fn stat_is_lnk(u32 mode):bool {
 fn stat_is_sock(u32 mode):bool {
     return (mode & S_IFMT) == S_IFSOCK
 }
-fn stat(string filename):stat_t! {
+pub fn stat(string filename):stat_t! {
     var st = stat_t{
         dev: 56,
         ino: 24,
@@ -665,7 +665,7 @@ fn stat(string filename):stat_t! {
     return st
 }
 
-fn fstat(int fd):stat_t! {
+pub fn fstat(int fd):stat_t! {
     var st = stat_t{}
 
     // call6 的错误处理在 runtime 中已经做过了k
@@ -674,15 +674,15 @@ fn fstat(int fd):stat_t! {
     return st
 }
 
-fn mkdir(string path, u32 mode):void! {
+pub fn mkdir(string path, u32 mode):void! {
     call6(SYS_MKDIR, path.ref(), mode as anyptr, 0, 0, 0, 0)
 }
 
-fn rmdir(string path):void! {
+pub fn rmdir(string path):void! {
     call6(SYS_RMDIR, path.ref(), 0, 0, 0, 0, 0)
 }
 
-fn rename(string oldpath, string newpath):void! {
+pub fn rename(string oldpath, string newpath):void! {
     call6(SYS_RENAME, oldpath.ref(), newpath.ref(), 0, 0, 0, 0)
 }
 
@@ -690,15 +690,15 @@ fn exit(int status):void! {
     call6(SYS_EXIT_GROUP, status as anyptr, 0, 0, 0, 0, 0)
 }
 
-fn getpid():int! {
+pub fn getpid():int! {
     return call6(SYS_GETPID, 0, 0, 0, 0, 0, 0)
 }
 
-fn getppid():int! {
+pub fn getppid():int! {
     return call6(SYS_GETPPID, 0, 0, 0, 0, 0, 0)
 }
 
-fn getcwd():string! {
+pub fn getcwd():string! {
     var buf = vec<u8>.new(0, 1024) // 1024 是 path max
     var len = call6(SYS_GETCWD, buf.ref(), buf.len() as anyptr, 0, 0, 0, 0)
 
@@ -707,11 +707,11 @@ fn getcwd():string! {
     return buf as string
 }
 
-fn kill(int pid, int sig):void! {
+pub fn kill(int pid, int sig):void! {
     call6(SYS_KILL, pid as anyptr, sig as anyptr, 0, 0, 0, 0)
 }
 
-fn wait(int pid, int option):(int, int)! {
+pub fn wait(int pid, int option):(int, int)! {
     var status = 0
     int result = libc.waitpid(pid, &status, option)
     if result == -1 {
@@ -733,11 +733,11 @@ fn chown(string path, u32 uid, u32 gid):void! {
     call6(SYS_CHOWN, path.ref(), uid as anyptr, gid as anyptr, 0, 0, 0)
 }
 
-fn chmod(string path, u32 mode):void! {
+pub fn chmod(string path, u32 mode):void! {
     call6(SYS_CHMOD, path.ref(), mode as anyptr, 0, 0, 0, 0)
 }
 
-fn gettime():timespec_t! {
+pub fn gettime():timespec_t! {
     int clock_id = CLOCK_REALTIME
     var result = timespec_t{}
 
@@ -747,7 +747,7 @@ fn gettime():timespec_t! {
 }
 
 // net --------------
-type sockaddr_in = struct {
+pub type sockaddr_in = struct {
     u16 sin_family
     u16 sin_port
     u32 sin_addr
@@ -771,12 +771,12 @@ type sockaddr_un = struct {
     [u8;108] sun_path
 }
 
-fn socket(int domain, int t, int protocol):int! {
+pub fn socket(int domain, int t, int protocol):int! {
     return call6(SYS_SOCKET, domain as anyptr, t as anyptr, protocol as anyptr, 0, 0, 0)
 }
 
 // TODO limit <T:sockaddr_in|sockaddr_un>
-fn bind<T>(int sockfd, T addr):void! {
+pub fn bind<T>(int sockfd, T addr):void! {
     //  nature struct to c
      var len = 16 as anyptr // in 和 unix 长度为 16byte
      call6(SYS_BIND, sockfd as anyptr, addr as anyptr, len, 0, 0, 0)
@@ -788,12 +788,12 @@ fn bind6(int sockfd, sockaddr_in6 addr):void! {
 }
 
 // backlog 表示最大的监听长度
-fn listen(int sockfd, int backlog):void! {
+pub fn listen(int sockfd, int backlog):void! {
     call6(SYS_LISTEN, sockfd as anyptr, backlog as anyptr, 0, 0, 0, 0)
 }
 
 // 相应 client sockfd 和 client sockaddr
-fn accept<T>(int sockfd, ref<T> addr):int! {
+pub fn accept<T>(int sockfd, ref<T> addr):int! {
     var len = 16
     ptr<int> len_ptr = &len
     int fd = call6(SYS_ACCEPT, sockfd as anyptr, addr as anyptr, len_ptr as anyptr, 0, 0, 0)
@@ -801,19 +801,19 @@ fn accept<T>(int sockfd, ref<T> addr):int! {
     return fd
 }
 
-fn recvfrom(int sockfd, [u8] buf, int flags):int! {
+pub fn recvfrom(int sockfd, [u8] buf, int flags):int! {
     return call6(SYS_RECVFROM, sockfd as anyptr, buf.ref(), buf.len() as anyptr, flags as anyptr, 0, 0)
 }
 
-fn sendto(int sockfd, [u8] buf, int flags):int! {
+pub fn sendto(int sockfd, [u8] buf, int flags):int! {
     return call6(SYS_SENDTO, sockfd as anyptr, buf.ref(), buf.len() as anyptr, flags as anyptr, 0, 0)
 }
 
-fn get_envs():[string] {
+pub fn get_envs():[string] {
     return libc.get_envs()
 }
 
-fn get_env(string key):string {
+pub fn get_env(string key):string {
     anyptr ref = getenv(key.ref())
     if ref == 0 {
         return ''
@@ -822,7 +822,7 @@ fn get_env(string key):string {
     return runtime.string_new(ref)
 }
 
-fn set_env(string key, string value):void! {
+pub fn set_env(string key, string value):void! {
     var result = setenv(key.ref(), value.ref(), 1)
     if result != 0 {
         throw errorf('setenv error')

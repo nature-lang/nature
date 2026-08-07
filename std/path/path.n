@@ -4,7 +4,7 @@ import strings
 import fmt.utils as *
 import syscall
 
-fn exists(string path):bool {
+pub fn exists(string path):bool {
    var _ =  syscall.stat(path) catch err {
         return false
    }
@@ -12,7 +12,7 @@ fn exists(string path):bool {
 }
 
 // refer golang path.base
-fn base(string path):string {
+pub fn base(string path):string {
     if path == '' {
         return '.'
     }
@@ -32,7 +32,7 @@ fn base(string path):string {
 }
 
 // ref golang path.dir
-fn dir(string path):string {
+pub fn dir(string path):string {
   if path == '' {
      return '.'
   }
@@ -59,7 +59,7 @@ fn dir(string path):string {
   return path.slice(0, i)
 }
 
-fn join(string dst, ...[string] list):string {
+pub fn join(string dst, ...[string] list):string {
     for src in list {
         dst = _join(dst, src)
     }
@@ -106,7 +106,7 @@ fn _join(string dst, string src):string {
     return result
 }
 
-fn isdir(string path):bool {
+pub fn isdir(string path):bool {
    var s = syscall.stat(path) catch err {
          return false
     }

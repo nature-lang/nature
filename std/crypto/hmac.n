@@ -1,27 +1,27 @@
 import libc
 import crypto.utils
 
-const MD5 = 0x03
-const RIPEMD160 = 0x04
-const SHA1 = 0x05
-const SHA224= 0x08
-const SHA256 = 0x09
+pub const MD5 = 0x03
+pub const RIPEMD160 = 0x04
+pub const SHA1 = 0x05
+pub const SHA224= 0x08
+pub const SHA256 = 0x09
 const SHA384 = 0x0a
-const SHA512 = 0x0b
-const SHA3_224 = 0x10
-const SHA3_256 = 0x11
-const SHA3_384 = 0x12
-const SHA3_512 = 0x13
+pub const SHA512 = 0x0b
+pub const SHA3_224 = 0x10
+pub const SHA3_256 = 0x11
+pub const SHA3_384 = 0x12
+pub const SHA3_512 = 0x13
 
 
-type hmac_t = struct{
+pub type hmac_t = struct{
     anyptr md_info
     int hasher_type
     int output_size
     utils.mbedtls_md_context_t mbed_ctx
 }
 
-fn new(int hasher_type, [u8] secret):ref<hmac_t> {
+pub fn new(int hasher_type, [u8] secret):ref<hmac_t> {
     var h = new hmac_t()
     h.hasher_type = hasher_type
     
@@ -62,12 +62,12 @@ fn new(int hasher_type, [u8] secret):ref<hmac_t> {
     return h
 }
 
-fn hmac_t.update(&self, [u8] message):ref<hmac_t> {
+pub fn hmac_t.update(&self, [u8] message):ref<hmac_t> {
     utils.mbedtls_md_hmac_update(&self.mbed_ctx, (message as string).to_cstr(), message.len())
     return self
 }
 
-fn hmac_t.finish(&self):[u8] {
+pub fn hmac_t.finish(&self):[u8] {
     var output = vec<u8>.new(0, self.output_size)
     utils.mbedtls_md_hmac_finish(&self.mbed_ctx, output.ref())
     
@@ -76,7 +76,7 @@ fn hmac_t.finish(&self):[u8] {
     return output
 }
 
-fn hmac_t.hex(&self):string {
+pub fn hmac_t.hex(&self):string {
     var output = vec<u8>.new(0, self.output_size)
     utils.mbedtls_md_hmac_finish(&self.mbed_ctx, output.ref())
     
@@ -86,6 +86,6 @@ fn hmac_t.hex(&self):string {
     return result
 }
 
-fn hex(int hasher_type, [u8] secret, [u8] message):string {
+pub fn hex(int hasher_type, [u8] secret, [u8] message):string {
     return new(hasher_type, secret).update(message).hex()
 }

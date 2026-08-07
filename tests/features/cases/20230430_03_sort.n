@@ -9,7 +9,7 @@ fn sort([int] list) {
     }
 }
 
-[int] list = []
+pub [int] list = []
 
 fn main() {
     list = [2, 8, 4, 2, 3]

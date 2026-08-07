@@ -1,19 +1,19 @@
-var a = 12
-var b = 12 as u8
+pub var a = 12
+pub var b = 12 as u8
 
-fn call() {
+pub fn call() {
     println('hello world')
 }
 
 int c = 24
-var d = 3.1415
-[int] e = []
+pub var d = 3.1415
+pub [int] e = []
 
-int e1 = 2.15 as int
+pub int e1 = 2.15 as int
 
 var f = false
-var t = true
+pub var t = true
 
-fn init() {
+pub fn init() {
     e = [1, 5, 7, 9]
 }

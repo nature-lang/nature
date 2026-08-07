@@ -1,6 +1,6 @@
 import 'mod.n' as m
 
-type person_t = struct{
+pub type person_t = struct{
     string sex = 'male'
     int age = 1
     var limbs = true

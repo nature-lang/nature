@@ -1,5 +1,5 @@
 mod shared
 
-fn value():string {
+pub fn value():string {
     return 'right'
 }

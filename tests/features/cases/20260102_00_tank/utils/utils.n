@@ -5,13 +5,13 @@ import time
 import mem
 import libc
 
-#linkid abs
+pub #linkid abs
 fn abs(i32 x):i32
 
-#linkid fmaxf
+pub #linkid fmaxf
 fn fmaxf(f32 x, f32 y):f32
 
-#linkid fminf
+pub #linkid fminf
 fn fminf(f32 x, f32 y):f32
 
 

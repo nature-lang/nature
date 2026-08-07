@@ -1,4 +1,4 @@
-type url_t = struct{
+pub type url_t = struct{
     string url
     string scheme
     string authority
@@ -18,7 +18,7 @@ const QUERY = 4
 const FRAGMENT = 5
 
 
-fn parse(string url):url_t! {
+pub fn parse(string url):url_t! {
     if url.len() == 0 {
         throw errorf('url cannot empty')
     }
@@ -130,7 +130,7 @@ fn parse_authority(ptr<url_t> result, string authority) {
     }
 }
 
-fn query_t.get(self, string key):string {
+pub fn query_t.get(self, string key):string {
     if !self.contains(key) {
         return ''
     }
@@ -138,7 +138,7 @@ fn query_t.get(self, string key):string {
     return self[key][0]
 }
 
-fn url_t.query(*self):query_t {
+pub fn url_t.query(*self):query_t {
     query_t result = {}
     
     if self.raw_query.len() == 0 {
@@ -170,7 +170,7 @@ fn url_t.query(*self):query_t {
     return result
 }
 
-fn url_t.request_uri(*self):string {
+pub fn url_t.request_uri(*self):string {
     if self.raw_query.len() > 0 {
         return self.path + '?' + self.raw_query
     } else {
@@ -178,7 +178,7 @@ fn url_t.request_uri(*self):string {
     }
 }
 
-fn decode(string s):string {
+pub fn decode(string s):string {
     if s.len() == 0 {
         return s
     }
@@ -227,7 +227,7 @@ fn hex_to_int(u8 ch):int {
 }
 
 
-fn encode(string s):string {
+pub fn encode(string s):string {
     if s.len() == 0 {
         return s
     }

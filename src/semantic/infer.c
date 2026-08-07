@@ -2752,6 +2752,12 @@ static type_fn_t *infer_impl_call_rewrite(module_t *m, ast_call_t *call, type_t 
         INFER_ASSERTF(s, "type '%s' not impl '%s' fn", type_format(extract_type), select->key);
     }
 
+    // 跨 module 方法调用, 检查方法可见性
+    if (!symbol_accessible_from(s, m)) {
+        INFER_ASSERTF(false, "cannot access private method '%s' of type '%s', declare it with 'pub' to export it "
+                             "from its module", select->key, impl_ident);
+    }
+
     // rewrite call left ident, 延迟到 call left fn type 确定后再做
     call->left = *ast_ident_expr(call->left.line, call->left.column, impl_symbol_name);
 

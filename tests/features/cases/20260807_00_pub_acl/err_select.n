@@ -1,0 +1,5 @@
+import 'mod.n'.{private_fn}
+
+fn main() {
+    println(private_fn())
+}

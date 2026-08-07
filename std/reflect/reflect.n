@@ -3,30 +3,30 @@ mod reflect
 import unsafe
 import libc
 
-const NULL = 1
-const BOOL = 2
-const I8 = 3
-const U8 = 4
-const I16 = 5
-const U16 = 6
-const I32 = 7
-const U32 = 8
-const I64 = 9
-const U64 = 10
+pub const NULL = 1
+pub const BOOL = 2
+pub const I8 = 3
+pub const U8 = 4
+pub const I16 = 5
+pub const U16 = 6
+pub const I32 = 7
+pub const U32 = 8
+pub const I64 = 9
+pub const U64 = 10
 const INT = 9 // trans i64 in compiler time
 const UINT = 10 // trans u64 in compiler time
 
-const F32 = 11
-const F64 = 12
+pub const F32 = 11
+pub const F64 = 12
 const FLOAT = 12 // trans f64 in compiler time
 
-const STRING = 13
-const VEC = 14
+pub const STRING = 13
+pub const VEC = 14
 const ARR = 15
-const MAP = 16
+pub const MAP = 16
 const SET = 17
 const TUP = 18
-const STRUCT = 19
+pub const STRUCT = 19
 const FN = 20
 const CHAN = 21
 const COROUTINE_T = 22
@@ -35,27 +35,27 @@ const REF = 23
 const PTR = 24
 const ANYPTR = 25
 
-const ANY = 26
-const UNION = 27
+pub const ANY = 26
+pub const UNION = 27
 const INTERFACE = 28
 const TAGGED_UNION = 29
 const ENUM = 30
 
 const PTR_SIZE = 8
 
-type storage_kind_t = enum:u32 {
+pub type storage_kind_t = enum:u32 {
     IND = 1,
     PTR,
     DIR,
 }
 
-type field_t = struct{
+pub type field_t = struct{
     string name
     int hash
     int offset
 }
 
-type type_t = struct{
+pub type type_t = struct{
     int size
     int hash
     int kind
@@ -99,7 +99,7 @@ fn find_data(int offset):anyptr
 #linkid rt_find_strtable
 fn find_strtable(int offset):libc.cstr
 
-fn typeof_hash(i64 hash):ref<type_t>! {
+pub fn typeof_hash(i64 hash):ref<type_t>! {
     if hash <= 0 {
         throw errorf('hash must be greater than 0')
     }
@@ -141,13 +141,13 @@ fn typeof_hash(i64 hash):ref<type_t>! {
     return t
 }
 
-fn typeof<T>(T v):ref<type_t>! {
+pub fn typeof<T>(T v):ref<type_t>! {
     var hash = @reflect_hash(T)
     return typeof_hash(hash)
 }
 
 // kind base to string
-fn type_t.to_string(&self):string {
+pub fn type_t.to_string(&self):string {
     return match self.kind {
         NULL -> 'null'
         BOOL -> 'bool'
@@ -181,7 +181,7 @@ fn type_t.to_string(&self):string {
 }
 
 // ----------------------------------------------- value of ------------------------------------------------------------
-type vec_t = struct{
+pub type vec_t = struct{
     anyptr data
     i64 length
     i64 capacity
@@ -192,7 +192,7 @@ type vec_t = struct{
 
 type string_t = vec_t
 
-type map_t = struct{
+pub type map_t = struct{
     anyptr hash_table
     anyptr key_data
     anyptr value_data
@@ -210,12 +210,12 @@ type set_t = struct{
     i64 capacity
 }
 
-type union_t = struct{
+pub type union_t = struct{
     ptr<rtype_t> rtype
     anyptr value
 }
 
-type any_t = struct{
+pub type any_t = struct{
     ptr<rtype_t> rtype
     anyptr value
 }
@@ -225,7 +225,7 @@ type value_t = struct{
     anyptr v
 }
 
-fn valueof<T>(T v):ref<value_t>! {
+pub fn valueof<T>(T v):ref<value_t>! {
     var t = typeof<T>(v)
     if t.kind != VEC && t.kind != MAP && t.kind != SET {
         throw errorf('not value support type')
@@ -239,7 +239,7 @@ fn valueof<T>(T v):ref<value_t>! {
     return result
 }
 
-fn value_t.len(&self):int {
+pub fn value_t.len(&self):int {
     if self.t.kind == VEC {
         var v = self.v as ptr<vec_t>
         return v.length as int

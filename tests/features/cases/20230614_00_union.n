@@ -1,4 +1,4 @@
-type nullable<T> = T|null
+pub type nullable<T> = T|null
 type nullable2<T, E> = T|E|null
 
 fn main() {

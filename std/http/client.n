@@ -89,7 +89,7 @@ fn multipart_t.serialize(&self):string {
     return result
 }
 
-type request_t = struct{
+pub type request_t = struct{
     string method
     {string:string} headers
     int timeout_ms
@@ -108,7 +108,7 @@ type config_t = struct{
     string body
 }
 
-type response_t = struct{
+pub type response_t = struct{
     string version // http version
     {string:string} headers
     int status // http code
@@ -122,11 +122,11 @@ type response_t = struct{
     ref<buf.reader<types.connable>> buf_conn
 }
 
-fn new():ref<request_t> {
+pub fn new():ref<request_t> {
     return new request_t()
 }
 
-fn request_t.get(&self, string url):ref<request_t> {
+pub fn request_t.get(&self, string url):ref<request_t> {
     self.url = url
     self.method = 'GET'
     return self
@@ -168,7 +168,7 @@ fn request_t.head(&self, string url):ref<request_t> {
     return self
 }
 
-fn request_t.timeout(&self, int timeout):ref<request_t> {
+pub fn request_t.timeout(&self, int timeout):ref<request_t> {
     self.timeout_ms = timeout
     return self
 }
@@ -270,7 +270,7 @@ fn read_until_space(ref<buf.reader<types.connable>> br):string! {
     return bytes as string
 }
 
-fn request_t.send(&self):ref<response_t>! {
+pub fn request_t.send(&self):ref<response_t>! {
     self.u = url.parse(self.url)
     self.remote_ip = dns.lookup(self.u.hostname)[0]
     self.version = 'HTTP/1.1'
@@ -370,7 +370,7 @@ fn response_t.status(&self):int {
 
 // 读取响应体的一段字节到 buf, 返回实际读取的字节数,
 // 响应体读取完毕时抛出 EOF。超时错误统一为 'HTTP response read timeout'
-fn response_t.read(&self, [u8] buf):int! {
+pub fn response_t.read(&self, [u8] buf):int! {
     try {
         return self.buf_conn.read(buf)
     } catch e {
@@ -382,7 +382,7 @@ fn response_t.read(&self, [u8] buf):int! {
 }
 
 // 大小写不敏感的响应头查找, 不存在时返回空串
-fn response_t.header(&self, string key):string {
+pub fn response_t.header(&self, string key):string {
     var lower = key.to_lower()
     for k, v in self.headers {
         if k.to_lower() == lower {
@@ -393,11 +393,11 @@ fn response_t.header(&self, string key):string {
 }
 
 // 显式关闭底层连接
-fn response_t.close(&self) {
+pub fn response_t.close(&self) {
     self.buf_conn.rd.close()
 }
 
-fn response_t.text(&self):string! {
+pub fn response_t.text(&self):string! {
     if self.body_read {
         return self.body
     }

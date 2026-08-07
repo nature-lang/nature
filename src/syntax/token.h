@@ -130,6 +130,7 @@ typedef enum {
     TOKEN_BOOM,
     TOKEN_FN,
     TOKEN_FX,
+    TOKEN_PUB,
     TOKEN_IMPORT,
     TOKEN_RETURN,
     TOKEN_DEFER,
@@ -238,6 +239,7 @@ static string token_str[] = {
 
         [TOKEN_FN] = "fn",
         [TOKEN_FX] = "fx",
+        [TOKEN_PUB] = "pub",
         [TOKEN_RETURN] = "return",
         [TOKEN_DEFER] = "defer",
         [TOKEN_CATCH] = "catch",

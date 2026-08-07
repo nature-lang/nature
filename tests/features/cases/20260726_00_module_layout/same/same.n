@@ -1,5 +1,5 @@
 // A same-named source is a single-file directory module, so it may omit mod.
 
-fn name():string {
+pub fn name():string {
     return 'modtest.same'
 }

@@ -1,21 +1,21 @@
 import runtime
 
-fn map<T,U>.new():map<T,U> {
+pub fn map<T,U>.new():map<T,U> {
     int hash = @reflect_hash(map<T,U>)
     int key_hash = @reflect_hash(T)
     int value_hash = @reflect_hash(U)
     return runtime.map_new<T,U>(hash, key_hash, value_hash)
 }
 
-#linkid rt_map_length
+pub #linkid rt_map_length
 fn map<T,U>.len(*self):int
 
-fn map<T,U>.del(*self, T key) {
+pub fn map<T,U>.del(*self, T key) {
     ptr<T> ref = &key
     runtime.map_delete(self as anyptr, ref as anyptr)
 }
 
-fn map<T,U>.contains(*self, T key):bool {
+pub fn map<T,U>.contains(*self, T key):bool {
     ptr<T> ref = &key
     return runtime.map_contains(self as anyptr, ref as anyptr)
 }

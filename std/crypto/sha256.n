@@ -1,11 +1,11 @@
 import libc
 import crypto.utils
 
-type sha256_t = struct{
+pub type sha256_t = struct{
     utils.mbedtls_sha256_context mbed_ctx
 }
 
-fn new():ref<sha256_t> {
+pub fn new():ref<sha256_t> {
     var s = new sha256_t()
     
     utils.mbedtls_sha256_init(&s.mbed_ctx)
@@ -15,12 +15,12 @@ fn new():ref<sha256_t> {
     return s
 }
 
-fn sha256_t.update(&self, [u8] input):ref<sha256_t> {
+pub fn sha256_t.update(&self, [u8] input):ref<sha256_t> {
     utils.mbedtls_sha256_update(&self.mbed_ctx, (input as string).to_cstr(), input.len())
     return self
 }
 
-fn sha256_t.finish(&self):[u8] {
+pub fn sha256_t.finish(&self):[u8] {
     var output = vec<u8>.new(0, 32)  // SHA256 输出 32 字节
     utils.mbedtls_sha256_finish(&self.mbed_ctx, output.ref())
     
@@ -30,7 +30,7 @@ fn sha256_t.finish(&self):[u8] {
     return output
 }
 
-fn sha256_t.hex(&self):string {
+pub fn sha256_t.hex(&self):string {
     var output = vec<u8>.new(0, 32)  // SHA256 输出 32 字节
     utils.mbedtls_sha256_finish(&self.mbed_ctx, output.ref())
     
@@ -41,6 +41,6 @@ fn sha256_t.hex(&self):string {
     return result
 }
 
-fn hex(string input):string {
+pub fn hex(string input):string {
     return new().update(input as [u8]).hex()
 }

@@ -9,7 +9,7 @@ type Lexer = struct {
     string ch          // current char under examination
 }
 
-fn newLexer(string input): Lexer {
+pub fn newLexer(string input): Lexer {
     var l = Lexer {
         input: input,
         position: 0,
@@ -34,7 +34,7 @@ fn Lexer.readChar(*self) {
     }
 }
 
-fn Lexer.nextToken(*self): token.Token {
+pub fn Lexer.nextToken(*self): token.Token {
     // Implementation of tokenization logic goes here
     self.skipWhitespace()
     var tk =  match self.ch {
