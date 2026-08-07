@@ -1049,9 +1049,10 @@ fn deserialize_t.parser_number_token(&self):string! {
     return self.data.slice(start, self.cursor) as string
 }
 
-// stream_parser_t incrementally frames one JSON value across arbitrary input
-// chunks. Once framing is complete, value() performs the strict semantic parse.
-type stream_parser_t = struct{
+// reader_t incrementally frames one JSON value across arbitrary input
+// chunks (push model, like Boost.JSON's stream_parser). Once framing is
+// complete, value() performs the strict semantic parse.
+type reader_t = struct{
     [u8] data
     [u8] containers
     int scan_cursor
@@ -1063,13 +1064,14 @@ type stream_parser_t = struct{
     bool complete
 }
 
-fn stream_parser():ref<stream_parser_t> {
-    return new stream_parser_t(max_depth = DEFAULT_MAX_DEPTH)
+// reader 创建增量解析器（等价 Go 的 json.Decoder，push 模型）
+fn reader():ref<reader_t> {
+    return new reader_t(max_depth = DEFAULT_MAX_DEPTH)
 }
 
-// Returns true as soon as a complete root value has been framed. Additional
-// non-whitespace bytes are rejected, so one parser always represents one value.
-fn stream_parser_t.feed(&self, [u8] chunk):bool! {
+// write 喂入一个数据块；返回 true 表示一个完整根值已被框架识别。
+// 多余的非空白字节会被拒绝，一个 reader 只消费一个值。
+fn reader_t.write(&self, [u8] chunk):bool! {
     self.data.append(chunk)
 
     for self.scan_cursor < self.data.len() {
@@ -1155,7 +1157,7 @@ fn stream_parser_t.feed(&self, [u8] chunk):bool! {
     return self.complete
 }
 
-fn stream_parser_t.value(&self):any! {
+fn reader_t.value(&self):any! {
     if !self.complete {
         throw errorf('JSON value is incomplete')
     }

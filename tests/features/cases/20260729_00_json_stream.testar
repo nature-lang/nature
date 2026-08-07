@@ -102,3 +102,41 @@ fn main() {
 
     assert(rejects(deep))
 }
+
+=== test_stream_reader
+--- main.n
+import json
+
+fn main() {
+    // 分块喂入，最后一块返回 true
+    var r = json.reader()
+    assert(!r.write('{"a":' as [u8]))
+    assert(r.write('1}' as [u8]))
+    var v = r.value() as {string:any}
+    assert(v['a'] as json.number == '1' as json.number)
+
+    // 单块完整喂入
+    var r2 = json.reader()
+    assert(r2.write('[1,2]' as [u8]))
+    var arr = r2.value() as [any]
+    assert(arr[1] as json.number == '2' as json.number)
+
+    // 尾随非空白数据 → write 抛错
+    var r3 = json.reader()
+    bool trailing = false
+    var ok = r3.write('{} x' as [u8]) catch e {
+        trailing = true
+        false
+    }
+    assert(trailing)
+
+    // 框架未完成时 value() 抛错
+    var r4 = json.reader()
+    r4.write('[1' as [u8])
+    var incomplete = false
+    var v4 = r4.value() catch e {
+        incomplete = true
+        false
+    }
+    assert(incomplete)
+}
