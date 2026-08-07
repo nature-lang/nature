@@ -59,29 +59,24 @@ int main(void) {
 
     // 私有符号跨 module 访问报错(module.member)
     assert_entry_error("err_member.n", "acl_err_member",
-                       "20260807_00_pub_acl/err_member.n:4:17: cannot access private symbol 'private_fn', "
-                       "declare it with 'pub' to export it from its module\n");
+                       "20260807_00_pub_acl/err_member.n:4:17: undefined: math.private_fn\n");
 
     // star import 本身合法, 使用其中的私有符号时报错
     assert_entry_error("err_star.n", "acl_err_star",
-                       "20260807_00_pub_acl/err_star.n:4:13: cannot access private symbol 'private_fn', "
-                       "declare it with 'pub' to export it from its module\n");
+                       "20260807_00_pub_acl/err_star.n:4:22: undefined: private_fn\n");
 
     // selective import 在符号实际解析时检查可见性
     assert_entry_error("err_select.n", "acl_err_select",
-                       "20260807_00_pub_acl/err_select.n:4:13: cannot access private symbol 'private_fn', "
-                       "declare it with 'pub' to export it from its module\n");
+                       "20260807_00_pub_acl/err_select.n:4:22: undefined: private_fn\n");
 
     // 私有类型引用报错
     assert_entry_error("err_type.n", "acl_err_type",
-                       "20260807_00_pub_acl/err_type.n:4:16: cannot access private symbol 'private_t', "
-                       "declare it with 'pub' to export it from its module\n");
+                       "20260807_00_pub_acl/err_type.n:4:16: undefined: math.private_t\n");
 
     // 私有方法调用报错
     assert_entry_error("err_method.n", "acl_err_method",
-                       "20260807_00_pub_acl/err_method.n:5:13: cannot access private method 'priv_mul' of type "
-                       "'20260807_00_pub_acl.mod.pub_pair_t', declare it with 'pub' to export it from its "
-                       "module\n");
+                       "20260807_00_pub_acl/err_method.n:5:13: p.priv_mul undefined (cannot refer to unexported "
+                       "method priv_mul)\n");
 
     // 函数体内 pub 报错
     assert_entry_error("err_local_pub.n", "acl_err_local_pub",

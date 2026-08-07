@@ -2506,6 +2506,18 @@ static char *impl_symbol_name_new(char *impl_ident, char *method) {
     return str_connect_by(impl_ident, method, IMPL_CONNECT_IDENT);
 }
 
+static char *infer_method_access_name(ast_expr_t *receiver, char *method) {
+    if (receiver->assert_type == AST_EXPR_IDENT) {
+        ast_ident *ident = receiver->value;
+        if (ident && ident->literal) {
+            char *display_literal = ident->display_literal ? ident->display_literal : ident->literal;
+            return str_connect_by(display_literal, method, ".");
+        }
+    }
+
+    return method;
+}
+
 static bool impl_static_symbol_exists(module_t *m, type_t select_left_type, char *method) {
     type_t extract_type = select_left_type;
     if (select_left_type.kind == TYPE_REF || select_left_type.kind == TYPE_PTR) {
@@ -2754,8 +2766,8 @@ static type_fn_t *infer_impl_call_rewrite(module_t *m, ast_call_t *call, type_t 
 
     // 跨 module 方法调用, 检查方法可见性
     if (!symbol_accessible_from(s, m)) {
-        INFER_ASSERTF(false, "cannot access private method '%s' of type '%s', declare it with 'pub' to export it "
-                             "from its module", select->key, impl_ident);
+        char *display_ident = infer_method_access_name(&select->left, select->key);
+        INFER_ASSERTF(false, "%s undefined (cannot refer to unexported method %s)", display_ident, select->key);
     }
 
     // rewrite call left ident, 延迟到 call left fn type 确定后再做

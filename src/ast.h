@@ -181,6 +181,7 @@ typedef struct {
 
 typedef struct {
     char *literal;
+    char *display_literal; // original spelling retained for diagnostics
 } ast_ident;
 
 typedef struct {

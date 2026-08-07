@@ -281,8 +281,7 @@ static type_t analyzer_type_fn(ast_fndef_t *fndef) {
  * @return
  */
 static void analyzer_symbol_access_assert(module_t *m, symbol_t *symbol, char *ident) {
-    ANALYZER_ASSERTF(symbol_accessible_from(symbol, m),
-                     "cannot access private symbol '%s', declare it with 'pub' to export it from its module", ident);
+    ANALYZER_ASSERTF(symbol_accessible_from(symbol, m), "undefined: %s", ident);
 }
 
 static char *analyzer_resolve_typedef(module_t *m, analyzer_fndef_t *current, string ident) {
@@ -391,7 +390,8 @@ static void analyzer_type(module_t *m, type_t *t) {
             if (!import_sym) {
                 ANALYZER_ASSERTF(false, "type '%s' undeclared", t->ident);
             }
-            analyzer_symbol_access_assert(m, import_sym, t->ident);
+            char *display_ident = str_connect_by(t->import_as, t->ident, ".");
+            analyzer_symbol_access_assert(m, import_sym, display_ident);
 
             // 更新 ident 指向
             t->ident = unique_ident;
@@ -1658,7 +1658,8 @@ static void rewrite_select_expr(module_t *m, ast_expr_t *expr) {
             }
 
             // module.member 访问, 检查被访问符号的可见性
-            analyzer_symbol_access_assert(m, member, select->key);
+            char *display_ident = str_connect_by(ident->literal, select->key, ".");
+            analyzer_symbol_access_assert(m, member, display_ident);
 
             expr->assert_type = AST_EXPR_IDENT;
             expr->value = ast_new_ident(unique_ident);

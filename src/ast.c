@@ -20,6 +20,7 @@ static ast_select_stmt_t *ast_select_copy(module_t *m, ast_select_stmt_t *temp);
 ast_ident *ast_new_ident(char *literal) {
     ast_ident *ident = NEW(ast_ident);
     ident->literal = strdup(literal);
+    ident->display_literal = strdup(literal);
     return ident;
 }
 
@@ -259,6 +260,7 @@ static list_t *ast_list_expr_copy(module_t *m, list_t *temp) {
 static ast_ident *ast_ident_copy(ast_ident *temp) {
     ast_ident *ident = COPY_NEW(ast_ident, temp);
     ident->literal = strdup(temp->literal);
+    ident->display_literal = temp->display_literal ? strdup(temp->display_literal) : NULL;
     return ident;
 }
 
