@@ -92,8 +92,8 @@ fn process_t.handle_stderr(&self):void! {
     }
 }
 
-pub #linkid rt_uv_process_wait
-fn process_t.wait(&self):void!
+#linkid rt_uv_process_wait
+pub fn process_t.wait(&self):void!
 
 #linkid rt_uv_process_read_stdout
 fn process_t.read_stdout(&self):string!

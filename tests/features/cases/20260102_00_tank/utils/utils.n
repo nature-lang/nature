@@ -5,14 +5,14 @@ import time
 import mem
 import libc
 
-pub #linkid abs
-fn abs(i32 x):i32
+#linkid abs
+pub fn abs(i32 x):i32
 
-pub #linkid fmaxf
-fn fmaxf(f32 x, f32 y):f32
+#linkid fmaxf
+pub fn fmaxf(f32 x, f32 y):f32
 
-pub #linkid fminf
-fn fminf(f32 x, f32 y):f32
+#linkid fminf
+pub fn fminf(f32 x, f32 y):f32
 
 
 fn logf(string format, ...[any] args) {

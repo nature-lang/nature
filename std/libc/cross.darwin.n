@@ -1,17 +1,17 @@
-pub #linkid timegm
-fn timegm(anyptr value):i64
+#linkid timegm
+pub fn timegm(anyptr value):i64
 
-pub #linkid atol
-fn atol(anyptr value):i64
+#linkid atol
+pub fn atol(anyptr value):i64
 
-pub #linkid strtol
-fn strtol(anyptr value, anyptr endptr, i32 base):i64
+#linkid strtol
+pub fn strtol(anyptr value, anyptr endptr, i32 base):i64
 
-pub #linkid strtoul
-fn strtoul(anyptr value, anyptr endptr, i32 base):u64
+#linkid strtoul
+pub fn strtoul(anyptr value, anyptr endptr, i32 base):u64
 
-pub #linkid localtime
-fn localtime(anyptr timestamp):anyptr
+#linkid localtime
+pub fn localtime(anyptr timestamp):anyptr
 
-pub #linkid gmtime
-fn gmtime(anyptr timestamp):anyptr
+#linkid gmtime
+pub fn gmtime(anyptr timestamp):anyptr

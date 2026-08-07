@@ -675,23 +675,23 @@ type automation_event_list_t = struct{
     anyptr events
 }
 
-pub #linkid WindowShouldClose
-fn window_should_close():bool
+#linkid WindowShouldClose
+pub fn window_should_close():bool
 
-pub #linkid BeginDrawing
-fn begin_drawing()
+#linkid BeginDrawing
+pub fn begin_drawing()
 
-pub #linkid ClearBackground
-fn clear_background(color_t color)
+#linkid ClearBackground
+pub fn clear_background(color_t color)
 
-pub #linkid EndDrawing
-fn end_drawing()
+#linkid EndDrawing
+pub fn end_drawing()
 
-pub #linkid InitWindow
-fn init_window(i32 width, i32 height, anyptr title)
+#linkid InitWindow
+pub fn init_window(i32 width, i32 height, anyptr title)
 
-pub #linkid CloseWindow
-fn close_window()
+#linkid CloseWindow
+pub fn close_window()
 
 
 #linkid IsWindowReady
@@ -769,11 +769,11 @@ fn set_window_focused()
 #linkid GetWindowHandle
 fn get_window_handle():anyptr
 
-pub #linkid GetScreenWidth
-fn get_screen_width():i32
+#linkid GetScreenWidth
+pub fn get_screen_width():i32
 
-pub #linkid GetScreenHeight
-fn get_screen_height():i32
+#linkid GetScreenHeight
+pub fn get_screen_height():i32
 
 #linkid GetRenderWidth
 fn get_render_width():i32
@@ -958,14 +958,14 @@ fn get_camera_matrix_2d(camera2d_t camera):matrix_t
 
 
 // Timing-related functions
-pub #linkid SetTargetFPS
-fn set_target_fps(i32 fps)
+#linkid SetTargetFPS
+pub fn set_target_fps(i32 fps)
 
-pub #linkid GetFrameTime
-fn get_frame_time():f32
+#linkid GetFrameTime
+pub fn get_frame_time():f32
 
-pub #linkid GetTime
-fn get_time():f64
+#linkid GetTime
+pub fn get_time():f64
 
 #linkid GetFPS
 fn get_fps():i32
@@ -984,8 +984,8 @@ fn wait_time(f64 seconds)
 #linkid SetRandomSeed
 fn set_random_seed(u32 seed)
 
-pub #linkid GetRandomValue
-fn get_random_value(i32 min, i32 max):i32
+#linkid GetRandomValue
+pub fn get_random_value(i32 min, i32 max):i32
 
 #linkid LoadRandomSequence
 fn load_random_sequence(u32 count, i32 min, i32 max):ptr<i32>
@@ -1174,14 +1174,14 @@ fn stop_automation_event_recording()
 fn play_automation_event(automation_event_t event)
 
 // Input-related functions: keyboard
-pub #linkid IsKeyPressed
-fn is_key_pressed(i32 key):bool
+#linkid IsKeyPressed
+pub fn is_key_pressed(i32 key):bool
 
 #linkid IsKeyPressedRepeat
 fn is_key_pressed_repeat(i32 key):bool
 
-pub #linkid IsKeyDown
-fn is_key_down(i32 key):bool
+#linkid IsKeyDown
+pub fn is_key_down(i32 key):bool
 
 #linkid IsKeyReleased
 fn is_key_released(i32 key):bool
@@ -1334,20 +1334,20 @@ fn get_shapes_texture():texture2d_t
 fn get_shapes_texture_rectangle():rectangle_t
 
 // Basic shapes drawing functions
-pub #linkid DrawPixel
-fn draw_pixel(i32 pos_x, i32 pos_y, color_t color)
+#linkid DrawPixel
+pub fn draw_pixel(i32 pos_x, i32 pos_y, color_t color)
 
 #linkid DrawPixelV
 fn draw_pixel_v(vector2_t position, color_t color)
 
-pub #linkid DrawLine
-fn draw_line(i32 start_pos_x, i32 start_pos_y, i32 end_pos_x, i32 end_pos_y, color_t color)
+#linkid DrawLine
+pub fn draw_line(i32 start_pos_x, i32 start_pos_y, i32 end_pos_x, i32 end_pos_y, color_t color)
 
 #linkid DrawLineV
 fn draw_line_v(vector2_t start_pos, vector2_t end_pos, color_t color)
 
-pub #linkid DrawLineEx
-fn draw_line_ex(vector2_t start_pos, vector2_t end_pos, f32 thick, color_t color)
+#linkid DrawLineEx
+pub fn draw_line_ex(vector2_t start_pos, vector2_t end_pos, f32 thick, color_t color)
 
 #linkid DrawLineStrip
 fn draw_line_strip(ptr<vector2_t> points, i32 point_count, color_t color)
@@ -1367,8 +1367,8 @@ fn draw_circle_sector_lines(vector2_t center, f32 radius, f32 start_angle, f32 e
 #linkid DrawCircleGradient
 fn draw_circle_gradient(i32 center_x, i32 center_y, f32 radius, color_t inner, color_t outer)
 
-pub #linkid DrawCircleV
-fn draw_circle_v(vector2_t center, f32 radius, color_t color)
+#linkid DrawCircleV
+pub fn draw_circle_v(vector2_t center, f32 radius, color_t color)
 
 #linkid DrawCircleLines
 fn draw_circle_lines(i32 center_x, i32 center_y, f32 radius, color_t color)
@@ -1388,8 +1388,8 @@ fn draw_ring(vector2_t center, f32 inner_radius, f32 outer_radius, f32 start_ang
 #linkid DrawRingLines
 fn draw_ring_lines(vector2_t center, f32 inner_radius, f32 outer_radius, f32 start_angle, f32 end_angle, i32 segments, color_t color)
 
-pub #linkid DrawRectangle
-fn draw_rectangle(i32 pos_x, i32 pos_y, i32 width, i32 height, color_t color)
+#linkid DrawRectangle
+pub fn draw_rectangle(i32 pos_x, i32 pos_y, i32 width, i32 height, color_t color)
 
 #linkid DrawRectangleV
 fn draw_rectangle_v(vector2_t position, vector2_t size, color_t color)
@@ -1409,8 +1409,8 @@ fn draw_rectangle_gradient_h(i32 pos_x, i32 pos_y, i32 width, i32 height, color_
 #linkid DrawRectangleGradientEx
 fn draw_rectangle_gradient_ex(rectangle_t rec, color_t top_left, color_t bottom_left, color_t top_right, color_t bottom_right)
 
-pub #linkid DrawRectangleLines
-fn draw_rectangle_lines(i32 pos_x, i32 pos_y, i32 width, i32 height, color_t color)
+#linkid DrawRectangleLines
+pub fn draw_rectangle_lines(i32 pos_x, i32 pos_y, i32 width, i32 height, color_t color)
 
 #linkid DrawRectangleLinesEx
 fn draw_rectangle_lines_ex(rectangle_t rec, f32 line_thick, color_t color)
@@ -1493,8 +1493,8 @@ fn get_spline_point_bezier_quad(vector2_t p1, vector2_t c2, vector2_t p3, f32 t)
 fn get_spline_point_bezier_cubic(vector2_t p1, vector2_t c2, vector2_t c3, vector2_t p4, f32 t):vector2_t
 
 // Basic shapes collision detection functions
-pub #linkid CheckCollisionRecs
-fn check_collision_recs(rectangle_t rec1, rectangle_t rec2):bool
+#linkid CheckCollisionRecs
+pub fn check_collision_recs(rectangle_t rec1, rectangle_t rec2):bool
 
 #linkid CheckCollisionCircles
 fn check_collision_circles(vector2_t center1, f32 radius1, vector2_t center2, f32 radius2):bool
@@ -1832,8 +1832,8 @@ fn draw_texture_n_patch(texture2d_t texture, npatch_info_t n_patch_info, rectang
 #linkid ColorIsEqual
 fn color_is_equal(color_t col1, color_t col2):bool
 
-pub #linkid Fade
-fn fade(color_t color, f32 alpha):color_t
+#linkid Fade
+pub fn fade(color_t color, f32 alpha):color_t
 
 #linkid ColorToInt
 fn color_to_int(color_t color):i32
@@ -1919,8 +1919,8 @@ fn export_font_as_code(font_t font, anyptr file_name):bool
 #linkid DrawFPS
 fn draw_fps(i32 pos_x, i32 pos_y)
 
-pub #linkid DrawText
-fn draw_text(anyptr text, i32 pos_x, i32 pos_y, i32 font_size, color_t color)
+#linkid DrawText
+pub fn draw_text(anyptr text, i32 pos_x, i32 pos_y, i32 font_size, color_t color)
 
 #linkid DrawTextEx
 fn draw_text_ex(font_t font, anyptr text, vector2_t position, f32 font_size, f32 spacing, color_t tint)
@@ -1938,8 +1938,8 @@ fn draw_text_codepoints(font_t font, ptr<i32> codepoints, i32 codepoint_count, v
 #linkid SetTextLineSpacing
 fn set_text_line_spacing(i32 spacing)
 
-pub #linkid MeasureText
-fn measure_text(anyptr text, i32 font_size):i32
+#linkid MeasureText
+pub fn measure_text(anyptr text, i32 font_size):i32
 
 #linkid MeasureTextEx
 fn measure_text_ex(font_t font, anyptr text, f32 font_size, f32 spacing):vector2_t

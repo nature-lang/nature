@@ -3620,7 +3620,7 @@ impl<'a> Syntax {
         Ok(stmt)
     }
 
-    fn parser_label(&mut self, is_pub: bool) -> Result<Box<Stmt>, SyntaxError> {
+    fn parser_label(&mut self, mut is_pub: bool, allow_pub: bool) -> Result<Box<Stmt>, SyntaxError> {
         let mut fndef = AstFnDef::default();
         fndef.is_pub = is_pub;
 
@@ -3658,6 +3658,17 @@ impl<'a> Syntax {
                     format!("expected '{}' found '{}'", TokenType::StmtEof, self.peek().literal),
                 ));
             }
+        }
+
+        if allow_pub && self.consume(TokenType::Pub) {
+            is_pub = true;
+            fndef.is_pub = true;
+        } else if !allow_pub && self.is(TokenType::Pub) {
+            return Err(SyntaxError(
+                self.peek().start,
+                self.peek().end,
+                "pub can only be applied to module-level declarations".to_string(),
+            ));
         }
 
         if fndef.pending_where_params.is_some() && !self.is(TokenType::Fn) && !self.is(TokenType::Fx) {
@@ -3761,13 +3772,20 @@ impl<'a> Syntax {
         }
 
         let is_pub = self.consume(TokenType::Pub);
+        if is_pub && self.is(TokenType::Label) {
+            return Err(SyntaxError(
+                self.peek().start,
+                self.peek().end,
+                "pub must follow declaration labels".to_string(),
+            ));
+        }
 
         let stmt = if self.is(TokenType::Var) {
             self.parser_var_begin_stmt(is_pub)?
         } else if self.is_type_begin_stmt() {
             self.parser_type_begin_stmt(is_pub)?
         } else if self.is(TokenType::Label) {
-            self.parser_label(is_pub)?
+            self.parser_label(is_pub, true)?
         } else if self.is(TokenType::Test) {
             if is_pub {
                 return Err(SyntaxError(self.peek().start, self.peek().end, "pub cannot be applied to test".to_string()));
@@ -3854,7 +3872,7 @@ impl<'a> Syntax {
         } else if self.is(TokenType::Let) {
             self.parser_let_stmt()?
         } else if self.is(TokenType::Label) {
-            self.parser_label(false)?
+            self.parser_label(false, false)?
         } else if self.is(TokenType::If) {
             self.parser_if_stmt()?
         } else if self.is(TokenType::For) {

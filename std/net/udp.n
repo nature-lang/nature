@@ -49,8 +49,8 @@ pub fn bind(string host):ref<socket_t>! {
     return s
 }
 
-pub #linkid rt_uv_udp_close
-fn socket_t.close(&self)
+#linkid rt_uv_udp_close
+pub fn socket_t.close(&self)
 
 pub fn socket_t.recvfrom(&self, [u8] buf):(int, addr_t)! {
     if self.closed {

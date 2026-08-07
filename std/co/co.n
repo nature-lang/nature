@@ -3,11 +3,11 @@ mod co
 // var SOLO = 1 << 1
 pub var SAME = 1 << 2
 
-pub #linkid rt_coroutine_sleep
-fn sleep(int ms)
+#linkid rt_coroutine_sleep
+pub fn sleep(int ms)
 
-pub #linkid rt_coroutine_yield
-fn yield()
+#linkid rt_coroutine_yield
+pub fn yield()
 
-pub #linkid rt_coroutine_arg
-fn arg():anyptr
+#linkid rt_coroutine_arg
+pub fn arg():anyptr

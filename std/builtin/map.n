@@ -7,8 +7,8 @@ pub fn map<T,U>.new():map<T,U> {
     return runtime.map_new<T,U>(hash, key_hash, value_hash)
 }
 
-pub #linkid rt_map_length
-fn map<T,U>.len(*self):int
+#linkid rt_map_length
+pub fn map<T,U>.len(*self):int
 
 pub fn map<T,U>.del(*self, T key) {
     ptr<T> ref = &key

@@ -1,0 +1,22 @@
+=== valid_label_before_pub
+--- main.n
+#linkid gzwrite
+pub fn gzwrite(anyptr outfile, anyptr buf, int len):int
+
+fn main() {
+    println(1)
+}
+
+--- output.txt
+1
+
+=== invalid_pub_before_label
+--- main.n
+pub #linkid gzwrite
+fn gzwrite(anyptr outfile, anyptr buf, int len):int
+
+fn main() {
+}
+
+--- output.txt
+nature-test/main.n:1:12: pub must follow declaration labels

@@ -1,10 +1,10 @@
 import runtime
 
-pub #linkid rt_string_length
-fn string.len(*self):int
+#linkid rt_string_length
+pub fn string.len(*self):int
 
-pub #linkid rt_string_ref
-fn string.ref(*self):anyptr
+#linkid rt_string_ref
+pub fn string.ref(*self):anyptr
 
 pub fn string.char(*self):u8 {
     return (*self)[0]

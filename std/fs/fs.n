@@ -40,11 +40,11 @@ pub type file_t:io.reader, io.writer, io.seeker = struct{
 #linkid rt_uv_fs_from
 fn from(int fd, string name):ref<file_t>!
 
-pub #linkid rt_uv_fs_open
-fn open(string path, int flags, int mode):ref<file_t>!
+#linkid rt_uv_fs_open
+pub fn open(string path, int flags, int mode):ref<file_t>!
 
-pub #linkid rt_uv_fs_content
-fn file_t.content(&self):string! {
+#linkid rt_uv_fs_content
+pub fn file_t.content(&self):string! {
     var s = self.stat()
     var file_size = s.size
     var buf = vec<u8>.new(0, file_size as int)
@@ -55,27 +55,27 @@ fn file_t.content(&self):string! {
     return buf as string
 }
 
-pub #linkid rt_uv_fs_read
-fn file_t.read(&self, [u8] buf):int!
+#linkid rt_uv_fs_read
+pub fn file_t.read(&self, [u8] buf):int!
 
-pub #linkid rt_uv_fs_write
-fn file_t.write(&self, [u8] buf):int!
+#linkid rt_uv_fs_write
+pub fn file_t.write(&self, [u8] buf):int!
 
 fn file_t.seek(&self, int offset, int whence):int! {
     return syscall.seek(self.fd as int, offset, whence)
 }
 
-pub #linkid rt_uv_fs_read_at
-fn file_t.read_at(&self, [u8] buf, int offset):int!
+#linkid rt_uv_fs_read_at
+pub fn file_t.read_at(&self, [u8] buf, int offset):int!
 
-pub #linkid rt_uv_fs_write_at
-fn file_t.write_at(&self, [u8] buf, int offset):int!
+#linkid rt_uv_fs_write_at
+pub fn file_t.write_at(&self, [u8] buf, int offset):int!
 
-pub #linkid rt_uv_fs_close
-fn file_t.close(&self):void
+#linkid rt_uv_fs_close
+pub fn file_t.close(&self):void
 
-pub #linkid rt_uv_fs_stat
-fn file_t.stat(&self):stat_t!
+#linkid rt_uv_fs_stat
+pub fn file_t.stat(&self):stat_t!
 
 // io
 pub fn stdout():ref<file_t>! {

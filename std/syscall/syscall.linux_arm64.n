@@ -577,8 +577,8 @@ int AT_STATX_DONT_SYNC = 0x4000
 int AT_RECURSIVE = 0x8000
 int AT_EACCESS = 0x200
 
-pub #linkid syscall_call6
-fn call6(int number, anyptr a1, anyptr a2, anyptr a3, anyptr a4, anyptr a5, anyptr a6):int!
+#linkid syscall_call6
+pub fn call6(int number, anyptr a1, anyptr a2, anyptr a3, anyptr a4, anyptr a5, anyptr a6):int!
 
 #linkid syscall_getcwd
 fn syscall_getcwd():string
@@ -623,8 +623,8 @@ pub fn fork():int! {
 
 // path is full path
 // argv[0] = /proc/:pid/comm
-pub #linkid syscall_exec
-fn exec(string path, [string] argv, [string] envp):void!
+#linkid syscall_exec
+pub fn exec(string path, [string] argv, [string] envp):void!
 
 type timespec_t = struct {
     i64 sec

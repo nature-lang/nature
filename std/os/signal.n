@@ -4,8 +4,8 @@ import syscall
 
 pub type sig_t = int
 
-pub #linkid signal_notify
-fn notify(chan<sig_t> sig_ch, ...[int] signals)
+#linkid signal_notify
+pub fn notify(chan<sig_t> sig_ch, ...[int] signals)
 
 #linkid signal_stop
 fn stop(chan<sig_t> sig_ch)

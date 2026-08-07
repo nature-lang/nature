@@ -9,11 +9,11 @@ pub type dirent_t = struct {
     [u8;1024] name
 }
 
-pub #linkid 'opendir$INODE64'
-fn opendir(anyptr str):dir_t
+#linkid 'opendir$INODE64'
+pub fn opendir(anyptr str):dir_t
 
-pub #linkid 'readdir$INODE64'
-fn readdir(dir_t d):ptr<dirent_t>
+#linkid 'readdir$INODE64'
+pub fn readdir(dir_t d):ptr<dirent_t>
 
-pub #linkid closedir
-fn closedir(dir_t d):int
+#linkid closedir
+pub fn closedir(dir_t d):int

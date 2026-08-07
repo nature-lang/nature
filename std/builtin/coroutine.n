@@ -27,8 +27,8 @@ pub fn co_return<T>(ptr<T> result) {
     utils.coroutine_return(result as anyptr)
 }
 
-pub #where T:nonvoid
-fn future_t<T>.await(&self):T! {
+#where T:nonvoid
+pub fn future_t<T>.await(&self):T! {
     utils.coroutine_await(self.co)
 
     if self.error is throwable {

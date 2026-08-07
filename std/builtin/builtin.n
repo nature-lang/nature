@@ -1,13 +1,13 @@
 pub type nullable<T> = T?
 
-pub #linkid print
-fn print(...[any] args)
+#linkid print
+pub fn print(...[any] args)
 
-pub #linkid println
-fn println(...[any] args)
+#linkid println
+pub fn println(...[any] args)
 
-pub #linkid rt_panic
-fn panic(string msg)
+#linkid rt_panic
+pub fn panic(string msg)
 
-pub #linkid rt_assert
-fn assert(bool cond)
+#linkid rt_assert
+pub fn assert(bool cond)

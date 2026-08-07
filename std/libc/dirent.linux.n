@@ -8,11 +8,11 @@ pub type dirent_t = struct {
     [u8;256] name
 }
 
-pub #linkid opendir
-fn opendir(anyptr str):dir_t
+#linkid opendir
+pub fn opendir(anyptr str):dir_t
 
-pub #linkid readdir
-fn readdir(dir_t d):ptr<dirent_t>
+#linkid readdir
+pub fn readdir(dir_t d):ptr<dirent_t>
 
-pub #linkid closedir
-fn closedir(dir_t d):int
+#linkid closedir
+pub fn closedir(dir_t d):int

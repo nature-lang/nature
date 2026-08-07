@@ -123,8 +123,8 @@ pub fn vec<T>.concat(*self, vec<T> l2):vec<T> {
     return runtime.vec_concat<T>(self as anyptr, l2 as anyptr, element_hash)
 }
 
-pub #linkid rt_vec_copy
-fn vec<T>.copy(*self, vec<T> src):int
+#linkid rt_vec_copy
+pub fn vec<T>.copy(*self, vec<T> src):int
 
 pub fn vec<T>.len(*self):int {
     var rv = self as anyptr as ptr<vec_t>
@@ -136,8 +136,8 @@ pub fn vec<T>.cap(*self):int {
     return rv.capacity
 }
 
-pub #linkid rt_vec_ref
-fn vec<T>.ref(*self):anyptr
+#linkid rt_vec_ref
+pub fn vec<T>.ref(*self):anyptr
 
 pub fn vec<T>.sort(*self, fn(int, int):bool less) {
     // 如果向量长度小于等于1，无需排序

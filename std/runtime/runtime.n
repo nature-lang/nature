@@ -1,88 +1,88 @@
 mod runtime
 
-pub #linkid rt_vec_new
-fn vec_new<T>(int hash, int element_hash, int len, anyptr value_ref):vec<T>!
+#linkid rt_vec_new
+pub fn vec_new<T>(int hash, int element_hash, int len, anyptr value_ref):vec<T>!
 
-pub #linkid rt_vec_cap
-fn vec_cap<T>(int hash, int element_hash, int cap):vec<T>!
+#linkid rt_vec_cap
+pub fn vec_cap<T>(int hash, int element_hash, int cap):vec<T>!
 
 #linkid rt_vec_alloc
 fn vec_alloc(int hash, int element_hash, int cap):anyptr!
 
-pub #linkid rt_vec_new_out
-fn vec_new_out(anyptr out, int hash, int element_hash, int cap)
+#linkid rt_vec_new_out
+pub fn vec_new_out(anyptr out, int hash, int element_hash, int cap)
 
-pub #linkid rt_vec_push
-fn vec_push(anyptr list, int element_hash, anyptr val)
+#linkid rt_vec_push
+pub fn vec_push(anyptr list, int element_hash, anyptr val)
 
-pub #linkid rt_vec_grow
-fn vec_grow(anyptr list, int element_hash, int custom_capacity)
+#linkid rt_vec_grow
+pub fn vec_grow(anyptr list, int element_hash, int custom_capacity)
 
-pub #linkid rt_vec_slice
-fn vec_slice<T>(anyptr list, int start, int end):vec<T>!
+#linkid rt_vec_slice
+pub fn vec_slice<T>(anyptr list, int start, int end):vec<T>!
 
-pub #linkid rt_vec_append
-fn vec_append(anyptr list1, anyptr list2, int element_hash)
+#linkid rt_vec_append
+pub fn vec_append(anyptr list1, anyptr list2, int element_hash)
 
-pub #linkid rt_vec_concat
-fn vec_concat<T>(anyptr list1, anyptr list2, int element_hash):vec<T>
+#linkid rt_vec_concat
+pub fn vec_concat<T>(anyptr list1, anyptr list2, int element_hash):vec<T>
 
-pub #linkid rt_set_new
-fn set_new<T>(int hash, int key_hash):set<T>
+#linkid rt_set_new
+pub fn set_new<T>(int hash, int key_hash):set<T>
 
-pub #linkid rt_set_add
-fn set_add(anyptr s, anyptr key):bool
+#linkid rt_set_add
+pub fn set_add(anyptr s, anyptr key):bool
 
-pub #linkid rt_set_contains
-fn set_contains(anyptr s, anyptr key):bool
+#linkid rt_set_contains
+pub fn set_contains(anyptr s, anyptr key):bool
 
-pub #linkid rt_set_delete
-fn set_delete(anyptr s, anyptr key)
+#linkid rt_set_delete
+pub fn set_delete(anyptr s, anyptr key)
 
 #linkid rt_set_new_out
 fn set_new_out(anyptr out, int hash, int key_hash)
 
-pub #linkid rt_map_new
-fn map_new<K,V>(int hash, int key_hash, int value_hash):map<K,V>
+#linkid rt_map_new
+pub fn map_new<K,V>(int hash, int key_hash, int value_hash):map<K,V>
 
 #linkid rt_map_alloc
 fn map_alloc(int hash, int key_hash, int value_hash):anyptr
 
-pub #linkid rt_map_new_out
-fn map_new_out(anyptr out, int hash, int key_hash, int value_hash)
+#linkid rt_map_new_out
+pub fn map_new_out(anyptr out, int hash, int key_hash, int value_hash)
 
-pub #linkid rt_map_delete
-fn map_delete(anyptr m, anyptr key)
+#linkid rt_map_delete
+pub fn map_delete(anyptr m, anyptr key)
 
-pub #linkid rt_map_contains
-fn map_contains(anyptr m, anyptr key):bool
+#linkid rt_map_contains
+pub fn map_contains(anyptr m, anyptr key):bool
 
-pub #linkid rt_map_assign
-fn map_assign(anyptr m, anyptr key_ref):anyptr
+#linkid rt_map_assign
+pub fn map_assign(anyptr m, anyptr key_ref):anyptr
 
 #linkid rt_string_ref
 fn string_ref(anyptr s):anyptr
 
-pub #linkid rt_processor_index
-fn processor_index():int
+#linkid rt_processor_index
+pub fn processor_index():int
 
-pub #linkid runtime_force_gc
-fn gc()
+#linkid runtime_force_gc
+pub fn gc()
 
-pub #linkid runtime_malloc_bytes
-fn malloc_bytes():i64
+#linkid runtime_malloc_bytes
+pub fn malloc_bytes():i64
 
-pub #linkid gc_malloc
-fn gc_malloc(int hash):anyptr
+#linkid gc_malloc
+pub fn gc_malloc(int hash):anyptr
 
 #linkid gc_malloc_size
 fn gc_malloc_size(int size):anyptr
 
-pub #linkid rt_string_new
-fn string_new(anyptr s):string
+#linkid rt_string_new
+pub fn string_new(anyptr s):string
 
-pub #linkid rt_string_ref_new
-fn string_ref_new(anyptr s, int len):string
+#linkid rt_string_ref_new
+pub fn string_ref_new(anyptr s, int len):string
 
-pub #linkid rt_in_heap
-fn in_heap(anyptr addr):bool
+#linkid rt_in_heap
+pub fn in_heap(anyptr addr):bool

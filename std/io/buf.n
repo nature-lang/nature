@@ -8,13 +8,13 @@ pub type reader<T>:io.reader = struct{
     bool eof
 }
 
-pub #where T:io.reader
-fn reader<T>.size(&self):int {
+#where T:io.reader
+pub fn reader<T>.size(&self):int {
     return self.buf.len()
 }
 
-pub #where T:io.reader
-fn reader<T>.reset(&self, T rd) {
+#where T:io.reader
+pub fn reader<T>.reset(&self, T rd) {
     self.rd = rd
     if self.buf.len() == 0 {
         self.buf = vec<u8>.new(0, 4096)
@@ -24,8 +24,8 @@ fn reader<T>.reset(&self, T rd) {
     self.eof = false
 }
 
-pub #local #where T:io.reader
-fn reader<T>.fill(&self):void! {
+#local #where T:io.reader
+pub fn reader<T>.fill(&self):void! {
     if self.r > 0 {
         // Copy unread data to the buffer start position
         self.buf.copy(self.buf.slice(self.r, self.w))
@@ -61,8 +61,8 @@ fn reader<T>.fill(&self):void! {
     throw errorf('no progress')
 }
 
-pub #where T:io.reader
-fn reader<T>.read(&self, [u8] buf):int! {
+#where T:io.reader
+pub fn reader<T>.read(&self, [u8] buf):int! {
     if buf.len() == 0 {
         if self.buffered() > 0 {
             return 0
@@ -101,13 +101,13 @@ fn reader<T>.read(&self, [u8] buf):int! {
     return n
 }
 
-pub #where T:io.reader
-fn reader<T>.buffered(&self):int {
+#where T:io.reader
+pub fn reader<T>.buffered(&self):int {
     return self.w - self.r
 }
 
-pub #where T:io.reader
-fn reader<T>.read_until(&self, u8 delim):[u8] {
+#where T:io.reader
+pub fn reader<T>.read_until(&self, u8 delim):[u8] {
     [u8] result = vec<u8>.new(0, 0)
     var has_error = false
 
@@ -151,8 +151,8 @@ fn reader<T>.read_until(&self, u8 delim):[u8] {
     return result
 }
 
-pub #where T:io.reader
-fn reader<T>.read_exact(&self, [u8] buf):void! {
+#where T:io.reader
+pub fn reader<T>.read_exact(&self, [u8] buf):void! {
     int total = 0
     for total < buf.len() {
         int n = self.read(buf.slice(total, buf.len()))
@@ -160,8 +160,8 @@ fn reader<T>.read_exact(&self, [u8] buf):void! {
     }
 }
 
-pub #where T:io.reader
-fn reader<T>.read_byte(&self):u8! {
+#where T:io.reader
+pub fn reader<T>.read_byte(&self):u8! {
     if self.r == self.w {
         self.fill()
     }
@@ -171,8 +171,8 @@ fn reader<T>.read_byte(&self):u8! {
     return b
 }
 
-pub #where T:io.reader
-fn reader<T>.read_line(&self):string! {
+#where T:io.reader
+pub fn reader<T>.read_line(&self):string! {
     if self.eof {
         throw errorf('EOF')
     }
@@ -197,13 +197,13 @@ pub type writer<T>:io.writer = struct{
     bool err
 }
 
-pub #where T:io.writer
-fn writer<T>.size(&self):int {
+#where T:io.writer
+pub fn writer<T>.size(&self):int {
     return self.buf.len()
 }
 
-pub #where T:io.writer
-fn writer<T>.reset(&self, T wr) {
+#where T:io.writer
+pub fn writer<T>.reset(&self, T wr) {
     self.wr = wr
     if self.buf.len() == 0 {
         self.buf = vec<u8>.new(0, 4096)
@@ -212,18 +212,18 @@ fn writer<T>.reset(&self, T wr) {
     self.err = false
 }
 
-pub #where T:io.writer
-fn writer<T>.available(&self):int {
+#where T:io.writer
+pub fn writer<T>.available(&self):int {
     return self.buf.len() - self.n
 }
 
-pub #where T:io.writer
-fn writer<T>.buffered(&self):int {
+#where T:io.writer
+pub fn writer<T>.buffered(&self):int {
     return self.n
 }
 
-pub #local #where T:io.writer
-fn writer<T>.flush(&self):void! {
+#local #where T:io.writer
+pub fn writer<T>.flush(&self):void! {
     if self.err {
         throw errorf('previous write error')
     }
@@ -250,8 +250,8 @@ fn writer<T>.flush(&self):void! {
     self.n = 0
 }
 
-pub #where T:io.writer
-fn writer<T>.write(&self, [u8] buf):int! {
+#where T:io.writer
+pub fn writer<T>.write(&self, [u8] buf):int! {
     if self.err {
         throw errorf('previous write error')
     }
@@ -298,8 +298,8 @@ fn writer<T>.write(&self, [u8] buf):int! {
     return total_written
 }
 
-pub #where T:io.writer
-fn writer<T>.write_byte(&self, u8 b):void! {
+#where T:io.writer
+pub fn writer<T>.write_byte(&self, u8 b):void! {
     if self.err {
         throw errorf('previous write error')
     }

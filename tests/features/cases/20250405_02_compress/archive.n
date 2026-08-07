@@ -1,26 +1,26 @@
 type archive_t = anyptr
 type archive_entry_t = anyptr
 
-pub #linkid archive_write_new
-fn write_new():archive_t
+#linkid archive_write_new
+pub fn write_new():archive_t
 
-pub #linkid archive_write_add_filter_gzip
-fn write_add_filter_gzip(archive_t a)
+#linkid archive_write_add_filter_gzip
+pub fn write_add_filter_gzip(archive_t a)
 
-pub #linkid archive_write_set_format_ustar
-fn write_set_format_ustar(archive_t a)
+#linkid archive_write_set_format_ustar
+pub fn write_set_format_ustar(archive_t a)
 
-pub #linkid archive_write_open_filename
-fn write_open_filename(archive_t a, anyptr filename)
+#linkid archive_write_open_filename
+pub fn write_open_filename(archive_t a, anyptr filename)
 
-pub #linkid archive_read_disk_new
-fn read_disk_new():archive_t
+#linkid archive_read_disk_new
+pub fn read_disk_new():archive_t
 
-pub #linkid archive_read_disk_open
-fn read_disk_open(archive_t a, anyptr filename):i32
+#linkid archive_read_disk_open
+pub fn read_disk_open(archive_t a, anyptr filename):i32
 
-pub #linkid archive_entry_new
-fn entry_new():archive_entry_t
+#linkid archive_entry_new
+pub fn entry_new():archive_entry_t
 
 #linkid archive_read_next_header2
 fn read_next_header2(archive_t a, archive_entry_t e):i32

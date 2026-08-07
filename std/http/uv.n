@@ -30,17 +30,17 @@ pub type conn_t = struct{
     // ... other field not use
 }
 
-pub #linkid rt_uv_http_listen
-fn http_listen(anyptr server):void!
+#linkid rt_uv_http_listen
+pub fn http_listen(anyptr server):void!
 
-pub #linkid rt_uv_read
-fn read(anyptr client):string!
+#linkid rt_uv_read
+pub fn read(anyptr client):string!
 
-pub #linkid rt_uv_write
-fn write(anyptr client, string data):void!
+#linkid rt_uv_write
+pub fn write(anyptr client, string data):void!
 
-pub #linkid rt_uv_conn_resp
-fn conn_resp(ptr<conn_t> ctx, string data)
+#linkid rt_uv_conn_resp
+pub fn conn_resp(ptr<conn_t> ctx, string data)
 
-pub #linkid rt_uv_http_close
-fn http_close(anyptr server)
+#linkid rt_uv_http_close
+pub fn http_close(anyptr server)

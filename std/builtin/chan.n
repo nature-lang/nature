@@ -44,23 +44,23 @@ pub fn chan<T>.try_recv(self):(T, bool)! {
     return (msg, is_recv)
 }
 
-pub #linkid rt_chan_close
-fn chan<T>.close(self):void!
+#linkid rt_chan_close
+pub fn chan<T>.close(self):void!
 
-pub #linkid rt_chan_is_closed
-fn chan<T>.is_closed(self):bool
+#linkid rt_chan_is_closed
+pub fn chan<T>.is_closed(self):bool
 
-pub #linkid rt_chan_is_successful
-fn chan<T>.is_successful(self):bool
+#linkid rt_chan_is_successful
+pub fn chan<T>.is_successful(self):bool
 
-pub #linkid rt_chan_new
-fn rt_chan_new(i64 rhash, i64 ele_hash, i64 buf_len):anyptr
+#linkid rt_chan_new
+pub fn rt_chan_new(i64 rhash, i64 ele_hash, i64 buf_len):anyptr
 
-pub #linkid rt_chan_send
-fn rt_chan_send(anyptr ch, anyptr msg, bool _try):bool!
+#linkid rt_chan_send
+pub fn rt_chan_send(anyptr ch, anyptr msg, bool _try):bool!
 
-pub #linkid rt_chan_recv
-fn rt_chan_recv(anyptr ch, anyptr msg, bool _try):bool!
+#linkid rt_chan_recv
+pub fn rt_chan_recv(anyptr ch, anyptr msg, bool _try):bool!
 
-pub #linkid rt_chan_close
-fn rt_chan_close(anyptr ch):void!
+#linkid rt_chan_close
+pub fn rt_chan_close(anyptr ch):void!

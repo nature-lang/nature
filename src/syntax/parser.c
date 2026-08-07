@@ -3147,7 +3147,7 @@ static ast_stmt_t *parser_test_stmt(module_t *m) {
  * @param m
  * @return
  */
-static ast_stmt_t *parser_label(module_t *m, bool is_pub) {
+static ast_stmt_t *parser_label(module_t *m, bool is_pub, bool allow_pub) {
     ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
     fndef->is_pub = is_pub;
 
@@ -3179,6 +3179,13 @@ static ast_stmt_t *parser_label(module_t *m, bool is_pub) {
         // #where 允许最后一个约束后保留逗号，scanner 不会自动插入 TOKEN_STMT_EOF
         PARSER_ASSERTF(fndef->pending_where_params, "expected '%s' found '%s'", token_str[TOKEN_STMT_EOF],
                        parser_peek(m)->literal);
+    }
+
+    if (allow_pub && parser_consume(m, TOKEN_PUB)) {
+        is_pub = true;
+        fndef->is_pub = true;
+    } else if (!allow_pub && parser_is(m, TOKEN_PUB)) {
+        PARSER_ASSERTF(false, "pub can only be applied to module-level declarations");
     }
 
     if (fndef->pending_where_params) {
@@ -3298,7 +3305,7 @@ static ast_stmt_t *parser_local_stmt(module_t *m) {
     } else if (parser_is(m, TOKEN_LET)) {
         return parser_let_stmt(m);
     } else if (parser_is(m, TOKEN_LABEL)) {
-        return parser_label(m, false);
+        return parser_label(m, false, false);
     } else if (parser_is(m, TOKEN_IF)) {
         return parser_if_stmt(m);
     } else if (parser_is(m, TOKEN_FOR)) {
@@ -3348,6 +3355,7 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
     if (parser_is(m, TOKEN_PUB)) {
         parser_advance(m);
         is_pub = true;
+        PARSER_ASSERTF(!parser_is(m, TOKEN_LABEL), "pub must follow declaration labels");
     }
 
     // module parser 只包含着几种简单语句
@@ -3358,7 +3366,7 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
     } else if (is_type_begin_stmt(m)) {
         return parser_type_begin_stmt(m, is_pub);
     } else if (parser_is(m, TOKEN_LABEL)) {
-        return parser_label(m, is_pub);
+        return parser_label(m, is_pub, true);
     } else if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
         ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
         fndef->is_pub = is_pub;
