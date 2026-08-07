@@ -20,9 +20,9 @@ jobs:
       matrix:
         include:
           - target: linux-arm64
-            runs-on: [self-hosted, linux, arm64]
+            runs-on: [self-hosted, Linux, ARM64]
           - target: darwin-arm64
-            runs-on: [self-hosted, macos, arm64]
+            runs-on: [self-hosted, macOS, ARM64]
     runs-on: ${{ matrix.runs-on }}
     steps:
       - name: Checkout
