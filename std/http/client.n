@@ -259,7 +259,10 @@ fn request_t.tcp_buf(&self):[u8]! {
 
 #local
 fn read_until_space(ref<buf.reader<types.connable>> br):string! {
-    var bytes = vec<u8>.new(0, 32)
+    // vec<u8>.new(0, 32) pre-fills 32 zero bytes that are included in the
+    // `as string` result, corrupting every status line parse. Build the token
+    // from an empty vec instead.
+    var bytes = vec<u8>.new(0, 0)
     for true {
         var b = br.read_byte()
         if b == ' '.char() {
