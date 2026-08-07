@@ -231,6 +231,9 @@ impl<'a> CompletionProvider<'a> {
     /// Check if a symbol is an impl method for the given typedef and add it to completions
     fn check_impl_method(&self, symbol_id: NodeId, typedef_symbol_id: NodeId, prefix: &str, completions: &mut Vec<CompletionItem>) {
         let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) else { return };
+        if !self.symbol_table.symbol_accessible_from(symbol_id, &self.module.ident) {
+            return;
+        }
         let SymbolKind::Fn(fndef_mutex) = &symbol.kind else { return };
         let fndef = fndef_mutex.lock().unwrap();
 

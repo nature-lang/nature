@@ -211,9 +211,11 @@ impl<'a> Semantic<'a> {
 
     pub fn analyze_as_star_or_builtin(&mut self, ident: &str) -> Option<(NodeId, String)> {
         // import * ident
-        for import in &self.imports {
+        let imports = self.imports.clone();
+        for import in &imports {
             if import.as_name == "*" {
                 if let Some(id) = self.symbol_table.find_module_symbol_id(&import.module_ident, &ident) {
+                    self.ensure_symbol_accessible(id, ident, 0, 0);
                     return Some((id, format_global_ident(import.module_ident.clone(), ident.to_string().clone())));
                 }
             }
@@ -266,7 +268,8 @@ impl<'a> Semantic<'a> {
             }
 
             // Check selective imports: import colors.{Color} then Color.RED
-            for import in &self.imports {
+            let imports = self.imports.clone();
+            for import in &imports {
                 if !import.is_selective {
                     continue;
                 }
@@ -278,6 +281,8 @@ impl<'a> Semantic<'a> {
                     }
                     let global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
                     if let Some(id) = self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id) {
+                        let access_ident = format!("{}.{}", import.display_module(), item.ident);
+                        self.ensure_symbol_accessible(id, &access_ident, item.start, item.end);
                         *left_ident = global_ident;
                         *symbol_id = id;
                         return;
@@ -291,6 +296,8 @@ impl<'a> Semantic<'a> {
                 .map(|i| i.module_ident.clone());
             if let Some(module_ident) = import_module_ident {
                 if let Some(id) = self.symbol_table.find_module_symbol_id(&module_ident, key) {
+                    let access_ident = format!("{}.{}", left_ident, key);
+                    self.ensure_symbol_accessible(id, &access_ident, expr.start, expr.end);
                     // Mark the import prefix as NAMESPACE and the key token by its resolved kind
                     let left_ns_idx = semantic_token_type_index(SemanticTokenType::NAMESPACE);
                     for token in self.module.sem_token_db.iter_mut() {
@@ -360,7 +367,8 @@ impl<'a> Semantic<'a> {
         }
 
         // Check selective imports: import math.{sqrt, pow}
-        for import in &self.imports {
+        let imports = self.imports.clone();
+        for import in &imports {
             if !import.is_selective {
                 continue;
             }
@@ -372,6 +380,8 @@ impl<'a> Semantic<'a> {
                 }
                 let global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
                 if let Some(id) = self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id) {
+                    let access_ident = format!("{}.{}", import.display_module(), item.ident);
+                    self.ensure_symbol_accessible(id, &access_ident, 0, 0);
                     *ident = global_ident;
                     *symbol_id = id;
                     return true;
@@ -862,7 +872,7 @@ impl<'a> Semantic<'a> {
                     symbol_start: start,
                     symbol_end: end,
                     symbol_id: 0,
-                    is_private: false,
+                    is_pub: false,
                 }));
 
                 Box::new(Stmt {

@@ -7,6 +7,7 @@ use std::path::Path;
 pub struct IndexedSymbol {
     pub name: String,         // The symbol name (e.g., "MyController")
     pub kind: IndexedSymbolKind,
+    pub is_pub: bool,
     pub file_path: String,    // Absolute path to the .n file
 }
 
@@ -213,6 +214,7 @@ impl WorkspaceIndex {
         }
 
         // Second pass: extract top-level declarations
+        let mut pending_pub = false;
         for (i, line) in lines.iter().enumerate() {
             let depth = line_start_brace_depths[i];
             if depth != 0 {
@@ -226,36 +228,49 @@ impl WorkspaceIndex {
                 continue;
             }
 
-            // Skip import statements
-            if trimmed.starts_with("import ") {
+            let (line_is_pub, declaration) = if let Some(rest) = trimmed.strip_prefix("pub ") {
+                (true, rest.trim_start())
+            } else {
+                (false, trimmed)
+            };
+
+            // Skip import statements and label-only declarations
+            if declaration.starts_with("import ") {
+                pending_pub = false;
                 continue;
             }
 
             // Skip preprocessor/macro directives
-            if trimmed.starts_with('#') {
+            if declaration.starts_with('#') {
+                pending_pub |= line_is_pub;
                 continue;
             }
 
+            let is_pub = line_is_pub || pending_pub;
+            pending_pub = false;
+
             // type <name> = ...
-            if trimmed.starts_with("type ") {
-                if let Some(name) = Self::extract_type_name(trimmed) {
+            if declaration.starts_with("type ") {
+                if let Some(name) = Self::extract_type_name(declaration) {
                     symbols.push(IndexedSymbol {
                         name,
                         kind: IndexedSymbolKind::Type,
+                        is_pub,
                         file_path: file_path.to_string(),
                     });
                 }
                 continue;
             }
 
-            // fn <name>(...) or fn <type>.<method>(...)
-            if trimmed.starts_with("fn ") {
-                if let Some(name) = Self::extract_fn_name(trimmed) {
+            // fn/fx <name>(...) or fn/fx <type>.<method>(...)
+            if declaration.starts_with("fn ") || declaration.starts_with("fx ") {
+                if let Some(name) = Self::extract_fn_name(declaration) {
                     // Only index top-level functions, not methods (type.method)
                     if !name.contains('.') {
                         symbols.push(IndexedSymbol {
                             name,
                             kind: IndexedSymbolKind::Function,
+                            is_pub,
                             file_path: file_path.to_string(),
                         });
                     }
@@ -264,11 +279,12 @@ impl WorkspaceIndex {
             }
 
             // const <name> = ...
-            if trimmed.starts_with("const ") {
-                if let Some(name) = Self::extract_const_name(trimmed) {
+            if declaration.starts_with("const ") {
+                if let Some(name) = Self::extract_const_name(declaration) {
                     symbols.push(IndexedSymbol {
                         name,
                         kind: IndexedSymbolKind::Constant,
+                        is_pub,
                         file_path: file_path.to_string(),
                     });
                 }
@@ -276,11 +292,12 @@ impl WorkspaceIndex {
             }
 
             // var <name> = ... OR <type> <name> = ...
-            if trimmed.starts_with("var ") {
-                if let Some(name) = Self::extract_var_name(trimmed) {
+            if declaration.starts_with("var ") {
+                if let Some(name) = Self::extract_var_name(declaration) {
                     symbols.push(IndexedSymbol {
                         name,
                         kind: IndexedSymbolKind::Variable,
+                        is_pub,
                         file_path: file_path.to_string(),
                     });
                 }
@@ -288,9 +305,14 @@ impl WorkspaceIndex {
             }
 
             // Explicit typed variable: <type> <name> = ...
-            // This is trickier - we need to detect patterns like: string foo = "bar"
-            // We skip this for now to avoid false positives; these are less common for
-            // cross-file usage since they're typically module-level state.
+            if let Some(name) = Self::extract_typed_var_name(declaration) {
+                symbols.push(IndexedSymbol {
+                    name,
+                    kind: IndexedSymbolKind::Variable,
+                    is_pub,
+                    file_path: file_path.to_string(),
+                });
+            }
         }
 
         symbols
@@ -308,7 +330,10 @@ impl WorkspaceIndex {
 
     /// Extract function name from "fn <name>(...)"
     fn extract_fn_name(line: &str) -> Option<String> {
-        let rest = line.strip_prefix("fn ")?.trim_start();
+        let rest = line
+            .strip_prefix("fn ")
+            .or_else(|| line.strip_prefix("fx "))?
+            .trim_start();
         let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.').collect();
         if name.is_empty() {
             return None;
@@ -334,6 +359,27 @@ impl WorkspaceIndex {
             return None;
         }
         Some(name)
+    }
+
+    /// Extract the name from a typed variable declaration such as
+    /// `u32 MS_ACTIVE = ...` or `vec<u8> buffer = ...`.
+    fn extract_typed_var_name(line: &str) -> Option<String> {
+        let (left, _) = line.split_once('=')?;
+        let mut parts = left.split_whitespace();
+        let _type = parts.next()?;
+        let name = parts.next_back()?;
+
+        if !name.chars().all(|c| c.is_alphanumeric() || c == '_') || name.is_empty() {
+            return None;
+        }
+
+        // A typed declaration has exactly one identifier after its type. This
+        // avoids indexing expressions or malformed declarations as variables.
+        if parts.next().is_some() {
+            return None;
+        }
+
+        Some(name.to_string())
     }
 
     /// Search for symbols matching a prefix (case-sensitive)

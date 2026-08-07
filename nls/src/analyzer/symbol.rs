@@ -61,6 +61,7 @@ pub struct Symbol {
     pub kind: SymbolKind,
     pub defined_in: NodeId, // defined in scope
     pub is_local: bool,     // 是否是 module 级别的 global symbol
+    pub is_pub: bool,       // module symbol 可被其他 module 访问
     pub pos: usize,         // 符号定义的起始
     pub source_path: Option<String>,
 
@@ -201,7 +202,7 @@ impl SymbolTable {
                 is_tagged_union: false,
                 impl_interfaces: Vec::new(),
                 method_table: HashMap::new(),
-                is_private: false,
+                is_pub: false,
                 symbol_start: 0,
                 symbol_end: 0,
                 symbol_id: 0,
@@ -357,6 +358,17 @@ impl SymbolTable {
     }
 
     pub fn define_global_symbol(&mut self, global_ident: String, kind: SymbolKind, pos: usize, defined_in: NodeId) -> Result<NodeId, String> {
+        self.define_global_symbol_with_visibility(global_ident, kind, pos, defined_in, false)
+    }
+
+    pub fn define_global_symbol_with_visibility(
+        &mut self,
+        global_ident: String,
+        kind: SymbolKind,
+        pos: usize,
+        defined_in: NodeId,
+        is_pub: bool,
+    ) -> Result<NodeId, String> {
         debug_assert!(global_ident != "");
         let source_path = self.source_path_for_scope(defined_in);
 
@@ -373,6 +385,7 @@ impl SymbolTable {
             kind,
             defined_in, // global ident 的 defined_in 指向 module scope id
             is_local: false,
+            is_pub,
             pos,
             source_path,
             is_capture: false,
@@ -408,6 +421,17 @@ impl SymbolTable {
     }
 
     pub fn define_symbol_in_scope(&mut self, ident: String, kind: SymbolKind, pos: usize, scope_id: NodeId) -> Result<NodeId, String> {
+        self.define_symbol_in_scope_with_visibility(ident, kind, pos, scope_id, false)
+    }
+
+    pub fn define_symbol_in_scope_with_visibility(
+        &mut self,
+        ident: String,
+        kind: SymbolKind,
+        pos: usize,
+        scope_id: NodeId,
+        is_pub: bool,
+    ) -> Result<NodeId, String> {
         debug_assert!(ident != "");
 
         let source_path = self.source_path_for_scope(scope_id);
@@ -427,6 +451,7 @@ impl SymbolTable {
             kind,
             defined_in: scope_id,
             is_local,
+            is_pub,
             pos,
             source_path,
             is_capture: false,
@@ -528,6 +553,33 @@ impl SymbolTable {
         } else {
             return None;
         }
+    }
+
+    /// A module declaration is visible inside its own module, while imported
+    /// declarations require `pub`. Builtins and local symbols have no owner
+    /// module and remain visible as before.
+    pub fn symbol_accessible_from(&self, symbol_id: NodeId, module_ident: &str) -> bool {
+        let Some(symbol) = self.symbols.get(symbol_id) else {
+            return false;
+        };
+
+        if symbol.is_local {
+            return true;
+        }
+
+        let mut scope_id = symbol.defined_in;
+        while scope_id > 0 {
+            let Some(scope) = self.scopes.get(scope_id) else {
+                return true;
+            };
+            match &scope.kind {
+                ScopeKind::Module(owner) => return owner == module_ident || symbol.is_pub,
+                ScopeKind::Global => return true,
+                _ => scope_id = scope.parent,
+            }
+        }
+
+        true
     }
 
     pub fn symbol_exists_in_scope(&self, ident: &str, scope_id: NodeId) -> bool {

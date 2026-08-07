@@ -354,6 +354,12 @@ impl<'a> Typesys<'a> {
         }
     }
 
+    fn ensure_symbol_accessible(&mut self, symbol_id: NodeId, ident: &str, start: usize, end: usize) {
+        if !self.symbol_table.symbol_accessible_from(symbol_id, &self.module.ident) {
+            self.errors_push(start, end, format!("undefined: {}", ident));
+        }
+    }
+
     fn type_recycle_check(&mut self, t: &Type, visited: &mut HashSet<String>) -> Option<String> {
         if t.ident.len() > 0 {
             if visited.contains(&t.ident) {
@@ -3812,7 +3818,11 @@ impl<'a> Typesys<'a> {
         let mut impl_symbol_name = format_impl_ident(impl_ident.clone(), key.clone());
 
         let (final_symbol_name, symbol_id) = match self.symbol_table.find_symbol_id(&impl_symbol_name, self.symbol_table.global_scope_id) {
-            Some(symbol_id) => (impl_symbol_name.clone(), symbol_id),
+            Some(symbol_id) => {
+                let access_ident = format!("{}.{}", impl_ident, key);
+                self.ensure_symbol_accessible(symbol_id, &access_ident, start, end);
+                (impl_symbol_name.clone(), symbol_id)
+            }
             None => {
                 if extract_type.kind != TypeKind::Ident {
                     // ident to default kind(need args)

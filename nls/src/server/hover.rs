@@ -339,7 +339,7 @@ mod tests {
             type_: Type::new(TypeKind::Int64),
             be_capture: false,
             heap_ident: None,
-            is_private: false,
+            is_pub: false,
         }));
         let content = format_hover_content(&SymbolKind::Var(var), "count", None);
         assert!(content.contains("var count: i64"), "got: {}", content);
@@ -366,7 +366,7 @@ mod tests {
             type_: Type::new(TypeKind::Int64),
             be_capture: false,
             heap_ident: None,
-            is_private: false,
+            is_pub: false,
         }));
         let param_b = Arc::new(Mutex::new(VarDeclExpr {
             ident: "b".into(),
@@ -376,7 +376,7 @@ mod tests {
             type_: Type::new(TypeKind::String),
             be_capture: false,
             heap_ident: None,
-            is_private: false,
+            is_pub: false,
         }));
         let fndef = Arc::new(Mutex::new(AstFnDef {
             fn_name: "greet".into(),
@@ -404,7 +404,7 @@ mod tests {
             type_: Type::new(TypeKind::Int64),
             be_capture: false,
             heap_ident: None,
-            is_private: false,
+            is_pub: false,
         }));
         let content = format_hover_content(
             &SymbolKind::Var(var),

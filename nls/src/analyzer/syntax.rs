@@ -1272,7 +1272,7 @@ impl<'a> Syntax {
         return Ok(t);
     }
 
-    fn parser_typedef_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
+    fn parser_typedef_stmt(&mut self, is_pub: bool) -> Result<Box<Stmt>, SyntaxError> {
         let mut stmt: Box<Stmt> = self.stmt_new();
 
         self.must(TokenType::Type)?;
@@ -1576,7 +1576,7 @@ impl<'a> Syntax {
             impl_interfaces,
             method_table: HashMap::new(),
             symbol_id: 0,
-            is_private: false,
+            is_pub,
         })));
         stmt.end = self.prev().unwrap().end;
 
@@ -1628,7 +1628,7 @@ impl<'a> Syntax {
             be_capture: false,
             heap_ident: None,
             symbol_id: 0,
-            is_private: false,
+            is_pub: false,
         })))
     }
 
@@ -1939,7 +1939,7 @@ impl<'a> Syntax {
             be_capture: false,
             heap_ident: None,
             symbol_id: 0,
-            is_private: false,
+            is_pub: false,
         };
 
         let catch_body = self.parser_body(true)?;
@@ -2556,7 +2556,7 @@ impl<'a> Syntax {
                 be_capture: false,
                 symbol_id: 0,
                 heap_ident: None,
-                is_private: false,
+                is_pub: false,
             };
 
             let second = if self.consume(TokenType::Comma) {
@@ -2569,7 +2569,7 @@ impl<'a> Syntax {
                     be_capture: false,
                     heap_ident: None,
                     symbol_id: 0,
-                    is_private: false,
+                    is_pub: false,
                 })))
             } else {
                 None
@@ -3220,7 +3220,7 @@ impl<'a> Syntax {
                     be_capture: false,
                     heap_ident: None,
                     symbol_id: 0,
-                    is_private: false,
+                    is_pub: false,
                 })));
                 expr.end = self.prev().unwrap().end;
                 expr
@@ -3238,7 +3238,7 @@ impl<'a> Syntax {
         Ok(elements)
     }
 
-    fn parser_var_begin_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
+    fn parser_var_begin_stmt(&mut self, is_pub: bool) -> Result<Box<Stmt>, SyntaxError> {
         let mut stmt = self.stmt_new();
         let type_decl = self.parser_type()?;
 
@@ -3247,6 +3247,14 @@ impl<'a> Syntax {
             let tuple_destr = self.parser_var_tuple_destr()?;
             self.must(TokenType::Equal)?;
             let right = self.parser_expr()?;
+
+            if is_pub {
+                return Err(SyntaxError(
+                    self.peek().start,
+                    self.peek().end,
+                    "pub cannot be applied to tuple destructuring".to_string(),
+                ));
+            }
 
             stmt.node = AstNode::VarTupleDestr(tuple_destr, right);
             stmt.end = self.prev().unwrap().end;
@@ -3266,7 +3274,7 @@ impl<'a> Syntax {
                 be_capture: false,
                 heap_ident: None,
                 symbol_id: 0,
-                is_private: false,
+                is_pub,
             })),
             self.parser_expr()?,
         );
@@ -3274,7 +3282,7 @@ impl<'a> Syntax {
         Ok(stmt)
     }
 
-    fn parser_type_begin_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
+    fn parser_type_begin_stmt(&mut self, is_pub: bool) -> Result<Box<Stmt>, SyntaxError> {
         let mut stmt = self.stmt_new();
         let type_decl = self.parser_type()?;
         let ident = self.must(TokenType::Ident)?.clone();
@@ -3300,7 +3308,7 @@ impl<'a> Syntax {
                 be_capture: false,
                 heap_ident: None,
                 symbol_id: 0,
-                is_private: false,
+                is_pub,
             })),
             self.parser_expr()?,
         );
@@ -3308,7 +3316,7 @@ impl<'a> Syntax {
         Ok(stmt)
     }
 
-    fn parser_constdef_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
+    fn parser_constdef_stmt(&mut self, is_pub: bool) -> Result<Box<Stmt>, SyntaxError> {
         let mut stmt: Box<Stmt> = self.stmt_new();
 
         self.must(TokenType::Const)?;
@@ -3324,7 +3332,7 @@ impl<'a> Syntax {
             symbol_start: const_ident.start,
             symbol_end: const_ident.end,
             symbol_id: 0,
-            is_private: false,
+            is_pub,
         })));
 
         Ok(stmt)
@@ -3421,7 +3429,7 @@ impl<'a> Syntax {
         let mut fndef = AstFnDef::default();
         fndef.symbol_start = start;
         fndef.is_test = true;
-        fndef.is_private = true;
+        fndef.is_pub = false;
         fndef.is_errable = true;
         fndef.test_name = name_token.literal.clone();
 
@@ -3612,9 +3620,9 @@ impl<'a> Syntax {
         Ok(stmt)
     }
 
-    fn parser_label(&mut self) -> Result<Box<Stmt>, SyntaxError> {
+    fn parser_label(&mut self, is_pub: bool) -> Result<Box<Stmt>, SyntaxError> {
         let mut fndef = AstFnDef::default();
-        let mut is_private = false;
+        fndef.is_pub = is_pub;
 
         while self.is(TokenType::Label) {
             let token = self.must(TokenType::Label)?;
@@ -3627,9 +3635,6 @@ impl<'a> Syntax {
                     let literal = self.must(TokenType::StringLiteral)?;
                     fndef.linkid = Some(literal.literal.clone());
                 }
-            } else if token.literal == "local" {
-                is_private = true;
-                fndef.is_private = true;
             } else if token.literal == "where" {
                 if fndef.pending_where_params.is_some() {
                     return Err(SyntaxError(token.start, token.end, "#where redeclared".to_string()));
@@ -3671,39 +3676,15 @@ impl<'a> Syntax {
                     "#where can only be applied to fn/fx".to_string(),
                 ));
             }
-            let result = self.parser_typedef_stmt()?;
-            if is_private {
-                if let AstNode::Typedef(ref typedef) = result.node {
-                    typedef.lock().unwrap().is_private = true;
-                }
-            }
-            Ok(result)
+            self.parser_typedef_stmt(is_pub)
         } else if self.is(TokenType::Fn) || self.is(TokenType::Fx) {
             self.parser_fndef_stmt(fndef)
         } else if self.is(TokenType::Const) {
-            let result = self.parser_constdef_stmt()?;
-            if is_private {
-                if let AstNode::ConstDef(ref constdef) = result.node {
-                    constdef.lock().unwrap().is_private = true;
-                }
-            }
-            Ok(result)
+            self.parser_constdef_stmt(is_pub)
         } else if self.is(TokenType::Var) {
-            let result = self.parser_var_begin_stmt()?;
-            if is_private {
-                if let AstNode::VarDef(ref var_decl, _) = result.node {
-                    var_decl.lock().unwrap().is_private = true;
-                }
-            }
-            Ok(result)
+            self.parser_var_begin_stmt(is_pub)
         } else if self.is_type_begin_stmt() {
-            let result = self.parser_type_begin_stmt()?;
-            if is_private {
-                if let AstNode::VarDef(ref var_decl, _) = result.node {
-                    var_decl.lock().unwrap().is_private = true;
-                }
-            }
-            Ok(result)
+            self.parser_type_begin_stmt(is_pub)
         } else {
             Err(SyntaxError(
                 self.peek().start,
@@ -3779,23 +3760,36 @@ impl<'a> Syntax {
             ));
         }
 
+        let is_pub = self.consume(TokenType::Pub);
+
         let stmt = if self.is(TokenType::Var) {
-            self.parser_var_begin_stmt()?
+            self.parser_var_begin_stmt(is_pub)?
         } else if self.is_type_begin_stmt() {
-            self.parser_type_begin_stmt()?
+            self.parser_type_begin_stmt(is_pub)?
         } else if self.is(TokenType::Label) {
-            self.parser_label()?
+            self.parser_label(is_pub)?
         } else if self.is(TokenType::Test) {
+            if is_pub {
+                return Err(SyntaxError(self.peek().start, self.peek().end, "pub cannot be applied to test".to_string()));
+            }
             self.parser_test_stmt()?
         } else if self.is(TokenType::Fn) || self.is(TokenType::Fx) {
-            self.parser_fndef_stmt(AstFnDef::default())?
+            let mut fndef = AstFnDef::default();
+            fndef.is_pub = is_pub;
+            self.parser_fndef_stmt(fndef)?
         } else if self.is(TokenType::Import) {
+            if is_pub {
+                return Err(SyntaxError(self.peek().start, self.peek().end, "pub cannot be applied to import".to_string()));
+            }
             self.parser_import_stmt()?
         } else if self.is(TokenType::Type) {
-            self.parser_typedef_stmt()?
+            self.parser_typedef_stmt(is_pub)?
         } else if self.is(TokenType::Const) {
-            self.parser_constdef_stmt()?
+            self.parser_constdef_stmt(is_pub)?
         } else {
+            if is_pub {
+                return Err(SyntaxError(self.peek().start, self.peek().end, "pub can only be applied to module-level declarations".to_string()));
+            }
             return Err(SyntaxError(
                 self.peek().start,
                 self.peek().end,
@@ -3815,10 +3809,10 @@ impl<'a> Syntax {
     fn parser_for_init_stmt(&mut self) -> Result<Box<Stmt>, SyntaxError> {
         let stmt = if self.is(TokenType::Var) {
             // var 声明语句
-            self.parser_var_begin_stmt()?
+            self.parser_var_begin_stmt(false)?
         } else if self.is_type_begin_stmt() {
             // 类型声明语句
-            self.parser_type_begin_stmt()?
+            self.parser_type_begin_stmt(false)?
         } else if self.is(TokenType::LeftParen) {
             // 元组解构赋值语句
             self.parser_left_paren_begin_stmt()?
@@ -3837,10 +3831,16 @@ impl<'a> Syntax {
     }
 
     fn parser_local_stmt_core(&mut self, consume_stmt_end: bool) -> Result<Box<Stmt>, SyntaxError> {
-        let stmt = if self.is(TokenType::Var) {
-            self.parser_var_begin_stmt()?
+        let stmt = if self.is(TokenType::Pub) {
+            return Err(SyntaxError(
+                self.peek().start,
+                self.peek().end,
+                "pub can only be applied to module-level declarations".to_string(),
+            ));
+        } else if self.is(TokenType::Var) {
+            self.parser_var_begin_stmt(false)?
         } else if self.is_type_begin_stmt() {
-            self.parser_type_begin_stmt()?
+            self.parser_type_begin_stmt(false)?
         } else if self.is(TokenType::LeftParen) {
             self.parser_left_paren_begin_stmt()?
         } else if self.is(TokenType::Test) {
@@ -3854,7 +3854,7 @@ impl<'a> Syntax {
         } else if self.is(TokenType::Let) {
             self.parser_let_stmt()?
         } else if self.is(TokenType::Label) {
-            self.parser_label()?
+            self.parser_label(false)?
         } else if self.is(TokenType::If) {
             self.parser_if_stmt()?
         } else if self.is(TokenType::For) {
@@ -3866,9 +3866,9 @@ impl<'a> Syntax {
         } else if self.is(TokenType::Import) {
             self.parser_import_stmt()?
         } else if self.is(TokenType::Type) {
-            self.parser_typedef_stmt()?
+            self.parser_typedef_stmt(false)?
         } else if self.is(TokenType::Const) {
-            self.parser_constdef_stmt()?
+            self.parser_constdef_stmt(false)?
         } else if self.is(TokenType::Continue) {
             self.parser_continue_stmt()?
         } else if self.is(TokenType::Break) {
@@ -4081,7 +4081,7 @@ impl<'a> Syntax {
                 be_capture: false,
                 heap_ident: None,
                 symbol_id: 0,
-                is_private: false,
+                is_pub: false,
             })),
             call_expr.clone(),
         );
@@ -4159,7 +4159,7 @@ impl<'a> Syntax {
             be_capture: false,
             heap_ident: None,
             symbol_id: 0,
-            is_private: false,
+            is_pub: false,
         }));
 
         let catch_body = self.parser_body(false)?;
@@ -4258,7 +4258,7 @@ impl<'a> Syntax {
                     be_capture: false,
                     heap_ident: None,
                     symbol_id: 0,
-                    is_private: false,
+                    is_pub: false,
                 })));
             }
 
