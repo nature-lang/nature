@@ -1,0 +1,123 @@
+name: Test Local
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+env:
+  BUILD_TYPE: Release
+
+concurrency:
+  group: test-local-${{ github.event_name }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  test-local:
+    name: Test (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-arm64
+            runs-on: [self-hosted, linux, arm64]
+          - target: darwin-arm64
+            runs-on: [self-hosted, macos, arm64]
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          submodules: true
+
+      - name: Setup Go for package
+        uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: package/go.sum
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: nls
+          prefix-key: nls
+          cache-on-failure: true
+
+      - name: Setup Rust for nls
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Setup Musl for Linux
+        if: ${{ contains(matrix.target, 'linux') }}
+        run: sudo apt-get install musl-tools
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          append-timestamp: false
+          key: ${{ matrix.target }}
+
+      - name: Cache LLaMA model files
+        uses: actions/cache@v4
+        with:
+          path: tests/features/cases/20250324_00_llama/stories15M.bin
+          key: llama-model-stories15M-${{ hashFiles('tests/features/cases/20250324_00_llama/README.md') }}
+          restore-keys: |
+            llama-model-stories15M-
+
+      - name: Download LLaMA model file
+        run: |
+          cd tests/features/cases/20250324_00_llama
+          if [ ! -f "stories15M.bin" ]; then
+            echo "Downloading stories15M.bin model file..."
+            wget https://huggingface.co/karpathy/tinyllamas/resolve/main/stories15M.bin
+          else
+            echo "Model file stories15M.bin already exists (from cache)"
+          fi
+
+      - name: Set job parallelism
+        id: parallelism
+        run: |
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            echo "j_flag=$(nproc)" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            echo "j_flag=$(sysctl -n hw.ncpu)" >> "$GITHUB_OUTPUT"
+          else
+            echo "j_flag=2" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build Runtime
+        uses: threeal/cmake-action@v2.1.0
+        with:
+          c-compiler: ${{ contains(matrix.target, 'linux') && 'musl-gcc' || 'clang' }}
+          build-dir: build-runtime
+          args: -S runtime
+          options: |
+            CMAKE_BUILD_TYPE=Debug
+            CMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/cmake/${{ matrix.target }}-toolchain.cmake
+            CMAKE_C_COMPILER_LAUNCHER=ccache
+            CMAKE_CXX_COMPILER_LAUNCHER=ccache
+          build-args:
+            --target runtime
+
+      - name: Build Project
+        uses: threeal/cmake-action@v2.1.0
+        with:
+          c-compiler: ${{ contains(matrix.target, 'linux') && 'musl-gcc' || 'clang' }}
+          build-dir: build-release
+          options: |
+            CMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }}
+            CMAKE_VERBOSE_MAKEFILE=ON
+            CPACK_OUTPUT_FILE_PREFIX=${{ github.workspace }}/release
+            CMAKE_C_COMPILER_LAUNCHER=ccache
+            CMAKE_CXX_COMPILER_LAUNCHER=ccache
+          build-args:
+            -- -j${{ steps.parallelism.outputs.j_flag }}
+
+      - name: Test
+        uses: threeal/ctest-action@v1.1.0
+        with:
+          test-dir: build-release/tests
+          args: -E "20250424_00_parker" --timeout 80
