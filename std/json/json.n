@@ -7,8 +7,9 @@ import runtime
 
 var null_hash = @reflect_hash(null) 
 
-// number 是无损数字类型（等价 Go 的 json.Number）：JSON 数字以原始文本保留，
-// 不经 f64 转换，避免大整数/长 ID 精度丢失
+// number is the lossless JSON number type (like Go's json.Number): numbers
+// keep their original token instead of being coerced through f64, so large
+// integers and long IDs round-trip exactly.
 type number = string
 
 var number_hash = @reflect_hash(number)
@@ -84,7 +85,7 @@ fn serialize_value(anyptr p, ref<reflect.type_t> t):[u8]! {
 
             var any_type = reflect.typeof_hash(rv.rtype.hash)
 
-            // json.number 按原始数字文本输出，不加引号
+            // json.number is emitted verbatim (no quotes)
             var any_p = &rv.value as anyptr
             if any_type.storage_kind == reflect.storage_kind_t.IND {
                 any_p = rv.value
@@ -143,7 +144,7 @@ fn serialize_string(string s):[u8] {
                 result.push('t'.char())
             }
             _ -> {
-                // 对于控制字符（0-31），使用unicode转义
+                // escape control characters (0-31) as unicode escapes
                 if c < 32 {
                     result.push('\\'.char())
                     result.push('u'.char())
@@ -152,7 +153,7 @@ fn serialize_string(string s):[u8] {
                 } else if c < 0x80 {
                     result.push(c)
                 } else {
-                    // 非法 UTF-8 替换为 \ufffd（与 Go 的 json.Marshal 一致）
+                    // invalid UTF-8 is replaced with \ufffd (like Go's json.Marshal)
                     var rune_len = utf8_len(bytes, i)
                     if rune_len == 0 {
                         result.append(`\ufffd` as [u8])
@@ -602,7 +603,7 @@ fn deserialize_t.parser_string(&self):string! {
                     var codepoint = self.parser_hex4()
 
                     if codepoint >= 0xD800 && codepoint <= 0xDBFF {
-                        // 高代理项: 尝试配对后续的 \uXXXX 低代理项
+                        // high surrogate: try to pair a following \uXXXX low surrogate
                         int low = -1
                         if self.cursor + 6 <= self.data.len() &&
                            self.data[self.cursor] == '\\'.char() &&
@@ -614,11 +615,11 @@ fn deserialize_t.parser_string(&self):string! {
                             self.parser_hex4()
                             codepoint = 0x10000 + ((codepoint - 0xD800) << 10) + (low - 0xDC00)
                         } else {
-                            // 未配对的代理项替换为 U+FFFD（与 Go 一致）
+                            // unpaired surrogate is replaced with U+FFFD (like Go)
                             codepoint = 0xFFFD
                         }
                     } else if codepoint >= 0xDC00 && codepoint <= 0xDFFF {
-                        // 孤立的低代理项替换为 U+FFFD（与 Go 一致）
+                        // lone low surrogate is replaced with U+FFFD (like Go)
                         codepoint = 0xFFFD
                     }
 
@@ -637,7 +638,7 @@ fn deserialize_t.parser_string(&self):string! {
             if c < 0x80 {
                 result.push(c)
             } else {
-                // 非法 UTF-8 字节替换为 U+FFFD（与 Go 的解码行为一致）
+                // invalid raw UTF-8 bytes are replaced with U+FFFD (like Go's decoder)
                 var rune_len = utf8_len(self.data, self.cursor)
                 if rune_len == 0 {
                     result.push(0xEF as u8)
@@ -840,7 +841,7 @@ fn append_utf8([u8] result, int codepoint):[u8] {
     return result
 }
 
-// 返回从 cursor 开始的合法 UTF-8 序列长度; 非法序列返回 0
+// Returns the length of the UTF-8 sequence starting at cursor, or 0 if invalid
 fn utf8_len([u8] data, int cursor):int {
     if cursor >= data.len() {
         return 0
@@ -876,7 +877,7 @@ fn utf8_len([u8] data, int cursor):int {
     return length
 }
 
-// 非推进式读取 4 位十六进制; 非法时返回 -1
+// Non-advancing 4-hex-digit read; returns -1 on invalid input
 fn hex4_peek([u8] data, int cursor):int {
     if cursor + 4 > data.len() {
         return -1
@@ -900,9 +901,9 @@ fn hex4_peek([u8] data, int cursor):int {
     return value
 }
 
-// parse 将 JSON 文本解析为动态值（等价 Go 的 Unmarshal + UseNumber）：
-// 对象 -> {string:any}，数组 -> [any]，字符串 -> string，
-// 布尔 -> bool，null -> null，数字 -> number（无损原始文本）
+// parse parses JSON text into a dynamic value (like Go's Unmarshal + UseNumber):
+// objects -> {string:any}, arrays -> [any], strings -> string,
+// bools -> bool, null -> null, numbers -> number (lossless original token)
 fn parse(string source):any! {
     return parse_with_depth(source, DEFAULT_MAX_DEPTH)
 }
@@ -1064,13 +1065,14 @@ type reader_t = struct{
     bool complete
 }
 
-// reader 创建增量解析器（等价 Go 的 json.Decoder，push 模型）
+// reader creates an incremental parser (like Go's json.Decoder, push model)
 fn reader():ref<reader_t> {
     return new reader_t(max_depth = DEFAULT_MAX_DEPTH)
 }
 
-// write 喂入一个数据块；返回 true 表示一个完整根值已被框架识别。
-// 多余的非空白字节会被拒绝，一个 reader 只消费一个值。
+// write feeds one data chunk; returns true once a complete root value has
+// been framed. Extra non-whitespace bytes are rejected, so one reader
+// always consumes exactly one value.
 fn reader_t.write(&self, [u8] chunk):bool! {
     self.data.append(chunk)
 

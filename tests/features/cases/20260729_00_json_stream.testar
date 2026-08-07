@@ -63,7 +63,7 @@ fn main() {
 import json
 
 fn main() {
-    // 无损数字: 9007199254740993 超出 f64 精度，number 保留原始文本
+    // lossless number: 9007199254740993 exceeds f64 precision, number keeps the raw token
     var value = json.parse('{"big":9007199254740993,"emoji":"\\uD83D\\uDE00","items":[true,null]}') as {string:any}
     assert(value['big'] as json.number == '9007199254740993' as json.number)
     assert(value['emoji'] as string == '😀')
@@ -71,7 +71,7 @@ fn main() {
     assert(items[0] as bool)
     assert(json.serialize(items[1]) == 'null')
 
-    // round-trip: serialize 后重新 parse 仍无损
+    // round-trip: parse -> serialize -> parse stays lossless
     var encoded = json.serialize(value)
     var reparsed = json.parse(encoded) as {string:any}
     assert(reparsed['big'] as json.number == '9007199254740993' as json.number)
@@ -90,7 +90,7 @@ fn rejects(string source):bool {
 }
 
 fn main() {
-    // 嵌套深度超过 256 时拒绝（Go 同样有硬编码深度限制）
+    // nesting deeper than 256 is rejected (Go has a hardcoded limit too)
     string deep = ''
     for int i = 0; i < 300; i += 1 {
         deep += '['
@@ -108,20 +108,20 @@ fn main() {
 import json
 
 fn main() {
-    // 分块喂入，最后一块返回 true
+    // chunked feeding; the final chunk returns true
     var r = json.reader()
     assert(!r.write('{"a":' as [u8]))
     assert(r.write('1}' as [u8]))
     var v = r.value() as {string:any}
     assert(v['a'] as json.number == '1' as json.number)
 
-    // 单块完整喂入
+    // single-chunk input
     var r2 = json.reader()
     assert(r2.write('[1,2]' as [u8]))
     var arr = r2.value() as [any]
     assert(arr[1] as json.number == '2' as json.number)
 
-    // 尾随非空白数据 → write 抛错
+    // trailing non-whitespace data -> write errors
     var r3 = json.reader()
     bool trailing = false
     var ok = r3.write('{} x' as [u8]) catch e {
@@ -130,7 +130,7 @@ fn main() {
     }
     assert(trailing)
 
-    // 框架未完成时 value() 抛错
+    // value() errors while framing is incomplete
     var r4 = json.reader()
     r4.write('[1' as [u8])
     var incomplete = false
