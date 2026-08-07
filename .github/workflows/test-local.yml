@@ -49,6 +49,10 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Test NLS
+        working-directory: nls
+        run: cargo test --all --locked
+
       - name: Setup Musl for Linux
         if: ${{ contains(matrix.target, 'linux') }}
         run: sudo apt-get install musl-tools
