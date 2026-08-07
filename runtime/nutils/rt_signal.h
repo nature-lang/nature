@@ -35,6 +35,7 @@ static const int64_t all_signals[] = {
         SIGUSR1,
         SIGUSR2,
         SIGTERM, // 默认行为是终止进程
+        SIGWINCH,
 };
 #endif
 
