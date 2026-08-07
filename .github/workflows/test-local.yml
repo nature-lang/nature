@@ -51,7 +51,7 @@ jobs:
 
       - name: Setup Musl for Linux
         if: ${{ contains(matrix.target, 'linux') }}
-        run: sudo apt-get install musl-tools
+        run: sudo apt-get install -y musl-tools
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2
