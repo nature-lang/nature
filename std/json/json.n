@@ -7,6 +7,16 @@ import runtime
 
 var null_hash = @reflect_hash(null) 
 
+// number is the lossless JSON number type (like Go's json.Number): numbers
+// keep their original token instead of being coerced through f64, so large
+// integers and long IDs round-trip exactly.
+pub type number = string
+
+var number_hash = @reflect_hash(number)
+
+const DEFAULT_MAX_DEPTH = 256
+const DEFAULT_MAX_BYTES = 16777216
+
 // Convert object to json string
 pub fn serialize<T>(T object):string! {
     var t = reflect.typeof(object)
@@ -76,10 +86,13 @@ fn serialize_value(anyptr p, ref<reflect.type_t> t):[u8]! {
 
             var any_type = reflect.typeof_hash(rv.rtype.hash)
 
-            // get value p
+            // json.number is emitted verbatim (no quotes)
             var any_p = &rv.value as anyptr
             if any_type.storage_kind == reflect.storage_kind_t.IND {
                 any_p = rv.value
+            }
+            if rv.rtype.hash == number_hash {
+                return unsafe.ptr_to<string>(any_p) as [u8]
             }
 
             return serialize_value(any_p, any_type)
@@ -99,7 +112,9 @@ fn serialize_string(string s):[u8] {
     [u8] result = ['\"'.char()]
     
     var bytes = s as [u8]
-    for i, c in bytes {
+    int i = 0
+    for i < bytes.len() {
+        var c = bytes[i]
         match c {
             '\"'.char() -> {
                 result.push('\\'.char())
@@ -130,17 +145,29 @@ fn serialize_string(string s):[u8] {
                 result.push('t'.char())
             }
             _ -> {
-                // 对于控制字符（0-31），使用unicode转义
+                // escape control characters (0-31) as unicode escapes
                 if c < 32 {
                     result.push('\\'.char())
                     result.push('u'.char())
                     var hex = fmt.sprintf('%04x', c as int)
                     result.append(hex as [u8])
-                } else {
+                } else if c < 0x80 {
                     result.push(c)
+                } else {
+                    // invalid UTF-8 is replaced with \ufffd (like Go's json.Marshal)
+                    var rune_len = utf8_len(bytes, i)
+                    if rune_len == 0 {
+                        result.append(`\ufffd` as [u8])
+                        i += 1
+                        continue
+                    }
+                    result.append(bytes.slice(i, i + rune_len))
+                    i += rune_len
+                    continue
                 }
             }
         }
+        i += 1
     }
     
     result.push('\"'.char())
@@ -224,15 +251,24 @@ fn serialize_map(anyptr p, ref<reflect.type_t> t):[u8]! {
 type deserialize_t = struct{
     int cursor
     [u8] data
+    int depth
+    int max_depth
 }
 
 // Convert json string to object
 pub fn deserialize<T>(string s):T! {
+    if s.len() > DEFAULT_MAX_BYTES {
+        throw errorf('JSON input exceeds %d bytes', DEFAULT_MAX_BYTES)
+    }
     var val = @default(T)
     var t = reflect.typeof(val)
 
-    var d = new deserialize_t(data = s as [u8])
+    var d = new deserialize_t(data = s as [u8], max_depth = DEFAULT_MAX_DEPTH)
     d.parser(&val as anyptr, t)
+    d.skip_whitespace()
+    if d.cursor != d.data.len() {
+        throw errorf('unexpected trailing data at position %d', d.cursor)
+    }
 
     return val
 }
@@ -325,8 +361,10 @@ fn deserialize_t.parser(&self, anyptr p, ref<reflect.type_t> t):void! {
 
 // p points to the stack address of struct
 fn deserialize_t.parser_struct(&self, anyptr p, ref<reflect.type_t> t):void! {
+    self.enter_container()
     self.must('{')
     if self.consume('}') {
+        self.leave_container()
         return
     }
 
@@ -356,13 +394,16 @@ fn deserialize_t.parser_struct(&self, anyptr p, ref<reflect.type_t> t):void! {
             self.must(',')
         }
     }
+    self.leave_container()
 }
 
 fn deserialize_t.parser_vec(&self, anyptr p, ref<reflect.type_t> t):void! {
+    self.enter_container()
     var rv = p as ptr<reflect.vec_t>
     rv.length = 0 // Assignment from zero
     self.must('[')
     if self.consume(']') {
+        self.leave_container()
         return
     }
 
@@ -382,12 +423,15 @@ fn deserialize_t.parser_vec(&self, anyptr p, ref<reflect.type_t> t):void! {
             self.must(',')
         }
     }
+    self.leave_container()
 }
 
 fn deserialize_t.parser_map(&self, anyptr p, ref<reflect.type_t> t):void! {
+    self.enter_container()
     var rv = p as ptr<reflect.map_t>
     self.must('{')
     if self.consume('}') {
+        self.leave_container()
         return
     }
     
@@ -407,6 +451,7 @@ fn deserialize_t.parser_map(&self, anyptr p, ref<reflect.type_t> t):void! {
             self.must(',')
         }
     }
+    self.leave_container()
 }
 
 fn deserialize_t.parser_bool(&self):bool! {
@@ -430,7 +475,7 @@ fn deserialize_t.parser_bool(&self):bool! {
 }
 
 fn deserialize_t.parser_number(&self):f64! {
-    var start = self.cursor
+    self.skip_whitespace()
     var negative = false
     var len = self.data.len()
     
@@ -445,10 +490,18 @@ fn deserialize_t.parser_number(&self):f64! {
     
     var integer_part = 0.0
     
-    // parser integer part
-    for self.cursor < len && self.is_digit(self.data[self.cursor]) {
+    // JSON forbids leading zeroes except for the value zero itself.
+    if self.data[self.cursor] == '0'.char() {
         integer_part = integer_part * 10.0 + (self.data[self.cursor] - '0'.char()) as f64
         self.cursor += 1
+        if self.cursor < len && self.is_digit(self.data[self.cursor]) {
+            throw errorf('leading zero in number at position %d', self.cursor)
+        }
+    } else {
+        for self.cursor < len && self.is_digit(self.data[self.cursor]) {
+            integer_part = integer_part * 10.0 + (self.data[self.cursor] - '0'.char()) as f64
+            self.cursor += 1
+        }
     }
     
     var result = integer_part
@@ -456,6 +509,9 @@ fn deserialize_t.parser_number(&self):f64! {
     // parsing optional fractional parts
     if self.cursor < len && self.data[self.cursor] == '.'.char() {
         self.cursor += 1
+        if self.cursor >= len || !self.is_digit(self.data[self.cursor]) {
+            throw errorf('expected digit after decimal point at position %d', self.cursor)
+        }
         var decimal_part = 0.0
         var decimal_places = 1.0
         
@@ -479,11 +535,18 @@ fn deserialize_t.parser_number(&self):f64! {
         } else if self.cursor < len && self.data[self.cursor] == '+'.char() {
             self.cursor += 1
         }
+
+        if self.cursor >= len || !self.is_digit(self.data[self.cursor]) {
+            throw errorf('expected exponent digit at position %d', self.cursor)
+        }
         
         var exponent = 0
         for self.cursor < len && self.is_digit(self.data[self.cursor]) {
             exponent = exponent * 10 + (self.data[self.cursor] - '0'.char()) as int
             self.cursor += 1
+            if exponent > 400 {
+                throw errorf('number cannot be represented as f64 at position %d', self.cursor)
+            }
         }
         
         var exp_multiplier = 1.0
@@ -536,17 +599,59 @@ fn deserialize_t.parser_string(&self):string! {
                 'n'.char() -> result.push('\n'.char())
                 'r'.char() -> result.push('\r'.char())
                 't'.char() -> result.push('\t'.char())
+                'u'.char() -> {
+                    self.cursor += 1
+                    var codepoint = self.parser_hex4()
+
+                    if codepoint >= 0xD800 && codepoint <= 0xDBFF {
+                        // high surrogate: try to pair a following \uXXXX low surrogate
+                        int low = -1
+                        if self.cursor + 6 <= self.data.len() &&
+                           self.data[self.cursor] == '\\'.char() &&
+                           self.data[self.cursor + 1] == 'u'.char() {
+                            low = hex4_peek(self.data, self.cursor + 2)
+                        }
+                        if low >= 0xDC00 && low <= 0xDFFF {
+                            self.cursor += 2
+                            self.parser_hex4()
+                            codepoint = 0x10000 + ((codepoint - 0xD800) << 10) + (low - 0xDC00)
+                        } else {
+                            // unpaired surrogate is replaced with U+FFFD (like Go)
+                            codepoint = 0xFFFD
+                        }
+                    } else if codepoint >= 0xDC00 && codepoint <= 0xDFFF {
+                        // lone low surrogate is replaced with U+FFFD (like Go)
+                        codepoint = 0xFFFD
+                    }
+
+                    result = append_utf8(result, codepoint)
+                    continue
+                }
                 _ -> {
                     throw errorf('invalid escape sequence at position %d', self.cursor)
                 }
             }
         } else {
-            // detect unescaped characters
-            if c == 9 || c == 10 || c == 13 {
+            if c < 0x20 {
                 throw errorf('invalid character in string literal at position %d', self.cursor)
             }
 
-            result.push(c)
+            if c < 0x80 {
+                result.push(c)
+            } else {
+                // invalid raw UTF-8 bytes are replaced with U+FFFD (like Go's decoder)
+                var rune_len = utf8_len(self.data, self.cursor)
+                if rune_len == 0 {
+                    result.push(0xEF as u8)
+                    result.push(0xBF as u8)
+                    result.push(0xBD as u8)
+                    self.cursor += 1
+                    continue
+                }
+                result.append(self.data.slice(self.cursor, self.cursor + rune_len))
+                self.cursor += rune_len
+                continue
+            }
         }
         
         self.cursor += 1
@@ -556,6 +661,7 @@ fn deserialize_t.parser_string(&self):string! {
 }
 
 fn deserialize_t.parser_nullable(&self, anyptr p, ref<reflect.type_t> t):void! {
+    self.skip_whitespace()
     if self.cursor >= self.data.len() {
         throw errorf('unexpected end of input at position %d', self.cursor)
     }
@@ -598,11 +704,10 @@ fn deserialize_t.parser_nullable(&self, anyptr p, ref<reflect.type_t> t):void! {
 }
 
 fn deserialize_t.parser_any(&self):any! {
+    self.skip_whitespace()
     if self.cursor >= self.data.len() {
         throw errorf('unexpected end of input at position %d', self.cursor)
     }
-
-    self.skip_whitespace()
     var c = self.data[self.cursor]
 
      match c {
@@ -676,4 +781,392 @@ fn deserialize_t.must(&self, string s):void! {
     if !self.consume(s) {
         throw errorf('expected `%s` at position %d', s, self.cursor)
     }
+}
+
+fn deserialize_t.enter_container(&self):void! {
+    self.depth += 1
+    if self.depth > self.max_depth {
+        throw errorf('JSON nesting exceeds %d at position %d', self.max_depth, self.cursor)
+    }
+}
+
+fn deserialize_t.leave_container(&self) {
+    self.depth -= 1
+}
+
+fn deserialize_t.parser_hex4(&self):int! {
+    if self.cursor + 4 > self.data.len() {
+        throw errorf('incomplete unicode escape at position %d', self.cursor)
+    }
+
+    int value = 0
+    for int i = 0; i < 4; i += 1 {
+        var c = self.data[self.cursor + i]
+        int digit = -1
+        if c >= '0'.char() && c <= '9'.char() {
+            digit = (c - '0'.char()) as int
+        } else if c >= 'a'.char() && c <= 'f'.char() {
+            digit = (c - 'a'.char()) as int + 10
+        } else if c >= 'A'.char() && c <= 'F'.char() {
+            digit = (c - 'A'.char()) as int + 10
+        } else {
+            throw errorf('invalid unicode escape at position %d', self.cursor + i)
+        }
+        value = value * 16 + digit
+    }
+    self.cursor += 4
+    return value
+}
+
+fn append_utf8([u8] result, int codepoint):[u8] {
+    if codepoint < 0 || codepoint > 0x10FFFF ||
+       (codepoint >= 0xD800 && codepoint <= 0xDFFF) {
+        codepoint = 0xFFFD
+    }
+
+    if codepoint <= 0x7F {
+        result.push(codepoint as u8)
+    } else if codepoint <= 0x7FF {
+        result.push((0xC0 | (codepoint >> 6)) as u8)
+        result.push((0x80 | (codepoint & 0x3F)) as u8)
+    } else if codepoint <= 0xFFFF {
+        result.push((0xE0 | (codepoint >> 12)) as u8)
+        result.push((0x80 | ((codepoint >> 6) & 0x3F)) as u8)
+        result.push((0x80 | (codepoint & 0x3F)) as u8)
+    } else {
+        result.push((0xF0 | (codepoint >> 18)) as u8)
+        result.push((0x80 | ((codepoint >> 12) & 0x3F)) as u8)
+        result.push((0x80 | ((codepoint >> 6) & 0x3F)) as u8)
+        result.push((0x80 | (codepoint & 0x3F)) as u8)
+    }
+    return result
+}
+
+// Returns the length of the UTF-8 sequence starting at cursor, or 0 if invalid
+fn utf8_len([u8] data, int cursor):int {
+    if cursor >= data.len() {
+        return 0
+    }
+    var first = data[cursor]
+    int length = 0
+    if first >= 0xC2 && first <= 0xDF {
+        length = 2
+    } else if first >= 0xE0 && first <= 0xEF {
+        length = 3
+    } else if first >= 0xF0 && first <= 0xF4 {
+        length = 4
+    } else {
+        return 0
+    }
+
+    if cursor + length > data.len() {
+        return 0
+    }
+    for int i = 1; i < length; i += 1 {
+        if data[cursor + i] < 0x80 || data[cursor + i] > 0xBF {
+            return 0
+        }
+    }
+
+    var second = data[cursor + 1]
+    if (first == 0xE0 && second < 0xA0) ||
+       (first == 0xED && second > 0x9F) ||
+       (first == 0xF0 && second < 0x90) ||
+       (first == 0xF4 && second > 0x8F) {
+        return 0
+    }
+    return length
+}
+
+// Non-advancing 4-hex-digit read; returns -1 on invalid input
+fn hex4_peek([u8] data, int cursor):int {
+    if cursor + 4 > data.len() {
+        return -1
+    }
+
+    int value = 0
+    for int i = 0; i < 4; i += 1 {
+        var c = data[cursor + i]
+        int digit = -1
+        if c >= '0'.char() && c <= '9'.char() {
+            digit = (c - '0'.char()) as int
+        } else if c >= 'a'.char() && c <= 'f'.char() {
+            digit = (c - 'a'.char()) as int + 10
+        } else if c >= 'A'.char() && c <= 'F'.char() {
+            digit = (c - 'A'.char()) as int + 10
+        } else {
+            return -1
+        }
+        value = value * 16 + digit
+    }
+    return value
+}
+
+// parse parses JSON text into a dynamic value (like Go's Unmarshal + UseNumber):
+// objects -> {string:any}, arrays -> [any], strings -> string,
+// bools -> bool, null -> null, numbers -> number (lossless original token)
+pub fn parse(string source):any! {
+    return parse_with_depth(source, DEFAULT_MAX_DEPTH)
+}
+
+fn parse_with_depth(string source, int max_depth):any! {
+    if max_depth <= 0 {
+        throw errorf('JSON max depth must be positive')
+    }
+
+    var parser = new deserialize_t(
+        data = source as [u8],
+        max_depth = max_depth,
+    )
+    var value = parser.parser_value()
+    parser.skip_whitespace()
+    if parser.cursor != parser.data.len() {
+        throw errorf('unexpected trailing data at position %d', parser.cursor)
+    }
+    return value
+}
+
+fn deserialize_t.parser_value(&self):any! {
+    self.skip_whitespace()
+    if self.cursor >= self.data.len() {
+        throw errorf('unexpected end of input at position %d', self.cursor)
+    }
+
+    var c = self.data[self.cursor]
+    match c {
+        'n'.char() -> {
+            self.must('null')
+            return null
+        }
+        't'.char()|'f'.char() -> {
+            return self.parser_bool()
+        }
+        '"'.char() -> {
+            return self.parser_string()
+        }
+        '['.char() -> {
+            return self.parser_value_array()
+        }
+        '{'.char() -> {
+            return self.parser_value_object()
+        }
+        _ -> {
+            return self.parser_number_token() as number
+        }
+    }
+}
+
+fn deserialize_t.parser_value_array(&self):[any]! {
+    self.enter_container()
+    self.must('[')
+    [any] values = []
+    if self.consume(']') {
+        self.leave_container()
+        return values
+    }
+
+    for true {
+        values.push(self.parser_value())
+        if self.consume(']') {
+            break
+        }
+        self.must(',')
+    }
+    self.leave_container()
+    return values
+}
+
+fn deserialize_t.parser_value_object(&self):{string:any}! {
+    self.enter_container()
+    self.must('{')
+    {string:any} values = {}
+    if self.consume('}') {
+        self.leave_container()
+        return values
+    }
+
+    for true {
+        var key = self.parser_string()
+        self.must(':')
+        values[key] = self.parser_value()
+        if self.consume('}') {
+            break
+        }
+        self.must(',')
+    }
+    self.leave_container()
+    return values
+}
+
+fn deserialize_t.parser_number_token(&self):string! {
+    self.skip_whitespace()
+    var start = self.cursor
+    var len = self.data.len()
+
+    if self.cursor < len && self.data[self.cursor] == '-'.char() {
+        self.cursor += 1
+    }
+    if self.cursor >= len {
+        throw errorf('invalid number at position %d', self.cursor)
+    }
+
+    if self.data[self.cursor] == '0'.char() {
+        self.cursor += 1
+        if self.cursor < len && self.is_digit(self.data[self.cursor]) {
+            throw errorf('leading zero in number at position %d', self.cursor)
+        }
+    } else if self.data[self.cursor] >= '1'.char() && self.data[self.cursor] <= '9'.char() {
+        for self.cursor < len && self.is_digit(self.data[self.cursor]) {
+            self.cursor += 1
+        }
+    } else {
+        throw errorf('invalid number at position %d', self.cursor)
+    }
+
+    if self.cursor < len && self.data[self.cursor] == '.'.char() {
+        self.cursor += 1
+        if self.cursor >= len || !self.is_digit(self.data[self.cursor]) {
+            throw errorf('expected digit after decimal point at position %d', self.cursor)
+        }
+        for self.cursor < len && self.is_digit(self.data[self.cursor]) {
+            self.cursor += 1
+        }
+    }
+
+    if self.cursor < len &&
+       (self.data[self.cursor] == 'e'.char() || self.data[self.cursor] == 'E'.char()) {
+        self.cursor += 1
+        if self.cursor < len &&
+           (self.data[self.cursor] == '+'.char() || self.data[self.cursor] == '-'.char()) {
+            self.cursor += 1
+        }
+        if self.cursor >= len || !self.is_digit(self.data[self.cursor]) {
+            throw errorf('expected exponent digit at position %d', self.cursor)
+        }
+        for self.cursor < len && self.is_digit(self.data[self.cursor]) {
+            self.cursor += 1
+        }
+    }
+
+    return self.data.slice(start, self.cursor) as string
+}
+
+// reader_t incrementally frames one JSON value across arbitrary input
+// chunks (push model, like Boost.JSON's stream_parser). Once framing is
+// complete, value() performs the strict semantic parse.
+type reader_t = struct{
+    [u8] data
+    [u8] containers
+    int scan_cursor
+    int max_depth
+    bool started
+    bool in_string
+    bool escaped
+    bool scalar
+    bool complete
+}
+
+// reader creates an incremental parser (like Go's json.Decoder, push model)
+pub fn reader():ref<reader_t> {
+    return new reader_t(max_depth = DEFAULT_MAX_DEPTH)
+}
+
+// write feeds one data chunk; returns true once a complete root value has
+// been framed. Extra non-whitespace bytes are rejected, so one reader
+// always consumes exactly one value.
+pub fn reader_t.write(&self, [u8] chunk):bool! {
+    self.data.append(chunk)
+
+    for self.scan_cursor < self.data.len() {
+        var c = self.data[self.scan_cursor]
+
+        if self.complete {
+            if !json_space(c) {
+                throw errorf('unexpected trailing data at position %d', self.scan_cursor)
+            }
+            self.scan_cursor += 1
+            continue
+        }
+
+        if !self.started {
+            if json_space(c) {
+                self.scan_cursor += 1
+                continue
+            }
+            self.started = true
+            if c == '"'.char() {
+                self.in_string = true
+                self.scalar = true
+            } else if c == '{'.char() || c == '['.char() {
+                self.containers.push(c)
+            } else {
+                self.scalar = true
+            }
+            self.scan_cursor += 1
+            continue
+        }
+
+        if self.in_string {
+            if self.escaped {
+                self.escaped = false
+            } else if c == '\\'.char() {
+                self.escaped = true
+            } else if c == '"'.char() {
+                self.in_string = false
+                if self.scalar && self.containers.len() == 0 {
+                    self.complete = true
+                }
+            } else if c < 0x20 {
+                throw errorf('invalid character in string literal at position %d', self.scan_cursor)
+            }
+            self.scan_cursor += 1
+            continue
+        }
+
+        if self.scalar {
+            if json_space(c) {
+                self.complete = true
+                self.scan_cursor += 1
+                continue
+            }
+            self.scan_cursor += 1
+            continue
+        }
+
+        if c == '"'.char() {
+            self.in_string = true
+        } else if c == '{'.char() || c == '['.char() {
+            self.containers.push(c)
+            if self.containers.len() > self.max_depth {
+                throw errorf('JSON nesting exceeds %d at position %d', self.max_depth, self.scan_cursor)
+            }
+        } else if c == '}'.char() || c == ']'.char() {
+            if self.containers.len() == 0 {
+                throw errorf('unexpected closing delimiter at position %d', self.scan_cursor)
+            }
+            var opening = self.containers[self.containers.len() - 1]
+            if (opening == '{'.char() && c != '}'.char()) ||
+               (opening == '['.char() && c != ']'.char()) {
+                throw errorf('mismatched closing delimiter at position %d', self.scan_cursor)
+            }
+            self.containers = self.containers.slice(0, self.containers.len() - 1)
+            if self.containers.len() == 0 {
+                self.complete = true
+            }
+        }
+        self.scan_cursor += 1
+    }
+
+    return self.complete
+}
+
+pub fn reader_t.value(&self):any! {
+    if !self.complete {
+        throw errorf('JSON value is incomplete')
+    }
+    return parse_with_depth(self.data as string, self.max_depth)
+}
+
+fn json_space(u8 c):bool {
+    return c == ' '.char() || c == '\t'.char() || c == '\r'.char() || c == '\n'.char()
 }

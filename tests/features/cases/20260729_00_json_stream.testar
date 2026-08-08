@@ -1,0 +1,142 @@
+=== test_unicode_and_surrogate_pairs
+--- main.n
+import json
+
+fn main() {
+    var decoded = json.deserialize<string>(`"A\u4F60\u597D \uD83D\uDE00"`)
+    assert(decoded == 'A你好 😀')
+
+    var value = json.parse(`{"emoji":"\uD83D\uDE00","cjk":"\u4F60\u597D"}`) as {string:any}
+    assert(value['emoji'] as string == '😀')
+    assert(value['cjk'] as string == '你好')
+}
+
+=== test_unpaired_surrogates_and_bad_utf8_replaced
+--- main.n
+import json
+
+fn main() {
+    // Go replaces unpaired surrogates with U+FFFD instead of erroring
+    var lone_high = json.parse(`"\uD83D"`) as string
+    assert(lone_high == '�')
+    var lone_low = json.parse(`"\uDE00"`) as string
+    assert(lone_low == '�')
+    var high_ascii = json.parse(`"\uD83D\u0041"`) as string
+    assert(high_ascii == '�A')
+
+    // Go replaces invalid raw UTF-8 with U+FFFD instead of erroring
+    var invalid = [0xC0 as u8, 0x80 as u8] as string
+    var raw = json.parse('"' + invalid + '"') as string
+    assert(raw == '��')
+
+    // Go replaces invalid UTF-8 with escaped \ufffd during marshal, no error
+    var encoded = json.serialize(invalid) catch e {
+        assert(false)
+        ''
+    }
+    assert(encoded == `"\ufffd\ufffd"`)
+}
+
+=== test_invalid_and_strict_numbers
+--- main.n
+import json
+
+fn rejects(string source):bool {
+    var value = json.parse(source) catch e {
+        return true
+    }
+    return false
+}
+
+fn main() {
+    assert(rejects(`"\x"`))
+    assert(rejects('"line\nbreak"'))
+    assert(rejects('01'))
+    assert(rejects('1.'))
+    assert(rejects('1e'))
+    assert(rejects('+1'))
+    assert(rejects('true false'))
+}
+
+=== test_lossless_dynamic
+--- main.n
+import json
+
+fn main() {
+    // lossless number: 9007199254740993 exceeds f64 precision, number keeps the raw token
+    var value = json.parse('{"big":9007199254740993,"emoji":"\\uD83D\\uDE00","items":[true,null]}') as {string:any}
+    assert(value['big'] as json.number == '9007199254740993' as json.number)
+    assert(value['emoji'] as string == '😀')
+    var items = value['items'] as [any]
+    assert(items[0] as bool)
+    assert(json.serialize(items[1]) == 'null')
+
+    // round-trip: parse -> serialize -> parse stays lossless
+    var encoded = json.serialize(value)
+    var reparsed = json.parse(encoded) as {string:any}
+    assert(reparsed['big'] as json.number == '9007199254740993' as json.number)
+    assert(reparsed['emoji'] as string == '😀')
+}
+
+=== test_limits
+--- main.n
+import json
+
+fn rejects(string source):bool {
+    var value = json.parse(source) catch e {
+        return true
+    }
+    return false
+}
+
+fn main() {
+    // nesting deeper than 256 is rejected (Go has a hardcoded limit too)
+    string deep = ''
+    for int i = 0; i < 300; i += 1 {
+        deep += '['
+    }
+    deep += '0'
+    for int i = 0; i < 300; i += 1 {
+        deep += ']'
+    }
+
+    assert(rejects(deep))
+}
+
+=== test_stream_reader
+--- main.n
+import json
+
+fn main() {
+    // chunked feeding; the final chunk returns true
+    var r = json.reader()
+    assert(!r.write('{"a":' as [u8]))
+    assert(r.write('1}' as [u8]))
+    var v = r.value() as {string:any}
+    assert(v['a'] as json.number == '1' as json.number)
+
+    // single-chunk input
+    var r2 = json.reader()
+    assert(r2.write('[1,2]' as [u8]))
+    var arr = r2.value() as [any]
+    assert(arr[1] as json.number == '2' as json.number)
+
+    // trailing non-whitespace data -> write errors
+    var r3 = json.reader()
+    bool trailing = false
+    var ok = r3.write('{} x' as [u8]) catch e {
+        trailing = true
+        false
+    }
+    assert(trailing)
+
+    // value() errors while framing is incomplete
+    var r4 = json.reader()
+    r4.write('[1' as [u8])
+    var incomplete = false
+    var v4 = r4.value() catch e {
+        incomplete = true
+        false
+    }
+    assert(incomplete)
+}
