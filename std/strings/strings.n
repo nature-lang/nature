@@ -5,7 +5,7 @@ import libc
 import runtime
 
 // 基于 c 字符串创建一个 nature 字符串 
-fn from(anyptr p):string! {
+pub fn from(anyptr p):string! {
     return runtime.string_new(p)
 }
 
