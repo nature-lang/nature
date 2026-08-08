@@ -404,6 +404,17 @@ impl SymbolTable {
     }
 
     pub fn cover_symbol_in_scope(&mut self, ident: String, kind: SymbolKind, pos: usize, scope_id: NodeId) -> NodeId {
+        self.cover_symbol_in_scope_with_visibility(ident, kind, pos, scope_id, false)
+    }
+
+    pub fn cover_symbol_in_scope_with_visibility(
+        &mut self,
+        ident: String,
+        kind: SymbolKind,
+        pos: usize,
+        scope_id: NodeId,
+        is_pub: bool,
+    ) -> NodeId {
         // 检查当前作用域是否已存在同名符号
         let scope = self.scopes.get_mut(scope_id).unwrap();
 
@@ -412,12 +423,13 @@ impl SymbolTable {
             let symbol = self.get_symbol(symbol_id).unwrap();
             symbol.kind = kind;
             symbol.pos = pos;
+            symbol.is_pub = is_pub;
             symbol.generics_id_map = HashMap::new();
             return symbol_id;
         }
 
         // 符号不存在，直接调用 define_symbol_in_scope 创建
-        return self.define_symbol_in_scope(ident, kind, pos, scope_id).unwrap();
+        self.define_symbol_in_scope_with_visibility(ident, kind, pos, scope_id, is_pub).unwrap()
     }
 
     pub fn define_symbol_in_scope(&mut self, ident: String, kind: SymbolKind, pos: usize, scope_id: NodeId) -> Result<NodeId, String> {

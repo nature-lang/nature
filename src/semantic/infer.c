@@ -2429,7 +2429,7 @@ static ast_fndef_t *generics_special_fn(module_t *m, ast_call_t *call, type_t ta
 
     // 注册到全局符号表(还未基于 args_hash infer + reduction)
     assert(!special_fn->is_local);
-    symbol_table_set(special_fn->symbol_name, SYMBOL_FN, special_fn, special_fn->is_local);
+    symbol_table_set_module(special_fn->symbol_name, SYMBOL_FN, special_fn, special_fn->module, special_fn->is_pub);
     // 下面的 infer_fn_decl 会进行 special_fn->type 的类型推导
     special_fn->type.status = REDUCTION_STATUS_UNDO;
 

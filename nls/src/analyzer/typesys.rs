@@ -3449,11 +3449,12 @@ impl<'a> Typesys<'a> {
 
             // singleton_tpl 则是同一个符号，不需要重复注册，直接使用即可
             // 非 singleton_tpl 对于当前 symbol_name 必须是唯一的，不能重复注册。存在缓存机制，也不可能重复注册
-            let new_symbol_id = self.symbol_table.cover_symbol_in_scope(
+            let new_symbol_id = self.symbol_table.cover_symbol_in_scope_with_visibility(
                 special_fn.symbol_name.clone(),
                 SymbolKind::Fn(special_fn_mutex.clone()),
                 special_fn.symbol_start,
                 module_scope_id,
+                special_fn.is_pub,
             );
 
             special_fn.symbol_id = new_symbol_id;
