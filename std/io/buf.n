@@ -141,10 +141,14 @@ pub fn reader<T>.read_until(&self, u8 delim):[u8] {
             return result
         }
 
-        // fill may read to the end of the file to generate an eof error
-        // fill will make 100 attempts until the data is filled successfully, otherwise it will throw no progress
+        // fill may read to the end of the file to generate an eof error.
+        // fill retries empty reads 100 times and then throws 'no progress',
+        // which for blocking descriptors (files, pipes) means EOF. Record it
+        // so read_line() can terminate instead of returning empty lines
+        // forever (cc103849 made read_until swallow every fill error).
         self.fill() catch e {
             has_error = true
+            self.eof = true
         }
     }
 
@@ -178,6 +182,11 @@ pub fn reader<T>.read_line(&self):string! {
     }
 
     var bytes = self.read_until('\n'.char())
+    if self.eof && bytes.len() == 0 {
+        // The underlying descriptor reached EOF with no complete line; the
+        // caller must observe the terminal condition instead of an empty line.
+        throw errorf('EOF')
+    }
 
     // 处理 \r\n
     if bytes.len() > 0 && bytes[bytes.len() - 1] == '\n'.char() {
