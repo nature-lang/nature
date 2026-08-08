@@ -51,6 +51,8 @@ jobs:
 
       - name: Test NLS
         working-directory: nls
+        env:
+          NATURE_ROOT: ${{ github.workspace }}
         run: cargo test --all --locked
 
       - name: Setup Musl for Linux
