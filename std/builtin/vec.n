@@ -4,9 +4,9 @@ import allocator as ac
 import reflect.{vec_t}
 import libc
 
-const VEC_DEFAULT_CAPACITY = 8
+pub const VEC_DEFAULT_CAPACITY = 8
 
-fn vec<T>.new(T default_value, int len):vec<T> {
+pub fn vec<T>.new(T default_value, int len):vec<T> {
     int hash = @reflect_hash(vec<T>)
     int element_hash = @reflect_hash(T)
     return runtime.vec_new<T>(hash, element_hash, len, &default_value as anyptr) catch e {
@@ -15,7 +15,7 @@ fn vec<T>.new(T default_value, int len):vec<T> {
     }
 }
 
-fn vec<T>.alloc(allocatable a, T default_value, int len):vec<T> {
+pub fn vec<T>.alloc(allocatable a, T default_value, int len):vec<T> {
     if len < 0 {
         panic('len must be greater than 0')
     }
@@ -46,7 +46,7 @@ fn vec<T>.alloc(allocatable a, T default_value, int len):vec<T> {
     return result
 }
 
-fn vec<T>.cap_of(int cap):vec<T> {
+pub fn vec<T>.cap_of(int cap):vec<T> {
     int hash = @reflect_hash(vec<T>)
     int element_hash = @reflect_hash(T)
     return runtime.vec_cap<T>(hash, element_hash, cap) catch e {
@@ -55,7 +55,7 @@ fn vec<T>.cap_of(int cap):vec<T> {
     }
 }
 
-fn vec<T>.grow(*self) {
+pub fn vec<T>.grow(*self) {
     ptr<vec_t> rv = self as anyptr as ptr<vec_t>
     assert(rv.allocator > 0)
 
@@ -75,7 +75,7 @@ fn vec<T>.grow(*self) {
     a.dealloc(old_data)
 }
 
-fn vec<T>.push(*self, T v) {
+pub fn vec<T>.push(*self, T v) {
     ptr<vec_t> rv = self as anyptr as ptr<vec_t>
     if rv.allocator == 0 {
         ptr<T> ref = &v
@@ -95,7 +95,7 @@ fn vec<T>.push(*self, T v) {
     libc.memmove(p, &v as anyptr, @sizeof(T))
 }
 
-fn vec<T>.deinit(*self) {
+pub fn vec<T>.deinit(*self) {
     ptr<vec_t> rv = self as anyptr as ptr<vec_t>
     if rv.allocator == 0 {
         return
@@ -106,40 +106,40 @@ fn vec<T>.deinit(*self) {
     a.dealloc(rv.data)
 }
 
-fn vec<T>.append(*self, vec<T> l2) {
+pub fn vec<T>.append(*self, vec<T> l2) {
     int element_hash = @reflect_hash(T)
     return runtime.vec_append(self as anyptr, l2 as anyptr, element_hash)
 }
 
-fn vec<T>.slice(*self, int start, int end):vec<T> {
+pub fn vec<T>.slice(*self, int start, int end):vec<T> {
     return runtime.vec_slice<T>(self as anyptr, start, end) catch e {
         panic(e.msg())
         []
     }
 }
 
-fn vec<T>.concat(*self, vec<T> l2):vec<T> {
+pub fn vec<T>.concat(*self, vec<T> l2):vec<T> {
     int element_hash = @reflect_hash(T)
     return runtime.vec_concat<T>(self as anyptr, l2 as anyptr, element_hash)
 }
 
 #linkid rt_vec_copy
-fn vec<T>.copy(*self, vec<T> src):int
+pub fn vec<T>.copy(*self, vec<T> src):int
 
-fn vec<T>.len(*self):int {
+pub fn vec<T>.len(*self):int {
     var rv = self as anyptr as ptr<vec_t>
     return rv.length
 }
 
-fn vec<T>.cap(*self):int {
+pub fn vec<T>.cap(*self):int {
     var rv = self as anyptr as ptr<vec_t>
     return rv.capacity
 }
 
 #linkid rt_vec_ref
-fn vec<T>.ref(*self):anyptr
+pub fn vec<T>.ref(*self):anyptr
 
-fn vec<T>.sort(*self, fn(int, int):bool less) {
+pub fn vec<T>.sort(*self, fn(int, int):bool less) {
     // 如果向量长度小于等于1，无需排序
     if self.len() <= 1 {
         return
@@ -149,7 +149,7 @@ fn vec<T>.sort(*self, fn(int, int):bool less) {
     self.pdqsort(0, self.len(), 64, less)
 }
 
-fn vec<T>.insertion_sort(*self, int a, int b, fn(int, int):bool less) {
+pub fn vec<T>.insertion_sort(*self, int a, int b, fn(int, int):bool less) {
     for int i = a + 1; i < b; i+=1 {
         for int j = i; j > a && less(j, j-1); j-=1 {
             self.swap(j, j-1)
@@ -157,7 +157,7 @@ fn vec<T>.insertion_sort(*self, int a, int b, fn(int, int):bool less) {
     }
 }
 
-fn vec<T>.swap(self, int i, int j) {
+pub fn vec<T>.swap(self, int i, int j) {
     if i == j {
         return
     }
@@ -167,7 +167,7 @@ fn vec<T>.swap(self, int i, int j) {
     self[j] = temp
 }
 
-fn vec<T>.heap_sort(*self, int a, int b, fn(int, int):bool less) {
+pub fn vec<T>.heap_sort(*self, int a, int b, fn(int, int):bool less) {
     int first = a
     int lo = 0
     int hi = b - a
@@ -184,7 +184,7 @@ fn vec<T>.heap_sort(*self, int a, int b, fn(int, int):bool less) {
     }
 }
 
-fn vec<T>.sift_down(*self, int root, int hi, int first, fn(int, int):bool less) {
+pub fn vec<T>.sift_down(*self, int root, int hi, int first, fn(int, int):bool less) {
     for true {
         int child = 2 * root + 1
         if child >= hi {
@@ -204,7 +204,7 @@ fn vec<T>.sift_down(*self, int root, int hi, int first, fn(int, int):bool less) 
     }
 }
 
-fn vec<T>.pdqsort(*self, int a, int b, int limit, fn(int, int):bool less) {
+pub fn vec<T>.pdqsort(*self, int a, int b, int limit, fn(int, int):bool less) {
     int max_insertion = 12
     
     bool was_balanced = true    // 上次分区是否平衡
@@ -263,7 +263,7 @@ fn vec<T>.pdqsort(*self, int a, int b, int limit, fn(int, int):bool less) {
 }
 
 // 分区函数
-fn vec<T>.partition(*self, int a, int b, int pivot, fn(int, int):bool less, ptr<bool> already_partitioned):int {
+pub fn vec<T>.partition(*self, int a, int b, int pivot, fn(int, int):bool less, ptr<bool> already_partitioned):int {
     self.swap(a, pivot)
     int i = a + 1
     int j = b - 1
@@ -312,7 +312,7 @@ fn vec<T>.partition(*self, int a, int b, int pivot, fn(int, int):bool less, ptr<
     return j
 }
 
-fn vec<T>.break_patterns(*self, int a, int b) {
+pub fn vec<T>.break_patterns(*self, int a, int b) {
     int length = b - a
     
     if length >= 8 {
@@ -323,7 +323,7 @@ fn vec<T>.break_patterns(*self, int a, int b) {
     }
 }
 
-fn vec<T>.search(*self, fn(int):bool predicate):int {
+pub fn vec<T>.search(*self, fn(int):bool predicate):int {
     int low = 0
     int high = self.len()
     

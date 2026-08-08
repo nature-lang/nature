@@ -1,4 +1,4 @@
-type allocatable = interface{
+pub type allocatable = interface{
     fn alloc(int size):anyptr
     fn dealloc(anyptr p):void
 }

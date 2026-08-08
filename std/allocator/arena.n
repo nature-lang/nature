@@ -58,7 +58,7 @@ fn block_alloc(ptr<block_t> b, int size):anyptr {
     return p
 }
 
-fn init(int capacity):ptr<arena_t> {
+pub fn init(int capacity):ptr<arena_t> {
     ptr<arena_t> a = libc.malloc(@sizeof(arena_t)) as ptr<arena_t>
     if a == null {
         panic('arena: init malloc failed')
@@ -80,7 +80,7 @@ fn init(int capacity):ptr<arena_t> {
     return a
 }
 
-fn arena_t.deinit(*self) {
+pub fn arena_t.deinit(*self) {
     // walk the linked list and free all blocks
     var b = self.head
     for b != null {
@@ -140,7 +140,7 @@ fn arena_t.dealloc(*self, anyptr p) {
 }
 
 // convenience generic helper: allocate and initialize a value of type T
-fn arena_t.new<T>(*self, T value):ptr<T> {
+pub fn arena_t.new<T>(*self, T value):ptr<T> {
     int size = @sizeof(T)
     if size <= 0 {
         panic('arena: new invalid type size')

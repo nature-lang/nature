@@ -739,7 +739,7 @@ fn resolve_member_on_type(
                         type_: prop.type_.clone(),
                         be_capture: false,
                         heap_ident: None,
-                        is_private: false,
+                        is_pub: false,
                     };
                     return Some(ResolvedSymbol {
                         symbol_id: 0,
@@ -794,7 +794,7 @@ fn resolve_member_on_type(
                             type_: prop.type_.clone(),
                             be_capture: false,
                             heap_ident: None,
-                            is_private: false,
+                            is_pub: false,
                         };
                         return Some(ResolvedSymbol {
                             symbol_id: 0,
@@ -1054,7 +1054,7 @@ mod tests {
             type_: crate::analyzer::common::Type::default(),
             be_capture: false,
             heap_ident: None,
-            is_private: false,
+            is_pub: false,
         }));
         assert_eq!(symbol_def_range(&SymbolKind::Var(var)), (10, 11));
     }

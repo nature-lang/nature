@@ -4,27 +4,27 @@ import time
 import libc
 
 // bcrypt constant definitions
-const MIN_COST = 4
-const MAX_COST = 31
-const DEFAULT_COST = 10
+pub const MIN_COST = 4
+pub const MAX_COST = 31
+pub const DEFAULT_COST = 10
 
-const MAJOR_VERSION = 50 // '2'
-const MINOR_VERSION = 97 // 'a'
-const MAX_SALT_SIZE = 16
-const MAX_CRYPTED_HASH_SIZE = 23
-const ENCODED_SALT_SIZE = 22
-const ENCODED_HASH_SIZE = 31
-const MIN_HASH_SIZE = 59
+pub const MAJOR_VERSION = 50 // '2'
+pub const MINOR_VERSION = 97 // 'a'
+pub const MAX_SALT_SIZE = 16
+pub const MAX_CRYPTED_HASH_SIZE = 23
+pub const ENCODED_SALT_SIZE = 22
+pub const ENCODED_HASH_SIZE = 31
+pub const MIN_HASH_SIZE = 59
 
-const DOLLAR_CHAR = 36 // $
-const ZERO_CHAR = 48 // '0'
-const NINE_CHAR = 57 // '9'
+pub const DOLLAR_CHAR = 36 // $
+pub const ZERO_CHAR = 48 // '0'
+pub const NINE_CHAR = 57 // '9'
 
 // bcrypt-specific base64 alphabet
-const ALPHABET = "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+pub const ALPHABET = "./ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
 // Magic cipher data - big-endian bytes of "OrpheanBeholderScryDoubt"
-const MAGIC_CIPHER_COUNT = 24
+pub const MAGIC_CIPHER_COUNT = 24
 [u8;MAGIC_CIPHER_COUNT] MAGIC_CIPHER_DATA = [
     0x4f, 0x72, 0x70, 0x68,
     0x65, 0x61, 0x6e, 0x42,
@@ -35,15 +35,15 @@ const MAGIC_CIPHER_COUNT = 24
 ]
 
 // Error definitions for throw
-const ERROR_PASSWORD_TOO_LONG = "password too long"
-const ERROR_INVALID_COST = "invalid cost parameter"
-const ERROR_HASH_TOO_SHORT = "hash too short"
-const ERROR_INVALID_HASH_PREFIX = "invalid hash prefix"
-const ERROR_HASH_VERSION_TOO_NEW = "hash version too new"
-const ERROR_NOT_VERIFY = "verify failed"
+pub const ERROR_PASSWORD_TOO_LONG = "password too long"
+pub const ERROR_INVALID_COST = "invalid cost parameter"
+pub const ERROR_HASH_TOO_SHORT = "hash too short"
+pub const ERROR_INVALID_HASH_PREFIX = "invalid hash prefix"
+pub const ERROR_HASH_VERSION_TOO_NEW = "hash version too new"
+pub const ERROR_NOT_VERIFY = "verify failed"
 
 // bcrypt hash structure
-type bcrypt_hash_t = struct {
+pub type bcrypt_hash_t = struct {
     [u8] hash
     [u8] salt
     int cost
@@ -52,7 +52,7 @@ type bcrypt_hash_t = struct {
 }
 
 // bcrypt-specific base64 encoding (based on C implementation)
-fn base64_encode([u8] src):[u8] {
+pub fn base64_encode([u8] src):[u8] {
     [u8] result = []
     int src_len = src.len()
 
@@ -88,7 +88,7 @@ fn base64_encode([u8] src):[u8] {
 }
 
 // bcrypt-specific base64 decoding (based on C implementation)
-fn base64_decode([u8] src):[u8]! {
+pub fn base64_decode([u8] src):[u8]! {
     // Character to value lookup function
     var char_to_value = fn(u8 c):int {
         for int i = 0; i < ALPHABET.len(); i += 1 {
@@ -145,14 +145,14 @@ fn base64_decode([u8] src):[u8]! {
 }
 
 // Check if cost parameter is valid
-fn check_cost(int cost):void! {
+pub fn check_cost(int cost):void! {
     if cost < MIN_COST || cost > MAX_COST {
         throw errorf(ERROR_INVALID_COST)
     }
 }
 
 // Generate random salt
-fn generate_salt():[u8] {
+pub fn generate_salt():[u8] {
     [u8] salt = []
 
     // Use libc random functions for better randomness
@@ -166,7 +166,7 @@ fn generate_salt():[u8] {
     return salt
 }
 
-fn expensive_blowfish_setup([u8] key, u32 cost, [u8] salt):blowfish.cipher_t! {
+pub fn expensive_blowfish_setup([u8] key, u32 cost, [u8] salt):blowfish.cipher_t! {
     var cipher = blowfish.cipher_t{
         p: vec<u32>.new(0, 18),
         s0: vec<u32>.new(0, 256),
@@ -202,7 +202,7 @@ fn expensive_blowfish_setup([u8] key, u32 cost, [u8] salt):blowfish.cipher_t! {
 }
 
 // bcrypt core function
-fn bcrypt([u8] password, int cost, [u8] salt):[u8]! {
+pub fn bcrypt([u8] password, int cost, [u8] salt):[u8]! {
     [u8] cipher_data = []
     for int i = 0; i < MAGIC_CIPHER_COUNT; i+= 1 {
         cipher_data.push(MAGIC_CIPHER_DATA[i])
@@ -238,7 +238,7 @@ fn bcrypt([u8] password, int cost, [u8] salt):[u8]! {
 }
 
 // Generate new hash from password
-fn new_from_password([u8] password, int cost):bcrypt_hash_t! {
+pub fn new_from_password([u8] password, int cost):bcrypt_hash_t! {
     if password.len() > 72 {
         throw errorf(ERROR_PASSWORD_TOO_LONG)
     }
@@ -267,7 +267,7 @@ fn new_from_password([u8] password, int cost):bcrypt_hash_t! {
 }
 
 // Parse from hash string
-fn new_from_hash([u8] hashed_secret):bcrypt_hash_t! {
+pub fn new_from_hash([u8] hashed_secret):bcrypt_hash_t! {
     if hashed_secret.len() < MIN_HASH_SIZE {
         throw errorf(ERROR_HASH_TOO_SHORT)
     }
@@ -348,7 +348,7 @@ fn new_from_hash([u8] hashed_secret):bcrypt_hash_t! {
 }
 
 // Generate complete hash string
-fn hash_to_string(bcrypt_hash_t hash_info):[u8] {
+pub fn hash_to_string(bcrypt_hash_t hash_info):[u8] {
     [u8] result = []
     
     result.push(DOLLAR_CHAR)
@@ -378,7 +378,7 @@ fn hash_to_string(bcrypt_hash_t hash_info):[u8] {
 }
 
 // Compare two byte arrays for equality (constant time)
-fn constant_time_compare([u8] a, [u8] b):bool {
+pub fn constant_time_compare([u8] a, [u8] b):bool {
     if a.len() != b.len() {
         return false
     }
@@ -394,13 +394,13 @@ fn constant_time_compare([u8] a, [u8] b):bool {
 // Public API functions
 
 // Generate bcrypt hash from password
-fn hash([u8] password, int cost):[u8]! {
+pub fn hash([u8] password, int cost):[u8]! {
     bcrypt_hash_t hash_info = new_from_password(password, cost)
     return hash_to_string(hash_info)
 }
 
 // Compare hash and password
-fn verify([u8] hashed_password, [u8] password):void! {
+pub fn verify([u8] hashed_password, [u8] password):void! {
     bcrypt_hash_t hash_info = new_from_hash(hashed_password)
     
     [u8] other_hash = bcrypt(password, hash_info.cost, hash_info.salt)
@@ -422,12 +422,12 @@ fn verify([u8] hashed_password, [u8] password):void! {
 }
 
 // Get cost of hash
-fn cost([u8] hashed_password):int! {
+pub fn cost([u8] hashed_password):int! {
     bcrypt_hash_t hash_info = new_from_hash(hashed_password)
     return hash_info.cost
 }
 
-fn main():void! {
+pub fn main():void! {
     println("bcrypt test started...")
     
     string password = "mypassword"

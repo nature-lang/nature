@@ -64,6 +64,9 @@ impl<'a> CompletionProvider<'a> {
 
             for &symbol_id in &scope.symbols {
                 if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
+                    if !self.symbol_table.symbol_accessible_from(symbol_id, &self.module.ident) {
+                        continue;
+                    }
                     let symbol_name = extract_last_ident_part(&symbol.ident);
 
                     // Skip test functions and impl methods (struct methods can't be exported)
@@ -151,6 +154,9 @@ impl<'a> CompletionProvider<'a> {
             // Iterate through all symbols in imported module
             for &symbol_id in &imported_scope.symbols {
                 if let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) {
+                    if !self.symbol_table.symbol_accessible_from(symbol_id, &self.module.ident) {
+                        continue;
+                    }
                     if let SymbolKind::Fn(fndef) = &symbol.kind {
                         if fndef.lock().unwrap().is_test {
                             continue;
@@ -254,6 +260,9 @@ impl<'a> CompletionProvider<'a> {
                 if !match_set.contains(indexed.file_path.as_str()) {
                     continue;
                 }
+                if !indexed.is_pub {
+                    continue;
+                }
                 if !prefix.is_empty() && !name.starts_with(prefix) {
                     continue;
                 }
@@ -316,6 +325,11 @@ impl<'a> CompletionProvider<'a> {
 
                 // Try to find the symbol in the imported module's scope
                 let global_ident = crate::utils::format_global_ident(import.module_ident.clone(), item.ident.clone());
+                if let Some(symbol_id) = self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id) {
+                    if !self.symbol_table.symbol_accessible_from(symbol_id, &self.module.ident) {
+                        continue;
+                    }
+                }
                 let symbol = self.symbol_table.find_global_symbol(&global_ident)
                     .or_else(|| {
                         // Fallback: search in module scope
@@ -674,6 +688,9 @@ impl<'a> CompletionProvider<'a> {
         };
 
         for indexed_symbol in &matching_symbols {
+            if !indexed_symbol.is_pub {
+                continue;
+            }
             // Skip if this symbol is from the current file
             if indexed_symbol.file_path == self.module.path {
                 continue;

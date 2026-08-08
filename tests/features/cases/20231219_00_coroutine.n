@@ -28,7 +28,7 @@ fn car() {
     b = 'hello world nice'
 }
 
-fn foo(){
+pub fn foo(){
     int a = 1
     int b = 2
     bool c = true

@@ -8,7 +8,7 @@ type timespec_t = struct {
     u64 nsec
 }
 
-type stat_t = struct {
+pub type stat_t = struct {
     u64 dev      // device ID
     u64 mode     // file mode
     u64 nlink    // number of hard links
@@ -28,7 +28,7 @@ type stat_t = struct {
 }
 
 // match runtime.fs_context_t 
-type file_t:io.reader, io.writer, io.seeker = struct{
+pub type file_t:io.reader, io.writer, io.seeker = struct{
     int fd
     anyptr data
     i64 data_len
@@ -41,10 +41,10 @@ type file_t:io.reader, io.writer, io.seeker = struct{
 fn from(int fd, string name):ref<file_t>!
 
 #linkid rt_uv_fs_open
-fn open(string path, int flags, int mode):ref<file_t>!
+pub fn open(string path, int flags, int mode):ref<file_t>!
 
 #linkid rt_uv_fs_content
-fn file_t.content(&self):string! {
+pub fn file_t.content(&self):string! {
     var s = self.stat()
     var file_size = s.size
     var buf = vec<u8>.new(0, file_size as int)
@@ -56,29 +56,29 @@ fn file_t.content(&self):string! {
 }
 
 #linkid rt_uv_fs_read
-fn file_t.read(&self, [u8] buf):int!
+pub fn file_t.read(&self, [u8] buf):int!
 
 #linkid rt_uv_fs_write
-fn file_t.write(&self, [u8] buf):int!
+pub fn file_t.write(&self, [u8] buf):int!
 
 fn file_t.seek(&self, int offset, int whence):int! {
     return syscall.seek(self.fd as int, offset, whence)
 }
 
 #linkid rt_uv_fs_read_at
-fn file_t.read_at(&self, [u8] buf, int offset):int!
+pub fn file_t.read_at(&self, [u8] buf, int offset):int!
 
 #linkid rt_uv_fs_write_at
-fn file_t.write_at(&self, [u8] buf, int offset):int!
+pub fn file_t.write_at(&self, [u8] buf, int offset):int!
 
 #linkid rt_uv_fs_close
-fn file_t.close(&self):void
+pub fn file_t.close(&self):void
 
 #linkid rt_uv_fs_stat
-fn file_t.stat(&self):stat_t!
+pub fn file_t.stat(&self):stat_t!
 
 // io
-fn stdout():ref<file_t>! {
+pub fn stdout():ref<file_t>! {
     return from(syscall.STDOUT, '/dev/stdout')
 }
 
@@ -86,10 +86,10 @@ fn stdin():ref<file_t>! {
     return from(syscall.STDIN, '/dev/stdin')
 }
 
-fn stderr():ref<file_t>! {
+pub fn stderr():ref<file_t>! {
     return from(syscall.STDERR, '/dev/stderr')
 }
 
-fn discard():ref<file_t>! {
+pub fn discard():ref<file_t>! {
     return open(syscall.null_device(), syscall.O_RDWR, 0)
 }

@@ -1,1 +1,1 @@
-int count = 0
+pub int count = 0

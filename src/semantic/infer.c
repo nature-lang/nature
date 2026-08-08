@@ -2429,7 +2429,7 @@ static ast_fndef_t *generics_special_fn(module_t *m, ast_call_t *call, type_t ta
 
     // 注册到全局符号表(还未基于 args_hash infer + reduction)
     assert(!special_fn->is_local);
-    symbol_table_set(special_fn->symbol_name, SYMBOL_FN, special_fn, special_fn->is_local);
+    symbol_table_set_module(special_fn->symbol_name, SYMBOL_FN, special_fn, special_fn->module, special_fn->is_pub);
     // 下面的 infer_fn_decl 会进行 special_fn->type 的类型推导
     special_fn->type.status = REDUCTION_STATUS_UNDO;
 
@@ -2504,6 +2504,18 @@ static bool select_left_is_type(module_t *m, ast_expr_select_t *select, type_t *
 
 static char *impl_symbol_name_new(char *impl_ident, char *method) {
     return str_connect_by(impl_ident, method, IMPL_CONNECT_IDENT);
+}
+
+static char *infer_method_access_name(ast_expr_t *receiver, char *method) {
+    if (receiver->assert_type == AST_EXPR_IDENT) {
+        ast_ident *ident = receiver->value;
+        if (ident && ident->literal) {
+            char *display_literal = ident->display_literal ? ident->display_literal : ident->literal;
+            return str_connect_by(display_literal, method, ".");
+        }
+    }
+
+    return method;
 }
 
 static bool impl_static_symbol_exists(module_t *m, type_t select_left_type, char *method) {
@@ -2750,6 +2762,12 @@ static type_fn_t *infer_impl_call_rewrite(module_t *m, ast_call_t *call, type_t 
         }
 
         INFER_ASSERTF(s, "type '%s' not impl '%s' fn", type_format(extract_type), select->key);
+    }
+
+    // 跨 module 方法调用, 检查方法可见性
+    if (!symbol_accessible_from(s, m)) {
+        char *display_ident = infer_method_access_name(&select->left, select->key);
+        INFER_ASSERTF(false, "%s undefined (cannot refer to unexported method %s)", display_ident, select->key);
     }
 
     // rewrite call left ident, 延迟到 call left fn type 确定后再做

@@ -525,11 +525,12 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                 // 构造全局唯一标识符
                 var_decl.ident = format_global_ident(m.ident.clone(), var_decl.ident.clone());
 
-                match symbol_table.define_symbol_in_scope(
+                match symbol_table.define_symbol_in_scope_with_visibility(
                     var_decl.ident.clone(),
                     SymbolKind::Var(var_decl_mutex.clone()),
                     var_decl.symbol_start,
                     m.module_scope_id,
+                    var_decl.is_pub,
                 ) {
                     Ok(symbol_id) => {
                         var_decl.symbol_id = symbol_id;
@@ -549,11 +550,12 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                 }
 
                 // 注册到全局符号表
-                if let Ok(symbol_id) = symbol_table.define_global_symbol(
+                if let Ok(symbol_id) = symbol_table.define_global_symbol_with_visibility(
                     var_decl.ident.clone(),
                     SymbolKind::Var(var_decl_mutex.clone()),
                     var_decl.symbol_start,
                     m.module_scope_id,
+                    var_decl.is_pub,
                 ) {
                     symbol_table.set_symbol_source_path(symbol_id, &m.path);
                 }
@@ -562,11 +564,12 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                 let mut constdef = constdef_mutex.lock().unwrap();
                 constdef.ident = format_global_ident(m.ident.clone(), constdef.ident.clone());
 
-                match symbol_table.define_symbol_in_scope(
+                match symbol_table.define_symbol_in_scope_with_visibility(
                     constdef.ident.clone(),
                     SymbolKind::Const(constdef_mutex.clone()),
                     constdef.symbol_start,
                     m.module_scope_id,
+                    constdef.is_pub,
                 ) {
                     Ok(symbol_id) => {
                         constdef.symbol_id = symbol_id;
@@ -586,11 +589,12 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                 }
 
                 // Register in global symbol table (needed for selective imports)
-                if let Ok(symbol_id) = symbol_table.define_global_symbol(
+                if let Ok(symbol_id) = symbol_table.define_global_symbol_with_visibility(
                     constdef.ident.clone(),
                     SymbolKind::Const(constdef_mutex.clone()),
                     constdef.symbol_start,
                     m.module_scope_id,
+                    constdef.is_pub,
                 ) {
                     symbol_table.set_symbol_source_path(symbol_id, &m.path);
                 }
@@ -599,7 +603,13 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                 let mut typedef = typedef_mutex.lock().unwrap();
                 typedef.ident = format_global_ident(m.ident.clone(), typedef.ident.clone());
 
-                match symbol_table.define_symbol_in_scope(typedef.ident.clone(), SymbolKind::Type(typedef_mutex.clone()), typedef.symbol_start, m.module_scope_id) {
+                match symbol_table.define_symbol_in_scope_with_visibility(
+                    typedef.ident.clone(),
+                    SymbolKind::Type(typedef_mutex.clone()),
+                    typedef.symbol_start,
+                    m.module_scope_id,
+                    typedef.is_pub,
+                ) {
                     Ok(symbol_id) => {
                         typedef.symbol_id = symbol_id;
                         symbol_table.set_symbol_source_path(symbol_id, &m.path);
@@ -618,7 +628,13 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                     }
                 }
 
-                if let Ok(symbol_id) = symbol_table.define_global_symbol(typedef.ident.clone(), SymbolKind::Type(typedef_mutex.clone()), typedef.symbol_start, m.module_scope_id) {
+                if let Ok(symbol_id) = symbol_table.define_global_symbol_with_visibility(
+                    typedef.ident.clone(),
+                    SymbolKind::Type(typedef_mutex.clone()),
+                    typedef.symbol_start,
+                    m.module_scope_id,
+                    typedef.is_pub,
+                ) {
                     symbol_table.set_symbol_source_path(symbol_id, &m.path);
                 }
             }
@@ -629,7 +645,13 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                 if fndef.impl_type.kind.is_unknown() {
                     fndef.symbol_name = format_global_ident(m.ident.clone(), symbol_name.clone());
 
-                    match symbol_table.define_symbol_in_scope(fndef.symbol_name.clone(), SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, m.module_scope_id) {
+                    match symbol_table.define_symbol_in_scope_with_visibility(
+                        fndef.symbol_name.clone(),
+                        SymbolKind::Fn(fndef_mutex.clone()),
+                        fndef.symbol_start,
+                        m.module_scope_id,
+                        fndef.is_pub,
+                    ) {
                         Ok(symbol_id) => {
                             fndef.symbol_id = symbol_id;
                             symbol_table.set_symbol_source_path(symbol_id, &m.path);
@@ -647,7 +669,13 @@ pub fn register_global_symbol(m: &mut Module, symbol_table: &mut SymbolTable, st
                         }
                     }
 
-                    if let Ok(symbol_id) = symbol_table.define_global_symbol(fndef.symbol_name.clone(), SymbolKind::Fn(fndef_mutex.clone()), fndef.symbol_start, m.module_scope_id) {
+                    if let Ok(symbol_id) = symbol_table.define_global_symbol_with_visibility(
+                        fndef.symbol_name.clone(),
+                        SymbolKind::Fn(fndef_mutex.clone()),
+                        fndef.symbol_start,
+                        m.module_scope_id,
+                        fndef.is_pub,
+                    ) {
                         symbol_table.set_symbol_source_path(symbol_id, &m.path);
                     }
                 } else {

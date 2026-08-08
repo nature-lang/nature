@@ -3,7 +3,7 @@ mod syscall
 import myrand
 import myrand.utils.pool
 
-fn dump() {
+pub fn dump() {
     myrand.dump()
     pool.dump()
     println('hello world syscall')

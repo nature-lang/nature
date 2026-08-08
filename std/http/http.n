@@ -72,7 +72,7 @@ const MIME_JSON = 'application/json'
 const separation = '\r\n'
 const separation2 = '\r\n\r\n'
 
-type callback_fn = fn(request_t, ref<response_t>):void!
+pub type callback_fn = fn(request_t, ref<response_t>):void!
 
 fn callback_notfound(request_t req, ref<response_t> res):void! {
     res.status = 404
@@ -81,7 +81,7 @@ fn callback_notfound(request_t req, ref<response_t> res):void! {
 }
 
 #runtime_use n_http_server_t
-type server_t = struct{
+pub type server_t = struct{
     fn():void! handler_fn
     string addr
     int port
@@ -94,11 +94,11 @@ fn server_t.acquire_response(&self) {
     
 }
 
-fn server_t.get(&self, string path, callback_fn callback) {
+pub fn server_t.get(&self, string path, callback_fn callback) {
     self.router_register(ROUTES_GET, path, callback)
 }
 
-fn server_t.post(&self, string path, callback_fn callback) {
+pub fn server_t.post(&self, string path, callback_fn callback) {
     self.router_register(ROUTES_POST, path, callback)
 }
 
@@ -157,21 +157,21 @@ fn server_t.find_callback(&self, u8 method, string path):callback_fn {
     }
 }
 
-fn server_t.listen(&self, int port):void! {
+pub fn server_t.listen(&self, int port):void! {
     self.port = port
     uv.http_listen(self as anyptr)
 }
 
-fn server_t.close(&self) {
+pub fn server_t.close(&self) {
     uv.http_close(self as anyptr)
 }
 
-fn server():ref<server_t> {
+pub fn server():ref<server_t> {
     var s = new server_t(addr = '0.0.0.0', handler_fn = conn_handler)
     return s
 }
 
-type request_t = struct{
+pub type request_t = struct{
     u8 method
     {string:string} headers
     int length // content length
@@ -182,7 +182,7 @@ type request_t = struct{
     string body // http 请求原始 body
 }
 
-type response_t = struct{
+pub type response_t = struct{
     string version // http 版本号
     {string:string} headers
     int status // http 状态码
@@ -248,7 +248,7 @@ fn response_new():ref<response_t> {
     )
 }
 
-fn response_t.send(&self, string msg) {
+pub fn response_t.send(&self, string msg) {
     self.body = msg
     self.length = msg.len()
 }

@@ -1,0 +1,6 @@
+import 'mod.n' as math
+
+fn main() {
+    var p = math.pub_pair_t{x: 3, y: 4}
+    println(p.priv_mul())
+}

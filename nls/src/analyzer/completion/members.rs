@@ -116,6 +116,14 @@ impl<'a> CompletionProvider<'a> {
                     // Add methods for typedef
                     for method in typedef.method_table.values() {
                         let fndef = method.lock().unwrap();
+                        let accessible = if fndef.symbol_id != 0 {
+                            self.symbol_table.symbol_accessible_from(fndef.symbol_id, &self.module.ident)
+                        } else {
+                            fndef.module_index == self.module.index || fndef.is_pub
+                        };
+                        if !accessible {
+                            continue;
+                        }
                         if prefix.is_empty() || fndef.fn_name.starts_with(prefix) {
                             let signature = self.format_function_signature(&fndef);
                             let insert_text = if self.has_parameters(&fndef) {
@@ -231,6 +239,9 @@ impl<'a> CompletionProvider<'a> {
     /// Check if a symbol is an impl method for the given typedef and add it to completions
     fn check_impl_method(&self, symbol_id: NodeId, typedef_symbol_id: NodeId, prefix: &str, completions: &mut Vec<CompletionItem>) {
         let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) else { return };
+        if !self.symbol_table.symbol_accessible_from(symbol_id, &self.module.ident) {
+            return;
+        }
         let SymbolKind::Fn(fndef_mutex) = &symbol.kind else { return };
         let fndef = fndef_mutex.lock().unwrap();
 
@@ -522,6 +533,9 @@ impl<'a> CompletionProvider<'a> {
         // Closure that inspects one symbol and maybe pushes a completion.
         let mut check_symbol = |symbol_id: NodeId, is_builtin: bool| {
             let Some(symbol) = self.symbol_table.get_symbol_ref(symbol_id) else { return };
+            if !self.symbol_table.symbol_accessible_from(symbol_id, &self.module.ident) {
+                return;
+            }
             let symbol_name = extract_last_ident_part(&symbol.ident);
 
             if !prefix.is_empty() && !symbol_name.starts_with(prefix) {

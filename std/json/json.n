@@ -8,7 +8,7 @@ import runtime
 var null_hash = @reflect_hash(null) 
 
 // Convert object to json string
-fn serialize<T>(T object):string! {
+pub fn serialize<T>(T object):string! {
     var t = reflect.typeof(object)
     return serialize_value(&object as anyptr, t) as string
 }
@@ -227,7 +227,7 @@ type deserialize_t = struct{
 }
 
 // Convert json string to object
-fn deserialize<T>(string s):T! {
+pub fn deserialize<T>(string s):T! {
     var val = @default(T)
     var t = reflect.typeof(val)
 

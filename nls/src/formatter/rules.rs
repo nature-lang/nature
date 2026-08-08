@@ -383,6 +383,7 @@ impl<'a> Formatter<'a> {
             | TokenType::Defer
             | TokenType::Let
             | TokenType::Var
+            | TokenType::Pub
             | TokenType::Const
             | TokenType::Test
             | TokenType::Fn

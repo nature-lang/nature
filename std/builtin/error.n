@@ -1,29 +1,29 @@
 import fmt
 
-type throwable = interface{
+pub type throwable = interface{
 	fn msg():string
 }
 
-type trace_t = struct{
+pub type trace_t = struct{
     string path
     string ident
     int line
     int column
 }
 
-type errort:throwable = struct{
+pub type errort:throwable = struct{
 	string message
 	bool is_panic
 }
 
-fn errort.msg(&self):string {
+pub fn errort.msg(&self):string {
 	return self.message
 }
 
-fn errorf(string format, ...[any] args):ref<errort> {
+pub fn errorf(string format, ...[any] args):ref<errort> {
 	var msg = fmt.sprintf(format, ...args)
 	return new errort(message = msg)
 }
 
 
-type errable<T> = errort|T
+pub type errable<T> = errort|T

@@ -280,6 +280,10 @@ static type_t analyzer_type_fn(ast_fndef_t *fndef) {
  * @param ident
  * @return
  */
+static void analyzer_symbol_access_assert(module_t *m, symbol_t *symbol, char *ident) {
+    ANALYZER_ASSERTF(symbol_accessible_from(symbol, m), "undefined: %s", ident);
+}
+
 static char *analyzer_resolve_typedef(module_t *m, analyzer_fndef_t *current, string ident) {
     if (current == NULL) {
         // 进行全局作用域符号查找
@@ -288,7 +292,9 @@ static char *analyzer_resolve_typedef(module_t *m, analyzer_fndef_t *current, st
         // can_import_symbol_table 记录了所有的 package + ident 组成的符号，所以也包括 current module
         // 所以可以用来判断是否 import 了当前 package 中的 symbol
         char *global_ident = ident_with_prefix(m->ident, ident);
-        if (symbol_table_get(global_ident)) {
+        symbol_t *s = symbol_table_get(global_ident);
+        if (s) {
+            analyzer_symbol_access_assert(m, s, ident);
             return global_ident;
         }
 
@@ -296,7 +302,9 @@ static char *analyzer_resolve_typedef(module_t *m, analyzer_fndef_t *current, st
         ast_import_select_t *select_ref = table_get(m->selective_import_table, ident);
         if (select_ref != NULL) {
             char *selective_global_ident = ident_with_prefix(select_ref->module_ident, select_ref->original_ident);
-            if (symbol_table_get(selective_global_ident)) {
+            s = symbol_table_get(selective_global_ident);
+            if (s) {
+                analyzer_symbol_access_assert(m, s, select_ref->original_ident);
                 return selective_global_ident;
             }
         }
@@ -307,15 +315,18 @@ static char *analyzer_resolve_typedef(module_t *m, analyzer_fndef_t *current, st
 
             if (str_equal(import->as, "*")) {
                 char *temp = ident_with_prefix(analyzer_import_key(import), ident);
-                if (symbol_table_get(temp)) {
+                s = symbol_table_get(temp);
+                if (s) {
+                    analyzer_symbol_access_assert(m, s, ident);
                     return temp;
                 }
             }
         }
 
         // builtin 中的全局类型
-        symbol_t *s = table_get(symbol_table, ident);
+        s = table_get(symbol_table, ident);
         if (s != NULL) {
+            analyzer_symbol_access_assert(m, s, ident);
             // 不需要改写使用的名称了
             return ident;
         }
@@ -373,6 +384,14 @@ static void analyzer_type(module_t *m, type_t *t) {
             ANALYZER_ASSERTF(import, "module '%s' not found", t->import_as);
 
             char *unique_ident = ident_with_prefix(analyzer_import_key(import), t->ident);
+
+            // 跨 module 类型引用, 检查可见性
+            symbol_t *import_sym = symbol_table_get(unique_ident);
+            if (!import_sym) {
+                ANALYZER_ASSERTF(false, "type '%s' undeclared", t->ident);
+            }
+            char *display_ident = str_connect_by(t->import_as, t->ident, ".");
+            analyzer_symbol_access_assert(m, import_sym, display_ident);
 
             // 更新 ident 指向
             t->ident = unique_ident;
@@ -1515,7 +1534,9 @@ static bool analyzer_as_star_or_builtin_ident(module_t *m, ast_ident *ident) {
 
         if (str_equal(import->as, "*")) {
             char *temp = ident_with_prefix(analyzer_import_key(import), ident->literal);
-            if (symbol_table_get(temp)) {
+            symbol_t *s = symbol_table_get(temp);
+            if (s) {
+                analyzer_symbol_access_assert(m, s, ident->literal);
                 ident->literal = temp;
                 return true;
             }
@@ -1525,6 +1546,7 @@ static bool analyzer_as_star_or_builtin_ident(module_t *m, ast_ident *ident) {
     // - builtin 产生的全局符号
     symbol_t *s = table_get(symbol_table, ident->literal);
     if (s != NULL) {
+        analyzer_symbol_access_assert(m, s, ident->literal);
         // builtin global Symbol does not require symbol rewriting
         return true;
     }
@@ -1551,6 +1573,7 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
     char *current_global_ident = ident_with_prefix(m->ident, ident->literal);
     symbol_t *s = symbol_table_get(current_global_ident);
     if (s != NULL) {
+        analyzer_symbol_access_assert(m, s, ident->literal);
         ident->literal = current_global_ident; // 找到了则修改为全局名称
         return true;
     }
@@ -1565,14 +1588,7 @@ static bool analyzer_ident(module_t *m, ast_expr_t *expr) {
         if (!sym) {
             ANALYZER_ASSERTF(false, "symbol '%s' not found in module", select_ref->original_ident);
         }
-
-        // Check if symbol is private (only for functions)
-        if (sym->type == SYMBOL_FN) {
-            ast_fndef_t *fndef = sym->ast_value;
-            if (fndef->is_private) {
-                ANALYZER_ASSERTF(false, "cannot import private function '%s'", select_ref->original_ident);
-            }
-        }
+        analyzer_symbol_access_assert(m, sym, select_ref->original_ident);
 
         ident->literal = global_ident;
         return true;
@@ -1611,6 +1627,7 @@ static void rewrite_select_expr(module_t *m, ast_expr_t *expr) {
         char *current_module_ident = ident_with_prefix(m->ident, ident->literal);
         symbol_t *s = table_get(symbol_table, current_module_ident);
         if (s != NULL) {
+            analyzer_symbol_access_assert(m, s, ident->literal);
             ident->literal = current_module_ident; // 找到了则修改为全局名称
             return;
         }
@@ -1621,6 +1638,7 @@ static void rewrite_select_expr(module_t *m, ast_expr_t *expr) {
             char *global_ident = ident_with_prefix(select_ref->module_ident, select_ref->original_ident);
             symbol_t *sym = symbol_table_get(global_ident);
             if (sym) {
+                analyzer_symbol_access_assert(m, sym, select_ref->original_ident);
                 ident->literal = global_ident;
                 return;
             }
@@ -1634,9 +1652,14 @@ static void rewrite_select_expr(module_t *m, ast_expr_t *expr) {
             char *unique_ident = ident_with_prefix(analyzer_import_key(import), select->key);
 
             // 检测 import ident 是否存在
-            if (!symbol_table_get(unique_ident)) {
+            symbol_t *member = symbol_table_get(unique_ident);
+            if (!member) {
                 ANALYZER_ASSERTF(false, "identifier '%s' undeclared \n", unique_ident);
             }
+
+            // module.member 访问, 检查被访问符号的可见性
+            char *display_ident = str_connect_by(ident->literal, select->key, ".");
+            analyzer_symbol_access_assert(m, member, display_ident);
 
             expr->assert_type = AST_EXPR_IDENT;
             expr->value = ast_new_ident(unique_ident);
@@ -2448,7 +2471,7 @@ static void analyzer_module_decls(module_t *m, slice_t *stmt_list, slice_t *fn_l
 
                 fndef->symbol_name = str_connect_by(impl_type_ident, symbol_name, IMPL_CONNECT_IDENT);
 
-                symbol_t *s = symbol_table_set(fndef->symbol_name, SYMBOL_FN, fndef, false);
+                symbol_t *s = symbol_table_set_module(fndef->symbol_name, SYMBOL_FN, fndef, m, fndef->is_pub);
                 ANALYZER_ASSERTF(s, "ident '%s' redeclared", fndef->symbol_name);
             }
 

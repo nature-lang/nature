@@ -2,13 +2,13 @@ mod local
 
 import rand.other as rand_other
 
-int count = 444
+pub int count = 444
 
-fn get_count():int {
+pub fn get_count():int {
     return count
 }
 
-fn dump() {
+pub fn dump() {
     rand_other.dump()
     println("hello local in cross linux")
 }

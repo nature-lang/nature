@@ -1,19 +1,19 @@
-type person_t = struct{
+pub type person_t = struct{
     string name
     int age
     bool sex
 }
 
 
-fn person_t.set_age(*self, int now) {
+pub fn person_t.set_age(*self, int now) {
     self.age = now
 }
 
-fn person_t.get_name(*self):string {
+pub fn person_t.get_name(*self):string {
     return self.name
 }
 
-fn person_t.test_self(self) {
+pub fn person_t.test_self(self) {
     person_t p = self
     println('in test_self', p.name, p.age, p.sex)
 }

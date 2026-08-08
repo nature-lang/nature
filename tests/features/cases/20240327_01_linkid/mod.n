@@ -1,7 +1,7 @@
-fn bar()
+pub fn bar()
 
 #linkid custom_link_foo_id
-fn foo(int a) {
+pub fn foo(int a) {
     println('hello world', a)
 }
 
@@ -12,4 +12,4 @@ fn test2() {
 }
 
 #linkid sleep
-fn test3(int second)
+pub fn test3(int second)

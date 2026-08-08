@@ -1,0 +1,32 @@
+pub fn pub_add(int a, int b):int {
+    return a + b
+}
+
+fn private_fn():int {
+    return 42
+}
+
+pub const PUB_CONST = 100
+
+const PRIVATE_CONST = 200
+
+pub type pub_pair_t = struct {
+    int x
+    int y
+}
+
+type private_t = struct {
+    int v
+}
+
+pub var pub_counter = 1
+
+var private_counter = 1
+
+pub fn pub_pair_t.sum(*self):int {
+    return self.x + self.y
+}
+
+fn pub_pair_t.priv_mul(*self):int {
+    return self.x * self.y
+}

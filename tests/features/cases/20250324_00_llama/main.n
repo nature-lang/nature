@@ -464,7 +464,7 @@ fn transformer_new(string path):ref<transformer>! {
     return t
 }
 
-fn tokenizer_t.decode(&self, int prev_token, int token):string! {
+pub fn tokenizer_t.decode(&self, int prev_token, int token):string! {
     string piece = self.vocab[token]
     // following BOS (1) token, sentencepiece decoder strips any leading whitespace (see PR #89)
     if prev_token == 1 && piece[0] == ' '.char() {

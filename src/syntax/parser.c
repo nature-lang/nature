@@ -763,10 +763,11 @@ static type_t parser_single_type(module_t *m) {
  * type foo = gen i8|u8|i16
  * @return
  */
-static ast_stmt_t *parser_typedef_stmt(module_t *m) {
+static ast_stmt_t *parser_typedef_stmt(module_t *m, bool is_pub) {
     ast_stmt_t *result = stmt_new(m);
     ast_typedef_stmt_t *typedef_stmt = NEW(ast_typedef_stmt_t);
     sc_map_init_sv(&typedef_stmt->method_table, 0, 0);
+    typedef_stmt->is_pub = is_pub;
 
     parser_must(m, TOKEN_TYPE); // code
     typedef_stmt->ident = parser_must(m, TOKEN_IDENT)->literal; // ident
@@ -2804,11 +2805,12 @@ static ast_tuple_destr_t *parser_var_tuple_destr(module_t *m) {
     return result;
 }
 
-static ast_stmt_t *parser_constdef_stmt(module_t *m) {
+static ast_stmt_t *parser_constdef_stmt(module_t *m, bool is_pub) {
     ast_stmt_t *result = stmt_new(m);
 
     parser_must(m, TOKEN_CONST);
     ast_constdef_stmt_t *constdef = NEW(ast_constdef_stmt_t);
+    constdef->is_pub = is_pub;
 
     // 可选的 const 类型， string/int(i..)/float(f..)
     // 暂时看来没有用，如果需要在使用的时候主动进行 as
@@ -2833,12 +2835,13 @@ static ast_stmt_t *parser_constdef_stmt(module_t *m) {
  * @param m
  * @return
  */
-static ast_stmt_t *parser_var_begin_stmt(module_t *m) {
+static ast_stmt_t *parser_var_begin_stmt(module_t *m, bool is_pub) {
     ast_stmt_t *result = stmt_new(m);
     type_t typedecl = parser_type(m);
 
     // var (a, b)
     if (parser_is(m, TOKEN_LEFT_PAREN)) {
+        PARSER_ASSERTF(!is_pub, "pub cannot be applied to tuple destructuring");
         ast_var_tuple_def_stmt_t *stmt = NEW(ast_var_tuple_def_stmt_t);
         stmt->tuple_destr = parser_var_tuple_destr(m);
         parser_must(m, TOKEN_EQUAL);
@@ -2852,6 +2855,7 @@ static ast_stmt_t *parser_var_begin_stmt(module_t *m) {
     ast_vardef_stmt_t *var_assign = NEW(ast_vardef_stmt_t);
     token_t *ident_token = parser_must(m, TOKEN_IDENT);
     var_assign->var_decl.type = typedecl;
+    var_assign->var_decl.is_pub = is_pub;
     var_assign->var_decl.ident = ident_token->literal;
     parser_must(m, TOKEN_EQUAL);
     var_assign->right = expr_new_ptr(m);
@@ -2863,7 +2867,7 @@ static ast_stmt_t *parser_var_begin_stmt(module_t *m) {
 }
 
 // int a = 1
-static ast_stmt_t *parser_type_begin_stmt(module_t *m) {
+static ast_stmt_t *parser_type_begin_stmt(module_t *m, bool is_pub) {
     ast_stmt_t *result = stmt_new(m);
     // 类型解析
     type_t t = parser_type(m);
@@ -2876,6 +2880,7 @@ static ast_stmt_t *parser_type_begin_stmt(module_t *m) {
     ast_var_decl_t *var_decl = NEW(ast_var_decl_t);
     var_decl->type = t;
     var_decl->ident = ident_token->literal;
+    var_decl->is_pub = is_pub;
 
     // 声明必须赋值
     parser_must(m, TOKEN_EQUAL);
@@ -3119,7 +3124,6 @@ static ast_stmt_t *parser_test_stmt(module_t *m) {
     }
 
     fndef->is_test = true;
-    fndef->is_private = true;
     fndef->is_errable = true;
     fndef->test_name = name_token->literal;
     fndef->symbol_name =
@@ -3156,8 +3160,6 @@ static ast_stmt_t *parser_label(module_t *m) {
                 token_t *literal = parser_must(m, TOKEN_LITERAL_STRING);
                 fndef->linkid = literal->literal;
             }
-        } else if (str_equal(token->literal, MACRO_LOCAL)) {
-            fndef->is_private = true;
         } else if (str_equal(token->literal, MACRO_WHERE)) {
             PARSER_ASSERTF(!fndef->pending_where_params, "#where redeclared");
             fndef->pending_where_params = parser_parse_where_constraints(m);
@@ -3178,13 +3180,15 @@ static ast_stmt_t *parser_label(module_t *m) {
                        parser_peek(m)->literal);
     }
 
+    fndef->is_pub = parser_consume(m, TOKEN_PUB);
+
     if (fndef->pending_where_params) {
         PARSER_ASSERTF(parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX), "#where can only be applied to fn/fx");
     }
 
     if (parser_is(m, TOKEN_TYPE)) {
         PARSER_ASSERTF(!fndef->pending_where_params, "#where can only be applied to fn/fx");
-        return parser_typedef_stmt(m);
+        return parser_typedef_stmt(m, fndef->is_pub);
     } else if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
         return parser_fndef_stmt(m, fndef);
     } else {
@@ -3281,19 +3285,17 @@ static ast_stmt_t *parser_left_param_begin_stmt(module_t *m) {
  */
 static ast_stmt_t *parser_local_stmt(module_t *m) {
     if (parser_is(m, TOKEN_VAR)) {
-        return parser_var_begin_stmt(m);
+        return parser_var_begin_stmt(m, false);
     } else if (parser_is(m, TOKEN_CONST)) {
-        return parser_constdef_stmt(m);
+        return parser_constdef_stmt(m, false);
     } else if (is_type_begin_stmt(m)) {
-        return parser_type_begin_stmt(m);
+        return parser_type_begin_stmt(m, false);
     } else if (parser_is(m, TOKEN_LEFT_PAREN)) {
         return parser_left_param_begin_stmt(m);
     } else if (parser_is(m, TOKEN_THROW)) {
         return parser_throw_stmt(m);
     } else if (parser_is(m, TOKEN_LET)) {
         return parser_let_stmt(m);
-    } else if (parser_is(m, TOKEN_LABEL)) {
-        return parser_label(m);
     } else if (parser_is(m, TOKEN_IF)) {
         return parser_if_stmt(m);
     } else if (parser_is(m, TOKEN_FOR)) {
@@ -3305,7 +3307,7 @@ static ast_stmt_t *parser_local_stmt(module_t *m) {
     } else if (parser_is(m, TOKEN_IMPORT)) {
         return parser_import_stmt(m);
     } else if (parser_is(m, TOKEN_TYPE)) {
-        return parser_typedef_stmt(m);
+        return parser_typedef_stmt(m, false);
     } else if (parser_is(m, TOKEN_CONTINUE)) {
         return parser_continue_stmt(m);
     } else if (parser_is(m, TOKEN_BREAK)) {
@@ -3338,23 +3340,27 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
         PARSER_ASSERTF(false, "'mod' declaration must be the first statement of the file");
     }
 
+    bool is_pub = parser_consume(m, TOKEN_PUB);
+
     // module parser 只包含着几种简单语句
     if (parser_is(m, TOKEN_VAR)) {
-        return parser_var_begin_stmt(m);
+        return parser_var_begin_stmt(m, is_pub);
     } else if (parser_is(m, TOKEN_CONST)) {
-        return parser_constdef_stmt(m);
+        return parser_constdef_stmt(m, is_pub);
     } else if (is_type_begin_stmt(m)) {
-        return parser_type_begin_stmt(m);
-    } else if (parser_is(m, TOKEN_LABEL)) {
+        return parser_type_begin_stmt(m, is_pub);
+    } else if (!is_pub && parser_is(m, TOKEN_LABEL)) {
         return parser_label(m);
     } else if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
-        return parser_fndef_stmt(m, ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column));
-    } else if (parser_is(m, TOKEN_TEST)) {
+        ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
+        fndef->is_pub = is_pub;
+        return parser_fndef_stmt(m, fndef);
+    } else if (!is_pub && parser_is(m, TOKEN_TEST)) {
         return parser_test_stmt(m);
-    } else if (parser_is(m, TOKEN_IMPORT)) {
+    } else if (!is_pub && parser_is(m, TOKEN_IMPORT)) {
         return parser_import_stmt(m);
     } else if (parser_is(m, TOKEN_TYPE)) {
-        return parser_typedef_stmt(m);
+        return parser_typedef_stmt(m, is_pub);
     }
 
     PARSER_ASSERTF(false, "non-declaration statement outside fn body")

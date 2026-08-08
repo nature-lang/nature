@@ -4,12 +4,12 @@ type foo_t<T:f32|bool|int, U:bool|string|f32|[i32]> = struct{
     float c
 }
 
-type bar_t<T,U> = struct{
+pub type bar_t<T,U> = struct{
     T a
     U b
 }
 
-fn bar_t<T, U>.dump(self):T {
+pub fn bar_t<T, U>.dump(self):T {
    println('bar_t any dump', self.a)
    return self.a
 }

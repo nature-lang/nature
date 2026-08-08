@@ -223,7 +223,7 @@ mod tests {
             type_: Type::default(),
             be_capture: false,
             heap_ident: None,
-            is_private: false,
+            is_pub: false,
         }));
         let right = Box::new(crate::analyzer::common::Expr {
             start,

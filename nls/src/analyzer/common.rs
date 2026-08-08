@@ -1097,7 +1097,7 @@ pub struct VarDeclExpr {
     pub type_: Type,
     pub be_capture: bool,
     pub heap_ident: Option<String>,
-    pub is_private: bool,
+    pub is_pub: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1109,7 +1109,7 @@ pub struct AstConstDef {
     pub symbol_id: NodeId,
     pub symbol_start: usize,
     pub symbol_end: usize,
-    pub is_private: bool,
+    pub is_pub: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1255,7 +1255,7 @@ pub struct TypedefStmt {
     pub is_tagged_union: bool,
     pub impl_interfaces: Vec<Type>,
     pub method_table: HashMap<String, Arc<Mutex<AstFnDef>>>, // key = ident, value = ast_fndef_t
-    pub is_private: bool,
+    pub is_pub: bool,
 
     pub symbol_start: usize,
     pub symbol_end: usize,
@@ -1325,7 +1325,7 @@ pub struct AstFnDef {
     pub is_tpl: bool,
     pub is_generics: bool,
     pub is_async: bool,
-    pub is_private: bool,
+    pub is_pub: bool,
     pub is_fx: bool,
     pub is_errable: bool, // 当前函数是否返回错误
     pub is_test: bool,
@@ -1379,7 +1379,7 @@ impl Default for AstFnDef {
             pending_where_params: None,
             is_generics: false,
             is_async: false,
-            is_private: false,
+            is_pub: false,
             is_fx: false,
             is_errable: false,
             is_test: false,

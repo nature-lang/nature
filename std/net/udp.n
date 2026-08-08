@@ -12,7 +12,7 @@ type addr_t = struct{
     bool v4
 }
 
-type socket_t = struct{
+pub type socket_t = struct{
     addr_t addr
 
     anyptr handle
@@ -21,7 +21,7 @@ type socket_t = struct{
     uint fd
 }
 
-type conn_t:io.reader, io.writer = struct{
+pub type conn_t:io.reader, io.writer = struct{
     ref<socket_t> socket
     addr_t remote_addr
 }
@@ -32,7 +32,7 @@ fn uv_udp_bind(ref<socket_t> s):void!
 #linkid rt_uv_udp_recvfrom
 fn uv_udp_recvfrom(ref<socket_t> s, [u8] buf, ptr<addr_t> addr):int!
 
-fn bind(string host):ref<socket_t>! {
+pub fn bind(string host):ref<socket_t>! {
     var (ip, port) = utils.split_host(host)
     var addr = addr_t{port: port, v4: utils.is_ipv4(ip)}
 
@@ -50,9 +50,9 @@ fn bind(string host):ref<socket_t>! {
 }
 
 #linkid rt_uv_udp_close
-fn socket_t.close(&self)
+pub fn socket_t.close(&self)
 
-fn socket_t.recvfrom(&self, [u8] buf):(int, addr_t)! {
+pub fn socket_t.recvfrom(&self, [u8] buf):(int, addr_t)! {
     if self.closed {
         throw errorf('socket closed')
     }
@@ -65,7 +65,7 @@ fn socket_t.recvfrom(&self, [u8] buf):(int, addr_t)! {
 #linkid rt_uv_udp_sendto
 fn uv_sendto(ref<socket_t> s, [u8] buf, addr_t addr):int!
 
-fn socket_t.sendto(&self, [u8] buf, string host):int! {
+pub fn socket_t.sendto(&self, [u8] buf, string host):int! {
     if self.closed {
        throw errorf('socket closed')
     }
@@ -82,7 +82,7 @@ fn socket_t.sendto(&self, [u8] buf, string host):int! {
     return uv_sendto(self, buf, addr)
 }
 
-fn socket_t.connect(&self, string host):ref<conn_t>! {
+pub fn socket_t.connect(&self, string host):ref<conn_t>! {
     if self.closed {
         throw errorf('socket closed')
     }
@@ -103,12 +103,12 @@ fn socket_t.connect(&self, string host):ref<conn_t>! {
     return conn
 }
 
-fn connect(string host):ref<conn_t>! {
+pub fn connect(string host):ref<conn_t>! {
     var s = bind('0.0.0.0:0')
     return s.connect(host)
 }
 
-fn conn_t.write(&self, [u8] buf):int! {
+pub fn conn_t.write(&self, [u8] buf):int! {
     if self.socket.closed {
         throw errorf('socket closed')
     }
@@ -116,7 +116,7 @@ fn conn_t.write(&self, [u8] buf):int! {
     return uv_sendto(self.socket, buf, self.remote_addr)
 }
 
-fn conn_t.read(&self, [u8] buf):int! {
+pub fn conn_t.read(&self, [u8] buf):int! {
     if self.socket.closed {
         throw errorf('socket closed')
     }
@@ -125,7 +125,7 @@ fn conn_t.read(&self, [u8] buf):int! {
 }
 
 
-fn conn_t.close(&self) {
+pub fn conn_t.close(&self) {
     self.socket.close()
 }
 
@@ -143,6 +143,6 @@ fn addr_t.ip(*self):string {
     return data[..len] as string
 }
 
-fn addr_t.to_string(*self):string {
+pub fn addr_t.to_string(*self):string {
     return fmt.sprintf('%s:%d', self.ip(), self.port)
 }

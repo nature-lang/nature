@@ -1,3 +1,3 @@
-fn name():string {
+pub fn name():string {
     return 'fmtx'
 }

@@ -139,18 +139,6 @@ static void symbol_register_builtin_types() {
     symbol_table_set("tup", SYMBOL_TYPE, builtin_typedef_tuple("tup"), false);
 }
 
-static symbol_t *_symbol_table_set(string ident, symbol_type_t type, void *ast_value, bool is_local) {
-    symbol_t *s = NEW(symbol_t);
-    s->ident = ident;
-    s->type = type;
-    s->ast_value = ast_value;
-    s->is_local = is_local;
-
-    table_set(symbol_table, ident, s);
-
-    return s;
-}
-
 void symbol_init() {
     symbol_table = table_new();
     symbol_fn_list = slice_new();
@@ -160,10 +148,19 @@ void symbol_init() {
     symbol_register_builtin_types();
 }
 
-symbol_t *symbol_table_set(string ident, symbol_type_t type, void *ast_value, bool is_local) {
+static symbol_t *symbol_table_set_scoped(string ident, symbol_type_t type, void *ast_value, bool is_local,
+                                         module_t *owner, bool is_pub) {
     bool overlay = table_exist(symbol_table, ident);
 
-    symbol_t *s = _symbol_table_set(ident, type, ast_value, is_local);
+    symbol_t *s = NEW(symbol_t);
+    s->ident = ident;
+    s->type = type;
+    s->ast_value = ast_value;
+    s->is_local = is_local;
+    s->owner = owner;
+    s->is_pub = is_pub;
+    table_set(symbol_table, ident, s);
+
     if (type == SYMBOL_FN) {
         slice_push(symbol_fn_list, s);
     }
@@ -183,6 +180,18 @@ symbol_t *symbol_table_set(string ident, symbol_type_t type, void *ast_value, bo
     return s;
 }
 
+symbol_t *symbol_table_set(string ident, symbol_type_t type, void *ast_value, bool is_local) {
+    return symbol_table_set_scoped(ident, type, ast_value, is_local, NULL, true);
+}
+
+symbol_t *symbol_table_set_module(string ident, symbol_type_t type, void *ast_value, module_t *owner, bool is_pub) {
+    assert(owner);
+    return symbol_table_set_scoped(ident, type, ast_value, false, owner, is_pub);
+}
+
+bool symbol_accessible_from(symbol_t *symbol, module_t *from) {
+    return symbol && (!symbol->owner || symbol->owner == from || symbol->is_pub);
+}
 
 symbol_t *symbol_table_get_noref(char *ident) {
     return table_get(symbol_table, ident);

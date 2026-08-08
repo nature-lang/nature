@@ -274,6 +274,9 @@ pub enum TokenType {
     #[strum(serialize = "var")]
     Var,
 
+    #[strum(serialize = "pub")]
+    Pub,
+
     #[strum(serialize = "const")]
     Const,
 
@@ -419,6 +422,7 @@ impl Token {
             | TokenType::Defer
             | TokenType::Let
             | TokenType::Var
+            | TokenType::Pub
             | TokenType::Const
             | TokenType::Test
             | TokenType::Fn
@@ -571,6 +575,7 @@ impl Lexer {
             "int" => TokenType::Int,
             "is" => TokenType::Is,
             "let" => TokenType::Let,
+            "pub" => TokenType::Pub,
             // "map" => TokenType::Map,
             "match" => TokenType::Match,
             "select" => TokenType::Select,

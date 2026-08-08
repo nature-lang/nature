@@ -8,7 +8,7 @@ fn mbedtls_base64_decode(anyptr dst, int dlen, ptr<int> olen, anyptr src, int sl
 #linkid mbedtls_base64_encode
 fn mbedtls_base64_encode(anyptr dst, int dlen, ptr<int> olen, anyptr src, int slen):i32
 
-fn encode([u8] src):[u8] {
+pub fn encode([u8] src):[u8] {
     var max_len = ((src.len() + 2) / 3) * 4 + 1
     var dst = vec<u8>.new(0, max_len)
     int olen = 0
@@ -19,7 +19,7 @@ fn encode([u8] src):[u8] {
     return dst
 }
 
-fn decode([u8] src):[u8]! {
+pub fn decode([u8] src):[u8]! {
     var max_len = (src.len() * 3) / 4 + 1
     var dst = vec<u8>.new(0, max_len)
     var olen = 0

@@ -5,13 +5,13 @@ import rand.other as rand_other
 import rand.utils.pool
 import rand.utils.seed
 
-int count = 233
+pub int count = 233
 
-fn get_count():int {
+pub fn get_count():int {
     return count
 }
 
-fn dump() {
+pub fn dump() {
     rand_other.dump()
     pool.dump()
     seed.dump()

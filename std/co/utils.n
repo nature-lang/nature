@@ -2,13 +2,13 @@
 fn coroutine_new(anyptr function, int flag, anyptr future):anyptr
 
 #linkid rt_coroutine_async
-fn coroutine_async(anyptr function, int flag, anyptr future):anyptr
+pub fn coroutine_async(anyptr function, int flag, anyptr future):anyptr
 
 #linkid rt_coroutine_dispatch
 fn coroutine_dispatch(anyptr co)
 
 #linkid rt_coroutine_return
-fn coroutine_return(anyptr result)
+pub fn coroutine_return(anyptr result)
 
 #linkid rt_coroutine_await
-fn coroutine_await(anyptr co)
+pub fn coroutine_await(anyptr co)

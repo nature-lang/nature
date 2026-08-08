@@ -59,7 +59,7 @@ async fn cross_part_declarations_are_shared() {
 
     // avoid builtins (println and friends) so the test does not depend on NATURE_ROOT
     write(&root, "package.toml", "name = \"app\"\nversion = \"1.0.0\"\ntype = \"bin\"\n");
-    write(&root, "codec/encode.n", "mod codec\n\nfn encode(int v):int {\n    return v * scale()\n}\n");
+    write(&root, "codec/encode.n", "mod codec\n\npub fn encode(int v):int {\n    return v * scale()\n}\n");
     write(&root, "codec/codec.n", "mod codec\n\nfn scale():int {\n    return 2\n}\n");
     write(&root, "main.n", "import app.codec\n\nfn main() {\n    int v = codec.encode(3)\n}\n");
 

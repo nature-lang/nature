@@ -1,7 +1,7 @@
 import co
 import time
 
-fn sum(int a, int b):int {
+pub fn sum(int a, int b):int {
     co.sleep(1000)
     return a + b
 }

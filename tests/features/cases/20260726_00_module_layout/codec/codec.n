@@ -3,9 +3,9 @@ mod codec
 import strings
 
 // top-level globals are shared by the whole module
-int shared_count = 7
+pub int shared_count = 7
 
-fn decode(int v):int {
+pub fn decode(int v):int {
     return v + scale()
 }
 

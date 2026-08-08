@@ -3,7 +3,7 @@ import io
 // A network connection can be read, written, and explicitly closed. Keeping
 // close in the common interface lets higher-level streaming protocols release
 // a connection as soon as their body is complete or cancelled.
-type connable:io.writer,io.reader = interface{
+pub type connable:io.writer,io.reader = interface{
     fn close()
     fn set_read_timeout(int timeout_ms)
     fn read_timeout():int

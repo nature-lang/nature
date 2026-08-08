@@ -25,7 +25,7 @@ i32 ARCHIVE_EXTRACT_UNLINK = 0x0010
 i32 ARCHIVE_EXTRACT_ACL = 0x0020
 i32 ARCHIVE_EXTRACT_FFLAGS = 0x0040
 
-bool verbose = false
+pub bool verbose = false
 
 fn logf(string format, ...[any] args) {
     if !verbose {
@@ -40,7 +40,7 @@ fn logf(string format, ...[any] args) {
  * @sources 是具体的文件夹或者目录名称，不支持按通配符号，如 * 或者 . 来匹配所有文件
  * @workdir 表示具体的工作目录, 相关 sources 都是在 workdir 中被找到的
  */
-fn encode(string workdir, string tgz_path, [string] sources):void! {
+pub fn encode(string workdir, string tgz_path, [string] sources):void! {
     if workdir.len() == 0 {
         throw errorf('workdir is empty')
     }
@@ -146,7 +146,7 @@ fn encode(string workdir, string tgz_path, [string] sources):void! {
 
 
 // 在指定目录将 tgz path 进行解压
-fn decode(string workdir, string tgz_path):void! {
+pub fn decode(string workdir, string tgz_path):void! {
     if tgz_path.len() == 0 {
         throw errorf('tgz_path is empty')
     }

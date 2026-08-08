@@ -70,7 +70,7 @@ type HashTable = struct{
     [HashItem?] items
 }
 
-fn newHashTable(int size):ref<HashTable> {
+pub fn newHashTable(int size):ref<HashTable> {
     return new HashTable(
         size = size,
         count = 0,
@@ -78,7 +78,7 @@ fn newHashTable(int size):ref<HashTable> {
     )
 }
 
-fn HashTable.hash(&self, string s, int a, int m):int {
+pub fn HashTable.hash(&self, string s, int a, int m):int {
     var hash = 0
     for var i= 0; i < s.len(); i += 1 {
         hash += pow(a,s.len() - (i + 1)) * s[i] as int
@@ -87,13 +87,13 @@ fn HashTable.hash(&self, string s, int a, int m):int {
     return hash
 }
 
-fn HashTable.getHash(&self, string s, int num_bucket, int attempt): int {
+pub fn HashTable.getHash(&self, string s, int num_bucket, int attempt): int {
     var hash_a = self.hash(s, 99, num_bucket)
     var hash_b = self.hash(s, 66, num_bucket)
     return (hash_a + (attempt * (hash_b + 1))) % num_bucket
 }
 
-fn HashTable.insert(&self, string key, string value) {
+pub fn HashTable.insert(&self, string key, string value) {
     var item = newItem(key, value)
     var idx = self.getHash(key, self.size, 0)
     println("Inserting at index: ", idx)
@@ -117,7 +117,7 @@ fn HashTable.insert(&self, string key, string value) {
     self.count += 1
 }
 
-fn  HashTable.get(&self, string key): string? {
+pub fn  HashTable.get(&self, string key): string? {
     var idx = self.getHash(key, self.size, 0)
     HashItem? item = self.items[idx]
     var i = 1

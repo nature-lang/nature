@@ -1,4 +1,4 @@
-fn max(int a, int b):int {
+pub fn max(int a, int b):int {
     if (a > b) {
         return a
     }

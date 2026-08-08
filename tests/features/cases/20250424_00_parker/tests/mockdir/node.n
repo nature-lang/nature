@@ -1,7 +1,7 @@
 import syscall
 import co
 
-int count = 10
+pub int count = 10
 
 fn main() {
     var str = syscall.get_env('REPEAT_COUNT')

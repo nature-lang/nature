@@ -2,10 +2,10 @@ import co
 import co.mutex
 import syscall
 
-type sig_t = int
+pub type sig_t = int
 
 #linkid signal_notify
-fn notify(chan<sig_t> sig_ch, ...[int] signals)
+pub fn notify(chan<sig_t> sig_ch, ...[int] signals)
 
 #linkid signal_stop
 fn stop(chan<sig_t> sig_ch)

@@ -65,6 +65,8 @@ typedef struct {
     bool is_local; // 对应 elf 符号中的 global/local, 表示能否被外部链接链接到
     symbol_type_t type;
     void *ast_value; // ast_typedef_stmt/ast_var_decl/ast_fndef_t/closure_t/ast_constdef_stmt_t
+    module_t *owner; // 模块声明的所属 module; 局部、内建和编译器生成符号为 NULL
+    bool is_pub; // owner 非 NULL 时表示能否被其他 module 访问
     int64_t ref_count; // 引用计数
     void *data;
 } symbol_t;
@@ -80,6 +82,10 @@ static inline bool is_builtin_call(char *ident) {
 }
 
 symbol_t *symbol_table_set(char *ident, symbol_type_t type, void *ast_value, bool is_local);
+
+symbol_t *symbol_table_set_module(char *ident, symbol_type_t type, void *ast_value, module_t *owner, bool is_pub);
+
+bool symbol_accessible_from(symbol_t *symbol, module_t *from);
 
 symbol_t *symbol_typedef_add_method(char *typedef_ident, char *method_ident, ast_fndef_t *fndef);
 

@@ -7,7 +7,7 @@ type linkco_t = struct{
     anyptr data // 各种需要的数据存储, 比如 chan 中的 msg_ptr
 }
 
-type linkco_list_t = struct{
+pub type linkco_list_t = struct{
     ptr<linkco_t> head
     ptr<linkco_t> rear
     i64 count

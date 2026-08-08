@@ -1,0 +1,6 @@
+import 'mod.n' as math
+
+fn main() {
+    var v = math.private_t{x: 1}
+    println(v.v)
+}

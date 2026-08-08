@@ -1,9 +1,9 @@
-fn bar():void! {
+pub fn bar():void! {
     var list = vec<i8>.new(0, 10)
     var foo = list[11]
 }
 
-fn foo():void! {
+pub fn foo():void! {
     bar()
 }
 

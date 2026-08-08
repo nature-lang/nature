@@ -1,6 +1,6 @@
-int foo = 1
-int bar = 2
+pub int foo = 1
+pub int bar = 2
 
-fn log() {
+pub fn log() {
     println('i am pool.log')
 }

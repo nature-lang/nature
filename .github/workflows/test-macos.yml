@@ -26,17 +26,17 @@ jobs:
           go-version: stable
           cache-dependency-path: package/go.sum
 
+      - name: Setup Rust for nls
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: nls
           prefix-key: nls
           cache-on-failure: true
-
-      - name: Setup Rust for nls
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2

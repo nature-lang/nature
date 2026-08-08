@@ -1,14 +1,14 @@
-type person_t = struct {
+pub type person_t = struct {
     string name
     int age
     string from
     u8 gender
 }
 
-fn person_t.set_age(&self, int now) {
+pub fn person_t.set_age(&self, int now) {
     self.age = now
 }
 
-fn person_t.get_name(&self):string {
+pub fn person_t.get_name(&self):string {
     return self.name
 }

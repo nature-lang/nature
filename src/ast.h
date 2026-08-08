@@ -181,6 +181,7 @@ typedef struct {
 
 typedef struct {
     char *literal;
+    char *display_literal; // original spelling retained for diagnostics
 } ast_ident;
 
 typedef struct {
@@ -302,9 +303,10 @@ typedef struct {
 // int a;
 typedef struct {
     char *ident;
-    type_t type; // type 已经决定了 size
+    type_t type;
 
     bool be_capture; // 被 coroutine closure 引用, 必须在堆中分配
+    bool is_pub; // module 外可见, 默认 false
 
     // 当该值不为 null 时，则需要在 linear 进行堆分配以及相关的改写。
     // 变量进行 heap 分配时，指向 heap 的 ident， 后续的使用都需要替换成该 ident, 默认为 null
@@ -318,6 +320,7 @@ typedef struct {
     type_t type;
     ast_expr_t *right;
     bool processing;
+    bool is_pub; // module 外可见, 默认 false
 } ast_constdef_stmt_t;
 
 typedef struct {
@@ -688,6 +691,7 @@ typedef struct {
     list_t *impl_interfaces; // type_t, typedef 可以实现多个接口, 对于 interface 来说则是自身扩展
     struct sc_map_sv method_table; // key = ident, value = ast_fndef_t
     int64_t hash;
+    bool is_pub; // module 外可见, 默认 false
 } ast_typedef_stmt_t;
 
 // 这里包含 body, 所以属于 def
@@ -763,7 +767,7 @@ struct ast_fndef_t {
     bool is_generics; // 是否是泛型
 
     bool is_async; // coroutine closure fn, default is false
-    bool is_private;
+    bool is_pub; // module 外可见, 默认 false
 
     bool is_test;
     char *test_name;
@@ -946,7 +950,7 @@ static inline bool can_assign(ast_type_t t) {
 static inline ast_fndef_t *ast_fndef_new(module_t *m, int line, int column) {
     ast_fndef_t *fndef = NEW(ast_fndef_t);
     fndef->is_async = false;
-    fndef->is_private = false;
+    fndef->is_pub = false;
     fndef->is_test = false;
     fndef->test_name = NULL;
     fndef->module = m;

@@ -1,7 +1,7 @@
 import co
 
 // var ch = chan<T>.new()
-fn chan<T>.new(...[int] args):chan<T> {
+pub fn chan<T>.new(...[int] args):chan<T> {
     int rhash = @reflect_hash(chan<T>)
     int ele_rhash = @reflect_hash(T)
 
@@ -13,19 +13,19 @@ fn chan<T>.new(...[int] args):chan<T> {
     return rt_chan_new(rhash, ele_rhash, buf_len) as chan<T>
 }
 
-fn chan<T>.send(self, T msg):void! {
+pub fn chan<T>.send(self, T msg):void! {
     rt_chan_send(self as anyptr, &msg as anyptr, false)
 }
 
-fn chan<T>.try_send(self, T msg):bool! {
+pub fn chan<T>.try_send(self, T msg):bool! {
     return rt_chan_send(self as anyptr, &msg as anyptr, true)
 }
 
-fn chan<T>.on_send(self, T msg):void {
+pub fn chan<T>.on_send(self, T msg):void {
     // no body
 }
 
-fn chan<T>.recv(self):T! {
+pub fn chan<T>.recv(self):T! {
     var msg = @default(T)
     rt_chan_recv(self as anyptr, &msg as anyptr, false)
 
@@ -33,34 +33,34 @@ fn chan<T>.recv(self):T! {
 }
 
 // The specific logic is already handled at compiler time, and this function is mainly used for compiler front-end validation
-fn chan<T>.on_recv(self):T {
+pub fn chan<T>.on_recv(self):T {
     var msg = @default(T)
     return msg
 }
 
-fn chan<T>.try_recv(self):(T, bool)! {
+pub fn chan<T>.try_recv(self):(T, bool)! {
     var msg = @default(T)
     bool is_recv = rt_chan_recv(self as anyptr, &msg as anyptr, true)
     return (msg, is_recv)
 }
 
 #linkid rt_chan_close
-fn chan<T>.close(self):void!
+pub fn chan<T>.close(self):void!
 
 #linkid rt_chan_is_closed
-fn chan<T>.is_closed(self):bool
+pub fn chan<T>.is_closed(self):bool
 
 #linkid rt_chan_is_successful
-fn chan<T>.is_successful(self):bool
+pub fn chan<T>.is_successful(self):bool
 
 #linkid rt_chan_new
-fn rt_chan_new(i64 rhash, i64 ele_hash, i64 buf_len):anyptr
+pub fn rt_chan_new(i64 rhash, i64 ele_hash, i64 buf_len):anyptr
 
 #linkid rt_chan_send
-fn rt_chan_send(anyptr ch, anyptr msg, bool _try):bool!
+pub fn rt_chan_send(anyptr ch, anyptr msg, bool _try):bool!
 
 #linkid rt_chan_recv
-fn rt_chan_recv(anyptr ch, anyptr msg, bool _try):bool!
+pub fn rt_chan_recv(anyptr ch, anyptr msg, bool _try):bool!
 
 #linkid rt_chan_close
-fn rt_chan_close(anyptr ch):void!
+pub fn rt_chan_close(anyptr ch):void!

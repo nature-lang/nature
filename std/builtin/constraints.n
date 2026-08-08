@@ -1,9 +1,9 @@
-type equatable = interface{}
+pub type equatable = interface{}
 
-type comparable = interface{}
+pub type comparable = interface{}
 
-type addable = interface{}
+pub type addable = interface{}
 
-type numeric:addable,comparable,equatable = interface{}
+pub type numeric:addable,comparable,equatable = interface{}
 
-type nonvoid = interface{}
+pub type nonvoid = interface{}

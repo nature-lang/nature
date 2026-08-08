@@ -46,6 +46,23 @@ impl<'a> Semantic<'a> {
         self.current_scope_id = self.symbol_table.exit_scope(self.current_scope_id);
     }
 
+    pub(crate) fn ensure_symbol_accessible(&mut self, symbol_id: NodeId, ident: &str, start: usize, end: usize) -> bool {
+        if self.symbol_table.symbol_accessible_from(symbol_id, &self.module.ident) {
+            return true;
+        }
+
+        errors_push(
+            self.module,
+            AnalyzerError {
+                start,
+                end,
+                message: format!("undefined: {}", ident),
+                is_warning: false,
+            },
+        );
+        false
+    }
+
     fn analyze_special_type_rewrite(&mut self, t: &mut Type) -> bool {
         debug_assert!(t.import_as.is_empty());
 
@@ -218,11 +235,15 @@ impl<'a> Semantic<'a> {
                 }
 
                 let import_stmt = import_stmt.unwrap();
+                let module_ident = import_stmt.module_ident.clone();
+                let module_display = import_stmt.display_module().to_string();
 
                 // 从 symbol table 中查找相关的 global symbol id
-                if let Some(symbol_id) = self.symbol_table.find_module_symbol_id(&import_stmt.module_ident, &t.ident) {
+                if let Some(symbol_id) = self.symbol_table.find_module_symbol_id(&module_ident, &t.ident) {
+                    let access_ident = format!("{}.{}", module_display, t.ident);
+                    self.ensure_symbol_accessible(symbol_id, &access_ident, t.start, t.end);
                     t.import_as = "".to_string();
-                    t.ident = format_global_ident(import_stmt.module_ident.clone(), t.ident.clone());
+                    t.ident = format_global_ident(module_ident, t.ident.clone());
                     t.symbol_id = symbol_id;
                 } else {
                     errors_push(
@@ -230,7 +251,7 @@ impl<'a> Semantic<'a> {
                         AnalyzerError {
                             start: t.start,
                             end: t.end,
-                            message: format!("type '{}' undeclared in {} module", t.ident, import_stmt.display_module()),
+                            message: format!("type '{}' undeclared in {} module", t.ident, module_display),
                             is_warning: false,
                         },
                     );
@@ -646,11 +667,12 @@ impl<'a> Semantic<'a> {
                         fndef.symbol_name = format_impl_ident(impl_type_ident, symbol_name);
 
                         // register to global symbol table
-                        match self.symbol_table.define_symbol_in_scope(
+                        match self.symbol_table.define_symbol_in_scope_with_visibility(
                             fndef.symbol_name.clone(),
                             SymbolKind::Fn(fndef_mutex.clone()),
                             fndef.symbol_start,
                             self.module.module_scope_id,
+                            fndef.is_pub,
                         ) {
                             Ok(symbol_id) => {
                                 fndef.symbol_id = symbol_id;
@@ -670,11 +692,12 @@ impl<'a> Semantic<'a> {
                         }
 
                         // register to global symbol
-                        if let Ok(symbol_id) = self.symbol_table.define_global_symbol(
+                        if let Ok(symbol_id) = self.symbol_table.define_global_symbol_with_visibility(
                             fndef.symbol_name.clone(),
                             SymbolKind::Fn(fndef_mutex.clone()),
                             fndef.symbol_start,
                             self.module.module_scope_id,
+                            fndef.is_pub,
                         ) {
                             self.symbol_table.set_symbol_source_path(symbol_id, &self.module.path);
                         }
@@ -798,7 +821,8 @@ impl<'a> Semantic<'a> {
         }
 
         // Check selective imports: import math.{sqrt, pow, Point}
-        for import in &self.imports {
+        let imports = self.imports.clone();
+        for import in &imports {
             if !import.is_selective {
                 continue;
             }
@@ -810,6 +834,8 @@ impl<'a> Semantic<'a> {
                 }
                 let global_ident = format_global_ident(import.module_ident.clone(), item.ident.clone());
                 if let Some(id) = self.symbol_table.find_symbol_id(&global_ident, self.symbol_table.global_scope_id) {
+                    let access_ident = item.alias.as_ref().map_or_else(|| item.ident.clone(), |alias| alias.clone());
+                    self.ensure_symbol_accessible(id, &access_ident, item.start, item.end);
                     *ident = global_ident;
                     return Some(id);
                 }
@@ -817,12 +843,13 @@ impl<'a> Semantic<'a> {
         }
 
         // import x as * 产生的全局符号
-        for i in &self.imports {
+        for i in &imports {
             if i.as_name != "*" {
                 continue;
             };
 
             if let Some(symbol_id) = self.symbol_table.find_module_symbol_id(&i.module_ident, ident) {
+                self.ensure_symbol_accessible(symbol_id, ident, 0, 0);
                 *ident = format_global_ident(i.module_ident.clone(), ident.to_string());
                 return Some(symbol_id);
             }

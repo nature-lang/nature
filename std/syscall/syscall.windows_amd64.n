@@ -4,27 +4,27 @@ import libc
 import runtime
 // UCRT open flags. Files opened through this package default to binary mode so
 // that the descriptor behaves like the descriptors returned on Unix targets.
-int O_RDONLY = 0x0000
-int O_WRONLY = 0x0001
-int O_RDWR = 0x0002
-int O_APPEND = 0x0008
-int O_CREAT = 0x0100
-int O_TRUNC = 0x0200
-int O_EXCL = 0x0400
+pub int O_RDONLY = 0x0000
+pub int O_WRONLY = 0x0001
+pub int O_RDWR = 0x0002
+pub int O_APPEND = 0x0008
+pub int O_CREAT = 0x0100
+pub int O_TRUNC = 0x0200
+pub int O_EXCL = 0x0400
 int O_TEXT = 0x4000
 int O_BINARY = 0x8000
-int SEEK_SET = 0
-int SEEK_CUR = 1
-int SEEK_END = 2
+pub int SEEK_SET = 0
+pub int SEEK_CUR = 1
+pub int SEEK_END = 2
 // UCRT reserves descriptors 0, 1, and 2 for the standard streams.
-int STDIN = 0
-int STDOUT = 1
-int STDERR = 2
+pub int STDIN = 0
+pub int STDOUT = 1
+pub int STDERR = 2
 
-fn null_device():string {
+pub fn null_device():string {
     return 'NUL'
 }
-int CLOCK_REALTIME = 0
+pub int CLOCK_REALTIME = 0
 u32 S_IFMT = 0xf000
 u32 S_IFBLK = 0x6000
 u32 S_IFCHR = 0x2000
@@ -43,7 +43,7 @@ type timespec_t = struct {
     i64 nsec
 }
 // Keep the common Nature stat surface independent from the UCRT wire layout.
-type stat_t = struct {
+pub type stat_t = struct {
     u64 dev
     u64 ino
     u64 nlink
@@ -128,7 +128,7 @@ fn windows_exit(i32 status): void
 fn windows_getpid(): i32
 #local #linkid getppid
 fn windows_getppid(): i32
-fn open(string filename, int flags, u32 perm): int! {
+pub fn open(string filename, int flags, u32 perm): int! {
     int native_flags = flags
     if (native_flags & (O_TEXT | O_BINARY)) == 0 {
         native_flags |= O_BINARY
@@ -139,7 +139,7 @@ fn open(string filename, int flags, u32 perm): int! {
     }
     return fd
 }
-fn read(int fd, anyptr buf, int len): int! {
+pub fn read(int fd, anyptr buf, int len): int! {
     if len < 0 || len > 0xffffffff {
         throw errorf('read length is outside the UCRT range')
     }
@@ -149,7 +149,7 @@ fn read(int fd, anyptr buf, int len): int! {
     }
     return result
 }
-fn write(int fd, anyptr buf, int len): int! {
+pub fn write(int fd, anyptr buf, int len): int! {
     if len < 0 || len > 0xffffffff {
         throw errorf('write length is outside the UCRT range')
     }
@@ -159,12 +159,12 @@ fn write(int fd, anyptr buf, int len): int! {
     }
     return result
 }
-fn close(int fd): void! {
+pub fn close(int fd): void! {
     if windows_close(fd as i32) == -1 {
         throw errorf(libc.error_string())
     }
 }
-fn seek(int fd, int offset, int whence): int! {
+pub fn seek(int fd, int offset, int whence): int! {
     i64 result = windows_seek(fd as i32, offset as i64, whence as i32)
     if result == -1 {
         throw errorf(libc.error_string())
@@ -173,7 +173,7 @@ fn seek(int fd, int offset, int whence): int! {
 }
 // Windows has no POSIX readlink. Preserve the existing std/os executable-path
 // request and otherwise return the normalized target reached through a handle.
-fn readlink(string file, [u8] buf): int! {
+pub fn readlink(string file, [u8] buf): int! {
     if buf.len() == 0 || buf.len() > 0xffffffff {
         throw errorf('readlink buffer has an invalid size')
     }
@@ -183,7 +183,7 @@ fn readlink(string file, [u8] buf): int! {
     }
     return len as int
 }
-fn unlink(string path): void! {
+pub fn unlink(string path): void! {
     if windows_unlink(path.ref()) == -1 {
         throw errorf(libc.error_string())
     }
@@ -194,13 +194,13 @@ fn stat_is_blk(u32 mode): bool {
 fn stat_is_chr(u32 mode): bool {
     return (mode & S_IFMT) == S_IFCHR
 }
-fn stat_is_dir(u32 mode): bool {
+pub fn stat_is_dir(u32 mode): bool {
     return (mode & S_IFMT) == S_IFDIR
 }
 fn stat_is_fifo(u32 mode): bool {
     return (mode & S_IFMT) == S_IFIFO
 }
-fn stat_is_reg(u32 mode): bool {
+pub fn stat_is_reg(u32 mode): bool {
     return (mode & S_IFMT) == S_IFREG
 }
 fn stat_is_lnk(u32 mode): bool {
@@ -209,7 +209,7 @@ fn stat_is_lnk(u32 mode): bool {
 fn stat_is_sock(u32 mode): bool {
     return (mode & S_IFMT) == S_IFSOCK
 }
-fn stat(string filename): stat_t! {
+pub fn stat(string filename): stat_t! {
     var raw = windows_stat64_t {}
     if windows_stat(filename.ref(), &raw) == -1 {
         throw errorf(libc.error_string())
@@ -228,7 +228,7 @@ fn stat(string filename): stat_t! {
         dev: raw.dev as u64, ino: raw.ino as u64, nlink: raw.nlink as u64, mode: raw.mode as u32, uid: raw.uid as u32, gid: raw.gid as u32, rdev: raw.rdev as u64, size: raw.size, blksize: 0, blocks: blocks, atim: atim, mtim: mtim, ctim: ctim,
     }
 }
-fn fstat(int fd): stat_t! {
+pub fn fstat(int fd): stat_t! {
     var raw = windows_stat64_t {}
     if windows_fstat(fd as i32, &raw) == -1 {
         throw errorf(libc.error_string())
@@ -247,22 +247,22 @@ fn fstat(int fd): stat_t! {
         dev: raw.dev as u64, ino: raw.ino as u64, nlink: raw.nlink as u64, mode: raw.mode as u32, uid: raw.uid as u32, gid: raw.gid as u32, rdev: raw.rdev as u64, size: raw.size, blksize: 0, blocks: blocks, atim: atim, mtim: mtim, ctim: ctim,
     }
 }
-fn mkdir(string path, u32 mode): void! {
+pub fn mkdir(string path, u32 mode): void! {
     if windows_mkdir(path.ref()) == -1 {
         throw errorf(libc.error_string())
     }
 }
-fn rmdir(string path): void! {
+pub fn rmdir(string path): void! {
     if windows_rmdir(path.ref()) == -1 {
         throw errorf(libc.error_string())
     }
 }
-fn rename(string oldpath, string newpath): void! {
+pub fn rename(string oldpath, string newpath): void! {
     if windows_rename(oldpath.ref(), newpath.ref()) == -1 {
         throw errorf(libc.error_string())
     }
 }
-fn chmod(string path, u32 mode): void! {
+pub fn chmod(string path, u32 mode): void! {
     if windows_chmod(path.ref(), mode as i32) == -1 {
         throw errorf(libc.error_string())
     }
@@ -270,17 +270,17 @@ fn chmod(string path, u32 mode): void! {
 fn exit(int status): void! {
     windows_exit(status as i32)
 }
-fn getpid(): int! {
+pub fn getpid(): int! {
     return windows_getpid() as int
 }
-fn getppid(): int! {
+pub fn getppid(): int! {
     i32 pid = windows_getppid()
     if pid <= 0 {
         throw errorf(libc.error_string())
     }
     return pid as int
 }
-fn getcwd(): string! {
+pub fn getcwd(): string! {
     var buf = vec<u8>.new(0, 32768)
     i64 len = windows_getcwd(buf.ref(), buf.len() as u64)
     if len < 0 {
@@ -293,7 +293,7 @@ fn chdir(string path): void! {
         throw errorf(libc.error_string())
     }
 }
-fn gettime(): timespec_t! {
+pub fn gettime(): timespec_t! {
     var filetime = windows_filetime_t {}
     windows_system_time(&filetime)
     u64 ticks = (filetime.high as u64) << 32 | filetime.low as u64
@@ -305,7 +305,7 @@ fn gettime(): timespec_t! {
         sec: (ticks / WINDOWS_TICKS_PER_SECOND) as i64, nsec: ((ticks % WINDOWS_TICKS_PER_SECOND) * 100) as i64,
     }
 }
-fn get_envs(): [string]{
+pub fn get_envs(): [string]{
     [string] result = []
     var entry_buf = vec<u8>.new(0, 131072)
     anyptr iterator = windows_env_first(entry_buf.ref(), entry_buf.len() as u64)
@@ -323,7 +323,7 @@ fn get_envs(): [string]{
     windows_env_close(iterator)
     return result
 }
-fn get_env(string key): string {
+pub fn get_env(string key): string {
     var value_buf = vec<u8>.new(0, 131072)
     i64 len = windows_get_env(key.ref(), value_buf.ref(), value_buf.len() as u64)
     if len <= 0 {
@@ -331,7 +331,7 @@ fn get_env(string key): string {
     }
     return value_buf.slice(0, len as int) as string
 }
-fn set_env(string key, string value): void! {
+pub fn set_env(string key, string value): void! {
     if windows_set_env(key.ref(), value.ref()) == 0 {
         throw errorf('SetEnvironmentVariableW failed with Windows error %d', windows_last_error())
     }

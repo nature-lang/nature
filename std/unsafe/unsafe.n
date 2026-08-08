@@ -2,7 +2,7 @@ mod unsafe
 
 import libc
 
-fn vec_new<T>(ptr<T> p, int len):vec<T>! {
+pub fn vec_new<T>(ptr<T> p, int len):vec<T>! {
     if len < 0 {
         throw errorf("invalid vec index '%d' (must be non-negative)", len)
     }
@@ -14,13 +14,13 @@ fn vec_new<T>(ptr<T> p, int len):vec<T>! {
 }
 
 #local #linkid unsafe_vec_new
-fn unsafe_vec_new<T>(int hash, int ele_hash, int len, anyptr p):vec<T>!
+pub fn unsafe_vec_new<T>(int hash, int ele_hash, int len, anyptr p):vec<T>!
 
-fn ptr_to<T>(anyptr p):T {
+pub fn ptr_to<T>(anyptr p):T {
     return *(p as ptr<T>)
 }
 
-fn ptr_copy<T>(anyptr dst, ptr<T> src) {
+pub fn ptr_copy<T>(anyptr dst, ptr<T> src) {
     var dst2 = dst as ptr<T>
 
     var size = @sizeof(T)
