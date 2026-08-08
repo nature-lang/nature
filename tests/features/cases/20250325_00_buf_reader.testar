@@ -313,9 +313,16 @@ fn main():void! {
     rd.write("\n\n\nHello\n\n" as [u8])
     var br = new buf.reader<ref<io.buffer>>(rd)
 
-    for int i = 0; i < 6; i += 1 {
+    for int i = 0; i < 5; i += 1 {
         var line = br.read_line()
         println("Read line: '" + line + "'")
+    }
+
+    try {
+        var line = br.read_line()
+        println("unexpected line: '" + line + "'")
+    } catch e {
+        println("catch e: " + e.msg())
     }
 }
 
@@ -325,4 +332,4 @@ Read line: ''
 Read line: ''
 Read line: 'Hello'
 Read line: ''
-Read line: ''
+catch e: EOF
