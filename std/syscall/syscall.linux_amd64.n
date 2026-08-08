@@ -408,7 +408,7 @@ int SIGCHLD = 0x11
 int SIGCLD = 0x11
 int SIGCONT = 0x12
 int SIGFPE = 0x8
-int SIGHUP = 0x1
+pub int SIGHUP = 0x1
 int SIGILL = 0x4
 pub int SIGINT = 0x2
 int SIGIO = 0x1d
@@ -425,7 +425,7 @@ int SIGSTOP = 0x13
 int SIGSYS = 0x1f
 pub int SIGTERM = 0xf
 int SIGTRAP = 0x5
-int SIGTSTP = 0x14
+pub int SIGTSTP = 0x14
 int SIGTTIN = 0x15
 int SIGTTOU = 0x16
 int SIGUNUSED = 0x1f
@@ -433,7 +433,7 @@ int SIGURG = 0x17
 pub int SIGUSR1 = 0xa
 pub int SIGUSR2 = 0xc
 int SIGVTALRM = 0x1a
-int SIGWINCH = 0x1c
+pub int SIGWINCH = 0x1c
 int SIGXCPU = 0x18
 int SIGXFSZ = 0x19
 
@@ -640,7 +640,7 @@ pub fn stat_is_dir(u32 mode):bool {
     return (mode & S_IFMT) == S_IFDIR
 }
 
-fn stat_is_fifo(u32 mode):bool {
+pub fn stat_is_fifo(u32 mode):bool {
     return (mode & S_IFMT) == S_IFIFO
 }
 
@@ -650,7 +650,7 @@ pub fn stat_is_reg(u32 mode):bool {
 fn stat_is_lnk(u32 mode):bool {
     return (mode & S_IFMT) == S_IFLNK
 }
-fn stat_is_sock(u32 mode):bool {
+pub fn stat_is_sock(u32 mode):bool {
     return (mode & S_IFMT) == S_IFSOCK
 }
 pub fn stat(string filename):stat_t! {
@@ -686,7 +686,7 @@ pub fn rename(string oldpath, string newpath):void! {
     call6(SYS_RENAME, oldpath.ref(), newpath.ref(), 0, 0, 0, 0)
 }
 
-fn exit(int status):void! {
+pub fn exit(int status):void! {
     call6(SYS_EXIT_GROUP, status as anyptr, 0, 0, 0, 0, 0)
 }
 

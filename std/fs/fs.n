@@ -61,7 +61,7 @@ pub fn file_t.read(&self, [u8] buf):int!
 #linkid rt_uv_fs_write
 pub fn file_t.write(&self, [u8] buf):int!
 
-fn file_t.seek(&self, int offset, int whence):int! {
+pub fn file_t.seek(&self, int offset, int whence):int! {
     return syscall.seek(self.fd as int, offset, whence)
 }
 
@@ -82,7 +82,7 @@ pub fn stdout():ref<file_t>! {
     return from(syscall.STDOUT, '/dev/stdout')
 }
 
-fn stdin():ref<file_t>! {
+pub fn stdin():ref<file_t>! {
     return from(syscall.STDIN, '/dev/stdin')
 }
 
