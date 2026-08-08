@@ -80,8 +80,7 @@ int main(void) {
 
     // 函数体内 pub 报错
     assert_entry_error("err_local_pub.n", "acl_err_local_pub",
-                       "20260807_00_pub_acl/err_local_pub.n:2:7: pub can only be applied to module-level "
-                       "declarations\n");
+                       "20260807_00_pub_acl/err_local_pub.n:2:7: cannot parser ident 'pub'\n");
 
     return 0;
 }

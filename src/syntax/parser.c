@@ -3147,9 +3147,8 @@ static ast_stmt_t *parser_test_stmt(module_t *m) {
  * @param m
  * @return
  */
-static ast_stmt_t *parser_label(module_t *m, bool is_pub, bool allow_pub) {
+static ast_stmt_t *parser_label(module_t *m) {
     ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
-    fndef->is_pub = is_pub;
 
     do {
         token_t *token = parser_must(m, TOKEN_LABEL);
@@ -3181,12 +3180,7 @@ static ast_stmt_t *parser_label(module_t *m, bool is_pub, bool allow_pub) {
                        parser_peek(m)->literal);
     }
 
-    if (allow_pub && parser_consume(m, TOKEN_PUB)) {
-        is_pub = true;
-        fndef->is_pub = true;
-    } else if (!allow_pub && parser_is(m, TOKEN_PUB)) {
-        PARSER_ASSERTF(false, "pub can only be applied to module-level declarations");
-    }
+    fndef->is_pub = parser_consume(m, TOKEN_PUB);
 
     if (fndef->pending_where_params) {
         PARSER_ASSERTF(parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX), "#where can only be applied to fn/fx");
@@ -3194,7 +3188,7 @@ static ast_stmt_t *parser_label(module_t *m, bool is_pub, bool allow_pub) {
 
     if (parser_is(m, TOKEN_TYPE)) {
         PARSER_ASSERTF(!fndef->pending_where_params, "#where can only be applied to fn/fx");
-        return parser_typedef_stmt(m, is_pub);
+        return parser_typedef_stmt(m, fndef->is_pub);
     } else if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
         return parser_fndef_stmt(m, fndef);
     } else {
@@ -3290,9 +3284,7 @@ static ast_stmt_t *parser_left_param_begin_stmt(module_t *m) {
  * @return
  */
 static ast_stmt_t *parser_local_stmt(module_t *m) {
-    if (parser_is(m, TOKEN_PUB)) {
-        PARSER_ASSERTF(false, "pub can only be applied to module-level declarations");
-    } else if (parser_is(m, TOKEN_VAR)) {
+    if (parser_is(m, TOKEN_VAR)) {
         return parser_var_begin_stmt(m, false);
     } else if (parser_is(m, TOKEN_CONST)) {
         return parser_constdef_stmt(m, false);
@@ -3304,8 +3296,6 @@ static ast_stmt_t *parser_local_stmt(module_t *m) {
         return parser_throw_stmt(m);
     } else if (parser_is(m, TOKEN_LET)) {
         return parser_let_stmt(m);
-    } else if (parser_is(m, TOKEN_LABEL)) {
-        return parser_label(m, false, false);
     } else if (parser_is(m, TOKEN_IF)) {
         return parser_if_stmt(m);
     } else if (parser_is(m, TOKEN_FOR)) {
@@ -3350,13 +3340,7 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
         PARSER_ASSERTF(false, "'mod' declaration must be the first statement of the file");
     }
 
-    // pub is the access-control modifier for module-level declarations
-    bool is_pub = false;
-    if (parser_is(m, TOKEN_PUB)) {
-        parser_advance(m);
-        is_pub = true;
-        PARSER_ASSERTF(!parser_is(m, TOKEN_LABEL), "pub must follow declaration labels");
-    }
+    bool is_pub = parser_consume(m, TOKEN_PUB);
 
     // module parser 只包含着几种简单语句
     if (parser_is(m, TOKEN_VAR)) {
@@ -3365,17 +3349,15 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
         return parser_constdef_stmt(m, is_pub);
     } else if (is_type_begin_stmt(m)) {
         return parser_type_begin_stmt(m, is_pub);
-    } else if (parser_is(m, TOKEN_LABEL)) {
-        return parser_label(m, is_pub, true);
+    } else if (!is_pub && parser_is(m, TOKEN_LABEL)) {
+        return parser_label(m);
     } else if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
         ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
         fndef->is_pub = is_pub;
         return parser_fndef_stmt(m, fndef);
-    } else if (parser_is(m, TOKEN_TEST)) {
-        PARSER_ASSERTF(!is_pub, "pub cannot be applied to test");
+    } else if (!is_pub && parser_is(m, TOKEN_TEST)) {
         return parser_test_stmt(m);
-    } else if (parser_is(m, TOKEN_IMPORT)) {
-        PARSER_ASSERTF(!is_pub, "pub cannot be applied to import");
+    } else if (!is_pub && parser_is(m, TOKEN_IMPORT)) {
         return parser_import_stmt(m);
     } else if (parser_is(m, TOKEN_TYPE)) {
         return parser_typedef_stmt(m, is_pub);

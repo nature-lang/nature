@@ -3620,9 +3620,8 @@ impl<'a> Syntax {
         Ok(stmt)
     }
 
-    fn parser_label(&mut self, mut is_pub: bool, allow_pub: bool) -> Result<Box<Stmt>, SyntaxError> {
+    fn parser_label(&mut self) -> Result<Box<Stmt>, SyntaxError> {
         let mut fndef = AstFnDef::default();
-        fndef.is_pub = is_pub;
 
         while self.is(TokenType::Label) {
             let token = self.must(TokenType::Label)?;
@@ -3660,16 +3659,8 @@ impl<'a> Syntax {
             }
         }
 
-        if allow_pub && self.consume(TokenType::Pub) {
-            is_pub = true;
-            fndef.is_pub = true;
-        } else if !allow_pub && self.is(TokenType::Pub) {
-            return Err(SyntaxError(
-                self.peek().start,
-                self.peek().end,
-                "pub can only be applied to module-level declarations".to_string(),
-            ));
-        }
+        let is_pub = self.consume(TokenType::Pub);
+        fndef.is_pub = is_pub;
 
         if fndef.pending_where_params.is_some() && !self.is(TokenType::Fn) && !self.is(TokenType::Fx) {
             return Err(SyntaxError(
@@ -3772,42 +3763,26 @@ impl<'a> Syntax {
         }
 
         let is_pub = self.consume(TokenType::Pub);
-        if is_pub && self.is(TokenType::Label) {
-            return Err(SyntaxError(
-                self.peek().start,
-                self.peek().end,
-                "pub must follow declaration labels".to_string(),
-            ));
-        }
 
         let stmt = if self.is(TokenType::Var) {
             self.parser_var_begin_stmt(is_pub)?
         } else if self.is_type_begin_stmt() {
             self.parser_type_begin_stmt(is_pub)?
-        } else if self.is(TokenType::Label) {
-            self.parser_label(is_pub, true)?
-        } else if self.is(TokenType::Test) {
-            if is_pub {
-                return Err(SyntaxError(self.peek().start, self.peek().end, "pub cannot be applied to test".to_string()));
-            }
+        } else if !is_pub && self.is(TokenType::Label) {
+            self.parser_label()?
+        } else if !is_pub && self.is(TokenType::Test) {
             self.parser_test_stmt()?
         } else if self.is(TokenType::Fn) || self.is(TokenType::Fx) {
             let mut fndef = AstFnDef::default();
             fndef.is_pub = is_pub;
             self.parser_fndef_stmt(fndef)?
-        } else if self.is(TokenType::Import) {
-            if is_pub {
-                return Err(SyntaxError(self.peek().start, self.peek().end, "pub cannot be applied to import".to_string()));
-            }
+        } else if !is_pub && self.is(TokenType::Import) {
             self.parser_import_stmt()?
         } else if self.is(TokenType::Type) {
             self.parser_typedef_stmt(is_pub)?
         } else if self.is(TokenType::Const) {
             self.parser_constdef_stmt(is_pub)?
         } else {
-            if is_pub {
-                return Err(SyntaxError(self.peek().start, self.peek().end, "pub can only be applied to module-level declarations".to_string()));
-            }
             return Err(SyntaxError(
                 self.peek().start,
                 self.peek().end,
@@ -3849,13 +3824,7 @@ impl<'a> Syntax {
     }
 
     fn parser_local_stmt_core(&mut self, consume_stmt_end: bool) -> Result<Box<Stmt>, SyntaxError> {
-        let stmt = if self.is(TokenType::Pub) {
-            return Err(SyntaxError(
-                self.peek().start,
-                self.peek().end,
-                "pub can only be applied to module-level declarations".to_string(),
-            ));
-        } else if self.is(TokenType::Var) {
+        let stmt = if self.is(TokenType::Var) {
             self.parser_var_begin_stmt(false)?
         } else if self.is_type_begin_stmt() {
             self.parser_type_begin_stmt(false)?
@@ -3871,8 +3840,6 @@ impl<'a> Syntax {
             self.parser_throw_stmt()?
         } else if self.is(TokenType::Let) {
             self.parser_let_stmt()?
-        } else if self.is(TokenType::Label) {
-            self.parser_label(false, false)?
         } else if self.is(TokenType::If) {
             self.parser_if_stmt()?
         } else if self.is(TokenType::For) {
