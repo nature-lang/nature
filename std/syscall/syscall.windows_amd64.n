@@ -197,7 +197,7 @@ fn stat_is_chr(u32 mode): bool {
 pub fn stat_is_dir(u32 mode): bool {
     return (mode & S_IFMT) == S_IFDIR
 }
-fn stat_is_fifo(u32 mode): bool {
+pub fn stat_is_fifo(u32 mode): bool {
     return (mode & S_IFMT) == S_IFIFO
 }
 pub fn stat_is_reg(u32 mode): bool {
@@ -206,7 +206,7 @@ pub fn stat_is_reg(u32 mode): bool {
 fn stat_is_lnk(u32 mode): bool {
     return (mode & S_IFMT) == S_IFLNK
 }
-fn stat_is_sock(u32 mode): bool {
+pub fn stat_is_sock(u32 mode): bool {
     return (mode & S_IFMT) == S_IFSOCK
 }
 pub fn stat(string filename): stat_t! {
@@ -267,7 +267,7 @@ pub fn chmod(string path, u32 mode): void! {
         throw errorf(libc.error_string())
     }
 }
-fn exit(int status): void! {
+pub fn exit(int status): void! {
     windows_exit(status as i32)
 }
 pub fn getpid(): int! {

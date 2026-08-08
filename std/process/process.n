@@ -11,7 +11,7 @@ type state_t = struct{
     i32 term_sig
 }
 
-type process_t = struct{
+pub type process_t = struct{
     int pid
     anyptr args
     anyptr envs
@@ -26,7 +26,7 @@ type process_t = struct{
     // req
 }
 
-type command_t = struct{
+pub type command_t = struct{
     string name
     [string] args
 

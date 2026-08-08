@@ -480,7 +480,7 @@ pub const SYS_MAXSYSCALL = 546
 pub const SYS_INVALID = 63
 
 // sigkill 相关信号
-int SIGHUP = 1       /* hangup */
+pub int SIGHUP = 1       /* hangup */
 pub int SIGINT = 2       /* interrupt */
 int SIGQUIT = 3      /* quit */
 int SIGILL = 4       /* illegal instruction (not reset when caught) */
@@ -497,7 +497,7 @@ int SIGALRM = 14     /* alarm clock */
 pub int SIGTERM = 15     /* software termination signal from kill */
 int SIGURG = 16      /* urgent condition on IO channel */
 int SIGSTOP = 17     /* sendable stop signal not from tty */
-int SIGTSTP = 18     /* stop signal from tty */
+pub int SIGTSTP = 18     /* stop signal from tty */
 int SIGCONT = 19     /* continue a stopped process */
 int SIGCHLD = 20     /* to parent on child stop or exit */
 int SIGTTIN = 21     /* to readers pgrp upon background tty read */
@@ -507,7 +507,7 @@ int SIGXCPU = 24     /* exceeded CPU time limit */
 int SIGXFSZ = 25     /* exceeded file size limit */
 int SIGVTALRM = 26   /* virtual time alarm */
 int SIGPROF = 27     /* profiling time alarm */
-int SIGWINCH = 28    /* window size changes */
+pub int SIGWINCH = 28    /* window size changes */
 int SIGINFO = 29     /* information request */
 pub int SIGUSR1 = 30     /* user defined signal 1 */
 pub int SIGUSR2 = 31     /* user defined signal 2 */
@@ -720,7 +720,7 @@ pub fn stat_is_dir(u16 mode):bool {
     return (mode & S_IFMT) == S_IFDIR
 }
 
-fn stat_is_fifo(u16 mode):bool {
+pub fn stat_is_fifo(u16 mode):bool {
     return (mode & S_IFMT) == S_IFIFO
 }
 
@@ -732,7 +732,7 @@ pub fn stat_is_reg(u16 mode):bool {
     return (mode & S_IFMT) == S_IFREG
 }
 
-fn stat_is_sock(u16 mode):bool {
+pub fn stat_is_sock(u16 mode):bool {
     return (mode & S_IFMT) == S_IFSOCK
 }
 pub fn stat(string filename):stat_t! {
@@ -759,7 +759,7 @@ pub fn rename(string oldpath, string newpath):void! {
     call6(SYS_RENAME, oldpath.ref(), newpath.ref(), 0, 0, 0, 0)
 }
 
-fn exit(int status):void! {
+pub fn exit(int status):void! {
     call6(SYS_EXIT, status as anyptr, 0, 0, 0, 0, 0)
 }
 
