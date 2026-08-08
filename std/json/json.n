@@ -10,11 +10,12 @@ var null_hash = @reflect_hash(null)
 // number is the lossless JSON number type (like Go's json.Number): numbers
 // keep their original token instead of being coerced through f64, so large
 // integers and long IDs round-trip exactly.
-type number = string
+pub type number = string
 
 var number_hash = @reflect_hash(number)
 
 const DEFAULT_MAX_DEPTH = 256
+const DEFAULT_MAX_BYTES = 16777216
 
 // Convert object to json string
 pub fn serialize<T>(T object):string! {
@@ -904,7 +905,7 @@ fn hex4_peek([u8] data, int cursor):int {
 // parse parses JSON text into a dynamic value (like Go's Unmarshal + UseNumber):
 // objects -> {string:any}, arrays -> [any], strings -> string,
 // bools -> bool, null -> null, numbers -> number (lossless original token)
-fn parse(string source):any! {
+pub fn parse(string source):any! {
     return parse_with_depth(source, DEFAULT_MAX_DEPTH)
 }
 
@@ -1066,14 +1067,14 @@ type reader_t = struct{
 }
 
 // reader creates an incremental parser (like Go's json.Decoder, push model)
-fn reader():ref<reader_t> {
+pub fn reader():ref<reader_t> {
     return new reader_t(max_depth = DEFAULT_MAX_DEPTH)
 }
 
 // write feeds one data chunk; returns true once a complete root value has
 // been framed. Extra non-whitespace bytes are rejected, so one reader
 // always consumes exactly one value.
-fn reader_t.write(&self, [u8] chunk):bool! {
+pub fn reader_t.write(&self, [u8] chunk):bool! {
     self.data.append(chunk)
 
     for self.scan_cursor < self.data.len() {
@@ -1159,7 +1160,7 @@ fn reader_t.write(&self, [u8] chunk):bool! {
     return self.complete
 }
 
-fn reader_t.value(&self):any! {
+pub fn reader_t.value(&self):any! {
     if !self.complete {
         throw errorf('JSON value is incomplete')
     }
