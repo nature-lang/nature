@@ -1,0 +1,42 @@
+type holder_t = struct {
+    [int] values
+}
+
+type counter_t = struct {
+    int value
+}
+
+fn counter_t.increment(*self) {
+    self.value = self.value + 1
+}
+
+fn append_value(ptr<[int]> values, int value) {
+    (*values).push(value)
+}
+
+fn increment_value(ptr<counter_t> counter) {
+    (*counter).increment()
+}
+
+fn append_copy(ptr<[int]> values) {
+    var copied = *values
+    copied.push(99)
+}
+
+fn main() {
+    [int] values = []
+    append_value(&values, 42)
+    println('issue:', values.len(), values[0])
+
+    var holder = holder_t{values: []}
+    append_value(&holder.values, 7)
+    println('field:', holder.values.len(), holder.values[0])
+
+    var counter = counter_t{value: 0}
+    increment_value(&counter)
+    println('method:', counter.value)
+
+    [int] original = []
+    append_copy(&original)
+    println('copy:', original.len())
+}
