@@ -145,7 +145,8 @@ pub fn string.split(self, string separator):[string] {
         return result
     }
 
-    if self.len() <= separator.len() {
+    if self.len() < separator.len() {
+        result.push(self)
         return result
     }
 
