@@ -35,7 +35,7 @@ pub fn build(b: *std.Build) !void {
             const s = try timestampToDate(@as(usize, @intCast(elapsed.toMilliseconds() * -1)), 8);
             break :blk s;
         },
-        .BUILD_TYPE = if (optimize == .Debug) "debug" else "release",
+        .BUILD_TYPE = if (optimize == .debug) "debug" else "release",
     });
 
     exe.root_module.addConfigHeader(config_header);
@@ -66,6 +66,39 @@ pub fn build(b: *std.Build) !void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+
+    //build runtime,please use ReleaseFast
+    const lib = b.addLibrary(.{
+        .name = "libruntime",
+        .root_module = b.createModule(.{
+            .optimize = optimize,
+            .target = target,
+            .link_libc = true,
+        }),
+    });
+    setCMacros(lib, target);
+    lib.root_module.addIncludePath(.{ .cwd_relative = "./" });
+    lib.root_module.addIncludePath(.{ .cwd_relative = "./include/" });
+    lib.root_module.addAssemblyFile(.{ .cwd_relative = "./runtime/aco/acosw.S" });
+
+    const runtime_file = try findCFiles(b.allocator, "runtime");
+    lib.root_module.addCSourceFiles(.{
+        .files = runtime_file.items,
+        .flags = &.{},
+    });
+
+    lib.root_module.addCSourceFiles(.{
+        .files = nature_utils.items,
+        .flags = &.{},
+    });
+
+    const run_lib_cmd = b.addRunArtifact(lib);
+    run_lib_cmd.step.dependOn(b.getInstallStep());
+
+    b.installArtifact(lib);
+
+    const run_lib_step = b.step("lib", "build runtime libary");
+    run_lib_step.dependOn(&run_lib_cmd.step);
 }
 
 pub fn findCFiles(allocator: std.mem.Allocator, dir_path: []const u8) !std.ArrayList([]const u8) {
