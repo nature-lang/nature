@@ -1,0 +1,15 @@
+import strings
+
+fn dump([string] parts) {
+    println(parts.len())
+    for part in parts {
+        println(part)
+    }
+}
+
+fn main() {
+    dump('0'.split(';'))
+    dump('0'.split(';;'))
+    dump('word'.split(';'))
+    dump('1;2'.split(';'))
+}
