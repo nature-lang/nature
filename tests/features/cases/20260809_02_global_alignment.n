@@ -1,0 +1,23 @@
+type aligned_t = struct {
+    i64 value
+}
+
+u8 prefix_i16 = 1
+i16 global_i16 = 2
+u8 prefix_i32 = 1
+i32 global_i32 = 3
+u8 prefix_i64 = 1
+i64 global_i64 = 4
+u8 prefix_struct = 1
+aligned_t global_struct = aligned_t{value: 5}
+
+fn remainder(anyptr value, int alignment):int {
+    return (value as int) % alignment
+}
+
+fn main() {
+    println('i16:', remainder(&global_i16 as anyptr, 2))
+    println('i32:', remainder(&global_i32 as anyptr, 4))
+    println('i64:', remainder(&global_i64 as anyptr, 8))
+    println('struct:', remainder(&global_struct as anyptr, 8))
+}

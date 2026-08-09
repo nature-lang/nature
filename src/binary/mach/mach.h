@@ -116,7 +116,8 @@ static inline void macho_section_realloc(mach_section_t *section, int64_t new_si
  * macho 对齐 2 的 ^
  */
 static inline size_t macho_section_data_forward(mach_section_t *ms, uint64_t size, uint64_t align) {
-    align = 1 << align;
+    uint64_t align_log2 = align;
+    align = 1ULL << align_log2;
 
     size_t offset, offset_end;
     offset = (ms->data_offset + align - 1) & -align;
@@ -127,8 +128,8 @@ static inline size_t macho_section_data_forward(mach_section_t *ms, uint64_t siz
     }
     ms->data_offset = offset_end; // forward
 
-    if (align > ms->section.align) {
-        ms->section.align = align;
+    if (align_log2 > ms->section.align) {
+        ms->section.align = align_log2;
     }
 
     return offset;
@@ -139,16 +140,30 @@ static inline void *mach_section_ptr_add(mach_section_t *ms, uint64_t size) {
     return ms->data + offset;
 }
 
-static inline int64_t mach_put_data(mach_section_t *ms, uint8_t *data, int64_t size) {
-    char *ptr = mach_section_ptr_add(ms, size);
+static inline int64_t mach_put_data_aligned(mach_section_t *ms, uint8_t *data, int64_t size, uint64_t alignment) {
+    if (alignment == 0) {
+        alignment = 1;
+    }
+    assert((alignment & (alignment - 1)) == 0);
 
+    uint64_t align_log2 = 0;
+    while ((1ULL << align_log2) < alignment) {
+        ++align_log2;
+    }
+
+    size_t offset = macho_section_data_forward(ms, size, align_log2);
+    char *ptr = (char *) ms->data + offset;
     if (data) {
         memmove(ptr, data, size);
     } else {
         memset(ptr, 0, size);
     }
 
-    return (int64_t) ptr - (int64_t) ms->data;
+    return offset;
+}
+
+static inline int64_t mach_put_data(mach_section_t *ms, uint8_t *data, int64_t size) {
+    return mach_put_data_aligned(ms, data, size, 1);
 }
 
 static uint64_t mach_put_str(mach_section_t *str_table, string_view_t *str) {
