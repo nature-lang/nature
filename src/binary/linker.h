@@ -118,6 +118,8 @@ uint64_t elf_put_str(section_t *s, char *str);
 
 uint64_t elf_put_data(section_t *s, uint8_t *data, uint64_t size);
 
+uint64_t elf_put_data_aligned(section_t *s, uint8_t *data, uint64_t size, uint64_t alignment);
+
 void elf_resolve_common_symbols(elf_context_t *ctx);
 
 void elf_build_got_entries(elf_context_t *ctx, uint64_t got_sym_index);

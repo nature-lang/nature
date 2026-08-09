@@ -510,7 +510,8 @@ static void elf_assembler_module(module_t *m) {
     for (int i = 0; i < m->asm_global_symbols->count; ++i) {
         asm_global_symbol_t *symbol = m->asm_global_symbols->take[i];
         // 写入到数据段
-        uint64_t offset = elf_put_data(ctx->data_section, symbol->value, symbol->size);
+        uint64_t offset =
+                elf_put_data_aligned(ctx->data_section, symbol->value, symbol->size, symbol->alignment);
 
         // 写入符号表
         Elf64_Sym sym = {
@@ -557,7 +558,8 @@ static void mach_assembler_module(module_t *m) {
     for (int i = 0; i < m->asm_global_symbols->count; ++i) {
         asm_global_symbol_t *symbol = m->asm_global_symbols->take[i];
         // 写入到数据段
-        uint64_t offset = mach_put_data(ctx->data_section, symbol->value, symbol->size);
+        uint64_t offset =
+                mach_put_data_aligned(ctx->data_section, symbol->value, symbol->size, symbol->alignment);
 
         // 写入符号表
         mach_put_sym(ctx->symtab_command, &(struct nlist_64) {
@@ -1315,6 +1317,7 @@ static void build_assembler(slice_t *modules) {
             asm_global_symbol_t *symbol = NEW(asm_global_symbol_t);
             symbol->name = var_decl->ident;
             symbol->size = var_decl->type.storage_size;
+            symbol->alignment = var_decl->type.align > 0 ? var_decl->type.align : 1;
             symbol->value = vardef->global_data;
             slice_push(m->asm_global_symbols, symbol);
         }
