@@ -203,8 +203,7 @@ n_anyptr_t rt_map_assign(n_map_t *m, void *key_ref) {
     if (hash_value_empty(hash_value)) {
         data_index = m->length++;
     } else if (hash_value_deleted(hash_value)) {
-        m->length++;
-        data_index = extract_data_index(hash_value);
+        data_index = m->length++;
     } else {
         // 绝对的修改
         data_index = extract_data_index(hash_value);
@@ -234,8 +233,35 @@ void rt_map_delete(n_map_t *m, void *key_ref) {
         return;
     }
     uint64_t hash_index = find_hash_slot(m->hash_table, m->capacity, m->key_data, m->key_rtype_hash, key_ref);
-    uint64_t *hash_value = &m->hash_table[hash_index];
-    *hash_value &= 1ULL << HASH_DELETED; // 配置删除标志即可
+    uint64_t hash_value = m->hash_table[hash_index];
+    if (hash_value_empty(hash_value) || hash_value_deleted(hash_value)) {
+        return;
+    }
+
+    uint64_t data_index = extract_data_index(hash_value);
+    uint64_t last_data_index = m->length - 1;
+    rtype_t *key_rtype = rt_find_rtype(m->key_rtype_hash);
+    rtype_t *value_rtype = rt_find_rtype(m->value_rtype_hash);
+    uint64_t key_size = key_rtype->storage_size;
+    uint64_t value_size = value_rtype->storage_size;
+
+    if (data_index != last_data_index) {
+        void *last_key_ref = m->key_data + last_data_index * key_size;
+        void *last_value_ref = m->value_data + last_data_index * value_size;
+        uint64_t last_hash_index = find_hash_slot(m->hash_table,
+                                                  m->capacity,
+                                                  m->key_data,
+                                                  m->key_rtype_hash,
+                                                  last_key_ref);
+
+        rti_write_barrier_rtype(m->key_data + data_index * key_size, last_key_ref, key_rtype);
+        rti_write_barrier_rtype(m->value_data + data_index * value_size, last_value_ref, value_rtype);
+        set_data_index(m, last_hash_index, data_index);
+    }
+
+    m->hash_table[hash_index] = (1ULL << HASH_SET) | (1ULL << HASH_DELETED);
+    memset(m->key_data + last_data_index * key_size, 0, key_size);
+    memset(m->value_data + last_data_index * value_size, 0, value_size);
     m->length--;
 }
 

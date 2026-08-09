@@ -98,8 +98,13 @@ static uint64_t find_hash_slot(uint64_t *hash_table, uint64_t capacity, uint8_t 
             return first_deleted_index != -1 ? first_deleted_index : hash_index;
         }
 
-        if (hash_value_deleted(hash_value) && first_deleted_index == -1) {
-            first_deleted_index = (int64_t) hash_index;
+        if (hash_value_deleted(hash_value)) {
+            if (first_deleted_index == -1) {
+                first_deleted_index = (int64_t) hash_index;
+            }
+            hash_index = (hash_index + 1) % capacity;
+            attempts++;
+            continue;
         }
 
         // key equal 的 slot 是最高优先且绝对正确的 slot
