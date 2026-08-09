@@ -1,0 +1,35 @@
+import json
+
+fn main() {
+    var parsed = json.parse('{"a":true,"b":false}') catch e {
+        {string:any} empty = {}
+        empty
+    } as {string:any}
+
+    parsed.del('a')
+    parsed['b'] = true
+    println(parsed.len(), parsed.contains('a'), parsed.contains('b'))
+    println(json.serialize(parsed))
+
+    var plain = {'a': 1, 'b': 2, 'c': 3}
+    plain.del('b')
+    println(plain.len(), plain.contains('a'), plain.contains('b'), plain.contains('c'))
+    println(json.serialize(plain))
+
+    plain['d'] = 4
+    println(plain.len(), plain.contains('a'), plain.contains('c'), plain.contains('d'))
+    println(json.serialize(plain))
+
+    plain.del('missing')
+    println(plain.len())
+
+    // 'a' and 'q' collide at the default map capacity. Deleting the first
+    // key must keep the rest of the probe chain reachable.
+    var collision = {'a': 10, 'q': 20}
+    collision.del('a')
+    println(collision.len(), collision.contains('a'), collision.contains('q'), collision['q'])
+
+    collision['a'] = 30
+    println(collision.len(), collision.contains('a'), collision.contains('q'), collision['a'], collision['q'])
+    println(json.serialize(collision))
+}
