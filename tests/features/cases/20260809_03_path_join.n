@@ -1,0 +1,9 @@
+import path
+
+fn main() {
+    println(path.join('/tmp/base', '.'))
+    println(path.join('/tmp/base', 'a'))
+    println(path.join('/tmp/base', '.', 'child'))
+    println(path.join('', '.'))
+    println(path.join('/', '.'))
+}

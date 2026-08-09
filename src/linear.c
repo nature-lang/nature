@@ -2329,6 +2329,20 @@ static lir_operand_t *linear_binary(module_t *m, ast_expr_t expr, lir_operand_t 
 static lir_operand_t *linear_unary(module_t *m, ast_expr_t expr, lir_operand_t *target) {
     ast_unary_expr_t *unary_expr = expr.value;
 
+    // Preserve the original lvalue for &(*p). Evaluating *p first copies
+    // indirect values such as vec and struct headers into a temporary, so a
+    // pointer-receiver method would mutate the temporary instead of *p.
+    if (unary_expr->op == AST_OP_LA && unary_expr->operand.assert_type == AST_EXPR_UNARY) {
+        ast_unary_expr_t *inner_unary = unary_expr->operand.value;
+        if (inner_unary->op == AST_OP_IA) {
+            lir_operand_t *src = linear_expr(m, inner_unary->operand, NULL);
+            if (!target) {
+                target = temp_var_operand_with_alloc(m, expr.type);
+            }
+            return linear_super_move(m, expr.type, target, src);
+        }
+    }
+
     lir_operand_t *first = linear_expr(m, unary_expr->operand, NULL);
 
     // 判断 first 的类型，如果是 imm 数，则直接对 int_value 取反，否则使用 lir minus  指令编译

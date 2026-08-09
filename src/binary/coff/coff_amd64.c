@@ -473,8 +473,9 @@ static coff_writer_status_t coff_amd64_emit_globals(
                 context->module->asm_global_symbols->take[i];
         if (coff_amd64_is_unwind_plan_name(symbol->name)) continue;
         uint32_t offset = 0U;
+        uint32_t alignment = symbol->alignment ? symbol->alignment : 1U;
         coff_writer_status_t status = coff_section_append(
-                context->data, symbol->value, symbol->size, 1U, &offset);
+                context->data, symbol->value, symbol->size, alignment, &offset);
         if (status != COFF_WRITER_OK)
             return coff_amd64_writer_status(context, status);
         status = coff_object_define_symbol(

@@ -73,6 +73,7 @@ typedef enum {
 typedef struct {
     char *name; // 符号名称
     size_t size; // 符号大小，单位 byte, 生成符号表的时候需要使用
+    uint32_t alignment; // 符号的自然对齐，单位 byte；0 等同于 1
     uint8_t *value; // 符号值
 } asm_global_symbol_t;
 

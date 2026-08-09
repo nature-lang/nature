@@ -24,12 +24,15 @@ static inline void lower_imm_symbol(closure_t *c, lir_operand_t *imm_operand, li
         if (imm->kind == TYPE_RAW_STRING) {
             assert(imm->string_value);
             global_symbol->size = imm->strlen + 1;
+            global_symbol->alignment = 1;
             global_symbol->value = (uint8_t *) imm->string_value;
         } else if (imm->kind == TYPE_FLOAT64) {
             global_symbol->size = type_kind_sizeof(imm->kind);
+            global_symbol->alignment = type_kind_sizeof(imm->kind);
             global_symbol->value = (uint8_t *) &imm->f64_value;
         } else if (imm->kind == TYPE_FLOAT32) {
             global_symbol->size = type_kind_sizeof(imm->kind);
+            global_symbol->alignment = type_kind_sizeof(imm->kind);
             global_symbol->value = (uint8_t *) &imm->f32_value;
         } else {
             assertf(false, "not support type %s", type_kind_str[imm->kind]);
