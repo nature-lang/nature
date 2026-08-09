@@ -76,6 +76,10 @@ fn _join(string dst, string src):string {
         return src
     }
 
+    if src == '.' {
+        return dst
+    }
+
     // src 是绝对路径时不进行拼接
     if src[0] == ascii('/') {
         return src
