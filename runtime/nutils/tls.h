@@ -202,6 +202,9 @@ static int mbedtls_recv_cb(void *ctx, unsigned char *buf, size_t len) {
 
     global_waiting_send(uv_async_tls_read, conn, 0, 0);
     // may be error
+    if (conn->read_timeout) {
+        return MBEDTLS_ERR_SSL_TIMEOUT;
+    }
     return (int) conn->read_len;
 }
 
@@ -335,6 +338,7 @@ void rt_uv_tls_connect(n_tls_conn_t *n_conn, n_string_t addr, n_int64_t port, n_
     conn->ref_count = 3;
     n_conn->conn = conn;
     conn->co = co;
+    conn->read_timeout_ms = timeout_ms;
 
     DEBUGF("[rt_uv_tls_connect] malloc new conn=%p, co=%p, p_index=%d", conn, conn->co, p->index);
 

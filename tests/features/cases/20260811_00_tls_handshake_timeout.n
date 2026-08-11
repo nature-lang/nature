@@ -1,0 +1,26 @@
+import co
+import net.tcp
+import net.tls
+
+fn blackhole_server():void! {
+    var server = tcp.listen('127.0.0.1:18999')
+    var conn = server.accept()
+
+    // Accept TCP but never reply to the TLS ClientHello.
+    co.sleep(2000)
+    conn.close()
+    server.close()
+}
+
+fn main() {
+    go blackhole_server()
+    co.sleep(100)
+
+    var conn = tls.connect_timeout('127.0.0.1:18999', 100) catch e {
+        println('handshake timeout')
+        return
+    }
+
+    conn.close()
+    println('unexpected handshake success')
+}
