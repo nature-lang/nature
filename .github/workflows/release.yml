@@ -1,0 +1,319 @@
+name: Release
+
+on:
+  schedule:
+    # Monday 02:00 UTC / Monday 10:00 Asia/Shanghai.
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing weekly.YYYY.WW or 0.x.x tag; leave empty for this week's release
+        required: false
+        type: string
+  push:
+    tags:
+      - "weekly.*"
+      - "0.*"
+
+permissions:
+  contents: read
+
+# Releases are infrequent. Serializing them also prevents a scheduled weekly
+# release from racing a manually created tag for the same ISO week.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    name: Resolve release
+    runs-on: ubuntu-24.04
+    outputs:
+      create_tag: ${{ steps.release.outputs.create_tag }}
+      is_weekly: ${{ steps.release.outputs.is_weekly }}
+      sha: ${{ steps.release.outputs.sha }}
+      skip: ${{ steps.release.outputs.skip }}
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            api.github.com:443
+            github.com:443
+            objects.githubusercontent.com:443
+
+      - name: Checkout master and tags
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: master
+
+      - name: Resolve and validate release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          weekly_regex='^weekly\.[0-9]{4}\.(0[1-9]|[1-4][0-9]|5[0-3])$'
+          stable_regex='^0\.[0-9]+\.[0-9]+$'
+          create_tag=false
+
+          case "${GITHUB_EVENT_NAME}" in
+            push)
+              tag="${GITHUB_REF_NAME}"
+              sha="$(git rev-parse --verify "refs/tags/${tag}^{commit}")"
+              if [[ "${sha}" != "${GITHUB_SHA}" ]]; then
+                echo "Tag commit ${sha} does not match push commit ${GITHUB_SHA}" >&2
+                exit 1
+              fi
+              ;;
+            workflow_dispatch)
+              if [[ -n "${REQUESTED_TAG}" ]]; then
+                tag="${REQUESTED_TAG}"
+                sha="$(git rev-parse --verify "refs/tags/${tag}^{commit}")"
+              else
+                tag="weekly.$(date -u +%G.%V)"
+                if git show-ref --verify --quiet "refs/tags/${tag}"; then
+                  sha="$(git rev-parse --verify "refs/tags/${tag}^{commit}")"
+                else
+                  sha="$(git rev-parse --verify 'origin/master^{commit}')"
+                  create_tag=true
+                fi
+              fi
+              ;;
+            schedule)
+              tag="weekly.$(date -u +%G.%V)"
+              if git show-ref --verify --quiet "refs/tags/${tag}"; then
+                sha="$(git rev-parse --verify "refs/tags/${tag}^{commit}")"
+              else
+                sha="$(git rev-parse --verify 'origin/master^{commit}')"
+                create_tag=true
+              fi
+              ;;
+            *)
+              echo "Unsupported event: ${GITHUB_EVENT_NAME}" >&2
+              exit 1
+              ;;
+          esac
+
+          if [[ "${tag}" =~ ${weekly_regex} ]]; then
+            is_weekly=true
+          elif [[ "${tag}" =~ ${stable_regex} ]]; then
+            is_weekly=false
+          else
+            echo "Release tag must match weekly.YYYY.WW or 0.x.x: ${tag}" >&2
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "${sha}" origin/master; then
+            echo "Release commit ${sha} must be reachable from master" >&2
+            exit 1
+          fi
+
+          if [[ "${is_weekly}" == false ]]; then
+            source_version="$(git show "${sha}:VERSION" | tr -d '\r\n')"
+            if [[ "${source_version}" != "${tag}" ]]; then
+              echo "VERSION (${source_version}) does not match stable tag (${tag})" >&2
+              exit 1
+            fi
+          fi
+
+          skip=false
+          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release ${tag} already exists; nothing to do"
+            skip=true
+          fi
+
+          {
+            echo "create_tag=${create_tag}"
+            echo "is_weekly=${is_weekly}"
+            echo "sha=${sha}"
+            echo "skip=${skip}"
+            echo "tag=${tag}"
+          } >> "${GITHUB_OUTPUT}"
+
+  build:
+    name: Build (${{ matrix.target }})
+    if: needs.resolve.outputs.skip != 'true'
+    needs: resolve
+    runs-on: ${{ matrix.runs_on }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux-amd64
+            runs_on: ubuntu-24.04
+            egress_policy: block
+          - target: linux-arm64
+            runs_on: ubuntu-24.04-arm
+            egress_policy: block
+          - target: darwin-amd64
+            runs_on: macos-15-intel
+            # GitHub-hosted macOS runners support Harden Runner in audit mode.
+            egress_policy: audit
+          - target: darwin-arm64
+            runs_on: macos-15
+            egress_policy: audit
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: ${{ matrix.egress_policy }}
+          allowed-endpoints: >
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            *.blob.storage.azure.net:443
+            api.github.com:443
+            archive.ubuntu.com:443
+            azure.archive.ubuntu.com:443
+            crates.io:443
+            github.com:443
+            go.dev:443
+            index.crates.io:443
+            objects.githubusercontent.com:443
+            packages.microsoft.com:443
+            ports.ubuntu.com:443
+            proxy.golang.org:443
+            raw.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            security.ubuntu.com:443
+            static.crates.io:443
+            static.rust-lang.org:443
+            storage.googleapis.com:443
+            sum.golang.org:443
+
+      - name: Checkout release commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - name: Setup Go for npkg
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          cache: false
+          go-version: stable
+
+      - name: Setup Rust for nls
+        uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable
+        with:
+          toolchain: stable
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Build, package, and smoke test
+        shell: bash
+        run: scripts/release/build-package.sh "${{ matrix.target }}" "${{ needs.resolve.outputs.tag }}"
+
+      - name: Upload package
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          compression-level: 0
+          if-no-files-found: error
+          name: release-${{ matrix.target }}
+          path: release/nature-${{ needs.resolve.outputs.tag }}-${{ matrix.target }}.tar.gz
+          retention-days: 1
+
+  publish:
+    name: Publish release
+    if: needs.resolve.outputs.skip != 'true'
+    needs: [resolve, build]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@f808768d1510423e83855289c910610ca9b43176 # v2.17.0
+        with:
+          egress-policy: block
+          allowed-endpoints: >
+            *.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
+            *.blob.storage.azure.net:443
+            api.github.com:443
+            github.com:443
+            uploads.github.com:443
+
+      - name: Download packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          merge-multiple: true
+          path: dist
+          pattern: release-*
+
+      - name: Verify packages and generate checksums
+        env:
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          targets=(linux-amd64 linux-arm64 darwin-amd64 darwin-arm64)
+          for target in "${targets[@]}"; do
+            test -s "dist/nature-${RELEASE_TAG}-${target}.tar.gz"
+          done
+
+          mapfile -t archives < <(find dist -maxdepth 1 -type f -name 'nature-*.tar.gz' | sort)
+          if [[ "${#archives[@]}" -ne "${#targets[@]}" ]]; then
+            echo "Expected ${#targets[@]} release archives, found ${#archives[@]}" >&2
+            exit 1
+          fi
+
+          (cd dist && sha256sum nature-*.tar.gz > SHA256SUMS)
+
+      - name: Create tag and GitHub Release
+        env:
+          CREATE_TAG: ${{ needs.resolve.outputs.create_tag }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          IS_WEEKLY: ${{ needs.resolve.outputs.is_weekly }}
+          RELEASE_SHA: ${{ needs.resolve.outputs.sha }}
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+            echo "Release ${RELEASE_TAG} already exists; refusing to overwrite it" >&2
+            exit 1
+          fi
+
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_TAG}" >/dev/null 2>&1; then
+            tag_sha="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}" --jq .sha)"
+            if [[ "${tag_sha}" != "${RELEASE_SHA}" ]]; then
+              echo "Tag ${RELEASE_TAG} points to ${tag_sha}, expected ${RELEASE_SHA}" >&2
+              exit 1
+            fi
+          elif [[ "${CREATE_TAG}" == true ]]; then
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f ref="refs/tags/${RELEASE_TAG}" \
+              -f sha="${RELEASE_SHA}"
+          else
+            echo "Expected existing release tag ${RELEASE_TAG}" >&2
+            exit 1
+          fi
+
+          release_flags=(--latest)
+          if [[ "${IS_WEEKLY}" == true ]]; then
+            release_flags=(--prerelease)
+          fi
+
+          gh release create "${RELEASE_TAG}" dist/*.tar.gz dist/SHA256SUMS \
+            --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag \
+            --title "${RELEASE_TAG}" \
+            --generate-notes \
+            "${release_flags[@]}"
