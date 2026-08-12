@@ -12,6 +12,7 @@ uint64_t next_gc_bytes = 0; // 下一次 gc 的内存量
 bool gc_barrier; // gc 屏障开启标识
 
 struct sc_map_sv const_str_pool;
+mutex_t const_str_pool_locker;
 
 uint8_t gc_stage; // gc 阶段
 mutex_t gc_stage_locker;
@@ -93,6 +94,7 @@ void rtypes_deserialize() {
 
 
 void register_const_str_pool() {
+    mutex_init(&const_str_pool_locker, false);
     sc_map_init_sv(&const_str_pool, 1024, 0);
     for (int i = 0; i < rt_symdef_count; ++i) {
         symdef_t s = rt_symdef_ptr[i];

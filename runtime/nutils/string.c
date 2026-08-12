@@ -20,10 +20,14 @@ n_string_t string_new_with_pool(void *raw_string, int64_t length) {
     DEBUGF("[string_new_with_pool] raw_string=%s, length=%lu, ptr=%p", (char *) raw_string, length, raw_string);
 
     // check const
+    mutex_lock(&const_str_pool_locker);
     n_string_t *pooled = sc_map_get_sv(&const_str_pool, (char *) raw_string);
     if (pooled && pooled->length == length) {
-        return *pooled;
+        n_string_t result = *pooled;
+        mutex_unlock(&const_str_pool_locker);
+        return result;
     }
+    mutex_unlock(&const_str_pool_locker);
     DEBUGF("[string_new_with_pool] not match, raw %s, length %ld, map get %s", (char *) raw_string, length,
            pooled ? (char *) pooled->data : "-");
 
@@ -50,7 +54,20 @@ n_string_t string_new_with_pool(void *raw_string, int64_t length) {
         n_string_t *pool_copy = malloc(sizeof(n_string_t));
         if (pool_copy != NULL) {
             *pool_copy = str;
-            sc_map_put_sv(&const_str_pool, (char *) raw_string, pool_copy);
+
+            mutex_lock(&const_str_pool_locker);
+            pooled = sc_map_get_sv(&const_str_pool, (char *) raw_string);
+            if (pooled && pooled->length == length) {
+                str = *pooled;
+                mutex_unlock(&const_str_pool_locker);
+                free(pool_copy);
+                return str;
+            }
+
+            // The map keeps key pointers instead of copying the bytes. Point
+            // the key at the pooled string so GC keeps both alive together.
+            sc_map_put_sv(&const_str_pool, (char *) pool_copy->data, pool_copy);
+            mutex_unlock(&const_str_pool_locker);
         }
     }
 

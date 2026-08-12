@@ -897,11 +897,13 @@ static void scan_pool() {
     // handle n string
     n_processor_t *p = processor_index[0];
     n_string_t *value;
+    mutex_lock(&const_str_pool_locker);
     sc_map_foreach_value(&const_str_pool, value) {
         if (value && span_of((addr_t) value->data)) {
             rt_linked_fixalloc_push(&p->gc_worklist, value->data);
         }
     }
+    mutex_unlock(&const_str_pool_locker);
 }
 
 /**

@@ -1,0 +1,34 @@
+import fmt
+
+const WORKERS = 64
+const ITERATIONS = 20000
+
+fn churn(int worker, chan<int> start, chan<int> done): void! {
+	start.recv()
+	int total = 0
+	for int i = 0; i < ITERATIONS; i += 1 {
+		string value = fmt.sprintf('%06d', (worker * ITERATIONS + i) % 1000000)
+		total += value.len()
+	}
+	done.send(total)
+}
+
+fn main(): void! {
+	var start = chan<int>.new(WORKERS)
+	var done = chan<int>.new(WORKERS)
+
+	for int worker = 0; worker < WORKERS; worker += 1 {
+		go churn(worker, start, done)
+	}
+
+	for int worker = 0; worker < WORKERS; worker += 1 {
+		start.send(worker)
+	}
+
+	int total = 0
+	for int worker = 0; worker < WORKERS; worker += 1 {
+		total += done.recv()
+	}
+
+	assert(total == WORKERS * ITERATIONS * 6)
+}
