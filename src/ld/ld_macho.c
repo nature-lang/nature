@@ -3298,13 +3298,14 @@ static size_t ld_write_load_commands(ld_context_t *ctx, uint8_t *image, const ld
     dyld.cmd = LD_LC_DYLD_INFO_ONLY;
     dyld.cmdsize = sizeof(dyld);
     dyld.rebase_off = linkedit->rebaseoff;
-    dyld.rebase_size = (uint32_t) linkedit->rebase.size;
+    dyld.rebase_size = (uint32_t) ld_align_up(linkedit->rebase.size, 8);
     dyld.bind_off = linkedit->bindoff;
-    dyld.bind_size = (uint32_t) linkedit->bind.size;
+    dyld.bind_size = (uint32_t) ld_align_up(linkedit->bind.size, 8);
     dyld.weak_bind_off = linkedit->weak_bindoff;
-    dyld.weak_bind_size = (uint32_t) linkedit->weak_bind.size;
+    dyld.weak_bind_size = (uint32_t) ld_align_up(linkedit->weak_bind.size, 8);
+    dyld.lazy_bind_off = linkedit->exportoff;
     dyld.export_off = linkedit->exportoff;
-    dyld.export_size = (uint32_t) linkedit->exports.size;
+    dyld.export_size = linkedit->exportsize;
     memcpy(image + position, &dyld, sizeof(dyld));
     position += sizeof(dyld);
 
@@ -3550,9 +3551,11 @@ static int ld_emit_image(ld_context_t *ctx) {
     if (result != LD_OK) goto cleanup;
     result = ld_make_symbol_tables(ctx, &linkedit);
     if (result != LD_OK) goto cleanup;
-    if (linkedit.rebase.size > UINT32_MAX || linkedit.bind.size > UINT32_MAX ||
-        linkedit.weak_bind.size > UINT32_MAX ||
-        linkedit.exports.size > UINT32_MAX || linkedit.function_starts.size > UINT32_MAX ||
+    if (linkedit.rebase.size > UINT32_MAX - 7U ||
+        linkedit.bind.size > UINT32_MAX - 7U ||
+        linkedit.weak_bind.size > UINT32_MAX - 7U ||
+        linkedit.exports.size > UINT32_MAX - 7U ||
+        linkedit.function_starts.size > UINT32_MAX ||
         linkedit.data_in_code.size > UINT32_MAX || linkedit.symtab.size > UINT32_MAX ||
         linkedit.strtab.size > UINT32_MAX || linkedit.indirect.size > UINT32_MAX) {
         result = ld_fail(ctx, LD_OUTPUT_ERROR, "linkedit table exceeds Mach-O 32-bit size fields");
@@ -3569,8 +3572,7 @@ static int ld_emit_image(ld_context_t *ctx) {
         result = ld_fail(ctx, LD_OUTPUT_ERROR, "linkedit data is too large");
         goto cleanup;
     }
-    cursor += linkedit.rebase.size;
-    cursor = ld_align_up(cursor, 8);
+    cursor += ld_align_up(linkedit.rebase.size, 8);
     if (cursor > UINT32_MAX) {
         result = ld_fail(ctx, LD_OUTPUT_ERROR, "linkedit offset is too large");
         goto cleanup;
@@ -3580,8 +3582,7 @@ static int ld_emit_image(ld_context_t *ctx) {
         result = ld_fail(ctx, LD_OUTPUT_ERROR, "linkedit data is too large");
         goto cleanup;
     }
-    cursor += linkedit.bind.size;
-    cursor = ld_align_up(cursor, 8);
+    cursor += ld_align_up(linkedit.bind.size, 8);
     if (cursor > UINT32_MAX) {
         result = ld_fail(ctx, LD_OUTPUT_ERROR, "linkedit offset is too large");
         goto cleanup;
@@ -3591,8 +3592,7 @@ static int ld_emit_image(ld_context_t *ctx) {
         result = ld_fail(ctx, LD_OUTPUT_ERROR, "weak bind data is too large");
         goto cleanup;
     }
-    cursor += linkedit.weak_bind.size;
-    cursor = ld_align_up(cursor, 8);
+    cursor += ld_align_up(linkedit.weak_bind.size, 8);
     if (cursor > UINT32_MAX) {
         result = ld_fail(ctx, LD_OUTPUT_ERROR, "linkedit offset is too large");
         goto cleanup;
@@ -3602,42 +3602,8 @@ static int ld_emit_image(ld_context_t *ctx) {
         result = ld_fail(ctx, LD_OUTPUT_ERROR, "export trie is too large");
         goto cleanup;
     }
-    linkedit.exportsize = (uint32_t) linkedit.exports.size;
-    cursor += linkedit.exports.size;
-    cursor = ld_align_up(cursor, 8);
-    if (cursor > UINT32_MAX) {
-        result = ld_fail(ctx, LD_OUTPUT_ERROR, "linkedit offset is too large");
-        goto cleanup;
-    }
-    linkedit.symoff = (uint32_t) cursor;
-    if (linkedit.symtab.size > UINT64_MAX - cursor) {
-        result = ld_fail(ctx, LD_OUTPUT_ERROR, "symbol table is too large");
-        goto cleanup;
-    }
-    cursor += linkedit.symtab.size;
-    cursor = ld_align_up(cursor, 8);
-    if (cursor > UINT32_MAX) {
-        result = ld_fail(ctx, LD_OUTPUT_ERROR, "linkedit offset is too large");
-        goto cleanup;
-    }
-    linkedit.stroff = (uint32_t) cursor;
-    if (linkedit.strtab.size > UINT64_MAX - cursor) {
-        result = ld_fail(ctx, LD_OUTPUT_ERROR, "string table is too large");
-        goto cleanup;
-    }
-    cursor += linkedit.strtab.size;
-    cursor = ld_align_up(cursor, 8);
-    if (cursor > UINT32_MAX) {
-        result = ld_fail(ctx, LD_OUTPUT_ERROR, "linkedit offset is too large");
-        goto cleanup;
-    }
-    linkedit.indirectoff = (uint32_t) cursor;
-    if (linkedit.indirect.size > UINT64_MAX - cursor) {
-        result = ld_fail(ctx, LD_OUTPUT_ERROR, "indirect symbol table is too large");
-        goto cleanup;
-    }
-    cursor += linkedit.indirect.size;
-    cursor = ld_align_up(cursor, 8);
+    linkedit.exportsize = (uint32_t) ld_align_up(linkedit.exports.size, 8);
+    cursor += linkedit.exportsize;
     if (cursor > UINT32_MAX) {
         result = ld_fail(ctx, LD_OUTPUT_ERROR, "linkedit offset is too large");
         goto cleanup;
@@ -3659,6 +3625,39 @@ static int ld_emit_image(ld_context_t *ctx) {
         goto cleanup;
     }
     cursor += linkedit.data_in_code.size;
+    cursor = ld_align_up(cursor, 8);
+    if (cursor > UINT32_MAX) {
+        result = ld_fail(ctx, LD_OUTPUT_ERROR, "linkedit offset is too large");
+        goto cleanup;
+    }
+    linkedit.symoff = (uint32_t) cursor;
+    if (linkedit.symtab.size > UINT64_MAX - cursor) {
+        result = ld_fail(ctx, LD_OUTPUT_ERROR, "symbol table is too large");
+        goto cleanup;
+    }
+    cursor += linkedit.symtab.size;
+    cursor = ld_align_up(cursor, 8);
+    if (cursor > UINT32_MAX) {
+        result = ld_fail(ctx, LD_OUTPUT_ERROR, "linkedit offset is too large");
+        goto cleanup;
+    }
+    linkedit.indirectoff = (uint32_t) cursor;
+    if (linkedit.indirect.size > UINT64_MAX - cursor) {
+        result = ld_fail(ctx, LD_OUTPUT_ERROR, "indirect symbol table is too large");
+        goto cleanup;
+    }
+    cursor += linkedit.indirect.size;
+    cursor = ld_align_up(cursor, 8);
+    if (cursor > UINT32_MAX) {
+        result = ld_fail(ctx, LD_OUTPUT_ERROR, "linkedit offset is too large");
+        goto cleanup;
+    }
+    linkedit.stroff = (uint32_t) cursor;
+    if (linkedit.strtab.size > UINT64_MAX - cursor) {
+        result = ld_fail(ctx, LD_OUTPUT_ERROR, "string table is too large");
+        goto cleanup;
+    }
+    cursor += linkedit.strtab.size;
     uint64_t signature_offset = ld_align_up(cursor, 16);
     size_t signature_size = 0;
     if (ctx->options->adhoc_codesign &&
@@ -3671,8 +3670,10 @@ static int ld_emit_image(ld_context_t *ctx) {
         result = ld_fail(ctx, LD_OUTPUT_ERROR, "code signature is too large");
         goto cleanup;
     }
-    uint64_t total_size = ld_align_up(signature_offset + signature_size, LD_PAGE_SIZE);
-    if (total_size < signature_offset || total_size > SIZE_MAX || total_size > UINT32_MAX) {
+    uint64_t total_size = ctx->options->adhoc_codesign
+                                  ? signature_offset + signature_size
+                                  : cursor;
+    if (total_size < cursor || total_size > SIZE_MAX || total_size > UINT32_MAX) {
         result = ld_fail(ctx, LD_OUTPUT_ERROR, "output is too large");
         goto cleanup;
     }
@@ -3681,8 +3682,8 @@ static int ld_emit_image(ld_context_t *ctx) {
         result = ld_fail(ctx, LD_OUTPUT_ERROR, "invalid __LINKEDIT layout");
         goto cleanup;
     }
-    linkedit_segment->filesize = ld_align_up(total_size - linkedit_segment->fileoff, LD_PAGE_SIZE);
-    linkedit_segment->vmsize = linkedit_segment->filesize;
+    linkedit_segment->filesize = total_size - linkedit_segment->fileoff;
+    linkedit_segment->vmsize = ld_align_up(linkedit_segment->filesize, LD_PAGE_SIZE);
     ctx->linkedit_size = linkedit_segment->filesize;
     image = calloc(1, (size_t) total_size);
     if (!image) {

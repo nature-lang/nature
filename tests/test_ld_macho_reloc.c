@@ -195,14 +195,16 @@ static void test_imported_unsigned32_is_not_pointer_bind(void) {
     assert(value == 0x10203040U);
     assert(canary == 0xa5a5f00dU);
 
-    /* An empty classic bind stream may be encoded either as zero bytes or as
-       a single BIND_OPCODE_DONE.  It must not contain an 8-byte pointer bind
-       for the four-byte relocation above. */
+    /* An empty classic bind stream may be absent or contain a
+       BIND_OPCODE_DONE followed by linker padding.  It must not contain a
+       pointer bind for the four-byte relocation above. */
     assert(dyld_info != NULL);
-    assert(dyld_info->bind_size == 0U ||
-           (dyld_info->bind_size == 1U &&
-            dyld_info->bind_off < (uint64_t) st.st_size &&
-            image[dyld_info->bind_off] == 0U));
+    assert(dyld_info->bind_off <= (uint64_t) st.st_size &&
+           dyld_info->bind_size <=
+                   (uint64_t) st.st_size - dyld_info->bind_off);
+    for (uint32_t i = 0; i < dyld_info->bind_size; i++) {
+        assert(image[dyld_info->bind_off + i] == 0U);
+    }
 
     free(image);
     unlink(object_path);

@@ -32,6 +32,10 @@ typedef struct {
     const ld_symtab_command_t *symtab;
     const ld_dysymtab_command_t *dysymtab;
     const ld_dyld_info_command_t *dyld_info;
+    const ld_linkedit_data_command_t *function_starts;
+    const ld_linkedit_data_command_t *data_in_code;
+    const ld_linkedit_data_command_t *code_signature;
+    const ld_segment_command_64_t *linkedit;
 } test_macho_output_t;
 
 static uint32_t test_arm64_relocation_word(uint32_t symbol, bool pcrel,
@@ -168,6 +172,9 @@ static test_macho_output_t test_read_macho_output(const char *path) {
         if (command->cmd == LD_LC_SEGMENT_64) {
             const ld_segment_command_64_t *segment =
                     (const ld_segment_command_64_t *) command;
+            if (strncmp(segment->segname, "__LINKEDIT", 16) == 0) {
+                output.linkedit = segment;
+            }
             const ld_section_64_t *sections =
                     (const ld_section_64_t *) (segment + 1);
             for (uint32_t j = 0; j < segment->nsects; j++) {
@@ -194,6 +201,15 @@ static test_macho_output_t test_read_macho_output(const char *path) {
             output.symtab = (const ld_symtab_command_t *) command;
         } else if (command->cmd == LD_LC_DYLD_INFO_ONLY) {
             output.dyld_info = (const ld_dyld_info_command_t *) command;
+        } else if (command->cmd == LD_LC_FUNCTION_STARTS) {
+            output.function_starts =
+                    (const ld_linkedit_data_command_t *) command;
+        } else if (command->cmd == LD_LC_DATA_IN_CODE) {
+            output.data_in_code =
+                    (const ld_linkedit_data_command_t *) command;
+        } else if (command->cmd == LD_LC_CODE_SIGNATURE) {
+            output.code_signature =
+                    (const ld_linkedit_data_command_t *) command;
         }
         cursor += command->cmdsize;
     }
@@ -381,15 +397,15 @@ static uint64_t test_arm64_page_pair_target(uint32_t adrp, uint32_t pageoff,
     return page + (load ? immediate * 8U : immediate);
 }
 
-static void test_link_macho_fixture(const char *object_path,
-                                    const char *dylib_path,
-                                    const char *output_path, int expected,
-                                    test_ld_diagnostic_capture_t *capture) {
+static void test_link_macho_fixture_with_codesign(
+        const char *object_path, const char *dylib_path,
+        const char *output_path, int expected,
+        test_ld_diagnostic_capture_t *capture, bool adhoc_codesign) {
     unlink(output_path);
     ld_options_t options;
     ld_options_init(&options);
     options.output_path = output_path;
-    options.adhoc_codesign = false;
+    options.adhoc_codesign = adhoc_codesign;
     if (capture) {
         options.diagnostic = test_ld_capture_diagnostic;
         options.diagnostic_context = capture;
@@ -398,6 +414,84 @@ static void test_link_macho_fixture(const char *object_path,
     if (dylib_path) assert(ld_add_input(&options, dylib_path) == LD_OK);
     assert(ld_link(&options) == expected);
     ld_options_deinit(&options);
+}
+
+static void test_link_macho_fixture(const char *object_path,
+                                    const char *dylib_path,
+                                    const char *output_path, int expected,
+                                    test_ld_diagnostic_capture_t *capture) {
+    test_link_macho_fixture_with_codesign(
+            object_path, dylib_path, output_path, expected, capture, false);
+}
+
+static void test_codesigned_linkedit_layout(void) {
+    static const uint32_t text_words[] = {0xd65f03c0U};
+    const test_macho_section_fixture_t section = {
+            .segname = "__TEXT",
+            .sectname = "__text",
+            .flags = LD_S_ATTR_PURE_INSTRUCTIONS |
+                     LD_S_ATTR_SOME_INSTRUCTIONS,
+            .align = 2U,
+            .data = (const uint8_t *) text_words,
+            .size = sizeof(text_words),
+    };
+    static const char strings[] = "\0_main\0";
+    const ld_nlist_64_t symbol = {
+            .n_strx = 1U,
+            .n_type = LD_N_SECT | LD_N_EXT,
+            .n_sect = 1U,
+    };
+    char object_path[] = "/tmp/nature-ld-codesign-object-XXXXXX";
+    test_make_macho_object(object_path, &section, 1U, &symbol, 1U,
+                           strings, sizeof(strings));
+    char output_path[] = "/tmp/nature-ld-codesign-output-XXXXXX";
+    int output_fd = mkstemp(output_path);
+    assert(output_fd >= 0);
+    assert(close(output_fd) == 0);
+    test_link_macho_fixture_with_codesign(
+            object_path, NULL, output_path, LD_OK, NULL, true);
+
+    test_macho_output_t output = test_read_macho_output(output_path);
+    assert(output.linkedit && output.dyld_info && output.function_starts &&
+           output.data_in_code && output.symtab && output.dysymtab &&
+           output.code_signature);
+    assert(output.dyld_info->bind_off ==
+           output.dyld_info->rebase_off + output.dyld_info->rebase_size);
+    assert(output.dyld_info->weak_bind_off ==
+           output.dyld_info->bind_off + output.dyld_info->bind_size);
+    assert(output.dyld_info->lazy_bind_off ==
+           output.dyld_info->weak_bind_off +
+                   output.dyld_info->weak_bind_size);
+    assert(output.dyld_info->export_off ==
+           output.dyld_info->lazy_bind_off +
+                   output.dyld_info->lazy_bind_size);
+    assert(output.function_starts->dataoff ==
+           output.dyld_info->export_off + output.dyld_info->export_size);
+    assert(output.data_in_code->dataoff >=
+           output.function_starts->dataoff +
+                   output.function_starts->datasize);
+    assert(output.symtab->symoff >=
+           output.data_in_code->dataoff + output.data_in_code->datasize);
+    assert(output.dysymtab->indirectsymoff >=
+           output.symtab->symoff +
+                   output.symtab->nsyms * sizeof(ld_nlist_64_t));
+    assert(output.symtab->stroff >=
+           output.dysymtab->indirectsymoff +
+                   output.dysymtab->nindirectsyms * sizeof(uint32_t));
+    assert(output.code_signature->dataoff >=
+           output.symtab->stroff + output.symtab->strsize);
+    assert((output.code_signature->dataoff & 15U) == 0U);
+    assert((size_t) output.code_signature->dataoff +
+                   output.code_signature->datasize ==
+           output.size);
+    assert(output.linkedit->fileoff + output.linkedit->filesize ==
+           output.size);
+    assert(output.linkedit->vmsize >= output.linkedit->filesize);
+    assert((output.linkedit->vmsize & (0x4000U - 1U)) == 0U);
+
+    free(output.bytes);
+    unlink(object_path);
+    unlink(output_path);
 }
 
 static void test_local_got_and_indirect_offsets(void) {
@@ -870,6 +964,7 @@ static void test_imported_tlv_pointer(void) {
 }
 
 void test_ld_macho_synthetic(void) {
+    test_codesigned_linkedit_layout();
     test_local_got_and_indirect_offsets();
     test_weak_dylib_provider_direct_and_got_fixups();
     test_local_global_and_weak_tlv();
