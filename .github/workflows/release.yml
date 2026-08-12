@@ -7,13 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing weekly.YYYY.WW or 0.x.x tag; leave empty for this week's release
+        description: Existing weekly.YYYY.WW or v0.x.x tag; leave empty for this week's release
         required: false
         type: string
   push:
     tags:
       - "weekly.*"
-      - "0.*"
+      - "v0.*"
 
 permissions:
   contents: read
@@ -61,7 +61,7 @@ jobs:
           set -euo pipefail
 
           weekly_regex='^weekly\.[0-9]{4}\.(0[1-9]|[1-4][0-9]|5[0-3])$'
-          stable_regex='^0\.[0-9]+\.[0-9]+$'
+          stable_regex='^v0\.[0-9]+\.[0-9]+$'
           create_tag=false
 
           case "${GITHUB_EVENT_NAME}" in
@@ -107,7 +107,7 @@ jobs:
           elif [[ "${tag}" =~ ${stable_regex} ]]; then
             is_weekly=false
           else
-            echo "Release tag must match weekly.YYYY.WW or 0.x.x: ${tag}" >&2
+            echo "Release tag must match weekly.YYYY.WW or v0.x.x: ${tag}" >&2
             exit 1
           fi
 

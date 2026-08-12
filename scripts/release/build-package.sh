@@ -15,7 +15,7 @@ cleanup() {
 trap cleanup EXIT
 
 weekly_regex='^weekly\.[0-9]{4}\.(0[1-9]|[1-4][0-9]|5[0-3])$'
-stable_regex='^0\.[0-9]+\.[0-9]+$'
+stable_regex='^v0\.[0-9]+\.[0-9]+$'
 if [[ "${release_tag}" =~ ${stable_regex} ]]; then
     source_version="$(tr -d '\r\n' < VERSION)"
     if [[ "${source_version}" != "${release_tag}" ]]; then
@@ -23,7 +23,7 @@ if [[ "${release_tag}" =~ ${stable_regex} ]]; then
         exit 1
     fi
 elif [[ ! "${release_tag}" =~ ${weekly_regex} ]]; then
-    echo "Release tag must match weekly.YYYY.WW or 0.x.x: ${release_tag}" >&2
+    echo "Release tag must match weekly.YYYY.WW or v0.x.x: ${release_tag}" >&2
     exit 1
 fi
 
