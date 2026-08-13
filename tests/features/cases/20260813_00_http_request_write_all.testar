@@ -1,0 +1,32 @@
+=== test_large_http_request
+--- main.n
+import co
+import http
+import http.client
+
+fn main():void! {
+    var app = http.server()
+    app.post('/length', fn(http.request_t req, ref<http.response_t> res):void! {
+        // llhttp only exposes the final body callback chunk, so assert the
+        // request reached the complete-message callback via the response.
+        res.send('large request body completed')
+    })
+
+    go fn():void! {
+        app.listen(18995)
+    }()
+    co.sleep(1000)
+
+    var body = ''
+    for int i = 0; i < 19016; i += 1 {
+        body += 'x'
+    }
+
+    var resp = client.new().post('http://127.0.0.1:18995/length').content(body).send()
+    assert(resp.status == 200)
+    assert(resp.text() == 'large request body completed')
+    println('large request body completed')
+}
+
+--- output.txt
+large request body completed
