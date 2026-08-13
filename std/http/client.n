@@ -289,15 +289,8 @@ pub fn request_t.send(&self):ref<response_t>! {
 
     var conn = temp_conn as types.connable
     conn.set_read_timeout(self.timeout_ms)
-    var request_bytes = self.tcp_buf()
-    int written = 0
-    for written < request_bytes.len() {
-        int n = conn.write(request_bytes.slice(written, request_bytes.len()))
-        if n <= 0 {
-            throw errorf('HTTP request write made no progress')
-        }
-        written += n
-    }
+    var buf = self.tcp_buf()
+    conn.write(buf)
 
     // read resp
     var br = new buf.reader<types.connable>(rd = conn)

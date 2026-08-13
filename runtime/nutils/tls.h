@@ -10,6 +10,7 @@
 #include "mbedtls/ssl.h"
 #include "mbedtls/ssl_cache.h"
 #include "mbedtls/x509_crt.h"
+#include "runtime/nutils/tls_write.h"
 #include "runtime/processor.h"
 #include "runtime/uv_compat.h"
 
@@ -443,6 +444,10 @@ int64_t rt_uv_tls_read(n_tls_conn_t *n_conn, n_vec_t buf) {
     return ret;
 }
 
+static int tls_mbedtls_write_record(void *ctx, const unsigned char *buf, size_t len) {
+    return mbedtls_ssl_write((mbedtls_ssl_context *) ctx, buf, len);
+}
+
 int64_t rt_uv_tls_write(n_tls_conn_t *n_conn, n_vec_t buf) {
     coroutine_t *co = coroutine_get();
     if (n_conn->closed) {
@@ -460,10 +465,24 @@ int64_t rt_uv_tls_write(n_tls_conn_t *n_conn, n_vec_t buf) {
         return 0;
     }
 
-    // 使用 mbedTLS 写入加密数据, 具体会调用的 socket 已经通过 bio 注册了
-    int ret = mbedtls_ssl_write(&conn->ssl, (const unsigned char *) buf.data, buf.length);
+    // mbedtls_ssl_write() writes at most one TLS record and may therefore
+    // return a positive short count for buffers larger than the negotiated
+    // record payload (normally about 16 KiB). Keep the connable write
+    // contract complete instead of silently truncating callers.
+    int64_t written = tls_write_all_records(&conn->ssl, tls_mbedtls_write_record,
+                                            (const unsigned char *) buf.data, (size_t) buf.length);
+    if (written < 0) {
+        char error_buf[256];
+        mbedtls_strerror((int) written, error_buf, sizeof(error_buf));
+        rti_co_throw(co, tlsprintf("TLS write failed: %s", error_buf), false);
+        return 0;
+    }
+    if (written == 0 && buf.length > 0) {
+        rti_co_throw(co, "TLS write made no progress", false);
+        return 0;
+    }
 
-    return ret;
+    return written;
 }
 
 static void uv_async_conn_close(inner_tls_conn_t *conn) {

@@ -155,6 +155,10 @@ target_compile_definitions(test_nature_root PRIVATE
 target_link_libraries(test_nature_root nature_common_test m)
 add_test(test_nature_root test_nature_root)
 
+add_executable(test_tls_write_all test_tls_write_all.c)
+target_include_directories(test_tls_write_all PRIVATE ${CMAKE_SOURCE_DIR})
+add_test(test_tls_write_all test_tls_write_all)
+
 add_executable(test_archive_writer test_archive_writer.c)
 target_link_libraries(test_archive_writer nature_common_test m)
 add_test(test_archive_writer test_archive_writer)
