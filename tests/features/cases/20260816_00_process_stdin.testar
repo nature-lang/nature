@@ -1,0 +1,22 @@
+=== custom_command_stdin_reaches_child
+--- main.n
+import io
+import process
+
+fn main():void! {
+    var input = new io.buffer()
+    input.write('stdin-probe\n' as [u8])
+    var output = new io.buffer()
+
+    var cmd = process.command('/bin/cat', [])
+    cmd.stdin = input
+    cmd.stdout = output
+    var child = cmd.spawn()
+    child.wait()
+
+    assert(output.read_all() as string == 'stdin-probe\n')
+    println('stdin forwarded')
+}
+
+--- output.txt
+stdin forwarded

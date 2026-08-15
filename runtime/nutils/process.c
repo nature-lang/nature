@@ -6,6 +6,8 @@ typedef n_int_t *(*io_write_fn)(void *self, n_vec_t *buf);
 
 typedef n_int_t *(*io_read_fn)(void *self, n_vec_t *buf);
 
+static inline void close_stdin_pipe(process_context_t *ctx);
+
 static inline bool is_real_exit(process_context_t *ctx) {
     return ctx->exited && ctx->stderr_pipe.closed && ctx->stdout_pipe.closed;
 }
@@ -42,6 +44,7 @@ static inline void on_exit_cb(uv_process_t *req, int64_t exit_status, int term_s
         free(ctx->envs);
     }
     uv_close((uv_handle_t *) req, NULL);
+    close_stdin_pipe(ctx);
 
     if (is_real_exit(ctx)) {
         real_exit(ctx);
@@ -133,6 +136,7 @@ static inline void on_read_stdout_cb(uv_stream_t *stream, ssize_t nread, const u
 
 static void uv_async_process_spawn(process_context_t *ctx, coroutine_t *co) {
     // 初始化
+    uv_pipe_init(&global_loop, &ctx->stdin_pipe.pipe, 0);
     uv_pipe_init(&global_loop, &ctx->stderr_pipe.pipe, 0);
     uv_pipe_init(&global_loop, &ctx->stdout_pipe.pipe, 0);
 
@@ -142,9 +146,10 @@ static void uv_async_process_spawn(process_context_t *ctx, coroutine_t *co) {
     options.args = ctx->args;
     options.env = ctx->envs;
 
-    // 设置标准输出重定向到当前进程
+    // 将子进程的标准流连接到父进程 pipe
     uv_stdio_container_t stdio[3];
-    stdio[0].flags = UV_IGNORE;
+    stdio[0].flags = UV_CREATE_PIPE | UV_READABLE_PIPE;
+    stdio[0].data.stream = (uv_stream_t *) &ctx->stdin_pipe.pipe;
     stdio[1].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
     stdio[1].data.stream = (uv_stream_t *) &ctx->stdout_pipe.pipe;
     stdio[2].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
@@ -155,6 +160,18 @@ static void uv_async_process_spawn(process_context_t *ctx, coroutine_t *co) {
 
     int result = uv_spawn(&global_loop, &ctx->req, &options);
     if (result) {
+        ctx->stdin_pipe.closed = true;
+        ctx->stdout_pipe.closed = true;
+        ctx->stderr_pipe.closed = true;
+        uv_close((uv_handle_t *) &ctx->stdin_pipe.pipe, NULL);
+        uv_close((uv_handle_t *) &ctx->stdout_pipe.pipe, NULL);
+        uv_close((uv_handle_t *) &ctx->stderr_pipe.pipe, NULL);
+        free(ctx->args);
+        ctx->args = NULL;
+        if (ctx->envs) {
+            free(ctx->envs);
+            ctx->envs = NULL;
+        }
         rti_co_throw(co, (char *) uv_strerror(result), false);
     } else {
         // 设置 pid 的值
@@ -209,6 +226,90 @@ process_context_t *rt_uv_process_spawn(command_t *cmd) {
 
     DEBUGF("[rt_uv_process_spawn] end, ctx: %p", ctx)
     return ctx;
+}
+
+static inline void on_write_stdin_cb(uv_write_t *req, int status) {
+    process_context_t *ctx = req->data;
+    coroutine_t *co = ctx->stdin_pipe.write_co;
+    ctx->stdin_pipe.write_co = NULL;
+
+    if (status < 0) {
+        rti_co_throw(co, tlsprintf("write stdin failed: %s", uv_strerror(status)), false);
+    }
+    co_ready(co);
+}
+
+static void uv_async_process_write_stdin(process_context_t *ctx) {
+    coroutine_t *co = ctx->stdin_pipe.write_co;
+    if (ctx->stdin_pipe.closed || uv_is_closing((uv_handle_t *) &ctx->stdin_pipe.pipe)) {
+        rti_co_throw(co, "stdin pipe closed", false);
+        ctx->stdin_pipe.write_co = NULL;
+        co_ready(co);
+        return;
+    }
+
+    uv_buf_t buf = uv_buf_init((char *) ctx->stdin_pipe.write_buf.data, ctx->stdin_pipe.write_buf.length);
+    ctx->stdin_pipe.write_req.data = ctx;
+    int result = uv_write(&ctx->stdin_pipe.write_req, (uv_stream_t *) &ctx->stdin_pipe.pipe, &buf, 1,
+                          on_write_stdin_cb);
+    if (result < 0) {
+        rti_co_throw(co, tlsprintf("write stdin failed: %s", uv_strerror(result)), false);
+        ctx->stdin_pipe.write_co = NULL;
+        co_ready(co);
+    }
+}
+
+n_int_t rt_uv_process_write_stdin(process_context_t *ctx, n_vec_t buf) {
+    coroutine_t *co = coroutine_get();
+    if (ctx->stdin_pipe.closed) {
+        rti_co_throw(co, "stdin pipe closed", false);
+        return 0;
+    }
+
+    ctx->stdin_pipe.write_buf = buf;
+    ctx->stdin_pipe.write_co = co;
+    global_waiting_send(uv_async_process_write_stdin, ctx, 0, 0);
+
+    if (co->has_error) {
+        return 0;
+    }
+    return buf.length;
+}
+
+static inline void on_stdin_close_cb(uv_handle_t *handle) {
+    stdin_pipe_context_t *stdin_pipe = CONTAINER_OF(handle, stdin_pipe_context_t, pipe);
+    coroutine_t *co = stdin_pipe->close_co;
+    stdin_pipe->close_co = NULL;
+    if (co) {
+        co_ready(co);
+    }
+}
+
+static inline void close_stdin_pipe(process_context_t *ctx) {
+    if (ctx->stdin_pipe.closed || uv_is_closing((uv_handle_t *) &ctx->stdin_pipe.pipe)) {
+        return;
+    }
+
+    ctx->stdin_pipe.closed = true;
+    uv_close((uv_handle_t *) &ctx->stdin_pipe.pipe, on_stdin_close_cb);
+}
+
+static void uv_async_process_close_stdin(process_context_t *ctx, coroutine_t *co) {
+    if (ctx->stdin_pipe.closed || uv_is_closing((uv_handle_t *) &ctx->stdin_pipe.pipe)) {
+        co_ready(co);
+        return;
+    }
+
+    ctx->stdin_pipe.close_co = co;
+    close_stdin_pipe(ctx);
+}
+
+void rt_uv_process_close_stdin(process_context_t *ctx) {
+    if (ctx->stdin_pipe.closed) {
+        return;
+    }
+
+    global_waiting_send(uv_async_process_close_stdin, ctx, coroutine_get(), 0);
 }
 
 void uv_async_process_wait(process_context_t *ctx, coroutine_t *co) {
