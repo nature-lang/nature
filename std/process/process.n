@@ -74,20 +74,19 @@ pub fn command_t.spawn(&self):ref<process_t>! {
 fn command_t.uv_spawn(&self, ref<command_t> cmd):ref<process_t>!
 
 fn process_t.handle_stdin(&self):void! {
+    defer self.close_stdin()
+
     var buf = vec<u8>.new(0, 1024)
     for true {
         int n = self.cmd.stdin.read(buf) catch e {
-            self.close_stdin()
             return
         }
 
         if n <= 0 {
-            self.close_stdin()
             return
         }
 
         self.write_stdin(buf.slice(0, n)) catch e {
-            self.close_stdin()
             return
         }
     }

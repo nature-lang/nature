@@ -230,8 +230,7 @@ process_context_t *rt_uv_process_spawn(command_t *cmd) {
 
 static inline void on_write_stdin_cb(uv_write_t *req, int status) {
     process_context_t *ctx = req->data;
-    coroutine_t *co = ctx->stdin_pipe.write_co;
-    ctx->stdin_pipe.write_co = NULL;
+    coroutine_t *co = ctx->stdin_pipe.pipe.data;
 
     if (status < 0) {
         rti_co_throw(co, tlsprintf("write stdin failed: %s", uv_strerror(status)), false);
@@ -240,10 +239,9 @@ static inline void on_write_stdin_cb(uv_write_t *req, int status) {
 }
 
 static void uv_async_process_write_stdin(process_context_t *ctx) {
-    coroutine_t *co = ctx->stdin_pipe.write_co;
+    coroutine_t *co = ctx->stdin_pipe.pipe.data;
     if (ctx->stdin_pipe.closed || uv_is_closing((uv_handle_t *) &ctx->stdin_pipe.pipe)) {
         rti_co_throw(co, "stdin pipe closed", false);
-        ctx->stdin_pipe.write_co = NULL;
         co_ready(co);
         return;
     }
@@ -254,7 +252,6 @@ static void uv_async_process_write_stdin(process_context_t *ctx) {
                           on_write_stdin_cb);
     if (result < 0) {
         rti_co_throw(co, tlsprintf("write stdin failed: %s", uv_strerror(result)), false);
-        ctx->stdin_pipe.write_co = NULL;
         co_ready(co);
     }
 }
@@ -267,7 +264,7 @@ n_int_t rt_uv_process_write_stdin(process_context_t *ctx, n_vec_t buf) {
     }
 
     ctx->stdin_pipe.write_buf = buf;
-    ctx->stdin_pipe.write_co = co;
+    ctx->stdin_pipe.pipe.data = co;
     global_waiting_send(uv_async_process_write_stdin, ctx, 0, 0);
 
     if (co->has_error) {
@@ -276,32 +273,11 @@ n_int_t rt_uv_process_write_stdin(process_context_t *ctx, n_vec_t buf) {
     return buf.length;
 }
 
-static inline void on_stdin_close_cb(uv_handle_t *handle) {
-    stdin_pipe_context_t *stdin_pipe = CONTAINER_OF(handle, stdin_pipe_context_t, pipe);
-    coroutine_t *co = stdin_pipe->close_co;
-    stdin_pipe->close_co = NULL;
-    if (co) {
-        co_ready(co);
-    }
-}
-
 static inline void close_stdin_pipe(process_context_t *ctx) {
-    if (ctx->stdin_pipe.closed || uv_is_closing((uv_handle_t *) &ctx->stdin_pipe.pipe)) {
-        return;
-    }
-
     ctx->stdin_pipe.closed = true;
-    uv_close((uv_handle_t *) &ctx->stdin_pipe.pipe, on_stdin_close_cb);
-}
-
-static void uv_async_process_close_stdin(process_context_t *ctx, coroutine_t *co) {
-    if (ctx->stdin_pipe.closed || uv_is_closing((uv_handle_t *) &ctx->stdin_pipe.pipe)) {
-        co_ready(co);
-        return;
+    if (!uv_is_closing((uv_handle_t *) &ctx->stdin_pipe.pipe)) {
+        uv_close((uv_handle_t *) &ctx->stdin_pipe.pipe, NULL);
     }
-
-    ctx->stdin_pipe.close_co = co;
-    close_stdin_pipe(ctx);
 }
 
 void rt_uv_process_close_stdin(process_context_t *ctx) {
@@ -309,7 +285,8 @@ void rt_uv_process_close_stdin(process_context_t *ctx) {
         return;
     }
 
-    global_waiting_send(uv_async_process_close_stdin, ctx, coroutine_get(), 0);
+    ctx->stdin_pipe.closed = true;
+    global_async_send(close_stdin_pipe, ctx, 0, 0);
 }
 
 void uv_async_process_wait(process_context_t *ctx, coroutine_t *co) {
