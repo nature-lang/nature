@@ -154,10 +154,23 @@ static void test_bitmap_batch_operations_combined() {
     bitmap_free(b);
 }
 
+static void test_bitmap_grow_exact_byte_boundary() {
+    bitmap_t *b = bitmap_new(16);
+
+    // Bit 128 is the first bit after a 16-byte bitmap. Growing must happen
+    // when index / 8 equals the current byte capacity.
+    bitmap_grow_set(b, 16 * 8, true);
+    assert_true(b->size > 16);
+    assert_int_equal(bitmap_test(b->bits, 16 * 8), 1);
+
+    bitmap_free(b);
+}
+
 int main(void) {
     test_bitmap_base();
     test_bitmap_batch_set();
     test_bitmap_batch_clear();
     test_bitmap_batch_operations_combined();
+    test_bitmap_grow_exact_byte_boundary();
     printf("All bitmap batch tests passed!\n");
 }
