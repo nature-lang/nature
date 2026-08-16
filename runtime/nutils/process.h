@@ -27,10 +27,9 @@ typedef struct {
 typedef struct {
     uv_pipe_t pipe;
     char buffer[1024];
-    int64_t read_buffer_count;
+    int64_t buffer_count;
     const char *name;
     uv_write_t write_req;
-    n_vec_t write_buf;
     bool closed;
 } pipe_context_t;
 
