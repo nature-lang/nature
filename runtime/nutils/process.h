@@ -29,7 +29,6 @@ typedef struct {
     char buffer[1024];
     int64_t buffer_count;
     const char *name;
-    uv_write_t write_req;
     bool closed;
 } pipe_context_t;
 
@@ -47,6 +46,7 @@ typedef struct {
     pipe_context_t stdin_pipe;
     pipe_context_t stdout_pipe;
     pipe_context_t stderr_pipe;
+    uv_write_t stdin_write_req;
     uv_process_t req; // 程序启动成功后, pid 存储在 req 中
 } process_context_t;
 

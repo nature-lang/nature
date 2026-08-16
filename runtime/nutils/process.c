@@ -249,8 +249,8 @@ static void uv_async_process_write_stdin(process_context_t *ctx) {
     }
 
     uv_buf_t buf = uv_buf_init(ctx->stdin_pipe.buffer, ctx->stdin_pipe.buffer_count);
-    ctx->stdin_pipe.write_req.data = ctx;
-    int result = uv_write(&ctx->stdin_pipe.write_req, (uv_stream_t *) &ctx->stdin_pipe.pipe, &buf, 1,
+    ctx->stdin_write_req.data = ctx;
+    int result = uv_write(&ctx->stdin_write_req, (uv_stream_t *) &ctx->stdin_pipe.pipe, &buf, 1,
                           on_write_stdin_cb);
     if (result < 0) {
         rti_co_throw(co, tlsprintf("write stdin failed: %s", uv_strerror(result)), false);
