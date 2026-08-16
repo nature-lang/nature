@@ -150,6 +150,7 @@ static void uv_async_process_spawn(process_context_t *ctx, coroutine_t *co) {
     options.file = rt_string_ref(&ctx->cmd.name);
     options.args = ctx->args;
     options.env = ctx->envs;
+    options.cwd = ctx->cmd.cwd.length ? rt_string_ref(&ctx->cmd.cwd) : NULL;
 
     // 将子进程的标准流连接到父进程 pipe
     uv_stdio_container_t stdio[3];

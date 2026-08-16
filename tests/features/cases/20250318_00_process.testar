@@ -88,3 +88,41 @@ fn main():void! {
 }
 --- output.txt
 process exited 0 0\s\s
+
+=== test_cwd
+--- main.n
+import io
+import process
+import os
+import syscall
+
+fn main():void! {
+    var args = os.args()
+    if args.len() > 1 && args[1] == 'cwd_child' {
+        var _ = syscall.stat('marker') catch err {
+            println('cwd failed')
+            return
+        }
+        println('cwd ok')
+        return
+    }
+
+    string target = 'process-cwd'
+    syscall.mkdir(target, 0755)
+    int marker = syscall.open(target + '/marker', syscall.O_CREAT | syscall.O_RDWR, 0644)
+    syscall.write(marker, 'ok'.ref(), 2)
+    syscall.close(marker)
+
+    var output = io.buffer.new()
+    var cmd = process.command(args[0], ['cwd_child'])
+    cmd.cwd = target
+    cmd.stdout = output
+    var p = cmd.spawn()
+    p.wait()
+
+    assert((output.read_all() as string).trim(['\n', '\r']) == 'cwd ok')
+    println('process cwd option ok')
+}
+
+--- output.txt
+process cwd option ok
