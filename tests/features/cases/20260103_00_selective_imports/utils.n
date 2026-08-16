@@ -10,7 +10,6 @@ fn parse_int(string s):int {
     return 42
 }
 
-#local
 fn private_util():int {
     return 1
 }

@@ -535,7 +535,7 @@
         "annotation": {
             "patterns": [
                 {
-                    "comment": "#linkid, #where, #local, etc.",
+                    "comment": "#linkid, #where, etc.",
                     "match": "(#[a-zA-Z_][a-zA-Z0-9_]*)\\b(.*)?$",
                     "captures": {
                         "1": {

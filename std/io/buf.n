@@ -24,7 +24,7 @@ pub fn reader<T>.reset(&self, T rd) {
     self.eof = false
 }
 
-#local #where T:io.reader
+#where T:io.reader
 pub fn reader<T>.fill(&self):void! {
     if self.r > 0 {
         // Copy unread data to the buffer start position
@@ -231,7 +231,7 @@ pub fn writer<T>.buffered(&self):int {
     return self.n
 }
 
-#local #where T:io.writer
+#where T:io.writer
 pub fn writer<T>.flush(&self):void! {
     if self.err {
         throw errorf('previous write error')
