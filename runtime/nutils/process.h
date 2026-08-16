@@ -1,10 +1,10 @@
 #ifndef NATURE_PROCESS_H
 #define NATURE_PROCESS_H
 
-#include "runtime/uv_compat.h"
-#include "vec.h"
-#include "utils/helper.h"
 #include "runtime/processor.h"
+#include "runtime/uv_compat.h"
+#include "utils/helper.h"
+#include "vec.h"
 
 typedef struct {
     n_string_t stdout_text;
@@ -27,7 +27,7 @@ typedef struct {
 typedef struct {
     uv_pipe_t pipe;
     char buffer[1024];
-    int64_t read_buffer_count;
+    int64_t buffer_count;
     const char *name;
     bool closed;
 } pipe_context_t;
@@ -43,14 +43,20 @@ typedef struct {
     int32_t term_sig;
     command_t cmd;
 
+    pipe_context_t stdin_pipe;
     pipe_context_t stdout_pipe;
     pipe_context_t stderr_pipe;
+    uv_write_t stdin_write_req;
     uv_process_t req; // 程序启动成功后, pid 存储在 req 中
 } process_context_t;
 
 n_string_t rt_uv_process_read_stdout(process_context_t *ctx);
 
 n_string_t rt_uv_process_read_stderr(process_context_t *ctx);
+
+n_int_t rt_uv_process_write_stdin(process_context_t *ctx, n_vec_t buf);
+
+void rt_uv_process_close_stdin(process_context_t *ctx);
 
 void rt_uv_process_wait(process_context_t *ctx);
 

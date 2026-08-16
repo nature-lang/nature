@@ -64,6 +64,7 @@ pub fn command_t.spawn(&self):ref<process_t>! {
     // Scheduling in the current thread will not cause competition
     go p.handle_stdout()
     go p.handle_stderr()
+    go p.handle_stdin()
 
     return p
 }
@@ -71,6 +72,31 @@ pub fn command_t.spawn(&self):ref<process_t>! {
 
 #linkid rt_uv_process_spawn
 fn command_t.uv_spawn(&self, ref<command_t> cmd):ref<process_t>!
+
+fn process_t.handle_stdin(&self):void! {
+    defer self.close_stdin()
+
+    var buf = vec<u8>.new(0, 1024)
+    for true {
+        int n = self.cmd.stdin.read(buf) catch e {
+            return
+        }
+
+        if n <= 0 {
+            return
+        }
+
+        self.write_stdin(buf.slice(0, n)) catch e {
+            return
+        }
+    }
+}
+
+#linkid rt_uv_process_write_stdin
+fn process_t.write_stdin(&self, [u8] buf):int!
+
+#linkid rt_uv_process_close_stdin
+fn process_t.close_stdin(&self):void
 
 fn process_t.handle_stdout(&self):void! {
     for true {

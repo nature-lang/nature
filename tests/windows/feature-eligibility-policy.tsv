@@ -11,3 +11,4 @@
 20250616_02_libc_fcntl	skip	all scenarios are explicitly linux-only
 20260102_00_tank	skip	requires an interactive raylib window
 20260118_00_mix_stack	skip	ships ELF or Mach-O fixture objects, not AMD64 COFF
+20260816_00_process_stdin	skip	requires the Unix /bin/cat executable

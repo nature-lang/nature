@@ -6,6 +6,13 @@ typedef n_int_t *(*io_write_fn)(void *self, n_vec_t *buf);
 
 typedef n_int_t *(*io_read_fn)(void *self, n_vec_t *buf);
 
+static inline void close_pipe(pipe_context_t *pipe_ctx) {
+    pipe_ctx->closed = true;
+    if (!uv_is_closing((uv_handle_t *) &pipe_ctx->pipe)) {
+        uv_close((uv_handle_t *) &pipe_ctx->pipe, NULL);
+    }
+}
+
 static inline bool is_real_exit(process_context_t *ctx) {
     return ctx->exited && ctx->stderr_pipe.closed && ctx->stdout_pipe.closed;
 }
@@ -17,8 +24,8 @@ static inline void real_exit(process_context_t *ctx) {
     assert(ctx->stderr_pipe.closed);
 
     // 关闭 pipe
-    uv_close((uv_handle_t *) &ctx->stdout_pipe.pipe, NULL);
-    uv_close((uv_handle_t *) &ctx->stderr_pipe.pipe, NULL);
+    close_pipe(&ctx->stdout_pipe);
+    close_pipe(&ctx->stderr_pipe);
 
     // 唤醒主协程
     coroutine_t *co = ctx->req.data;
@@ -42,6 +49,7 @@ static inline void on_exit_cb(uv_process_t *req, int64_t exit_status, int term_s
         free(ctx->envs);
     }
     uv_close((uv_handle_t *) req, NULL);
+    close_pipe(&ctx->stdin_pipe);
 
     if (is_real_exit(ctx)) {
         real_exit(ctx);
@@ -86,7 +94,7 @@ static inline void on_read_stderr_cb(uv_stream_t *stream, ssize_t nread, const u
     // 尝试打印读取到的数据, 尝试将读取的数据写入到 process_context 设置的 stdin 和 stdout 中
     DEBUGF("[on_read_stderr_cb] %s: nread: %d", pipe_ctx->name, (int) nread);
 
-    pipe_ctx->read_buffer_count = nread;
+    pipe_ctx->buffer_count = nread;
 
     // 唤醒应用层消化相关数据
     co_ready(co);
@@ -125,7 +133,7 @@ static inline void on_read_stdout_cb(uv_stream_t *stream, ssize_t nread, const u
     DEBUGF("[on_read_stdout_cb] %s: nread: %d", pipe_ctx->name, (int) nread);
 
 
-    pipe_ctx->read_buffer_count = nread;
+    pipe_ctx->buffer_count = nread;
 
     // 唤醒应用层消化相关数据
     co_ready(co);
@@ -133,6 +141,7 @@ static inline void on_read_stdout_cb(uv_stream_t *stream, ssize_t nread, const u
 
 static void uv_async_process_spawn(process_context_t *ctx, coroutine_t *co) {
     // 初始化
+    uv_pipe_init(&global_loop, &ctx->stdin_pipe.pipe, 0);
     uv_pipe_init(&global_loop, &ctx->stderr_pipe.pipe, 0);
     uv_pipe_init(&global_loop, &ctx->stdout_pipe.pipe, 0);
 
@@ -142,9 +151,10 @@ static void uv_async_process_spawn(process_context_t *ctx, coroutine_t *co) {
     options.args = ctx->args;
     options.env = ctx->envs;
 
-    // 设置标准输出重定向到当前进程
+    // 将子进程的标准流连接到父进程 pipe
     uv_stdio_container_t stdio[3];
-    stdio[0].flags = UV_IGNORE;
+    stdio[0].flags = UV_CREATE_PIPE | UV_READABLE_PIPE;
+    stdio[0].data.stream = (uv_stream_t *) &ctx->stdin_pipe.pipe;
     stdio[1].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
     stdio[1].data.stream = (uv_stream_t *) &ctx->stdout_pipe.pipe;
     stdio[2].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
@@ -155,6 +165,15 @@ static void uv_async_process_spawn(process_context_t *ctx, coroutine_t *co) {
 
     int result = uv_spawn(&global_loop, &ctx->req, &options);
     if (result) {
+        close_pipe(&ctx->stdin_pipe);
+        close_pipe(&ctx->stdout_pipe);
+        close_pipe(&ctx->stderr_pipe);
+        free(ctx->args);
+        ctx->args = NULL;
+        if (ctx->envs) {
+            free(ctx->envs);
+            ctx->envs = NULL;
+        }
         rti_co_throw(co, (char *) uv_strerror(result), false);
     } else {
         // 设置 pid 的值
@@ -211,6 +230,65 @@ process_context_t *rt_uv_process_spawn(command_t *cmd) {
     return ctx;
 }
 
+static inline void on_write_stdin_cb(uv_write_t *req, int status) {
+    process_context_t *ctx = req->data;
+    coroutine_t *co = ctx->stdin_pipe.pipe.data;
+
+    if (status < 0) {
+        rti_co_throw(co, tlsprintf("write stdin failed: %s", uv_strerror(status)), false);
+    }
+    co_ready(co);
+}
+
+static void uv_async_process_write_stdin(process_context_t *ctx) {
+    coroutine_t *co = ctx->stdin_pipe.pipe.data;
+    if (ctx->stdin_pipe.closed || uv_is_closing((uv_handle_t *) &ctx->stdin_pipe.pipe)) {
+        rti_co_throw(co, "stdin pipe closed", false);
+        co_ready(co);
+        return;
+    }
+
+    uv_buf_t buf = uv_buf_init(ctx->stdin_pipe.buffer, ctx->stdin_pipe.buffer_count);
+    ctx->stdin_write_req.data = ctx;
+    int result = uv_write(&ctx->stdin_write_req, (uv_stream_t *) &ctx->stdin_pipe.pipe, &buf, 1,
+                          on_write_stdin_cb);
+    if (result < 0) {
+        rti_co_throw(co, tlsprintf("write stdin failed: %s", uv_strerror(result)), false);
+        co_ready(co);
+    }
+}
+
+n_int_t rt_uv_process_write_stdin(process_context_t *ctx, n_vec_t buf) {
+    coroutine_t *co = coroutine_get();
+    if (ctx->stdin_pipe.closed) {
+        rti_co_throw(co, "stdin pipe closed", false);
+        return 0;
+    }
+    if (buf.length > sizeof(ctx->stdin_pipe.buffer)) {
+        rti_co_throw(co, "stdin write exceeds pipe buffer", false);
+        return 0;
+    }
+
+    memcpy(ctx->stdin_pipe.buffer, buf.data, buf.length);
+    ctx->stdin_pipe.buffer_count = buf.length;
+    ctx->stdin_pipe.pipe.data = co;
+    global_waiting_send(uv_async_process_write_stdin, ctx, 0, 0);
+
+    if (co->has_error) {
+        return 0;
+    }
+    return buf.length;
+}
+
+void rt_uv_process_close_stdin(process_context_t *ctx) {
+    if (ctx->stdin_pipe.closed) {
+        return;
+    }
+
+    ctx->stdin_pipe.closed = true;
+    global_async_send(close_pipe, &ctx->stdin_pipe, 0, 0);
+}
+
 void uv_async_process_wait(process_context_t *ctx, coroutine_t *co) {
     // check real exited, ready
     if (is_real_exit(ctx)) {
@@ -258,7 +336,7 @@ n_string_t rt_uv_process_read_stdout(process_context_t *ctx) {
         return (n_string_t) {0};
     }
 
-    n_string_t buf_string = rt_string_ref_new(ctx->stdout_pipe.buffer, ctx->stdout_pipe.read_buffer_count);
+    n_string_t buf_string = rt_string_ref_new(ctx->stdout_pipe.buffer, ctx->stdout_pipe.buffer_count);
     DEBUGF("[rt_uv_process_read_stdout] read buf len: %d", buf_string.length);
     return buf_string;
 }
@@ -284,7 +362,7 @@ n_string_t rt_uv_process_read_stderr(process_context_t *ctx) {
     }
 
     // 提取 buf 并返回
-    n_string_t buf_string = rt_string_ref_new(ctx->stderr_pipe.buffer, ctx->stderr_pipe.read_buffer_count);
+    n_string_t buf_string = rt_string_ref_new(ctx->stderr_pipe.buffer, ctx->stderr_pipe.buffer_count);
     DEBUGF("[rt_uv_process_read_stderr] read buf len: %ld", buf_string.length);
     return buf_string;
 }
