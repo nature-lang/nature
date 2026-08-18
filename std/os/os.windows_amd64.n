@@ -7,16 +7,16 @@ import runtime
 
 type signal = u8
 
-#local #linkid rt_windows_find_first_utf8
+#linkid rt_windows_find_first_utf8
 fn windows_find_first(anyptr pattern, anyptr name, u64 capacity): anyptr
 
-#local #linkid rt_windows_find_next_utf8
+#linkid rt_windows_find_next_utf8
 fn windows_find_next(anyptr handle, anyptr name, u64 capacity): i32
 
-#local #linkid rt_windows_find_close_utf8
+#linkid rt_windows_find_close_utf8
 fn windows_find_close(anyptr handle): i32
 
-#local #linkid GetLastError
+#linkid GetLastError
 fn windows_last_error(): u32
 
 pub fn args():[string] {

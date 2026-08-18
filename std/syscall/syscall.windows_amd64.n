@@ -78,55 +78,55 @@ type windows_filetime_t = struct {
     u32 low
     u32 high
 }
-#local #linkid rt_windows_open_utf8
+#linkid rt_windows_open_utf8
 fn windows_open(anyptr filename, i32 flags, i32 perm): i32
-#local #linkid _read
+#linkid _read
 fn windows_read(i32 fd, anyptr buf, u32 len): i32
-#local #linkid _write
+#linkid _write
 fn windows_write(i32 fd, anyptr buf, u32 len): i32
-#local #linkid _close
+#linkid _close
 fn windows_close(i32 fd): i32
-#local #linkid _lseeki64
+#linkid _lseeki64
 fn windows_seek(i32 fd, i64 offset, i32 whence): i64
-#local #linkid rt_windows_stat_utf8
+#linkid rt_windows_stat_utf8
 fn windows_stat(anyptr filename, ptr<windows_stat64_t> result): i32
-#local #linkid _fstat64
+#linkid _fstat64
 fn windows_fstat(i32 fd, ptr<windows_stat64_t> result): i32
-#local #linkid rt_windows_mkdir_utf8
+#linkid rt_windows_mkdir_utf8
 fn windows_mkdir(anyptr path): i32
-#local #linkid rt_windows_rmdir_utf8
+#linkid rt_windows_rmdir_utf8
 fn windows_rmdir(anyptr path): i32
-#local #linkid rt_windows_unlink_utf8
+#linkid rt_windows_unlink_utf8
 fn windows_unlink(anyptr path): i32
-#local #linkid rt_windows_rename_utf8
+#linkid rt_windows_rename_utf8
 fn windows_rename(anyptr old_path, anyptr new_path): i32
-#local #linkid rt_windows_chmod_utf8
+#linkid rt_windows_chmod_utf8
 fn windows_chmod(anyptr path, i32 mode): i32
-#local #linkid rt_windows_chdir_utf8
+#linkid rt_windows_chdir_utf8
 fn windows_chdir(anyptr path): i32
-#local #linkid rt_windows_getcwd_utf8
+#linkid rt_windows_getcwd_utf8
 fn windows_getcwd(anyptr buf, u64 size): i64
-#local #linkid rt_windows_readlink_utf8
+#linkid rt_windows_readlink_utf8
 fn windows_readlink(anyptr filename, anyptr buf, u64 len): i64
-#local #linkid rt_windows_get_env_utf8
+#linkid rt_windows_get_env_utf8
 fn windows_get_env(anyptr key, anyptr value, u64 len): i64
-#local #linkid rt_windows_set_env_utf8
+#linkid rt_windows_set_env_utf8
 fn windows_set_env(anyptr key, anyptr value): i32
-#local #linkid rt_windows_env_first_utf8
+#linkid rt_windows_env_first_utf8
 fn windows_env_first(anyptr entry, u64 len): anyptr
-#local #linkid rt_windows_env_next_utf8
+#linkid rt_windows_env_next_utf8
 fn windows_env_next(anyptr iterator, anyptr entry, u64 len): i32
-#local #linkid rt_windows_env_close_utf8
+#linkid rt_windows_env_close_utf8
 fn windows_env_close(anyptr iterator): i32
-#local #linkid GetLastError
+#linkid GetLastError
 fn windows_last_error(): u32
-#local #linkid GetSystemTimeAsFileTime
+#linkid GetSystemTimeAsFileTime
 fn windows_system_time(ptr<windows_filetime_t> result): void
-#local #linkid exit
+#linkid exit
 fn windows_exit(i32 status): void
-#local #linkid getpid
+#linkid getpid
 fn windows_getpid(): i32
-#local #linkid getppid
+#linkid getppid
 fn windows_getppid(): i32
 pub fn open(string filename, int flags, u32 perm): int! {
     int native_flags = flags

@@ -257,7 +257,6 @@ fn request_t.tcp_buf(&self):[u8]! {
     return buf
 }
 
-#local
 fn read_until_space(ref<buf.reader<types.connable>> br):string! {
     // vec<u8>.new(0, 32) pre-fills 32 zero bytes that are included in the
     // `as string` result, corrupting every status line parse. Build the token
@@ -448,7 +447,6 @@ fn chunked_reader_t.new(ref<buf.reader<types.connable>> br):ref<chunked_reader_t
     return new chunked_reader_t(br = br)
 }
 
-#local
 fn chunked_reader_t.hex_to_int(&self, string s):int {
     var result = 0
     for int i = 0; i < s.len(); i += 1 {
@@ -465,7 +463,6 @@ fn chunked_reader_t.hex_to_int(&self, string s):int {
     return result
 }
 
-#local
 fn chunked_reader_t.fill_staging(&self):void! {
     for true {
         if self.state == 0 {

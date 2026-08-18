@@ -19,7 +19,6 @@ pub fn multiply(int a, int b):int {
 }
 
 // Private function - should not be importable
-#local
 fn internal_helper():int {
     return 42
 }
