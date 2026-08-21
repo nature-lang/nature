@@ -1,0 +1,125 @@
+=== test_map_assign_any_assert_return
+--- main.n
+// issue #315: writing an any assert result directly into a map value slot wrongly took the address
+// of the anyptr target, making any_assert overflow adjacent spill slots; returning the map from the
+// function then crashed reliably with SIGSEGV
+type options_t = struct {
+    {string:string} headers = {}
+}
+
+fn stream_option_headers(any value): {string:string}! {
+    if !(value is {string:any}) {throw errorf('headers must be an object')}
+    {string:string} result = {}
+    for name, item in value as {string:any} {
+        if !(item is string) {throw errorf('header must be a string')}
+        result[name] = item as string
+    }
+    return result
+}
+
+fn set_runtime_stream_options(ref<options_t> options, {string:any} value): void! {
+    if value.contains('headers') {
+        {string:string} headers = stream_option_headers(value['headers'])
+        options.headers = headers
+    }
+}
+
+fn main() {
+    var options = new options_t()
+    {string:any} headers = {}
+    headers['x-repro'] = 'yes'
+    {string:any} value = {}
+    value['headers'] = headers
+    set_runtime_stream_options(options, value) catch error {println(error.msg()); return}
+    println(options.headers['x-repro'])
+}
+
+--- output.txt
+yes
+
+=== test_map_new_any_assert_value
+--- main.n
+// issue #315 same-family scenario: map literal value is an any assert expression
+fn main() {
+    {string:string} m = {}
+    m['a'] = 'x'
+    println(m['a'])
+
+    {string:any} src = {'k': 'v'}
+    {string:string} n = {'b': src['k'] as string}
+    println(n['b'])
+}
+
+--- output.txt
+x
+v
+
+=== test_ind_assert_slot_targets
+--- main.n
+// issue #315 same-family scenario: any assert results written into various IND slots
+// (struct field/tuple/vec/array/map); the targets are all anyptr/ref temp variables whose
+// value is the write address, so taking their address is not allowed
+type holder_t = struct {
+    string name = ''
+    int x = 0
+}
+
+fn main() {
+    {string:any} src = {}
+    src['s'] = 'v'
+    src['v'] = [1, 2, 3]
+    src['set'] = {7, 8}
+    src['h'] = holder_t {name: 'nn', x: 5}
+    src['m'] = {'n': 'deep'}
+
+    {string:string} a = {}
+    a['r1'] = src['s'] as string
+    println('a=', a['r1'])
+
+    {string:[any]} av = {}
+    av['r'] = src['v'] as [any]
+    println('av=', av['r'][0], av['r'][2])
+
+    {string:{int}} aset = {}
+    aset['r'] = src['set'] as {int}
+    {int} s7 = aset['r']
+    println('aset=', s7.contains(7), s7.contains(9))
+
+    {string:holder_t} ah = {}
+    ah['r'] = src['h'] as holder_t
+    println('ah=', ah['r'].name, ah['r'].x)
+
+    {string:{string:any}} am = {}
+    am['r'] = src['m'] as {string:any}
+    println('am=', am['r']['n'])
+
+    var h = new holder_t()
+    h.name = src['s'] as string
+    println('h=', h.name)
+
+    var h2 = holder_t {name: src['s'] as string, x: 3}
+    println('h2=', h2.name, h2.x)
+
+    var t = (0, '')
+    t[1] = src['s'] as string
+    println('t=', t[0], t[1])
+
+    [string] vl = [src['s'] as string, 'z']
+    println('vl=', vl[0], vl[1])
+
+    [string] arr = ['a', 'b']
+    arr[0] = src['s'] as string
+    println('arr=', arr[0], arr[1])
+}
+
+--- output.txt
+a= v
+av= 1 3
+aset= true false
+ah= nn 5
+am= deep
+h= v
+h2= v 3
+t= 0 v
+vl= v z
+arr= v b
