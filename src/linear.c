@@ -3352,8 +3352,14 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             OP_PUSH(lir_op_move(target, temp));
             return target;
         } else {
-            // indirect, like struct/vec 等总是会进行分配 def, 所以不需要特殊 def
-            lir_operand_t *output_ref = lea_operand_pointer(m, target);
+            // VAR target's value is the write address: pass it by value, lea only for I_ADDR/SYMBOL_VAR
+            lir_operand_t *output_ref = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            lir_operand_t *out_src = target;
+            if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
+                target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+                out_src = lea_operand_pointer(m, target);
+            }
+            OP_PUSH(lir_op_move(output_ref, out_src));
             uint64_t target_rtype_hash = type_hash(as_expr->target_type);
             lir_operand_t *any_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             OP_PUSH(lir_op_move(any_ptr, src_operand));
@@ -3379,8 +3385,13 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             OP_PUSH(lir_op_move(target, temp));
             return target;
         } else {
-            // indirect, like struct/vec 等总是会进行分配 def, 所以不需要特殊 def
-            lir_operand_t *output_ref = lea_operand_pointer(m, target);
+            // VAR target's value is the write address: pass it by value, lea only for I_ADDR/SYMBOL_VAR
+            lir_operand_t *output_ref = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            lir_operand_t *out_src = target;
+            if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+                out_src = lea_operand_pointer(m, target);
+            }
+            OP_PUSH(lir_op_move(output_ref, out_src));
             uint64_t target_rtype_hash = type_hash(as_expr->target_type);
             lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             OP_PUSH(lir_op_move(union_ptr, src_operand));
@@ -3401,11 +3412,20 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     // interface as
     if (as_expr->src.type.kind == TYPE_INTERFACE) {
         assert(as_expr->target_type.kind != TYPE_INTERFACE);
-        OP_PUSH(lir_op_nop_def(target));
 
-        lir_operand_t *output_ref = target;
+        lir_operand_t *output_ref;
         if (as_expr->target_type.storage_kind != STORAGE_KIND_IND) {
+            // nop_def marks the variable as written by the runtime
+            OP_PUSH(lir_op_nop_def(target));
             output_ref = lea_operand_pointer(m, target);
+        } else {
+            // VAR target's value is the write address: pass it by value, lea only for I_ADDR/SYMBOL_VAR
+            output_ref = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+            lir_operand_t *out_src = target;
+            if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
+                out_src = lea_operand_pointer(m, target);
+            }
+            OP_PUSH(lir_op_move(output_ref, out_src));
         }
 
         uint64_t target_rtype_hash = type_hash(as_expr->target_type);
