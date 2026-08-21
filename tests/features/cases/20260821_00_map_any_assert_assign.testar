@@ -123,3 +123,84 @@ h2= v 3
 t= 0 v
 vl= v z
 arr= v b
+
+=== test_union_assert_ind_slot
+--- main.n
+// issue #315 same-family scenario: a union assert result written into an IND slot must not take the
+// address of the target either, otherwise union_assert overflows the target's spill slot and adjacent
+// slots
+type m_union = {string:any}|string
+
+fn main() {
+    any a = {'n': 'deep'}
+    m_union um = a as {string:any}
+    m_union us = 'value-string'
+
+    {string:{string:any}} m = {}
+    m['k'] = um as {string:any}
+    println('m=', m['k']['n'])
+
+    {string:string} ms = {}
+    ms['k'] = us as string
+    println('ms=', ms['k'])
+
+    var mm = um as {string:any}
+    println('mm=', mm['n'])
+
+    var ss = us as string
+    println('ss=', ss)
+}
+
+--- output.txt
+m= deep
+ms= value-string
+mm= deep
+ss= value-string
+
+=== test_interface_assert_ind_slot
+--- main.n
+// issue #315 same-family scenario: writing an interface assert result into an IND slot must pass the
+// VAR target's address by value; IND struct params must not be passed directly, or the call ABI
+// re-stages them by value (an HFA expands into float registers) and the assert result is written into
+// a dead copy or a wrong address
+type measurable<T> = interface{
+	fn area():T
+	fn perimeter():T
+}
+
+type rectangle: measurable<f64> = struct{
+	f64 width
+	f64 height
+}
+
+fn rectangle.area(&self):f64 {
+	return self.width * self.height
+}
+
+fn rectangle.perimeter(&self):f64 {
+	return 2 * (self.width + self.height)
+}
+
+type holder_t = struct {
+    rectangle r = rectangle{width: 0, height: 0}
+}
+
+fn main():void! {
+    measurable<f64> s = rectangle{width:3, height:4}
+
+    var r = s as rectangle
+    println('r=', r.width, r.height)
+
+    var h = new holder_t()
+    h.r = s as rectangle
+    println('h=', h.r.width, h.r.height)
+
+    {string:rectangle} m = {}
+    m['k'] = s as rectangle
+    println('m=', m['k'].width, m['k'].height)
+}
+
+--- output.txt
+r= 3.000000 4.000000
+h= 3.000000 4.000000
+m= 3.000000 4.000000
