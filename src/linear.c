@@ -3352,13 +3352,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             OP_PUSH(lir_op_move(target, temp));
             return target;
         } else {
-            // indirect, like struct/vec always have allocation def, so no special def needed
-            // Consistent with the any_casting/union_casting branches below: a VAR target's value is the
-            // write address (a lir_stack_alloc temp object address, a map assign value slot address, or a
-            // ref field address), so move it into an anyptr temp and pass by value. Taking the address of
-            // a VAR target would make any_assert overflow the target's own spill slot and adjacent stack
-            // slots; passing IND struct params directly is also wrong, because the call ABI re-stages them
-            // by value into a temporary copy, so the assert result would be written into a dead copy.
+            // VAR target's value is the write address: pass it by value, lea only for I_ADDR/SYMBOL_VAR
             lir_operand_t *output_ref = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             lir_operand_t *out_src = target;
             if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR ||
@@ -3391,13 +3385,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             OP_PUSH(lir_op_move(target, temp));
             return target;
         } else {
-            // indirect, like struct/vec always have allocation def, so no special def needed
-            // Consistent with the any assert / any_casting / union_casting branches: a VAR target's value
-            // is the write address (a lir_stack_alloc temp object address, a map assign value slot address,
-            // or a ref field address), so move it into an anyptr temp and pass by value. Taking the address
-            // of a VAR target would make union_assert overflow the target's own spill slot and adjacent
-            // stack slots; passing IND struct params directly is also wrong, because the call ABI re-stages
-            // them by value into a temporary copy, so the assert result would be written into a dead copy.
+            // VAR target's value is the write address: pass it by value, lea only for I_ADDR/SYMBOL_VAR
             lir_operand_t *output_ref = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             lir_operand_t *out_src = target;
             if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {
@@ -3427,16 +3415,11 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
         lir_operand_t *output_ref;
         if (as_expr->target_type.storage_kind != STORAGE_KIND_IND) {
-            // nop_def marks the variable as written by the runtime, since the target may otherwise lack a def
+            // nop_def marks the variable as written by the runtime
             OP_PUSH(lir_op_nop_def(target));
             output_ref = lea_operand_pointer(m, target);
         } else {
-            // indirect, like struct/vec always have allocation def, so no special def needed
-            // Consistent with the any assert / union assert / any_casting branches: a VAR target's value is
-            // the write address (a lir_stack_alloc temp object address, a map assign value slot address, or
-            // a ref field address), so move it into an anyptr temp and pass by value. IND struct params must
-            // not be passed directly: the call ABI re-stages them by value (e.g. a 16B HFA expands into
-            // float registers), writing the assert result into a dead copy or a wrong address.
+            // VAR target's value is the write address: pass it by value, lea only for I_ADDR/SYMBOL_VAR
             output_ref = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             lir_operand_t *out_src = target;
             if (target->assert_type == LIR_OPERAND_INDIRECT_ADDR || target->assert_type == LIR_OPERAND_SYMBOL_VAR) {

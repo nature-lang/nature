@@ -1,8 +1,6 @@
 === test_map_assign_any_assert_return
 --- main.n
-// issue #315: writing an any assert result directly into a map value slot wrongly took the address
-// of the anyptr target, making any_assert overflow adjacent spill slots; returning the map from the
-// function then crashed reliably with SIGSEGV
+// issue #315: any assert into a map value slot wrongly took the address of the anyptr target, overflowing adjacent spill slots and crashing on return
 type options_t = struct {
     {string:string} headers = {}
 }
@@ -56,9 +54,7 @@ v
 
 === test_ind_assert_slot_targets
 --- main.n
-// issue #315 same-family scenario: any assert results written into various IND slots
-// (struct field/tuple/vec/array/map); the targets are all anyptr/ref temp variables whose
-// value is the write address, so taking their address is not allowed
+// issue #315 same-family scenario: any assert results into various IND slots whose anyptr/ref targets must be passed by value
 type holder_t = struct {
     string name = ''
     int x = 0
@@ -126,9 +122,7 @@ arr= v b
 
 === test_union_assert_ind_slot
 --- main.n
-// issue #315 same-family scenario: a union assert result written into an IND slot must not take the
-// address of the target either, otherwise union_assert overflows the target's spill slot and adjacent
-// slots
+// issue #315 same-family scenario: a union assert result into an IND slot must not take the address of the target either
 type m_union = {string:any}|string
 
 fn main() {
@@ -159,10 +153,7 @@ ss= value-string
 
 === test_interface_assert_ind_slot
 --- main.n
-// issue #315 same-family scenario: writing an interface assert result into an IND slot must pass the
-// VAR target's address by value; IND struct params must not be passed directly, or the call ABI
-// re-stages them by value (an HFA expands into float registers) and the assert result is written into
-// a dead copy or a wrong address
+// issue #315 same-family scenario: an interface assert result into an IND slot must pass the VAR target's address by value, not the IND param directly
 type measurable<T> = interface{
 	fn area():T
 	fn perimeter():T
