@@ -50,7 +50,6 @@ closure_t *lir_closure_new(ast_fndef_t *fndef) {
     c->interval_count = alloc_reg_count() + 1;
 
     fndef->closure = c;
-    c->is_x = fndef->is_x;
     c->fndef = fndef;
 
     c->stack_gc_bits = bitmap_new(1024);

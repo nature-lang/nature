@@ -622,7 +622,6 @@ typedef struct closure_t {
 
     bool exists_call;
     bool exists_sp;
-    bool is_x;
 
     slice_t *callee_saved; // 记录函数中使用的 callee-saved 寄存器 (reg_t*)
 
