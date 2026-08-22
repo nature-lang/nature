@@ -5,6 +5,7 @@
 //! the workspace-wide symbol index.
 
 use crate::analyzer::common::{AnalyzerError, AstFnDef, AstNode, ImportStmt, PackageConfig, Stmt};
+use crate::module_index::is_source_extension;
 use crate::analyzer::flow::Flow;
 use crate::analyzer::generics::Generics;
 use crate::analyzer::global_eval::GlobalEval;
@@ -197,7 +198,7 @@ impl Project {
         if let Ok(entries) = std::fs::read_dir(&std_builtin_dir) {
             for entry in entries.flatten() {
                 let p = entry.path();
-                if p.is_file() && p.extension().map_or(false, |ext| ext == "n") {
+                if p.is_file() && p.extension().and_then(|e| e.to_str()).map_or(false, is_source_extension) {
                     if let Some(s) = p.to_str() {
                         builtin_list.push(s.to_string());
                     }

@@ -1,4 +1,5 @@
 use crate::analyzer::common::ImportStmt;
+use crate::module_index::is_source_extension;
 use crate::analyzer::symbol::SymbolKind;
 use crate::analyzer::workspace_index::IndexedSymbolKind;
 use log::debug;
@@ -234,7 +235,7 @@ impl<'a> CompletionProvider<'a> {
             if let Ok(entries) = std::fs::read_dir(&std_module_dir) {
                 for entry in entries.flatten() {
                     let p = entry.path();
-                    if p.is_file() && p.extension().map_or(false, |e| e == "n") {
+                    if p.is_file() && p.extension().and_then(|e| e.to_str()).map_or(false, is_source_extension) {
                         if let Some(s) = p.to_str() {
                             paths.push(s.to_string());
                         }
@@ -445,7 +446,7 @@ impl<'a> CompletionProvider<'a> {
             for entry in entries {
                 if let Ok(entry) = entry {
                     let path = entry.path();
-                    if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("n") {
+                    if path.is_file() && path.extension().and_then(|s| s.to_str()).map_or(false, is_source_extension) {
                         if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
                             // Skip current file
                             if path == std::path::Path::new(&self.module.path) {

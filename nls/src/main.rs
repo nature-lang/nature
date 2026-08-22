@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use tower_lsp::{LspService, Server};
 
 use nls::analyzer::common::AnalyzerError;
+use nls::module_index::is_source_extension;
 use nls::document::DocumentStore;
 use nls::formatter;
 use nls::server::Backend;
@@ -205,7 +206,7 @@ fn collect_path_targets(
             continue;
         }
 
-        if entry_path.extension().and_then(|ext| ext.to_str()) == Some("n")
+        if entry_path.extension().and_then(|ext| ext.to_str()).map_or(false, is_source_extension)
             && seen_paths.insert(entry_path.clone())
         {
             targets.push(FmtTarget::Path(entry_path));

@@ -1,3 +1,4 @@
+use crate::module_index::{is_source_extension, strip_source_ext};
 use log::debug;
 use std::collections::HashMap;
 use std::path::Path;
@@ -90,7 +91,7 @@ impl WorkspaceIndex {
                 self.scan_directory(path.to_str().unwrap_or(""), project_root);
             } else if path.is_file() {
                 if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                    if ext == "n" {
+                    if is_source_extension(ext) {
                         self.index_file(path.to_str().unwrap_or(""), project_root);
                     }
                 }
@@ -466,7 +467,7 @@ impl WorkspaceIndex {
 
                             if components.len() == 1 {
                                 // It's the package root file (shouldn't usually happen)
-                                let pkg = std_package.trim_end_matches(".n");
+                                let pkg = strip_source_ext(std_package);
                                 return Some(ImportInfo {
                                     import_statement: format!("import {}\n", pkg),
                                     module_as_name: pkg.to_string(),
@@ -475,7 +476,7 @@ impl WorkspaceIndex {
                             } else {
                                 // It's a submodule of a std package
                                 let module_path: Vec<String> = components.iter()
-                                    .map(|c| c.trim_end_matches(".n").to_string())
+                                    .map(|c| strip_source_ext(c).to_string())
                                     .collect();
                                 let as_name = module_path.last()?.clone();
                                 let import_path = module_path.join(".");
@@ -495,7 +496,7 @@ impl WorkspaceIndex {
         if let Some(pkg_name) = package_name {
             if symbol_file.starts_with(project_root) {
                 let rel = &symbol_file[project_root.len()..].trim_start_matches('/');
-                let rel_no_ext = rel.trim_end_matches(".n");
+                let rel_no_ext = strip_source_ext(rel);
                 let import_path = format!("{}.{}", pkg_name, rel_no_ext.replace('/', "."));
                 let as_name = file_stem.to_string();
                 return Some(ImportInfo {

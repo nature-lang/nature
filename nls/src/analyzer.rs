@@ -14,8 +14,8 @@ pub mod workspace_index;
 use std::path::Path;
 
 use crate::module_index::{
-    import_module_path, module_ident_join, module_parent_path, module_source_rel_path, package_unit_load,
-    PackageUnit,
+    import_module_path, is_source_path, module_ident_join, module_parent_path, module_source_rel_path,
+    package_unit_load, strip_source_ext, PackageUnit,
 };
 use crate::package::parse_package;
 use crate::project::{Module, DEFAULT_NATURE_ROOT};
@@ -231,8 +231,8 @@ pub fn module_unique_ident(root: &str, full_path: &str) -> String {
     // 移除开头的斜杠
     ident = ident.trim_start_matches('/').to_string();
 
-    // 移除 .n 后缀
-    ident = ident.trim_end_matches(".n").to_string();
+    // 移除 .n / .x 后缀
+    ident = strip_source_ext(&ident).to_string();
 
     // 将路径分隔符替换为点
     ident = ident.replace('/', ".");
@@ -262,11 +262,11 @@ pub fn analyze_import(
         }
 
         import.full_path = Path::new(&m.dir).join(file).to_string_lossy().into_owned();
-        if !import.full_path.ends_with(".n") {
+        if !is_source_path(&import.full_path) {
             return Err(AnalyzerError {
                 start: import.start,
                 end: import.end,
-                message: format!("import file suffix must .n"),
+                message: format!("import file suffix must .n or .x"),
                 is_warning: false,
                             });
         }

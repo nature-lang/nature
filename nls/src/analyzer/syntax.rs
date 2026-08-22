@@ -2,6 +2,7 @@ use super::common::*;
 use super::lexer::semantic_token_type_index;
 use super::lexer::Token;
 use super::lexer::TokenType;
+use crate::module_index::SOURCE_EXT_X;
 use crate::project::Module;
 use crate::utils::errors_push;
 use std::collections::HashMap;
@@ -158,12 +159,16 @@ pub struct Syntax {
     // match 表达式中 subject 的解析
     match_subject: bool,
 
+    // the source extension selects the module mode, .x means x mode
+    is_x: bool,
+
     module: Module,
 }
 
 impl<'a> Syntax {
     // static method new, Syntax::new(tokens)
     pub fn new(m: Module, token_db: Vec<Token>, token_indexes: Vec<usize>) -> Self {
+        let is_x = m.path.ends_with(SOURCE_EXT_X);
         Self {
             token_db: token_db,
             token_indexes: token_indexes,
@@ -173,8 +178,15 @@ impl<'a> Syntax {
             match_subject: false,
             lambda_index: 0,
             test_index: 0,
+            is_x,
             module: m,
         }
+    }
+
+    /// Every fn declared in this file inherits the file's mode, mirroring `ast_fndef_new` in
+    /// `src/ast.h`. Always build fndefs through here so the mode is never dropped.
+    fn new_fndef(&self) -> AstFnDef {
+        AstFnDef { is_x: self.is_x, ..AstFnDef::default() }
     }
 
     fn set_current_token_type(&mut self, token_type: SemanticTokenType) {
@@ -956,7 +968,7 @@ impl<'a> Syntax {
             rest: is_rest,
             tpl: false,
             errable: is_errable,
-            x: false,
+            x: self.is_x,
         })))
     }
 
@@ -3029,7 +3041,7 @@ impl<'a> Syntax {
 
         self.must(TokenType::Fn)?;
 
-        let mut fndef = AstFnDef::default();
+        let mut fndef = self.new_fndef();
         fndef.symbol_start = start;
         fndef.symbol_end = end;
 
@@ -3416,7 +3428,7 @@ impl<'a> Syntax {
             ));
         };
 
-        let mut fndef = AstFnDef::default();
+        let mut fndef = self.new_fndef();
         fndef.symbol_start = start;
         fndef.is_test = true;
         fndef.is_pub = false;
@@ -3607,7 +3619,7 @@ impl<'a> Syntax {
     }
 
     fn parser_label(&mut self) -> Result<Box<Stmt>, SyntaxError> {
-        let mut fndef = AstFnDef::default();
+        let mut fndef = self.new_fndef();
 
         while self.is(TokenType::Label) {
             let token = self.must(TokenType::Label)?;
@@ -3759,7 +3771,7 @@ impl<'a> Syntax {
         } else if !is_pub && self.is(TokenType::Test) {
             self.parser_test_stmt()?
         } else if self.is(TokenType::Fn) {
-            let mut fndef = AstFnDef::default();
+            let mut fndef = self.new_fndef();
             fndef.is_pub = is_pub;
             self.parser_fndef_stmt(fndef)?
         } else if !is_pub && self.is(TokenType::Import) {
@@ -4025,7 +4037,7 @@ impl<'a> Syntax {
     }
 
     fn coroutine_fn_closure(&mut self, call_expr: &Box<Expr>) -> AstFnDef {
-        let mut fndef = AstFnDef::default();
+        let mut fndef = self.new_fndef();
 
         fndef.is_async = true;
         fndef.is_errable = true;
@@ -4083,7 +4095,7 @@ impl<'a> Syntax {
     }
 
     fn coroutine_fn_void_closure(&mut self, call_expr: &Box<Expr>) -> AstFnDef {
-        let mut fndef = AstFnDef::default();
+        let mut fndef = self.new_fndef();
         fndef.is_async = true;
         fndef.is_errable = true;
         fndef.params = Vec::new();
