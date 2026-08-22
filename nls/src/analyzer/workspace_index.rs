@@ -262,8 +262,8 @@ impl WorkspaceIndex {
                 continue;
             }
 
-            // fn/fx <name>(...) or fn/fx <type>.<method>(...)
-            if declaration.starts_with("fn ") || declaration.starts_with("fx ") {
+            // fn <name>(...) or fn <type>.<method>(...)
+            if declaration.starts_with("fn ") {
                 if let Some(name) = Self::extract_fn_name(declaration) {
                     // Only index top-level functions, not methods (type.method)
                     if !name.contains('.') {
@@ -330,10 +330,7 @@ impl WorkspaceIndex {
 
     /// Extract function name from "fn <name>(...)"
     fn extract_fn_name(line: &str) -> Option<String> {
-        let rest = line
-            .strip_prefix("fn ")
-            .or_else(|| line.strip_prefix("fx "))?
-            .trim_start();
+        let rest = line.strip_prefix("fn ")?.trim_start();
         let name: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '.').collect();
         if name.is_empty() {
             return None;

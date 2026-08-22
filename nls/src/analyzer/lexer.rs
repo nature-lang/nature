@@ -295,8 +295,6 @@ pub enum TokenType {
     As,
     #[strum(serialize = "fn")]
     Fn,
-    #[strum(serialize = "fx")]
-    Fx,
     #[strum(serialize = "import")]
     Import,
 
@@ -564,8 +562,6 @@ impl Lexer {
             "else" => TokenType::Else,
             "false" => TokenType::False,
             "float" => TokenType::Float,
-            // "fx" is deliberately absent: fx mode is not exposed yet, so fx stays a plain ident
-            // until the mode is redesigned. The TokenType::Fx parser paths remain, just unreachable.
             "fn" => TokenType::Fn,
             "for" => TokenType::For,
             "go" => TokenType::Go,

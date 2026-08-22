@@ -400,7 +400,7 @@ void union_casting(n_union_t *out, int64_t input_rtype_hash, void *value_ref) {
  * @param value_ref
  * @return
  */
-void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref, n_bool_t is_fx) {
+void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref, n_bool_t is_x) {
     assert(out && "any_casting out is null");
     // - 根据 input_rtype_hash 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
@@ -419,8 +419,8 @@ void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref, n_bool
     out->value.i64_value = 0;
 
     if (rtype->storage_kind == STORAGE_KIND_IND) {
-        if (is_fx) {
-            // fx 模式下不进行 gc_malloc，直接引用原始地址。
+        if (is_x) {
+            // x mode does no gc_malloc, the original address is referenced directly.
             out->value.ptr_value = value_ref;
         } else {
             void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
@@ -438,7 +438,7 @@ void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref, n_bool
 /**
  * union -> any: 提取 union 的 rtype 和 value 传递给 any_casting
  */
-void union_to_any(n_any_t *out, n_union_t *input, n_bool_t is_fx) {
+void union_to_any(n_any_t *out, n_union_t *input, n_bool_t is_x) {
     assert(out && "union_to_any out is null");
     assert(input && "union_to_any input is null");
     assert(input->rtype && "union_to_any input rtype is null");
@@ -455,7 +455,7 @@ void union_to_any(n_any_t *out, n_union_t *input, n_bool_t is_fx) {
         value_ref = &input->value;
     }
 
-    any_casting(out, rtype->hash, value_ref, is_fx);
+    any_casting(out, rtype->hash, value_ref, is_x);
 }
 
 void tagged_union_casting(n_tagged_union_t *out, int64_t tag_hash, int64_t value_rtype_hash, void *value_ref) {
@@ -1034,9 +1034,9 @@ n_anyptr_t rt_array_new(int64_t element_hash, int64_t length) {
     return (n_anyptr_t) rti_array_new(element_rtype, (uint64_t) length);
 }
 
-n_anyptr_t fx_malloc(int64_t size) {
+n_anyptr_t x_malloc(int64_t size) {
     if (size < 0) {
-        rti_throw("fx_malloc size must be non-negative", true);
+        rti_throw("x_malloc size must be non-negative", true);
         return 0;
     }
 
@@ -1046,10 +1046,10 @@ n_anyptr_t fx_malloc(int64_t size) {
 
     void *ptr = malloc((size_t) size);
     if (!ptr) {
-        rti_throw("fx_malloc out of memory", true);
+        rti_throw("x_malloc out of memory", true);
         return 0;
     }
-    DEBUGF("[fx_malloc] ptr is %p", ptr);
+    DEBUGF("[x_malloc] ptr is %p", ptr);
 
     memset(ptr, 0, (size_t) size);
     return (n_anyptr_t) ptr;

@@ -4179,12 +4179,12 @@ impl<'a> Typesys<'a> {
 
         {
             let current_fn = self.current_fn_mutex.lock().unwrap();
-            if current_fn.is_fx && !type_fn.fx {
+            if current_fn.is_x && !type_fn.x {
                 return Err(AnalyzerError {
                     start,
                     end,
                     message: format!(
-                        "calling fn `{}` from fx `{}` is not allowed.",
+                        "calling .n fn '{}' from .x fn '{}' is not allowed.",
                         if type_fn.name.is_empty() {
                             "lambda".to_string()
                         } else {
@@ -4748,7 +4748,7 @@ impl<'a> Typesys<'a> {
                     || left_fn.param_types.len() != right_fn.param_types.len()
                     || left_fn.rest != right_fn.rest
                     || left_fn.errable != right_fn.errable
-                    || left_fn.fx != right_fn.fx
+                    || left_fn.x != right_fn.x
                     || left_fn.tpl != right_fn.tpl
                 {
                     return false;
@@ -4872,7 +4872,7 @@ impl<'a> Typesys<'a> {
                     || left_fn.param_types.len() != right_fn.param_types.len()
                     || left_fn.rest != right_fn.rest
                     || left_fn.errable != right_fn.errable
-                    || left_fn.fx != right_fn.fx
+                    || left_fn.x != right_fn.x
                     || left_fn.tpl != right_fn.tpl
                 {
                     return false;
@@ -5048,7 +5048,7 @@ impl<'a> Typesys<'a> {
             tpl: fndef.is_tpl,
             errable: fndef.is_errable,
             rest: fndef.rest_param,
-            fx: fndef.is_fx,
+            x: fndef.is_x,
             param_types,
         })));
 

@@ -331,8 +331,7 @@ static void arm64_lower_block(closure_t *c, basic_block_t *block) {
                 insert_operations = operations;
             }
 
-            // maybe empty
-            linked_node *insert_head = insert_operations->front->succ->succ; // safepoint
+            linked_node *insert_head = lower_imm_insert_anchor(insert_operations);
 
             for (linked_node *sym_node = symbol_operations->front; sym_node != symbol_operations->rear; sym_node = sym_node->succ) {
                 lir_op_t *sym_op = sym_node->value;

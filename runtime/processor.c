@@ -511,7 +511,7 @@ static void processor_wake(n_processor_t *p) {
 }
 
 void rt_coroutine_dispatch(coroutine_t *co) {
-    // 延迟初始化: 如果 fx 模式下需要协程调度，则初始化 fn 模式
+    // lazy init: an x mode binary that dispatches a coroutine still needs fn mode deps
     // fn_mode_init 内部有原子锁判断，重复调用安全
     fn_depend_init(false);
 
