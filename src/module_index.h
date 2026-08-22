@@ -77,6 +77,13 @@ char *module_source_rel_path(char *package_dir, char *source_path);
 /**
  * Whether unit contains a source part whose basename is <name>.n
  */
+// nature source extensions, .n compiles in normal mode and .x in x mode
+#define SOURCE_EXT_N ".n"
+#define SOURCE_EXT_X ".x"
+
+// returns SOURCE_EXT_N / SOURCE_EXT_X for a nature source file, NULL otherwise
+char *module_source_ext(char *filename);
+
 bool module_unit_has_source_named(module_unit_t *unit, char *name);
 
 /**

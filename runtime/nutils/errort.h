@@ -35,7 +35,8 @@ static inline n_interface_t n_error_new(n_string_t msg, uint8_t panic) {
     // interface casting, error to interface union
     int64_t methods[1] = {(int64_t) errort_msg};
     n_interface_t result = {0};
-    interface_casting(&result, errort_rtype.hash, errort, 1, methods);
+    // the methods table is a local here, so it always needs the copying path
+    interface_casting(&result, errort_rtype.hash, errort, 1, methods, false);
 
     return result;
 }

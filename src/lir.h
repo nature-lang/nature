@@ -141,7 +141,6 @@
 #define RT_CALL_STRING_REF "rt_string_ref" // 默认引用传递
 
 #define RT_CALL_GC_MALLOC "gc_malloc"
-#define RT_CALL_X_MALLOC "x_malloc"
 
 #define RT_CALL_RUNTIME_EVAL_GC "runtime_eval_gc"
 
@@ -269,7 +268,7 @@ static inline bool is_rtcall(string target) {
            str_equal(target, RT_CALL_STRING_EE) || str_equal(target, RT_CALL_STRING_NE) ||
            str_equal(target, RT_CALL_STRING_LT) || str_equal(target, RT_CALL_STRING_LE) ||
            str_equal(target, RT_CALL_STRING_GT) || str_equal(target, RT_CALL_STRING_GE) ||
-           str_equal(target, RT_CALL_GC_MALLOC) || str_equal(target, RT_CALL_X_MALLOC) ||
+           str_equal(target, RT_CALL_GC_MALLOC) ||
            str_equal(target, RT_CALL_RUNTIME_EVAL_GC) || str_equal(target, RT_CALL_COROUTINE_ASYNC2) || str_equal(target, RT_CALL_CO_THROW_ERROR) ||
            str_equal(target, RT_CALL_CO_REMOVE_ERROR) || str_equal(target, RT_CALL_CO_HAS_ERROR) ||
            str_equal(target, RT_CALL_CO_HAS_PANIC) || str_equal(target, RT_CALL_PROCESSOR_SET_EXIT) ||

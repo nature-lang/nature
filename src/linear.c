@@ -554,16 +554,14 @@ linear_unsafe_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target
     if (len == 0) {
         OP_PUSH(lir_op_move(data_dst, int_operand(0)));
     } else {
+        // a vec literal owns gc managed storage, x mode has no gc to free it again,
+        // so the allocator based vec<T>.alloc is the way to build one there
+        LINEAR_ASSERTF(!m->is_x, "vec literal is not supported in .x, use vec<T>.alloc with an allocator");
+
         lir_operand_t *data_ptr = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
-        assert(m->current_closure);
-        if (m->current_closure->is_x) {
-            uint64_t data_size = len * t.vec->element_type.storage_size;
-            push_rt_call(m, RT_CALL_X_MALLOC, data_ptr, 1, int_operand(data_size));
-        } else {
-            lir_operand_t *element_hash = int_operand(type_hash(t.vec->element_type));
-            lir_operand_t *len_operand = int_operand(len);
-            push_rt_call(m, RT_CALL_ARRAY_NEW, data_ptr, 2, element_hash, len_operand);
-        }
+        lir_operand_t *element_hash = int_operand(type_hash(t.vec->element_type));
+        lir_operand_t *len_operand = int_operand(len);
+        push_rt_call(m, RT_CALL_ARRAY_NEW, data_ptr, 2, element_hash, len_operand);
         OP_PUSH(lir_op_move(data_dst, data_ptr));
     }
 
@@ -3440,6 +3438,8 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     if (as_expr->target_type.kind == TYPE_INTERFACE) {
+        // x mode has no gc, interface_casting aliases the method table and the boxed value instead
+        bool is_x = m->current_closure && m->current_closure->is_x;
         lir_operand_t *interface_value;
         if (as_expr->src.type.storage_kind == STORAGE_KIND_IND) {
             interface_value = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
@@ -3514,13 +3514,13 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
                 OP_PUSH(lir_op_lea(item_target, fn_label));
             }
 
-            push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 5, out_ptr, int_operand(src_rtype_hash), interface_value,
+            push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 6, out_ptr, int_operand(src_rtype_hash), interface_value,
                          int_operand(interface_type->elements->length),
-                         methods_target);
+                         methods_target, bool_operand(is_x));
         } else {
-            push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 5, out_ptr, int_operand(src_rtype_hash), interface_value,
+            push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 6, out_ptr, int_operand(src_rtype_hash), interface_value,
                          int_operand(0),
-                         int_operand(0));
+                         int_operand(0), bool_operand(is_x));
         }
 
         return target;
