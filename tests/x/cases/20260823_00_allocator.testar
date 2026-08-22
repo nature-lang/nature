@@ -1,24 +1,3 @@
-=== test_basic
---- main.x
-fn main() {
-    var sum = 1 + 1
-    println(sum)
-    assert(sum == 2)
-}
-
---- output.txt
-2
-
-=== test_const_string
---- main.x
-fn main() {
-    var str = 'hello world'
-    println(str)
-}
-
---- output.txt
-hello world
-
 === test_allocator
 --- main.x
 import allocator as ac
