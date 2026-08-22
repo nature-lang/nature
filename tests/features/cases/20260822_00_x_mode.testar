@@ -1,0 +1,38 @@
+=== test_x_hello
+--- main.x
+fn main() {
+    println('hello world')
+}
+--- output.txt
+hello world
+
+=== test_x_call_n_fn_denied
+--- main.x
+import "util.n"
+
+fn main() {
+    println(util.double(21))
+}
+--- util.n
+pub fn double(int v):int {
+    return v * 2
+}
+--- output.txt
+nature-test/main.x:4:26: calling .n fn 'double' from .x fn 'main' is not allowed.
+
+=== test_n_import_x
+--- main.n
+import "util.x"
+
+fn main() {
+    println(util.fib(10))
+}
+--- util.x
+pub fn fib(int n):int {
+    if n < 2 {
+        return n
+    }
+    return fib(n - 1) + fib(n - 2)
+}
+--- output.txt
+55

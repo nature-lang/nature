@@ -1027,7 +1027,7 @@ static slice_t *arm64_native_fn_end(closure_t *c, lir_op_t *op) {
         operations = arm64_native_return(c, op);
     }
 
-    if (!c->fndef->is_fx) {
+    if (!c->fndef->is_x) {
         // assist preempt label
         char *preempt_ident = local_sym_with_fn(c, ".preempt");
         slice_push(operations, ARM64_INST(R_LABEL, ARM64_SYM(preempt_ident, true, 0, 0)));

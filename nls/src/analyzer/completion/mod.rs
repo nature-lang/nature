@@ -212,7 +212,7 @@ impl<'a> CompletionProvider<'a> {
         }
 
         let return_type = fndef.return_type.to_string();
-        let fn_prefix = if fndef.is_fx { "fx" } else { "fn" };
+        let fn_prefix = if fndef.is_x { "xfn" } else { "fn" };
         format!("{}({}): {}", fn_prefix, params_str, return_type)
     }
 

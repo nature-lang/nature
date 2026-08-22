@@ -380,7 +380,7 @@ bool type_generics(type_t dst, type_t src, table_t *generics_param_table) {
             return false;
         }
 
-        if (left_type_fn->is_fx != right_type_fn->is_fx) {
+        if (left_type_fn->is_x != right_type_fn->is_x) {
             return false;
         }
 
@@ -672,7 +672,7 @@ bool type_compare_visited(type_t dst, type_t src, table_t *visited) {
             return false;
         }
 
-        if (left_type_fn->is_fx != right_type_fn->is_fx) {
+        if (left_type_fn->is_x != right_type_fn->is_x) {
             return false;
         }
 
@@ -1281,6 +1281,8 @@ static type_t infer_new_expr(module_t *m, ast_new_expr_t *new_expr) {
  */
 static type_t infer_async(module_t *m, ast_expr_t *expr, type_t target_type) {
     ast_macro_async_t *co_expr = expr->value;
+
+    INFER_ASSERTF(!(m->current_fn && m->current_fn->is_x), "@async is not supported in .x");
 
     type_fn_t *type_fn = infer_call_left(m, co_expr->origin_call, type_kind_new(TYPE_UNKNOWN));
 
@@ -2886,13 +2888,14 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
 
     call->return_type = type_fn->return_type;
 
-    if (m->current_fn && m->current_fn->is_fx && !type_fn->is_fx) {
-        INFER_ASSERTF(false, "calling fn `%s` from fx `%s` is not allowed.",
+    if (m->current_fn && m->current_fn->is_x && !type_fn->is_x) {
+        INFER_ASSERTF(false, "calling .n fn '%s' from .x fn '%s' is not allowed.",
                       type_fn->fn_name ? type_fn->fn_name : "lambda", m->current_fn->fn_name);
     }
 
     // catch 语句中可以包含多条 call 语句, 都统一处理了
     if (type_fn->is_errable && check_errable) {
+        INFER_ASSERTF(!m->current_fn->is_x, "errable fn call is not supported in .x");
         INFER_ASSERTF(m->current_fn->is_errable || m->be_caught > 0,
                       "calling an errable! fn `%s` requires the current `fn %s` errable! as well or be caught.",
                       type_fn->fn_name ? type_fn->fn_name : "lambda",
@@ -3090,6 +3093,7 @@ static void infer_assign(module_t *m, ast_assign_stmt_t *stmt) {
 
 
 static void infer_select(module_t *m, ast_select_stmt_t *stmt) {
+    INFER_ASSERTF(!(m->current_fn && m->current_fn->is_x), "select is not supported in .x");
     SLICE_FOR(stmt->cases) {
         ast_select_case_t *select_case = SLICE_VALUE(stmt->cases);
 
@@ -3857,6 +3861,7 @@ static type_t reduction_complex_type(module_t *m, type_t t, struct sc_map_s64 *v
     }
 
     if (t.kind == TYPE_CHAN) {
+        INFER_ASSERTF(!m->is_x, "chan is not supported in .x");
         type_chan_t *type_chan = t.chan;
         type_chan->element_type = reduction_type_visited(m, type_chan->element_type, visited);
 
@@ -4293,7 +4298,7 @@ static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef) {
     f->fn_name = fndef->fn_name;
     f->is_tpl = fndef->is_tpl;
     f->is_errable = fndef->is_errable;
-    f->is_fx = fndef->is_fx;
+    f->is_x = fndef->is_x;
     f->param_types = ct_list_new(sizeof(type_t));
     f->return_type = reduction_type(m, fndef->return_type);
     f->self_kind = fndef->self_kind;
@@ -4352,7 +4357,7 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     type_fn->fn_name = fndef->fn_name;
     type_fn->is_tpl = fndef->is_tpl;
     type_fn->is_errable = fndef->is_errable;
-    type_fn->is_fx = fndef->is_fx;
+    type_fn->is_x = fndef->is_x;
     type_fn->param_types = ct_list_new(sizeof(type_t));
     fndef->return_type.status = REDUCTION_STATUS_UNDO;
     type_fn->return_type = reduction_type(m, fndef->return_type);
@@ -4428,6 +4433,12 @@ static void infer_fndef(module_t *m, ast_fndef_t *fn) {
     m->current_fn = fn;
     m->current_line = fn->line;
     m->current_column = fn->column;
+
+    // v1 x mode subset: error handling and capturing closures are rejected rather than supported
+    if (fn->is_x) {
+        INFER_ASSERTF(!fn->is_errable, "errable fn declaration is not supported in .x");
+        INFER_ASSERTF(fn->capture_exprs->length == 0, "closure capture is not supported in .x");
+    }
 
     // rewrite_formals ident
     for (int i = 0; i < fn->params->length; ++i) {
