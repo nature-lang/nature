@@ -81,10 +81,10 @@ int runtime_main(int argc, char *argv[]) {
 
         DEBUGF("[runtime_main] fn mode user code run completed, will exit");
     } else {
-        // fx 模式：直接调用 user_main，无需 GC 和调度器
-        DEBUGF("[runtime_main] fx mode, calling user_main directly");
+        // x mode: call user_main directly, no GC and no scheduler
+        DEBUGF("[runtime_main] x mode, calling user_main directly");
         user_main();
-        DEBUGF("[runtime_main] fx mode user code run completed, will exit");
+        DEBUGF("[runtime_main] x mode user code run completed, will exit");
     }
 
     return 0;

@@ -41,7 +41,7 @@ char *analyzer_force_unique_ident(module_t *m) {
     if (m->type == MODULE_TYPE_BUILTIN) {
         char *temp = strrchr(m->source_path, '/');
         char *ident = ltrim(temp, "/");
-        ident = str_replace(ident, ".n", ".n.o");
+        ident = str_replace(ident, m->is_x ? ".x" : ".n", m->is_x ? ".x.o" : ".n.o");
         ident = str_replace(ident, "/", ".");
         ident = str_connect("std.builtin.", ident);
         return ident;
@@ -138,22 +138,23 @@ void analyzer_import(module_t *m, ast_import_t *import) {
     // - import file
     if (import->file) {
         assert(strlen(import->file) > 0);
-        // import->path 必须以 .n 结尾
-        ANALYZER_ASSERTF(ends_with(import->file, ".n"), "import file suffix must .n");
+        // import->path must end with .n or .x
+        ANALYZER_ASSERTF(ends_with(import->file, ".n") || ends_with(import->file, ".x"),
+                         "import file suffix must .n or .x");
 
         // 不能有以 ./ 或者 / 开头
         ANALYZER_ASSERTF(import->file[0] != '.', "cannot use path=%s begin with '.'", import->file);
 
         ANALYZER_ASSERTF(import->file[0] != '/', "cannot use absolute path=%s", import->file);
 
-        // 去掉 .n 部分, 作为默认的 module as (可能不包含 /)
+        // strip the .n/.x suffix to build the default module as (may not contain /)
         char *temp_as = strrchr(import->file, '/'); // foo/bar.n -> /bar.n
         if (temp_as != NULL) {
             temp_as++;
         } else {
             temp_as = import->file;
         }
-        char *module_as = str_replace(temp_as, ".n", "");
+        char *module_as = rtrim(temp_as, ".n"); // rtrim cuts by length, so .x works as well
 
         // 基于当前 module 的 source_dir 做相对路径引入 (不支持跨平台引入)
         // import file 模式下直接使用当前 module 携带的 package 即可,可能为 null
@@ -263,7 +264,7 @@ static type_t analyzer_type_fn(ast_fndef_t *fndef) {
     f->is_rest = fndef->rest_param;
     f->is_c_variadic = fndef->c_variadic;
     f->is_errable = fndef->is_errable;
-    f->is_fx = fndef->is_fx;
+    f->is_x = fndef->is_x;
     type_t result = type_new(TYPE_FN, f);
     result.status = REDUCTION_STATUS_UNDO;
 
@@ -2546,8 +2547,8 @@ static void analyzer_main(module_t *m) {
     ANALYZER_ASSERTF(main_fn->return_type.kind == TYPE_VOID,
                      "fn main must have no arguments and no return values, example: fn main() {...");
 
-    // main fn add define errorable
-    main_fn->is_errable = true;
+    // main fn add define errorable, x mode has no coroutine error slot
+    main_fn->is_errable = !m->is_x;
 
     // the entry symbol name is pinned by the runtime, decoupled from the module ident
     main_fn->linkid = FN_MAIN_LINKID;

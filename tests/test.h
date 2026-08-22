@@ -592,10 +592,11 @@ static inline void feature_testar_test(char *custom_target) {
         printf("\n");
         fflush(stdout);
 
-        assertf(test_case->files->count > 0, "test case '%s' must have main.n", test_case->name);
+        assertf(test_case->files->count > 0, "test case '%s' must have main.n or main.x", test_case->name);
 
         testar_case_file_t *output_file = NULL;
-        bool has_entry_main = false;
+        // the entry is main.n, or main.x for an x mode case
+        char *entry = NULL;
 
         for (int j = 0; j < test_case->files->count; j++) {
             testar_case_file_t *file = test_case->files->take[j];
@@ -604,8 +605,8 @@ static inline void feature_testar_test(char *custom_target) {
                 output_file = file;
             }
 
-            if (str_equal(file->name, "main.n")) {
-                has_entry_main = true;
+            if (str_equal(file->name, "main.n") || str_equal(file->name, "main.x")) {
+                entry = file->name;
             }
 
             // 构建完整的文件路径
@@ -625,10 +626,7 @@ static inline void feature_testar_test(char *custom_target) {
             fclose(fp);
         }
 
-        assertf(has_entry_main, "test case '%s' must have main.n", test_case->name);
-
-        // 固定格式生命
-        char *entry = "main.n";
+        assertf(entry, "test case '%s' must have main.n or main.x", test_case->name);
 
         // 设置超时处理（如果指定了timeout）
         if (test_case->attrs->timeout > 0) {

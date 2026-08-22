@@ -765,8 +765,6 @@ static token_type_t scanner_ident(char *word, int length) {
             }
 
         case 'f': {
-            // 'fx' is deliberately absent: fx mode is not exposed yet, so fx stays a plain ident
-            // until the mode is redesigned. The TOKEN_FX parser/infer paths remain, just unreachable.
             switch (word[1]) {
                 case 'n':
                     return scanner_rest(word, length, 2, 0, "", TOKEN_FN);

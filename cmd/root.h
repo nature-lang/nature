@@ -126,8 +126,8 @@ void cmd_entry(int argc, char **argv) {
     // the first non-option arugment
     const char *build_file = argv[optind];
 
-    if (!ends_with(build_file, ".n")) {
-        assertf(false, "must specify the compile target with suffix n, example: nature build main.n");
+    if (!ends_with(build_file, ".n") && !ends_with(build_file, ".x")) {
+        assertf(false, "must specify the compile target with suffix n or x, example: nature build main.n");
         return;
     }
 

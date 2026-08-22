@@ -1372,7 +1372,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
         char *filename = strdup(entry->d_name);
-        if (!ends_with(filename, ".n")) {
+        if (!ends_with(filename, ".n") && !ends_with(filename, ".x")) {
             free(filename);
             continue;
         }
@@ -1532,7 +1532,7 @@ static slice_t *build_modules(toml_table_t *package_conf) {
         }
     }
     assert(main_fndef);
-    build_main_is_fn = main_fndef->is_fx ? 0 : 1;
+    build_main_is_fn = main_fndef->is_x ? 0 : 1;
 
     return modules;
 }

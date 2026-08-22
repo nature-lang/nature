@@ -196,6 +196,10 @@ static inline void amd64_peephole_handle_block(closure_t *c, basic_block_t *bloc
         changed = false;
         iterations++;
 
+        // rewrites of the previous round change the operand uses, so the counts must be rebuilt,
+        // otherwise a stale count lets move elimination drop a def that is still referenced
+        peephole_build_use_count(block);
+
         slice_t *new_ops = slice_new();
         int cursor = 0;
         while (cursor < ops->count) {
