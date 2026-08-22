@@ -486,7 +486,7 @@ static lir_operand_t *linear_default_any(module_t *m, type_t t, lir_operand_t *t
         out_src = lea_operand_pointer(m, target);
     }
     OP_PUSH(lir_op_move(out_ptr, out_src));
-    bool is_x = m->current_closure && m->current_closure->is_x;
+    bool is_x = m->is_x;
     push_rt_call(m, RT_CALL_ANY_CASTING, NULL, 4, out_ptr, int_operand(rtype_hash), value_ref, bool_operand(is_x));
 
     return target;
@@ -531,6 +531,11 @@ static inline lir_operand_t *linear_lea_builtin_value_struct(module_t *m, lir_op
 
 static lir_operand_t *
 linear_unsafe_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target) {
+    // a vec literal owns gc managed storage, x mode has no gc to free it again,
+    // so the allocator based vec<T>.alloc is the way to build one there. an empty literal
+    // allocates nothing but still carries allocator=0, which sends push down the gc path.
+    LINEAR_ASSERTF(!m->is_x, "vec literal is not supported in .x, use vec<T>.alloc with an allocator");
+
     if (!target) {
         target = temp_var_operand_with_alloc(m, t);
     }
@@ -554,10 +559,6 @@ linear_unsafe_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target
     if (len == 0) {
         OP_PUSH(lir_op_move(data_dst, int_operand(0)));
     } else {
-        // a vec literal owns gc managed storage, x mode has no gc to free it again,
-        // so the allocator based vec<T>.alloc is the way to build one there
-        LINEAR_ASSERTF(!m->is_x, "vec literal is not supported in .x, use vec<T>.alloc with an allocator");
-
         lir_operand_t *data_ptr = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
         lir_operand_t *element_hash = int_operand(type_hash(t.vec->element_type));
         lir_operand_t *len_operand = int_operand(len);
@@ -2079,7 +2080,7 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
 
             // actual 剩余的所有参数进行 linear_expr 之后 都需要用一个数组收集起来，并写入到 target_operand 中
             int len = call->args->length - i; // 5, 1
-            bool is_x = m->current_closure && m->current_closure->is_x;
+            bool is_x = m->is_x;
             lir_operand_t *rest_vec_target = is_x
                                                  ? linear_stack_vec_new(m, *rest_list_type, len, NULL)
                                                  : linear_unsafe_vec_new(m, *rest_list_type, len, NULL);
@@ -3280,7 +3281,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             OP_PUSH(lir_op_move(union_ptr, src_operand));
 
-            bool is_x = m->current_closure && m->current_closure->is_x;
+            bool is_x = m->is_x;
             push_rt_call(m, RT_CALL_UNION_TO_ANY, NULL, 3, out_ptr, union_ptr, bool_operand(is_x));
 
             return target;
@@ -3304,7 +3305,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             out_src = lea_operand_pointer(m, target);
         }
         OP_PUSH(lir_op_move(out_ptr, out_src));
-        bool is_x = m->current_closure && m->current_closure->is_x;
+        bool is_x = m->is_x;
         push_rt_call(m, RT_CALL_ANY_CASTING, NULL, 4, out_ptr, int_operand(src_rtype_hash), any_value,
                      bool_operand(is_x));
 
@@ -3439,7 +3440,7 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
 
     if (as_expr->target_type.kind == TYPE_INTERFACE) {
         // x mode has no gc, interface_casting aliases the method table and the boxed value instead
-        bool is_x = m->current_closure && m->current_closure->is_x;
+        bool is_x = m->is_x;
         lir_operand_t *interface_value;
         if (as_expr->src.type.storage_kind == STORAGE_KIND_IND) {
             interface_value = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));

@@ -352,7 +352,7 @@ static void amd64_lower_block(closure_t *c, basic_block_t *block) {
                 insert_operations = operations;
             }
 
-            linked_node *insert_head = lower_imm_insert_anchor(insert_operations);
+            linked_node *insert_head = lower_imm_insert_anchor(c, insert_operations);
 
             for (linked_node *sym_node = symbol_operations->front;
                  sym_node != symbol_operations->rear; sym_node = sym_node->succ) {
