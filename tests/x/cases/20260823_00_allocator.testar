@@ -1,0 +1,177 @@
+=== test_basic
+--- main.x
+fn main() {
+    var sum = 1 + 1
+    println(sum)
+    assert(sum == 2)
+}
+
+--- output.txt
+2
+
+=== test_const_string
+--- main.x
+fn main() {
+    var str = 'hello world'
+    println(str)
+}
+
+--- output.txt
+hello world
+
+=== test_allocator
+--- main.x
+import allocator as ac
+
+type foo_t = struct{
+    string a
+    float c
+}
+
+fn main() {
+    ptr<foo_t> f = ac.new(foo_t{a: 'hello', c: 1.1})
+    println(f.a, f.c)
+
+    ptr<bool> b = ac.new(true)
+    println(*b)
+    ac.free(b)
+}
+
+--- output.txt
+hello 1.100000
+true
+
+=== test_arena_alloc
+--- main.x
+import allocator.arena
+
+type foo_t = struct{
+    string a // 48
+    float c // 8
+}
+
+fn main() {
+    var ar = arena.init(4096)
+    println(ar.current.used)
+
+    ptr<foo_t> f = ar.new(foo_t{a: 'hello', c: 1.1})
+    println(f.a, f.c)
+
+    ptr<bool> b = ar.new(true)
+    println(*b)
+
+    println(ar.current.used)
+    ar.deinit()
+}
+
+--- output.txt
+0
+hello 1.100000
+true
+57
+
+=== test_defer_alloc
+--- main.x
+import allocator.arena
+
+type foo_t = struct{
+    string a
+    float c
+}
+
+fn main() {
+    var ar = arena.init(4096)
+    defer ar.deinit()
+
+    ptr<bool> b = ar.new(true)
+    var f = ar.new(foo_t{a: 'hello', c: 1.1})
+    println(f.a, f.c)
+
+    println(ar.current.used)
+}
+
+--- output.txt
+hello 1.100000
+64
+
+=== test_vec_basic
+--- main.x
+import allocator as ac
+
+fn main() {
+    var list = vec<u8>.alloc(ac.heap, 200 as u8, 10)
+    defer list.deinit()
+
+    println(list[0], list[9])
+    list[0] = 12
+    list[9] = 15
+    println(list[0], list[9])
+    list.push(100)
+    println(list[10])
+}
+
+--- output.txt
+200 200
+12 15
+100
+
+=== test_arena_vec
+--- main.x
+import allocator.arena
+
+fn main() {
+    var ar = arena.init(4096)
+    defer ar.deinit()
+
+    var list = vec<int>.alloc(ar, 0, 3)
+    for int i = 0; i < 3; i += 1 {
+        list[i] = i * 10
+    }
+    list.push(99)
+    println(list.len(), list[0], list[2], list[3])
+}
+
+--- output.txt
+4 0 20 99
+
+=== test_vec_from_n
+--- main.n
+import allocator as ac
+import "vops.x"
+
+// the allocatable box is built here where gc is available, the .x side then
+// reads, writes and pushes on the same allocator backed vec
+fn main() {
+    var list = vec<u8>.alloc(ac.heap, 0 as u8, 4)
+    defer list.deinit()
+
+    vops.fill(list, 10)
+    println(list[0], list[3], vops.total(list))
+    println(vops.grow_total(list, 3))
+}
+
+--- vops.x
+pub fn fill(vec<u8> v, u8 base) {
+    for int i = 0; i < v.len(); i += 1 {
+        v[i] = base + i as u8
+    }
+}
+
+pub fn total(vec<u8> v):int {
+    int sum = 0
+    for int i = 0; i < v.len(); i += 1 {
+        sum += v[i] as int
+    }
+    return sum
+}
+
+pub fn grow_total(vec<u8> v, int n):int {
+    for int i = 0; i < n; i += 1 {
+        v.push(200)
+    }
+    return v.len() * 1000 + v.cap()
+}
+
+--- output.txt
+10 13 46
+7008

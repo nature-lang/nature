@@ -5,3 +5,9 @@ pub fn print(...[any] args)
 
 #linkid println
 pub fn println(...[any] args)
+
+#linkid rt_panic
+pub fn panic(string msg)
+
+#linkid rt_assert
+pub fn assert(bool cond)
