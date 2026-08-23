@@ -1018,15 +1018,14 @@ static bool amd64_windows_gp_is_nonvolatile(uint8_t index) {
 }
 
 /*
- * linear_posthandle historically discovers callee-saved registers by looking
- * for DEF/USE bits on physical-register operands. Variables acquire their
- * physical registers after those bits were attached, so allocator-selected
- * registers can be absent from c->callee_saved. That is observable on Win64
- * as soon as ordinary register pressure selects RSI/RDI/R12-R15 or XMM6-14.
+ * linear_posthandle discovers callee-saved registers through DEF flags on
+ * physical-register descriptors. Variables acquire their physical registers
+ * after those flags were attached, so allocator-selected registers can be
+ * absent from c->callee_saved. Rebuild the Win64 save set from final LIR.
  *
- * Rebuild the Windows save set from the final post-allocation LIR instead of
- * relying on those stale operand flags. This scan is deliberately Windows-only
- * so the existing SysV frame layout remains unchanged.
+ * This is an ABI save/restore requirement, not GC root discovery: a function
+ * that modifies a Microsoft x64 nonvolatile register must restore its caller's
+ * value even when that register does not contain a managed pointer.
  */
 static void amd64_windows_collect_callee_saved(closure_t *c) {
     bool gp_seen[16] = {false};
@@ -1279,26 +1278,6 @@ static slice_t *amd64_windows_native_fn_begin(closure_t *c, lir_op_t *op) {
     uint64_t bits_end = (uint64_t) frame_size / POINTER_SIZE;
     for (uint64_t i = bits_start; i < bits_end; ++i) {
         bitmap_grow_set(c->stack_gc_bits, i, 0);
-    }
-
-    // A nested call may reuse a nonvolatile register that contains one of its
-    // caller's live heap pointers. In that case the only remaining copy is the
-    // ABI save slot in this frame, so conservatively include GP save slots in
-    // the frame's GC bitmap. Runtime span validation rejects scalar values.
-    uint64_t rbx_bit =
-            ((uint64_t) frame_size - (uint64_t) c->call_stack_max_offset) /
-                    POINTER_SIZE -
-            1;
-    bitmap_grow_set(c->stack_gc_bits, rbx_bit, 1);
-    for (int i = 0; i < c->callee_saved->count; ++i) {
-        reg_t *reg = c->callee_saved->take[i];
-        if (amd64_reg_is_float(reg)) {
-            continue;
-        }
-        uint64_t save_offset =
-                (uint64_t) amd64_windows_discovered_save_offset(c, i);
-        uint64_t bit = ((uint64_t) frame_size - save_offset) / POINTER_SIZE - 1;
-        bitmap_grow_set(c->stack_gc_bits, bit, 1);
     }
 
     amd64_windows_emit_unwind_plan(c, (uint32_t) frame_size);
