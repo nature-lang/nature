@@ -1352,27 +1352,30 @@ mspan_t *span_of(addr_t addr) {
     return span;
 }
 
-// Call only at an outer managed-allocation boundary, before runtime locks are
-// acquired or temporary heap values are held only by C stack frames.
-void gc_allocation_poll() {
-    uint64_t safepoint = global_safepoint.value;
+// Call only at a safe mutator boundary, before runtime locks are acquired or
+// temporary heap values are held only by C stack frames.
+void gc_mutator_yield_if_needed() {
+    bool need_stw = global_safepoint.value > 0;
     uint8_t stage = gc_stage;
-    if (safepoint == 0 && stage != GC_STAGE_START &&
-        stage != GC_STAGE_MARK) {
+    if (!need_stw && stage != GC_STAGE_MARK) {
         return;
     }
 
     n_processor_t *p = processor_get();
     coroutine_t *co = coroutine_get();
-    if (!p || p->status != P_STATUS_RUNNING || !co || p->coroutine != co ||
-        (co->flag & FLAG(CO_FLAG_RTFN))) {
+    assert(p);
+    assert(co);
+    assert(p->status == P_STATUS_RUNNING);
+    assert(p->coroutine == co);
+    assert(!(co->flag & FLAG(CO_FLAG_RTFN)));
+
+    bool gc_work_pending = stage == GC_STAGE_MARK &&
+                           p->gc_work_finished < memory->gc_count;
+    if (!need_stw && !gc_work_pending) {
         return;
     }
 
-    if (stage == GC_STAGE_START || safepoint > 0 ||
-        (stage == GC_STAGE_MARK && p->gc_work_finished < memory->gc_count)) {
-        co_yield_runnable(p, co);
-    }
+    co_yield_runnable(p, co);
 }
 
 /**
