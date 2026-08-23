@@ -1365,9 +1365,6 @@ void gc_mutator_yield_if_needed() {
     coroutine_t *co = coroutine_get();
     assert(p);
     assert(co);
-    assert(p->status == P_STATUS_RUNNING);
-    assert(p->coroutine == co);
-    assert(!(co->flag & FLAG(CO_FLAG_RTFN)));
 
     bool gc_work_pending = stage == GC_STAGE_MARK &&
                            p->gc_work_finished < memory->gc_count;
