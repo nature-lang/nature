@@ -27,6 +27,12 @@ pub fn string.find_after(self, string sub, int after):int {
         return -1
     }
 
+    // zero-value string fields carry a nil data ptr, libc.strstr on it would
+    // segfault, an empty haystack never contains sub anyway
+    if self.len() == 0 {
+        return -1
+    }
+
     if (n == 1) {
         return self.find_char(sub[0], after)
     }

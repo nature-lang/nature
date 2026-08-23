@@ -1,0 +1,36 @@
+// regression for issue #318: a zero-value string field carries a nil data ptr,
+// find_after must not hand it to libc.strstr
+type opts_t = struct {
+    string api_key
+    int n
+}
+
+fn main(): void {
+    var o = new opts_t(n = 1)
+
+    // len reads the zeroed length field only
+    assert(o.api_key.len() == 0)
+
+    // multi-char needle used to hit libc.strstr(NULL, ...) -> SIGSEGV
+    assert(o.api_key.contains('sk-ant-oat') == false)
+    assert(o.api_key.find('sk-ant') == -1)
+    assert(o.api_key.find_after('sk-ant', 0) == -1)
+
+    // single-char needle walks the find_char path
+    assert(o.api_key.contains('x') == false)
+    assert(o.api_key.find('x') == -1)
+
+    // empty literal haystack stays -1 as well
+    var s = ''
+    assert(s.contains('abc') == false)
+    assert(s.find('abc') == -1)
+
+    // non-empty strings keep working through strstr
+    var t = 'hello world'
+    assert(t.contains('world') == true)
+    assert(t.find('world') == 6)
+    assert(t.find('nope') == -1)
+    assert(t.contains('') == false)
+
+    println('nil string find ok')
+}
