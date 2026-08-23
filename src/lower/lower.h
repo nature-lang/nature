@@ -1,15 +1,6 @@
 #ifndef NATURE_SRC_LOWER_LOWER_H_
 #define NATURE_SRC_LOWER_LOWER_H_
 
-/**
- * Hoisted imm symbols are inserted after the entry block prologue, which is label, fn_begin and
- * then a safepoint. x mode emits no safepoint, so there the anchor is fn_begin instead.
- */
-static inline linked_node *lower_imm_insert_anchor(closure_t *c, linked_t *operations) {
-    linked_node *anchor = operations->front->succ; // fn_begin
-    return c->fndef->is_x ? anchor : anchor->succ; // safepoint
-}
-
 static inline void lower_imm_symbol(closure_t *c, lir_operand_t *imm_operand, linked_t *list, linked_t *symbol_operations) {
     lir_imm_t *imm = imm_operand->value;
     assert(imm);
