@@ -105,6 +105,8 @@ n_string_t string_new(void *raw_string, int64_t length) {
 n_string_t string_concat(n_string_t *a, n_string_t *b) {
     DEBUGF("[runtime.string_concat] a=%s, b=%s", a->data, b->data);
 
+    gc_mutator_yield_if_needed();
+
     int64_t length = a->length + b->length;
     int64_t capacity = length + 1;
     n_array_t *data = rti_array_new(&string_element_rtype, capacity);

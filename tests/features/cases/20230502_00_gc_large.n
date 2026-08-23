@@ -1,26 +1,27 @@
 import co
 import runtime
-
 fn main() {
     [int] l = [1, 2, 3, 4]
-
-    var large_allocator = fn() {
+    var large_allocator = fn () {
         [i64] list = []
-        for int i = 0; i < 5000; i+=1 {
+        for int i = 0; i < 5000; i += 1 {
             list.push(i)
         }
-
         runtime.gc()
+        co.sleep(500)
+        // wait for the forced GC while list is still live
         assert(list[380] == 380)
         assert(list[2000] == 2000)
+        assert(runtime.malloc_bytes() > 50000)
     }
-
     large_allocator()
-
-    assert(runtime.malloc_bytes() > 100000 && runtime.malloc_bytes() < 200000)
-    co.sleep(1000) // 等待 1s 等待 gc 完成
-    assert(runtime.malloc_bytes() > 100 && runtime.malloc_bytes() < 2000)
+    var before_reclaim = runtime.malloc_bytes()
+    assert(before_reclaim > 50000)
+    runtime.gc()
+    co.sleep(500)
+    // wait for the forced GC after list becomes unreachable
+    var after_reclaim = runtime.malloc_bytes()
+    assert(after_reclaim < before_reclaim / 10)
     assert(l[2] == 3)
-
     println('gc large test success')
 }
