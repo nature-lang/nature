@@ -1,0 +1,18 @@
+fn main(): void {
+    [i64; 500000] values = []
+
+    assert(values[0] == 0)
+    assert(values[250000] == 0)
+    assert(values[499999] == 0)
+
+    values[0] = 42
+    values[499999] = 7
+    assert(values[0] == 42)
+    assert(values[499999] == 7)
+
+    [i64; 500000] initialized = [1, 2, 3]
+    assert(initialized[0] == 1)
+    assert(initialized[2] == 3)
+    assert(initialized[3] == 0)
+    assert(initialized[499999] == 0)
+}

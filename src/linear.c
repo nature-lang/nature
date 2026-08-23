@@ -1475,9 +1475,15 @@ static void linear_vardef(module_t *m, ast_vardef_stmt_t *stmt) {
     // 左值右值主要提现在，vardef/var_tup_def/assign/call(arg)
     lir_operand_t *dst = linear_var_decl(m, &stmt->var_decl);
     assert(stmt->right);
-    lir_operand_t *src = linear_expr(m, *stmt->right, NULL);
-
-    linear_super_move(m, stmt->var_decl.type, dst, src);
+    bool direct_heap_array_init = stmt->right->assert_type == AST_EXPR_ARRAY_NEW &&
+                                  stmt->var_decl.type.in_heap &&
+                                  stmt->var_decl.type.array->element_type.storage_kind == STORAGE_KIND_DIR;
+    if (direct_heap_array_init) {
+        linear_expr(m, *stmt->right, dst);
+    } else {
+        lir_operand_t *src = linear_expr(m, *stmt->right, NULL);
+        linear_super_move(m, stmt->var_decl.type, dst, src);
+    }
 
     // 将 dst 值 copy 出来进行重新分配改写
     linear_escape_rewrite(m, &stmt->var_decl, false);
@@ -2614,7 +2620,12 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
 
     int64_t offset = 0;
     // 无论 array 分配在栈还是堆，都需要进行数据初始化，当然有一些例外情况可以进行优化
-    for (int i = 0; i < type_array.array->length; ++i) {
+    uint64_t initialize_length = type_array.array->length;
+    if (arr_in_heap && type_array.array->element_type.storage_kind == STORAGE_KIND_DIR) {
+        initialize_length = ast->elements->length;
+    }
+
+    for (uint64_t i = 0; i < initialize_length; ++i) {
         lir_operand_t *item_target = linear_inline_arr_element_addr_not_check(m, target_ref, int_operand(i),
                                                                               type_array);
 
@@ -2626,12 +2637,7 @@ static lir_operand_t *linear_array_new(module_t *m, ast_expr_t expr, lir_operand
             ast_expr_t *item_expr = ct_list_value(ast->elements, i);
             linear_expr(m, *item_expr, item_target);
         } else {
-            // in stack
-            if (arr_in_heap && type_array.array->element_type.storage_kind == STORAGE_KIND_DIR) {
-                // default is zero, not need set default value
-            } else {
-                linear_default_operand(m, type_array.array->element_type, item_target);
-            }
+            linear_default_operand(m, type_array.array->element_type, item_target);
         }
     }
 
