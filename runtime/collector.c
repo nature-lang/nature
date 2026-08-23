@@ -327,19 +327,6 @@ void mcentral_sweep(mheap_t *mheap) {
  * 通过 assist_preempt_yield_ret_addr 抢占进入安全点时，寄存器分配不会将 assist_preempt_yield_ret_addr 视为 call 而 spill 所有的寄存器，这导致寄存器中可能保存了 heap 指针
  * 寄存器会在 co_preempt_yield 保存到 acosw 函数汇编申请的栈空间中。此时需要采取保守的栈扫描策略，将可能存在的 ptr 加入到 gc mark 中
  */
-#if defined(__AMD64) && defined(__WINDOWS)
-static void scan_windows_context_roots(rt_linked_fixalloc_t *worklist,
-                                       const aco_t *aco) {
-    for (int i = ACO_REG_IDX_GP_NONVOL_FIRST;
-         i <= ACO_REG_IDX_GP_NONVOL_LAST; ++i) {
-        addr_t value = (addr_t) aco->reg[i];
-        if (span_of(value)) {
-            insert_gc_worklist(worklist, (void *) value);
-        }
-    }
-}
-#endif
-
 static void scan_saved_stack_conservative(rt_linked_fixalloc_t *worklist,
                                           const aco_save_stack_t *save_stack) {
     if (!save_stack->ptr || save_stack->valid_sz == 0) {
@@ -377,13 +364,6 @@ static void scan_stack(n_processor_t *p, coroutine_t *co) {
 
     // solo processor 的 gc_worklist 无法使用，需要使用 share processor 进行辅助
     rt_linked_fixalloc_t *worklist = &p->gc_worklist;
-
-#if defined(__AMD64) && defined(__WINDOWS)
-    // Microsoft x64 allows heap pointers to remain live in nonvolatile GP
-    // registers across calls. acosw saves those registers outside the copied
-    // stack, so they must be treated as roots explicitly.
-    scan_windows_context_roots(worklist, &co->aco);
-#endif
 
     if (co->aco.save_stack.ptr && co->aco.save_stack.sz > SAVE_STACK_DEFAULT_SIZE) {
         assert(span_of((addr_t) co->aco.save_stack.ptr) && "coroutine save stack not found span");
