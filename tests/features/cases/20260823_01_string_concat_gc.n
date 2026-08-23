@@ -1,0 +1,20 @@
+import runtime
+fn main() {
+    var s = ''
+    var i = 0
+    var iterations = 20000
+    var live_limit = runtime.malloc_bytes() + 384 * 1024 * 1024
+    for i < iterations {
+        s += 'abcd'
+        i += 1
+        if i % 1000 == 0 {
+            assert(runtime.malloc_bytes() < live_limit)
+            if i < iterations {
+                // Request collection without yielding explicitly. Subsequent
+                // string allocations must cooperate with the collector.
+                runtime.gc()
+            }
+        }
+    }
+    assert(s.len() == iterations * 4)
+}
