@@ -224,6 +224,8 @@ fndef_t *find_fn(addr_t addr, n_processor_t *p);
  */
 void runtime_gc();
 
+void gc_allocation_poll();
+
 void runtime_eval_gc();
 
 void runtime_force_gc();
