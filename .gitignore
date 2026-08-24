@@ -5,7 +5,7 @@
 
 # Binary and release artifacts
 bin
-release/
+/release/
 tmp/
 temps/
 
