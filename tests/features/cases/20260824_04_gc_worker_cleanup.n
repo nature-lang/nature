@@ -1,0 +1,38 @@
+import co
+import fmt
+import runtime
+
+fn churn(int cycle):string {
+    [string] parts = []
+    for int j = 0; j < 64; j += 1 {
+        var src = fmt.sprintf('churn-payload-line-%d-x%d', j, cycle)
+        parts.push(src.slice(0, 6))
+        parts.push(src.slice(6, 12))
+        parts.push(src.slice(3, 9))
+    }
+    return parts[0]
+}
+
+fn main():void! {
+    var anchor = ''
+
+    // Warm up the scheduler and GC before measuring process footprint.
+    for int cycle = 0; cycle < 20; cycle += 1 {
+        anchor = churn(cycle)
+        runtime.gc()
+        co.sleep(15)
+    }
+
+    println('gc-worker-baseline')
+    co.sleep(500)
+
+    for int cycle = 0; cycle < 800; cycle += 1 {
+        anchor = churn(cycle)
+        runtime.gc()
+        co.sleep(15)
+    }
+
+    assert(anchor.len() > 0)
+    println('gc-worker-done')
+    co.sleep(1000)
+}
