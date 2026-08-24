@@ -81,27 +81,26 @@ extern rtype_t fn_rtype;
     };                                                                    \
 })
 
-/**
- * TODO struct/arr 计算异常, 应该采用递归的方式正确计算
- * @param element_rtype
- * @param length
- * @return
- */
-static inline rtype_t rti_rtype_array(rtype_t *element_rtype, uint64_t length) {
-    assert(element_rtype);
+static inline uint8_t *rtype_gc_bits_data(rtype_t *rtype) {
+    if (rtype->malloc_gc_bits_offset == -1) {
+        return (uint8_t *) &rtype->gc_bits;
+    }
+    return RTDATA(rtype->malloc_gc_bits_offset);
+}
 
-    rtype_t rtype = {
-        .gc_heap_size = element_rtype->storage_size * length,
-        .hash = 0, // runtime 生成的没有 hash 值，不需要进行 hash 定位
-        .kind = TYPE_ARR,
-        .length = length,
-        .malloc_gc_bits_offset = -1,
-        .hashes_offset = -1,
-    };
+// An allocation may contain repeated values of the same type, as with a vec
+// backing array. Tile the type bitmap across the allocation like Go's
+// typePointers iterator.
+static inline bool rtype_word_is_pointer(rtype_t *rtype, uint64_t allocation_word) {
+    assert(rtype);
+    assert(rtype->gc_heap_size > 0);
 
-    rtype.last_ptr = element_rtype->last_ptr > 0; // 根据 0 和 1 在 heap_arena_bits_set 进行特殊处理
-
-    return rtype;
+    uint64_t type_words = align_up(rtype->gc_heap_size, POINTER_SIZE) / POINTER_SIZE;
+    uint64_t type_word = allocation_word % type_words;
+    if (type_word * POINTER_SIZE >= rtype->last_ptr) {
+        return false;
+    }
+    return bitmap_test(rtype_gc_bits_data(rtype), type_word);
 }
 
 static inline void builtin_rtype_init() {

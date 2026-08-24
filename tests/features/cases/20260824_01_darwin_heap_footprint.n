@@ -1,0 +1,25 @@
+import co
+import fmt
+import runtime
+
+const PAYLOAD = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+
+fn main() {
+    var anchor = ''
+    for int frame = 0; frame < 200; frame += 1 {
+        [string] rows = []
+        for int row = 0; row < 1024; row += 1 {
+            rows.push(fmt.sprintf('%s-%d-%d', PAYLOAD, frame, row))
+        }
+        anchor = rows[0]
+    }
+    for int round = 0; round < 5; round += 1 {
+        runtime.gc()
+        co.sleep(500)
+    }
+
+    assert(runtime.malloc_bytes() < 1024 * 1024)
+    println('heap-ready')
+    co.sleep(30000)
+    assert(anchor.len() > 0)
+}

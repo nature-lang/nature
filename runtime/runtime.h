@@ -98,8 +98,6 @@ static inline bool user_main_is_fn(void) {
 
 #define ARENA_PAGES_COUNT 8192 // 64M / 8K = 8192 个 page
 
-#define ARENA_BITS_COUNT 2097152 // 1byte = 8bit 可以索引 4*8byte = 32byte 空间, 64MB 空间需要 64*1024*1024 / 32
-
 #define PAGE_ALLOC_CHUNK_SPLIT 8192 // 每组 chunks 中的元素的数量
 
 #define MMAP_SHARE_STACK_BASE 0xa000000000
@@ -131,6 +129,12 @@ static inline bool user_main_is_fn(void) {
 #define CHUNK_BITS_COUNT 512 // 单位 bit, 一个 chunk 的大小是 512bit
 
 #define STD_MALLOC_LIMIT (32 * 1024) // 32Kb
+
+// Match Go's heap metadata cutover on 64-bit platforms. Pointer-containing
+// objects up to 512 bytes keep their pointer bitmap at the end of the span.
+// Larger small objects reserve one word immediately before the user object.
+#define MALLOC_HEADER_SIZE 8
+#define MIN_SIZE_FOR_MALLOC_HEADER (POINTER_SIZE * POINTER_SIZE * 8)
 
 #define PAGE_SUMMARY_LEVEL 5 // 5 层 radix tree
 #define PAGE_SUMMARY_MERGE_COUNT 8 // 每个上级 summary 索引的数量
@@ -204,6 +208,10 @@ typedef struct mspan_t {
     gc_bits *alloc_bits;
     gc_bits *gcmark_bits; // gc 阶段标记，1 表示被使用(三色标记中的黑色),0表示空闲(三色标记中的白色)
 
+    // Large objects occupy a whole span, so their type metadata lives on the
+    // span instead of in an allocation header, matching Go's largeType.
+    _Atomic(rtype_t *) large_rtype;
+
     mutex_t alloc_locker;
     mutex_t gcmark_locker;
 } mspan_t;
@@ -271,13 +279,6 @@ typedef struct {
 // arena meta
 
 typedef struct {
-    // heapArena.bitmap? bitmap 用一个字节(8bit)标记 arena 中4个指针大小(8byte)的内存空间。(也就是 2bit 标记一个指针)
-    // 8bit 低四位用于标记这四个内存空间的类型(0: 标量 scalar， 1: 指针 pointer)。这是 gc 遍历所有对象的关键
-    // 高四位用于标记这四个内存空间是否需要被 gc 扫描？ (0: dead，1: scan)
-    // 高四位标记了 4 个指针，如果其是 1 表示其后面还有指针需要扫描，0 表示 no more pointers in this object
-    // 当 obj 是一个大对象时这很有效
-    uint8_t bits[ARENA_BITS_COUNT];
-
     // 每个 arena 包含 64M 内存，被划分成 8192个 page, 每个 page 8K
     // 可以通过 page_index 快速定位到 span, 每一个 pages 都会在这里有一个数据
     // 可以是一个 span 存在于多个 page_index 中, 一个 span 的最小内存是 8k, 所以一个 page 最多只能存储一个 span.

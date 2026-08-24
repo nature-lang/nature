@@ -823,6 +823,9 @@ static mspan_t *mheap_alloc_span(uint64_t pages_count, uint8_t spanclass) {
 
     // - prepared -> ready
     sys_memory_used((void *) base, pages_count * ALLOC_PAGE_SIZE);
+    if (span_uses_heap_bits(span)) {
+        memset(span_heap_bits(span), 0, span_heap_bits_size(span));
+    }
 
     mutex_unlock(&memory->locker);
     DEBUGF("[mheap_alloc_span] success, span=%p, base=%p, spc=%d, obj_count=%lu, alloc_count=%lu", span,
@@ -1008,116 +1011,38 @@ static addr_t mcache_alloc(uint8_t spanclass, mspan_t **span) {
     return 0;
 }
 
-/**
- * 1. 提前计算 arena 边界，减少条件判断
- * 2. 优化 arena 切换逻辑
- * 3. 使用指针算术减少数组索引开销
- */
-static inline void heap_arena_bits_batch_handle(addr_t start, addr_t end, bool is_clear) {
-    if (start >= end) {
-        return;
-    }
+static void span_heap_bits_set_type(mspan_t *span, addr_t slot, uint64_t data_size, rtype_t *rtype) {
+    assert(span_uses_heap_bits(span));
+    assert(rtype && rtype->last_ptr > 0);
 
-    arena_t **arenas = memory->mheap->arenas;
-
-    while (start < end) {
-        uint64_t current_arena_idx = arena_index(start);
-        arena_t *arena = arenas[current_arena_idx];
-        addr_t arena_end = arena->base + ARENA_SIZE;
-
-        addr_t temp_end = (arena_end < end) ? arena_end : end;
-
-        // arena_bits_index 内联展开
-        uint64_t start_ptr_count = (start - arena->base) >> 3;
-        uint64_t end_ptr_count = (temp_end - arena->base) >> 3;
-
-        uint64_t index_start = ((start_ptr_count & ~3ULL) << 1) + (start_ptr_count & 3ULL);
-        uint64_t index_end = ((end_ptr_count & ~3ULL) << 1) + (end_ptr_count & 3ULL);
-        uint64_t index_count = index_end - index_start;
-
-        // 批量操作
-        if (is_clear) {
-            bitmap_batch_clear(arena->bits, index_start, index_count);
+    uint8_t *heap_bits = span_heap_bits(span);
+    uint64_t slot_word = (slot - span->base) / POINTER_SIZE;
+    uint64_t slot_words = span->obj_size / POINTER_SIZE;
+    uint64_t data_words = align_up(data_size, POINTER_SIZE) / POINTER_SIZE;
+    for (uint64_t i = 0; i < slot_words; ++i) {
+        if (i < data_words && rtype_word_is_pointer(rtype, i)) {
+            bitmap_set(heap_bits, slot_word + i);
         } else {
-            bitmap_batch_set(arena->bits, index_start, index_count);
+            bitmap_clear(heap_bits, slot_word + i);
         }
-
-        start = temp_end;
     }
 }
 
-/**
- * 设置 arena_t 的 bits 具体怎么设置可以参考 arenat_t 中的注释, 通常情况下 size < obj_size
- * @param addr
- * @param size
- * @param obj_size
- * @param rtype
- */
-static void heap_arena_bits_set(addr_t addr, uint64_t size, uint64_t obj_size, rtype_t *rtype) {
-    DEBUGF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, start", (void *) addr, size, obj_size);
-    assert(rtype->last_ptr > 0);
+static void heap_set_type(mspan_t *span, addr_t slot, uint64_t data_size, rtype_t *rtype) {
+    assert(spanclass_has_ptr(span->spanclass));
+    assert(rtype && rtype->last_ptr > 0);
 
-    uint8_t *gc_bits = RTDATA(rtype->malloc_gc_bits_offset);
-    if (rtype->malloc_gc_bits_offset == -1) {
-        gc_bits = (uint8_t *) &rtype->gc_bits;
+    if (span_uses_heap_bits(span)) {
+        span_heap_bits_set_type(span, slot, data_size, rtype);
+        return;
     }
-
-    bool arr_ptr = rtype->kind == TYPE_ARR && rtype->last_ptr > 0 && rtype->malloc_gc_bits_offset == -1;
-    if (arr_ptr) {
-        heap_arena_bits_batch_handle(addr, addr + obj_size, false);
-        //        int index = 0;
-        //        for (addr_t temp_addr = addr; temp_addr < addr + obj_size + POINTER_SIZE; temp_addr += POINTER_SIZE) {
-        //            uint64_t i = arena_index(temp_addr);
-        //            arena_t *arena = memory->mheap->arenas[i];
-        //            assert(arena && "cannot find arena by addr");
-        //            uint64_t bit_index = arena_bits_index(arena, temp_addr);
-        //
-        //            TDEBUGF("[runtime.heap_arena_bits_set] array %p + objsize %d, arena batch set, arena bit index(%d) = %d",
-        //                    addr, obj_size, index, bitmap_test(arena->bits, bit_index));
-        //            index += 1;
-        //        }
+    if (span_has_malloc_header(span)) {
+        atomic_store_explicit((_Atomic(rtype_t *) *) slot, rtype, memory_order_release);
         return;
     }
 
-    // index 计算错误，不能这么算? 奇怪的 index 算法导致 gc_bits 不能这么直接清理。
-    addr_t clear_start_addr = addr + rtype->last_ptr;
-    heap_arena_bits_batch_handle(clear_start_addr, addr + obj_size, true);
-
-    int index = 0;
-    addr_t end = clear_start_addr;
-    for (addr_t temp_addr = addr; temp_addr < end; temp_addr += POINTER_SIZE) {
-        arena_t *arena = memory->mheap->arenas[arena_index(temp_addr)];
-        assert(arena && "cannot find arena by addr");
-        uint64_t bit_index = arena_bits_index(arena, temp_addr);
-        DEBUGF("[runtime.heap_arena_bits_set] bit_index=%lu, temp_addr=%p, addr=%p, obj_size=%lu", bit_index,
-               (void *) temp_addr,
-               (void *) addr, obj_size);
-
-
-        if (bitmap_test(gc_bits, index)) {
-            bitmap_set(arena->bits, bit_index); // 1 表示为指针
-        } else {
-            bitmap_clear(arena->bits, bit_index);
-        }
-
-        DEBUGF(
-            "[runtime.heap_arena_bits_set] rtype_kind=%s, size=%lu, scan_addr=0x%lx, temp_addr=0x%lx, bit_index=%ld, bit_value = %d",
-            type_kind_str[rtype->kind], size, addr, temp_addr, bit_index);
-
-        index += 1;
-    }
-
-
-    // TODO check gc bits 和 lastptr 不一致问题, clear start 后
-    //    for (addr_t temp_addr = clear_start_addr; temp_addr < addr + obj_size; temp_addr += POINTER_SIZE) {
-    //        arena_t *arena = memory->mheap->arenas[arena_index(temp_addr)];
-    //        assert(arena && "cannot find arena by addr");
-    //        uint64_t bit_index = arena_bits_index(arena, temp_addr);
-    //        assert(bitmap_test(gc_bits, index) == 0);
-    //        index += 1;
-    //    }
-
-    TRACEF("[runtime.heap_arena_bits_set] addr=%p, size=%lu, obj_size=%lu, unlock, end", (void *) addr, size, obj_size);
+    assert(take_sizeclass(span->spanclass) == LARGE_SIZECLASS);
+    atomic_store_explicit(&span->large_rtype, rtype, memory_order_release);
 }
 
 // 单位
@@ -1128,8 +1053,11 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
     DEBUGF("[std_malloc] start");
     assert(size > 0);
     bool has_ptr = rtype != NULL && rtype->last_ptr > 0;
+    bool needs_header = has_ptr && size > MIN_SIZE_FOR_MALLOC_HEADER;
+    uint64_t alloc_size = size + (needs_header ? MALLOC_HEADER_SIZE : 0);
+    assert(alloc_size <= STD_MALLOC_LIMIT);
 
-    uint8_t sizeclass = calc_sizeclass(size);
+    uint8_t sizeclass = calc_sizeclass(alloc_size);
     uint8_t spanclass = make_spanclass(sizeclass, !has_ptr);
     assert(sizeclass > 0 && spanclass > 1);
 
@@ -1137,18 +1065,18 @@ static addr_t std_malloc(uint64_t size, rtype_t *rtype) {
     DEBUGF("[std_malloc] spanclass=%d", spanclass);
 
     mspan_t *span = NULL;
-    addr_t addr = mcache_alloc(spanclass, &span);
+    addr_t slot = mcache_alloc(spanclass, &span);
     assert(span && "std_malloc notfound span");
 
-    DEBUGF("[std_malloc] mcache_alloc addr=%p", (void *) addr);
+    DEBUGF("[std_malloc] mcache_alloc slot=%p", (void *) slot);
 
-    // 对 arena.bits 做标记,标记是指针还是标量, has ptr 需要借助 arena bits 进行扫描
     if (has_ptr) {
-        heap_arena_bits_set(addr, size, span->obj_size, rtype);
+        heap_set_type(span, slot, size, rtype);
     }
 
     atomic_fetch_add(&allocated_bytes, span->obj_size);
 
+    addr_t addr = slot + (needs_header ? MALLOC_HEADER_SIZE : 0);
     assert(span_of(addr) == span && "std_malloc span not match");
 
     return addr;
@@ -1169,25 +1097,24 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
 
     assert(span != NULL && "out of memory: large malloc");
 
-    // 将 span 推送到 full swept 中，这样才能被 sweept
-    mcentral_t *central = &memory->mheap->centrals[spanclass];
-    mutex_lock(&central->locker);
-    RT_LIST_PUSH_HEAD(central->full_list, span);
-    mutex_unlock(&central->locker);
+    if (span->needzero) {
+        memset((void *) span->base, 0, span->obj_size);
+        span->needzero = 0;
+    }
 
-    // heap_arena_bits_set
     if (has_ptr) {
-        heap_arena_bits_set(span->base, size, span->obj_size, rtype);
+        heap_set_type(span, span->base, size, rtype);
     }
 
     assert(span->obj_count == 1);
     bitmap_set(span->alloc_bits, 0);
     span->alloc_count += 1;
 
-    if (span->needzero) {
-        memset((void *) span->base, 0, span->obj_size);
-        span->needzero = 0;
-    }
+    // 将 span 推送到 full swept 中，这样才能被 sweept
+    mcentral_t *central = &memory->mheap->centrals[spanclass];
+    mutex_lock(&central->locker);
+    RT_LIST_PUSH_HEAD(central->full_list, span);
+    mutex_unlock(&central->locker);
 
     atomic_fetch_add(&allocated_bytes, size);
 
@@ -1251,9 +1178,6 @@ void mheap_free_span(mheap_t *mheap, mspan_t *span) {
     mheap_clear_spans(span);
 
     DEBUGF("[mheap_free_span] mheap_clear_spans success");
-    // arena.bits 保存了当前 span 中的指针 bit, 当下一次当前内存被分配时会覆盖写入
-    // 垃圾回收期间不会有任何指针指向该空间，因为当前 span 就是因为没有被任何 ptr 指向才被回收的
-
     remove_total_bytes += free_size;
 
     // 将物理内存归还给操作系统
@@ -1388,8 +1312,14 @@ void *rti_gc_malloc(uint64_t size, rtype_t *rtype) {
         DEBUGF("[rti_gc_malloc] size=%ld, type is null", size);
     }
 
+    bool has_ptr = rtype != NULL && rtype->last_ptr > 0;
+    uint64_t alloc_size = size;
+    if (has_ptr && size > MIN_SIZE_FOR_MALLOC_HEADER) {
+        alloc_size += MALLOC_HEADER_SIZE;
+    }
+
     void *ptr;
-    if (size <= STD_MALLOC_LIMIT) {
+    if (alloc_size <= STD_MALLOC_LIMIT) {
         DEBUGF("[rti_gc_malloc] std malloc");
         // 1. 标准内存分配(0~32KB)
         ptr = (void *) std_malloc(size, rtype);
@@ -1431,6 +1361,7 @@ mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     span->free_index = 0;
     span->sweepgen = 0;
     span->spanclass = spanclass;
+    atomic_store_explicit(&span->large_rtype, NULL, memory_order_relaxed);
     uint8_t sizeclass = take_sizeclass(spanclass);
     if (sizeclass == LARGE_SIZECLASS) {
         // 使用 spanclass = 0 来管理 large_malloc
@@ -1439,7 +1370,11 @@ mspan_t *mspan_new(uint64_t base, uint64_t pages_count, uint8_t spanclass) {
     } else {
         span->obj_size = class_obj_size[sizeclass];
         assert(span->obj_size > 0 && "span obj_size is zero");
-        span->obj_count = span->pages_count * ALLOC_PAGE_SIZE / span->obj_size;
+        uint64_t span_size = span->pages_count * ALLOC_PAGE_SIZE;
+        if (spanclass_has_ptr(spanclass) && span->obj_size <= MIN_SIZE_FOR_MALLOC_HEADER) {
+            span_size -= span_size / POINTER_SIZE / 8;
+        }
+        span->obj_count = span_size / span->obj_size;
     }
 
     span->end = span->base + (span->pages_count * ALLOC_PAGE_SIZE);

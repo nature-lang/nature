@@ -118,20 +118,6 @@ static inline arena_t *take_arena(addr_t addr) {
     return arena;
 }
 
-static inline uint64_t arena_bits_index(arena_t *arena, addr_t addr) {
-    // 最优化版本：完全使用位运算
-    uint64_t ptr_count = (addr - arena->base) >> 3; // 假设POINTER_SIZE=8
-    uint64_t result = ((ptr_count & ~3ULL) << 1) + (ptr_count & 3ULL);
-
-    // Optimized: use bit shifts for maximum performance
-    // Maps 4 consecutive pointers to 8 bits (2 bits per pointer)
-    //    uint64_t _ptr_count = (addr - arena->base) / POINTER_SIZE;
-    //    uint64_t bit_index = (_ptr_count / 4) * 8 + (_ptr_count % 4);
-    //    return bit_index;
-    //    assert(bit_index == result);
-    return result;
-}
-
 static inline addr_t safe_heap_addr(addr_t addr) {
     assert(addr >= ARENA_HINT_BASE && "addr overflow heap base");
     assert(addr < memory->mheap->current_arena.end && "addr overflow heap end");
@@ -214,6 +200,34 @@ static inline uint64_t rt_rtype_stack_size(int64_t rhash) {
 
 static inline uint8_t take_sizeclass(uint8_t spanclass) {
     return spanclass >> 1;
+}
+
+static inline bool span_uses_heap_bits(mspan_t *span) {
+    return spanclass_has_ptr(span->spanclass) && take_sizeclass(span->spanclass) != LARGE_SIZECLASS &&
+           span->obj_size <= MIN_SIZE_FOR_MALLOC_HEADER;
+}
+
+static inline bool span_has_malloc_header(mspan_t *span) {
+    return spanclass_has_ptr(span->spanclass) && take_sizeclass(span->spanclass) != LARGE_SIZECLASS &&
+           span->obj_size > MIN_SIZE_FOR_MALLOC_HEADER;
+}
+
+static inline uint64_t span_heap_bits_size(mspan_t *span) {
+    return span->pages_count * ALLOC_PAGE_SIZE / POINTER_SIZE / 8;
+}
+
+static inline uint8_t *span_heap_bits(mspan_t *span) {
+    addr_t span_end = span->base + span->pages_count * ALLOC_PAGE_SIZE;
+    return (uint8_t *) (span_end - span_heap_bits_size(span));
+}
+
+static inline addr_t span_slot_base(mspan_t *span, uint64_t obj_index) {
+    return span->base + obj_index * span->obj_size;
+}
+
+static inline addr_t span_object_base(mspan_t *span, uint64_t obj_index) {
+    addr_t slot = span_slot_base(span, obj_index);
+    return span_has_malloc_header(span) ? slot + MALLOC_HEADER_SIZE : slot;
 }
 
 fndef_t *find_fn(addr_t addr, n_processor_t *p);
