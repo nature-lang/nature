@@ -35,10 +35,15 @@ void shade_obj_grey(void *obj) {
 
     // get mspan by ptr
     mspan_t *span = span_of(addr);
-    assert(span);
+    if (!span) {
+        return;
+    }
 
     // get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
+    if (!span_object_is_allocated(span, obj_index)) {
+        return;
+    }
 
     mutex_lock(&span->gcmark_locker);
     bitmap_clear(span->gcmark_bits, obj_index);
@@ -620,16 +625,22 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
 
     // get mspan by ptr
     mspan_t *span = span_of(addr);
-    assertf(span, "span not found by addr=%p", (void *) addr);
+    if (!span) {
+        return;
+    }
     assert(span->obj_size > 0);
 
     // get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
+    if (!span_object_is_allocated(span, obj_index)) {
+        return;
+    }
 
     // 如果 addr 不是 span obj 的起始地点，也就是需要和 obj_size 前向对齐
-    // 计算 addr 所在的 obj 的起始地址
+    // 计算 addr 所在的 slot 和用户对象起始地址。
     addr_t old = addr;
-    addr = span->base + (obj_index * span->obj_size);
+    addr_t slot = span_slot_base(span, obj_index);
+    addr = span_object_base(span, obj_index);
 
     DEBUGF("[runtime_gc.handle_gc_ptr] addr=%p(%p), has_ptr=%d, span_base=%p, spc=%d, obj_index=%lu, obj_size=%lu byte",
            (void *) addr, (void *) old,
@@ -663,17 +674,32 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
         return;
     }
 
-    // scan object field
-    // - search ptr ~ ptr+size sub ptrs by heap bits then push to temp grep list
-    // ++i 此时按指针跨度增加
-    int index = 0;
-    for (addr_t temp_addr = addr; temp_addr < addr + span->obj_size; temp_addr += POINTER_SIZE) {
-        arena_t *arena = take_arena(addr);
-        assert(arena && "cannot find arena by addr");
+    uint8_t *heap_bits = NULL;
+    rtype_t *rtype = NULL;
+    uint64_t scan_size = span->obj_size;
+    if (span_uses_heap_bits(span)) {
+        heap_bits = span_heap_bits(span);
+    } else if (span_has_malloc_header(span)) {
+        rtype = atomic_load_explicit((_Atomic(rtype_t *) *) slot, memory_order_acquire);
+        scan_size -= MALLOC_HEADER_SIZE;
+    } else {
+        assert(take_sizeclass(span->spanclass) == LARGE_SIZECLASS);
+        rtype = atomic_load_explicit(&span->large_rtype, memory_order_acquire);
+    }
+    // A conservative candidate may race with allocation publication. New
+    // objects are allocated black, so a not-yet-visible type has no work for
+    // this mark cycle.
+    if (!heap_bits && !rtype) {
+        return;
+    }
 
-        uint64_t bit_index = arena_bits_index(arena, temp_addr);
-        index++;
-        bool is_ptr = bitmap_test(arena->bits, bit_index);
+    // Scan pointer words from either the span-local bitmap or the stable type
+    // descriptor stored in the allocation header/mspan.
+    uint64_t scan_words = scan_size / POINTER_SIZE;
+    for (uint64_t i = 0; i < scan_words; ++i) {
+        addr_t temp_addr = addr + i * POINTER_SIZE;
+        uint64_t bit_index = (temp_addr - span->base) / POINTER_SIZE;
+        bool is_ptr = heap_bits ? bitmap_test(heap_bits, bit_index) : rtype_word_is_pointer(rtype, i);
         if (is_ptr) {
             // 同理，即使某个 ptr 需要 gc, 但是也可能存在 gc 时，还没有赋值的清空
             addr_t value = fetch_addr_value(temp_addr);
@@ -681,7 +707,7 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
             DEBUGF(
                 "[handle_gc_ptr] addr is ptr,base=%p cursor=%p cursor_value=%p, obj_size=%ld, bit_index=%lu, in_heap=%d",
                 (void *) addr,
-                (void *) temp_addr, (void *) value, span->obj_size, bit_index, in_heap(value));
+                (void *) temp_addr, (void *) value, scan_size, bit_index, in_heap(value));
 
             if (span_of(value)) {
                 // assert(span_of(heap_addr) && "heap_addr not belong active span");
@@ -700,7 +726,7 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
             DEBUGF(
                 "[handle_gc_ptr] addr not ptr,base=%p cursor=%p cursor_value(int)=%p, obj_size=%ld, bit_index=%lu",
                 (void *) addr,
-                (void *) temp_addr, fetch_int_value(temp_addr, POINTER_SIZE), span->obj_size, bit_index);
+                (void *) temp_addr, fetch_int_value(temp_addr, POINTER_SIZE), scan_size, bit_index);
         }
     }
 }

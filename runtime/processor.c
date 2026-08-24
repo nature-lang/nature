@@ -696,9 +696,9 @@ void mark_ptr_black(void *value) {
     // get mspan by ptr
     mspan_t *span = span_of(addr);
     assert(span);
-    mutex_lock(&span->gcmark_locker);
-    // get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
+    assert(span_object_is_allocated(span, obj_index));
+    mutex_lock(&span->gcmark_locker);
     bitmap_set(span->gcmark_bits, obj_index);
     DEBUGF("[runtime.mark_ptr_black] addr=%p, span=%p, spc=%d, span_base=%p, obj_index=%lu marked", value, span,
            span->spanclass,

@@ -1,0 +1,73 @@
+import co
+import runtime
+
+type span_bits_t = struct {
+    [u8;504] padding
+    ref<int> child
+}
+
+type malloc_header_t = struct {
+    ref<int> child
+    [u8;512] padding
+}
+
+type max_malloc_header_t = struct {
+    [u8;32752] padding
+    ref<int> child
+}
+
+type large_type_t = struct {
+    [u8;32760] padding
+    ref<int> child
+}
+
+type alternate_malloc_header_t = struct {
+    [u8;512] padding
+    ref<int> child
+}
+
+type array_element_t = struct {
+    int scalar
+    ref<int> child
+}
+
+fn main() {
+    assert(@sizeof(span_bits_t) == 512)
+    assert(@sizeof(malloc_header_t) == 520)
+    assert(@sizeof(max_malloc_header_t) == 32760)
+    assert(@sizeof(large_type_t) == 32768)
+    assert(@sizeof(alternate_malloc_header_t) == 520)
+
+    var span_bits = new span_bits_t(child = new int(512))
+    var malloc_header = new malloc_header_t(child = new int(520))
+    var max_malloc_header = new max_malloc_header_t(child = new int(32760))
+    var large_type = new large_type_t(child = new int(32768))
+    var alternate_malloc_header = new alternate_malloc_header_t(child = new int(521))
+
+    // Exercise the same four metadata paths for runtime backing arrays.
+    var span_bits_array = vec<ref<int>>.cap_of(64)
+    span_bits_array.push(new int(64))
+    var malloc_header_array = vec<ref<int>>.cap_of(65)
+    malloc_header_array.push(new int(65))
+    var max_malloc_header_array = vec<ref<int>>.cap_of(4095)
+    max_malloc_header_array.push(new int(4095))
+    var large_type_array = vec<ref<int>>.cap_of(4096)
+    large_type_array.push(new int(4096))
+    var typed_header_array = vec<array_element_t>.cap_of(33)
+    typed_header_array.push(array_element_t{scalar: 33, child: new int(533)})
+
+    runtime.gc()
+    co.sleep(500)
+
+    assert(*span_bits.child == 512)
+    assert(*malloc_header.child == 520)
+    assert(*max_malloc_header.child == 32760)
+    assert(*large_type.child == 32768)
+    assert(*alternate_malloc_header.child == 521)
+    assert(*span_bits_array[0] == 64)
+    assert(*malloc_header_array[0] == 65)
+    assert(*max_malloc_header_array[0] == 4095)
+    assert(*large_type_array[0] == 4096)
+    assert(typed_header_array[0].scalar == 33)
+    assert(*typed_header_array[0].child == 533)
+}
