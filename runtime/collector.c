@@ -35,10 +35,15 @@ void shade_obj_grey(void *obj) {
 
     // get mspan by ptr
     mspan_t *span = span_of(addr);
-    assert(span);
+    if (!span) {
+        return;
+    }
 
     // get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
+    if (!span_object_is_allocated(span, obj_index)) {
+        return;
+    }
 
     mutex_lock(&span->gcmark_locker);
     bitmap_clear(span->gcmark_bits, obj_index);
@@ -620,11 +625,16 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
 
     // get mspan by ptr
     mspan_t *span = span_of(addr);
-    assertf(span, "span not found by addr=%p", (void *) addr);
+    if (!span) {
+        return;
+    }
     assert(span->obj_size > 0);
 
     // get span index
     uint64_t obj_index = (addr - span->base) / span->obj_size;
+    if (!span_object_is_allocated(span, obj_index)) {
+        return;
+    }
 
     // 如果 addr 不是 span obj 的起始地点，也就是需要和 obj_size 前向对齐
     // 计算 addr 所在的 slot 和用户对象起始地址。
@@ -676,7 +686,12 @@ static void handle_gc_ptr(n_processor_t *p, addr_t addr) {
         assert(take_sizeclass(span->spanclass) == LARGE_SIZECLASS);
         rtype = atomic_load_explicit(&span->large_rtype, memory_order_acquire);
     }
-    assert(heap_bits || rtype);
+    // A conservative candidate may race with allocation publication. New
+    // objects are allocated black, so a not-yet-visible type has no work for
+    // this mark cycle.
+    if (!heap_bits && !rtype) {
+        return;
+    }
 
     // Scan pointer words from either the span-local bitmap or the stable type
     // descriptor stored in the allocation header/mspan.

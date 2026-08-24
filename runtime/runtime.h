@@ -191,7 +191,7 @@ typedef struct mspan_t {
 
     uint32_t sweepgen;
     addr_t base; // mspan 在 arena 中的起始位置
-    addr_t end;
+    addr_t end; // end of the object-containing region (Go's mspan.limit)
     uint8_t spanclass; // spanclass index (基于 sizeclass 通过 table 可以确定 page 的数量和 span 的数量)
     uint8_t needzero; // 1 = 需要清零(GC后有脏数据), 0 = 不需要清零(新分配或已清零)
 
@@ -282,7 +282,7 @@ typedef struct {
     // 每个 arena 包含 64M 内存，被划分成 8192个 page, 每个 page 8K
     // 可以通过 page_index 快速定位到 span, 每一个 pages 都会在这里有一个数据
     // 可以是一个 span 存在于多个 page_index 中, 一个 span 的最小内存是 8k, 所以一个 page 最多只能存储一个 span.
-    mspan_t *spans[ARENA_PAGES_COUNT]; // page = 8192, 所以 pages 的数量是固定的
+    _Atomic(mspan_t *) spans[ARENA_PAGES_COUNT]; // page = 8192, 所以 pages 的数量是固定的
 
     addr_t base;
 } arena_t;

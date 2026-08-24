@@ -202,9 +202,14 @@ static inline uint8_t take_sizeclass(uint8_t spanclass) {
     return spanclass >> 1;
 }
 
+// Go counterpart: heapBitsInSpan.
+static inline bool heap_bits_in_span(uint64_t user_size) {
+    return user_size <= MIN_SIZE_FOR_MALLOC_HEADER;
+}
+
 static inline bool span_uses_heap_bits(mspan_t *span) {
     return spanclass_has_ptr(span->spanclass) && take_sizeclass(span->spanclass) != LARGE_SIZECLASS &&
-           span->obj_size <= MIN_SIZE_FOR_MALLOC_HEADER;
+           heap_bits_in_span(span->obj_size);
 }
 
 static inline bool span_has_malloc_header(mspan_t *span) {
@@ -228,6 +233,10 @@ static inline addr_t span_slot_base(mspan_t *span, uint64_t obj_index) {
 static inline addr_t span_object_base(mspan_t *span, uint64_t obj_index) {
     addr_t slot = span_slot_base(span, obj_index);
     return span_has_malloc_header(span) ? slot + MALLOC_HEADER_SIZE : slot;
+}
+
+static inline bool span_object_is_allocated(mspan_t *span, uint64_t obj_index) {
+    return obj_index < span->obj_count && bitmap_test_acquire(span->alloc_bits, obj_index);
 }
 
 fndef_t *find_fn(addr_t addr, n_processor_t *p);

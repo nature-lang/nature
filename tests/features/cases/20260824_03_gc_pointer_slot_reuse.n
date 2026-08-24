@@ -1,0 +1,64 @@
+import co
+import runtime
+
+fn make_callback(int value):fn():int {
+    var captured = value
+    return fn():int {
+        return captured
+    }
+}
+
+fn build_callbacks(int count, int base):[fn():int] {
+    var callbacks = vec<fn():int>.cap_of(count)
+    for int i = 0; i < count; i += 1 {
+        callbacks.push(make_callback(base + i))
+    }
+    return callbacks
+}
+
+fn build_closed_channels(int count):[chan<int>]! {
+    var channels = vec<chan<int>>.cap_of(count)
+    for int i = 0; i < count; i += 1 {
+        var channel = chan<int>.new(1)
+        channel.close()
+        channels.push(channel)
+    }
+    return channels
+}
+
+fn build_open_channels(int count):[chan<int>] {
+    var channels = vec<chan<int>>.cap_of(count)
+    for int i = 0; i < count; i += 1 {
+        channels.push(chan<int>.new(1))
+    }
+    return channels
+}
+
+fn main():void! {
+    // 64 pointer slots use span-tail heap bits; 65 slots use a malloc header.
+    var small_callbacks = build_callbacks(64, 1000)
+    var header_callbacks = build_callbacks(65, 2000)
+    var small_channels = build_closed_channels(64)
+    var header_channels = build_closed_channels(65)
+
+    runtime.gc()
+    co.sleep(1000)
+
+    // Reuse the exact fn/chan size classes. A missed array slot is swept and
+    // overwritten here instead of remaining readable as stale memory.
+    var callback_trash = build_callbacks(2048, -10000)
+    var channel_trash = build_open_channels(1024)
+
+    assert(small_callbacks[1]() == 1001)
+    assert(small_callbacks[63]() == 1063)
+    assert(header_callbacks[1]() == 2001)
+    assert(header_callbacks[63]() == 2063)
+
+    assert(small_channels[7].is_closed())
+    assert(small_channels[63].is_closed())
+    assert(header_channels[7].is_closed())
+    assert(header_channels[63].is_closed())
+
+    assert(callback_trash.len() == 2048)
+    assert(channel_trash.len() == 1024)
+}

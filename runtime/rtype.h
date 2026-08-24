@@ -49,6 +49,10 @@ extern rtype_t vec_rtype;
 
 extern rtype_t fn_rtype;
 
+// Backing arrays of STORAGE_KIND_PTR values contain pointer-sized slots, not
+// inline copies of the objects described by their element rtypes.
+extern rtype_t pointer_slot_rtype;
+
 // 默认是 uint8[8] == uint8* , 因为指针占用 8 byte
 #define GC_RTYPE(_kind, _count, ...) ({                                   \
     assert(_count <= 32);                                                 \
@@ -104,6 +108,9 @@ static inline bool rtype_word_is_pointer(rtype_t *rtype, uint64_t allocation_wor
 }
 
 static inline void builtin_rtype_init() {
+    pointer_slot_rtype = GC_RTYPE(TYPE_ANYPTR, 1, TYPE_GC_SCAN);
+    pointer_slot_rtype.storage_kind = STORAGE_KIND_PTR;
+
     // 初始化协程结构体 rtype
     linkco_rtype = GC_RTYPE(TYPE_STRUCT, 7, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_SCAN, TYPE_GC_SCAN,
                             TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN);

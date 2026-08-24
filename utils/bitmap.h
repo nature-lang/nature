@@ -2,6 +2,7 @@
 #define NATURE_UTILS_BITMAP_H
 
 #include <stdbool.h>
+#include <stdatomic.h>
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -34,6 +35,12 @@ static inline void bitmap_free(bitmap_t *b) {
 static inline void bitmap_set(uint8_t *bits, uint64_t index) {
     // index & 7 等于 index % 8
     bits[index / 8] |= 1 << (index & 7);
+}
+
+static inline void bitmap_set_release(uint8_t *bits, uint64_t index) {
+    atomic_fetch_or_explicit((_Atomic uint8_t *) &bits[index / 8],
+                             (uint8_t) (1U << (index & 7)),
+                             memory_order_release);
 }
 
 
@@ -130,6 +137,12 @@ static inline void bitmap_locker_clear(bitmap_t *b, uint64_t index) {
 
 static inline bool bitmap_test(uint8_t *bits, uint64_t index) {
     return bits[index / 8] & (1 << (index & 7));
+}
+
+static inline bool bitmap_test_acquire(uint8_t *bits, uint64_t index) {
+    uint8_t value = atomic_load_explicit((_Atomic uint8_t *) &bits[index / 8],
+                                         memory_order_acquire);
+    return value & (1U << (index & 7));
 }
 
 static inline bool bitmap_empty(uint8_t *bits, uint64_t count) {

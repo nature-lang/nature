@@ -17,6 +17,9 @@ static inline n_array_t *rti_array_new(rtype_t *element_rtype, uint64_t length) 
 
     uint64_t size = element_rtype->storage_size * length;
     rtype_t *allocation_rtype = element_rtype->last_ptr > 0 ? element_rtype : NULL;
+    if (allocation_rtype && element_rtype->storage_kind == STORAGE_KIND_PTR) {
+        allocation_rtype = &pointer_slot_rtype;
+    }
 
     // Mirror Go's newarray allocation: pass the total byte size with the stable
     // element type, whose pointer bitmap is tiled across the backing array.
