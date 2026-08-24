@@ -44,4 +44,12 @@
 #pragma pop_macro("WORD")
 #endif
 
+static inline int rt_thread_detach(uv_thread_t thread) {
+#ifdef __WINDOWS
+    return CloseHandle(thread) ? 0 : -1;
+#else
+    return pthread_detach(thread);
+#endif
+}
+
 #endif // NATURE_RUNTIME_UV_COMPAT_H

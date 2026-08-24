@@ -1422,6 +1422,19 @@ uint64_t runtime_malloc_bytes() {
     return allocated_bytes;
 }
 
+static void runtime_gc_start() {
+    uv_thread_t thread;
+    int result = uv_thread_create(&thread, runtime_gc, NULL);
+    if (result != 0) {
+        gc_stage = GC_STAGE_OFF;
+        assertf(false, "create gc thread failed: %d", result);
+        return;
+    }
+
+    result = rt_thread_detach(thread);
+    assertf(result == 0, "detach gc thread failed: %d", result);
+}
+
 void runtime_eval_gc() {
     mutex_lock(&gc_stage_locker);
 
@@ -1440,8 +1453,7 @@ void runtime_eval_gc() {
     }
 
     gc_stage = GC_STAGE_START;
-    uv_thread_t runtime_gc_thread;
-    uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
+    runtime_gc_start();
 
 EXIT:
     mutex_unlock(&gc_stage_locker);
@@ -1460,8 +1472,7 @@ void runtime_force_gc() {
     }
 
     gc_stage = GC_STAGE_START;
-    uv_thread_t runtime_gc_thread;
-    uv_thread_create(&runtime_gc_thread, runtime_gc, NULL);
+    runtime_gc_start();
 
 EXIT:
     mutex_unlock(&gc_stage_locker);
