@@ -13,7 +13,7 @@ Tests are located in `tests/features/` and follow a naming convention: `YYYYMMDD
 
 ## Prerequisites
 
-Before running tests, ensure the runtime library is up to date. If you encounter linking errors like `_global_safepoint` symbol not found, rebuild the runtime:
+Before running tests, ensure the runtime library is up to date. If you encounter linking errors like `_tls_safepoint` symbol not found, rebuild the runtime:
 
 ```bash
 cd /path/to/nature
@@ -103,7 +103,7 @@ expected output line 2
 
 ### Linking Errors
 
-**Problem:** `Undefined symbols for architecture arm64: "_global_safepoint"`
+**Problem:** `Undefined symbols for architecture arm64: "_tls_safepoint"`
 
 **Solution:** Rebuild the runtime library (see Prerequisites above)
 

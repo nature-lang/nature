@@ -29,8 +29,7 @@
 #define NONVOID_IDENT "nonvoid"
 
 #define ASSIST_PREEMPT_YIELD_IDENT "assist_preempt_yield"
-#define TLS_YIELD_SAFEPOINT_IDENT "tls_yield_safepoint"
-#define GLOBAL_SAFEPOINT_IDENT "global_safepoint"
+#define TLS_SAFEPOINT_IDENT "tls_safepoint"
 
 // 指令字符宽度
 #define BYTE 1 // 1 byte = 8 位
@@ -725,8 +724,7 @@ static inline bool type_is_ident(type_t *t) {
         return false;
     }
 
-    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_INTERFACE || t->ident_kind ==
-           TYPE_IDENT_TAGGER_UNION || t->ident_kind == TYPE_IDENT_UNKNOWN;
+    return t->ident_kind == TYPE_IDENT_DEF || t->ident_kind == TYPE_IDENT_INTERFACE || t->ident_kind == TYPE_IDENT_TAGGER_UNION || t->ident_kind == TYPE_IDENT_UNKNOWN;
 }
 
 static inline type_t type_ident_new(char *ident, type_ident_kind kind) {
@@ -789,8 +787,7 @@ static inline bool is_number(type_kind kind) {
 }
 
 static inline storage_kind_t type_storage_kind(type_t t) {
-    if (is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_ANYPTR || t.kind == TYPE_ENUM || t.kind ==
-        TYPE_VOID) {
+    if (is_number(t.kind) || t.kind == TYPE_BOOL || t.kind == TYPE_ANYPTR || t.kind == TYPE_ENUM || t.kind == TYPE_VOID) {
         return STORAGE_KIND_DIR;
     }
 
@@ -1026,8 +1023,7 @@ static inline bool is_abi_struct_like(type_t t) {
 }
 
 static inline bool is_impl_builtin_type(type_kind kind) {
-    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind ==
-           TYPE_CHAN ||
+    return is_number(kind) || kind == TYPE_BOOL || kind == TYPE_MAP || kind == TYPE_SET || kind == TYPE_VEC || kind == TYPE_CHAN ||
            kind == TYPE_STRING || kind == TYPE_COROUTINE_T;
 }
 

@@ -1,9 +1,10 @@
 #ifndef NATURE_RUNTIME_RUNTIME_H
 #define NATURE_RUNTIME_RUNTIME_H
 
-#include "utils/helper.h"
 #include "runtime/uv_compat.h"
+#include "utils/helper.h"
 #include <pthread.h>
+#include <stdatomic.h>
 
 #include "aco/aco.h"
 #include "fixalloc.h"
@@ -458,7 +459,7 @@ struct coroutine_t {
  */
 struct n_processor_t {
     int index;
-    int64_t *tls_yield_safepoint_ptr;
+    _Atomic(_Atomic uint64_t *) tls_safepoint_ptr;
     mcache_t mcache; // 线程维度无锁内存分配器
     aco_t main_aco; // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
     aco_share_stack_t share_stack; // processor 中的所有的 stack 都使用该共享栈
@@ -467,13 +468,13 @@ struct n_processor_t {
     struct sigaction sig;
 #endif
     uv_timer_t timer; // 辅助协程调度的定时器
-    //    uint64_t need_stw; // 外部声明, 内部判断 是否需要 stw
-    uint64_t in_stw; // 外部判断是否已经 stw
+    _Atomic uint64_t need_stw; // 当前 GC STW 代次，0 表示无请求
+    _Atomic uint64_t in_stw; // 已确认进入 STW 的代次
 
     // 当前 p 需要被其他线程读取的一些属性都通过该锁进行保护
     // - 如更新 p 对应的 co 的状态等
     mutex_t thread_locker;
-    ATOMIC bool thread_waked; // 原子标志：线程是否已创建，避免重复创建
+    _Atomic bool thread_waked; // 原子标志：线程是否已创建，避免重复创建
     p_status_t status;
 
     uv_thread_t thread_id; // 当前 processor 绑定的 pthread 线程

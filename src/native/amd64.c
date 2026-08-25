@@ -1477,12 +1477,24 @@ static slice_t *amd64_native_bcc(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_safepoint(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
-    amd64_asm_operand_t *global_safepoint_operand = AMD64_SYMBOL(GLOBAL_SAFEPOINT_IDENT, false);
-    global_safepoint_operand->size = QWORD;
-
-    //    slice_push(operations, AMD64_INST("cmp", global_safepoint_operand, AMD64_UINT32(0))); // 5.20s
-
-    slice_push(operations, AMD64_INST("mov", AMD64_REG(r11), global_safepoint_operand)); // 5.0s
+    amd64_asm_operand_t *tls_safepoint_operand = AMD64_TLS_SYMBOL(TLS_SAFEPOINT_IDENT);
+    if (BUILD_OS == OS_DARWIN) {
+        // Darwin's TLV getter receives its descriptor in rdi.  Preserve the
+        // incoming Nature argument while keeping the stack call-aligned.
+        slice_push(operations, AMD64_INST("sub", AMD64_REG(rsp), AMD64_UINT32(16)));
+        slice_push(operations,
+                   AMD64_INST("mov", SIB_REG(rsp, NULL, 0, 0, QWORD), AMD64_REG(rdi)));
+        slice_push(operations, AMD64_INST("mov", AMD64_REG(rdi), tls_safepoint_operand));
+        slice_push(operations, AMD64_INST("call", INDIRECT_REG(rdi, QWORD)));
+        slice_push(operations, AMD64_INST("mov", AMD64_REG(r11), INDIRECT_REG(rax, QWORD)));
+        slice_push(operations,
+                   AMD64_INST("mov", AMD64_REG(rdi), SIB_REG(rsp, NULL, 0, 0, QWORD)));
+        slice_push(operations, AMD64_INST("add", AMD64_REG(rsp), AMD64_UINT32(16)));
+    } else {
+        // Linux uses local-exec fs:TPOFF; the COFF writer expands the same TLS
+        // operand through the Windows TLS array while preserving scratch regs.
+        slice_push(operations, AMD64_INST("mov", AMD64_REG(r11), tls_safepoint_operand));
+    }
     slice_push(operations, AMD64_INST("test", AMD64_REG(r11), AMD64_REG(r11)));
 
     char *preempt_ident = local_sym_with_fn(c, ".preempt");

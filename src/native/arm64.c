@@ -219,8 +219,7 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
     }
 
     // indirect 有符号偏移范围 [-256, 255], 如果超出范围，需要借助临时寄存器 x16 进行转换(此处转换不需要考虑 float 类型)
-    if (result && result->type == ARM64_ASM_OPERAND_INDIRECT && (
-            result->indirect.offset < -256 || result->indirect.offset > 255)) {
+    if (result && result->type == ARM64_ASM_OPERAND_INDIRECT && (result->indirect.offset < -256 || result->indirect.offset > 255)) {
         //        int64_t offset = result->indirect.offset * -1;
 
         arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, result->indirect.offset);
@@ -289,7 +288,8 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
 
         lir_symbol_var_t *v = operand->value;
         result = ARM64_SYM(v->ident, false, 0, 0);
-        result->size = v->t.storage_size;;
+        result->size = v->t.storage_size;
+        ;
         return result;
     }
 
@@ -1045,17 +1045,51 @@ static slice_t *arm64_native_fn_end(closure_t *c, lir_op_t *op) {
 static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
-    // 1. ADRP 加载页地址
-    arm64_asm_operand_t *global_safepoint_operand = ARM64_SYM(GLOBAL_SAFEPOINT_IDENT, false, 0, 0);
-    slice_push(operations, ARM64_INST(R_ADRP, ARM64_REG(x16), global_safepoint_operand));
+    if (BUILD_OS == OS_DARWIN) {
+        // The Darwin TLV getter takes and returns its descriptor in x0.  A
+        // function-entry safepoint runs before x0 is necessarily moved out of
+        // its ABI argument register, so preserve it across the getter call.
+        slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), ARM64_IMM(16)));
+        slice_push(operations,
+                   ARM64_INST(R_STR, ARM64_REG_SIZE(x0, QWORD),
+                              ARM64_INDIRECT(sp, 0, 0, QWORD)));
+        slice_push(operations,
+                   ARM64_INST(R_ADRP, ARM64_REG(x0),
+                              ARM64_SYM(TLS_SAFEPOINT_IDENT, false, 0,
+                                        ASM_ARM64_RELOC_TLVP_LOAD_PAGE21)));
+        slice_push(operations,
+                   ARM64_INST(R_LDR, ARM64_REG_SIZE(x0, QWORD),
+                              ARM64_INDIRECT_SYM(x0, TLS_SAFEPOINT_IDENT,
+                                                 ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12, QWORD)));
+        slice_push(operations,
+                   ARM64_INST(R_LDR, ARM64_REG_SIZE(x16, QWORD),
+                              ARM64_INDIRECT(x0, 0, 0, QWORD)));
+        slice_push(operations, ARM64_INST(R_BLR, ARM64_REG(x16)));
+        slice_push(operations, ARM64_INST(R_MOV, ARM64_REG(x16), ARM64_REG(x0)));
+        slice_push(operations,
+                   ARM64_INST(R_LDR, ARM64_REG_SIZE(x0, QWORD),
+                              ARM64_INDIRECT(sp, 0, 0, QWORD)));
+        slice_push(operations, ARM64_INST(R_ADD, ARM64_REG(sp), ARM64_REG(sp), ARM64_IMM(16)));
+        slice_push(operations,
+                   ARM64_INST(R_LDR, ARM64_REG_SIZE(x16, QWORD),
+                              ARM64_INDIRECT(x16, 0, 0, QWORD)));
+    } else {
+        slice_push(operations, ARM64_INST(R_MRS, ARM64_REG(x16), ARM64_IMM(TPIDR_EL0)));
+        slice_push(operations,
+                   ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(x16),
+                              ARM64_SYM(TLS_SAFEPOINT_IDENT, false, 0,
+                                        ASM_ARM64_RELOC_TLSLE_ADD_TPREL_HI12)));
+        slice_push(operations,
+                   ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(x16),
+                              ARM64_SYM(TLS_SAFEPOINT_IDENT, false, 0,
+                                        ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12_NC)));
+        slice_push(operations,
+                   ARM64_INST(R_LDR, ARM64_REG_SIZE(x16, QWORD),
+                              ARM64_INDIRECT(x16, 0, 0, QWORD)));
+    }
 
-    // 2. LDR 带 :lo12: 偏移，直接加载值（合并原来的 ADD + LDR）
-    // 使用 ARM64_INDIRECT_SYM: LDR x16, [x16, :lo12:global_safepoint]
-    // 需要使用 ARM64_REG_SIZE 设置 operand.size，用于确定正确的重定位类型
-    slice_push(operations, ARM64_INST(R_LDR, ARM64_REG_SIZE(x16, QWORD),
-                                      ARM64_INDIRECT_SYM(x16, GLOBAL_SAFEPOINT_IDENT, ASM_ARM64_RELOC_LO12, QWORD)));
-
-    // 3. CBNZ 合并 CMP + BNE: 如果 x16 != 0 则跳转到 preempt
+    // If the current thread has either a local yield or GC generation, enter
+    // the existing register-preserving slow path.
     char *preempt_ident = local_sym_with_fn(c, ".preempt");
     slice_push(operations, ARM64_INST(R_CBNZ, ARM64_REG(x16), ARM64_SYM(preempt_ident, true, 0, 0)));
 
@@ -1233,8 +1267,7 @@ static slice_t *arm64_native_bcc(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *first = lir_operand_trans_arm64(c, op, op->first, operations);
     arm64_asm_operand_t *second = lir_operand_trans_arm64(c, op, op->second, operations);
     assert(
-        second->type == ARM64_ASM_OPERAND_REG || second->type == ARM64_ASM_OPERAND_FREG || second->type ==
-        ARM64_ASM_OPERAND_IMMEDIATE);
+            second->type == ARM64_ASM_OPERAND_REG || second->type == ARM64_ASM_OPERAND_FREG || second->type == ARM64_ASM_OPERAND_IMMEDIATE);
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
     arm64_gen_cmp(op, operations, second, first, arm64_is_integer_operand(op->first));

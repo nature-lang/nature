@@ -230,42 +230,43 @@ static void solo_processor_sysmon() {
 static void processor_sysmon() {
     // - 监控长时间被占用的 share processor 进行抢占式调度
     PROCESSOR_FOR(processor_list) {
-        // 没有需要运行的 runnable_list(等待运行的 runnable) 并且当前也不需要 stw 则不需要则不考虑抢占
-        if (global_safepoint.value == 0 && p->runnable_list.count == 0) {
-            DEBUGF("[processor_sysmon] p_index=%d p_status=%d runnable_list.count == 0 cannot preempt, will skip", p->index, p->status);
+        if (!atomic_load_explicit(&p->thread_waked, memory_order_acquire)) {
             continue;
         }
 
-        // running 既 coroutine running
-        if (p->status != P_STATUS_RUNNING) {
-            DEBUGF("[processor_sysmon] p_index=%d p_status=%d cannot preempt, will skip", p->index, p->status);
-            continue;
-        }
+        // Queue length, current coroutine, status and start time form a single
+        // scheduling snapshot. Keep the queue lock outside thread_locker to
+        // match the scheduler's pop-then-status order.
+        pthread_mutex_lock(&p->runnable_list.locker);
+        mutex_lock(&p->thread_locker);
 
-        coroutine_t *co = p->coroutine;
-        assert(co); // p co 切换期间不会清空 co 了
-        if (co->flag & FLAG(CO_FLAG_RTFN)) { // rt fn 包括 gc_work/signal_handle
-            DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p is runtime fn, will skip", p->index,
-                   (uint64_t) p->thread_id, p->coroutine);
-            continue;
+        uint64_t need_stw = atomic_load_explicit(&p->need_stw, memory_order_acquire);
+        if (need_stw != SAFEPOINT_TOKEN_NONE || p->runnable_list.count == 0 ||
+            p->status != P_STATUS_RUNNING || p->coroutine == NULL ||
+            (p->coroutine->flag & FLAG(CO_FLAG_RTFN)) || p->co_started_at == 0) {
+            goto PROCESSOR_SYSMON_UNLOCK;
         }
 
         uint64_t co_start_at = p->co_started_at;
-        if (co_start_at == 0) {
-            DEBUGF("[wait_sysmon.share] p_index=%d, co=%p/%p co_stared_at = 0, will skip", p->index, p->coroutine,
-                   co);
-            continue;
-        }
-        uint64_t time = (uv_hrtime() - co_start_at);
-        if (time < CO_TIMEOUT) {
-            DEBUGF("[processor_sysmon] p_index=%d, co=%p/%p run not timeout(%lu ms), will skip", p->index,
-                   p->coroutine, co,
-                   time / 1000 / 1000);
-            continue;
+        uint64_t elapsed = uv_hrtime() - co_start_at;
+        if (elapsed < CO_TIMEOUT) {
+            goto PROCESSOR_SYSMON_UNLOCK;
         }
 
-        DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p run timeout=%d ms(co_start=%ld) set tls yield safepoint=true", p->index,
-               (uint64_t) p->thread_id, p->coroutine, time / 1000 / 1000, co_start_at / 1000 / 1000);
+        _Atomic uint64_t *tls_ptr = atomic_load_explicit(&p->tls_safepoint_ptr, memory_order_acquire);
+        if (tls_ptr != NULL) {
+            uint64_t expected = SAFEPOINT_TOKEN_NONE;
+            if (atomic_compare_exchange_strong_explicit(tls_ptr, &expected, SAFEPOINT_TOKEN_YIELD,
+                                                        memory_order_release, memory_order_relaxed)) {
+                DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p run timeout=%lu ms, requested local yield",
+                       p->index, (uint64_t) p->thread_id, p->coroutine,
+                       elapsed / 1000 / 1000);
+            }
+        }
+
+    PROCESSOR_SYSMON_UNLOCK:
+        mutex_unlock(&p->thread_locker);
+        pthread_mutex_unlock(&p->runnable_list.locker);
     }
 }
 
@@ -286,7 +287,7 @@ static void wait_sysmon() {
     while (true) {
         DEBUGF("[wait_sysmon] will processor sysmon ");
 
-        // processor_sysmon();
+        processor_sysmon();
 
         DEBUGF("[wait_sysmon] sysmon end, will eval gc %ld", gc_eval_count);
         // - GC 判断 (每 100ms 进行一次)
