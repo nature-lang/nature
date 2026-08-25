@@ -219,7 +219,7 @@ static inline void race_detector_check(const char *func, const char *file, int l
 // locker
 void *global_gc_worklist_pop();
 
-uint64_t processor_all_need_stop();
+void processor_all_need_stop(uint64_t stw_token);
 
 void processor_all_start(uint64_t stw_token);
 

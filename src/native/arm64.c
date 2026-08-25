@@ -219,7 +219,8 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
     }
 
     // indirect 有符号偏移范围 [-256, 255], 如果超出范围，需要借助临时寄存器 x16 进行转换(此处转换不需要考虑 float 类型)
-    if (result && result->type == ARM64_ASM_OPERAND_INDIRECT && (result->indirect.offset < -256 || result->indirect.offset > 255)) {
+    if (result && result->type == ARM64_ASM_OPERAND_INDIRECT && (
+            result->indirect.offset < -256 || result->indirect.offset > 255)) {
         //        int64_t offset = result->indirect.offset * -1;
 
         arm64_asm_operand_t *offset_operand = arm64_imm_operand(op, operations, result->indirect.offset);
@@ -288,8 +289,7 @@ lir_operand_trans_arm64(closure_t *c, lir_op_t *op, lir_operand_t *operand, slic
 
         lir_symbol_var_t *v = operand->value;
         result = ARM64_SYM(v->ident, false, 0, 0);
-        result->size = v->t.storage_size;
-        ;
+        result->size = v->t.storage_size;;
         return result;
     }
 
@@ -1267,7 +1267,8 @@ static slice_t *arm64_native_bcc(closure_t *c, lir_op_t *op) {
     arm64_asm_operand_t *first = lir_operand_trans_arm64(c, op, op->first, operations);
     arm64_asm_operand_t *second = lir_operand_trans_arm64(c, op, op->second, operations);
     assert(
-            second->type == ARM64_ASM_OPERAND_REG || second->type == ARM64_ASM_OPERAND_FREG || second->type == ARM64_ASM_OPERAND_IMMEDIATE);
+        second->type == ARM64_ASM_OPERAND_REG || second->type == ARM64_ASM_OPERAND_FREG || second->type ==
+        ARM64_ASM_OPERAND_IMMEDIATE);
     arm64_asm_operand_t *result = lir_operand_trans_arm64(c, op, op->output, operations);
 
     arm64_gen_cmp(op, operations, second, first, arm64_is_integer_operand(op->first));

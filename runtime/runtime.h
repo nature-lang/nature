@@ -1,8 +1,8 @@
 #ifndef NATURE_RUNTIME_RUNTIME_H
 #define NATURE_RUNTIME_RUNTIME_H
 
-#include "runtime/uv_compat.h"
 #include "utils/helper.h"
+#include "runtime/uv_compat.h"
 #include <pthread.h>
 #include <stdatomic.h>
 

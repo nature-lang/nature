@@ -6,10 +6,14 @@
 #include <stdatomic.h>
 #include <stdlib.h>
 
-static _Atomic int64_t processor_test_busy_finished;
-static _Atomic int64_t processor_test_waiter_ran;
-static _Atomic int64_t processor_test_waiter_saw_finished;
-static _Atomic int64_t processor_test_other_ran;
+enum {
+    PROCESSOR_TEST_WAITER_RAN = 1,
+    PROCESSOR_TEST_OTHER_RAN = 2,
+    PROCESSOR_TEST_WAITER_SAW_FINISHED = 4,
+    PROCESSOR_TEST_BUSY_FINISHED = 8,
+};
+
+static _Atomic int64_t processor_test_state;
 static _Atomic int64_t processor_test_runtime_busy_ms;
 static _Atomic int64_t processor_test_runtime_token;
 
@@ -49,25 +53,14 @@ int64_t get_safepoint() {
 }
 
 void test_processor_safepoint_reset() {
-    atomic_store_explicit(&processor_test_busy_finished, 0, memory_order_release);
-    atomic_store_explicit(&processor_test_waiter_ran, 0, memory_order_release);
-    atomic_store_explicit(&processor_test_waiter_saw_finished, 0, memory_order_release);
-    atomic_store_explicit(&processor_test_other_ran, 0, memory_order_release);
+    atomic_store_explicit(&processor_test_state, 0, memory_order_release);
     atomic_store_explicit(&processor_test_runtime_token, -1, memory_order_release);
 }
 
 static int64_t test_processor_state_snapshot() {
-    int64_t state = 0;
-    if (atomic_load_explicit(&processor_test_waiter_ran, memory_order_acquire)) {
-        state |= 1;
-    }
-    if (atomic_load_explicit(&processor_test_other_ran, memory_order_acquire)) {
-        state |= 2;
-    }
-    if (atomic_load_explicit(&processor_test_waiter_saw_finished, memory_order_acquire)) {
-        state |= 4;
-    }
-    return state;
+    return atomic_load_explicit(&processor_test_state, memory_order_acquire) &
+           (PROCESSOR_TEST_WAITER_RAN | PROCESSOR_TEST_OTHER_RAN |
+            PROCESSOR_TEST_WAITER_SAW_FINISHED);
 }
 
 int64_t test_processor_busy_no_safepoint(int64_t milliseconds) {
@@ -79,18 +72,23 @@ int64_t test_processor_busy_no_safepoint(int64_t milliseconds) {
     }
 
     int64_t state = test_processor_state_snapshot();
-    atomic_store_explicit(&processor_test_busy_finished, 1, memory_order_release);
+    atomic_fetch_or_explicit(&processor_test_state, PROCESSOR_TEST_BUSY_FINISHED,
+                             memory_order_release);
     return state;
 }
 
 void test_processor_mark_waiter() {
-    int64_t busy_finished = atomic_load_explicit(&processor_test_busy_finished, memory_order_acquire);
-    atomic_store_explicit(&processor_test_waiter_saw_finished, busy_finished, memory_order_release);
-    atomic_store_explicit(&processor_test_waiter_ran, 1, memory_order_release);
+    int64_t state = atomic_load_explicit(&processor_test_state, memory_order_acquire);
+    int64_t flags = PROCESSOR_TEST_WAITER_RAN;
+    if (state & PROCESSOR_TEST_BUSY_FINISHED) {
+        flags |= PROCESSOR_TEST_WAITER_SAW_FINISHED;
+    }
+    atomic_fetch_or_explicit(&processor_test_state, flags, memory_order_release);
 }
 
 void test_processor_mark_other() {
-    atomic_store_explicit(&processor_test_other_ran, 1, memory_order_release);
+    atomic_fetch_or_explicit(&processor_test_state, PROCESSOR_TEST_OTHER_RAN,
+                             memory_order_release);
 }
 
 int64_t test_processor_safepoint_state() {

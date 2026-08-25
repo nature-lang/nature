@@ -1008,9 +1008,11 @@ void runtime_gc() {
     DEBUGF("[runtime_gc] start, allocated=%ldKB, gc stage: GC_START, pid %d", allocated_bytes / 1000, getpid());
 
     memory->gc_count += 1;
+    assert(memory->gc_count <= UINT64_MAX / 2);
 
     // 等待所有的 processor 进入安全点
-    uint64_t mark_stw_token = processor_all_need_stop();
+    uint64_t mark_stw_token = memory->gc_count * 2;
+    processor_all_need_stop(mark_stw_token);
     if (!processor_all_wait_safe(mark_stw_token, GC_STW_WAIT_COUNT)) {
         DEBUGF("[runtime_gc] wait processor safe timeout, will return")
         processor_all_start(mark_stw_token); // 清空安全点
@@ -1051,7 +1053,8 @@ void runtime_gc() {
 
     // STW 之后再更改 GC 阶段
     DEBUGF("[runtime_gc] wait all processor gc work completed, will stop the world and get solo stw locker");
-    uint64_t sweep_stw_token = processor_all_need_stop();
+    uint64_t sweep_stw_token = mark_stw_token + 1;
+    processor_all_need_stop(sweep_stw_token);
     if (!processor_all_wait_safe(sweep_stw_token, GC_STW_SWEEP_COUNT)) {
         DEBUGF("[runtime_gc] wait processor safe sweep timeout, will return")
         processor_all_start(sweep_stw_token);
