@@ -356,9 +356,16 @@ static void uv_async_tcp_connect(inner_conn_t *conn, struct sockaddr_in *dest, n
     uv_tcp_init(&global_loop, &conn->handle);
     uv_timer_init(&global_loop, &conn->timer);
 
-    uv_tcp_connect(&conn->conn_req, &conn->handle, (const struct sockaddr *) dest, on_tcp_connect_cb);
+    int result = uv_tcp_connect(&conn->conn_req, &conn->handle, (const struct sockaddr *) dest, on_tcp_connect_cb);
 
     free(dest);
+
+    if (result < 0) {
+        rti_co_throw(conn->co, tlsprintf("connection failed: %s", uv_strerror(result)), false);
+        uv_close((uv_handle_t *) &conn->handle, on_conn_close_handle_cb);
+        uv_close((uv_handle_t *) &conn->timer, on_conn_close_timer_cb);
+        return;
+    }
 
     if (timeout_ms > 0) {
         uv_timer_start(&conn->timer, on_tcp_timeout_cb, timeout_ms, 0); // repeat == 0

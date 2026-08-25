@@ -128,8 +128,6 @@
 
 #define RT_CALL_STRING_TO_VEC "rt_string_to_vec_out"
 #define RT_CALL_VEC_TO_STRING "rt_vec_to_string_out"
-#define RT_CALL_STRING_NEW_WITH_POOL "rt_string_new_with_pool_out"
-
 #define RT_CALL_STRING_CONCAT "rt_string_concat_out"
 #define RT_CALL_STRING_EE "string_ee"
 #define RT_CALL_STRING_NE "string_ne"

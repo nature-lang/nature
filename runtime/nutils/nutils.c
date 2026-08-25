@@ -1089,6 +1089,16 @@ n_string_t rt_string_ref_new(void *raw_string, int64_t length) {
     return str;
 }
 
+n_string_t rt_string_alloc(int64_t length) {
+    if (length < 0 || length == INT64_MAX) {
+        rti_throw("string_alloc length is out of range", false);
+        return (n_string_t){0};
+    }
+
+    gc_mutator_yield_if_needed();
+    return rti_string_alloc(length);
+}
+
 /**
  * c 语言字符串中添加 '\0' 作为结束字符
  * @param n_str

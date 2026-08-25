@@ -93,6 +93,8 @@ n_string_t rt_strerror();
 
 n_string_t rt_string_ref_new(void *raw_string, int64_t length);
 
+n_string_t rt_string_alloc(int64_t length);
+
 void *rt_string_ref(n_string_t *n_str);
 
 n_string_t rt_string_new(n_anyptr_t raw_string);

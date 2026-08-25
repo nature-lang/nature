@@ -1,0 +1,26 @@
+import runtime
+
+const SOURCE_LENGTH = 65536
+const SLICE_LENGTH = 80
+
+fn main() {
+    var bytes = vec<u8>.new(120, SOURCE_LENGTH + 1)
+    bytes[SOURCE_LENGTH] = 0
+    var source_bytes = bytes[..SOURCE_LENGTH]
+    string source = source_bytes as string
+
+    assert(source.slice(10, 15) == 'xxxxx')
+    assert(source.slice(0, 0) == '')
+    assert(source.slice(SOURCE_LENGTH - 5, -1) == 'xxxxx')
+
+    var before = runtime.malloc_bytes()
+    int total = 0
+    for int i = 0; i < 64; i += 1 {
+        var row = source.slice(i, i + SLICE_LENGTH)
+        total += row.len()
+    }
+    var allocated = runtime.malloc_bytes() - before
+
+    assert(total == 64 * SLICE_LENGTH)
+    assert(allocated < 1024 * 1024)
+}

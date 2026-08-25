@@ -4,57 +4,36 @@ import syscall
 import libc
 import runtime
 
-// 基于 c 字符串创建一个 nature 字符串 
+fn copy_bytes(anyptr dst, int dst_offset, anyptr src, int src_offset, int length) {
+    if length == 0 {
+        return
+    }
+
+    libc.memmove(dst + dst_offset as anyptr, src + src_offset as anyptr, length as u64)
+}
+
+// 基于 c 字符串创建一个 nature 字符串
 pub fn from(anyptr p):string! {
     return runtime.string_new(p)
 }
 
-fn string.find_char(self, u8 char, int after):int {
-    int len = self.len()
-    for int k = after; k < len; k += 1 {
-        if self[k] == char {
-            return k
-        }
-    }
-
-    return -1
-}
-
 pub fn string.find_after(self, string sub, int after):int {
-    var n = sub.len()
-
-    if (n == 0) {
-        return -1
-    }
-
-    // zero-value string fields carry a nil data ptr, libc.strstr on it would
-    // segfault, an empty haystack never contains sub anyway
-    if self.len() == 0 {
-        return -1
-    }
-
-    if (n == 1) {
-        return self.find_char(sub[0], after)
-    }
-
-    anyptr base = self.ref()
-    var temp = libc.strstr((base as uint + after as uint) as libc.cstr, sub.to_cstr())
-    if temp == 0 {
-        return -1
-    }
-
-    uint index = temp as uint - base as uint
-    return index as int
+    return runtime.string_find_after(&self as anyptr, &sub as anyptr, after)
 }
 
 pub fn string.reverse(self):string {
-    var result = vec<u8>.new(0, self.len())
-
-    for i,c in self {
-        result[self.len() - 1 - i] = c
+    if self.len() <= 1 {
+        return self
     }
 
-    return result as string
+    var result = runtime.string_alloc(self.len())
+    anyptr result_ref = result.ref()
+
+    for i,c in self {
+        *((result_ref + (self.len() - 1 - i) as anyptr) as ptr<u8>) = c
+    }
+
+    return result
 }
 
 pub fn string.rfind(self, string sub):int {
@@ -130,9 +109,13 @@ pub fn string.find(self, string sub):int {
 }
 
 pub fn string.slice(self, int start, int end):string {
-    var list = self as [u8]
-    list = list[start..end]
-    return list as string
+    // Reuse vec slicing for the view, then copy only the selected bytes so the
+    // resulting string remains NUL-terminated.
+    var sliced = runtime.vec_slice<u8>(&self as anyptr, start, end) catch e {
+        panic(e.msg())
+        []
+    }
+    return runtime.string_ref_new(sliced.ref(), sliced.len())
 }
 
 pub fn string.split(self, string separator):[string] {
@@ -140,8 +123,9 @@ pub fn string.split(self, string separator):[string] {
 
     if separator == '' {
         for v in self {
-            var temp = [v]
-            result.push(temp as string)
+            var item = runtime.string_alloc(1)
+            *(item.ref() as ptr<u8>) = v
+            result.push(item)
         }
 
         return result
@@ -174,36 +158,40 @@ pub fn string.split(self, string separator):[string] {
 }
 
 pub fn join([string] list, string separator):string {
-    [u8] result = []
-
     if list.len() == 0 {
         return ''
     }
 
-    var i = 0
-    for i < list.len() {
-        for v in list[i] {
-            result.push(v)
-        }
-
-        if i < list.len() - 1 {
-            for v in separator {
-                result.push(v)
-            }
-        }
-
-        i = i + 1
+    if list.len() == 1 {
+        return list[0]
     }
 
-    return result as string
+    var length = separator.len() * (list.len() - 1)
+    for item in list {
+        length += item.len()
+    }
+
+    var result = runtime.string_alloc(length)
+    anyptr result_ref = result.ref()
+    var offset = 0
+
+    for i, item in list {
+        copy_bytes(result_ref, offset, item.ref(), 0, item.len())
+        offset += item.len()
+        if i < list.len() - 1 {
+            copy_bytes(result_ref, offset, separator.ref(), 0, separator.len())
+            offset += separator.len()
+        }
+    }
+
+    return result
 }
 
 fn string.ascii(self):u8 {
     if self.len() == 0 {
         return 0
     }
-    var list = self as [u8]
-    return list[0]
+    return self[0]
 }
 
 pub fn string.ltrim(self, [string] list):string {
@@ -214,6 +202,9 @@ pub fn string.ltrim(self, [string] list):string {
 
     for i, c in self {
         if !cut.contains(c) {
+            if i == 0 {
+                return self
+            }
             return self.slice(i, self.len())
         }
     }
@@ -229,6 +220,9 @@ pub fn string.rtrim(self, [string] list):string {
 
     for int i = self.len() - 1; i >= 0; i -= 1 {
         if !cut.contains(self[i]) {
+            if i == self.len() - 1 {
+                return self
+            }
             return self.slice(0, i + 1)
         }
     }
@@ -237,30 +231,78 @@ pub fn string.rtrim(self, [string] list):string {
 }
 
 pub fn string.trim(self, [string] list):string {
-    return self.ltrim(list).rtrim(list)
+    if self.len() == 0 {
+        return self
+    }
+
+    {u8} cut = {}
+    for sub in list {
+        cut.add(sub[0])
+    }
+
+    var start = 0
+    for start < self.len() && cut.contains(self[start]) {
+        start += 1
+    }
+
+    if start == self.len() {
+        return ''
+    }
+
+    var end = self.len()
+    for end > start && cut.contains(self[end - 1]) {
+        end -= 1
+    }
+
+    if start == 0 && end == self.len() {
+        return self
+    }
+
+    return self.slice(start, end)
 }
 
 pub fn string.replace(self, string sub_old, string sub_new):string {
-    var result = ""
-
     if sub_old.len() == 0 || self.len() < sub_old.len() {
         return self
     }
 
-    var i = 0
-    for i < self.len() {
-        var found = self.find_after(sub_old, i)
-
+    var count = 0
+    var search = 0
+    for search < self.len() {
+        var found = self.find_after(sub_old, search)
         if found == -1 {
-            result += self.slice(i, self.len())
             break
         }
 
-        result += self.slice(i, found)
-        result += sub_new
-        i = found + sub_old.len()
+        count += 1
+        search = found + sub_old.len()
     }
 
+    if count == 0 {
+        return self
+    }
+
+    var result_length = self.len() + count * (sub_new.len() - sub_old.len())
+    var result = runtime.string_alloc(result_length)
+    anyptr result_ref = result.ref()
+    var read_offset = 0
+    var write_offset = 0
+    search = 0
+
+    for int replaced = 0; replaced < count; replaced += 1 {
+        var found = self.find_after(sub_old, search)
+        var prefix_length = found - read_offset
+        copy_bytes(result_ref, write_offset, self.ref(), read_offset, prefix_length)
+        write_offset += prefix_length
+
+        copy_bytes(result_ref, write_offset, sub_new.ref(), 0, sub_new.len())
+        write_offset += sub_new.len()
+
+        read_offset = found + sub_old.len()
+        search = read_offset
+    }
+
+    copy_bytes(result_ref, write_offset, self.ref(), read_offset, self.len() - read_offset)
     return result
 }
 
@@ -334,6 +376,7 @@ pub fn string.to_float(self):float! {
     }
 
     var decimal_point = -1
+    var multiplier = 0.1
     for int i = start; i < self.len(); i += 1 {
         var c = self[i]
         if c == '.'.char() {
@@ -353,16 +396,9 @@ pub fn string.to_float(self):float! {
             result = result * 10.0 + (c - '0'.char()) as float
         } else {
             // 处理小数部分
-            var decimal_place = i - decimal_point
             var decimal_value = (c - '0'.char()) as float
-            var multiplier = 0.1
-            
-            // 计算正确的小数位乘数
-            for int j = 1; j < decimal_place; j += 1 {
-                multiplier = multiplier * 0.1
-            }
-            
             result = result + decimal_value * multiplier
+            multiplier *= 0.1
         }
     }
 
@@ -375,29 +411,55 @@ pub fn string.to_float(self):float! {
 
 
 pub fn string.to_lower(self):string {
-    var result = vec<u8>.new(0, self.len())
-    
+    var first = -1
     for i, c in self {
         if c >= 'A'.char() && c <= 'Z'.char() {
-            result[i] = c + ('a'.char() - 'A'.char())
-        } else {
-            result[i] = c
+            first = i
+            break
         }
     }
-    
-    return result as string
+
+    if first == -1 {
+        return self
+    }
+
+    var result = runtime.string_alloc(self.len())
+    anyptr result_ref = result.ref()
+    copy_bytes(result_ref, 0, self.ref(), 0, self.len())
+
+    for int i = first; i < self.len(); i += 1 {
+        var c = self[i]
+        if c >= 'A'.char() && c <= 'Z'.char() {
+            *((result_ref + i as anyptr) as ptr<u8>) = c + ('a'.char() - 'A'.char())
+        }
+    }
+
+    return result
 }
 
 pub fn string.to_upper(self):string {
-    var result = vec<u8>.new(0, self.len())
-    
+    var first = -1
     for i, c in self {
         if c >= 'a'.char() && c <= 'z'.char() {
-            result[i] = c - ('a'.char() - 'A'.char())
-        } else {
-            result[i] = c
+            first = i
+            break
         }
     }
-    
-    return result as string
+
+    if first == -1 {
+        return self
+    }
+
+    var result = runtime.string_alloc(self.len())
+    anyptr result_ref = result.ref()
+    copy_bytes(result_ref, 0, self.ref(), 0, self.len())
+
+    for int i = first; i < self.len(); i += 1 {
+        var c = self[i]
+        if c >= 'a'.char() && c <= 'z'.char() {
+            *((result_ref + i as anyptr) as ptr<u8>) = c - ('a'.char() - 'A'.char())
+        }
+    }
+
+    return result
 }
