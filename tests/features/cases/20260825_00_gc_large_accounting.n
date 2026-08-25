@@ -1,0 +1,26 @@
+import co
+import runtime
+
+const LARGE_CAPACITY = 32769
+
+fn allocate_large_buffer() {
+    var buffer = vec<u8>.cap_of(LARGE_CAPACITY)
+    buffer.push(1)
+    assert(buffer[0] == 1)
+}
+
+fn main() {
+    for int i = 0; i < 64; i += 1 {
+        allocate_large_buffer()
+    }
+
+    var before_gc = runtime.malloc_bytes()
+    assert(before_gc > LARGE_CAPACITY)
+
+    runtime.gc()
+    co.sleep(500)
+
+    var after_gc = runtime.malloc_bytes()
+    assert(after_gc >= 0)
+    assert(after_gc < before_gc)
+}

@@ -1135,7 +1135,7 @@ static addr_t large_malloc(uint64_t size, rtype_t *rtype) {
     RT_LIST_PUSH_HEAD(central->full_list, span);
     mutex_unlock(&central->locker);
 
-    atomic_fetch_add(&allocated_bytes, size);
+    atomic_fetch_add(&allocated_bytes, span->obj_size);
 
     char *debug_kind = "";
     if (rtype) {
