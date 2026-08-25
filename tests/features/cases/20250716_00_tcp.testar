@@ -111,7 +111,7 @@ fn main() {
 
     // client
     int start = time.now().ms_timestamp()
-    int count = 1000
+    int count = 500
     int every = 10
     var done = chan<bool>.new()
     for int i = 0; i < count; i += 1 {
