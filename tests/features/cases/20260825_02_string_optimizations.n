@@ -1,0 +1,96 @@
+import co
+import runtime
+import strings
+
+const LARGE_LENGTH = 65536
+
+fn make_string(u8 value, int length):string {
+    var bytes = vec<u8>.new(value, length + 1)
+    bytes[length] = 0
+    return bytes[..length] as string
+}
+
+fn churn_dynamic_short_strings() {
+    for int i = 0; i < 8192; i += 1 {
+        var bytes = vec<u8>.new(0, 8)
+        var value = i
+        for int j = 0; j < 7; j += 1 {
+            bytes[j] = ('A'.char() + (value % 26) as u8)
+            value /= 26
+        }
+
+        string text = bytes[..7] as string
+        assert(text.len() == 7)
+    }
+}
+
+fn main() {
+    // find_after must honor Nature string lengths instead of C NUL termination.
+    var embedded_bytes = ['a'.char(), 0, 'b'.char(), 'c'.char()]
+    string embedded = embedded_bytes as string
+    assert(embedded.find_after('bc', 0) == 2)
+    assert('abc'.find_after('a', -1) == -1)
+    assert('abc'.find_after('a', 4) == -1)
+    assert('abc'.find_after('c', 3) == -1)
+
+    string lower = make_string('x'.char(), LARGE_LENGTH)
+    string upper = make_string('X'.char(), LARGE_LENGTH)
+
+    // No-op operations may safely reuse immutable string storage.
+    assert(lower.to_lower().ref() == lower.ref())
+    assert(upper.to_upper().ref() == upper.ref())
+    assert(lower.ltrim([' ']).ref() == lower.ref())
+    assert(lower.rtrim([' ']).ref() == lower.ref())
+    assert(lower.trim([' ']).ref() == lower.ref())
+    assert(lower.replace('missing', 'value').ref() == lower.ref())
+    assert(strings.join([lower], ',').ref() == lower.ref())
+
+    assert('abcdef'.reverse() == 'fedcba')
+    assert('  value  '.trim([' ']) == 'value')
+    assert('aaaa'.replace('a', 'bb') == 'bbbbbbbb')
+    assert(strings.join(['a', 'bb', 'ccc'], '-') == 'a-bb-ccc')
+    var characters = 'abc'.split('')
+    assert(characters.len() == 3)
+    assert(characters[0] == 'a')
+    assert(characters[1] == 'b')
+    assert(characters[2] == 'c')
+    assert('123.456789'.to_float() > 123.456788)
+    assert('123.456789'.to_float() < 123.456790)
+
+    // A result of this size should require one backing allocation, not a vec
+    // allocation followed by another full string copy.
+    var before = runtime.malloc_bytes()
+    string reversed = lower.reverse()
+    var reverse_allocated = runtime.malloc_bytes() - before
+    assert(reversed.len() == LARGE_LENGTH)
+    assert(reverse_allocated < LARGE_LENGTH * 2)
+
+    before = runtime.malloc_bytes()
+    string converted = upper.to_lower()
+    var case_allocated = runtime.malloc_bytes() - before
+    assert(converted[0] == 'x'.char())
+    assert(converted[LARGE_LENGTH - 1] == 'x'.char())
+    assert(case_allocated < LARGE_LENGTH * 2)
+
+    before = runtime.malloc_bytes()
+    string joined = strings.join([lower, lower], '')
+    var join_allocated = runtime.malloc_bytes() - before
+    assert(joined.len() == LARGE_LENGTH * 2)
+    assert(join_allocated < LARGE_LENGTH * 3)
+
+    string replace_source = make_string('a'.char(), 1024)
+    before = runtime.malloc_bytes()
+    string replaced = replace_source.replace('a', 'bb')
+    var replace_allocated = runtime.malloc_bytes() - before
+    assert(replaced.len() == 2048)
+    assert(replace_allocated < 128 * 1024)
+
+    // Dynamically produced short strings must not become permanent roots in
+    // the compile-time constant string pool.
+    before = runtime.malloc_bytes()
+    churn_dynamic_short_strings()
+    runtime.gc()
+    co.sleep(500)
+    var after_gc = runtime.malloc_bytes()
+    assert(after_gc - before < 64 * 1024)
+}

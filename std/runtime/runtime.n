@@ -84,5 +84,11 @@ pub fn string_new(anyptr s):string
 #linkid rt_string_ref_new
 pub fn string_ref_new(anyptr s, int len):string
 
+#linkid rt_string_alloc
+pub fn string_alloc(int len):string
+
+#linkid rt_string_find_after
+pub fn string_find_after(anyptr self, anyptr sub, int after):int
+
 #linkid rt_in_heap
 pub fn in_heap(anyptr addr):bool

@@ -7,11 +7,13 @@ n_vec_t string_to_vec(n_string_t *src);
 
 n_string_t vec_to_string(n_vec_t *src);
 
-n_string_t string_new_with_pool(void *raw_string, int64_t length);
+n_string_t rti_string_alloc(int64_t length);
 
 n_string_t string_new(void *raw_string, int64_t length);
 
 n_string_t string_concat(n_string_t *a, n_string_t *b);
+
+n_int_t rt_string_find_after(n_string_t *self, n_string_t *sub, n_int_t after);
 
 n_bool_t string_ee(n_string_t *a, n_string_t *b);
 
