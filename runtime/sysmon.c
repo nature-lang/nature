@@ -237,22 +237,18 @@ static void processor_sysmon() {
             continue;
         }
 
-        // 保持 runnable 计数与当前 coroutine 快照一致。
-        pthread_mutex_lock(&p->runnable_list.locker);
-        mutex_lock(&p->thread_locker);
-
         uint64_t stw_time = global_safepoint.value;
 
         // 普通 yield 需要同 processor 存在待运行任务；GC STW 不受此限制。
         if (stw_time == 0 && p->runnable_list.count == 0) {
             DEBUGF("[processor_sysmon] p_index=%d p_status=%d runnable_list.count == 0 cannot preempt, will skip", p->index, p->status);
-            goto PROCESSOR_SYSMON_UNLOCK;
+            continue;
         }
 
         // running 既 coroutine running
         if (p->status != P_STATUS_RUNNING) {
             DEBUGF("[processor_sysmon] p_index=%d p_status=%d cannot preempt, will skip", p->index, p->status);
-            goto PROCESSOR_SYSMON_UNLOCK;
+            continue;
         }
 
         coroutine_t *co = p->coroutine;
@@ -260,21 +256,21 @@ static void processor_sysmon() {
         if (co->flag & FLAG(CO_FLAG_RTFN)) { // rt fn 包括 gc_work/signal_handle
             DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p is runtime fn, will skip", p->index,
                    (uint64_t) p->thread_id, p->coroutine);
-            goto PROCESSOR_SYSMON_UNLOCK;
+            continue;
         }
 
         if (stw_time != 0) {
             co->safepoint = stw_time;
             DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p set gc safepoint=%lu", p->index,
                    (uint64_t) p->thread_id, co, stw_time);
-            goto PROCESSOR_SYSMON_UNLOCK;
+            continue;
         }
 
         uint64_t co_start_at = p->co_started_at;
         if (co_start_at == 0) {
             DEBUGF("[wait_sysmon.share] p_index=%d, co=%p/%p co_stared_at = 0, will skip", p->index, p->coroutine,
                    co);
-            goto PROCESSOR_SYSMON_UNLOCK;
+            continue;
         }
         uint64_t safepoint_time = uv_hrtime();
         uint64_t time = (safepoint_time - co_start_at);
@@ -282,7 +278,7 @@ static void processor_sysmon() {
             DEBUGF("[processor_sysmon] p_index=%d, co=%p/%p run not timeout(%lu ms), will skip", p->index,
                    p->coroutine, co,
                    time / 1000 / 1000);
-            goto PROCESSOR_SYSMON_UNLOCK;
+            continue;
         }
 
         if (co->safepoint == 0) {
@@ -292,10 +288,6 @@ static void processor_sysmon() {
         DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p run timeout=%d ms(co_start=%ld) set safepoint=%lu", p->index,
                (uint64_t) p->thread_id, p->coroutine, time / 1000 / 1000, co_start_at / 1000 / 1000,
                co->safepoint);
-
-    PROCESSOR_SYSMON_UNLOCK:
-        mutex_unlock(&p->thread_locker);
-        pthread_mutex_unlock(&p->runnable_list.locker);
     }
 }
 
