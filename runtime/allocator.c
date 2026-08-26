@@ -1302,8 +1302,7 @@ mspan_t *span_of(addr_t addr) {
 // Call only at a safe mutator boundary, before runtime locks are acquired or
 // temporary heap values are held only by C stack frames.
 void gc_mutator_yield_if_needed() {
-    uint64_t safepoint_request = atomic_load_explicit(&tls_safepoint, memory_order_acquire);
-    bool need_yield = safepoint_request != SAFEPOINT_NONE;
+    bool need_yield = tls_safepoint != SAFEPOINT_NONE;
     uint8_t stage = gc_stage;
     if (!need_yield && stage != GC_STAGE_MARK) {
         return;
