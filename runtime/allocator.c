@@ -1301,24 +1301,14 @@ mspan_t *span_of(addr_t addr) {
 
 // Call only at a safe mutator boundary, before runtime locks are acquired or
 // temporary heap values are held only by C stack frames.
-void gc_mutator_yield_if_needed() {
+void mutator_safepoint_yield_if_needed() {
     coroutine_t *co = coroutine_get();
-    bool need_yield = global_safepoint.value != 0 ||
-                      (co != NULL && co->safepoint != 0);
-    uint8_t stage = gc_stage;
-    if (!need_yield && stage != GC_STAGE_MARK) {
+    if (co == NULL || co->safepoint == 0) {
         return;
     }
 
     n_processor_t *p = processor_get();
     assert(p);
-    assert(co);
-
-    bool gc_work_pending = stage == GC_STAGE_MARK &&
-                           p->gc_work_finished < memory->gc_count;
-    if (!need_yield && !gc_work_pending) {
-        return;
-    }
 
     co_yield_runnable(p, co);
 }

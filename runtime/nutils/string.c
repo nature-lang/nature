@@ -60,7 +60,7 @@ n_string_t string_new(void *raw_string, int64_t length) {
 n_string_t string_concat(n_string_t *a, n_string_t *b) {
     DEBUGF("[runtime.string_concat] a=%s, b=%s", a->data, b->data);
 
-    gc_mutator_yield_if_needed();
+    mutator_safepoint_yield_if_needed();
 
     if (a->length > INT64_MAX - b->length) {
         rti_throw("string concatenation result is too large", true);

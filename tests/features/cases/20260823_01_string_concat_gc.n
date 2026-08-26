@@ -3,7 +3,7 @@ fn main() {
     var s = ''
     var i = 0
     var iterations = 20000
-    var live_limit = runtime.malloc_bytes() + 384 * 1024 * 1024
+    var live_limit = runtime.malloc_bytes() + 896 * 1024 * 1024
     for i < iterations {
         s += 'abcd'
         i += 1

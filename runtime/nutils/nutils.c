@@ -1095,7 +1095,7 @@ n_string_t rt_string_alloc(int64_t length) {
         return (n_string_t){0};
     }
 
-    gc_mutator_yield_if_needed();
+    mutator_safepoint_yield_if_needed();
     return rti_string_alloc(length);
 }
 
