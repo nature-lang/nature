@@ -106,7 +106,7 @@ int64_t test_processor_current_safepoint_request() {
 int64_t test_processor_current_need_stw() {
     n_processor_t *p = processor_get();
     assert(p);
-    return (int64_t) atomic_load_explicit(&p->need_stw, memory_order_acquire);
+    return (int64_t) p->need_stw;
 }
 
 static void test_processor_runtime_busy() {

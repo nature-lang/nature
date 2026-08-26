@@ -230,7 +230,7 @@ static void solo_processor_sysmon() {
 static void processor_sysmon() {
     // - 监控长时间被占用的 share processor 进行抢占式调度
     PROCESSOR_FOR(processor_list) {
-        if (!atomic_load_explicit(&p->thread_waked, memory_order_acquire)) {
+        if (!p->thread_waked) {
             continue;
         }
 
@@ -238,8 +238,7 @@ static void processor_sysmon() {
         pthread_mutex_lock(&p->runnable_list.locker);
         mutex_lock(&p->thread_locker);
 
-        uint64_t need_stw = atomic_load_explicit(&p->need_stw, memory_order_acquire);
-        if (need_stw != 0) {
+        if (p->need_stw != 0) {
             goto PROCESSOR_SYSMON_UNLOCK;
         }
 

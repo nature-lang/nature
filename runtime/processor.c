@@ -319,7 +319,7 @@ void processor_all_need_stop() {
     uint64_t stw_time = uv_hrtime();
     PROCESSOR_FOR(processor_list) {
         mutex_lock(&p->thread_locker);
-        atomic_store_explicit(&p->need_stw, stw_time, memory_order_release);
+        p->need_stw = stw_time;
         if (p->tls_yield_safepoint_ptr != NULL) {
             *p->tls_yield_safepoint_ptr = (int64_t) stw_time;
         }
@@ -333,7 +333,7 @@ void processor_all_start() {
         if (p->tls_yield_safepoint_ptr != NULL) {
             *p->tls_yield_safepoint_ptr = 0;
         }
-        atomic_store_explicit(&p->need_stw, 0, memory_order_release);
+        p->need_stw = 0;
         mutex_unlock(&p->thread_locker);
     }
 
@@ -387,9 +387,12 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
         co->wait_lock = NULL;
     }
 
+    p->co_started_at = 0;
+
     // running -> dispatch
     // preempt -> dispatch
     processor_set_status(p, P_STATUS_DISPATCH);
+    tls_yield_safepoint = 0;
 
     uint64_t time = (uv_hrtime() - p->co_started_at) / 1000 / 1000;
     RDEBUGF("[coroutine_resume] resume back, co=%p, aco=%p, run_time=%lu ms, rt_co=%d", co, &co->aco, time,
@@ -415,17 +418,11 @@ static void processor_run(void *raw) {
     //    uv_loop_init(&p->uv_loop);
     //    uv_timer_init(&p->uv_loop, &p->timer);
 
+    p->tls_yield_safepoint_ptr = &tls_yield_safepoint;
+
     // 注册线程信号监听, 用于抢占式调度
     // 将 p 存储在线程维度全局遍历中，方便直接在 coroutine 运行中读取相关的 processor
     uv_key_set(&tls_processor_key, p);
-
-    mutex_lock(&p->thread_locker);
-    p->tls_yield_safepoint_ptr = &tls_yield_safepoint;
-    uint64_t stw_time = atomic_load_explicit(&p->need_stw, memory_order_acquire);
-    if (stw_time != 0) {
-        tls_yield_safepoint = (int64_t) stw_time;
-    }
-    mutex_unlock(&p->thread_locker);
 
     // 对 p 进行调度处理(p 上面可能还没有 coroutine)
     while (true) {
@@ -433,23 +430,20 @@ static void processor_run(void *raw) {
                p->runnable_list.count);
 
         // - stw
-        stw_time = atomic_load_explicit(&p->need_stw, memory_order_acquire);
+        uint64_t stw_time = p->need_stw;
         if (stw_time != 0) {
         STW_WAIT:
             DEBUGF("[runtime.processor_run] need stw, need_stw=%ld, p_index=%d, main_exited=%d", stw_time, p->index, main_coroutine_exited);
-            atomic_store_explicit(&p->in_stw, stw_time, memory_order_release);
+            p->in_stw = stw_time;
 
-            while (atomic_load_explicit(&p->need_stw, memory_order_acquire) == stw_time) {
+            while (p->need_stw == stw_time) {
                 TRACEF("[runtime.processor_run] p_index=%d, need_stw=%lu, safe_point=%lu stw loop....", p->index,
-                       atomic_load_explicit(&p->need_stw, memory_order_acquire),
-                       atomic_load_explicit(&p->in_stw, memory_order_acquire));
+                       p->need_stw, p->in_stw);
                 usleep(WAIT_BRIEF_TIME * 1000); // 1ms
             }
 
             DEBUGF("[runtime.processor_run] p_index=%d, stw completed, safe_point=%lu, main_exited=%d, need_stw=%ld",
-                   p->index,
-                   atomic_load_explicit(&p->in_stw, memory_order_acquire), main_coroutine_exited,
-                   atomic_load_explicit(&p->need_stw, memory_order_acquire));
+                   p->index, p->in_stw, main_coroutine_exited, p->need_stw);
         }
 
         // - exit
@@ -474,7 +468,7 @@ static void processor_run(void *raw) {
                     p->index, co);
 
             // check stw
-            stw_time = atomic_load_explicit(&p->need_stw, memory_order_acquire);
+            stw_time = p->need_stw;
             if (stw_time != 0) {
                 goto STW_WAIT;
             }
@@ -489,12 +483,9 @@ static void processor_run(void *raw) {
     }
 
 EXIT:
-    mutex_lock(&p->thread_locker);
-    p->status = P_STATUS_EXIT;
-    p->co_started_at = 0;
     p->tls_yield_safepoint_ptr = NULL;
     p->thread_id = 0;
-    mutex_unlock(&p->thread_locker);
+    processor_set_status(p, P_STATUS_EXIT);
 
     DEBUGF("[runtime.processor_run] exited, p_index=%d", p->index);
 }
@@ -774,14 +765,14 @@ n_processor_t *processor_new(int index) {
 
     // uv_loop_init(&p->uv_loop);
     //    mutex_init(&p->gc_solo_stw_locker, false);
-    atomic_init(&p->need_stw, 0);
-    atomic_init(&p->in_stw, 0);
+    p->need_stw = 0;
+    p->in_stw = 0;
     p->tls_yield_safepoint_ptr = NULL;
 
     sc_map_init_64v(&p->caller_cache, 100, 0);
     mutex_init(&p->thread_locker, false);
     p->status = P_STATUS_INIT;
-    atomic_init(&p->thread_waked, false);
+    p->thread_waked = false;
 #ifndef __WINDOWS
     p->sig.sa_flags = 0;
 #endif
@@ -859,26 +850,21 @@ void processor_free(n_processor_t *p) {
 bool processor_all_safe() {
     PROCESSOR_FOR(processor_list) {
         // 跳过未唤醒的 processor
-        if (!atomic_load_explicit(&p->thread_waked, memory_order_acquire)) {
+        if (!p->thread_waked) {
             continue;
         }
 
-        mutex_lock(&p->thread_locker);
-        p_status_t status = p->status;
-        mutex_unlock(&p->thread_locker);
-        if (status == P_STATUS_EXIT) {
+        if (p->status == P_STATUS_EXIT) {
             continue;
         }
 
-        uint64_t need_stw = atomic_load_explicit(&p->need_stw, memory_order_acquire);
-        uint64_t in_stw = atomic_load_explicit(&p->in_stw, memory_order_acquire);
-        if (need_stw != 0 && in_stw == need_stw) {
+        if (p->need_stw != 0 && p->in_stw == p->need_stw) {
             continue;
         }
 
         RDEBUGF(
                 "[runtime_gc.processor_all_safe] share processor p_index=%d, thread_id=%lu not safe, need_stw=%lu, safe_point=%lu",
-                p->index, (uint64_t) p->thread_id, need_stw, in_stw);
+                p->index, (uint64_t) p->thread_id, p->need_stw, p->in_stw);
         return false;
     }
 
@@ -1033,20 +1019,16 @@ void processor_set_status(n_processor_t *p, p_status_t status) {
     //    }
 
     p->status = status;
-    if (status == P_STATUS_RUNNING) {
-        p->co_started_at = uv_hrtime();
-    } else {
-        p->co_started_at = 0;
-    }
-    if (status == P_STATUS_DISPATCH) {
-        tls_yield_safepoint = 0;
-    }
 
     //    if (!p->share && status == P_STATUS_RUNNING) {
     //        mutex_unlock(&p->gc_solo_stw_locker);
     //    }
 
     mutex_unlock(&p->thread_locker);
+
+    if (status == P_STATUS_RUNNING) {
+        p->co_started_at = uv_hrtime();
+    }
 }
 
 void rt_coroutine_return(void *result_ptr) {
