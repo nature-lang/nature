@@ -37,9 +37,9 @@ uv_key_t tls_coroutine_key = {0};
 
 
 #ifdef __WINDOWS
-_Thread_local _Atomic uint64_t tls_safepoint = SAFEPOINT_NONE;
+_Thread_local uint64_t tls_safepoint = SAFEPOINT_NONE;
 #else
-_Thread_local __attribute__((tls_model("local-exec"))) _Atomic uint64_t tls_safepoint = SAFEPOINT_NONE;
+_Thread_local __attribute__((tls_model("local-exec"))) uint64_t tls_safepoint = SAFEPOINT_NONE;
 #endif
 
 uint64_t assist_preempt_yield_ret_addr = 0;
@@ -301,12 +301,12 @@ static void coroutine_aco_init(n_processor_t *p, coroutine_t *co) {
 
 // thread_locker protects the lifetime of the target thread's published TLS address.
 static void processor_set_safepoint_request(n_processor_t *p, uint64_t request) {
-    _Atomic uint64_t *tls_ptr = p->tls_safepoint_ptr;
+    uint64_t *tls_ptr = p->tls_safepoint_ptr;
     if (tls_ptr == NULL) {
         return;
     }
 
-    atomic_store_explicit(tls_ptr, request, memory_order_release);
+    *tls_ptr = request;
 }
 
 void processor_all_need_stop() {
@@ -419,7 +419,7 @@ static void processor_run(void *raw) {
     p->tls_safepoint_ptr = &tls_safepoint;
     uint64_t stw_time = atomic_load_explicit(&p->need_stw, memory_order_acquire);
     if (stw_time != SAFEPOINT_NONE) {
-        atomic_store_explicit(&tls_safepoint, stw_time, memory_order_release);
+        tls_safepoint = stw_time;
     }
     p->status = P_STATUS_DISPATCH;
     p->co_started_at = 0;

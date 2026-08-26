@@ -100,7 +100,7 @@ int64_t test_processor_count() {
 }
 
 int64_t test_processor_current_safepoint_request() {
-    return (int64_t) atomic_load_explicit(&tls_safepoint, memory_order_acquire);
+    return (int64_t) tls_safepoint;
 }
 
 int64_t test_processor_current_need_stw() {
@@ -116,7 +116,7 @@ static void test_processor_runtime_busy() {
     while (uv_hrtime() - started_at < duration) {
     }
     atomic_store_explicit(&processor_test_runtime_request,
-                          (int64_t) atomic_load_explicit(&tls_safepoint, memory_order_acquire),
+                          (int64_t) tls_safepoint,
                           memory_order_release);
 }
 

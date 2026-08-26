@@ -254,11 +254,10 @@ static void processor_sysmon() {
             goto PROCESSOR_SYSMON_UNLOCK;
         }
 
-        _Atomic uint64_t *tls_ptr = p->tls_safepoint_ptr;
+        uint64_t *tls_ptr = p->tls_safepoint_ptr;
         if (tls_ptr != NULL) {
-            uint64_t expected = SAFEPOINT_NONE;
-            if (atomic_compare_exchange_strong_explicit(tls_ptr, &expected, safepoint_time,
-                                                        memory_order_release, memory_order_relaxed)) {
+            if (*tls_ptr == SAFEPOINT_NONE) {
+                *tls_ptr = safepoint_time;
                 DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p run timeout=%lu ms, requested local yield",
                        p->index, (uint64_t) p->thread_id, p->coroutine,
                        elapsed / 1000 / 1000);
