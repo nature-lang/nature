@@ -1500,16 +1500,7 @@ static slice_t *riscv64_native_safepoint(closure_t *c, lir_op_t *op) {
 
     riscv64_asm_operand_t *t6_operand = RO_REG(T6);
 
-    slice_push(operations,
-               RISCV64_INST(RV_LUIS, t6_operand,
-                            RO_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
-                                   ASM_RISCV64_RELOC_TPREL_HI20)));
-    slice_push(operations,
-               RISCV64_INST(RV_ADDIS, t6_operand,
-                            RO_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
-                                   ASM_RISCV64_RELOC_TPREL_LO12_I)));
-    slice_push(operations, RISCV64_INST(RV_ADD, t6_operand, t6_operand, RO_REG(TP)));
-    slice_push(operations, RISCV64_INST(RV_LD, t6_operand, RO_INDIRECT(T6, 0, QWORD)));
+    slice_push(operations, RISCV64_INST(RV_LD, t6_operand, RO_INDIRECT(S11, 0, QWORD)));
 
     //    char *preempt_ident = str_connect(c->linkident, ".preempt");
     //    slice_push(operations, RISCV64_INST(RV_BNE, t6_operand, RO_REG(ZEROREG), RO_SYM(preempt_ident, true, 0, 0)));

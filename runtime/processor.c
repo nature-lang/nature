@@ -35,12 +35,7 @@ rt_linked_fixalloc_t global_gc_worklist;
 uv_key_t tls_processor_key = {0};
 uv_key_t tls_coroutine_key = {0};
 
-
-#ifdef __WINDOWS
-_Thread_local int64_t tls_yield_safepoint = false;
-#else
-_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint = false;
-#endif
+__attribute__((aligned(128))) aligned_page_t global_safepoint = {0};
 
 uint64_t assist_preempt_yield_ret_addr = 0;
 
@@ -76,10 +71,10 @@ NO_OPTIMIZE void co_preempt_yield() {
     assert(p);
 
     DEBUGF(
-            "[runtime.co_preempt_yield] p_index=%d(%d), co=%p, p_status=%d,  will yield, co_start=%ld, assist_preempt_yield_ret_addr=%p, tls_yield_safepoint=%ld",
-            p->index, p->status, co, co->status, p->co_started_at / 1000 / 1000, (void *) assist_preempt_yield_ret_addr, tls_yield_safepoint);
+            "[runtime.co_preempt_yield] p_index=%d(%d), co=%p, p_status=%d,  will yield, co_start=%ld, assist_preempt_yield_ret_addr=%p, global_safepoint=%ld",
+            p->index, p->status, co, co->status, p->co_started_at / 1000 / 1000, (void *) assist_preempt_yield_ret_addr, global_safepoint.value);
 
-    processor_set_status(p, P_STATUS_PREEMPT); // 抢占返回标志
+    p->status = P_STATUS_PREEMPT; // 抢占返回标志
 
     // 不需要等待，直接设置为 runnable 状态
     co->status = CO_STATUS_RUNNABLE;
@@ -91,10 +86,10 @@ NO_OPTIMIZE void co_preempt_yield() {
 
     // 接下来将直接 return 到用户态，不经过 post_tpl_hook, 所以直接更新为允许抢占
     // yield 切换回了用户态，此时允许抢占，所以不能再使用 RDEBUG, 而是 DEBUG
-    DEBUGF("[runtime.co_preempt_yield] yield resume end, will set running, p_index=%d, p_status=%d co=%p, p->co=%p, share_stack.base=%p, share_stack.top(sp)=%p, co_start_at=%ld, tls_yield_safepoint=%ld",
+    DEBUGF("[runtime.co_preempt_yield] yield resume end, will set running, p_index=%d, p_status=%d co=%p, p->co=%p, share_stack.base=%p, share_stack.top(sp)=%p, co_start_at=%ld, global_safepoint=%ld",
            p->index,
            p->status, co, p->coroutine, p->share_stack.align_retptr, co->aco.reg[ACO_REG_IDX_SP],
-           p->co_started_at / 1000 / 1000, tls_yield_safepoint);
+           p->co_started_at / 1000 / 1000, global_safepoint.value);
 
     //    co_set_status(p, co, CO_STATUS_RUNNING);
     //    processor_set_status(p, P_STATUS_RUNNING);
@@ -313,29 +308,27 @@ static void coroutine_aco_init(n_processor_t *p, coroutine_t *co) {
     assert(p->share_stack.sz > 0);
 
     aco_create_init(&co->aco, &p->main_aco, &p->share_stack, 0, coroutine_wrapper, co);
+    co->aco.reg[ACO_REG_IDX_CURRENT_CO] = co;
 }
 
 void processor_all_need_stop() {
-    uint64_t stw_time = uv_hrtime();
-    PROCESSOR_FOR(processor_list) {
-        mutex_lock(&p->thread_locker);
-        p->need_stw = stw_time;
-        if (p->tls_yield_safepoint_ptr != NULL) {
-            *p->tls_yield_safepoint_ptr = (int64_t) stw_time;
-        }
-        mutex_unlock(&p->thread_locker);
-    }
+    //    uint64_t stw_time = uv_hrtime();
+    //    PROCESSOR_FOR(processor_list) {
+    //        p->need_stw = stw_time;
+    //    }
+    global_safepoint.value = uv_hrtime();
 }
 
 void processor_all_start() {
-    PROCESSOR_FOR(processor_list) {
-        mutex_lock(&p->thread_locker);
-        if (p->tls_yield_safepoint_ptr != NULL) {
-            *p->tls_yield_safepoint_ptr = 0;
-        }
-        p->need_stw = 0;
-        mutex_unlock(&p->thread_locker);
-    }
+    global_safepoint.value = 0;
+
+    //    PROCESSOR_FOR(processor_list) {
+    //        p->need_stw = 0;
+    //        p->in_stw = 0;
+    //        RDEBUGF("[runtime_gc.processor_all_start] p_index=%d, thread_id=%lu set safe_point=false",
+    //                p->index,
+    //                (uint64_t) p->thread_id);
+    //    }
 
     DEBUGF("[runtime_gc.processor_all_start] all processor stw completed");
 }
@@ -373,6 +366,7 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
 
     // 核心 resume
     aco_resume(&co->aco);
+    co->safepoint = 0;
 
     TRACEF(
             "[coroutine_resume] resume back, p_index=%d(%d), co=%p, status=%d, rt_fn=%d",
@@ -392,7 +386,6 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
     // running -> dispatch
     // preempt -> dispatch
     processor_set_status(p, P_STATUS_DISPATCH);
-    tls_yield_safepoint = 0;
 
     uint64_t time = (uv_hrtime() - p->co_started_at) / 1000 / 1000;
     RDEBUGF("[coroutine_resume] resume back, co=%p, aco=%p, run_time=%lu ms, rt_co=%d", co, &co->aco, time,
@@ -402,9 +395,7 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
 // handle by thread
 static void processor_run(void *raw) {
     n_processor_t *p = raw;
-    DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, yield_safepoint_ptr=%p(%ld)", p->index, p, &tls_yield_safepoint, tls_yield_safepoint);
-
-    DEBUGF("[runtime.processor_run] tls1 %p, tls2 %p, tls3 %p tls4 %p, tls5 %p, tls6 %p", &tls_yield_safepoint1, &tls_yield_safepoint2, &tls_yield_safepoint3, &tls_yield_safepoint4, &tls_yield_safepoint5, &tls_yield_safepoint6);
+    DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p", p->index, p);
 
     processor_set_status(p, P_STATUS_DISPATCH);
 
@@ -418,8 +409,6 @@ static void processor_run(void *raw) {
     //    uv_loop_init(&p->uv_loop);
     //    uv_timer_init(&p->uv_loop, &p->timer);
 
-    p->tls_yield_safepoint_ptr = &tls_yield_safepoint;
-
     // 注册线程信号监听, 用于抢占式调度
     // 将 p 存储在线程维度全局遍历中，方便直接在 coroutine 运行中读取相关的 processor
     uv_key_set(&tls_processor_key, p);
@@ -430,20 +419,20 @@ static void processor_run(void *raw) {
                p->runnable_list.count);
 
         // - stw
-        uint64_t stw_time = p->need_stw;
-        if (stw_time != 0) {
+        if (global_safepoint.value > 0) {
         STW_WAIT:
-            DEBUGF("[runtime.processor_run] need stw, need_stw=%ld, p_index=%d, main_exited=%d", stw_time, p->index, main_coroutine_exited);
-            p->in_stw = stw_time;
+            DEBUGF("[runtime.processor_run] need stw, global_safepoint=%ld, p_index=%d, main_exited=%d", global_safepoint.value, p->index, main_coroutine_exited);
+            p->in_stw = global_safepoint.value; // 进入 stw 状态
 
-            while (p->need_stw == stw_time) {
-                TRACEF("[runtime.processor_run] p_index=%d, need_stw=%lu, safe_point=%lu stw loop....", p->index,
-                       p->need_stw, p->in_stw);
+            // runtime_gc 线程会解除 safe 状态，所以这里一直等待直到 global_safepoint 清零即可
+            while (p->in_stw == global_safepoint.value) {
+                TRACEF("[runtime.processor_run] p_index=%d, global_safepoint=%lu, safe_point=%lu stw loop....", p->index,
+                       global_safepoint.value, p->in_stw);
                 usleep(WAIT_BRIEF_TIME * 1000); // 1ms
             }
 
-            DEBUGF("[runtime.processor_run] p_index=%d, stw completed, safe_point=%lu, main_exited=%d, need_stw=%ld",
-                   p->index, p->in_stw, main_coroutine_exited, p->need_stw);
+            DEBUGF("[runtime.processor_run] p_index=%d, stw completed, safe_point=%lu, main_exited=%d, global_safepoint=%ld",
+                   p->index, p->in_stw, main_coroutine_exited, global_safepoint.value);
         }
 
         // - exit
@@ -468,8 +457,7 @@ static void processor_run(void *raw) {
                     p->index, co);
 
             // check stw
-            stw_time = p->need_stw;
-            if (stw_time != 0) {
+            if (global_safepoint.value > 0) {
                 goto STW_WAIT;
             }
         }
@@ -483,7 +471,6 @@ static void processor_run(void *raw) {
     }
 
 EXIT:
-    p->tls_yield_safepoint_ptr = NULL;
     p->thread_id = 0;
     processor_set_status(p, P_STATUS_EXIT);
 
@@ -735,6 +722,7 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu, void *arg)
     rt_shade_obj_with_barrier(fu);
 
     co->future = fu;
+    co->safepoint = 0;
     co->fn = fn;
     co->main = FLAG(CO_FLAG_MAIN) & flag;
     co->flag = flag;
@@ -765,9 +753,7 @@ n_processor_t *processor_new(int index) {
 
     // uv_loop_init(&p->uv_loop);
     //    mutex_init(&p->gc_solo_stw_locker, false);
-    p->need_stw = 0;
     p->in_stw = 0;
-    p->tls_yield_safepoint_ptr = NULL;
 
     sc_map_init_64v(&p->caller_cache, 100, 0);
     mutex_init(&p->thread_locker, false);
@@ -858,13 +844,13 @@ bool processor_all_safe() {
             continue;
         }
 
-        if (p->need_stw != 0 && p->in_stw == p->need_stw) {
+        if (p->in_stw == global_safepoint.value) {
             continue;
         }
 
         RDEBUGF(
-                "[runtime_gc.processor_all_safe] share processor p_index=%d, thread_id=%lu not safe, need_stw=%lu, safe_point=%lu",
-                p->index, (uint64_t) p->thread_id, p->need_stw, p->in_stw);
+                "[runtime_gc.processor_all_safe] share processor p_index=%d, thread_id=%lu not safe, global_safepoint=%lu, safe_point=%lu",
+                p->index, (uint64_t) p->thread_id, global_safepoint.value, p->in_stw);
         return false;
     }
 

@@ -4,7 +4,10 @@
 
 #include "sysmon.h"
 
-#define CO_TIMEOUT (10 * 1000 * 1000) // ms
+#define CO_TIMEOUT (10 * 1000 * 1000) // ns
+#define SYSMON_INTERVAL 5 // ms
+#define GC_EVAL_INTERVAL 100 // ms
+#define GC_EVAL_TICKS (GC_EVAL_INTERVAL / SYSMON_INTERVAL)
 
 // 等待 1000ms 的时间，如果无法抢占则 deadlock
 #define PREEMPT_TIMEOUT 1000
@@ -234,16 +237,14 @@ static void processor_sysmon() {
             continue;
         }
 
-        // 与调度路径保持相同的加锁顺序
+        // 保持 runnable 计数与当前 coroutine 快照一致。
         pthread_mutex_lock(&p->runnable_list.locker);
         mutex_lock(&p->thread_locker);
 
-        if (p->need_stw != 0) {
-            goto PROCESSOR_SYSMON_UNLOCK;
-        }
+        uint64_t stw_time = global_safepoint.value;
 
-        // 没有需要运行的 runnable_list(等待运行的 runnable) 则不考虑抢占
-        if (p->runnable_list.count == 0) {
+        // 普通 yield 需要同 processor 存在待运行任务；GC STW 不受此限制。
+        if (stw_time == 0 && p->runnable_list.count == 0) {
             DEBUGF("[processor_sysmon] p_index=%d p_status=%d runnable_list.count == 0 cannot preempt, will skip", p->index, p->status);
             goto PROCESSOR_SYSMON_UNLOCK;
         }
@@ -262,6 +263,13 @@ static void processor_sysmon() {
             goto PROCESSOR_SYSMON_UNLOCK;
         }
 
+        if (stw_time != 0) {
+            co->safepoint = stw_time;
+            DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p set gc safepoint=%lu", p->index,
+                   (uint64_t) p->thread_id, co, stw_time);
+            goto PROCESSOR_SYSMON_UNLOCK;
+        }
+
         uint64_t co_start_at = p->co_started_at;
         if (co_start_at == 0) {
             DEBUGF("[wait_sysmon.share] p_index=%d, co=%p/%p co_stared_at = 0, will skip", p->index, p->coroutine,
@@ -277,13 +285,13 @@ static void processor_sysmon() {
             goto PROCESSOR_SYSMON_UNLOCK;
         }
 
-        int64_t *tls_ptr = p->tls_yield_safepoint_ptr;
-        if (tls_ptr != NULL && *tls_ptr == 0) {
-            *tls_ptr = (int64_t) safepoint_time;
+        if (co->safepoint == 0) {
+            co->safepoint = safepoint_time;
         }
 
-        DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p run timeout=%d ms(co_start=%ld) set tls yield safepoint=true", p->index,
-               (uint64_t) p->thread_id, p->coroutine, time / 1000 / 1000, co_start_at / 1000 / 1000);
+        DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p run timeout=%d ms(co_start=%ld) set safepoint=%lu", p->index,
+               (uint64_t) p->thread_id, p->coroutine, time / 1000 / 1000, co_start_at / 1000 / 1000,
+               co->safepoint);
 
     PROCESSOR_SYSMON_UNLOCK:
         mutex_unlock(&p->thread_locker);
@@ -298,13 +306,12 @@ static void on_timer_stop_cb(uv_timer_t *timer) {
 }
 
 static void wait_sysmon() {
-    // 每 50 * 10ms 进行 eval 一次
-    int gc_eval_count = WAIT_SHORT_TIME;
+    int gc_eval_count = GC_EVAL_TICKS;
 
     //    uv_timer_t timer;
     //    uv_timer_init(&global_loop, &timer);
 
-    // 循环监控(每 10ms 监控一次)
+    // 每 5ms 检查一次超时 coroutine。
     while (true) {
         DEBUGF("[wait_sysmon] will processor sysmon ");
 
@@ -312,14 +319,13 @@ static void wait_sysmon() {
 
         DEBUGF("[wait_sysmon] sysmon end, will eval gc %ld", gc_eval_count);
         // - GC 判断 (每 100ms 进行一次)
-        if (gc_eval_count <= 0) {
+        gc_eval_count--;
+        if (gc_eval_count == 0) {
             runtime_eval_gc();
-            gc_eval_count = WAIT_SHORT_TIME; // 10 * 10ms = 100ms
+            gc_eval_count = GC_EVAL_TICKS;
         }
 
-        gc_eval_count--;
-
-        usleep(WAIT_SHORT_TIME * 1000); // 10ms
+        usleep(SYSMON_INTERVAL * 1000);
 
         // libuv loop with io 10ms
         //        uv_timer_start(&timer, on_timer_stop_cb, 10, 0); // 只触发一次

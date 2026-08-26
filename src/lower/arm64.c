@@ -229,7 +229,6 @@ static linked_t *arm64_lower_safepoint(closure_t *c, lir_op_t *op) {
     //        result_reg = lir_reg_operand(x28->index, TYPE_ANYPTR);
     //    }
     //    op->output = result_reg;
-    op->output = lir_reg_operand(x16->index, type_kind_new(TYPE_ANYPTR));
 
     // 增加 label continue
     linked_push(list, op);

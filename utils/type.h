@@ -29,7 +29,7 @@
 #define NONVOID_IDENT "nonvoid"
 
 #define ASSIST_PREEMPT_YIELD_IDENT "assist_preempt_yield"
-#define TLS_YIELD_SAFEPOINT_IDENT "tls_yield_safepoint"
+#define GLOBAL_SAFEPOINT_IDENT "global_safepoint"
 
 // 指令字符宽度
 #define BYTE 1 // 1 byte = 8 位

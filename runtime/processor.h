@@ -69,11 +69,14 @@ extern int64_t coroutine_count;
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
 
-#ifdef __WINDOWS
-extern _Thread_local int64_t tls_yield_safepoint;
-#else
-extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint;
-#endif
+// gc 全局 safepoint 标识，通常配合 stw 使用
+
+typedef struct {
+    uint64_t value; // 8 bytes
+    uint8_t pad[120]; // 56 bytes padding
+} aligned_page_t;
+
+extern __attribute__((aligned(128))) aligned_page_t global_safepoint;
 
 // processor gc_finished 后新产生的 shade ptr 会存入到该全局工作队列中，在 gc_mark_done 阶段进行单线程处理
 extern rt_linked_fixalloc_t global_gc_worklist; // 全局 gc worklist
@@ -133,7 +136,8 @@ static inline void _co_yield(n_processor_t *p, coroutine_t *co) {
     aco_yield1(&co->aco);
 
     // yield 返回，继续 running
-    processor_set_status(p, P_STATUS_RUNNING);
+    p->status = P_STATUS_RUNNING;
+    p->co_started_at = uv_hrtime();
 }
 
 static inline void co_ready(coroutine_t *co) {

@@ -196,9 +196,9 @@ void amd64_reg_init() {
     r12->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r13 = reg_new("r13", 13, LIR_FLAG_ALLOC_INT, QWORD, 11);
     r13->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
-    r14 = reg_new("r14", 14, LIR_FLAG_ALLOC_INT, QWORD, 12);
+    r14 = reg_new("r14", 14, LIR_FLAG_ALLOC_INT, QWORD, 0); // current coroutine
     r14->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
-    r15 = reg_new("r15", 15, LIR_FLAG_ALLOC_INT, QWORD, 13);
+    r15 = reg_new("r15", 15, LIR_FLAG_ALLOC_INT, QWORD, 12);
     r15->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
 
     eax = reg_new("eax", 0, LIR_FLAG_ALLOC_INT, DWORD, 0);
@@ -259,21 +259,21 @@ void amd64_reg_init() {
     r14b = reg_new("r14b", 14, LIR_FLAG_ALLOC_INT, BYTE, 0);
     r15b = reg_new("r15b", 15, LIR_FLAG_ALLOC_INT, BYTE, 0);
 
-    xmm0 = reg_new("xmm0", 0, LIR_FLAG_ALLOC_FLOAT, OWORD, 14);
-    xmm1 = reg_new("xmm1", 1, LIR_FLAG_ALLOC_FLOAT, OWORD, 15);
-    xmm2 = reg_new("xmm2", 2, LIR_FLAG_ALLOC_FLOAT, OWORD, 16);
-    xmm3 = reg_new("xmm3", 3, LIR_FLAG_ALLOC_FLOAT, OWORD, 17);
-    xmm4 = reg_new("xmm4", 4, LIR_FLAG_ALLOC_FLOAT, OWORD, 18);
-    xmm5 = reg_new("xmm5", 5, LIR_FLAG_ALLOC_FLOAT, OWORD, 19);
-    xmm6 = reg_new("xmm6", 6, LIR_FLAG_ALLOC_FLOAT, OWORD, 20);
-    xmm7 = reg_new("xmm7", 7, LIR_FLAG_ALLOC_FLOAT, OWORD, 21);
-    xmm8 = reg_new("xmm8", 8, LIR_FLAG_ALLOC_FLOAT, OWORD, 22);
-    xmm9 = reg_new("xmm9", 9, LIR_FLAG_ALLOC_FLOAT, OWORD, 23);
-    xmm10 = reg_new("xmm10", 10, LIR_FLAG_ALLOC_FLOAT, OWORD, 24);
-    xmm11 = reg_new("xmm11", 11, LIR_FLAG_ALLOC_FLOAT, OWORD, 25);
-    xmm12 = reg_new("xmm12", 12, LIR_FLAG_ALLOC_FLOAT, OWORD, 26);
-    xmm13 = reg_new("xmm13", 13, LIR_FLAG_ALLOC_FLOAT, OWORD, 27);
-    xmm14 = reg_new("xmm14", 14, LIR_FLAG_ALLOC_FLOAT, OWORD, 28);
+    xmm0 = reg_new("xmm0", 0, LIR_FLAG_ALLOC_FLOAT, OWORD, 13);
+    xmm1 = reg_new("xmm1", 1, LIR_FLAG_ALLOC_FLOAT, OWORD, 14);
+    xmm2 = reg_new("xmm2", 2, LIR_FLAG_ALLOC_FLOAT, OWORD, 15);
+    xmm3 = reg_new("xmm3", 3, LIR_FLAG_ALLOC_FLOAT, OWORD, 16);
+    xmm4 = reg_new("xmm4", 4, LIR_FLAG_ALLOC_FLOAT, OWORD, 17);
+    xmm5 = reg_new("xmm5", 5, LIR_FLAG_ALLOC_FLOAT, OWORD, 18);
+    xmm6 = reg_new("xmm6", 6, LIR_FLAG_ALLOC_FLOAT, OWORD, 19);
+    xmm7 = reg_new("xmm7", 7, LIR_FLAG_ALLOC_FLOAT, OWORD, 20);
+    xmm8 = reg_new("xmm8", 8, LIR_FLAG_ALLOC_FLOAT, OWORD, 21);
+    xmm9 = reg_new("xmm9", 9, LIR_FLAG_ALLOC_FLOAT, OWORD, 22);
+    xmm10 = reg_new("xmm10", 10, LIR_FLAG_ALLOC_FLOAT, OWORD, 23);
+    xmm11 = reg_new("xmm11", 11, LIR_FLAG_ALLOC_FLOAT, OWORD, 24);
+    xmm12 = reg_new("xmm12", 12, LIR_FLAG_ALLOC_FLOAT, OWORD, 25);
+    xmm13 = reg_new("xmm13", 13, LIR_FLAG_ALLOC_FLOAT, OWORD, 26);
+    xmm14 = reg_new("xmm14", 14, LIR_FLAG_ALLOC_FLOAT, OWORD, 27);
     xmm15 = reg_new("xmm15", 15, LIR_FLAG_ALLOC_FLOAT, OWORD, 0);
 
     xmm0s32 = reg_new("xmm0s32", 0, LIR_FLAG_ALLOC_FLOAT, DWORD, 0);

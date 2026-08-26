@@ -1477,22 +1477,8 @@ static slice_t *amd64_native_bcc(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_safepoint(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
-    amd64_asm_operand_t *tls_yield_safepoint_operand = AMD64_TLS_SYMBOL(TLS_YIELD_SAFEPOINT_IDENT);
-    if (BUILD_OS == OS_DARWIN) {
-        // TLV getter 使用 rdi/rax，先保存 Nature 的 rdi 入参
-        slice_push(operations, AMD64_INST("sub", AMD64_REG(rsp), AMD64_UINT32(16)));
-        slice_push(operations,
-                   AMD64_INST("mov", SIB_REG(rsp, NULL, 0, 0, QWORD), AMD64_REG(rdi)));
-        slice_push(operations, AMD64_INST("mov", AMD64_REG(rdi), tls_yield_safepoint_operand));
-        slice_push(operations, AMD64_INST("call", INDIRECT_REG(rdi, QWORD)));
-        slice_push(operations, AMD64_INST("mov", AMD64_REG(r11), INDIRECT_REG(rax, QWORD)));
-        slice_push(operations,
-                   AMD64_INST("mov", AMD64_REG(rdi), SIB_REG(rsp, NULL, 0, 0, QWORD)));
-        slice_push(operations, AMD64_INST("add", AMD64_REG(rsp), AMD64_UINT32(16)));
-    } else {
-        slice_push(operations, AMD64_INST("mov", AMD64_REG(r11), tls_yield_safepoint_operand));
-    }
-    slice_push(operations, AMD64_INST("test", AMD64_REG(r11), AMD64_REG(r11)));
+    slice_push(operations,
+               AMD64_INST("cmp", SIB_REG(r14, NULL, 0, 0, QWORD), AMD64_UINT32(0)));
 
     char *preempt_ident = local_sym_with_fn(c, ".preempt");
     slice_push(operations, AMD64_INST("jne", AMD64_SYMBOL(preempt_ident, true)));

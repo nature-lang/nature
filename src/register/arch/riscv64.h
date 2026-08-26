@@ -103,10 +103,8 @@ extern reg_t *r_f24s, *r_f25s, *r_f26s, *r_f27s, *r_f28s, *r_f29s, *r_f30s, *r_f
 #define FT11 r_f31
 
 // RISC-V specific counts and sizes
-// Integer registers: x5-x7 (t0-t2), x9 (s1), x10-x17 (a0-a7), x18-x27 (s2-s11), x28-x31 (t3-t6)
-// Count: 3 (t0-t2) + 1 (s1) + 8 (a0-a7) + 10 (s2-s11) + 4 (t3-t6) = 26 allocatable integer registers.
-// (x0=zero, x1=ra, x2=sp, x3=gp, x4=tp, x8=s0/fp are special or have fixed roles)
-#define RISCV64_ALLOC_INT_REG_COUNT 24
+// s11 holds the current coroutine; t5/t6 remain compiler scratch registers.
+#define RISCV64_ALLOC_INT_REG_COUNT 23
 
 // Floating-point registers: f0-f7 (ft0-ft7), f9 (fs1), f10-f17 (fa0-fa7), f18-f27 (fs2-fs11), f28-f31 (ft8-ft11)
 // Count: 8 (ft0-ft7) + 1 (fs1) + 8 (fa0-fa7) + 10 (fs2-fs11) + 4 (ft8-ft11) = 31 allocatable float registers.

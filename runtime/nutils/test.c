@@ -100,13 +100,13 @@ int64_t test_processor_count() {
 }
 
 int64_t test_processor_current_safepoint_request() {
-    return tls_yield_safepoint;
+    coroutine_t *co = coroutine_get();
+    assert(co);
+    return (int64_t) co->safepoint;
 }
 
-int64_t test_processor_current_need_stw() {
-    n_processor_t *p = processor_get();
-    assert(p);
-    return (int64_t) p->need_stw;
+int64_t test_processor_current_global_safepoint() {
+    return (int64_t) global_safepoint.value;
 }
 
 static void test_processor_runtime_busy() {
@@ -115,8 +115,10 @@ static void test_processor_runtime_busy() {
     uint64_t started_at = uv_hrtime();
     while (uv_hrtime() - started_at < duration) {
     }
+    coroutine_t *co = coroutine_get();
+    assert(co);
     atomic_store_explicit(&processor_test_runtime_request,
-                          tls_yield_safepoint,
+                          (int64_t) co->safepoint,
                           memory_order_release);
 }
 

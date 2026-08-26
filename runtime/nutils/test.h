@@ -26,7 +26,7 @@ int64_t test_processor_count();
 
 int64_t test_processor_current_safepoint_request();
 
-int64_t test_processor_current_need_stw();
+int64_t test_processor_current_global_safepoint();
 
 void test_processor_dispatch_runtime_busy(int64_t milliseconds);
 

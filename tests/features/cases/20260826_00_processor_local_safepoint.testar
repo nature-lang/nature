@@ -23,8 +23,8 @@ fn processor_count():int
 #linkid test_processor_current_safepoint_request
 fn current_safepoint_request():int
 
-#linkid test_processor_current_need_stw
-fn current_need_stw():int
+#linkid test_processor_current_global_safepoint
+fn current_global_safepoint():int
 
 fn cooperative_entry(int state_before_entry, int processors) {
     // The sysmon request cannot interrupt the preceding C busy loop. It is
@@ -34,7 +34,7 @@ fn cooperative_entry(int state_before_entry, int processors) {
     assert((state_after_entry & 1) == 1)
     assert((state_after_entry & 4) == 4)
     assert(current_safepoint_request() == 0)
-    assert(current_need_stw() == 0)
+    assert(current_global_safepoint() == 0)
 
     if processors > 1 {
         assert((state_before_entry & 2) == 2)
@@ -66,7 +66,7 @@ fn main():void! {
     long_future.await_void()
     waiter_future.await_void()
     assert(current_safepoint_request() == 0)
-    assert(current_need_stw() == 0)
+    assert(current_global_safepoint() == 0)
 }
 
 === test_runtime_coroutine_not_preempted[timeout=10]
@@ -113,8 +113,8 @@ import runtime
 #linkid test_processor_current_safepoint_request
 fn current_safepoint_request():int
 
-#linkid test_processor_current_need_stw
-fn current_need_stw():int
+#linkid test_processor_current_global_safepoint
+fn current_global_safepoint():int
 
 fn gc_tick(int value):int {
     return value + 1
@@ -142,5 +142,5 @@ fn main():void! {
     runtime.gc()
     co.sleep(200)
     assert(current_safepoint_request() == 0)
-    assert(current_need_stw() == 0)
+    assert(current_global_safepoint() == 0)
 }

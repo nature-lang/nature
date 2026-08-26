@@ -88,11 +88,11 @@ void riscv64_reg_init() {
     r_x25->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
     r_x26 = reg_new("s10", 26, LIR_FLAG_ALLOC_INT, QWORD, 21); // s10: Saved register (Callee)
     r_x26->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
-    r_x27 = reg_new("s11", 27, LIR_FLAG_ALLOC_INT, QWORD, 22); // s11: Saved register (Callee)
+    r_x27 = reg_new("s11", 27, LIR_FLAG_ALLOC_INT, QWORD, 0); // current coroutine
     r_x27->flag |= FLAG(LIR_FLAG_CALLEE_SAVED);
 
-    r_x28 = reg_new("t3", 28, LIR_FLAG_ALLOC_INT, QWORD, 23); // t3: Temporary (Caller)
-    r_x29 = reg_new("t4", 29, LIR_FLAG_ALLOC_INT, QWORD, 24); // t4: Temporary (Caller)
+    r_x28 = reg_new("t3", 28, LIR_FLAG_ALLOC_INT, QWORD, 22); // t3: Temporary (Caller)
+    r_x29 = reg_new("t4", 29, LIR_FLAG_ALLOC_INT, QWORD, 23); // t4: Temporary (Caller)
     r_x30 = reg_new("t5", 30, LIR_FLAG_ALLOC_INT, QWORD, 0); // t5: Temporary (Caller)
     r_x31 = reg_new("t6", 31, LIR_FLAG_ALLOC_INT, QWORD, 0); // t6: Temporary (Caller)
 
