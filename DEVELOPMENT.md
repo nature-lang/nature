@@ -357,7 +357,7 @@ RUST_BACKTRACE=1 cargo build
 
 ## Common Issues
 
-### Issue: "Undefined symbols" or "_tls_safepoint not found"
+### Issue: "Undefined symbols" or "_global_safepoint not found"
 
 **Solution:** Rebuild the runtime library
 ```bash

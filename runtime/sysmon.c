@@ -234,35 +234,57 @@ static void processor_sysmon() {
             continue;
         }
 
-        // Queue length, current coroutine, status and start time form a single
-        // scheduling snapshot. Keep the queue lock outside thread_locker to
-        // match the scheduler's pop-then-status order.
+        // 与调度路径保持相同的加锁顺序
         pthread_mutex_lock(&p->runnable_list.locker);
         mutex_lock(&p->thread_locker);
 
         uint64_t need_stw = atomic_load_explicit(&p->need_stw, memory_order_acquire);
-        if (need_stw != SAFEPOINT_NONE || p->runnable_list.count == 0 ||
-            p->status != P_STATUS_RUNNING || p->coroutine == NULL ||
-            (p->coroutine->flag & FLAG(CO_FLAG_RTFN)) || p->co_started_at == 0) {
+        if (need_stw != 0) {
+            goto PROCESSOR_SYSMON_UNLOCK;
+        }
+
+        // 没有需要运行的 runnable_list(等待运行的 runnable) 则不考虑抢占
+        if (p->runnable_list.count == 0) {
+            DEBUGF("[processor_sysmon] p_index=%d p_status=%d runnable_list.count == 0 cannot preempt, will skip", p->index, p->status);
+            goto PROCESSOR_SYSMON_UNLOCK;
+        }
+
+        // running 既 coroutine running
+        if (p->status != P_STATUS_RUNNING) {
+            DEBUGF("[processor_sysmon] p_index=%d p_status=%d cannot preempt, will skip", p->index, p->status);
+            goto PROCESSOR_SYSMON_UNLOCK;
+        }
+
+        coroutine_t *co = p->coroutine;
+        assert(co); // p co 切换期间不会清空 co 了
+        if (co->flag & FLAG(CO_FLAG_RTFN)) { // rt fn 包括 gc_work/signal_handle
+            DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p is runtime fn, will skip", p->index,
+                   (uint64_t) p->thread_id, p->coroutine);
             goto PROCESSOR_SYSMON_UNLOCK;
         }
 
         uint64_t co_start_at = p->co_started_at;
+        if (co_start_at == 0) {
+            DEBUGF("[wait_sysmon.share] p_index=%d, co=%p/%p co_stared_at = 0, will skip", p->index, p->coroutine,
+                   co);
+            goto PROCESSOR_SYSMON_UNLOCK;
+        }
         uint64_t safepoint_time = uv_hrtime();
-        uint64_t elapsed = safepoint_time - co_start_at;
-        if (elapsed < CO_TIMEOUT) {
+        uint64_t time = (safepoint_time - co_start_at);
+        if (time < CO_TIMEOUT) {
+            DEBUGF("[processor_sysmon] p_index=%d, co=%p/%p run not timeout(%lu ms), will skip", p->index,
+                   p->coroutine, co,
+                   time / 1000 / 1000);
             goto PROCESSOR_SYSMON_UNLOCK;
         }
 
-        uint64_t *tls_ptr = p->tls_safepoint_ptr;
-        if (tls_ptr != NULL) {
-            if (*tls_ptr == SAFEPOINT_NONE) {
-                *tls_ptr = safepoint_time;
-                DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p run timeout=%lu ms, requested local yield",
-                       p->index, (uint64_t) p->thread_id, p->coroutine,
-                       elapsed / 1000 / 1000);
-            }
+        int64_t *tls_ptr = p->tls_yield_safepoint_ptr;
+        if (tls_ptr != NULL && *tls_ptr == 0) {
+            *tls_ptr = (int64_t) safepoint_time;
         }
+
+        DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p run timeout=%d ms(co_start=%ld) set tls yield safepoint=true", p->index,
+               (uint64_t) p->thread_id, p->coroutine, time / 1000 / 1000, co_start_at / 1000 / 1000);
 
     PROCESSOR_SYSMON_UNLOCK:
         mutex_unlock(&p->thread_locker);

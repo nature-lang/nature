@@ -220,10 +220,20 @@ static linked_t *arm64_lower_ternary(closure_t *c, lir_op_t *op) {
 static linked_t *arm64_lower_safepoint(closure_t *c, lir_op_t *op) {
     linked_t *list = linked_new();
 
+
+    // 创建临时寄存器存储标志地址
+    //    lir_operand_t *result_reg;
+    //    if (BUILD_OS == OS_DARWIN) {
+    //        result_reg = lir_reg_operand(x0->index, TYPE_ANYPTR);
+    //    } else {
+    //        result_reg = lir_reg_operand(x28->index, TYPE_ANYPTR);
+    //    }
+    //    op->output = result_reg;
     op->output = lir_reg_operand(x16->index, type_kind_new(TYPE_ANYPTR));
 
     // 增加 label continue
     linked_push(list, op);
+
 
     return list;
 }

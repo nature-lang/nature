@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-_Thread_local int64_t tls_test_value = 0;
+_Thread_local int64_t tls_safepoint = 0;
 
 void test_gc_sleep_yield();
 

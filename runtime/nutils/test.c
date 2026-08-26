@@ -45,11 +45,11 @@ void __attribute__((noinline)) test_gc_sleep_yield() {
 }
 
 void init_safepoint(int64_t v) {
-    tls_test_value = v;
+    tls_safepoint = v;
 }
 
 int64_t get_safepoint() {
-    return tls_test_value;
+    return tls_safepoint;
 }
 
 void test_processor_safepoint_reset() {
@@ -100,7 +100,7 @@ int64_t test_processor_count() {
 }
 
 int64_t test_processor_current_safepoint_request() {
-    return (int64_t) tls_safepoint;
+    return tls_yield_safepoint;
 }
 
 int64_t test_processor_current_need_stw() {
@@ -116,7 +116,7 @@ static void test_processor_runtime_busy() {
     while (uv_hrtime() - started_at < duration) {
     }
     atomic_store_explicit(&processor_test_runtime_request,
-                          (int64_t) tls_safepoint,
+                          tls_yield_safepoint,
                           memory_order_release);
 }
 

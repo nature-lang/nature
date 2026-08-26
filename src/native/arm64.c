@@ -1046,20 +1046,18 @@ static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
     if (BUILD_OS == OS_DARWIN) {
-        // The Darwin TLV getter takes and returns its descriptor in x0.  A
-        // function-entry safepoint runs before x0 is necessarily moved out of
-        // its ABI argument register, so preserve it across the getter call.
+        // TLV getter 使用 x0，先保存 Nature 的 x0 入参
         slice_push(operations, ARM64_INST(R_SUB, ARM64_REG(sp), ARM64_REG(sp), ARM64_IMM(16)));
         slice_push(operations,
                    ARM64_INST(R_STR, ARM64_REG_SIZE(x0, QWORD),
                               ARM64_INDIRECT(sp, 0, 0, QWORD)));
         slice_push(operations,
                    ARM64_INST(R_ADRP, ARM64_REG(x0),
-                              ARM64_SYM(TLS_SAFEPOINT_IDENT, false, 0,
+                              ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
                                         ASM_ARM64_RELOC_TLVP_LOAD_PAGE21)));
         slice_push(operations,
                    ARM64_INST(R_LDR, ARM64_REG_SIZE(x0, QWORD),
-                              ARM64_INDIRECT_SYM(x0, TLS_SAFEPOINT_IDENT,
+                              ARM64_INDIRECT_SYM(x0, TLS_YIELD_SAFEPOINT_IDENT,
                                                  ASM_ARM64_RELOC_TLVP_LOAD_PAGEOFF12, QWORD)));
         slice_push(operations,
                    ARM64_INST(R_LDR, ARM64_REG_SIZE(x16, QWORD),
@@ -1077,18 +1075,18 @@ static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
         slice_push(operations, ARM64_INST(R_MRS, ARM64_REG(x16), ARM64_IMM(TPIDR_EL0)));
         slice_push(operations,
                    ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(x16),
-                              ARM64_SYM(TLS_SAFEPOINT_IDENT, false, 0,
+                              ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
                                         ASM_ARM64_RELOC_TLSLE_ADD_TPREL_HI12)));
         slice_push(operations,
                    ARM64_INST(R_ADD, ARM64_REG(x16), ARM64_REG(x16),
-                              ARM64_SYM(TLS_SAFEPOINT_IDENT, false, 0,
+                              ARM64_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
                                         ASM_ARM64_RELOC_TLSLE_ADD_TPREL_LO12_NC)));
         slice_push(operations,
                    ARM64_INST(R_LDR, ARM64_REG_SIZE(x16, QWORD),
                               ARM64_INDIRECT(x16, 0, 0, QWORD)));
     }
 
-    // Any non-zero local safepoint enters the existing register-preserving slow path.
+    // 3. CBNZ 合并 CMP + BNE: 如果 x16 != 0 则跳转到 preempt
     char *preempt_ident = local_sym_with_fn(c, ".preempt");
     slice_push(operations, ARM64_INST(R_CBNZ, ARM64_REG(x16), ARM64_SYM(preempt_ident, true, 0, 0)));
 

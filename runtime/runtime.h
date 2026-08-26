@@ -459,7 +459,7 @@ struct coroutine_t {
  */
 struct n_processor_t {
     int index;
-    uint64_t *tls_safepoint_ptr; // protected by thread_locker
+    int64_t *tls_yield_safepoint_ptr; // protected by thread_locker
     mcache_t mcache; // 线程维度无锁内存分配器
     aco_t main_aco; // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
     aco_share_stack_t share_stack; // processor 中的所有的 stack 都使用该共享栈

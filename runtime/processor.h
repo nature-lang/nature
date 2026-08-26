@@ -69,12 +69,10 @@ extern int64_t coroutine_count;
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
 
-#define SAFEPOINT_NONE UINT64_C(0)
-
 #ifdef __WINDOWS
-extern _Thread_local uint64_t tls_safepoint;
+extern _Thread_local int64_t tls_yield_safepoint;
 #else
-extern _Thread_local __attribute__((tls_model("local-exec"))) uint64_t tls_safepoint;
+extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint;
 #endif
 
 // processor gc_finished 后新产生的 shade ptr 会存入到该全局工作队列中，在 gc_mark_done 阶段进行单线程处理

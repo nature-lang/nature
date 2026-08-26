@@ -24,7 +24,7 @@
 - Source files and identifiers favor `snake_case`; keep braces/spaces as formatter defines.
 
 ## Testing Guidelines
-- Build runtime + main tree before `ctest`; link errors like `_tls_safepoint` usually mean rerun the runtime build.
+- Build runtime + main tree before `ctest`; link errors like `_global_safepoint` usually mean rerun the runtime build.
 - `ctest` only runs existing test binaries; it does not compile changed sources. Before every test run, rebuild the affected target. Compiler/linker changes must also rebuild and relink the C test harness (for example, `cmake --build build --target <test-name> -- -j8`), and stale `build*` artifacts must not be treated as evidence for the current source revision.
 - When reusing a build directory during compiler/linker diagnosis, verify that the relevant binary and object-file timestamps are newer than the changed sources before trusting a passing result.
 - New tests: harness in `tests/features/` plus cases in `tests/features/cases/<name>/`; rerun `cmake ..` in `build/`, then `ctest -R <name>`.

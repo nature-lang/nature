@@ -1502,11 +1502,11 @@ static slice_t *riscv64_native_safepoint(closure_t *c, lir_op_t *op) {
 
     slice_push(operations,
                RISCV64_INST(RV_LUIS, t6_operand,
-                            RO_SYM(TLS_SAFEPOINT_IDENT, false, 0,
+                            RO_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
                                    ASM_RISCV64_RELOC_TPREL_HI20)));
     slice_push(operations,
                RISCV64_INST(RV_ADDIS, t6_operand,
-                            RO_SYM(TLS_SAFEPOINT_IDENT, false, 0,
+                            RO_SYM(TLS_YIELD_SAFEPOINT_IDENT, false, 0,
                                    ASM_RISCV64_RELOC_TPREL_LO12_I)));
     slice_push(operations, RISCV64_INST(RV_ADD, t6_operand, t6_operand, RO_REG(TP)));
     slice_push(operations, RISCV64_INST(RV_LD, t6_operand, RO_INDIRECT(T6, 0, QWORD)));
