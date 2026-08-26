@@ -24,13 +24,13 @@ int64_t test_processor_safepoint_state();
 
 int64_t test_processor_count();
 
-int64_t test_processor_current_safepoint_token();
+int64_t test_processor_current_safepoint_request();
 
 int64_t test_processor_current_need_stw();
 
 void test_processor_dispatch_runtime_busy(int64_t milliseconds);
 
-int64_t test_processor_runtime_busy_token();
+int64_t test_processor_runtime_busy_request();
 
 typedef struct {
     float x;

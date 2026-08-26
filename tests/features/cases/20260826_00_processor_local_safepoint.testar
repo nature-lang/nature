@@ -20,8 +20,8 @@ fn safepoint_state():int
 #linkid test_processor_count
 fn processor_count():int
 
-#linkid test_processor_current_safepoint_token
-fn current_safepoint_token():int
+#linkid test_processor_current_safepoint_request
+fn current_safepoint_request():int
 
 #linkid test_processor_current_need_stw
 fn current_need_stw():int
@@ -33,7 +33,7 @@ fn cooperative_entry(int state_before_entry, int processors) {
     assert((state_before_entry & 1) == 0)
     assert((state_after_entry & 1) == 1)
     assert((state_after_entry & 4) == 4)
-    assert(current_safepoint_token() == 0)
+    assert(current_safepoint_request() == 0)
     assert(current_need_stw() == 0)
 
     if processors > 1 {
@@ -65,7 +65,7 @@ fn main():void! {
 
     long_future.await_void()
     waiter_future.await_void()
-    assert(current_safepoint_token() == 0)
+    assert(current_safepoint_request() == 0)
     assert(current_need_stw() == 0)
 }
 
@@ -79,14 +79,14 @@ fn test_reset()
 #linkid test_processor_dispatch_runtime_busy
 fn dispatch_runtime_busy(int milliseconds)
 
-#linkid test_processor_runtime_busy_token
-fn runtime_busy_token():int
+#linkid test_processor_runtime_busy_request
+fn runtime_busy_request():int
 
 #linkid test_processor_mark_waiter
 fn mark_waiter()
 
-#linkid test_processor_current_safepoint_token
-fn current_safepoint_token():int
+#linkid test_processor_current_safepoint_request
+fn current_safepoint_request():int
 
 fn waiter() {
     mark_waiter()
@@ -100,8 +100,8 @@ fn main():void! {
 
     // A runnable waiter was present for the entire runtime coroutine busy
     // interval, but sysmon must not target CO_FLAG_RTFN coroutines.
-    assert(runtime_busy_token() == 0)
-    assert(current_safepoint_token() == 0)
+    assert(runtime_busy_request() == 0)
+    assert(current_safepoint_request() == 0)
 }
 
 === test_gc_stw_generations[timeout=15]
@@ -110,8 +110,8 @@ import co
 import libc
 import runtime
 
-#linkid test_processor_current_safepoint_token
-fn current_safepoint_token():int
+#linkid test_processor_current_safepoint_request
+fn current_safepoint_request():int
 
 #linkid test_processor_current_need_stw
 fn current_need_stw():int
@@ -141,6 +141,6 @@ fn main():void! {
     // in every cycle must use fresh generations rather than stale acks.
     runtime.gc()
     co.sleep(200)
-    assert(current_safepoint_token() == 0)
+    assert(current_safepoint_request() == 0)
     assert(current_need_stw() == 0)
 }

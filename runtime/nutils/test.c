@@ -15,7 +15,7 @@ enum {
 
 static _Atomic int64_t processor_test_state;
 static _Atomic int64_t processor_test_runtime_busy_ms;
-static _Atomic int64_t processor_test_runtime_token;
+static _Atomic int64_t processor_test_runtime_request;
 
 static void __attribute__((noinline)) test_sleep_yield() {
     char *str = "sleep wait gc";
@@ -54,7 +54,7 @@ int64_t get_safepoint() {
 
 void test_processor_safepoint_reset() {
     atomic_store_explicit(&processor_test_state, 0, memory_order_release);
-    atomic_store_explicit(&processor_test_runtime_token, -1, memory_order_release);
+    atomic_store_explicit(&processor_test_runtime_request, -1, memory_order_release);
 }
 
 static int64_t test_processor_state_snapshot() {
@@ -68,7 +68,7 @@ int64_t test_processor_busy_no_safepoint(int64_t milliseconds) {
     uint64_t started_at = uv_hrtime();
     while (uv_hrtime() - started_at < duration) {
         // This C loop deliberately contains no Nature function-entry
-        // safepoint. A pending token must remain cooperative until return.
+        // safepoint. A pending request must remain cooperative until return.
     }
 
     int64_t state = test_processor_state_snapshot();
@@ -99,7 +99,7 @@ int64_t test_processor_count() {
     return cpu_count;
 }
 
-int64_t test_processor_current_safepoint_token() {
+int64_t test_processor_current_safepoint_request() {
     return (int64_t) atomic_load_explicit(&tls_safepoint, memory_order_acquire);
 }
 
@@ -115,7 +115,7 @@ static void test_processor_runtime_busy() {
     uint64_t started_at = uv_hrtime();
     while (uv_hrtime() - started_at < duration) {
     }
-    atomic_store_explicit(&processor_test_runtime_token,
+    atomic_store_explicit(&processor_test_runtime_request,
                           (int64_t) atomic_load_explicit(&tls_safepoint, memory_order_acquire),
                           memory_order_release);
 }
@@ -128,8 +128,8 @@ void test_processor_dispatch_runtime_busy(int64_t milliseconds) {
     rt_coroutine_dispatch(co);
 }
 
-int64_t test_processor_runtime_busy_token() {
-    return atomic_load_explicit(&processor_test_runtime_token, memory_order_acquire);
+int64_t test_processor_runtime_busy_request() {
+    return atomic_load_explicit(&processor_test_runtime_request, memory_order_acquire);
 }
 
 void test_arm64_abi_draw_line_ex(vector2_t v1, vector2_t v2) {

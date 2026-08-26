@@ -69,9 +69,9 @@ extern int64_t coroutine_count;
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
 
-#define SAFEPOINT_TOKEN_NONE UINT64_C(0)
-#define SAFEPOINT_TOKEN_YIELD UINT64_C(1)
-#define SAFEPOINT_TOKEN_STW_MIN UINT64_C(2)
+#define SAFEPOINT_NONE UINT64_C(0)
+#define SAFEPOINT_REQUEST UINT64_C(1)
+#define STW_TOKEN_MIN UINT64_C(2)
 
 #ifdef __WINDOWS
 extern _Thread_local _Atomic uint64_t tls_safepoint;

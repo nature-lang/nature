@@ -37,9 +37,9 @@ uv_key_t tls_coroutine_key = {0};
 
 
 #ifdef __WINDOWS
-_Thread_local _Atomic uint64_t tls_safepoint = SAFEPOINT_TOKEN_NONE;
+_Thread_local _Atomic uint64_t tls_safepoint = SAFEPOINT_NONE;
 #else
-_Thread_local __attribute__((tls_model("local-exec"))) _Atomic uint64_t tls_safepoint = SAFEPOINT_TOKEN_NONE;
+_Thread_local __attribute__((tls_model("local-exec"))) _Atomic uint64_t tls_safepoint = SAFEPOINT_NONE;
 #endif
 
 uint64_t assist_preempt_yield_ret_addr = 0;
@@ -299,76 +299,46 @@ static void coroutine_aco_init(n_processor_t *p, coroutine_t *co) {
     aco_create_init(&co->aco, &p->main_aco, &p->share_stack, 0, coroutine_wrapper, co);
 }
 
-static void processor_publish_stw_request(n_processor_t *p, uint64_t stw_token) {
-    atomic_store_explicit(&p->need_stw, stw_token, memory_order_release);
-
-    // Keep the target thread alive while dereferencing its published TLS
-    // address. The same lock protects publication and withdrawal at thread
-    // start and exit.
-    mutex_lock(&p->thread_locker);
-    _Atomic uint64_t *tls_ptr = atomic_load_explicit(&p->tls_safepoint_ptr, memory_order_acquire);
+// thread_locker protects the lifetime of the target thread's published TLS address.
+static void processor_set_safepoint_request(n_processor_t *p, uint64_t request) {
+    _Atomic uint64_t *tls_ptr = p->tls_safepoint_ptr;
     if (tls_ptr == NULL) {
-        mutex_unlock(&p->thread_locker);
         return;
     }
 
-    uint64_t current = atomic_load_explicit(tls_ptr, memory_order_acquire);
-    while (current != stw_token) {
-        assertf(current <= SAFEPOINT_TOKEN_YIELD,
-                "processor %d already has unexpected STW token %lu while publishing %lu",
-                p->index, current, stw_token);
-        if (atomic_compare_exchange_weak_explicit(tls_ptr, &current, stw_token,
-                                                  memory_order_release, memory_order_acquire)) {
-            break;
-        }
-    }
-    mutex_unlock(&p->thread_locker);
+    atomic_store_explicit(tls_ptr, request, memory_order_release);
 }
 
 void processor_all_need_stop(uint64_t stw_token) {
-    assert(stw_token >= SAFEPOINT_TOKEN_STW_MIN);
+    assert(stw_token >= STW_TOKEN_MIN);
     PROCESSOR_FOR(processor_list) {
-        processor_publish_stw_request(p, stw_token);
+        mutex_lock(&p->thread_locker);
+        atomic_store_explicit(&p->need_stw, stw_token, memory_order_release);
+        processor_set_safepoint_request(p, SAFEPOINT_REQUEST);
+        mutex_unlock(&p->thread_locker);
     }
 }
 
 void processor_all_start(uint64_t stw_token) {
-    assert(stw_token >= SAFEPOINT_TOKEN_STW_MIN);
+    assert(stw_token >= STW_TOKEN_MIN);
     PROCESSOR_FOR(processor_list) {
         mutex_lock(&p->thread_locker);
-        _Atomic uint64_t *tls_ptr = atomic_load_explicit(&p->tls_safepoint_ptr, memory_order_acquire);
-        if (tls_ptr != NULL) {
-            uint64_t expected = stw_token;
-            atomic_compare_exchange_strong_explicit(tls_ptr, &expected, SAFEPOINT_TOKEN_NONE,
-                                                    memory_order_release, memory_order_relaxed);
+        if (atomic_load_explicit(&p->need_stw, memory_order_acquire) == stw_token) {
+            // Clear the TLS nudge before releasing the processor from STW.
+            processor_set_safepoint_request(p, SAFEPOINT_NONE);
+            atomic_store_explicit(&p->need_stw, SAFEPOINT_NONE, memory_order_release);
         }
-
-        uint64_t expected = stw_token;
-        atomic_compare_exchange_strong_explicit(&p->need_stw, &expected, SAFEPOINT_TOKEN_NONE,
-                                                memory_order_release, memory_order_relaxed);
         mutex_unlock(&p->thread_locker);
     }
 
     DEBUGF("[runtime_gc.processor_all_start] STW generation %lu completed", stw_token);
 }
 
-static void processor_clear_yield_request(n_processor_t *p) {
-    _Atomic uint64_t *tls_ptr = atomic_load_explicit(&p->tls_safepoint_ptr, memory_order_acquire);
-    if (tls_ptr == NULL) {
-        return;
-    }
-
-    uint64_t expected = SAFEPOINT_TOKEN_YIELD;
-    atomic_compare_exchange_strong_explicit(tls_ptr, &expected, SAFEPOINT_TOKEN_NONE,
-                                            memory_order_release, memory_order_relaxed);
-}
-
 static void processor_finish_handoff(n_processor_t *p) {
-    // Serialize the token clear with sysmon's RUNNING snapshot. Otherwise
-    // sysmon could publish a yield after the clear but immediately before the
-    // status transition, leaking that request into the next coroutine.
+    // Serialize the request clear with sysmon's RUNNING snapshot. GC state
+    // remains in need_stw and is checked before another coroutine is run.
     mutex_lock(&p->thread_locker);
-    processor_clear_yield_request(p);
+    processor_set_safepoint_request(p, SAFEPOINT_NONE);
     p->status = P_STATUS_DISPATCH;
     p->co_started_at = 0;
     mutex_unlock(&p->thread_locker);
@@ -421,8 +391,7 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
         co->wait_lock = NULL;
     }
 
-    // Any real handoff consumes an ordinary sysmon yield. A GC generation is
-    // left intact for the GC resume path to clear.
+    // Any real handoff consumes the TLS request. GC state remains in need_stw.
     processor_finish_handoff(p);
 
     uint64_t time = (uv_hrtime() - p->co_started_at) / 1000 / 1000;
@@ -447,13 +416,13 @@ static void processor_run(void *raw) {
     // 将 p 存储在线程维度全局遍历中，方便直接在 coroutine 运行中读取相关的 processor
     uv_key_set(&tls_processor_key, p);
 
-    // Publish this thread's TLS token before scheduling. If GC requested STW
-    // while the processor was still lazy, mirror that generation now.
+    // Publish this thread's TLS address before scheduling. If GC requested STW
+    // while the processor was still lazy, request an immediate handoff.
     mutex_lock(&p->thread_locker);
-    atomic_store_explicit(&p->tls_safepoint_ptr, &tls_safepoint, memory_order_release);
+    p->tls_safepoint_ptr = &tls_safepoint;
     uint64_t startup_request = atomic_load_explicit(&p->need_stw, memory_order_acquire);
-    if (startup_request >= SAFEPOINT_TOKEN_STW_MIN) {
-        atomic_store_explicit(&tls_safepoint, startup_request, memory_order_release);
+    if (startup_request >= STW_TOKEN_MIN) {
+        atomic_store_explicit(&tls_safepoint, SAFEPOINT_REQUEST, memory_order_release);
     }
     p->status = P_STATUS_DISPATCH;
     p->co_started_at = 0;
@@ -466,7 +435,7 @@ static void processor_run(void *raw) {
 
         // - stw
         uint64_t stw_request = atomic_load_explicit(&p->need_stw, memory_order_acquire);
-        if (stw_request >= SAFEPOINT_TOKEN_STW_MIN) {
+        if (stw_request >= STW_TOKEN_MIN) {
         STW_WAIT:
             DEBUGF("[runtime.processor_run] need STW generation %lu, p_index=%d, main_exited=%d",
                    stw_request, p->index, main_coroutine_exited);
@@ -503,7 +472,7 @@ static void processor_run(void *raw) {
 
             // check stw
             stw_request = atomic_load_explicit(&p->need_stw, memory_order_acquire);
-            if (stw_request >= SAFEPOINT_TOKEN_STW_MIN) {
+            if (stw_request >= STW_TOKEN_MIN) {
                 goto STW_WAIT;
             }
         }
@@ -520,7 +489,7 @@ EXIT:
     mutex_lock(&p->thread_locker);
     p->status = P_STATUS_EXIT;
     p->co_started_at = 0;
-    atomic_store_explicit(&p->tls_safepoint_ptr, NULL, memory_order_release);
+    p->tls_safepoint_ptr = NULL;
     p->thread_id = 0;
     mutex_unlock(&p->thread_locker);
 
@@ -802,9 +771,9 @@ n_processor_t *processor_new(int index) {
 
     // uv_loop_init(&p->uv_loop);
     //    mutex_init(&p->gc_solo_stw_locker, false);
-    atomic_init(&p->need_stw, SAFEPOINT_TOKEN_NONE);
-    atomic_init(&p->in_stw, SAFEPOINT_TOKEN_NONE);
-    atomic_init(&p->tls_safepoint_ptr, NULL);
+    atomic_init(&p->need_stw, SAFEPOINT_NONE);
+    atomic_init(&p->in_stw, SAFEPOINT_NONE);
+    p->tls_safepoint_ptr = NULL;
 
     sc_map_init_64v(&p->caller_cache, 100, 0);
     mutex_init(&p->thread_locker, false);
@@ -885,7 +854,7 @@ void processor_free(n_processor_t *p) {
  * @return
  */
 bool processor_all_safe(uint64_t stw_token) {
-    assert(stw_token >= SAFEPOINT_TOKEN_STW_MIN);
+    assert(stw_token >= STW_TOKEN_MIN);
     PROCESSOR_FOR(processor_list) {
         // 跳过未唤醒的 processor
         if (!atomic_load_explicit(&p->thread_waked, memory_order_acquire)) {

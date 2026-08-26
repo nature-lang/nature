@@ -241,7 +241,7 @@ static void processor_sysmon() {
         mutex_lock(&p->thread_locker);
 
         uint64_t need_stw = atomic_load_explicit(&p->need_stw, memory_order_acquire);
-        if (need_stw != SAFEPOINT_TOKEN_NONE || p->runnable_list.count == 0 ||
+        if (need_stw != SAFEPOINT_NONE || p->runnable_list.count == 0 ||
             p->status != P_STATUS_RUNNING || p->coroutine == NULL ||
             (p->coroutine->flag & FLAG(CO_FLAG_RTFN)) || p->co_started_at == 0) {
             goto PROCESSOR_SYSMON_UNLOCK;
@@ -253,10 +253,10 @@ static void processor_sysmon() {
             goto PROCESSOR_SYSMON_UNLOCK;
         }
 
-        _Atomic uint64_t *tls_ptr = atomic_load_explicit(&p->tls_safepoint_ptr, memory_order_acquire);
+        _Atomic uint64_t *tls_ptr = p->tls_safepoint_ptr;
         if (tls_ptr != NULL) {
-            uint64_t expected = SAFEPOINT_TOKEN_NONE;
-            if (atomic_compare_exchange_strong_explicit(tls_ptr, &expected, SAFEPOINT_TOKEN_YIELD,
+            uint64_t expected = SAFEPOINT_NONE;
+            if (atomic_compare_exchange_strong_explicit(tls_ptr, &expected, SAFEPOINT_REQUEST,
                                                         memory_order_release, memory_order_relaxed)) {
                 DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p run timeout=%lu ms, requested local yield",
                        p->index, (uint64_t) p->thread_id, p->coroutine,
