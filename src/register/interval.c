@@ -1198,7 +1198,7 @@ void interval_add_use_pos(closure_t *c, interval_t *i, int position, alloc_kind_
 }
 
 
-int interval_next_use_position(interval_t *i, int after_position) {
+static int interval_segment_next_use_position(interval_t *i, int after_position) {
     linked_t *pos_list = i->use_pos_list;
 
     LINKED_FOR(pos_list) {
@@ -1208,6 +1208,27 @@ int interval_next_use_position(interval_t *i, int after_position) {
         }
     }
     return 0;
+}
+
+/**
+ * Return the earliest use position after `after_position` across an interval
+ * and all of its split children. Split segments may use different registers,
+ * but they still represent the same logical value. Blocked register
+ * allocation needs the complete next-use information to choose a victim.
+ */
+int interval_next_use_position(interval_t *i, int after_position) {
+    interval_t *parent = i->parent ? i->parent : i;
+    int result = interval_segment_next_use_position(parent, after_position);
+
+    LINKED_FOR(parent->children) {
+        interval_t *child = LINKED_VALUE();
+        int position = interval_segment_next_use_position(child, after_position);
+        if (position > 0 && (result == 0 || position < result)) {
+            result = position;
+        }
+    }
+
+    return result;
 }
 
 /**

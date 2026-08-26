@@ -84,11 +84,8 @@ int old_interval_next_intersect(closure_t *c, interval_t *current, interval_t *s
 bool interval_is_intersect(interval_t *current, interval_t *select);
 
 /**
- * 寻找 select interval 大于 after 的第一个 use_position
- * first_use_position != first_from
- * @param select
- * @param after_position
- * @return
+ * Find the earliest use position after `after_position` across an interval and
+ * all of its split children.
  */
 int interval_next_use_position(interval_t *i, int after_position);
 
