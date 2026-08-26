@@ -104,7 +104,7 @@ fn main():void! {
     assert(current_safepoint_request() == 0)
 }
 
-=== test_gc_stw_generations[timeout=15]
+=== test_gc_repeated_stw[timeout=15]
 --- main.n
 import co
 import libc
@@ -138,7 +138,7 @@ fn main():void! {
     mutator.await_void()
 
     // Force another cycle after the active mutator is gone. Both STW phases
-    // in every cycle must use fresh generations rather than stale acks.
+    // in every cycle must use fresh times rather than stale acknowledgements.
     runtime.gc()
     co.sleep(200)
     assert(current_safepoint_request() == 0)

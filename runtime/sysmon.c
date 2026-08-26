@@ -248,7 +248,8 @@ static void processor_sysmon() {
         }
 
         uint64_t co_start_at = p->co_started_at;
-        uint64_t elapsed = uv_hrtime() - co_start_at;
+        uint64_t safepoint_time = uv_hrtime();
+        uint64_t elapsed = safepoint_time - co_start_at;
         if (elapsed < CO_TIMEOUT) {
             goto PROCESSOR_SYSMON_UNLOCK;
         }
@@ -256,7 +257,7 @@ static void processor_sysmon() {
         _Atomic uint64_t *tls_ptr = p->tls_safepoint_ptr;
         if (tls_ptr != NULL) {
             uint64_t expected = SAFEPOINT_NONE;
-            if (atomic_compare_exchange_strong_explicit(tls_ptr, &expected, SAFEPOINT_REQUEST,
+            if (atomic_compare_exchange_strong_explicit(tls_ptr, &expected, safepoint_time,
                                                         memory_order_release, memory_order_relaxed)) {
                 DEBUGF("[processor_sysmon] p_index=%d(%lu), co=%p run timeout=%lu ms, requested local yield",
                        p->index, (uint64_t) p->thread_id, p->coroutine,

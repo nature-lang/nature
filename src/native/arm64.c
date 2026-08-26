@@ -1088,8 +1088,7 @@ static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
                               ARM64_INDIRECT(x16, 0, 0, QWORD)));
     }
 
-    // If the current thread has either a local yield or GC generation, enter
-    // the existing register-preserving slow path.
+    // Any non-zero local safepoint enters the existing register-preserving slow path.
     char *preempt_ident = local_sym_with_fn(c, ".preempt");
     slice_push(operations, ARM64_INST(R_CBNZ, ARM64_REG(x16), ARM64_SYM(preempt_ident, true, 0, 0)));
 

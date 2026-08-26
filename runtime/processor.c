@@ -309,29 +309,26 @@ static void processor_set_safepoint_request(n_processor_t *p, uint64_t request) 
     atomic_store_explicit(tls_ptr, request, memory_order_release);
 }
 
-void processor_all_need_stop(uint64_t stw_token) {
-    assert(stw_token >= STW_TOKEN_MIN);
+void processor_all_need_stop() {
+    uint64_t stw_time = uv_hrtime();
+    assert(stw_time != SAFEPOINT_NONE);
     PROCESSOR_FOR(processor_list) {
         mutex_lock(&p->thread_locker);
-        atomic_store_explicit(&p->need_stw, stw_token, memory_order_release);
-        processor_set_safepoint_request(p, SAFEPOINT_REQUEST);
+        atomic_store_explicit(&p->need_stw, stw_time, memory_order_release);
+        processor_set_safepoint_request(p, stw_time);
         mutex_unlock(&p->thread_locker);
     }
 }
 
-void processor_all_start(uint64_t stw_token) {
-    assert(stw_token >= STW_TOKEN_MIN);
+void processor_all_start() {
     PROCESSOR_FOR(processor_list) {
         mutex_lock(&p->thread_locker);
-        if (atomic_load_explicit(&p->need_stw, memory_order_acquire) == stw_token) {
-            // Clear the TLS nudge before releasing the processor from STW.
-            processor_set_safepoint_request(p, SAFEPOINT_NONE);
-            atomic_store_explicit(&p->need_stw, SAFEPOINT_NONE, memory_order_release);
-        }
+        processor_set_safepoint_request(p, SAFEPOINT_NONE);
+        atomic_store_explicit(&p->need_stw, SAFEPOINT_NONE, memory_order_release);
         mutex_unlock(&p->thread_locker);
     }
 
-    DEBUGF("[runtime_gc.processor_all_start] STW generation %lu completed", stw_token);
+    DEBUGF("[runtime_gc.processor_all_start] all processor STW completed");
 }
 
 static void processor_finish_handoff(n_processor_t *p) {
@@ -420,9 +417,9 @@ static void processor_run(void *raw) {
     // while the processor was still lazy, request an immediate handoff.
     mutex_lock(&p->thread_locker);
     p->tls_safepoint_ptr = &tls_safepoint;
-    uint64_t startup_request = atomic_load_explicit(&p->need_stw, memory_order_acquire);
-    if (startup_request >= STW_TOKEN_MIN) {
-        atomic_store_explicit(&tls_safepoint, SAFEPOINT_REQUEST, memory_order_release);
+    uint64_t stw_time = atomic_load_explicit(&p->need_stw, memory_order_acquire);
+    if (stw_time != SAFEPOINT_NONE) {
+        atomic_store_explicit(&tls_safepoint, stw_time, memory_order_release);
     }
     p->status = P_STATUS_DISPATCH;
     p->co_started_at = 0;
@@ -434,19 +431,19 @@ static void processor_run(void *raw) {
                p->runnable_list.count);
 
         // - stw
-        uint64_t stw_request = atomic_load_explicit(&p->need_stw, memory_order_acquire);
-        if (stw_request >= STW_TOKEN_MIN) {
+        stw_time = atomic_load_explicit(&p->need_stw, memory_order_acquire);
+        if (stw_time != SAFEPOINT_NONE) {
         STW_WAIT:
-            DEBUGF("[runtime.processor_run] need STW generation %lu, p_index=%d, main_exited=%d",
-                   stw_request, p->index, main_coroutine_exited);
-            atomic_store_explicit(&p->in_stw, stw_request, memory_order_release);
+            DEBUGF("[runtime.processor_run] need STW time %lu, p_index=%d, main_exited=%d",
+                   stw_time, p->index, main_coroutine_exited);
+            atomic_store_explicit(&p->in_stw, stw_time, memory_order_release);
 
-            while (atomic_load_explicit(&p->need_stw, memory_order_acquire) == stw_request) {
+            while (atomic_load_explicit(&p->need_stw, memory_order_acquire) == stw_time) {
                 usleep(WAIT_BRIEF_TIME * 1000); // 1ms
             }
 
-            DEBUGF("[runtime.processor_run] p_index=%d, STW generation %lu completed, main_exited=%d",
-                   p->index, stw_request, main_coroutine_exited);
+            DEBUGF("[runtime.processor_run] p_index=%d, STW time %lu completed, main_exited=%d",
+                   p->index, stw_time, main_coroutine_exited);
         }
 
         // - exit
@@ -471,8 +468,8 @@ static void processor_run(void *raw) {
                     p->index, co);
 
             // check stw
-            stw_request = atomic_load_explicit(&p->need_stw, memory_order_acquire);
-            if (stw_request >= STW_TOKEN_MIN) {
+            stw_time = atomic_load_explicit(&p->need_stw, memory_order_acquire);
+            if (stw_time != SAFEPOINT_NONE) {
                 goto STW_WAIT;
             }
         }
@@ -853,8 +850,7 @@ void processor_free(n_processor_t *p) {
  * 是否所有的 processor 都到达了安全点
  * @return
  */
-bool processor_all_safe(uint64_t stw_token) {
-    assert(stw_token >= STW_TOKEN_MIN);
+bool processor_all_safe() {
     PROCESSOR_FOR(processor_list) {
         // 跳过未唤醒的 processor
         if (!atomic_load_explicit(&p->thread_waked, memory_order_acquire)) {
@@ -870,7 +866,7 @@ bool processor_all_safe(uint64_t stw_token) {
 
         uint64_t need_stw = atomic_load_explicit(&p->need_stw, memory_order_acquire);
         uint64_t in_stw = atomic_load_explicit(&p->in_stw, memory_order_acquire);
-        if (need_stw == stw_token && in_stw == need_stw) {
+        if (need_stw != SAFEPOINT_NONE && in_stw == need_stw) {
             continue;
         }
 
@@ -883,10 +879,10 @@ bool processor_all_safe(uint64_t stw_token) {
     return true;
 }
 
-bool processor_all_wait_safe(uint64_t stw_token, int max_count) {
+bool processor_all_wait_safe(int max_count) {
     int count = 0;
     RDEBUGF("[processor_all_wait_safe] start");
-    while (!processor_all_safe(stw_token)) {
+    while (!processor_all_safe()) {
         if (count >= max_count) {
             return false; // T
         }

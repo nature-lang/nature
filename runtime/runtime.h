@@ -468,8 +468,8 @@ struct n_processor_t {
     struct sigaction sig;
 #endif
     uv_timer_t timer; // 辅助协程调度的定时器
-    _Atomic uint64_t need_stw; // 当前 GC STW 代次，0 表示无请求
-    _Atomic uint64_t in_stw; // 已确认进入 STW 的代次
+    _Atomic uint64_t need_stw; // 当前 GC STW 时间，0 表示无请求
+    _Atomic uint64_t in_stw; // 已确认进入 STW 的时间
 
     // 当前 p 需要被其他线程读取的一些属性都通过该锁进行保护
     // - 如更新 p 对应的 co 的状态等
