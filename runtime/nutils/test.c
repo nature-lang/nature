@@ -3,7 +3,19 @@
 #include "process.h"
 #include "runtime/processor.h"
 
+#include <stdatomic.h>
 #include <stdlib.h>
+
+enum {
+    PROCESSOR_TEST_WAITER_RAN = 1,
+    PROCESSOR_TEST_OTHER_RAN = 2,
+    PROCESSOR_TEST_WAITER_SAW_FINISHED = 4,
+    PROCESSOR_TEST_BUSY_FINISHED = 8,
+};
+
+static _Atomic int64_t processor_test_state;
+static _Atomic int64_t processor_test_runtime_busy_ms;
+static _Atomic int64_t processor_test_runtime_request;
 
 static void __attribute__((noinline)) test_sleep_yield() {
     char *str = "sleep wait gc";
@@ -38,6 +50,88 @@ void init_safepoint(int64_t v) {
 
 int64_t get_safepoint() {
     return tls_safepoint;
+}
+
+void test_processor_safepoint_reset() {
+    atomic_store_explicit(&processor_test_state, 0, memory_order_release);
+    atomic_store_explicit(&processor_test_runtime_request, -1, memory_order_release);
+}
+
+static int64_t test_processor_state_snapshot() {
+    return atomic_load_explicit(&processor_test_state, memory_order_acquire) &
+           (PROCESSOR_TEST_WAITER_RAN | PROCESSOR_TEST_OTHER_RAN |
+            PROCESSOR_TEST_WAITER_SAW_FINISHED);
+}
+
+int64_t test_processor_busy_no_safepoint(int64_t milliseconds) {
+    uint64_t duration = (uint64_t) milliseconds * 1000 * 1000;
+    uint64_t started_at = uv_hrtime();
+    while (uv_hrtime() - started_at < duration) {
+        // This C loop deliberately contains no Nature function-entry
+        // safepoint. A pending request must remain cooperative until return.
+    }
+
+    int64_t state = test_processor_state_snapshot();
+    atomic_fetch_or_explicit(&processor_test_state, PROCESSOR_TEST_BUSY_FINISHED,
+                             memory_order_release);
+    return state;
+}
+
+void test_processor_mark_waiter() {
+    int64_t state = atomic_load_explicit(&processor_test_state, memory_order_acquire);
+    int64_t flags = PROCESSOR_TEST_WAITER_RAN;
+    if (state & PROCESSOR_TEST_BUSY_FINISHED) {
+        flags |= PROCESSOR_TEST_WAITER_SAW_FINISHED;
+    }
+    atomic_fetch_or_explicit(&processor_test_state, flags, memory_order_release);
+}
+
+void test_processor_mark_other() {
+    atomic_fetch_or_explicit(&processor_test_state, PROCESSOR_TEST_OTHER_RAN,
+                             memory_order_release);
+}
+
+int64_t test_processor_safepoint_state() {
+    return test_processor_state_snapshot();
+}
+
+int64_t test_processor_count() {
+    return cpu_count;
+}
+
+int64_t test_processor_current_safepoint_request() {
+    coroutine_t *co = coroutine_get();
+    assert(co);
+    return (int64_t) co->safepoint;
+}
+
+int64_t test_processor_current_global_safepoint() {
+    return (int64_t) global_safepoint.value;
+}
+
+static void test_processor_runtime_busy() {
+    int64_t milliseconds = atomic_load_explicit(&processor_test_runtime_busy_ms, memory_order_acquire);
+    uint64_t duration = (uint64_t) milliseconds * 1000 * 1000;
+    uint64_t started_at = uv_hrtime();
+    while (uv_hrtime() - started_at < duration) {
+    }
+    coroutine_t *co = coroutine_get();
+    assert(co);
+    atomic_store_explicit(&processor_test_runtime_request,
+                          (int64_t) co->safepoint,
+                          memory_order_release);
+}
+
+void test_processor_dispatch_runtime_busy(int64_t milliseconds) {
+    atomic_store_explicit(&processor_test_runtime_busy_ms, milliseconds, memory_order_release);
+    coroutine_t *co = rt_coroutine_new((void *) test_processor_runtime_busy,
+                                       FLAG(CO_FLAG_RTFN) | FLAG(CO_FLAG_DIRECT) | FLAG(CO_FLAG_SAME),
+                                       NULL, NULL);
+    rt_coroutine_dispatch(co);
+}
+
+int64_t test_processor_runtime_busy_request() {
+    return atomic_load_explicit(&processor_test_runtime_request, memory_order_acquire);
 }
 
 void test_arm64_abi_draw_line_ex(vector2_t v1, vector2_t v2) {

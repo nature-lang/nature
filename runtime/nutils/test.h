@@ -12,6 +12,26 @@ void init_safepoint(int64_t v);
 
 int64_t get_safepoint();
 
+void test_processor_safepoint_reset();
+
+int64_t test_processor_busy_no_safepoint(int64_t milliseconds);
+
+void test_processor_mark_waiter();
+
+void test_processor_mark_other();
+
+int64_t test_processor_safepoint_state();
+
+int64_t test_processor_count();
+
+int64_t test_processor_current_safepoint_request();
+
+int64_t test_processor_current_global_safepoint();
+
+void test_processor_dispatch_runtime_busy(int64_t milliseconds);
+
+int64_t test_processor_runtime_busy_request();
+
 typedef struct {
     float x;
     float y;

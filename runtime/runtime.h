@@ -379,6 +379,7 @@ typedef struct n_future_t {
 } n_future_t;
 
 struct coroutine_t {
+    uint64_t safepoint; // 0 表示无请求，非 0 表示需要在函数入口 yield
     int64_t id;
     bool main; // 是否是 main 函数
     bool solo; // 当前协程需要独享线程
@@ -452,13 +453,15 @@ struct coroutine_t {
     struct coroutine_t *next; // coroutine list
 };
 
+_Static_assert(offsetof(coroutine_t, safepoint) == 0,
+               "coroutine safepoint must stay at offset zero");
+
 /**
  * 位于 share_processor_t 中的协程，如果运行时间过长会被抢占式调度
  * 共享处理器的数量通畅等于线程的数量, 所以可以将线程维度的无锁内存分配器放置再这里
  */
 struct n_processor_t {
     int index;
-    int64_t *tls_yield_safepoint_ptr;
     mcache_t mcache; // 线程维度无锁内存分配器
     aco_t main_aco; // 每个 processor 都会绑定一个 main_aco 用于 aco 的切换操作。
     aco_share_stack_t share_stack; // processor 中的所有的 stack 都使用该共享栈

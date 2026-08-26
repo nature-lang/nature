@@ -1477,13 +1477,8 @@ static slice_t *amd64_native_bcc(closure_t *c, lir_op_t *op) {
 static slice_t *amd64_native_safepoint(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
-    amd64_asm_operand_t *global_safepoint_operand = AMD64_SYMBOL(GLOBAL_SAFEPOINT_IDENT, false);
-    global_safepoint_operand->size = QWORD;
-
-    //    slice_push(operations, AMD64_INST("cmp", global_safepoint_operand, AMD64_UINT32(0))); // 5.20s
-
-    slice_push(operations, AMD64_INST("mov", AMD64_REG(r11), global_safepoint_operand)); // 5.0s
-    slice_push(operations, AMD64_INST("test", AMD64_REG(r11), AMD64_REG(r11)));
+    slice_push(operations,
+               AMD64_INST("cmp", SIB_REG(r14, NULL, 0, 0, QWORD), AMD64_UINT32(0)));
 
     char *preempt_ident = local_sym_with_fn(c, ".preempt");
     slice_push(operations, AMD64_INST("jne", AMD64_SYMBOL(preempt_ident, true)));

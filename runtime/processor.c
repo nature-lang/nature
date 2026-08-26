@@ -35,13 +35,6 @@ rt_linked_fixalloc_t global_gc_worklist;
 uv_key_t tls_processor_key = {0};
 uv_key_t tls_coroutine_key = {0};
 
-
-#ifdef __WINDOWS
-_Thread_local int64_t tls_yield_safepoint = false;
-#else
-_Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint = false;
-#endif
-
 __attribute__((aligned(128))) aligned_page_t global_safepoint = {0};
 
 uint64_t assist_preempt_yield_ret_addr = 0;
@@ -87,7 +80,6 @@ NO_OPTIMIZE void co_preempt_yield() {
     co->status = CO_STATUS_RUNNABLE;
     rt_linked_fixalloc_push(&p->runnable_list, co);
 
-    *p->tls_yield_safepoint_ptr = false; // 清空状态
     DEBUGF("[runtime.co_preempt_yield] co=%p push and update status success", co);
 
     _co_yield(p, co);
@@ -316,6 +308,7 @@ static void coroutine_aco_init(n_processor_t *p, coroutine_t *co) {
     assert(p->share_stack.sz > 0);
 
     aco_create_init(&co->aco, &p->main_aco, &p->share_stack, 0, coroutine_wrapper, co);
+    co->aco.reg[ACO_REG_IDX_CURRENT_CO] = co;
 }
 
 void processor_all_need_stop() {
@@ -373,6 +366,7 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
 
     // 核心 resume
     aco_resume(&co->aco);
+    co->safepoint = 0;
 
     TRACEF(
             "[coroutine_resume] resume back, p_index=%d(%d), co=%p, status=%d, rt_fn=%d",
@@ -401,9 +395,7 @@ void coroutine_resume(n_processor_t *p, coroutine_t *co) {
 // handle by thread
 static void processor_run(void *raw) {
     n_processor_t *p = raw;
-    DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p, yield_safepoint_ptr=%p(%ld)", p->index, p, &tls_yield_safepoint, tls_yield_safepoint);
-
-    DEBUGF("[runtime.processor_run] tls1 %p, tls2 %p, tls3 %p tls4 %p, tls5 %p, tls6 %p", &tls_yield_safepoint1, &tls_yield_safepoint2, &tls_yield_safepoint3, &tls_yield_safepoint4, &tls_yield_safepoint5, &tls_yield_safepoint6);
+    DEBUGF("[runtime.processor_run] start, p_index=%d, addr=%p", p->index, p);
 
     processor_set_status(p, P_STATUS_DISPATCH);
 
@@ -416,8 +408,6 @@ static void processor_run(void *raw) {
     // - 初始化 libuv
     //    uv_loop_init(&p->uv_loop);
     //    uv_timer_init(&p->uv_loop, &p->timer);
-
-    p->tls_yield_safepoint_ptr = &tls_yield_safepoint;
 
     // 注册线程信号监听, 用于抢占式调度
     // 将 p 存储在线程维度全局遍历中，方便直接在 coroutine 运行中读取相关的 processor
@@ -436,14 +426,13 @@ static void processor_run(void *raw) {
 
             // runtime_gc 线程会解除 safe 状态，所以这里一直等待直到 global_safepoint 清零即可
             while (p->in_stw == global_safepoint.value) {
-                TRACEF("[runtime.processor_run] p_index=%d, need_stw=%lu, safe_point=%lu stw loop....", p->index,
-                       p->need_stw, p->in_stw);
+                TRACEF("[runtime.processor_run] p_index=%d, global_safepoint=%lu, safe_point=%lu stw loop....", p->index,
+                       global_safepoint.value, p->in_stw);
                 usleep(WAIT_BRIEF_TIME * 1000); // 1ms
             }
 
             DEBUGF("[runtime.processor_run] p_index=%d, stw completed, safe_point=%lu, main_exited=%d, global_safepoint=%ld",
-                   p->index,
-                   p->in_stw, main_coroutine_exited, global_safepoint.value);
+                   p->index, p->in_stw, main_coroutine_exited, global_safepoint.value);
         }
 
         // - exit
@@ -733,6 +722,7 @@ coroutine_t *rt_coroutine_new(void *fn, int64_t flag, n_future_t *fu, void *arg)
     rt_shade_obj_with_barrier(fu);
 
     co->future = fu;
+    co->safepoint = 0;
     co->fn = fn;
     co->main = FLAG(CO_FLAG_MAIN) & flag;
     co->flag = flag;
@@ -859,8 +849,8 @@ bool processor_all_safe() {
         }
 
         RDEBUGF(
-                "[runtime_gc.processor_all_safe] share processor p_index=%d, thread_id=%lu not safe, need_stw=%lu, safe_point=%lu",
-                p->index, (uint64_t) p->thread_id, p->need_stw, p->in_stw);
+                "[runtime_gc.processor_all_safe] share processor p_index=%d, thread_id=%lu not safe, global_safepoint=%lu, safe_point=%lu",
+                p->index, (uint64_t) p->thread_id, global_safepoint.value, p->in_stw);
         return false;
     }
 

@@ -1,0 +1,146 @@
+=== test_processor_local_yield[timeout=10]
+--- main.n
+import co
+
+#linkid test_processor_safepoint_reset
+fn test_reset()
+
+#linkid test_processor_busy_no_safepoint
+fn busy_without_nature_safepoint(int milliseconds):int
+
+#linkid test_processor_mark_waiter
+fn mark_waiter()
+
+#linkid test_processor_mark_other
+fn mark_other()
+
+#linkid test_processor_safepoint_state
+fn safepoint_state():int
+
+#linkid test_processor_count
+fn processor_count():int
+
+#linkid test_processor_current_safepoint_request
+fn current_safepoint_request():int
+
+#linkid test_processor_current_global_safepoint
+fn current_global_safepoint():int
+
+fn cooperative_entry(int state_before_entry, int processors) {
+    // The sysmon request cannot interrupt the preceding C busy loop. It is
+    // consumed only by this normal Nature function entry.
+    var state_after_entry = safepoint_state()
+    assert((state_before_entry & 1) == 0)
+    assert((state_after_entry & 1) == 1)
+    assert((state_after_entry & 4) == 4)
+    assert(current_safepoint_request() == 0)
+    assert(current_global_safepoint() == 0)
+
+    if processors > 1 {
+        assert((state_before_entry & 2) == 2)
+    }
+}
+
+fn long_task(int processors) {
+    var state_before_entry = busy_without_nature_safepoint(150)
+    cooperative_entry(state_before_entry, processors)
+}
+
+fn waiter() {
+    mark_waiter()
+}
+
+fn unrelated_processor() {
+    mark_other()
+}
+
+fn main():void! {
+    test_reset()
+    var processors = processor_count()
+    var long_future = @async(long_task(processors), co.SAME)
+    var waiter_future = @async(waiter(), co.SAME)
+    if processors > 1 {
+        @async(unrelated_processor(), 0)
+    }
+
+    long_future.await_void()
+    waiter_future.await_void()
+    assert(current_safepoint_request() == 0)
+    assert(current_global_safepoint() == 0)
+}
+
+=== test_runtime_coroutine_not_preempted[timeout=10]
+--- main.n
+import co
+
+#linkid test_processor_safepoint_reset
+fn test_reset()
+
+#linkid test_processor_dispatch_runtime_busy
+fn dispatch_runtime_busy(int milliseconds)
+
+#linkid test_processor_runtime_busy_request
+fn runtime_busy_request():int
+
+#linkid test_processor_mark_waiter
+fn mark_waiter()
+
+#linkid test_processor_current_safepoint_request
+fn current_safepoint_request():int
+
+fn waiter() {
+    mark_waiter()
+}
+
+fn main():void! {
+    test_reset()
+    dispatch_runtime_busy(150)
+    var waiter_future = @async(waiter(), co.SAME)
+    waiter_future.await_void()
+
+    // A runnable waiter was present for the entire runtime coroutine busy
+    // interval, but sysmon must not target CO_FLAG_RTFN coroutines.
+    assert(runtime_busy_request() == 0)
+    assert(current_safepoint_request() == 0)
+}
+
+=== test_gc_repeated_stw[timeout=15]
+--- main.n
+import co
+import libc
+import runtime
+
+#linkid test_processor_current_safepoint_request
+fn current_safepoint_request():int
+
+#linkid test_processor_current_global_safepoint
+fn current_global_safepoint():int
+
+fn gc_tick(int value):int {
+    return value + 1
+}
+
+fn active_mutator() {
+    var deadline = libc.uv_hrtime() + 900 * 1000 * 1000
+    int iterations = 0
+    for libc.uv_hrtime() < deadline {
+        iterations = gc_tick(iterations)
+    }
+    assert(iterations > 0)
+}
+
+fn main():void! {
+    var mutator = @async(active_mutator(), 0)
+    for int i = 0; i < 4; i += 1 {
+        runtime.gc()
+        co.sleep(120)
+    }
+    mutator.await_void()
+
+    // Force another cycle after the active mutator is gone. Both STW phases
+    // in every cycle must use fresh times rather than stale acknowledgements.
+    runtime.gc()
+    co.sleep(200)
+    assert(current_safepoint_request() == 0)
+    assert(current_global_safepoint() == 0)
+}

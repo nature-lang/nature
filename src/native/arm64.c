@@ -1045,17 +1045,10 @@ static slice_t *arm64_native_fn_end(closure_t *c, lir_op_t *op) {
 static slice_t *arm64_native_safepoint(closure_t *c, lir_op_t *op) {
     slice_t *operations = slice_new();
 
-    // 1. ADRP 加载页地址
-    arm64_asm_operand_t *global_safepoint_operand = ARM64_SYM(GLOBAL_SAFEPOINT_IDENT, false, 0, 0);
-    slice_push(operations, ARM64_INST(R_ADRP, ARM64_REG(x16), global_safepoint_operand));
+    slice_push(operations,
+               ARM64_INST(R_LDR, ARM64_REG_SIZE(x16, QWORD),
+                          ARM64_INDIRECT(x27, 0, 0, QWORD)));
 
-    // 2. LDR 带 :lo12: 偏移，直接加载值（合并原来的 ADD + LDR）
-    // 使用 ARM64_INDIRECT_SYM: LDR x16, [x16, :lo12:global_safepoint]
-    // 需要使用 ARM64_REG_SIZE 设置 operand.size，用于确定正确的重定位类型
-    slice_push(operations, ARM64_INST(R_LDR, ARM64_REG_SIZE(x16, QWORD),
-                                      ARM64_INDIRECT_SYM(x16, GLOBAL_SAFEPOINT_IDENT, ASM_ARM64_RELOC_LO12, QWORD)));
-
-    // 3. CBNZ 合并 CMP + BNE: 如果 x16 != 0 则跳转到 preempt
     char *preempt_ident = local_sym_with_fn(c, ".preempt");
     slice_push(operations, ARM64_INST(R_CBNZ, ARM64_REG(x16), ARM64_SYM(preempt_ident, true, 0, 0)));
 

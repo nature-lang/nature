@@ -69,11 +69,6 @@ extern int64_t coroutine_count;
 extern uv_key_t tls_processor_key;
 extern uv_key_t tls_coroutine_key;
 
-#ifdef __WINDOWS
-extern _Thread_local int64_t tls_yield_safepoint;
-#else
-extern _Thread_local __attribute__((tls_model("local-exec"))) int64_t tls_yield_safepoint;
-#endif
 // gc 全局 safepoint 标识，通常配合 stw 使用
 
 typedef struct {

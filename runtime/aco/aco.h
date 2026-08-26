@@ -50,6 +50,7 @@
 #define ACO_REG_IDX_RETADDR 8
 #define ACO_REG_IDX_SP 9
 #define ACO_REG_IDX_FPU 10
+#define ACO_REG_IDX_CURRENT_CO 6 // r14
 #define ACO_REG_IDX_XMM6 12
 #define ACO_REG_IDX_STACK_BASE 32
 #define ACO_REG_IDX_STACK_LIMIT 33
@@ -59,16 +60,19 @@
 #define ACO_REG_IDX_SP 5
 #define ACO_REG_IDX_BP 7
 #define ACO_REG_IDX_FPU 8
+#define ACO_REG_IDX_CURRENT_CO 2 // r14
 #elif defined(__aarch64__)
 #define ACO_REG_IDX_RETADDR 13
 #define ACO_REG_IDX_SP 14
 #define ACO_REG_IDX_BP 12
 #define ACO_REG_IDX_FPU 15
+#define ACO_REG_IDX_CURRENT_CO 10 // x27
 #elif defined(__riscv) && (__riscv_xlen == 64)
 #define ACO_REG_IDX_RETADDR 12 // ra 寄存器在索引 12 (偏移量 96)
 #define ACO_REG_IDX_SP 13 // sp 寄存器在索引 13 (偏移量 104)
 #define ACO_REG_IDX_BP 0 // s0/fp 寄存器在索引 0 (偏移量 0)
 #define ACO_REG_IDX_FPU 14 // fcsr 在索引 14 (偏移量 112)
+#define ACO_REG_IDX_CURRENT_CO 11 // s11
 #else
 #error "platform no support yet"
 #endif

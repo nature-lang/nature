@@ -247,7 +247,7 @@ fndef_t *find_fn(addr_t addr, n_processor_t *p);
  */
 void runtime_gc();
 
-void gc_mutator_yield_if_needed();
+void mutator_safepoint_yield_if_needed();
 
 void runtime_eval_gc();
 

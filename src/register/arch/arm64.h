@@ -41,8 +41,8 @@ extern reg_t *s8, *s9, *s10, *s11, *s12, *s13, *s14, *s15;
 extern reg_t *s16, *s17, *s18, *s19, *s20, *s21, *s22, *s23;
 extern reg_t *s24, *s25, *s26, *s27, *s28, *s29, *s30, *s31;
 
-#define ARM64_ALLOC_REG_COUNT 27 + 31;
-#define DARWIN_ARM64_ALLOC_REG_COUNT 26 + 31;
+#define ARM64_ALLOC_REG_COUNT 26 + 31;
+#define DARWIN_ARM64_ALLOC_REG_COUNT 25 + 31;
 
 #define ARM64_STACK_ALIGN_SIZE 16
 
