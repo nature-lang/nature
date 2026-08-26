@@ -1,0 +1,38 @@
+=== test_json_map_any_gc[os=darwin,arch=arm64]
+--- main.n
+import co
+import json
+import runtime
+
+const CONTENT_BYTES = 16 * 1024
+const CYCLE_COUNT = 64
+
+fn fill(string seed, int wanted): string {
+    string result = ''
+    for result.len() < wanted {
+        result += seed
+    }
+    return result.slice(0, wanted)
+}
+
+fn make_document_fields(string content): any {
+    {string:any} fields = {}
+    fields['path'] = '/tmp/pelican-bike.html'
+    fields['content'] = content
+    return fields
+}
+
+fn main(): void! {
+    string document = fill('<svg><text>pelican bicycle animation</text></svg>', CONTENT_BYTES)
+    any document_fields = make_document_fields(document)
+
+    for int cycle = 0; cycle < CYCLE_COUNT; cycle += 1 {
+        string encoded = json.serialize(document_fields)
+        assert(encoded.len() == 16430)
+
+        if cycle % 8 == 7 {
+            runtime.gc()
+            co.yield()
+        }
+    }
+}

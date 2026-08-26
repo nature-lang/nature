@@ -468,7 +468,9 @@ static inline rtype_t rtype_union(type_t t) {
 
 /**
  * any: { rtype_t *rtype; value_casting value; }
- * value runtime type not fixed, conservatively scan all slots
+ * The runtime type and the dynamically typed payload are both pointers in
+ * the representation. The payload is conservatively scanned because its
+ * concrete type is only known at runtime.
  */
 static inline rtype_t rtype_any(type_t t) {
     int64_t any_size = t.storage_size;
@@ -484,7 +486,10 @@ static inline rtype_t rtype_any(type_t t) {
             .length = 0,
     };
 
-    bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), 0);
+    int64_t slot_count = align_up(any_size, POINTER_SIZE) / POINTER_SIZE;
+    for (int64_t i = 0; i < slot_count; ++i) {
+        bitmap_set(CTDATA(rtype.malloc_gc_bits_offset), i);
+    }
 
     return rtype;
 }
