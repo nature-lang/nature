@@ -507,6 +507,7 @@ typedef struct {
     int64_t buf_rear;
 
     int64_t msg_size;
+    int64_t msg_rhash; // element type hash, used for GC-aware buffered copies
     pthread_mutex_t lock;
     bool closed;
     bool successful; // 默认是 true, 一旦变成 false 就永远是 false, 和 successful 对应
