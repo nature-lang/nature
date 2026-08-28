@@ -9,6 +9,16 @@ typedef struct {
 
 static void selunlock(scase *cases, int16_t *lockorder, int16_t norder);
 
+static inline rtype_t *chan_msg_rtype(n_chan_t *chan) {
+    rtype_t *rtype = rt_find_rtype(chan->msg_rhash);
+    assert(rtype && "cannot find channel message rtype");
+    return rtype;
+}
+
+static inline void chan_buf_copy(n_chan_t *chan, void *dst, void *src) {
+    rti_write_barrier_rtype(dst, src, chan_msg_rtype(chan));
+}
+
 static inline bool buf_empty(n_chan_t *ch) {
     return ch->buf_front == ch->buf_rear;
 }
@@ -149,7 +159,8 @@ static inline linkco_t *waitq_pop(waitq_t *waitq) {
  * @param stack_ptr
  * @return
  */
-static void rt_msg_transmit(coroutine_t *co, void *stack_ptr, void *msg_ptr, bool pull, int64_t size) {
+static void rt_msg_transmit(coroutine_t *co, void *stack_ptr, void *msg_ptr, bool pull, int64_t size,
+                            rtype_t *dst_rtype) {
     // 计算基于 share_stack_ptr 得到的 offset(正数)
     aco_share_stack_t *share_stack = co->aco.share_stack;
     aco_save_stack_t *save_stack = &co->aco.save_stack;
@@ -170,6 +181,8 @@ static void rt_msg_transmit(coroutine_t *co, void *stack_ptr, void *msg_ptr, boo
 
     if (pull) {
         memmove(stack_ptr, msg_ptr, size);
+    } else if (dst_rtype) {
+        rti_write_barrier_rtype(msg_ptr, stack_ptr, dst_rtype);
     } else {
         memmove(msg_ptr, stack_ptr, size);
     }
@@ -196,6 +209,7 @@ n_chan_t *rt_chan_new(int64_t rhash, int64_t ele_rhash, int64_t buf_len) {
 
     n_chan_t *chan = rti_gc_malloc(rtype->gc_heap_size, rtype);
     chan->msg_size = element_rtype->storage_size;
+    chan->msg_rhash = ele_rhash;
     pthread_mutex_init(&chan->lock, NULL);
 
     // ele_rhash
@@ -213,7 +227,7 @@ static void rt_send(n_chan_t *chan, linkco_t *linkco, void *msg_ptr, scase *case
     linkco->success = true;
 
     if (linkco->data) {
-        rt_msg_transmit(linkco->co, linkco->data, msg_ptr, true, chan->msg_size);
+        rt_msg_transmit(linkco->co, linkco->data, msg_ptr, true, chan->msg_size, NULL);
         linkco->data = NULL;
     }
 
@@ -249,7 +263,7 @@ bool rt_chan_send(n_chan_t *chan, void *msg_ptr, bool try) {
         // 直接将 msg push 到 chan 中, 不阻塞当前 buf
         void *dst_ptr = buf_next_ref(chan);
 
-        memmove(dst_ptr, msg_ptr, chan->msg_size);
+        chan_buf_copy(chan, dst_ptr, msg_ptr);
 
         pthread_mutex_unlock(&chan->lock);
         return true;
@@ -305,7 +319,7 @@ static void rt_recv(n_chan_t *chan, linkco_t *linkco, void *msg_ptr, scase *case
     assert(msg_ptr);
     if (buf_empty(chan)) {
         DEBUGF("[rt_chan_recv] sendq have, buf empty,  will direct wakeup")
-        rt_msg_transmit(linkco->co, linkco->data, msg_ptr, false, chan->msg_size);
+        rt_msg_transmit(linkco->co, linkco->data, msg_ptr, false, chan->msg_size, NULL);
     } else {
         assert(buf_full(chan));
 
@@ -316,7 +330,7 @@ static void rt_recv(n_chan_t *chan, linkco_t *linkco, void *msg_ptr, scase *case
 
         // copy linkco->data to buf tail
         void *dst_ptr = buf_next_ref(chan);
-        rt_msg_transmit(linkco->co, linkco->data, dst_ptr, false, chan->msg_size);
+        rt_msg_transmit(linkco->co, linkco->data, dst_ptr, false, chan->msg_size, chan_msg_rtype(chan));
     }
 
     linkco->data = NULL;
@@ -707,7 +721,7 @@ BUFRECV:
 BUFSEND:
     case_success = true;
     void *dst_ptr = buf_next_ref(c);
-    memmove(dst_ptr, cas->msg_ptr, c->msg_size);
+    chan_buf_copy(c, dst_ptr, cas->msg_ptr);
     selunlock(cases, lockorder, cases_count);
     goto RETC;
 

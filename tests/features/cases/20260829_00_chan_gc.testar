@@ -1,0 +1,110 @@
+=== test_buffered_chan_gc[exclude_os=windows,repeat=5]
+--- main.n
+import co
+import runtime
+
+const SEED_COUNT = 128
+const MESSAGE_COUNT = 5000
+const GC_COUNT = 200
+const LIVE_COUNT = 50000
+
+type payload_t = struct {
+    int sequence
+    ref<int> marker
+}
+
+fn new_payload(int sequence): ref<payload_t> {
+    return new payload_t(
+        sequence = sequence,
+        marker = new int(sequence),
+    )
+}
+
+fn seed(chan<ref<payload_t>?> messages): void! {
+    for int sequence = 0; sequence < SEED_COUNT; sequence += 1 {
+        messages.send(new_payload(sequence))
+    }
+}
+
+fn send_one(chan<ref<payload_t>?> messages, int sequence): void! {
+    ref<payload_t> payload = new_payload(sequence)
+    for true {
+        bool sent = messages.try_send(payload)
+        if sent {
+            return
+        }
+        co.yield()
+    }
+}
+
+fn producer(chan<ref<payload_t>?> messages, chan<bool> done): void! {
+    for int sequence = SEED_COUNT; sequence < MESSAGE_COUNT; sequence += 1 {
+        send_one(messages, sequence)
+    }
+    done.send(true)
+}
+
+fn consumer(chan<ref<payload_t>?> messages, chan<bool> done): void! {
+    bool ok = true
+    for int expected = 0; expected < MESSAGE_COUNT; expected += 1 {
+        var payload = messages.recv()
+        if !(payload is ref<payload_t>) {
+            if ok {
+                println('type mismatch at', expected)
+            }
+            ok = false
+        } else {
+            ref<payload_t> payload_ref = payload as ref<payload_t>
+            if payload_ref.sequence != expected || *payload_ref.marker != expected {
+                if ok {
+                    println('payload mismatch expected', expected, 'got', payload_ref.sequence, *payload_ref.marker)
+                }
+                ok = false
+            }
+        }
+        if expected % 8 == 0 {
+            co.sleep(1)
+        }
+    }
+    done.send(ok)
+}
+
+fn gc_worker(chan<bool> done): void! {
+    for int i = 0; i < GC_COUNT; i += 1 {
+        runtime.gc()
+        co.sleep(1)
+    }
+    done.send(true)
+}
+
+fn main(): void! {
+    var messages = chan<ref<payload_t>?>.new(SEED_COUNT)
+    var producer_done = chan<bool>.new(1)
+    var consumer_done = chan<bool>.new(1)
+    var gc_done = chan<bool>.new(1)
+
+    seed(messages)
+
+    var live = vec<ref<int>>.cap_of(LIVE_COUNT)
+    ref<int> shared = new int(1)
+    for int i = 0; i < LIVE_COUNT; i += 1 {
+        live.push(shared)
+    }
+
+    runtime.gc()
+    co.sleep(500)
+
+    go gc_worker(gc_done)
+    co.sleep(1)
+    go consumer(messages, consumer_done)
+    go producer(messages, producer_done)
+
+    producer_done.recv()
+    bool consumer_ok = consumer_done.recv()
+    gc_done.recv()
+    assert(live.len() == LIVE_COUNT)
+    assert(consumer_ok)
+    println('ok')
+}
+--- output.txt
+ok
