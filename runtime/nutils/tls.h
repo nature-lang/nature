@@ -19,6 +19,7 @@
 // TLS 连接内部结构
 typedef struct {
     coroutine_t *co;
+    coroutine_t *write_co;
     int64_t read_len;
     void *data;
     bool timeout; // 是否触发了 timeout
@@ -133,14 +134,17 @@ static inline void on_tls_read_timeout_cb(uv_timer_t *timer) {
 
 static inline void on_tls_write_end_cb(uv_write_t *write_req, int status) {
     inner_tls_conn_t *conn = CONTAINER_OF(write_req, inner_tls_conn_t, write_req);
+    coroutine_t *write_co = conn->write_co;
+    assert(write_co);
+    conn->write_co = NULL;
 
     if (status < 0) {
         char *msg = tlsprintf("tls uv_write failed: %s", uv_strerror(status));
-        DEBUGF("[on_tls_write_end_cb] failed: %s, co=%p", msg, conn->co);
+        DEBUGF("[on_tls_write_end_cb] failed: %s, co=%p", msg, write_co);
     }
 
-    co_ready(conn->co);
-    DEBUGF("[on_tls_write_end_cb] co=%p ready, status=%d", conn->co, conn->co->status);
+    co_ready(write_co);
+    DEBUGF("[on_tls_write_end_cb] co=%p ready, status=%d", write_co, write_co->status);
 }
 
 
@@ -153,13 +157,18 @@ static void uv_async_tls_write(inner_tls_conn_t *conn, char *buf, size_t len) {
     conn->write_req.data = conn;
     int result = uv_write(&conn->write_req, (uv_stream_t *) &conn->handle, &write_buf, 1, on_tls_write_end_cb);
     if (result < 0) {
-        rti_co_throw(conn->co, tlsprintf("TLS write failed: %s", uv_strerror(result)), false);
-        co_ready(conn->co);
+        coroutine_t *write_co = conn->write_co;
+        assert(write_co);
+        conn->write_co = NULL;
+        rti_co_throw(write_co, tlsprintf("TLS write failed: %s", uv_strerror(result)), false);
+        co_ready(write_co);
     }
 }
 
 static int mbedtls_send_cb(void *ctx, const unsigned char *buf, size_t len) {
     inner_tls_conn_t *conn = (inner_tls_conn_t *) ctx;
+    assert(conn->write_co == NULL);
+    conn->write_co = coroutine_get();
 
     global_waiting_send(uv_async_tls_write, conn, (void *) buf, (void *) len);
 
@@ -456,7 +465,6 @@ int64_t rt_uv_tls_write(n_tls_conn_t *n_conn, n_vec_t buf) {
     }
 
     inner_tls_conn_t *conn = n_conn->conn;
-    conn->co = co;
     conn->handle.data = conn;
     conn->user_buf = buf;
 
@@ -512,7 +520,9 @@ void rt_uv_tls_conn_close(n_tls_conn_t *n_conn) {
     inner_tls_conn_t *conn = n_conn->conn;
     n_conn->closed = true;
 
-    // 发送 TLS close notify
+    // Send TLS close notify before closing the transport. mbedtls_send_cb()
+    // records the coroutine performing this write separately from conn->co,
+    // which may still be a different coroutine blocked in TLS read.
     if (conn->handshake_done) {
         mbedtls_ssl_close_notify(&conn->ssl);
     }
