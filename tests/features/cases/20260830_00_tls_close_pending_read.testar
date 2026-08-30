@@ -1,0 +1,30 @@
+=== test_close_with_pending_read[timeout=15]
+--- main.n
+import co
+import net.tls
+
+fn read_pending(ref<tls.conn_t> conn, chan<bool> started, chan<bool> done):void! {
+    started.send(true)
+    var scratch = vec<u8>.new(0, 16)
+    conn.read(scratch) catch e {
+        0
+    }
+    done.send(true)
+}
+
+fn main():void! {
+    var conn = tls.connect_timeout('34.160.111.145:443', 5000)
+    var started = chan<bool>.new(1)
+    var done = chan<bool>.new(1)
+
+    go read_pending(conn, started, done)
+    started.recv()
+    co.sleep(100)
+
+    conn.close()
+    done.recv()
+    println('tls close completed')
+}
+
+--- output.txt
+tls close completed
