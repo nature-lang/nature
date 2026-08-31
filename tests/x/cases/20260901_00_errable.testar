@@ -1,0 +1,129 @@
+=== test_propagate
+--- main.x
+// the errable control flow skeleton: declare, call, propagate, catch with nothing thrown
+fn risky(int v):int! {
+    return v * 2
+}
+
+fn caller(int v):int! {
+    return risky(v)
+}
+
+fn main() {
+    var a = caller(21) catch e {
+        -1
+    }
+    println('happy:', a)
+}
+
+--- output.txt
+happy: 42
+
+=== test_throw_catch
+--- main.x
+// errorf goes through fmt.sprintf, which x mode cannot run, so .x throws a struct literal
+fn risky(int v):int! {
+    if v < 0 {
+        throw errort{message: 'negative input', is_panic: false}
+    }
+    return v * 2
+}
+
+fn main() {
+    var b = risky(-1) catch e {
+        println('caught:', e.msg())
+        -2
+    }
+    println('thrown:', b)
+}
+
+--- output.txt
+caught: negative input
+thrown: -2
+
+=== test_nested_catch
+--- main.x
+// the outer error has to survive a catch that runs inside it. a single error slot
+// would let the inner throw overwrite the value the outer `e` still points at.
+fn risky(int v):int! {
+    if v < 0 {
+        throw errort{message: 'negative input', is_panic: false}
+    }
+    return v * 2
+}
+
+fn main() {
+    var c = risky(-1) catch outer {
+        var inner = risky(-1) catch e2 {
+            -3
+        }
+        println('outer after inner:', outer.msg(), inner)
+        -4
+    }
+    println('nested:', c)
+}
+
+--- output.txt
+outer after inner: negative input -3
+nested: -4
+
+=== test_catch_builtin
+--- main.x
+import allocator as ac
+
+// a builtin error is built by the runtime rather than by user code, so it exercises
+// the error value allocation path rather than the throw path
+fn main() {
+    var v = vec<int>.alloc(ac.heap, 0, 2)
+    defer v.deinit()
+
+    var x = v[5] catch e {
+        println('builtin caught:', e.msg())
+        -1
+    }
+    println(x)
+}
+
+--- output.txt
+builtin caught: index out of range [5] with length 2
+-1
+
+=== test_uncaught_panic
+--- main.x
+import allocator as ac
+
+// the uncaught path already works in x mode today, it must not regress
+fn main() {
+    var v = vec<int>.alloc(ac.heap, 0, 2)
+    defer v.deinit()
+    println(v[5])
+}
+
+--- output.txt
+panic: 'index out of range [5] with length 2' at nature-test/main.x:7:15
+
+=== test_n_catches_x_error
+--- main.n
+import "worker.x"
+
+// an .x errable fn throwing while a coroutine is live must land in the coroutine slot,
+// not in the x mode thread local one, or the .n caller never sees it
+fn main() {
+    var v = worker.risky(-1) catch e {
+        println('n caught from x:', e.msg())
+        -1
+    }
+    println(v)
+}
+
+--- worker.x
+pub fn risky(int v):int! {
+    if v < 0 {
+        throw errort{message: 'x side failure', is_panic: false}
+    }
+    return v * 2
+}
+
+--- output.txt
+n caught from x: x side failure
+-1
