@@ -714,9 +714,11 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
     assert(error->method_count == 1);
     coroutine_t *co = coroutine_get();
     if (!co) {
-        // the value is copied into a fixed size buffer, so x mode only accepts errort.
-        // errort is the sole implementor of throwable in the tree, this guards a user defined one.
-        assertf(error->rtype && error->rtype->hash == errort_rtype.hash,
+        // the value is copied into a fixed size buffer, so it has to fit. errort is the only
+        // implementor of throwable in the tree; this guards a user defined one that is larger.
+        // The rtype hash cannot be compared against errort_rtype here: that one is fabricated by
+        // the runtime with GC_RTYPE and never matches the compiler's hash for nature's errort.
+        assertf(error->rtype && error->rtype->gc_heap_size <= sizeof(n_errort),
                 "x mode can only throw errort");
         x_store_error(error->value.ptr_value);
         return;
