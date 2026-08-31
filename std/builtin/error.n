@@ -1,29 +1,10 @@
 import fmt
 
-pub type throwable = interface{
-	fn msg():string
-}
-
-pub type trace_t = struct{
-    string path
-    string ident
-    int line
-    int column
-}
-
-pub type errort:throwable = struct{
-	string message
-	bool is_panic
-}
-
-pub fn errort.msg(&self):string {
-	return self.message
-}
-
+// throwable / trace_t / errort live in error.x, see the note there.
+// errorf stays here because fmt.sprintf is gc backed and x mode cannot run it.
 pub fn errorf(string format, ...[any] args):ref<errort> {
 	var msg = fmt.sprintf(format, ...args)
 	return new errort(message = msg)
 }
-
 
 pub type errable<T> = errort|T

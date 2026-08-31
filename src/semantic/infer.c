@@ -4431,10 +4431,8 @@ static void infer_fndef(module_t *m, ast_fndef_t *fn) {
     m->current_line = fn->line;
     m->current_column = fn->column;
 
-    // v1 x mode subset. both are demonstrated crashes rather than style rules: an errable chain
-    // aborts register allocation, and a capturing closure segfaults on the gc env promotion.
+    // x mode subset: a capturing closure segfaults on the gc env promotion, so it stays rejected.
     if (fn->is_x) {
-        INFER_ASSERTF(!fn->is_errable, "errable fn declaration is not supported in .x");
         INFER_ASSERTF(fn->capture_exprs->length == 0, "closure capture is not supported in .x");
     }
 
