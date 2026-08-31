@@ -81,7 +81,11 @@ int runtime_main(int argc, char *argv[]) {
 
         DEBUGF("[runtime_main] fn mode user code run completed, will exit");
     } else {
-        // x mode: call user_main directly, no GC and no scheduler
+        // x mode: call user_main directly, no GC and no scheduler.
+        // The coroutine key still has to exist: uv_key_get on an uncreated key returns junk
+        // rather than NULL, and the error path dispatches on coroutine_get() being NULL.
+        uv_key_create(&tls_coroutine_key);
+
         DEBUGF("[runtime_main] x mode, calling user_main directly");
         user_main();
         DEBUGF("[runtime_main] x mode user code run completed, will exit");

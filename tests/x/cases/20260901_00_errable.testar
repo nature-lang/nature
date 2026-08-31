@@ -43,29 +43,25 @@ thrown: -2
 
 === test_nested_catch
 --- main.x
-// the outer error has to survive a catch that runs inside it. a single error slot
-// would let the inner throw overwrite the value the outer `e` still points at.
-fn risky(int v):int! {
-    if v < 0 {
-        throw errort{message: 'negative input', is_panic: false}
-    }
-    return v * 2
+// the outer error has to survive a catch that runs inside it. the two messages differ
+// on purpose: with one shared slot the inner throw overwrites what `e` still points at,
+// and identical messages would hide that.
+fn fail(string msg):int! {
+    throw errort{message: msg, is_panic: false}
 }
 
 fn main() {
-    var c = risky(-1) catch outer {
-        var inner = risky(-1) catch e2 {
-            -3
+    fail('AAA') catch e {
+        fail('BBB') catch e2 {
+            0
         }
-        println('outer after inner:', outer.msg(), inner)
-        -4
+        println('e.msg() =', e.msg())
+        0
     }
-    println('nested:', c)
 }
 
 --- output.txt
-outer after inner: negative input -3
-nested: -4
+e.msg() = AAA
 
 === test_catch_builtin
 --- main.x

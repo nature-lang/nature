@@ -657,10 +657,83 @@ void iterator_take_value(void *iterator, int64_t hash, int64_t cursor, void *val
     exit(0);
 }
 
+
+// ---- x mode error slot ------------------------------------------------------
+
+// throwable has a single method and x mode only lets errort implement it, so the table is
+// static here rather than copied out of the throwing frame, where linear lea's it onto the stack.
+static int64_t x_errort_methods[1] = {(int64_t) errort_msg};
+
+static _Thread_local x_error_buf_t x_flight = {0};
+static _Thread_local n_interface_t x_error = {0};
+static _Thread_local bool x_has_error = false;
+
+/**
+ * Move an error into the flight slot. The value, its message bytes and the method table all
+ * live in the throwing frame, which dies while unwinding, so none of them may be aliased.
+ */
+static void x_store_error(n_errort *src) {
+    x_flight.errort = *src;
+
+    int64_t len = x_flight.errort.msg.length;
+    if (len > X_ERR_MSG_CAP - 1) {
+        len = X_ERR_MSG_CAP - 1;
+    }
+    if (len > 0 && x_flight.errort.msg.data) {
+        memmove(x_flight.msg_buf, x_flight.errort.msg.data, len);
+    }
+    x_flight.msg_buf[len] = 0;
+    x_flight.errort.msg.data = (uint8_t *) x_flight.msg_buf;
+    x_flight.errort.msg.length = len;
+    x_flight.errort.msg.capacity = len;
+    x_flight.errort.msg.allocator = NULL;
+
+    x_error = (n_interface_t){
+        .value.ptr_value = &x_flight.errort,
+        .methods = x_errort_methods,
+        .rtype = &errort_rtype,
+        .method_count = 1,
+    };
+    x_has_error = true;
+}
+
+static void x_store_error_msg(char *msg) {
+    n_errort e = {0};
+    e.msg = (n_string_t){
+        .data = (uint8_t *) msg,
+        .length = (int64_t) strlen(msg),
+        .capacity = (int64_t) strlen(msg),
+        .element_size = 1,
+    };
+    e.panic = 1;
+    x_store_error(&e);
+}
+
 // 基于字符串到快速设置不太需要考虑内存泄漏的问题， raw_string 都是 .data 段中的字符串
 void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t line, n_int_t column) {
     assert(error->method_count == 1);
     coroutine_t *co = coroutine_get();
+    if (!co) {
+        // the value is copied into a fixed size buffer, so x mode only accepts errort.
+        // errort is the sole implementor of throwable in the tree, this guards a user defined one.
+        assertf(error->rtype && error->rtype->hash == errort_rtype.hash,
+                "x mode can only throw errort");
+        x_store_error(error->value.ptr_value);
+        return;
+    }
+
+    // An .x fn aliases its error onto the throwing frame rather than gc allocating it
+    // (interface_casting with is_x), and that frame dies while unwinding. Under a coroutine the
+    // value has to outlive it, so lift both the value and the method table onto the gc heap.
+    if (!in_heap((addr_t) error->value.ptr_value)) {
+        void *value_copy = rti_gc_malloc(error->rtype->gc_heap_size, error->rtype);
+        memmove(value_copy, error->value.ptr_value, error->rtype->gc_heap_size);
+        error->value.ptr_value = value_copy;
+
+        int64_t *methods_copy = (int64_t *) rti_array_new(&uint64_rtype, error->method_count);
+        memmove(methods_copy, error->methods, error->method_count * POINTER_SIZE);
+        error->methods = methods_copy;
+    }
 
     n_string_t err_msg = rti_error_msg(error);
     DEBUGF("[runtime.co_throw_error] co=%p, error=%p, path=%s, fn_name=%s, line=%ld, column=%ld, msg=%s", co,
@@ -695,6 +768,18 @@ void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
 
     char *msg = tlsprintf("index out of range [%d] with length %d", index, len);
 
+    if (!co) {
+        // x mode: no gc, so the message goes straight into the flight slot
+        if (be_catch) {
+            x_store_error_msg(msg);
+        } else {
+            char *x_copy = strdup(msg);
+            panic_dump(caller, x_copy);
+            free(x_copy);
+        }
+        return;
+    }
+
     if (be_catch) {
         n_interface_t error = n_error_new(string_new(msg, strlen(msg)), true);
         assert(error.method_count == 1);
@@ -723,8 +808,21 @@ void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch) {
     }
 }
 
-n_interface_t co_remove_error() {
+n_interface_t co_remove_error(void *dst) {
     coroutine_t *co = coroutine_get();
+    if (!co) {
+        // copy the value out of the flight slot so a later throw cannot reach this handler's error
+        assert(dst);
+        x_error_buf_t *buf = dst;
+        buf->errort = x_flight.errort;
+        memmove(buf->msg_buf, x_flight.msg_buf, X_ERR_MSG_CAP);
+        buf->errort.msg.data = (uint8_t *) buf->msg_buf;
+
+        x_has_error = false;
+        n_interface_t out = x_error;
+        out.value.ptr_value = &buf->errort;
+        return out;
+    }
 
     assert(co->has_error);
     co->has_error = false;
@@ -739,6 +837,19 @@ n_interface_t co_remove_error() {
 
 uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_int_t column) {
     coroutine_t *co = coroutine_get();
+    if (!co) {
+        if (!x_has_error) {
+            return 0;
+        }
+        if (be_catch) {
+            return 1;
+        }
+
+        n_string_t x_msg = rti_error_msg(&x_error);
+        char *x_dump = tlsprintf("panic: '%s' at %s:%d:%d\n", (char *) rt_string_ref(&x_msg), path, line, column);
+        VOID write(STDOUT_FILENO, x_dump, strlen(x_dump));
+        exit(EXIT_FAILURE);
+    }
     if (!co->has_error) {
         return 0;
     }
@@ -778,6 +889,9 @@ uint8_t co_has_panic(bool be_catch, char *path, char *fn_name, n_int_t line, n_i
 
 uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column) {
     coroutine_t *co = coroutine_get();
+    if (!co) {
+        return x_has_error ? 1 : 0;
+    }
     if (!co->has_error) {
         return 0;
     }

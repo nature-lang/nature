@@ -611,6 +611,16 @@ typedef struct {
     uint8_t panic;
 } n_errort;
 
+// x mode copies a caught error into a buffer in the handler's own frame, see co_remove_error.
+// linear reserves X_ERR_BUF_SIZE bytes there, so both sides have to agree on this.
+#define X_ERR_MSG_CAP 160
+#define X_ERR_BUF_SIZE (sizeof(n_errort) + X_ERR_MSG_CAP)
+
+typedef struct {
+    n_errort errort;
+    char msg_buf[X_ERR_MSG_CAP];
+} x_error_buf_t;
+
 /**
  * 将 ct_rtypes 填入到 ct_rtypes 中并返回索引
  * @param rtype

@@ -607,6 +607,27 @@ linear_stack_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target)
     return target;
 }
 
+/**
+ * x mode has no gc, so the error value cannot stay on a shared runtime slot: a later throw would
+ * overwrite what a handler still holds. Hand co_remove_error a buffer in the handler's own frame
+ * and it copies the value in, giving every handler its own copy like the gc does in fn mode.
+ */
+static void linear_remove_error(module_t *m, lir_operand_t *err_operand) {
+    lir_operand_t *err_buf_ptr = int_operand(0);
+
+    if (m->is_x) {
+        type_array_t *buf_array = NEW(type_array_t);
+        buf_array->length = X_ERR_BUF_SIZE;
+        buf_array->element_type = type_kind_new(TYPE_UINT8);
+        type_t buf_type = type_new(TYPE_ARR, buf_array);
+
+        lir_operand_t *buf_target = temp_var_operand_with_alloc(m, buf_type);
+        err_buf_ptr = lea_operand_pointer(m, buf_target);
+    }
+
+    push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 1, err_buf_ptr);
+}
+
 // target 中保存了栈地址，开始向上清理
 static void linear_default_empty_stack(module_t *m, lir_operand_t *target, uint64_t offset, uint64_t size) {
     uint64_t remind = size;
@@ -3776,7 +3797,7 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     // 从 catch expr 中获取 err 然后为 err 赋值
     lir_operand_t *err_operand = linear_var_decl(m, &catch_expr->catch_err);
 
-    push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
+    linear_remove_error(m, err_operand);
 
     stack_push(m->current_closure->ret_labels, catch_end_label->output);
     stack_push(m->current_closure->ret_targets, target);
@@ -3813,7 +3834,7 @@ static void linear_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
 
     // 为 err 赋值
     lir_operand_t *err_operand = linear_var_decl(m, &try_stmt->catch_err);
-    push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
+    linear_remove_error(m, err_operand);
 
     stack_push(m->current_closure->ret_labels, catch_end_label->output);
 

@@ -51,7 +51,14 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
 
 void throw_index_out_error(n_int_t *index, n_int_t *len, n_bool_t be_catch);
 
-n_interface_t co_remove_error();
+// x mode has no coroutine, so the error in flight lives in a thread local slot. The slot is
+// only correct for the flight window, which holds one error at a time; co_remove_error copies
+// the value into caller owned storage so a later throw cannot disturb a handler's `e`.
+// The message bytes are copied too: a builtin error's message sits in the reused tlsprintf
+// buffer, and copying n_errort alone would only copy the string header.
+// x_error_buf_t and X_ERR_BUF_SIZE live in utils/type.h, linear reserves the same size.
+// dst is the caller owned x_error_buf_t, or NULL in fn mode
+n_interface_t co_remove_error(void *dst);
 
 uint8_t co_has_error(char *path, char *fn_name, n_int_t line, n_int_t column);
 
