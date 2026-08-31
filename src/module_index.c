@@ -98,23 +98,40 @@ char *module_source_rel_path(char *package_dir, char *source_path) {
     return rel;
 }
 
+/**
+ * a nature source is either .n (normal mode) or .x (x mode), the extension is part of the
+ * module identity so foo.n and foo.x are distinct slots rather than variants of one module
+ */
+char *module_source_ext(char *filename) {
+    if (ends_with(filename, SOURCE_EXT_N)) {
+        return SOURCE_EXT_N;
+    }
+    if (ends_with(filename, SOURCE_EXT_X)) {
+        return SOURCE_EXT_X;
+    }
+    return NULL;
+}
+
 bool module_unit_has_source_named(module_unit_t *unit, char *name) {
-    char *expect = str_connect(name, ".n");
+    char *expect_n = str_connect(name, SOURCE_EXT_N);
+    char *expect_x = str_connect(name, SOURCE_EXT_X);
 
     for (int i = 0; i < unit->sources->count; ++i) {
         char *slot_key = module_source_slot_key(unit->sources->take[i]);
         char *basename = strrchr(slot_key, '/');
         basename = basename ? basename + 1 : slot_key;
 
-        if (str_equal(basename, expect)) {
+        if (str_equal(basename, expect_n) || str_equal(basename, expect_x)) {
             free(slot_key);
-            free(expect);
+            free(expect_n);
+            free(expect_x);
             return true;
         }
         free(slot_key);
     }
 
-    free(expect);
+    free(expect_n);
+    free(expect_x);
     return false;
 }
 
@@ -247,10 +264,10 @@ done:
  */
 static void source_parse_variant(char *filename, char **base_out, source_variant_kind_t *kind_out, uint8_t *os_out,
                                  uint8_t *arch_out) {
-    assert(ends_with(filename, ".n"));
+    assert(module_source_ext(filename));
 
     char *stem = strdup(filename);
-    stem[strlen(stem) - 2] = '\0'; // strip .n
+    stem[strlen(stem) - 2] = '\0'; // strip .n / .x, both are two chars
 
     *kind_out = SOURCE_VARIANT_PLAIN;
     *os_out = 0;
@@ -296,7 +313,8 @@ char *module_source_slot_key(char *source_path) {
     char *filename = strrchr(source_path, '/');
     filename = filename ? filename + 1 : source_path;
 
-    if (!ends_with(filename, ".n")) {
+    char *ext = module_source_ext(filename);
+    if (!ext) {
         return NULL;
     }
 
@@ -305,7 +323,7 @@ char *module_source_slot_key(char *source_path) {
     uint8_t os, arch;
     source_parse_variant(filename, &base, &kind, &os, &arch);
 
-    char *key = path_join(strdup(dir), str_connect(base, ".n"));
+    char *key = path_join(strdup(dir), str_connect(base, ext));
     free(dir);
     return key;
 }
@@ -375,7 +393,8 @@ static void package_scan_dir(package_unit_t *pu, table_t *slot_table, slice_t *s
             continue;
         }
 
-        if (!ends_with(name, ".n")) {
+        char *ext = module_source_ext(name);
+        if (!ext) {
             continue;
         }
 
@@ -384,7 +403,7 @@ static void package_scan_dir(package_unit_t *pu, table_t *slot_table, slice_t *s
         uint8_t os, arch;
         source_parse_variant(name, &base, &kind, &os, &arch);
 
-        char *slot_key = path_join(strdup(dir), str_connect(base, ".n"));
+        char *slot_key = path_join(strdup(dir), str_connect(base, ext));
 
         scan_slot_t *slot = table_get(slot_table, slot_key);
         if (!slot) {

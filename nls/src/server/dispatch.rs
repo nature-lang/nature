@@ -6,7 +6,7 @@ use std::sync::Arc;
 use log::debug;
 use tower_lsp::lsp_types::*;
 
-use crate::module_index::{package_unit_invalidate, package_unit_reset};
+use crate::module_index::{is_source_path, package_unit_invalidate, package_unit_reset};
 use crate::package::parse_package;
 use crate::project::Project;
 use crate::utils::offset_to_position;
@@ -171,15 +171,15 @@ impl Backend {
         for change in params.changes {
             let file_path = change.uri.path();
 
-            // .n file created/deleted → re-scan workspace index.
-            if file_path.ends_with(".n") {
+            // .n / .x file created/deleted → re-scan workspace index.
+            if is_source_path(file_path) {
                 // adding or removing a file changes the module layout (and file/directory module conflicts)
                 package_unit_invalidate(file_path);
 
                 if let Some(project) = self.get_file_project(file_path) {
                     if let Ok(mut ws_index) = project.workspace_index.lock() {
                         ws_index.scan_workspace(&project.root, &project.nature_root);
-                        debug!("workspace re-indexed after .n file change: {}", file_path);
+                        debug!("workspace re-indexed after source file change: {}", file_path);
                     }
                 }
                 continue;

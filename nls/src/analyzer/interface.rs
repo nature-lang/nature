@@ -131,7 +131,7 @@ fn interface_extract_fn_type(typesys: &mut Typesys, fndef: &AstFnDef) -> Result<
         tpl: fndef.is_tpl,
         errable: fndef.is_errable,
         rest: fndef.rest_param,
-        fx: fndef.is_fx,
+        x: fndef.is_x,
         param_types: Vec::new(),
         return_type: typesys.reduction_type(fndef.return_type.clone())?,
     };

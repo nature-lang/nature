@@ -468,7 +468,7 @@ struct type_fn_t {
     bool is_rest;
     bool is_c_variadic;
     bool is_errable;
-    bool is_fx;
+    bool is_x;
     bool is_tpl;
     int self_kind;
 };

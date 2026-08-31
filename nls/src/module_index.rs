@@ -18,6 +18,40 @@ use lazy_static::lazy_static;
 pub const MOD_DECL_IDENT: &str = "mod";
 const PACKAGE_TOML: &str = "package.toml";
 
+/// nature source extensions, `.n` compiles in normal mode and `.x` in x mode
+pub const SOURCE_EXT_N: &str = ".n";
+pub const SOURCE_EXT_X: &str = ".x";
+
+/// Mirrors `module_source_ext` in `src/module_index.c`: the extension is part of the module
+/// identity, so `foo.n` and `foo.x` are distinct slots rather than variants of one module.
+pub fn source_ext(filename: &str) -> Option<&'static str> {
+    if filename.ends_with(SOURCE_EXT_N) {
+        Some(SOURCE_EXT_N)
+    } else if filename.ends_with(SOURCE_EXT_X) {
+        Some(SOURCE_EXT_X)
+    } else {
+        None
+    }
+}
+
+/// Whether the path names a nature source file of either mode.
+pub fn is_source_path(path: &str) -> bool {
+    source_ext(path).is_some()
+}
+
+/// Whether a bare extension (as returned by `Path::extension`, no leading dot) is a nature source.
+pub fn is_source_extension(ext: &str) -> bool {
+    ext == "n" || ext == "x"
+}
+
+/// Strip a trailing `.n` / `.x` from a path or module ident.
+pub fn strip_source_ext(name: &str) -> &str {
+    match source_ext(name) {
+        Some(ext) => &name[..name.len() - ext.len()],
+        None => name,
+    }
+}
+
 const OS_NAMES: [&str; 3] = ["linux", "darwin", "windows"];
 const ARCH_NAMES: [&str; 4] = ["amd64", "arm64", "riscv64", "wasm"];
 
@@ -179,7 +213,7 @@ fn read_mod_decl_from_file(path: &str) -> Option<String> {
 
 /// Parse the target suffix in a file name, returning (base, kind, os, arch)
 fn parse_variant(filename: &str) -> (String, VariantKind, String, String) {
-    let stem = filename.strip_suffix(".n").unwrap_or(filename);
+    let stem = strip_source_ext(filename);
 
     if let Some(dot) = stem.rfind('.') {
         let suffix = &stem[dot + 1..];
@@ -202,13 +236,11 @@ fn parse_variant(filename: &str) -> (String, VariantKind, String, String) {
 pub fn source_slot_key(source_path: &str) -> Option<String> {
     let path = Path::new(source_path);
     let filename = path.file_name()?.to_str()?;
-    if !filename.ends_with(".n") {
-        return None;
-    }
+    let ext = source_ext(filename)?;
 
     let (base, ..) = parse_variant(filename);
     let dir = path.parent()?.to_str()?;
-    Some(format!("{}/{}.n", dir, base))
+    Some(format!("{}/{}{}", dir, base, ext))
 }
 
 #[derive(Debug, Clone)]
@@ -262,12 +294,12 @@ fn scan_dir(dir: &Path, rel_dir: &str, slots: &mut HashMap<String, ScanSlot>, vi
             continue;
         }
 
-        if !name.ends_with(".n") {
+        let Some(ext) = source_ext(&name) else {
             continue;
-        }
+        };
 
         let (base, kind, os, arch) = parse_variant(&name);
-        let slot_key = format!("{}/{}.n", dir.to_str().unwrap_or(""), base);
+        let slot_key = format!("{}/{}{}", dir.to_str().unwrap_or(""), base, ext);
         let path = full_path.to_str().unwrap_or("").to_string();
         let mod_ident = match overlay {
             Some((overlay_path, source)) if overlay_path == path => read_mod_decl(source),

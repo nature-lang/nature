@@ -206,6 +206,7 @@ struct module_t {
 
     // bool entry; // 入口
     module_type_t type;
+    bool is_x; // the module is compiled from a .x source (x mode)
 
     scanner_cursor_t s_cursor;
     linked_t *token_list; // scanner 结果
@@ -621,7 +622,6 @@ typedef struct closure_t {
 
     bool exists_call;
     bool exists_sp;
-    bool is_fx;
 
     slice_t *callee_saved; // 记录函数中使用的 callee-saved 寄存器 (reg_t*)
 

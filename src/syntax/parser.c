@@ -302,7 +302,7 @@ static list_t *parser_parse_where_constraints(module_t *m) {
     PARSER_ASSERTF(!parser_is(m, TOKEN_STMT_EOF), "#where must declare at least one generic constraint");
 
     while (!parser_is(m, TOKEN_STMT_EOF) && !parser_is(m, TOKEN_EOF) &&
-           !parser_is(m, TOKEN_FN) && !parser_is(m, TOKEN_FX)) {
+           !parser_is(m, TOKEN_FN)) {
         token_t *ident = parser_must(m, TOKEN_IDENT);
         ast_generics_param_t *param = ast_generics_param_new(ident->line, ident->column, ident->literal);
         parser_must(m, TOKEN_COLON);
@@ -324,7 +324,7 @@ static list_t *parser_parse_where_constraints(module_t *m) {
 
         // 允许 #where 最后一个约束后保留逗号
         if (parser_is(m, TOKEN_STMT_EOF) || parser_is(m, TOKEN_EOF) ||
-            parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
+            parser_is(m, TOKEN_FN)) {
             break;
         }
     }
@@ -390,9 +390,10 @@ static slice_t *parser_body(module_t *m, bool last_to_ret) {
     return stmt_list;
 }
 
-static inline type_fn_t *parser_type_fn(module_t *m, bool is_fx) {
+static inline type_fn_t *parser_type_fn(module_t *m) {
     type_fn_t *type_fn = NEW(type_fn_t);
-    type_fn->is_fx = is_fx;
+    // a fn type annotation carries the mode of the file that writes it
+    type_fn->is_x = m->is_x;
     type_fn->param_types = ct_list_new(sizeof(type_t));
     parser_must(m, TOKEN_LEFT_PAREN);
 
@@ -697,14 +698,11 @@ static type_t parser_single_type(module_t *m) {
         return result;
     }
 
-    // fn(int, int):int! / fx(int, int):int!
-    if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
-        bool is_fx = parser_consume(m, TOKEN_FX);
-        if (!is_fx) {
-            parser_must(m, TOKEN_FN);
-        }
+    // fn(int, int):int!
+    if (parser_is(m, TOKEN_FN)) {
+        parser_must(m, TOKEN_FN);
 
-        type_fn_t *type_fn = parser_type_fn(m, is_fx);
+        type_fn_t *type_fn = parser_type_fn(m);
         result.kind = TYPE_FN;
         result.fn = type_fn;
         return result;
@@ -904,11 +902,8 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m, bool is_pub) {
         sc_map_init_s64(&exists, 0, 0); // value is type_fn_t
 
         while (!parser_consume(m, TOKEN_RIGHT_CURLY)) {
-            INFER_ASSERTF(parser_is(m, TOKEN_FX) || parser_is(m, TOKEN_FN), "interface only supports fn and fx");
-            bool is_fx = parser_consume(m, TOKEN_FX);
-            if (!is_fx) {
-                parser_must(m, TOKEN_FN);
-            }
+            INFER_ASSERTF(parser_is(m, TOKEN_FN), "interface only supports fn");
+            parser_must(m, TOKEN_FN);
 
             // ident
             char *fn_name = parser_must(m, TOKEN_IDENT)->literal;
@@ -923,9 +918,8 @@ static ast_stmt_t *parser_typedef_stmt(module_t *m, bool is_pub) {
                 parser_must(m, TOKEN_RIGHT_ANGLE);
             }
 
-            type_fn_t *type_fn = parser_type_fn(m, false);
+            type_fn_t *type_fn = parser_type_fn(m);
             type_fn->fn_name = fn_name;
-            type_fn->is_fx = is_fx;
             if (method_generics_params && method_generics_params->length > 0) {
                 type_fn->is_tpl = true;
             }
@@ -1954,7 +1948,7 @@ RET:
  * {x} a = xxx
  * [x] a = xxx
  * (x, x, x) a = xxx
- * fn(x):x a = xxx / fx(x):x a = xxx // 区分 fn a(x): x {}
+ * fn(x):x a = xxx // 区分 fn a(x): x {}
  * custom_x a = xxx # 连续两个 ident 判定就能判定出来
  * @return
  */
@@ -1978,8 +1972,7 @@ static bool is_type_begin_stmt(module_t *m) {
     }
 
     // fndef type (stmt 维度禁止了匿名 fndef, 所以这里一定是 fndef type)
-    if ((parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) &&
-        parser_next_is(m, 1, TOKEN_LEFT_PAREN)) {
+    if (parser_is(m, TOKEN_FN) && parser_next_is(m, 1, TOKEN_LEFT_PAREN)) {
         return true;
     }
 
@@ -2643,12 +2636,7 @@ static ast_expr_t parser_left_curly_expr(module_t *m) {
 static ast_expr_t parser_fndef_expr(module_t *m) {
     ast_expr_t result = expr_new(m);
     ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
-    if (parser_is(m, TOKEN_FX)) {
-        parser_advance(m);
-        fndef->is_fx = true;
-    } else {
-        parser_must(m, TOKEN_FN);
-    }
+    parser_must(m, TOKEN_FN);
 
     if (parser_is(m, TOKEN_IDENT)) {
         PARSER_ASSERTF(false, "closure fn cannot have a name");
@@ -2971,12 +2959,7 @@ static ast_stmt_t *parser_fndef_stmt(module_t *m, ast_fndef_t *fndef) {
     result->assert_type = AST_FNDEF;
     result->value = fndef;
 
-    if (parser_is(m, TOKEN_FX)) {
-        parser_advance(m);
-        fndef->is_fx = true;
-    } else {
-        parser_must(m, TOKEN_FN);
-    }
+    parser_must(m, TOKEN_FN);
 
     // 第一个绝对是 ident, 第二个如果是 . 或者 < 则说明是类型扩展
     if (parser_is_impl_fn(m)) {
@@ -3183,16 +3166,16 @@ static ast_stmt_t *parser_label(module_t *m) {
     fndef->is_pub = parser_consume(m, TOKEN_PUB);
 
     if (fndef->pending_where_params) {
-        PARSER_ASSERTF(parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX), "#where can only be applied to fn/fx");
+        PARSER_ASSERTF(parser_is(m, TOKEN_FN), "#where can only be applied to fn");
     }
 
     if (parser_is(m, TOKEN_TYPE)) {
-        PARSER_ASSERTF(!fndef->pending_where_params, "#where can only be applied to fn/fx");
+        PARSER_ASSERTF(!fndef->pending_where_params, "#where can only be applied to fn");
         return parser_typedef_stmt(m, fndef->is_pub);
-    } else if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
+    } else if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_stmt(m, fndef);
     } else {
-        PARSER_ASSERTF(false, "the label can only be applied to type alias or fn/fx.");
+        PARSER_ASSERTF(false, "the label can only be applied to type alias or fn.");
     }
 }
 
@@ -3351,7 +3334,7 @@ static ast_stmt_t *parser_global_stmt(module_t *m) {
         return parser_type_begin_stmt(m, is_pub);
     } else if (!is_pub && parser_is(m, TOKEN_LABEL)) {
         return parser_label(m);
-    } else if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
+    } else if (parser_is(m, TOKEN_FN)) {
         ast_fndef_t *fndef = ast_fndef_new(m, parser_peek(m)->line, parser_peek(m)->column);
         fndef->is_pub = is_pub;
         return parser_fndef_stmt(m, fndef);
@@ -3935,7 +3918,7 @@ static ast_expr_t parser_expr(module_t *m) {
     }
 
     // fn def, 也能写到括号里面呀
-    if (parser_is(m, TOKEN_FN) || parser_is(m, TOKEN_FX)) {
+    if (parser_is(m, TOKEN_FN)) {
         return parser_fndef_expr(m);
     }
 

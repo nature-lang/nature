@@ -270,7 +270,7 @@ fn build_signature_information(
     }
 
     let ret = &fndef.return_type;
-    let fn_prefix = if fndef.is_fx { "fx" } else { "fn" };
+    let fn_prefix = if fndef.is_x { "xfn" } else { "fn" };
     let mut label = format!("{} {}({}): {}", fn_prefix, display_name, param_parts.join(", "), ret);
     if fndef.is_errable {
         label.push('!');
@@ -294,7 +294,7 @@ fn format_signature_from_type(
         .iter()
         .map(|t| type_display(t))
         .collect();
-    let fn_prefix = if fn_type.fx { "fx" } else { "fn" };
+    let fn_prefix = if fn_type.x { "xfn" } else { "fn" };
     let mut sig = format!("{} {}({}): {}", fn_prefix, name, params.join(", "), fn_type.return_type);
     if fn_type.errable {
         sig.push('!');

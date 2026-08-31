@@ -1399,7 +1399,7 @@ static slice_t *amd64_native_fn_end(closure_t *c, lir_op_t *op) {
         operations = amd64_native_return(c, op);
     }
 
-    if (!c->fndef->is_fx) {
+    if (!c->fndef->is_x) {
         // assist preempt label
         char *preempt_ident = local_sym_with_fn(c, ".preempt");
         slice_push(operations, AMD64_INST("label", AMD64_SYMBOL(preempt_ident, true)));

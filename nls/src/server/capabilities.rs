@@ -136,7 +136,7 @@ impl Backend {
     pub(crate) async fn handle_initialized(&self) {
         debug!("initialized");
 
-        // Register file watchers for .n files and package.toml.
+        // Register file watchers for .n / .x sources and package.toml.
         let registrations = vec![Registration {
             id: "nature-file-watcher".into(),
             method: "workspace/didChangeWatchedFiles".into(),
@@ -144,6 +144,10 @@ impl Backend {
                 watchers: vec![
                     FileSystemWatcher {
                         glob_pattern: GlobPattern::String("**/*.n".into()),
+                        kind: Some(WatchKind::Create | WatchKind::Delete),
+                    },
+                    FileSystemWatcher {
+                        glob_pattern: GlobPattern::String("**/*.x".into()),
                         kind: Some(WatchKind::Create | WatchKind::Delete),
                     },
                     FileSystemWatcher {

@@ -2,6 +2,7 @@ use super::common::*;
 use super::lexer::semantic_token_type_index;
 use super::lexer::Token;
 use super::lexer::TokenType;
+use crate::module_index::SOURCE_EXT_X;
 use crate::project::Module;
 use crate::utils::errors_push;
 use std::collections::HashMap;
@@ -158,12 +159,16 @@ pub struct Syntax {
     // match 表达式中 subject 的解析
     match_subject: bool,
 
+    // the source extension selects the module mode, .x means x mode
+    is_x: bool,
+
     module: Module,
 }
 
 impl<'a> Syntax {
     // static method new, Syntax::new(tokens)
     pub fn new(m: Module, token_db: Vec<Token>, token_indexes: Vec<usize>) -> Self {
+        let is_x = m.path.ends_with(SOURCE_EXT_X);
         Self {
             token_db: token_db,
             token_indexes: token_indexes,
@@ -173,8 +178,15 @@ impl<'a> Syntax {
             match_subject: false,
             lambda_index: 0,
             test_index: 0,
+            is_x,
             module: m,
         }
+    }
+
+    /// Every fn declared in this file inherits the file's mode, mirroring `ast_fndef_new` in
+    /// `src/ast.h`. Always build fndefs through here so the mode is never dropped.
+    fn new_fndef(&self) -> AstFnDef {
+        AstFnDef { is_x: self.is_x, ..AstFnDef::default() }
     }
 
     fn set_current_token_type(&mut self, token_type: SemanticTokenType) {
@@ -607,7 +619,7 @@ impl<'a> Syntax {
             ));
         }
 
-        while !self.is(TokenType::StmtEof) && !self.is(TokenType::Eof) && !self.is(TokenType::Fn) && !self.is(TokenType::Fx) {
+        while !self.is(TokenType::StmtEof) && !self.is(TokenType::Eof) && !self.is(TokenType::Fn) {
             let ident = self.must(TokenType::Ident)?.clone();
             let mut param = GenericsParam::new(ident.literal.clone());
             self.must(TokenType::Colon)?;
@@ -647,7 +659,7 @@ impl<'a> Syntax {
             }
 
             // #where 支持最后一个约束后保留逗号
-            if self.is(TokenType::StmtEof) || self.is(TokenType::Eof) || self.is(TokenType::Fn) || self.is(TokenType::Fx) {
+            if self.is(TokenType::StmtEof) || self.is(TokenType::Eof) || self.is(TokenType::Fn) {
                 break;
             }
         }
@@ -843,7 +855,7 @@ impl<'a> Syntax {
                     if brace_level == 0 {
                         if matches!(
                             token,
-                            TokenType::Fn | TokenType::Fx | TokenType::Var | TokenType::Import | TokenType::Type | TokenType::Const
+                            TokenType::Fn | TokenType::Var | TokenType::Import | TokenType::Type | TokenType::Const
                         ) || self.is_basic_type()
                         {
                             return true;
@@ -892,7 +904,7 @@ impl<'a> Syntax {
         }
     }
 
-    fn parser_type_fn(&mut self, is_fx: bool) -> Result<TypeKind, SyntaxError> {
+    fn parser_type_fn(&mut self) -> Result<TypeKind, SyntaxError> {
         let mut param_types = Vec::new();
 
         self.must(TokenType::LeftParen)?;
@@ -956,7 +968,7 @@ impl<'a> Syntax {
             rest: is_rest,
             tpl: false,
             errable: is_errable,
-            fx: is_fx,
+            x: self.is_x,
         })))
     }
 
@@ -1171,13 +1183,10 @@ impl<'a> Syntax {
             return Ok(t);
         }
 
-        // fn(Type, Type, ...):T! / fx(Type, Type, ...):T!
-        if self.is(TokenType::Fn) || self.is(TokenType::Fx) {
-            let is_fx = self.consume(TokenType::Fx);
-            if !is_fx {
-                self.must(TokenType::Fn)?;
-            }
-            let type_fn_kind = self.parser_type_fn(is_fx)?;
+        // fn(Type, Type, ...):T!
+        if self.is(TokenType::Fn) {
+            self.must(TokenType::Fn)?;
+            let type_fn_kind = self.parser_type_fn()?;
             t.kind = type_fn_kind;
             t.end = self.prev().unwrap().end;
             return Ok(t);
@@ -1378,14 +1387,11 @@ impl<'a> Syntax {
             self.must(TokenType::LeftCurly)?;
 
             while !self.consume(TokenType::RightCurly) {
-                if !self.is(TokenType::Fn) && !self.is(TokenType::Fx) {
-                    return Err(SyntaxError(self.peek().start, self.peek().end, "interface only supports fn and fx".to_string()));
+                if !self.is(TokenType::Fn) {
+                    return Err(SyntaxError(self.peek().start, self.peek().end, "interface only supports fn".to_string()));
                 }
 
-                let is_fx = self.consume(TokenType::Fx);
-                if !is_fx {
-                    self.must(TokenType::Fn)?;
-                }
+                self.must(TokenType::Fn)?;
                 let fn_start = self.prev().unwrap().clone();
                 let fn_name_token = self.must(TokenType::Ident)?.clone();
                 let fn_name = fn_name_token.literal.clone();
@@ -1398,7 +1404,7 @@ impl<'a> Syntax {
                     self.must(TokenType::RightAngle)?;
                 }
 
-                let mut type_fn_kind = self.parser_type_fn(is_fx)?;
+                let mut type_fn_kind = self.parser_type_fn()?;
                 if let TypeKind::Fn(fn_kind) = &mut type_fn_kind {
                     fn_kind.name = fn_name.clone();
                     if !method_generics_params.is_empty() {
@@ -2429,7 +2435,7 @@ impl<'a> Syntax {
         }
 
         // fndef type (stmt 维度禁止了匿名 fndef, 所以这里一定是 fndef type)
-        if (self.is(TokenType::Fn) || self.is(TokenType::Fx)) && self.next_is(1, TokenType::LeftParen) {
+        if self.is(TokenType::Fn) && self.next_is(1, TokenType::LeftParen) {
             return true;
         }
 
@@ -3033,13 +3039,9 @@ impl<'a> Syntax {
         let start = self.peek().start;
         let end = self.peek().end;
 
-        let is_fx = self.consume(TokenType::Fx);
-        if !is_fx {
-            self.must(TokenType::Fn)?;
-        }
+        self.must(TokenType::Fn)?;
 
-        let mut fndef = AstFnDef::default();
-        fndef.is_fx = is_fx;
+        let mut fndef = self.new_fndef();
         fndef.symbol_start = start;
         fndef.symbol_end = end;
 
@@ -3426,7 +3428,7 @@ impl<'a> Syntax {
             ));
         };
 
-        let mut fndef = AstFnDef::default();
+        let mut fndef = self.new_fndef();
         fndef.symbol_start = start;
         fndef.is_test = true;
         fndef.is_pub = false;
@@ -3454,11 +3456,7 @@ impl<'a> Syntax {
     fn parser_fndef_stmt(&mut self, mut fndef: AstFnDef) -> Result<Box<Stmt>, SyntaxError> {
         let mut stmt = self.stmt_new();
         fndef.symbol_start = self.peek().start;
-        if self.consume(TokenType::Fx) {
-            fndef.is_fx = true;
-        } else {
-            self.must(TokenType::Fn)?;
-        }
+        self.must(TokenType::Fn)?;
 
         // 检查是否是类型实现函数
         if self.is_impl_fn() {
@@ -3621,7 +3619,7 @@ impl<'a> Syntax {
     }
 
     fn parser_label(&mut self) -> Result<Box<Stmt>, SyntaxError> {
-        let mut fndef = AstFnDef::default();
+        let mut fndef = self.new_fndef();
 
         while self.is(TokenType::Label) {
             let token = self.must(TokenType::Label)?;
@@ -3662,11 +3660,11 @@ impl<'a> Syntax {
         let is_pub = self.consume(TokenType::Pub);
         fndef.is_pub = is_pub;
 
-        if fndef.pending_where_params.is_some() && !self.is(TokenType::Fn) && !self.is(TokenType::Fx) {
+        if fndef.pending_where_params.is_some() && !self.is(TokenType::Fn) {
             return Err(SyntaxError(
                 self.peek().start,
                 self.peek().end,
-                "#where can only be applied to fn/fx".to_string(),
+                "#where can only be applied to fn".to_string(),
             ));
         }
 
@@ -3675,11 +3673,11 @@ impl<'a> Syntax {
                 return Err(SyntaxError(
                     self.peek().start,
                     self.peek().end,
-                    "#where can only be applied to fn/fx".to_string(),
+                    "#where can only be applied to fn".to_string(),
                 ));
             }
             self.parser_typedef_stmt(is_pub)
-        } else if self.is(TokenType::Fn) || self.is(TokenType::Fx) {
+        } else if self.is(TokenType::Fn) {
             self.parser_fndef_stmt(fndef)
         } else if self.is(TokenType::Const) {
             self.parser_constdef_stmt(is_pub)
@@ -3691,7 +3689,7 @@ impl<'a> Syntax {
             Err(SyntaxError(
                 self.peek().start,
                 self.peek().end,
-                format!("the label can only be applied to type, fn, fx, const, or var"),
+                format!("the label can only be applied to type, fn, const, or var"),
             ))
         }
     }
@@ -3772,8 +3770,8 @@ impl<'a> Syntax {
             self.parser_label()?
         } else if !is_pub && self.is(TokenType::Test) {
             self.parser_test_stmt()?
-        } else if self.is(TokenType::Fn) || self.is(TokenType::Fx) {
-            let mut fndef = AstFnDef::default();
+        } else if self.is(TokenType::Fn) {
+            let mut fndef = self.new_fndef();
             fndef.is_pub = is_pub;
             self.parser_fndef_stmt(fndef)?
         } else if !is_pub && self.is(TokenType::Import) {
@@ -4039,7 +4037,7 @@ impl<'a> Syntax {
     }
 
     fn coroutine_fn_closure(&mut self, call_expr: &Box<Expr>) -> AstFnDef {
-        let mut fndef = AstFnDef::default();
+        let mut fndef = self.new_fndef();
 
         fndef.is_async = true;
         fndef.is_errable = true;
@@ -4097,7 +4095,7 @@ impl<'a> Syntax {
     }
 
     fn coroutine_fn_void_closure(&mut self, call_expr: &Box<Expr>) -> AstFnDef {
-        let mut fndef = AstFnDef::default();
+        let mut fndef = self.new_fndef();
         fndef.is_async = true;
         fndef.is_errable = true;
         fndef.params = Vec::new();
@@ -4438,7 +4436,7 @@ impl<'a> Syntax {
             self.parser_go_expr()
         } else if self.is(TokenType::Match) {
             self.parser_match_expr()
-        } else if self.is(TokenType::Fn) || self.is(TokenType::Fx) {
+        } else if self.is(TokenType::Fn) {
             self.parser_fndef_expr()
         } else if self.parser_is_new() {
             self.parser_new_expr()

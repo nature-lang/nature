@@ -60,7 +60,7 @@ static type_t interface_extract_fn_type(module_t *m, ast_fndef_t *fndef) {
     fn->fn_name = fndef->fn_name;
     fn->is_tpl = fndef->is_tpl;
     fn->is_errable = fndef->is_errable;
-    fn->is_fx = fndef->is_fx;
+    fn->is_x = fndef->is_x;
     fn->param_types = ct_list_new(sizeof(type_t));
     fn->return_type = reduction_type(m, type_copy(m, fndef->return_type));
 

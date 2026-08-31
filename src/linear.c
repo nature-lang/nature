@@ -486,8 +486,8 @@ static lir_operand_t *linear_default_any(module_t *m, type_t t, lir_operand_t *t
         out_src = lea_operand_pointer(m, target);
     }
     OP_PUSH(lir_op_move(out_ptr, out_src));
-    bool is_fx = m->current_closure && m->current_closure->is_fx;
-    push_rt_call(m, RT_CALL_ANY_CASTING, NULL, 4, out_ptr, int_operand(rtype_hash), value_ref, bool_operand(is_fx));
+    bool is_x = m->is_x;
+    push_rt_call(m, RT_CALL_ANY_CASTING, NULL, 4, out_ptr, int_operand(rtype_hash), value_ref, bool_operand(is_x));
 
     return target;
 }
@@ -531,6 +531,11 @@ static inline lir_operand_t *linear_lea_builtin_value_struct(module_t *m, lir_op
 
 static lir_operand_t *
 linear_unsafe_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target) {
+    // a vec literal owns gc managed storage, x mode has no gc to free it again,
+    // so the allocator based vec<T>.alloc is the way to build one there. an empty literal
+    // allocates nothing but still carries allocator=0, which sends push down the gc path.
+    LINEAR_ASSERTF(!m->is_x, "vec literal is not supported in .x, use vec<T>.alloc with an allocator");
+
     if (!target) {
         target = temp_var_operand_with_alloc(m, t);
     }
@@ -555,15 +560,9 @@ linear_unsafe_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target
         OP_PUSH(lir_op_move(data_dst, int_operand(0)));
     } else {
         lir_operand_t *data_ptr = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
-        assert(m->current_closure);
-        if (m->current_closure->is_fx) {
-            uint64_t data_size = len * t.vec->element_type.storage_size;
-            push_rt_call(m, RT_CALL_FX_MALLOC, data_ptr, 1, int_operand(data_size));
-        } else {
-            lir_operand_t *element_hash = int_operand(type_hash(t.vec->element_type));
-            lir_operand_t *len_operand = int_operand(len);
-            push_rt_call(m, RT_CALL_ARRAY_NEW, data_ptr, 2, element_hash, len_operand);
-        }
+        lir_operand_t *element_hash = int_operand(type_hash(t.vec->element_type));
+        lir_operand_t *len_operand = int_operand(len);
+        push_rt_call(m, RT_CALL_ARRAY_NEW, data_ptr, 2, element_hash, len_operand);
         OP_PUSH(lir_op_move(data_dst, data_ptr));
     }
 
@@ -1055,6 +1054,9 @@ static lir_operand_t *linear_ident(module_t *m, ast_expr_t expr, lir_operand_t *
     if (s->type == SYMBOL_FN) {
         // 现在 symbol fn 是作为一个 type_fn 值进行传递，所以需要取出其 label 进行处理。
         // 即使是 global fn 也不例外, linear call symbol 已经进行了特殊处理，进不到这里来
+        // a fn used as a value needs fn_new, which gc allocates the closure, so x mode rejects it
+        LINEAR_ASSERTF(!m->is_x, "fn as value is not supported in .x");
+
         // linkident 特殊处理
         ast_fndef_t *fndef = s->ast_value;
         char *symbol_ident = fndef->symbol_name;
@@ -2084,8 +2086,8 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
 
             // actual 剩余的所有参数进行 linear_expr 之后 都需要用一个数组收集起来，并写入到 target_operand 中
             int len = call->args->length - i; // 5, 1
-            bool is_fx = m->current_closure && m->current_closure->is_fx;
-            lir_operand_t *rest_vec_target = is_fx
+            bool is_x = m->is_x;
+            lir_operand_t *rest_vec_target = is_x
                                                  ? linear_stack_vec_new(m, *rest_list_type, len, NULL)
                                                  : linear_unsafe_vec_new(m, *rest_list_type, len, NULL);
             type_t vec_element_type = rest_list_type->vec->element_type;
@@ -3285,8 +3287,8 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
             OP_PUSH(lir_op_move(union_ptr, src_operand));
 
-            bool is_fx = m->current_closure && m->current_closure->is_fx;
-            push_rt_call(m, RT_CALL_UNION_TO_ANY, NULL, 3, out_ptr, union_ptr, bool_operand(is_fx));
+            bool is_x = m->is_x;
+            push_rt_call(m, RT_CALL_UNION_TO_ANY, NULL, 3, out_ptr, union_ptr, bool_operand(is_x));
 
             return target;
         }
@@ -3309,9 +3311,9 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
             out_src = lea_operand_pointer(m, target);
         }
         OP_PUSH(lir_op_move(out_ptr, out_src));
-        bool is_fx = m->current_closure && m->current_closure->is_fx;
+        bool is_x = m->is_x;
         push_rt_call(m, RT_CALL_ANY_CASTING, NULL, 4, out_ptr, int_operand(src_rtype_hash), any_value,
-                     bool_operand(is_fx));
+                     bool_operand(is_x));
 
         return target;
     }
@@ -3443,6 +3445,8 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     }
 
     if (as_expr->target_type.kind == TYPE_INTERFACE) {
+        // x mode has no gc, interface_casting aliases the method table and the boxed value instead
+        bool is_x = m->is_x;
         lir_operand_t *interface_value;
         if (as_expr->src.type.storage_kind == STORAGE_KIND_IND) {
             interface_value = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
@@ -3517,13 +3521,13 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
                 OP_PUSH(lir_op_lea(item_target, fn_label));
             }
 
-            push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 5, out_ptr, int_operand(src_rtype_hash), interface_value,
+            push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 6, out_ptr, int_operand(src_rtype_hash), interface_value,
                          int_operand(interface_type->elements->length),
-                         methods_target);
+                         methods_target, bool_operand(is_x));
         } else {
-            push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 5, out_ptr, int_operand(src_rtype_hash), interface_value,
+            push_rt_call(m, RT_CALL_INTERFACE_CASTING, NULL, 6, out_ptr, int_operand(src_rtype_hash), interface_value,
                          int_operand(0),
-                         int_operand(0));
+                         int_operand(0), bool_operand(is_x));
         }
 
         return target;
@@ -4325,7 +4329,7 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
 
     OP_PUSH(lir_op_output(LIR_OPCODE_FN_BEGIN, operand_new(LIR_OPERAND_PARAMS, params)));
 
-    if (!fndef->is_fx) {
+    if (!fndef->is_x) {
         OP_PUSH(lir_op_safepoint());
     }
 

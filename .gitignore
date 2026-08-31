@@ -37,6 +37,9 @@ tsconfig.tsbuildinfo
 # Examples
 example/
 
+# Design docs, kept out of the repo
+docs/
+
 .cache
 
 # Python caches

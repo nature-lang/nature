@@ -262,6 +262,9 @@ module_t *module_build_sources(ast_import_t *import, slice_t *source_paths, modu
     // primary source, used as the label_prefix fallback and in diagnostics
     m->source_path = source_paths->take[0];
 
+    // the source extension selects the module mode, .x means x mode
+    m->is_x = ends_with(m->source_path, ".x");
+
     for (int i = 0; i < source_paths->count; ++i) {
         source_file_t *sf = module_source_new(m, source_paths->take[i]);
         slice_push(m->sources, sf);

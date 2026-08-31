@@ -1,0 +1,108 @@
+=== test_x_cannot_call_n
+--- main.x
+import "util.n"
+
+fn main() {
+    util.normal()
+}
+
+--- util.n
+pub fn normal() {}
+
+--- output.txt
+nature-test/main.x:4:9: calling .n fn 'normal' from .x fn 'main' is not allowed.
+
+=== test_x_fn_type_mismatch
+--- main.n
+import "util.x"
+
+fn main() {
+    fn() cb = util.worker
+}
+
+--- util.x
+pub fn worker() {}
+
+--- output.txt
+nature-test/main.n:4:19: type inconsistency, expect=fn(...):void, actual=xfn(...):void
+
+=== test_interface_mode_mismatch
+--- main.x
+import "iface.n"
+
+type heap_t:iface.allocatable = int
+
+fn heap_t.new(*self) {
+    println(1)
+}
+
+fn main() {
+    heap_t h = 0
+    h.new()
+}
+
+--- iface.n
+pub type allocatable = interface{
+    fn new()
+}
+
+--- output.txt
+nature-test/main.x:5:2: the fn 'new' of type 'main.heap_t' mismatch interface 'nature-test.iface.allocatable'
+
+=== test_errable_definition
+--- main.x
+fn risky():int! {
+    return 1
+}
+
+fn main() {
+    println(1)
+}
+
+--- output.txt
+nature-test/main.x:1:3: errable fn declaration is not supported in .x
+
+=== test_vec_literal
+--- main.x
+fn main() {
+    [int] v = [1, 2, 3]
+    println(v[0])
+}
+
+--- output.txt
+nature-test/main.x:2:15: vec literal is not supported in .x, use vec<T>.alloc with an allocator
+
+=== test_vec_literal_empty
+--- main.x
+fn main() {
+    [int] v = []
+    println(v.len())
+}
+
+--- output.txt
+nature-test/main.x:2:15: vec literal is not supported in .x, use vec<T>.alloc with an allocator
+
+=== test_n_impl_x_interface
+--- main.n
+import "iface.x"
+
+// an .x interface can only be implemented by .x methods, the mode is part of the fn type.
+// this is what keeps allocatable an x mode contract rather than a shared one.
+type heap_t:iface.allocatable = int
+
+fn heap_t.alloc(*self, int size):anyptr {
+    return 0
+}
+
+fn main() {
+    heap_t h = 0
+    h.alloc(1)
+}
+
+--- iface.x
+pub type allocatable = interface{
+    fn alloc(int size):anyptr
+}
+
+--- output.txt
+nature-test/main.n:7:2: the fn 'alloc' of type 'main.heap_t' mismatch interface 'nature-test.iface.allocatable'

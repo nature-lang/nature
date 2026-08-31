@@ -310,7 +310,7 @@ bool interface_is(n_interface_t *mu, int64_t target_rtype_hash) {
  * @param methods
  */
 void interface_casting(n_interface_t *out, uint64_t input_rtype_hash, void *value_ref, int64_t method_count,
-                       int64_t *methods) {
+                       int64_t *methods, n_bool_t is_x) {
     assert(out && "interface_casting out is null");
     // - 根据 input_rtype_hash 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
@@ -322,9 +322,15 @@ void interface_casting(n_interface_t *out, uint64_t input_rtype_hash, void *valu
 
     if (method_count > 0) {
         out->method_count = method_count;
-        out->methods = (int64_t *) rti_array_new(&uint64_rtype, method_count); // TODO
-        // 进行数据 copy TODO write barrier
-        memmove(out->methods, methods, method_count * POINTER_SIZE);
+        if (is_x) {
+            // x mode has no gc to hold a copy, the caller's method table is referenced directly.
+            // its contents are compile time fn addresses, so only the table's lifetime matters.
+            out->methods = methods;
+        } else {
+            out->methods = (int64_t *) rti_array_new(&uint64_rtype, method_count); // TODO
+            // 进行数据 copy TODO write barrier
+            memmove(out->methods, methods, method_count * POINTER_SIZE);
+        }
     } else {
         out->method_count = 0;
         out->methods = NULL;
@@ -342,9 +348,14 @@ void interface_casting(n_interface_t *out, uint64_t input_rtype_hash, void *valu
     if (rtype->storage_kind != STORAGE_KIND_PTR) {
         // TODO number 可以直接存储在 value 中
         // union 进行了数据的额外缓存，并进行值 copy，不需要担心 arr/struct 这样的大数据的丢失问题
-        void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
-        memmove(new_value, value_ref, stack_size);
-        out->value.ptr_value = new_value;
+        if (is_x) {
+            // x mode does no gc_malloc, the original address is referenced directly.
+            out->value.ptr_value = value_ref;
+        } else {
+            void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
+            memmove(new_value, value_ref, stack_size);
+            out->value.ptr_value = new_value;
+        }
     } else {
         // 特殊类型参数处理，为了兼容 fn method 中的 self 自动化参数, self 如果是 int/struct 等类型，会自动转换为 ref<int>
         // 如果是 vec/string 等类型，self 的类型依旧是 vec/string 等，而不是 ref<vec>/ref<string> 这有点多余, 因为 vec/string
@@ -400,7 +411,7 @@ void union_casting(n_union_t *out, int64_t input_rtype_hash, void *value_ref) {
  * @param value_ref
  * @return
  */
-void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref, n_bool_t is_fx) {
+void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref, n_bool_t is_x) {
     assert(out && "any_casting out is null");
     // - 根据 input_rtype_hash 找到对应的
     rtype_t *rtype = rt_find_rtype(input_rtype_hash);
@@ -419,8 +430,8 @@ void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref, n_bool
     out->value.i64_value = 0;
 
     if (rtype->storage_kind == STORAGE_KIND_IND) {
-        if (is_fx) {
-            // fx 模式下不进行 gc_malloc，直接引用原始地址。
+        if (is_x) {
+            // x mode does no gc_malloc, the original address is referenced directly.
             out->value.ptr_value = value_ref;
         } else {
             void *new_value = rti_gc_malloc(rtype->gc_heap_size, rtype);
@@ -438,7 +449,7 @@ void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref, n_bool
 /**
  * union -> any: 提取 union 的 rtype 和 value 传递给 any_casting
  */
-void union_to_any(n_any_t *out, n_union_t *input, n_bool_t is_fx) {
+void union_to_any(n_any_t *out, n_union_t *input, n_bool_t is_x) {
     assert(out && "union_to_any out is null");
     assert(input && "union_to_any input is null");
     assert(input->rtype && "union_to_any input rtype is null");
@@ -455,7 +466,7 @@ void union_to_any(n_any_t *out, n_union_t *input, n_bool_t is_fx) {
         value_ref = &input->value;
     }
 
-    any_casting(out, rtype->hash, value_ref, is_fx);
+    any_casting(out, rtype->hash, value_ref, is_x);
 }
 
 void tagged_union_casting(n_tagged_union_t *out, int64_t tag_hash, int64_t value_rtype_hash, void *value_ref) {
@@ -1032,27 +1043,6 @@ n_anyptr_t rt_array_new(int64_t element_hash, int64_t length) {
     rtype_t *element_rtype = rt_find_rtype(element_hash);
     assert(element_rtype && "cannot find element_rtype_hash with hash");
     return (n_anyptr_t) rti_array_new(element_rtype, (uint64_t) length);
-}
-
-n_anyptr_t fx_malloc(int64_t size) {
-    if (size < 0) {
-        rti_throw("fx_malloc size must be non-negative", true);
-        return 0;
-    }
-
-    if (size == 0) {
-        return 0;
-    }
-
-    void *ptr = malloc((size_t) size);
-    if (!ptr) {
-        rti_throw("fx_malloc out of memory", true);
-        return 0;
-    }
-    DEBUGF("[fx_malloc] ptr is %p", ptr);
-
-    memset(ptr, 0, (size_t) size);
-    return (n_anyptr_t) ptr;
 }
 
 n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr) {

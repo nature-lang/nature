@@ -33,13 +33,13 @@ bool interface_is(n_interface_t *mu, int64_t target_rtype_hash);
  */
 void union_casting(n_union_t *out, int64_t input_rtype_hash, void *value_ref);
 
-void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref, n_bool_t is_fx);
+void any_casting(n_any_t *out, int64_t input_rtype_hash, void *value_ref, n_bool_t is_x);
 
-void union_to_any(n_any_t *out, n_union_t *input, n_bool_t is_fx);
+void union_to_any(n_any_t *out, n_union_t *input, n_bool_t is_x);
 
 void tagged_union_casting(n_tagged_union_t *out, int64_t id, int64_t value_rtype_hash, void *value_ref);
 
-void interface_casting(n_interface_t *out, uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods);
+void interface_casting(n_interface_t *out, uint64_t input_rtype_hash, void *value_ref, int64_t method_count, int64_t *methods, n_bool_t is_x);
 
 int64_t iterator_next_key(void *iterator, uint64_t rtype_hash, int64_t cursor, void *key_ref);
 
@@ -85,7 +85,6 @@ void rt_assert(n_bool_t cond);
 
 // allocate array data by element rtype hash
 n_anyptr_t rt_array_new(int64_t element_hash, int64_t length);
-n_anyptr_t fx_malloc(int64_t size);
 
 n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr);
 
