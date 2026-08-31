@@ -24,28 +24,30 @@ static inline bool peephole_is_in_live_out(basic_block_t *block, lir_var_t *var)
 /**
  * 构建 block 的变量使用计数表
  * 仅统计 USE 标志的变量出现次数
+ *
+ * Counts over `ops`, the list the optimization loop is actually rewriting.
+ * block->operations is only written back once the loop ends, so counting from it
+ * would miss this round's rewrites: an op the loop replaced still contributes its
+ * old uses, and an op the loop inserted contributes none.
  */
-static inline void peephole_build_use_count(basic_block_t *block) {
+static inline void peephole_build_use_count(basic_block_t *block, slice_t *ops) {
     if (block->use_count) {
         table_free(block->use_count);
     }
 
     block->use_count = table_new();
 
-    linked_node *current = linked_first(block->operations);
-    while (current != NULL && current->value != NULL) {
-        lir_op_t *op = current->value;
+    for (int i = 0; i < ops->count; ++i) {
+        lir_op_t *op = ops->take[i];
 
         // 提取该指令中所有 use 的变量
         slice_t *use_operands = extract_op_operands(op, FLAG(LIR_OPERAND_VAR), FLAG(LIR_FLAG_USE), true);
-        for (int i = 0; i < use_operands->count; ++i) {
-            lir_var_t *use_var = use_operands->take[i];
+        for (int j = 0; j < use_operands->count; ++j) {
+            lir_var_t *use_var = use_operands->take[j];
             intptr_t count = (intptr_t) table_get(block->use_count, use_var->ident);
             table_set(block->use_count, use_var->ident, (void *) (count + 1));
         }
         slice_free(use_operands); // 释放临时 slice
-
-        current = current->succ;
     }
 }
 

@@ -463,8 +463,6 @@ static bool peephole_fma_recognition(closure_t *c, basic_block_t *block, slice_t
 }
 
 static inline void arm64_peephole_handle_block(closure_t *c, basic_block_t *block) {
-    peephole_build_use_count(block);
-
     slice_t *ops = slice_new();
 
     LINKED_FOR(block->operations) {
@@ -479,6 +477,10 @@ static inline void arm64_peephole_handle_block(closure_t *c, basic_block_t *bloc
     while (changed && iterations < max_iterations) {
         changed = false;
         iterations++;
+
+        // the previous round's rewrites changed the operand uses, so the counts have
+        // to be rebuilt or move elimination drops a def that is still referenced
+        peephole_build_use_count(block, ops);
 
         slice_t *new_ops = slice_new();
         int cursor = 0;
