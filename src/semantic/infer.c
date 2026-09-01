@@ -1542,6 +1542,9 @@ static void infer_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
 
     type_t interface_error = interface_throwable();
     interface_error = reduction_type(m, interface_error);
+    if (m->is_x) {
+        interface_error = reduction_type(m, x_errdesc_ptr_type());
+    }
     try_stmt->catch_err.type = interface_error;
 
     rewrite_var_decl(m, &try_stmt->catch_err);
@@ -1559,6 +1562,9 @@ static type_t infer_catch(module_t *m, ast_catch_t *catch_expr) {
 
     type_t interface_error = interface_throwable();
     interface_error = reduction_type(m, interface_error);
+    if (m->is_x) {
+        interface_error = reduction_type(m, x_errdesc_ptr_type());
+    }
     catch_expr->catch_err.type = interface_error;
 
     rewrite_var_decl(m, &catch_expr->catch_err);
@@ -3335,6 +3341,30 @@ static void infer_throw(module_t *m, ast_throw_stmt_t *throw_stmt) {
     INFER_ASSERTF(m->current_fn->is_errable,
                   "can't use throw stmt in a fn without an errable! declaration. example: fn %s(...):%s!",
                   m->current_fn->fn_name, type_origin_format(m->current_fn->return_type));
+
+    // In .x the error is a pointer to an immutable descriptor emitted into .data at this site, so
+    // the message has to be known now. `throw errorf('literal')` is recognized by shape here,
+    // before infer_call would reject the call into .n, and never becomes a real call.
+    if (m->is_x) {
+        INFER_ASSERTF(throw_stmt->error.assert_type == AST_CALL, "throw in .x requires a literal message");
+
+        ast_call_t *call = throw_stmt->error.value;
+        INFER_ASSERTF(call->left.assert_type == AST_EXPR_IDENT, "throw in .x requires a literal message");
+
+        ast_ident *ident = call->left.value;
+        INFER_ASSERTF(str_equal(ident->literal, ERRORF_IDENT) && call->args->length == 1,
+                      "throw in .x requires a literal message");
+
+        ast_expr_t *arg = ct_list_value(call->args, 0);
+        INFER_ASSERTF(arg->assert_type == AST_EXPR_LITERAL, "throw in .x requires a literal message");
+
+        ast_literal_t *literal = arg->value;
+        INFER_ASSERTF(literal->kind == TYPE_STRING, "throw in .x requires a literal message");
+
+        throw_stmt->x_desc_msg = literal->value;
+        throw_stmt->x_desc_len = literal->len;
+        return;
+    }
 
     infer_right_expr(m, &throw_stmt->error, interface_throwable());
 }

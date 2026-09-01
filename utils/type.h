@@ -17,6 +17,10 @@
 #endif
 
 #define THROWABLE_IDENT "throwable"
+// std/builtin/error.n. Recognized by name in .x throws, where it never becomes a real call.
+#define ERRORF_IDENT "errorf"
+// std/builtin/error.x. What a .x catch binds: a pointer to an immutable descriptor in .data.
+#define X_ERRDESC_IDENT "errdesc"
 
 #define ALL_T_IDENT "all_t"
 #define FN_T_IDENT "fn_t"
@@ -770,6 +774,10 @@ static inline type_t type_array_new(type_kind element_type_kind, uint64_t length
 
 static inline type_t interface_throwable() {
     return type_ident_new(THROWABLE_IDENT, TYPE_IDENT_INTERFACE);
+}
+
+static inline type_t x_errdesc_ptr_type() {
+    return type_ptrof(type_ident_new(X_ERRDESC_IDENT, TYPE_IDENT_DEF));
 }
 
 static inline bool must_assign_value(type_t t) {

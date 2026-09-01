@@ -578,6 +578,14 @@ typedef struct closure_t {
     char *error_label; // 遇到表达式错误时需要调整到的目标 label
 
     ct_stack_t *catch_error_labels;
+    // x mode only: one error slot per active catch, parallel to catch_error_labels, plus
+    // x_return_err for the propagate-out-of-fn path. The error site writes the slot belonging
+    // to the label it is about to jump to, so a defer body's own errors never share storage.
+    ct_stack_t *x_catch_err_slots;
+    // the { err, value } this fn returns, a stack local so the error is written straight into
+    // the return slot at the error site. x_return_err addresses its err field.
+    lir_operand_t *x_return_pair;
+    lir_operand_t *x_return_err;
 
     ct_stack_t *continue_labels; // 用于 for continue lir_operand*
     ct_stack_t *break_labels; // 用于 for break lir_operand*

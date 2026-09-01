@@ -909,6 +909,105 @@ static void linear_has_panic(module_t *m) {
 }
 
 
+/**
+ * .x errable propagation. The callee returned { err, value }, so the check is a null test on the
+ * pair's err field rather than a question to the coroutine. Nothing is stored across the branch:
+ * the error is materialized into this fn's own return slot at the point it is detected, before
+ * any defer body runs, so an errable call inside a defer cannot clobber the error in flight.
+ */
+/**
+ * Put the error where the handler about to run will look for it: the innermost active catch's
+ * own slot, or the fn's return-error slot when the error is propagating out. Writing it here,
+ * at the error site, means nothing shared stays live across the defer bodies that
+ * linear_bal_error is about to emit.
+ */
+/**
+ * In .x the caught error is the descriptor pointer this catch's own slot was given at the error
+ * site. No runtime call, no shared slot, no copy: `e` is an 8-byte pointer to immutable data.
+ */
+/**
+ * Emit an immutable error descriptor into .data and return its address.
+ *
+ * Layout is self contained -- [i32 len][i32 flags][bytes][NUL] -- rather than a pointer to the
+ * message, because this toolchain never emits a relocation into the data section. That is the
+ * same limit global_eval.c hits when it rejects a non-empty global string initializer.
+ *
+ * Descriptors with the same text and flags share one symbol; the key carries the length so two
+ * different messages cannot collide on a prefix.
+ */
+static lir_operand_t *linear_x_errdesc(module_t *m, char *msg, int64_t len, int32_t flags) {
+    char *key = dsprintf("xerrdesc:%d:%ld:%s", flags, len, msg);
+
+    asm_global_symbol_t *symbol = table_get(m->global_symbol_table, key);
+    if (!symbol) {
+        size_t size = X_ERRDESC_HEADER_SIZE + (size_t) len + 1;
+        uint8_t *value = mallocz(size);
+        *(int32_t *) value = (int32_t) len;
+        *(int32_t *) (value + 4) = flags;
+        memmove(value + X_ERRDESC_HEADER_SIZE, msg, (size_t) len);
+
+        symbol = NEW(asm_global_symbol_t);
+        symbol->name = label_ident_with_prefix(m, "xerrdesc");
+        symbol->size = size;
+        symbol->alignment = QWORD;
+        symbol->value = value;
+
+        symbol_table_set_raw_string(m, symbol->name, type_kind_new(TYPE_RAW_STRING), size);
+        slice_push(m->asm_global_symbols, symbol);
+        table_set(m->global_symbol_table, key, symbol);
+    }
+
+    lir_symbol_var_t *symbol_var = NEW(lir_symbol_var_t);
+    symbol_var->ident = symbol->name;
+    symbol_var->t = type_kind_new(TYPE_ANYPTR);
+
+    lir_operand_t *addr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_lea(addr, operand_new(LIR_OPERAND_SYMBOL_VAR, symbol_var)));
+    return addr;
+}
+
+static void linear_x_bind_error(module_t *m, lir_operand_t *err_operand, lir_operand_t *slot) {
+    assert(slot);
+    OP_PUSH(lir_op_move(err_operand, slot));
+}
+
+static void linear_x_store_error(module_t *m, lir_operand_t *err_value) {
+    closure_t *c = m->current_closure;
+
+    if (c->x_catch_err_slots->count > 0) {
+        lir_operand_t *slot = stack_top(c->x_catch_err_slots);
+        OP_PUSH(lir_op_move(slot, err_value));
+        return;
+    }
+
+    assert(c->x_return_err);
+    uint64_t err_offset = type_struct_offset(c->fndef->return_type.struct_, X_ERRABLE_ERR_NAME);
+    OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), c->x_return_pair, err_offset),
+                        err_value));
+}
+
+static void linear_x_has_error(module_t *m, lir_operand_t *pair, type_t pair_type) {
+    char *error_target_label = m->current_closure->error_label;
+    uint16_t catch_depth = m->current_closure->catch_error_labels->count;
+    if (catch_depth > 0) {
+        error_target_label = stack_top(m->current_closure->catch_error_labels);
+    }
+
+    uint64_t err_offset = type_struct_offset(pair_type.struct_, X_ERRABLE_ERR_NAME);
+    lir_operand_t *err_value = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_move(err_value, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), pair, err_offset)));
+
+    char *error_ident = label_ident_with_unique(".xerror");
+    char *error_end_ident = str_connect(error_ident, LABEL_END_SUFFIX);
+
+    // err == 0 means ok, skip the error path
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(0), err_value, lir_label_operand(error_end_ident, true)));
+    OP_PUSH(lir_op_label(error_ident, true));
+    linear_x_store_error(m, err_value);
+    linear_bal_error(m, error_target_label, catch_depth);
+    OP_PUSH(lir_op_label(error_end_ident, true));
+}
+
 static void linear_has_error(module_t *m) {
     char *error_target_label = m->current_closure->error_label;
     assertf(m->current_line < 1000000, "line '%d' exception", m->current_line);
@@ -1809,9 +1908,20 @@ static void linear_ret(module_t *m, ast_ret_stmt_t *stmt) {
 }
 
 static void linear_return(module_t *m, ast_return_stmt_t *ast) {
+    closure_t *c = m->current_closure;
     lir_operand_t *src = NULL;
     if (ast->expr != NULL) {
         src = linear_expr(m, *ast->expr, NULL);
+    }
+
+    // an errable .x fn returns the pair; err was cleared in the prologue and stays NULL here
+    if (c->x_return_pair) {
+        if (src) {
+            uint64_t value_offset = type_struct_offset(c->fndef->return_type.struct_, X_ERRABLE_VALUE_NAME);
+            type_t value_type = c->fndef->errable_value_type;
+            OP_PUSH(lir_op_move(indirect_addr_operand(m, value_type, c->x_return_pair, value_offset), src));
+        }
+        src = c->x_return_pair;
     }
 
     linear_unwind_all(m);
@@ -2177,6 +2287,28 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     }
 
     lir_operand_t *temp = NULL;
+
+    if (is_x_errable_fn(type_fn)) {
+        // the callee returns { err, value }, so the call writes the pair and the value is read
+        // back out of it. The error check is a null test on the pair rather than a runtime call.
+        type_t pair_type = type_fn->return_type;
+        lir_operand_t *pair = temp_var_operand_with_alloc(m, pair_type);
+
+        OP_PUSH(lir_op_new(LIR_OPCODE_CALL, fn_target, operand_new(LIR_OPERAND_ARGS, args), pair));
+        linear_x_has_error(m, pair, pair_type);
+
+        if (call->return_type.kind != TYPE_VOID) {
+            uint64_t value_offset = type_struct_offset(pair_type.struct_, X_ERRABLE_VALUE_NAME);
+            temp = temp_var_operand(m, call->return_type);
+            OP_PUSH(lir_op_move(temp, indirect_addr_operand(m, call->return_type, pair, value_offset)));
+        }
+
+        if (temp) {
+            return linear_super_move(m, expr.type, target, temp);
+        }
+        return target;
+    }
+
     if (call->return_type.kind != TYPE_VOID) {
         temp = temp_var_operand(m, call->return_type);
     }
@@ -3763,9 +3895,22 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
         target = temp_var_operand_with_alloc(m, expr.type);
     }
 
+    lir_operand_t *x_err_slot = NULL;
+    if (m->is_x) {
+        // this catch's own error slot: a nested catch or a defer body gets a different one,
+        // so nothing shares storage across the unwind
+        x_err_slot = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
+        OP_PUSH(lir_op_move(x_err_slot, int_operand(0)));
+        stack_push(m->current_closure->x_catch_err_slots, x_err_slot);
+    }
+
     stack_push(m->current_closure->catch_error_labels, catch_start_label);
     linear_expr(m, catch_expr->try_expr, target);
     stack_pop(m->current_closure->catch_error_labels);
+
+    if (m->is_x) {
+        stack_pop(m->current_closure->x_catch_err_slots);
+    }
 
     // 跳过错误处理部分
     lir_op_t *catch_end_label = lir_op_label(catch_end_ident, true);
@@ -3786,7 +3931,11 @@ static lir_operand_t *linear_catch_expr(module_t *m, ast_expr_t expr, lir_operan
     // 从 catch expr 中获取 err 然后为 err 赋值
     lir_operand_t *err_operand = linear_var_decl(m, &catch_expr->catch_err);
 
-    push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
+    if (m->is_x) {
+        linear_x_bind_error(m, err_operand, x_err_slot);
+    } else {
+        push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
+    }
 
     stack_push(m->current_closure->ret_labels, catch_end_label->output);
     stack_push(m->current_closure->ret_targets, target);
@@ -3809,9 +3958,20 @@ static void linear_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
     bool has_ret = false;
 
 
+    lir_operand_t *x_err_slot = NULL;
+    if (m->is_x) {
+        x_err_slot = temp_var_operand_with_alloc(m, type_kind_new(TYPE_ANYPTR));
+        OP_PUSH(lir_op_move(x_err_slot, int_operand(0)));
+        stack_push(m->current_closure->x_catch_err_slots, x_err_slot);
+    }
+
     stack_push(m->current_closure->catch_error_labels, catch_start_label);
     linear_body(m, try_stmt->try_body);
     stack_pop(m->current_closure->catch_error_labels);
+
+    if (m->is_x) {
+        stack_pop(m->current_closure->x_catch_err_slots);
+    }
 
     // 跳过错误处理部分
     lir_op_t *catch_end_label = lir_op_label(catch_end_ident, true);
@@ -3823,7 +3983,11 @@ static void linear_try_catch_stmt(module_t *m, ast_try_catch_stmt_t *try_stmt) {
 
     // 为 err 赋值
     lir_operand_t *err_operand = linear_var_decl(m, &try_stmt->catch_err);
-    push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
+    if (m->is_x) {
+        linear_x_bind_error(m, err_operand, x_err_slot);
+    } else {
+        push_rt_call(m, RT_CALL_CO_REMOVE_ERROR, err_operand, 0);
+    }
 
     stack_push(m->current_closure->ret_labels, catch_end_label->output);
 
@@ -4049,6 +4213,20 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 }
 
 static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
+    // .x throws a descriptor pointer written straight into this fn's return slot, so nothing is
+    // live across the defer bodies linear_unwind_all is about to emit.
+    if (m->is_x) {
+        assert(stmt->x_desc_msg);
+        lir_operand_t *desc = linear_x_errdesc(m, stmt->x_desc_msg, stmt->x_desc_len, 0);
+        linear_x_store_error(m, desc);
+        linear_unwind_all(m);
+
+        closure_t *c = m->current_closure;
+        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, c->x_return_pair, NULL, NULL));
+        OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, false)));
+        return;
+    }
+
     // msg to errort
     assert(str_equal(stmt->error.type.ident, THROWABLE_IDENT));
     lir_operand_t *error_operand = linear_expr(m, stmt->error, NULL);
@@ -4343,6 +4521,16 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
         OP_PUSH(lir_op_safepoint());
     }
 
+    // an errable .x fn returns { err, value }. Allocate it once here and clear err, so the ok
+    // path returns NULL without touching it and every error site writes straight into the slot
+    // it will be returned from.
+    if (fndef->is_x && fndef->is_errable) {
+        c->x_return_pair = temp_var_operand_with_alloc(m, fndef->return_type);
+        uint64_t err_offset = type_struct_offset(fndef->return_type.struct_, X_ERRABLE_ERR_NAME);
+        c->x_return_err = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), c->x_return_pair, err_offset);
+        OP_PUSH(lir_op_move(c->x_return_err, int_operand(0)));
+    }
+
     // 参数 escape rewrite
     for (int i = 0; i < fndef->params->length; ++i) {
         ast_var_decl_t *var_decl = ct_list_value(fndef->params, i);
@@ -4356,7 +4544,8 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true)));
 
     OP_PUSH(lir_op_label(c->error_label, true));
-    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, NULL, NULL, NULL)); // 方便 return check
+    // in .x the error is already in the pair's err field, so the error path returns it
+    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, c->x_return_pair, NULL, NULL)); // 方便 return check
     OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true))); // bal end
 
     OP_PUSH(lir_op_label(c->end_label, true));

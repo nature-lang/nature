@@ -368,6 +368,10 @@ typedef struct {
  */
 typedef struct {
     ast_expr_t error;
+    // .x only: the literal message, lifted out of `throw errorf('...')` by infer. The error there
+    // is a pointer to an immutable descriptor emitted at this site, so the text must be known now.
+    char *x_desc_msg;
+    int64_t x_desc_len;
 } ast_throw_stmt_t;
 
 /**

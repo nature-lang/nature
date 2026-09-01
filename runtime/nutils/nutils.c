@@ -1034,6 +1034,25 @@ n_int_t rt_errno() {
     return errno;
 }
 
+
+/**
+ * A .x error is a pointer to an immutable descriptor in .data. Its message bytes sit inline right
+ * after the header, so msg() is a non owning view: no allocation, and the bytes outlive every
+ * frame. allocator is left NULL, matching how the rest of x mode marks storage it does not own.
+ */
+n_string_t rt_x_errdesc_msg(void *self) {
+    uint8_t *desc = self;
+    int32_t len = *(int32_t *) desc;
+
+    n_string_t result = {0};
+    result.data = desc + X_ERRDESC_HEADER_SIZE;
+    result.length = len;
+    result.capacity = len;
+    result.element_size = 1;
+    result.allocator = NULL;
+    return result;
+}
+
 n_anyptr_t rt_array_new(int64_t element_hash, int64_t length) {
     if (length < 0) {
         rti_throw("array_new length must be non-negative", true);
