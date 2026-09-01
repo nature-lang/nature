@@ -100,18 +100,18 @@ fn fail(bool odd):string! {
 }
 
 fn main() {
-    string acc = ''
     for int i = 0; i < 3; i += 1 {
         var s = fail(i == 1) catch e {
             e.msg()
         }
-        acc = acc + s + ','
+        println(i, s)
     }
-    println('loop:', acc)
 }
 
 --- output.txt
-loop: EVEN,ODD,EVEN,
+0 EVEN
+1 ODD
+2 EVEN
 
 === test_nested_catch
 --- main.x
@@ -303,4 +303,4 @@ fn main() {
 }
 
 --- output.txt
-nature-test/main.x:4:11: throw in .x requires a literal message
+nature-test/main.x:4:9: throw in .x requires a literal message

@@ -1053,6 +1053,19 @@ n_string_t rt_x_errdesc_msg(void *self) {
     return result;
 }
 
+/**
+ * Bridge for a .n fn calling an errable .x fn. The .x side returned a descriptor pointer, which
+ * .n's error path knows nothing about, so build a real gc errort from it and hand it to the
+ * coroutine exactly as a .n throw would. Copying the message is required: the descriptor is
+ * immortal but n_errort wants an owned n_string_t.
+ */
+void co_throw_error_from_desc(void *desc, char *path, char *fn_name, n_int_t line, n_int_t column) {
+    n_string_t view = rt_x_errdesc_msg(desc);
+    n_interface_t error = n_error_new(string_new((char *) view.data, view.length), false);
+    co_throw_error(&error, path, fn_name, line, column);
+}
+
+
 n_anyptr_t rt_array_new(int64_t element_hash, int64_t length) {
     if (length < 0) {
         rti_throw("array_new length must be non-negative", true);

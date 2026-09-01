@@ -1,4 +1,7 @@
 #include "linear.h"
+static void linear_x_builtin_error(module_t *m, char *msg, bool be_catch);
+static void linear_x_store_error(module_t *m, lir_operand_t *err_value);
+static lir_operand_t *linear_x_errdesc(module_t *m, char *msg, int64_t len, int32_t flags);
 
 #include <stddef.h>
 #include <stdio.h>
@@ -239,7 +242,14 @@ linear_inline_arr_element_addr(module_t *m, lir_operand_t *arr_target, lir_opera
         error_label_ident = stack_top(m->current_closure->catch_error_labels);
     }
 
-    push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target, bool_operand(be_catch));
+    if (m->is_x && be_catch) {
+        // caught in .x: the descriptor carries the static text, the interpolated index and
+        // length are only kept on the uncaught path below
+        linear_x_builtin_error(m, "index out of range", be_catch);
+    } else {
+        push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target,
+                     bool_operand(be_catch));
+    }
     // bal catch or end label
     linear_bal_error(m, error_label_ident, catch_depth);
     OP_PUSH(lir_op_label(end_label_ident, true));
@@ -344,7 +354,14 @@ linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_opera
         error_label_ident = stack_top(m->current_closure->catch_error_labels);
     }
 
-    push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target, bool_operand(be_catch));
+    if (m->is_x && be_catch) {
+        // caught in .x: the descriptor carries the static text, the interpolated index and
+        // length are only kept on the uncaught path below
+        linear_x_builtin_error(m, "index out of range", be_catch);
+    } else {
+        push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target,
+                     bool_operand(be_catch));
+    }
     // bal catch or end label
     linear_bal_error(m, error_label_ident, catch_depth);
     OP_PUSH(lir_op_label(end_label_ident, true));
@@ -966,6 +983,16 @@ static lir_operand_t *linear_x_errdesc(module_t *m, char *msg, int64_t len, int3
     return addr;
 }
 
+/**
+ * A runtime error raised from a check the compiler emitted (bounds, nil deref, ...). In .x it
+ * becomes the same thing a user throw does: a static descriptor written into the error slot.
+ * The uncaught path still calls the runtime, which keeps the interpolated detail and exits.
+ */
+static void linear_x_builtin_error(module_t *m, char *msg, bool be_catch) {
+    lir_operand_t *desc = linear_x_errdesc(m, msg, (int64_t) strlen(msg), X_ERRDESC_FLAG_PANIC);
+    linear_x_store_error(m, desc);
+}
+
 static void linear_x_bind_error(module_t *m, lir_operand_t *err_operand, lir_operand_t *slot) {
     assert(slot);
     OP_PUSH(lir_op_move(err_operand, slot));
@@ -1003,7 +1030,20 @@ static void linear_x_has_error(module_t *m, lir_operand_t *pair, type_t pair_typ
     // err == 0 means ok, skip the error path
     OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(0), err_value, lir_label_operand(error_end_ident, true)));
     OP_PUSH(lir_op_label(error_ident, true));
-    linear_x_store_error(m, err_value);
+
+    if (m->is_x) {
+        linear_x_store_error(m, err_value);
+    } else {
+        // a .n caller has a coroutine to put the error on, and its own error path expects to find
+        // it there, so the descriptor is turned into a real errort at the boundary
+        char *error_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
+        push_rt_call(m, RT_CALL_CO_THROW_ERROR_FROM_DESC, NULL, 5, err_value,
+                     string_operand(error_path, strlen(error_path)),
+                     string_operand(m->current_closure->fndef->fn_name_with_pkg,
+                                    strlen(m->current_closure->fndef->fn_name_with_pkg)),
+                     int_operand(m->current_line), int_operand(m->current_column));
+    }
+
     linear_bal_error(m, error_target_label, catch_depth);
     OP_PUSH(lir_op_label(error_end_ident, true));
 }
@@ -4549,6 +4589,11 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true))); // bal end
 
     OP_PUSH(lir_op_label(c->end_label, true));
+
+    // an errable .x fn whose declared T is void falls through here with err already NULL
+    if (c->x_return_pair && c->fndef->errable_value_type.kind == TYPE_VOID) {
+        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, c->x_return_pair, NULL, NULL));
+    }
 
     //    OP_PUSH(lir_op_safepoint());
     // lower 的时候需要进行特殊的处理(return_operand 为了让 ssa use-def 链条完整)
