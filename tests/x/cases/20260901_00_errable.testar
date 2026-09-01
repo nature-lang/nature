@@ -123,3 +123,26 @@ pub fn risky(int v):int! {
 --- output.txt
 n caught from x: x side failure
 -1
+
+=== test_catch_assert_concrete
+--- main.x
+// `as` on a caught error compares rtype hashes, so the slot has to keep the compiler's
+// rtype rather than the one the runtime fabricates for its own errort
+fn fail():int! {
+    throw errort{message: 'boom', is_panic: false}
+}
+
+fn main() {
+    var v = fail() catch e {
+        println('msg:', e.msg())
+        var concrete = e as errort
+        println('assert:', concrete.message)
+        -1
+    }
+    println(v)
+}
+
+--- output.txt
+msg: boom
+assert: boom
+-1

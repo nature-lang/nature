@@ -24,3 +24,5 @@ pub type errort:throwable = struct{
 pub fn errort.msg(&self):string {
 	return self.message
 }
+
+pub type errable<T> = errort|T

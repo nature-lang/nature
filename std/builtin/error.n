@@ -7,4 +7,3 @@ pub fn errorf(string format, ...[any] args):ref<errort> {
 	return new errort(message = msg)
 }
 
-pub type errable<T> = errort|T

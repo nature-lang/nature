@@ -672,7 +672,7 @@ static _Thread_local bool x_has_error = false;
  * Move an error into the flight slot. The value, its message bytes and the method table all
  * live in the throwing frame, which dies while unwinding, so none of them may be aliased.
  */
-static void x_store_error(n_errort *src) {
+static void x_store_error(n_errort *src, rtype_t *rtype) {
     x_flight.errort = *src;
 
     int64_t len = x_flight.errort.msg.length;
@@ -688,10 +688,13 @@ static void x_store_error(n_errort *src) {
     x_flight.errort.msg.capacity = len;
     x_flight.errort.msg.allocator = NULL;
 
+    // keep the caller's rtype: it is the compiler's rtype for nature's errort, and an
+    // `as` on the caught error compares against that one. errort_rtype is the runtime's own
+    // fabrication and substituting it here breaks interface_assert.
     x_error = (n_interface_t){
         .value.ptr_value = &x_flight.errort,
         .methods = x_errort_methods,
-        .rtype = &errort_rtype,
+        .rtype = rtype,
         .method_count = 1,
     };
     x_has_error = true;
@@ -706,7 +709,8 @@ static void x_store_error_msg(char *msg) {
         .element_size = 1,
     };
     e.panic = 1;
-    x_store_error(&e);
+    // a builtin error has no incoming interface, so it takes the same rtype fn mode gives it
+    x_store_error(&e, &errort_rtype);
 }
 
 // 基于字符串到快速设置不太需要考虑内存泄漏的问题， raw_string 都是 .data 段中的字符串
@@ -720,7 +724,7 @@ void co_throw_error(n_interface_t *error, char *path, char *fn_name, n_int_t lin
         // the runtime with GC_RTYPE and never matches the compiler's hash for nature's errort.
         assertf(error->rtype && error->rtype->gc_heap_size <= sizeof(n_errort),
                 "x mode can only throw errort");
-        x_store_error(error->value.ptr_value);
+        x_store_error(error->value.ptr_value, error->rtype);
         return;
     }
 
