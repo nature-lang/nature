@@ -190,3 +190,31 @@ fn main() {
 
 --- output.txt
 nature-test/main.n:3:14: return/break/continue/throw/ret are not allowed inside defer block
+
+=== test_defer_errable_call_in_throwing_fn
+--- main.n
+// An errable call inside a defer body emits its own unwind, which walks the defer scope stack
+// again. Without a re-entrancy guard that re-enters the scope currently being emitted and
+// recurses until the compiler's own stack runs out.
+fn cleanup():int! {
+    return 1
+}
+
+fn work():int! {
+    defer {
+        cleanup()
+    }
+    throw errorf('boom')
+}
+
+fn main() {
+    var v = work() catch e {
+        println('caught:', e.msg())
+        -1
+    }
+    println(v)
+}
+
+--- output.txt
+caught: boom
+-1

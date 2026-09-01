@@ -56,6 +56,10 @@ typedef struct {
     uint16_t break_depth;
     uint16_t ret_depth;
     uint16_t catch_depth;
+    // set while this scope's defer bodies are being emitted. an errable call inside a defer
+    // body emits its own unwind, which walks the scope stack again and would re-enter the scope
+    // that is emitting it, recursing until the compiler's stack runs out.
+    bool emitting;
 } linear_defer_scope_t;
 
 typedef enum {
@@ -79,10 +83,16 @@ static linear_defer_scope_t *linear_defer_scope_new(module_t *m) {
 static void linear_emit_defer_stmt(module_t *m, ast_defer_stmt_t *defer_stmt);
 
 static void linear_emit_scope_defer_stmts(module_t *m, linear_defer_scope_t *scope) {
+    if (scope->emitting) {
+        return;
+    }
+
+    scope->emitting = true;
     for (int i = scope->defer_stmts->count - 1; i >= 0; --i) {
         ast_defer_stmt_t *defer_stmt = scope->defer_stmts->take[i];
         linear_emit_defer_stmt(m, defer_stmt);
     }
+    scope->emitting = false;
 }
 
 static void linear_defer_scope_enter(module_t *m) {
