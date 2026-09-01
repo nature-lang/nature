@@ -92,6 +92,10 @@ n_string_t rt_x_errdesc_msg(void *self);
 // .n caller receiving an error from an .x callee
 void co_throw_error_from_desc(void *desc, char *path, char *fn_name, n_int_t line, n_int_t column);
 
+// x mode uncaught bounds panic. Never touches the coroutine: in .x the tls key is never
+// created, and reading it is undefined -- junk on darwin, a crash on linux.
+void rt_x_index_panic(n_int_t *index, n_int_t *len, char *path, n_int_t line, n_int_t column);
+
 n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr);
 
 n_string_t rt_strerror();

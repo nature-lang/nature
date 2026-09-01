@@ -1059,6 +1059,22 @@ n_string_t rt_x_errdesc_msg(void *self) {
  * coroutine exactly as a .n throw would. Copying the message is required: the descriptor is
  * immortal but n_errort wants an owned n_string_t.
  */
+
+/**
+ * Uncaught index-out-of-range raised from .x. Same message and exit as the fn mode path, but it
+ * resolves the caller directly instead of going through throw_index_out_error, which begins with
+ * coroutine_get(). x mode never creates the coroutine tls key, so reading it is undefined.
+ */
+void rt_x_index_panic(n_int_t *index, n_int_t *len, char *path, n_int_t line, n_int_t column) {
+    // the site is passed in rather than recovered from the return address: linear knows it
+    // statically, and the caller table lookup the fn mode path uses does not resolve from here
+    // one tlsprintf: it hands back a reused static buffer, so nesting two calls clobbers the first
+    char *dump = tlsprintf("panic: 'index out of range [%d] with length %d' at %s:%ld:%ld\n",
+                           index, len, path, line, column);
+    VOID write(STDOUT_FILENO, dump, strlen(dump));
+    exit(EXIT_FAILURE);
+}
+
 void co_throw_error_from_desc(void *desc, char *path, char *fn_name, n_int_t line, n_int_t column) {
     n_string_t view = rt_x_errdesc_msg(desc);
     n_interface_t error = n_error_new(string_new((char *) view.data, view.length), false);

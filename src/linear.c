@@ -246,6 +246,13 @@ linear_inline_arr_element_addr(module_t *m, lir_operand_t *arr_target, lir_opera
         // caught in .x: the descriptor carries the static text, the interpolated index and
         // length are only kept on the uncaught path below
         linear_x_builtin_error(m, "index out of range", be_catch);
+    } else if (m->is_x) {
+        // uncaught in .x: same message and exit, but through a path that never reads the
+        // coroutine tls key, which x mode does not create
+        char *panic_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
+        push_rt_call(m, RT_CALL_X_INDEX_PANIC, NULL, 5, index_target, length_target,
+                     string_operand(panic_path, strlen(panic_path)),
+                     int_operand(m->current_line), int_operand(m->current_column));
     } else {
         push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target,
                      bool_operand(be_catch));
@@ -358,6 +365,13 @@ linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_opera
         // caught in .x: the descriptor carries the static text, the interpolated index and
         // length are only kept on the uncaught path below
         linear_x_builtin_error(m, "index out of range", be_catch);
+    } else if (m->is_x) {
+        // uncaught in .x: same message and exit, but through a path that never reads the
+        // coroutine tls key, which x mode does not create
+        char *panic_path = m->current_closure->fndef->rel_path ? m->current_closure->fndef->rel_path : m->rel_path;
+        push_rt_call(m, RT_CALL_X_INDEX_PANIC, NULL, 5, index_target, length_target,
+                     string_operand(panic_path, strlen(panic_path)),
+                     int_operand(m->current_line), int_operand(m->current_column));
     } else {
         push_rt_call(m, RT_CALL_THROW_INDEX_OUT_ERROR, NULL, 3, index_target, length_target,
                      bool_operand(be_catch));
