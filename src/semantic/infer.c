@@ -10,6 +10,7 @@
 #include "src/error.h"
 
 static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *visited);
+static type_t x_errable_pair_type(module_t *m, type_t value_type);
 
 static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *visited);
 
@@ -2886,6 +2887,12 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
 
     call->return_type = type_fn->return_type;
 
+    // an errable .x fn returns { err, value }; the call still has the type the user declared,
+    // and linear reads the fn type to learn the real ABI shape.
+    if (is_x_errable_fn(type_fn)) {
+        call->return_type = type_fn->errable_value_type;
+    }
+
     if (m->current_fn && m->current_fn->is_x && !type_fn->is_x) {
         INFER_ASSERTF(false, "calling .n fn '%s' from .x fn '%s' is not allowed.",
                       type_fn->fn_name ? type_fn->fn_name : "lambda", m->current_fn->fn_name);
@@ -2899,7 +2906,7 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
                       m->current_fn->fn_name);
     }
 
-    return type_fn->return_type;
+    return call->return_type;
 }
 
 static void infer_tagged_union_element(module_t *m, ast_expr_t *expr, type_t target_type) {
@@ -3228,6 +3235,13 @@ static void infer_typedef_stmt(module_t *m, ast_typedef_stmt_t *stmt) {
  */
 static void infer_return(module_t *m, ast_return_stmt_t *stmt) {
     type_t expect_type = m->current_fn->return_type;
+
+    // an errable .x fn declares T but returns { err, value }, so `return v` is checked against T
+    // and linear builds the pair. The declared shape stays invisible to the user.
+    if (m->current_fn->is_x && m->current_fn->is_errable) {
+        expect_type = m->current_fn->errable_value_type;
+    }
+
     if (stmt->expr != NULL) {
         infer_right_expr(m, stmt->expr, expect_type);
     } else {
@@ -4149,6 +4163,39 @@ static type_t reduction_interface(module_t *m, type_t t, struct sc_map_s64 *visi
     return t;
 }
 
+/**
+ * Build the return type an errable .x fn actually returns: { anyptr err; T value }, or just
+ * { anyptr err } when T is void. err == NULL means ok.
+ *
+ * The struct carries no ident, so rtype.h hashes it structurally and every module that
+ * synthesizes the pair for the same T lands on one shared rtype and one ABI shape.
+ * reduction_type computes storage_size / storage_kind / abi_struct / align and registers the
+ * rtype for it exactly as it would for a parsed struct, so no ABI code has to know about this.
+ */
+static type_t x_errable_pair_type(module_t *m, type_t value_type) {
+    type_struct_t *s = NEW(type_struct_t);
+    s->ident = NULL;
+    s->properties = ct_list_new(sizeof(struct_property_t));
+
+    struct_property_t err = {0};
+    err.name = X_ERRABLE_ERR_NAME;
+    err.type = type_kind_new(TYPE_ANYPTR);
+    err.right = NULL;
+    ct_list_push(s->properties, &err);
+
+    if (value_type.kind != TYPE_VOID) {
+        struct_property_t value = {0};
+        value.name = X_ERRABLE_VALUE_NAME;
+        value.type = value_type;
+        value.right = NULL;
+        ct_list_push(s->properties, &value);
+    }
+
+    type_t result = type_new(TYPE_STRUCT, s);
+    result.status = REDUCTION_STATUS_UNDO;
+    return reduction_type(m, result);
+}
+
 type_t reduction_type(module_t *m, type_t t) {
     struct sc_map_s64 visited;
     sc_map_init_s64(&visited, 0, 0);
@@ -4298,6 +4345,12 @@ static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef) {
     f->is_x = fndef->is_x;
     f->param_types = ct_list_new(sizeof(type_t));
     f->return_type = reduction_type(m, fndef->return_type);
+    if (is_x_errable_fn(f)) {
+        f->errable_value_type = f->return_type;
+        f->return_type = x_errable_pair_type(m, f->return_type);
+        fndef->errable_value_type = f->errable_value_type;
+        fndef->return_type = f->return_type;
+    }
     f->self_kind = fndef->self_kind;
 
     // 跳过 self(仅当存在 receiver)
@@ -4358,6 +4411,13 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     type_fn->param_types = ct_list_new(sizeof(type_t));
     fndef->return_type.status = REDUCTION_STATUS_UNDO;
     type_fn->return_type = reduction_type(m, fndef->return_type);
+
+    // an errable .x fn returns its error beside its value instead of on a coroutine slot
+    if (is_x_errable_fn(type_fn)) {
+        type_fn->errable_value_type = type_fn->return_type;
+        type_fn->return_type = x_errable_pair_type(m, type_fn->return_type);
+        fndef->errable_value_type = type_fn->errable_value_type;
+    }
 
     fndef->return_type = type_fn->return_type;
 
@@ -4434,7 +4494,6 @@ static void infer_fndef(module_t *m, ast_fndef_t *fn) {
     // v1 x mode subset. both are demonstrated crashes rather than style rules: an errable chain
     // aborts register allocation, and a capturing closure segfaults on the gc env promotion.
     if (fn->is_x) {
-        INFER_ASSERTF(!fn->is_errable, "errable fn declaration is not supported in .x");
         INFER_ASSERTF(fn->capture_exprs->length == 0, "closure capture is not supported in .x");
     }
 
