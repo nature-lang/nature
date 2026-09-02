@@ -41,6 +41,11 @@ static const int64_t all_signals[] = {
 
 void signal_notify(n_chan_t *ch, n_vec_t signals);
 
+// The native signal registry stores channel addresses in a C map. The GC
+// collector calls this while the world is stopped so registered channels are
+// treated as live roots until signal_stop removes them.
+void signal_scan_roots(rt_linked_fixalloc_t *worklist);
+
 static inline bool signal_intercepted(int sig) {
     return (signal_mask & (1 << sig)) != 0;
 }

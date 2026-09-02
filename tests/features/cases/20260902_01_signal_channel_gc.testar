@@ -1,0 +1,66 @@
+=== test_registered_signal_channel_is_kept_alive_by_gc
+--- main.n
+import co
+import os.signal
+import runtime
+import syscall
+
+const CHANNEL_COUNT = 64
+const FILLER_COUNT = 4096
+
+fn register_and_drop(int index): void! {
+    var channel = chan<signal.sig_t>.new(1)
+    signal.notify(channel, syscall.SIGWINCH)
+    if index % 16 == 0 {
+        println('registered', index)
+    }
+}
+
+type filler_t = struct {
+    i64 a
+    i64 b
+    i64 c
+    i64 d
+    i64 e
+    i64 f
+    i64 g
+    i64 h
+    i64 i
+    i64 j
+    i64 k
+    i64 l
+    i64 m
+    i64 n
+    i64 o
+}
+
+fn overwrite_reclaimed_channels() {
+    [ref<filler_t>] fillers = []
+    for int index = 0; index < FILLER_COUNT; index += 1 {
+        fillers.push(new filler_t(a = index, b = index, c = index, d = index, e = index, f = index, g = index, h = index, i = index, j = index, k = index, l = index, m = index, n = index, o = index))
+    }
+    assert(fillers.len() == FILLER_COUNT)
+}
+
+fn main(): void! {
+    for int index = 0; index < CHANNEL_COUNT; index += 1 {
+        register_and_drop(index)
+    }
+
+    runtime.gc()
+    co.sleep(500)
+    overwrite_reclaimed_channels()
+    runtime.gc()
+    co.sleep(500)
+
+    syscall.kill(syscall.getpid(), syscall.SIGWINCH)
+    co.sleep(500)
+    println('signal channel lifetime repro completed')
+}
+
+--- output.txt
+registered 0
+registered 16
+registered 32
+registered 48
+signal channel lifetime repro completed

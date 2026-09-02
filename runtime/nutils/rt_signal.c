@@ -83,3 +83,21 @@ void signal_stop(n_chan_t *ch) {
 
     pthread_mutex_unlock(&signal_locker);
 }
+
+void signal_scan_roots(rt_linked_fixalloc_t *worklist) {
+    assert(worklist);
+
+    pthread_mutex_lock(&signal_locker);
+    int64_t key;
+    int64_t mask;
+    sc_map_foreach(&signal_handlers, key, mask) {
+        (void) mask;
+        if (key != 0) {
+            // signal_handlers is outside the GC graph. Publish every
+            // currently registered channel to the collector's worklist while
+            // holding the same lock used by notify/stop.
+            rt_linked_fixalloc_push(worklist, (void *) key);
+        }
+    }
+    pthread_mutex_unlock(&signal_locker);
+}
