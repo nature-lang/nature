@@ -1,4 +1,4 @@
-=== test_registered_signal_channel_is_kept_alive_by_gc
+=== test_registered_signal_channel_is_kept_alive_by_gc[exclude_os=windows]
 --- main.n
 import co
 import os.signal

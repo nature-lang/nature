@@ -53,6 +53,10 @@ void signal_notify(n_chan_t *ch, n_vec_t signals) {
         }
     }
 
+    // signal_handlers is outside the GC graph. If registration races with
+    // concurrent marking after the initial root scan, publish the new root
+    // through the write barrier before the caller can drop its last reference.
+    rt_shade_obj_with_barrier(ch);
     sc_map_put_64(&signal_handlers, (uint64_t) ch, mask);
 
     if (!signal_loop_co) {
