@@ -1,6 +1,7 @@
 #include "fixalloc.h"
 #include "gcbits.h"
 #include "memory.h"
+#include "nutils/rt_signal.h"
 #include "processor.h"
 
 static void insert_gc_worklist(rt_linked_fixalloc_t *gc_worklist, void *ptr) {
@@ -973,6 +974,13 @@ static void scan_global() {
                    STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base);
         }
     }
+
+    // signal_handlers is a native map keyed by raw channel pointers, so the
+    // normal Nature stack/global scan cannot see channels that remain
+    // registered with os.signal. Keep those channels alive until signal.stop
+    // removes them from the registry. Without this root, the background
+    // signal coroutine can call rt_chan_send on a channel reclaimed by GC.
+    signal_scan_roots(&p->gc_worklist);
 
     RDEBUGF("[runtime_gc.scan_global] scan global completed");
 }
