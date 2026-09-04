@@ -688,15 +688,19 @@ linked_t *arm64_lower_return(closure_t *c, lir_op_t *op) {
             }
         } else if (return_size <= 16) {
             // 小于等于 16 字节的结构体，使用 x0 和 x1 返回
-            lir_operand_t *src_lo = indirect_addr_operand(c->module, type_kind_new(TYPE_UINT64), return_operand, 0);
-            lir_operand_t *dst_lo = operand_new(LIR_OPERAND_REG, x0);
-            linked_push(result, lir_op_move(dst_lo, src_lo));
-
+            // Load the high word first. return_operand commonly carries an x0 hint; writing x0
+            // first would destroy the base before the [base + 8] load.
             if (return_size > 8) {
-                lir_operand_t *src_hi = indirect_addr_operand(c->module, type_kind_new(TYPE_UINT64), return_operand, 8);
+                lir_operand_t *src_hi =
+                        indirect_addr_operand(c->module, type_kind_new(TYPE_UINT64), return_operand, 8);
                 lir_operand_t *dst_hi = operand_new(LIR_OPERAND_REG, x1);
                 linked_push(result, lir_op_move(dst_hi, src_hi));
             }
+
+            lir_operand_t *src_lo =
+                    indirect_addr_operand(c->module, type_kind_new(TYPE_UINT64), return_operand, 0);
+            lir_operand_t *dst_lo = operand_new(LIR_OPERAND_REG, x0);
+            linked_push(result, lir_op_move(dst_lo, src_lo));
         } else {
             assert(c->return_big_operand);
             // fn begin 时 x8 寄存器中存储的指针被传递给了 c->return_operand

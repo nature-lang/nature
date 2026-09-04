@@ -17,6 +17,7 @@
 #endif
 
 #define THROWABLE_IDENT "throwable"
+#define ERRABLE_IDENT "errable"
 // std/builtin/error.n. Recognized by name in .x throws, where it never becomes a real call.
 #define ERRORF_IDENT "errorf"
 // std/builtin/error.x. What a .x catch binds: a pointer to an immutable descriptor in .data.
@@ -419,9 +420,9 @@ struct type_struct_t {
     list_t *properties; // struct_property_t
 };
 
-// x mode has no coroutine to hang an error on, so an errable .x fn returns the error beside its
-// value: { anyptr err; T value }, err == NULL meaning ok. The error is a pointer to an immutable
-// descriptor emitted into .data at the throw site, so nothing is allocated and nothing is copied.
+// x mode has no coroutine to hang an error on, so T! is lowered to the tagged union
+// errable<T> = value(T) | error(ptr<errdesc>). The error descriptor is immutable data emitted at
+// the throw site, so nothing is allocated and nothing is copied.
 //
 // The descriptor is self contained -- [i32 len][i32 flags][bytes][NUL] -- rather than carrying a
 // char* to the message. This toolchain never emits a relocation into the data section (only into
@@ -430,8 +431,8 @@ struct type_struct_t {
 #define X_ERRDESC_HEADER_SIZE 8
 #define X_ERRDESC_FLAG_PANIC 1
 
-#define X_ERRABLE_ERR_NAME "err"
-#define X_ERRABLE_VALUE_NAME "value"
+#define X_ERRABLE_ERROR_TAG "error"
+#define X_ERRABLE_VALUE_TAG "value"
 
 
 typedef struct {
@@ -483,8 +484,8 @@ struct type_enum_t {
 struct type_fn_t {
     char *fn_name; // 可选的函数名称，并不是所有的函数类型都能改得到函数名称
     type_t return_type;
-    // for an errable .x fn, return_type is the { err, value } pair and this is the declared T,
-    // so a call expression still types as T. void for every other fn.
+    // for an errable .x fn, return_type is errable<T> and this is the declared T, so a call
+    // expression still types as T. void for every other fn.
     type_t errable_value_type;
     list_t *param_types; // type_t
     bool is_rest;

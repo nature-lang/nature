@@ -1,5 +1,5 @@
 #include "linear.h"
-static void linear_x_builtin_error(module_t *m, char *msg, bool be_catch);
+static void linear_x_builtin_error(module_t *m, char *msg);
 static void linear_x_store_error(module_t *m, lir_operand_t *err_value);
 static lir_operand_t *linear_x_errdesc(module_t *m, char *msg, int64_t len, int32_t flags);
 
@@ -245,7 +245,7 @@ linear_inline_arr_element_addr(module_t *m, lir_operand_t *arr_target, lir_opera
     if (m->is_x && be_catch) {
         // caught in .x: the descriptor carries the static text, the interpolated index and
         // length are only kept on the uncaught path below
-        linear_x_builtin_error(m, "index out of range", be_catch);
+        linear_x_builtin_error(m, "index out of range");
     } else if (m->is_x) {
         // uncaught in .x: same message and exit, but through a path that never reads the
         // coroutine tls key, which x mode does not create
@@ -364,7 +364,7 @@ linear_inline_vec_element_addr(module_t *m, lir_operand_t *vec_target, lir_opera
     if (m->is_x && be_catch) {
         // caught in .x: the descriptor carries the static text, the interpolated index and
         // length are only kept on the uncaught path below
-        linear_x_builtin_error(m, "index out of range", be_catch);
+        linear_x_builtin_error(m, "index out of range");
     } else if (m->is_x) {
         // uncaught in .x: same message and exit, but through a path that never reads the
         // coroutine tls key, which x mode does not create
@@ -941,22 +941,6 @@ static void linear_has_panic(module_t *m) {
 
 
 /**
- * .x errable propagation. The callee returned { err, value }, so the check is a null test on the
- * pair's err field rather than a question to the coroutine. Nothing is stored across the branch:
- * the error is materialized into this fn's own return slot at the point it is detected, before
- * any defer body runs, so an errable call inside a defer cannot clobber the error in flight.
- */
-/**
- * Put the error where the handler about to run will look for it: the innermost active catch's
- * own slot, or the fn's return-error slot when the error is propagating out. Writing it here,
- * at the error site, means nothing shared stays live across the defer bodies that
- * linear_bal_error is about to emit.
- */
-/**
- * In .x the caught error is the descriptor pointer this catch's own slot was given at the error
- * site. No runtime call, no shared slot, no copy: `e` is an 8-byte pointer to immutable data.
- */
-/**
  * Emit an immutable error descriptor into .data and return its address.
  *
  * Layout is self contained -- [i32 len][i32 flags][bytes][NUL] -- rather than a pointer to the
@@ -1002,48 +986,77 @@ static lir_operand_t *linear_x_errdesc(module_t *m, char *msg, int64_t len, int3
  * becomes the same thing a user throw does: a static descriptor written into the error slot.
  * The uncaught path still calls the runtime, which keeps the interpolated detail and exits.
  */
-static void linear_x_builtin_error(module_t *m, char *msg, bool be_catch) {
+static void linear_x_builtin_error(module_t *m, char *msg) {
     lir_operand_t *desc = linear_x_errdesc(m, msg, (int64_t) strlen(msg), X_ERRDESC_FLAG_PANIC);
     linear_x_store_error(m, desc);
 }
 
+/**
+ * In .x the caught error is the descriptor pointer this catch's own slot was given at the error
+ * site. No runtime call, no shared slot, no copy: `e` is an 8-byte pointer to immutable data.
+ */
 static void linear_x_bind_error(module_t *m, lir_operand_t *err_operand, lir_operand_t *slot) {
     assert(slot);
     OP_PUSH(lir_op_move(err_operand, slot));
 }
 
+/**
+ * Put the error where the handler about to run will look for it: the innermost active catch's
+ * own slot, or the fn's errable<T> return value when propagating out. The first error wins: a
+ * failing errable call in a defer body must not replace the error which started the unwind.
+ */
 static void linear_x_store_error(module_t *m, lir_operand_t *err_value) {
     closure_t *c = m->current_closure;
 
     if (c->x_catch_err_slots->count > 0) {
         lir_operand_t *slot = stack_top(c->x_catch_err_slots);
+        lir_operand_t *current = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+        OP_PUSH(lir_op_move(current, slot));
+
+        char *end_ident = label_ident_with_unique(".xerror.store.end");
+        OP_PUSH(lir_op_new(LIR_OPCODE_BNE, int_operand(0), current, lir_label_operand(end_ident, true)));
         OP_PUSH(lir_op_move(slot, err_value));
+        OP_PUSH(lir_op_label(end_ident, true));
         return;
     }
 
-    assert(c->x_return_err);
-    uint64_t err_offset = type_struct_offset(c->fndef->return_type.struct_, X_ERRABLE_ERR_NAME);
-    OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), c->x_return_pair, err_offset),
+    assert(c->x_return_errable);
+    lir_operand_t *current_tag = temp_var_operand(m, type_kind_new(TYPE_INT64));
+    OP_PUSH(lir_op_move(current_tag,
+                        indirect_addr_operand(m, type_kind_new(TYPE_INT64), c->x_return_errable, 0)));
+
+    // The function result is already error(...), so a defer failure must not replace it.
+    char *end_ident = label_ident_with_unique(".xerror.store.end");
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(hash_string(X_ERRABLE_ERROR_TAG)), current_tag,
+                       lir_label_operand(end_ident, true)));
+    OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), c->x_return_errable, POINTER_SIZE),
                         err_value));
+    OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_INT64), c->x_return_errable, 0),
+                        int_operand(hash_string(X_ERRABLE_ERROR_TAG))));
+    OP_PUSH(lir_op_label(end_ident, true));
 }
 
-static void linear_x_has_error(module_t *m, lir_operand_t *pair, type_t pair_type) {
+static void linear_x_has_error(module_t *m, lir_operand_t *errable) {
     char *error_target_label = m->current_closure->error_label;
     uint16_t catch_depth = m->current_closure->catch_error_labels->count;
     if (catch_depth > 0) {
         error_target_label = stack_top(m->current_closure->catch_error_labels);
     }
 
-    uint64_t err_offset = type_struct_offset(pair_type.struct_, X_ERRABLE_ERR_NAME);
-    lir_operand_t *err_value = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
-    OP_PUSH(lir_op_move(err_value, indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), pair, err_offset)));
+    lir_operand_t *actual_tag = temp_var_operand(m, type_kind_new(TYPE_INT64));
+    OP_PUSH(lir_op_move(actual_tag, indirect_addr_operand(m, type_kind_new(TYPE_INT64), errable, 0)));
 
     char *error_ident = label_ident_with_unique(".xerror");
     char *error_end_ident = str_connect(error_ident, LABEL_END_SUFFIX);
 
-    // err == 0 means ok, skip the error path
-    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(0), err_value, lir_label_operand(error_end_ident, true)));
+    // Anything other than error(...) is the value variant and stays on the happy path.
+    OP_PUSH(lir_op_new(LIR_OPCODE_BNE, int_operand(hash_string(X_ERRABLE_ERROR_TAG)), actual_tag,
+                       lir_label_operand(error_end_ident, true)));
     OP_PUSH(lir_op_label(error_ident, true));
+
+    lir_operand_t *err_value = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_move(err_value,
+                        indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), errable, POINTER_SIZE)));
 
     if (m->is_x) {
         linear_x_store_error(m, err_value);
@@ -1968,14 +1981,13 @@ static void linear_return(module_t *m, ast_return_stmt_t *ast) {
         src = linear_expr(m, *ast->expr, NULL);
     }
 
-    // an errable .x fn returns the pair; err was cleared in the prologue and stays NULL here
-    if (c->x_return_pair) {
+    // Surface `return T` constructs the value(T) variant of the function's errable<T> result.
+    if (c->x_return_errable) {
         if (src) {
-            uint64_t value_offset = type_struct_offset(c->fndef->return_type.struct_, X_ERRABLE_VALUE_NAME);
             type_t value_type = c->fndef->errable_value_type;
-            OP_PUSH(lir_op_move(indirect_addr_operand(m, value_type, c->x_return_pair, value_offset), src));
+            OP_PUSH(lir_op_move(indirect_addr_operand(m, value_type, c->x_return_errable, POINTER_SIZE), src));
         }
-        src = c->x_return_pair;
+        src = c->x_return_errable;
     }
 
     linear_unwind_all(m);
@@ -2343,18 +2355,17 @@ static lir_operand_t *linear_call(module_t *m, ast_expr_t expr, lir_operand_t *t
     lir_operand_t *temp = NULL;
 
     if (is_x_errable_fn(type_fn)) {
-        // the callee returns { err, value }, so the call writes the pair and the value is read
-        // back out of it. The error check is a null test on the pair rather than a runtime call.
-        type_t pair_type = type_fn->return_type;
-        lir_operand_t *pair = temp_var_operand_with_alloc(m, pair_type);
+        // The callee returns errable<T>. Check its tag inline, then extract the value payload.
+        type_t errable_type = type_fn->return_type;
+        lir_operand_t *errable = temp_var_operand_with_alloc(m, errable_type);
 
-        OP_PUSH(lir_op_new(LIR_OPCODE_CALL, fn_target, operand_new(LIR_OPERAND_ARGS, args), pair));
-        linear_x_has_error(m, pair, pair_type);
+        OP_PUSH(lir_op_new(LIR_OPCODE_CALL, fn_target, operand_new(LIR_OPERAND_ARGS, args), errable));
+        linear_x_has_error(m, errable);
 
         if (call->return_type.kind != TYPE_VOID) {
-            uint64_t value_offset = type_struct_offset(pair_type.struct_, X_ERRABLE_VALUE_NAME);
             temp = temp_var_operand(m, call->return_type);
-            OP_PUSH(lir_op_move(temp, indirect_addr_operand(m, call->return_type, pair, value_offset)));
+            OP_PUSH(lir_op_move(temp,
+                                indirect_addr_operand(m, call->return_type, errable, POINTER_SIZE)));
         }
 
         if (temp) {
@@ -3399,6 +3410,49 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
 }
 
 /**
+ * Ordinary unions keep an rtype pointer in their first word. In .x the successful runtime
+ * assertion helper is unnecessary, while its failure path is invalid because it allocates a
+ * coroutine error. Compare the stored rtype hash directly and report through x's error path.
+ */
+static void linear_x_union_assert(module_t *m, lir_operand_t *src_operand, uint64_t target_rtype_hash) {
+    lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_move(union_ptr, src_operand));
+
+    lir_operand_t *rtype_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_move(rtype_ptr,
+                        indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), union_ptr,
+                                              offsetof(n_union_t, rtype))));
+
+    lir_operand_t *actual_hash = temp_var_operand(m, type_kind_new(TYPE_INT64));
+    OP_PUSH(lir_op_move(actual_hash,
+                        indirect_addr_operand(m, type_kind_new(TYPE_INT64), rtype_ptr,
+                                              offsetof(rtype_t, hash))));
+
+    char *assert_ident = label_ident_with_unique(".union.assert");
+    char *assert_end_ident = str_connect(assert_ident, LABEL_END_SUFFIX);
+    lir_operand_t *assert_end = lir_label_operand(assert_end_ident, true);
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(target_rtype_hash), actual_hash, assert_end));
+
+    uint16_t catch_depth = m->current_closure->catch_error_labels->count;
+    char *error_target_label = m->current_closure->error_label;
+    if (catch_depth > 0) {
+        error_target_label = stack_top(m->current_closure->catch_error_labels);
+        linear_x_builtin_error(m, "type assert failed");
+    } else {
+        char *panic_path = m->current_closure->fndef->rel_path
+                                   ? m->current_closure->fndef->rel_path
+                                   : m->rel_path;
+        push_rt_call(m, RT_CALL_X_PANIC, NULL, 4,
+                     string_operand("type assert failed", strlen("type assert failed")),
+                     string_operand(panic_path, strlen(panic_path)), int_operand(m->current_line),
+                     int_operand(m->current_column));
+    }
+
+    linear_bal_error(m, error_target_label, catch_depth);
+    OP_PUSH(lir_op_label(assert_end_ident, true));
+}
+
+/**
  * @param m
  * @param expr
  * @return
@@ -3576,6 +3630,17 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     // union assert
     if (as_expr->src.type.kind == TYPE_UNION) {
         assert(as_expr->target_type.kind != TYPE_UNION);
+        if (m->is_x) {
+            uint64_t target_rtype_hash = type_hash(as_expr->target_type);
+            linear_x_union_assert(m, src_operand, target_rtype_hash);
+
+            lir_operand_t *payload = indirect_addr_operand(m, as_expr->target_type, src_operand, POINTER_SIZE);
+            if (as_expr->target_type.storage_kind == STORAGE_KIND_IND) {
+                payload = lea_operand_pointer(m, payload);
+            }
+            return linear_super_move(m, as_expr->target_type, target, payload);
+        }
+
         if (as_expr->target_type.storage_kind != STORAGE_KIND_IND) {
             // target 可能总是未 def 导致下面的取值异常, 所以最好使用临时值 assert，然后 mov 到 target
             lir_operand_t *temp = temp_var_operand(m, as_expr->target_type);
@@ -4267,8 +4332,7 @@ static lir_operand_t *linear_fn_decl(module_t *m, ast_expr_t expr, lir_operand_t
 }
 
 static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
-    // .x throws a descriptor pointer written straight into this fn's return slot, so nothing is
-    // live across the defer bodies linear_unwind_all is about to emit.
+    // .x throw constructs error(ptr<errdesc>) before running defer bodies.
     if (m->is_x) {
         assert(stmt->x_desc_msg);
         lir_operand_t *desc = linear_x_errdesc(m, stmt->x_desc_msg, stmt->x_desc_len, 0);
@@ -4276,7 +4340,7 @@ static void linear_throw(module_t *m, ast_throw_stmt_t *stmt) {
         linear_unwind_all(m);
 
         closure_t *c = m->current_closure;
-        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, c->x_return_pair, NULL, NULL));
+        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, c->x_return_errable, NULL, NULL));
         OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, false)));
         return;
     }
@@ -4575,14 +4639,15 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
         OP_PUSH(lir_op_safepoint());
     }
 
-    // an errable .x fn returns { err, value }. Allocate it once here and clear err, so the ok
-    // path returns NULL without touching it and every error site writes straight into the slot
-    // it will be returned from.
+    // Allocate the errable<T> result once. Falling through or returning T keeps value(T);
+    // an error site changes the tag and writes its descriptor into the shared payload.
     if (fndef->is_x && fndef->is_errable) {
-        c->x_return_pair = temp_var_operand_with_alloc(m, fndef->return_type);
-        uint64_t err_offset = type_struct_offset(fndef->return_type.struct_, X_ERRABLE_ERR_NAME);
-        c->x_return_err = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), c->x_return_pair, err_offset);
-        OP_PUSH(lir_op_move(c->x_return_err, int_operand(0)));
+        c->x_return_errable = temp_var_operand_with_alloc(m, fndef->return_type);
+        OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_INT64), c->x_return_errable, 0),
+                            int_operand(hash_string(X_ERRABLE_VALUE_TAG))));
+        OP_PUSH(lir_op_move(indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), c->x_return_errable,
+                                                 POINTER_SIZE),
+                            int_operand(0)));
     }
 
     // 参数 escape rewrite
@@ -4598,15 +4663,15 @@ static closure_t *linear_fndef(module_t *m, ast_fndef_t *fndef) {
     OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true)));
 
     OP_PUSH(lir_op_label(c->error_label, true));
-    // in .x the error is already in the pair's err field, so the error path returns it
-    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, c->x_return_pair, NULL, NULL)); // 方便 return check
+    // In .x the error variant is already materialized, so the error path returns it directly.
+    OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, c->x_return_errable, NULL, NULL)); // 方便 return check
     OP_PUSH(lir_op_bal(lir_label_operand(c->end_label, true))); // bal end
 
     OP_PUSH(lir_op_label(c->end_label, true));
 
-    // an errable .x fn whose declared T is void falls through here with err already NULL
-    if (c->x_return_pair && c->fndef->errable_value_type.kind == TYPE_VOID) {
-        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, c->x_return_pair, NULL, NULL));
+    // An errable .x fn whose declared T is void falls through with value(void).
+    if (c->x_return_errable && c->fndef->errable_value_type.kind == TYPE_VOID) {
+        OP_PUSH(lir_op_new(LIR_OPCODE_RETURN, c->x_return_errable, NULL, NULL));
     }
 
     //    OP_PUSH(lir_op_safepoint());

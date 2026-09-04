@@ -758,7 +758,7 @@ struct ast_fndef_t {
     bool is_x; // the fn belongs to an .x module (x mode)
 
     bool is_errable;
-    // errable .x fn only: the declared T, while return_type holds the { err, value } pair
+    // errable .x fn only: the declared T, while return_type holds tagged errable<T>
     type_t errable_value_type;
 
     // tpl fn 可以自定义 #linkid 宏, 用来自定义链接符号名称

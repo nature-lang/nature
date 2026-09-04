@@ -1,0 +1,102 @@
+=== test_ordinary_union
+--- main.x
+type pair_t = struct {
+    int left
+    int right
+}
+
+type value_t = int|pair_t|null
+
+fn make_value():value_t {
+    return pair_t{left: 12, right: 34}
+}
+
+fn main() {
+    println('ordinary size:', @sizeof(value_t))
+    value_t value = make_value()
+    println(value is pair_t, value is int, value is null)
+
+    var pair = value as pair_t
+    println(pair.left, pair.right)
+    if value is pair_t bound {
+        println('bound:', bound.left + bound.right)
+    }
+
+    value = 42
+    println(value is int, value as int)
+
+    value_t empty = null
+    println(empty is null)
+}
+
+--- output.txt
+ordinary size: 24
+true false false
+12 34
+bound: 46
+true 42
+true
+
+=== test_union_assert_uncaught
+--- main.x
+type value_t = int|bool
+
+fn main() {
+    value_t value = true
+    println(value as int)
+}
+
+--- output.txt
+panic: 'type assert failed' at nature-test/main.x:5:17
+
+=== test_tagged_union
+--- main.x
+type pair_t = struct {
+    int left
+    int right
+}
+
+type option<T> = union {
+    T some
+    void none
+}
+
+fn make_option():option<pair_t> {
+    return option<pair_t>.some(pair_t{left: 7, right: 9})
+}
+
+fn main() {
+    println('tagged size:', @sizeof(option<pair_t>))
+    option<pair_t> r = make_option()
+    if r is option.some pair {
+        println('some:', pair.left, pair.right)
+    }
+
+    r = option.none
+    match r {
+        is option.some pair -> println('unexpected:', pair.left)
+        is option.none -> println('none')
+    }
+}
+
+--- output.txt
+tagged size: 24
+some: 7 9
+none
+
+=== test_union_assert_catch
+--- main.x
+type value_t = int|bool
+
+fn main() {
+    value_t value = true
+    var number = value as int catch e {
+        println('caught:', e.msg())
+        -1
+    }
+    println(number)
+}
+
+--- output.txt
+caught: type assert failed
+-1

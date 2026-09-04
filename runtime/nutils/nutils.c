@@ -1075,6 +1075,12 @@ void rt_x_index_panic(n_int_t *index, n_int_t *len, char *path, n_int_t line, n_
     exit(EXIT_FAILURE);
 }
 
+void rt_x_panic(char *msg, char *path, n_int_t line, n_int_t column) {
+    char *dump = tlsprintf("panic: '%s' at %s:%ld:%ld\n", msg, path, line, column);
+    VOID write(STDOUT_FILENO, dump, strlen(dump));
+    exit(EXIT_FAILURE);
+}
+
 void co_throw_error_from_desc(void *desc, char *path, char *fn_name, n_int_t line, n_int_t column) {
     n_string_t view = rt_x_errdesc_msg(desc);
     n_interface_t error = n_error_new(string_new((char *) view.data, view.length), false);

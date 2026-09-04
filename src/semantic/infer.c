@@ -10,7 +10,7 @@
 #include "src/error.h"
 
 static type_t reduction_type_visited(module_t *m, type_t t, struct sc_map_s64 *visited);
-static type_t x_errable_pair_type(module_t *m, type_t value_type);
+static type_t x_errable_type(module_t *m, type_t value_type);
 
 static type_t reduction_type_ident(module_t *m, type_t t, struct sc_map_s64 *visited);
 
@@ -2893,7 +2893,7 @@ static type_t infer_call(module_t *m, ast_call_t *call, type_t target_type, bool
 
     call->return_type = type_fn->return_type;
 
-    // an errable .x fn returns { err, value }; the call still has the type the user declared,
+    // An errable .x fn returns tagged errable<T>; the call still has the type the user declared,
     // and linear reads the fn type to learn the real ABI shape.
     if (is_x_errable_fn(type_fn)) {
         call->return_type = type_fn->errable_value_type;
@@ -3242,8 +3242,8 @@ static void infer_typedef_stmt(module_t *m, ast_typedef_stmt_t *stmt) {
 static void infer_return(module_t *m, ast_return_stmt_t *stmt) {
     type_t expect_type = m->current_fn->return_type;
 
-    // an errable .x fn declares T but returns { err, value }, so `return v` is checked against T
-    // and linear builds the pair. The declared shape stays invisible to the user.
+    // An errable .x fn declares T but returns errable<T>, so `return v` is checked against T and
+    // linear constructs the value variant. The ABI shape stays invisible to the user.
     if (m->current_fn->is_x && m->current_fn->is_errable) {
         expect_type = m->current_fn->errable_value_type;
     }
@@ -4194,34 +4194,37 @@ static type_t reduction_interface(module_t *m, type_t t, struct sc_map_s64 *visi
 }
 
 /**
- * Build the return type an errable .x fn actually returns: { anyptr err; T value }, or just
- * { anyptr err } when T is void. err == NULL means ok.
+ * Build the concrete tagged union behind T! in .x:
  *
- * The struct carries no ident, so rtype.h hashes it structurally and every module that
- * synthesizes the pair for the same T lands on one shared rtype and one ABI shape.
- * reduction_type computes storage_size / storage_kind / abi_struct / align and registers the
- * rtype for it exactly as it would for a parsed struct, so no ABI code has to know about this.
+ *     errable<T> = value(T) | error(ptr<errdesc>)
+ *
+ * This is synthesized as the specialization is inferred instead of resolving the public .n
+ * alias, whose error member is deliberately the coroutine-backed errort. Keeping the canonical
+ * errable name and T argument makes diagnostics describe the language concept, while the tagged
+ * variants make it impossible for a value and an error to be active simultaneously.
  */
-static type_t x_errable_pair_type(module_t *m, type_t value_type) {
-    type_struct_t *s = NEW(type_struct_t);
-    s->ident = NULL;
-    s->properties = ct_list_new(sizeof(struct_property_t));
+static type_t x_errable_type(module_t *m, type_t value_type) {
+    type_tagged_union_t *tagged = NEW(type_tagged_union_t);
+    tagged->ident = ERRABLE_IDENT;
+    tagged->elements = ct_list_new(sizeof(tagged_union_element_t));
 
-    struct_property_t err = {0};
-    err.name = X_ERRABLE_ERR_NAME;
-    err.type = type_kind_new(TYPE_ANYPTR);
-    err.right = NULL;
-    ct_list_push(s->properties, &err);
+    tagged_union_element_t value = {
+            .tag = X_ERRABLE_VALUE_TAG,
+            .type = value_type,
+    };
+    ct_list_push(tagged->elements, &value);
 
-    if (value_type.kind != TYPE_VOID) {
-        struct_property_t value = {0};
-        value.name = X_ERRABLE_VALUE_NAME;
-        value.type = value_type;
-        value.right = NULL;
-        ct_list_push(s->properties, &value);
-    }
+    tagged_union_element_t error = {
+            .tag = X_ERRABLE_ERROR_TAG,
+            .type = x_errdesc_ptr_type(),
+    };
+    ct_list_push(tagged->elements, &error);
 
-    type_t result = type_new(TYPE_STRUCT, s);
+    type_t result = type_new(TYPE_TAGGED_UNION, tagged);
+    result.ident = ERRABLE_IDENT;
+    result.ident_kind = TYPE_IDENT_TAGGER_UNION;
+    result.args = ct_list_new(sizeof(type_t));
+    ct_list_push(result.args, &value_type);
     result.status = REDUCTION_STATUS_UNDO;
     return reduction_type(m, result);
 }
@@ -4377,7 +4380,7 @@ static type_t infer_impl_fn_decl(module_t *m, ast_fndef_t *fndef) {
     f->return_type = reduction_type(m, fndef->return_type);
     if (is_x_errable_fn(f)) {
         f->errable_value_type = f->return_type;
-        f->return_type = x_errable_pair_type(m, f->return_type);
+        f->return_type = x_errable_type(m, f->return_type);
         fndef->errable_value_type = f->errable_value_type;
         fndef->return_type = f->return_type;
     }
@@ -4442,10 +4445,10 @@ static type_t infer_fn_decl(module_t *m, ast_fndef_t *fndef, type_t target_type)
     fndef->return_type.status = REDUCTION_STATUS_UNDO;
     type_fn->return_type = reduction_type(m, fndef->return_type);
 
-    // an errable .x fn returns its error beside its value instead of on a coroutine slot
+    // an errable .x fn returns tagged errable<T> instead of using a coroutine slot
     if (is_x_errable_fn(type_fn)) {
         type_fn->errable_value_type = type_fn->return_type;
-        type_fn->return_type = x_errable_pair_type(m, type_fn->return_type);
+        type_fn->return_type = x_errable_type(m, type_fn->return_type);
         fndef->errable_value_type = type_fn->errable_value_type;
     }
 
