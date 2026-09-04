@@ -368,6 +368,10 @@ typedef struct {
  */
 typedef struct {
     ast_expr_t error;
+    // .x only: the literal message, lifted out of `throw errorf('...')` by infer. The error there
+    // is a pointer to an immutable descriptor emitted at this site, so the text must be known now.
+    char *x_desc_msg;
+    int64_t x_desc_len;
 } ast_throw_stmt_t;
 
 /**
@@ -754,6 +758,8 @@ struct ast_fndef_t {
     bool is_x; // the fn belongs to an .x module (x mode)
 
     bool is_errable;
+    // errable .x fn only: the declared T, while return_type holds tagged errable<T>
+    type_t errable_value_type;
 
     // tpl fn 可以自定义 #linkid 宏, 用来自定义链接符号名称
     char *linkid;

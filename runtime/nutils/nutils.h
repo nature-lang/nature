@@ -86,6 +86,19 @@ void rt_assert(n_bool_t cond);
 // allocate array data by element rtype hash
 n_anyptr_t rt_array_new(int64_t element_hash, int64_t length);
 
+// x mode error descriptor: [i32 len][i32 flags][bytes][NUL] in .data
+n_string_t rt_x_errdesc_msg(void *self);
+
+// .n caller receiving an error from an .x callee
+void co_throw_error_from_desc(void *desc, char *path, char *fn_name, n_int_t line, n_int_t column);
+
+// x mode uncaught bounds panic. Never touches the coroutine: in .x the tls key is never
+// created, and reading it is undefined -- junk on darwin, a crash on linux.
+void rt_x_index_panic(n_int_t *index, n_int_t *len, char *path, n_int_t line, n_int_t column);
+
+// Generic uncaught panic for .x checks that do not need interpolated operands.
+void rt_x_panic(char *msg, char *path, n_int_t line, n_int_t column);
+
 n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr);
 
 n_string_t rt_strerror();

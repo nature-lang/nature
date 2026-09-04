@@ -204,6 +204,12 @@ static void return_check(closure_t *c, table_t *handled, basic_block_t *b) {
         return;
     }
 
+    // An errable .x fn returns errable<T>; when T is void, linear emits value(void), so the user
+    // does not need an explicit return.
+    if (c->fndef->is_x && c->fndef->is_errable && c->fndef->errable_value_type.kind == TYPE_VOID) {
+        return;
+    }
+
     if (handled == NULL) {
         handled = table_new();
     }

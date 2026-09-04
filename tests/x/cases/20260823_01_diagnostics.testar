@@ -49,19 +49,6 @@ pub type allocatable = interface{
 --- output.txt
 nature-test/main.x:5:2: the fn 'new' of type 'main.heap_t' mismatch interface 'nature-test.iface.allocatable'
 
-=== test_errable_definition
---- main.x
-fn risky():int! {
-    return 1
-}
-
-fn main() {
-    println(1)
-}
-
---- output.txt
-nature-test/main.x:1:3: errable fn declaration is not supported in .x
-
 === test_vec_literal
 --- main.x
 fn main() {

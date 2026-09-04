@@ -578,6 +578,11 @@ typedef struct closure_t {
     char *error_label; // 遇到表达式错误时需要调整到的目标 label
 
     ct_stack_t *catch_error_labels;
+    // x mode only: one descriptor slot per active catch, parallel to catch_error_labels.
+    ct_stack_t *x_catch_err_slots;
+    // The tagged errable<T> this fn returns. Error sites change it from value(T) to
+    // error(ptr<errdesc>) before unwinding defer bodies.
+    lir_operand_t *x_return_errable;
 
     ct_stack_t *continue_labels; // 用于 for continue lir_operand*
     ct_stack_t *break_labels; // 用于 for break lir_operand*

@@ -1034,6 +1034,60 @@ n_int_t rt_errno() {
     return errno;
 }
 
+
+/**
+ * A .x error is a pointer to an immutable descriptor in .data. Its message bytes sit inline right
+ * after the header, so msg() is a non owning view: no allocation, and the bytes outlive every
+ * frame. allocator is left NULL, matching how the rest of x mode marks storage it does not own.
+ */
+n_string_t rt_x_errdesc_msg(void *self) {
+    uint8_t *desc = self;
+    int32_t len = *(int32_t *) desc;
+
+    n_string_t result = {0};
+    result.data = desc + X_ERRDESC_HEADER_SIZE;
+    result.length = len;
+    result.capacity = len;
+    result.element_size = 1;
+    result.allocator = NULL;
+    return result;
+}
+
+/**
+ * Bridge for a .n fn calling an errable .x fn. The .x side returned a descriptor pointer, which
+ * .n's error path knows nothing about, so build a real gc errort from it and hand it to the
+ * coroutine exactly as a .n throw would. Copying the message is required: the descriptor is
+ * immortal but n_errort wants an owned n_string_t.
+ */
+
+/**
+ * Uncaught index-out-of-range raised from .x. Same message and exit as the fn mode path, but it
+ * resolves the caller directly instead of going through throw_index_out_error, which begins with
+ * coroutine_get(). x mode never creates the coroutine tls key, so reading it is undefined.
+ */
+void rt_x_index_panic(n_int_t *index, n_int_t *len, char *path, n_int_t line, n_int_t column) {
+    // the site is passed in rather than recovered from the return address: linear knows it
+    // statically, and the caller table lookup the fn mode path uses does not resolve from here
+    // one tlsprintf: it hands back a reused static buffer, so nesting two calls clobbers the first
+    char *dump = tlsprintf("panic: 'index out of range [%d] with length %d' at %s:%ld:%ld\n",
+                           index, len, path, line, column);
+    VOID write(STDOUT_FILENO, dump, strlen(dump));
+    exit(EXIT_FAILURE);
+}
+
+void rt_x_panic(char *msg, char *path, n_int_t line, n_int_t column) {
+    char *dump = tlsprintf("panic: '%s' at %s:%ld:%ld\n", msg, path, line, column);
+    VOID write(STDOUT_FILENO, dump, strlen(dump));
+    exit(EXIT_FAILURE);
+}
+
+void co_throw_error_from_desc(void *desc, char *path, char *fn_name, n_int_t line, n_int_t column) {
+    n_string_t view = rt_x_errdesc_msg(desc);
+    n_interface_t error = n_error_new(string_new((char *) view.data, view.length), false);
+    co_throw_error(&error, path, fn_name, line, column);
+}
+
+
 n_anyptr_t rt_array_new(int64_t element_hash, int64_t length) {
     if (length < 0) {
         rti_throw("array_new length must be non-negative", true);

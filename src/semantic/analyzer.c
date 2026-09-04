@@ -2547,8 +2547,9 @@ static void analyzer_main(module_t *m) {
     ANALYZER_ASSERTF(main_fn->return_type.kind == TYPE_VOID,
                      "fn main must have no arguments and no return values, example: fn main() {...");
 
-    // main fn add define errorable, x mode has no coroutine error slot
-    main_fn->is_errable = !m->is_x;
+    // main fn add define errorable. .x carries the error in its return value now, so its main
+    // can be errable too and an uncaught error is reported instead of being a compile error.
+    main_fn->is_errable = true;
 
     // the entry symbol name is pinned by the runtime, decoupled from the module ident
     main_fn->linkid = FN_MAIN_LINKID;

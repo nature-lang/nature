@@ -1,0 +1,479 @@
+=== test_propagate
+--- main.x
+// declare, call, propagate, catch with nothing thrown
+fn risky(int v):int! {
+    return v * 2
+}
+
+fn caller(int v):int! {
+    return risky(v)
+}
+
+fn main() {
+    var a = caller(21) catch e {
+        -1
+    }
+    println('happy:', a)
+}
+
+--- output.txt
+happy: 42
+
+=== test_throw_catch
+--- main.x
+fn risky(int v):int! {
+    if v < 0 {
+        throw errorf('negative input')
+    }
+    return v * 2
+}
+
+fn main() {
+    var b = risky(-1) catch e {
+        println('caught:', e.msg())
+        -2
+    }
+    println('thrown:', b)
+}
+
+--- output.txt
+caught: negative input
+thrown: -2
+
+=== test_same_catch_site_twice
+--- main.x
+// One catch site, executed twice, reached by two different throw sites. The v1 design
+// reserved the catch buffer per catch SITE rather than per execution, so the second run
+// rewrote the first handler's message and printed "SECON SECOND".
+// .n reference: "FIRST SECOND".
+fn fail(bool first):string! {
+    if first {
+        throw errorf('FIRST')
+    }
+    throw errorf('SECOND')
+}
+
+fn grab(bool first):string {
+    var s = fail(first) catch e {
+        return e.msg()
+    }
+    return 'none'
+}
+
+fn main() {
+    println(grab(true), grab(false))
+}
+
+--- output.txt
+FIRST SECOND
+
+=== test_error_escapes_catching_fn
+--- main.x
+// the message has to outlive the frame that caught it
+fn fail():string! {
+    throw errorf('ESCAPED')
+}
+
+fn escape():string {
+    var s = fail() catch e {
+        e.msg()
+    }
+    return s
+}
+
+fn main() {
+    println('escape:', escape())
+}
+
+--- output.txt
+escape: ESCAPED
+
+=== test_catch_in_loop
+--- main.x
+// each iteration's `e` must be that iteration's error. The middle iteration throws a
+// different message, so a per-site slot would smear one of them across the others.
+fn fail(bool odd):string! {
+    if odd {
+        throw errorf('ODD')
+    }
+    throw errorf('EVEN')
+}
+
+fn main() {
+    for int i = 0; i < 3; i += 1 {
+        var s = fail(i == 1) catch e {
+            e.msg()
+        }
+        println(i, s)
+    }
+}
+
+--- output.txt
+0 EVEN
+1 ODD
+2 EVEN
+
+=== test_nested_catch
+--- main.x
+// the outer error survives a catch running inside it. two different messages on purpose:
+// identical ones would hide a shared slot.
+fn fail_a():int! {
+    throw errorf('AAA')
+}
+
+fn fail_b():int! {
+    throw errorf('BBB')
+}
+
+fn main() {
+    fail_a() catch e {
+        fail_b() catch e2 {
+            0
+        }
+        println('e.msg() =', e.msg())
+        0
+    }
+}
+
+--- output.txt
+e.msg() = AAA
+
+=== test_long_message
+--- main.x
+// v1 truncated at 159 bytes with no signal. A static descriptor has no cap.
+fn fail():string! {
+    throw errorf('0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789END')
+}
+
+fn main() {
+    var s = fail() catch e {
+        e.msg()
+    }
+    println(s)
+}
+
+--- output.txt
+0123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789END
+
+=== test_catch_builtin
+--- main.x
+import allocator as ac
+
+// A builtin error caught in .x carries the static descriptor text. The interpolated index
+// and length are deliberately dropped — the descriptor lives in .rodata — while the uncaught
+// panic path below keeps them.
+fn main() {
+    var v = vec<int>.alloc(ac.heap, 0, 2)
+    defer v.deinit()
+
+    var x = v[5] catch e {
+        println('builtin caught:', e.msg())
+        -1
+    }
+    println(x)
+}
+
+--- output.txt
+builtin caught: index out of range
+-1
+
+=== test_uncaught_panic
+--- main.x
+import allocator as ac
+
+// the uncaught path keeps the full interpolated message and the exit code
+fn main() {
+    var v = vec<int>.alloc(ac.heap, 0, 2)
+    defer v.deinit()
+    println(v[5])
+}
+
+--- output.txt
+panic: 'index out of range [5] with length 2' at nature-test/main.x:7:15
+
+=== test_errable_main
+--- main.x
+// .x main may be errable, so an uncaught error is reportable rather than a compile error.
+// .n prints a stack backtrace here; .x has no traces, so it reports the message alone.
+fn risky():int! {
+    throw errorf('from main')
+}
+
+fn main():void! {
+    var v = risky()
+    println(v)
+}
+
+--- output.txt
+uncaught error: 'from main'
+
+=== test_void_errable_variants
+--- main.x
+fn action(bool fail):void! {
+    if fail {
+        throw errorf('void failed')
+    }
+}
+
+fn main() {
+    action(false) catch e {
+        println('unexpected:', e.msg())
+    }
+    println('void value')
+
+    action(true) catch e {
+        println('void error:', e.msg())
+    }
+}
+
+--- output.txt
+void value
+void error: void failed
+
+=== test_defer_with_errable_call
+--- main.x
+// defer bodies run while the error is propagating; an errable call inside one must not
+// disturb the error in flight
+fn cleanup():int! {
+    return 1
+}
+
+fn work():int! {
+    defer {
+        cleanup()
+    }
+    throw errorf('boom')
+}
+
+fn main() {
+    var v = work() catch e {
+        println('caught:', e.msg())
+        -1
+    }
+    println(v)
+}
+
+--- output.txt
+caught: boom
+-1
+
+=== test_defer_error_preserves_original
+--- main.x
+// If cleanup fails while another error is already unwinding, the original error wins.
+// The error slot is also the propagation state, so overwriting it would lose the cause.
+fn cleanup():int! {
+    throw errorf('cleanup failed')
+}
+
+fn work():int! {
+    defer {
+        cleanup()
+    }
+    throw errorf('original failure')
+}
+
+fn main() {
+    var v = work() catch e {
+        println('caught:', e.msg())
+        -1
+    }
+    println(v)
+}
+
+--- output.txt
+caught: original failure
+-1
+
+=== test_defer_can_raise_first_error
+--- main.x
+// The conditional store must still accept a defer's error when normal return did
+// not already place one in the function result.
+fn cleanup():int! {
+    throw errorf('cleanup is first')
+}
+
+fn work():int! {
+    defer {
+        cleanup()
+    }
+    return 42
+}
+
+fn main() {
+    var v = work() catch e {
+        println('caught:', e.msg())
+        -1
+    }
+    println(v)
+}
+
+--- output.txt
+caught: cleanup is first
+-1
+
+=== test_large_value_result
+--- main.x
+// pair_t is 16 bytes, so tagged errable<pair_t> is 24 bytes and uses
+// the platform's indirect aggregate-return ABI.
+type pair_t = struct {
+    int left
+    int right
+}
+
+fn make_pair(bool fail):pair_t! {
+    if fail {
+        throw errorf('pair failed')
+    }
+    return pair_t{left: 20, right: 22}
+}
+
+fn main() {
+    var ok = make_pair(false) catch e {
+        pair_t{left: -1, right: -1}
+    }
+    println('ok:', ok.left, ok.right)
+
+    var failed = make_pair(true) catch e {
+        println('caught:', e.msg())
+        pair_t{left: 7, right: 9}
+    }
+    println('fallback:', failed.left, failed.right)
+}
+
+--- output.txt
+ok: 20 22
+caught: pair failed
+fallback: 7 9
+
+=== test_generic_errable
+--- main.x
+fn echo<T>(T value, bool fail):T! {
+    if fail {
+        throw errorf('generic failed')
+    }
+    return value
+}
+
+fn main() {
+    var number = echo<int>(42, false) catch e {
+        -1
+    }
+    println('generic value:', number)
+
+    var failed = echo<string>('unused', true) catch e {
+        println('generic caught:', e.msg())
+        'fallback'
+    }
+    println(failed)
+}
+
+--- output.txt
+generic value: 42
+generic caught: generic failed
+fallback
+
+=== test_n_catches_x_error
+--- main.n
+import "worker.x"
+
+// an .x fn throwing under a live coroutine must reach the .n caller's handler
+fn main() {
+    var v = worker.risky(-1) catch e {
+        println('n caught from x:', e.msg())
+        -1
+    }
+    println(v)
+}
+
+--- worker.x
+pub fn risky(int v):int! {
+    if v < 0 {
+        throw errorf('x side failure')
+    }
+    return v * 2
+}
+
+--- output.txt
+n caught from x: x side failure
+-1
+
+=== test_n_calls_x_large_value_result
+--- main.n
+import "worker.x"
+
+fn main() {
+    var ok = worker.make_pair(false) catch e {
+        worker.pair_t{left: -1, right: -1}
+    }
+    println('n ok:', ok.left, ok.right)
+
+    var failed = worker.make_pair(true) catch e {
+        println('n caught:', e.msg())
+        worker.pair_t{left: 3, right: 4}
+    }
+    println('n fallback:', failed.left, failed.right)
+}
+
+--- worker.x
+pub type pair_t = struct {
+    int left
+    int right
+}
+
+pub fn make_pair(bool fail):pair_t! {
+    if fail {
+        throw errorf('large x failure')
+    }
+    return pair_t{left: 40, right: 2}
+}
+
+--- output.txt
+n ok: 40 2
+n caught: large x failure
+n fallback: 3 4
+
+=== test_n_custom_throwable_still_works
+--- main.n
+// v1 moved throwable into error.x, which made is_x part of the interface's fn type and broke
+// every .n implementation of it. Custom error types in .n are a documented feature.
+type my_err:throwable = struct{
+    string detail
+}
+
+fn my_err.msg(&self):string {
+    return self.detail
+}
+
+fn risky():int! {
+    throw my_err{detail: 'custom failure'}
+}
+
+fn main() {
+    var v = risky() catch e {
+        println('caught:', e.msg())
+        -1
+    }
+    println(v)
+}
+
+--- output.txt
+caught: custom failure
+-1
+
+=== test_throw_non_literal_rejected
+--- main.x
+// the .x error is a static descriptor, so the message must be known at compile time.
+// This is the compile-time replacement for v1's release-stripped runtime assert.
+fn fail(string m):string! {
+    throw errorf(m)
+}
+
+fn main() {
+    var s = fail('x') catch e {
+        e.msg()
+    }
+    println(s)
+}
+
+--- output.txt
+nature-test/main.x:4:9: throw in .x requires a literal message
