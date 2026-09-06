@@ -483,8 +483,16 @@ typedef struct {
     int64_t capacity; // 预先申请的容量大小
     int64_t element_size;
     int64_t hash;
+} n_vec_t;
+
+typedef struct {
+    uint8_t *data;
+    int64_t length;
+    int64_t capacity;
+    int64_t element_size;
+    int64_t hash;
     void *allocator;
-} n_vec_t, n_string_t;
+} n_string_t;
 
 // 通过 gc malloc 申请
 typedef struct linkco_t linkco_t;
@@ -930,20 +938,23 @@ static inline list_t *type_abi_struct(type_t t) {
         return result;
     }
 
-    // n_string_t / n_vec_t: { uint8_t* data; int64_t length; int64_t capacity; int64_t element_size; int64_t hash; }
-    if (t.kind == TYPE_STRING || t.kind == TYPE_VEC) {
+    // n_vec_t and n_string_t share the first five fields. String keeps its
+    // existing reserved allocator pointer until its ownership model is redesigned.
+    if (t.kind == TYPE_VEC || t.kind == TYPE_STRING) {
         type_t data_ptr = type_kind_new(TYPE_ANYPTR);
         type_t len_type = type_kind_new(TYPE_INT64);
         type_t cap_type = type_kind_new(TYPE_INT64);
         type_t elem_size_type = type_kind_new(TYPE_INT64);
         type_t hash_type = type_kind_new(TYPE_INT64);
-        type_t allocator = type_kind_new(TYPE_ANYPTR);
         ct_list_push(result, &data_ptr);
         ct_list_push(result, &len_type);
         ct_list_push(result, &cap_type);
         ct_list_push(result, &elem_size_type);
         ct_list_push(result, &hash_type);
-        ct_list_push(result, &allocator);
+        if (t.kind == TYPE_STRING) {
+            type_t allocator = type_kind_new(TYPE_ANYPTR);
+            ct_list_push(result, &allocator);
+        }
         return result;
     }
 

@@ -9,7 +9,14 @@
 // string copy to vec
 // vec copy to string
 n_vec_t string_to_vec(n_string_t *src) {
-    return string_new(src->data, src->length);
+    n_string_t copy = string_new(src->data, src->length);
+    return (n_vec_t){
+        .data = copy.data,
+        .length = copy.length,
+        .capacity = copy.capacity,
+        .element_size = copy.element_size,
+        .hash = copy.hash,
+    };
 }
 
 n_string_t vec_to_string(n_vec_t *vec) {
