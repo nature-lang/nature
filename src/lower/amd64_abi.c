@@ -120,9 +120,6 @@ linked_t *amd64_lower_return(closure_t *c, lir_op_t *op) {
 
     if (is_abi_struct_like(return_type)) {
         // return_operand 保存的是一个指针，需要 indirect 这个值，将响应的值 mov 到寄存器中
-        lir_operand_t *src = indirect_addr_operand(c->module, type_kind_new(lo_kind), return_operand, 0);
-        linked_push(result, lir_op_move(lo_dst_reg, src));
-
         if (count == 2) {
             lir_operand_t *hi_dst_reg = NULL;
             type_kind hi_kind;
@@ -133,9 +130,15 @@ linked_t *amd64_lower_return(closure_t *c, lir_op_t *op) {
                 hi_dst_reg = operand_new(LIR_OPERAND_REG, xmm1s64);
                 hi_kind = TYPE_FLOAT64;
             }
-            src = indirect_addr_operand(c->module, type_kind_new(hi_kind), return_operand, QWORD);
+            // The aggregate base commonly has a return-register hint. Preserve it until both
+            // words have been loaded by moving the high word before the low return register.
+            lir_operand_t *src =
+                    indirect_addr_operand(c->module, type_kind_new(hi_kind), return_operand, QWORD);
             linked_push(result, lir_op_move(hi_dst_reg, src));
         }
+
+        lir_operand_t *src = indirect_addr_operand(c->module, type_kind_new(lo_kind), return_operand, 0);
+        linked_push(result, lir_op_move(lo_dst_reg, src));
     } else {
         assert(count == 1);
         assertf(return_type.kind != TYPE_ARR, "array type must be pointer type");

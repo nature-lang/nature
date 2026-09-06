@@ -406,3 +406,7 @@ endif ()
 add_executable(test_amd64_windows_abi test_amd64_windows_abi.c)
 target_link_libraries(test_amd64_windows_abi nature_common_test m)
 add_test(test_amd64_windows_abi test_amd64_windows_abi)
+
+add_executable(test_aggregate_return_abi test_aggregate_return_abi.c)
+target_link_libraries(test_aggregate_return_abi nature_common_test m)
+add_test(test_aggregate_return_abi test_aggregate_return_abi)

@@ -713,14 +713,16 @@ linked_t *riscv64_lower_return(closure_t *c, lir_op_t *op) {
                 hi_dst = operand_new(LIR_OPERAND_REG, reg_select(reg_index, attach_kind));
             }
         }
-        // 进行 mov
-        lir_operand_t *lo_src = indirect_addr_operand(c->module, type_kind_new(main_kind), return_operand, 0);
-        linked_push(result, lir_op_move(lo_dst, lo_src));
-
+        // Keep the aggregate base alive until both words have been loaded. It commonly has an
+        // a0 return hint, so writing the low return register first can clobber [base + offset].
         if (hi_dst) {
-            lir_operand_t *hi_src = indirect_addr_operand(c->module, type_kind_new(attach_kind), return_operand, attach_offset);
+            lir_operand_t *hi_src =
+                    indirect_addr_operand(c->module, type_kind_new(attach_kind), return_operand, attach_offset);
             linked_push(result, lir_op_move(hi_dst, hi_src));
         }
+
+        lir_operand_t *lo_src = indirect_addr_operand(c->module, type_kind_new(main_kind), return_operand, 0);
+        linked_push(result, lir_op_move(lo_dst, lo_src));
 
     } else {
         if (return_size > 16) {
