@@ -1034,6 +1034,13 @@ n_int_t rt_errno() {
     return errno;
 }
 
+void rt_x_panic(char *msg, char *path, n_int_t line, n_int_t column) {
+    char *dump = tlsprintf("panic: '%s' at %s:%llu:%llu\n", msg, path,
+                           (unsigned long long) line, (unsigned long long) column);
+    VOID write(STDOUT_FILENO, dump, strlen(dump));
+    exit(EXIT_FAILURE);
+}
+
 n_anyptr_t rt_array_new(int64_t element_hash, int64_t length) {
     if (length < 0) {
         rti_throw("array_new length must be non-negative", true);
