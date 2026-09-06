@@ -86,6 +86,9 @@ void rt_assert(n_bool_t cond);
 // allocate array data by element rtype hash
 n_anyptr_t rt_array_new(int64_t element_hash, int64_t length);
 
+// Report an uncaught .x panic without accessing coroutine state.
+void rt_x_panic(char *msg, char *path, n_int_t line, n_int_t column);
+
 n_vec_t unsafe_vec_new(int64_t hash, int64_t element_hash, int64_t len, void *data_ptr);
 
 n_string_t rt_strerror();
