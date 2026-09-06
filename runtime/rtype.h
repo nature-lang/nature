@@ -44,7 +44,7 @@ extern rtype_t std_arg_rtype;
 // GC_RTYPE(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
 extern rtype_t os_env_rtype;
 
-// GC_RTYPE(TYPE_VEC, 6, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN)
+// GC_RTYPE(TYPE_VEC, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN)
 extern rtype_t vec_rtype;
 
 extern rtype_t fn_rtype;
@@ -171,7 +171,7 @@ static inline void builtin_rtype_init() {
     os_env_rtype = GC_RTYPE(TYPE_STRING, 2, TYPE_GC_SCAN, TYPE_GC_NOSCAN);
 
     // 初始化向量 rtype
-    vec_rtype = GC_RTYPE(TYPE_VEC, 6, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
+    vec_rtype = GC_RTYPE(TYPE_VEC, 5, TYPE_GC_SCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN, TYPE_GC_NOSCAN,
                          TYPE_GC_NOSCAN);
 
     // 初始化函数 rtype

@@ -514,15 +514,12 @@ linear_default_vec(module_t *m, type_t t, lir_operand_t *target) {
     lir_operand_t *elem_size_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target,
                                                          offsetof(n_vec_t, element_size));
     lir_operand_t *hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, hash));
-    lir_operand_t *allocator_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target,
-                                                         offsetof(n_vec_t, allocator));
 
     OP_PUSH(lir_op_move(data_dst, int_operand(0)));
     OP_PUSH(lir_op_move(len_dst, int_operand(0)));
     OP_PUSH(lir_op_move(cap_dst, int_operand(0)));
     OP_PUSH(lir_op_move(elem_size_dst, int_operand(t.vec->element_type.storage_size)));
     OP_PUSH(lir_op_move(hash_dst, int_operand(type_hash(t))));
-    OP_PUSH(lir_op_move(allocator_dst, int_operand(0)));
     return target;
 }
 
@@ -541,9 +538,8 @@ static inline lir_operand_t *linear_lea_builtin_value_struct(module_t *m, lir_op
 
 static lir_operand_t *
 linear_unsafe_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target) {
-    // a vec literal owns gc managed storage, x mode has no gc to free it again,
-    // so the allocator based vec<T>.alloc is the way to build one there. an empty literal
-    // allocates nothing but still carries allocator=0, which sends push down the gc path.
+    // A vec literal owns GC-managed storage. X mode has no GC to free it, so
+    // vec<T>.alloc with an explicit allocator is the supported constructor there.
     LINEAR_ASSERTF(!m->is_x, "vec literal is not supported in .x, use vec<T>.alloc with an allocator");
 
     if (!target) {
@@ -557,14 +553,11 @@ linear_unsafe_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target
     lir_operand_t *elem_size_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target,
                                                          offsetof(n_vec_t, element_size));
     lir_operand_t *hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, hash));
-    lir_operand_t *allocator_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target,
-                                                         offsetof(n_vec_t, allocator));
 
     OP_PUSH(lir_op_move(len_dst, int_operand(len)));
     OP_PUSH(lir_op_move(cap_dst, int_operand(len)));
     OP_PUSH(lir_op_move(elem_size_dst, int_operand(t.vec->element_type.storage_size)));
     OP_PUSH(lir_op_move(hash_dst, int_operand(type_hash(t))));
-    OP_PUSH(lir_op_move(allocator_dst, int_operand(0)));
 
     if (len == 0) {
         OP_PUSH(lir_op_move(data_dst, int_operand(0)));
@@ -592,14 +585,11 @@ linear_stack_vec_new(module_t *m, type_t t, uint64_t len, lir_operand_t *target)
     lir_operand_t *elem_size_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target,
                                                          offsetof(n_vec_t, element_size));
     lir_operand_t *hash_dst = indirect_addr_operand(m, type_kind_new(TYPE_INT64), target, offsetof(n_vec_t, hash));
-    lir_operand_t *allocator_dst = indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), target,
-                                                         offsetof(n_vec_t, allocator));
 
     OP_PUSH(lir_op_move(len_dst, int_operand(len)));
     OP_PUSH(lir_op_move(cap_dst, int_operand(len)));
     OP_PUSH(lir_op_move(elem_size_dst, int_operand(t.vec->element_type.storage_size)));
     OP_PUSH(lir_op_move(hash_dst, int_operand(type_hash(t))));
-    OP_PUSH(lir_op_move(allocator_dst, int_operand(0)));
 
     if (len == 0) {
         OP_PUSH(lir_op_move(data_dst, int_operand(0)));
