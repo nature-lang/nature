@@ -911,6 +911,13 @@ static void scan_pool() {
         }
     }
     mutex_unlock(&const_str_pool_locker);
+
+    // signal_handlers is a native map keyed by raw channel pointers, so the
+    // normal Nature stack/global scan cannot see channels that remain
+    // registered with os.signal. Keep those channels alive until signal.stop
+    // removes them from the registry. Without this root, the background
+    // signal coroutine can call rt_chan_send on a channel reclaimed by GC.
+    signal_scan_roots(&p->gc_worklist);
 }
 
 /**
@@ -974,13 +981,6 @@ static void scan_global() {
                    STRTABLE(s.name_offset), type_kind_str[rtype->kind], s.base);
         }
     }
-
-    // signal_handlers is a native map keyed by raw channel pointers, so the
-    // normal Nature stack/global scan cannot see channels that remain
-    // registered with os.signal. Keep those channels alive until signal.stop
-    // removes them from the registry. Without this root, the background
-    // signal coroutine can call rt_chan_send on a channel reclaimed by GC.
-    signal_scan_roots(&p->gc_worklist);
 
     RDEBUGF("[runtime_gc.scan_global] scan global completed");
 }
