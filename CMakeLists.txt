@@ -8,7 +8,17 @@ set(CMAKE_VERBOSE_MAKEFILE OFF)
 
 include(cmake/cross.cmake)
 
-file(READ "VERSION" PROJECT_VERSION)
+file(READ "VERSION" NATURE_SOURCE_VERSION)
+string(STRIP "${NATURE_SOURCE_VERSION}" NATURE_SOURCE_VERSION)
+set(NATURE_VERSION_OVERRIDE "" CACHE STRING "Override the Nature version embedded in release artifacts")
+if(NATURE_VERSION_OVERRIDE)
+    set(PROJECT_VERSION "${NATURE_VERSION_OVERRIDE}")
+    set(NATURE_VERSION_FILE "${PROJECT_BINARY_DIR}/VERSION")
+    file(WRITE "${NATURE_VERSION_FILE}" "${PROJECT_VERSION}")
+else()
+    set(PROJECT_VERSION "${NATURE_SOURCE_VERSION}")
+    set(NATURE_VERSION_FILE "${PROJECT_SOURCE_DIR}/VERSION")
+endif()
 
 # 打印当前的项目版本
 message("nature version: ${PROJECT_VERSION}")
@@ -169,8 +179,10 @@ else()
 endif()
 
 
-enable_testing()
-add_subdirectory(tests)
+include(CTest)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
+endif()
 add_subdirectory(runtime EXCLUDE_FROM_ALL)
 
 
@@ -186,7 +198,7 @@ install(DIRECTORY lib/ DESTINATION nature/lib)
 install(DIRECTORY std/ DESTINATION nature/std)
 install(FILES LICENSE-MIT DESTINATION nature/)
 install(FILES LICENSE-APACHE DESTINATION nature/)
-install(FILES VERSION DESTINATION nature/)
+install(FILES "${NATURE_VERSION_FILE}" DESTINATION nature/ RENAME VERSION)
 
 
 include(cmake/cpack.cmake)
