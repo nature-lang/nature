@@ -10,6 +10,13 @@ on:
         description: Existing weekly.YYYY.WW or v0.x.x tag; leave empty for this week's weekly. A v0.x.x tag lands as an editable draft.
         required: false
         type: string
+  pull_request:
+    # Changes to the release pipeline itself get a dry run: everything up to
+    # publishing is exercised, so a broken egress allowlist or an unavailable
+    # runner label surfaces in the pull request instead of on master.
+    paths:
+      - .github/workflows/release.yml
+      - .github/scripts/release/build-package.sh
   push:
     tags:
       - "weekly.*"
@@ -19,10 +26,12 @@ permissions:
   contents: read
 
 # Releases are infrequent. Serializing them also prevents a scheduled weekly
-# release from racing a manually created tag for the same ISO week.
+# release from racing a manually created tag for the same ISO week. Dry runs get
+# a group per pull request instead, so they neither queue behind a real release
+# nor pile up across pushes to the same branch.
 concurrency:
-  group: release
-  cancel-in-progress: false
+  group: release-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   resolve:
@@ -30,6 +39,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       create_tag: ${{ steps.release.outputs.create_tag }}
+      dry_run: ${{ steps.release.outputs.dry_run }}
       is_weekly: ${{ steps.release.outputs.is_weekly }}
       notes_start_tag: ${{ steps.release.outputs.notes_start_tag }}
       sha: ${{ steps.release.outputs.sha }}
@@ -64,6 +74,7 @@ jobs:
           weekly_regex='^weekly\.[0-9]{4}\.(0[1-9]|[1-4][0-9]|5[0-3])$'
           stable_regex='^v0\.[0-9]+\.[0-9]+$'
           create_tag=false
+          dry_run=false
 
           case "${GITHUB_EVENT_NAME}" in
             push)
@@ -97,6 +108,14 @@ jobs:
                 create_tag=true
               fi
               ;;
+            pull_request)
+              # Build and package the pull request without creating a tag or a
+              # release. The tag only names the archives here, so this week's
+              # weekly tag is good enough.
+              tag="weekly.$(date -u +%G.%V)"
+              sha="${GITHUB_SHA}"
+              dry_run=true
+              ;;
             *)
               echo "Unsupported event: ${GITHUB_EVENT_NAME}" >&2
               exit 1
@@ -112,9 +131,13 @@ jobs:
             exit 1
           fi
 
-          if ! git merge-base --is-ancestor "${sha}" origin/master; then
-            echo "Release commit ${sha} must be reachable from master" >&2
-            exit 1
+          # A dry run builds the pull request's merge commit, which is not on
+          # master by design.
+          if [[ "${dry_run}" == false ]]; then
+            if ! git merge-base --is-ancestor "${sha}" origin/master; then
+              echo "Release commit ${sha} must be reachable from master" >&2
+              exit 1
+            fi
           fi
 
           if [[ "${is_weekly}" == false ]]; then
@@ -135,14 +158,17 @@ jobs:
               awk -v cur="${tag}" 'found { print; exit } $0 == cur { found = 1 }')"
           fi
 
+          # A dry run still has to build even when this week's release already
+          # exists, since the point is to exercise the pipeline.
           skip=false
-          if gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
+          if [[ "${dry_run}" == false ]] && gh release view "${tag}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
             echo "Release ${tag} already exists; nothing to do"
             skip=true
           fi
 
           {
             echo "create_tag=${create_tag}"
+            echo "dry_run=${dry_run}"
             echo "is_weekly=${is_weekly}"
             echo "notes_start_tag=${notes_start_tag}"
             echo "sha=${sha}"
@@ -185,7 +211,9 @@ jobs:
             *.blob.storage.azure.net:443
             api.github.com:443
             archive.ubuntu.com:443
+            archive.ubuntu.com:80
             azure.archive.ubuntu.com:443
+            azure.archive.ubuntu.com:80
             crates.io:443
             github.com:443
             go.dev:443
@@ -193,10 +221,12 @@ jobs:
             objects.githubusercontent.com:443
             packages.microsoft.com:443
             ports.ubuntu.com:443
+            ports.ubuntu.com:80
             proxy.golang.org:443
             raw.githubusercontent.com:443
             release-assets.githubusercontent.com:443
             security.ubuntu.com:443
+            security.ubuntu.com:80
             static.crates.io:443
             static.rust-lang.org:443
             storage.googleapis.com:443
@@ -223,8 +253,14 @@ jobs:
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         shell: bash
+        # A host missing from the egress allowlist makes apt hang rather than
+        # fail, so cap this step well below the job timeout.
+        timeout-minutes: 5
         run: |
-          sudo apt-get update
+          # Read only /etc/apt/sources.list. The runner images preinstall
+          # third-party repositories under sources.list.d whose hosts are not on
+          # the allowlist, and none of them are needed to install musl-tools.
+          sudo apt-get update -o Dir::Etc::sourceparts=/dev/null
           sudo apt-get install -y musl-tools
 
       - name: Build, package, and smoke test
@@ -242,7 +278,7 @@ jobs:
 
   publish:
     name: Publish release
-    if: needs.resolve.outputs.skip != 'true'
+    if: needs.resolve.outputs.skip != 'true' && needs.resolve.outputs.dry_run != 'true'
     needs: [resolve, build]
     runs-on: ubuntu-24.04
     permissions:
