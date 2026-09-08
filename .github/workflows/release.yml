@@ -324,6 +324,12 @@ jobs:
             # A weekly is a plain snapshot of master for people who want to try the
             # current toolchain. The tag is the whole description, so ship an empty
             # body rather than an auto-generated changelog nobody reads.
+            #
+            # --prerelease is load bearing, not cosmetic: INSTALL.sh installs
+            # whatever the releases/latest endpoint returns, and that endpoint
+            # skips prereleases and drafts. Drop the marker and every new user
+            # running the install script lands on a weekly snapshot instead of
+            # the newest stable release.
             release_flags+=(--prerelease --notes "")
           else
             # A stable release is created as a draft with generated notes so the
