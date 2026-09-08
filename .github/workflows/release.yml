@@ -217,7 +217,7 @@ jobs:
 
       - name: Build, package, and smoke test
         shell: bash
-        run: scripts/release/build-package.sh "${{ matrix.target }}" "${{ needs.resolve.outputs.tag }}"
+        run: .github/scripts/release/build-package.sh "${{ matrix.target }}" "${{ needs.resolve.outputs.tag }}"
 
       - name: Upload package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
