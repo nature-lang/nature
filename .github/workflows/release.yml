@@ -215,6 +215,7 @@ jobs:
             azure.archive.ubuntu.com:443
             azure.archive.ubuntu.com:80
             crates.io:443
+            dl.google.com:443
             github.com:443
             go.dev:443
             index.crates.io:443
@@ -253,14 +254,14 @@ jobs:
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         shell: bash
-        # A host missing from the egress allowlist makes apt hang rather than
-        # fail, so cap this step well below the job timeout.
+        # The runner image preinstalls Chrome and Microsoft apt repositories, so
+        # their hosts need to be on the allowlist as well -- a host that is
+        # missing gets dropped rather than refused, which makes apt hang instead
+        # of fail. Cap the step well below the job timeout so that a future gap
+        # in the allowlist surfaces in minutes.
         timeout-minutes: 5
         run: |
-          # Read only /etc/apt/sources.list. The runner images preinstall
-          # third-party repositories under sources.list.d whose hosts are not on
-          # the allowlist, and none of them are needed to install musl-tools.
-          sudo apt-get update -o Dir::Etc::sourceparts=/dev/null
+          sudo apt-get update
           sudo apt-get install -y musl-tools
 
       - name: Build, package, and smoke test
