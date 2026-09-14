@@ -374,10 +374,17 @@ Internal vector structure representation
 ## type string_t
 
 ```
-type string_t = vec_t
+type string_t = struct{
+    anyptr data
+    i64 length
+    i64 capacity
+    i64 element_size
+    i64 hash
+    anyptr allocator
+}
 ```
 
-Internal string structure (alias for vec_t)
+Internal string structure
 
 ## type map_t
 

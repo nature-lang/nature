@@ -375,10 +375,17 @@ type vec_t = struct{
 ## type string_t
 
 ```
-type string_t = vec_t
+type string_t = struct{
+    anyptr data
+    i64 length
+    i64 capacity
+    i64 element_size
+    i64 hash
+    anyptr allocator
+}
 ```
 
-内部字符串结构（vec_t 的别名）
+内部字符串结构
 
 ## type map_t
 
