@@ -3213,6 +3213,40 @@ static lir_operand_t *linear_is_expr(module_t *m, ast_expr_t expr, lir_operand_t
 }
 
 /**
+ * Ordinary unions keep an rtype pointer in their first word. In .x the runtime assertion's
+ * failure path cannot be used because it reports through coroutine state, which x mode does not
+ * create. Compare the stored rtype hash directly and panic through the x runtime on mismatch.
+ */
+static void linear_x_union_assert(module_t *m, lir_operand_t *src_operand, uint64_t target_rtype_hash) {
+    lir_operand_t *union_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_move(union_ptr, src_operand));
+
+    lir_operand_t *rtype_ptr = temp_var_operand(m, type_kind_new(TYPE_ANYPTR));
+    OP_PUSH(lir_op_move(rtype_ptr,
+                        indirect_addr_operand(m, type_kind_new(TYPE_ANYPTR), union_ptr,
+                                              offsetof(n_union_t, rtype))));
+
+    lir_operand_t *actual_hash = temp_var_operand(m, type_kind_new(TYPE_INT64));
+    OP_PUSH(lir_op_move(actual_hash,
+                        indirect_addr_operand(m, type_kind_new(TYPE_INT64), rtype_ptr,
+                                              offsetof(rtype_t, hash))));
+
+    char *assert_end_ident = label_ident_with_unique(".union.assert.end");
+    OP_PUSH(lir_op_new(LIR_OPCODE_BEE, int_operand(target_rtype_hash), actual_hash,
+                       lir_label_operand(assert_end_ident, true)));
+
+    char *panic_path = m->current_closure->fndef->rel_path
+                               ? m->current_closure->fndef->rel_path
+                               : m->rel_path;
+    push_rt_call(m, RT_CALL_X_PANIC, NULL, 4,
+                 string_operand("type assert failed", strlen("type assert failed")),
+                 string_operand(panic_path, strlen(panic_path)), int_operand(m->current_line),
+                 int_operand(m->current_column));
+
+    OP_PUSH(lir_op_label(assert_end_ident, true));
+}
+
+/**
  * @param m
  * @param expr
  * @return
@@ -3390,6 +3424,19 @@ static lir_operand_t *linear_as_expr(module_t *m, ast_expr_t expr, lir_operand_t
     // union assert
     if (as_expr->src.type.kind == TYPE_UNION) {
         assert(as_expr->target_type.kind != TYPE_UNION);
+        if (m->is_x) {
+            uint64_t target_rtype_hash = type_hash(as_expr->target_type);
+            linear_x_union_assert(m, src_operand, target_rtype_hash);
+
+            lir_operand_t *payload =
+                    indirect_addr_operand(m, as_expr->target_type, src_operand,
+                                          offsetof(n_union_t, value));
+            if (as_expr->target_type.storage_kind == STORAGE_KIND_IND) {
+                payload = lea_operand_pointer(m, payload);
+            }
+            return linear_super_move(m, as_expr->target_type, target, payload);
+        }
+
         if (as_expr->target_type.storage_kind != STORAGE_KIND_IND) {
             // target 可能总是未 def 导致下面的取值异常, 所以最好使用临时值 assert，然后 mov 到 target
             lir_operand_t *temp = temp_var_operand(m, as_expr->target_type);
